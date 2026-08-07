@@ -6,9 +6,10 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from app.db import init_db
+from app.routers import kunden
+from app.templating import render
 
 APP_ORDNER = Path(__file__).resolve().parent
 
@@ -22,31 +23,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Friondo Angebotstool", lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory=APP_ORDNER / "static"), name="static")
-templates = Jinja2Templates(directory=APP_ORDNER / "templates")
 
-# Navigation: (URL-Pfad, Beschriftung) – wird im Basis-Layout gerendert.
-NAVIGATION = [
-    ("/kunden", "Kunden"),
-    ("/artikel", "Artikel"),
-    ("/angebote", "Angebote"),
-    ("/konfiguration", "Konfiguration"),
-]
-
-
-def render(request: Request, template: str, **kontext):
-    kontext.update({"request": request, "navigation": NAVIGATION})
-    return templates.TemplateResponse(request, template, kontext)
+app.include_router(kunden.router)
 
 
 @app.get("/")
 async def startseite(request: Request):
     return render(request, "index.html", aktiv=None)
-
-
-@app.get("/kunden")
-async def kunden(request: Request):
-    return render(request, "platzhalter.html", aktiv="/kunden",
-                  titel="Kunden", hinweis="Die Kundenverwaltung folgt in Phase 1.")
 
 
 @app.get("/artikel")

@@ -16,10 +16,10 @@ oder den Texten: nachfragen statt raten.
 - [x] start.bat, README, Git init, .gitignore (data/, .env, venv/, __pycache__)
 
 ## Phase 1 – Kundenverwaltung
-- [ ] Modell `kunden` (Firma/Anrede, Vor-/Nachname, Straße, PLZ, Ort, E-Mail, Telefon,
+- [x] Modell `kunden` (Firma/Anrede, Vor-/Nachname, Straße, PLZ, Ort, E-Mail, Telefon,
       Kunden-Nr., Notizen, aktiv)
-- [ ] Liste mit Suche; anlegen / bearbeiten / deaktivieren (kein Löschen bei Angeboten)
-- [ ] Validierung: Name oder Firma Pflicht, E-Mail-Format
+- [x] Liste mit Suche; anlegen / bearbeiten / deaktivieren (kein Löschen bei Angeboten)
+- [x] Validierung: Name oder Firma Pflicht, E-Mail-Format
 
 ## Phase 2 – Preislisten-Import (TAIFUN)
 - [ ] Modell `artikel` inkl. GUID, Positionsnummer, Kategorie, EP-Flag, aktiv

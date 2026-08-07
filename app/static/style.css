@@ -105,3 +105,186 @@ h1 { color: var(--friondo-dunkel); margin-top: 0; }
     padding: 1rem;
     border-top: 1px solid var(--grau-linie);
 }
+
+/* --- Seitenkopf und Knöpfe ------------------------------------------- */
+
+.seitenkopf {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.knopf {
+    display: inline-block;
+    background: var(--friondo-blau);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 0.5rem 1rem;
+    font-size: 0.95rem;
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.knopf:hover { background: #3a7fc4; }
+
+.knopf.zweitrangig {
+    background: #fff;
+    color: var(--friondo-dunkel);
+    border: 1px solid var(--grau-linie);
+}
+
+.knopf.zweitrangig:hover { border-color: var(--friondo-blau); }
+
+.knopf.klein { padding: 0.25rem 0.6rem; font-size: 0.85rem; }
+
+/* --- Suchleiste ------------------------------------------------------- */
+
+.suchleiste {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 1rem 0;
+}
+
+.suchleiste input[type="text"] {
+    flex: 1;
+    max-width: 420px;
+}
+
+.kontrollfeld {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+    color: #555;
+    font-size: 0.9rem;
+}
+
+/* --- Tabellen --------------------------------------------------------- */
+
+.tabelle {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border: 1px solid var(--grau-linie);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.tabelle th, .tabelle td {
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--grau-linie);
+    vertical-align: middle;
+}
+
+.tabelle th {
+    background: var(--grau-hell);
+    color: var(--friondo-dunkel);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.tabelle tr:last-child td { border-bottom: none; }
+
+.tabelle tr.inaktiv td { color: #999; }
+
+.tabelle a { color: var(--friondo-dunkel); font-weight: 600; }
+
+.aktionen {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.aktionen form { margin: 0; }
+
+.abzeichen {
+    display: inline-block;
+    background: #eee;
+    color: #777;
+    font-size: 0.75rem;
+    border-radius: 10px;
+    padding: 0.1rem 0.55rem;
+    margin-left: 0.4rem;
+}
+
+/* --- Meldungen -------------------------------------------------------- */
+
+.meldung {
+    background: #e8f4e5;
+    border: 1px solid #b7d8ae;
+    border-left: 4px solid #4c9a3d;
+    padding: 0.6rem 1rem;
+    border-radius: 4px;
+}
+
+.meldung.fehler {
+    background: #fbeaea;
+    border-color: #e3b3b3;
+    border-left-color: #c0392b;
+}
+
+.dezent { color: #888; font-size: 0.85rem; }
+
+/* --- Formulare -------------------------------------------------------- */
+
+.formular {
+    background: #fff;
+    border: 1px solid var(--grau-linie);
+    border-radius: 6px;
+    padding: 1.5rem;
+    max-width: 720px;
+}
+
+.formzeile {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 0.9rem;
+}
+
+.formular label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1;
+    font-size: 0.9rem;
+    color: #444;
+}
+
+.formular label.schmal { flex: 0 0 160px; }
+.formular label.breit { flex: 1 1 100%; }
+
+.formular input[type="text"],
+.formular select,
+.formular textarea,
+.suchleiste input[type="text"] {
+    font-family: inherit;
+    font-size: 0.95rem;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--grau-linie);
+    border-radius: 4px;
+}
+
+.formular input:focus,
+.formular select:focus,
+.formular textarea:focus,
+.suchleiste input:focus {
+    outline: 2px solid var(--friondo-blau);
+    outline-offset: -1px;
+}
+
+.feld-fehler input { border-color: #c0392b; }
+
+.fehlertext { color: #c0392b; font-size: 0.85rem; }
+
+.formaktionen {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}

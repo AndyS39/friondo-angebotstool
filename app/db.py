@@ -25,7 +25,8 @@ def init_db() -> None:
     config.ANGEBOTE_PDF_ORDNER.mkdir(parents=True, exist_ok=True)
     config.BACKUP_ORDNER.mkdir(parents=True, exist_ok=True)
     # Modelle importieren, damit sie an Base registriert sind, bevor create_all läuft.
-    # (Ab Phase 1 kommen hier die Modell-Module hinzu, z. B. from app import models)
+    from app import models  # noqa: F401
+
     Base.metadata.create_all(bind=engine)
 
 

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block titel %}Kunden – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Kunden</h1>
+    <a class="knopf" href="/kunden/neu">+ Neuer Kunde</a>
+</div>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<form method="get" action="/kunden" class="suchleiste">
+    <input type="text" name="q" value="{{ q }}" placeholder="Suche: Name, Firma, Ort, Kunden-Nr., E-Mail">
+    <label class="kontrollfeld">
+        <input type="checkbox" name="inaktive" value="true" {{ 'checked' if inaktive }}>
+        inaktive anzeigen
+    </label>
+    <button class="knopf" type="submit">Suchen</button>
+</form>
+
+{% if kunden %}
+<table class="tabelle">
+    <thead>
+        <tr>
+            <th>Name / Firma</th>
+            <th>Adresse</th>
+            <th>E-Mail</th>
+            <th>Telefon</th>
+            <th>Kunden-Nr.</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for kunde in kunden %}
+        <tr class="{{ 'inaktiv' if not kunde.aktiv }}">
+            <td>
+                <a href="/kunden/{{ kunde.id }}/bearbeiten">{{ kunde.anzeige_name }}</a>
+                {% if not kunde.aktiv %}<span class="abzeichen">inaktiv</span>{% endif %}
+            </td>
+            <td>{{ kunde.strasse }}{% if kunde.strasse and (kunde.plz or kunde.ort) %}, {% endif %}{{ kunde.plz }} {{ kunde.ort }}</td>
+            <td>{{ kunde.email }}</td>
+            <td>{{ kunde.telefon }}</td>
+            <td>{{ kunde.kunden_nr }}</td>
+            <td class="aktionen">
+                <a class="knopf klein" href="/kunden/{{ kunde.id }}/bearbeiten">Bearbeiten</a>
+                <form method="post" action="/kunden/{{ kunde.id }}/aktiv">
+                    {% if kunde.aktiv %}
+                        <input type="hidden" name="aktiv" value="false">
+                        <button class="knopf klein zweitrangig" type="submit">Deaktivieren</button>
+                    {% else %}
+                        <input type="hidden" name="aktiv" value="true">
+                        <button class="knopf klein" type="submit">Aktivieren</button>
+                    {% endif %}
+                </form>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<p class="dezent">{{ kunden | length }} Kunde{{ 'n' if kunden | length != 1 }}</p>
+{% else %}
+<p class="hinweis">Keine Kunden gefunden{% if q %} für „{{ q }}“{% endif %}.</p>
+{% endif %}
+{% endblock %}

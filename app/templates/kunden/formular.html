@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block titel %}{{ 'Kunde bearbeiten' if kunde else 'Neuer Kunde' }} – Friondo Angebotstool{% endblock %}
+
+{# Feldwert: bei Validierungsfehler die Eingabe (daten), sonst der gespeicherte Wert #}
+{% macro wert(feld) -%}
+    {{- daten[feld] if feld in daten else (kunde[feld] if kunde else '') -}}
+{%- endmacro %}
+
+{% block inhalt %}
+<h1>{{ 'Kunde bearbeiten' if kunde else 'Neuer Kunde' }}</h1>
+
+{% if fehler %}
+<p class="meldung fehler">Bitte Eingaben prüfen – das Formular enthält Fehler.</p>
+{% endif %}
+
+<form method="post" class="formular">
+    <div class="formzeile">
+        <label>Anrede
+            <select name="anrede">
+                {% for a in anreden %}
+                    <option value="{{ a }}" {{ 'selected' if wert('anrede') == a }}>{{ a if a else '–' }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Firma
+            <input type="text" name="firma" value="{{ wert('firma') }}">
+        </label>
+    </div>
+
+    <div class="formzeile">
+        <label>Vorname
+            <input type="text" name="vorname" value="{{ wert('vorname') }}">
+        </label>
+        <label class="{{ 'feld-fehler' if fehler.nachname }}">Nachname *
+            <input type="text" name="nachname" value="{{ wert('nachname') }}">
+            {% if fehler.nachname %}<span class="fehlertext">{{ fehler.nachname }}</span>{% endif %}
+        </label>
+    </div>
+
+    <div class="formzeile">
+        <label class="breit">Straße und Hausnummer
+            <input type="text" name="strasse" value="{{ wert('strasse') }}">
+        </label>
+    </div>
+
+    <div class="formzeile">
+        <label class="schmal">PLZ
+            <input type="text" name="plz" value="{{ wert('plz') }}" maxlength="10">
+        </label>
+        <label>Ort
+            <input type="text" name="ort" value="{{ wert('ort') }}">
+        </label>
+    </div>
+
+    <div class="formzeile">
+        <label class="{{ 'feld-fehler' if fehler.email }}">E-Mail
+            <input type="text" name="email" value="{{ wert('email') }}">
+            {% if fehler.email %}<span class="fehlertext">{{ fehler.email }}</span>{% endif %}
+        </label>
+        <label>Telefon
+            <input type="text" name="telefon" value="{{ wert('telefon') }}">
+        </label>
+    </div>
+
+    <div class="formzeile">
+        <label class="schmal">Kunden-Nr. (TAIFUN)
+            <input type="text" name="kunden_nr" value="{{ wert('kunden_nr') }}">
+        </label>
+    </div>
+
+    <div class="formzeile">
+        <label class="breit">Notizen
+            <textarea name="notizen" rows="4">{{ wert('notizen') }}</textarea>
+        </label>
+    </div>
+
+    <p class="dezent">* Nachname oder Firma muss angegeben werden.</p>
+
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Speichern</button>
+        <a class="knopf zweitrangig" href="/kunden">Abbrechen</a>
+    </div>
+</form>
+{% endblock %}
