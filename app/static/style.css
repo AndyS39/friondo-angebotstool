@@ -331,3 +331,102 @@ h1 { color: var(--friondo-dunkel); margin-top: 0; }
 }
 
 h2 { color: var(--friondo-dunkel); margin-top: 2rem; font-size: 1.15rem; }
+
+/* --- Konfigurator ------------------------------------------------------ */
+
+.konfigurator-spalten {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+}
+
+.konfigurator-haupt { flex: 1 1 60%; }
+
+.konfigurator-protokoll {
+    flex: 1 1 32%;
+    background: #fff;
+    border: 1px solid var(--grau-linie);
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+}
+
+.konfigurator-protokoll h2 { margin-top: 0; font-size: 1rem; }
+
+.protokoll-liste {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 0.9rem;
+}
+
+.protokoll-liste li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--grau-linie);
+}
+
+.protokoll-liste li:last-child { border-bottom: none; }
+
+.aendern {
+    margin-left: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--friondo-blau);
+}
+
+.fragekarte {
+    background: #fff;
+    border: 1px solid var(--grau-linie);
+    border-radius: 6px;
+    padding: 1.5rem;
+}
+
+.fragekarte h2 { margin-top: 0.25rem; font-size: 1.3rem; }
+
+.antwort-knoepfe {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 1rem;
+}
+
+.knopf.antwort {
+    background: #fff;
+    color: var(--friondo-dunkel);
+    border: 1px solid var(--grau-linie);
+    padding: 0.7rem 1.2rem;
+    font-size: 1rem;
+}
+
+.knopf.antwort:hover {
+    border-color: var(--friondo-blau);
+    background: #f0f6fc;
+}
+
+.knopf.antwort.gewaehlt {
+    border-color: var(--friondo-blau);
+    background: var(--friondo-blau);
+    color: #fff;
+}
+
+.fragekarte input[type="text"] {
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--grau-linie);
+    border-radius: 4px;
+}
+
+.fragekarte label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+    color: #444;
+}
+
+.fragekarte .formzeile {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+    margin: 1rem 0;
+    flex-wrap: wrap;
+}

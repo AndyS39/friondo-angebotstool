@@ -39,13 +39,13 @@ oder den Texten: nachfragen statt raten.
 - [x] „Konfiguration neu einlesen"-Funktion im Adminbereich
 
 ## Phase 4 – Konfigurator-UI
-- [ ] Fragenfluss F01–F36 mit Bedingungen („Anzeigen wenn"), ein Schritt pro Frage,
+- [x] Fragenfluss F01–F36 mit Bedingungen („Anzeigen wenn"), ein Schritt pro Frage,
       zurückspringen möglich, Antworten änderbar
-- [ ] Fragetypen: Auswahl (Buttons), Zahlen-/Betragseingabe, Mengenmaske (F17),
+- [x] Fragetypen: Auswahl (Buttons), Zahlen-/Betragseingabe, Mengenmaske (F17),
       Wiederholfelder (F20 dynamisch aus F19)
-- [ ] ABBRUCH-Logik: Meldung + Button „Manuelles Angebot erstellen" (Kunde übernehmen)
-- [ ] Leistungsklassen-Ermittlung (F02) + Paketauflösung erst wenn F03/F04 beantwortet
-- [ ] Konfigurationsprotokoll (alle Fragen + Antworten) am Angebot speichern
+- [x] ABBRUCH-Logik: Meldung + Button „Manuelles Angebot erstellen" (Kunde übernehmen)
+- [x] Leistungsklassen-Ermittlung (F02) + Paketauflösung erst wenn F03/F04 beantwortet
+- [x] Konfigurationsprotokoll (alle Fragen + Antworten) am Angebot speichern
 
 ## Phase 5 – Angebotserstellung
 - [ ] Modelle `angebote` + `angebotspositionen` (Snapshots: Bezeichnung, Beschreibung,

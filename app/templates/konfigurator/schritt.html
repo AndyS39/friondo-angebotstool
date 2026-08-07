@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block titel %}Konfigurator – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Konfigurator</h1>
+    <span class="dezent">Kunde: <strong>{{ kunde.anzeige_name }}</strong></span>
+</div>
+
+<div class="konfigurator-spalten">
+<div class="konfigurator-haupt">
+
+{% if konfig.status == 'abbruch' and not frage %}
+    <div class="warnblock fehlerblock">
+        <strong>Konfiguration nicht möglich</strong>
+        <p>{{ konfig.abbruch_meldung }}</p>
+    </div>
+    <div class="formaktionen">
+        <a class="knopf" href="/angebote/neu?kunde_id={{ kunde.id }}">Manuelles Angebot erstellen</a>
+        {% if protokoll %}
+            <a class="knopf zweitrangig" href="/konfigurator/{{ konfig.id }}?frage={{ protokoll[-1].frage_id }}">Letzte Antwort ändern</a>
+        {% endif %}
+    </div>
+
+{% elif konfig.status == 'fertig' and not frage %}
+    <p class="meldung">Alle Fragen beantwortet – der Angebotsentwurf kann erstellt werden.</p>
+    {% if klasse %}
+        <p>Ermittelte Leistungsklasse: <strong>{{ klasse.leistungsklasse }}</strong>
+        {% if paket %} · Paket: <strong>{{ paket | map(attribute='ref') | join(' + ') }}</strong>{% endif %}</p>
+    {% endif %}
+    <div class="formaktionen">
+        <a class="knopf" href="/angebote/aus-konfiguration/{{ konfig.id }}">Angebot erstellen</a>
+        <a class="knopf zweitrangig" href="/konfigurator?kunde_id={{ kunde.id }}">Neu starten</a>
+    </div>
+
+{% elif frage %}
+    <div class="fragekarte">
+        <p class="dezent">Frage {{ frage.id }} · {{ beantwortet }} von {{ gesamt }} sichtbaren Fragen beantwortet</p>
+        <h2>{{ frage.text }}</h2>
+        {% if frage.hinweis %}<p class="dezent">{{ frage.hinweis }}</p>{% endif %}
+        {% if fehler %}<p class="meldung fehler">{{ fehler }}</p>{% endif %}
+
+        <form method="post" action="/konfigurator/{{ konfig.id }}/antwort">
+            <input type="hidden" name="frage_id" value="{{ frage.id }}">
+
+            {% if frage.typ == 'Auswahl' %}
+                <div class="antwort-knoepfe">
+                    {% for option in frage.antworten %}
+                        <button class="knopf antwort {{ 'gewaehlt' if wert == option }}"
+                                type="submit" name="wert" value="{{ option }}">{{ option }}</button>
+                    {% endfor %}
+                </div>
+
+            {% elif frage.typ in ('Zahleneingabe', 'Betragseingabe') %}
+                <div class="formzeile">
+                    <label class="schmal">{{ 'Betrag in €' if frage.typ == 'Betragseingabe' else 'Wert' }}
+                        <input type="text" name="wert" value="{{ wert if wert is not none }}" autofocus>
+                    </label>
+                    <button class="knopf" type="submit">Weiter</button>
+                </div>
+
+            {% elif frage.typ == 'Mengenmaske (4 Zahlenfelder)' %}
+                <div class="formzeile">
+                    {% for option in frage.antworten %}
+                        <label class="schmal">Größe {{ option }}
+                            <input type="text" name="wert_{{ option }}"
+                                   value="{{ wert[option] if wert and option in wert }}">
+                        </label>
+                    {% endfor %}
+                </div>
+                <button class="knopf" type="submit">Weiter</button>
+
+            {% elif frage.typ == 'Wiederholfeld je Verteiler' %}
+                <div class="formzeile">
+                    {% for i in range(1, anzahl_wiederhol + 1) %}
+                        <label class="schmal">Verteiler {{ i }}
+                            <input type="text" name="wert_{{ i }}"
+                                   value="{{ wert[i-1] if wert and wert | length >= i }}">
+                        </label>
+                    {% endfor %}
+                </div>
+                <button class="knopf" type="submit">Weiter</button>
+            {% endif %}
+        </form>
+    </div>
+{% endif %}
+
+</div>
+<aside class="konfigurator-protokoll">
+    <h2>Bisherige Antworten</h2>
+    {% if protokoll %}
+        <ul class="protokoll-liste">
+        {% for p in protokoll %}
+            <li>
+                <span class="dezent">{{ p.frage_id }}</span> {{ p.frage | truncate(60) }}<br>
+                <strong>{{ p.antwort }}</strong>
+                <a class="aendern" href="/konfigurator/{{ konfig.id }}?frage={{ p.frage_id }}">ändern</a>
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p class="dezent">Noch keine Antworten.</p>
+    {% endif %}
+    {% if klasse %}
+        <p class="dezent">Leistungsklasse: <strong>{{ klasse.leistungsklasse }}</strong>
+        {% if paket %}<br>Paket: <strong>{{ paket | map(attribute='ref') | join(' + ') }}</strong>{% endif %}</p>
+    {% endif %}
+</aside>
+</div>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block titel %}Konfigurator – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<h1>Angebots-Konfigurator</h1>
+<p>Kunde wählen und den geführten Fragenfluss starten. Aus den Antworten wird
+automatisch ein vollständiger Angebotsentwurf zusammengestellt.</p>
+
+{% if kunden %}
+<form method="post" action="/konfigurator/start" class="formular">
+    <div class="formzeile">
+        <label>Kunde
+            <select name="kunde_id">
+                {% for k in kunden %}
+                    <option value="{{ k.id }}" {{ 'selected' if k.id == kunde_id }}>{{ k.anzeige_name }}{% if k.ort %} – {{ k.ort }}{% endif %}</option>
+                {% endfor %}
+            </select>
+        </label>
+    </div>
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Konfigurator starten</button>
+        <a class="knopf zweitrangig" href="/kunden/neu">Neuen Kunden anlegen</a>
+    </div>
+</form>
+{% else %}
+<p class="hinweis">Noch keine Kunden vorhanden – bitte zuerst einen
+<a href="/kunden/neu">Kunden anlegen</a>.</p>
+{% endif %}
+{% endblock %}

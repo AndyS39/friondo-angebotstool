@@ -67,3 +67,15 @@ class Artikel(Base):
         if self.bezeichnung:
             return self.bezeichnung
         return self.beschreibung.splitlines()[0] if self.beschreibung else ""
+
+
+class Konfiguration(Base):
+    """Laufender oder abgeschlossener Konfigurator-Durchlauf (Phase 4)."""
+    __tablename__ = "konfigurationen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kunde_id: Mapped[int] = mapped_column(Integer, index=True)
+    antworten_json: Mapped[str] = mapped_column(Text, default="{}")
+    status: Mapped[str] = mapped_column(String(20), default="laufend")  # laufend | abbruch | fertig
+    abbruch_meldung: Mapped[str] = mapped_column(Text, default="")
+    angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

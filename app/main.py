@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
 from app.db import init_db
-from app.routers import artikel, konfiguration, kunden
+from app.routers import artikel, konfiguration, konfigurator, kunden
 from app.templating import render
 
 APP_ORDNER = Path(__file__).resolve().parent
@@ -27,6 +27,7 @@ app.mount("/static", StaticFiles(directory=APP_ORDNER / "static"), name="static"
 app.include_router(kunden.router)
 app.include_router(artikel.router)
 app.include_router(konfiguration.router)
+app.include_router(konfigurator.router)
 
 
 @app.get("/")
