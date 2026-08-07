@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block titel %}Konfiguration – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Konfiguration</h1>
+    <form method="post" action="/konfiguration/neu-einlesen">
+        <button class="knopf" type="submit">Konfiguration neu einlesen</button>
+    </form>
+</div>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% if dateifehler %}
+    <p class="meldung fehler">Die Logik-Excel wurde nicht gefunden: <code>{{ dateifehler }}</code></p>
+{% else %}
+
+<p class="dezent">
+    Quelle: <code>konfigurator_logik.xlsx</code> ·
+    zuletzt eingelesen: {{ logik.geladen_am.strftime('%d.%m.%Y %H:%M:%S') }}
+</p>
+
+{% if bericht.ok %}
+    <p class="meldung">Validierung erfolgreich – keine Fehler gefunden.</p>
+{% else %}
+    <div class="warnblock fehlerblock">
+        <strong>Fehler ({{ bericht.fehler | length }}) – bitte Logik-Excel korrigieren und neu einlesen</strong>
+        <ul>{% for f in bericht.fehler %}<li>{{ f }}</li>{% endfor %}</ul>
+    </div>
+{% endif %}
+
+{% if bericht.warnungen %}
+    <div class="warnblock">
+        <strong>Hinweise ({{ bericht.warnungen | length }})</strong>
+        <ul>{% for w in bericht.warnungen %}<li>{{ w }}</li>{% endfor %}</ul>
+    </div>
+{% endif %}
+
+<h2>Eingelesene Logik</h2>
+<table class="tabelle zusammenfassung">
+    <tr><th>Fragen</th><td>{{ logik.fragen | length }}</td></tr>
+    <tr><th>Aktionen</th><td>{{ logik.aktionen | length }}</td></tr>
+    <tr><th>Paketmatrix-Zeilen</th><td>{{ logik.pakete | length }}</td></tr>
+    <tr><th>Angebots-Blöcke</th><td>{{ logik.bloecke | length }}</td></tr>
+    <tr><th>KfW-Parameter</th><td>{{ logik.kfw | length }}</td></tr>
+</table>
+
+<h2>Fragen</h2>
+<table class="tabelle">
+    <thead><tr><th>ID</th><th>Frage</th><th>Typ</th><th>Antwortmöglichkeiten</th><th>Anzeigen wenn</th></tr></thead>
+    <tbody>
+    {% for f in logik.fragen.values() | sort(attribute='reihenfolge') %}
+        <tr>
+            <td>{{ f.id }}</td>
+            <td>{{ f.text }}</td>
+            <td class="dezent">{{ f.typ }}</td>
+            <td class="dezent">{{ f.antworten | join(' | ') | truncate(60) }}</td>
+            <td class="dezent">{{ f.bedingung.roh if f.bedingung else '?' }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Angebotsaufbau</h2>
+<table class="tabelle">
+    <thead><tr><th>Block</th><th>Überschrift</th><th>Wann</th></tr></thead>
+    <tbody>
+    {% for b in logik.bloecke %}
+        <tr>
+            <td>{{ b.nr }}</td>
+            <td>{{ b.ueberschrift | truncate(90) }}</td>
+            <td class="dezent">{{ b.wann.roh if b.wann else '?' }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>KfW-Parameter</h2>
+<table class="tabelle">
+    <thead><tr><th>Parameter</th><th>Wert</th><th>Bemerkung</th></tr></thead>
+    <tbody>
+    {% for name, (wert, bemerkung) in logik.kfw.items() %}
+        <tr>
+            <td>{{ name }}</td>
+            <td>{{ wert | truncate(90) }}</td>
+            <td class="dezent">{{ bemerkung | truncate(70) }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{% endif %}
+{% endblock %}

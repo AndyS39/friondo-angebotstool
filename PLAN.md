@@ -32,11 +32,11 @@ oder den Texten: nachfragen statt raten.
 - [x] Artikelliste mit Suche/Kategorie-Filter; manuelles Anlegen/Bearbeiten möglich
 
 ## Phase 3 – Logik-Import & Validierung
-- [ ] Parser für konfigurator_logik.xlsx (Blätter Fragen, Aktionen, Paketmatrix,
+- [x] Parser für konfigurator_logik.xlsx (Blätter Fragen, Aktionen, Paketmatrix,
       Angebotsaufbau, KfW)
-- [ ] Validierungslauf: alle referenzierten Positionen/Z-Artikel existieren, alle
+- [x] Validierungslauf: alle referenzierten Positionen/Z-Artikel existieren, alle
       Fragen-IDs aus Aktionen bekannt, Bedingungen parsebar → Fehlerbericht im UI
-- [ ] „Konfiguration neu einlesen"-Funktion im Adminbereich
+- [x] „Konfiguration neu einlesen"-Funktion im Adminbereich
 
 ## Phase 4 – Konfigurator-UI
 - [ ] Fragenfluss F01–F36 mit Bedingungen („Anzeigen wenn"), ein Schritt pro Frage,

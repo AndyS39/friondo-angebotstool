@@ -309,6 +309,12 @@ h1 { color: var(--friondo-dunkel); margin-top: 0; }
 
 .warnblock ul { margin: 0.5rem 0 0; padding-left: 1.2rem; }
 
+.warnblock.fehlerblock {
+    background: #fbeaea;
+    border-color: #e3b3b3;
+    border-left-color: #c0392b;
+}
+
 .warnblock li { margin-bottom: 0.25rem; }
 
 .zusammenfassung { max-width: 420px; margin: 1rem 0; }
