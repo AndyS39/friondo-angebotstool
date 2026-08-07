@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block titel %}Friondo Angebotstool{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+<body>
+<header class="kopfleiste">
+    <a class="marke" href="/">Friondo <span>Angebotstool</span></a>
+    <nav>
+        {% for pfad, name in navigation %}
+            <a href="{{ pfad }}" class="{{ 'aktiv' if aktiv == pfad else '' }}">{{ name }}</a>
+        {% endfor %}
+    </nav>
+</header>
+<main>
+    {% block inhalt %}{% endblock %}
+</main>
+<footer class="fusszeile">
+    Friondo GmbH – internes Angebotstool
+</footer>
+</body>
+</html>

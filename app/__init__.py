@@ -1,0 +1,1 @@
+# Friondo Angebotstool – Anwendungspaket

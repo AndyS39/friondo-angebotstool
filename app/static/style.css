@@ -1,0 +1,107 @@
+/* Friondo Angebotstool – Basis-Layout
+   Farben angelehnt ans Logo: Blau #4A90D9, Dunkelblau #1B2A5E */
+
+:root {
+    --friondo-blau: #4a90d9;
+    --friondo-dunkel: #1b2a5e;
+    --grau-hell: #f4f6f9;
+    --grau-linie: #dde3ea;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: "Segoe UI", Arial, sans-serif;
+    color: #222;
+    background: var(--grau-hell);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.kopfleiste {
+    background: var(--friondo-dunkel);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.5rem;
+}
+
+.marke {
+    color: #fff;
+    text-decoration: none;
+    font-size: 1.2rem;
+    font-weight: 700;
+    padding: 0.9rem 0;
+}
+
+.marke span { font-weight: 300; opacity: 0.85; }
+
+.kopfleiste nav a {
+    color: #fff;
+    text-decoration: none;
+    padding: 1.1rem 1rem;
+    display: inline-block;
+    opacity: 0.85;
+    border-bottom: 3px solid transparent;
+}
+
+.kopfleiste nav a:hover { opacity: 1; }
+
+.kopfleiste nav a.aktiv {
+    opacity: 1;
+    border-bottom-color: var(--friondo-blau);
+    font-weight: 600;
+}
+
+main {
+    flex: 1;
+    width: 100%;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+}
+
+h1 { color: var(--friondo-dunkel); margin-top: 0; }
+
+.hinweis {
+    background: #fff;
+    border: 1px solid var(--grau-linie);
+    border-left: 4px solid var(--friondo-blau);
+    padding: 1rem 1.25rem;
+    border-radius: 4px;
+}
+
+.kacheln {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.kachel {
+    background: #fff;
+    border: 1px solid var(--grau-linie);
+    border-radius: 6px;
+    padding: 1.5rem;
+    text-align: center;
+    text-decoration: none;
+    color: var(--friondo-dunkel);
+    font-weight: 600;
+    font-size: 1.05rem;
+}
+
+.kachel:hover {
+    border-color: var(--friondo-blau);
+    box-shadow: 0 2px 8px rgba(74, 144, 217, 0.25);
+}
+
+.fusszeile {
+    text-align: center;
+    color: #777;
+    font-size: 0.85rem;
+    padding: 1rem;
+    border-top: 1px solid var(--grau-linie);
+}

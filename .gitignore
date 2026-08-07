@@ -1,0 +1,14 @@
+# Laufzeitdaten (Datenbank, PDFs, Backups)
+data/
+
+# Lokale Konfiguration mit Tokens
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Betriebssystem / Editor
+Thumbs.db
+.DS_Store

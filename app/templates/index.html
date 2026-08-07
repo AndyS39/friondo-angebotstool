@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block inhalt %}
+<h1>Willkommen im Friondo Angebotstool</h1>
+<p>Internes Tool für den Vertrieb: Konfigurator, KfW-Förderung, PDF-Angebote und Versand.</p>
+
+<div class="kacheln">
+    {% for pfad, name in navigation %}
+        <a class="kachel" href="{{ pfad }}">{{ name }}</a>
+    {% endfor %}
+</div>
+{% endblock %}
