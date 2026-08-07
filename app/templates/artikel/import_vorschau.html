@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block titel %}Preislisten-Import – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<h1>Preislisten-Import – Vorschau</h1>
+
+{% if dateifehler %}
+    <p class="meldung fehler">Folgende Dateien wurden nicht gefunden:</p>
+    <ul>{% for d in dateifehler %}<li><code>{{ d }}</code></li>{% endfor %}</ul>
+{% else %}
+
+<p>
+    Quelle: <code>{{ 'Artikel-Preislisten/Angebotserstellung Tool.xlsx' }}</code>
+    und Zusatzartikel/Textregeln aus <code>konfigurator_logik.xlsx</code>.
+    Es wird noch nichts gespeichert – erst mit „Import ausführen“.
+</p>
+
+{% if diff.warnungen %}
+<div class="warnblock">
+    <strong>Warnungen ({{ diff.warnungen | length }})</strong>
+    <ul>
+        {% for w in diff.warnungen %}<li>{{ w }}</li>{% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<table class="tabelle zusammenfassung">
+    <tr><th>Neu</th><td>{{ diff.neu | length }}</td></tr>
+    <tr><th>Geändert</th><td>{{ diff.geaendert | length }}</td></tr>
+    <tr><th>Unverändert</th><td>{{ diff.unveraendert }}</td></tr>
+    <tr><th>Entfallen (werden deaktiviert)</th><td>{{ diff.entfallen | length }}</td></tr>
+    {% if diff.reaktiviert %}<tr><th>Wieder aktiviert</th><td>{{ diff.reaktiviert | length }}</td></tr>{% endif %}
+</table>
+
+{% if diff.geaendert %}
+<h2>Geänderte Artikel</h2>
+<table class="tabelle">
+    <thead><tr><th>Pos.</th><th>Artikel</th><th>Geänderte Felder</th><th class="rechts">Preis bisher</th><th class="rechts">Preis neu</th></tr></thead>
+    <tbody>
+    {% for vorhanden, neu, felder in diff.geaendert %}
+        <tr>
+            <td>{{ neu.pos_nr }}</td>
+            <td>{{ vorhanden.titel | truncate(60) }}</td>
+            <td>{{ felder | join(', ') }}</td>
+            <td class="rechts">{{ vorhanden.e_preis_cent | euro }}</td>
+            <td class="rechts">{{ neu.e_preis_cent | euro }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% if diff.neu %}
+<h2>Neue Artikel</h2>
+<table class="tabelle">
+    <thead><tr><th>Pos.</th><th>Artikel</th><th>Kategorie</th><th class="rechts">E-Preis</th><th>EP</th></tr></thead>
+    <tbody>
+    {% for a in diff.neu %}
+        <tr>
+            <td>{{ a.pos_nr }}</td>
+            <td>{{ (a.bezeichnung or a.beschreibung.splitlines()[0] if a.beschreibung or a.bezeichnung else '') | truncate(70) }}</td>
+            <td class="dezent">{{ a.kategorie | truncate(45) }}</td>
+            <td class="rechts">{{ a.e_preis_cent | euro }}</td>
+            <td>{{ 'EP.' if a.ep_flag }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% if diff.entfallen %}
+<h2>Nicht mehr in der Preisliste (werden deaktiviert)</h2>
+<table class="tabelle">
+    <thead><tr><th>Pos.</th><th>Artikel</th></tr></thead>
+    <tbody>
+    {% for a in diff.entfallen %}
+        <tr><td>{{ a.pos_nr }}</td><td>{{ a.titel | truncate(80) }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<form method="post" action="/artikel/import" class="formaktionen">
+    <button class="knopf" type="submit">Import ausführen</button>
+    <a class="knopf zweitrangig" href="/artikel">Abbrechen</a>
+</form>
+
+{% endif %}
+{% endblock %}

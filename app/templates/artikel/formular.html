@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block titel %}{{ 'Artikel bearbeiten' if artikel else 'Neuer Artikel' }} – Friondo Angebotstool{% endblock %}
+
+{% macro wert(feld) -%}
+    {{- daten[feld] if feld in daten else (artikel[feld] if artikel else '') -}}
+{%- endmacro %}
+
+{% block inhalt %}
+<h1>{{ 'Artikel bearbeiten' if artikel else 'Neuer Artikel' }}</h1>
+
+{% if artikel and artikel.quelle != 'manuell' %}
+<p class="hinweis">Dieser Artikel stammt aus dem Import ({{ artikel.quelle }}).
+Änderungen werden beim nächsten Re-Import der Preisliste überschrieben.</p>
+{% endif %}
+
+{% if fehler %}
+<p class="meldung fehler">Bitte Eingaben prüfen – das Formular enthält Fehler.</p>
+{% endif %}
+
+<form method="post" class="formular">
+    <div class="formzeile">
+        <label class="schmal">Positionsnummer
+            <input type="text" name="pos_nr" value="{{ wert('pos_nr') }}">
+        </label>
+        <label>Kategorie
+            <input type="text" name="kategorie" value="{{ wert('kategorie') }}" list="kategorien">
+            <datalist id="kategorien">
+                {% for k in kategorien %}<option value="{{ k }}">{% endfor %}
+            </datalist>
+        </label>
+    </div>
+
+    <div class="formzeile">
+        <label class="breit {{ 'feld-fehler' if fehler.bezeichnung }}">Bezeichnung (Kurztitel)
+            <input type="text" name="bezeichnung" value="{{ wert('bezeichnung') }}">
+            {% if fehler.bezeichnung %}<span class="fehlertext">{{ fehler.bezeichnung }}</span>{% endif %}
+        </label>
+    </div>
+
+    <div class="formzeile">
+        <label class="breit">Beschreibung (erscheint im Angebot)
+            <textarea name="beschreibung" rows="8">{{ wert('beschreibung') }}</textarea>
+        </label>
+    </div>
+
+    <div class="formzeile">
+        <label class="schmal {{ 'feld-fehler' if fehler.menge_standard }}">Standardmenge
+            <input type="text" name="menge_standard"
+                   value="{{ daten.menge_standard if 'menge_standard' in daten else (artikel.menge_standard | menge if artikel else '1') }}">
+            {% if fehler.menge_standard %}<span class="fehlertext">{{ fehler.menge_standard }}</span>{% endif %}
+        </label>
+        <label class="schmal">Einheit
+            <input type="text" name="einheit" value="{{ wert('einheit') }}" placeholder="Stück / Set / psl.">
+        </label>
+        <label class="schmal {{ 'feld-fehler' if fehler.e_preis }}">E-Preis netto (€)
+            <input type="text" name="e_preis"
+                   value="{{ daten.e_preis if 'e_preis' in daten else ((artikel.e_preis_cent | euro).replace(' €', '') if artikel else '') }}">
+            {% if fehler.e_preis %}<span class="fehlertext">{{ fehler.e_preis }}</span>{% endif %}
+        </label>
+    </div>
+
+    <div class="formzeile">
+        <label class="kontrollfeld">
+            <input type="checkbox" name="ep_flag"
+                   {{ 'checked' if (daten.ep_flag if daten else (artikel.ep_flag if artikel)) }}>
+            Eventualposition („EP.“ – wird nicht in die Summe eingerechnet)
+        </label>
+        {% if artikel %}
+        <label class="kontrollfeld">
+            <input type="checkbox" name="aktiv" {{ 'checked' if artikel.aktiv }}>
+            aktiv
+        </label>
+        {% endif %}
+    </div>
+
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Speichern</button>
+        <a class="knopf zweitrangig" href="/artikel">Abbrechen</a>
+    </div>
+</form>
+{% endblock %}

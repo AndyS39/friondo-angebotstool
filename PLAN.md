@@ -22,14 +22,14 @@ oder den Texten: nachfragen statt raten.
 - [x] Validierung: Name oder Firma Pflicht, E-Mail-Format
 
 ## Phase 2 – Preislisten-Import (TAIFUN)
-- [ ] Modell `artikel` inkl. GUID, Positionsnummer, Kategorie, EP-Flag, aktiv
-- [ ] Import lt. CLAUDE.md (GUID-Anker, Kategorien, _x000D_-Bereinigung, „EP.")
-- [ ] Textregeln aus Logik-Excel Blatt „Textregeln" beim Import anwenden
-- [ ] Zusatzartikel Z01–Z22 aus Blatt „Zusatzartikel" importieren; bei Textquelle
+- [x] Modell `artikel` inkl. GUID, Positionsnummer, Kategorie, EP-Flag, aktiv
+- [x] Import lt. CLAUDE.md (GUID-Anker, Kategorien, _x000D_-Bereinigung, „EP.")
+- [x] Textregeln aus Logik-Excel Blatt „Textregeln" beim Import anwenden
+- [x] Zusatzartikel Z01–Z22 aus Blatt „Zusatzartikel" importieren; bei Textquelle
       „analog Pos. 125 / 130 / 131" den Beschreibungstext von dort übernehmen und
       Material/Größe anpassen
-- [ ] Re-Import mit Vorschau + Warnliste (Positionsnummer ↔ GUID-Abweichungen)
-- [ ] Artikelliste mit Suche/Kategorie-Filter; manuelles Anlegen/Bearbeiten möglich
+- [x] Re-Import mit Vorschau + Warnliste (Positionsnummer ↔ GUID-Abweichungen)
+- [x] Artikelliste mit Suche/Kategorie-Filter; manuelles Anlegen/Bearbeiten möglich
 
 ## Phase 3 – Logik-Import & Validierung
 - [ ] Parser für konfigurator_logik.xlsx (Blätter Fragen, Aktionen, Paketmatrix,

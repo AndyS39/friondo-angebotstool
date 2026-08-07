@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
 from app.db import init_db
-from app.routers import kunden
+from app.routers import artikel, kunden
 from app.templating import render
 
 APP_ORDNER = Path(__file__).resolve().parent
@@ -25,17 +25,12 @@ app = FastAPI(title="Friondo Angebotstool", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=APP_ORDNER / "static"), name="static")
 
 app.include_router(kunden.router)
+app.include_router(artikel.router)
 
 
 @app.get("/")
 async def startseite(request: Request):
     return render(request, "index.html", aktiv=None)
-
-
-@app.get("/artikel")
-async def artikel(request: Request):
-    return render(request, "platzhalter.html", aktiv="/artikel",
-                  titel="Artikel", hinweis="Der Preislisten-Import folgt in Phase 2.")
 
 
 @app.get("/angebote")
