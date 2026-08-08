@@ -60,10 +60,10 @@ oder den Texten: nachfragen statt raten.
 - [x] Manuelles Angebot (ohne Konfigurator) mit gleichem Editor
 
 ## Phase 6 – KfW-Berechnung
-- [ ] Rechenmodul exakt nach Blatt „KfW" (EFH/MFH/Gewerbe, Boni, Deckel, Höchstkosten,
+- [x] Rechenmodul exakt nach Blatt „KfW" (EFH/MFH/Gewerbe, Boni, Deckel, Höchstkosten,
       MFH-Anteilslogik, Programmnummer)
-- [ ] Gültigkeitswarnung nach 31.01.2027 im UI
-- [ ] Testfälle gegen foerderrechner-website.html (mind. 8 Szenarien inkl. Deckelung,
+- [x] Gültigkeitswarnung nach 31.01.2027 im UI
+- [x] Testfälle gegen foerderrechner-website.html (mind. 8 Szenarien inkl. Deckelung,
       Kind-Freibetrag, MFH anteilig, Gewerbe-Fläche) als automatisierte Tests
 
 ## Phase 7 – PDF-Export (Friondo-Layout)

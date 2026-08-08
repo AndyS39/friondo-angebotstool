@@ -9,7 +9,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
-from app import angebot_aufbau
+from app import angebot_aufbau, kfw
 from app import logik as logik_modul
 from app.db import get_session
 from app.models import (ANGEBOT_STATUS, Angebot, AngebotsPosition, Artikel,
@@ -87,10 +87,24 @@ async def editor(request: Request, angebot_id: int,
             gruppen.append({"name": p.gruppe, "block": p.block_nr, "positionen": []})
         gruppen[-1]["positionen"].append(p)
 
+    # KfW-Aufschlüsselung: Kosten der Maßnahme = Angebotssumme brutto (automatisch)
+    kfw_ergebnis = None
+    kfw_warnung = None
+    kfw_daten = json.loads(angebot.kfw_json or "{}")
+    if kfw_daten.get("F30"):
+        logik, bericht = logik_modul.hole_logik(session)
+        if bericht is not None:
+            parameter, _ = kfw.parameter_lesen(logik)
+            eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["brutto"])
+            if eingaben is not None:
+                kfw_ergebnis = kfw.berechnen(parameter, eingaben)
+                kfw_warnung = kfw.gueltigkeits_warnung(parameter)
+
     return render(request, "angebote/editor.html", aktiv="/angebote",
                   angebot=angebot, kunde=kunde, gruppen=gruppen,
                   summen=angebot.summen(), artikel_liste=artikel_liste,
                   protokoll=protokoll, status_liste=ANGEBOT_STATUS,
+                  kfw_ergebnis=kfw_ergebnis, kfw_warnung=kfw_warnung,
                   meldung=request.query_params.get("meldung", ""))
 
 

@@ -74,8 +74,29 @@
     <tr><th>19 % USt.</th><td class="rechts">{{ summen.ust | euro }}</td></tr>
     <tr><th>Gesamt-Betrag brutto</th><td class="rechts"><strong>{{ summen.brutto | euro }}</strong></td></tr>
 </table>
-<p class="dezent">EP-Positionen (Eventualpositionen) sind nicht in der Summe enthalten.
-Die KfW-Aufschlüsselung folgt in Phase 6.</p>
+<p class="dezent">EP-Positionen (Eventualpositionen) sind nicht in der Summe enthalten.</p>
+
+{% if kfw_warnung %}
+<div class="warnblock fehlerblock"><strong>{{ kfw_warnung }}</strong></div>
+{% endif %}
+
+{% if kfw_ergebnis %}
+<h2>Voraussichtliche KfW-Förderung</h2>
+<p class="dezent">{{ kfw_ergebnis.programm }} · Kosten der Maßnahme = Angebotssumme brutto</p>
+<table class="tabelle zusammenfassung summenblock">
+    {% for name, wert, fett in kfw_ergebnis.zeilen %}
+        <tr>
+            <th>{{ name }}</th>
+            <td class="rechts">{% if fett %}<strong>{{ wert }}</strong>{% else %}{{ wert }}{% endif %}</td>
+        </tr>
+    {% endfor %}
+</table>
+<p class="dezent">{{ kfw_ergebnis.satz_text }}</p>
+{% for hinweis in kfw_ergebnis.hinweise %}
+    <p class="dezent">⚠ {{ hinweis }}</p>
+{% endfor %}
+<p class="dezent"><em>{{ kfw_ergebnis.disclaimer }}</em></p>
+{% endif %}
 
 <h2>Position hinzufügen</h2>
 <div class="konfigurator-spalten">
