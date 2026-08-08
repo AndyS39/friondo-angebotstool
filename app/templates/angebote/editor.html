@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block titel %}{{ angebot.nummer }} – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Angebot {{ angebot.nummer }}</h1>
+    <div class="aktionen">
+        <form method="post" action="/angebote/{{ angebot.id }}/status" class="statusform">
+            <select name="status" onchange="this.form.submit()">
+                {% for s in status_liste %}
+                    <option value="{{ s }}" {{ 'selected' if angebot.status == s }}>{{ s }}</option>
+                {% endfor %}
+            </select>
+        </form>
+        <form method="post" action="/angebote/{{ angebot.id }}/duplizieren">
+            <button class="knopf klein zweitrangig" type="submit">Duplizieren</button>
+        </form>
+    </div>
+</div>
+
+<p class="dezent">
+    Kunde: <strong>{{ kunde.anzeige_name if kunde }}</strong>
+    {% if kunde and (kunde.strasse or kunde.ort) %} · {{ kunde.strasse }}, {{ kunde.plz }} {{ kunde.ort }}{% endif %}
+    · Datum: {{ angebot.datum.strftime('%d.%m.%Y') }}
+    · gültig 30 Tage
+</p>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% for gruppe in gruppen %}
+    {% if gruppe.name %}<h2 class="gruppentitel">{{ gruppe.name }}</h2>{% endif %}
+    <table class="tabelle positionen">
+        <thead>
+            <tr>
+                <th class="schmalspalte">Pos.</th>
+                <th>Beschreibung</th>
+                <th class="schmalspalte rechts">Menge</th>
+                <th class="schmalspalte">Einheit</th>
+                <th class="rechts">E-Preis</th>
+                <th class="rechts">G-Preis</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for p in gruppe.positionen %}
+            <tr>
+                <td>{{ p.pos_nr }}</td>
+                <td>
+                    {% if p.bezeichnung %}<strong>{{ p.bezeichnung }}</strong><br>{% endif %}
+                    <span class="beschreibung">{{ p.beschreibung | truncate(220) }}</span>
+                </td>
+                <td class="rechts">
+                    <form method="post" action="/angebote/{{ angebot.id }}/position/{{ p.id }}/menge" class="mengenform">
+                        <input type="text" name="menge" value="{{ p.menge | menge }}" size="4">
+                    </form>
+                </td>
+                <td>{{ p.einheit }}</td>
+                <td class="rechts">{{ p.e_preis_cent | euro }}</td>
+                <td class="rechts">{% if p.ep_flag %}EP.{% else %}{{ p.gesamt_cent | euro }}{% endif %}</td>
+                <td class="aktionen">
+                    <form method="post" action="/angebote/{{ angebot.id }}/position/{{ p.id }}/entfernen">
+                        <button class="knopf klein zweitrangig" type="submit" title="Position entfernen">✕</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% endfor %}
+
+<table class="tabelle zusammenfassung summenblock">
+    <tr><th>Netto-Summe</th><td class="rechts">{{ summen.netto | euro }}</td></tr>
+    <tr><th>19 % USt.</th><td class="rechts">{{ summen.ust | euro }}</td></tr>
+    <tr><th>Gesamt-Betrag brutto</th><td class="rechts"><strong>{{ summen.brutto | euro }}</strong></td></tr>
+</table>
+<p class="dezent">EP-Positionen (Eventualpositionen) sind nicht in der Summe enthalten.
+Die KfW-Aufschlüsselung folgt in Phase 6.</p>
+
+<h2>Position hinzufügen</h2>
+<div class="konfigurator-spalten">
+    <form method="post" action="/angebote/{{ angebot.id }}/position-neu" class="formular konfigurator-haupt">
+        <p><strong>Artikel aus dem Stamm</strong></p>
+        <div class="formzeile">
+            <label>Artikel
+                <select name="artikel_id">
+                    <option value="">– wählen –</option>
+                    {% for a in artikel_liste %}
+                        <option value="{{ a.id }}">{{ a.pos_nr }} · {{ a.titel | truncate(60) }} · {{ a.e_preis_cent | euro }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+        <button class="knopf" type="submit">Hinzufügen</button>
+    </form>
+
+    <form method="post" action="/angebote/{{ angebot.id }}/position-neu" class="formular konfigurator-protokoll">
+        <p><strong>Freitextposition</strong></p>
+        <div class="formzeile">
+            <label>Bezeichnung <input type="text" name="bezeichnung"></label>
+        </div>
+        <div class="formzeile">
+            <label class="breit">Beschreibung <textarea name="beschreibung" rows="2"></textarea></label>
+        </div>
+        <div class="formzeile">
+            <label class="schmal">Menge <input type="text" name="menge" value="1"></label>
+            <label class="schmal">Einheit <input type="text" name="einheit"></label>
+            <label class="schmal">E-Preis (€) <input type="text" name="e_preis"></label>
+        </div>
+        <label class="kontrollfeld"><input type="checkbox" name="ep_flag"> Eventualposition (EP.)</label>
+        <div class="formaktionen"><button class="knopf" type="submit">Hinzufügen</button></div>
+    </form>
+</div>
+
+{% if protokoll %}
+<h2>Konfigurationsprotokoll (intern)</h2>
+<table class="tabelle">
+    <tbody>
+    {% for p in protokoll %}
+        <tr><td class="dezent schmalspalte">{{ p.frage_id }}</td><td>{{ p.frage }}</td><td><strong>{{ p.antwort }}</strong></td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock %}

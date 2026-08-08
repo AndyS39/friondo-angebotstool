@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
 from app.db import init_db
-from app.routers import artikel, konfiguration, konfigurator, kunden
+from app.routers import angebote, artikel, konfiguration, konfigurator, kunden
 from app.templating import render
 
 APP_ORDNER = Path(__file__).resolve().parent
@@ -28,14 +28,9 @@ app.include_router(kunden.router)
 app.include_router(artikel.router)
 app.include_router(konfiguration.router)
 app.include_router(konfigurator.router)
+app.include_router(angebote.router)
 
 
 @app.get("/")
 async def startseite(request: Request):
     return render(request, "index.html", aktiv=None)
-
-
-@app.get("/angebote")
-async def angebote(request: Request):
-    return render(request, "platzhalter.html", aktiv="/angebote",
-                  titel="Angebote", hinweis="Die Angebotserstellung folgt in Phase 5.")

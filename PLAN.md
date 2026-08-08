@@ -48,16 +48,16 @@ oder den Texten: nachfragen statt raten.
 - [x] Konfigurationsprotokoll (alle Fragen + Antworten) am Angebot speichern
 
 ## Phase 5 – Angebotserstellung
-- [ ] Modelle `angebote` + `angebotspositionen` (Snapshots: Bezeichnung, Beschreibung,
+- [x] Modelle `angebote` + `angebotspositionen` (Snapshots: Bezeichnung, Beschreibung,
       Einheit, Einzelpreis, EP-Flag, Gruppenzuordnung)
-- [ ] Zusammenbau lt. Blatt „Angebotsaufbau": Blockreihenfolge, Gruppen-Überschriften,
+- [x] Zusammenbau lt. Blatt „Angebotsaufbau": Blockreihenfolge, Gruppen-Überschriften,
       dynamische Überschrift Block 1, Gruppen-Trigger Pos. 014, Heizkörper-Pauschale
       129 × Gesamtanzahl, Verteiler-Pauschale 108 × Anzahl, EP-Regel
-- [ ] Summen: Netto / USt / Brutto (Decimal, Cent); EP-Positionen nicht einrechnen
-- [ ] Nummernkreis AN-C-<JJ><NNNN> ab 261000, transaktionssicher beim ersten Speichern
-- [ ] Nachbearbeitung: Mengen ändern, Position entfernen, Freitextposition, Artikel aus
+- [x] Summen: Netto / USt / Brutto (Decimal, Cent); EP-Positionen nicht einrechnen
+- [x] Nummernkreis AN-C-<JJ><NNNN> ab 261000, transaktionssicher beim ersten Speichern
+- [x] Nachbearbeitung: Mengen ändern, Position entfernen, Freitextposition, Artikel aus
       Stamm ergänzen; Angebotsliste mit Status/Suche; duplizieren
-- [ ] Manuelles Angebot (ohne Konfigurator) mit gleichem Editor
+- [x] Manuelles Angebot (ohne Konfigurator) mit gleichem Editor
 
 ## Phase 6 – KfW-Berechnung
 - [ ] Rechenmodul exakt nach Blatt „KfW" (EFH/MFH/Gewerbe, Boni, Deckel, Höchstkosten,

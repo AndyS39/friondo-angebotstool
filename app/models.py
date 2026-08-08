@@ -2,10 +2,11 @@
 # Phase 1: Kunden · Phase 2: Artikel. Weitere Modelle folgen in späteren Phasen.
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 
@@ -79,3 +80,65 @@ class Konfiguration(Base):
     status: Mapped[str] = mapped_column(String(20), default="laufend")  # laufend | abbruch | fertig
     abbruch_meldung: Mapped[str] = mapped_column(Text, default="")
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+ANGEBOT_STATUS = ["Entwurf", "Versendet", "Angenommen", "Abgelehnt"]
+
+
+class Angebot(Base):
+    """Angebot mit Positions-Snapshots (Phase 5)."""
+    __tablename__ = "angebote"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nummer: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    kunde_id: Mapped[int] = mapped_column(Integer, index=True)
+    konfiguration_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="Entwurf")
+    datum: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    protokoll_json: Mapped[str] = mapped_column(Text, default="[]")   # Konfigurationsprotokoll
+    kfw_json: Mapped[str] = mapped_column(Text, default="{}")         # KfW-Eingaben (F30–F36)
+    angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    positionen: Mapped[list["AngebotsPosition"]] = relationship(
+        back_populates="angebot", order_by="AngebotsPosition.sort",
+        cascade="all, delete-orphan")
+
+    def summen(self) -> dict:
+        """Netto/USt/Brutto in Cent; EP-Positionen zählen nicht mit."""
+        netto = 0
+        for p in self.positionen:
+            if not p.ep_flag:
+                netto += p.gesamt_cent
+        ust = int(Decimal(netto) * Decimal("0.19"))
+        return {"netto": netto, "ust": ust, "brutto": netto + ust}
+
+
+class AngebotsPosition(Base):
+    """Snapshot einer Angebotsposition – unabhängig vom Artikelstamm."""
+    __tablename__ = "angebotspositionen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    angebot_id: Mapped[int] = mapped_column(ForeignKey("angebote.id"), index=True)
+    sort: Mapped[int] = mapped_column(Integer, default=0)
+    block_nr: Mapped[int] = mapped_column(Integer, default=0)
+    gruppe: Mapped[str] = mapped_column(String(300), default="")      # Gruppen-Überschrift
+    pos_nr: Mapped[str] = mapped_column(String(10), default="")
+    bezeichnung: Mapped[str] = mapped_column(String(300), default="")
+    beschreibung: Mapped[str] = mapped_column(Text, default="")
+    menge: Mapped[float] = mapped_column(Float, default=1.0)
+    einheit: Mapped[str] = mapped_column(String(20), default="")
+    e_preis_cent: Mapped[int] = mapped_column(Integer, default=0)
+    ep_flag: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    angebot: Mapped["Angebot"] = relationship(back_populates="positionen")
+
+    @property
+    def gesamt_cent(self) -> int:
+        return int((Decimal(str(self.menge)) * Decimal(self.e_preis_cent))
+                   .quantize(Decimal("1")))
+
+    @property
+    def titel(self) -> str:
+        if self.bezeichnung:
+            return self.bezeichnung
+        return self.beschreibung.splitlines()[0] if self.beschreibung else ""

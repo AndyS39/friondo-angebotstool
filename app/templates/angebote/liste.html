@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block titel %}Angebote – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Angebote</h1>
+    <a class="knopf" href="/konfigurator">+ Neues Angebot (Konfigurator)</a>
+</div>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<form method="get" action="/angebote" class="suchleiste">
+    <input type="text" name="q" value="{{ q }}" placeholder="Suche: Angebots-Nr., Kunde">
+    <select name="status">
+        <option value="">Alle Status</option>
+        {% for s in status_liste %}
+            <option value="{{ s }}" {{ 'selected' if status == s }}>{{ s }}</option>
+        {% endfor %}
+    </select>
+    <button class="knopf" type="submit">Filtern</button>
+</form>
+
+{% if angebote %}
+<table class="tabelle">
+    <thead>
+        <tr>
+            <th>Angebots-Nr.</th>
+            <th>Kunde</th>
+            <th>Datum</th>
+            <th>Status</th>
+            <th class="rechts">Brutto</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for a in angebote %}
+        <tr>
+            <td><a href="/angebote/{{ a.id }}">{{ a.nummer }}</a></td>
+            <td>{{ kunden[a.kunde_id].anzeige_name if a.kunde_id in kunden else '?' }}</td>
+            <td>{{ a.datum.strftime('%d.%m.%Y') }}</td>
+            <td><span class="abzeichen status-{{ a.status | lower }}">{{ a.status }}</span></td>
+            <td class="rechts">{{ a.summen().brutto | euro }}</td>
+            <td class="aktionen">
+                <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">Öffnen</a>
+                <form method="post" action="/angebote/{{ a.id }}/duplizieren">
+                    <button class="knopf klein zweitrangig" type="submit">Duplizieren</button>
+                </form>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<p class="dezent">{{ angebote | length }} Angebot{{ 'e' if angebote | length != 1 }}</p>
+{% else %}
+<p class="hinweis">Noch keine Angebote. Über den <a href="/konfigurator">Konfigurator</a>
+oder als manuelles Angebot über einen Kunden starten.</p>
+{% endif %}
+{% endblock %}

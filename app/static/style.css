@@ -430,3 +430,41 @@ h2 { color: var(--friondo-dunkel); margin-top: 2rem; font-size: 1.15rem; }
     margin: 1rem 0;
     flex-wrap: wrap;
 }
+
+/* --- Angebots-Editor --------------------------------------------------- */
+
+.gruppentitel {
+    margin: 1.5rem 0 0.5rem;
+    font-size: 1.05rem;
+}
+
+.positionen .beschreibung {
+    white-space: pre-line;
+    font-size: 0.85rem;
+    color: #555;
+}
+
+.schmalspalte { width: 4.5rem; }
+
+.mengenform input {
+    width: 4rem;
+    text-align: right;
+    padding: 0.25rem 0.4rem;
+    border: 1px solid var(--grau-linie);
+    border-radius: 4px;
+}
+
+.summenblock { margin-left: auto; margin-right: 0; }
+
+.summenblock td { min-width: 9rem; }
+
+.statusform select {
+    font-family: inherit;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--grau-linie);
+    border-radius: 4px;
+}
+
+.abzeichen.status-versendet { background: #e3effa; color: #2c6cb0; }
+.abzeichen.status-angenommen { background: #e8f4e5; color: #4c9a3d; }
+.abzeichen.status-abgelehnt { background: #fbeaea; color: #c0392b; }

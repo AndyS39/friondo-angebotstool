@@ -123,6 +123,7 @@ def refs_extrahieren(text: str) -> list[ArtikelRef]:
         rest = text[m.end():]
         m_menge = re.match(r"\s*×\s*([\wäöüÄÖÜß. ]+)", rest)
         menge = m_menge.group(1).strip() if (m_menge and len(nummern) == 1) else "1"
+        menge = re.sub(r"\s*als EP.*$", "", menge).strip() or "1"
         ep_nach = bool(re.match(r"[^+·]*als EP", rest))
         for nummer, ep in nummern:
             refs.append(ArtikelRef(nummer.zfill(3), menge, bool(ep) or ep_nach))
