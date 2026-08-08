@@ -79,9 +79,9 @@ oder den Texten: nachfragen statt raten.
 - [x] Ablage data/angebote/AN-C-<Nr>.pdf, Anzeige/Download im Browser
 
 ## Phase 8 – Outlook-Versand
-- [ ] pywin32; Button „Per E-Mail senden": Outlook-Entwurf an Kunden-E-Mail mit
+- [x] pywin32; Button „Per E-Mail senden": Outlook-Entwurf an Kunden-E-Mail mit
       Betreff „Ihr Wärmepumpen-Angebot AN-C-… der Friondo GmbH", Standardtext, PDF-Anhang
-- [ ] Nach Bestätigung Status „Versendet"; Hinweis: klassisches Outlook nötig,
+- [x] Nach Bestätigung Status „Versendet"; Hinweis: klassisches Outlook nötig,
       Fallback PDF-Download
 
 ## Phase 9 – monday.com

@@ -105,6 +105,7 @@ async def editor(request: Request, angebot_id: int,
                   summen=angebot.summen(), artikel_liste=artikel_liste,
                   protokoll=protokoll, status_liste=ANGEBOT_STATUS,
                   kfw_ergebnis=kfw_ergebnis, kfw_warnung=kfw_warnung,
+                  versand=request.query_params.get("versand", ""),
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -185,6 +186,22 @@ async def pdf_anzeigen(angebot_id: int, session: Session = Depends(get_session))
     return FileResponse(pfad, media_type="application/pdf",
                         content_disposition_type="inline",
                         filename=f"{angebot.nummer}.pdf")
+
+
+@router.post("/{angebot_id}/email")
+async def email_entwurf(angebot_id: int, session: Session = Depends(get_session)):
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote?meldung=Angebot+nicht+gefunden", status_code=303)
+    kunde = session.get(Kunde, angebot.kunde_id)
+    from app import outlook_versand, pdf_export
+    pdf_pfad = pdf_export.pdf_fuer_angebot(session, angebot)
+    erfolg, meldung = outlook_versand.entwurf_oeffnen(kunde, angebot, pdf_pfad)
+    from urllib.parse import quote_plus
+    ziel = f"/angebote/{angebot_id}?meldung={quote_plus(meldung)}"
+    if erfolg:
+        ziel += "&versand=1"
+    return RedirectResponse(ziel, status_code=303)
 
 
 @router.post("/{angebot_id}/status")

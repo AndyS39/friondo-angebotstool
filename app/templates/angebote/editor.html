@@ -17,6 +17,9 @@
             <button class="knopf klein zweitrangig" type="submit">Duplizieren</button>
         </form>
         <a class="knopf klein" href="/angebote/{{ angebot.id }}/pdf" target="_blank">PDF anzeigen</a>
+        <form method="post" action="/angebote/{{ angebot.id }}/email">
+            <button class="knopf klein" type="submit">Per E-Mail senden</button>
+        </form>
     </div>
 </div>
 
@@ -28,6 +31,13 @@
 </p>
 
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% if versand == '1' and angebot.status == 'Entwurf' %}
+<form method="post" action="/angebote/{{ angebot.id }}/status" class="formaktionen">
+    <input type="hidden" name="status" value="Versendet">
+    <button class="knopf" type="submit">E-Mail wurde gesendet – Status auf „Versendet“ setzen</button>
+</form>
+{% endif %}
 
 {% for gruppe in gruppen %}
     {% if gruppe.name %}<h2 class="gruppentitel">{{ gruppe.name }}</h2>{% endif %}
