@@ -67,16 +67,16 @@ oder den Texten: nachfragen statt raten.
       Kind-Freibetrag, MFH anteilig, Gewerbe-Fläche) als automatisierte Tests
 
 ## Phase 7 – PDF-Export (Friondo-Layout)
-- [ ] Referenz „Layout - Logo/Angebot-Nr. AN250096" als visuelle Vorlage nachbauen
-- [ ] Seite 1: Logo-Leiste, Absenderzeile, Empfänger, Seite/Datum/Kunden-Nr.,
+- [x] Referenz „Layout - Logo/Angebot-Nr. AN250096" als visuelle Vorlage nachbauen
+- [x] Seite 1: Logo-Leiste, Absenderzeile, Empfänger, Seite/Datum/Kunden-Nr.,
       Angebots-Nr., Vortext aus ANGEBOTSTEXTE.md
-- [ ] Jede Seite: Kopf (ab S. 2 Logo rechts + Angebots-Nr./Seite), 5-Spalten-Fußzeile
-- [ ] Positionstabelle mit Gruppen-Überschriften, Übertrag-Zeilen, EP-Darstellung,
+- [x] Jede Seite: Kopf (ab S. 2 Logo rechts + Angebots-Nr./Seite), 5-Spalten-Fußzeile
+- [x] Positionstabelle mit Gruppen-Überschriften, Übertrag-Zeilen, EP-Darstellung,
       sauberen Umbrüchen bei langen Beschreibungen
-- [ ] Summenblock + KfW-Aufschlüsselung + Eigenanteil + Disclaimer
-- [ ] Nachtext-Seiten A–D aus ANGEBOTSTEXTE.md (Zahlungsoptionen, Installations-
+- [x] Summenblock + KfW-Aufschlüsselung + Eigenanteil + Disclaimer
+- [x] Nachtext-Seiten A–D aus ANGEBOTSTEXTE.md (Zahlungsoptionen, Installations-
       voraussetzungen, Unterschriften-Seite, Vollmacht mit vorbefüllten Kundendaten)
-- [ ] Ablage data/angebote/AN-C-<Nr>.pdf, Anzeige/Download im Browser
+- [x] Ablage data/angebote/AN-C-<Nr>.pdf, Anzeige/Download im Browser
 
 ## Phase 8 – Outlook-Versand
 - [ ] pywin32; Button „Per E-Mail senden": Outlook-Entwurf an Kunden-E-Mail mit

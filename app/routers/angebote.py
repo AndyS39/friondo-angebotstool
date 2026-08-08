@@ -5,7 +5,7 @@
 import json
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
@@ -173,6 +173,18 @@ async def position_neu(request: Request, angebot_id: int,
     return RedirectResponse(
         f"/angebote/{angebot_id}?meldung=Freitextposition:+Bezeichnung+und+Preis+erforderlich",
         status_code=303)
+
+
+@router.get("/{angebot_id}/pdf")
+async def pdf_anzeigen(angebot_id: int, session: Session = Depends(get_session)):
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote?meldung=Angebot+nicht+gefunden", status_code=303)
+    from app import pdf_export
+    pfad = pdf_export.pdf_fuer_angebot(session, angebot)
+    return FileResponse(pfad, media_type="application/pdf",
+                        content_disposition_type="inline",
+                        filename=f"{angebot.nummer}.pdf")
 
 
 @router.post("/{angebot_id}/status")
