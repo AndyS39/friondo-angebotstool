@@ -19,15 +19,25 @@ FRAGE_TYPEN = {
     "Auswahl",
     "Zahleneingabe",
     "Betragseingabe",
-    "Mengenmaske (4 Zahlenfelder)",
-    "Wiederholfeld je Verteiler",
+    "Mengenmaske",
+    "Wiederholfeld",
+    "Freitext",
+    "Freitext groß",
 }
 
-ZAHLEN_TYPEN = {"Zahleneingabe", "Betragseingabe",
-                "Mengenmaske (4 Zahlenfelder)", "Wiederholfeld je Verteiler"}
+# Alt-Schreibweisen aus der v1-Logik werden beim Einlesen normalisiert
+TYP_ALIASE = {
+    "Mengenmaske (4 Zahlenfelder)": "Mengenmaske",
+    "Wiederholfeld je Verteiler": "Wiederholfeld",
+}
+
+ZAHLEN_TYPEN = {"Zahleneingabe", "Betragseingabe", "Mengenmaske", "Wiederholfeld"}
+
+FREITEXT_TYPEN = {"Freitext", "Freitext groß"}
 
 # Aktionszeilen, die keine einzelne Frage betreffen
-SPEZIAL_AKTIONEN = {"Gruppen-Trigger", "Grundpaket", "F30–F36", "F30-F36"}
+SPEZIAL_AKTIONEN = {"Gruppen-Trigger", "Grundpaket", "Ampel-Auswertung",
+                    "O01–O08 / K01–K04", "O01-O08 / K01-K04"}
 
 
 # --- Datenstrukturen ------------------------------------------------------
@@ -49,6 +59,7 @@ class Frage:
     antworten: list[str]
     bedingung: Optional[Bedingung]
     hinweis: str
+    seite: str = ""          # Kategorie-Seite der mobilen Erfassung (v2)
 
 
 @dataclass
@@ -60,11 +71,11 @@ class ArtikelRef:
 
 @dataclass
 class Aktion:
-    frage: str                    # "F01" oder Spezialschlüssel (Gruppen-Trigger, Grundpaket, ...)
-    antwort: str                  # roh, z. B. "Gas", "Kunststoff, bis 3.000 L", "Meterzahl"
+    frage: str                    # "A01" oder Spezialschlüssel (Gruppen-Trigger, Grundpaket, ...)
+    antwort: str                  # roh, z. B. "Gas", "Kunststoff, bis 3.000 L", "50 l / 100 l / 200 l"
     aktion_roh: str
-    typ: str                      # abbruch | normal
-    abbruch_meldung: str
+    typ: str                      # ampel | normal
+    ampel_grund: str              # Klartext-Grund bei AMPEL-Antworten (v2: kein Abbruch)
     artikel: list[ArtikelRef]
     bemerkung: str
 
@@ -90,6 +101,17 @@ class AngebotsBlock:
 
 
 @dataclass
+class Anhang:
+    datei: str                              # Dateiname im Ordner anlagen/
+    regel_roh: str
+    art: str                                # immer | frage | position | unbekannt
+    frage_id: str = ""
+    antwort: str = ""
+    positionen: list[str] = field(default_factory=list)
+    bemerkung: str = ""
+
+
+@dataclass
 class Logik:
     fragen: dict[str, Frage]
     aktionen: list[Aktion]
@@ -97,6 +119,16 @@ class Logik:
     bloecke: list[AngebotsBlock]
     kfw: dict[str, tuple[str, str]]         # Parameter -> (Wert, Bemerkung)
     geladen_am: datetime
+    anhaenge: list[Anhang] = field(default_factory=list)
+
+    @property
+    def seiten(self) -> list[str]:
+        """Seiten der mobilen Erfassung in Blatt-Reihenfolge."""
+        ergebnis: list[str] = []
+        for frage in sorted(self.fragen.values(), key=lambda f: f.reihenfolge):
+            if frage.seite and frage.seite not in ergebnis:
+                ergebnis.append(frage.seite)
+        return ergebnis
 
 
 @dataclass
@@ -118,23 +150,32 @@ def refs_extrahieren(text: str) -> list[ArtikelRef]:
         return []
     refs: list[ArtikelRef] = []
 
+    menge_muster = r"\s*×\s*(\([^)]*\)|[\wäöüÄÖÜß. ]+)"   # auch "(Eingabe − 3)"
+    gefunden: list[tuple[int, ArtikelRef]] = []
+
     for m in re.finditer(r"Pos\.\s*((?:\d{1,3}(?:\s*\(EP\))?\s*(?:[,/]\s*)?)+)", text):
         nummern = re.findall(r"(\d{1,3})(\s*\(EP\))?", m.group(1))
         rest = text[m.end():]
-        m_menge = re.match(r"\s*×\s*([\wäöüÄÖÜß. ]+)", rest)
-        menge = m_menge.group(1).strip() if (m_menge and len(nummern) == 1) else "1"
+        m_menge = re.match(menge_muster, rest)
+        menge = m_menge.group(1).strip() if m_menge else "1"
         menge = re.sub(r"\s*als EP.*$", "", menge).strip() or "1"
         ep_nach = bool(re.match(r"[^+·]*als EP", rest))
-        for nummer, ep in nummern:
-            refs.append(ArtikelRef(nummer.zfill(3), menge, bool(ep) or ep_nach))
+        for i, (nummer, ep) in enumerate(nummern):
+            gefunden.append((m.start() + i,
+                             ArtikelRef(nummer.zfill(3), menge, bool(ep) or ep_nach)))
 
     for m in re.finditer(r"\bZ(\d{2})\b(?:\s*[–-]\s*Z(\d{2}))?", text):
         von, bis = int(m.group(1)), int(m.group(2) or m.group(1))
         rest = text[m.end():]
-        m_menge = re.match(r"\s*×\s*([\wäöüÄÖÜß. ]+)", rest)
+        m_menge = re.match(menge_muster, rest)
         menge = m_menge.group(1).strip() if (m_menge and von == bis) else "1"
         for n in range(von, bis + 1):
-            refs.append(ArtikelRef(f"Z{n:02d}", menge, False))
+            gefunden.append((m.start() + (n - von),
+                             ArtikelRef(f"Z{n:02d}", menge, False)))
+
+    # Reihenfolge wie im Text – wichtig für die paarweise Zuordnung zu Slash-Listen
+    gefunden.sort(key=lambda t: t[0])
+    refs.extend(ref for _, ref in gefunden)
     return refs
 
 
@@ -147,13 +188,13 @@ def bedingung_parsen(roh) -> Optional[Bedingung]:
         return Bedingung(text, "selbstnutzung")
     if re.search(r"Friondo-Ja", text):
         return Bedingung(text, "friondo_ja")
-    m = re.match(r"nur wenn F(\d+)\s+ausgefüllt$", text)
+    m = re.match(r"nur wenn ([A-Z]\d{2})\s+ausgefüllt$", text)
     if m:
-        return Bedingung(text, "ausgefuellt", f"F{m.group(1)}")
-    m = re.match(r"nur wenn F(\d+)\s*=\s*(.+)$", text)
+        return Bedingung(text, "ausgefuellt", m.group(1))
+    m = re.match(r"nur wenn ([A-Z]\d{2})\s*=\s*(.+)$", text)
     if m:
         werte = [w.strip() for w in m.group(2).split(" oder ")]
-        return Bedingung(text, "antwort", f"F{m.group(1)}", werte)
+        return Bedingung(text, "antwort", m.group(1), werte)
     return None
 
 
@@ -194,23 +235,63 @@ def logik_einlesen() -> tuple[Logik, Pruefbericht]:
     pakete = _paketmatrix_einlesen(wb, bericht)
     bloecke = _angebotsaufbau_einlesen(wb, bericht)
     kfw = _kfw_einlesen(wb, bericht)
+    anhaenge = _anhaenge_einlesen(wb, bericht)
 
-    logik = Logik(fragen, aktionen, pakete, bloecke, kfw, datetime.now())
+    logik = Logik(fragen, aktionen, pakete, bloecke, kfw, datetime.now(), anhaenge)
     _querbezuege_pruefen(logik, bericht)
     return logik, bericht
 
 
+def _anhaenge_einlesen(wb, bericht: Pruefbericht) -> list[Anhang]:
+    """Blatt "Anhänge": Datei · Regel · Bemerkung.
+    Regeln: 'immer' | 'wenn <Frage> = <Antwort>' | 'wenn Pos. <Nr> im Angebot'."""
+    if "Anhänge" not in wb.sheetnames:
+        bericht.warnungen.append("Blatt „Anhänge“ fehlt – es werden keine Anhänge geregelt.")
+        return []
+    anhaenge = []
+    for datei, regel, bemerkung in wb["Anhänge"].iter_rows(min_row=2, values_only=True):
+        datei = _zelle(datei)
+        regel = _zelle(regel)
+        if not datei or datei.startswith("("):
+            continue  # Platzhalterzeile
+        eintrag = Anhang(datei, regel, "unbekannt", bemerkung=_zelle(bemerkung))
+        if regel == "immer":
+            eintrag.art = "immer"
+        elif (m := re.match(r"wenn\s+([A-Z]\d{2})\s*=\s*(.+)$", regel)):
+            eintrag.art = "frage"
+            eintrag.frage_id = m.group(1)
+            eintrag.antwort = m.group(2).strip()
+        elif (m := re.match(r"wenn\s+(?:WP-Paket\s+)?Pos\.\s*([\d–\-\s]+)\s+im Angebot", regel)):
+            eintrag.art = "position"
+            teil = m.group(1).strip()
+            m_bereich = re.match(r"(\d{1,3})\s*[–-]\s*(\d{1,3})$", teil)
+            if m_bereich:
+                eintrag.positionen = [f"{n:03d}" for n in
+                                      range(int(m_bereich.group(1)), int(m_bereich.group(2)) + 1)]
+            else:
+                eintrag.positionen = [n.zfill(3) for n in re.findall(r"\d{1,3}", teil)]
+        else:
+            bericht.warnungen.append(f"Anhänge: Regel „{regel}“ für {datei} nicht lesbar.")
+        anhaenge.append(eintrag)
+    return anhaenge
+
+
 def _fragen_einlesen(wb, bericht: Pruefbericht) -> dict[str, Frage]:
+    """v2-Layout: Seite · ID · Fragetext · Typ · Antworten · Anzeigen wenn · Hinweis.
+    Die Reihenfolge ergibt sich aus der Zeilenfolge im Blatt."""
     fragen: dict[str, Frage] = {}
     for zeile, row in enumerate(wb["Fragen"].iter_rows(min_row=2, values_only=True), 2):
-        fid, reihenfolge, text, typ, antworten, anzeigen, hinweis = (_zelle(v) for v in row[:7])
+        seite, fid, text, typ, antworten, anzeigen, hinweis = (_zelle(v) for v in row[:7])
         if not fid:
             continue
         if fid in fragen:
             bericht.fehler.append(f"Fragen Zeile {zeile}: ID {fid} doppelt vergeben.")
             continue
+        typ = TYP_ALIASE.get(typ, typ)
         if typ not in FRAGE_TYPEN:
             bericht.fehler.append(f"Fragen {fid}: unbekannter Typ „{typ}“.")
+        if not seite:
+            bericht.fehler.append(f"Fragen {fid}: Spalte „Seite“ ist leer.")
         optionen = [a.strip() for a in antworten.split("|") if a.strip()] if antworten else []
         if typ == "Auswahl" and not optionen:
             bericht.fehler.append(f"Fragen {fid}: Auswahl ohne Antwortmöglichkeiten.")
@@ -218,12 +299,8 @@ def _fragen_einlesen(wb, bericht: Pruefbericht) -> dict[str, Frage]:
         if bedingung is None:
             bericht.fehler.append(
                 f"Fragen {fid}: Bedingung „{anzeigen}“ nicht parsebar.")
-        try:
-            nr = int(float(reihenfolge))
-        except ValueError:
-            bericht.fehler.append(f"Fragen {fid}: Reihenfolge „{reihenfolge}“ keine Zahl.")
-            nr = 0
-        fragen[fid] = Frage(fid, nr, text, typ, optionen, bedingung, hinweis)
+        fragen[fid] = Frage(fid, len(fragen) + 1, text, typ, optionen, bedingung,
+                            hinweis, seite)
     return fragen
 
 
@@ -233,13 +310,15 @@ def _aktionen_einlesen(wb, bericht: Pruefbericht) -> list[Aktion]:
         frage, antwort, aktion_roh, bemerkung = (_zelle(v) for v in row[:4])
         if not frage:
             continue
-        if aktion_roh.startswith("ABBRUCH"):
-            typ = "abbruch"
-            meldung = aktion_roh.split(":", 1)[1].strip() if ":" in aktion_roh else aktion_roh
+        if aktion_roh.startswith("AMPEL"):
+            # "AMPEL: individuell – Grund: <Text>" → Flag statt Abbruch
+            typ = "ampel"
+            m = re.search(r"Grund:\s*(.+)$", aktion_roh)
+            grund = m.group(1).strip() if m else aktion_roh
         else:
             typ = "normal"
-            meldung = ""
-        aktionen.append(Aktion(frage, antwort, aktion_roh, typ, meldung,
+            grund = ""
+        aktionen.append(Aktion(frage, antwort, aktion_roh, typ, grund,
                                refs_extrahieren(aktion_roh), bemerkung))
     return aktionen
 
@@ -276,6 +355,8 @@ def _angebotsaufbau_einlesen(wb, bericht: Pruefbericht) -> list[AngebotsBlock]:
         nr, ueberschrift, inhalt, wann = (_zelle(v) for v in row[:4])
         if not nr:
             continue
+        if nr == "Nachtexte":
+            continue  # Vollmacht-Bedingung (Nachtext D) – wird in pdf_export ausgewertet
         try:
             block_nr = int(float(nr))
         except ValueError:
@@ -285,16 +366,23 @@ def _angebotsaufbau_einlesen(wb, bericht: Pruefbericht) -> list[AngebotsBlock]:
         if bedingung is None:
             bericht.fehler.append(
                 f"Angebotsaufbau Block {block_nr}: Bedingung „{wann}“ nicht parsebar.")
-        bloecke.append(AngebotsBlock(block_nr, ueberschrift, inhalt,
-                                     bedingung, refs_extrahieren(inhalt)))
+        refs = refs_extrahieren(inhalt)
+        # v2-Schreibweise: nach "Pos. 005 · 006 · 007 (EP)" stehen weitere Nummern
+        # ohne "Pos."-Präfix – nackte dreistellige Token ergänzen
+        vorhanden = {r.ref for r in refs}
+        for m in re.finditer(r"\b(\d{3})\b", inhalt):
+            if m.group(1) not in vorhanden:
+                refs.append(ArtikelRef(m.group(1), "1", False))
+                vorhanden.add(m.group(1))
+        bloecke.append(AngebotsBlock(block_nr, ueberschrift, inhalt, bedingung, refs))
     return bloecke
 
 
 PFLICHT_KFW_PARAMETER = [
     "Gültigkeit der Konditionen", "Grundförderung", "Klimageschwindigkeits-Bonus",
-    "Einkommensbonus Stufe 1", "Einkommensbonus Stufe 2", "Einkommensbonus Stufe 3",
-    "Kind-Freibetrag", "Fördersatz-Deckel", "Fördersatz-Deckel erhöht",
+    "Einkommensbonus", "Fördersatz-Deckel",
     "Höchstkosten EFH", "Höchstkosten MFH", "Höchstkosten Gewerbe",
+    "ABLEITUNG Gebäudetyp", "ABLEITUNG Klima-Vorbelegung (K02)",
 ]
 
 
@@ -317,20 +405,28 @@ def _kfw_einlesen(wb, bericht: Pruefbericht) -> dict[str, tuple[str, str]]:
 
 # --- Querbezüge validieren ------------------------------------------------
 
+def antwort_teile(text: str) -> list[str]:
+    """Zerlegt Slash-/oder-Listen aus Aktionszeilen. Slash nur mit Leerzeichen
+    ringsum trennen, damit Optionswerte wie 'Luft/Wasser' erhalten bleiben."""
+    return [t.strip() for t in re.split(r"\s+oder\s+|\s+/\s+", text) if t.strip()]
+
+
 def _antwort_pruefen(frage: Frage, antwort: str, fragen: dict[str, Frage]) -> Optional[str]:
     """Prüft, ob eine Antwort/Bedingung aus dem Blatt Aktionen zur Frage passt.
     Liefert einen Fehlertext oder None."""
-    if frage.typ in ZAHLEN_TYPEN and frage.typ != "Mengenmaske (4 Zahlenfelder)":
-        return None  # freie Beschreibungen/Bereiche bei Zahlenfragen erlaubt
-    if frage.typ == "Mengenmaske (4 Zahlenfelder)":
-        m = re.match(r"Anzahl\s+(\S+)$", antwort)
-        if m and m.group(1) in frage.antworten:
+    if frage.typ == "Mengenmaske":
+        # z. B. "Anzahl S / M / L / XL": erster Teil trägt das "Anzahl"-Präfix
+        teile = antwort_teile(antwort)
+        groessen = [re.sub(r"^Anzahl\s+", "", t) for t in teile]
+        if groessen and all(g in frage.antworten for g in groessen):
             return None
         return f"„{antwort}“ passt nicht zur Mengenmaske ({' | '.join(frage.antworten)})."
+    if frage.typ in ZAHLEN_TYPEN or frage.typ in FREITEXT_TYPEN:
+        return None  # freie Beschreibungen/Bereiche erlaubt
 
-    # Auswahl: "A", "A oder B", "A / B", "Bedingungsfrage-Wert, eigener Wert"
-    teile = re.split(r"\s+oder\s+|\s*/\s*", antwort)
-    if all(_alias_aufloesen(t.strip(), frage.antworten) for t in teile):
+    # Auswahl: "A", "A oder B", "A / B / C", "Bedingungsfrage-Wert, eigener Wert"
+    teile = antwort_teile(antwort)
+    if all(_alias_aufloesen(t, frage.antworten) for t in teile):
         return None
     if "," in antwort:
         vorne, hinten = (t.strip() for t in antwort.split(",", 1))
@@ -362,6 +458,18 @@ def _querbezuege_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
                     bericht.fehler.append(
                         f"Fragen {frage.id}: Bedingungswert „{wert}“ ist keine Option von {ziel.id}.")
 
+    # Anhänge: referenzierte Fragen/Antworten müssen existieren
+    for anhang in logik.anhaenge:
+        if anhang.art != "frage":
+            continue
+        if anhang.frage_id not in fragen:
+            bericht.fehler.append(
+                f"Anhänge {anhang.datei}: unbekannte Frage {anhang.frage_id}.")
+        elif (fragen[anhang.frage_id].typ == "Auswahl"
+              and _alias_aufloesen(anhang.antwort, fragen[anhang.frage_id].antworten) is None):
+            bericht.fehler.append(
+                f"Anhänge {anhang.datei}: „{anhang.antwort}“ ist keine Option von {anhang.frage_id}.")
+
     # Aktionen: Frage bekannt, Antwort plausibel
     for aktion in logik.aktionen:
         if aktion.frage in SPEZIAL_AKTIONEN:
@@ -375,9 +483,12 @@ def _querbezuege_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
             bericht.fehler.append(f"Aktionen {aktion.frage}: {problem}")
 
     # Abgedeckte Antworten: jede Auswahl-Option sollte eine Aktionszeile haben.
-    # F30–F36 sind über die Sammelzeile "F30–F36" (KfW-Angaben) abgedeckt.
-    sammelbereich = {f"F{n}" for n in range(30, 37)
-                     if any(a.frage in ("F30–F36", "F30-F36") for a in logik.aktionen)}
+    # Sammelzeilen wie "O01–O08 / K01–K04" decken ganze ID-Bereiche ab.
+    sammelbereich: set[str] = set()
+    for aktion in logik.aktionen:
+        for praefix, von, bis in re.findall(r"([A-Z])(\d{2})[–-]\1(\d{2})", aktion.frage):
+            sammelbereich.update(f"{praefix}{n:02d}"
+                                 for n in range(int(von), int(bis) + 1))
     for frage in fragen.values():
         if frage.typ != "Auswahl" or frage.id in sammelbereich:
             continue
@@ -385,8 +496,8 @@ def _querbezuege_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
         for aktion in logik.aktionen:
             if aktion.frage != frage.id:
                 continue
-            for teil in re.split(r"\s+oder\s+|\s*/\s*|,", aktion.antwort):
-                option = _alias_aufloesen(teil.strip(), frage.antworten)
+            for teil in [aktion.antwort] + antwort_teile(aktion.antwort):
+                option = _alias_aufloesen(teil, frage.antworten)
                 if option:
                     abgedeckt.add(option)
         fehlend = [o for o in frage.antworten if o not in abgedeckt]

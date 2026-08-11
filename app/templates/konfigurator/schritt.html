@@ -8,35 +8,40 @@
     <span class="dezent">Kunde: <strong>{{ kunde.anzeige_name }}</strong></span>
 </div>
 
+{% if gruende %}
+<div class="warnblock">
+    <strong>Ampel: Individuell (orange)</strong> – der Katalog läuft normal weiter.
+    <ul>{% for g in gruende %}<li>{{ g }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
 <div class="konfigurator-spalten">
 <div class="konfigurator-haupt">
 
-{% if konfig.status == 'abbruch' and not frage %}
-    <div class="warnblock fehlerblock">
-        <strong>Konfiguration nicht möglich</strong>
-        <p>{{ konfig.abbruch_meldung }}</p>
-    </div>
-    <div class="formaktionen">
-        <a class="knopf" href="/angebote/neu?kunde_id={{ kunde.id }}">Manuelles Angebot erstellen</a>
-        {% if protokoll %}
-            <a class="knopf zweitrangig" href="/konfigurator/{{ konfig.id }}?frage={{ protokoll[-1].frage_id }}">Letzte Antwort ändern</a>
+{% if konfig.status == 'fertig' and not frage %}
+    {% if gruende %}
+        <p class="meldung">Alle Fragen beantwortet. Ampel: <strong>Individuell</strong> –
+        für dieses Objekt ist ein manuelles Angebot vorgesehen.</p>
+        <div class="formaktionen">
+            <a class="knopf" href="/angebote/neu?kunde_id={{ kunde.id }}">Manuelles Angebot erstellen</a>
+            <a class="knopf zweitrangig" href="/angebote/aus-konfiguration/{{ konfig.id }}">Trotzdem Angebot erzeugen</a>
+        </div>
+    {% else %}
+        <p class="meldung">Alle Fragen beantwortet. Ampel: <strong>Konfigurierbar</strong> –
+        der Angebotsentwurf kann erstellt werden.</p>
+        {% if klasse %}
+            <p>Leistungsklasse: <strong>{{ klasse.leistungsklasse }}</strong>
+            {% if paket %} · Paket: <strong>{{ paket | map(attribute='ref') | join(' + ') }}</strong>{% endif %}</p>
         {% endif %}
-    </div>
-
-{% elif konfig.status == 'fertig' and not frage %}
-    <p class="meldung">Alle Fragen beantwortet – der Angebotsentwurf kann erstellt werden.</p>
-    {% if klasse %}
-        <p>Ermittelte Leistungsklasse: <strong>{{ klasse.leistungsklasse }}</strong>
-        {% if paket %} · Paket: <strong>{{ paket | map(attribute='ref') | join(' + ') }}</strong>{% endif %}</p>
+        <div class="formaktionen">
+            <a class="knopf" href="/angebote/aus-konfiguration/{{ konfig.id }}">Angebot erstellen</a>
+            <a class="knopf zweitrangig" href="/konfigurator?kunde_id={{ kunde.id }}">Neu starten</a>
+        </div>
     {% endif %}
-    <div class="formaktionen">
-        <a class="knopf" href="/angebote/aus-konfiguration/{{ konfig.id }}">Angebot erstellen</a>
-        <a class="knopf zweitrangig" href="/konfigurator?kunde_id={{ kunde.id }}">Neu starten</a>
-    </div>
 
 {% elif frage %}
     <div class="fragekarte">
-        <p class="dezent">Frage {{ frage.id }} · {{ beantwortet }} von {{ gesamt }} sichtbaren Fragen beantwortet</p>
+        <p class="dezent">{{ frage.seite }} · Frage {{ frage.id }} · {{ beantwortet }} von {{ gesamt }} sichtbaren Fragen beantwortet</p>
         <h2>{{ frage.text }}</h2>
         {% if frage.hinweis %}<p class="dezent">{{ frage.hinweis }}</p>{% endif %}
         {% if fehler %}<p class="meldung fehler">{{ fehler }}</p>{% endif %}
@@ -52,6 +57,20 @@
                     {% endfor %}
                 </div>
 
+            {% elif frage.typ == 'Freitext' %}
+                <div class="formzeile">
+                    <label class="breit">Eingabe
+                        <input type="text" name="wert" value="{{ wert if wert is not none }}" autofocus>
+                    </label>
+                    <button class="knopf" type="submit">Weiter</button>
+                </div>
+
+            {% elif frage.typ == 'Freitext groß' %}
+                <label class="breit">Eingabe (optional)
+                    <textarea name="wert" rows="4">{{ wert if wert is not none }}</textarea>
+                </label>
+                <div class="formaktionen"><button class="knopf" type="submit">Weiter</button></div>
+
             {% elif frage.typ in ('Zahleneingabe', 'Betragseingabe') %}
                 <div class="formzeile">
                     <label class="schmal">{{ 'Betrag in €' if frage.typ == 'Betragseingabe' else 'Wert' }}
@@ -60,23 +79,23 @@
                     <button class="knopf" type="submit">Weiter</button>
                 </div>
 
-            {% elif frage.typ == 'Mengenmaske (4 Zahlenfelder)' %}
+            {% elif frage.typ == 'Mengenmaske' %}
                 <div class="formzeile">
                     {% for option in frage.antworten %}
                         <label class="schmal">Größe {{ option }}
                             <input type="text" name="wert_{{ option }}"
-                                   value="{{ wert[option] if wert and option in wert }}">
+                                   value="{{ wert[option] if wert is mapping and option in wert }}">
                         </label>
                     {% endfor %}
                 </div>
                 <button class="knopf" type="submit">Weiter</button>
 
-            {% elif frage.typ == 'Wiederholfeld je Verteiler' %}
+            {% elif frage.typ == 'Wiederholfeld' %}
                 <div class="formzeile">
                     {% for i in range(1, anzahl_wiederhol + 1) %}
                         <label class="schmal">Verteiler {{ i }}
                             <input type="text" name="wert_{{ i }}"
-                                   value="{{ wert[i-1] if wert and wert | length >= i }}">
+                                   value="{{ wert[i-1] if wert is sequence and wert is not string and wert | length >= i }}">
                         </label>
                     {% endfor %}
                 </div>

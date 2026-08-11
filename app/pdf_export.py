@@ -589,7 +589,7 @@ def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
     kunde = session.get(Kunde, angebot.kunde_id)
     ergebnis = None
     kfw_daten = json.loads(angebot.kfw_json or "{}")
-    if kfw_daten.get("F30"):
+    if kfw_daten.get("O01"):
         logik, _ = logik_modul.hole_logik(session)
         parameter, _warn = kfw.parameter_lesen(logik)
         eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["brutto"])

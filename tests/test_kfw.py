@@ -135,21 +135,29 @@ class TestGewerbe(unittest.TestCase):
 
 
 class TestEingaben(unittest.TestCase):
-    def test_aus_konfigurator_antworten(self):
+    def test_ableitung_aus_v2_antworten(self):
+        # MFH: WE aus O03, Selbstnutzung aus K01
         e = eingaben_aus_antworten({
-            "F30": "Mehrfamilienhaus (2+ WE)", "F31": 4, "F32": "Ja",
-            "F34": "Gas- oder Biomasseheizung, mindestens 20 Jahre alt, funktionstüchtig",
-            "F35": 35000, "F36": "Ja",
+            "O01": "MFH", "O03": 4, "K01": "Ja",
+            "K02": "Gas- oder Biomasseheizung, mind. 20 Jahre, funktionstüchtig",
+            "K03": 35000, "K04": "Ja",
         }, 1000000)
         self.assertEqual(e.objekt, "mfh")
         self.assertTrue(e.mfh_selbst and e.klima_bonus and e.kind)
         self.assertEqual(e.wohneinheiten, 4)
-        e2 = eingaben_aus_antworten({"F30": "Einfamilienhaus (selbst bewohnt)",
-                                     "F34": "Andere / jüngere Heizung oder Neubaufall",
-                                     "F35": ""}, 1)
+        # EFH-Arten: Selbstnutzung automatisch, Klima-Option 3 zählt nicht
+        e2 = eingaben_aus_antworten({"O01": "REH",
+                                     "K02": "Andere / jüngere Heizung / Neubau",
+                                     "K03": ""}, 1)
         self.assertEqual(e2.objekt, "efh")
+        self.assertTrue(e2.mfh_selbst)
         self.assertFalse(e2.klima_bonus)
         self.assertEqual(e2.einkommen_eur, 0)
+        # Gewerbe: Fläche aus O05, nie Selbstnutzung
+        e3 = eingaben_aus_antworten({"O01": "Gewerbe", "O05": 500}, 1)
+        self.assertEqual(e3.objekt, "nwg")
+        self.assertEqual(e3.flaeche_m2, 500)
+        self.assertFalse(e3.mfh_selbst)
 
 
 if __name__ == "__main__":

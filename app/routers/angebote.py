@@ -91,7 +91,7 @@ async def editor(request: Request, angebot_id: int,
     kfw_ergebnis = None
     kfw_warnung = None
     kfw_daten = json.loads(angebot.kfw_json or "{}")
-    if kfw_daten.get("F30"):
+    if kfw_daten.get("O01"):
         logik, bericht = logik_modul.hole_logik(session)
         if bericht is not None:
             parameter, _ = kfw.parameter_lesen(logik)

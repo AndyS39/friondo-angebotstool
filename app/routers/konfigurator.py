@@ -1,6 +1,6 @@
-# Konfigurator-UI (Phase 4): geführter Fragenfluss F01–F36 mit Bedingungen,
-# ABBRUCH-Logik und Konfigurationsprotokoll. Ein Schritt pro Frage,
-# Zurückspringen und Ändern jederzeit möglich.
+# Konfigurator-UI (Phase 4, ab Phase 12 Logik v2): geführter Fragenkatalog mit
+# Seiten, AMPEL-Auswertung statt Abbruch (der Katalog läuft immer vollständig
+# durch), Vorbelegungen und Konfigurationsprotokoll.
 
 import json
 
@@ -22,13 +22,14 @@ def _antworten(konfig: Konfiguration) -> dict:
 
 
 def _status_aktualisieren(konfig: Konfiguration, logik, antworten: dict) -> None:
-    meldung = engine.abbruch_status(logik, antworten)
-    if meldung:
-        konfig.status, konfig.abbruch_meldung = "abbruch", meldung
-    elif engine.naechste_frage(logik, antworten) is None:
-        konfig.status, konfig.abbruch_meldung = "fertig", ""
+    """v2: kein Abbruch mehr. Status wird 'fertig', sobald alle Fragen beantwortet
+    sind; AMPEL-Gründe werden gesammelt gespeichert (orange = individuell)."""
+    gruende = engine.ampel_gruende(logik, antworten)
+    konfig.abbruch_meldung = "\n".join(gruende)
+    if engine.naechste_frage(logik, antworten) is None:
+        konfig.status = "fertig"
     else:
-        konfig.status, konfig.abbruch_meldung = "laufend", ""
+        konfig.status = "laufend"
 
 
 @router.get("")
@@ -71,6 +72,7 @@ async def schritt(request: Request, konfig_id: int, frage: str = "",
     prot = engine.protokoll(logik, antworten)
     klasse = engine.leistungsklasse(logik, antworten)
     paket = engine.paket_aufloesen(logik, antworten)
+    gruende = engine.ampel_gruende(logik, antworten)
 
     # gezieltes Ändern einer bereits beantworteten Frage
     aktuelle = None
@@ -78,22 +80,24 @@ async def schritt(request: Request, konfig_id: int, frage: str = "",
         kandidat = logik.fragen[frage]
         if engine.ist_sichtbar(kandidat, antworten, logik.fragen):
             aktuelle = kandidat
-    if aktuelle is None and konfig.status == "laufend":
+    if aktuelle is None and konfig.status != "fertig":
         aktuelle = engine.naechste_frage(logik, antworten)
 
-    anzahl_wiederhol = 0
-    if aktuelle and aktuelle.typ == "Wiederholfeld je Verteiler":
-        anzahl_wiederhol = int(engine.zahl_parsen(antworten.get("F19")) or 1)
+    wert = antworten.get(aktuelle.id) if aktuelle else None
+    if aktuelle and wert is None:
+        wert = engine.vorbelegung(aktuelle, antworten)
 
-    beantwortet = len([p for p in prot])
-    gesamt = len(engine.sichtbare_fragen(logik, antworten))
+    anzahl_wiederhol = 0
+    if aktuelle and aktuelle.typ == "Wiederholfeld":
+        anzahl_wiederhol = int(engine.zahl_parsen(
+            antworten.get(engine.ID_WIEDERHOL_ANZAHL)) or 1)
 
     return render(request, "konfigurator/schritt.html", aktiv="/angebote",
                   konfig=konfig, kunde=kunde, frage=aktuelle,
-                  wert=antworten.get(aktuelle.id) if aktuelle else None,
-                  protokoll=prot, klasse=klasse, paket=paket,
-                  anzahl_wiederhol=anzahl_wiederhol,
-                  beantwortet=beantwortet, gesamt=gesamt, fehler="")
+                  wert=wert, protokoll=prot, klasse=klasse, paket=paket,
+                  gruende=gruende, anzahl_wiederhol=anzahl_wiederhol,
+                  beantwortet=len(prot),
+                  gesamt=len(engine.sichtbare_fragen(logik, antworten)), fehler="")
 
 
 @router.post("/{konfig_id}/antwort")
@@ -119,7 +123,9 @@ async def antwort(request: Request, konfig_id: int,
                       wert=wert, protokoll=prot,
                       klasse=engine.leistungsklasse(logik, antworten),
                       paket=engine.paket_aufloesen(logik, antworten),
-                      anzahl_wiederhol=int(engine.zahl_parsen(antworten.get("F19")) or 1),
+                      gruende=engine.ampel_gruende(logik, antworten),
+                      anzahl_wiederhol=int(engine.zahl_parsen(
+                          antworten.get(engine.ID_WIEDERHOL_ANZAHL)) or 1),
                       beantwortet=len(prot),
                       gesamt=len(engine.sichtbare_fragen(logik, antworten)),
                       fehler=fehler)
@@ -139,6 +145,9 @@ def _wert_lesen(frage, form, antworten):
             return wert, "Bitte eine der Antwortmöglichkeiten wählen."
         return wert, ""
 
+    if frage.typ in ("Freitext", "Freitext groß"):
+        return (form.get("wert") or "").strip(), ""
+
     if frage.typ in ("Zahleneingabe", "Betragseingabe"):
         roh = (form.get("wert") or "").strip()
         optional = "leer" in frage.hinweis.lower()
@@ -149,7 +158,7 @@ def _wert_lesen(frage, form, antworten):
             return roh, "Bitte eine gültige Zahl eingeben."
         return zahl, ""
 
-    if frage.typ == "Mengenmaske (4 Zahlenfelder)":
+    if frage.typ == "Mengenmaske":
         werte = {}
         for option in frage.antworten:
             roh = (form.get(f"wert_{option}") or "").strip()
@@ -159,8 +168,8 @@ def _wert_lesen(frage, form, antworten):
             werte[option] = int(zahl)
         return werte, ""
 
-    if frage.typ == "Wiederholfeld je Verteiler":
-        anzahl = int(engine.zahl_parsen(antworten.get("F19")) or 0)
+    if frage.typ == "Wiederholfeld":
+        anzahl = int(engine.zahl_parsen(antworten.get(engine.ID_WIEDERHOL_ANZAHL)) or 0)
         werte = []
         for i in range(1, max(anzahl, 1) + 1):
             roh = (form.get(f"wert_{i}") or "").strip()

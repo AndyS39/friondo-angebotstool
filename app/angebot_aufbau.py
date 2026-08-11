@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app import config
 from app import konfigurator as engine
-from app.logik import Logik
+from app.logik import Logik, antwort_teile as logik_antwort_teile
 from app.models import Angebot, AngebotsPosition, Artikel, Konfiguration
 
 
@@ -29,13 +29,18 @@ class GewaehlterArtikel:
 # --- Artikel aus den Antworten ermitteln ----------------------------------
 
 def _menge_aufloesen(menge_roh: str, antwort) -> float:
-    """Mengen-Ausdruck einer Aktionszeile: Zahl direkt ('1', '2'), sonst der
-    eingegebene Zahlenwert ('eingegebene Meter', 'Anzahl Verteiler')."""
+    """Mengen-Ausdruck einer Aktionszeile: Zahl direkt ('1', '2'), Formel
+    '(Eingabe − 3)' (Erdleitung: nie unter 0) oder der eingegebene Zahlenwert."""
     zahl = engine.zahl_parsen(menge_roh)
     if zahl is not None:
         return zahl
     antwortzahl = antwort if isinstance(antwort, (int, float)) else engine.zahl_parsen(antwort)
-    return float(antwortzahl) if antwortzahl is not None else 1.0
+    if antwortzahl is None:
+        return 1.0
+    m = re.search(r"Eingabe\s*[−–-]\s*([\d.,]+)", menge_roh)
+    if m:
+        return max(0.0, float(antwortzahl) - engine.zahl_parsen(m.group(1)))
+    return float(antwortzahl)
 
 
 def artikel_ermitteln(logik: Logik, antworten: dict) -> list[GewaehlterArtikel]:
@@ -46,49 +51,58 @@ def artikel_ermitteln(logik: Logik, antworten: dict) -> list[GewaehlterArtikel]:
             continue
         wert = antworten[frage.id]
 
-        if frage.typ == "Mengenmaske (4 Zahlenfelder)":
-            # F17: je Größe die passende Aktionszeile ("Anzahl S" -> Z18 × Anzahl)
+        if frage.typ == "Mengenmaske":
+            # H04: eine Zeile "Anzahl S / M / L / XL" -> Artikel paarweise je Größe
+            zeile = next((a for a in logik.aktionen if a.frage == frage.id), None)
+            if zeile is None:
+                continue
+            groessen = [re.sub(r"^Anzahl\s+", "", t)
+                        for t in logik_antwort_teile(zeile.antwort)]
             gesamt = 0
             for groesse, anzahl in wert.items():
                 if not anzahl:
                     continue
                 gesamt += int(anzahl)
-                for aktion in logik.aktionen:
-                    if (aktion.frage == frage.id
-                            and re.fullmatch(rf"Anzahl\s+{groesse}", aktion.antwort)):
-                        for ref in aktion.artikel:
-                            gewaehlt.append(GewaehlterArtikel(
-                                ref.ref, float(anzahl), ref.ep, frage.id))
+                if groesse in groessen:
+                    index = groessen.index(groesse)
+                    if index < len(zeile.artikel):
+                        gewaehlt.append(GewaehlterArtikel(
+                            zeile.artikel[index].ref, float(anzahl), False, frage.id))
             if gesamt:
                 # Heizkörper-Pauschale: Pos. 129 × Gesamtanzahl aller Heizkörper
                 gewaehlt.append(GewaehlterArtikel("129", float(gesamt), False, frage.id))
             continue
 
-        if frage.typ == "Wiederholfeld je Verteiler":
-            # F20: je Verteiler die passende Größen-Zeile; gleiche Artikel zusammenfassen
+        if frage.typ == "Wiederholfeld":
+            # H07: je Verteiler die passende Größenstufe; gleiche Artikel zusammenfassen
             zaehler: dict[str, float] = {}
             for gruppenzahl in wert:
-                aktion = engine.aktion_finden(logik, frage, gruppenzahl, antworten)
-                if aktion and aktion.typ == "normal":
-                    for ref in aktion.artikel:
+                treffer = engine.aktion_finden(logik, frage, gruppenzahl, antworten)
+                if treffer and treffer[0].typ == "normal":
+                    for ref in engine.refs_fuer_treffer(*treffer):
                         zaehler[ref.ref] = zaehler.get(ref.ref, 0) + 1
             for ref_nr, anzahl in zaehler.items():
                 gewaehlt.append(GewaehlterArtikel(ref_nr, anzahl, False, frage.id))
             continue
 
-        aktion = engine.aktion_finden(logik, frage, wert, antworten)
-        if aktion is None or aktion.typ != "normal":
+        if isinstance(wert, (dict, list)) or frage.typ in ("Freitext", "Freitext groß"):
             continue
-        for ref in aktion.artikel:
-            gewaehlt.append(GewaehlterArtikel(
-                ref.ref, _menge_aufloesen(ref.menge, wert), ref.ep, frage.id))
 
-    # Paket laut Paketmatrix (F02 + F03/F04)
+        treffer = engine.aktion_finden(logik, frage, wert, antworten)
+        if treffer is None or treffer[0].typ != "normal":
+            continue
+        for ref in engine.refs_fuer_treffer(*treffer):
+            menge = _menge_aufloesen(ref.menge, wert)
+            if menge <= 0:
+                continue  # z. B. Erdleitung: (Eingabe − 3) = 0 -> keine Position
+            gewaehlt.append(GewaehlterArtikel(ref.ref, menge, ref.ep, frage.id))
+
+    # Paket laut Paketmatrix (A03 + N02/N03)
     for ref in (engine.paket_aufloesen(logik, antworten) or []):
         gewaehlt.append(GewaehlterArtikel(ref.ref, 1.0, ref.ep, "paket"))
 
     # Grundpaket und Gruppen-Trigger aus den Spezial-Aktionszeilen
-    friondo_ja = any(antworten.get(f) == "Ja" for f in ("F27", "F28", "F29"))
+    friondo_ja = any(antworten.get(f) == "Ja" for f in engine.FRIONDO_FRAGEN)
     for aktion in logik.aktionen:
         if aktion.frage == "Grundpaket":
             for ref in aktion.artikel:
@@ -106,7 +120,7 @@ def _block_sichtbar(block, antworten: dict, logik: Logik) -> bool:
     if b is None or b.art == "immer":
         return True
     if b.art == "friondo_ja":
-        return any(antworten.get(f) == "Ja" for f in ("F27", "F28", "F29"))
+        return any(antworten.get(f) == "Ja" for f in engine.FRIONDO_FRAGEN)
     if b.art == "antwort":
         return str(antworten.get(b.frage_id) or "") in b.werte
     return True
@@ -125,14 +139,14 @@ def _position_im_inhalt(block, artikel: GewaehlterArtikel) -> int:
             if int(m.group(1)) <= int(ref[1:]) <= int(m.group(2)):
                 return m.start()
     else:
-        for m in re.finditer(r"Pos\.\s*((?:\d{1,3}(?:\s*\(EP\))?\s*(?:[,/]\s*)?)+)", inhalt):
-            nummern = re.findall(r"\d{1,3}", m.group(1))
-            if ref.lstrip("0") in [n.lstrip("0") for n in nummern]:
-                versatz = m.group(0).find(ref)
-                if versatz < 0:
-                    versatz = m.group(0).find(ref.lstrip("0"))
-                return m.start() + max(versatz, 0)
-    if artikel.quelle_frage.startswith("F"):
+        # v2: Positionsnummern stehen auch ohne "Pos."-Präfix im Inhalt
+        # ("Pos. 005 · 006 · 007 (EP)") – nacktes Token genügt
+        m = re.search(rf"\b{re.escape(ref)}\b", inhalt)
+        if m is None and ref.lstrip("0") != ref:
+            m = re.search(rf"\b{re.escape(ref.lstrip('0'))}\b", inhalt)
+        if m:
+            return m.start()
+    if re.fullmatch(r"[A-Z]\d{2}", artikel.quelle_frage):
         m = re.search(rf"\b{artikel.quelle_frage}\b", inhalt)
         if m:
             return m.start()
@@ -150,7 +164,7 @@ def _block_ueberschrift(block, antworten: dict, erste_kategorie: str) -> str:
     if u.startswith("DYNAMISCH"):
         zitate = re.findall(r"'([^']+)'", u)
         basis = zitate[0] if zitate else ""
-        if antworten.get("F03") == "Ja" and len(zitate) > 1 and zitate[1].startswith("…"):
+        if antworten.get(engine.ID_WARMWASSER) == "Ja" and len(zitate) > 1 and zitate[1].startswith("…"):
             kopf = basis.split(" mit ")[0]
             return kopf + " " + zitate[1].lstrip("… ").strip()
         return basis
@@ -266,9 +280,7 @@ def angebot_anlegen(session: Session, kunde_id: int,
     if konfiguration is not None and logik is not None:
         antworten = json.loads(konfiguration.antworten_json or "{}")
         protokoll_json = json.dumps(engine.protokoll(logik, antworten), ensure_ascii=False)
-        kfw_json = json.dumps(
-            {f: antworten.get(f) for f in ("F30", "F31", "F32", "F33", "F34", "F35", "F36")
-             if f in antworten}, ensure_ascii=False)
+        kfw_json = json.dumps(engine.kfw_daten(antworten), ensure_ascii=False)
         positionen = positionen_zusammenstellen(logik, antworten, session)
 
     for _versuch in range(5):

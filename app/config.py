@@ -24,11 +24,9 @@ PREISLISTE_PFAD = _pfad(
     "PREISLISTE_PFAD",
     PROJEKT_ORDNER / "Artikel-Preislisten" / "Angebotserstellung Tool mit EK.xlsx",
 )
-LOGIK_EXCEL_PFAD = _pfad("LOGIK_EXCEL_PFAD", PROJEKT_ORDNER / "konfigurator_logik.xlsx")
-# v2-Logik: Phase 11 nutzt daraus Zusatzartikel (inkl. EK) und Textregeln;
-# der vollständige Umstieg der Fragen-/Aktionslogik folgt in Phase 12.
-LOGIK_EXCEL_V2_PFAD = _pfad("LOGIK_EXCEL_V2_PFAD",
-                            PROJEKT_ORDNER / "konfigurator_logik_v2.xlsx")
+# Seit Phase 12 ist die v2-Logik führend (Seiten, AMPEL, IDs O/A/N/H/E/P/K)
+LOGIK_EXCEL_PFAD = _pfad("LOGIK_EXCEL_PFAD", PROJEKT_ORDNER / "konfigurator_logik_v2.xlsx")
+LOGIK_EXCEL_V2_PFAD = LOGIK_EXCEL_PFAD  # Alias (Phase-11-Import nutzt diesen Namen)
 LOGO_ORDNER = _pfad("LOGO_ORDNER", PROJEKT_ORDNER / "Layout - Logo")
 DATA_ORDNER = _pfad("DATA_ORDNER", PROJEKT_ORDNER / "data")
 

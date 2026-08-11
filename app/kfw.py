@@ -16,6 +16,13 @@ def _rund_cent(wert: float) -> int:
     return int(math.floor(wert + 0.5))
 
 
+# Fallback, falls die Logik-Excel keinen eigenen Disclaimer-Text pflegt (v2)
+STANDARD_DISCLAIMER = (
+    "Unverbindliche Beispielrechnung der Friondo GmbH auf Basis der BEG-Richtlinie, "
+    "Konditionen ab 21.07.2026. Maßgeblich sind allein die Förderzusage der KfW "
+    "und die jeweils gültige Richtlinie.")
+
+
 def _zahl(text: str) -> Optional[float]:
     m = re.search(r"[\d.]+(?:,\d+)?", text)
     if not m:
@@ -58,22 +65,25 @@ def parameter_lesen(logik: Logik) -> tuple[KfwParameter, list[str]]:
         p.grund_prozent = z
     if (z := _zahl(wert("Klimageschwindigkeits-Bonus"))) is not None:
         p.klima_prozent = z
-    for stufe in ("Einkommensbonus Stufe 1", "Einkommensbonus Stufe 2", "Einkommensbonus Stufe 3"):
-        m = re.search(r"([\d.]+)\s*%\s*bei Einkommen bis\s*([\d.]+)", wert(stufe))
-        if m:
-            p.einkommens_stufen.append((_zahl(m.group(1)), _zahl(m.group(2))))
-        else:
-            warnungen.append(f"KfW: „{stufe}“ nicht lesbar – Standardwert verwendet.")
+
+    # v2: eine Zeile "40 % (≤ 30.000 €) · 30 % (≤ 40.000 €) · 10 % (≤ 50.000 €)";
+    # Kind-Freibetrag steht in der Bemerkung derselben Zeile
+    bonus_wert, bonus_bem = kfw.get("Einkommensbonus", ("", ""))
+    for m in re.finditer(r"([\d.]+)\s*%\s*\(≤\s*([\d.]+)", bonus_wert):
+        p.einkommens_stufen.append((_zahl(m.group(1)), _zahl(m.group(2))))
     if not p.einkommens_stufen:
         p.einkommens_stufen = [(40, 30000), (30, 40000), (10, 50000)]
+        warnungen.append("KfW: Einkommensbonus-Stufen nicht lesbar – Standardwerte verwendet.")
     p.einkommens_stufen.sort(key=lambda s: s[1])
+    m = re.search(r"Kind-Freibetrag\s*([\d.]+)", bonus_bem)
+    if m:
+        p.kind_freibetrag_eur = _zahl(m.group(1))
 
-    if (z := _zahl(wert("Kind-Freibetrag"))) is not None:
-        p.kind_freibetrag_eur = z
-    if (z := _zahl(wert("Fördersatz-Deckel"))) is not None:
-        p.deckel_prozent = z
-    if (z := _zahl(wert("Fördersatz-Deckel erhöht"))) is not None:
-        p.deckel_erhoeht_prozent = z
+    # v2: "70 % · 80 % bei 40er-Einkommensbonus"
+    deckel_werte = [_zahl(t) for t in re.findall(r"([\d.]+)\s*%", wert("Fördersatz-Deckel"))]
+    if deckel_werte:
+        p.deckel_prozent = deckel_werte[0]
+        p.deckel_erhoeht_prozent = deckel_werte[1] if len(deckel_werte) > 1 else deckel_werte[0]
     if (z := _zahl(wert("Höchstkosten EFH"))) is not None:
         p.efh_max_eur = z
 
@@ -113,11 +123,13 @@ def parameter_lesen(logik: Logik) -> tuple[KfwParameter, list[str]]:
     else:
         warnungen.append("KfW: Gültigkeit der Konditionen nicht lesbar.")
 
-    if (m := re.search(r"KfW\s*\d+", kfw.get("Gewerbe", ("", ""))[0])):
-        p.programm_gewerbe = f"{m.group(0)} (Nichtwohngebäude)"
-    if (m := re.search(r"KfW\s*\d+", kfw.get("Gewerbe", ("", ""))[1])):
-        p.programm_wohn = f"{m.group(0)} (Wohngebäude)"
-    p.disclaimer = wert("Disclaimer")
+    # v2: "Programm ;; Wohngebäude KfW 458 · Gewerbe KfW 522 (nur Grundförderung)"
+    programm_text = wert("Programm")
+    if (m := re.search(r"Wohngebäude\s*(KfW\s*\d+)", programm_text)):
+        p.programm_wohn = f"{m.group(1)} (Wohngebäude)"
+    if (m := re.search(r"Gewerbe\s*(KfW\s*\d+)", programm_text)):
+        p.programm_gewerbe = f"{m.group(1)} (Nichtwohngebäude)"
+    p.disclaimer = wert("Disclaimer") or STANDARD_DISCLAIMER
     return p, warnungen
 
 
@@ -158,28 +170,34 @@ class KfwErgebnis:
 
 
 def eingaben_aus_antworten(kfw_daten: dict, kosten_cent: int) -> Optional[KfwEingaben]:
-    """Erzeugt die Berechnungs-Eingaben aus den Konfigurator-Antworten F30–F36."""
-    f30 = str(kfw_daten.get("F30") or "")
-    if f30.startswith("Einfamilienhaus"):
+    """Ableitung lt. Blatt "KfW" (v2): Gebäudetyp aus der Objektart O01
+    (EFH/REH/RMH → EFH mit automatischer Selbstnutzung; 2FH/MFH → MFH mit
+    WE aus O03 und Selbstnutzung aus K01; Gewerbe → Nichtwohngebäude mit
+    Fläche aus O05), Klima-Bonus aus K02, Einkommen K03, Kind K04."""
+    objektart = str(kfw_daten.get("O01") or "")
+    if objektart in ("EFH", "REH", "RMH"):
         objekt = "efh"
-    elif f30.startswith("Mehrfamilienhaus"):
+        mfh_selbst = True
+    elif objektart in ("2FH", "MFH"):
         objekt = "mfh"
-    elif f30.startswith("Gewerbe"):
+        mfh_selbst = kfw_daten.get("K01") == "Ja"
+    elif objektart.startswith("Gewerbe"):
         objekt = "nwg"
+        mfh_selbst = False
     else:
         return None
-    f34 = str(kfw_daten.get("F34") or "")
-    klima = bool(f34) and not f34.startswith("Andere")
-    einkommen = kfw_daten.get("F35")
+    k02 = str(kfw_daten.get("K02") or "")
+    klima = bool(k02) and not k02.startswith("Andere")
+    einkommen = kfw_daten.get("K03")
     return KfwEingaben(
         objekt=objekt,
         kosten_cent=kosten_cent,
-        wohneinheiten=int(kfw_daten.get("F31") or 0),
-        flaeche_m2=float(kfw_daten.get("F33") or 0),
-        mfh_selbst=kfw_daten.get("F32") == "Ja",
+        wohneinheiten=int(float(kfw_daten.get("O03") or 0)),
+        flaeche_m2=float(kfw_daten.get("O05") or 0),
+        mfh_selbst=mfh_selbst,
         klima_bonus=klima,
         einkommen_eur=float(einkommen) if einkommen not in (None, "") else 0,
-        kind=kfw_daten.get("F36") == "Ja",
+        kind=kfw_daten.get("K04") == "Ja",
     )
 
 

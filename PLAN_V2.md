@@ -19,18 +19,18 @@ committen. CLAUDE.md (v2) vorher vollständig lesen.
       greift, sobald Phase 13 die Rollen einführt
 
 ## Phase 12 – Logik v2 & Fragebogen-Umbau
-- [ ] `konfigurator_logik_v2.xlsx` einlesen (neue IDs O/A/N/H/E/P/K, Spalte „Seite",
+- [x] `konfigurator_logik_v2.xlsx` einlesen (neue IDs O/A/N/H/E/P/K, Spalte „Seite",
       Blatt „Anhänge"); Validierung wie gehabt
-- [ ] AMPEL statt Abbruch: 14 Gründe setzen Flag „individuell" + Grundliste,
+- [x] AMPEL statt Abbruch: 14 Gründe setzen Flag „individuell" + Grundliste,
       Katalog läuft immer vollständig durch, keine Fehlermeldungen
-- [ ] Neue Fragen der Seiten Objektdaten / Alte Anlage / Neue Anlage umsetzen
+- [x] Neue Fragen der Seiten Objektdaten / Alte Anlage / Neue Anlage umsetzen
       (inkl. Folgefeld O07 bei „Rechnungsanschrift korrekt = Nein")
-- [ ] Erdleitung: Menge = max(0, Eingabe − 3); bei 0 keine Position
-- [ ] KfW-Ableitungen + Klima-Vorbelegung lt. Blatt „KfW" (alte Direktfragen entfallen)
-- [ ] Regressionstest Kontroll-Szenario (Werte wie gehabt, Erdleitung 8 m → 5 m
+- [x] Erdleitung: Menge = max(0, Eingabe − 3); bei 0 keine Position
+- [x] KfW-Ableitungen + Klima-Vorbelegung lt. Blatt „KfW" (alte Direktfragen entfallen)
+- [x] Regressionstest Kontroll-Szenario (Werte wie gehabt, Erdleitung 8 m → 5 m
       berechnet): Netto 29.629,37 € · USt 5.629,58 € · Brutto 35.258,95 € ·
       Zuschuss 19.600,00 € · Eigenanteil 15.658,95 €
-- [ ] KfW-Testfälle gegen foerderrechner-website.html erneut laufen lassen
+- [x] KfW-Testfälle gegen foerderrechner-website.html erneut laufen lassen
 
 ## Phase 13 – Rollen & mobile Erfassung
 - [ ] Einfache Benutzerverwaltung: Benutzerliste (Name, Rolle Innendienst/Außendienst,

@@ -87,6 +87,40 @@ class Konfiguration(Base):
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
+class Benutzer(Base):
+    """Leichtgewichtige Benutzerverwaltung (Phase 13): Name, Rolle, PIN-Hash."""
+    __tablename__ = "benutzer"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    rolle: Mapped[str] = mapped_column(String(20), default="aussendienst")  # innendienst | aussendienst
+    pin_hash: Mapped[str] = mapped_column(String(64), default="")
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
+    angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+ERFASSUNG_STATUS = ["Neu", "In Bearbeitung", "Erledigt"]
+
+
+class Erfassung(Base):
+    """Mobile Außendienst-Erfassung (Phase 13): Antworten + Ampel; der Innendienst
+    verarbeitet sie in der Erfassungsliste (Phase 14) weiter."""
+    __tablename__ = "erfassungen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kunde_id: Mapped[int] = mapped_column(Integer, index=True)
+    benutzer_id: Mapped[int] = mapped_column(Integer, index=True)      # Vertriebler
+    antworten_json: Mapped[str] = mapped_column(Text, default="{}")
+    ampel: Mapped[str] = mapped_column(String(10), default="gruen")    # gruen | orange
+    gruende_text: Mapped[str] = mapped_column(Text, default="")        # AMPEL-Gründe (je Zeile)
+    status: Mapped[str] = mapped_column(String(20), default="Entwurf") # Entwurf -> Neu -> ...
+    seite_index: Mapped[int] = mapped_column(Integer, default=0)       # Fortschritt beim Ausfüllen
+    angebot_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    aenderungs_protokoll: Mapped[str] = mapped_column(Text, default="")  # Korrekturen Innendienst
+    angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    abgesendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
 ANGEBOT_STATUS = ["Entwurf", "Versendet", "Angenommen", "Abgelehnt"]
 
 
