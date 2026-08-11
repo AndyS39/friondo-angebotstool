@@ -33,13 +33,13 @@ committen. CLAUDE.md (v2) vorher vollständig lesen.
 - [x] KfW-Testfälle gegen foerderrechner-website.html erneut laufen lassen
 
 ## Phase 13 – Rollen & mobile Erfassung
-- [ ] Einfache Benutzerverwaltung: Benutzerliste (Name, Rolle Innendienst/Außendienst,
-      PIN); Login leichtgewichtig, Sitzung merken
-- [ ] `/erfassung`: mobile-first, eine Seite pro Kategorie, große Bedienelemente,
+- [x] Einfache Benutzerverwaltung: Benutzerliste (Name, Rolle Innendienst/Außendienst,
+      PIN); Login leichtgewichtig, Sitzung merken (Erststart: Admin / PIN 1234)
+- [x] `/erfassung`: mobile-first, eine Seite pro Kategorie, große Bedienelemente,
       Fortschritt, vor/zurück, Pflichtfeld-Prüfung
-- [ ] Ablauf: Vertriebler angemeldet → Kunde anlegen oder wählen → Katalog → „Absenden"
-- [ ] Außendienst-Sicht ohne Preise, EK, DB und ohne Angebotsbereich
-- [ ] Erfassung speichert: Kunde, Vertriebler, Zeitpunkt, alle Antworten, Ampel + Gründe
+- [x] Ablauf: Vertriebler angemeldet → Kunde anlegen oder wählen → Katalog → „Absenden"
+- [x] Außendienst-Sicht ohne Preise, EK, DB und ohne Angebotsbereich
+- [x] Erfassung speichert: Kunde, Vertriebler, Zeitpunkt, alle Antworten, Ampel + Gründe
 
 ## Phase 14 – Erfassungsliste Innendienst
 - [ ] Liste: Datum, Kunde, Vertriebler, Ampel (grün „Konfigurierbar" / orange

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block titel %}Abgesendet – Erfassung{% endblock %}
+
+{% block inhalt %}
+<div class="mobil-inhalt">
+    <h1>Erfassung abgesendet ✓</h1>
+    <p class="meldung">Vielen Dank! Die Erfassung liegt jetzt beim Innendienst
+    {% if erfassung.ampel == 'orange' %} und ist als <strong>individuell</strong> markiert{% endif %}.</p>
+    <div class="mobil-aktionen">
+        <a class="knopf gross" href="/erfassung/neu">Nächste Erfassung</a>
+        <a class="knopf zweitrangig gross" href="/erfassung">Zur Übersicht</a>
+    </div>
+</div>
+{% endblock %}

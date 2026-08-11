@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block titel %}Anmeldung – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="login-karte">
+    <h1>Anmeldung</h1>
+    {% if fehler %}<p class="meldung fehler">{{ fehler }}</p>{% endif %}
+    {% if benutzer %}
+    <form method="post" action="/login">
+        <label>Benutzer
+            <select name="benutzer_id">
+                {% for b in benutzer %}
+                    <option value="{{ b.id }}">{{ b.name }} ({{ b.rolle }})</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>PIN
+            <input type="password" name="pin" inputmode="numeric" autocomplete="off" autofocus>
+        </label>
+        <button class="knopf gross" type="submit">Anmelden</button>
+    </form>
+    {% else %}
+    <p class="hinweis">Keine Benutzer vorhanden – beim ersten Start wird automatisch
+    „Admin“ (PIN 1234) angelegt. Bitte App neu starten.</p>
+    {% endif %}
+</div>
+{% endblock %}

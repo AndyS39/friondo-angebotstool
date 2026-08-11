@@ -59,3 +59,4 @@ KFW_GUELTIG_BIS = "2027-01-31"
 
 # --- Sonstiges -----------------------------------------------------------
 MONDAY_API_TOKEN = os.getenv("MONDAY_API_TOKEN", "").strip()
+SESSION_SECRET = os.getenv("SESSION_SECRET", "").strip()  # leer = auto (data/.session_secret)

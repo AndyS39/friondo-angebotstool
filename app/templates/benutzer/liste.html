@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block titel %}Benutzer – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<h1>Benutzer</h1>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<table class="tabelle">
+    <thead><tr><th>Name</th><th>Rolle</th><th>Neue PIN</th><th>Aktiv</th><th></th></tr></thead>
+    <tbody>
+    {% for b in benutzer %}
+        <tr class="{{ 'inaktiv' if not b.aktiv }}">
+            <form method="post" action="/benutzer/{{ b.id }}/aendern">
+                <td>{{ b.name }}</td>
+                <td>
+                    <select name="rolle">
+                        {% for r in rollen %}
+                            <option value="{{ r }}" {{ 'selected' if b.rolle == r }}>{{ r }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td><input type="password" name="pin" placeholder="unverändert" size="8"></td>
+                <td><input type="checkbox" name="aktiv" {{ 'checked' if b.aktiv }}></td>
+                <td class="aktionen"><button class="knopf klein" type="submit">Speichern</button></td>
+            </form>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Neuer Benutzer</h2>
+<form method="post" action="/benutzer/neu" class="formular">
+    <div class="formzeile">
+        <label>Name <input type="text" name="name"></label>
+        <label class="schmal">Rolle
+            <select name="rolle">
+                {% for r in rollen %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+            </select>
+        </label>
+        <label class="schmal">PIN (mind. 4 Ziffern)
+            <input type="password" name="pin" inputmode="numeric">
+        </label>
+    </div>
+    <button class="knopf" type="submit">Anlegen</button>
+</form>
+<p class="dezent">Außendienst-Benutzer sehen ausschließlich die mobile Erfassung –
+keine Preise, keine Einkaufspreise, keinen Deckungsbeitrag, keine Angebote.</p>
+{% endblock %}

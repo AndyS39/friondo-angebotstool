@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block titel %}{{ seiten[nr] }} – Erfassung{% endblock %}
+
+{% block inhalt %}
+<div class="mobil-inhalt">
+    <p class="dezent">Kunde: <strong>{{ kunde.anzeige_name }}</strong></p>
+
+    <div class="fortschritt">
+        {% for s in seiten %}
+            <span class="schritt {{ 'aktuell' if loop.index0 == nr else ('fertig' if loop.index0 < nr) }}"
+                  title="{{ s }}"></span>
+        {% endfor %}
+    </div>
+    <h1>{{ seiten[nr] }} <span class="dezent">({{ nr + 1 }}/{{ seiten | length }})</span></h1>
+
+    <form method="post" action="/erfassung/{{ erfassung.id }}/seite/{{ nr }}" class="mobil-formular" id="seitenform">
+        {% for frage in fragen %}
+        <div class="fragefeld {{ 'verborgen' if not sichtbar[frage.id] }}"
+             data-frage="{{ frage.id }}" data-regel='{{ client_regel(frage) }}'>
+            <label class="fragetitel">{{ frage.text }}
+                {% if frage.hinweis %}<span class="dezent hinweiszeile">{{ frage.hinweis }}</span>{% endif %}
+            </label>
+            {% if fehler.get(frage.id) %}<p class="feldfehler">{{ fehler[frage.id] }}</p>{% endif %}
+
+            {% if frage.typ == 'Auswahl' %}
+                <div class="wahl-gruppe">
+                {% for option in frage.antworten %}
+                    <label class="wahl">
+                        <input type="radio" name="f_{{ frage.id }}" value="{{ option }}"
+                               {{ 'checked' if werte.get(frage.id) == option }}>
+                        <span>{{ option }}</span>
+                    </label>
+                {% endfor %}
+                </div>
+            {% elif frage.typ == 'Freitext' %}
+                <input type="text" name="f_{{ frage.id }}" value="{{ werte.get(frage.id) or '' }}">
+            {% elif frage.typ == 'Freitext groß' %}
+                <textarea name="f_{{ frage.id }}" rows="3">{{ werte.get(frage.id) or '' }}</textarea>
+            {% elif frage.typ in ('Zahleneingabe', 'Betragseingabe') %}
+                <input type="text" name="f_{{ frage.id }}" inputmode="decimal"
+                       value="{{ werte.get(frage.id) | menge if werte.get(frage.id) not in (None, '') else '' }}">
+            {% elif frage.typ == 'Mengenmaske' %}
+                <div class="mengen-gruppe">
+                {% for option in frage.antworten %}
+                    <label>{{ option }}
+                        <input type="text" name="f_{{ frage.id }}_{{ option }}" inputmode="numeric"
+                               value="{{ werte[frage.id][option] if werte.get(frage.id) is mapping and option in werte[frage.id] }}">
+                    </label>
+                {% endfor %}
+                </div>
+            {% elif frage.typ == 'Wiederholfeld' %}
+                <div class="mengen-gruppe" data-wiederhol="f_{{ frage.id }}" data-zaehler="f_{{ wiederhol_id }}">
+                {% for i in range(1, 9) %}
+                    <label class="wiederhol-feld" data-index="{{ i }}">Verteiler {{ i }}
+                        <input type="text" name="f_{{ frage.id }}_{{ i }}" inputmode="numeric"
+                               value="{{ werte[frage.id][i-1] if werte.get(frage.id) and werte[frage.id] is not string and werte[frage.id] | length >= i }}">
+                    </label>
+                {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <div class="mobil-aktionen">
+            {% if nr > 0 %}
+                <button class="knopf zweitrangig gross" type="submit" name="richtung" value="zurueck">← Zurück</button>
+            {% endif %}
+            <button class="knopf gross" type="submit" name="richtung" value="weiter">
+                {{ 'Zur Übersicht →' if nr + 1 == seiten | length else 'Weiter →' }}
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+// Folgefragen derselben Seite ein-/ausblenden (serverseitig wird erneut geprüft)
+(function () {
+    const felder = Array.from(document.querySelectorAll('.fragefeld'));
+    const objektart = {{ (werte.get('O01') or '') | tojson }};
+
+    function wert(frageId) {
+        const radio = document.querySelector(`input[name="f_${frageId}"]:checked`);
+        if (radio) return radio.value;
+        const feld = document.querySelector(`[name="f_${frageId}"]`);
+        return feld ? feld.value.trim() : null;
+    }
+
+    function sichtbar(regel) {
+        if (!regel || regel.art === 'immer') return true;
+        if (regel.art === 'antwort') {
+            const w = wert(regel.frage);
+            if (w === null) return true;   // Frage liegt auf früherer Seite -> Server entschied
+            return regel.werte.some(v => w === v || (v === 'beides' && w.includes(' und ')));
+        }
+        if (regel.art === 'ausgefuellt') {
+            const w = wert(regel.frage);
+            return w === null ? true : w !== '';
+        }
+        if (regel.art === 'selbstnutzung') {
+            if (['EFH', 'REH', 'RMH'].includes(objektart)) return true;
+            if (objektart === 'Gewerbe') return false;
+            const k01 = wert('K01');
+            return k01 === null ? true : k01 === 'Ja';
+        }
+        return true;
+    }
+
+    function aktualisieren() {
+        felder.forEach(f => {
+            const regel = JSON.parse(f.dataset.regel || '{}');
+            const zeigen = sichtbar(regel);
+            f.classList.toggle('verborgen', !zeigen);
+        });
+        document.querySelectorAll('[data-wiederhol]').forEach(gruppe => {
+            const zaehlerFeld = document.querySelector(`[name="${gruppe.dataset.zaehler}"]`);
+            const n = zaehlerFeld ? parseInt(zaehlerFeld.value) || 0 : 0;
+            gruppe.querySelectorAll('.wiederhol-feld').forEach(feld => {
+                feld.style.display = parseInt(feld.dataset.index) <= Math.max(n, 1) ? '' : 'none';
+            });
+        });
+    }
+
+    document.getElementById('seitenform').addEventListener('input', aktualisieren);
+    document.getElementById('seitenform').addEventListener('change', aktualisieren);
+    aktualisieren();
+})();
+</script>
+{% endblock %}

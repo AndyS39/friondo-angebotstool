@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block titel %}Übersicht – Erfassung{% endblock %}
+
+{% block inhalt %}
+<div class="mobil-inhalt">
+    <h1>Übersicht</h1>
+    <p class="dezent">Kunde: <strong>{{ kunde.anzeige_name }}</strong></p>
+
+    {% if offen %}
+        <p class="meldung fehler">Es fehlen noch Antworten (z. B. {{ offen.id }} –
+        {{ offen.text }}). Bitte die Seiten vervollständigen.</p>
+    {% endif %}
+
+    {% if gruende %}
+        <div class="warnblock">
+            <strong>Hinweis für den Innendienst: individuelle Prüfung nötig</strong>
+            <ul>{% for g in gruende %}<li>{{ g }}</li>{% endfor %}</ul>
+        </div>
+    {% endif %}
+
+    {% set ns = namespace(seite=None) %}
+    {% for p in protokoll %}
+        {% if p.seite != ns.seite %}
+            {% set ns.seite = p.seite %}
+            <h2>{{ p.seite }}</h2>
+        {% endif %}
+        <div class="protokoll-zeile">
+            <span class="dezent">{{ p.frage }}</span><br><strong>{{ p.antwort }}</strong>
+        </div>
+    {% endfor %}
+
+    <div class="mobil-aktionen">
+        <a class="knopf zweitrangig gross" href="/erfassung/{{ erfassung.id }}/seite/{{ seiten | length - 1 }}">← Zurück</a>
+        {% if not offen and erfassung.status == 'Entwurf' %}
+        <form method="post" action="/erfassung/{{ erfassung.id }}/absenden">
+            <button class="knopf gross" type="submit">Absenden</button>
+        </form>
+        {% elif erfassung.status != 'Entwurf' %}
+        <p class="meldung">Bereits abgesendet ({{ erfassung.status }}).</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

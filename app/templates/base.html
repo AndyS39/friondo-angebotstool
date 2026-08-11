@@ -7,12 +7,18 @@
     <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
 </head>
 <body>
+{% set benutzer_angemeldet = request.state.benutzer if request.state is defined else None %}
 <header class="kopfleiste">
-    <a class="marke" href="/">Friondo <span>Angebotstool</span></a>
+    <a class="marke" href="{{ '/erfassung' if benutzer_angemeldet and benutzer_angemeldet.rolle != 'innendienst' else '/' }}">Friondo <span>Angebotstool</span></a>
     <nav>
-        {% for pfad, name in navigation %}
-            <a href="{{ pfad }}" class="{{ 'aktiv' if aktiv == pfad else '' }}">{{ name }}</a>
-        {% endfor %}
+        {% if benutzer_angemeldet and benutzer_angemeldet.rolle == 'innendienst' and not mobil %}
+            {% for pfad, name in navigation %}
+                <a href="{{ pfad }}" class="{{ 'aktiv' if aktiv == pfad else '' }}">{{ name }}</a>
+            {% endfor %}
+        {% endif %}
+        {% if benutzer_angemeldet %}
+            <a href="/logout" title="{{ benutzer_angemeldet.name }} abmelden">{{ benutzer_angemeldet.name }} ⏻</a>
+        {% endif %}
     </nav>
 </header>
 <main>

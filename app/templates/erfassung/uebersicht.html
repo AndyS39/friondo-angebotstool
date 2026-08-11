@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block titel %}Erfassung – Friondo{% endblock %}
+
+{% block inhalt %}
+<div class="mobil-inhalt">
+    <h1>Erfassungen</h1>
+    <a class="knopf gross" href="/erfassung/neu">+ Neue Erfassung</a>
+
+    {% if erfassungen %}
+    <ul class="erfassung-liste">
+    {% for e in erfassungen %}
+        <li>
+            <a href="{{ '/erfassung/' ~ e.id ~ '/seite/' ~ e.seite_index if e.status == 'Entwurf' else '/erfassung/' ~ e.id ~ '/pruefen' }}">
+                <strong>{{ kunden[e.kunde_id].anzeige_name if e.kunde_id in kunden else '?' }}</strong><br>
+                <span class="dezent">{{ e.angelegt_am.strftime('%d.%m.%Y %H:%M') }} ·
+                {% if e.status == 'Entwurf' %}Entwurf – fortsetzen
+                {% else %}abgesendet ({{ e.status }})
+                    {% if e.ampel == 'orange' %}· <span class="ampel orange">Individuell</span>
+                    {% else %}· <span class="ampel gruen">Konfigurierbar</span>{% endif %}
+                {% endif %}</span>
+            </a>
+        </li>
+    {% endfor %}
+    </ul>
+    {% else %}
+    <p class="dezent">Noch keine Erfassungen.</p>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block titel %}Neue Erfassung – Friondo{% endblock %}
+
+{% block inhalt %}
+<div class="mobil-inhalt">
+    <h1>Neue Erfassung</h1>
+    {% if fehler %}<p class="meldung fehler">{{ fehler }}</p>{% endif %}
+
+    <form method="post" action="/erfassung/neu" class="mobil-formular">
+        <h2>Bestehenden Kunden wählen …</h2>
+        <label>Kunde
+            <select name="kunde_id">
+                <option value="">– neuen Kunden anlegen –</option>
+                {% for k in kunden %}
+                    <option value="{{ k.id }}">{{ k.anzeige_name }}{% if k.ort %} – {{ k.ort }}{% endif %}</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <h2>… oder neuen Kunden anlegen</h2>
+        <label>Anrede
+            <select name="anrede">
+                <option value=""></option>
+                <option>Herr</option><option>Frau</option><option>Familie</option><option>Firma</option>
+            </select>
+        </label>
+        <label>Firma <input type="text" name="firma"></label>
+        <label>Vorname <input type="text" name="vorname"></label>
+        <label>Nachname <input type="text" name="nachname"></label>
+        <label>Straße und Hausnummer <input type="text" name="strasse"></label>
+        <label>PLZ <input type="text" name="plz" inputmode="numeric"></label>
+        <label>Ort <input type="text" name="ort"></label>
+        <label>E-Mail <input type="email" name="email"></label>
+        <label>Telefon <input type="tel" name="telefon"></label>
+
+        <button class="knopf gross" type="submit">Erfassung starten</button>
+    </form>
+</div>
+{% endblock %}

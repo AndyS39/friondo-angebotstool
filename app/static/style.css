@@ -493,6 +493,125 @@ h2 { color: var(--friondo-dunkel); margin-top: 2rem; font-size: 1.15rem; }
 
 .db-warnung ul { margin: 0.4rem 0 0; padding-left: 1.2rem; font-size: 0.85rem; }
 
+/* --- Mobile Erfassung (Phase 13) -------------------------------------- */
+
+.mobil-inhalt { max-width: 560px; margin: 0 auto; }
+
+.knopf.gross {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 0.9rem 1rem;
+    font-size: 1.1rem;
+    margin: 0.5rem 0;
+    box-sizing: border-box;
+}
+
+.login-karte {
+    max-width: 380px;
+    margin: 3rem auto;
+    background: #fff;
+    border: 1px solid var(--grau-linie);
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.login-karte label, .mobil-formular label {
+    display: block;
+    margin: 0.8rem 0 0.3rem;
+    font-size: 0.95rem;
+    color: #444;
+}
+
+.login-karte input, .login-karte select,
+.mobil-formular input, .mobil-formular select, .mobil-formular textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font-family: inherit;
+    font-size: 1.05rem;
+    padding: 0.7rem 0.75rem;
+    border: 1px solid var(--grau-linie);
+    border-radius: 6px;
+}
+
+.erfassung-liste { list-style: none; padding: 0; margin: 1rem 0; }
+
+.erfassung-liste li {
+    background: #fff;
+    border: 1px solid var(--grau-linie);
+    border-radius: 8px;
+    margin-bottom: 0.6rem;
+}
+
+.erfassung-liste a { display: block; padding: 0.8rem 1rem; text-decoration: none; color: inherit; }
+
+.ampel { font-weight: 700; }
+.ampel.gruen { color: #2c6b22; }
+.ampel.orange { color: #b46a00; }
+
+.fortschritt { display: flex; gap: 0.35rem; margin: 0.8rem 0; }
+
+.fortschritt .schritt {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--grau-linie);
+}
+
+.fortschritt .schritt.fertig { background: #9ec79b; }
+.fortschritt .schritt.aktuell { background: var(--friondo-blau); }
+
+.fragefeld {
+    background: #fff;
+    border: 1px solid var(--grau-linie);
+    border-radius: 8px;
+    padding: 0.9rem 1rem;
+    margin-bottom: 0.8rem;
+}
+
+.fragefeld.verborgen { display: none; }
+
+.fragetitel { font-weight: 600; color: var(--friondo-dunkel); }
+
+.hinweiszeile { display: block; font-weight: 400; margin-top: 0.15rem; }
+
+.feldfehler { color: #c0392b; margin: 0.3rem 0; font-size: 0.9rem; }
+
+.wahl-gruppe { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
+
+.wahl input { position: absolute; opacity: 0; }
+
+.wahl span {
+    display: inline-block;
+    padding: 0.65rem 1rem;
+    border: 1.5px solid var(--grau-linie);
+    border-radius: 8px;
+    background: #fff;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.wahl input:checked + span {
+    border-color: var(--friondo-blau);
+    background: var(--friondo-blau);
+    color: #fff;
+}
+
+.mengen-gruppe { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.5rem; }
+
+.mengen-gruppe label { flex: 1 1 90px; margin: 0; }
+
+.mobil-aktionen { display: flex; gap: 0.7rem; margin: 1.2rem 0; flex-wrap: wrap; }
+
+.mobil-aktionen .knopf, .mobil-aktionen form { flex: 1; }
+
+.protokoll-zeile {
+    background: #fff;
+    border-bottom: 1px solid var(--grau-linie);
+    padding: 0.5rem 0.25rem;
+    font-size: 0.95rem;
+}
+
 .abzeichen.status-versendet { background: #e3effa; color: #2c6cb0; }
 .abzeichen.status-angenommen { background: #e8f4e5; color: #4c9a3d; }
 .abzeichen.status-abgelehnt { background: #fbeaea; color: #c0392b; }
