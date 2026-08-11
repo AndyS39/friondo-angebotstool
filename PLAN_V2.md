@@ -52,11 +52,11 @@ committen. CLAUDE.md (v2) vorher vollständig lesen.
 - [x] Nach Angebotserstellung Status automatisch „In Bearbeitung"/„Erledigt" pflegen
 
 ## Phase 15 – Vollmacht-Bedingung & Anhänge-Bibliothek
-- [ ] PDF: Nachtext D (Vollmacht) nur wenn P02 und/oder P03 = Ja; Seitenzahlen bleiben korrekt
-- [ ] Ordner `anlagen/` anlegen; Blatt „Anhänge" einlesen (Regeln: immer /
+- [x] PDF: Nachtext D (Vollmacht) nur wenn P02 und/oder P03 = Ja; Seitenzahlen bleiben korrekt
+- [x] Ordner `anlagen/` anlegen; Blatt „Anhänge" einlesen (Regeln: immer /
       wenn Frage = Antwort / wenn Pos. im Angebot)
-- [ ] Fehlende Datei → Warnung beim Versand statt Absturz
-- [ ] Vorschau in der Angebotsansicht: welche Anhänge würden mitgehen
+- [x] Fehlende Datei → Warnung beim Versand statt Absturz
+- [x] Vorschau in der Angebotsansicht: welche Anhänge würden mitgehen
 
 ## Phase 16 – Umzug Terminal Server & Zugriff
 - [ ] Installationsskript/Anleitung: Projekt auf Terminal Server, venv, Dienst mit

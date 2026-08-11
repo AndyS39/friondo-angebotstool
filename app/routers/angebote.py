@@ -102,12 +102,19 @@ async def editor(request: Request, angebot_id: int,
                 kfw_ergebnis = kfw.berechnen(parameter, eingaben)
                 kfw_warnung = kfw.gueltigkeits_warnung(parameter)
 
+    # Anhänge-Vorschau (Phase 15): was würde beim Versand mitgehen?
+    from app import anhaenge as anhaenge_modul
+    logik, _bericht = logik_modul.hole_logik(session)
+    anhaenge_liste = anhaenge_modul.fuer_angebot(logik, angebot)
+    vollmacht = anhaenge_modul.vollmacht_erforderlich(angebot)
+
     return render(request, "angebote/editor.html", aktiv="/angebote",
                   angebot=angebot, kunde=kunde, gruppen=gruppen,
                   summen=angebot.summen(), artikel_liste=artikel_liste,
                   deckung=angebot.deckungsbeitrag(),
                   protokoll=protokoll, status_liste=ANGEBOT_STATUS,
                   kfw_ergebnis=kfw_ergebnis, kfw_warnung=kfw_warnung,
+                  anhaenge_liste=anhaenge_liste, vollmacht=vollmacht,
                   versand=request.query_params.get("versand", ""),
                   meldung=request.query_params.get("meldung", ""))
 
@@ -197,9 +204,17 @@ async def email_entwurf(angebot_id: int, session: Session = Depends(get_session)
     if angebot is None:
         return RedirectResponse("/angebote?meldung=Angebot+nicht+gefunden", status_code=303)
     kunde = session.get(Kunde, angebot.kunde_id)
+    from pathlib import Path
+
+    from app import anhaenge as anhaenge_modul
     from app import outlook_versand, pdf_export
     pdf_pfad = pdf_export.pdf_fuer_angebot(session, angebot)
-    erfolg, meldung = outlook_versand.entwurf_oeffnen(kunde, angebot, pdf_pfad)
+    logik, _ = logik_modul.hole_logik(session)
+    anhaenge = anhaenge_modul.fuer_angebot(logik, angebot)
+    erfolg, meldung = outlook_versand.entwurf_oeffnen(
+        kunde, angebot, pdf_pfad,
+        weitere_anhaenge=[Path(a.pfad) for a in anhaenge if a.vorhanden],
+        fehlende_anhaenge=[a.datei for a in anhaenge if not a.vorhanden])
     from urllib.parse import quote_plus
     ziel = f"/angebote/{angebot_id}?meldung={quote_plus(meldung)}"
     if erfolg:

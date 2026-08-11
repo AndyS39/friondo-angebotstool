@@ -29,6 +29,7 @@ LOGIK_EXCEL_PFAD = _pfad("LOGIK_EXCEL_PFAD", PROJEKT_ORDNER / "konfigurator_logi
 LOGIK_EXCEL_V2_PFAD = LOGIK_EXCEL_PFAD  # Alias (Phase-11-Import nutzt diesen Namen)
 LOGO_ORDNER = _pfad("LOGO_ORDNER", PROJEKT_ORDNER / "Layout - Logo")
 DATA_ORDNER = _pfad("DATA_ORDNER", PROJEKT_ORDNER / "data")
+ANLAGEN_ORDNER = _pfad("ANLAGEN_ORDNER", PROJEKT_ORDNER / "anlagen")  # Versand-Broschüren
 
 # Logodateien (Ordner "Layout - Logo", Sichtung 08/2026):
 #   Logo-01.png = Haupt-Logo: blaue Bildmarke + Schriftzug "Friondo GmbH" (Briefkopf S. 1)

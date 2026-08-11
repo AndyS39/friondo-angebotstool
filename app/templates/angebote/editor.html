@@ -165,6 +165,24 @@
     </form>
 </div>
 
+<h2>Versand-Anhänge</h2>
+<p class="dezent">PDF-Anlage: Angebot {{ angebot.nummer }} ·
+Vollmacht-Seite (Nachtext D): {{ 'ja (iMSys/SpotDynamic im Angebot)' if vollmacht else 'nein' }}</p>
+{% if anhaenge_liste %}
+<ul>
+    {% for a in anhaenge_liste %}
+        <li>
+            {{ a.datei }} <span class="dezent">({{ a.regel }})</span>
+            {% if not a.vorhanden %}
+                <span class="abzeichen ep" title="Datei fehlt im Ordner anlagen/">fehlt!</span>
+            {% endif %}
+        </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p class="dezent">Keine zusätzlichen Anhänge laut Blatt „Anhänge“.</p>
+{% endif %}
+
 {% if protokoll %}
 <h2>Konfigurationsprotokoll (intern)</h2>
 <table class="tabelle">

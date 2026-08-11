@@ -32,8 +32,11 @@ def standardtext(kunde: Kunde, angebot: Angebot) -> str:
             f"www.friondo.de")
 
 
-def entwurf_oeffnen(kunde: Kunde, angebot: Angebot, pdf_pfad: Path) -> tuple[bool, str]:
-    """Erzeugt den Outlook-Entwurf und zeigt ihn an. Liefert (erfolg, meldung)."""
+def entwurf_oeffnen(kunde: Kunde, angebot: Angebot, pdf_pfad: Path,
+                    weitere_anhaenge: list[Path] | None = None,
+                    fehlende_anhaenge: list[str] | None = None) -> tuple[bool, str]:
+    """Erzeugt den Outlook-Entwurf und zeigt ihn an. Liefert (erfolg, meldung).
+    Fehlende Anhang-Dateien führen nur zu einer Warnung (Phase 15)."""
     if not kunde.email:
         return False, "Der Kunde hat keine E-Mail-Adresse – bitte zuerst in der Kundenverwaltung ergänzen."
     try:
@@ -47,11 +50,17 @@ def entwurf_oeffnen(kunde: Kunde, angebot: Angebot, pdf_pfad: Path) -> tuple[boo
             mail.Subject = f"Ihr Wärmepumpen-Angebot {angebot.nummer} der Friondo GmbH"
             mail.Body = standardtext(kunde, angebot)
             mail.Attachments.Add(str(pdf_pfad))
+            for anhang in (weitere_anhaenge or []):
+                mail.Attachments.Add(str(anhang))
             mail.Display()  # Entwurf anzeigen – Versand erfolgt manuell durch den Vertrieb
         finally:
             pythoncom.CoUninitialize()
-        return True, ("Outlook-Entwurf geöffnet – bitte prüfen und senden. "
-                      "Danach hier den Status auf „Versendet“ setzen.")
+        meldung = ("Outlook-Entwurf geöffnet – bitte prüfen und senden. "
+                   "Danach hier den Status auf „Versendet“ setzen.")
+        if fehlende_anhaenge:
+            meldung += (" Achtung, fehlende Anhang-Dateien im Ordner anlagen/: "
+                        + ", ".join(fehlende_anhaenge))
+        return True, meldung
     except Exception as fehler:  # COM nicht verfügbar / kein klassisches Outlook
         return False, ("Outlook konnte nicht geöffnet werden (klassisches "
                        f"Outlook-Desktop erforderlich): {fehler}. "

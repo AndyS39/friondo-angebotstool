@@ -148,7 +148,8 @@ class AngebotsPdf(FPDF):
 
 
 def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
-                kfw_ergebnis: "kfw.KfwErgebnis | None" = None) -> Path:
+                kfw_ergebnis: "kfw.KfwErgebnis | None" = None,
+                mit_vollmacht: bool = True) -> Path:
     pdf = AngebotsPdf(angebot.nummer)
     _seite1(pdf, angebot, kunde)
     _positionsteil(pdf, angebot)
@@ -156,7 +157,9 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
     _nachtext_a(pdf)
     _nachtext_b(pdf)
     _nachtext_c(pdf)
-    _nachtext_d(pdf, kunde)
+    if mit_vollmacht:
+        # Nachtext D nur bei iMSys (P02) und/oder SpotDynamic (P03) – Phase 15
+        _nachtext_d(pdf, kunde)
 
     config.ANGEBOTE_PDF_ORDNER.mkdir(parents=True, exist_ok=True)
     ziel = config.ANGEBOTE_PDF_ORDNER / f"{angebot.nummer}.pdf"
@@ -584,7 +587,9 @@ def _nachtext_d(pdf: AngebotsPdf, kunde: Kunde):
 # --- Einstieg für Router ---------------------------------------------------
 
 def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
-    """Erzeugt das PDF inkl. KfW-Block (falls Konfigurator-Daten vorliegen)."""
+    """Erzeugt das PDF inkl. KfW-Block (falls Konfigurator-Daten vorliegen);
+    Vollmacht-Seite nur bei iMSys/SpotDynamic im Angebot."""
+    from app import anhaenge
     from app import logik as logik_modul
     kunde = session.get(Kunde, angebot.kunde_id)
     ergebnis = None
@@ -595,4 +600,5 @@ def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
         eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["brutto"])
         if eingaben is not None:
             ergebnis = kfw.berechnen(parameter, eingaben)
-    return erzeuge_pdf(angebot, kunde, ergebnis)
+    return erzeuge_pdf(angebot, kunde, ergebnis,
+                       mit_vollmacht=anhaenge.vollmacht_erforderlich(angebot))
