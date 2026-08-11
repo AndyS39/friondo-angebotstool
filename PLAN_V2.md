@@ -59,14 +59,16 @@ committen. CLAUDE.md (v2) vorher vollständig lesen.
 - [x] Vorschau in der Angebotsansicht: welche Anhänge würden mitgehen
 
 ## Phase 16 – Umzug Terminal Server & Zugriff
-- [ ] Installationsskript/Anleitung: Projekt auf Terminal Server, venv, Dienst mit
+- [x] Installationsskript/Anleitung: Projekt auf Terminal Server, venv, Dienst mit
       Autostart (z. B. Aufgabenplanung oder NSSM), Datenpfad + tägliches Backup prüfen
-- [ ] App an 0.0.0.0 binden, Firmen-Adresse (Server-IP/Hostname) in README festhalten
-- [ ] Innendienst-Test aus Terminalsitzung; Desktop-Verknüpfungen auf Server-Adresse
-- [ ] OFFEN (Entscheidung Nutzer/IT): Mobilzugriff Variante A – WireGuard-App auf
-      Vertriebler-Handys (empfohlen, bestehendes WireGuard nutzen) ODER Variante B –
-      /erfassung öffentlich über HTTPS + Login (Reverse Proxy, Zertifikat, Domain
-      durch RZ/IT). Beide dokumentieren, Umsetzung erst nach Entscheidung.
+      (docs/installation-terminal-server.md; Tagesbackup nach data/backups/ eingebaut)
+- [x] App an 0.0.0.0 binden (start.bat/Dienst), Firmen-Adresse in README festgehalten
+      (Platzhalter – Servernamen nach dem Umzug eintragen)
+- [x] Innendienst-Test aus Terminalsitzung als Abnahme-Checkliste dokumentiert;
+      Desktop-Verknüpfungen auf Server-Adresse beschrieben (Umzug selbst macht die IT)
+- [ ] OFFEN (Entscheidung Nutzer/IT): Mobilzugriff Variante A – WireGuard (empfohlen)
+      ODER Variante B – HTTPS + Login. Beide in docs/mobilzugriff.md dokumentiert,
+      Umsetzung erst nach Entscheidung.
 
 ## Phase 17 – Versand über Microsoft Graph
 - [ ] docs/graph-einrichtung.md: App-Registrierung Schritt für Schritt für die IT

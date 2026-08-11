@@ -29,6 +29,24 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _spalten_ergaenzen()
+    taegliches_backup()
+
+
+def taegliches_backup(aufbewahrung_tage: int = 30) -> None:
+    """Kopiert die SQLite-DB einmal pro Tag nach data/backups/ (beim App-Start);
+    Backups älter als die Aufbewahrungsfrist werden entfernt."""
+    import shutil
+    from datetime import date, datetime, timedelta
+
+    if not config.DB_PFAD.exists():
+        return
+    ziel = config.BACKUP_ORDNER / f"angebotstool-{date.today().isoformat()}.db"
+    if not ziel.exists():
+        shutil.copy2(config.DB_PFAD, ziel)
+    grenze = datetime.now() - timedelta(days=aufbewahrung_tage)
+    for alt in config.BACKUP_ORDNER.glob("angebotstool-*.db"):
+        if datetime.fromtimestamp(alt.stat().st_mtime) < grenze:
+            alt.unlink(missing_ok=True)
 
 
 # Nachträglich eingeführte Spalten (SQLite: create_all ergänzt keine Spalten).

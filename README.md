@@ -6,10 +6,16 @@ PDF im Friondo-Layout → Versand per Outlook. Läuft lokal, keine Cloud.
 
 ## Starten
 
-Doppelklick auf `start.bat` – danach im Browser öffnen:
+Doppelklick auf `start.bat` – Server startet und der Browser öffnet sich.
 
 - am selben Rechner: <http://localhost:8000>
 - im Firmennetz: `http://<Rechnername>:8000`
+
+**Firmen-Adresse (Terminal Server):** `http://<SERVERNAME-EINTRAGEN>:8000`
+– nach dem Umzug lt. `docs/installation-terminal-server.md` hier den echten
+Servernamen eintragen; Desktop-Verknüpfungen der Innendienst-PCs zeigen auf
+diese Adresse. Anmeldung beim allerersten Start: Admin / PIN 1234 (sofort ändern).
+Mobilzugriff Außendienst: Entscheidung offen, siehe `docs/mobilzugriff.md`.
 
 ## Erstmalige Einrichtung (nur auf einem neuen Rechner nötig)
 
