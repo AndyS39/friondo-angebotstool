@@ -116,6 +116,7 @@ async def editor(request: Request, angebot_id: int,
                   kfw_ergebnis=kfw_ergebnis, kfw_warnung=kfw_warnung,
                   anhaenge_liste=anhaenge_liste, vollmacht=vollmacht,
                   versand=request.query_params.get("versand", ""),
+                  weblink=request.query_params.get("weblink", ""),
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -200,25 +201,42 @@ async def pdf_anzeigen(angebot_id: int, session: Session = Depends(get_session))
 
 @router.post("/{angebot_id}/email")
 async def email_entwurf(angebot_id: int, session: Session = Depends(get_session)):
+    """Versand vorbereiten (Phase 17): Entwurf per Microsoft Graph im Postfach
+    des angemeldeten Innendienst-Nutzers; Fallback bleibt der PDF-Download."""
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
         return RedirectResponse("/angebote?meldung=Angebot+nicht+gefunden", status_code=303)
     kunde = session.get(Kunde, angebot.kunde_id)
     from pathlib import Path
+    from urllib.parse import quote_plus
 
     from app import anhaenge as anhaenge_modul
-    from app import outlook_versand, pdf_export
+    from app import graph_versand, pdf_export
+
+    if not graph_versand.konfiguriert():
+        return RedirectResponse(
+            f"/angebote/{angebot_id}?meldung=" + quote_plus(
+                "Microsoft Graph ist noch nicht eingerichtet "
+                "(docs/graph-einrichtung.md). Übergangslösung: PDF anzeigen "
+                "und manuell versenden."), status_code=303)
+    if graph_versand.angemeldeter_benutzer() is None:
+        return RedirectResponse(
+            "/versand?meldung=" + quote_plus(
+                "Bitte zuerst mit Microsoft anmelden, dann den Versand erneut "
+                "vorbereiten."), status_code=303)
+
     pdf_pfad = pdf_export.pdf_fuer_angebot(session, angebot)
     logik, _ = logik_modul.hole_logik(session)
     anhaenge = anhaenge_modul.fuer_angebot(logik, angebot)
-    erfolg, meldung = outlook_versand.entwurf_oeffnen(
+    erfolg, meldung, weblink = graph_versand.entwurf_erstellen(
         kunde, angebot, pdf_pfad,
         weitere_anhaenge=[Path(a.pfad) for a in anhaenge if a.vorhanden],
         fehlende_anhaenge=[a.datei for a in anhaenge if not a.vorhanden])
-    from urllib.parse import quote_plus
     ziel = f"/angebote/{angebot_id}?meldung={quote_plus(meldung)}"
     if erfolg:
         ziel += "&versand=1"
+        if weblink:
+            ziel += f"&weblink={quote_plus(weblink)}"
     return RedirectResponse(ziel, status_code=303)
 
 

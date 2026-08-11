@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block titel %}Versand – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<h1>E-Mail-Versand (Microsoft Graph)</h1>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% if not konfiguriert %}
+    <p class="hinweis">Microsoft Graph ist noch nicht eingerichtet. Die IT trägt
+    nach der App-Registrierung <code>GRAPH_CLIENT_ID</code> (und optional
+    <code>GRAPH_TENANT_ID</code>) in die <code>.env</code> ein –
+    Anleitung: <code>docs/graph-einrichtung.md</code>.<br>
+    Bis dahin: Angebots-PDF im Editor herunterladen und manuell versenden.</p>
+
+{% elif konto %}
+    <p class="meldung">Angemeldet als <strong>{{ konto }}</strong> –
+    „Versand vorbereiten“ legt Entwürfe in diesem Postfach ab.</p>
+    <form method="post" action="/versand/abmelden">
+        <button class="knopf zweitrangig" type="submit">Abmelden</button>
+    </form>
+
+{% elif flow.laeuft %}
+    <div class="hinweis">
+        <p><strong>Anmeldung läuft:</strong> Auf
+        <a href="{{ flow.verification_uri }}" target="_blank">{{ flow.verification_uri }}</a>
+        diesen Code eingeben:</p>
+        <p style="font-size:1.6rem; letter-spacing:0.2em;"><strong>{{ flow.user_code }}</strong></p>
+        <p class="dezent">Diese Seite danach neu laden.</p>
+    </div>
+    <meta http-equiv="refresh" content="5">
+
+{% else %}
+    {% if flow.fehler %}<p class="meldung fehler">{{ flow.fehler }}</p>{% endif %}
+    <p>Der Innendienst-Mitarbeiter meldet sich einmalig mit seinem
+    Microsoft-Konto an; Entwürfe werden dann in seinem Postfach erstellt.</p>
+    <form method="post" action="/versand/anmelden">
+        <button class="knopf" type="submit">Mit Microsoft anmelden</button>
+    </form>
+{% endif %}
+{% endblock %}

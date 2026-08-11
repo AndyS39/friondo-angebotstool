@@ -71,11 +71,13 @@ committen. CLAUDE.md (v2) vorher vollständig lesen.
       Umsetzung erst nach Entscheidung.
 
 ## Phase 17 – Versand über Microsoft Graph
-- [ ] docs/graph-einrichtung.md: App-Registrierung Schritt für Schritt für die IT
+- [x] docs/graph-einrichtung.md: App-Registrierung Schritt für Schritt für die IT
       (delegierte Berechtigung Mail.ReadWrite; Entwurf-Erstellung im Nutzerpostfach)
-- [ ] Anmeldung des Innendienst-Nutzers (Device-Code oder OAuth), Token sicher speichern
-- [ ] „Versand vorbereiten": Entwurf im Postfach des angemeldeten Mitarbeiters mit
+- [x] Anmeldung des Innendienst-Nutzers (Device-Code), Token in data/.graph_token.json,
+      Abmelden löscht es (Seite „Versand")
+- [x] „Versand vorbereiten": Entwurf im Postfach des angemeldeten Mitarbeiters mit
       Betreff „Ihr Wärmepumpen-Angebot AN-C-… der Friondo GmbH", Standardtext,
-      Angebots-PDF + Anhängen lt. Regeln
-- [ ] Bestätigung im Tool setzt Status „Versendet"; COM-Versand entfernen;
-      Fallback PDF-Download bleibt
+      Angebots-PDF + Anhängen lt. Regeln (Web-Link zum Entwurf im Editor)
+- [x] Bestätigung im Tool setzt Status „Versendet"; COM-Versand entfernt;
+      Fallback PDF-Download bleibt. Hinweis: echter Graph-Test erst nach
+      App-Registrierung durch die IT möglich (bis dahin greift der Fallback).

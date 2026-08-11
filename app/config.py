@@ -61,3 +61,7 @@ KFW_GUELTIG_BIS = "2027-01-31"
 # --- Sonstiges -----------------------------------------------------------
 MONDAY_API_TOKEN = os.getenv("MONDAY_API_TOKEN", "").strip()
 SESSION_SECRET = os.getenv("SESSION_SECRET", "").strip()  # leer = auto (data/.session_secret)
+
+# Microsoft Graph (Versand, Phase 17) – Einrichtung: docs/graph-einrichtung.md
+GRAPH_CLIENT_ID = os.getenv("GRAPH_CLIENT_ID", "").strip()
+GRAPH_TENANT_ID = os.getenv("GRAPH_TENANT_ID", "").strip()

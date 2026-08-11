@@ -18,7 +18,7 @@
         </form>
         <a class="knopf klein" href="/angebote/{{ angebot.id }}/pdf" target="_blank">PDF anzeigen</a>
         <form method="post" action="/angebote/{{ angebot.id }}/email">
-            <button class="knopf klein" type="submit">Per E-Mail senden</button>
+            <button class="knopf klein" type="submit">Versand vorbereiten</button>
         </form>
     </div>
 </div>
@@ -33,10 +33,15 @@
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
 {% if versand == '1' and angebot.status == 'Entwurf' %}
-<form method="post" action="/angebote/{{ angebot.id }}/status" class="formaktionen">
-    <input type="hidden" name="status" value="Versendet">
-    <button class="knopf" type="submit">E-Mail wurde gesendet – Status auf „Versendet“ setzen</button>
-</form>
+<div class="formaktionen">
+    {% if weblink %}
+        <a class="knopf zweitrangig" href="{{ weblink }}" target="_blank">Entwurf in Outlook (Web) öffnen</a>
+    {% endif %}
+    <form method="post" action="/angebote/{{ angebot.id }}/status">
+        <input type="hidden" name="status" value="Versendet">
+        <button class="knopf" type="submit">E-Mail wurde gesendet – Status auf „Versendet“ setzen</button>
+    </form>
+</div>
 {% endif %}
 
 {% for gruppe in gruppen %}
