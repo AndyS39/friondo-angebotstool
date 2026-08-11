@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block titel %}Erfassungen – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<h1>Erfassungen</h1>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<form method="get" action="/erfassungen" class="suchleiste">
+    <input type="text" name="q" value="{{ q }}" placeholder="Suche: Kunde, Vertriebler">
+    <select name="status">
+        <option value="">Alle Status</option>
+        {% for s in status_liste %}
+            <option value="{{ s }}" {{ 'selected' if status == s }}>{{ s }}</option>
+        {% endfor %}
+    </select>
+    <select name="ampel">
+        <option value="">Alle Ampeln</option>
+        <option value="gruen" {{ 'selected' if ampel == 'gruen' }}>Konfigurierbar</option>
+        <option value="orange" {{ 'selected' if ampel == 'orange' }}>Individuell</option>
+    </select>
+    <button class="knopf" type="submit">Filtern</button>
+</form>
+
+{% if erfassungen %}
+<table class="tabelle">
+    <thead>
+        <tr><th>Datum</th><th>Kunde</th><th>Vertriebler</th><th>Ampel</th><th>Status</th><th>Angebot</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for e in erfassungen %}
+        <tr>
+            <td>{{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am }}</td>
+            <td><a href="/erfassungen/{{ e.id }}">{{ kunden[e.kunde_id].anzeige_name if e.kunde_id in kunden else '?' }}</a></td>
+            <td>{{ benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '?' }}</td>
+            <td>
+                {% if e.ampel == 'orange' %}
+                    <span class="ampel orange" title="{{ e.gruende_text }}">● Individuell</span>
+                {% else %}
+                    <span class="ampel gruen">● Konfigurierbar</span>
+                {% endif %}
+            </td>
+            <td><span class="abzeichen">{{ e.status }}</span></td>
+            <td>{% if e.angebot_id and e.angebot_id in angebote %}<a href="/angebote/{{ e.angebot_id }}">{{ angebote[e.angebot_id].nummer }}</a>{% endif %}</td>
+            <td class="aktionen">
+                <a class="knopf klein zweitrangig" href="/erfassungen/{{ e.id }}">Öffnen</a>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<p class="dezent">{{ erfassungen | length }} Erfassung{{ 'en' if erfassungen | length != 1 }}</p>
+{% else %}
+<p class="hinweis">Keine Erfassungen gefunden.</p>
+{% endif %}
+{% endblock %}

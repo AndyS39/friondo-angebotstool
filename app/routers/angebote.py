@@ -56,7 +56,9 @@ async def aus_konfiguration(konfig_id: int, session: Session = Depends(get_sessi
     logik, bericht = logik_modul.hole_logik(session)
     if not bericht.ok:
         return RedirectResponse("/konfiguration", status_code=303)
-    angebot = angebot_aufbau.angebot_anlegen(session, konfig.kunde_id, konfig, logik)
+    angebot = angebot_aufbau.angebot_anlegen(
+        session, konfig.kunde_id, antworten=json.loads(konfig.antworten_json or "{}"),
+        logik=logik, konfiguration_id=konfig.id)
     return RedirectResponse(f"/angebote/{angebot.id}", status_code=303)
 
 
@@ -213,6 +215,15 @@ async def status_aendern(request: Request, angebot_id: int,
     neuer_status = form.get("status", "")
     if angebot is not None and neuer_status in ANGEBOT_STATUS:
         angebot.status = neuer_status
+        # verknüpfte Erfassung automatisch pflegen (Phase 14)
+        from app.models import Erfassung
+        erfassung = (session.query(Erfassung)
+                     .filter(Erfassung.angebot_id == angebot.id).first())
+        if erfassung is not None:
+            if neuer_status in ("Versendet", "Angenommen", "Abgelehnt"):
+                erfassung.status = "Erledigt"
+            elif erfassung.status == "Neu":
+                erfassung.status = "In Bearbeitung"
         session.commit()
     return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
 

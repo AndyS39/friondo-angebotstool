@@ -34,6 +34,7 @@ templates.env.filters["menge"] = menge_format
 
 # Navigation: (URL-Pfad, Beschriftung) – wird im Basis-Layout gerendert (Innendienst).
 NAVIGATION = [
+    ("/erfassungen", "Erfassungen"),
     ("/kunden", "Kunden"),
     ("/artikel", "Artikel"),
     ("/angebote", "Angebote"),

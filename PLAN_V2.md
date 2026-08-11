@@ -42,14 +42,14 @@ committen. CLAUDE.md (v2) vorher vollständig lesen.
 - [x] Erfassung speichert: Kunde, Vertriebler, Zeitpunkt, alle Antworten, Ampel + Gründe
 
 ## Phase 14 – Erfassungsliste Innendienst
-- [ ] Liste: Datum, Kunde, Vertriebler, Ampel (grün „Konfigurierbar" / orange
+- [x] Liste: Datum, Kunde, Vertriebler, Ampel (grün „Konfigurierbar" / orange
       „Individuell" mit Gründen), Status Neu / In Bearbeitung / Erledigt, Filter/Suche
-- [ ] Detailansicht: alle Antworten je Kategorie, vom Innendienst korrigierbar
+- [x] Detailansicht: alle Antworten je Kategorie, vom Innendienst korrigierbar
       (Änderungen protokollieren)
-- [ ] Grün: Button „Angebot erzeugen" → Antworten durch die Logik → Angebotsentwurf
+- [x] Grün: Button „Angebot erzeugen" → Antworten durch die Logik → Angebotsentwurf
       öffnet sich; Erfassung ↔ Angebot verknüpft
-- [ ] Orange: Button „Manuelles Angebot" → Editor mit Abfrageprotokoll als Seitenpanel
-- [ ] Nach Angebotserstellung Status automatisch „In Bearbeitung"/„Erledigt" pflegen
+- [x] Orange: Button „Manuelles Angebot" → Editor mit Abfrageprotokoll als Seitenpanel
+- [x] Nach Angebotserstellung Status automatisch „In Bearbeitung"/„Erledigt" pflegen
 
 ## Phase 15 – Vollmacht-Bedingung & Anhänge-Bibliothek
 - [ ] PDF: Nachtext D (Vollmacht) nur wenn P02 und/oder P03 = Ja; Seitenzahlen bleiben korrekt

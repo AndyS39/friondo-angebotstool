@@ -160,6 +160,7 @@ async def seite_speichern(request: Request, erfassung_id: int, nr: int,
     nr = max(0, min(nr, len(seiten) - 1))
     form = await request.form()
     antworten = _antworten(erfassung)
+    antworten_vorher = dict(antworten)
     fragen = _fragen_der_seite(logik, seiten[nr])
 
     fehler: dict[str, str] = {}
@@ -188,6 +189,8 @@ async def seite_speichern(request: Request, erfassung_id: int, nr: int,
                       wiederhol_id=engine.ID_WIEDERHOL_ANZAHL)
 
     erfassung.antworten_json = json.dumps(antworten, ensure_ascii=False)
+    _korrekturen_protokollieren(erfassung, antworten_vorher, antworten,
+                                _benutzer(request), logik)
     if richtung == "zurueck":
         ziel = max(0, nr - 1)
         erfassung.seite_index = ziel
@@ -199,6 +202,27 @@ async def seite_speichern(request: Request, erfassung_id: int, nr: int,
         return RedirectResponse(f"/erfassung/{erfassung.id}/seite/{nr + 1}", status_code=303)
     session.commit()
     return RedirectResponse(f"/erfassung/{erfassung.id}/pruefen", status_code=303)
+
+
+def _korrekturen_protokollieren(erfassung, vorher: dict, nachher: dict,
+                                benutzer, logik) -> None:
+    """Innendienst-Korrekturen an abgesendeten Erfassungen protokollieren
+    und Ampel/Gründe neu berechnen (Phase 14)."""
+    if erfassung.status == "Entwurf":
+        return
+    zeilen = []
+    for frage_id in sorted(set(vorher) | set(nachher)):
+        if vorher.get(frage_id) != nachher.get(frage_id):
+            zeilen.append(f"{datetime.now().strftime('%d.%m.%Y %H:%M')} · "
+                          f"{benutzer.name}: {frage_id}: "
+                          f"{vorher.get(frage_id, '–')!r} → {nachher.get(frage_id, '–')!r}")
+    if zeilen:
+        erfassung.aenderungs_protokoll = (
+            (erfassung.aenderungs_protokoll + "\n" if erfassung.aenderungs_protokoll else "")
+            + "\n".join(zeilen))
+        gruende = engine.ampel_gruende(logik, nachher)
+        erfassung.ampel = "orange" if gruende else "gruen"
+        erfassung.gruende_text = "\n".join(gruende)
 
 
 def _wert_lesen(frage, form, antworten):

@@ -271,23 +271,28 @@ def naechste_angebotsnummer(session: Session) -> str:
 
 
 def angebot_anlegen(session: Session, kunde_id: int,
-                    konfiguration: Konfiguration | None = None,
-                    logik: Logik | None = None) -> Angebot:
-    """Legt ein Angebot mit transaktionssicherer Nummer an (Retry bei Kollision)."""
+                    antworten: dict | None = None,
+                    logik: Logik | None = None,
+                    konfiguration_id: int | None = None,
+                    nur_protokoll: bool = False) -> Angebot:
+    """Legt ein Angebot mit transaktionssicherer Nummer an (Retry bei Kollision).
+    Mit Antworten + Logik werden Positionen, Protokoll und KfW-Daten erzeugt;
+    nur_protokoll=True übernimmt Protokoll/KfW ohne Positionen (manuelles Angebot
+    zu einer orangen Erfassung)."""
     protokoll_json = "[]"
     kfw_json = "{}"
     positionen: list[dict] = []
-    if konfiguration is not None and logik is not None:
-        antworten = json.loads(konfiguration.antworten_json or "{}")
+    if antworten is not None and logik is not None:
         protokoll_json = json.dumps(engine.protokoll(logik, antworten), ensure_ascii=False)
         kfw_json = json.dumps(engine.kfw_daten(antworten), ensure_ascii=False)
-        positionen = positionen_zusammenstellen(logik, antworten, session)
+        if not nur_protokoll:
+            positionen = positionen_zusammenstellen(logik, antworten, session)
 
     for _versuch in range(5):
         angebot = Angebot(
             nummer=naechste_angebotsnummer(session),
             kunde_id=kunde_id,
-            konfiguration_id=konfiguration.id if konfiguration else None,
+            konfiguration_id=konfiguration_id,
             protokoll_json=protokoll_json,
             kfw_json=kfw_json,
         )

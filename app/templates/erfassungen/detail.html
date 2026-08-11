@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block titel %}Erfassung {{ erfassung.id }} – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Erfassung vom {{ erfassung.abgesendet_am.strftime('%d.%m.%Y %H:%M') if erfassung.abgesendet_am }}</h1>
+    <form method="post" action="/erfassungen/{{ erfassung.id }}/status" class="statusform">
+        <select name="status" onchange="this.form.submit()">
+            {% for s in status_liste %}
+                <option value="{{ s }}" {{ 'selected' if erfassung.status == s }}>{{ s }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<p class="dezent">
+    Kunde: <strong>{{ kunde.anzeige_name if kunde }}</strong>
+    · Vertriebler: <strong>{{ vertriebler.name if vertriebler }}</strong>
+    · Ampel:
+    {% if erfassung.ampel == 'orange' %}<span class="ampel orange">● Individuell</span>
+    {% else %}<span class="ampel gruen">● Konfigurierbar</span>{% endif %}
+</p>
+
+{% if gruende and gruende[0] %}
+<div class="warnblock">
+    <strong>Gründe für individuelle Prüfung</strong>
+    <ul>{% for g in gruende %}{% if g %}<li>{{ g }}</li>{% endif %}{% endfor %}</ul>
+</div>
+{% endif %}
+
+<div class="formaktionen">
+    {% if angebot %}
+        <a class="knopf" href="/angebote/{{ angebot.id }}">Zum Angebot {{ angebot.nummer }}</a>
+    {% elif erfassung.ampel == 'gruen' %}
+        <a class="knopf" href="/erfassungen/{{ erfassung.id }}/angebot-erzeugen">Angebot erzeugen</a>
+        <a class="knopf zweitrangig" href="/erfassungen/{{ erfassung.id }}/manuelles-angebot">Manuelles Angebot</a>
+    {% else %}
+        <a class="knopf" href="/erfassungen/{{ erfassung.id }}/manuelles-angebot">Manuelles Angebot</a>
+        <a class="knopf zweitrangig" href="/erfassungen/{{ erfassung.id }}/angebot-erzeugen">Trotzdem automatisch erzeugen</a>
+    {% endif %}
+</div>
+
+<h2>Antworten</h2>
+{% set ns = namespace(seite=None) %}
+{% for p in protokoll %}
+    {% if p.seite != ns.seite %}
+        {% set ns.seite = p.seite %}
+        <h2 class="gruppentitel">{{ p.seite }}
+            <a class="aendern" href="/erfassung/{{ erfassung.id }}/seite/{{ seiten.index(p.seite) }}">korrigieren</a>
+        </h2>
+    {% endif %}
+    <div class="protokoll-zeile">
+        <span class="dezent">{{ p.frage_id }} · {{ p.frage }}</span><br>
+        <strong>{{ p.antwort }}</strong>
+    </div>
+{% endfor %}
+
+{% if erfassung.aenderungs_protokoll %}
+<h2>Änderungsprotokoll (Innendienst)</h2>
+<pre class="hinweis">{{ erfassung.aenderungs_protokoll }}</pre>
+{% endif %}
+{% endblock %}
