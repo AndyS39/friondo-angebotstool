@@ -103,6 +103,7 @@ async def editor(request: Request, angebot_id: int,
     return render(request, "angebote/editor.html", aktiv="/angebote",
                   angebot=angebot, kunde=kunde, gruppen=gruppen,
                   summen=angebot.summen(), artikel_liste=artikel_liste,
+                  deckung=angebot.deckungsbeitrag(),
                   protokoll=protokoll, status_liste=ANGEBOT_STATUS,
                   kfw_ergebnis=kfw_ergebnis, kfw_warnung=kfw_warnung,
                   versand=request.query_params.get("versand", ""),
@@ -153,7 +154,7 @@ async def position_neu(request: Request, angebot_id: int,
                 pos_nr=artikel.pos_nr, bezeichnung=artikel.bezeichnung,
                 beschreibung=artikel.beschreibung, menge=artikel.menge_standard,
                 einheit=artikel.einheit, e_preis_cent=artikel.e_preis_cent,
-                ep_flag=artikel.ep_flag))
+                ep_flag=artikel.ep_flag, ek_cent=artikel.ek_cent))
             session.commit()
         return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
 
@@ -228,6 +229,7 @@ async def duplizieren(angebot_id: int, session: Session = Depends(get_session)):
         kopie.positionen.append(AngebotsPosition(
             sort=p.sort, block_nr=p.block_nr, gruppe=p.gruppe, pos_nr=p.pos_nr,
             bezeichnung=p.bezeichnung, beschreibung=p.beschreibung, menge=p.menge,
-            einheit=p.einheit, e_preis_cent=p.e_preis_cent, ep_flag=p.ep_flag))
+            einheit=p.einheit, e_preis_cent=p.e_preis_cent, ep_flag=p.ep_flag,
+            ek_cent=p.ek_cent))
     session.commit()
     return RedirectResponse(f"/angebote/{kopie.id}?meldung=Angebot+dupliziert", status_code=303)

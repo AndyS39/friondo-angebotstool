@@ -465,6 +465,34 @@ h2 { color: var(--friondo-dunkel); margin-top: 2rem; font-size: 1.15rem; }
     border-radius: 4px;
 }
 
+/* Deckungsbeitrag (interne Box, nur Innendienst) */
+.db-box {
+    background: #f4f9f4;
+    border: 1px solid #cfe3cf;
+    border-left: 4px solid #4c9a3d;
+    border-radius: 4px;
+    padding: 0.9rem 1.2rem;
+    margin: 1rem 0;
+    max-width: 420px;
+    margin-left: auto;
+    margin-right: 0;
+}
+
+.db-werte {
+    display: flex;
+    gap: 1rem;
+    align-items: baseline;
+    margin: 0.4rem 0;
+}
+
+.db-betrag { font-size: 1.3rem; font-weight: 700; color: #2c6b22; }
+
+.db-prozent { font-size: 1.05rem; color: #2c6b22; }
+
+.db-warnung summary { cursor: pointer; color: #9a7016; font-size: 0.9rem; }
+
+.db-warnung ul { margin: 0.4rem 0 0; padding-left: 1.2rem; font-size: 0.85rem; }
+
 .abzeichen.status-versendet { background: #e3effa; color: #2c6cb0; }
 .abzeichen.status-angenommen { background: #e8f4e5; color: #4c9a3d; }
 .abzeichen.status-abgelehnt { background: #fbeaea; color: #c0392b; }

@@ -87,6 +87,27 @@
 </table>
 <p class="dezent">EP-Positionen (Eventualpositionen) sind nicht in der Summe enthalten.</p>
 
+{# Deckungsbeitrag: nur Innendienst-Ansicht, erscheint NIE im PDF #}
+<div class="db-box">
+    <strong>Deckungsbeitrag (intern)</strong>
+    <div class="db-werte">
+        <span class="db-betrag">{{ deckung.db | euro }}</span>
+        <span class="db-prozent">{{ ('%.1f' | format(deckung.prozent)) | replace('.', ',') }} %</span>
+    </div>
+    <p class="dezent">VK netto {{ deckung.vk | euro }} − Material-EK {{ deckung.ek | euro }}
+    (ohne EP-Positionen)</p>
+    {% if deckung.ohne_ek %}
+    <details class="db-warnung">
+        <summary>⚠ EK fehlt bei {{ deckung.ohne_ek | length }} Position{{ 'en' if deckung.ohne_ek | length != 1 }}</summary>
+        <ul>
+            {% for p in deckung.ohne_ek %}
+                <li>{{ p.pos_nr }} · {{ p.titel | truncate(70) }}</li>
+            {% endfor %}
+        </ul>
+    </details>
+    {% endif %}
+</div>
+
 {% if kfw_warnung %}
 <div class="warnblock fehlerblock"><strong>{{ kfw_warnung }}</strong></div>
 {% endif %}

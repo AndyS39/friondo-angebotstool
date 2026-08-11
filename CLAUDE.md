@@ -1,82 +1,76 @@
-# Friondo Angebotstool – Projektkontext
+# Friondo Angebotstool – Projektkontext (v2)
 
 ## Ziel
-Internes Angebotstool für den Vertrieb der Friondo GmbH (Wärmepumpen zum Festpreis).
-Ein geführter Frage-Konfigurator stellt aus Kundendaten und Antworten automatisch ein
-vollständiges Angebot zusammen, berechnet die voraussichtliche KfW-Förderung, erzeugt
-ein PDF im gewohnten Friondo-Layout und versendet es per Outlook. Läuft lokal, keine Cloud.
+Zweistufiger Vertriebsprozess der Friondo GmbH (Wärmepumpen zum Festpreis):
+1) Der **Außendienst** füllt beim Kunden mobil einen Fragenkatalog aus (Erfassung).
+2) Der **Innendienst** sieht die Erfassung in einer Liste mit Ampel (konfigurierbar /
+individuell), erzeugt per Klick das Angebot oder schreibt es manuell mit dem
+Abfrageprotokoll daneben, prüft, versendet per E-Mail und behält den Deckungsbeitrag
+im Blick. PDF im Friondo-Layout, KfW-Förderung inklusive. Läuft lokal/on-prem.
 
-## Nutzer & Betrieb
-- Nutzer: ausschließlich das Vertriebsteam (interne Anwendung, kein Kundenzugang)
-- Betrieb: lokale Web-App im Firmennetz; eine zentrale Instanz, Zugriff per Browser
-- Umgebung: Windows, klassisches Outlook-Desktop vorhanden
+## Nutzer, Rollen & Betrieb
+- Zwei Oberflächen derselben App: `/erfassung` (mobil, Außendienst) und das
+  Innendienst-Tool (Desktop-Browser).
+- Einfache Rollen mit leichtem Login (Benutzerliste + PIN): Außendienst sieht NIE
+  Preise, EK oder Deckungsbeitrag; Deckungsbeitrag erscheint NIE im PDF.
+- Zielbetrieb: Terminal Server im Rechenzentrum, App als Dienst/Autostart.
+  Mobiler Zugriff: Entscheidung offen – Variante A (WireGuard-App auf Vertriebler-
+  Handys, empfohlen) oder Variante B (HTTPS + Login öffentlich). Siehe PLAN_V2 Phase 16.
 
 ## Tech-Stack
-- Python 3.11+, FastAPI, Uvicorn; SQLite (`data/angebotstool.db`) über SQLAlchemy
-- Server-gerenderte Jinja2-Templates, wenig JavaScript, kein SPA-Framework
-- PDF: fpdf2 · Excel: openpyxl · Outlook: pywin32/COM · monday.com: GraphQL API (.env)
+Python 3.11+, FastAPI, Uvicorn · SQLite/SQLAlchemy · Jinja2 (Erfassung mobile-first)
+· fpdf2 · openpyxl · Versand: Microsoft Graph API · monday.com: GraphQL (.env)
 
-## Zentrale Dateien im Projektordner
-- `konfigurator_logik.xlsx` – **die** Steuerdatei: Fragen, Aktionen, Paketmatrix,
-  Zusatzartikel Z01–Z22, Textregeln, Angebotsaufbau, KfW-Parameter. Wird vom Tool
-  eingelesen; Änderungen dort erfordern KEINE Codeänderung.
-- `ANGEBOTSTEXTE.md` – Briefkopf-/Fußzeilen-Daten und alle statischen Angebotstexte
-  (Vortext, Zahlungsoptionen, Installationsvoraussetzungen, Unterschriften-Seite,
-  Vollmacht). Wortlaut exakt übernehmen.
-- `Artikel-Preislisten/Angebotserstellung Tool.xlsx` – TAIFUN-Preisliste (163 Positionen).
-- `Layout - Logo/` – Logodateien und Referenz-PDF „Angebot-Nr. AN250096" (Ordner beim
-  Start inspizieren; das Referenz-PDF ist die visuelle Vorlage für das Angebots-Layout).
-- `foerderrechner-website.html` – Referenz für die KfW-Berechnung (Testfälle dagegen).
-- `PLAN.md` – Umsetzungsplan; immer nur eine Phase bearbeiten, Checkboxen abhaken.
+## Zentrale Dateien
+- `konfigurator_logik_v2.xlsx` – Steuerdatei (ersetzt v1): Fragen mit Seiten,
+  Aktionen mit AMPEL-Logik, Paketmatrix, Zusatzartikel inkl. EK-Spalte, Textregeln,
+  Angebotsaufbau inkl. Vollmacht-Bedingung, NEU Blatt „Anhänge", KfW inkl.
+  Ableitungsregeln. Änderungen dort erfordern keine Codeänderung.
+- `Artikel-Preislisten/Angebotserstellung_Tool_mit_EK.xlsx` – **neue führende
+  Preisliste** (ersetzt die alte Datei): 11 Spalten inkl. Artikelnummer, Multi,
+  EK-Datum, „Einkaufspreis Material". Spalten beim Import über Header-Namen erkennen,
+  nicht über feste Indizes (Layout hat sich gegenüber v1 geändert!).
+- `ANGEBOTSTEXTE.md` – unverändert gültig; Vollmacht (Nachtext D) jetzt bedingt.
+- `anlagen/` – PDF-Broschüren für den Versand (Regeln im Blatt „Anhänge").
+- `Layout - Logo/` – Logos + Referenz-PDF. · `foerderrechner-website.html` – KfW-Referenz.
 
-## Preislisten-Import (TAIFUN)
-- Spalten: GUID · Position (dreistellig, z. B. „045") · Menge · Einheit · Beschreibung ·
-  E-Preis · G-Preis. Zeilen ohne Positionsnummer sind Kategorie-Überschriften.
-- Jede Position an ihrer GUID verankern. Bei Re-Import warnen, wenn hinter einer
-  Positionsnummer eine andere GUID/Beschreibung steckt (niemals still falsch zuordnen).
-- `_x000D_`-Zeilenumbrüche bereinigen; G-Preis „EP." = Eventualposition-Kennzeichen.
-- Textregeln aus der Logik-Excel bei jedem Import anwenden (z. B. Pos. 090 ohne BOSCH).
-- Zusatzartikel Z01–Z22 aus der Logik-Excel zusätzlich in den Artikelstamm importieren.
-- Re-Import aktualisiert Preise; bestehende Angebote bleiben unverändert (Snapshots).
-
-## Konfigurator
-- Ablauf: Kunde anlegen/wählen → Fragen F01–F36 lt. Logik-Excel → Angebotsentwurf.
-- Fragetypen: Auswahl, Zahleneingabe, Betragseingabe, Mengenmaske (F17),
-  Wiederholfelder (F20, Anzahl aus F19), Info-Frage (F21).
-- ABBRUCH-Antworten (12 Fälle): Meldung anzeigen, Konfigurator stoppt, Wechsel ins
-  manuelle Angebot anbieten.
-- Alle Antworten als Konfigurationsprotokoll am Angebot speichern (intern, nicht im PDF).
-- Nach dem Konfigurator ist das Angebot voll editierbar (Mengen, Positionen entfernen,
-  Freitextpositionen ergänzen).
+## Fragebogen & Ampel (ersetzt Konfigurator-Abbrüche)
+- Seiten: Objektdaten → Alte Anlage → Neue Anlage → Heizverteilung → Elektro/ZV →
+  Friondo → Förderung. IDs O/A/N/H/E/P/K lt. Logik-Excel.
+- **Keine Abbrüche, keine Fehlermeldungen:** AMPEL-Antworten (14 Gründe) markieren
+  die Erfassung als „individuell" mit Klartext-Grund; der Katalog läuft immer
+  vollständig durch, Folgefragen-Bedingungen bleiben aktiv.
+- Erfassungen landen in der Innendienst-Liste (Status Neu → In Bearbeitung →
+  Erledigt) mit Ampel + Gründen. Grün: „Angebot erzeugen" (Antworten → Logik →
+  Entwurf). Orange: „Manuelles Angebot" mit Protokoll-Seitenpanel. Antworten sind
+  vom Innendienst korrigierbar; Erfassung bleibt mit Angebot verknüpft.
+- KfW-Angaben werden abgeleitet (Objektart/WE/Fläche) und vorbelegt (Klima-Bonus
+  aus Energieträger + Baujahr) – Regeln im Blatt „KfW".
 
 ## Fachliche Regeln
-- Nur Festpreise; Preise in Angeboten sind Snapshots.
-- Angebotsnummer: eigener Kreis `AN-C-<JJ><NNNN>`, Start **AN-C-261000**, dann +1;
-  Jahreswechsel: neues JJ, Zähler wieder 1000. Transaktionssicher, niemals doppelt.
-- EP-Positionen: mit E-Preis und Kennzeichen „EP." ausweisen, NICHT in Summe einrechnen.
-- Beträge als Decimal in Cent; 19 % USt.; deutsche Formatierung (1.234,56 €).
-- Gültigkeit Angebot: 30 Tage („Wir halten uns freibleibend 30 Tage … gebunden").
+- Festpreise; Angebotspositionen sind Snapshots. Nummernkreis AN-C-<JJ><NNNN>
+  (fortlaufend, transaktionssicher; Zählerstand aus v1 weiterführen).
+- EP-Positionen: ausgewiesen mit „EP.", nicht in Summe, nicht im Deckungsbeitrag.
+- **Erdleitung: berechnete Menge = Eingabe − 3 m, nie unter 0** (3 m im Fundament
+  enthalten; gilt generell). Fassadenleitung: volle Meterzahl.
+- **Deckungsbeitrag** je Angebot: Σ VK netto − Σ Material-EK (ohne EP), als Box mit
+  € und % nur im Innendienst; Positionen ohne EK als Warnliste ausweisen.
+- Beträge Decimal/Cent, 19 % USt., deutsche Formate. Gültigkeit 30 Tage.
 - Status: Entwurf → Versendet → Angenommen / Abgelehnt.
 
-## KfW-Förderung
-- Parameter ausschließlich aus Logik-Excel Blatt „KfW" (editierbar, mit Gültigkeits-
-  warnung nach 31.01.2027). Kosten der Maßnahme = Angebotssumme brutto (automatisch).
-- Summenblock: Netto → USt → Gesamt brutto → volle Aufschlüsselung (Grundförderung,
-  Boni, Fördersatz, förderfähige Kosten, Zuschuss) → Eigenanteil → Disclaimer.
-- Ergebnisse müssen mit `foerderrechner-website.html` übereinstimmen (Testfälle!).
+## Versand (Microsoft Graph)
+Versand ausschließlich durch den Innendienst: Das Tool legt den E-Mail-Entwurf im
+Postfach des **angemeldeten Innendienst-Mitarbeiters** ab (Graph API, App-
+Registrierung durch IT; Anleitung in docs/). Anhänge: Angebots-PDF + Dateien lt.
+Blatt „Anhänge" (immer / bei HEMS / je WP-Paket). Absenden erfolgt in Outlook nach
+Kontrolle; danach Status „Versendet". Übergangslösung bis Graph steht: PDF-Download.
 
-## PDF-Layout
-Referenz-PDF pixelnah nachbauen: Logo-Leiste Seite 1, Folgeseiten Friondo-Logo rechts,
-5-Spalten-Fußzeile auf jeder Seite, Positionstabelle mit Übertrag-Zeilen und fetten
-Gruppen-Überschriften lt. Blatt „Angebotsaufbau" (Block 1 mit dynamischer Überschrift),
-danach Summen-/KfW-Block und die vier statischen Nachtext-Seiten aus ANGEBOTSTEXTE.md.
-Ablage: `data/angebote/AN-C-<Nr>.pdf`.
+## PDF
+Wie v1 (Referenz AN250096, Blatt „Angebotsaufbau"), mit einer Änderung:
+**Vollmacht-Seite (Nachtext D) nur, wenn iMSys (P02) und/oder SpotDynamic (P03)
+im Angebot sind.**
 
-## Konventionen
-- Sprache in UI, Kommentaren, Commits: Deutsch. Struktur: `app/`, `app/templates/`,
-  `app/static/`, `data/` (nicht committen), `docs/`.
-- Konfiguration (Pfade, MwSt, API-Tokens) über `.env` + `config.py`; Tokens nie committen.
-- Nach jeder Phase aus @PLAN.md: testen, Checkboxen abhaken, Git-Commit.
-
-## Nicht-Ziele (v1)
-Kein Login/Rechteverwaltung, keine Rechnungen, keine Rabattlogik, keine Cloud.
+## Konventionen & Nicht-Ziele
+Deutsch überall; testen + abhaken + committen je Phase; Tokens/Secrets nur in .env.
+Nicht-Ziele: keine Rechnungen, keine Rabattlogik, kein komplexes Rechtesystem
+(einfache Rollen genügen), keine Cloud.

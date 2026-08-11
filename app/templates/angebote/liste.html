@@ -30,6 +30,7 @@
             <th>Datum</th>
             <th>Status</th>
             <th class="rechts">Brutto</th>
+            <th class="rechts" title="Deckungsbeitrag (intern)">DB</th>
             <th></th>
         </tr>
     </thead>
@@ -41,6 +42,11 @@
             <td>{{ a.datum.strftime('%d.%m.%Y') }}</td>
             <td><span class="abzeichen status-{{ a.status | lower }}">{{ a.status }}</span></td>
             <td class="rechts">{{ a.summen().brutto | euro }}</td>
+            {% set deckung = a.deckungsbeitrag() %}
+            <td class="rechts" title="{{ deckung.db | euro }} · VK netto {{ deckung.vk | euro }} − EK {{ deckung.ek | euro }}{% if deckung.ohne_ek %} · EK fehlt bei {{ deckung.ohne_ek | length }} Pos.{% endif %}">
+                {{ ('%.1f' | format(deckung.prozent)) | replace('.', ',') }} %
+                {% if deckung.ohne_ek %}<span class="abzeichen ep">!</span>{% endif %}
+            </td>
             <td class="aktionen">
                 <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">Öffnen</a>
                 <form method="post" action="/angebote/{{ a.id }}/duplizieren">

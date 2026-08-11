@@ -1,12 +1,15 @@
-# Preislisten-Import (Phase 2):
-# - liest die TAIFUN-Preisliste (GUID-Anker, Kategoriezeilen, _x000D_-Bereinigung, "EP.")
-# - wendet die Textregeln aus der Logik-Excel an (Blatt "Textregeln")
-# - importiert die Zusatzartikel Z01–Z22 (Blatt "Zusatzartikel"), bei "analog Pos. X"
-#   wird der Beschreibungstext von dort übernommen und Material/Größe angepasst
+# Preislisten-Import (Phase 2, ab Phase 11 auf die EK-Preisliste umgestellt):
+# - liest die TAIFUN-Preisliste v2 (11 Spalten, Erkennung über Header-Namen;
+#   GUID-Anker, Kategoriezeilen, _x000D_-Bereinigung, "EP.", EK/Multi/Artikelnummer)
+# - wendet die Textregeln aus der Logik-Excel v2 an (Blatt "Textregeln")
+# - importiert die Zusatzartikel Z01–Z22 (Blatt "Zusatzartikel", inkl. EK Material);
+#   bei "analog Pos. X" wird der Beschreibungstext übernommen und angepasst
+# - Plausiprüfung: |EK × Multi − VK| > 1 € ergibt eine Hinweiszeile im Importbericht
 # - Re-Import: Diff-Vorschau mit Warnliste (Positionsnummer <-> GUID-Abweichungen)
 
 import re
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from decimal import Decimal
 
 import openpyxl
@@ -34,6 +37,44 @@ def kategorie_bereinigen(wert) -> str:
 
 def euro_zu_cent(wert) -> int:
     return int((Decimal(str(wert)) * 100).quantize(Decimal("1")))
+
+
+def datum_text(wert) -> str:
+    """EK-Datum als deutscher Datumstext (Zelle kann Datum oder Text sein)."""
+    if wert in (None, ""):
+        return ""
+    if isinstance(wert, (datetime, date)):
+        return wert.strftime("%d.%m.%Y")
+    return str(wert).strip()
+
+
+def _header_indizes(kopfzeile, bericht_warnungen: list[str]) -> dict[str, int]:
+    """Spalten über Header-Namen erkennen (Layout v2 ist nicht mehr fest).
+    Die Einheiten-Spalte trägt in der TAIFUN-Datei keinen Namen und wird als
+    erste unbenannte Spalte zwischen 'Menge' und 'Beschreibung' erkannt."""
+    namen = [str(z).strip() if z is not None else "" for z in kopfzeile]
+    indizes: dict[str, int] = {}
+    for i, name in enumerate(namen):
+        if name and name not in indizes:
+            indizes[name] = i
+    pflicht = ["GUID", "Position", "Menge", "Beschreibung", "E-Preis", "G-Preis"]
+    for name in pflicht:
+        if name not in indizes:
+            raise ValueError(f"Preisliste: Pflichtspalte „{name}“ nicht im Header gefunden.")
+    if "Einheit" not in indizes:
+        for i in range(indizes["Menge"] + 1, indizes["Beschreibung"]):
+            if not namen[i]:
+                indizes["Einheit"] = i
+                break
+    if "Einheit" not in indizes:
+        raise ValueError("Preisliste: Einheiten-Spalte nicht gefunden "
+                         "(weder Header „Einheit“ noch unbenannte Spalte nach „Menge“).")
+    for optional in ("Multi", "Artikelnummer", "Datum Einkaufspreis Material",
+                     "Einkaufspreis Material"):
+        if optional not in indizes:
+            bericht_warnungen.append(
+                f"Preisliste: Spalte „{optional}“ fehlt – Feld bleibt leer.")
+    return indizes
 
 
 # --- Textregeln aus der Logik-Excel --------------------------------------
@@ -91,19 +132,28 @@ class ImportErgebnis:
 
 
 def lese_dateien() -> ImportErgebnis:
-    """Liest Preisliste und Zusatzartikel; liefert Artikel-Dicts plus Warnungen."""
+    """Liest Preisliste v2 und Zusatzartikel (Logik v2); liefert Artikel-Dicts + Warnungen."""
     ergebnis = ImportErgebnis()
-    wb_logik = openpyxl.load_workbook(config.LOGIK_EXCEL_PFAD, data_only=True)
+    wb_logik = openpyxl.load_workbook(config.LOGIK_EXCEL_V2_PFAD, data_only=True)
     regeln = lade_textregeln(wb_logik)
     ergebnis.warnungen.extend(regeln.nicht_anwendbar)
 
     wb = openpyxl.load_workbook(config.PREISLISTE_PFAD, data_only=True)
     ws = wb[wb.sheetnames[0]]
 
+    zeilen = ws.iter_rows(values_only=True)
+    indizes = _header_indizes(next(zeilen), ergebnis.warnungen)
+
+    def zelle(row, name):
+        i = indizes.get(name)
+        return row[i] if i is not None and i < len(row) else None
+
     kategorie = ""
     nach_pos: dict[str, dict] = {}
-    for zeile, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-        guid, _, pos, menge, einheit, beschreibung, e_preis, g_preis = row[:8]
+    for zeile_nr, row in enumerate(zeilen, start=2):
+        guid = zelle(row, "GUID")
+        beschreibung = zelle(row, "Beschreibung")
+        pos = zelle(row, "Position")
         if guid is None and beschreibung is None:
             continue
         if pos is None:
@@ -115,26 +165,35 @@ def lese_dateien() -> ImportErgebnis:
             continue
         pos_nr = str(pos).strip()
         if guid is None:
-            ergebnis.warnungen.append(f"Zeile {zeile}: Position {pos_nr} ohne GUID – übersprungen.")
+            ergebnis.warnungen.append(f"Zeile {zeile_nr}: Position {pos_nr} ohne GUID – übersprungen.")
             continue
         text = text_bereinigen(beschreibung)
         if pos_nr in regeln.begriff_entfernen:
             text = begriff_entfernen(text, regeln.begriff_entfernen[pos_nr])
+        g_preis = zelle(row, "G-Preis")
+        e_preis = zelle(row, "E-Preis")
         ep_flag = isinstance(g_preis, str) and "EP" in g_preis
         if e_preis is None:
             ergebnis.warnungen.append(f"Position {pos_nr}: kein E-Preis – mit 0,00 € importiert.")
+        ek = zelle(row, "Einkaufspreis Material")
+        multi = zelle(row, "Multi")
         artikel = {
             "guid": str(guid).strip(),
             "pos_nr": pos_nr,
             "kategorie": kategorie,
             "bezeichnung": "",
             "beschreibung": text,
-            "menge_standard": float(menge or 1),
-            "einheit": str(einheit or "").strip(),
+            "menge_standard": float(zelle(row, "Menge") or 1),
+            "einheit": str(zelle(row, "Einheit") or "").strip(),
             "e_preis_cent": euro_zu_cent(e_preis or 0),
             "ep_flag": ep_flag,
             "quelle": QUELLE_PREISLISTE,
+            "artikelnummer": str(zelle(row, "Artikelnummer") or "").strip(),
+            "multi": float(multi) if multi not in (None, "") else None,
+            "ek_cent": euro_zu_cent(ek) if ek not in (None, "") else None,
+            "ek_datum": datum_text(zelle(row, "Datum Einkaufspreis Material")),
         }
+        _plausibilitaet_pruefen(artikel, ergebnis)
         ergebnis.artikel.append(artikel)
         nach_pos[pos_nr] = artikel
 
@@ -142,14 +201,50 @@ def lese_dateien() -> ImportErgebnis:
     return ergebnis
 
 
+def _plausibilitaet_pruefen(artikel: dict, ergebnis: ImportErgebnis) -> None:
+    """Hinweis, wenn EK × Multi um mehr als 1 € vom VK abweicht."""
+    if artikel["ek_cent"] is None or not artikel["multi"]:
+        return
+    erwartet = artikel["ek_cent"] * artikel["multi"]
+    abweichung_cent = abs(erwartet - artikel["e_preis_cent"])
+    if abweichung_cent > 100:
+        ergebnis.warnungen.append(
+            f"Plausibilität Pos. {artikel['pos_nr']}: EK × Multi = "
+            f"{erwartet / 100:,.2f} €, VK = {artikel['e_preis_cent'] / 100:,.2f} € "
+            f"(Abweichung {abweichung_cent / 100:,.2f} €).".replace(",", "X")
+            .replace(".", ",").replace("X", "."))
+
+
 def _zusatzartikel_lesen(wb_logik, nach_pos: dict[str, dict], ergebnis: ImportErgebnis) -> None:
-    for nr, bez, einheit, preis, quelle_text in wb_logik["Zusatzartikel"].iter_rows(
-            min_row=2, values_only=True):
+    """Zusatzartikel aus der Logik-Excel v2; Spalten über Header-Namen erkennen
+    (u. a. 'VK netto (€)' und 'EK Material (€) – bitte ergänzen')."""
+    zeilen = wb_logik["Zusatzartikel"].iter_rows(values_only=True)
+    kopf = [str(z).strip() if z is not None else "" for z in next(zeilen)]
+
+    def spalte(*muster):
+        for i, name in enumerate(kopf):
+            if any(m.lower() in name.lower() for m in muster):
+                return i
+        return None
+
+    i_nr = spalte("Nr")
+    i_bez = spalte("Bezeichnung")
+    i_einheit = spalte("Einheit")
+    i_vk = spalte("VK")
+    i_ek = spalte("EK Material")
+    i_text = spalte("Beschreibung", "Textquelle")
+    if i_ek is None:
+        ergebnis.warnungen.append(
+            "Zusatzartikel: EK-Spalte nicht gefunden – Einkaufspreise bleiben leer.")
+
+    for row in zeilen:
+        nr = row[i_nr] if i_nr is not None else None
         if not nr:
             continue
         nr = str(nr).strip()
-        bez = text_bereinigen(bez)
-        quelle_text = (str(quelle_text or "")).strip()
+        bez = text_bereinigen(row[i_bez]) if i_bez is not None else ""
+        quelle_text = (str(row[i_text] or "")).strip() if i_text is not None else ""
+        ek = row[i_ek] if i_ek is not None else None
         beschreibung = ""
         m_analog = re.search(r"analog Pos\.?\s*(\d+)", quelle_text)
         if m_analog:
@@ -168,10 +263,14 @@ def _zusatzartikel_lesen(wb_logik, nach_pos: dict[str, dict], ergebnis: ImportEr
             "bezeichnung": bez,
             "beschreibung": beschreibung,
             "menge_standard": 1.0,
-            "einheit": str(einheit or "").strip(),
-            "e_preis_cent": euro_zu_cent(preis or 0),
+            "einheit": str((row[i_einheit] if i_einheit is not None else "") or "").strip(),
+            "e_preis_cent": euro_zu_cent((row[i_vk] if i_vk is not None else 0) or 0),
             "ep_flag": False,
             "quelle": QUELLE_ZUSATZ,
+            "artikelnummer": "",
+            "multi": None,
+            "ek_cent": euro_zu_cent(ek) if ek not in (None, "") else None,
+            "ek_datum": "",
         })
 
 
@@ -200,12 +299,15 @@ def _text_anpassen(basis_text: str, ziel_bezeichnung: str) -> str:
 # --- Diff-Vorschau und Übernahme ------------------------------------------
 
 FELDER_VERGLEICH = ["pos_nr", "kategorie", "bezeichnung", "beschreibung",
-                    "menge_standard", "einheit", "e_preis_cent", "ep_flag"]
+                    "menge_standard", "einheit", "e_preis_cent", "ep_flag",
+                    "artikelnummer", "multi", "ek_cent", "ek_datum"]
 
 FELD_NAMEN = {
     "pos_nr": "Positionsnummer", "kategorie": "Kategorie", "bezeichnung": "Bezeichnung",
     "beschreibung": "Beschreibung", "menge_standard": "Standardmenge",
     "einheit": "Einheit", "e_preis_cent": "E-Preis", "ep_flag": "EP-Kennzeichen",
+    "artikelnummer": "Artikelnummer", "multi": "Multi", "ek_cent": "EK Material",
+    "ek_datum": "EK-Datum",
 }
 
 

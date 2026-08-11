@@ -58,6 +58,11 @@ class Artikel(Base):
     e_preis_cent: Mapped[int] = mapped_column(Integer, default=0)            # Einzelpreis netto in Cent
     ep_flag: Mapped[bool] = mapped_column(Boolean, default=False)            # Eventualposition ("EP.")
     quelle: Mapped[str] = mapped_column(String(20), default=QUELLE_MANUELL)
+    # Preisliste v2 (Phase 11): Einkaufsdaten – nur Innendienst, nie im PDF
+    artikelnummer: Mapped[str] = mapped_column(String(50), default="")
+    multi: Mapped[Optional[float]] = mapped_column(Float, nullable=True)     # VK = EK × Multi
+    ek_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)   # Einkaufspreis Material
+    ek_datum: Mapped[str] = mapped_column(String(20), default="")
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
                                                       onupdate=datetime.now)
@@ -112,6 +117,25 @@ class Angebot(Base):
         ust = int(Decimal(netto) * Decimal("0.19"))
         return {"netto": netto, "ust": ust, "brutto": netto + ust}
 
+    def deckungsbeitrag(self) -> dict:
+        """Σ VK netto − Σ Material-EK (ohne EP). Nur Innendienst, nie im PDF.
+        Positionen ohne hinterlegten EK werden als Warnliste mitgeliefert."""
+        vk = 0
+        ek = 0
+        ohne_ek = []
+        for p in self.positionen:
+            if p.ep_flag:
+                continue
+            vk += p.gesamt_cent
+            if p.ek_cent is None:
+                ohne_ek.append(p)
+            else:
+                ek += int((Decimal(str(p.menge)) * Decimal(p.ek_cent))
+                          .quantize(Decimal("1")))
+        db = vk - ek
+        prozent = (db / vk * 100) if vk else 0.0
+        return {"vk": vk, "ek": ek, "db": db, "prozent": prozent, "ohne_ek": ohne_ek}
+
 
 class AngebotsPosition(Base):
     """Snapshot einer Angebotsposition – unabhängig vom Artikelstamm."""
@@ -129,6 +153,7 @@ class AngebotsPosition(Base):
     einheit: Mapped[str] = mapped_column(String(20), default="")
     e_preis_cent: Mapped[int] = mapped_column(Integer, default=0)
     ep_flag: Mapped[bool] = mapped_column(Boolean, default=False)
+    ek_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # EK-Snapshot (Phase 11)
 
     angebot: Mapped["Angebot"] = relationship(back_populates="positionen")
 

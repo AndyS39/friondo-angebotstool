@@ -28,6 +28,36 @@ def init_db() -> None:
     from app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    _spalten_ergaenzen()
+
+
+# Nachträglich eingeführte Spalten (SQLite: create_all ergänzt keine Spalten).
+# Format: Tabelle -> {Spaltenname: SQL-Typdefinition}
+_NACHTRAEGLICHE_SPALTEN = {
+    "artikel": {
+        "artikelnummer": "VARCHAR(50) NOT NULL DEFAULT ''",
+        "multi": "FLOAT",
+        "ek_cent": "INTEGER",
+        "ek_datum": "VARCHAR(20) NOT NULL DEFAULT ''",
+    },
+    "angebotspositionen": {
+        "ek_cent": "INTEGER",
+    },
+}
+
+
+def _spalten_ergaenzen() -> None:
+    """Leichte Migration: fehlende Spalten per ALTER TABLE ergänzen (idempotent)."""
+    from sqlalchemy import text
+
+    with engine.begin() as verbindung:
+        for tabelle, spalten in _NACHTRAEGLICHE_SPALTEN.items():
+            vorhanden = {zeile[1] for zeile in
+                         verbindung.execute(text(f"PRAGMA table_info({tabelle})"))}
+            for name, typdef in spalten.items():
+                if name not in vorhanden:
+                    verbindung.execute(
+                        text(f"ALTER TABLE {tabelle} ADD COLUMN {name} {typdef}"))
 
 
 def get_session():

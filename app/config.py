@@ -19,11 +19,16 @@ def _pfad(env_name: str, standard: Path) -> Path:
 
 
 # --- Pfade ---------------------------------------------------------------
+# Preisliste v2 mit EK-Spalten (führend seit Phase 11)
 PREISLISTE_PFAD = _pfad(
     "PREISLISTE_PFAD",
-    PROJEKT_ORDNER / "Artikel-Preislisten" / "Angebotserstellung Tool.xlsx",
+    PROJEKT_ORDNER / "Artikel-Preislisten" / "Angebotserstellung Tool mit EK.xlsx",
 )
 LOGIK_EXCEL_PFAD = _pfad("LOGIK_EXCEL_PFAD", PROJEKT_ORDNER / "konfigurator_logik.xlsx")
+# v2-Logik: Phase 11 nutzt daraus Zusatzartikel (inkl. EK) und Textregeln;
+# der vollständige Umstieg der Fragen-/Aktionslogik folgt in Phase 12.
+LOGIK_EXCEL_V2_PFAD = _pfad("LOGIK_EXCEL_V2_PFAD",
+                            PROJEKT_ORDNER / "konfigurator_logik_v2.xlsx")
 LOGO_ORDNER = _pfad("LOGO_ORDNER", PROJEKT_ORDNER / "Layout - Logo")
 DATA_ORDNER = _pfad("DATA_ORDNER", PROJEKT_ORDNER / "data")
 
