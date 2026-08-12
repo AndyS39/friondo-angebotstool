@@ -13,6 +13,13 @@
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
+{% if sync_status and sync_status.letzter_sync %}
+<p class="dezent">Letzter monday-Sync: {{ sync_status.letzter_sync.strftime('%d.%m.%Y %H:%M') }}
+{% if sync_status.fehler %} · <span title="{{ sync_status.fehler | join(' · ') }}">⚠ Hinweise</span>{% endif %}</p>
+{% elif sync_status and sync_status.fehler %}
+<div class="warnblock">{{ sync_status.fehler | join(' · ') }}</div>
+{% endif %}
+
 {% if leads %}
 <table class="tabelle">
     <thead>

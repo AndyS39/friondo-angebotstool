@@ -21,6 +21,15 @@ APP_ORDNER = Path(__file__).resolve().parent
 async def lifespan(app: FastAPI):
     init_db()
     standardbenutzer_anlegen()
+    # monday-Lesesync (Phase 22): Quellen vorbelegen + 15-Minuten-Scheduler
+    from app import monday_sync
+    from app.db import SessionLocal
+    sitzung = SessionLocal()
+    try:
+        monday_sync.quellen_vorbelegen(sitzung)
+    finally:
+        sitzung.close()
+    monday_sync.scheduler_starten()
     yield
 
 

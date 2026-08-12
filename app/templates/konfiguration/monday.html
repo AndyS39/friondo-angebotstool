@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block titel %}monday-Anbindung – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<h1>Parametrierung · monday-Anbindung</h1>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% if not token_da %}
+<p class="hinweis">Kein API-Token hinterlegt – bitte <code>MONDAY_API_TOKEN</code>
+in die <code>.env</code> eintragen und die App neu starten. Quellen und Mapping
+können trotzdem schon gepflegt werden.</p>
+{% elif spalten_fehler %}
+<div class="warnblock"><strong>Spalten konnten nicht geladen werden:</strong> {{ spalten_fehler }}</div>
+{% endif %}
+
+{% if sync_status.letzter_sync %}
+<p class="dezent">Letzter Sync: {{ sync_status.letzter_sync.strftime('%d.%m.%Y %H:%M') }}
+· {{ sync_status.anzahl }} Leads
+{% if sync_status.fehler %} · Hinweise: {{ sync_status.fehler | join(' · ') }}{% endif %}</p>
+{% endif %}
+
+<h2>Quellen (Board + Gruppentitel)</h2>
+<table class="tabelle">
+    <thead><tr><th>Board-ID</th><th>Name</th><th>Gruppentitel</th><th>Fester Verantwortlicher</th><th>Aktiv</th><th></th></tr></thead>
+    <tbody>
+    {% for q in quellen %}
+        <tr>
+            <form method="post" action="/parametrierung/monday/quelle">
+                <input type="hidden" name="quelle_id" value="{{ q.id }}">
+                <td>{{ q.board_id }}</td>
+                <td><input type="text" name="board_name" value="{{ q.board_name }}" size="28"></td>
+                <td><input type="text" name="gruppen_titel" value="{{ q.gruppen_titel }}" size="12"></td>
+                <td>
+                    <select name="fester_benutzer_id">
+                        <option value="">– aus Personen-Spalte –</option>
+                        {% for b in benutzer %}
+                            <option value="{{ b.id }}" {{ 'selected' if q.fester_benutzer_id == b.id }}>{{ b.name }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td><input type="checkbox" name="aktiv" {{ 'checked' if q.aktiv }}></td>
+                <td><button class="knopf klein" type="submit">Speichern</button></td>
+            </form>
+        </tr>
+    {% endfor %}
+    <tr>
+        <form method="post" action="/parametrierung/monday/quelle">
+            <td><input type="text" name="board_id" size="12" placeholder="Board-ID"></td>
+            <td><input type="text" name="board_name" size="28" placeholder="Name (optional)"></td>
+            <td><input type="text" name="gruppen_titel" value="Terminiert" size="12"></td>
+            <td></td>
+            <td><input type="checkbox" name="aktiv" checked></td>
+            <td><button class="knopf klein" type="submit">Hinzufügen</button></td>
+        </form>
+    </tr>
+    </tbody>
+</table>
+<p class="dezent">Sonderregel „Deals - Rene": fester Verantwortlicher auf
+Rene Golaschewski stellen – gilt dann auch bei leerer Personen-Spalte.</p>
+
+<h2>Spalten-Mapping je Board</h2>
+{% for q in quellen %}
+    <h2 class="gruppentitel">{{ q.board_name or q.board_id }}</h2>
+    <form method="post" action="/parametrierung/monday/mapping/{{ q.board_id }}" class="formular">
+        <div class="formzeile" style="flex-wrap: wrap">
+        {% for feld in felder %}
+            <label class="schmal">{{ feld }}
+                {% if spalten.get(q.board_id) %}
+                    <select name="{{ feld }}">
+                        <option value="">–</option>
+                        {% for spalte in spalten[q.board_id] %}
+                            <option value="{{ spalte.id }}"
+                                {{ 'selected' if mappings[q.board_id].get(feld) == spalte.id }}>
+                                {{ spalte.title }} ({{ spalte.type }})</option>
+                        {% endfor %}
+                    </select>
+                {% else %}
+                    <input type="text" name="{{ feld }}"
+                           value="{{ mappings[q.board_id].get(feld, '') }}"
+                           placeholder="Spalten-ID">
+                {% endif %}
+            </label>
+        {% endfor %}
+        </div>
+        <button class="knopf" type="submit">Mapping speichern</button>
+    </form>
+{% endfor %}
+
+<h2>Zuordnung monday-Person ↔ Tool-Benutzer</h2>
+{% if personen %}
+<table class="tabelle zusammenfassung">
+    {% for p in personen %}
+        <tr>
+            <form method="post" action="/parametrierung/monday/person/{{ p.id }}">
+                <th>{{ p.monday_name }}</th>
+                <td>
+                    <select name="benutzer_id" onchange="this.form.submit()">
+                        <option value="">– nicht zugeordnet –</option>
+                        {% for b in benutzer %}
+                            <option value="{{ b.id }}" {{ 'selected' if p.benutzer_id == b.id }}>{{ b.name }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+            </form>
+        </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p class="dezent">Noch keine monday-Personen gesehen – erscheinen nach dem ersten Sync.</p>
+{% endif %}
+{% endblock %}

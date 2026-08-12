@@ -5,9 +5,12 @@
 {% block inhalt %}
 <div class="seitenkopf">
     <h1>Parametrierung</h1>
-    <form method="post" action="/parametrierung/neu-einlesen">
-        <button class="knopf" type="submit">Parametrierung neu einlesen</button>
-    </form>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung/monday">monday-Anbindung</a>
+        <form method="post" action="/parametrierung/neu-einlesen">
+            <button class="knopf" type="submit">Parametrierung neu einlesen</button>
+        </form>
+    </div>
 </div>
 
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}

@@ -52,27 +52,25 @@ vorher lesen. Je Phase: Ansatz erläutern → umsetzen → testen → abhaken �
       erreicht) / Eigenanteil 15.063,95 €
 
 ## Phase 22 – Leads VOT (monday-Lesesync)
-- [ ] Parametrierung „monday-Anbindung": Quellenliste (Board + Gruppentitel),
-      vorbelegt mit den drei verifizierten Quellen – „Deals" 5080725439 (Blinno
-      Working Space, Gruppe „Terminiert" = group_mkzb5f0e), „Deals - Simon"
-      5089971526 und „Deals - Rene" 5092657267 (Pool Working Space, Gruppe
-      „Terminiert" je Board über den Titel auflösen)
-- [ ] Spalten-Mapping je Board per Dropdown (Spalten live von monday laden):
-      VOT-Datum, Personen-Spalte „Verantwortlicher", Anrede, Vorname, Nachname,
-      Straße, PLZ, Ort, Telefon, E-Mail, Status
-- [ ] Sonderregel: Bei „Deals - Rene" ist der Verantwortliche IMMER der Benutzer
-      Rene Golaschewski (auch bei leerer Spalte); Deduplizierung, falls derselbe
-      Kunde in mehreren Boards auftaucht
-- [ ] Zuordnungstabelle monday-Person ↔ Tool-Benutzer (für AD-Filter)
-- [ ] Lesesync alle 15 Min + Button „Jetzt aktualisieren"; API-Token aus .env;
-      Fehler werden angezeigt, blockieren aber nichts
-- [ ] Menüpunkt „Leads VOT": Leads mit VOT-Datum und ohne verknüpftes Angebot,
-      chronologisch nach Termin; Spalten: Termin, Kunde, Ort, Vertriebler, Status;
-      AD sieht nur eigene, ID/Admin alle
-- [ ] Klick → Fragenkatalog mit automatisch angelegtem/abgeglichenem Kunden
-      (Duplikatabgleich Name + PLZ); Verknüpfung Lead ↔ Erfassung ↔ Angebot
-- [ ] Nach Absenden der Erfassung verschwindet der Lead aus der Liste;
-      Statistik-Kachel „Offene Leads" speist sich hieraus
+- [x] Parametrierung „monday-Anbindung": Quellenliste (Board + Gruppentitel),
+      vorbelegt mit den drei verifizierten Quellen; Gruppe wird je Board über
+      den Titel „Terminiert" aufgelöst
+- [x] Spalten-Mapping je Board per Dropdown (Spalten live von monday geladen;
+      ohne Token als Spalten-ID-Eingabe): VOT-Datum, Verantwortlicher, Anrede,
+      Vorname, Nachname, Straße, PLZ, Ort, Telefon, E-Mail, Status
+- [x] Sonderregel „Deals - Rene" über festen Verantwortlichen je Quelle (greift
+      auch bei leerer Spalte); Deduplizierung gleicher Kunden über Boards
+- [x] Zuordnungstabelle monday-Person ↔ Tool-Benutzer (unbekannte Personen
+      werden nach dem Sync automatisch zur Zuordnung angeboten)
+- [x] Lesesync alle 15 Min (Hintergrund-Thread) + Button „Jetzt aktualisieren";
+      API-Token aus .env; Fehler werden angezeigt, blockieren aber nichts
+- [x] Menüpunkt „Leads VOT": chronologisch, Termin/Kunde/Ort/Vertriebler/Status,
+      AD nur eigene, ID/Admin alle
+- [x] Klick → Fragenkatalog mit angelegtem/abgeglichenem Kunden (Name + PLZ);
+      Verknüpfung Lead ↔ Kunde ↔ Erfassung (Angebot über die Erfassung)
+- [x] Nach Absenden der Erfassung verschwindet der Lead; Statistik-Kachel zählt
+      (Hinweis: echter Sync braucht MONDAY_API_TOKEN in der .env – Tests liefen
+      gegen eine gemockte monday-API)
 
 ## Phase 23 – E-Signatur
 - [ ] Signaturmodul: Seite mit Angebots-PDF-Vorschau + Touch-Signaturfeld (Canvas),

@@ -121,6 +121,44 @@ class Erfassung(Base):
     abgesendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
+class MondayQuelle(Base):
+    """monday-Quelle (Phase 22): Board + Gruppentitel; Gruppe wird über den
+    Titel aufgelöst (robust bei Board-Kopien). fester_benutzer_id bildet die
+    Sonderregel „Deals - Rene“ ab (Verantwortlicher immer dieser Benutzer)."""
+    __tablename__ = "monday_quellen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    board_id: Mapped[str] = mapped_column(String(30), unique=True)
+    board_name: Mapped[str] = mapped_column(String(200), default="")
+    gruppen_titel: Mapped[str] = mapped_column(String(100), default="Terminiert")
+    fester_benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+# Felder, die je Board auf monday-Spalten gemappt werden (Phase 22)
+MONDAY_FELDER = ["vot_datum", "verantwortlicher", "anrede", "vorname", "nachname",
+                 "strasse", "plz", "ort", "telefon", "email", "status"]
+
+
+class MondayMapping(Base):
+    """Spalten-Mapping je Board: Tool-Feld -> monday-Spalten-ID."""
+    __tablename__ = "monday_mappings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    board_id: Mapped[str] = mapped_column(String(30), index=True)
+    feld: Mapped[str] = mapped_column(String(30))
+    spalten_id: Mapped[str] = mapped_column(String(100), default="")
+
+
+class MondayPerson(Base):
+    """Zuordnung monday-Person (Anzeigename) -> Tool-Benutzer (für AD-Filter)."""
+    __tablename__ = "monday_personen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    monday_name: Mapped[str] = mapped_column(String(200), unique=True)
+    benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+
 class Lead(Base):
     """monday-Lead mit Vor-Ort-Termin (Phase 19 Modell, Phase 22 Lesesync)."""
     __tablename__ = "leads"
