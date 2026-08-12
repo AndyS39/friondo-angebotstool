@@ -14,15 +14,23 @@
         <span>Angebotstool</span>
     </a>
     <nav>
-        {% if benutzer_angemeldet and benutzer_angemeldet.rolle in ('admin', 'innendienst') and not mobil %}
-            {% for pfad, name in navigation %}
-                {% if pfad != '/benutzer' or benutzer_angemeldet.rolle == 'admin' %}
-                    <a href="{{ pfad }}" class="{{ 'aktiv' if aktiv == pfad else '' }}">{{ name }}</a>
-                {% endif %}
-            {% endfor %}
-        {% endif %}
         {% if benutzer_angemeldet %}
-            <a href="/logout" title="{{ benutzer_angemeldet.name }} abmelden">{{ benutzer_angemeldet.name }} ⏻</a>
+            <details class="menue">
+                <summary>Menü ☰</summary>
+                <div class="menue-liste">
+                    {% if benutzer_angemeldet.rolle in ('admin', 'innendienst') %}
+                        {% for pfad, name in navigation %}
+                            {% if pfad != '/benutzer' or benutzer_angemeldet.rolle == 'admin' %}
+                                <a href="{{ pfad }}" class="{{ 'aktiv' if aktiv == pfad else '' }}">{{ name }}</a>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <a href="/leads">Leads VOT</a>
+                        <a href="/erfassung">Erfassung</a>
+                    {% endif %}
+                    <a href="/logout">{{ benutzer_angemeldet.name }} abmelden ⏻</a>
+                </div>
+            </details>
         {% endif %}
     </nav>
 </header>

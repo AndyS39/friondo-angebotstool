@@ -121,6 +121,37 @@ class Erfassung(Base):
     abgesendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
+class Lead(Base):
+    """monday-Lead mit Vor-Ort-Termin (Phase 19 Modell, Phase 22 Lesesync)."""
+    __tablename__ = "leads"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    monday_item_id: Mapped[str] = mapped_column(String(30), unique=True, index=True)
+    board_id: Mapped[str] = mapped_column(String(30), default="")
+    board_name: Mapped[str] = mapped_column(String(200), default="")
+    vot_datum: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    status_text: Mapped[str] = mapped_column(String(100), default="")
+    anrede: Mapped[str] = mapped_column(String(20), default="")
+    vorname: Mapped[str] = mapped_column(String(100), default="")
+    nachname: Mapped[str] = mapped_column(String(100), default="")
+    strasse: Mapped[str] = mapped_column(String(200), default="")
+    plz: Mapped[str] = mapped_column(String(10), default="")
+    ort: Mapped[str] = mapped_column(String(100), default="")
+    telefon: Mapped[str] = mapped_column(String(50), default="")
+    email: Mapped[str] = mapped_column(String(200), default="")
+    monday_person: Mapped[str] = mapped_column(String(200), default="")  # Verantwortlicher
+    benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Tool-Benutzer
+    kunde_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    erfassung_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                     onupdate=datetime.now)
+
+    @property
+    def anzeige_name(self) -> str:
+        person = " ".join(t for t in (self.vorname, self.nachname) if t)
+        return person or self.email or f"monday-Item {self.monday_item_id}"
+
+
 ANGEBOT_STATUS = ["Entwurf", "Versendet", "Angenommen", "Abgelehnt"]
 
 

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block titel %}Leads VOT – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Leads VOT</h1>
+    {% if benutzer.rolle != 'aussendienst' %}
+        <form method="post" action="/leads/sync">
+            <button class="knopf zweitrangig" type="submit">Jetzt aktualisieren</button>
+        </form>
+    {% endif %}
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% if leads %}
+<table class="tabelle">
+    <thead>
+        <tr><th>Termin</th><th>Kunde</th><th>Ort</th><th>Vertriebler</th><th>Status</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for lead in leads %}
+        <tr>
+            <td>{{ lead.vot_datum.strftime('%d.%m.%Y %H:%M') if lead.vot_datum }}</td>
+            <td>{{ lead.anzeige_name }}</td>
+            <td>{{ lead.plz }} {{ lead.ort }}</td>
+            <td>{{ vertriebler[lead.benutzer_id].name if lead.benutzer_id in vertriebler else lead.monday_person }}</td>
+            <td class="dezent">{{ lead.status_text }}</td>
+            <td class="aktionen">
+                <a class="knopf klein" href="/leads/{{ lead.id }}/erfassen">Erfassung starten</a>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<p class="dezent">{{ leads | length }} offene{{ 'r' if leads | length == 1 }} Lead{{ 's' if leads | length != 1 }}</p>
+{% else %}
+<p class="hinweis">Keine offenen Leads mit Vor-Ort-Termin.
+{% if benutzer.rolle != 'aussendienst' %}Die monday-Anbindung wird in der
+<a href="/parametrierung">Parametrierung</a> eingerichtet.{% endif %}</p>
+{% endif %}
+{% endblock %}

@@ -2,11 +2,29 @@
 
 {% block inhalt %}
 <h1>Willkommen im Friondo Angebotstool</h1>
-<p>Internes Tool für den Vertrieb: Konfigurator, KfW-Förderung, PDF-Angebote und Versand.</p>
 
-<div class="kacheln">
-    {% for pfad, name in navigation %}
-        <a class="kachel" href="{{ pfad }}">{{ name }}</a>
-    {% endfor %}
+<div class="kacheln start-shortcuts">
+    <a class="kachel" href="/leads">Leads VOT</a>
+    <a class="kachel" href="/erfassungen">Erfassungen</a>
+    <a class="kachel" href="/angebote">Angebote</a>
+</div>
+
+<h2>Auf einen Blick</h2>
+<div class="kacheln statistik">
+    <a class="kachel stat" href="/leads">
+        <span class="stat-zahl">{{ offene_leads }}</span>
+        <span>Offene Leads</span>
+        <span class="dezent">VOT ohne Angebot</span>
+    </a>
+    <a class="kachel stat" href="/erfassungen?status=offen">
+        <span class="stat-zahl">{{ offene_erfassungen }}</span>
+        <span>Offene Erfassungen</span>
+        <span class="dezent">Neu / In Bearbeitung</span>
+    </a>
+    <a class="kachel stat" href="/angebote?status=Versendet">
+        <span class="stat-zahl">{{ versendete }}</span>
+        <span>Versendete Angebote</span>
+        <span class="dezent">warten auf Antwort</span>
+    </a>
 </div>
 {% endblock %}

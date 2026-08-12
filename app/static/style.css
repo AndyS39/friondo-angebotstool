@@ -66,6 +66,51 @@ body {
     font-weight: 600;
 }
 
+/* Menü-Dropdown oben rechts (Phase 19) */
+.menue { position: relative; }
+
+.menue summary {
+    list-style: none;
+    cursor: pointer;
+    color: #fff;
+    padding: 1.1rem 0.5rem;
+    font-weight: 600;
+}
+
+.menue summary::-webkit-details-marker { display: none; }
+
+.menue[open] .menue-liste {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background: #fff;
+    border: 1px solid var(--grau-linie);
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    min-width: 220px;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+}
+
+.menue-liste a {
+    color: var(--friondo-dunkel) !important;
+    padding: 0.7rem 1rem !important;
+    border-bottom: 1px solid var(--grau-linie);
+    opacity: 1 !important;
+    display: block !important;
+}
+
+.menue-liste a:last-child { border-bottom: none; }
+
+.menue-liste a:hover { background: var(--grau-hell); }
+
+.start-shortcuts .kachel { font-size: 1.2rem; padding: 2rem; }
+
+.kachel.stat { display: flex; flex-direction: column; gap: 0.2rem; }
+
+.stat-zahl { font-size: 2.2rem; color: var(--friondo-blau); }
+
 main {
     flex: 1;
     width: 100%;

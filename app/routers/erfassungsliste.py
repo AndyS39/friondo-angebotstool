@@ -31,7 +31,9 @@ def _kontext(session: Session, erfassungen):
 async def liste(request: Request, q: str = "", status: str = "", ampel: str = "",
                 session: Session = Depends(get_session)):
     abfrage = session.query(Erfassung).filter(Erfassung.status != "Entwurf")
-    if status:
+    if status == "offen":   # Statistik-Kachel der Startseite (Phase 19)
+        abfrage = abfrage.filter(Erfassung.status.in_(["Neu", "In Bearbeitung"]))
+    elif status:
         abfrage = abfrage.filter(Erfassung.status == status)
     if ampel:
         abfrage = abfrage.filter(Erfassung.ampel == ampel)

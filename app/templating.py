@@ -32,12 +32,13 @@ def menge_format(wert) -> str:
 templates.env.filters["euro"] = euro
 templates.env.filters["menge"] = menge_format
 
-# Navigation: (URL-Pfad, Beschriftung) – wird im Basis-Layout gerendert (Innendienst).
+# Menü-Einträge (Phase 19: Dropdown oben rechts, rollenabhängig gefiltert)
 NAVIGATION = [
+    ("/leads", "Leads VOT"),
     ("/erfassungen", "Erfassungen"),
+    ("/angebote", "Angebote"),
     ("/kunden", "Kunden"),
     ("/artikel", "Artikel"),
-    ("/angebote", "Angebote"),
     ("/benutzer", "Benutzer"),
     ("/versand", "Versand"),
     ("/parametrierung", "Parametrierung"),

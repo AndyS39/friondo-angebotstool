@@ -11,7 +11,7 @@ from app.auth import RollenMiddleware, standardbenutzer_anlegen
 from app.db import init_db
 from app.routers import (angebote, anmeldung, artikel, benutzer, erfassung,
                          erfassungsliste, konfiguration, konfigurator, kunden,
-                         versand)
+                         leads, versand)
 from app.templating import render
 
 APP_ORDNER = Path(__file__).resolve().parent
@@ -34,6 +34,7 @@ app.include_router(anmeldung.router)
 app.include_router(benutzer.router)
 app.include_router(erfassung.router)
 app.include_router(erfassungsliste.router)
+app.include_router(leads.router)
 app.include_router(kunden.router)
 app.include_router(artikel.router)
 app.include_router(konfiguration.router)
@@ -44,7 +45,37 @@ app.include_router(versand.router)
 
 @app.get("/")
 async def startseite(request: Request):
-    return render(request, "index.html", aktiv=None)
+    """Startseite (Phase 19): drei Shortcuts + klickbare Statistik-Kacheln."""
+    from sqlalchemy import or_
+
+    from app.db import SessionLocal
+    from app.models import Angebot, Erfassung, Lead
+    session = SessionLocal()
+    try:
+        offene_leads = _offene_leads_anzahl(session)
+        offene_erfassungen = (session.query(Erfassung)
+                              .filter(Erfassung.status.in_(["Neu", "In Bearbeitung"]))
+                              .count())
+        versendete = (session.query(Angebot)
+                      .filter(Angebot.status == "Versendet").count())
+    finally:
+        session.close()
+    return render(request, "index.html", aktiv=None,
+                  offene_leads=offene_leads,
+                  offene_erfassungen=offene_erfassungen,
+                  versendete=versendete)
+
+
+def _offene_leads_anzahl(session) -> int:
+    """Leads mit VOT-Datum, deren Erfassung fehlt oder noch Entwurf ist."""
+    from sqlalchemy import or_
+
+    from app.models import Erfassung, Lead
+    return (session.query(Lead)
+            .outerjoin(Erfassung, Lead.erfassung_id == Erfassung.id)
+            .filter(Lead.vot_datum.isnot(None))
+            .filter(or_(Lead.erfassung_id.is_(None), Erfassung.status == "Entwurf"))
+            .count())
 
 
 @app.get("/konfiguration")

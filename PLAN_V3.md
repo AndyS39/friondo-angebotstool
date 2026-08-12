@@ -16,11 +16,12 @@ vorher lesen. Je Phase: Ansatz erläutern → umsetzen → testen → abhaken �
       Zusatzinfo sichtbar; bestehende Angebote werden beim Öffnen korrekt angezeigt
 
 ## Phase 19 – Startseite
-- [ ] Startseite: nur Shortcuts „Leads VOT", „Erfassungen", „Angebote"
-- [ ] Alle übrigen Punkte in Dropdown „Menü" oben rechts (rollenabhängig gefiltert)
-- [ ] Statistik-Kacheln: Offene Leads (VOT ohne Angebot) · Offene Erfassungen
+- [x] Startseite: nur Shortcuts „Leads VOT", „Erfassungen", „Angebote"
+- [x] Alle übrigen Punkte in Dropdown „Menü" oben rechts (rollenabhängig gefiltert)
+- [x] Statistik-Kacheln: Offene Leads (VOT ohne Angebot) · Offene Erfassungen
       (Status Neu/In Bearbeitung) · Versendete Angebote (Status Versendet);
-      Zahlen anklickbar → gefilterte Liste
+      Zahlen anklickbar → gefilterte Liste (Lead-Modell + /leads-Liste angelegt,
+      Befüllung durch den monday-Sync folgt in Phase 22)
 
 ## Phase 20 – Logik v3
 - [ ] konfigurator_logik_v3.xlsx einlesen; Validierung (neue IDs D01–D05,
