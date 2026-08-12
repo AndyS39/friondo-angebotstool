@@ -17,6 +17,7 @@
             <button class="knopf klein zweitrangig" type="submit">Duplizieren</button>
         </form>
         <a class="knopf klein" href="/angebote/{{ angebot.id }}/pdf" target="_blank">PDF anzeigen</a>
+        <a class="knopf klein" href="/signatur/{{ angebot.id }}">Signieren</a>
         <form method="post" action="/angebote/{{ angebot.id }}/email">
             <button class="knopf klein" type="submit">Versand vorbereiten</button>
         </form>

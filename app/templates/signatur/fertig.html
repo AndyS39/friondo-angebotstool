@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block titel %}Signiert – {{ angebot.nummer }}{% endblock %}
+
+{% block inhalt %}
+<div class="mobil-inhalt">
+    <h1>Angebot angenommen ✓</h1>
+    <p class="meldung">{{ angebot.nummer }} wurde von
+    <strong>{{ angebot.signatur_name }}</strong> am
+    {{ angebot.signiert_am.strftime('%d.%m.%Y um %H:%M Uhr') }} signiert.
+    Status: <strong>Angenommen</strong>.</p>
+    <div class="mobil-aktionen">
+        <a class="knopf gross" href="/signatur/{{ angebot.id }}/signiert.pdf" target="_blank">Signiertes PDF öffnen</a>
+        {% set b = request.state.benutzer %}
+        {% if b and b.rolle != 'aussendienst' %}
+            <a class="knopf zweitrangig gross" href="/angebote/{{ angebot.id }}">Zum Angebot</a>
+        {% else %}
+            <a class="knopf zweitrangig gross" href="/erfassung">Zur Übersicht</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

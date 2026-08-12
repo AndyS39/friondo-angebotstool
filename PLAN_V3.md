@@ -73,15 +73,16 @@ vorher lesen. Je Phase: Ansatz erläutern → umsetzen → testen → abhaken �
       gegen eine gemockte monday-API)
 
 ## Phase 23 – E-Signatur
-- [ ] Signaturmodul: Seite mit Angebots-PDF-Vorschau + Touch-Signaturfeld (Canvas),
+- [x] Signaturmodul: Seite mit Angebots-PDF-Vorschau + Touch-Signaturfeld (Canvas),
       Name des Unterzeichners, Datum/Uhrzeit
-- [ ] Vor-Ort-Modus: aus Angebotsansicht „Signieren" starten (auch auf dem
-      AD-Handy über die bestehende Erfassungs-Route erreichbar)
-- [ ] Nach Signatur: Signaturbild + Name + Zeitstempel in die Unterschriften-Seite
+- [x] Vor-Ort-Modus: aus Angebotsansicht „Signieren" starten (auch auf dem
+      AD-Handy über die Erfassungs-Übersicht, nur für eigene Angebote)
+- [x] Nach Signatur: Signaturbild + Name + Zeitstempel in die Unterschriften-Seite
       des PDFs einbetten; signiertes PDF unter data/angebote/signiert/ ablegen;
-      Status „Angenommen"; Signaturprotokoll (Zeit, Benutzer, Gerät/IP) am Angebot
-- [ ] Fern-Modus vorbereiten: Token-Link-Route + Gültigkeitsdauer, standardmäßig
-      deaktiviert; Aktivierung erst nach Entscheidung öffentlicher Zugang
-      (PLAN_V2 Phase 16 Variante B) oder externer Signatur-Anbieter
-- [ ] Hinweis in docs/: einfache elektronische Signatur; rechtliche Feinheiten
-      bei Bedarf mit Rechtsberatung klären
+      Status „Angenommen" (verknüpfte Erfassung → Erledigt); Signaturprotokoll
+      (Zeit, Benutzer, Gerät/IP) am Angebot
+- [x] Fern-Modus vorbereitet: öffentliche Token-Link-Route + Gültigkeitsdauer,
+      standardmäßig deaktiviert (SIGNATUR_FERN_AKTIV in .env); Aktivierung erst
+      nach Entscheidung öffentlicher Zugang oder externer Signatur-Anbieter
+- [x] Hinweis in docs/e-signatur.md: einfache elektronische Signatur; rechtliche
+      Feinheiten bei Bedarf mit Rechtsberatung klären

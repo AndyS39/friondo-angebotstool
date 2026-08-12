@@ -149,20 +149,26 @@ class AngebotsPdf(FPDF):
 
 def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
                 kfw_ergebnis: "kfw.KfwErgebnis | None" = None,
-                mit_vollmacht: bool = True) -> Path:
+                mit_vollmacht: bool = True,
+                signatur: dict | None = None,
+                ziel: Path | None = None) -> Path:
+    """signatur (Phase 23): {"png_pfad", "name", "zeit"} – wird auf der
+    Unterschriften-Seite eingebettet; ziel überschreibt den Ablageort."""
     pdf = AngebotsPdf(angebot.nummer)
     _seite1(pdf, angebot, kunde)
     _positionsteil(pdf, angebot)
     _summen_und_kfw(pdf, angebot, kfw_ergebnis)
     _nachtext_a(pdf)
     _nachtext_b(pdf)
-    _nachtext_c(pdf)
+    _nachtext_c(pdf, signatur)
     if mit_vollmacht:
         # Nachtext D nur bei iMSys (P02) und/oder SpotDynamic (P03) – Phase 15
         _nachtext_d(pdf, kunde)
 
     config.ANGEBOTE_PDF_ORDNER.mkdir(parents=True, exist_ok=True)
-    ziel = config.ANGEBOTE_PDF_ORDNER / f"{angebot.nummer}.pdf"
+    if ziel is None:
+        ziel = config.ANGEBOTE_PDF_ORDNER / f"{angebot.nummer}.pdf"
+    ziel.parent.mkdir(parents=True, exist_ok=True)
     pdf.output(str(ziel))
     return ziel
 
@@ -506,7 +512,7 @@ def _nachtext_b(pdf: AngebotsPdf):
                  "https://friondo.de/Datenschutz")
 
 
-def _nachtext_c(pdf: AngebotsPdf):
+def _nachtext_c(pdf: AngebotsPdf, signatur: dict | None = None):
     pdf.add_page()
     _absatz(pdf, "Wir sichern Ihnen eine fach- und zeitgerechte Ausführung aller "
                  "angebotenen Leistungen zu.")
@@ -528,12 +534,35 @@ def _nachtext_c(pdf: AngebotsPdf):
                  "löst dann direkt den Vorhabensbeginn aus.")
     _absatz(pdf, "Voraussichtliches Datum der Umsetzung: ______________ ,liegt innerhalb "
                  "des Bewilligungszeitraum nach Nummer 9.4.1.")
-    pdf.ln(14)
-    pdf.set_font("Arial", "", 9)
-    pdf.cell(85, 4.5, "." * 47, new_x=XPos.RIGHT)
-    pdf.cell(0, 4.5, "." * 54, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.cell(85, 4.5, "Ort, Datum")
-    pdf.cell(0, 4.5, "Unterschrift des Auftraggebers")
+    if signatur is None:
+        pdf.ln(14)
+        pdf.set_font("Arial", "", 9)
+        pdf.cell(85, 4.5, "." * 47, new_x=XPos.RIGHT)
+        pdf.cell(0, 4.5, "." * 54, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.cell(85, 4.5, "Ort, Datum")
+        pdf.cell(0, 4.5, "Unterschrift des Auftraggebers")
+    else:
+        # Elektronische Signatur (Phase 23): Bild + Name + Zeitstempel einbetten
+        pdf.ln(6)
+        y = pdf.get_y()
+        pdf.image(signatur["png_pfad"], x=pdf.l_margin + 85, y=y, w=60)
+        pdf.set_xy(pdf.l_margin, y + 26)
+        pdf.set_font("Arial", "", 9)
+        pdf.cell(85, 4.5, signatur["zeit"].strftime("%d.%m.%Y, %H:%M Uhr"),
+                 new_x=XPos.RIGHT)
+        pdf.cell(0, 4.5, signatur["name"], new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_draw_color(120, 120, 120)
+        pdf.line(pdf.l_margin, pdf.get_y(), pdf.l_margin + 75, pdf.get_y())
+        pdf.line(pdf.l_margin + 85, pdf.get_y(), pdf.l_margin + 160, pdf.get_y())
+        pdf.cell(85, 4.5, "Ort, Datum")
+        pdf.cell(0, 4.5, "Unterschrift des Auftraggebers", new_x=XPos.LMARGIN,
+                 new_y=YPos.NEXT)
+        pdf.ln(2)
+        pdf.set_font("Arial", "I", 8)
+        pdf.multi_cell(0, 4, f"Elektronisch signiert von {signatur['name']} am "
+                             f"{signatur['zeit'].strftime('%d.%m.%Y um %H:%M Uhr')} "
+                             "(einfache elektronische Signatur, erfasst im Friondo "
+                             "Angebotstool).")
 
 
 def _nachtext_d(pdf: AngebotsPdf, kunde: Kunde):
@@ -591,6 +620,35 @@ def _nachtext_d(pdf: AngebotsPdf, kunde: Kunde):
 
 
 # --- Einstieg für Router ---------------------------------------------------
+
+def signiertes_pdf_erzeugen(session, angebot: Angebot, png_bytes: bytes,
+                            name: str, zeit) -> Path:
+    """Erzeugt das signierte PDF unter data/angebote/signiert/ (Phase 23)."""
+    import tempfile
+
+    from app import anhaenge
+    from app import logik as logik_modul
+    kunde = session.get(Kunde, angebot.kunde_id)
+    ergebnis = None
+    kfw_daten = json.loads(angebot.kfw_json or "{}")
+    if kfw_daten.get("O01"):
+        logik, _ = logik_modul.hole_logik(session)
+        parameter, _warn = kfw.parameter_lesen(logik)
+        eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["brutto"])
+        if eingaben is not None:
+            ergebnis = kfw.berechnen(parameter, eingaben)
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as datei:
+        datei.write(png_bytes)
+        png_pfad = datei.name
+    try:
+        ziel = config.SIGNIERT_ORDNER / f"{angebot.nummer}-signiert.pdf"
+        return erzeuge_pdf(angebot, kunde, ergebnis,
+                           mit_vollmacht=anhaenge.vollmacht_erforderlich(angebot),
+                           signatur={"png_pfad": png_pfad, "name": name, "zeit": zeit},
+                           ziel=ziel)
+    finally:
+        Path(png_pfad).unlink(missing_ok=True)
+
 
 def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
     """Erzeugt das PDF inkl. KfW-Block (falls Konfigurator-Daten vorliegen);

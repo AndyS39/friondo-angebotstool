@@ -40,7 +40,13 @@ REFERENZ_ANGEBOT_PDF = LOGO_ORDNER / "Angebot-Nr. AN250096.pdf"
 
 # Ablageorte (werden beim Start angelegt)
 ANGEBOTE_PDF_ORDNER = DATA_ORDNER / "angebote"
+SIGNIERT_ORDNER = DATA_ORDNER / "angebote" / "signiert"
 BACKUP_ORDNER = DATA_ORDNER / "backups"
+
+# E-Signatur Fern-Modus (Phase 23): Token-Link-Route ist vorbereitet, aber
+# standardmäßig deaktiviert – Aktivierung erst nach Entscheidung über den
+# öffentlichen Zugang (PLAN_V2 Phase 16 Variante B) bzw. einen Signatur-Anbieter.
+SIGNATUR_FERN_AKTIV = os.getenv("SIGNATUR_FERN_AKTIV", "").strip().lower() in ("1", "ja", "true")
 
 # --- Datenbank -----------------------------------------------------------
 DB_PFAD = DATA_ORDNER / "angebotstool.db"

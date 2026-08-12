@@ -209,6 +209,14 @@ class Angebot(Base):
     rabatt_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     rabatt_prozent: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     rabatt_bezeichnung: Mapped[str] = mapped_column(String(200), default="")
+    # E-Signatur (Phase 23): Vor-Ort-Signatur + vorbereiteter Fern-Modus
+    signiert_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    signatur_name: Mapped[str] = mapped_column(String(200), default="")
+    signatur_protokoll: Mapped[str] = mapped_column(Text, default="")
+    signierte_datei: Mapped[str] = mapped_column(String(300), default="")
+    signatur_token: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    signatur_token_gueltig_bis: Mapped[Optional[datetime]] = mapped_column(DateTime,
+                                                                           nullable=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     positionen: Mapped[list["AngebotsPosition"]] = relationship(

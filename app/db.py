@@ -23,6 +23,7 @@ def init_db() -> None:
     """Legt Datenordner und alle registrierten Tabellen an (idempotent)."""
     config.DATA_ORDNER.mkdir(parents=True, exist_ok=True)
     config.ANGEBOTE_PDF_ORDNER.mkdir(parents=True, exist_ok=True)
+    config.SIGNIERT_ORDNER.mkdir(parents=True, exist_ok=True)
     config.BACKUP_ORDNER.mkdir(parents=True, exist_ok=True)
     # Modelle importieren, damit sie an Base registriert sind, bevor create_all läuft.
     from app import models  # noqa: F401
@@ -66,6 +67,12 @@ _NACHTRAEGLICHE_SPALTEN = {
         "rabatt_cent": "INTEGER",
         "rabatt_prozent": "FLOAT",
         "rabatt_bezeichnung": "VARCHAR(200) NOT NULL DEFAULT ''",
+        "signiert_am": "DATETIME",
+        "signatur_name": "VARCHAR(200) NOT NULL DEFAULT ''",
+        "signatur_protokoll": "TEXT NOT NULL DEFAULT ''",
+        "signierte_datei": "VARCHAR(300) NOT NULL DEFAULT ''",
+        "signatur_token": "VARCHAR(64)",
+        "signatur_token_gueltig_bis": "DATETIME",
     },
 }
 

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block titel %}Signieren – {{ angebot.nummer }}{% endblock %}
+
+{% block inhalt %}
+<div class="mobil-inhalt">
+    <h1>Angebot {{ angebot.nummer }} signieren</h1>
+    <p class="dezent">Kunde: <strong>{{ kunde.anzeige_name if kunde }}</strong>
+    · {{ jetzt.strftime('%d.%m.%Y, %H:%M Uhr') }}</p>
+    {% if fehler %}<p class="meldung fehler">{{ fehler }}</p>{% endif %}
+
+    <details open>
+        <summary class="dezent">Angebots-PDF ansehen</summary>
+        <iframe src="/signatur/{{ angebot.id }}/pdf" class="pdf-vorschau"
+                title="Angebots-PDF"></iframe>
+    </details>
+
+    <form method="post" action="/signatur/{{ angebot.id }}" id="signaturform"
+          class="mobil-formular">
+        <label>Name des Unterzeichners
+            <input type="text" name="name" value="{{ kunde.anzeige_name if kunde }}" required>
+        </label>
+        <label>Unterschrift (mit Finger oder Stift)</label>
+        <canvas id="feld" class="signatur-feld" width="600" height="220"></canvas>
+        <input type="hidden" name="signatur" id="signaturdaten">
+        <div class="mobil-aktionen">
+            <button class="knopf zweitrangig gross" type="button" id="loeschen">Löschen</button>
+            <button class="knopf gross" type="submit">Signatur übernehmen</button>
+        </div>
+    </form>
+</div>
+
+<script>
+(function () {
+    const feld = document.getElementById('feld');
+    const ctx = feld.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, feld.width, feld.height);
+    ctx.strokeStyle = '#1b2a5e';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    let zeichnet = false;
+    let leer = true;
+
+    function punkt(ereignis) {
+        const box = feld.getBoundingClientRect();
+        const quelle = ereignis.touches ? ereignis.touches[0] : ereignis;
+        return {
+            x: (quelle.clientX - box.left) * feld.width / box.width,
+            y: (quelle.clientY - box.top) * feld.height / box.height,
+        };
+    }
+
+    function start(e) { zeichnet = true; const p = punkt(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault(); }
+    function ziehen(e) {
+        if (!zeichnet) return;
+        const p = punkt(e);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+        leer = false;
+        e.preventDefault();
+    }
+    function ende() { zeichnet = false; }
+
+    feld.addEventListener('mousedown', start);
+    feld.addEventListener('mousemove', ziehen);
+    window.addEventListener('mouseup', ende);
+    feld.addEventListener('touchstart', start, { passive: false });
+    feld.addEventListener('touchmove', ziehen, { passive: false });
+    feld.addEventListener('touchend', ende);
+
+    document.getElementById('loeschen').addEventListener('click', function () {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, feld.width, feld.height);
+        leer = true;
+    });
+
+    document.getElementById('signaturform').addEventListener('submit', function (e) {
+        if (leer) {
+            e.preventDefault();
+            alert('Bitte zuerst unterschreiben.');
+            return;
+        }
+        document.getElementById('signaturdaten').value = feld.toDataURL('image/png');
+    });
+})();
+</script>
+{% endblock %}

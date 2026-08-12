@@ -19,8 +19,9 @@ from app.models import Benutzer
 COOKIE_NAME = "angebotstool_sitzung"
 
 # Pfade ohne Anmeldung; Außendienst-Pfade; Admin-exklusive Pfade
-OFFENE_PFADE = ("/login", "/logout", "/static")
-AUSSENDIENST_PFADE = ("/erfassung", "/leads", "/login", "/logout", "/static")
+# /signatur/extern ist die (standardmäßig deaktivierte) Kunden-Fernsignatur
+OFFENE_PFADE = ("/login", "/logout", "/static", "/signatur/extern")
+AUSSENDIENST_PFADE = ("/erfassung", "/leads", "/signatur", "/login", "/logout", "/static")
 ADMIN_PFADE = ("/benutzer",)
 BUERO_ROLLEN = ("admin", "innendienst")
 
