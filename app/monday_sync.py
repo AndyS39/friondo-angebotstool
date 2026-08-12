@@ -117,6 +117,9 @@ def _items_der_gruppe(board_id: str, gruppen_titel: str) -> tuple[str, list[dict
 
 
 def _benutzer_fuer_person(session: Session, name: str):
+    """Personen-Spalte -> Tool-Benutzer. Bei Mehrfach-Zuweisung
+    ("Kyriakos Sarigiannis, Niko Goritsas") zählt die erste Person."""
+    name = (name or "").split(",")[0].strip()
     if not name:
         return None
     zuordnung = (session.query(MondayPerson)
@@ -124,9 +127,25 @@ def _benutzer_fuer_person(session: Session, name: str):
     if zuordnung and zuordnung.benutzer_id:
         return zuordnung.benutzer_id
     if zuordnung is None:
-        session.add(MondayPerson(monday_name=name))  # zur Zuordnung anbieten
+        zuordnung = MondayPerson(monday_name=name)   # zur Zuordnung anbieten
+        session.add(zuordnung)
+        session.flush()   # sofort sichtbar machen (Session läuft ohne Autoflush)
     benutzer = session.query(Benutzer).filter(Benutzer.name == name).first()
-    return benutzer.id if benutzer else None
+    if benutzer is not None:
+        zuordnung.benutzer_id = benutzer.id   # Namensgleichheit -> automatisch verknüpfen
+        return benutzer.id
+    return None
+
+
+def _plz_ort_trennen(plz: str, ort: str) -> tuple[str, str]:
+    """monday pflegt die PLZ oft im Ort-Feld ("47169 Duisburg", "46149- Oberhausen");
+    ohne eigene PLZ-Spalte wird sie hier herausgelöst."""
+    plz, ort = plz.strip(), ort.strip()
+    if not plz:
+        m = re.match(r"^(\d{5})\s*-?\s*(.*)$", ort)
+        if m:
+            return m.group(1), m.group(2).strip()
+    return plz, ort
 
 
 def _normal(text: str) -> str:
@@ -190,8 +209,7 @@ def _quelle_syncen(session: Session, quelle: MondayQuelle,
             vorname, nachname = (teile[0], teile[1]) if len(teile) == 2 else ("", item.get("name") or "")
         lead.vorname, lead.nachname = vorname, nachname
         lead.strasse = wert("strasse")
-        lead.plz = wert("plz")
-        lead.ort = wert("ort")
+        lead.plz, lead.ort = _plz_ort_trennen(wert("plz"), wert("ort"))
         lead.telefon = wert("telefon")
         lead.email = wert("email")
         lead.monday_person = wert("verantwortlicher")
