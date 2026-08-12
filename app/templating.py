@@ -32,6 +32,13 @@ def menge_format(wert) -> str:
 templates.env.filters["euro"] = euro
 templates.env.filters["menge"] = menge_format
 
+# Cache-Busting: Browser laden style.css nach jeder Änderung neu (Phase 18 Nachfix)
+try:
+    templates.env.globals["css_version"] = int(
+        (APP_ORDNER / "static" / "style.css").stat().st_mtime)
+except OSError:
+    templates.env.globals["css_version"] = 0
+
 # Menü-Einträge (Phase 19: Dropdown oben rechts, rollenabhängig gefiltert)
 NAVIGATION = [
     ("/leads", "Leads VOT"),
