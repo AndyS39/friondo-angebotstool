@@ -1,76 +1,79 @@
-# Friondo Angebotstool – Projektkontext (v2)
+# Friondo Angebotstool – Projektkontext (v3)
 
 ## Ziel
-Zweistufiger Vertriebsprozess der Friondo GmbH (Wärmepumpen zum Festpreis):
-1) Der **Außendienst** füllt beim Kunden mobil einen Fragenkatalog aus (Erfassung).
-2) Der **Innendienst** sieht die Erfassung in einer Liste mit Ampel (konfigurierbar /
-individuell), erzeugt per Klick das Angebot oder schreibt es manuell mit dem
-Abfrageprotokoll daneben, prüft, versendet per E-Mail und behält den Deckungsbeitrag
-im Blick. PDF im Friondo-Layout, KfW-Förderung inklusive. Läuft lokal/on-prem.
+Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
+Fragenkatalog (gespeist aus monday-Leads mit Vor-Ort-Termin), Innendienst erzeugt,
+prüft, rabattiert und versendet Angebote (PDF im Friondo-Layout, KfW-Förderung,
+Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
 
-## Nutzer, Rollen & Betrieb
-- Zwei Oberflächen derselben App: `/erfassung` (mobil, Außendienst) und das
-  Innendienst-Tool (Desktop-Browser).
-- Einfache Rollen mit leichtem Login (Benutzerliste + PIN): Außendienst sieht NIE
-  Preise, EK oder Deckungsbeitrag; Deckungsbeitrag erscheint NIE im PDF.
-- Zielbetrieb: Terminal Server im Rechenzentrum, App als Dienst/Autostart.
-  Mobiler Zugriff: Entscheidung offen – Variante A (WireGuard-App auf Vertriebler-
-  Handys, empfohlen) oder Variante B (HTTPS + Login öffentlich). Siehe PLAN_V2 Phase 16.
-
-## Tech-Stack
-Python 3.11+, FastAPI, Uvicorn · SQLite/SQLAlchemy · Jinja2 (Erfassung mobile-first)
-· fpdf2 · openpyxl · Versand: Microsoft Graph API · monday.com: GraphQL (.env)
+## Rollen & Navigation
+- Rollen: **Admin** (Benutzer verwalten inkl. Namen ändern, alles sehen),
+  **Innendienst** (alles außer Benutzerverwaltung), **Außendienst** (nur Leads VOT
+  eigene + Erfassung; nie Preise/EK/DB/Rabatt).
+- Startseite: Friondo-Logo oben links; nur drei Shortcuts **Leads VOT · Erfassungen ·
+  Angebote**; alle weiteren Punkte im Dropdown „Menü" oben rechts; darunter
+  Statistik-Kacheln: Offene Leads · Offene Erfassungen · Versendete Angebote.
+- Menüpunkt „Konfiguration" heißt jetzt **„Parametrierung"** (Logik-/Preislisten-
+  Import, monday-Mapping, Nummernkreis, Förderparameter-Ansicht).
 
 ## Zentrale Dateien
-- `konfigurator_logik_v2.xlsx` – Steuerdatei (ersetzt v1): Fragen mit Seiten,
-  Aktionen mit AMPEL-Logik, Paketmatrix, Zusatzartikel inkl. EK-Spalte, Textregeln,
-  Angebotsaufbau inkl. Vollmacht-Bedingung, NEU Blatt „Anhänge", KfW inkl.
-  Ableitungsregeln. Änderungen dort erfordern keine Codeänderung.
-- `Artikel-Preislisten/Angebotserstellung_Tool_mit_EK.xlsx` – **neue führende
-  Preisliste** (ersetzt die alte Datei): 11 Spalten inkl. Artikelnummer, Multi,
-  EK-Datum, „Einkaufspreis Material". Spalten beim Import über Header-Namen erkennen,
-  nicht über feste Indizes (Layout hat sich gegenüber v1 geändert!).
-- `ANGEBOTSTEXTE.md` – unverändert gültig; Vollmacht (Nachtext D) jetzt bedingt.
-- `anlagen/` – PDF-Broschüren für den Versand (Regeln im Blatt „Anhänge").
-- `Layout - Logo/` – Logos + Referenz-PDF. · `foerderrechner-website.html` – KfW-Referenz.
+- `konfigurator_logik_v3.xlsx` – Steuerdatei (ersetzt v2): NEU Dachzentralen-Block
+  D01–D05, geänderte Bedingungen A05/A06, Pos. 163 bei DG, SLS/ÜSS/APZ nur Protokoll,
+  Summenblock mit Rabatt. 15 AMPEL-Gründe.
+- `Artikel-Preislisten/Angebotserstellung_Tool_mit_EK.xlsx`, `ANGEBOTSTEXTE.md`,
+  `anlagen/`, `Layout - Logo/`, `foerderrechner-website.html` – unverändert.
 
-## Fragebogen & Ampel (ersetzt Konfigurator-Abbrüche)
-- Seiten: Objektdaten → Alte Anlage → Neue Anlage → Heizverteilung → Elektro/ZV →
-  Friondo → Förderung. IDs O/A/N/H/E/P/K lt. Logik-Excel.
-- **Keine Abbrüche, keine Fehlermeldungen:** AMPEL-Antworten (14 Gründe) markieren
-  die Erfassung als „individuell" mit Klartext-Grund; der Katalog läuft immer
-  vollständig durch, Folgefragen-Bedingungen bleiben aktiv.
-- Erfassungen landen in der Innendienst-Liste (Status Neu → In Bearbeitung →
-  Erledigt) mit Ampel + Gründen. Grün: „Angebot erzeugen" (Antworten → Logik →
-  Entwurf). Orange: „Manuelles Angebot" mit Protokoll-Seitenpanel. Antworten sind
-  vom Innendienst korrigierbar; Erfassung bleibt mit Angebot verknüpft.
-- KfW-Angaben werden abgeleitet (Objektart/WE/Fläche) und vorbelegt (Klima-Bonus
-  aus Energieträger + Baujahr) – Regeln im Blatt „KfW".
+## Fachliche Regeln (Änderungen v3)
+- **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
+  optionale Bezeichnung. Wird **vom Netto abgezogen, USt auf den rabattierten
+  Betrag** (steuerlich korrekt), keine Angebotsposition. KfW rechnet mit der
+  Brutto-Summe NACH Rabatt; Deckungsbeitrag sinkt um den Rabatt.
+- **PDF-Nummerierung:** Positionen im Angebot werden fortlaufend neu nummeriert
+  (001, 002, …) – Editor und PDF identisch. TAIFUN-Pos./Z-Nr./GUID bleiben intern
+  gespeichert und sind im Editor als Zusatzinfo sichtbar.
+- **Dachzentrale:** Bei alter Anlage im DG immer Pos. 163. D-Block steuert 141 bzw.
+  139/140 × Meter. Fassadenleitung nur bei OG oder (DG und WP bleibt im DG);
+  Erdleitung bei KG/EG oder (DG und WP zieht nach unten).
+- SLS/ÜSS/APZ (E04–E06): reine Protokollfragen – Komponenten sind in Pos. 011
+  enthalten; Pos. 149/150/153 bleiben ungenutzt im Artikelstamm.
+- EK-Preise sind unter „Artikel bearbeiten" änderbar (Innendienst/Admin).
 
-## Fachliche Regeln
-- Festpreise; Angebotspositionen sind Snapshots. Nummernkreis AN-C-<JJ><NNNN>
-  (fortlaufend, transaktionssicher; Zählerstand aus v1 weiterführen).
-- EP-Positionen: ausgewiesen mit „EP.", nicht in Summe, nicht im Deckungsbeitrag.
-- **Erdleitung: berechnete Menge = Eingabe − 3 m, nie unter 0** (3 m im Fundament
-  enthalten; gilt generell). Fassadenleitung: volle Meterzahl.
-- **Deckungsbeitrag** je Angebot: Σ VK netto − Σ Material-EK (ohne EP), als Box mit
-  € und % nur im Innendienst; Positionen ohne EK als Warnliste ausweisen.
-- Beträge Decimal/Cent, 19 % USt., deutsche Formate. Gültigkeit 30 Tage.
-- Status: Entwurf → Versendet → Angenommen / Abgelehnt.
+## Leads VOT (monday-Lesesync)
+- Quellen (friondo-gmbh.monday.com), jeweils NUR die Gruppe mit Titel „Terminiert"
+  (Gruppe über den Titel finden, nicht über die ID – robust bei Board-Kopien):
+  1. Workspace „Blinno Working Space" (5217202) → Board „Deals" (ID 5080725439;
+     Gruppe „Terminiert" dort = group_mkzb5f0e)
+  2. Workspace „Pool Working Space" (5578078) → Board „Deals - Simon" (ID 5089971526)
+  3. Workspace „Pool Working Space" (5578078) → Board „Deals - Rene" (ID 5092657267)
+  Quellenliste in der Parametrierung pflegbar (Board + Gruppentitel je Zeile).
+- Spalten-Mapping je Board über Zuordnungsseite in der Parametrierung (Dropdowns,
+  Spalten live von monday geladen): VOT-Datum, **„Verantwortlicher"** (Personen-
+  Spalte → AD-Mitarbeiter), Anrede/Vorname/Nachname, Adresse, PLZ, Ort, Telefon,
+  E-Mail, Status. Zuordnung monday-Person ↔ Tool-Benutzer.
+  **Sonderregel „Deals - Rene": Verantwortlicher ist immer Rene Golaschewski**,
+  auch wenn die Spalte leer ist. Derselbe Kunde in mehreren Boards → deduplizieren.
+- Sync: alle 15 Minuten + Button „Jetzt aktualisieren"; nur lesend, Fehler
+  blockieren das Tool nie.
+- Liste „Leads VOT": nur Leads **mit** VOT-Datum und **ohne** verknüpftes Angebot,
+  chronologisch nach Termin; Außendienst sieht nur eigene, Innendienst/Admin alle.
+- Klick auf Lead → Fragenkatalog startet mit angelegtem/abgeglichenem Kunden
+  (Duplikatabgleich Name + PLZ). Nach Absenden gilt der Lead als erfasst und
+  verschwindet aus der Liste (Verknüpfung Lead ↔ Erfassung ↔ Angebot speichern).
 
-## Versand (Microsoft Graph)
-Versand ausschließlich durch den Innendienst: Das Tool legt den E-Mail-Entwurf im
-Postfach des **angemeldeten Innendienst-Mitarbeiters** ab (Graph API, App-
-Registrierung durch IT; Anleitung in docs/). Anhänge: Angebots-PDF + Dateien lt.
-Blatt „Anhänge" (immer / bei HEMS / je WP-Paket). Absenden erfolgt in Outlook nach
-Kontrolle; danach Status „Versendet". Übergangslösung bis Graph steht: PDF-Download.
+## E-Signatur
+- Jedes Angebots-PDF erhält die Unterschriften-Seite wie bisher; zusätzlich digitales
+  Signieren: **Vor-Ort-Modus** (sofort aktiv): Innendienst/Außendienst öffnet
+  „Signieren", Kunde unterschreibt auf dem Touchscreen; Signaturbild + Name +
+  Zeitstempel werden in das PDF eingebettet, Status → „Angenommen", signierte Datei
+  separat unter data/angebote/signiert/ abgelegt, Signaturprotokoll (Zeit, Gerät,
+  Benutzer) am Angebot.
+- **Fern-Modus** (per Link an den Kunden): technisch vorbereitet (Token-Link,
+  gleiche Signaturseite), wird erst aktiviert, wenn öffentlicher HTTPS-Zugang
+  (Phase 16 Variante B) oder ein Signatur-Anbieter entschieden ist.
 
-## PDF
-Wie v1 (Referenz AN250096, Blatt „Angebotsaufbau"), mit einer Änderung:
-**Vollmacht-Seite (Nachtext D) nur, wenn iMSys (P02) und/oder SpotDynamic (P03)
-im Angebot sind.**
-
-## Konventionen & Nicht-Ziele
-Deutsch überall; testen + abhaken + committen je Phase; Tokens/Secrets nur in .env.
-Nicht-Ziele: keine Rechnungen, keine Rabattlogik, kein komplexes Rechtesystem
-(einfache Rollen genügen), keine Cloud.
+## Unverändert aus v2
+Stack (FastAPI/SQLite/fpdf2), TAIFUN-Import mit GUID-Anker und Textregeln,
+Fragebogen mit Seiten + AMPEL, Erfassungsliste, Nummernkreis AN-C-<JJ><NNNN>,
+EP-Regel, Decimal/Cent, 19 % USt, KfW-Modul mit Testfällen gegen den HTML-Rechner,
+PDF nach Referenz AN250096, Vollmacht nur bei iMSys/SpotDynamic, Anhänge-Bibliothek,
+Graph-Versand über Innendienst, Terminal-Server-Betrieb.

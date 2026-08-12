@@ -180,7 +180,10 @@ class AngebotsPosition(Base):
     sort: Mapped[int] = mapped_column(Integer, default=0)
     block_nr: Mapped[int] = mapped_column(Integer, default=0)
     gruppe: Mapped[str] = mapped_column(String(300), default="")      # Gruppen-Überschrift
+    # Interne Referenz (Phase 18): TAIFUN-Pos./Z-Nr. + GUID; die angezeigte
+    # Positionsnummer ist die fortlaufende Nummer (001, 002, ...) je Angebot.
     pos_nr: Mapped[str] = mapped_column(String(10), default="")
+    guid: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
     bezeichnung: Mapped[str] = mapped_column(String(300), default="")
     beschreibung: Mapped[str] = mapped_column(Text, default="")
     menge: Mapped[float] = mapped_column(Float, default=1.0)

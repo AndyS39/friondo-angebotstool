@@ -1,4 +1,4 @@
-# Benutzerverwaltung (Phase 13, nur Innendienst): Name, Rolle, PIN.
+# Benutzerverwaltung (Phase 13; seit Phase 18 nur Rolle Admin): Name, Rolle, PIN.
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
@@ -11,7 +11,7 @@ from app.templating import render
 
 router = APIRouter(prefix="/benutzer")
 
-ROLLEN = ["innendienst", "aussendienst"]
+ROLLEN = ["admin", "innendienst", "aussendienst"]
 
 
 @router.get("")
@@ -45,6 +45,12 @@ async def aendern(request: Request, benutzer_id: int,
     benutzer = session.get(Benutzer, benutzer_id)
     if benutzer is None:
         return RedirectResponse("/benutzer", status_code=303)
+    neuer_name = (form.get("name") or "").strip()
+    if neuer_name and neuer_name != benutzer.name:
+        if session.query(Benutzer).filter(Benutzer.name == neuer_name,
+                                          Benutzer.id != benutzer.id).first():
+            return RedirectResponse("/benutzer?meldung=Name+bereits+vergeben", status_code=303)
+        benutzer.name = neuer_name
     if form.get("rolle") in ROLLEN:
         benutzer.rolle = form.get("rolle")
     pin = (form.get("pin") or "").strip()

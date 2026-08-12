@@ -34,7 +34,17 @@ body {
     text-decoration: none;
     font-size: 1.2rem;
     font-weight: 700;
-    padding: 0.9rem 0;
+    padding: 0.55rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.marken-logo {
+    height: 30px;
+    background: #fff;
+    border-radius: 4px;
+    padding: 2px 6px;
 }
 
 .marke span { font-weight: 300; opacity: 0.85; }
@@ -445,6 +455,8 @@ h2 { color: var(--friondo-dunkel); margin-top: 2rem; font-size: 1.15rem; }
 }
 
 .schmalspalte { width: 4.5rem; }
+
+.interne-ref { font-size: 0.75rem; }
 
 .mengenform input {
     width: 4rem;

@@ -61,7 +61,12 @@
         <tbody>
         {% for p in gruppe.positionen %}
             <tr>
-                <td>{{ p.pos_nr }}</td>
+                <td>
+                    {{ p.lfd_nr }}
+                    {% if p.pos_nr or p.guid %}
+                        <br><span class="dezent interne-ref" title="{{ p.guid or '' }}">{{ p.pos_nr }}</span>
+                    {% endif %}
+                </td>
                 <td>
                     {% if p.bezeichnung %}<strong>{{ p.bezeichnung }}</strong><br>{% endif %}
                     <span class="beschreibung">{{ p.beschreibung | truncate(220) }}</span>

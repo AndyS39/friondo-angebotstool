@@ -35,7 +35,7 @@ async def login(request: Request, session: Session = Depends(get_session)):
                 .order_by(Benutzer.name).all())
         return render(request, "anmeldung/login.html", aktiv=None,
                       benutzer=alle, fehler="Benutzer oder PIN falsch.")
-    ziel = "/erfassung" if benutzer.rolle != "innendienst" else "/"
+    ziel = "/erfassung" if benutzer.rolle == "aussendienst" else "/"
     antwort = RedirectResponse(ziel, status_code=303)
     antwort.set_cookie(auth.COOKIE_NAME, auth.cookie_wert(benutzer.id),
                        httponly=True, max_age=60 * 60 * 12)

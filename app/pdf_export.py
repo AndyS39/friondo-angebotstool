@@ -296,7 +296,8 @@ def _positionsteil(pdf: AngebotsPdf, angebot: Angebot):
     uebertrag_cent = 0
     letzte_gruppe = None
 
-    for position in angebot.positionen:
+    # Fortlaufende Nummerierung 001, 002, ... – identisch mit dem Editor (Phase 18)
+    for lfd, position in enumerate(angebot.positionen, 1):
         text = position.beschreibung or ""
         if position.bezeichnung and position.bezeichnung not in text.splitlines()[:1]:
             text = position.bezeichnung + ("\n" + text if text else "")
@@ -328,7 +329,7 @@ def _positionsteil(pdf: AngebotsPdf, angebot: Angebot):
         y_start = pdf.get_y()
         pdf.set_font("Arial", "", 8)
         pdf.set_xy(pdf.l_margin, y_start)
-        pdf.cell(SPALTEN["pos"], zeilenhoehe, position.pos_nr)
+        pdf.cell(SPALTEN["pos"], zeilenhoehe, f"{lfd:03d}")
         pdf.cell(SPALTEN["menge"], zeilenhoehe, _menge_text(position.menge), align="R")
         pdf.cell(SPALTEN["einheit"], zeilenhoehe, " " + position.einheit)
 

@@ -91,7 +91,7 @@ async def angebot_erzeugen(erfassung_id: int, session: Session = Depends(get_ses
         return RedirectResponse("/erfassungen", status_code=303)
     logik, bericht = logik_modul.hole_logik(session)
     if not bericht.ok:
-        return RedirectResponse("/konfiguration", status_code=303)
+        return RedirectResponse("/parametrierung", status_code=303)
     antworten = json.loads(erfassung.antworten_json or "{}")
     angebot = angebot_aufbau.angebot_anlegen(session, erfassung.kunde_id,
                                              antworten=antworten, logik=logik)

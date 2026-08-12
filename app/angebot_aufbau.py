@@ -225,6 +225,7 @@ def positionen_zusammenstellen(logik: Logik, antworten: dict,
             "e_preis_cent": stamm.e_preis_cent,
             "ep_flag": stamm.ep_flag or gw.ep,
             "ek_cent": stamm.ek_cent,   # EK-Snapshot für den Deckungsbeitrag
+            "guid": stamm.guid,         # interne Referenz (Phase 18)
         }
         gesehen[schluessel] = eintrag
         positionen.append(eintrag)

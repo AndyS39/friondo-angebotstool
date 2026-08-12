@@ -9,11 +9,16 @@
 <body>
 {% set benutzer_angemeldet = request.state.benutzer if request.state is defined else None %}
 <header class="kopfleiste">
-    <a class="marke" href="{{ '/erfassung' if benutzer_angemeldet and benutzer_angemeldet.rolle != 'innendienst' else '/' }}">Friondo <span>Angebotstool</span></a>
+    <a class="marke" href="{{ '/erfassung' if benutzer_angemeldet and benutzer_angemeldet.rolle == 'aussendienst' else '/' }}">
+        <img src="/static/logo.png" alt="Friondo" class="marken-logo">
+        <span>Angebotstool</span>
+    </a>
     <nav>
-        {% if benutzer_angemeldet and benutzer_angemeldet.rolle == 'innendienst' and not mobil %}
+        {% if benutzer_angemeldet and benutzer_angemeldet.rolle in ('admin', 'innendienst') and not mobil %}
             {% for pfad, name in navigation %}
-                <a href="{{ pfad }}" class="{{ 'aktiv' if aktiv == pfad else '' }}">{{ name }}</a>
+                {% if pfad != '/benutzer' or benutzer_angemeldet.rolle == 'admin' %}
+                    <a href="{{ pfad }}" class="{{ 'aktiv' if aktiv == pfad else '' }}">{{ name }}</a>
+                {% endif %}
             {% endfor %}
         {% endif %}
         {% if benutzer_angemeldet %}

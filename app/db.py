@@ -60,6 +60,7 @@ _NACHTRAEGLICHE_SPALTEN = {
     },
     "angebotspositionen": {
         "ek_cent": "INTEGER",
+        "guid": "VARCHAR(40)",
     },
 }
 

@@ -58,6 +58,11 @@
                    value="{{ daten.e_preis if 'e_preis' in daten else ((artikel.e_preis_cent | euro).replace(' €', '') if artikel else '') }}">
             {% if fehler.e_preis %}<span class="fehlertext">{{ fehler.e_preis }}</span>{% endif %}
         </label>
+        <label class="schmal {{ 'feld-fehler' if fehler.ek_preis }}">EK Material (€)
+            <input type="text" name="ek_preis"
+                   value="{{ daten.ek_preis if 'ek_preis' in daten else ((artikel.ek_cent | euro).replace(' €', '') if artikel and artikel.ek_cent is not none else '') }}">
+            {% if fehler.ek_preis %}<span class="fehlertext">{{ fehler.ek_preis }}</span>{% endif %}
+        </label>
     </div>
 
     <div class="formzeile">

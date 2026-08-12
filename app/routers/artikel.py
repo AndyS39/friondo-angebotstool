@@ -82,6 +82,7 @@ def _formular_lesen(form) -> dict:
     felder = ["pos_nr", "kategorie", "bezeichnung", "beschreibung", "einheit"]
     daten = {f: (form.get(f) or "").strip() for f in felder}
     daten["e_preis"] = (form.get("e_preis") or "").strip()
+    daten["ek_preis"] = (form.get("ek_preis") or "").strip()   # Phase 18: EK änderbar
     daten["menge_standard"] = (form.get("menge_standard") or "1").strip()
     daten["ep_flag"] = form.get("ep_flag") == "on"
     return daten
@@ -93,6 +94,8 @@ def _validieren(daten: dict) -> dict[str, str]:
         fehler["bezeichnung"] = "Bitte Bezeichnung oder Beschreibung angeben."
     if preis_parsen(daten["e_preis"]) is None:
         fehler["e_preis"] = "Ungültiger Preis (z. B. 1.234,56)."
+    if daten["ek_preis"] and preis_parsen(daten["ek_preis"]) is None:
+        fehler["ek_preis"] = "Ungültiger EK-Preis (z. B. 1.234,56, leer = kein EK)."
     try:
         float(daten["menge_standard"].replace(",", "."))
     except ValueError:
@@ -108,6 +111,7 @@ def _uebernehmen(artikel: Artikel, daten: dict) -> None:
     artikel.einheit = daten["einheit"]
     artikel.menge_standard = float(daten["menge_standard"].replace(",", "."))
     artikel.e_preis_cent = preis_parsen(daten["e_preis"])
+    artikel.ek_cent = preis_parsen(daten["ek_preis"]) if daten["ek_preis"] else None
     artikel.ep_flag = daten["ep_flag"]
 
 

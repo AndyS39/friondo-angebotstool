@@ -45,3 +45,10 @@ app.include_router(versand.router)
 @app.get("/")
 async def startseite(request: Request):
     return render(request, "index.html", aktiv=None)
+
+
+@app.get("/konfiguration")
+async def konfiguration_umleitung():
+    """Alte Adresse – der Bereich heißt seit Phase 18 „Parametrierung“."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse("/parametrierung", status_code=301)

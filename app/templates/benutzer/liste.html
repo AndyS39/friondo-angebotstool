@@ -12,7 +12,7 @@
     {% for b in benutzer %}
         <tr class="{{ 'inaktiv' if not b.aktiv }}">
             <form method="post" action="/benutzer/{{ b.id }}/aendern">
-                <td>{{ b.name }}</td>
+                <td><input type="text" name="name" value="{{ b.name }}" size="16"></td>
                 <td>
                     <select name="rolle">
                         {% for r in rollen %}

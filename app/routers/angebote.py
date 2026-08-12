@@ -55,7 +55,7 @@ async def aus_konfiguration(konfig_id: int, session: Session = Depends(get_sessi
                                 status_code=303)
     logik, bericht = logik_modul.hole_logik(session)
     if not bericht.ok:
-        return RedirectResponse("/konfiguration", status_code=303)
+        return RedirectResponse("/parametrierung", status_code=303)
     angebot = angebot_aufbau.angebot_anlegen(
         session, konfig.kunde_id, antworten=json.loads(konfig.antworten_json or "{}"),
         logik=logik, konfiguration_id=konfig.id)
@@ -81,6 +81,11 @@ async def editor(request: Request, angebot_id: int,
     artikel_liste = (session.query(Artikel).filter(Artikel.aktiv.is_(True))
                      .order_by(Artikel.pos_nr).all())
     protokoll = json.loads(angebot.protokoll_json or "[]")
+
+    # Fortlaufende Anzeigenummern 001, 002, ... (Phase 18); die interne
+    # TAIFUN-/Z-Referenz bleibt in pos_nr/guid gespeichert
+    for lfd, p in enumerate(angebot.positionen, 1):
+        p.lfd_nr = f"{lfd:03d}"
 
     # Positionen nach Gruppe (Blockreihenfolge) für die Anzeige bündeln
     gruppen: list[dict] = []
@@ -164,7 +169,8 @@ async def position_neu(request: Request, angebot_id: int,
                 pos_nr=artikel.pos_nr, bezeichnung=artikel.bezeichnung,
                 beschreibung=artikel.beschreibung, menge=artikel.menge_standard,
                 einheit=artikel.einheit, e_preis_cent=artikel.e_preis_cent,
-                ep_flag=artikel.ep_flag, ek_cent=artikel.ek_cent))
+                ep_flag=artikel.ep_flag, ek_cent=artikel.ek_cent,
+                guid=artikel.guid))
             session.commit()
         return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
 
@@ -274,6 +280,6 @@ async def duplizieren(angebot_id: int, session: Session = Depends(get_session)):
             sort=p.sort, block_nr=p.block_nr, gruppe=p.gruppe, pos_nr=p.pos_nr,
             bezeichnung=p.bezeichnung, beschreibung=p.beschreibung, menge=p.menge,
             einheit=p.einheit, e_preis_cent=p.e_preis_cent, ep_flag=p.ep_flag,
-            ek_cent=p.ek_cent))
+            ek_cent=p.ek_cent, guid=p.guid))
     session.commit()
     return RedirectResponse(f"/angebote/{kopie.id}?meldung=Angebot+dupliziert", status_code=303)

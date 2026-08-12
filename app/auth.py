@@ -18,9 +18,11 @@ from app.models import Benutzer
 
 COOKIE_NAME = "angebotstool_sitzung"
 
-# Pfade ohne Anmeldung; Außendienst-Pfade
+# Pfade ohne Anmeldung; Außendienst-Pfade; Admin-exklusive Pfade
 OFFENE_PFADE = ("/login", "/logout", "/static")
-AUSSENDIENST_PFADE = ("/erfassung", "/login", "/logout", "/static")
+AUSSENDIENST_PFADE = ("/erfassung", "/leads", "/login", "/logout", "/static")
+ADMIN_PFADE = ("/benutzer",)
+BUERO_ROLLEN = ("admin", "innendienst")
 
 
 def _geheimnis() -> bytes:
@@ -60,13 +62,20 @@ def benutzer_aus_cookie(wert: str, session: Session):
 
 
 def standardbenutzer_anlegen() -> None:
-    """Beim Start: ohne Benutzer wäre das Tool ausgesperrt – Admin (PIN 1234) anlegen."""
+    """Beim Start: ohne Benutzer wäre das Tool ausgesperrt – Admin (PIN 1234) anlegen.
+    Migration Phase 18: gibt es noch keinen Benutzer mit Rolle admin, wird der
+    Benutzer „Admin“ auf die neue Admin-Rolle gehoben."""
     session = SessionLocal()
     try:
         if session.query(Benutzer).count() == 0:
-            session.add(Benutzer(name="Admin", rolle="innendienst",
+            session.add(Benutzer(name="Admin", rolle="admin",
                                  pin_hash=pin_hash("1234")))
             session.commit()
+        elif not session.query(Benutzer).filter(Benutzer.rolle == "admin").count():
+            admin = session.query(Benutzer).filter(Benutzer.name == "Admin").first()
+            if admin is not None:
+                admin.rolle = "admin"
+                session.commit()
     finally:
         session.close()
 
@@ -85,8 +94,10 @@ class RollenMiddleware(BaseHTTPMiddleware):
                 return await call_next(request)
             if benutzer is None:
                 return RedirectResponse("/login", status_code=303)
-            if benutzer.rolle != "innendienst" and not pfad.startswith(AUSSENDIENST_PFADE):
+            if benutzer.rolle not in BUERO_ROLLEN and not pfad.startswith(AUSSENDIENST_PFADE):
                 return RedirectResponse("/erfassung", status_code=303)
+            if benutzer.rolle == "innendienst" and pfad.startswith(ADMIN_PFADE):
+                return RedirectResponse("/", status_code=303)
             return await call_next(request)
         finally:
             session.close()

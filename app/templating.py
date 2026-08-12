@@ -40,7 +40,7 @@ NAVIGATION = [
     ("/angebote", "Angebote"),
     ("/benutzer", "Benutzer"),
     ("/versand", "Versand"),
-    ("/konfiguration", "Konfiguration"),
+    ("/parametrierung", "Parametrierung"),
 ]
 
 
