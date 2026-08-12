@@ -167,24 +167,43 @@ class Angebot(Base):
     datum: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     protokoll_json: Mapped[str] = mapped_column(Text, default="[]")   # Konfigurationsprotokoll
     kfw_json: Mapped[str] = mapped_column(Text, default="{}")         # KfW-Eingaben (F30–F36)
+    # Rabatt (Phase 21, nur Innendienst/Admin): Betrag ODER Prozent, keine Position
+    rabatt_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    rabatt_prozent: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    rabatt_bezeichnung: Mapped[str] = mapped_column(String(200), default="")
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     positionen: Mapped[list["AngebotsPosition"]] = relationship(
         back_populates="angebot", order_by="AngebotsPosition.sort",
         cascade="all, delete-orphan")
 
+    def rabatt_effektiv_cent(self, netto_cent: int) -> int:
+        """Rabatt in Cent (Betrag direkt, Prozent vom Netto), nie über dem Netto."""
+        if self.rabatt_cent:
+            return min(self.rabatt_cent, netto_cent)
+        if self.rabatt_prozent:
+            betrag = int((Decimal(netto_cent) * Decimal(str(self.rabatt_prozent))
+                          / 100).quantize(Decimal("1")))
+            return min(betrag, netto_cent)
+        return 0
+
     def summen(self) -> dict:
-        """Netto/USt/Brutto in Cent; EP-Positionen zählen nicht mit."""
+        """Netto − Rabatt = Netto nach Rabatt → 19 % USt → Brutto (Phase 21);
+        EP-Positionen zählen nicht mit, der Rabatt ist keine Position."""
         netto = 0
         for p in self.positionen:
             if not p.ep_flag:
                 netto += p.gesamt_cent
-        ust = int(Decimal(netto) * Decimal("0.19"))
-        return {"netto": netto, "ust": ust, "brutto": netto + ust}
+        rabatt = self.rabatt_effektiv_cent(netto)
+        netto_nach_rabatt = netto - rabatt
+        ust = int(Decimal(netto_nach_rabatt) * Decimal("0.19"))
+        return {"netto": netto, "rabatt": rabatt,
+                "netto_nach_rabatt": netto_nach_rabatt,
+                "ust": ust, "brutto": netto_nach_rabatt + ust}
 
     def deckungsbeitrag(self) -> dict:
-        """Σ VK netto − Σ Material-EK (ohne EP). Nur Innendienst, nie im PDF.
-        Positionen ohne hinterlegten EK werden als Warnliste mitgeliefert."""
+        """Σ VK netto (nach Rabatt) − Σ Material-EK (ohne EP). Nur Innendienst,
+        nie im PDF. Der Rabatt mindert den Deckungsbeitrag (Phase 21)."""
         vk = 0
         ek = 0
         ohne_ek = []
@@ -197,9 +216,12 @@ class Angebot(Base):
             else:
                 ek += int((Decimal(str(p.menge)) * Decimal(p.ek_cent))
                           .quantize(Decimal("1")))
-        db = vk - ek
-        prozent = (db / vk * 100) if vk else 0.0
-        return {"vk": vk, "ek": ek, "db": db, "prozent": prozent, "ohne_ek": ohne_ek}
+        rabatt = self.rabatt_effektiv_cent(vk)
+        vk_nach_rabatt = vk - rabatt
+        db = vk_nach_rabatt - ek
+        prozent = (db / vk_nach_rabatt * 100) if vk_nach_rabatt else 0.0
+        return {"vk": vk_nach_rabatt, "ek": ek, "db": db, "prozent": prozent,
+                "rabatt": rabatt, "ohne_ek": ohne_ek}
 
 
 class AngebotsPosition(Base):

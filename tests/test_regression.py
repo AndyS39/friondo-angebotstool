@@ -171,5 +171,65 @@ class TestDachzentrale(unittest.TestCase):
         self.assertEqual(engine.ampel_gruende(self.logik, self.antworten), [])
 
 
+class TestRabatt(unittest.TestCase):
+    """Phase 21: Kontroll-Szenario + 500 € Rabatt lt. PLAN_V3."""
+
+    @classmethod
+    def setUpClass(cls):
+        from app.models import Angebot, AngebotsPosition
+        init_db()
+        cls.logik, bericht = logik_einlesen()
+        assert not bericht.fehler
+        session = SessionLocal()
+        positionen = angebot_aufbau.positionen_zusammenstellen(
+            cls.logik, KONTROLL_SZENARIO, session)
+        cls.angebot = Angebot(nummer="TEST-RABATT", kunde_id=0)
+        for p in positionen:
+            cls.angebot.positionen.append(AngebotsPosition(**p))
+
+    def test_summen_mit_500_euro_rabatt(self):
+        self.angebot.rabatt_cent = 50000
+        self.angebot.rabatt_prozent = None
+        s = self.angebot.summen()
+        self.assertEqual(s["netto"], 2962937)
+        self.assertEqual(s["rabatt"], 50000)
+        self.assertEqual(s["netto_nach_rabatt"], 2912937)   # 29.129,37 €
+        self.assertEqual(s["ust"], 553458)                  # 5.534,58 €
+        self.assertEqual(s["brutto"], 3466395)              # 34.663,95 €
+
+    def test_kfw_mit_rabatt(self):
+        self.angebot.rabatt_cent = 50000
+        self.angebot.rabatt_prozent = None
+        parameter, _ = kfw.parameter_lesen(self.logik)
+        eingaben = kfw.eingaben_aus_antworten(
+            engine.kfw_daten(KONTROLL_SZENARIO), self.angebot.summen()["brutto"])
+        ergebnis = kfw.berechnen(parameter, eingaben)
+        self.assertEqual(ergebnis.zuschuss_cent, 1960000)     # Deckel weiter erreicht
+        self.assertEqual(ergebnis.eigenanteil_cent, 1506395)  # 15.063,95 €
+
+    def test_prozent_rabatt(self):
+        self.angebot.rabatt_cent = None
+        self.angebot.rabatt_prozent = 10.0
+        s = self.angebot.summen()
+        self.assertEqual(s["rabatt"], 296294)   # 10 % von 29.629,37, kaufmännisch
+        self.assertEqual(s["netto_nach_rabatt"], 2666643)
+
+    def test_deckungsbeitrag_sinkt_um_rabatt(self):
+        self.angebot.rabatt_cent = None
+        self.angebot.rabatt_prozent = None
+        ohne = self.angebot.deckungsbeitrag()
+        self.angebot.rabatt_cent = 50000
+        mit = self.angebot.deckungsbeitrag()
+        self.assertEqual(mit["db"], ohne["db"] - 50000)
+        self.assertEqual(mit["rabatt"], 50000)
+
+    def test_ohne_rabatt_unveraendert(self):
+        self.angebot.rabatt_cent = None
+        self.angebot.rabatt_prozent = None
+        s = self.angebot.summen()
+        self.assertEqual(s["rabatt"], 0)
+        self.assertEqual(s["brutto"], 3525895)
+
+
 if __name__ == "__main__":
     unittest.main()

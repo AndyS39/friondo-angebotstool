@@ -62,6 +62,11 @@ _NACHTRAEGLICHE_SPALTEN = {
         "ek_cent": "INTEGER",
         "guid": "VARCHAR(40)",
     },
+    "angebote": {
+        "rabatt_cent": "INTEGER",
+        "rabatt_prozent": "FLOAT",
+        "rabatt_bezeichnung": "VARCHAR(200) NOT NULL DEFAULT ''",
+    },
 }
 
 

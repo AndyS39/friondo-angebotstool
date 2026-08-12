@@ -193,6 +193,41 @@ async def position_neu(request: Request, angebot_id: int,
         status_code=303)
 
 
+@router.post("/{angebot_id}/rabatt")
+async def rabatt_setzen(request: Request, angebot_id: int,
+                        session: Session = Depends(get_session)):
+    """Rabatt (Phase 21): Betrag ODER Prozent + optionale Bezeichnung;
+    leerer Wert entfernt den Rabatt. Nur Innendienst/Admin (Middleware)."""
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote", status_code=303)
+    form = await request.form()
+    wert = (form.get("wert") or "").strip()
+    typ = form.get("typ", "betrag")
+    angebot.rabatt_bezeichnung = (form.get("bezeichnung") or "").strip()
+    angebot.rabatt_cent = None
+    angebot.rabatt_prozent = None
+    if wert:
+        if typ == "prozent":
+            from app.konfigurator import zahl_parsen
+            prozent = zahl_parsen(wert)
+            if prozent is None or not (0 < prozent <= 100):
+                return RedirectResponse(
+                    f"/angebote/{angebot_id}?meldung=Ung%C3%BCltiger+Prozentwert",
+                    status_code=303)
+            angebot.rabatt_prozent = prozent
+        else:
+            betrag = preis_parsen(wert)
+            if betrag is None or betrag <= 0:
+                return RedirectResponse(
+                    f"/angebote/{angebot_id}?meldung=Ung%C3%BCltiger+Rabattbetrag",
+                    status_code=303)
+            angebot.rabatt_cent = betrag
+    session.commit()
+    return RedirectResponse(f"/angebote/{angebot_id}?meldung=Rabatt+gespeichert",
+                            status_code=303)
+
+
 @router.get("/{angebot_id}/pdf")
 async def pdf_anzeigen(angebot_id: int, session: Session = Depends(get_session)):
     angebot = session.get(Angebot, angebot_id)

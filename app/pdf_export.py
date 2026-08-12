@@ -368,6 +368,11 @@ def _summen_und_kfw(pdf: AngebotsPdf, angebot: Angebot, ergebnis):
     pdf.line(pdf.l_margin + 70, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
     pdf.ln(1.5)
     _summen_zeile(pdf, "Netto-Summe", summen["netto"])
+    if summen.get("rabatt"):
+        bezeichnung = angebot.rabatt_bezeichnung
+        _summen_zeile(pdf, "− Rabatt" + (f" ({bezeichnung})" if bezeichnung else ""),
+                      summen["rabatt"])
+        _summen_zeile(pdf, "Netto nach Rabatt", summen["netto_nach_rabatt"])
     _summen_zeile(pdf, "19,00 % USt.", summen["ust"])
     _summen_zeile(pdf, "Gesamt-Betrag", summen["brutto"], fett=True)
 

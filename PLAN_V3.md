@@ -41,13 +41,13 @@ vorher lesen. Je Phase: Ansatz erläutern → umsetzen → testen → abhaken �
       Fassadenleitung wird NICHT gefragt, Erdleitung wird gefragt
 
 ## Phase 21 – Rabatt
-- [ ] Angebots-Editor: Rabattfeld (Betrag € oder Prozent, optionale Bezeichnung),
+- [x] Angebots-Editor: Rabattfeld (Betrag € oder Prozent, optionale Bezeichnung),
       nur Innendienst/Admin sichtbar und änderbar
-- [ ] Summenlogik: Netto − Rabatt = Netto nach Rabatt → 19 % USt → Brutto;
+- [x] Summenlogik: Netto − Rabatt = Netto nach Rabatt → 19 % USt → Brutto;
       Rabatt ist keine Position; Decimal/Cent
-- [ ] KfW: förderfähige Kosten = Brutto nach Rabatt; DB-Box zieht Rabatt ab
-- [ ] PDF: Rabattzeile im Summenblock (mit Bezeichnung, falls angegeben)
-- [ ] Test: Kontroll-Szenario + 500 € Rabatt → Netto nach Rabatt 29.129,37 € /
+- [x] KfW: förderfähige Kosten = Brutto nach Rabatt; DB-Box zieht Rabatt ab
+- [x] PDF: Rabattzeile im Summenblock (mit Bezeichnung, falls angegeben)
+- [x] Test: Kontroll-Szenario + 500 € Rabatt → Netto nach Rabatt 29.129,37 € /
       USt 5.534,58 € / Brutto 34.663,95 € / Zuschuss 19.600,00 € (Deckel weiter
       erreicht) / Eigenanteil 15.063,95 €
 
