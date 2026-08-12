@@ -77,6 +77,17 @@ def ist_selbstnutzung(antworten: dict) -> bool:
     return False
 
 
+def _term_erfuellt(frage_id: str, werte: list[str], antworten: dict,
+                   fragen: dict[str, Frage]) -> bool:
+    wert = antworten.get(frage_id)
+    if wert is None:
+        return False
+    ziel = fragen.get(frage_id)
+    optionen = ziel.antworten if ziel else []
+    erlaubt = {_alias_aufloesen(w, optionen) or w for w in werte}
+    return str(wert) in erlaubt
+
+
 def ist_sichtbar(frage: Frage, antworten: dict, fragen: dict[str, Frage]) -> bool:
     b = frage.bedingung
     if b is None or b.art == "immer":
@@ -87,13 +98,12 @@ def ist_sichtbar(frage: Frage, antworten: dict, fragen: dict[str, Frage]) -> boo
         wert = antworten.get(b.frage_id)
         return wert is not None and str(wert) != ""
     if b.art == "antwort":
-        wert = antworten.get(b.frage_id)
-        if wert is None:
-            return False
-        ziel = fragen.get(b.frage_id)
-        optionen = ziel.antworten if ziel else []
-        erlaubt = {_alias_aufloesen(w, optionen) or w for w in b.werte}
-        return str(wert) in erlaubt
+        return _term_erfuellt(b.frage_id, b.werte, antworten, fragen)
+    if b.art == "klauseln":
+        # ODER über Klauseln, UND innerhalb einer Klausel (v3)
+        return any(all(_term_erfuellt(fid, werte, antworten, fragen)
+                       for fid, werte in klausel)
+                   for klausel in b.klauseln)
     return False
 
 

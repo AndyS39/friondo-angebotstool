@@ -25,9 +25,10 @@ FRAGE_TYPEN = {
     "Freitext groß",
 }
 
-# Alt-Schreibweisen aus der v1-Logik werden beim Einlesen normalisiert
+# Alt-/Varianten-Schreibweisen werden beim Einlesen normalisiert
 TYP_ALIASE = {
     "Mengenmaske (4 Zahlenfelder)": "Mengenmaske",
+    "Mengenmaske (2 Zahlenfelder)": "Mengenmaske",
     "Wiederholfeld je Verteiler": "Wiederholfeld",
 }
 
@@ -45,9 +46,12 @@ SPEZIAL_AKTIONEN = {"Gruppen-Trigger", "Grundpaket", "Ampel-Auswertung",
 @dataclass
 class Bedingung:
     roh: str
-    art: str                      # immer | antwort | ausgefuellt | selbstnutzung | friondo_ja
+    art: str          # immer | antwort | ausgefuellt | selbstnutzung | friondo_ja | klauseln
     frage_id: Optional[str] = None
     werte: list[str] = field(default_factory=list)
+    # v3: ODER-verknüpfte Klauseln, jede Klausel = UND-Liste von (frage_id, werte),
+    # z. B. "nur wenn A04 = KG oder EG, oder (A04 = DG und D01 = Nein)"
+    klauseln: list[list[tuple[str, list[str]]]] = field(default_factory=list)
 
 
 @dataclass
@@ -191,10 +195,27 @@ def bedingung_parsen(roh) -> Optional[Bedingung]:
     m = re.match(r"nur wenn ([A-Z]\d{2})\s+ausgefüllt$", text)
     if m:
         return Bedingung(text, "ausgefuellt", m.group(1))
-    m = re.match(r"nur wenn ([A-Z]\d{2})\s*=\s*(.+)$", text)
+    m = re.match(r"nur wenn (.+)$", text)
     if m:
-        werte = [w.strip() for w in m.group(2).split(" oder ")]
-        return Bedingung(text, "antwort", m.group(1), werte)
+        # ", oder " trennt ODER-Klauseln; innerhalb einer Klausel trennt " und ";
+        # " oder " ohne Komma trennt Werte derselben Frage ("KG oder EG")
+        klauseln: list[list[tuple[str, list[str]]]] = []
+        for klausel_text in re.split(r",\s*oder\s+", m.group(1)):
+            klausel_text = klausel_text.strip()
+            if klausel_text.startswith("(") and klausel_text.endswith(")"):
+                klausel_text = klausel_text[1:-1].strip()
+            terme: list[tuple[str, list[str]]] = []
+            for teil in re.split(r"\s+und\s+", klausel_text):
+                tm = re.match(r"([A-Z]\d{2})\s*=\s*(.+)$", teil.strip())
+                if tm is None:
+                    return None
+                terme.append((tm.group(1),
+                              [w.strip() for w in tm.group(2).split(" oder ")]))
+            klauseln.append(terme)
+        if len(klauseln) == 1 and len(klauseln[0]) == 1:
+            frage_id, werte = klauseln[0][0]
+            return Bedingung(text, "antwort", frage_id, werte)
+        return Bedingung(text, "klauseln", klauseln=klauseln)
     return None
 
 
@@ -442,18 +463,27 @@ def _antwort_pruefen(frage: Frage, antwort: str, fragen: dict[str, Frage]) -> Op
 def _querbezuege_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
     fragen = logik.fragen
 
-    # Bedingungen der Fragen: referenzierte Frage + Werte müssen existieren
+    # Bedingungen der Fragen: referenzierte Fragen + Werte müssen existieren
     for frage in fragen.values():
         b = frage.bedingung
-        if b is None or b.art not in ("antwort", "ausgefuellt"):
+        if b is None:
             continue
-        if b.frage_id not in fragen:
-            bericht.fehler.append(
-                f"Fragen {frage.id}: Bedingung verweist auf unbekannte Frage {b.frage_id}.")
-            continue
-        ziel = fragen[b.frage_id]
-        if b.art == "antwort" and ziel.typ == "Auswahl":
-            for wert in b.werte:
+        terme: list[tuple[str, list[str]]] = []
+        if b.art in ("antwort",):
+            terme = [(b.frage_id, b.werte)]
+        elif b.art == "ausgefuellt":
+            terme = [(b.frage_id, [])]
+        elif b.art == "klauseln":
+            terme = [t for klausel in b.klauseln for t in klausel]
+        for frage_id, werte in terme:
+            if frage_id not in fragen:
+                bericht.fehler.append(
+                    f"Fragen {frage.id}: Bedingung verweist auf unbekannte Frage {frage_id}.")
+                continue
+            ziel = fragen[frage_id]
+            if ziel.typ != "Auswahl":
+                continue
+            for wert in werte:
                 if _alias_aufloesen(wert, ziel.antworten) is None:
                     bericht.fehler.append(
                         f"Fragen {frage.id}: Bedingungswert „{wert}“ ist keine Option von {ziel.id}.")

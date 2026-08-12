@@ -50,6 +50,11 @@ def _client_regel(frage) -> str:
         return json.dumps({"art": "ausgefuellt", "frage": b.frage_id})
     if b.art == "selbstnutzung":
         return json.dumps({"art": "selbstnutzung"})
+    if b.art == "klauseln":
+        return json.dumps({"art": "klauseln",
+                           "klauseln": [[{"frage": fid, "werte": werte}
+                                         for fid, werte in klausel]
+                                        for klausel in b.klauseln]}, ensure_ascii=False)
     return json.dumps({"art": "immer"})
 
 

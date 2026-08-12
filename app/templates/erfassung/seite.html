@@ -86,12 +86,22 @@
         return feld ? feld.value.trim() : null;
     }
 
+    function termErfuellt(term) {
+        const w = wert(term.frage);
+        if (w === null) return true;   // Frage liegt auf früherer Seite -> Server entschied
+        if (w === '') return false;
+        return term.werte.some(v => w === v || (v === 'beides' && w.includes(' und ')));
+    }
+
     function sichtbar(regel) {
         if (!regel || regel.art === 'immer') return true;
         if (regel.art === 'antwort') {
             const w = wert(regel.frage);
-            if (w === null) return true;   // Frage liegt auf früherer Seite -> Server entschied
+            if (w === null) return true;
             return regel.werte.some(v => w === v || (v === 'beides' && w.includes(' und ')));
+        }
+        if (regel.art === 'klauseln') {
+            return regel.klauseln.some(klausel => klausel.every(termErfuellt));
         }
         if (regel.art === 'ausgefuellt') {
             const w = wert(regel.frage);

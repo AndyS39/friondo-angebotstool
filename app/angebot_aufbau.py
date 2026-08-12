@@ -14,8 +14,24 @@ from sqlalchemy.orm import Session
 
 from app import config
 from app import konfigurator as engine
-from app.logik import Logik, antwort_teile as logik_antwort_teile
+from app.logik import (Logik, antwort_teile as logik_antwort_teile,
+                       refs_extrahieren as logik_refs_extrahieren)
 from app.models import Angebot, AngebotsPosition, Artikel, Konfiguration
+
+
+def _mengenmaske_ref(zeilen, option: str):
+    """Artikel-Referenz zu einem Mengenmasken-Feld: paarweise Slash-Liste
+    ("Anzahl S / M / L / XL") oder eigene Zeile je Feld (D05)."""
+    for zeile in zeilen:
+        teile = [re.sub(r"^Anzahl\s+", "", t)
+                 for t in logik_antwort_teile(zeile.antwort)]
+        if option in teile:
+            index = teile.index(option)
+            if len(teile) > 1 and len(zeile.artikel) == len(teile):
+                return zeile.artikel[index]
+            if zeile.artikel:
+                return zeile.artikel[0]
+    return None
 
 
 @dataclass
@@ -52,25 +68,28 @@ def artikel_ermitteln(logik: Logik, antworten: dict) -> list[GewaehlterArtikel]:
         wert = antworten[frage.id]
 
         if frage.typ == "Mengenmaske":
-            # H04: eine Zeile "Anzahl S / M / L / XL" -> Artikel paarweise je Größe
-            zeile = next((a for a in logik.aktionen if a.frage == frage.id), None)
-            if zeile is None:
-                continue
-            groessen = [re.sub(r"^Anzahl\s+", "", t)
-                        for t in logik_antwort_teile(zeile.antwort)]
-            gesamt = 0
-            for groesse, anzahl in wert.items():
+            # H04: eine Zeile "Anzahl S / M / L / XL" mit paarweisen Artikeln;
+            # D05 (v3): eine Zeile je Feld ("Heizung VL/RL (m)" -> Pos. 139 × Eingabe)
+            zeilen = [a for a in logik.aktionen if a.frage == frage.id]
+            gesamt = 0.0
+            for option, anzahl in wert.items():
                 if not anzahl:
                     continue
-                gesamt += int(anzahl)
-                if groesse in groessen:
-                    index = groessen.index(groesse)
-                    if index < len(zeile.artikel):
-                        gewaehlt.append(GewaehlterArtikel(
-                            zeile.artikel[index].ref, float(anzahl), False, frage.id))
+                gesamt += float(anzahl)
+                ref = _mengenmaske_ref(zeilen, option)
+                if ref is not None:
+                    gewaehlt.append(GewaehlterArtikel(ref.ref, float(anzahl),
+                                                     False, frage.id))
             if gesamt:
-                # Heizkörper-Pauschale: Pos. 129 × Gesamtanzahl aller Heizkörper
-                gewaehlt.append(GewaehlterArtikel("129", float(gesamt), False, frage.id))
+                # Pauschalen aus der Bemerkung ("zusätzlich Pos. 129 × Gesamtanzahl")
+                gesehen_pauschale: set[str] = set()
+                for zeile in zeilen:
+                    for ref in logik_refs_extrahieren(zeile.bemerkung):
+                        if ("Gesamtanzahl" in ref.menge
+                                and ref.ref not in gesehen_pauschale):
+                            gesehen_pauschale.add(ref.ref)
+                            gewaehlt.append(GewaehlterArtikel(
+                                ref.ref, float(gesamt), False, frage.id))
             continue
 
         if frage.typ == "Wiederholfeld":

@@ -24,17 +24,19 @@ vorher lesen. Je Phase: Ansatz erläutern → umsetzen → testen → abhaken �
       Befüllung durch den monday-Sync folgt in Phase 22)
 
 ## Phase 20 – Logik v3
-- [ ] konfigurator_logik_v3.xlsx einlesen; Validierung (neue IDs D01–D05,
+- [x] konfigurator_logik_v3.xlsx einlesen; Validierung (neue IDs D01–D05,
       Positionen 139/140/141/163 müssen im Artikelstamm existieren)
-- [ ] Dachzentralen-Block umsetzen: D01–D05 nur bei A04 = DG, Kette lt. Aktionen;
+- [x] Dachzentralen-Block umsetzen: D01–D05 nur bei A04 = DG, Kette lt. Aktionen;
       D05 als Mengenmaske mit zwei Meterfeldern (Pos. 139 / Pos. 140 × Eingabe)
-- [ ] Bedingungen: A06 Fassadenleitung nur bei OG oder (DG und D01 = Ja);
-      A05 Erdleitung bei KG/EG oder (DG und D01 = Nein)
-- [ ] Pos. 163 automatisch bei A04 = DG (Block 5); Pos. 141 bei D03 = Ja (Block 2)
-- [ ] E04–E06 ohne Artikelwirkung (nur Protokoll); AMPEL-Grund Nr. 15 (D04 = Nein)
-- [ ] Regressionstest: Kontroll-Szenario (KG-Fall) unverändert – Netto 29.629,37 € /
-      Brutto 35.258,95 € / Eigenanteil 15.658,95 €
-- [ ] Neuer Testfall DG: A04 = DG, D01 = Nein, D02 = Nein, D03 = Nein, D04 = Ja,
+- [x] Bedingungen: A06 Fassadenleitung nur bei OG oder (DG und D01 = Ja);
+      A05 Erdleitung bei KG/EG oder (DG und D01 = Nein) – ODER/UND-Klauseln
+      generisch im Parser und in der Erfassungs-Sichtbarkeit (auch clientseitig)
+- [x] Pos. 163 automatisch bei A04 = DG (Block 5); Pos. 141 bei D03 = Ja (Block 2)
+- [x] E04–E06 ohne Artikelwirkung (nur Protokoll); AMPEL-Grund Nr. 15 (D04 = Nein)
+- [x] Regressionstest: Kontroll-Szenario (KG-Fall) unverändert – Netto 29.629,37 € /
+      Brutto 35.258,95 € / Eigenanteil 15.658,95 € (Detailantworten an die
+      artikellosen E-Fragen angepasst, Summen identisch)
+- [x] Neuer Testfall DG: A04 = DG, D01 = Nein, D02 = Nein, D03 = Nein, D04 = Ja,
       D05 = 6 m Heizung + 4 m Trinkwasser → Pos. 163 + 139×6 + 140×4 im Angebot;
       Fassadenleitung wird NICHT gefragt, Erdleitung wird gefragt
 
