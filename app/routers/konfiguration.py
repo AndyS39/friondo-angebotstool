@@ -24,6 +24,9 @@ async def uebersicht(request: Request, session: Session = Depends(get_session)):
                   logik=logik, bericht=bericht, dateifehler=None,
                   db_rot=einstellung_holen(session, "db_ampel_rot_unter", "9000"),
                   db_gruen=einstellung_holen(session, "db_ampel_gruen_ueber", "10000"),
+                  fern_aktiv=einstellung_holen(session, "signatur_fern_aktiv", "0"),
+                  fern_tage=einstellung_holen(session, "signatur_fern_gueltig_tage", "14"),
+                  fern_basis=einstellung_holen(session, "signatur_fern_basis_url", ""),
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -37,6 +40,15 @@ async def einstellungen_speichern(request: Request,
         wert = (form.get(name) or "").strip().replace(".", "")
         if wert.isdigit():
             einstellung_setzen(session, name, wert)
+    # Fern-Signatur (Phase 28): Schalter, Gültigkeitsdauer, öffentliche Basis-URL
+    if "fern_formular" in form:
+        einstellung_setzen(session, "signatur_fern_aktiv",
+                           "1" if form.get("signatur_fern_aktiv") else "0")
+        tage = (form.get("signatur_fern_gueltig_tage") or "").strip()
+        if tage.isdigit() and int(tage) > 0:
+            einstellung_setzen(session, "signatur_fern_gueltig_tage", tage)
+        einstellung_setzen(session, "signatur_fern_basis_url",
+                           (form.get("signatur_fern_basis_url") or "").strip().rstrip("/"))
     session.commit()
     return RedirectResponse("/parametrierung?meldung=Einstellungen+gespeichert",
                             status_code=303)

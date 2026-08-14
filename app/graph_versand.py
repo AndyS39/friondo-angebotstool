@@ -14,7 +14,9 @@ from app.models import Angebot, Kunde
 
 # Mail.ReadWrite deckt das Lesen mit ab; Mail.Read steht zur Klarheit dabei,
 # weil der Mail-Verlauf (Phase 27) die Konversation nur lesend abruft.
-SCOPES = ["Mail.ReadWrite", "Mail.Read"]
+# Mail.Send: nur für die Info-Mail an das eigene Postfach nach einer
+# Fern-Signatur (Phase 28) – Angebots-Mails bleiben Entwürfe für Outlook.
+SCOPES = ["Mail.ReadWrite", "Mail.Read", "Mail.Send"]
 GRAPH = "https://graph.microsoft.com/v1.0"
 
 _token_cache = None
@@ -130,12 +132,19 @@ def _anrede(kunde: Kunde) -> str:
     return "Sehr geehrte Damen und Herren,"
 
 
-def standardtext(kunde: Kunde, angebot: Angebot) -> str:
+def standardtext(kunde: Kunde, angebot: Angebot, signatur_link: str = "") -> str:
+    signatur_absatz = ""
+    if signatur_link:
+        signatur_absatz = (
+            f"Sie möchten das Angebot direkt annehmen? Unter folgendem Link "
+            f"können Sie bequem online unterschreiben (auch am Smartphone):\n"
+            f"{signatur_link}\n\n")
     return (f"{_anrede(kunde)}\n\n"
             f"vielen Dank für Ihr Interesse an einer Wärmepumpe der Friondo GmbH.\n\n"
             f"Anbei erhalten Sie Ihr individuelles Angebot {angebot.nummer} "
             f"als PDF-Datei. Wir halten uns freibleibend 30 Tage an dieses "
             f"Angebot gebunden.\n\n"
+            f"{signatur_absatz}"
             f"Bei Fragen stehen wir Ihnen jederzeit gerne zur Verfügung – "
             f"telefonisch unter 0203 - 3965 710 oder per E-Mail an info@friondo.de.\n\n"
             f"Mit freundlichen Grüßen\n"
@@ -156,9 +165,37 @@ def _graph_aufruf(methode: str, pfad: str, token: str, daten: dict | None = None
     return json.loads(inhalt) if inhalt else {}
 
 
+def info_mail_senden(betreff: str, text: str) -> bool:
+    """Sendet eine kurze Info-Mail an das eigene Postfach (Fern-Signatur,
+    Phase 28). Best effort: ohne Anmeldung/Berechtigung einfach False."""
+    token = _token()
+    if token is None:
+        return False
+    app = _app()
+    konten = app.get_accounts()
+    if not konten:
+        return False
+    empfaenger = konten[0].get("username", "")
+    if not empfaenger:
+        return False
+    try:
+        _graph_aufruf("POST", "/me/sendMail", token, {
+            "message": {
+                "subject": betreff,
+                "body": {"contentType": "text", "content": text},
+                "toRecipients": [{"emailAddress": {"address": empfaenger}}],
+            },
+            "saveToSentItems": False,
+        })
+        return True
+    except Exception:
+        return False
+
+
 def entwurf_erstellen(kunde: Kunde, angebot: Angebot, pdf_pfad: Path,
                       weitere_anhaenge: list[Path] | None = None,
-                      fehlende_anhaenge: list[str] | None = None
+                      fehlende_anhaenge: list[str] | None = None,
+                      signatur_link: str = ""
                       ) -> tuple[bool, str, str, str]:
     """Legt den Entwurf mit Anhängen im Postfach ab.
     Liefert (erfolg, meldung, weblink, conversation_id) – die conversation_id
@@ -173,7 +210,8 @@ def entwurf_erstellen(kunde: Kunde, angebot: Angebot, pdf_pfad: Path,
     try:
         nachricht = {
             "subject": f"Ihr Wärmepumpen-Angebot {angebot.nummer} der Friondo GmbH",
-            "body": {"contentType": "text", "content": standardtext(kunde, angebot)},
+            "body": {"contentType": "text",
+                     "content": standardtext(kunde, angebot, signatur_link)},
             "toRecipients": [{"emailAddress": {"address": kunde.email}}],
         }
         entwurf = _graph_aufruf("POST", "/me/messages", token, nachricht)

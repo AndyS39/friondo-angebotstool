@@ -307,7 +307,8 @@ async def pdf_anzeigen(angebot_id: int, session: Session = Depends(get_session))
 
 
 @router.post("/{angebot_id}/email")
-async def email_entwurf(angebot_id: int, session: Session = Depends(get_session)):
+async def email_entwurf(request: Request, angebot_id: int,
+                        session: Session = Depends(get_session)):
     """Versand vorbereiten (Phase 17): Entwurf per Microsoft Graph im Postfach
     des angemeldeten Innendienst-Nutzers; Fallback bleibt der PDF-Download."""
     angebot = session.get(Angebot, angebot_id)
@@ -335,10 +336,22 @@ async def email_entwurf(angebot_id: int, session: Session = Depends(get_session)
     pdf_pfad = pdf_export.pdf_fuer_angebot(session, angebot)
     logik, _ = logik_modul.hole_logik(session)
     anhaenge = anhaenge_modul.fuer_angebot(logik, angebot)
+    # Fern-Signatur (Phase 28): bei aktivem Schalter Einmal-Link in die Mail
+    signatur_link = ""
+    from app.routers.signatur import fern_aktiv, fern_token_ausstellen
+    if fern_aktiv(session):
+        from app.models import einstellung_holen
+        token = fern_token_ausstellen(session, angebot)
+        basis = einstellung_holen(session, "signatur_fern_basis_url", "").rstrip("/")
+        if not basis:
+            basis = str(request.base_url).rstrip("/")
+        signatur_link = f"{basis}/signatur/extern/{token}"
+        session.commit()
     erfolg, meldung, weblink, conversation_id = graph_versand.entwurf_erstellen(
         kunde, angebot, pdf_pfad,
         weitere_anhaenge=[Path(a.pfad) for a in anhaenge if a.vorhanden],
-        fehlende_anhaenge=[a.datei for a in anhaenge if not a.vorhanden])
+        fehlende_anhaenge=[a.datei for a in anhaenge if not a.vorhanden],
+        signatur_link=signatur_link)
     if erfolg and conversation_id:
         # Mail-Verlauf (Phase 27): Konversation der Angebots-Mail merken
         angebot.graph_conversation_id = conversation_id

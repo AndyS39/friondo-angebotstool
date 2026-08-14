@@ -57,12 +57,12 @@ Je Phase: Ansatz erläutern → umsetzen → testen → abhaken → committen.
 - [x] Klick → Mailverlauf-Ansicht (Absender, Zeitpunkt, Textauszug), nur lesend
 
 ## Phase 28 – Fern-Signatur (Kunde signiert selbst)
-- [ ] Signatur-Link in die Angebots-Mail: Einmal-Token, Gültigkeitsdauer
+- [x] Signatur-Link in die Angebots-Mail: Einmal-Token, Gültigkeitsdauer
       (Parametrierung), Seite mit PDF-Ansicht + Signaturfeld, mobiltauglich
-- [ ] Nach Signatur: wie Vor-Ort-Modus (Einbettung, Status „Angenommen",
+- [x] Nach Signatur: wie Vor-Ort-Modus (Einbettung, Status „Angenommen",
       Ablage signiert/, Protokoll mit Zeit/IP), zusätzlich Info-Mail an den
       Innendienst-Postfachinhaber
-- [ ] Aktivierungsschalter in Parametrierung; standardmäßig AUS, bis die
+- [x] Aktivierungsschalter in Parametrierung; standardmäßig AUS, bis die
       öffentliche HTTPS-Adresse für die Signatur-Route steht (RZ/IT) –
       Anforderung an die IT in docs/ beschreiben (nur diese eine Route öffentlich,
       Rest bleibt intern); Alternative externer Signatur-Anbieter dokumentieren

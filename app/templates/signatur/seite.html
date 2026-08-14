@@ -11,11 +11,11 @@
 
     <details open>
         <summary class="dezent">Angebots-PDF ansehen</summary>
-        <iframe src="/signatur/{{ angebot.id }}/pdf" class="pdf-vorschau"
+        <iframe src="{{ pdf_ziel or '/signatur/' ~ angebot.id ~ '/pdf' }}" class="pdf-vorschau"
                 title="Angebots-PDF"></iframe>
     </details>
 
-    <form method="post" action="/signatur/{{ angebot.id }}" id="signaturform"
+    <form method="post" action="{{ post_ziel or '/signatur/' ~ angebot.id }}" id="signaturform"
           class="mobil-formular">
         <label>Name des Unterzeichners
             <input type="text" name="name" value="{{ kunde.anzeige_name if kunde }}" required>

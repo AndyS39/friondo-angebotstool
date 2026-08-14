@@ -50,6 +50,26 @@
     <span class="dezent">dazwischen = orange</span>
 </form>
 
+<h2>Fern-Signatur (Kunde signiert selbst)</h2>
+<form method="post" action="/parametrierung/einstellungen" class="suchleiste">
+    <input type="hidden" name="fern_formular" value="1">
+    <label class="kontrollfeld">
+        <input type="checkbox" name="signatur_fern_aktiv" value="1"
+               {{ 'checked' if fern_aktiv == '1' }}> aktiv
+    </label>
+    <label class="kontrollfeld">Link gültig (Tage)
+        <input type="text" name="signatur_fern_gueltig_tage" value="{{ fern_tage }}" size="4"></label>
+    <label class="kontrollfeld">Öffentliche Basis-Adresse
+        <input type="text" name="signatur_fern_basis_url" value="{{ fern_basis }}"
+               size="34" placeholder="https://signatur.friondo.de"></label>
+    <button class="knopf" type="submit">Speichern</button>
+</form>
+<p class="dezent">Standard AUS – erst aktivieren, wenn die IT die öffentliche
+HTTPS-Adresse für die Signatur-Route bereitgestellt hat
+(<code>docs/fern-signatur-it.md</code>). Bei aktivem Schalter enthält die
+Angebots-Mail einen Einmal-Link zum Online-Unterschreiben; nach der Signatur
+wird der Status auf „Angenommen" gesetzt und der Innendienst per E-Mail informiert.</p>
+
 <h2>Eingelesene Logik</h2>
 <table class="tabelle zusammenfassung">
     <tr><th>Fragen</th><td>{{ logik.fragen | length }}</td></tr>
