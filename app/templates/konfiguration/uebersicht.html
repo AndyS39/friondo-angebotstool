@@ -40,6 +40,16 @@
     </div>
 {% endif %}
 
+<h2>Deckungsbeitrags-Ampel (Angebotsliste)</h2>
+<form method="post" action="/parametrierung/einstellungen" class="suchleiste">
+    <label class="kontrollfeld">rot unter (€)
+        <input type="text" name="db_ampel_rot_unter" value="{{ db_rot }}" size="8"></label>
+    <label class="kontrollfeld">grün über (€)
+        <input type="text" name="db_ampel_gruen_ueber" value="{{ db_gruen }}" size="8"></label>
+    <button class="knopf" type="submit">Speichern</button>
+    <span class="dezent">dazwischen = orange</span>
+</form>
+
 <h2>Eingelesene Logik</h2>
 <table class="tabelle zusammenfassung">
     <tr><th>Fragen</th><td>{{ logik.fragen | length }}</td></tr>

@@ -11,7 +11,7 @@
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
 <form method="get" action="/angebote" class="suchleiste">
-    <input type="text" name="q" value="{{ q }}" placeholder="Suche: Angebots-Nr., Kunde">
+    <input type="text" name="q" value="{{ q }}" placeholder="Suche: Angebots-Nr., Kunde, Ort">
     <select name="status">
         <option value="">Alle Status</option>
         {% for s in status_liste %}
@@ -43,8 +43,10 @@
             <td><span class="abzeichen status-{{ a.status | lower }}">{{ a.status }}</span></td>
             <td class="rechts">{{ a.summen().brutto | euro }}</td>
             {% set deckung = a.deckungsbeitrag() %}
-            <td class="rechts" title="{{ deckung.db | euro }} · VK netto {{ deckung.vk | euro }} − EK {{ deckung.ek | euro }}{% if deckung.ohne_ek %} · EK fehlt bei {{ deckung.ohne_ek | length }} Pos.{% endif %}">
-                {{ ('%.1f' | format(deckung.prozent)) | replace('.', ',') }} %
+            {% set db_farbe = 'db-rot' if deckung.db < db_rot_cent
+               else ('db-gruen' if deckung.db > db_gruen_cent else 'db-orange') %}
+            <td class="rechts {{ db_farbe }}" title="{{ ('%.1f' | format(deckung.prozent)) | replace('.', ',') }} % · VK netto {{ deckung.vk | euro }} − EK {{ deckung.ek | euro }}{% if deckung.ohne_ek %} · EK fehlt bei {{ deckung.ohne_ek | length }} Pos.{% endif %}">
+                {{ deckung.db | euro }}
                 {% if deckung.ohne_ek %}<span class="abzeichen ep">!</span>{% endif %}
             </td>
             <td class="aktionen">

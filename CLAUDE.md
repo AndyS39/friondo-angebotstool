@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v3)
+# Friondo Angebotstool – Projektkontext (v4)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -17,7 +17,7 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   Import, monday-Mapping, Nummernkreis, Förderparameter-Ansicht).
 
 ## Zentrale Dateien
-- `konfigurator_logik_v3.xlsx` – Steuerdatei (ersetzt v2): NEU Dachzentralen-Block
+- `konfigurator_logik_v4.xlsx` – Steuerdatei (ersetzt v3): Dachzentralen-Block
   D01–D05, geänderte Bedingungen A05/A06, Pos. 163 bei DG, SLS/ÜSS/APZ nur Protokoll,
   Summenblock mit Rabatt. 15 AMPEL-Gründe.
 - `Artikel-Preislisten/Angebotserstellung_Tool_mit_EK.xlsx`, `ANGEBOTSTEXTE.md`,
@@ -25,9 +25,14 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
-  optionale Bezeichnung. Wird **vom Netto abgezogen, USt auf den rabattierten
-  Betrag** (steuerlich korrekt), keine Angebotsposition. KfW rechnet mit der
-  Brutto-Summe NACH Rabatt; Deckungsbeitrag sinkt um den Rabatt.
+  optionale Bezeichnung, keine Angebotsposition. Darstellung: Netto → 19 % USt →
+  Gesamt-Betrag → **− Rabatt (brutto) → = Endbetrag**. KfW rechnet mit dem
+  Endbetrag; der Deckungsbeitrag sinkt um den Netto-Anteil (Rabatt ÷ 1,19).
+  Hinweis in docs/: Auf der späteren Rechnung (TAIFUN) ist der Rabatt vor der
+  USt auszuweisen – die Angebots-Darstellung ist eine Brutto-Optik.
+- **Deckungsbeitrag** in der Angebotsliste absolut in € mit Farbampel:
+  unter 9.000 € rot · 9.000–10.000 € orange · über 10.000 € grün
+  (Schwellen in der Parametrierung änderbar).
 - **PDF-Nummerierung:** Positionen im Angebot werden fortlaufend neu nummeriert
   (001, 002, …) – Editor und PDF identisch. TAIFUN-Pos./Z-Nr./GUID bleiben intern
   gespeichert und sind im Editor als Zusatzinfo sichtbar.
@@ -56,9 +61,10 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   blockieren das Tool nie.
 - Liste „Leads VOT": nur Leads **mit** VOT-Datum und **ohne** verknüpftes Angebot,
   chronologisch nach Termin; Außendienst sieht nur eigene, Innendienst/Admin alle.
-- Klick auf Lead → Fragenkatalog startet mit angelegtem/abgeglichenem Kunden
-  (Duplikatabgleich Name + PLZ). Nach Absenden gilt der Lead als erfasst und
-  verschwindet aus der Liste (Verknüpfung Lead ↔ Erfassung ↔ Angebot speichern).
+- Der Sync legt **alle** Leads sofort als Kunden an bzw. aktualisiert sie
+  (Duplikatabgleich Name + PLZ). Klick auf Lead → Fragenkatalog mit vorausgewähltem
+  Kunden. Nach Absenden gilt der Lead als erfasst und verschwindet aus der Liste
+  (Verknüpfung Lead ↔ Erfassung ↔ Angebot speichern).
 
 ## E-Signatur
 - Jedes Angebots-PDF erhält die Unterschriften-Seite wie bisher; zusätzlich digitales
@@ -67,9 +73,17 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   Zeitstempel werden in das PDF eingebettet, Status → „Angenommen", signierte Datei
   separat unter data/angebote/signiert/ abgelegt, Signaturprotokoll (Zeit, Gerät,
   Benutzer) am Angebot.
-- **Fern-Modus** (per Link an den Kunden): technisch vorbereitet (Token-Link,
-  gleiche Signaturseite), wird erst aktiviert, wenn öffentlicher HTTPS-Zugang
-  (Phase 16 Variante B) oder ein Signatur-Anbieter entschieden ist.
+- **Fern-Modus** (Ziel v4): Der Kunde signiert selbst von zu Hause über einen
+  Token-Link aus der Angebots-Mail (Gültigkeitsdauer, Einmal-Token, Protokoll).
+  Voraussetzung: öffentliche HTTPS-Adresse ausschließlich für die Signatur-Route
+  (RZ/IT) oder ein externer Signatur-Anbieter – Entscheidung offen, Modul wird
+  fertig gebaut und per Schalter aktiviert.
+
+## Mail-Verlauf am Angebot (neu v4)
+Kundenantworten auf die Angebots-Mail werden über Graph (zusätzliche Berechtigung
+Mail.Read) anhand der Konversation bzw. Betreffzeile AN-C-… erkannt und dem Angebot
+zugeordnet (Abruf alle 15 Min). Die Angebotsliste zeigt ein Symbol, Klick öffnet
+den Mailverlauf (Absender, Zeit, Text).
 
 ## Unverändert aus v2
 Stack (FastAPI/SQLite/fpdf2), TAIFUN-Import mit GUID-Anker und Textregeln,

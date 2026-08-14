@@ -31,7 +31,7 @@ def preis_parsen(text: str):
 
 @router.get("")
 async def liste(request: Request, q: str = "", kategorie: str = "", inaktive: bool = False,
-                session: Session = Depends(get_session)):
+                fehlend: bool = False, session: Session = Depends(get_session)):
     abfrage = session.query(Artikel)
     if not inaktive:
         abfrage = abfrage.filter(Artikel.aktiv.is_(True))
@@ -44,13 +44,19 @@ async def liste(request: Request, q: str = "", kategorie: str = "", inaktive: bo
             Artikel.bezeichnung.ilike(suchwort),
             Artikel.beschreibung.ilike(suchwort),
             Artikel.kategorie.ilike(suchwort),
+            Artikel.artikelnummer.ilike(suchwort),
         ))
     artikel = abfrage.order_by(Artikel.pos_nr, Artikel.id).all()
+    # Phase 24: EK fehlt (leer) oder VK fehlt (0) markieren + Banner mit Filter
+    ohne_preis = [a for a in artikel if a.ek_cent is None or not a.e_preis_cent]
+    if fehlend:
+        artikel = ohne_preis
     kategorien = [k for (k,) in session.query(Artikel.kategorie).distinct()
                   .order_by(Artikel.kategorie) if k]
     return render(request, "artikel/liste.html", aktiv="/artikel",
                   artikel=artikel, kategorien=kategorien, q=q,
-                  kategorie=kategorie, inaktive=inaktive,
+                  kategorie=kategorie, inaktive=inaktive, fehlend=fehlend,
+                  ohne_preis_anzahl=len(ohne_preis),
                   meldung=request.query_params.get("meldung", ""))
 
 

@@ -31,7 +31,12 @@
     {% for e in erfassungen %}
         <tr>
             <td>{{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am }}</td>
-            <td><a href="/erfassungen/{{ e.id }}">{{ kunden[e.kunde_id].anzeige_name if e.kunde_id in kunden else '?' }}</a></td>
+            <td>
+                <a href="/erfassungen/{{ e.id }}">{{ kunden[e.kunde_id].anzeige_name if e.kunde_id in kunden else '?' }}</a>
+                {% if e.id in bemerkungen %}
+                    <span class="bemerkung-symbol" title="{{ bemerkungen[e.id] | truncate(300) }}">📝</span>
+                {% endif %}
+            </td>
             <td>{{ benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '?' }}</td>
             <td>
                 {% if e.ampel == 'orange' %}

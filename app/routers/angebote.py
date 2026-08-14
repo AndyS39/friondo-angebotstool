@@ -40,10 +40,16 @@ async def liste(request: Request, q: str = "", status: str = "",
         angebote = [a for a in angebote
                     if suchwort in a.nummer.lower()
                     or (a.kunde_id in kunden
-                        and suchwort in kunden[a.kunde_id].anzeige_name.lower())]
+                        and (suchwort in kunden[a.kunde_id].anzeige_name.lower()
+                             or suchwort in (kunden[a.kunde_id].ort or "").lower()))]
+    # DB-Farbampel (Phase 24): Schwellen in Euro, in der Parametrierung pflegbar
+    from app.models import einstellung_holen
+    rot_unter = int(einstellung_holen(session, "db_ampel_rot_unter", "9000"))
+    gruen_ueber = int(einstellung_holen(session, "db_ampel_gruen_ueber", "10000"))
     return render(request, "angebote/liste.html", aktiv="/angebote",
                   angebote=angebote, kunden=kunden, q=q, status=status,
                   status_liste=ANGEBOT_STATUS,
+                  db_rot_cent=rot_unter * 100, db_gruen_cent=gruen_ueber * 100,
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -160,7 +166,26 @@ async def position_neu(request: Request, angebot_id: int,
     letzte_gruppe = angebot.positionen[-1].gruppe if angebot.positionen else ""
     letzter_block = angebot.positionen[-1].block_nr if angebot.positionen else 0
 
+    # Autocomplete-Feld (Phase 24): "#<id> · <Pos> · <Titel> …" oder Alt-Feld artikel_id
     artikel_id = form.get("artikel_id") or ""
+    suche = (form.get("artikel_suche") or "").strip()
+    if not artikel_id and suche:
+        import re as _re
+        m = _re.match(r"#(\d+)\b", suche)
+        if m:
+            artikel_id = m.group(1)
+        else:
+            # Freitext ohne Auswahl aus der Liste: nach Pos-Nr./Artikelnummer suchen
+            treffer = (session.query(Artikel)
+                       .filter(Artikel.aktiv.is_(True))
+                       .filter(or_(Artikel.pos_nr == suche,
+                                   Artikel.artikelnummer == suche)).first())
+            if treffer is not None:
+                artikel_id = str(treffer.id)
+            else:
+                return RedirectResponse(
+                    f"/angebote/{angebot_id}?meldung=Artikel+nicht+gefunden+–+bitte+aus+der+Vorschlagsliste+w%C3%A4hlen",
+                    status_code=303)
     if artikel_id:
         artikel = session.get(Artikel, int(artikel_id))
         if artikel is not None:

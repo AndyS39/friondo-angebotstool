@@ -167,13 +167,14 @@
     <form method="post" action="/angebote/{{ angebot.id }}/position-neu" class="formular konfigurator-haupt">
         <p><strong>Artikel aus dem Stamm</strong></p>
         <div class="formzeile">
-            <label>Artikel
-                <select name="artikel_id">
-                    <option value="">– wählen –</option>
+            <label class="breit">Artikel suchen (Bezeichnung, Pos-Nr., Artikelnummer, Kategorie)
+                <input type="text" name="artikel_suche" list="artikelstamm"
+                       placeholder="Tippen zum Suchen …" autocomplete="off">
+                <datalist id="artikelstamm">
                     {% for a in artikel_liste %}
-                        <option value="{{ a.id }}">{{ a.pos_nr }} · {{ a.titel | truncate(60) }} · {{ a.e_preis_cent | euro }}</option>
+                        <option value="#{{ a.id }} · {{ a.pos_nr }} · {{ a.titel | truncate(70) }}{{ ' · ' ~ a.artikelnummer if a.artikelnummer }} · {{ a.kategorie | truncate(40) }} · {{ a.e_preis_cent | euro }}">
                     {% endfor %}
-                </select>
+                </datalist>
             </label>
         </div>
         <button class="knopf" type="submit">Hinzufügen</button>

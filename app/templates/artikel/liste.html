@@ -13,6 +13,16 @@
 
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
+{% if ohne_preis_anzahl and not fehlend %}
+<div class="warnblock">
+    <strong>{{ ohne_preis_anzahl }} Artikel ohne EK/VK</strong> –
+    <a href="/artikel?fehlend=true{{ '&inaktive=true' if inaktive }}">nur diese anzeigen</a>
+</div>
+{% elif fehlend %}
+<p class="meldung">Gefiltert: nur Artikel ohne EK oder VK.
+<a href="/artikel">Filter aufheben</a></p>
+{% endif %}
+
 <form method="get" action="/artikel" class="suchleiste">
     <input type="text" name="q" value="{{ q }}" placeholder="Suche: Pos-Nr., Bezeichnung, Beschreibung">
     <select name="kategorie">
@@ -38,6 +48,7 @@
             <th class="rechts">Menge</th>
             <th>Einheit</th>
             <th class="rechts">E-Preis netto</th>
+            <th class="rechts">EK Material</th>
             <th>Quelle</th>
             <th></th>
         </tr>
@@ -54,7 +65,9 @@
             <td class="dezent">{{ a.kategorie | truncate(40) }}</td>
             <td class="rechts">{{ a.menge_standard | menge }}</td>
             <td>{{ a.einheit }}</td>
-            <td class="rechts">{{ a.e_preis_cent | euro }}</td>
+            <td class="rechts {{ 'preis-fehlt' if not a.e_preis_cent }}">{{ a.e_preis_cent | euro }}</td>
+            <td class="rechts {{ 'preis-fehlt' if a.ek_cent is none }}">
+                {{ a.ek_cent | euro if a.ek_cent is not none else 'fehlt' }}</td>
             <td class="dezent">{{ a.quelle }}</td>
             <td class="aktionen">
                 <a class="knopf klein zweitrangig" href="/artikel/{{ a.id }}/bearbeiten">Bearbeiten</a>

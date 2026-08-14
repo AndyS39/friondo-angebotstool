@@ -20,6 +20,11 @@
 <div class="warnblock">{{ sync_status.fehler | join(' · ') }}</div>
 {% endif %}
 
+<form method="get" action="/leads" class="suchleiste">
+    <input type="text" name="q" value="{{ q }}" placeholder="Suche: Name, Ort, PLZ">
+    <button class="knopf" type="submit">Suchen</button>
+</form>
+
 {% if leads %}
 <table class="tabelle">
     <thead>

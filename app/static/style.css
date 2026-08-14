@@ -690,6 +690,13 @@ h2 { color: var(--friondo-dunkel); margin-top: 2rem; font-size: 1.15rem; }
     font-size: 0.95rem;
 }
 
+.preis-fehlt { background: #fdecec; color: #c0392b; font-weight: 600; }
+
+/* DB-Farbampel in der Angebotsliste (Phase 24) */
+.db-rot { color: #c0392b; font-weight: 700; }
+.db-orange { color: #b46a00; font-weight: 700; }
+.db-gruen { color: #2c6b22; font-weight: 700; }
+
 .abzeichen.status-versendet { background: #e3effa; color: #2c6cb0; }
 .abzeichen.status-angenommen { background: #e8f4e5; color: #4c9a3d; }
 .abzeichen.status-abgelehnt { background: #fbeaea; color: #c0392b; }

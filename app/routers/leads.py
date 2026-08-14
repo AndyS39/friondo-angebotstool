@@ -26,15 +26,21 @@ def offene_leads(session: Session, benutzer=None):
 
 
 @router.get("")
-async def liste(request: Request, session: Session = Depends(get_session)):
+async def liste(request: Request, q: str = "", session: Session = Depends(get_session)):
     from app import monday_sync
     benutzer = request.state.benutzer
     leads = offene_leads(session, benutzer)
+    if q:
+        suchwort = q.lower()
+        leads = [l for l in leads
+                 if suchwort in l.anzeige_name.lower()
+                 or suchwort in (l.ort or "").lower()
+                 or suchwort in (l.plz or "")]
     vertriebler = {b.id: b for b in session.query(Benutzer)}
     return render(request, "leads/liste.html", aktiv="/leads",
                   mobil=benutzer.rolle == "aussendienst",
                   leads=leads, vertriebler=vertriebler, benutzer=benutzer,
-                  sync_status=monday_sync.status,
+                  q=q, sync_status=monday_sync.status,
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -55,11 +61,8 @@ async def jetzt_aktualisieren(request: Request, session: Session = Depends(get_s
 @router.get("/{lead_id}/erfassen")
 async def erfassen(request: Request, lead_id: int,
                    session: Session = Depends(get_session)):
-    """Klick auf den Lead: Kunde anlegen/abgleichen (Name + PLZ), Erfassung
+    """Klick auf den Lead: Erfassung mit dem (per Sync angelegten) Kunden
     starten, Lead ↔ Kunde ↔ Erfassung verknüpfen."""
-    import re as _re
-
-    from app.models import Kunde
     benutzer = request.state.benutzer
     lead = session.get(Lead, lead_id)
     if lead is None:
@@ -67,27 +70,9 @@ async def erfassen(request: Request, lead_id: int,
     if benutzer.rolle == "aussendienst" and lead.benutzer_id != benutzer.id:
         return RedirectResponse("/leads", status_code=303)
 
-    # Duplikatabgleich: Nachname+Vorname (normalisiert) + PLZ
-    def normal(text):
-        return _re.sub(r"\s+", " ", (text or "").strip().lower())
-
-    kunde = None
-    if lead.kunde_id:
-        kunde = session.get(Kunde, lead.kunde_id)
-    if kunde is None:
-        for kandidat in session.query(Kunde).filter(Kunde.plz == lead.plz):
-            if (normal(kandidat.nachname) == normal(lead.nachname)
-                    and normal(kandidat.vorname) == normal(lead.vorname)):
-                kunde = kandidat
-                break
-    if kunde is None:
-        kunde = Kunde(anrede=lead.anrede, vorname=lead.vorname,
-                      nachname=lead.nachname, strasse=lead.strasse,
-                      plz=lead.plz, ort=lead.ort, telefon=lead.telefon,
-                      email=lead.email)
-        session.add(kunde)
-        session.flush()
-    lead.kunde_id = kunde.id
+    # Kunde ist seit Phase 24 schon per Sync angelegt; Abgleich hier als Fallback
+    from app.monday_sync import kunde_fuer_lead
+    kunde = kunde_fuer_lead(session, lead)
 
     if lead.erfassung_id:
         erfassung = session.get(Erfassung, lead.erfassung_id)

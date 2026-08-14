@@ -121,6 +121,28 @@ class Erfassung(Base):
     abgesendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
+class Einstellung(Base):
+    """Pflegbare Schlüssel/Wert-Einstellungen (Phase 24), z. B. DB-Ampel-Schwellen."""
+    __tablename__ = "einstellungen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(60), unique=True)
+    wert: Mapped[str] = mapped_column(String(300), default="")
+
+
+def einstellung_holen(session, name: str, standard: str) -> str:
+    zeile = session.query(Einstellung).filter(Einstellung.name == name).first()
+    return zeile.wert if zeile and zeile.wert != "" else standard
+
+
+def einstellung_setzen(session, name: str, wert: str) -> None:
+    zeile = session.query(Einstellung).filter(Einstellung.name == name).first()
+    if zeile is None:
+        zeile = Einstellung(name=name)
+        session.add(zeile)
+    zeile.wert = wert
+
+
 class MondayQuelle(Base):
     """monday-Quelle (Phase 22): Board + Gruppentitel; Gruppe wird über den
     Titel aufgelöst (robust bei Board-Kopien). fester_benutzer_id bildet die

@@ -152,6 +152,30 @@ def _normal(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").strip().lower())
 
 
+def kunde_fuer_lead(session: Session, lead: Lead):
+    """Phase 24: der Sync legt jeden Lead sofort als Kunden an bzw. aktualisiert
+    ihn (Duplikatabgleich Name + PLZ); nicht-leere monday-Werte gewinnen."""
+    from app.models import Kunde
+    kunde = session.get(Kunde, lead.kunde_id) if lead.kunde_id else None
+    if kunde is None:
+        for kandidat in session.query(Kunde).filter(Kunde.plz == lead.plz):
+            if (_normal(kandidat.nachname) == _normal(lead.nachname)
+                    and _normal(kandidat.vorname) == _normal(lead.vorname)):
+                kunde = kandidat
+                break
+    if kunde is None:
+        kunde = Kunde()
+        session.add(kunde)
+    for feld in ("anrede", "vorname", "nachname", "strasse", "plz", "ort",
+                 "telefon", "email"):
+        wert = getattr(lead, feld)
+        if wert:
+            setattr(kunde, feld, wert)
+    session.flush()
+    lead.kunde_id = kunde.id
+    return kunde
+
+
 def sync(session: Session | None = None) -> dict:
     """Ein Sync-Lauf über alle aktiven Quellen. Fehler je Quelle, nie blockierend."""
     eigen = session is None
@@ -226,6 +250,7 @@ def _quelle_syncen(session: Session, quelle: MondayQuelle,
                 continue   # Dedup: derselbe Kunde ist bereits aus einem anderen Board da
             session.add(lead)
             gesehen[schluessel] = lead.monday_item_id
+        kunde_fuer_lead(session, lead)   # Kunden sofort anlegen/aktualisieren (Phase 24)
         anzahl += 1
     return anzahl
 

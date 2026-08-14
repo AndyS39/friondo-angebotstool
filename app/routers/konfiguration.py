@@ -18,10 +18,28 @@ async def uebersicht(request: Request, session: Session = Depends(get_session)):
         return render(request, "konfiguration/uebersicht.html", aktiv="/parametrierung",
                       logik=None, bericht=None, dateifehler=str(config.LOGIK_EXCEL_PFAD),
                       meldung="")
+    from app.models import einstellung_holen
     logik, bericht = logik_modul.hole_logik(session)
     return render(request, "konfiguration/uebersicht.html", aktiv="/parametrierung",
                   logik=logik, bericht=bericht, dateifehler=None,
+                  db_rot=einstellung_holen(session, "db_ampel_rot_unter", "9000"),
+                  db_gruen=einstellung_holen(session, "db_ampel_gruen_ueber", "10000"),
                   meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/einstellungen")
+async def einstellungen_speichern(request: Request,
+                                  session: Session = Depends(get_session)):
+    """DB-Ampel-Schwellen (Phase 24) und weitere pflegbare Werte."""
+    from app.models import einstellung_setzen
+    form = await request.form()
+    for name in ("db_ampel_rot_unter", "db_ampel_gruen_ueber"):
+        wert = (form.get(name) or "").strip().replace(".", "")
+        if wert.isdigit():
+            einstellung_setzen(session, name, wert)
+    session.commit()
+    return RedirectResponse("/parametrierung?meldung=Einstellungen+gespeichert",
+                            status_code=303)
 
 
 @router.get("/monday")

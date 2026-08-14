@@ -46,10 +46,18 @@ async def liste(request: Request, q: str = "", status: str = "", ampel: str = ""
                            and suchwort in kunden[e.kunde_id].anzeige_name.lower())
                        or (e.benutzer_id in benutzer
                            and suchwort in benutzer[e.benutzer_id].name.lower())]
+    # Bemerkungs-Symbol (Phase 24): O08 (Objekt) / A12 (alte Anlage) gefüllt?
+    bemerkungen = {}
+    for e in erfassungen:
+        antworten = json.loads(e.antworten_json or "{}")
+        texte = [t for t in (antworten.get("O08"), antworten.get("A12"))
+                 if t and str(t).strip()]
+        if texte:
+            bemerkungen[e.id] = " · ".join(str(t) for t in texte)
     return render(request, "erfassungen/liste.html", aktiv="/erfassungen",
                   erfassungen=erfassungen, kunden=kunden, benutzer_map=benutzer,
                   angebote=angebote, q=q, status=status, ampel=ampel,
-                  status_liste=ERFASSUNG_STATUS,
+                  bemerkungen=bemerkungen, status_liste=ERFASSUNG_STATUS,
                   meldung=request.query_params.get("meldung", ""))
 
 
