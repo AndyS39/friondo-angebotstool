@@ -653,6 +653,21 @@ h2 { color: var(--friondo-dunkel); margin-top: 2rem; font-size: 1.15rem; }
 
 .hinweiszeile { display: block; font-weight: 400; margin-top: 0.15rem; }
 
+/* Hinweistext optisch vom Fragetitel getrennt (Phase 25) */
+.frage-hinweis {
+    margin: 0.35rem 0 0.2rem;
+    padding-left: 0.6rem;
+    border-left: 3px solid var(--grau-linie);
+    color: #777;
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+/* AMPEL-Auslöser im Protokoll (Phase 25) */
+.ampel-zeile, tr.ampel-zeile td {
+    background: #fdecec !important;
+}
+
 .feldfehler { color: #c0392b; margin: 0.3rem 0; font-size: 0.9rem; }
 
 .wahl-gruppe { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }

@@ -217,11 +217,22 @@ Vollmacht-Seite (Nachtext D): {{ 'ja (iMSys/SpotDynamic im Angebot)' if vollmach
 {% endif %}
 
 {% if protokoll %}
-<h2>Konfigurationsprotokoll (intern)</h2>
+<h2>Konfigurationsprotokoll (intern)
+    <a class="knopf klein zweitrangig" href="/angebote/{{ angebot.id }}/protokoll.pdf"
+       target="_blank">Protokoll-PDF</a>
+</h2>
 <table class="tabelle">
     <tbody>
     {% for p in protokoll %}
-        <tr><td class="dezent schmalspalte">{{ p.frage_id }}</td><td>{{ p.frage }}</td><td><strong>{{ p.antwort }}</strong></td></tr>
+        <tr class="{{ 'ampel-zeile' if p.get('ampel_grund') }}">
+            <td class="dezent schmalspalte">{{ p.frage_id }}</td>
+            <td>{{ p.frage }}</td>
+            <td><strong>{{ p.antwort }}</strong>
+                {% if p.get('ampel_grund') %}
+                    <br><span class="ampel orange">● {{ p.ampel_grund }}</span>
+                {% endif %}
+            </td>
+        </tr>
     {% endfor %}
     </tbody>
 </table>

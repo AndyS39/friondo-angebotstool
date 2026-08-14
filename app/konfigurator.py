@@ -228,12 +228,10 @@ def paket_aufloesen(logik: Logik, antworten: dict) -> Optional[list[ArtikelRef]]
 # --- Vorbelegungen (Blatt "KfW" / Fragen-Hinweise) -------------------------
 
 def vorbelegung(frage: Frage, antworten: dict) -> Optional[str]:
-    """Vorbelegte Werte: O03 (WE aus Objektart) und K02 (Klima aus A01+A02)."""
+    """Vorbelegte Werte: O03 (2 bei 2FH; Frage nur noch bei 2FH/MFH sichtbar)
+    und K02 (Klima aus A01+A02)."""
     if frage.id == ID_WOHNEINHEITEN:
-        objektart = str(antworten.get(ID_OBJEKTART) or "")
-        if objektart in EFH_ARTEN:
-            return "1"
-        if objektart == "2FH":
+        if str(antworten.get(ID_OBJEKTART) or "") == "2FH":
             return "2"
         return None
     if frage.id == "K02" and len(frage.antworten) >= 3:
@@ -262,8 +260,31 @@ def antwort_anzeige(frage: Frage, wert) -> str:
     return str(wert)
 
 
+def ampel_je_frage(logik: Logik, antworten: dict) -> dict[str, str]:
+    """Frage-ID -> AMPEL-Grund für alle Antworten, die „individuell“ auslösten."""
+    gruende: dict[str, str] = {}
+    for frage in sichtbare_fragen(logik, antworten):
+        if frage.id not in antworten:
+            continue
+        wert = antworten[frage.id]
+        if frage.typ == "Wiederholfeld" and isinstance(wert, list):
+            for einzel in wert:
+                treffer = aktion_finden(logik, frage, einzel, antworten)
+                if treffer and treffer[0].typ == "ampel":
+                    gruende[frage.id] = treffer[0].ampel_grund
+            continue
+        if isinstance(wert, (dict, list)) or frage.typ in FREITEXT_TYPEN:
+            continue
+        treffer = aktion_finden(logik, frage, wert, antworten)
+        if treffer and treffer[0].typ == "ampel":
+            gruende[frage.id] = treffer[0].ampel_grund
+    return gruende
+
+
 def protokoll(logik: Logik, antworten: dict) -> list[dict]:
-    """Konfigurationsprotokoll: alle sichtbaren beantworteten Fragen mit Antwort."""
+    """Konfigurationsprotokoll: alle sichtbaren beantworteten Fragen mit Antwort;
+    AMPEL-Auslöser tragen ihren Grund (Phase 25)."""
+    gruende = ampel_je_frage(logik, antworten)
     eintraege = []
     for frage in sichtbare_fragen(logik, antworten):
         if frage.id not in antworten:
@@ -273,6 +294,7 @@ def protokoll(logik: Logik, antworten: dict) -> list[dict]:
             "seite": frage.seite,
             "frage": frage.text,
             "antwort": antwort_anzeige(frage, antworten[frage.id]),
+            "ampel_grund": gruende.get(frage.id, ""),
         })
     return eintraege
 

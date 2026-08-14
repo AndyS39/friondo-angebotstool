@@ -24,8 +24,8 @@ PREISLISTE_PFAD = _pfad(
     "PREISLISTE_PFAD",
     PROJEKT_ORDNER / "Artikel-Preislisten" / "Angebotserstellung Tool mit EK.xlsx",
 )
-# Seit Phase 20 ist die v3-Logik führend (Dachzentrale, OR-Bedingungen, Rabatt-Summenblock)
-LOGIK_EXCEL_PFAD = _pfad("LOGIK_EXCEL_PFAD", PROJEKT_ORDNER / "konfigurator_logik_v3.xlsx")
+# Seit Phase 25 ist die v4-Logik führend (O03 nur bei 2FH/MFH, Brutto-Rabatt-Summenblock)
+LOGIK_EXCEL_PFAD = _pfad("LOGIK_EXCEL_PFAD", PROJEKT_ORDNER / "konfigurator_logik_v4.xlsx")
 LOGIK_EXCEL_V2_PFAD = LOGIK_EXCEL_PFAD  # Alias (Phase-11-Import nutzt diesen Namen)
 LOGO_ORDNER = _pfad("LOGO_ORDNER", PROJEKT_ORDNER / "Layout - Logo")
 DATA_ORDNER = _pfad("DATA_ORDNER", PROJEKT_ORDNER / "data")

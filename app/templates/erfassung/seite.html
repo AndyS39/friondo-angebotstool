@@ -18,9 +18,8 @@
         {% for frage in fragen %}
         <div class="fragefeld {{ 'verborgen' if not sichtbar[frage.id] }}"
              data-frage="{{ frage.id }}" data-regel='{{ client_regel(frage) }}'>
-            <label class="fragetitel">{{ frage.text }}
-                {% if frage.hinweis %}<span class="dezent hinweiszeile">{{ frage.hinweis }}</span>{% endif %}
-            </label>
+            <label class="fragetitel">{{ frage.text }}</label>
+            {% if frage.hinweis %}<p class="frage-hinweis">{{ frage.hinweis }}</p>{% endif %}
             {% if fehler.get(frage.id) %}<p class="feldfehler">{{ fehler[frage.id] }}</p>{% endif %}
 
             {% if frage.typ == 'Auswahl' %}
@@ -83,8 +82,10 @@
         const radio = document.querySelector(`input[name="f_${frageId}"]:checked`);
         if (radio) return radio.value;
         const feld = document.querySelector(`[name="f_${frageId}"]`);
-        return feld ? feld.value.trim() : null;
-    }
+        if (!feld) return null;                 // Frage liegt auf einer früheren Seite
+        if (feld.type === 'radio') return '';   // Auswahl auf DIESER Seite noch offen
+        return feld.value.trim();               // (Bugfix Phase 25: vorher lieferte das
+    }                                           //  value-Attribut des ersten Radios "Ja")
 
     function termErfuellt(term) {
         const w = wert(term.frage);

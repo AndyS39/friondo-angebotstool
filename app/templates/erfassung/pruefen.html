@@ -25,8 +25,11 @@
             {% set ns.seite = p.seite %}
             <h2>{{ p.seite }}</h2>
         {% endif %}
-        <div class="protokoll-zeile">
+        <div class="protokoll-zeile {{ 'ampel-zeile' if p.get('ampel_grund') }}">
             <span class="dezent">{{ p.frage }}</span><br><strong>{{ p.antwort }}</strong>
+            {% if p.get('ampel_grund') %}
+                <br><span class="ampel orange">● {{ p.ampel_grund }}</span>
+            {% endif %}
         </div>
     {% endfor %}
 

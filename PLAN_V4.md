@@ -18,18 +18,18 @@ Je Phase: Ansatz erläutern → umsetzen → testen → abhaken → committen.
       (Duplikatabgleich Name + PLZ); Bestands-Leads per Backfill versorgt
 
 ## Phase 25 – Protokoll & Logik v4
-- [ ] Protokoll-PDF: Download-Button an Erfassung und Angebot; Layout schlicht
+- [x] Protokoll-PDF: Download-Button an Erfassung und Angebot; Layout schlicht
       (Kopf mit Kunde/Datum/Vertriebler, Fragen je Kategorie)
-- [ ] AMPEL-Markierung: Fragen, die „individuell" ausgelöst haben, im Protokoll
-      (Ansicht UND PDF) farblich hervorheben, mit Grund-Text
-- [ ] konfigurator_logik_v4.xlsx einlesen: O03 (Anzahl WE) nur noch bei 2FH/MFH –
+- [x] AMPEL-Markierung: Fragen, die „individuell" ausgelöst haben, im Protokoll
+      (Ansicht UND PDF) farblich hervorgehoben, mit Grund-Text
+- [x] konfigurator_logik_v4.xlsx einlesen: O03 (Anzahl WE) nur noch bei 2FH/MFH –
       EFH/REH/RMH automatisch 1 WE, Gewerbe ohne WE-Frage
-- [ ] BUGFIX bedingte Anzeige im Seiten-Layout: Felder mit „Anzeigen wenn" müssen
-      beim Ändern der Antwort live ein-/ausblenden – konkret: D05 („Länge der zu
-      verlegenden Leitungen") erscheint aktuell immer, darf aber nur bei D04 = Ja
-      sichtbar sein; alle bedingten Fragen systematisch durchtesten
-- [ ] Darstellung: Hinweistext („Meter je Leitungsart" u. ä.) optisch getrennt vom
-      Fragetext rendern (aktuell klebt er am Titel)
+- [x] BUGFIX bedingte Anzeige: Radio-Gruppen ohne Auswahl lieferten im Seiten-JS
+      das value-Attribut des ersten Radios („Ja") – D05 erschien deshalb immer;
+      behoben und die bedingte Kette (D01–D05, A05/A06-ODER-Regel, Öl-Zweig)
+      systematisch im Browser durchgetestet
+- [x] Darstellung: Hinweistext optisch getrennt vom Fragetext (eigener kursiver
+      Block mit Randlinie)
 
 ## Phase 26 – Rabatt-Umstellung & PDF-Feinschliff
 - [ ] Rabatt neu: wird als BRUTTO-Betrag nach dem Gesamt-Betrag abgezogen –

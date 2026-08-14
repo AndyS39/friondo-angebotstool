@@ -82,6 +82,37 @@ async def detail(request: Request, erfassung_id: int,
                   meldung=request.query_params.get("meldung", ""))
 
 
+@router.get("/{erfassung_id}/protokoll.pdf")
+async def protokoll_pdf(erfassung_id: int, session: Session = Depends(get_session)):
+    """Abfrageprotokoll als PDF (Phase 25)."""
+    from fastapi.responses import FileResponse
+
+    from app import protokoll_pdf as protokoll_modul
+    erfassung = session.get(Erfassung, erfassung_id)
+    if erfassung is None:
+        return RedirectResponse("/erfassungen", status_code=303)
+    logik, _ = logik_modul.hole_logik(session)
+    antworten = json.loads(erfassung.antworten_json or "{}")
+    prot = engine.protokoll(logik, antworten)
+    kunde = session.get(Kunde, erfassung.kunde_id)
+    vertriebler = session.get(Benutzer, erfassung.benutzer_id)
+    kopf = [
+        ("Kunde", kunde.anzeige_name if kunde else "?"),
+        ("Adresse", f"{kunde.strasse}, {kunde.plz} {kunde.ort}".strip(", ") if kunde else ""),
+        ("Vertriebler", vertriebler.name if vertriebler else "?"),
+        ("Erfasst am", erfassung.abgesendet_am.strftime("%d.%m.%Y %H:%M")
+         if erfassung.abgesendet_am else "Entwurf"),
+        ("Status", erfassung.status),
+    ]
+    pfad = protokoll_modul.erzeuge_protokoll_pdf(
+        f"protokoll-erfassung-{erfassung.id}.pdf",
+        f"Erfassung {erfassung.id} · {kunde.anzeige_name if kunde else ''}",
+        kopf, prot, [g for g in erfassung.gruende_text.splitlines() if g])
+    return FileResponse(pfad, media_type="application/pdf",
+                        content_disposition_type="inline",
+                        filename=f"Protokoll-Erfassung-{erfassung.id}.pdf")
+
+
 @router.post("/{erfassung_id}/status")
 async def status_aendern(request: Request, erfassung_id: int,
                          session: Session = Depends(get_session)):

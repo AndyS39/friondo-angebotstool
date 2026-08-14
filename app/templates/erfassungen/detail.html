@@ -43,7 +43,10 @@
     {% endif %}
 </div>
 
-<h2>Antworten</h2>
+<h2>Antworten
+    <a class="knopf klein zweitrangig" href="/erfassungen/{{ erfassung.id }}/protokoll.pdf"
+       target="_blank">Protokoll-PDF</a>
+</h2>
 {% set ns = namespace(seite=None) %}
 {% for p in protokoll %}
     {% if p.seite != ns.seite %}
@@ -52,9 +55,12 @@
             <a class="aendern" href="/erfassung/{{ erfassung.id }}/seite/{{ seiten.index(p.seite) }}">korrigieren</a>
         </h2>
     {% endif %}
-    <div class="protokoll-zeile">
+    <div class="protokoll-zeile {{ 'ampel-zeile' if p.get('ampel_grund') }}">
         <span class="dezent">{{ p.frage_id }} · {{ p.frage }}</span><br>
         <strong>{{ p.antwort }}</strong>
+        {% if p.get('ampel_grund') %}
+            <br><span class="ampel orange">● Individuell: {{ p.ampel_grund }}</span>
+        {% endif %}
     </div>
 {% endfor %}
 

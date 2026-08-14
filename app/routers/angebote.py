@@ -253,6 +253,40 @@ async def rabatt_setzen(request: Request, angebot_id: int,
                             status_code=303)
 
 
+@router.get("/{angebot_id}/protokoll.pdf")
+async def protokoll_pdf(angebot_id: int, session: Session = Depends(get_session)):
+    """Abfrageprotokoll des Angebots als PDF (Phase 25)."""
+    from app import protokoll_pdf as protokoll_modul
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote", status_code=303)
+    prot = json.loads(angebot.protokoll_json or "[]")
+    if not prot:
+        return RedirectResponse(
+            f"/angebote/{angebot_id}?meldung=Kein+Abfrageprotokoll+vorhanden+(manuelles+Angebot)",
+            status_code=303)
+    kunde = session.get(Kunde, angebot.kunde_id)
+    from app.models import Benutzer, Erfassung
+    erfassung = (session.query(Erfassung)
+                 .filter(Erfassung.angebot_id == angebot.id).first())
+    vertriebler = session.get(Benutzer, erfassung.benutzer_id) if erfassung else None
+    kopf = [
+        ("Angebot", angebot.nummer),
+        ("Kunde", kunde.anzeige_name if kunde else "?"),
+        ("Adresse", f"{kunde.strasse}, {kunde.plz} {kunde.ort}".strip(", ") if kunde else ""),
+        ("Vertriebler", vertriebler.name if vertriebler else "–"),
+        ("Datum", angebot.datum.strftime("%d.%m.%Y")),
+    ]
+    gruende = [p["ampel_grund"] for p in prot if p.get("ampel_grund")]
+    pfad = protokoll_modul.erzeuge_protokoll_pdf(
+        f"protokoll-{angebot.nummer}.pdf",
+        f"Angebot {angebot.nummer} · {kunde.anzeige_name if kunde else ''}",
+        kopf, prot, sorted(set(gruende)))
+    return FileResponse(pfad, media_type="application/pdf",
+                        content_disposition_type="inline",
+                        filename=f"Protokoll-{angebot.nummer}.pdf")
+
+
 @router.get("/{angebot_id}/pdf")
 async def pdf_anzeigen(angebot_id: int, session: Session = Depends(get_session)):
     angebot = session.get(Angebot, angebot_id)
