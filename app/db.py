@@ -73,6 +73,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "signierte_datei": "VARCHAR(300) NOT NULL DEFAULT ''",
         "signatur_token": "VARCHAR(64)",
         "signatur_token_gueltig_bis": "DATETIME",
+        "graph_conversation_id": "VARCHAR(200)",
     },
 }
 

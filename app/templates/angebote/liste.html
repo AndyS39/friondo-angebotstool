@@ -37,7 +37,14 @@
     <tbody>
     {% for a in angebote %}
         <tr>
-            <td><a href="/angebote/{{ a.id }}">{{ a.nummer }}</a></td>
+            <td>
+                <a href="/angebote/{{ a.id }}">{{ a.nummer }}</a>
+                {% if mail_zaehler.get(a.id) %}
+                    <a class="mail-abzeichen" href="/angebote/{{ a.id }}/mails"
+                       title="{{ mail_zaehler[a.id] }} Antwort{{ 'en' if mail_zaehler[a.id] != 1 }} zur Angebots-Mail">
+                        ✉ {{ mail_zaehler[a.id] }}</a>
+                {% endif %}
+            </td>
             <td>{{ kunden[a.kunde_id].anzeige_name if a.kunde_id in kunden else '?' }}</td>
             <td>{{ a.datum.strftime('%d.%m.%Y') }}</td>
             <td><span class="abzeichen status-{{ a.status | lower }}">{{ a.status }}</span></td>

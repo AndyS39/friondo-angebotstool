@@ -22,9 +22,14 @@ App-Registrierung → **Authentifizierung** →
 ## 3. Berechtigung vergeben
 
 App-Registrierung → **API-Berechtigungen** → **Berechtigung hinzufügen** →
-**Microsoft Graph** → **Delegierte Berechtigungen** → `Mail.ReadWrite`
-auswählen → Hinzufügen. (Der Mitarbeiter stimmt bei der ersten Anmeldung
-selbst zu; alternativ „Administratorzustimmung erteilen".)
+**Microsoft Graph** → **Delegierte Berechtigungen** → `Mail.ReadWrite` und
+`Mail.Read` auswählen → Hinzufügen. (Der Mitarbeiter stimmt bei der ersten
+Anmeldung selbst zu; alternativ „Administratorzustimmung erteilen".)
+
+`Mail.Read` wird für den **Mail-Verlauf am Angebot** (Phase 27) benötigt:
+Das Tool ruft alle 15 Minuten die Nachrichten der Angebots-Konversation ab
+(nur lesend) und zeigt Antworten des Kunden in der Angebotsliste an.
+Es wird weiterhin nichts automatisch gesendet.
 
 ## 4. IDs in die .env eintragen
 
@@ -52,3 +57,13 @@ anschließend im Tool den Status auf „Versendet" setzen.
 
 **Übergangslösung, solange Graph nicht eingerichtet ist:** „PDF anzeigen" im
 Editor und die E-Mail manuell verfassen.
+
+## 7. Mail-Verlauf am Angebot (Phase 27)
+
+Beim „Versand vorbereiten" speichert das Tool die Konversations-ID der
+Angebots-Mail. Ein Hintergrund-Abruf (alle 15 Minuten, nur lesend) holt die
+Nachrichten dieser Konversation; für ältere Angebote ohne gespeicherte
+Konversations-ID wird ersatzweise nach dem Betreff mit der AN-C-Nummer
+gesucht. Antworten erscheinen in der Angebotsliste als Brief-Symbol mit
+Zähler; ein Klick öffnet den Mail-Verlauf (Absender, Zeitpunkt, Textauszug).
+Geantwortet wird weiterhin in Outlook – das Tool zeigt nur an.

@@ -46,9 +46,16 @@ async def liste(request: Request, q: str = "", status: str = "",
     from app.models import einstellung_holen
     rot_unter = int(einstellung_holen(session, "db_ampel_rot_unter", "9000"))
     gruen_ueber = int(einstellung_holen(session, "db_ampel_gruen_ueber", "10000"))
+    # Mail-Verlauf (Phase 27): eingehende Antworten je Angebot zählen
+    from sqlalchemy import func
+
+    from app.models import AngebotsMail
+    mail_zaehler = dict(session.query(AngebotsMail.angebot_id, func.count())
+                        .filter(AngebotsMail.eingehend.is_(True))
+                        .group_by(AngebotsMail.angebot_id))
     return render(request, "angebote/liste.html", aktiv="/angebote",
                   angebote=angebote, kunden=kunden, q=q, status=status,
-                  status_liste=ANGEBOT_STATUS,
+                  status_liste=ANGEBOT_STATUS, mail_zaehler=mail_zaehler,
                   db_rot_cent=rot_unter * 100, db_gruen_cent=gruen_ueber * 100,
                   meldung=request.query_params.get("meldung", ""))
 
@@ -328,16 +335,38 @@ async def email_entwurf(angebot_id: int, session: Session = Depends(get_session)
     pdf_pfad = pdf_export.pdf_fuer_angebot(session, angebot)
     logik, _ = logik_modul.hole_logik(session)
     anhaenge = anhaenge_modul.fuer_angebot(logik, angebot)
-    erfolg, meldung, weblink = graph_versand.entwurf_erstellen(
+    erfolg, meldung, weblink, conversation_id = graph_versand.entwurf_erstellen(
         kunde, angebot, pdf_pfad,
         weitere_anhaenge=[Path(a.pfad) for a in anhaenge if a.vorhanden],
         fehlende_anhaenge=[a.datei for a in anhaenge if not a.vorhanden])
+    if erfolg and conversation_id:
+        # Mail-Verlauf (Phase 27): Konversation der Angebots-Mail merken
+        angebot.graph_conversation_id = conversation_id
+        session.commit()
     ziel = f"/angebote/{angebot_id}?meldung={quote_plus(meldung)}"
     if erfolg:
         ziel += "&versand=1"
         if weblink:
             ziel += f"&weblink={quote_plus(weblink)}"
     return RedirectResponse(ziel, status_code=303)
+
+
+@router.get("/{angebot_id}/mails")
+async def mailverlauf(request: Request, angebot_id: int,
+                      session: Session = Depends(get_session)):
+    """Mail-Verlauf zur Angebots-Konversation (Phase 27, nur lesend)."""
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote?meldung=Angebot+nicht+gefunden", status_code=303)
+    from app import mail_sync
+    from app.models import AngebotsMail
+    mails = (session.query(AngebotsMail)
+             .filter(AngebotsMail.angebot_id == angebot.id)
+             .order_by(AngebotsMail.empfangen_am.desc().nullslast()).all())
+    kunde = session.get(Kunde, angebot.kunde_id)
+    return render(request, "angebote/mails.html", aktiv="/angebote",
+                  angebot=angebot, kunde=kunde, mails=mails,
+                  sync_status=mail_sync.status)
 
 
 @router.post("/{angebot_id}/status")

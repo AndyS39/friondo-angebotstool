@@ -239,6 +239,9 @@ class Angebot(Base):
     signatur_token: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     signatur_token_gueltig_bis: Mapped[Optional[datetime]] = mapped_column(DateTime,
                                                                            nullable=True)
+    # Mail-Verlauf (Phase 27): Konversations-ID der Angebots-Mail aus Graph
+    graph_conversation_id: Mapped[Optional[str]] = mapped_column(String(200),
+                                                                 nullable=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     positionen: Mapped[list["AngebotsPosition"]] = relationship(
@@ -327,3 +330,21 @@ class AngebotsPosition(Base):
         if self.bezeichnung:
             return self.bezeichnung
         return self.beschreibung.splitlines()[0] if self.beschreibung else ""
+
+
+class AngebotsMail(Base):
+    """Nachricht aus der Angebots-Konversation (Phase 27, nur lesend).
+    Wird alle 15 Minuten über Microsoft Graph abgerufen; graph_id dedupliziert."""
+    __tablename__ = "angebots_mails"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    angebot_id: Mapped[int] = mapped_column(ForeignKey("angebote.id"), index=True)
+    graph_id: Mapped[str] = mapped_column(String(300), unique=True)
+    von_name: Mapped[str] = mapped_column(String(200), default="")
+    von_email: Mapped[str] = mapped_column(String(200), default="")
+    empfangen_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    betreff: Mapped[str] = mapped_column(String(500), default="")
+    vorschau: Mapped[str] = mapped_column(Text, default="")   # bodyPreview aus Graph
+    # True = Antwort des Kunden (nicht vom eigenen Postfach gesendet)
+    eingehend: Mapped[bool] = mapped_column(Boolean, default=True)
+    angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

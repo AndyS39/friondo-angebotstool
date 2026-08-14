@@ -50,11 +50,11 @@ Je Phase: Ansatz erläutern → umsetzen → testen → abhaken → committen.
       genau diesem Angebot und weiteren langen Angeboten
 
 ## Phase 27 – Mail-Verlauf am Angebot
-- [ ] Graph-Berechtigung Mail.Read ergänzen (docs/graph-einrichtung.md erweitern)
-- [ ] Beim Versand conversationId der Angebots-Mail speichern; Abruf alle 15 Min:
+- [x] Graph-Berechtigung Mail.Read ergänzen (docs/graph-einrichtung.md erweitern)
+- [x] Beim Versand conversationId der Angebots-Mail speichern; Abruf alle 15 Min:
       neue Nachrichten der Konversation (Fallback: Betreff enthält AN-C-Nummer)
-- [ ] Angebotsliste: Brief-Symbol mit Zähler, wenn Antworten vorliegen
-- [ ] Klick → Mailverlauf-Ansicht (Absender, Zeitpunkt, Textauszug), nur lesend
+- [x] Angebotsliste: Brief-Symbol mit Zähler, wenn Antworten vorliegen
+- [x] Klick → Mailverlauf-Ansicht (Absender, Zeitpunkt, Textauszug), nur lesend
 
 ## Phase 28 – Fern-Signatur (Kunde signiert selbst)
 - [ ] Signatur-Link in die Angebots-Mail: Einmal-Token, Gültigkeitsdauer

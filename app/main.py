@@ -30,6 +30,9 @@ async def lifespan(app: FastAPI):
     finally:
         sitzung.close()
     monday_sync.scheduler_starten()
+    # Mail-Verlauf (Phase 27): Antworten der Angebots-Konversationen abrufen
+    from app import mail_sync
+    mail_sync.scheduler_starten()
     yield
 
 

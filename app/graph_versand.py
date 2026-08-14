@@ -12,7 +12,9 @@ from pathlib import Path
 from app import config
 from app.models import Angebot, Kunde
 
-SCOPES = ["Mail.ReadWrite"]
+# Mail.ReadWrite deckt das Lesen mit ab; Mail.Read steht zur Klarheit dabei,
+# weil der Mail-Verlauf (Phase 27) die Konversation nur lesend abruft.
+SCOPES = ["Mail.ReadWrite", "Mail.Read"]
 GRAPH = "https://graph.microsoft.com/v1.0"
 
 _token_cache = None
@@ -157,14 +159,17 @@ def _graph_aufruf(methode: str, pfad: str, token: str, daten: dict | None = None
 def entwurf_erstellen(kunde: Kunde, angebot: Angebot, pdf_pfad: Path,
                       weitere_anhaenge: list[Path] | None = None,
                       fehlende_anhaenge: list[str] | None = None
-                      ) -> tuple[bool, str, str]:
-    """Legt den Entwurf mit Anhängen im Postfach ab. Liefert (erfolg, meldung, weblink)."""
+                      ) -> tuple[bool, str, str, str]:
+    """Legt den Entwurf mit Anhängen im Postfach ab.
+    Liefert (erfolg, meldung, weblink, conversation_id) – die conversation_id
+    wird am Angebot gespeichert, damit der Mail-Verlauf (Phase 27) die
+    Antworten der Konversation zuordnen kann."""
     if not kunde.email:
         return False, ("Der Kunde hat keine E-Mail-Adresse – bitte zuerst in der "
-                       "Kundenverwaltung ergänzen."), ""
+                       "Kundenverwaltung ergänzen."), "", ""
     token = _token()
     if token is None:
-        return False, "Nicht bei Microsoft angemeldet – bitte unter „Versand“ anmelden.", ""
+        return False, "Nicht bei Microsoft angemeldet – bitte unter „Versand“ anmelden.", "", ""
     try:
         nachricht = {
             "subject": f"Ihr Wärmepumpen-Angebot {angebot.nummer} der Friondo GmbH",
@@ -185,7 +190,7 @@ def entwurf_erstellen(kunde: Kunde, angebot: Angebot, pdf_pfad: Path,
         if fehlende_anhaenge:
             meldung += (" Achtung, fehlende Anhang-Dateien im Ordner anlagen/: "
                         + ", ".join(fehlende_anhaenge))
-        return True, meldung, weblink
+        return True, meldung, weblink, entwurf.get("conversationId", "")
     except Exception as fehler:
         return False, (f"Entwurf konnte nicht erstellt werden: {fehler}. "
-                       "Alternativ das PDF herunterladen und manuell versenden."), ""
+                       "Alternativ das PDF herunterladen und manuell versenden."), "", ""

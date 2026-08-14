@@ -713,5 +713,19 @@ h2 { color: var(--friondo-dunkel); margin-top: 2rem; font-size: 1.15rem; }
 .db-gruen { color: #2c6b22; font-weight: 700; }
 
 .abzeichen.status-versendet { background: #e3effa; color: #2c6cb0; }
+
+/* Brief-Symbol mit Antwort-Zähler in der Angebotsliste (Phase 27) */
+.mail-abzeichen {
+    display: inline-block;
+    background: #e3effa;
+    color: #2c6cb0;
+    font-size: 0.78rem;
+    border-radius: 10px;
+    padding: 0.05rem 0.5rem;
+    margin-left: 0.35rem;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.mail-abzeichen:hover { background: #cfe3f7; }
 .abzeichen.status-angenommen { background: #e8f4e5; color: #4c9a3d; }
 .abzeichen.status-abgelehnt { background: #fbeaea; color: #c0392b; }

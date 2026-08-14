@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block titel %}Mail-Verlauf {{ angebot.nummer }} – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Mail-Verlauf zu {{ angebot.nummer }}</h1>
+    <a class="knopf klein zweitrangig" href="/angebote/{{ angebot.id }}">Zurück zum Angebot</a>
+</div>
+
+<p class="dezent">
+    Kunde: <strong>{{ kunde.anzeige_name if kunde }}</strong>
+    {% if kunde and kunde.email %} · {{ kunde.email }}{% endif %}
+    · Abruf alle 15 Minuten über Microsoft Graph (nur lesend)
+    {% if sync_status.letzter_lauf %}
+        · letzter Abruf {{ sync_status.letzter_lauf.strftime('%d.%m.%Y %H:%M') }}
+    {% endif %}
+</p>
+
+{% if sync_status.fehler %}
+<div class="warnblock">
+    {% for f in sync_status.fehler %}<p>⚠ {{ f }}</p>{% endfor %}
+</div>
+{% endif %}
+
+{% if mails %}
+<table class="tabelle">
+    <thead>
+        <tr>
+            <th>Zeitpunkt</th>
+            <th>Absender</th>
+            <th>Betreff / Textauszug</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for m in mails %}
+        <tr>
+            <td class="dezent">{{ m.empfangen_am.strftime('%d.%m.%Y %H:%M') if m.empfangen_am }}</td>
+            <td>
+                {{ m.von_name or m.von_email }}
+                {% if m.eingehend %}
+                    <span class="abzeichen status-versendet" title="Antwort des Kunden">Antwort</span>
+                {% else %}
+                    <span class="abzeichen" title="Vom eigenen Postfach gesendet">Gesendet</span>
+                {% endif %}
+            </td>
+            <td>
+                <strong>{{ m.betreff }}</strong>
+                {% if m.vorschau %}<br><span class="dezent">{{ m.vorschau | truncate(300) }}</span>{% endif %}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<p class="dezent">{{ mails | length }} Nachricht{{ 'en' if mails | length != 1 }} ·
+Antworten werden hier nur angezeigt – geantwortet wird in Outlook.</p>
+{% else %}
+<p class="hinweis">Noch keine Nachrichten zu diesem Angebot gefunden.
+    {% if not angebot.graph_conversation_id %}
+        Für dieses Angebot ist keine Konversations-ID gespeichert – der Abruf
+        sucht ersatzweise nach dem Betreff mit der Angebotsnummer.
+    {% endif %}
+</p>
+{% endif %}
+{% endblock %}
