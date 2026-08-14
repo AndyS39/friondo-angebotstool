@@ -47,16 +47,25 @@ def init_db() -> None:
 
 
 def taegliches_backup(aufbewahrung_tage: int = 30) -> None:
-    """Kopiert die SQLite-DB einmal pro Tag nach data/backups/ (beim App-Start);
-    Backups älter als die Aufbewahrungsfrist werden entfernt."""
-    import shutil
+    """Sichert die SQLite-DB einmal pro Tag nach data/backups/ (beim App-Start);
+    Backups älter als die Aufbewahrungsfrist werden entfernt. Seit dem
+    WAL-Modus über die SQLite-Backup-API statt Dateikopie: eine reine Kopie
+    der .db-Datei würde noch nicht eingespielte Änderungen aus der
+    -wal-Datei verlieren."""
+    import sqlite3
     from datetime import date, datetime, timedelta
 
     if not config.DB_PFAD.exists():
         return
     ziel = config.BACKUP_ORDNER / f"angebotstool-{date.today().isoformat()}.db"
     if not ziel.exists():
-        shutil.copy2(config.DB_PFAD, ziel)
+        quelle = sqlite3.connect(config.DB_PFAD)
+        sicherung = sqlite3.connect(ziel)
+        try:
+            quelle.backup(sicherung)
+        finally:
+            sicherung.close()
+            quelle.close()
     grenze = datetime.now() - timedelta(days=aufbewahrung_tage)
     for alt in config.BACKUP_ORDNER.glob("angebotstool-*.db"):
         if datetime.fromtimestamp(alt.stat().st_mtime) < grenze:
