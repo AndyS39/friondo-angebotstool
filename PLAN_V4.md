@@ -32,19 +32,19 @@ Je Phase: Ansatz erläutern → umsetzen → testen → abhaken → committen.
       Block mit Randlinie)
 
 ## Phase 26 – Rabatt-Umstellung & PDF-Feinschliff
-- [ ] Rabatt neu: wird als BRUTTO-Betrag nach dem Gesamt-Betrag abgezogen –
+- [x] Rabatt neu: wird als BRUTTO-Betrag nach dem Gesamt-Betrag abgezogen –
       Summenblock: Netto → 19 % USt → Gesamt-Betrag → − Rabatt → **= Endbetrag**
-- [ ] KfW: förderfähige Kosten = Endbetrag; DB zieht den Netto-Anteil des Rabatts
+- [x] KfW: förderfähige Kosten = Endbetrag; DB zieht den Netto-Anteil des Rabatts
       ab (Rabatt ÷ 1,19); Testfall: Kontroll-Szenario + 500 € Brutto-Rabatt →
       Endbetrag 34.758,95 €, Zuschuss 19.600,00 €, Eigenanteil 15.158,95 €
-- [ ] docs/: Hinweis, dass auf der späteren Rechnung (TAIFUN) der Rabatt vor der
+- [x] docs/: Hinweis, dass auf der späteren Rechnung (TAIFUN) der Rabatt vor der
       USt auszuweisen ist
-- [ ] Logos exakt wie im Referenz-PDF: Positionen/Größen der Bilder aus
+- [x] Logos exakt wie im Referenz-PDF: Positionen/Größen der Bilder aus
       „Angebot-Nr. AN250096.pdf" auslesen (z. B. pdfplumber Image-BBoxen) und
       1:1 übernehmen (Seite 1 Logo-Leiste, Folgeseiten Logo rechts oben)
-- [ ] Eigenanteil hervorheben: Zeile „Eigenanteil" fett, größer, dezente farbige
+- [x] Eigenanteil hervorheben: Zeile „Eigenanteil" fett, größer, dezente farbige
       Hinterlegung – muss auf einen Blick ins Auge springen
-- [ ] BUGFIX Leerseite: Angebot AN-C-261015 (ID 16) reproduziert eine komplett
+- [x] BUGFIX Leerseite: Angebot AN-C-261015 (ID 16) reproduziert eine komplett
       leere Seite 5 – Seitenumbruch-Logik prüfen (Verdacht: Umbruch vor Gruppen-
       überschrift oder langer Beschreibung erzeugt Leerseite); Fix + Test mit
       genau diesem Angebot und weiteren langen Angeboten

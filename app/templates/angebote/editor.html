@@ -93,13 +93,13 @@
 
 <table class="tabelle zusammenfassung summenblock">
     <tr><th>Netto-Summe</th><td class="rechts">{{ summen.netto | euro }}</td></tr>
+    <tr><th>19 % USt.</th><td class="rechts">{{ summen.ust | euro }}</td></tr>
+    <tr><th>Gesamt-Betrag</th><td class="rechts">{{ summen.brutto | euro }}</td></tr>
     {% if summen.rabatt %}
     <tr><th>− Rabatt{{ ' (' ~ angebot.rabatt_bezeichnung ~ ')' if angebot.rabatt_bezeichnung }}</th>
         <td class="rechts">{{ summen.rabatt | euro }}</td></tr>
-    <tr><th>Netto nach Rabatt</th><td class="rechts">{{ summen.netto_nach_rabatt | euro }}</td></tr>
     {% endif %}
-    <tr><th>19 % USt.</th><td class="rechts">{{ summen.ust | euro }}</td></tr>
-    <tr><th>Gesamt-Betrag brutto</th><td class="rechts"><strong>{{ summen.brutto | euro }}</strong></td></tr>
+    <tr><th>= Endbetrag</th><td class="rechts"><strong>{{ summen.endbetrag | euro }}</strong></td></tr>
 </table>
 <p class="dezent">EP-Positionen (Eventualpositionen) sind nicht in der Summe enthalten.</p>
 
@@ -116,7 +116,7 @@
     <input type="text" name="bezeichnung" placeholder="Bezeichnung (optional)"
            value="{{ angebot.rabatt_bezeichnung }}">
     <button class="knopf klein" type="submit">Übernehmen</button>
-    <span class="dezent">leer = Rabatt entfernen · USt. wird auf den rabattierten Betrag gerechnet</span>
+    <span class="dezent">leer = Rabatt entfernen · Abzug vom Brutto-Gesamtbetrag (Endbetrag)</span>
 </form>
 
 {# Deckungsbeitrag: nur Innendienst-Ansicht, erscheint NIE im PDF #}

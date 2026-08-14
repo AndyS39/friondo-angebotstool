@@ -245,33 +245,33 @@ class Angebot(Base):
         back_populates="angebot", order_by="AngebotsPosition.sort",
         cascade="all, delete-orphan")
 
-    def rabatt_effektiv_cent(self, netto_cent: int) -> int:
-        """Rabatt in Cent (Betrag direkt, Prozent vom Netto), nie über dem Netto."""
+    def rabatt_effektiv_cent(self, brutto_cent: int) -> int:
+        """Rabatt in Cent (Betrag direkt, Prozent vom Brutto), nie über dem Brutto.
+        Seit Phase 26 ist der Rabatt ein BRUTTO-Abzug nach dem Gesamt-Betrag."""
         if self.rabatt_cent:
-            return min(self.rabatt_cent, netto_cent)
+            return min(self.rabatt_cent, brutto_cent)
         if self.rabatt_prozent:
-            betrag = int((Decimal(netto_cent) * Decimal(str(self.rabatt_prozent))
+            betrag = int((Decimal(brutto_cent) * Decimal(str(self.rabatt_prozent))
                           / 100).quantize(Decimal("1")))
-            return min(betrag, netto_cent)
+            return min(betrag, brutto_cent)
         return 0
 
     def summen(self) -> dict:
-        """Netto − Rabatt = Netto nach Rabatt → 19 % USt → Brutto (Phase 21);
-        EP-Positionen zählen nicht mit, der Rabatt ist keine Position."""
+        """Netto → 19 % USt → Gesamt-Betrag → − Rabatt (brutto) → = Endbetrag
+        (Phase 26); EP-Positionen zählen nicht mit, der Rabatt ist keine Position."""
         netto = 0
         for p in self.positionen:
             if not p.ep_flag:
                 netto += p.gesamt_cent
-        rabatt = self.rabatt_effektiv_cent(netto)
-        netto_nach_rabatt = netto - rabatt
-        ust = int(Decimal(netto_nach_rabatt) * Decimal("0.19"))
-        return {"netto": netto, "rabatt": rabatt,
-                "netto_nach_rabatt": netto_nach_rabatt,
-                "ust": ust, "brutto": netto_nach_rabatt + ust}
+        ust = int(Decimal(netto) * Decimal("0.19"))
+        brutto = netto + ust
+        rabatt = self.rabatt_effektiv_cent(brutto)
+        return {"netto": netto, "ust": ust, "brutto": brutto,
+                "rabatt": rabatt, "endbetrag": brutto - rabatt}
 
     def deckungsbeitrag(self) -> dict:
-        """Σ VK netto (nach Rabatt) − Σ Material-EK (ohne EP). Nur Innendienst,
-        nie im PDF. Der Rabatt mindert den Deckungsbeitrag (Phase 21)."""
+        """Σ VK netto − Σ Material-EK (ohne EP). Nur Innendienst, nie im PDF.
+        Der Brutto-Rabatt mindert den DB um seinen Netto-Anteil (÷ 1,19; Phase 26)."""
         vk = 0
         ek = 0
         ohne_ek = []
@@ -284,12 +284,14 @@ class Angebot(Base):
             else:
                 ek += int((Decimal(str(p.menge)) * Decimal(p.ek_cent))
                           .quantize(Decimal("1")))
-        rabatt = self.rabatt_effektiv_cent(vk)
-        vk_nach_rabatt = vk - rabatt
+        rabatt_brutto = self.rabatt_effektiv_cent(self.summen()["brutto"])
+        rabatt_netto = int((Decimal(rabatt_brutto) / Decimal("1.19"))
+                           .quantize(Decimal("1")))
+        vk_nach_rabatt = max(0, vk - rabatt_netto)
         db = vk_nach_rabatt - ek
         prozent = (db / vk_nach_rabatt * 100) if vk_nach_rabatt else 0.0
         return {"vk": vk_nach_rabatt, "ek": ek, "db": db, "prozent": prozent,
-                "rabatt": rabatt, "ohne_ek": ohne_ek}
+                "rabatt": rabatt_netto, "ohne_ek": ohne_ek}
 
 
 class AngebotsPosition(Base):

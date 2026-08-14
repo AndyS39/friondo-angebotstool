@@ -108,7 +108,7 @@ async def editor(request: Request, angebot_id: int,
         logik, bericht = logik_modul.hole_logik(session)
         if bericht is not None:
             parameter, _ = kfw.parameter_lesen(logik)
-            eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["brutto"])
+            eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["endbetrag"])
             if eingaben is not None:
                 kfw_ergebnis = kfw.berechnen(parameter, eingaben)
                 kfw_warnung = kfw.gueltigkeits_warnung(parameter)

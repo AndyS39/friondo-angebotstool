@@ -31,9 +31,18 @@ FUSSZEILE = [
 
 ABSENDERZEILE = "Friondo GmbH · Arnold-Overbeck-Str. 63-65 · 47139 Duisburg"
 
-# Logo-Leiste Seite 1 (Reihenfolge lt. ANGEBOTSTEXTE.md)
-LOGO_LEISTE = ["badge_innung.png", "badge_bosch_premium.png", "badge_energy_awards.png",
-               "friondo_logo.png", "badge_fachbetrieb_wp.png", "badge_bosch_split.png"]
+# Logo-Leiste Seite 1: Positionen/Größen exakt aus dem Referenz-PDF ausgelesen
+# (pdfplumber-Image-BBoxen, Phase 26) – zweizeilige Anordnung wie im Original.
+LOGO_LEISTE = [
+    ("badge_innung.png",         20.8, 16.9, 29.9),   # (Datei, x, y, Breite in mm)
+    ("badge_bosch_premium.png",  54.0, 16.9, 19.9),
+    ("badge_energy_awards.png",  90.8, 16.4, 39.8),
+    ("friondo_logo.png",        144.5, 13.8, 51.9),
+    ("badge_bosch_split.png",    20.8, 37.2, 52.9),
+    ("badge_fachbetrieb_wp.png", 160.5, 36.2, 32.4),
+]
+# Folgeseiten: Friondo-Logo rechts oben, Maße aus der Referenz (Seite 2)
+FOLGESEITEN_LOGO = ("friondo_logo_gross.png", 119.0, 7.4, 79.4)
 
 
 def _euro_betrag(cent: int) -> str:
@@ -79,35 +88,22 @@ class AngebotsPdf(FPDF):
         if self.page_no() == 1:
             self._logo_leiste()
         else:
+            # Kopfzeile unterhalb des Logos, Positionen wie in der Referenz
+            datei, x, y, breite = FOLGESEITEN_LOGO
+            self.image(ASSETS / datei, x=x, y=y, w=breite)
             self.set_font("Arial", "B", 10)
-            self.set_xy(self.l_margin, 12)
-            self.cell(110, 6, f"A N G E B O T - Nr.: {self.nummer}")
+            self.set_xy(self.l_margin, 46)
+            self.cell(120, 6, f"A N G E B O T - Nr.: {self.nummer}")
             self.set_font("Arial", "", 10)
-            self.cell(30, 6, f"Seite: {self.page_no()}")
-            self.image(ASSETS / "friondo_logo_gross.png", x=self.w - 58, y=8, w=38)
-            self.set_y(26)
+            self.set_x(169.4)
+            self.cell(0, 6, f"Seite: {self.page_no()}")
+            self.set_y(54.5)
 
     def _logo_leiste(self):
-        """Sechs Badges nebeneinander am oberen Rand von Seite 1 (in Box eingepasst)."""
-        hoehe = 13.0
-        max_breite = 32.0
-        luecke = 3.0
-        masse = []
-        for name in LOGO_LEISTE:
-            from PIL import Image
-            with Image.open(ASSETS / name) as im:
-                b, h = im.size
-            seitenverhaeltnis = b / h
-            breite = hoehe * seitenverhaeltnis
-            if breite > max_breite:
-                breite = max_breite
-            masse.append((name, breite, breite / seitenverhaeltnis))
-        gesamt = sum(b for _, b, _ in masse) + luecke * (len(masse) - 1)
-        x = self.l_margin + max(0.0, (self.inhaltsbreite - gesamt) / 2)
-        for name, breite, bild_hoehe in masse:
-            self.image(ASSETS / name, x=x, y=10 + (hoehe - bild_hoehe) / 2, w=breite)
-            x += breite + luecke
-        self.set_y(28)
+        """Logo-Leiste Seite 1: Positionen exakt wie im Referenz-PDF (Phase 26)."""
+        for datei, x, y, breite in LOGO_LEISTE:
+            self.image(ASSETS / datei, x=x, y=y, w=breite)
+        self.set_y(47)
 
     def footer(self):
         self.set_y(-36)
@@ -180,7 +176,7 @@ def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde):
 
     pdf.set_font("Arial", "", 6.5)
     pdf.set_text_color(100, 100, 100)
-    pdf.set_y(34)
+    pdf.set_y(49.3)   # unterhalb der zweizeiligen Logo-Leiste (wie Referenz: 49,6 mm)
     pdf.cell(0, 3, ABSENDERZEILE, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_text_color(0, 0, 0)
 
@@ -319,7 +315,14 @@ def _positionsteil(pdf: AngebotsPdf, angebot: Angebot):
             gruppen_hoehe = len(gruppen_zeilen) * 4.2 + 3
 
         if pdf.get_y() + gruppen_hoehe + min(block_hoehe, 40) > pdf.page_break_trigger:
+            # Bugfix Leerseite (Phase 26): steht der Cursor näher als die
+            # Zeilenhöhe an der Umbruchgrenze, würde cell() in der Übertrag-
+            # Zeile selbst eine Seite anlegen und das add_page() darunter
+            # eine (fast) leere Seite erzeugen. Der Platz bis zur Fußzeile
+            # reicht immer aus, daher hier ohne automatischen Umbruch zeichnen.
+            pdf.set_auto_page_break(False)
             _uebertrag_zeile(pdf, uebertrag_cent)
+            pdf.set_auto_page_break(True, 42)
             pdf.add_page()
             _tabellenkopf(pdf)
             _uebertrag_zeile(pdf, uebertrag_cent)
@@ -373,14 +376,17 @@ def _summen_und_kfw(pdf: AngebotsPdf, angebot: Angebot, ergebnis):
     pdf.set_draw_color(120, 120, 120)
     pdf.line(pdf.l_margin + 70, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
     pdf.ln(1.5)
+    # Phase 26: Netto → USt → Gesamt-Betrag → − Rabatt (brutto) → = Endbetrag
     _summen_zeile(pdf, "Netto-Summe", summen["netto"])
+    _summen_zeile(pdf, "19,00 % USt.", summen["ust"])
     if summen.get("rabatt"):
+        _summen_zeile(pdf, "Gesamt-Betrag", summen["brutto"])
         bezeichnung = angebot.rabatt_bezeichnung
         _summen_zeile(pdf, "− Rabatt" + (f" ({bezeichnung})" if bezeichnung else ""),
                       summen["rabatt"])
-        _summen_zeile(pdf, "Netto nach Rabatt", summen["netto_nach_rabatt"])
-    _summen_zeile(pdf, "19,00 % USt.", summen["ust"])
-    _summen_zeile(pdf, "Gesamt-Betrag", summen["brutto"], fett=True)
+        _summen_zeile(pdf, "= Endbetrag", summen["endbetrag"], fett=True)
+    else:
+        _summen_zeile(pdf, "Gesamt-Betrag", summen["brutto"], fett=True)
 
     if ergebnis is None:
         return
@@ -398,9 +404,21 @@ def _summen_und_kfw(pdf: AngebotsPdf, angebot: Angebot, ergebnis):
     pdf.set_font("Arial", "", 9)
     pdf.cell(0, 5, ergebnis.satz_text, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(2)
-    _summen_zeile(pdf, "Angebotssumme (brutto)", summen["brutto"])
+    _summen_zeile(pdf, "Angebotssumme (Endbetrag)", summen["endbetrag"])
     _summen_zeile(pdf, "− voraussichtliche Förderung", ergebnis.zuschuss_cent)
-    _summen_zeile(pdf, "= Eigenanteil", ergebnis.eigenanteil_cent, fett=True)
+    # Eigenanteil hervorheben (Phase 26): fett, größer, dezente Hinterlegung
+    pdf.ln(1)
+    y = pdf.get_y()
+    pdf.set_fill_color(232, 244, 229)
+    pdf.rect(pdf.l_margin + 68, y - 0.8, pdf.w - pdf.r_margin - pdf.l_margin - 68, 9, "F")
+    pdf.set_font("Arial", "B", 12)
+    pdf.set_text_color(44, 107, 34)
+    pdf.set_x(pdf.l_margin + 70)
+    pdf.cell(60, 7.5, "= Eigenanteil")
+    pdf.cell(10, 7.5, "€")
+    pdf.cell(30, 7.5, _euro_betrag(ergebnis.eigenanteil_cent), align="R",
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_text_color(0, 0, 0)
     pdf.ln(2)
     pdf.set_font("Arial", "B", 9)
     pdf.cell(0, 5, ergebnis.programm, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -634,7 +652,7 @@ def signiertes_pdf_erzeugen(session, angebot: Angebot, png_bytes: bytes,
     if kfw_daten.get("O01"):
         logik, _ = logik_modul.hole_logik(session)
         parameter, _warn = kfw.parameter_lesen(logik)
-        eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["brutto"])
+        eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["endbetrag"])
         if eingaben is not None:
             ergebnis = kfw.berechnen(parameter, eingaben)
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as datei:
@@ -661,7 +679,7 @@ def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
     if kfw_daten.get("O01"):
         logik, _ = logik_modul.hole_logik(session)
         parameter, _warn = kfw.parameter_lesen(logik)
-        eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["brutto"])
+        eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["endbetrag"])
         if eingaben is not None:
             ergebnis = kfw.berechnen(parameter, eingaben)
     return erzeuge_pdf(angebot, kunde, ergebnis,
