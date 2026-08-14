@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
-from app import angebot_aufbau, kfw
+from app import angebot_aufbau, kfw, sperren
 from app import logik as logik_modul
 from app.db import get_session
 from app.models import (ANGEBOT_STATUS, Angebot, AngebotsPosition, Artikel,
@@ -18,6 +18,20 @@ from app.routers.artikel import preis_parsen
 from app.templating import render
 
 router = APIRouter(prefix="/angebote")
+
+
+def _sperr_umleitung(request: Request, angebot_id: int):
+    """Bearbeitungssperre für POST-Routen: hält ein anderer Benutzer das
+    Angebot gerade im Editor, wird die Änderung abgewiesen (None = frei)."""
+    benutzer = request.state.benutzer
+    halter = sperren.gesperrt_fuer(angebot_id, benutzer.id if benutzer else 0)
+    if halter is None:
+        return None
+    from urllib.parse import quote_plus
+    return RedirectResponse(
+        f"/angebote/{angebot_id}?meldung=" + quote_plus(
+            f"Keine Änderung möglich – wird gerade von {halter['name']} bearbeitet."),
+        status_code=303)
 
 
 def _kunden_map(session: Session, angebote) -> dict[int, Kunde]:
@@ -90,6 +104,11 @@ async def editor(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
         return RedirectResponse("/angebote?meldung=Angebot+nicht+gefunden", status_code=303)
+    # Bearbeitungssperre: Erster im Editor hält das Angebot, andere lesen nur
+    benutzer = request.state.benutzer
+    sperr_halter = sperren.erwerben(angebot.id, benutzer.id if benutzer else 0,
+                                    benutzer.name if benutzer else "?")
+    nur_lesen = sperr_halter is not None
     kunde = session.get(Kunde, angebot.kunde_id)
     artikel_liste = (session.query(Artikel).filter(Artikel.aktiv.is_(True))
                      .order_by(Artikel.pos_nr).all())
@@ -133,14 +152,37 @@ async def editor(request: Request, angebot_id: int,
                   protokoll=protokoll, status_liste=ANGEBOT_STATUS,
                   kfw_ergebnis=kfw_ergebnis, kfw_warnung=kfw_warnung,
                   anhaenge_liste=anhaenge_liste, vollmacht=vollmacht,
+                  nur_lesen=nur_lesen, sperr_halter=sperr_halter,
                   versand=request.query_params.get("versand", ""),
                   weblink=request.query_params.get("weblink", ""),
                   meldung=request.query_params.get("meldung", ""))
 
 
+@router.post("/{angebot_id}/sperre")
+async def sperre_verlaengern(request: Request, angebot_id: int):
+    """Heartbeat des offenen Editors (alle 4 Minuten per JS)."""
+    benutzer = request.state.benutzer
+    ok = sperren.verlaengern(angebot_id, benutzer.id if benutzer else 0)
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"ok": ok})
+
+
+@router.post("/{angebot_id}/sperre-frei")
+async def sperre_freigeben(request: Request, angebot_id: int):
+    """Freigabe beim Verlassen der Seite (sendBeacon); sonst läuft die
+    Sperre nach 10 Minuten ohne Heartbeat von selbst ab."""
+    benutzer = request.state.benutzer
+    if benutzer is not None:
+        sperren.freigeben(angebot_id, benutzer.id)
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"ok": True})
+
+
 @router.post("/{angebot_id}/position/{position_id}/menge")
 async def menge_aendern(request: Request, angebot_id: int, position_id: int,
                         session: Session = Depends(get_session)):
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
     form = await request.form()
     position = session.get(AngebotsPosition, position_id)
     if position and position.angebot_id == angebot_id:
@@ -153,8 +195,10 @@ async def menge_aendern(request: Request, angebot_id: int, position_id: int,
 
 
 @router.post("/{angebot_id}/position/{position_id}/entfernen")
-async def position_entfernen(angebot_id: int, position_id: int,
+async def position_entfernen(request: Request, angebot_id: int, position_id: int,
                              session: Session = Depends(get_session)):
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
     position = session.get(AngebotsPosition, position_id)
     if position and position.angebot_id == angebot_id:
         session.delete(position)
@@ -165,6 +209,8 @@ async def position_entfernen(angebot_id: int, position_id: int,
 @router.post("/{angebot_id}/position-neu")
 async def position_neu(request: Request, angebot_id: int,
                        session: Session = Depends(get_session)):
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
         return RedirectResponse("/angebote", status_code=303)
@@ -230,6 +276,8 @@ async def rabatt_setzen(request: Request, angebot_id: int,
                         session: Session = Depends(get_session)):
     """Rabatt (Phase 21): Betrag ODER Prozent + optionale Bezeichnung;
     leerer Wert entfernt den Rabatt. Nur Innendienst/Admin (Middleware)."""
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
         return RedirectResponse("/angebote", status_code=303)
@@ -385,6 +433,8 @@ async def mailverlauf(request: Request, angebot_id: int,
 @router.post("/{angebot_id}/status")
 async def status_aendern(request: Request, angebot_id: int,
                          session: Session = Depends(get_session)):
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
     form = await request.form()
     angebot = session.get(Angebot, angebot_id)
     neuer_status = form.get("status", "")

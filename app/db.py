@@ -2,7 +2,7 @@
 # Die Modelle der einzelnen Phasen registrieren sich an Base; init_db() legt
 # beim App-Start alle noch fehlenden Tabellen an.
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app import config
@@ -11,6 +11,19 @@ engine = create_engine(
     config.DB_URL,
     connect_args={"check_same_thread": False},  # FastAPI: Zugriff aus mehreren Threads
 )
+
+
+@event.listens_for(engine, "connect")
+def _sqlite_einstellen(verbindung, _):
+    """WAL-Modus: Leser blockieren Schreiber nicht (mehrere gleichzeitige
+    Benutzer + Hintergrund-Syncs). Der Modus ist in der DB-Datei persistent,
+    das Setzen je Verbindung ist idempotent; busy_timeout überbrückt kurze
+    Schreibkonflikte statt sofort 'database is locked' zu werfen."""
+    zeiger = verbindung.cursor()
+    zeiger.execute("PRAGMA journal_mode=WAL")
+    zeiger.execute("PRAGMA synchronous=NORMAL")
+    zeiger.execute("PRAGMA busy_timeout=5000")
+    zeiger.close()
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 

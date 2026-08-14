@@ -6,6 +6,9 @@
 <div class="seitenkopf">
     <h1>Angebot {{ angebot.nummer }}</h1>
     <div class="aktionen">
+        {% if nur_lesen %}
+            <span class="abzeichen status-versendet">{{ angebot.status }}</span>
+        {% else %}
         <form method="post" action="/angebote/{{ angebot.id }}/status" class="statusform">
             <select name="status" onchange="this.form.submit()">
                 {% for s in status_liste %}
@@ -13,16 +16,28 @@
                 {% endfor %}
             </select>
         </form>
+        {% endif %}
         <form method="post" action="/angebote/{{ angebot.id }}/duplizieren">
             <button class="knopf klein zweitrangig" type="submit">Duplizieren</button>
         </form>
         <a class="knopf klein" href="/angebote/{{ angebot.id }}/pdf" target="_blank">PDF anzeigen</a>
+        {% if not nur_lesen %}
         <a class="knopf klein" href="/signatur/{{ angebot.id }}">Signieren</a>
         <form method="post" action="/angebote/{{ angebot.id }}/email">
             <button class="knopf klein" type="submit">Versand vorbereiten</button>
         </form>
+        {% endif %}
     </div>
 </div>
+
+{% if nur_lesen %}
+<div class="warnblock sperrhinweis">
+    <strong>🔒 Wird gerade von {{ sperr_halter.name }} bearbeitet.</strong>
+    Das Angebot ist solange schreibgeschützt – die Ansicht ist nur lesend.
+    Die Sperre endet spätestens 5 Minuten nachdem {{ sperr_halter.name }}
+    den Editor geschlossen hat; danach die Seite einfach neu laden.
+</div>
+{% endif %}
 
 <p class="dezent">
     Kunde: <strong>{{ kunde.anzeige_name if kunde }}</strong>
@@ -73,17 +88,23 @@
                     <span class="beschreibung">{{ p.beschreibung | truncate(220) }}</span>
                 </td>
                 <td class="rechts">
+                    {% if nur_lesen %}
+                        {{ p.menge | menge }}
+                    {% else %}
                     <form method="post" action="/angebote/{{ angebot.id }}/position/{{ p.id }}/menge" class="mengenform">
                         <input type="text" name="menge" value="{{ p.menge | menge }}" size="4">
                     </form>
+                    {% endif %}
                 </td>
                 <td>{{ p.einheit }}</td>
                 <td class="rechts">{{ p.e_preis_cent | euro }}</td>
                 <td class="rechts">{% if p.ep_flag %}EP.{% else %}{{ p.gesamt_cent | euro }}{% endif %}</td>
                 <td class="aktionen">
+                    {% if not nur_lesen %}
                     <form method="post" action="/angebote/{{ angebot.id }}/position/{{ p.id }}/entfernen">
                         <button class="knopf klein zweitrangig" type="submit" title="Position entfernen">✕</button>
                     </form>
+                    {% endif %}
                 </td>
             </tr>
         {% endfor %}
@@ -104,6 +125,7 @@
 <p class="dezent">EP-Positionen (Eventualpositionen) sind nicht in der Summe enthalten.</p>
 
 {# Rabatt (Phase 21): nur Innendienst/Admin – der Außendienst erreicht den Editor nicht #}
+{% if not nur_lesen %}
 <form method="post" action="/angebote/{{ angebot.id }}/rabatt" class="suchleiste rabattform">
     <strong>Rabatt:</strong>
     <input type="text" name="wert" size="10" placeholder="z. B. 500,00"
@@ -118,6 +140,7 @@
     <button class="knopf klein" type="submit">Übernehmen</button>
     <span class="dezent">leer = Rabatt entfernen · Abzug vom Brutto-Gesamtbetrag (Endbetrag)</span>
 </form>
+{% endif %}
 
 {# Deckungsbeitrag: nur Innendienst-Ansicht, erscheint NIE im PDF #}
 <div class="db-box">
@@ -162,6 +185,7 @@
 <p class="dezent"><em>{{ kfw_ergebnis.disclaimer }}</em></p>
 {% endif %}
 
+{% if not nur_lesen %}
 <h2>Position hinzufügen</h2>
 <div class="konfigurator-spalten">
     <form method="post" action="/angebote/{{ angebot.id }}/position-neu" class="formular konfigurator-haupt">
@@ -197,6 +221,7 @@
         <div class="formaktionen"><button class="knopf" type="submit">Hinzufügen</button></div>
     </form>
 </div>
+{% endif %}
 
 <h2>Versand-Anhänge</h2>
 <p class="dezent">PDF-Anlage: Angebot {{ angebot.nummer }} ·
@@ -236,5 +261,17 @@ Vollmacht-Seite (Nachtext D): {{ 'ja (iMSys/SpotDynamic im Angebot)' if vollmach
     {% endfor %}
     </tbody>
 </table>
+{% endif %}
+
+{% if not nur_lesen %}
+<script>
+// Bearbeitungssperre: der offene Editor verlängert alle 2 Minuten;
+// ohne Verlängerung läuft die Sperre serverseitig nach 5 Minuten ab.
+// (Bewusst keine Freigabe bei pagehide: das Ereignis feuert auch bei
+// jedem Formular-Submit und würde die Sperre per Wettlauf löschen.)
+setInterval(function () {
+    fetch('/angebote/{{ angebot.id }}/sperre', { method: 'POST' });
+}, 2 * 60 * 1000);
+</script>
 {% endif %}
 {% endblock %}
