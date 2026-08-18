@@ -49,7 +49,8 @@ BACKUP_ORDNER = DATA_ORDNER / "backups"
 SIGNATUR_FERN_AKTIV = os.getenv("SIGNATUR_FERN_AKTIV", "").strip().lower() in ("1", "ja", "true")
 
 # --- Datenbank -----------------------------------------------------------
-DB_PFAD = DATA_ORDNER / "angebotstool.db"
+# DB_PFAD_OVERRIDE: nur für migrate.py --db (Testlauf gegen eine Kopie)
+DB_PFAD = _pfad("DB_PFAD_OVERRIDE", DATA_ORDNER / "angebotstool.db")
 DB_URL = f"sqlite:///{DB_PFAD}"
 
 # --- Fachliche Konstanten ------------------------------------------------

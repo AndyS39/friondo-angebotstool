@@ -4,7 +4,9 @@
 
 {% block inhalt %}
 <div class="seitenkopf">
-    <h1>Angebot {{ angebot.nummer }}</h1>
+    <h1>Angebot {{ angebot.nummer }}
+        {% if angebot.archiviert %}<span class="abzeichen" title="Archiviert – nur über den Filter Archiv sichtbar">🗄 Archiv</span>{% endif %}
+    </h1>
     <div class="aktionen">
         {% if nur_lesen %}
             <span class="abzeichen status-versendet">{{ angebot.status }}</span>
@@ -22,6 +24,17 @@
         </form>
         <a class="knopf klein" href="/angebote/{{ angebot.id }}/pdf" target="_blank">PDF anzeigen</a>
         {% if not nur_lesen %}
+        {% if angebot.status == 'Entwurf' %}
+        <form method="post" action="/angebote/{{ angebot.id }}/loeschen"
+              onsubmit="return confirm('Entwurf {{ angebot.nummer }} wirklich löschen? Eine verknüpfte Erfassung wird wieder freigegeben.');">
+            <button class="knopf klein zweitrangig" type="submit">Löschen</button>
+        </form>
+        {% else %}
+        <form method="post" action="/angebote/{{ angebot.id }}/archivieren">
+            <button class="knopf klein zweitrangig" type="submit">
+                {{ 'Aus Archiv zurückholen' if angebot.archiviert else 'Archivieren' }}</button>
+        </form>
+        {% endif %}
         <a class="knopf klein" href="/signatur/{{ angebot.id }}">Signieren</a>
         <form method="post" action="/angebote/{{ angebot.id }}/email">
             <button class="knopf klein" type="submit">Versand vorbereiten</button>

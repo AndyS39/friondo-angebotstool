@@ -1,0 +1,85 @@
+# Datenbank-Migration (v5): sammelt alle Schema- und Datenänderungen an
+# einer Stelle. Idempotent – mehrfaches Ausführen richtet keinen Schaden an.
+# Wird von update.bat nach jedem git pull ausgeführt; beim App-Start läuft
+# der Schema-Teil (init_db) zusätzlich, damit auch ein manueller Start ohne
+# update.bat eine passende Datenbank vorfindet.
+#
+# Aufruf:  venv\Scripts\python migrate.py            (echte DB laut config)
+#          venv\Scripts\python migrate.py --db PFAD  (z. B. Kopie zum Testen)
+
+import argparse
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+
+def _schema() -> list[str]:
+    """Tabellen anlegen + nachträgliche Spalten ergänzen (siehe app.db)."""
+    from app import db
+    from sqlalchemy import text
+
+    vorher = {}
+    with db.engine.begin() as v:
+        for tabelle in db._NACHTRAEGLICHE_SPALTEN:
+            vorher[tabelle] = {z[1] for z in
+                               v.execute(text(f"PRAGMA table_info({tabelle})"))}
+    db.init_db()
+    meldungen = []
+    with db.engine.begin() as v:
+        for tabelle, spalten in db._NACHTRAEGLICHE_SPALTEN.items():
+            jetzt = {z[1] for z in v.execute(text(f"PRAGMA table_info({tabelle})"))}
+            for name in spalten:
+                if name in jetzt and name not in vorher.get(tabelle, set()):
+                    meldungen.append(f"Spalte ergänzt: {tabelle}.{name}")
+    return meldungen
+
+
+def _daten() -> list[str]:
+    """Datenmigrationen – jede prüft selbst, ob sie schon gelaufen ist."""
+    from app.db import SessionLocal
+    from app.models import einstellung_holen, einstellung_setzen
+
+    meldungen = []
+    session = SessionLocal()
+    try:
+        # Phase 30: bisheriger fester Mailtext wird zur Standard-Vorlage
+        if einstellung_holen(session, "mail_vorlage_standard_betreff", "") == "":
+            from app import mail_vorlagen
+            einstellung_setzen(session, "mail_vorlage_standard_betreff",
+                               mail_vorlagen.STANDARD_BETREFF)
+            einstellung_setzen(session, "mail_vorlage_standard_text",
+                               mail_vorlagen.STANDARD_TEXT)
+            meldungen.append("Standard-E-Mail-Vorlage angelegt")
+        # Phase 31: BCC-Vorbelegung
+        if einstellung_holen(session, "mail_bcc", "") == "":
+            einstellung_setzen(session, "mail_bcc", "info@friondo.de")
+            meldungen.append("BCC-Adresse vorbelegt (info@friondo.de)")
+        session.commit()
+    finally:
+        session.close()
+    return meldungen
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Friondo Angebotstool – DB-Migration")
+    parser.add_argument("--db", help="Pfad zu einer SQLite-Datei (Standard: data/angebotstool.db)")
+    argumente = parser.parse_args()
+    if argumente.db:
+        import os
+        os.environ["DB_PFAD_OVERRIDE"] = str(Path(argumente.db).resolve())
+
+    from app import config
+    print(f"Datenbank: {config.DB_PFAD}")
+    meldungen = _schema() + _daten()
+    if meldungen:
+        for m in meldungen:
+            print(" -", m)
+    else:
+        print(" - keine Änderungen nötig (bereits aktuell)")
+    print("Migration abgeschlossen.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

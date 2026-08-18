@@ -124,6 +124,30 @@ async def status_aendern(request: Request, erfassung_id: int,
     return RedirectResponse(f"/erfassungen/{erfassung_id}", status_code=303)
 
 
+@router.post("/{erfassung_id}/loeschen")
+async def loeschen(erfassung_id: int, session: Session = Depends(get_session)):
+    """Erfassung löschen (v5, Innendienst/Admin): gesperrt, sobald ein Angebot
+    verknüpft ist. Ein verknüpfter Lead wird gelöst und erscheint wieder in
+    „Leads VOT“."""
+    from urllib.parse import quote_plus
+
+    from app.models import Lead
+    erfassung = session.get(Erfassung, erfassung_id)
+    if erfassung is None:
+        return RedirectResponse("/erfassungen", status_code=303)
+    if erfassung.angebot_id:
+        return RedirectResponse(
+            f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
+                "Löschen nicht möglich – mit dieser Erfassung ist ein Angebot verknüpft."),
+            status_code=303)
+    for lead in session.query(Lead).filter(Lead.erfassung_id == erfassung.id):
+        lead.erfassung_id = None
+    session.delete(erfassung)
+    session.commit()
+    return RedirectResponse("/erfassungen?meldung=" + quote_plus(
+        f"Erfassung {erfassung_id} gelöscht"), status_code=303)
+
+
 @router.get("/{erfassung_id}/angebot-erzeugen")
 async def angebot_erzeugen(erfassung_id: int, session: Session = Depends(get_session)):
     """Grün: Antworten durch die Logik -> Angebotsentwurf; Erfassung verknüpfen."""

@@ -45,8 +45,13 @@ def _kunden_map(session: Session, angebote) -> dict[int, Kunde]:
 async def liste(request: Request, q: str = "", status: str = "",
                 session: Session = Depends(get_session)):
     abfrage = session.query(Angebot).options(joinedload(Angebot.positionen))
-    if status:
-        abfrage = abfrage.filter(Angebot.status == status)
+    # Archiv (v5): Standardansicht ohne archivierte, Filter „Archiv“ nur diese
+    if status == "archiv":
+        abfrage = abfrage.filter(Angebot.archiviert.is_(True))
+    else:
+        abfrage = abfrage.filter(Angebot.archiviert.is_(False))
+        if status:
+            abfrage = abfrage.filter(Angebot.status == status)
     angebote = abfrage.order_by(Angebot.nummer.desc()).all()
     kunden = _kunden_map(session, angebote)
     if q:
@@ -451,6 +456,62 @@ async def status_aendern(request: Request, angebot_id: int,
                 erfassung.status = "In Bearbeitung"
         session.commit()
     return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+
+
+@router.post("/{angebot_id}/loeschen")
+async def loeschen(request: Request, angebot_id: int,
+                   session: Session = Depends(get_session)):
+    """Nur Entwürfe löschbar (v5); alles andere wird archiviert."""
+    from pathlib import Path
+    from urllib.parse import quote_plus
+
+    from app.models import AngebotsMail, Erfassung
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote", status_code=303)
+    if angebot.status != "Entwurf":
+        return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+            "Nur Entwürfe können gelöscht werden – dieses Angebot bitte archivieren."),
+            status_code=303)
+    nummer = angebot.nummer
+    # Verknüpfte Erfassung lösen: sie ist wieder offen für ein neues Angebot
+    for erfassung in session.query(Erfassung).filter(Erfassung.angebot_id == angebot.id):
+        erfassung.angebot_id = None
+        if erfassung.status == "In Bearbeitung":
+            erfassung.status = "Neu"
+    session.query(AngebotsMail).filter(AngebotsMail.angebot_id == angebot.id).delete()
+    session.delete(angebot)   # Positionen per Cascade
+    session.commit()
+    from app import config
+    Path(config.ANGEBOTE_PDF_ORDNER / f"{nummer}.pdf").unlink(missing_ok=True)
+    benutzer = request.state.benutzer
+    if benutzer is not None:
+        sperren.freigeben(angebot_id, benutzer.id)
+    return RedirectResponse("/angebote?meldung=" + quote_plus(f"Entwurf {nummer} gelöscht"),
+                            status_code=303)
+
+
+@router.post("/{angebot_id}/archivieren")
+async def archivieren(request: Request, angebot_id: int,
+                      session: Session = Depends(get_session)):
+    """Versendete/angenommene/abgelehnte Angebote ins Archiv bzw. zurück (v5)."""
+    from urllib.parse import quote_plus
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote", status_code=303)
+    if angebot.status == "Entwurf" and not angebot.archiviert:
+        return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+            "Entwürfe werden nicht archiviert, sondern gelöscht."), status_code=303)
+    angebot.archiviert = not angebot.archiviert
+    session.commit()
+    if angebot.archiviert:
+        return RedirectResponse("/angebote?meldung=" + quote_plus(
+            f"{angebot.nummer} archiviert – über den Filter „Archiv“ weiterhin erreichbar."),
+            status_code=303)
+    return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+        "Aus dem Archiv zurückgeholt."), status_code=303)
 
 
 @router.post("/{angebot_id}/duplizieren")

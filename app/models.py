@@ -95,6 +95,8 @@ class Benutzer(Base):
     name: Mapped[str] = mapped_column(String(100), unique=True)
     rolle: Mapped[str] = mapped_column(String(20), default="aussendienst")  # innendienst | aussendienst
     pin_hash: Mapped[str] = mapped_column(String(64), default="")
+    # E-Mail (v5): Pflicht für Außendienst – landet als CC in der Angebots-Mail
+    email: Mapped[str] = mapped_column(String(200), default="")
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
@@ -242,6 +244,9 @@ class Angebot(Base):
     # Mail-Verlauf (Phase 27): Konversations-ID der Angebots-Mail aus Graph
     graph_conversation_id: Mapped[Optional[str]] = mapped_column(String(200),
                                                                  nullable=True)
+    # Archiv (v5): versendete/angenommene/abgelehnte Angebote werden nicht
+    # gelöscht (Aufbewahrung), sondern aus der Standardansicht genommen
+    archiviert: Mapped[bool] = mapped_column(Boolean, default=False)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     positionen: Mapped[list["AngebotsPosition"]] = relationship(

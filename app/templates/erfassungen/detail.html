@@ -41,6 +41,12 @@
         <a class="knopf" href="/erfassungen/{{ erfassung.id }}/manuelles-angebot">Manuelles Angebot</a>
         <a class="knopf zweitrangig" href="/erfassungen/{{ erfassung.id }}/angebot-erzeugen">Trotzdem automatisch erzeugen</a>
     {% endif %}
+    {% if not angebot %}
+    <form method="post" action="/erfassungen/{{ erfassung.id }}/loeschen"
+          onsubmit="return confirm('Erfassung {{ erfassung.id }} wirklich löschen? Ein verknüpfter Lead erscheint wieder in Leads VOT.');">
+        <button class="knopf zweitrangig" type="submit">Erfassung löschen</button>
+    </form>
+    {% endif %}
 </div>
 
 <h2>Antworten

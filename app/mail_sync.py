@@ -103,7 +103,8 @@ def sync() -> int:
     try:
         angebote = (session.query(Angebot)
                     .filter(Angebot.status.in_(["Versendet", "Angenommen",
-                                                "Abgelehnt"]))
+                                                "Abgelehnt"]),
+                            Angebot.archiviert.is_(False))
                     .all())
         for angebot in angebote:
             try:

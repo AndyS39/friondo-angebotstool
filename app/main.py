@@ -70,7 +70,8 @@ async def startseite(request: Request):
                               .filter(Erfassung.status.in_(["Neu", "In Bearbeitung"]))
                               .count())
         versendete = (session.query(Angebot)
-                      .filter(Angebot.status == "Versendet").count())
+                      .filter(Angebot.status == "Versendet",
+                              Angebot.archiviert.is_(False)).count())
     finally:
         session.close()
     return render(request, "index.html", aktiv=None,

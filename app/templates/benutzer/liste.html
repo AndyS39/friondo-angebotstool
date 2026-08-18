@@ -7,27 +7,42 @@
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
 <table class="tabelle">
-    <thead><tr><th>Name</th><th>Rolle</th><th>Neue PIN</th><th>Aktiv</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Rolle</th><th>E-Mail</th><th>Neue PIN</th><th>Aktiv</th><th></th></tr></thead>
     <tbody>
     {% for b in benutzer %}
         <tr class="{{ 'inaktiv' if not b.aktiv }}">
-            <form method="post" action="/benutzer/{{ b.id }}/aendern">
-                <td><input type="text" name="name" value="{{ b.name }}" size="16"></td>
-                <td>
-                    <select name="rolle">
-                        {% for r in rollen %}
-                            <option value="{{ r }}" {{ 'selected' if b.rolle == r }}>{{ r }}</option>
-                        {% endfor %}
-                    </select>
-                </td>
-                <td><input type="password" name="pin" placeholder="unverändert" size="8"></td>
-                <td><input type="checkbox" name="aktiv" {{ 'checked' if b.aktiv }}></td>
-                <td class="aktionen"><button class="knopf klein" type="submit">Speichern</button></td>
-            </form>
+            <td><input form="f{{ b.id }}" type="text" name="name" value="{{ b.name }}" size="16"></td>
+            <td>
+                <select form="f{{ b.id }}" name="rolle">
+                    {% for r in rollen %}
+                        <option value="{{ r }}" {{ 'selected' if b.rolle == r }}>{{ r }}</option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td><input form="f{{ b.id }}" type="email" name="email" value="{{ b.email }}" size="24"
+                       placeholder="{{ 'Pflicht (CC)' if b.rolle == 'aussendienst' else 'optional' }}"></td>
+            <td><input form="f{{ b.id }}" type="password" name="pin" placeholder="unverändert" size="8"></td>
+            <td><input form="f{{ b.id }}" type="checkbox" name="aktiv" {{ 'checked' if b.aktiv }}></td>
+            <td class="aktionen">
+                <form id="f{{ b.id }}" method="post" action="/benutzer/{{ b.id }}/aendern">
+                    <button class="knopf klein" type="submit">Speichern</button>
+                </form>
+                <form method="post" action="/benutzer/{{ b.id }}/loeschen"
+                      onsubmit="return confirm('{{ b.name }} wirklich {{ 'löschen' if loeschbar[b.id] else 'deaktivieren' }}?');">
+                    <button class="knopf klein zweitrangig" type="submit"
+                            title="{{ 'Benutzer endgültig löschen' if loeschbar[b.id]
+                                     else 'Vorgänge zugeordnet – wird nur deaktiviert' }}">
+                        {{ 'Löschen' if loeschbar[b.id] else 'Deaktivieren' }}
+                    </button>
+                </form>
+            </td>
         </tr>
     {% endfor %}
     </tbody>
 </table>
+<p class="dezent">Löschen ist nur möglich, solange keinem Benutzer Erfassungen, Leads oder
+monday-Zuordnungen anhängen; sonst wird er deaktiviert – er verschwindet aus allen
+Auswahllisten, die Historie bleibt lesbar.</p>
 
 <h2>Neuer Benutzer</h2>
 <form method="post" action="/benutzer/neu" class="formular">
@@ -38,6 +53,7 @@
                 {% for r in rollen %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
             </select>
         </label>
+        <label>E-Mail <input type="email" name="email" placeholder="vorname.nachname@friondo.de"></label>
         <label class="schmal">PIN (mind. 4 Ziffern)
             <input type="password" name="pin" inputmode="numeric">
         </label>
@@ -45,5 +61,6 @@
     <button class="knopf" type="submit">Anlegen</button>
 </form>
 <p class="dezent">Außendienst-Benutzer sehen ausschließlich die mobile Erfassung –
-keine Preise, keine Einkaufspreise, keinen Deckungsbeitrag, keine Angebote.</p>
+keine Preise, keine Einkaufspreise, keinen Deckungsbeitrag, keine Angebote.
+Ihre E-Mail-Adresse wird beim Versand automatisch als CC gesetzt.</p>
 {% endblock %}

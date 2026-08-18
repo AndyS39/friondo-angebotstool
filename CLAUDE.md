@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v4)
+# Friondo Angebotstool – Projektkontext (v5)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -42,6 +42,11 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
 - SLS/ÜSS/APZ (E04–E06): reine Protokollfragen – Komponenten sind in Pos. 011
   enthalten; Pos. 149/150/153 bleiben ungenutzt im Artikelstamm.
 - EK-Preise sind unter „Artikel bearbeiten" änderbar (Innendienst/Admin).
+- **Löschen & Archiv (v5):** Benutzer sind löschbar, solange keine Vorgänge an
+  ihnen hängen – sonst deaktivieren (Historie bleibt lesbar). Erfassungen sind
+  löschbar (ID/Admin), außer ein Angebot ist verknüpft. Angebote: nur **Entwürfe**
+  löschbar; versendete/abgelehnte werden **archiviert** (Aufbewahrungspflicht) und
+  über den Filter „Archiv" erreichbar. Benutzer haben ein E-Mail-Feld (für CC).
 
 ## Leads VOT (monday-Lesesync)
 - Quellen (friondo-gmbh.monday.com), jeweils NUR die Gruppe mit Titel „Terminiert"
@@ -57,6 +62,10 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   E-Mail, Status. Zuordnung monday-Person ↔ Tool-Benutzer.
   **Sonderregel „Deals - Rene": Verantwortlicher ist immer Rene Golaschewski**,
   auch wenn die Spalte leer ist. Derselbe Kunde in mehreren Boards → deduplizieren.
+- **Interesse (v5):** Mehrfach-Feld WP / PV / KL / WB an Lead und Kunde, aus einer
+  monday-Spalte gemappt; Badges + Filter in Leads VOT, Erfassungen und Angeboten.
+  Jeder Vorgang trägt zudem einen **Konfigurator-Typ** (aktuell „WP") als Unterbau
+  für die späteren PV- und Klima-Konfiguratoren.
 - Sync: alle 15 Minuten + Button „Jetzt aktualisieren"; nur lesend, Fehler
   blockieren das Tool nie.
 - Liste „Leads VOT": nur Leads **mit** VOT-Datum und **ohne** verknüpftes Angebot,
@@ -79,11 +88,32 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   (RZ/IT) oder ein externer Signatur-Anbieter – Entscheidung offen, Modul wird
   fertig gebaut und per Schalter aktiviert.
 
-## Mail-Verlauf am Angebot (neu v4)
-Kundenantworten auf die Angebots-Mail werden über Graph (zusätzliche Berechtigung
-Mail.Read) anhand der Konversation bzw. Betreffzeile AN-C-… erkannt und dem Angebot
-zugeordnet (Abruf alle 15 Min). Die Angebotsliste zeigt ein Symbol, Klick öffnet
-den Mailverlauf (Absender, Zeit, Text).
+## E-Mail-Versand, Vorlagen & Verlauf (v5)
+- Versand über Graph aus dem Postfach des angemeldeten ID-Mitarbeiters, Absender
+  ist immer **angebot@friondo.de** („Senden als"-Berechtigung durch M365-Admin;
+  Graph-Berechtigungen um Shared-Mailbox-Zugriff erweitern, docs/graph-einrichtung.md
+  fortschreiben).
+- Automatisch: **CC = Außendienstler des Vorgangs** (E-Mail aus der Benutzer-
+  verwaltung; fehlt sie, Entwurf ohne CC + Hinweis), **BCC** aus der Parametrierung
+  (Standard info@friondo.de).
+- **Vorlagen:** Standard-Vorlage für Betreff + Text plus optionale Vorlage je
+  Außendienstler (greift automatisch nach AD des Vorgangs). Platzhalter: {anrede},
+  {vorname}, {nachname}, {angebotsnummer}, {endbetrag}, {eigenanteil}, {foerderung},
+  {gueltig_bis}, {vertriebler}, {absender}. Pflege durch Admin/Innendienst in der
+  Parametrierung, mit Vorschau; bisheriger Festtext wird als Standard migriert.
+- **Status-Automatik:** „Versand vorbereiten" setzt Status **„Versand vorbereitet"**;
+  Graph erkennt den tatsächlichen Versand (Gesendete Elemente/Konversation) und
+  stellt automatisch auf **„Versendet"** – erst das löst die monday-Rückspielung aus.
+- **Mail-Verlauf:** Kundenantworten laufen im Postfach angebot@friondo.de auf und
+  werden per Konversation bzw. Betreff AN-C-… dem Angebot zugeordnet (Abruf alle
+  15 Min); Angebotsliste zeigt ein Brief-Symbol, Klick öffnet den Verlauf.
+
+## monday-Rückspielung (v5)
+Sobald ein Angebot auf „Versendet" wechselt, wird der Quell-Deal aktualisiert:
+Status „Angebot versendet" (konfigurierbar als Status-Spaltenwert ODER Verschieben
+in eine Zielgruppe) und Deal-Wert = Endbetrag (Zielspalte per Dropdown, brutto oder
+netto wählbar). Fehler blockieren nie – Warnung am Angebot mit Wiederholen-Button,
+alle Rückspielungen werden protokolliert.
 
 ## Unverändert aus v2
 Stack (FastAPI/SQLite/fpdf2), TAIFUN-Import mit GUID-Anker und Textregeln,

@@ -13,10 +13,11 @@
 <form method="get" action="/angebote" class="suchleiste">
     <input type="text" name="q" value="{{ q }}" placeholder="Suche: Angebots-Nr., Kunde, Ort">
     <select name="status">
-        <option value="">Alle Status</option>
+        <option value="">Alle Status (ohne Archiv)</option>
         {% for s in status_liste %}
             <option value="{{ s }}" {{ 'selected' if status == s }}>{{ s }}</option>
         {% endfor %}
+        <option value="archiv" {{ 'selected' if status == 'archiv' }}>Archiv</option>
     </select>
     <button class="knopf" type="submit">Filtern</button>
 </form>
@@ -61,6 +62,18 @@
                 <form method="post" action="/angebote/{{ a.id }}/duplizieren">
                     <button class="knopf klein zweitrangig" type="submit">Duplizieren</button>
                 </form>
+                {% if a.status == 'Entwurf' %}
+                <form method="post" action="/angebote/{{ a.id }}/loeschen"
+                      onsubmit="return confirm('Entwurf {{ a.nummer }} wirklich löschen?');">
+                    <button class="knopf klein zweitrangig" type="submit" title="Entwurf löschen">✕</button>
+                </form>
+                {% else %}
+                <form method="post" action="/angebote/{{ a.id }}/archivieren">
+                    <button class="knopf klein zweitrangig" type="submit"
+                            title="{{ 'Aus dem Archiv zurückholen' if a.archiviert else 'Archivieren' }}">
+                        {{ '↩' if a.archiviert else '🗄' }}</button>
+                </form>
+                {% endif %}
             </td>
         </tr>
     {% endfor %}

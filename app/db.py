@@ -96,6 +96,10 @@ _NACHTRAEGLICHE_SPALTEN = {
         "signatur_token": "VARCHAR(64)",
         "signatur_token_gueltig_bis": "DATETIME",
         "graph_conversation_id": "VARCHAR(200)",
+        "archiviert": "BOOLEAN NOT NULL DEFAULT 0",
+    },
+    "benutzer": {
+        "email": "VARCHAR(200) NOT NULL DEFAULT ''",
     },
 }
 
