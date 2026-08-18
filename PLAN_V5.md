@@ -29,19 +29,19 @@ Schaden), die update.bat führt sie automatisch aus.
 - [x] Rechte: Admin und Innendienst pflegen alle Vorlagen
 
 ## Phase 31 – Versand-Automatik & Absender angebot@friondo.de
-- [ ] Entwurf setzt Absender fest auf angebot@friondo.de („Senden als");
+- [x] Entwurf setzt Absender fest auf angebot@friondo.de („Senden als");
       docs/graph-einrichtung.md um die nötige Berechtigungsvergabe und die
       erweiterten Graph-Berechtigungen (Shared-Mailbox-Zugriff) ergänzen
-- [ ] CC automatisch = E-Mail des Außendienstlers des Vorgangs (fehlt sie:
+- [x] CC automatisch = E-Mail des Außendienstlers des Vorgangs (fehlt sie:
       Entwurf ohne CC + gut sichtbarer Hinweis); BCC aus Parametrierung
       (Vorbelegung info@friondo.de)
-- [ ] Status-Kette: „Versand vorbereiten" → Status „Versand vorbereitet";
+- [x] Status-Kette: „Versand vorbereiten" → Status „Versand vorbereitet";
       Graph-Abgleich (alle 15 Min) erkennt den tatsächlichen Versand über
       Gesendete Elemente/Konversation → Status automatisch „Versendet"
-- [ ] Mail-Verlauf auf das Postfach angebot@friondo.de umstellen (Antworten
+- [x] Mail-Verlauf auf das Postfach angebot@friondo.de umstellen (Antworten
       laufen dort auf); prüfen, ob Phase 27 (Verlauf, Brief-Symbol, Thread-
       Ansicht) vollständig umgesetzt ist – falls nicht, hier nachziehen
-- [ ] Test: Versand an eine Testadresse → Absender angebot@, CC/BCC korrekt,
+- [x] Test: Versand an eine Testadresse → Absender angebot@, CC/BCC korrekt,
       Status springt nach echtem Senden automatisch um, Antwort erzeugt Symbol
 
 ## Phase 32 – monday-Rückspielung

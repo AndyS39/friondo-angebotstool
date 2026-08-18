@@ -12,11 +12,15 @@ from pathlib import Path
 from app import config
 from app.models import Angebot, Kunde
 
-# Mail.ReadWrite deckt das Lesen mit ab; Mail.Read steht zur Klarheit dabei,
-# weil der Mail-Verlauf (Phase 27) die Konversation nur lesend abruft.
-# Mail.Send: nur für die Info-Mail an das eigene Postfach nach einer
-# Fern-Signatur (Phase 28) – Angebots-Mails bleiben Entwürfe für Outlook.
-SCOPES = ["Mail.ReadWrite", "Mail.Read", "Mail.Send"]
+# Delegierte Berechtigungen (docs/graph-einrichtung.md):
+#  Mail.ReadWrite / Mail.Read  – Entwurf im eigenen Postfach, Mail-Verlauf
+#  Mail.Send                   – Info-Mail nach Fern-Signatur (Phase 28)
+#  *.Shared (Phase 31)         – Zugriff auf das freigegebene Postfach
+#                                angebot@friondo.de (Versand-Erkennung,
+#                                Antworten der Kunden); setzt „Vollzugriff“
+#                                auf das Postfach durch den M365-Admin voraus
+SCOPES = ["Mail.ReadWrite", "Mail.Read", "Mail.Send",
+          "Mail.ReadWrite.Shared", "Mail.Send.Shared"]
 GRAPH = "https://graph.microsoft.com/v1.0"
 
 _token_cache = None

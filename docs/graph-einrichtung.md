@@ -22,14 +22,42 @@ App-Registrierung → **Authentifizierung** →
 ## 3. Berechtigung vergeben
 
 App-Registrierung → **API-Berechtigungen** → **Berechtigung hinzufügen** →
-**Microsoft Graph** → **Delegierte Berechtigungen** → `Mail.ReadWrite` und
-`Mail.Read` auswählen → Hinzufügen. (Der Mitarbeiter stimmt bei der ersten
-Anmeldung selbst zu; alternativ „Administratorzustimmung erteilen".)
+**Microsoft Graph** → **Delegierte Berechtigungen** → folgende auswählen →
+Hinzufügen → anschließend **„Administratorzustimmung für Friondo erteilen"**
+(bei jeder späteren Erweiterung der Liste erneut nötig):
 
-`Mail.Read` wird für den **Mail-Verlauf am Angebot** (Phase 27) benötigt:
-Das Tool ruft alle 15 Minuten die Nachrichten der Angebots-Konversation ab
-(nur lesend) und zeigt Antworten des Kunden in der Angebotsliste an.
-Es wird weiterhin nichts automatisch gesendet.
+| Berechtigung | Wofür |
+|---|---|
+| `Mail.ReadWrite` | Entwurf im Postfach des Mitarbeiters ablegen (Phase 17) |
+| `Mail.Read` | Mail-Verlauf am Angebot (Phase 27) |
+| `Mail.Send` | Info-Mail an den Innendienst nach Fern-Signatur (Phase 28) |
+| `Mail.ReadWrite.Shared` | Zugriff auf das freigegebene Postfach **angebot@friondo.de** – Versand-Erkennung + Kundenantworten (Phase 31) |
+| `Mail.Send.Shared` | Senden im Namen von angebot@friondo.de (Phase 31) |
+
+Es wird weiterhin nichts ohne Zutun eines Mitarbeiters an Kunden gesendet:
+Das Tool legt Entwürfe an, gesendet wird in Outlook.
+
+## 3a. Postfach angebot@friondo.de („Senden als") – Phase 31
+
+Alle Angebots-Mails gehen mit dem Absender **angebot@friondo.de** raus, und
+Kundenantworten laufen dort auf. Dafür richtet der M365-Admin ein:
+
+1. **Freigegebenes Postfach** `angebot@friondo.de` anlegen (Exchange Admin
+   Center → Empfänger → Postfächer → Freigegebenes Postfach hinzufügen), falls
+   noch nicht vorhanden.
+2. Für **jeden Innendienst-Mitarbeiter** unter diesem Postfach →
+   **Postfachdelegierung** zwei Rechte vergeben:
+   - **„Senden als"** – damit der in Outlook gesendete Entwurf mit dem
+     Absender angebot@friondo.de rausgeht
+   - **„Lesen und Verwalten (Vollzugriff)"** – damit das Tool über das
+     Konto des Mitarbeiters die gesendeten Mails und Antworten im Postfach
+     angebot@ lesen kann (Graph `Mail.ReadWrite.Shared`)
+3. Die Rechte greifen nach bis zu 60 Minuten. Danach im Tool einmal
+   **Versand → Abmelden → Mit Microsoft anmelden**, damit das Token die
+   neuen Berechtigungen enthält.
+
+Im Tool stehen Absender und Abgleich-Postfach unter **Parametrierung →
+E-Mail-Versand** (Vorbelegung angebot@friondo.de, BCC info@friondo.de).
 
 ## 4. IDs in die .env eintragen
 
@@ -58,12 +86,22 @@ anschließend im Tool den Status auf „Versendet" setzen.
 **Übergangslösung, solange Graph nicht eingerichtet ist:** „PDF anzeigen" im
 Editor und die E-Mail manuell verfassen.
 
-## 7. Mail-Verlauf am Angebot (Phase 27)
+## 7. Ablauf Versand, Status-Automatik und Mail-Verlauf (Phase 27/31)
 
-Beim „Versand vorbereiten" speichert das Tool die Konversations-ID der
-Angebots-Mail. Ein Hintergrund-Abruf (alle 15 Minuten, nur lesend) holt die
-Nachrichten dieser Konversation; für ältere Angebote ohne gespeicherte
-Konversations-ID wird ersatzweise nach dem Betreff mit der AN-C-Nummer
-gesucht. Antworten erscheinen in der Angebotsliste als Brief-Symbol mit
-Zähler; ein Klick öffnet den Mail-Verlauf (Absender, Zeitpunkt, Textauszug).
-Geantwortet wird weiterhin in Outlook – das Tool zeigt nur an.
+1. **„Versand vorbereiten"** im Angebots-Editor: Das Tool baut Betreff und
+   Text aus der E-Mail-Vorlage (Standard oder die des Außendienstlers des
+   Vorgangs), setzt Absender angebot@friondo.de, **CC = E-Mail des
+   Außendienstlers** (aus der Benutzerverwaltung; fehlt sie, kommt ein
+   deutlicher Hinweis und der Entwurf geht ohne CC raus), **BCC** aus der
+   Parametrierung, hängt PDF + Anlagen an, legt den Entwurf im Postfach des
+   Mitarbeiters ab und setzt den Status auf **„Versand vorbereitet"**.
+2. Der Mitarbeiter prüft den Entwurf in Outlook und sendet ihn.
+3. Der **Abgleich alle 15 Minuten** sucht die Konversation der Angebots-Mail
+   im Postfach angebot@friondo.de. Sobald dort eine gesendete (nicht mehr als
+   Entwurf markierte) Nachricht von uns liegt, springt der Status automatisch
+   auf **„Versendet"** – erst das löst die monday-Rückspielung aus. Notfalls
+   kann der Status im Editor auch manuell gesetzt werden.
+4. Antworten des Kunden in derselben Konversation (Fallback: Betreff mit der
+   AN-C-Nummer) erscheinen in der Angebotsliste als Brief-Symbol mit Zähler;
+   Klick öffnet den Mail-Verlauf (Absender, Zeitpunkt, Textauszug).
+   Geantwortet wird weiterhin in Outlook – das Tool zeigt nur an.

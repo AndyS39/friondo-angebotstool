@@ -18,6 +18,7 @@ async def uebersicht(request: Request, session: Session = Depends(get_session)):
         return render(request, "konfiguration/uebersicht.html", aktiv="/parametrierung",
                       logik=None, bericht=None, dateifehler=str(config.LOGIK_EXCEL_PFAD),
                       meldung="")
+    from app import mail_sync
     from app.models import einstellung_holen
     logik, bericht = logik_modul.hole_logik(session)
     return render(request, "konfiguration/uebersicht.html", aktiv="/parametrierung",
@@ -27,6 +28,10 @@ async def uebersicht(request: Request, session: Session = Depends(get_session)):
                   fern_aktiv=einstellung_holen(session, "signatur_fern_aktiv", "0"),
                   fern_tage=einstellung_holen(session, "signatur_fern_gueltig_tage", "14"),
                   fern_basis=einstellung_holen(session, "signatur_fern_basis_url", ""),
+                  mail_absender=einstellung_holen(session, "mail_absender", "angebot@friondo.de"),
+                  mail_postfach=einstellung_holen(session, "mail_postfach", "angebot@friondo.de"),
+                  mail_bcc=einstellung_holen(session, "mail_bcc", ""),
+                  sync_status=mail_sync.status,
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -49,6 +54,10 @@ async def einstellungen_speichern(request: Request,
             einstellung_setzen(session, "signatur_fern_gueltig_tage", tage)
         einstellung_setzen(session, "signatur_fern_basis_url",
                            (form.get("signatur_fern_basis_url") or "").strip().rstrip("/"))
+    # Versand (Phase 31): Absender „Senden als“, Abgleich-Postfach, BCC
+    if "mail_formular" in form:
+        for name in ("mail_absender", "mail_postfach", "mail_bcc"):
+            einstellung_setzen(session, name, (form.get(name) or "").strip().lower())
     session.commit()
     return RedirectResponse("/parametrierung?meldung=Einstellungen+gespeichert",
                             status_code=303)

@@ -51,6 +51,28 @@
     <span class="dezent">dazwischen = orange</span>
 </form>
 
+<h2>E-Mail-Versand</h2>
+<form method="post" action="/parametrierung/einstellungen" class="suchleiste">
+    <input type="hidden" name="mail_formular" value="1">
+    <label class="kontrollfeld">Absender („Senden als“)
+        <input type="email" name="mail_absender" value="{{ mail_absender }}" size="24"></label>
+    <label class="kontrollfeld">Abgleich-Postfach
+        <input type="email" name="mail_postfach" value="{{ mail_postfach }}" size="24"></label>
+    <label class="kontrollfeld">BCC
+        <input type="text" name="mail_bcc" value="{{ mail_bcc }}" size="24" placeholder="info@friondo.de"></label>
+    <button class="knopf" type="submit">Speichern</button>
+</form>
+<p class="dezent">Der Entwurf wird mit dem Absender angelegt (M365-Admin muss „Senden als“
+für alle Innendienst-Mitarbeiter vergeben, siehe <code>docs/graph-einrichtung.md</code>).
+CC = E-Mail des Außendienstlers des Vorgangs (automatisch). Der 15-Minuten-Abgleich
+prüft im Abgleich-Postfach, ob die Mail tatsächlich gesendet wurde
+(Status „Versand vorbereitet“ → „Versendet“) und sammelt Kundenantworten. Mehrere
+BCC-Adressen mit Komma trennen; leer = kein BCC.
+{% if sync_status and sync_status.letzter_lauf %}
+    Letzter Abgleich: {{ sync_status.letzter_lauf.strftime('%d.%m.%Y %H:%M') }}
+    ({{ sync_status.versendet }} als versendet erkannt, {{ sync_status.neu }} neue Mails).
+{% endif %}</p>
+
 <h2>Fern-Signatur (Kunde signiert selbst)</h2>
 <form method="post" action="/parametrierung/einstellungen" class="suchleiste">
     <input type="hidden" name="fern_formular" value="1">

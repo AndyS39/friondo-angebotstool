@@ -92,6 +92,55 @@ class TestMailVerarbeitung(unittest.TestCase):
         mail = self.session.query(AngebotsMail).one()
         self.assertFalse(mail.eingehend)
 
+    # --- Phase 31: Versand-Erkennung + Shared Mailbox --------------------
+
+    def test_entwurf_wird_nicht_gespeichert(self):
+        entwurf = _nachricht("d1", "angebot@friondo.de"); entwurf["isDraft"] = True
+        neu = mail_sync.nachrichten_verarbeiten(self.session, self.angebot,
+                                                [entwurf], {"angebot@friondo.de"})
+        self.assertEqual(neu, 0)
+
+    def test_versand_erkannt_nur_bei_gesendeter_nachricht(self):
+        self.angebot.status = "Versand vorbereitet"
+        eigene = {"angebot@friondo.de", "ida@friondo.de"}
+        entwurf = _nachricht("d1", "angebot@friondo.de"); entwurf["isDraft"] = True
+        # nur Entwurf vorhanden → bleibt „Versand vorbereitet“
+        self.assertFalse(mail_sync.versand_erkennen(self.session, self.angebot, [entwurf], eigene))
+        self.assertEqual(self.angebot.status, "Versand vorbereitet")
+        # Kundenantwort allein reicht nicht (nicht von uns)
+        antwort = _nachricht("k1", "erika@beispiel.de"); antwort["sentDateTime"] = "2026-08-14T10:00:00Z"
+        self.assertFalse(mail_sync.versand_erkennen(self.session, self.angebot, [antwort], eigene))
+        # gesendete Nachricht von angebot@ → Versendet
+        gesendet = _nachricht("s1", "angebot@friondo.de")
+        gesendet["isDraft"] = False; gesendet["sentDateTime"] = "2026-08-14T09:31:00Z"
+        self.assertTrue(mail_sync.versand_erkennen(self.session, self.angebot,
+                                                   [entwurf, gesendet], eigene))
+        self.assertEqual(self.angebot.status, "Versendet")
+        # zweiter Lauf ändert nichts mehr
+        self.assertFalse(mail_sync.versand_erkennen(self.session, self.angebot, [gesendet], eigene))
+
+    def test_versand_erkennung_nur_im_status_vorbereitet(self):
+        self.angebot.status = "Entwurf"
+        gesendet = _nachricht("s1", "angebot@friondo.de"); gesendet["sentDateTime"] = "2026-08-14T09:31:00Z"
+        self.assertFalse(mail_sync.versand_erkennen(self.session, self.angebot, [gesendet],
+                                                    {"angebot@friondo.de"}))
+        self.assertEqual(self.angebot.status, "Entwurf")
+
+    def test_eigene_adressen_mehrere(self):
+        # Mail von angebot@ (Shared Mailbox) gilt als ausgehend, auch wenn das
+        # angemeldete Konto ida@ ist
+        nachrichten = [_nachricht("m5", "angebot@friondo.de"),
+                       _nachricht("m6", "erika@beispiel.de")]
+        mail_sync.nachrichten_verarbeiten(self.session, self.angebot, nachrichten,
+                                          {"ida@friondo.de", "angebot@friondo.de"})
+        mails = {m.graph_id: m for m in self.session.query(AngebotsMail)}
+        self.assertFalse(mails["m5"].eingehend)
+        self.assertTrue(mails["m6"].eingehend)
+
+    def test_graph_pfad_shared_mailbox(self):
+        self.assertEqual(mail_sync._basis(""), "/me")
+        self.assertEqual(mail_sync._basis("angebot@friondo.de"), "/users/angebot%40friondo.de")
+
 
 if __name__ == "__main__":
     unittest.main()

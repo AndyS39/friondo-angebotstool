@@ -1,7 +1,12 @@
-# Mail-Verlauf am Angebot (Phase 27): ruft alle 15 Minuten die Nachrichten der
-# Angebots-Konversation über Microsoft Graph ab (nur lesend, delegiertes Token
-# aus graph_versand). Zuordnung primär über die beim Versand gespeicherte
-# conversationId; Fallback für ältere Angebote: Betreff enthält die AN-C-Nummer.
+# Mail-Abgleich (Phase 27/31): alle 15 Minuten über Microsoft Graph, nur lesend.
+#  1) Versand-Erkennung: Angebote im Status „Versand vorbereitet“ – taucht in der
+#     Konversation der Angebots-Mail eine GESENDETE Nachricht (kein Entwurf) auf,
+#     springt der Status automatisch auf „Versendet“ (löst die monday-Rück-
+#     spielung aus, Phase 32).
+#  2) Mail-Verlauf: Nachrichten der Konversation (Antworten des Kunden) werden
+#     dem Angebot zugeordnet; Fallback ohne conversationId: Betreff mit AN-C-Nr.
+# Postfach: das Versand-Postfach angebot@friondo.de (Parametrierung
+# mail_postfach; leer = eigenes Postfach /me). Delegiertes Token aus graph_versand.
 
 import json
 import threading
@@ -10,13 +15,13 @@ import urllib.request
 from datetime import datetime
 
 from app.db import SessionLocal
-from app.models import Angebot, AngebotsMail
+from app.models import Angebot, AngebotsMail, einstellung_holen
 
 SYNC_INTERVALL_SEKUNDEN = 15 * 60
 GRAPH = "https://graph.microsoft.com/v1.0"
-FELDER = "id,conversationId,subject,from,receivedDateTime,bodyPreview"
+FELDER = "id,conversationId,subject,from,receivedDateTime,sentDateTime,bodyPreview,isDraft"
 
-status: dict = {"letzter_lauf": None, "neu": 0, "fehler": []}
+status: dict = {"letzter_lauf": None, "neu": 0, "versendet": 0, "fehler": []}
 
 
 def _graph_get(pfad: str, token: str) -> dict:
@@ -37,39 +42,64 @@ def _zeit_parsen(wert: str) -> datetime | None:
         return None
 
 
-def nachrichten_je_konversation(token: str, conversation_id: str) -> list[dict]:
+def _basis(postfach: str) -> str:
+    """Graph-Pfadbasis: Shared Mailbox angebot@ oder eigenes Postfach."""
+    return f"/users/{urllib.parse.quote(postfach)}" if postfach else "/me"
+
+
+def nachrichten_je_konversation(token: str, conversation_id: str,
+                                postfach: str = "") -> list[dict]:
     filter_ = urllib.parse.quote(f"conversationId eq '{conversation_id}'")
-    daten = _graph_get(f"/me/messages?$filter={filter_}"
+    daten = _graph_get(f"{_basis(postfach)}/messages?$filter={filter_}"
                        f"&$select={FELDER}&$top=50", token)
     return daten.get("value", [])
 
 
-def nachrichten_je_betreff(token: str, nummer: str) -> list[dict]:
+def nachrichten_je_betreff(token: str, nummer: str, postfach: str = "") -> list[dict]:
     """Fallback ohne gespeicherte conversationId: Suche nach der AN-C-Nummer."""
     suche = urllib.parse.quote(f'"{nummer}"')
-    daten = _graph_get(f"/me/messages?$search={suche}"
+    daten = _graph_get(f"{_basis(postfach)}/messages?$search={suche}"
                        f"&$select={FELDER}&$top=50", token)
     return daten.get("value", [])
+
+
+def _eigene_adressen(*adressen: str) -> set[str]:
+    return {a.lower() for a in adressen if a}
+
+
+def versand_erkennen(session, angebot: Angebot, nachrichten: list[dict],
+                     eigene: set[str]) -> bool:
+    """Phase 31: Liegt in der Konversation eine gesendete (nicht-Entwurf)
+    Nachricht von uns vor? Dann Status „Versendet“ setzen. True = umgestellt."""
+    if angebot.status != "Versand vorbereitet":
+        return False
+    for n in nachrichten:
+        if n.get("isDraft"):
+            continue
+        absender = ((n.get("from") or {}).get("emailAddress") or {}).get("address", "")
+        if absender and absender.lower() in eigene and n.get("sentDateTime"):
+            angebot.status = "Versendet"
+            return True
+    return False
 
 
 def nachrichten_verarbeiten(session, angebot: Angebot, nachrichten: list[dict],
-                            eigenes_postfach: str) -> int:
-    """Übernimmt neue Nachrichten in angebots_mails (Dedup über graph_id).
-    Liefert die Zahl neu gespeicherter Nachrichten. Vom Scheduler und von den
-    Tests (mit Mock-Daten) gemeinsam genutzt."""
+                            eigenes_postfach: str | set[str]) -> int:
+    """Übernimmt neue Nachrichten in angebots_mails (Dedup über graph_id);
+    Entwürfe werden nicht gespeichert. Liefert die Zahl neuer Nachrichten."""
     vorhanden = {m.graph_id for m in
                  session.query(AngebotsMail.graph_id)
                  .filter(AngebotsMail.angebot_id == angebot.id)}
-    eigenes = (eigenes_postfach or "").lower()
+    eigene = (_eigene_adressen(eigenes_postfach) if isinstance(eigenes_postfach, str)
+              else {a.lower() for a in eigenes_postfach})
     neu = 0
     for nachricht in nachrichten:
         graph_id = nachricht.get("id") or ""
-        if not graph_id or graph_id in vorhanden:
+        if not graph_id or graph_id in vorhanden or nachricht.get("isDraft"):
             continue
         absender = (nachricht.get("from") or {}).get("emailAddress") or {}
         von_email = absender.get("address") or ""
-        # Konversation kann ohne conversationId-Filter (Betreff-Suche) auch
-        # Fremdtreffer liefern – die eigene Konversation sichern, falls bekannt
+        # Betreff-Suche kann Fremdtreffer liefern – bekannte Konversation sichern
         if (angebot.graph_conversation_id
                 and nachricht.get("conversationId")
                 and nachricht["conversationId"] != angebot.graph_conversation_id):
@@ -79,10 +109,11 @@ def nachrichten_verarbeiten(session, angebot: Angebot, nachrichten: list[dict],
             graph_id=graph_id,
             von_name=absender.get("name") or "",
             von_email=von_email,
-            empfangen_am=_zeit_parsen(nachricht.get("receivedDateTime") or ""),
+            empfangen_am=_zeit_parsen(nachricht.get("receivedDateTime")
+                                      or nachricht.get("sentDateTime") or ""),
             betreff=nachricht.get("subject") or "",
             vorschau=nachricht.get("bodyPreview") or "",
-            eingehend=bool(von_email) and von_email.lower() != eigenes,
+            eingehend=bool(von_email) and von_email.lower() not in eigene,
         ))
         vorhanden.add(graph_id)
         neu += 1
@@ -90,38 +121,60 @@ def nachrichten_verarbeiten(session, angebot: Angebot, nachrichten: list[dict],
 
 
 def sync() -> int:
-    """Ein Abruflauf über alle versendeten/angenommenen Angebote."""
+    """Ein Abgleichlauf: Versand-Erkennung + Mail-Verlauf über alle offenen
+    Angebote (nicht archiviert)."""
     from app import graph_versand
 
     token = graph_versand._token()
-    postfach = graph_versand.angemeldeter_benutzer() or ""
     if token is None:
         return 0
+    konto = graph_versand.angemeldeter_benutzer() or ""
     session = SessionLocal()
-    neu_gesamt = 0
+    neu_gesamt = versendet_gesamt = 0
     fehler: list[str] = []
     try:
+        postfach = einstellung_holen(session, "mail_postfach", "angebot@friondo.de")
+        absender = einstellung_holen(session, "mail_absender", "angebot@friondo.de")
+        eigene = _eigene_adressen(konto, postfach, absender)
         angebote = (session.query(Angebot)
-                    .filter(Angebot.status.in_(["Versendet", "Angenommen",
-                                                "Abgelehnt"]),
+                    .filter(Angebot.status.in_(["Versand vorbereitet", "Versendet",
+                                                "Angenommen", "Abgelehnt"]),
                             Angebot.archiviert.is_(False))
                     .all())
         for angebot in angebote:
             try:
                 if angebot.graph_conversation_id:
                     nachrichten = nachrichten_je_konversation(
-                        token, angebot.graph_conversation_id)
+                        token, angebot.graph_conversation_id, postfach)
                 else:
-                    nachrichten = nachrichten_je_betreff(token, angebot.nummer)
-                neu_gesamt += nachrichten_verarbeiten(session, angebot,
-                                                      nachrichten, postfach)
+                    nachrichten = nachrichten_je_betreff(token, angebot.nummer, postfach)
+                if versand_erkennen(session, angebot, nachrichten, eigene):
+                    versendet_gesamt += 1
+                    session.commit()
+                    _nach_versand(session, angebot)
+                neu_gesamt += nachrichten_verarbeiten(session, angebot, nachrichten, eigene)
             except Exception as problem:
                 fehler.append(f"{angebot.nummer}: {problem}")
         session.commit()
     finally:
         session.close()
-    status.update(letzter_lauf=datetime.now(), neu=neu_gesamt, fehler=fehler)
+    status.update(letzter_lauf=datetime.now(), neu=neu_gesamt,
+                  versendet=versendet_gesamt, fehler=fehler)
     return neu_gesamt
+
+
+def _nach_versand(session, angebot: Angebot) -> None:
+    """Folgeaktionen nach automatisch erkanntem Versand: Erfassung erledigt,
+    monday-Rückspielung (Phase 32) – Fehler blockieren nie."""
+    from app.models import Erfassung
+    for erfassung in session.query(Erfassung).filter(Erfassung.angebot_id == angebot.id):
+        erfassung.status = "Erledigt"
+    session.commit()
+    try:
+        from app import monday_rueckspielung
+        monday_rueckspielung.bei_versand(session, angebot)
+    except Exception as problem:   # Modul fehlt oder Rückspielung schlägt fehl
+        status.setdefault("fehler", []).append(f"monday {angebot.nummer}: {problem}")
 
 
 # --- Hintergrund-Scheduler (alle 15 Minuten) ------------------------------
@@ -143,7 +196,7 @@ def scheduler_starten() -> None:
                 try:
                     sync()
                 except Exception as problem:   # nie durchschlagen lassen
-                    status["fehler"] = [f"Mail-Abruf fehlgeschlagen: {problem}"]
+                    status["fehler"] = [f"Mail-Abgleich fehlgeschlagen: {problem}"]
             time.sleep(SYNC_INTERVALL_SEKUNDEN)
 
     threading.Thread(target=schleife, daemon=True).start()
