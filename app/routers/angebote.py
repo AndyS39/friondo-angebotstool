@@ -466,6 +466,7 @@ async def status_aendern(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     neuer_status = form.get("status", "")
     if angebot is not None and neuer_status in ANGEBOT_STATUS:
+        alter_status = angebot.status
         angebot.status = neuer_status
         # verknüpfte Erfassung automatisch pflegen (Phase 14)
         from app.models import Erfassung
@@ -477,7 +478,29 @@ async def status_aendern(request: Request, angebot_id: int,
             elif erfassung.status == "Neu":
                 erfassung.status = "In Bearbeitung"
         session.commit()
+        # monday-Rückspielung (Phase 32): Trigger ist der Wechsel auf „Versendet“
+        if neuer_status == "Versendet" and alter_status != "Versendet":
+            from app import monday_rueckspielung
+            monday_rueckspielung.bei_versand(session, angebot)
     return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+
+
+@router.post("/{angebot_id}/monday-rueckspielung")
+async def monday_erneut(request: Request, angebot_id: int,
+                        session: Session = Depends(get_session)):
+    """„Erneut übertragen“ nach fehlgeschlagener Rückspielung (Phase 32)."""
+    from urllib.parse import quote_plus
+
+    from app import monday_rueckspielung
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote", status_code=303)
+    ok = monday_rueckspielung.uebertragen(session, angebot)
+    meldung = ("monday-Rückspielung erfolgreich" if ok and angebot.monday_rueck_status == "ok"
+               else ("monday-Rückspielung übersprungen – siehe Protokoll" if ok
+                     else "monday-Rückspielung fehlgeschlagen – siehe Protokoll"))
+    return RedirectResponse(f"/angebote/{angebot_id}?meldung={quote_plus(meldung)}",
+                            status_code=303)
 
 
 @router.post("/{angebot_id}/loeschen")

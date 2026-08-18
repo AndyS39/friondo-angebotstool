@@ -70,6 +70,14 @@ def spalten_laden(board_id: str) -> list[dict]:
     return boards[0]["columns"] if boards else []
 
 
+def gruppen_laden(board_id: str) -> list[dict]:
+    """Gruppen eines Boards (für die Zielgruppe der Rückspielung, Phase 32)."""
+    daten = _api("query($id: [ID!]) { boards(ids: $id) { groups { id title } } }",
+                 {"id": [board_id]})
+    boards = daten.get("boards") or []
+    return boards[0]["groups"] if boards else []
+
+
 def _mapping(session: Session, board_id: str) -> dict[str, str]:
     return {m.feld: m.spalten_id
             for m in session.query(MondayMapping).filter(MondayMapping.board_id == board_id)

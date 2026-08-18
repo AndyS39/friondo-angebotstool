@@ -150,6 +150,7 @@ async def monday_uebersicht(request: Request, session: Session = Depends(get_ses
     benutzer = session.query(Benutzer).filter(Benutzer.aktiv.is_(True)).all()
     mappings = {}
     spalten: dict[str, list] = {}
+    gruppen: dict[str, list] = {}
     spalten_fehler = ""
     for quelle in quellen:
         mappings[quelle.board_id] = {
@@ -158,11 +159,13 @@ async def monday_uebersicht(request: Request, session: Session = Depends(get_ses
         if config.MONDAY_API_TOKEN:
             try:
                 spalten[quelle.board_id] = monday_sync.spalten_laden(quelle.board_id)
+                gruppen[quelle.board_id] = monday_sync.gruppen_laden(quelle.board_id)
             except Exception as problem:
                 spalten_fehler = str(problem)
     return render(request, "konfiguration/monday.html", aktiv="/parametrierung",
                   quellen=quellen, personen=personen, benutzer=benutzer,
-                  mappings=mappings, spalten=spalten, felder=MONDAY_FELDER,
+                  mappings=mappings, spalten=spalten, gruppen=gruppen,
+                  felder=MONDAY_FELDER,
                   token_da=bool(config.MONDAY_API_TOKEN),
                   spalten_fehler=spalten_fehler,
                   sync_status=monday_sync.status,
@@ -210,6 +213,28 @@ async def monday_mapping_speichern(request: Request, board_id: str,
         eintrag.spalten_id = (form.get(feld) or "").strip()
     session.commit()
     return RedirectResponse("/parametrierung/monday?meldung=Mapping+gespeichert",
+                            status_code=303)
+
+
+@router.post("/monday/rueckspielung/{board_id}")
+async def monday_rueckspielung_speichern(request: Request, board_id: str,
+                                         session: Session = Depends(get_session)):
+    """Rückspiel-Konfiguration je Quell-Board (Phase 32)."""
+    from app.models import MondayQuelle
+    form = await request.form()
+    quelle = (session.query(MondayQuelle)
+              .filter(MondayQuelle.board_id == board_id).first())
+    if quelle is None:
+        return RedirectResponse("/parametrierung/monday", status_code=303)
+    modus = form.get("rueck_modus") or "aus"
+    quelle.rueck_modus = modus if modus in ("aus", "status", "gruppe") else "aus"
+    quelle.rueck_status_spalte = (form.get("rueck_status_spalte") or "").strip()
+    quelle.rueck_status_wert = (form.get("rueck_status_wert") or "").strip() or "Angebot versendet"
+    quelle.rueck_gruppe_id = (form.get("rueck_gruppe_id") or "").strip()
+    quelle.rueck_wert_spalte = (form.get("rueck_wert_spalte") or "").strip()
+    quelle.rueck_wert_basis = "netto" if form.get("rueck_wert_basis") == "netto" else "brutto"
+    session.commit()
+    return RedirectResponse("/parametrierung/monday?meldung=R%C3%BCckspielung+gespeichert",
                             status_code=303)
 
 

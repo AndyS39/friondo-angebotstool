@@ -45,14 +45,14 @@ Schaden), die update.bat führt sie automatisch aus.
       Status springt nach echtem Senden automatisch um, Antwort erzeugt Symbol
 
 ## Phase 32 – monday-Rückspielung
-- [ ] Mapping in der Parametrierung erweitern: je Quell-Board wählbar –
+- [x] Mapping in der Parametrierung erweitern: je Quell-Board wählbar –
       Statusänderung als Status-Spaltenwert „Angebot versendet" ODER Verschieben
       in eine Zielgruppe; Deal-Wert-Spalte per Dropdown; Betrag brutto (Standard)
       oder netto
-- [ ] Trigger: Statuswechsel auf „Versendet" (auch der automatische aus Phase 31)
-- [ ] Fehler blockieren nie: Warnhinweis am Angebot + „Erneut übertragen"-Button;
+- [x] Trigger: Statuswechsel auf „Versendet" (auch der automatische aus Phase 31)
+- [x] Fehler blockieren nie: Warnhinweis am Angebot + „Erneut übertragen"-Button;
       jede Rückspielung mit Zeitstempel am Angebot protokollieren
-- [ ] Test mit einem Test-Deal in monday (Status und Wert prüfen, dann zurücksetzen)
+- [x] Test mit einem Test-Deal in monday (Status und Wert prüfen, dann zurücksetzen)
 
 ## Phase 33 – Interesse-Badges & Konfigurator-Typ
 - [ ] Mehrfach-Feld „Interesse" (WP / PV / KL / WB) an Lead und Kunde;

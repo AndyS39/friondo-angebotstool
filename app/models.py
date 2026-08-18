@@ -157,6 +157,14 @@ class MondayQuelle(Base):
     gruppen_titel: Mapped[str] = mapped_column(String(100), default="Terminiert")
     fester_benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Rückspielung (v5, Phase 32) je Quell-Board bei Statuswechsel „Versendet“:
+    #   rueck_modus: aus | status (Status-Spaltenwert setzen) | gruppe (Item verschieben)
+    rueck_modus: Mapped[str] = mapped_column(String(10), default="aus")
+    rueck_status_spalte: Mapped[str] = mapped_column(String(100), default="")
+    rueck_status_wert: Mapped[str] = mapped_column(String(100), default="Angebot versendet")
+    rueck_gruppe_id: Mapped[str] = mapped_column(String(100), default="")
+    rueck_wert_spalte: Mapped[str] = mapped_column(String(100), default="")   # Deal-Wert
+    rueck_wert_basis: Mapped[str] = mapped_column(String(10), default="brutto")  # brutto | netto
 
 
 # Felder, die je Board auf monday-Spalten gemappt werden (Phase 22)
@@ -249,6 +257,10 @@ class Angebot(Base):
     # Archiv (v5): versendete/angenommene/abgelehnte Angebote werden nicht
     # gelöscht (Aufbewahrung), sondern aus der Standardansicht genommen
     archiviert: Mapped[bool] = mapped_column(Boolean, default=False)
+    # monday-Rückspielung (v5, Phase 32): "" | ok | fehler | uebersprungen;
+    # Protokoll = eine Zeile je Versuch mit Zeitstempel
+    monday_rueck_status: Mapped[str] = mapped_column(String(20), default="")
+    monday_rueck_protokoll: Mapped[str] = mapped_column(Text, default="")
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     positionen: Mapped[list["AngebotsPosition"]] = relationship(

@@ -87,6 +87,71 @@ Rene Golaschewski stellen – gilt dann auch bei leerer Personen-Spalte.</p>
     </form>
 {% endfor %}
 
+<h2>Rückspielung nach monday (bei Status „Versendet“)</h2>
+<p class="dezent">Je Quell-Board: Statuswert setzen ODER Item in eine Zielgruppe
+verschieben; zusätzlich optional den Deal-Wert (Endbetrag brutto oder Netto) in
+eine Zahlenspalte schreiben. Fehler blockieren nie – sie erscheinen als Warnung
+am Angebot mit „Erneut übertragen“.</p>
+{% for q in quellen %}
+    <h2 class="gruppentitel">{{ q.board_name or q.board_id }}</h2>
+    <form method="post" action="/parametrierung/monday/rueckspielung/{{ q.board_id }}" class="formular">
+        <div class="formzeile" style="flex-wrap: wrap">
+            <label class="schmal">Modus
+                <select name="rueck_modus">
+                    <option value="aus" {{ 'selected' if q.rueck_modus == 'aus' }}>aus</option>
+                    <option value="status" {{ 'selected' if q.rueck_modus == 'status' }}>Status-Spaltenwert</option>
+                    <option value="gruppe" {{ 'selected' if q.rueck_modus == 'gruppe' }}>in Gruppe verschieben</option>
+                </select>
+            </label>
+            <label class="schmal">Status-Spalte
+                {% if spalten.get(q.board_id) %}
+                <select name="rueck_status_spalte">
+                    <option value="">–</option>
+                    {% for sp in spalten[q.board_id] if sp.type in ('status', 'color') %}
+                        <option value="{{ sp.id }}" {{ 'selected' if q.rueck_status_spalte == sp.id }}>{{ sp.title }}</option>
+                    {% endfor %}
+                </select>
+                {% else %}
+                <input type="text" name="rueck_status_spalte" value="{{ q.rueck_status_spalte }}" placeholder="Spalten-ID">
+                {% endif %}
+            </label>
+            <label class="schmal">Statuswert
+                <input type="text" name="rueck_status_wert" value="{{ q.rueck_status_wert }}" size="18"></label>
+            <label class="schmal">Zielgruppe
+                {% if gruppen.get(q.board_id) %}
+                <select name="rueck_gruppe_id">
+                    <option value="">–</option>
+                    {% for g in gruppen[q.board_id] %}
+                        <option value="{{ g.id }}" {{ 'selected' if q.rueck_gruppe_id == g.id }}>{{ g.title }}</option>
+                    {% endfor %}
+                </select>
+                {% else %}
+                <input type="text" name="rueck_gruppe_id" value="{{ q.rueck_gruppe_id }}" placeholder="Gruppen-ID">
+                {% endif %}
+            </label>
+            <label class="schmal">Deal-Wert-Spalte
+                {% if spalten.get(q.board_id) %}
+                <select name="rueck_wert_spalte">
+                    <option value="">– nicht schreiben –</option>
+                    {% for sp in spalten[q.board_id] if sp.type in ('numbers', 'numeric') %}
+                        <option value="{{ sp.id }}" {{ 'selected' if q.rueck_wert_spalte == sp.id }}>{{ sp.title }}</option>
+                    {% endfor %}
+                </select>
+                {% else %}
+                <input type="text" name="rueck_wert_spalte" value="{{ q.rueck_wert_spalte }}" placeholder="Spalten-ID">
+                {% endif %}
+            </label>
+            <label class="schmal">Betrag
+                <select name="rueck_wert_basis">
+                    <option value="brutto" {{ 'selected' if q.rueck_wert_basis == 'brutto' }}>Endbetrag (brutto)</option>
+                    <option value="netto" {{ 'selected' if q.rueck_wert_basis == 'netto' }}>Netto</option>
+                </select>
+            </label>
+        </div>
+        <button class="knopf" type="submit">Rückspielung speichern</button>
+    </form>
+{% endfor %}
+
 <h2>Zuordnung monday-Person ↔ Tool-Benutzer</h2>
 {% if personen %}
 <table class="tabelle zusammenfassung">

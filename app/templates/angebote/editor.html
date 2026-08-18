@@ -61,6 +61,18 @@
 
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
+{% if angebot.monday_rueck_status == 'fehler' %}
+<div class="warnblock fehlerblock">
+    <strong>⚠ monday-Rückspielung fehlgeschlagen</strong> – der Quell-Deal wurde nicht
+    aktualisiert. Letzter Versuch: {{ angebot.monday_rueck_protokoll.splitlines()[-1] }}
+    {% if not nur_lesen %}
+    <form method="post" action="/angebote/{{ angebot.id }}/monday-rueckspielung" style="display:inline">
+        <button class="knopf klein" type="submit">Erneut übertragen</button>
+    </form>
+    {% endif %}
+</div>
+{% endif %}
+
 {% if angebot.status == 'Versand vorbereitet' and not nur_lesen %}
 <div class="formaktionen">
     {% if weblink %}
@@ -255,6 +267,20 @@ Vollmacht-Seite (Nachtext D): {{ 'ja (iMSys/SpotDynamic im Angebot)' if vollmach
 </ul>
 {% else %}
 <p class="dezent">Keine zusätzlichen Anhänge laut Blatt „Anhänge“.</p>
+{% endif %}
+
+{% if angebot.monday_rueck_protokoll %}
+<details>
+    <summary class="dezent">monday-Rückspielung – Protokoll
+        ({{ 'OK' if angebot.monday_rueck_status == 'ok' else angebot.monday_rueck_status }})
+        {% if not nur_lesen %}
+        <form method="post" action="/angebote/{{ angebot.id }}/monday-rueckspielung" style="display:inline">
+            <button class="knopf klein zweitrangig" type="submit">Erneut übertragen</button>
+        </form>
+        {% endif %}
+    </summary>
+    <pre class="hinweis">{{ angebot.monday_rueck_protokoll }}</pre>
+</details>
 {% endif %}
 
 {% if protokoll %}

@@ -97,9 +97,19 @@ _NACHTRAEGLICHE_SPALTEN = {
         "signatur_token_gueltig_bis": "DATETIME",
         "graph_conversation_id": "VARCHAR(200)",
         "archiviert": "BOOLEAN NOT NULL DEFAULT 0",
+        "monday_rueck_status": "VARCHAR(20) NOT NULL DEFAULT ''",
+        "monday_rueck_protokoll": "TEXT NOT NULL DEFAULT ''",
     },
     "benutzer": {
         "email": "VARCHAR(200) NOT NULL DEFAULT ''",
+    },
+    "monday_quellen": {
+        "rueck_modus": "VARCHAR(10) NOT NULL DEFAULT 'aus'",
+        "rueck_status_spalte": "VARCHAR(100) NOT NULL DEFAULT ''",
+        "rueck_status_wert": "VARCHAR(100) NOT NULL DEFAULT 'Angebot versendet'",
+        "rueck_gruppe_id": "VARCHAR(100) NOT NULL DEFAULT ''",
+        "rueck_wert_spalte": "VARCHAR(100) NOT NULL DEFAULT ''",
+        "rueck_wert_basis": "VARCHAR(10) NOT NULL DEFAULT 'brutto'",
     },
 }
 
