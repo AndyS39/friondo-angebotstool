@@ -26,7 +26,8 @@ def offene_leads(session: Session, benutzer=None):
 
 
 @router.get("")
-async def liste(request: Request, q: str = "", session: Session = Depends(get_session)):
+async def liste(request: Request, q: str = "", interesse: str = "",
+                session: Session = Depends(get_session)):
     from app import monday_sync
     benutzer = request.state.benutzer
     leads = offene_leads(session, benutzer)
@@ -36,11 +37,13 @@ async def liste(request: Request, q: str = "", session: Session = Depends(get_se
                  if suchwort in l.anzeige_name.lower()
                  or suchwort in (l.ort or "").lower()
                  or suchwort in (l.plz or "")]
+    if interesse:   # Filter nach Interesse (Phase 33)
+        leads = [l for l in leads if interesse in l.interessen]
     vertriebler = {b.id: b for b in session.query(Benutzer)}
     return render(request, "leads/liste.html", aktiv="/leads",
                   mobil=benutzer.rolle == "aussendienst",
                   leads=leads, vertriebler=vertriebler, benutzer=benutzer,
-                  q=q, sync_status=monday_sync.status,
+                  q=q, interesse=interesse, sync_status=monday_sync.status,
                   meldung=request.query_params.get("meldung", ""))
 
 

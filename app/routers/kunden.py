@@ -23,7 +23,11 @@ def _formular_lesen(form) -> dict:
     """Liest die Kundenfelder aus dem Formular (Whitespace bereinigt)."""
     felder = ["anrede", "firma", "vorname", "nachname", "strasse", "plz", "ort",
               "email", "telefon", "kunden_nr", "notizen"]
-    return {f: (form.get(f) or "").strip() for f in felder}
+    daten = {f: (form.get(f) or "").strip() for f in felder}
+    # Interesse (v5): Mehrfachauswahl als Checkboxen name="interesse"
+    from app.models import interesse_text
+    daten["interesse"] = interesse_text(form.getlist("interesse"))
+    return daten
 
 
 def _validieren(daten: dict) -> dict[str, str]:

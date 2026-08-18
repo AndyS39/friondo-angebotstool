@@ -160,6 +160,25 @@ def _normal(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").strip().lower())
 
 
+# monday-Interessen-Labels -> Tool-Codes (Phase 33); Vergleich ohne Groß/Klein.
+# Nicht aufgeführte Labels (HEMS, FBH, Gewerbe, ...) werden ignoriert.
+_INTERESSE_LABELS = {
+    "WP": ("wp", "wärmepumpe", "waermepumpe", "wp mfh", "wärmepumpe mfh", "heizung"),
+    "PV": ("pv", "photovoltaik", "pv mieterstrom", "solar", "speicher", "speichererweiterung"),
+    "KL": ("kl", "klima", "klimaanlage", "klimaanlagen"),
+    "WB": ("wb", "wallbox", "ladestation"),
+}
+
+
+def interesse_aus_text(text: str) -> str:
+    """"Klimaanlage, WP, HEMS" -> "WP,KL" (kanonische Reihenfolge)."""
+    from app.models import interesse_text
+    labels = {_normal(t) for t in re.split(r"[,;/|]", text or "") if t.strip()}
+    codes = [code for code, varianten in _INTERESSE_LABELS.items()
+             if labels & set(varianten)]
+    return interesse_text(codes)
+
+
 def kunde_fuer_lead(session: Session, lead: Lead):
     """Phase 24: der Sync legt jeden Lead sofort als Kunden an bzw. aktualisiert
     ihn (Duplikatabgleich Name + PLZ); nicht-leere monday-Werte gewinnen."""
@@ -175,7 +194,7 @@ def kunde_fuer_lead(session: Session, lead: Lead):
         kunde = Kunde()
         session.add(kunde)
     for feld in ("anrede", "vorname", "nachname", "strasse", "plz", "ort",
-                 "telefon", "email"):
+                 "telefon", "email", "interesse"):
         wert = getattr(lead, feld)
         if wert:
             setattr(kunde, feld, wert)
@@ -244,6 +263,7 @@ def _quelle_syncen(session: Session, quelle: MondayQuelle,
         lead.plz, lead.ort = _plz_ort_trennen(wert("plz"), wert("ort"))
         lead.telefon = wert("telefon")
         lead.email = wert("email")
+        lead.interesse = interesse_aus_text(wert("interesse"))   # Phase 33
         lead.monday_person = wert("verantwortlicher")
         if quelle.fester_benutzer_id:
             # Sonderregel (z. B. Deals - Rene): Verantwortlicher immer dieser Benutzer

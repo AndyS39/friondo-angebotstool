@@ -714,6 +714,11 @@ h2 { color: var(--friondo-dunkel); margin-top: 2rem; font-size: 1.15rem; }
 
 .abzeichen.status-versendet { background: #e3effa; color: #2c6cb0; }
 .abzeichen.status-versand-vorbereitet { background: #fdf3dc; color: #9a7016; }
+/* Interesse-Badges (v5) */
+.abzeichen.interesse-wp { background: #e3effa; color: #2c6cb0; margin-left: 0.2rem; }
+.abzeichen.interesse-pv { background: #fdf3dc; color: #9a7016; margin-left: 0.2rem; }
+.abzeichen.interesse-kl { background: #e0f5f4; color: #1f7f79; margin-left: 0.2rem; }
+.abzeichen.interesse-wb { background: #efe6f7; color: #6b3fa0; margin-left: 0.2rem; }
 .platzhalter { cursor: pointer; }
 .platzhalter:hover { background: #e3effa; }
 

@@ -26,8 +26,14 @@ class Kunde(Base):
     telefon: Mapped[str] = mapped_column(String(50), default="")
     kunden_nr: Mapped[str] = mapped_column(String(50), default="")     # Nummer aus TAIFUN, optional
     notizen: Mapped[str] = mapped_column(Text, default="")
+    # Interesse (v5): Mehrfach-Feld, Codes kommagetrennt, z. B. "WP,PV"
+    interesse: Mapped[str] = mapped_column(String(50), default="")
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    @property
+    def interessen(self) -> list[str]:
+        return interesse_liste(self.interesse)
 
     @property
     def anzeige_name(self) -> str:
@@ -36,6 +42,25 @@ class Kunde(Base):
         if self.firma and person:
             return f"{self.firma} ({person})"
         return self.firma or person
+
+
+# Interesse (v5): Codes und Anzeigenamen; Reihenfolge = Anzeigereihenfolge
+INTERESSEN = [("WP", "Wärmepumpe"), ("PV", "Photovoltaik"), ("KL", "Klima"), ("WB", "Wallbox")]
+INTERESSE_CODES = [code for code, _ in INTERESSEN]
+
+# Konfigurator-Typ (v5): aktuell nur WP; PV/Klima docken später als eigene
+# Kataloge an – jeder Vorgang trägt den Typ bereits mit.
+KONFIGURATOR_TYPEN = ["WP", "PV", "KL"]
+
+
+def interesse_liste(wert: str) -> list[str]:
+    """"WP,PV" -> ["WP", "PV"] in kanonischer Reihenfolge."""
+    gesetzt = {t.strip().upper() for t in (wert or "").split(",") if t.strip()}
+    return [code for code in INTERESSE_CODES if code in gesetzt]
+
+
+def interesse_text(codes) -> str:
+    return ",".join(interesse_liste(",".join(codes)))
 
 
 # Herkunft eines Artikels – steuert, was der Re-Import anfassen darf.
@@ -119,6 +144,7 @@ class Erfassung(Base):
     seite_index: Mapped[int] = mapped_column(Integer, default=0)       # Fortschritt beim Ausfüllen
     angebot_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     aenderungs_protokoll: Mapped[str] = mapped_column(Text, default="")  # Korrekturen Innendienst
+    konfigurator_typ: Mapped[str] = mapped_column(String(10), default="WP")   # v5
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     abgesendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
@@ -169,7 +195,7 @@ class MondayQuelle(Base):
 
 # Felder, die je Board auf monday-Spalten gemappt werden (Phase 22)
 MONDAY_FELDER = ["vot_datum", "verantwortlicher", "anrede", "vorname", "nachname",
-                 "strasse", "plz", "ort", "telefon", "email", "status"]
+                 "strasse", "plz", "ort", "telefon", "email", "status", "interesse"]
 
 
 class MondayMapping(Base):
@@ -213,8 +239,13 @@ class Lead(Base):
     benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Tool-Benutzer
     kunde_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     erfassung_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    interesse: Mapped[str] = mapped_column(String(50), default="")   # v5, aus monday
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
                                                      onupdate=datetime.now)
+
+    @property
+    def interessen(self) -> list[str]:
+        return interesse_liste(self.interesse)
 
     @property
     def anzeige_name(self) -> str:
@@ -261,6 +292,7 @@ class Angebot(Base):
     # Protokoll = eine Zeile je Versuch mit Zeitstempel
     monday_rueck_status: Mapped[str] = mapped_column(String(20), default="")
     monday_rueck_protokoll: Mapped[str] = mapped_column(Text, default="")
+    konfigurator_typ: Mapped[str] = mapped_column(String(10), default="WP")   # v5
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     positionen: Mapped[list["AngebotsPosition"]] = relationship(

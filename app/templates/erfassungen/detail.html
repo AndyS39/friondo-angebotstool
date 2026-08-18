@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_interesse.html" as interesse_ui %}
 
 {% block titel %}Erfassung {{ erfassung.id }} – Friondo Angebotstool{% endblock %}
 
@@ -19,6 +20,8 @@
 <p class="dezent">
     Kunde: <strong>{{ kunde.anzeige_name if kunde }}</strong>
     · Vertriebler: <strong>{{ vertriebler.name if vertriebler }}</strong>
+    · Konfigurator: <span class="abzeichen">{{ erfassung.konfigurator_typ or 'WP' }}</span>
+    {% if kunde and kunde.interessen %}· Interesse: {{ interesse_ui.badges(kunde.interessen) }}{% endif %}
     · Ampel:
     {% if erfassung.ampel == 'orange' %}<span class="ampel orange">● Individuell</span>
     {% else %}<span class="ampel gruen">● Konfigurierbar</span>{% endif %}

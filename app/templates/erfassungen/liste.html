@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_interesse.html" as interesse_ui %}
 
 {% block titel %}Erfassungen – Friondo Angebotstool{% endblock %}
 
@@ -19,6 +20,7 @@
         <option value="gruen" {{ 'selected' if ampel == 'gruen' }}>Konfigurierbar</option>
         <option value="orange" {{ 'selected' if ampel == 'orange' }}>Individuell</option>
     </select>
+    {{ interesse_ui.filter(interesse) }}
     <button class="knopf" type="submit">Filtern</button>
 </form>
 
@@ -33,6 +35,7 @@
             <td>{{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am }}</td>
             <td>
                 <a href="/erfassungen/{{ e.id }}">{{ kunden[e.kunde_id].anzeige_name if e.kunde_id in kunden else '?' }}</a>
+                {% if e.kunde_id in kunden %}{{ interesse_ui.badges(kunden[e.kunde_id].interessen) }}{% endif %}
                 {% if e.id in bemerkungen %}
                     <span class="bemerkung-symbol" title="{{ bemerkungen[e.id] | truncate(300) }}">📝</span>
                 {% endif %}

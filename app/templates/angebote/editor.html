@@ -5,6 +5,7 @@
 {% block inhalt %}
 <div class="seitenkopf">
     <h1>Angebot {{ angebot.nummer }}
+        <span class="abzeichen" title="Konfigurator-Typ">{{ angebot.konfigurator_typ or 'WP' }}</span>
         {% if angebot.archiviert %}<span class="abzeichen" title="Archiviert – nur über den Filter Archiv sichtbar">🗄 Archiv</span>{% endif %}
     </h1>
     <div class="aktionen">

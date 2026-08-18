@@ -55,12 +55,12 @@ Schaden), die update.bat führt sie automatisch aus.
 - [x] Test mit einem Test-Deal in monday (Status und Wert prüfen, dann zurücksetzen)
 
 ## Phase 33 – Interesse-Badges & Konfigurator-Typ
-- [ ] Mehrfach-Feld „Interesse" (WP / PV / KL / WB) an Lead und Kunde;
+- [x] Mehrfach-Feld „Interesse" (WP / PV / KL / WB) an Lead und Kunde;
       monday-Mapping um die Interesse-Spalte erweitern
-- [ ] Badges in „Leads VOT", Erfassungs- und Angebotsliste + Filter danach
-- [ ] Unterbau: Feld „Konfigurator-Typ" an Erfassung/Angebot (aktuell immer „WP"),
+- [x] Badges in „Leads VOT", Erfassungs- und Angebotsliste + Filter danach
+- [x] Unterbau: Feld „Konfigurator-Typ" an Erfassung/Angebot (aktuell immer „WP"),
       damit PV- und Klima-Konfigurator später als eigene Kataloge andocken
-- [ ] migrate.py erweitern (Interesse, Konfigurator-Typ)
+- [x] migrate.py erweitern (Interesse, Konfigurator-Typ)
 
 ## Phase 34 – Migration, Abnahme & Rollout
 - [ ] migrate.py final prüfen: läuft idempotent gegen eine Kopie der echten DB

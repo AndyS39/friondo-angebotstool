@@ -70,6 +70,18 @@
     </div>
 
     <div class="formzeile">
+        {% set interessen_gesetzt = (daten.get('interesse') if daten.get('interesse') is not none
+                                     else (kunde.interesse if kunde else '')) or '' %}
+        <span class="dezent" style="align-self:center">Interesse:</span>
+        {% for code, name in [('WP', 'Wärmepumpe'), ('PV', 'Photovoltaik'), ('KL', 'Klima'), ('WB', 'Wallbox')] %}
+            <label class="kontrollfeld">
+                <input type="checkbox" name="interesse" value="{{ code }}"
+                       {{ 'checked' if code in interessen_gesetzt.split(',') }}> {{ code }} – {{ name }}
+            </label>
+        {% endfor %}
+    </div>
+
+    <div class="formzeile">
         <label class="breit">Notizen
             <textarea name="notizen" rows="4">{{ wert('notizen') }}</textarea>
         </label>

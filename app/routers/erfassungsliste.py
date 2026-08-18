@@ -29,7 +29,7 @@ def _kontext(session: Session, erfassungen):
 
 @router.get("")
 async def liste(request: Request, q: str = "", status: str = "", ampel: str = "",
-                session: Session = Depends(get_session)):
+                interesse: str = "", session: Session = Depends(get_session)):
     abfrage = session.query(Erfassung).filter(Erfassung.status != "Entwurf")
     if status == "offen":   # Statistik-Kachel der Startseite (Phase 19)
         abfrage = abfrage.filter(Erfassung.status.in_(["Neu", "In Bearbeitung"]))
@@ -46,6 +46,9 @@ async def liste(request: Request, q: str = "", status: str = "", ampel: str = ""
                            and suchwort in kunden[e.kunde_id].anzeige_name.lower())
                        or (e.benutzer_id in benutzer
                            and suchwort in benutzer[e.benutzer_id].name.lower())]
+    if interesse:   # Filter nach Interesse des Kunden (Phase 33)
+        erfassungen = [e for e in erfassungen
+                       if e.kunde_id in kunden and interesse in kunden[e.kunde_id].interessen]
     # Bemerkungs-Symbol (Phase 24): O08 (Objekt) / A12 (alte Anlage) gefüllt?
     bemerkungen = {}
     for e in erfassungen:
@@ -57,6 +60,7 @@ async def liste(request: Request, q: str = "", status: str = "", ampel: str = ""
     return render(request, "erfassungen/liste.html", aktiv="/erfassungen",
                   erfassungen=erfassungen, kunden=kunden, benutzer_map=benutzer,
                   angebote=angebote, q=q, status=status, ampel=ampel,
+                  interesse=interesse,
                   bemerkungen=bemerkungen, status_liste=ERFASSUNG_STATUS,
                   meldung=request.query_params.get("meldung", ""))
 
@@ -160,6 +164,7 @@ async def angebot_erzeugen(erfassung_id: int, session: Session = Depends(get_ses
     antworten = json.loads(erfassung.antworten_json or "{}")
     angebot = angebot_aufbau.angebot_anlegen(session, erfassung.kunde_id,
                                              antworten=antworten, logik=logik)
+    angebot.konfigurator_typ = erfassung.konfigurator_typ or "WP"   # v5
     erfassung.angebot_id = angebot.id
     if erfassung.status == "Neu":
         erfassung.status = "In Bearbeitung"
@@ -178,6 +183,7 @@ async def manuelles_angebot(erfassung_id: int, session: Session = Depends(get_se
     angebot = angebot_aufbau.angebot_anlegen(session, erfassung.kunde_id,
                                              antworten=antworten, logik=logik,
                                              nur_protokoll=True)
+    angebot.konfigurator_typ = erfassung.konfigurator_typ or "WP"   # v5
     erfassung.angebot_id = angebot.id
     if erfassung.status == "Neu":
         erfassung.status = "In Bearbeitung"

@@ -42,7 +42,7 @@ def _kunden_map(session: Session, angebote) -> dict[int, Kunde]:
 
 
 @router.get("")
-async def liste(request: Request, q: str = "", status: str = "",
+async def liste(request: Request, q: str = "", status: str = "", interesse: str = "",
                 session: Session = Depends(get_session)):
     abfrage = session.query(Angebot).options(joinedload(Angebot.positionen))
     # Archiv (v5): Standardansicht ohne archivierte, Filter „Archiv“ nur diese
@@ -61,6 +61,9 @@ async def liste(request: Request, q: str = "", status: str = "",
                     or (a.kunde_id in kunden
                         and (suchwort in kunden[a.kunde_id].anzeige_name.lower()
                              or suchwort in (kunden[a.kunde_id].ort or "").lower()))]
+    if interesse:   # Filter nach Interesse des Kunden (Phase 33)
+        angebote = [a for a in angebote
+                    if a.kunde_id in kunden and interesse in kunden[a.kunde_id].interessen]
     # DB-Farbampel (Phase 24): Schwellen in Euro, in der Parametrierung pflegbar
     from app.models import einstellung_holen
     rot_unter = int(einstellung_holen(session, "db_ampel_rot_unter", "9000"))
@@ -74,6 +77,7 @@ async def liste(request: Request, q: str = "", status: str = "",
                         .group_by(AngebotsMail.angebot_id))
     return render(request, "angebote/liste.html", aktiv="/angebote",
                   angebote=angebote, kunden=kunden, q=q, status=status,
+                  interesse=interesse,
                   status_liste=ANGEBOT_STATUS, mail_zaehler=mail_zaehler,
                   db_rot_cent=rot_unter * 100, db_gruen_cent=gruen_ueber * 100,
                   meldung=request.query_params.get("meldung", ""))

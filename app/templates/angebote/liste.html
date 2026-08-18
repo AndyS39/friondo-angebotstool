@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_interesse.html" as interesse_ui %}
 
 {% block titel %}Angebote – Friondo Angebotstool{% endblock %}
 
@@ -19,6 +20,7 @@
         {% endfor %}
         <option value="archiv" {{ 'selected' if status == 'archiv' }}>Archiv</option>
     </select>
+    {{ interesse_ui.filter(interesse) }}
     <button class="knopf" type="submit">Filtern</button>
 </form>
 
@@ -46,7 +48,8 @@
                         ✉ {{ mail_zaehler[a.id] }}</a>
                 {% endif %}
             </td>
-            <td>{{ kunden[a.kunde_id].anzeige_name if a.kunde_id in kunden else '?' }}</td>
+            <td>{{ kunden[a.kunde_id].anzeige_name if a.kunde_id in kunden else '?' }}
+                {% if a.kunde_id in kunden %}{{ interesse_ui.badges(kunden[a.kunde_id].interessen) }}{% endif %}</td>
             <td>{{ a.datum.strftime('%d.%m.%Y') }}</td>
             <td><span class="abzeichen status-{{ a.status | lower | replace(' ', '-') }}">{{ a.status }}</span></td>
             <td class="rechts">{{ a.summen().brutto | euro }}</td>

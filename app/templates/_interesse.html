@@ -1,0 +1,16 @@
+{# Interesse-Badges (v5): WP / PV / KL / WB als kleine farbige Abzeichen #}
+{% macro badges(codes) -%}
+    {%- for c in codes -%}
+        <span class="abzeichen interesse-{{ c | lower }}" title="{{ {'WP': 'Wärmepumpe', 'PV': 'Photovoltaik', 'KL': 'Klima', 'WB': 'Wallbox'}[c] }}">{{ c }}</span>
+    {%- endfor -%}
+{%- endmacro %}
+
+{# Filter-Dropdown für die Suchleisten #}
+{% macro filter(aktuell) -%}
+    <select name="interesse">
+        <option value="">Alle Interessen</option>
+        {% for code, name in [('WP', 'Wärmepumpe'), ('PV', 'Photovoltaik'), ('KL', 'Klima'), ('WB', 'Wallbox')] %}
+            <option value="{{ code }}" {{ 'selected' if aktuell == code }}>{{ code }} – {{ name }}</option>
+        {% endfor %}
+    </select>
+{%- endmacro %}

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_interesse.html" as interesse_ui %}
 
 {% block titel %}Leads VOT – Friondo Angebotstool{% endblock %}
 
@@ -22,6 +23,7 @@
 
 <form method="get" action="/leads" class="suchleiste">
     <input type="text" name="q" value="{{ q }}" placeholder="Suche: Name, Ort, PLZ">
+    {{ interesse_ui.filter(interesse) }}
     <button class="knopf" type="submit">Suchen</button>
 </form>
 
@@ -34,7 +36,7 @@
     {% for lead in leads %}
         <tr>
             <td>{{ lead.vot_datum.strftime('%d.%m.%Y %H:%M') if lead.vot_datum }}</td>
-            <td>{{ lead.anzeige_name }}</td>
+            <td>{{ lead.anzeige_name }} {{ interesse_ui.badges(lead.interessen) }}</td>
             <td>{{ lead.plz }} {{ lead.ort }}</td>
             <td>{{ vertriebler[lead.benutzer_id].name if lead.benutzer_id in vertriebler else lead.monday_person }}</td>
             <td class="dezent">{{ lead.status_text }}</td>

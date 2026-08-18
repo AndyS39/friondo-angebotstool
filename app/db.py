@@ -99,9 +99,19 @@ _NACHTRAEGLICHE_SPALTEN = {
         "archiviert": "BOOLEAN NOT NULL DEFAULT 0",
         "monday_rueck_status": "VARCHAR(20) NOT NULL DEFAULT ''",
         "monday_rueck_protokoll": "TEXT NOT NULL DEFAULT ''",
+        "konfigurator_typ": "VARCHAR(10) NOT NULL DEFAULT 'WP'",
     },
     "benutzer": {
         "email": "VARCHAR(200) NOT NULL DEFAULT ''",
+    },
+    "kunden": {
+        "interesse": "VARCHAR(50) NOT NULL DEFAULT ''",
+    },
+    "leads": {
+        "interesse": "VARCHAR(50) NOT NULL DEFAULT ''",
+    },
+    "erfassungen": {
+        "konfigurator_typ": "VARCHAR(10) NOT NULL DEFAULT 'WP'",
     },
     "monday_quellen": {
         "rueck_modus": "VARCHAR(10) NOT NULL DEFAULT 'aus'",
