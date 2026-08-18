@@ -54,6 +54,81 @@ async def einstellungen_speichern(request: Request,
                             status_code=303)
 
 
+# --- E-Mail-Vorlagen (Phase 30) ------------------------------------------
+
+@router.get("/vorlagen")
+async def vorlagen_uebersicht(request: Request, benutzer_id: int = 0,
+                              angebot_id: int = 0,
+                              session: Session = Depends(get_session)):
+    """Standard-Vorlage + optionale Vorlage je Außendienstler, mit Platzhalter-
+    liste und Vorschau anhand eines echten Angebots."""
+    from app import mail_vorlagen
+    from app.models import Angebot, Benutzer, Kunde
+    aussendienst = (session.query(Benutzer)
+                    .filter(Benutzer.rolle == "aussendienst", Benutzer.aktiv.is_(True))
+                    .order_by(Benutzer.name).all())
+    ausgewaehlt = session.get(Benutzer, benutzer_id) if benutzer_id else None
+    betreff, text, quelle = mail_vorlagen.vorlage_laden(session, benutzer_id or None)
+    # Hat der AD eine eigene Vorlage? (sonst zeigen wir den Standard als Vorschlag)
+    eigene = bool(benutzer_id) and quelle != "Standard-Vorlage"
+    # Vorlagen-Status je AD für die Übersicht
+    hat_vorlage = {b.id: mail_vorlagen.vorlage_laden(session, b.id)[2] != "Standard-Vorlage"
+                   for b in aussendienst}
+    # Vorschau: gewähltes oder neuestes Angebot
+    angebote = (session.query(Angebot).filter(Angebot.archiviert.is_(False))
+                .order_by(Angebot.nummer.desc()).limit(30).all())
+    vorschau_angebot = session.get(Angebot, angebot_id) if angebot_id else (angebote[0] if angebote else None)
+    vorschau = None
+    if vorschau_angebot is not None:
+        kunde = session.get(Kunde, vorschau_angebot.kunde_id)
+        werte = mail_vorlagen.werte_fuer_angebot(session, vorschau_angebot, kunde,
+                                                 request.state.benutzer.name)
+        vorschau = {"betreff": mail_vorlagen.einsetzen(betreff, werte),
+                    "text": mail_vorlagen.einsetzen(text, werte),
+                    "werte": werte}
+    return render(request, "konfiguration/vorlagen.html", aktiv="/parametrierung",
+                  aussendienst=aussendienst, ausgewaehlt=ausgewaehlt,
+                  benutzer_id=benutzer_id, betreff=betreff, text=text,
+                  eigene=eigene, hat_vorlage=hat_vorlage,
+                  platzhalter=mail_vorlagen.PLATZHALTER,
+                  unbekannt=mail_vorlagen.unbekannte_platzhalter(betreff + text),
+                  angebote=angebote, vorschau_angebot=vorschau_angebot,
+                  vorschau=vorschau,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/vorlagen")
+async def vorlagen_speichern(request: Request, session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+
+    from app import mail_vorlagen
+    form = await request.form()
+    benutzer_id = form.get("benutzer_id") or ""
+    bid = int(benutzer_id) if benutzer_id.isdigit() and int(benutzer_id) > 0 else None
+    aktion = form.get("aktion") or "speichern"
+    if aktion == "entfernen" and bid:
+        # eigene AD-Vorlage löschen → Standard greift wieder
+        mail_vorlagen.vorlage_speichern(session, bid, "", "")
+        session.commit()
+        return RedirectResponse(f"/parametrierung/vorlagen?benutzer_id={bid}&meldung="
+                                + quote_plus("Eigene Vorlage entfernt – Standard gilt"),
+                                status_code=303)
+    betreff = (form.get("betreff") or "").strip()
+    text = (form.get("text") or "").strip()
+    if not betreff or not text:
+        return RedirectResponse(f"/parametrierung/vorlagen?benutzer_id={bid or 0}&meldung="
+                                + quote_plus("Betreff und Text dürfen nicht leer sein"),
+                                status_code=303)
+    mail_vorlagen.vorlage_speichern(session, bid, betreff, text)
+    session.commit()
+    unbekannt = mail_vorlagen.unbekannte_platzhalter(betreff + text)
+    meldung = "Vorlage gespeichert"
+    if unbekannt:
+        meldung += " – unbekannte Platzhalter bleiben im Text stehen: " + ", ".join(unbekannt)
+    return RedirectResponse(f"/parametrierung/vorlagen?benutzer_id={bid or 0}&meldung="
+                            + quote_plus(meldung), status_code=303)
+
+
 @router.get("/monday")
 async def monday_uebersicht(request: Request, session: Session = Depends(get_session)):
     """monday-Anbindung (Phase 22): Quellen, Spalten-Mapping, Personen-Zuordnung."""

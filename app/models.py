@@ -214,7 +214,9 @@ class Lead(Base):
         return person or self.email or f"monday-Item {self.monday_item_id}"
 
 
-ANGEBOT_STATUS = ["Entwurf", "Versendet", "Angenommen", "Abgelehnt"]
+# „Versand vorbereitet“ (v5): Entwurf liegt in Outlook; der Graph-Abgleich
+# stellt nach dem tatsächlichen Senden automatisch auf „Versendet“.
+ANGEBOT_STATUS = ["Entwurf", "Versand vorbereitet", "Versendet", "Angenommen", "Abgelehnt"]
 
 
 class Angebot(Base):

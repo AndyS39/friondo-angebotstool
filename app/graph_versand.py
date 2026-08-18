@@ -122,35 +122,13 @@ def abmelden() -> None:
 
 # --- Entwurf im Postfach --------------------------------------------------
 
-def _anrede(kunde: Kunde) -> str:
-    if kunde.anrede == "Herr" and kunde.nachname:
-        return f"Sehr geehrter Herr {kunde.nachname},"
-    if kunde.anrede == "Frau" and kunde.nachname:
-        return f"Sehr geehrte Frau {kunde.nachname},"
-    if kunde.anrede == "Familie" and kunde.nachname:
-        return f"Sehr geehrte Familie {kunde.nachname},"
-    return "Sehr geehrte Damen und Herren,"
-
-
-def standardtext(kunde: Kunde, angebot: Angebot, signatur_link: str = "") -> str:
-    signatur_absatz = ""
-    if signatur_link:
-        signatur_absatz = (
-            f"Sie möchten das Angebot direkt annehmen? Unter folgendem Link "
-            f"können Sie bequem online unterschreiben (auch am Smartphone):\n"
-            f"{signatur_link}\n\n")
-    return (f"{_anrede(kunde)}\n\n"
-            f"vielen Dank für Ihr Interesse an einer Wärmepumpe der Friondo GmbH.\n\n"
-            f"Anbei erhalten Sie Ihr individuelles Angebot {angebot.nummer} "
-            f"als PDF-Datei. Wir halten uns freibleibend 30 Tage an dieses "
-            f"Angebot gebunden.\n\n"
-            f"{signatur_absatz}"
-            f"Bei Fragen stehen wir Ihnen jederzeit gerne zur Verfügung – "
-            f"telefonisch unter 0203 - 3965 710 oder per E-Mail an info@friondo.de.\n\n"
-            f"Mit freundlichen Grüßen\n"
-            f"Ihr Friondo-Team\n\n"
-            f"Friondo GmbH · Arnold-Overbeck-Str. 63-65 · 47139 Duisburg\n"
-            f"www.friondo.de")
+def signatur_absatz(signatur_link: str) -> str:
+    """Wird bei aktiver Fern-Signatur (Phase 28) an den Vorlagentext angehängt."""
+    if not signatur_link:
+        return ""
+    return ("\n\nSie möchten das Angebot direkt annehmen? Unter folgendem Link "
+            "können Sie bequem online unterschreiben (auch am Smartphone):\n"
+            f"{signatur_link}")
 
 
 def _graph_aufruf(methode: str, pfad: str, token: str, daten: dict | None = None) -> dict:
@@ -193,14 +171,16 @@ def info_mail_senden(betreff: str, text: str) -> bool:
 
 
 def entwurf_erstellen(kunde: Kunde, angebot: Angebot, pdf_pfad: Path,
+                      betreff: str, text: str,
                       weitere_anhaenge: list[Path] | None = None,
                       fehlende_anhaenge: list[str] | None = None,
-                      signatur_link: str = ""
+                      cc: list[str] | None = None, bcc: list[str] | None = None,
+                      absender: str = ""
                       ) -> tuple[bool, str, str, str]:
-    """Legt den Entwurf mit Anhängen im Postfach ab.
-    Liefert (erfolg, meldung, weblink, conversation_id) – die conversation_id
-    wird am Angebot gespeichert, damit der Mail-Verlauf (Phase 27) die
-    Antworten der Konversation zuordnen kann."""
+    """Legt den Entwurf mit Anhängen im Postfach des angemeldeten Mitarbeiters ab.
+    Betreff/Text kommen aus den Vorlagen (Phase 30); absender setzt „Senden als“
+    (Phase 31, z. B. angebot@friondo.de – braucht die Berechtigung durch den
+    M365-Admin). Liefert (erfolg, meldung, weblink, conversation_id)."""
     if not kunde.email:
         return False, ("Der Kunde hat keine E-Mail-Adresse – bitte zuerst in der "
                        "Kundenverwaltung ergänzen."), "", ""
@@ -209,11 +189,17 @@ def entwurf_erstellen(kunde: Kunde, angebot: Angebot, pdf_pfad: Path,
         return False, "Nicht bei Microsoft angemeldet – bitte unter „Versand“ anmelden.", "", ""
     try:
         nachricht = {
-            "subject": f"Ihr Wärmepumpen-Angebot {angebot.nummer} der Friondo GmbH",
-            "body": {"contentType": "text",
-                     "content": standardtext(kunde, angebot, signatur_link)},
+            "subject": betreff,
+            "body": {"contentType": "text", "content": text},
             "toRecipients": [{"emailAddress": {"address": kunde.email}}],
         }
+        if cc:
+            nachricht["ccRecipients"] = [{"emailAddress": {"address": a}} for a in cc]
+        if bcc:
+            nachricht["bccRecipients"] = [{"emailAddress": {"address": a}} for a in bcc]
+        if absender:
+            # „Senden als“ – Outlook zeigt den Entwurf mit diesem Absender an
+            nachricht["from"] = {"emailAddress": {"address": absender}}
         entwurf = _graph_aufruf("POST", "/me/messages", token, nachricht)
         nachricht_id = entwurf["id"]
         for pfad in [pdf_pfad] + list(weitere_anhaenge or []):
@@ -224,7 +210,7 @@ def entwurf_erstellen(kunde: Kunde, angebot: Angebot, pdf_pfad: Path,
             })
         weblink = entwurf.get("webLink", "")
         meldung = ("Entwurf im Postfach abgelegt – bitte in Outlook prüfen und senden. "
-                   "Danach hier den Status auf „Versendet“ setzen.")
+                   "Der Status springt nach dem Senden automatisch auf „Versendet“.")
         if fehlende_anhaenge:
             meldung += (" Achtung, fehlende Anhang-Dateien im Ordner anlagen/: "
                         + ", ".join(fehlende_anhaenge))

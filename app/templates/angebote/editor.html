@@ -61,14 +61,17 @@
 
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-{% if versand == '1' and angebot.status == 'Entwurf' %}
+{% if angebot.status == 'Versand vorbereitet' and not nur_lesen %}
 <div class="formaktionen">
     {% if weblink %}
         <a class="knopf zweitrangig" href="{{ weblink }}" target="_blank">Entwurf in Outlook (Web) öffnen</a>
     {% endif %}
+    <span class="dezent">Der Entwurf liegt in Outlook. Nach dem Senden erkennt das Tool den
+        Versand automatisch (Abgleich alle 15 Min) und setzt „Versendet“ –
+        alternativ manuell:</span>
     <form method="post" action="/angebote/{{ angebot.id }}/status">
         <input type="hidden" name="status" value="Versendet">
-        <button class="knopf" type="submit">E-Mail wurde gesendet – Status auf „Versendet“ setzen</button>
+        <button class="knopf klein" type="submit">Jetzt auf „Versendet“ setzen</button>
     </form>
 </div>
 {% endif %}

@@ -400,14 +400,36 @@ async def email_entwurf(request: Request, angebot_id: int,
             basis = str(request.base_url).rstrip("/")
         signatur_link = f"{basis}/signatur/extern/{token}"
         session.commit()
+    # Vorlage (Phase 30): AD des Vorgangs, sonst Standard; Platzhalter füllen
+    from app import mail_vorlagen
+    from app.models import einstellung_holen
+    betreff, text, vorlage_quelle = mail_vorlagen.mail_fuer_angebot(
+        session, angebot, kunde, request.state.benutzer.name)
+    text += graph_versand.signatur_absatz(signatur_link)
+    # Phase 31: Absender angebot@friondo.de, CC = AD des Vorgangs, BCC aus Parametrierung
+    absender = einstellung_holen(session, "mail_absender", "angebot@friondo.de")
+    bcc = [a.strip() for a in einstellung_holen(session, "mail_bcc", "").split(",") if a.strip()]
+    vertriebler = mail_vorlagen.vertriebler_fuer_angebot(session, angebot)
+    cc = [vertriebler.email] if vertriebler and vertriebler.email else []
+    cc_hinweis = ""
+    if vertriebler and not vertriebler.email:
+        cc_hinweis = (f" ACHTUNG: {vertriebler.name} hat keine E-Mail-Adresse hinterlegt – "
+                      "Entwurf ohne CC (Benutzerverwaltung ergänzen).")
+    elif vertriebler is None:
+        cc_hinweis = " Hinweis: kein Außendienstler zugeordnet – Entwurf ohne CC."
     erfolg, meldung, weblink, conversation_id = graph_versand.entwurf_erstellen(
-        kunde, angebot, pdf_pfad,
+        kunde, angebot, pdf_pfad, betreff, text,
         weitere_anhaenge=[Path(a.pfad) for a in anhaenge if a.vorhanden],
         fehlende_anhaenge=[a.datei for a in anhaenge if not a.vorhanden],
-        signatur_link=signatur_link)
-    if erfolg and conversation_id:
+        cc=cc, bcc=bcc, absender=absender)
+    if erfolg:
+        meldung += f" ({vorlage_quelle}, Absender {absender})" + cc_hinweis
         # Mail-Verlauf (Phase 27): Konversation der Angebots-Mail merken
-        angebot.graph_conversation_id = conversation_id
+        if conversation_id:
+            angebot.graph_conversation_id = conversation_id
+        # Status-Kette (Phase 31): „Versand vorbereitet“ → Graph-Abgleich → „Versendet“
+        if angebot.status == "Entwurf":
+            angebot.status = "Versand vorbereitet"
         session.commit()
     ziel = f"/angebote/{angebot_id}?meldung={quote_plus(meldung)}"
     if erfolg:

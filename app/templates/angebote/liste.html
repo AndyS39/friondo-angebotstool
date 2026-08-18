@@ -48,7 +48,7 @@
             </td>
             <td>{{ kunden[a.kunde_id].anzeige_name if a.kunde_id in kunden else '?' }}</td>
             <td>{{ a.datum.strftime('%d.%m.%Y') }}</td>
-            <td><span class="abzeichen status-{{ a.status | lower }}">{{ a.status }}</span></td>
+            <td><span class="abzeichen status-{{ a.status | lower | replace(' ', '-') }}">{{ a.status }}</span></td>
             <td class="rechts">{{ a.summen().brutto | euro }}</td>
             {% set deckung = a.deckungsbeitrag() %}
             {% set db_farbe = 'db-rot' if deckung.db < db_rot_cent

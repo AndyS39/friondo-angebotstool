@@ -19,14 +19,14 @@ Schaden), die update.bat führt sie automatisch aus.
 - [x] migrate.py: neue Felder (Benutzer-E-Mail, Archiv-Flag)
 
 ## Phase 30 – E-Mail-Vorlagen je Außendienstler
-- [ ] Parametrierung „E-Mail-Vorlagen": Standard-Vorlage (Betreff + Text) und
+- [x] Parametrierung „E-Mail-Vorlagen": Standard-Vorlage (Betreff + Text) und
       optionale Vorlage je Außendienstler; beim Versand zieht das Tool die Vorlage
       des AD des Vorgangs, sonst den Standard
-- [ ] Platzhalter: {anrede}, {vorname}, {nachname}, {angebotsnummer}, {endbetrag},
+- [x] Platzhalter: {anrede}, {vorname}, {nachname}, {angebotsnummer}, {endbetrag},
       {eigenanteil}, {foerderung}, {gueltig_bis}, {vertriebler}, {absender} –
       mit Platzhalterliste im Editor und Vorschau anhand eines echten Angebots
-- [ ] Bisherigen festen Mailtext als Standard-Vorlage migrieren
-- [ ] Rechte: Admin und Innendienst pflegen alle Vorlagen
+- [x] Bisherigen festen Mailtext als Standard-Vorlage migrieren
+- [x] Rechte: Admin und Innendienst pflegen alle Vorlagen
 
 ## Phase 31 – Versand-Automatik & Absender angebot@friondo.de
 - [ ] Entwurf setzt Absender fest auf angebot@friondo.de („Senden als");

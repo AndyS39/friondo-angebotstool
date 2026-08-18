@@ -713,6 +713,9 @@ h2 { color: var(--friondo-dunkel); margin-top: 2rem; font-size: 1.15rem; }
 .db-gruen { color: #2c6b22; font-weight: 700; }
 
 .abzeichen.status-versendet { background: #e3effa; color: #2c6cb0; }
+.abzeichen.status-versand-vorbereitet { background: #fdf3dc; color: #9a7016; }
+.platzhalter { cursor: pointer; }
+.platzhalter:hover { background: #e3effa; }
 
 /* Brief-Symbol mit Antwort-Zähler in der Angebotsliste (Phase 27) */
 .mail-abzeichen {

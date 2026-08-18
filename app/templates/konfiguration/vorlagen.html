@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block titel %}E-Mail-Vorlagen – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>E-Mail-Vorlagen</h1>
+    <a class="knopf klein zweitrangig" href="/parametrierung">Zurück zur Parametrierung</a>
+</div>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<p class="dezent">Beim „Versand vorbereiten“ nimmt das Tool die Vorlage des Außendienstlers
+des Vorgangs (über die Erfassung); hat er keine eigene, gilt die Standard-Vorlage.
+Pflege durch Admin und Innendienst.</p>
+
+<form method="get" action="/parametrierung/vorlagen" class="suchleiste">
+    <label class="kontrollfeld">Vorlage für
+        <select name="benutzer_id" onchange="this.form.submit()">
+            <option value="0" {{ 'selected' if not benutzer_id }}>Standard (alle)</option>
+            {% for b in aussendienst %}
+                <option value="{{ b.id }}" {{ 'selected' if benutzer_id == b.id }}>
+                    {{ b.name }}{{ ' ✓ eigene' if hat_vorlage[b.id] else ' (Standard)' }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    {% if vorschau_angebot %}
+    <label class="kontrollfeld">Vorschau mit Angebot
+        <select name="angebot_id" onchange="this.form.submit()">
+            {% for a in angebote %}
+                <option value="{{ a.id }}" {{ 'selected' if a.id == vorschau_angebot.id }}>{{ a.nummer }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    {% endif %}
+</form>
+
+<div class="konfigurator-spalten">
+    <form method="post" action="/parametrierung/vorlagen" class="formular konfigurator-haupt">
+        <input type="hidden" name="benutzer_id" value="{{ benutzer_id }}">
+        <p><strong>{{ 'Vorlage für ' ~ ausgewaehlt.name if ausgewaehlt else 'Standard-Vorlage' }}</strong>
+        {% if ausgewaehlt and not eigene %}
+            <span class="dezent">– noch keine eigene; unten steht der Standard als Ausgangspunkt</span>
+        {% endif %}</p>
+        <div class="formzeile">
+            <label class="breit">Betreff <input type="text" name="betreff" value="{{ betreff }}"></label>
+        </div>
+        <div class="formzeile">
+            <label class="breit">Text <textarea name="text" rows="16">{{ text }}</textarea></label>
+        </div>
+        {% if unbekannt %}
+        <p class="meldung fehler">Unbekannte Platzhalter: {{ unbekannt | join(', ') }}</p>
+        {% endif %}
+        <div class="formaktionen">
+            <button class="knopf" type="submit" name="aktion" value="speichern">Speichern</button>
+            {% if ausgewaehlt and eigene %}
+            <button class="knopf zweitrangig" type="submit" name="aktion" value="entfernen"
+                    onclick="return confirm('Eigene Vorlage von {{ ausgewaehlt.name }} entfernen? Danach gilt der Standard.');">
+                Eigene Vorlage entfernen</button>
+            {% endif %}
+        </div>
+    </form>
+
+    <div class="konfigurator-protokoll">
+        <p><strong>Platzhalter</strong> <span class="dezent">(anklicken zum Kopieren)</span></p>
+        <table class="tabelle">
+            <tbody>
+            {% for p, erkl in platzhalter %}
+                <tr>
+                    <td><code class="platzhalter" onclick="navigator.clipboard && navigator.clipboard.writeText('{{ p }}')" title="Kopieren">{{ p }}</code></td>
+                    <td class="dezent">{{ erkl }}
+                        {% if vorschau %}<br><strong>{{ vorschau.werte[p[1:-1]] }}</strong>{% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if vorschau %}
+<h2>Vorschau <span class="dezent">– Angebot {{ vorschau_angebot.nummer }}</span></h2>
+<div class="hinweis">
+    <p><strong>Betreff:</strong> {{ vorschau.betreff }}</p>
+    <pre style="white-space: pre-wrap; font-family: inherit;">{{ vorschau.text }}</pre>
+</div>
+{% else %}
+<p class="dezent">Für die Vorschau wird ein vorhandenes Angebot benötigt.</p>
+{% endif %}
+{% endblock %}
