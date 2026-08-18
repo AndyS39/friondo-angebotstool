@@ -10,6 +10,10 @@ schtasks /End /TN "Friondo Angebotstool" >nul 2>&1
 timeout /t 3 /nobreak >nul
 
 echo [2/5] Neuen Stand holen (git pull) ...
+git remote get-url origin >nul 2>&1 || (
+    echo FEHLER: Kein Git-Remote origin eingerichtet - siehe docs\nach-dem-update-v5.md, Abschnitt Rollout.
+    goto :ende
+)
 git pull --ff-only || (echo FEHLER: git pull fehlgeschlagen & goto :ende)
 
 echo [3/5] Abhaengigkeiten aktualisieren ...

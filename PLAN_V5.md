@@ -63,11 +63,13 @@ Schaden), die update.bat führt sie automatisch aus.
 - [x] migrate.py erweitern (Interesse, Konfigurator-Typ)
 
 ## Phase 34 – Migration, Abnahme & Rollout
-- [ ] migrate.py final prüfen: läuft idempotent gegen eine Kopie der echten DB
-- [ ] Regressionstests: Kontroll-Szenarien (KG-Fall, DG-Fall, Rabatt) unverändert
-- [ ] docs/nach-dem-update-v5.md erstellen: ① M365-Admin vergibt „Senden als"
+- [x] migrate.py final prüfen: läuft idempotent gegen eine Kopie der echten DB
+- [x] Regressionstests: Kontroll-Szenarien (KG-Fall, DG-Fall, Rabatt) unverändert
+- [x] docs/nach-dem-update-v5.md erstellen: ① M365-Admin vergibt „Senden als"
       für angebot@friondo.de an alle ID-Mitarbeiter ② Graph-Berechtigungen
       erweitern + Admin-Zustimmung erneuern ③ Parametrierung: BCC-Adresse prüfen,
       monday-Rückspiel-Mapping zuweisen, Interesse-Spalte mappen ④ E-Mail-Adressen
       der Benutzer eintragen ⑤ Vorlagentexte je AD hinterlegen ⑥ Testversand
 - [ ] git push; danach Rollout am Server über update.bat (führt migrate.py aus)
+      OFFEN: Git-Remote fehlt (kein origin) – Einrichtung Variante A/B in
+      docs/nach-dem-update-v5.md; alle Commits liegen lokal auf master bereit.
