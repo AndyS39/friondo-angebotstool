@@ -95,6 +95,6 @@ Schaden), die update.bat führt sie automatisch aus.
       erweitern + Admin-Zustimmung erneuern ③ Parametrierung: BCC-Adresse prüfen,
       monday-Rückspiel-Mapping zuweisen, Interesse-Spalte mappen ④ E-Mail-Adressen
       der Benutzer eintragen ⑤ Vorlagentexte je AD hinterlegen ⑥ Testversand
-- [ ] git push; danach Rollout am Server über update.bat (führt migrate.py aus)
-      OFFEN: GitHub-Remote braucht deine Anmeldung – privates Repo anlegen,
-      dann scripts\github-einrichten.bat <URL> (docs/updates.md); Commits liegen lokal bereit.
+- [x] git push; danach Rollout am Server über update.bat (führt migrate.py aus)
+      (Push erledigt 19.08.2026 → https://github.com/AndyS39/friondo-angebotstool;
+      Server-Schritt: docs/updates.md Abschnitt 1.3, dann update.bat)

@@ -96,5 +96,6 @@ Im Angebots-Editor (nur Innendienst/Admin):
 
 Die Auslieferung läuft über **git push** (PC) und **update.bat** (Server, mit
 Backup, getrennten Fehlerpfaden und `rollback.bat`). Der komplette Ablauf
-inklusive der einmaligen GitHub-Einrichtung (privates Repository, noch
-offen – `scripts\github-einrichten.bat`) steht in **`docs/updates.md`**.
+inklusive der einmaligen GitHub-Einrichtung (Repository
+`https://github.com/AndyS39/friondo-angebotstool`, PC-Seite erledigt, Server-Seite
+noch offen) steht in **`docs/updates.md`**.

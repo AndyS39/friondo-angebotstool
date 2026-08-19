@@ -7,16 +7,16 @@ zurück.
 
 ## 1. Einmalige Einrichtung (GitHub, privates Repository)
 
-**Stand 19.08.2026: noch nicht eingerichtet** – auf dem Entwicklungs-PC gibt es
-keine GitHub-Anmeldung, daher sind diese drei Schritte von Hand nötig
-(dauert ca. 5 Minuten):
+**Stand 19.08.2026: Repository `https://github.com/AndyS39/friondo-angebotstool`
+(privat) ist angelegt, der Entwicklungs-PC pusht dorthin (Schritte 1 und 2 erledigt).
+Offen ist nur noch Schritt 3 auf dem Server:**
 
 1. Auf https://github.com/new ein **privates** Repository anlegen, Name z. B.
    `friondo-angebotstool`, **ohne** README/.gitignore/Lizenz (leer lassen).
 2. Am Entwicklungs-PC im Projektordner `C:\Users\Andreas\Documents\Claude\Angebotserstellungtool`:
 
    ```bat
-   scripts\github-einrichten.bat https://github.com/DEIN-KONTO/friondo-angebotstool.git
+   scripts\github-einrichten.bat https://github.com/AndyS39/friondo-angebotstool.git
    ```
 
    Das Skript setzt `origin`, pusht `master` und setzt den Upstream. Beim ersten
@@ -25,7 +25,7 @@ keine GitHub-Anmeldung, daher sind diese drei Schritte von Hand nötig
 3. Auf dem **Server** einmalig als Administrator in `C:\Friondo\Angebotstool`:
 
    ```bat
-   git remote add origin https://github.com/DEIN-KONTO/friondo-angebotstool.git
+   git remote add origin https://github.com/AndyS39/friondo-angebotstool.git
    git fetch origin
    git branch --set-upstream-to=origin/master master
    ```
