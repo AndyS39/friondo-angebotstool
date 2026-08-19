@@ -24,7 +24,29 @@
 <form method="get" action="/leads" class="suchleiste">
     <input type="text" name="q" value="{{ q }}" placeholder="Suche: Name, Ort, PLZ">
     {{ interesse_ui.filter(interesse) }}
-    <button class="knopf" type="submit">Suchen</button>
+    {% if benutzer.rolle != 'aussendienst' %}
+    <select name="vertriebler_id">
+        <option value="0">Alle Vertriebler</option>
+        {% for vid in vertriebler_werte %}
+            <option value="{{ vid }}" {{ 'selected' if vertriebler_id == vid }}>{{ vertriebler[vid].name if vid in vertriebler else vid }}</option>
+        {% endfor %}
+    </select>
+    {% endif %}
+    <select name="lead_status">
+        <option value="">Alle Status</option>
+        {% for st in status_werte %}
+            <option value="{{ st }}" {{ 'selected' if lead_status == st }}>{{ st }}</option>
+        {% endfor %}
+    </select>
+    <select name="sortierung" title="Sortierung">
+        <option value="termin" {{ 'selected' if sortierung == 'termin' }}>Sortierung: Termin</option>
+        <option value="vertriebler" {{ 'selected' if sortierung == 'vertriebler' }}>Sortierung: Vertriebler</option>
+        <option value="status" {{ 'selected' if sortierung == 'status' }}>Sortierung: Status</option>
+    </select>
+    <button class="knopf" type="submit">Filtern</button>
+    {% if q or interesse or vertriebler_id or lead_status or sortierung != 'termin' %}
+        <a class="knopf klein zweitrangig" href="/leads">Zurücksetzen</a>
+    {% endif %}
 </form>
 
 {% if leads %}

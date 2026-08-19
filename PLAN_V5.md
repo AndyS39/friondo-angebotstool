@@ -76,15 +76,15 @@ Schaden), die update.bat führt sie automatisch aus.
 - [x] migrate.py erweitern (eigene Nummer, Rabatt, bauseits, Originalpreis)
 
 ## Phase 35 – Leads-VOT-Filter, Logik v5 & Briefanrede
-- [ ] Leads VOT: Filter + Sortierung nach Termin, Vertriebler und Status,
+- [x] Leads VOT: Filter + Sortierung nach Termin, Vertriebler und Status,
       kombinierbar mit der Suche
-- [ ] konfigurator_logik_v5.xlsx einlesen: neue Frage A13 „Leitungslänge zwischen
+- [x] konfigurator_logik_v5.xlsx einlesen: neue Frage A13 „Leitungslänge zwischen
       Hauseinführung und WP-Inneneinheit (m)" → Pos. 103 × (Eingabe − 5 m,
       nie unter 0; die ersten 5 m stecken in Pos. 006), analog Erdleitungs-Abzug;
       SLS/ÜSS/APZ-Fragen entfallen (E02 = Nein → keine Folgefragen)
-- [ ] Regressionstest: Kontroll-Szenarien um A13 ergänzen (Beispiel 8 m →
+- [x] Regressionstest: Kontroll-Szenarien um A13 ergänzen (Beispiel 8 m →
       Pos. 103 ×3 = 267,00 € netto zusätzlich; Beispiel 4 m → keine Position)
-- [ ] Briefanrede im PDF-Vortext dynamisch (Herr/Frau + Nachname, Fallback
+- [x] Briefanrede im PDF-Vortext dynamisch (Herr/Frau + Nachname, Fallback
       „Sehr geehrte Damen und Herren"); Platzhalter {briefanrede} in Mail-Vorlagen
 
 ## Phase 36 – Migration, Abnahme & Rollout

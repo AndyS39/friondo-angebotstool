@@ -13,7 +13,7 @@ from app.models import (Angebot, Benutzer, Erfassung, Kunde, einstellung_holen,
 # Bisheriger fester Text (Phase 17) – wird per migrate.py zur Standard-Vorlage
 STANDARD_BETREFF = "Ihr Wärmepumpen-Angebot {angebotsnummer} der Friondo GmbH"
 STANDARD_TEXT = (
-    "{anrede}\n\n"
+    "{briefanrede}\n\n"
     "vielen Dank für Ihr Interesse an einer Wärmepumpe der Friondo GmbH.\n\n"
     "Anbei erhalten Sie Ihr individuelles Angebot {angebotsnummer} als PDF-Datei. "
     "Wir halten uns freibleibend 30 Tage an dieses Angebot gebunden "
@@ -27,7 +27,8 @@ STANDARD_TEXT = (
     "www.friondo.de")
 
 PLATZHALTER = [
-    ("{anrede}", "Briefanrede, z. B. „Sehr geehrte Frau Beispiel,“"),
+    ("{briefanrede}", "Briefanrede, z. B. „Sehr geehrte Frau Beispiel,“ (identisch mit dem PDF-Vortext)"),
+    ("{anrede}", "wie {briefanrede} (Kurzform, aus v5-Vorlagen)"),
     ("{vorname}", "Vorname des Kunden"),
     ("{nachname}", "Nachname des Kunden"),
     ("{angebotsnummer}", "Angebotsnummer, z. B. AN-C-261015"),
@@ -43,15 +44,11 @@ _MUSTER = re.compile(r"\{[a-z_]+\}")
 
 
 def briefanrede(kunde: Kunde | None) -> str:
+    """Gemeinsamer Baustein (v5): Kunde.briefanrede – im PDF-Vortext und als
+    Platzhalter {briefanrede}/{anrede} in den Mail-Vorlagen identisch."""
     if kunde is None:
         return "Sehr geehrte Damen und Herren,"
-    if kunde.anrede == "Herr" and kunde.nachname:
-        return f"Sehr geehrter Herr {kunde.nachname},"
-    if kunde.anrede == "Frau" and kunde.nachname:
-        return f"Sehr geehrte Frau {kunde.nachname},"
-    if kunde.anrede == "Familie" and kunde.nachname:
-        return f"Sehr geehrte Familie {kunde.nachname},"
-    return "Sehr geehrte Damen und Herren,"
+    return kunde.briefanrede
 
 
 def vertriebler_fuer_angebot(session, angebot: Angebot) -> Benutzer | None:
@@ -86,6 +83,7 @@ def werte_fuer_angebot(session, angebot: Angebot, kunde: Kunde | None,
     vertriebler = vertriebler_fuer_angebot(session, angebot)
     gueltig_bis = (angebot.datum + timedelta(days=30)).strftime("%d.%m.%Y") if angebot.datum else ""
     return {
+        "briefanrede": briefanrede(kunde),
         "anrede": briefanrede(kunde),
         "vorname": (kunde.vorname if kunde else "") or "",
         "nachname": (kunde.nachname if kunde else "") or "",

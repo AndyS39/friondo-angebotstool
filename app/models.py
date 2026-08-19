@@ -36,6 +36,19 @@ class Kunde(Base):
         return interesse_liste(self.interesse)
 
     @property
+    def briefanrede(self) -> str:
+        """Briefanrede (v5) – identischer Baustein für PDF-Vortext und
+        Mail-Platzhalter {briefanrede}: Herr/Frau + Nachname, Familie,
+        sonst „Sehr geehrte Damen und Herren,“."""
+        if self.anrede == "Herr" and self.nachname:
+            return f"Sehr geehrter Herr {self.nachname},"
+        if self.anrede == "Frau" and self.nachname:
+            return f"Sehr geehrte Frau {self.nachname},"
+        if self.anrede == "Familie" and self.nachname:
+            return f"Sehr geehrte Familie {self.nachname},"
+        return "Sehr geehrte Damen und Herren,"
+
+    @property
     def anzeige_name(self) -> str:
         """Name für Listen und Auswahlfelder: Firma bzw. 'Nachname, Vorname'."""
         person = ", ".join(t for t in (self.nachname, self.vorname) if t)

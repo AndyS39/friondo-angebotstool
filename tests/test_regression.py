@@ -11,9 +11,10 @@ from app import konfigurator as engine
 from app.db import SessionLocal, init_db
 from app.logik import logik_einlesen
 
-# v3-stabiles Kontroll-Szenario (KG-Fall): E04–E06 sind seit Logik v3 reine
-# Protokollfragen ohne Artikel; die Detailwerte wurden entsprechend justiert,
-# die Summen entsprechen weiterhin exakt den in PLAN_V2/V3 fixierten Werten.
+# v5-stabiles Kontroll-Szenario (KG-Fall): E04–E06 (SLS/ÜSS/APZ) werden seit
+# Logik v5 nicht mehr abgefragt; neu ist A13 (Anschlussleitung Inneneinheit,
+# Pos. 103 × [Eingabe − 5]) – mit 4 m entsteht keine Position, die Summen
+# entsprechen weiterhin exakt den in PLAN_V2/V3 fixierten Werten.
 KONTROLL_SZENARIO = {
     # Objektdaten
     "O01": "EFH", "O02": 1995, "O03": 1, "O04": "Nein", "O05": 180,
@@ -21,7 +22,7 @@ KONTROLL_SZENARIO = {
     # Alte Anlage (Öl-Zweig, Erdleitung 8 m, Kunststofftank 5.000 L)
     "A01": "Öl", "A02": 2001, "A03": 15000, "A04": "KG", "A05": 8,
     "A07": "Ja", "A08": "Kunststoff", "A09": "bis 5.000 L",
-    "A10": "Nein", "A11": "Nein", "A12": "",
+    "A10": "Nein", "A11": "Nein", "A12": "", "A13": 4,
     # Neue Anlage (7-kW-AWM-Paket, 50-l-Puffer, Garagendach ohne Bitumen)
     "N01": "Luft/Wasser", "N02": "Ja", "N03": "bis 200 l",
     "N04": "Garagendach", "N05": "Nein", "N06": "50 l",
@@ -29,8 +30,8 @@ KONTROLL_SZENARIO = {
     "H01": "2", "H02": "Heizkörper und Fußbodenheizung",
     "H03": "Ja", "H04": {"S": 1, "M": 0, "L": 0, "XL": 0},
     "H05": "Nein", "H06": 2, "H07": [4, 4],
-    # Elektro/ZV (alles vorhanden – reine Protokollfragen)
-    "E01": "KG", "E02": "Nein", "E04": "Ja", "E05": "Ja", "E06": "Ja",
+    # Elektro/ZV (v5: SLS/ÜSS/APZ entfallen)
+    "E01": "KG", "E02": "Nein",
     # Friondo (HEMS ja)
     "P01": "Ja", "P02": "Nein", "P03": "Nein",
     # Förderung: 45.000 € Einkommen, Kind -> 35.000 -> +30 %; Satz 76 -> Deckel 70
@@ -62,6 +63,25 @@ class TestKontrollSzenario(unittest.TestCase):
     def test_erdleitung_8m_ergibt_5m(self):
         mengen = [p["menge"] for p in self.positionen if p["pos_nr"] == "102"]
         self.assertEqual(mengen, [5.0])
+
+    def test_a13_4m_keine_anschlussleitung(self):
+        # Logik v5: 4 m − 5 m < 0 -> keine Pos. 103
+        self.assertEqual([p for p in self.positionen if p["pos_nr"] == "103"], [])
+
+    def test_a13_8m_ergibt_3m_pos_103(self):
+        # Logik v5: 8 m − 5 m = 3 m × 89,00 € = 267,00 € netto zusätzlich
+        antworten = dict(KONTROLL_SZENARIO, A13=8)
+        positionen = angebot_aufbau.positionen_zusammenstellen(self.logik, antworten, self.session)
+        p103 = [p for p in positionen if p["pos_nr"] == "103"]
+        self.assertEqual([p["menge"] for p in p103], [3.0])
+        netto = sum(round(p["menge"] * p["e_preis_cent"]) for p in positionen if not p["ep_flag"])
+        self.assertEqual(netto, 2962937 + 26700)   # 29.896,37 €
+        self.assertIsNone(engine.naechste_frage(self.logik, antworten))
+
+    def test_sls_uess_apz_nicht_mehr_abgefragt(self):
+        self.assertNotIn("E04", self.logik.fragen)
+        self.assertNotIn("E05", self.logik.fragen)
+        self.assertNotIn("E06", self.logik.fragen)
 
     def test_summen(self):
         netto = self._netto_cent()
@@ -106,7 +126,7 @@ class TestKontrollSzenario(unittest.TestCase):
         self.assertIsNone(engine.naechste_frage(self.logik, antworten))
 
     def test_keine_zv_artikel_mehr(self):
-        # E04–E06 sind seit v3 reine Protokollfragen (Pos. 011 enthält alles)
+        # SLS/ÜSS/APZ-Komponenten stecken in Pos. 011 – 149/150/153 bleiben ungenutzt
         nummern = {p["pos_nr"] for p in self.positionen}
         self.assertFalse(nummern & {"149", "150", "153"})
 

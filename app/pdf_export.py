@@ -223,8 +223,9 @@ def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde):
              new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(3)
     pdf.set_font("Arial", "", 9)
+    # Briefanrede dynamisch (v5): Herr/Frau + Nachname, Fallback Damen und Herren
     pdf.multi_cell(0, 4.4,
-                   "Sehr geehrte Damen und Herren,\n\n"
+                   f"{kunde.briefanrede}\n\n"
                    "vielen Dank für Ihr Vertrauen in die Friondo GmbH. Sie haben eine "
                    "zukunftssichere Entscheidung getroffen – eine moderne Wärmepumpe senkt "
                    "Ihre Energiekosten, steigert den Wohnkomfort und macht Sie unabhängiger "

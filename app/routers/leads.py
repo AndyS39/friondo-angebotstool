@@ -2,6 +2,8 @@
 # Leads mit Vor-Ort-Termin und ohne abgesendete Erfassung, chronologisch.
 # Außendienst sieht nur eigene, Innendienst/Admin alle.
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import or_
@@ -27,10 +29,17 @@ def offene_leads(session: Session, benutzer=None):
 
 @router.get("")
 async def liste(request: Request, q: str = "", interesse: str = "",
+                vertriebler_id: int = 0, lead_status: str = "", sortierung: str = "termin",
                 session: Session = Depends(get_session)):
     from app import monday_sync
     benutzer = request.state.benutzer
-    leads = offene_leads(session, benutzer)
+    alle = offene_leads(session, benutzer)
+    vertriebler = {b.id: b for b in session.query(Benutzer)}
+    # Auswahlwerte für die Filter aus der ungefilterten Liste
+    status_werte = sorted({l.status_text for l in alle if l.status_text})
+    vertriebler_werte = sorted({l.benutzer_id for l in alle if l.benutzer_id},
+                               key=lambda i: vertriebler[i].name if i in vertriebler else "")
+    leads = alle
     if q:
         suchwort = q.lower()
         leads = [l for l in leads
@@ -39,11 +48,27 @@ async def liste(request: Request, q: str = "", interesse: str = "",
                  or suchwort in (l.plz or "")]
     if interesse:   # Filter nach Interesse (Phase 33)
         leads = [l for l in leads if interesse in l.interessen]
-    vertriebler = {b.id: b for b in session.query(Benutzer)}
+    # Filter Vertriebler + Status (v5, Phase 35) – kombinierbar mit Suche
+    if vertriebler_id:
+        leads = [l for l in leads if l.benutzer_id == vertriebler_id]
+    if lead_status:
+        leads = [l for l in leads if l.status_text == lead_status]
+    # Sortierung (v5): Termin (Standard), Vertriebler, Status – jeweils dann Termin
+    if sortierung == "vertriebler":
+        leads.sort(key=lambda l: ((vertriebler[l.benutzer_id].name if l.benutzer_id in vertriebler
+                                   else l.monday_person or "zzz").lower(), l.vot_datum or datetime.max))
+    elif sortierung == "status":
+        leads.sort(key=lambda l: ((l.status_text or "zzz").lower(), l.vot_datum or datetime.max))
+    else:
+        sortierung = "termin"
+        leads.sort(key=lambda l: l.vot_datum or datetime.max)
     return render(request, "leads/liste.html", aktiv="/leads",
                   mobil=benutzer.rolle == "aussendienst",
                   leads=leads, vertriebler=vertriebler, benutzer=benutzer,
-                  q=q, interesse=interesse, sync_status=monday_sync.status,
+                  q=q, interesse=interesse, vertriebler_id=vertriebler_id,
+                  lead_status=lead_status, sortierung=sortierung,
+                  status_werte=status_werte, vertriebler_werte=vertriebler_werte,
+                  sync_status=monday_sync.status,
                   meldung=request.query_params.get("meldung", ""))
 
 
