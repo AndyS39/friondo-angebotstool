@@ -61,55 +61,40 @@ echten Angebots).
    Brief-Symbol mit Zähler, Klick zeigt den Verlauf.
 4. Test-Deal in monday zurücksetzen, Testangebot archivieren oder löschen.
 
+## ⑦ Neu in der Logik v5 – bitte beachten
+
+Die Steuerdatei ist jetzt `konfigurator_logik_v5.xlsx`: Im Fragenkatalog gibt
+es die neue Frage **A13 „Leitungslänge zwischen Hauseinführung und
+WP-Inneneinheit (m)“** (immer, Seite „Alte Anlage“) → Pos. 103 ×
+(Eingabe − 5 m, nie unter 0; die ersten 5 m stecken in Pos. 006). Die Fragen
+SLS/ÜSS/APZ (E04–E06) werden nicht mehr gestellt. Bereits angelegte
+Erfassungen/Angebote bleiben unverändert.
+
+## Kurzanleitung Innendienst: Positionen, Preise, Rabatte, bauseits
+
+Im Angebots-Editor (nur Innendienst/Admin):
+
+- **Umsortieren:** Zeile am Griff **☰** ziehen und fallen lassen – das PDF
+  folgt exakt der neuen Reihenfolge.
+- **Positionsnummer:** Feld „Pos.“ in der Zeile frei ändern (z. B. „010“) und
+  mit Enter oder ✓ übernehmen; **„Neu durchnummerieren“** setzt alle Nummern
+  wieder auf fortlaufend 001, 002, …
+- **Einzelpreis:** Feld „E-Preis“ ändern → Kennzeichen ✎ „manuell geändert“,
+  der Originalpreis steht als Tooltip; der Deckungsbeitrag rechnet mit dem
+  geänderten Preis.
+- **Positionsrabatt:** Wert eintragen und **%** oder **€** wählen; der Abzug
+  erscheint unter dem Feld, im PDF als Zeile „abzgl. Rabatt … (− Betrag)“ an
+  der Position; er wirkt auf Summen, KfW-Basis und DB. Feld leeren = Rabatt
+  entfernen. (Der Gesamt-Rabatt unter der Summe bleibt zusätzlich möglich.)
+- **bauseits:** Häkchen in der Zeile → PDF zeigt „bauseits“ statt Preisen,
+  die Position zählt weder in Summe noch KfW noch DB (Leistung durch den
+  Kunden). Häkchen entfernen macht die Position wieder normal.
+
 ---
 
 ## Rollout: Entwicklungs-PC → Server
 
-Die Auslieferung läuft über **git push** (Entwicklungs-PC) und **update.bat**
-(Server: Dienst stoppen → `git pull` → `pip install` → `migrate.py` → Dienst
-starten). Dafür brauchen beide Seiten ein gemeinsames Git-Remote – **das ist
-noch nicht eingerichtet** (Stand 18.08.2026: kein `origin` konfiguriert).
-Zwei Varianten:
-
-**Variante A – Bare-Repository auf dem Fileserver (ohne Internetdienst):**
-
-Am Entwicklungs-PC (Pfad zur Freigabe anpassen):
-
-```bat
-git init --bare "\\FR-WFS-01\Daten\Friondo\Friondo GmbH\Tools\Angebotstool.git"
-git remote add origin "\\FR-WFS-01\Daten\Friondo\Friondo GmbH\Tools\Angebotstool.git"
-git push -u origin master
-```
-
-Auf dem Server einmalig im Projektordner `C:\Friondo\Angebotstool`:
-
-```bat
-git remote add origin "\\FR-WFS-01\Daten\Friondo\Friondo GmbH\Tools\Angebotstool.git"
-git fetch origin
-git branch --set-upstream-to=origin/master master
-```
-
-**Variante B – GitHub/Azure DevOps (privates Repository):** Repository anlegen,
-`git remote add origin <URL>` auf beiden Seiten, `git push -u origin master`
-am PC; auf dem Server muss dann Git mit Zugangsdaten (PAT) eingerichtet sein.
-
-**Danach bei jedem Update:** am PC `git push`, auf dem Server als Administrator
-im Projektordner:
-
-```bat
-update.bat
-```
-
-`update.bat` prüft, ob ein Remote eingerichtet ist, führt `migrate.py`
-automatisch aus (idempotent, mehrfach ausführbar) und startet den Dienst neu.
-Vor dem ersten v5-Update auf dem Server ist ein Backup von `data\` sinnvoll –
-das Tagesbackup nach `data\backups\` legt der App-Start ohnehin an.
-
-**Übergangsweise ohne Git-Remote:** Projektordner (ohne `venv\` und `data\`)
-per robocopy auf den Server kopieren und dort im Projektordner ausführen:
-
-```bat
-venv\Scripts\python migrate.py
-```
-
-anschließend den Dienst neu starten (`schtasks /End` + `schtasks /Run /TN "Friondo Angebotstool"`).
+Die Auslieferung läuft über **git push** (PC) und **update.bat** (Server, mit
+Backup, getrennten Fehlerpfaden und `rollback.bat`). Der komplette Ablauf
+inklusive der einmaligen GitHub-Einrichtung (privates Repository, noch
+offen – `scripts\github-einrichten.bat`) steht in **`docs/updates.md`**.

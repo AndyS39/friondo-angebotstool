@@ -88,11 +88,13 @@ Schaden), die update.bat führt sie automatisch aus.
       „Sehr geehrte Damen und Herren"); Platzhalter {briefanrede} in Mail-Vorlagen
 
 ## Phase 36 – Migration, Abnahme & Rollout
-- [ ] migrate.py final prüfen: läuft idempotent gegen eine Kopie der echten DB
-- [ ] Regressionstests: Kontroll-Szenarien (KG-Fall, DG-Fall, Rabatt) mit A13-Eingabe gemäß Phase 35
-- [ ] docs/nach-dem-update-v5.md erstellen (zusätzlich: Positionsrabatt-/bauseits-Kurzanleitung für den Innendienst): ① M365-Admin vergibt „Senden als"
+- [x] migrate.py final prüfen: läuft idempotent gegen eine Kopie der echten DB
+- [x] Regressionstests: Kontroll-Szenarien (KG-Fall, DG-Fall, Rabatt) mit A13-Eingabe gemäß Phase 35
+- [x] docs/nach-dem-update-v5.md erstellen (zusätzlich: Positionsrabatt-/bauseits-Kurzanleitung für den Innendienst): ① M365-Admin vergibt „Senden als"
       für angebot@friondo.de an alle ID-Mitarbeiter ② Graph-Berechtigungen
       erweitern + Admin-Zustimmung erneuern ③ Parametrierung: BCC-Adresse prüfen,
       monday-Rückspiel-Mapping zuweisen, Interesse-Spalte mappen ④ E-Mail-Adressen
       der Benutzer eintragen ⑤ Vorlagentexte je AD hinterlegen ⑥ Testversand
 - [ ] git push; danach Rollout am Server über update.bat (führt migrate.py aus)
+      OFFEN: GitHub-Remote braucht deine Anmeldung – privates Repo anlegen,
+      dann scripts\github-einrichten.bat <URL> (docs/updates.md); Commits liegen lokal bereit.
