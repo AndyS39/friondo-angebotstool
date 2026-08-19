@@ -253,6 +253,11 @@ class Lead(Base):
     kunde_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     erfassung_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     interesse: Mapped[str] = mapped_column(String(50), default="")   # v5, aus monday
+    # Ausblenden (v5-Nachtrag): aus „Leads VOT“ nehmen ohne zu löschen; der Sync
+    # lässt das Kennzeichen stehen, der Lead taucht also nicht erneut auf
+    ausgeblendet: Mapped[bool] = mapped_column(Boolean, default=False)
+    ausgeblendet_grund: Mapped[str] = mapped_column(String(300), default="")
+    ausgeblendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
                                                      onupdate=datetime.now)
 

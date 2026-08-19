@@ -38,13 +38,17 @@
             <option value="{{ st }}" {{ 'selected' if lead_status == st }}>{{ st }}</option>
         {% endfor %}
     </select>
+    <select name="ansicht" title="Ansicht">
+        <option value="" {{ 'selected' if not ausgeblendet }}>Offene Leads</option>
+        <option value="ausgeblendet" {{ 'selected' if ausgeblendet }}>Ausgeblendet</option>
+    </select>
     <select name="sortierung" title="Sortierung">
         <option value="termin" {{ 'selected' if sortierung == 'termin' }}>Sortierung: Termin</option>
         <option value="vertriebler" {{ 'selected' if sortierung == 'vertriebler' }}>Sortierung: Vertriebler</option>
         <option value="status" {{ 'selected' if sortierung == 'status' }}>Sortierung: Status</option>
     </select>
     <button class="knopf" type="submit">Filtern</button>
-    {% if q or interesse or vertriebler_id or lead_status or sortierung != 'termin' %}
+    {% if q or interesse or vertriebler_id or lead_status or sortierung != 'termin' or ausgeblendet %}
         <a class="knopf klein zweitrangig" href="/leads">Zurücksetzen</a>
     {% endif %}
 </form>
@@ -52,7 +56,8 @@
 {% if leads %}
 <table class="tabelle">
     <thead>
-        <tr><th>Termin</th><th>Kunde</th><th>Ort</th><th>Vertriebler</th><th>Status</th><th></th></tr>
+        <tr><th>Termin</th><th>Kunde</th><th>Ort</th><th>Vertriebler</th><th>Status</th>
+            {% if ausgeblendet %}<th>Ausgeblendet</th>{% endif %}<th></th></tr>
     </thead>
     <tbody>
     {% for lead in leads %}
@@ -62,14 +67,31 @@
             <td>{{ lead.plz }} {{ lead.ort }}</td>
             <td>{{ vertriebler[lead.benutzer_id].name if lead.benutzer_id in vertriebler else lead.monday_person }}</td>
             <td class="dezent">{{ lead.status_text }}</td>
+            {% if ausgeblendet %}
+            <td class="dezent">{{ lead.ausgeblendet_am.strftime('%d.%m.%Y') if lead.ausgeblendet_am }}
+                {% if lead.ausgeblendet_grund %}<br>{{ lead.ausgeblendet_grund }}{% endif %}</td>
+            <td class="aktionen">
+                <form method="post" action="/leads/{{ lead.id }}/zurueckholen">
+                    <button class="knopf klein" type="submit">Zurückholen</button>
+                </form>
+            </td>
+            {% else %}
             <td class="aktionen">
                 <a class="knopf klein" href="/leads/{{ lead.id }}/erfassen">Erfassung starten</a>
+                <form method="post" action="/leads/{{ lead.id }}/ausblenden" class="ausblenden-form"
+                      onsubmit="var g = prompt('Lead ausblenden: {{ lead.anzeige_name | e }}\nGrund (optional):', ''); if (g === null) return false; this.grund.value = g; return true;">
+                    <input type="hidden" name="grund" value="">
+                    <button class="knopf klein zweitrangig" type="submit" title="Aus Leads VOT ausblenden (zurückholbar)">Ausblenden</button>
+                </form>
             </td>
+            {% endif %}
         </tr>
     {% endfor %}
     </tbody>
 </table>
-<p class="dezent">{{ leads | length }} offene{{ 'r' if leads | length == 1 }} Lead{{ 's' if leads | length != 1 }}</p>
+<p class="dezent">{{ leads | length }} {{ 'ausgeblendete' if ausgeblendet else 'offene' }}{{ 'r' if leads | length == 1 and not ausgeblendet }} Lead{{ 's' if leads | length != 1 }}</p>
+{% elif ausgeblendet %}
+<p class="hinweis">Keine ausgeblendeten Leads.</p>
 {% else %}
 <p class="hinweis">Keine offenen Leads mit Vor-Ort-Termin.
 {% if benutzer.rolle != 'aussendienst' %}Die monday-Anbindung wird in der

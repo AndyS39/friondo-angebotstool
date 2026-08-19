@@ -21,7 +21,22 @@
         <option value="archiv" {{ 'selected' if status == 'archiv' }}>Archiv</option>
     </select>
     {{ interesse_ui.filter(interesse) }}
+    <select name="vertriebler_id">
+        <option value="0">Alle Vertriebler</option>
+        {% for vid in vertriebler_werte %}
+            <option value="{{ vid }}" {{ 'selected' if vertriebler_id == vid }}>{{ vertriebler[vid].name if vid in vertriebler else vid }}</option>
+        {% endfor %}
+    </select>
+    <select name="sortierung" title="Sortierung">
+        <option value="nummer" {{ 'selected' if sortierung == 'nummer' }}>Sortierung: Nummer</option>
+        <option value="datum" {{ 'selected' if sortierung == 'datum' }}>Sortierung: Datum</option>
+        <option value="kunde" {{ 'selected' if sortierung == 'kunde' }}>Sortierung: Kunde</option>
+        <option value="vertriebler" {{ 'selected' if sortierung == 'vertriebler' }}>Sortierung: Vertriebler</option>
+    </select>
     <button class="knopf" type="submit">Filtern</button>
+    {% if q or status or interesse or vertriebler_id or sortierung != 'nummer' %}
+        <a class="knopf klein zweitrangig" href="/angebote">Zurücksetzen</a>
+    {% endif %}
 </form>
 
 {% if angebote %}
@@ -30,6 +45,7 @@
         <tr>
             <th>Angebots-Nr.</th>
             <th>Kunde</th>
+            <th>Vertriebler</th>
             <th>Datum</th>
             <th>Status</th>
             <th class="rechts">Brutto</th>
@@ -50,6 +66,7 @@
             </td>
             <td>{{ kunden[a.kunde_id].anzeige_name if a.kunde_id in kunden else '?' }}
                 {% if a.kunde_id in kunden %}{{ interesse_ui.badges(kunden[a.kunde_id].interessen) }}{% endif %}</td>
+            <td class="dezent">{% set vid = angebot_vertriebler.get(a.id) %}{{ vertriebler[vid].name if vid in vertriebler else '–' }}</td>
             <td>{{ a.datum.strftime('%d.%m.%Y') }}</td>
             <td><span class="abzeichen status-{{ a.status | lower | replace(' ', '-') }}">{{ a.status }}</span></td>
             <td class="rechts">{{ a.summen().brutto | euro }}</td>

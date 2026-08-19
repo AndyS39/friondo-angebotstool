@@ -43,6 +43,7 @@ def _kunden_map(session: Session, angebote) -> dict[int, Kunde]:
 
 @router.get("")
 async def liste(request: Request, q: str = "", status: str = "", interesse: str = "",
+                vertriebler_id: int = 0, sortierung: str = "nummer",
                 session: Session = Depends(get_session)):
     abfrage = session.query(Angebot).options(joinedload(Angebot.positionen))
     # Archiv (v5): Standardansicht ohne archivierte, Filter „Archiv“ nur diese
@@ -64,6 +65,31 @@ async def liste(request: Request, q: str = "", status: str = "", interesse: str 
     if interesse:   # Filter nach Interesse des Kunden (Phase 33)
         angebote = [a for a in angebote
                     if a.kunde_id in kunden and interesse in kunden[a.kunde_id].interessen]
+    # Vertriebler je Angebot (v5-Nachtrag): über die verknüpfte Erfassung
+    from app.models import Benutzer, Erfassung
+    vertriebler = {b.id: b for b in session.query(Benutzer)}
+    angebot_vertriebler: dict[int, int] = {}
+    for e in session.query(Erfassung).filter(Erfassung.angebot_id.isnot(None)):
+        angebot_vertriebler[e.angebot_id] = e.benutzer_id
+    vertriebler_werte = sorted({angebot_vertriebler[a.id] for a in angebote
+                                if a.id in angebot_vertriebler},
+                               key=lambda i: vertriebler[i].name if i in vertriebler else "")
+    if vertriebler_id:
+        angebote = [a for a in angebote if angebot_vertriebler.get(a.id) == vertriebler_id]
+    # Sortierung (v5-Nachtrag): Nummer (Standard, absteigend), Datum, Kunde, Vertriebler
+    def name_von(a):
+        bid = angebot_vertriebler.get(a.id)
+        return (vertriebler[bid].name if bid in vertriebler else "zzz").lower()
+    if sortierung == "vertriebler":
+        angebote.sort(key=lambda a: (name_von(a), a.nummer))
+    elif sortierung == "kunde":
+        angebote.sort(key=lambda a: (kunden[a.kunde_id].anzeige_name.lower()
+                                     if a.kunde_id in kunden else "zzz", a.nummer))
+    elif sortierung == "datum":
+        from datetime import datetime as _dt
+        angebote.sort(key=lambda a: a.datum or _dt.min, reverse=True)
+    else:
+        sortierung = "nummer"
     # DB-Farbampel (Phase 24): Schwellen in Euro, in der Parametrierung pflegbar
     from app.models import einstellung_holen
     rot_unter = int(einstellung_holen(session, "db_ampel_rot_unter", "9000"))
@@ -77,7 +103,9 @@ async def liste(request: Request, q: str = "", status: str = "", interesse: str 
                         .group_by(AngebotsMail.angebot_id))
     return render(request, "angebote/liste.html", aktiv="/angebote",
                   angebote=angebote, kunden=kunden, q=q, status=status,
-                  interesse=interesse,
+                  interesse=interesse, vertriebler_id=vertriebler_id, sortierung=sortierung,
+                  vertriebler=vertriebler, angebot_vertriebler=angebot_vertriebler,
+                  vertriebler_werte=vertriebler_werte,
                   status_liste=ANGEBOT_STATUS, mail_zaehler=mail_zaehler,
                   db_rot_cent=rot_unter * 100, db_gruen_cent=gruen_ueber * 100,
                   meldung=request.query_params.get("meldung", ""))

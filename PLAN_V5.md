@@ -98,3 +98,13 @@ Schaden), die update.bat führt sie automatisch aus.
 - [x] git push; danach Rollout am Server über update.bat (führt migrate.py aus)
       (Push erledigt 19.08.2026 → https://github.com/AndyS39/friondo-angebotstool;
       Server-Schritt: docs/updates.md Abschnitt 1.3, dann update.bat)
+
+## Nachtrag v5 (19.08.2026)
+- [x] Leads VOT: „Ausblenden“ mit optionalem Grund, Ansicht „Ausgeblendet“ mit
+      Zurückholen; Sync lässt Ausgeblendete ausgeblendet (Test)
+- [x] Angebotsliste: Spalte „Vertriebler“, filter- und sortierbar
+- [x] A09-Kombinationslogik im Validator (Matrix A08 × A09) – Warnung in der
+      Parametrierung weg; Laufzeit-Test Öl → Ja → Stahl → bis 5.000 L → Z10 (1.812 €)
+- [x] Vier Broschüren in anlagen/ (Unternehmenspräsentation, Ratenkauf, HEMS,
+      SpotDynamic) im Repository; Blatt „Anhänge“ der Logik v5 auf die echten
+      Dateinamen/Regeln gesetzt, neu eingelesen

@@ -114,6 +114,9 @@ _NACHTRAEGLICHE_SPALTEN = {
     },
     "leads": {
         "interesse": "VARCHAR(50) NOT NULL DEFAULT ''",
+        "ausgeblendet": "BOOLEAN NOT NULL DEFAULT 0",
+        "ausgeblendet_grund": "VARCHAR(300) NOT NULL DEFAULT ''",
+        "ausgeblendet_am": "DATETIME",
     },
     "erfassungen": {
         "konfigurator_typ": "VARCHAR(10) NOT NULL DEFAULT 'WP'",

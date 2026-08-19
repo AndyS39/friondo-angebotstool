@@ -248,6 +248,9 @@ def _quelle_syncen(session: Session, quelle: MondayQuelle,
         neu = lead is None
         if neu:
             lead = Lead(monday_item_id=str(item["id"]))
+        # Hinweis (v5-Nachtrag): der Sync aktualisiert nur Stammdaten – das
+        # Kennzeichen „ausgeblendet“ bleibt stehen, ausgeblendete Leads tauchen
+        # also nicht erneut in „Leads VOT“ auf.
 
         lead.board_id = quelle.board_id
         lead.board_name = board_name

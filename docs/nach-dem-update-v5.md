@@ -70,6 +70,21 @@ WP-Inneneinheit (m)“** (immer, Seite „Alte Anlage“) → Pos. 103 ×
 SLS/ÜSS/APZ (E04–E06) werden nicht mehr gestellt. Bereits angelegte
 Erfassungen/Angebote bleiben unverändert.
 
+## ⑧ Nachtrag: Leads ausblenden, Vertriebler-Spalte, Anhänge
+
+- **Leads VOT → „Ausblenden“** (mit optionalem Grund) nimmt einen Lead aus der
+  Liste, ohne ihn zu löschen; über **Ansicht „Ausgeblendet“** sieht man ihn
+  samt Grund und kann ihn **zurückholen**. Der monday-Sync lässt ausgeblendete
+  Leads ausgeblendet. Außendienst kann nur eigene Leads ausblenden.
+- **Angebotsliste:** neue Spalte **Vertriebler** (über die verknüpfte
+  Erfassung), Filter „Alle Vertriebler“ und Sortierung Nummer/Datum/Kunde/
+  Vertriebler – kombinierbar mit Suche, Status und Interesse.
+- **Versand-Anhänge:** Das Blatt „Anhänge“ der Logik v5 verweist jetzt auf die
+  vier Broschüren in `anlagen\`: *Friondo Unternehmenspräsentation.pdf* und
+  *Broschüre Ratenkauf.pdf* immer, *Friondo HEMS.pdf* bei P01 = Ja, *Friondo
+  SpotDynamic.pdf* bei P03 = Ja. Die PDFs liegen im Repository und kommen mit
+  dem Update auf den Server.
+
 ## Kurzanleitung Innendienst: Positionen, Preise, Rabatte, bauseits
 
 Im Angebots-Editor (nur Innendienst/Admin):

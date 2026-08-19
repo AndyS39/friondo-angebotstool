@@ -16,12 +16,15 @@ from app.templating import render
 router = APIRouter(prefix="/leads")
 
 
-def offene_leads(session: Session, benutzer=None):
+def offene_leads(session: Session, benutzer=None, ausgeblendet: bool = False):
+    """Offene Leads (VOT-Datum, keine abgesendete Erfassung). Standard ohne
+    ausgeblendete (v5-Nachtrag); ausgeblendet=True liefert nur diese."""
     abfrage = (session.query(Lead)
                .outerjoin(Erfassung, Lead.erfassung_id == Erfassung.id)
                .filter(Lead.vot_datum.isnot(None))
                .filter(or_(Lead.erfassung_id.is_(None),
-                           Erfassung.status == "Entwurf")))
+                           Erfassung.status == "Entwurf"))
+               .filter(Lead.ausgeblendet.is_(ausgeblendet)))
     if benutzer is not None and benutzer.rolle == "aussendienst":
         abfrage = abfrage.filter(Lead.benutzer_id == benutzer.id)
     return abfrage.order_by(Lead.vot_datum).all()
@@ -30,10 +33,11 @@ def offene_leads(session: Session, benutzer=None):
 @router.get("")
 async def liste(request: Request, q: str = "", interesse: str = "",
                 vertriebler_id: int = 0, lead_status: str = "", sortierung: str = "termin",
-                session: Session = Depends(get_session)):
+                ansicht: str = "", session: Session = Depends(get_session)):
     from app import monday_sync
     benutzer = request.state.benutzer
-    alle = offene_leads(session, benutzer)
+    ausgeblendet = ansicht == "ausgeblendet"   # Filter „Ausgeblendet“ (v5-Nachtrag)
+    alle = offene_leads(session, benutzer, ausgeblendet=ausgeblendet)
     vertriebler = {b.id: b for b in session.query(Benutzer)}
     # Auswahlwerte für die Filter aus der ungefilterten Liste
     status_werte = sorted({l.status_text for l in alle if l.status_text})
@@ -66,7 +70,8 @@ async def liste(request: Request, q: str = "", interesse: str = "",
                   mobil=benutzer.rolle == "aussendienst",
                   leads=leads, vertriebler=vertriebler, benutzer=benutzer,
                   q=q, interesse=interesse, vertriebler_id=vertriebler_id,
-                  lead_status=lead_status, sortierung=sortierung,
+                  lead_status=lead_status, sortierung=sortierung, ansicht=ansicht,
+                  ausgeblendet=ausgeblendet,
                   status_werte=status_werte, vertriebler_werte=vertriebler_werte,
                   sync_status=monday_sync.status,
                   meldung=request.query_params.get("meldung", ""))
@@ -84,6 +89,42 @@ async def jetzt_aktualisieren(request: Request, session: Session = Depends(get_s
     else:
         meldung = f"Sync abgeschlossen – {ergebnis['anzahl']} Leads aktualisiert."
     return RedirectResponse(f"/leads?meldung={quote_plus(meldung)}", status_code=303)
+
+
+@router.post("/{lead_id}/ausblenden")
+async def ausblenden(request: Request, lead_id: int,
+                     session: Session = Depends(get_session)):
+    """Lead aus „Leads VOT“ nehmen (optional mit Grund); nicht löschen – der
+    Sync lässt das Kennzeichen stehen, der Lead taucht nicht erneut auf."""
+    from urllib.parse import quote_plus
+    benutzer = request.state.benutzer
+    lead = session.get(Lead, lead_id)
+    if lead is None or (benutzer.rolle == "aussendienst" and lead.benutzer_id != benutzer.id):
+        return RedirectResponse("/leads", status_code=303)
+    form = await request.form()
+    lead.ausgeblendet = True
+    lead.ausgeblendet_grund = (form.get("grund") or "").strip()[:300]
+    lead.ausgeblendet_am = datetime.now()
+    session.commit()
+    return RedirectResponse("/leads?meldung=" + quote_plus(
+        f"{lead.anzeige_name} ausgeblendet – über die Ansicht „Ausgeblendet“ zurückholbar."),
+        status_code=303)
+
+
+@router.post("/{lead_id}/zurueckholen")
+async def zurueckholen(request: Request, lead_id: int,
+                       session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+    benutzer = request.state.benutzer
+    lead = session.get(Lead, lead_id)
+    if lead is None or (benutzer.rolle == "aussendienst" and lead.benutzer_id != benutzer.id):
+        return RedirectResponse("/leads", status_code=303)
+    lead.ausgeblendet = False
+    lead.ausgeblendet_grund = ""
+    lead.ausgeblendet_am = None
+    session.commit()
+    return RedirectResponse("/leads?meldung=" + quote_plus(
+        f"{lead.anzeige_name} wieder in Leads VOT."), status_code=303)
 
 
 @router.get("/{lead_id}/erfassen")

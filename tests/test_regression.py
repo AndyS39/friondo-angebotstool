@@ -78,6 +78,21 @@ class TestKontrollSzenario(unittest.TestCase):
         self.assertEqual(netto, 2962937 + 26700)   # 29.896,37 €
         self.assertIsNone(engine.naechste_frage(self.logik, antworten))
 
+    def test_a09_kombination_stahl_5000l_ergibt_z10(self):
+        # Kombinationslogik: Aktionszeile „Stahl, bis 5.000 L“ = A08-Antwort +
+        # A09-Antwort -> Z10 (Stahltank bis 5.000 L, 1.812,00 € netto)
+        antworten = dict(KONTROLL_SZENARIO, A01="Öl", A07="Ja", A08="Stahl", A09="bis 5.000 L")
+        positionen = angebot_aufbau.positionen_zusammenstellen(self.logik, antworten, self.session)
+        tank = [p for p in positionen if p["pos_nr"] == "Z10"]
+        self.assertEqual(len(tank), 1)
+        self.assertEqual(tank[0]["e_preis_cent"], 181200)
+        self.assertFalse([p for p in positionen if p["pos_nr"] == "Z03"])   # Kunststoff-Zeile greift nicht
+
+    def test_a09_validator_ohne_warnung(self):
+        # Kombinationszeilen decken die A09-Optionen je A08-Option ab -> keine Warnung
+        _, bericht = logik_einlesen()
+        self.assertFalse([w for w in bericht.warnungen if "A09" in w], bericht.warnungen)
+
     def test_sls_uess_apz_nicht_mehr_abgefragt(self):
         self.assertNotIn("E04", self.logik.fragen)
         self.assertNotIn("E05", self.logik.fragen)

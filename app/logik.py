@@ -522,14 +522,42 @@ def _querbezuege_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
     for frage in fragen.values():
         if frage.typ != "Auswahl" or frage.id in sammelbereich:
             continue
-        abgedeckt = set()
+        # Kombinationslogik (z. B. A09 „Stahl, bis 5.000 L“ = Antwort der
+        # Bedingungsfrage A08 + eigene Antwort): die Zeile deckt die eigene
+        # Option nur für diese Eltern-Option ab – geprüft wird die ganze Matrix.
+        eltern = (fragen.get(frage.bedingung.frage_id)
+                  if frage.bedingung and frage.bedingung.frage_id else None)
+        eltern_optionen = (frage.bedingung.werte or eltern.antworten) if eltern else []
+        abgedeckt: set[str] = set()                       # Optionen ohne Eltern-Bezug
+        kombi: dict[str, set[str]] = {}                   # Eltern-Option -> eigene Optionen
         for aktion in logik.aktionen:
             if aktion.frage != frage.id:
+                continue
+            kombiniert = False
+            if "," in aktion.antwort and eltern is not None:
+                vorne, hinten = (x.strip() for x in aktion.antwort.split(",", 1))
+                e_opt = _alias_aufloesen(vorne, eltern.antworten)
+                o_opt = _alias_aufloesen(hinten, frage.antworten)
+                if e_opt and o_opt:
+                    kombi.setdefault(e_opt, set()).add(o_opt)
+                    kombiniert = True
+            if kombiniert:
                 continue
             for teil in [aktion.antwort] + antwort_teile(aktion.antwort):
                 option = _alias_aufloesen(teil, frage.antworten)
                 if option:
                     abgedeckt.add(option)
+        if kombi:
+            # je Eltern-Option, unter der die Frage gestellt wird, muss jede
+            # eigene Option entweder kombiniert oder allgemein abgedeckt sein
+            for e_opt in eltern_optionen:
+                fehlend = [o for o in frage.antworten
+                           if o not in abgedeckt and o not in kombi.get(e_opt, set())]
+                if fehlend:
+                    bericht.warnungen.append(
+                        f"Aktionen {frage.id}: keine Aktionszeile für „{e_opt}, …“ bei "
+                        f"Option(en) {', '.join(fehlend)}.")
+            continue
         fehlend = [o for o in frage.antworten if o not in abgedeckt]
         if fehlend:
             bericht.warnungen.append(

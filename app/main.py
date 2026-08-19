@@ -88,6 +88,7 @@ def _offene_leads_anzahl(session) -> int:
     return (session.query(Lead)
             .outerjoin(Erfassung, Lead.erfassung_id == Erfassung.id)
             .filter(Lead.vot_datum.isnot(None))
+            .filter(Lead.ausgeblendet.is_(False))
             .filter(or_(Lead.erfassung_id.is_(None), Erfassung.status == "Entwurf"))
             .count())
 
