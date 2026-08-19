@@ -7,3 +7,6 @@ openpyxl
 fpdf2
 python-dotenv
 msal
+
+# nur Entwicklung/Abnahme (tests/abnahme.py, TestClient)
+httpx
