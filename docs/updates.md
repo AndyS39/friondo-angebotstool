@@ -7,9 +7,11 @@ zurück.
 
 ## 1. Einmalige Einrichtung (GitHub, privates Repository)
 
-**Stand 19.08.2026: Repository `https://github.com/AndyS39/friondo-angebotstool`
-(privat) ist angelegt, der Entwicklungs-PC pusht dorthin (Schritte 1 und 2 erledigt).
-Offen ist nur noch Schritt 3 auf dem Server:**
+**Stand 20.08.2026: komplett eingerichtet** – Repository
+`https://github.com/AndyS39/friondo-angebotstool` (privat), Entwicklungs-PC pusht,
+Server (`C:\Friondo\Angebotstool`) ist per `git init` + `git checkout -f -B master
+origin/master` verbunden (Dateikopie ohne `.git` nachträglich angebunden). Die
+Schritte hier nur zur Dokumentation bzw. für eine Neuinstallation:**
 
 1. Auf https://github.com/new ein **privates** Repository anlegen, Name z. B.
    `friondo-angebotstool`, **ohne** README/.gitignore/Lizenz (leer lassen).

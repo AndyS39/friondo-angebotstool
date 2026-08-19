@@ -1,4 +1,19 @@
-# Nach dem Update auf v5 – Checkliste (Phasen 29–34)
+# Nach dem Update auf v5 – Checkliste (Phasen 29–36 + Nachtrag)
+
+**Stand 20.08.2026 – Rollout-Paket „v5-Nachtrag“:** Der Server läuft seit
+19.08. auf v5 (Phasen 29–36). Dieses Update bringt zusätzlich den Nachtrag
+(Leads ausblenden, Vertriebler-Spalte, A09-Validator, vier Broschüren, Logik-
+Blatt „Anhänge“) und das Abnahmeskript. Was `update.bat` dabei tut:
+`migrate.py` ergänzt drei Spalten an `leads` (ausgeblendet, Grund, Datum) –
+idempotent geprüft gegen eine Kopie der Datenbank vor v5 und gegen den
+aktuellen Stand; die vier PDFs landen per `git pull` in `anlagen\`; die
+Logik v5 wird beim Dienststart neu eingelesen. **Nach dem Update bitte alle
+offenen Browser-Tabs des Tools neu laden (Strg+F5).**
+
+Abnahme vor dem Rollout (Entwicklungs-PC, 20.08.): 74/74 Unit-Tests und
+43/43 Punkte in `testsbnahme.py` (Kontroll-Szenarien KG/DG/Rabatt inkl. A13,
+15 KfW-Fälle gegen den HTML-Rechner, A09-Stahltank, Anhänge-Regeln, Status-Kette
+mit Absender/CC/BCC, Lösch-/Archiv-Regeln, Briefanrede im PDF).
 
 Diese Punkte sind **einmalig nach dem Rollout** zu erledigen, teils durch die
 IT/M365-Admin, teils durch den Innendienst in der Parametrierung. Reihenfolge
@@ -112,5 +127,6 @@ Im Angebots-Editor (nur Innendienst/Admin):
 Die Auslieferung läuft über **git push** (PC) und **update.bat** (Server, mit
 Backup, getrennten Fehlerpfaden und `rollback.bat`). Der komplette Ablauf
 inklusive der einmaligen GitHub-Einrichtung (Repository
-`https://github.com/AndyS39/friondo-angebotstool`, PC-Seite erledigt, Server-Seite
-noch offen) steht in **`docs/updates.md`**.
+`https://github.com/AndyS39/friondo-angebotstool`, PC und Server sind seit
+19.08.2026 verbunden) steht in **`docs/updates.md`**. Für dieses Update genügt
+auf dem Server: `update.bat` (als Administrator in `C:\Friondo\Angebotstool`).
