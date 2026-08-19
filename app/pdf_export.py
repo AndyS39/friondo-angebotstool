@@ -298,11 +298,16 @@ def _positionsteil(pdf: AngebotsPdf, angebot: Angebot):
     uebertrag_cent = 0
     letzte_gruppe = None
 
-    # Fortlaufende Nummerierung 001, 002, ... – identisch mit dem Editor (Phase 18)
-    for lfd, position in enumerate(angebot.positionen, 1):
+    # Nummerierung identisch mit dem Editor (Phase 18/v5): eigene Nummer oder
+    # fortlaufend 001, 002, … in Sortierreihenfolge
+    for position, nummer in zip(angebot.positionen, angebot.nummerierung()):
         text = position.beschreibung or ""
         if position.bezeichnung and position.bezeichnung not in text.splitlines()[:1]:
             text = position.bezeichnung + ("\n" + text if text else "")
+        # Positionsrabatt (v5) sichtbar an der Position ausweisen
+        if position.rabatt_effektiv_cent and not position.bauseits:
+            text += (f"\nabzgl. Rabatt {position.rabatt_text}"
+                     f" (− {_euro_betrag(position.rabatt_effektiv_cent)} €)")
 
         pdf.set_font("Arial", "", 8)
         zeilen = pdf.multi_cell(text_breite, zeilenhoehe, text, dry_run=True, output="LINES")
@@ -338,7 +343,7 @@ def _positionsteil(pdf: AngebotsPdf, angebot: Angebot):
         y_start = pdf.get_y()
         pdf.set_font("Arial", "", 8)
         pdf.set_xy(pdf.l_margin, y_start)
-        pdf.cell(SPALTEN["pos"], zeilenhoehe, f"{lfd:03d}")
+        pdf.cell(SPALTEN["pos"], zeilenhoehe, nummer)
         pdf.cell(SPALTEN["menge"], zeilenhoehe, _menge_text(position.menge), align="R")
         pdf.cell(SPALTEN["einheit"], zeilenhoehe, " " + position.einheit)
 
@@ -349,10 +354,15 @@ def _positionsteil(pdf: AngebotsPdf, angebot: Angebot):
 
         # Preise auf Höhe der letzten Textzeile (wie im Referenz-PDF)
         pdf.set_xy(text_x + text_breite, y_ende - zeilenhoehe)
-        pdf.cell(SPALTEN["e_preis"], zeilenhoehe, _euro_betrag(position.e_preis_cent), align="R")
-        if position.ep_flag:
+        if position.bauseits:
+            # bauseits (v5): Leistung durch den Kunden – keine Preise, zählt nicht
+            pdf.cell(SPALTEN["e_preis"], zeilenhoehe, "", align="R")
+            pdf.cell(SPALTEN["g_preis"], zeilenhoehe, "bauseits", align="R")
+        elif position.ep_flag:
+            pdf.cell(SPALTEN["e_preis"], zeilenhoehe, _euro_betrag(position.e_preis_cent), align="R")
             pdf.cell(SPALTEN["g_preis"], zeilenhoehe, "EP.", align="R")
         else:
+            pdf.cell(SPALTEN["e_preis"], zeilenhoehe, _euro_betrag(position.e_preis_cent), align="R")
             pdf.cell(SPALTEN["g_preis"], zeilenhoehe, _euro_betrag(position.gesamt_cent), align="R")
             uebertrag_cent += position.gesamt_cent
         pdf.set_xy(pdf.l_margin, y_ende + 2.5)

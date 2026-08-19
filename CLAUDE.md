@@ -17,9 +17,9 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   Import, monday-Mapping, Nummernkreis, Förderparameter-Ansicht).
 
 ## Zentrale Dateien
-- `konfigurator_logik_v4.xlsx` – Steuerdatei (ersetzt v3): Dachzentralen-Block
-  D01–D05, geänderte Bedingungen A05/A06, Pos. 163 bei DG, SLS/ÜSS/APZ nur Protokoll,
-  Summenblock mit Rabatt. 15 AMPEL-Gründe.
+- `konfigurator_logik_v5.xlsx` – Steuerdatei (ersetzt v4): zusätzlich Frage A13
+  „Leitungslänge Hauseinführung ↔ WP-Inneneinheit" (immer; Pos. 103 × [Eingabe − 5 m, nie unter 0] – 5 m stecken in Pos. 006),
+  SLS/ÜSS/APZ-Fragen komplett entfernt. 15 AMPEL-Gründe.
 - `Artikel-Preislisten/Angebotserstellung_Tool_mit_EK.xlsx`, `ANGEBOTSTEXTE.md`,
   `anlagen/`, `Layout - Logo/`, `foerderrechner-website.html` – unverändert.
 
@@ -39,7 +39,7 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
 - **Dachzentrale:** Bei alter Anlage im DG immer Pos. 163. D-Block steuert 141 bzw.
   139/140 × Meter. Fassadenleitung nur bei OG oder (DG und WP bleibt im DG);
   Erdleitung bei KG/EG oder (DG und WP zieht nach unten).
-- SLS/ÜSS/APZ (E04–E06): reine Protokollfragen – Komponenten sind in Pos. 011
+- SLS/ÜSS/APZ werden nicht mehr abgefragt – die Komponenten sind in Pos. 011
   enthalten; Pos. 149/150/153 bleiben ungenutzt im Artikelstamm.
 - EK-Preise sind unter „Artikel bearbeiten" änderbar (Innendienst/Admin).
 - **Löschen & Archiv (v5):** Benutzer sind löschbar, solange keine Vorgänge an
@@ -47,6 +47,17 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   löschbar (ID/Admin), außer ein Angebot ist verknüpft. Angebote: nur **Entwürfe**
   löschbar; versendete/abgelehnte werden **archiviert** (Aufbewahrungspflicht) und
   über den Filter „Archiv" erreichbar. Benutzer haben ein E-Mail-Feld (für CC).
+- **Angebots-Editor (v5):** Positionen per Drag & Drop umsortierbar, Positions-
+  nummern frei editierbar + Button „Neu durchnummerieren" (PDF folgt exakt).
+  Einzelpreise je Position änderbar (interne Kennzeichnung „manuell geändert",
+  Originalpreis als Tooltip; DB nutzt den geänderten Preis). Rabatt je Position
+  (% oder €), wird im PDF sichtbar an der Position ausgewiesen und wirkt auf
+  Summen, KfW-Basis und DB. Kennzeichen **„bauseits"** je Position:
+  PDF zeigt „bauseits" statt Preisen, zählt weder in Summe noch DB.
+- **Briefanrede im PDF-Vortext:** „Sehr geehrter Herr <Nachname>," bzw.
+  „Sehr geehrte Frau <Nachname>,"; ohne eindeutige Anrede Fallback „Sehr geehrte
+  Damen und Herren," – identischer Baustein als Platzhalter {briefanrede} in den
+  Mail-Vorlagen.
 
 ## Leads VOT (monday-Lesesync)
 - Quellen (friondo-gmbh.monday.com), jeweils NUR die Gruppe mit Titel „Terminiert"
@@ -70,6 +81,7 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   blockieren das Tool nie.
 - Liste „Leads VOT": nur Leads **mit** VOT-Datum und **ohne** verknüpftes Angebot,
   chronologisch nach Termin; Außendienst sieht nur eigene, Innendienst/Admin alle.
+  Filter und Sortierung nach Termin, Vertriebler und Status.
 - Der Sync legt **alle** Leads sofort als Kunden an bzw. aktualisiert sie
   (Duplikatabgleich Name + PLZ). Klick auf Lead → Fragenkatalog mit vorausgewähltem
   Kunden. Nach Absenden gilt der Lead als erfasst und verschwindet aus der Liste

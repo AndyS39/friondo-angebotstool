@@ -84,6 +84,11 @@ _NACHTRAEGLICHE_SPALTEN = {
     "angebotspositionen": {
         "ek_cent": "INTEGER",
         "guid": "VARCHAR(40)",
+        "anzeige_nr": "VARCHAR(10) NOT NULL DEFAULT ''",
+        "original_preis_cent": "INTEGER",
+        "rabatt_prozent": "FLOAT",
+        "rabatt_cent": "INTEGER",
+        "bauseits": "BOOLEAN NOT NULL DEFAULT 0",
     },
     "angebote": {
         "rabatt_cent": "INTEGER",

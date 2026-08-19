@@ -89,25 +89,42 @@
 </div>
 {% endif %}
 
+{% if not nur_lesen %}
+<div class="dezent positions-hilfe">Positionen per Ziehen am ☰ umsortieren · Pos.-Nr., Menge, E-Preis,
+Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
+<form method="post" action="/angebote/{{ angebot.id }}/neu-nummerieren" style="display:inline">
+    <button class="knopf klein zweitrangig" type="submit">Neu durchnummerieren</button>
+</form></div>
+<form method="post" action="/angebote/{{ angebot.id }}/sortierung" id="sortierform">
+    <input type="hidden" name="reihenfolge" id="reihenfolge">
+</form>
+{% endif %}
 {% for gruppe in gruppen %}
     {% if gruppe.name %}<h2 class="gruppentitel">{{ gruppe.name }}</h2>{% endif %}
     <table class="tabelle positionen">
         <thead>
             <tr>
+                {% if not nur_lesen %}<th></th>{% endif %}
                 <th class="schmalspalte">Pos.</th>
                 <th>Beschreibung</th>
                 <th class="schmalspalte rechts">Menge</th>
                 <th class="schmalspalte">Einheit</th>
                 <th class="rechts">E-Preis</th>
+                <th class="rechts">Rabatt</th>
                 <th class="rechts">G-Preis</th>
                 <th></th>
             </tr>
         </thead>
-        <tbody>
+        <tbody class="sortierbar">
         {% for p in gruppe.positionen %}
-            <tr>
+            <tr data-pos-id="{{ p.id }}" class="{{ 'bauseits' if p.bauseits }}"{% if not nur_lesen %} draggable="true"{% endif %}>
+                {% if not nur_lesen %}<td class="griff" title="Ziehen zum Umsortieren">☰</td>{% endif %}
                 <td>
-                    {{ p.lfd_nr }}
+                    {% if nur_lesen %}{{ p.lfd_nr }}{% else %}
+                    <input form="pos{{ p.id }}" type="text" name="anzeige_nr" value="{{ p.lfd_nr }}" size="3"
+                           title="Positionsnummer (frei editierbar){{ ' – eigene Nummer' if p.anzeige_nr }}"
+                           class="{{ 'eigene-nr' if p.anzeige_nr }}">
+                    {% endif %}
                     {% if p.pos_nr or p.guid %}
                         <br><span class="dezent interne-ref" title="{{ p.guid or '' }}">{{ p.pos_nr }}</span>
                     {% endif %}
@@ -115,21 +132,46 @@
                 <td>
                     {% if p.bezeichnung %}<strong>{{ p.bezeichnung }}</strong><br>{% endif %}
                     <span class="beschreibung">{{ p.beschreibung | truncate(220) }}</span>
+                    {% if p.bauseits %}<br><span class="abzeichen ep">bauseits</span>{% endif %}
                 </td>
                 <td class="rechts">
-                    {% if nur_lesen %}
-                        {{ p.menge | menge }}
-                    {% else %}
-                    <form method="post" action="/angebote/{{ angebot.id }}/position/{{ p.id }}/menge" class="mengenform">
-                        <input type="text" name="menge" value="{{ p.menge | menge }}" size="4">
-                    </form>
+                    {% if nur_lesen %}{{ p.menge | menge }}{% else %}
+                    <input form="pos{{ p.id }}" type="text" name="menge" value="{{ p.menge | menge }}" size="4">
                     {% endif %}
                 </td>
                 <td>{{ p.einheit }}</td>
-                <td class="rechts">{{ p.e_preis_cent | euro }}</td>
-                <td class="rechts">{% if p.ep_flag %}EP.{% else %}{{ p.gesamt_cent | euro }}{% endif %}</td>
+                <td class="rechts">
+                    {% if nur_lesen %}{{ p.e_preis_cent | euro }}{% else %}
+                    <input form="pos{{ p.id }}" type="text" name="e_preis" value="{{ (p.e_preis_cent | euro).replace(' €', '') }}" size="9"
+                           class="{{ 'preis-geaendert' if p.preis_geaendert }}"
+                           title="{{ ('manuell geändert – Original ' ~ (p.original_preis_cent | euro)) if p.preis_geaendert else 'Einzelpreis netto' }}">
+                    {% endif %}
+                    {% if p.preis_geaendert %}<span class="abzeichen ep" title="manuell geändert – Original {{ p.original_preis_cent | euro }}">✎</span>{% endif %}
+                </td>
+                <td class="rechts">
+                    {% if nur_lesen %}{{ p.rabatt_text }}{% else %}
+                    <input form="pos{{ p.id }}" type="text" name="rabatt_wert" size="5"
+                           value="{{ (p.rabatt_cent | euro).replace(' €', '') if p.rabatt_cent else (p.rabatt_prozent | menge if p.rabatt_prozent) }}"
+                           placeholder="–" title="Positionsrabatt">
+                    <select form="pos{{ p.id }}" name="rabatt_typ">
+                        <option value="prozent" {{ 'selected' if p.rabatt_prozent }}>%</option>
+                        <option value="betrag" {{ 'selected' if p.rabatt_cent or not p.rabatt_prozent }}>€</option>
+                    </select>
+                    {% endif %}
+                    {% if p.rabatt_effektiv_cent %}<br><span class="dezent">− {{ p.rabatt_effektiv_cent | euro }}</span>{% endif %}
+                </td>
+                <td class="rechts">
+                    {% if p.bauseits %}<span class="dezent">bauseits</span>
+                    {% elif p.ep_flag %}EP.
+                    {% else %}{{ p.gesamt_cent | euro }}{% endif %}
+                </td>
                 <td class="aktionen">
                     {% if not nur_lesen %}
+                    <form method="post" action="/angebote/{{ angebot.id }}/position/{{ p.id }}/aendern" id="pos{{ p.id }}" class="zeilenform">
+                        <label class="kontrollfeld" title="bauseits: Leistung durch den Kunden – PDF zeigt „bauseits“, zählt nicht in Summe/KfW/DB">
+                            <input type="checkbox" name="bauseits" {{ 'checked' if p.bauseits }} onchange="this.form.submit()"> bauseits</label>
+                        <button class="knopf klein" type="submit" title="Änderungen übernehmen">✓</button>
+                    </form>
                     <form method="post" action="/angebote/{{ angebot.id }}/position/{{ p.id }}/entfernen">
                         <button class="knopf klein zweitrangig" type="submit" title="Position entfernen">✕</button>
                     </form>
@@ -307,6 +349,34 @@ Vollmacht-Seite (Nachtext D): {{ 'ja (iMSys/SpotDynamic im Angebot)' if vollmach
 {% endif %}
 
 {% if not nur_lesen %}
+<script>
+// Drag & Drop der Positionen (v5): Zeilen über alle Gruppen hinweg ziehen,
+// danach die Reihenfolge aller IDs an den Server senden
+(function () {
+    let gezogen = null;
+    document.querySelectorAll('tr[data-pos-id]').forEach(function (zeile) {
+        zeile.addEventListener('dragstart', function (e) {
+            gezogen = zeile; zeile.classList.add('wird-gezogen');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', zeile.dataset.posId);
+        });
+        zeile.addEventListener('dragend', function () { zeile.classList.remove('wird-gezogen'); });
+        zeile.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            if (!gezogen || gezogen === zeile) return;
+            const box = zeile.getBoundingClientRect();
+            const unten = (e.clientY - box.top) > box.height / 2;
+            zeile.parentNode.insertBefore(gezogen, unten ? zeile.nextSibling : zeile);
+        });
+        zeile.addEventListener('drop', function (e) {
+            e.preventDefault();
+            const ids = Array.from(document.querySelectorAll('tr[data-pos-id]')).map(function (z) { return z.dataset.posId; });
+            document.getElementById('reihenfolge').value = ids.join(',');
+            document.getElementById('sortierform').submit();
+        });
+    });
+})();
+</script>
 <script>
 // Bearbeitungssperre: der offene Editor verlängert alle 2 Minuten;
 // ohne Verlängerung läuft die Sperre serverseitig nach 5 Minuten ab.

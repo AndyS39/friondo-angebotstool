@@ -315,13 +315,19 @@ class Angebot(Base):
         (Phase 26); EP-Positionen zählen nicht mit, der Rabatt ist keine Position."""
         netto = 0
         for p in self.positionen:
-            if not p.ep_flag:
+            if not p.ep_flag and not p.bauseits:   # bauseits (v5) zählt nie mit
                 netto += p.gesamt_cent
         ust = int(Decimal(netto) * Decimal("0.19"))
         brutto = netto + ust
         rabatt = self.rabatt_effektiv_cent(brutto)
         return {"netto": netto, "ust": ust, "brutto": brutto,
                 "rabatt": rabatt, "endbetrag": brutto - rabatt}
+
+    def nummerierung(self) -> list[str]:
+        """Anzeigenummer je Position (v5) in Sortierreihenfolge: eigene Nummer,
+        sonst fortlaufend 001, 002, … – Editor und PDF nutzen dieselbe Liste."""
+        return [((p.anzeige_nr or "").strip() or f"{lfd:03d}")
+                for lfd, p in enumerate(self.positionen, 1)]
 
     def deckungsbeitrag(self) -> dict:
         """Σ VK netto − Σ Material-EK (ohne EP). Nur Innendienst, nie im PDF.
@@ -330,9 +336,9 @@ class Angebot(Base):
         ek = 0
         ohne_ek = []
         for p in self.positionen:
-            if p.ep_flag:
+            if p.ep_flag or p.bauseits:
                 continue
-            vk += p.gesamt_cent
+            vk += p.gesamt_cent   # enthält Positionsrabatt und geänderte Preise (v5)
             if p.ek_cent is None:
                 ohne_ek.append(p)
             else:
@@ -368,13 +374,53 @@ class AngebotsPosition(Base):
     e_preis_cent: Mapped[int] = mapped_column(Integer, default=0)
     ep_flag: Mapped[bool] = mapped_column(Boolean, default=False)
     ek_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # EK-Snapshot (Phase 11)
+    # Angebots-Editor v5 (Phase 34):
+    anzeige_nr: Mapped[str] = mapped_column(String(10), default="")      # eigene Positionsnummer (leer = fortlaufend)
+    original_preis_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # vor manueller Änderung
+    rabatt_prozent: Mapped[Optional[float]] = mapped_column(Float, nullable=True)       # Positionsrabatt %
+    rabatt_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)          # Positionsrabatt €
+    bauseits: Mapped[bool] = mapped_column(Boolean, default=False)       # PDF „bauseits“, zählt nirgends
 
     angebot: Mapped["Angebot"] = relationship(back_populates="positionen")
 
     @property
-    def gesamt_cent(self) -> int:
+    def zeilen_cent(self) -> int:
+        """Menge × Einzelpreis vor Positionsrabatt."""
         return int((Decimal(str(self.menge)) * Decimal(self.e_preis_cent))
                    .quantize(Decimal("1")))
+
+    @property
+    def rabatt_effektiv_cent(self) -> int:
+        """Positionsrabatt in Cent (Betrag oder Prozent vom Zeilenwert), nie > Zeilenwert."""
+        zeile = self.zeilen_cent
+        if self.rabatt_cent:
+            return max(0, min(self.rabatt_cent, zeile))
+        if self.rabatt_prozent:
+            betrag = int((Decimal(zeile) * Decimal(str(self.rabatt_prozent)) / 100)
+                         .quantize(Decimal("1")))
+            return max(0, min(betrag, zeile))
+        return 0
+
+    @property
+    def rabatt_text(self) -> str:
+        """Kurzform für Editor/PDF: „10 %“ oder „50,00 €“; leer ohne Rabatt."""
+        if self.rabatt_cent:
+            euro = Decimal(self.rabatt_cent) / 100
+            return f"{euro:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+        if self.rabatt_prozent:
+            p = Decimal(str(self.rabatt_prozent)).normalize()
+            return f"{p:f}".replace(".", ",") + " %"
+        return ""
+
+    @property
+    def preis_geaendert(self) -> bool:
+        return (self.original_preis_cent is not None
+                and self.original_preis_cent != self.e_preis_cent)
+
+    @property
+    def gesamt_cent(self) -> int:
+        """Zeilenwert nach Positionsrabatt – Basis für Summen, KfW und DB."""
+        return self.zeilen_cent - self.rabatt_effektiv_cent
 
     @property
     def titel(self) -> str:

@@ -123,10 +123,10 @@ async def editor(request: Request, angebot_id: int,
                      .order_by(Artikel.pos_nr).all())
     protokoll = json.loads(angebot.protokoll_json or "[]")
 
-    # Fortlaufende Anzeigenummern 001, 002, ... (Phase 18); die interne
-    # TAIFUN-/Z-Referenz bleibt in pos_nr/guid gespeichert
-    for lfd, p in enumerate(angebot.positionen, 1):
-        p.lfd_nr = f"{lfd:03d}"
+    # Anzeigenummern (Phase 18/v5): eigene Nummer oder fortlaufend 001, 002, …;
+    # die interne TAIFUN-/Z-Referenz bleibt in pos_nr/guid gespeichert
+    for p, nummer in zip(angebot.positionen, angebot.nummerierung()):
+        p.lfd_nr = nummer
 
     # Positionen nach Gruppe (Blockreihenfolge) für die Anzeige bündeln
     gruppen: list[dict] = []
@@ -201,6 +201,90 @@ async def menge_aendern(request: Request, angebot_id: int, position_id: int,
             position.menge = zahl
             session.commit()
     return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+
+
+@router.post("/{angebot_id}/position/{position_id}/aendern")
+async def position_aendern(request: Request, angebot_id: int, position_id: int,
+                           session: Session = Depends(get_session)):
+    """Zeilen-Editor (v5, Phase 34): Anzeigenummer, Menge, Einzelpreis
+    (Original bleibt erhalten), Positionsrabatt (% oder €), bauseits."""
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
+    from urllib.parse import quote_plus
+
+    from app.konfigurator import zahl_parsen
+    form = await request.form()
+    position = session.get(AngebotsPosition, position_id)
+    if position is None or position.angebot_id != angebot_id:
+        return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+    fehler = []
+    position.anzeige_nr = (form.get("anzeige_nr") or "").strip()[:10]
+    menge = zahl_parsen(form.get("menge"))
+    if menge is not None and menge > 0:
+        position.menge = menge
+    elif (form.get("menge") or "").strip():
+        fehler.append("Menge ungültig")
+    preis_text = (form.get("e_preis") or "").strip()
+    if preis_text:
+        preis = preis_parsen(preis_text)
+        if preis is None or preis < 0:
+            fehler.append("Einzelpreis ungültig")
+        elif preis != position.e_preis_cent:
+            if position.original_preis_cent is None:
+                position.original_preis_cent = position.e_preis_cent
+            position.e_preis_cent = preis
+    # Positionsrabatt: leer = kein Rabatt
+    rabatt_wert = (form.get("rabatt_wert") or "").strip()
+    position.rabatt_cent = None
+    position.rabatt_prozent = None
+    if rabatt_wert:
+        if form.get("rabatt_typ") == "prozent":
+            prozent = zahl_parsen(rabatt_wert)
+            if prozent is None or not 0 < prozent <= 100:
+                fehler.append("Rabatt-Prozent ungültig (0–100)")
+            else:
+                position.rabatt_prozent = prozent
+        else:
+            cent = preis_parsen(rabatt_wert)
+            if cent is None or cent <= 0:
+                fehler.append("Rabatt-Betrag ungültig")
+            else:
+                position.rabatt_cent = cent
+    position.bauseits = form.get("bauseits") == "on"
+    session.commit()
+    ziel = f"/angebote/{angebot_id}"
+    if fehler:
+        ziel += "?meldung=" + quote_plus("Position teilweise nicht übernommen: " + ", ".join(fehler))
+    return RedirectResponse(ziel, status_code=303)
+
+
+@router.post("/{angebot_id}/sortierung")
+async def sortierung(request: Request, angebot_id: int,
+                     session: Session = Depends(get_session)):
+    """Drag & Drop (v5): Reihenfolge aller Positions-IDs kommagetrennt."""
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
+    form = await request.form()
+    ids = [int(t) for t in (form.get("reihenfolge") or "").split(",") if t.strip().isdigit()]
+    positionen = {p.id: p for p in session.query(AngebotsPosition)
+                  .filter(AngebotsPosition.angebot_id == angebot_id)}
+    if set(ids) == set(positionen):
+        for index, pid in enumerate(ids, 1):
+            positionen[pid].sort = index
+        session.commit()
+    return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+
+
+@router.post("/{angebot_id}/neu-nummerieren")
+async def neu_nummerieren(request: Request, angebot_id: int,
+                          session: Session = Depends(get_session)):
+    """Eigene Nummern verwerfen → wieder fortlaufend 001, 002, … (v5)."""
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
+    for p in session.query(AngebotsPosition).filter(AngebotsPosition.angebot_id == angebot_id):
+        p.anzeige_nr = ""
+    session.commit()
+    return RedirectResponse(f"/angebote/{angebot_id}?meldung=Neu+durchnummeriert", status_code=303)
 
 
 @router.post("/{angebot_id}/position/{position_id}/entfernen")
