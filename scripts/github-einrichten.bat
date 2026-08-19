@@ -26,6 +26,6 @@ git push -u origin master || (
 )
 echo.
 echo Fertig: origin = %URL%  (Branch master, Upstream gesetzt)
-echo Naechste Updates: git push  (PC)  ->  update.bat  (Server)
+echo Naechste Updates: git push am PC, danach update.bat auf dem Server
 pause
 endlocal
