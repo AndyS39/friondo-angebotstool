@@ -11,7 +11,7 @@ Logik v5 wird beim Dienststart neu eingelesen. **Nach dem Update bitte alle
 offenen Browser-Tabs des Tools neu laden (Strg+F5).**
 
 Abnahme vor dem Rollout (Entwicklungs-PC, 20.08.): 74/74 Unit-Tests und
-43/43 Punkte in `testsbnahme.py` (Kontroll-Szenarien KG/DG/Rabatt inkl. A13,
+43/43 Punkte in `tests/abnahme.py` (Kontroll-Szenarien KG/DG/Rabatt inkl. A13,
 15 KfW-Fälle gegen den HTML-Rechner, A09-Stahltank, Anhänge-Regeln, Status-Kette
 mit Absender/CC/BCC, Lösch-/Archiv-Regeln, Briefanrede im PDF).
 
