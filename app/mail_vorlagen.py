@@ -52,12 +52,16 @@ def briefanrede(kunde: Kunde | None) -> str:
 
 
 def vertriebler_fuer_angebot(session, angebot: Angebot) -> Benutzer | None:
-    """AD des Vorgangs über die verknüpfte Erfassung."""
+    """AD des Vorgangs: über die verknüpfte Erfassung; bei manuellen Angeboten
+    ohne Erfassung über angebot.vertriebler_id (v5-Nachtrag, vom Innendienst
+    im Editor änderbar). Steuert CC und die Vorlagenwahl."""
     erfassung = (session.query(Erfassung)
                  .filter(Erfassung.angebot_id == angebot.id).first())
-    if erfassung is None:
-        return None
-    return session.get(Benutzer, erfassung.benutzer_id)
+    if erfassung is not None:
+        return session.get(Benutzer, erfassung.benutzer_id)
+    if angebot.vertriebler_id:
+        return session.get(Benutzer, angebot.vertriebler_id)
+    return None
 
 
 def werte_fuer_angebot(session, angebot: Angebot, kunde: Kunde | None,

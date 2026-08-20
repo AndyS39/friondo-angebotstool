@@ -58,6 +58,23 @@
     {% if kunde and (kunde.strasse or kunde.ort) %} · {{ kunde.strasse }}, {{ kunde.plz }} {{ kunde.ort }}{% endif %}
     · Datum: {{ angebot.datum.strftime('%d.%m.%Y') }}
     · gültig 30 Tage
+    · Vertriebler:
+    {% if nur_lesen %}
+        <strong>{{ angebot_vertriebler.name if angebot_vertriebler else '–' }}</strong>
+    {% else %}
+    <form method="post" action="/angebote/{{ angebot.id }}/vertriebler" style="display:inline">
+        <select name="benutzer_id" onchange="this.form.submit()"
+                title="Vertriebler des Vorgangs (CC + Mail-Vorlage beim Versand)">
+            {% if not angebot_vertriebler %}<option value="" selected>– nicht zugeordnet –</option>{% endif %}
+            {% for b in aussendienst %}
+                <option value="{{ b.id }}" {{ 'selected' if angebot_vertriebler and angebot_vertriebler.id == b.id }}>{{ b.name }}</option>
+            {% endfor %}
+            {% if angebot_vertriebler and angebot_vertriebler not in aussendienst %}
+                <option value="{{ angebot_vertriebler.id }}" selected>{{ angebot_vertriebler.name }}</option>
+            {% endif %}
+        </select>
+    </form>
+    {% endif %}
 </p>
 
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}

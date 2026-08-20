@@ -258,6 +258,9 @@ class Lead(Base):
     ausgeblendet: Mapped[bool] = mapped_column(Boolean, default=False)
     ausgeblendet_grund: Mapped[str] = mapped_column(String(300), default="")
     ausgeblendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Vertriebler manuell zugeordnet (v5-Nachtrag): der Sync überschreibt
+    # benutzer_id dann nicht mehr aus der monday-Personen-Spalte
+    benutzer_manuell: Mapped[bool] = mapped_column(Boolean, default=False)
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
                                                      onupdate=datetime.now)
 
@@ -311,6 +314,9 @@ class Angebot(Base):
     monday_rueck_status: Mapped[str] = mapped_column(String(20), default="")
     monday_rueck_protokoll: Mapped[str] = mapped_column(Text, default="")
     konfigurator_typ: Mapped[str] = mapped_column(String(10), default="WP")   # v5
+    # Vertriebler (v5-Nachtrag): normalerweise über die verknüpfte Erfassung;
+    # dieses Feld greift nur bei manuellen Angeboten ohne Erfassung
+    vertriebler_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     positionen: Mapped[list["AngebotsPosition"]] = relationship(

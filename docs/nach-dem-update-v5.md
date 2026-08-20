@@ -117,6 +117,23 @@ Erfassungen/Angebote bleiben unverändert.
   **Angebotsbeileger „Bosch CS3800iAW.pdf“** mit, sobald ein WP-Paket
   (Pos. 045–054) im Angebot ist.
 
+## ⑩ Vertriebler ändern (Innendienst/Admin)
+
+Der zugeordnete Außendienstler lässt sich an drei Stellen per Dropdown ändern:
+
+- **Leads VOT:** direkt in der Spalte „Vertriebler“. Die manuelle Zuordnung
+  hat Vorrang vor monday – der 15-Minuten-Sync überschreibt sie nicht mehr
+  (der monday-Name bleibt als Tooltip sichtbar). „– nicht zugeordnet –“
+  wählen setzt zurück auf die monday-Zuordnung.
+- **Erfassungen (Detailansicht):** Dropdown neben „Vertriebler“ – wirkt auf
+  das verknüpfte Angebot (CC und Mail-Vorlage beim Versand).
+- **Angebots-Editor:** Dropdown in der Kopfzeile. Die Änderung schreibt in
+  die verknüpfte Erfassung (eine Quelle je Vorgang); nur manuelle Angebote
+  ohne Erfassung merken sie sich direkt am Angebot. CC und Vorlagenwahl
+  folgen sofort der neuen Zuordnung.
+
+Der Außendienst selbst kann Zuordnungen nicht ändern.
+
 ## Kurzanleitung Innendienst: Positionen, Preise, Rabatte, bauseits
 
 Im Angebots-Editor (nur Innendienst/Admin):

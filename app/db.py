@@ -105,6 +105,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "monday_rueck_status": "VARCHAR(20) NOT NULL DEFAULT ''",
         "monday_rueck_protokoll": "TEXT NOT NULL DEFAULT ''",
         "konfigurator_typ": "VARCHAR(10) NOT NULL DEFAULT 'WP'",
+        "vertriebler_id": "INTEGER",
     },
     "benutzer": {
         "email": "VARCHAR(200) NOT NULL DEFAULT ''",
@@ -117,6 +118,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "ausgeblendet": "BOOLEAN NOT NULL DEFAULT 0",
         "ausgeblendet_grund": "VARCHAR(300) NOT NULL DEFAULT ''",
         "ausgeblendet_am": "DATETIME",
+        "benutzer_manuell": "BOOLEAN NOT NULL DEFAULT 0",
     },
     "erfassungen": {
         "konfigurator_typ": "VARCHAR(10) NOT NULL DEFAULT 'WP'",

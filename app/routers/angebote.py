@@ -69,8 +69,11 @@ async def liste(request: Request, q: str = "", status: str = "", interesse: str 
     from app.models import Benutzer, Erfassung
     vertriebler = {b.id: b for b in session.query(Benutzer)}
     angebot_vertriebler: dict[int, int] = {}
+    for a in angebote:            # Fallback: manuelles Angebot ohne Erfassung
+        if a.vertriebler_id:
+            angebot_vertriebler[a.id] = a.vertriebler_id
     for e in session.query(Erfassung).filter(Erfassung.angebot_id.isnot(None)):
-        angebot_vertriebler[e.angebot_id] = e.benutzer_id
+        angebot_vertriebler[e.angebot_id] = e.benutzer_id   # Erfassung gewinnt
     vertriebler_werte = sorted({angebot_vertriebler[a.id] for a in angebote
                                 if a.id in angebot_vertriebler},
                                key=lambda i: vertriebler[i].name if i in vertriebler else "")
@@ -182,6 +185,15 @@ async def editor(request: Request, angebot_id: int,
     anhaenge_liste = anhaenge_modul.fuer_angebot(logik, angebot)
     vollmacht = anhaenge_modul.vollmacht_erforderlich(angebot)
 
+    # Vertriebler des Vorgangs (v5-Nachtrag): anzeigen + änderbar
+    from app import mail_vorlagen
+    from app.models import Benutzer as BenutzerModell
+    angebot_vertriebler = mail_vorlagen.vertriebler_fuer_angebot(session, angebot)
+    aussendienst = (session.query(BenutzerModell)
+                    .filter(BenutzerModell.rolle == "aussendienst",
+                            BenutzerModell.aktiv.is_(True))
+                    .order_by(BenutzerModell.name).all())
+
     return render(request, "angebote/editor.html", aktiv="/angebote",
                   angebot=angebot, kunde=kunde, gruppen=gruppen,
                   summen=angebot.summen(), artikel_liste=artikel_liste,
@@ -189,6 +201,7 @@ async def editor(request: Request, angebot_id: int,
                   protokoll=protokoll, status_liste=ANGEBOT_STATUS,
                   kfw_ergebnis=kfw_ergebnis, kfw_warnung=kfw_warnung,
                   anhaenge_liste=anhaenge_liste, vollmacht=vollmacht,
+                  angebot_vertriebler=angebot_vertriebler, aussendienst=aussendienst,
                   nur_lesen=nur_lesen, sperr_halter=sperr_halter,
                   versand=request.query_params.get("versand", ""),
                   weblink=request.query_params.get("weblink", ""),
@@ -553,6 +566,37 @@ async def email_entwurf(request: Request, angebot_id: int,
         if weblink:
             ziel += f"&weblink={quote_plus(weblink)}"
     return RedirectResponse(ziel, status_code=303)
+
+
+@router.post("/{angebot_id}/vertriebler")
+async def vertriebler_aendern(request: Request, angebot_id: int,
+                              session: Session = Depends(get_session)):
+    """Vertriebler des Angebots ändern (v5-Nachtrag): schreibt in die
+    verknüpfte Erfassung (eine Quelle je Vorgang); nur bei manuellen
+    Angeboten ohne Erfassung ins Feld angebot.vertriebler_id."""
+    from urllib.parse import quote_plus
+
+    from app.models import Benutzer, Erfassung
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote", status_code=303)
+    form = await request.form()
+    wert = form.get("benutzer_id") or ""
+    if not (wert.isdigit() and session.get(Benutzer, int(wert)) is not None):
+        return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+    erfassung = (session.query(Erfassung)
+                 .filter(Erfassung.angebot_id == angebot.id).first())
+    if erfassung is not None:
+        erfassung.benutzer_id = int(wert)
+        angebot.vertriebler_id = None
+    else:
+        angebot.vertriebler_id = int(wert)
+    session.commit()
+    return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+        "Vertriebler geändert – CC und Mail-Vorlage folgen der neuen Zuordnung."),
+        status_code=303)
 
 
 @router.get("/{angebot_id}/mails")

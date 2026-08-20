@@ -268,7 +268,9 @@ def _quelle_syncen(session: Session, quelle: MondayQuelle,
         lead.email = wert("email")
         lead.interesse = interesse_aus_text(wert("interesse"))   # Phase 33
         lead.monday_person = wert("verantwortlicher")
-        if quelle.fester_benutzer_id:
+        if lead.benutzer_manuell:
+            pass   # manuelle Zuordnung durch den Innendienst hat Vorrang (v5-Nachtrag)
+        elif quelle.fester_benutzer_id:
             # Sonderregel (z. B. Deals - Rene): Verantwortlicher immer dieser Benutzer
             lead.benutzer_id = quelle.fester_benutzer_id
         else:

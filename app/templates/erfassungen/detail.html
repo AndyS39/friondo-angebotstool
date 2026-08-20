@@ -19,7 +19,17 @@
 
 <p class="dezent">
     Kunde: <strong>{{ kunde.anzeige_name if kunde }}</strong>
-    · Vertriebler: <strong>{{ vertriebler.name if vertriebler }}</strong>
+    · Vertriebler:
+    <form method="post" action="/erfassungen/{{ erfassung.id }}/vertriebler" style="display:inline">
+        <select name="benutzer_id" onchange="this.form.submit()" title="Vertriebler ändern (wirkt auf CC und Mail-Vorlage)">
+            {% for b in aussendienst %}
+                <option value="{{ b.id }}" {{ 'selected' if vertriebler and vertriebler.id == b.id }}>{{ b.name }}</option>
+            {% endfor %}
+            {% if vertriebler and vertriebler not in aussendienst %}
+                <option value="{{ vertriebler.id }}" selected>{{ vertriebler.name }}</option>
+            {% endif %}
+        </select>
+    </form>
     · Konfigurator: <span class="abzeichen">{{ erfassung.konfigurator_typ or 'WP' }}</span>
     {% if kunde and kunde.interessen %}· Interesse: {{ interesse_ui.badges(kunde.interessen) }}{% endif %}
     · Ampel:

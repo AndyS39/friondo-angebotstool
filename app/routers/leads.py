@@ -66,8 +66,11 @@ async def liste(request: Request, q: str = "", interesse: str = "",
     else:
         sortierung = "termin"
         leads.sort(key=lambda l: l.vot_datum or datetime.max)
+    aussendienst = (session.query(Benutzer)
+                    .filter(Benutzer.rolle == "aussendienst", Benutzer.aktiv.is_(True))
+                    .order_by(Benutzer.name).all())
     return render(request, "leads/liste.html", aktiv="/leads",
-                  mobil=benutzer.rolle == "aussendienst",
+                  mobil=benutzer.rolle == "aussendienst", aussendienst=aussendienst,
                   leads=leads, vertriebler=vertriebler, benutzer=benutzer,
                   q=q, interesse=interesse, vertriebler_id=vertriebler_id,
                   lead_status=lead_status, sortierung=sortierung, ansicht=ansicht,
@@ -89,6 +92,35 @@ async def jetzt_aktualisieren(request: Request, session: Session = Depends(get_s
     else:
         meldung = f"Sync abgeschlossen – {ergebnis['anzahl']} Leads aktualisiert."
     return RedirectResponse(f"/leads?meldung={quote_plus(meldung)}", status_code=303)
+
+
+@router.post("/{lead_id}/vertriebler")
+async def vertriebler_aendern(request: Request, lead_id: int,
+                              session: Session = Depends(get_session)):
+    """Innendienst/Admin ordnet den Lead einem anderen Außendienstler zu
+    (v5-Nachtrag); der monday-Sync überschreibt das beim nächsten Lauf nur,
+    wenn sich die Personen-Spalte in monday ändert – daher wird zusätzlich
+    die Personen-Zuordnung nicht angefasst, nur dieser Lead."""
+    from urllib.parse import quote_plus
+    benutzer = request.state.benutzer
+    if benutzer.rolle == "aussendienst":
+        return RedirectResponse("/leads", status_code=303)
+    lead = session.get(Lead, lead_id)
+    if lead is None:
+        return RedirectResponse("/leads", status_code=303)
+    form = await request.form()
+    wert = form.get("benutzer_id") or ""
+    if wert.isdigit() and int(wert) > 0:
+        lead.benutzer_id = int(wert)
+        lead.benutzer_manuell = True    # Sync überschreibt nicht mehr
+    else:
+        lead.benutzer_id = None
+        lead.benutzer_manuell = False   # zurück zur monday-Zuordnung beim nächsten Sync
+    session.commit()
+    neuer = session.get(Benutzer, lead.benutzer_id) if lead.benutzer_id else None
+    return RedirectResponse("/leads?meldung=" + quote_plus(
+        f"{lead.anzeige_name} → Vertriebler: {neuer.name if neuer else 'nicht zugeordnet'}"),
+        status_code=303)
 
 
 @router.post("/{lead_id}/ausblenden")

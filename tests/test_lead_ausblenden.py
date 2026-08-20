@@ -37,6 +37,23 @@ class TestLeadAusblenden(unittest.TestCase):
         self.assertEqual(lead.ort, "Moers")                     # Stammdaten trotzdem aktualisiert
         self.assertIsNotNone(lead.vot_datum)
 
+    def test_sync_respektiert_manuelle_zuordnung(self):
+        # Innendienst hat den Vertriebler im Tool geändert (benutzer_manuell):
+        # der Sync darf ihn nicht mehr aus der monday-Personen-Spalte setzen
+        lead = self.s.query(Lead).filter_by(monday_item_id="4711").one()
+        lead.benutzer_id = 99
+        lead.benutzer_manuell = True
+        self.quelle.fester_benutzer_id = 5   # würde sonst greifen
+        self.s.commit()
+        items = [{"id": "4711", "name": "Erika Beispiel",
+                  "column_values": [{"id": "p", "text": "Rene Golaschewski"}]}]
+        with mock.patch.object(monday_sync, "_items_der_gruppe", return_value=("Deals", items)),                 mock.patch.object(monday_sync, "_mapping", return_value={"verantwortlicher": "p"}):
+            monday_sync._quelle_syncen(self.s, self.quelle, {})
+        self.s.commit()
+        lead = self.s.query(Lead).filter_by(monday_item_id="4711").one()
+        self.assertEqual(lead.benutzer_id, 99)          # manuelle Zuordnung bleibt
+        self.assertEqual(lead.monday_person, "Rene Golaschewski")   # Anzeige aktuell
+
     def test_offene_leads_ohne_ausgeblendete(self):
         from app.routers.leads import offene_leads
         import datetime

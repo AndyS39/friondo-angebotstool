@@ -78,8 +78,12 @@ async def detail(request: Request, erfassung_id: int,
     vertriebler = session.get(Benutzer, erfassung.benutzer_id)
     angebot = session.get(Angebot, erfassung.angebot_id) if erfassung.angebot_id else None
     seiten = logik.seiten
+    aussendienst = (session.query(Benutzer)
+                    .filter(Benutzer.rolle == "aussendienst", Benutzer.aktiv.is_(True))
+                    .order_by(Benutzer.name).all())
     return render(request, "erfassungen/detail.html", aktiv="/erfassungen",
                   erfassung=erfassung, kunde=kunde, vertriebler=vertriebler,
+                  aussendienst=aussendienst,
                   protokoll=prot, angebot=angebot, seiten=seiten,
                   gruende=erfassung.gruende_text.splitlines(),
                   status_liste=ERFASSUNG_STATUS,
@@ -126,6 +130,25 @@ async def status_aendern(request: Request, erfassung_id: int,
         erfassung.status = form.get("status")
         session.commit()
     return RedirectResponse(f"/erfassungen/{erfassung_id}", status_code=303)
+
+
+@router.post("/{erfassung_id}/vertriebler")
+async def vertriebler_aendern(request: Request, erfassung_id: int,
+                              session: Session = Depends(get_session)):
+    """Vertriebler des Vorgangs ändern (v5-Nachtrag, nur Innendienst/Admin –
+    die Erfassungsliste ist ohnehin Büro-only). Wirkt auf CC und Vorlagenwahl
+    beim Versand des verknüpften Angebots."""
+    from urllib.parse import quote_plus
+    erfassung = session.get(Erfassung, erfassung_id)
+    if erfassung is None:
+        return RedirectResponse("/erfassungen", status_code=303)
+    form = await request.form()
+    wert = form.get("benutzer_id") or ""
+    if wert.isdigit() and session.get(Benutzer, int(wert)) is not None:
+        erfassung.benutzer_id = int(wert)
+        session.commit()
+    return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
+        "Vertriebler geändert"), status_code=303)
 
 
 @router.post("/{erfassung_id}/loeschen")

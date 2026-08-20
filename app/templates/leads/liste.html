@@ -65,7 +65,25 @@
             <td>{{ lead.vot_datum.strftime('%d.%m.%Y %H:%M') if lead.vot_datum }}</td>
             <td>{{ lead.anzeige_name }} {{ interesse_ui.badges(lead.interessen) }}</td>
             <td>{{ lead.plz }} {{ lead.ort }}</td>
-            <td>{{ vertriebler[lead.benutzer_id].name if lead.benutzer_id in vertriebler else lead.monday_person }}</td>
+            <td>
+                {% if benutzer.rolle == 'aussendienst' %}
+                    {{ vertriebler[lead.benutzer_id].name if lead.benutzer_id in vertriebler else lead.monday_person }}
+                {% else %}
+                <form method="post" action="/leads/{{ lead.id }}/vertriebler">
+                    <select name="benutzer_id" onchange="this.form.submit()"
+                            title="Vertriebler ändern{{ ' (monday: ' ~ lead.monday_person ~ ')' if lead.monday_person }}">
+                        <option value="0">– nicht zugeordnet –</option>
+                        {% for b in aussendienst %}
+                            <option value="{{ b.id }}" {{ 'selected' if lead.benutzer_id == b.id }}>{{ b.name }}</option>
+                        {% endfor %}
+                        {% if lead.benutzer_id and lead.benutzer_id in vertriebler
+                              and vertriebler[lead.benutzer_id] not in aussendienst %}
+                            <option value="{{ lead.benutzer_id }}" selected>{{ vertriebler[lead.benutzer_id].name }}</option>
+                        {% endif %}
+                    </select>
+                </form>
+                {% endif %}
+            </td>
             <td class="dezent">{{ lead.status_text }}</td>
             {% if ausgeblendet %}
             <td class="dezent">{{ lead.ausgeblendet_am.strftime('%d.%m.%Y') if lead.ausgeblendet_am }}
