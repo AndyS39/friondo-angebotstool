@@ -159,7 +159,7 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
     _nachtext_c(pdf, signatur)
     if mit_vollmacht:
         # Nachtext D nur bei iMSys (P02) und/oder SpotDynamic (P03) – Phase 15
-        _nachtext_d(pdf, kunde)
+        _nachtext_d(pdf, kunde, angebot)
 
     config.ANGEBOTE_PDF_ORDNER.mkdir(parents=True, exist_ok=True)
     if ziel is None:
@@ -594,58 +594,91 @@ def _nachtext_c(pdf: AngebotsPdf, signatur: dict | None = None):
                              "Angebotstool).")
 
 
-def _nachtext_d(pdf: AngebotsPdf, kunde: Kunde):
+def _nachtext_d(pdf: AngebotsPdf, kunde: Kunde, angebot: Angebot | None = None):
+    """Vollmacht-Seite (Nachtext D). Muss komplett – inklusive Ort/Datum und
+    beider Unterschriftszeilen – auf EINER Seite bleiben (Referenz AN250096
+    Seite 11): kompakte Zeilenhöhen plus Keep-together am Schluss (der
+    Unterschriftenblock wird notfalls ohne automatischen Umbruch in die
+    Reserve vor der Fußzeile gezeichnet, nie auf eine eigene Seite)."""
+    from app import anhaenge as anhaenge_modul
     pdf.add_page()
     _ueberschrift(pdf, "Vollmacht zur Beauftragung der SpotmyEnergy GmbH sowie zur "
                        "Anmeldung und Inbetriebsetzung von Anlagen", groesse=11)
-    _absatz(pdf, "Ich bevollmächtige als zukünftiger Anlagenbetreiber und "
-                 "Gebäudeeigentümer die Friondo GmbH, in meinem Namen alle erforderlichen "
-                 "Schritte zur Beauftragung der SpotmyEnergy GmbH als Messstellenbetreiber "
-                 "und/oder Stromlieferant einzuleiten und entsprechende Verträge "
-                 "abzuschließen. Dies umfasst auch die Erteilung eines "
-                 "SEPA-Lastschriftmandats für damit verbundene Zahlungen.")
-    _absatz(pdf, "Die Vollmacht gilt ebenfalls für die Friondo GmbH sowie deren "
-                 "Nachunternehmer zur Anmeldung, Inbetriebnahme, Änderung, Erweiterung "
-                 "oder Abmeldung folgender Anlagen und Verbrauchseinrichtungen beim "
-                 "zuständigen Netzbetreiber oder Energieversorgungsunternehmen:")
-    _absatz(pdf, "Photovoltaikanlagen, Wärmepumpen, Ladeeinrichtungen/Wallboxen sowie "
-                 "sonstige steuerbare Verbrauchseinrichtungen gemäß § 14a EnWG "
-                 "(Modul 1, 2 oder 3).")
-    _absatz(pdf, "Die Vollmacht umfasst insbesondere die An- und Abmeldung von Zählern, "
-                 "die Beantragung neuer Zähler, die Einreichung und Entgegennahme "
-                 "erforderlicher Unterlagen, die Kommunikation mit Netzbetreibern, "
-                 "Messstellenbetreibern und Stromlieferanten, die Kündigung bestehender "
-                 "Verträge, die Durchführung eines Anbieterwechsels sowie die Beauftragung "
-                 "und Betreuung eines intelligenten Messsystems.")
-    _absatz(pdf, "Die Vollmacht gilt ausschließlich für die genannten Zwecke und erlischt "
-                 "nach Abschluss des beauftragten Vorgangs. Sie kann jederzeit schriftlich "
-                 "widerrufen werden.")
-    pdf.ln(2)
-    _absatz(pdf, "Angaben zur Verbrauchsstelle", fett=True)
+
+    def absatz(text, fett=False):
+        pdf.set_font("Arial", "B" if fett else "", 8.5)
+        pdf.multi_cell(0, 3.9, text)
+        pdf.ln(1.2)
+
+    absatz("Ich bevollmächtige als zukünftiger Anlagenbetreiber und "
+           "Gebäudeeigentümer die Friondo GmbH, in meinem Namen alle erforderlichen "
+           "Schritte zur Beauftragung der SpotmyEnergy GmbH als Messstellenbetreiber "
+           "und/oder Stromlieferant einzuleiten und entsprechende Verträge "
+           "abzuschließen. Dies umfasst auch die Erteilung eines "
+           "SEPA-Lastschriftmandats für damit verbundene Zahlungen.")
+    absatz("Die Vollmacht gilt ebenfalls für die Friondo GmbH sowie deren "
+           "Nachunternehmer zur Anmeldung, Inbetriebnahme, Änderung, Erweiterung "
+           "oder Abmeldung folgender Anlagen und Verbrauchseinrichtungen beim "
+           "zuständigen Netzbetreiber oder Energieversorgungsunternehmen:")
+    absatz("Photovoltaikanlagen, Wärmepumpen, Ladeeinrichtungen/Wallboxen sowie "
+           "sonstige steuerbare Verbrauchseinrichtungen gemäß § 14a EnWG "
+           "(Modul 1, 2 oder 3).")
+    absatz("Die Vollmacht umfasst insbesondere die An- und Abmeldung von Zählern, "
+           "die Beantragung neuer Zähler, die Einreichung und Entgegennahme "
+           "erforderlicher Unterlagen, die Kommunikation mit Netzbetreibern, "
+           "Messstellenbetreibern und Stromlieferanten, die Kündigung bestehender "
+           "Verträge, die Durchführung eines Anbieterwechsels sowie die Beauftragung "
+           "und Betreuung eines intelligenten Messsystems.")
+    absatz("Die Vollmacht gilt ausschließlich für die genannten Zwecke und erlischt "
+           "nach Abschluss des beauftragten Vorgangs. Sie kann jederzeit schriftlich "
+           "widerrufen werden.")
+    pdf.ln(1)
+    absatz("Angaben zur Verbrauchsstelle", fett=True)
     name = kunde.firma or " ".join(t for t in (kunde.vorname, kunde.nachname) if t)
     adresse = f"{kunde.strasse}, {kunde.plz} {kunde.ort}".strip(", ")
-    pdf.set_font("Arial", "", 9)
+    pdf.set_font("Arial", "", 8.5)
     for beschriftung, wert in [("Name:", name), ("Adresse:", adresse),
                                ("Geburtsdatum:", ""), ("Telefon:", kunde.telefon),
                                ("E-Mail:", kunde.email)]:
-        pdf.cell(30, 6, beschriftung)
-        pdf.cell(0, 6, wert if wert else "_" * 60, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.cell(28, 5.2, beschriftung)
+        pdf.cell(0, 5.2, wert if wert else "_" * 60, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(1)
-    _absatz(pdf, "Bitte ankreuzen:", fett=True)
-    _absatz(pdf, "[  ] Messstellenbetreiber und [  ] Stromlieferant\n"
-                 "[  ] Anmeldung/Inbetriebnahme/Änderung/Erweiterung/Abmeldung")
-    pdf.ln(1)
-    _absatz(pdf, "SEPA-Lastschriftmandat", fett=True)
-    _absatz(pdf, "Ich ermächtige den Zahlungsempfänger, fällige Zahlungen mittels "
-                 "Lastschrift von folgendem Konto einzuziehen.")
-    for beschriftung in ["Kontoinhaber:", "Adresse:", "IBAN:", "Kreditinstitut:", "Ort, Datum:"]:
-        pdf.cell(30, 6, beschriftung)
-        pdf.cell(0, 6, "_" * 60, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.ln(4)
+    # Ankreuzfelder (v5-Nachtrag): automatisch vorbelegt aus dem Angebot –
+    # iMSys -> Messstellenbetreiber, SpotDynamic -> Stromlieferant,
+    # Anmeldung/... immer, wenn die Vollmacht-Seite ausgegeben wird
+    kreuze = (anhaenge_modul.vollmacht_kreuze(angebot) if angebot is not None
+              else {"messstellenbetreiber": False, "stromlieferant": False, "anmeldung": True})
+
+    def kasten(gesetzt):
+        return "[X]" if gesetzt else "[  ]"
+
+    absatz("Bitte ankreuzen:", fett=True)
+    absatz(f"{kasten(kreuze['messstellenbetreiber'])} Messstellenbetreiber und "
+           f"{kasten(kreuze['stromlieferant'])} Stromlieferant\n"
+           f"{kasten(kreuze['anmeldung'])} Anmeldung/Inbetriebnahme/Änderung/Erweiterung/Abmeldung")
+    absatz("SEPA-Lastschriftmandat", fett=True)
+    absatz("Ich ermächtige den Zahlungsempfänger, fällige Zahlungen mittels "
+           "Lastschrift von folgendem Konto einzuziehen.")
+    pdf.set_font("Arial", "", 8.5)
+    for beschriftung in ["Kontoinhaber:", "Adresse:", "IBAN:", "Kreditinstitut:"]:
+        pdf.cell(28, 5.2, beschriftung)
+        pdf.cell(0, 5.2, "_" * 60, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
+    # Keep-together: Ort/Datum + beide Unterschriften als ein Block; passt er
+    # nicht mehr vor die Umbruchgrenze, in die Reserve vor der Fußzeile
+    # zeichnen (Auto-Umbruch aus – Platz bis zur Fußzeile reicht), damit der
+    # Block nie allein auf einer letzten Seite steht.
+    block_hoehe = 5.2 + 2.5 + 6 + 6
+    if pdf.get_y() + block_hoehe > pdf.page_break_trigger:
+        pdf.set_auto_page_break(False)
+    pdf.cell(28, 5.2, "Ort, Datum:")
+    pdf.cell(0, 5.2, "_" * 60, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.ln(2.5)
     pdf.cell(0, 6, "Unterschrift Vollmachtgeber: ______________________",
              new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.cell(0, 6, "Unterschrift Kontoinhaber, sofern abweichend: ______________________",
              new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_auto_page_break(True, 42)
 
 
 # --- Einstieg für Router ---------------------------------------------------

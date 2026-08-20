@@ -54,6 +54,20 @@ def fuer_angebot(logik: Logik, angebot: Angebot) -> list[AngebotsAnhang]:
     return ergebnis
 
 
+def vollmacht_kreuze(angebot: Angebot) -> dict:
+    """Vorbelegung der Ankreuzfelder auf der Vollmacht-Seite (v5-Nachtrag):
+    Messstellenbetreiber bei iMSys (P02/Pos. 016), Stromlieferant bei
+    SpotDynamic (P03/Pos. 017); Anmeldung/Inbetriebnahme immer, wenn die
+    Seite ausgegeben wird."""
+    positionen = {p.pos_nr for p in angebot.positionen}
+    antworten = _antworten_aus_protokoll(angebot)
+    return {
+        "messstellenbetreiber": "016" in positionen or antworten.get("P02") == "Ja",
+        "stromlieferant": "017" in positionen or antworten.get("P03") == "Ja",
+        "anmeldung": True,
+    }
+
+
 def vollmacht_erforderlich(angebot: Angebot) -> bool:
     """Nachtext D (Vollmacht) nur, wenn iMSys (P02/Pos. 016) und/oder
     SpotDynamic (P03/Pos. 017) im Angebot sind."""

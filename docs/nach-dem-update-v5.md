@@ -100,6 +100,23 @@ Erfassungen/Angebote bleiben unverändert.
   SpotDynamic.pdf* bei P03 = Ja. Die PDFs liegen im Repository und kommen mit
   dem Update auf den Server.
 
+## ⑨ Vollmacht-Seite: eine Seite, Ankreuzfelder automatisch
+
+- Die Vollmacht (Nachtext D) bleibt **komplett auf einer Seite** – inklusive
+  Ort/Datum und beider Unterschriftszeilen (kompaktere Zeilenhöhen plus
+  Keep-together-Schutz für den Unterschriftenblock, wie Referenz AN250096
+  Seite 11).
+- Die **Ankreuzfelder werden automatisch vorbelegt**:
+  **[X] Messstellenbetreiber**, wenn iMSys im Angebot ist (P02 = Ja bzw.
+  Pos. 016) · **[X] Stromlieferant**, wenn SpotDynamic im Angebot ist
+  (P03 = Ja bzw. Pos. 017) · **[X] Anmeldung/Inbetriebnahme/Änderung/
+  Erweiterung/Abmeldung** immer, wenn die Vollmacht-Seite ausgegeben wird.
+  Nicht zutreffende Kästchen bleiben leer; von Hand geändert werden kann
+  weiterhin auf dem Ausdruck.
+- **Versand-Anhänge:** zusätzlich zur Broschüren-Regel aus ⑧ geht der
+  **Angebotsbeileger „Bosch CS3800iAW.pdf“** mit, sobald ein WP-Paket
+  (Pos. 045–054) im Angebot ist.
+
 ## Kurzanleitung Innendienst: Positionen, Preise, Rabatte, bauseits
 
 Im Angebots-Editor (nur Innendienst/Admin):
