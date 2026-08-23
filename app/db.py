@@ -110,6 +110,9 @@ _NACHTRAEGLICHE_SPALTEN = {
         "foerderung_ausblenden": "BOOLEAN NOT NULL DEFAULT 0",
         "verfolgung_ampel": "VARCHAR(10) NOT NULL DEFAULT ''",
         "wiedervorlage_am": "DATETIME",
+        "versendet_am": "DATETIME",
+        "angenommen_am": "DATETIME",
+        "abgelehnt_am": "DATETIME",
     },
     "benutzer": {
         "email": "VARCHAR(200) NOT NULL DEFAULT ''",
@@ -125,6 +128,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "ausgeblendet_am": "DATETIME",
         "benutzer_manuell": "BOOLEAN NOT NULL DEFAULT 0",
         "vertriebskanal": "VARCHAR(100) NOT NULL DEFAULT ''",
+        "angelegt_am": "DATETIME",
     },
     "erfassungen": {
         "konfigurator_typ": "VARCHAR(10) NOT NULL DEFAULT 'WP'",

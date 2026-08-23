@@ -11,7 +11,7 @@ from app.auth import RollenMiddleware, standardbenutzer_anlegen
 from app.db import init_db
 from app.routers import (angebote, anmeldung, artikel, benutzer, erfassung,
                          erfassungsliste, konfiguration, konfigurator, kunden,
-                         leads, signatur, versand)
+                         leads, signatur, statistik, versand)
 from app.templating import render
 
 APP_ORDNER = Path(__file__).resolve().parent
@@ -53,6 +53,7 @@ app.include_router(artikel.router)
 app.include_router(konfiguration.router)
 app.include_router(konfigurator.router)
 app.include_router(angebote.router)
+app.include_router(statistik.router)
 app.include_router(versand.router)
 
 

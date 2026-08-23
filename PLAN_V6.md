@@ -53,13 +53,13 @@ Dropdown) und wird mit v6 ausgerollt.
 - [x] migrate.py (Ampel, Wiedervorlage, Notizen-Tabelle)
 
 ## Phase 41 – Statistik
-- [ ] Menüpunkt „Statistik“: Zeitraumwahl (Woche/Monat/Quartal/Jahr/frei),
+- [x] Menüpunkt „Statistik“: Zeitraumwahl (Woche/Monat/Quartal/Jahr/frei),
       Kennzahlen gesamt + je Vertriebler: neue Leads, Erfassungen, Angebote
       erstellt/versendet/angenommen/abgelehnt, Summe versendet (Endbetrag),
       Summe angenommen, DB, Abschlussquote
-- [ ] Auswertung je Vertriebskanal (Leads, Angebote, Abschlüsse)
-- [ ] Außendienst sieht die Seite mit ausschließlich eigenen Zahlen
-- [ ] Archivierte/„Individuell“ zählen als das, was sie zuletzt waren
+- [x] Auswertung je Vertriebskanal (Leads, Angebote, Abschlüsse)
+- [x] Außendienst sieht die Seite mit ausschließlich eigenen Zahlen
+- [x] Archivierte/„Individuell“ zählen als das, was sie zuletzt waren
       (versendet bleibt versendet), tauchen aber nicht doppelt auf
 
 ## Phase 42 – HTML-Mail, Formatierung & Outlook-Signatur

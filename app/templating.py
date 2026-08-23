@@ -44,6 +44,7 @@ NAVIGATION = [
     ("/leads", "Leads VOT"),
     ("/erfassungen", "Erfassungen"),
     ("/angebote", "Angebote"),
+    ("/statistik", "Statistik"),
     ("/kunden", "Kunden"),
     ("/artikel", "Artikel"),
     ("/benutzer", "Benutzer"),

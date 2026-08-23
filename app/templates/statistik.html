@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block titel %}Statistik – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<h1>Statistik{% if eigene_ansicht %} <span class="dezent">(eigene Zahlen)</span>{% endif %}</h1>
+
+<form method="get" action="/statistik" class="suchleiste">
+    <select name="zeitraum" onchange="document.getElementById('freifelder').hidden = this.value != 'frei'; if (this.value != 'frei') this.form.submit();">
+        {% for wert, name in zeitraeume %}
+            <option value="{{ wert }}" {{ 'selected' if zeitraum == wert }}>{{ name }}</option>
+        {% endfor %}
+    </select>
+    <span id="freifelder" {% if zeitraum != 'frei' %}hidden{% endif %}>
+        <input type="date" name="von" value="{{ von }}">
+        <input type="date" name="bis" value="{{ bis }}">
+        <button class="knopf klein" type="submit">Anzeigen</button>
+    </span>
+    <span class="dezent">{{ von | replace('-', '.') }} – {{ bis | replace('-', '.') }}</span>
+</form>
+
+<div class="kacheln">
+    <div class="kachel stat"><span class="stat-zahl">{{ gesamt.leads }}</span>Neue Leads</div>
+    <div class="kachel stat"><span class="stat-zahl">{{ gesamt.erfassungen }}</span>Erfassungen</div>
+    <div class="kachel stat"><span class="stat-zahl">{{ gesamt.erstellt }}</span>Angebote erstellt</div>
+    <div class="kachel stat"><span class="stat-zahl">{{ gesamt.versendet }}</span>Angebote versendet</div>
+    <div class="kachel stat"><span class="stat-zahl">{{ gesamt.angenommen }}</span>Angenommen</div>
+    <div class="kachel stat"><span class="stat-zahl">{{ ('%.0f' | format(gesamt.quote)) }} %</span>Abschlussquote</div>
+</div>
+
+<table class="tabelle zusammenfassung" style="margin-top:1rem; max-width:560px">
+    <tr><th>Summe versendet (Endbetrag)</th><td class="rechts"><strong>{{ gesamt.summe_versendet | euro }}</strong></td></tr>
+    <tr><th>Summe angenommen</th><td class="rechts"><strong>{{ gesamt.summe_angenommen | euro }}</strong></td></tr>
+    {% if not eigene_ansicht %}
+    <tr><th>Deckungsbeitrag (versendete)</th><td class="rechts"><strong>{{ gesamt.db | euro }}</strong></td></tr>
+    {% endif %}
+    <tr><th>Abgelehnt</th><td class="rechts">{{ gesamt.abgelehnt }}</td></tr>
+</table>
+
+{% if not eigene_ansicht and ad_zeilen %}
+<h2>Je Vertriebler</h2>
+<table class="tabelle">
+    <thead><tr><th>Vertriebler</th><th class="rechts">Leads</th><th class="rechts">Erfassungen</th>
+        <th class="rechts">Erstellt</th><th class="rechts">Versendet</th><th class="rechts">Angenommen</th>
+        <th class="rechts">Summe versendet</th><th class="rechts">Summe angenommen</th>
+        <th class="rechts">DB</th><th class="rechts">Quote</th></tr></thead>
+    <tbody>
+    {% for bid, z in ad_zeilen %}
+        <tr>
+            <td>{{ benutzer_map[bid].name if bid in benutzer_map else '?' }}</td>
+            <td class="rechts">{{ z.leads }}</td>
+            <td class="rechts">{{ z.erfassungen }}</td>
+            <td class="rechts">{{ z.erstellt }}</td>
+            <td class="rechts">{{ z.versendet }}</td>
+            <td class="rechts">{{ z.angenommen }}</td>
+            <td class="rechts">{{ z.summe_versendet | euro }}</td>
+            <td class="rechts">{{ z.summe_angenommen | euro }}</td>
+            <td class="rechts">{{ z.db | euro }}</td>
+            <td class="rechts">{{ ('%.0f' | format(z.quote)) }} %</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% if kanal_zeilen %}
+<h2>Je Vertriebskanal</h2>
+<table class="tabelle">
+    <thead><tr><th>Kanal</th><th class="rechts">Leads</th><th class="rechts">Angebote versendet</th>
+        <th class="rechts">Angenommen</th><th class="rechts">Summe versendet</th><th class="rechts">Quote</th></tr></thead>
+    <tbody>
+    {% for kanal, z in kanal_zeilen %}
+        <tr>
+            <td>{{ kanal }}</td>
+            <td class="rechts">{{ z.leads }}</td>
+            <td class="rechts">{{ z.versendet }}</td>
+            <td class="rechts">{{ z.angenommen }}</td>
+            <td class="rechts">{{ z.summe_versendet | euro }}</td>
+            <td class="rechts">{{ ('%.0f' | format(z.quote)) }} %</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="dezent">Je-Kanal-Auswertung erscheint, sobald die Vertriebskanal-Spalte
+in der monday-Anbindung gemappt ist.</p>
+{% endif %}
+
+<p class="dezent">Zeitpunkte: Leads = Anlage im Tool · Erfassungen = Absenden ·
+versendet/angenommen/abgelehnt = tatsächlicher Statuswechsel (für Angebote von
+vor dem v6-Update näherungsweise das Angebotsdatum). Archivierte und
+„Individuell“ zählen als das, was sie zuletzt waren.</p>
+{% endblock %}

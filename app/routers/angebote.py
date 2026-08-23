@@ -735,8 +735,9 @@ async def status_aendern(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     neuer_status = form.get("status", "")
     if angebot is not None and neuer_status in ANGEBOT_STATUS:
+        from app.models import angebot_status_setzen
         alter_status = angebot.status
-        angebot.status = neuer_status
+        angebot_status_setzen(angebot, neuer_status)
         if neuer_status == "Individuell":
             angebot.archiviert = True   # v6: Individuell → automatisch ins Archiv
         # verknüpfte Erfassung automatisch pflegen (Phase 14)

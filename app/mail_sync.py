@@ -78,7 +78,8 @@ def versand_erkennen(session, angebot: Angebot, nachrichten: list[dict],
             continue
         absender = ((n.get("from") or {}).get("emailAddress") or {}).get("address", "")
         if absender and absender.lower() in eigene and n.get("sentDateTime"):
-            angebot.status = "Versendet"
+            from app.models import angebot_status_setzen
+            angebot_status_setzen(angebot, "Versendet")
             return True
     return False
 

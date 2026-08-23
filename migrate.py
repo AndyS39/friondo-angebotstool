@@ -71,6 +71,26 @@ def _daten() -> list[str]:
                 nachgezogen += 1
         if nachgezogen:
             meldungen.append(f"{nachgezogen} Bestandsleads dem Vertriebler zugeordnet")
+        # v6 (Phase 41): Statistik-Zeitstempel für Bestandsdaten (Näherung:
+        # Angebotsdatum als Statuszeitpunkt; Lead-Anlage = aktualisiert_am)
+        from app.models import Angebot
+        gestempelt = 0
+        for a in session.query(Angebot).filter(Angebot.status.in_(
+                ["Versendet", "Angenommen", "Abgelehnt"])):
+            if a.versendet_am is None:
+                a.versendet_am = a.datum; gestempelt += 1
+            if a.status == "Angenommen" and a.angenommen_am is None:
+                a.angenommen_am = a.signiert_am or a.datum
+            if a.status == "Abgelehnt" and a.abgelehnt_am is None:
+                a.abgelehnt_am = a.datum
+        if gestempelt:
+            meldungen.append(f"{gestempelt} Bestandsangebote mit Status-Zeitpunkt (Näherung: Angebotsdatum)")
+        leads_ohne = 0
+        for lead in session.query(Lead).filter(Lead.angelegt_am.is_(None)):
+            lead.angelegt_am = lead.aktualisiert_am
+            leads_ohne += 1
+        if leads_ohne:
+            meldungen.append(f"{leads_ohne} Bestandsleads mit Anlagedatum (Näherung: aktualisiert_am)")
         session.commit()
     finally:
         session.close()

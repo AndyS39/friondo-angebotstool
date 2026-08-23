@@ -67,6 +67,19 @@ INTERESSE_CODES = [code for code, _ in INTERESSEN]
 KONFIGURATOR_TYPEN = ["WP", "PV", "KL"]
 
 
+def angebot_status_setzen(angebot, neuer_status: str) -> None:
+    """Zentraler Statuswechsel (v6): setzt den Status und stempelt den
+    Zeitpunkt für die Statistik (nur beim ersten Erreichen des Status)."""
+    angebot.status = neuer_status
+    jetzt = datetime.now()
+    if neuer_status == "Versendet" and angebot.versendet_am is None:
+        angebot.versendet_am = jetzt
+    elif neuer_status == "Angenommen" and angebot.angenommen_am is None:
+        angebot.angenommen_am = jetzt
+    elif neuer_status == "Abgelehnt" and angebot.abgelehnt_am is None:
+        angebot.abgelehnt_am = jetzt
+
+
 def interesse_liste(wert: str) -> list[str]:
     """"WP,PV" -> ["WP", "PV"] in kanonischer Reihenfolge."""
     gesetzt = {t.strip().upper() for t in (wert or "").split(",") if t.strip()}
@@ -258,6 +271,7 @@ class Lead(Base):
     kunde_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     erfassung_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     interesse: Mapped[str] = mapped_column(String(50), default="")   # v5, aus monday
+    angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)  # v6 Statistik
     # Ausblenden (v5-Nachtrag): aus „Leads VOT“ nehmen ohne zu löschen; der Sync
     # lässt das Kennzeichen stehen, der Lead taucht also nicht erneut auf
     ausgeblendet: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -332,6 +346,10 @@ class Angebot(Base):
     # Angebotsverfolgung (v6): Hot-Ampel (heiss/warm/kalt/""), Wiedervorlage
     verfolgung_ampel: Mapped[str] = mapped_column(String(10), default="")
     wiedervorlage_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Statistik (v6): Zeitpunkte der Statuswechsel (über angebot_status_setzen)
+    versendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    angenommen_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    abgelehnt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     positionen: Mapped[list["AngebotsPosition"]] = relationship(
