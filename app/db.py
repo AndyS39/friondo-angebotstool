@@ -108,6 +108,8 @@ _NACHTRAEGLICHE_SPALTEN = {
         "vertriebler_id": "INTEGER",
         "foerderung_manuell_cent": "INTEGER",
         "foerderung_ausblenden": "BOOLEAN NOT NULL DEFAULT 0",
+        "verfolgung_ampel": "VARCHAR(10) NOT NULL DEFAULT ''",
+        "wiedervorlage_am": "DATETIME",
     },
     "benutzer": {
         "email": "VARCHAR(200) NOT NULL DEFAULT ''",

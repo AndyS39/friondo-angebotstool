@@ -329,6 +329,9 @@ class Angebot(Base):
     # und Schalter, den KfW-Block im PDF komplett auszublenden
     foerderung_manuell_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     foerderung_ausblenden: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Angebotsverfolgung (v6): Hot-Ampel (heiss/warm/kalt/""), Wiedervorlage
+    verfolgung_ampel: Mapped[str] = mapped_column(String(10), default="")
+    wiedervorlage_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     positionen: Mapped[list["AngebotsPosition"]] = relationship(
@@ -463,6 +466,17 @@ class AngebotsPosition(Base):
         if self.bezeichnung:
             return self.bezeichnung
         return self.beschreibung.splitlines()[0] if self.beschreibung else ""
+
+
+class AngebotsNotiz(Base):
+    """Notizen-Verlauf zur Angebotsverfolgung (v6): nur anhängen."""
+    __tablename__ = "angebots_notizen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    angebot_id: Mapped[int] = mapped_column(ForeignKey("angebote.id"), index=True)
+    benutzer_name: Mapped[str] = mapped_column(String(100), default="")
+    text: Mapped[str] = mapped_column(Text, default="")
+    angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
 class AngebotsLoeschung(Base):

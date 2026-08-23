@@ -21,6 +21,12 @@
         <span>Offene Erfassungen</span>
         <span class="dezent">Neu / In Bearbeitung</span>
     </a>
+    {% if faellige %}
+    <a class="kachel stat" href="/angebote?verfolgung=faellig">
+        <span class="stat-zahl" style="color:#c0392b">{{ faellige }}</span>
+        Fällige Wiedervorlagen
+    </a>
+    {% endif %}
     <a class="kachel stat" href="/angebote?status=Versendet">
         <span class="stat-zahl">{{ versendete }}</span>
         <span>Versendete Angebote</span>

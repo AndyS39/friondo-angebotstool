@@ -46,11 +46,11 @@ Dropdown) und wird mit v6 ausgerollt.
       wiederverwendet; migrate.py (Lösch-Protokoll-Tabelle, Förder-Override)
 
 ## Phase 40 – Angebotsverfolgung
-- [ ] Je Angebot: Hot-Ampel (heiß/warm/kalt/–), Wiedervorlage-Datum, Notizen-
+- [x] Je Angebot: Hot-Ampel (heiß/warm/kalt/–), Wiedervorlage-Datum, Notizen-
       Verlauf (nur anhängen, mit Zeitstempel + Benutzer)
-- [ ] Angebotsliste: Ampel-Spalte + Filter, Wiedervorlage-Spalte (überfällig
+- [x] Angebotsliste: Ampel-Spalte + Filter, Wiedervorlage-Spalte (überfällig
       rot); Startseite: Kachel „Fällige Wiedervorlagen“
-- [ ] migrate.py (Ampel, Wiedervorlage, Notizen-Tabelle)
+- [x] migrate.py (Ampel, Wiedervorlage, Notizen-Tabelle)
 
 ## Phase 41 – Statistik
 - [ ] Menüpunkt „Statistik“: Zeitraumwahl (Woche/Monat/Quartal/Jahr/frei),

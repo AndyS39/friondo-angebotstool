@@ -73,9 +73,15 @@ async def startseite(request: Request):
         versendete = (session.query(Angebot)
                       .filter(Angebot.status == "Versendet",
                               Angebot.archiviert.is_(False)).count())
+        from datetime import datetime as dt
+        faellige = (session.query(Angebot)
+                    .filter(Angebot.wiedervorlage_am.isnot(None),
+                            Angebot.wiedervorlage_am <= dt.now(),
+                            Angebot.archiviert.is_(False)).count())
     finally:
         session.close()
     return render(request, "index.html", aktiv=None,
+                  faellige=faellige,
                   offene_leads=offene_leads,
                   offene_erfassungen=offene_erfassungen,
                   versendete=versendete)

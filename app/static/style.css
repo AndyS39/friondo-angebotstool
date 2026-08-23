@@ -714,6 +714,14 @@ h2 { color: var(--friondo-dunkel); margin-top: 2rem; font-size: 1.15rem; }
 
 .abzeichen.status-versendet { background: #e3effa; color: #2c6cb0; }
 .abzeichen.status-versand-vorbereitet { background: #fdf3dc; color: #9a7016; }
+/* Angebotsverfolgung (v6) */
+.verfolgung-block { background: #fff; border: 1px solid var(--grau-linie); border-radius: 6px;
+    padding: 0.4rem 0.9rem; margin: 0.8rem 0; }
+.verfolgung-block .suchleiste { margin: 0.4rem 0; }
+.notizen-liste { margin: 0.3rem 0 0.5rem; padding-left: 1.1rem; }
+.notizen-liste li { margin-bottom: 0.25rem; }
+.wv-faellig { color: #c0392b; font-weight: 600; font-size: 0.85rem; }
+
 /* Text bearbeiten/aufklappen (v6) */
 .textform { margin-top: 0.3rem; display: grid; gap: 0.3rem; }
 .mehr-link { margin-left: 0.3rem; white-space: nowrap; }

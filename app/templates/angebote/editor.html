@@ -277,6 +277,34 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
 <div class="warnblock fehlerblock"><strong>{{ kfw_warnung }}</strong></div>
 {% endif %}
 
+<div class="verfolgung-block">
+    <form method="post" action="/angebote/{{ angebot.id }}/verfolgung" class="suchleiste">
+        <strong>Verfolgung:</strong>
+        <select name="verfolgung_ampel" {{ 'disabled' if nur_lesen }}>
+            <option value="" {{ 'selected' if not angebot.verfolgung_ampel }}>– keine Einstufung –</option>
+            <option value="heiss" {{ 'selected' if angebot.verfolgung_ampel == 'heiss' }}>🔥 heiß</option>
+            <option value="warm" {{ 'selected' if angebot.verfolgung_ampel == 'warm' }}>🌤 warm</option>
+            <option value="kalt" {{ 'selected' if angebot.verfolgung_ampel == 'kalt' }}>❄ kalt</option>
+        </select>
+        <label class="kontrollfeld">Wiedervorlage
+            <input type="date" name="wiedervorlage_am" {{ 'disabled' if nur_lesen }}
+                   value="{{ angebot.wiedervorlage_am.strftime('%Y-%m-%d') if angebot.wiedervorlage_am }}"></label>
+        <input type="text" name="notiz" size="40" placeholder="Notiz anhängen (optional)" {{ 'disabled' if nur_lesen }}>
+        {% if not nur_lesen %}<button class="knopf klein" type="submit">Speichern</button>{% endif %}
+    </form>
+    {% if notizen %}
+    <details {{ 'open' if notizen | length <= 3 }}>
+        <summary class="dezent">Notizen ({{ notizen | length }})</summary>
+        <ul class="notizen-liste">
+            {% for n in notizen %}
+                <li><span class="dezent">{{ n.angelegt_am.strftime('%d.%m.%Y %H:%M') }} · {{ n.benutzer_name }}:</span>
+                    {{ n.text }}</li>
+            {% endfor %}
+        </ul>
+    </details>
+    {% endif %}
+</div>
+
 {% if not nur_lesen %}
 <form method="post" action="/angebote/{{ angebot.id }}/foerderung" class="suchleiste rabattform">
     <strong>Förderung:</strong>
