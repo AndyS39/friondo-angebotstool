@@ -278,15 +278,22 @@ def positionen_zusammenstellen(logik: Logik, antworten: dict,
 # --- Nummernkreis ---------------------------------------------------------
 
 def naechste_angebotsnummer(session: Session) -> str:
+    """Fortlaufend je Jahr; berücksichtigt seit v6 auch das Lösch-Protokoll,
+    damit die Nummer eines gelöschten Angebots nie wiederverwendet wird."""
+    from app.models import AngebotsLoeschung
     jj = datetime.now().year % 100
     praefix = f"{config.NUMMERNKREIS_PREFIX}{jj}"
-    letzte = (session.query(Angebot.nummer)
-              .filter(Angebot.nummer.like(f"{praefix}%"))
-              .order_by(Angebot.nummer.desc()).first())
-    if letzte:
-        zaehler = int(letzte[0][len(praefix):]) + 1
-    else:
-        zaehler = config.NUMMERNKREIS_START_ZAEHLER
+    kandidaten = [n for (n,) in
+                  session.query(Angebot.nummer)
+                  .filter(Angebot.nummer.like(f"{praefix}%"))]
+    kandidaten += [n for (n,) in
+                   session.query(AngebotsLoeschung.nummer)
+                   .filter(AngebotsLoeschung.nummer.like(f"{praefix}%"))]
+    zaehler = config.NUMMERNKREIS_START_ZAEHLER
+    for nummer in kandidaten:
+        rest = nummer[len(praefix):]
+        if rest.isdigit():
+            zaehler = max(zaehler, int(rest) + 1)
     return f"{praefix}{zaehler}"
 
 

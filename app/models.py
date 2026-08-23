@@ -325,6 +325,10 @@ class Angebot(Base):
     # Vertriebler (v5-Nachtrag): normalerweise über die verknüpfte Erfassung;
     # dieses Feld greift nur bei manuellen Angeboten ohne Erfassung
     vertriebler_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Förderung (v6): manuell überschriebener Zuschuss (Cent; None = automatisch)
+    # und Schalter, den KfW-Block im PDF komplett auszublenden
+    foerderung_manuell_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    foerderung_ausblenden: Mapped[bool] = mapped_column(Boolean, default=False)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     positionen: Mapped[list["AngebotsPosition"]] = relationship(
@@ -459,6 +463,20 @@ class AngebotsPosition(Base):
         if self.bezeichnung:
             return self.bezeichnung
         return self.beschreibung.splitlines()[0] if self.beschreibung else ""
+
+
+class AngebotsLoeschung(Base):
+    """Lösch-Protokoll (v6): jede Löschung eines Angebots jenseits von
+    „Entwurf“ wird festgehalten – einsehbar in der Parametrierung."""
+    __tablename__ = "angebots_loeschungen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nummer: Mapped[str] = mapped_column(String(20))
+    kunde_name: Mapped[str] = mapped_column(String(300), default="")
+    status_vorher: Mapped[str] = mapped_column(String(20), default="")
+    endbetrag_cent: Mapped[int] = mapped_column(Integer, default=0)
+    benutzer_name: Mapped[str] = mapped_column(String(100), default="")
+    geloescht_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
 class AngebotsMail(Base):

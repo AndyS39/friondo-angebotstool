@@ -31,16 +31,16 @@ Dropdown) und wird mit v6 ausgerollt.
 - [x] migrate.py (Erfassung archiviert-Flag; Statuslisten erweitert)
 
 ## Phase 39 – Angebots-Editor: Texte, EP, Förderung, Löschen
-- [ ] Artikeltexte (Bezeichnung + Beschreibung) je Position im Editor editierbar;
+- [x] Artikeltexte (Bezeichnung + Beschreibung) je Position im Editor editierbar;
       gilt nur für das Angebot, Artikelstamm bleibt unberührt
-- [ ] Lange Beschreibungen: gekürzte Anzeige mit „mehr…“ zum Aufklappen
+- [x] Lange Beschreibungen: gekürzte Anzeige mit „mehr…“ zum Aufklappen
       (aufgeklappt = editierbar), kein Abschneiden mehr mit „…“
-- [ ] EP-Kästchen je Position (wie „bauseits“): Position wird Eventualposition
+- [x] EP-Kästchen je Position (wie „bauseits“): Position wird Eventualposition
       bzw. wieder normal; wirkt auf Summen/KfW/DB wie bisherige EP-Regel
-- [ ] Förderung anpassbar: (b) Förderbetrag manuell überschreibbar mit
+- [x] Förderung anpassbar: (b) Förderbetrag manuell überschreibbar mit
       Kennzeichen „manuell“ (Eigenanteil rechnet mit dem manuellen Betrag,
       leeren = wieder automatisch); (c) Schalter „Förderblock im PDF ausblenden“
-- [ ] Versendete/angenommene/abgelehnte Angebote löschbar für Innendienst UND
+- [x] Versendete/angenommene/abgelehnte Angebote löschbar für Innendienst UND
       Admin: Sicherheitsabfrage + Lösch-Protokoll (Nummer, Kunde, Endbetrag,
       Benutzer, Zeit) in der Parametrierung einsehbar; Nummer wird nie
       wiederverwendet; migrate.py (Lösch-Protokoll-Tabelle, Förder-Override)

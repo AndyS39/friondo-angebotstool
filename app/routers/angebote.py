@@ -191,7 +191,9 @@ async def editor(request: Request, angebot_id: int,
             parameter, _ = kfw.parameter_lesen(logik)
             eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["endbetrag"])
             if eingaben is not None:
-                kfw_ergebnis = kfw.berechnen(parameter, eingaben)
+                kfw_ergebnis = kfw.ergebnis_mit_override(
+                    kfw.berechnen(parameter, eingaben),
+                    angebot.foerderung_manuell_cent, angebot.summen()["endbetrag"])
                 kfw_warnung = kfw.gueltigkeits_warnung(parameter)
 
     # Anhänge-Vorschau (Phase 15): was würde beim Versand mitgehen?
@@ -307,6 +309,7 @@ async def position_aendern(request: Request, angebot_id: int, position_id: int,
             else:
                 position.rabatt_cent = cent
     position.bauseits = form.get("bauseits") == "on"
+    position.ep_flag = form.get("ep_flag") == "on"   # v6: EP-Kästchen je Position
     session.commit()
     ziel = f"/angebote/{angebot_id}"
     if fehler:
@@ -583,6 +586,49 @@ async def email_entwurf(request: Request, angebot_id: int,
     return RedirectResponse(ziel, status_code=303)
 
 
+@router.post("/{angebot_id}/foerderung")
+async def foerderung_setzen(request: Request, angebot_id: int,
+                            session: Session = Depends(get_session)):
+    """Förderung (v6): Zuschuss manuell überschreiben (leer = automatisch)
+    und den KfW-Block im PDF ausblenden."""
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
+    from urllib.parse import quote_plus
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote", status_code=303)
+    form = await request.form()
+    wert = (form.get("betrag") or "").strip()
+    if wert:
+        cent = preis_parsen(wert)
+        if cent is None or cent < 0:
+            return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+                "Förderbetrag ungültig"), status_code=303)
+        angebot.foerderung_manuell_cent = cent
+    else:
+        angebot.foerderung_manuell_cent = None   # zurück zur Automatik
+    angebot.foerderung_ausblenden = form.get("ausblenden") == "on"
+    session.commit()
+    return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+        "Förderung aktualisiert"), status_code=303)
+
+
+@router.post("/{angebot_id}/position/{position_id}/text")
+async def position_text(request: Request, angebot_id: int, position_id: int,
+                        session: Session = Depends(get_session)):
+    """Artikeltext je Position editierbar (v6) – nur in diesem Angebot,
+    der Artikelstamm bleibt unberührt."""
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
+    position = session.get(AngebotsPosition, position_id)
+    if position and position.angebot_id == angebot_id:
+        form = await request.form()
+        position.bezeichnung = (form.get("bezeichnung") or "").strip()[:300]
+        position.beschreibung = (form.get("beschreibung") or "").strip()
+        session.commit()
+    return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+
+
 @router.post("/{angebot_id}/vertriebler")
 async def vertriebler_aendern(request: Request, angebot_id: int,
                               session: Session = Depends(get_session)):
@@ -694,9 +740,17 @@ async def loeschen(request: Request, angebot_id: int,
     if angebot is None:
         return RedirectResponse("/angebote", status_code=303)
     if angebot.status != "Entwurf":
-        return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
-            "Nur Entwürfe können gelöscht werden – dieses Angebot bitte archivieren."),
-            status_code=303)
+        # v6: auch versendete/angenommene/abgelehnte löschbar (ID + Admin) –
+        # mit Eintrag ins Lösch-Protokoll; die Nummer wird nie wiederverwendet
+        from app.models import AngebotsLoeschung
+        kunde = session.get(Kunde, angebot.kunde_id)
+        benutzer = request.state.benutzer
+        session.add(AngebotsLoeschung(
+            nummer=angebot.nummer,
+            kunde_name=kunde.anzeige_name if kunde else "",
+            status_vorher=angebot.status,
+            endbetrag_cent=angebot.summen()["endbetrag"],
+            benutzer_name=benutzer.name if benutzer else "?"))
     nummer = angebot.nummer
     # Verknüpfte Erfassung lösen: sie ist wieder offen für ein neues Angebot
     for erfassung in session.query(Erfassung).filter(Erfassung.angebot_id == angebot.id):

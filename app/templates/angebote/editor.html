@@ -35,6 +35,10 @@
             <button class="knopf klein zweitrangig" type="submit">
                 {{ 'Aus Archiv zurückholen' if angebot.archiviert else 'Archivieren' }}</button>
         </form>
+        <form method="post" action="/angebote/{{ angebot.id }}/loeschen"
+              onsubmit="return confirm('{{ angebot.nummer }} ({{ angebot.status }}) ENDGÜLTIG löschen?\nDie Löschung wird im Lösch-Protokoll festgehalten; die Nummer wird nicht wiederverwendet.');">
+            <button class="knopf klein zweitrangig" type="submit">Löschen</button>
+        </form>
         {% endif %}
         <a class="knopf klein" href="/signatur/{{ angebot.id }}">Signieren</a>
         <form method="post" action="/angebote/{{ angebot.id }}/email">
@@ -147,9 +151,25 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
                     {% endif %}
                 </td>
                 <td>
-                    {% if p.bezeichnung %}<strong>{{ p.bezeichnung }}</strong><br>{% endif %}
-                    <span class="beschreibung">{{ p.beschreibung | truncate(220) }}</span>
-                    {% if p.bauseits %}<br><span class="abzeichen ep">bauseits</span>{% endif %}
+                    {% set lang = (p.beschreibung | length) > 220 %}
+                    <div class="text-anzeige" id="anzeige{{ p.id }}">
+                        {% if p.bezeichnung %}<strong>{{ p.bezeichnung }}</strong><br>{% endif %}
+                        <span class="beschreibung kurz" {% if lang %}data-voll="1"{% endif %}>{{ p.beschreibung | truncate(220) if lang else p.beschreibung }}</span>
+                        {% if lang %}<a href="#" class="mehr-link" onclick="textAufklappen({{ p.id }}); return false;">mehr…</a>{% endif %}
+                        {% if not nur_lesen %}
+                            <a href="#" class="dezent text-bearbeiten" onclick="textBearbeiten({{ p.id }}); return false;" title="Text nur in diesem Angebot ändern – der Artikelstamm bleibt unberührt">✎ Text</a>
+                        {% endif %}
+                        {% if p.bauseits %}<br><span class="abzeichen ep">bauseits</span>{% endif %}
+                    </div>
+                    {% if not nur_lesen %}
+                    <form method="post" action="/angebote/{{ angebot.id }}/position/{{ p.id }}/text"
+                          class="textform" id="textform{{ p.id }}" hidden>
+                        <input type="text" name="bezeichnung" value="{{ p.bezeichnung }}" placeholder="Bezeichnung" style="width:100%">
+                        <textarea name="beschreibung" rows="6" style="width:100%">{{ p.beschreibung }}</textarea>
+                        <button class="knopf klein" type="submit">Text speichern</button>
+                        <button class="knopf klein zweitrangig" type="button" onclick="textBearbeiten({{ p.id }}, true)">Abbrechen</button>
+                    </form>
+                    {% endif %}
                 </td>
                 <td class="rechts">
                     {% if nur_lesen %}{{ p.menge | menge }}{% else %}
@@ -185,6 +205,8 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
                 <td class="aktionen">
                     {% if not nur_lesen %}
                     <form method="post" action="/angebote/{{ angebot.id }}/position/{{ p.id }}/aendern" id="pos{{ p.id }}" class="zeilenform">
+                        <label class="kontrollfeld" title="Eventualposition: PDF zeigt EP. statt Gesamtpreis, zählt nicht in Summe/KfW/DB">
+                            <input type="checkbox" name="ep_flag" {{ 'checked' if p.ep_flag }} onchange="this.form.submit()"> EP</label>
                         <label class="kontrollfeld" title="bauseits: Leistung durch den Kunden – PDF zeigt „bauseits“, zählt nicht in Summe/KfW/DB">
                             <input type="checkbox" name="bauseits" {{ 'checked' if p.bauseits }} onchange="this.form.submit()"> bauseits</label>
                         <button class="knopf klein" type="submit" title="Änderungen übernehmen">✓</button>
@@ -253,6 +275,24 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
 
 {% if kfw_warnung %}
 <div class="warnblock fehlerblock"><strong>{{ kfw_warnung }}</strong></div>
+{% endif %}
+
+{% if not nur_lesen %}
+<form method="post" action="/angebote/{{ angebot.id }}/foerderung" class="suchleiste rabattform">
+    <strong>Förderung:</strong>
+    <input type="text" name="betrag" size="10"
+           value="{{ (angebot.foerderung_manuell_cent | euro).replace(' €', '') if angebot.foerderung_manuell_cent is not none }}"
+           placeholder="automatisch">
+    <span class="dezent">€ Zuschuss (leer = automatisch berechnen)</span>
+    <label class="kontrollfeld"><input type="checkbox" name="ausblenden"
+        {{ 'checked' if angebot.foerderung_ausblenden }}> Förderblock im PDF ausblenden</label>
+    <button class="knopf klein" type="submit">Übernehmen</button>
+    {% if angebot.foerderung_manuell_cent is not none %}<span class="abzeichen ep">Zuschuss manuell</span>{% endif %}
+</form>
+{% endif %}
+
+{% if angebot.foerderung_ausblenden %}
+<p class="dezent">KfW-Förderung wird im PDF nicht angezeigt.</p>
 {% endif %}
 
 {% if kfw_ergebnis %}
@@ -365,6 +405,33 @@ Vollmacht-Seite (Nachtext D): {{ 'ja (iMSys/SpotDynamic im Angebot)' if vollmach
 </table>
 {% endif %}
 
+<script>
+// Lange Beschreibungen aufklappen (v6); Vollversion steckt im Bearbeiten-Formular
+function textAufklappen(id) {
+    var form = document.getElementById('textform' + id);
+    var span = document.querySelector('#anzeige' + id + ' .beschreibung');
+    var link = document.querySelector('#anzeige' + id + ' .mehr-link');
+    if (!span) return;
+    if (span.dataset.offen === '1') {
+        span.textContent = span.dataset.kurz;
+        span.dataset.offen = '';
+        if (link) link.textContent = 'mehr…';
+    } else {
+        span.dataset.kurz = span.textContent;
+        var voll = form ? form.querySelector('textarea').value : null;
+        if (voll !== null) span.textContent = voll;
+        span.dataset.offen = '1';
+        if (link) link.textContent = 'weniger';
+    }
+}
+function textBearbeiten(id, zu) {
+    var form = document.getElementById('textform' + id);
+    var anzeige = document.getElementById('anzeige' + id);
+    if (!form) return;
+    form.hidden = zu === true ? true : !form.hidden;
+    anzeige.hidden = !form.hidden;
+}
+</script>
 {% if not nur_lesen %}
 <script>
 // Drag & Drop der Positionen (v5): Zeilen über alle Gruppen hinweg ziehen,

@@ -106,6 +106,8 @@ _NACHTRAEGLICHE_SPALTEN = {
         "monday_rueck_protokoll": "TEXT NOT NULL DEFAULT ''",
         "konfigurator_typ": "VARCHAR(10) NOT NULL DEFAULT 'WP'",
         "vertriebler_id": "INTEGER",
+        "foerderung_manuell_cent": "INTEGER",
+        "foerderung_ausblenden": "BOOLEAN NOT NULL DEFAULT 0",
     },
     "benutzer": {
         "email": "VARCHAR(200) NOT NULL DEFAULT ''",

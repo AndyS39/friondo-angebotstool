@@ -693,12 +693,14 @@ def signiertes_pdf_erzeugen(session, angebot: Angebot, png_bytes: bytes,
     kunde = session.get(Kunde, angebot.kunde_id)
     ergebnis = None
     kfw_daten = json.loads(angebot.kfw_json or "{}")
-    if kfw_daten.get("O01"):
+    if kfw_daten.get("O01") and not angebot.foerderung_ausblenden:
         logik, _ = logik_modul.hole_logik(session)
         parameter, _warn = kfw.parameter_lesen(logik)
         eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["endbetrag"])
         if eingaben is not None:
-            ergebnis = kfw.berechnen(parameter, eingaben)
+            ergebnis = kfw.ergebnis_mit_override(
+                kfw.berechnen(parameter, eingaben),
+                angebot.foerderung_manuell_cent, angebot.summen()["endbetrag"])
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as datei:
         datei.write(png_bytes)
         png_pfad = datei.name
@@ -720,11 +722,13 @@ def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
     kunde = session.get(Kunde, angebot.kunde_id)
     ergebnis = None
     kfw_daten = json.loads(angebot.kfw_json or "{}")
-    if kfw_daten.get("O01"):
+    if kfw_daten.get("O01") and not angebot.foerderung_ausblenden:
         logik, _ = logik_modul.hole_logik(session)
         parameter, _warn = kfw.parameter_lesen(logik)
         eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["endbetrag"])
         if eingaben is not None:
-            ergebnis = kfw.berechnen(parameter, eingaben)
+            ergebnis = kfw.ergebnis_mit_override(
+                kfw.berechnen(parameter, eingaben),
+                angebot.foerderung_manuell_cent, angebot.summen()["endbetrag"])
     return erzeuge_pdf(angebot, kunde, ergebnis,
                        mit_vollmacht=anhaenge.vollmacht_erforderlich(angebot))

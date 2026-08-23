@@ -93,6 +93,25 @@ HTTPS-Adresse für die Signatur-Route bereitgestellt hat
 Angebots-Mail einen Einmal-Link zum Online-Unterschreiben; nach der Signatur
 wird der Status auf „Angenommen" gesetzt und der Innendienst per E-Mail informiert.</p>
 
+{% if loeschungen %}
+<h2>Lösch-Protokoll Angebote</h2>
+<table class="tabelle">
+    <thead><tr><th>Gelöscht am</th><th>Nummer</th><th>Kunde</th><th>Status</th><th class="rechts">Endbetrag</th><th>durch</th></tr></thead>
+    <tbody>
+    {% for l in loeschungen %}
+        <tr>
+            <td>{{ l.geloescht_am.strftime('%d.%m.%Y %H:%M') }}</td>
+            <td>{{ l.nummer }}</td>
+            <td>{{ l.kunde_name }}</td>
+            <td>{{ l.status_vorher }}</td>
+            <td class="rechts">{{ l.endbetrag_cent | euro }}</td>
+            <td>{{ l.benutzer_name }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
 <h2>Eingelesene Logik</h2>
 <table class="tabelle zusammenfassung">
     <tr><th>Fragen</th><td>{{ logik.fragen | length }}</td></tr>

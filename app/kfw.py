@@ -169,6 +169,29 @@ class KfwErgebnis:
     disclaimer: str
 
 
+def ergebnis_mit_override(ergebnis: "KfwErgebnis", manuell_cent,
+                          kosten_cent: int) -> "KfwErgebnis":
+    """v6: manuell überschriebener Zuschuss (Angebot.foerderung_manuell_cent).
+    Ersetzt Zuschuss + Eigenanteil und kennzeichnet die Darstellung als
+    „manuell festgelegt“; None lässt das Ergebnis unverändert."""
+    if manuell_cent is None:
+        return ergebnis
+    from dataclasses import replace
+    zuschuss = max(0, int(manuell_cent))
+    eigenanteil = max(0, kosten_cent - zuschuss)
+    zeilen = []
+    for name, wert, fett in ergebnis.zeilen:
+        if name == "KfW-Zuschuss":
+            zeilen.append(("KfW-Zuschuss (manuell festgelegt)", _euro(zuschuss), True))
+        elif name == "Eigenanteil des Kunden":
+            zeilen.append((name, _euro(eigenanteil), fett))
+        else:
+            zeilen.append((name, wert, fett))
+    return replace(ergebnis, zeilen=zeilen, zuschuss_cent=zuschuss,
+                   eigenanteil_cent=eigenanteil,
+                   satz_text=ergebnis.satz_text + " · Zuschuss manuell festgelegt")
+
+
 def eingaben_aus_antworten(kfw_daten: dict, kosten_cent: int) -> Optional[KfwEingaben]:
     """Ableitung lt. Blatt "KfW" (v2): Gebäudetyp aus der Objektart O01
     (EFH/REH/RMH → EFH mit automatischer Selbstnutzung; 2FH/MFH → MFH mit

@@ -19,7 +19,7 @@ async def uebersicht(request: Request, session: Session = Depends(get_session)):
                       logik=None, bericht=None, dateifehler=str(config.LOGIK_EXCEL_PFAD),
                       meldung="")
     from app import mail_sync
-    from app.models import einstellung_holen
+    from app.models import AngebotsLoeschung, einstellung_holen
     logik, bericht = logik_modul.hole_logik(session)
     return render(request, "konfiguration/uebersicht.html", aktiv="/parametrierung",
                   logik=logik, bericht=bericht, dateifehler=None,
@@ -32,6 +32,9 @@ async def uebersicht(request: Request, session: Session = Depends(get_session)):
                   mail_postfach=einstellung_holen(session, "mail_postfach", "angebot@friondo.de"),
                   mail_bcc=einstellung_holen(session, "mail_bcc", ""),
                   sync_status=mail_sync.status,
+                  loeschungen=(session.query(AngebotsLoeschung)
+                               .order_by(AngebotsLoeschung.geloescht_am.desc())
+                               .limit(50).all()),
                   meldung=request.query_params.get("meldung", ""))
 
 
