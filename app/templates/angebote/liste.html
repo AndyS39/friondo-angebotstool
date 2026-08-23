@@ -60,6 +60,7 @@
         <tr>
             <th>Angebots-Nr.</th>
             <th>Kunde</th>
+            <th>Kanal</th>
             <th>Vertriebler</th>
             <th>Datum</th>
             <th>Status</th>
@@ -80,9 +81,8 @@
                 {% endif %}
             </td>
             <td>{{ kunden[a.kunde_id].anzeige_name if a.kunde_id in kunden else '?' }}
-                {% if a.kunde_id in kunden %}{{ interesse_ui.badges(kunden[a.kunde_id].interessen) }}
-                    {% if kunden[a.kunde_id].vertriebskanal %}<span class="abzeichen">{{ kunden[a.kunde_id].vertriebskanal }}</span>{% endif %}
-                {% endif %}</td>
+                {% if a.kunde_id in kunden %}{{ interesse_ui.badges(kunden[a.kunde_id].interessen) }}{% endif %}</td>
+            <td class="dezent">{{ kunden[a.kunde_id].vertriebskanal or '–' if a.kunde_id in kunden else '–' }}</td>
             <td class="dezent">{% set vid = angebot_vertriebler.get(a.id) %}{{ vertriebler[vid].name if vid in vertriebler else '–' }}</td>
             <td>{{ a.datum.strftime('%d.%m.%Y') }}</td>
             <td><span class="abzeichen status-{{ a.status | lower | replace(' ', '-') }}">{{ a.status }}</span>

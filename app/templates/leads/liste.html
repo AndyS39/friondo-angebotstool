@@ -70,7 +70,7 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
 {% if leads %}
 <table class="tabelle">
     <thead>
-        <tr><th>Termin</th><th>Kunde</th><th>Ort</th><th>Vertriebler</th><th>Status</th>
+        <tr><th>Termin</th><th>Kunde</th><th>Ort</th><th>Kanal</th><th>Vertriebler</th><th>Status</th>
             {% if ausgeblendet %}<th>Ausgeblendet</th>{% endif %}<th></th></tr>
     </thead>
     <tbody>
@@ -78,8 +78,8 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
         <tr>
             <td>{{ lead.vot_datum.strftime('%d.%m.%Y %H:%M') if lead.vot_datum }}</td>
             <td>{{ lead.anzeige_name }} {{ interesse_ui.badges(lead.interessen) }}</td>
-            <td>{{ lead.plz }} {{ lead.ort }}
-                {% if lead.vertriebskanal %}<br><span class="abzeichen">{{ lead.vertriebskanal }}</span>{% endif %}</td>
+            <td>{{ lead.plz }} {{ lead.ort }}</td>
+            <td class="dezent">{{ lead.vertriebskanal or '–' }}</td>
             <td>
                 {% if benutzer.rolle == 'aussendienst' %}
                     {{ vertriebler[lead.benutzer_id].name if lead.benutzer_id in vertriebler else lead.monday_person }}
