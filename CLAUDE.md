@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v5)
+# Friondo Angebotstool – Projektkontext (v6)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -58,6 +58,28 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   „Sehr geehrte Frau <Nachname>,"; ohne eindeutige Anrede Fallback „Sehr geehrte
   Damen und Herren," – identischer Baustein als Platzhalter {briefanrede} in den
   Mail-Vorlagen.
+
+## Neu in v6 (abgestimmt 21.08.2026)
+- **Lead-Zuordnung:** Personen-Zuordnung wirkt sofort rückwirkend auf bestehende
+  Leads; Matching zusätzlich über Benutzer-E-Mail; Warnhinweis bei Leads ohne AD.
+- **Vertriebskanal** aus monday (Mapping je Board) an Lead/Kunde, Badge + Filter
+  in allen Listen, Auswertung in der Statistik.
+- **Archiv:** Erfassungen archivierbar; neuer Status **„Individuell“** für
+  Erfassungen und Angebote (außerhalb des Tools geschrieben) → archiviert
+  automatisch. Versendete Angebote sind (ID + Admin) mit Sicherheitsabfrage
+  löschbar; jede Löschung landet im Lösch-Protokoll (Parametrierung).
+- **Angebotsliste:** Summenzeile Netto/Endbetrag/DB über die gefilterte Liste.
+- **Editor:** Artikeltexte je Position editierbar (nur im Angebot), lange
+  Beschreibungen aufklappbar statt abgeschnitten, EP-Kästchen je Position;
+  Förderbetrag manuell überschreibbar (Kennzeichen „manuell“) und Förderblock
+  im PDF ausblendbar.
+- **Angebotsverfolgung:** Hot-Ampel (heiß/warm/kalt), Wiedervorlage-Datum
+  (Startseiten-Kachel „fällig“), Notizen-Verlauf (append-only).
+- **Statistik-Seite:** Zeitraumwahl, Kennzahlen gesamt/je AD/je Kanal,
+  Abschlussquote; Außendienst sieht nur die eigenen Zahlen.
+- **E-Mail:** Versand als HTML; Vorlagen-Editor mit Formatierung (fett usw.);
+  je ID-Benutzer die echte Outlook-Signatur (Upload .htm + Bilder, Inline-CID)
+  1:1 unter dem Entwurf.
 
 ## Leads VOT (monday-Lesesync)
 - Quellen (friondo-gmbh.monday.com), jeweils NUR die Gruppe mit Titel „Terminiert"
