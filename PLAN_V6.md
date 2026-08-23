@@ -63,17 +63,17 @@ Dropdown) und wird mit v6 ausgerollt.
       (versendet bleibt versendet), tauchen aber nicht doppelt auf
 
 ## Phase 42 – HTML-Mail, Formatierung & Outlook-Signatur
-- [ ] Versand als HTML-Mail (contentType html); Vorlagen-Editor mit einfacher
+- [x] Versand als HTML-Mail (contentType html); Vorlagen-Editor mit einfacher
       Formatierung (fett, kursiv, unterstrichen, Aufzählung, Link) ohne externe
       Bibliotheken; Platzhalter funktionieren weiter; Alt-Vorlagen (Klartext)
       werden automatisch nach HTML gewandelt
-- [ ] Signatur je Innendienst-Benutzer: Upload der Outlook-Signatur (HTML-Datei
+- [x] Signatur je Innendienst-Benutzer: Upload der Outlook-Signatur (HTML-Datei
       + Bilderordner, Anleitung in docs/) in der Parametrierung; Bilder werden
       als Inline-Anhänge (CID) eingebettet – Darstellung exakt wie in Outlook
       (Logo, Badges, Fotos); Fallback: Standard-Signatur der Firma
-- [ ] Entwurf per Graph: HTML-Text + Signatur + Inline-Bilder + PDF-Anhänge;
+- [x] Entwurf per Graph: HTML-Text + Signatur + Inline-Bilder + PDF-Anhänge;
       Test mit gemocktem Graph (HTML, CIDs, Anhänge)
-- [ ] docs/graph-einrichtung.md bzw. docs/: Signatur-Export aus Outlook
+- [x] docs/graph-einrichtung.md bzw. docs/: Signatur-Export aus Outlook
       Schritt für Schritt (%APPDATA%\Microsoft\Signatures)
 
 ## Phase 43 – Migration, Abnahme & Rollout

@@ -43,6 +43,32 @@ PLATZHALTER = [
 _MUSTER = re.compile(r"\{[a-z_]+\}")
 
 
+def ist_html(text: str) -> bool:
+    return "<" in text and ">" in text
+
+
+def als_html(text: str) -> str:
+    """Klartext-Vorlage (v5) nach HTML wandeln: Absätze als <p>, Zeilen als
+    <br>; Platzhalter bleiben unangetastet. HTML bleibt HTML (v6)."""
+    import html as html_modul
+    if ist_html(text):
+        return text
+    absaetze = [a for a in text.split("\n\n")]
+    teile = []
+    for absatz in absaetze:
+        zeilen = [html_modul.escape(z) for z in absatz.split("\n")]
+        teile.append("<p>" + "<br>".join(zeilen) + "</p>")
+    return "".join(teile)
+
+
+def einsetzen_html(vorlage_html: str, werte: dict[str, str]) -> str:
+    """Platzhalter in einer HTML-Vorlage ersetzen – Werte werden escaped."""
+    import html as html_modul
+    return _MUSTER.sub(
+        lambda m: html_modul.escape(werte.get(m.group(0)[1:-1], m.group(0))),
+        vorlage_html)
+
+
 def briefanrede(kunde: Kunde | None) -> str:
     """Gemeinsamer Baustein (v5): Kunde.briefanrede – im PDF-Vortext und als
     Platzhalter {briefanrede}/{anrede} in den Mail-Vorlagen identisch."""
@@ -135,8 +161,10 @@ def vorlage_speichern(session, benutzer_id: int | None, betreff: str, text: str)
 
 def mail_fuer_angebot(session, angebot: Angebot, kunde: Kunde | None,
                       absender_name: str = "") -> tuple[str, str, str]:
-    """Fertiger Betreff + Text für den Versand; dritter Wert = verwendete Vorlage."""
+    """Fertiger Betreff + HTML-Text für den Versand (v6); dritter Wert =
+    verwendete Vorlage. Klartext-Vorlagen werden automatisch gewandelt."""
     vertriebler = vertriebler_fuer_angebot(session, angebot)
     betreff, text, quelle = vorlage_laden(session, vertriebler.id if vertriebler else None)
     werte = werte_fuer_angebot(session, angebot, kunde, absender_name)
-    return einsetzen(betreff, werte), einsetzen(text, werte), quelle
+    return (einsetzen(betreff, werte),
+            einsetzen_html(als_html(text), werte), quelle)

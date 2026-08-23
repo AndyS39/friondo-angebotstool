@@ -714,6 +714,17 @@ h2 { color: var(--friondo-dunkel); margin-top: 2rem; font-size: 1.15rem; }
 
 .abzeichen.status-versendet { background: #e3effa; color: #2c6cb0; }
 .abzeichen.status-versand-vorbereitet { background: #fdf3dc; color: #9a7016; }
+/* HTML-Mail-Editor + Signatur-Vorschau (v6) */
+.editor-leiste { display: flex; gap: 0.3rem; margin: 0.3rem 0; }
+.editor-leiste button { padding: 0.2rem 0.55rem; border: 1px solid var(--grau-linie);
+    background: #fff; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
+.editor-leiste button:hover { border-color: var(--friondo-blau); }
+.html-editor { min-height: 260px; background: #fff; border: 1px solid var(--grau-linie);
+    border-radius: 4px; padding: 0.6rem 0.8rem; font-size: 0.95rem; }
+.html-editor:focus { outline: 2px solid var(--friondo-blau); outline-offset: -1px; }
+.mail-vorschau { background: #fff; padding: 0.8rem 1rem; overflow-x: auto; }
+.mail-vorschau img { max-width: 100%; }
+
 /* Angebotsverfolgung (v6) */
 .verfolgung-block { background: #fff; border: 1px solid var(--grau-linie); border-radius: 6px;
     padding: 0.4rem 0.9rem; margin: 0.8rem 0; }

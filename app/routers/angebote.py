@@ -567,6 +567,10 @@ async def email_entwurf(request: Request, angebot_id: int,
     betreff, text, vorlage_quelle = mail_vorlagen.mail_fuer_angebot(
         session, angebot, kunde, request.state.benutzer.name)
     text += graph_versand.signatur_absatz(signatur_link)
+    # Signatur des angemeldeten ID-Mitarbeiters (v6): HTML + Inline-Bilder
+    from app import signaturen
+    signatur_html, inline_bilder = signaturen.fuer_versand(request.state.benutzer.id)
+    text += signatur_html
     # Phase 31: Absender angebot@friondo.de, CC = AD des Vorgangs, BCC aus Parametrierung
     absender = einstellung_holen(session, "mail_absender", "angebot@friondo.de")
     bcc = [a.strip() for a in einstellung_holen(session, "mail_bcc", "").split(",") if a.strip()]
@@ -582,7 +586,7 @@ async def email_entwurf(request: Request, angebot_id: int,
         kunde, angebot, pdf_pfad, betreff, text,
         weitere_anhaenge=[Path(a.pfad) for a in anhaenge if a.vorhanden],
         fehlende_anhaenge=[a.datei for a in anhaenge if not a.vorhanden],
-        cc=cc, bcc=bcc, absender=absender)
+        cc=cc, bcc=bcc, absender=absender, inline_bilder=inline_bilder)
     if erfolg:
         meldung += f" ({vorlage_quelle}, Absender {absender})" + cc_hinweis
         # Mail-Verlauf (Phase 27): Konversation der Angebots-Mail merken

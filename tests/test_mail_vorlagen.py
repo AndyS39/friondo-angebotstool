@@ -59,7 +59,7 @@ class TestMailVorlagen(unittest.TestCase):
         betreff, text, quelle = mail_vorlagen.mail_fuer_angebot(self.s, self.angebot, self.kunde)
         self.assertEqual(quelle, "Vorlage Rene Golaschewski")
         self.assertEqual(betreff, "Angebot AN-C-260042 – Rene")
-        self.assertEqual(text, "Moin Erika,\nRene Golaschewski")
+        self.assertEqual(text, "<p>Moin Erika,<br>Rene Golaschewski</p>")   # v6: HTML
         # entfernen → Standard
         mail_vorlagen.vorlage_speichern(self.s, self.ad.id, "", "")
         self.s.commit()
@@ -70,7 +70,8 @@ class TestMailVorlagen(unittest.TestCase):
         mail_vorlagen.vorlage_speichern(self.s, None, "Neu {angebotsnummer}", "Text {absender}")
         self.s.commit()
         betreff, text, quelle = mail_vorlagen.mail_fuer_angebot(self.s, self.angebot, self.kunde, "Ida")
-        self.assertEqual((betreff, text, quelle), ("Neu AN-C-260042", "Text Ida", "Standard-Vorlage"))
+        self.assertEqual((betreff, text, quelle),
+                         ("Neu AN-C-260042", "<p>Text Ida</p>", "Standard-Vorlage"))   # v6: HTML
 
 
 if __name__ == "__main__":

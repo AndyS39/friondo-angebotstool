@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block titel %}Signaturen – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>E-Mail-Signaturen</h1>
+    <a class="knopf klein zweitrangig" href="/parametrierung">Zurück zur Parametrierung</a>
+</div>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<p class="dezent">Jeder Innendienst-Mitarbeiter hinterlegt hier seine Outlook-Signatur –
+sie wird 1:1 (inklusive Logo, Badges und Fotos) unter jeden Angebots-Entwurf gesetzt.
+Woher die Dateien kommen: In Outlook unter
+<code>%APPDATA%\Microsoft\Signatures</code> liegen die <strong>.htm-Datei</strong> der
+Signatur und ein gleichnamiger <strong>…-Dateien-Ordner</strong> mit den Bildern –
+beim Hochladen die .htm-Datei UND alle Bilder aus dem Ordner auswählen
+(Details: <code>docs/signaturen.md</code>). Ohne hochgeladene Signatur gilt die
+neutrale Standard-Signatur der Firma.</p>
+
+<form method="get" action="/parametrierung/signaturen" class="suchleiste">
+    <label class="kontrollfeld">Signatur von
+        <select name="benutzer_id" onchange="this.form.submit()">
+            {% for b in innendienst %}
+                <option value="{{ b.id }}" {{ 'selected' if benutzer_id == b.id }}>
+                    {{ b.name }}{{ ' ✓' if hat_signatur[b.id] else ' (Standard)' }}</option>
+            {% endfor %}
+        </select>
+    </label>
+</form>
+
+<form method="post" action="/parametrierung/signaturen/{{ benutzer_id }}"
+      enctype="multipart/form-data" class="formular">
+    <div class="formzeile">
+        <label class="breit">Signatur-Dateien (.htm + Bilder, Mehrfachauswahl mit Strg)
+            <input type="file" name="dateien" multiple
+                   accept=".htm,.html,.png,.jpg,.jpeg,.gif,.bmp">
+        </label>
+    </div>
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Hochladen (ersetzt vorhandene)</button>
+        {% if hochgeladen %}
+        <button class="knopf zweitrangig" type="submit" name="aktion" value="entfernen"
+                onclick="return confirm('Signatur von {{ ausgewaehlt.name }} entfernen? Danach gilt die Standard-Signatur.');">
+            Entfernen</button>
+        {% endif %}
+    </div>
+</form>
+
+{% if hochgeladen %}
+<p class="dezent">Hochgeladene Dateien: {{ dateien | join(' · ') }}</p>
+{% endif %}
+
+<h2>Vorschau <span class="dezent">– so erscheint die Signatur unter der Mail</span></h2>
+<div class="hinweis mail-vorschau">{{ vorschau_html | safe }}</div>
+{% endblock %}

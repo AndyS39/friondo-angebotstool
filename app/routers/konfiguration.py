@@ -96,11 +96,13 @@ async def vorlagen_uebersicht(request: Request, benutzer_id: int = 0,
         werte = mail_vorlagen.werte_fuer_angebot(session, vorschau_angebot, kunde,
                                                  request.state.benutzer.name)
         vorschau = {"betreff": mail_vorlagen.einsetzen(betreff, werte),
-                    "text": mail_vorlagen.einsetzen(text, werte),
+                    "text_html": mail_vorlagen.einsetzen_html(
+                        mail_vorlagen.als_html(text), werte),
                     "werte": werte}
     return render(request, "konfiguration/vorlagen.html", aktiv="/parametrierung",
                   aussendienst=aussendienst, ausgewaehlt=ausgewaehlt,
                   benutzer_id=benutzer_id, betreff=betreff, text=text,
+                  text_html=mail_vorlagen.als_html(text),
                   eigene=eigene, hat_vorlage=hat_vorlage,
                   platzhalter=mail_vorlagen.PLATZHALTER,
                   unbekannt=mail_vorlagen.unbekannte_platzhalter(betreff + text),
@@ -139,6 +141,69 @@ async def vorlagen_speichern(request: Request, session: Session = Depends(get_se
         meldung += " – unbekannte Platzhalter bleiben im Text stehen: " + ", ".join(unbekannt)
     return RedirectResponse(f"/parametrierung/vorlagen?benutzer_id={bid or 0}&meldung="
                             + quote_plus(meldung), status_code=303)
+
+
+# --- E-Mail-Signaturen (v6, Phase 42) --------------------------------------
+
+@router.get("/signaturen")
+async def signaturen_uebersicht(request: Request, benutzer_id: int = 0,
+                                session: Session = Depends(get_session)):
+    """Outlook-Signatur je Innendienst-Benutzer hochladen/prüfen."""
+    from app import signaturen
+    from app.models import Benutzer
+    innendienst = (session.query(Benutzer)
+                   .filter(Benutzer.rolle.in_(["admin", "innendienst"]),
+                           Benutzer.aktiv.is_(True))
+                   .order_by(Benutzer.name).all())
+    if not benutzer_id:
+        benutzer_id = request.state.benutzer.id
+    ausgewaehlt = session.get(Benutzer, benutzer_id)
+    html_vorschau, _bilder = signaturen.fuer_versand(benutzer_id)
+    # Vorschau: cid-Bilder über die Bild-Route auflösen
+    html_vorschau = html_vorschau.replace(
+        "cid:", f"/parametrierung/signaturen/{benutzer_id}/bild/")
+    return render(request, "konfiguration/signaturen.html", aktiv="/parametrierung",
+                  innendienst=innendienst, benutzer_id=benutzer_id,
+                  ausgewaehlt=ausgewaehlt,
+                  hochgeladen=signaturen.vorhanden(benutzer_id),
+                  dateien=signaturen.dateien_auflisten(benutzer_id),
+                  hat_signatur={b.id: signaturen.vorhanden(b.id) for b in innendienst},
+                  vorschau_html=html_vorschau,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.get("/signaturen/{benutzer_id}/bild/{cid}")
+async def signatur_bild(benutzer_id: int, cid: str):
+    """Inline-Bild der Signatur für die Vorschau (cid → Datei)."""
+    from fastapi.responses import FileResponse, Response
+
+    from app import signaturen
+    _, bilder = signaturen.fuer_versand(benutzer_id)
+    for bild_cid, pfad, mime in bilder:
+        if bild_cid == cid:
+            return FileResponse(pfad, media_type=mime)
+    return Response(status_code=404)
+
+
+@router.post("/signaturen/{benutzer_id}")
+async def signatur_hochladen(request: Request, benutzer_id: int,
+                             session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+
+    from app import signaturen
+    form = await request.form()
+    if form.get("aktion") == "entfernen":
+        signaturen.entfernen(benutzer_id)
+        return RedirectResponse(f"/parametrierung/signaturen?benutzer_id={benutzer_id}"
+                                "&meldung=Signatur+entfernt+%E2%80%93+Standard+gilt",
+                                status_code=303)
+    dateien = []
+    for feld in form.getlist("dateien"):
+        if hasattr(feld, "filename") and feld.filename:
+            dateien.append((feld.filename, await feld.read()))
+    ok, meldung = signaturen.speichern(benutzer_id, dateien)
+    return RedirectResponse(f"/parametrierung/signaturen?benutzer_id={benutzer_id}"
+                            f"&meldung={quote_plus(meldung)}", status_code=303)
 
 
 @router.get("/monday")

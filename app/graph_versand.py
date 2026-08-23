@@ -127,12 +127,13 @@ def abmelden() -> None:
 # --- Entwurf im Postfach --------------------------------------------------
 
 def signatur_absatz(signatur_link: str) -> str:
-    """Wird bei aktiver Fern-Signatur (Phase 28) an den Vorlagentext angehängt."""
+    """Wird bei aktiver Fern-Signatur (Phase 28) an den Mailtext angehängt
+    (seit v6 als HTML-Absatz)."""
     if not signatur_link:
         return ""
-    return ("\n\nSie möchten das Angebot direkt annehmen? Unter folgendem Link "
-            "können Sie bequem online unterschreiben (auch am Smartphone):\n"
-            f"{signatur_link}")
+    return ("<p>Sie möchten das Angebot direkt annehmen? Unter folgendem Link "
+            "können Sie bequem online unterschreiben (auch am Smartphone):<br>"
+            f'<a href="{signatur_link}">{signatur_link}</a></p>')
 
 
 def _graph_aufruf(methode: str, pfad: str, token: str, daten: dict | None = None) -> dict:
@@ -179,7 +180,8 @@ def entwurf_erstellen(kunde: Kunde, angebot: Angebot, pdf_pfad: Path,
                       weitere_anhaenge: list[Path] | None = None,
                       fehlende_anhaenge: list[str] | None = None,
                       cc: list[str] | None = None, bcc: list[str] | None = None,
-                      absender: str = ""
+                      absender: str = "",
+                      inline_bilder: list[tuple[str, Path, str]] | None = None
                       ) -> tuple[bool, str, str, str]:
     """Legt den Entwurf mit Anhängen im Postfach des angemeldeten Mitarbeiters ab.
     Betreff/Text kommen aus den Vorlagen (Phase 30); absender setzt „Senden als“
@@ -194,7 +196,8 @@ def entwurf_erstellen(kunde: Kunde, angebot: Angebot, pdf_pfad: Path,
     try:
         nachricht = {
             "subject": betreff,
-            "body": {"contentType": "text", "content": text},
+            # v6: HTML-Mail; text ist bereits fertiges HTML (Vorlage + Signatur)
+            "body": {"contentType": "html", "content": text},
             "toRecipients": [{"emailAddress": {"address": kunde.email}}],
         }
         if cc:
@@ -206,6 +209,17 @@ def entwurf_erstellen(kunde: Kunde, angebot: Angebot, pdf_pfad: Path,
             nachricht["from"] = {"emailAddress": {"address": absender}}
         entwurf = _graph_aufruf("POST", "/me/messages", token, nachricht)
         nachricht_id = entwurf["id"]
+        # Inline-Bilder der Signatur (v6): als CID-Anhänge, unsichtbar in der
+        # Anhangsliste, referenziert über cid: im HTML
+        for cid, pfad, mime in (inline_bilder or []):
+            _graph_aufruf("POST", f"/me/messages/{nachricht_id}/attachments", token, {
+                "@odata.type": "#microsoft.graph.fileAttachment",
+                "name": Path(pfad).name,
+                "contentType": mime,
+                "contentId": cid,
+                "isInline": True,
+                "contentBytes": base64.b64encode(Path(pfad).read_bytes()).decode(),
+            })
         for pfad in [pdf_pfad] + list(weitere_anhaenge or []):
             _graph_aufruf("POST", f"/me/messages/{nachricht_id}/attachments", token, {
                 "@odata.type": "#microsoft.graph.fileAttachment",

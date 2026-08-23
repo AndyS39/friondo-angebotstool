@@ -88,7 +88,8 @@ Editor und die E-Mail manuell verfassen.
 
 ## 7. Ablauf Versand, Status-Automatik und Mail-Verlauf (Phase 27/31)
 
-1. **„Versand vorbereiten"** im Angebots-Editor: Das Tool baut Betreff und
+1. **„Versand vorbereiten"** im Angebots-Editor (seit v6 als **HTML-Mail** mit
+   der Outlook-Signatur des Mitarbeiters, siehe `docs/signaturen.md`): Das Tool baut Betreff und
    Text aus der E-Mail-Vorlage (Standard oder die des Außendienstlers des
    Vorgangs), setzt Absender angebot@friondo.de, **CC = E-Mail des
    Außendienstlers** (aus der Benutzerverwaltung; fehlt sie, kommt ein

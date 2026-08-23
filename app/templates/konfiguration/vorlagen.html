@@ -46,7 +46,18 @@ Pflege durch Admin und Innendienst.</p>
             <label class="breit">Betreff <input type="text" name="betreff" value="{{ betreff }}"></label>
         </div>
         <div class="formzeile">
-            <label class="breit">Text <textarea name="text" rows="16">{{ text }}</textarea></label>
+            <label class="breit">Text
+                <span class="editor-leiste">
+                    <button type="button" onclick="format('bold')" title="Fett"><strong>F</strong></button>
+                    <button type="button" onclick="format('italic')" title="Kursiv"><em>K</em></button>
+                    <button type="button" onclick="format('underline')" title="Unterstrichen"><u>U</u></button>
+                    <button type="button" onclick="format('insertUnorderedList')" title="Aufzählung">• Liste</button>
+                    <button type="button" onclick="linkEinfuegen()" title="Link">🔗 Link</button>
+                    <button type="button" onclick="format('removeFormat')" title="Formatierung entfernen">⌫ Format</button>
+                </span>
+                <div id="editor" class="html-editor" contenteditable="true">{{ text_html | safe }}</div>
+                <textarea name="text" id="textfeld" hidden>{{ text }}</textarea>
+            </label>
         </div>
         {% if unbekannt %}
         <p class="meldung fehler">Unbekannte Platzhalter: {{ unbekannt | join(', ') }}</p>
@@ -79,12 +90,27 @@ Pflege durch Admin und Innendienst.</p>
 </div>
 
 {% if vorschau %}
-<h2>Vorschau <span class="dezent">– Angebot {{ vorschau_angebot.nummer }}</span></h2>
+<h2>Vorschau <span class="dezent">– Angebot {{ vorschau_angebot.nummer }}, als HTML-Mail</span></h2>
 <div class="hinweis">
     <p><strong>Betreff:</strong> {{ vorschau.betreff }}</p>
-    <pre style="white-space: pre-wrap; font-family: inherit;">{{ vorschau.text }}</pre>
+    <div class="mail-vorschau">{{ vorschau.text_html | safe }}</div>
 </div>
 {% else %}
 <p class="dezent">Für die Vorschau wird ein vorhandenes Angebot benötigt.</p>
 {% endif %}
+<script>
+// Einfacher Formatierungs-Editor (v6): contenteditable + execCommand,
+// beim Absenden wandert das HTML in das verborgene Textfeld
+function format(befehl) {
+    document.getElementById('editor').focus();
+    document.execCommand(befehl, false, null);
+}
+function linkEinfuegen() {
+    var url = prompt('Link-Adresse (https://…):', 'https://');
+    if (url) { document.getElementById('editor').focus(); document.execCommand('createLink', false, url); }
+}
+document.querySelector('form.konfigurator-haupt').addEventListener('submit', function () {
+    document.getElementById('textfeld').value = document.getElementById('editor').innerHTML;
+});
+</script>
 {% endblock %}
