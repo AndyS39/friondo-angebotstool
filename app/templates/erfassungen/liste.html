@@ -21,6 +21,12 @@
         <option value="orange" {{ 'selected' if ampel == 'orange' }}>Individuell</option>
     </select>
     {{ interesse_ui.filter(interesse) }}
+    <select name="vertriebler_id">
+        <option value="0">Alle Vertriebler</option>
+        {% for vid in vertriebler_werte %}
+            <option value="{{ vid }}" {{ 'selected' if vertriebler_id == vid }}>{{ benutzer_map[vid].name if vid in benutzer_map else vid }}</option>
+        {% endfor %}
+    </select>
     <button class="knopf" type="submit">Filtern</button>
 </form>
 
@@ -36,6 +42,9 @@
             <td>
                 <a href="/erfassungen/{{ e.id }}">{{ kunden[e.kunde_id].anzeige_name if e.kunde_id in kunden else '?' }}</a>
                 {% if e.kunde_id in kunden %}{{ interesse_ui.badges(kunden[e.kunde_id].interessen) }}{% endif %}
+                {% if e.kunde_id in kunden and kunden[e.kunde_id].vertriebskanal %}
+                    <span class="abzeichen">{{ kunden[e.kunde_id].vertriebskanal }}</span>
+                {% endif %}
                 {% if e.id in bemerkungen %}
                     <span class="bemerkung-symbol" title="{{ bemerkungen[e.id] | truncate(300) }}">📝</span>
                 {% endif %}

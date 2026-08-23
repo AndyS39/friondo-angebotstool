@@ -14,6 +14,12 @@
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
+{% if ohne_ad %}
+<div class="warnblock">⚠ <strong>{{ ohne_ad }} Lead{{ 's' if ohne_ad != 1 }} ohne Vertriebler</strong> –
+bitte die <a href="/parametrierung/monday">Personen-Zuordnung</a> prüfen oder in der
+Spalte „Vertriebler“ direkt zuordnen.</div>
+{% endif %}
+
 {% if sync_status and sync_status.letzter_sync %}
 <p class="dezent">Letzter monday-Sync: {{ sync_status.letzter_sync.strftime('%d.%m.%Y %H:%M') }}
 {% if sync_status.fehler %} · <span title="{{ sync_status.fehler | join(' · ') }}">⚠ Hinweise</span>{% endif %}</p>
@@ -38,6 +44,14 @@
             <option value="{{ st }}" {{ 'selected' if lead_status == st }}>{{ st }}</option>
         {% endfor %}
     </select>
+    {% if kanal_werte %}
+    <select name="kanal" title="Vertriebskanal">
+        <option value="">Alle Kanäle</option>
+        {% for k in kanal_werte %}
+            <option value="{{ k }}" {{ 'selected' if kanal == k }}>{{ k }}</option>
+        {% endfor %}
+    </select>
+    {% endif %}
     <select name="ansicht" title="Ansicht">
         <option value="" {{ 'selected' if not ausgeblendet }}>Offene Leads</option>
         <option value="ausgeblendet" {{ 'selected' if ausgeblendet }}>Ausgeblendet</option>
@@ -48,7 +62,7 @@
         <option value="status" {{ 'selected' if sortierung == 'status' }}>Sortierung: Status</option>
     </select>
     <button class="knopf" type="submit">Filtern</button>
-    {% if q or interesse or vertriebler_id or lead_status or sortierung != 'termin' or ausgeblendet %}
+    {% if q or interesse or vertriebler_id or lead_status or sortierung != 'termin' or ausgeblendet or kanal %}
         <a class="knopf klein zweitrangig" href="/leads">Zurücksetzen</a>
     {% endif %}
 </form>
@@ -64,7 +78,8 @@
         <tr>
             <td>{{ lead.vot_datum.strftime('%d.%m.%Y %H:%M') if lead.vot_datum }}</td>
             <td>{{ lead.anzeige_name }} {{ interesse_ui.badges(lead.interessen) }}</td>
-            <td>{{ lead.plz }} {{ lead.ort }}</td>
+            <td>{{ lead.plz }} {{ lead.ort }}
+                {% if lead.vertriebskanal %}<br><span class="abzeichen">{{ lead.vertriebskanal }}</span>{% endif %}</td>
             <td>
                 {% if benutzer.rolle == 'aussendienst' %}
                     {{ vertriebler[lead.benutzer_id].name if lead.benutzer_id in vertriebler else lead.monday_person }}

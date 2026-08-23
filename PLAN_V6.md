@@ -8,17 +8,17 @@ AD-Spalte in der Angebotsliste ist seit v5-Nachtrag vorhanden (anpassbar per
 Dropdown) und wird mit v6 ausgerollt.
 
 ## Phase 37 – Leads: Zuordnungs-Bugfix & Vertriebskanal
-- [ ] BUGFIX: Personen-Zuordnung (Parametrierung) wirkt sofort rückwirkend auf
+- [x] BUGFIX: Personen-Zuordnung (Parametrierung) wirkt sofort rückwirkend auf
       alle vorhandenen Leads mit diesem monday-Namen (nicht erst beim nächsten
       Sync; manuelle Zuordnungen bleiben unberührt)
-- [ ] Automatisches Matching zusätzlich über die Benutzer-E-Mail (monday liefert
+- [x] Automatisches Matching zusätzlich über die Benutzer-E-Mail (monday liefert
       z. T. E-Mail-Adressen wie h.becker@friondo.de als Personen-Namen)
-- [ ] Leads VOT: Warnhinweis „X Leads ohne Vertriebler – Zuordnung prüfen“ mit
+- [x] Leads VOT: Warnhinweis „X Leads ohne Vertriebler – Zuordnung prüfen“ mit
       Link auf die Personen-Zuordnung (nur Büro-Rollen)
-- [ ] Vertriebskanal aus monday: Mapping-Feld „vertriebskanal“ je Board,
+- [x] Vertriebskanal aus monday: Mapping-Feld „vertriebskanal“ je Board,
       Feld an Lead + Kunde, Badge/Spalte + Filter in Leads VOT, Erfassungs- und
       Angebotsliste; migrate.py
-- [ ] Erfassungsliste: Filter nach Vertriebler
+- [x] Erfassungsliste: Filter nach Vertriebler
 
 ## Phase 38 – Archiv & Status „Individuell“
 - [ ] Erfassungen archivieren (Innendienst/Admin): Flag + Filter „Archiv“ in der

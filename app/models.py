@@ -28,6 +28,7 @@ class Kunde(Base):
     notizen: Mapped[str] = mapped_column(Text, default="")
     # Interesse (v5): Mehrfach-Feld, Codes kommagetrennt, z. B. "WP,PV"
     interesse: Mapped[str] = mapped_column(String(50), default="")
+    vertriebskanal: Mapped[str] = mapped_column(String(100), default="")   # v6, aus monday
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
@@ -208,7 +209,8 @@ class MondayQuelle(Base):
 
 # Felder, die je Board auf monday-Spalten gemappt werden (Phase 22)
 MONDAY_FELDER = ["vot_datum", "verantwortlicher", "anrede", "vorname", "nachname",
-                 "strasse", "plz", "ort", "telefon", "email", "status", "interesse"]
+                 "strasse", "plz", "ort", "telefon", "email", "status", "interesse",
+                 "vertriebskanal"]
 
 
 class MondayMapping(Base):
@@ -261,6 +263,7 @@ class Lead(Base):
     # Vertriebler manuell zugeordnet (v5-Nachtrag): der Sync überschreibt
     # benutzer_id dann nicht mehr aus der monday-Personen-Spalte
     benutzer_manuell: Mapped[bool] = mapped_column(Boolean, default=False)
+    vertriebskanal: Mapped[str] = mapped_column(String(100), default="")   # v6, aus monday
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
                                                      onupdate=datetime.now)
 

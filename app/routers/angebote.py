@@ -43,7 +43,7 @@ def _kunden_map(session: Session, angebote) -> dict[int, Kunde]:
 
 @router.get("")
 async def liste(request: Request, q: str = "", status: str = "", interesse: str = "",
-                vertriebler_id: int = 0, sortierung: str = "nummer",
+                vertriebler_id: int = 0, sortierung: str = "nummer", kanal: str = "",
                 session: Session = Depends(get_session)):
     abfrage = session.query(Angebot).options(joinedload(Angebot.positionen))
     # Archiv (v5): Standardansicht ohne archivierte, Filter „Archiv“ nur diese
@@ -65,6 +65,9 @@ async def liste(request: Request, q: str = "", status: str = "", interesse: str 
     if interesse:   # Filter nach Interesse des Kunden (Phase 33)
         angebote = [a for a in angebote
                     if a.kunde_id in kunden and interesse in kunden[a.kunde_id].interessen]
+    if kanal:       # Vertriebskanal des Kunden (v6)
+        angebote = [a for a in angebote
+                    if a.kunde_id in kunden and kunden[a.kunde_id].vertriebskanal == kanal]
     # Vertriebler je Angebot (v5-Nachtrag): über die verknüpfte Erfassung
     from app.models import Benutzer, Erfassung
     vertriebler = {b.id: b for b in session.query(Benutzer)}
@@ -107,6 +110,10 @@ async def liste(request: Request, q: str = "", status: str = "", interesse: str 
     return render(request, "angebote/liste.html", aktiv="/angebote",
                   angebote=angebote, kunden=kunden, q=q, status=status,
                   interesse=interesse, vertriebler_id=vertriebler_id, sortierung=sortierung,
+                  kanal=kanal,
+                  kanal_werte=sorted({kunden[a.kunde_id].vertriebskanal for a in angebote
+                                      if a.kunde_id in kunden and kunden[a.kunde_id].vertriebskanal}
+                                     | ({kanal} if kanal else set())),
                   vertriebler=vertriebler, angebot_vertriebler=angebot_vertriebler,
                   vertriebler_werte=vertriebler_werte,
                   status_liste=ANGEBOT_STATUS, mail_zaehler=mail_zaehler,

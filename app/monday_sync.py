@@ -126,7 +126,9 @@ def _items_der_gruppe(board_id: str, gruppen_titel: str) -> tuple[str, list[dict
 
 def _benutzer_fuer_person(session: Session, name: str):
     """Personen-Spalte -> Tool-Benutzer. Bei Mehrfach-Zuweisung
-    ("Kyriakos Sarigiannis, Niko Goritsas") zählt die erste Person."""
+    ("Kyriakos Sarigiannis, Niko Goritsas") zählt die erste Person.
+    Automatisches Matching über Namensgleichheit ODER Benutzer-E-Mail
+    (monday liefert z. T. E-Mail-Adressen als Personen-Namen, v6)."""
     name = (name or "").split(",")[0].strip()
     if not name:
         return None
@@ -139,10 +141,29 @@ def _benutzer_fuer_person(session: Session, name: str):
         session.add(zuordnung)
         session.flush()   # sofort sichtbar machen (Session läuft ohne Autoflush)
     benutzer = session.query(Benutzer).filter(Benutzer.name == name).first()
+    if benutzer is None and "@" in name:
+        benutzer = (session.query(Benutzer)
+                    .filter(Benutzer.email == name.lower()).first())
     if benutzer is not None:
-        zuordnung.benutzer_id = benutzer.id   # Namensgleichheit -> automatisch verknüpfen
+        zuordnung.benutzer_id = benutzer.id   # automatisch verknüpfen
         return benutzer.id
     return None
+
+
+def zuordnung_anwenden(session: Session, person: MondayPerson) -> int:
+    """v6-Bugfix: eine (neue) Personen-Zuordnung sofort rückwirkend auf alle
+    vorhandenen Leads mit diesem monday-Namen anwenden – bisher griff sie erst
+    beim nächsten Sync-Lauf (und ohne API-Token nie). Manuell zugeordnete
+    Leads bleiben unberührt. Liefert die Zahl aktualisierter Leads."""
+    if not person.benutzer_id:
+        return 0
+    anzahl = 0
+    for lead in session.query(Lead).filter(Lead.benutzer_manuell.is_(False)):
+        erster = (lead.monday_person or "").split(",")[0].strip()
+        if erster == person.monday_name and lead.benutzer_id != person.benutzer_id:
+            lead.benutzer_id = person.benutzer_id
+            anzahl += 1
+    return anzahl
 
 
 def _plz_ort_trennen(plz: str, ort: str) -> tuple[str, str]:
@@ -194,7 +215,7 @@ def kunde_fuer_lead(session: Session, lead: Lead):
         kunde = Kunde()
         session.add(kunde)
     for feld in ("anrede", "vorname", "nachname", "strasse", "plz", "ort",
-                 "telefon", "email", "interesse"):
+                 "telefon", "email", "interesse", "vertriebskanal"):
         wert = getattr(lead, feld)
         if wert:
             setattr(kunde, feld, wert)
@@ -267,6 +288,7 @@ def _quelle_syncen(session: Session, quelle: MondayQuelle,
         lead.telefon = wert("telefon")
         lead.email = wert("email")
         lead.interesse = interesse_aus_text(wert("interesse"))   # Phase 33
+        lead.vertriebskanal = wert("vertriebskanal")[:100]        # v6
         lead.monday_person = wert("verantwortlicher")
         if lead.benutzer_manuell:
             pass   # manuelle Zuordnung durch den Innendienst hat Vorrang (v5-Nachtrag)

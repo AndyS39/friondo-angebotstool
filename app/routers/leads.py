@@ -33,7 +33,7 @@ def offene_leads(session: Session, benutzer=None, ausgeblendet: bool = False):
 @router.get("")
 async def liste(request: Request, q: str = "", interesse: str = "",
                 vertriebler_id: int = 0, lead_status: str = "", sortierung: str = "termin",
-                ansicht: str = "", session: Session = Depends(get_session)):
+                ansicht: str = "", kanal: str = "", session: Session = Depends(get_session)):
     from app import monday_sync
     benutzer = request.state.benutzer
     ausgeblendet = ansicht == "ausgeblendet"   # Filter „Ausgeblendet“ (v5-Nachtrag)
@@ -41,6 +41,10 @@ async def liste(request: Request, q: str = "", interesse: str = "",
     vertriebler = {b.id: b for b in session.query(Benutzer)}
     # Auswahlwerte für die Filter aus der ungefilterten Liste
     status_werte = sorted({l.status_text for l in alle if l.status_text})
+    kanal_werte = sorted({l.vertriebskanal for l in alle if l.vertriebskanal})
+    # Warnhinweis (v6): offene Leads ohne Vertriebler-Zuordnung (nur Büro)
+    ohne_ad = 0 if (ausgeblendet or benutzer.rolle == "aussendienst") else sum(
+        1 for l in alle if not l.benutzer_id)
     vertriebler_werte = sorted({l.benutzer_id for l in alle if l.benutzer_id},
                                key=lambda i: vertriebler[i].name if i in vertriebler else "")
     leads = alle
@@ -57,6 +61,8 @@ async def liste(request: Request, q: str = "", interesse: str = "",
         leads = [l for l in leads if l.benutzer_id == vertriebler_id]
     if lead_status:
         leads = [l for l in leads if l.status_text == lead_status]
+    if kanal:   # Vertriebskanal (v6)
+        leads = [l for l in leads if l.vertriebskanal == kanal]
     # Sortierung (v5): Termin (Standard), Vertriebler, Status – jeweils dann Termin
     if sortierung == "vertriebler":
         leads.sort(key=lambda l: ((vertriebler[l.benutzer_id].name if l.benutzer_id in vertriebler
@@ -74,7 +80,8 @@ async def liste(request: Request, q: str = "", interesse: str = "",
                   leads=leads, vertriebler=vertriebler, benutzer=benutzer,
                   q=q, interesse=interesse, vertriebler_id=vertriebler_id,
                   lead_status=lead_status, sortierung=sortierung, ansicht=ansicht,
-                  ausgeblendet=ausgeblendet,
+                  ausgeblendet=ausgeblendet, kanal=kanal, kanal_werte=kanal_werte,
+                  ohne_ad=ohne_ad,
                   status_werte=status_werte, vertriebler_werte=vertriebler_werte,
                   sync_status=monday_sync.status,
                   meldung=request.query_params.get("meldung", ""))

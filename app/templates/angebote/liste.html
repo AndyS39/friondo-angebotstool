@@ -27,6 +27,14 @@
             <option value="{{ vid }}" {{ 'selected' if vertriebler_id == vid }}>{{ vertriebler[vid].name if vid in vertriebler else vid }}</option>
         {% endfor %}
     </select>
+    {% if kanal_werte %}
+    <select name="kanal" title="Vertriebskanal">
+        <option value="">Alle Kanäle</option>
+        {% for k in kanal_werte %}
+            <option value="{{ k }}" {{ 'selected' if kanal == k }}>{{ k }}</option>
+        {% endfor %}
+    </select>
+    {% endif %}
     <select name="sortierung" title="Sortierung">
         <option value="nummer" {{ 'selected' if sortierung == 'nummer' }}>Sortierung: Nummer</option>
         <option value="datum" {{ 'selected' if sortierung == 'datum' }}>Sortierung: Datum</option>
@@ -34,7 +42,7 @@
         <option value="vertriebler" {{ 'selected' if sortierung == 'vertriebler' }}>Sortierung: Vertriebler</option>
     </select>
     <button class="knopf" type="submit">Filtern</button>
-    {% if q or status or interesse or vertriebler_id or sortierung != 'nummer' %}
+    {% if q or status or interesse or vertriebler_id or sortierung != 'nummer' or kanal %}
         <a class="knopf klein zweitrangig" href="/angebote">Zurücksetzen</a>
     {% endif %}
 </form>
@@ -65,7 +73,9 @@
                 {% endif %}
             </td>
             <td>{{ kunden[a.kunde_id].anzeige_name if a.kunde_id in kunden else '?' }}
-                {% if a.kunde_id in kunden %}{{ interesse_ui.badges(kunden[a.kunde_id].interessen) }}{% endif %}</td>
+                {% if a.kunde_id in kunden %}{{ interesse_ui.badges(kunden[a.kunde_id].interessen) }}
+                    {% if kunden[a.kunde_id].vertriebskanal %}<span class="abzeichen">{{ kunden[a.kunde_id].vertriebskanal }}</span>{% endif %}
+                {% endif %}</td>
             <td class="dezent">{% set vid = angebot_vertriebler.get(a.id) %}{{ vertriebler[vid].name if vid in vertriebler else '–' }}</td>
             <td>{{ a.datum.strftime('%d.%m.%Y') }}</td>
             <td><span class="abzeichen status-{{ a.status | lower | replace(' ', '-') }}">{{ a.status }}</span></td>

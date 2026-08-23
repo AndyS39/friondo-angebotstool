@@ -241,14 +241,23 @@ async def monday_rueckspielung_speichern(request: Request, board_id: str,
 @router.post("/monday/person/{person_id}")
 async def monday_person_zuordnen(request: Request, person_id: int,
                                  session: Session = Depends(get_session)):
+    from app import monday_sync
+    from urllib.parse import quote_plus
+
     from app.models import MondayPerson
     form = await request.form()
     person = session.get(MondayPerson, person_id)
-    if person is not None:
-        wert = form.get("benutzer_id") or ""
-        person.benutzer_id = int(wert) if wert.isdigit() else None
-        session.commit()
-    return RedirectResponse("/parametrierung/monday?meldung=Zuordnung+gespeichert",
+    if person is None:
+        return RedirectResponse("/parametrierung/monday", status_code=303)
+    wert = form.get("benutzer_id") or ""
+    person.benutzer_id = int(wert) if wert.isdigit() else None
+    # v6-Bugfix: sofort rückwirkend auf vorhandene Leads anwenden
+    anzahl = monday_sync.zuordnung_anwenden(session, person)
+    session.commit()
+    meldung = "Zuordnung gespeichert"
+    if anzahl:
+        meldung += f" – {anzahl} vorhandene Leads aktualisiert"
+    return RedirectResponse("/parametrierung/monday?meldung=" + quote_plus(meldung),
                             status_code=303)
 
 

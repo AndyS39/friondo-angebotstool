@@ -55,6 +55,22 @@ def _daten() -> list[str]:
         if einstellung_holen(session, "mail_bcc", "") == "":
             einstellung_setzen(session, "mail_bcc", "info@friondo.de")
             meldungen.append("BCC-Adresse vorbelegt (info@friondo.de)")
+        # v6 (Phase 37): Bestandsleads ohne Vertriebler erneut zuordnen –
+        # Personen-Zuordnungen griffen bisher erst beim nächsten Sync-Lauf;
+        # zusätzlich Matching über die Benutzer-E-Mail. Idempotent: fasst nur
+        # Leads ohne benutzer_id und ohne manuelle Zuordnung an.
+        from app import monday_sync
+        from app.models import Lead
+        nachgezogen = 0
+        for lead in (session.query(Lead)
+                     .filter(Lead.benutzer_id.is_(None),
+                             Lead.benutzer_manuell.is_(False))):
+            neu_id = monday_sync._benutzer_fuer_person(session, lead.monday_person)
+            if neu_id:
+                lead.benutzer_id = neu_id
+                nachgezogen += 1
+        if nachgezogen:
+            meldungen.append(f"{nachgezogen} Bestandsleads dem Vertriebler zugeordnet")
         session.commit()
     finally:
         session.close()

@@ -112,6 +112,7 @@ _NACHTRAEGLICHE_SPALTEN = {
     },
     "kunden": {
         "interesse": "VARCHAR(50) NOT NULL DEFAULT ''",
+        "vertriebskanal": "VARCHAR(100) NOT NULL DEFAULT ''",
     },
     "leads": {
         "interesse": "VARCHAR(50) NOT NULL DEFAULT ''",
@@ -119,6 +120,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "ausgeblendet_grund": "VARCHAR(300) NOT NULL DEFAULT ''",
         "ausgeblendet_am": "DATETIME",
         "benutzer_manuell": "BOOLEAN NOT NULL DEFAULT 0",
+        "vertriebskanal": "VARCHAR(100) NOT NULL DEFAULT ''",
     },
     "erfassungen": {
         "konfigurator_typ": "VARCHAR(10) NOT NULL DEFAULT 'WP'",

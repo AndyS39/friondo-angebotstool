@@ -29,7 +29,8 @@ def _kontext(session: Session, erfassungen):
 
 @router.get("")
 async def liste(request: Request, q: str = "", status: str = "", ampel: str = "",
-                interesse: str = "", session: Session = Depends(get_session)):
+                interesse: str = "", vertriebler_id: int = 0,
+                session: Session = Depends(get_session)):
     abfrage = session.query(Erfassung).filter(Erfassung.status != "Entwurf")
     if status == "offen":   # Statistik-Kachel der Startseite (Phase 19)
         abfrage = abfrage.filter(Erfassung.status.in_(["Neu", "In Bearbeitung"]))
@@ -49,6 +50,8 @@ async def liste(request: Request, q: str = "", status: str = "", ampel: str = ""
     if interesse:   # Filter nach Interesse des Kunden (Phase 33)
         erfassungen = [e for e in erfassungen
                        if e.kunde_id in kunden and interesse in kunden[e.kunde_id].interessen]
+    if vertriebler_id:   # Filter nach Vertriebler (v6)
+        erfassungen = [e for e in erfassungen if e.benutzer_id == vertriebler_id]
     # Bemerkungs-Symbol (Phase 24): O08 (Objekt) / A12 (alte Anlage) gefüllt?
     bemerkungen = {}
     for e in erfassungen:
@@ -57,10 +60,14 @@ async def liste(request: Request, q: str = "", status: str = "", ampel: str = ""
                  if t and str(t).strip()]
         if texte:
             bemerkungen[e.id] = " · ".join(str(t) for t in texte)
+    vertriebler_werte = sorted({e.benutzer_id for e in erfassungen if e.benutzer_id}
+                               | ({vertriebler_id} if vertriebler_id else set()),
+                               key=lambda i: benutzer[i].name if i in benutzer else "")
     return render(request, "erfassungen/liste.html", aktiv="/erfassungen",
                   erfassungen=erfassungen, kunden=kunden, benutzer_map=benutzer,
                   angebote=angebote, q=q, status=status, ampel=ampel,
-                  interesse=interesse,
+                  interesse=interesse, vertriebler_id=vertriebler_id,
+                  vertriebler_werte=vertriebler_werte,
                   bemerkungen=bemerkungen, status_liste=ERFASSUNG_STATUS,
                   meldung=request.query_params.get("meldung", ""))
 
