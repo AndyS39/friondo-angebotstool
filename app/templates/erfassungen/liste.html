@@ -10,10 +10,11 @@
 <form method="get" action="/erfassungen" class="suchleiste">
     <input type="text" name="q" value="{{ q }}" placeholder="Suche: Kunde, Vertriebler">
     <select name="status">
-        <option value="">Alle Status</option>
+        <option value="">Alle Status (ohne Archiv)</option>
         {% for s in status_liste %}
             <option value="{{ s }}" {{ 'selected' if status == s }}>{{ s }}</option>
         {% endfor %}
+        <option value="archiv" {{ 'selected' if status == 'archiv' }}>Archiv</option>
     </select>
     <select name="ampel">
         <option value="">Alle Ampeln</option>

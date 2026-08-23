@@ -32,10 +32,15 @@ async def liste(request: Request, q: str = "", status: str = "", ampel: str = ""
                 interesse: str = "", vertriebler_id: int = 0,
                 session: Session = Depends(get_session)):
     abfrage = session.query(Erfassung).filter(Erfassung.status != "Entwurf")
-    if status == "offen":   # Statistik-Kachel der Startseite (Phase 19)
-        abfrage = abfrage.filter(Erfassung.status.in_(["Neu", "In Bearbeitung"]))
-    elif status:
-        abfrage = abfrage.filter(Erfassung.status == status)
+    # Archiv (v6): Standardansicht ohne archivierte, Filter „Archiv“ nur diese
+    if status == "archiv":
+        abfrage = abfrage.filter(Erfassung.archiviert.is_(True))
+    else:
+        abfrage = abfrage.filter(Erfassung.archiviert.is_(False))
+        if status == "offen":   # Statistik-Kachel der Startseite (Phase 19)
+            abfrage = abfrage.filter(Erfassung.status.in_(["Neu", "In Bearbeitung"]))
+        elif status:
+            abfrage = abfrage.filter(Erfassung.status == status)
     if ampel:
         abfrage = abfrage.filter(Erfassung.ampel == ampel)
     erfassungen = abfrage.order_by(Erfassung.abgesendet_am.desc()).all()
@@ -135,6 +140,8 @@ async def status_aendern(request: Request, erfassung_id: int,
     erfassung = session.get(Erfassung, erfassung_id)
     if erfassung is not None and form.get("status") in ERFASSUNG_STATUS:
         erfassung.status = form.get("status")
+        if erfassung.status == "Individuell":
+            erfassung.archiviert = True   # v6: Individuell → automatisch ins Archiv
         session.commit()
     return RedirectResponse(f"/erfassungen/{erfassung_id}", status_code=303)
 
@@ -156,6 +163,23 @@ async def vertriebler_aendern(request: Request, erfassung_id: int,
         session.commit()
     return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
         "Vertriebler geändert"), status_code=303)
+
+
+@router.post("/{erfassung_id}/archivieren")
+async def archivieren(erfassung_id: int, session: Session = Depends(get_session)):
+    """Erfassung ins Archiv bzw. zurück (v6, Innendienst/Admin)."""
+    from urllib.parse import quote_plus
+    erfassung = session.get(Erfassung, erfassung_id)
+    if erfassung is None:
+        return RedirectResponse("/erfassungen", status_code=303)
+    erfassung.archiviert = not erfassung.archiviert
+    session.commit()
+    if erfassung.archiviert:
+        return RedirectResponse("/erfassungen?meldung=" + quote_plus(
+            f"Erfassung {erfassung_id} archiviert – über den Filter „Archiv“ erreichbar."),
+            status_code=303)
+    return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
+        "Aus dem Archiv zurückgeholt."), status_code=303)
 
 
 @router.post("/{erfassung_id}/loeschen")

@@ -140,7 +140,9 @@ class Benutzer(Base):
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
-ERFASSUNG_STATUS = ["Neu", "In Bearbeitung", "Erledigt"]
+# „Individuell“ (v6): Vorgang wird außerhalb des Tools geschrieben –
+# Setzen archiviert automatisch, damit keine „Leichen“ in den Listen liegen
+ERFASSUNG_STATUS = ["Neu", "In Bearbeitung", "Erledigt", "Individuell"]
 
 
 class Erfassung(Base):
@@ -159,6 +161,7 @@ class Erfassung(Base):
     angebot_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     aenderungs_protokoll: Mapped[str] = mapped_column(Text, default="")  # Korrekturen Innendienst
     konfigurator_typ: Mapped[str] = mapped_column(String(10), default="WP")   # v5
+    archiviert: Mapped[bool] = mapped_column(Boolean, default=False)          # v6
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     abgesendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
@@ -279,7 +282,9 @@ class Lead(Base):
 
 # „Versand vorbereitet“ (v5): Entwurf liegt in Outlook; der Graph-Abgleich
 # stellt nach dem tatsächlichen Senden automatisch auf „Versendet“.
-ANGEBOT_STATUS = ["Entwurf", "Versand vorbereitet", "Versendet", "Angenommen", "Abgelehnt"]
+# „Individuell“ (v6): wird außerhalb des Tools geschrieben → Auto-Archiv.
+ANGEBOT_STATUS = ["Entwurf", "Versand vorbereitet", "Versendet", "Angenommen",
+                  "Abgelehnt", "Individuell"]
 
 
 class Angebot(Base):

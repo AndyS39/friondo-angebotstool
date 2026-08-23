@@ -67,7 +67,8 @@ async def startseite(request: Request):
     try:
         offene_leads = _offene_leads_anzahl(session)
         offene_erfassungen = (session.query(Erfassung)
-                              .filter(Erfassung.status.in_(["Neu", "In Bearbeitung"]))
+                              .filter(Erfassung.status.in_(["Neu", "In Bearbeitung"]),
+                                      Erfassung.archiviert.is_(False))
                               .count())
         versendete = (session.query(Angebot)
                       .filter(Angebot.status == "Versendet",

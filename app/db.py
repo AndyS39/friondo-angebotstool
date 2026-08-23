@@ -124,6 +124,7 @@ _NACHTRAEGLICHE_SPALTEN = {
     },
     "erfassungen": {
         "konfigurator_typ": "VARCHAR(10) NOT NULL DEFAULT 'WP'",
+        "archiviert": "BOOLEAN NOT NULL DEFAULT 0",
     },
     "monday_quellen": {
         "rueck_modus": "VARCHAR(10) NOT NULL DEFAULT 'aus'",

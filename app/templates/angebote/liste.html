@@ -109,7 +109,14 @@
     {% endfor %}
     </tbody>
 </table>
-<p class="dezent">{{ angebote | length }} Angebot{{ 'e' if angebote | length != 1 }}</p>
+<table class="tabelle zusammenfassung summenblock">
+    <tr>
+        <th>Summe ({{ angebote | length }} Angebot{{ 'e' if angebote | length != 1 }})</th>
+        <td class="rechts">Netto: <strong>{{ summen_gesamt.netto | euro }}</strong></td>
+        <td class="rechts">Endbetrag (brutto): <strong>{{ summen_gesamt.endbetrag | euro }}</strong></td>
+        <td class="rechts">DB: <strong>{{ summen_gesamt.db | euro }}</strong></td>
+    </tr>
+</table>
 {% else %}
 <p class="hinweis">Noch keine Angebote. Über den <a href="/konfigurator">Konfigurator</a>
 oder als manuelles Angebot über einen Kunden starten.</p>

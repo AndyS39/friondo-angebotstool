@@ -21,14 +21,14 @@ Dropdown) und wird mit v6 ausgerollt.
 - [x] Erfassungsliste: Filter nach Vertriebler
 
 ## Phase 38 – Archiv & Status „Individuell“
-- [ ] Erfassungen archivieren (Innendienst/Admin): Flag + Filter „Archiv“ in der
+- [x] Erfassungen archivieren (Innendienst/Admin): Flag + Filter „Archiv“ in der
       Erfassungsliste mit Zurückholen; Statistik-Kacheln zählen Archivierte nicht
-- [ ] Neuer Status „Individuell“ für Erfassungen UND Angebote: markiert Vorgänge,
+- [x] Neuer Status „Individuell“ für Erfassungen UND Angebote: markiert Vorgänge,
       die außerhalb des Tools geschrieben werden; Setzen archiviert automatisch
       (keine „Leichen“ in den Listen); Filter zeigt sie im Archiv
-- [ ] Angebotsliste: Summenzeile über die gefilterte Liste – Netto, Endbetrag
+- [x] Angebotsliste: Summenzeile über die gefilterte Liste – Netto, Endbetrag
       (brutto) und DB
-- [ ] migrate.py (Erfassung archiviert-Flag; Statuslisten erweitert)
+- [x] migrate.py (Erfassung archiviert-Flag; Statuslisten erweitert)
 
 ## Phase 39 – Angebots-Editor: Texte, EP, Förderung, Löschen
 - [ ] Artikeltexte (Bezeichnung + Beschreibung) je Position im Editor editierbar;

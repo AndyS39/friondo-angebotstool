@@ -107,7 +107,15 @@ async def liste(request: Request, q: str = "", status: str = "", interesse: str 
     mail_zaehler = dict(session.query(AngebotsMail.angebot_id, func.count())
                         .filter(AngebotsMail.eingehend.is_(True))
                         .group_by(AngebotsMail.angebot_id))
+    # Summenzeile (v6): über die aktuell gefilterte Liste
+    summen_gesamt = {"netto": 0, "endbetrag": 0, "db": 0}
+    for a in angebote:
+        su = a.summen()
+        summen_gesamt["netto"] += su["netto"]
+        summen_gesamt["endbetrag"] += su["endbetrag"]
+        summen_gesamt["db"] += a.deckungsbeitrag()["db"]
     return render(request, "angebote/liste.html", aktiv="/angebote",
+                  summen_gesamt=summen_gesamt,
                   angebote=angebote, kunden=kunden, q=q, status=status,
                   interesse=interesse, vertriebler_id=vertriebler_id, sortierung=sortierung,
                   kanal=kanal,
@@ -635,6 +643,8 @@ async def status_aendern(request: Request, angebot_id: int,
     if angebot is not None and neuer_status in ANGEBOT_STATUS:
         alter_status = angebot.status
         angebot.status = neuer_status
+        if neuer_status == "Individuell":
+            angebot.archiviert = True   # v6: Individuell → automatisch ins Archiv
         # verknüpfte Erfassung automatisch pflegen (Phase 14)
         from app.models import Erfassung
         erfassung = (session.query(Erfassung)
