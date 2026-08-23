@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import pypdf
 from fastapi.testclient import TestClient
 
-from app import angebot_aufbau, anhaenge, graph_versand, kfw, pdf_export
+from app import angebot_aufbau, anhaenge, config, graph_versand, kfw, pdf_export
 from app import konfigurator as engine
 from app.db import SessionLocal, init_db
 from app.logik import logik_einlesen
@@ -38,9 +38,39 @@ def euro(cent):
     return f"{cent / 100:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def vorab_aufraeumen(s):
+    """Reste eines abgebrochenen Laufs entfernen, damit der neue Lauf sauber startet."""
+    from app import signaturen
+    from app.models import AngebotsLoeschung, AngebotsMail, AngebotsNotiz, Erfassung, MondayPerson
+    for k in s.query(Kunde).filter(Kunde.email == "abnahme@test.local"):
+        for a in s.query(Angebot).filter_by(kunde_id=k.id):
+            (config.DATA_ORDNER / "angebote" / f"{a.nummer}.pdf").unlink(missing_ok=True)
+            s.query(AngebotsMail).filter_by(angebot_id=a.id).delete()
+            s.query(AngebotsNotiz).filter_by(angebot_id=a.id).delete()
+            s.delete(a)
+        for e in s.query(Erfassung).filter_by(kunde_id=k.id):
+            s.delete(e)
+        s.delete(k)
+    for b in s.query(Benutzer).filter(Benutzer.name.in_(["AD Abnahme", "Abn V6"])):
+        s.delete(b)
+    for l in s.query(Lead).filter(Lead.monday_item_id.in_(["abn-lead", "abn-v6"])):
+        s.delete(l)
+    s.query(MondayPerson).filter_by(monday_name="abn.v6@friondo.de").delete()
+    s.query(AngebotsMail).filter(AngebotsMail.graph_id.in_(["s1", "k1"])).delete(synchronize_session=False)
+    s.query(AngebotsLoeschung).filter(AngebotsLoeschung.kunde_name.like("%Abnahme%")).delete(synchronize_session=False)
+    s.commit()
+    sig_ordner = config.DATA_ORDNER / "signaturen" / "1"
+    if sig_ordner.exists():
+        for datei in sig_ordner.iterdir():
+            if datei.suffix.lower() in (".htm", ".html") and "Abnahme-Signatur" in datei.read_text(errors="ignore"):
+                signaturen.entfernen(1)
+                break
+
+
 def main():
     init_db()
     s = SessionLocal()
+    vorab_aufraeumen(s)
     logik, bericht = logik_einlesen()
     aufraeumen: list = []
     client = TestClient(app)
@@ -116,17 +146,19 @@ def main():
            all((Path("anlagen") / n).exists() for n in ("Friondo Unternehmenspräsentation.pdf", "Broschüre Ratenkauf.pdf",
                                                        "Friondo HEMS.pdf", "Friondo SpotDynamic.pdf")))
     hems = [a.datei for a in anhaenge.fuer_angebot(logik, ang)]     # KG: P01 = Ja, P03 = Nein
-    pruefe("Anhänge", "HEMS-Angebot (P01 = Ja) → 3 Anhänge", sorted(hems) == sorted(
-        ["Friondo Unternehmenspräsentation.pdf", "Broschüre Ratenkauf.pdf", "Friondo HEMS.pdf"]), ", ".join(hems))
+    pruefe("Anhänge", "HEMS-Angebot (P01 = Ja) → 4 Anhänge inkl. Gerätebroschüre", sorted(hems) == sorted(
+        ["Friondo Unternehmenspräsentation.pdf", "Broschüre Ratenkauf.pdf",
+         "Friondo HEMS.pdf", "Bosch CS3800iAW.pdf"]), ", ".join(hems))
     ohne = angebot_aufbau.angebot_anlegen(s, kunde_t.id, antworten=dict(kg, P01="Nein", P02="Nein", P03="Nein"), logik=logik)
     aufraeumen.append(ohne)
     liste_ohne = [a.datei for a in anhaenge.fuer_angebot(logik, ohne)]
-    pruefe("Anhänge", "ohne Friondo-Produkte → 2 Anhänge", sorted(liste_ohne) == sorted(
-        ["Friondo Unternehmenspräsentation.pdf", "Broschüre Ratenkauf.pdf"]), ", ".join(liste_ohne))
+    pruefe("Anhänge", "ohne Friondo-Produkte → 3 Anhänge (Standard + Gerätebroschüre)", sorted(liste_ohne) == sorted(
+        ["Friondo Unternehmenspräsentation.pdf", "Broschüre Ratenkauf.pdf",
+         "Bosch CS3800iAW.pdf"]), ", ".join(liste_ohne))
     spot = angebot_aufbau.angebot_anlegen(s, kunde_t.id, antworten=dict(kg, P03="Ja"), logik=logik)
     aufraeumen.append(spot)
-    pruefe("Anhänge", "SpotDynamic (P03 = Ja) → 4 Anhänge + Vollmacht",
-           len(anhaenge.fuer_angebot(logik, spot)) == 4 and anhaenge.vollmacht_erforderlich(spot))
+    pruefe("Anhänge", "SpotDynamic (P03 = Ja) → 5 Anhänge + Vollmacht",
+           len(anhaenge.fuer_angebot(logik, spot)) == 5 and anhaenge.vollmacht_erforderlich(spot))
     pruefe("Anhänge", "alle Dateien vorhanden (kein „fehlt“)", all(a.vorhanden for a in anhaenge.fuer_angebot(logik, spot)))
 
     # ---------- 5) Status-Kette + CC/BCC (gemockter Graph) ----------
@@ -159,7 +191,7 @@ def main():
            ang.nummer in nachricht.get("subject", "") and "Sehr geehrte Frau Abnahme," in nachricht.get("body", {}).get("content", "")
            and "{" not in nachricht.get("body", {}).get("content", ""))
     anhang_namen = [d["name"] for p, d in payloads if p.endswith("/attachments")]
-    pruefe("Versand", "PDF + 3 Broschüren als Anhang", anhang_namen[0] == f"{ang.nummer}.pdf" and len(anhang_namen) == 4, ", ".join(anhang_namen))
+    pruefe("Versand", "PDF + 4 Broschüren als Anhang", anhang_namen[0] == f"{ang.nummer}.pdf" and len(anhang_namen) == 5, ", ".join(anhang_namen))
     # Mail-Abgleich: gesendete Nachricht → Versendet; Erfassung erledigt; monday übersprungen (kein Lead)
     from app import mail_sync
     gesendet = {"id": "s1", "conversationId": "konv-abn", "isDraft": False, "sentDateTime": "2026-08-19T10:00:00Z",
@@ -180,9 +212,8 @@ def main():
     aufraeumen.extend(s.query(AngebotsMail).filter(AngebotsMail.angebot_id == ang.id).all())
 
     # ---------- 6) Lösch-/Archiv-Regeln ----------
-    r = client.post(f"/angebote/{ang.id}/loeschen", follow_redirects=True)
-    s.expire_all()
-    pruefe("Löschen/Archiv", "Versendetes Angebot nicht löschbar", s.get(Angebot, ang.id) is not None and "Nur Entwürfe" in r.text)
+    # seit v6 sind Versendete löschbar (mit Protokoll, geprüft im v6-Block) –
+    # hier nur: Archivieren funktioniert weiterhin
     client.post(f"/angebote/{ang.id}/archivieren", follow_redirects=True); s.expire_all()
     pruefe("Löschen/Archiv", "Versendet → archivierbar, aus Standardliste raus, im Archiv-Filter",
            s.get(Angebot, ang.id).archiviert and ang.nummer not in client.get("/angebote").text
@@ -220,6 +251,83 @@ def main():
     alle_seiten = "\n".join(pg.extract_text() or "" for pg in pypdf.PdfReader(str(pfad)).pages)
     pruefe("PDF", "Summenblock Netto/USt/Gesamt/−Rabatt/=Endbetrag + Eigenanteil",
            all(w in alle_seiten for w in ("Netto-Summe", "Rabatt", "Endbetrag", "Eigenanteil")))
+
+    # ---------- 8) v6-Abnahme ----------
+    from app import mail_vorlagen, monday_sync, signaturen
+    from app.models import AngebotsLoeschung, AngebotsNotiz, MondayPerson
+    # Lead-Zuordnung rückwirkend
+    tl = Lead(monday_item_id="abn-v6", vorname="V", nachname="Sechs",
+              monday_person="abn.v6@friondo.de", vot_datum=datetime.datetime.now())
+    tb = Benutzer(name="Abn V6", rolle="aussendienst", email="abn.v6@friondo.de", pin_hash="x")
+    s.add_all([tl, tb]); s.commit()
+    mp = MondayPerson(monday_name="abn.v6@friondo.de"); s.add(mp); s.commit()
+    mp.benutzer_id = tb.id
+    anzahl = monday_sync.zuordnung_anwenden(s, mp); s.commit()
+    pruefe("v6", "Personen-Zuordnung wirkt sofort rückwirkend", anzahl == 1
+           and s.get(Lead, tl.id).benutzer_id == tb.id)
+    pruefe("v6", "E-Mail-Matching (monday liefert Adresse)",
+           monday_sync._benutzer_fuer_person(s, "abn.v6@friondo.de") == tb.id)
+    # Individuell → Auto-Archiv
+    indiv = angebot_aufbau.angebot_anlegen(s, kunde_t.id)
+    client.post(f"/angebote/{indiv.id}/status", data={"status": "Individuell"})
+    s.expire_all()
+    pruefe("v6", "Status Individuell archiviert automatisch",
+           s.get(Angebot, indiv.id).status == "Individuell" and s.get(Angebot, indiv.id).archiviert)
+    # Summenzeile
+    pruefe("v6", "Angebotsliste mit Summenzeile Netto/Endbetrag/DB",
+           all(w in client.get("/angebote").text for w in ("Summe (", "Netto:", "Endbetrag (brutto):", "DB:")))
+    # Förder-Override + EP-Kästchen (auf dem Rabatt-Angebot ang)
+    a2 = s.get(Angebot, indiv.id); a2.status = "Entwurf"; a2.archiviert = False; s.commit()
+    client.post(f"/angebote/{ang.id}/foerderung", data={"betrag": "12.345,00"})
+    s.expire_all()
+    pruefe("v6", "Förderbetrag manuell überschreibbar", s.get(Angebot, ang.id).foerderung_manuell_cent == 1234500)
+    client.post(f"/angebote/{ang.id}/foerderung", data={"betrag": ""})
+    pos1 = s.get(Angebot, ang.id).positionen[0]
+    client.post(f"/angebote/{ang.id}/position/{pos1.id}/aendern",
+                data={"anzeige_nr": "", "menge": "", "e_preis": "", "rabatt_wert": "", "rabatt_typ": "betrag", "ep_flag": "on"})
+    s.expire_all()
+    pruefe("v6", "EP-Kästchen je Position", s.get(type(pos1), pos1.id).ep_flag)
+    client.post(f"/angebote/{ang.id}/position/{pos1.id}/aendern",
+                data={"anzeige_nr": "", "menge": "", "e_preis": "", "rabatt_wert": "", "rabatt_typ": "betrag"})
+    # Verfolgung
+    client.post(f"/angebote/{ang.id}/verfolgung",
+                data={"verfolgung_ampel": "heiss", "wiedervorlage_am": "2026-01-01", "notiz": "Abnahme"})
+    s.expire_all()
+    pruefe("v6", "Verfolgung: Ampel + fällige Wiedervorlage + Notiz",
+           s.get(Angebot, ang.id).verfolgung_ampel == "heiss"
+           and ang.nummer in client.get("/angebote?verfolgung=faellig").text
+           and s.query(AngebotsNotiz).filter_by(angebot_id=ang.id).count() == 1)
+    # Statistik
+    stat = client.get("/statistik?zeitraum=jahr").text
+    pruefe("v6", "Statistik-Seite (Jahr) mit Kacheln + Je Vertriebler",
+           "Abschlussquote" in stat and "Je Vertriebler" in stat)
+    # HTML-Mail + Signatur (Payload lag oben schon vor? Neu prüfen mit Signatur)
+    signaturen.speichern(1, [("Sig.htm", b"<html><body><p>Abnahme-Signatur <img src=\"x/l.png\"></p></body></html>"), ("l.png", b"PNG")])
+    payloads.clear()
+    with mock.patch.object(graph_versand, "konfiguriert", return_value=True),             mock.patch.object(graph_versand, "angemeldeter_benutzer", return_value="ida@friondo.de"),             mock.patch.object(graph_versand, "_token", return_value="tok"),             mock.patch.object(graph_versand, "_graph_aufruf", side_effect=fake_graph):
+        client.post(f"/angebote/{a2.id}/email", follow_redirects=False)
+    n2 = next((d for pfad, d in payloads if pfad == "/me/messages"), {}) or {}
+    inline = [d for pfad, d in payloads if pfad.endswith("/attachments") and d.get("isInline")]
+    pruefe("v6", "HTML-Mail mit Outlook-Signatur (cid + Inline-Bild)",
+           n2.get("body", {}).get("contentType") == "html"
+           and "Abnahme-Signatur" in n2.get("body", {}).get("content", "")
+           and len(inline) == 1 and inline[0]["contentId"].startswith("sig1"))
+    signaturen.entfernen(1)
+    # Löschen versendeter mit Protokoll
+    a2 = s.get(Angebot, a2.id); a2.status = "Versendet"; s.commit()
+    n2_nummer, a2_id = a2.nummer, a2.id
+    client.post(f"/angebote/{a2_id}/loeschen")
+    s.expire_all()
+    pruefe("v6", "Versendetes löschbar + Lösch-Protokoll + Nummer gesperrt",
+           s.get(Angebot, a2_id) is None
+           and s.query(AngebotsLoeschung).filter_by(nummer=n2_nummer).count() == 1
+           and angebot_aufbau.naechste_angebotsnummer(s) != n2_nummer)
+    # v6-Aufräumen
+    s.query(AngebotsLoeschung).filter_by(nummer=n2_nummer).delete()
+    s.query(AngebotsNotiz).filter_by(angebot_id=ang.id).delete()
+    ang2 = s.get(Angebot, ang.id); ang2.verfolgung_ampel = ""; ang2.wiedervorlage_am = None
+    s.delete(s.get(Lead, tl.id)); s.query(MondayPerson).filter_by(monday_name="abn.v6@friondo.de").delete()
+    s.delete(s.get(Benutzer, tb.id)); s.commit()
 
     # ---------- Aufräumen ----------
     for a in s.query(Angebot).filter(Angebot.kunde_id == kunde_t.id):

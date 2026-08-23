@@ -77,11 +77,11 @@ Dropdown) und wird mit v6 ausgerollt.
       Schritt für Schritt (%APPDATA%\Microsoft\Signatures)
 
 ## Phase 43 – Migration, Abnahme & Rollout
-- [ ] migrate.py idempotent gegen Kopie der echten DB (vor v6) und aktuellen Stand
-- [ ] Regressionstests unverändert grün; Abnahmeskript um v6-Punkte erweitert
+- [x] migrate.py idempotent gegen Kopie der echten DB (vor v6) und aktuellen Stand
+- [x] Regressionstests unverändert grün; Abnahmeskript um v6-Punkte erweitert
       (Individuell-Archiv, Summenzeile, Förder-Override, EP-Kästchen,
       HTML-Mail/Signatur mit Mocks, Lead-Zuordnung rückwirkend)
-- [ ] docs/nach-dem-update-v6.md: ① Personen-Zuordnung prüfen (P. Diblasi als
+- [x] docs/nach-dem-update-v6.md: ① Personen-Zuordnung prüfen (P. Diblasi als
       Benutzer anlegen oder zuordnen; Ioannis Simeonidis klären) ② Vertriebskanal-
       Spalte je Board mappen ③ Signaturen der ID-Mitarbeiter hochladen
       ④ Kurzanleitung Verfolgung/Statistik/Individuell
