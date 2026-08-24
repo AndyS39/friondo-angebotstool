@@ -7,15 +7,19 @@
 <h1>Erfassungen</h1>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
+<div class="tab-leiste">
+    {% for wert, name in [('', 'Alle'), ('offen', 'Offen'),
+                          ('Individuell – zu prüfen', 'Individuell – zu prüfen'),
+                          ('In TAIFUN zu schreiben', 'In TAIFUN zu schreiben'),
+                          ('erledigt', 'Erledigt'), ('archiv', 'Archiv')] %}
+        <a class="tab {{ 'aktiv' if status == wert }}"
+           href="/erfassungen?status={{ wert | urlencode }}">{{ name }}</a>
+    {% endfor %}
+</div>
+
 <form method="get" action="/erfassungen" class="suchleiste">
+    <input type="hidden" name="status" value="{{ status }}">
     <input type="text" name="q" value="{{ q }}" placeholder="Suche: Kunde, Vertriebler">
-    <select name="status">
-        <option value="">Alle Status (ohne Archiv)</option>
-        {% for s in status_liste %}
-            <option value="{{ s }}" {{ 'selected' if status == s }}>{{ s }}</option>
-        {% endfor %}
-        <option value="archiv" {{ 'selected' if status == 'archiv' }}>Archiv</option>
-    </select>
     <select name="ampel">
         <option value="">Alle Ampeln</option>
         <option value="gruen" {{ 'selected' if ampel == 'gruen' }}>Konfigurierbar</option>
@@ -46,6 +50,7 @@
                 {% if e.kunde_id in kunden and kunden[e.kunde_id].vertriebskanal %}
                     <span class="abzeichen">{{ kunden[e.kunde_id].vertriebskanal }}</span>
                 {% endif %}
+                {% if e.typ == 'freitext' %}<span class="abzeichen">Freitext</span>{% endif %}
                 {% if e.id in bemerkungen %}
                     <span class="bemerkung-symbol" title="{{ bemerkungen[e.id] | truncate(300) }}">📝</span>
                 {% endif %}
@@ -62,6 +67,10 @@
             <td>{% if e.angebot_id and e.angebot_id in angebote %}<a href="/angebote/{{ e.angebot_id }}">{{ angebote[e.angebot_id].nummer }}</a>{% endif %}</td>
             <td class="aktionen">
                 <a class="knopf klein zweitrangig" href="/erfassungen/{{ e.id }}">Öffnen</a>
+                {% if e.status == 'In TAIFUN zu schreiben' %}
+                    <a class="knopf klein" href="/erfassungen/{{ e.id }}/protokoll.pdf"
+                       target="_blank" title="Übergabezettel für TAIFUN">Protokoll-PDF</a>
+                {% endif %}
             </td>
         </tr>
     {% endfor %}

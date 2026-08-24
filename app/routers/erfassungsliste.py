@@ -32,13 +32,20 @@ async def liste(request: Request, q: str = "", status: str = "", ampel: str = ""
                 interesse: str = "", vertriebler_id: int = 0,
                 session: Session = Depends(get_session)):
     abfrage = session.query(Erfassung).filter(Erfassung.status != "Entwurf")
-    # Archiv (v6): Standardansicht ohne archivierte, Filter „Archiv“ nur diese
+    # Archiv (v6): Standardansicht ohne archivierte, Filter „Archiv“ nur diese;
+    # v7: Tabs Offen · Individuell – zu prüfen · In TAIFUN zu schreiben ·
+    # Erledigt · Archiv (Sammelwerte offen/erledigt/individuell-offen)
     if status == "archiv":
         abfrage = abfrage.filter(Erfassung.archiviert.is_(True))
     else:
         abfrage = abfrage.filter(Erfassung.archiviert.is_(False))
         if status == "offen":   # Statistik-Kachel der Startseite (Phase 19)
             abfrage = abfrage.filter(Erfassung.status.in_(["Neu", "In Bearbeitung"]))
+        elif status == "erledigt":
+            abfrage = abfrage.filter(Erfassung.status.in_(["Erledigt", "Erledigt (extern)"]))
+        elif status == "individuell-offen":   # Startseiten-Kachel (v7)
+            abfrage = abfrage.filter(Erfassung.status.in_(
+                ["Individuell – zu prüfen", "In TAIFUN zu schreiben"]))
         elif status:
             abfrage = abfrage.filter(Erfassung.status == status)
     if ampel:
@@ -142,10 +149,55 @@ async def status_aendern(request: Request, erfassung_id: int,
     erfassung = session.get(Erfassung, erfassung_id)
     if erfassung is not None and form.get("status") in ERFASSUNG_STATUS:
         erfassung.status = form.get("status")
-        if erfassung.status == "Individuell":
-            erfassung.archiviert = True   # v6: Individuell → automatisch ins Archiv
+        # v7: nur der Abschluss der TAIFUN-Kette archiviert automatisch
+        if erfassung.status == "Erledigt (extern)":
+            erfassung.archiviert = True
         session.commit()
     return RedirectResponse(f"/erfassungen/{erfassung_id}", status_code=303)
+
+
+def _kette_protokollieren(erfassung: Erfassung, benutzer, text: str) -> None:
+    from datetime import datetime
+    zeile = (f"{datetime.now().strftime('%d.%m.%Y %H:%M')} · "
+             f"{benutzer.name if benutzer else '?'}: {text}")
+    erfassung.aenderungs_protokoll = (
+        (erfassung.aenderungs_protokoll + "\n" if erfassung.aenderungs_protokoll else "")
+        + zeile)
+
+
+@router.post("/{erfassung_id}/doch-konfigurierbar")
+async def doch_konfigurierbar(request: Request, erfassung_id: int,
+                              session: Session = Depends(get_session)):
+    """v7: „Individuell – zu prüfen“ zurück auf den normalen Tool-Weg –
+    die Antworten sind korrigierbar, danach „Angebot erzeugen“ wie gewohnt."""
+    from urllib.parse import quote_plus
+    erfassung = session.get(Erfassung, erfassung_id)
+    if erfassung is None:
+        return RedirectResponse("/erfassungen", status_code=303)
+    erfassung.status = "Neu"
+    _kette_protokollieren(erfassung, request.state.benutzer,
+                          "als „Doch konfigurierbar“ eingestuft – normaler Tool-Weg")
+    session.commit()
+    return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
+        "Zurück auf dem normalen Weg – Antworten prüfen/korrigieren, dann Angebot erzeugen."),
+        status_code=303)
+
+
+@router.post("/{erfassung_id}/individuell-bestaetigt")
+async def individuell_bestaetigt(request: Request, erfassung_id: int,
+                                 session: Session = Depends(get_session)):
+    """v7: Prüfung abgeschlossen – der Fall wandert in die TAIFUN-Warteschlange."""
+    from urllib.parse import quote_plus
+    erfassung = session.get(Erfassung, erfassung_id)
+    if erfassung is None:
+        return RedirectResponse("/erfassungen", status_code=303)
+    erfassung.status = "In TAIFUN zu schreiben"
+    _kette_protokollieren(erfassung, request.state.benutzer,
+                          "Individuell bestätigt – in TAIFUN zu schreiben")
+    session.commit()
+    return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
+        "Individuell bestätigt – der Fall steht jetzt in der Warteschlange „In TAIFUN zu schreiben“."),
+        status_code=303)
 
 
 @router.post("/{erfassung_id}/vertriebler")

@@ -19,19 +19,19 @@ committen. Alle Schema-Änderungen in migrate.py (idempotent).
 - [x] migrate.py: erfassungen.typ (katalog/freitext), erfassungen.freitext
 
 ## Phase 45 – Statuskette & TAIFUN-Warteschlange
-- [ ] v6-Verhalten entfernen: Status „Individuell" archiviert NICHT mehr
+- [x] v6-Verhalten entfernen: Status „Individuell" archiviert NICHT mehr
       automatisch
-- [ ] Neue Erfassungs-Statuskette: Katalog-Fälle mit oranger Ampel →
+- [x] Neue Erfassungs-Statuskette: Katalog-Fälle mit oranger Ampel →
       „Individuell – zu prüfen" mit Buttons „Doch konfigurierbar" (Antworten
       korrigierbar, normaler Weg inkl. „Angebot erzeugen") und „Individuell
       bestätigt" → „In TAIFUN zu schreiben" → nach Phase-46-Dialog
       „Erledigt (extern)" + Archiv
-- [ ] Erfassungsliste: Tabs/Filter Offen · Individuell – zu prüfen ·
+- [x] Erfassungsliste: Tabs/Filter Offen · Individuell – zu prüfen ·
       In TAIFUN zu schreiben · Erledigt · Archiv; Protokoll-PDF-Button
       prominent in der Warteschlange
-- [ ] Startseiten-Kachel „Individuell offen: n" (zu prüfen + zu schreiben),
+- [x] Startseiten-Kachel „Individuell offen: n" (zu prüfen + zu schreiben),
       klickbar auf die gefilterte Liste
-- [ ] migrate.py: BESTANDSDATEN REAKTIVIEREN – alle bisher als „Individuell"
+- [x] migrate.py: BESTANDSDATEN REAKTIVIEREN – alle bisher als „Individuell"
       markierten (auto-archivierten) Erfassungen auf „In TAIFUN zu schreiben"
       setzen und entarchivieren, damit sie als Arbeitsliste sichtbar werden;
       im Änderungsprotokoll vermerken

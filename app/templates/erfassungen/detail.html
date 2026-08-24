@@ -46,9 +46,30 @@
 </div>
 {% endif %}
 
+{% if erfassung.status == 'Individuell – zu prüfen' %}
+<div class="warnblock">
+    <strong>Individuell – zu prüfen:</strong> Lässt sich der Fall doch über das
+    Tool abbilden, oder wird das Angebot in TAIFUN geschrieben?
+    <div class="formaktionen">
+        <form method="post" action="/erfassungen/{{ erfassung.id }}/doch-konfigurierbar">
+            <button class="knopf" type="submit">✓ Doch konfigurierbar</button>
+        </form>
+        <form method="post" action="/erfassungen/{{ erfassung.id }}/individuell-bestaetigt">
+            <button class="knopf zweitrangig" type="submit">→ Individuell bestätigt (TAIFUN)</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
 <div class="formaktionen">
     {% if angebot %}
         <a class="knopf" href="/angebote/{{ angebot.id }}">Zum Angebot {{ angebot.nummer }}</a>
+    {% elif erfassung.status == 'In TAIFUN zu schreiben' %}
+        <a class="knopf" href="/erfassungen/{{ erfassung.id }}/protokoll.pdf"
+           target="_blank">Protokoll-PDF (Übergabe an TAIFUN)</a>
+    {% elif erfassung.status == 'Individuell – zu prüfen' %}
+        {# Entscheidung oben treffen – keine Angebots-Buttons, bis geklärt ist,
+           ob der Fall über das Tool läuft #}
     {% elif erfassung.ampel == 'gruen' %}
         <a class="knopf" href="/erfassungen/{{ erfassung.id }}/angebot-erzeugen">Angebot erzeugen</a>
         <a class="knopf zweitrangig" href="/erfassungen/{{ erfassung.id }}/manuelles-angebot">Manuelles Angebot</a>

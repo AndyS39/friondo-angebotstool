@@ -79,12 +79,19 @@ async def startseite(request: Request):
                     .filter(Angebot.wiedervorlage_am.isnot(None),
                             Angebot.wiedervorlage_am <= dt.now(),
                             Angebot.archiviert.is_(False)).count())
+        # v7: offene Individuell-Fälle (zu prüfen + in TAIFUN zu schreiben)
+        individuell_offen = (session.query(Erfassung)
+                             .filter(Erfassung.status.in_(
+                                 ["Individuell – zu prüfen", "In TAIFUN zu schreiben"]),
+                                     Erfassung.archiviert.is_(False))
+                             .count())
     finally:
         session.close()
     return render(request, "index.html", aktiv=None,
                   faellige=faellige,
                   offene_leads=offene_leads,
                   offene_erfassungen=offene_erfassungen,
+                  individuell_offen=individuell_offen,
                   versendete=versendete)
 
 

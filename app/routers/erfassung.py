@@ -361,7 +361,8 @@ async def absenden(request: Request, erfassung_id: int,
     gruende = engine.ampel_gruende(logik, antworten)
     erfassung.ampel = "orange" if gruende else "gruen"
     erfassung.gruende_text = "\n".join(gruende)
-    erfassung.status = "Neu"
+    # v7: orange Katalog-Fälle landen zur Prüfung beim Innendienst
+    erfassung.status = "Individuell – zu prüfen" if gruende else "Neu"
     erfassung.abgesendet_am = datetime.now()
     session.commit()
     return render(request, "erfassung/fertig.html", aktiv=None, mobil=True,

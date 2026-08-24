@@ -267,12 +267,12 @@ def main():
            and s.get(Lead, tl.id).benutzer_id == tb.id)
     pruefe("v6", "E-Mail-Matching (monday liefert Adresse)",
            monday_sync._benutzer_fuer_person(s, "abn.v6@friondo.de") == tb.id)
-    # Individuell → Auto-Archiv
+    # Individuell (v7): KEIN Auto-Archiv mehr – Kette läuft über die Erfassung
     indiv = angebot_aufbau.angebot_anlegen(s, kunde_t.id)
     client.post(f"/angebote/{indiv.id}/status", data={"status": "Individuell"})
     s.expire_all()
-    pruefe("v6", "Status Individuell archiviert automatisch",
-           s.get(Angebot, indiv.id).status == "Individuell" and s.get(Angebot, indiv.id).archiviert)
+    pruefe("v6", "Status Individuell OHNE Auto-Archiv (v7-Kette)",
+           s.get(Angebot, indiv.id).status == "Individuell" and not s.get(Angebot, indiv.id).archiviert)
     # Summenzeile
     pruefe("v6", "Angebotsliste mit Summenzeile Netto/Endbetrag/DB",
            all(w in client.get("/angebote").text for w in ("Summe (", "Netto:", "Endbetrag (brutto):", "DB:")))

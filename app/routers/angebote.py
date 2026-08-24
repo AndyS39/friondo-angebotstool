@@ -742,8 +742,8 @@ async def status_aendern(request: Request, angebot_id: int,
         from app.models import angebot_status_setzen
         alter_status = angebot.status
         angebot_status_setzen(angebot, neuer_status)
-        if neuer_status == "Individuell":
-            angebot.archiviert = True   # v6: Individuell → automatisch ins Archiv
+        # v7: „Individuell“ archiviert NICHT mehr automatisch – individuelle
+        # Fälle laufen über die Erfassungs-Statuskette (TAIFUN-Warteschlange)
         # verknüpfte Erfassung automatisch pflegen (Phase 14)
         from app.models import Erfassung
         erfassung = (session.query(Erfassung)

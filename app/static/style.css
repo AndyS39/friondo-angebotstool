@@ -781,3 +781,11 @@ tr.bauseits td { color: #888; }
 .weiche-titel { font-size: 1.15rem; font-weight: 700; }
 .freitext-wechsel { margin-top: 1.4rem; text-align: center; }
 .freitext-block { white-space: pre-wrap; }
+
+/* v7: Tab-Leiste der Erfassungsliste (Statuskette) */
+.tab-leiste { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.9rem; }
+.tab-leiste .tab { padding: 0.45rem 0.9rem; border-radius: 6px 6px 0 0;
+    border: 1px solid #d4d9e4; border-bottom: 2px solid transparent;
+    text-decoration: none; color: #1b2a5e; background: #f4f6fa; }
+.tab-leiste .tab.aktiv { background: #fff; font-weight: 700;
+    border-bottom-color: #1b2a5e; }

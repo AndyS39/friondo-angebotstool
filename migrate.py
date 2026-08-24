@@ -91,6 +91,25 @@ def _daten() -> list[str]:
             leads_ohne += 1
         if leads_ohne:
             meldungen.append(f"{leads_ohne} Bestandsleads mit Anlagedatum (Näherung: aktualisiert_am)")
+        # v7 (Phase 45): Bestandsdaten reaktivieren – alle in v6 als
+        # „Individuell“ markierten (auto-archivierten) Erfassungen werden zur
+        # sichtbaren Arbeitsliste „In TAIFUN zu schreiben“ und entarchiviert.
+        # Idempotent: nach dem ersten Lauf existiert der Status nicht mehr.
+        from datetime import datetime as _dt
+
+        from app.models import Erfassung
+        reaktiviert = 0
+        for e in session.query(Erfassung).filter(Erfassung.status == "Individuell"):
+            e.status = "In TAIFUN zu schreiben"
+            e.archiviert = False
+            e.aenderungs_protokoll = (
+                (e.aenderungs_protokoll + "\n" if e.aenderungs_protokoll else "")
+                + f"{_dt.now().strftime('%d.%m.%Y %H:%M')} · Migration v7: aus "
+                  "„Individuell“ (Archiv) reaktiviert – in TAIFUN zu schreiben")
+            reaktiviert += 1
+        if reaktiviert:
+            meldungen.append(f"{reaktiviert} Individuell-Erfassungen reaktiviert "
+                             "(jetzt „In TAIFUN zu schreiben“, entarchiviert)")
         session.commit()
     finally:
         session.close()

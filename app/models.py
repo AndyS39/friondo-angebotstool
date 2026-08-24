@@ -153,12 +153,13 @@ class Benutzer(Base):
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
-# „Individuell“ (v6): Vorgang wird außerhalb des Tools geschrieben –
-# Setzen archiviert automatisch, damit keine „Leichen“ in den Listen liegen.
-# „In TAIFUN zu schreiben“ (v7): Warteschlange des Zwei-Wege-Prozesses –
-# Freitext-Erfassungen landen direkt hier.
-ERFASSUNG_STATUS = ["Neu", "In Bearbeitung", "Erledigt", "Individuell",
-                    "In TAIFUN zu schreiben"]
+# Statuskette v7 (ersetzt das v6-Auto-Archiv von „Individuell“):
+# Katalog-Fälle mit oranger Ampel starten als „Individuell – zu prüfen“
+# (Buttons „Doch konfigurierbar“ / „Individuell bestätigt“); bestätigte und
+# Freitext-Fälle stehen als Arbeitsliste „In TAIFUN zu schreiben“; nach dem
+# Dialog „Extern erledigt“ → „Erledigt (extern)“ + Archiv.
+ERFASSUNG_STATUS = ["Neu", "In Bearbeitung", "Individuell – zu prüfen",
+                    "In TAIFUN zu schreiben", "Erledigt", "Erledigt (extern)"]
 
 
 class Erfassung(Base):
@@ -303,7 +304,8 @@ class Lead(Base):
 
 # „Versand vorbereitet“ (v5): Entwurf liegt in Outlook; der Graph-Abgleich
 # stellt nach dem tatsächlichen Senden automatisch auf „Versendet“.
-# „Individuell“ (v6): wird außerhalb des Tools geschrieben → Auto-Archiv.
+# „Individuell“ (v6): wird außerhalb des Tools geschrieben – seit v7 ohne
+# Auto-Archiv (individuelle Fälle laufen über die Erfassungs-Statuskette).
 ANGEBOT_STATUS = ["Entwurf", "Versand vorbereitet", "Versendet", "Angenommen",
                   "Abgelehnt", "Individuell"]
 

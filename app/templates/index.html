@@ -21,6 +21,13 @@
         <span>Offene Erfassungen</span>
         <span class="dezent">Neu / In Bearbeitung</span>
     </a>
+    {% if individuell_offen %}
+    <a class="kachel stat" href="/erfassungen?status=individuell-offen">
+        <span class="stat-zahl">{{ individuell_offen }}</span>
+        <span>Individuell offen</span>
+        <span class="dezent">zu prüfen / in TAIFUN zu schreiben</span>
+    </a>
+    {% endif %}
     {% if faellige %}
     <a class="kachel stat" href="/angebote?verfolgung=faellig">
         <span class="stat-zahl" style="color:#c0392b">{{ faellige }}</span>
