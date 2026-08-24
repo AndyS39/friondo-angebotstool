@@ -53,9 +53,11 @@ def vorab_aufraeumen(s):
         s.delete(k)
     for b in s.query(Benutzer).filter(Benutzer.name.in_(["AD Abnahme", "Abn V6"])):
         s.delete(b)
-    for l in s.query(Lead).filter(Lead.monday_item_id.in_(["abn-lead", "abn-v6"])):
+    for l in s.query(Lead).filter(Lead.monday_item_id.in_(["abn-lead", "abn-v6", "abn-v7"])):
         s.delete(l)
     s.query(MondayPerson).filter_by(monday_name="abn.v6@friondo.de").delete()
+    from app.models import MondayQuelle
+    s.query(MondayQuelle).filter_by(board_id="abn-v7-board").delete()
     s.query(AngebotsMail).filter(AngebotsMail.graph_id.in_(["s1", "k1"])).delete(synchronize_session=False)
     s.query(AngebotsLoeschung).filter(AngebotsLoeschung.kunde_name.like("%Abnahme%")).delete(synchronize_session=False)
     s.commit()
@@ -328,6 +330,83 @@ def main():
     ang2 = s.get(Angebot, ang.id); ang2.verfolgung_ampel = ""; ang2.wiedervorlage_am = None
     s.delete(s.get(Lead, tl.id)); s.query(MondayPerson).filter_by(monday_name="abn.v6@friondo.de").delete()
     s.delete(s.get(Benutzer, tb.id)); s.commit()
+
+    # ---------- 9) v7-Abnahme: Zwei-Wege-Prozess (Tool + TAIFUN) ----------
+    import datetime as _dt_modul
+
+    from app.models import MondayQuelle
+    # Startweiche + Freitext → direkt in die TAIFUN-Warteschlange
+    antwort = client.post("/erfassung/neu", data={"kunde_id": str(kunde_t.id)},
+                          follow_redirects=False)
+    v7e_id = int(antwort.headers["location"].split("/")[2])
+    weiche_html = client.get(f"/erfassung/{v7e_id}/weiche").text
+    pruefe("v7", "Startweiche mit beiden Wegen",
+           "/weiche" in antwort.headers["location"]
+           and "Erfassungsbogen starten" in weiche_html
+           and "Freitext-Erfassung" in weiche_html)
+    client.post(f"/erfassung/{v7e_id}/freitext", data={"freitext": "Abnahme-Sonderfall v7"})
+    s.expire_all(); v7e = s.get(Erfassung, v7e_id)
+    pruefe("v7", "Freitext → Individuell + In TAIFUN zu schreiben",
+           v7e.typ == "freitext" and v7e.ampel == "orange"
+           and v7e.status == "In TAIFUN zu schreiben")
+    # Statuskette: orange Katalog-Fall → zu prüfen → bestätigt
+    v7k = Erfassung(kunde_id=kunde_t.id, benutzer_id=1,
+                    antworten_json=json.dumps(dict(kg, A01="Nachtspeicher"),
+                                              ensure_ascii=False))
+    s.add(v7k); s.commit()
+    client.post(f"/erfassung/{v7k.id}/absenden")
+    s.expire_all()
+    zu_pruefen = s.get(Erfassung, v7k.id).status == "Individuell – zu prüfen"
+    client.post(f"/erfassungen/{v7k.id}/individuell-bestaetigt")
+    s.expire_all()
+    pruefe("v7", "Kette: orange → zu prüfen → bestätigt → Warteschlange",
+           zu_pruefen and s.get(Erfassung, v7k.id).status == "In TAIFUN zu schreiben")
+    # Reaktivierung (Migration): alte Individuell-Erfassung wird Arbeitsliste
+    v7alt = Erfassung(kunde_id=kunde_t.id, benutzer_id=1, status="Individuell",
+                      archiviert=True)
+    s.add(v7alt); s.commit()
+    import migrate as migrate_modul
+    migrate_modul._daten()
+    s.expire_all(); v7alt = s.get(Erfassung, v7alt.id)
+    pruefe("v7", "Migration reaktiviert Individuell-Bestand",
+           v7alt.status == "In TAIFUN zu schreiben" and not v7alt.archiviert)
+    # Externer Eintrag inkl. monday-Rückspielung im Trockenlauf
+    v7lead = Lead(monday_item_id="abn-v7", board_id="abn-v7-board", vorname="A",
+                  nachname="V7", erfassung_id=v7e_id, vot_datum=_dt_modul.datetime.now())
+    v7quelle = MondayQuelle(board_id="abn-v7-board", board_name="Abn v7",
+                            gruppen_titel="x", rueck_modus="status",
+                            rueck_status_spalte="status",
+                            rueck_status_wert="Angebot versendet",
+                            rueck_wert_spalte="zahlen", rueck_wert_basis="brutto")
+    s.add_all([v7lead, v7quelle]); s.commit()
+    monday_aufrufe = []
+    with mock.patch.object(monday_sync, "_api",
+                           side_effect=lambda q, v: monday_aufrufe.append(v) or {}):
+        client.post(f"/erfassungen/{v7e_id}/extern-erledigt",
+                    data={"endbetrag": "25.000,00", "datum": "2026-08-24",
+                          "taifun_nummer": ""})
+    s.expire_all(); v7e = s.get(Erfassung, v7e_id)
+    v7a = s.get(Angebot, v7e.angebot_id)
+    werte_v7 = json.loads(monday_aufrufe[0]["werte"]) if monday_aufrufe else {}
+    pruefe("v7", "Extern erledigt → TAIFUN-Eintrag + Erfassung archiviert",
+           v7a is not None and v7a.extern and v7a.status == "Versendet (extern)"
+           and v7a.summen()["endbetrag"] == 2500000
+           and v7e.status == "Erledigt (extern)" and v7e.archiviert)
+    pruefe("v7", "monday-Rückspielung beim Anlegen (Trockenlauf)",
+           v7a.monday_rueck_status == "ok" and werte_v7.get("zahlen") == "25000.00")
+    liste_html = client.get("/angebote", params={"status": "Versendet (extern)"}).text
+    pruefe("v7", "Angebotsliste: Badge TAIFUN + Nummer fehlt + kein DB",
+           "TAIFUN" in liste_html and "Nummer fehlt" in liste_html
+           and "kein DB im Tool" in liste_html)
+    stat_v7 = client.get("/statistik?zeitraum=jahr").text
+    pruefe("v7", "Statistik getrennt Tool/TAIFUN/gesamt",
+           "TAIFUN (extern)" in stat_v7 and "davon TAIFUN" in stat_v7)
+    # v7-Aufräumen
+    for eid in (v7e_id, v7k.id, v7alt.id):
+        Path(f"data/angebote/protokoll-erfassung-{eid}.pdf").unlink(missing_ok=True)
+    s.delete(v7a); s.delete(v7e); s.delete(s.get(Erfassung, v7k.id)); s.delete(v7alt)
+    s.delete(s.get(Lead, v7lead.id)); s.delete(s.get(MondayQuelle, v7quelle.id))
+    s.commit()
 
     # ---------- Aufräumen ----------
     for a in s.query(Angebot).filter(Angebot.kunde_id == kunde_t.id):

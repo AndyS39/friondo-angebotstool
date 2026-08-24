@@ -789,3 +789,6 @@ tr.bauseits td { color: #888; }
     text-decoration: none; color: #1b2a5e; background: #f4f6fa; }
 .tab-leiste .tab.aktiv { background: #fff; font-weight: 700;
     border-bottom-color: #1b2a5e; }
+
+/* v7: externe TAIFUN-Eintraege */
+.abzeichen.status-versendet-extern { background: #e3effa; color: #2c6cb0; }

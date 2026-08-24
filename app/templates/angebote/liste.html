@@ -73,7 +73,13 @@
     {% for a in angebote %}
         <tr>
             <td>
-                <a href="/angebote/{{ a.id }}">{{ a.nummer }}</a>
+                {% if a.extern %}
+                    <a href="/angebote/{{ a.id }}"><span class="abzeichen">TAIFUN</span>
+                        {{ a.taifun_nummer or '' }}</a>
+                    {% if not a.taifun_nummer %}<span class="abzeichen ep" title="TAIFUN-Angebotsnummer nachtragen">Nummer fehlt</span>{% endif %}
+                {% else %}
+                    <a href="/angebote/{{ a.id }}">{{ a.nummer }}</a>
+                {% endif %}
                 {% if mail_zaehler.get(a.id) %}
                     <a class="mail-abzeichen" href="/angebote/{{ a.id }}/mails"
                        title="{{ mail_zaehler[a.id] }} Antwort{{ 'en' if mail_zaehler[a.id] != 1 }} zur Angebots-Mail">
@@ -85,13 +91,16 @@
             <td class="dezent">{{ kunden[a.kunde_id].vertriebskanal or '–' if a.kunde_id in kunden else '–' }}</td>
             <td class="dezent">{% set vid = angebot_vertriebler.get(a.id) %}{{ vertriebler[vid].name if vid in vertriebler else '–' }}</td>
             <td>{{ a.datum.strftime('%d.%m.%Y') }}</td>
-            <td><span class="abzeichen status-{{ a.status | lower | replace(' ', '-') }}">{{ a.status }}</span>
+            <td><span class="abzeichen status-{{ a.status | lower | replace(' ', '-') | replace('(', '') | replace(')', '') }}">{{ a.status }}</span>
                 {% if a.verfolgung_ampel %}<span title="Verfolgung: {{ a.verfolgung_ampel }}">{{ {'heiss': '🔥', 'warm': '🌤', 'kalt': '❄'}[a.verfolgung_ampel] }}</span>{% endif %}
                 {% if a.wiedervorlage_am %}
                     <br><span class="{{ 'wv-faellig' if a.wiedervorlage_am <= heute else 'dezent' }}"
                           title="Wiedervorlage">↻ {{ a.wiedervorlage_am.strftime('%d.%m.%Y') }}</span>
                 {% endif %}</td>
             <td class="rechts">{{ a.summen().brutto | euro }}</td>
+            {% if a.extern %}
+            <td class="rechts dezent" title="Externer TAIFUN-Eintrag – kein DB im Tool">–</td>
+            {% else %}
             {% set deckung = a.deckungsbeitrag() %}
             {% set db_farbe = 'db-rot' if deckung.db < db_rot_cent
                else ('db-gruen' if deckung.db > db_gruen_cent else 'db-orange') %}
@@ -99,11 +108,14 @@
                 {{ deckung.db | euro }}
                 {% if deckung.ohne_ek %}<span class="abzeichen ep">!</span>{% endif %}
             </td>
+            {% endif %}
             <td class="aktionen">
                 <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">Öffnen</a>
+                {% if not a.extern %}
                 <form method="post" action="/angebote/{{ a.id }}/duplizieren">
                     <button class="knopf klein zweitrangig" type="submit">Duplizieren</button>
                 </form>
+                {% endif %}
                 {% if a.status == 'Entwurf' %}
                 <form method="post" action="/angebote/{{ a.id }}/loeschen"
                       onsubmit="return confirm('Entwurf {{ a.nummer }} wirklich löschen?');">
@@ -129,6 +141,10 @@
         <td class="rechts">DB: <strong>{{ summen_gesamt.db | euro }}</strong></td>
     </tr>
 </table>
+{% if angebote | selectattr('extern') | list %}
+<p class="dezent">Externe TAIFUN-Einträge zählen im Endbetrag mit; Netto und DB
+sind dort unbekannt und bleiben außen vor.</p>
+{% endif %}
 {% else %}
 <p class="hinweis">Noch keine Angebote. Über den <a href="/konfigurator">Konfigurator</a>
 oder als manuelles Angebot über einen Kunden starten.</p>

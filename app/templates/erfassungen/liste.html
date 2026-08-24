@@ -64,7 +64,9 @@
                 {% endif %}
             </td>
             <td><span class="abzeichen">{{ e.status }}</span></td>
-            <td>{% if e.angebot_id and e.angebot_id in angebote %}<a href="/angebote/{{ e.angebot_id }}">{{ angebote[e.angebot_id].nummer }}</a>{% endif %}</td>
+            <td>{% if e.angebot_id and e.angebot_id in angebote %}
+                <a href="/angebote/{{ e.angebot_id }}">{% if angebote[e.angebot_id].extern %}<span class="abzeichen">TAIFUN</span> {{ angebote[e.angebot_id].taifun_nummer }}{% else %}{{ angebote[e.angebot_id].nummer }}{% endif %}</a>
+            {% endif %}</td>
             <td class="aktionen">
                 <a class="knopf klein zweitrangig" href="/erfassungen/{{ e.id }}">Öffnen</a>
                 {% if e.status == 'In TAIFUN zu schreiben' %}

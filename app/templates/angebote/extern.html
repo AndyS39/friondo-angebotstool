@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block titel %}TAIFUN-Eintrag {{ angebot.taifun_nummer or angebot.nummer }} – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1><span class="abzeichen">TAIFUN</span>
+        Externer Angebotseintrag
+        {% if angebot.taifun_nummer %}{{ angebot.taifun_nummer }}
+        {% else %}<span class="abzeichen ep" title="TAIFUN-Angebotsnummer nachtragen">Nummer fehlt</span>{% endif %}
+        {% if angebot.archiviert %}<span class="abzeichen">🗄 Archiv</span>{% endif %}</h1>
+    <form method="post" action="/angebote/{{ angebot.id }}/status" class="statusform">
+        <select name="status" onchange="this.form.submit()">
+            {% for s in status_liste %}
+                <option value="{{ s }}" {{ 'selected' if angebot.status == s }}>{{ s }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% if angebot.monday_rueck_status == 'fehler' %}
+<div class="warnblock fehlerblock">
+    <strong>⚠ monday-Rückspielung fehlgeschlagen</strong> – der Quell-Deal wurde nicht
+    aktualisiert. Letzter Versuch: {{ angebot.monday_rueck_protokoll.splitlines()[-1] }}
+    <form method="post" action="/angebote/{{ angebot.id }}/monday-rueckspielung" style="display:inline">
+        <button class="knopf klein" type="submit">Erneut übertragen</button>
+    </form>
+</div>
+{% endif %}
+
+<p class="dezent">
+    Kunde: <strong>{{ kunde.anzeige_name if kunde }}</strong>
+    {% if vertriebler %}· Vertriebler: {{ vertriebler.name }}{% endif %}
+    · Datum: {{ angebot.datum.strftime('%d.%m.%Y') }}
+    · Endbetrag brutto: <strong>{{ angebot.summen().endbetrag | euro }}</strong>
+</p>
+
+<p class="hinweis">Dieses Angebot wurde in <strong>TAIFUN</strong> geschrieben –
+im Tool gibt es dafür kein PDF, keinen Editor und keinen E-Mail-Versand.
+Statuspflege (Angenommen/Abgelehnt), Verfolgung und Notizen laufen hier weiter.</p>
+
+<form method="post" action="/angebote/{{ angebot.id }}/taifun-nummer" class="suchleiste">
+    <strong>TAIFUN-Nr.:</strong>
+    <input type="text" name="taifun_nummer" maxlength="30" size="16"
+           value="{{ angebot.taifun_nummer }}" placeholder="z. B. AN250123">
+    <button class="knopf klein" type="submit">Speichern</button>
+</form>
+
+<div class="verfolgung-block">
+    <form method="post" action="/angebote/{{ angebot.id }}/verfolgung" class="suchleiste">
+        <strong>Verfolgung:</strong>
+        <select name="verfolgung_ampel">
+            <option value="" {{ 'selected' if not angebot.verfolgung_ampel }}>– keine Einstufung –</option>
+            <option value="heiss" {{ 'selected' if angebot.verfolgung_ampel == 'heiss' }}>🔥 heiß</option>
+            <option value="warm" {{ 'selected' if angebot.verfolgung_ampel == 'warm' }}>🌤 warm</option>
+            <option value="kalt" {{ 'selected' if angebot.verfolgung_ampel == 'kalt' }}>❄ kalt</option>
+        </select>
+        <label class="kontrollfeld">Wiedervorlage
+            <input type="date" name="wiedervorlage_am"
+                   value="{{ angebot.wiedervorlage_am.strftime('%Y-%m-%d') if angebot.wiedervorlage_am }}"></label>
+        <input type="text" name="notiz" size="40" placeholder="Notiz anhängen (optional)">
+        <button class="knopf klein" type="submit">Speichern</button>
+    </form>
+    {% if notizen %}
+    <details {{ 'open' if notizen | length <= 3 }}>
+        <summary class="dezent">Notizen ({{ notizen | length }})</summary>
+        <ul class="notizen-liste">
+            {% for n in notizen %}
+                <li><span class="dezent">{{ n.angelegt_am.strftime('%d.%m.%Y %H:%M') }} · {{ n.benutzer_name }}:</span>
+                    {{ n.text }}</li>
+            {% endfor %}
+        </ul>
+    </details>
+    {% endif %}
+</div>
+
+<div class="formaktionen">
+    {% if erfassung %}
+        <a class="knopf zweitrangig" href="/erfassungen/{{ erfassung.id }}">Zur Erfassung</a>
+        <a class="knopf zweitrangig" href="/erfassungen/{{ erfassung.id }}/protokoll.pdf"
+           target="_blank">Abfrageprotokoll (PDF)</a>
+    {% endif %}
+    <form method="post" action="/angebote/{{ angebot.id }}/archivieren">
+        <button class="knopf zweitrangig" type="submit">
+            {{ 'Aus Archiv zurückholen' if angebot.archiviert else 'Archivieren' }}</button>
+    </form>
+    <form method="post" action="/angebote/{{ angebot.id }}/loeschen"
+          onsubmit="return confirm('Externen Eintrag wirklich löschen? Die Löschung wird protokolliert.');">
+        <button class="knopf zweitrangig" type="submit">Löschen</button>
+    </form>
+</div>
+
+{% if angebot.monday_rueck_protokoll %}
+<details>
+    <summary class="dezent">monday-Rückspielung – Protokoll
+        ({{ 'OK' if angebot.monday_rueck_status == 'ok' else angebot.monday_rueck_status }})
+        <form method="post" action="/angebote/{{ angebot.id }}/monday-rueckspielung" style="display:inline">
+            <button class="knopf klein zweitrangig" type="submit">Erneut übertragen</button>
+        </form>
+    </summary>
+    <pre class="hinweis">{{ angebot.monday_rueck_protokoll }}</pre>
+</details>
+{% endif %}
+{% endblock %}

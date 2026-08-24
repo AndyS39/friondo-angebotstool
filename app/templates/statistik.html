@@ -28,20 +28,56 @@
     <div class="kachel stat"><span class="stat-zahl">{{ ('%.0f' | format(gesamt.quote)) }} %</span>Abschlussquote</div>
 </div>
 
-<table class="tabelle zusammenfassung" style="margin-top:1rem; max-width:560px">
-    <tr><th>Summe versendet (Endbetrag)</th><td class="rechts"><strong>{{ gesamt.summe_versendet | euro }}</strong></td></tr>
-    <tr><th>Summe angenommen</th><td class="rechts"><strong>{{ gesamt.summe_angenommen | euro }}</strong></td></tr>
+<h2>Angebote: Tool · TAIFUN · gesamt</h2>
+<table class="tabelle" style="max-width:720px">
+    <thead><tr><th></th><th class="rechts">Tool</th><th class="rechts">TAIFUN (extern)</th>
+        <th class="rechts">Gesamt</th></tr></thead>
+    <tbody>
+    <tr><th>Erstellt</th>
+        <td class="rechts">{{ gesamt.erstellt - gesamt.x_erstellt }}</td>
+        <td class="rechts">{{ gesamt.x_erstellt }}</td>
+        <td class="rechts"><strong>{{ gesamt.erstellt }}</strong></td></tr>
+    <tr><th>Versendet</th>
+        <td class="rechts">{{ gesamt.versendet - gesamt.x_versendet }}</td>
+        <td class="rechts">{{ gesamt.x_versendet }}</td>
+        <td class="rechts"><strong>{{ gesamt.versendet }}</strong></td></tr>
+    <tr><th>Angenommen</th>
+        <td class="rechts">{{ gesamt.angenommen - gesamt.x_angenommen }}</td>
+        <td class="rechts">{{ gesamt.x_angenommen }}</td>
+        <td class="rechts"><strong>{{ gesamt.angenommen }}</strong></td></tr>
+    <tr><th>Abgelehnt</th>
+        <td class="rechts">{{ gesamt.abgelehnt - gesamt.x_abgelehnt }}</td>
+        <td class="rechts">{{ gesamt.x_abgelehnt }}</td>
+        <td class="rechts"><strong>{{ gesamt.abgelehnt }}</strong></td></tr>
+    <tr><th>Summe versendet (Endbetrag)</th>
+        <td class="rechts">{{ (gesamt.summe_versendet - gesamt.x_summe_versendet) | euro }}</td>
+        <td class="rechts">{{ gesamt.x_summe_versendet | euro }}</td>
+        <td class="rechts"><strong>{{ gesamt.summe_versendet | euro }}</strong></td></tr>
+    <tr><th>Summe angenommen</th>
+        <td class="rechts">{{ (gesamt.summe_angenommen - gesamt.x_summe_angenommen) | euro }}</td>
+        <td class="rechts">{{ gesamt.x_summe_angenommen | euro }}</td>
+        <td class="rechts"><strong>{{ gesamt.summe_angenommen | euro }}</strong></td></tr>
+    <tr><th>Abschlussquote</th>
+        <td class="rechts">{{ ('%.0f' | format(gesamt.t_quote)) }} %</td>
+        <td class="rechts">{{ ('%.0f' | format(gesamt.x_quote)) }} %</td>
+        <td class="rechts"><strong>{{ ('%.0f' | format(gesamt.quote)) }} %</strong></td></tr>
     {% if not eigene_ansicht %}
-    <tr><th>Deckungsbeitrag (versendete)</th><td class="rechts"><strong>{{ gesamt.db | euro }}</strong></td></tr>
+    <tr><th>Deckungsbeitrag (versendete)</th>
+        <td class="rechts">{{ gesamt.db | euro }}</td>
+        <td class="rechts dezent">–</td>
+        <td class="rechts"><strong>{{ gesamt.db | euro }}</strong></td></tr>
     {% endif %}
-    <tr><th>Abgelehnt</th><td class="rechts">{{ gesamt.abgelehnt }}</td></tr>
+    </tbody>
 </table>
+<p class="dezent">Der Deckungsbeitrag lässt sich nur für Tool-Angebote berechnen –
+externe TAIFUN-Einträge kennen nur den Endbetrag brutto.</p>
 
 {% if not eigene_ansicht and ad_zeilen %}
 <h2>Je Vertriebler</h2>
 <table class="tabelle">
     <thead><tr><th>Vertriebler</th><th class="rechts">Leads</th><th class="rechts">Erfassungen</th>
         <th class="rechts">Erstellt</th><th class="rechts">Versendet</th><th class="rechts">Angenommen</th>
+        <th class="rechts" title="davon externe TAIFUN-Einträge (versendet/angenommen)">davon TAIFUN</th>
         <th class="rechts">Summe versendet</th><th class="rechts">Summe angenommen</th>
         <th class="rechts">DB</th><th class="rechts">Quote</th></tr></thead>
     <tbody>
@@ -53,6 +89,7 @@
             <td class="rechts">{{ z.erstellt }}</td>
             <td class="rechts">{{ z.versendet }}</td>
             <td class="rechts">{{ z.angenommen }}</td>
+            <td class="rechts dezent">{{ z.x_versendet }}/{{ z.x_angenommen }}</td>
             <td class="rechts">{{ z.summe_versendet | euro }}</td>
             <td class="rechts">{{ z.summe_angenommen | euro }}</td>
             <td class="rechts">{{ z.db | euro }}</td>
@@ -67,7 +104,9 @@
 <h2>Je Vertriebskanal</h2>
 <table class="tabelle">
     <thead><tr><th>Kanal</th><th class="rechts">Leads</th><th class="rechts">Angebote versendet</th>
-        <th class="rechts">Angenommen</th><th class="rechts">Summe versendet</th><th class="rechts">Quote</th></tr></thead>
+        <th class="rechts">Angenommen</th>
+        <th class="rechts" title="davon externe TAIFUN-Einträge (versendet/angenommen)">davon TAIFUN</th>
+        <th class="rechts">Summe versendet</th><th class="rechts">Quote</th></tr></thead>
     <tbody>
     {% for kanal, z in kanal_zeilen %}
         <tr>
@@ -75,6 +114,7 @@
             <td class="rechts">{{ z.leads }}</td>
             <td class="rechts">{{ z.versendet }}</td>
             <td class="rechts">{{ z.angenommen }}</td>
+            <td class="rechts dezent">{{ z.x_versendet }}/{{ z.x_angenommen }}</td>
             <td class="rechts">{{ z.summe_versendet | euro }}</td>
             <td class="rechts">{{ ('%.0f' | format(z.quote)) }} %</td>
         </tr>

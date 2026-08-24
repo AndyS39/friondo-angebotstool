@@ -166,6 +166,23 @@ async def editor(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
         return RedirectResponse("/angebote?meldung=Angebot+nicht+gefunden", status_code=303)
+    # Externer TAIFUN-Eintrag (v7): eigene Detailseite statt Editor –
+    # kein PDF, kein Versand, aber Verfolgung, Notizen und Statuspflege
+    if angebot.extern:
+        from app.models import AngebotsNotiz, Benutzer as BenutzerModell, EXTERN_STATUS, Erfassung
+        kunde = session.get(Kunde, angebot.kunde_id)
+        erfassung = (session.query(Erfassung)
+                     .filter(Erfassung.angebot_id == angebot.id).first())
+        vertriebler = (session.get(BenutzerModell, angebot.vertriebler_id)
+                       if angebot.vertriebler_id else None)
+        notizen = (session.query(AngebotsNotiz)
+                   .filter(AngebotsNotiz.angebot_id == angebot.id)
+                   .order_by(AngebotsNotiz.angelegt_am.desc()).all())
+        return render(request, "angebote/extern.html", aktiv="/angebote",
+                      angebot=angebot, kunde=kunde, erfassung=erfassung,
+                      vertriebler=vertriebler, notizen=notizen,
+                      status_liste=EXTERN_STATUS,
+                      meldung=request.query_params.get("meldung", ""))
     # Bearbeitungssperre: Erster im Editor hält das Angebot, andere lesen nur
     benutzer = request.state.benutzer
     sperr_halter = sperren.erwerben(angebot.id, benutzer.id if benutzer else 0,
@@ -513,6 +530,9 @@ async def pdf_anzeigen(angebot_id: int, session: Session = Depends(get_session))
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
         return RedirectResponse("/angebote?meldung=Angebot+nicht+gefunden", status_code=303)
+    if angebot.extern:   # v7: externer TAIFUN-Eintrag hat kein PDF
+        return RedirectResponse(f"/angebote/{angebot_id}?meldung=Externer+Eintrag+ohne+PDF",
+                                status_code=303)
     from app import pdf_export
     pfad = pdf_export.pdf_fuer_angebot(session, angebot)
     return FileResponse(pfad, media_type="application/pdf",
@@ -535,6 +555,11 @@ async def email_entwurf(request: Request, angebot_id: int,
     from app import anhaenge as anhaenge_modul
     from app import graph_versand, pdf_export
 
+    angebot_vorab = session.get(Angebot, angebot_id)
+    if angebot_vorab is not None and angebot_vorab.extern:   # v7: kein Versand
+        return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+            "Externer TAIFUN-Eintrag – Versand läuft außerhalb des Tools."),
+            status_code=303)
     if not graph_versand.konfiguriert():
         return RedirectResponse(
             f"/angebote/{angebot_id}?meldung=" + quote_plus(
@@ -739,16 +764,19 @@ async def status_aendern(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     neuer_status = form.get("status", "")
     if angebot is not None and neuer_status in ANGEBOT_STATUS:
-        from app.models import angebot_status_setzen
+        from app.models import EXTERN_STATUS, angebot_status_setzen
+        if angebot.extern and neuer_status not in EXTERN_STATUS:
+            return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
         alter_status = angebot.status
         angebot_status_setzen(angebot, neuer_status)
         # v7: „Individuell“ archiviert NICHT mehr automatisch – individuelle
         # Fälle laufen über die Erfassungs-Statuskette (TAIFUN-Warteschlange)
-        # verknüpfte Erfassung automatisch pflegen (Phase 14)
+        # verknüpfte Erfassung automatisch pflegen (Phase 14); eine als
+        # „Erledigt (extern)“ abgeschlossene Erfassung bleibt unangetastet
         from app.models import Erfassung
         erfassung = (session.query(Erfassung)
                      .filter(Erfassung.angebot_id == angebot.id).first())
-        if erfassung is not None:
+        if erfassung is not None and erfassung.status != "Erledigt (extern)":
             if neuer_status in ("Versendet", "Angenommen", "Abgelehnt"):
                 erfassung.status = "Erledigt"
             elif erfassung.status == "Neu":
@@ -759,6 +787,22 @@ async def status_aendern(request: Request, angebot_id: int,
             from app import monday_rueckspielung
             monday_rueckspielung.bei_versand(session, angebot)
     return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+
+
+@router.post("/{angebot_id}/taifun-nummer")
+async def taifun_nummer_setzen(request: Request, angebot_id: int,
+                               session: Session = Depends(get_session)):
+    """v7: TAIFUN-Angebotsnummer am externen Eintrag nachtragen."""
+    from urllib.parse import quote_plus
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None or not angebot.extern:
+        return RedirectResponse("/angebote", status_code=303)
+    form = await request.form()
+    angebot.taifun_nummer = (form.get("taifun_nummer") or "").strip()[:30]
+    session.commit()
+    return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+        "TAIFUN-Nummer gespeichert" if angebot.taifun_nummer else "TAIFUN-Nummer entfernt"),
+        status_code=303)
 
 
 @router.post("/{angebot_id}/monday-rueckspielung")
@@ -848,6 +892,9 @@ async def duplizieren(angebot_id: int, session: Session = Depends(get_session)):
     original = session.get(Angebot, angebot_id)
     if original is None:
         return RedirectResponse("/angebote", status_code=303)
+    if original.extern:   # v7: externe TAIFUN-Einträge werden nicht dupliziert
+        return RedirectResponse(f"/angebote/{angebot_id}?meldung=Externer+Eintrag+nicht+duplizierbar",
+                                status_code=303)
     kopie = angebot_aufbau.angebot_anlegen(session, original.kunde_id)
     kopie.protokoll_json = original.protokoll_json
     kopie.kfw_json = original.kfw_json

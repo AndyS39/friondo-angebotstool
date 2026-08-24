@@ -63,10 +63,14 @@
 
 <div class="formaktionen">
     {% if angebot %}
-        <a class="knopf" href="/angebote/{{ angebot.id }}">Zum Angebot {{ angebot.nummer }}</a>
+        <a class="knopf" href="/angebote/{{ angebot.id }}">
+            {% if angebot.extern %}Zum TAIFUN-Eintrag {{ angebot.taifun_nummer }}{% else %}Zum Angebot {{ angebot.nummer }}{% endif %}</a>
     {% elif erfassung.status == 'In TAIFUN zu schreiben' %}
         <a class="knopf" href="/erfassungen/{{ erfassung.id }}/protokoll.pdf"
            target="_blank">Protokoll-PDF (Übergabe an TAIFUN)</a>
+        <button class="knopf zweitrangig" type="button"
+                onclick="document.getElementById('extern-dialog').hidden = false; this.hidden = true;">
+            ✓ Extern erledigt …</button>
     {% elif erfassung.status == 'Individuell – zu prüfen' %}
         {# Entscheidung oben treffen – keine Angebots-Buttons, bis geklärt ist,
            ob der Fall über das Tool läuft #}
@@ -81,6 +85,22 @@
         <button class="knopf zweitrangig" type="submit">
             {{ 'Aus Archiv zurückholen' if erfassung.archiviert else 'Archivieren' }}</button>
     </form>
+    {% if erfassung.status == 'In TAIFUN zu schreiben' and not angebot %}
+    <form method="post" action="/erfassungen/{{ erfassung.id }}/extern-erledigt"
+          id="extern-dialog" class="formular warnblock" hidden
+          style="flex-basis:100%">
+        <p><strong>Extern erledigt – Angebot wurde in TAIFUN geschrieben</strong></p>
+        <div class="formzeile">
+            <label>TAIFUN-Angebotsnummer <span class="dezent">(optional, nachtragbar)</span>
+                <input type="text" name="taifun_nummer" maxlength="30" placeholder="z. B. AN250123"></label>
+            <label>Endbetrag brutto (€) *
+                <input type="text" name="endbetrag" inputmode="decimal" required placeholder="z. B. 32.500,00"></label>
+            <label>Datum *
+                <input type="date" name="datum" required value="{{ heute }}"></label>
+        </div>
+        <button class="knopf" type="submit">Externen Angebotseintrag anlegen</button>
+    </form>
+    {% endif %}
     {% if not angebot %}
     <form method="post" action="/erfassungen/{{ erfassung.id }}/loeschen"
           onsubmit="return confirm('Erfassung {{ erfassung.id }} wirklich löschen? Ein verknüpfter Lead erscheint wieder in Leads VOT.');">

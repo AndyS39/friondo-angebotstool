@@ -32,9 +32,11 @@ def lead_fuer_angebot(session, angebot: Angebot) -> Lead | None:
 
 
 def _betrag(angebot: Angebot, basis: str) -> str:
-    """Deal-Wert als Zahl mit Punkt (monday numbers-Spalte), 2 Nachkommastellen."""
+    """Deal-Wert als Zahl mit Punkt (monday numbers-Spalte), 2 Nachkommastellen.
+    Externe TAIFUN-Einträge (v7) kennen nur den Endbetrag brutto."""
     summen = angebot.summen()
-    cent = summen["netto"] if basis == "netto" else summen["endbetrag"]
+    cent = (summen["endbetrag"] if angebot.extern
+            else (summen["netto"] if basis == "netto" else summen["endbetrag"]))
     return str((Decimal(cent) / 100).quantize(Decimal("0.01")))
 
 

@@ -66,8 +66,15 @@ async def uebersicht(request: Request, session: Session = Depends(get_session)):
                    .order_by(Erfassung.angelegt_am.desc()).limit(25).all())
     kunden = {k.id: k for k in session.query(Kunde)
               .filter(Kunde.id.in_([e.kunde_id for e in erfassungen] or [0]))}
+    # v7: externe TAIFUN-Einträge haben kein PDF – kein Signieren-Knopf
+    from app.models import Angebot
+    extern_ids = {a.id for a in session.query(Angebot)
+                  .filter(Angebot.id.in_([e.angebot_id for e in erfassungen
+                                          if e.angebot_id] or [0]),
+                          Angebot.extern.is_(True))}
     return render(request, "erfassung/uebersicht.html", aktiv=None, mobil=True,
-                  benutzer=benutzer, erfassungen=erfassungen, kunden=kunden)
+                  benutzer=benutzer, erfassungen=erfassungen, kunden=kunden,
+                  extern_ids=extern_ids)
 
 
 @router.get("/neu")

@@ -38,6 +38,8 @@ async def seite(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     if angebot is None or not _berechtigt(request, angebot, session):
         return RedirectResponse("/erfassung", status_code=303)
+    if angebot.extern:   # v7: externe TAIFUN-Einträge haben kein PDF zum Signieren
+        return RedirectResponse("/erfassung", status_code=303)
     kunde = session.get(Kunde, angebot.kunde_id)
     return render(request, "signatur/seite.html", aktiv=None, mobil=True,
                   angebot=angebot, kunde=kunde,

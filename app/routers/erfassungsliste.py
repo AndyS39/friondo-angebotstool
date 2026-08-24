@@ -100,12 +100,14 @@ async def detail(request: Request, erfassung_id: int,
     aussendienst = (session.query(Benutzer)
                     .filter(Benutzer.rolle == "aussendienst", Benutzer.aktiv.is_(True))
                     .order_by(Benutzer.name).all())
+    from datetime import date
     return render(request, "erfassungen/detail.html", aktiv="/erfassungen",
                   erfassung=erfassung, kunde=kunde, vertriebler=vertriebler,
                   aussendienst=aussendienst,
                   protokoll=prot, angebot=angebot, seiten=seiten,
                   gruende=erfassung.gruende_text.splitlines(),
                   status_liste=ERFASSUNG_STATUS,
+                  heute=date.today().strftime("%Y-%m-%d"),
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -180,6 +182,62 @@ async def doch_konfigurierbar(request: Request, erfassung_id: int,
     session.commit()
     return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
         "Zurück auf dem normalen Weg – Antworten prüfen/korrigieren, dann Angebot erzeugen."),
+        status_code=303)
+
+
+@router.post("/{erfassung_id}/extern-erledigt")
+async def extern_erledigt(request: Request, erfassung_id: int,
+                          session: Session = Depends(get_session)):
+    """v7: Dialog „Extern erledigt“ – das Angebot wurde in TAIFUN geschrieben.
+    Erzeugt einen externen Angebotseintrag (Badge „TAIFUN“, kein PDF/Editor/
+    Versand), stößt die monday-Rückspielung an und schließt die Erfassung als
+    „Erledigt (extern)“ + Archiv ab."""
+    from datetime import datetime
+    from urllib.parse import quote_plus
+
+    from app import monday_rueckspielung
+    from app.models import angebot_status_setzen
+    from app.routers.artikel import preis_parsen
+    erfassung = session.get(Erfassung, erfassung_id)
+    if erfassung is None:
+        return RedirectResponse("/erfassungen", status_code=303)
+    if erfassung.angebot_id:
+        return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
+            "Mit dieser Erfassung ist bereits ein Angebot verknüpft."), status_code=303)
+    form = await request.form()
+    endbetrag = preis_parsen((form.get("endbetrag") or "").strip())
+    if endbetrag is None or endbetrag <= 0:
+        return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
+            "Bitte einen gültigen Endbetrag (brutto) eingeben."), status_code=303)
+    try:
+        datum = datetime.strptime((form.get("datum") or "").strip(), "%Y-%m-%d")
+    except ValueError:
+        return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
+            "Bitte ein Datum wählen."), status_code=303)
+    from uuid import uuid4
+    angebot = Angebot(nummer=f"EXT-{uuid4().hex[:10]}", kunde_id=erfassung.kunde_id,
+                      extern=True,
+                      taifun_nummer=(form.get("taifun_nummer") or "").strip()[:30],
+                      extern_endbetrag_cent=endbetrag, datum=datum,
+                      vertriebler_id=erfassung.benutzer_id,
+                      konfigurator_typ=erfassung.konfigurator_typ or "WP")
+    session.add(angebot)
+    session.flush()
+    angebot.nummer = f"EXT-{angebot.id}"   # interne Kennung, nie AN-C-Kreis
+    angebot_status_setzen(angebot, "Versendet (extern)")
+    angebot.versendet_am = datum           # Zeitstempel = Dialog-Datum
+    erfassung.angebot_id = angebot.id
+    erfassung.status = "Erledigt (extern)"
+    erfassung.archiviert = True
+    _kette_protokollieren(erfassung, request.state.benutzer,
+                          f"Extern erledigt – TAIFUN-Eintrag über {endbetrag / 100:.2f} €"
+                          + (f", Nr. {angebot.taifun_nummer}" if angebot.taifun_nummer
+                             else " (Nummer fehlt noch)"))
+    session.commit()
+    # monday-Rückspielung wie bei Tool-Angeboten (Fehler blockieren nie)
+    monday_rueckspielung.bei_versand(session, angebot)
+    return RedirectResponse(f"/angebote/{angebot.id}?meldung=" + quote_plus(
+        "Externer Angebotseintrag angelegt – Erfassung ist erledigt (extern) und archiviert."),
         status_code=303)
 
 

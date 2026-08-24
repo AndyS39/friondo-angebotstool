@@ -37,26 +37,26 @@ committen. Alle Schema-Änderungen in migrate.py (idempotent).
       im Änderungsprotokoll vermerken
 
 ## Phase 46 – Externe Angebotseinträge (TAIFUN)
-- [ ] Dialog „Extern erledigt" an Erfassungen der Warteschlange:
+- [x] Dialog „Extern erledigt" an Erfassungen der Warteschlange:
       TAIFUN-Angebotsnummer (optional, später nachtragbar → Badge „Nummer
       fehlt" am Eintrag), Endbetrag brutto (Pflicht), Datum (Pflicht,
       Vorbelegung heute)
-- [ ] Externer Angebotseintrag in der Angebotsliste: Badge „TAIFUN", Status
+- [x] Externer Angebotseintrag in der Angebotsliste: Badge „TAIFUN", Status
       „Versendet (extern)" mit Zeitstempel = Dialog-Datum; kein PDF, kein
       Editor, kein Mail-Versand; Detailseite mit Verfolgungs-Block (Ampel,
       Wiedervorlage, Notizen) und Verweis auf Erfassung + Protokoll;
       Status weiter pflegbar auf Angenommen/Abgelehnt (Abschlussquote)
-- [ ] monday-Rückspielung beim Anlegen des Eintrags (Deal-Status/Gruppe +
+- [x] monday-Rückspielung beim Anlegen des Eintrags (Deal-Status/Gruppe +
       Deal-Wert = Endbetrag), gleiche Fehler-/Wiederholen-Mechanik und
       Protokollierung wie bei Tool-Angeboten
-- [ ] Statistik: alle Kennzahlen getrennt nach Tool / TAIFUN / gesamt
+- [x] Statistik: alle Kennzahlen getrennt nach Tool / TAIFUN / gesamt
       (Anzahl, Auftragswert, Abschlussquote); DB nur für Tool-Angebote,
       mit Fußnote
-- [ ] Summenzeile der Angebotsliste berücksichtigt externe Einträge
+- [x] Summenzeile der Angebotsliste berücksichtigt externe Einträge
       (Endbetrag ja, DB nein)
-- [ ] migrate.py: Felder/Tabelle für externe Einträge; Abnahmeskript um
+- [x] migrate.py: Felder/Tabelle für externe Einträge; Abnahmeskript um
       v7-Block erweitern (Weiche, Statuskette, Reaktivierung, externer
       Eintrag inkl. monday-Rückspielung im Trockenlauf)
-- [ ] docs/nach-dem-update-v7.md: Team-Hinweis, dass alte Individuell-Fälle
+- [x] docs/nach-dem-update-v7.md: Team-Hinweis, dass alte Individuell-Fälle
       bewusst als Arbeitsliste wieder auftauchen; Kurzanleitung Zwei-Wege-
       Prozess für den Innendienst

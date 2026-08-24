@@ -72,7 +72,7 @@ def angebot_status_setzen(angebot, neuer_status: str) -> None:
     Zeitpunkt für die Statistik (nur beim ersten Erreichen des Status)."""
     angebot.status = neuer_status
     jetzt = datetime.now()
-    if neuer_status == "Versendet" and angebot.versendet_am is None:
+    if neuer_status in ("Versendet", "Versendet (extern)") and angebot.versendet_am is None:
         angebot.versendet_am = jetzt
     elif neuer_status == "Angenommen" and angebot.angenommen_am is None:
         angebot.angenommen_am = jetzt
@@ -306,8 +306,12 @@ class Lead(Base):
 # stellt nach dem tatsächlichen Senden automatisch auf „Versendet“.
 # „Individuell“ (v6): wird außerhalb des Tools geschrieben – seit v7 ohne
 # Auto-Archiv (individuelle Fälle laufen über die Erfassungs-Statuskette).
+# „Versendet (extern)“ (v7): Start-Status externer TAIFUN-Einträge.
 ANGEBOT_STATUS = ["Entwurf", "Versand vorbereitet", "Versendet", "Angenommen",
-                  "Abgelehnt", "Individuell"]
+                  "Abgelehnt", "Individuell", "Versendet (extern)"]
+
+# Status, die ein externer TAIFUN-Eintrag durchlaufen darf (Abschlussquote)
+EXTERN_STATUS = ["Versendet (extern)", "Angenommen", "Abgelehnt"]
 
 
 class Angebot(Base):
@@ -355,6 +359,12 @@ class Angebot(Base):
     # Angebotsverfolgung (v6): Hot-Ampel (heiss/warm/kalt/""), Wiedervorlage
     verfolgung_ampel: Mapped[str] = mapped_column(String(10), default="")
     wiedervorlage_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Externe Angebotseinträge (v7): in TAIFUN geschriebene Angebote – nur
+    # Eintrag mit Endbetrag (brutto), ohne PDF/Editor/Versand; die
+    # TAIFUN-Nummer ist optional nachtragbar (Badge „Nummer fehlt“)
+    extern: Mapped[bool] = mapped_column(Boolean, default=False)
+    taifun_nummer: Mapped[str] = mapped_column(String(30), default="")
+    extern_endbetrag_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Statistik (v6): Zeitpunkte der Statuswechsel (über angebot_status_setzen)
     versendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     angenommen_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -378,7 +388,13 @@ class Angebot(Base):
 
     def summen(self) -> dict:
         """Netto → 19 % USt → Gesamt-Betrag → − Rabatt (brutto) → = Endbetrag
-        (Phase 26); EP-Positionen zählen nicht mit, der Rabatt ist keine Position."""
+        (Phase 26); EP-Positionen zählen nicht mit, der Rabatt ist keine Position.
+        Externe TAIFUN-Einträge (v7) haben nur einen festen Endbetrag brutto –
+        Netto/USt sind dort unbekannt und bleiben 0."""
+        if self.extern:
+            betrag = self.extern_endbetrag_cent or 0
+            return {"netto": 0, "ust": 0, "brutto": betrag,
+                    "rabatt": 0, "endbetrag": betrag}
         netto = 0
         for p in self.positionen:
             if not p.ep_flag and not p.bauseits:   # bauseits (v5) zählt nie mit
@@ -397,7 +413,11 @@ class Angebot(Base):
 
     def deckungsbeitrag(self) -> dict:
         """Σ VK netto − Σ Material-EK (ohne EP). Nur Innendienst, nie im PDF.
-        Der Brutto-Rabatt mindert den DB um seinen Netto-Anteil (÷ 1,19; Phase 26)."""
+        Der Brutto-Rabatt mindert den DB um seinen Netto-Anteil (÷ 1,19; Phase 26).
+        Externe TAIFUN-Einträge (v7) haben keinen DB im Tool."""
+        if self.extern:
+            return {"vk": 0, "ek": 0, "db": 0, "prozent": 0.0,
+                    "rabatt": 0, "ohne_ek": []}
         vk = 0
         ek = 0
         ohne_ek = []

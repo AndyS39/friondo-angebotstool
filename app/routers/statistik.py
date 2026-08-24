@@ -62,9 +62,13 @@ def _vertriebler_map(session: Session) -> dict[int, int]:
 
 
 def _leer() -> dict:
+    # Angebots-Kennzahlen sind GESAMT-Werte; die x_-Felder zählen den darin
+    # enthaltenen TAIFUN-Anteil (v7), Tool = gesamt − extern. DB nur für Tool.
     return {"leads": 0, "erfassungen": 0, "erstellt": 0, "versendet": 0,
             "angenommen": 0, "abgelehnt": 0, "summe_versendet": 0,
-            "summe_angenommen": 0, "db": 0}
+            "summe_angenommen": 0, "db": 0,
+            "x_erstellt": 0, "x_versendet": 0, "x_angenommen": 0,
+            "x_abgelehnt": 0, "x_summe_versendet": 0, "x_summe_angenommen": 0}
 
 
 def kennzahlen(session: Session, von: datetime, bis: datetime,
@@ -109,21 +113,37 @@ def kennzahlen(session: Session, von: datetime, bis: datetime,
         summen = None
         if von <= a.angelegt_am < bis:
             zaehle("erstellt", ad_id, kanal)
+            if a.extern:
+                zaehle("x_erstellt", ad_id, kanal)
         if a.versendet_am and von <= a.versendet_am < bis:
             summen = a.summen()
-            zaehle("versendet", ad_id, kanal,
-                   {"summe_versendet": summen["endbetrag"],
-                    "db": a.deckungsbeitrag()["db"]})
+            betrag = {"summe_versendet": summen["endbetrag"]}
+            if not a.extern:   # DB gibt es nur für Tool-Angebote (v7)
+                betrag["db"] = a.deckungsbeitrag()["db"]
+            zaehle("versendet", ad_id, kanal, betrag)
+            if a.extern:
+                zaehle("x_versendet", ad_id, kanal,
+                       {"x_summe_versendet": summen["endbetrag"]})
         if a.angenommen_am and von <= a.angenommen_am < bis:
             summen = summen or a.summen()
             zaehle("angenommen", ad_id, kanal,
                    {"summe_angenommen": summen["endbetrag"]})
+            if a.extern:
+                zaehle("x_angenommen", ad_id, kanal,
+                       {"x_summe_angenommen": summen["endbetrag"]})
         if a.abgelehnt_am and von <= a.abgelehnt_am < bis:
             zaehle("abgelehnt", ad_id, kanal)
+            if a.extern:
+                zaehle("x_abgelehnt", ad_id, kanal)
 
     def quote(topf_):
         topf_["quote"] = (topf_["angenommen"] / topf_["versendet"] * 100
                           if topf_["versendet"] else 0.0)
+        topf_["x_quote"] = (topf_["x_angenommen"] / topf_["x_versendet"] * 100
+                            if topf_["x_versendet"] else 0.0)
+        t_versendet = topf_["versendet"] - topf_["x_versendet"]
+        topf_["t_quote"] = ((topf_["angenommen"] - topf_["x_angenommen"])
+                            / t_versendet * 100 if t_versendet else 0.0)
     quote(gesamt)
     for t in je_ad.values():
         quote(t)

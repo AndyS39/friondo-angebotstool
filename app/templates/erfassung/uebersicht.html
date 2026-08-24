@@ -21,7 +21,7 @@
                     {% else %}· <span class="ampel gruen">Konfigurierbar</span>{% endif %}
                 {% endif %}</span>
             </a>
-            {% if e.angebot_id %}
+            {% if e.angebot_id and e.angebot_id not in extern_ids %}
                 <a class="knopf klein" style="margin: 0 1rem 0.8rem"
                    href="/signatur/{{ e.angebot_id }}">Angebot signieren</a>
             {% endif %}
