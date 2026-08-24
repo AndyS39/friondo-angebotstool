@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block titel %}Erfassungsart wählen – Erfassung{% endblock %}
+
+{% block inhalt %}
+<div class="mobil-inhalt">
+    <p class="dezent">Kunde: <strong>{{ kunde.anzeige_name }}</strong></p>
+    <h1>Wie soll erfasst werden?</h1>
+
+    <div class="weiche">
+        <a class="kachel weiche-kachel" href="/erfassung/{{ erfassung.id }}/seite/0">
+            <span class="weiche-titel">Erfassungsbogen starten</span>
+            <span class="dezent">Fragenkatalog Schritt für Schritt –
+                Standardfall, das Angebot entsteht im Tool.</span>
+        </a>
+        <a class="kachel weiche-kachel" href="/erfassung/{{ erfassung.id }}/freitext">
+            <span class="weiche-titel">Freitext-Erfassung</span>
+            <span class="dezent">Individueller Fall – freie Beschreibung,
+                das Angebot wird in TAIFUN geschrieben.</span>
+        </a>
+    </div>
+
+    <div class="mobil-aktionen">
+        <a class="knopf zweitrangig gross" href="/erfassung">Abbrechen</a>
+    </div>
+</div>
+{% endblock %}

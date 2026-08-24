@@ -773,3 +773,11 @@ tr.bauseits td { color: #888; }
 .mail-abzeichen:hover { background: #cfe3f7; }
 .abzeichen.status-angenommen { background: #e8f4e5; color: #4c9a3d; }
 .abzeichen.status-abgelehnt { background: #fbeaea; color: #c0392b; }
+
+/* Zwei-Wege-Prozess (v7): Startweiche + Freitext-Erfassung */
+.weiche { display: grid; gap: 1rem; margin: 1.2rem 0; }
+.weiche-kachel { display: flex; flex-direction: column; gap: 0.4rem;
+    padding: 1.4rem 1.2rem; text-align: left; }
+.weiche-titel { font-size: 1.15rem; font-weight: 700; }
+.freitext-wechsel { margin-top: 1.4rem; text-align: center; }
+.freitext-block { white-space: pre-wrap; }

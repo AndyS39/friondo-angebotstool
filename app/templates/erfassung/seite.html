@@ -69,6 +69,12 @@
                 {{ 'Zur Übersicht →' if nr + 1 == seiten | length else 'Weiter →' }}
             </button>
         </div>
+        <p class="freitext-wechsel">
+            <button class="knopf zweitrangig" type="submit" name="richtung" value="freitext"
+                    formnovalidate
+                    onclick="return confirm('In die Freitext-Erfassung wechseln? Die bisherigen Antworten bleiben im Protokoll erhalten.');">
+                ✎ In Freitext wechseln (individueller Fall)</button>
+        </p>
     </form>
 </div>
 

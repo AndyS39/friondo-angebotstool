@@ -110,7 +110,61 @@ async def neu(request: Request, session: Session = Depends(get_session)):
     erfassung = Erfassung(kunde_id=kunde.id, benutzer_id=_benutzer(request).id)
     session.add(erfassung)
     session.commit()
-    return RedirectResponse(f"/erfassung/{erfassung.id}/seite/0", status_code=303)
+    return RedirectResponse(f"/erfassung/{erfassung.id}/weiche", status_code=303)
+
+
+@router.get("/{erfassung_id}/weiche")
+async def weiche(request: Request, erfassung_id: int,
+                 session: Session = Depends(get_session)):
+    """Startweiche (v7): Erfassungsbogen (Katalog) oder Freitext-Erfassung."""
+    erfassung = _erfassung_laden(request, erfassung_id, session)
+    if erfassung is None:
+        return RedirectResponse("/erfassung", status_code=303)
+    kunde = session.get(Kunde, erfassung.kunde_id)
+    return render(request, "erfassung/weiche.html", aktiv=None, mobil=True,
+                  benutzer=_benutzer(request), erfassung=erfassung, kunde=kunde)
+
+
+@router.get("/{erfassung_id}/freitext")
+async def freitext_formular(request: Request, erfassung_id: int,
+                            session: Session = Depends(get_session)):
+    """Freitext-Erfassung (v7): großes Pflicht-Textfeld; bei Wechsel aus dem
+    Katalog bleiben die bereits gegebenen Antworten im Protokoll erhalten."""
+    erfassung = _erfassung_laden(request, erfassung_id, session)
+    if erfassung is None:
+        return RedirectResponse("/erfassung", status_code=303)
+    kunde = session.get(Kunde, erfassung.kunde_id)
+    hat_antworten = bool(_antworten(erfassung))
+    return render(request, "erfassung/freitext.html", aktiv=None, mobil=True,
+                  benutzer=_benutzer(request), erfassung=erfassung, kunde=kunde,
+                  hat_antworten=hat_antworten, fehler="")
+
+
+@router.post("/{erfassung_id}/freitext")
+async def freitext_absenden(request: Request, erfassung_id: int,
+                            session: Session = Depends(get_session)):
+    """Freitext absenden (v7): keine Vorprüfung – Ampel Individuell und
+    Status direkt „In TAIFUN zu schreiben“."""
+    erfassung = _erfassung_laden(request, erfassung_id, session)
+    if erfassung is None:
+        return RedirectResponse("/erfassung", status_code=303)
+    form = await request.form()
+    text = (form.get("freitext") or "").strip()
+    if not text:
+        kunde = session.get(Kunde, erfassung.kunde_id)
+        return render(request, "erfassung/freitext.html", aktiv=None, mobil=True,
+                      benutzer=_benutzer(request), erfassung=erfassung, kunde=kunde,
+                      hat_antworten=bool(_antworten(erfassung)),
+                      fehler="Bitte die Beschreibung ausfüllen.")
+    erfassung.typ = "freitext"
+    erfassung.freitext = text
+    erfassung.ampel = "orange"
+    erfassung.gruende_text = "vom Außendienst als individuell erfasst"
+    erfassung.status = "In TAIFUN zu schreiben"
+    erfassung.abgesendet_am = datetime.now()
+    session.commit()
+    return render(request, "erfassung/fertig.html", aktiv=None, mobil=True,
+                  benutzer=_benutzer(request), erfassung=erfassung)
 
 
 def _erfassung_laden(request: Request, erfassung_id: int, session: Session):
@@ -196,6 +250,9 @@ async def seite_speichern(request: Request, erfassung_id: int, nr: int,
     erfassung.antworten_json = json.dumps(antworten, ensure_ascii=False)
     _korrekturen_protokollieren(erfassung, antworten_vorher, antworten,
                                 _benutzer(request), logik)
+    if richtung == "freitext":   # v7: Wechsel in die Freitext-Erfassung –
+        session.commit()         # bereits gegebene Antworten bleiben erhalten
+        return RedirectResponse(f"/erfassung/{erfassung.id}/freitext", status_code=303)
     if richtung == "zurueck":
         ziel = max(0, nr - 1)
         erfassung.seite_index = ziel

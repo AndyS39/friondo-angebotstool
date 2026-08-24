@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block titel %}Freitext-Erfassung{% endblock %}
+
+{% block inhalt %}
+<div class="mobil-inhalt">
+    <p class="dezent">Kunde: <strong>{{ kunde.anzeige_name }}</strong></p>
+    <h1>Freitext-Erfassung</h1>
+
+    {% if hat_antworten %}
+    <p class="hinweis">Die bereits beantworteten Katalog-Fragen bleiben erhalten
+    und erscheinen im Protokoll als Teilantworten.</p>
+    {% endif %}
+    <p class="dezent">Der Vorgang wird als <strong>individuell</strong> markiert und geht
+    direkt in die Warteschlange „In TAIFUN zu schreiben“ – ohne Vorprüfung.</p>
+
+    <form method="post" action="/erfassung/{{ erfassung.id }}/freitext" class="mobil-formular">
+        <div class="fragefeld">
+            <label class="fragetitel">Beschreibung des Vorhabens *</label>
+            <p class="frage-hinweis">Alles Wichtige für den Innendienst: Anlage, Ort der
+            Aufstellung, Besonderheiten, Maße, gewünschte Leistungen …</p>
+            {% if fehler %}<p class="feldfehler">{{ fehler }}</p>{% endif %}
+            <textarea name="freitext" rows="12" required>{{ erfassung.freitext }}</textarea>
+        </div>
+        <div class="mobil-aktionen">
+            {% if hat_antworten %}
+                <a class="knopf zweitrangig gross" href="/erfassung/{{ erfassung.id }}/seite/{{ erfassung.seite_index }}">← Zurück zum Katalog</a>
+            {% else %}
+                <a class="knopf zweitrangig gross" href="/erfassung/{{ erfassung.id }}/weiche">← Zurück</a>
+            {% endif %}
+            <button class="knopf gross" type="submit">Absenden</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

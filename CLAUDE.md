@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v6)
+# Friondo Angebotstool – Projektkontext (v7)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -65,8 +65,8 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
 - **Vertriebskanal** aus monday (Mapping je Board) an Lead/Kunde, Badge + Filter
   in allen Listen, Auswertung in der Statistik.
 - **Archiv:** Erfassungen archivierbar; neuer Status **„Individuell“** für
-  Erfassungen und Angebote (außerhalb des Tools geschrieben) → archiviert
-  automatisch. Versendete Angebote sind (ID + Admin) mit Sicherheitsabfrage
+  Erfassungen und Angebote (außerhalb des Tools geschrieben); seit v7 gilt
+  die Statuskette aus „Neu in v7" statt Auto-Archiv. Versendete Angebote sind (ID + Admin) mit Sicherheitsabfrage
   löschbar; jede Löschung landet im Lösch-Protokoll (Parametrierung).
 - **Angebotsliste:** Summenzeile Netto/Endbetrag/DB über die gefilterte Liste.
 - **Editor:** Artikeltexte je Position editierbar (nur im Angebot), lange
@@ -80,6 +80,26 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
 - **E-Mail:** Versand als HTML; Vorlagen-Editor mit Formatierung (fett usw.);
   je ID-Benutzer die echte Outlook-Signatur (Upload .htm + Bilder, Inline-CID)
   1:1 unter dem Entwurf.
+
+## Neu in v7 (abgestimmt 24.08.2026)
+- **Startweiche der Erfassung** (nach Kundenwahl): „Erfassungsbogen starten" oder
+  „Freitext-Erfassung" (großes Pflicht-Textfeld). Freitext setzt die Ampel sofort
+  auf Individuell (Grund „vom Außendienst als individuell erfasst") und geht ohne
+  Vorprüfung direkt in die TAIFUN-Warteschlange. Im Katalog jederzeit Button
+  „In Freitext wechseln" – bereits gegebene Antworten bleiben im Protokoll.
+- **Statuskette für Individuell-Fälle** (ersetzt das v6-Auto-Archiv):
+  „Individuell – zu prüfen" (Katalog-Fälle mit oranger Ampel) → Buttons „Doch
+  konfigurierbar" (Antworten korrigieren, normaler Tool-Weg) oder „Individuell
+  bestätigt" → „In TAIFUN zu schreiben" (sichtbare Arbeitsliste + Startseiten-
+  Kachel „Individuell offen") → „Extern erledigt" → Erfassung „Erledigt (extern)"
+  und Archiv. Das Protokoll-PDF ist der Übergabezettel für TAIFUN.
+- **Externe Angebotseinträge:** „Extern erledigt" fragt TAIFUN-Angebotsnummer
+  (optional, nachtragbar – Badge „Nummer fehlt"), Endbetrag brutto (Pflicht) und
+  Datum ab und erzeugt einen Eintrag in der Angebotsliste mit Badge „TAIFUN":
+  ohne PDF/Editor/Versand, aber mit monday-Rückspielung (Deal-Status + Deal-Wert),
+  Verfolgung (Ampel/Wiedervorlage/Notizen) und Statistik. Die Statistik weist
+  Tool-, TAIFUN- und Gesamt-Angebote getrennt aus.
+- Fotos in der Erfassung: bewusst zurückgestellt (späteres Thema für alle Wege).
 
 ## Leads VOT (monday-Lesesync)
 - Quellen (friondo-gmbh.monday.com), jeweils NUR die Gruppe mit Titel „Terminiert"

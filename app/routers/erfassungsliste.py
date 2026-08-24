@@ -123,11 +123,13 @@ async def protokoll_pdf(erfassung_id: int, session: Session = Depends(get_sessio
         ("Erfasst am", erfassung.abgesendet_am.strftime("%d.%m.%Y %H:%M")
          if erfassung.abgesendet_am else "Entwurf"),
         ("Status", erfassung.status),
+        ("Erfassungsart", "Freitext" if erfassung.typ == "freitext" else "Katalog"),
     ]
     pfad = protokoll_modul.erzeuge_protokoll_pdf(
         f"protokoll-erfassung-{erfassung.id}.pdf",
         f"Erfassung {erfassung.id} · {kunde.anzeige_name if kunde else ''}",
-        kopf, prot, [g for g in erfassung.gruende_text.splitlines() if g])
+        kopf, prot, [g for g in erfassung.gruende_text.splitlines() if g],
+        freitext=erfassung.freitext if erfassung.typ == "freitext" else "")
     return FileResponse(pfad, media_type="application/pdf",
                         content_disposition_type="inline",
                         filename=f"Protokoll-Erfassung-{erfassung.id}.pdf")

@@ -154,8 +154,11 @@ class Benutzer(Base):
 
 
 # „Individuell“ (v6): Vorgang wird außerhalb des Tools geschrieben –
-# Setzen archiviert automatisch, damit keine „Leichen“ in den Listen liegen
-ERFASSUNG_STATUS = ["Neu", "In Bearbeitung", "Erledigt", "Individuell"]
+# Setzen archiviert automatisch, damit keine „Leichen“ in den Listen liegen.
+# „In TAIFUN zu schreiben“ (v7): Warteschlange des Zwei-Wege-Prozesses –
+# Freitext-Erfassungen landen direkt hier.
+ERFASSUNG_STATUS = ["Neu", "In Bearbeitung", "Erledigt", "Individuell",
+                    "In TAIFUN zu schreiben"]
 
 
 class Erfassung(Base):
@@ -175,6 +178,10 @@ class Erfassung(Base):
     aenderungs_protokoll: Mapped[str] = mapped_column(Text, default="")  # Korrekturen Innendienst
     konfigurator_typ: Mapped[str] = mapped_column(String(10), default="WP")   # v5
     archiviert: Mapped[bool] = mapped_column(Boolean, default=False)          # v6
+    # Zwei-Wege-Prozess (v7): "katalog" (Fragenkatalog) oder "freitext"
+    # (Freitext-Erfassung bzw. Wechsel aus dem Katalog – Teilantworten bleiben)
+    typ: Mapped[str] = mapped_column(String(10), default="katalog")
+    freitext: Mapped[str] = mapped_column(Text, default="")
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     abgesendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 

@@ -48,7 +48,8 @@ class ProtokollPdf(FPDF):
 
 
 def erzeuge_protokoll_pdf(dateiname: str, titelzeile: str, kopfdaten: list[tuple[str, str]],
-                          protokoll: list[dict], gruende: list[str]) -> Path:
+                          protokoll: list[dict], gruende: list[str],
+                          freitext: str = "") -> Path:
     pdf = ProtokollPdf(titelzeile)
     pdf.add_page()
 
@@ -67,6 +68,27 @@ def erzeuge_protokoll_pdf(dateiname: str, titelzeile: str, kopfdaten: list[tuple
                        new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_text_color(0, 0, 0)
     pdf.ln(3)
+
+    # Freitext-Erfassung (v7): freie Beschreibung als eigener Block – der
+    # Übergabezettel für TAIFUN; ggf. folgen darunter die Teilantworten
+    if freitext:
+        pdf.set_font("Arial", "B", 10.5)
+        pdf.set_text_color(*DUNKELBLAU)
+        pdf.cell(0, 6, "Freitext-Erfassung", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_draw_color(200, 205, 215)
+        pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
+        pdf.ln(1.5)
+        pdf.set_font("Arial", "", 9.5)
+        pdf.multi_cell(0, 5, freitext, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        if protokoll:
+            pdf.ln(3)
+            pdf.set_font("Arial", "B", 10.5)
+            pdf.set_text_color(*DUNKELBLAU)
+            pdf.cell(0, 6, "Teilantworten aus dem Katalog (vor dem Wechsel in den Freitext)",
+                     new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.set_text_color(0, 0, 0)
+        pdf.ln(1)
 
     # Fragen je Kategorie
     aktuelle_seite = None

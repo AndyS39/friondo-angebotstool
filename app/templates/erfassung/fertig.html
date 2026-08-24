@@ -5,8 +5,14 @@
 {% block inhalt %}
 <div class="mobil-inhalt">
     <h1>Erfassung abgesendet ✓</h1>
+    {% if erfassung.typ == 'freitext' %}
+    <p class="meldung">Vielen Dank! Die Freitext-Erfassung ist als
+    <strong>individuell</strong> markiert und liegt beim Innendienst in der
+    Warteschlange <strong>„In TAIFUN zu schreiben“</strong>.</p>
+    {% else %}
     <p class="meldung">Vielen Dank! Die Erfassung liegt jetzt beim Innendienst
     {% if erfassung.ampel == 'orange' %} und ist als <strong>individuell</strong> markiert{% endif %}.</p>
+    {% endif %}
     <div class="mobil-aktionen">
         <a class="knopf gross" href="/erfassung/neu">Nächste Erfassung</a>
         <a class="knopf zweitrangig gross" href="/erfassung">Zur Übersicht</a>

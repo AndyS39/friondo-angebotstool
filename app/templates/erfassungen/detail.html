@@ -32,6 +32,7 @@
         </select>
     </form>
     · Konfigurator: <span class="abzeichen">{{ erfassung.konfigurator_typ or 'WP' }}</span>
+    · Erfassungsart: <span class="abzeichen">{{ 'Freitext' if erfassung.typ == 'freitext' else 'Katalog' }}</span>
     {% if kunde and kunde.interessen %}· Interesse: {{ interesse_ui.badges(kunde.interessen) }}{% endif %}
     · Ampel:
     {% if erfassung.ampel == 'orange' %}<span class="ampel orange">● Individuell</span>
@@ -67,10 +68,19 @@
     {% endif %}
 </div>
 
+{% if erfassung.typ == 'freitext' %}
+<h2>Freitext-Erfassung
+    <a class="knopf klein zweitrangig" href="/erfassungen/{{ erfassung.id }}/protokoll.pdf"
+       target="_blank">Protokoll-PDF</a>
+</h2>
+<div class="hinweis freitext-block">{{ erfassung.freitext }}</div>
+{% if protokoll %}<h2>Teilantworten aus dem Katalog <span class="dezent">(vor dem Wechsel in den Freitext)</span></h2>{% endif %}
+{% else %}
 <h2>Antworten
     <a class="knopf klein zweitrangig" href="/erfassungen/{{ erfassung.id }}/protokoll.pdf"
        target="_blank">Protokoll-PDF</a>
 </h2>
+{% endif %}
 {% set ns = namespace(seite=None) %}
 {% for p in protokoll %}
     {% if p.seite != ns.seite %}
