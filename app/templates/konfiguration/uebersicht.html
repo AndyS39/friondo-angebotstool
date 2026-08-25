@@ -94,6 +94,48 @@ HTTPS-Adresse für die Signatur-Route bereitgestellt hat
 Angebots-Mail einen Einmal-Link zum Online-Unterschreiben; nach der Signatur
 wird der Status auf „Angenommen" gesetzt und der Innendienst per E-Mail informiert.</p>
 
+<h2>Abgelehnt-Prozess (v8)</h2>
+<div class="konfigurator-spalten">
+    <div class="konfigurator-haupt">
+        <form method="post" action="/parametrierung/einstellungen" class="suchleiste">
+            <input type="hidden" name="ablehnung_formular" value="1">
+            <label class="kontrollfeld">Automatisch ablehnen nach
+                <input type="text" name="ablehnung_auto_tage" value="{{ ablehnung_tage }}" size="4"> Tagen</label>
+            <span class="dezent">Versendete Angebote ohne Annahme/Ablehnung; eine
+            Wiedervorlage in der Zukunft schützt vor dem Prüflauf.</span>
+            <button class="knopf klein" type="submit">Speichern</button>
+        </form>
+        <p><strong>Gründe der Ablehnung</strong> <span class="dezent">(Auswahlliste im Pflichtdialog)</span></p>
+        <table class="tabelle" style="max-width:520px">
+            <tbody>
+            {% for g in ablehnungsgruende %}
+                <tr>
+                    <td class="{{ 'dezent' if not g.aktiv }}">{{ g.name }}{{ ' (deaktiviert)' if not g.aktiv }}</td>
+                    <td class="aktionen">
+                        <form method="post" action="/parametrierung/ablehnungsgruende">
+                            <input type="hidden" name="aktion" value="umschalten">
+                            <input type="hidden" name="id" value="{{ g.id }}">
+                            <button class="knopf klein zweitrangig" type="submit">
+                                {{ 'Aktivieren' if not g.aktiv else 'Deaktivieren' }}</button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <form method="post" action="/parametrierung/ablehnungsgruende" class="suchleiste">
+            <input type="hidden" name="aktion" value="hinzufuegen">
+            <input type="text" name="name" maxlength="100" placeholder="Neuer Grund …">
+            <button class="knopf klein" type="submit">Hinzufügen</button>
+        </form>
+    </div>
+    <div class="konfigurator-protokoll">
+        <p><strong>Prüflauf-Protokoll</strong> <span class="dezent">(letzte Läufe)</span></p>
+        {% if ablehnung_protokoll %}<pre class="hinweis">{{ ablehnung_protokoll }}</pre>
+        {% else %}<p class="dezent">Noch kein Lauf protokolliert.</p>{% endif %}
+    </div>
+</div>
+
 {% if loeschungen %}
 <h2>Lösch-Protokoll Angebote</h2>
 <table class="tabelle">

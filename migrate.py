@@ -140,6 +140,12 @@ def _daten() -> list[str]:
             if zurueck:
                 meldungen.append(f"{zurueck} Erledigt-(extern)-Erfassungen aus dem "
                                  "Archiv in den Reiter „Erledigt“ zurückgeholt")
+        # v8 (Phase 51): Startwerte der Ablehnungsgründe (nur wenn Tabelle leer)
+        from app.models import ABLEHNUNGSGRUND_STARTWERTE, AblehnungsGrund
+        if session.query(AblehnungsGrund).count() == 0:
+            for sort, name in enumerate(ABLEHNUNGSGRUND_STARTWERTE):
+                session.add(AblehnungsGrund(name=name, sort=sort))
+            meldungen.append(f"{len(ABLEHNUNGSGRUND_STARTWERTE)} Ablehnungsgründe vorbelegt")
         session.commit()
     finally:
         session.close()

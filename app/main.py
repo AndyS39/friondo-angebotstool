@@ -34,6 +34,9 @@ async def lifespan(app: FastAPI):
     # Mail-Verlauf (Phase 27): Antworten der Angebots-Konversationen abrufen
     from app import mail_sync
     mail_sync.scheduler_starten()
+    # 90-Tage-Prüflauf (v8): versendete Angebote ohne Reaktion → Abgelehnt
+    from app import ablauf_pruefung
+    ablauf_pruefung.scheduler_starten()
     yield
 
 

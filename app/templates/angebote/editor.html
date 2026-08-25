@@ -13,7 +13,8 @@
             <span class="abzeichen status-versendet">{{ angebot.status }}</span>
         {% else %}
         <form method="post" action="/angebote/{{ angebot.id }}/status" class="statusform">
-            <select name="status" onchange="this.form.submit()">
+            <select name="status"
+                    onchange="if (this.value === 'Abgelehnt') { document.getElementById('ablehnung-dialog').hidden = false; } else { this.form.submit(); }">
                 {% for s in status_liste %}
                     <option value="{{ s }}" {{ 'selected' if angebot.status == s }}>{{ s }}</option>
                 {% endfor %}
@@ -93,6 +94,35 @@
     </form>
     {% endif %}
 </div>
+{% endif %}
+
+{# v8: Pflichtdialog „Grund der Ablehnung“ #}
+<form method="post" action="/angebote/{{ angebot.id }}/status" id="ablehnung-dialog"
+      class="formular warnblock" hidden>
+    <input type="hidden" name="status" value="Abgelehnt">
+    <p><strong>Grund der Ablehnung</strong> <span class="dezent">(Pflicht)</span></p>
+    <div class="formzeile">
+        <label>Grund
+            <select name="ablehnungsgrund" required>
+                <option value="">– bitte wählen –</option>
+                {% for g in ablehnungsgruende %}
+                    <option value="{{ g.name }}">{{ g.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="breit">Ergänzung (optional)
+            <input type="text" name="ablehnungsgrund_text" maxlength="500"></label>
+    </div>
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Als abgelehnt speichern</button>
+        <button class="knopf zweitrangig" type="button"
+                onclick="this.closest('form').hidden = true; document.querySelector('.statusform select').value = {{ angebot.status | tojson }};">Abbrechen</button>
+    </div>
+</form>
+
+{% if angebot.ablehnungsgrund %}
+<p class="dezent">Ablehnungsgrund: <strong>{{ angebot.ablehnungsgrund }}</strong>
+    {% if angebot.ablehnungsgrund_text %}– {{ angebot.ablehnungsgrund_text }}{% endif %}</p>
 {% endif %}
 
 {# Verfolgung (v8): prominent am Seitenanfang #}

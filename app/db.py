@@ -119,6 +119,8 @@ _NACHTRAEGLICHE_SPALTEN = {
         "rechnung_strasse": "VARCHAR(200) NOT NULL DEFAULT ''",
         "rechnung_plz": "VARCHAR(10) NOT NULL DEFAULT ''",
         "rechnung_ort": "VARCHAR(100) NOT NULL DEFAULT ''",
+        "ablehnungsgrund": "VARCHAR(100) NOT NULL DEFAULT ''",
+        "ablehnungsgrund_text": "VARCHAR(500) NOT NULL DEFAULT ''",
         "verfolgung_ampel": "VARCHAR(10) NOT NULL DEFAULT ''",
         "wiedervorlage_am": "DATETIME",
         "versendet_am": "DATETIME",

@@ -396,6 +396,10 @@ class Angebot(Base):
     extern: Mapped[bool] = mapped_column(Boolean, default=False)
     taifun_nummer: Mapped[str] = mapped_column(String(30), default="")
     extern_endbetrag_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Abgelehnt-Prozess (v8): Pflicht-Grund (Auswahlliste der Parametrierung
+    # bzw. "90 Tage Ablauf" aus dem täglichen Prüflauf) + optionaler Freitext
+    ablehnungsgrund: Mapped[str] = mapped_column(String(100), default="")
+    ablehnungsgrund_text: Mapped[str] = mapped_column(String(500), default="")
     # Statistik (v6): Zeitpunkte der Statuswechsel (über angebot_status_setzen)
     versendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     angenommen_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -555,6 +559,24 @@ class AngebotsNotiz(Base):
     benutzer_name: Mapped[str] = mapped_column(String(100), default="")
     text: Mapped[str] = mapped_column(Text, default="")
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+ABLEHNUNGSGRUND_STARTWERTE = [
+    "Preis zu hoch", "Wettbewerber beauftragt", "Förderung unsicher/abgelehnt",
+    "Projekt verschoben", "Finanzierung gescheitert", "Kunde nicht erreichbar",
+    "Technisch nicht umsetzbar", "Sonstiges"]
+
+
+class AblehnungsGrund(Base):
+    """v8: pflegbare Auswahlliste für den Pflichtdialog „Grund der Ablehnung“
+    (Parametrierung); der Prüflauf nutzt zusätzlich den festen Grund
+    „90 Tage Ablauf“."""
+    __tablename__ = "ablehnungsgruende"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class AngebotsLoeschung(Base):

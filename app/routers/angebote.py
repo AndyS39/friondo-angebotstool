@@ -181,9 +181,14 @@ async def editor(request: Request, angebot_id: int,
         notizen = (session.query(AngebotsNotiz)
                    .filter(AngebotsNotiz.angebot_id == angebot.id)
                    .order_by(AngebotsNotiz.angelegt_am.desc()).all())
+        from app.models import AblehnungsGrund
+        gruende = (session.query(AblehnungsGrund)
+                   .filter(AblehnungsGrund.aktiv.is_(True))
+                   .order_by(AblehnungsGrund.sort, AblehnungsGrund.id).all())
         return render(request, "angebote/extern.html", aktiv="/angebote",
                       angebot=angebot, kunde=kunde, erfassung=erfassung,
                       vertriebler=vertriebler, notizen=notizen,
+                      ablehnungsgruende=gruende,
                       status_liste=EXTERN_STATUS,
                       meldung=request.query_params.get("meldung", ""))
     # Bearbeitungssperre: Erster im Editor hält das Angebot, andere lesen nur
@@ -242,7 +247,12 @@ async def editor(request: Request, angebot_id: int,
                             BenutzerModell.aktiv.is_(True))
                     .order_by(BenutzerModell.name).all())
 
+    from app.models import AblehnungsGrund
+    ablehnungsgruende = (session.query(AblehnungsGrund)
+                         .filter(AblehnungsGrund.aktiv.is_(True))
+                         .order_by(AblehnungsGrund.sort, AblehnungsGrund.id).all())
     return render(request, "angebote/editor.html", aktiv="/angebote",
+                  ablehnungsgruende=ablehnungsgruende,
                   angebot=angebot, kunde=kunde, gruppen=gruppen,
                   summen=angebot.summen(), artikel_liste=artikel_liste,
                   deckung=angebot.deckungsbeitrag(),
@@ -789,6 +799,26 @@ async def status_aendern(request: Request, angebot_id: int,
         from app.models import EXTERN_STATUS, angebot_status_setzen
         if angebot.extern and neuer_status not in EXTERN_STATUS:
             return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+        # v8: Ablehnung nur mit Grund (Pflichtdialog, Tool + extern)
+        if neuer_status == "Abgelehnt":
+            from urllib.parse import quote_plus
+
+            from app.models import AblehnungsGrund, AngebotsNotiz
+            grund = (form.get("ablehnungsgrund") or "").strip()
+            bekannt = {g.name for g in session.query(AblehnungsGrund)
+                       .filter(AblehnungsGrund.aktiv.is_(True))}
+            if grund not in bekannt:
+                return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+                    "Bitte den Grund der Ablehnung angeben (Dialog beim Status „Abgelehnt“)."),
+                    status_code=303)
+            angebot.ablehnungsgrund = grund
+            angebot.ablehnungsgrund_text = (form.get("ablehnungsgrund_text") or "").strip()[:500]
+            benutzer = request.state.benutzer
+            session.add(AngebotsNotiz(
+                angebot_id=angebot.id,
+                benutzer_name=benutzer.name if benutzer else "?",
+                text="Abgelehnt – Grund: " + grund
+                     + (f" ({angebot.ablehnungsgrund_text})" if angebot.ablehnungsgrund_text else "")))
         alter_status = angebot.status
         angebot_status_setzen(angebot, neuer_status)
         # v7: „Individuell“ archiviert NICHT mehr automatisch – individuelle

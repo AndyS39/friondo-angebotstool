@@ -149,6 +149,42 @@ externe TAIFUN-Einträge kennen nur den Endbetrag brutto.</p>
 in der monday-Anbindung gemappt ist.</p>
 {% endif %}
 
+<h2>Ablehnungsgründe</h2>
+<form method="get" action="/statistik" class="suchleiste">
+    <input type="hidden" name="zeitraum" value="{{ zeitraum }}">
+    <input type="hidden" name="von" value="{{ von }}">
+    <input type="hidden" name="bis" value="{{ bis }}">
+    {% if not eigene_ansicht %}
+    <select name="grund_ad">
+        <option value="0">Alle Vertriebler</option>
+        {% for bid, b in benutzer_map.items() if b.rolle == 'aussendienst' %}
+            <option value="{{ bid }}" {{ 'selected' if grund_ad == bid }}>{{ b.name }}</option>
+        {% endfor %}
+    </select>
+    {% endif %}
+    <input type="text" name="grund_kanal" value="{{ grund_kanal }}" size="14"
+           placeholder="Kanal (exakt)">
+    <select name="grund_sparte">
+        <option value="">Alle Sparten</option>
+        {% for s in ('WP', 'PV', 'KL', 'WB') %}
+            <option value="{{ s }}" {{ 'selected' if grund_sparte == s }}>{{ s }}</option>
+        {% endfor %}
+    </select>
+    <button class="knopf klein" type="submit">Filtern</button>
+</form>
+{% if grund_zeilen %}
+<table class="tabelle" style="max-width:520px">
+    <thead><tr><th>Grund</th><th class="rechts">Anzahl</th></tr></thead>
+    <tbody>
+    {% for grund, anzahl in grund_zeilen %}
+        <tr><td>{{ grund }}</td><td class="rechts">{{ anzahl }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="dezent">Keine Ablehnungen im gewählten Zeitraum/Filter.</p>
+{% endif %}
+
 <p class="dezent">Zeitpunkte: Leads = Anlage im Tool · Erfassungen = Absenden ·
 versendet/angenommen/abgelehnt = tatsächlicher Statuswechsel (für Angebote von
 vor dem v6-Update näherungsweise das Angebotsdatum). Archivierte und

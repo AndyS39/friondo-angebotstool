@@ -19,10 +19,14 @@ async def uebersicht(request: Request, session: Session = Depends(get_session)):
                       logik=None, bericht=None, dateifehler=str(config.LOGIK_EXCEL_PFAD),
                       meldung="")
     from app import mail_sync
-    from app.models import AngebotsLoeschung, einstellung_holen
+    from app.models import AblehnungsGrund, AngebotsLoeschung, einstellung_holen
     logik, bericht = logik_modul.hole_logik(session)
     return render(request, "konfiguration/uebersicht.html", aktiv="/parametrierung",
                   logik=logik, bericht=bericht, dateifehler=None,
+                  ablehnungsgruende=(session.query(AblehnungsGrund)
+                                     .order_by(AblehnungsGrund.sort, AblehnungsGrund.id).all()),
+                  ablehnung_tage=einstellung_holen(session, "ablehnung_auto_tage", "90"),
+                  ablehnung_protokoll=einstellung_holen(session, "ablehnung_auto_protokoll", ""),
                   db_rot=einstellung_holen(session, "db_ampel_rot_unter", "9000"),
                   db_gruen=einstellung_holen(session, "db_ampel_gruen_ueber", "10000"),
                   fern_aktiv=einstellung_holen(session, "signatur_fern_aktiv", "0"),
@@ -61,9 +65,39 @@ async def einstellungen_speichern(request: Request,
     if "mail_formular" in form:
         for name in ("mail_absender", "mail_postfach", "mail_bcc"):
             einstellung_setzen(session, name, (form.get(name) or "").strip().lower())
+    # Abgelehnt-Prozess (v8): Frist des täglichen Prüflaufs
+    if "ablehnung_formular" in form:
+        tage = (form.get("ablehnung_auto_tage") or "").strip()
+        if tage.isdigit() and int(tage) > 0:
+            einstellung_setzen(session, "ablehnung_auto_tage", tage)
     session.commit()
     return RedirectResponse("/parametrierung?meldung=Einstellungen+gespeichert",
                             status_code=303)
+
+
+@router.post("/ablehnungsgruende")
+async def ablehnungsgruende_pflegen(request: Request,
+                                    session: Session = Depends(get_session)):
+    """v8: Auswahlliste „Grund der Ablehnung“ pflegen (hinzufügen bzw.
+    deaktivieren/aktivieren – gelöscht wird nicht, Altdaten bleiben lesbar)."""
+    from urllib.parse import quote_plus
+
+    from app.models import AblehnungsGrund
+    form = await request.form()
+    if form.get("aktion") == "hinzufuegen":
+        name = (form.get("name") or "").strip()[:100]
+        if name and session.query(AblehnungsGrund).filter_by(name=name).count() == 0:
+            session.add(AblehnungsGrund(
+                name=name, sort=session.query(AblehnungsGrund).count()))
+            session.commit()
+            return RedirectResponse("/parametrierung?meldung=" + quote_plus(
+                f"Ablehnungsgrund „{name}“ hinzugefügt"), status_code=303)
+    elif form.get("aktion") == "umschalten":
+        grund = session.get(AblehnungsGrund, int(form.get("id") or 0))
+        if grund is not None:
+            grund.aktiv = not grund.aktiv
+            session.commit()
+    return RedirectResponse("/parametrierung", status_code=303)
 
 
 # --- E-Mail-Vorlagen (Phase 30) ------------------------------------------

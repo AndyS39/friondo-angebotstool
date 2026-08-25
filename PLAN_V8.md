@@ -179,20 +179,20 @@ Leiter | Gerüst erforderlich | Hubsteiger erforderlich).
 - [x] migrate.py: Sparte an Erfassung/Angebotseintrag; Bestandsdaten = WP
 
 ## Phase 51 – Ablehnungsgründe & 90-Tage-Automatik
-- [ ] Pflichtdialog bei Statuswechsel auf „Abgelehnt" (Tool + extern):
+- [x] Pflichtdialog bei Statuswechsel auf „Abgelehnt" (Tool + extern):
       Auswahlliste + optionales Freitextfeld; Liste in der Parametrierung
       pflegbar, Startwerte: Preis zu hoch · Wettbewerber beauftragt ·
       Förderung unsicher/abgelehnt · Projekt verschoben · Finanzierung
       gescheitert · Kunde nicht erreichbar · Technisch nicht umsetzbar ·
       Sonstiges
-- [ ] Grund an Angebot + Verfolgungs-Historie; Statistik-Auswertung
+- [x] Grund an Angebot + Verfolgungs-Historie; Statistik-Auswertung
       „Ablehnungsgründe" (Verteilung, filterbar nach Zeitraum/AD/Kanal/Sparte)
-- [ ] Täglicher Prüflauf: Status „Versendet" (inkl. „Versendet (extern)"),
+- [x] Täglicher Prüflauf: Status „Versendet" (inkl. „Versendet (extern)"),
       älter als 90 Tage (Wert in Parametrierung), keine Wiedervorlage in
       der Zukunft → „Abgelehnt", Grund „90 Tage Ablauf"; Lauf protokollieren
-- [ ] docs/nach-dem-update-v8.md: Hinweis auf die einmalige Absage-Welle
+- [x] docs/nach-dem-update-v8.md: Hinweis auf die einmalige Absage-Welle
       bei Altfällen (gewollt – Statistik wird ehrlich)
-- [ ] migrate.py: Ablehnungsgrund-Felder + Gründe-Tabelle
+- [x] migrate.py: Ablehnungsgrund-Felder + Gründe-Tabelle
 
 ## Phase 52 – Migration, Abnahme & Rollout
 - [ ] migrate.py final: idempotent, zweimal gegen Kopie der echten DB

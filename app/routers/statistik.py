@@ -156,13 +156,43 @@ def kennzahlen(session: Session, von: datetime, bis: datetime,
             "je_sparte": je_sparte}
 
 
+def ablehnungsgruende_verteilung(session: Session, von: datetime, bis: datetime,
+                                 nur_benutzer_id=None, ad_id: int = 0,
+                                 kanal: str = "", sparte: str = "") -> list[tuple[str, int]]:
+    """v8: Verteilung der Ablehnungsgründe im Zeitraum, filterbar nach
+    Vertriebler, Kanal und Sparte (Tool- UND TAIFUN-Angebote)."""
+    zuordnung = _vertriebler_map(session)
+    kunden = {k.id: k for k in session.query(Kunde)}
+    zaehler: dict[str, int] = {}
+    for a in session.query(Angebot).filter(Angebot.abgelehnt_am.isnot(None),
+                                           Angebot.abgelehnt_am >= von,
+                                           Angebot.abgelehnt_am < bis):
+        a_ad = zuordnung.get(a.id)
+        if nur_benutzer_id is not None and a_ad != nur_benutzer_id:
+            continue
+        if ad_id and a_ad != ad_id:
+            continue
+        if kanal and (a.kunde_id not in kunden
+                      or kunden[a.kunde_id].vertriebskanal != kanal):
+            continue
+        if sparte and (a.konfigurator_typ or "WP") != sparte:
+            continue
+        grund = a.ablehnungsgrund or "– ohne Angabe –"
+        zaehler[grund] = zaehler.get(grund, 0) + 1
+    return sorted(zaehler.items(), key=lambda kv: (-kv[1], kv[0]))
+
+
 @router.get("")
 async def seite(request: Request, zeitraum: str = "monat", von: str = "",
-                bis: str = "", session: Session = Depends(get_session)):
+                bis: str = "", grund_ad: int = 0, grund_kanal: str = "",
+                grund_sparte: str = "", session: Session = Depends(get_session)):
     benutzer = request.state.benutzer
     start, ende, zeitraum = _zeitraum(zeitraum, von, bis)
     nur = benutzer.id if benutzer.rolle == "aussendienst" else None
     daten = kennzahlen(session, start, ende, nur_benutzer_id=nur)
+    grund_zeilen = ablehnungsgruende_verteilung(
+        session, start, ende, nur_benutzer_id=nur,
+        ad_id=grund_ad, kanal=grund_kanal, sparte=grund_sparte)
     benutzer_map = {b.id: b for b in session.query(Benutzer)}
     ad_zeilen = sorted(daten["je_ad"].items(),
                        key=lambda kv: benutzer_map[kv[0]].name
@@ -175,6 +205,8 @@ async def seite(request: Request, zeitraum: str = "monat", von: str = "",
                   mobil=benutzer.rolle == "aussendienst",
                   gesamt=daten["gesamt"], ad_zeilen=ad_zeilen,
                   kanal_zeilen=kanal_zeilen, sparten_zeilen=sparten_zeilen,
+                  grund_zeilen=grund_zeilen, grund_ad=grund_ad,
+                  grund_kanal=grund_kanal, grund_sparte=grund_sparte,
                   benutzer_map=benutzer_map,
                   eigene_ansicht=nur is not None,
                   zeitraum=zeitraum, zeitraeume=ZEITRAEUME,
