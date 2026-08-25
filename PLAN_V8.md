@@ -153,14 +153,14 @@ Leiter | Gerüst erforderlich | Hubsteiger erforderlich).
       Einschätzungs-Startwerte
 
 ## Phase 49 – Rollen, Tabs & Lead-Chips
-- [ ] „Meine Angebote" für Außendienst: eigene Angebote read-only inkl.
+- [x] „Meine Angebote" für Außendienst: eigene Angebote read-only inkl.
       PDF-Download und Kundenpreisen; ohne EK/DB, ohne Editor/Versand/Löschen
-- [ ] Tab-Fix: „Erledigt (extern)" erscheint im Reiter „Erledigt"; Archiv
+- [x] Tab-Fix: „Erledigt (extern)" erscheint im Reiter „Erledigt"; Archiv
       nur manuell; Migration holt falsch archivierte Fälle zurück
-- [ ] Leads VOT: Status-Chips je Interesse („WP ✓ · PV offen"); Lead
+- [x] Leads VOT: Status-Chips je Interesse („WP ✓ · PV offen"); Lead
       verschwindet erst, wenn alle Interessen erfasst oder ausgeblendet sind;
       Ausblenden wahlweise je Sparte oder ganz
-- [ ] migrate.py: Chip-Status je Lead-Sparte
+- [x] migrate.py: Chip-Status je Lead-Sparte
 
 ## Phase 50 – Multi-Sparten-Erfassung
 - [ ] Erfassungsstart: Sparten-Auswahl (Lead-Interessen vorausgewählt,
