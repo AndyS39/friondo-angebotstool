@@ -192,6 +192,35 @@ def ergebnis_mit_override(ergebnis: "KfwErgebnis", manuell_cent,
                    satz_text=ergebnis.satz_text + " · Zuschuss manuell festgelegt")
 
 
+@dataclass
+class FoerderBausteine:
+    """v8: einzelne Förder-Overrides aus dem Editor; None = automatisch."""
+    grund_prozent: Optional[float] = None
+    klima_prozent: Optional[float] = None
+    einkommen_prozent: Optional[float] = None
+    hoechstkosten_cent: Optional[int] = None
+
+    @property
+    def aktiv(self) -> bool:
+        return any(w is not None for w in (self.grund_prozent, self.klima_prozent,
+                                           self.einkommen_prozent, self.hoechstkosten_cent))
+
+
+def bausteine_aus_angebot(angebot) -> FoerderBausteine:
+    return FoerderBausteine(angebot.foerder_grund_prozent,
+                            angebot.foerder_klima_prozent,
+                            angebot.foerder_einkommen_prozent,
+                            angebot.foerder_hoechstkosten_cent)
+
+
+def ergebnis_fuer_angebot(p: KfwParameter, e: KfwEingaben, angebot) -> "KfwErgebnis":
+    """v8: Berechnung mit Baustein-Overrides des Angebots; ein Alt-Override
+    (foerderung_manuell_cent, v6) wird weiterhin als Gesamtwert angewendet."""
+    ergebnis = berechnen(p, e, bausteine_aus_angebot(angebot))
+    return ergebnis_mit_override(ergebnis, angebot.foerderung_manuell_cent,
+                                 e.kosten_cent)
+
+
 def eingaben_aus_antworten(kfw_daten: dict, kosten_cent: int) -> Optional[KfwEingaben]:
     """Ableitung lt. Blatt "KfW" (v2): Gebäudetyp aus der Objektart O01
     (EFH/REH/RMH → EFH mit automatischer Selbstnutzung; 2FH/MFH → MFH mit
@@ -253,9 +282,12 @@ def hoechstkosten_cent(p: KfwParameter, e: KfwEingaben) -> int:
     return int(round(eur * 100))
 
 
-def berechnen(p: KfwParameter, e: KfwEingaben) -> KfwErgebnis:
+def berechnen(p: KfwParameter, e: KfwEingaben,
+              bausteine: Optional["FoerderBausteine"] = None) -> KfwErgebnis:
+    b = bausteine if (bausteine and bausteine.aktiv) else None
     selbstnutzung = e.objekt == "efh" or (e.objekt == "mfh" and e.mfh_selbst)
-    cap_cent = hoechstkosten_cent(p, e)
+    cap_cent = (b.hoechstkosten_cent if b and b.hoechstkosten_cent is not None
+                else hoechstkosten_cent(p, e))
     foerderf_cent = min(e.kosten_cent, cap_cent)
 
     einkommen = max(0.0, e.einkommen_eur - (p.kind_freibetrag_eur if e.kind else 0)) \
@@ -269,6 +301,16 @@ def berechnen(p: KfwParameter, e: KfwEingaben) -> KfwErgebnis:
     hoechste_stufe = max(s[0] for s in p.einkommens_stufen)
     deckel = p.deckel_erhoeht_prozent if eink_bonus == hoechste_stufe else p.deckel_prozent
     klima_bonus = p.klima_prozent if (selbstnutzung and e.klima_bonus) else 0.0
+
+    # v8: Baustein-Overrides ersetzen die jeweils berechneten Werte
+    if b is not None:
+        if b.grund_prozent is not None:
+            from dataclasses import replace as _replace
+            p = _replace(p, grund_prozent=b.grund_prozent)
+        if b.klima_prozent is not None:
+            klima_bonus = b.klima_prozent
+        if b.einkommen_prozent is not None:
+            eink_bonus = b.einkommen_prozent
 
     zeilen: list[tuple[str, str, bool]] = []
     hinweise: list[str] = []
@@ -331,6 +373,15 @@ def berechnen(p: KfwParameter, e: KfwEingaben) -> KfwErgebnis:
     if e.kosten_cent > cap_cent:
         hinweise.append(f"Die Kosten übersteigen die förderfähigen Höchstkosten von "
                         f"{_euro(cap_cent)} – der Betrag darüber wird nicht bezuschusst.")
+
+    # v8: Kennzeichnung, welche Bausteine manuell überschrieben wurden
+    if b is not None:
+        angepasst = [name for name, wert in (
+            ("Grundförderung", b.grund_prozent), ("Klima-Bonus", b.klima_prozent),
+            ("Einkommensbonus", b.einkommen_prozent),
+            ("Höchstkosten", b.hoechstkosten_cent)) if wert is not None]
+        satz_text += " · Förderung manuell angepasst"
+        hinweise.append("Förderung manuell angepasst: " + ", ".join(angepasst) + ".")
 
     programm = p.programm_gewerbe if e.objekt == "nwg" else p.programm_wohn
     return KfwErgebnis(

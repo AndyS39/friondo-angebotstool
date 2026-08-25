@@ -180,21 +180,30 @@ def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde):
     pdf.cell(0, 3, ABSENDERZEILE, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_text_color(0, 0, 0)
 
-    # Empfängerblock links, Seite/Datum/Kunden-Nr. rechts
+    # Empfängerblock links (v8: Rechnungsanschrift, falls abweichend),
+    # Seite/Datum rechts (Kunden-Nr. entfällt seit v8)
     y_start = pdf.get_y() + 3
     pdf.set_font("Arial", "", 10)
     pdf.set_xy(pdf.l_margin, y_start)
-    empfaenger = []
-    if kunde.firma:
-        empfaenger.append(kunde.firma)
     person = " ".join(t for t in (kunde.anrede if kunde.anrede != "Firma" else "",
                                   kunde.vorname, kunde.nachname) if t)
-    if person:
-        empfaenger.append(person)
-    if kunde.strasse:
-        empfaenger.append(kunde.strasse)
-    if kunde.plz or kunde.ort:
-        empfaenger.append(f"{kunde.plz} {kunde.ort}".strip())
+    abweichend = bool(angebot.rechnung_strasse or angebot.rechnung_ort)
+    empfaenger = []
+    if abweichend:
+        empfaenger.append(angebot.rechnung_name or kunde.firma or person)
+        if angebot.rechnung_strasse:
+            empfaenger.append(angebot.rechnung_strasse)
+        if angebot.rechnung_plz or angebot.rechnung_ort:
+            empfaenger.append(f"{angebot.rechnung_plz} {angebot.rechnung_ort}".strip())
+    else:
+        if kunde.firma:
+            empfaenger.append(kunde.firma)
+        if person:
+            empfaenger.append(person)
+        if kunde.strasse:
+            empfaenger.append(kunde.strasse)
+        if kunde.plz or kunde.ort:
+            empfaenger.append(f"{kunde.plz} {kunde.ort}".strip())
     pdf.multi_cell(100, 4.8, "\n".join(empfaenger))
 
     pdf.set_font("Arial", "", 9)
@@ -205,14 +214,17 @@ def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde):
     pdf.set_x(rechts_x)
     pdf.cell(25, 4.6, "Datum")
     pdf.cell(30, 4.6, f": {angebot.datum.strftime('%d.%m.%Y')}", new_x=XPos.LEFT, new_y=YPos.NEXT)
-    pdf.set_x(rechts_x)
-    pdf.cell(25, 4.6, "Kunden-Nr.")
-    pdf.cell(30, 4.6, f": {kunde.kunden_nr}", new_x=XPos.LEFT, new_y=YPos.NEXT)
 
     pdf.set_xy(pdf.l_margin, max(pdf.get_y(), y_start + 26) + 6)
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 6, f"A N G E B O T - Nr.: {angebot.nummer}",
              new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    if abweichend:
+        # v8: abweichender Ausführungsort (= Kundenadresse aus monday)
+        pdf.set_font("Arial", "", 9)
+        ausfuehrung = f"{kunde.strasse}, {kunde.plz} {kunde.ort}".strip(", ")
+        pdf.cell(0, 5, f"Ausführungsort: {ausfuehrung}",
+                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(4)
 
     # Vortext lt. ANGEBOTSTEXTE.md
@@ -643,11 +655,9 @@ def _nachtext_d(pdf: AngebotsPdf, kunde: Kunde, angebot: Angebot | None = None):
         pdf.cell(28, 5.2, beschriftung)
         pdf.cell(0, 5.2, wert if wert else "_" * 60, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(1)
-    # Ankreuzfelder (v5-Nachtrag): automatisch vorbelegt aus dem Angebot –
-    # iMSys -> Messstellenbetreiber, SpotDynamic -> Stromlieferant,
-    # Anmeldung/... immer, wenn die Vollmacht-Seite ausgegeben wird
-    kreuze = (anhaenge_modul.vollmacht_kreuze(angebot) if angebot is not None
-              else {"messstellenbetreiber": False, "stromlieferant": False, "anmeldung": True})
+    # Ankreuzfelder: seit v8 bewusst wieder ALLE leer – der Kunde kreuzt
+    # selbst an (das v5-Auto-Vorbelegen entfällt auf Kundenwunsch)
+    kreuze = {"messstellenbetreiber": False, "stromlieferant": False, "anmeldung": False}
 
     def kasten(gesetzt):
         return "[X]" if gesetzt else "[  ]"
@@ -698,9 +708,7 @@ def signiertes_pdf_erzeugen(session, angebot: Angebot, png_bytes: bytes,
         parameter, _warn = kfw.parameter_lesen(logik)
         eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["endbetrag"])
         if eingaben is not None:
-            ergebnis = kfw.ergebnis_mit_override(
-                kfw.berechnen(parameter, eingaben),
-                angebot.foerderung_manuell_cent, angebot.summen()["endbetrag"])
+            ergebnis = kfw.ergebnis_fuer_angebot(parameter, eingaben, angebot)
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as datei:
         datei.write(png_bytes)
         png_pfad = datei.name
@@ -727,8 +735,6 @@ def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
         parameter, _warn = kfw.parameter_lesen(logik)
         eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["endbetrag"])
         if eingaben is not None:
-            ergebnis = kfw.ergebnis_mit_override(
-                kfw.berechnen(parameter, eingaben),
-                angebot.foerderung_manuell_cent, angebot.summen()["endbetrag"])
+            ergebnis = kfw.ergebnis_fuer_angebot(parameter, eingaben, angebot)
     return erzeuge_pdf(angebot, kunde, ergebnis,
                        mit_vollmacht=anhaenge.vollmacht_erforderlich(angebot))

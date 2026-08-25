@@ -133,23 +133,23 @@ Seite Zugänglichkeit: KZ01 Erreichbarkeit der Montageorte (vom Boden/
 Leiter | Gerüst erforderlich | Hubsteiger erforderlich).
 
 ## Phase 48 – WP-Bogen v8 & Editor/PDF
-- [ ] WP-Bogen: neue Fragen aus Phase 47 umsetzen (Heizlast-Vorrang,
+- [x] WP-Bogen: neue Fragen aus Phase 47 umsetzen (Heizlast-Vorrang,
       Adressen, Unterverteilung/MID, Wärmemengenzähler, Stemmarbeiten,
       Abschluss-Seite „Einschätzung" → Startwerte Ampel/Wiedervorlage)
-- [ ] Editor: Verfolgungs-Block an den Seitenanfang
-- [ ] Förder-Editor baustein-basiert: Grundförderung (%), Klima-Bonus (%),
+- [x] Editor: Verfolgungs-Block an den Seitenanfang
+- [x] Förder-Editor baustein-basiert: Grundförderung (%), Klima-Bonus (%),
       Einkommensbonus (%), förderfähige Höchstkosten (€) einzeln
       überschreibbar; Live-Neuberechnung; Reset je Baustein; PDF-Kennzeichen
       „Förderung manuell angepasst"; alter Gesamt-Override entfällt
       (Migration: vorhandene Overrides in Höchstkosten/Zuschuss überführen
       oder als Gesamtwert weiter anzeigen – sauber dokumentieren)
-- [ ] Drag & Drop: Scroll-Position beim Ablegen erhalten; Auto-Scroll beim
+- [x] Drag & Drop: Scroll-Position beim Ablegen erhalten; Auto-Scroll beim
       Ziehen an oberen/unteren Fensterrand
-- [ ] Vollmacht: automatische Häkchen entfernen (alle Kästchen leer)
-- [ ] Briefkopf: Zeile „Kunden-Nr." entfernen
-- [ ] PDF: Empfängerfeld = Rechnungsanschrift; Zeile „Ausführungsort: …"
+- [x] Vollmacht: automatische Häkchen entfernen (alle Kästchen leer)
+- [x] Briefkopf: Zeile „Kunden-Nr." entfernen
+- [x] PDF: Empfängerfeld = Rechnungsanschrift; Zeile „Ausführungsort: …"
       unter der Betreffzeile, wenn abweichend
-- [ ] migrate.py: Heizlast, Rechnungsadresse (Felder), Förder-Bausteine,
+- [x] migrate.py: Heizlast, Rechnungsadresse (Felder), Förder-Bausteine,
       Einschätzungs-Startwerte
 
 ## Phase 49 – Rollen, Tabs & Lead-Chips

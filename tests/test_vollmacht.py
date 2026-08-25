@@ -60,29 +60,19 @@ class TestVollmachtSeite(unittest.TestCase):
             if i != nr:
                 self.assertNotIn("Unterschrift Kontoinhaber", t)
 
-    def test_kreuze_imsys_und_spotdynamic(self):
-        faelle = [
-            (("016", "017"), "[X] Messstellenbetreiber und [X] Stromlieferant"),
-            (("016",), "[X] Messstellenbetreiber und [  ] Stromlieferant"),
-            (("017",), "[  ] Messstellenbetreiber und [X] Stromlieferant"),
-        ]
-        for zusatz, erwartet in faelle:
+    def test_kreuze_bleiben_leer(self):
+        # v8: die automatische Vorbelegung entfällt – der Kunde kreuzt selbst an
+        for zusatz in (("016", "017"), ("016",), ("017",)):
             with tempfile.TemporaryDirectory() as ordner:
                 pfad = Path(ordner) / "v.pdf"
                 pdf_export.erzeuge_pdf(_angebot(positionen_zusatz=zusatz), KUNDE,
                                        kfw_ergebnis=None, mit_vollmacht=True, ziel=pfad)
                 _, _, treffer = _vollmacht_seite(pfad)
-            self.assertIn(erwartet, treffer[0][1], zusatz)
-            self.assertIn("[X] Anmeldung/Inbetriebnahme/Änderung/Erweiterung/Abmeldung",
+            self.assertIn("[  ] Messstellenbetreiber und [  ] Stromlieferant",
+                          treffer[0][1], zusatz)
+            self.assertIn("[  ] Anmeldung/Inbetriebnahme/Änderung/Erweiterung/Abmeldung",
                           treffer[0][1])
-
-    def test_kreuze_aus_protokoll(self):
-        import json
-        prot = json.dumps([{"frage_id": "P02", "antwort": "Ja"},
-                           {"frage_id": "P03", "antwort": "Nein"}])
-        kreuze = anhaenge.vollmacht_kreuze(_angebot(protokoll=prot))
-        self.assertEqual(kreuze, {"messstellenbetreiber": True,
-                                  "stromlieferant": False, "anmeldung": True})
+            self.assertNotIn("[X]", treffer[0][1])
 
 
 if __name__ == "__main__":

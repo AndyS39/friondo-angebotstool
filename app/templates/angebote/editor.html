@@ -95,6 +95,35 @@
 </div>
 {% endif %}
 
+{# Verfolgung (v8): prominent am Seitenanfang #}
+<div class="verfolgung-block">
+    <form method="post" action="/angebote/{{ angebot.id }}/verfolgung" class="suchleiste">
+        <strong>Verfolgung:</strong>
+        <select name="verfolgung_ampel" {{ 'disabled' if nur_lesen }}>
+            <option value="" {{ 'selected' if not angebot.verfolgung_ampel }}>– keine Einstufung –</option>
+            <option value="heiss" {{ 'selected' if angebot.verfolgung_ampel == 'heiss' }}>🔥 heiß</option>
+            <option value="warm" {{ 'selected' if angebot.verfolgung_ampel == 'warm' }}>🌤 warm</option>
+            <option value="kalt" {{ 'selected' if angebot.verfolgung_ampel == 'kalt' }}>❄ kalt</option>
+        </select>
+        <label class="kontrollfeld">Wiedervorlage
+            <input type="date" name="wiedervorlage_am" {{ 'disabled' if nur_lesen }}
+                   value="{{ angebot.wiedervorlage_am.strftime('%Y-%m-%d') if angebot.wiedervorlage_am }}"></label>
+        <input type="text" name="notiz" size="40" placeholder="Notiz anhängen (optional)" {{ 'disabled' if nur_lesen }}>
+        {% if not nur_lesen %}<button class="knopf klein" type="submit">Speichern</button>{% endif %}
+    </form>
+    {% if notizen %}
+    <details {{ 'open' if notizen | length <= 3 }}>
+        <summary class="dezent">Notizen ({{ notizen | length }})</summary>
+        <ul class="notizen-liste">
+            {% for n in notizen %}
+                <li><span class="dezent">{{ n.angelegt_am.strftime('%d.%m.%Y %H:%M') }} · {{ n.benutzer_name }}:</span>
+                    {{ n.text }}</li>
+            {% endfor %}
+        </ul>
+    </details>
+    {% endif %}
+</div>
+
 {% if angebot.status == 'Versand vorbereitet' and not nur_lesen %}
 <div class="formaktionen">
     {% if weblink %}
@@ -277,45 +306,49 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
 <div class="warnblock fehlerblock"><strong>{{ kfw_warnung }}</strong></div>
 {% endif %}
 
-<div class="verfolgung-block">
-    <form method="post" action="/angebote/{{ angebot.id }}/verfolgung" class="suchleiste">
-        <strong>Verfolgung:</strong>
-        <select name="verfolgung_ampel" {{ 'disabled' if nur_lesen }}>
-            <option value="" {{ 'selected' if not angebot.verfolgung_ampel }}>– keine Einstufung –</option>
-            <option value="heiss" {{ 'selected' if angebot.verfolgung_ampel == 'heiss' }}>🔥 heiß</option>
-            <option value="warm" {{ 'selected' if angebot.verfolgung_ampel == 'warm' }}>🌤 warm</option>
-            <option value="kalt" {{ 'selected' if angebot.verfolgung_ampel == 'kalt' }}>❄ kalt</option>
-        </select>
-        <label class="kontrollfeld">Wiedervorlage
-            <input type="date" name="wiedervorlage_am" {{ 'disabled' if nur_lesen }}
-                   value="{{ angebot.wiedervorlage_am.strftime('%Y-%m-%d') if angebot.wiedervorlage_am }}"></label>
-        <input type="text" name="notiz" size="40" placeholder="Notiz anhängen (optional)" {{ 'disabled' if nur_lesen }}>
-        {% if not nur_lesen %}<button class="knopf klein" type="submit">Speichern</button>{% endif %}
-    </form>
-    {% if notizen %}
-    <details {{ 'open' if notizen | length <= 3 }}>
-        <summary class="dezent">Notizen ({{ notizen | length }})</summary>
-        <ul class="notizen-liste">
-            {% for n in notizen %}
-                <li><span class="dezent">{{ n.angelegt_am.strftime('%d.%m.%Y %H:%M') }} · {{ n.benutzer_name }}:</span>
-                    {{ n.text }}</li>
-            {% endfor %}
-        </ul>
-    </details>
-    {% endif %}
-</div>
-
 {% if not nur_lesen %}
-<form method="post" action="/angebote/{{ angebot.id }}/foerderung" class="suchleiste rabattform">
-    <strong>Förderung:</strong>
-    <input type="text" name="betrag" size="10"
-           value="{{ (angebot.foerderung_manuell_cent | euro).replace(' €', '') if angebot.foerderung_manuell_cent is not none }}"
-           placeholder="automatisch">
-    <span class="dezent">€ Zuschuss (leer = automatisch berechnen)</span>
-    <label class="kontrollfeld"><input type="checkbox" name="ausblenden"
-        {{ 'checked' if angebot.foerderung_ausblenden }}> Förderblock im PDF ausblenden</label>
-    <button class="knopf klein" type="submit">Übernehmen</button>
-    {% if angebot.foerderung_manuell_cent is not none %}<span class="abzeichen ep">Zuschuss manuell</span>{% endif %}
+<form method="post" action="/angebote/{{ angebot.id }}/foerderung" class="formular foerder-editor">
+    <strong>Förderung
+        {% set bausteine_aktiv = angebot.foerder_grund_prozent is not none
+           or angebot.foerder_klima_prozent is not none
+           or angebot.foerder_einkommen_prozent is not none
+           or angebot.foerder_hoechstkosten_cent is not none %}
+        {% if bausteine_aktiv %}<span class="abzeichen ep">manuell angepasst</span>{% endif %}
+        {% if angebot.foerderung_manuell_cent is not none %}
+            <span class="abzeichen ep" title="Alt-Override aus v6 – wird beim Speichern der Bausteine zurückgesetzt">Gesamt-Zuschuss manuell (alt)</span>
+        {% endif %}
+    </strong>
+    <div class="formzeile foerder-bausteine">
+        {% for feldname, titel, wert in [
+            ('grund_prozent', 'Grundförderung (%)', angebot.foerder_grund_prozent),
+            ('klima_prozent', 'Klima-Bonus (%)', angebot.foerder_klima_prozent),
+            ('einkommen_prozent', 'Einkommensbonus (%)', angebot.foerder_einkommen_prozent)] %}
+        <label>{{ titel }}
+            <span class="feld-mit-reset">
+                <input type="text" name="{{ feldname }}" size="6" inputmode="decimal"
+                       value="{{ ('%g' | format(wert)) | replace('.', ',') if wert is not none }}"
+                       placeholder="auto">
+                <button class="knopf klein zweitrangig" type="button" title="Zurück zur Automatik"
+                        onclick="this.parentNode.querySelector('input').value = ''">↺</button>
+            </span>
+        </label>
+        {% endfor %}
+        <label>Höchstkosten (€)
+            <span class="feld-mit-reset">
+                <input type="text" name="hoechstkosten" size="10" inputmode="decimal"
+                       value="{{ (angebot.foerder_hoechstkosten_cent | euro).replace(' €', '') if angebot.foerder_hoechstkosten_cent is not none }}"
+                       placeholder="auto">
+                <button class="knopf klein zweitrangig" type="button" title="Zurück zur Automatik"
+                        onclick="this.parentNode.querySelector('input').value = ''">↺</button>
+            </span>
+        </label>
+    </div>
+    <div class="formaktionen">
+        <label class="kontrollfeld"><input type="checkbox" name="ausblenden"
+            {{ 'checked' if angebot.foerderung_ausblenden }}> Förderblock im PDF ausblenden</label>
+        <button class="knopf klein" type="submit">Übernehmen &amp; neu berechnen</button>
+        <span class="dezent">leer = automatisch je Baustein</span>
+    </div>
 </form>
 {% endif %}
 
@@ -462,17 +495,37 @@ function textBearbeiten(id, zu) {
 </script>
 {% if not nur_lesen %}
 <script>
-// Drag & Drop der Positionen (v5): Zeilen über alle Gruppen hinweg ziehen,
-// danach die Reihenfolge aller IDs an den Server senden
+// Drag & Drop der Positionen (v5, v8: ohne Scroll-Sprung + Auto-Scroll):
+// Zeilen über alle Gruppen hinweg ziehen, danach die Reihenfolge senden.
+// Die Scroll-Position wird vor dem Submit gemerkt und nach dem Neuladen
+// wiederhergestellt; beim Ziehen an den Fensterrand scrollt die Seite mit.
 (function () {
+    const merker = 'editor-scroll-{{ angebot.id }}';
+    const gemerkt = sessionStorage.getItem(merker);
+    if (gemerkt !== null) {
+        window.scrollTo(0, parseInt(gemerkt));
+        sessionStorage.removeItem(merker);
+    }
     let gezogen = null;
+    let autoScroll = 0;
+    document.addEventListener('dragover', function (e) {
+        if (!gezogen) return;
+        const rand = 80;
+        autoScroll = e.clientY < rand ? -14
+            : (e.clientY > window.innerHeight - rand ? 14 : 0);
+    });
+    const scroller = setInterval(function () {
+        if (gezogen && autoScroll) window.scrollBy(0, autoScroll);
+    }, 40);
     document.querySelectorAll('tr[data-pos-id]').forEach(function (zeile) {
         zeile.addEventListener('dragstart', function (e) {
             gezogen = zeile; zeile.classList.add('wird-gezogen');
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', zeile.dataset.posId);
         });
-        zeile.addEventListener('dragend', function () { zeile.classList.remove('wird-gezogen'); });
+        zeile.addEventListener('dragend', function () {
+            zeile.classList.remove('wird-gezogen'); gezogen = null; autoScroll = 0;
+        });
         zeile.addEventListener('dragover', function (e) {
             e.preventDefault();
             if (!gezogen || gezogen === zeile) return;
@@ -484,6 +537,7 @@ function textBearbeiten(id, zu) {
             e.preventDefault();
             const ids = Array.from(document.querySelectorAll('tr[data-pos-id]')).map(function (z) { return z.dataset.posId; });
             document.getElementById('reihenfolge').value = ids.join(',');
+            sessionStorage.setItem(merker, String(window.scrollY));
             document.getElementById('sortierform').submit();
         });
     });

@@ -226,6 +226,16 @@ async def extern_erledigt(request: Request, erfassung_id: int,
     angebot.nummer = f"EXT-{angebot.id}"   # interne Kennung, nie AN-C-Kreis
     angebot_status_setzen(angebot, "Versendet (extern)")
     angebot.versendet_am = datum           # Zeitstempel = Dialog-Datum
+    # v8: Einschätzung (S01/S02) aus dem Katalog als Startwerte der Verfolgung
+    antworten_kat = json.loads(erfassung.antworten_json or "{}")
+    angebot.verfolgung_ampel = {"heiß": "heiss", "warm": "warm", "kalt": "kalt"}.get(
+        str(antworten_kat.get("S01") or ""), "")
+    if antworten_kat.get("S02"):
+        try:
+            angebot.wiedervorlage_am = datetime.strptime(
+                str(antworten_kat["S02"]), "%Y-%m-%d")
+        except ValueError:
+            pass
     erfassung.angebot_id = angebot.id
     erfassung.status = "Erledigt (extern)"
     erfassung.archiviert = True

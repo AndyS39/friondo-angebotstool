@@ -40,6 +40,7 @@ class GewaehlterArtikel:
     menge: float
     ep: bool
     quelle_frage: str   # "F06", "paket", "puffer", "grundpaket", "trigger", ...
+    kein_ep: bool = False   # v8: "(kein EP)" – überschreibt das EP-Flag des Stamms
 
 
 # --- Artikel aus den Antworten ermitteln ----------------------------------
@@ -114,7 +115,8 @@ def artikel_ermitteln(logik: Logik, antworten: dict) -> list[GewaehlterArtikel]:
             menge = _menge_aufloesen(ref.menge, wert)
             if menge <= 0:
                 continue  # z. B. Erdleitung: (Eingabe − 3) = 0 -> keine Position
-            gewaehlt.append(GewaehlterArtikel(ref.ref, menge, ref.ep, frage.id))
+            gewaehlt.append(GewaehlterArtikel(ref.ref, menge, ref.ep, frage.id,
+                                              ref.kein_ep))
 
     # Paket laut Paketmatrix (A03 + N02/N03)
     for ref in (engine.paket_aufloesen(logik, antworten) or []):
@@ -165,7 +167,7 @@ def _position_im_inhalt(block, artikel: GewaehlterArtikel) -> int:
             m = re.search(rf"\b{re.escape(ref.lstrip('0'))}\b", inhalt)
         if m:
             return m.start()
-    if re.fullmatch(r"[A-Z]\d{2}", artikel.quelle_frage):
+    if re.fullmatch(r"[A-Z]{1,2}\d{2}", artikel.quelle_frage):
         m = re.search(rf"\b{artikel.quelle_frage}\b", inhalt)
         if m:
             return m.start()
@@ -242,7 +244,8 @@ def positionen_zusammenstellen(logik: Logik, antworten: dict,
             "menge": gw.menge,
             "einheit": stamm.einheit,
             "e_preis_cent": stamm.e_preis_cent,
-            "ep_flag": stamm.ep_flag or gw.ep,
+            # v8: "(kein EP)" in der Aktionszeile erzwingt eine normale Position
+            "ep_flag": (stamm.ep_flag or gw.ep) and not gw.kein_ep,
             "ek_cent": stamm.ek_cent,   # EK-Snapshot für den Deckungsbeitrag
             "guid": stamm.guid,         # interne Referenz (Phase 18)
         }
@@ -314,6 +317,22 @@ def angebot_anlegen(session: Session, kunde_id: int,
         kfw_json = json.dumps(engine.kfw_daten(antworten), ensure_ascii=False)
         if not nur_protokoll:
             positionen = positionen_zusammenstellen(logik, antworten, session)
+    # v8: Einschätzung (S01/S02) als Startwerte der Verfolgung; abweichende
+    # Rechnungsanschrift aus O06/O09–O12 (monday-Adresse = Ausführungsort)
+    verfolgung_ampel = {"heiß": "heiss", "warm": "warm", "kalt": "kalt"}.get(
+        str((antworten or {}).get("S01") or ""), "")
+    wiedervorlage = None
+    if (antworten or {}).get("S02"):
+        try:
+            wiedervorlage = datetime.strptime(str(antworten["S02"]), "%Y-%m-%d")
+        except ValueError:
+            pass
+    rechnung = {}
+    if (antworten or {}).get("O06") == "Nein":
+        rechnung = {"rechnung_name": str(antworten.get("O09") or "")[:200],
+                    "rechnung_strasse": str(antworten.get("O10") or "")[:200],
+                    "rechnung_plz": str(antworten.get("O11") or "")[:10],
+                    "rechnung_ort": str(antworten.get("O12") or "")[:100]}
 
     for _versuch in range(5):
         angebot = Angebot(
@@ -322,6 +341,9 @@ def angebot_anlegen(session: Session, kunde_id: int,
             konfiguration_id=konfiguration_id,
             protokoll_json=protokoll_json,
             kfw_json=kfw_json,
+            verfolgung_ampel=verfolgung_ampel,
+            wiedervorlage_am=wiedervorlage,
+            **rechnung,
         )
         for p in positionen:
             angebot.positionen.append(AngebotsPosition(**p))

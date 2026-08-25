@@ -11,7 +11,9 @@ from app.logik import (Aktion, ArtikelRef, Frage, Logik, PaketZeile,
                        FREITEXT_TYPEN, _alias_aufloesen, antwort_teile)
 
 # Zentrale Fragen-IDs der Logik v2
-ID_VERBRAUCH = "A03"          # Leistungsklasse
+ID_VERBRAUCH = "A03"          # Leistungsklasse (kWh)
+ID_HEIZLAST_BEKANNT = "A14"   # v8: Heizlast hat Vorrang vor der kWh-Zuordnung
+ID_HEIZLAST = "A15"
 ID_WARMWASSER = "N02"
 ID_WW_GROESSE = "N03"
 ID_WIEDERHOL_ANZAHL = "H06"   # Anzahl Heizkreisverteiler -> Felder in H07
@@ -181,8 +183,14 @@ def ampel_gruende(logik: Logik, antworten: dict) -> list[str]:
         if grund and grund not in gruende:
             gruende.append(grund)
 
+    # v8: bei bekannter Heizlast mit Matrix-Treffer entscheidet die Heizlast –
+    # eine kWh-Angabe über 31.000 löst dann keine AMPEL mehr aus
+    heizlast_greift = (heizlast_wert(antworten) is not None
+                       and leistungsklasse(logik, antworten) is not None)
     for frage in sichtbare_fragen(logik, antworten):
         if frage.id not in antworten:
+            continue
+        if frage.id == ID_VERBRAUCH and heizlast_greift:
             continue
         wert = antworten[frage.id]
         if frage.typ == "Wiederholfeld" and isinstance(wert, list):
@@ -201,7 +209,23 @@ def ampel_gruende(logik: Logik, antworten: dict) -> list[str]:
 
 # --- Leistungsklasse und Paketauflösung -----------------------------------
 
+def heizlast_wert(antworten: dict) -> Optional[float]:
+    """v8: angegebene Heizlast in kW (nur wenn A14 = Ja), sonst None."""
+    if str(antworten.get(ID_HEIZLAST_BEKANNT) or "") != "Ja":
+        return None
+    return zahl_parsen(antworten.get(ID_HEIZLAST))
+
+
 def leistungsklasse(logik: Logik, antworten: dict) -> Optional[PaketZeile]:
+    # v8: eine bekannte Heizlast hat Vorrang vor der kWh-Zuordnung;
+    # ab 16 kW passt keine Zeile mehr (AMPEL über die Aktionszeile zu A15)
+    heizlast = heizlast_wert(antworten)
+    if heizlast is not None:
+        for zeile in logik.pakete:
+            if (zeile.heizlast_von is not None
+                    and zeile.heizlast_von <= heizlast <= zeile.heizlast_bis):
+                return zeile
+        return None
     zahl = zahl_parsen(antworten.get(ID_VERBRAUCH))
     if zahl is None:
         return None
@@ -263,9 +287,13 @@ def antwort_anzeige(frage: Frage, wert) -> str:
 def ampel_je_frage(logik: Logik, antworten: dict) -> dict[str, str]:
     """Frage-ID -> AMPEL-Grund für alle Antworten, die „individuell“ auslösten."""
     gruende: dict[str, str] = {}
+    heizlast_greift = (heizlast_wert(antworten) is not None
+                       and leistungsklasse(logik, antworten) is not None)
     for frage in sichtbare_fragen(logik, antworten):
         if frage.id not in antworten:
             continue
+        if frage.id == ID_VERBRAUCH and heizlast_greift:
+            continue   # v8: Heizlast hat Vorrang vor der kWh-AMPEL
         wert = antworten[frage.id]
         if frage.typ == "Wiederholfeld" and isinstance(wert, list):
             for einzel in wert:

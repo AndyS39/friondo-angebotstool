@@ -107,9 +107,7 @@ def werte_fuer_angebot(session, angebot: Angebot, kunde: Kunde | None,
             parameter, _ = kfw.parameter_lesen(logik)
             eingaben = kfw.eingaben_aus_antworten(kfw_daten, summen["endbetrag"])
             if eingaben is not None:
-                ergebnis = kfw.ergebnis_mit_override(
-                    kfw.berechnen(parameter, eingaben),
-                    angebot.foerderung_manuell_cent, summen["endbetrag"])
+                ergebnis = kfw.ergebnis_fuer_angebot(parameter, eingaben, angebot)
                 foerderung = _euro_betrag(ergebnis.zuschuss_cent) + " €"
                 eigenanteil = _euro_betrag(ergebnis.eigenanteil_cent) + " €"
     vertriebler = vertriebler_fuer_angebot(session, angebot)

@@ -215,9 +215,7 @@ async def editor(request: Request, angebot_id: int,
             parameter, _ = kfw.parameter_lesen(logik)
             eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["endbetrag"])
             if eingaben is not None:
-                kfw_ergebnis = kfw.ergebnis_mit_override(
-                    kfw.berechnen(parameter, eingaben),
-                    angebot.foerderung_manuell_cent, angebot.summen()["endbetrag"])
+                kfw_ergebnis = kfw.ergebnis_fuer_angebot(parameter, eingaben, angebot)
                 kfw_warnung = kfw.gueltigkeits_warnung(parameter)
 
     # Anhänge-Vorschau (Phase 15): was würde beim Versand mitgehen?
@@ -666,8 +664,9 @@ async def verfolgung_setzen(request: Request, angebot_id: int,
 @router.post("/{angebot_id}/foerderung")
 async def foerderung_setzen(request: Request, angebot_id: int,
                             session: Session = Depends(get_session)):
-    """Förderung (v6): Zuschuss manuell überschreiben (leer = automatisch)
-    und den KfW-Block im PDF ausblenden."""
+    """Förderung (v8): baustein-basierte Overrides – Grundförderung, Klima-Bonus,
+    Einkommensbonus (je %), förderfähige Höchstkosten (€). Leeres Feld =
+    automatisch. Speichern setzt einen alten Gesamt-Override (v6) zurück."""
     if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
         return umleitung
     from urllib.parse import quote_plus
@@ -675,15 +674,35 @@ async def foerderung_setzen(request: Request, angebot_id: int,
     if angebot is None:
         return RedirectResponse("/angebote", status_code=303)
     form = await request.form()
-    wert = (form.get("betrag") or "").strip()
-    if wert:
-        cent = preis_parsen(wert)
-        if cent is None or cent < 0:
-            return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
-                "Förderbetrag ungültig"), status_code=303)
-        angebot.foerderung_manuell_cent = cent
-    else:
-        angebot.foerderung_manuell_cent = None   # zurück zur Automatik
+
+    def prozent_lesen(name):
+        roh = (form.get(name) or "").strip()
+        if not roh:
+            return None, ""
+        from app.konfigurator import zahl_parsen
+        zahl = zahl_parsen(roh)
+        if zahl is None or zahl < 0 or zahl > 100:
+            return None, f"Ungültiger Prozentwert bei {name}"
+        return zahl, ""
+
+    grund, f1 = prozent_lesen("grund_prozent")
+    klima, f2 = prozent_lesen("klima_prozent")
+    einkommen, f3 = prozent_lesen("einkommen_prozent")
+    fehler = f1 or f2 or f3
+    hoechst = None
+    roh = (form.get("hoechstkosten") or "").strip()
+    if roh:
+        hoechst = preis_parsen(roh)
+        if hoechst is None or hoechst <= 0:
+            fehler = "Ungültige Höchstkosten"
+    if fehler:
+        return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(fehler),
+                                status_code=303)
+    angebot.foerder_grund_prozent = grund
+    angebot.foerder_klima_prozent = klima
+    angebot.foerder_einkommen_prozent = einkommen
+    angebot.foerder_hoechstkosten_cent = hoechst
+    angebot.foerderung_manuell_cent = None   # Alt-Override (v6) entfällt
     angebot.foerderung_ausblenden = form.get("ausblenden") == "on"
     session.commit()
     return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(

@@ -352,10 +352,23 @@ class Angebot(Base):
     # Vertriebler (v5-Nachtrag): normalerweise über die verknüpfte Erfassung;
     # dieses Feld greift nur bei manuellen Angeboten ohne Erfassung
     vertriebler_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    # Förderung (v6): manuell überschriebener Zuschuss (Cent; None = automatisch)
-    # und Schalter, den KfW-Block im PDF komplett auszublenden
+    # Förderung (v6): manuell überschriebener Gesamt-Zuschuss (Cent; None =
+    # automatisch). Seit v8 nur noch Altbestand – die Baustein-Overrides unten
+    # ersetzen das Eingabefeld; ein gesetzter Altwert wird weiter angezeigt
+    # und beim Speichern der Bausteine zurückgesetzt.
     foerderung_manuell_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     foerderung_ausblenden: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Förder-Bausteine (v8): einzelne Overrides, None = automatisch
+    foerder_grund_prozent: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    foerder_klima_prozent: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    foerder_einkommen_prozent: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    foerder_hoechstkosten_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Rechnungsanschrift (v8): abweichend vom Ausführungsort (= Kundenadresse
+    # aus monday); leer = identisch. Gefüllt aus den Katalog-Antworten O06/O09–O12.
+    rechnung_name: Mapped[str] = mapped_column(String(200), default="")
+    rechnung_strasse: Mapped[str] = mapped_column(String(200), default="")
+    rechnung_plz: Mapped[str] = mapped_column(String(10), default="")
+    rechnung_ort: Mapped[str] = mapped_column(String(100), default="")
     # Angebotsverfolgung (v6): Hot-Ampel (heiss/warm/kalt/""), Wiedervorlage
     verfolgung_ampel: Mapped[str] = mapped_column(String(10), default="")
     wiedervorlage_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
