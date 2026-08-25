@@ -36,6 +36,8 @@
                 <input type="text" name="f_{{ frage.id }}" value="{{ werte.get(frage.id) or '' }}">
             {% elif frage.typ == 'Freitext groß' %}
                 <textarea name="f_{{ frage.id }}" rows="3">{{ werte.get(frage.id) or '' }}</textarea>
+            {% elif frage.typ == 'Datum' %}
+                <input type="date" name="f_{{ frage.id }}" value="{{ werte.get(frage.id) or '' }}">
             {% elif frage.typ in ('Zahleneingabe', 'Betragseingabe') %}
                 <input type="text" name="f_{{ frage.id }}" inputmode="decimal"
                        value="{{ werte.get(frage.id) | menge if werte.get(frage.id) not in (None, '') else '' }}">

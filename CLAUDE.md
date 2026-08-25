@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v7)
+# Friondo Angebotstool – Projektkontext (v8)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -91,8 +91,8 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   „Individuell – zu prüfen" (Katalog-Fälle mit oranger Ampel) → Buttons „Doch
   konfigurierbar" (Antworten korrigieren, normaler Tool-Weg) oder „Individuell
   bestätigt" → „In TAIFUN zu schreiben" (sichtbare Arbeitsliste + Startseiten-
-  Kachel „Individuell offen") → „Extern erledigt" → Erfassung „Erledigt (extern)"
-  und Archiv. Das Protokoll-PDF ist der Übergabezettel für TAIFUN.
+  Kachel „Individuell offen") → „Extern erledigt" → Erfassung „Erledigt (extern)";
+  Archiv erst manuell (seit v8). Das Protokoll-PDF ist der Übergabezettel für TAIFUN.
 - **Externe Angebotseinträge:** „Extern erledigt" fragt TAIFUN-Angebotsnummer
   (optional, nachtragbar – Badge „Nummer fehlt"), Endbetrag brutto (Pflicht) und
   Datum ab und erzeugt einen Eintrag in der Angebotsliste mit Badge „TAIFUN":
@@ -100,6 +100,40 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   Verfolgung (Ampel/Wiedervorlage/Notizen) und Statistik. Die Statistik weist
   Tool-, TAIFUN- und Gesamt-Angebote getrennt aus.
 - Fotos in der Erfassung: bewusst zurückgestellt (späteres Thema für alle Wege).
+
+## Neu in v8 (abgestimmt 28.08.2026)
+- Multi-Sparten: Ein Lead kann mehrere Interessen (WP/PV/KL/WB) haben;
+  je Sparte eine eigene Erfassung mit Status-Chips am Lead. Der Lead
+  verlässt „Leads VOT" erst, wenn alle Interessen erfasst oder
+  ausgeblendet sind. Sparten-Auswahl beim Erfassungsstart
+  (Lead-Interessen vorausgewählt); je Sparte Weiche Katalog/Freitext,
+  WB vorerst immer Freitext. PV/KL sind reine Erfassungsformulare
+  (Blätter „Fragen PV" / „Fragen KL", ohne Artikel-Aktionen) und laufen
+  über die TAIFUN-Schiene; Sparten-Badge an Erfassung, Warteschlange,
+  externem Angebotseintrag und in der Statistik.
+- WP-Bogen: Heizlast-Abfrage (entscheidet bei Bekanntsein über das
+  Paket, Unterdimensionierungs-Matrix in der Paketmatrix; kWh bleibt
+  Pflicht fürs Protokoll); Rechnungs-/Ausführungsanschrift getrennt
+  (monday-Adresse = Ausführungsort); Unterverteilung (Pos. 152) mit
+  MID-Zwischenzähler (Z23); Wärmemengenzähler Pos. 096 × Anzahl bei
+  mehr als einer WE; Stemmarbeiten Pos. 126 im Öl-Zweig; Abschluss-
+  Seite „Einschätzung" mit Hot-Ampel + Wiedervorlage (Startwerte der
+  Verfolgung).
+- Angebote: Verfolgungs-Block oben im Editor; Förder-Editor
+  baustein-basiert (Grundförderung, Klima-Bonus, Einkommensbonus,
+  Höchstkosten einzeln überschreibbar, Kennzeichen „manuell
+  angepasst"); Drag & Drop ohne Scroll-Sprung, mit Auto-Scroll;
+  Vollmacht-Häkchen wieder leer; Kunden-Nr. entfällt im Briefkopf;
+  PDF zeigt Rechnungsanschrift im Empfängerfeld und abweichenden
+  Ausführungsort als eigene Zeile.
+- Rollen: Außendienst sieht „Meine Angebote" (read-only, Kundenpreise
+  und PDF, ohne EK/DB/Editor/Versand).
+- Abgelehnt-Prozess: Pflichtdialog „Grund der Ablehnung" (Auswahlliste
+  aus Parametrierung + Freitext) für Tool- und TAIFUN-Angebote;
+  Statistik-Auswertung „Ablehnungsgründe"; täglicher Prüflauf setzt
+  versendete Angebote ohne Annahme/Ablehnung nach 90 Tagen
+  (Parametrierung) auf Abgelehnt mit Grund „90 Tage Ablauf" –
+  außer eine Wiedervorlage liegt in der Zukunft.
 
 ## Leads VOT (monday-Lesesync)
 - Quellen (friondo-gmbh.monday.com), jeweils NUR die Gruppe mit Titel „Terminiert"

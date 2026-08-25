@@ -148,6 +148,17 @@ def _wert_lesen(frage, form, antworten):
     if frage.typ in ("Freitext", "Freitext groß"):
         return (form.get("wert") or "").strip(), ""
 
+    if frage.typ == "Datum":   # v8: optional per Hinweis "leer …"
+        roh = (form.get("wert") or "").strip()
+        if not roh:
+            return "", ("" if "leer" in frage.hinweis.lower() else "Bitte ein Datum wählen.")
+        from datetime import datetime as _dt
+        try:
+            _dt.strptime(roh, "%Y-%m-%d")
+        except ValueError:
+            return roh, "Ungültiges Datum."
+        return roh, ""
+
     if frage.typ in ("Zahleneingabe", "Betragseingabe"):
         roh = (form.get("wert") or "").strip()
         optional = "leer" in frage.hinweis.lower()

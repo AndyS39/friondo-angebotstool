@@ -23,6 +23,7 @@ FRAGE_TYPEN = {
     "Wiederholfeld",
     "Freitext",
     "Freitext groß",
+    "Datum",            # v8: Datumseingabe (z. B. Wiedervorlage der Einschätzung)
 }
 
 # Alt-/Varianten-Schreibweisen werden beim Einlesen normalisiert
@@ -46,7 +47,9 @@ SPEZIAL_AKTIONEN = {"Gruppen-Trigger", "Grundpaket", "Ampel-Auswertung",
 @dataclass
 class Bedingung:
     roh: str
-    art: str          # immer | antwort | ausgefuellt | selbstnutzung | friondo_ja | klauseln
+    # immer | antwort | ausgefuellt | selbstnutzung | friondo_ja | klauseln |
+    # wiederholgruppe (v8: „je Raum (KO05)“ – Frage wiederholt sich je Zähler)
+    art: str
     frage_id: Optional[str] = None
     werte: list[str] = field(default_factory=list)
     # v3: ODER-verknüpfte Klauseln, jede Klausel = UND-Liste von (frage_id, werte),
@@ -71,6 +74,7 @@ class ArtikelRef:
     ref: str                      # "045" oder "Z01"
     menge: str = "1"              # roh: "1", "2", "eingegebene Meter", "Anzahl Verteiler", ...
     ep: bool = False
+    kein_ep: bool = False         # v8: "(kein EP)" – überschreibt das EP-Flag des Artikelstamms
 
 
 @dataclass
@@ -93,6 +97,10 @@ class PaketZeile:
     ww_bis_200: list[ArtikelRef]
     ohne_ww: list[ArtikelRef]
     ww_300: list[ArtikelRef]
+    # v8: Heizlast-Spalte (kW, Dezimalzahlen) – hat bei Bekanntsein Vorrang
+    heizlast_roh: str = ""
+    heizlast_von: Optional[float] = None
+    heizlast_bis: Optional[float] = None
 
 
 @dataclass
@@ -124,6 +132,9 @@ class Logik:
     kfw: dict[str, tuple[str, str]]         # Parameter -> (Wert, Bemerkung)
     geladen_am: datetime
     anhaenge: list[Anhang] = field(default_factory=list)
+    # v8: reine Erfassungsbögen je Sparte (Blätter "Fragen PV" / "Fragen KL"),
+    # ohne Artikel-Aktionen – laufen über die TAIFUN-Schiene
+    sparten_fragen: dict[str, dict[str, Frage]] = field(default_factory=dict)
 
     @property
     def seiten(self) -> list[str]:
@@ -164,9 +175,11 @@ def refs_extrahieren(text: str) -> list[ArtikelRef]:
         menge = m_menge.group(1).strip() if m_menge else "1"
         menge = re.sub(r"\s*als EP.*$", "", menge).strip() or "1"
         ep_nach = bool(re.match(r"[^+·]*als EP", rest))
+        kein_ep = bool(re.match(r"[^+·]*\(kein EP\)", rest))   # v8: EP-Flag unterdrücken
         for i, (nummer, ep) in enumerate(nummern):
             gefunden.append((m.start() + i,
-                             ArtikelRef(nummer.zfill(3), menge, bool(ep) or ep_nach)))
+                             ArtikelRef(nummer.zfill(3), menge, bool(ep) or ep_nach,
+                                        kein_ep)))
 
     for m in re.finditer(r"\bZ(\d{2})\b(?:\s*[–-]\s*Z(\d{2}))?", text):
         von, bis = int(m.group(1)), int(m.group(2) or m.group(1))
@@ -192,7 +205,12 @@ def bedingung_parsen(roh) -> Optional[Bedingung]:
         return Bedingung(text, "selbstnutzung")
     if re.search(r"Friondo-Ja", text):
         return Bedingung(text, "friondo_ja")
-    m = re.match(r"nur wenn ([A-Z]\d{2})\s+ausgefüllt$", text)
+    # v8: Wiederholgruppe – „je Raum (KO05)“: Fragen wiederholen sich so oft,
+    # wie die referenzierte Zählfrage angibt
+    m = re.match(r"je\s+\S+\s*\(([A-Z]{1,2}\d{2})\)$", text)
+    if m:
+        return Bedingung(text, "wiederholgruppe", m.group(1))
+    m = re.match(r"nur wenn ([A-Z]{1,2}\d{2})\s+ausgefüllt$", text)
     if m:
         return Bedingung(text, "ausgefuellt", m.group(1))
     m = re.match(r"nur wenn (.+)$", text)
@@ -206,7 +224,7 @@ def bedingung_parsen(roh) -> Optional[Bedingung]:
                 klausel_text = klausel_text[1:-1].strip()
             terme: list[tuple[str, list[str]]] = []
             for teil in re.split(r"\s+und\s+", klausel_text):
-                tm = re.match(r"([A-Z]\d{2})\s*=\s*(.+)$", teil.strip())
+                tm = re.match(r"([A-Z]{1,2}\d{2})\s*=\s*(.+)$", teil.strip())
                 if tm is None:
                     return None
                 terme.append((tm.group(1),
@@ -258,8 +276,20 @@ def logik_einlesen() -> tuple[Logik, Pruefbericht]:
     kfw = _kfw_einlesen(wb, bericht)
     anhaenge = _anhaenge_einlesen(wb, bericht)
 
-    logik = Logik(fragen, aktionen, pakete, bloecke, kfw, datetime.now(), anhaenge)
+    # v8: reine Erfassungsbögen PV/KL (eigene Blätter, ohne Artikel-Aktionen)
+    sparten_fragen: dict[str, dict[str, Frage]] = {}
+    for sparte, blatt in (("PV", "Fragen PV"), ("KL", "Fragen KL")):
+        if blatt not in wb.sheetnames:
+            bericht.warnungen.append(
+                f"Blatt „{blatt}“ fehlt – die {sparte}-Erfassung läuft nur als Freitext.")
+            continue
+        sparten_fragen[sparte] = _fragen_einlesen(wb, bericht, blatt)
+
+    logik = Logik(fragen, aktionen, pakete, bloecke, kfw, datetime.now(), anhaenge,
+                  sparten_fragen)
     _querbezuege_pruefen(logik, bericht)
+    for sparte, sfragen in sparten_fragen.items():
+        _bedingungen_pruefen(sfragen, bericht, f"Fragen {sparte}")
     return logik, bericht
 
 
@@ -297,29 +327,30 @@ def _anhaenge_einlesen(wb, bericht: Pruefbericht) -> list[Anhang]:
     return anhaenge
 
 
-def _fragen_einlesen(wb, bericht: Pruefbericht) -> dict[str, Frage]:
+def _fragen_einlesen(wb, bericht: Pruefbericht, blatt: str = "Fragen") -> dict[str, Frage]:
     """v2-Layout: Seite · ID · Fragetext · Typ · Antworten · Anzeigen wenn · Hinweis.
-    Die Reihenfolge ergibt sich aus der Zeilenfolge im Blatt."""
+    Die Reihenfolge ergibt sich aus der Zeilenfolge im Blatt. Seit v8 auch für
+    die Sparten-Blätter „Fragen PV“ / „Fragen KL“."""
     fragen: dict[str, Frage] = {}
-    for zeile, row in enumerate(wb["Fragen"].iter_rows(min_row=2, values_only=True), 2):
+    for zeile, row in enumerate(wb[blatt].iter_rows(min_row=2, values_only=True), 2):
         seite, fid, text, typ, antworten, anzeigen, hinweis = (_zelle(v) for v in row[:7])
         if not fid:
             continue
         if fid in fragen:
-            bericht.fehler.append(f"Fragen Zeile {zeile}: ID {fid} doppelt vergeben.")
+            bericht.fehler.append(f"{blatt} Zeile {zeile}: ID {fid} doppelt vergeben.")
             continue
         typ = TYP_ALIASE.get(typ, typ)
         if typ not in FRAGE_TYPEN:
-            bericht.fehler.append(f"Fragen {fid}: unbekannter Typ „{typ}“.")
+            bericht.fehler.append(f"{blatt} {fid}: unbekannter Typ „{typ}“.")
         if not seite:
-            bericht.fehler.append(f"Fragen {fid}: Spalte „Seite“ ist leer.")
+            bericht.fehler.append(f"{blatt} {fid}: Spalte „Seite“ ist leer.")
         optionen = [a.strip() for a in antworten.split("|") if a.strip()] if antworten else []
         if typ == "Auswahl" and not optionen:
-            bericht.fehler.append(f"Fragen {fid}: Auswahl ohne Antwortmöglichkeiten.")
+            bericht.fehler.append(f"{blatt} {fid}: Auswahl ohne Antwortmöglichkeiten.")
         bedingung = bedingung_parsen(anzeigen)
         if bedingung is None:
             bericht.fehler.append(
-                f"Fragen {fid}: Bedingung „{anzeigen}“ nicht parsebar.")
+                f"{blatt} {fid}: Bedingung „{anzeigen}“ nicht parsebar.")
         fragen[fid] = Frage(fid, len(fragen) + 1, text, typ, optionen, bedingung,
                             hinweis, seite)
     return fragen
@@ -348,6 +379,7 @@ def _paketmatrix_einlesen(wb, bericht: Pruefbericht) -> list[PaketZeile]:
     pakete = []
     for row in wb["Paketmatrix"].iter_rows(min_row=2, values_only=True):
         klasse, verbrauch, ww200, ohne_ww, ww300 = (_zelle(v) for v in row[:5])
+        heizlast = _zelle(row[5]) if len(row) > 5 else ""
         if not klasse:
             continue
         von = bis = None
@@ -358,9 +390,21 @@ def _paketmatrix_einlesen(wb, bericht: Pruefbericht) -> list[PaketZeile]:
         else:
             bericht.fehler.append(
                 f"Paketmatrix {klasse}: Verbrauchsbereich „{verbrauch}“ nicht parsebar.")
+        # v8: Heizlast-Spalte „bis 5,9 kW“ / „6,0 – 7,9 kW“ (Dezimal mit Komma)
+        h_von = h_bis = None
+        if heizlast:
+            def _dez(t):
+                return float(t.replace(".", "").replace(",", "."))
+            if (m := re.match(r"([\d.,]+)\s*[–-]\s*([\d.,]+)", heizlast)):
+                h_von, h_bis = _dez(m.group(1)), _dez(m.group(2))
+            elif (m := re.match(r"bis\s*([\d.,]+)", heizlast)):
+                h_von, h_bis = 0.0, _dez(m.group(1))
+            else:
+                bericht.fehler.append(
+                    f"Paketmatrix {klasse}: Heizlast „{heizlast}“ nicht parsebar.")
         zeile = PaketZeile(klasse, verbrauch, von, bis,
                            refs_extrahieren(ww200), refs_extrahieren(ohne_ww),
-                           refs_extrahieren(ww300))
+                           refs_extrahieren(ww300), heizlast, h_von, h_bis)
         for spalte, refs in (("WW bis 200 l", zeile.ww_bis_200),
                              ("ohne Warmwasser", zeile.ohne_ww), ("WW 300 l", zeile.ww_300)):
             if not refs:
@@ -460,10 +504,10 @@ def _antwort_pruefen(frage: Frage, antwort: str, fragen: dict[str, Frage]) -> Op
     return f"Antwort „{antwort}“ ist keine bekannte Option ({' | '.join(frage.antworten)})."
 
 
-def _querbezuege_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
-    fragen = logik.fragen
-
-    # Bedingungen der Fragen: referenzierte Fragen + Werte müssen existieren
+def _bedingungen_pruefen(fragen: dict[str, Frage], bericht: Pruefbericht,
+                         kontext: str = "Fragen") -> None:
+    """Bedingungen eines Fragen-Satzes: referenzierte Fragen + Werte müssen
+    existieren (v8: auch für die Sparten-Blätter, inkl. Wiederholgruppen)."""
     for frage in fragen.values():
         b = frage.bedingung
         if b is None:
@@ -471,14 +515,14 @@ def _querbezuege_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
         terme: list[tuple[str, list[str]]] = []
         if b.art in ("antwort",):
             terme = [(b.frage_id, b.werte)]
-        elif b.art == "ausgefuellt":
+        elif b.art in ("ausgefuellt", "wiederholgruppe"):
             terme = [(b.frage_id, [])]
         elif b.art == "klauseln":
             terme = [t for klausel in b.klauseln for t in klausel]
         for frage_id, werte in terme:
             if frage_id not in fragen:
                 bericht.fehler.append(
-                    f"Fragen {frage.id}: Bedingung verweist auf unbekannte Frage {frage_id}.")
+                    f"{kontext} {frage.id}: Bedingung verweist auf unbekannte Frage {frage_id}.")
                 continue
             ziel = fragen[frage_id]
             if ziel.typ != "Auswahl":
@@ -486,7 +530,12 @@ def _querbezuege_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
             for wert in werte:
                 if _alias_aufloesen(wert, ziel.antworten) is None:
                     bericht.fehler.append(
-                        f"Fragen {frage.id}: Bedingungswert „{wert}“ ist keine Option von {ziel.id}.")
+                        f"{kontext} {frage.id}: Bedingungswert „{wert}“ ist keine Option von {ziel.id}.")
+
+
+def _querbezuege_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
+    fragen = logik.fragen
+    _bedingungen_pruefen(fragen, bericht)
 
     # Anhänge: referenzierte Fragen/Antworten müssen existieren
     for anhang in logik.anhaenge:

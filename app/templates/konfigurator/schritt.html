@@ -71,6 +71,12 @@
                 </label>
                 <div class="formaktionen"><button class="knopf" type="submit">Weiter</button></div>
 
+            {% elif frage.typ == 'Datum' %}
+                <div class="formzeile">
+                    <label class="schmal">Datum
+                        <input type="date" name="wert" value="{{ wert or '' }}">
+                    </label>
+                </div>
             {% elif frage.typ in ('Zahleneingabe', 'Betragseingabe') %}
                 <div class="formzeile">
                     <label class="schmal">{{ 'Betrag in €' if frage.typ == 'Betragseingabe' else 'Wert' }}

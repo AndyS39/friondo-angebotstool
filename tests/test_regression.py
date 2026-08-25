@@ -23,6 +23,8 @@ KONTROLL_SZENARIO = {
     "A01": "Öl", "A02": 2001, "A03": 15000, "A04": "KG", "A05": 8,
     "A07": "Ja", "A08": "Kunststoff", "A09": "bis 5.000 L",
     "A10": "Nein", "A11": "Nein", "A12": "", "A13": 4,
+    # v8: Heizlast unbekannt, keine Stemmarbeiten -> Ergebnis unverändert
+    "A14": "Nein", "A16": "Nein",
     # Neue Anlage (7-kW-AWM-Paket, 50-l-Puffer, Garagendach ohne Bitumen)
     "N01": "Luft/Wasser", "N02": "Ja", "N03": "bis 200 l",
     "N04": "Garagendach", "N05": "Nein", "N06": "50 l",
@@ -30,8 +32,10 @@ KONTROLL_SZENARIO = {
     "H01": "2", "H02": "Heizkörper und Fußbodenheizung",
     "H03": "Ja", "H04": {"S": 1, "M": 0, "L": 0, "XL": 0},
     "H05": "Nein", "H06": 2, "H07": [4, 4],
-    # Elektro/ZV (v5: SLS/ÜSS/APZ entfallen)
-    "E01": "KG", "E02": "Nein",
+    # Elektro/ZV (v5: SLS/ÜSS/APZ entfallen; v8: ohne Unterverteilung)
+    "E01": "KG", "E02": "Nein", "E04": "Nein",
+    # Einschätzung (v8): Startwerte der Verfolgung, keine Artikel
+    "S01": "warm", "S02": "",
     # Friondo (HEMS ja)
     "P01": "Ja", "P02": "Nein", "P03": "Nein",
     # Förderung: 45.000 € Einkommen, Kind -> 35.000 -> +30 %; Satz 76 -> Deckel 70
@@ -94,9 +98,11 @@ class TestKontrollSzenario(unittest.TestCase):
         self.assertFalse([w for w in bericht.warnungen if "A09" in w], bericht.warnungen)
 
     def test_sls_uess_apz_nicht_mehr_abgefragt(self):
-        self.assertNotIn("E04", self.logik.fragen)
-        self.assertNotIn("E05", self.logik.fragen)
+        # v5: SLS/ÜSS/APZ entfallen; v8 belegt E04/E05 neu mit der
+        # Unterverteilung + MID-Zwischenzähler – E06 bleibt frei
         self.assertNotIn("E06", self.logik.fragen)
+        self.assertEqual(self.logik.fragen["E04"].text, "Unterverteilung erforderlich?")
+        self.assertEqual(self.logik.fragen["E05"].text, "MID-Zwischenzähler erforderlich?")
 
     def test_summen(self):
         netto = self._netto_cent()

@@ -110,6 +110,9 @@ def _daten() -> list[str]:
         if reaktiviert:
             meldungen.append(f"{reaktiviert} Individuell-Erfassungen reaktiviert "
                              "(jetzt „In TAIFUN zu schreiben“, entarchiviert)")
+        # ---------------- v8 (Phasen 47–52) ----------------
+        # Schema-Nachzüge laufen wie immer über db._NACHTRAEGLICHE_SPALTEN;
+        # die Daten-Migrationen der einzelnen v8-Phasen werden hier ergänzt.
         session.commit()
     finally:
         session.close()

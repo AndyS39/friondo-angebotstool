@@ -307,6 +307,15 @@ def _wert_lesen(frage, form, antworten):
         if not wert and not _ist_optional(frage):
             return wert, "Bitte ausfüllen."
         return wert, ""
+    if frage.typ == "Datum":   # v8: z. B. Wiedervorlage der Einschätzung
+        wert = (form.get(name) or "").strip()
+        if not wert:
+            return "", ("" if _ist_optional(frage) else "Bitte ein Datum wählen.")
+        try:
+            datetime.strptime(wert, "%Y-%m-%d")
+        except ValueError:
+            return wert, "Ungültiges Datum."
+        return wert, ""
     if frage.typ in ("Zahleneingabe", "Betragseingabe"):
         roh = (form.get(name) or "").strip()
         if not roh:
