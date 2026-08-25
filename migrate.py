@@ -111,8 +111,35 @@ def _daten() -> list[str]:
             meldungen.append(f"{reaktiviert} Individuell-Erfassungen reaktiviert "
                              "(jetzt „In TAIFUN zu schreiben“, entarchiviert)")
         # ---------------- v8 (Phasen 47–52) ----------------
-        # Schema-Nachzüge laufen wie immer über db._NACHTRAEGLICHE_SPALTEN;
-        # die Daten-Migrationen der einzelnen v8-Phasen werden hier ergänzt.
+        # Schema-Nachzüge laufen wie immer über db._NACHTRAEGLICHE_SPALTEN.
+        # Hinweis Förderung: der v6-Gesamt-Override (foerderung_manuell_cent)
+        # bleibt bestehen und wird weiter als Gesamtwert angezeigt; die neuen
+        # Baustein-Overrides ersetzen nur das Eingabefeld im Editor.
+        # v8 (Phase 49): Erfassungen rückwirkend mit ihrem Lead verknüpfen
+        # (Multi-Sparten braucht die n:1-Verknüpfung Erfassung → Lead)
+        verknuepft = 0
+        for lead in session.query(Lead).filter(Lead.erfassung_id.isnot(None)):
+            e = session.get(Erfassung, lead.erfassung_id)
+            if e is not None and e.lead_id is None:
+                e.lead_id = lead.id
+                verknuepft += 1
+        if verknuepft:
+            meldungen.append(f"{verknuepft} Erfassungen mit ihrem Lead verknüpft (Multi-Sparten)")
+        # v8 (Phase 49): Tab-Fix – in v7 automatisch archivierte
+        # „Erledigt (extern)“-Fälle einmalig zurückholen (Archiv nur manuell);
+        # der Einstellungs-Schalter verhindert, dass später manuell
+        # archivierte Fälle bei erneuten Läufen wieder auftauchen.
+        if einstellung_holen(session, "migration_v8_extern_archiv", "") != "erledigt":
+            zurueck = 0
+            for e in session.query(Erfassung).filter(
+                    Erfassung.status == "Erledigt (extern)",
+                    Erfassung.archiviert.is_(True)):
+                e.archiviert = False
+                zurueck += 1
+            einstellung_setzen(session, "migration_v8_extern_archiv", "erledigt")
+            if zurueck:
+                meldungen.append(f"{zurueck} Erledigt-(extern)-Erfassungen aus dem "
+                                 "Archiv in den Reiter „Erledigt“ zurückgeholt")
         session.commit()
     finally:
         session.close()

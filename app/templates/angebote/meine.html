@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block titel %}Meine Angebote – Friondo{% endblock %}
+
+{% block inhalt %}
+<div class="mobil-inhalt">
+    <h1>Meine Angebote</h1>
+    <p class="dezent">Nur Ansicht – Bearbeitung und Versand laufen über den Innendienst.</p>
+
+    {% if angebote %}
+    <ul class="erfassung-liste">
+    {% for a in angebote %}
+        <li>
+            <div style="padding: 0.7rem 1rem 0.2rem">
+                <strong>{% if a.extern %}<span class="abzeichen">TAIFUN</span> {{ a.taifun_nummer or '– Nummer fehlt –' }}{% else %}{{ a.nummer }}{% endif %}</strong>
+                · {{ kunden[a.kunde_id].anzeige_name if a.kunde_id in kunden else '?' }}<br>
+                <span class="dezent">{{ a.datum.strftime('%d.%m.%Y') }} ·
+                    <span class="abzeichen">{{ a.status }}</span>
+                    {% if a.verfolgung_ampel %}{{ {'heiss': '🔥', 'warm': '🌤', 'kalt': '❄'}[a.verfolgung_ampel] }}{% endif %}
+                    {% if a.wiedervorlage_am %}
+                        <span class="{{ 'wv-faellig' if a.wiedervorlage_am <= heute else 'dezent' }}">↻ {{ a.wiedervorlage_am.strftime('%d.%m.%Y') }}</span>
+                    {% endif %}
+                    · Endbetrag: <strong>{{ a.summen().endbetrag | euro }}</strong></span>
+            </div>
+            {% if not a.extern %}
+            <a class="knopf klein" style="margin: 0.3rem 1rem 0.8rem"
+               href="/meine-angebote/{{ a.id }}/pdf" target="_blank">Angebots-PDF</a>
+            {% endif %}
+        </li>
+    {% endfor %}
+    </ul>
+    {% else %}
+    <p class="dezent">Noch keine Angebote zu deinen Vorgängen.</p>
+    {% endif %}
+</div>
+{% endblock %}

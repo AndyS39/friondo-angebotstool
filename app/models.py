@@ -183,6 +183,11 @@ class Erfassung(Base):
     # (Freitext-Erfassung bzw. Wechsel aus dem Katalog – Teilantworten bleiben)
     typ: Mapped[str] = mapped_column(String(10), default="katalog")
     freitext: Mapped[str] = mapped_column(Text, default="")
+    # Multi-Sparten (v8): je Sparte (WP/PV/KL/WB) eine eigene Erfassung;
+    # lead_id verknüpft ALLE Erfassungen eines Leads (Lead.erfassung_id
+    # bleibt als Alt-Verknüpfung der ersten/WP-Erfassung bestehen)
+    sparte: Mapped[str] = mapped_column(String(4), default="WP")
+    lead_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     abgesendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
@@ -289,12 +294,25 @@ class Lead(Base):
     # benutzer_id dann nicht mehr aus der monday-Personen-Spalte
     benutzer_manuell: Mapped[bool] = mapped_column(Boolean, default=False)
     vertriebskanal: Mapped[str] = mapped_column(String(100), default="")   # v6, aus monday
+    # Multi-Sparten (v8): einzelne Interessen ausblendbar (Kommaliste, z. B.
+    # "PV,WB"); der Lead verschwindet erst, wenn alle Interessen erfasst
+    # oder ausgeblendet sind. Ganz ausblenden weiterhin über `ausgeblendet`.
+    ausgeblendet_sparten: Mapped[str] = mapped_column(String(50), default="")
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
                                                      onupdate=datetime.now)
 
     @property
     def interessen(self) -> list[str]:
         return interesse_liste(self.interesse)
+
+    @property
+    def sparten(self) -> list[str]:
+        """v8: die zu erfassenden Sparten – die Lead-Interessen, sonst WP."""
+        return self.interessen or ["WP"]
+
+    @property
+    def ausgeblendete_sparten(self) -> list[str]:
+        return interesse_liste(self.ausgeblendet_sparten)
 
     @property
     def anzeige_name(self) -> str:

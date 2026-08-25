@@ -151,9 +151,8 @@ async def status_aendern(request: Request, erfassung_id: int,
     erfassung = session.get(Erfassung, erfassung_id)
     if erfassung is not None and form.get("status") in ERFASSUNG_STATUS:
         erfassung.status = form.get("status")
-        # v7: nur der Abschluss der TAIFUN-Kette archiviert automatisch
-        if erfassung.status == "Erledigt (extern)":
-            erfassung.archiviert = True
+        # v8: kein Auto-Archiv mehr – „Erledigt (extern)“ erscheint im
+        # Reiter „Erledigt“, archiviert wird nur noch manuell
         session.commit()
     return RedirectResponse(f"/erfassungen/{erfassung_id}", status_code=303)
 
@@ -237,8 +236,7 @@ async def extern_erledigt(request: Request, erfassung_id: int,
         except ValueError:
             pass
     erfassung.angebot_id = angebot.id
-    erfassung.status = "Erledigt (extern)"
-    erfassung.archiviert = True
+    erfassung.status = "Erledigt (extern)"   # v8: Archiv erst manuell
     _kette_protokollieren(erfassung, request.state.benutzer,
                           f"Extern erledigt – TAIFUN-Eintrag über {endbetrag / 100:.2f} €"
                           + (f", Nr. {angebot.taifun_nummer}" if angebot.taifun_nummer

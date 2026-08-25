@@ -388,10 +388,10 @@ def main():
     s.expire_all(); v7e = s.get(Erfassung, v7e_id)
     v7a = s.get(Angebot, v7e.angebot_id)
     werte_v7 = json.loads(monday_aufrufe[0]["werte"]) if monday_aufrufe else {}
-    pruefe("v7", "Extern erledigt → TAIFUN-Eintrag + Erfassung archiviert",
+    pruefe("v7", "Extern erledigt → TAIFUN-Eintrag, Erfassung erledigt (v8: ohne Auto-Archiv)",
            v7a is not None and v7a.extern and v7a.status == "Versendet (extern)"
            and v7a.summen()["endbetrag"] == 2500000
-           and v7e.status == "Erledigt (extern)" and v7e.archiviert)
+           and v7e.status == "Erledigt (extern)" and not v7e.archiviert)
     pruefe("v7", "monday-Rückspielung beim Anlegen (Trockenlauf)",
            v7a.monday_rueck_status == "ok" and werte_v7.get("zahlen") == "25000.00")
     liste_html = client.get("/angebote", params={"status": "Versendet (extern)"}).text

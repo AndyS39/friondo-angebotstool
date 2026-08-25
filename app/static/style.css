@@ -798,3 +798,11 @@ tr.bauseits td { color: #888; }
     border: 1px solid #d4d9e4; border-radius: 8px; background: #f8f9fc; }
 .foerder-bausteine { display: flex; flex-wrap: wrap; gap: 0.9rem; margin-top: 0.5rem; }
 .feld-mit-reset { display: inline-flex; gap: 0.25rem; align-items: center; }
+
+/* v8: Sparten-Chips an Leads */
+.sparten-chips { display: inline-flex; gap: 0.25rem; flex-wrap: wrap; margin-left: 0.3rem; }
+.chip { border: 1px solid #d4d9e4; border-radius: 999px; padding: 0.1rem 0.55rem;
+    font-size: 0.78rem; background: #f4f6fa; cursor: pointer; }
+.chip-erfasst { background: #e8f4e5; color: #4c9a3d; border-color: #bfe0b5; cursor: default; }
+.chip-offen { background: #fdf3e0; color: #ad7a12; border-color: #ecd9ab; }
+.chip-ausgeblendet { background: #eee; color: #888; text-decoration: line-through; }

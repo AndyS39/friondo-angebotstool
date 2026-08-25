@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from app.auth import RollenMiddleware, standardbenutzer_anlegen
 from app.db import init_db
 from app.routers import (angebote, anmeldung, artikel, benutzer, erfassung,
+                         meine_angebote,
                          erfassungsliste, konfiguration, konfigurator, kunden,
                          leads, signatur, statistik, versand)
 from app.templating import render
@@ -54,6 +55,7 @@ app.include_router(konfiguration.router)
 app.include_router(konfigurator.router)
 app.include_router(angebote.router)
 app.include_router(statistik.router)
+app.include_router(meine_angebote.router)
 app.include_router(versand.router)
 
 
@@ -96,16 +98,9 @@ async def startseite(request: Request):
 
 
 def _offene_leads_anzahl(session) -> int:
-    """Leads mit VOT-Datum, deren Erfassung fehlt oder noch Entwurf ist."""
-    from sqlalchemy import or_
-
-    from app.models import Erfassung, Lead
-    return (session.query(Lead)
-            .outerjoin(Erfassung, Lead.erfassung_id == Erfassung.id)
-            .filter(Lead.vot_datum.isnot(None))
-            .filter(Lead.ausgeblendet.is_(False))
-            .filter(or_(Lead.erfassung_id.is_(None), Erfassung.status == "Entwurf"))
-            .count())
+    """v8: Leads mit VOT-Datum, bei denen noch mindestens eine Sparte offen ist."""
+    from app.routers.leads import offene_leads
+    return len(offene_leads(session))
 
 
 @app.get("/konfiguration")

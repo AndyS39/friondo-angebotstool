@@ -139,6 +139,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "ausgeblendet_am": "DATETIME",
         "benutzer_manuell": "BOOLEAN NOT NULL DEFAULT 0",
         "vertriebskanal": "VARCHAR(100) NOT NULL DEFAULT ''",
+        "ausgeblendet_sparten": "VARCHAR(50) NOT NULL DEFAULT ''",
         "angelegt_am": "DATETIME",
     },
     "erfassungen": {
@@ -146,6 +147,8 @@ _NACHTRAEGLICHE_SPALTEN = {
         "archiviert": "BOOLEAN NOT NULL DEFAULT 0",
         "typ": "VARCHAR(10) NOT NULL DEFAULT 'katalog'",
         "freitext": "TEXT NOT NULL DEFAULT ''",
+        "sparte": "VARCHAR(4) NOT NULL DEFAULT 'WP'",
+        "lead_id": "INTEGER",
     },
     "monday_quellen": {
         "rueck_modus": "VARCHAR(10) NOT NULL DEFAULT 'aus'",

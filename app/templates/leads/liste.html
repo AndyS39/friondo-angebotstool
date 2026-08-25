@@ -77,7 +77,19 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
     {% for lead in leads %}
         <tr>
             <td>{{ lead.vot_datum.strftime('%d.%m.%Y %H:%M') if lead.vot_datum }}</td>
-            <td>{{ lead.anzeige_name }} {{ interesse_ui.badges(lead.interessen) }}</td>
+            <td>{{ lead.anzeige_name }}
+                <span class="sparten-chips">
+                {% for sparte, status in chips.get(lead.id, []) %}
+                    <form method="post" action="/leads/{{ lead.id }}/sparte-ausblenden" style="display:inline">
+                        <input type="hidden" name="sparte" value="{{ sparte }}">
+                        <button class="chip chip-{{ status }}" type="submit"
+                                title="{{ sparte }}: {{ status }} – klicken zum {{ 'Zurückholen' if status == 'ausgeblendet' else 'Ausblenden' }} dieser Sparte"
+                                {{ 'disabled' if status == 'erfasst' }}>
+                            {{ sparte }} {{ '✓' if status == 'erfasst' else ('✕' if status == 'ausgeblendet' else 'offen') }}
+                        </button>
+                    </form>
+                {% endfor %}
+                </span></td>
             <td>{{ lead.plz }} {{ lead.ort }}</td>
             <td class="dezent">{{ lead.vertriebskanal or '–' }}</td>
             <td>
