@@ -236,19 +236,8 @@ async def erfassen(request: Request, lead_id: int,
 
     # Kunde ist seit Phase 24 schon per Sync angelegt; Abgleich hier als Fallback
     from app.monday_sync import kunde_fuer_lead
-    kunde = kunde_fuer_lead(session, lead)
-
-    if lead.erfassung_id:
-        erfassung = session.get(Erfassung, lead.erfassung_id)
-        if erfassung is not None and erfassung.status == "Entwurf":
-            session.commit()
-            return RedirectResponse(
-                f"/erfassung/{erfassung.id}/seite/{erfassung.seite_index}",
-                status_code=303)
-    erfassung = Erfassung(kunde_id=kunde.id, benutzer_id=benutzer.id,
-                          lead_id=lead.id)   # v8: n:1-Verknüpfung je Sparte
-    session.add(erfassung)
-    session.flush()
-    lead.erfassung_id = erfassung.id
+    kunde_fuer_lead(session, lead)
     session.commit()
-    return RedirectResponse(f"/erfassung/{erfassung.id}/weiche", status_code=303)
+    # v8: erst die Sparten-Auswahl (Lead-Interessen vorausgewählt); dort sind
+    # auch offene Entwürfe des Leads zum Fortsetzen verlinkt
+    return RedirectResponse(f"/erfassung/sparten?lead_id={lead.id}", status_code=303)

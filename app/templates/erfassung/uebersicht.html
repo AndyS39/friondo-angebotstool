@@ -16,6 +16,7 @@
                 <span class="dezent">{{ e.angelegt_am.strftime('%d.%m.%Y %H:%M') }} ·
                 {% if e.status == 'Entwurf' %}Entwurf – fortsetzen
                 {% else %}abgesendet ({{ e.status }})
+                    · <span class="abzeichen">{{ e.sparte or 'WP' }}</span>
                     {% if e.typ == 'freitext' %}· <span class="abzeichen">Freitext</span>{% endif %}
                     {% if e.ampel == 'orange' %}· <span class="ampel orange">Individuell</span>
                     {% else %}· <span class="ampel gruen">Konfigurierbar</span>{% endif %}

@@ -20,6 +20,12 @@
 <form method="get" action="/erfassungen" class="suchleiste">
     <input type="hidden" name="status" value="{{ status }}">
     <input type="text" name="q" value="{{ q }}" placeholder="Suche: Kunde, Vertriebler">
+    <select name="sparte" title="Sparte">
+        <option value="">Alle Sparten</option>
+        {% for s in ('WP', 'PV', 'KL', 'WB') %}
+            <option value="{{ s }}" {{ 'selected' if sparte == s }}>{{ s }}</option>
+        {% endfor %}
+    </select>
     <select name="ampel">
         <option value="">Alle Ampeln</option>
         <option value="gruen" {{ 'selected' if ampel == 'gruen' }}>Konfigurierbar</option>
@@ -50,6 +56,7 @@
                 {% if e.kunde_id in kunden and kunden[e.kunde_id].vertriebskanal %}
                     <span class="abzeichen">{{ kunden[e.kunde_id].vertriebskanal }}</span>
                 {% endif %}
+                <span class="abzeichen">{{ e.sparte or 'WP' }}</span>
                 {% if e.typ == 'freitext' %}<span class="abzeichen">Freitext</span>{% endif %}
                 {% if e.id in bemerkungen %}
                     <span class="bemerkung-symbol" title="{{ bemerkungen[e.id] | truncate(300) }}">📝</span>

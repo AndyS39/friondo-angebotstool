@@ -5,6 +5,7 @@
 {% block inhalt %}
 <div class="seitenkopf">
     <h1><span class="abzeichen">TAIFUN</span>
+        {% if angebot.konfigurator_typ and angebot.konfigurator_typ != 'WP' %}<span class="abzeichen">{{ angebot.konfigurator_typ }}</span>{% endif %}
         Externer Angebotseintrag
         {% if angebot.taifun_nummer %}{{ angebot.taifun_nummer }}
         {% else %}<span class="abzeichen ep" title="TAIFUN-Angebotsnummer nachtragen">Nummer fehlt</span>{% endif %}

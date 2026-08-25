@@ -29,9 +29,11 @@ def _kontext(session: Session, erfassungen):
 
 @router.get("")
 async def liste(request: Request, q: str = "", status: str = "", ampel: str = "",
-                interesse: str = "", vertriebler_id: int = 0,
+                interesse: str = "", vertriebler_id: int = 0, sparte: str = "",
                 session: Session = Depends(get_session)):
     abfrage = session.query(Erfassung).filter(Erfassung.status != "Entwurf")
+    if sparte:   # Sparten-Filter (v8)
+        abfrage = abfrage.filter(Erfassung.sparte == sparte)
     # Archiv (v6): Standardansicht ohne archivierte, Filter „Archiv“ nur diese;
     # v7: Tabs Offen · Individuell – zu prüfen · In TAIFUN zu schreiben ·
     # Erledigt · Archiv (Sammelwerte offen/erledigt/individuell-offen)
@@ -78,7 +80,7 @@ async def liste(request: Request, q: str = "", status: str = "", ampel: str = ""
     return render(request, "erfassungen/liste.html", aktiv="/erfassungen",
                   erfassungen=erfassungen, kunden=kunden, benutzer_map=benutzer,
                   angebote=angebote, q=q, status=status, ampel=ampel,
-                  interesse=interesse, vertriebler_id=vertriebler_id,
+                  interesse=interesse, vertriebler_id=vertriebler_id, sparte=sparte,
                   vertriebler_werte=vertriebler_werte,
                   bemerkungen=bemerkungen, status_liste=ERFASSUNG_STATUS,
                   meldung=request.query_params.get("meldung", ""))
@@ -90,7 +92,9 @@ async def detail(request: Request, erfassung_id: int,
     erfassung = session.get(Erfassung, erfassung_id)
     if erfassung is None:
         return RedirectResponse("/erfassungen", status_code=303)
+    from app.logik import logik_fuer_sparte
     logik, _ = logik_modul.hole_logik(session)
+    logik = logik_fuer_sparte(logik, erfassung.sparte or "WP") or logik   # v8
     antworten = json.loads(erfassung.antworten_json or "{}")
     prot = engine.protokoll(logik, antworten)
     kunde = session.get(Kunde, erfassung.kunde_id)
@@ -120,12 +124,15 @@ async def protokoll_pdf(erfassung_id: int, session: Session = Depends(get_sessio
     erfassung = session.get(Erfassung, erfassung_id)
     if erfassung is None:
         return RedirectResponse("/erfassungen", status_code=303)
+    from app.logik import logik_fuer_sparte
     logik, _ = logik_modul.hole_logik(session)
+    logik = logik_fuer_sparte(logik, erfassung.sparte or "WP") or logik   # v8
     antworten = json.loads(erfassung.antworten_json or "{}")
     prot = engine.protokoll(logik, antworten)
     kunde = session.get(Kunde, erfassung.kunde_id)
     vertriebler = session.get(Benutzer, erfassung.benutzer_id)
     kopf = [
+        ("Sparte", erfassung.sparte or "WP"),
         ("Kunde", kunde.anzeige_name if kunde else "?"),
         ("Adresse", f"{kunde.strasse}, {kunde.plz} {kunde.ort}".strip(", ") if kunde else ""),
         ("Vertriebler", vertriebler.name if vertriebler else "?"),

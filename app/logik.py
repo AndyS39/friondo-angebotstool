@@ -649,6 +649,18 @@ def artikel_pruefen(logik: Logik, session: Session, bericht: Pruefbericht) -> No
                 f"fehlt im Artikelstamm – referenziert in: {'; '.join(sorted(set(quellen)))}.")
 
 
+def logik_fuer_sparte(logik: Logik, sparte: str) -> Optional[Logik]:
+    """v8: Sicht auf die Logik für eine Sparte. WP = die volle Logik;
+    PV/KL = reiner Erfassungsbogen (eigene Fragen, keine Aktionen/Pakete);
+    WB oder unbekannt = None (nur Freitext möglich)."""
+    if sparte in ("", "WP"):
+        return logik
+    fragen = logik.sparten_fragen.get(sparte)
+    if not fragen:
+        return None
+    return Logik(fragen, [], [], [], logik.kfw, logik.geladen_am, [])
+
+
 # --- Cache / öffentliche API ---------------------------------------------
 
 _cache: dict = {"logik": None, "bericht": None}

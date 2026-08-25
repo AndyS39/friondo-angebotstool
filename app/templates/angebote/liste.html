@@ -34,6 +34,12 @@
         <option value="warm" {{ 'selected' if verfolgung == 'warm' }}>🌤 warm</option>
         <option value="kalt" {{ 'selected' if verfolgung == 'kalt' }}>❄ kalt</option>
     </select>
+    <select name="sparte" title="Sparte">
+        <option value="">Alle Sparten</option>
+        {% for s in ('WP', 'PV', 'KL', 'WB') %}
+            <option value="{{ s }}" {{ 'selected' if sparte == s }}>{{ s }}</option>
+        {% endfor %}
+    </select>
     {% if kanal_werte %}
     <select name="kanal" title="Vertriebskanal">
         <option value="">Alle Kanäle</option>
@@ -75,6 +81,7 @@
             <td>
                 {% if a.extern %}
                     <a href="/angebote/{{ a.id }}"><span class="abzeichen">TAIFUN</span>
+                        {% if a.konfigurator_typ and a.konfigurator_typ != 'WP' %}<span class="abzeichen">{{ a.konfigurator_typ }}</span>{% endif %}
                         {{ a.taifun_nummer or '' }}</a>
                     {% if not a.taifun_nummer %}<span class="abzeichen ep" title="TAIFUN-Angebotsnummer nachtragen">Nummer fehlt</span>{% endif %}
                 {% else %}

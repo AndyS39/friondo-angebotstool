@@ -163,20 +163,20 @@ Leiter | Gerüst erforderlich | Hubsteiger erforderlich).
 - [x] migrate.py: Chip-Status je Lead-Sparte
 
 ## Phase 50 – Multi-Sparten-Erfassung
-- [ ] Erfassungsstart: Sparten-Auswahl (Lead-Interessen vorausgewählt,
+- [x] Erfassungsstart: Sparten-Auswahl (Lead-Interessen vorausgewählt,
       weitere zuwählbar); je Sparte eigene Erfassung mit eigenem Protokoll
-- [ ] Weiche je Sparte: Katalog (WP aus „Fragen", PV aus „Fragen PV",
+- [x] Weiche je Sparte: Katalog (WP aus „Fragen", PV aus „Fragen PV",
       KL aus „Fragen KL") oder Freitext; „In Freitext wechseln" überall;
       WB startet immer direkt im Freitext
-- [ ] Fragetyp „Wiederholgruppe" generisch umsetzen (KO05 → n Raumblöcke;
+- [x] Fragetyp „Wiederholgruppe" generisch umsetzen (KO05 → n Raumblöcke;
       dynamische Optionsliste KR07 aus KO04); Darstellung in Ansicht und
       Protokoll-PDF sauber je Raum
-- [ ] PV-/KL-/WB-Erfassungen: immer Ampel „Individuell" (reine Erfassung),
+- [x] PV-/KL-/WB-Erfassungen: immer Ampel „Individuell" (reine Erfassung),
       Weg über Warteschlange → „Extern erledigt" → externer Angebotseintrag;
       Sparten-Badge an Erfassung, Warteschlange, Angebotseintrag
-- [ ] Filter nach Sparte in Erfassungsliste, Warteschlange, Angebotsliste;
+- [x] Filter nach Sparte in Erfassungsliste, Warteschlange, Angebotsliste;
       Statistik zusätzlich je Sparte
-- [ ] migrate.py: Sparte an Erfassung/Angebotseintrag; Bestandsdaten = WP
+- [x] migrate.py: Sparte an Erfassung/Angebotseintrag; Bestandsdaten = WP
 
 ## Phase 51 – Ablehnungsgründe & 90-Tage-Automatik
 - [ ] Pflichtdialog bei Statuswechsel auf „Abgelehnt" (Tool + extern):

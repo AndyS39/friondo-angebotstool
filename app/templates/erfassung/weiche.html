@@ -4,7 +4,9 @@
 
 {% block inhalt %}
 <div class="mobil-inhalt">
-    <p class="dezent">Kunde: <strong>{{ kunde.anzeige_name }}</strong></p>
+    <p class="dezent">Kunde: <strong>{{ kunde.anzeige_name }}</strong>
+        · Sparte: <span class="abzeichen">{{ erfassung.sparte }}</span>
+        {{ sparten_namen.get(erfassung.sparte, '') if sparten_namen is defined }}</p>
     <h1>Wie soll erfasst werden?</h1>
 
     <div class="weiche">

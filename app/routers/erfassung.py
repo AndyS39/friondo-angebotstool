@@ -12,11 +12,14 @@ from sqlalchemy.orm import Session
 from app import konfigurator as engine
 from app import logik as logik_modul
 from app.db import get_session
-from app.logik import FREITEXT_TYPEN
-from app.models import Erfassung, Kunde
+from app.logik import FREITEXT_TYPEN, logik_fuer_sparte
+from app.models import INTERESSE_CODES, Erfassung, Kunde
 from app.templating import render
 
 router = APIRouter(prefix="/erfassung")
+
+SPARTEN_NAMEN = {"WP": "Wärmepumpe", "PV": "Photovoltaik",
+                 "KL": "Klima", "WB": "Wallbox"}
 
 
 def _benutzer(request: Request):
@@ -27,9 +30,25 @@ def _antworten(erfassung: Erfassung) -> dict:
     return json.loads(erfassung.antworten_json or "{}")
 
 
-def _fragen_der_seite(logik, seite: str):
-    return [f for f in sorted(logik.fragen.values(), key=lambda f: f.reihenfolge)
-            if f.seite == seite]
+def _sparten_logik(session, erfassung: Erfassung):
+    """v8: die Logik-Sicht für die Sparte der Erfassung (None = nur Freitext)."""
+    logik, bericht = logik_modul.hole_logik(session)
+    return logik_fuer_sparte(logik, erfassung.sparte or "WP"), bericht
+
+
+def _fragen_der_seite(logik, seite: str, antworten: dict | None = None):
+    """Fragen einer Katalogseite; Wiederholgruppen (v8, z. B. „je Raum“)
+    werden anhand der Zählfrage zu Klonen KR01#1, KR01#2 … expandiert."""
+    ergebnis = []
+    for f in sorted(logik.fragen.values(), key=lambda f: f.reihenfolge):
+        if f.seite != seite:
+            continue
+        if f.bedingung is not None and f.bedingung.art == "wiederholgruppe":
+            ergebnis.extend(engine._wiederhol_klone(f, antworten or {}, logik.fragen))
+        else:
+            ergebnis.append(f)
+    ergebnis.sort(key=lambda f: f.reihenfolge)
+    return ergebnis
 
 
 def _ist_optional(frage) -> bool:
@@ -114,22 +133,88 @@ async def neu(request: Request, session: Session = Depends(get_session)):
         return render(request, "erfassung/neu.html", aktiv=None, mobil=True,
                       benutzer=_benutzer(request), kunden=kunden,
                       fehler="Bitte Kunden wählen oder Name/Firma eingeben.")
-    erfassung = Erfassung(kunde_id=kunde.id, benutzer_id=_benutzer(request).id)
-    session.add(erfassung)
     session.commit()
-    return RedirectResponse(f"/erfassung/{erfassung.id}/weiche", status_code=303)
+    # v8: nach der Kundenwahl zuerst die Sparten-Auswahl
+    return RedirectResponse(f"/erfassung/sparten?kunde_id={kunde.id}", status_code=303)
+
+
+@router.get("/sparten")
+async def sparten_auswahl(request: Request, kunde_id: int = 0, lead_id: int = 0,
+                          session: Session = Depends(get_session)):
+    """v8: Sparten-Auswahl beim Erfassungsstart – Lead-Interessen sind
+    vorausgewählt, weitere Sparten zuwählbar; je Sparte entsteht eine
+    eigene Erfassung."""
+    from app.models import Lead
+    lead = session.get(Lead, lead_id) if lead_id else None
+    if lead is not None and not kunde_id:
+        kunde_id = lead.kunde_id
+    kunde = session.get(Kunde, kunde_id) if kunde_id else None
+    if kunde is None:
+        return RedirectResponse("/erfassung/neu", status_code=303)
+    vorausgewaehlt = set(lead.sparten) if lead else {"WP"}
+    erfasst: set[str] = set()
+    entwuerfe: list[Erfassung] = []
+    if lead is not None:
+        for e in (session.query(Erfassung)
+                  .filter(Erfassung.lead_id == lead.id)):
+            if e.status == "Entwurf":
+                entwuerfe.append(e)
+            else:
+                erfasst.add(e.sparte or "WP")
+    return render(request, "erfassung/sparten.html", aktiv=None, mobil=True,
+                  benutzer=_benutzer(request), kunde=kunde, lead=lead,
+                  sparten=INTERESSE_CODES, sparten_namen=SPARTEN_NAMEN,
+                  vorausgewaehlt=vorausgewaehlt - erfasst, erfasst=erfasst,
+                  entwuerfe=entwuerfe, fehler="")
+
+
+@router.post("/sparten-start")
+async def sparten_start(request: Request, session: Session = Depends(get_session)):
+    """v8: legt je gewählter Sparte eine eigene Erfassung an und öffnet die
+    erste (WB startet immer direkt im Freitext)."""
+    from app.models import Lead
+    form = await request.form()
+    kunde = session.get(Kunde, int(form.get("kunde_id") or 0))
+    lead = session.get(Lead, int(form.get("lead_id") or 0)) if form.get("lead_id") else None
+    if kunde is None:
+        return RedirectResponse("/erfassung/neu", status_code=303)
+    gewaehlt = [s for s in INTERESSE_CODES if form.get(f"sparte_{s}") == "on"]
+    if not gewaehlt:
+        return RedirectResponse(
+            f"/erfassung/sparten?kunde_id={kunde.id}&lead_id={lead.id if lead else 0}",
+            status_code=303)
+    neu: list[Erfassung] = []
+    for sparte in gewaehlt:
+        erfassung = Erfassung(kunde_id=kunde.id, benutzer_id=_benutzer(request).id,
+                              sparte=sparte, konfigurator_typ=sparte,
+                              lead_id=lead.id if lead else None)
+        session.add(erfassung)
+        neu.append(erfassung)
+    session.flush()
+    if lead is not None and lead.erfassung_id is None:
+        lead.erfassung_id = neu[0].id   # Alt-Verknüpfung (erste Erfassung)
+    session.commit()
+    erste = neu[0]
+    if erste.sparte == "WB":   # Wallbox: vorerst immer Freitext
+        return RedirectResponse(f"/erfassung/{erste.id}/freitext", status_code=303)
+    return RedirectResponse(f"/erfassung/{erste.id}/weiche", status_code=303)
 
 
 @router.get("/{erfassung_id}/weiche")
 async def weiche(request: Request, erfassung_id: int,
                  session: Session = Depends(get_session)):
-    """Startweiche (v7): Erfassungsbogen (Katalog) oder Freitext-Erfassung."""
+    """Startweiche (v7): Erfassungsbogen (Katalog) oder Freitext-Erfassung.
+    v8: je Sparte – WB (oder Sparten ohne Bogen) startet direkt im Freitext."""
     erfassung = _erfassung_laden(request, erfassung_id, session)
     if erfassung is None:
         return RedirectResponse("/erfassung", status_code=303)
+    slogik, _ = _sparten_logik(session, erfassung)
+    if slogik is None:   # WB o. Ä.: kein Katalog vorhanden
+        return RedirectResponse(f"/erfassung/{erfassung.id}/freitext", status_code=303)
     kunde = session.get(Kunde, erfassung.kunde_id)
     return render(request, "erfassung/weiche.html", aktiv=None, mobil=True,
-                  benutzer=_benutzer(request), erfassung=erfassung, kunde=kunde)
+                  benutzer=_benutzer(request), erfassung=erfassung, kunde=kunde,
+                  sparten_namen=SPARTEN_NAMEN)
 
 
 @router.get("/{erfassung_id}/freitext")
@@ -190,7 +275,9 @@ async def seite(request: Request, erfassung_id: int, nr: int,
     erfassung = _erfassung_laden(request, erfassung_id, session)
     if erfassung is None:
         return RedirectResponse("/erfassung", status_code=303)
-    logik, bericht = logik_modul.hole_logik(session)
+    logik, bericht = _sparten_logik(session, erfassung)
+    if logik is None:
+        return RedirectResponse(f"/erfassung/{erfassung.id}/freitext", status_code=303)
     if not bericht.ok:
         return render(request, "konfigurator/logikfehler.html", aktiv=None,
                       bericht=bericht)
@@ -198,7 +285,7 @@ async def seite(request: Request, erfassung_id: int, nr: int,
     nr = max(0, min(nr, len(seiten) - 1))
     antworten = _antworten(erfassung)
     kunde = session.get(Kunde, erfassung.kunde_id)
-    fragen = _fragen_der_seite(logik, seiten[nr])
+    fragen = _fragen_der_seite(logik, seiten[nr], antworten)
     sichtbar = {f.id: engine.ist_sichtbar(f, antworten, logik.fragen) for f in fragen}
     werte = {}
     for f in fragen:
@@ -221,13 +308,15 @@ async def seite_speichern(request: Request, erfassung_id: int, nr: int,
     erfassung = _erfassung_laden(request, erfassung_id, session)
     if erfassung is None:
         return RedirectResponse("/erfassung", status_code=303)
-    logik, _ = logik_modul.hole_logik(session)
+    logik, _ = _sparten_logik(session, erfassung)
+    if logik is None:
+        return RedirectResponse(f"/erfassung/{erfassung.id}/freitext", status_code=303)
     seiten = logik.seiten
     nr = max(0, min(nr, len(seiten) - 1))
     form = await request.form()
     antworten = _antworten(erfassung)
     antworten_vorher = dict(antworten)
-    fragen = _fragen_der_seite(logik, seiten[nr])
+    fragen = _fragen_der_seite(logik, seiten[nr], antworten)
 
     fehler: dict[str, str] = {}
     for frage in fragen:
@@ -352,7 +441,9 @@ async def pruefen(request: Request, erfassung_id: int,
     erfassung = _erfassung_laden(request, erfassung_id, session)
     if erfassung is None:
         return RedirectResponse("/erfassung", status_code=303)
-    logik, _ = logik_modul.hole_logik(session)
+    logik, _ = _sparten_logik(session, erfassung)
+    if logik is None:
+        return RedirectResponse(f"/erfassung/{erfassung.id}/freitext", status_code=303)
     antworten = _antworten(erfassung)
     offen = engine.naechste_frage(logik, antworten)
     prot = engine.protokoll(logik, antworten)
@@ -370,10 +461,23 @@ async def absenden(request: Request, erfassung_id: int,
     erfassung = _erfassung_laden(request, erfassung_id, session)
     if erfassung is None:
         return RedirectResponse("/erfassung", status_code=303)
-    logik, _ = logik_modul.hole_logik(session)
+    logik, _ = _sparten_logik(session, erfassung)
+    if logik is None:
+        return RedirectResponse(f"/erfassung/{erfassung.id}/freitext", status_code=303)
     antworten = _antworten(erfassung)
     if engine.naechste_frage(logik, antworten) is not None:
         return RedirectResponse(f"/erfassung/{erfassung.id}/pruefen", status_code=303)
+    if erfassung.sparte not in ("", "WP"):
+        # v8: PV/KL sind reine Erfassungen – immer individuell, direkt in
+        # die TAIFUN-Warteschlange (das Angebot entsteht extern)
+        erfassung.ampel = "orange"
+        erfassung.gruende_text = (f"reine {erfassung.sparte}-Erfassung – "
+                                  "das Angebot wird in TAIFUN geschrieben")
+        erfassung.status = "In TAIFUN zu schreiben"
+        erfassung.abgesendet_am = datetime.now()
+        session.commit()
+        return render(request, "erfassung/fertig.html", aktiv=None, mobil=True,
+                      benutzer=_benutzer(request), erfassung=erfassung)
     gruende = engine.ampel_gruende(logik, antworten)
     erfassung.ampel = "orange" if gruende else "gruen"
     erfassung.gruende_text = "\n".join(gruende)

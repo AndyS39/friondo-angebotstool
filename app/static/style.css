@@ -806,3 +806,6 @@ tr.bauseits td { color: #888; }
 .chip-erfasst { background: #e8f4e5; color: #4c9a3d; border-color: #bfe0b5; cursor: default; }
 .chip-offen { background: #fdf3e0; color: #ad7a12; border-color: #ecd9ab; }
 .chip-ausgeblendet { background: #eee; color: #888; text-decoration: line-through; }
+
+/* v8: Sparten-Auswahl */
+.wahl-erledigt { opacity: 0.55; }

@@ -31,7 +31,7 @@
             {% endif %}
         </select>
     </form>
-    · Konfigurator: <span class="abzeichen">{{ erfassung.konfigurator_typ or 'WP' }}</span>
+    · Sparte: <span class="abzeichen">{{ erfassung.sparte or 'WP' }}</span>
     · Erfassungsart: <span class="abzeichen">{{ 'Freitext' if erfassung.typ == 'freitext' else 'Katalog' }}</span>
     {% if kunde and kunde.interessen %}· Interesse: {{ interesse_ui.badges(kunde.interessen) }}{% endif %}
     · Ampel:

@@ -77,6 +77,7 @@ def kennzahlen(session: Session, von: datetime, bis: datetime,
     gesamt = _leer()
     je_ad: dict[int, dict] = {}
     je_kanal: dict[str, dict] = {}
+    je_sparte: dict[str, dict] = {}   # v8: WP/PV/KL/WB
     zuordnung = _vertriebler_map(session)
     kunden = {k.id: k for k in session.query(Kunde)}
 
@@ -85,20 +86,19 @@ def kennzahlen(session: Session, von: datetime, bis: datetime,
             sammlung[schluessel] = _leer()
         return sammlung[schluessel]
 
-    def zaehle(feld, ad_id, kanal, betrag=None):
+    def zaehle(feld, ad_id, kanal, betrag=None, sparte=""):
         if nur_benutzer_id is not None and ad_id != nur_benutzer_id:
             return
-        for ziel in ([gesamt, topf(je_ad, ad_id)] if ad_id else [gesamt]):
+        ziele = [gesamt] + ([topf(je_ad, ad_id)] if ad_id else [])
+        if kanal:
+            ziele.append(topf(je_kanal, kanal))
+        if sparte:
+            ziele.append(topf(je_sparte, sparte))
+        for ziel in ziele:
             ziel[feld] += 1
             if betrag:
                 for name, wert in betrag.items():
                     ziel[name] += wert
-        if kanal:
-            k = topf(je_kanal, kanal)
-            k[feld] += 1
-            if betrag:
-                for name, wert in betrag.items():
-                    k[name] += wert
 
     for lead in session.query(Lead).filter(Lead.angelegt_am >= von,
                                            Lead.angelegt_am < bis):
@@ -106,35 +106,36 @@ def kennzahlen(session: Session, von: datetime, bis: datetime,
     for erf in session.query(Erfassung).filter(Erfassung.abgesendet_am >= von,
                                                Erfassung.abgesendet_am < bis):
         kanal = kunden[erf.kunde_id].vertriebskanal if erf.kunde_id in kunden else ""
-        zaehle("erfassungen", erf.benutzer_id, kanal)
+        zaehle("erfassungen", erf.benutzer_id, kanal, sparte=erf.sparte or "WP")
     for a in session.query(Angebot):
         ad_id = zuordnung.get(a.id)
         kanal = kunden[a.kunde_id].vertriebskanal if a.kunde_id in kunden else ""
+        a_sparte = a.konfigurator_typ or "WP"
         summen = None
         if von <= a.angelegt_am < bis:
-            zaehle("erstellt", ad_id, kanal)
+            zaehle("erstellt", ad_id, kanal, sparte=a_sparte)
             if a.extern:
-                zaehle("x_erstellt", ad_id, kanal)
+                zaehle("x_erstellt", ad_id, kanal, sparte=a_sparte)
         if a.versendet_am and von <= a.versendet_am < bis:
             summen = a.summen()
             betrag = {"summe_versendet": summen["endbetrag"]}
             if not a.extern:   # DB gibt es nur für Tool-Angebote (v7)
                 betrag["db"] = a.deckungsbeitrag()["db"]
-            zaehle("versendet", ad_id, kanal, betrag)
+            zaehle("versendet", ad_id, kanal, betrag, sparte=a_sparte)
             if a.extern:
                 zaehle("x_versendet", ad_id, kanal,
-                       {"x_summe_versendet": summen["endbetrag"]})
+                       {"x_summe_versendet": summen["endbetrag"]}, sparte=a_sparte)
         if a.angenommen_am and von <= a.angenommen_am < bis:
             summen = summen or a.summen()
             zaehle("angenommen", ad_id, kanal,
-                   {"summe_angenommen": summen["endbetrag"]})
+                   {"summe_angenommen": summen["endbetrag"]}, sparte=a_sparte)
             if a.extern:
                 zaehle("x_angenommen", ad_id, kanal,
-                       {"x_summe_angenommen": summen["endbetrag"]})
+                       {"x_summe_angenommen": summen["endbetrag"]}, sparte=a_sparte)
         if a.abgelehnt_am and von <= a.abgelehnt_am < bis:
-            zaehle("abgelehnt", ad_id, kanal)
+            zaehle("abgelehnt", ad_id, kanal, sparte=a_sparte)
             if a.extern:
-                zaehle("x_abgelehnt", ad_id, kanal)
+                zaehle("x_abgelehnt", ad_id, kanal, sparte=a_sparte)
 
     def quote(topf_):
         topf_["quote"] = (topf_["angenommen"] / topf_["versendet"] * 100
@@ -149,7 +150,10 @@ def kennzahlen(session: Session, von: datetime, bis: datetime,
         quote(t)
     for t in je_kanal.values():
         quote(t)
-    return {"gesamt": gesamt, "je_ad": je_ad, "je_kanal": je_kanal}
+    for t in je_sparte.values():
+        quote(t)
+    return {"gesamt": gesamt, "je_ad": je_ad, "je_kanal": je_kanal,
+            "je_sparte": je_sparte}
 
 
 @router.get("")
@@ -164,10 +168,14 @@ async def seite(request: Request, zeitraum: str = "monat", von: str = "",
                        key=lambda kv: benutzer_map[kv[0]].name
                        if kv[0] in benutzer_map else "")
     kanal_zeilen = sorted(daten["je_kanal"].items())
+    reihenfolge = {"WP": 0, "PV": 1, "KL": 2, "WB": 3}
+    sparten_zeilen = sorted(daten["je_sparte"].items(),
+                            key=lambda kv: reihenfolge.get(kv[0], 9))
     return render(request, "statistik.html", aktiv="/statistik",
                   mobil=benutzer.rolle == "aussendienst",
                   gesamt=daten["gesamt"], ad_zeilen=ad_zeilen,
-                  kanal_zeilen=kanal_zeilen, benutzer_map=benutzer_map,
+                  kanal_zeilen=kanal_zeilen, sparten_zeilen=sparten_zeilen,
+                  benutzer_map=benutzer_map,
                   eigene_ansicht=nur is not None,
                   zeitraum=zeitraum, zeitraeume=ZEITRAEUME,
                   von=start.strftime("%Y-%m-%d"),

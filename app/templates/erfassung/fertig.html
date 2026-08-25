@@ -5,9 +5,9 @@
 {% block inhalt %}
 <div class="mobil-inhalt">
     <h1>Erfassung abgesendet ✓</h1>
-    {% if erfassung.typ == 'freitext' %}
-    <p class="meldung">Vielen Dank! Die Freitext-Erfassung ist als
-    <strong>individuell</strong> markiert und liegt beim Innendienst in der
+    {% if erfassung.status == 'In TAIFUN zu schreiben' %}
+    <p class="meldung">Vielen Dank! Die {{ 'Freitext-' if erfassung.typ == 'freitext' else erfassung.sparte ~ '-' }}Erfassung
+    ist als <strong>individuell</strong> markiert und liegt beim Innendienst in der
     Warteschlange <strong>„In TAIFUN zu schreiben“</strong>.</p>
     {% else %}
     <p class="meldung">Vielen Dank! Die Erfassung liegt jetzt beim Innendienst

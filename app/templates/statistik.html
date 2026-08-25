@@ -100,6 +100,29 @@ externe TAIFUN-Einträge kennen nur den Endbetrag brutto.</p>
 </table>
 {% endif %}
 
+{% if sparten_zeilen %}
+<h2>Je Sparte</h2>
+<table class="tabelle">
+    <thead><tr><th>Sparte</th><th class="rechts">Erfassungen</th>
+        <th class="rechts">Angebote versendet</th><th class="rechts">Angenommen</th>
+        <th class="rechts" title="davon externe TAIFUN-Einträge (versendet/angenommen)">davon TAIFUN</th>
+        <th class="rechts">Summe versendet</th><th class="rechts">Quote</th></tr></thead>
+    <tbody>
+    {% for s, z in sparten_zeilen %}
+        <tr>
+            <td><span class="abzeichen">{{ s }}</span></td>
+            <td class="rechts">{{ z.erfassungen }}</td>
+            <td class="rechts">{{ z.versendet }}</td>
+            <td class="rechts">{{ z.angenommen }}</td>
+            <td class="rechts dezent">{{ z.x_versendet }}/{{ z.x_angenommen }}</td>
+            <td class="rechts">{{ z.summe_versendet | euro }}</td>
+            <td class="rechts">{{ ('%.0f' | format(z.quote)) }} %</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
 {% if kanal_zeilen %}
 <h2>Je Vertriebskanal</h2>
 <table class="tabelle">

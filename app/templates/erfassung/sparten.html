@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block titel %}Sparten wählen – Erfassung{% endblock %}
+
+{% block inhalt %}
+<div class="mobil-inhalt">
+    <p class="dezent">Kunde: <strong>{{ kunde.anzeige_name }}</strong>
+        {% if lead %}· Lead: {{ lead.anzeige_name }}{% endif %}</p>
+    <h1>Was soll erfasst werden?</h1>
+    <p class="dezent">Je Sparte entsteht eine eigene Erfassung mit eigenem Protokoll.
+    {% if lead %}Die Interessen des Leads sind vorausgewählt.{% endif %}</p>
+
+    {% if entwuerfe %}
+    <div class="hinweis">
+        <strong>Offene Entwürfe zu diesem Lead:</strong>
+        {% for e in entwuerfe %}
+            <a class="knopf klein zweitrangig" style="margin: 0.2rem"
+               href="/erfassung/{{ e.id }}/seite/{{ e.seite_index }}">{{ e.sparte }} fortsetzen</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/erfassung/sparten-start" class="mobil-formular">
+        <input type="hidden" name="kunde_id" value="{{ kunde.id }}">
+        {% if lead %}<input type="hidden" name="lead_id" value="{{ lead.id }}">{% endif %}
+        <div class="wahl-gruppe">
+        {% for s in sparten %}
+            <label class="wahl {{ 'wahl-erledigt' if s in erfasst }}">
+                <input type="checkbox" name="sparte_{{ s }}"
+                       {{ 'checked' if s in vorausgewaehlt }} {{ 'disabled' if s in erfasst }}>
+                <span>{{ s }} – {{ sparten_namen[s] }}{{ ' ✓ bereits erfasst' if s in erfasst }}
+                    {% if s == 'WB' %}<span class="dezent">(immer Freitext)</span>{% endif %}</span>
+            </label>
+        {% endfor %}
+        </div>
+        <div class="mobil-aktionen">
+            <a class="knopf zweitrangig gross" href="{{ '/leads' if lead else '/erfassung' }}">Abbrechen</a>
+            <button class="knopf gross" type="submit">Erfassung starten →</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

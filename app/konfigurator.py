@@ -109,9 +109,53 @@ def ist_sichtbar(frage: Frage, antworten: dict, fragen: dict[str, Frage]) -> boo
     return False
 
 
+MAX_WIEDERHOLUNGEN = 12   # v8: Obergrenze je Wiederholgruppe (z. B. Räume)
+
+
+def _wiederhol_klone(frage: Frage, antworten: dict,
+                     fragen: dict[str, Frage]) -> list[Frage]:
+    """v8: Fragen einer Wiederholgruppe („je Raum (KO05)“) je Zähler klonen.
+    Klon-IDs: „KR01#1“, „KR01#2“ … – normale Fragen für Seite, Prüfung und
+    Protokoll. Ein Hinweis wie „… Optionen wie … (KO04)“ begrenzt die
+    Auswahl dynamisch auf den Wert der referenzierten Zählfrage."""
+    from dataclasses import replace as _replace
+    b = frage.bedingung
+    anzahl = int(zahl_parsen(antworten.get(b.frage_id)) or 0)
+    anzahl = max(0, min(anzahl, MAX_WIEDERHOLUNGEN))
+    optionen = frage.antworten
+    m = re.search(r"Optionen wie .*\(([A-Z]{1,2}\d{2})\)", frage.hinweis)
+    if m:
+        limit = int(zahl_parsen(antworten.get(m.group(1))) or len(optionen))
+        optionen = optionen[:max(1, limit)]
+    # Sortierung: Raum 1 komplett, dann Raum 2 … – alle Klone liegen zwischen
+    # der ersten Gruppenfrage und der nächsten regulären Frage
+    gruppe = [f for f in fragen.values()
+              if f.bedingung and f.bedingung.art == "wiederholgruppe"
+              and f.bedingung.frage_id == b.frage_id]
+    basis = min(f.reihenfolge for f in gruppe)
+    breite = len(gruppe) * MAX_WIEDERHOLUNGEN + 1
+    idx = sorted(f.reihenfolge for f in gruppe).index(frage.reihenfolge)
+    klone = []
+    for i in range(1, anzahl + 1):
+        klone.append(_replace(
+            frage, id=f"{frage.id}#{i}",
+            text=f"Raum {i}: {frage.text}",
+            reihenfolge=basis + ((i - 1) * len(gruppe) + idx) / breite,
+            antworten=list(optionen),
+            bedingung=None))
+    return klone
+
+
 def sichtbare_fragen(logik: Logik, antworten: dict) -> list[Frage]:
-    return [f for f in sorted(logik.fragen.values(), key=lambda f: f.reihenfolge)
-            if ist_sichtbar(f, antworten, logik.fragen)]
+    ergebnis: list[Frage] = []
+    for f in sorted(logik.fragen.values(), key=lambda f: f.reihenfolge):
+        if f.bedingung is not None and f.bedingung.art == "wiederholgruppe":
+            ergebnis.extend(_wiederhol_klone(f, antworten, logik.fragen))
+            continue
+        if ist_sichtbar(f, antworten, logik.fragen):
+            ergebnis.append(f)
+    ergebnis.sort(key=lambda f: f.reihenfolge)
+    return ergebnis
 
 
 def naechste_frage(logik: Logik, antworten: dict) -> Optional[Frage]:
