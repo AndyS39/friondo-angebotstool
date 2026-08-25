@@ -195,8 +195,8 @@ Leiter | Gerüst erforderlich | Hubsteiger erforderlich).
 - [x] migrate.py: Ablehnungsgrund-Felder + Gründe-Tabelle
 
 ## Phase 52 – Migration, Abnahme & Rollout
-- [ ] migrate.py final: idempotent, zweimal gegen Kopie der echten DB
-- [ ] Regressionstests: bestehende Kontroll-Szenarien unverändert; NEU:
+- [x] migrate.py final: idempotent, zweimal gegen Kopie der echten DB
+- [x] Regressionstests: bestehende Kontroll-Szenarien unverändert; NEU:
       Heizlast 8,4 kW → 7-kW-Paket (kWh-Angabe wird ignoriert);
       Unterverteilung Ja + MID Ja → Pos. 152 + Z23; Wärmemengenzähler ×3 →
       Pos. 096 ×3 (keine EP-Kennung); Öl/Stahl + Stemmarbeiten → Pos. 126;
@@ -204,5 +204,5 @@ Leiter | Gerüst erforderlich | Hubsteiger erforderlich).
       Zeile); Klima-Erfassung mit 2 Außengeräten und 3 Räumen
       (Wiederholgruppe, KR07 zeigt nur 1–2); Ablehnung mit Grund;
       90-Tage-Lauf im Trockenmodus
-- [ ] Abnahmeskript v8-Block; git push → Rollout per update.bat →
+- [x] Abnahmeskript v8-Block; git push → Rollout per update.bat →
       docs/nach-dem-update-v8.md abarbeiten

@@ -53,7 +53,8 @@ def vorab_aufraeumen(s):
         s.delete(k)
     for b in s.query(Benutzer).filter(Benutzer.name.in_(["AD Abnahme", "Abn V6"])):
         s.delete(b)
-    for l in s.query(Lead).filter(Lead.monday_item_id.in_(["abn-lead", "abn-v6", "abn-v7"])):
+    for l in s.query(Lead).filter(Lead.monday_item_id.in_(
+            ["abn-lead", "abn-v6", "abn-v7", "abn-v8"])):
         s.delete(l)
     s.query(MondayPerson).filter_by(monday_name="abn.v6@friondo.de").delete()
     from app.models import MondayQuelle
@@ -280,10 +281,13 @@ def main():
            all(w in client.get("/angebote").text for w in ("Summe (", "Netto:", "Endbetrag (brutto):", "DB:")))
     # Förder-Override + EP-Kästchen (auf dem Rabatt-Angebot ang)
     a2 = s.get(Angebot, indiv.id); a2.status = "Entwurf"; a2.archiviert = False; s.commit()
-    client.post(f"/angebote/{ang.id}/foerderung", data={"betrag": "12.345,00"})
+    # v8: der v6-Gesamt-Override ist durch Baustein-Overrides ersetzt –
+    # geprüft wird hier der Höchstkosten-Baustein (Betrag in €)
+    client.post(f"/angebote/{ang.id}/foerderung", data={"hoechstkosten": "12.345,00"})
     s.expire_all()
-    pruefe("v6", "Förderbetrag manuell überschreibbar", s.get(Angebot, ang.id).foerderung_manuell_cent == 1234500)
-    client.post(f"/angebote/{ang.id}/foerderung", data={"betrag": ""})
+    pruefe("v6", "Förderung manuell überschreibbar (v8: Bausteine)",
+           s.get(Angebot, ang.id).foerder_hoechstkosten_cent == 1234500)
+    client.post(f"/angebote/{ang.id}/foerderung", data={})
     pos1 = s.get(Angebot, ang.id).positionen[0]
     client.post(f"/angebote/{ang.id}/position/{pos1.id}/aendern",
                 data={"anzeige_nr": "", "menge": "", "e_preis": "", "rabatt_wert": "", "rabatt_typ": "betrag", "ep_flag": "on"})
@@ -336,12 +340,17 @@ def main():
 
     from app.models import MondayQuelle
     # Startweiche + Freitext → direkt in die TAIFUN-Warteschlange
+    # (seit v8 liegt vor der Weiche die Sparten-Auswahl)
     antwort = client.post("/erfassung/neu", data={"kunde_id": str(kunde_t.id)},
+                          follow_redirects=False)
+    ueber_sparten = "/erfassung/sparten" in antwort.headers["location"]
+    antwort = client.post("/erfassung/sparten-start",
+                          data={"kunde_id": str(kunde_t.id), "sparte_WP": "on"},
                           follow_redirects=False)
     v7e_id = int(antwort.headers["location"].split("/")[2])
     weiche_html = client.get(f"/erfassung/{v7e_id}/weiche").text
-    pruefe("v7", "Startweiche mit beiden Wegen",
-           "/weiche" in antwort.headers["location"]
+    pruefe("v7", "Startweiche mit beiden Wegen (über Sparten-Auswahl)",
+           ueber_sparten and "/weiche" in antwort.headers["location"]
            and "Erfassungsbogen starten" in weiche_html
            and "Freitext-Erfassung" in weiche_html)
     client.post(f"/erfassung/{v7e_id}/freitext", data={"freitext": "Abnahme-Sonderfall v7"})
@@ -406,6 +415,73 @@ def main():
         Path(f"data/angebote/protokoll-erfassung-{eid}.pdf").unlink(missing_ok=True)
     s.delete(v7a); s.delete(v7e); s.delete(s.get(Erfassung, v7k.id)); s.delete(v7alt)
     s.delete(s.get(Lead, v7lead.id)); s.delete(s.get(MondayQuelle, v7quelle.id))
+    s.commit()
+
+    # ---------- 10) v8-Abnahme: Multi-Sparten, Heizlast, Ablehnung ----------
+    from app import ablauf_pruefung
+    from app.models import AblehnungsGrund, AngebotsNotiz as AN8
+    # Multi-Sparten: Lead mit PV+KL → Sparten-Auswahl, je Sparte eigene Erfassung
+    v8lead = Lead(monday_item_id="abn-v8", vorname="V8", nachname="Abnahme",
+                  interesse="PV,KL", kunde_id=kunde_t.id,
+                  vot_datum=datetime.datetime.now())
+    s.add(v8lead); s.commit()
+    antwort = client.get(f"/leads/{v8lead.id}/erfassen", follow_redirects=True)
+    pruefe("v8", "Lead-Erfassen → Sparten-Auswahl (Interessen vorausgewählt)",
+           "Was soll erfasst werden?" in antwort.text
+           and "PV – Photovoltaik" in antwort.text)
+    client.post("/erfassung/sparten-start",
+                data={"kunde_id": str(kunde_t.id), "lead_id": str(v8lead.id),
+                      "sparte_PV": "on", "sparte_KL": "on"})
+    v8erf = (s.query(Erfassung).filter(Erfassung.lead_id == v8lead.id)
+             .order_by(Erfassung.id).all())
+    pruefe("v8", "Je Sparte eine eigene Erfassung (PV + KL)",
+           [e.sparte for e in v8erf] == ["PV", "KL"])
+    chips_html = client.get("/leads").text
+    pruefe("v8", "Lead-Chips: PV offen · KL offen",
+           "PV offen" in chips_html and "KL offen" in chips_html)
+    # Heizlast-Vorrang im automatischen Angebot
+    v8kg = dict(kg, A03=5000, A14="Ja", A15="8,4")
+    v8pos = angebot_aufbau.positionen_zusammenstellen(logik, v8kg, s)
+    pruefe("v8", "Heizlast 8,4 → 7-kW-Paket (Pos. 047), kWh ignoriert",
+           any(p["pos_nr"] == "047" for p in v8pos)
+           and engine.ampel_gruende(logik, dict(v8kg, A03=35000)) == [])
+    # Ablehnung: ohne Grund abgewiesen, mit Grund + Notiz
+    v8ang = angebot_aufbau.angebot_anlegen(s, kunde_t.id)
+    v8ang.status = "Versendet"; s.commit()
+    client.post(f"/angebote/{v8ang.id}/status", data={"status": "Abgelehnt"})
+    s.expire_all()
+    ohne_grund = s.get(Angebot, v8ang.id).status == "Versendet"
+    client.post(f"/angebote/{v8ang.id}/status",
+                data={"status": "Abgelehnt", "ablehnungsgrund": "Preis zu hoch"})
+    s.expire_all()
+    pruefe("v8", "Abgelehnt nur mit Pflicht-Grund (+ Verfolgungs-Notiz)",
+           ohne_grund and s.get(Angebot, v8ang.id).ablehnungsgrund == "Preis zu hoch"
+           and s.query(AN8).filter(AN8.angebot_id == v8ang.id,
+                                   AN8.text.like("%Preis zu hoch%")).count() == 1)
+    # 90-Tage-Prüflauf im Trockenmodus
+    v8alt = angebot_aufbau.angebot_anlegen(s, kunde_t.id)
+    v8alt.status = "Versendet"
+    v8alt.versendet_am = datetime.datetime.now() - datetime.timedelta(days=200)
+    s.commit()
+    trocken = ablauf_pruefung.lauf(s, trocken=True)
+    pruefe("v8", "90-Tage-Prüflauf (Trockenmodus) findet den Altfall",
+           v8alt.nummer in trocken["nummern"])
+    # Förder-Bausteine
+    client.post(f"/angebote/{v8ang.id}/foerderung",
+                data={"grund_prozent": "25", "hoechstkosten": "20.000,00"})
+    s.expire_all()
+    pruefe("v8", "Förder-Bausteine einzeln überschreibbar",
+           s.get(Angebot, v8ang.id).foerder_grund_prozent == 25
+           and s.get(Angebot, v8ang.id).foerder_hoechstkosten_cent == 2000000)
+    pruefe("v8", "Statistik: Je Sparte + Ablehnungsgründe",
+           all(w in client.get("/statistik?zeitraum=jahr").text
+               for w in ("Je Sparte", "Ablehnungsgründe")))
+    # v8-Aufräumen
+    for e in v8erf:
+        s.delete(s.get(Erfassung, e.id))
+    s.query(AN8).filter(AN8.angebot_id == v8ang.id).delete()
+    s.delete(s.get(Angebot, v8ang.id)); s.delete(s.get(Angebot, v8alt.id))
+    s.delete(s.get(Lead, v8lead.id))
     s.commit()
 
     # ---------- Aufräumen ----------
