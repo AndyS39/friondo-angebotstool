@@ -101,6 +101,39 @@ class TestV8(unittest.TestCase):
         self.assertLess(ids.index("KR07#1"), ids.index("KR01#2"))
         self.assertLess(ids.index("KR07#3"), ids.index("KA01"))
 
+    def test_ww300_pos065_nur_einmal(self):
+        # Bugfix: Pos. 065 kam bei N03 = "300 l" doppelt (Aktionszeile +
+        # Paketmatrix-Spalte "WW 300 l") – die Matrix ist die einzige Quelle
+        antworten = dict(KONTROLL_SZENARIO, N03="300 l")
+        pos = [p for p in angebot_aufbau.positionen_zusammenstellen(
+            self.logik, antworten, self.s) if p["pos_nr"] == "065"]
+        self.assertEqual(len(pos), 1)
+        self.assertEqual(pos[0]["menge"], 1)
+        # die Aktionszeile trägt keine eigene Artikel-Anweisung mehr
+        n03 = [a for a in self.logik.aktionen
+               if a.frage == "N03" and a.antwort == "300 l"]
+        self.assertEqual(n03[0].artikel, [])
+        # und die übrigen Matrix-Spalten sind frei von Doppelquellen
+        _, bericht = logik_einlesen()
+        self.assertFalse([w for w in bericht.warnungen
+                          if "Doppelte Artikelquelle" in w], bericht.warnungen)
+
+    def test_doppelquellen_warnung(self):
+        # Der Wächter meldet, wenn ein Matrix-Artikel zusätzlich über eine
+        # Aktionszeile käme (künstlich nachgestellt)
+        import copy
+
+        from app import logik as logik_modul
+        from app.logik import Aktion, ArtikelRef, Pruefbericht
+        kopie = copy.copy(self.logik)
+        kopie.aktionen = list(self.logik.aktionen) + [
+            Aktion("N03", "300 l", "Artikel: Pos. 065 ×1", "normal", "",
+                   [ArtikelRef("065")], "")]
+        bericht = Pruefbericht()
+        logik_modul._doppelquellen_pruefen(kopie, bericht)
+        self.assertTrue(any("Doppelte Artikelquelle" in w and "065" in w
+                            for w in bericht.warnungen), bericht.warnungen)
+
     def test_prueflauf_trockenmodus(self):
         kunde = Kunde(nachname="PruefV8")
         self.s.add(kunde); self.s.commit()

@@ -370,8 +370,13 @@ def _aktionen_einlesen(wb, bericht: Pruefbericht) -> list[Aktion]:
         else:
             typ = "normal"
             grund = ""
+        # Verweist die Zeile auf die Paketmatrix („… lt. Paketmatrix …“), ist
+        # die Matrix die EINZIGE Artikelquelle – Positionsnummern im Text sind
+        # nur erläuternd (Bugfix: Pos. 065 kam sonst doppelt ins Angebot).
+        refs = ([] if "lt. Paketmatrix" in aktion_roh
+                else refs_extrahieren(aktion_roh))
         aktionen.append(Aktion(frage, antwort, aktion_roh, typ, grund,
-                               refs_extrahieren(aktion_roh), bemerkung))
+                               refs, bemerkung))
     return aktionen
 
 
@@ -533,9 +538,36 @@ def _bedingungen_pruefen(fragen: dict[str, Frage], bericht: Pruefbericht,
                         f"{kontext} {frage.id}: Bedingungswert „{wert}“ ist keine Option von {ziel.id}.")
 
 
+def _doppelquellen_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
+    """Bugfix-Wächter: Ein Artikel, der in einer Paketmatrix-Spalte steht,
+    darf nicht zusätzlich über eine normale Aktionszeile hinzukommen – sonst
+    landet er doppelt im Angebot (so kam Pos. 065 bei WW 300 l zweimal).
+    Geprüft werden ALLE Matrix-Spalten gegen alle Aktionszeilen mit Artikeln."""
+    matrix_refs: dict[str, list[str]] = {}
+    for paket in logik.pakete:
+        for spalte, refs in (("WW bis 200 l", paket.ww_bis_200),
+                             ("ohne Warmwasser", paket.ohne_ww),
+                             ("WW 300 l", paket.ww_300)):
+            for ref in refs:
+                matrix_refs.setdefault(ref.ref, []).append(
+                    f"{paket.leistungsklasse}/{spalte}")
+    for aktion in logik.aktionen:
+        if aktion.typ != "normal":
+            continue
+        for ref in aktion.artikel:
+            if ref.ref in matrix_refs:
+                bericht.warnungen.append(
+                    f"Doppelte Artikelquelle: {('Pos. ' + ref.ref) if not ref.ref.startswith('Z') else ref.ref} "
+                    f"kommt über die Aktionszeile {aktion.frage} („{aktion.antwort}“) UND "
+                    f"über die Paketmatrix ({', '.join(sorted(set(matrix_refs[ref.ref])))}) – "
+                    "der Artikel würde doppelt im Angebot landen. Die Paketmatrix ist "
+                    "die einzige Quelle; Aktionszeile bitte auf „… lt. Paketmatrix“ umstellen.")
+
+
 def _querbezuege_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
     fragen = logik.fragen
     _bedingungen_pruefen(fragen, bericht)
+    _doppelquellen_pruefen(logik, bericht)
 
     # Anhänge: referenzierte Fragen/Antworten müssen existieren
     for anhang in logik.anhaenge:
