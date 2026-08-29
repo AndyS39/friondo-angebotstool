@@ -24,6 +24,12 @@
         <form method="post" action="/angebote/{{ angebot.id }}/duplizieren">
             <button class="knopf klein zweitrangig" type="submit">Duplizieren</button>
         </form>
+        {% if angebot.status in ('Versendet', 'Angenommen') and not angebot.extern %}
+        <form method="post" action="/angebote/{{ angebot.id }}/ueberarbeiten"
+              onsubmit="return confirm('Neue Version {{ angebot.stamm_nummer }}.x als Entwurf erstellen? {{ angebot.nummer }} wird dadurch als „Überholt“ markiert.');">
+            <button class="knopf klein" type="submit" title="Neue Version erstellen">Überarbeiten</button>
+        </form>
+        {% endif %}
         <a class="knopf klein" href="/angebote/{{ angebot.id }}/pdf" target="_blank">PDF anzeigen</a>
         {% if not nur_lesen %}
         {% if angebot.status == 'Entwurf' %}
@@ -130,6 +136,19 @@
     <strong>⚠ Fachliche Hinweise zum Vorgang</strong>
     <ul>{% for h in fachhinweise %}<li>{{ h }}</li>{% endfor %}</ul>
 </div>
+{% endif %}
+
+{% if versionen | length > 1 %}
+<p class="dezent">Versions-Historie:
+    {% for v in versionen %}
+        {% if v.id == angebot.id %}<strong>{{ v.nummer }}</strong>
+        {% else %}<a href="/angebote/{{ v.id }}">{{ v.nummer }}</a>{% endif %}
+        <span class="abzeichen">{{ v.status }}</span>{{ ' · ' if not loop.last }}
+    {% endfor %}
+    {% if angebot.status == 'Überholt' %}
+        <span class="abzeichen ep">Diese Version ist überholt</span>
+    {% endif %}
+</p>
 {% endif %}
 
 {# v9: Angebotsprofil + Vertriebskanal + Vortext #}

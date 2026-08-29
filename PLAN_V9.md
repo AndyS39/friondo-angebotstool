@@ -154,18 +154,18 @@ SWD / Sparkasse DU – beim Start lokalisieren, im Zweifel nachfragen).
       im PDF vorhanden
 
 ## Phase 56 – Angebots-Versionierung
-- [ ] Button „Überarbeiten" an Angeboten mit Status Versendet/Angenommen:
+- [x] Button „Überarbeiten" an Angeboten mit Status Versendet/Angenommen:
       erzeugt vollständige Kopie als Entwurf mit Nummer <Stamm>.2
       (fortlaufend .3, .4 …); Original → neuer Status „Überholt"
-- [ ] „Überholt": zählt nicht in Statistik, Summenzeile, 90-Tage-Lauf;
+- [x] „Überholt": zählt nicht in Statistik, Summenzeile, 90-Tage-Lauf;
       Standard-Angebotsliste zeigt nur die aktuelle Version, ältere über
       Versions-Historie in der Angebots-Detailansicht
-- [ ] Neue Version: PDF-Zeile „Ersetzt Angebot <Nr.> vom <Datum>";
+- [x] Neue Version: PDF-Zeile „Ersetzt Angebot <Nr.> vom <Datum>";
       Versand aktualisiert den monday-Deal-Wert; Verfolgung, Mail-Verlauf
       und Lead-Verknüpfung laufen an der Stammnummer weiter
-- [ ] Nummernkreis-Logik: Versionssuffix berührt den Zähler nicht;
+- [x] Nummernkreis-Logik: Versionssuffix berührt den Zähler nicht;
       Duplizieren (bestehende Funktion) bleibt davon getrennt
-- [ ] Tests: Version .2 erzeugen, versenden → Original „Überholt",
+- [x] Tests: Version .2 erzeugen, versenden → Original „Überholt",
       Statistik zählt 1 Angebot, monday-Wert = neue Summe
 
 ## Phase 57 – Darstellung: Förderung, Chips, Freitext, Startseite

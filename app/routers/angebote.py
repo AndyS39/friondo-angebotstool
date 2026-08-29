@@ -56,6 +56,9 @@ async def liste(request: Request, q: str = "", status: str = "", interesse: str 
         abfrage = abfrage.filter(Angebot.archiviert.is_(False))
         if status:
             abfrage = abfrage.filter(Angebot.status == status)
+        else:
+            # v9: überholte Versionen nur über den Status-Filter/die Historie
+            abfrage = abfrage.filter(Angebot.status != "Überholt")
     angebote = abfrage.order_by(Angebot.nummer.desc()).all()
     kunden = _kunden_map(session, angebote)
     if q:
@@ -256,6 +259,12 @@ async def editor(request: Request, angebot_id: int,
     from app.models import Profil
     profil = angebotsprofile.profil_fuer_angebot(session, angebot, kunde)
     profile = session.query(Profil).order_by(Profil.id).all()
+    # v9: Versions-Historie über die Stammnummer
+    stamm = angebot.stamm_nummer
+    versionen = (session.query(Angebot)
+                 .filter(or_(Angebot.nummer == stamm,
+                             Angebot.nummer.like(f"{stamm}.%")))
+                 .order_by(Angebot.nummer).all())
     # v9: fachliche Hinweise (z. B. Solarthermie-Widerspruch) aus dem Protokoll
     from app import konfigurator as engine_modul
     fachhinweise = engine_modul.hinweise_aus_protokoll(protokoll)
@@ -263,7 +272,7 @@ async def editor(request: Request, angebot_id: int,
     return render(request, "angebote/editor.html", aktiv="/angebote",
                   ablehnungsgruende=ablehnungsgruende,
                   profil=profil, profile=profile, profil_hinweise=profil_hinweise,
-                  fachhinweise=fachhinweise,
+                  fachhinweise=fachhinweise, versionen=versionen,
                   vortext_standard=angebotsprofile.vortext_fuer_angebot(session, angebot),
                   angebot=angebot, kunde=kunde, gruppen=gruppen,
                   summen=angebot.summen(), artikel_liste=artikel_liste,
@@ -1046,6 +1055,79 @@ async def archivieren(request: Request, angebot_id: int,
             status_code=303)
     return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
         "Aus dem Archiv zurückgeholt."), status_code=303)
+
+
+@router.post("/{angebot_id}/ueberarbeiten")
+async def ueberarbeiten(request: Request, angebot_id: int,
+                        session: Session = Depends(get_session)):
+    """v9: neue Version (.2/.3 …) eines versendeten/angenommenen Angebots als
+    Entwurf; das Original wird „Überholt“ (zählt nicht mehr in Statistik,
+    Summenzeile und 90-Tage-Lauf). Verfolgung, Mail-Konversation und die
+    Erfassungs-/Lead-Verknüpfung laufen an der neuen Version weiter."""
+    from urllib.parse import quote_plus
+
+    from app.models import Erfassung
+    original = session.get(Angebot, angebot_id)
+    if original is None:
+        return RedirectResponse("/angebote", status_code=303)
+    if original.extern or original.status not in ("Versendet", "Angenommen"):
+        return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+            "Überarbeiten geht nur bei versendeten/angenommenen Tool-Angeboten."),
+            status_code=303)
+    stamm = original.stamm_nummer
+    versionen = [a.nummer for a in session.query(Angebot)
+                 .filter(or_(Angebot.nummer == stamm,
+                             Angebot.nummer.like(f"{stamm}.%")))]
+    hoechste = 1
+    for nummer in versionen:
+        _, punkt, rest = nummer.rpartition(".")
+        if punkt and rest.isdigit():
+            hoechste = max(hoechste, int(rest))
+    neue_nummer = f"{stamm}.{hoechste + 1}"
+
+    version = Angebot(
+        nummer=neue_nummer, kunde_id=original.kunde_id,
+        protokoll_json=original.protokoll_json, kfw_json=original.kfw_json,
+        vermerke_json=original.vermerke_json,
+        rabatt_cent=original.rabatt_cent, rabatt_prozent=original.rabatt_prozent,
+        rabatt_bezeichnung=original.rabatt_bezeichnung,
+        konfigurator_typ=original.konfigurator_typ,
+        vertriebler_id=original.vertriebler_id,
+        profil_id=original.profil_id, vortext_text=original.vortext_text,
+        rechnung_name=original.rechnung_name,
+        rechnung_strasse=original.rechnung_strasse,
+        rechnung_plz=original.rechnung_plz, rechnung_ort=original.rechnung_ort,
+        foerderung_manuell_cent=original.foerderung_manuell_cent,
+        foerderung_ausblenden=original.foerderung_ausblenden,
+        foerder_grund_prozent=original.foerder_grund_prozent,
+        foerder_klima_prozent=original.foerder_klima_prozent,
+        foerder_einkommen_prozent=original.foerder_einkommen_prozent,
+        foerder_hoechstkosten_cent=original.foerder_hoechstkosten_cent,
+        verfolgung_ampel=original.verfolgung_ampel,
+        wiedervorlage_am=original.wiedervorlage_am,
+        graph_conversation_id=original.graph_conversation_id,
+        vorgaenger_id=original.id,
+    )
+    for p in original.positionen:
+        version.positionen.append(AngebotsPosition(
+            sort=p.sort, block_nr=p.block_nr, gruppe=p.gruppe, pos_nr=p.pos_nr,
+            bezeichnung=p.bezeichnung, beschreibung=p.beschreibung, menge=p.menge,
+            einheit=p.einheit, e_preis_cent=p.e_preis_cent, ep_flag=p.ep_flag,
+            ek_cent=p.ek_cent, guid=p.guid, anzeige_nr=p.anzeige_nr,
+            original_preis_cent=p.original_preis_cent,
+            rabatt_prozent=p.rabatt_prozent, rabatt_cent=p.rabatt_cent,
+            bauseits=p.bauseits, sonderpreis=p.sonderpreis))
+    session.add(version)
+    session.flush()
+    original.status = "Überholt"
+    # Erfassung/Lead-Verknüpfung folgt der aktuellen Version (Stammnummer)
+    for erfassung in session.query(Erfassung).filter(
+            Erfassung.angebot_id == original.id):
+        erfassung.angebot_id = version.id
+    session.commit()
+    return RedirectResponse(f"/angebote/{version.id}?meldung=" + quote_plus(
+        f"Version {neue_nummer} als Entwurf erstellt – {original.nummer} ist "
+        "jetzt „Überholt“."), status_code=303)
 
 
 @router.post("/{angebot_id}/duplizieren")

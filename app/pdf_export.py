@@ -149,7 +149,8 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
                 signatur: dict | None = None,
                 ziel: Path | None = None,
                 vortext_text: str | None = None,
-                nachtext_text: str | None = None) -> Path:
+                nachtext_text: str | None = None,
+                ersetzt_hinweis: str = "") -> Path:
     """signatur (Phase 23): {"png_pfad", "name", "zeit"} – wird auf der
     Unterschriften-Seite eingebettet; ziel überschreibt den Ablageort.
     v9: Vor- und Nachtext kommen als Textblöcke (Profil/Parametrierung);
@@ -158,7 +159,8 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
     pdf = AngebotsPdf(angebot.nummer)
     _seite1(pdf, angebot, kunde,
             vortext_text if vortext_text is not None
-            else angebotsprofile.STANDARD_VORTEXT)
+            else angebotsprofile.STANDARD_VORTEXT,
+            ersetzt_hinweis=ersetzt_hinweis)
     _positionsteil(pdf, angebot)
     _vermerke_rendern(pdf, angebot)
     _summen_und_kfw(pdf, angebot, kfw_ergebnis)
@@ -192,7 +194,8 @@ def _vermerke_rendern(pdf: "AngebotsPdf", angebot: Angebot) -> None:
 
 # --- Seite 1: Briefkopf + Vortext ----------------------------------------
 
-def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde, vortext_text: str):
+def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde, vortext_text: str,
+            ersetzt_hinweis: str = ""):
     pdf.add_page()
 
     pdf.set_font("Arial", "", 6.5)
@@ -246,6 +249,10 @@ def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde, vortext_text: str)
         ausfuehrung = f"{kunde.strasse}, {kunde.plz} {kunde.ort}".strip(", ")
         pdf.cell(0, 5, f"Ausführungsort: {ausfuehrung}",
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    if ersetzt_hinweis:
+        # v9: neue Version ersetzt ein früheres Angebot
+        pdf.set_font("Arial", "", 9)
+        pdf.cell(0, 5, ersetzt_hinweis, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(4)
 
     # Vortext (v9): editierbarer Textblock je Profil, Override am Angebot
@@ -672,9 +679,21 @@ def signiertes_pdf_erzeugen(session, angebot: Angebot, png_bytes: bytes,
                            signatur={"png_pfad": png_pfad, "name": name, "zeit": zeit},
                            ziel=ziel,
                            vortext_text=angebotsprofile.vortext_fuer_angebot(session, angebot),
-                           nachtext_text=angebotsprofile.nachtext_fuer_angebot(session, angebot))
+                           nachtext_text=angebotsprofile.nachtext_fuer_angebot(session, angebot),
+                           ersetzt_hinweis=_ersetzt_hinweis(session, angebot))
     finally:
         Path(png_pfad).unlink(missing_ok=True)
+
+
+def _ersetzt_hinweis(session, angebot: Angebot) -> str:
+    """v9: „Ersetzt Angebot <Nr.> vom <Datum>“ für neue Versionen."""
+    if not getattr(angebot, "vorgaenger_id", None):
+        return ""
+    vorgaenger = session.get(Angebot, angebot.vorgaenger_id)
+    if vorgaenger is None:
+        return ""
+    return (f"Ersetzt Angebot {vorgaenger.nummer} "
+            f"vom {vorgaenger.datum.strftime('%d.%m.%Y')}")
 
 
 def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
@@ -696,4 +715,5 @@ def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
                        mit_vollmacht=(anhaenge.vollmacht_erforderlich(angebot)
                                       and angebotsprofile.vollmacht_erlaubt(session, angebot)),
                        vortext_text=angebotsprofile.vortext_fuer_angebot(session, angebot),
-                       nachtext_text=angebotsprofile.nachtext_fuer_angebot(session, angebot))
+                       nachtext_text=angebotsprofile.nachtext_fuer_angebot(session, angebot),
+                       ersetzt_hinweis=_ersetzt_hinweis(session, angebot))

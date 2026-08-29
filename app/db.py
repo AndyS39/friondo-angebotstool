@@ -123,6 +123,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "ablehnungsgrund": "VARCHAR(100) NOT NULL DEFAULT ''",
         "ablehnungsgrund_text": "VARCHAR(500) NOT NULL DEFAULT ''",
         "vermerke_json": "TEXT NOT NULL DEFAULT '[]'",
+        "vorgaenger_id": "INTEGER",
         "profil_id": "INTEGER",
         "vortext_text": "TEXT NOT NULL DEFAULT ''",
         "verfolgung_ampel": "VARCHAR(10) NOT NULL DEFAULT ''",

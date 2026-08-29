@@ -108,6 +108,8 @@ def kennzahlen(session: Session, von: datetime, bis: datetime,
         kanal = kunden[erf.kunde_id].vertriebskanal if erf.kunde_id in kunden else ""
         zaehle("erfassungen", erf.benutzer_id, kanal, sparte=erf.sparte or "WP")
     for a in session.query(Angebot):
+        if a.status == "Überholt":
+            continue   # v9: durch eine neue Version ersetzt – zählt nicht mehr
         ad_id = zuordnung.get(a.id)
         kanal = kunden[a.kunde_id].vertriebskanal if a.kunde_id in kunden else ""
         a_sparte = a.konfigurator_typ or "WP"

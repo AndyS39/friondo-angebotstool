@@ -328,8 +328,10 @@ class Lead(Base):
 # „Individuell“ (v6): wird außerhalb des Tools geschrieben – seit v7 ohne
 # Auto-Archiv (individuelle Fälle laufen über die Erfassungs-Statuskette).
 # „Versendet (extern)“ (v7): Start-Status externer TAIFUN-Einträge.
+# „Überholt“ (v9): durch eine neue Version (.2/.3 …) ersetzt – zählt nicht
+# mehr in Statistik, Summenzeile und 90-Tage-Prüflauf.
 ANGEBOT_STATUS = ["Entwurf", "Versand vorbereitet", "Versendet", "Angenommen",
-                  "Abgelehnt", "Individuell", "Versendet (extern)"]
+                  "Abgelehnt", "Individuell", "Versendet (extern)", "Überholt"]
 
 # Status, die ein externer TAIFUN-Eintrag durchlaufen darf (Abschlussquote)
 EXTERN_STATUS = ["Versendet (extern)", "Angenommen", "Abgelehnt"]
@@ -399,6 +401,9 @@ class Angebot(Base):
     extern: Mapped[bool] = mapped_column(Boolean, default=False)
     taifun_nummer: Mapped[str] = mapped_column(String(30), default="")
     extern_endbetrag_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Versionierung (v9): „Überarbeiten“ erzeugt <Stamm>.2/.3 … als Entwurf;
+    # vorgaenger_id zeigt auf die ersetzte Version (Status „Überholt“)
+    vorgaenger_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Bedingte Angebotsvermerke (v9, Blatt "Vermerke"): beim Anlegen
     # ausgewertete Texte für das PDF (Ende Positionsteil vor Summenblock)
     vermerke_json: Mapped[str] = mapped_column(Text, default="[]")
@@ -419,6 +424,12 @@ class Angebot(Base):
     positionen: Mapped[list["AngebotsPosition"]] = relationship(
         back_populates="angebot", order_by="AngebotsPosition.sort",
         cascade="all, delete-orphan")
+
+    @property
+    def stamm_nummer(self) -> str:
+        """v9: Angebotsnummer ohne Versionssuffix (AN-C-261079.2 → AN-C-261079)."""
+        basis, punkt, rest = self.nummer.rpartition(".")
+        return basis if punkt and rest.isdigit() else self.nummer
 
     def rabatt_effektiv_cent(self, brutto_cent: int) -> int:
         """Rabatt in Cent (Betrag direkt, Prozent vom Brutto), nie über dem Brutto.
