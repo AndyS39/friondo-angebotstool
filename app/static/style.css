@@ -822,22 +822,29 @@ span.chip { cursor: default; }
     display: flex; gap: 0.7rem; flex-wrap: wrap; align-items: center; }
 
 /* v9 (Phase 57): Startseite in drei Bereichen – Mitte Angebotstool,
-   links/rechts Platzhalter mit rotem Coming-soon-Hinweis */
-.start-bereiche { display: grid; grid-template-columns: 1fr 1.6fr 1fr;
-    gap: 1.2rem; align-items: start; }
+   links/rechts Platzhalter mit rotem Coming-soon-Hinweis. Die Startseite
+   nutzt die volle Monitorbreite (main.breit), damit die drei Bereiche
+   nebeneinander Platz haben statt schmal gestapelt zu wirken. */
+main.breit { max-width: 1720px; }
+.start-bereiche { display: grid; grid-template-columns: 1fr 1.8fr 1fr;
+    gap: 1.5rem; align-items: stretch; }
 .start-bereich { border: 1px solid #d4d9e4; border-radius: 10px;
-    padding: 1rem 1.2rem; background: #fff; }
-.start-bereich h2 { margin-top: 0; }
+    padding: 1.2rem 1.4rem; background: #fff; }
+.start-bereich h2 { margin-top: 0; display: flex; align-items: center;
+    gap: 0.5rem; flex-wrap: nowrap; }
 .start-bereich h2 a { text-decoration: none; color: inherit; }
 .start-bereich h2 a:hover { text-decoration: underline; }
 .platzhalter-bereich { background: #f8f9fc; }
-.platzhalter-bereich .bereich-kacheln { grid-template-columns: 1fr; }
+.platzhalter-bereich .bereich-kacheln { grid-template-columns: 1fr;
+    gap: 0.8rem; margin-top: 1rem; }
+.platzhalter-bereich .kachel { padding: 0.9rem 1rem; }
+.platzhalter-bereich .stat-zahl { font-size: 1.5rem; }
 .kachel.inaktiv { cursor: default; opacity: 0.65; }
 .kachel.inaktiv:hover { transform: none; box-shadow: none;
     border-color: var(--grau-linie); }
 .coming-soon { color: #c0392b; font-size: 0.72rem; font-weight: 700;
     text-transform: uppercase; letter-spacing: 0.06em; border: 1px solid #c0392b;
-    border-radius: 999px; padding: 0.1rem 0.5rem; vertical-align: middle; }
+    border-radius: 999px; padding: 0.1rem 0.5rem; white-space: nowrap; }
 @media (max-width: 1100px) {
     .start-bereiche { grid-template-columns: 1fr; }
     .platzhalter-bereich .bereich-kacheln { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
