@@ -150,6 +150,7 @@ def _daten() -> list[str]:
         # Phase 53: Textblöcke (Nach-/Vortexte) + Angebotsprofile anlegen;
         # Pos.-162-Text auf den Enni-Wortlaut aktualisieren (Preis bleibt)
         from app import angebotsprofile
+        from app.models import Artikel
         meldungen += angebotsprofile.seed(session)
         # v8/v9: neue Zusatzartikel (Z23 MID-Zähler, Z24 Solar-Rückbau) müssen
         # im Artikelstamm liegen, sonst blockiert die Logik-Validierung –
@@ -168,7 +169,6 @@ def _daten() -> list[str]:
                                  f"und der Import schlug fehl: {problem} – bitte "
                                  "Artikel → Preisliste importieren ausführen!")
         session.commit()
-        from app.models import Artikel
         artikel_162 = (session.query(Artikel)
                        .filter(Artikel.pos_nr == "162", Artikel.aktiv.is_(True)).first())
         if (artikel_162 is not None
