@@ -319,9 +319,13 @@ def angebot_anlegen(session: Session, kunde_id: int,
     protokoll_json = "[]"
     kfw_json = "{}"
     positionen: list[dict] = []
+    vermerke_json = "[]"
     if antworten is not None and logik is not None:
         protokoll_json = json.dumps(engine.protokoll(logik, antworten), ensure_ascii=False)
         kfw_json = json.dumps(engine.kfw_daten(antworten), ensure_ascii=False)
+        # v9: bedingte Angebotsvermerke (Blatt "Vermerke") am Angebot ablegen
+        vermerke_json = json.dumps(engine.vermerke_fuer(logik, antworten),
+                                   ensure_ascii=False)
         if not nur_protokoll:
             positionen = positionen_zusammenstellen(logik, antworten, session)
     # v8: Einschätzung (S01/S02) als Startwerte der Verfolgung; abweichende
@@ -348,6 +352,7 @@ def angebot_anlegen(session: Session, kunde_id: int,
             konfiguration_id=konfiguration_id,
             protokoll_json=protokoll_json,
             kfw_json=kfw_json,
+            vermerke_json=vermerke_json,
             verfolgung_ampel=verfolgung_ampel,
             wiedervorlage_am=wiedervorlage,
             **rechnung,

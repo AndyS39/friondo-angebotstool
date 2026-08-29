@@ -159,7 +159,7 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   im Heizungsraum); „übernehmen" → AWE-Paket + Pos. 069 (bivalenter
   390-l-Speicher) statt 065/067, WW-Größenfrage entfällt; Widerspruch
   „Übernahme, aber WW über WP = Nein" erzeugt einen fachlichen
-  Hinweis am Vorgang (069 übersteuert). Noch 13 AMPEL-Gründe.
+  Hinweis am Vorgang (069 übersteuert). Noch 14 eindeutige AMPEL-Gründe.
 - Angebots-Versionierung: Button „Überarbeiten" an versendeten/
   angenommenen Angeboten erzeugt Version .2/.3 … als Entwurf;
   Original erhält Status „Überholt" (zählt nicht mehr in Statistik,

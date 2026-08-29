@@ -256,10 +256,14 @@ async def editor(request: Request, angebot_id: int,
     from app.models import Profil
     profil = angebotsprofile.profil_fuer_angebot(session, angebot, kunde)
     profile = session.query(Profil).order_by(Profil.id).all()
+    # v9: fachliche Hinweise (z. B. Solarthermie-Widerspruch) aus dem Protokoll
+    from app import konfigurator as engine_modul
+    fachhinweise = engine_modul.hinweise_aus_protokoll(protokoll)
     profil_hinweise = {p_.id: angebotsprofile.regeln_beschreibung(p_) for p_ in profile}
     return render(request, "angebote/editor.html", aktiv="/angebote",
                   ablehnungsgruende=ablehnungsgruende,
                   profil=profil, profile=profile, profil_hinweise=profil_hinweise,
+                  fachhinweise=fachhinweise,
                   vortext_standard=angebotsprofile.vortext_fuer_angebot(session, angebot),
                   angebot=angebot, kunde=kunde, gruppen=gruppen,
                   summen=angebot.summen(), artikel_liste=artikel_liste,

@@ -22,6 +22,8 @@ ID_WOHNEINHEITEN = "O03"
 ID_FLAECHE = "O05"
 ID_SELBSTNUTZUNG = "K01"
 ID_ENERGIETRAEGER = "A01"
+ID_SOLARTHERMIE = "A10"       # v9: Übernahme steuert die Warmwasser-Schiene
+SOLAR_UEBERNAHME = "Ja, soll übernommen werden"
 ID_HEIZUNG_BAUJAHR = "A02"
 FRIONDO_FRAGEN = ("P01", "P02", "P03")
 
@@ -158,6 +160,9 @@ def _frage_unterdrueckt(frage: Frage, logik: Logik, antworten: dict) -> bool:
     """v9-Sonderregeln jenseits der Excel-Bedingungen: Die WW-Größenfrage N03
     entfällt bei der Serie CS8800i (Klasse 15: Warmwasser fix über Pos. 065)."""
     if frage.id == ID_WW_GROESSE:
+        # Solarthermie-Übernahme: Warmwasser über den bivalenten 390-l-Speicher
+        if str(antworten.get(ID_SOLARTHERMIE) or "") == SOLAR_UEBERNAHME:
+            return True
         zeile = leistungsklasse(logik, antworten)
         if zeile is not None and zeile.leistungsklasse == "15 kW":
             return True
@@ -303,11 +308,21 @@ def paket_aufloesen(logik: Logik, antworten: dict) -> Optional[list[ArtikelRef]]
     zeile = leistungsklasse(logik, antworten)
     if zeile is None or ID_WARMWASSER not in antworten:
         return None
+    solar_uebernahme = (str(antworten.get(ID_SOLARTHERMIE) or "")
+                        == SOLAR_UEBERNAHME)
     if zeile.leistungsklasse == "15 kW":
         # v9 (Serie CS8800i): Außeneinheit (030/031) und Inneneinheit
         # (AWMB 055 / AWE 056 + Puffer) kommen über die Farb-/Pufferfragen;
-        # aus der Matrix kommt nur das fixe Warmwasser (Pos. 065 bei N02 = Ja)
+        # aus der Matrix kommt nur das fixe Warmwasser (Pos. 065 bei N02 = Ja).
+        # Solarthermie-Übernahme: bivalenter 390-l-Speicher (069) statt 065.
+        if solar_uebernahme:
+            return [ArtikelRef("069")]
         return [ArtikelRef("065")] if antworten[ID_WARMWASSER] == "Ja" else []
+    if solar_uebernahme:
+        # v9: Übernahme erzwingt die AWE-Variante + Pos. 069 (kein 065/067) –
+        # das Warmwasser läuft über den bivalenten Solarspeicher, auch wenn
+        # N02 = Nein erfasst wurde (fachlicher Hinweis macht darauf aufmerksam)
+        return list(zeile.ohne_ww) + [ArtikelRef("069")]
     if antworten[ID_WARMWASSER] == "Nein":
         return zeile.ohne_ww
     groesse = str(antworten.get(ID_WW_GROESSE) or "")
@@ -401,3 +416,46 @@ def kfw_daten(antworten: dict) -> dict:
     return {schluessel: antworten.get(schluessel)
             for schluessel in ("O01", "O03", "O05", "K01", "K02", "K03", "K04")
             if schluessel in antworten}
+
+
+def fachliche_hinweise(antworten: dict) -> list[str]:
+    """v9: generische fachliche Hinweise am Vorgang (keine Blockade) –
+    funktioniert mit Roh-Antworten UND mit den Anzeige-Strings aus dem
+    Konfigurationsprotokoll (frage_id -> antwort)."""
+    hinweise: list[str] = []
+    if str(antworten.get(ID_SOLARTHERMIE) or "") == SOLAR_UEBERNAHME:
+        if str(antworten.get(ID_WARMWASSER) or "") == "Nein":
+            hinweise.append(
+                "Widerspruch: Solarthermie-Übernahme erfasst, aber „Warmwasser "
+                "über WP = Nein“ – Pos. 069 (bivalenter 390-l-Solarspeicher) "
+                "wurde übernommen, bitte prüfen.")
+        else:
+            hinweise.append(
+                "Warmwasser läuft über den bivalenten 390-l-Solarspeicher "
+                "(Pos. 069) – Solarthermie-Übernahme.")
+    return hinweise
+
+
+def hinweise_aus_protokoll(protokoll: list[dict]) -> list[str]:
+    """Fachliche Hinweise aus dem gespeicherten Konfigurationsprotokoll."""
+    antworten = {e.get("frage_id"): e.get("antwort") for e in protokoll}
+    return fachliche_hinweise(antworten)
+
+
+def vermerke_fuer(logik: Logik, antworten: dict) -> list[str]:
+    """v9: zutreffende Angebotsvermerke (Blatt "Vermerke") als Textliste."""
+    ergebnis = []
+    for vermerk in logik.vermerke:
+        b = vermerk.bedingung
+        if b is None:
+            continue
+        if b.art == "immer":
+            ergebnis.append(vermerk.text)
+        elif b.art == "antwort" and _term_erfuellt(b.frage_id, b.werte,
+                                                   antworten, logik.fragen):
+            ergebnis.append(vermerk.text)
+        elif b.art == "klauseln" and any(
+                all(_term_erfuellt(fid, werte, antworten, logik.fragen)
+                    for fid, werte in klausel) for klausel in b.klauseln):
+            ergebnis.append(vermerk.text)
+    return ergebnis

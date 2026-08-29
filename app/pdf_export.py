@@ -160,6 +160,7 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
             vortext_text if vortext_text is not None
             else angebotsprofile.STANDARD_VORTEXT)
     _positionsteil(pdf, angebot)
+    _vermerke_rendern(pdf, angebot)
     _summen_und_kfw(pdf, angebot, kfw_ergebnis)
     _nachtext_rendern(pdf, nachtext_text if nachtext_text is not None
                       else angebotsprofile.STANDARD_NACHTEXT, signatur)
@@ -173,6 +174,20 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
     ziel.parent.mkdir(parents=True, exist_ok=True)
     pdf.output(str(ziel))
     return ziel
+
+
+def _vermerke_rendern(pdf: "AngebotsPdf", angebot: Angebot) -> None:
+    """v9: bedingte Angebotsvermerke (Blatt "Vermerke") am Ende des
+    Positionsteils vor dem Summenblock; erste Zeile des Textes = Überschrift."""
+    for vermerk in json.loads(getattr(angebot, "vermerke_json", "[]") or "[]"):
+        zeilen = vermerk.splitlines()
+        pdf.ln(3)
+        if pdf.get_y() > pdf.page_break_trigger - 30:
+            pdf.add_page()
+        pdf.set_font("Arial", "B", 9)
+        pdf.multi_cell(0, 4.4, zeilen[0])
+        pdf.set_font("Arial", "", 8.5)
+        pdf.multi_cell(0, 4.2, "\n".join(zeilen[1:]).strip())
 
 
 # --- Seite 1: Briefkopf + Vortext ----------------------------------------

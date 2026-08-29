@@ -161,6 +161,22 @@ def _daten() -> list[str]:
             meldungen.append("Pos.-162-Text auf enni.flexstrom-Wortlaut aktualisiert "
                              f"(Preis unverändert: {artikel_162.e_preis_cent / 100:.2f} €)")
         session.commit()
+        # v8/v9: neue Zusatzartikel (Z23 MID-Zähler, Z24 Solar-Rückbau) müssen
+        # im Artikelstamm liegen, sonst blockiert die Logik-Validierung –
+        # fehlen sie, läuft der Preislisten-/Zusatzartikel-Import automatisch
+        fehlend = [nr for nr in ("Z23", "Z24")
+                   if session.query(Artikel).filter(Artikel.pos_nr == nr,
+                                                    Artikel.aktiv.is_(True)).count() == 0]
+        if fehlend:
+            try:
+                from app import import_preisliste
+                _, import_meldung = import_preisliste.import_ausfuehren(session)
+                meldungen.append(f"Zusatzartikel {', '.join(fehlend)} fehlten – "
+                                 f"Preislisten-Import ausgeführt ({import_meldung})")
+            except Exception as problem:
+                meldungen.append(f"WARNUNG: Zusatzartikel {', '.join(fehlend)} fehlen "
+                                 f"und der Import schlug fehl: {problem} – bitte "
+                                 "Artikel → Preisliste importieren ausführen!")
     finally:
         session.close()
     return meldungen

@@ -58,6 +58,9 @@
                 {% endif %}
                 <span class="abzeichen">{{ e.sparte or 'WP' }}</span>
                 {% if e.typ == 'freitext' %}<span class="abzeichen">Freitext</span>{% endif %}
+                {% if e.id in fachhinweis_ids %}
+                    <span title="{{ fachhinweis_ids[e.id] }}">⚠</span>
+                {% endif %}
                 {% if e.id in bemerkungen %}
                     <span class="bemerkung-symbol" title="{{ bemerkungen[e.id] | truncate(300) }}">📝</span>
                 {% endif %}

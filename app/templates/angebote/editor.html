@@ -125,6 +125,13 @@
     {% if angebot.ablehnungsgrund_text %}– {{ angebot.ablehnungsgrund_text }}{% endif %}</p>
 {% endif %}
 
+{% if fachhinweise %}
+<div class="warnblock">
+    <strong>⚠ Fachliche Hinweise zum Vorgang</strong>
+    <ul>{% for h in fachhinweise %}<li>{{ h }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
 {# v9: Angebotsprofil + Vertriebskanal + Vortext #}
 <div class="verfolgung-block">
     <form method="post" action="/angebote/{{ angebot.id }}/profil" class="suchleiste" id="profilform">

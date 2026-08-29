@@ -39,6 +39,13 @@
     {% else %}<span class="ampel gruen">● Konfigurierbar</span>{% endif %}
 </p>
 
+{% if fachhinweise %}
+<div class="warnblock">
+    <strong>⚠ Fachliche Hinweise</strong>
+    <ul>{% for h in fachhinweise %}<li>{{ h }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
 {% if gruende and gruende[0] %}
 <div class="warnblock">
     <strong>Gründe für individuelle Prüfung</strong>

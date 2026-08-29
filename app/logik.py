@@ -124,6 +124,15 @@ class Anhang:
 
 
 @dataclass
+class Vermerk:
+    """v9: bedingter Angebotsvermerk (Blatt "Vermerke") – Text erscheint als
+    Absatz im PDF, wenn die Bedingung auf die Antworten zutrifft."""
+    text: str
+    bedingung: Optional[Bedingung]
+    platzierung: str = "Ende Positionsteil"
+
+
+@dataclass
 class Logik:
     fragen: dict[str, Frage]
     aktionen: list[Aktion]
@@ -135,6 +144,7 @@ class Logik:
     # v8: reine Erfassungsbögen je Sparte (Blätter "Fragen PV" / "Fragen KL"),
     # ohne Artikel-Aktionen – laufen über die TAIFUN-Schiene
     sparten_fragen: dict[str, dict[str, Frage]] = field(default_factory=dict)
+    vermerke: list[Vermerk] = field(default_factory=list)   # v9
 
     @property
     def seiten(self) -> list[str]:
@@ -292,7 +302,7 @@ def logik_einlesen() -> tuple[Logik, Pruefbericht]:
         sparten_fragen[sparte] = _fragen_einlesen(wb, bericht, blatt)
 
     logik = Logik(fragen, aktionen, pakete, bloecke, kfw, datetime.now(), anhaenge,
-                  sparten_fragen)
+                  sparten_fragen, _vermerke_einlesen(wb, bericht))
     _querbezuege_pruefen(logik, bericht)
     for sparte, sfragen in sparten_fragen.items():
         _bedingungen_pruefen(sfragen, bericht, f"Fragen {sparte}")
@@ -331,6 +341,26 @@ def _anhaenge_einlesen(wb, bericht: Pruefbericht) -> list[Anhang]:
             bericht.warnungen.append(f"Anhänge: Regel „{regel}“ für {datei} nicht lesbar.")
         anhaenge.append(eintrag)
     return anhaenge
+
+
+def _vermerke_einlesen(wb, bericht: Pruefbericht) -> list["Vermerk"]:
+    """v9: Blatt "Vermerke" (Text · Bedingung · Platzierung); fehlt das Blatt,
+    gibt es schlicht keine Vermerke."""
+    if "Vermerke" not in wb.sheetnames:
+        return []
+    vermerke = []
+    for text, bedingung_roh, platzierung in wb["Vermerke"].iter_rows(min_row=2,
+                                                                     values_only=True):
+        text = _zelle(text)
+        if not text:
+            continue
+        bedingung = bedingung_parsen(bedingung_roh)
+        if bedingung is None:
+            bericht.fehler.append(
+                f"Vermerke: Bedingung nicht parsebar: {bedingung_roh!r}")
+        vermerke.append(Vermerk(text, bedingung,
+                                _zelle(platzierung) or "Ende Positionsteil"))
+    return vermerke
 
 
 def _fragen_einlesen(wb, bericht: Pruefbericht, blatt: str = "Fragen") -> dict[str, Frage]:

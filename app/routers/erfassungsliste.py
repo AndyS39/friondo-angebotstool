@@ -68,12 +68,16 @@ async def liste(request: Request, q: str = "", status: str = "", ampel: str = ""
         erfassungen = [e for e in erfassungen if e.benutzer_id == vertriebler_id]
     # Bemerkungs-Symbol (Phase 24): O08 (Objekt) / A12 (alte Anlage) gefüllt?
     bemerkungen = {}
+    fachhinweis_ids = {}   # v9: Warnsymbol bei fachlichen Hinweisen
     for e in erfassungen:
         antworten = json.loads(e.antworten_json or "{}")
         texte = [t for t in (antworten.get("O08"), antworten.get("A12"))
                  if t and str(t).strip()]
         if texte:
             bemerkungen[e.id] = " · ".join(str(t) for t in texte)
+        hinweise = engine.fachliche_hinweise(antworten)
+        if hinweise:
+            fachhinweis_ids[e.id] = " · ".join(hinweise)
     vertriebler_werte = sorted({e.benutzer_id for e in erfassungen if e.benutzer_id}
                                | ({vertriebler_id} if vertriebler_id else set()),
                                key=lambda i: benutzer[i].name if i in benutzer else "")
@@ -82,7 +86,8 @@ async def liste(request: Request, q: str = "", status: str = "", ampel: str = ""
                   angebote=angebote, q=q, status=status, ampel=ampel,
                   interesse=interesse, vertriebler_id=vertriebler_id, sparte=sparte,
                   vertriebler_werte=vertriebler_werte,
-                  bemerkungen=bemerkungen, status_liste=ERFASSUNG_STATUS,
+                  bemerkungen=bemerkungen, fachhinweis_ids=fachhinweis_ids,
+                  status_liste=ERFASSUNG_STATUS,
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -105,7 +110,9 @@ async def detail(request: Request, erfassung_id: int,
                     .filter(Benutzer.rolle == "aussendienst", Benutzer.aktiv.is_(True))
                     .order_by(Benutzer.name).all())
     from datetime import date
+    fachhinweise = engine.fachliche_hinweise(antworten)   # v9
     return render(request, "erfassungen/detail.html", aktiv="/erfassungen",
+                  fachhinweise=fachhinweise,
                   erfassung=erfassung, kunde=kunde, vertriebler=vertriebler,
                   aussendienst=aussendienst,
                   protokoll=prot, angebot=angebot, seiten=seiten,

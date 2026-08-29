@@ -399,6 +399,9 @@ class Angebot(Base):
     extern: Mapped[bool] = mapped_column(Boolean, default=False)
     taifun_nummer: Mapped[str] = mapped_column(String(30), default="")
     extern_endbetrag_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Bedingte Angebotsvermerke (v9, Blatt "Vermerke"): beim Anlegen
+    # ausgewertete Texte für das PDF (Ende Positionsteil vor Summenblock)
+    vermerke_json: Mapped[str] = mapped_column(Text, default="[]")
     # Angebotsprofil (v9): None = automatisch über den Kanal des Kunden;
     # vortext_text überschreibt den Profil-Vortext (leer = Standard)
     profil_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

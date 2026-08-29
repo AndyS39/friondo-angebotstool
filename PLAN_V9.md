@@ -103,7 +103,7 @@ SWD / Sparkasse DU – beim Start lokalisieren, im Zweifel nachfragen).
       18.500 kWh + WW bis 200 l → Paket 047 + 067 genau 1×
 
 ## Phase 55 – Solarthermie & bedingte Vermerke
-- [ ] Zusatzartikel Z24 anlegen: „Rückbau Solarthermieanlage im
+- [x] Zusatzartikel Z24 anlegen: „Rückbau Solarthermieanlage im
       Heizungsraum inkl. Entsorgung", pauschal, VK 0,00 € / EK 0,00 €,
       Beschreibung wörtlich:
       „Technischer Hinweis: Im Angebot enthalten ist ausschließlich der
@@ -114,19 +114,19 @@ SWD / Sparkasse DU – beim Start lokalisieren, im Zweifel nachfragen).
       entsorgt. Nicht enthalten sind die dachseitigen Komponenten sowie
       die Leitungsführung außerhalb des Heizungsraums ab dem
       Übergabepunkt."
-- [ ] A10 „Ja, soll stillgelegt werden": AMPEL entfernen → Z24 ×1 (Block 5)
-- [ ] A10 „Ja, soll übernommen werden": AMPEL entfernen → Warmwasser-
+- [x] A10 „Ja, soll stillgelegt werden": AMPEL entfernen → Z24 ×1 (Block 5)
+- [x] A10 „Ja, soll übernommen werden": AMPEL entfernen → Warmwasser-
       Übersteuerung: Paket zwingend AWE-Variante der Klasse (Klasse 15:
       Inneneinheit weiter über Pufferwahl AWMB/AWE – Übernahme wirkt nur
       auf die WW-Schiene); Pos. 069 ×1 statt 065/067; N03 wird
       ausgeblendet, Info „Warmwasser über bivalenten 390-l-Solarspeicher";
       Block-1-Überschrift mit Warmwasserbereitung
-- [ ] Generischer Mechanismus „fachliche Hinweise am Vorgang" (Warnsymbol
+- [x] Generischer Mechanismus „fachliche Hinweise am Vorgang" (Warnsymbol
       in Erfassungsliste + prominenter Kasten im Angebotsentwurf, ohne
       Blockade); erster Hinweis: N02 = Nein UND A10 = übernehmen →
       „Widerspruch: Solarthermie-Übernahme erfasst, aber ‚Warmwasser über
       WP = Nein' – 069 wurde übernommen, bitte prüfen"
-- [ ] Neues Logik-Blatt „Vermerke" (Spalten: Text | Bedingung |
+- [x] Neues Logik-Blatt „Vermerke" (Spalten: Text | Bedingung |
       Platzierung); Engine rendert zutreffende Vermerke als Textabsatz;
       erster Eintrag – Bedingung A04 = DG und D01 = Nein, Platzierung
       Ende Positionsteil vor Summenblock, Text wörtlich:
@@ -148,7 +148,7 @@ SWD / Sparkasse DU – beim Start lokalisieren, im Zweifel nachfragen).
       eines geeigneten Schachtes mit Durchführung in das Kellergeschoss
       wurden bereits berücksichtigt und sind Bestandteil der Kalkulation.
       Diese Voraussetzungen werden bauseitig als gegeben angenommen."
-- [ ] Tests: Stilllegung → Z24 mit 0,00 €; Übernahme + 18.500 kWh +
+- [x] Tests: Stilllegung → Z24 mit 0,00 €; Übernahme + 18.500 kWh +
       „200 l" → Paket 052 (AWE) + 069, keine 065/067; Übernahme +
       N02 = Nein → 069 + fachlicher Hinweis; DG + D01 = Nein → Vermerk
       im PDF vorhanden
