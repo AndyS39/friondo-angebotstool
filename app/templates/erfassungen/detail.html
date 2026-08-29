@@ -120,8 +120,22 @@
 <h2>Freitext-Erfassung
     <a class="knopf klein zweitrangig" href="/erfassungen/{{ erfassung.id }}/protokoll.pdf"
        target="_blank">Protokoll-PDF</a>
+    {% if 'Freitext geändert (Vorgang bereits' in (erfassung.aenderungs_protokoll or '') %}
+        <span class="abzeichen ep" title="Der Freitext wurde geändert, während der Vorgang bereits in Bearbeitung/mit Angebot war – Details im Änderungsprotokoll.">Freitext geändert</span>
+    {% endif %}
 </h2>
+{% set darf_freitext = benutzer.rolle != 'aussendienst' or erfassung.benutzer_id == benutzer.id %}
+{% if darf_freitext %}
+<form method="post" action="/erfassungen/{{ erfassung.id }}/freitext" class="formular">
+    <textarea name="freitext" rows="10" style="width:100%">{{ erfassung.freitext }}</textarea>
+    <div class="formaktionen">
+        <button class="knopf klein" type="submit">Freitext speichern</button>
+        <span class="dezent">Änderungen werden mit Name und Zeit protokolliert.</span>
+    </div>
+</form>
+{% else %}
 <div class="hinweis freitext-block">{{ erfassung.freitext }}</div>
+{% endif %}
 {% if protokoll %}<h2>Teilantworten aus dem Katalog <span class="dezent">(vor dem Wechsel in den Freitext)</span></h2>{% endif %}
 {% else %}
 <h2>Antworten

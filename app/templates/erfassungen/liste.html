@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import "_interesse.html" as interesse_ui %}
+{% import "_sparten.html" as sparten_ui %}
 
 {% block titel %}Erfassungen – Friondo Angebotstool{% endblock %}
 
@@ -56,8 +57,11 @@
                 {% if e.kunde_id in kunden and kunden[e.kunde_id].vertriebskanal %}
                     <span class="abzeichen">{{ kunden[e.kunde_id].vertriebskanal }}</span>
                 {% endif %}
-                <span class="abzeichen">{{ e.sparte or 'WP' }}</span>
+                {{ sparten_ui.chip(e.sparte or 'WP') }}
                 {% if e.typ == 'freitext' %}<span class="abzeichen">Freitext</span>{% endif %}
+                {% if 'Freitext geändert (Vorgang bereits' in (e.aenderungs_protokoll or '') %}
+                    <span class="abzeichen ep" title="Freitext wurde geändert, während der Vorgang bereits lief – Details im Änderungsprotokoll.">Freitext geändert</span>
+                {% endif %}
                 {% if e.id in fachhinweis_ids %}
                     <span title="{{ fachhinweis_ids[e.id] }}">⚠</span>
                 {% endif %}
@@ -89,6 +93,7 @@
     </tbody>
 </table>
 <p class="dezent">{{ erfassungen | length }} Erfassung{{ 'en' if erfassungen | length != 1 }}</p>
+{{ sparten_ui.legende() }}
 {% else %}
 <p class="hinweis">Keine Erfassungen gefunden.</p>
 {% endif %}

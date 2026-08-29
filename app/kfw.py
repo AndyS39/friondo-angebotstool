@@ -340,8 +340,18 @@ def berechnen(p: KfwParameter, e: KfwEingaben,
         zeilen.append((f"Grundförderung ({_prozent(p.grund_prozent)} %)",
                        _euro(grund_cent), False))
         if e.mfh_selbst:
-            zeilen.append((f"Boni selbstgenutzte WE ({_prozent(bonus_rate)} % anteilig)",
-                           _euro(bonus_cent) if bonus_cent else "–", False))
+            # v9 (Phase 57): Klima- und Einkommensbonus als getrennte Zeilen –
+            # Anzeige-Kappung: Klimabonus zuerst voll, Einkommensbonus ist der
+            # Restwert, damit die Summe exakt dem Referenz-Rechner entspricht.
+            klima_anteil = min(klima_bonus, bonus_rate)
+            klima_zeile_cent = _rund_cent(anteil_cent * klima_anteil / 100)
+            eink_zeile_cent = bonus_cent - klima_zeile_cent
+            zeilen.append((f"Klimageschwindigkeits-Bonus ({_prozent(klima_anteil)} % "
+                           "anteilig auf die selbstgenutzte WE)",
+                           _euro(klima_zeile_cent) if klima_zeile_cent else "–", False))
+            zeilen.append((f"Einkommensbonus ({_prozent(bonus_rate - klima_anteil)} % "
+                           "anteilig auf die selbstgenutzte WE)",
+                           _euro(eink_zeile_cent) if eink_zeile_cent else "–", False))
             if klima_bonus + eink_bonus > bonus_rate:
                 hinweise.append(
                     f"Die Boni ergäben rechnerisch {_prozent(klima_bonus + eink_bonus)} %-Punkte, "

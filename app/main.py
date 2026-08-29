@@ -62,13 +62,10 @@ app.include_router(meine_angebote.router)
 app.include_router(versand.router)
 
 
-@app.get("/")
-async def startseite(request: Request):
-    """Startseite (Phase 19): drei Shortcuts + klickbare Statistik-Kacheln."""
-    from sqlalchemy import or_
-
+def _start_kontext() -> dict:
+    """Kennzahlen für die Angebotstool-Kacheln (Startseite + /angebotstool)."""
     from app.db import SessionLocal
-    from app.models import Angebot, Erfassung, Lead
+    from app.models import Angebot, Erfassung
     session = SessionLocal()
     try:
         offene_leads = _offene_leads_anzahl(session)
@@ -92,12 +89,23 @@ async def startseite(request: Request):
                              .count())
     finally:
         session.close()
-    return render(request, "index.html", aktiv=None,
-                  faellige=faellige,
-                  offene_leads=offene_leads,
-                  offene_erfassungen=offene_erfassungen,
-                  individuell_offen=individuell_offen,
-                  versendete=versendete)
+    return dict(faellige=faellige, offene_leads=offene_leads,
+                offene_erfassungen=offene_erfassungen,
+                individuell_offen=individuell_offen, versendete=versendete)
+
+
+@app.get("/")
+async def startseite(request: Request):
+    """Startseite: drei Bereiche (v9, Phase 57) – links Lead-Management und
+    rechts Projektierung als „Coming soon“-Platzhalter, in der Mitte das
+    Angebotstool mit den bisherigen Kacheln."""
+    return render(request, "index.html", aktiv=None, **_start_kontext())
+
+
+@app.get("/angebotstool")
+async def angebotstool(request: Request):
+    """Bisherige Startansicht (Phase 19): Shortcuts + Statistik-Kacheln."""
+    return render(request, "angebotstool.html", aktiv=None, **_start_kontext())
 
 
 def _offene_leads_anzahl(session) -> int:

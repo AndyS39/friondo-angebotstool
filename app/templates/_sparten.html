@@ -1,0 +1,27 @@
+{# Sparten-Chips (v9, Phase 57): farbcodiert je Sparte (WP/PV/KL/WB),
+   Zustände erfasst (gefüllt, Haken) / offen (umrandet) / ausgeblendet
+   (grau, durchgestrichen). chip() für reine Anzeige (Erfassungs-/
+   Angebotsliste), in der Lead-Liste sitzen die Chips als Buttons. #}
+
+{% set NAMEN = {'WP': 'Wärmepumpe', 'PV': 'Photovoltaik',
+                'KL': 'Klimaanlage', 'WB': 'Wallbox'} %}
+{% set ZUSTAND = {'erfasst': 'erfasst', 'offen': 'noch offen',
+                  'ausgeblendet': 'ausgeblendet (kein Bedarf)'} %}
+
+{% macro chip(sparte, status='erfasst', zusatz='') -%}
+    <span class="chip chip-{{ sparte | lower }} chip-{{ status }}"
+          title="{{ NAMEN.get(sparte, sparte) }}: {{ ZUSTAND.get(status, status) }}{{ ' – ' ~ zusatz if zusatz }}">
+        {{- sparte }}{{ ' ✓' if status == 'erfasst' else (' ✕' if status == 'ausgeblendet') -}}
+    </span>
+{%- endmacro %}
+
+{% macro legende() -%}
+    <p class="chip-legende">Sparten:
+        {% for kuerzel, name in NAMEN.items() %}
+            <span class="chip chip-{{ kuerzel | lower }} chip-erfasst">{{ kuerzel }}</span> {{ name }}
+        {% endfor %}
+        · <span class="chip chip-erfasst">✓ erfasst</span>
+        <span class="chip chip-offen">offen</span>
+        <span class="chip chip-ausgeblendet">✕ ausgeblendet</span>
+    </p>
+{%- endmacro %}

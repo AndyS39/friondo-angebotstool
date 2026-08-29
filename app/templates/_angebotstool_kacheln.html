@@ -1,0 +1,39 @@
+{# Angebotstool-Kacheln (Phase 19, seit v9 auch im mittleren Startseiten-
+   Bereich eingebunden): drei Shortcuts + klickbare Statistik-Kacheln. #}
+<div class="kacheln start-shortcuts">
+    <a class="kachel" href="/leads">Leads VOT</a>
+    <a class="kachel" href="/erfassungen">Erfassungen</a>
+    <a class="kachel" href="/angebote">Angebote</a>
+</div>
+
+<h2>Auf einen Blick</h2>
+<div class="kacheln statistik">
+    <a class="kachel stat" href="/leads">
+        <span class="stat-zahl">{{ offene_leads }}</span>
+        <span>Offene Leads</span>
+        <span class="dezent">VOT ohne Angebot</span>
+    </a>
+    <a class="kachel stat" href="/erfassungen?status=offen">
+        <span class="stat-zahl">{{ offene_erfassungen }}</span>
+        <span>Offene Erfassungen</span>
+        <span class="dezent">Neu / In Bearbeitung</span>
+    </a>
+    {% if individuell_offen %}
+    <a class="kachel stat" href="/erfassungen?status=individuell-offen">
+        <span class="stat-zahl">{{ individuell_offen }}</span>
+        <span>Individuell offen</span>
+        <span class="dezent">zu prüfen / in TAIFUN zu schreiben</span>
+    </a>
+    {% endif %}
+    {% if faellige %}
+    <a class="kachel stat" href="/angebote?verfolgung=faellig">
+        <span class="stat-zahl" style="color:#c0392b">{{ faellige }}</span>
+        Fällige Wiedervorlagen
+    </a>
+    {% endif %}
+    <a class="kachel stat" href="/angebote?status=Versendet">
+        <span class="stat-zahl">{{ versendete }}</span>
+        <span>Versendete Angebote</span>
+        <span class="dezent">warten auf Antwort</span>
+    </a>
+</div>

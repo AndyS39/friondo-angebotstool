@@ -799,13 +799,49 @@ tr.bauseits td { color: #888; }
 .foerder-bausteine { display: flex; flex-wrap: wrap; gap: 0.9rem; margin-top: 0.5rem; }
 .feld-mit-reset { display: inline-flex; gap: 0.25rem; align-items: center; }
 
-/* v8: Sparten-Chips an Leads */
+/* v9 (Phase 57): Sparten-Chips – farbcodiert je Sparte, Zustände über
+   Füllung: erfasst = gefüllt mit Haken, offen = nur umrandet,
+   ausgeblendet = grau und durchgestrichen. Verwendet in Leads-,
+   Erfassungs- und Angebotsliste (Makros in _sparten.html). */
 .sparten-chips { display: inline-flex; gap: 0.25rem; flex-wrap: wrap; margin-left: 0.3rem; }
-.chip { border: 1px solid #d4d9e4; border-radius: 999px; padding: 0.1rem 0.55rem;
-    font-size: 0.78rem; background: #f4f6fa; cursor: pointer; }
-.chip-erfasst { background: #e8f4e5; color: #4c9a3d; border-color: #bfe0b5; cursor: default; }
-.chip-offen { background: #fdf3e0; color: #ad7a12; border-color: #ecd9ab; }
-.chip-ausgeblendet { background: #eee; color: #888; text-decoration: line-through; }
+.chip { --chip-farbe: #5a6478;
+    border: 1.5px solid var(--chip-farbe); border-radius: 999px;
+    padding: 0.1rem 0.55rem; font-size: 0.78rem; font-weight: 600;
+    background: #fff; color: var(--chip-farbe); cursor: pointer;
+    white-space: nowrap; display: inline-block; }
+span.chip { cursor: default; }
+.chip-wp { --chip-farbe: #b3543a; }   /* Wärmepumpe – Terrakotta */
+.chip-pv { --chip-farbe: #b8860b; }   /* Photovoltaik – Goldgelb */
+.chip-kl { --chip-farbe: #2a7fb8; }   /* Klima – Blau */
+.chip-wb { --chip-farbe: #4c9a3d; }   /* Wallbox – Grün */
+.chip-erfasst { background: var(--chip-farbe); color: #fff; cursor: default; }
+.chip-offen { background: #fff; }
+.chip-ausgeblendet { --chip-farbe: #999; background: #eee; color: #888;
+    border-color: #ccc; text-decoration: line-through; }
+.chip-legende { margin-top: 0.5rem; font-size: 0.78rem; color: #5a6478;
+    display: flex; gap: 0.7rem; flex-wrap: wrap; align-items: center; }
+
+/* v9 (Phase 57): Startseite in drei Bereichen – Mitte Angebotstool,
+   links/rechts Platzhalter mit rotem Coming-soon-Hinweis */
+.start-bereiche { display: grid; grid-template-columns: 1fr 1.6fr 1fr;
+    gap: 1.2rem; align-items: start; }
+.start-bereich { border: 1px solid #d4d9e4; border-radius: 10px;
+    padding: 1rem 1.2rem; background: #fff; }
+.start-bereich h2 { margin-top: 0; }
+.start-bereich h2 a { text-decoration: none; color: inherit; }
+.start-bereich h2 a:hover { text-decoration: underline; }
+.platzhalter-bereich { background: #f8f9fc; }
+.platzhalter-bereich .bereich-kacheln { grid-template-columns: 1fr; }
+.kachel.inaktiv { cursor: default; opacity: 0.65; }
+.kachel.inaktiv:hover { transform: none; box-shadow: none;
+    border-color: var(--grau-linie); }
+.coming-soon { color: #c0392b; font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em; border: 1px solid #c0392b;
+    border-radius: 999px; padding: 0.1rem 0.5rem; vertical-align: middle; }
+@media (max-width: 1100px) {
+    .start-bereiche { grid-template-columns: 1fr; }
+    .platzhalter-bereich .bereich-kacheln { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+}
 
 /* v8: Sparten-Auswahl */
 .wahl-erledigt { opacity: 0.55; }

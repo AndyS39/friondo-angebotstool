@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import "_interesse.html" as interesse_ui %}
+{% import "_sparten.html" as sparten_ui %}
 
 {% block titel %}Leads VOT – Friondo Angebotstool{% endblock %}
 
@@ -82,10 +83,10 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
                 {% for sparte, status in chips.get(lead.id, []) %}
                     <form method="post" action="/leads/{{ lead.id }}/sparte-ausblenden" style="display:inline">
                         <input type="hidden" name="sparte" value="{{ sparte }}">
-                        <button class="chip chip-{{ status }}" type="submit"
-                                title="{{ sparte }}: {{ status }} – klicken zum {{ 'Zurückholen' if status == 'ausgeblendet' else 'Ausblenden' }} dieser Sparte"
+                        <button class="chip chip-{{ sparte | lower }} chip-{{ status }}" type="submit"
+                                title="{{ sparten_ui.NAMEN.get(sparte, sparte) }}: {{ sparten_ui.ZUSTAND.get(status, status) }} – klicken zum {{ 'Zurückholen' if status == 'ausgeblendet' else 'Ausblenden' }} dieser Sparte"
                                 {{ 'disabled' if status == 'erfasst' }}>
-                            {{ sparte }} {{ '✓' if status == 'erfasst' else ('✕' if status == 'ausgeblendet' else 'offen') }}
+                            {{ sparte }}{{ ' ✓' if status == 'erfasst' else (' ✕' if status == 'ausgeblendet') }}
                         </button>
                     </form>
                 {% endfor %}
@@ -146,6 +147,7 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
     </tbody>
 </table>
 <p class="dezent">{{ leads | length }} {{ 'ausgeblendete' if ausgeblendet else 'offene' }}{{ 'r' if leads | length == 1 and not ausgeblendet }} Lead{{ 's' if leads | length != 1 }}</p>
+{{ sparten_ui.legende() }}
 {% elif ausgeblendet %}
 <p class="hinweis">Keine ausgeblendeten Leads.</p>
 {% else %}

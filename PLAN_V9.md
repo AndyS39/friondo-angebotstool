@@ -169,7 +169,7 @@ SWD / Sparkasse DU – beim Start lokalisieren, im Zweifel nachfragen).
       Statistik zählt 1 Angebot, monday-Wert = neue Summe
 
 ## Phase 57 – Darstellung: Förderung, Chips, Freitext, Startseite
-- [ ] MFH-Förderaufschlüsselung: Klima- und Einkommensbonus als getrennte
+- [x] MFH-Förderaufschlüsselung: Klima- und Einkommensbonus als getrennte
       Zeilen (je „x % anteilig auf die selbstgenutzte WE" + €-Betrag);
       Rechenlogik UNVERÄNDERT (war korrekt – prüfen, dass aus dem
       früheren Bugfix-Auftrag keine Logikänderung übrig ist, Tests
@@ -179,15 +179,15 @@ SWD / Sparkasse DU – beim Start lokalisieren, im Zweifel nachfragen).
       Referenz entspricht), Kappungshinweis wie im Referenz-Rechner.
       Anzeige-Tests: B1 → Klima 3.093,33 € + Einkommen 4.640,00 €;
       B3 → Klima 3.093,33 € + Einkommen 6.573,34 € (Restwert)
-- [ ] Förder-Baustein-Editor entsprechend MFH-tauglich beschriften
-- [ ] Sparten-Chips-Redesign in Leads VOT, Erfassungs- und Angebotsliste:
+- [x] Förder-Baustein-Editor entsprechend MFH-tauglich beschriften
+- [x] Sparten-Chips-Redesign in Leads VOT, Erfassungs- und Angebotsliste:
       farbcodiert je Sparte, Zustände erfasst (gefüllt, Haken) / offen
       (umrandet) / ausgeblendet (grau, durchgestrichen); Tooltip + Legende
-- [ ] Freitext nachträglich editierbar: ID/Admin überall, AD bei eigenen
+- [x] Freitext nachträglich editierbar: ID/Admin überall, AD bei eigenen
       Erfassungen; Änderungen protokolliert (Name, Zeit); ist der Vorgang
       bereits in Bearbeitung/mit Angebot, erscheint der Hinweis „Freitext
       geändert" am Vorgang
-- [ ] Startseite in drei Bereiche: Mitte „Angebotstool" (klickbar → 
+- [x] Startseite in drei Bereiche: Mitte „Angebotstool" (klickbar → 
       bisherige Startansicht/Kacheln), links „Lead-Management", rechts
       „Projektierung" – beide mit rotem „Coming soon" und eigenen
       Platzhalter-Kacheln (Werte 0, ohne Logik):

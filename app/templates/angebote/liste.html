@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import "_interesse.html" as interesse_ui %}
+{% import "_sparten.html" as sparten_ui %}
 
 {% block titel %}Angebote – Friondo Angebotstool{% endblock %}
 
@@ -81,12 +82,12 @@
             <td>
                 {% if a.extern %}
                     <a href="/angebote/{{ a.id }}"><span class="abzeichen">TAIFUN</span>
-                        {% if a.konfigurator_typ and a.konfigurator_typ != 'WP' %}<span class="abzeichen">{{ a.konfigurator_typ }}</span>{% endif %}
                         {{ a.taifun_nummer or '' }}</a>
                     {% if not a.taifun_nummer %}<span class="abzeichen ep" title="TAIFUN-Angebotsnummer nachtragen">Nummer fehlt</span>{% endif %}
                 {% else %}
                     <a href="/angebote/{{ a.id }}">{{ a.nummer }}</a>
                 {% endif %}
+                {{ sparten_ui.chip(a.konfigurator_typ or 'WP') }}
                 {% if mail_zaehler.get(a.id) %}
                     <a class="mail-abzeichen" href="/angebote/{{ a.id }}/mails"
                        title="{{ mail_zaehler[a.id] }} Antwort{{ 'en' if mail_zaehler[a.id] != 1 }} zur Angebots-Mail">
@@ -152,6 +153,7 @@
 <p class="dezent">Externe TAIFUN-Einträge zählen im Endbetrag mit; Netto und DB
 sind dort unbekannt und bleiben außen vor.</p>
 {% endif %}
+{{ sparten_ui.legende() }}
 {% else %}
 <p class="hinweis">Noch keine Angebote. Über den <a href="/konfigurator">Konfigurator</a>
 oder als manuelles Angebot über einen Kunden starten.</p>

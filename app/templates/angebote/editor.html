@@ -438,6 +438,11 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
             </span>
         </label>
     </div>
+    {% if kfw_ergebnis and kfw_ergebnis.satz_text.startswith('Effektiver') %}
+    <p class="dezent">Mehrfamilienhaus: Grundförderung wirkt auf die gesamten
+        förderfähigen Kosten; Klima- und Einkommensbonus wirken anteilig nur auf
+        die selbstgenutzte Wohneinheit (förderfähige Kosten ÷ Wohneinheiten).</p>
+    {% endif %}
     <div class="formaktionen">
         <label class="kontrollfeld"><input type="checkbox" name="ausblenden"
             {{ 'checked' if angebot.foerderung_ausblenden }}> Förderblock im PDF ausblenden</label>

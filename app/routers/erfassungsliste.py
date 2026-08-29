@@ -112,7 +112,7 @@ async def detail(request: Request, erfassung_id: int,
     from datetime import date
     fachhinweise = engine.fachliche_hinweise(antworten)   # v9
     return render(request, "erfassungen/detail.html", aktiv="/erfassungen",
-                  fachhinweise=fachhinweise,
+                  fachhinweise=fachhinweise, benutzer=request.state.benutzer,
                   erfassung=erfassung, kunde=kunde, vertriebler=vertriebler,
                   aussendienst=aussendienst,
                   protokoll=prot, angebot=angebot, seiten=seiten,
@@ -169,6 +169,41 @@ async def status_aendern(request: Request, erfassung_id: int,
         # Reiter „Erledigt“, archiviert wird nur noch manuell
         session.commit()
     return RedirectResponse(f"/erfassungen/{erfassung_id}", status_code=303)
+
+
+@router.post("/{erfassung_id}/freitext")
+async def freitext_aendern(request: Request, erfassung_id: int,
+                           session: Session = Depends(get_session)):
+    """v9 (Phase 57): Freitext nachträglich editierbar – Innendienst/Admin
+    überall, Außendienst nur an eigenen Erfassungen; jede Änderung wird mit
+    Name und Zeit protokolliert. Läuft der Vorgang bereits (in Bearbeitung
+    oder mit Angebot), erscheint zusätzlich der Hinweis „Freitext geändert“."""
+    from urllib.parse import quote_plus
+    form = await request.form()
+    erfassung = session.get(Erfassung, erfassung_id)
+    benutzer = request.state.benutzer
+    if erfassung is None or erfassung.typ != "freitext":
+        return RedirectResponse(f"/erfassungen/{erfassung_id}", status_code=303)
+    if benutzer.rolle == "aussendienst" and erfassung.benutzer_id != benutzer.id:
+        return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
+            "Keine Berechtigung – der Freitext gehört zu einer fremden Erfassung."),
+            status_code=303)
+    neuer_text = (form.get("freitext") or "").strip()
+    if not neuer_text:
+        return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
+            "Der Freitext darf nicht leer sein."), status_code=303)
+    if neuer_text == (erfassung.freitext or "").strip():
+        return RedirectResponse(f"/erfassungen/{erfassung_id}", status_code=303)
+    laeuft = erfassung.status != "Neu" or erfassung.angebot_id is not None
+    erfassung.freitext = neuer_text
+    _kette_protokollieren(erfassung, benutzer,
+                          "Freitext geändert"
+                          + (" (Vorgang bereits in Bearbeitung/mit Angebot)"
+                             if laeuft else ""))
+    session.commit()
+    return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
+        "Freitext gespeichert – die Änderung steht im Änderungsprotokoll."),
+        status_code=303)
 
 
 def _kette_protokollieren(erfassung: Erfassung, benutzer, text: str) -> None:

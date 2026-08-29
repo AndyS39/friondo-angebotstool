@@ -203,14 +203,28 @@ class TestMfhKontrollwerte(unittest.TestCase):
         self.assertEqual(berechnen(P, e).zuschuss_cent, 1960000)
 
     def test_mfh_pdf_aufschluesselung_wie_referenz(self):
+        # v9 (Phase 57): getrennte Bonus-Zeilen – Klimabonus zuerst voll,
+        # Einkommensbonus = Restwert (B1: 16 % → 3.093,33 €, Rest 4.640,00 €)
         erg = self._mfh(3, 60000, selbst=True, klima=True, einkommen=35000)
-        namen = [z[0] for z in erg.zeilen]
-        self.assertIn("Grundförderung (30 %)", namen)
-        self.assertIn("Boni selbstgenutzte WE (40 % anteilig)", namen)
+        zeilen = dict((z[0], z[1]) for z in erg.zeilen)
+        self.assertIn("Grundförderung (30 %)", zeilen)
+        self.assertEqual(zeilen["Klimageschwindigkeits-Bonus (16 % anteilig "
+                                "auf die selbstgenutzte WE)"], "3.093,33 €")
+        self.assertEqual(zeilen["Einkommensbonus (24 % anteilig "
+                                "auf die selbstgenutzte WE)"], "4.640,00 €")
         self.assertTrue(erg.satz_text.startswith("Effektiver Fördersatz:"))
         self.assertTrue(any("anteilig für die selbst bewohnte Wohneinheit" in h
                             for h in erg.hinweise))
         self.assertTrue(any("%-Punkte" in h for h in erg.hinweise))
+
+    def test_mfh_anzeige_split_b3_restwert(self):
+        # B3: Rate 50, Klima 16 → 3.093,33 €; Einkommen = Restwert 6.573,34 €
+        erg = self._mfh(3, 60000, selbst=True, klima=True, einkommen=25000)
+        zeilen = dict((z[0], z[1]) for z in erg.zeilen)
+        self.assertEqual(zeilen["Klimageschwindigkeits-Bonus (16 % anteilig "
+                                "auf die selbstgenutzte WE)"], "3.093,33 €")
+        self.assertEqual(zeilen["Einkommensbonus (34 % anteilig "
+                                "auf die selbstgenutzte WE)"], "6.573,34 €")
 
     def test_mfh_mit_foerder_bausteinen(self):
         # v8-Baustein-Editor: Overrides ändern die Sätze, der MFH-Rechenweg
