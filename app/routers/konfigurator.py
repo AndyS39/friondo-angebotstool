@@ -78,7 +78,7 @@ async def schritt(request: Request, konfig_id: int, frage: str = "",
     aktuelle = None
     if frage and frage in logik.fragen:
         kandidat = logik.fragen[frage]
-        if engine.ist_sichtbar(kandidat, antworten, logik.fragen):
+        if engine.ist_sichtbar(kandidat, antworten, logik.fragen, logik):
             aktuelle = kandidat
     if aktuelle is None and konfig.status != "fertig":
         aktuelle = engine.naechste_frage(logik, antworten)

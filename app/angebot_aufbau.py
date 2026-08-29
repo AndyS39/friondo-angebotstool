@@ -176,7 +176,8 @@ def _position_im_inhalt(block, artikel: GewaehlterArtikel) -> int:
     return -1
 
 
-def _block_ueberschrift(block, antworten: dict, erste_kategorie: str) -> str:
+def _block_ueberschrift(block, antworten: dict, erste_kategorie: str,
+                        logik: Logik | None = None) -> str:
     u = block.ueberschrift
     if u.startswith("(ohne"):
         return ""
@@ -185,6 +186,12 @@ def _block_ueberschrift(block, antworten: dict, erste_kategorie: str) -> str:
     if u.startswith("DYNAMISCH"):
         zitate = re.findall(r"'([^']+)'", u)
         basis = zitate[0] if zitate else ""
+        # v9: Serie CS8800i bei Leistungsklasse 15 kW
+        if logik is not None:
+            zeile = engine.leistungsklasse(logik, antworten)
+            if zeile is not None and zeile.leistungsklasse == "15 kW":
+                basis = basis.replace("CS3800i", "CS8800i")
+                zitate = [z.replace("CS3800i", "CS8800i") for z in zitate]
         if antworten.get(engine.ID_WARMWASSER) == "Ja" and len(zitate) > 1 and zitate[1].startswith("…"):
             kopf = basis.split(" mit ")[0]
             return kopf + " " + zitate[1].lstrip("… ").strip()
@@ -268,7 +275,7 @@ def positionen_zusammenstellen(logik: Logik, antworten: dict,
             kategorie = stamm.kategorie
             if stamm.quelle == "preisliste":
                 break
-        ueberschrift = _block_ueberschrift(block, antworten, kategorie)
+        ueberschrift = _block_ueberschrift(block, antworten, kategorie, logik)
         for p in positionen:
             if p["block_nr"] == block_nr:
                 p["gruppe"] = ueberschrift

@@ -51,16 +51,17 @@ def zahl_parsen(text) -> Optional[float]:
 
 def _bereich_passt(text: str, zahl: float) -> bool:
     """Zahlenbereiche aus Aktionszeilen: '0 – 8.000 kWh', 'über 14', 'bis 4', 'ab 9.000'."""
-    m = re.search(r"([\d.]+)\s*[–-]\s*([\d.]+)", text)
+    # v9: Bereiche auch mit Dezimal-Kommas ('16,0 – 18,5', 'ab 18,6')
+    m = re.search(r"(\d[\d.,]*)\s*[–-]\s*(\d[\d.,]*)", text)
     if m:
         return zahl_parsen(m.group(1)) <= zahl <= zahl_parsen(m.group(2))
-    m = re.search(r"über\s*([\d.]+)", text)
+    m = re.search(r"über\s*(\d[\d.,]*)", text)
     if m:
         return zahl > zahl_parsen(m.group(1))
-    m = re.search(r"\bbis\s*([\d.]+)", text)
+    m = re.search(r"\bbis\s*(\d[\d.,]*)", text)
     if m:
         return zahl <= zahl_parsen(m.group(1))
-    m = re.search(r"\bab\s*([\d.]+)", text)
+    m = re.search(r"\bab\s*(\d[\d.,]*)", text)
     if m:
         return zahl >= zahl_parsen(m.group(1))
     return True  # freie Beschreibung ("Meterzahl", "Anzahl") passt auf jede Zahl
@@ -90,10 +91,17 @@ def _term_erfuellt(frage_id: str, werte: list[str], antworten: dict,
     return str(wert) in erlaubt
 
 
-def ist_sichtbar(frage: Frage, antworten: dict, fragen: dict[str, Frage]) -> bool:
+def ist_sichtbar(frage: Frage, antworten: dict, fragen: dict[str, Frage],
+                 logik: "Logik | None" = None) -> bool:
     b = frage.bedingung
     if b is None or b.art == "immer":
         return True
+    if b.art == "klasse":
+        # v9: sichtbar nur, wenn die ermittelte Leistungsklasse passt
+        if logik is None:
+            return False
+        zeile = leistungsklasse(logik, antworten)
+        return zeile is not None and zeile.leistungsklasse in b.werte
     if b.art == "selbstnutzung":
         return ist_selbstnutzung(antworten)
     if b.art == "ausgefuellt":
@@ -146,13 +154,25 @@ def _wiederhol_klone(frage: Frage, antworten: dict,
     return klone
 
 
+def _frage_unterdrueckt(frage: Frage, logik: Logik, antworten: dict) -> bool:
+    """v9-Sonderregeln jenseits der Excel-Bedingungen: Die WW-Größenfrage N03
+    entfällt bei der Serie CS8800i (Klasse 15: Warmwasser fix über Pos. 065)."""
+    if frage.id == ID_WW_GROESSE:
+        zeile = leistungsklasse(logik, antworten)
+        if zeile is not None and zeile.leistungsklasse == "15 kW":
+            return True
+    return False
+
+
 def sichtbare_fragen(logik: Logik, antworten: dict) -> list[Frage]:
     ergebnis: list[Frage] = []
     for f in sorted(logik.fragen.values(), key=lambda f: f.reihenfolge):
         if f.bedingung is not None and f.bedingung.art == "wiederholgruppe":
             ergebnis.extend(_wiederhol_klone(f, antworten, logik.fragen))
             continue
-        if ist_sichtbar(f, antworten, logik.fragen):
+        if _frage_unterdrueckt(f, logik, antworten):
+            continue
+        if ist_sichtbar(f, antworten, logik.fragen, logik):
             ergebnis.append(f)
     ergebnis.sort(key=lambda f: f.reihenfolge)
     return ergebnis
@@ -283,6 +303,11 @@ def paket_aufloesen(logik: Logik, antworten: dict) -> Optional[list[ArtikelRef]]
     zeile = leistungsklasse(logik, antworten)
     if zeile is None or ID_WARMWASSER not in antworten:
         return None
+    if zeile.leistungsklasse == "15 kW":
+        # v9 (Serie CS8800i): Außeneinheit (030/031) und Inneneinheit
+        # (AWMB 055 / AWE 056 + Puffer) kommen über die Farb-/Pufferfragen;
+        # aus der Matrix kommt nur das fixe Warmwasser (Pos. 065 bei N02 = Ja)
+        return [ArtikelRef("065")] if antworten[ID_WARMWASSER] == "Ja" else []
     if antworten[ID_WARMWASSER] == "Nein":
         return zeile.ohne_ww
     groesse = str(antworten.get(ID_WW_GROESSE) or "")

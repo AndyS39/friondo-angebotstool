@@ -37,8 +37,8 @@ class TestV8(unittest.TestCase):
         # kWh über 31.000 löst mit gültiger Heizlast keine AMPEL aus
         antworten = dict(KONTROLL_SZENARIO, A03=35000, A14="Ja", A15="8,4")
         self.assertEqual(engine.ampel_gruende(self.logik, antworten), [])
-        # ab 16 kW → AMPEL Leistungsklasse zu hoch
-        antworten = dict(KONTROLL_SZENARIO, A14="Ja", A15="17")
+        # v9: 16,0–18,5 kW = Klasse 15 (CS8800i); AMPEL erst ab 18,6
+        antworten = dict(KONTROLL_SZENARIO, A14="Ja", A15="18,6")
         self.assertTrue(any("Leistungsklasse" in g
                             for g in engine.ampel_gruende(self.logik, antworten)))
 

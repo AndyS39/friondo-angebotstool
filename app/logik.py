@@ -210,6 +210,12 @@ def bedingung_parsen(roh) -> Optional[Bedingung]:
     m = re.match(r"je\s+\S+\s*\(([A-Z]{1,2}\d{2})\)$", text)
     if m:
         return Bedingung(text, "wiederholgruppe", m.group(1))
+    # v9: klassenabhängige Fragen – „nur wenn Klasse = 15 kW“ bzw.
+    # „nur wenn Klasse = 4 kW oder 6 kW …“ (ermittelte Leistungsklasse)
+    m = re.match(r"nur wenn Klasse\s*=\s*(.+)$", text)
+    if m:
+        return Bedingung(text, "klasse",
+                         werte=[w.strip() for w in m.group(1).split(" oder ")])
     m = re.match(r"nur wenn ([A-Z]{1,2}\d{2})\s+ausgefüllt$", text)
     if m:
         return Bedingung(text, "ausgefuellt", m.group(1))
@@ -410,9 +416,12 @@ def _paketmatrix_einlesen(wb, bericht: Pruefbericht) -> list[PaketZeile]:
         zeile = PaketZeile(klasse, verbrauch, von, bis,
                            refs_extrahieren(ww200), refs_extrahieren(ohne_ww),
                            refs_extrahieren(ww300), heizlast, h_von, h_bis)
-        for spalte, refs in (("WW bis 200 l", zeile.ww_bis_200),
-                             ("ohne Warmwasser", zeile.ohne_ww), ("WW 300 l", zeile.ww_300)):
-            if not refs:
+        for spalte, refs, roh in (("WW bis 200 l", zeile.ww_bis_200, ww200),
+                                  ("ohne Warmwasser", zeile.ohne_ww, ohne_ww),
+                                  ("WW 300 l", zeile.ww_300, ww300)):
+            # v9: „lt. …“-Zellen (Serie CS8800i: Artikel kommen aus den
+            # Puffer-/Farbfragen) brauchen keine eigene Referenz
+            if not refs and "lt. " not in roh:
                 bericht.fehler.append(
                     f"Paketmatrix {klasse}: Spalte „{spalte}“ ohne Artikel-Referenz.")
         pakete.append(zeile)

@@ -85,13 +85,13 @@ def main():
     netto = sum(round(p["menge"] * p["e_preis_cent"]) for p in pos if not p["ep_flag"])
     pruefe("Kontroll KG", "Katalog vollständig (inkl. A13 = 4)", engine.naechste_frage(logik, kg) is None)
     pruefe("Kontroll KG", "Ampel grün", engine.ampel_gruende(logik, kg) == [])
-    pruefe("Kontroll KG", "Netto 29.629,37 €", netto == 2962937, euro(netto))
+    pruefe("Kontroll KG", "Netto 30.245,43 € (v9: inkl. Pos. 067)", netto == 3024543, euro(netto))
     pruefe("Kontroll KG", "Erdleitung 8 m → Pos. 102 × 5", [p["menge"] for p in pos if p["pos_nr"] == "102"] == [5.0])
     pruefe("Kontroll KG", "A13 = 4 m → keine Pos. 103", not [p for p in pos if p["pos_nr"] == "103"])
     kg8 = dict(kg, A13=8)
     pos8 = angebot_aufbau.positionen_zusammenstellen(logik, kg8, s)
     netto8 = sum(round(p["menge"] * p["e_preis_cent"]) for p in pos8 if not p["ep_flag"])
-    pruefe("Kontroll KG", "A13 = 8 m → Pos. 103 × 3 = +267,00 €", netto8 == 2962937 + 26700
+    pruefe("Kontroll KG", "A13 = 8 m → Pos. 103 × 3 = +267,00 €", netto8 == 3024543 + 26700
            and [p["menge"] for p in pos8 if p["pos_nr"] == "103"] == [3.0], euro(netto8))
     # KfW für KG-Fall
     parameter, _ = kfw.parameter_lesen(logik)
@@ -119,11 +119,11 @@ def main():
     aufraeumen.append(ang)
     ang.rabatt_cent = 50000; s.commit()
     su = ang.summen()
-    pruefe("Rabatt", "Endbetrag 34.758,95 € (Brutto − 500 €)", su["endbetrag"] == 3475895, euro(su["endbetrag"]))
+    pruefe("Rabatt", "Endbetrag 35.492,06 € (Brutto − 500 €, v9)", su["endbetrag"] == 3549206, euro(su["endbetrag"]))
     eing = kfw.eingaben_aus_antworten(json.loads(ang.kfw_json), su["endbetrag"])
     erg = kfw.berechnen(parameter, eing)
-    pruefe("Rabatt", "Zuschuss 19.600 €, Eigenanteil 15.158,95 €",
-           erg.zuschuss_cent == 1960000 and erg.eigenanteil_cent == 1515895, euro(erg.eigenanteil_cent))
+    pruefe("Rabatt", "Zuschuss 19.600 €, Eigenanteil 15.892,06 €",
+           erg.zuschuss_cent == 1960000 and erg.eigenanteil_cent == 1589206, euro(erg.eigenanteil_cent))
     db_ohne = dict(angebot_aufbau.angebot_anlegen(s, kunde_t.id, antworten=kg, logik=logik).deckungsbeitrag())
     aufraeumen.append(s.query(Angebot).order_by(Angebot.id.desc()).first())
     pruefe("Rabatt", "DB sinkt um Netto-Anteil 420,17 €", db_ohne["db"] - ang.deckungsbeitrag()["db"] == 42017)

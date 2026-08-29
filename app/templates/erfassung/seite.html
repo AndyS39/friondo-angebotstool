@@ -112,6 +112,7 @@
         if (regel.art === 'klauseln') {
             return regel.klauseln.some(klausel => klausel.every(termErfuellt));
         }
+        if (regel.art === 'statisch') return regel.sichtbar;
         if (regel.art === 'ausgefuellt') {
             const w = wert(regel.frage);
             return w === null ? true : w !== '';

@@ -57,7 +57,7 @@ def _ist_optional(frage) -> bool:
     return "leer" in frage.hinweis.lower()
 
 
-def _client_regel(frage) -> str:
+def _client_regel(frage, antworten=None, logik=None) -> str:
     """Sichtbarkeitsregel für das Seiten-JavaScript (Folgefragen derselben Seite)."""
     b = frage.bedingung
     if b is None or b.art == "immer":
@@ -74,6 +74,13 @@ def _client_regel(frage) -> str:
                            "klauseln": [[{"frage": fid, "werte": werte}
                                          for fid, werte in klausel]
                                         for klausel in b.klauseln]}, ensure_ascii=False)
+    if b.art == "klasse":
+        # v9: die Klasse steht beim Seitenaufruf bereits fest (frühere Seite) –
+        # das Ergebnis wird serverseitig fixiert, das Seiten-JS ändert nichts
+        return json.dumps({"art": "statisch",
+                           "sichtbar": engine.ist_sichtbar(frage, antworten or {},
+                                                           logik.fragen if logik else {},
+                                                           logik)})
     return json.dumps({"art": "immer"})
 
 
@@ -299,7 +306,7 @@ async def seite(request: Request, erfassung_id: int, nr: int,
     from app import angebotsprofile
     if angebotsprofile.enni_bogen(session, erfassung):
         fragen = [f for f in fragen if f.id not in ("P02", "P03")]
-    sichtbar = {f.id: engine.ist_sichtbar(f, antworten, logik.fragen) for f in fragen}
+    sichtbar = {f.id: engine.ist_sichtbar(f, antworten, logik.fragen, logik) for f in fragen}
     werte = {}
     for f in fragen:
         wert = antworten.get(f.id)
@@ -311,7 +318,8 @@ async def seite(request: Request, erfassung_id: int, nr: int,
     return render(request, "erfassung/seite.html", aktiv=None, mobil=True,
                   benutzer=_benutzer(request), erfassung=erfassung, kunde=kunde,
                   seiten=seiten, nr=nr, fragen=fragen, sichtbar=sichtbar,
-                  werte=werte, fehler={}, client_regel=_client_regel,
+                  werte=werte, fehler={},
+                  client_regel=lambda f: _client_regel(f, antworten, logik),
                   wiederhol_id=engine.ID_WIEDERHOL_ANZAHL)
 
 
@@ -333,7 +341,7 @@ async def seite_speichern(request: Request, erfassung_id: int, nr: int,
 
     fehler: dict[str, str] = {}
     for frage in fragen:
-        if not engine.ist_sichtbar(frage, antworten, logik.fragen):
+        if not engine.ist_sichtbar(frage, antworten, logik.fragen, logik):
             antworten.pop(frage.id, None)   # unsichtbar geworden -> Antwort verwerfen
             continue
         wert, problem = _wert_lesen(frage, form, antworten)
@@ -348,12 +356,13 @@ async def seite_speichern(request: Request, erfassung_id: int, nr: int,
     richtung = form.get("richtung", "weiter")
     if fehler and richtung == "weiter":
         kunde = session.get(Kunde, erfassung.kunde_id)
-        sichtbar = {f.id: engine.ist_sichtbar(f, antworten, logik.fragen) for f in fragen}
+        sichtbar = {f.id: engine.ist_sichtbar(f, antworten, logik.fragen, logik) for f in fragen}
         werte = {f.id: antworten.get(f.id) for f in fragen}
         return render(request, "erfassung/seite.html", aktiv=None, mobil=True,
                       benutzer=_benutzer(request), erfassung=erfassung, kunde=kunde,
                       seiten=seiten, nr=nr, fragen=fragen, sichtbar=sichtbar,
-                      werte=werte, fehler=fehler, client_regel=_client_regel,
+                      werte=werte, fehler=fehler,
+                      client_regel=lambda f: _client_regel(f, antworten, logik),
                       wiederhol_id=engine.ID_WIEDERHOL_ANZAHL)
 
     erfassung.antworten_json = json.dumps(antworten, ensure_ascii=False)

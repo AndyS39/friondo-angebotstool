@@ -79,25 +79,25 @@ SWD / Sparkasse DU – beim Start lokalisieren, im Zweifel nachfragen).
 - [x] migrate.py: Profile, Textblöcke, Kanal-Override, Sonderpreis-Feld
 
 ## Phase 54 – Leistungsklasse 15 kW (Serie CS8800i) & Pos. 067
-- [ ] Engine: Fragen-Bedingungen dürfen von der ermittelten Leistungsklasse
+- [x] Engine: Fragen-Bedingungen dürfen von der ermittelten Leistungsklasse
       abhängen („nur wenn Klasse = 15 kW"); Live-Ein-/Ausblenden, verworfene
       Antworten werden ignoriert und nicht protokolliert
-- [ ] Logik-Excel: Klassenzuordnung erweitern – Verbrauch 31.001–37.000 kWh
+- [x] Logik-Excel: Klassenzuordnung erweitern – Verbrauch 31.001–37.000 kWh
       → 15 kW (AMPEL erst über 37.000); Heizlast 16,0–18,5 → 15 kW
       (AMPEL ab 18,6)
-- [ ] Neue Frage (nur Klasse 15): „Farbe der Außeneinheit?" Weiß | Schwarz
+- [x] Neue Frage (nur Klasse 15): „Farbe der Außeneinheit?" Weiß | Schwarz
       → Pos. 030 / Pos. 031; Platzierung nach der Warmwasser-Frage
-- [ ] Pufferfrage klassenabhängig: bei Klasse 15 Optionen 70 l | 200 l |
+- [x] Pufferfrage klassenabhängig: bei Klasse 15 Optionen 70 l | 200 l |
       300 l | 500 l | mehr als 500 l → 70 l = AWMB Pos. 055 (kein externer
       Puffer); 200/300/500 = AWE Pos. 056 + Z17 / 098 / 099; mehr = AMPEL.
       3800er-Klassen behalten die bisherige Optionsliste
-- [ ] Warmwasser bei Klasse 15: N02 = Ja → Pos. 065 fix, Größenfrage N03
+- [x] Warmwasser bei Klasse 15: N02 = Ja → Pos. 065 fix, Größenfrage N03
       entfällt; KEINE Pos. 067 bei der 8800er
-- [ ] Pos. 067 bei den AWM-Paketen: in der Paketmatrix-Spalte „WW bis
+- [x] Pos. 067 bei den AWM-Paketen: in der Paketmatrix-Spalte „WW bis
       200 l" je Zelle ergänzen („Pos. 04x + Pos. 067") – Paketmatrix ist
       die EINZIGE Quelle (Doppler-Schutzprüfung muss grün bleiben)
-- [ ] Block-1-Überschrift serienabhängig („…CS8800i AW…" bei Klasse 15)
-- [ ] Tests: 35.000 kWh + weiß + 70 l Puffer + WW Ja → 030 + 055 + 065,
+- [x] Block-1-Überschrift serienabhängig („…CS8800i AW…" bei Klasse 15)
+- [x] Tests: 35.000 kWh + weiß + 70 l Puffer + WW Ja → 030 + 055 + 065,
       keine 067; 35.000 kWh + schwarz + 300 l → 031 + 056 + 098 + 065;
       Heizlast 17,5 → Klasse 15; Heizlast 18,6 → AMPEL; AWM-Kontrollfall:
       18.500 kWh + WW bis 200 l → Paket 047 + 067 genau 1×
