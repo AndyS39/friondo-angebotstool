@@ -199,17 +199,17 @@ SWD / Sparkasse DU – beim Start lokalisieren, im Zweifel nachfragen).
       Seitenblöcke auf genau diese Kachel-Sets umstellen
 
 ## Phase 58 – Migration, Abnahme & Rollout
-- [ ] migrate.py final: idempotent, zweimal gegen Kopie der echten DB
-- [ ] Regressionstests: alle Kontroll-Szenarien (KG, DG, Rabatt, A13,
+- [x] migrate.py final: idempotent, zweimal gegen Kopie der echten DB
+- [x] Regressionstests: alle Kontroll-Szenarien (KG, DG, Rabatt, A13,
       Heizlast, B1–B4) unverändert grün; Doppler-Schutz (065/067) grün
-- [ ] Abnahmeskript v9-Block: Profile (Enni-Angebot mit 015 à 599 € +
+- [x] Abnahmeskript v9-Block: Profile (Enni-Angebot mit 015 à 599 € +
       162, SWD-Versand ohne Empfänger, Sparkasse-Nachtext), 15-kW-Fälle,
       Solarthermie-Fälle, Vermerk, Version .2, Chips, Freitext-Edit,
       MFH-Anzeige-Split
-- [ ] docs/nach-dem-update-v9.md: Parametrierung – Kanal-Zuordnung
+- [x] docs/nach-dem-update-v9.md: Parametrierung – Kanal-Zuordnung
       prüfen/ergänzen („Enni", „Sparkasse", SWD-Wert), BCC-Feld auf
       Mehrfachadressen umstellen (info@friondo.de, ggf. d.chatzis@…),
       Nachtext-Blöcke inhaltlich abnehmen, Pos.-162-Preis kontrollieren;
       Team-Hinweise: Versionierung („Überarbeiten" statt Duplizieren bei
       Änderungswünschen), Solarthermie jetzt konfigurierbar
-- [ ] git push → Rollout per update.bat → Checkliste abarbeiten
+- [x] git push → Rollout per update.bat → Checkliste abarbeiten

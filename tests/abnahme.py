@@ -437,8 +437,10 @@ def main():
     pruefe("v8", "Je Sparte eine eigene Erfassung (PV + KL)",
            [e.sparte for e in v8erf] == ["PV", "KL"])
     chips_html = client.get("/leads").text
+    # v9 (Phase 57): Chips farbcodiert, Zustand „offen“ = umrandet (Tooltip)
     pruefe("v8", "Lead-Chips: PV offen · KL offen",
-           "PV offen" in chips_html and "KL offen" in chips_html)
+           "chip chip-pv chip-offen" in chips_html
+           and "chip chip-kl chip-offen" in chips_html)
     # Heizlast-Vorrang im automatischen Angebot
     v8kg = dict(kg, A03=5000, A14="Ja", A15="8,4")
     v8pos = angebot_aufbau.positionen_zusammenstellen(logik, v8kg, s)
@@ -482,6 +484,146 @@ def main():
     s.query(AN8).filter(AN8.angebot_id == v8ang.id).delete()
     s.delete(s.get(Angebot, v8ang.id)); s.delete(s.get(Angebot, v8alt.id))
     s.delete(s.get(Lead, v8lead.id))
+    s.commit()
+
+    # ---------- 11) v9-Abnahme: Profile, 15 kW, Solar, Vermerke, Versionen ----------
+    from app import angebotsprofile
+    from app.models import Profil
+    # Enni-Profil: Kanal „Enni“ → 015 zu 599 €, +162, ohne 014/016/017
+    kunde_v9 = s.get(Kunde, kunde_t.id)
+    kanal_vorher = kunde_v9.vertriebskanal
+    kunde_v9.vertriebskanal = "Enni"
+    s.commit()
+    v9ang = angebot_aufbau.angebot_anlegen(s, kunde_t.id, antworten=kg, logik=logik)
+    v9profil = angebotsprofile.profil_fuer_angebot(s, v9ang, kunde_v9)
+    v9ang.profil_id = v9profil.id
+    angebotsprofile.positionsregeln_anwenden(s, v9ang, v9profil)
+    s.commit()
+    v9pos = {p.pos_nr: p for p in v9ang.positionen}
+    pruefe("v9 Profile", "Enni: Pos. 015 zu 599,00 € (Sonderpreis) + Pos. 162",
+           v9profil.name == "Enni"
+           and v9pos.get("015") is not None and v9pos["015"].e_preis_cent == 59900
+           and v9pos["015"].sonderpreis and "162" in v9pos)
+    pruefe("v9 Profile", "Enni: 014/016/017 entfernt",
+           not ({"014", "016", "017"} & set(v9pos)))
+    # SWD: Versand ohne Empfänger (An bleibt leer, Hinweis in der Maske)
+    swd = s.query(Profil).filter(Profil.name == "SWD").first()
+    v9ang.profil_id = swd.id
+    s.commit()
+    payloads.clear()
+    with mock.patch.object(graph_versand, "konfiguriert", return_value=True), \
+            mock.patch.object(graph_versand, "angemeldeter_benutzer", return_value="ida@friondo.de"), \
+            mock.patch.object(graph_versand, "_token", return_value="tok"), \
+            mock.patch.object(graph_versand, "_graph_aufruf", side_effect=fake_graph):
+        meldung_swd = client.post(f"/angebote/{v9ang.id}/email",
+                                  follow_redirects=True).text
+    v9n = next((d for pfad, d in payloads if pfad == "/me/messages"), {}) or {}
+    pruefe("v9 Profile", "SWD: Versand ohne Empfänger (An bleibt leer) + Pflichthinweis",
+           v9n.get("toRecipients") == [] and "SWD-Kontakt" in meldung_swd)
+    # Sparkasse: eigener Nachtext im PDF
+    kunde_v9.vertriebskanal = "Sparkasse Duisburg"
+    v9ang.profil_id = None
+    s.commit()
+    pfad_v9 = pdf_export.pdf_fuer_angebot(s, v9ang)
+    text_v9 = "".join(seite.extract_text() for seite in pypdf.PdfReader(str(pfad_v9)).pages)
+    pruefe("v9 Profile", "Sparkasse: Nachtext „Finanzierung mit Sparkasse Duisburg“",
+           "Finanzierung mit Sparkasse Duisburg" in text_v9)
+    kunde_v9.vertriebskanal = kanal_vorher
+    s.commit()
+    # 15-kW-Klasse (Serie CS8800i): A03 = 35.000 kWh → N08/N07 statt N03/N06
+    kw15 = dict(kg, A03=35000, N08="Weiß", N07="70 l")
+    kw15.pop("N03", None); kw15.pop("N06", None)
+    pruefe("v9 15 kW", "Katalog vollständig, Ampel grün (Klasse 15 kW)",
+           engine.naechste_frage(logik, kw15) is None
+           and engine.ampel_gruende(logik, kw15) == []
+           and engine.leistungsklasse(logik, kw15).leistungsklasse == "15 kW")
+    nummern15 = {p["pos_nr"] for p in
+                 angebot_aufbau.positionen_zusammenstellen(logik, kw15, s)}
+    pruefe("v9 15 kW", "Weiß → 030, 70 l → 055, WW → 065",
+           {"030", "055", "065"} <= nummern15, str(sorted(nummern15)))
+    pruefe("v9 15 kW", "über 37.000 kWh / Heizlast 19 → AMPEL",
+           engine.ampel_gruende(logik, dict(kg, A03=40000)) != []
+           and engine.ampel_gruende(logik, dict(kg, A14="Ja", A15="19")) != [])
+    # Solarthermie: stilllegen → Z24 (0 €), übernehmen → 069 statt 065/067
+    still = dict(kg, A10="Ja, soll stillgelegt werden")
+    pos_still = angebot_aufbau.positionen_zusammenstellen(logik, still, s)
+    z24 = [p for p in pos_still if p["pos_nr"] == "Z24"]
+    pruefe("v9 Solar", "Stilllegung → Z24 (Rückbau, 0,00 €), keine AMPEL",
+           len(z24) == 1 and z24[0]["e_preis_cent"] == 0
+           and engine.ampel_gruende(logik, still) == [])
+    ueber = dict(kg, A10="Ja, soll übernommen werden")
+    ueber.pop("N03", None)
+    nummern_u = {p["pos_nr"] for p in
+                 angebot_aufbau.positionen_zusammenstellen(logik, ueber, s)}
+    pruefe("v9 Solar", "Übernahme → 069, keine 065/067 (N03 entfällt)",
+           "069" in nummern_u and not ({"065", "067"} & nummern_u)
+           and engine.naechste_frage(logik, ueber) is None)
+    # Vermerk: DG ohne Aufzug → Heizungsumverlegungs-Vermerk im PDF
+    vermerke_dg = engine.vermerke_fuer(logik, dg)
+    v9dg = angebot_aufbau.angebot_anlegen(s, kunde_t.id, antworten=dg, logik=logik)
+    s.commit()
+    pfad_dg = pdf_export.pdf_fuer_angebot(s, v9dg)
+    text_dg = "".join(seite.extract_text() for seite in pypdf.PdfReader(str(pfad_dg)).pages)
+    pruefe("v9 Vermerk", "DG + kein Kran → Vermerk am Positionsteil-Ende im PDF",
+           len(vermerke_dg) == 1 and vermerke_dg[0].splitlines()[0] in text_dg.replace("\n", " ")
+           or (len(vermerke_dg) == 1 and "Vermerk" in text_dg))
+    # Versionierung: Versendet → Überarbeiten → .2, Original „Überholt“
+    v9ang.status = "Versendet"
+    s.commit()
+    client.post(f"/angebote/{v9ang.id}/ueberarbeiten")
+    s.expire_all()
+    v9v2 = (s.query(Angebot)
+            .filter(Angebot.nummer == f"{v9ang.nummer}.2").first())
+    pruefe("v9 Version", "Überarbeiten → Version .2 (Entwurf), Original Überholt",
+           v9v2 is not None and v9v2.status == "Entwurf"
+           and s.get(Angebot, v9ang.id).status == "Überholt"
+           and v9v2.vorgaenger_id == v9ang.id)
+    pruefe("v9 Version", "Standard-Liste ohne Überholt, Nummernkreis unberührt",
+           f">{v9ang.nummer}<" not in client.get("/angebote").text
+           and "." not in angebot_aufbau.naechste_angebotsnummer(s))
+    text_v2 = pypdf.PdfReader(str(pdf_export.pdf_fuer_angebot(s, v9v2))
+                              ).pages[0].extract_text()
+    pruefe("v9 Version", "PDF der .2: „Ersetzt Angebot <Nr.> vom <Datum>“",
+           f"Ersetzt Angebot {v9ang.nummer}" in text_v2)
+    # Chips + Startseite
+    pruefe("v9 Darstellung", "Sparten-Chips mit Legende in den Listen",
+           all("chip-legende" in client.get(pfad).text
+               for pfad in ("/leads", "/erfassungen", "/angebote")))
+    start_v9 = client.get("/").text
+    pruefe("v9 Darstellung", "Startseite: 3 Bereiche + Coming soon + Angebotstool-Link",
+           "Lead-Management" in start_v9 and "Projektierung" in start_v9
+           and start_v9.count("Coming soon") >= 2 and 'href="/angebotstool"' in start_v9)
+    # Freitext-Edit mit Protokoll und Hinweis
+    v9frei = Erfassung(kunde_id=kunde_t.id, benutzer_id=1, status="In Bearbeitung",
+                       sparte="WP", typ="freitext", freitext="Abnahme-Text",
+                       abgesendet_am=datetime.datetime.now())
+    s.add(v9frei); s.commit()
+    client.post(f"/erfassungen/{v9frei.id}/freitext", data={"freitext": "Abnahme-Text NEU"})
+    s.expire_all()
+    v9frei = s.get(Erfassung, v9frei.id)
+    pruefe("v9 Darstellung", "Freitext editierbar, protokolliert + Hinweis",
+           v9frei.freitext == "Abnahme-Text NEU"
+           and "Freitext geändert (Vorgang bereits" in v9frei.aenderungs_protokoll)
+    # MFH-Anzeige-Split (B1: Klima 3.093,33 € + Einkommen 4.640,00 €)
+    p_kfw, _ = kfw.parameter_lesen(logik)
+    erg_b1 = kfw.berechnen(p_kfw, kfw.KfwEingaben(
+        "mfh", 6000000, wohneinheiten=3, mfh_selbst=True,
+        klima_bonus=True, einkommen_eur=35000))
+    zeilen_b1 = dict((z[0], z[1]) for z in erg_b1.zeilen)
+    pruefe("v9 Darstellung", "MFH-Split: Klima 3.093,33 € + Einkommen 4.640,00 € (B1)",
+           erg_b1.zuschuss_cent == 2513333
+           and zeilen_b1.get("Klimageschwindigkeits-Bonus (16 % anteilig auf die "
+                             "selbstgenutzte WE)") == "3.093,33 €"
+           and zeilen_b1.get("Einkommensbonus (24 % anteilig auf die "
+                             "selbstgenutzte WE)") == "4.640,00 €")
+    # v9-Aufräumen
+    Path(f"data/angebote/{v9ang.nummer}.pdf").unlink(missing_ok=True)
+    Path(f"data/angebote/{v9dg.nummer}.pdf").unlink(missing_ok=True)
+    if v9v2 is not None:
+        Path(f"data/angebote/{v9v2.nummer}.pdf").unlink(missing_ok=True)
+        s.delete(s.get(Angebot, v9v2.id))
+    s.delete(s.get(Angebot, v9ang.id)); s.delete(s.get(Angebot, v9dg.id))
+    s.delete(s.get(Erfassung, v9frei.id))
     s.commit()
 
     # ---------- Aufräumen ----------
