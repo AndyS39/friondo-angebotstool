@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block titel %}Angebotsprofile – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Angebotsprofile &amp; Textblöcke</h1>
+    <a class="knopf klein zweitrangig" href="/parametrierung">Zurück zur Parametrierung</a>
+</div>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<p class="dezent">Ein Profil bündelt Nachtext, Positions- und Versandregeln je
+Vertriebskanal. Die Auto-Auswahl vergleicht die <strong>Kanalwerte</strong>
+(kommagetrennt) mit dem Kanal des Leads/Kunden – ohne Treffer gilt Standard.
+Die Positionsregeln (Enni/SWD) sind fest hinterlegt und am ℹ nachzulesen.</p>
+
+<table class="tabelle">
+    <thead><tr><th>Profil</th><th>Kanalwerte</th><th>Nachtext</th><th>Vortext</th>
+        <th>Zusatz-CC</th><th>Empf. leer</th><th>ohne Vollmacht</th><th></th></tr></thead>
+    <tbody>
+    {% for p in profile %}
+    <tr title="{{ hinweise[p.id] }}">
+        <form method="post" action="/parametrierung/profile/{{ p.id }}">
+        <td><strong>{{ p.name }}</strong> <span class="dezent">ℹ</span></td>
+        <td><input type="text" name="kanalwerte" value="{{ p.kanalwerte }}" size="14"></td>
+        <td><select name="nachtext_id">
+            <option value="0">– Standard –</option>
+            {% for b in bloecke_nachtext %}
+                <option value="{{ b.id }}" {{ 'selected' if p.nachtext_id == b.id }}>{{ b.name }}</option>
+            {% endfor %}
+        </select></td>
+        <td><select name="vortext_id">
+            <option value="0">– Standard –</option>
+            {% for b in bloecke_vortext %}
+                <option value="{{ b.id }}" {{ 'selected' if p.vortext_id == b.id }}>{{ b.name }}</option>
+            {% endfor %}
+        </select></td>
+        <td><input type="text" name="versand_cc" value="{{ p.versand_cc }}" size="18"
+                   placeholder="cc@…, cc2@…"></td>
+        <td><input type="checkbox" name="empfaenger_leer" {{ 'checked' if p.empfaenger_leer }}></td>
+        <td><input type="checkbox" name="ohne_vollmacht" {{ 'checked' if p.ohne_vollmacht }}></td>
+        <td><button class="knopf klein" type="submit">Speichern</button></td>
+        </form>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Textblöcke (Nach- &amp; Vortexte)</h2>
+<form method="get" action="/parametrierung/profile" class="suchleiste">
+    <select name="block_id" onchange="this.form.submit()">
+        <option value="0">– Block wählen –</option>
+        {% for b in bloecke %}
+            <option value="{{ b.id }}" {{ 'selected' if block and block.id == b.id }}>
+                [{{ b.art }}] {{ b.name }}</option>
+        {% endfor %}
+    </select>
+</form>
+<form method="post" action="/parametrierung/textbloecke" class="suchleiste">
+    <input type="hidden" name="aktion" value="neu">
+    <select name="art"><option value="nachtext">Nachtext</option>
+        <option value="vortext">Vortext</option></select>
+    <input type="text" name="name" maxlength="100" placeholder="Neuer Block …">
+    <button class="knopf klein zweitrangig" type="submit">Anlegen</button>
+</form>
+
+{% if block %}
+<form method="post" action="/parametrierung/textbloecke" class="formular">
+    <input type="hidden" name="block_id" value="{{ block.id }}">
+    <p><strong>[{{ block.art }}] {{ block.name }}</strong>
+        <span class="dezent">– Konventionen: „# “ Seitenüberschrift · „## “ fette
+        Zwischenzeile · „### “ Absatz-Überschrift · „---“ allein = Seitenumbruch ·
+        „~ “ kleine Fußnote · „[UNTERSCHRIFT]“ Unterschriftenblock; Vortext:
+        „- “/„* “ Haken-Zeilen, {{ '{briefanrede}' }} = Anrede.</span></p>
+    <textarea name="text" rows="24" style="width:100%; font-family:monospace">{{ block.text }}</textarea>
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Block speichern</button>
+    </div>
+</form>
+{% endif %}
+{% endblock %}

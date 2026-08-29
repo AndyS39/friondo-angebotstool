@@ -75,6 +75,78 @@ async def einstellungen_speichern(request: Request,
                             status_code=303)
 
 
+@router.get("/profile")
+async def profile_seite(request: Request, block_id: int = 0,
+                        session: Session = Depends(get_session)):
+    """v9: Angebotsprofile + Textblock-Verwaltung (Nach-/Vortexte)."""
+    from app import angebotsprofile
+    from app.models import Profil, Textblock
+    profile = session.query(Profil).order_by(Profil.id).all()
+    bloecke = (session.query(Textblock)
+               .order_by(Textblock.art.desc(), Textblock.name).all())
+    block = session.get(Textblock, block_id) if block_id else None
+    return render(request, "konfiguration/profile.html", aktiv="/parametrierung",
+                  profile=profile, bloecke=bloecke, block=block,
+                  hinweise={p.id: angebotsprofile.regeln_beschreibung(p)
+                            for p in profile},
+                  bloecke_nachtext=[b for b in bloecke if b.art == "nachtext"],
+                  bloecke_vortext=[b for b in bloecke if b.art == "vortext"],
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/profile/{profil_id}")
+async def profil_speichern(request: Request, profil_id: int,
+                           session: Session = Depends(get_session)):
+    """v9: Kanal-Zuordnung, Textblöcke und Versandregeln eines Profils."""
+    from urllib.parse import quote_plus
+
+    from app.models import Profil
+    profil = session.get(Profil, profil_id)
+    if profil is None:
+        return RedirectResponse("/parametrierung/profile", status_code=303)
+    form = await request.form()
+    profil.kanalwerte = (form.get("kanalwerte") or "").strip()[:200]
+    profil.versand_cc = (form.get("versand_cc") or "").strip()[:200]
+    profil.empfaenger_leer = form.get("empfaenger_leer") == "on"
+    profil.ohne_vollmacht = form.get("ohne_vollmacht") == "on"
+    for feld in ("nachtext_id", "vortext_id"):
+        wert = form.get(feld) or ""
+        setattr(profil, feld, int(wert) if wert.isdigit() and int(wert) else None)
+    session.commit()
+    return RedirectResponse("/parametrierung/profile?meldung=" + quote_plus(
+        f"Profil „{profil.name}“ gespeichert"), status_code=303)
+
+
+@router.post("/textbloecke")
+async def textblock_speichern(request: Request,
+                              session: Session = Depends(get_session)):
+    """v9: Textblock bearbeiten oder neu anlegen."""
+    from urllib.parse import quote_plus
+
+    from app.models import Textblock
+    form = await request.form()
+    if form.get("aktion") == "neu":
+        name = (form.get("name") or "").strip()[:100]
+        art = form.get("art") if form.get("art") in ("nachtext", "vortext") else "nachtext"
+        if name:
+            block = Textblock(art=art, name=name, text="")
+            session.add(block)
+            session.commit()
+            return RedirectResponse(
+                f"/parametrierung/profile?block_id={block.id}&meldung="
+                + quote_plus(f"Block „{name}“ angelegt – Text unten pflegen"),
+                status_code=303)
+        return RedirectResponse("/parametrierung/profile", status_code=303)
+    block = session.get(Textblock, int(form.get("block_id") or 0))
+    if block is None:
+        return RedirectResponse("/parametrierung/profile", status_code=303)
+    block.text = form.get("text") or ""
+    session.commit()
+    return RedirectResponse(
+        f"/parametrierung/profile?block_id={block.id}&meldung="
+        + quote_plus(f"Block „{block.name}“ gespeichert"), status_code=303)
+
+
 @router.post("/ablehnungsgruende")
 async def ablehnungsgruende_pflegen(request: Request,
                                     session: Session = Depends(get_session)):

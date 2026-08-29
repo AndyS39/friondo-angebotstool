@@ -184,10 +184,19 @@ async def sparten_start(request: Request, session: Session = Depends(get_session
             f"/erfassung/sparten?kunde_id={kunde.id}&lead_id={lead.id if lead else 0}",
             status_code=303)
     neu: list[Erfassung] = []
+    # v9: Enni-Profil → der WP-Bogen zeigt nur die HEMS-Frage; P02/P03 werden
+    # mit "Nein" vorbelegt (bleiben unsichtbar, Katalog gilt als vollständig)
+    from app import angebotsprofile
+    kanal = (lead.vertriebskanal if lead else "") or kunde.vertriebskanal
+    profil = angebotsprofile.profil_fuer_kanal(session, kanal)
+    enni = profil is not None and profil.regel_kennung == "enni"
     for sparte in gewaehlt:
         erfassung = Erfassung(kunde_id=kunde.id, benutzer_id=_benutzer(request).id,
                               sparte=sparte, konfigurator_typ=sparte,
                               lead_id=lead.id if lead else None)
+        if enni and sparte == "WP":
+            erfassung.antworten_json = json.dumps({"P02": "Nein", "P03": "Nein"},
+                                                  ensure_ascii=False)
         session.add(erfassung)
         neu.append(erfassung)
     session.flush()
@@ -286,6 +295,10 @@ async def seite(request: Request, erfassung_id: int, nr: int,
     antworten = _antworten(erfassung)
     kunde = session.get(Kunde, erfassung.kunde_id)
     fragen = _fragen_der_seite(logik, seiten[nr], antworten)
+    # v9: Enni-Bogen zeigt nur die HEMS-Frage (P02/P03 sind mit Nein vorbelegt)
+    from app import angebotsprofile
+    if angebotsprofile.enni_bogen(session, erfassung):
+        fragen = [f for f in fragen if f.id not in ("P02", "P03")]
     sichtbar = {f.id: engine.ist_sichtbar(f, antworten, logik.fragen) for f in fragen}
     werte = {}
     for f in fragen:

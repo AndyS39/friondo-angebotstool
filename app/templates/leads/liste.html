@@ -91,7 +91,18 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
                 {% endfor %}
                 </span></td>
             <td>{{ lead.plz }} {{ lead.ort }}</td>
-            <td class="dezent">{{ lead.vertriebskanal or '–' }}</td>
+            <td class="dezent">
+                {% if benutzer.rolle == 'aussendienst' %}
+                    {{ lead.vertriebskanal or '–' }}
+                {% else %}
+                <form method="post" action="/leads/{{ lead.id }}/kanal"
+                      title="Vertriebskanal manuell setzen (leer = Sync-Automatik)">
+                    <input type="text" name="kanal" value="{{ lead.vertriebskanal }}" size="9"
+                           placeholder="–" onchange="this.form.submit()">
+                    {% if lead.kanal_manuell %}<span title="manuell gesetzt – Sync überschreibt nicht">✎</span>{% endif %}
+                </form>
+                {% endif %}
+            </td>
             <td>
                 {% if benutzer.rolle == 'aussendienst' %}
                     {{ vertriebler[lead.benutzer_id].name if lead.benutzer_id in vertriebler else lead.monday_person }}

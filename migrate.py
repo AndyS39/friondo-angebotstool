@@ -146,6 +146,20 @@ def _daten() -> list[str]:
             for sort, name in enumerate(ABLEHNUNGSGRUND_STARTWERTE):
                 session.add(AblehnungsGrund(name=name, sort=sort))
             meldungen.append(f"{len(ABLEHNUNGSGRUND_STARTWERTE)} Ablehnungsgründe vorbelegt")
+        # ---------------- v9 (Phasen 53–58) ----------------
+        # Phase 53: Textblöcke (Nach-/Vortexte) + Angebotsprofile anlegen;
+        # Pos.-162-Text auf den Enni-Wortlaut aktualisieren (Preis bleibt)
+        from app import angebotsprofile
+        meldungen += angebotsprofile.seed(session)
+        from app.models import Artikel
+        artikel_162 = (session.query(Artikel)
+                       .filter(Artikel.pos_nr == "162", Artikel.aktiv.is_(True)).first())
+        if (artikel_162 is not None
+                and artikel_162.bezeichnung != angebotsprofile.POS_162_BEZEICHNUNG):
+            artikel_162.bezeichnung = angebotsprofile.POS_162_BEZEICHNUNG
+            artikel_162.beschreibung = angebotsprofile.POS_162_TEXT
+            meldungen.append("Pos.-162-Text auf enni.flexstrom-Wortlaut aktualisiert "
+                             f"(Preis unverändert: {artikel_162.e_preis_cent / 100:.2f} €)")
         session.commit()
     finally:
         session.close()

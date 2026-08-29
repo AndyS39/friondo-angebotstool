@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v8)
+# Friondo Angebotstool – Projektkontext (v9)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -134,6 +134,45 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   versendete Angebote ohne Annahme/Ablehnung nach 90 Tagen
   (Parametrierung) auf Abgelehnt mit Grund „90 Tage Ablauf" –
   außer eine Wiedervorlage liegt in der Zukunft.
+
+## Neu in v9 (abgestimmt 29.08.2026)
+- Angebotsprofile (Standard / Enni / SWD / Sparkasse DU) bündeln je
+  Vertriebskanal: Nachtext-Block, Positionsregeln und Versandregeln.
+  Auto-Auswahl über den Kanal des Leads (Zuordnung Kanalwert → Profil
+  in der Parametrierung, Fallback Standard), am Angebot manuell
+  umschaltbar mit Konsistenz-Hinweis. Nach- und Vortexte sind
+  editierbare Textblöcke in der Parametrierung.
+- Enni: nur HEMS-Frage (P02/P03 entfallen im Bogen); HEMS = Ja →
+  Pos. 015 zum Sonderpreis 599 € (kein 014) + Pos. 162 automatisch;
+  keine Vollmacht; Versand zusätzlich CC energieberatung@enni.de.
+  SWD: P01–P03 nur Protokoll (keine 014–017, keine Vollmacht);
+  Empfängerfeld beim Versand leer (ID trägt SWD-Kontakt manuell ein).
+  Sparkasse DU: nur eigener Nachtext. BCC-Feld akzeptiert mehrere
+  Adressen (kommagetrennt).
+- Neue Leistungsklasse 15 kW (Serie CS8800i): Verbrauch 31.001–37.000
+  kWh bzw. Heizlast 16,0–18,5 kW; Farbwahl Außeneinheit (030 weiß /
+  031 schwarz); Inneneinheit aus Pufferwahl abgeleitet (70 l → AWMB
+  055; 200/300/500 l → AWE 056 + externer Puffer); Warmwasser fix
+  über Pos. 065. Pos. 067 kommt automatisch bei jedem AWM-Paket
+  (045–049) – einzige Quelle: Paketmatrix.
+- Solarthermie ist konfigurierbar: „stilllegen" → Z24 (0 €, Rückbau
+  im Heizungsraum); „übernehmen" → AWE-Paket + Pos. 069 (bivalenter
+  390-l-Speicher) statt 065/067, WW-Größenfrage entfällt; Widerspruch
+  „Übernahme, aber WW über WP = Nein" erzeugt einen fachlichen
+  Hinweis am Vorgang (069 übersteuert). Noch 13 AMPEL-Gründe.
+- Angebots-Versionierung: Button „Überarbeiten" an versendeten/
+  angenommenen Angeboten erzeugt Version .2/.3 … als Entwurf;
+  Original erhält Status „Überholt" (zählt nicht mehr in Statistik,
+  Summen, 90-Tage-Lauf); PDF trägt „Ersetzt Angebot … vom …";
+  monday-Deal-Wert folgt der neuen Version.
+- Bedingte Angebotsvermerke (neues Logik-Blatt „Vermerke"): erster
+  Vermerk „Heizungsumverlegung DG → Keller" bei A04 = DG und
+  D01 = Nein. MFH-Förderaufschlüsselung weist Klima- und
+  Einkommensbonus getrennt aus (Rechenlogik unverändert korrekt).
+  Freitext von Erfassungen nachträglich editierbar (auch AD bei
+  eigenen), Vertriebskanal manuell änderbar (Vorrang vor Sync),
+  Sparten-Chips mit Zustandsanzeige, Startseite in drei Bereichen
+  (Lead-Management · Angebotstool · Projektierung).
 
 ## Leads VOT (monday-Lesesync)
 - Quellen (friondo-gmbh.monday.com), jeweils NUR die Gruppe mit Titel „Terminiert"

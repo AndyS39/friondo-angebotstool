@@ -82,6 +82,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "ek_datum": "VARCHAR(20) NOT NULL DEFAULT ''",
     },
     "angebotspositionen": {
+        "sonderpreis": "BOOLEAN NOT NULL DEFAULT 0",
         "ek_cent": "INTEGER",
         "guid": "VARCHAR(40)",
         "anzeige_nr": "VARCHAR(10) NOT NULL DEFAULT ''",
@@ -121,6 +122,8 @@ _NACHTRAEGLICHE_SPALTEN = {
         "rechnung_ort": "VARCHAR(100) NOT NULL DEFAULT ''",
         "ablehnungsgrund": "VARCHAR(100) NOT NULL DEFAULT ''",
         "ablehnungsgrund_text": "VARCHAR(500) NOT NULL DEFAULT ''",
+        "profil_id": "INTEGER",
+        "vortext_text": "TEXT NOT NULL DEFAULT ''",
         "verfolgung_ampel": "VARCHAR(10) NOT NULL DEFAULT ''",
         "wiedervorlage_am": "DATETIME",
         "versendet_am": "DATETIME",
@@ -132,6 +135,7 @@ _NACHTRAEGLICHE_SPALTEN = {
     },
     "kunden": {
         "interesse": "VARCHAR(50) NOT NULL DEFAULT ''",
+        "kanal_manuell": "BOOLEAN NOT NULL DEFAULT 0",
         "vertriebskanal": "VARCHAR(100) NOT NULL DEFAULT ''",
     },
     "leads": {
@@ -142,6 +146,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "benutzer_manuell": "BOOLEAN NOT NULL DEFAULT 0",
         "vertriebskanal": "VARCHAR(100) NOT NULL DEFAULT ''",
         "ausgeblendet_sparten": "VARCHAR(50) NOT NULL DEFAULT ''",
+        "kanal_manuell": "BOOLEAN NOT NULL DEFAULT 0",
         "angelegt_am": "DATETIME",
     },
     "erfassungen": {

@@ -181,13 +181,14 @@ def entwurf_erstellen(kunde: Kunde, angebot: Angebot, pdf_pfad: Path,
                       fehlende_anhaenge: list[str] | None = None,
                       cc: list[str] | None = None, bcc: list[str] | None = None,
                       absender: str = "",
-                      inline_bilder: list[tuple[str, Path, str]] | None = None
+                      inline_bilder: list[tuple[str, Path, str]] | None = None,
+                      empfaenger_leer: bool = False
                       ) -> tuple[bool, str, str, str]:
     """Legt den Entwurf mit Anhängen im Postfach des angemeldeten Mitarbeiters ab.
     Betreff/Text kommen aus den Vorlagen (Phase 30); absender setzt „Senden als“
     (Phase 31, z. B. angebot@friondo.de – braucht die Berechtigung durch den
     M365-Admin). Liefert (erfolg, meldung, weblink, conversation_id)."""
-    if not kunde.email:
+    if not kunde.email and not empfaenger_leer:
         return False, ("Der Kunde hat keine E-Mail-Adresse – bitte zuerst in der "
                        "Kundenverwaltung ergänzen."), "", ""
     token = _token()
@@ -198,7 +199,10 @@ def entwurf_erstellen(kunde: Kunde, angebot: Angebot, pdf_pfad: Path,
             "subject": betreff,
             # v6: HTML-Mail; text ist bereits fertiges HTML (Vorlage + Signatur)
             "body": {"contentType": "html", "content": text},
-            "toRecipients": [{"emailAddress": {"address": kunde.email}}],
+            # v9 (SWD-Profil): Empfänger bewusst leer lassen – der Innendienst
+            # trägt den Kontakt manuell in Outlook ein
+            "toRecipients": ([] if empfaenger_leer
+                             else [{"emailAddress": {"address": kunde.email}}]),
         }
         if cc:
             nachricht["ccRecipients"] = [{"emailAddress": {"address": a}} for a in cc]

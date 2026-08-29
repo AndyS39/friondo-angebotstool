@@ -216,6 +216,8 @@ def kunde_fuer_lead(session: Session, lead: Lead):
         session.add(kunde)
     for feld in ("anrede", "vorname", "nachname", "strasse", "plz", "ort",
                  "telefon", "email", "interesse", "vertriebskanal"):
+        if feld == "vertriebskanal" and kunde.kanal_manuell:
+            continue   # v9: manuell gesetzter Kunden-Kanal bleibt stehen
         wert = getattr(lead, feld)
         if wert:
             setattr(kunde, feld, wert)
@@ -288,7 +290,8 @@ def _quelle_syncen(session: Session, quelle: MondayQuelle,
         lead.telefon = wert("telefon")
         lead.email = wert("email")
         lead.interesse = interesse_aus_text(wert("interesse"))   # Phase 33
-        lead.vertriebskanal = wert("vertriebskanal")[:100]        # v6
+        if not lead.kanal_manuell:   # v9: manueller Kanal hat Vorrang
+            lead.vertriebskanal = wert("vertriebskanal")[:100]    # v6
         lead.monday_person = wert("verantwortlicher")
         if lead.benutzer_manuell:
             pass   # manuelle Zuordnung durch den Innendienst hat Vorrang (v5-Nachtrag)

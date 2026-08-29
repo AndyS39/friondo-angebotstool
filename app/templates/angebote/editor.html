@@ -125,6 +125,45 @@
     {% if angebot.ablehnungsgrund_text %}– {{ angebot.ablehnungsgrund_text }}{% endif %}</p>
 {% endif %}
 
+{# v9: Angebotsprofil + Vertriebskanal + Vortext #}
+<div class="verfolgung-block">
+    <form method="post" action="/angebote/{{ angebot.id }}/profil" class="suchleiste" id="profilform">
+        <strong>Profil:</strong>
+        <select name="profil_id" {{ 'disabled' if nur_lesen }}
+                onchange="if (confirm('Profil umstellen?\n\n' + (this.options[this.selectedIndex].dataset.hinweis || ''))) { this.form.submit(); } else { this.value = {{ (profil.id if profil else 0) | tojson }}; }">
+            {% for p_ in profile %}
+                <option value="{{ p_.id }}" data-hinweis="{{ profil_hinweise[p_.id] }}"
+                        {{ 'selected' if profil and profil.id == p_.id }}>{{ p_.name }}</option>
+            {% endfor %}
+        </select>
+        {% if profil %}<span class="dezent" title="{{ profil_hinweise[profil.id] }}">ℹ {{ profil.regel_kennung }}</span>{% endif %}
+        <label class="kontrollfeld">Kanal
+            <input type="text" name="kanal_anzeige" size="10" value="{{ kunde.vertriebskanal }}" disabled></label>
+        {% if not nur_lesen %}
+        <button class="knopf klein zweitrangig" type="button"
+                onclick="var k = prompt('Vertriebskanal des Kunden (leer = Sync-Automatik):', {{ kunde.vertriebskanal | tojson }}); if (k === null) return; var auto = confirm('Profil anhand des neuen Kanals automatisch umstellen?'); var f = document.getElementById('kanalform'); f.kanal.value = k; f.profil_auto.value = auto ? '1' : '0'; f.submit();">
+            Kanal ändern</button>
+        {% endif %}
+    </form>
+    <form method="post" action="/angebote/{{ angebot.id }}/kanal" id="kanalform" hidden>
+        <input type="hidden" name="kanal"><input type="hidden" name="profil_auto" value="0">
+    </form>
+    {% if not nur_lesen %}
+    <details>
+        <summary class="dezent">Vortext {{ '(am Angebot überschrieben)' if angebot.vortext_text else '(Profil-Standard)' }}</summary>
+        <form method="post" action="/angebote/{{ angebot.id }}/vortext" class="formular">
+            <textarea name="vortext_text" rows="10" style="width:100%"
+                      placeholder="leer = Profil-Standard verwenden">{{ angebot.vortext_text or vortext_standard }}</textarea>
+            <div class="formaktionen">
+                <button class="knopf klein" type="submit">Vortext speichern</button>
+                <button class="knopf klein zweitrangig" type="submit"
+                        onclick="this.form.vortext_text.value = '';">Zurück zum Profil-Standard</button>
+            </div>
+        </form>
+    </details>
+    {% endif %}
+</div>
+
 {# Verfolgung (v8): prominent am Seitenanfang #}
 <div class="verfolgung-block">
     <form method="post" action="/angebote/{{ angebot.id }}/verfolgung" class="suchleiste">

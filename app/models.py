@@ -29,6 +29,7 @@ class Kunde(Base):
     # Interesse (v5): Mehrfach-Feld, Codes kommagetrennt, z. B. "WP,PV"
     interesse: Mapped[str] = mapped_column(String(50), default="")
     vertriebskanal: Mapped[str] = mapped_column(String(100), default="")   # v6, aus monday
+    kanal_manuell: Mapped[bool] = mapped_column(Boolean, default=False)    # v9: Sync-Schutz
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
@@ -298,6 +299,8 @@ class Lead(Base):
     # "PV,WB"); der Lead verschwindet erst, wenn alle Interessen erfasst
     # oder ausgeblendet sind. Ganz ausblenden weiterhin über `ausgeblendet`.
     ausgeblendet_sparten: Mapped[str] = mapped_column(String(50), default="")
+    # v9: Vertriebskanal manuell gesetzt – der Sync überschreibt ihn nicht mehr
+    kanal_manuell: Mapped[bool] = mapped_column(Boolean, default=False)
     aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
                                                      onupdate=datetime.now)
 
@@ -396,6 +399,10 @@ class Angebot(Base):
     extern: Mapped[bool] = mapped_column(Boolean, default=False)
     taifun_nummer: Mapped[str] = mapped_column(String(30), default="")
     extern_endbetrag_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Angebotsprofil (v9): None = automatisch über den Kanal des Kunden;
+    # vortext_text überschreibt den Profil-Vortext (leer = Standard)
+    profil_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    vortext_text: Mapped[str] = mapped_column(Text, default="")
     # Abgelehnt-Prozess (v8): Pflicht-Grund (Auswahlliste der Parametrierung
     # bzw. "90 Tage Ablauf" aus dem täglichen Prüflauf) + optionaler Freitext
     ablehnungsgrund: Mapped[str] = mapped_column(String(100), default="")
@@ -494,6 +501,9 @@ class AngebotsPosition(Base):
     einheit: Mapped[str] = mapped_column(String(20), default="")
     e_preis_cent: Mapped[int] = mapped_column(Integer, default=0)
     ep_flag: Mapped[bool] = mapped_column(Boolean, default=False)
+    # v9: Profil-Sonderpreis (z. B. Enni: Pos. 015 zu 599 €) –
+    # Kennzeichen für die Anzeige; der DB rechnet mit dem echten EK
+    sonderpreis: Mapped[bool] = mapped_column(Boolean, default=False)
     ek_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # EK-Snapshot (Phase 11)
     # Angebots-Editor v5 (Phase 34):
     anzeige_nr: Mapped[str] = mapped_column(String(10), default="")      # eigene Positionsnummer (leer = fortlaufend)
@@ -559,6 +569,45 @@ class AngebotsNotiz(Base):
     benutzer_name: Mapped[str] = mapped_column(String(100), default="")
     text: Mapped[str] = mapped_column(Text, default="")
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class Textblock(Base):
+    """v9: editierbare Nach-/Vortext-Blöcke (Parametrierung). Konventionen im
+    Text: "# " = große Überschrift, "## " = fette Absatz-Überschrift,
+    "---" allein = Seitenumbruch, "[UNTERSCHRIFT]" = Ort/Datum-Unterschriften-
+    block (inkl. elektronischer Signatur), "- " = Haken-Aufzählung (Vortext),
+    {briefanrede} = Anrede-Platzhalter (Vortext)."""
+    __tablename__ = "textbloecke"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    art: Mapped[str] = mapped_column(String(10), default="nachtext")  # nachtext | vortext
+    name: Mapped[str] = mapped_column(String(100))
+    text: Mapped[str] = mapped_column(Text, default="")
+    aktualisiert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                      onupdate=datetime.now)
+
+
+# Regel-Kennungen der Profile: steuern die fest programmierten Positions-
+# und Bogenregeln (Enni: nur P01, 015 zum Sonderpreis + 162, kein 014;
+# SWD: P01–P03 nur Protokoll). "standard"/"sparkasse" haben keine Regeln.
+PROFIL_KENNUNGEN = ["standard", "enni", "swd", "sparkasse"]
+
+
+class Profil(Base):
+    """v9: Angebotsprofil je Vertriebskanal – bündelt Nachtext-Block,
+    Positionsregeln (regel_kennung) und Versandregeln. Auto-Auswahl über
+    kanalwerte (kommagetrennt, Teilstring-Abgleich), Fallback Standard."""
+    __tablename__ = "profile"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    regel_kennung: Mapped[str] = mapped_column(String(20), default="standard")
+    nachtext_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    vortext_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    kanalwerte: Mapped[str] = mapped_column(String(200), default="")
+    versand_cc: Mapped[str] = mapped_column(String(200), default="")      # zusätzl. CC
+    empfaenger_leer: Mapped[bool] = mapped_column(Boolean, default=False)  # SWD
+    ohne_vollmacht: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 ABLEHNUNGSGRUND_STARTWERTE = [

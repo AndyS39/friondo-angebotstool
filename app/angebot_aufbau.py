@@ -16,7 +16,7 @@ from app import config
 from app import konfigurator as engine
 from app.logik import (Logik, antwort_teile as logik_antwort_teile,
                        refs_extrahieren as logik_refs_extrahieren)
-from app.models import Angebot, AngebotsPosition, Artikel, Konfiguration
+from app.models import Angebot, AngebotsPosition, Artikel, Konfiguration, Kunde
 
 
 def _mengenmaske_ref(zeilen, option: str):
@@ -347,6 +347,13 @@ def angebot_anlegen(session: Session, kunde_id: int,
         )
         for p in positionen:
             angebot.positionen.append(AngebotsPosition(**p))
+        # v9: Angebotsprofil über den Kanal des Kunden + Positionsregeln
+        from app import angebotsprofile
+        profil = angebotsprofile.profil_fuer_kanal(
+            session, getattr(session.get(Kunde, kunde_id), "vertriebskanal", ""))
+        if profil is not None:
+            angebot.profil_id = profil.id
+            angebotsprofile.positionsregeln_anwenden(session, angebot, profil)
         session.add(angebot)
         try:
             session.commit()

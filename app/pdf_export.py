@@ -147,16 +147,22 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
                 kfw_ergebnis: "kfw.KfwErgebnis | None" = None,
                 mit_vollmacht: bool = True,
                 signatur: dict | None = None,
-                ziel: Path | None = None) -> Path:
+                ziel: Path | None = None,
+                vortext_text: str | None = None,
+                nachtext_text: str | None = None) -> Path:
     """signatur (Phase 23): {"png_pfad", "name", "zeit"} – wird auf der
-    Unterschriften-Seite eingebettet; ziel überschreibt den Ablageort."""
+    Unterschriften-Seite eingebettet; ziel überschreibt den Ablageort.
+    v9: Vor- und Nachtext kommen als Textblöcke (Profil/Parametrierung);
+    None = Standard-Blöcke aus app.angebotsprofile."""
+    from app import angebotsprofile
     pdf = AngebotsPdf(angebot.nummer)
-    _seite1(pdf, angebot, kunde)
+    _seite1(pdf, angebot, kunde,
+            vortext_text if vortext_text is not None
+            else angebotsprofile.STANDARD_VORTEXT)
     _positionsteil(pdf, angebot)
     _summen_und_kfw(pdf, angebot, kfw_ergebnis)
-    _nachtext_a(pdf)
-    _nachtext_b(pdf)
-    _nachtext_c(pdf, signatur)
+    _nachtext_rendern(pdf, nachtext_text if nachtext_text is not None
+                      else angebotsprofile.STANDARD_NACHTEXT, signatur)
     if mit_vollmacht:
         # Nachtext D nur bei iMSys (P02) und/oder SpotDynamic (P03) – Phase 15
         _nachtext_d(pdf, kunde, angebot)
@@ -171,7 +177,7 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
 
 # --- Seite 1: Briefkopf + Vortext ----------------------------------------
 
-def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde):
+def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde, vortext_text: str):
     pdf.add_page()
 
     pdf.set_font("Arial", "", 6.5)
@@ -227,55 +233,46 @@ def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde):
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(4)
 
-    # Vortext lt. ANGEBOTSTEXTE.md
-    pdf.set_font("Arial", "B", 10)
-    pdf.cell(0, 5, "Ihr individuelles Wärmepumpen-Angebot zum Festpreis",
-             new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.cell(0, 5, "Effizienz, Komfort und zukunftssicher",
-             new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.ln(3)
-    pdf.set_font("Arial", "", 9)
-    # Briefanrede dynamisch (v5): Herr/Frau + Nachname, Fallback Damen und Herren
-    pdf.multi_cell(0, 4.4,
-                   f"{kunde.briefanrede}\n\n"
-                   "vielen Dank für Ihr Vertrauen in die Friondo GmbH. Sie haben eine "
-                   "zukunftssichere Entscheidung getroffen – eine moderne Wärmepumpe senkt "
-                   "Ihre Energiekosten, steigert den Wohnkomfort und macht Sie unabhängiger "
-                   "von fossilen Brennstoffen.\n\n"
-                   "Anbei erhalten Sie Ihr maßgeschneidertes Angebot. Darin enthalten sind:")
-    pdf.ln(1.5)
-    for text in [
-        "Ihre individuelle Wärmepumpe – optimal dimensioniert für Ihre Immobilie",
-        "Detaillierte Installationsleistungen – fachgerecht, sauber und termingerecht",
-        "Transparent und Festpreis – klar verständlich und ohne versteckte Kosten",
-        "Unser Rundum-Sorglos-Service – von der Planung bis zur Inbetriebnahme",
-    ]:
-        pdf.haken_zeile(text)
-    pdf.ln(2)
-    pdf.set_font("Arial", "B", 10)
-    pdf.cell(0, 5, "Warum Friondo?", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.ln(1)
-    pdf.set_font("Arial", "", 9)
-    for text in [
-        "Fachkompetenz & Qualität – Als Meisterbetrieb, Mitglied der Innung und "
-        "VDI-zertifiziertes Fachunternehmen setzen wir auf höchste Standards.",
-        "Zertifizierte Sachkundige für Wärmepumpensysteme nach VDI 4650 – Fundiertes "
-        "Fachwissen und tiefgehender Expertise der Wärmepumpentechnik.",
-        "Persönliche Beratung – Wir begleiten Sie von der ersten Idee bis zur perfekten "
-        "Lösung für Ihr Zuhause.",
-        "Effizienz & Nachhaltigkeit – Unsere Systeme senken Ihren Energieverbrauch spürbar "
-        "und steigern den Wert Ihrer Immobilie.",
-        "Fördermittel-Check & Unterstützung – Wir helfen Ihnen, maximale staatliche "
-        "Zuschüsse zu nutzen.",
-    ]:
-        pdf.haken_zeile(text, fett_bis=" – ")
-    pdf.ln(2)
-    pdf.set_font("Arial", "B", 9)
-    pdf.multi_cell(0, 4.4, "Wir sind auf Wärmepumpen spezialisiert und gehören in der "
-                           "Region zu den führenden Anbieter.")
-    pdf.set_font("Arial", "", 9)
-    pdf.multi_cell(0, 4.4, "Lassen Sie uns gemeinsam Ihre Heizung zukunftsfähig machen!\n\n"
-                           "Ihr Friondo-Team")
+    # Vortext (v9): editierbarer Textblock je Profil, Override am Angebot
+    _vortext_rendern(pdf, vortext_text, kunde)
+
+
+def _vortext_rendern(pdf: AngebotsPdf, text: str, kunde: Kunde) -> None:
+    """Vortext-Blocktext rendern: "## " fette Titelzeile · "- " Haken-Zeile ·
+    "* " Haken-Zeile mit fettem Anfang (bis " – ") · "**…**" fetter Absatz ·
+    {briefanrede} = dynamische Anrede; Leerzeile trennt Absätze."""
+    text = text.replace("{briefanrede}", kunde.briefanrede)
+    puffer: list[str] = []
+
+    def puffer_leeren():
+        if puffer:
+            pdf.set_font("Arial", "", 9)
+            pdf.multi_cell(0, 4.4, "\n".join(puffer))
+            pdf.ln(1.5)
+            puffer.clear()
+
+    for zeile in text.splitlines():
+        zeile = zeile.rstrip()
+        if not zeile.strip():
+            puffer_leeren()
+            continue
+        if zeile.startswith("## "):
+            puffer_leeren()
+            pdf.set_font("Arial", "B", 10)
+            pdf.cell(0, 5, zeile[3:], new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        elif zeile.startswith("- "):
+            puffer_leeren()
+            pdf.haken_zeile(zeile[2:])
+        elif zeile.startswith("* "):
+            puffer_leeren()
+            pdf.haken_zeile(zeile[2:], fett_bis=" – ")
+        elif zeile.startswith("**") and zeile.endswith("**"):
+            puffer_leeren()
+            pdf.set_font("Arial", "B", 9)
+            pdf.multi_cell(0, 4.4, zeile[2:-2])
+        else:
+            puffer.append(zeile)
+    puffer_leeren()
 
 
 # --- Positionsteil ---------------------------------------------------------
@@ -469,112 +466,52 @@ def _absatz(pdf: AngebotsPdf, text: str, fett=False, groesse=9):
     pdf.ln(1.5)
 
 
-def _nachtext_a(pdf: AngebotsPdf):
-    pdf.add_page()
-    _ueberschrift(pdf, "Ihre Zahlungsoptionen bei Friondo")
-    _absatz(pdf, "Barkauf oder Finanzierung", fett=True, groesse=10)
-    _absatz(pdf, "Saubere Energie. Faire Raten. Maximale Freiheit.")
-    _absatz(pdf, "Finanzierung mit Cloover", fett=True, groesse=10)
-    _absatz(pdf, "Investieren Sie jetzt in Ihre Energie- oder Wärmelösung – ohne hohe "
-                 "Einmalzahlung und bequem in festen Monatsraten über bis zu 20 Jahre.")
-    _absatz(pdf, "Sofort starten", fett=True)
-    _absatz(pdf, "• Keine Anzahlung, Keine Grundbuchbelastung, Schnelle - digitale Prüfung, "
-                 "Finanzierungszusage in wenigen Minuten, 100 % digital, Kein Papierkram "
-                 "und keine Banktermine")
-    _absatz(pdf, "Planbare Monatsraten – Zum Beispiel:", fett=True)
-    _absatz(pdf, "• Wärmepumpe ab 129 € pro Monat mit Förderung*\n"
-                 "• Oder ab 250 € pro Monat ohne Förderung")
-    _absatz(pdf, "So bleibt Ihr Budget flexibel und Ihre Energiekosten sinken langfristig.")
-    _absatz(pdf, "Maximale Flexibilität", fett=True)
-    _absatz(pdf, "• Kostenlose Sondertilgungen\n"
-                 "• Vorzeitige Rückzahlung ohne Strafgebühren\n"
-                 "• Individuell anpassbare Laufzeiten")
-    _absatz(pdf, "Ihre Vorteile", fett=True)
-    _absatz(pdf, "• Sofort investieren · Monatlich entspannt zahlen · Energiekosten senken · "
-                 "Unabhängiger werden")
-    _absatz(pdf, "Kundenzufriedenheit: 4,8 von 5", fett=True)
-    _absatz(pdf, "„Dank Cloover konnten wir unsere Wärmepumpe einfach, fair und transparent "
-                 "finanzieren.“")
-    _absatz(pdf, "Starten Sie jetzt mit Friondo und Cloover in eine nachhaltige Zukunft.")
-    pdf.set_font("Arial", "I", 7.5)
-    pdf.multi_cell(0, 3.8, "*Beispielrate auf Basis einer Angebotssumme von 29.000 €, einer "
-                           "Förderung von 56 %, gedeckelt auf 28.000 €, und einer Laufzeit "
-                           "von 20 Jahren.")
+def _nachtext_rendern(pdf: AngebotsPdf, text: str,
+                      signatur: dict | None = None) -> None:
+    """v9: Nachtext-Blocktext rendern. Konventionen: "# " Seitenüberschrift ·
+    "## " fette Zwischenzeile (10 pt) · "### " fette Absatz-Überschrift ·
+    "---" allein = Seitenumbruch · "~ " kleine kursive Fußnote ·
+    "[UNTERSCHRIFT]" = Ort/Datum-Unterschriftenblock (inkl. elektronischer
+    Signatur). Aufeinanderfolgende Zeilen bilden EINEN Absatz."""
+    for seite in text.split("\n---\n"):
+        pdf.add_page()
+        puffer: list[str] = []
+
+        def puffer_leeren():
+            if puffer:
+                _absatz(pdf, "\n".join(puffer))
+                puffer.clear()
+
+        for zeile in seite.splitlines():
+            zeile = zeile.rstrip()
+            if not zeile.strip():
+                puffer_leeren()
+                continue
+            if zeile.strip() == "[UNTERSCHRIFT]":
+                puffer_leeren()
+                _unterschrift_block(pdf, signatur)
+            elif zeile.startswith("# "):
+                puffer_leeren()
+                _ueberschrift(pdf, zeile[2:])
+            elif zeile.startswith("## "):
+                puffer_leeren()
+                _absatz(pdf, zeile[3:], fett=True, groesse=10)
+            elif zeile.startswith("### "):
+                puffer_leeren()
+                _absatz(pdf, zeile[4:], fett=True)
+            elif zeile.startswith("~ "):
+                puffer_leeren()
+                pdf.set_font("Arial", "I", 7.5)
+                pdf.multi_cell(0, 3.8, zeile[2:])
+                pdf.ln(1)
+            else:
+                puffer.append(zeile)
+        puffer_leeren()
 
 
-def _nachtext_b(pdf: AngebotsPdf):
-    pdf.add_page()
-    _ueberschrift(pdf, "Installationsvoraussetzungen")
-    _absatz(pdf, "Haftungsbegrenzung", fett=True)
-    _absatz(pdf, "Technische und kaufmännische Angaben sind freibleibend. Sie werden erst "
-                 "durch eine nachfolgende Auftragsbestätigung verbindlich.")
-    _absatz(pdf, "Rücktrittsrecht im Zusammenhang mit Technischer Feinplanung", fett=True)
-    _absatz(pdf, "Die in diesem Vertrag vorgesehenen Verpflichtungen und (Liefer-)Leistungen "
-                 "setzen eine eingehende technische Feinplanung voraus, um sicherzustellen, "
-                 "dass das Vorhaben zu den vereinbarten Bedingungen umgesetzt werden kann. "
-                 "Sollte die technische Feinplanung ergeben, dass die Umsetzung des Vorhabens "
-                 "technisch nicht möglich ist oder nur mit erheblichem Mehraufwand erfolgen "
-                 "kann, ist jede Vertragspartei – abweichend der AGB von Friondo – berechtigt, "
-                 "von dem Vertrag zurückzutreten. Ein entsprechender Rücktritt ist innerhalb "
-                 "von sechs (6) Wochen ab Kenntnisnahme in Textform gegenüber der jeweils "
-                 "anderen Vertragspartei zu erklären.")
-    _absatz(pdf, "Zahlung", fett=True)
-    _absatz(pdf, "Eine Anzahlung von 50% des Angebotsbetrags ist spätestens 14 Tage vor "
-                 "Arbeitsbeginn zu zahlen. Die Restzahlung wird mit der "
-                 "Schlussrechnungsstellung fällig. Die Rechnung erhalten Sie im Anschluss "
-                 "zur Installation.")
-    _absatz(pdf, "Hinweis zur KfW-Förderung", fett=True)
-    _absatz(pdf, "Der Wechsel zu einer klimafreundlichen Heizlösung kann unter bestimmten "
-                 "Voraussetzungen durch Förderprogramme der Bundesregierung unterstützt "
-                 "werden. Im Rahmen des Programms „Heizungsförderung für Privatpersonen – "
-                 "Wohngebäude“ (Programmnummer 458) erfolgt die Förderung über die "
-                 "Kreditanstalt für Wiederaufbau (KfW).")
-    _absatz(pdf, "Bitte beachten Sie, dass weder der Anspruch auf Fördermittel noch deren "
-                 "konkrete Höhe garantiert werden kann. Die abschließende Entscheidung über "
-                 "Bewilligung und Umfang der Förderung liegt ausschließlich bei der KfW.")
-    _absatz(pdf, "Die Ihnen kommunizierte, voraussichtliche Förderhöhe basiert auf den "
-                 "Angaben, die im Beratungsgespräch erfasst wurden. Für die Richtigkeit und "
-                 "Vollständigkeit dieser Informationen übernimmt Friondo keine Haftung. "
-                 "Zudem wird bestätigt, dass sich die Antragsteller bei mehreren am Vorhaben "
-                 "beteiligten Investoren über die Verteilung der Förderbeträge einvernehmlich "
-                 "verständigt haben.")
-    _absatz(pdf, "Eine Kombination bzw. Kumulierung der KfW-Förderung mit der steuerlichen "
-                 "Förderung gemäß § 35 EStG ist ausgeschlossen. Antragsteller sind "
-                 "verpflichtet, für dieselbe Maßnahme keinen zusätzlichen Antrag auf "
-                 "steuerliche Förderung zu stellen. Voraussetzung für die Förderung von "
-                 "Wärmepumpen ist außerdem, dass am vorgesehenen Installationsort kein "
-                 "Anschluss- oder Benutzungszwang an ein Wärmenetz besteht. Die Prüfung "
-                 "dieser Voraussetzung obliegt dem Kunden und muss vor Auftragserteilung "
-                 "erfolgen.")
-    _absatz(pdf, "Wir halten uns freibleibend 30 Tage an dieses Angebot gebunden.\n"
-                 "Es gelten unsere Allgemeinen Geschäftsbedingungen, diese sind zu finden "
-                 "unter: https://friondo.de/AGB\n"
-                 "Informationen zu unserem Datenschutz finden Sie unter: "
-                 "https://friondo.de/Datenschutz")
-
-
-def _nachtext_c(pdf: AngebotsPdf, signatur: dict | None = None):
-    pdf.add_page()
-    _absatz(pdf, "Wir sichern Ihnen eine fach- und zeitgerechte Ausführung aller "
-                 "angebotenen Leistungen zu.")
-    _absatz(pdf, "Sie haben Fragen oder wünschen weitere Informationen? Rufen Sie uns an - "
-                 "wir sind für Sie da.")
-    _absatz(pdf, "Mit freundlichen Grüßen,")
-    _absatz(pdf, "Ihr Friondo-Team")
-    pdf.ln(4)
-    _absatz(pdf, "Sollte Ihnen das Angebot zusagen, senden Sie uns bitte zur "
-                 "Auftragserteilung das unterschriebene Angebot zurück.")
-    _absatz(pdf, "Aufschiebende Bedingung:", fett=True)
-    _absatz(pdf, "Dieser Vertrag tritt hinsichtlich der Liefer- und Leistungspflichten zur "
-                 "Umsetzung, erst und nur insoweit in Kraft, wenn und soweit die KfW den "
-                 "Antrag zur Förderung Heizungstausch BEG EM bewilligt und die Förderung "
-                 "mit einer Zusage gegenüber der antragstellenden Vertragspartei zugesagt "
-                 "hat (aufschiebende Bedingung). Die antragstellende Vertragspartei wird "
-                 "die jeweils andere Vertragspartei über den Eintritt und den Umfang des "
-                 "Eintritts der Bedingung unverzüglich in Kenntnis setzen. Die Förderzusage "
-                 "löst dann direkt den Vorhabensbeginn aus.")
-    _absatz(pdf, "Voraussichtliches Datum der Umsetzung: ______________ ,liegt innerhalb "
-                 "des Bewilligungszeitraum nach Nummer 9.4.1.")
+def _unterschrift_block(pdf: AngebotsPdf, signatur: dict | None = None) -> None:
+    """Ort/Datum + Unterschrift des Auftraggebers; mit elektronischer
+    Signatur (Phase 23) wird Bild + Name + Zeitstempel eingebettet."""
     if signatur is None:
         pdf.ln(14)
         pdf.set_font("Arial", "", 9)
@@ -583,7 +520,6 @@ def _nachtext_c(pdf: AngebotsPdf, signatur: dict | None = None):
         pdf.cell(85, 4.5, "Ort, Datum")
         pdf.cell(0, 4.5, "Unterschrift des Auftraggebers")
     else:
-        # Elektronische Signatur (Phase 23): Bild + Name + Zeitstempel einbetten
         pdf.ln(6)
         y = pdf.get_y()
         pdf.image(signatur["png_pfad"], x=pdf.l_margin + 85, y=y, w=60)
@@ -714,10 +650,14 @@ def signiertes_pdf_erzeugen(session, angebot: Angebot, png_bytes: bytes,
         png_pfad = datei.name
     try:
         ziel = config.SIGNIERT_ORDNER / f"{angebot.nummer}-signiert.pdf"
+        from app import angebotsprofile
         return erzeuge_pdf(angebot, kunde, ergebnis,
-                           mit_vollmacht=anhaenge.vollmacht_erforderlich(angebot),
+                           mit_vollmacht=(anhaenge.vollmacht_erforderlich(angebot)
+                                          and angebotsprofile.vollmacht_erlaubt(session, angebot)),
                            signatur={"png_pfad": png_pfad, "name": name, "zeit": zeit},
-                           ziel=ziel)
+                           ziel=ziel,
+                           vortext_text=angebotsprofile.vortext_fuer_angebot(session, angebot),
+                           nachtext_text=angebotsprofile.nachtext_fuer_angebot(session, angebot))
     finally:
         Path(png_pfad).unlink(missing_ok=True)
 
@@ -736,5 +676,9 @@ def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
         eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["endbetrag"])
         if eingaben is not None:
             ergebnis = kfw.ergebnis_fuer_angebot(parameter, eingaben, angebot)
+    from app import angebotsprofile
     return erzeuge_pdf(angebot, kunde, ergebnis,
-                       mit_vollmacht=anhaenge.vollmacht_erforderlich(angebot))
+                       mit_vollmacht=(anhaenge.vollmacht_erforderlich(angebot)
+                                      and angebotsprofile.vollmacht_erlaubt(session, angebot)),
+                       vortext_text=angebotsprofile.vortext_fuer_angebot(session, angebot),
+                       nachtext_text=angebotsprofile.nachtext_fuer_angebot(session, angebot))

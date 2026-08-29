@@ -251,8 +251,16 @@ async def editor(request: Request, angebot_id: int,
     ablehnungsgruende = (session.query(AblehnungsGrund)
                          .filter(AblehnungsGrund.aktiv.is_(True))
                          .order_by(AblehnungsGrund.sort, AblehnungsGrund.id).all())
+    # v9: Angebotsprofil (Nachtext/Positions-/Versandregeln) + Vortext-Override
+    from app import angebotsprofile
+    from app.models import Profil
+    profil = angebotsprofile.profil_fuer_angebot(session, angebot, kunde)
+    profile = session.query(Profil).order_by(Profil.id).all()
+    profil_hinweise = {p_.id: angebotsprofile.regeln_beschreibung(p_) for p_ in profile}
     return render(request, "angebote/editor.html", aktiv="/angebote",
                   ablehnungsgruende=ablehnungsgruende,
+                  profil=profil, profile=profile, profil_hinweise=profil_hinweise,
+                  vortext_standard=angebotsprofile.vortext_fuer_angebot(session, angebot),
                   angebot=angebot, kunde=kunde, gruppen=gruppen,
                   summen=angebot.summen(), artikel_liste=artikel_liste,
                   deckung=angebot.deckungsbeitrag(),
@@ -618,11 +626,23 @@ async def email_entwurf(request: Request, angebot_id: int,
                       "Entwurf ohne CC (Benutzerverwaltung ergänzen).")
     elif vertriebler is None:
         cc_hinweis = " Hinweis: kein Außendienstler zugeordnet – Entwurf ohne CC."
+    # v9: Versandregeln des Angebotsprofils (Enni: CC energieberatung@enni.de;
+    # SWD: Empfänger leer – der Innendienst trägt den SWD-Kontakt manuell ein)
+    from app import angebotsprofile
+    profil = angebotsprofile.profil_fuer_angebot(session, angebot, kunde)
+    if profil is not None and profil.versand_cc:
+        cc += [a.strip() for a in profil.versand_cc.split(",")
+               if a.strip() and a.strip() not in cc]
+    empfaenger_leer = bool(profil is not None and profil.empfaenger_leer)
+    if empfaenger_leer:
+        cc_hinweis += (" PFLICHT: Empfänger ist leer (SWD-Profil) – bitte den "
+                       "SWD-Kontakt vor dem Senden in Outlook eintragen!")
     erfolg, meldung, weblink, conversation_id = graph_versand.entwurf_erstellen(
         kunde, angebot, pdf_pfad, betreff, text,
         weitere_anhaenge=[Path(a.pfad) for a in anhaenge if a.vorhanden],
         fehlende_anhaenge=[a.datei for a in anhaenge if not a.vorhanden],
-        cc=cc, bcc=bcc, absender=absender, inline_bilder=inline_bilder)
+        cc=cc, bcc=bcc, absender=absender, inline_bilder=inline_bilder,
+        empfaenger_leer=empfaenger_leer)
     if erfolg:
         meldung += f" ({vorlage_quelle}, Absender {absender})" + cc_hinweis
         # Mail-Verlauf (Phase 27): Konversation der Angebots-Mail merken
@@ -638,6 +658,91 @@ async def email_entwurf(request: Request, angebot_id: int,
         if weblink:
             ziel += f"&weblink={quote_plus(weblink)}"
     return RedirectResponse(ziel, status_code=303)
+
+
+@router.post("/{angebot_id}/profil")
+async def profil_umschalten(request: Request, angebot_id: int,
+                            session: Session = Depends(get_session)):
+    """v9: Angebotsprofil manuell umschalten. Bei Entwürfen werden die
+    Positionsregeln des neuen Profils direkt angewendet; sonst ändern sich
+    nur Nachtext/Versandregeln (Meldung sagt, was passiert ist)."""
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
+    from urllib.parse import quote_plus
+
+    from app import angebotsprofile
+    from app.models import Profil
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote", status_code=303)
+    form = await request.form()
+    profil = session.get(Profil, int(form.get("profil_id") or 0))
+    if profil is None:
+        return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+    angebot.profil_id = profil.id
+    meldungen = [f"Profil auf „{profil.name}“ umgestellt."]
+    if angebot.status == "Entwurf":
+        meldungen += angebotsprofile.positionsregeln_anwenden(session, angebot, profil)
+    else:
+        meldungen.append("Positionen unverändert (kein Entwurf) – es gelten "
+                         "Nachtext und Versandregeln des neuen Profils.")
+    session.commit()
+    return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+        " ".join(meldungen)), status_code=303)
+
+
+@router.post("/{angebot_id}/vortext")
+async def vortext_speichern(request: Request, angebot_id: int,
+                            session: Session = Depends(get_session)):
+    """v9: Vortext am Angebot überschreiben (leer = Profil-/Standardtext)."""
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
+    from urllib.parse import quote_plus
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote", status_code=303)
+    form = await request.form()
+    angebot.vortext_text = (form.get("vortext_text") or "").strip()
+    session.commit()
+    return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+        "Vortext gespeichert" if angebot.vortext_text
+        else "Vortext zurück auf den Profil-Standard"), status_code=303)
+
+
+@router.post("/{angebot_id}/kanal")
+async def kanal_aendern(request: Request, angebot_id: int,
+                        session: Session = Depends(get_session)):
+    """v9: Vertriebskanal des Kunden manuell setzen (Vorrang vor dem Sync);
+    mit profil_auto=1 wird das Profil anhand des neuen Kanals neu bestimmt."""
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
+    from urllib.parse import quote_plus
+
+    from app import angebotsprofile
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote", status_code=303)
+    kunde = session.get(Kunde, angebot.kunde_id)
+    form = await request.form()
+    kanal = (form.get("kanal") or "").strip()[:100]
+    if kunde is not None:
+        kunde.vertriebskanal = kanal
+        kunde.kanal_manuell = bool(kanal)
+    meldung = f"Vertriebskanal auf „{kanal or '–'}“ gesetzt."
+    if form.get("profil_auto") == "1":
+        angebot.profil_id = None   # Auto-Auswahl über den neuen Kanal
+        profil = angebotsprofile.profil_fuer_angebot(session, angebot, kunde)
+        if profil is not None:
+            angebot.profil_id = profil.id
+            meldung += f" Profil automatisch: „{profil.name}“."
+            if angebot.status == "Entwurf":
+                aenderungen = angebotsprofile.positionsregeln_anwenden(
+                    session, angebot, profil)
+                if aenderungen:
+                    meldung += " " + " ".join(aenderungen)
+    session.commit()
+    return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(meldung),
+                            status_code=303)
 
 
 @router.post("/{angebot_id}/verfolgung")

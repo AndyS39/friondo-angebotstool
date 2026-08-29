@@ -178,6 +178,35 @@ async def ausblenden(request: Request, lead_id: int,
         status_code=303)
 
 
+@router.post("/{lead_id}/kanal")
+async def kanal_aendern(request: Request, lead_id: int,
+                        session: Session = Depends(get_session)):
+    """v9: Vertriebskanal manuell setzen (Vorrang vor dem monday-Sync);
+    wirkt auf Lead UND Kunden. Leer = zurück zur Sync-Automatik."""
+    from urllib.parse import quote_plus
+
+    from app.models import Kunde
+    benutzer = request.state.benutzer
+    if benutzer.rolle == "aussendienst":
+        return RedirectResponse("/leads", status_code=303)
+    lead = session.get(Lead, lead_id)
+    if lead is None:
+        return RedirectResponse("/leads", status_code=303)
+    form = await request.form()
+    kanal = (form.get("kanal") or "").strip()[:100]
+    lead.vertriebskanal = kanal
+    lead.kanal_manuell = bool(kanal)
+    kunde = session.get(Kunde, lead.kunde_id) if lead.kunde_id else None
+    if kunde is not None:
+        kunde.vertriebskanal = kanal
+        kunde.kanal_manuell = bool(kanal)
+    session.commit()
+    return RedirectResponse("/leads?meldung=" + quote_plus(
+        f"{lead.anzeige_name}: Kanal "
+        + (f"manuell auf „{kanal}“ gesetzt (Sync überschreibt nicht mehr)."
+           if kanal else "zurück auf Sync-Automatik.")), status_code=303)
+
+
 @router.post("/{lead_id}/sparte-ausblenden")
 async def sparte_ausblenden(request: Request, lead_id: int,
                             session: Session = Depends(get_session)):
