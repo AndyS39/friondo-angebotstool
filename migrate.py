@@ -151,16 +151,6 @@ def _daten() -> list[str]:
         # Pos.-162-Text auf den Enni-Wortlaut aktualisieren (Preis bleibt)
         from app import angebotsprofile
         meldungen += angebotsprofile.seed(session)
-        from app.models import Artikel
-        artikel_162 = (session.query(Artikel)
-                       .filter(Artikel.pos_nr == "162", Artikel.aktiv.is_(True)).first())
-        if (artikel_162 is not None
-                and artikel_162.bezeichnung != angebotsprofile.POS_162_BEZEICHNUNG):
-            artikel_162.bezeichnung = angebotsprofile.POS_162_BEZEICHNUNG
-            artikel_162.beschreibung = angebotsprofile.POS_162_TEXT
-            meldungen.append("Pos.-162-Text auf enni.flexstrom-Wortlaut aktualisiert "
-                             f"(Preis unverändert: {artikel_162.e_preis_cent / 100:.2f} €)")
-        session.commit()
         # v8/v9: neue Zusatzartikel (Z23 MID-Zähler, Z24 Solar-Rückbau) müssen
         # im Artikelstamm liegen, sonst blockiert die Logik-Validierung –
         # fehlen sie, läuft der Preislisten-/Zusatzartikel-Import automatisch
@@ -177,6 +167,17 @@ def _daten() -> list[str]:
                 meldungen.append(f"WARNUNG: Zusatzartikel {', '.join(fehlend)} fehlen "
                                  f"und der Import schlug fehl: {problem} – bitte "
                                  "Artikel → Preisliste importieren ausführen!")
+        session.commit()
+        from app.models import Artikel
+        artikel_162 = (session.query(Artikel)
+                       .filter(Artikel.pos_nr == "162", Artikel.aktiv.is_(True)).first())
+        if (artikel_162 is not None
+                and artikel_162.bezeichnung != angebotsprofile.POS_162_BEZEICHNUNG):
+            artikel_162.bezeichnung = angebotsprofile.POS_162_BEZEICHNUNG
+            artikel_162.beschreibung = angebotsprofile.POS_162_TEXT
+            meldungen.append("Pos.-162-Text auf enni.flexstrom-Wortlaut aktualisiert "
+                             f"(Preis unverändert: {artikel_162.e_preis_cent / 100:.2f} €)")
+        session.commit()
     finally:
         session.close()
     return meldungen
