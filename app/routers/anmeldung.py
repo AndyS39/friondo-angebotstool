@@ -35,7 +35,9 @@ async def login(request: Request, session: Session = Depends(get_session)):
                 .order_by(Benutzer.name).all())
         return render(request, "anmeldung/login.html", aktiv=None,
                       benutzer=alle, fehler="Benutzer oder PIN falsch.")
-    ziel = "/erfassung" if benutzer.rolle == "aussendienst" else "/"
+    # v9-Portal: Innendienst landet nach dem Login direkt im Angebotstool
+    # (das Portal „/“ ist über den Home-Link im Kopf erreichbar)
+    ziel = "/erfassung" if benutzer.rolle == "aussendienst" else "/angebotstool"
     antwort = RedirectResponse(ziel, status_code=303)
     antwort.set_cookie(auth.COOKIE_NAME, auth.cookie_wert(benutzer.id),
                        httponly=True, max_age=60 * 60 * 12)

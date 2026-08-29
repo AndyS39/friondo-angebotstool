@@ -96,16 +96,41 @@ def _start_kontext() -> dict:
 
 @app.get("/")
 async def startseite(request: Request):
-    """Startseite: drei Bereiche (v9, Phase 57) – links Lead-Management und
-    rechts Projektierung als „Coming soon“-Platzhalter, in der Mitte das
-    Angebotstool mit den bisherigen Kacheln."""
+    """Portal (v9-Finale): drei große klickbare Karten – Lead-Management und
+    Projektierung als „Coming soon“, in der Mitte das Angebotstool mit den
+    „Auf einen Blick“-Zahlen. Nur Innendienst/Admin; Außendienst leitet die
+    Rollen-Middleware bei „/“ automatisch auf die mobile Erfassung um."""
+    from fastapi.responses import RedirectResponse
+    benutzer = request.state.benutzer
+    if benutzer is not None and benutzer.rolle == "aussendienst":
+        return RedirectResponse("/erfassung", status_code=303)
     return render(request, "index.html", aktiv=None, **_start_kontext())
 
 
 @app.get("/angebotstool")
 async def angebotstool(request: Request):
-    """Bisherige Startansicht (Phase 19): Shortcuts + Statistik-Kacheln."""
+    """Angebotstool-Startansicht (Ebene 2): Shortcuts + klickbare Kacheln."""
     return render(request, "angebotstool.html", aktiv=None, **_start_kontext())
+
+
+@app.get("/lead-management")
+async def lead_management(request: Request):
+    """Platzhalterseite (v9-Portal): Lead-Management ist im Aufbau."""
+    return render(request, "platzhalter.html", aktiv=None,
+                  titel="Lead-Management",
+                  hinweis="Dieser Bereich ist im Aufbau (Coming soon). "
+                          "Die Lead-Arbeit läuft bis dahin wie gewohnt über "
+                          "das Angebotstool (Leads VOT).")
+
+
+@app.get("/projektierung")
+async def projektierung(request: Request):
+    """Platzhalterseite (v9-Portal): Projektierung ist im Aufbau."""
+    return render(request, "platzhalter.html", aktiv=None,
+                  titel="Projektierung",
+                  hinweis="Dieser Bereich ist im Aufbau (Coming soon). "
+                          "Auftragsabwicklung und Montageplanung folgen in "
+                          "einer späteren Version.")
 
 
 def _offene_leads_anzahl(session) -> int:

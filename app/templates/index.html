@@ -5,38 +5,64 @@
 {% block inhalt %}
 <h1>Willkommen bei Friondo</h1>
 
-{# v9 (Phase 57): Startseite in drei Bereichen – Mitte Angebotstool (aktiv),
-   links Lead-Management und rechts Projektierung als Platzhalter (Werte 0). #}
-<div class="start-bereiche">
-    <section class="start-bereich platzhalter-bereich">
-        <h2>Lead-Management <span class="coming-soon">Coming soon</span></h2>
+{# v9-Portal (finale Fassung): drei große Karten, jede Karte ist EIN
+   Klickziel zur jeweiligen Tool-Seite. Die Kacheln darin sind reine
+   Anzeige (keine eigenen Links) – Klick darauf zählt als Kartenklick. #}
+<div class="portal-karten">
+    <a class="portal-karte" href="/lead-management">
+        <h2 class="portal-titel">Lead-Management <span class="coming-soon">Coming soon</span></h2>
         <div class="kacheln bereich-kacheln">
             {% for titel in ['Neue Leads', 'Kontaktierte Leads', 'Nachzufassende Leads',
                              'Disqualifizierte Leads', 'Terminierte Leads'] %}
-            <div class="kachel stat inaktiv" title="Noch ohne Funktion – Coming soon">
+            <div class="kachel stat inaktiv">
                 <span class="stat-zahl">0</span>
                 <span>{{ titel }}</span>
             </div>
             {% endfor %}
         </div>
-    </section>
+    </a>
 
-    <section class="start-bereich angebotstool-bereich">
-        <h2><a href="/angebotstool" title="Zur Angebotstool-Startansicht">Angebotstool</a></h2>
-        {% include "_angebotstool_kacheln.html" %}
-    </section>
+    <a class="portal-karte" href="/angebotstool">
+        <h2 class="portal-titel">Angebotstool</h2>
+        <div class="kacheln bereich-kacheln">
+            <div class="kachel stat">
+                <span class="stat-zahl">{{ offene_leads }}</span>
+                <span>Offene Leads</span>
+                <span class="dezent">VOT ohne Angebot</span>
+            </div>
+            <div class="kachel stat">
+                <span class="stat-zahl">{{ offene_erfassungen }}</span>
+                <span>Offene Erfassungen</span>
+                <span class="dezent">Neu / In Bearbeitung</span>
+            </div>
+            <div class="kachel stat">
+                <span class="stat-zahl">{{ individuell_offen }}</span>
+                <span>Individuell offen</span>
+                <span class="dezent">zu prüfen / in TAIFUN zu schreiben</span>
+            </div>
+            <div class="kachel stat">
+                <span class="stat-zahl" {% if faellige %}style="color:#c0392b"{% endif %}>{{ faellige }}</span>
+                <span>Fällige Wiedervorlagen</span>
+            </div>
+            <div class="kachel stat">
+                <span class="stat-zahl">{{ versendete }}</span>
+                <span>Versendete Angebote</span>
+                <span class="dezent">warten auf Antwort</span>
+            </div>
+        </div>
+    </a>
 
-    <section class="start-bereich platzhalter-bereich">
-        <h2>Projektierung <span class="coming-soon">Coming soon</span></h2>
+    <a class="portal-karte" href="/projektierung">
+        <h2 class="portal-titel">Projektierung <span class="coming-soon">Coming soon</span></h2>
         <div class="kacheln bereich-kacheln">
             {% for titel in ['Aufträge in Feinplanung', 'Feinplanung abgeschlossen',
                              'Montage geplant', 'In Ausführung', 'Abnahme offen'] %}
-            <div class="kachel stat inaktiv" title="Noch ohne Funktion – Coming soon">
+            <div class="kachel stat inaktiv">
                 <span class="stat-zahl">0</span>
                 <span>{{ titel }}</span>
             </div>
             {% endfor %}
         </div>
-    </section>
+    </a>
 </div>
 {% endblock %}
