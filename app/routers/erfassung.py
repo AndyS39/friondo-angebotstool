@@ -98,9 +98,13 @@ async def uebersicht(request: Request, session: Session = Depends(get_session)):
                   .filter(Angebot.id.in_([e.angebot_id for e in erfassungen
                                           if e.angebot_id] or [0]),
                           Angebot.extern.is_(True))}
+    # v10 (Phase 60): kleine Fälligkeits-Anzeige – eigene Vorgangs-
+    # Wiedervorlagen des Außendienstlers
+    from app import vorgaenge as vorgaenge_modul
+    faellige_wv = len(vorgaenge_modul.faellige_vorgaenge(session, benutzer))
     return render(request, "erfassung/uebersicht.html", aktiv=None, mobil=True,
                   benutzer=benutzer, erfassungen=erfassungen, kunden=kunden,
-                  extern_ids=extern_ids)
+                  extern_ids=extern_ids, faellige_wv=faellige_wv)
 
 
 @router.get("/neu")
@@ -480,6 +484,26 @@ async def pruefen(request: Request, erfassung_id: int,
                   seiten=logik.seiten)
 
 
+def _verfolgung_startwerte(session, erfassung) -> None:
+    """v10 (Phase 60): Einschätzung (S01/S02) schreibt die Startwerte der
+    Verfolgung auf den VORGANG – nur leere Felder werden befüllt, der
+    Verantwortliche der Wiedervorlage ist der Ersteller (AD)."""
+    from app import vorgaenge as vorgaenge_modul
+    vorgang = vorgaenge_modul.vorgang_fuer_erfassung(session, erfassung)
+    antworten = _antworten(erfassung)
+    start_ampel = {"heiß": "heiss", "warm": "warm", "kalt": "kalt"}.get(
+        str(antworten.get("S01") or ""), "")
+    if start_ampel and not vorgang.verfolgung_ampel:
+        vorgang.verfolgung_ampel = start_ampel
+    if antworten.get("S02") and vorgang.wiedervorlage_am is None:
+        try:
+            vorgang.wiedervorlage_am = datetime.strptime(
+                str(antworten["S02"]), "%Y-%m-%d")
+            vorgang.wiedervorlage_benutzer_id = erfassung.benutzer_id
+        except ValueError:
+            pass
+
+
 @router.post("/{erfassung_id}/absenden")
 async def absenden(request: Request, erfassung_id: int,
                    session: Session = Depends(get_session)):
@@ -509,6 +533,7 @@ async def absenden(request: Request, erfassung_id: int,
     # v7: orange Katalog-Fälle landen zur Prüfung beim Innendienst
     erfassung.status = "Individuell – zu prüfen" if gruende else "Neu"
     erfassung.abgesendet_am = datetime.now()
+    _verfolgung_startwerte(session, erfassung)
     session.commit()
     return render(request, "erfassung/fertig.html", aktiv=None, mobil=True,
                   benutzer=_benutzer(request), erfassung=erfassung)

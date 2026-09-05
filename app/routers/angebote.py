@@ -74,12 +74,20 @@ async def liste(request: Request, q: str = "", status: str = "", interesse: str 
     if kanal:       # Vertriebskanal des Kunden (v6)
         angebote = [a for a in angebote
                     if a.kunde_id in kunden and kunden[a.kunde_id].vertriebskanal == kanal]
-    if verfolgung == "faellig":   # Verfolgung (v6): fällige Wiedervorlagen
+    # Verfolgung (v10): Ampel/Wiedervorlage des VORGANGS je Angebot
+    from app.models import Vorgang
+    vorgaenge_map = {v.id: v for v in session.query(Vorgang)}
+    def vorgang_von(a):
+        return vorgaenge_map.get(a.vorgang_id)
+    if verfolgung == "faellig":   # fällige Vorgangs-Wiedervorlagen
         from datetime import datetime as dt
         angebote = [a for a in angebote
-                    if a.wiedervorlage_am and a.wiedervorlage_am <= dt.now()]
+                    if (v := vorgang_von(a)) is not None
+                    and v.wiedervorlage_am and v.wiedervorlage_am <= dt.now()]
     elif verfolgung in ("heiss", "warm", "kalt"):
-        angebote = [a for a in angebote if a.verfolgung_ampel == verfolgung]
+        angebote = [a for a in angebote
+                    if (v := vorgang_von(a)) is not None
+                    and v.verfolgung_ampel == verfolgung]
     # Vertriebler je Angebot (v5-Nachtrag): über die verknüpfte Erfassung
     from app.models import Benutzer, Erfassung
     vertriebler = {b.id: b for b in session.query(Benutzer)}
@@ -131,6 +139,7 @@ async def liste(request: Request, q: str = "", status: str = "", interesse: str 
                   angebote=angebote, kunden=kunden, q=q, status=status,
                   interesse=interesse, vertriebler_id=vertriebler_id, sortierung=sortierung,
                   kanal=kanal, verfolgung=verfolgung, sparte=sparte,
+                  vorgaenge_map=vorgaenge_map,
                   heute=__import__("datetime").datetime.now(),
                   kanal_werte=sorted({kunden[a.kunde_id].vertriebskanal for a in angebote
                                       if a.kunde_id in kunden and kunden[a.kunde_id].vertriebskanal}
@@ -327,11 +336,15 @@ async def editor(request: Request, angebot_id: int,
     anhaenge_liste = anhaenge_modul.fuer_angebot(logik, angebot)
     vollmacht = anhaenge_modul.vollmacht_erforderlich(angebot)
 
-    # Angebotsverfolgung (v6): Notizen-Verlauf
+    # Angebotsverfolgung: Alt-Notizen (Historie) + Vorgang (v10: die
+    # Verfolgung lebt auf Vorgangsebene, der Chat in der Vorgangsakte)
+    from app import vorgaenge as vorgaenge_modul
     from app.models import AngebotsNotiz
     notizen = (session.query(AngebotsNotiz)
                .filter(AngebotsNotiz.angebot_id == angebot.id)
                .order_by(AngebotsNotiz.angelegt_am.desc()).all())
+    vorgang = vorgaenge_modul.vorgang_fuer_angebot(session, angebot)
+    session.commit()
 
     # Vertriebler des Vorgangs (v5-Nachtrag): anzeigen + änderbar
     from app import mail_vorlagen
@@ -365,6 +378,7 @@ async def editor(request: Request, angebot_id: int,
                   ablehnungsgruende=ablehnungsgruende,
                   profil=profil, profile=profile, profil_hinweise=profil_hinweise,
                   fachhinweise=fachhinweise, versionen=versionen,
+                  vorgang=vorgang,
                   vortext_standard=angebotsprofile.vortext_fuer_angebot(session, angebot),
                   angebot=angebot, kunde=kunde, gruppen=gruppen,
                   summen=angebot.summen(), artikel_liste=artikel_liste,
@@ -853,35 +867,27 @@ async def kanal_aendern(request: Request, angebot_id: int,
 @router.post("/{angebot_id}/verfolgung")
 async def verfolgung_setzen(request: Request, angebot_id: int,
                             session: Session = Depends(get_session)):
-    """Angebotsverfolgung (v6): Hot-Ampel + Wiedervorlage-Datum; optional
-    eine Notiz an den Verlauf anhängen (append-only)."""
+    """Verfolgung (v10, Phase 60): lebt auf VORGANGSEBENE – EINE Hot-Ampel und
+    Wiedervorlage je Kundenanfrage; die Notiz geht in den Vorgangs-Chat."""
     from urllib.parse import quote_plus
 
-    from app.models import AngebotsNotiz
+    from app import vorgaenge as vorgaenge_modul
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
         return RedirectResponse("/angebote", status_code=303)
     form = await request.form()
-    ampel = form.get("verfolgung_ampel") or ""
-    if ampel in ("", "heiss", "warm", "kalt"):
-        angebot.verfolgung_ampel = ampel
-    datum = (form.get("wiedervorlage_am") or "").strip()
-    if datum:
-        from datetime import datetime as dt
-        try:
-            angebot.wiedervorlage_am = dt.strptime(datum, "%Y-%m-%d")
-        except ValueError:
-            pass
-    else:
-        angebot.wiedervorlage_am = None
-    notiz = (form.get("notiz") or "").strip()
-    if notiz:
-        benutzer = request.state.benutzer
-        session.add(AngebotsNotiz(angebot_id=angebot.id, text=notiz[:2000],
-                                  benutzer_name=benutzer.name if benutzer else "?"))
+    try:
+        verantwortlicher_id = int(form.get("wv_verantwortlicher") or 0) or None
+    except ValueError:
+        verantwortlicher_id = None
+    vorgang = vorgaenge_modul.vorgang_fuer_angebot(session, angebot)
+    vorgaenge_modul.verfolgung_setzen(
+        session, vorgang, request.state.benutzer,
+        form.get("verfolgung_ampel") or "", form.get("wiedervorlage_am") or "",
+        notiz=form.get("notiz") or "", verantwortlicher_id=verantwortlicher_id)
     session.commit()
     return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
-        "Verfolgung aktualisiert"), status_code=303)
+        "Verfolgung aktualisiert (gilt für den gesamten Vorgang)"), status_code=303)
 
 
 @router.post("/{angebot_id}/foerderung")

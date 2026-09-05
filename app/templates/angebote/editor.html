@@ -190,25 +190,33 @@
     {% endif %}
 </div>
 
-{# Verfolgung (v8): prominent am Seitenanfang #}
+{# Verfolgung (v10): EINE Ampel/Wiedervorlage je VORGANG #}
 <div class="verfolgung-block">
     <form method="post" action="/angebote/{{ angebot.id }}/verfolgung" class="suchleiste">
-        <strong>Verfolgung:</strong>
+        <strong>Verfolgung <span class="dezent" title="Gilt für den gesamten Vorgang (alle Sparten/Angebote dieser Kundenanfrage)">(Vorgang)</span>:</strong>
         <select name="verfolgung_ampel" {{ 'disabled' if nur_lesen }}>
-            <option value="" {{ 'selected' if not angebot.verfolgung_ampel }}>– keine Einstufung –</option>
-            <option value="heiss" {{ 'selected' if angebot.verfolgung_ampel == 'heiss' }}>🔥 heiß</option>
-            <option value="warm" {{ 'selected' if angebot.verfolgung_ampel == 'warm' }}>🌤 warm</option>
-            <option value="kalt" {{ 'selected' if angebot.verfolgung_ampel == 'kalt' }}>❄ kalt</option>
+            <option value="" {{ 'selected' if not vorgang.verfolgung_ampel }}>– keine Einstufung –</option>
+            <option value="heiss" {{ 'selected' if vorgang.verfolgung_ampel == 'heiss' }}>🔥 heiß</option>
+            <option value="warm" {{ 'selected' if vorgang.verfolgung_ampel == 'warm' }}>🌤 warm</option>
+            <option value="kalt" {{ 'selected' if vorgang.verfolgung_ampel == 'kalt' }}>❄ kalt</option>
         </select>
         <label class="kontrollfeld">Wiedervorlage
             <input type="date" name="wiedervorlage_am" {{ 'disabled' if nur_lesen }}
-                   value="{{ angebot.wiedervorlage_am.strftime('%Y-%m-%d') if angebot.wiedervorlage_am }}"></label>
-        <input type="text" name="notiz" size="40" placeholder="Notiz anhängen (optional)" {{ 'disabled' if nur_lesen }}>
+                   value="{{ vorgang.wiedervorlage_am.strftime('%Y-%m-%d') if vorgang.wiedervorlage_am }}"></label>
+        <label class="kontrollfeld">Verantwortlich
+            <select name="wv_verantwortlicher" {{ 'disabled' if nur_lesen }}>
+                <option value="0" {{ 'selected' if not vorgang.wiedervorlage_benutzer_id }}>– Innendienst –</option>
+                {% for b in aussendienst %}
+                    <option value="{{ b.id }}" {{ 'selected' if vorgang.wiedervorlage_benutzer_id == b.id }}>{{ b.name }}</option>
+                {% endfor %}
+            </select></label>
+        <input type="text" name="notiz" size="28" placeholder="Notiz in den Vorgangs-Chat (optional)" {{ 'disabled' if nur_lesen }}>
         {% if not nur_lesen %}<button class="knopf klein" type="submit">Speichern</button>{% endif %}
+        <a class="knopf klein zweitrangig" href="/vorgaenge/{{ vorgang.id }}">Vorgangsakte</a>
     </form>
     {% if notizen %}
     <details {{ 'open' if notizen | length <= 3 }}>
-        <summary class="dezent">Notizen ({{ notizen | length }})</summary>
+        <summary class="dezent">Alt-Notizen am Angebot ({{ notizen | length }}) – neue Notizen laufen über den Chat der Vorgangsakte</summary>
         <ul class="notizen-liste">
             {% for n in notizen %}
                 <li><span class="dezent">{{ n.angelegt_am.strftime('%d.%m.%Y %H:%M') }} · {{ n.benutzer_name }}:</span>

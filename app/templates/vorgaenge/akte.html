@@ -23,14 +23,35 @@
     </p>
     <p><span class="sparten-chips">
         {% for sparte, status in chips %}{{ sparten_ui.chip(sparte, status) }}{% endfor %}
-    </span>
-    {% if vorgang.verfolgung_ampel %}
-        <span title="Verfolgung: {{ vorgang.verfolgung_ampel }}">{{ {'heiss': '🔥', 'warm': '🌤', 'kalt': '❄'}[vorgang.verfolgung_ampel] }}</span>
-    {% endif %}
-    {% if vorgang.wiedervorlage_am %}
-        <span class="{{ 'wv-faellig' if vorgang.wiedervorlage_am <= heute else 'dezent' }}"
-              title="Wiedervorlage des Vorgangs">↻ {{ vorgang.wiedervorlage_am.strftime('%d.%m.%Y') }}</span>
-    {% endif %}</p>
+    </span></p>
+    {# Verfolgung (Phase 60): EINE Ampel + Wiedervorlage je Vorgang #}
+    <form method="post" action="/vorgaenge/{{ vorgang.id }}/verfolgung" class="suchleiste">
+        <strong>Verfolgung:</strong>
+        <select name="verfolgung_ampel">
+            <option value="" {{ 'selected' if not vorgang.verfolgung_ampel }}>– keine Einstufung –</option>
+            <option value="heiss" {{ 'selected' if vorgang.verfolgung_ampel == 'heiss' }}>🔥 heiß</option>
+            <option value="warm" {{ 'selected' if vorgang.verfolgung_ampel == 'warm' }}>🌤 warm</option>
+            <option value="kalt" {{ 'selected' if vorgang.verfolgung_ampel == 'kalt' }}>❄ kalt</option>
+        </select>
+        <label class="kontrollfeld">Wiedervorlage
+            <input type="date" name="wiedervorlage_am"
+                   value="{{ vorgang.wiedervorlage_am.strftime('%Y-%m-%d') if vorgang.wiedervorlage_am }}"
+                   class="{{ 'wv-faellig' if vorgang.wiedervorlage_am and vorgang.wiedervorlage_am <= heute }}"></label>
+        {% if benutzer.rolle in ('admin', 'innendienst') %}
+        <label class="kontrollfeld">Verantwortlich
+            <select name="wv_verantwortlicher">
+                <option value="0" {{ 'selected' if not vorgang.wiedervorlage_benutzer_id }}>– Innendienst –</option>
+                {% for b in aussendienst %}
+                    <option value="{{ b.id }}" {{ 'selected' if vorgang.wiedervorlage_benutzer_id == b.id }}>{{ b.name }}</option>
+                {% endfor %}
+            </select></label>
+        {% elif vorgang.wiedervorlage_benutzer_id %}
+            <span class="dezent">Verantwortlich: {{ benutzer_map[vorgang.wiedervorlage_benutzer_id].name
+                                                    if vorgang.wiedervorlage_benutzer_id in benutzer_map else '?' }}</span>
+        {% endif %}
+        <input type="text" name="notiz" size="24" placeholder="Notiz in den Chat (optional)">
+        <button class="knopf klein" type="submit">Speichern</button>
+    </form>
 </div>
 
 <h2>Erfassungen</h2>

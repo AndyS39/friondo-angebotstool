@@ -12,16 +12,23 @@ _STATUS = ["Versendet", "Versendet (extern)"]
 
 
 def kandidaten(session, jetzt: datetime | None = None):
-    """Angebote, die der nächste Lauf ablehnen würde (Trockenmodus)."""
-    from app.models import Angebot, einstellung_holen
+    """Angebote, die der nächste Lauf ablehnen würde (Trockenmodus).
+    v10 (Phase 60): eine zukünftige VORGANGS-Wiedervorlage schützt ALLE
+    Angebote des Vorgangs; die alten Angebots-Wiedervorlagen schützen
+    weiterhin (stillgelegter Bestand)."""
+    from app.models import Angebot, Vorgang, einstellung_holen
     jetzt = jetzt or datetime.now()
     tage = int(einstellung_holen(session, "ablehnung_auto_tage", "90") or 90)
     grenze = jetzt - timedelta(days=tage)
+    geschuetzte_vorgaenge = {v.id for v in session.query(Vorgang)
+                             .filter(Vorgang.wiedervorlage_am.isnot(None),
+                                     Vorgang.wiedervorlage_am > jetzt)}
     return [a for a in session.query(Angebot)
             .filter(Angebot.status.in_(_STATUS),
                     Angebot.versendet_am.isnot(None),
                     Angebot.versendet_am < grenze)
-            if not (a.wiedervorlage_am and a.wiedervorlage_am > jetzt)], tage
+            if not (a.wiedervorlage_am and a.wiedervorlage_am > jetzt)
+            and a.vorgang_id not in geschuetzte_vorgaenge], tage
 
 
 def lauf(session=None, trocken: bool = False) -> dict:

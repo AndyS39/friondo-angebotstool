@@ -386,16 +386,13 @@ def angebot_anlegen(session: Session, kunde_id: int,
                                    ensure_ascii=False)
         if not nur_protokoll:
             positionen = positionen_zusammenstellen(logik, antworten, session)
-    # v8: Einschätzung (S01/S02) als Startwerte der Verfolgung; abweichende
-    # Rechnungsanschrift aus O06/O09–O12 (monday-Adresse = Ausführungsort)
-    verfolgung_ampel = {"heiß": "heiss", "warm": "warm", "kalt": "kalt"}.get(
-        str((antworten or {}).get("S01") or ""), "")
+    # v10 (Phase 60): Die Verfolgung lebt auf VORGANGSEBENE – die Felder am
+    # Angebot sind stillgelegt (Bestand bleibt lesbar). Die Einschätzung
+    # (S01/S02) schreibt ihre Startwerte beim Absenden der Erfassung auf den
+    # Vorgang (app/routers/erfassung.py). Abweichende Rechnungsanschrift aus
+    # O06/O09–O12 (monday-Adresse = Ausführungsort).
+    verfolgung_ampel = ""
     wiedervorlage = None
-    if (antworten or {}).get("S02"):
-        try:
-            wiedervorlage = datetime.strptime(str(antworten["S02"]), "%Y-%m-%d")
-        except ValueError:
-            pass
     rechnung = {}
     if (antworten or {}).get("O06") == "Nein":
         rechnung = {"rechnung_name": str(antworten.get("O09") or "")[:200],

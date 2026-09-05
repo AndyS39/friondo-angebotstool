@@ -184,6 +184,60 @@ def _daten() -> list[str]:
         from app import vorgaenge
         meldungen += vorgaenge.bestands_migration(session)
         session.commit()
+        # Phase 60: Verfolgung auf Vorgangsebene – je Vorgang die heißeste
+        # Angebots-Ampel und die früheste ZUKÜNFTIGE Wiedervorlage übernehmen;
+        # die alten Angebots-Felder bleiben lesbar stehen (stillgelegt).
+        # Verantwortlicher: leer = Innendienst-Sicht (bisher pflegte der ID
+        # die Verfolgung; der Ersteller wurde nie protokolliert).
+        from app.models import Vorgang
+        if einstellung_holen(session, "migration_v10_verfolgung", "") != "erledigt":
+            rang = {"heiss": 3, "warm": 2, "kalt": 1, "": 0}
+            uebernommen = 0
+            jetzt = _dt.now()
+            for vorgang in session.query(Vorgang):
+                beste = ""
+                frueheste = None
+                for a in session.query(Angebot).filter(Angebot.vorgang_id == vorgang.id):
+                    if rang.get(a.verfolgung_ampel or "", 0) > rang.get(beste, 0):
+                        beste = a.verfolgung_ampel
+                    if (a.wiedervorlage_am and a.wiedervorlage_am > jetzt
+                            and (frueheste is None or a.wiedervorlage_am < frueheste)):
+                        frueheste = a.wiedervorlage_am
+                geaendert = False
+                if beste and not vorgang.verfolgung_ampel:
+                    vorgang.verfolgung_ampel = beste
+                    geaendert = True
+                if frueheste is not None and vorgang.wiedervorlage_am is None:
+                    vorgang.wiedervorlage_am = frueheste
+                    geaendert = True
+                uebernommen += geaendert
+            einstellung_setzen(session, "migration_v10_verfolgung", "erledigt")
+            if uebernommen:
+                meldungen.append(f"Verfolgung auf Vorgangsebene übernommen "
+                                 f"({uebernommen} Vorgänge; Ampel = heißeste, "
+                                 "Wiedervorlage = früheste zukünftige)")
+        # Phase 60: bestehende Verfolgungs-Notizen der Angebote als
+        # Alt-Einträge in den Vorgangs-Chat kopieren (mit Herkunftsvermerk)
+        from app.models import AngebotsNotiz, VorgangsNotiz
+        if einstellung_holen(session, "migration_v10_notizen", "") != "erledigt":
+            kopiert = 0
+            nummern = {a.id: (a.nummer, a.vorgang_id)
+                       for a in session.query(Angebot)}
+            for notiz in session.query(AngebotsNotiz).order_by(AngebotsNotiz.angelegt_am):
+                nummer, vorgang_id = nummern.get(notiz.angebot_id, ("?", None))
+                if vorgang_id is None:
+                    continue
+                session.add(VorgangsNotiz(
+                    vorgang_id=vorgang_id, benutzer_id=None,
+                    benutzer_name=notiz.benutzer_name or "?",
+                    zeit=notiz.angelegt_am, text=notiz.text,
+                    herkunft=f"Angebot {nummer} (migriert)"))
+                kopiert += 1
+            einstellung_setzen(session, "migration_v10_notizen", "erledigt")
+            if kopiert:
+                meldungen.append(f"{kopiert} Angebots-Notizen in den "
+                                 "Vorgangs-Chat übernommen (Alt-Einträge)")
+        session.commit()
     finally:
         session.close()
     return meldungen

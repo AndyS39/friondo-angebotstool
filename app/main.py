@@ -77,11 +77,18 @@ def _start_kontext() -> dict:
         versendete = (session.query(Angebot)
                       .filter(Angebot.status == "Versendet",
                               Angebot.archiviert.is_(False)).count())
+        # v10 (Phase 60): fällige Wiedervorlagen zählen VORGÄNGE –
+        # rollenbezogen die Innendienst-Sicht (Verantwortlicher ID/unbekannt)
+        from app.models import Benutzer, Vorgang
         from datetime import datetime as dt
-        faellige = (session.query(Angebot)
-                    .filter(Angebot.wiedervorlage_am.isnot(None),
-                            Angebot.wiedervorlage_am <= dt.now(),
-                            Angebot.archiviert.is_(False)).count())
+        buero = {b.id for b in session.query(Benutzer)
+                 if b.rolle in ("admin", "innendienst")}
+        faellige = sum(
+            1 for v in session.query(Vorgang)
+            .filter(Vorgang.wiedervorlage_am.isnot(None),
+                    Vorgang.wiedervorlage_am <= dt.now())
+            if v.wiedervorlage_benutzer_id is None
+            or v.wiedervorlage_benutzer_id in buero)
         # v7: offene Individuell-Fälle (zu prüfen + in TAIFUN zu schreiben)
         individuell_offen = (session.query(Erfassung)
                              .filter(Erfassung.status.in_(

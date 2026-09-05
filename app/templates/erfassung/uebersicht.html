@@ -5,6 +5,11 @@
 {% block inhalt %}
 <div class="mobil-inhalt">
     <h1>Erfassungen</h1>
+    {% if faellige_wv %}
+    <p class="meldung"><a href="/vorgaenge?verfolgung=faellig"
+          style="color:#c0392b; text-decoration:none">↻ {{ faellige_wv }} fällige
+          Wiedervorlage{{ 'n' if faellige_wv != 1 }} – jetzt nachfassen</a></p>
+    {% endif %}
     <a class="knopf gross" href="/erfassung/neu">+ Neue Erfassung</a>
 
     {% if erfassungen %}

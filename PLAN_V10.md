@@ -89,29 +89,29 @@ die Notizen – und er ist die Einheit für den gemeinsamen Versand.
       Bestandsdaten erzeugen (je Lead bzw. je Kunde mit Erfassungen)
 
 ## Phase 60 – Verfolgung & Notizen auf Vorgangsebene
-- [ ] Hot-Ampel + Wiedervorlage vom Angebot auf den Vorgang verlagern;
+- [x] Hot-Ampel + Wiedervorlage vom Angebot auf den Vorgang verlagern;
       Anzeige in Akte (oben) und in den Listen; Einschätzungs-Seite der
       Erfassung schreibt die Startwerte auf den Vorgang
-- [ ] Migration Bestand: je Vorgang heißeste vorhandene Angebots-Ampel
+- [x] Migration Bestand: je Vorgang heißeste vorhandene Angebots-Ampel
       und früheste zukünftige Wiedervorlage übernehmen; alte Werte an
       den Angeboten stilllegen (Historie bleibt lesbar)
-- [ ] 90-Tage-Automatik: zukünftige Vorgangs-Wiedervorlage schützt ALLE
+- [x] 90-Tage-Automatik: zukünftige Vorgangs-Wiedervorlage schützt ALLE
       Angebote des Vorgangs
-- [ ] Wiedervorlagen-Verantwortlicher: Vorbelegung = Ersteller, durch
+- [x] Wiedervorlagen-Verantwortlicher: Vorbelegung = Ersteller, durch
       ID änderbar. Kachel „Fällige Wiedervorlagen" und Listen zeigen
       rollenbezogen die eigenen (ID sieht ID-Wiedervorlagen, AD seine
       in der mobilen Sicht – dort neue kleine Fälligkeits-Anzeige);
       Migration: bestehende Wiedervorlagen dem Ersteller zuordnen
-- [ ] Notizen-Chat am Vorgang: chronologisch, Eingabefeld unten, Eintrag
+- [x] Notizen-Chat am Vorgang: chronologisch, Eingabefeld unten, Eintrag
       wird automatisch mit „<Name> <TT.MM.JJ> <HH:MM> Uhr:" versehen,
       Einträge unveränderlich (kein Bearbeiten/Löschen); Rechte: ID/Admin
       alle Vorgänge, AD eigene (auch mobil); bestehende Verfolgungs-
       Notizen der Angebote werden als Alt-Einträge in den Chat migriert
       (mit Herkunftsvermerk)
-- [ ] „Neue Notizen"-Punkt je Benutzer in Vorgangsliste/Akte (seit
+- [x] „Neue Notizen"-Punkt je Benutzer in Vorgangsliste/Akte (seit
       letztem Öffnen), dezent
-- [ ] Statistik-Kachel „Fällige Wiedervorlagen" zählt ab jetzt Vorgänge
-- [ ] migrate.py: Vorgangs-Verfolgung, Notizen-Tabelle, Gelesen-Marker
+- [x] Statistik-Kachel „Fällige Wiedervorlagen" zählt ab jetzt Vorgänge
+- [x] migrate.py: Vorgangs-Verfolgung, Notizen-Tabelle, Gelesen-Marker
 
 ## Phase 61 – Kombi-Versand
 - [ ] In der Akte: Auswahl mehrerer versandfertiger Angebote (Entwurf/

@@ -295,14 +295,16 @@ def main():
     pruefe("v6", "EP-Kästchen je Position", s.get(type(pos1), pos1.id).ep_flag)
     client.post(f"/angebote/{ang.id}/position/{pos1.id}/aendern",
                 data={"anzeige_nr": "", "menge": "", "e_preis": "", "rabatt_wert": "", "rabatt_typ": "betrag"})
-    # Verfolgung
+    # Verfolgung (v10: lebt auf Vorgangsebene, Notiz geht in den Chat)
     client.post(f"/angebote/{ang.id}/verfolgung",
                 data={"verfolgung_ampel": "heiss", "wiedervorlage_am": "2026-01-01", "notiz": "Abnahme"})
     s.expire_all()
-    pruefe("v6", "Verfolgung: Ampel + fällige Wiedervorlage + Notiz",
-           s.get(Angebot, ang.id).verfolgung_ampel == "heiss"
+    from app.models import Vorgang as _Vorgang, VorgangsNotiz as _VN
+    v6_vorgang = s.get(_Vorgang, s.get(Angebot, ang.id).vorgang_id)
+    pruefe("v6", "Verfolgung: Ampel + fällige Wiedervorlage + Chat-Notiz (v10: am Vorgang)",
+           v6_vorgang is not None and v6_vorgang.verfolgung_ampel == "heiss"
            and ang.nummer in client.get("/angebote?verfolgung=faellig").text
-           and s.query(AngebotsNotiz).filter_by(angebot_id=ang.id).count() == 1)
+           and s.query(_VN).filter_by(vorgang_id=v6_vorgang.id).count() >= 1)
     # Statistik
     stat = client.get("/statistik?zeitraum=jahr").text
     pruefe("v6", "Statistik-Seite (Jahr) mit Kacheln + Je Vertriebler",
@@ -331,6 +333,10 @@ def main():
     # v6-Aufräumen
     s.query(AngebotsLoeschung).filter_by(nummer=n2_nummer).delete()
     s.query(AngebotsNotiz).filter_by(angebot_id=ang.id).delete()
+    if v6_vorgang is not None:
+        s.query(_VN).filter_by(vorgang_id=v6_vorgang.id).delete()
+        v6_vorgang.verfolgung_ampel = ""; v6_vorgang.wiedervorlage_am = None
+        v6_vorgang.wiedervorlage_benutzer_id = None
     ang2 = s.get(Angebot, ang.id); ang2.verfolgung_ampel = ""; ang2.wiedervorlage_am = None
     s.delete(s.get(Lead, tl.id)); s.query(MondayPerson).filter_by(monday_name="abn.v6@friondo.de").delete()
     s.delete(s.get(Benutzer, tb.id)); s.commit()
