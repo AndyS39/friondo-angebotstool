@@ -854,3 +854,18 @@ main.breit { max-width: 1720px; }
 
 /* v8: Sparten-Auswahl */
 .wahl-erledigt { opacity: 0.55; }
+
+/* v10: Vorgangsakte + Notizen-Chat */
+.akte-kopf { border: 1px solid #d4d9e4; border-radius: 10px;
+    padding: 0.8rem 1.2rem; background: #f8f9fc; margin-bottom: 1rem; }
+.notiz-punkt { color: #c0392b; font-size: 0.8rem; vertical-align: super; }
+.notizen-chat { display: flex; flex-direction: column; gap: 0.6rem;
+    max-width: 720px; margin-bottom: 0.8rem; }
+.notiz { border: 1px solid #d4d9e4; border-radius: 10px;
+    padding: 0.5rem 0.8rem; background: #fff; }
+.notiz.eigene { background: #eef4fb; border-color: #c9dcf2; }
+.notiz-kopf { font-weight: 600; font-size: 0.82rem; color: #5a6478; }
+.notiz-text { white-space: pre-wrap; }
+.notiz-eingabe { display: flex; gap: 0.6rem; align-items: flex-start;
+    max-width: 720px; }
+.notiz-eingabe textarea { flex: 1; }

@@ -285,6 +285,8 @@ async def extern_erledigt(request: Request, erfassung_id: int,
         except ValueError:
             pass
     erfassung.angebot_id = angebot.id
+    from app import vorgaenge as vorgaenge_modul
+    vorgaenge_modul.vorgang_fuer_angebot(session, angebot)   # v10: Akte
     erfassung.status = "Erledigt (extern)"   # v8: Archiv erst manuell
     _kette_protokollieren(erfassung, request.state.benutzer,
                           f"Extern erledigt – TAIFUN-Eintrag über {endbetrag / 100:.2f} €"
@@ -389,6 +391,8 @@ async def angebot_erzeugen(erfassung_id: int, session: Session = Depends(get_ses
                                              antworten=antworten, logik=logik)
     angebot.konfigurator_typ = erfassung.konfigurator_typ or "WP"   # v5
     erfassung.angebot_id = angebot.id
+    from app import vorgaenge as vorgaenge_modul
+    vorgaenge_modul.vorgang_fuer_angebot(session, angebot)   # v10: Akte
     if erfassung.status == "Neu":
         erfassung.status = "In Bearbeitung"
     session.commit()
@@ -408,6 +412,8 @@ async def manuelles_angebot(erfassung_id: int, session: Session = Depends(get_se
                                              nur_protokoll=True)
     angebot.konfigurator_typ = erfassung.konfigurator_typ or "WP"   # v5
     erfassung.angebot_id = angebot.id
+    from app import vorgaenge as vorgaenge_modul
+    vorgaenge_modul.vorgang_fuer_angebot(session, angebot)   # v10: Akte
     if erfassung.status == "Neu":
         erfassung.status = "In Bearbeitung"
     session.commit()

@@ -142,6 +142,98 @@ async def liste(request: Request, q: str = "", status: str = "", interesse: str 
                   meldung=request.query_params.get("meldung", ""))
 
 
+@router.get("/rabatt-freigaben")
+async def rabatt_freigaben(request: Request, session: Session = Depends(get_session)):
+    """v10 (Phase 59): offene AD-Rabatt-Anfragen – der Innendienst sieht die
+    €-Auswirkung auf den DB und genehmigt oder lehnt mit Kommentar ab."""
+    from app.models import Benutzer, RabattFreigabe
+    from app.routers.meine_angebote import _db_ampel, _db_mit_rabatt
+    freigaben = (session.query(RabattFreigabe)
+                 .filter(RabattFreigabe.status == "offen")
+                 .order_by(RabattFreigabe.angefragt_am).all())
+    angebote = {a.id: a for a in session.query(Angebot)
+                .filter(Angebot.id.in_([f.angebot_id for f in freigaben] or [0]))}
+    kunden = _kunden_map(session, angebote.values())
+    benutzer_map = {b.id: b for b in session.query(Benutzer)}
+    zeilen = []
+    for f in freigaben:
+        angebot = angebote.get(f.angebot_id)
+        if angebot is None:
+            continue
+        db_neu = _db_mit_rabatt(angebot, f.rabatt_cent, f.rabatt_prozent)
+        zeilen.append({"freigabe": f, "angebot": angebot,
+                       "kunde": kunden.get(angebot.kunde_id),
+                       "ad": benutzer_map.get(f.benutzer_id),
+                       "db_alt": angebot.deckungsbeitrag()["db"],
+                       "db_neu": db_neu,
+                       "ampel_neu": _db_ampel(session, db_neu)})
+    return render(request, "angebote/rabatt_freigaben.html", aktiv="/angebote",
+                  zeilen=zeilen,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/rabatt-freigaben/{freigabe_id}/entscheiden")
+async def rabatt_entscheiden(request: Request, freigabe_id: int,
+                             session: Session = Depends(get_session)):
+    """Genehmigen wendet den Rabatt an (Entwurf direkt, versendet → neue
+    Version); Ablehnen verlangt einen Kommentar. Beides landet im
+    Notizen-Chat des Vorgangs."""
+    from urllib.parse import quote_plus
+
+    from app import vorgaenge as vorgaenge_modul
+    from app.models import RabattFreigabe
+    from app.routers.meine_angebote import rabatt_anwenden
+    freigabe = session.get(RabattFreigabe, freigabe_id)
+    if freigabe is None or freigabe.status != "offen":
+        return RedirectResponse("/angebote/rabatt-freigaben", status_code=303)
+    form = await request.form()
+    aktion = form.get("aktion", "")
+    kommentar = (form.get("kommentar") or "").strip()[:500]
+    benutzer = request.state.benutzer
+    angebot = session.get(Angebot, freigabe.angebot_id)
+    rabatt_text = (f"{freigabe.rabatt_prozent:g} %" if freigabe.rabatt_prozent
+                   else f"{(freigabe.rabatt_cent or 0) / 100:.2f} €".replace(".", ","))
+    from datetime import datetime as dt
+    if aktion == "genehmigen" and angebot is not None:
+        ziel = rabatt_anwenden(session, angebot, freigabe.rabatt_cent,
+                               freigabe.rabatt_prozent, freigabe.rabatt_bezeichnung)
+        freigabe.status = "genehmigt"
+        freigabe.kommentar = kommentar
+        freigabe.entschieden_am = dt.now()
+        freigabe.entschieden_von = benutzer.id
+        if freigabe.vorgang_id:
+            vorgaenge_modul.notiz_anlegen(
+                session, freigabe.vorgang_id, benutzer,
+                f"Rabatt-Freigabe GENEHMIGT: {rabatt_text} auf {ziel.nummer}"
+                + (f" (neue Version von {angebot.nummer})" if ziel.id != angebot.id else "")
+                + (f" – {kommentar}" if kommentar else ""),
+                herkunft="Rabatt-Workflow")
+        session.commit()
+        return RedirectResponse("/angebote/rabatt-freigaben?meldung=" + quote_plus(
+            f"Genehmigt – Rabatt {rabatt_text} steht an {ziel.nummer}."),
+            status_code=303)
+    if aktion == "ablehnen":
+        if not kommentar:
+            return RedirectResponse("/angebote/rabatt-freigaben?meldung=" + quote_plus(
+                "Bitte beim Ablehnen einen Kommentar für den Außendienst angeben."),
+                status_code=303)
+        freigabe.status = "abgelehnt"
+        freigabe.kommentar = kommentar
+        freigabe.entschieden_am = dt.now()
+        freigabe.entschieden_von = benutzer.id
+        if freigabe.vorgang_id:
+            vorgaenge_modul.notiz_anlegen(
+                session, freigabe.vorgang_id, benutzer,
+                f"Rabatt-Freigabe ABGELEHNT ({rabatt_text}"
+                + (f" auf {angebot.nummer}" if angebot else "") + f"): {kommentar}",
+                herkunft="Rabatt-Workflow")
+        session.commit()
+        return RedirectResponse("/angebote/rabatt-freigaben?meldung=" + quote_plus(
+            "Abgelehnt – der Kommentar steht im Notizen-Chat des Vorgangs."),
+            status_code=303)
+    return RedirectResponse("/angebote/rabatt-freigaben", status_code=303)
+
+
 @router.get("/aus-konfiguration/{konfig_id}")
 async def aus_konfiguration(konfig_id: int, session: Session = Depends(get_session)):
     konfig = session.get(Konfiguration, konfig_id)
@@ -1074,56 +1166,8 @@ async def ueberarbeiten(request: Request, angebot_id: int,
         return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
             "Überarbeiten geht nur bei versendeten/angenommenen Tool-Angeboten."),
             status_code=303)
-    stamm = original.stamm_nummer
-    versionen = [a.nummer for a in session.query(Angebot)
-                 .filter(or_(Angebot.nummer == stamm,
-                             Angebot.nummer.like(f"{stamm}.%")))]
-    hoechste = 1
-    for nummer in versionen:
-        _, punkt, rest = nummer.rpartition(".")
-        if punkt and rest.isdigit():
-            hoechste = max(hoechste, int(rest))
-    neue_nummer = f"{stamm}.{hoechste + 1}"
-
-    version = Angebot(
-        nummer=neue_nummer, kunde_id=original.kunde_id,
-        protokoll_json=original.protokoll_json, kfw_json=original.kfw_json,
-        vermerke_json=original.vermerke_json,
-        rabatt_cent=original.rabatt_cent, rabatt_prozent=original.rabatt_prozent,
-        rabatt_bezeichnung=original.rabatt_bezeichnung,
-        konfigurator_typ=original.konfigurator_typ,
-        vertriebler_id=original.vertriebler_id,
-        profil_id=original.profil_id, vortext_text=original.vortext_text,
-        rechnung_name=original.rechnung_name,
-        rechnung_strasse=original.rechnung_strasse,
-        rechnung_plz=original.rechnung_plz, rechnung_ort=original.rechnung_ort,
-        foerderung_manuell_cent=original.foerderung_manuell_cent,
-        foerderung_ausblenden=original.foerderung_ausblenden,
-        foerder_grund_prozent=original.foerder_grund_prozent,
-        foerder_klima_prozent=original.foerder_klima_prozent,
-        foerder_einkommen_prozent=original.foerder_einkommen_prozent,
-        foerder_hoechstkosten_cent=original.foerder_hoechstkosten_cent,
-        verfolgung_ampel=original.verfolgung_ampel,
-        wiedervorlage_am=original.wiedervorlage_am,
-        graph_conversation_id=original.graph_conversation_id,
-        vorgaenger_id=original.id,
-    )
-    for p in original.positionen:
-        version.positionen.append(AngebotsPosition(
-            sort=p.sort, block_nr=p.block_nr, gruppe=p.gruppe, pos_nr=p.pos_nr,
-            bezeichnung=p.bezeichnung, beschreibung=p.beschreibung, menge=p.menge,
-            einheit=p.einheit, e_preis_cent=p.e_preis_cent, ep_flag=p.ep_flag,
-            ek_cent=p.ek_cent, guid=p.guid, anzeige_nr=p.anzeige_nr,
-            original_preis_cent=p.original_preis_cent,
-            rabatt_prozent=p.rabatt_prozent, rabatt_cent=p.rabatt_cent,
-            bauseits=p.bauseits, sonderpreis=p.sonderpreis))
-    session.add(version)
-    session.flush()
-    original.status = "Überholt"
-    # Erfassung/Lead-Verknüpfung folgt der aktuellen Version (Stammnummer)
-    for erfassung in session.query(Erfassung).filter(
-            Erfassung.angebot_id == original.id):
-        erfassung.angebot_id = version.id
+    version = angebot_aufbau.version_erzeugen(session, original)
+    neue_nummer = version.nummer
     session.commit()
     return RedirectResponse(f"/angebote/{version.id}?meldung=" + quote_plus(
         f"Version {neue_nummer} als Entwurf erstellt – {original.nummer} ist "

@@ -189,6 +189,8 @@ class Erfassung(Base):
     # bleibt als Alt-Verknüpfung der ersten/WP-Erfassung bestehen)
     sparte: Mapped[str] = mapped_column(String(4), default="WP")
     lead_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    # v10: Vorgangszugehörigkeit (Akte); Migration setzt sie rückwirkend
+    vorgang_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     abgesendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
@@ -323,6 +325,73 @@ class Lead(Base):
         return person or self.email or f"monday-Item {self.monday_item_id}"
 
 
+class Vorgang(Base):
+    """v10: Der VORGANG (= Kundenanfrage) ist die Arbeitseinheit. Anker ist
+    der Lead; für Kunden ohne Lead entsteht beim ersten Erfassen automatisch
+    ein Vorgang. Er bündelt Erfassungen, Angebote (inkl. Versionen/TAIFUN),
+    Mail-Verlauf, die Verfolgung (EINE Ampel + Wiedervorlage je Vorgang,
+    Phase 60) und den chronologischen Notizen-Chat."""
+    __tablename__ = "vorgaenge"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kunde_id: Mapped[int] = mapped_column(Integer, index=True)
+    lead_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True,
+                                                   unique=True, index=True)
+    angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    # Verfolgung auf Vorgangsebene (Phase 60): ersetzt die Angebots-Felder
+    verfolgung_ampel: Mapped[str] = mapped_column(String(10), default="")
+    wiedervorlage_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Verantwortlicher der Wiedervorlage (Vorbelegung: Ersteller)
+    wiedervorlage_benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+
+class VorgangsNotiz(Base):
+    """v10: Notizen-Chat am Vorgang – chronologisch, Einträge unveränderlich
+    (kein Bearbeiten/Löschen). herkunft kennzeichnet migrierte Alt-Notizen
+    und automatische Protokolleinträge (z. B. Rabatt-Freigaben)."""
+    __tablename__ = "vorgangs_notizen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    vorgang_id: Mapped[int] = mapped_column(Integer, index=True)
+    benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    benutzer_name: Mapped[str] = mapped_column(String(100), default="")
+    zeit: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    text: Mapped[str] = mapped_column(Text, default="")
+    herkunft: Mapped[str] = mapped_column(String(200), default="")
+
+
+class VorgangNotizGelesen(Base):
+    """v10: „Neue Notizen“-Punkt je Benutzer – merkt, bis wann ein Benutzer
+    den Notizen-Chat eines Vorgangs zuletzt gesehen hat."""
+    __tablename__ = "vorgang_notiz_gelesen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    vorgang_id: Mapped[int] = mapped_column(Integer, index=True)
+    benutzer_id: Mapped[int] = mapped_column(Integer, index=True)
+    gelesen_bis: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class RabattFreigabe(Base):
+    """v10: AD-Rabatt mit Freigabe-Workflow – würde der gewünschte
+    Gesamtrabatt die DB-Ampel auf Rot drücken, entsteht eine Anfrage an den
+    Innendienst (genehmigen → Rabatt/Version wird angelegt, oder ablehnen
+    mit Kommentar); alles wird im Notizen-Chat des Vorgangs protokolliert."""
+    __tablename__ = "rabatt_freigaben"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    angebot_id: Mapped[int] = mapped_column(Integer, index=True)
+    vorgang_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    benutzer_id: Mapped[int] = mapped_column(Integer)          # anfragender AD
+    rabatt_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    rabatt_prozent: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    rabatt_bezeichnung: Mapped[str] = mapped_column(String(200), default="")
+    status: Mapped[str] = mapped_column(String(20), default="offen")  # offen | genehmigt | abgelehnt
+    kommentar: Mapped[str] = mapped_column(String(500), default="")
+    angefragt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    entschieden_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    entschieden_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+
 # „Versand vorbereitet“ (v5): Entwurf liegt in Outlook; der Graph-Abgleich
 # stellt nach dem tatsächlichen Senden automatisch auf „Versendet“.
 # „Individuell“ (v6): wird außerhalb des Tools geschrieben – seit v7 ohne
@@ -404,6 +473,8 @@ class Angebot(Base):
     # Versionierung (v9): „Überarbeiten“ erzeugt <Stamm>.2/.3 … als Entwurf;
     # vorgaenger_id zeigt auf die ersetzte Version (Status „Überholt“)
     vorgaenger_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # v10: Vorgangszugehörigkeit (Akte); Migration setzt sie rückwirkend
+    vorgang_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     # Bedingte Angebotsvermerke (v9, Blatt "Vermerke"): beim Anlegen
     # ausgewertete Texte für das PDF (Ende Positionsteil vor Summenblock)
     vermerke_json: Mapped[str] = mapped_column(Text, default="[]")

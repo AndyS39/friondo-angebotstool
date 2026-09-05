@@ -25,6 +25,13 @@
         <span class="dezent">zu prüfen / in TAIFUN zu schreiben</span>
     </a>
     {% endif %}
+    {% if rabatt_freigaben %}
+    <a class="kachel stat" href="/angebote/rabatt-freigaben">
+        <span class="stat-zahl" style="color:#c0392b">{{ rabatt_freigaben }}</span>
+        <span>Rabatt-Freigaben offen</span>
+        <span class="dezent">Anfragen vom Außendienst</span>
+    </a>
+    {% endif %}
     {% if faellige %}
     <a class="kachel stat" href="/angebote?verfolgung=faellig">
         <span class="stat-zahl" style="color:#c0392b">{{ faellige }}</span>

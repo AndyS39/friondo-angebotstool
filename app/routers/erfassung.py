@@ -207,6 +207,9 @@ async def sparten_start(request: Request, session: Session = Depends(get_session
         session.add(erfassung)
         neu.append(erfassung)
     session.flush()
+    from app import vorgaenge as vorgaenge_modul
+    for erfassung in neu:               # v10: Vorgangszugehörigkeit (Akte)
+        vorgaenge_modul.vorgang_fuer_erfassung(session, erfassung)
     if lead is not None and lead.erfassung_id is None:
         lead.erfassung_id = neu[0].id   # Alt-Verknüpfung (erste Erfassung)
     session.commit()

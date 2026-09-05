@@ -52,7 +52,7 @@
         <tr>
             <td>{{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am }}</td>
             <td>
-                <a href="/erfassungen/{{ e.id }}">{{ kunden[e.kunde_id].anzeige_name if e.kunde_id in kunden else '?' }}</a>
+                <a href="/vorgaenge/zu-erfassung/{{ e.id }}" title="Vorgangsakte öffnen">{{ kunden[e.kunde_id].anzeige_name if e.kunde_id in kunden else '?' }}</a>
                 {% if e.kunde_id in kunden %}{{ interesse_ui.badges(kunden[e.kunde_id].interessen) }}{% endif %}
                 {% if e.kunde_id in kunden and kunden[e.kunde_id].vertriebskanal %}
                     <span class="abzeichen">{{ kunden[e.kunde_id].vertriebskanal }}</span>

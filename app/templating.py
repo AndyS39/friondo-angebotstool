@@ -42,6 +42,7 @@ except OSError:
 # Menü-Einträge (Phase 19: Dropdown oben rechts, rollenabhängig gefiltert)
 NAVIGATION = [
     ("/leads", "Leads VOT"),
+    ("/vorgaenge", "Vorgänge"),
     ("/erfassungen", "Erfassungen"),
     ("/angebote", "Angebote"),
     ("/statistik", "Statistik"),

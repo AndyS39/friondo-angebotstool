@@ -178,6 +178,12 @@ def _daten() -> list[str]:
             meldungen.append("Pos.-162-Text auf enni.flexstrom-Wortlaut aktualisiert "
                              f"(Preis unverändert: {artikel_162.e_preis_cent / 100:.2f} €)")
         session.commit()
+        # ---------------- v10 (Phasen 59–63) ----------------
+        # Phase 59: Vorgänge rückwirkend erzeugen (je Lead ein Vorgang;
+        # Erfassungen/Angebote ohne Lead am Kunden-Vorgang) – idempotent
+        from app import vorgaenge
+        meldungen += vorgaenge.bestands_migration(session)
+        session.commit()
     finally:
         session.close()
     return meldungen

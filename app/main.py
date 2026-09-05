@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.auth import RollenMiddleware, standardbenutzer_anlegen
 from app.db import init_db
-from app.routers import (angebote, anmeldung, artikel, benutzer, erfassung,
+from app.routers import (angebote, anmeldung, artikel, benutzer, erfassung, vorgaenge,
                          meine_angebote,
                          erfassungsliste, konfiguration, konfigurator, kunden,
                          leads, signatur, statistik, versand)
@@ -47,6 +47,7 @@ app.add_middleware(RollenMiddleware)
 app.mount("/static", StaticFiles(directory=APP_ORDNER / "static"), name="static")
 
 app.include_router(anmeldung.router)
+app.include_router(vorgaenge.router)
 app.include_router(benutzer.router)
 app.include_router(erfassung.router)
 app.include_router(erfassungsliste.router)
@@ -87,11 +88,16 @@ def _start_kontext() -> dict:
                                  ["Individuell – zu prüfen", "In TAIFUN zu schreiben"]),
                                      Erfassung.archiviert.is_(False))
                              .count())
+        # v10 (Phase 59): offene AD-Rabatt-Freigaben
+        from app.models import RabattFreigabe
+        rabatt_freigaben = (session.query(RabattFreigabe)
+                            .filter(RabattFreigabe.status == "offen").count())
     finally:
         session.close()
     return dict(faellige=faellige, offene_leads=offene_leads,
                 offene_erfassungen=offene_erfassungen,
-                individuell_offen=individuell_offen, versendete=versendete)
+                individuell_offen=individuell_offen, versendete=versendete,
+                rabatt_freigaben=rabatt_freigaben)
 
 
 @app.get("/")

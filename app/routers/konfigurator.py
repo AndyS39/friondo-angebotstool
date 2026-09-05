@@ -35,10 +35,13 @@ def _status_aktualisieren(konfig: Konfiguration, logik, antworten: dict) -> None
 @router.get("")
 async def start(request: Request, kunde_id: int = 0,
                 session: Session = Depends(get_session)):
-    kunden = (session.query(Kunde).filter(Kunde.aktiv.is_(True))
-              .order_by(Kunde.firma, Kunde.nachname).all())
-    return render(request, "konfigurator/start.html", aktiv="/angebote",
-                  kunden=kunden, kunde_id=kunde_id)
+    """v10-Bugfix (Phase 59): Der Direkt-Konfigurator aus dem Angebote-Bereich
+    erzeugte Angebote OHNE Erfassung – dadurch fehlten Absenden-Schritt und
+    Statuskette. Neuer Weg: alle Vorgänge (mit und ohne Lead) laufen über den
+    identischen Erfassungs-Ablauf. Alte laufende Konfigurationen unter
+    /konfigurator/<id> bleiben abschließbar."""
+    ziel = f"/erfassung/sparten?kunde_id={kunde_id}" if kunde_id else "/erfassung/neu"
+    return RedirectResponse(ziel, status_code=303)
 
 
 @router.post("/start")

@@ -5,7 +5,14 @@
 {% block inhalt %}
 <div class="mobil-inhalt">
     <h1>Meine Angebote</h1>
-    <p class="dezent">Nur Ansicht – Bearbeitung und Versand laufen über den Innendienst.</p>
+    <p class="dezent">Ansicht + Gesamtrabatt (mit DB-Ampel-Wächter) – Versand läuft über den Innendienst.</p>
+    {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+    <form method="get" class="filterleiste">
+        <input type="text" name="q" value="{{ q }}" placeholder="Suche: Name, Ort, Angebots-Nr." size="26">
+        <button class="knopf" type="submit">Suchen</button>
+        {% if q %}<a class="knopf klein zweitrangig" href="/meine-angebote">Zurücksetzen</a>{% endif %}
+    </form>
 
     {% if angebote %}
     <ul class="erfassung-liste">
@@ -23,9 +30,13 @@
                     · Endbetrag: <strong>{{ a.summen().endbetrag | euro }}</strong></span>
             </div>
             {% if not a.extern %}
-            <a class="knopf klein" style="margin: 0.3rem 1rem 0.8rem"
+            <a class="knopf klein" style="margin: 0.3rem 0.4rem 0.8rem 1rem"
+               href="/meine-angebote/{{ a.id }}">Ansehen</a>
+            <a class="knopf klein zweitrangig" style="margin: 0.3rem 0 0.8rem"
                href="/meine-angebote/{{ a.id }}/pdf" target="_blank">Angebots-PDF</a>
             {% endif %}
+            <a class="knopf klein zweitrangig" style="margin: 0.3rem 0.4rem 0.8rem"
+               href="/vorgaenge/zu-angebot/{{ a.id }}">Vorgangsakte</a>
         </li>
     {% endfor %}
     </ul>

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block titel %}Rabatt-Freigaben – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<h1>Rabatt-Freigaben <a class="knopf klein zweitrangig" href="/angebote">Zu den Angeboten</a></h1>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% if zeilen %}
+<table class="tabelle">
+    <thead>
+        <tr><th>Angefragt</th><th>Angebot</th><th>Kunde</th><th>Außendienst</th>
+            <th>Rabatt</th><th class="rechts">DB aktuell</th><th class="rechts">DB mit Rabatt</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for z in zeilen %}
+        <tr>
+            <td>{{ z.freigabe.angefragt_am.strftime('%d.%m.%Y %H:%M') }}</td>
+            <td><a href="/angebote/{{ z.angebot.id }}">{{ z.angebot.nummer }}</a>
+                <span class="abzeichen">{{ z.angebot.status }}</span></td>
+            <td>{{ z.kunde.anzeige_name if z.kunde else '?' }}</td>
+            <td>{{ z.ad.name if z.ad else '?' }}</td>
+            <td>{{ ('%g' | format(z.freigabe.rabatt_prozent)) | replace('.', ',') ~ ' %'
+                   if z.freigabe.rabatt_prozent else (z.freigabe.rabatt_cent | euro) }}
+                {% if z.freigabe.rabatt_bezeichnung %}<span class="dezent">({{ z.freigabe.rabatt_bezeichnung }})</span>{% endif %}</td>
+            <td class="rechts">{{ z.db_alt | euro }}</td>
+            <td class="rechts" style="color:#c0392b"><strong>{{ z.db_neu | euro }}</strong>
+                <span class="dezent">(Ampel {{ z.ampel_neu }})</span></td>
+            <td class="aktionen">
+                <form method="post" action="/angebote/rabatt-freigaben/{{ z.freigabe.id }}/entscheiden">
+                    <input type="text" name="kommentar" size="18" placeholder="Kommentar (Pflicht bei Ablehnung)">
+                    <button class="knopf klein" type="submit" name="aktion" value="genehmigen"
+                            onclick="return confirm('Rabatt genehmigen? Bei versendeten Angeboten entsteht eine neue Version als Entwurf.');">Genehmigen</button>
+                    <button class="knopf klein zweitrangig" type="submit" name="aktion" value="ablehnen">Ablehnen</button>
+                </form>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="hinweis">Keine offenen Rabatt-Freigaben.</p>
+{% endif %}
+{% endblock %}

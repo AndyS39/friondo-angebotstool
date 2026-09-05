@@ -78,7 +78,7 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
     {% for lead in leads %}
         <tr>
             <td>{{ lead.vot_datum.strftime('%d.%m.%Y %H:%M') if lead.vot_datum }}</td>
-            <td>{{ lead.anzeige_name }}
+            <td><a href="/vorgaenge/zu-lead/{{ lead.id }}" title="Vorgangsakte öffnen">{{ lead.anzeige_name }}</a>
                 <span class="sparten-chips">
                 {% for sparte, status in chips.get(lead.id, []) %}
                     <form method="post" action="/leads/{{ lead.id }}/sparte-ausblenden" style="display:inline">

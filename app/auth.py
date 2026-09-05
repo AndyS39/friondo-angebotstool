@@ -22,7 +22,8 @@ COOKIE_NAME = "angebotstool_sitzung"
 # /signatur/extern ist die (standardmäßig deaktivierte) Kunden-Fernsignatur
 OFFENE_PFADE = ("/login", "/logout", "/static", "/signatur/extern")
 AUSSENDIENST_PFADE = ("/erfassung", "/leads", "/signatur", "/statistik",
-                      "/meine-angebote", "/login", "/logout", "/static")
+                      "/meine-angebote", "/vorgaenge", "/login", "/logout",
+                      "/static")
 ADMIN_PFADE = ("/benutzer",)
 BUERO_ROLLEN = ("admin", "innendienst")
 

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block titel %}{{ angebot.nummer }} – Meine Angebote{% endblock %}
+
+{% block inhalt %}
+<div class="mobil-inhalt">
+    <h1>{{ angebot.nummer }}
+        <a class="knopf klein zweitrangig" href="/meine-angebote">Zurück</a>
+    </h1>
+    {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+    <p class="dezent">
+        {{ kunde.anzeige_name if kunde else '?' }} ·
+        {{ angebot.datum.strftime('%d.%m.%Y') if angebot.datum }} ·
+        <span class="abzeichen">{{ angebot.status }}</span>
+        {% if angebot.vorgaenger_id %}<span class="abzeichen" title="Neue Version eines früheren Angebots">Version</span>{% endif %}
+    </p>
+    <p>
+        <a class="knopf klein" href="/meine-angebote/{{ angebot.id }}/pdf" target="_blank">Angebots-PDF</a>
+        <a class="knopf klein zweitrangig" href="/vorgaenge/zu-angebot/{{ angebot.id }}">Vorgangsakte</a>
+    </p>
+
+    {# Vollansicht (v10): alle Positionen mit Kundenpreisen – ohne EK/DB #}
+    {% for gruppe in gruppen %}
+        {% if gruppe.name %}<h2 class="gruppentitel">{{ gruppe.name }}</h2>{% endif %}
+        {% for p in gruppe.positionen %}
+        <div class="protokoll-zeile">
+            <span class="dezent">Pos. {{ p.lfd_nr }}</span>
+            <strong>{{ p.bezeichnung }}</strong><br>
+            <span class="dezent">{{ p.menge | menge }} {{ p.einheit }}
+                × {{ p.e_preis_cent | euro }}
+                {% if p.bauseits %}· <span class="abzeichen">bauseits</span>
+                {% elif p.ep_flag %}· <span class="abzeichen ep">EP</span>
+                {% else %}= <strong>{{ (p.zeilen_cent - p.rabatt_effektiv_cent) | euro }}</strong>
+                {% endif %}
+                {% if p.rabatt_effektiv_cent %}<span class="abzeichen">Rabatt</span>{% endif %}
+            </span>
+        </div>
+        {% endfor %}
+    {% endfor %}
+
+    <table class="tabelle zusammenfassung">
+        <tr><th>Netto</th><td class="rechts">{{ summen.netto | euro }}</td></tr>
+        <tr><th>19 % USt</th><td class="rechts">{{ summen.ust | euro }}</td></tr>
+        <tr><th>Gesamt-Betrag</th><td class="rechts">{{ summen.brutto | euro }}</td></tr>
+        {% if summen.rabatt %}
+        <tr><th>− Rabatt{{ ' (' ~ angebot.rabatt_bezeichnung ~ ')' if angebot.rabatt_bezeichnung }}</th>
+            <td class="rechts">{{ summen.rabatt | euro }}</td></tr>
+        {% endif %}
+        <tr><th>= Endbetrag</th><td class="rechts"><strong>{{ summen.endbetrag | euro }}</strong></td></tr>
+        {% if kfw_ergebnis %}
+        <tr><th>KfW-Zuschuss (Prognose)</th><td class="rechts">{{ kfw_ergebnis.zuschuss_cent | euro }}</td></tr>
+        <tr><th>Eigenanteil nach Förderung</th>
+            <td class="rechts">{{ (summen.endbetrag - kfw_ergebnis.zuschuss_cent if summen.endbetrag > kfw_ergebnis.zuschuss_cent else 0) | euro }}</td></tr>
+        {% endif %}
+    </table>
+
+    <h2>Gesamtrabatt</h2>
+    <p>DB-Ampel:
+        <span class="ampel {{ {'gruen': 'gruen', 'orange': 'orange', 'rot': 'orange'}[db_ampel] }}"
+              style="{{ 'color:#c0392b' if db_ampel == 'rot' }}">● {{ {'gruen': 'Grün', 'orange': 'Orange', 'rot': 'Rot'}[db_ampel] }}</span>
+        <span class="dezent">(Rabatt ist möglich, solange die Ampel nicht auf Rot fällt)</span>
+    </p>
+    {% if freigabe_offen %}
+        <p class="meldung">Rabatt-Freigabe beim Innendienst offen
+            ({{ freigabe_offen.angefragt_am.strftime('%d.%m.%Y %H:%M') }}) –
+            das Ergebnis erscheint im Notizen-Chat des Vorgangs.</p>
+    {% elif rabatt_erlaubt %}
+    <form method="post" action="/meine-angebote/{{ angebot.id }}/rabatt" class="formular"
+          onsubmit="return confirm('Gesamtrabatt übernehmen?{{ ' Bei diesem versendeten Angebot entsteht automatisch eine neue Version als Entwurf.' if angebot.status in ('Versendet', 'Angenommen') }}');">
+        <div class="formzeile">
+            <label>Rabatt
+                <input type="text" name="rabatt_wert" size="8" inputmode="decimal"
+                       value="{{ ('%g' | format(angebot.rabatt_prozent)) | replace('.', ',') if angebot.rabatt_prozent
+                                 else ((angebot.rabatt_cent | euro).replace(' €', '') if angebot.rabatt_cent) }}"
+                       placeholder="z. B. 500">
+            </label>
+            <label>Art
+                <select name="rabatt_typ">
+                    <option value="betrag" {{ 'selected' if not angebot.rabatt_prozent }}>€ (brutto)</option>
+                    <option value="prozent" {{ 'selected' if angebot.rabatt_prozent }}>%</option>
+                </select>
+            </label>
+            <label>Bezeichnung
+                <input type="text" name="rabatt_bezeichnung" size="18"
+                       value="{{ angebot.rabatt_bezeichnung }}" placeholder="optional">
+            </label>
+            <button class="knopf" type="submit">Rabatt übernehmen</button>
+        </div>
+        {% if angebot.status in ('Versendet', 'Angenommen') %}
+        <p class="dezent">Hinweis: Bei versendeten Angeboten entsteht automatisch
+            Version {{ angebot.stamm_nummer }}.x als Entwurf (v9-Mechanik) –
+            bereit für Vor-Ort-Signatur oder den Versand durch den Innendienst.</p>
+        {% endif %}
+    </form>
+    {% else %}
+        <p class="dezent">Rabatt bei Status „{{ angebot.status }}“ nicht möglich.</p>
+    {% endif %}
+</div>
+{% endblock %}

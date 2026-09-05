@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% import "_sparten.html" as sparten_ui %}
+
+{% block titel %}Vorgang {{ kunde.anzeige_name if kunde else vorgang.id }} – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<h1>Vorgangsakte: {{ kunde.anzeige_name if kunde else '?' }}
+    <a class="knopf klein zweitrangig" href="/vorgaenge">Zur Vorgangsliste</a>
+</h1>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<div class="akte-kopf">
+    <p>
+        {% if kunde %}<strong>Ausführungsort:</strong>
+            {{ ((kunde.strasse ~ ', ' if kunde.strasse) ~ kunde.plz ~ ' ' ~ kunde.ort) | trim or '–' }}
+            {% if kunde.telefon %} · ☎ {{ kunde.telefon }}{% endif %}
+            {% if kunde.email %} · ✉ {{ kunde.email }}{% endif %}
+        {% endif %}<br>
+        <strong>Kanal/Profil:</strong> {{ kanal or '–' }}{% if profil %} → {{ profil.name }}{% endif %}
+        · <strong>Vertriebler:</strong>
+        {% for b in vertriebler %}{{ b.name }}{{ ', ' if not loop.last }}{% else %}–{% endfor %}
+        {% if lead and lead.vot_datum %} · <strong>VOT:</strong> {{ lead.vot_datum.strftime('%d.%m.%Y %H:%M') }}{% endif %}
+    </p>
+    <p><span class="sparten-chips">
+        {% for sparte, status in chips %}{{ sparten_ui.chip(sparte, status) }}{% endfor %}
+    </span>
+    {% if vorgang.verfolgung_ampel %}
+        <span title="Verfolgung: {{ vorgang.verfolgung_ampel }}">{{ {'heiss': '🔥', 'warm': '🌤', 'kalt': '❄'}[vorgang.verfolgung_ampel] }}</span>
+    {% endif %}
+    {% if vorgang.wiedervorlage_am %}
+        <span class="{{ 'wv-faellig' if vorgang.wiedervorlage_am <= heute else 'dezent' }}"
+              title="Wiedervorlage des Vorgangs">↻ {{ vorgang.wiedervorlage_am.strftime('%d.%m.%Y') }}</span>
+    {% endif %}</p>
+</div>
+
+<h2>Erfassungen</h2>
+{% if erfassungen %}
+<table class="tabelle">
+    <thead><tr><th>Sparte</th><th>Art</th><th>Status</th><th>Vertriebler</th><th>Erfasst am</th><th></th></tr></thead>
+    <tbody>
+    {% for e in erfassungen %}
+        <tr>
+            <td>{{ sparten_ui.chip(e.sparte or 'WP') }}</td>
+            <td>{{ 'Freitext' if e.typ == 'freitext' else 'Katalog' }}</td>
+            <td><span class="abzeichen">{{ e.status }}</span></td>
+            <td class="dezent">{{ benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '–' }}</td>
+            <td>{{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am else '–' }}</td>
+            <td class="aktionen">
+                {% if benutzer.rolle in ('admin', 'innendienst') %}
+                    <a class="knopf klein zweitrangig" href="/erfassungen/{{ e.id }}">Öffnen</a>
+                {% elif e.status == 'Entwurf' %}
+                    <a class="knopf klein zweitrangig" href="/erfassung/{{ e.id }}/weiche">Fortsetzen</a>
+                {% endif %}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="dezent">Noch keine Erfassungen.
+    {% if kunde %}<a href="/erfassung/sparten?kunde_id={{ kunde.id }}{{ '&lead_id=' ~ lead.id if lead }}">Erfassung starten</a>{% endif %}</p>
+{% endif %}
+
+<h2>Angebote</h2>
+{% if angebote %}
+<table class="tabelle">
+    <thead><tr><th>Nummer</th><th>Sparte</th><th>Status</th><th class="rechts">Endbetrag</th><th>Datum</th><th></th></tr></thead>
+    <tbody>
+    {% for a in angebote %}
+        <tr class="{{ 'dezent' if a.status == 'Überholt' }}">
+            <td>{% if a.extern %}<span class="abzeichen">TAIFUN</span> {{ a.taifun_nummer or a.nummer }}
+                {% else %}{{ a.nummer }}{% endif %}
+                {% if '.' in a.nummer and a.stamm_nummer != a.nummer %}<span class="abzeichen" title="Version">v{{ a.nummer.rpartition('.')[2] }}</span>{% endif %}</td>
+            <td>{{ sparten_ui.chip(a.konfigurator_typ or 'WP') }}</td>
+            <td><span class="abzeichen">{{ a.status }}</span></td>
+            <td class="rechts">{{ a.summen().endbetrag | euro }}</td>
+            <td>{{ a.datum.strftime('%d.%m.%Y') if a.datum }}</td>
+            <td class="aktionen">
+                {% if benutzer.rolle in ('admin', 'innendienst') %}
+                    <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">Öffnen</a>
+                {% elif not a.extern %}
+                    <a class="knopf klein zweitrangig" href="/meine-angebote/{{ a.id }}">Ansehen</a>
+                    <a class="knopf klein zweitrangig" href="/meine-angebote/{{ a.id }}/pdf" target="_blank">PDF</a>
+                {% endif %}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="dezent">Noch keine Angebote.</p>
+{% endif %}
+
+<h2>Mail-Verlauf</h2>
+{% if mails %}
+<table class="tabelle">
+    <thead><tr><th>Zeit</th><th>Richtung</th><th>Von</th><th>Betreff</th></tr></thead>
+    <tbody>
+    {% for m in mails %}
+        <tr>
+            <td>{{ m.empfangen_am.strftime('%d.%m.%Y %H:%M') if m.empfangen_am }}</td>
+            <td>{{ '⬅ Antwort' if m.eingehend else '➡ gesendet' }}</td>
+            <td class="dezent">{{ m.von_name or m.von_email }}</td>
+            <td title="{{ m.vorschau | truncate(300) }}">{{ m.betreff }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="dezent">Noch kein Mail-Verlauf.</p>
+{% endif %}
+
+<h2 id="notizen">Notizen</h2>
+<div class="notizen-chat">
+    {% for n in notizen %}
+        <div class="notiz {{ 'eigene' if n.benutzer_id == benutzer.id }}">
+            <span class="notiz-kopf">{{ n.benutzer_name }} {{ n.zeit.strftime('%d.%m.%y %H:%M') }} Uhr:</span>
+            {% if n.herkunft %}<span class="abzeichen" title="{{ n.herkunft }}">{{ n.herkunft | truncate(40) }}</span>{% endif %}
+            <div class="notiz-text">{{ n.text }}</div>
+        </div>
+    {% else %}
+        <p class="dezent">Noch keine Notizen.</p>
+    {% endfor %}
+</div>
+<form method="post" action="/vorgaenge/{{ vorgang.id }}/notiz" class="notiz-eingabe">
+    <textarea name="text" rows="2" placeholder="Notiz schreiben … (Einträge sind unveränderlich)" required></textarea>
+    <button class="knopf" type="submit">Notiz speichern</button>
+</form>
+{% endblock %}

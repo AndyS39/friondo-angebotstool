@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% import "_sparten.html" as sparten_ui %}
+
+{% block titel %}Vorgänge – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<h1>Vorgänge</h1>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<form method="get" class="filterleiste">
+    <input type="text" name="q" value="{{ q }}" placeholder="Suche: Kunde, Ort, PLZ, Angebots-Nr."
+           size="34">
+    <button class="knopf" type="submit">Suchen</button>
+    {% if q %}<a class="knopf klein zweitrangig" href="/vorgaenge">Zurücksetzen</a>{% endif %}
+</form>
+
+{% if vorgaenge %}
+<table class="tabelle">
+    <thead>
+        <tr><th>Kunde</th><th>Ort</th><th>Kanal</th><th>Sparten</th>
+            <th>Erfassungen</th><th>Angebote</th><th>Verfolgung</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for v in vorgaenge %}
+        {% set kunde = kunden.get(v.kunde_id) %}
+        <tr>
+            <td><a href="/vorgaenge/{{ v.id }}">{{ kunde.anzeige_name if kunde else '?' }}</a>
+                {% if v.id in neue_notizen %}
+                    <span class="notiz-punkt" title="Neue Notizen seit dem letzten Öffnen">●</span>
+                {% endif %}
+                {% if not v.lead_id %}<span class="abzeichen" title="Vorgang ohne monday-Lead">manuell</span>{% endif %}
+            </td>
+            <td>{{ kunde.plz if kunde }} {{ kunde.ort if kunde }}</td>
+            <td class="dezent">{{ (leads[v.lead_id].vertriebskanal if v.lead_id in leads else '')
+                                  or (kunde.vertriebskanal if kunde) or '–' }}</td>
+            <td><span class="sparten-chips">
+                {% for sparte, status in chips.get(v.id, []) %}
+                    {{ sparten_ui.chip(sparte, status) }}
+                {% endfor %}</span></td>
+            <td>{{ erf_je_vorgang.get(v.id, []) | length }}</td>
+            <td>{{ ang_je_vorgang.get(v.id, []) | rejectattr('status', 'equalto', 'Überholt') | list | length }}</td>
+            <td>{% if v.verfolgung_ampel %}
+                    <span title="Verfolgung: {{ v.verfolgung_ampel }}">{{ {'heiss': '🔥', 'warm': '🌤', 'kalt': '❄'}[v.verfolgung_ampel] }}</span>
+                {% endif %}
+                {% if v.wiedervorlage_am %}
+                    <span class="dezent" title="Wiedervorlage">↻ {{ v.wiedervorlage_am.strftime('%d.%m.%Y') }}</span>
+                {% endif %}</td>
+            <td class="aktionen"><a class="knopf klein zweitrangig" href="/vorgaenge/{{ v.id }}">Akte öffnen</a></td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<p class="dezent">{{ vorgaenge | length }} Vorg{{ 'änge' if vorgaenge | length != 1 else 'ang' }}</p>
+{{ sparten_ui.legende() }}
+{% else %}
+<p class="hinweis">Keine Vorgänge gefunden.</p>
+{% endif %}
+{% endblock %}

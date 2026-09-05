@@ -285,6 +285,64 @@ def positionen_zusammenstellen(logik: Logik, antworten: dict,
     return positionen
 
 
+def version_erzeugen(session: Session, original: Angebot) -> Angebot:
+    """v9/v10: erzeugt die nächste Version (<Stamm>.2/.3 …) eines versendeten/
+    angenommenen Angebots als Entwurf; das Original wird „Überholt“ und die
+    Erfassungs-Verknüpfung wandert zur neuen Version. Wird vom Überarbeiten-
+    Button und vom AD-Rabatt-Workflow (Phase 59) genutzt."""
+    from sqlalchemy import or_
+
+    from app.models import AngebotsPosition, Erfassung
+    stamm = original.stamm_nummer
+    hoechste = 1
+    for (nummer,) in (session.query(Angebot.nummer)
+                      .filter(or_(Angebot.nummer == stamm,
+                                  Angebot.nummer.like(f"{stamm}.%")))):
+        _, punkt, rest = nummer.rpartition(".")
+        if punkt and rest.isdigit():
+            hoechste = max(hoechste, int(rest))
+    version = Angebot(
+        nummer=f"{stamm}.{hoechste + 1}", kunde_id=original.kunde_id,
+        protokoll_json=original.protokoll_json, kfw_json=original.kfw_json,
+        vermerke_json=original.vermerke_json,
+        rabatt_cent=original.rabatt_cent, rabatt_prozent=original.rabatt_prozent,
+        rabatt_bezeichnung=original.rabatt_bezeichnung,
+        konfigurator_typ=original.konfigurator_typ,
+        vertriebler_id=original.vertriebler_id,
+        profil_id=original.profil_id, vortext_text=original.vortext_text,
+        rechnung_name=original.rechnung_name,
+        rechnung_strasse=original.rechnung_strasse,
+        rechnung_plz=original.rechnung_plz, rechnung_ort=original.rechnung_ort,
+        foerderung_manuell_cent=original.foerderung_manuell_cent,
+        foerderung_ausblenden=original.foerderung_ausblenden,
+        foerder_grund_prozent=original.foerder_grund_prozent,
+        foerder_klima_prozent=original.foerder_klima_prozent,
+        foerder_einkommen_prozent=original.foerder_einkommen_prozent,
+        foerder_hoechstkosten_cent=original.foerder_hoechstkosten_cent,
+        verfolgung_ampel=original.verfolgung_ampel,
+        wiedervorlage_am=original.wiedervorlage_am,
+        graph_conversation_id=original.graph_conversation_id,
+        vorgaenger_id=original.id,
+        vorgang_id=original.vorgang_id,
+    )
+    for p in original.positionen:
+        version.positionen.append(AngebotsPosition(
+            sort=p.sort, block_nr=p.block_nr, gruppe=p.gruppe, pos_nr=p.pos_nr,
+            bezeichnung=p.bezeichnung, beschreibung=p.beschreibung, menge=p.menge,
+            einheit=p.einheit, e_preis_cent=p.e_preis_cent, ep_flag=p.ep_flag,
+            ek_cent=p.ek_cent, guid=p.guid, anzeige_nr=p.anzeige_nr,
+            original_preis_cent=p.original_preis_cent,
+            rabatt_prozent=p.rabatt_prozent, rabatt_cent=p.rabatt_cent,
+            bauseits=p.bauseits, sonderpreis=p.sonderpreis))
+    session.add(version)
+    session.flush()
+    original.status = "Überholt"
+    for erfassung in session.query(Erfassung).filter(
+            Erfassung.angebot_id == original.id):
+        erfassung.angebot_id = version.id
+    return version
+
+
 # --- Nummernkreis ---------------------------------------------------------
 
 def naechste_angebotsnummer(session: Session) -> str:

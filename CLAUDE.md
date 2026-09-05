@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v9)
+# Friondo Angebotstool – Projektkontext (v10)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -173,6 +173,43 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   eigenen), Vertriebskanal manuell änderbar (Vorrang vor Sync),
   Sparten-Chips mit Zustandsanzeige, Startseite in drei Bereichen
   (Lead-Management · Angebotstool · Projektierung).
+
+## Neu in v10 (abgestimmt 05.09.2026)
+- Kundenvorgänge: Jeder Lead ist ein Vorgang mit eigener Akte –
+  sie bündelt Sparten-Chips, alle Erfassungen, alle Angebote
+  (Tool/TAIFUN, inkl. Versionen), Mail-Verlauf, Verfolgung und
+  einen chronologischen Notizen-Chat (Autor + Zeitstempel,
+  Einträge unveränderlich; AD bei eigenen Vorgängen, ID/Admin
+  überall). Verfolgung (Hot-Ampel, Wiedervorlage) lebt auf
+  Vorgangsebene – EINE Ampel je Kundenanfrage; Angenommen/
+  Abgelehnt bleibt je Angebot. Der 90-Tage-Lauf respektiert die
+  Vorgangs-Wiedervorlage für alle Angebote des Vorgangs.
+- Kombi-Versand: Aus der Akte mehrere versandfertige Angebote in
+  EINER Mail versenden (mehrere separate PDFs). Kombi-Vorlage mit
+  {angebotsliste} (je Angebot Sparte + Endbetrag, WP zusätzlich
+  Eigenanteil) – Einzelbeträge, keine Gesamtsumme. Broschüren
+  dedupliziert. Die Versand-Erkennung setzt alle enthaltenen
+  Angebote auf „Versendet"; der Mail-Verlauf hängt an allen.
+- Externe TAIFUN-Einträge können übergangsweise ein PDF tragen
+  (Upload am Eintrag), damit Kombi-Mails alle Angebote enthalten.
+- Alternativ-Kennzeichen je Position: „in anderem Angebot enthalten"
+  – Darstellung wie EP (ausgewiesen, nicht in Summe/KfW/DB) mit
+  automatischem Vermerk und Verknüpfung zum Geschwister-Angebot des
+  Vorgangs. Parametrierungs-Liste „gewerkeübergreifende Artikel"
+  löst bei Mehr-Sparten-Vorgängen einen fachlichen Hinweis aus;
+  der Kombi-Versand warnt bei doppelt voll berechneten Artikeln
+  (nur zwischen Tool-Angeboten prüfbar).
+- monday: Deal-Wert = Summe aller versendeten, nicht überholten
+  Angebote des Vorgangs (aktualisiert bei Versand, neuer Version,
+  Ablehnung). Statistik zusätzlich je Vorgang (Kombiquote,
+  Auftragswert je Vorgang) und als Monatsübersicht Auftragseingang
+  (angenommene Angebote), filterbar.
+- Außendienst-Ausbau: Suche in „Meine Angebote"; vollständige
+  Angebotsansicht der eigenen Angebote (weiterhin ohne EK/DB);
+  AD kann den Gesamtrabatt selbst setzen, solange die DB-Ampel
+  nicht rot wird – darunter Freigabe-Anfrage an den Innendienst.
+  Wiedervorlagen haben einen Verantwortlichen: vom AD gesetzte
+  erscheinen in dessen Sicht, nicht in der ID-Kachel.
 
 ## Leads VOT (monday-Lesesync)
 - Quellen (friondo-gmbh.monday.com), jeweils NUR die Gruppe mit Titel „Terminiert"

@@ -7,7 +7,8 @@
 {% block inhalt %}
 <div class="seitenkopf">
     <h1>Angebote</h1>
-    <a class="knopf" href="/konfigurator">+ Neues Angebot (Konfigurator)</a>
+    <a class="knopf" href="/erfassung/neu"
+       title="Startet den regulären Erfassungs-Ablauf (Sparten → Bogen/Freitext → Absenden → Angebot)">+ Neuer Vorgang (Erfassung)</a>
 </div>
 
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
@@ -94,7 +95,7 @@
                         ✉ {{ mail_zaehler[a.id] }}</a>
                 {% endif %}
             </td>
-            <td>{{ kunden[a.kunde_id].anzeige_name if a.kunde_id in kunden else '?' }}
+            <td><a href="/vorgaenge/zu-angebot/{{ a.id }}" title="Vorgangsakte öffnen">{{ kunden[a.kunde_id].anzeige_name if a.kunde_id in kunden else '?' }}</a>
                 {% if a.kunde_id in kunden %}{{ interesse_ui.badges(kunden[a.kunde_id].interessen) }}{% endif %}</td>
             <td class="dezent">{{ kunden[a.kunde_id].vertriebskanal or '–' if a.kunde_id in kunden else '–' }}</td>
             <td class="dezent">{% set vid = angebot_vertriebler.get(a.id) %}{{ vertriebler[vid].name if vid in vertriebler else '–' }}</td>
@@ -155,7 +156,7 @@ sind dort unbekannt und bleiben außen vor.</p>
 {% endif %}
 {{ sparten_ui.legende() }}
 {% else %}
-<p class="hinweis">Noch keine Angebote. Über den <a href="/konfigurator">Konfigurator</a>
+<p class="hinweis">Noch keine Angebote. Über eine <a href="/erfassung/neu">neue Erfassung</a>
 oder als manuelles Angebot über einen Kunden starten.</p>
 {% endif %}
 {% endblock %}

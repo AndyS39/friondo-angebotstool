@@ -92,6 +92,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "bauseits": "BOOLEAN NOT NULL DEFAULT 0",
     },
     "angebote": {
+        "vorgang_id": "INTEGER",            # v10 Vorgangsakte
         "rabatt_cent": "INTEGER",
         "rabatt_prozent": "FLOAT",
         "rabatt_bezeichnung": "VARCHAR(200) NOT NULL DEFAULT ''",
@@ -152,6 +153,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "angelegt_am": "DATETIME",
     },
     "erfassungen": {
+        "vorgang_id": "INTEGER",            # v10 Vorgangsakte
         "konfigurator_typ": "VARCHAR(10) NOT NULL DEFAULT 'WP'",
         "archiviert": "BOOLEAN NOT NULL DEFAULT 0",
         "typ": "VARCHAR(10) NOT NULL DEFAULT 'katalog'",
