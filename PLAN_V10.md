@@ -11,7 +11,7 @@ bündelt alle Sparten, Erfassungen, Angebote, Mails, die Verfolgung und
 die Notizen – und er ist die Einheit für den gemeinsamen Versand.
 
 ## Phase 59 – Vorgangsakte
-- [ ] CLAUDE.md: Kopf auf „(v10)"; neuen Abschnitt einfügen:
+- [x] CLAUDE.md: Kopf auf „(v10)"; neuen Abschnitt einfügen:
 
       ## Neu in v10 (abgestimmt 05.09.2026)
       - Kundenvorgänge: Jeder Lead ist ein Vorgang mit eigener Akte –
@@ -50,30 +50,30 @@ die Notizen – und er ist die Einheit für den gemeinsamen Versand.
         Wiedervorlagen haben einen Verantwortlichen: vom AD gesetzte
         erscheinen in dessen Sicht, nicht in der ID-Kachel.
 
-- [ ] Datenmodell: Vorgang als führendes Objekt formalisieren (Anker =
+- [x] Datenmodell: Vorgang als führendes Objekt formalisieren (Anker =
       Lead; für manuell angelegte Kunden ohne Lead wird beim ersten
       Erfassen automatisch ein Vorgang erzeugt); bestehende
       Verknüpfungen (Erfassungen, Angebote, Lead) daran aufhängen
-- [ ] Vorgangsakte als Detailseite: Kopf (Kunde, Ausführungsort, Kanal/
+- [x] Vorgangsakte als Detailseite: Kopf (Kunde, Ausführungsort, Kanal/
       Profil, Sparten-Chips, Vertriebler), Bereiche Erfassungen ·
       Angebote (mit Status, Version, Endbetrag; TAIFUN-Badge) ·
       Mail-Verlauf · Verfolgung · Notizen
-- [ ] Einstiege: Klick auf den Kunden in Leads VOT, Erfassungs- und
+- [x] Einstiege: Klick auf den Kunden in Leads VOT, Erfassungs- und
       Angebotsliste öffnet die Akte; Suche findet Vorgänge; Akte bleibt
       nach Abschluss/Ausblenden des Leads erreichbar
-- [ ] AD-Sicht (mobil): eigene Vorgänge lesbar inkl. Angebots-PDFs
+- [x] AD-Sicht (mobil): eigene Vorgänge lesbar inkl. Angebots-PDFs
       (read-only, ohne EK/DB) – ersetzt perspektivisch „Meine Angebote",
       der Menüpunkt bleibt vorerst und verlinkt auf die Akten
-- [ ] BUGFIX: Erfassung, die ohne Leads-VOT-Eintrag aus dem Angebote-/
+- [x] BUGFIX: Erfassung, die ohne Leads-VOT-Eintrag aus dem Angebote-/
       Kundenbereich gestartet wird, hat am Ende keinen Absenden-/
       Versand-Button – reproduzieren, Ursache beheben, Vorgänge ohne
       Lead müssen den identischen Ablauf haben wie Lead-Vorgänge
-- [ ] „Meine Angebote": Suchfeld (Name, Ort, Angebotsnummer)
-- [ ] AD-Vollansicht der eigenen Angebote: alle Positionen, Preise,
+- [x] „Meine Angebote": Suchfeld (Name, Ort, Angebotsnummer)
+- [x] AD-Vollansicht der eigenen Angebote: alle Positionen, Preise,
       Summen, Status, Verlauf und PDF – weiterhin OHNE EK, DB-Werte
       und Editor (Entscheidung siehe Chat; falls doch inkl. DB: nur
       diese Zeile ändern)
-- [ ] AD-Rabatt mit Freigabe-Workflow: AD kann am eigenen Angebot den
+- [x] AD-Rabatt mit Freigabe-Workflow: AD kann am eigenen Angebot den
       Gesamtrabatt (Brutto, v4-Mechanik) eingeben. Zulässig, solange
       der resultierende DB die Rot-Schwelle der Ampel nicht
       unterschreitet – der AD sieht dabei nur die Ampel-FARBE als
@@ -85,7 +85,7 @@ die Notizen – und er ist die Einheit für den gemeinsamen Versand.
       „Rabatt-Freigaben offen"; ID genehmigt → Rabatt/Version
       entsteht, oder lehnt mit Kommentar ab); alles im Notizen-Chat
       des Vorgangs protokolliert
-- [ ] migrate.py: Vorgangs-Objekt + Verknüpfungen, rückwirkend aus
+- [x] migrate.py: Vorgangs-Objekt + Verknüpfungen, rückwirkend aus
       Bestandsdaten erzeugen (je Lead bzw. je Kunde mit Erfassungen)
 
 ## Phase 60 – Verfolgung & Notizen auf Vorgangsebene
