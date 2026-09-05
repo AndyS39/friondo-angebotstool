@@ -475,6 +475,10 @@ class Angebot(Base):
     vorgaenger_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # v10: Vorgangszugehörigkeit (Akte); Migration setzt sie rückwirkend
     vorgang_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    # v10 (Phase 61/62): externer TAIFUN-Eintrag kann übergangsweise ein PDF
+    # tragen – nur damit ist er im Kombi-Versand wählbar
+    extern_pdf_pfad: Mapped[str] = mapped_column(String(300), default="")
+    extern_pdf_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # Bedingte Angebotsvermerke (v9, Blatt "Vermerke"): beim Anlegen
     # ausgewertete Texte für das PDF (Ende Positionsteil vor Summenblock)
     vermerke_json: Mapped[str] = mapped_column(Text, default="[]")
@@ -524,7 +528,8 @@ class Angebot(Base):
                     "rabatt": 0, "endbetrag": betrag}
         netto = 0
         for p in self.positionen:
-            if not p.ep_flag and not p.bauseits:   # bauseits (v5) zählt nie mit
+            # bauseits (v5) und Alternativ-Positionen (v10) zählen nie mit
+            if not p.ep_flag and not p.bauseits and not p.alternativ:
                 netto += p.gesamt_cent
         ust = int(Decimal(netto) * Decimal("0.19"))
         brutto = netto + ust
@@ -549,7 +554,7 @@ class Angebot(Base):
         ek = 0
         ohne_ek = []
         for p in self.positionen:
-            if p.ep_flag or p.bauseits:
+            if p.ep_flag or p.bauseits or p.alternativ:
                 continue
             vk += p.gesamt_cent   # enthält Positionsrabatt und geänderte Preise (v5)
             if p.ek_cent is None:
@@ -596,6 +601,11 @@ class AngebotsPosition(Base):
     rabatt_prozent: Mapped[Optional[float]] = mapped_column(Float, nullable=True)       # Positionsrabatt %
     rabatt_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)          # Positionsrabatt €
     bauseits: Mapped[bool] = mapped_column(Boolean, default=False)       # PDF „bauseits“, zählt nirgends
+    # v10 (Phase 61): „Alternativ – in anderem Angebot enthalten“: Preis wird
+    # ausgewiesen, zählt aber nicht in Summe/KfW-Basis/DB; alternativ_zu
+    # verweist auf das Geschwister-Angebot des Vorgangs (oder Freitext)
+    alternativ: Mapped[bool] = mapped_column(Boolean, default=False)
+    alternativ_zu: Mapped[str] = mapped_column(String(200), default="")
 
     angebot: Mapped["Angebot"] = relationship(back_populates="positionen")
 

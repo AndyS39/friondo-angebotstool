@@ -345,6 +345,13 @@ async def editor(request: Request, angebot_id: int,
                .order_by(AngebotsNotiz.angelegt_am.desc()).all())
     vorgang = vorgaenge_modul.vorgang_fuer_angebot(session, angebot)
     session.commit()
+    # v10 (Phase 61): Geschwister-Angebote als Verknüpfungsziele fürs
+    # Alternativ-Kennzeichen (z. B. „PV-Angebot AN-…“)
+    geschwister = [f"{(a.konfigurator_typ or 'WP')}-Angebot {a.nummer}"
+                   for a in session.query(Angebot)
+                   .filter(Angebot.vorgang_id == vorgang.id,
+                           Angebot.id != angebot.id,
+                           Angebot.status != "Überholt")]
 
     # Vertriebler des Vorgangs (v5-Nachtrag): anzeigen + änderbar
     from app import mail_vorlagen
@@ -378,7 +385,7 @@ async def editor(request: Request, angebot_id: int,
                   ablehnungsgruende=ablehnungsgruende,
                   profil=profil, profile=profile, profil_hinweise=profil_hinweise,
                   fachhinweise=fachhinweise, versionen=versionen,
-                  vorgang=vorgang,
+                  vorgang=vorgang, geschwister=geschwister,
                   vortext_standard=angebotsprofile.vortext_fuer_angebot(session, angebot),
                   angebot=angebot, kunde=kunde, gruppen=gruppen,
                   summen=angebot.summen(), artikel_liste=artikel_liste,
@@ -479,6 +486,13 @@ async def position_aendern(request: Request, angebot_id: int, position_id: int,
                 position.rabatt_cent = cent
     position.bauseits = form.get("bauseits") == "on"
     position.ep_flag = form.get("ep_flag") == "on"   # v6: EP-Kästchen je Position
+    # v10 (Phase 61): „Alternativ – in anderem Angebot enthalten“ – zählt wie
+    # EP nicht mit; die Verknüpfung nennt das Geschwister-Angebot (oder Text)
+    position.alternativ = form.get("alternativ") == "on"
+    if position.alternativ:
+        position.alternativ_zu = (form.get("alternativ_zu") or "").strip()[:200]
+    else:
+        position.alternativ_zu = ""
     session.commit()
     ziel = f"/angebote/{angebot_id}"
     if fehler:

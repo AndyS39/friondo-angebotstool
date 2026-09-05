@@ -340,6 +340,12 @@ def _positionsteil(pdf: AngebotsPdf, angebot: Angebot):
         if position.rabatt_effektiv_cent and not position.bauseits:
             text += (f"\nabzgl. Rabatt {position.rabatt_text}"
                      f" (− {_euro_betrag(position.rabatt_effektiv_cent)} €)")
+        # v10 (Phase 61): automatischer Vermerk unter Alternativ-Positionen
+        if position.alternativ:
+            text += ("\nHinweis: Diese Position ist im parallel vorliegenden "
+                     f"{position.alternativ_zu or 'Parallel-Angebot'} enthalten "
+                     "und kommt nur zum Tragen, wenn ausschließlich das "
+                     "vorliegende Angebot beauftragt wird.")
 
         pdf.set_font("Arial", "", 8)
         zeilen = pdf.multi_cell(text_breite, zeilenhoehe, text, dry_run=True, output="LINES")
@@ -386,7 +392,13 @@ def _positionsteil(pdf: AngebotsPdf, angebot: Angebot):
 
         # Preise auf Höhe der letzten Textzeile (wie im Referenz-PDF)
         pdf.set_xy(text_x + text_breite, y_ende - zeilenhoehe)
-        if position.bauseits:
+        if position.alternativ:
+            # v10 (Phase 61): Alternativ-Position – Preis ausgewiesen, zählt
+            # nicht in der Summe; „Altern.“ statt Gesamtpreis
+            pdf.cell(SPALTEN["e_preis"], zeilenhoehe,
+                     _euro_betrag(position.e_preis_cent), align="R")
+            pdf.cell(SPALTEN["g_preis"], zeilenhoehe, "Altern.", align="R")
+        elif position.bauseits:
             # bauseits (v5): Leistung durch den Kunden – keine Preise, zählt nicht
             pdf.cell(SPALTEN["e_preis"], zeilenhoehe, "", align="R")
             pdf.cell(SPALTEN["g_preis"], zeilenhoehe, "bauseits", align="R")

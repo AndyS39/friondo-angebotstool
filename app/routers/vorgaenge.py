@@ -4,6 +4,7 @@
 # Außendienst sieht ausschließlich die eigenen Vorgänge (read-only + Notizen).
 
 from datetime import datetime
+from pathlib import Path
 from urllib.parse import quote_plus
 
 from fastapi import APIRouter, Depends, Request
@@ -174,6 +175,12 @@ async def akte(request: Request, vorgang_id: int,
     erfassung_offen = next((e for e in erfassungen if e.status == "Entwurf"), None)
     aussendienst = [b for b in benutzer_map.values()
                     if b.rolle == "aussendienst" and b.aktiv]
+    # Kombi-Versand (Phase 61): Wählbarkeit je Angebot + fachliche Hinweise
+    from app import kombi_versand as kombi_modul
+    kombi_info = {a.id: kombi_modul.waehlbar(a) for a in angebote}
+    gewerke_hinweise = kombi_modul.gewerke_hinweise(session, vorgang, angebote)
+    kombi_doppelt = kombi_modul.doppelte_artikel(
+        [a for a in angebote if kombi_info[a.id][0]])
     return render(request, "vorgaenge/akte.html", aktiv="/vorgaenge",
                   mobil=benutzer.rolle == "aussendienst",
                   vorgang=vorgang, kunde=kunde, lead=lead, kanal=kanal,
@@ -184,9 +191,123 @@ async def akte(request: Request, vorgang_id: int,
                   vertriebler=[benutzer_map[i] for i in sorted(vertriebler_ids)
                                if i in benutzer_map],
                   erfassung_offen=erfassung_offen,
+                  kombi_info=kombi_info, gewerke_hinweise=gewerke_hinweise,
+                  kombi_doppelt=kombi_doppelt,
                   aussendienst=sorted(aussendienst, key=lambda b: b.name),
                   heute=datetime.now(),
                   meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/{vorgang_id}/kombi-versand")
+async def kombi_versand(request: Request, vorgang_id: int,
+                        session: Session = Depends(get_session)):
+    """Kombi-Versand (v10, Phase 61): EINE Mail mit mehreren Angebots-PDFs.
+    Nur Innendienst/Admin; Betreff/Text aus der Kombi-Vorlage; die Versand-
+    Erkennung stellt später alle enthaltenen Tool-Angebote auf „Versendet"."""
+    from app import (anhaenge as anhaenge_modul, graph_versand,
+                     kombi_versand as kombi_modul)
+    from app import logik as logik_modul
+    from app import mail_vorlagen, signaturen
+    from app.models import einstellung_holen
+    benutzer = request.state.benutzer
+    vorgang = session.get(Vorgang, vorgang_id)
+    if vorgang is None or benutzer.rolle not in ("admin", "innendienst"):
+        return RedirectResponse("/vorgaenge", status_code=303)
+    form = await request.form()
+    ids = [int(w) for w in form.getlist("angebot_ids") if str(w).isdigit()]
+    angebote = [a for a in session.query(Angebot)
+                .filter(Angebot.id.in_(ids or [0]),
+                        Angebot.vorgang_id == vorgang.id)
+                .order_by(Angebot.nummer)]
+    ziel = f"/vorgaenge/{vorgang_id}?meldung="
+    if len(angebote) < 2:
+        return RedirectResponse(ziel + quote_plus(
+            "Bitte mindestens zwei Angebote für den Kombi-Versand wählen "
+            "(Einzelversand läuft weiter über das Angebot)."), status_code=303)
+    for angebot in angebote:
+        ok, grund = kombi_modul.waehlbar(angebot)
+        if not ok:
+            return RedirectResponse(ziel + quote_plus(
+                f"{angebot.nummer}: {grund}"), status_code=303)
+    if not graph_versand.konfiguriert():
+        return RedirectResponse(ziel + quote_plus(
+            "Microsoft Graph ist noch nicht eingerichtet "
+            "(docs/graph-einrichtung.md)."), status_code=303)
+    if graph_versand.angemeldeter_benutzer() is None:
+        return RedirectResponse("/versand?meldung=" + quote_plus(
+            "Bitte zuerst mit Microsoft anmelden, dann den Kombi-Versand "
+            "erneut starten."), status_code=303)
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    # PDFs: je Angebot ein Anhang (Tool frisch erzeugt, TAIFUN aus dem Upload)
+    pdfs = [kombi_modul.pdf_fuer(session, a) for a in angebote]
+    # Broschüren über alle Tool-Angebote dedupliziert (je Dateiname einmal)
+    logik, _ = logik_modul.hole_logik(session)
+    broschueren: list = []
+    fehlende: list[str] = []
+    gesehen: set[str] = set()
+    for angebot in angebote:
+        if angebot.extern:
+            continue
+        for anhang in anhaenge_modul.fuer_angebot(logik, angebot):
+            if anhang.datei in gesehen:
+                continue
+            gesehen.add(anhang.datei)
+            if anhang.vorhanden:
+                broschueren.append(Path(anhang.pfad))
+            else:
+                fehlende.append(anhang.datei)
+    # Kombi-Vorlage + Signatur des angemeldeten ID-Mitarbeiters
+    betreff, text = mail_vorlagen.kombi_mail_fuer_vorgang(
+        session, angebote, kunde, benutzer.name)
+    signatur_html, inline_bilder = signaturen.fuer_versand(benutzer.id)
+    text += signatur_html
+    # Versandregeln des Vorgangs-Profils (Enni-CC, SWD leer, Mehrfach-BCC)
+    from app import angebotsprofile
+    kanal = ""
+    if vorgang.lead_id:
+        lead = session.get(Lead, vorgang.lead_id)
+        kanal = lead.vertriebskanal if lead else ""
+    kanal = kanal or (kunde.vertriebskanal if kunde else "")
+    profil = angebotsprofile.profil_fuer_kanal(session, kanal)
+    absender = einstellung_holen(session, "mail_absender", "angebot@friondo.de")
+    bcc = [a.strip() for a in einstellung_holen(session, "mail_bcc", "").split(",")
+           if a.strip()]
+    vertriebler = mail_vorlagen.vertriebler_fuer_angebot(session, angebote[0])
+    cc = [vertriebler.email] if vertriebler and vertriebler.email else []
+    if profil is not None and profil.versand_cc:
+        cc += [a.strip() for a in profil.versand_cc.split(",")
+               if a.strip() and a.strip() not in cc]
+    empfaenger_leer = bool(profil is not None and profil.empfaenger_leer)
+    erfolg, meldung, weblink, conversation_id = graph_versand.entwurf_erstellen(
+        kunde, angebote[0], pdfs[0], betreff, text,
+        weitere_anhaenge=pdfs[1:] + broschueren,
+        fehlende_anhaenge=fehlende, cc=cc, bcc=bcc, absender=absender,
+        inline_bilder=inline_bilder, empfaenger_leer=empfaenger_leer)
+    if erfolg:
+        nummern = ", ".join(a.nummer for a in angebote)
+        for angebot in angebote:
+            if conversation_id:
+                angebot.graph_conversation_id = conversation_id
+            if not angebot.extern and angebot.status == "Entwurf":
+                angebot.status = "Versand vorbereitet"
+        vorgaenge_modul.notiz_anlegen(
+            session, vorgang.id, benutzer,
+            f"Kombi-Versand vorbereitet: {nummern} in einer Mail "
+            f"({len(pdfs)} Angebots-PDFs, {len(broschueren)} Broschüren).",
+            herkunft="Kombi-Versand")
+        session.commit()
+        # Warnung: dieselbe Artikelnummer in mehreren Tool-Angeboten voll berechnet
+        doppelt = kombi_modul.doppelte_artikel(angebote)
+        if doppelt:
+            meldung += (f" ACHTUNG: Pos. {', '.join(doppelt)} sind in mehreren "
+                        "Angeboten voll berechnet – bitte prüfen "
+                        "(Alternativ-Kennzeichen?). TAIFUN-PDFs sind nicht prüfbar.")
+        if empfaenger_leer:
+            meldung += (" PFLICHT: Empfänger ist leer (SWD-Profil) – bitte den "
+                        "SWD-Kontakt vor dem Senden in Outlook eintragen!")
+        return RedirectResponse(ziel + quote_plus(
+            f"Kombi-Entwurf für {nummern} erstellt. " + meldung), status_code=303)
+    return RedirectResponse(ziel + quote_plus(meldung), status_code=303)
 
 
 @router.post("/{vorgang_id}/verfolgung")

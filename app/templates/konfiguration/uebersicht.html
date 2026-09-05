@@ -75,6 +75,29 @@ BCC-Adressen mit Komma trennen; leer = kein BCC.
     ({{ sync_status.versendet }} als versendet erkannt, {{ sync_status.neu }} neue Mails).
 {% endif %}</p>
 
+<h2>Kombi-Versand (v10)</h2>
+<form method="post" action="/parametrierung/einstellungen" class="formular">
+    <input type="hidden" name="kombi_formular" value="1">
+    <label>Betreff der Kombi-Mail<br>
+        <input type="text" name="kombi_vorlage_betreff" value="{{ kombi_betreff }}" size="70"></label><br>
+    <label>Text der Kombi-Mail<br>
+        <textarea name="kombi_vorlage_text" rows="9" style="width:100%">{{ kombi_text }}</textarea></label>
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Speichern</button>
+        <span class="dezent">Platzhalter: {angebotsliste} (je Angebot Sparte, Nummer,
+            Endbetrag; bei WP zusätzlich Eigenanteil – keine Gesamtsumme),
+            {angebotsnummern}, {briefanrede}, {vertriebler}, {absender}</span>
+    </div>
+</form>
+<form method="post" action="/parametrierung/einstellungen" class="suchleiste">
+    <input type="hidden" name="gewerke_formular" value="1">
+    <label class="kontrollfeld">Gewerkeübergreifende Artikel
+        <input type="text" name="gewerke_artikel" value="{{ gewerke_artikel }}" size="40"></label>
+    <button class="knopf" type="submit">Speichern</button>
+    <span class="dezent">Kommaliste (Pos.-Nrn.); löst bei Mehr-Sparten-Vorgängen
+        einen fachlichen Hinweis in der Akte aus, wenn voll berechnet.</span>
+</form>
+
 <h2>Fern-Signatur (Kunde signiert selbst)</h2>
 <form method="post" action="/parametrierung/einstellungen" class="suchleiste">
     <input type="hidden" name="fern_formular" value="1">

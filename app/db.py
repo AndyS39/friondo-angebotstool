@@ -82,6 +82,8 @@ _NACHTRAEGLICHE_SPALTEN = {
         "ek_datum": "VARCHAR(20) NOT NULL DEFAULT ''",
     },
     "angebotspositionen": {
+        "alternativ": "BOOLEAN NOT NULL DEFAULT 0",     # v10 Kombi-Versand
+        "alternativ_zu": "VARCHAR(200) NOT NULL DEFAULT ''",
         "sonderpreis": "BOOLEAN NOT NULL DEFAULT 0",
         "ek_cent": "INTEGER",
         "guid": "VARCHAR(40)",
@@ -93,6 +95,8 @@ _NACHTRAEGLICHE_SPALTEN = {
     },
     "angebote": {
         "vorgang_id": "INTEGER",            # v10 Vorgangsakte
+        "extern_pdf_pfad": "VARCHAR(300) NOT NULL DEFAULT ''",   # v10 TAIFUN-PDF
+        "extern_pdf_am": "DATETIME",
         "rabatt_cent": "INTEGER",
         "rabatt_prozent": "FLOAT",
         "rabatt_bezeichnung": "VARCHAR(200) NOT NULL DEFAULT ''",

@@ -216,6 +216,13 @@ def _daten() -> list[str]:
                 meldungen.append(f"Verfolgung auf Vorgangsebene übernommen "
                                  f"({uebernommen} Vorgänge; Ampel = heißeste, "
                                  "Wiedervorlage = früheste zukünftige)")
+        # Phase 61: Startwerte Kombi-Versand (Vorlage + Gewerke-Artikel)
+        from app import kombi_versand as kombi_modul
+        if einstellung_holen(session, "gewerke_artikel", "") == "":
+            einstellung_setzen(session, "gewerke_artikel",
+                               kombi_modul.GEWERKE_ARTIKEL_START)
+            meldungen.append("Gewerkeübergreifende Artikel vorbelegt "
+                             f"({kombi_modul.GEWERKE_ARTIKEL_START})")
         # Phase 60: bestehende Verfolgungs-Notizen der Angebote als
         # Alt-Einträge in den Vorgangs-Chat kopieren (mit Herkunftsvermerk)
         from app.models import AngebotsNotiz, VorgangsNotiz

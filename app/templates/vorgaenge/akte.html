@@ -83,13 +83,33 @@
 {% endif %}
 
 <h2>Angebote</h2>
+{% if gewerke_hinweise %}
+<div class="warnblock">
+    <strong>⚠ Gewerkeübergreifende Artikel (Mehr-Sparten-Vorgang)</strong>
+    <ul>{% for h in gewerke_hinweise %}<li>{{ h }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
 {% if angebote %}
+{% set kombi_erlaubt = benutzer.rolle in ('admin', 'innendienst') %}
+<form method="post" action="/vorgaenge/{{ vorgang.id }}/kombi-versand" id="kombiform"
+      onsubmit="return confirm('Gewählte Angebote in EINER Mail (je ein PDF) als Entwurf vorbereiten?');">
 <table class="tabelle">
-    <thead><tr><th>Nummer</th><th>Sparte</th><th>Status</th><th class="rechts">Endbetrag</th><th>Datum</th><th></th></tr></thead>
+    <thead><tr>{% if kombi_erlaubt %}<th title="Für den Kombi-Versand auswählen">✉</th>{% endif %}
+        <th>Nummer</th><th>Sparte</th><th>Status</th><th class="rechts">Endbetrag</th><th>Datum</th><th></th></tr></thead>
     <tbody>
     {% for a in angebote %}
+        {% set waehlbar, grund = kombi_info[a.id] %}
         <tr class="{{ 'dezent' if a.status == 'Überholt' }}">
+            {% if kombi_erlaubt %}
+            <td>{% if waehlbar %}
+                    <input type="checkbox" name="angebot_ids" value="{{ a.id }}"
+                           title="Für den Kombi-Versand auswählen">
+                {% else %}
+                    <span class="dezent" title="{{ grund }}">–</span>
+                {% endif %}</td>
+            {% endif %}
             <td>{% if a.extern %}<span class="abzeichen">TAIFUN</span> {{ a.taifun_nummer or a.nummer }}
+                {% if a.extern_pdf_pfad %}<span class="abzeichen" title="PDF hinterlegt (Kombi-fähig)">PDF ✓</span>{% endif %}
                 {% else %}{{ a.nummer }}{% endif %}
                 {% if '.' in a.nummer and a.stamm_nummer != a.nummer %}<span class="abzeichen" title="Version">v{{ a.nummer.rpartition('.')[2] }}</span>{% endif %}</td>
             <td>{{ sparten_ui.chip(a.konfigurator_typ or 'WP') }}</td>
@@ -108,6 +128,17 @@
     {% endfor %}
     </tbody>
 </table>
+{% if kombi_erlaubt %}
+<div class="formaktionen">
+    <button class="knopf" type="submit">Gemeinsam versenden (eine Mail, mehrere PDFs)</button>
+    <span class="dezent">Wählbar: Entwurf/Versand vorbereitet; TAIFUN nur mit hinterlegtem PDF.
+        Der Einzelversand über das Angebot bleibt unverändert.</span>
+    {% if kombi_doppelt %}
+        <span class="abzeichen ep" title="Diese Artikelnummern sind in mehreren Tool-Angeboten voll berechnet – ggf. Alternativ-Kennzeichen setzen">⚠ doppelt: {{ kombi_doppelt | join(', ') }}</span>
+    {% endif %}
+</div>
+{% endif %}
+</form>
 {% else %}
 <p class="dezent">Noch keine Angebote.</p>
 {% endif %}

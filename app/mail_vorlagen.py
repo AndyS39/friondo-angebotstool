@@ -43,6 +43,55 @@ PLATZHALTER = [
 _MUSTER = re.compile(r"\{[a-z_]+\}")
 
 
+KOMBI_BETREFF = "Ihre Angebote {angebotsnummern} – Friondo GmbH"
+KOMBI_TEXT = (
+    "{briefanrede}\n\n"
+    "vielen Dank für Ihr Interesse an unseren Energielösungen. Wie besprochen "
+    "erhalten Sie anbei Ihre Angebote – jeweils als eigenes PDF:\n\n"
+    "{angebotsliste}\n\n"
+    "Die Angebote sind einzeln beauftragbar; Details und Hinweise entnehmen "
+    "Sie bitte den beigefügten Unterlagen.\n\n"
+    "Bei Fragen sind wir gerne für Sie da.\n\n"
+    "Mit freundlichen Grüßen\n{absender}\nFriondo GmbH\n\n"
+    "Ihr Ansprechpartner im Außendienst: {vertriebler}")
+
+
+def kombi_vorlage_laden(session) -> tuple[str, str]:
+    """v10 (Phase 61): Kombi-Vorlage aus der Parametrierung, sonst Standard."""
+    from app.models import einstellung_holen
+    return (einstellung_holen(session, "kombi_vorlage_betreff", "") or KOMBI_BETREFF,
+            einstellung_holen(session, "kombi_vorlage_text", "") or KOMBI_TEXT)
+
+
+def angebotsliste_text(session, angebote) -> str:
+    """{angebotsliste}: je Zeile Sparte, Angebotsnummer und Endbetrag; bei WP
+    zusätzlich der Eigenanteil nach Förderung. Bewusst KEINE Gesamtsumme."""
+    from app.pdf_export import _euro_betrag
+    zeilen = []
+    for angebot in angebote:
+        kunde = None
+        werte = werte_fuer_angebot(session, angebot, kunde)
+        sparte = angebot.konfigurator_typ or "WP"
+        nummer = (angebot.taifun_nummer or angebot.nummer) if angebot.extern else angebot.nummer
+        zeile = (f"• {sparte}-Angebot {nummer} – "
+                 f"Endbetrag: {_euro_betrag(angebot.summen()['endbetrag'])} €")
+        if sparte == "WP" and not angebot.extern and werte.get("eigenanteil", "–") != "–":
+            zeile += f" (Eigenanteil nach Förderung: {werte['eigenanteil']})"
+        zeilen.append(zeile)
+    return "\n".join(zeilen)
+
+
+def kombi_mail_fuer_vorgang(session, angebote, kunde,
+                            absender_name: str = "") -> tuple[str, str]:
+    """Fertiger Betreff + HTML-Text für den Kombi-Versand (Phase 61)."""
+    betreff, text = kombi_vorlage_laden(session)
+    basis = werte_fuer_angebot(session, angebote[0], kunde, absender_name)
+    basis["angebotsnummern"] = ", ".join(
+        (a.taifun_nummer or a.nummer) if a.extern else a.nummer for a in angebote)
+    basis["angebotsliste"] = angebotsliste_text(session, angebote)
+    return (einsetzen(betreff, basis), einsetzen_html(als_html(text), basis))
+
+
 def ist_html(text: str) -> bool:
     return "<" in text and ">" in text
 

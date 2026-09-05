@@ -114,21 +114,21 @@ die Notizen – und er ist die Einheit für den gemeinsamen Versand.
 - [x] migrate.py: Vorgangs-Verfolgung, Notizen-Tabelle, Gelesen-Marker
 
 ## Phase 61 – Kombi-Versand
-- [ ] In der Akte: Auswahl mehrerer versandfertiger Angebote (Entwurf/
+- [x] In der Akte: Auswahl mehrerer versandfertiger Angebote (Entwurf/
       Versand vorbereitet; TAIFUN-Einträge nur mit hinterlegtem PDF) →
       „Gemeinsam versenden"
-- [ ] Eine Mail, mehrere PDF-Anhänge: Betreff „Ihre Angebote <Nr1>,
+- [x] Eine Mail, mehrere PDF-Anhänge: Betreff „Ihre Angebote <Nr1>,
       <Nr2> – Friondo GmbH"; neue Kombi-Vorlage in der Parametrierung
       mit Platzhaltern {angebotsliste} (je Zeile: Sparte, Angebotsnummer,
       Endbetrag; bei WP zusätzlich „Eigenanteil nach Förderung: …"),
       {briefanrede}, {vertriebler} usw.; KEINE Gesamtsumme
-- [ ] Profil-/Versandregeln des Vorgangs gelten (Enni-CC, SWD-Empfänger
+- [x] Profil-/Versandregeln des Vorgangs gelten (Enni-CC, SWD-Empfänger
       leer, Mehrfach-BCC); Broschüren-Anhänge über alle Angebote
       dedupliziert (allgemeine einmal, produktspezifische je Sparte)
-- [ ] Versand-Erkennung: setzt alle enthaltenen Angebote auf „Versendet"
+- [x] Versand-Erkennung: setzt alle enthaltenen Angebote auf „Versendet"
       (inkl. Rückspielung), Konversation wird allen zugeordnet;
       Brief-Symbol an Vorgang und Angeboten
-- [ ] Alternativ-Kennzeichen je Position im Editor: „Alternativ – in
+- [x] Alternativ-Kennzeichen je Position im Editor: „Alternativ – in
       anderem Angebot enthalten" mit Verknüpfung (Auswahl aus Angeboten
       des Vorgangs oder Freitext, z. B. „PV-Angebot"); Darstellung wie
       EP (Preis ausgewiesen, nicht in Summe/KfW-Basis/DB), automatischer
@@ -137,18 +137,18 @@ die Notizen – und er ist die Einheit für den gemeinsamen Versand.
       Tragen, wenn ausschließlich das vorliegende Angebot beauftragt
       wird."; Kennzeichen jederzeit entfernbar (Position zählt dann
       wieder voll)
-- [ ] Parametrierung „Gewerkeübergreifende Artikel" (Startbestückung:
+- [x] Parametrierung „Gewerkeübergreifende Artikel" (Startbestückung:
       Pos. 014/015/016/017, 104, Z22, 152, Z23 – Liste pflegbar);
       fachlicher Hinweis am Vorgang, wenn er mehrere Sparten hat und
       ein solcher Artikel in einem Tool-Angebot VOLL berechnet ist:
       „Prüfen: ggf. ins PV-Angebot verlagern oder Alternativ-Kennzeichen
       setzen (Förder-/USt-Optimierung)"
-- [ ] Kombi-Versand-Warnung, wenn dieselbe Artikelnummer in mehreren
+- [x] Kombi-Versand-Warnung, wenn dieselbe Artikelnummer in mehreren
       angehängten Tool-Angeboten voll berechnet ist (TAIFUN-PDFs sind
       nicht prüfbar – Hinweis in docs)
-- [ ] migrate.py: Alternativ-Kennzeichen + Verknüpfungsfeld
-- [ ] Einzelversand bleibt unverändert möglich
-- [ ] Tests: Kombi aus WP-Tool-Angebot + PV-TAIFUN-Eintrag (mit PDF) →
+- [x] migrate.py: Alternativ-Kennzeichen + Verknüpfungsfeld
+- [x] Einzelversand bleibt unverändert möglich
+- [x] Tests: Kombi aus WP-Tool-Angebot + PV-TAIFUN-Eintrag (mit PDF) →
       1 Mail, 2 Angebots-PDFs + deduplizierte Broschüren, beide auf
       „Versendet", monday-Wert = Summe; WP-Angebot mit HEMS als
       Alternativ-Kennzeichen → nicht in Summe/KfW/DB, Vermerk im PDF,

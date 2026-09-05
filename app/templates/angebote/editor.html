@@ -332,6 +332,7 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
                 <td class="rechts">
                     {% if p.bauseits %}<span class="dezent">bauseits</span>
                     {% elif p.ep_flag %}EP.
+                    {% elif p.alternativ %}<span class="dezent" title="Alternativ – enthalten in: {{ p.alternativ_zu or 'Parallel-Angebot' }}">Altern.</span>
                     {% else %}{{ p.gesamt_cent | euro }}{% endif %}
                 </td>
                 <td class="aktionen">
@@ -341,6 +342,13 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
                             <input type="checkbox" name="ep_flag" {{ 'checked' if p.ep_flag }} onchange="this.form.submit()"> EP</label>
                         <label class="kontrollfeld" title="bauseits: Leistung durch den Kunden – PDF zeigt „bauseits“, zählt nicht in Summe/KfW/DB">
                             <input type="checkbox" name="bauseits" {{ 'checked' if p.bauseits }} onchange="this.form.submit()"> bauseits</label>
+                        <label class="kontrollfeld" title="Alternativ – in anderem Angebot des Vorgangs enthalten: Preis ausgewiesen, zählt nicht in Summe/KfW/DB; automatischer Vermerk im PDF">
+                            <input type="checkbox" name="alternativ" {{ 'checked' if p.alternativ }} onchange="this.form.submit()"> Alt.</label>
+                        {% if p.alternativ or geschwister %}
+                        <input type="text" name="alternativ_zu" size="16" list="geschwisterliste"
+                               value="{{ p.alternativ_zu }}" placeholder="enthalten in …"
+                               title="Verknüpfung: Angebot des Vorgangs wählen oder Freitext (z. B. „PV-Angebot“)">
+                        {% endif %}
                         <button class="knopf klein" type="submit" title="Änderungen übernehmen">✓</button>
                     </form>
                     <form method="post" action="/angebote/{{ angebot.id }}/position/{{ p.id }}/entfernen">
@@ -353,6 +361,9 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
         </tbody>
     </table>
 {% endfor %}
+<datalist id="geschwisterliste">
+    {% for g in geschwister %}<option value="{{ g }}">{% endfor %}
+</datalist>
 
 <table class="tabelle zusammenfassung summenblock">
     <tr><th>Netto-Summe</th><td class="rechts">{{ summen.netto | euro }}</td></tr>

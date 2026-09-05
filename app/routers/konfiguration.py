@@ -35,6 +35,13 @@ async def uebersicht(request: Request, session: Session = Depends(get_session)):
                   mail_absender=einstellung_holen(session, "mail_absender", "angebot@friondo.de"),
                   mail_postfach=einstellung_holen(session, "mail_postfach", "angebot@friondo.de"),
                   mail_bcc=einstellung_holen(session, "mail_bcc", ""),
+                  gewerke_artikel=einstellung_holen(
+                      session, "gewerke_artikel",
+                      __import__("app.kombi_versand", fromlist=["x"]).GEWERKE_ARTIKEL_START),
+                  kombi_betreff=einstellung_holen(session, "kombi_vorlage_betreff", "")
+                  or __import__("app.mail_vorlagen", fromlist=["x"]).KOMBI_BETREFF,
+                  kombi_text=einstellung_holen(session, "kombi_vorlage_text", "")
+                  or __import__("app.mail_vorlagen", fromlist=["x"]).KOMBI_TEXT,
                   sync_status=mail_sync.status,
                   loeschungen=(session.query(AngebotsLoeschung)
                                .order_by(AngebotsLoeschung.geloescht_am.desc())
@@ -65,6 +72,15 @@ async def einstellungen_speichern(request: Request,
     if "mail_formular" in form:
         for name in ("mail_absender", "mail_postfach", "mail_bcc"):
             einstellung_setzen(session, name, (form.get(name) or "").strip().lower())
+    # v10 (Phase 61): gewerkeübergreifende Artikel + Kombi-Vorlage
+    if "gewerke_formular" in form:
+        einstellung_setzen(session, "gewerke_artikel",
+                           (form.get("gewerke_artikel") or "").strip())
+    if "kombi_formular" in form:
+        einstellung_setzen(session, "kombi_vorlage_betreff",
+                           (form.get("kombi_vorlage_betreff") or "").strip())
+        einstellung_setzen(session, "kombi_vorlage_text",
+                           (form.get("kombi_vorlage_text") or "").strip())
     # Abgelehnt-Prozess (v8): Frist des täglichen Prüflaufs
     if "ablehnung_formular" in form:
         tage = (form.get("ablehnung_auto_tage") or "").strip()
