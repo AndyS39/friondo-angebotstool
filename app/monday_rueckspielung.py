@@ -23,7 +23,12 @@ def _protokollieren(angebot: Angebot, status: str, text: str) -> None:
 
 
 def lead_fuer_angebot(session, angebot: Angebot) -> Lead | None:
-    """Angebot → Erfassung → Lead (monday-Item)."""
+    """Angebot → Vorgang → Lead (v10); Fallback über die Erfassung."""
+    from app.models import Vorgang
+    if angebot.vorgang_id:
+        vorgang = session.get(Vorgang, angebot.vorgang_id)
+        if vorgang is not None and vorgang.lead_id:
+            return session.get(Lead, vorgang.lead_id)
     erfassung = (session.query(Erfassung)
                  .filter(Erfassung.angebot_id == angebot.id).first())
     if erfassung is None:
@@ -31,23 +36,55 @@ def lead_fuer_angebot(session, angebot: Angebot) -> Lead | None:
     return session.query(Lead).filter(Lead.erfassung_id == erfassung.id).first()
 
 
-def _betrag(angebot: Angebot, basis: str) -> str:
-    """Deal-Wert als Zahl mit Punkt (monday numbers-Spalte), 2 Nachkommastellen.
-    Externe TAIFUN-Einträge (v7) kennen nur den Endbetrag brutto."""
-    summen = angebot.summen()
-    cent = (summen["endbetrag"] if angebot.extern
-            else (summen["netto"] if basis == "netto" else summen["endbetrag"]))
+# Status, die in die Vorgangssumme zählen (v10, Phase 62): versendet oder
+# angenommen – nicht überholt, nicht abgelehnt, keine Entwürfe
+_SUMMEN_STATUS = ("Versendet", "Versendet (extern)", "Angenommen")
+
+
+def vorgangssumme_cent(session, angebot: Angebot, basis: str) -> int:
+    """v10 (Phase 62): Deal-Wert = Summe der Endbeträge ALLER versendeten,
+    nicht überholten, nicht abgelehnten Angebote des Vorgangs. Externe
+    TAIFUN-Einträge kennen nur den Endbetrag brutto (auch bei Basis netto)."""
+    angebote = [angebot]
+    if angebot.vorgang_id:
+        angebote = (session.query(Angebot)
+                    .filter(Angebot.vorgang_id == angebot.vorgang_id).all())
+    summe = 0
+    for a in angebote:
+        if a.status not in _SUMMEN_STATUS:
+            continue
+        summen = a.summen()
+        summe += (summen["endbetrag"] if a.extern
+                  else (summen["netto"] if basis == "netto" else summen["endbetrag"]))
+    if summe == 0 and angebot.status in _SUMMEN_STATUS:
+        summen = angebot.summen()
+        summe = (summen["endbetrag"] if angebot.extern
+                 else (summen["netto"] if basis == "netto" else summen["endbetrag"]))
+    return summe
+
+
+def _betrag(angebot: Angebot, basis: str, session=None) -> str:
+    """Deal-Wert als Zahl mit Punkt (monday numbers-Spalte), 2 Nachkommastellen."""
+    if session is not None:
+        cent = vorgangssumme_cent(session, angebot, basis)
+    else:
+        summen = angebot.summen()
+        cent = (summen["endbetrag"] if angebot.extern
+                else (summen["netto"] if basis == "netto" else summen["endbetrag"]))
     return str((Decimal(cent) / 100).quantize(Decimal("0.01")))
 
 
-def spaltenwerte_bauen(quelle: MondayQuelle, angebot: Angebot) -> dict:
-    """column_values für change_multiple_column_values (ohne Gruppenwechsel)."""
+def spaltenwerte_bauen(quelle: MondayQuelle, angebot: Angebot,
+                       session=None) -> dict:
+    """column_values für change_multiple_column_values (ohne Gruppenwechsel).
+    v10: Mit session wird der Deal-Wert als Vorgangssumme berechnet."""
     werte: dict = {}
     if quelle.rueck_modus == "status" and quelle.rueck_status_spalte:
         werte[quelle.rueck_status_spalte] = {"label": quelle.rueck_status_wert
                                              or "Angebot versendet"}
     if quelle.rueck_wert_spalte:
-        werte[quelle.rueck_wert_spalte] = _betrag(angebot, quelle.rueck_wert_basis)
+        werte[quelle.rueck_wert_spalte] = _betrag(angebot, quelle.rueck_wert_basis,
+                                                  session)
     return werte
 
 
@@ -70,7 +107,7 @@ def uebertragen(session, angebot: Angebot) -> bool:
         return True
     try:
         getan: list[str] = []
-        werte = spaltenwerte_bauen(quelle, angebot)
+        werte = spaltenwerte_bauen(quelle, angebot, session)
         if werte:
             monday_sync._api(
                 "mutation($board: ID!, $item: ID!, $werte: JSON!) {"
@@ -81,8 +118,8 @@ def uebertragen(session, angebot: Angebot) -> bool:
             if quelle.rueck_modus == "status":
                 getan.append(f"Status „{quelle.rueck_status_wert}“")
             if quelle.rueck_wert_spalte:
-                getan.append(f"Deal-Wert {_betrag(angebot, quelle.rueck_wert_basis)} "
-                             f"({quelle.rueck_wert_basis})")
+                getan.append(f"Deal-Wert {_betrag(angebot, quelle.rueck_wert_basis, session)} "
+                             f"({quelle.rueck_wert_basis}, Vorgangssumme)")
         if quelle.rueck_modus == "gruppe" and quelle.rueck_gruppe_id:
             monday_sync._api(
                 "mutation($item: ID!, $gruppe: String!) {"
@@ -102,6 +139,41 @@ def uebertragen(session, angebot: Angebot) -> bool:
         _protokollieren(angebot, "fehler", f"FEHLER: {problem}")
         session.commit()
         return False
+
+
+def wert_aktualisieren(session, angebot: Angebot, anlass: str = "",
+                       protokoll: bool = True) -> None:
+    """v10 (Phase 62): Deal-Wert nach neuer Vorgangssummen-Logik neu schreiben
+    (bei Versionierung, Ablehnung, Löschung) – nur die Wert-Spalte, kein
+    Status-/Gruppenwechsel; Fehler blockieren nie."""
+    try:
+        lead = lead_fuer_angebot(session, angebot)
+        if lead is None or not lead.monday_item_id:
+            return
+        quelle = (session.query(MondayQuelle)
+                  .filter(MondayQuelle.board_id == lead.board_id).first())
+        if quelle is None or quelle.rueck_modus == "aus" or not quelle.rueck_wert_spalte:
+            return
+        betrag = _betrag(angebot, quelle.rueck_wert_basis, session)
+        monday_sync._api(
+            "mutation($board: ID!, $item: ID!, $werte: JSON!) {"
+            " change_multiple_column_values(board_id: $board, item_id: $item,"
+            "  column_values: $werte) { id } }",
+            {"board": lead.board_id, "item": lead.monday_item_id,
+             "werte": json.dumps({quelle.rueck_wert_spalte: betrag})})
+        if protokoll:
+            _protokollieren(angebot, "ok",
+                            f"OK – Deal-Wert auf {betrag} aktualisiert"
+                            + (f" ({anlass})" if anlass else "") + " (Vorgangssumme).")
+            session.commit()
+    except Exception as problem:
+        try:
+            if protokoll:
+                _protokollieren(angebot, "fehler",
+                                f"FEHLER Deal-Wert-Aktualisierung: {problem}")
+                session.commit()
+        except Exception:
+            pass
 
 
 def bei_versand(session, angebot: Angebot) -> None:

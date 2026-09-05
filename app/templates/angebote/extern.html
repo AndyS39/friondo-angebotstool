@@ -79,18 +79,35 @@ Statuspflege (Angenommen/Abgelehnt), Verfolgung und Notizen laufen hier weiter.<
     <button class="knopf klein" type="submit">Speichern</button>
 </form>
 
+{# v10 (Phase 62): TAIFUN-PDF für den Kombi-Versand hinterlegen #}
+<form method="post" action="/angebote/{{ angebot.id }}/taifun-pdf" class="suchleiste"
+      enctype="multipart/form-data">
+    <strong>Angebots-PDF:</strong>
+    {% if angebot.extern_pdf_pfad %}
+        <a class="knopf klein zweitrangig" href="/angebote/{{ angebot.id }}/taifun-pdf"
+           target="_blank">PDF ansehen</a>
+        <span class="dezent">hinterlegt am {{ angebot.extern_pdf_am.strftime('%d.%m.%Y %H:%M') if angebot.extern_pdf_am }}</span>
+    {% else %}
+        <span class="abzeichen ep" title="Ohne PDF ist der Eintrag im Kombi-Versand nicht wählbar">kein PDF</span>
+    {% endif %}
+    <input type="file" name="pdf_datei" accept="application/pdf">
+    <button class="knopf klein" type="submit">{{ 'Ersetzen' if angebot.extern_pdf_pfad else 'Hochladen' }}</button>
+</form>
+<p class="dezent">Übergangslösung – Ziel ist die Erstellung im Tool. Mit
+hinterlegtem PDF kann der Eintrag im Kombi-Versand der Vorgangsakte mitgesendet werden.</p>
+
 <div class="verfolgung-block">
     <form method="post" action="/angebote/{{ angebot.id }}/verfolgung" class="suchleiste">
         <strong>Verfolgung:</strong>
         <select name="verfolgung_ampel">
-            <option value="" {{ 'selected' if not angebot.verfolgung_ampel }}>– keine Einstufung –</option>
-            <option value="heiss" {{ 'selected' if angebot.verfolgung_ampel == 'heiss' }}>🔥 heiß</option>
-            <option value="warm" {{ 'selected' if angebot.verfolgung_ampel == 'warm' }}>🌤 warm</option>
-            <option value="kalt" {{ 'selected' if angebot.verfolgung_ampel == 'kalt' }}>❄ kalt</option>
+            <option value="" {{ 'selected' if not vorgang.verfolgung_ampel }}>– keine Einstufung –</option>
+            <option value="heiss" {{ 'selected' if vorgang.verfolgung_ampel == 'heiss' }}>🔥 heiß</option>
+            <option value="warm" {{ 'selected' if vorgang.verfolgung_ampel == 'warm' }}>🌤 warm</option>
+            <option value="kalt" {{ 'selected' if vorgang.verfolgung_ampel == 'kalt' }}>❄ kalt</option>
         </select>
-        <label class="kontrollfeld">Wiedervorlage
+        <label class="kontrollfeld">Wiedervorlage (Vorgang)
             <input type="date" name="wiedervorlage_am"
-                   value="{{ angebot.wiedervorlage_am.strftime('%Y-%m-%d') if angebot.wiedervorlage_am }}"></label>
+                   value="{{ vorgang.wiedervorlage_am.strftime('%Y-%m-%d') if vorgang.wiedervorlage_am }}"></label>
         <input type="text" name="notiz" size="40" placeholder="Notiz anhängen (optional)">
         <button class="knopf klein" type="submit">Speichern</button>
     </form>

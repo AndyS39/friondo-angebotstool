@@ -206,6 +206,10 @@ async def rabatt_entscheiden(request: Request, freigabe_id: int,
     if aktion == "genehmigen" and angebot is not None:
         ziel = rabatt_anwenden(session, angebot, freigabe.rabatt_cent,
                                freigabe.rabatt_prozent, freigabe.rabatt_bezeichnung)
+        if ziel.id != angebot.id:
+            from app import monday_rueckspielung
+            monday_rueckspielung.wert_aktualisieren(session, ziel,
+                                                    "neue Version (Rabatt-Freigabe)")
         freigabe.status = "genehmigt"
         freigabe.kommentar = kommentar
         freigabe.entschieden_am = dt.now()
@@ -289,10 +293,13 @@ async def editor(request: Request, angebot_id: int,
         gruende = (session.query(AblehnungsGrund)
                    .filter(AblehnungsGrund.aktiv.is_(True))
                    .order_by(AblehnungsGrund.sort, AblehnungsGrund.id).all())
+        from app import vorgaenge as vorgaenge_modul
+        vorgang = vorgaenge_modul.vorgang_fuer_angebot(session, angebot)
+        session.commit()
         return render(request, "angebote/extern.html", aktiv="/angebote",
                       angebot=angebot, kunde=kunde, erfassung=erfassung,
                       vertriebler=vertriebler, notizen=notizen,
-                      ablehnungsgruende=gruende,
+                      ablehnungsgruende=gruende, vorgang=vorgang,
                       status_liste=EXTERN_STATUS,
                       meldung=request.query_params.get("meldung", ""))
     # Bearbeitungssperre: Erster im Editor hält das Angebot, andere lesen nur
@@ -1068,7 +1075,60 @@ async def status_aendern(request: Request, angebot_id: int,
         if neuer_status == "Versendet" and alter_status != "Versendet":
             from app import monday_rueckspielung
             monday_rueckspielung.bei_versand(session, angebot)
+        # v10 (Phase 62): Ablehnung senkt die Vorgangssumme → Wert neu schreiben
+        elif (neuer_status == "Abgelehnt"
+              and alter_status in ("Versendet", "Versendet (extern)", "Angenommen")):
+            from app import monday_rueckspielung
+            monday_rueckspielung.wert_aktualisieren(session, angebot, "Ablehnung")
     return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+
+
+@router.post("/{angebot_id}/taifun-pdf")
+async def taifun_pdf_hochladen(request: Request, angebot_id: int,
+                               session: Session = Depends(get_session)):
+    """v10 (Phase 62): PDF-Upload am externen TAIFUN-Eintrag (ersetzbar, mit
+    Zeitstempel) – Übergangslösung, damit Kombi-Mails alle Angebote enthalten;
+    Ziel bleibt die Erstellung im Tool."""
+    from datetime import datetime as dt
+    from urllib.parse import quote_plus
+
+    from app import config
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None or not angebot.extern:
+        return RedirectResponse("/angebote", status_code=303)
+    form = await request.form()
+    datei = form.get("pdf_datei")
+    if datei is None or not getattr(datei, "filename", ""):
+        return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+            "Bitte eine PDF-Datei auswählen."), status_code=303)
+    inhalt = await datei.read()
+    if not inhalt.startswith(b"%PDF"):
+        return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+            "Die Datei ist kein PDF."), status_code=303)
+    ordner = config.ANGEBOTE_PDF_ORDNER / "extern"
+    ordner.mkdir(parents=True, exist_ok=True)
+    ziel = ordner / f"{angebot.nummer}.pdf"
+    ziel.write_bytes(inhalt)
+    ersetzt = bool(angebot.extern_pdf_pfad)
+    angebot.extern_pdf_pfad = str(ziel)
+    angebot.extern_pdf_am = dt.now()
+    session.commit()
+    return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+        ("PDF ersetzt" if ersetzt else "PDF hinterlegt")
+        + " – der Eintrag ist jetzt im Kombi-Versand wählbar."), status_code=303)
+
+
+@router.get("/{angebot_id}/taifun-pdf")
+async def taifun_pdf_anzeigen(angebot_id: int, session: Session = Depends(get_session)):
+    """Hinterlegtes TAIFUN-PDF anzeigen."""
+    from pathlib import Path as _Path
+    angebot = session.get(Angebot, angebot_id)
+    if (angebot is None or not angebot.extern or not angebot.extern_pdf_pfad
+            or not _Path(angebot.extern_pdf_pfad).exists()):
+        return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+    return FileResponse(angebot.extern_pdf_pfad, media_type="application/pdf",
+                        content_disposition_type="inline",
+                        filename=f"{angebot.taifun_nummer or angebot.nummer}.pdf")
 
 
 @router.post("/{angebot_id}/taifun-nummer")
@@ -1137,8 +1197,14 @@ async def loeschen(request: Request, angebot_id: int,
         if erfassung.status == "In Bearbeitung":
             erfassung.status = "Neu"
     session.query(AngebotsMail).filter(AngebotsMail.angebot_id == angebot.id).delete()
+    war_in_summe = angebot.status in ("Versendet", "Versendet (extern)", "Angenommen")
     session.delete(angebot)   # Positionen per Cascade
     session.commit()
+    if war_in_summe:
+        # v10 (Phase 62): Vorgangssumme ohne das gelöschte Angebot schreiben
+        from app import monday_rueckspielung
+        monday_rueckspielung.wert_aktualisieren(session, angebot, "Löschung",
+                                                protokoll=False)
     from app import config
     Path(config.ANGEBOTE_PDF_ORDNER / f"{nummer}.pdf").unlink(missing_ok=True)
     benutzer = request.state.benutzer
@@ -1189,6 +1255,10 @@ async def ueberarbeiten(request: Request, angebot_id: int,
     version = angebot_aufbau.version_erzeugen(session, original)
     neue_nummer = version.nummer
     session.commit()
+    # v10 (Phase 62): monday-Deal-Wert folgt der Vorgangssumme (Original
+    # zählt als „Überholt" nicht mehr mit)
+    from app import monday_rueckspielung
+    monday_rueckspielung.wert_aktualisieren(session, version, "neue Version")
     return RedirectResponse(f"/angebote/{version.id}?meldung=" + quote_plus(
         f"Version {neue_nummer} als Entwurf erstellt – {original.nummer} ist "
         "jetzt „Überholt“."), status_code=303)

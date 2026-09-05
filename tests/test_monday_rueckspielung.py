@@ -55,7 +55,9 @@ class TestRueckspielung(unittest.TestCase):
         # 10.000 netto + 19 % = 11.900 − 500 Rabatt = 11.400,00 Endbetrag
         self.assertEqual(werte["numbers_1"], "11400.00")
         self.assertIn("OK", self.angebot.monday_rueck_protokoll)
-        self.assertIn("Deal-Wert 11400.00 (brutto)", self.angebot.monday_rueck_protokoll)
+        # v10 (Phase 62): der Deal-Wert ist die Vorgangssumme
+        self.assertIn("Deal-Wert 11400.00 (brutto, Vorgangssumme)",
+                      self.angebot.monday_rueck_protokoll)
 
     def test_deal_wert_netto(self):
         self.quelle.rueck_wert_basis = "netto"; self.s.commit()

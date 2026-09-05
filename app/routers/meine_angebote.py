@@ -208,6 +208,9 @@ async def rabatt(request: Request, angebot_id: int,
             "Der Rabatt würde die DB-Ampel auf Rot drücken – Freigabe-Anfrage "
             "an den Innendienst gestellt."), status_code=303)
     ziel = rabatt_anwenden(session, angebot, cent, prozent, bezeichnung)
+    if ziel.id != angebot.id:
+        from app import monday_rueckspielung
+        monday_rueckspielung.wert_aktualisieren(session, ziel, "neue Version (AD-Rabatt)")
     vorgaenge_modul.notiz_anlegen(
         session, vorgang.id, benutzer,
         f"Rabatt {rabatt_text} auf {ziel.nummer} gesetzt"

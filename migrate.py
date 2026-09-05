@@ -216,6 +216,14 @@ def _daten() -> list[str]:
                 meldungen.append(f"Verfolgung auf Vorgangsebene übernommen "
                                  f"({uebernommen} Vorgänge; Ampel = heißeste, "
                                  "Wiedervorlage = früheste zukünftige)")
+        # Phase 62: Deal-Werte werden NICHT automatisch nach monday
+        # geschrieben – der Innendienst sichtet den Trockenlauf und bestätigt:
+        # scripts\monday_deal_werte.py (bzw. --ausfuehren). Einmaliger Hinweis.
+        if einstellung_holen(session, "migration_v10_dealwerte_hinweis", "") != "erledigt":
+            einstellung_setzen(session, "migration_v10_dealwerte_hinweis", "erledigt")
+            meldungen.append("HINWEIS: monday-Deal-Werte laufen jetzt als "
+                             "VORGANGSSUMME – Bestand einmalig prüfen/schreiben mit "
+                             "scripts\\monday_deal_werte.py (Trockenlauf, dann --ausfuehren)")
         # Phase 61: Startwerte Kombi-Versand (Vorlage + Gewerke-Artikel)
         from app import kombi_versand as kombi_modul
         if einstellung_holen(session, "gewerke_artikel", "") == "":

@@ -156,16 +156,16 @@ die Notizen – und er ist die Einheit für den gemeinsamen Versand.
       bei Mehr-Sparten-Vorgang mit voll berechnetem HEMS
 
 ## Phase 62 – TAIFUN-PDF & monday-Summenlogik
-- [ ] Externer Angebotseintrag: PDF-Upload (ersetzbar, mit Zeitstempel);
+- [x] Externer Angebotseintrag: PDF-Upload (ersetzbar, mit Zeitstempel);
       UI-Hinweis „Übergangslösung – Ziel ist die Erstellung im Tool";
       ohne PDF ist der Eintrag im Kombi-Versand nicht wählbar (Tooltip)
-- [ ] monday-Rückspielung umstellen: Deal-Wert = Summe der Endbeträge
+- [x] monday-Rückspielung umstellen: Deal-Wert = Summe der Endbeträge
       aller versendeten, nicht überholten, nicht abgelehnten Angebote
       des Vorgangs; Neuberechnung bei Versand, Versionierung, Ablehnung,
       Löschung; Protokoll wie gehabt
-- [ ] Migration: Deal-Werte der aktiven Vorgänge einmalig nach neuer
+- [x] Migration: Deal-Werte der aktiven Vorgänge einmalig nach neuer
       Summenlogik aktualisieren (Trockenlauf-Liste zur Bestätigung)
-- [ ] migrate.py: PDF-Feld extern, Summen-Trigger
+- [x] migrate.py: PDF-Feld extern, Summen-Trigger
 
 ## Phase 63 – Statistik, Abnahme & Rollout
 - [ ] Statistik: Kombiquote (Anteil Vorgänge mit >1 versendeter Sparte),
