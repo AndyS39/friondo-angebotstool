@@ -158,6 +158,88 @@ def kennzahlen(session: Session, von: datetime, bis: datetime,
             "je_sparte": je_sparte}
 
 
+def vorgangs_kennzahlen(session: Session, von: datetime, bis: datetime,
+                        nur_benutzer_id: int | None = None) -> dict:
+    """v10 (Phase 63): Kennzahlen je Vorgang – Kombiquote (Anteil der Vorgänge
+    mit mehr als einer versendeten Sparte) und Auftragswert je Vorgang
+    (Durchschnitt der Summe angenommener Angebote je Vorgang)."""
+    zuordnung = _vertriebler_map(session)
+    versendet_je_vorgang: dict[int, set[str]] = {}
+    angenommen_je_vorgang: dict[int, int] = {}
+    for a in session.query(Angebot).filter(Angebot.vorgang_id.isnot(None)):
+        if a.status == "Überholt":
+            continue
+        if nur_benutzer_id is not None and zuordnung.get(a.id) != nur_benutzer_id:
+            continue
+        sparte = a.konfigurator_typ or "WP"
+        if a.versendet_am and von <= a.versendet_am < bis:
+            versendet_je_vorgang.setdefault(a.vorgang_id, set()).add(sparte)
+        if a.angenommen_am and von <= a.angenommen_am < bis:
+            angenommen_je_vorgang[a.vorgang_id] = (
+                angenommen_je_vorgang.get(a.vorgang_id, 0)
+                + a.summen()["endbetrag"])
+    kombi = sum(1 for sparten in versendet_je_vorgang.values() if len(sparten) > 1)
+    gesamt_versendet = len(versendet_je_vorgang)
+    gesamt_angenommen = len(angenommen_je_vorgang)
+    return {
+        "vorgaenge_versendet": gesamt_versendet,
+        "vorgaenge_kombi": kombi,
+        "kombiquote": (kombi / gesamt_versendet * 100) if gesamt_versendet else 0.0,
+        "vorgaenge_angenommen": gesamt_angenommen,
+        "auftragswert_gesamt": sum(angenommen_je_vorgang.values()),
+        "auftragswert_je_vorgang": (sum(angenommen_je_vorgang.values())
+                                    // gesamt_angenommen) if gesamt_angenommen else 0,
+    }
+
+
+def auftragseingang_monate(session: Session, monate: int = 12, ad_id: int = 0,
+                           kanal: str = "", sparte: str = "",
+                           quelle: str = "",
+                           nur_benutzer_id: int | None = None) -> list[dict]:
+    """v10 (Phase 63): Auftragseingang je Monat – Summe der Endbeträge aller
+    im jeweiligen Monat auf „Angenommen" gesetzten Angebote (Statuszeitpunkt),
+    filterbar nach Vertriebler, Kanal, Sparte und Tool/TAIFUN."""
+    zuordnung = _vertriebler_map(session)
+    kunden = {k.id: k for k in session.query(Kunde)}
+    heute = date.today()
+    start_monat = (heute.year, heute.month)
+    reihen: dict[tuple[int, int], dict] = {}
+    jahr, monat = start_monat
+    for _ in range(monate):
+        reihen[(jahr, monat)] = {"jahr": jahr, "monat": monat,
+                                 "summe": 0, "anzahl": 0}
+        monat -= 1
+        if monat == 0:
+            jahr, monat = jahr - 1, 12
+    for a in session.query(Angebot).filter(Angebot.angenommen_am.isnot(None)):
+        if a.status == "Überholt":
+            continue
+        schluessel = (a.angenommen_am.year, a.angenommen_am.month)
+        if schluessel not in reihen:
+            continue
+        a_ad = zuordnung.get(a.id)
+        if nur_benutzer_id is not None and a_ad != nur_benutzer_id:
+            continue
+        if ad_id and a_ad != ad_id:
+            continue
+        if kanal and (a.kunde_id not in kunden
+                      or kunden[a.kunde_id].vertriebskanal != kanal):
+            continue
+        if sparte and (a.konfigurator_typ or "WP") != sparte:
+            continue
+        if quelle == "tool" and a.extern:
+            continue
+        if quelle == "taifun" and not a.extern:
+            continue
+        reihen[schluessel]["summe"] += a.summen()["endbetrag"]
+        reihen[schluessel]["anzahl"] += 1
+    ergebnis = sorted(reihen.values(), key=lambda r: (r["jahr"], r["monat"]))
+    maximum = max((r["summe"] for r in ergebnis), default=0)
+    for r in ergebnis:
+        r["prozent"] = (r["summe"] / maximum * 100) if maximum else 0
+    return ergebnis
+
+
 def ablehnungsgruende_verteilung(session: Session, von: datetime, bis: datetime,
                                  nur_benutzer_id=None, ad_id: int = 0,
                                  kanal: str = "", sparte: str = "") -> list[tuple[str, int]]:
@@ -187,7 +269,9 @@ def ablehnungsgruende_verteilung(session: Session, von: datetime, bis: datetime,
 @router.get("")
 async def seite(request: Request, zeitraum: str = "monat", von: str = "",
                 bis: str = "", grund_ad: int = 0, grund_kanal: str = "",
-                grund_sparte: str = "", session: Session = Depends(get_session)):
+                grund_sparte: str = "", ae_ad: int = 0, ae_kanal: str = "",
+                ae_sparte: str = "", ae_quelle: str = "",
+                session: Session = Depends(get_session)):
     benutzer = request.state.benutzer
     start, ende, zeitraum = _zeitraum(zeitraum, von, bis)
     nur = benutzer.id if benutzer.rolle == "aussendienst" else None
@@ -195,6 +279,10 @@ async def seite(request: Request, zeitraum: str = "monat", von: str = "",
     grund_zeilen = ablehnungsgruende_verteilung(
         session, start, ende, nur_benutzer_id=nur,
         ad_id=grund_ad, kanal=grund_kanal, sparte=grund_sparte)
+    vorgaenge = vorgangs_kennzahlen(session, start, ende, nur_benutzer_id=nur)
+    auftragseingang = auftragseingang_monate(
+        session, ad_id=ae_ad, kanal=ae_kanal, sparte=ae_sparte,
+        quelle=ae_quelle, nur_benutzer_id=nur)
     benutzer_map = {b.id: b for b in session.query(Benutzer)}
     ad_zeilen = sorted(daten["je_ad"].items(),
                        key=lambda kv: benutzer_map[kv[0]].name
@@ -209,6 +297,9 @@ async def seite(request: Request, zeitraum: str = "monat", von: str = "",
                   kanal_zeilen=kanal_zeilen, sparten_zeilen=sparten_zeilen,
                   grund_zeilen=grund_zeilen, grund_ad=grund_ad,
                   grund_kanal=grund_kanal, grund_sparte=grund_sparte,
+                  vorgaenge=vorgaenge, auftragseingang=auftragseingang,
+                  ae_ad=ae_ad, ae_kanal=ae_kanal, ae_sparte=ae_sparte,
+                  ae_quelle=ae_quelle,
                   benutzer_map=benutzer_map,
                   eigene_ansicht=nur is not None,
                   zeitraum=zeitraum, zeitraeume=ZEITRAEUME,

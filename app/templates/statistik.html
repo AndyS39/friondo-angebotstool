@@ -185,6 +185,68 @@ in der monday-Anbindung gemappt ist.</p>
 <p class="dezent">Keine Ablehnungen im gewählten Zeitraum/Filter.</p>
 {% endif %}
 
+{# v10 (Phase 63): Kennzahlen je Vorgang #}
+<h2>Vorgänge</h2>
+<div class="kacheln statistik" style="max-width:900px">
+    <div class="kachel stat">
+        <span class="stat-zahl">{{ '%0.1f' | format(vorgaenge.kombiquote) | replace('.', ',') }} %</span>
+        <span>Kombiquote</span>
+        <span class="dezent">{{ vorgaenge.vorgaenge_kombi }} von {{ vorgaenge.vorgaenge_versendet }}
+            Vorgängen mit mehr als einer versendeten Sparte</span>
+    </div>
+    <div class="kachel stat">
+        <span class="stat-zahl">{{ vorgaenge.auftragswert_je_vorgang | euro }}</span>
+        <span>Auftragswert je Vorgang</span>
+        <span class="dezent">Ø angenommene Summe ({{ vorgaenge.vorgaenge_angenommen }}
+            Vorg{{ 'änge' if vorgaenge.vorgaenge_angenommen != 1 else 'ang' }})</span>
+    </div>
+</div>
+
+{# v10 (Phase 63): Auftragseingang je Monat (Statuszeitpunkt „Angenommen") #}
+<h2>Auftragseingang je Monat</h2>
+<form method="get" action="/statistik" class="suchleiste">
+    <input type="hidden" name="zeitraum" value="{{ zeitraum }}">
+    <input type="hidden" name="von" value="{{ von }}">
+    <input type="hidden" name="bis" value="{{ bis }}">
+    {% if not eigene_ansicht %}
+    <select name="ae_ad">
+        <option value="0">Alle Vertriebler</option>
+        {% for bid, b in benutzer_map.items() if b.rolle == 'aussendienst' %}
+            <option value="{{ bid }}" {{ 'selected' if ae_ad == bid }}>{{ b.name }}</option>
+        {% endfor %}
+    </select>
+    {% endif %}
+    <input type="text" name="ae_kanal" value="{{ ae_kanal }}" size="14"
+           placeholder="Kanal (exakt)">
+    <select name="ae_sparte">
+        <option value="">Alle Sparten</option>
+        {% for s in ('WP', 'PV', 'KL', 'WB') %}
+            <option value="{{ s }}" {{ 'selected' if ae_sparte == s }}>{{ s }}</option>
+        {% endfor %}
+    </select>
+    <select name="ae_quelle">
+        <option value="">Tool + TAIFUN</option>
+        <option value="tool" {{ 'selected' if ae_quelle == 'tool' }}>nur Tool</option>
+        <option value="taifun" {{ 'selected' if ae_quelle == 'taifun' }}>nur TAIFUN</option>
+    </select>
+    <button class="knopf klein" type="submit">Filtern</button>
+</form>
+<table class="tabelle" style="max-width:760px">
+    <thead><tr><th>Monat</th><th class="rechts">Angenommen</th>
+        <th class="rechts">Auftragseingang</th><th style="width:45%"></th></tr></thead>
+    <tbody>
+    {% for r in auftragseingang %}
+        <tr>
+            <td>{{ '%02d' | format(r.monat) }}/{{ r.jahr }}</td>
+            <td class="rechts">{{ r.anzahl }}</td>
+            <td class="rechts">{{ r.summe | euro }}</td>
+            <td><div class="ae-balken" style="width: {{ '%0.1f' | format(r.prozent) }}%"
+                     title="{{ r.summe | euro }}"></div></td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
 <p class="dezent">Zeitpunkte: Leads = Anlage im Tool · Erfassungen = Absenden ·
 versendet/angenommen/abgelehnt = tatsächlicher Statuswechsel (für Angebote von
 vor dem v6-Update näherungsweise das Angebotsdatum). Archivierte und

@@ -855,6 +855,10 @@ main.breit { max-width: 1720px; }
 /* v8: Sparten-Auswahl */
 .wahl-erledigt { opacity: 0.55; }
 
+/* v10 (Phase 63): Auftragseingangs-Balken in der Statistik */
+.ae-balken { height: 14px; background: var(--friondo-blau, #4a90d9);
+    border-radius: 3px; min-width: 2px; }
+
 /* v10: Vorgangsakte + Notizen-Chat */
 .akte-kopf { border: 1px solid #d4d9e4; border-radius: 10px;
     padding: 0.8rem 1.2rem; background: #f8f9fc; margin-bottom: 1rem; }

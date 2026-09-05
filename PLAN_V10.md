@@ -168,25 +168,25 @@ die Notizen – und er ist die Einheit für den gemeinsamen Versand.
 - [x] migrate.py: PDF-Feld extern, Summen-Trigger
 
 ## Phase 63 – Statistik, Abnahme & Rollout
-- [ ] Statistik: Kombiquote (Anteil Vorgänge mit >1 versendeter Sparte),
+- [x] Statistik: Kombiquote (Anteil Vorgänge mit >1 versendeter Sparte),
       Auftragswert je Vorgang; bestehende Auswertungen unverändert
-- [ ] Statistik „Auftragseingang je Monat": Summe der Endbeträge aller
+- [x] Statistik „Auftragseingang je Monat": Summe der Endbeträge aller
       im jeweiligen Monat auf „Angenommen" gesetzten Angebote (Basis:
       Statuszeitpunkt), als Diagramm + Tabelle, filterbar nach
       Vertriebler, Kanal, Sparte und Tool/TAIFUN
-- [ ] Logik-Excel (Angebotsaufbau): Erdleitung (Pos. 102 aus A05) von
+- [x] Logik-Excel (Angebotsaufbau): Erdleitung (Pos. 102 aus A05) von
       Block 2 „Leitungen und Heizkreise" in Block 6 „Aufstellung der
       Außeneinheit und Hauseinführung" verschieben (zur Fundament-/
       Konsolen-Position); Fassadenleitung bleibt in Block 2;
       Kontroll-Szenario-PDFs entsprechend prüfen
-- [ ] Regressionstests: alle Kontroll-Szenarien grün; Einzelversand,
+- [x] Regressionstests: alle Kontroll-Szenarien grün; Einzelversand,
       Status-Automatik, 90-Tage-Lauf mit Vorgangs-Wiedervorlage
-- [ ] Abnahmeskript v10-Block: Akte, Notizen-Chat (Format, Rechte,
+- [x] Abnahmeskript v10-Block: Akte, Notizen-Chat (Format, Rechte,
       Unveränderlichkeit), Kombi-Versand, TAIFUN-PDF, monday-Summe,
       Migrationen (Ampeln, Notizen, Deal-Werte)
-- [ ] docs/nach-dem-update-v10.md: Kombi-Vorlage texten/abnehmen,
+- [x] docs/nach-dem-update-v10.md: Kombi-Vorlage texten/abnehmen,
       Team-Hinweise (Verfolgung jetzt am Vorgang, Notizen-Chat-Regeln,
       Kombi-Versand-Ablauf, TAIFUN-PDF-Pflicht für Kombi); Hinweis an
       den Projektierungs-Chat: „Vorgang" ist ab v10 das zentrale Objekt –
       Projekte docken am Vorgang an (ein Vorgang, ggf. mehrere Gewerke)
-- [ ] git push → Rollout per update.bat → Checkliste abarbeiten
+- [x] git push → Rollout per update.bat → Checkliste abarbeiten

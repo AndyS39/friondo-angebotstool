@@ -61,6 +61,15 @@ def vorab_aufraeumen(s):
     s.query(MondayQuelle).filter_by(board_id="abn-v7-board").delete()
     s.query(AngebotsMail).filter(AngebotsMail.graph_id.in_(["s1", "k1"])).delete(synchronize_session=False)
     s.query(AngebotsLoeschung).filter(AngebotsLoeschung.kunde_name.like("%Abnahme%")).delete(synchronize_session=False)
+    # v10: verwaiste Vorgänge (der Lead früherer Testläufe wurde gelöscht)
+    from app.models import Vorgang, VorgangsNotiz
+    lead_ids = {l.id for l in s.query(Lead)}
+    kunden_ids = {k.id for k in s.query(Kunde)}
+    for v in s.query(Vorgang):
+        if ((v.lead_id is not None and v.lead_id not in lead_ids)
+                or v.kunde_id not in kunden_ids):
+            s.query(VorgangsNotiz).filter(VorgangsNotiz.vorgang_id == v.id).delete()
+            s.delete(v)
     s.commit()
     sig_ordner = config.DATA_ORDNER / "signaturen" / "1"
     if sig_ordner.exists():
@@ -407,8 +416,13 @@ def main():
            v7a is not None and v7a.extern and v7a.status == "Versendet (extern)"
            and v7a.summen()["endbetrag"] == 2500000
            and v7e.status == "Erledigt (extern)" and not v7e.archiviert)
-    pruefe("v7", "monday-Rückspielung beim Anlegen (Trockenlauf)",
-           v7a.monday_rueck_status == "ok" and werte_v7.get("zahlen") == "25000.00")
+    # v10: der Deal-Wert ist die VORGANGSSUMME (hier: Kunden-Vorgang von
+    # kunde_t – weitere versendete Abnahme-Angebote zählen mit)
+    from app import monday_rueckspielung as mr_v7
+    v7_summe = mr_v7.vorgangssumme_cent(s, v7a, "brutto")
+    pruefe("v7", "monday-Rückspielung beim Anlegen (Trockenlauf, Vorgangssumme)",
+           v7a.monday_rueck_status == "ok" and v7_summe >= 2500000
+           and werte_v7.get("zahlen") == f"{v7_summe // 100}.{v7_summe % 100:02d}")
     liste_html = client.get("/angebote", params={"status": "Versendet (extern)"}).text
     pruefe("v7", "Angebotsliste: Badge TAIFUN + Nummer fehlt + kein DB",
            "TAIFUN" in liste_html and "Nummer fehlt" in liste_html
@@ -630,6 +644,122 @@ def main():
         s.delete(s.get(Angebot, v9v2.id))
     s.delete(s.get(Angebot, v9ang.id)); s.delete(s.get(Angebot, v9dg.id))
     s.delete(s.get(Erfassung, v9frei.id))
+    s.commit()
+
+    # ---------- 12) v10-Abnahme: Akte, Notizen, Kombi, TAIFUN-PDF, monday ----------
+    from app import kombi_versand as kombi_modul
+    from app import monday_rueckspielung, monday_sync, vorgaenge as vorgaenge_modul
+    from app.models import Vorgang, VorgangsNotiz
+    # Akte + Notizen-Chat
+    v10ang = angebot_aufbau.angebot_anlegen(s, kunde_t.id, antworten=kg, logik=logik)
+    v10vorgang = vorgaenge_modul.vorgang_fuer_angebot(s, v10ang)
+    s.commit()
+    akte = client.get(f"/vorgaenge/{v10vorgang.id}").text
+    pruefe("v10 Akte", "Bereiche Erfassungen · Angebote · Mail-Verlauf · Verfolgung · Notizen",
+           all(w in akte for w in ("Erfassungen", "Angebote", "Mail-Verlauf",
+                                   "Verfolgung", "Notizen", v10ang.nummer)))
+    client.post(f"/vorgaenge/{v10vorgang.id}/notiz", data={"text": "Abnahme-Notiz v10"})
+    akte = client.get(f"/vorgaenge/{v10vorgang.id}").text
+    v10notiz = (s.query(VorgangsNotiz)
+                .filter(VorgangsNotiz.vorgang_id == v10vorgang.id).first())
+    pruefe("v10 Akte", "Notiz mit Autor + Zeitstempel im Chat-Format",
+           "Abnahme-Notiz v10" in akte and "Uhr:" in akte
+           and v10notiz is not None and v10notiz.benutzer_name == "Admin")
+    pruefe("v10 Akte", "Notizen unveränderlich (kein Bearbeiten/Löschen-Endpunkt)",
+           client.post(f"/vorgaenge/{v10vorgang.id}/notiz/{v10notiz.id}/loeschen")
+           .status_code in (404, 405)
+           and client.post(f"/vorgaenge/{v10vorgang.id}/notiz/{v10notiz.id}",
+                           data={"text": "x"}).status_code in (404, 405))
+    # 90-Tage-Lauf respektiert die Vorgangs-Wiedervorlage
+    from app import ablauf_pruefung
+    v10ang.status = "Versendet"
+    v10ang.versendet_am = datetime.datetime.now() - datetime.timedelta(days=200)
+    v10vorgang.wiedervorlage_am = datetime.datetime.now() + datetime.timedelta(days=5)
+    s.commit()
+    geschuetzt = v10ang.nummer not in [a.nummer for a in
+                                       ablauf_pruefung.kandidaten(s)[0]]
+    v10vorgang.wiedervorlage_am = None
+    s.commit()
+    unge = v10ang.nummer in [a.nummer for a in ablauf_pruefung.kandidaten(s)[0]]
+    pruefe("v10 Akte", "90-Tage-Lauf: Vorgangs-Wiedervorlage schützt alle Angebote",
+           geschuetzt and unge)
+    v10ang.status = "Entwurf"; v10ang.versendet_am = None; s.commit()
+    # TAIFUN-Eintrag mit PDF + Kombi-Versand (eine Mail, zwei PDFs)
+    v10pdf = config.DATA_ORDNER / "angebote" / "extern" / "ABN-TAIFUN.pdf"
+    v10pdf.parent.mkdir(parents=True, exist_ok=True)
+    v10pdf.write_bytes(b"%PDF-1.4 abnahme")
+    v10pv = Angebot(nummer=f"{v10ang.nummer}T", kunde_id=kunde_t.id, extern=True,
+                    status="Versendet (extern)", datum=datetime.datetime.now(),
+                    konfigurator_typ="PV", extern_endbetrag_cent=1234500,
+                    taifun_nummer="ABN-TAIFUN", extern_pdf_pfad=str(v10pdf),
+                    extern_pdf_am=datetime.datetime.now(),
+                    vorgang_id=v10vorgang.id)
+    s.add(v10pv); s.commit()
+    payloads.clear()
+    with mock.patch.object(graph_versand, "konfiguriert", return_value=True), \
+            mock.patch.object(graph_versand, "angemeldeter_benutzer", return_value="ida@friondo.de"), \
+            mock.patch.object(graph_versand, "_token", return_value="tok"), \
+            mock.patch.object(graph_versand, "_graph_aufruf", side_effect=fake_graph):
+        client.post(f"/vorgaenge/{v10vorgang.id}/kombi-versand",
+                    data={"angebot_ids": [str(v10ang.id), str(v10pv.id)]})
+    s.expire_all()
+    v10ang = s.get(Angebot, v10ang.id)
+    kombi_nachricht = next((d for p, d in payloads if p == "/me/messages"), {}) or {}
+    kombi_anhaenge = [d.get("name") for p, d in payloads
+                      if p.endswith("/attachments") and d and not d.get("isInline")]
+    pruefe("v10 Kombi", "Eine Mail mit zwei Angebots-PDFs + Kombi-Betreff",
+           f"{v10ang.nummer}.pdf" in kombi_anhaenge
+           and "ABN-TAIFUN.pdf" in kombi_anhaenge
+           and "Ihre Angebote" in kombi_nachricht.get("subject", ""))
+    pruefe("v10 Kombi", "{angebotsliste} ohne Gesamtsumme, Status Versand vorbereitet",
+           "PV-Angebot ABN-TAIFUN" in kombi_nachricht.get("body", {}).get("content", "")
+           and v10ang.status == "Versand vorbereitet"
+           and v10ang.graph_conversation_id == "konv-abn")
+    # monday-Summe: Versand-Erkennung → Deal-Wert = Vorgangssumme
+    monday_aufrufe_v10 = []
+    with mock.patch.object(monday_sync, "_api",
+                           side_effect=lambda q, v=None: monday_aufrufe_v10.append(v) or {}):
+        v10lead = Lead(monday_item_id="abn-v10", board_id="abn-v7-board",
+                       nachname="Abnahme", kunde_id=kunde_t.id,
+                       angelegt_am=datetime.datetime.now())
+        s.add(v10lead); s.flush()
+        for altv in s.query(Vorgang).filter(Vorgang.lead_id == v10lead.id,
+                                            Vorgang.id != v10vorgang.id):
+            s.delete(altv)
+        s.flush()
+        v10vorgang.lead_id = v10lead.id
+        from app.models import MondayQuelle as MQ10
+        v10quelle = MQ10(board_id="abn-v7-board", board_name="Abn v10",
+                         gruppen_titel="x", rueck_modus="status",
+                         rueck_status_spalte="status",
+                         rueck_status_wert="Angebot versendet",
+                         rueck_wert_spalte="zahlen", rueck_wert_basis="brutto")
+        s.add(v10quelle); s.commit()
+        from app.models import angebot_status_setzen as setzen10
+        setzen10(v10ang, "Versendet"); s.commit()
+        monday_rueckspielung.bei_versand(s, v10ang)
+    summe_soll = monday_rueckspielung.vorgangssumme_cent(s, v10ang, "brutto")
+    werte_v10 = json.loads((monday_aufrufe_v10[-1] or {}).get("werte", "{}")) \
+        if monday_aufrufe_v10 else {}
+    pruefe("v10 monday", "Deal-Wert = Vorgangssumme (Tool + TAIFUN)",
+           summe_soll >= v10ang.summen()["endbetrag"] + 1234500
+           and werte_v10.get("zahlen") == f"{summe_soll // 100}.{summe_soll % 100:02d}",
+           str(werte_v10))
+    # Migrationen laufen erneut ohne Doppel (Vorgänge/Ampeln/Notizen idempotent)
+    vorgaenge_vorher = s.query(Vorgang).count()
+    notizen_vorher = s.query(VorgangsNotiz).count()
+    migrate_modul._daten()
+    s.expire_all()
+    pruefe("v10 Migration", "Wiederholte Migration ohne Doppel (Vorgänge/Notizen)",
+           s.query(Vorgang).count() == vorgaenge_vorher
+           and s.query(VorgangsNotiz).count() == notizen_vorher)
+    # v10-Aufräumen
+    s.query(VorgangsNotiz).filter(VorgangsNotiz.vorgang_id == v10vorgang.id).delete()
+    v10pdf.unlink(missing_ok=True)
+    Path(f"data/angebote/{v10ang.nummer}.pdf").unlink(missing_ok=True)
+    s.delete(s.get(Angebot, v10pv.id)); s.delete(s.get(Angebot, v10ang.id))
+    s.delete(s.get(Lead, v10lead.id)); s.delete(s.get(MQ10, v10quelle.id))
+    s.delete(s.get(Vorgang, v10vorgang.id))
     s.commit()
 
     # ---------- Aufräumen ----------
