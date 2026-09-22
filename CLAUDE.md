@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v11)
+# Friondo Angebotstool – Projektkontext (v12)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -320,3 +320,55 @@ Graph-Versand über Innendienst, Terminal-Server-Betrieb.
 - Geplant: V2 Feinplanungs-Erfassung + Sub-Mails + Kalender, V3 Montage-
   Formulare + Collin-Bestellung (UGL/IDS), V4 Rechnungen/OP/Mahnwesen +
   Heizreport-/SpotmyEnergy-Anbindung.
+
+## Neu in v12 – Lead-Management V1 Demo (abgestimmt 22.09.2026)
+
+- **Lead-Management V1 (Demo):** Lead = Vorgang (v10) mit Lead-Phase
+  (Neu · In Kontaktierung · Qualifiziert · Terminiert · danach abgeleitet
+  Erfasst/Angebot/Gewonnen/Verloren; Seitenzustände Zurückgestellt · Nicht
+  erreicht · Unqualifiziert), Quelle/Kampagne/UTM, Eingang, SLA, Score (A/B/C),
+  Leadmanager, Wunschzeiten, Koordinaten, Einwilligungen. Gesyncte monday-Leads
+  erhalten die Phase abgeleitet (Badge „monday"); **monday-Sync und -Rückspielung
+  unverändert**.
+- **Demo-Modus:** Parameter `lead_freigabe_modus` (admin / alle, Standard admin):
+  bei admin sind alle Routen unter `/leads` und `/api/leads`, Menüpunkte, Reiter,
+  Kacheln nur für Admins (server-seitig, 404 für andere); Startportal-Karte
+  „Lead-Management" trägt das Badge „Demo · Coming soon". Im Modul angelegte Leads
+  tragen `demo = 1` und erscheinen in keiner bestehenden Liste/Statistik/Kachel/
+  Rückspielung; Umstellung auf `alle` fragt: Demo-Leads löschen oder behalten.
+  Sperren im Demo-Modus: `mail_modus` nur protokoll/test (live abgewiesen),
+  `kalender_sync` nur ins Testpostfach, monday-Leads nicht buchbar.
+- **Eingang:** Schnellanlage, CSV/Excel-Import mit Spaltenzuordnung, `POST
+  /api/leads` (API-Key je Quelle), Mail-Parser mit Regeln + Test (Abruf nur bei
+  `parser_modus = an`), Formular-Standard `[LEAD] <quelle> <kampagne>` + `Feld: Wert`,
+  „Posteingang unklar", Duplikatprüfung (Telefon E.164, E-Mail, Name+PLZ, Adresse)
+  mit Anhängen an offenen Vorgang, Demo-Daten-Generator.
+- **Terminierung:** Anrufliste priorisiert (SLA → fällig → zurückgestellt → Score),
+  Ein-Klick-Anrufergebnisse, Wiedervorlage-Kaskade und Gründe aus
+  `leadmanagement_logik_v1.xlsx` (Blätter Qualifizierung, Scoring, Klassen, Kaskade,
+  Gruende, Wunschzeiten; Import in der Parametrierung), Qualifizierungsbogen je
+  Sparte mit Live-Score und Vorbelegung des Erfassungsbogens über `erfassungs_frage`
+  (aktiv erst bei `alle`).
+- **Terminassistent:** Top-5-Slots über AD-Profile (Startadresse, Arbeitszeiten,
+  Dauer/Puffer/Max), Tool-Termine (`vot_termine`, auch aus monday-VOT-Datum),
+  optional Outlook-Frei/Belegt (Graph, `kalender_sync`), Fahrzeiten
+  (`routing_anbieter` ors / google / luftlinie, Caches), Bewertung Umweg +
+  Wunschzeit/Tour-Tag/Randzeit; Buchen schreibt Termin, Outlook-Ereignis (falls an),
+  Bestätigung + Erinnerung; Umbuchen, No-Show (Lead zurück auf Qualifiziert),
+  Terminkalender Woche je AD, Karte (Leaflet lokal, OSM-Kacheln), „Adresse prüfen".
+- **Kommunikation:** Vorlagen eingangsbestaetigung / nicht_erreicht /
+  terminbestaetigung (ICS) / terminerinnerung (−24 h) / terminaenderung / nurture
+  (nur mit Einwilligung), Warteschlange + Versand-Job, `mail_modus` protokoll / test /
+  live, Reiter Kommunikation in der Akte, Absender `leads@friondo.de` (Fallback angebot@).
+- **Oberfläche:** Anrufliste, Pipeline-Kanban, Lead-Akte (Vorgangsakte + Kopfblock
+  Lead + Reiter Aktivitäten/Qualifizierung/Termin/Kommunikation), Kalender, Karte,
+  Cockpit, Statistik-Reiter „Leads" (Trichter, Speed-to-Lead, Quoten, Gründe),
+  Kanal-Report (Kosten je Lead/Termin/Auftrag), Pipeline-Wert.
+- **Rollen:** neu `leadmanagement` (Mehrfachrolle; keine EK/DB, kein Angebots-Editor),
+  AD-Profile in der Benutzerverwaltung, AD-Sicht Lead-Akte read-only + No-Show/
+  Verschieben – alles erst bei `alle` wirksam. Löschlauf (`loeschlauf`, Frist
+  `loeschfrist_monate`, Anonymisierung) mit Vorschau.
+- Geplant: V2 monday-Import + Parallelbetrieb, SMS, Tourenplanung Tag + „Leads in
+  der Nähe", Gebietskarte, KI-Extraktion (Schalter), CTI, Webhook extern; V3
+  Online-Terminwahl, WhatsApp, Cross-Selling-Trigger, Score-Kalibrierung; V4
+  KI-Sprachschicht, Voice-/Chat-Vorqualifizierung.

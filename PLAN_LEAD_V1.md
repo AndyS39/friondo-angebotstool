@@ -570,28 +570,28 @@ Terminal-Server weiterhin nacheinander (update.bat).
 
 ## Phase 82 – Qualität, Docs, Rollout, Live-Master fortschreiben
 
-- [ ] Fehlerfälle: Lead ohne Telefon und E-Mail (Anlage verweigern), Adresse ohne
+- [x] Fehlerfälle: Lead ohne Telefon und E-Mail (Anlage verweigern), Adresse ohne
   Geocode (Assistent mit Hinweis „Adresse prüfen"), Routing-Dienst nicht erreichbar
   (Luftlinie, Kennzeichen), Graph-Kalender ohne Recht (Hinweis, Tool-Termine), Import
   mit fehlerhafter Zeile (übersprungen + Protokoll), doppelter API-Aufruf (409), Termin
   außerhalb der Arbeitszeit (Warnung, erlaubt), monday-Lead im Assistenten (Buchen
   nur, wenn `lead_freigabe_modus = alle` – im Demo-Modus Hinweis „Terminierung im
   Demo-Modus nur für Demo-Leads", Vorschläge trotzdem sichtbar).
-- [ ] Sicherheitsprüfung: jede `/leads`- und `/api/leads`-Route serverseitig gegen
+- [x] Sicherheitsprüfung: jede `/leads`- und `/api/leads`-Route serverseitig gegen
   `lead_modul_sichtbar` bzw. API-Key; Demo-Leads in **keiner** bestehenden Abfrage
   (automatisierter Test: Demo-Lead anlegen → Leads VOT, Kundenliste, Angebotsliste,
   Statistik, Startportal-Kacheln als Innendienst zählen ihn nicht; Rückspielungs-Job
   überspringt ihn).
-- [ ] `docs/leadmanagement.md` (Bedienanleitung: Eingangswege, Anrufliste, Kaskade,
+- [x] `docs/leadmanagement.md` (Bedienanleitung: Eingangswege, Anrufliste, Kaskade,
   Qualifizierung, Assistent, Kalender, Kommunikation, Board, Statistik, Parametrierung,
   Demo-Modus und Umstellung auf `alle`), `docs/leads-api.md`, `docs/leadmanagement-
   entscheidungen.md`, `docs/graph-einrichtung.md` (Kalender-Rechte, Postfach leads@ und
   Testpostfach – Aufgaben für den M365-Admin).
-- [ ] git push → Absprache mit dem Angebotstool-Chat (kein PROJ-Rollout am selben Tag) →
+- [ ] *(offen auf Anweisung von Andreas: „Noch nicht pushen“ – gilt weiter, v11+v12 liegen auf demselben Branch)* git push → Absprache mit dem Angebotstool-Chat (kein PROJ-Rollout am selben Tag) →
   update.bat auf dem Terminal-Server → migrate-Log prüfen → als Admin: Demo-Daten
   erzeugen, Sync-Lauf anstoßen, Board und Assistent öffnen. Als Innendienst gegenprüfen:
   nichts Neues sichtbar.
-- [ ] `CLAUDE.md`: Kopf auf die nächste Versionsnummer erhöhen (v11, oder v12, falls
+- [x] `CLAUDE.md`: Kopf auf die nächste Versionsnummer erhöhen (v11, oder v12, falls
   PLAN_PROJ_V1 bereits v11 erzeugt hat); neuen Abschnitt **„Neu in v<NN> – Lead-Management
   V1 Demo (abgestimmt 22.09.2026)"** anhängen, wörtlich:
 
@@ -645,7 +645,7 @@ Terminal-Server weiterhin nacheinander (update.bat).
   >   Online-Terminwahl, WhatsApp, Cross-Selling-Trigger, Score-Kalibrierung; V4
   >   KI-Sprachschicht, Voice-/Chat-Vorqualifizierung.
 
-- [ ] `konfigurator_logik_v5.xlsx`: **keine Änderung** in V1.
+- [x] `konfigurator_logik_v5.xlsx`: **keine Änderung** in V1.
 
 ---
 

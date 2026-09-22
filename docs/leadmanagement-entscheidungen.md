@@ -197,3 +197,17 @@ nach V1 durch.
 - **Löschlauf** hängt am Lead-Scheduler (5-Minuten-Schleife, ab 03:00 mit
   Datums-Schalter); die Vorschau nutzt denselben Kandidaten-Filter im
   Trockenmodus. Im Demo-Modus werden ausschließlich Demo-Leads angefasst.
+
+## Phase 82 – Qualität, Docs, Rollout
+
+- **Assistent bei Geocode-Fehler**: nach einem gescheiterten Geokodier-
+  Versuch ruft der Assistent NICHT erneut synchron nach außen (nie
+  blockieren) – der 5-Minuten-Hintergrund-Job und „Adresse prüfen“
+  übernehmen; der Assistent bewertet dann ohne Fahrzeiten mit Hinweis.
+- **Sicherheitstest automatisiert**: der Phase-82-Test läuft über ALLE
+  registrierten GET-Routen unter /lead-management und erwartet für den
+  Innendienst im Demo-Modus 404 (Einstiegsseite = alte Platzhalterseite).
+- **git push offen gelassen** (Anweisung Andreas „Noch nicht pushen“ aus dem
+  v11-Auftrag gilt weiter): v11 (Projektierung) und v12 (Lead-Management)
+  liegen ungepusht auf demselben Branch – ein Push würde beide Module
+  gleichzeitig ausrollen; der Plan verlangt Rollouts nacheinander.

@@ -787,8 +787,11 @@ async def termin_assistent(request: Request, vorgang_id: int,
     if vorgang is None:
         return RedirectResponse("/lead-management/anrufliste", status_code=303)
     kunde = session.get(Kunde, vorgang.kunde_id)
-    # Adresse bei Bedarf sofort geokodieren (Fortschritt < 3 s dank Cache)
-    if vorgang.lat is None and vorgang.geocode_status != "manuell":
+    # Adresse bei Bedarf sofort geokodieren (Fortschritt < 3 s dank Cache);
+    # nach einem Fehlschlag NICHT erneut synchron nach außen rufen – der
+    # Hintergrund-Job und „Adresse prüfen“ übernehmen (nie blockieren)
+    if vorgang.lat is None and vorgang.geocode_status not in ("manuell",
+                                                              "fehler"):
         adresse = geocoding.lead_adresse(session, vorgang)
         lat, lon, status = geocoding.geokodieren(session, adresse)
         vorgang.lat, vorgang.lon, vorgang.geocode_status = lat, lon, status
