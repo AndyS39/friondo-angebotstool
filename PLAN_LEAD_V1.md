@@ -530,21 +530,21 @@ Terminal-Server weiterhin nacheinander (update.bat).
 
 ## Phase 81 – Rollen, Sichten, Parametrierung, Löschlauf
 
-- [ ] **Rolle Leadmanagement** (im Demo-Modus vollständig gebaut, aber unsichtbar – wirkt
+- [x] **Rolle Leadmanagement** (im Demo-Modus vollständig gebaut, aber unsichtbar – wirkt
   erst bei `alle`): Menü Lead-Management (Anrufliste, Board, Kalender, Karte, Posteingang,
   Import, Statistik-Reiter Leads), Kunden lesend/schreibend, Vorgangsakte mit allen
   Lead-Reitern; Angebote nur Liste mit Status/Endbetrag + PDF-Ansicht (keine EK/DB, kein
   Editor, kein Versand, kein Rabatt), Erfassungen lesend, Projektierung nur Phasen-Block.
   Keine Parametrierung außer „Lead-Management → Quellen & Kampagnen" und „Steuerdatei".
-- [ ] **Außendienst-Sicht** (ebenfalls erst bei `alle`): in „Leads VOT" und in der eigenen
+- [x] **Außendienst-Sicht** (ebenfalls erst bei `alle`): in „Leads VOT" und in der eigenen
   Angebotsansicht Link „Lead-Akte" → Kopfblock + Reiter Aktivitäten/Qualifizierung/
   Termin read-only; Buttons **No-Show melden** und **Termin verschieben** (nur eigene
   Termine, nur in die eigene Woche, Dialog mit Grund; Kunde erhält Terminänderung nach
   `mail_modus`, Leadmanager wird benachrichtigt). Mobil: Seite **„Meine Termine"** (heute/
   diese Woche, Adresse mit Karten-Link `https://www.google.com/maps/dir/?api=1&destination=…`,
   Telefon, Steckbrief aus der Qualifizierung).
-- [ ] **Innendienst** erhält bei `alle` alles wie Leadmanagement plus die bestehenden Rechte.
-- [ ] **Parametrierung → Lead-Management** (nur Admin), Unterseiten: Einstellungen
+- [x] **Innendienst** erhält bei `alle` alles wie Leadmanagement plus die bestehenden Rechte.
+- [x] **Parametrierung → Lead-Management** (nur Admin), Unterseiten: Einstellungen
   (`lead_freigabe_modus` mit dem Demo-Leads-Dialog aus Phase 73, `mail_modus` +
   Testadresse, `parser_modus`, `kalender_sync` + Testpostfach, SLA-Minuten,
   Arbeitszeit LM, Zuweisung, Horizont/Raster, Absender, Kerngebiet-PLZ, Erwartungswerte,
@@ -552,7 +552,7 @@ Terminal-Server weiterhin nacheinander (update.bat).
   (mit Test) · Routing (Anbieter, Schlüssel, Test, Tageszähler) · Steuerdatei · API-
   Schlüssel je Quelle · Demo-Daten (Generator, Löschen) · Protokoll (Änderungen an
   Parametern, Löschläufe, Demo-Umstellung).
-- [ ] **Löschlauf** (täglich 03:00, **nur bei `loeschlauf = an`**): Vorgänge in Phase
+- [x] **Löschlauf** (täglich 03:00, **nur bei `loeschlauf = an`**): Vorgänge in Phase
   unqualifiziert / nicht_erreicht / verloren, deren letzte Aktivität älter als
   `loeschfrist_monate` ist und die kein angenommenes Angebot und kein Projekt haben →
   Anonymisierung: Name „Gelöscht", Kontakt/Adresse/Anfragetext/Rohdaten leer,
@@ -560,10 +560,10 @@ Terminal-Server weiterhin nacheinander (update.bat).
   bleiben; Kunde ebenfalls anonymisiert, wenn kein anderer Vorgang hängt. Protokoll mit
   Anzahl. Vorschau-Button „Was würde gelöscht?" in der Parametrierung. Im Demo-Modus
   läuft der Lauf zusätzlich nur über Demo-Leads.
-- [ ] **Einwilligung**: Häkchen in Schnellanlage/Import/API mit Pflicht-Quelle
+- [x] **Einwilligung**: Häkchen in Schnellanlage/Import/API mit Pflicht-Quelle
   (`formular` / `telefonisch` / `portal`), Datum automatisch; Anzeige in der Akte;
   `nurture`-Mails nur mit Einwilligung (Phase 78).
-- [ ] Test je Rolle mit Test-PINs im Demo-Modus: Innendienst/AD/Projektierung sehen nichts
+- [x] Test je Rolle mit Test-PINs im Demo-Modus: Innendienst/AD/Projektierung sehen nichts
   Neues; Admin alles. Dann lokal `lead_freigabe_modus = alle` setzen: Leadmanagement
   sieht keine EK/DB; AD sieht Lead-Akte read-only und kann No-Show melden; zurück auf
   `admin` → alles wieder verborgen. Löschlauf-Vorschau plausibel.

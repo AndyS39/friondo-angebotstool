@@ -34,6 +34,10 @@
             {{ '✓ ' ~ vorgang.einwilligung_werbung_am.strftime('%d.%m.%Y')
                ~ ' (' ~ (vorgang.einwilligung_quelle or '?') ~ ')'
                if vorgang.einwilligung_werbung else 'nein' }}</span>
+        {% if lead_readonly | default(false) %}
+        <span class="dezent">Leadmanager: {{ lead_kontext.leadmanager.name
+            if lead_kontext.leadmanager else '–' }}</span>
+        {% else %}
         <form method="post" action="/lead-management/lead/{{ vorgang.id }}/leadmanager"
               class="formzeile" style="margin:0">
             <label class="dezent">Leadmanager
@@ -45,8 +49,10 @@
                 </select>
             </label>
         </form>
+        {% endif %}
         <span class="dezent">AD: {{ lead_kontext.ad.name if lead_kontext.ad else '– (über Termin)' }}</span>
     </div>
+    {% if not (lead_readonly | default(false)) %}
     <div class="formzeile">
         {% for wert, name in [('erreicht', '✅ Erreicht'), ('nicht_erreicht', '📵 Nicht erreicht'),
                               ('besetzt', '⛔ Besetzt'), ('mailbox', '📼 Mailbox')] %}
@@ -61,6 +67,7 @@
         <a class="knopf klein" href="/lead-management/lead/{{ vorgang.id }}/termin">Termin vorschlagen</a>
         <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}/kommunikation">Mail mit Vorlage</a>
     </div>
+    {% endif %}
 
     <details>
         <summary><strong>Aktivitäten ({{ lead_kontext.timeline | length }})</strong>
@@ -107,6 +114,29 @@
                 {{ '· Umweg +' ~ t.umweg_min ~ ' Min' if t.umweg_min is not none }}
                 · Status {{ t.status }}
                 {% if t.quelle == 'monday' %}<span class="abzeichen">monday</span>{% endif %}</p>
+            {% if lead_readonly | default(false) %}
+            {% if t.ad_id == benutzer.id %}
+            <div class="formzeile">
+                <button class="knopf klein zweitrangig"
+                        onclick="document.getElementById('dlg-akte-noshow').showModal(); return false;">No-Show melden</button>
+                <button class="knopf klein zweitrangig"
+                        onclick="document.getElementById('dlg-ad-verschieben').showModal(); return false;">Termin verschieben (eigene Woche)</button>
+            </div>
+            <dialog id="dlg-ad-verschieben">
+                <form method="post" class="formular"
+                      action="/lead-management/ad/termin/{{ t.id }}/verschieben">
+                    <h3>Termin verschieben (nur dieselbe Woche)</h3>
+                    <label>Neuer Beginn <input type="datetime-local" name="beginn" required></label>
+                    <label>Grund <input type="text" name="grund" required></label>
+                    <div class="formzeile">
+                        <button class="knopf" type="submit">Verschieben (Kunde wird informiert)</button>
+                        <button class="knopf zweitrangig" type="button"
+                                onclick="this.closest('dialog').close()">Abbrechen</button>
+                    </div>
+                </form>
+            </dialog>
+            {% endif %}
+            {% else %}
             <div class="formzeile">
                 <a class="knopf klein zweitrangig"
                    href="/lead-management/lead/{{ vorgang.id }}/termin?umbuchen={{ t.id }}">Umbuchen</a>
@@ -116,9 +146,12 @@
                     <button class="knopf klein" type="submit">Erfolgt</button>
                 </form>
             </div>
+            {% endif %}
             <dialog id="dlg-akte-noshow">
                 <form method="post" class="formular"
-                      action="/lead-management/termin/{{ t.id }}/no-show">
+                      action="{{ '/lead-management/ad/termin/' ~ t.id ~ '/no-show'
+                                 if lead_readonly | default(false)
+                                 else '/lead-management/termin/' ~ t.id ~ '/no-show' }}">
                     <h3>No-Show / Absage</h3>
                     <label><input type="radio" name="art" value="no_show" checked> No-Show</label>
                     <label><input type="radio" name="art" value="absage"> Absage</label>

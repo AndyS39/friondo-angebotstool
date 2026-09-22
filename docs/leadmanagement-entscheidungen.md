@@ -178,3 +178,22 @@ nach V1 durch.
 - **Kanal-Report immer letzte 12 Monate** (unabhängig von der
   Zeitraumwahl des Reiters); Kosten = kosten_je_lead × Leads des Monats,
   der Kosten-Monatsimport folgt in V2 wie geplant.
+
+## Phase 81 – Rollen, Sichten, Parametrierung, Löschlauf
+
+- **AD-Zugriff auf die Lead-Akte** läuft über die bestehenden
+  Vorgangs-Zugriffsregeln (v10: eigene Vorgänge über Erfassung/Lead) – die
+  AD-Aktionen (No-Show, Verschieben) prüfen zusätzlich hart auf den eigenen
+  Termin und Freigabe „alle“; „Meine Termine“ zeigt alle eigenen
+  VOT-Termine unabhängig vom Vorgangs-Bezug.
+- **„Verschieben nur in die eigene Woche“** = dieselbe ISO-Kalenderwoche wie
+  der bestehende Termin; alles andere läuft über das Leadmanagement.
+- **mail_modus=live wird beim Speichern abgewiesen**, solange der Demo-Modus
+  aktiv ist (zusätzlich zur Laufzeit-Sperre im Versand-Job).
+- **Demo-Umstellung** auf „alle“ erzwingt bei vorhandenen Demo-Leads die
+  Entscheidung löschen/behalten direkt im Freigabe-Block der
+  Einstellungen-Seite (kein separates Dialogfenster); beides wird
+  protokolliert (einstellungs_protokoll, letzte 30 Zeilen).
+- **Löschlauf** hängt am Lead-Scheduler (5-Minuten-Schleife, ab 03:00 mit
+  Datums-Schalter); die Vorschau nutzt denselben Kandidaten-Filter im
+  Trockenmodus. Im Demo-Modus werden ausschließlich Demo-Leads angefasst.

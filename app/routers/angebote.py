@@ -166,7 +166,8 @@ async def liste(request: Request, q: str = "", status: str = "", interesse: str 
                   # DB-Spalte nur mit kalkulation_sichtbar, Öffnen → PDF
                   kalk_sichtbar=(request.state.benutzer.rolle in ("admin", "innendienst")
                                  or request.state.benutzer.kalkulation_sichtbar),
-                  nur_lesend=request.state.benutzer.rolle == "projektierung",
+                  nur_lesend=request.state.benutzer.rolle in ("projektierung",
+                                                              "leadmanagement"),
                   meldung=request.query_params.get("meldung", ""))
 
 

@@ -27,6 +27,9 @@ OFFENE_PFADE = ("/login", "/logout", "/static", "/signatur/extern",
                 "/api/leads")
 AUSSENDIENST_PFADE = ("/erfassung", "/leads", "/signatur", "/statistik",
                       "/meine-angebote", "/vorgaenge", "/benachrichtigungen",
+                      # v12 (Phase 81): AD-Sicht des Lead-Moduls (Meine
+                      # Termine, No-Show/Verschieben) – Routen prüfen selbst
+                      "/lead-management",
                       "/login", "/logout", "/static")
 ADMIN_PFADE = ("/benutzer",)
 BUERO_ROLLEN = ("admin", "innendienst")
@@ -42,6 +45,17 @@ PROJEKTIERUNG_SCHREIBEN = ("/projektierung", "/montage", "/benachrichtigungen",
                            "/parametrierung", "/login", "/logout")
 MONTAGE_PFADE = ("/montage", "/benachrichtigungen", "/login", "/logout", "/static")
 _ANGEBOTE_LESEPFAD = re.compile(r"^/angebote(/\d+/pdf)?$")
+# v12 (Phase 81): Hauptrolle leadmanagement – Lead-Modul voll, Kunden
+# lesend/schreibend, Vorgangsakte, Angebote nur Liste+PDF, Erfassungen lesend;
+# Parametrierung nur Quellen & Kampagnen + Steuerdatei (Plan 81)
+LEADMANAGEMENT_PFADE = ("/lead-management", "/api/leads", "/benachrichtigungen",
+                        "/kunden", "/vorgaenge", "/erfassungen", "/angebote",
+                        "/parametrierung/lead-quellen",
+                        "/parametrierung/lead-logik",
+                        "/login", "/logout", "/static")
+LEADMANAGEMENT_SCHREIBEN = ("/lead-management", "/api/leads",
+                            "/benachrichtigungen", "/kunden", "/vorgaenge",
+                            "/parametrierung", "/login", "/logout")
 
 
 def _geheimnis() -> bytes:
@@ -114,6 +128,7 @@ class RollenMiddleware(BaseHTTPMiddleware):
             request.state.glocke_ungelesen = 0
             request.state.glocke_liste = []
             request.state.lead_modul_ok = False
+            request.state.lead_ad_ok = False
             if benutzer is not None and not pfad.startswith("/static"):
                 try:
                     from app import benachrichtigungen as glocke_modul
@@ -128,6 +143,8 @@ class RollenMiddleware(BaseHTTPMiddleware):
                     from app import leadmanagement
                     request.state.lead_modul_ok = (
                         leadmanagement.lead_modul_sichtbar(session, benutzer))
+                    request.state.lead_ad_ok = (
+                        leadmanagement.lead_ad_sicht(session, benutzer))
                 except Exception:
                     pass
             if pfad.startswith(OFFENE_PFADE):
@@ -148,6 +165,15 @@ class RollenMiddleware(BaseHTTPMiddleware):
             elif benutzer.rolle == "montage":
                 if pfad != "/" and not pfad.startswith(MONTAGE_PFADE):
                     return RedirectResponse("/montage", status_code=303)
+            elif benutzer.rolle == "leadmanagement":
+                if pfad != "/" and not pfad.startswith(LEADMANAGEMENT_PFADE):
+                    return RedirectResponse("/lead-management", status_code=303)
+                if (request.method != "GET"
+                        and not pfad.startswith(LEADMANAGEMENT_SCHREIBEN)):
+                    return RedirectResponse("/lead-management", status_code=303)
+                # Angebote nur Liste + PDF (kein Editor, kein EK/DB)
+                if pfad.startswith("/angebote") and not _ANGEBOTE_LESEPFAD.match(pfad):
+                    return RedirectResponse("/angebote", status_code=303)
             elif benutzer.rolle not in BUERO_ROLLEN and not pfad.startswith(AUSSENDIENST_PFADE):
                 return RedirectResponse("/erfassung", status_code=303)
             if benutzer.rolle == "innendienst" and pfad.startswith(ADMIN_PFADE):

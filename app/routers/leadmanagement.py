@@ -289,7 +289,9 @@ async def import_verarbeiten(request: Request,
             werte = {feld: (zeile[int(i)] if int(i) < len(zeile) else "")
                      for i, feld in zuordnung.items()}
             werte["sparten"] = sparten
-            werte["einwilligung_quelle"] = "portal"
+            werte["einwilligung_werbung"] = form.get("einwilligung_werbung") == "on"
+            werte["einwilligung_quelle"] = (form.get("einwilligung_quelle")
+                                            or "portal")
             if not werte.get("nachname"):
                 protokoll["uebersprungen"].append(f"Zeile {nr}: Nachname fehlt")
                 continue
@@ -1390,4 +1392,145 @@ async def lead_kanal_report(request: Request,
                                  "attachment; filename=kanal-report.csv"})
     return render(request, "leadmanagement/kanal_report.html",
                   aktiv="/lead-management", mit_demo=mit_demo, **daten,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+# --- Phase 81: Außendienst-Sicht (No-Show, Verschieben, Meine Termine) --------------
+
+def _ad_termin(request: Request, session: Session, termin_id: int):
+    """Gate der AD-Routen: Rolle aussendienst, Freigabe „alle“, eigener
+    Termin – sonst None."""
+    benutzer = request.state.benutzer
+    if not kern.lead_ad_sicht(session, benutzer):
+        return None
+    termin = session.get(VotTermin, termin_id)
+    if termin is None or termin.ad_id != benutzer.id:
+        return None
+    return termin
+
+
+@router.post("/ad/termin/{termin_id}/no-show")
+async def ad_no_show(request: Request, termin_id: int,
+                     session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+    termin = _ad_termin(request, session, termin_id)
+    if termin is None:
+        return RedirectResponse("/erfassung", status_code=303)
+    form = await request.form()
+    grund = (form.get("grund") or "").strip()
+    text = (form.get("grund_text") or "").strip()
+    fehler = _grund_pruefen(session, "no_show", grund, text)
+    if fehler:
+        return RedirectResponse(f"/vorgaenge/{termin.vorgang_id}?meldung="
+                                + quote_plus(fehler), status_code=303)
+    status = "abgesagt" if form.get("art") == "absage" else "no_show"
+    kern.termin_no_show(session, termin, grund, text, status=status,
+                        benutzer=request.state.benutzer)
+    session.commit()
+    return RedirectResponse(f"/vorgaenge/{termin.vorgang_id}?meldung="
+                            + quote_plus("Zurückgemeldet – das Leadmanagement "
+                                         "übernimmt."), status_code=303)
+
+
+@router.post("/ad/termin/{termin_id}/verschieben")
+async def ad_verschieben(request: Request, termin_id: int,
+                         session: Session = Depends(get_session)):
+    """AD darf eigene Termine verschieben – nur innerhalb derselben Woche;
+    der Kunde erhält die Terminänderung nach mail_modus, der Leadmanager
+    wird benachrichtigt (Plan 81)."""
+    from urllib.parse import quote_plus
+    termin = _ad_termin(request, session, termin_id)
+    if termin is None:
+        return RedirectResponse("/erfassung", status_code=303)
+    form = await request.form()
+    try:
+        beginn = datetime.strptime((form.get("beginn") or "").strip(),
+                                   "%Y-%m-%dT%H:%M")
+    except ValueError:
+        return RedirectResponse(f"/vorgaenge/{termin.vorgang_id}?meldung="
+                                + quote_plus("Neuer Beginn ist Pflicht."),
+                                status_code=303)
+    if termin.beginn is not None and \
+            beginn.isocalendar()[:2] != termin.beginn.isocalendar()[:2]:
+        return RedirectResponse(f"/vorgaenge/{termin.vorgang_id}?meldung="
+                                + quote_plus("Verschieben nur innerhalb "
+                                             "derselben Woche – sonst über "
+                                             "das Leadmanagement."),
+                                status_code=303)
+    grund = (form.get("grund") or "").strip()
+    vorgang = session.get(Vorgang, termin.vorgang_id)
+    neu, meldung = kern.termin_buchen(session, vorgang, termin.ad_id, beginn,
+                                      benutzer=request.state.benutzer,
+                                      quelle="manuell", umbuchen_id=termin.id)
+    if neu is not None and grund:
+        neu.grund_text = f"AD verschoben: {grund}"
+    if neu is not None and vorgang.leadmanager_id:
+        kunde = session.get(Kunde, vorgang.kunde_id)
+        kern.benachrichtigen(session, [vorgang.leadmanager_id],
+                             f"AD hat Termin verschoben: "
+                             f"{kunde.anzeige_name if kunde else '?'} → "
+                             f"{beginn.strftime('%d.%m. %H:%M')}"
+                             + (f" ({grund})" if grund else ""),
+                             f"/lead-management/lead/{vorgang.id}")
+    session.commit()
+    return RedirectResponse(f"/vorgaenge/{termin.vorgang_id}?meldung="
+                            + quote_plus("Termin verschoben – der Kunde wird "
+                                         "informiert."), status_code=303)
+
+
+@router.get("/meine-termine")
+async def meine_termine(request: Request,
+                        session: Session = Depends(get_session)):
+    """Mobil für den AD (Freigabe „alle“): heute/diese Woche mit Karten-Link,
+    Telefon und Steckbrief aus der Qualifizierung."""
+    import json as json_modul
+    from urllib.parse import quote_plus as url_quote
+    benutzer = request.state.benutzer
+    if not kern.lead_ad_sicht(session, benutzer):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404)
+    from app import leadmanagement_logik
+    logik = leadmanagement_logik.hole_logik()
+    jetzt = datetime.now()
+    heute_start = jetzt.replace(hour=0, minute=0, second=0, microsecond=0)
+    woche_ende = heute_start + timedelta(days=7)
+    termine = (session.query(VotTermin)
+               .filter(VotTermin.ad_id == benutzer.id,
+                       VotTermin.status.in_(("geplant", "bestaetigt")),
+                       VotTermin.beginn >= heute_start,
+                       VotTermin.beginn < woche_ende)
+               .order_by(VotTermin.beginn).all())
+    zeilen = []
+    for t in termine:
+        vorgang = session.get(Vorgang, t.vorgang_id)
+        kunde = session.get(Kunde, vorgang.kunde_id) if vorgang else None
+        if kunde is None:
+            continue
+        steckbrief = []
+        for q in (session.query(LeadQualifizierung)
+                  .filter(LeadQualifizierung.vorgang_id == vorgang.id,
+                          LeadQualifizierung.abgeschlossen_am.isnot(None))):
+            try:
+                antworten = json_modul.loads(q.antworten or "{}")
+            except ValueError:
+                continue
+            for frage in logik.fragen_der_sparte(q.sparte):
+                if frage.key in antworten:
+                    wert = antworten[frage.key]
+                    steckbrief.append((f"{q.sparte}: {frage.frage}",
+                                       ", ".join(wert) if isinstance(wert, list)
+                                       else str(wert)))
+        zeilen.append({
+            "termin": t, "vorgang": vorgang, "kunde": kunde,
+            "steckbrief": steckbrief[:12],
+            "karten_link": "https://www.google.com/maps/dir/?api=1&destination="
+                           + url_quote(t.adresse or ""),
+        })
+    heute_liste = [z for z in zeilen
+                   if z["termin"].beginn.date() == jetzt.date()]
+    woche_liste = [z for z in zeilen
+                   if z["termin"].beginn.date() > jetzt.date()]
+    return render(request, "leadmanagement/meine_termine.html",
+                  aktiv=None, mobil=True, benutzer=benutzer,
+                  heute_liste=heute_liste, woche_liste=woche_liste,
                   meldung=request.query_params.get("meldung", ""))

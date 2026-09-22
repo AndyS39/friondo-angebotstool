@@ -2058,3 +2058,38 @@ def kanal_report(session: Session, monate: int = 12,
             ohne_kosten.add(name)
     return {"zeilen": zeilen, "monate": monats_liste,
             "ohne_kosten": sorted(ohne_kosten)}
+
+
+# --- Phase 81: AD-Sicht, Einstellungs-Protokoll, Demo-Umstellung --------------------
+
+def lead_ad_sicht(session: Session, benutzer) -> bool:
+    """Außendienst-Sicht auf die Lead-Akte (read-only + No-Show/Verschieben):
+    erst bei lead_freigabe_modus = alle wirksam (Plan 81)."""
+    return (benutzer is not None and benutzer.rolle == "aussendienst"
+            and freigabe_modus(session) == "alle")
+
+
+def einstellungs_protokoll(session: Session, text: str, benutzer=None) -> None:
+    """Protokoll der Parametrierung (Parameter-Änderungen, Löschläufe,
+    Demo-Umstellung) – letzte 30 Zeilen."""
+    stempel = datetime.now().strftime("%d.%m.%Y %H:%M")
+    wer = f" ({benutzer.name})" if benutzer else ""
+    bisher = parameter_holen(session, "einstellungs_protokoll", "")
+    zeilen = ([f"{stempel}{wer} · {text}"] + bisher.splitlines())[:30]
+    parameter_setzen(session, "einstellungs_protokoll", "\n".join(zeilen))
+
+
+def demo_kennzeichen_entfernen(session: Session, benutzer=None) -> int:
+    """Umstellung auf „alle“ mit „Behalten“: Demo-Kennzeichen entfernen
+    (nur Admin, protokolliert) – die Leads werden zu echten Leads."""
+    anzahl = 0
+    for vorgang in session.query(Vorgang).filter(Vorgang.demo.is_(True)):
+        vorgang.demo = False
+        anzahl += 1
+    for termin in session.query(VotTermin).filter(VotTermin.demo.is_(True)):
+        termin.demo = False
+    einstellungs_protokoll(session, f"Demo-Kennzeichen von {anzahl} Leads "
+                                    "entfernt (Umstellung auf alle, behalten)",
+                           benutzer)
+    session.flush()
+    return anzahl

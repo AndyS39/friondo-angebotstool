@@ -9,7 +9,7 @@
 <body>
 {% set benutzer_angemeldet = request.state.benutzer if request.state is defined else None %}
 <header class="kopfleiste">
-    <a class="marke" href="{{ {'aussendienst': '/erfassung', 'projektierung': '/projektierung', 'montage': '/montage'}.get(benutzer_angemeldet.rolle, '/') if benutzer_angemeldet else '/' }}">
+    <a class="marke" href="{{ {'aussendienst': '/erfassung', 'projektierung': '/projektierung', 'montage': '/montage', 'leadmanagement': '/lead-management'}.get(benutzer_angemeldet.rolle, '/') if benutzer_angemeldet else '/' }}">
         {# feste Maße direkt am Bild – wirkt auch bei veraltetem CSS-Cache #}
         <img src="/static/logo.png" alt="Friondo" class="marken-logo"
              width="75" height="30" style="height:30px; width:auto;">
@@ -64,6 +64,20 @@
                         <a href="/parametrierung/projektierung-logik">Projektierung-Logik</a>
                         <a href="/parametrierung/teams">Teams</a>
                         <a href="/parametrierung/subunternehmer">Subunternehmer</a>
+                    {% elif benutzer_angemeldet.rolle == 'leadmanagement' %}
+                        <a href="/lead-management/anrufliste">Anrufliste</a>
+                        <a href="/lead-management/board">Pipeline</a>
+                        <a href="/lead-management/kalender">Kalender</a>
+                        <a href="/lead-management/karte">Karte</a>
+                        <a href="/lead-management/posteingang">Posteingang</a>
+                        <a href="/lead-management/import">Import</a>
+                        <a href="/lead-management/statistik">Statistik Leads</a>
+                        <a href="/vorgaenge">Vorgänge</a>
+                        <a href="/kunden">Kunden</a>
+                        <a href="/angebote">Angebote (lesend)</a>
+                        <a href="/erfassungen">Erfassungen (lesend)</a>
+                        <a href="/parametrierung/lead-quellen">Quellen &amp; Kampagnen</a>
+                        <a href="/parametrierung/lead-logik">Steuerdatei</a>
                     {% elif benutzer_angemeldet.rolle == 'montage' %}
                         <a href="/montage">Meine Einsätze</a>
                     {% else %}
@@ -71,6 +85,9 @@
                         <a href="/erfassung">Erfassung</a>
                         <a href="/meine-angebote">Meine Angebote</a>
                         <a href="/statistik">Meine Statistik</a>
+                        {% if request.state.lead_ad_ok | default(false) %}
+                            <a href="/lead-management/meine-termine">Meine Termine</a>
+                        {% endif %}
                     {% endif %}
                     <a href="/logout">{{ benutzer_angemeldet.name }} abmelden ⏻</a>
                 </div>

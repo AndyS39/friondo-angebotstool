@@ -55,6 +55,15 @@
                     <input type="checkbox" name="sparten" value="{{ s }}"> {{ s }}</label>
             {% endfor %}
         </fieldset>
+        <label><input type="checkbox" name="einwilligung_werbung">
+            Einwilligung Werbung liegt vor</label>
+        <label class="schmal">Einwilligungs-Quelle
+            <select name="einwilligung_quelle">
+                {% for q in ('portal', 'formular', 'telefonisch') %}
+                    <option value="{{ q }}">{{ q }}</option>
+                {% endfor %}
+            </select>
+        </label>
     </div>
     <h2>Spaltenzuordnung + Vorschau (erste 20 Zeilen)</h2>
     <div style="overflow-x:auto">

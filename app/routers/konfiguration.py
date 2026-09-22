@@ -1068,3 +1068,133 @@ async def lead_vorlagen_speichern(request: Request,
     return RedirectResponse(f"/parametrierung/lead-vorlagen?vorlage={schluessel}"
                             + (f"&sparte={sparte}" if sparte else "")
                             + "&meldung=Gespeichert", status_code=303)
+
+
+@router.get("/lead-einstellungen")
+async def lead_einstellungen(request: Request,
+                             session: Session = Depends(get_session)):
+    """Lead-Management → Einstellungen (nur Admin, Plan 81)."""
+    from app import leadmanagement as lead_kern
+    from app.models import Vorgang
+    _lead_gate(request, session)
+    if request.state.benutzer.rolle != "admin":
+        return RedirectResponse("/parametrierung", status_code=303)
+    schluessel = ["lead_freigabe_modus", "mail_modus", "mail_testadresse",
+                  "parser_modus", "kalender_sync", "kalender_testpostfach",
+                  "sla_gruen_min", "sla_gelb_min", "arbeitszeit_lm",
+                  "zuweisung_lm", "vorschlag_horizont_tage",
+                  "vorschlag_raster_min", "absender_postfach",
+                  "kerngebiet_plz", "loeschlauf", "loeschfrist_monate",
+                  "firmen_adresse", "demo_badge_text",
+                  "erwartungswert_WP", "erwartungswert_PV",
+                  "erwartungswert_KL", "erwartungswert_WB",
+                  "quote_neu", "quote_in_kontaktierung", "quote_qualifiziert",
+                  "quote_terminiert", "quote_erfasst", "quote_angebot"]
+    werte = {name: lead_kern.parameter_holen(session, name)
+             for name in schluessel}
+    vorschau = None
+    if request.query_params.get("loeschvorschau") == "1":
+        vorschau = lead_kern.loeschlauf(session, trocken=True)
+    return render(request, "konfiguration/lead_einstellungen.html",
+                  aktiv="/parametrierung", werte=werte,
+                  demo_anzahl=session.query(Vorgang)
+                  .filter(Vorgang.demo.is_(True)).count(),
+                  protokoll=lead_kern.parameter_holen(
+                      session, "einstellungs_protokoll"),
+                  loesch_protokoll=lead_kern.parameter_holen(
+                      session, "loeschlauf_protokoll"),
+                  loeschvorschau=vorschau,
+                  umstellung=request.query_params.get("umstellung", ""),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/lead-einstellungen")
+async def lead_einstellungen_speichern(request: Request,
+                                       session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+
+    from app import leadmanagement as lead_kern
+    from app.models import Vorgang
+    _lead_gate(request, session)
+    benutzer = request.state.benutzer
+    if benutzer.rolle != "admin":
+        return RedirectResponse("/parametrierung", status_code=303)
+    form = await request.form()
+
+    # Demo-Umstellung auf „alle": Dialog erzwingt eine Entscheidung über
+    # die vorhandenen Demo-Leads (Plan 73/81)
+    neuer_modus = form.get("lead_freigabe_modus") or ""
+    if (neuer_modus == "alle"
+            and lead_kern.freigabe_modus(session) == "admin"):
+        demo_anzahl = (session.query(Vorgang)
+                       .filter(Vorgang.demo.is_(True)).count())
+        entscheidung = form.get("demo_entscheidung") or ""
+        if demo_anzahl and entscheidung not in ("loeschen", "behalten"):
+            return RedirectResponse(
+                "/parametrierung/lead-einstellungen?umstellung=1&meldung="
+                + quote_plus(f"{demo_anzahl} Demo-Leads vorhanden – bitte "
+                             "unten entscheiden: löschen oder behalten."),
+                status_code=303)
+        if entscheidung == "loeschen":
+            ergebnis = lead_kern.demo_leads_loeschen(session)
+            lead_kern.einstellungs_protokoll(
+                session, f"Umstellung auf alle – {ergebnis['vorgaenge']} "
+                         "Demo-Leads gelöscht", benutzer)
+        elif entscheidung == "behalten":
+            lead_kern.demo_kennzeichen_entfernen(session, benutzer)
+        lead_kern.parameter_setzen(session, "lead_freigabe_modus", "alle")
+        lead_kern.einstellungs_protokoll(session,
+                                         "lead_freigabe_modus → alle", benutzer)
+    elif neuer_modus == "admin":
+        if lead_kern.freigabe_modus(session) != "admin":
+            lead_kern.einstellungs_protokoll(session,
+                                             "lead_freigabe_modus → admin",
+                                             benutzer)
+        lead_kern.parameter_setzen(session, "lead_freigabe_modus", "admin")
+
+    # mail_modus: live ist server-seitig nur bei Freigabe „alle" zulässig
+    mail_modus = form.get("mail_modus") or ""
+    if mail_modus in ("protokoll", "test", "live"):
+        if mail_modus == "live" and lead_kern.demo_aktiv(session):
+            return RedirectResponse(
+                "/parametrierung/lead-einstellungen?meldung="
+                + quote_plus("mail_modus=live ist im Demo-Modus nicht "
+                             "zulässig (Sendesperre) – erst Freigabe auf "
+                             "„alle“ stellen."), status_code=303)
+        alt = lead_kern.parameter_holen(session, "mail_modus")
+        if mail_modus != alt:
+            lead_kern.einstellungs_protokoll(
+                session, f"mail_modus {alt} → {mail_modus}", benutzer)
+        lead_kern.parameter_setzen(session, "mail_modus", mail_modus)
+
+    einfache = ["mail_testadresse", "kalender_testpostfach", "arbeitszeit_lm",
+                "absender_postfach", "kerngebiet_plz", "firmen_adresse",
+                "demo_badge_text"]
+    zahlen = ["sla_gruen_min", "sla_gelb_min", "vorschlag_horizont_tage",
+              "vorschlag_raster_min", "loeschfrist_monate",
+              "erwartungswert_WP", "erwartungswert_PV", "erwartungswert_KL",
+              "erwartungswert_WB", "quote_neu", "quote_in_kontaktierung",
+              "quote_qualifiziert", "quote_terminiert", "quote_erfasst",
+              "quote_angebot"]
+    for name in einfache:
+        if form.get(name) is not None:
+            lead_kern.parameter_setzen(session, name,
+                                       (form.get(name) or "").strip())
+    for name in zahlen:
+        wert = (form.get(name) or "").strip()
+        if wert.isdigit():
+            lead_kern.parameter_setzen(session, name, wert)
+    for name in ("parser_modus", "kalender_sync", "loeschlauf"):
+        if form.get(name) in ("an", "aus"):
+            alt = lead_kern.parameter_holen(session, name)
+            if form.get(name) != alt:
+                lead_kern.einstellungs_protokoll(
+                    session, f"{name} {alt} → {form.get(name)}", benutzer)
+            lead_kern.parameter_setzen(session, name, form.get(name))
+    if form.get("zuweisung_lm") in ("round_robin",):
+        lead_kern.parameter_setzen(session, "zuweisung_lm",
+                                   form.get("zuweisung_lm"))
+    session.commit()
+    return RedirectResponse("/parametrierung/lead-einstellungen?meldung="
+                            + quote_plus("Einstellungen gespeichert."),
+                            status_code=303)

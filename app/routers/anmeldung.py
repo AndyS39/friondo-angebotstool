@@ -38,7 +38,9 @@ async def login(request: Request, session: Session = Depends(get_session)):
     # v9-Portal: Innendienst landet nach dem Login direkt im Angebotstool
     # (das Portal „/“ ist über den Home-Link im Kopf erreichbar)
     ziel = {"aussendienst": "/erfassung", "projektierung": "/projektierung",
-            "montage": "/montage"}.get(benutzer.rolle, "/angebotstool")
+            "montage": "/montage",
+            "leadmanagement": "/lead-management"}.get(benutzer.rolle,
+                                                      "/angebotstool")
     antwort = RedirectResponse(ziel, status_code=303)
     antwort.set_cookie(auth.COOKIE_NAME, auth.cookie_wert(benutzer.id),
                        httponly=True, max_age=60 * 60 * 12)

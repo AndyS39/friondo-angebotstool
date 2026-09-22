@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block titel %}Meine Termine – Friondo{% endblock %}
+
+{% block inhalt %}
+<h1>Meine Termine</h1>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% macro termin_karten(liste) %}
+{% if liste %}
+<div class="einsatz-liste">
+    {% for z in liste %}
+    <div class="einsatz-karte" style="cursor:default">
+        <strong>{{ z.termin.beginn.strftime('%a %d.%m. %H:%M') }} Uhr
+            · {{ z.kunde.anzeige_name }}</strong>
+        <span>{{ z.termin.adresse or '–' }}
+            {% if z.termin.adresse %}
+                · <a href="{{ z.karten_link }}" target="_blank">Navigation ↗</a>
+            {% endif %}</span>
+        {% if z.kunde.telefon %}
+            <span>Telefon: <a href="tel:{{ z.kunde.telefon }}">{{ z.kunde.telefon }}</a></span>
+        {% endif %}
+        <span><a href="/vorgaenge/{{ z.vorgang.id }}">Lead-Akte öffnen</a></span>
+        {% if z.steckbrief %}
+        <details>
+            <summary class="dezent">Steckbrief aus der Qualifizierung</summary>
+            <table class="tabelle"><tbody>
+            {% for frage, wert in z.steckbrief %}
+                <tr><td>{{ frage }}</td><td>{{ wert }}</td></tr>
+            {% endfor %}
+            </tbody></table>
+        </details>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}<p class="dezent">Keine Termine.</p>{% endif %}
+{% endmacro %}
+
+<h2>Heute ({{ heute_liste | length }})</h2>
+{{ termin_karten(heute_liste) }}
+<h2>Diese Woche ({{ woche_liste | length }})</h2>
+{{ termin_karten(woche_liste) }}
+<p class="dezent">No-Show melden und Verschieben (eigene Woche) direkt in der
+    Lead-Akte des Termins.</p>
+{% endblock %}
