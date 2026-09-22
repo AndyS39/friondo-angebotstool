@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block titel %}Lead-Management-Steuerdatei – Friondo Angebotstool{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Lead-Management → Steuerdatei</h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung">Zur Parametrierung</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<p class="dezent">Quelle: <code>{{ pfad }}</code>
+    {% if logik.stand %} · Stand: {{ logik.stand }}{% endif %}
+    · Änderungen wirken auf neue Qualifizierungen; abgeschlossene behalten
+    ihre Antworten.</p>
+
+{% if logik.fehler %}
+<div class="warnblock fehlerblock">
+    <strong>Fehler ({{ logik.fehler | length }})</strong>
+    <ul>{% for f in logik.fehler %}<li>{{ f }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+{% if logik.warnungen %}
+<div class="warnblock">
+    <strong>Warnungen ({{ logik.warnungen | length }})</strong>
+    <ul>{% for w in logik.warnungen %}<li>{{ w }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<form method="post" action="/parametrierung/lead-logik"
+      enctype="multipart/form-data" class="formzeile">
+    <input type="file" name="datei" accept=".xlsx" required>
+    <button class="knopf" type="submit">Neue Steuerdatei einlesen</button>
+</form>
+
+<h2>Qualifizierung ({{ logik.fragen | length }} Fragen)</h2>
+<div style="overflow-x:auto">
+<table class="tabelle">
+    <thead><tr><th>Sparte</th><th>Key</th><th>Frage</th><th>Typ</th>
+        <th>Optionen</th><th>Pflicht</th><th>Nr.</th>
+        <th title="Vorbelegung des AD-Erfassungsbogens">Erfassungs-Frage</th>
+        <th>Unqualifiziert bei</th></tr></thead>
+    <tbody>
+    {% for f in logik.fragen %}
+        <tr>
+            <td>{{ f.sparte }}</td><td>{{ f.key }}</td><td>{{ f.frage }}</td>
+            <td>{{ f.typ }}</td>
+            <td class="dezent">{{ f.optionen | join(' | ') }}</td>
+            <td>{{ 'J' if f.pflicht else '' }}</td>
+            <td>{{ f.reihenfolge }}</td>
+            <td>{{ f.erfassungs_frage }}</td>
+            <td>{{ f.unqualifiziert_bei }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<h2>Scoring ({{ logik.scoring | length }} Regeln) · Klassen:
+    {% for klasse, ab in logik.klassen %}{{ klasse }} ≥ {{ ab }}{{ ' · ' if not loop.last }}{% endfor %}</h2>
+<table class="tabelle" style="max-width:700px">
+    <thead><tr><th>Frage</th><th>Bedingung</th><th>Punkte</th><th>Bemerkung</th></tr></thead>
+    <tbody>
+    {% for s in logik.scoring %}
+        <tr><td>{{ s.frage_key }}</td><td>{{ s.bedingung }}</td>
+            <td class="rechts">{{ s.punkte }}</td><td class="dezent">{{ s.bemerkung }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+<p class="dezent">Systemregeln im Code: PLZ-Präfix im Kerngebiet +10,
+    Quellen-Bonus aus der Quelle.</p>
+
+<h2>Kaskade</h2>
+<table class="tabelle" style="max-width:600px">
+    <thead><tr><th>Versuch</th><th>Wiedervorlage nach</th><th>Aktion</th><th>Letzter</th></tr></thead>
+    <tbody>
+    {% for s in logik.kaskade %}
+        <tr><td>{{ s.versuch_nr }}</td><td>{{ s.wiedervorlage_nach }}</td>
+            <td>{{ s.aktion }}</td><td>{{ 'J' if s.letzter }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+<p class="dezent">Nach dem letzten Versuch: Phase „Nicht erreicht“,
+    Wiedervorlage +30 Tage, Aktion mail_nurture.</p>
+
+<h2>Gründe</h2>
+<table class="tabelle" style="max-width:700px">
+    <thead><tr><th>Phase</th><th>Grund</th><th>Freitext Pflicht</th></tr></thead>
+    <tbody>
+    {% for g in logik.gruende %}
+        <tr><td>{{ g.phase }}</td><td>{{ g.grund }}</td>
+            <td>{{ 'J' if g.freitext_pflicht }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Wunschzeiten</h2>
+<table class="tabelle" style="max-width:600px">
+    <thead><tr><th>Key</th><th>Bezeichnung</th><th>Von</th><th>Bis</th><th>Wochentage</th></tr></thead>
+    <tbody>
+    {% for w in logik.wunschzeiten %}
+        <tr><td>{{ w.key }}</td><td>{{ w.bezeichnung }}</td>
+            <td>{{ w.von }}</td><td>{{ w.bis }}</td><td>{{ w.wochentage }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

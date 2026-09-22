@@ -38,3 +38,18 @@ nach V1 durch.
   Benachrichtigungs-Strecke (Phase 69) und werden für Benutzer ohne
   Modul-Sichtbarkeit gefiltert – Glocke UND Mail (gleiches Muster wie der
   Projektierungs-Demo-Filter).
+
+## Phase 74 – Steuerdatei
+
+- **erfassungs_frage-Mapping** nur bei inhaltlich identischen Fragen gesetzt:
+  WP: Q-W02→O01, Q-W03→O02, Q-W04→O05, Q-W05→A01, Q-W06→A02, Q-W07→A03,
+  Q-W09→H02; PV: Q-P02→PO01, Q-P03→PD01, Q-P07→PO04; KL: Q-K01→KO03,
+  Q-K02→KO05. Q-W08 (Warmwasser über die Heizung, IST-Zustand) wurde bewusst
+  NICHT auf N02 (Warmwasser über die Wärmepumpe, SOLL) gemappt; die
+  Eigentümer-Fragen der Sparten WP/PV haben keinen identischen Bogen-Key.
+- **Zusatz-Spalte `unqualifiziert_bei`** liegt als 9. Spalte im Blatt
+  Qualifizierung (Plan nennt sie im Blattaufbau, Startinhalt setzt sie bei
+  den Eigentümer-Fragen auf „nein“).
+- **hole_logik ohne Session**: Anders als die Projektierung braucht die
+  Lead-Steuerdatei keine Parameter-Übernahme in die Datenbank – der Cache
+  hängt nur an der Datei (mtime).

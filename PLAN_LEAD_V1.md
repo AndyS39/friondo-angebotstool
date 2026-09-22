@@ -159,7 +159,7 @@ Terminal-Server weiterhin nacheinander (update.bat).
 
 ## Phase 74 – Steuerdatei `leadmanagement_logik_v1.xlsx` + Import
 
-- [ ] Datei anlegen (Repo-Ordner wie `konfigurator_logik_v5.xlsx`) mit Blättern:
+- [x] Datei anlegen (Repo-Ordner wie `konfigurator_logik_v5.xlsx`) mit Blättern:
   - **Qualifizierung**: `sparte`, `frage_key`, `frage`, `typ` (janein / auswahl / mehrfach /
     zahl / text), `optionen` (mit `|` getrennt), `pflicht` (J/N), `reihenfolge`,
     `erfassungs_frage` (Frage-Key des bestehenden Erfassungsbogens aus
@@ -175,7 +175,7 @@ Terminal-Server weiterhin nacheinander (update.bat).
   - **Gruende**: `phase` (unqualifiziert / zurueckgestellt / no_show / verloren_vor_termin),
     `grund`, `freitext_pflicht` (J/N).
   - **Wunschzeiten**: `key`, `bezeichnung`, `von`, `bis`, `wochentage` (`mo-fr`, `sa`).
-- [ ] Startinhalt **Qualifizierung WP** (Reihenfolge 1–14; Andreas passt später in der Excel an):
+- [x] Startinhalt **Qualifizierung WP** (Reihenfolge 1–14; Andreas passt später in der Excel an):
   Q-W01 „Sind Sie Eigentümer des Gebäudes?" janein, Pflicht, unqualifiziert_bei = nein ·
   Q-W02 „Gebäudetyp" auswahl `Einfamilienhaus|Doppelhaushälfte|Reihenhaus|Mehrfamilienhaus|Gewerbe`, Pflicht ·
   Q-W03 „Baujahr des Gebäudes" zahl · Q-W04 „Beheizte Wohnfläche (m²)" zahl ·
@@ -188,7 +188,7 @@ Terminal-Server weiterhin nacheinander (update.bat).
   Q-W12 „Sind alle Entscheider beim Termin anwesend?" janein ·
   Q-W13 „Wunschzeiten" mehrfach `vormittags|nachmittags|abends|samstag`, Pflicht ·
   Q-W14 „Zusätzliches Interesse" mehrfach `PV|Klima|Wallbox|Speicher`.
-- [ ] Startinhalt **PV**: Q-P01 Eigentümer (janein, Pflicht, unqualifiziert_bei nein) · Q-P02 Gebäudetyp
+- [x] Startinhalt **PV**: Q-P01 Eigentümer (janein, Pflicht, unqualifiziert_bei nein) · Q-P02 Gebäudetyp
   (wie W02) · Q-P03 „Dachform" `Satteldach|Flachdach|Walmdach|Pultdach` · Q-P04 „Dachausrichtung"
   `Süd|Südost/Südwest|Ost/West|Nord|unklar` · Q-P05 „Freie Dachfläche ca. (m²)" zahl ·
   Q-P06 „Dacheindeckung" `Ziegel|Blech|Bitumen|Schiefer|Sonstiges` · Q-P07 „Stromverbrauch
@@ -201,7 +201,7 @@ Terminal-Server weiterhin nacheinander (update.bat).
   **WB**: Q-B01 „Eigener Stellplatz/Garage?" janein, Pflicht · Q-B02 „E-Fahrzeug"
   `vorhanden|bestellt|geplant` · Q-B03 „Entfernung Zählerschrank ↔ Stellplatz (m)" zahl ·
   Q-B04 „PV vorhanden/geplant?" `vorhanden|geplant|nein` · Q-B05 Zeitrahmen · Q-B06 Wunschzeiten.
-- [ ] Startinhalt **Scoring** (Punkte, Platzhalter): Q-W01 `=nein` −100 · Q-W05 `=Öl` +20 ·
+- [x] Startinhalt **Scoring** (Punkte, Platzhalter): Q-W01 `=nein` −100 · Q-W05 `=Öl` +20 ·
   Q-W05 `=Gas` +10 · Q-W05 `=Nachtspeicher` +15 · Q-W06 `<2005` +15 · Q-W06 `<2013` +5 ·
   Q-W07 `>20000` +10 · Q-W10 `=sofort` +25 · `=innerhalb 3 Monate` +20 ·
   `=innerhalb 6 Monate` +10 · Q-W11 `=ja` +5 · Q-W12 `=ja` +10 · Q-W12 `=nein` −10 ·
@@ -209,23 +209,23 @@ Terminal-Server weiterhin nacheinander (update.bat).
   Q-P07 `>4000` +10 · Q-P08 `=ja` +10 · Q-P09 `=vorhanden` +10 · Q-P10 wie W10 ·
   Q-K05/Q-B05 wie W10. **Systemregeln** (im Code, nicht in der Excel): PLZ-Präfix in
   `kerngebiet_plz` +10; `lead_quellen.score_bonus` addieren.
-- [ ] Startinhalt **Kaskade**: 1 → `+2h`, keine · 2 → `+1d 18:00`, mail_nicht_erreicht ·
+- [x] Startinhalt **Kaskade**: 1 → `+2h`, keine · 2 → `+1d 18:00`, mail_nicht_erreicht ·
   3 → `+3d`, keine · 4 → `+7d`, mail_nicht_erreicht, letzter = J (danach Phase
   „Nicht erreicht", Wiedervorlage +30 Tage, Aktion mail_nurture).
-- [ ] Startinhalt **Gruende**: unqualifiziert: Mieter/kein Eigentümer · außerhalb
+- [x] Startinhalt **Gruende**: unqualifiziert: Mieter/kein Eigentümer · außerhalb
   Vertriebsgebiet · kein Bedarf, nur Information · Budget/Finanzierung · technisch nicht
   geeignet · Doppelter · Spam/Fehleingabe · Sonstiges (Freitext Pflicht) ·
   zurueckgestellt: Kunde meldet sich selbst · Bauphase später · Förderung/Finanzierung
   abwarten · Sonstiges (Pflicht) · no_show: Kunde nicht angetroffen · Kunde hat kurzfristig
   abgesagt · Außendienst verhindert · Sonstiges (Pflicht) · verloren_vor_termin:
   Wettbewerber · Preiserwartung · keine Reaktion mehr · Sonstiges (Pflicht).
-- [ ] Startinhalt **Wunschzeiten**: vormittags 08:00–12:00 mo-fr · nachmittags 12:00–17:00
+- [x] Startinhalt **Wunschzeiten**: vormittags 08:00–12:00 mo-fr · nachmittags 12:00–17:00
   mo-fr · abends 17:00–20:00 mo-fr · samstag 09:00–14:00 sa.
-- [ ] Import in der Parametrierung: Bereich **„Lead-Management → Steuerdatei"** mit Upload
+- [x] Import in der Parametrierung: Bereich **„Lead-Management → Steuerdatei"** mit Upload
   (wie Logik-Import), Anzeige der Blätter als Tabellen, Versionsstand, Prüfung: unbekannte
   `erfassungs_frage`-Keys werden als Warnung gelistet. Änderungen wirken auf neue
   Qualifizierungen; abgeschlossene bleiben mit ihren Antworten.
-- [ ] Test: Import läuft, alle Blätter sichtbar, doppelter Import ohne Dubletten,
+- [x] Test: Import läuft, alle Blätter sichtbar, doppelter Import ohne Dubletten,
   Warnung bei falschem Key.
 
 ## Phase 75 – Lead-Eingang: Quellen, Schnellanlage, Import, API, Parser, Duplikate, Demo-Daten

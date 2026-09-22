@@ -16,6 +16,9 @@
         {% if request.state.benutzer and request.state.benutzer.rolle == 'admin' %}
             <a class="knopf zweitrangig" href="/parametrierung/projektierung-einstellungen">Projektierung-Einstellungen</a>
         {% endif %}
+        {% if request.state.lead_modul_ok | default(false) %}
+            <a class="knopf zweitrangig" href="/parametrierung/lead-logik">Lead-Steuerdatei</a>
+        {% endif %}
         <form method="post" action="/parametrierung/neu-einlesen">
             <button class="knopf" type="submit">Parametrierung neu einlesen</button>
         </form>

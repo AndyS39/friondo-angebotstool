@@ -674,3 +674,69 @@ async def projektierung_einstellungen_speichern(
     return RedirectResponse("/parametrierung/projektierung-einstellungen?meldung="
                             + quote_plus("Einstellungen gespeichert."),
                             status_code=303)
+
+
+# --- v12 (Phase 74): Lead-Management – Steuerdatei ---------------------------------
+
+@router.get("/lead-logik")
+async def lead_logik_seite(request: Request,
+                           session: Session = Depends(get_session)):
+    """Steuerdatei des Lead-Managements: Blätter als Tabellen, Versionsstand,
+    Upload. Änderungen wirken auf neue Qualifizierungen; abgeschlossene
+    behalten ihre Antworten."""
+    from fastapi import HTTPException
+
+    from app import leadmanagement, leadmanagement_logik
+    if not leadmanagement.lead_modul_sichtbar(session, request.state.benutzer):
+        raise HTTPException(status_code=404)   # Demo-Modus: unsichtbar
+    logik = leadmanagement_logik.hole_logik()
+    return render(request, "konfiguration/lead_logik.html",
+                  aktiv="/parametrierung", logik=logik,
+                  pfad=str(leadmanagement_logik.LOGIK_PFAD),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/lead-logik")
+async def lead_logik_upload(request: Request,
+                            session: Session = Depends(get_session)):
+    """Upload wie beim Logik-Import: Backup, ersetzen, neu einlesen; bei
+    Fehlern wird die alte Datei wiederhergestellt."""
+    import shutil
+    from datetime import datetime as dt
+    from urllib.parse import quote_plus
+
+    from fastapi import HTTPException
+
+    from app import leadmanagement, leadmanagement_logik
+    if not leadmanagement.lead_modul_sichtbar(session, request.state.benutzer):
+        raise HTTPException(status_code=404)
+    form = await request.form()
+    datei = form.get("datei")
+    if datei is None or not getattr(datei, "filename", ""):
+        return RedirectResponse("/parametrierung/lead-logik?meldung="
+                                + quote_plus("Bitte eine .xlsx-Datei wählen."),
+                                status_code=303)
+    inhalt = await datei.read()
+    ziel = leadmanagement_logik.LOGIK_PFAD
+    sicherung = None
+    if ziel.exists():
+        sicherung = (config.BACKUP_ORDNER
+                     / f"leadmanagement_logik_{dt.now():%Y%m%d_%H%M%S}.xlsx")
+        shutil.copyfile(ziel, sicherung)
+    ziel.write_bytes(inhalt)
+    logik = leadmanagement_logik.hole_logik(erzwingen=True)
+    if logik.fehler:
+        if sicherung is not None:
+            shutil.copyfile(sicherung, ziel)
+            leadmanagement_logik.hole_logik(erzwingen=True)
+        return RedirectResponse("/parametrierung/lead-logik?meldung="
+                                + quote_plus("Import abgewiesen: "
+                                             + " · ".join(logik.fehler)),
+                                status_code=303)
+    meldung = (f"Steuerdatei übernommen – {len(logik.fragen)} Fragen, "
+               f"{len(logik.scoring)} Scoring-Regeln, "
+               f"{len(logik.kaskade)} Kaskaden-Stufen"
+               + (f", {len(logik.warnungen)} Warnungen" if logik.warnungen else "")
+               + (f". Backup: {sicherung.name}" if sicherung else "."))
+    return RedirectResponse("/parametrierung/lead-logik?meldung="
+                            + quote_plus(meldung), status_code=303)
