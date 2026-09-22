@@ -408,10 +408,12 @@ def projekt_anlegen(session: Session, angebot: Angebot, benutzer=None,
     projekt = Projekt(
         nummer=naechste_projektnummer(session),
         vorgang_id=vorgang.id, kunde_id=angebot.kunde_id,
-        ausfuehrung_strasse=(adresse or {}).get("strasse",
-                                                kunde.strasse if kunde else ""),
-        ausfuehrung_plz=(adresse or {}).get("plz", kunde.plz if kunde else ""),
-        ausfuehrung_ort=(adresse or {}).get("ort", kunde.ort if kunde else ""),
+        ausfuehrung_strasse=((adresse or {}).get("strasse")
+                             or (kunde.strasse if kunde else "")),
+        ausfuehrung_plz=((adresse or {}).get("plz")
+                         or (kunde.plz if kunde else "")),
+        ausfuehrung_ort=((adresse or {}).get("ort")
+                         or (kunde.ort if kunde else "")),
         projektleiter_id=projektleiter_id,
         vertriebler_id=vertriebler.id if vertriebler else angebot.vertriebler_id,
         kanal=kanal or "", notiz_kopf=(notiz_kopf or "").strip()[:500],
@@ -536,6 +538,151 @@ def _erfassungsprotokoll_ablegen(session: Session, projekt: Projekt,
         freitext=erfassung.freitext if erfassung.typ == "freitext" else "")
     _dokument_ablegen(session, projekt, Path(pfad), "01 Angebot & Erfassung",
                       gewerk.id, benutzer)
+
+
+# --- Phasenwechsel + Freigabe (Phase 67) --------------------------------------------
+
+def waechter_pruefen(session: Session, gewerk: Gewerk, ziel: str) -> list[str]:
+    """Unerfüllte Bedingungen für den Wechsel NACH RECHTS (Konzept 3.1);
+    leer = Wechsel frei. Rückwärts liefert [] (Begründung regelt die Route)."""
+    reihen = {p: i for i, p in enumerate(
+        ["feinplanung", "feinplanung_abgeschlossen", "montage_geplant",
+         "in_ausfuehrung", "abnahme_offen", "abgeschlossen"])}
+    if ziel not in reihen or reihen.get(gewerk.phase, 0) >= reihen[ziel]:
+        return []
+    offen: list[str] = []
+    # ab „Feinplanung abgeschlossen": alle Pflichtaufgaben der aktiven Pakete
+    if reihen[ziel] >= reihen["feinplanung_abgeschlossen"]:
+        ampel = planungs_ampel(session, gewerk)
+        if ampel["erledigt"] < ampel["gesamt"]:
+            offen.append(f"{ampel['gesamt'] - ampel['erledigt']} Pflichtaufgaben offen "
+                         f"({ampel['erledigt']} von {ampel['gesamt']} erledigt)")
+    # ab „Montage geplant": mindestens ein Montagetermin mit Team/Person
+    if reihen[ziel] >= reihen["montage_geplant"]:
+        termin = (session.query(ProjektTermin)
+                  .filter(ProjektTermin.gewerk_id == gewerk.id,
+                          ProjektTermin.typ == "montage",
+                          ProjektTermin.beginn.isnot(None)).first())
+        if termin is None:
+            offen.append("Kein Montagetermin angelegt")
+        elif not (termin.team_id or termin.person_id):
+            offen.append("Montagetermin ohne Team/Person")
+    # „Abgeschlossen" nur über die Rechnungsfreigabe
+    if ziel == "abgeschlossen" and gewerk.freigabe_am is None:
+        offen.append("Rechnung nicht freigegeben – bitte „Rechnung freigeben“ nutzen")
+    return offen
+
+
+def phase_wechseln(session: Session, gewerk: Gewerk, ziel: str,
+                   begruendung: str, benutzer=None) -> tuple[bool, str]:
+    """Phasenwechsel mit Wächtern; Override und Rückwärts nur mit Begründung
+    (immer protokolliert). Stornierte Gewerke sind gesperrt."""
+    from app.models import GEWERK_PHASEN, GEWERK_PHASEN_NAMEN
+    if gewerk.phase == "storniert":
+        return False, "Storniertes Gewerk – Phasenwechsel nicht möglich."
+    if ziel not in GEWERK_PHASEN or ziel == "storniert":
+        return False, "Unbekannte Zielphase."
+    if ziel == gewerk.phase:
+        return False, "Das Gewerk ist bereits in dieser Phase."
+    reihen = {p: i for i, p in enumerate(GEWERK_PHASEN)}
+    rueckwaerts = reihen[ziel] < reihen[gewerk.phase]
+    offen = waechter_pruefen(session, gewerk, ziel)
+    begruendung = (begruendung or "").strip()[:500]
+    if (offen or rueckwaerts) and not begruendung:
+        if rueckwaerts:
+            return False, ("Rückwärts-Wechsel nur mit Begründung "
+                           "(Feld „Begründung“ ausfüllen).")
+        return False, ("Wächter: " + " · ".join(offen)
+                       + " – Override nur mit Begründung.")
+    alt = gewerk.phase
+    gewerk.phase = ziel
+    gewerk.phase_geaendert_am = datetime.now()
+    if ziel == "abnahme_offen" and gewerk.montage_fertig_am is None:
+        gewerk.montage_fertig_am = datetime.now()   # V1: Häkchen „Montage fertig"
+    projekt = session.get(Projekt, gewerk.projekt_id)
+    if projekt is not None:
+        projektstatus_berechnen(session, projekt)
+    text = (f"Phase des Gewerks {gewerk.sparte} geändert: "
+            f"{GEWERK_PHASEN_NAMEN[alt]} → {GEWERK_PHASEN_NAMEN[ziel]}")
+    if offen and begruendung:
+        text += f" – trotz offener Punkte: {begruendung} ({' · '.join(offen)})"
+    elif begruendung:
+        text += f" – Begründung: {begruendung}"
+    verlauf(session, gewerk.projekt_id, text, benutzer=benutzer,
+            gewerk_id=gewerk.id)
+    # Benachrichtigung an die Zugewiesenen des Gewerks (Phase 69)
+    if projekt is not None:
+        benachrichtigen(
+            session,
+            [projekt.projektleiter_id, gewerk.feinplaner_id,
+             gewerk.elektroplaner_id],
+            f"{projekt.nummer} {gewerk.sparte}: {GEWERK_PHASEN_NAMEN[ziel]}",
+            f"/projektierung/projekt/{projekt.id}", art="phase")
+    return True, f"Gewerk {gewerk.sparte}: {GEWERK_PHASEN_NAMEN[ziel]}."
+
+
+def rechnung_freigeben(session: Session, gewerk: Gewerk, restarbeiten: str,
+                       restarbeiten_text: str, benutzer=None) -> tuple[bool, str]:
+    """„Rechnung freigeben“ (Phase 67): Restarbeiten-Pflichtfrage, Phase
+    Abgeschlossen, Benachrichtigung an die Buchhaltung, Verlaufseintrag;
+    Restarbeiten erzeugen automatisch eine Pflicht-Aufgabe (+14)."""
+    if gewerk.phase != "abnahme_offen":
+        return False, "Freigabe nur in Phase „Abnahme offen“ möglich."
+    restarbeiten_text = (restarbeiten_text or "").strip()[:1000]
+    if restarbeiten == "ja" and not restarbeiten_text:
+        return False, "Bitte die Restarbeiten/Reklamationen beschreiben (Pflicht)."
+    if restarbeiten not in ("keine", "ja"):
+        return False, "Bitte angeben, ob Restarbeiten offen sind."
+    gewerk.freigabe_am = datetime.now()
+    gewerk.freigabe_von = benutzer.id if benutzer else None
+    gewerk.restarbeiten_text = restarbeiten_text if restarbeiten == "ja" else ""
+    gewerk.phase = "abgeschlossen"
+    gewerk.phase_geaendert_am = datetime.now()
+    projekt = session.get(Projekt, gewerk.projekt_id)
+    if projekt is not None:
+        projektstatus_berechnen(session, projekt)
+    if restarbeiten == "ja":
+        session.add(Aufgabe(
+            gewerk_id=gewerk.id, projekt_id=gewerk.projekt_id,
+            titel=f"Restarbeiten: {restarbeiten_text[:250]}",
+            rolle="projektierer",
+            verantwortlich_id=_standard_benutzer(session, "projektierer",
+                                                 gewerk, projekt),
+            faellig_am=datetime.now() + timedelta(days=14),
+            faellig_regel="+14", pflicht=True, reihenfolge=998,
+            erstellt_von=benutzer.id if benutzer else None))
+    verlauf(session, gewerk.projekt_id,
+            f"Rechnung freigegeben ({gewerk.sparte}) – Restarbeiten: "
+            + (restarbeiten_text or "keine"), benutzer=benutzer,
+            gewerk_id=gewerk.id)
+    # Buchhaltung benachrichtigen (Parametrierung „Buchhaltungs-Benutzer",
+    # sonst alle Innendienst-Benutzer)
+    buchhaltung = parameter_holen(session, "buchhaltung_benutzer", "")
+    if buchhaltung.isdigit():
+        ziele = [int(buchhaltung)]
+    else:
+        ziele = [b.id for b in session.query(Benutzer)
+                 .filter(Benutzer.rolle == "innendienst",
+                         Benutzer.aktiv.is_(True))]
+    if projekt is not None:
+        benachrichtigen(session, ziele,
+                        f"Rechnung freigegeben: {projekt.nummer} "
+                        f"({gewerk.sparte}) – bitte in TAIFUN abrechnen",
+                        f"/projektierung/projekt/{projekt.id}", art="freigabe")
+    return True, f"Rechnung freigegeben – Gewerk {gewerk.sparte} abgeschlossen."
+
+
+def erwaehnungen_finden(session: Session, text: str) -> list[int]:
+    """@Erwähnungen im Kommentartext: längster passender Benutzername nach
+    jedem @ (Namen können Leerzeichen enthalten)."""
+    treffer: list[int] = []
+    if "@" not in (text or ""):
+        return treffer
+    text_klein = text.lower()
+    for benutzer in session.query(Benutzer).filter(Benutzer.aktiv.is_(True)):
+        if f"@{benutzer.name.lower()}" in text_klein and benutzer.id not in treffer:
+            treffer.append(benutzer.id)
+    return treffer
 
 
 # --- Versionsfolge + Storno (Phase 66) ---------------------------------------------

@@ -61,3 +61,21 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
 - **Versionsfolge**: Der Nachzieh-Hook hängt am zentralen Statuswechsel
   (`angebot_status_setzen` → Wrapper in den Routen Status/Signatur), damit
   auch die Vor-Ort-/Fern-Signatur (Status „Angenommen") das Gewerk nachzieht.
+
+## Phase 67 – Projektakte
+
+- **Aufgaben-Anhänge** laufen in V1 über den Dokumente-Reiter (Ordner je
+  Gewerk) statt über eine eigene Anhang-Tabelle je Aufgabe; Kommentare je
+  Aufgabe liegen im Projektverlauf (`aufgabe_id`) und werden mit Zähler an
+  der Aufgabe angezeigt.
+- **Wächter „In Ausführung → Abnahme offen"**: Der Phasenwechsel selbst gilt
+  in V1 als Häkchen „Montage fertig" (setzt `montage_fertig_am`); die
+  Protokoll-Prüfung kommt mit den Montage-Formularen in V3.
+- **„Abgeschlossen"** ist im Phase-Dropdown wählbar, aber vom Wächter
+  „Rechnung nicht freigegeben" geschützt – regulär führt nur der
+  Freigabe-Dialog dorthin (Override mit Begründung bleibt möglich,
+  Konzept Annahme 13: kein hartes Sperren).
+- **Benachrichtigung bei Phasenwechsel** geht an Projektleiter, Feinplaner
+  und Elektroplaner des Gewerks (= „Benutzer, die zugewiesen sind").
+- **Vorgangs-Notizen** (Vertriebsphase) erscheinen in der Akte nur, wenn
+  welche existieren (read-only, aufklappbar unter dem Projektverlauf).

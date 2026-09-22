@@ -202,11 +202,11 @@ Server – dieser Plan setzt darauf auf und nummeriert ab Phase 64 weiter.
 
 ## Phase 67 – Projektakte
 
-- [ ] Route `/projektierung/projekt/<id>`. Kopfbereich: PR-Nr., Kunde (Link zur
+- [x] Route `/projektierung/projekt/<id>`. Kopfbereich: PR-Nr., Kunde (Link zur
   Kundenakte), Rechnungs- und Ausführungsadresse, Telefon/E-Mail, Vertriebler,
   Kanal-Badge, Projektleiter (änderbar), Gesamt-Auftragswert (Summe aktive Gewerke),
   Projektstatus, Buttons „Kommentar", „Dokument hochladen", „Termin anlegen".
-- [ ] **Gewerk-Spalten nebeneinander** (1 Gewerk = volle Breite, 2 = halbe, ab 3
+- [x] **Gewerk-Spalten nebeneinander** (1 Gewerk = volle Breite, 2 = halbe, ab 3
   scrollbar/umbrechend). Je Spalte: Sparten-Badge, Phase als Stepper (5 Schritte),
   Planungs-Ampel + „x von y Pflichtaufgaben", Auftragswert original/aktuell,
   Zuweisungen (Feinplaner, Elektroplaner – änderbar), Heizlast-Block (kW, Datum,
@@ -218,7 +218,7 @@ Server – dieser Plan setzt darauf auf und nummeriert ab Phase 64 weiter.
   + Version, Endbetrag, Link zum Angebot/PDF, Positionen aufklappbar (Kundenpreise;
   EK/DB nur bei `kalkulation_sichtbar` oder Innendienst/Admin), Buttons
   „Phase ändern", „Stornieren", ab Phase Abnahme offen: „Rechnung freigeben".
-- [ ] Reiter unter den Gewerken: **Dokumente** (Ordnerbaum, Upload per Drag & Drop
+- [x] Reiter unter den Gewerken: **Dokumente** (Ordnerbaum, Upload per Drag & Drop
   und Kamera, Vorschau Bilder, Löschen nur Projektierung/Admin mit Protokoll),
   **Verlauf & Kommentare** (Kommentare + Systemereignisse chronologisch, Eingabefeld
   mit @Erwähnung – Autovervollständigung der Benutzernamen; technisch als eigene
@@ -227,15 +227,15 @@ Server – dieser Plan setzt darauf auf und nummeriert ab Phase 64 weiter.
   (V1: Sub aus Stamm zuordnen mit Leistung, Status angefragt/beauftragt/bestätigt/
   erledigt, Termin, Notiz; Mailversand erst V2), **Mail-Verlauf** (Platzhalter mit
   Hinweis „ab V2").
-- [ ] **Phasenwechsel** mit Wächtern (Konzept 3.1): Dialog zeigt unerfüllte
+- [x] **Phasenwechsel** mit Wächtern (Konzept 3.1): Dialog zeigt unerfüllte
   Bedingungen; Override-Feld „Begründung" (Pflicht) → Verlaufseintrag „Phase geändert
   trotz offener Punkte: …". Rückwärts immer mit Begründung.
-- [ ] **Rechnung freigeben**: Dialog „Restarbeiten/Reklamationen?" (Radio: keine /
+- [x] **Rechnung freigeben**: Dialog „Restarbeiten/Reklamationen?" (Radio: keine /
   ja + Pflichttext), setzt `freigabe_am/von`, Phase „Abgeschlossen", Benachrichtigung an
   Rolle Buchhaltung (Benutzer mit Rolle Innendienst, in Parametrierung
   „Buchhaltungs-Benutzer" wählbar), Verlaufseintrag. Restarbeiten-Text erzeugt
   automatisch eine offene Aufgabe „Restarbeiten: …" (Pflicht, projektierer, +14).
-- [ ] Test: Kombi-Projekt mit WP + PV nebeneinander, Aufgaben abhaken, Ampel wechselt,
+- [x] Test: Kombi-Projekt mit WP + PV nebeneinander, Aufgaben abhaken, Ampel wechselt,
   Phasenwechsel mit und ohne Override, Freigabe mit Restarbeiten.
 
 ## Phase 68 – Kanban, Liste, Startseite

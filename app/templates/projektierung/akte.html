@@ -122,18 +122,19 @@
 
         {# Aufgaben gruppiert nach Paket #}
         <h3>Aufgaben</h3>
-        {% set gewerk_aufgaben = aufgaben_je_gewerk.get(g.id, []) %}
-        {% for instanz_id, gruppe in gewerk_aufgaben | groupby('paket_instanz_id') %}
+        {% for instanz_id, gruppe in aufgaben_gruppen.get(g.id, []) %}
         <details class="paket-gruppe" open>
             <summary><strong>{{ instanzen[instanz_id].paket_name if instanz_id in instanzen else 'Einzelaufgaben' }}</strong>
                 <span class="dezent">{{ gruppe | selectattr('status', 'equalto', 'erledigt') | list | length }}/{{ gruppe | length }}</span>
             </summary>
             {% for a in gruppe %}
             <div class="aufgabe-zeile {{ 'aufgabe-erledigt' if a.status == 'erledigt' }} {{ 'aufgabe-ueberfaellig' if a.status != 'erledigt' and a.faellig_am and a.faellig_am < heute }}">
+                <form method="post" action="/projektierung/aufgabe/{{ a.id }}/erledigt-umschalten"
+                      style="display:inline">
+                    <input type="checkbox" onchange="this.form.submit()"
+                           {{ 'checked' if a.status == 'erledigt' }} title="Erledigt">
+                </form>
                 <form method="post" action="/projektierung/aufgabe/{{ a.id }}/status" class="aufgabe-form">
-                    <input type="checkbox" name="erledigt" onchange="this.form.submit()"
-                           {{ 'checked' if a.status == 'erledigt' }}
-                           title="Erledigt">
                     <details class="aufgabe-detail">
                         <summary>{{ a.titel }}{{ ' *' if a.pflicht }}
                             <span class="dezent">· {{ benutzer_map[a.verantwortlich_id].name if a.verantwortlich_id in benutzer_map else a.rolle }}
@@ -145,10 +146,25 @@
                                 <option value="{{ wert }}" {{ 'selected' if a.status == wert }}>{{ name }}</option>
                             {% endfor %}
                         </select>
+                        <select name="verantwortlich_id" onchange="this.form.submit()"
+                                title="Verantwortlicher">
+                            <option value="0">– Verantwortlicher –</option>
+                            {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
+                                <option value="{{ b.id }}" {{ 'selected' if a.verantwortlich_id == b.id }}>{{ b.name }}</option>
+                            {% endfor %}
+                        </select>
                         {% if a.status == 'wartet' and a.wartet_frist_am %}
                             <span class="dezent">Warte-Frist: {{ a.wartet_frist_am.strftime('%d.%m.%Y') }}</span>
                         {% endif %}
                     </details>
+                </form>
+                {% if kommentar_zaehler.get(a.id) %}
+                    <span class="dezent" title="Kommentare zu dieser Aufgabe (im Verlauf)">💬 {{ kommentar_zaehler[a.id] }}</span>
+                {% endif %}
+                <form method="post" action="/projektierung/projekt/{{ projekt.id }}/kommentar" class="suchleiste">
+                    <input type="hidden" name="aufgabe_id" value="{{ a.id }}">
+                    <input type="hidden" name="gewerk_id" value="{{ g.id }}">
+                    <input type="text" name="text" size="18" placeholder="Kommentar zur Aufgabe …">
                 </form>
             </div>
             {% endfor %}
