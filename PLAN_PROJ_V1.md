@@ -328,16 +328,16 @@ Server – dieser Plan setzt darauf auf und nummeriert ab Phase 64 weiter.
 
 ## Phase 71 – Qualität, Docs, Rollout
 
-- [ ] Fehlerfälle: Angebot ohne Kunde-Adresse, Angebot bereits verknüpft, Storno eines
+- [x] Fehlerfälle: Angebot ohne Kunde-Adresse, Angebot bereits verknüpft, Storno eines
   abgeschlossenen Gewerks (verboten), Phasenwechsel bei storniertem Gewerk (verboten),
   Upload > 20 MB (Hinweis), Benutzer ohne E-Mail bei Mail-Benachrichtigung (überspringen
   + Log).
-- [ ] `docs/projektierung.md`: Bedienanleitung (Angebot → Projekt, Board, Akte, Aufgaben,
+- [x] `docs/projektierung.md`: Bedienanleitung (Angebot → Projekt, Board, Akte, Aufgaben,
   Pakete pflegen, Rollen) und `docs/projektierung-entscheidungen.md` (Entscheidungen
   von Claude Code während der Umsetzung).
-- [ ] `docs/graph-einrichtung.md` ergänzen: Shared-Postfach `projektierung@friondo.de`
+- [x] `docs/graph-einrichtung.md` ergänzen: Shared-Postfach `projektierung@friondo.de`
   anlegen, „Senden als" für die Projektierungs-Benutzer (Aufgabe für den M365-Admin).
-- [ ] git push → Absprache mit dem Angebotstool-Chat → update.bat auf dem Terminal-
+- [ ] *(offen auf Anweisung von Andreas: „Noch nicht pushen“)* git push → Absprache mit dem Angebotstool-Chat → update.bat auf dem Terminal-
   Server → Migration prüfen (Anzahl migrierter Projekte im Log) → Board öffnen und
   Altbestand einmalig sortieren.
 

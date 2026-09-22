@@ -106,3 +106,22 @@ Editor und die E-Mail manuell verfassen.
    AN-C-Nummer) erscheinen in der Angebotsliste als Brief-Symbol mit Zähler;
    Klick öffnet den Mail-Verlauf (Absender, Zeitpunkt, Textauszug).
    Geantwortet wird weiterhin in Outlook – das Tool zeigt nur an.
+
+## Projektierung V1 (v11): Shared-Postfach projektierung@friondo.de
+
+Aufgaben für den M365-Admin, damit die Benachrichtigungs-Mails der
+Projektierung (Sofort-Mail und Tagesdigest 07:15) mit dem richtigen Absender
+rausgehen:
+
+1. **Shared-Postfach anlegen**: Exchange Admin Center → Empfänger →
+   Postfächer → „Freigegebenes Postfach hinzufügen" →
+   `projektierung@friondo.de` (kein eigenes Konto/keine Lizenz nötig).
+2. **„Senden als"-Berechtigung** für die Benutzer vergeben, unter deren
+   Graph-Anmeldung das Tool läuft (dieselben Konten wie beim Angebotsversand):
+   Shared-Postfach → Delegierung → „Senden als" → Benutzer hinzufügen.
+   Die Berechtigung greift erfahrungsgemäß erst nach bis zu einer Stunde.
+3. Das Absender-Postfach steht im Tool unter **Parametrierung →
+   Projektierung-Einstellungen** (Standard `projektierung@friondo.de`).
+   Fehlt die Berechtigung, versucht das Tool automatisch den Fallback
+   `angebot@friondo.de`; beide Fehler landen im **Mail-Protokoll** auf
+   derselben Einstellungsseite. Der Mail-Versand blockiert das Tool nie.
