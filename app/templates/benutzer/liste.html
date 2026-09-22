@@ -7,7 +7,7 @@
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
 <table class="tabelle">
-    <thead><tr><th>Name</th><th>Rolle</th><th>E-Mail</th><th>Benachrichtigungs-Mail</th><th>Neue PIN</th><th>Aktiv</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Rolle</th><th>Zusatzrollen</th><th>E-Mail</th><th>Telefon</th><th>Benachrichtigungs-Mail</th><th title="EK/DB auch mit Rolle Projektierung sichtbar">Kalk.</th><th>Teams</th><th>Neue PIN</th><th>Aktiv</th><th></th></tr></thead>
     <tbody>
     {% for b in benutzer %}
         <tr class="{{ 'inaktiv' if not b.aktiv }}">
@@ -19,14 +19,32 @@
                     {% endfor %}
                 </select>
             </td>
+            <td>{# v11 (Phase 70): Mehrfachrollen als Häkchen #}
+                {% for r in zusatzrollen %}
+                    <label class="dezent" style="display:block; white-space:nowrap">
+                        <input form="f{{ b.id }}" type="checkbox" name="zusatz_{{ r }}"
+                               {{ 'checked' if b.hat_rolle(r) }}> {{ r }}</label>
+                {% endfor %}
+            </td>
             <td><input form="f{{ b.id }}" type="email" name="email" value="{{ b.email }}" size="24"
                        placeholder="{{ 'Pflicht (CC)' if b.rolle == 'aussendienst' else 'optional' }}"></td>
+            <td><input form="f{{ b.id }}" type="tel" name="telefon" value="{{ b.telefon }}" size="12"
+                       placeholder="optional"></td>
             <td>{# v11 (Phase 69): Glocken-Ereignisse zusätzlich als Mail #}
                 <select form="f{{ b.id }}" name="benachrichtigung_mail" title="Glocken-Ereignisse zusätzlich als E-Mail">
                     {% for wert, name in [('aus', 'aus'), ('sofort', 'sofort'), ('digest', 'Tagesdigest 07:15')] %}
                         <option value="{{ wert }}" {{ 'selected' if b.benachrichtigung_mail == wert }}>{{ name }}</option>
                     {% endfor %}
                 </select>
+            </td>
+            <td><input form="f{{ b.id }}" type="checkbox" name="kalkulation_sichtbar"
+                       {{ 'checked' if b.kalkulation_sichtbar }}></td>
+            <td>{# v11 (Phase 70): Team-Zuordnung (Montage-Einsätze) #}
+                {% for t in teams %}
+                    <label class="dezent" style="display:block; white-space:nowrap">
+                        <input form="f{{ b.id }}" type="checkbox" name="team_ids" value="{{ t.id }}"
+                               {{ 'checked' if t.id in team_je_benutzer.get(b.id, ()) }}> {{ t.name }}</label>
+                {% else %}<span class="dezent">–</span>{% endfor %}
             </td>
             <td><input form="f{{ b.id }}" type="password" name="pin" placeholder="unverändert" size="8"></td>
             <td><input form="f{{ b.id }}" type="checkbox" name="aktiv" {{ 'checked' if b.aktiv }}></td>

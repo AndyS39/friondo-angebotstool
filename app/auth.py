@@ -5,6 +5,7 @@
 
 import hashlib
 import hmac
+import re
 import secrets
 
 from fastapi import Request
@@ -26,6 +27,18 @@ AUSSENDIENST_PFADE = ("/erfassung", "/leads", "/signatur", "/statistik",
                       "/login", "/logout", "/static")
 ADMIN_PFADE = ("/benutzer",)
 BUERO_ROLLEN = ("admin", "innendienst")
+# v11 (Phase 70): Hauptrolle projektierung – Projektierung voll, Angebote/
+# Erfassungen/Kunden nur lesend, Parametrierung nur die drei Projektierungs-
+# Stammseiten. Hauptrolle montage – ausschließlich der mobile /montage-Bereich.
+PROJEKTIERUNG_PFADE = ("/projektierung", "/montage", "/benachrichtigungen",
+                       "/kunden", "/erfassungen", "/angebote",
+                       "/parametrierung/projektierung-logik",
+                       "/parametrierung/teams", "/parametrierung/subunternehmer",
+                       "/login", "/logout", "/static")
+PROJEKTIERUNG_SCHREIBEN = ("/projektierung", "/montage", "/benachrichtigungen",
+                           "/parametrierung", "/login", "/logout")
+MONTAGE_PFADE = ("/montage", "/benachrichtigungen", "/login", "/logout", "/static")
+_ANGEBOTE_LESEPFAD = re.compile(r"^/angebote(/\d+/pdf)?$")
 
 
 def _geheimnis() -> bytes:
@@ -110,7 +123,21 @@ class RollenMiddleware(BaseHTTPMiddleware):
                 return await call_next(request)
             if benutzer is None:
                 return RedirectResponse("/login", status_code=303)
-            if benutzer.rolle not in BUERO_ROLLEN and not pfad.startswith(AUSSENDIENST_PFADE):
+            if benutzer.rolle == "projektierung":
+                # "/" bleibt erreichbar: Landeplatz im Demo-Modus (Portal
+                # zeigt die nicht anklickbare Projektierungs-Karte)
+                if pfad != "/" and not pfad.startswith(PROJEKTIERUNG_PFADE):
+                    return RedirectResponse("/projektierung", status_code=303)
+                if (request.method != "GET"
+                        and not pfad.startswith(PROJEKTIERUNG_SCHREIBEN)):
+                    return RedirectResponse("/projektierung", status_code=303)
+                # Angebote nur lesend: Liste + PDF (kein Editor, kein EK/DB)
+                if pfad.startswith("/angebote") and not _ANGEBOTE_LESEPFAD.match(pfad):
+                    return RedirectResponse("/angebote", status_code=303)
+            elif benutzer.rolle == "montage":
+                if pfad != "/" and not pfad.startswith(MONTAGE_PFADE):
+                    return RedirectResponse("/montage", status_code=303)
+            elif benutzer.rolle not in BUERO_ROLLEN and not pfad.startswith(AUSSENDIENST_PFADE):
                 return RedirectResponse("/erfassung", status_code=303)
             if benutzer.rolle == "innendienst" and pfad.startswith(ADMIN_PFADE):
                 return RedirectResponse("/", status_code=303)

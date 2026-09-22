@@ -517,3 +517,160 @@ async def neu_einlesen(session: Session = Depends(get_session)):
     else:
         meldung = f"Parametrierung+neu+eingelesen+–+{len(bericht.fehler)}+Fehler+gefunden"
     return RedirectResponse(f"/parametrierung?meldung={meldung}", status_code=303)
+
+
+# --- v11 (Phase 70): Stammseiten der Projektierung --------------------------------
+
+def _nur_admin(request: Request):
+    """Projektierung-Einstellungen (Demo-Schalter usw.) sind Admin-exklusiv."""
+    benutzer = request.state.benutzer
+    if benutzer is None or benutzer.rolle != "admin":
+        return RedirectResponse("/parametrierung", status_code=303)
+    return None
+
+
+@router.get("/teams")
+async def teams_seite(request: Request, session: Session = Depends(get_session)):
+    from app.models import Benutzer, Team, TeamMitglied
+    teams = session.query(Team).order_by(Team.name).all()
+    mitglieder: dict[int, list[str]] = {}
+    benutzer_map = {b.id: b for b in session.query(Benutzer)}
+    for m in session.query(TeamMitglied):
+        if m.benutzer_id in benutzer_map:
+            mitglieder.setdefault(m.team_id, []).append(
+                benutzer_map[m.benutzer_id].name)
+    return render(request, "konfiguration/teams.html", aktiv="/parametrierung",
+                  teams=teams, mitglieder=mitglieder,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/teams")
+async def team_speichern(request: Request, session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+
+    from app.models import Team
+    form = await request.form()
+    team_id = form.get("team_id") or ""
+    name = (form.get("name") or "").strip()
+    typ = form.get("typ") if form.get("typ") in ("SHK", "Elektro", "Sonstige") else "SHK"
+    if team_id.isdigit():
+        team = session.get(Team, int(team_id))
+        if team is not None:
+            if name:
+                team.name = name
+            team.typ = typ
+            team.aktiv = form.get("aktiv") == "on"
+    elif name:
+        session.add(Team(name=name, typ=typ, aktiv=True,
+                         erstellt_von=request.state.benutzer.id))
+    else:
+        return RedirectResponse("/parametrierung/teams?meldung="
+                                + quote_plus("Bitte einen Namen angeben."),
+                                status_code=303)
+    session.commit()
+    return RedirectResponse("/parametrierung/teams?meldung=Gespeichert",
+                            status_code=303)
+
+
+@router.get("/subunternehmer")
+async def subs_seite(request: Request, session: Session = Depends(get_session)):
+    from app import projektierung_logik
+    from app.models import Subunternehmer
+    return render(request, "konfiguration/subunternehmer.html",
+                  aktiv="/parametrierung",
+                  subs=session.query(Subunternehmer)
+                  .order_by(Subunternehmer.firma).all(),
+                  typen=projektierung_logik.sub_typen(session),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/subunternehmer")
+async def sub_speichern(request: Request, session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+
+    from app.models import Subunternehmer
+    form = await request.form()
+    sub_id = form.get("sub_id") or ""
+    felder = {name: (form.get(name) or "").strip()
+              for name in ("firma", "typ", "ansprechpartner", "email",
+                           "telefon", "notiz")}
+    if sub_id.isdigit():
+        sub = session.get(Subunternehmer, int(sub_id))
+        if sub is not None:
+            for name, wert in felder.items():
+                if name == "firma" and not wert:
+                    continue
+                setattr(sub, name, wert)
+            sub.aktiv = form.get("aktiv") == "on"
+    elif felder["firma"]:
+        session.add(Subunternehmer(aktiv=True,
+                                   erstellt_von=request.state.benutzer.id,
+                                   **felder))
+    else:
+        return RedirectResponse("/parametrierung/subunternehmer?meldung="
+                                + quote_plus("Bitte eine Firma angeben."),
+                                status_code=303)
+    session.commit()
+    return RedirectResponse("/parametrierung/subunternehmer?meldung=Gespeichert",
+                            status_code=303)
+
+
+@router.get("/projektierung-einstellungen")
+async def projektierung_einstellungen(request: Request,
+                                      session: Session = Depends(get_session)):
+    """Demo-Schalter, Standard-Verantwortliche, Absender, Storno-Gründe,
+    Ordnervorlage (Anzeige) – nur Admin (Plan Phase 70)."""
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    from app import benachrichtigungen as mail_modul
+    from app import projektierung as kern
+    from app.models import Benutzer
+    benutzer_liste = (session.query(Benutzer)
+                      .filter(Benutzer.aktiv.is_(True))
+                      .order_by(Benutzer.name).all())
+    return render(request, "konfiguration/projektierung_einstellungen.html",
+                  aktiv="/parametrierung",
+                  freigabe_modus=kern.freigabe_modus(session),
+                  benutzer_liste=benutzer_liste,
+                  standard_pl=kern.parameter_holen(session, "standard_projektleiter"),
+                  standard_fp=kern.parameter_holen(session, "standard_feinplaner"),
+                  standard_ep=kern.parameter_holen(session, "standard_elektroplaner"),
+                  buchhaltung=kern.parameter_holen(session, "buchhaltung_benutzer"),
+                  absender=kern.parameter_holen(session, "absender_postfach",
+                                                mail_modul.ABSENDER_STANDARD),
+                  gruende="\n".join(kern.storno_gruende(session)),
+                  vorlage=kern.ordnervorlage(session),
+                  mail_protokoll=kern.parameter_holen(session, "mail_protokoll"),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/projektierung-einstellungen")
+async def projektierung_einstellungen_speichern(
+        request: Request, session: Session = Depends(get_session)):
+    import json as json_modul
+    from urllib.parse import quote_plus
+
+    from app import projektierung as kern
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    form = await request.form()
+    if form.get("freigabe_modus") in ("admin", "alle"):
+        kern.parameter_setzen(session, "freigabe_modus", form.get("freigabe_modus"))
+    for feld, name in (("standard_pl", "standard_projektleiter"),
+                       ("standard_fp", "standard_feinplaner"),
+                       ("standard_ep", "standard_elektroplaner"),
+                       ("buchhaltung", "buchhaltung_benutzer")):
+        wert = form.get(feld) or ""
+        kern.parameter_setzen(session, name, wert if wert.isdigit() else "")
+    absender = (form.get("absender") or "").strip()
+    if absender:
+        kern.parameter_setzen(session, "absender_postfach", absender)
+    gruende = [z.strip() for z in (form.get("gruende") or "").splitlines()
+               if z.strip()]
+    if gruende:
+        kern.parameter_setzen(session, "storno_gruende",
+                              json_modul.dumps(gruende, ensure_ascii=False))
+    session.commit()
+    return RedirectResponse("/parametrierung/projektierung-einstellungen?meldung="
+                            + quote_plus("Einstellungen gespeichert."),
+                            status_code=303)

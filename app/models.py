@@ -158,6 +158,8 @@ class Benutzer(Base):
     rollen: Mapped[str] = mapped_column(String(100), default="")
     kalkulation_sichtbar: Mapped[bool] = mapped_column(Boolean, default=False)
     benachrichtigung_mail: Mapped[str] = mapped_column(String(10), default="aus")  # aus|sofort|digest
+    # v11 (Phase 70): Telefon des Projektleiters im AD-Projektstand-Block
+    telefon: Mapped[str] = mapped_column(String(50), default="")
 
     @property
     def rollen_liste(self) -> list[str]:

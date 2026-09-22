@@ -143,6 +143,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "rollen": "VARCHAR(100) NOT NULL DEFAULT ''",           # v11 Mehrfachrollen
         "kalkulation_sichtbar": "BOOLEAN NOT NULL DEFAULT 0",   # v11
         "benachrichtigung_mail": "VARCHAR(10) NOT NULL DEFAULT 'aus'",  # v11
+        "telefon": "VARCHAR(50) NOT NULL DEFAULT ''",           # v11 Phase 70
     },
     "kunden": {
         "interesse": "VARCHAR(50) NOT NULL DEFAULT ''",

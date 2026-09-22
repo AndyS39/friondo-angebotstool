@@ -73,7 +73,7 @@
             <th>Datum</th>
             <th>Status</th>
             <th class="rechts">Brutto</th>
-            <th class="rechts" title="Deckungsbeitrag (intern)">DB</th>
+            {% if kalk_sichtbar %}<th class="rechts" title="Deckungsbeitrag (intern)">DB</th>{% endif %}
             <th></th>
         </tr>
     </thead>
@@ -108,7 +108,8 @@
                           title="Wiedervorlage des Vorgangs">↻ {{ v.wiedervorlage_am.strftime('%d.%m.%Y') }}</span>
                 {% endif %}</td>
             <td class="rechts">{{ a.summen().brutto | euro }}</td>
-            {% if a.extern %}
+            {% if not kalk_sichtbar %}
+            {% elif a.extern %}
             <td class="rechts dezent" title="Externer TAIFUN-Eintrag – kein DB im Tool">–</td>
             {% else %}
             {% set deckung = a.deckungsbeitrag() %}
@@ -120,7 +121,11 @@
             </td>
             {% endif %}
             <td class="aktionen">
-                <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">Öffnen</a>
+                {% if nur_lesend %}
+                    <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}/pdf" target="_blank">PDF</a>
+                {% else %}
+                    <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">Öffnen</a>
+                {% endif %}
                 {% if projekt_modul_ok %}
                     {% if a.id in projekt_je_angebot %}
                         <a class="knopf klein zweitrangig" href="/projektierung/projekt/{{ projekt_je_angebot[a.id].id }}"

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block titel %}Meine Einsätze – Montage{% endblock %}
+
+{% block inhalt %}
+<h1>Meine Einsätze</h1>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% macro einsatz_karten(liste) %}
+{% if liste %}
+<div class="einsatz-liste">
+    {% for t in liste %}
+        {% set projekt = projekte.get(t.projekt_id) %}
+        {% set gewerk = gewerke.get(t.gewerk_id) %}
+        {% set kunde = kunden.get(projekt.kunde_id) if projekt else none %}
+        <a class="einsatz-karte" href="/montage/einsatz/{{ t.id }}">
+            <strong>{{ t.beginn.strftime('%a %d.%m. %H:%M') }} Uhr
+                · {{ gewerk.sparte if gewerk else t.typ }}</strong>
+            <span>{{ kunde.anzeige_name if kunde else '?' }}</span>
+            <span class="dezent">{{ projekt.ausfuehrung_ort if projekt else '' }}
+                · {{ projekt.nummer if projekt else '' }}
+                {{ '· ' ~ t.notiz if t.notiz }}</span>
+        </a>
+    {% endfor %}
+</div>
+{% else %}<p class="dezent">Keine Einsätze.</p>{% endif %}
+{% endmacro %}
+
+<h2>Heute ({{ heute_liste | length }})</h2>
+{{ einsatz_karten(heute_liste) }}
+<h2>Diese Woche ({{ woche_liste | length }})</h2>
+{{ einsatz_karten(woche_liste) }}
+{% endblock %}

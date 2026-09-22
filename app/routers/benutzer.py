@@ -15,7 +15,10 @@ from app.templating import render
 
 router = APIRouter(prefix="/benutzer")
 
-ROLLEN = ["admin", "innendienst", "aussendienst"]
+ROLLEN = ["admin", "innendienst", "aussendienst", "projektierung", "montage"]
+# v11 (Phase 70): Zusatzrollen als Häkchen – die Hauptrolle steuert weiterhin
+# die Grundsicht, Zusatzrollen schalten Projektierung/Montage frei
+ZUSATZROLLEN = ["projektierung", "montage"]
 _EMAIL_MUSTER = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -43,10 +46,18 @@ def _email_pruefen(rolle: str, email: str) -> str | None:
 
 @router.get("")
 async def liste(request: Request, session: Session = Depends(get_session)):
+    from app.models import Team, TeamMitglied
     benutzer = session.query(Benutzer).order_by(Benutzer.name).all()
     loeschbar = {b.id: not verknuepfungen(session, b.id) for b in benutzer}
+    teams = (session.query(Team).filter(Team.aktiv.is_(True))
+             .order_by(Team.name).all())
+    team_je_benutzer: dict[int, set[int]] = {}
+    for m in session.query(TeamMitglied):
+        team_je_benutzer.setdefault(m.benutzer_id, set()).add(m.team_id)
     return render(request, "benutzer/liste.html", aktiv="/benutzer",
                   benutzer=benutzer, rollen=ROLLEN, loeschbar=loeschbar,
+                  zusatzrollen=ZUSATZROLLEN, teams=teams,
+                  team_je_benutzer=team_je_benutzer,
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -95,6 +106,24 @@ async def aendern(request: Request, benutzer_id: int,
     # v11 (Phase 69): E-Mail-Benachrichtigung aus Glocken-Ereignissen
     if form.get("benachrichtigung_mail") in ("aus", "sofort", "digest"):
         benutzer.benachrichtigung_mail = form.get("benachrichtigung_mail")
+    # v11 (Phase 70): Mehrfachrollen (Häkchen), Kalkulation, Telefon, Teams
+    zusatz = [r for r in ZUSATZROLLEN if form.get(f"zusatz_{r}") == "on"]
+    benutzer.rollen = ",".join([rolle] + [r for r in zusatz if r != rolle])
+    benutzer.kalkulation_sichtbar = form.get("kalkulation_sichtbar") == "on"
+    benutzer.telefon = (form.get("telefon") or "").strip()
+    from app.models import Team, TeamMitglied
+    gewaehlt = {int(t) for t in form.getlist("team_ids") if str(t).isdigit()}
+    gueltig = {t.id for t in session.query(Team)}
+    gewaehlt &= gueltig
+    for m in (session.query(TeamMitglied)
+              .filter(TeamMitglied.benutzer_id == benutzer.id)):
+        if m.team_id in gewaehlt:
+            gewaehlt.discard(m.team_id)
+        else:
+            session.delete(m)
+    for team_id in gewaehlt:
+        session.add(TeamMitglied(team_id=team_id, benutzer_id=benutzer.id,
+                                 erstellt_von=request.state.benutzer.id))
     pin = (form.get("pin") or "").strip()
     if pin:
         if not pin.isdigit() or len(pin) < 4:

@@ -985,3 +985,22 @@ main.breit { max-width: 1720px; }
 }
 
 .erwaehnung-liste button:hover { background: var(--grau-hell); }
+
+/* v11 (Phase 70): mobiler Montage-Bereich */
+.einsatz-liste { display: flex; flex-direction: column; gap: 0.6rem; max-width: 640px; }
+
+.einsatz-karte {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.8rem 1rem;
+    border: 1px solid var(--grau-linie);
+    border-radius: 8px;
+    background: #fff;
+    text-decoration: none;
+    color: inherit;
+}
+
+.einsatz-karte:hover { border-color: var(--friondo-blau); }
+
+.foto-galerie { display: flex; flex-direction: column; gap: 0.3rem; max-width: 640px; }

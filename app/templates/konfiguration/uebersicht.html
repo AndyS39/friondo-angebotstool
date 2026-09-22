@@ -11,6 +11,11 @@
         <a class="knopf zweitrangig" href="/parametrierung/signaturen">Signaturen</a>
         <a class="knopf zweitrangig" href="/parametrierung/profile">Angebotsprofile</a>
         <a class="knopf zweitrangig" href="/parametrierung/projektierung-logik">Projektierung-Logik</a>
+        <a class="knopf zweitrangig" href="/parametrierung/teams">Teams</a>
+        <a class="knopf zweitrangig" href="/parametrierung/subunternehmer">Subunternehmer</a>
+        {% if request.state.benutzer and request.state.benutzer.rolle == 'admin' %}
+            <a class="knopf zweitrangig" href="/parametrierung/projektierung-einstellungen">Projektierung-Einstellungen</a>
+        {% endif %}
         <form method="post" action="/parametrierung/neu-einlesen">
             <button class="knopf" type="submit">Parametrierung neu einlesen</button>
         </form>

@@ -120,3 +120,26 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
   (Start nach 07:00 holt den Lauf desselben Tags nach).
 - **Profil-Einstellung aus/sofort/digest** liegt in der Benutzerverwaltung
   (Admin) – ein eigenes Selbstbedienungs-Profil gibt es im Tool bisher nicht.
+
+## Phase 70 – Rollen und Sichten
+
+- **„/“ bleibt für die Rollen projektierung und montage erreichbar** und dient
+  als Landeplatz im Demo-Modus (das Portal zeigt dann die nicht anklickbare
+  Projektierungs-Karte). Ohne diese Ausnahme entstünde eine Umleitungs-
+  Schleife (Modul-Gate → „/“, Middleware → „/projektierung“).
+- **„Angebote lesend“** für die Rolle Projektierung ist als Pfad-Whitelist
+  umgesetzt: nur die Liste (`/angebote`) und das PDF (`/angebote/<id>/pdf`).
+  Der Editor selbst bleibt gesperrt (dort stünden EK/DB); in der Liste ist
+  die DB-Spalte an `kalkulation_sichtbar` geknüpft und der Öffnen-Knopf
+  durch einen PDF-Knopf ersetzt.
+- **Fotos für die Rolle Montage** laufen über einen eigenen Lesepfad
+  `/montage/dokument/<id>`, weil `/projektierung/...` für die Rolle gesperrt
+  ist; der Upload landet im Gewerk-Ordner „03 Fotos/Neue Anlage“.
+- **„Montage gestartet“** nutzt den normalen Phasenwechsel mit Begründung
+  „Montage gestartet (mobil)“ – ein blockierender Wächter wird damit als
+  protokollierter Override passiert (Konzept: kein hartes Sperren).
+- **Team-Zuordnung** liegt als Häkchen-Spalte in der Benutzerverwaltung
+  (nicht auf der Teams-Stammseite): eine Pflegemaske je Benutzer, die
+  Teams-Seite zeigt die Mitglieder nur an.
+- **Einsatz-Sichtbarkeit Montage**: Termine der eigenen Teams sowie direkt
+  als Person zugeteilte Termine; Admin sieht alle (für die Demo).

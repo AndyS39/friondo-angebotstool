@@ -9,7 +9,7 @@
 <body>
 {% set benutzer_angemeldet = request.state.benutzer if request.state is defined else None %}
 <header class="kopfleiste">
-    <a class="marke" href="{{ '/erfassung' if benutzer_angemeldet and benutzer_angemeldet.rolle == 'aussendienst' else '/' }}">
+    <a class="marke" href="{{ {'aussendienst': '/erfassung', 'projektierung': '/projektierung', 'montage': '/montage'}.get(benutzer_angemeldet.rolle, '/') if benutzer_angemeldet else '/' }}">
         {# feste Maße direkt am Bild – wirkt auch bei veraltetem CSS-Cache #}
         <img src="/static/logo.png" alt="Friondo" class="marken-logo"
              width="75" height="30" style="height:30px; width:auto;">
@@ -48,6 +48,21 @@
                                 <a href="{{ pfad }}" class="{{ 'aktiv' if aktiv == pfad else '' }}">{{ name }}</a>
                             {% endif %}
                         {% endfor %}
+                    {% elif benutzer_angemeldet.rolle == 'projektierung' %}
+                        {# v11 (Phase 70): Projektierungs-Sicht – Projektierung voll,
+                           Angebote/Erfassungen/Kunden lesend, drei Stammseiten #}
+                        <a href="/projektierung">Board</a>
+                        <a href="/projektierung/liste">Liste</a>
+                        <a href="/projektierung/termine">Termine</a>
+                        <a href="/projektierung/meine-aufgaben">Meine Aufgaben</a>
+                        <a href="/angebote">Angebote (lesend)</a>
+                        <a href="/erfassungen">Erfassungen (lesend)</a>
+                        <a href="/kunden">Kunden (lesend)</a>
+                        <a href="/parametrierung/projektierung-logik">Projektierung-Logik</a>
+                        <a href="/parametrierung/teams">Teams</a>
+                        <a href="/parametrierung/subunternehmer">Subunternehmer</a>
+                    {% elif benutzer_angemeldet.rolle == 'montage' %}
+                        <a href="/montage">Meine Einsätze</a>
                     {% else %}
                         <a href="/leads">Leads VOT</a>
                         <a href="/erfassung">Erfassung</a>

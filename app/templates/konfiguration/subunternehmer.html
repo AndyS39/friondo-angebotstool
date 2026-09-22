@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block titel %}Subunternehmer – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Subunternehmer</h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung">Zur Parametrierung</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<table class="tabelle">
+    <thead><tr><th>Firma</th><th>Typ</th><th>Ansprechpartner</th><th>E-Mail</th>
+        <th>Telefon</th><th>Notiz</th><th>Aktiv</th><th></th></tr></thead>
+    <tbody>
+    {% for sub in subs %}
+        <tr class="{{ 'inaktiv' if not sub.aktiv }}">
+            <td><input form="s{{ sub.id }}" type="text" name="firma" value="{{ sub.firma }}" size="18"></td>
+            <td>
+                <select form="s{{ sub.id }}" name="typ">
+                    {% for typ in typen %}
+                        <option value="{{ typ }}" {{ 'selected' if sub.typ == typ }}>{{ typ }}</option>
+                    {% endfor %}
+                    {% if sub.typ and sub.typ not in typen %}
+                        <option value="{{ sub.typ }}" selected>{{ sub.typ }}</option>
+                    {% endif %}
+                </select>
+            </td>
+            <td><input form="s{{ sub.id }}" type="text" name="ansprechpartner" value="{{ sub.ansprechpartner }}" size="14"></td>
+            <td><input form="s{{ sub.id }}" type="email" name="email" value="{{ sub.email }}" size="18"></td>
+            <td><input form="s{{ sub.id }}" type="tel" name="telefon" value="{{ sub.telefon }}" size="12"></td>
+            <td><input form="s{{ sub.id }}" type="text" name="notiz" value="{{ sub.notiz }}" size="18"></td>
+            <td><input form="s{{ sub.id }}" type="checkbox" name="aktiv" {{ 'checked' if sub.aktiv }}></td>
+            <td>
+                <form id="s{{ sub.id }}" method="post" action="/parametrierung/subunternehmer">
+                    <input type="hidden" name="sub_id" value="{{ sub.id }}">
+                    <button class="knopf klein" type="submit">Speichern</button>
+                </form>
+            </td>
+        </tr>
+    {% else %}
+        <tr><td colspan="8" class="dezent">Noch keine Subunternehmer.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Neuer Subunternehmer</h2>
+<form method="post" action="/parametrierung/subunternehmer" class="formzeile">
+    <label>Firma <input type="text" name="firma" required></label>
+    <label>Typ
+        <select name="typ">
+            {% for typ in typen %}<option value="{{ typ }}">{{ typ }}</option>{% endfor %}
+        </select>
+    </label>
+    <label>Ansprechpartner <input type="text" name="ansprechpartner"></label>
+    <label>E-Mail <input type="email" name="email"></label>
+    <label>Telefon <input type="tel" name="telefon"></label>
+    <button class="knopf" type="submit">Anlegen</button>
+</form>
+<p class="dezent">Die Typen kommen aus der Projektierung-Logik (Blatt
+    „Sub-Typen“). Zuordnung zu Projekten: Reiter „Subs &amp; Bestellungen“
+    in der Projektakte.</p>
+{% endblock %}

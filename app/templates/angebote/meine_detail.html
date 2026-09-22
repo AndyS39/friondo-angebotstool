@@ -96,4 +96,38 @@
         <p class="dezent">Rabatt bei Status „{{ angebot.status }}“ nicht möglich.</p>
     {% endif %}
 </div>
+
+{# v11 (Phase 70): Projektstand am eigenen Angebot – read-only, mit Kommentar
+   an die Projektierung; erscheint nur, wenn ein Projekt verknüpft und das
+   Modul für den Benutzer freigegeben ist (Demo-Modus: Admin) #}
+{% if projektstand %}
+{% from "_projektierung.html" import ampel_punkt %}
+<div class="karte" id="projektstand">
+    <h2>Projektstand · {{ projektstand.projekt.nummer }}</h2>
+    <table class="tabelle">
+        <tbody>
+        {% for z in projektstand.zeilen %}
+            <tr>
+                <td><strong>{{ z.gewerk.sparte }}</strong></td>
+                <td>{{ z.phase_name }} {{ ampel_punkt(z.ampel) }}</td>
+                <td>{{ z.termin.beginn.strftime('%d.%m.%Y %H:%M') ~ ' Uhr'
+                       if z.termin else 'kein Termin' }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% if projektstand.projektleiter %}
+    <p>Projektleiter: <strong>{{ projektstand.projektleiter.name }}</strong>
+        {% if projektstand.projektleiter.telefon %}
+            · <a href="tel:{{ projektstand.projektleiter.telefon }}">{{ projektstand.projektleiter.telefon }}</a>
+        {% endif %}</p>
+    {% endif %}
+    <form method="post" action="/meine-angebote/{{ angebot.id }}/projekt-kommentar"
+          class="notiz-eingabe">
+        <textarea name="text" rows="2" required
+                  placeholder="Frage/Hinweis an die Projektierung …"></textarea>
+        <button class="knopf" type="submit">Kommentar senden</button>
+    </form>
+</div>
+{% endif %}
 {% endblock %}

@@ -162,6 +162,11 @@ async def liste(request: Request, q: str = "", status: str = "", interesse: str 
                   vertriebler_werte=vertriebler_werte,
                   status_liste=ANGEBOT_STATUS, mail_zaehler=mail_zaehler,
                   db_rot_cent=rot_unter * 100, db_gruen_cent=gruen_ueber * 100,
+                  # v11 (Phase 70): Rolle projektierung sieht die Liste lesend –
+                  # DB-Spalte nur mit kalkulation_sichtbar, Öffnen → PDF
+                  kalk_sichtbar=(request.state.benutzer.rolle in ("admin", "innendienst")
+                                 or request.state.benutzer.kalkulation_sichtbar),
+                  nur_lesend=request.state.benutzer.rolle == "projektierung",
                   meldung=request.query_params.get("meldung", ""))
 
 

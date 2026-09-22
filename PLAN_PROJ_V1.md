@@ -288,7 +288,7 @@ Server – dieser Plan setzt darauf auf und nummeriert ab Phase 64 weiter.
 
 ## Phase 70 – Rollen und Sichten
 
-- [ ] **Demo-Schalter (V1 gilt als Demo im Live-Tool):** In `projektierung_parameter`
+- [x] **Demo-Schalter (V1 gilt als Demo im Live-Tool):** In `projektierung_parameter`
   Schlüssel `freigabe_modus` mit Wert `admin` (Standard) oder `alle`. Bei `admin`
   sind **alle** Routen unter `/projektierung`, `/montage`, der Button „Angebot →
   Projekt", der Projektstand-Block am Angebot und die Glocken-Ereignisse aus der
@@ -297,33 +297,33 @@ Server – dieser Plan setzt darauf auf und nummeriert ab Phase 64 weiter.
   Montage und Außendienst sehen das Modul erst nach Umstellung auf `alle`
   (Parametrierung → Projektierung-Einstellungen, nur Admin). Die Migration des
   Altbestands läuft trotzdem sofort, damit die Demo echte Daten zeigt.
-- [ ] **Startportal-Karte:** Die dritte Karte heißt weiterhin „Projektierung";
+- [x] **Startportal-Karte:** Die dritte Karte heißt weiterhin „Projektierung";
   darunter in der Karte ein Badge **„Demo · Coming soon"** (gelb, wie ein
   Status-Badge). Für Admins ist die Karte anklickbar und die fünf Kacheln zählen
   live (Phase 68); für alle anderen Rollen bleibt die Karte nicht anklickbar, die
   Kacheln zeigen weiterhin 0 und darunter steht der Hinweis „Das Modul befindet
   sich im Aufbau." Wird `freigabe_modus` auf `alle` gestellt, verschwindet das
   Badge automatisch.
-- [ ] Rolle **Projektierung**: Menü zeigt Projektierung (Board, Liste, Termine, Meine
+- [x] Rolle **Projektierung**: Menü zeigt Projektierung (Board, Liste, Termine, Meine
   Aufgaben), Angebote (nur lesend: Liste, PDF, Kundenpreise; kein Editor, kein Versand,
   kein EK/DB außer `kalkulation_sichtbar`), Erfassungen lesend, Kunden lesend. Keine
   Parametrierung außer „Projektierung-Logik", Subunternehmer, Teams.
-- [ ] Rolle **Montage** (V1 reduziert): mobiler Bereich `/montage` mit „Meine Einsätze"
+- [x] Rolle **Montage** (V1 reduziert): mobiler Bereich `/montage` mit „Meine Einsätze"
   (Termine der eigenen Teams heute/diese Woche), je Einsatz: Steckbrief read-only
   (Kunde, Ausführungsadresse mit Karten-Link, Telefon, Sparte, Gerät/Positionen ohne
   Preise, Bemerkung für die Technik, Heizlast, offene Aufgaben mit Rolle montage,
   erledigbar), Dokumente/Fotos ansehen + Foto-Upload in Ordner, Buttons „Montage
   gestartet" (→ In Ausführung) und „Montage fertig" (→ Abnahme offen, Pflichtfeld
   Kurzbericht → Verlauf). Keine Preise, keine Angebote, keine anderen Projekte.
-- [ ] **Außendienst**: an eigenen Angeboten mit Projekt ein Block „Projektstand"
+- [x] **Außendienst**: an eigenen Angeboten mit Projekt ein Block „Projektstand"
   (Phase je Gewerk, Ampel, nächster Termin, Projektleiter mit Telefon) + Kommentar
   schreiben (landet im Projektverlauf, Projektleiter wird benachrichtigt).
-- [ ] Benutzerverwaltung (Admin): Mehrfachrollen, Häkchen `kalkulation_sichtbar`,
+- [x] Benutzerverwaltung (Admin): Mehrfachrollen, Häkchen `kalkulation_sichtbar`,
   Team-Zuordnung. Neue Stammseiten in der Parametrierung: **Teams**,
   **Subunternehmer**, **Projektierung-Einstellungen** (Standard-Projektleiter/
   Feinplaner/Elektroplaner, Buchhaltungs-Benutzer, Absender-Postfach, Storno-Gründe,
   Ordnervorlage anzeigen).
-- [ ] Test je Rolle mit Test-PINs: Projektierung sieht keine EK/DB; Montage sieht nur
+- [x] Test je Rolle mit Test-PINs: Projektierung sieht keine EK/DB; Montage sieht nur
   eigene Einsätze; Außendienst sieht Projektstand read-only.
 
 ## Phase 71 – Qualität, Docs, Rollout

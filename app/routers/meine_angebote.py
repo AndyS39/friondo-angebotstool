@@ -95,6 +95,75 @@ def _rabatt_lesen(form):
     return cent, None, bezeichnung, ""
 
 
+def _projektstand(session: Session, angebot: Angebot, benutzer) -> dict | None:
+    """v11 (Phase 70): Phase je Gewerk, Ampel, nächster Termin und
+    Projektleiter (mit Telefon) für den Projektstand-Block am AD-Angebot."""
+    from datetime import datetime as dt
+
+    from app import projektierung as kern
+    from app.models import (Benutzer, Gewerk, Projekt, ProjektTermin,
+                            GEWERK_PHASEN_NAMEN)
+    if not kern.modul_sichtbar(session, benutzer):
+        return None
+    gewerk = None
+    if angebot.projekt_gewerk_id:
+        gewerk = session.get(Gewerk, angebot.projekt_gewerk_id)
+    if gewerk is None:
+        gewerk = (session.query(Gewerk)
+                  .filter(Gewerk.angebot_id == angebot.id).first())
+    if gewerk is None:
+        return None
+    projekt = session.get(Projekt, gewerk.projekt_id)
+    if projekt is None:
+        return None
+    gewerke = (session.query(Gewerk)
+               .filter(Gewerk.projekt_id == projekt.id)
+               .order_by(Gewerk.id).all())
+    zeilen = []
+    for g in gewerke:
+        termin = (session.query(ProjektTermin)
+                  .filter(ProjektTermin.gewerk_id == g.id,
+                          ProjektTermin.beginn.isnot(None),
+                          ProjektTermin.beginn >= dt.now())
+                  .order_by(ProjektTermin.beginn).first())
+        zeilen.append({"gewerk": g, "phase_name": GEWERK_PHASEN_NAMEN[g.phase],
+                       "ampel": kern.planungs_ampel(session, g),
+                       "termin": termin})
+    projektleiter = (session.get(Benutzer, projekt.projektleiter_id)
+                     if projekt.projektleiter_id else None)
+    return {"projekt": projekt, "zeilen": zeilen, "projektleiter": projektleiter}
+
+
+@router.post("/{angebot_id}/projekt-kommentar")
+async def projekt_kommentar(request: Request, angebot_id: int,
+                            session: Session = Depends(get_session)):
+    """AD-Kommentar zum Projektstand → Projektverlauf + Info an den
+    Projektleiter (Plan Phase 70)."""
+    from app import projektierung as kern
+    benutzer = request.state.benutzer
+    angebot = session.get(Angebot, angebot_id)
+    if (angebot is None or not _gehoert_mir(session, angebot, benutzer.id)):
+        return RedirectResponse("/meine-angebote", status_code=303)
+    stand = _projektstand(session, angebot, benutzer)
+    form = await request.form()
+    text = (form.get("text") or "").strip()
+    if stand is None or not text:
+        return RedirectResponse(f"/meine-angebote/{angebot_id}", status_code=303)
+    projekt = stand["projekt"]
+    kern.verlauf(session, projekt.id, f"Außendienst: {text}", benutzer=benutzer,
+                 art="kommentar")
+    if projekt.projektleiter_id:
+        kern.benachrichtigen(
+            session, [projekt.projektleiter_id],
+            f"{benutzer.name} (Außendienst) hat im Projekt {projekt.nummer} "
+            f"kommentiert: {text[:120]}",
+            f"/projektierung/projekt/{projekt.id}#verlauf", art="kommentar")
+    session.commit()
+    return RedirectResponse(f"/meine-angebote/{angebot_id}?meldung="
+                            + quote_plus("Kommentar an die Projektierung übermittelt."),
+                            status_code=303)
+
+
 @router.get("")
 async def liste(request: Request, q: str = "",
                 session: Session = Depends(get_session)):
@@ -152,7 +221,11 @@ async def detail(request: Request, angebot_id: int,
                               RabattFreigabe.status == "offen").first())
     rabatt_erlaubt = (not angebot.extern and angebot.status in
                       ("Entwurf", "Versand vorbereitet", "Versendet", "Angenommen"))
+    # v11 (Phase 70): Projektstand-Block am eigenen Angebot (read-only) –
+    # nur wenn das Modul für den Benutzer sichtbar ist (Demo-Modus: Admin)
+    projektstand = _projektstand(session, angebot, benutzer)
     return render(request, "angebote/meine_detail.html", aktiv=None, mobil=True,
+                  projektstand=projektstand,
                   benutzer=benutzer, angebot=angebot, kunde=kunde,
                   gruppen=gruppen, summen=angebot.summen(),
                   kfw_ergebnis=kfw_ergebnis,
