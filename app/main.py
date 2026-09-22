@@ -151,10 +151,20 @@ async def startseite(request: Request):
         demo_badge = projektierung_modul.freigabe_modus(sitzung) == "admin"
         if projektierung_modul.modul_sichtbar(sitzung, benutzer):
             projekt_kacheln = projektierung_modul.startseiten_kacheln(sitzung)
+        # v12 (Phase 79): Lead-Management-Karte – live nur bei Sichtbarkeit
+        from app import leadmanagement
+        lead_kacheln = None
+        lead_demo_badge = leadmanagement.demo_aktiv(sitzung)
+        lead_badge_text = leadmanagement.parameter_holen(
+            sitzung, "demo_badge_text", "Demo · Coming soon")
+        if leadmanagement.lead_modul_sichtbar(sitzung, benutzer):
+            lead_kacheln = leadmanagement.startseiten_kacheln_leads(sitzung)
     finally:
         sitzung.close()
     return render(request, "index.html", aktiv=None,
                   projekt_kacheln=projekt_kacheln, demo_badge=demo_badge,
+                  lead_kacheln=lead_kacheln, lead_demo_badge=lead_demo_badge,
+                  lead_badge_text=lead_badge_text,
                   **_start_kontext())
 
 

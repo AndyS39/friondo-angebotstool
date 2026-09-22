@@ -1417,3 +1417,327 @@ def monday_termine_ableiten(session: Session) -> int:
             anzahl += 1
     session.flush()
     return anzahl
+
+
+# --- Phase 79: Board, Lead-Akte-Kontext, Startportal-Kacheln, Cockpit ---------------
+
+BOARD_SPALTEN = ["neu", "in_kontaktierung", "qualifiziert", "terminiert",
+                 "erfasst", "angebot", "gewonnen"]
+SEITEN_PHASEN = ("zurueckgestellt", "nicht_erreicht", "unqualifiziert")
+
+
+def erwartungswert(session: Session, kunde: Kunde | None) -> int:
+    """Erwarteter Auftragswert (Cent, brutto) über die Interessen-Sparten."""
+    if kunde is None:
+        return 0
+    summe = 0
+    for sparte in (kunde.interesse or "").split(","):
+        sparte = sparte.strip()
+        if sparte in ("WP", "PV", "KL", "WB"):
+            try:
+                summe += int(parameter_holen(session,
+                                             f"erwartungswert_{sparte}", "0"))
+            except ValueError:
+                pass
+    return summe
+
+
+def board_daten(session: Session, benutzer, filter_werte: dict) -> dict:
+    """Karten je Spalte (Karte = Vorgang) + Kopfzahlen/-summen (Plan 79)."""
+    jetzt = datetime.now()
+    abfrage = session.query(Vorgang).filter(Vorgang.lead_phase.isnot(None))
+    if filter_werte.get("meine") and benutzer is not None:
+        abfrage = abfrage.filter(Vorgang.leadmanager_id == benutzer.id)
+    if filter_werte.get("quelle_id"):
+        abfrage = abfrage.filter(Vorgang.quelle_id == int(filter_werte["quelle_id"]))
+    if filter_werte.get("klasse"):
+        abfrage = abfrage.filter(Vorgang.score_klasse == filter_werte["klasse"])
+    vorgaenge = abfrage.all()
+    kunden = {k.id: k for k in session.query(Kunde)
+              .filter(Kunde.id.in_({v.kunde_id for v in vorgaenge} or {0}))}
+    quellen = {q.id: q for q in session.query(LeadQuelle)}
+    benutzer_alle = {b.id: b for b in session.query(Benutzer)}
+    mehrfach: dict[int, int] = {}
+    for v in session.query(Vorgang):
+        mehrfach[v.kunde_id] = mehrfach.get(v.kunde_id, 0) + 1
+    aktive_termine: dict[int, VotTermin] = {}
+    for t in (session.query(VotTermin)
+              .filter(VotTermin.status.in_(("geplant", "bestaetigt")))
+              .order_by(VotTermin.beginn)):
+        aktive_termine.setdefault(t.vorgang_id, t)
+
+    spalten = {s: [] for s in BOARD_SPALTEN + ["verloren"]
+               + list(SEITEN_PHASEN)}
+    grenze_30 = jetzt - timedelta(days=30)
+    for v in vorgaenge:
+        kunde = kunden.get(v.kunde_id)
+        if kunde is None or v.lead_phase not in spalten:
+            continue
+        if filter_werte.get("sparte") and \
+                filter_werte["sparte"] not in (kunde.interesse or ""):
+            continue
+        if filter_werte.get("plz") and \
+                not (kunde.plz or "").startswith(filter_werte["plz"]):
+            continue
+        suche = (filter_werte.get("q") or "").lower()
+        if suche and suche not in " ".join(
+                (kunde.vorname or "", kunde.nachname or "",
+                 kunde.ort or "")).lower():
+            continue
+        if filter_werte.get("eingang_von") and (
+                v.eingang_am is None
+                or v.eingang_am < filter_werte["eingang_von"]):
+            continue
+        if filter_werte.get("eingang_bis") and (
+                v.eingang_am is None
+                or v.eingang_am > filter_werte["eingang_bis"]):
+            continue
+        if (v.lead_phase in ("gewonnen", "verloren")
+                and (v.eingang_am or v.angelegt_am) < grenze_30
+                and not filter_werte.get("seiten")):
+            pass   # Endzustände bleiben (eingeklappte Spalte zeigt 30 Tage)
+        termin = aktive_termine.get(v.id)
+        spalten[v.lead_phase].append({
+            "vorgang": v, "kunde": kunde,
+            "quelle": quellen.get(v.quelle_id),
+            "sparten": [s.strip() for s in (kunde.interesse or "").split(",")
+                        if s.strip()],
+            "sla": sla_status(session, v, jetzt) if v.lead_phase == "neu" else None,
+            "wiederkehrer": mehrfach.get(v.kunde_id, 0) > 1,
+            "monday": v.eingang_art == "monday",
+            "ueberfaellig": (v.naechste_aktion_am is not None
+                             and v.naechste_aktion_am < jetzt),
+            "leadmanager": benutzer_alle.get(v.leadmanager_id),
+            "ad": benutzer_alle.get(termin.ad_id) if termin else None,
+            "termin": termin,
+            "wert": erwartungswert(session, kunde),
+        })
+    for karten in spalten.values():
+        karten.sort(key=lambda k: (k["vorgang"].eingang_am
+                                   or k["vorgang"].angelegt_am), reverse=True)
+    koepfe = {}
+    for phase, karten in spalten.items():
+        summe = (sum(k["wert"] for k in karten)
+                 if phase in ("terminiert", "erfasst", "angebot", "gewonnen")
+                 else None)
+        koepfe[phase] = {"anzahl": len(karten), "summe": summe}
+    return {"spalten": spalten, "koepfe": koepfe}
+
+
+def akte_kontext(session: Session, vorgang: Vorgang) -> dict:
+    """Lead-Kopfblock + Reiter für die Vorgangsakte (Phase 79)."""
+    import json as json_modul
+
+    from app import leadmanagement_logik
+    from app.models import KommunikationLog, VorgangsNotiz
+    logik = leadmanagement_logik.hole_logik()
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    quelle = session.get(LeadQuelle, vorgang.quelle_id) if vorgang.quelle_id else None
+    kampagne = session.get(Kampagne, vorgang.kampagne_id) if vorgang.kampagne_id else None
+    benutzer_map = {b.id: b for b in session.query(Benutzer)}
+
+    # Timeline: Aktivitäten ∪ Notizen-Chat (chronologisch absteigend)
+    timeline = []
+    for a in (session.query(LeadAktivitaet)
+              .filter(LeadAktivitaet.vorgang_id == vorgang.id)):
+        timeline.append({"zeit": a.zeitpunkt, "typ": a.typ,
+                         "ergebnis": a.ergebnis, "text": a.text,
+                         "benutzer": benutzer_map.get(a.benutzer_id)})
+    for n in (session.query(VorgangsNotiz)
+              .filter(VorgangsNotiz.vorgang_id == vorgang.id)):
+        timeline.append({"zeit": n.zeit, "typ": "notiz", "ergebnis": None,
+                         "text": n.text,
+                         "benutzer": benutzer_map.get(n.benutzer_id)})
+    timeline.sort(key=lambda e: e["zeit"], reverse=True)
+
+    # Qualifizierung je Sparte mit Fragetexten
+    qualifizierungen = []
+    for q in (session.query(LeadQualifizierung)
+              .filter(LeadQualifizierung.vorgang_id == vorgang.id)
+              .order_by(LeadQualifizierung.sparte)):
+        try:
+            antworten = json_modul.loads(q.antworten or "{}")
+        except ValueError:
+            antworten = {}
+        zeilen = []
+        for frage in logik.fragen_der_sparte(q.sparte):
+            if frage.key in antworten:
+                wert = antworten[frage.key]
+                zeilen.append((frage.frage,
+                               ", ".join(wert) if isinstance(wert, list)
+                               else str(wert)))
+        qualifizierungen.append({"zeile": q, "antworten": zeilen})
+
+    # Score-Aufschlüsselung (Tooltip)
+    score_teile = []
+    antworten_alle: dict = {}
+    for q in (session.query(LeadQualifizierung)
+              .filter(LeadQualifizierung.vorgang_id == vorgang.id)):
+        try:
+            antworten_alle.update(json_modul.loads(q.antworten or "{}"))
+        except ValueError:
+            pass
+    benutzt_keys: set = set()
+    benutzt_texte: set = set()
+    for regel in logik.scoring:
+        if regel.frage_key in benutzt_keys or regel.frage_key not in antworten_alle:
+            continue
+        frage = logik.frage(regel.frage_key)
+        text = frage.frage if frage else regel.frage_key
+        if text in benutzt_texte:
+            continue
+        if leadmanagement_logik.bedingung_trifft(regel.bedingung,
+                                                 antworten_alle[regel.frage_key]):
+            score_teile.append(f"{text} {regel.bedingung}: "
+                               f"{regel.punkte:+d}")
+            benutzt_keys.add(regel.frage_key)
+            benutzt_texte.add(text)
+    kerngebiet = [p.strip() for p in
+                  parameter_holen(session, "kerngebiet_plz", "").split(",")
+                  if p.strip()]
+    if kunde is not None and kunde.plz and any(
+            kunde.plz.startswith(p) for p in kerngebiet):
+        score_teile.append("Kerngebiet-PLZ: +10")
+    if quelle is not None and quelle.score_bonus:
+        score_teile.append(f"Quelle {quelle.name}: {quelle.score_bonus:+d}")
+
+    termine = (session.query(VotTermin)
+               .filter(VotTermin.vorgang_id == vorgang.id)
+               .order_by(VotTermin.beginn.desc()).all())
+    aktiver_termin = next((t for t in termine
+                           if t.status in ("geplant", "bestaetigt")), None)
+    try:
+        wunschzeiten = json_modul.loads(vorgang.wunschzeiten or "[]")
+    except ValueError:
+        wunschzeiten = []
+    kommunikation = (session.query(KommunikationLog)
+                     .filter(KommunikationLog.vorgang_id == vorgang.id)
+                     .order_by(KommunikationLog.geplant_am.desc())
+                     .limit(20).all())
+    mehrfach = (session.query(Vorgang)
+                .filter(Vorgang.kunde_id == vorgang.kunde_id).count() > 1)
+    return {
+        "quelle": quelle, "kampagne": kampagne,
+        "sla": sla_status(session, vorgang),
+        "score_teile": score_teile,
+        "leadmanager": benutzer_map.get(vorgang.leadmanager_id),
+        "ad": (benutzer_map.get(aktiver_termin.ad_id)
+               if aktiver_termin else None),
+        "phasen": LEAD_PHASEN_ANZEIGE,
+        "wunschzeiten": wunschzeiten,
+        "timeline": timeline,
+        "qualifizierungen": qualifizierungen,
+        "termine": termine, "aktiver_termin": aktiver_termin,
+        "kommunikation": kommunikation,
+        "wiederkehrer": mehrfach,
+        "leadmanager_wahl": [b for b in benutzer_map.values()
+                             if b.aktiv and (b.lm_aktiv or b.rolle == "admin"
+                                             or b.hat_rolle("leadmanagement")
+                                             or b.rolle == "innendienst")],
+        "no_show_gruende": logik.gruende_der_phase("no_show"),
+        "sparten": [s.strip() for s in ((kunde.interesse or "") if kunde else "").split(",")
+                    if s.strip()],
+    }
+
+
+LEAD_PHASEN_ANZEIGE = ["neu", "in_kontaktierung", "qualifiziert", "terminiert",
+                       "erfasst", "angebot", "gewonnen"]
+
+
+def startseiten_kacheln_leads(session: Session) -> dict:
+    """Portal-Karte Lead-Management (Phase 79): Neue Leads (+SLA rot),
+    Jetzt anrufen, Wiedervorlagen heute, Termine diese Woche (je AD),
+    Posteingang unklar."""
+    from app.models import LeadPosteingang
+    jetzt = datetime.now()
+    neue = (session.query(Vorgang)
+            .filter(Vorgang.lead_phase == "neu").all())
+    sla_rot = sum(1 for v in neue
+                  if sla_status(session, v, jetzt)["farbe"] == "rot")
+    faellig = (session.query(Vorgang)
+               .filter(Vorgang.lead_phase.in_(("neu", "in_kontaktierung")),
+                       Vorgang.naechste_aktion_am.isnot(None),
+                       Vorgang.naechste_aktion_am <= jetzt).count())
+    heute_ende = jetzt.replace(hour=23, minute=59, second=59)
+    wiedervorlagen = (session.query(Vorgang)
+                      .filter(Vorgang.lead_phase == "zurueckgestellt",
+                              Vorgang.zurueckgestellt_bis.isnot(None),
+                              Vorgang.zurueckgestellt_bis <= heute_ende)
+                      .count())
+    woche_ende = jetzt + timedelta(days=7 - jetzt.weekday())
+    termine = (session.query(VotTermin)
+               .filter(VotTermin.status.in_(("geplant", "bestaetigt")),
+                       VotTermin.beginn >= jetzt.replace(hour=0, minute=0),
+                       VotTermin.beginn < woche_ende).all())
+    je_ad: dict[int, int] = {}
+    for t in termine:
+        if t.ad_id:
+            je_ad[t.ad_id] = je_ad.get(t.ad_id, 0) + 1
+    benutzer_map = {b.id: b for b in session.query(Benutzer)}
+    untertitel = " / ".join(
+        f"{anzahl} {benutzer_map[ad_id].name.split()[0] if ad_id in benutzer_map else '?'}"
+        for ad_id, anzahl in sorted(je_ad.items(), key=lambda x: -x[1])[:3])
+    posteingang = (session.query(LeadPosteingang)
+                   .filter(LeadPosteingang.status == "offen").count())
+    return {
+        "neue": len(neue), "sla_rot": sla_rot, "faellig": faellig,
+        "wiedervorlagen": wiedervorlagen, "termine_woche": len(termine),
+        "termine_untertitel": untertitel, "posteingang": posteingang,
+    }
+
+
+def cockpit_daten(session: Session) -> dict:
+    """Cockpit (Phase 79): heute/diese Woche je Leadmanager + je AD."""
+    jetzt = datetime.now()
+    heute_start = jetzt.replace(hour=0, minute=0, second=0, microsecond=0)
+    woche_start = heute_start - timedelta(days=heute_start.weekday())
+    benutzer_map = {b.id: b for b in session.query(Benutzer)}
+
+    def _lm_zahlen(seit: datetime) -> dict:
+        zahlen: dict[int, dict] = {}
+        for a in (session.query(LeadAktivitaet)
+                  .filter(LeadAktivitaet.zeitpunkt >= seit)):
+            if a.benutzer_id is None:
+                continue
+            eintrag = zahlen.setdefault(a.benutzer_id, {
+                "anrufe": 0, "erreicht": 0, "qualifiziert": 0,
+                "terminiert": 0})
+            if a.typ == "anruf":
+                eintrag["anrufe"] += 1
+                if a.ergebnis == "erreicht":
+                    eintrag["erreicht"] += 1
+            elif a.typ == "status" and a.text.startswith("Qualifiziert"):
+                eintrag["qualifiziert"] += 1
+            elif a.typ == "termin" and a.text.startswith("Termin gebucht"):
+                eintrag["terminiert"] += 1
+        return zahlen
+
+    ueberfaellig: dict[int, int] = {}
+    for v in (session.query(Vorgang)
+              .filter(Vorgang.naechste_aktion_am.isnot(None),
+                      Vorgang.naechste_aktion_am < jetzt,
+                      Vorgang.lead_phase.in_(("neu", "in_kontaktierung",
+                                              "qualifiziert")))):
+        if v.leadmanager_id:
+            ueberfaellig[v.leadmanager_id] = \
+                ueberfaellig.get(v.leadmanager_id, 0) + 1
+
+    ad_zahlen: dict[int, dict] = {}
+    for t in (session.query(VotTermin)
+              .filter(VotTermin.beginn >= woche_start)):
+        if not t.ad_id:
+            continue
+        eintrag = ad_zahlen.setdefault(t.ad_id, {"termine": 0, "no_shows": 0})
+        eintrag["termine"] += 1
+        if t.status == "no_show":
+            eintrag["no_shows"] += 1
+
+    sla_rot = [v for v in session.query(Vorgang)
+               .filter(Vorgang.lead_phase == "neu")
+               if sla_status(session, v, jetzt)["farbe"] == "rot"]
+    return {
+        "heute": _lm_zahlen(heute_start), "woche": _lm_zahlen(woche_start),
+        "ueberfaellig": ueberfaellig, "ad": ad_zahlen,
+        "sla_rot": sla_rot, "benutzer_map": benutzer_map,
+        "kunden_map": {k.id: k for k in session.query(Kunde)},
+    }

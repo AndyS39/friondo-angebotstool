@@ -141,3 +141,24 @@ nach V1 durch.
   in der Akte) statt stillem Verwerfen.
 - **Rückruf-Betreff** „Rückruf V<Vorgangs-Nr>“ ({link_rueckruf} als
   mailto-Link) – die Antwort-Zuordnung erkennt dieses Muster und AN-C-Nummern.
+
+## Phase 79 – Board, Lead-Akte, Karte, Portal, Cockpit
+
+- **Portal-Karte ohne eingebettete Shortcuts**: Die v9-Portal-Regel (jede
+  Karte ist EIN Klickziel) gilt weiter – die Shortcuts Anrufliste/Pipeline/
+  Kalender/Karte liegen im Kopf jeder Modul-Seite, die Karte führt auf den
+  Modul-Einstieg (Anrufliste).
+- **Lead-Akte als Kopfblock + aufklappbare Reiter** direkt in der bestehenden
+  Vorgangsakte (vor Erfassungen/Angeboten), eingebunden über ein Include –
+  kein Umbau der bestehenden Akte-Blöcke. Der Kanban aus PLAN_PROJ Phase 68
+  wird als CSS/Muster wiederverwendet (kanban/kanban-spalte/kanban-karte).
+- **„AD änderbar“ im Kopfblock**: Der AD lebt am aktiven Termin – Wechsel
+  läuft über Umbuchen im Assistenten; der Kopf zeigt ihn read-only.
+- **Board-DnD**: nur → Zurückgestellt/→ Unqualifiziert (Dialog) und
+  Seitenzustand → Neu (Reaktivieren); alle anderen Ziele zeigen den Hinweis
+  „über Anrufliste/Assistent“ (Terminieren nur über den Assistenten).
+- **Leaflet 1.9.4 lokal** unter static/leaflet/ eingecheckt (keine
+  CDN-Abhängigkeit); Kacheln von tile.openstreetmap.org mit Attribution –
+  ohne Internet erscheinen weiterhin die Pins auf grauem Grund.
+- **Gewonnen/Verloren im Board** zeigen die Endzustände (Verloren
+  eingeklappt); die 30-Tage-Grenze betrifft die eingeklappte Anzeige.

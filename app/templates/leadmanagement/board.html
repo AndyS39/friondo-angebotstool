@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block titel %}Pipeline – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Pipeline
+        {% if demo_badge %}<span class="demo-badge">Demo · Coming soon</span>{% endif %}
+    </h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/anrufliste">Anrufliste</a>
+        <a class="knopf klein zweitrangig" href="/lead-management/kalender">Kalender</a>
+        <a class="knopf klein zweitrangig" href="/lead-management/karte">Karte</a>
+        <a class="knopf klein zweitrangig" href="/lead-management/cockpit">Cockpit</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<form method="get" action="/lead-management/board" class="suchleiste">
+    <label class="kontrollfeld">
+        <select name="meine">
+            <option value="0" {{ 'selected' if not filter_werte.meine }}>Alle</option>
+            <option value="1" {{ 'selected' if filter_werte.meine }}>Meine Leads</option>
+        </select>
+    </label>
+    <label class="kontrollfeld">Quelle
+        <select name="quelle_id">
+            <option value="">alle</option>
+            {% for q in quellen %}
+                <option value="{{ q.id }}" {{ 'selected' if filter_werte.quelle_id == q.id | string }}>{{ q.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="kontrollfeld">Sparte
+        <select name="sparte">
+            <option value="">alle</option>
+            {% for s in ('WP', 'PV', 'KL', 'WB') %}
+                <option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }}>{{ s }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="kontrollfeld">Klasse
+        <select name="klasse">
+            <option value="">alle</option>
+            {% for k in ('A', 'B', 'C') %}
+                <option value="{{ k }}" {{ 'selected' if filter_werte.klasse == k }}>{{ k }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="kontrollfeld">PLZ <input type="text" name="plz" size="5"
+           value="{{ filter_werte.plz }}"></label>
+    <label class="kontrollfeld">Eingang von <input type="date" name="eingang_von"
+           value="{{ filter_werte.eingang_von.strftime('%Y-%m-%d') if filter_werte.eingang_von }}"></label>
+    <label class="kontrollfeld">bis <input type="date" name="eingang_bis"
+           value="{{ filter_werte.eingang_bis.strftime('%Y-%m-%d') if filter_werte.eingang_bis }}"></label>
+    <input type="search" name="q" value="{{ filter_werte.q }}" placeholder="Suche">
+    <label class="kontrollfeld"><input type="checkbox" name="seiten" value="1"
+           {{ 'checked' if filter_werte.seiten }}> Zurückgestellt/Nicht erreicht/Unqualifiziert</label>
+    <button class="knopf klein" type="submit">Filtern</button>
+</form>
+
+{% macro lead_karte(k) %}
+<div class="kanban-karte lead-karte" draggable="true"
+     ondragstart="kartenStart(event, {{ k.vorgang.id }})">
+    <a href="/lead-management/lead/{{ k.vorgang.id }}"><strong>{{ k.kunde.anzeige_name }}</strong></a>
+    <span class="dezent">{{ k.kunde.ort or '?' }}</span>
+    <span>
+        {% for s in k.sparten %}<span class="abzeichen">{{ s }}</span>{% endfor %}
+        {% if k.quelle %}<span class="abzeichen">{{ k.quelle.name }}</span>{% endif %}
+        {% if k.vorgang.demo %}<span class="demo-badge">Demo</span>{% endif %}
+        {% if k.monday %}<span class="abzeichen">monday</span>{% endif %}
+        {% if k.wiederkehrer %}<span class="abzeichen ep">Wiederkehrer</span>{% endif %}
+    </span>
+    <span>
+        Klasse <strong>{{ k.vorgang.score_klasse or '–' }}</strong>
+        {% if k.sla and k.sla.farbe and k.sla.farbe != 'erfuellt' %}
+            <span class="sla-chip sla-{{ k.sla.farbe }}">{{ k.sla.minuten }} Min</span>
+        {% endif %}
+        {% if k.vorgang.naechste_aktion_am %}
+            <span class="{{ 'ueberfaellig-rot' if k.ueberfaellig else 'dezent' }}">
+                → {{ k.vorgang.naechste_aktion_am.strftime('%d.%m. %H:%M') }}</span>
+        {% endif %}
+    </span>
+    <span class="dezent">
+        {% if k.leadmanager %}LM {{ k.leadmanager.name.split()[0] }}{% endif %}
+        {% if k.ad %} · AD {{ k.ad.name.split()[0] }}{% endif %}
+        {% if k.termin and k.termin.beginn %} · VOT {{ k.termin.beginn.strftime('%d.%m. %H:%M') }}{% endif %}
+    </span>
+</div>
+{% endmacro %}
+
+<div class="kanban">
+    {% for phase in spalten_reihenfolge %}
+    <div class="kanban-spalte" data-phase="{{ phase }}"
+         ondragover="event.preventDefault()" ondrop="kartenDrop(event, '{{ phase }}')">
+        <h3>{{ phasen_namen[phase] }} ({{ koepfe[phase].anzahl }})
+            {% if koepfe[phase].summe is not none %}
+                <span class="dezent">{{ koepfe[phase].summe | euro }}</span>
+            {% endif %}</h3>
+        {% for k in spalten[phase] %}{{ lead_karte(k) }}{% endfor %}
+    </div>
+    {% endfor %}
+    <div class="kanban-spalte" data-phase="verloren"
+         ondragover="event.preventDefault()" ondrop="kartenDrop(event, 'verloren')">
+        <details>
+            <summary><h3 style="display:inline">Verloren ({{ koepfe['verloren'].anzahl }}) · letzte 30 Tage</h3></summary>
+            {% for k in spalten['verloren'] %}{{ lead_karte(k) }}{% endfor %}
+        </details>
+    </div>
+    {% if filter_werte.seiten %}
+        {% for phase in seiten_phasen %}
+        <div class="kanban-spalte" data-phase="{{ phase }}"
+             ondragover="event.preventDefault()" ondrop="kartenDrop(event, '{{ phase }}')">
+            <h3>{{ phasen_namen[phase] }} ({{ koepfe[phase].anzahl }})</h3>
+            {% for k in spalten[phase] %}{{ lead_karte(k) }}{% endfor %}
+        </div>
+        {% endfor %}
+    {% endif %}
+</div>
+
+<dialog id="dlg-board-zurueck">
+    <form method="post" class="formular">
+        <h3>Zurückstellen</h3>
+        <label>Bis (Pflicht) <input type="date" name="bis" required></label>
+        <label>Grund
+            <select name="grund" required>
+                {% for g in zurueck_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}
+            </select>
+        </label>
+        <label>Freitext <input type="text" name="grund_text"></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Zurückstellen</button>
+            <button class="knopf zweitrangig" type="button"
+                    onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+<dialog id="dlg-board-unq">
+    <form method="post" class="formular">
+        <h3>Unqualifiziert (Grund Pflicht)</h3>
+        <label>Grund
+            <select name="grund" required>
+                {% for g in unq_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}
+            </select>
+        </label>
+        <label>Freitext <input type="text" name="grund_text"></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Unqualifiziert setzen</button>
+            <button class="knopf zweitrangig" type="button"
+                    onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+<dialog id="dlg-board-reakt">
+    <form method="post" class="formular">
+        <h3>Reaktivieren</h3>
+        <label>Begründung (Pflicht) <input type="text" name="begruendung" required></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Reaktivieren (→ Neu)</button>
+            <button class="knopf zweitrangig" type="button"
+                    onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+
+<script>
+// Drag & Drop nur, wo es fachlich passt (Plan 79): → Zurückgestellt (Dialog),
+// → Unqualifiziert (Dialog), Seitenzustände → Neu (Reaktivieren);
+// alles andere läuft über Anrufliste/Assistent.
+let boardGezogen = null;
+let boardQuelle = null;
+function kartenStart(e, vorgangId) {
+    boardGezogen = vorgangId;
+    boardQuelle = e.target.closest('.kanban-spalte').dataset.phase;
+}
+const seitenPhasen = ['zurueckgestellt', 'nicht_erreicht', 'unqualifiziert'];
+function kartenDrop(e, ziel) {
+    e.preventDefault();
+    if (!boardGezogen || ziel === boardQuelle) return;
+    if (ziel === 'zurueckgestellt') {
+        const dlg = document.getElementById('dlg-board-zurueck');
+        dlg.querySelector('form').action =
+            `/lead-management/lead/${boardGezogen}/zurueckstellen`;
+        dlg.showModal();
+    } else if (ziel === 'unqualifiziert') {
+        const dlg = document.getElementById('dlg-board-unq');
+        dlg.querySelector('form').action =
+            `/lead-management/lead/${boardGezogen}/unqualifiziert`;
+        dlg.showModal();
+    } else if (ziel === 'neu' && seitenPhasen.includes(boardQuelle)) {
+        const dlg = document.getElementById('dlg-board-reakt');
+        dlg.querySelector('form').action =
+            `/lead-management/lead/${boardGezogen}/reaktivieren`;
+        dlg.showModal();
+    } else {
+        alert('Dieser Wechsel läuft über die Anrufliste bzw. den ' +
+              'Terminassistenten (Terminieren nur über den Assistenten).');
+    }
+    boardGezogen = null;
+}
+</script>
+{% endblock %}

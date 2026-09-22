@@ -9,6 +9,40 @@
    Klickziel zur jeweiligen Tool-Seite. Die Kacheln darin sind reine
    Anzeige (keine eigenen Links) – Klick darauf zählt als Kartenklick. #}
 <div class="portal-karten">
+    {# v12 (Phase 79): Live-Kacheln nur bei Modul-Sichtbarkeit (Demo: Admin);
+       alle anderen Rollen sehen die Karte unverändert wie bisher #}
+    {% if lead_kacheln %}
+    <a class="portal-karte" href="/lead-management">
+        <h2 class="portal-titel">Lead-Management
+            {% if lead_demo_badge %}<span class="demo-badge">{{ lead_badge_text }}</span>{% endif %}
+        </h2>
+        <div class="kacheln bereich-kacheln">
+            <div class="kachel stat">
+                <span class="stat-zahl" {% if lead_kacheln.sla_rot %}style="color:#c0392b"{% endif %}>{{ lead_kacheln.neue }}</span>
+                <span>Neue Leads</span>
+                <span class="dezent">{{ lead_kacheln.sla_rot }} × SLA rot</span>
+            </div>
+            <div class="kachel stat">
+                <span class="stat-zahl">{{ lead_kacheln.faellig }}</span>
+                <span>Jetzt anrufen</span>
+                <span class="dezent">fällige Aktionen</span>
+            </div>
+            <div class="kachel stat">
+                <span class="stat-zahl">{{ lead_kacheln.wiedervorlagen }}</span>
+                <span>Wiedervorlagen heute</span>
+            </div>
+            <div class="kachel stat">
+                <span class="stat-zahl">{{ lead_kacheln.termine_woche }}</span>
+                <span>Termine diese Woche</span>
+                <span class="dezent">{{ lead_kacheln.termine_untertitel or 'je AD' }}</span>
+            </div>
+            <div class="kachel stat">
+                <span class="stat-zahl">{{ lead_kacheln.posteingang }}</span>
+                <span>Posteingang unklar</span>
+            </div>
+        </div>
+    </a>
+    {% else %}
     <a class="portal-karte" href="/lead-management">
         <h2 class="portal-titel">Lead-Management <span class="coming-soon">Coming soon</span></h2>
         <div class="kacheln bereich-kacheln">
@@ -21,6 +55,7 @@
             {% endfor %}
         </div>
     </a>
+    {% endif %}
 
     <a class="portal-karte" href="/angebotstool">
         <h2 class="portal-titel">Angebotstool</h2>

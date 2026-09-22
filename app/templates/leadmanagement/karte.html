@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block titel %}Karte – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{% block inhalt %}
+<link rel="stylesheet" href="/static/leaflet/leaflet.css">
+<div class="seitenkopf">
+    <h1>Karte</h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/board">Pipeline</a>
+        <a class="knopf klein zweitrangig" href="/lead-management/anrufliste">Anrufliste</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<form id="kartefilter" class="suchleiste">
+    <label class="kontrollfeld">Phase
+        <select name="phase">
+            <option value="">offene (neu … terminiert)</option>
+            {% for wert, name in phasen_namen.items() %}
+                <option value="{{ wert }}">{{ name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="kontrollfeld">Sparte
+        <select name="sparte">
+            <option value="">alle</option>
+            {% for s in ('WP', 'PV', 'KL', 'WB') %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+        </select>
+    </label>
+    <label class="kontrollfeld">AD (Termine)
+        <select name="ad_id">
+            <option value="">alle</option>
+            {% for ad in alle_ad %}<option value="{{ ad.id }}">{{ ad.name }}</option>{% endfor %}
+        </select>
+    </label>
+    <label class="kontrollfeld">Termine (Tage)
+        <input type="number" name="tage" value="60" style="width:4rem"></label>
+    <button class="knopf klein" type="submit">Aktualisieren</button>
+    <span class="dezent">Pins: Leads (Farbe je Phase, Größe je Klasse) ·
+        Termine · AD-Start. Kacheln © OpenStreetMap.</span>
+</form>
+
+<div id="karte" style="height:70vh; border:1px solid var(--grau-linie);
+     border-radius:8px"></div>
+
+<script src="/static/leaflet/leaflet.js"></script>
+<script>
+const karte = L.map('karte').setView([51.4344, 6.7623], 10);   // Duisburg
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende'
+}).addTo(karte);
+const phasenFarben = {neu: '#c0392b', in_kontaktierung: '#d4a017',
+                      qualifiziert: '#2471a3', terminiert: '#27ae60',
+                      erfasst: '#17a589', angebot: '#8e44ad',
+                      gewonnen: '#1e8449', verloren: '#7f8c8d'};
+let ebene = L.layerGroup().addTo(karte);
+
+async function laden() {
+    const form = document.getElementById('kartefilter');
+    const params = new URLSearchParams(new FormData(form));
+    const antwort = await fetch('/lead-management/karte/daten?' + params);
+    const daten = await antwort.json();
+    ebene.clearLayers();
+    for (const p of daten.pins) {
+        if (p.art === 'lead') {
+            const radius = {A: 12, B: 9, C: 7}[p.klasse] || 7;
+            L.circleMarker([p.lat, p.lon], {
+                radius, color: phasenFarben[p.phase] || '#555',
+                fillOpacity: 0.75,
+            }).bindPopup(`<strong>${p.name}</strong><br>${p.ort} · ${p.phase}` +
+                `<br><a href="/lead-management/lead/${p.vorgang_id}">Akte</a> · ` +
+                `<a href="/lead-management/lead/${p.vorgang_id}/termin">Termin vorschlagen</a>`)
+              .addTo(ebene);
+        } else if (p.art === 'termin') {
+            L.marker([p.lat, p.lon]).bindPopup(
+                `VOT ${p.beginn} · ${p.ad}<br>` +
+                `<a href="/lead-management/lead/${p.vorgang_id}">Akte</a>`)
+              .addTo(ebene);
+        } else if (p.art === 'start') {
+            L.circleMarker([p.lat, p.lon], {radius: 6, color: '#000',
+                fillColor: '#fff', fillOpacity: 1})
+              .bindPopup(`Start ${p.ad}`).addTo(ebene);
+        }
+    }
+}
+document.getElementById('kartefilter').addEventListener('submit', e => {
+    e.preventDefault();
+    laden();
+});
+L.Icon.Default.prototype.options.imagePath = '/static/leaflet/images/';
+laden();
+</script>
+{% endblock %}

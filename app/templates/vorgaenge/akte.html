@@ -54,7 +54,14 @@
     </form>
 </div>
 
+{% if lead_kontext is defined and lead_kontext %}
+    {% include "vorgaenge/_lead_kopf.html" %}
+{% endif %}
+
 <h2>Erfassungen</h2>
+{% if vorgang.demo %}
+<p class="hinweis">Demo-Lead – keine Erfassung möglich.</p>
+{% else %}
 {% if erfassungen %}
 <table class="tabelle">
     <thead><tr><th>Sparte</th><th>Art</th><th>Status</th><th>Vertriebler</th><th>Erfasst am</th><th></th></tr></thead>
@@ -81,6 +88,7 @@
 <p class="dezent">Noch keine Erfassungen.
     {% if kunde %}<a href="/erfassung/sparten?kunde_id={{ kunde.id }}{{ '&lead_id=' ~ lead.id if lead }}">Erfassung starten</a>{% endif %}</p>
 {% endif %}
+{% endif %}{# /vorgang.demo #}
 
 {% if projekt_modul_ok and vorgang_projekte %}
 {% from "_projektierung.html" import phase_name %}

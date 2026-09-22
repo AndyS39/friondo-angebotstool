@@ -459,7 +459,7 @@ Terminal-Server weiterhin nacheinander (update.bat).
 
 ## Phase 79 – Pipeline-Kanban, Lead-Akte, Karte, Startportal, Cockpit
 
-- [ ] **Kanban** `/leads/board` (Kanban-Komponente aus PLAN_PROJ_V1 Phase 68 wiederverwenden,
+- [x] **Kanban** `/leads/board` (Kanban-Komponente aus PLAN_PROJ_V1 Phase 68 wiederverwenden,
   falls vorhanden; sonst hier bauen und für die Projektierung wiederverwendbar ablegen):
   Spalten Neu · In Kontaktierung · Qualifiziert · Terminiert · Erfasst · Angebot ·
   Gewonnen | Verloren (eingeklappt, letzte 30 Tage); Zurückgestellt / Nicht erreicht /
@@ -472,7 +472,7 @@ Terminal-Server weiterhin nacheinander (update.bat).
   Eingang. Spaltenköpfe zeigen Anzahl und (ab Terminiert) Summe erwarteter Werte
   (Parameter `erwartungswert_<sparte>` in `lead_parameter`, Standard WP 30.000 €,
   PV 20.000 €, KL 8.000 €, WB 2.500 € brutto – Andreas korrigiert).
-- [ ] **Lead-Akte** = bestehende Vorgangsakte (v10), erweitert (nur bei `lead_modul_sichtbar`):
+- [x] **Lead-Akte** = bestehende Vorgangsakte (v10), erweitert (nur bei `lead_modul_sichtbar`):
   **Kopfblock „Lead"** (Quelle, Kampagne, Eingang am/Art, SLA, Score + Klasse mit
   Punkte-Aufschlüsselung als Tooltip, Leadmanager (änderbar), AD (änderbar), Phase mit
   Stepper, Wunschzeiten, Einwilligungen (Häkchen + Datum + Quelle), Badges) und
@@ -485,24 +485,24 @@ Terminal-Server weiterhin nacheinander (update.bat).
   Bestehende Bereiche Erfassungen · Angebote · Mail-Verlauf · Projekt unverändert
   dahinter. Bei Demo-Leads: Bereich Erfassungen zeigt den Hinweis „Demo-Lead – keine
   Erfassung möglich", Button „Erfassung starten" ausgeblendet.
-- [ ] **Karte** `/leads/karte`: Leaflet lokal unter `static/leaflet/` ablegen (keine CDN-
+- [x] **Karte** `/leads/karte`: Leaflet lokal unter `static/leaflet/` ablegen (keine CDN-
   Abhängigkeit), Kacheln `https://tile.openstreetmap.org/{z}/{x}/{y}.png` mit
   Attribution, Zentrum Duisburg. Pins: offene Leads (Farbe je Phase, Größe je Klasse),
   Termine (Symbol je AD), AD-Startadressen. Filter Phase/Sparte/AD/Zeitraum; Klick →
   Popup mit Name, Ort, Phase, Buttons „Akte", „Termin vorschlagen". Komponente
   `karte_termine_tag(ad, datum)` für die Mini-Karte im Assistenten (Termine des Tages
   als nummerierte Pins + Kandidat als Stern, Linie in Reihenfolge).
-- [ ] **Startportal**: Karte „Lead-Management" – für Admins im Demo-Modus zusätzlich
+- [x] **Startportal**: Karte „Lead-Management" – für Admins im Demo-Modus zusätzlich
   Badge `demo_badge_text` (gelb, wie bei der Projektierung) und die Kacheln **Neue
   Leads** (Zähler + SLA-Rot-Anteil) · **Jetzt anrufen** (fällig jetzt) · **Wiedervorlagen
   heute** · **Termine diese Woche** (Summe, Untertitel je AD) · **Posteingang unklar**;
   Shortcuts Anrufliste · Pipeline · Kalender · Karte. Bestehende Kacheln/Shortcuts
   (Leads VOT …) bleiben. Für alle anderen Rollen: Karte unverändert. Bei
   `lead_freigabe_modus = alle`: Badge weg, Kacheln für Innendienst/Leadmanagement/Admin.
-- [ ] **Cockpit** `/leads/cockpit` (Admin, später Leadmanagement-Leitung): heute/diese
+- [x] **Cockpit** `/leads/cockpit` (Admin, später Leadmanagement-Leitung): heute/diese
   Woche je Leadmanager: Anrufe, erreicht, qualifiziert, terminiert, überfällige
   Aktionen; je AD: Termine, No-Shows; Liste „SLA rot jetzt".
-- [ ] Test: 30 Vorgänge (Demo + gesyncte) im Board richtig einsortiert; Akte zeigt alle
+- [x] Test: 30 Vorgänge (Demo + gesyncte) im Board richtig einsortiert; Akte zeigt alle
   Reiter; Karte lädt ohne Internet-Kacheln wenigstens die Pins; Kachelzahlen = Listen.
 
 ## Phase 80 – Kennzahlen: Statistik-Reiter „Leads" und Kanal-Report

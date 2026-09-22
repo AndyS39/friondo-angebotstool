@@ -201,8 +201,18 @@ async def akte(request: Request, vorgang_id: int,
     gewerke_hinweise = kombi_modul.gewerke_hinweise(session, vorgang, angebote)
     kombi_doppelt = kombi_modul.doppelte_artikel(
         [a for a in angebote if kombi_info[a.id][0]])
+    # v12 (Phase 79): Lead-Kopfblock + Reiter, nur bei Modul-Sichtbarkeit
+    lead_kontext = None
+    try:
+        from app import leadmanagement
+        if leadmanagement.lead_modul_sichtbar(session, benutzer):
+            lead_kontext = leadmanagement.akte_kontext(session, vorgang)
+    except Exception:
+        lead_kontext = None
     return render(request, "vorgaenge/akte.html", aktiv="/vorgaenge",
                   mobil=benutzer.rolle == "aussendienst",
+                  lead_kontext=lead_kontext,
+                  lead_phasen_namen=__import__("app.models", fromlist=["x"]).LEAD_PHASEN_NAMEN,
                   vorgang=vorgang, kunde=kunde, lead=lead, kanal=kanal,
                   profil=profil, erfassungen=erfassungen, angebote=angebote,
                   mails=mails, notizen=notizen, benutzer=benutzer,

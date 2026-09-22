@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block titel %}Cockpit – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Cockpit Leadmanagement</h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/board">Pipeline</a>
+        <a class="knopf klein zweitrangig" href="/lead-management/anrufliste">Anrufliste</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% macro lm_tabelle(zahlen, titel) %}
+<h2>{{ titel }}</h2>
+<table class="tabelle" style="max-width:800px">
+    <thead><tr><th>Leadmanager</th><th>Anrufe</th><th>erreicht</th>
+        <th>qualifiziert</th><th>terminiert</th><th>überfällige Aktionen</th></tr></thead>
+    <tbody>
+    {% for benutzer_id, z in zahlen.items() %}
+        <tr>
+            <td>{{ benutzer_map[benutzer_id].name if benutzer_id in benutzer_map else '?' }}</td>
+            <td class="rechts">{{ z.anrufe }}</td>
+            <td class="rechts">{{ z.erreicht }}</td>
+            <td class="rechts">{{ z.qualifiziert }}</td>
+            <td class="rechts">{{ z.terminiert }}</td>
+            <td class="rechts {{ 'ueberfaellig-rot' if ueberfaellig.get(benutzer_id) }}">
+                {{ ueberfaellig.get(benutzer_id, 0) }}</td>
+        </tr>
+    {% else %}
+        <tr><td colspan="6" class="dezent">Keine Aktivitäten.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endmacro %}
+
+{{ lm_tabelle(heute, 'Heute je Leadmanager') }}
+{{ lm_tabelle(woche, 'Diese Woche je Leadmanager') }}
+
+<h2>Diese Woche je Außendienstler</h2>
+<table class="tabelle" style="max-width:500px">
+    <thead><tr><th>AD</th><th>Termine</th><th>No-Shows</th></tr></thead>
+    <tbody>
+    {% for ad_id, z in ad.items() %}
+        <tr>
+            <td>{{ benutzer_map[ad_id].name if ad_id in benutzer_map else '?' }}</td>
+            <td class="rechts">{{ z.termine }}</td>
+            <td class="rechts {{ 'ueberfaellig-rot' if z.no_shows }}">{{ z.no_shows }}</td>
+        </tr>
+    {% else %}
+        <tr><td colspan="3" class="dezent">Keine Termine diese Woche.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2 style="color:#c0392b">SLA rot jetzt ({{ sla_rot | length }})</h2>
+{% if sla_rot %}
+<table class="tabelle" style="max-width:700px">
+    <tbody>
+    {% for v in sla_rot %}
+        <tr>
+            <td><a href="/lead-management/lead/{{ v.id }}">
+                {{ kunden_map[v.kunde_id].anzeige_name if v.kunde_id in kunden_map else '?' }}</a></td>
+            <td>{{ v.eingang_am.strftime('%d.%m. %H:%M') if v.eingang_am }}</td>
+            <td>{{ benutzer_map[v.leadmanager_id].name if v.leadmanager_id in benutzer_map else 'ohne LM' }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}<p class="dezent">Keine roten SLA-Fälle – gut so.</p>{% endif %}
+{% endblock %}

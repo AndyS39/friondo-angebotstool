@@ -1134,3 +1134,178 @@ async def mail_mit_vorlage(request: Request, vorgang_id: int,
     return RedirectResponse(
         f"/lead-management/lead/{vorgang_id}/kommunikation?meldung="
         + quote_plus(f"Mail {schluessel}: {ergebnis}."), status_code=303)
+
+
+# --- Phase 79: Board, Karte, Cockpit, Lead-Kopf-Aktionen ----------------------------
+
+@router.get("/board")
+async def board(request: Request, session: Session = Depends(get_session)):
+    _gate(request, session)
+    from datetime import datetime as dt
+    benutzer = request.state.benutzer
+
+    def _datum(name):
+        wert = request.query_params.get(name, "")
+        try:
+            return dt.strptime(wert, "%Y-%m-%d") if wert else None
+        except ValueError:
+            return None
+    filter_werte = {
+        "meine": request.query_params.get("meine", "0") == "1",
+        "quelle_id": request.query_params.get("quelle_id", ""),
+        "sparte": request.query_params.get("sparte", ""),
+        "klasse": request.query_params.get("klasse", ""),
+        "plz": request.query_params.get("plz", ""),
+        "q": request.query_params.get("q", ""),
+        "eingang_von": _datum("eingang_von"),
+        "eingang_bis": _datum("eingang_bis"),
+        "seiten": request.query_params.get("seiten", "") == "1",
+    }
+    daten = kern.board_daten(session, benutzer, filter_werte)
+    from app import leadmanagement_logik
+    logik = leadmanagement_logik.hole_logik()
+    return render(request, "leadmanagement/board.html",
+                  aktiv="/lead-management", spalten=daten["spalten"],
+                  koepfe=daten["koepfe"], filter_werte=filter_werte,
+                  quellen=_quellen(session),
+                  spalten_reihenfolge=kern.BOARD_SPALTEN,
+                  seiten_phasen=kern.SEITEN_PHASEN,
+                  phasen_namen=LEAD_PHASEN_NAMEN,
+                  unq_gruende=logik.gruende_der_phase("unqualifiziert"),
+                  zurueck_gruende=logik.gruende_der_phase("zurueckgestellt"),
+                  demo_badge=kern.demo_aktiv(session),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/lead/{vorgang_id}/leadmanager")
+async def leadmanager_setzen(request: Request, vorgang_id: int,
+                             session: Session = Depends(get_session)):
+    _gate(request, session)
+    form = await request.form()
+    vorgang = session.get(Vorgang, vorgang_id)
+    if vorgang is not None and str(form.get("leadmanager_id") or "").isdigit():
+        neu = int(form.get("leadmanager_id"))
+        alt = vorgang.leadmanager_id
+        vorgang.leadmanager_id = neu
+        if neu != alt:
+            kern.aktivitaet(session, vorgang.id, "status",
+                            "Leadmanager geändert", benutzer=request.state.benutzer)
+            kern.benachrichtigen(session, [neu],
+                                 "Lead übernommen: "
+                                 f"{session.get(Kunde, vorgang.kunde_id).anzeige_name}",
+                                 f"/lead-management/lead/{vorgang.id}")
+        session.commit()
+    return RedirectResponse(f"/vorgaenge/{vorgang_id}", status_code=303)
+
+
+# --- Karte (Leaflet lokal, OSM-Kacheln) ----------------------------------------------
+
+@router.get("/karte")
+async def karte(request: Request, session: Session = Depends(get_session)):
+    _gate(request, session)
+    return render(request, "leadmanagement/karte.html",
+                  aktiv="/lead-management",
+                  phasen_namen=LEAD_PHASEN_NAMEN,
+                  alle_ad=[b for b in session.query(Benutzer)
+                           .filter(Benutzer.aktiv.is_(True),
+                                   Benutzer.rolle == "aussendienst")
+                           .order_by(Benutzer.name)],
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.get("/karte/daten")
+async def karte_daten(request: Request, session: Session = Depends(get_session)):
+    """JSON für die Karte: offene Leads (Farbe je Phase, Größe je Klasse),
+    Termine (Symbol je AD), AD-Startadressen. Filter Phase/Sparte/AD/Zeitraum."""
+    from datetime import datetime as dt
+
+    from fastapi.responses import JSONResponse
+
+    from app.models import AdProfil
+    _gate(request, session)
+    phase = request.query_params.get("phase", "")
+    sparte = request.query_params.get("sparte", "")
+    ad_filter = request.query_params.get("ad_id", "")
+    tage = request.query_params.get("tage", "60")
+    tage = int(tage) if tage.isdigit() else 60
+    pins = []
+    offene_phasen = ("neu", "in_kontaktierung", "qualifiziert", "terminiert")
+    kunden = {k.id: k for k in session.query(Kunde)}
+    for v in (session.query(Vorgang)
+              .filter(Vorgang.lat.isnot(None),
+                      Vorgang.lead_phase.in_((phase,) if phase else offene_phasen))):
+        kunde = kunden.get(v.kunde_id)
+        if kunde is None:
+            continue
+        if sparte and sparte not in (kunde.interesse or ""):
+            continue
+        pins.append({"art": "lead", "lat": v.lat, "lon": v.lon,
+                     "phase": v.lead_phase, "klasse": v.score_klasse or "C",
+                     "name": kunde.anzeige_name, "ort": kunde.ort or "",
+                     "vorgang_id": v.id})
+    benutzer_map = {b.id: b for b in session.query(Benutzer)}
+    for t in (session.query(VotTermin)
+              .filter(VotTermin.lat.isnot(None),
+                      VotTermin.status.in_(("geplant", "bestaetigt")),
+                      VotTermin.beginn >= dt.now(),
+                      VotTermin.beginn <= dt.now() + timedelta(days=tage))):
+        if ad_filter.isdigit() and t.ad_id != int(ad_filter):
+            continue
+        ad = benutzer_map.get(t.ad_id)
+        pins.append({"art": "termin", "lat": t.lat, "lon": t.lon,
+                     "beginn": t.beginn.strftime("%d.%m. %H:%M"),
+                     "ad": ad.name if ad else "?",
+                     "vorgang_id": t.vorgang_id})
+    for profil in session.query(AdProfil).filter(AdProfil.start_lat.isnot(None)):
+        ad = benutzer_map.get(profil.benutzer_id)
+        pins.append({"art": "start", "lat": profil.start_lat,
+                     "lon": profil.start_lon,
+                     "ad": ad.name if ad else "?"})
+    return JSONResponse({"pins": pins})
+
+
+@router.get("/karte/tag")
+async def karte_termine_tag(request: Request,
+                            session: Session = Depends(get_session)):
+    """Mini-Karten-Komponente (Assistent): Termine eines AD-Tages als
+    nummerierte Pins + Kandidat als Stern, Linie in Reihenfolge."""
+    from datetime import datetime as dt
+
+    from fastapi.responses import JSONResponse
+    _gate(request, session)
+    ad_id = request.query_params.get("ad_id", "")
+    datum = request.query_params.get("datum", "")
+    kandidat_lat = request.query_params.get("lat", "")
+    kandidat_lon = request.query_params.get("lon", "")
+    try:
+        tag = dt.strptime(datum, "%Y-%m-%d")
+    except ValueError:
+        return JSONResponse({"pins": []})
+    pins = []
+    if ad_id.isdigit():
+        termine = (session.query(VotTermin)
+                   .filter(VotTermin.ad_id == int(ad_id),
+                           VotTermin.status.in_(("geplant", "bestaetigt")),
+                           VotTermin.beginn >= tag,
+                           VotTermin.beginn < tag + timedelta(days=1))
+                   .order_by(VotTermin.beginn).all())
+        for nr, t in enumerate(termine, start=1):
+            if t.lat is not None:
+                pins.append({"art": "termin", "nr": nr, "lat": t.lat,
+                             "lon": t.lon,
+                             "zeit": t.beginn.strftime("%H:%M")})
+    try:
+        pins.append({"art": "kandidat", "lat": float(kandidat_lat),
+                     "lon": float(kandidat_lon)})
+    except ValueError:
+        pass
+    return JSONResponse({"pins": pins})
+
+
+@router.get("/cockpit")
+async def cockpit(request: Request, session: Session = Depends(get_session)):
+    _gate(request, session)
+    daten = kern.cockpit_daten(session)
+    return render(request, "leadmanagement/cockpit.html",
+                  aktiv="/lead-management", **daten,
+                  meldung=request.query_params.get("meldung", ""))

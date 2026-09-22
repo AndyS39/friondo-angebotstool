@@ -1,0 +1,167 @@
+{# v12 (Phase 79): Lead-Kopfblock + Reiter der Lead-Akte – erscheint in der
+   Vorgangsakte nur bei Modul-Sichtbarkeit (Demo: Admin). #}
+<div class="karte lead-kopf">
+    <h2>Lead
+        {% if vorgang.demo %}<span class="demo-badge">Demo</span>{% endif %}
+        {% if vorgang.eingang_art == 'monday' %}<span class="abzeichen">monday</span>{% endif %}
+        {% if lead_kontext.wiederkehrer %}<span class="abzeichen ep">Wiederkehrer</span>{% endif %}
+    </h2>
+    <div class="lead-stepper">
+        {% for phase in lead_kontext.phasen %}
+            <span class="schritt {{ 'aktiv' if vorgang.lead_phase == phase }}">{{ lead_phasen_namen[phase] }}</span>
+        {% endfor %}
+        {% if vorgang.lead_phase in ('zurueckgestellt', 'nicht_erreicht', 'unqualifiziert', 'verloren') %}
+            <span class="schritt seitenzustand aktiv">{{ lead_phasen_namen[vorgang.lead_phase] }}</span>
+        {% endif %}
+    </div>
+    <div class="formzeile" style="flex-wrap:wrap">
+        <span>Quelle: <strong>{{ lead_kontext.quelle.name if lead_kontext.quelle else '–' }}</strong>
+            {{ '· Kampagne ' ~ lead_kontext.kampagne.name if lead_kontext.kampagne }}</span>
+        <span>Eingang: {{ vorgang.eingang_am.strftime('%d.%m.%Y %H:%M') if vorgang.eingang_am else '–' }}
+            ({{ vorgang.eingang_art or '–' }})</span>
+        <span>SLA:
+            {% if lead_kontext.sla.farbe == 'erfuellt' %}
+                <span class="sla-chip sla-erfuellt">erfüllt ({{ lead_kontext.sla.minuten }} Min)</span>
+            {% elif lead_kontext.sla.farbe %}
+                <span class="sla-chip sla-{{ lead_kontext.sla.farbe }}">{{ lead_kontext.sla.minuten }} Min</span>
+            {% else %}–{% endif %}</span>
+        <span title="{{ lead_kontext.score_teile | join('&#10;') }}">Score:
+            <strong>{{ vorgang.score_punkte if vorgang.score_punkte is not none else '–' }}
+            · {{ vorgang.score_klasse or '–' }}</strong>
+            {% if not lead_kontext.qualifizierungen %}<span class="dezent">(vorläufig)</span>{% endif %}</span>
+        <span>Wunschzeiten: {{ lead_kontext.wunschzeiten | join(', ') or '–' }}</span>
+        <span>Einwilligung Werbung:
+            {{ '✓ ' ~ vorgang.einwilligung_werbung_am.strftime('%d.%m.%Y')
+               ~ ' (' ~ (vorgang.einwilligung_quelle or '?') ~ ')'
+               if vorgang.einwilligung_werbung else 'nein' }}</span>
+        <form method="post" action="/lead-management/lead/{{ vorgang.id }}/leadmanager"
+              class="formzeile" style="margin:0">
+            <label class="dezent">Leadmanager
+                <select name="leadmanager_id" onchange="this.form.submit()">
+                    <option value="">–</option>
+                    {% for b in lead_kontext.leadmanager_wahl %}
+                        <option value="{{ b.id }}" {{ 'selected' if vorgang.leadmanager_id == b.id }}>{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </form>
+        <span class="dezent">AD: {{ lead_kontext.ad.name if lead_kontext.ad else '– (über Termin)' }}</span>
+    </div>
+    <div class="formzeile">
+        {% for wert, name in [('erreicht', '✅ Erreicht'), ('nicht_erreicht', '📵 Nicht erreicht'),
+                              ('besetzt', '⛔ Besetzt'), ('mailbox', '📼 Mailbox')] %}
+        <form method="post" action="/lead-management/anruf/{{ vorgang.id }}" style="display:inline">
+            <button class="knopf klein zweitrangig" name="ergebnis" value="{{ wert }}">{{ name }}</button>
+        </form>
+        {% endfor %}
+        {% for s in lead_kontext.sparten %}
+            <a class="knopf klein zweitrangig"
+               href="/lead-management/lead/{{ vorgang.id }}/qualifizierung/{{ s }}">Qualifizieren {{ s }}</a>
+        {% endfor %}
+        <a class="knopf klein" href="/lead-management/lead/{{ vorgang.id }}/termin">Termin vorschlagen</a>
+        <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}/kommunikation">Mail mit Vorlage</a>
+    </div>
+
+    <details>
+        <summary><strong>Aktivitäten ({{ lead_kontext.timeline | length }})</strong>
+            – Timeline inkl. Notizen-Chat</summary>
+        <div class="notizen-chat" style="max-height:340px; overflow-y:auto">
+        {% for e in lead_kontext.timeline %}
+            <div class="notiz">
+                <span class="notiz-kopf">{{ e.benutzer.name if e.benutzer else 'System' }}
+                    · {{ e.zeit.strftime('%d.%m.%y %H:%M') }} Uhr
+                    · <span class="abzeichen">{{ e.typ }}{{ '/' ~ e.ergebnis if e.ergebnis }}</span></span>
+                {{ e.text }}
+            </div>
+        {% else %}<p class="dezent">Noch keine Aktivitäten.</p>{% endfor %}
+        </div>
+        <p class="dezent">Neue Notizen über den Notizen-Chat unten (bestehend).</p>
+    </details>
+
+    <details>
+        <summary><strong>Qualifizierung ({{ lead_kontext.qualifizierungen | length }} Sparten)</strong></summary>
+        {% for q in lead_kontext.qualifizierungen %}
+            <h3>{{ q.zeile.sparte }} – {{ q.zeile.score_punkte }} Punkte,
+                Klasse {{ q.zeile.score_klasse }}
+                {{ '· abgeschlossen ' ~ q.zeile.abgeschlossen_am.strftime('%d.%m.%Y')
+                   if q.zeile.abgeschlossen_am else '· Entwurf' }}
+                <a class="knopf klein zweitrangig"
+                   href="/lead-management/lead/{{ vorgang.id }}/qualifizierung/{{ q.zeile.sparte }}">Bearbeiten</a></h3>
+            <table class="tabelle" style="max-width:700px"><tbody>
+            {% for frage, wert in q.antworten %}
+                <tr><td>{{ frage }}</td><td>{{ wert }}</td></tr>
+            {% endfor %}
+            </tbody></table>
+        {% else %}<p class="dezent">Noch keine Qualifizierung.</p>{% endfor %}
+    </details>
+
+    <details>
+        <summary><strong>Termin</strong>
+            {% if lead_kontext.aktiver_termin %}
+                – {{ lead_kontext.aktiver_termin.beginn.strftime('%d.%m.%Y %H:%M') }} Uhr
+            {% else %} – kein aktiver Termin{% endif %}</summary>
+        {% if lead_kontext.aktiver_termin %}
+            {% set t = lead_kontext.aktiver_termin %}
+            <p><strong>{{ t.beginn.strftime('%A, %d.%m.%Y %H:%M') }} Uhr</strong>
+                · {{ lead_kontext.ad.name if lead_kontext.ad else '?' }}
+                {{ '· Umweg +' ~ t.umweg_min ~ ' Min' if t.umweg_min is not none }}
+                · Status {{ t.status }}
+                {% if t.quelle == 'monday' %}<span class="abzeichen">monday</span>{% endif %}</p>
+            <div class="formzeile">
+                <a class="knopf klein zweitrangig"
+                   href="/lead-management/lead/{{ vorgang.id }}/termin?umbuchen={{ t.id }}">Umbuchen</a>
+                <button class="knopf klein zweitrangig"
+                        onclick="document.getElementById('dlg-akte-noshow').showModal(); return false;">No-Show / Absagen</button>
+                <form method="post" action="/lead-management/termin/{{ t.id }}/erfolgt" style="display:inline">
+                    <button class="knopf klein" type="submit">Erfolgt</button>
+                </form>
+            </div>
+            <dialog id="dlg-akte-noshow">
+                <form method="post" class="formular"
+                      action="/lead-management/termin/{{ t.id }}/no-show">
+                    <h3>No-Show / Absage</h3>
+                    <label><input type="radio" name="art" value="no_show" checked> No-Show</label>
+                    <label><input type="radio" name="art" value="absage"> Absage</label>
+                    <label>Grund
+                        <select name="grund" required>
+                            {% for g in lead_kontext.no_show_gruende %}
+                                <option value="{{ g.grund }}">{{ g.grund }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>Freitext <input type="text" name="grund_text"></label>
+                    <div class="formzeile">
+                        <button class="knopf" type="submit">Zurückmelden</button>
+                        <button class="knopf zweitrangig" type="button"
+                                onclick="this.closest('dialog').close()">Abbrechen</button>
+                    </div>
+                </form>
+            </dialog>
+        {% endif %}
+        {% if lead_kontext.termine %}
+            <h4>Historie</h4>
+            <table class="tabelle" style="max-width:700px"><tbody>
+            {% for t in lead_kontext.termine %}
+                <tr><td>{{ t.beginn.strftime('%d.%m.%Y %H:%M') if t.beginn }}</td>
+                    <td>{{ t.status }}</td><td>{{ t.quelle }}</td>
+                    <td class="dezent">{{ t.grund_text }}</td></tr>
+            {% endfor %}
+            </tbody></table>
+        {% endif %}
+    </details>
+
+    <details>
+        <summary><strong>Kommunikation ({{ lead_kontext.kommunikation | length }})</strong></summary>
+        <table class="tabelle" style="max-width:800px"><tbody>
+        {% for e in lead_kontext.kommunikation %}
+            <tr><td>{{ e.vorlage_key }}</td><td>{{ e.status }}</td>
+                <td>{{ e.geplant_am.strftime('%d.%m.%y %H:%M') }}</td>
+                <td class="dezent">{{ e.betreff }}</td></tr>
+        {% else %}
+            <tr><td class="dezent">Noch keine Mails.</td></tr>
+        {% endfor %}
+        </tbody></table>
+        <a class="knopf klein zweitrangig"
+           href="/lead-management/lead/{{ vorgang.id }}/kommunikation">Vorschau &amp; Senden</a>
+    </details>
+</div>

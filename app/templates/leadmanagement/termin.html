@@ -66,6 +66,48 @@
 {% endfor %}
 </div>
 
+{% if vorschlaege %}
+<h2>Mini-Karte: Tagestour des besten Vorschlags</h2>
+<link rel="stylesheet" href="/static/leaflet/leaflet.css">
+<div id="mini-karte" style="height:320px; max-width:700px;
+     border:1px solid var(--grau-linie); border-radius:8px"></div>
+<script src="/static/leaflet/leaflet.js"></script>
+<script>
+(async () => {
+    const karte = L.map('mini-karte').setView(
+        [{{ vorgang.lat or 51.4344 }}, {{ vorgang.lon or 6.7623 }}], 11);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(karte);
+    const antwort = await fetch('/lead-management/karte/tag?' +
+        new URLSearchParams({
+            ad_id: '{{ vorschlaege[0].ad.id }}',
+            datum: '{{ vorschlaege[0].beginn.strftime("%Y-%m-%d") }}',
+            lat: '{{ vorgang.lat or '' }}', lon: '{{ vorgang.lon or '' }}'}));
+    const daten = await antwort.json();
+    const punkte = [];
+    for (const p of daten.pins) {
+        if (p.art === 'termin') {
+            L.marker([p.lat, p.lon]).bindTooltip(`${p.nr}. ${p.zeit}`,
+                {permanent: true, direction: 'top'}).addTo(karte);
+            punkte.push([p.lat, p.lon]);
+        } else if (p.art === 'kandidat') {
+            L.circleMarker([p.lat, p.lon], {radius: 11, color: '#d4a017',
+                fillOpacity: 0.9}).bindTooltip('★ Kandidat',
+                {permanent: true, direction: 'top'}).addTo(karte);
+            punkte.push([p.lat, p.lon]);
+        }
+    }
+    if (punkte.length > 1) {
+        L.polyline(punkte, {color: '#2471a3', dashArray: '6 6'}).addTo(karte);
+        karte.fitBounds(punkte, {padding: [30, 30]});
+    }
+    L.Icon.Default.prototype.options.imagePath = '/static/leaflet/images/';
+})();
+</script>
+{% endif %}
+
 <h2>Kalender (manuell setzen)</h2>
 <form method="get" action="/lead-management/lead/{{ vorgang.id }}/termin" class="suchleiste">
     <label class="kontrollfeld">Außendienstler

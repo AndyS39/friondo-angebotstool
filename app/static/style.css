@@ -1151,3 +1151,27 @@ main.breit { max-width: 1720px; }
     max-width: 720px;
     margin: 0.4rem 0;
 }
+
+/* v12 (Phase 79): Lead-Kopfblock + Board-Karten */
+.lead-kopf details { margin-top: 0.6rem; }
+
+.lead-stepper { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.4rem 0; }
+
+.lead-stepper .schritt {
+    padding: 0.2rem 0.7rem;
+    border-radius: 999px;
+    background: var(--grau-hell);
+    font-size: 0.85rem;
+}
+
+.lead-stepper .schritt.aktiv {
+    background: var(--friondo-blau);
+    color: #fff;
+    font-weight: 600;
+}
+
+.lead-stepper .schritt.seitenzustand.aktiv { background: #c0392b; }
+
+.lead-karte { display: flex; flex-direction: column; gap: 0.25rem; }
+
+.ueberfaellig-rot { color: #c0392b; font-weight: 600; }
