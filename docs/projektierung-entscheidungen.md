@@ -34,6 +34,22 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
 - **Auftragswert** wird in Cent gespeichert (wie alle Beträge im Tool);
   „Auftragswert = Endbetrag brutto" (Konzept Annahme 12).
 
+## Phase 65 – Steuerdatei
+
+- **Datei-basierter Import statt DB-Abbild**: `projektierung_logik_v1.xlsx`
+  liegt wie die Konfigurator-Excel im Projektroot und wird mit mtime-Cache
+  geparst; der Upload in der Parametrierung sichert die alte Datei nach
+  `data/backups/` und ersetzt sie (bei Lesefehlern automatischer Rollback).
+  Da Aufgaben nur bei der AKTIVIERUNG eines Pakets entstehen, sind doppelte
+  Importe konstruktionsbedingt dublettenfrei und Änderungen wirken – wie im
+  Plan gefordert – nur auf neue Aktivierungen.
+- **Ordnerstruktur + Sub-Typen** aus der Excel werden beim Einlesen in die
+  `projektierung_parameter` übernommen (`ordnervorlage`, `sub_typen`) und
+  gelten ab dann für neue Projekte/Formulare.
+- **Regel-Duplikate**: Verweisen mehrere IMMER-Regeln auf dasselbe Paket,
+  wird es nur einmal aktiviert; Regeln auf unbekannte Pakete erzeugen eine
+  Warnung im Import (kein Abbruch).
+
 ## Phase 66 – Angebot → Projekt
 
 - **„Offenes Projekt"** = `status_cache != "abgeschlossen"` (auch ein Projekt,

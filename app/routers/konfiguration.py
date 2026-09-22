@@ -451,6 +451,62 @@ async def monday_person_zuordnen(request: Request, person_id: int,
                             status_code=303)
 
 
+@router.get("/projektierung-logik")
+async def projektierung_logik_seite(request: Request,
+                                    session: Session = Depends(get_session)):
+    """v11 (Phase 65): Steuerdatei der Projektierung – Pakete-Tabelle,
+    Versionsstand, Upload. Änderungen wirken auf NEUE Aktivierungen."""
+    from app import projektierung_logik
+    logik = projektierung_logik.hole_logik(session)
+    session.commit()
+    return render(request, "konfiguration/projektierung_logik.html",
+                  aktiv="/parametrierung", logik=logik,
+                  pfad=str(projektierung_logik.LOGIK_PFAD),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/projektierung-logik")
+async def projektierung_logik_upload(request: Request,
+                                     session: Session = Depends(get_session)):
+    """Upload wie beim Logik-Import: Backup der alten Datei, ersetzen,
+    neu einlesen; bei Fehlern wird die alte Datei wiederhergestellt."""
+    import shutil
+    from datetime import datetime as dt
+    from urllib.parse import quote_plus
+
+    from app import projektierung_logik
+    form = await request.form()
+    datei = form.get("datei")
+    if datei is None or not getattr(datei, "filename", ""):
+        return RedirectResponse("/parametrierung/projektierung-logik?meldung="
+                                + quote_plus("Bitte eine .xlsx-Datei wählen."),
+                                status_code=303)
+    inhalt = await datei.read()
+    ziel = projektierung_logik.LOGIK_PFAD
+    sicherung = None
+    if ziel.exists():
+        sicherung = (config.BACKUP_ORDNER
+                     / f"projektierung_logik_{dt.now():%Y%m%d_%H%M%S}.xlsx")
+        shutil.copyfile(ziel, sicherung)
+    ziel.write_bytes(inhalt)
+    logik = projektierung_logik.hole_logik(session, erzwingen=True)
+    if logik.fehler:
+        if sicherung is not None:
+            shutil.copyfile(sicherung, ziel)
+            projektierung_logik.hole_logik(session, erzwingen=True)
+        return RedirectResponse("/parametrierung/projektierung-logik?meldung="
+                                + quote_plus("Import abgewiesen: "
+                                             + " · ".join(logik.fehler)),
+                                status_code=303)
+    session.commit()
+    meldung = (f"Steuerdatei übernommen – {len(logik.pakete)} Pakete, "
+               f"{len(logik.regeln)} Regeln"
+               + (f", {len(logik.warnungen)} Warnungen" if logik.warnungen else "")
+               + (f". Backup: {sicherung.name}" if sicherung else "."))
+    return RedirectResponse("/parametrierung/projektierung-logik?meldung="
+                            + quote_plus(meldung), status_code=303)
+
+
 @router.post("/neu-einlesen")
 async def neu_einlesen(session: Session = Depends(get_session)):
     if not config.LOGIK_EXCEL_PFAD.exists():

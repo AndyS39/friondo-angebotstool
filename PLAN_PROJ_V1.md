@@ -81,7 +81,7 @@ Server – dieser Plan setzt darauf auf und nummeriert ab Phase 64 weiter.
 
 ## Phase 65 – Steuerdatei `projektierung_logik_v1.xlsx` + Import
 
-- [ ] Datei anlegen mit Blättern:
+- [x] Datei anlegen mit Blättern:
   - **Aufgabenpakete**: Spalten `paket_key`, `paket_name`, `sparte` (WP/PV/KL/WB/ALLE),
     `schritt_nr`, `titel`, `beschreibung`, `rolle` (projektierer / elektroplaner /
     feinplaner / innendienst / buchhaltung / montage), `pflicht` (J/N), `faellig_regel`
@@ -92,7 +92,7 @@ Server – dieser Plan setzt darauf auf und nummeriert ab Phase 64 weiter.
     ausgewertet.
   - **Ordnerstruktur**: `pfad`, `ebene` (projekt / gewerk).
   - **Sub-Typen**: `typ`, `bezeichnung`.
-- [ ] Startinhalt Aufgabenpakete (Andreas passt später in der Excel an):
+- [x] Startinhalt Aufgabenpakete (Andreas passt später in der Excel an):
   - `auftragseingang` (ALLE, IMMER): 1 Auftragsunterlagen prüfen (Angebot, Protokoll,
     Fotos) – projektierer, Pflicht, +2 · 2 Kunde kontaktieren, Ablauf erklären,
     Feinplanungstermin abstimmen – projektierer, Pflicht, +3 · 3 Auftrag in TAIFUN
@@ -153,12 +153,12 @@ Server – dieser Plan setzt darauf auf und nummeriert ab Phase 64 weiter.
   - `kl_standard` (KL, IMMER): 1 Feinplanung Innen-/Außengerät, Leitungsweg, Kondensat –
     feinplaner, Pflicht, +14 · 2 Material bestellen – projektierer, Pflicht, FP+7 ·
     3 Montage + Inbetriebnahme (Kältemittel-Nachweis) – montage, Pflicht, M+1.
-- [ ] Ordnerstruktur Standard: siehe Konzept 3.5 (`01 …` bis `06 …`, Foto-Unterordner
+- [x] Ordnerstruktur Standard: siehe Konzept 3.5 (`01 …` bis `06 …`, Foto-Unterordner
   auf Ebene gewerk, `01`, `04`, `06` auf Ebene projekt).
-- [ ] Import in der Parametrierung: neuer Menüpunkt **„Projektierung-Logik"** mit
+- [x] Import in der Parametrierung: neuer Menüpunkt **„Projektierung-Logik"** mit
   Upload der Excel (wie Logik-Import), Anzeige der Pakete als Tabelle, Versionsstand.
   Änderungen wirken auf **neue** Aktivierungen; bestehende Aufgaben bleiben.
-- [ ] Test: Import läuft, Pakete werden angezeigt, doppelter Import ohne Dubletten.
+- [x] Test: Import läuft, Pakete werden angezeigt, doppelter Import ohne Dubletten.
 
 ## Phase 66 – „Angebot → Projekt", Storno, Migration
 

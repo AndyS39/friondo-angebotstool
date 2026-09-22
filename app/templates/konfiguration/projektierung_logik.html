@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block titel %}Projektierung-Logik – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Projektierung-Logik</h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung">Zur Parametrierung</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<p class="dezent">Quelle: <code>{{ pfad }}</code>
+    {% if logik.stand %} · Stand: {{ logik.stand }}{% endif %}</p>
+
+{% if logik.fehler %}
+<div class="warnblock fehlerblock">
+    <strong>Fehler ({{ logik.fehler | length }})</strong>
+    <ul>{% for f in logik.fehler %}<li>{{ f }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+{% if logik.warnungen %}
+<div class="warnblock">
+    <strong>Hinweise ({{ logik.warnungen | length }})</strong>
+    <ul>{% for w in logik.warnungen %}<li>{{ w }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<form method="post" action="/parametrierung/projektierung-logik" class="suchleiste"
+      enctype="multipart/form-data">
+    <strong>Neue Steuerdatei hochladen:</strong>
+    <input type="file" name="datei" accept=".xlsx" required>
+    <button class="knopf" type="submit"
+            onclick="return confirm('Steuerdatei ersetzen? Die alte Datei wird gesichert. Änderungen wirken nur auf NEUE Paket-Aktivierungen – bestehende Aufgaben bleiben unverändert.');">
+        Hochladen &amp; einlesen</button>
+</form>
+
+<h2>Aufgabenpakete ({{ logik.pakete | length }})</h2>
+{% for paket in logik.pakete.values() %}
+<details {{ 'open' if loop.first }}>
+    <summary><strong>{{ paket.name }}</strong>
+        <span class="abzeichen">{{ paket.sparte }}</span>
+        <span class="dezent">{{ paket.key }} · {{ paket.schritte | length }} Schritte ·
+            Regel: {% for r in logik.regeln if r.paket_key == paket.key %}{{ r.bedingung }}{{ ' · ' if not loop.last }}{% else %}–{% endfor %}</span>
+    </summary>
+    <table class="tabelle" style="max-width:900px">
+        <thead><tr><th>Nr.</th><th>Titel</th><th>Rolle</th><th>Pflicht</th>
+            <th>Fällig</th><th>Wartet-Frist</th></tr></thead>
+        <tbody>
+        {% for s in paket.schritte %}
+            <tr>
+                <td>{{ s.nr }}</td>
+                <td>{{ s.titel }}</td>
+                <td class="dezent">{{ s.rolle }}</td>
+                <td>{{ '✓' if s.pflicht else '–' }}</td>
+                <td>{{ s.faellig_regel or '–' }}</td>
+                <td>{{ s.wartet_frist_tage or '–' }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</details>
+{% endfor %}
+
+<h2>Ordnerstruktur ({{ logik.ordner | length }})</h2>
+<table class="tabelle" style="max-width:520px">
+    <thead><tr><th>Pfad</th><th>Ebene</th></tr></thead>
+    <tbody>
+    {% for o in logik.ordner %}
+        <tr><td>{{ o.pfad }}</td><td>{{ o.ebene }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Sub-Typen</h2>
+<p>{% for t in logik.sub_typen %}<span class="abzeichen">{{ t }}</span> {% endfor %}</p>
+
+<p class="dezent">Fälligkeitsregeln: <code>+N</code> = N Tage nach Aktivierung ·
+<code>FP+N</code> = N Tage nach dem Feinplanungs-Termin ·
+<code>M-N</code>/<code>M+N</code> = relativ zum ersten Montagetermin (FP/M ohne
+Termin bleiben leer und werden beim Anlegen des Termins nachberechnet).
+Frage-Regeln (<code>FP-…=…</code>) werden importiert, aber erst in V2 ausgewertet.</p>
+{% endblock %}
