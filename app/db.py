@@ -199,6 +199,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "angelegt_am": "DATETIME",
     },
     "erfassungen": {
+        "vorbelegt_json": "TEXT",   # v12 Phase 76: aus Qualifizierung
         "vorgang_id": "INTEGER",            # v10 Vorgangsakte
         "konfigurator_typ": "VARCHAR(10) NOT NULL DEFAULT 'WP'",
         "archiviert": "BOOLEAN NOT NULL DEFAULT 0",

@@ -18,7 +18,10 @@
         {% for frage in fragen %}
         <div class="fragefeld {{ 'verborgen' if not sichtbar[frage.id] }}"
              data-frage="{{ frage.id }}" data-regel='{{ client_regel(frage) }}'>
-            <label class="fragetitel">{{ frage.text }}</label>
+            <label class="fragetitel">{{ frage.text }}
+                {%- if vorbelegt is defined and vorbelegt.get(frage.id) %}
+                    <span class="abzeichen" title="{{ vorbelegt[frage.id] }}">aus Qualifizierung</span>
+                {%- endif %}</label>
             {% if frage.hinweis %}<p class="frage-hinweis">{{ frage.hinweis }}</p>{% endif %}
             {% if fehler.get(frage.id) %}<p class="feldfehler">{{ fehler[frage.id] }}</p>{% endif %}
 

@@ -1004,3 +1004,106 @@ main.breit { max-width: 1720px; }
 .einsatz-karte:hover { border-color: var(--friondo-blau); }
 
 .foto-galerie { display: flex; flex-direction: column; gap: 0.3rem; max-width: 640px; }
+
+/* v12 (Phase 76): Anrufliste + Qualifizierungsbogen */
+.anruf-layout { display: flex; gap: 1rem; align-items: flex-start; }
+
+.anruf-layout .tabelle { flex: 1; }
+
+#lead-panel {
+    width: 44%;
+    min-width: 420px;
+    position: sticky;
+    top: 0.5rem;
+    border: 1px solid var(--grau-linie);
+    border-radius: 8px;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    height: 82vh;
+}
+
+#lead-panel .panel-kopf {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    padding: 0.4rem;
+    border-bottom: 1px solid var(--grau-linie);
+}
+
+#panel-frame { border: none; flex: 1; width: 100%; }
+
+.anruf-zeile.aktiv { outline: 2px solid var(--friondo-blau); }
+
+.anruf-buttons form { display: inline; }
+
+.sla-chip {
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #fff;
+    background: #7f8c8d;
+    white-space: nowrap;
+}
+
+.sla-gruen { background: #27ae60; }
+.sla-gelb { background: #d4a017; }
+.sla-rot { background: #c0392b; }
+.sla-erfuellt { background: #95a5a6; }
+
+.fortschritt {
+    height: 8px;
+    background: var(--grau-hell);
+    border-radius: 999px;
+    margin: 0.6rem 0 1rem;
+    max-width: 800px;
+}
+
+#fortschritt-balken {
+    height: 100%;
+    width: 0;
+    border-radius: 999px;
+    background: var(--friondo-blau);
+    transition: width 0.2s;
+}
+
+.q-block { max-width: 800px; }
+
+.q-optionen { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0.6rem 0; }
+
+.q-option {
+    border: 1px solid var(--grau-linie);
+    border-radius: 8px;
+    padding: 0.7rem 1.1rem;
+    font-size: 1.05rem;
+    cursor: pointer;
+    background: #fff;
+}
+
+.q-option:has(input:checked) {
+    border-color: var(--friondo-blau);
+    background: #eef5fc;
+    font-weight: 600;
+}
+
+.q-nav { margin-top: 1rem; }
+
+.score-anzeige {
+    border: 1px solid var(--grau-linie);
+    border-radius: 8px;
+    padding: 0.4rem 0.8rem;
+    background: #fff;
+}
+
+.reiter { display: flex; gap: 0.4rem; margin-bottom: 0.6rem; }
+
+.reiter a {
+    padding: 0.4rem 0.9rem;
+    border: 1px solid var(--grau-linie);
+    border-radius: 8px 8px 0 0;
+    text-decoration: none;
+    color: inherit;
+}
+
+.reiter a.aktiv { background: var(--friondo-blau); color: #fff; font-weight: 600; }

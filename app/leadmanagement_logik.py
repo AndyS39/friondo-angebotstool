@@ -134,7 +134,9 @@ def einlesen(pfad: Path | None = None) -> LeadLogik:
         return logik
     try:
         from openpyxl import load_workbook
-        wb = load_workbook(pfad, read_only=True, data_only=True)
+        # data_only=False: Bedingungen wie „=Öl“ speichert Excel als Formel –
+        # so kommt der rohe Text zurück statt None
+        wb = load_workbook(pfad, read_only=True, data_only=False)
     except Exception as problem:
         logik.fehler.append(f"Datei nicht lesbar: {problem}")
         return logik

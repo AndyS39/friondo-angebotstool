@@ -643,3 +643,402 @@ def demo_leads_loeschen(session: Session) -> dict:
                 geloeschte_kunden += 1
     session.commit()
     return {"vorgaenge": anzahl, "kunden": geloeschte_kunden}
+
+
+# --- Phase 76: Anruf-Ergebnisse, Kaskade, Qualifizierung, Score ---------------------
+
+def _arbeitsfenster_schieben(session: Session, zeitpunkt: datetime) -> datetime:
+    """Zeitpunkt in das nächste LM-Arbeitsfenster (Mo-Fr) schieben; liegt er
+    hinter dem Arbeitsende, gilt der nächste Arbeitsbeginn."""
+    start_min, ende_min = _arbeitszeit(session)
+    while True:
+        tages_start = zeitpunkt.replace(hour=0, minute=0, second=0,
+                                        microsecond=0) + timedelta(minutes=start_min)
+        tages_ende = zeitpunkt.replace(hour=0, minute=0, second=0,
+                                       microsecond=0) + timedelta(minutes=ende_min)
+        if zeitpunkt.weekday() >= 5 or zeitpunkt > tages_ende:
+            zeitpunkt = (zeitpunkt.replace(hour=0, minute=0, second=0,
+                                           microsecond=0)
+                         + timedelta(days=1, minutes=start_min))
+            continue
+        if zeitpunkt < tages_start:
+            zeitpunkt = tages_start
+        return zeitpunkt
+
+
+def kaskade_zeitpunkt(session: Session, regel: str,
+                      jetzt: datetime | None = None) -> datetime:
+    """`+2h` (innerhalb der Arbeitszeit, sonst nächster Arbeitsbeginn),
+    `+1d 18:00` (nächster Werktag 18:00, außerhalb → Arbeitsende), `+3d`, `+7d`."""
+    jetzt = jetzt or datetime.now()
+    treffer = re.match(r"^\+(\d+)([hd])(?:\s+(\d{1,2}):(\d{2}))?$",
+                       (regel or "").strip())
+    if not treffer:
+        return _arbeitsfenster_schieben(session, jetzt + timedelta(days=1))
+    anzahl = int(treffer.group(1))
+    if treffer.group(2) == "h":
+        return _arbeitsfenster_schieben(session, jetzt + timedelta(hours=anzahl))
+    ziel = jetzt + timedelta(days=anzahl)
+    while ziel.weekday() >= 5:   # auf Werktag schieben
+        ziel += timedelta(days=1)
+    if treffer.group(3):
+        start_min, ende_min = _arbeitszeit(session)
+        stunde, minute = int(treffer.group(3)), int(treffer.group(4))
+        gewuenscht = stunde * 60 + minute
+        if gewuenscht > ende_min:   # 18:00 außerhalb → Arbeitsende
+            stunde, minute = divmod(ende_min, 60)
+        return ziel.replace(hour=stunde, minute=minute, second=0, microsecond=0)
+    return _arbeitsfenster_schieben(session, ziel)
+
+
+def mail_planen(session: Session, vorgang: Vorgang, vorlage_key: str,
+                termin=None, geplant_am: datetime | None = None):
+    """Eintrag in die Kommunikations-Warteschlange (Phase 78 verarbeitet ihn);
+    ohne Kunden-E-Mail passiert nichts."""
+    from app.models import KommunikationLog
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    if kunde is None or not kunde.email:
+        return None
+    eintrag = KommunikationLog(
+        vorgang_id=vorgang.id, termin_id=termin.id if termin else None,
+        kanal="mail", vorlage_key=vorlage_key, an=kunde.email,
+        geplant_am=geplant_am or datetime.now(), status="geplant",
+        modus=parameter_holen(session, "mail_modus", "protokoll"))
+    session.add(eintrag)
+    session.flush()
+    return eintrag
+
+
+def kaskade_anwenden(session: Session, vorgang: Vorgang, benutzer=None) -> str:
+    """Nach Nicht erreicht / Besetzt / Mailbox: Wiedervorlage + Aktion aus dem
+    Blatt Kaskade; nach dem letzten Versuch Phase „Nicht erreicht“ (+30 Tage,
+    mail_nurture). Liefert einen Meldungstext."""
+    from app import leadmanagement_logik
+    logik = leadmanagement_logik.hole_logik()
+    stufe = logik.stufe(vorgang.versuch_nr)
+    if stufe is not None and not stufe.letzter:
+        vorgang.naechste_aktion_am = kaskade_zeitpunkt(
+            session, stufe.wiedervorlage_nach)
+        if stufe.aktion == "mail_nicht_erreicht":
+            mail_planen(session, vorgang, "nicht_erreicht")
+        return ("Wiedervorlage "
+                + vorgang.naechste_aktion_am.strftime("%d.%m.%Y %H:%M"))
+    # letzter Versuch (oder Versuch über der Kaskade)
+    if stufe is not None and stufe.aktion == "mail_nicht_erreicht":
+        mail_planen(session, vorgang, "nicht_erreicht")
+    vorgang.lead_phase = "nicht_erreicht"
+    vorgang.naechste_aktion_am = datetime.now() + timedelta(days=30)
+    mail_planen(session, vorgang, "nurture")
+    aktivitaet(session, vorgang.id, "status",
+               "Kaskade ausgeschöpft – Phase Nicht erreicht, Wiedervorlage +30 Tage",
+               benutzer=benutzer)
+    return "Kaskade ausgeschöpft – Lead steht auf „Nicht erreicht“ (+30 Tage)."
+
+
+def score_berechnen(session: Session, vorgang: Vorgang) -> tuple[int, str]:
+    """Summe aus Blatt Scoring über alle Sparten-Antworten (je Frage nur die
+    erste zutreffende Zeile) + Systemregeln (Kerngebiet, Quellen-Bonus)."""
+    from app import leadmanagement_logik
+    logik = leadmanagement_logik.hole_logik()
+    antworten: dict = {}
+    for q in (session.query(LeadQualifizierung)
+              .filter(LeadQualifizierung.vorgang_id == vorgang.id)):
+        try:
+            antworten.update(json.loads(q.antworten or "{}"))
+        except ValueError:
+            pass
+    punkte = 0
+    bepunktete_keys: set[str] = set()
+    bepunktete_texte: set[str] = set()   # gemeinsame Fragen (Übernahme in
+    for regel in logik.scoring:          # andere Sparten) zählen nur einmal
+        if regel.frage_key in bepunktete_keys:
+            continue   # je Frage nur die erste zutreffende Zeile
+        if regel.frage_key not in antworten:
+            continue
+        frage = logik.frage(regel.frage_key)
+        fragetext = frage.frage if frage is not None else regel.frage_key
+        if fragetext in bepunktete_texte:
+            continue
+        if leadmanagement_logik.bedingung_trifft(regel.bedingung,
+                                                 antworten[regel.frage_key]):
+            punkte += regel.punkte
+            bepunktete_keys.add(regel.frage_key)
+            bepunktete_texte.add(fragetext)
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    kerngebiet = [p.strip() for p in
+                  parameter_holen(session, "kerngebiet_plz", "").split(",")
+                  if p.strip()]
+    if kunde is not None and kunde.plz and any(
+            kunde.plz.startswith(p) for p in kerngebiet):
+        punkte += 10
+    if vorgang.quelle_id:
+        quelle = session.get(LeadQuelle, vorgang.quelle_id)
+        if quelle is not None:
+            punkte += quelle.score_bonus or 0
+    klasse = logik.klasse_fuer(punkte)
+    vorgang.score_punkte = punkte
+    vorgang.score_klasse = klasse
+    return punkte, klasse
+
+
+def qualifizierung_abschliessen(session: Session, vorgang: Vorgang, sparte: str,
+                                antworten: dict, benutzer=None) -> LeadQualifizierung:
+    """Bogen speichern: Score, Phase, Wunschzeiten, Zusatzinteressen,
+    Übernahme gemeinsamer Fragen in die anderen Sparten (gleicher Fragetext)."""
+    from app import leadmanagement_logik
+    logik = leadmanagement_logik.hole_logik()
+    zeile = (session.query(LeadQualifizierung)
+             .filter(LeadQualifizierung.vorgang_id == vorgang.id,
+                     LeadQualifizierung.sparte == sparte).first())
+    if zeile is None:
+        zeile = LeadQualifizierung(vorgang_id=vorgang.id, sparte=sparte)
+        session.add(zeile)
+    vorher = {}
+    try:
+        vorher = json.loads(zeile.antworten or "{}")
+    except ValueError:
+        pass
+    vorher.update(antworten)
+    zeile.antworten = json.dumps(vorher, ensure_ascii=False)
+    zeile.abgeschlossen_am = datetime.now()
+    zeile.benutzer_id = benutzer.id if benutzer else None
+    session.flush()
+
+    # gemeinsame Fragen (gleicher Fragetext) in die anderen Interessen-Sparten
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    interessen = [s.strip() for s in (kunde.interesse or "").split(",")
+                  if s.strip() in ("WP", "PV", "KL", "WB")]
+    for frage in logik.fragen_der_sparte(sparte):
+        if frage.key not in antworten:
+            continue
+        for andere in interessen:
+            if andere == sparte:
+                continue
+            ziel_frage = next((f for f in logik.fragen_der_sparte(andere)
+                               if f.frage == frage.frage), None)
+            if ziel_frage is None:
+                continue
+            ziel = (session.query(LeadQualifizierung)
+                    .filter(LeadQualifizierung.vorgang_id == vorgang.id,
+                            LeadQualifizierung.sparte == andere).first())
+            if ziel is None:
+                ziel = LeadQualifizierung(vorgang_id=vorgang.id, sparte=andere)
+                session.add(ziel)
+                session.flush()
+            try:
+                ziel_antworten = json.loads(ziel.antworten or "{}")
+            except ValueError:
+                ziel_antworten = {}
+            ziel_antworten.setdefault(ziel_frage.key, antworten[frage.key])
+            ziel.antworten = json.dumps(ziel_antworten, ensure_ascii=False)
+
+    # Wunschzeiten + Zusatzinteressen an den Vorgang/Kunden
+    for frage in logik.fragen_der_sparte(sparte):
+        wert = antworten.get(frage.key)
+        if wert is None:
+            continue
+        if frage.frage == "Wunschzeiten" and isinstance(wert, list):
+            vorgang.wunschzeiten = json.dumps(wert, ensure_ascii=False)
+        if frage.frage == "Zusätzliches Interesse" and isinstance(wert, list):
+            zusatz = {"PV": "PV", "Klima": "KL", "Wallbox": "WB",
+                      "Speicher": ""}
+            neue = [zusatz.get(w, "") for w in wert if zusatz.get(w)]
+            if neue and kunde is not None:
+                _sparten_mischen(kunde, neue)
+    if vorgang.erreicht_am is None:
+        vorgang.erreicht_am = datetime.now()
+    punkte, klasse = score_berechnen(session, vorgang)
+    zeile.score_punkte = punkte
+    zeile.score_klasse = klasse
+    if vorgang.lead_phase not in ("terminiert", "erfasst", "angebot",
+                                  "gewonnen", "verloren"):
+        vorgang.lead_phase = "qualifiziert"
+    aktivitaet(session, vorgang.id, "status",
+               f"Qualifiziert {sparte} ({klasse}, {punkte} Punkte)",
+               benutzer=benutzer)
+    session.flush()
+    return zeile
+
+
+def erfassungs_vorbelegung(session: Session, vorgang: Vorgang) -> dict:
+    """Mapping Qualifizierung → Erfassungsbogen über `erfassungs_frage`
+    (Phase 76; aktiv erst bei lead_freigabe_modus = alle): liefert
+    {erfassungs_key: {"wert": …, "info": "aus Qualifizierung …"}}."""
+    from app import leadmanagement_logik
+    logik = leadmanagement_logik.hole_logik()
+    ergebnis: dict = {}
+    for q in (session.query(LeadQualifizierung)
+              .filter(LeadQualifizierung.vorgang_id == vorgang.id,
+                      LeadQualifizierung.abgeschlossen_am.isnot(None))):
+        try:
+            antworten = json.loads(q.antworten or "{}")
+        except ValueError:
+            continue
+        lm = session.get(Benutzer, q.benutzer_id) if q.benutzer_id else None
+        info = (f"aus Qualifizierung {q.sparte} vom "
+                f"{q.abgeschlossen_am.strftime('%d.%m.%Y')}"
+                + (f" ({lm.name})" if lm else ""))
+        for frage in logik.fragen_der_sparte(q.sparte):
+            if not frage.erfassungs_frage or frage.key not in antworten:
+                continue
+            wert = antworten[frage.key]
+            if frage.typ == "janein":
+                wert = "Ja" if str(wert).strip().lower() in ("ja", "true", "1") \
+                    else "Nein"
+            elif isinstance(wert, list):
+                wert = ", ".join(str(w) for w in wert)
+            else:
+                wert = str(wert)
+            ergebnis.setdefault(frage.erfassungs_frage,
+                                {"wert": wert, "info": info})
+    return ergebnis
+
+
+# --- Täglicher Lauf 07:00: fällige Zurückgestellte reaktivieren ---------------------
+
+def taeglicher_lauf_leads(session: Session | None = None,
+                          erzwingen: bool = False) -> dict:
+    from app.db import SessionLocal
+    eigen = session is None
+    if eigen:
+        session = SessionLocal()
+    try:
+        heute = datetime.now().date()
+        if (not erzwingen and parameter_holen(session, "lm_lauf_datum")
+                == heute.isoformat()):
+            return {"uebersprungen": True}
+        anzahl = 0
+        for vorgang in (session.query(Vorgang)
+                        .filter(Vorgang.lead_phase == "zurueckgestellt",
+                                Vorgang.zurueckgestellt_bis.isnot(None),
+                                Vorgang.zurueckgestellt_bis
+                                <= datetime.now())):
+            vorgang.lead_phase = "neu"
+            vorgang.naechste_aktion_am = datetime.now()
+            aktivitaet(session, vorgang.id, "status",
+                       "Wiedervorlage fällig – zurück auf Neu "
+                       f"(war zurückgestellt: {vorgang.zurueckgestellt_grund or '-'})")
+            if vorgang.leadmanager_id:
+                kunde = session.get(Kunde, vorgang.kunde_id)
+                benachrichtigen(session, [vorgang.leadmanager_id],
+                                f"Wiedervorlage fällig: {kunde.anzeige_name if kunde else '?'}",
+                                f"/lead-management/lead/{vorgang.id}")
+            anzahl += 1
+        parameter_setzen(session, "lm_lauf_datum", heute.isoformat())
+        session.commit()
+        return {"reaktiviert": anzahl}
+    finally:
+        if eigen:
+            session.close()
+
+
+_scheduler_laeuft = False
+
+
+def scheduler_starten() -> None:
+    """5-Minuten-Schleife: ab 07:00 der Wiedervorlage-Lauf (Datums-Schalter);
+    der Löschlauf 03:00 (Phase 81) hängt an derselben Schleife."""
+    global _scheduler_laeuft
+    if _scheduler_laeuft:
+        return
+    _scheduler_laeuft = True
+
+    def schleife():
+        import threading as _t   # noqa: F401 (Muster wie die anderen Scheduler)
+        import time
+
+        from app.db import SessionLocal
+        time.sleep(200)
+        while True:
+            try:
+                jetzt = datetime.now()
+                if jetzt.hour >= 7:
+                    taeglicher_lauf_leads()
+                if jetzt.hour >= 3:
+                    session = SessionLocal()
+                    try:
+                        loeschlauf(session)
+                    finally:
+                        session.close()
+            except Exception:
+                pass
+            time.sleep(300)
+
+    import threading
+    threading.Thread(target=schleife, daemon=True, name="leadmanagement").start()
+
+
+def loeschlauf(session: Session, erzwingen: bool = False,
+               trocken: bool = False) -> dict:
+    """DSGVO-Anonymisierung (Phase 81, täglich 03:00, nur bei loeschlauf=an):
+    unqualifiziert / nicht_erreicht / verloren, letzte Aktivität älter als
+    loeschfrist_monate, kein angenommenes Angebot, kein Projekt. Im Demo-Modus
+    zusätzlich nur Demo-Leads."""
+    if not trocken and not erzwingen:
+        if parameter_holen(session, "loeschlauf", "aus") != "an":
+            return {"uebersprungen": True}
+        if parameter_holen(session, "loeschlauf_datum") == \
+                datetime.now().date().isoformat():
+            return {"uebersprungen": True}
+    try:
+        monate = int(parameter_holen(session, "loeschfrist_monate", "12"))
+    except ValueError:
+        monate = 12
+    grenze = datetime.now() - timedelta(days=monate * 30)
+    from app.models import Projekt
+    kandidaten = []
+    for vorgang in (session.query(Vorgang)
+                    .filter(Vorgang.lead_phase.in_(
+                        ("unqualifiziert", "nicht_erreicht", "verloren")))):
+        if demo_aktiv(session) and not vorgang.demo:
+            continue
+        kunde = session.get(Kunde, vorgang.kunde_id)
+        if kunde is not None and kunde.nachname == "Gelöscht":
+            continue
+        letzte = (session.query(LeadAktivitaet)
+                  .filter(LeadAktivitaet.vorgang_id == vorgang.id)
+                  .order_by(LeadAktivitaet.zeitpunkt.desc()).first())
+        letzter_zeitpunkt = (letzte.zeitpunkt if letzte else
+                             vorgang.eingang_am or vorgang.angelegt_am)
+        if letzter_zeitpunkt is None or letzter_zeitpunkt > grenze:
+            continue
+        if (session.query(Angebot)
+                .filter(Angebot.vorgang_id == vorgang.id,
+                        Angebot.status == "Angenommen").count()):
+            continue
+        if (session.query(Projekt)
+                .filter(Projekt.vorgang_id == vorgang.id).count()):
+            continue
+        kandidaten.append(vorgang)
+    if trocken:
+        return {"kandidaten": [v.id for v in kandidaten]}
+    for vorgang in kandidaten:
+        kunde = session.get(Kunde, vorgang.kunde_id)
+        vorgang.anfrage_text = ""
+        vorgang.anfrage_rohdaten = ""
+        for a in (session.query(LeadAktivitaet)
+                  .filter(LeadAktivitaet.vorgang_id == vorgang.id)):
+            a.text = ""
+        if kunde is not None and not (
+                session.query(Vorgang)
+                .filter(Vorgang.kunde_id == kunde.id,
+                        Vorgang.id != vorgang.id).count()):
+            kunde.vorname = ""
+            kunde.nachname = "Gelöscht"
+            kunde.strasse = ""
+            kunde.telefon = ""
+            kunde.email = ""
+            kunde.notizen = ""
+            kunde.aktiv = False
+        aktivitaet(session, vorgang.id, "system",
+                   "Anonymisiert (Löschlauf)")
+    parameter_setzen(session, "loeschlauf_datum",
+                     datetime.now().date().isoformat())
+    if kandidaten:
+        protokoll = parameter_holen(session, "loeschlauf_protokoll", "")
+        zeile = (f"{datetime.now().strftime('%d.%m.%Y %H:%M')} · "
+                 f"{len(kandidaten)} Vorgänge anonymisiert")
+        parameter_setzen(session, "loeschlauf_protokoll",
+                         "\n".join(([zeile] + protokoll.splitlines())[:20]))
+    session.commit()
+    return {"anonymisiert": len(kandidaten)}

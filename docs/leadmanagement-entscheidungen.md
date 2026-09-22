@@ -77,3 +77,25 @@ nach V1 durch.
 - **Demo-Generator-Nachnamen** sind erkennbar fiktiv (Demolead, Testinger,
   Musterfrau …) – bewusst kein realistisch klingender Namenspool, damit
   Demo-Daten nie mit echten Kunden verwechselt werden.
+
+## Phase 76 – Anrufliste, Kaskade, Qualifizierung, Score
+
+- **Seitenpanel** der Anrufliste lädt die bestehende Vorgangsakte in einem
+  eingebetteten Rahmen (rechts, ohne Seitenwechsel) – ab Phase 79 zeigt
+  dieselbe Akte den Lead-Kopfblock. Tastaturkürzel 1–7 wirken auf die im
+  Panel geöffnete Zeile.
+- **Score über mehrere Sparten**: Gemeinsame Fragen (gleicher Fragetext, z. B.
+  Zeitrahmen), die per Übernahme in mehreren Sparten stehen, zählen nur
+  EINMAL – sonst würde ein WP+PV-Lead den Zeitrahmen doppelt bepunktet.
+- **„=Wert“-Bedingungen**: Excel speichert Zellen mit führendem „=“ als
+  Formel. Der Import liest deshalb mit data_only=False (liefert den rohen
+  Text), der Erzeuger erzwingt Text-Zellen – Andreas kann in Excel gefahrlos
+  `'=Öl` (mit Apostroph) oder direkt Text eingeben.
+- **„Falsche Nummer“** wird nicht als eigenes Vorgangsfeld gespeichert –
+  die Anrufliste zeigt das Kennzeichen „Nummer prüfen“, solange der letzte
+  Anruf dieses Ergebnis trägt.
+- **Reaktivieren aus „Nicht erreicht“** geht auf „In Kontaktierung“ (die
+  Versuche bleiben gezählt), aus Zurückgestellt/Unqualifiziert auf „Neu“.
+- **Vorbelegungs-Kennzeichen**: neue nullable Spalte `erfassungen.
+  vorbelegt_json` + Badge „aus Qualifizierung“ mit Tooltip im Erfassungsbogen;
+  der Hook in sparten-start greift NUR bei lead_freigabe_modus = alle.

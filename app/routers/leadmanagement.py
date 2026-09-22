@@ -41,17 +41,6 @@ async def startseite(request: Request, session: Session = Depends(get_session)):
     return RedirectResponse("/lead-management/anrufliste", status_code=303)
 
 
-@router.get("/anrufliste")
-async def anrufliste(request: Request, session: Session = Depends(get_session)):
-    """Arbeitsliste des Leadmanagements (Phase 76 baut sie voll aus)."""
-    _gate(request, session)
-    return render(request, "leadmanagement/anrufliste.html",
-                  aktiv="/lead-management",
-                  zeilen=[], filter_werte={}, phasen_namen=LEAD_PHASEN_NAMEN,
-                  ergebnis_namen=ANRUF_ERGEBNIS_NAMEN,
-                  meldung=request.query_params.get("meldung", ""))
-
-
 # --- Phase 75: Schnellanlage, Import, Posteingang unklar ---------------------------
 
 SPARTEN = ("WP", "PV", "KL", "WB")
@@ -376,3 +365,409 @@ async def posteingang_anlegen(request: Request, eintrag_id: int,
                   wunschzeiten=_wunschzeiten_liste(), sparten=SPARTEN,
                   daten=daten, duplikat=None,
                   meldung=f"Vorbefüllt aus Posteingang: {eintrag.betreff}")
+
+
+# --- Phase 76: Anrufliste, Ergebnis-Buttons, Kaskade, Qualifizierung ----------------
+
+def _anruf_zeilen(session: Session, benutzer, filter_werte: dict) -> list[dict]:
+    """Priorisierte Arbeitsliste (Plan 76): (1) SLA gelb/rot, älteste zuerst ·
+    (2) fällige nächste Aktionen/Rückrufe · (3) fällige Zurückgestellte ·
+    (4) Rest nach Score-Klasse, dann Eingang."""
+    from datetime import datetime as dt
+    jetzt = dt.now()
+    phase_filter = filter_werte.get("phase") or ""
+    abfrage = session.query(Vorgang)
+    if phase_filter:
+        abfrage = abfrage.filter(Vorgang.lead_phase == phase_filter)
+    else:
+        abfrage = abfrage.filter(Vorgang.lead_phase.in_(
+            ("neu", "in_kontaktierung", "zurueckgestellt", "nicht_erreicht")))
+    if filter_werte.get("meine") and benutzer is not None:
+        abfrage = abfrage.filter(Vorgang.leadmanager_id == benutzer.id)
+    if filter_werte.get("quelle_id"):
+        abfrage = abfrage.filter(Vorgang.quelle_id == int(filter_werte["quelle_id"]))
+    if filter_werte.get("klasse"):
+        abfrage = abfrage.filter(Vorgang.score_klasse == filter_werte["klasse"])
+    vorgaenge = abfrage.all()
+
+    kunden = {k.id: k for k in session.query(Kunde)
+              .filter(Kunde.id.in_({v.kunde_id for v in vorgaenge} or {0}))}
+    quellen = {q.id: q for q in session.query(LeadQuelle)}
+    mehrfach = {}
+    for v in session.query(Vorgang):
+        mehrfach[v.kunde_id] = mehrfach.get(v.kunde_id, 0) + 1
+    letzte_anrufe: dict[int, LeadAktivitaet] = {}
+    for a in (session.query(LeadAktivitaet)
+              .filter(LeadAktivitaet.typ == "anruf",
+                      LeadAktivitaet.vorgang_id.in_({v.id for v in vorgaenge} or {0}))
+              .order_by(LeadAktivitaet.zeitpunkt)):
+        letzte_anrufe[a.vorgang_id] = a
+
+    zeilen = []
+    for v in vorgaenge:
+        kunde = kunden.get(v.kunde_id)
+        if kunde is None:
+            continue
+        if filter_werte.get("sparte") and \
+                filter_werte["sparte"] not in (kunde.interesse or ""):
+            continue
+        if filter_werte.get("plz") and \
+                not (kunde.plz or "").startswith(filter_werte["plz"]):
+            continue
+        suche = (filter_werte.get("q") or "").lower()
+        if suche and suche not in " ".join(
+                (kunde.vorname or "", kunde.nachname or "",
+                 kunde.telefon or "", kunde.ort or "")).lower():
+            continue
+        # Phasen-Sonderfälle ohne expliziten Filter: nur fällige zeigen
+        if not phase_filter and v.lead_phase == "zurueckgestellt" and (
+                v.zurueckgestellt_bis is None or v.zurueckgestellt_bis > jetzt):
+            continue
+        if not phase_filter and v.lead_phase == "nicht_erreicht" and (
+                v.naechste_aktion_am is None or v.naechste_aktion_am > jetzt):
+            continue
+        sla = kern.sla_status(session, v, jetzt)
+        letzter = letzte_anrufe.get(v.id)
+        if v.lead_phase == "neu" and sla["farbe"] in ("gelb", "rot"):
+            gruppe, schluessel = 0, (v.eingang_am or v.angelegt_am).timestamp()
+        elif v.naechste_aktion_am is not None and v.naechste_aktion_am <= jetzt:
+            gruppe, schluessel = 1, v.naechste_aktion_am.timestamp()
+        elif v.lead_phase == "zurueckgestellt":
+            gruppe, schluessel = 2, (v.zurueckgestellt_bis or jetzt).timestamp()
+        else:
+            klassen_rang = {"A": 0, "B": 1, "C": 2}.get(v.score_klasse or "C", 2)
+            gruppe, schluessel = 3, klassen_rang * 10 ** 12 + (
+                v.eingang_am or v.angelegt_am).timestamp()
+        zeilen.append({
+            "vorgang": v, "kunde": kunde,
+            "quelle": quellen.get(v.quelle_id),
+            "sparten": [s for s in (kunde.interesse or "").split(",") if s.strip()],
+            "sla": sla, "letzter": letzter,
+            "wiederkehrer": mehrfach.get(v.kunde_id, 0) > 1,
+            "monday": v.eingang_art == "monday",
+            "nummer_pruefen": letzter is not None
+                              and letzter.ergebnis == "falsche_nummer",
+            "_sortierung": (gruppe, schluessel),
+        })
+    zeilen.sort(key=lambda z: z["_sortierung"])
+    return zeilen
+
+
+@router.get("/anrufliste")
+async def anrufliste_voll(request: Request,
+                          session: Session = Depends(get_session)):
+    _gate(request, session)
+    from app import leadmanagement_logik
+    benutzer = request.state.benutzer
+    filter_werte = {
+        "meine": request.query_params.get("meine", "1") == "1",
+        "quelle_id": request.query_params.get("quelle_id", ""),
+        "sparte": request.query_params.get("sparte", ""),
+        "klasse": request.query_params.get("klasse", ""),
+        "plz": request.query_params.get("plz", ""),
+        "phase": request.query_params.get("phase", ""),
+        "q": request.query_params.get("q", ""),
+    }
+    zeilen = _anruf_zeilen(session, benutzer, filter_werte)
+    if filter_werte["meine"] and not zeilen and not any(
+            v for k, v in filter_werte.items() if k != "meine" and v):
+        filter_werte["meine"] = False   # ohne eigene Leads direkt „Alle“
+        zeilen = _anruf_zeilen(session, benutzer, filter_werte)
+    logik = leadmanagement_logik.hole_logik()
+    return render(request, "leadmanagement/anrufliste.html",
+                  aktiv="/lead-management", zeilen=zeilen,
+                  filter_werte=filter_werte, quellen=_quellen(session),
+                  phasen_namen=LEAD_PHASEN_NAMEN,
+                  ergebnis_namen=ANRUF_ERGEBNIS_NAMEN,
+                  unq_gruende=logik.gruende_der_phase("unqualifiziert"),
+                  zurueck_gruende=logik.gruende_der_phase("zurueckgestellt"),
+                  demo_badge=kern.demo_aktiv(session),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/anruf/{vorgang_id}")
+async def anruf_ergebnis(request: Request, vorgang_id: int,
+                         session: Session = Depends(get_session)):
+    """Ein-Klick-Anrufergebnis (Plan 76): Aktivität, Zähler, Kaskade bzw.
+    Folgedialog-Aktionen."""
+    from datetime import datetime as dt
+    from urllib.parse import quote_plus
+    _gate(request, session)
+    form = await request.form()
+    benutzer = request.state.benutzer
+    vorgang = session.get(Vorgang, vorgang_id)
+    ergebnis = form.get("ergebnis") or ""
+    if vorgang is None or ergebnis not in ANRUF_ERGEBNIS_NAMEN:
+        return RedirectResponse("/lead-management/anrufliste", status_code=303)
+    jetzt = dt.now()
+    if vorgang.erstkontakt_am is None:
+        vorgang.erstkontakt_am = jetzt
+    vorgang.versuch_nr = (vorgang.versuch_nr or 0) + 1
+    if vorgang.lead_phase in ("neu", "zurueckgestellt", "nicht_erreicht", None):
+        vorgang.lead_phase = "in_kontaktierung"
+        vorgang.zurueckgestellt_bis = None
+    naechste = None
+    meldung = f"{ANRUF_ERGEBNIS_NAMEN[ergebnis]} protokolliert."
+    if ergebnis == "rueckruf_gewuenscht":
+        roh = (form.get("rueckruf_am") or "").strip()
+        try:
+            naechste = dt.strptime(roh, "%Y-%m-%dT%H:%M")
+        except ValueError:
+            return RedirectResponse("/lead-management/anrufliste?meldung="
+                                    + quote_plus("Rückruf: Datum/Uhrzeit ist "
+                                                 "Pflicht."), status_code=303)
+        vorgang.naechste_aktion_am = naechste
+        meldung = f"Rückruf {naechste.strftime('%d.%m.%Y %H:%M')} gemerkt."
+    kern.aktivitaet(session, vorgang.id, "anruf",
+                    f"Anruf: {ANRUF_ERGEBNIS_NAMEN[ergebnis]}"
+                    + (f" – {form.get('notiz')}" if form.get("notiz") else ""),
+                    benutzer=benutzer, ergebnis=ergebnis,
+                    naechste_aktion_am=naechste)
+    if ergebnis == "erreicht":
+        vorgang.erreicht_am = vorgang.erreicht_am or jetzt
+        vorgang.naechste_aktion_am = None
+        session.commit()
+        kunde = session.get(Kunde, vorgang.kunde_id)
+        sparte = next((s for s in (kunde.interesse or "").split(",")
+                       if s.strip() in SPARTEN), "WP").strip()
+        return RedirectResponse(
+            f"/lead-management/lead/{vorgang.id}/qualifizierung/{sparte}",
+            status_code=303)
+    if ergebnis in ("nicht_erreicht", "besetzt", "mailbox"):
+        meldung = (f"{ANRUF_ERGEBNIS_NAMEN[ergebnis]} – "
+                   + kern.kaskade_anwenden(session, vorgang, benutzer))
+    elif ergebnis == "falsche_nummer":
+        meldung = "Falsche Nummer – Lead bleibt mit Kennzeichen „Nummer prüfen“."
+    elif ergebnis == "kein_interesse":
+        grund = (form.get("grund") or "").strip()
+        text = (form.get("grund_text") or "").strip()
+        fehler = _grund_pruefen(session, "unqualifiziert", grund, text)
+        if fehler:
+            return RedirectResponse("/lead-management/anrufliste?meldung="
+                                    + quote_plus(fehler), status_code=303)
+        vorgang.lead_phase = "unqualifiziert"
+        vorgang.unqualifiziert_grund = grund
+        vorgang.unqualifiziert_text = text
+        vorgang.naechste_aktion_am = None
+        kern.aktivitaet(session, vorgang.id, "status",
+                        f"Unqualifiziert: {grund}"
+                        + (f" – {text}" if text else ""), benutzer=benutzer)
+        meldung = f"Kein Interesse – unqualifiziert ({grund})."
+    session.commit()
+    return RedirectResponse("/lead-management/anrufliste?meldung="
+                            + quote_plus(meldung), status_code=303)
+
+
+def _grund_pruefen(session: Session, phase: str, grund: str,
+                   text: str) -> str | None:
+    from app import leadmanagement_logik
+    logik = leadmanagement_logik.hole_logik()
+    passend = next((g for g in logik.gruende_der_phase(phase)
+                    if g.grund == grund), None)
+    if passend is None:
+        return "Bitte einen Grund aus der Liste wählen."
+    if passend.freitext_pflicht and not text:
+        return f"Beim Grund „{grund}“ ist der Freitext Pflicht."
+    return None
+
+
+@router.post("/lead/{vorgang_id}/zurueckstellen")
+async def zurueckstellen(request: Request, vorgang_id: int,
+                         session: Session = Depends(get_session)):
+    from datetime import datetime as dt
+    from urllib.parse import quote_plus
+    _gate(request, session)
+    form = await request.form()
+    benutzer = request.state.benutzer
+    vorgang = session.get(Vorgang, vorgang_id)
+    if vorgang is None:
+        return RedirectResponse("/lead-management/anrufliste", status_code=303)
+    try:
+        bis = dt.strptime((form.get("bis") or "").strip(), "%Y-%m-%d")
+    except ValueError:
+        return RedirectResponse("/lead-management/anrufliste?meldung="
+                                + quote_plus("Zurückstellen: Datum ist Pflicht."),
+                                status_code=303)
+    grund = (form.get("grund") or "").strip()
+    text = (form.get("grund_text") or "").strip()
+    fehler = _grund_pruefen(session, "zurueckgestellt", grund, text)
+    if fehler:
+        return RedirectResponse("/lead-management/anrufliste?meldung="
+                                + quote_plus(fehler), status_code=303)
+    vorgang.lead_phase = "zurueckgestellt"
+    vorgang.zurueckgestellt_bis = bis
+    vorgang.zurueckgestellt_grund = grund + (f" – {text}" if text else "")
+    vorgang.naechste_aktion_am = None
+    kern.aktivitaet(session, vorgang.id, "status",
+                    f"Zurückgestellt bis {bis.strftime('%d.%m.%Y')}: "
+                    f"{vorgang.zurueckgestellt_grund}", benutzer=benutzer)
+    session.commit()
+    zurueck = request.headers.get("referer", "/lead-management/anrufliste")
+    return RedirectResponse(zurueck if zurueck.startswith(("/", str(request.base_url)))
+                            else "/lead-management/anrufliste", status_code=303)
+
+
+@router.post("/lead/{vorgang_id}/unqualifiziert")
+async def unqualifiziert(request: Request, vorgang_id: int,
+                         session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+    _gate(request, session)
+    form = await request.form()
+    benutzer = request.state.benutzer
+    vorgang = session.get(Vorgang, vorgang_id)
+    if vorgang is None:
+        return RedirectResponse("/lead-management/anrufliste", status_code=303)
+    grund = (form.get("grund") or "").strip()
+    text = (form.get("grund_text") or "").strip()
+    fehler = _grund_pruefen(session, "unqualifiziert", grund, text)
+    if fehler:
+        return RedirectResponse("/lead-management/anrufliste?meldung="
+                                + quote_plus(fehler), status_code=303)
+    vorgang.lead_phase = "unqualifiziert"
+    vorgang.unqualifiziert_grund = grund
+    vorgang.unqualifiziert_text = text
+    vorgang.naechste_aktion_am = None
+    kern.aktivitaet(session, vorgang.id, "status",
+                    f"Unqualifiziert: {grund}" + (f" – {text}" if text else ""),
+                    benutzer=benutzer)
+    session.commit()
+    return RedirectResponse("/lead-management/anrufliste?meldung="
+                            + quote_plus(f"Unqualifiziert ({grund})."),
+                            status_code=303)
+
+
+@router.post("/lead/{vorgang_id}/reaktivieren")
+async def reaktivieren(request: Request, vorgang_id: int,
+                       session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+    _gate(request, session)
+    form = await request.form()
+    benutzer = request.state.benutzer
+    vorgang = session.get(Vorgang, vorgang_id)
+    if vorgang is None:
+        return RedirectResponse("/lead-management/anrufliste", status_code=303)
+    begruendung = (form.get("begruendung") or "").strip()
+    if not begruendung:
+        return RedirectResponse("/lead-management/anrufliste?meldung="
+                                + quote_plus("Reaktivieren: Begründung ist "
+                                             "Pflicht."), status_code=303)
+    alte_phase = vorgang.lead_phase
+    ziel = "in_kontaktierung" if alte_phase == "nicht_erreicht" else "neu"
+    vorgang.lead_phase = ziel
+    vorgang.zurueckgestellt_bis = None
+    vorgang.unqualifiziert_grund = None
+    vorgang.unqualifiziert_text = None
+    vorgang.naechste_aktion_am = datetime.now()
+    kern.aktivitaet(session, vorgang.id, "status",
+                    f"Reaktiviert ({LEAD_PHASEN_NAMEN.get(alte_phase, alte_phase)}"
+                    f" → {LEAD_PHASEN_NAMEN[ziel]}): {begruendung}",
+                    benutzer=benutzer)
+    session.commit()
+    return RedirectResponse("/lead-management/anrufliste?meldung="
+                            + quote_plus("Reaktiviert."), status_code=303)
+
+
+# --- Qualifizierungsbogen -------------------------------------------------------------
+
+@router.get("/lead/{vorgang_id}/qualifizierung/{sparte}")
+async def qualifizierung_bogen(request: Request, vorgang_id: int, sparte: str,
+                               session: Session = Depends(get_session)):
+    import json as json_modul
+    _gate(request, session)
+    from app import leadmanagement_logik
+    from app.models import LeadQualifizierung
+    vorgang = session.get(Vorgang, vorgang_id)
+    if vorgang is None or sparte not in SPARTEN:
+        return RedirectResponse("/lead-management/anrufliste", status_code=303)
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    logik = leadmanagement_logik.hole_logik()
+    fragen = logik.fragen_der_sparte(sparte)
+    interessen = [s.strip() for s in (kunde.interesse or "").split(",")
+                  if s.strip() in SPARTEN] or [sparte]
+    if sparte not in interessen:
+        interessen.append(sparte)
+    zeile = (session.query(LeadQualifizierung)
+             .filter_by(vorgang_id=vorgang.id, sparte=sparte).first())
+    try:
+        antworten = json_modul.loads(zeile.antworten) if zeile else {}
+    except ValueError:
+        antworten = {}
+    fertig = {q.sparte for q in session.query(LeadQualifizierung)
+              .filter(LeadQualifizierung.vorgang_id == vorgang.id,
+                      LeadQualifizierung.abgeschlossen_am.isnot(None))}
+    scoring = [{"frage_key": r.frage_key, "bedingung": r.bedingung,
+                "punkte": r.punkte} for r in logik.scoring]
+    return render(request, "leadmanagement/qualifizierung.html",
+                  aktiv="/lead-management", vorgang=vorgang, kunde=kunde,
+                  sparte=sparte, fragen=fragen, antworten=antworten,
+                  interessen=interessen, fertig=fertig,
+                  basis_punkte=(vorgang.score_punkte or 0),
+                  scoring_json=json_modul.dumps(scoring, ensure_ascii=False),
+                  klassen_json=json_modul.dumps(logik.klassen),
+                  antworten_json=json_modul.dumps(antworten, ensure_ascii=False),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/lead/{vorgang_id}/qualifizierung/{sparte}")
+async def qualifizierung_speichern(request: Request, vorgang_id: int,
+                                   sparte: str,
+                                   session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+
+    from app import leadmanagement_logik
+    _gate(request, session)
+    vorgang = session.get(Vorgang, vorgang_id)
+    if vorgang is None or sparte not in SPARTEN:
+        return RedirectResponse("/lead-management/anrufliste", status_code=303)
+    form = await request.form()
+    benutzer = request.state.benutzer
+    logik = leadmanagement_logik.hole_logik()
+    antworten: dict = {}
+    fehlend = []
+    for frage in logik.fragen_der_sparte(sparte):
+        if frage.typ == "mehrfach":
+            werte = form.getlist(f"f_{frage.key}")
+            if werte:
+                antworten[frage.key] = werte
+            elif frage.pflicht:
+                fehlend.append(frage.frage)
+        else:
+            wert = (form.get(f"f_{frage.key}") or "").strip()
+            if wert:
+                antworten[frage.key] = wert
+            elif frage.pflicht:
+                fehlend.append(frage.frage)
+    if form.get("aktion") == "spaeter":
+        # Zwischenstand ohne Abschluss speichern
+        from app.models import LeadQualifizierung
+        zeile = (session.query(LeadQualifizierung)
+                 .filter_by(vorgang_id=vorgang.id, sparte=sparte).first())
+        if zeile is None:
+            zeile = LeadQualifizierung(vorgang_id=vorgang.id, sparte=sparte)
+            session.add(zeile)
+        import json as json_modul
+        zeile.antworten = json_modul.dumps(antworten, ensure_ascii=False)
+        session.commit()
+        return RedirectResponse("/lead-management/anrufliste?meldung="
+                                + quote_plus("Zwischenstand gespeichert."),
+                                status_code=303)
+    if fehlend:
+        return RedirectResponse(
+            f"/lead-management/lead/{vorgang.id}/qualifizierung/{sparte}"
+            f"?meldung=" + quote_plus("Pflichtfragen offen: "
+                                      + " · ".join(fehlend[:3])),
+            status_code=303)
+    zeile = kern.qualifizierung_abschliessen(session, vorgang, sparte,
+                                             antworten, benutzer=benutzer)
+    session.commit()
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    offene = [s.strip() for s in (kunde.interesse or "").split(",")
+              if s.strip() in SPARTEN and s.strip() != sparte
+              and not (session.query(type(zeile))
+                       .filter_by(vorgang_id=vorgang.id, sparte=s.strip())
+                       .filter(type(zeile).abgeschlossen_am.isnot(None)).count())]
+    return render(request, "leadmanagement/qualifizierung_fertig.html",
+                  aktiv="/lead-management", vorgang=vorgang, kunde=kunde,
+                  sparte=sparte, punkte=zeile.score_punkte,
+                  klasse=zeile.score_klasse, offene_sparten=offene,
+                  meldung="")

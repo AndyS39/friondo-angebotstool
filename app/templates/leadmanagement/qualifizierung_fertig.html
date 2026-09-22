@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block titel %}Qualifiziert – {{ kunde.anzeige_name }}{% endblock %}
+
+{% block inhalt %}
+<h1>Qualifizierung {{ sparte }} abgeschlossen</h1>
+<p class="meldung">{{ kunde.anzeige_name }} · Score
+    <strong>{{ punkte }} Punkte · Klasse {{ klasse }}</strong></p>
+{% if klasse == 'C' %}
+<p class="hinweis">Score C – Termin trotzdem buchen? (Kein Verbot – bewusste
+    Entscheidung.)</p>
+{% endif %}
+
+{% if offene_sparten %}
+<p>Weitere Interessen ohne abgeschlossene Qualifizierung:
+    {% for s in offene_sparten %}
+        <a class="knopf klein zweitrangig"
+           href="/lead-management/lead/{{ vorgang.id }}/qualifizierung/{{ s }}">{{ s }} qualifizieren</a>
+    {% endfor %}</p>
+{% endif %}
+
+<div class="formzeile" style="margin-top:1rem">
+    <a class="knopf" href="/lead-management/lead/{{ vorgang.id }}/termin">Termin vorschlagen</a>
+    <button class="knopf zweitrangig" onclick="document.getElementById('dlg-zurueck').showModal()">Zurückstellen</button>
+    <button class="knopf zweitrangig" onclick="document.getElementById('dlg-unq').showModal()">Unqualifiziert</button>
+    <a class="knopf zweitrangig" href="/lead-management/anrufliste">Später weiter</a>
+</div>
+
+<dialog id="dlg-zurueck">
+    <form method="post" class="formular"
+          action="/lead-management/lead/{{ vorgang.id }}/zurueckstellen">
+        <h3>Zurückstellen</h3>
+        <label>Bis (Pflicht) <input type="date" name="bis" required></label>
+        <label>Grund
+            <select name="grund" required>
+                <option>Kunde meldet sich selbst</option>
+                <option>Bauphase später</option>
+                <option>Förderung/Finanzierung abwarten</option>
+                <option>Sonstiges</option>
+            </select>
+        </label>
+        <label>Freitext <input type="text" name="grund_text"></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Zurückstellen</button>
+            <button class="knopf zweitrangig" type="button"
+                    onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+<dialog id="dlg-unq">
+    <form method="post" class="formular"
+          action="/lead-management/lead/{{ vorgang.id }}/unqualifiziert">
+        <h3>Unqualifiziert</h3>
+        <label>Grund
+            <select name="grund" required>
+                <option>Mieter/kein Eigentümer</option>
+                <option>außerhalb Vertriebsgebiet</option>
+                <option>kein Bedarf, nur Information</option>
+                <option>Budget/Finanzierung</option>
+                <option>technisch nicht geeignet</option>
+                <option>Doppelter</option>
+                <option>Spam/Fehleingabe</option>
+                <option>Sonstiges</option>
+            </select>
+        </label>
+        <label>Freitext <input type="text" name="grund_text"></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Unqualifiziert setzen</button>
+            <button class="knopf zweitrangig" type="button"
+                    onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+{% endblock %}

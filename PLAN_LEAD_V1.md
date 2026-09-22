@@ -293,7 +293,7 @@ Terminal-Server weiterhin nacheinander (update.bat).
 
 ## Phase 76 – Anrufliste, Aktivitäten, Kaskade, Qualifizierung, Score
 
-- [ ] **Anrufliste** `/leads` (Startseite des Moduls): Reihenfolge (1) SLA gelb/rot, älteste
+- [x] **Anrufliste** `/leads` (Startseite des Moduls): Reihenfolge (1) SLA gelb/rot, älteste
   zuerst · (2) fällige `naechste_aktion_am` und Rückrufwünsche · (3) Zurückgestellte mit
   erreichtem Datum · (4) übrige Neue/In Kontaktierung nach Score-Klasse, dann Eingang.
   Zeile: Name, Ort (PLZ), Sparten-Chips, Quelle-Badge, Badges „monday"/„Demo"/„Wiederkehrer",
@@ -301,25 +301,25 @@ Terminal-Server weiterhin nacheinander (update.bat).
   **Ergebnis-Buttons** in der Zeile. Filter: Meine/Alle, Quelle, Sparte, Klasse,
   PLZ-Präfix, Phase; Suche Name/Telefon/Ort. Klick auf den Namen öffnet die Akte als
   Seitenpanel (rechts, ohne Seitenwechsel), Vollansicht per Link.
-- [ ] **Ergebnis-Buttons** (ein Klick, Aktivität `anruf` mit Ergebnis): Erreicht → öffnet den
+- [x] **Ergebnis-Buttons** (ein Klick, Aktivität `anruf` mit Ergebnis): Erreicht → öffnet den
   Qualifizierungsbogen · Nicht erreicht · Besetzt · Mailbox → Kaskade · Rückruf gewünscht →
   Dialog Datum/Uhrzeit Pflicht, setzt `naechste_aktion_am` · Falsche Nummer → Hinweis, Lead
   bleibt mit Kennzeichen „Nummer prüfen" · Kein Interesse → Grund-Dialog (Liste
   `unqualifiziert` + Freitext) → Phase `unqualifiziert`. Jeder Klick setzt
   `erstkontakt_am` (falls leer), erhöht `versuch_nr`, setzt `lead_phase` auf
   `in_kontaktierung`; Erreicht setzt `erreicht_am`. Tastaturkürzel 1–7 im Seitenpanel.
-- [ ] **Kaskade**: nach Nicht erreicht/Besetzt/Mailbox wird `naechste_aktion_am` aus dem
+- [x] **Kaskade**: nach Nicht erreicht/Besetzt/Mailbox wird `naechste_aktion_am` aus dem
   Blatt Kaskade gesetzt (`+2h` = jetzt + 2 h innerhalb `arbeitszeit_lm`, sonst nächster
   Arbeitsbeginn; `+1d 18:00` = nächster Werktag 18:00 – liegt 18:00 außerhalb der
   Arbeitszeit, gilt Arbeitsende); Aktion `mail_nicht_erreicht` legt einen Eintrag in
   `kommunikation_log` an (Phase 78 verarbeitet ihn). Nach dem letzten Versuch: Phase
   `nicht_erreicht`, `naechste_aktion_am` = +30 Tage, Aktion `mail_nurture`. Manuelles
   „Erneut aktivieren" setzt zurück auf `in_kontaktierung`.
-- [ ] **Zurückstellen** (Dialog Datum Pflicht + Grund aus Liste): Phase `zurueckgestellt`,
+- [x] **Zurückstellen** (Dialog Datum Pflicht + Grund aus Liste): Phase `zurueckgestellt`,
   `zurueckgestellt_bis`; täglicher Lauf 07:00 setzt fällige zurück auf `neu` mit Aktivität
   „Wiedervorlage fällig" und Benachrichtigung. **Unqualifiziert** (Dialog Grund Pflicht):
   Phase `unqualifiziert`; Button „Reaktivieren" (Begründung) → `neu`.
-- [ ] **Qualifizierungsbogen** `/leads/<id>/qualifizierung/<sparte>`: Fragen des Blatts
+- [x] **Qualifizierungsbogen** `/leads/<id>/qualifizierung/<sparte>`: Fragen des Blatts
   Qualifizierung als Gesprächsleitfaden (eine Frage je Block, große Buttons, Enter =
   weiter, Rücksprung möglich, Fortschrittsbalken); Sparten-Reiter, wenn der Lead mehrere
   Interessen hat (gemeinsame Fragen wie Eigentümer/Zeitrahmen/Wunschzeiten werden nur
@@ -330,16 +330,16 @@ Terminal-Server weiterhin nacheinander (update.bat).
   Zusatzinteressen (Q-W14) als Interessen, Aktivität „Qualifiziert (<Klasse>, <Punkte>)".
   Abschluss-Seite: Buttons **„Termin vorschlagen"** (Phase 77), „Zurückstellen",
   „Unqualifiziert", „Später weiter".
-- [ ] **Score-Berechnung** `score_berechnen(vorgang)`: Summe aus Blatt Scoring über alle
+- [x] **Score-Berechnung** `score_berechnen(vorgang)`: Summe aus Blatt Scoring über alle
   Sparten-Antworten (je Frage nur die erste zutreffende Zeile), + Systemregeln
   (Kerngebiet, Quellen-Bonus); Klasse aus Blatt Klassen; vorläufiger Score bereits bei
   Anlage (nur Systemregeln), Anzeige „vorläufig" bis zur Qualifizierung.
-- [ ] **Erfassungs-Vorbelegung** (vorbereiten, **erst aktiv bei `lead_freigabe_modus = alle`**):
+- [x] **Erfassungs-Vorbelegung** (vorbereiten, **erst aktiv bei `lead_freigabe_modus = alle`**):
   Beim Start einer Erfassung zu einem Vorgang mit abgeschlossener Qualifizierung werden
   Antworten über `erfassungs_frage` vorbelegt und je Antwort mit Kennzeichen „aus
   Qualifizierung" markiert (Tooltip mit Datum/Leadmanager); der AD kann sie ändern. Im
   Demo-Modus nur im Code vorhanden, Test über Unit-Test der Mapping-Funktion.
-- [ ] Test: 10 Demo-Leads durch die Liste arbeiten; Kaskade-Zeiten stimmen (auch abends/
+- [x] Test: 10 Demo-Leads durch die Liste arbeiten; Kaskade-Zeiten stimmen (auch abends/
   Freitag → Montag); Qualifizierung WP + PV am selben Lead; Score-Klasse ändert sich
   live; Kein Interesse → unqualifiziert; Zurückstellen → Wiedervorlage-Lauf manuell
   anstoßen.

@@ -46,6 +46,9 @@ async def lifespan(app: FastAPI):
     # v12 (Phase 75): Lead-Postfach-Abruf alle 2 Minuten (nur parser_modus=an)
     from app import lead_parser
     lead_parser.scheduler_starten()
+    # v12 (Phase 76/81): Wiedervorlage-Lauf 07:00 + Löschlauf 03:00
+    from app import leadmanagement
+    leadmanagement.scheduler_starten()
     yield
 
 

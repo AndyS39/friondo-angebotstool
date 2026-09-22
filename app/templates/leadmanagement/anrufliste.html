@@ -6,9 +6,236 @@
 
 {% block inhalt %}
 <div class="seitenkopf">
-    <h1>Anrufliste <span class="demo-badge">Demo · Coming soon</span></h1>
+    <h1>Anrufliste
+        {% if demo_badge %}<span class="demo-badge">Demo · Coming soon</span>{% endif %}
+    </h1>
+    <div class="aktionen">
+        <a class="knopf klein" href="/lead-management/neu">+ Neuer Lead</a>
+        <a class="knopf klein zweitrangig" href="/lead-management/import">Import</a>
+        <a class="knopf klein zweitrangig" href="/lead-management/posteingang">Posteingang</a>
+    </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
-<p class="dezent">Die Anrufliste wird in Phase 76 gefüllt (priorisierte
-    Arbeitsliste mit Ein-Klick-Anrufergebnissen).</p>
+
+<form method="get" action="/lead-management/anrufliste" class="suchleiste">
+    <label class="kontrollfeld">
+        <select name="meine">
+            <option value="1" {{ 'selected' if filter_werte.meine }}>Meine Leads</option>
+            <option value="0" {{ 'selected' if not filter_werte.meine }}>Alle</option>
+        </select>
+    </label>
+    <label class="kontrollfeld">Quelle
+        <select name="quelle_id">
+            <option value="">alle</option>
+            {% for q in quellen %}
+                <option value="{{ q.id }}" {{ 'selected' if filter_werte.quelle_id == q.id | string }}>{{ q.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="kontrollfeld">Sparte
+        <select name="sparte">
+            <option value="">alle</option>
+            {% for s in ('WP', 'PV', 'KL', 'WB') %}
+                <option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }}>{{ s }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="kontrollfeld">Klasse
+        <select name="klasse">
+            <option value="">alle</option>
+            {% for k in ('A', 'B', 'C') %}
+                <option value="{{ k }}" {{ 'selected' if filter_werte.klasse == k }}>{{ k }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="kontrollfeld">PLZ <input type="text" name="plz" size="5"
+           value="{{ filter_werte.plz }}"></label>
+    <label class="kontrollfeld">Phase
+        <select name="phase">
+            <option value="">Arbeitsliste</option>
+            {% for wert, name in phasen_namen.items() %}
+                <option value="{{ wert }}" {{ 'selected' if filter_werte.phase == wert }}>{{ name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <input type="search" name="q" value="{{ filter_werte.q }}"
+           placeholder="Name / Telefon / Ort">
+    <button class="knopf klein" type="submit">Filtern</button>
+</form>
+
+<div class="anruf-layout">
+<table class="tabelle" id="anruftabelle">
+    <thead><tr><th>Lead</th><th>Sparten</th><th>Quelle</th><th>Klasse</th>
+        <th>SLA</th><th title="Versuch-Nr.">V.</th><th>Letztes Ergebnis</th>
+        <th>Telefon</th><th>Ergebnis (Tasten 1–7)</th></tr></thead>
+    <tbody>
+    {% for z in zeilen %}
+        <tr class="anruf-zeile" data-vorgang="{{ z.vorgang.id }}">
+            <td>
+                <a href="#" class="panel-link" data-ziel="/vorgaenge/{{ z.vorgang.id }}">
+                    <strong>{{ z.kunde.anzeige_name }}</strong></a>
+                <span class="dezent">{{ z.kunde.ort or '?' }} ({{ z.kunde.plz or '–' }})</span>
+                {% if z.vorgang.demo %}<span class="demo-badge">Demo</span>{% endif %}
+                {% if z.monday %}<span class="abzeichen">monday</span>{% endif %}
+                {% if z.wiederkehrer %}<span class="abzeichen ep">Wiederkehrer</span>{% endif %}
+                {% if z.nummer_pruefen %}<span class="abzeichen ep">Nummer prüfen</span>{% endif %}
+                {% if z.vorgang.naechste_aktion_am %}
+                    <span class="dezent">→ {{ z.vorgang.naechste_aktion_am.strftime('%d.%m. %H:%M') }}</span>
+                {% endif %}
+            </td>
+            <td>{% for s in z.sparten %}<span class="abzeichen">{{ s }}</span>{% endfor %}</td>
+            <td>{% if z.quelle %}<span class="abzeichen">{{ z.quelle.name }}</span>{% endif %}</td>
+            <td><strong>{{ z.vorgang.score_klasse or '–' }}</strong>
+                <span class="dezent">{{ z.vorgang.score_punkte if z.vorgang.score_punkte is not none }}</span></td>
+            <td>{% if z.sla.farbe == 'erfuellt' %}
+                    <span class="sla-chip sla-erfuellt">erfüllt ({{ z.sla.minuten }} Min)</span>
+                {% elif z.sla.farbe %}
+                    <span class="sla-chip sla-{{ z.sla.farbe }}">{{ z.sla.minuten }} Min</span>
+                {% endif %}</td>
+            <td>{{ z.vorgang.versuch_nr or 0 }}</td>
+            <td class="dezent">{% if z.letzter %}{{ ergebnis_namen.get(z.letzter.ergebnis, '') }}
+                · {{ z.letzter.zeitpunkt.strftime('%d.%m. %H:%M') }}{% endif %}</td>
+            <td>{% if z.kunde.telefon %}<a href="tel:{{ z.kunde.telefon }}">{{ z.kunde.telefon }}</a>{% endif %}</td>
+            <td class="anruf-buttons">
+                <form method="post" action="/lead-management/anruf/{{ z.vorgang.id }}" style="display:inline">
+                    <button class="knopf klein" name="ergebnis" value="erreicht" title="1 – Erreicht">✅</button>
+                    <button class="knopf klein zweitrangig" name="ergebnis" value="nicht_erreicht" title="2 – Nicht erreicht">📵</button>
+                    <button class="knopf klein zweitrangig" name="ergebnis" value="besetzt" title="3 – Besetzt">⛔</button>
+                    <button class="knopf klein zweitrangig" name="ergebnis" value="mailbox" title="4 – Mailbox">📼</button>
+                </form>
+                <button class="knopf klein zweitrangig" title="5 – Rückruf gewünscht"
+                        onclick="dialogOeffnen('rueckruf', {{ z.vorgang.id }})">📅</button>
+                <form method="post" action="/lead-management/anruf/{{ z.vorgang.id }}" style="display:inline">
+                    <button class="knopf klein zweitrangig" name="ergebnis" value="falsche_nummer" title="6 – Falsche Nummer">❓</button>
+                </form>
+                <button class="knopf klein zweitrangig" title="7 – Kein Interesse"
+                        onclick="dialogOeffnen('keininteresse', {{ z.vorgang.id }})">🚫</button>
+                <button class="knopf klein zweitrangig" title="Zurückstellen"
+                        onclick="dialogOeffnen('zurueck', {{ z.vorgang.id }})">⏸</button>
+                {% if z.vorgang.lead_phase in ('nicht_erreicht', 'zurueckgestellt', 'unqualifiziert') %}
+                <button class="knopf klein zweitrangig" title="Erneut aktivieren"
+                        onclick="dialogOeffnen('reaktivieren', {{ z.vorgang.id }})">▶</button>
+                {% endif %}
+            </td>
+        </tr>
+    {% else %}
+        <tr><td colspan="9" class="dezent">Keine Leads in der Arbeitsliste.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+<aside id="lead-panel" hidden>
+    <div class="panel-kopf">
+        <a id="panel-voll" class="knopf klein zweitrangig" href="#" target="_blank">Vollansicht ↗</a>
+        <button class="knopf klein zweitrangig" onclick="panelSchliessen()">Schließen ✕</button>
+    </div>
+    <iframe id="panel-frame" src="about:blank" title="Lead-Akte"></iframe>
+</aside>
+</div>
+
+{# Dialoge: Rückruf, Kein Interesse, Zurückstellen, Reaktivieren #}
+<dialog id="dlg-rueckruf">
+    <form method="post" class="formular">
+        <input type="hidden" name="ergebnis" value="rueckruf_gewuenscht">
+        <h3>Rückruf gewünscht</h3>
+        <label>Datum/Uhrzeit (Pflicht)
+            <input type="datetime-local" name="rueckruf_am" required></label>
+        <label>Notiz <input type="text" name="notiz"></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Speichern</button>
+            <button class="knopf zweitrangig" type="button"
+                    onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+<dialog id="dlg-keininteresse">
+    <form method="post" class="formular">
+        <input type="hidden" name="ergebnis" value="kein_interesse">
+        <h3>Kein Interesse – Grund (Pflicht)</h3>
+        <label>Grund
+            <select name="grund" required>
+                {% for g in unq_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}
+            </select>
+        </label>
+        <label>Freitext <input type="text" name="grund_text"
+               placeholder="Pflicht bei Sonstiges"></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Unqualifiziert setzen</button>
+            <button class="knopf zweitrangig" type="button"
+                    onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+<dialog id="dlg-zurueck">
+    <form method="post" class="formular">
+        <h3>Zurückstellen</h3>
+        <label>Bis (Pflicht) <input type="date" name="bis" required></label>
+        <label>Grund
+            <select name="grund" required>
+                {% for g in zurueck_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}
+            </select>
+        </label>
+        <label>Freitext <input type="text" name="grund_text"
+               placeholder="Pflicht bei Sonstiges"></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Zurückstellen</button>
+            <button class="knopf zweitrangig" type="button"
+                    onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+<dialog id="dlg-reaktivieren">
+    <form method="post" class="formular">
+        <h3>Erneut aktivieren</h3>
+        <label>Begründung (Pflicht) <input type="text" name="begruendung" required></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Reaktivieren</button>
+            <button class="knopf zweitrangig" type="button"
+                    onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+
+<script>
+// Dialoge zielen je nach Art auf /anruf/<id> bzw. /lead/<id>/<aktion>
+const dialogZiele = {
+    rueckruf: id => `/lead-management/anruf/${id}`,
+    keininteresse: id => `/lead-management/anruf/${id}`,
+    zurueck: id => `/lead-management/lead/${id}/zurueckstellen`,
+    reaktivieren: id => `/lead-management/lead/${id}/reaktivieren`,
+};
+let aktiveZeile = null;
+function dialogOeffnen(art, vorgangId) {
+    const dlg = document.getElementById('dlg-' + art);
+    dlg.querySelector('form').action = dialogZiele[art](vorgangId);
+    dlg.showModal();
+}
+// Seitenpanel: Klick auf den Namen öffnet die Akte rechts ohne Seitenwechsel
+const panel = document.getElementById('lead-panel');
+document.querySelectorAll('.panel-link').forEach(a => {
+    a.addEventListener('click', e => {
+        e.preventDefault();
+        document.getElementById('panel-frame').src = a.dataset.ziel;
+        document.getElementById('panel-voll').href = a.dataset.ziel;
+        panel.hidden = false;
+        aktiveZeile = a.closest('tr');
+        document.querySelectorAll('.anruf-zeile.aktiv')
+            .forEach(z => z.classList.remove('aktiv'));
+        aktiveZeile.classList.add('aktiv');
+    });
+});
+function panelSchliessen() { panel.hidden = true; }
+// Tastaturkürzel 1–7 wirken auf die im Seitenpanel geöffnete Zeile
+const tasten = {"1": "erreicht", "2": "nicht_erreicht", "3": "besetzt",
+                "4": "mailbox", "6": "falsche_nummer"};
+document.addEventListener('keydown', e => {
+    if (panel.hidden || !aktiveZeile) return;
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+    const id = aktiveZeile.dataset.vorgang;
+    if (tasten[e.key]) {
+        const knopf = aktiveZeile.querySelector(`button[value="${tasten[e.key]}"]`);
+        if (knopf) knopf.click();
+    } else if (e.key === '5') { dialogOeffnen('rueckruf', id); }
+    else if (e.key === '7') { dialogOeffnen('keininteresse', id); }
+});
+</script>
 {% endblock %}

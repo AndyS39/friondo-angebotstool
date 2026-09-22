@@ -213,7 +213,27 @@ async def sparten_start(request: Request, session: Session = Depends(get_session
     session.flush()
     from app import vorgaenge as vorgaenge_modul
     for erfassung in neu:               # v10: Vorgangszugehörigkeit (Akte)
-        vorgaenge_modul.vorgang_fuer_erfassung(session, erfassung)
+        vorgang = vorgaenge_modul.vorgang_fuer_erfassung(session, erfassung)
+        # v12 (Phase 76): Vorbelegung aus der Lead-Qualifizierung – erst aktiv
+        # bei lead_freigabe_modus = alle (Demo-Modus: nur im Code vorhanden)
+        try:
+            from app import leadmanagement
+            if (vorgang is not None
+                    and leadmanagement.freigabe_modus(session) == "alle"):
+                vorbelegung = leadmanagement.erfassungs_vorbelegung(session,
+                                                                    vorgang)
+                if vorbelegung:
+                    antworten = json.loads(erfassung.antworten_json or "{}")
+                    kennzeichen = {}
+                    for key, eintrag in vorbelegung.items():
+                        antworten.setdefault(key, eintrag["wert"])
+                        kennzeichen[key] = eintrag["info"]
+                    erfassung.antworten_json = json.dumps(antworten,
+                                                          ensure_ascii=False)
+                    erfassung.vorbelegt_json = json.dumps(kennzeichen,
+                                                          ensure_ascii=False)
+        except Exception:
+            pass
     if lead is not None and lead.erfassung_id is None:
         lead.erfassung_id = neu[0].id   # Alt-Verknüpfung (erste Erfassung)
     session.commit()
@@ -326,6 +346,7 @@ async def seite(request: Request, erfassung_id: int, nr: int,
                   benutzer=_benutzer(request), erfassung=erfassung, kunde=kunde,
                   seiten=seiten, nr=nr, fragen=fragen, sichtbar=sichtbar,
                   werte=werte, fehler={},
+                  vorbelegt=json.loads(erfassung.vorbelegt_json or "{}"),
                   client_regel=lambda f: _client_regel(f, antworten, logik),
                   wiederhol_id=engine.ID_WIEDERHOL_ANZAHL)
 

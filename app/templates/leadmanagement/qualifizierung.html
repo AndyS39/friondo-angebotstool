@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block titel %}Qualifizierung {{ sparte }} – {{ kunde.anzeige_name }}{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Qualifizierung · {{ kunde.anzeige_name }}</h1>
+    <div class="aktionen">
+        <div id="live-score" class="score-anzeige">Score: <strong id="score-punkte">0</strong>
+            · Klasse <strong id="score-klasse">C</strong></div>
+        <a class="knopf klein zweitrangig" href="/lead-management/anrufliste">Anrufliste</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{# Sparten-Reiter bei mehreren Interessen #}
+{% if interessen | length > 1 %}
+<nav class="reiter">
+    {% for s in interessen %}
+        <a class="{{ 'aktiv' if s == sparte }}"
+           href="/lead-management/lead/{{ vorgang.id }}/qualifizierung/{{ s }}">
+            {{ s }}{{ ' ✓' if s in fertig }}</a>
+    {% endfor %}
+</nav>
+{% endif %}
+
+<div class="fortschritt"><div id="fortschritt-balken"></div></div>
+
+<form method="post" id="bogen"
+      action="/lead-management/lead/{{ vorgang.id }}/qualifizierung/{{ sparte }}">
+    {% for f in fragen %}
+    <section class="q-block" data-key="{{ f.key }}"
+             data-unq="{{ f.unqualifiziert_bei }}" hidden>
+        <h2>{{ loop.index }}/{{ fragen | length }} · {{ f.frage }}
+            {{ '*' if f.pflicht }}</h2>
+        {% if f.typ == 'janein' %}
+            <div class="q-optionen">
+                {% for o in ('ja', 'nein') %}
+                <label class="q-option"><input type="radio" name="f_{{ f.key }}"
+                    value="{{ o }}" {{ 'checked' if antworten.get(f.key) == o }}> {{ o }}</label>
+                {% endfor %}
+            </div>
+        {% elif f.typ == 'auswahl' %}
+            <div class="q-optionen">
+                {% for o in f.optionen %}
+                <label class="q-option"><input type="radio" name="f_{{ f.key }}"
+                    value="{{ o }}" {{ 'checked' if antworten.get(f.key) == o }}> {{ o }}</label>
+                {% endfor %}
+            </div>
+        {% elif f.typ == 'mehrfach' %}
+            <div class="q-optionen">
+                {% for o in f.optionen %}
+                <label class="q-option"><input type="checkbox" name="f_{{ f.key }}"
+                    value="{{ o }}" {{ 'checked' if o in antworten.get(f.key, []) }}> {{ o }}</label>
+                {% endfor %}
+            </div>
+        {% elif f.typ == 'zahl' %}
+            <input type="text" inputmode="decimal" name="f_{{ f.key }}"
+                   value="{{ antworten.get(f.key, '') }}" style="font-size:1.2rem">
+        {% else %}
+            <input type="text" name="f_{{ f.key }}"
+                   value="{{ antworten.get(f.key, '') }}" style="font-size:1.1rem">
+        {% endif %}
+        <p class="hinweis q-unq-hinweis" hidden>Antwort spricht gegen einen
+            Termin – als unqualifiziert kennzeichnen?
+            <button class="knopf klein zweitrangig" type="button"
+                    onclick="document.getElementById('dlg-unq').showModal()">Unqualifiziert…</button></p>
+        <div class="formzeile q-nav">
+            <button class="knopf zweitrangig" type="button" onclick="blockWechsel(-1)">← Zurück</button>
+            <button class="knopf" type="button" onclick="blockWechsel(1)">Weiter (Enter) →</button>
+        </div>
+    </section>
+    {% endfor %}
+    <div class="formzeile" id="bogen-abschluss" hidden>
+        <button class="knopf" type="submit" name="aktion" value="abschliessen">
+            Qualifizierung abschließen</button>
+        <button class="knopf zweitrangig" type="submit" name="aktion" value="spaeter">
+            Später weiter (Zwischenstand)</button>
+    </div>
+</form>
+
+<dialog id="dlg-unq">
+    <form method="post" class="formular"
+          action="/lead-management/lead/{{ vorgang.id }}/unqualifiziert">
+        <h3>Unqualifiziert kennzeichnen</h3>
+        <label>Grund
+            <select name="grund" required>
+                <option value="Mieter/kein Eigentümer">Mieter/kein Eigentümer</option>
+                <option value="außerhalb Vertriebsgebiet">außerhalb Vertriebsgebiet</option>
+                <option value="kein Bedarf, nur Information">kein Bedarf, nur Information</option>
+                <option value="Budget/Finanzierung">Budget/Finanzierung</option>
+                <option value="technisch nicht geeignet">technisch nicht geeignet</option>
+                <option value="Doppelter">Doppelter</option>
+                <option value="Spam/Fehleingabe">Spam/Fehleingabe</option>
+                <option value="Sonstiges">Sonstiges</option>
+            </select>
+        </label>
+        <label>Freitext <input type="text" name="grund_text"></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Unqualifiziert setzen</button>
+            <button class="knopf zweitrangig" type="button"
+                    onclick="this.closest('dialog').close()">Weiter im Gespräch</button>
+        </div>
+    </form>
+</dialog>
+
+<script>
+// Gesprächsleitfaden: eine Frage je Block, Enter = weiter, Live-Score rechts
+const bloecke = Array.from(document.querySelectorAll('.q-block'));
+const scoring = {{ scoring_json | safe }};
+const klassen = {{ klassen_json | safe }};
+const basisPunkte = {{ basis_punkte }};
+let aktuell = 0;
+
+function antwortWert(block) {
+    const radios = block.querySelectorAll('input[type=radio]:checked');
+    if (radios.length) return radios[0].value;
+    const checks = Array.from(block.querySelectorAll('input[type=checkbox]:checked'));
+    if (block.querySelector('input[type=checkbox]')) return checks.map(c => c.value);
+    const feld = block.querySelector('input[type=text]');
+    return feld && feld.value.trim() ? feld.value.trim() : null;
+}
+
+function bedingungTrifft(bedingung, wert) {
+    if (wert === null) return false;
+    bedingung = bedingung.trim();
+    if (bedingung.toLowerCase().startsWith('enthält')) {
+        const gesucht = bedingung.slice(7).trim().toLowerCase();
+        const liste = Array.isArray(wert) ? wert : [wert];
+        return liste.some(w => String(w).trim().toLowerCase() === gesucht);
+    }
+    if (bedingung.startsWith('=')) {
+        const ist = Array.isArray(wert) ? wert.join(',') : String(wert);
+        return ist.trim().toLowerCase() === bedingung.slice(1).trim().toLowerCase();
+    }
+    const m = bedingung.match(/^(>=|<=|>|<)\s*(-?\d+(?:[.,]\d+)?)$/);
+    if (!m) return false;
+    const zahl = parseFloat(String(wert).replace(',', '.'));
+    if (isNaN(zahl)) return false;
+    const grenze = parseFloat(m[2].replace(',', '.'));
+    return {'<': zahl < grenze, '<=': zahl <= grenze,
+            '>': zahl > grenze, '>=': zahl >= grenze}[m[1]];
+}
+
+function scoreAktualisieren() {
+    const antworten = {};
+    bloecke.forEach(b => { antworten[b.dataset.key] = antwortWert(b); });
+    let punkte = basisPunkte;
+    const benutzt = new Set();
+    for (const regel of scoring) {
+        if (benutzt.has(regel.frage_key)) continue;
+        if (!(regel.frage_key in antworten) || antworten[regel.frage_key] === null) continue;
+        if (bedingungTrifft(regel.bedingung, antworten[regel.frage_key])) {
+            punkte += regel.punkte;
+            benutzt.add(regel.frage_key);
+        }
+    }
+    let klasse = klassen.length ? klassen[klassen.length - 1][0] : 'C';
+    for (const [k, ab] of klassen) { if (punkte >= ab) { klasse = k; break; } }
+    document.getElementById('score-punkte').textContent = punkte;
+    document.getElementById('score-klasse').textContent = klasse;
+}
+
+function unqPruefen(block) {
+    const hinweis = block.querySelector('.q-unq-hinweis');
+    if (!hinweis) return;
+    const soll = (block.dataset.unq || '').trim().toLowerCase();
+    const wert = antwortWert(block);
+    hinweis.hidden = !(soll && wert !== null
+        && String(Array.isArray(wert) ? wert.join(',') : wert)
+            .trim().toLowerCase() === soll);
+}
+
+function blockZeigen(i) {
+    aktuell = Math.max(0, Math.min(i, bloecke.length - 1));
+    bloecke.forEach((b, n) => { b.hidden = n !== aktuell; });
+    document.getElementById('bogen-abschluss').hidden =
+        aktuell !== bloecke.length - 1;
+    document.getElementById('fortschritt-balken').style.width =
+        ((aktuell + 1) / bloecke.length * 100) + '%';
+    const feld = bloecke[aktuell].querySelector('input[type=text]');
+    if (feld) feld.focus();
+}
+function blockWechsel(richtung) { blockZeigen(aktuell + richtung); }
+
+document.getElementById('bogen').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.tagName !== 'BUTTON'
+            && aktuell < bloecke.length - 1) {
+        e.preventDefault();
+        blockWechsel(1);
+    }
+});
+document.getElementById('bogen').addEventListener('change', e => {
+    scoreAktualisieren();
+    unqPruefen(e.target.closest('.q-block'));
+});
+document.getElementById('bogen').addEventListener('input', scoreAktualisieren);
+// beim ersten unbeantworteten Block starten (Übernahme/Zwischenstand)
+let start = bloecke.findIndex(b => antwortWert(b) === null);
+blockZeigen(start === -1 ? bloecke.length - 1 : start);
+scoreAktualisieren();
+</script>
+{% endblock %}

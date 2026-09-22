@@ -193,6 +193,8 @@ class Erfassung(Base):
     kunde_id: Mapped[int] = mapped_column(Integer, index=True)
     benutzer_id: Mapped[int] = mapped_column(Integer, index=True)      # Vertriebler
     antworten_json: Mapped[str] = mapped_column(Text, default="{}")
+    # v12 (Lead-Management, Phase 76): Kennzeichen „aus Qualifizierung“
+    vorbelegt_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     ampel: Mapped[str] = mapped_column(String(10), default="gruen")    # gruen | orange
     gruende_text: Mapped[str] = mapped_column(Text, default="")        # AMPEL-Gründe (je Zeile)
     status: Mapped[str] = mapped_column(String(20), default="Entwurf") # Entwurf -> Neu -> ...
