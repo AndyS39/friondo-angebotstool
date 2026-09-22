@@ -967,3 +967,50 @@ async def lead_demo_aktion(request: Request,
         meldung = "Unbekannte Aktion."
     return RedirectResponse("/parametrierung/lead-demo?meldung="
                             + quote_plus(meldung), status_code=303)
+
+
+@router.get("/lead-routing")
+async def lead_routing_seite(request: Request,
+                             session: Session = Depends(get_session)):
+    from datetime import datetime as dt
+
+    from app import leadmanagement as lead_kern
+    _lead_gate(request, session)
+    heute = dt.now().date().isoformat()
+    zaehler = {dienst: lead_kern.parameter_holen(
+        session, f"aufrufe_{dienst}_{heute}", "0")
+        for dienst in ("ors_geocode", "ors_matrix", "google_geocode",
+                       "google_matrix", "nominatim")}
+    return render(request, "konfiguration/lead_routing.html",
+                  aktiv="/parametrierung",
+                  anbieter=lead_kern.parameter_holen(session, "routing_anbieter",
+                                                     "luftlinie"),
+                  ors_key=lead_kern.parameter_holen(session, "ors_api_key"),
+                  google_key=lead_kern.parameter_holen(session, "google_api_key"),
+                  zaehler=zaehler,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/lead-routing")
+async def lead_routing_speichern(request: Request,
+                                 session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+
+    from app import leadmanagement as lead_kern
+    from app import routing
+    _lead_gate(request, session)
+    form = await request.form()
+    if form.get("aktion") == "testen":
+        meldung = routing.verbindung_testen(session)
+        return RedirectResponse("/parametrierung/lead-routing?meldung="
+                                + quote_plus(meldung), status_code=303)
+    if form.get("routing_anbieter") in ("ors", "google", "luftlinie"):
+        lead_kern.parameter_setzen(session, "routing_anbieter",
+                                   form.get("routing_anbieter"))
+    lead_kern.parameter_setzen(session, "ors_api_key",
+                               (form.get("ors_api_key") or "").strip())
+    lead_kern.parameter_setzen(session, "google_api_key",
+                               (form.get("google_api_key") or "").strip())
+    session.commit()
+    return RedirectResponse("/parametrierung/lead-routing?meldung=Gespeichert",
+                            status_code=303)

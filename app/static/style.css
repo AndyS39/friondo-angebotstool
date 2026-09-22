@@ -1107,3 +1107,37 @@ main.breit { max-width: 1720px; }
 }
 
 .reiter a.aktiv { background: var(--friondo-blau); color: #fff; font-weight: 600; }
+
+/* v12 (Phase 77): Terminassistent + Terminkalender */
+.vorschlag-karten { display: flex; flex-wrap: wrap; gap: 0.8rem; }
+
+.vorschlag-karte {
+    border: 1px solid var(--grau-linie);
+    border-radius: 8px;
+    background: #fff;
+    padding: 0.8rem 1rem;
+    width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.vorschlag-karte h3 { margin: 0; }
+
+.kalender-tabelle td { min-width: 130px; vertical-align: top; }
+
+.kalender-eintrag {
+    border: 1px solid var(--grau-linie);
+    border-left: 4px solid var(--friondo-blau);
+    border-radius: 6px;
+    padding: 0.25rem 0.45rem;
+    margin-bottom: 0.3rem;
+    font-size: 0.85rem;
+    background: #fff;
+}
+
+.kalender-eintrag.belegt { background: #ececec; color: #666; border-left-color: #999; }
+.kalender-eintrag.sparte-wp { border-left-color: #2471a3; }
+.kalender-eintrag.sparte-pv { border-left-color: #d4a017; }
+.kalender-eintrag.sparte-kl { border-left-color: #17a589; }
+.kalender-eintrag.sparte-wb { border-left-color: #8e44ad; }

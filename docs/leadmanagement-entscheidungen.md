@@ -99,3 +99,28 @@ nach V1 durch.
 - **Vorbelegungs-Kennzeichen**: neue nullable Spalte `erfassungen.
   vorbelegt_json` + Badge „aus Qualifizierung“ mit Tooltip im Erfassungsbogen;
   der Hook in sparten-start greift NUR bei lead_freigabe_modus = alle.
+
+## Phase 77 – Geocoding, Routing, Terminassistent, Kalender
+
+- **AD-Kandidaten ohne Kanal-Regel**: Der Plan nennt „Kanal-Regel aus der
+  Quelle → Gebiets-PLZ → alle mit aktiv_terminierung“ – ein Feld „fester AD
+  je Quelle/Kanal“ existiert im Datenmodell (Phase 73) aber nicht. V1 nutzt
+  Gebiets-PLZ → aktiv_terminierung (manuell einschränkbar); die Kanal-festen
+  AD kommen mit den Zuweisungsregeln in V2.
+- **„AD am Vorgang“**: Der Vorgang trägt kein eigenes AD-Feld – der
+  Außendienstler lebt am aktiven VOT-Termin (`vot_termine.ad_id`), bei
+  monday-Leads zusätzlich wie bisher am Lead. Kein neues Feld nötig.
+- **Fahrzeit-Fallback je Paar**: `fahrzeit()` liefert IMMER einen Wert –
+  fehlt der Matrix-Cache, wird Luftlinie × 1,3 bei 45 km/h gecacht und als
+  „geschätzt“ markiert; ein späterer Matrix-Lauf überschreibt den Eintrag.
+- **Vielfalt der Top 5**: höchstens zwei Slots je AD und Tag, damit die
+  Vorschläge nicht alle auf demselben Tour-Tag liegen.
+- **Slots frühestens +2 Stunden** ab jetzt (kein Vorschlag „in 30 Minuten“).
+- **Outlook-Ereignis-ID** wird als `postfach|id` gespeichert, damit
+  Ändern/Löschen im Demo-Modus (Testpostfach) und später im echten
+  AD-Postfach dasselbe Feld nutzen.
+- **„Adresse prüfen“** setzt Koordinaten in V1 über zwei Eingabefelder
+  (Google-Maps-Rechtsklick); die Karten-Pin-Setzung kommt mit der
+  Leaflet-Karte in Phase 79.
+- **Samstag** zählt zu den Vorschlags-Tagen (Wunschzeit „samstag“), sofern
+  das AD-Profil dort Arbeitszeiten hat.

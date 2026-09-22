@@ -346,7 +346,7 @@ Terminal-Server weiterhin nacheinander (update.bat).
 
 ## Phase 77 – Geocoding, Routing, AD-Profile, Terminassistent, Kalender
 
-- [ ] **Geocoding** (`geocoding.py`): Adresse normalisieren → Cache → Anbieter laut
+- [x] **Geocoding** (`geocoding.py`): Adresse normalisieren → Cache → Anbieter laut
   `routing_anbieter` (ors: Geocode-Endpunkt mit `ors_api_key`; google: Geocoding API;
   luftlinie: Nominatim `https://nominatim.openstreetmap.org/search` mit User-Agent
   `Friondo-Tool/1.0 (info@friondo.de)`, **max. 1 Anfrage/s**, `countrycodes=de`).
@@ -355,7 +355,7 @@ Terminal-Server weiterhin nacheinander (update.bat).
   **„Adresse prüfen"** `/leads/adressen` mit manueller Pin-Setzung auf der Karte
   (speichert lat/lon, Status `manuell`). Alle Aufrufe nach außen mit Timeout 8 s,
   Fehler nie blockierend.
-- [ ] **Routing** (`routing.py`): `fahrzeit(von, nach)` → Cache (90 Tage) → Anbieter:
+- [x] **Routing** (`routing.py`): `fahrzeit(von, nach)` → Cache (90 Tage) → Anbieter:
   ors Matrix (`/v2/matrix/driving-car`, Quellen × Ziele, `metrics: duration,distance`),
   google Route Matrix, sonst Luftlinie × 1,3 bei 45 km/h (Kennzeichen `geschaetzt`).
   Matrix-Aufrufe bündeln: je Assistenten-Lauf **ein** Aufruf Lead → alle relevanten
@@ -363,11 +363,11 @@ Terminal-Server weiterhin nacheinander (update.bat).
   einem zweiten Aufruf; Ergebnisse in `routing_cache`. Parametrierung: Anbieter,
   Schlüssel, Button „Verbindung testen" (Fahrzeit Duisburg Hbf → Moers Bahnhof anzeigen),
   Tageszähler der externen Aufrufe.
-- [ ] **AD-Profile** (Benutzerverwaltung, Unterseite je Außendienstler; auch für Admins
+- [x] **AD-Profile** (Benutzerverwaltung, Unterseite je Außendienstler; auch für Admins
   mit AD-Rolle): Felder aus Phase 73; Startadresse wird geokodiert; Arbeitszeiten-Editor
   je Wochentag; Häkchen `aktiv_terminierung`. Ohne Profil nimmt der Assistent Standard
   (Mo–Fr 08:00–18:00, Start = Firmenadresse aus der Parametrierung, 90/15/4).
-- [ ] **Kalender-Anbindung** (`kalender.py`, Graph): `frei_belegt(ad, von, bis)` liest
+- [x] **Kalender-Anbindung** (`kalender.py`, Graph): `frei_belegt(ad, von, bis)` liest
   `calendarView` des `kalender_postfach`; `termin_schreiben/aendern/loeschen(vot_termin)`
   legt Ereignis an (Betreff `VOT <Sparten> – <Nachname>, <Ort>`, Ort = Adresse, Body:
   Telefon, Anfragetext-Kurzfassung, Qualifizierungs-Steckbrief, Link zur Akte
@@ -378,12 +378,12 @@ Terminal-Server weiterhin nacheinander (update.bat).
   `docs/graph-einrichtung.md` ergänzen: `Calendars.ReadWrite` (Application) +
   Application Access Policy auf die AD-Postfächer und das Testpostfach (Aufgabe
   M365-Admin).
-- [ ] **VOT-Termine der gesyncten Leads**: Beim Sync-Lauf wird aus dem VOT-Datum des
+- [x] **VOT-Termine der gesyncten Leads**: Beim Sync-Lauf wird aus dem VOT-Datum des
   monday-Leads ein `vot_termine`-Eintrag mit `quelle = monday`, `status = geplant`,
   Dauer laut AD-Profil erzeugt bzw. aktualisiert (nur lesend aus monday; Änderung in
   monday überschreibt den Tool-Eintrag, solange `quelle = monday`). Diese Termine sind
   die Grundlage, damit der Assistent in der Demo mit den echten Tagen der AD rechnet.
-- [ ] **Terminassistent** `/leads/<id>/termin` (Button aus Akte, Anrufliste und
+- [x] **Terminassistent** `/leads/<id>/termin` (Button aus Akte, Anrufliste und
   Qualifizierungs-Abschluss): Vorschlagsmaschine laut Konzept 6.1 – Horizont
   `vorschlag_horizont_tage` Werktage, Raster `vorschlag_raster_min`, AD-Kandidaten
   (Kanal-Regel aus der Quelle → Gebiets-PLZ → alle mit `aktiv_terminierung`; manuell
@@ -396,7 +396,7 @@ Terminal-Server weiterhin nacheinander (update.bat).
   Treffer, Mini-Karte (Phase 79-Komponente; in dieser Phase Platzhalter-Liste der
   Tagestermine). Reiter „Kalender": Wochenansicht des gewählten AD zum manuellen Setzen.
   Laufzeit-Ziel < 3 s; Fortschrittsanzeige bei externen Aufrufen.
-- [ ] **Buchen** (im Demo-Modus nur für Demo-Leads aktiv; bei gesyncten monday-Leads
+- [x] **Buchen** (im Demo-Modus nur für Demo-Leads aktiv; bei gesyncten monday-Leads
   zeigt der Assistent die Vorschläge, der Buchen-Button trägt den Hinweis „Terminierung
   im Demo-Modus nur für Demo-Leads – in monday terminieren"): `vot_termine`
   (`quelle = assistent`/`manuell`, `demo` vom Vorgang),
@@ -408,12 +408,12 @@ Terminal-Server weiterhin nacheinander (update.bat).
   Liste `no_show`): Termin-Status, Phase zurück auf `qualifiziert`, `naechste_aktion_am` =
   jetzt, Benachrichtigung an den Leadmanager. **Erfolgt**: automatisch, wenn eine
   Erfassung zum Vorgang abgesendet wird, sonst manuell durch den AD.
-- [ ] **Terminkalender** `/leads/kalender`: Wochenansicht, Spalten = AD (Filter einzelner
+- [x] **Terminkalender** `/leads/kalender`: Wochenansicht, Spalten = AD (Filter einzelner
   AD), Einträge = `vot_termine` (Farbe je Sparte, Demo/monday-Badge) + bei `kalender_sync
   = an` die belegten Zeiten aus Outlook (grau). Drag & Drop eines Tool-Termins =
   Umbuchung mit Bestätigungsdialog; monday-Termine nicht verschiebbar (Hinweis „in monday
   ändern"). Klick → Akte.
-- [ ] Test: Demo-Lead in Moers → Vorschläge liegen an Tagen, an denen der AD dort Termine
+- [x] Test: Demo-Lead in Moers → Vorschläge liegen an Tagen, an denen der AD dort Termine
   hat; Umweg-Werte plausibel; ohne API-Key → „geschätzt"; Buchen → Termin im Kalender,
   Log-Einträge vorhanden; Umbuchen; No-Show → Lead zurück in Anrufliste. Als Innendienst:
   keine Demo-Termine in Leads VOT.

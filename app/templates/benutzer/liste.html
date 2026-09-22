@@ -54,6 +54,10 @@
                 <form id="f{{ b.id }}" method="post" action="/benutzer/{{ b.id }}/aendern">
                     <button class="knopf klein" type="submit">Speichern</button>
                 </form>
+                {% if b.rolle == 'aussendienst' %}
+                    <a class="knopf klein zweitrangig" href="/benutzer/{{ b.id }}/ad-profil"
+                       title="Startadresse, Arbeitszeiten, Gebiet (Terminassistent)">AD-Profil</a>
+                {% endif %}
                 <form method="post" action="/benutzer/{{ b.id }}/loeschen"
                       onsubmit="return confirm('{{ b.name }} wirklich {{ 'löschen' if loeschbar[b.id] else 'deaktivieren' }}?');">
                     <button class="knopf klein zweitrangig" type="submit"

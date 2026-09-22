@@ -771,3 +771,268 @@ async def qualifizierung_speichern(request: Request, vorgang_id: int,
                   sparte=sparte, punkte=zeile.score_punkte,
                   klasse=zeile.score_klasse, offene_sparten=offene,
                   meldung="")
+
+
+# --- Phase 77: Terminassistent, Terminkalender, Adresse prüfen ----------------------
+
+@router.get("/lead/{vorgang_id}/termin")
+async def termin_assistent(request: Request, vorgang_id: int,
+                           session: Session = Depends(get_session)):
+    import json as json_modul
+    _gate(request, session)
+    from app import geocoding
+    vorgang = session.get(Vorgang, vorgang_id)
+    if vorgang is None:
+        return RedirectResponse("/lead-management/anrufliste", status_code=303)
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    # Adresse bei Bedarf sofort geokodieren (Fortschritt < 3 s dank Cache)
+    if vorgang.lat is None and vorgang.geocode_status != "manuell":
+        adresse = geocoding.lead_adresse(session, vorgang)
+        lat, lon, status = geocoding.geokodieren(session, adresse)
+        vorgang.lat, vorgang.lon, vorgang.geocode_status = lat, lon, status
+        session.commit()
+    nur_ad = request.query_params.get("ad_id", "")
+    umbuchen_id = request.query_params.get("umbuchen", "")
+    ergebnis = kern.termin_vorschlaege(
+        session, vorgang, nur_ad_id=int(nur_ad) if nur_ad.isdigit() else None)
+    session.commit()   # Routing-/Geocode-Cache behalten
+    # Wochenansicht des gewählten AD (Reiter „Kalender“)
+    kalender_ad = (int(nur_ad) if nur_ad.isdigit()
+                   else (ergebnis["kandidaten"][0].id
+                         if ergebnis["kandidaten"] else None))
+    woche = _wochenraster(session, [kalender_ad] if kalender_ad else [])
+    buchbar = not (kern.demo_aktiv(session) and not vorgang.demo)
+    try:
+        wunschzeiten = json_modul.loads(vorgang.wunschzeiten or "[]")
+    except ValueError:
+        wunschzeiten = []
+    return render(request, "leadmanagement/termin.html",
+                  aktiv="/lead-management", vorgang=vorgang, kunde=kunde,
+                  vorschlaege=ergebnis["vorschlaege"],
+                  hinweise=ergebnis["hinweise"],
+                  kandidaten=ergebnis["kandidaten"],
+                  kalender_ad=kalender_ad, woche=woche,
+                  wunschzeiten=wunschzeiten, buchbar=buchbar,
+                  umbuchen_id=umbuchen_id,
+                  benutzer_map={b.id: b for b in session.query(Benutzer)},
+                  kunden_map={k.id: k for k in session.query(Kunde)},
+                  meldung=request.query_params.get("meldung", ""))
+
+
+def _wochenraster(session: Session, ad_ids: list[int], start=None) -> dict:
+    """Wochenansicht: je AD und Tag die Tool-Termine (+ Outlook belegt,
+    falls Kalender-Sync an)."""
+    from app import kalender as kalender_modul
+    jetzt = datetime.now()
+    start = start or (jetzt - timedelta(days=jetzt.weekday()))
+    start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    tage = [start + timedelta(days=i) for i in range(6)]   # Mo–Sa
+    raster = {}
+    for ad_id in ad_ids:
+        if not ad_id:
+            continue
+        ad = session.get(Benutzer, ad_id)
+        termine = (session.query(VotTermin)
+                   .filter(VotTermin.ad_id == ad_id,
+                           VotTermin.status.in_(("geplant", "bestaetigt")),
+                           VotTermin.beginn >= tage[0],
+                           VotTermin.beginn < tage[-1] + timedelta(days=1))
+                   .order_by(VotTermin.beginn).all())
+        belegt = kalender_modul.frei_belegt(session, ad, tage[0],
+                                            tage[-1] + timedelta(days=1))
+        raster[ad_id] = {
+            "termine": {t.date(): [x for x in termine
+                                   if x.beginn.date() == t.date()]
+                        for t in tage},
+            "belegt": {t.date(): [b for b in (belegt or [])
+                                  if b[0].date() == t.date()]
+                       for t in tage},
+        }
+    return {"tage": tage, "je_ad": raster}
+
+
+@router.post("/lead/{vorgang_id}/termin")
+async def termin_buchen(request: Request, vorgang_id: int,
+                        session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+    _gate(request, session)
+    form = await request.form()
+    benutzer = request.state.benutzer
+    vorgang = session.get(Vorgang, vorgang_id)
+    if vorgang is None:
+        return RedirectResponse("/lead-management/anrufliste", status_code=303)
+    try:
+        beginn = datetime.strptime((form.get("beginn") or "").strip(),
+                                   "%Y-%m-%dT%H:%M")
+        ad_id = int(form.get("ad_id") or 0)
+    except ValueError:
+        return RedirectResponse(
+            f"/lead-management/lead/{vorgang_id}/termin?meldung="
+            + quote_plus("Beginn und Außendienstler sind Pflicht."),
+            status_code=303)
+    umbuchen = form.get("umbuchen_id") or ""
+    umweg = form.get("umweg") or ""
+    termin, meldung = kern.termin_buchen(
+        session, vorgang, ad_id, beginn, benutzer=benutzer,
+        quelle=form.get("quelle") or "assistent",
+        umweg=int(umweg) if umweg.lstrip("-").isdigit() else None,
+        umbuchen_id=int(umbuchen) if umbuchen.isdigit() else None)
+    if termin is None:
+        return RedirectResponse(
+            f"/lead-management/lead/{vorgang_id}/termin?meldung="
+            + quote_plus(meldung), status_code=303)
+    session.commit()
+    # Warnung, wenn außerhalb der AD-Arbeitszeit gebucht wurde (erlaubt)
+    profil = kern.ad_profil(session, ad_id)
+    fenster = kern._arbeitszeiten_von_bis(profil, beginn)
+    minute = beginn.hour * 60 + beginn.minute
+    if fenster is None or not (fenster[0] <= minute < fenster[1]):
+        meldung += " Hinweis: Termin liegt außerhalb der AD-Arbeitszeit."
+    return RedirectResponse("/lead-management/kalender?meldung="
+                            + quote_plus(meldung), status_code=303)
+
+
+@router.post("/termin/{termin_id}/no-show")
+async def termin_no_show(request: Request, termin_id: int,
+                         session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+    _gate(request, session)
+    form = await request.form()
+    termin = session.get(VotTermin, termin_id)
+    if termin is None:
+        return RedirectResponse("/lead-management/kalender", status_code=303)
+    grund = (form.get("grund") or "").strip()
+    text = (form.get("grund_text") or "").strip()
+    fehler = _grund_pruefen(session, "no_show", grund, text)
+    if fehler:
+        return RedirectResponse("/lead-management/kalender?meldung="
+                                + quote_plus(fehler), status_code=303)
+    status = "abgesagt" if form.get("art") == "absage" else "no_show"
+    kern.termin_no_show(session, termin, grund, text, status=status,
+                        benutzer=request.state.benutzer)
+    session.commit()
+    return RedirectResponse("/lead-management/anrufliste?meldung="
+                            + quote_plus("Termin zurückgemeldet – Lead wieder "
+                                         "in der Terminierung."),
+                            status_code=303)
+
+
+@router.post("/termin/{termin_id}/erfolgt")
+async def termin_erfolgt(request: Request, termin_id: int,
+                         session: Session = Depends(get_session)):
+    _gate(request, session)
+    termin = session.get(VotTermin, termin_id)
+    if termin is not None:
+        termin.status = "erfolgt"
+        kern.aktivitaet(session, termin.vorgang_id, "termin",
+                        "Termin als erfolgt markiert",
+                        benutzer=request.state.benutzer)
+        session.commit()
+    zurueck = request.headers.get("referer", "/lead-management/kalender")
+    return RedirectResponse(zurueck if zurueck.startswith(("/", str(request.base_url)))
+                            else "/lead-management/kalender", status_code=303)
+
+
+@router.post("/termin/{termin_id}/verschieben")
+async def termin_verschieben(request: Request, termin_id: int,
+                             session: Session = Depends(get_session)):
+    """Drag & Drop im Terminkalender: Umbuchung mit Bestätigungsdialog;
+    monday-Termine sind gesperrt (in monday ändern)."""
+    from urllib.parse import quote_plus
+    _gate(request, session)
+    form = await request.form()
+    termin = session.get(VotTermin, termin_id)
+    if termin is None:
+        return RedirectResponse("/lead-management/kalender", status_code=303)
+    if termin.quelle == "monday":
+        return RedirectResponse("/lead-management/kalender?meldung="
+                                + quote_plus("monday-Termin – bitte in monday "
+                                             "ändern."), status_code=303)
+    try:
+        beginn = datetime.strptime((form.get("beginn") or "").strip(),
+                                   "%Y-%m-%dT%H:%M")
+        ad_id = int(form.get("ad_id") or termin.ad_id or 0)
+    except ValueError:
+        return RedirectResponse("/lead-management/kalender", status_code=303)
+    vorgang = session.get(Vorgang, termin.vorgang_id)
+    neu, meldung = kern.termin_buchen(session, vorgang, ad_id, beginn,
+                                      benutzer=request.state.benutzer,
+                                      quelle="manuell",
+                                      umbuchen_id=termin.id)
+    session.commit()
+    return RedirectResponse("/lead-management/kalender?meldung="
+                            + quote_plus("Termin umgebucht." if neu else meldung),
+                            status_code=303)
+
+
+@router.get("/kalender")
+async def terminkalender(request: Request,
+                         session: Session = Depends(get_session)):
+    _gate(request, session)
+    from datetime import datetime as dt
+    versatz = request.query_params.get("woche", "0")
+    versatz = int(versatz) if versatz.lstrip("-").isdigit() else 0
+    start = dt.now() + timedelta(weeks=versatz)
+    nur_ad = request.query_params.get("ad_id", "")
+    alle_ad = [b for b in session.query(Benutzer)
+               .filter(Benutzer.aktiv.is_(True), Benutzer.rolle == "aussendienst")
+               .order_by(Benutzer.name)]
+    ad_ids = ([int(nur_ad)] if nur_ad.isdigit()
+              else [b.id for b in alle_ad])
+    woche = _wochenraster(session, ad_ids,
+                          start=start - timedelta(days=start.weekday()))
+    vorgaenge = {v.id: v for v in session.query(Vorgang)}
+    return render(request, "leadmanagement/kalender.html",
+                  aktiv="/lead-management", woche=woche, alle_ad=alle_ad,
+                  ad_ids=ad_ids, nur_ad=nur_ad, versatz=versatz,
+                  vorgaenge=vorgaenge,
+                  kunden_map={k.id: k for k in session.query(Kunde)},
+                  benutzer_map={b.id: b for b in session.query(Benutzer)},
+                  demo_badge=kern.demo_aktiv(session),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.get("/adressen")
+async def adressen_pruefen(request: Request,
+                           session: Session = Depends(get_session)):
+    """Liste „Adresse prüfen“ (Geocode-Fehler) mit manueller Koordinaten-
+    Setzung; die Karten-Pin-Setzung kommt mit der Leaflet-Karte (Phase 79)."""
+    _gate(request, session)
+    from app import geocoding
+    zeilen = []
+    for vorgang in (session.query(Vorgang)
+                    .filter(Vorgang.geocode_status == "fehler")):
+        kunde = session.get(Kunde, vorgang.kunde_id)
+        if kunde is not None:
+            zeilen.append({"vorgang": vorgang, "kunde": kunde,
+                           "adresse": geocoding.lead_adresse(session, vorgang)})
+    return render(request, "leadmanagement/adressen.html",
+                  aktiv="/lead-management", zeilen=zeilen,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/adressen/{vorgang_id}")
+async def adresse_setzen(request: Request, vorgang_id: int,
+                         session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+    _gate(request, session)
+    from app import geocoding
+    form = await request.form()
+    vorgang = session.get(Vorgang, vorgang_id)
+    if vorgang is None:
+        return RedirectResponse("/lead-management/adressen", status_code=303)
+    try:
+        lat = float((form.get("lat") or "").replace(",", "."))
+        lon = float((form.get("lon") or "").replace(",", "."))
+    except ValueError:
+        return RedirectResponse("/lead-management/adressen?meldung="
+                                + quote_plus("Bitte gültige Koordinaten "
+                                             "angeben."), status_code=303)
+    vorgang.lat, vorgang.lon = lat, lon
+    vorgang.geocode_status = "manuell"
+    geocoding.pin_setzen(session, geocoding.lead_adresse(session, vorgang),
+                         lat, lon)
+    session.commit()
+    return RedirectResponse("/lead-management/adressen?meldung="
+                            + quote_plus("Koordinaten gespeichert."),
+                            status_code=303)

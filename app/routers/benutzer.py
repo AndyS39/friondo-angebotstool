@@ -163,3 +163,89 @@ async def loeschen(request: Request, benutzer_id: int,
     session.commit()
     return RedirectResponse("/benutzer?meldung=" + quote_plus(f"{name} gelöscht"),
                             status_code=303)
+
+
+# --- v12 (Phase 77): AD-Profil für den Terminassistenten ---------------------------
+
+@router.get("/{benutzer_id}/ad-profil")
+async def ad_profil_seite(request: Request, benutzer_id: int,
+                          session: Session = Depends(get_session)):
+    import json as json_modul
+
+    from app.models import AdProfil
+    person = session.get(Benutzer, benutzer_id)
+    if person is None:
+        return RedirectResponse("/benutzer", status_code=303)
+    profil = (session.query(AdProfil)
+              .filter(AdProfil.benutzer_id == benutzer_id).first())
+    try:
+        zeiten = json_modul.loads(profil.arbeitszeiten) if profil else {}
+    except ValueError:
+        zeiten = {}
+    try:
+        gebiet = json_modul.loads(profil.gebiet_plz_praefixe) if profil else []
+    except ValueError:
+        gebiet = []
+    return render(request, "benutzer/ad_profil.html", aktiv="/benutzer",
+                  person=person, profil=profil, zeiten=zeiten,
+                  gebiet=", ".join(str(p) for p in gebiet),
+                  wochentage=[("mo", "Montag"), ("di", "Dienstag"),
+                              ("mi", "Mittwoch"), ("do", "Donnerstag"),
+                              ("fr", "Freitag"), ("sa", "Samstag")],
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/{benutzer_id}/ad-profil")
+async def ad_profil_speichern(request: Request, benutzer_id: int,
+                              session: Session = Depends(get_session)):
+    import json as json_modul
+    from urllib.parse import quote_plus
+
+    from app.models import AdProfil
+    person = session.get(Benutzer, benutzer_id)
+    if person is None:
+        return RedirectResponse("/benutzer", status_code=303)
+    form = await request.form()
+    profil = (session.query(AdProfil)
+              .filter(AdProfil.benutzer_id == benutzer_id).first())
+    if profil is None:
+        profil = AdProfil(benutzer_id=benutzer_id,
+                          erstellt_von=request.state.benutzer.id)
+        session.add(profil)
+    zeiten = {}
+    for tag in ("mo", "di", "mi", "do", "fr", "sa"):
+        von = (form.get(f"{tag}_von") or "").strip()
+        bis = (form.get(f"{tag}_bis") or "").strip()
+        if von and bis:
+            zeiten[tag] = [von, bis]
+    profil.arbeitszeiten = json_modul.dumps(zeiten)
+    neue_adresse = (form.get("start_adresse") or "").strip()[:300]
+    if neue_adresse != profil.start_adresse:
+        profil.start_adresse = neue_adresse
+        profil.start_lat = None   # Geokodierung läuft neu (Hintergrund/sofort)
+        profil.start_lon = None
+    def _zahl(name, standard):
+        try:
+            return max(1, int(form.get(name) or standard))
+        except ValueError:
+            return standard
+    profil.termin_dauer_min = _zahl("termin_dauer_min", 90)
+    profil.puffer_min = _zahl("puffer_min", 15)
+    profil.max_termine_tag = _zahl("max_termine_tag", 4)
+    profil.gebiet_plz_praefixe = json_modul.dumps(
+        [p.strip() for p in (form.get("gebiet") or "").split(",") if p.strip()])
+    profil.kalender_postfach = (form.get("kalender_postfach") or "").strip() or None
+    profil.aktiv_terminierung = form.get("aktiv_terminierung") == "on"
+    session.flush()
+    if profil.start_adresse and profil.start_lat is None:
+        try:   # Startadresse sofort geokodieren (best effort)
+            from app import geocoding
+            lat, lon, status = geocoding.geokodieren(session, profil.start_adresse)
+            if status == "ok":
+                profil.start_lat, profil.start_lon = lat, lon
+        except Exception:
+            pass
+    session.commit()
+    return RedirectResponse(f"/benutzer/{benutzer_id}/ad-profil?meldung="
+                            + quote_plus("Profil gespeichert."),
+                            status_code=303)

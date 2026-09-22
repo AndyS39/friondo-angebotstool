@@ -125,3 +125,25 @@ rausgehen:
    Fehlt die Berechtigung, versucht das Tool automatisch den Fallback
    `angebot@friondo.de`; beide Fehler landen im **Mail-Protokoll** auf
    derselben Einstellungsseite. Der Mail-Versand blockiert das Tool nie.
+
+## Lead-Management V1 (v12): Kalender-Rechte + Postfächer
+
+Aufgaben für den M365-Admin (Terminassistent, Mail-Parser, Kundenmails):
+
+1. **Postfach `leads@friondo.de`** anlegen (Shared-Postfach) – Eingang der
+   Formular-Mails (Parser) und Absender der Kundenmails; „Senden als" für
+   die Tool-Konten wie bei angebot@/projektierung@.
+2. **Testpostfach** (z. B. `lead-test@friondo.de`) anlegen: Im Demo-Modus
+   schreibt der Terminassistent Kalender-Ereignisse AUSSCHLIESSLICH in
+   dieses Postfach (Parametrierung → Lead-Einstellungen →
+   `kalender_testpostfach`) – nie in echte AD-Kalender.
+3. **Kalender-Berechtigung**: App-Registrierung um `Calendars.ReadWrite`
+   (Application) erweitern, Admin-Consent erteilen und den Zugriff mit
+   einer **Application Access Policy** auf die AD-Postfächer + das
+   Testpostfach beschränken:
+   `New-ApplicationAccessPolicy -AppId <App-ID> -PolicyScopeGroupId
+   <Mail-aktivierte Sicherheitsgruppe mit den AD-Postfächern> -AccessRight
+   RestrictAccess`
+4. Ohne Kalender-Recht arbeitet der Assistent nur mit Tool-Terminen
+   (Frei/Belegt aus Outlook entfällt) – das Tool blockiert nie; ein Hinweis
+   erscheint in der Parametrierung.

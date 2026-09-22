@@ -49,6 +49,9 @@ async def lifespan(app: FastAPI):
     # v12 (Phase 76/81): Wiedervorlage-Lauf 07:00 + Löschlauf 03:00
     from app import leadmanagement
     leadmanagement.scheduler_starten()
+    # v12 (Phase 77): Geokodierung im Hintergrund (alle 5 Minuten)
+    from app import geocoding
+    geocoding.scheduler_starten()
     yield
 
 

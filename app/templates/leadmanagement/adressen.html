@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block titel %}Adresse prüfen – Lead-Management{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Adresse prüfen ({{ zeilen | length }})</h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/anrufliste">Anrufliste</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+<p class="dezent">Leads, deren Adresse nicht geokodiert werden konnte – der
+    Terminassistent rechnet dort ohne Fahrzeiten. Koordinaten manuell setzen
+    (z. B. aus Google Maps: Rechtsklick → Koordinaten kopieren); mit der
+    Karte (Phase 79) geht das per Pin-Klick.</p>
+
+{% if zeilen %}
+<table class="tabelle" style="max-width:1000px">
+    <thead><tr><th>Lead</th><th>Adresse</th><th>Breite (lat)</th>
+        <th>Länge (lon)</th><th></th></tr></thead>
+    <tbody>
+    {% for z in zeilen %}
+        <tr>
+            <td><a href="/lead-management/lead/{{ z.vorgang.id }}">{{ z.kunde.anzeige_name }}</a></td>
+            <td>{{ z.adresse or '–' }}</td>
+            <td><input form="a{{ z.vorgang.id }}" type="text" name="lat" size="10"
+                       placeholder="51.4344"></td>
+            <td><input form="a{{ z.vorgang.id }}" type="text" name="lon" size="10"
+                       placeholder="6.7623"></td>
+            <td>
+                <form id="a{{ z.vorgang.id }}" method="post"
+                      action="/lead-management/adressen/{{ z.vorgang.id }}">
+                    <button class="knopf klein" type="submit">Speichern</button>
+                </form>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}<p class="dezent">Keine offenen Geokodier-Fehler.</p>{% endif %}
+{% endblock %}

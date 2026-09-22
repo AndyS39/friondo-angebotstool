@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block titel %}Terminassistent – {{ kunde.anzeige_name }}{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Terminassistent · {{ kunde.anzeige_name }}, {{ kunde.ort or '?' }}</h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}">Lead-Akte</a>
+        <a class="knopf klein zweitrangig" href="/lead-management/anrufliste">Anrufliste</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+{% for h in hinweise %}<p class="hinweis">{{ h }}
+    <a href="/lead-management/adressen">→ Adresse prüfen</a></p>{% endfor %}
+{% if not buchbar %}
+<p class="warnblock">Terminierung im Demo-Modus nur für Demo-Leads –
+    diesen (monday-)Lead bitte in monday terminieren. Die Vorschläge bleiben
+    zur Ansicht.</p>
+{% endif %}
+
+<p class="dezent">Wunschzeiten des Kunden:
+    {{ wunschzeiten | join(', ') if wunschzeiten else 'keine hinterlegt' }}
+    · Kandidaten: {{ kandidaten | map(attribute='name') | join(', ') or 'keine aktiven AD' }}
+    · <a href="?ad_id=">alle AD</a>
+    {% for ad in kandidaten %} · <a href="?ad_id={{ ad.id }}">nur {{ ad.name }}</a>{% endfor %}</p>
+
+<h2>Top {{ vorschlaege | length }} Vorschläge</h2>
+<div class="vorschlag-karten">
+{% for v in vorschlaege %}
+    <div class="vorschlag-karte">
+        <h3>{{ v.beginn.strftime('%a %d.%m.%Y · %H:%M') }} Uhr</h3>
+        <p><strong>{{ v.ad.name }}</strong>
+            · Umweg +{{ v.umweg }} Min{{ ' (geschätzt)' if v.geschaetzt }}</p>
+        <p class="dezent">
+            {% if v.vorher %}davor {{ v.vorher.beginn.strftime('%H:%M') }}
+                ({{ v.vorher.adresse.split(',')[-1] if v.vorher.adresse else '?' }}){% endif %}
+            {% if v.nachher %} · danach {{ v.nachher.beginn.strftime('%H:%M') }}
+                ({{ v.nachher.adresse.split(',')[-1] if v.nachher.adresse else '?' }}){% endif %}
+            {% if not v.vorher and not v.nachher %}ab Startadresse{% endif %}
+        </p>
+        <p>
+            {% if v.wunsch %}<span class="abzeichen">Wunschzeit ✓</span>{% endif %}
+            {% if v.tour_tag %}<span class="abzeichen">Tour-Tag</span>{% endif %}
+            {% if v.leerer_tag %}<span class="abzeichen ep">leerer Tag</span>{% endif %}
+        </p>
+        {% if v.tages_termine %}
+        <p class="dezent">Termine des Tages:
+            {% for t in v.tages_termine %}{{ t.beginn.strftime('%H:%M') }}
+                {{ t.adresse.split(',')[-1] if t.adresse else '' }}{{ ' · ' if not loop.last }}{% endfor %}</p>
+        {% else %}<p class="dezent">Noch keine Termine an diesem Tag.</p>{% endif %}
+        <form method="post" action="/lead-management/lead/{{ vorgang.id }}/termin">
+            <input type="hidden" name="beginn" value="{{ v.beginn.strftime('%Y-%m-%dT%H:%M') }}">
+            <input type="hidden" name="ad_id" value="{{ v.ad.id }}">
+            <input type="hidden" name="umweg" value="{{ v.umweg }}">
+            <input type="hidden" name="umbuchen_id" value="{{ umbuchen_id }}">
+            <button class="knopf" type="submit" {{ 'disabled' if not buchbar }}>
+                {{ 'Umbuchen' if umbuchen_id else 'Buchen' }}</button>
+        </form>
+    </div>
+{% else %}
+    <p class="dezent">Keine freien Slots im Horizont – Horizont/Raster in den
+        Lead-Einstellungen prüfen oder manuell setzen (unten).</p>
+{% endfor %}
+</div>
+
+<h2>Kalender (manuell setzen)</h2>
+<form method="get" action="/lead-management/lead/{{ vorgang.id }}/termin" class="suchleiste">
+    <label class="kontrollfeld">Außendienstler
+        <select name="ad_id" onchange="this.form.submit()">
+            {% for ad in kandidaten %}
+                <option value="{{ ad.id }}" {{ 'selected' if kalender_ad == ad.id }}>{{ ad.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+</form>
+{% if kalender_ad %}
+<table class="tabelle" style="max-width:1100px">
+    <thead><tr>{% for tag in woche.tage %}<th>{{ tag.strftime('%a %d.%m.') }}</th>{% endfor %}</tr></thead>
+    <tbody><tr>
+    {% for tag in woche.tage %}
+        <td style="vertical-align:top">
+            {% for t in woche.je_ad[kalender_ad].termine.get(tag.date(), []) %}
+                <div class="kalender-eintrag">{{ t.beginn.strftime('%H:%M') }}
+                    {{ t.adresse.split(',')[-1] if t.adresse else '' }}</div>
+            {% endfor %}
+            {% for b in woche.je_ad[kalender_ad].belegt.get(tag.date(), []) %}
+                <div class="kalender-eintrag belegt">{{ b[0].strftime('%H:%M') }}–{{ b[1].strftime('%H:%M') }} Outlook</div>
+            {% endfor %}
+        </td>
+    {% endfor %}
+    </tr></tbody>
+</table>
+<form method="post" action="/lead-management/lead/{{ vorgang.id }}/termin" class="formzeile">
+    <input type="hidden" name="quelle" value="manuell">
+    <input type="hidden" name="umbuchen_id" value="{{ umbuchen_id }}">
+    <label>Beginn <input type="datetime-local" name="beginn" required></label>
+    <label>AD
+        <select name="ad_id">
+            {% for ad in kandidaten %}
+                <option value="{{ ad.id }}" {{ 'selected' if kalender_ad == ad.id }}>{{ ad.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <button class="knopf" type="submit" {{ 'disabled' if not buchbar }}>Manuell buchen</button>
+</form>
+{% endif %}
+{% endblock %}

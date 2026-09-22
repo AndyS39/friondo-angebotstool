@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block titel %}Lead-Routing – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Lead-Management → Routing &amp; Geocoding</h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung">Zur Parametrierung</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<form method="post" action="/parametrierung/lead-routing" class="formular"
+      style="max-width:700px">
+    <label>Anbieter
+        <select name="routing_anbieter">
+            <option value="ors" {{ 'selected' if anbieter == 'ors' }}>openrouteservice (Empfehlung, kostenloser Plan)</option>
+            <option value="google" {{ 'selected' if anbieter == 'google' }}>Google Maps Platform</option>
+            <option value="luftlinie" {{ 'selected' if anbieter == 'luftlinie' }}>Luftlinie × 1,3 (ohne API-Key, „geschätzt“)</option>
+        </select>
+    </label>
+    <label>openrouteservice API-Key (account.heigit.org)
+        <input type="text" name="ors_api_key" value="{{ ors_key }}" size="50"></label>
+    <label>Google API-Key
+        <input type="text" name="google_api_key" value="{{ google_key }}" size="50"></label>
+    <div class="formzeile">
+        <button class="knopf" type="submit">Speichern</button>
+        <button class="knopf zweitrangig" type="submit" name="aktion" value="testen">
+            Verbindung testen (Duisburg Hbf → Moers Bahnhof)</button>
+    </div>
+</form>
+
+<h2>Externe Aufrufe heute</h2>
+<table class="tabelle" style="max-width:400px">
+    <tbody>
+    {% for dienst, anzahl in zaehler.items() %}
+        <tr><td>{{ dienst }}</td><td class="rechts">{{ anzahl }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+<p class="dezent">Geocoding-Fallback ohne Anbieter: Nominatim (max. 1
+    Anfrage/Sekunde). Adressen werden einmal geokodiert und gecacht;
+    Fahrzeiten je Koordinaten-Paar 90 Tage.</p>
+{% endblock %}

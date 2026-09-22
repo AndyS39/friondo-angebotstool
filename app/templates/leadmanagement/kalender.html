@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block titel %}Terminkalender – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Terminkalender
+        {% if demo_badge %}<span class="demo-badge">Demo · Coming soon</span>{% endif %}
+    </h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="?woche={{ versatz - 1 }}&ad_id={{ nur_ad }}">← Woche</a>
+        <a class="knopf klein zweitrangig" href="?woche=0&ad_id={{ nur_ad }}">Heute</a>
+        <a class="knopf klein zweitrangig" href="?woche={{ versatz + 1 }}&ad_id={{ nur_ad }}">Woche →</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<form method="get" class="suchleiste">
+    <input type="hidden" name="woche" value="{{ versatz }}">
+    <label class="kontrollfeld">Außendienstler
+        <select name="ad_id" onchange="this.form.submit()">
+            <option value="">alle</option>
+            {% for ad in alle_ad %}
+                <option value="{{ ad.id }}" {{ 'selected' if nur_ad == ad.id | string }}>{{ ad.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <span class="dezent">Ziehen = Umbuchen (mit Bestätigung); monday-Termine
+        sind gesperrt (in monday ändern). Farbe je Sparte.</span>
+</form>
+
+<div style="overflow-x:auto">
+<table class="tabelle kalender-tabelle">
+    <thead><tr><th>AD</th>
+        {% for tag in woche.tage %}<th>{{ tag.strftime('%a %d.%m.') }}</th>{% endfor %}
+    </tr></thead>
+    <tbody>
+    {% for ad_id in ad_ids %}
+        {% set ad = benutzer_map.get(ad_id) %}
+        <tr>
+            <td><strong>{{ ad.name if ad else '?' }}</strong></td>
+            {% for tag in woche.tage %}
+            <td class="kalender-zelle" data-ad="{{ ad_id }}"
+                data-tag="{{ tag.strftime('%Y-%m-%d') }}"
+                ondragover="event.preventDefault()" ondrop="ablegen(event)">
+                {% for t in woche.je_ad[ad_id].termine.get(tag.date(), []) %}
+                    {% set v = vorgaenge.get(t.vorgang_id) %}
+                    {% set kunde = kunden_map.get(v.kunde_id) if v else none %}
+                    {% set sparte = (kunde.interesse or 'WP').split(',')[0] if kunde else 'WP' %}
+                    <div class="kalender-eintrag sparte-{{ sparte | lower }}"
+                         draggable="{{ 'false' if t.quelle == 'monday' else 'true' }}"
+                         data-termin="{{ t.id }}" data-ad="{{ ad_id }}"
+                         data-monday="{{ '1' if t.quelle == 'monday' else '' }}"
+                         data-uhrzeit="{{ t.beginn.strftime('%H:%M') }}"
+                         ondragstart="ziehen(event)">
+                        <a href="/lead-management/lead/{{ t.vorgang_id }}">
+                            {{ t.beginn.strftime('%H:%M') }}
+                            {{ kunde.anzeige_name if kunde else '?' }}</a>
+                        {% if t.demo %}<span class="demo-badge">Demo</span>{% endif %}
+                        {% if t.quelle == 'monday' %}<span class="abzeichen">monday</span>{% endif %}
+                    </div>
+                {% endfor %}
+                {% for b in woche.je_ad[ad_id].belegt.get(tag.date(), []) %}
+                    <div class="kalender-eintrag belegt">{{ b[0].strftime('%H:%M') }}–{{ b[1].strftime('%H:%M') }}</div>
+                {% endfor %}
+            </td>
+            {% endfor %}
+        </tr>
+    {% else %}
+        <tr><td colspan="7" class="dezent">Keine Außendienstler.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<dialog id="dlg-verschieben">
+    <form method="post" class="formular" id="verschieben-form">
+        <h3>Termin umbuchen</h3>
+        <p id="verschieben-text" class="dezent"></p>
+        <label>Neuer Beginn <input type="datetime-local" name="beginn" required></label>
+        <input type="hidden" name="ad_id" id="verschieben-ad">
+        <div class="formzeile">
+            <button class="knopf" type="submit">Umbuchen (Kunde erhält Terminänderung)</button>
+            <button class="knopf zweitrangig" type="button"
+                    onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+
+<script>
+let gezogen = null;
+function ziehen(e) {
+    const el = e.target.closest('.kalender-eintrag');
+    if (el.dataset.monday) { e.preventDefault(); return; }
+    gezogen = el;
+    e.dataTransfer.setData('text/plain', el.dataset.termin);
+}
+function ablegen(e) {
+    e.preventDefault();
+    if (!gezogen) return;
+    const zelle = e.target.closest('.kalender-zelle');
+    const dlg = document.getElementById('dlg-verschieben');
+    const form = document.getElementById('verschieben-form');
+    form.action = `/lead-management/termin/${gezogen.dataset.termin}/verschieben`;
+    document.getElementById('verschieben-ad').value = zelle.dataset.ad;
+    form.querySelector('input[name=beginn]').value =
+        zelle.dataset.tag + 'T' + (gezogen.dataset.uhrzeit || '09:00');
+    document.getElementById('verschieben-text').textContent =
+        `Neuer Tag: ${zelle.dataset.tag} – Uhrzeit prüfen und bestätigen.`;
+    dlg.showModal();
+    gezogen = null;
+}
+</script>
+{% endblock %}

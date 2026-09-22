@@ -19,6 +19,7 @@
         {% if request.state.lead_modul_ok | default(false) %}
             <a class="knopf zweitrangig" href="/parametrierung/lead-quellen">Lead-Quellen &amp; Kampagnen</a>
             <a class="knopf zweitrangig" href="/parametrierung/lead-parser">Lead-Parser</a>
+            <a class="knopf zweitrangig" href="/parametrierung/lead-routing">Lead-Routing</a>
             <a class="knopf zweitrangig" href="/parametrierung/lead-logik">Lead-Steuerdatei</a>
             {% if request.state.benutzer.rolle == 'admin' %}
                 <a class="knopf zweitrangig" href="/parametrierung/lead-demo">Lead-Demo-Daten</a>

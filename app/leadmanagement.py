@@ -284,6 +284,13 @@ def phase_neu_berechnen(session: Session, vorgang_id: int | None) -> None:
         vorgang = session.get(Vorgang, vorgang_id)
         if vorgang is not None:
             lead_phase_berechnen(session, vorgang)
+            # Phase 77: Erfassung abgesendet → aktiver VOT-Termin „erfolgt“
+            if vorgang.lead_phase in ("erfasst", "angebot", "gewonnen"):
+                for termin in (session.query(VotTermin)
+                               .filter(VotTermin.vorgang_id == vorgang.id,
+                                       VotTermin.status.in_(("geplant",
+                                                             "bestaetigt")))):
+                    termin.status = "erfolgt"
     except Exception:
         pass
 
@@ -304,6 +311,10 @@ def nach_sync(session: Session) -> int:
             vorgang.quelle_id = vorgang.quelle_id or quelle.id
         lead_phase_berechnen(session, vorgang)
         anzahl += 1
+    try:
+        monday_termine_ableiten(session)   # Phase 77: VOT-Datum → vot_termine
+    except Exception:
+        pass
     session.commit()
     return anzahl
 
@@ -1042,3 +1053,364 @@ def loeschlauf(session: Session, erzwingen: bool = False,
                          "\n".join(([zeile] + protokoll.splitlines())[:20]))
     session.commit()
     return {"anonymisiert": len(kandidaten)}
+
+
+# --- Phase 77: AD-Profile, Terminassistent, Buchen ----------------------------------
+
+_WOCHENTAGE = ("mo", "di", "mi", "do", "fr", "sa", "so")
+STANDARD_ARBEITSZEITEN = {t: ["08:00", "18:00"] for t in _WOCHENTAGE[:5]}
+
+
+def ad_profil(session: Session, benutzer_id: int):
+    """Profil des AD oder Standardwerte (Mo–Fr 08–18, Start = Firmenadresse,
+    90/15/4) als leichtes Objekt."""
+    from app.models import AdProfil
+    profil = (session.query(AdProfil)
+              .filter(AdProfil.benutzer_id == benutzer_id).first())
+    if profil is not None:
+        return profil
+
+    class _Standard:
+        pass
+    standard = _Standard()
+    standard.benutzer_id = benutzer_id
+    standard.start_adresse = parameter_holen(session, "firmen_adresse", "Duisburg")
+    standard.start_lat = None
+    standard.start_lon = None
+    standard.arbeitszeiten = json.dumps(STANDARD_ARBEITSZEITEN)
+    standard.termin_dauer_min = 90
+    standard.puffer_min = 15
+    standard.max_termine_tag = 4
+    standard.gebiet_plz_praefixe = "[]"
+    standard.kalender_postfach = None
+    standard.aktiv_terminierung = True
+    return standard
+
+
+def _arbeitszeiten_von_bis(profil, tag: datetime) -> tuple[int, int] | None:
+    """(startminute, endminute) des AD an diesem Tag oder None (frei)."""
+    try:
+        zeiten = json.loads(profil.arbeitszeiten or "{}")
+    except ValueError:
+        zeiten = {}
+    fenster = zeiten.get(_WOCHENTAGE[tag.weekday()])
+    if not fenster or len(fenster) < 2:
+        return None
+    try:
+        von = int(fenster[0][:2]) * 60 + int(fenster[0][3:5])
+        bis = int(fenster[1][:2]) * 60 + int(fenster[1][3:5])
+    except (ValueError, IndexError):
+        return None
+    return (von, bis) if von < bis else None
+
+
+def ad_kandidaten(session: Session, vorgang: Vorgang,
+                  nur_ad_id: int | None = None) -> list[Benutzer]:
+    """Gebiets-PLZ der Profile → sonst alle mit aktiv_terminierung; manuell
+    einschränkbar. (Kanal-feste AD folgen mit den Zuweisungsregeln in V2 –
+    Entscheidung dokumentiert.)"""
+    from app.models import AdProfil
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    plz = (kunde.plz or "") if kunde else ""
+    alle_ad = [b for b in session.query(Benutzer)
+               .filter(Benutzer.aktiv.is_(True), Benutzer.rolle == "aussendienst")]
+    if nur_ad_id:
+        return [b for b in alle_ad if b.id == nur_ad_id]
+    profile = {p.benutzer_id: p for p in session.query(AdProfil)}
+    aktive = [b for b in alle_ad
+              if b.id not in profile or profile[b.id].aktiv_terminierung]
+    gebiet = []
+    for b in aktive:
+        profil = profile.get(b.id)
+        if profil is None:
+            continue
+        try:
+            praefixe = json.loads(profil.gebiet_plz_praefixe or "[]")
+        except ValueError:
+            praefixe = []
+        if plz and any(plz.startswith(str(p)) for p in praefixe):
+            gebiet.append(b)
+    return gebiet or aktive
+
+
+def _wunschzeit_fenster(session: Session, vorgang: Vorgang) -> list:
+    from app import leadmanagement_logik
+    logik = leadmanagement_logik.hole_logik()
+    try:
+        gewuenscht = json.loads(vorgang.wunschzeiten or "[]")
+    except ValueError:
+        gewuenscht = []
+    return [w for w in logik.wunschzeiten if w.key in gewuenscht]
+
+
+def _im_wunschfenster(fenster, beginn: datetime) -> bool:
+    tag = _WOCHENTAGE[beginn.weekday()]
+    for w in fenster:
+        tage = ("mo", "di", "mi", "do", "fr") if w.wochentage == "mo-fr" \
+            else (w.wochentage,)
+        if tag not in tage:
+            continue
+        if w.von <= beginn.strftime("%H:%M") < w.bis:
+            return True
+    return False
+
+
+def termin_vorschlaege(session: Session, vorgang: Vorgang,
+                       nur_ad_id: int | None = None,
+                       anzahl: int = 5) -> dict:
+    """Vorschlagsmaschine (Konzept 6.1): Top-Slots über AD-Kalender,
+    Tool-Termine, Fahrzeiten (Cache; Luftlinie = „geschätzt“)."""
+    from app import kalender as kalender_modul
+    from app import routing
+    jetzt = datetime.now()
+    try:
+        horizont = int(parameter_holen(session, "vorschlag_horizont_tage", "14"))
+        raster = int(parameter_holen(session, "vorschlag_raster_min", "30"))
+    except ValueError:
+        horizont, raster = 14, 30
+    lead_ort = (vorgang.lat, vorgang.lon) if vorgang.lat is not None else None
+    kandidaten = ad_kandidaten(session, vorgang, nur_ad_id)
+    hinweise = []
+    if lead_ort is None:
+        hinweise.append("Lead-Adresse ohne Koordinaten („Adresse prüfen“) – "
+                        "Umwege werden ohne Fahrzeit bewertet.")
+
+    # Werktage des Horizonts
+    tage = []
+    tag = jetzt.replace(hour=0, minute=0, second=0, microsecond=0)
+    while len(tage) < horizont:
+        tag += timedelta(days=1)
+        if tag.weekday() < 6:   # Samstag erlaubt (Wunschzeit samstag)
+            tage.append(tag)
+
+    # Bestehende Termine + Startadressen einsammeln → EIN Matrix-Aufruf
+    termine_je_ad: dict[int, list[VotTermin]] = {}
+    punkte = set()
+    for ad in kandidaten:
+        termine_je_ad[ad.id] = (session.query(VotTermin)
+                                .filter(VotTermin.ad_id == ad.id,
+                                        VotTermin.status.in_(("geplant", "bestaetigt")),
+                                        VotTermin.beginn >= jetzt,
+                                        VotTermin.beginn <= tage[-1] + timedelta(days=1))
+                                .order_by(VotTermin.beginn).all())
+        for t in termine_je_ad[ad.id]:
+            if t.lat is not None:
+                punkte.add((t.lat, t.lon))
+        profil = ad_profil(session, ad.id)
+        if profil.start_lat is not None:
+            punkte.add((profil.start_lat, profil.start_lon))
+    if lead_ort is not None and punkte:
+        routing.matrix_fuellen(session, [lead_ort], list(punkte))
+        routing.matrix_fuellen(session, list(punkte), [lead_ort])
+
+    fenster = _wunschzeit_fenster(session, vorgang)
+    vorschlaege = []
+    for ad in kandidaten:
+        profil = ad_profil(session, ad.id)
+        dauer = timedelta(minutes=profil.termin_dauer_min or 90)
+        puffer = timedelta(minutes=profil.puffer_min or 15)
+        start_ort = ((profil.start_lat, profil.start_lon)
+                     if profil.start_lat is not None else None)
+        belegt_extern = kalender_modul.frei_belegt(
+            session, ad, jetzt, tage[-1] + timedelta(days=1))
+        for tag in tage:
+            zeiten = _arbeitszeiten_von_bis(profil, tag)
+            if zeiten is None:
+                continue
+            tages_termine = [t for t in termine_je_ad[ad.id]
+                             if t.beginn.date() == tag.date()]
+            if len(tages_termine) >= (profil.max_termine_tag or 4):
+                continue
+            leerer_tag = not tages_termine
+            tour_tag = (lead_ort is not None and any(
+                t.lat is not None
+                and routing.luftlinie_km(lead_ort, (t.lat, t.lon)) <= 10
+                for t in tages_termine))
+            minute = zeiten[0]
+            while minute + int(dauer.total_seconds() // 60) <= zeiten[1]:
+                beginn = tag + timedelta(minutes=minute)
+                minute += raster
+                if beginn < jetzt + timedelta(hours=2):
+                    continue
+                ende = beginn + dauer
+                # Kollision mit Tool-Terminen (inkl. Puffer)
+                belegt = any(
+                    beginn < (t.ende or t.beginn + dauer) + puffer
+                    and t.beginn - puffer < ende
+                    for t in tages_termine)
+                if not belegt and belegt_extern:
+                    belegt = any(beginn < b_ende and b_von < ende
+                                 for b_von, b_ende in belegt_extern)
+                if belegt:
+                    continue
+                # Nachbarn für den Umweg
+                vorher = max((t for t in tages_termine
+                              if (t.ende or t.beginn) <= beginn),
+                             key=lambda t: t.beginn, default=None)
+                nachher = min((t for t in tages_termine if t.beginn >= ende),
+                              key=lambda t: t.beginn, default=None)
+                geschaetzt = False
+                if lead_ort is None:
+                    umweg = 0.0
+                else:
+                    def _ort(t):
+                        return (t.lat, t.lon) if t is not None and t.lat is not None \
+                            else start_ort
+                    hin = routing.fahrzeit(session, _ort(vorher), lead_ort)
+                    weg = routing.fahrzeit(session, lead_ort, _ort(nachher))
+                    direkt = routing.fahrzeit(session, _ort(vorher), _ort(nachher))
+                    umweg = max(0.0, hin["minuten"] + weg["minuten"]
+                                - direkt["minuten"])
+                    geschaetzt = (hin["geschaetzt"] or weg["geschaetzt"]
+                                  or direkt["geschaetzt"])
+                bewertung = umweg
+                wunsch = _im_wunschfenster(fenster, beginn) if fenster else False
+                if wunsch:
+                    bewertung -= 30
+                if tour_tag:
+                    bewertung -= 15
+                if leerer_tag:
+                    bewertung += 20
+                if beginn.hour < 9 or beginn.hour >= 17:
+                    bewertung += 10
+                if (vorgang.score_klasse or "") == "A":
+                    bewertung += (beginn.date() - jetzt.date()).days * 2
+                vorschlaege.append({
+                    "ad": ad, "beginn": beginn, "ende": ende,
+                    "umweg": round(umweg), "geschaetzt": geschaetzt,
+                    "wunsch": wunsch, "tour_tag": tour_tag,
+                    "leerer_tag": leerer_tag, "bewertung": bewertung,
+                    "vorher": vorher, "nachher": nachher,
+                    "tages_termine": tages_termine,
+                })
+    vorschlaege.sort(key=lambda v: (v["bewertung"], v["beginn"]))
+    # höchstens zwei Slots je AD und Tag in den Top-N (Vielfalt)
+    gewaehlt = []
+    je_tag: dict = {}
+    for v in vorschlaege:
+        schluessel = (v["ad"].id, v["beginn"].date())
+        if je_tag.get(schluessel, 0) >= 2:
+            continue
+        je_tag[schluessel] = je_tag.get(schluessel, 0) + 1
+        gewaehlt.append(v)
+        if len(gewaehlt) >= anzahl:
+            break
+    return {"vorschlaege": gewaehlt, "hinweise": hinweise,
+            "kandidaten": kandidaten}
+
+
+def termin_buchen(session: Session, vorgang: Vorgang, ad_id: int,
+                  beginn: datetime, benutzer=None,
+                  quelle: str = "assistent", umweg: int | None = None,
+                  umbuchen_id: int | None = None) -> tuple[VotTermin | None, str]:
+    """Buchen (Plan 77): Termin, Phase, Kalender, Bestätigung + Erinnerung,
+    Benachrichtigung an den AD. Umbuchen setzt den alten Termin auf
+    „verschoben“ und plant die Terminänderungs-Mail."""
+    from app import geocoding
+    from app import kalender as kalender_modul
+    ad = session.get(Benutzer, ad_id)
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    if ad is None or kunde is None:
+        return None, "Außendienstler oder Kunde fehlt."
+    # Leitplanke 3: im Demo-Modus nur Demo-Leads buchen
+    if demo_aktiv(session) and not vorgang.demo:
+        return None, ("Terminierung im Demo-Modus nur für Demo-Leads – "
+                      "in monday terminieren.")
+    profil = ad_profil(session, ad_id)
+    adresse = geocoding.lead_adresse(session, vorgang)
+    alter_termin = session.get(VotTermin, umbuchen_id) if umbuchen_id else None
+    termin = VotTermin(
+        vorgang_id=vorgang.id, ad_id=ad_id, beginn=beginn,
+        ende=beginn + timedelta(minutes=profil.termin_dauer_min or 90),
+        adresse=adresse, lat=vorgang.lat, lon=vorgang.lon,
+        status="geplant", quelle=quelle, umweg_min=umweg,
+        demo=bool(vorgang.demo),
+        erstellt_von=benutzer.id if benutzer else None)
+    session.add(termin)
+    session.flush()
+    if alter_termin is not None:
+        alter_termin.status = "verschoben"
+        kalender_modul.termin_loeschen(session, alter_termin)
+        mail_planen(session, vorgang, "terminaenderung", termin=termin)
+        aktivitaet(session, vorgang.id, "termin",
+                   f"Termin umgebucht auf {beginn.strftime('%d.%m.%Y %H:%M')} "
+                   f"bei {ad.name}", benutzer=benutzer)
+    else:
+        aktivitaet(session, vorgang.id, "termin",
+                   f"Termin gebucht {beginn.strftime('%d.%m.%Y %H:%M')} bei "
+                   f"{ad.name}"
+                   + (f" (+{umweg} Min)" if umweg is not None else ""),
+                   benutzer=benutzer)
+        mail_planen(session, vorgang, "terminbestaetigung", termin=termin)
+    mail_planen(session, vorgang, "terminerinnerung", termin=termin,
+                geplant_am=beginn - timedelta(hours=24))
+    kalender_modul.termin_schreiben(session, termin, vorgang, kunde, ad)
+    vorgang.lead_phase = "terminiert"
+    vorgang.terminiert_am = datetime.now()
+    vorgang.naechste_aktion_am = None
+    benachrichtigen(session, [ad_id],
+                    f"Neuer VOT-Termin {beginn.strftime('%d.%m. %H:%M')}: "
+                    f"{kunde.anzeige_name}, {kunde.ort or '?'}",
+                    f"/lead-management/lead/{vorgang.id}")
+    session.flush()
+    return termin, "Termin gebucht."
+
+
+def termin_no_show(session: Session, termin: VotTermin, grund: str,
+                   text: str, status: str = "no_show",
+                   benutzer=None) -> None:
+    """No-Show / Absage: Termin-Status, Lead zurück auf Qualifiziert,
+    sofortige nächste Aktion, Info an den Leadmanager."""
+    from app import kalender as kalender_modul
+    termin.status = status
+    termin.grund_text = grund + (f" – {text}" if text else "")
+    kalender_modul.termin_loeschen(session, termin)
+    vorgang = session.get(Vorgang, termin.vorgang_id)
+    if vorgang is not None:
+        vorgang.lead_phase = "qualifiziert"
+        vorgang.naechste_aktion_am = datetime.now()
+        aktivitaet(session, vorgang.id, "termin",
+                   f"Termin {VOT_STATUS_NAMEN_LOKAL.get(status, status)}: "
+                   f"{termin.grund_text}", benutzer=benutzer)
+        if vorgang.leadmanager_id:
+            kunde = session.get(Kunde, vorgang.kunde_id)
+            benachrichtigen(session, [vorgang.leadmanager_id],
+                            f"Termin {VOT_STATUS_NAMEN_LOKAL.get(status, status)}: "
+                            f"{kunde.anzeige_name if kunde else '?'} – "
+                            f"{termin.grund_text}",
+                            f"/lead-management/lead/{vorgang.id}")
+    session.flush()
+
+
+VOT_STATUS_NAMEN_LOKAL = {"no_show": "No-Show", "abgesagt": "abgesagt",
+                          "erfolgt": "erfolgt"}
+
+
+def monday_termine_ableiten(session: Session) -> int:
+    """Beim Sync-Lauf: VOT-Datum der monday-Leads → vot_termine
+    (quelle=monday, rein lesend; Änderung in monday überschreibt den
+    Tool-Eintrag, solange quelle=monday bleibt)."""
+    anzahl = 0
+    leads = {l.id: l for l in session.query(Lead)
+             if l.vot_datum is not None}
+    for vorgang in (session.query(Vorgang)
+                    .filter(Vorgang.lead_id.in_(set(leads) or {0}))):
+        lead = leads[vorgang.lead_id]
+        profil = ad_profil(session, lead.benutzer_id or 0)
+        dauer = timedelta(minutes=profil.termin_dauer_min or 90)
+        termin = (session.query(VotTermin)
+                  .filter(VotTermin.vorgang_id == vorgang.id,
+                          VotTermin.quelle == "monday").first())
+        if termin is None:
+            termin = VotTermin(vorgang_id=vorgang.id, quelle="monday",
+                               status="geplant", demo=False)
+            session.add(termin)
+        if termin.beginn != lead.vot_datum or termin.ad_id != lead.benutzer_id:
+            termin.beginn = lead.vot_datum
+            termin.ende = lead.vot_datum + dauer
+            termin.ad_id = lead.benutzer_id
+            termin.adresse = ", ".join(x for x in (
+                lead.strasse, f"{lead.plz} {lead.ort}".strip()) if x)
+            anzahl += 1
+    session.flush()
+    return anzahl
