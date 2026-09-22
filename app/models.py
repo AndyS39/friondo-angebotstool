@@ -152,6 +152,21 @@ class Benutzer(Base):
     email: Mapped[str] = mapped_column(String(200), default="")
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    # v11 (Projektierung, Phase 64): Mehrfachrollen als Komma-Liste – `rolle`
+    # bleibt die Hauptrolle (steuert die bisherigen Sichten), `rollen` trägt
+    # die vollständige Liste inkl. neuer Rollen projektierung/montage
+    rollen: Mapped[str] = mapped_column(String(100), default="")
+    kalkulation_sichtbar: Mapped[bool] = mapped_column(Boolean, default=False)
+    benachrichtigung_mail: Mapped[str] = mapped_column(String(10), default="aus")  # aus|sofort|digest
+
+    @property
+    def rollen_liste(self) -> list[str]:
+        """Alle Rollen des Benutzers (Hauptrolle immer enthalten)."""
+        zusatz = [r.strip() for r in (self.rollen or "").split(",") if r.strip()]
+        return [self.rolle] + [r for r in zusatz if r != self.rolle]
+
+    def hat_rolle(self, name: str) -> bool:
+        return name in self.rollen_liste
 
 
 # Statuskette v7 (ersetzt das v6-Auto-Archiv von „Individuell“):
@@ -392,6 +407,283 @@ class RabattFreigabe(Base):
     entschieden_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
 
+# ===================== Projektierung V1 (v11, Phase 64) =====================
+# Projekt = Bauvorhaben am v10-Vorgang (höchstens ein offenes Projekt je
+# Vorgang, Nummer PR-JJNNNN); je Sparte ein Gewerk mit eigener Phase,
+# Aufgaben (aus Paket-Vorlagen der projektierung_logik_v1.xlsx), Terminen,
+# Dokumenten (data/projekte/<PR>/…), Verlauf und Benachrichtigungen.
+
+GEWERK_PHASEN = ["feinplanung", "feinplanung_abgeschlossen", "montage_geplant",
+                 "in_ausfuehrung", "abnahme_offen", "abgeschlossen", "storniert"]
+GEWERK_PHASEN_NAMEN = {
+    "feinplanung": "Feinplanung",
+    "feinplanung_abgeschlossen": "Feinplanung abgeschlossen",
+    "montage_geplant": "Montage geplant",
+    "in_ausfuehrung": "In Ausführung",
+    "abnahme_offen": "Abnahme offen",
+    "abgeschlossen": "Abgeschlossen",
+    "storniert": "Storniert",
+}
+AUFGABE_STATUS = ["offen", "in_arbeit", "wartet", "erledigt", "entfaellt"]
+AUFGABE_STATUS_NAMEN = {"offen": "Offen", "in_arbeit": "In Arbeit",
+                        "wartet": "Wartet auf Dritte", "erledigt": "Erledigt",
+                        "entfaellt": "Entfällt"}
+PROJEKT_ROLLEN = ["projektierer", "elektroplaner", "feinplaner",
+                  "innendienst", "buchhaltung", "montage"]
+
+
+class Projekt(Base):
+    """Bauvorhaben (PR-JJNNNN) am v10-Vorgang; Status abgeleitet vom am
+    wenigsten fortgeschrittenen offenen Gewerk (status_cache)."""
+    __tablename__ = "projekte"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nummer: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    vorgang_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    kunde_id: Mapped[int] = mapped_column(Integer, index=True)
+    ausfuehrung_strasse: Mapped[str] = mapped_column(String(200), default="")
+    ausfuehrung_plz: Mapped[str] = mapped_column(String(10), default="")
+    ausfuehrung_ort: Mapped[str] = mapped_column(String(100), default="")
+    projektleiter_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    vertriebler_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    kanal: Mapped[str] = mapped_column(String(100), default="")
+    status_cache: Mapped[str] = mapped_column(String(30), default="feinplanung")
+    abgeschlossen_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    notiz_kopf: Mapped[str] = mapped_column(String(500), default="")
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class Gewerk(Base):
+    """Ausführungseinheit je Sparte (WP/PV/KL/WB) mit eigener Phase; Auftrag =
+    angenommenes Angebot (folgt Versionen .2/.3)."""
+    __tablename__ = "gewerke"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    projekt_id: Mapped[int] = mapped_column(Integer, index=True)
+    sparte: Mapped[str] = mapped_column(String(4), default="WP")
+    phase: Mapped[str] = mapped_column(String(30), default="feinplanung")
+    angebot_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    angebot_id_original: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    auftragswert_original: Mapped[int] = mapped_column(Integer, default=0)  # Cent brutto
+    auftragswert_aktuell: Mapped[int] = mapped_column(Integer, default=0)
+    feinplaner_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    elektroplaner_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    storno_grund: Mapped[str] = mapped_column(String(100), default="")
+    storno_text: Mapped[str] = mapped_column(String(500), default="")
+    montage_fertig_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    freigabe_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    freigabe_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    restarbeiten_text: Mapped[str] = mapped_column(String(1000), default="")
+    heizlast_kw: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    heizlast_datum: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    heizlast_link: Mapped[str] = mapped_column(String(300), default="")
+    phase_geaendert_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class Aufgabe(Base):
+    """Aufgabe am Gewerk (oder projektbezogen, gewerk_id leer)."""
+    __tablename__ = "aufgaben"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    gewerk_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    projekt_id: Mapped[int] = mapped_column(Integer, index=True)
+    paket_instanz_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    titel: Mapped[str] = mapped_column(String(300), default="")
+    beschreibung: Mapped[str] = mapped_column(Text, default="")
+    rolle: Mapped[str] = mapped_column(String(20), default="projektierer")
+    verantwortlich_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    faellig_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Fälligkeitsregel der Vorlage (+N / FP+N / M-N) – für Nachberechnung,
+    # sobald der Feinplanungs-/Montagetermin angelegt wird
+    faellig_regel: Mapped[str] = mapped_column(String(20), default="")
+    status: Mapped[str] = mapped_column(String(20), default="offen")
+    pflicht: Mapped[bool] = mapped_column(Boolean, default=False)
+    reihenfolge: Mapped[int] = mapped_column(Integer, default=0)
+    wartet_frist_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    wartet_frist_tage: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    erledigt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    erledigt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class AufgabenpaketInstanz(Base):
+    """Aktiviertes Aufgabenpaket an einem Gewerk (Quelle: Regel/manuell/Migration)."""
+    __tablename__ = "aufgabenpaket_instanzen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    gewerk_id: Mapped[int] = mapped_column(Integer, index=True)
+    paket_key: Mapped[str] = mapped_column(String(50), default="")
+    paket_name: Mapped[str] = mapped_column(String(200), default="")
+    aktiviert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    aktiviert_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    quelle: Mapped[str] = mapped_column(String(20), default="regel")  # regel | manuell | migration
+    deaktiviert_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class ProjektTermin(Base):
+    """Termin am Gewerk (V1: einfache Liste, kein Kalender-Sync)."""
+    __tablename__ = "projekt_termine"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    gewerk_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    projekt_id: Mapped[int] = mapped_column(Integer, index=True)
+    typ: Mapped[str] = mapped_column(String(20), default="sonstige")  # feinplanung|montage|abnahme|sub|sonstige
+    beginn: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    ende: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    team_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    person_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    sub_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    kunde_bestaetigt: Mapped[bool] = mapped_column(Boolean, default=False)
+    notiz: Mapped[str] = mapped_column(String(500), default="")
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class ProjektDokument(Base):
+    """Datei in der Projekt-Ordnerstruktur data/projekte/<PR>/…"""
+    __tablename__ = "projekt_dokumente"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    projekt_id: Mapped[int] = mapped_column(Integer, index=True)
+    gewerk_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    ordner: Mapped[str] = mapped_column(String(300), default="")
+    dateiname: Mapped[str] = mapped_column(String(300), default="")
+    pfad: Mapped[str] = mapped_column(String(500), default="")
+    typ: Mapped[str] = mapped_column(String(10), default="sonstige")  # pdf | bild | sonstige
+    hochgeladen_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    quelle: Mapped[str] = mapped_column(String(10), default="upload")  # auto | upload
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class ProjektVerlauf(Base):
+    """Verlauf + Kommentare (append-only; art = kommentar | system)."""
+    __tablename__ = "projekt_verlauf"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    projekt_id: Mapped[int] = mapped_column(Integer, index=True)
+    gewerk_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    aufgabe_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    art: Mapped[str] = mapped_column(String(10), default="system")  # kommentar | system
+    text: Mapped[str] = mapped_column(Text, default="")
+    benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    erwaehnte_ids: Mapped[str] = mapped_column(String(200), default="[]")  # JSON-Liste
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class Benachrichtigung(Base):
+    """Glocke in der Kopfzeile (Phase 69); art z. B. aufgabe/erwaehnung/phase."""
+    __tablename__ = "benachrichtigungen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    benutzer_id: Mapped[int] = mapped_column(Integer, index=True)
+    text: Mapped[str] = mapped_column(String(500), default="")
+    link: Mapped[str] = mapped_column(String(300), default="")
+    gelesen_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    art: Mapped[str] = mapped_column(String(30), default="")
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class Team(Base):
+    """Montage-Teams (SHK/Elektro/Sonstige) als Stammdaten."""
+    __tablename__ = "teams"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), default="")
+    typ: Mapped[str] = mapped_column(String(20), default="SHK")  # SHK | Elektro | Sonstige
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class TeamMitglied(Base):
+    __tablename__ = "team_mitglieder"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    team_id: Mapped[int] = mapped_column(Integer, index=True)
+    benutzer_id: Mapped[int] = mapped_column(Integer, index=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class Subunternehmer(Base):
+    """Sub-Stammdaten (Mailversand erst V2)."""
+    __tablename__ = "subunternehmer"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    firma: Mapped[str] = mapped_column(String(200), default="")
+    typ: Mapped[str] = mapped_column(String(30), default="Sonstige")
+    ansprechpartner: Mapped[str] = mapped_column(String(100), default="")
+    email: Mapped[str] = mapped_column(String(200), default="")
+    telefon: Mapped[str] = mapped_column(String(50), default="")
+    notiz: Mapped[str] = mapped_column(String(500), default="")
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class ProjektSub(Base):
+    """V1: Sub-Zuordnung am Projekt/Gewerk (Leistung, Status, Termin, Notiz)."""
+    __tablename__ = "projekt_subs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    projekt_id: Mapped[int] = mapped_column(Integer, index=True)
+    gewerk_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    sub_id: Mapped[int] = mapped_column(Integer)
+    leistung: Mapped[str] = mapped_column(String(300), default="")
+    status: Mapped[str] = mapped_column(String(20), default="angefragt")  # angefragt|beauftragt|bestaetigt|erledigt
+    termin: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    notiz: Mapped[str] = mapped_column(String(500), default="")
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class ProjektierungParameter(Base):
+    """Key-Value der Projektierung (Standard-Zuweisungen, Nummernkreis-Zähler,
+    Ordnervorlage JSON, Storno-Gründe JSON, Absender-Postfach, freigabe_modus)."""
+    __tablename__ = "projektierung_parameter"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    wert: Mapped[str] = mapped_column(Text, default="")
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
 # „Versand vorbereitet“ (v5): Entwurf liegt in Outlook; der Graph-Abgleich
 # stellt nach dem tatsächlichen Senden automatisch auf „Versendet“.
 # „Individuell“ (v6): wird außerhalb des Tools geschrieben – seit v7 ohne
@@ -479,6 +771,8 @@ class Angebot(Base):
     # tragen – nur damit ist er im Kombi-Versand wählbar
     extern_pdf_pfad: Mapped[str] = mapped_column(String(300), default="")
     extern_pdf_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # v11 (Projektierung, Phase 64): Verknüpfung zum Gewerk nach „Angebot → Projekt"
+    projekt_gewerk_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     # Bedingte Angebotsvermerke (v9, Blatt "Vermerke"): beim Anlegen
     # ausgewertete Texte für das PDF (Ende Positionsteil vor Summenblock)
     vermerke_json: Mapped[str] = mapped_column(Text, default="[]")

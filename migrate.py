@@ -253,6 +253,37 @@ def _daten() -> list[str]:
                 meldungen.append(f"{kopiert} Angebots-Notizen in den "
                                  "Vorgangs-Chat übernommen (Alt-Einträge)")
         session.commit()
+        # ---------------- v11: Projektierung V1 (Phasen 64–72) ----------------
+        # Phase 64: Parameter vorbelegen (Storno-Gründe, Ordnervorlage,
+        # Demo-Schalter) + Mehrfachrollen-Backfill (rollen = bisherige rolle)
+        import json as _json
+
+        from app import projektierung
+        if projektierung.parameter_holen(session, "storno_gruende", "") == "":
+            projektierung.parameter_setzen(
+                session, "storno_gruende",
+                _json.dumps(projektierung.STORNO_GRUENDE_STANDARD, ensure_ascii=False))
+            meldungen.append("Projektierung: Storno-Gründe vorbelegt")
+        if projektierung.parameter_holen(session, "ordnervorlage", "") == "":
+            projektierung.parameter_setzen(
+                session, "ordnervorlage",
+                _json.dumps(projektierung.ORDNERVORLAGE_STANDARD, ensure_ascii=False))
+            meldungen.append("Projektierung: Ordnervorlage vorbelegt (Konzept 3.5)")
+        if projektierung.parameter_holen(session, "freigabe_modus", "") == "":
+            projektierung.parameter_setzen(session, "freigabe_modus", "admin")
+            meldungen.append("Projektierung: Demo-Modus aktiv (freigabe_modus = admin)")
+        if projektierung.parameter_holen(session, "absender_postfach", "") == "":
+            projektierung.parameter_setzen(session, "absender_postfach",
+                                           "projektierung@friondo.de")
+        from app.models import Benutzer as _Benutzer
+        rollen_befuellt = 0
+        for b in session.query(_Benutzer).filter(_Benutzer.rollen == ""):
+            b.rollen = b.rolle
+            rollen_befuellt += 1
+        if rollen_befuellt:
+            meldungen.append(f"{rollen_befuellt} Benutzer auf Mehrfachrollen "
+                             "umgestellt (rollen = bisherige Rolle)")
+        session.commit()
     finally:
         session.close()
     return meldungen

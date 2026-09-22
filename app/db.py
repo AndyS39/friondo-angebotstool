@@ -94,6 +94,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "bauseits": "BOOLEAN NOT NULL DEFAULT 0",
     },
     "angebote": {
+        "projekt_gewerk_id": "INTEGER",     # v11 Projektierung
         "vorgang_id": "INTEGER",            # v10 Vorgangsakte
         "extern_pdf_pfad": "VARCHAR(300) NOT NULL DEFAULT ''",   # v10 TAIFUN-PDF
         "extern_pdf_am": "DATETIME",
@@ -139,6 +140,9 @@ _NACHTRAEGLICHE_SPALTEN = {
     },
     "benutzer": {
         "email": "VARCHAR(200) NOT NULL DEFAULT ''",
+        "rollen": "VARCHAR(100) NOT NULL DEFAULT ''",           # v11 Mehrfachrollen
+        "kalkulation_sichtbar": "BOOLEAN NOT NULL DEFAULT 0",   # v11
+        "benachrichtigung_mail": "VARCHAR(10) NOT NULL DEFAULT 'aus'",  # v11
     },
     "kunden": {
         "interesse": "VARCHAR(50) NOT NULL DEFAULT ''",
