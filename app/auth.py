@@ -21,7 +21,10 @@ COOKIE_NAME = "angebotstool_sitzung"
 
 # Pfade ohne Anmeldung; Außendienst-Pfade; Admin-exklusive Pfade
 # /signatur/extern ist die (standardmäßig deaktivierte) Kunden-Fernsignatur
-OFFENE_PFADE = ("/login", "/logout", "/static", "/signatur/extern")
+OFFENE_PFADE = ("/login", "/logout", "/static", "/signatur/extern",
+                # v12 (Lead-Management, Phase 75): REST-Eingang mit eigenem
+                # API-Key-Schutz statt Session-Cookie
+                "/api/leads")
 AUSSENDIENST_PFADE = ("/erfassung", "/leads", "/signatur", "/statistik",
                       "/meine-angebote", "/vorgaenge", "/benachrichtigungen",
                       "/login", "/logout", "/static")
@@ -110,6 +113,7 @@ class RollenMiddleware(BaseHTTPMiddleware):
             # für jede gerenderte Seite (Fehler blockieren die Seite nie)
             request.state.glocke_ungelesen = 0
             request.state.glocke_liste = []
+            request.state.lead_modul_ok = False
             if benutzer is not None and not pfad.startswith("/static"):
                 try:
                     from app import benachrichtigungen as glocke_modul
@@ -117,6 +121,13 @@ class RollenMiddleware(BaseHTTPMiddleware):
                         glocke_modul.ungelesen_anzahl(session, benutzer))
                     request.state.glocke_liste = (
                         glocke_modul.letzte(session, benutzer, 20))
+                except Exception:
+                    pass
+                # v12 (Phase 73): steuert Menüpunkt + Reiter des Lead-Moduls
+                try:
+                    from app import leadmanagement
+                    request.state.lead_modul_ok = (
+                        leadmanagement.lead_modul_sichtbar(session, benutzer))
                 except Exception:
                     pass
             if pfad.startswith(OFFENE_PFADE):

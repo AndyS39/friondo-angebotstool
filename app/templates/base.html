@@ -48,6 +48,9 @@
                                 <a href="{{ pfad }}" class="{{ 'aktiv' if aktiv == pfad else '' }}">{{ name }}</a>
                             {% endif %}
                         {% endfor %}
+                        {% if request.state.lead_modul_ok | default(false) %}
+                            <a href="/lead-management" class="{{ 'aktiv' if aktiv == '/lead-management' else '' }}">Lead-Management (Demo)</a>
+                        {% endif %}
                     {% elif benutzer_angemeldet.rolle == 'projektierung' %}
                         {# v11 (Phase 70): Projektierungs-Sicht – Projektierung voll,
                            Angebote/Erfassungen/Kunden lesend, drei Stammseiten #}

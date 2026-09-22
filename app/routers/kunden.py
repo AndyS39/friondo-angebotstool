@@ -45,6 +45,10 @@ def _validieren(daten: dict) -> dict[str, str]:
 async def liste(request: Request, q: str = "", inaktive: bool = False,
                 session: Session = Depends(get_session)):
     abfrage = session.query(Kunde)
+    from app import leadmanagement
+    demo_kunden = leadmanagement.demo_kunden_ids(session)   # v12: Demo-Leads
+    if demo_kunden:
+        abfrage = abfrage.filter(Kunde.id.notin_(demo_kunden))
     if not inaktive:
         abfrage = abfrage.filter(Kunde.aktiv.is_(True))
     if q:

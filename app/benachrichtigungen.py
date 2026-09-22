@@ -29,6 +29,9 @@ ART_NAMEN = {
 # In V1 stammen alle Ereignisse aus der Projektierung – im Demo-Modus
 # (freigabe_modus=admin) sieht/erhält sie nur die Rolle Admin (Plan Phase 70).
 PROJEKT_ARTEN = set(ART_NAMEN)
+# v12: Ereignisse des Lead-Moduls, gleicher Demo-Filter über lead_freigabe_modus
+LEAD_ARTEN = {"lead"}
+ART_NAMEN["lead"] = "Lead-Management"
 
 
 # --- Glocke (Kopfzeile) -----------------------------------------------------------
@@ -40,15 +43,28 @@ def _sichtbar_fuer(session: Session, benutzer) -> bool:
     return kern.modul_sichtbar(session, benutzer)
 
 
+def _lead_sichtbar_fuer(session: Session, benutzer) -> bool:
+    from app import leadmanagement
+    return leadmanagement.lead_modul_sichtbar(session, benutzer)
+
+
+def _gefiltert(session: Session, benutzer, abfrage):
+    from app.models import Benachrichtigung
+    if not _sichtbar_fuer(session, benutzer):
+        abfrage = abfrage.filter(~Benachrichtigung.art.in_(PROJEKT_ARTEN))
+    if not _lead_sichtbar_fuer(session, benutzer):
+        abfrage = abfrage.filter(~Benachrichtigung.art.in_(LEAD_ARTEN))
+    return abfrage
+
+
 def letzte(session: Session, benutzer, anzahl: int = 20) -> list:
     """Die letzten Einträge für das Glocken-Dropdown (Demo-Filter aktiv)."""
     from app.models import Benachrichtigung
     if benutzer is None:
         return []
-    abfrage = (session.query(Benachrichtigung)
-               .filter(Benachrichtigung.benutzer_id == benutzer.id))
-    if not _sichtbar_fuer(session, benutzer):
-        abfrage = abfrage.filter(~Benachrichtigung.art.in_(PROJEKT_ARTEN))
+    abfrage = _gefiltert(session, benutzer,
+                         session.query(Benachrichtigung)
+                         .filter(Benachrichtigung.benutzer_id == benutzer.id))
     return abfrage.order_by(Benachrichtigung.erstellt_am.desc()).limit(anzahl).all()
 
 
@@ -56,11 +72,10 @@ def ungelesen_anzahl(session: Session, benutzer) -> int:
     from app.models import Benachrichtigung
     if benutzer is None:
         return 0
-    abfrage = (session.query(Benachrichtigung)
-               .filter(Benachrichtigung.benutzer_id == benutzer.id,
-                       Benachrichtigung.gelesen_am.is_(None)))
-    if not _sichtbar_fuer(session, benutzer):
-        abfrage = abfrage.filter(~Benachrichtigung.art.in_(PROJEKT_ARTEN))
+    abfrage = _gefiltert(session, benutzer,
+                         session.query(Benachrichtigung)
+                         .filter(Benachrichtigung.benutzer_id == benutzer.id,
+                                 Benachrichtigung.gelesen_am.is_(None)))
     return abfrage.count()
 
 
@@ -128,6 +143,8 @@ def sofort_versenden(session: Session, benutzer_ids, text: str, link: str,
             continue
         if art in PROJEKT_ARTEN and not _sichtbar_fuer(session, benutzer):
             continue   # Demo-Modus: keine Projektierungs-Mails an Nicht-Admins
+        if art in LEAD_ARTEN and not _lead_sichtbar_fuer(session, benutzer):
+            continue   # v12: gleicher Demo-Filter für das Lead-Modul
         if not benutzer.email:
             _protokollieren(session, f"{benutzer.name}: keine E-Mail-Adresse "
                                      "hinterlegt – Sofort-Mail übersprungen")
@@ -223,6 +240,8 @@ def digest_versenden(session: Session | None = None, erzwingen: bool = False) ->
                          .order_by(Benachrichtigung.erstellt_am).all())
             if not _sichtbar_fuer(session, benutzer):
                 eintraege = [e for e in eintraege if e.art not in PROJEKT_ARTEN]
+            if not _lead_sichtbar_fuer(session, benutzer):
+                eintraege = [e for e in eintraege if e.art not in LEAD_ARTEN]
             if not eintraege:
                 continue
             if not benutzer.email:

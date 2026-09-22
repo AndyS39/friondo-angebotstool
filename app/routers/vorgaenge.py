@@ -48,7 +48,8 @@ async def liste(request: Request, q: str = "", verfolgung: str = "",
     verfolgung=faellig zeigt rollenbezogen die fälligen Wiedervorlagen."""
     from datetime import datetime as dt
     benutzer = request.state.benutzer
-    vorgaenge = (session.query(Vorgang)
+    from app import leadmanagement
+    vorgaenge = (leadmanagement.ohne_demo(session.query(Vorgang))
                  .order_by(Vorgang.angelegt_am.desc()).all())
     if verfolgung == "faellig":   # Phase 60: rollenbezogene Fälligkeit
         vorgaenge = [v for v in vorgaenge

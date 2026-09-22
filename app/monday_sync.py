@@ -246,6 +246,13 @@ def sync(session: Session | None = None) -> dict:
             except Exception as problem:
                 fehler.append(f"{quelle.board_name or quelle.board_id}: {problem}")
         session.commit()
+        try:
+            # v12 (Phase 73): abgeleitete Lead-Phase der gesyncten Vorgänge –
+            # rein lesend gegenüber monday, Fehler blockieren den Sync nie
+            from app import leadmanagement
+            leadmanagement.nach_sync(session)
+        except Exception:
+            pass
     finally:
         if eigen:
             session.close()

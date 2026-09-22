@@ -1113,6 +1113,10 @@ async def status_aendern(request: Request, angebot_id: int,
             from app import projektierung as projektierung_modul
             projektierung_modul.version_nachziehen(session, angebot)
             session.commit()
+        # v12 (Phase 73): abgeleitete Lead-Phase am Vorgang aktualisieren
+        from app import leadmanagement
+        leadmanagement.phase_neu_berechnen(session, angebot.vorgang_id)
+        session.commit()
     return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
 
 

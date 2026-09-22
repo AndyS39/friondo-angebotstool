@@ -15,10 +15,11 @@ from app.templating import render
 
 router = APIRouter(prefix="/benutzer")
 
-ROLLEN = ["admin", "innendienst", "aussendienst", "projektierung", "montage"]
+ROLLEN = ["admin", "innendienst", "aussendienst", "projektierung", "montage",
+          "leadmanagement"]
 # v11 (Phase 70): Zusatzrollen als Häkchen – die Hauptrolle steuert weiterhin
 # die Grundsicht, Zusatzrollen schalten Projektierung/Montage frei
-ZUSATZROLLEN = ["projektierung", "montage"]
+ZUSATZROLLEN = ["projektierung", "montage", "leadmanagement"]
 _EMAIL_MUSTER = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -111,6 +112,9 @@ async def aendern(request: Request, benutzer_id: int,
     benutzer.rollen = ",".join([rolle] + [r for r in zusatz if r != rolle])
     benutzer.kalkulation_sichtbar = form.get("kalkulation_sichtbar") == "on"
     benutzer.telefon = (form.get("telefon") or "").strip()
+    # v12 (Phase 73): Leadmanager-Einstellungen (Round-Robin-Zuweisung)
+    benutzer.lm_aktiv = form.get("lm_aktiv") == "on"
+    benutzer.lm_arbeitszeit = (form.get("lm_arbeitszeit") or "").strip() or None
     from app.models import Team, TeamMitglied
     gewaehlt = {int(t) for t in form.getlist("team_ids") if str(t).isdigit()}
     gueltig = {t.id for t in session.query(Team)}

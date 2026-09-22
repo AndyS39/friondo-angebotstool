@@ -147,6 +147,11 @@ def wert_aktualisieren(session, angebot: Angebot, anlass: str = "",
     (bei Versionierung, Ablehnung, Löschung) – nur die Wert-Spalte, kein
     Status-/Gruppenwechsel; Fehler blockieren nie."""
     try:
+        # v12 (Phase 73): Demo-Leads existieren für monday nicht
+        from app.models import Vorgang
+        vorgang = session.get(Vorgang, angebot.vorgang_id) if angebot.vorgang_id else None
+        if vorgang is not None and vorgang.demo:
+            return
         lead = lead_fuer_angebot(session, angebot)
         if lead is None or not lead.monday_item_id:
             return

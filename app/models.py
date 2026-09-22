@@ -5,7 +5,8 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (Boolean, DateTime, Float, ForeignKey, Integer, String,
+                        Text, UniqueConstraint)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -160,6 +161,9 @@ class Benutzer(Base):
     benachrichtigung_mail: Mapped[str] = mapped_column(String(10), default="aus")  # aus|sofort|digest
     # v11 (Phase 70): Telefon des Projektleiters im AD-Projektstand-Block
     telefon: Mapped[str] = mapped_column(String(50), default="")
+    # v12 (Lead-Management, Phase 73): Leadmanager-Einstellungen
+    lm_aktiv: Mapped[bool] = mapped_column(Boolean, default=False)   # Round-Robin
+    lm_arbeitszeit: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     @property
     def rollen_liste(self) -> list[str]:
@@ -360,6 +364,40 @@ class Vorgang(Base):
     wiedervorlage_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # Verantwortlicher der Wiedervorlage (Vorbelegung: Ersteller)
     wiedervorlage_benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # v12 (Lead-Management, Phase 73): Lead-Kopf am Vorgang – alle nullable,
+    # idempotent über db._NACHTRAEGLICHE_SPALTEN
+    lead_phase: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    quelle_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    kampagne_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    utm_source: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    utm_medium: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    utm_campaign: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    utm_content: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    eingang_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    eingang_art: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    anfrage_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    anfrage_rohdaten: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON
+    erstkontakt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    erreicht_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    terminiert_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    leadmanager_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    score_punkte: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    score_klasse: Mapped[Optional[str]] = mapped_column(String(1), nullable=True)
+    wunschzeiten: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)  # JSON
+    lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    lon: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    geocode_status: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    einwilligung_werbung: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    einwilligung_werbung_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    einwilligung_quelle: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    zurueckgestellt_bis: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    zurueckgestellt_grund: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    unqualifiziert_grund: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    unqualifiziert_text: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    versuch_nr: Mapped[int] = mapped_column(Integer, default=0)
+    naechste_aktion_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    loeschen_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    demo: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class VorgangsNotiz(Base):
@@ -1049,3 +1087,249 @@ class AngebotsMail(Base):
     # True = Antwort des Kunden (nicht vom eigenen Postfach gesendet)
     eingehend: Mapped[bool] = mapped_column(Boolean, default=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+# ================= v12: Lead-Management V1 (PLAN_LEAD_V1, Phasen 73-82) =============
+# Lead = Vorgang (v10) – keine eigene Lead-Tabelle; der Vorgang trägt den
+# Lead-Kopf (Spalten via db._NACHTRAEGLICHE_SPALTEN) und die Lead-Phase.
+
+LEAD_PHASEN = ["neu", "in_kontaktierung", "qualifiziert", "terminiert",
+               "erfasst", "angebot", "gewonnen", "verloren",
+               "zurueckgestellt", "nicht_erreicht", "unqualifiziert"]
+LEAD_PHASEN_NAMEN = {
+    "neu": "Neu", "in_kontaktierung": "In Kontaktierung",
+    "qualifiziert": "Qualifiziert", "terminiert": "Terminiert",
+    "erfasst": "Erfasst", "angebot": "Angebot", "gewonnen": "Gewonnen",
+    "verloren": "Verloren", "zurueckgestellt": "Zurückgestellt",
+    "nicht_erreicht": "Nicht erreicht", "unqualifiziert": "Unqualifiziert",
+}
+# Manuelle Seitenzustände haben Vorrang vor der Ableitung (Konzept 3.1)
+LEAD_PHASEN_MANUELL = ("zurueckgestellt", "nicht_erreicht", "unqualifiziert")
+
+ANRUF_ERGEBNISSE = ["erreicht", "nicht_erreicht", "besetzt", "mailbox",
+                    "rueckruf_gewuenscht", "falsche_nummer", "kein_interesse"]
+ANRUF_ERGEBNIS_NAMEN = {
+    "erreicht": "Erreicht", "nicht_erreicht": "Nicht erreicht",
+    "besetzt": "Besetzt", "mailbox": "Mailbox",
+    "rueckruf_gewuenscht": "Rückruf gewünscht",
+    "falsche_nummer": "Falsche Nummer", "kein_interesse": "Kein Interesse",
+}
+
+VOT_STATUS = ["geplant", "bestaetigt", "verschoben", "no_show", "erfolgt", "abgesagt"]
+VOT_STATUS_NAMEN = {"geplant": "Geplant", "bestaetigt": "Bestätigt",
+                    "verschoben": "Verschoben", "no_show": "No-Show",
+                    "erfolgt": "Erfolgt", "abgesagt": "Abgesagt"}
+
+
+class LeadQuelle(Base):
+    """Woher der Lead kommt (Website, Landingpage, Portal, Partner, monday …)."""
+    __tablename__ = "lead_quellen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(100), unique=True)
+    name: Mapped[str] = mapped_column(String(200), default="")
+    typ: Mapped[str] = mapped_column(String(20), default="website")
+    kanal: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    kosten_je_lead_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    standard_sparten: Mapped[str] = mapped_column(String(100), default="[]")  # JSON
+    score_bonus: Mapped[int] = mapped_column(Integer, default=0)
+    parser_regel_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    api_key: Mapped[str] = mapped_column(String(64), default="")   # REST-Endpunkt
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class Kampagne(Base):
+    __tablename__ = "kampagnen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), default="")
+    quelle_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    von: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    bis: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    budget_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    utm_campaign: Mapped[str] = mapped_column(String(200), default="")
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class LeadAktivitaet(Base):
+    """Timeline-Eintrag (Anruf, Mail, Status …); der v10-Notizen-Chat bleibt in
+    seiner Tabelle – die Timeline liest beide zusammen (Union nach Zeit)."""
+    __tablename__ = "lead_aktivitaeten"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    vorgang_id: Mapped[int] = mapped_column(Integer, index=True)
+    typ: Mapped[str] = mapped_column(String(20), default="notiz")
+    ergebnis: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    dauer_sek: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    zeitpunkt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    naechste_aktion_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class LeadQualifizierung(Base):
+    __tablename__ = "lead_qualifizierung"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    vorgang_id: Mapped[int] = mapped_column(Integer, index=True)
+    sparte: Mapped[str] = mapped_column(String(4), default="WP")
+    antworten: Mapped[str] = mapped_column(Text, default="{}")   # JSON {frage_key: wert}
+    score_punkte: Mapped[int] = mapped_column(Integer, default=0)
+    score_klasse: Mapped[str] = mapped_column(String(1), default="C")
+    abgeschlossen_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class VotTermin(Base):
+    """Vor-Ort-Termin des Lead-Moduls (auch aus dem monday-VOT-Datum abgeleitet)."""
+    __tablename__ = "vot_termine"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    vorgang_id: Mapped[int] = mapped_column(Integer, index=True)
+    ad_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    beginn: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    ende: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    adresse: Mapped[str] = mapped_column(String(300), default="")
+    lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    lon: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(15), default="geplant")
+    outlook_event_id: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    bestaetigung_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    erinnerung_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    fahrzeit_hin_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    umweg_min: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    quelle: Mapped[str] = mapped_column(String(10), default="manuell")  # assistent|manuell|monday
+    grund_text: Mapped[str] = mapped_column(String(500), default="")
+    demo: Mapped[bool] = mapped_column(Boolean, default=False)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class AdProfil(Base):
+    """Terminierungs-Profil des Außendienstlers (Assistent, Phase 77)."""
+    __tablename__ = "ad_profile"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    benutzer_id: Mapped[int] = mapped_column(Integer, unique=True)
+    start_adresse: Mapped[str] = mapped_column(String(300), default="")
+    start_lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    start_lon: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    arbeitszeiten: Mapped[str] = mapped_column(Text, default="{}")   # JSON je Wochentag
+    termin_dauer_min: Mapped[int] = mapped_column(Integer, default=90)
+    puffer_min: Mapped[int] = mapped_column(Integer, default=15)
+    max_termine_tag: Mapped[int] = mapped_column(Integer, default=4)
+    gebiet_plz_praefixe: Mapped[str] = mapped_column(String(300), default="[]")  # JSON
+    kalender_postfach: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    aktiv_terminierung: Mapped[bool] = mapped_column(Boolean, default=False)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class KommunikationLog(Base):
+    """Warteschlange + Protokoll der Kunden-Mails (Phase 78, Sendesperre)."""
+    __tablename__ = "kommunikation_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    vorgang_id: Mapped[int] = mapped_column(Integer, index=True)
+    termin_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    kanal: Mapped[str] = mapped_column(String(10), default="mail")
+    vorlage_key: Mapped[str] = mapped_column(String(50), default="")
+    an: Mapped[str] = mapped_column(String(200), default="")
+    betreff: Mapped[str] = mapped_column(String(300), default="")
+    body_html: Mapped[str] = mapped_column(Text, default="")
+    anhang_pfad: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    geplant_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    gesendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(15), default="geplant")
+    fehler_text: Mapped[str] = mapped_column(String(500), default="")
+    modus: Mapped[str] = mapped_column(String(10), default="protokoll")
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class ParserRegel(Base):
+    """Mail-Parser-Regel (Phase 75): Muster + Feldzuordnung je Quelle."""
+    __tablename__ = "parser_regeln"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), default="")
+    quelle_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    absender_muster: Mapped[str] = mapped_column(String(300), default="")
+    betreff_muster: Mapped[str] = mapped_column(String(300), default="")
+    format: Mapped[str] = mapped_column(String(15), default="zeilen")
+    feldzuordnung: Mapped[str] = mapped_column(Text, default="{}")   # JSON
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
+    zuletzt_getroffen_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class GeocodeCache(Base):
+    __tablename__ = "geocode_cache"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    adresse_norm: Mapped[str] = mapped_column(String(300), unique=True)
+    lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    lon: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    anbieter: Mapped[str] = mapped_column(String(20), default="")
+    stand: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    status: Mapped[str] = mapped_column(String(10), default="ok")   # ok | fehler
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class RoutingCache(Base):
+    __tablename__ = "routing_cache"
+    __table_args__ = (UniqueConstraint("von_key", "nach_key",
+                                       name="uq_routing_von_nach"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    von_key: Mapped[str] = mapped_column(String(30))
+    nach_key: Mapped[str] = mapped_column(String(30))
+    minuten: Mapped[float] = mapped_column(Float, default=0)
+    km: Mapped[float] = mapped_column(Float, default=0)
+    anbieter: Mapped[str] = mapped_column(String(20), default="")
+    gueltig_bis: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class LeadParameter(Base):
+    """Key-Value des Lead-Managements (Demo-Schalter, SLA, Routing, Absender …)."""
+    __tablename__ = "lead_parameter"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    wert: Mapped[str] = mapped_column(Text, default="")
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)

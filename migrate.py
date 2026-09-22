@@ -290,6 +290,23 @@ def _daten() -> list[str]:
         # Läuft auch im Demo-Modus sofort, damit die Demo echte Daten zeigt.
         meldungen += projektierung.altbestand_migrieren(session)
         session.commit()
+
+        # ---------------- v12: Lead-Management V1 (Phasen 73–82) ----------------
+        from app import leadmanagement
+        from app.models import einstellung_holen, einstellung_setzen
+        neu = leadmanagement.parameter_vorbelegen(session)
+        if neu:
+            meldungen.append(f"Lead-Parameter vorbelegt ({neu} Startwerte, "
+                             "lead_freigabe_modus=admin)")
+        session.commit()
+        # Bestehende (gesyncte) Vorgänge: Eingangsdaten + abgeleitete
+        # Lead-Phase (Schalter-idempotent; liest monday nur mit)
+        if einstellung_holen(session, "migration_v12_leads", "") != "erledigt":
+            anzahl = leadmanagement.nach_sync(session)
+            einstellung_setzen(session, "migration_v12_leads", "erledigt")
+            session.commit()
+            meldungen.append(f"Lead-Phase für {anzahl} bestehende Vorgänge "
+                             "abgeleitet (Badge monday)")
     finally:
         session.close()
     return meldungen

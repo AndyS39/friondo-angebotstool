@@ -7,7 +7,7 @@
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
 <table class="tabelle">
-    <thead><tr><th>Name</th><th>Rolle</th><th>Zusatzrollen</th><th>E-Mail</th><th>Telefon</th><th>Benachrichtigungs-Mail</th><th title="EK/DB auch mit Rolle Projektierung sichtbar">Kalk.</th><th>Teams</th><th>Neue PIN</th><th>Aktiv</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Rolle</th><th>Zusatzrollen</th><th>E-Mail</th><th>Telefon</th><th>Benachrichtigungs-Mail</th><th title="EK/DB auch mit Rolle Projektierung sichtbar">Kalk.</th><th title="Nimmt an der Round-Robin-Zuweisung neuer Leads teil (Lead-Management)">LM aktiv</th><th>Teams</th><th>Neue PIN</th><th>Aktiv</th><th></th></tr></thead>
     <tbody>
     {% for b in benutzer %}
         <tr class="{{ 'inaktiv' if not b.aktiv }}">
@@ -39,6 +39,8 @@
             </td>
             <td><input form="f{{ b.id }}" type="checkbox" name="kalkulation_sichtbar"
                        {{ 'checked' if b.kalkulation_sichtbar }}></td>
+            <td><input form="f{{ b.id }}" type="checkbox" name="lm_aktiv"
+                       {{ 'checked' if b.lm_aktiv }}></td>
             <td>{# v11 (Phase 70): Team-Zuordnung (Montage-Einsätze) #}
                 {% for t in teams %}
                     <label class="dezent" style="display:block; white-space:nowrap">

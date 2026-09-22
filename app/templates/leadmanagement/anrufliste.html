@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block titel %}Anrufliste – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Anrufliste <span class="demo-badge">Demo · Coming soon</span></h1>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+<p class="dezent">Die Anrufliste wird in Phase 76 gefüllt (priorisierte
+    Arbeitsliste mit Ein-Klick-Anrufergebnissen).</p>
+{% endblock %}

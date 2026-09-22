@@ -11,7 +11,8 @@ from app.auth import RollenMiddleware, standardbenutzer_anlegen
 from app.db import init_db
 from app.routers import (angebote, anmeldung, artikel, benutzer, erfassung, vorgaenge,
                          projektierung as projektierung_router,
-                         glocke, meine_angebote, montage,
+                         glocke, leadmanagement as leadmanagement_router,
+                         meine_angebote, montage,
                          erfassungsliste, konfiguration, konfigurator, kunden,
                          leads, signatur, statistik, versand)
 from app.templating import render
@@ -55,6 +56,7 @@ app.include_router(vorgaenge.router)
 app.include_router(projektierung_router.router)
 app.include_router(glocke.router)
 app.include_router(montage.router)
+app.include_router(leadmanagement_router.router)
 app.include_router(benutzer.router)
 app.include_router(erfassung.router)
 app.include_router(erfassungsliste.router)
@@ -90,8 +92,9 @@ def _start_kontext() -> dict:
         from datetime import datetime as dt
         buero = {b.id for b in session.query(Benutzer)
                  if b.rolle in ("admin", "innendienst")}
+        from app import leadmanagement
         faellige = sum(
-            1 for v in session.query(Vorgang)
+            1 for v in leadmanagement.ohne_demo(session.query(Vorgang))
             .filter(Vorgang.wiedervorlage_am.isnot(None),
                     Vorgang.wiedervorlage_am <= dt.now())
             if v.wiedervorlage_benutzer_id is None
@@ -147,14 +150,8 @@ async def angebotstool(request: Request):
     return render(request, "angebotstool.html", aktiv=None, **_start_kontext())
 
 
-@app.get("/lead-management")
-async def lead_management(request: Request):
-    """Platzhalterseite (v9-Portal): Lead-Management ist im Aufbau."""
-    return render(request, "platzhalter.html", aktiv=None,
-                  titel="Lead-Management",
-                  hinweis="Dieser Bereich ist im Aufbau (Coming soon). "
-                          "Die Lead-Arbeit läuft bis dahin wie gewohnt über "
-                          "das Angebotstool (Leads VOT).")
+# v12 (Phase 73): /lead-management ist jetzt der Einstieg des Lead-Moduls
+# (Router leadmanagement); Nicht-Sichtbare sehen dort weiter die Platzhalterseite.
 
 
 # v11 (Phase 68): /projektierung ist jetzt das Kanban-Board des

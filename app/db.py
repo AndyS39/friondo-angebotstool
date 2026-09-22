@@ -144,6 +144,43 @@ _NACHTRAEGLICHE_SPALTEN = {
         "kalkulation_sichtbar": "BOOLEAN NOT NULL DEFAULT 0",   # v11
         "benachrichtigung_mail": "VARCHAR(10) NOT NULL DEFAULT 'aus'",  # v11
         "telefon": "VARCHAR(50) NOT NULL DEFAULT ''",           # v11 Phase 70
+        "lm_aktiv": "BOOLEAN NOT NULL DEFAULT 0",               # v12 Lead-Management
+        "lm_arbeitszeit": "VARCHAR(20)",                        # v12
+    },
+    # v12 (Lead-Management, Phase 73): Lead-Kopf am Vorgang – alle nullable
+    "vorgaenge": {
+        "lead_phase": "VARCHAR(20)",
+        "quelle_id": "INTEGER",
+        "kampagne_id": "INTEGER",
+        "utm_source": "VARCHAR(200)",
+        "utm_medium": "VARCHAR(200)",
+        "utm_campaign": "VARCHAR(200)",
+        "utm_content": "VARCHAR(200)",
+        "eingang_am": "DATETIME",
+        "eingang_art": "VARCHAR(10)",
+        "anfrage_text": "TEXT",
+        "anfrage_rohdaten": "TEXT",
+        "erstkontakt_am": "DATETIME",
+        "erreicht_am": "DATETIME",
+        "terminiert_am": "DATETIME",
+        "leadmanager_id": "INTEGER",
+        "score_punkte": "INTEGER",
+        "score_klasse": "VARCHAR(1)",
+        "wunschzeiten": "VARCHAR(300)",
+        "lat": "FLOAT",
+        "lon": "FLOAT",
+        "geocode_status": "VARCHAR(10)",
+        "einwilligung_werbung": "BOOLEAN",
+        "einwilligung_werbung_am": "DATETIME",
+        "einwilligung_quelle": "VARCHAR(20)",
+        "zurueckgestellt_bis": "DATETIME",
+        "zurueckgestellt_grund": "VARCHAR(200)",
+        "unqualifiziert_grund": "VARCHAR(200)",
+        "unqualifiziert_text": "VARCHAR(500)",
+        "versuch_nr": "INTEGER NOT NULL DEFAULT 0",
+        "naechste_aktion_am": "DATETIME",
+        "loeschen_am": "DATETIME",
+        "demo": "BOOLEAN NOT NULL DEFAULT 0",
     },
     "kunden": {
         "interesse": "VARCHAR(50) NOT NULL DEFAULT ''",

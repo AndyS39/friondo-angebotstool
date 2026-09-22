@@ -534,6 +534,8 @@ async def absenden(request: Request, erfassung_id: int,
     erfassung.status = "Individuell – zu prüfen" if gruende else "Neu"
     erfassung.abgesendet_am = datetime.now()
     _verfolgung_startwerte(session, erfassung)
+    from app import leadmanagement
+    leadmanagement.phase_neu_berechnen(session, erfassung.vorgang_id)  # v12
     session.commit()
     return render(request, "erfassung/fertig.html", aktiv=None, mobil=True,
                   benutzer=_benutzer(request), erfassung=erfassung)
