@@ -230,13 +230,13 @@ Terminal-Server weiterhin nacheinander (update.bat).
 
 ## Phase 75 – Lead-Eingang: Quellen, Schnellanlage, Import, API, Parser, Duplikate, Demo-Daten
 
-- [ ] **Parametrierung → Lead-Management → Quellen & Kampagnen**: Tabellenpflege mit den
+- [x] **Parametrierung → Lead-Management → Quellen & Kampagnen**: Tabellenpflege mit den
   Feldern aus Phase 73. Startquellen anlegen: `website` (Website/Förderrechner, Typ
   website), `landingpage` (Typ landingpage), `portal` (Lead-Portal, Typ portal),
   `partner_enni`, `partner_swd`, `partner_sparkasse_du` (Typ partner, Kanal = der
   jeweilige bestehende Kanalwert), `telefon`, `empfehlung`, `bestand`. Die
   `monday_<board>`-Quellen entstehen automatisch (Phase 73).
-- [ ] **Schnellanlage** `/leads/neu` (auch mobil): Anrede, Vorname, Nachname (Pflicht),
+- [x] **Schnellanlage** `/leads/neu` (auch mobil): Anrede, Vorname, Nachname (Pflicht),
   Telefon (Pflicht, sonst E-Mail Pflicht), E-Mail, Straße, PLZ (Pflicht), Ort, Sparten
   (Mehrfach, Pflicht), Quelle (Pflicht, Dropdown), Kampagne, Wunschzeiten, Notiz/
   Anfragetext. Anlage = Kunde (bestehender Duplikatabgleich Name + PLZ) + Vorgang
@@ -244,24 +244,24 @@ Terminal-Server weiterhin nacheinander (update.bat).
   Sparten) + Aktivität „Lead angelegt (manuell)" + Geokodierung im Hintergrund +
   Zuweisung Leadmanager (Round-Robin über `lm_aktiv`-Benutzer; Admin ohne aktive
   Leadmanager → sich selbst) + Benachrichtigung an den Leadmanager.
-- [ ] **Duplikatprüfung** (Funktion `duplikat_pruefen(telefon, email, name, plz, adresse)`):
+- [x] **Duplikatprüfung** (Funktion `duplikat_pruefen(telefon, email, name, plz, adresse)`):
   Telefon normalisiert auf E.164 (+49…), E-Mail klein, Name + PLZ, Straße + PLZ. Treffer
   → im Anlage-Dialog Hinweis „Möglicher Doppelter: <Name>, <Ort>, Vorgang <Phase>" mit
   Wahl „An bestehenden Vorgang anhängen (neue Sparte)" (Standard, wenn der Vorgang
   offen ist) oder „Eigenen Vorgang anlegen". Bei automatischen Eingängen (Import/API/
   Parser): offener Vorgang → anhängen + Aktivität „Neue Anfrage <Quelle> angehängt";
   abgeschlossener Vorgang → neuer Vorgang mit Badge „Wiederkehrer"; kein Treffer → neu.
-- [ ] **CSV/Excel-Import** `/leads/import`: Upload, Spaltenzuordnung per Dropdown
+- [x] **CSV/Excel-Import** `/leads/import`: Upload, Spaltenzuordnung per Dropdown
   (Zuordnung je Quelle speicherbar), Vorschau der ersten 20 Zeilen mit Duplikat-
   Markierung, Quelle/Kampagne/Sparten für die Datei, Import-Protokoll (angelegt /
   angehängt / übersprungen mit Grund). `eingang_art = import`.
-- [ ] **REST-Endpunkt** `POST /api/leads` (JSON: `quelle`, `kampagne`, `anrede`, `vorname`,
+- [x] **REST-Endpunkt** `POST /api/leads` (JSON: `quelle`, `kampagne`, `anrede`, `vorname`,
   `nachname`, `strasse`, `plz`, `ort`, `telefon`, `email`, `sparten` [Liste], `wunschzeiten`
   [Liste], `nachricht`, `utm_*`, `einwilligung_werbung` bool, `rohdaten` beliebig).
   Auth über Header `X-Api-Key` (Schlüssel je Quelle in der Parametrierung erzeugbar).
   Antwort 201 mit Vorgangs-ID; 409 bei Duplikat-Anhängung (mit ID); 422 bei fehlenden
   Pflichtfeldern. Rate-Limit 60/min. Doku in `docs/leads-api.md` mit curl-Beispiel.
-- [ ] **Mail-Parser**: Tabelle `parser_regeln` in der Parametrierung pflegen; **Test-
+- [x] **Mail-Parser**: Tabelle `parser_regeln` in der Parametrierung pflegen; **Test-
   Funktion**: Beispiel-Mail (Betreff + Body) einfügen → Anzeige der erkannten Felder
   ohne Anlage. Formate: `zeilen` (`Feld: Wert` je Zeile), `html_tabelle` (2-spaltig),
   `json` (Anhang oder Body). Standardregel „Formular-Standard" anlegen: Betreff
@@ -271,14 +271,14 @@ Terminal-Server weiterhin nacheinander (update.bat).
   (`eingang_art = mail`, Original als `anfrage_text`/`anfrage_rohdaten`); nicht erkannte
   → Liste **„Posteingang unklar"** `/leads/posteingang` (Absender, Betreff, Vorschau,
   Button „Als Lead anlegen" mit vorbefülltem Schnellanlage-Formular, Button „Ignorieren").
-- [ ] **SLA**: `sla_status` berechnet, nicht gespeichert: Minuten seit `eingang_am` innerhalb
+- [x] **SLA**: `sla_status` berechnet, nicht gespeichert: Minuten seit `eingang_am` innerhalb
   `arbeitszeit_lm` (Mo–Fr) bis `erstkontakt_am`; grün < `sla_gruen_min`, gelb <
   `sla_gelb_min`, rot darüber; nach erstem Versuch „erfüllt (n Min)". Anzeige als Chip
   mit laufender Minutenzahl.
-- [ ] **Benachrichtigung** bei jedem Eingang an den zugewiesenen Leadmanager (Glocke:
+- [x] **Benachrichtigung** bei jedem Eingang an den zugewiesenen Leadmanager (Glocke:
   „Neuer Lead: <Name>, <Ort> – <Sparten> – <Quelle>", Link zur Akte); ohne Zuweisung an
   alle Benutzer mit Rolle leadmanagement bzw. Admins.
-- [ ] **Demo-Daten-Generator** (Parametrierung, nur Admin, nur im Demo-Modus): Button
+- [x] **Demo-Daten-Generator** (Parametrierung, nur Admin, nur im Demo-Modus): Button
   „25 Demo-Leads erzeugen" – fiktive Namen (kein Bezug zu echten Personen), reale
   Straßen-/Ortsnamen aus Duisburg, Moers, Oberhausen, Mülheim, Dinslaken, Krefeld ohne
   Hausnummern-Bezug, Telefon `0203 000 xx`, verteilt über Quellen, Sparten, Phasen
@@ -287,7 +287,7 @@ Terminal-Server weiterhin nacheinander (update.bat).
   Eingangszeiten der letzten 14 Tage; alle mit `demo = 1`. Button „Alle Demo-Leads
   löschen" (mit Sicherheitsabfrage, löscht Vorgänge, Kunden ohne andere Vorgänge,
   Aktivitäten, Termine, Log).
-- [ ] Test: Schnellanlage mit Duplikat → Anhängen; CSV mit 10 Zeilen; `curl` gegen die API;
+- [x] Test: Schnellanlage mit Duplikat → Anhängen; CSV mit 10 Zeilen; `curl` gegen die API;
   Parser-Test mit Beispiel-Mail; Demo-Generator → 25 Leads sichtbar **nur** im Modul,
   nicht in Leads VOT/Kunden/Angebote/Statistik (als Innendienst prüfen).
 

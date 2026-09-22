@@ -306,3 +306,340 @@ def nach_sync(session: Session) -> int:
         anzahl += 1
     session.commit()
     return anzahl
+
+
+# --- Phase 75: Eingang – Duplikate, Anlage, Startquellen, Demo-Daten ---------------
+
+STARTQUELLEN = [
+    ("website", "Website/Förderrechner", "website", None),
+    ("landingpage", "Landingpages", "landingpage", None),
+    ("portal", "Lead-Portal", "portal", None),
+    ("partner_enni", "Partner Enni", "partner", "Enni"),
+    ("partner_swd", "Partner SWD", "partner", "SWD"),
+    ("partner_sparkasse_du", "Partner Sparkasse DU", "partner", "Sparkasse"),
+    ("telefon", "Telefon", "telefon", None),
+    ("empfehlung", "Empfehlung", "empfehlung", None),
+    ("bestand", "Bestand", "bestand", None),
+]
+
+
+def quellen_vorbelegen(session: Session) -> int:
+    """Startquellen anlegen (idempotent, migrate.py); monday_<board> entsteht
+    automatisch beim Sync (Phase 73)."""
+    vorhanden = {q.key for q in session.query(LeadQuelle)}
+    neu = 0
+    for key, name, typ, kanal in STARTQUELLEN:
+        if key not in vorhanden:
+            session.add(LeadQuelle(key=key, name=name, typ=typ, kanal=kanal,
+                                   aktiv=True))
+            neu += 1
+    session.flush()
+    return neu
+
+
+def telefon_normalisieren(telefon: str) -> str:
+    """E.164 für den Duplikatabgleich: 0203… → +49203…, Trennzeichen raus."""
+    ziffern = re.sub(r"[^\d+]", "", telefon or "")
+    if not ziffern:
+        return ""
+    if ziffern.startswith("00"):
+        return "+" + ziffern[2:]
+    if ziffern.startswith("0"):
+        return "+49" + ziffern[1:]
+    if not ziffern.startswith("+"):
+        return "+49" + ziffern
+    return ziffern
+
+
+def _name_normal(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "").strip().lower())
+
+
+def vorgang_offen(vorgang: Vorgang) -> bool:
+    """Konzept 4: offen = nicht Gewonnen/Verloren/Unqualifiziert."""
+    return (vorgang.lead_phase or "neu") not in ("gewonnen", "verloren",
+                                                 "unqualifiziert")
+
+
+def duplikat_pruefen(session: Session, telefon: str = "", email: str = "",
+                     name: str = "", plz: str = "", strasse: str = "") -> dict | None:
+    """Treffer über Telefon (E.164), E-Mail, Name+PLZ oder Straße+PLZ.
+    Liefert {kunde, vorgang, offen} des jüngsten Vorgangs oder None."""
+    telefon_norm = telefon_normalisieren(telefon)
+    email_norm = (email or "").strip().lower()
+    treffer: Kunde | None = None
+    for kunde in session.query(Kunde).filter(Kunde.aktiv.is_(True)):
+        if telefon_norm and telefon_normalisieren(kunde.telefon) == telefon_norm:
+            treffer = kunde
+            break
+        if email_norm and (kunde.email or "").strip().lower() == email_norm:
+            treffer = kunde
+            break
+        if (plz and kunde.plz == plz.strip()
+                and name and _name_normal(kunde.nachname) in _name_normal(name)
+                and _name_normal(kunde.nachname)):
+            treffer = kunde
+            break
+        if (plz and kunde.plz == plz.strip() and strasse
+                and _name_normal(kunde.strasse) == _name_normal(strasse)
+                and _name_normal(strasse)):
+            treffer = kunde
+            break
+    if treffer is None:
+        return None
+    vorgang = (session.query(Vorgang)
+               .filter(Vorgang.kunde_id == treffer.id)
+               .order_by(Vorgang.angelegt_am.desc()).first())
+    return {"kunde": treffer, "vorgang": vorgang,
+            "offen": vorgang is not None and vorgang_offen(vorgang)}
+
+
+def _sparten_mischen(kunde: Kunde, sparten: list[str]) -> None:
+    vorhanden = [s.strip() for s in (kunde.interesse or "").split(",") if s.strip()]
+    for s in sparten:
+        if s not in vorhanden:
+            vorhanden.append(s)
+    kunde.interesse = ",".join(vorhanden)
+
+
+def lead_anlegen(session: Session, daten: dict, quelle: LeadQuelle | None,
+                 eingang_art: str, benutzer=None,
+                 kampagne_id: int | None = None,
+                 entscheidung: str = "") -> tuple[Vorgang, str]:
+    """Zentrale Anlage (Schnellanlage, Import, API, Parser, Demo-Generator).
+    Duplikat-Regel (Konzept 4): offener Vorgang → anhängen (neue Sparte);
+    abgeschlossener → neuer Vorgang „Wiederkehrer“; entscheidung='neu'
+    erzwingt einen eigenen Vorgang. Liefert (vorgang, status) mit status
+    neu | angehaengt | wiederkehrer."""
+    sparten = [s for s in (daten.get("sparten") or []) if s in ("WP", "PV", "KL", "WB")]
+    duplikat = duplikat_pruefen(
+        session, telefon=daten.get("telefon", ""), email=daten.get("email", ""),
+        name=f"{daten.get('vorname', '')} {daten.get('nachname', '')}",
+        plz=daten.get("plz", ""), strasse=daten.get("strasse", ""))
+    status = "neu"
+    kunde = None
+    vorgang = None
+    if duplikat is not None and entscheidung != "neu":
+        kunde = duplikat["kunde"]
+        if duplikat["offen"]:
+            vorgang = duplikat["vorgang"]
+            status = "angehaengt"
+        else:
+            status = "wiederkehrer"
+    if kunde is None:
+        kunde = Kunde(anrede=daten.get("anrede", ""),
+                      vorname=(daten.get("vorname") or "").strip()[:100],
+                      nachname=(daten.get("nachname") or "").strip()[:100],
+                      strasse=(daten.get("strasse") or "").strip()[:200],
+                      plz=(daten.get("plz") or "").strip()[:10],
+                      ort=(daten.get("ort") or "").strip()[:100],
+                      telefon=(daten.get("telefon") or "").strip()[:50],
+                      email=(daten.get("email") or "").strip().lower()[:200])
+        if quelle is not None and quelle.kanal and not kunde.kanal_manuell:
+            kunde.vertriebskanal = quelle.kanal
+        session.add(kunde)
+        session.flush()
+    else:
+        # nicht-leere neue Werte ergänzen (nie überschreiben)
+        for feld in ("telefon", "email", "strasse", "ort"):
+            if not getattr(kunde, feld) and daten.get(feld):
+                setattr(kunde, feld, str(daten[feld]).strip())
+    _sparten_mischen(kunde, sparten)
+
+    if vorgang is None:
+        vorgang = Vorgang(kunde_id=kunde.id, lead_phase="neu")
+        session.add(vorgang)
+        session.flush()
+    jetzt = datetime.now()
+    if not vorgang.eingang_am:
+        vorgang.eingang_am = jetzt
+        vorgang.eingang_art = eingang_art
+    if quelle is not None and not vorgang.quelle_id:
+        vorgang.quelle_id = quelle.id
+    if kampagne_id and not vorgang.kampagne_id:
+        vorgang.kampagne_id = kampagne_id
+    for utm in ("utm_source", "utm_medium", "utm_campaign", "utm_content"):
+        if daten.get(utm) and not getattr(vorgang, utm):
+            setattr(vorgang, utm, str(daten[utm]).strip()[:200])
+    if daten.get("wunschzeiten"):
+        vorgang.wunschzeiten = json.dumps(list(daten["wunschzeiten"]),
+                                          ensure_ascii=False)
+    if daten.get("nachricht"):
+        vorgang.anfrage_text = ((vorgang.anfrage_text + "\n\n---\n\n")
+                                if vorgang.anfrage_text else "") \
+                               + str(daten["nachricht"]).strip()[:4000]
+    if daten.get("rohdaten") is not None:
+        vorgang.anfrage_rohdaten = json.dumps(daten["rohdaten"],
+                                              ensure_ascii=False, default=str)[:8000]
+    if daten.get("einwilligung_werbung"):
+        vorgang.einwilligung_werbung = True
+        vorgang.einwilligung_werbung_am = jetzt
+        vorgang.einwilligung_quelle = daten.get("einwilligung_quelle", "formular")
+    # Leitplanke 3: im Demo-Modus tragen Modul-Leads demo=1
+    if demo_aktiv(session) and status != "angehaengt":
+        vorgang.demo = True
+    if status == "angehaengt":
+        aktivitaet(session, vorgang.id, "import",
+                   f"Neue Anfrage {quelle.name if quelle else eingang_art} "
+                   f"angehängt ({', '.join(sparten) or 'ohne Sparte'})",
+                   benutzer=benutzer)
+    else:
+        quelle_name = quelle.name if quelle else eingang_art
+        zusatz = " – Wiederkehrer" if status == "wiederkehrer" else ""
+        aktivitaet(session, vorgang.id, "system",
+                   f"Lead angelegt ({quelle_name}, {eingang_art}){zusatz}",
+                   benutzer=benutzer)
+        # vorläufiger Score (nur Systemregeln) + Zuweisung + Benachrichtigung
+        score_vorlaeufig(session, vorgang)
+        if vorgang.leadmanager_id is None:
+            vorgang.leadmanager_id = naechster_leadmanager(session, benutzer)
+        ziele = ([vorgang.leadmanager_id] if vorgang.leadmanager_id
+                 else [b.id for b in session.query(Benutzer)
+                       .filter(Benutzer.aktiv.is_(True))
+                       if b.rolle == "admin" or b.hat_rolle("leadmanagement")])
+        benachrichtigen(session, ziele,
+                        f"Neuer Lead: {kunde.anzeige_name}, {kunde.ort or '?'} – "
+                        f"{', '.join(sparten) or '–'} – {quelle_name}",
+                        f"/lead-management/lead/{vorgang.id}")
+    lead_phase_berechnen(session, vorgang)
+    session.flush()
+    return vorgang, status
+
+
+def score_vorlaeufig(session: Session, vorgang: Vorgang) -> None:
+    """Systemregeln vor der Qualifizierung: Kerngebiet-PLZ + Quellen-Bonus."""
+    from app import leadmanagement_logik
+    punkte = 0
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    kerngebiet = [p.strip() for p in
+                  parameter_holen(session, "kerngebiet_plz", "").split(",")
+                  if p.strip()]
+    if kunde is not None and kunde.plz and any(
+            kunde.plz.startswith(p) for p in kerngebiet):
+        punkte += 10
+    if vorgang.quelle_id:
+        quelle = session.get(LeadQuelle, vorgang.quelle_id)
+        if quelle is not None:
+            punkte += quelle.score_bonus or 0
+    vorgang.score_punkte = punkte
+    logik = leadmanagement_logik.hole_logik()
+    vorgang.score_klasse = logik.klasse_fuer(punkte)
+
+
+# --- Demo-Daten-Generator (Phase 75, nur Admin, nur Demo-Modus) ---------------------
+
+_DEMO_VORNAMEN = ["Lena", "Jonas", "Miriam", "Torben", "Sina", "Malte", "Ricarda",
+                  "Nils", "Annika", "Fabio", "Greta", "Ole", "Tessa", "Bendix",
+                  "Ronja", "Yannick", "Carla", "Mattis", "Ida", "Levke", "Thies",
+                  "Femke", "Jost", "Alva", "Rasmus"]
+_DEMO_NACHNAMEN = ["Demolead", "Testinger", "Musterfrau", "Beispieler", "Probst-Demo",
+                   "Fiktivius", "Demohaus", "Testerling", "Beispielmann", "Demovic"]
+_DEMO_ORTE = [("Duisburg", "47051", "Sonnenwall"), ("Moers", "47441", "Homberger Straße"),
+              ("Oberhausen", "46045", "Marktstraße"), ("Mülheim an der Ruhr", "45468", "Schloßstraße"),
+              ("Dinslaken", "46535", "Neustraße"), ("Krefeld", "47798", "Rheinstraße")]
+_DEMO_SPARTEN = [["WP"], ["PV"], ["WP", "PV"], ["KL"], ["WB"], ["WP"], ["PV"]]
+
+
+def _demo_werktag(basis: datetime, werktage: int) -> datetime:
+    tag = basis
+    while werktage > 0:
+        tag += timedelta(days=1)
+        if tag.weekday() < 5:
+            werktage -= 1
+    return tag
+
+
+def demo_leads_erzeugen(session: Session, benutzer=None) -> dict:
+    """25 fiktive Demo-Leads (Plan Phase 75): 10 neu, 6 in Kontaktierung,
+    5 qualifiziert, 4 terminiert (nächste 10 Werktage, vorhandene AD)."""
+    from app import leadmanagement_logik
+    if not demo_aktiv(session):
+        return {"fehler": "Nur im Demo-Modus möglich."}
+    quellen = [q for q in session.query(LeadQuelle)
+               .filter(LeadQuelle.aktiv.is_(True), LeadQuelle.typ != "monday")]
+    ad_liste = [b for b in session.query(Benutzer)
+                .filter(Benutzer.aktiv.is_(True), Benutzer.rolle == "aussendienst")]
+    logik = leadmanagement_logik.hole_logik()
+    jetzt = datetime.now()
+    angelegt = 0
+    for i in range(25):
+        ort, plz, strasse = _DEMO_ORTE[i % len(_DEMO_ORTE)]
+        daten = {
+            "anrede": "Frau" if i % 2 else "Herr",
+            "vorname": _DEMO_VORNAMEN[i % len(_DEMO_VORNAMEN)],
+            "nachname": f"{_DEMO_NACHNAMEN[i % len(_DEMO_NACHNAMEN)]}-{i + 1:02d}",
+            "telefon": f"0203 000 {i + 10:02d}",
+            "email": f"demo.lead{i + 1:02d}@example.invalid",
+            "strasse": strasse, "plz": plz, "ort": ort,
+            "sparten": _DEMO_SPARTEN[i % len(_DEMO_SPARTEN)],
+            "nachricht": "Demo-Anfrage (Generator) – bitte Rückruf.",
+            "wunschzeiten": ["vormittags", "abends"][i % 2:i % 2 + 1],
+        }
+        quelle = quellen[i % len(quellen)] if quellen else None
+        vorgang, _ = lead_anlegen(session, daten, quelle, "manuell",
+                                  benutzer=benutzer, entscheidung="neu")
+        vorgang.demo = True
+        vorgang.eingang_am = jetzt - timedelta(days=i % 14, hours=(i * 3) % 9)
+        if 10 <= i < 16:   # in Kontaktierung mit Versuchen
+            vorgang.versuch_nr = (i % 3) + 1
+            vorgang.erstkontakt_am = vorgang.eingang_am + timedelta(hours=1)
+            vorgang.naechste_aktion_am = jetzt + timedelta(days=(i % 3) - 1)
+            aktivitaet(session, vorgang.id, "anruf", "Demo: nicht erreicht",
+                       benutzer=benutzer, ergebnis="nicht_erreicht")
+        elif 16 <= i < 21:   # qualifiziert
+            vorgang.versuch_nr = 1
+            vorgang.erstkontakt_am = vorgang.eingang_am + timedelta(hours=1)
+            vorgang.erreicht_am = vorgang.erstkontakt_am
+            sparte = daten["sparten"][0]
+            session.add(LeadQualifizierung(
+                vorgang_id=vorgang.id, sparte=sparte,
+                antworten=json.dumps({"Q-DEMO": "ja"}),
+                score_punkte=40 + i, score_klasse=logik.klasse_fuer(40 + i),
+                abgeschlossen_am=jetzt,
+                benutzer_id=benutzer.id if benutzer else None))
+            vorgang.score_punkte = 40 + i
+            vorgang.score_klasse = logik.klasse_fuer(40 + i)
+        elif i >= 21:   # terminiert, nächste 10 Werktage
+            vorgang.versuch_nr = 1
+            vorgang.erstkontakt_am = vorgang.eingang_am + timedelta(hours=1)
+            vorgang.erreicht_am = vorgang.erstkontakt_am
+            beginn = _demo_werktag(jetzt, (i - 20) * 2).replace(
+                hour=9 + (i % 3) * 3, minute=0, second=0, microsecond=0)
+            ad = ad_liste[i % len(ad_liste)] if ad_liste else None
+            session.add(VotTermin(
+                vorgang_id=vorgang.id, ad_id=ad.id if ad else None,
+                beginn=beginn, ende=beginn + timedelta(minutes=90),
+                adresse=f"{strasse}, {plz} {ort}", status="geplant",
+                quelle="manuell", demo=True,
+                erstellt_von=benutzer.id if benutzer else None))
+            vorgang.terminiert_am = jetzt
+        session.flush()   # autoflush aus: Qualifizierung/Termin sichtbar machen
+        lead_phase_berechnen(session, vorgang)
+        angelegt += 1
+    session.commit()
+    return {"angelegt": angelegt}
+
+
+def demo_leads_loeschen(session: Session) -> dict:
+    """Alle Demo-Leads restlos entfernen (Vorgänge, Kunden ohne andere
+    Vorgänge, Aktivitäten, Termine, Kommunikation, Qualifizierungen)."""
+    from app.models import KommunikationLog
+    vorgaenge = session.query(Vorgang).filter(Vorgang.demo.is_(True)).all()
+    kunden_ids = {v.kunde_id for v in vorgaenge}
+    anzahl = len(vorgaenge)
+    for v in vorgaenge:
+        session.query(LeadAktivitaet).filter_by(vorgang_id=v.id).delete()
+        session.query(LeadQualifizierung).filter_by(vorgang_id=v.id).delete()
+        session.query(VotTermin).filter_by(vorgang_id=v.id).delete()
+        session.query(KommunikationLog).filter_by(vorgang_id=v.id).delete()
+        session.delete(v)
+    session.flush()
+    geloeschte_kunden = 0
+    for kunde_id in kunden_ids:
+        if not session.query(Vorgang).filter(Vorgang.kunde_id == kunde_id).count():
+            kunde = session.get(Kunde, kunde_id)
+            if kunde is not None:
+                session.delete(kunde)
+                geloeschte_kunden += 1
+    session.commit()
+    return {"vorgaenge": anzahl, "kunden": geloeschte_kunden}

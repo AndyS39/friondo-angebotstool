@@ -53,3 +53,27 @@ nach V1 durch.
 - **hole_logik ohne Session**: Anders als die Projektierung braucht die
   Lead-Steuerdatei keine Parameter-Übernahme in die Datenbank – der Cache
   hängt nur an der Datei (mtime).
+
+## Phase 75 – Lead-Eingang
+
+- **Tabelle `lead_posteingang`** (nicht in der Plan-Tabellenliste): „Posteingang
+  unklar“ braucht eine Ablage für nicht erkannte Mails inkl. graph_id-Dedup;
+  eine eigene kleine Tabelle ist sauberer als ein Missbrauch des
+  kommunikation_log.
+- **API-Key als Spalte `lead_quellen.api_key`** (Erzeugen-Häkchen in der
+  Quellen-Pflege, Anzeige gekürzt mit Tooltip) statt einer eigenen
+  Schlüssel-Tabelle – ein Schlüssel je Quelle, wie der Plan ihn beschreibt.
+- **Import zweistufig mit Datei-Token** unter `data/lead_import_tmp/`
+  (Vorschau → Ausführen); die Spaltenzuordnung je Quelle liegt als
+  `import_mapping_<key>` in lead_parameter.
+- **Duplikat „Name+PLZ“** vergleicht den Kunden-Nachnamen als Teil des
+  eingegebenen Namens (Vorname+Nachname), Telefon nach E.164-Normalisierung;
+  Startquellen-Kanäle: Enni, SWD, Sparkasse (Teilstrings der bestehenden
+  v9-Profil-Automatik).
+- **Parser**: Der Formular-Standard zieht Quelle/Kampagne aus dem Betreff
+  `[LEAD] <quelle> <kampagne>`; Sparten-Aliase (Wärmepumpe→WP, Wallbox→WB …)
+  werden normalisiert. Der Posteingangs-Abruf markiert verarbeitete Mails als
+  gelesen und prüft den Schalter parser_modus bei jedem Lauf.
+- **Demo-Generator-Nachnamen** sind erkennbar fiktiv (Demolead, Testinger,
+  Musterfrau …) – bewusst kein realistisch klingender Namenspool, damit
+  Demo-Daten nie mit echten Kunden verwechselt werden.

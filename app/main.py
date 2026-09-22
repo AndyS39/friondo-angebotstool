@@ -12,6 +12,7 @@ from app.db import init_db
 from app.routers import (angebote, anmeldung, artikel, benutzer, erfassung, vorgaenge,
                          projektierung as projektierung_router,
                          glocke, leadmanagement as leadmanagement_router,
+                         leads_api,
                          meine_angebote, montage,
                          erfassungsliste, konfiguration, konfigurator, kunden,
                          leads, signatur, statistik, versand)
@@ -42,6 +43,9 @@ async def lifespan(app: FastAPI):
     # v11 (Phase 69): täglicher Fälligkeits-Lauf 07:00 + Tagesdigest 07:15
     from app import benachrichtigungen
     benachrichtigungen.scheduler_starten()
+    # v12 (Phase 75): Lead-Postfach-Abruf alle 2 Minuten (nur parser_modus=an)
+    from app import lead_parser
+    lead_parser.scheduler_starten()
     yield
 
 
@@ -57,6 +61,7 @@ app.include_router(projektierung_router.router)
 app.include_router(glocke.router)
 app.include_router(montage.router)
 app.include_router(leadmanagement_router.router)
+app.include_router(leads_api.router)
 app.include_router(benutzer.router)
 app.include_router(erfassung.router)
 app.include_router(erfassungsliste.router)

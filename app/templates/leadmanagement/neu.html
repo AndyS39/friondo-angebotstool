@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block titel %}Lead-Schnellanlage – Lead-Management{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Neuer Lead</h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/anrufliste">Anrufliste</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% if duplikat %}
+<div class="warnblock">
+    <strong>Möglicher Doppelter:</strong>
+    {{ duplikat.kunde.anzeige_name }}, {{ duplikat.kunde.ort or '?' }}
+    {% if duplikat.vorgang %}
+        – Vorgang {{ phasen_namen.get(duplikat.vorgang.lead_phase, duplikat.vorgang.lead_phase or 'ohne Phase') }}
+    {% endif %}
+    <p class="dezent">{{ 'Der Vorgang ist offen – Standard: neue Anfrage als zusätzliche Sparte anhängen.'
+        if duplikat.offen else 'Der letzte Vorgang ist abgeschlossen – es entsteht ein neuer Vorgang (Wiederkehrer).' }}</p>
+</div>
+{% endif %}
+
+<form method="post" action="/lead-management/neu" class="formular" style="max-width:700px">
+    <div class="formzeile">
+        <label class="schmal">Anrede
+            <select name="anrede">
+                {% for a in ('', 'Herr', 'Frau', 'Firma') %}
+                    <option value="{{ a }}" {{ 'selected' if daten.get('anrede') == a }}>{{ a or '–' }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Vorname <input type="text" name="vorname" value="{{ daten.get('vorname', '') }}"></label>
+        <label>Nachname * <input type="text" name="nachname" value="{{ daten.get('nachname', '') }}" required></label>
+    </div>
+    <div class="formzeile">
+        <label>Telefon * <input type="tel" name="telefon" value="{{ daten.get('telefon', '') }}"
+               placeholder="Pflicht – sonst E-Mail"></label>
+        <label>E-Mail <input type="email" name="email" value="{{ daten.get('email', '') }}"></label>
+    </div>
+    <div class="formzeile">
+        <label>Straße <input type="text" name="strasse" value="{{ daten.get('strasse', '') }}"></label>
+        <label class="schmal">PLZ * <input type="text" name="plz" value="{{ daten.get('plz', '') }}" required></label>
+        <label>Ort <input type="text" name="ort" value="{{ daten.get('ort', '') }}"></label>
+    </div>
+    <div class="formzeile">
+        <fieldset><legend>Sparten *</legend>
+            {% for s in sparten %}
+                <label style="display:inline-block; margin-right:0.8rem">
+                    <input type="checkbox" name="sparten" value="{{ s }}"
+                           {{ 'checked' if s in daten.get('sparten', []) }}> {{ s }}</label>
+            {% endfor %}
+        </fieldset>
+        <fieldset><legend>Wunschzeiten</legend>
+            {% for w in wunschzeiten %}
+                <label style="display:inline-block; margin-right:0.8rem">
+                    <input type="checkbox" name="wunschzeiten" value="{{ w.key }}"
+                           {{ 'checked' if w.key in daten.get('wunschzeiten', []) }}> {{ w.bezeichnung }}</label>
+            {% endfor %}
+        </fieldset>
+    </div>
+    <div class="formzeile">
+        <label>Quelle *
+            <select name="quelle_id" required>
+                <option value="">– wählen –</option>
+                {% for q in quellen %}
+                    <option value="{{ q.id }}" {{ 'selected' if daten.get('quelle_id') == q.id | string }}>{{ q.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Kampagne
+            <select name="kampagne_id">
+                <option value="">–</option>
+                {% for k in kampagnen %}
+                    <option value="{{ k.id }}" {{ 'selected' if daten.get('kampagne_id') == k.id | string }}>{{ k.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+    </div>
+    <label>Notiz / Anfragetext
+        <textarea name="nachricht" rows="3">{{ daten.get('nachricht', '') }}</textarea>
+    </label>
+    <div class="formzeile">
+        <label><input type="checkbox" name="einwilligung_werbung"
+                      {{ 'checked' if daten.get('einwilligung_werbung') }}>
+            Einwilligung Werbung (Nurture-Mails)</label>
+        <label class="schmal">Einwilligungs-Quelle
+            <select name="einwilligung_quelle">
+                {% for q in ('telefonisch', 'formular', 'portal') %}
+                    <option value="{{ q }}" {{ 'selected' if daten.get('einwilligung_quelle') == q }}>{{ q }}</option>
+                {% endfor %}
+            </select>
+        </label>
+    </div>
+    {% if duplikat %}
+        <div class="formzeile">
+            <button class="knopf" type="submit" name="entscheidung"
+                    value="{{ 'anhaengen' if duplikat.offen else 'wiederkehrer' }}">
+                {{ 'An bestehenden Vorgang anhängen (neue Sparte)' if duplikat.offen
+                   else 'Neuen Vorgang anlegen (Wiederkehrer)' }}</button>
+            <button class="knopf zweitrangig" type="submit" name="entscheidung" value="neu">
+                Eigenen Vorgang anlegen</button>
+        </div>
+    {% else %}
+        <button class="knopf" type="submit">Lead anlegen</button>
+    {% endif %}
+</form>
+{% endblock %}

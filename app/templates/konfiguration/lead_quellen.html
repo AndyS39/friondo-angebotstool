@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block titel %}Lead-Quellen & Kampagnen – Friondo Angebotstool{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Lead-Management → Quellen &amp; Kampagnen</h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung">Zur Parametrierung</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<h2>Quellen</h2>
+<div style="overflow-x:auto">
+<table class="tabelle">
+    <thead><tr><th>Key</th><th>Name</th><th>Typ</th><th>Kanal</th>
+        <th>Kosten je Lead (€)</th><th>Standard-Sparten</th><th>Score-Bonus</th>
+        <th>API-Key</th><th>Aktiv</th><th></th></tr></thead>
+    <tbody>
+    {% for q in quellen %}
+        <tr class="{{ 'inaktiv' if not q.aktiv }}">
+            <td><code>{{ q.key }}</code></td>
+            <td><input form="q{{ q.id }}" type="text" name="name" value="{{ q.name }}" size="18"></td>
+            <td>
+                <select form="q{{ q.id }}" name="typ">
+                    {% for t in ('website', 'landingpage', 'portal', 'partner', 'telefon', 'empfehlung', 'bestand', 'monday') %}
+                        <option value="{{ t }}" {{ 'selected' if q.typ == t }}>{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td><input form="q{{ q.id }}" type="text" name="kanal" value="{{ q.kanal or '' }}" size="10"></td>
+            <td><input form="q{{ q.id }}" type="text" name="kosten" size="6"
+                       value="{{ ('%.2f' | format(q.kosten_je_lead_cent / 100)) | replace('.', ',') if q.kosten_je_lead_cent is not none }}"></td>
+            <td>
+                {% for s in ('WP', 'PV', 'KL', 'WB') %}
+                    <label style="white-space:nowrap"><input form="q{{ q.id }}" type="checkbox"
+                        name="standard_sparten" value="{{ s }}"
+                        {{ 'checked' if s in q.standard_sparten }}>{{ s }}</label>
+                {% endfor %}
+            </td>
+            <td><input form="q{{ q.id }}" type="number" name="score_bonus" value="{{ q.score_bonus }}" style="width:4rem"></td>
+            <td>{% if q.api_key %}<code title="{{ q.api_key }}">{{ q.api_key[:8] }}…</code>{% else %}<span class="dezent">–</span>{% endif %}
+                <label class="dezent" style="white-space:nowrap"><input form="q{{ q.id }}" type="checkbox" name="api_key_neu"> neu</label></td>
+            <td><input form="q{{ q.id }}" type="checkbox" name="aktiv" {{ 'checked' if q.aktiv }}></td>
+            <td>
+                <form id="q{{ q.id }}" method="post" action="/parametrierung/lead-quellen">
+                    <input type="hidden" name="art" value="quelle">
+                    <input type="hidden" name="id" value="{{ q.id }}">
+                    <button class="knopf klein" type="submit">Speichern</button>
+                </form>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<h3>Neue Quelle</h3>
+<form method="post" action="/parametrierung/lead-quellen" class="formzeile">
+    <input type="hidden" name="art" value="quelle">
+    <label>Key <input type="text" name="key" required placeholder="z. B. portal_xy"></label>
+    <label>Name <input type="text" name="name" required></label>
+    <label>Typ
+        <select name="typ">
+            {% for t in ('website', 'landingpage', 'portal', 'partner', 'telefon', 'empfehlung', 'bestand') %}
+                <option value="{{ t }}">{{ t }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>Kanal <input type="text" name="kanal" size="10"></label>
+    <button class="knopf" type="submit">Anlegen</button>
+</form>
+<p class="dezent">Der API-Key gehört zum REST-Endpunkt <code>POST /api/leads</code>
+    (Header <code>X-Api-Key</code>, Doku: docs/leads-api.md). „neu“ erzeugt beim
+    Speichern einen frischen Schlüssel. Vollständigen Key per Maus-Tooltip ablesen.</p>
+
+<h2>Kampagnen</h2>
+<table class="tabelle" style="max-width:1000px">
+    <thead><tr><th>Name</th><th>Quelle</th><th>Von</th><th>Bis</th>
+        <th>Budget (€)</th><th>utm_campaign</th><th>Aktiv</th><th></th></tr></thead>
+    <tbody>
+    {% for k in kampagnen %}
+        <tr class="{{ 'inaktiv' if not k.aktiv }}">
+            <td><input form="k{{ k.id }}" type="text" name="name" value="{{ k.name }}" size="16"></td>
+            <td>
+                <select form="k{{ k.id }}" name="quelle_id">
+                    <option value="">–</option>
+                    {% for q in quellen %}
+                        <option value="{{ q.id }}" {{ 'selected' if k.quelle_id == q.id }}>{{ q.name }}</option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td><input form="k{{ k.id }}" type="date" name="von"
+                       value="{{ k.von.strftime('%Y-%m-%d') if k.von }}"></td>
+            <td><input form="k{{ k.id }}" type="date" name="bis"
+                       value="{{ k.bis.strftime('%Y-%m-%d') if k.bis }}"></td>
+            <td><input form="k{{ k.id }}" type="text" name="budget" size="8"
+                       value="{{ ('%.2f' | format(k.budget_cent / 100)) | replace('.', ',') if k.budget_cent is not none }}"></td>
+            <td><input form="k{{ k.id }}" type="text" name="utm_campaign" value="{{ k.utm_campaign }}" size="14"></td>
+            <td><input form="k{{ k.id }}" type="checkbox" name="aktiv" {{ 'checked' if k.aktiv }}></td>
+            <td>
+                <form id="k{{ k.id }}" method="post" action="/parametrierung/lead-quellen">
+                    <input type="hidden" name="art" value="kampagne">
+                    <input type="hidden" name="kampagne_id" value="{{ k.id }}">
+                    <button class="knopf klein" type="submit">Speichern</button>
+                </form>
+            </td>
+        </tr>
+    {% else %}
+        <tr><td colspan="8" class="dezent">Noch keine Kampagnen.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h3>Neue Kampagne</h3>
+<form method="post" action="/parametrierung/lead-quellen" class="formzeile">
+    <input type="hidden" name="art" value="kampagne">
+    <label>Name <input type="text" name="name" required></label>
+    <label>Quelle
+        <select name="quelle_id">
+            <option value="">–</option>
+            {% for q in quellen %}<option value="{{ q.id }}">{{ q.name }}</option>{% endfor %}
+        </select>
+    </label>
+    <label>Von <input type="date" name="von"></label>
+    <label>Bis <input type="date" name="bis"></label>
+    <label>Budget (€) <input type="text" name="budget" size="8"></label>
+    <label>utm_campaign <input type="text" name="utm_campaign" size="14"></label>
+    <button class="knopf" type="submit">Anlegen</button>
+</form>
+{% endblock %}

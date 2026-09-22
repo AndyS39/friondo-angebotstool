@@ -1333,3 +1333,23 @@ class LeadParameter(Base):
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
                                                   onupdate=datetime.now)
+
+
+class LeadPosteingang(Base):
+    """„Posteingang unklar“ (Phase 75): Mails aus leads@, die keine
+    Parser-Regel treffen – mit Ein-Klick-Anlage. (Tabelle nicht im Plan
+    gelistet; Entscheidung in docs/leadmanagement-entscheidungen.md.)"""
+    __tablename__ = "lead_posteingang"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    graph_id: Mapped[str] = mapped_column(String(300), unique=True)
+    absender: Mapped[str] = mapped_column(String(200), default="")
+    betreff: Mapped[str] = mapped_column(String(300), default="")
+    body: Mapped[str] = mapped_column(Text, default="")
+    empfangen_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(10), default="offen")  # offen|ignoriert|angelegt
+    vorgang_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)

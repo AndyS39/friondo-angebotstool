@@ -307,6 +307,14 @@ def _daten() -> list[str]:
             session.commit()
             meldungen.append(f"Lead-Phase für {anzahl} bestehende Vorgänge "
                              "abgeleitet (Badge monday)")
+        # Phase 75: Startquellen + Parser-Standardregel (idempotent)
+        from app import lead_parser
+        neu_q = leadmanagement.quellen_vorbelegen(session)
+        if neu_q:
+            meldungen.append(f"{neu_q} Lead-Startquellen angelegt")
+        if lead_parser.standardregel_anlegen(session):
+            meldungen.append("Parser-Regel Formular-Standard angelegt")
+        session.commit()
     finally:
         session.close()
     return meldungen

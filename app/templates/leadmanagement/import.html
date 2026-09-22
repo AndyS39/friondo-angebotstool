@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block titel %}Lead-Import – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>CSV/Excel-Import</h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/anrufliste">Anrufliste</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% if schritt == 'upload' %}
+<form method="post" action="/lead-management/import" enctype="multipart/form-data"
+      class="formular" style="max-width:700px">
+    <input type="hidden" name="schritt" value="upload">
+    <div class="formzeile">
+        <label>Datei (CSV oder .xlsx) <input type="file" name="datei"
+               accept=".csv,.xlsx,.txt" required></label>
+        <label>Quelle (lädt die gespeicherte Spaltenzuordnung)
+            <select name="quelle_id">
+                <option value="">–</option>
+                {% for q in quellen %}<option value="{{ q.id }}">{{ q.name }}</option>{% endfor %}
+            </select>
+        </label>
+    </div>
+    <button class="knopf" type="submit">Hochladen und Vorschau</button>
+</form>
+
+{% elif schritt == 'vorschau' %}
+<form method="post" action="/lead-management/import">
+    <input type="hidden" name="schritt" value="ausfuehren">
+    <input type="hidden" name="token" value="{{ token }}">
+    <div class="formzeile">
+        <label>Quelle *
+            <select name="quelle_id" required>
+                <option value="">– wählen –</option>
+                {% for q in quellen %}
+                    <option value="{{ q.id }}" {{ 'selected' if form_daten.get('quelle_id') == q.id | string }}>{{ q.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Kampagne
+            <select name="kampagne_id">
+                <option value="">–</option>
+                {% for k in kampagnen %}<option value="{{ k.id }}">{{ k.name }}</option>{% endfor %}
+            </select>
+        </label>
+        <fieldset><legend>Sparten für die Datei *</legend>
+            {% for s in sparten %}
+                <label style="display:inline-block; margin-right:0.8rem">
+                    <input type="checkbox" name="sparten" value="{{ s }}"> {{ s }}</label>
+            {% endfor %}
+        </fieldset>
+    </div>
+    <h2>Spaltenzuordnung + Vorschau (erste 20 Zeilen)</h2>
+    <div style="overflow-x:auto">
+    <table class="tabelle">
+        <thead>
+            <tr><th></th>{% for name in kopf %}<th>{{ name }}</th>{% endfor %}</tr>
+            <tr><th></th>
+                {% for name in kopf %}
+                {% set i = loop.index0 %}
+                <th>
+                    <select name="spalte_{{ i }}">
+                        <option value="">– ignorieren –</option>
+                        {% for feld in felder %}
+                            <option value="{{ feld }}" {{ 'selected' if zuordnung.get(i | string) == feld }}>{{ feld }}</option>
+                        {% endfor %}
+                    </select>
+                </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+        {% for zeile in zeilen %}
+            <tr class="{{ 'aufgabe-ueberfaellig' if duplikate.get(loop.index0) }}">
+                <td>{{ '⚠ Doppelter?' if duplikate.get(loop.index0) }}</td>
+                {% for wert in zeile %}<td>{{ wert }}</td>{% endfor %}
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    <button class="knopf" type="submit">Import ausführen</button>
+</form>
+
+{% else %}
+<h2>Import-Protokoll</h2>
+<p><strong>{{ protokoll.angelegt }}</strong> angelegt ·
+   <strong>{{ protokoll.angehaengt }}</strong> an bestehende Vorgänge angehängt ·
+   <strong>{{ protokoll.uebersprungen | length }}</strong> übersprungen</p>
+{% if protokoll.uebersprungen %}
+<ul>{% for z in protokoll.uebersprungen %}<li class="dezent">{{ z }}</li>{% endfor %}</ul>
+{% endif %}
+<a class="knopf" href="/lead-management/anrufliste">Zur Anrufliste</a>
+<a class="knopf zweitrangig" href="/lead-management/import">Weitere Datei</a>
+{% endif %}
+{% endblock %}

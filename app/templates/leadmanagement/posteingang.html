@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block titel %}Posteingang unklar – Lead-Management{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Posteingang unklar ({{ eintraege | length }})</h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/anrufliste">Anrufliste</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+<p class="dezent">Mails aus dem Lead-Postfach, die keine Parser-Regel getroffen
+    haben (Abruf nur bei Parser-Modus „an“).</p>
+
+{% if eintraege %}
+<table class="tabelle">
+    <thead><tr><th>Empfangen</th><th>Absender</th><th>Betreff</th><th>Vorschau</th><th></th></tr></thead>
+    <tbody>
+    {% for e in eintraege %}
+        <tr>
+            <td>{{ e.empfangen_am.strftime('%d.%m.%y %H:%M') if e.empfangen_am
+                   else e.erstellt_am.strftime('%d.%m.%y %H:%M') }}</td>
+            <td>{{ e.absender }}</td>
+            <td>{{ e.betreff }}</td>
+            <td class="dezent">{{ e.body[:120] }}{{ '…' if e.body | length > 120 }}</td>
+            <td class="aktionen">
+                <a class="knopf klein" href="/lead-management/posteingang/{{ e.id }}/anlegen">Als Lead anlegen</a>
+                <form method="post" action="/lead-management/posteingang/{{ e.id }}/ignorieren">
+                    <button class="knopf klein zweitrangig" type="submit">Ignorieren</button>
+                </form>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}<p class="dezent">Keine unklaren Mails.</p>{% endif %}
+{% endblock %}

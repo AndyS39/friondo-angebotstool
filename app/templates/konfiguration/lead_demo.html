@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block titel %}Lead-Demo-Daten – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Lead-Management → Demo-Daten</h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung">Zur Parametrierung</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<p>Aktuell <strong>{{ anzahl }}</strong> Demo-Leads im Modul.
+    {% if not demo_aktiv %}<span class="abzeichen">Freigabe-Modus „alle“ –
+    der Generator ist nur im Demo-Modus aktiv.</span>{% endif %}</p>
+<p class="dezent">Demo-Leads (fiktive Namen, Orte im Vertriebsgebiet, Telefon
+    0203 000 xx) erscheinen ausschließlich im Lead-Modul – nie in Leads VOT,
+    Kunden, Angeboten, Statistik oder monday.</p>
+
+<div class="formzeile">
+    <form method="post" action="/parametrierung/lead-demo">
+        <input type="hidden" name="aktion" value="erzeugen">
+        <button class="knopf" type="submit" {{ 'disabled' if not demo_aktiv }}>
+            25 Demo-Leads erzeugen</button>
+    </form>
+    <form method="post" action="/parametrierung/lead-demo"
+          onsubmit="return confirm('Wirklich ALLE {{ anzahl }} Demo-Leads löschen (Vorgänge, Kunden ohne andere Vorgänge, Aktivitäten, Termine, Log)?');">
+        <input type="hidden" name="aktion" value="loeschen">
+        <button class="knopf zweitrangig" type="submit">Alle Demo-Leads löschen</button>
+    </form>
+</div>
+<p class="dezent">Verteilung je Lauf: 10 neu · 6 in Kontaktierung (mit
+    Versuchen) · 5 qualifiziert · 4 terminiert (VOT-Termine in den nächsten
+    10 Werktagen, verteilt auf die vorhandenen Außendienstler); Eingangszeiten
+    der letzten 14 Tage.</p>
+{% endblock %}

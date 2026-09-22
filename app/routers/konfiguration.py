@@ -740,3 +740,230 @@ async def lead_logik_upload(request: Request,
                + (f". Backup: {sicherung.name}" if sicherung else "."))
     return RedirectResponse("/parametrierung/lead-logik?meldung="
                             + quote_plus(meldung), status_code=303)
+
+
+# --- v12 (Phase 75): Lead-Management – Quellen & Kampagnen, Parser, Demo-Daten -----
+
+def _lead_gate(request: Request, session: Session):
+    from fastapi import HTTPException
+
+    from app import leadmanagement
+    if not leadmanagement.lead_modul_sichtbar(session, request.state.benutzer):
+        raise HTTPException(status_code=404)
+
+
+@router.get("/lead-quellen")
+async def lead_quellen_seite(request: Request,
+                             session: Session = Depends(get_session)):
+    from app.models import Kampagne, LeadQuelle
+    _lead_gate(request, session)
+    return render(request, "konfiguration/lead_quellen.html",
+                  aktiv="/parametrierung",
+                  quellen=session.query(LeadQuelle).order_by(LeadQuelle.name).all(),
+                  kampagnen=session.query(Kampagne).order_by(Kampagne.name).all(),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/lead-quellen")
+async def lead_quelle_speichern(request: Request,
+                                session: Session = Depends(get_session)):
+    import json as json_modul
+    import re as re_modul
+    import secrets
+    from urllib.parse import quote_plus
+
+    from app.models import Kampagne, LeadQuelle
+    _lead_gate(request, session)
+    form = await request.form()
+    art = form.get("art") or "quelle"
+
+    if art == "kampagne":
+        from datetime import datetime as dt
+        kampagne_id = form.get("kampagne_id") or ""
+        def _datum(name):
+            wert = (form.get(name) or "").strip()
+            try:
+                return dt.strptime(wert, "%Y-%m-%d") if wert else None
+            except ValueError:
+                return None
+        werte = dict(
+            name=(form.get("name") or "").strip()[:200],
+            quelle_id=(int(form.get("quelle_id"))
+                       if str(form.get("quelle_id") or "").isdigit() else None),
+            von=_datum("von"), bis=_datum("bis"),
+            budget_cent=(int(float((form.get("budget") or "0").replace(",", ".")) * 100)
+                         if (form.get("budget") or "").strip() else None),
+            utm_campaign=(form.get("utm_campaign") or "").strip()[:200],
+            aktiv=form.get("aktiv") == "on")
+        if kampagne_id.isdigit():
+            kampagne = session.get(Kampagne, int(kampagne_id))
+            if kampagne is not None:
+                for feld, wert in werte.items():
+                    if feld == "name" and not wert:
+                        continue
+                    setattr(kampagne, feld, wert)
+        elif werte["name"]:
+            session.add(Kampagne(erstellt_von=request.state.benutzer.id,
+                                 **dict(werte, aktiv=True)))
+        session.commit()
+        return RedirectResponse("/parametrierung/lead-quellen?meldung=Gespeichert",
+                                status_code=303)
+
+    quelle_id = form.get("id") or ""
+    schluessel = (form.get("key") or "").strip().lower()
+    schluessel = re_modul.sub(r"[^a-z0-9_]", "_", schluessel)[:100]
+    sparten = [s for s in form.getlist("standard_sparten")
+               if s in ("WP", "PV", "KL", "WB")]
+    werte = dict(
+        name=(form.get("name") or "").strip()[:200],
+        typ=(form.get("typ") if form.get("typ") in
+             ("website", "landingpage", "portal", "partner", "telefon",
+              "empfehlung", "bestand", "monday") else "website"),
+        kanal=(form.get("kanal") or "").strip()[:100] or None,
+        kosten_je_lead_cent=(int(float((form.get("kosten") or "0").replace(",", ".")) * 100)
+                             if (form.get("kosten") or "").strip() else None),
+        standard_sparten=json_modul.dumps(sparten),
+        score_bonus=(int(form.get("score_bonus"))
+                     if str(form.get("score_bonus") or "").lstrip("-").isdigit() else 0),
+        aktiv=form.get("aktiv") == "on")
+    if quelle_id.isdigit():
+        quelle = session.get(LeadQuelle, int(quelle_id))
+        if quelle is not None:
+            for feld, wert in werte.items():
+                if feld == "name" and not wert:
+                    continue
+                setattr(quelle, feld, wert)
+            if form.get("api_key_neu") == "on":
+                quelle.api_key = secrets.token_hex(24)
+    elif werte["name"] and schluessel:
+        if session.query(LeadQuelle).filter(LeadQuelle.key == schluessel).count():
+            return RedirectResponse("/parametrierung/lead-quellen?meldung="
+                                    + quote_plus(f"Key {schluessel} existiert schon."),
+                                    status_code=303)
+        session.add(LeadQuelle(key=schluessel,
+                               erstellt_von=request.state.benutzer.id,
+                               **dict(werte, aktiv=True)))
+    else:
+        return RedirectResponse("/parametrierung/lead-quellen?meldung="
+                                + quote_plus("Name und Key sind Pflicht."),
+                                status_code=303)
+    session.commit()
+    return RedirectResponse("/parametrierung/lead-quellen?meldung=Gespeichert",
+                            status_code=303)
+
+
+@router.get("/lead-parser")
+async def lead_parser_seite(request: Request,
+                            session: Session = Depends(get_session)):
+    from app.models import LeadQuelle, ParserRegel
+    _lead_gate(request, session)
+    return render(request, "konfiguration/lead_parser.html",
+                  aktiv="/parametrierung",
+                  regeln=session.query(ParserRegel).order_by(ParserRegel.id).all(),
+                  quellen=session.query(LeadQuelle)
+                  .filter(LeadQuelle.aktiv.is_(True)).order_by(LeadQuelle.name).all(),
+                  test_ergebnis=None, test_betreff="", test_body="",
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/lead-parser")
+async def lead_parser_speichern(request: Request,
+                                session: Session = Depends(get_session)):
+    import json as json_modul
+    from urllib.parse import quote_plus
+
+    from app import lead_parser
+    from app.models import LeadQuelle, ParserRegel
+    _lead_gate(request, session)
+    form = await request.form()
+
+    if form.get("art") == "test":
+        betreff = form.get("test_betreff") or ""
+        body = form.get("test_body") or ""
+        regel = lead_parser.regel_finden(session, form.get("test_absender") or "",
+                                         betreff)
+        ergebnis = {"regel": regel.name if regel else None, "felder": {}}
+        if regel is not None:
+            felder = lead_parser.mail_parsen(regel, betreff, body)
+            felder.pop("rohdaten", None)
+            ergebnis["felder"] = felder
+        return render(request, "konfiguration/lead_parser.html",
+                      aktiv="/parametrierung",
+                      regeln=session.query(ParserRegel).order_by(ParserRegel.id).all(),
+                      quellen=session.query(LeadQuelle)
+                      .filter(LeadQuelle.aktiv.is_(True)).order_by(LeadQuelle.name).all(),
+                      test_ergebnis=ergebnis, test_betreff=betreff,
+                      test_body=body, meldung="")
+
+    regel_id = form.get("id") or ""
+    zuordnung = (form.get("feldzuordnung") or "").strip() or "{}"
+    try:
+        json_modul.loads(zuordnung)
+    except ValueError:
+        return RedirectResponse("/parametrierung/lead-parser?meldung="
+                                + quote_plus("Feldzuordnung ist kein gültiges JSON."),
+                                status_code=303)
+    werte = dict(
+        name=(form.get("name") or "").strip()[:200],
+        quelle_id=(int(form.get("quelle_id"))
+                   if str(form.get("quelle_id") or "").isdigit() else None),
+        absender_muster=(form.get("absender_muster") or "").strip()[:300],
+        betreff_muster=(form.get("betreff_muster") or "").strip()[:300],
+        format=(form.get("format") if form.get("format") in
+                ("zeilen", "html_tabelle", "json") else "zeilen"),
+        feldzuordnung=zuordnung,
+        aktiv=form.get("aktiv") == "on")
+    if regel_id.isdigit():
+        regel = session.get(ParserRegel, int(regel_id))
+        if regel is not None:
+            for feld, wert in werte.items():
+                if feld == "name" and not wert:
+                    continue
+                setattr(regel, feld, wert)
+    elif werte["name"]:
+        session.add(ParserRegel(erstellt_von=request.state.benutzer.id,
+                                **dict(werte, aktiv=True)))
+    session.commit()
+    return RedirectResponse("/parametrierung/lead-parser?meldung=Gespeichert",
+                            status_code=303)
+
+
+@router.get("/lead-demo")
+async def lead_demo_seite(request: Request,
+                          session: Session = Depends(get_session)):
+    from app import leadmanagement
+    from app.models import Vorgang
+    _lead_gate(request, session)
+    if request.state.benutzer.rolle != "admin":
+        return RedirectResponse("/parametrierung", status_code=303)
+    return render(request, "konfiguration/lead_demo.html",
+                  aktiv="/parametrierung",
+                  demo_aktiv=leadmanagement.demo_aktiv(session),
+                  anzahl=session.query(Vorgang)
+                  .filter(Vorgang.demo.is_(True)).count(),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/lead-demo")
+async def lead_demo_aktion(request: Request,
+                           session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+
+    from app import leadmanagement
+    _lead_gate(request, session)
+    if request.state.benutzer.rolle != "admin":
+        return RedirectResponse("/parametrierung", status_code=303)
+    form = await request.form()
+    if form.get("aktion") == "erzeugen":
+        ergebnis = leadmanagement.demo_leads_erzeugen(session,
+                                                      request.state.benutzer)
+        meldung = (ergebnis.get("fehler")
+                   or f"{ergebnis.get('angelegt', 0)} Demo-Leads erzeugt.")
+    elif form.get("aktion") == "loeschen":
+        ergebnis = leadmanagement.demo_leads_loeschen(session)
+        meldung = (f"{ergebnis['vorgaenge']} Demo-Vorgänge und "
+                   f"{ergebnis['kunden']} Demo-Kunden gelöscht.")
+    else:
+        meldung = "Unbekannte Aktion."
+    return RedirectResponse("/parametrierung/lead-demo?meldung="
+                            + quote_plus(meldung), status_code=303)
