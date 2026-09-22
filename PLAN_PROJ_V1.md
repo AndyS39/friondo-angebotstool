@@ -343,7 +343,7 @@ Server – dieser Plan setzt darauf auf und nummeriert ab Phase 64 weiter.
 
 ## Phase 72 – Live-Master fortschreiben (Anweisung an Claude Code)
 
-- [ ] `CLAUDE.md`: Kopf auf „(v11)"; neuen Abschnitt **„Neu in v10 – Projektierung V1 (abgestimmt
+- [x] `CLAUDE.md`: Kopf auf „(v11)"; neuen Abschnitt **„Neu in v10 – Projektierung V1 (abgestimmt
   20.09.2026)"** anhängen, wörtlich:
 
   > - **Projektierung V1:** Projekt = Bauvorhaben am v10-Vorgang (höchstens ein
@@ -379,7 +379,7 @@ Server – dieser Plan setzt darauf auf und nummeriert ab Phase 64 weiter.
   >   Formulare + Collin-Bestellung (UGL/IDS), V4 Rechnungen/OP/Mahnwesen +
   >   Heizreport-/SpotmyEnergy-Anbindung.
 
-- [ ] `konfigurator_logik_v5.xlsx`: **keine Änderung** in V1.
+- [x] `konfigurator_logik_v5.xlsx`: **keine Änderung** in V1.
 
 ---
 

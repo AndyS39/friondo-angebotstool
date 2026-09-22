@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v10)
+# Friondo Angebotstool – Projektkontext (v11)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -285,3 +285,38 @@ Fragebogen mit Seiten + AMPEL, Erfassungsliste, Nummernkreis AN-C-<JJ><NNNN>,
 EP-Regel, Decimal/Cent, 19 % USt, KfW-Modul mit Testfällen gegen den HTML-Rechner,
 PDF nach Referenz AN250096, Vollmacht nur bei iMSys/SpotDynamic, Anhänge-Bibliothek,
 Graph-Versand über Innendienst, Terminal-Server-Betrieb.
+
+## Neu in v10 – Projektierung V1 (abgestimmt 20.09.2026)
+
+- **Projektierung V1:** Projekt = Bauvorhaben am v10-Vorgang (höchstens ein
+  offenes Projekt je Vorgang, Nummer PR-JJNNNN) mit Gewerken je Sparte WP/PV/KL/WB; jedes Gewerk hat eigene Phase
+  (Feinplanung · Feinplanung abgeschlossen · Montage geplant · In Ausführung ·
+  Abnahme offen · Abgeschlossen · Storniert), Aufgaben, Termine, Auftrag
+  (angenommenes Angebot, folgt Versionen). Button „Angebot → Projekt" an
+  Angeboten „Angenommen" (Tool + TAIFUN, auch in der Vorgangsakte) mit Vorschlag
+  „zu offenem Projekt des Vorgangs hinzufügen"; Vorgangsakte zeigt den Projektstand. Projektstatus abgeleitet vom am wenigsten fortgeschrittenen
+  offenen Gewerk.
+- **Aufgabenpakete** aus `projektierung_logik_v1.xlsx` (Blätter Aufgabenpakete,
+  Paketregeln, Ordnerstruktur, Sub-Typen), Import in der Parametrierung.
+  Fälligkeitsregeln `+N`, `FP+N`, `M-N`. Planungs-Ampel = Pflichtaufgaben-Stand.
+  Wächter je Phasenwechsel, Override mit Begründung protokolliert.
+- **Oberfläche:** Kanban (Karte = Projekt, Gewerk-Chips), Liste, Terminübersicht,
+  Projektakte mit Gewerk-Spalten nebeneinander, Dokumente in Ordnerstruktur
+  `data/projekte/<PR>/`, Verlauf + Kommentare mit @Erwähnung, Glocke +
+  Mail-Benachrichtigung (aus/sofort/digest), „Meine Aufgaben".
+- **Rollen:** neu Projektierung (keine EK/DB außer Häkchen „Kalkulation
+  sichtbar", keine Angebotserstellung) und Montage (nur `/montage`: Meine
+  Einsätze, Steckbrief, Fotos, Montage gestartet/fertig); Mehrfachrollen;
+  Teams und Subunternehmer als Stammdaten; Außendienst sieht Projektstand
+  read-only am eigenen Angebot.
+- **Demo-Modus:** Parameter `freigabe_modus` (admin / alle, Standard admin):
+  bei admin ist das gesamte Modul nur für Admins sichtbar und aufrufbar
+  (server-seitig), Startportal-Karte trägt Badge „Demo · Coming soon", andere
+  Rollen sehen Null-Kacheln und „Das Modul befindet sich im Aufbau."
+- **Storno** mit Pflichtgrund setzt Angebot auf Abgelehnt. **Rechnung
+  freigeben** mit Restarbeiten-Pflichtfrage → Abgeschlossen. Migration legt für
+  alle angenommenen Angebote Projekte an. Absender Projekt-Mails
+  `projektierung@friondo.de` (Fallback angebot@).
+- Geplant: V2 Feinplanungs-Erfassung + Sub-Mails + Kalender, V3 Montage-
+  Formulare + Collin-Bestellung (UGL/IDS), V4 Rechnungen/OP/Mahnwesen +
+  Heizreport-/SpotmyEnergy-Anbindung.
