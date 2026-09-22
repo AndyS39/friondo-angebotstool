@@ -124,3 +124,20 @@ nach V1 durch.
   Leaflet-Karte in Phase 79.
 - **Samstag** zählt zu den Vorschlags-Tagen (Wunschzeit „samstag“), sofern
   das AD-Profil dort Arbeitszeiten hat.
+
+## Phase 78 – Kundenkommunikation mit Sendesperre
+
+- **Vorlagen-Gruppe als eigene Unterseite** (/parametrierung/lead-vorlagen,
+  vom Vorlagen-Editor verlinkt): Der bestehende Editor ist fest auf
+  Angebots-Vorlagen (Standard + je AD) zugeschnitten; die sechs
+  Lead-Schlüssel mit optionaler Sparten-Variante brauchen eine eigene Maske.
+  Ablage in den bestehenden Einstellungen (lead_vorlage_<key>[_<Sparte>]_*).
+- **mail_modus wird beim Versand ausgewertet** (nicht beim Einreihen):
+  Umstellen des Schalters wirkt sofort auf alles, was noch in der
+  Warteschlange liegt; der ausgeführte Modus wird am Eintrag gespeichert.
+  live wird im Demo-Modus server-seitig zu protokoll herabgestuft
+  (zusätzlich weist die Einstellungen-Seite in Phase 81 den Wert ab).
+- **Nurture ohne Einwilligung** → Status fehler mit klarem Text (sichtbar
+  in der Akte) statt stillem Verwerfen.
+- **Rückruf-Betreff** „Rückruf V<Vorgangs-Nr>“ ({link_rueckruf} als
+  mailto-Link) – die Antwort-Zuordnung erkennt dieses Muster und AN-C-Nummern.

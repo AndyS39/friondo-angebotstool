@@ -420,7 +420,7 @@ Terminal-Server weiterhin nacheinander (update.bat).
 
 ## Phase 78 – Kundenkommunikation (Mail) mit Sendesperre
 
-- [ ] **Vorlagen** im bestehenden Vorlagen-Editor, neue Gruppe „Lead-Management" mit
+- [x] **Vorlagen** im bestehenden Vorlagen-Editor, neue Gruppe „Lead-Management" mit
   Schlüsseln `eingangsbestaetigung`, `nicht_erreicht`, `terminbestaetigung`,
   `terminerinnerung`, `terminaenderung`, `nurture`; je Vorlage Betreff + HTML-Text,
   optional je Sparte (Fallback allgemein). Platzhalter zusätzlich zu den bestehenden:
@@ -431,29 +431,29 @@ Terminal-Server weiterhin nacheinander (update.bat).
   Sie-Form, Friondo-Signatur; Terminbestätigung mit Vorbereitungs-Liste: letzte
   Heizkostenabrechnung, Stromrechnung, Grundriss falls vorhanden, Zugang zum
   Heizungsraum/Zählerschrank).
-- [ ] **Auslöser** → `kommunikation_log` (`status = geplant`): Eingang (sofort, nur wenn
+- [x] **Auslöser** → `kommunikation_log` (`status = geplant`): Eingang (sofort, nur wenn
   E-Mail vorhanden) · Kaskade-Aktionen · Buchen (Bestätigung sofort; Erinnerung
   `geplant_am` = Termin − 24 h) · Umbuchung · Nurture. ICS-Anhang bei Bestätigung/
   Änderung (`text/calendar`, METHOD:REQUEST, Organizer `absender_postfach`, Ort =
   Adresse). Kein Versand an Leads mit `einwilligung_werbung = 0` für `nurture`
   (Terminorganisation und Eingangsbestätigung sind von der Anfrage gedeckt).
-- [ ] **Versand-Job** jede Minute: fällige Einträge verarbeiten nach `mail_modus`:
+- [x] **Versand-Job** jede Minute: fällige Einträge verarbeiten nach `mail_modus`:
   `protokoll` → Mail rendern, als `status = protokolliert` speichern, **nicht senden**
   (Vorschau in der Akte); `test` → Versand über Graph an `mail_testadresse` mit Präfix
   „[TEST an <echte Adresse>]" im Betreff; `live` → Versand an den Kunden, Absender
   `absender_postfach` (Fallback angebot@ wie bei der Projektierung) – **`live` ist
   server-seitig nur zulässig bei `lead_freigabe_modus = alle`**, sonst wird der Wert beim
   Speichern abgewiesen. Fehler → `status = fehler`, Wiederholen-Button, nie blockierend.
-- [ ] **Reiter „Kommunikation"** in der Akte: alle Log-Einträge mit Status, Vorschau
+- [x] **Reiter „Kommunikation"** in der Akte: alle Log-Einträge mit Status, Vorschau
   (gerendertes HTML), Anhang, Button „Jetzt senden/erneut senden" (nach `mail_modus`),
   Button „Mail mit Vorlage" (Auswahl + Editierfeld vor dem Senden). Aktivität `mail_aus`
   je gesendeter/protokollierter Mail.
-- [ ] **Antworten** (nur bei `parser_modus = an`): Mails im Postfach, die keine Parser-Regel
+- [x] **Antworten** (nur bei `parser_modus = an`): Mails im Postfach, die keine Parser-Regel
   treffen, aber per Konversations-ID oder Betreff „Rückruf <Vorgangs-Nr>"/`AN-C-…` einem
   Vorgang zuzuordnen sind, werden als Aktivität `mail_ein` an den Vorgang gehängt
   (Kurztext, Link auf die Mail), Benachrichtigung an den Leadmanager. Sonst „Posteingang
   unklar".
-- [ ] Test: Buchen → Bestätigung und Erinnerung im Log als „protokolliert" mit korrektem
+- [x] Test: Buchen → Bestätigung und Erinnerung im Log als „protokolliert" mit korrektem
   ICS; `mail_modus = test` → Mail kommt an der Testadresse an; Versuch `live` im
   Demo-Modus → abgewiesen; Platzhalter alle gefüllt (keine `{…}` im Ergebnis).
 

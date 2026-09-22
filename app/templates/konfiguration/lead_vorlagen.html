@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block titel %}Lead-Vorlagen – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>E-Mail-Vorlagen → Gruppe Lead-Management</h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung/vorlagen">Angebots-Vorlagen</a>
+        <a class="knopf zweitrangig" href="/parametrierung">Zur Parametrierung</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<nav class="reiter">
+    {% for key, (name, _, _) in vorlagen.items() %}
+        <a class="{{ 'aktiv' if key == schluessel }}"
+           href="/parametrierung/lead-vorlagen?vorlage={{ key }}">{{ name }}</a>
+    {% endfor %}
+</nav>
+
+<form method="get" action="/parametrierung/lead-vorlagen" class="suchleiste">
+    <input type="hidden" name="vorlage" value="{{ schluessel }}">
+    <label class="kontrollfeld">Variante
+        <select name="sparte" onchange="this.form.submit()">
+            <option value="">allgemein (Fallback)</option>
+            {% for s in ('WP', 'PV', 'KL', 'WB') %}
+                <option value="{{ s }}" {{ 'selected' if sparte == s }}>je Sparte: {{ s }}</option>
+            {% endfor %}
+        </select>
+    </label>
+</form>
+
+<form method="post" action="/parametrierung/lead-vorlagen" class="formular"
+      style="max-width:860px">
+    <input type="hidden" name="vorlage" value="{{ schluessel }}">
+    <input type="hidden" name="sparte" value="{{ sparte }}">
+    <label>Betreff <input type="text" name="betreff" value="{{ betreff }}"></label>
+    <label>Text <textarea name="text" rows="14">{{ text }}</textarea></label>
+    <div class="formzeile">
+        <button class="knopf" type="submit">Speichern</button>
+        {% if sparte %}
+            <button class="knopf zweitrangig" type="submit" name="aktion"
+                    value="entfernen">Sparten-Variante entfernen (allgemein gilt)</button>
+        {% endif %}
+    </div>
+</form>
+<p class="dezent">Platzhalter zusätzlich zu den bestehenden:
+    {{ platzhalter | join(' · ') }}.
+    Terminbestätigung/-änderung erhalten automatisch den ICS-Kalendereintrag.
+    Nurture geht nur an Leads mit Werbe-Einwilligung. Versand nach Mail-Modus
+    (Lead-Einstellungen): protokoll = rendern ohne Senden (Demo-Sendesperre),
+    test = an die Testadresse mit [TEST]-Präfix, live = an den Kunden (nur
+    bei Freigabe „alle").</p>
+{% endblock %}

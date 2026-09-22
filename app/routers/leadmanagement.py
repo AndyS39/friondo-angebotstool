@@ -1036,3 +1036,101 @@ async def adresse_setzen(request: Request, vorgang_id: int,
     return RedirectResponse("/lead-management/adressen?meldung="
                             + quote_plus("Koordinaten gespeichert."),
                             status_code=303)
+
+
+# --- Phase 78: Kommunikation (Warteschlange, Vorschau, Senden) ----------------------
+
+@router.get("/lead/{vorgang_id}/kommunikation")
+async def kommunikation(request: Request, vorgang_id: int,
+                        session: Session = Depends(get_session)):
+    _gate(request, session)
+    from app import lead_mail
+    from app.models import KommunikationLog
+    vorgang = session.get(Vorgang, vorgang_id)
+    if vorgang is None:
+        return RedirectResponse("/lead-management/anrufliste", status_code=303)
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    eintraege = (session.query(KommunikationLog)
+                 .filter(KommunikationLog.vorgang_id == vorgang_id)
+                 .order_by(KommunikationLog.geplant_am.desc()).all())
+    # Vorschau für noch nicht gerenderte (geplante) Einträge
+    for eintrag in eintraege:
+        if not eintrag.betreff:
+            lead_mail.rendern(session, eintrag)
+    session.commit()
+    return render(request, "leadmanagement/kommunikation.html",
+                  aktiv="/lead-management", vorgang=vorgang, kunde=kunde,
+                  eintraege=eintraege,
+                  mail_modus=kern.parameter_holen(session, "mail_modus",
+                                                  "protokoll"),
+                  vorlagen=lead_mail.VORLAGEN_START,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/kommunikation/{eintrag_id}/senden")
+async def kommunikation_senden(request: Request, eintrag_id: int,
+                               session: Session = Depends(get_session)):
+    """„Jetzt senden / erneut senden“ – verarbeitet nach mail_modus."""
+    from urllib.parse import quote_plus
+
+    from app import lead_mail
+    from app.models import KommunikationLog
+    _gate(request, session)
+    eintrag = session.get(KommunikationLog, eintrag_id)
+    if eintrag is None:
+        return RedirectResponse("/lead-management/anrufliste", status_code=303)
+    eintrag.status = "geplant"
+    eintrag.fehler_text = ""
+    ergebnis = lead_mail.eintrag_verarbeiten(session, eintrag)
+    session.commit()
+    texte = {"protokolliert": "Protokolliert (Sendesperre – nicht gesendet).",
+             "gesendet": "Gesendet.",
+             "fehler": f"Fehler: {eintrag.fehler_text}"}
+    return RedirectResponse(
+        f"/lead-management/lead/{eintrag.vorgang_id}/kommunikation?meldung="
+        + quote_plus(texte.get(ergebnis, ergebnis)), status_code=303)
+
+
+@router.post("/lead/{vorgang_id}/mail")
+async def mail_mit_vorlage(request: Request, vorgang_id: int,
+                           session: Session = Depends(get_session)):
+    """„Mail mit Vorlage“: Auswahl + Editierfeld; landet als geplanter
+    Eintrag und wird sofort nach mail_modus verarbeitet."""
+    from urllib.parse import quote_plus
+
+    from app import lead_mail
+    from app.models import KommunikationLog
+    _gate(request, session)
+    form = await request.form()
+    vorgang = session.get(Vorgang, vorgang_id)
+    kunde = session.get(Kunde, vorgang.kunde_id) if vorgang else None
+    if vorgang is None or kunde is None:
+        return RedirectResponse("/lead-management/anrufliste", status_code=303)
+    if not kunde.email:
+        return RedirectResponse(
+            f"/lead-management/lead/{vorgang_id}/kommunikation?meldung="
+            + quote_plus("Der Kunde hat keine E-Mail-Adresse."),
+            status_code=303)
+    schluessel = form.get("vorlage_key") or ""
+    if schluessel not in lead_mail.VORLAGEN_START:
+        return RedirectResponse(
+            f"/lead-management/lead/{vorgang_id}/kommunikation",
+            status_code=303)
+    eintrag = KommunikationLog(
+        vorgang_id=vorgang.id, kanal="mail", vorlage_key=schluessel,
+        an=kunde.email, status="geplant",
+        modus=kern.parameter_holen(session, "mail_modus", "protokoll"),
+        erstellt_von=request.state.benutzer.id)
+    session.add(eintrag)
+    session.flush()
+    lead_mail.rendern(session, eintrag)
+    # Editierfelder überschreiben die gerenderte Vorlage
+    if (form.get("betreff") or "").strip():
+        eintrag.betreff = form.get("betreff").strip()[:300]
+    if (form.get("text") or "").strip():
+        eintrag.body_html = lead_mail._als_html(form.get("text").strip())
+    ergebnis = lead_mail.eintrag_verarbeiten(session, eintrag)
+    session.commit()
+    return RedirectResponse(
+        f"/lead-management/lead/{vorgang_id}/kommunikation?meldung="
+        + quote_plus(f"Mail {schluessel}: {ergebnis}."), status_code=303)

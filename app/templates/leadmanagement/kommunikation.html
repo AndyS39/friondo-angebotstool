@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block titel %}Kommunikation – {{ kunde.anzeige_name }}{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Kommunikation · {{ kunde.anzeige_name }}</h1>
+    <div class="aktionen">
+        <span class="abzeichen" title="Sendesperre: protokoll rendert nur, test sendet an die Testadresse, live nur bei Freigabe alle">
+            Mail-Modus: {{ mail_modus }}</span>
+        <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}">Lead-Akte</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<h2>Mail mit Vorlage senden</h2>
+<form method="post" action="/lead-management/lead/{{ vorgang.id }}/mail"
+      class="formular" style="max-width:800px">
+    <div class="formzeile">
+        <label>Vorlage
+            <select name="vorlage_key">
+                {% for key, (name, _, _) in vorlagen.items() %}
+                    <option value="{{ key }}">{{ name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <span class="dezent">Leer lassen = Vorlagentext; Eingaben überschreiben.</span>
+    </div>
+    <label>Betreff (optional) <input type="text" name="betreff"></label>
+    <label>Text (optional) <textarea name="text" rows="4"></textarea></label>
+    <button class="knopf" type="submit">Senden (nach Mail-Modus)</button>
+</form>
+
+<h2>Warteschlange &amp; Protokoll ({{ eintraege | length }})</h2>
+{% for e in eintraege %}
+<details class="karte" style="margin-bottom:0.6rem">
+    <summary>
+        <strong>{{ e.vorlage_key }}</strong> · {{ e.status }}
+        {% if e.status == 'fehler' %}<span class="abzeichen ep">{{ e.fehler_text }}</span>{% endif %}
+        · geplant {{ e.geplant_am.strftime('%d.%m.%y %H:%M') }}
+        {% if e.gesendet_am %} · gesendet {{ e.gesendet_am.strftime('%d.%m.%y %H:%M') }}{% endif %}
+        · an {{ e.an }} · Modus {{ e.modus }}
+        {% if e.anhang_pfad %} · 📎 ICS{% endif %}
+    </summary>
+    <p><strong>{{ e.betreff }}</strong></p>
+    <div class="mail-vorschau">{{ e.body_html | safe }}</div>
+    <form method="post" action="/lead-management/kommunikation/{{ e.id }}/senden">
+        <button class="knopf klein" type="submit">
+            {{ 'Erneut senden' if e.status in ('fehler', 'gesendet') else 'Jetzt senden' }}
+            (nach Mail-Modus)</button>
+    </form>
+</details>
+{% else %}
+<p class="dezent">Noch keine Einträge.</p>
+{% endfor %}
+{% endblock %}

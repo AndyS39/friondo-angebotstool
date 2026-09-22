@@ -314,6 +314,11 @@ def _daten() -> list[str]:
             meldungen.append(f"{neu_q} Lead-Startquellen angelegt")
         if lead_parser.standardregel_anlegen(session):
             meldungen.append("Parser-Regel Formular-Standard angelegt")
+        # Phase 78: Starttexte der sechs Lead-Vorlagen
+        from app import lead_mail
+        neue_vorlagen = lead_mail.vorlagen_vorbelegen(session)
+        if neue_vorlagen:
+            meldungen.append(f"{neue_vorlagen} Lead-Mail-Vorlagen vorbelegt")
         session.commit()
     finally:
         session.close()

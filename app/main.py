@@ -52,6 +52,9 @@ async def lifespan(app: FastAPI):
     # v12 (Phase 77): Geokodierung im Hintergrund (alle 5 Minuten)
     from app import geocoding
     geocoding.scheduler_starten()
+    # v12 (Phase 78): Mail-Warteschlange (jede Minute, Sendesperre je Modus)
+    from app import lead_mail
+    lead_mail.scheduler_starten()
     yield
 
 

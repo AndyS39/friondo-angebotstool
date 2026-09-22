@@ -1141,3 +1141,13 @@ main.breit { max-width: 1720px; }
 .kalender-eintrag.sparte-pv { border-left-color: #d4a017; }
 .kalender-eintrag.sparte-kl { border-left-color: #17a589; }
 .kalender-eintrag.sparte-wb { border-left-color: #8e44ad; }
+
+/* v12 (Phase 78): Mail-Vorschau */
+.mail-vorschau {
+    border: 1px solid var(--grau-linie);
+    border-radius: 6px;
+    background: #fdfdfd;
+    padding: 0.6rem 1rem;
+    max-width: 720px;
+    margin: 0.4rem 0;
+}

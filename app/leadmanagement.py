@@ -500,6 +500,9 @@ def lead_anlegen(session: Session, daten: dict, quelle: LeadQuelle | None,
         aktivitaet(session, vorgang.id, "system",
                    f"Lead angelegt ({quelle_name}, {eingang_art}){zusatz}",
                    benutzer=benutzer)
+        # Phase 78: Eingangsbestätigung sofort (nur mit E-Mail; der
+        # Versand-Job entscheidet nach mail_modus – Sendesperre im Demo)
+        mail_planen(session, vorgang, "eingangsbestaetigung")
         # vorläufiger Score (nur Systemregeln) + Zuweisung + Benachrichtigung
         score_vorlaeufig(session, vorgang)
         if vorgang.leadmanager_id is None:

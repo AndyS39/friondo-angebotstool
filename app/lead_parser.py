@@ -190,6 +190,35 @@ def mail_verarbeiten(session: Session, graph_id: str, absender: str,
                                     status="angelegt", vorgang_id=vorgang.id))
         session.commit()
         return "lead"
+    # Phase 78: Antworten einem Vorgang zuordnen (Betreff „Rückruf V<Nr>“
+    # oder AN-C-Nummer) → Aktivität mail_ein + Info an den Leadmanager
+    from app import leadmanagement as kern
+    vorgang = None
+    treffer = re.search(r"Rückruf\s+V(\d+)", betreff or "", re.IGNORECASE)
+    if treffer:
+        vorgang = session.get(Vorgang, int(treffer.group(1)))
+    if vorgang is None:
+        treffer = re.search(r"AN-C-\d{6}", betreff or "")
+        if treffer:
+            from app.models import Angebot
+            angebot = (session.query(Angebot)
+                       .filter(Angebot.nummer == treffer.group(0)).first())
+            if angebot is not None and angebot.vorgang_id:
+                vorgang = session.get(Vorgang, angebot.vorgang_id)
+    if vorgang is not None:
+        kern.aktivitaet(session, vorgang.id, "mail_ein",
+                        f"Antwort von {absender}: {betreff} – "
+                        f"{(body or '')[:200]}")
+        if vorgang.leadmanager_id:
+            kern.benachrichtigen(session, [vorgang.leadmanager_id],
+                                 f"Antwort-Mail von {absender}: {betreff}",
+                                 f"/lead-management/lead/{vorgang.id}")
+        session.add(LeadPosteingang(graph_id=graph_id, absender=absender,
+                                    betreff=betreff, body=(body or "")[:8000],
+                                    empfangen_am=empfangen_am,
+                                    status="angelegt", vorgang_id=vorgang.id))
+        session.commit()
+        return "antwort"
     session.add(LeadPosteingang(graph_id=graph_id, absender=absender,
                                 betreff=betreff, body=(body or "")[:8000],
                                 empfangen_am=empfangen_am, status="offen"))

@@ -1014,3 +1014,57 @@ async def lead_routing_speichern(request: Request,
     session.commit()
     return RedirectResponse("/parametrierung/lead-routing?meldung=Gespeichert",
                             status_code=303)
+
+
+@router.get("/lead-vorlagen")
+async def lead_vorlagen_seite(request: Request,
+                              session: Session = Depends(get_session)):
+    """Vorlagen-Gruppe „Lead-Management“ (Phase 78): sechs Schlüssel, je
+    Vorlage Betreff + Text, optional je Sparte (Fallback allgemein)."""
+    from app import lead_mail
+    _lead_gate(request, session)
+    schluessel = request.query_params.get("vorlage", "eingangsbestaetigung")
+    if schluessel not in lead_mail.VORLAGEN_START:
+        schluessel = "eingangsbestaetigung"
+    sparte = request.query_params.get("sparte", "")
+    betreff, text = lead_mail.vorlage_laden(session, schluessel, sparte)
+    return render(request, "konfiguration/lead_vorlagen.html",
+                  aktiv="/parametrierung", vorlagen=lead_mail.VORLAGEN_START,
+                  schluessel=schluessel, sparte=sparte,
+                  betreff=betreff, text=text,
+                  platzhalter=lead_mail.PLATZHALTER_NEU,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/lead-vorlagen")
+async def lead_vorlagen_speichern(request: Request,
+                                  session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+
+    from app import lead_mail
+    from app.models import einstellung_setzen
+    _lead_gate(request, session)
+    form = await request.form()
+    schluessel = form.get("vorlage") or ""
+    if schluessel not in lead_mail.VORLAGEN_START:
+        return RedirectResponse("/parametrierung/lead-vorlagen", status_code=303)
+    sparte = form.get("sparte") if form.get("sparte") in ("WP", "PV", "KL", "WB") else ""
+    zusatz = f"_{sparte}" if sparte else ""
+    betreff = (form.get("betreff") or "").strip()
+    text = (form.get("text") or "").strip()
+    if form.get("aktion") == "entfernen" and sparte:
+        einstellung_setzen(session, f"lead_vorlage_{schluessel}{zusatz}_betreff", "")
+        einstellung_setzen(session, f"lead_vorlage_{schluessel}{zusatz}_text", "")
+        session.commit()
+        return RedirectResponse(f"/parametrierung/lead-vorlagen?vorlage={schluessel}"
+                                "&meldung=Sparten-Vorlage+entfernt", status_code=303)
+    if not betreff or not text:
+        return RedirectResponse(f"/parametrierung/lead-vorlagen?vorlage={schluessel}"
+                                "&meldung=Betreff+und+Text+sind+Pflicht",
+                                status_code=303)
+    einstellung_setzen(session, f"lead_vorlage_{schluessel}{zusatz}_betreff", betreff)
+    einstellung_setzen(session, f"lead_vorlage_{schluessel}{zusatz}_text", text)
+    session.commit()
+    return RedirectResponse(f"/parametrierung/lead-vorlagen?vorlage={schluessel}"
+                            + (f"&sparte={sparte}" if sparte else "")
+                            + "&meldung=Gespeichert", status_code=303)
