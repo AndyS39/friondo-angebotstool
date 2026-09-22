@@ -22,8 +22,8 @@ COOKIE_NAME = "angebotstool_sitzung"
 # /signatur/extern ist die (standardmäßig deaktivierte) Kunden-Fernsignatur
 OFFENE_PFADE = ("/login", "/logout", "/static", "/signatur/extern")
 AUSSENDIENST_PFADE = ("/erfassung", "/leads", "/signatur", "/statistik",
-                      "/meine-angebote", "/vorgaenge", "/login", "/logout",
-                      "/static")
+                      "/meine-angebote", "/vorgaenge", "/benachrichtigungen",
+                      "/login", "/logout", "/static")
 ADMIN_PFADE = ("/benutzer",)
 BUERO_ROLLEN = ("admin", "innendienst")
 
@@ -93,6 +93,19 @@ class RollenMiddleware(BaseHTTPMiddleware):
         try:
             benutzer = benutzer_aus_cookie(request.cookies.get(COOKIE_NAME, ""), session)
             request.state.benutzer = benutzer
+            # v11 (Phase 69): Glocke in der Kopfzeile – Zähler + letzte 20
+            # für jede gerenderte Seite (Fehler blockieren die Seite nie)
+            request.state.glocke_ungelesen = 0
+            request.state.glocke_liste = []
+            if benutzer is not None and not pfad.startswith("/static"):
+                try:
+                    from app import benachrichtigungen as glocke_modul
+                    request.state.glocke_ungelesen = (
+                        glocke_modul.ungelesen_anzahl(session, benutzer))
+                    request.state.glocke_liste = (
+                        glocke_modul.letzte(session, benutzer, 20))
+                except Exception:
+                    pass
             if pfad.startswith(OFFENE_PFADE):
                 return await call_next(request)
             if benutzer is None:

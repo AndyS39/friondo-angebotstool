@@ -338,9 +338,6 @@
               placeholder="Kommentar schreiben … (@Name erwähnt einen Benutzer)"></textarea>
     <button class="knopf" type="submit">Kommentar speichern</button>
 </form>
-<datalist id="benutzerliste">
-    {% for b in benutzer_map.values() if b.aktiv %}<option value="@{{ b.name }}">{% endfor %}
-</datalist>
 <div class="notizen-chat" style="margin-top:0.6rem">
     {% for e in verlauf %}
     <div class="notiz {{ 'eigene' if e.benutzer_id == benutzer.id and e.art == 'kommentar' }}">
@@ -419,17 +416,56 @@
 <p class="hinweis">Projekt-Mail-Verlauf ab V2 (Betreff-Anker PR-…).</p>
 
 <script>
-// @Erwähnung (Phase 69): einfache Autovervollständigung über die datalist
+// @Erwähnung (Phase 69): „@“ im Kommentarfeld öffnet die Benutzerliste,
+// Klick (oder Enter auf dem ersten Treffer) fügt @Name ein.
 const feld = document.getElementById('kommentarfeld');
 if (feld) {
-    feld.setAttribute('list', '');
+    const namen = [{% for b in benutzer_map.values() if b.aktiv %}{{ b.name | tojson }},{% endfor %}];
+    const kasten = document.createElement('div');
+    kasten.className = 'erwaehnung-liste';
+    kasten.hidden = true;
+    feld.parentNode.style.position = 'relative';
+    feld.parentNode.appendChild(kasten);
+    let aktueller = null;   // {start, ende} des @-Fragments
+
+    function schliessen() { kasten.hidden = true; aktueller = null; }
+
+    function einsetzen(name) {
+        if (!aktueller) return;
+        feld.value = feld.value.slice(0, aktueller.start) + '@' + name + ' '
+                   + feld.value.slice(aktueller.ende);
+        schliessen();
+        feld.focus();
+    }
+
     feld.addEventListener('input', () => {
         const pos = feld.selectionStart;
         const text = feld.value.slice(0, pos);
-        const treffer = text.match(/@([\wäöüÄÖÜß .-]*)$/);
-        const liste = document.getElementById('benutzerliste');
-        if (!treffer || !liste) return;
+        const treffer = text.match(/@([\wäöüÄÖÜß.-]{0,30})$/);
+        if (!treffer) { schliessen(); return; }
+        const suche = treffer[1].toLowerCase();
+        const passend = namen.filter(n => n.toLowerCase().startsWith(suche)).slice(0, 8);
+        if (!passend.length) { schliessen(); return; }
+        aktueller = { start: pos - treffer[0].length, ende: pos };
+        kasten.innerHTML = '';
+        passend.forEach(name => {
+            const knopf = document.createElement('button');
+            knopf.type = 'button';
+            knopf.textContent = '@' + name;
+            knopf.addEventListener('mousedown', e => { e.preventDefault(); einsetzen(name); });
+            kasten.appendChild(knopf);
+        });
+        kasten.hidden = false;
     });
+    feld.addEventListener('keydown', e => {
+        if (kasten.hidden) return;
+        if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault();
+            const erster = kasten.querySelector('button');
+            if (erster) erster.dispatchEvent(new MouseEvent('mousedown'));
+        } else if (e.key === 'Escape') { schliessen(); }
+    });
+    feld.addEventListener('blur', () => setTimeout(schliessen, 150));
 }
 </script>
 {% endblock %}

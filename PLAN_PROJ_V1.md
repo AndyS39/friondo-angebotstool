@@ -270,20 +270,20 @@ Server – dieser Plan setzt darauf auf und nummeriert ab Phase 64 weiter.
 
 ## Phase 69 – Kommunikation und Benachrichtigungen
 
-- [ ] Glocke in der Kopfzeile (alle Rollen): Zähler ungelesen, Dropdown der letzten
+- [x] Glocke in der Kopfzeile (alle Rollen): Zähler ungelesen, Dropdown der letzten
   20, Klick → Link + gelesen. Ereignisse: Aufgabe zugewiesen, @Erwähnung,
   Aufgabe fällig heute/überfällig (täglicher Lauf 07:00, gebündelt je Benutzer),
   Phasenwechsel an Gewerken, in denen der Benutzer zugewiesen ist, Freigabe
   (Buchhaltung), neues Gewerk (Projektleiter/Feinplaner/Elektroplaner).
-- [ ] E-Mail-Benachrichtigung je Benutzer (Profil): aus / sofort / Tagesdigest 07:15,
+- [x] E-Mail-Benachrichtigung je Benutzer (Profil): aus / sofort / Tagesdigest 07:15,
   über die bestehende Graph-Strecke, Absender aus `projektierung_parameter`
   (`absender_postfach`, Standard `projektierung@friondo.de`, Fallback
   `angebot@friondo.de`, wenn das Postfach keine Senden-als-Berechtigung hat →
   Fehler protokollieren, Tool nie blockieren). Betreff: „[Friondo] <Ereignis> –
   PR-… <Kunde>". Text schlicht, Link zum Tool (`http://192.168.35.4:8000/...`).
-- [ ] @Erwähnung: `@` im Kommentarfeld öffnet Benutzerliste; gespeicherte IDs in
+- [x] @Erwähnung: `@` im Kommentarfeld öffnet Benutzerliste; gespeicherte IDs in
   `erwaehnte_ids`; Erwähnte erhalten Benachrichtigung.
-- [ ] Test: Zuweisung → Glocke; Erwähnung → Glocke + Mail (sofort); Digest-Lauf manuell
+- [x] Test: Zuweisung → Glocke; Erwähnung → Glocke + Mail (sofort); Digest-Lauf manuell
   anstoßen.
 
 ## Phase 70 – Rollen und Sichten

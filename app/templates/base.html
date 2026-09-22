@@ -17,6 +17,28 @@
     </a>
     <nav>
         {% if benutzer_angemeldet %}
+            {# v11 (Phase 69): Glocke – Zähler ungelesen + Dropdown der letzten 20 #}
+            {% set glocke_ungelesen = request.state.glocke_ungelesen | default(0) %}
+            {% set glocke_liste = request.state.glocke_liste | default([]) %}
+            <details class="menue glocke">
+                <summary title="Benachrichtigungen">🔔{% if glocke_ungelesen %}<span class="glocke-zahl">{{ glocke_ungelesen }}</span>{% endif %}</summary>
+                <div class="menue-liste glocke-liste">
+                    {% for e in glocke_liste %}
+                        <a href="/benachrichtigungen/{{ e.id }}/oeffnen"
+                           class="glocke-eintrag {{ 'ungelesen' if not e.gelesen_am }}">
+                            <span>{{ e.text }}</span>
+                            <span class="dezent">{{ e.erstellt_am.strftime('%d.%m.%y %H:%M') }} Uhr</span>
+                        </a>
+                    {% else %}
+                        <span class="glocke-eintrag dezent">Keine Benachrichtigungen.</span>
+                    {% endfor %}
+                    {% if glocke_ungelesen %}
+                        <form method="post" action="/benachrichtigungen/alle-gelesen">
+                            <button class="knopf klein zweitrangig" type="submit">Alle als gelesen markieren</button>
+                        </form>
+                    {% endif %}
+                </div>
+            </details>
             <details class="menue">
                 <summary>Menü ☰</summary>
                 <div class="menue-liste">

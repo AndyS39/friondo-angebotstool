@@ -175,6 +175,29 @@ def info_mail_senden(betreff: str, text: str) -> bool:
         return False
 
 
+def text_mail_senden(empfaenger: str, betreff: str, text: str,
+                     absender: str = "") -> tuple[bool, str]:
+    """Kurze Text-Mail direkt versenden (v11, Phase 69 – Benachrichtigungen).
+    absender setzt „Senden als“ (Shared-Postfach, braucht die Berechtigung
+    durch den M365-Admin). Liefert (erfolg, fehlertext) – wirft nie."""
+    token = _token()
+    if token is None:
+        return False, "Nicht bei Microsoft angemeldet"
+    nachricht = {
+        "subject": betreff,
+        "body": {"contentType": "text", "content": text},
+        "toRecipients": [{"emailAddress": {"address": empfaenger}}],
+    }
+    if absender:
+        nachricht["from"] = {"emailAddress": {"address": absender}}
+    try:
+        _graph_aufruf("POST", "/me/sendMail", token,
+                      {"message": nachricht, "saveToSentItems": False})
+        return True, ""
+    except Exception as fehler:
+        return False, str(fehler)
+
+
 def entwurf_erstellen(kunde: Kunde, angebot: Angebot, pdf_pfad: Path,
                       betreff: str, text: str,
                       weitere_anhaenge: list[Path] | None = None,

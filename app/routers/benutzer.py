@@ -92,6 +92,9 @@ async def aendern(request: Request, benutzer_id: int,
         return RedirectResponse(f"/benutzer?meldung={quote_plus(fehler)}", status_code=303)
     benutzer.rolle = rolle
     benutzer.email = email
+    # v11 (Phase 69): E-Mail-Benachrichtigung aus Glocken-Ereignissen
+    if form.get("benachrichtigung_mail") in ("aus", "sofort", "digest"):
+        benutzer.benachrichtigung_mail = form.get("benachrichtigung_mail")
     pin = (form.get("pin") or "").strip()
     if pin:
         if not pin.isdigit() or len(pin) < 4:

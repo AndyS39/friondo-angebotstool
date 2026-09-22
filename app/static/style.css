@@ -922,3 +922,66 @@ main.breit { max-width: 1720px; }
 .notiz-eingabe { display: flex; gap: 0.6rem; align-items: flex-start;
     max-width: 720px; }
 .notiz-eingabe textarea { flex: 1; }
+
+/* v11 (Phase 69): Glocke in der Kopfzeile */
+.kopfleiste nav { display: flex; align-items: center; gap: 0.4rem; }
+
+.glocke summary { position: relative; padding-right: 0.9rem; }
+
+.glocke-zahl {
+    position: absolute;
+    top: 0.7rem;
+    right: 0;
+    background: #c0392b;
+    color: #fff;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    line-height: 1;
+    padding: 0.15rem 0.35rem;
+    font-weight: 700;
+}
+
+.menue.glocke[open] .glocke-liste {
+    min-width: 340px;
+    max-width: 420px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.glocke-eintrag {
+    display: flex !important;
+    flex-direction: column;
+    gap: 0.1rem;
+    font-size: 0.88rem;
+    white-space: normal !important;
+}
+
+.glocke-eintrag.ungelesen { font-weight: 600; background: #f2f7fd; }
+
+.glocke-liste form { padding: 0.5rem 1rem; border-top: 1px solid var(--grau-linie); }
+
+/* v11 (Phase 69): @-Erwähnung – kleine Auswahl unter dem Kommentarfeld */
+.erwaehnung-liste {
+    position: absolute;
+    left: 0;
+    top: 100%;
+    background: #fff;
+    border: 1px solid var(--grau-linie);
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    min-width: 220px;
+}
+
+.erwaehnung-liste button {
+    border: none;
+    background: none;
+    text-align: left;
+    padding: 0.45rem 0.9rem;
+    cursor: pointer;
+    font: inherit;
+}
+
+.erwaehnung-liste button:hover { background: var(--grau-hell); }

@@ -95,3 +95,28 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
 - **CSV-Export** mit `utf-8-sig` und Semikolon-Trenner, damit Excel (deutsche
   Locale) die Datei direkt korrekt öffnet – gleiches Muster wie bestehende
   Exporte.
+
+## Phase 69 – Kommunikation und Benachrichtigungen
+
+- **Glocken-Daten je Seitenaufruf**: Die Kopfzeilen-Glocke (Zähler + letzte 20)
+  wird in der bestehenden RollenMiddleware befüllt (`request.state.glocke_*`) –
+  einzige Stelle, die auf jeder Seite läuft; Fehler dort blockieren die Seite
+  nie. `/benachrichtigungen` ist auch für den Außendienst freigeschaltet
+  (Plan: „alle Rollen").
+- **Demo-Filter schon in Phase 69**: Alle V1-Ereignisarten stammen aus der
+  Projektierung; im Demo-Modus (`freigabe_modus=admin`) blendet die Glocke sie
+  für Nicht-Admins aus und es gehen keine Mails an Nicht-Admins – das zieht die
+  Phase-70-Regel „Glocken-Ereignisse nur Admin" vor, damit die Demo nichts leakt.
+- **Mail-Betreff**: PR-Nummer wird aus dem Benachrichtigungstext gelesen
+  (Muster `PR-\d{6}`), der Kunde über das Projekt aufgelöst – so braucht
+  `benachrichtigen()` keine zusätzlichen Parameter und alle Aufrufer bleiben
+  unverändert.
+- **Senden-als-Fallback**: schlägt der Versand über das eingestellte Postfach
+  fehl, wird einmal mit `angebot@friondo.de` nachversucht; beide Fehler landen
+  im Protokoll `mail_protokoll` (letzte 20 Zeilen, projektierung_parameter).
+- **Scheduler**: ein Thread prüft alle 5 Minuten; Datums-Schalter
+  (`faellig_lauf_datum`, `digest_datum`) stellen sicher, dass Lauf und Digest
+  höchstens einmal pro Tag laufen – auch nach einem Neustart mitten am Tag
+  (Start nach 07:00 holt den Lauf desselben Tags nach).
+- **Profil-Einstellung aus/sofort/digest** liegt in der Benutzerverwaltung
+  (Admin) – ein eigenes Selbstbedienungs-Profil gibt es im Tool bisher nicht.
