@@ -1741,3 +1741,320 @@ def cockpit_daten(session: Session) -> dict:
         "sla_rot": sla_rot, "benutzer_map": benutzer_map,
         "kunden_map": {k.id: k for k in session.query(Kunde)},
     }
+
+
+# --- Phase 80: Kennzahlen (Statistik-Reiter Leads, Kanal-Report, Pipeline-Wert) -----
+
+def _median(werte: list[float]) -> float | None:
+    if not werte:
+        return None
+    werte = sorted(werte)
+    mitte = len(werte) // 2
+    if len(werte) % 2:
+        return werte[mitte]
+    return (werte[mitte - 1] + werte[mitte]) / 2
+
+
+def pipeline_wert(session: Session) -> int:
+    """Summe erwarteter Auftragswerte offener Leads, gewichtet nach
+    Phasen-Quote (Cent, brutto)."""
+    kunden = {k.id: k for k in session.query(Kunde)}
+    summe = 0
+    for v in (session.query(Vorgang)
+              .filter(Vorgang.lead_phase.in_(("neu", "in_kontaktierung",
+                                              "qualifiziert", "terminiert",
+                                              "erfasst", "angebot")))):
+        try:
+            quote = int(parameter_holen(session, f"quote_{v.lead_phase}", "0"))
+        except ValueError:
+            quote = 0
+        summe += erwartungswert(session, kunden.get(v.kunde_id)) * quote // 100
+    return summe
+
+
+def statistik_leads(session: Session, von: datetime, bis: datetime,
+                    filter_werte: dict) -> dict:
+    """Trichter + Kennzahlen (Konzept Abschnitt 8) für den Statistik-Reiter."""
+    import json as json_modul
+
+    from app import leadmanagement_logik
+    from app.models import Erfassung
+    logik = leadmanagement_logik.hole_logik()
+    kunden = {k.id: k for k in session.query(Kunde)}
+    quellen = {q.id: q for q in session.query(LeadQuelle)}
+    benutzer_map = {b.id: b for b in session.query(Benutzer)}
+
+    abfrage = session.query(Vorgang).filter(Vorgang.eingang_am.isnot(None))
+    if not filter_werte.get("demo"):
+        abfrage = ohne_demo(abfrage)
+    vorgaenge = []
+    for v in abfrage:
+        kunde = kunden.get(v.kunde_id)
+        if kunde is None:
+            continue
+        if filter_werte.get("quelle_id") and \
+                v.quelle_id != int(filter_werte["quelle_id"]):
+            continue
+        if filter_werte.get("kampagne_id") and \
+                v.kampagne_id != int(filter_werte["kampagne_id"]):
+            continue
+        if filter_werte.get("kanal") and \
+                filter_werte["kanal"].lower() not in \
+                (kunde.vertriebskanal or "").lower():
+            continue
+        if filter_werte.get("sparte") and \
+                filter_werte["sparte"] not in (kunde.interesse or ""):
+            continue
+        if filter_werte.get("leadmanager_id") and \
+                v.leadmanager_id != int(filter_werte["leadmanager_id"]):
+            continue
+        vorgaenge.append(v)
+    ids = {v.id for v in vorgaenge} or {0}
+
+    termine = (session.query(VotTermin)
+               .filter(VotTermin.vorgang_id.in_(ids)).all())
+    if filter_werte.get("ad_id"):
+        ad_id = int(filter_werte["ad_id"])
+        erlaubt = {t.vorgang_id for t in termine if t.ad_id == ad_id}
+        vorgaenge = [v for v in vorgaenge if v.id in erlaubt]
+        ids = {v.id for v in vorgaenge} or {0}
+        termine = [t for t in termine if t.vorgang_id in ids]
+    erfassungen = (session.query(Erfassung)
+                   .filter(Erfassung.vorgang_id.in_(ids),
+                           Erfassung.abgesendet_am.isnot(None)).all())
+    angebote = (session.query(Angebot)
+                .filter(Angebot.vorgang_id.in_(ids)).all())
+    qualifizierungen = (session.query(LeadQualifizierung)
+                        .filter(LeadQualifizierung.vorgang_id.in_(ids),
+                                LeadQualifizierung.abgeschlossen_am.isnot(None))
+                        .all())
+    quali_je_vorgang: dict[int, datetime] = {}
+    for q in qualifizierungen:
+        bisher = quali_je_vorgang.get(q.vorgang_id)
+        if bisher is None or q.abgeschlossen_am < bisher:
+            quali_je_vorgang[q.vorgang_id] = q.abgeschlossen_am
+
+    def _in(zeitpunkt) -> bool:
+        return zeitpunkt is not None and von <= zeitpunkt < bis
+
+    # Trichter (Anzahl + Quote zum Vorschritt)
+    eingang = [v for v in vorgaenge if _in(v.eingang_am)]
+    erreicht = [v for v in vorgaenge if _in(v.erreicht_am)]
+    qualifiziert = [v for v in vorgaenge if _in(quali_je_vorgang.get(v.id))]
+    terminiert = [v for v in vorgaenge if _in(v.terminiert_am)]
+    erfolgt_ids = {t.vorgang_id for t in termine
+                   if t.status == "erfolgt" and _in(t.beginn)}
+    erfasst_ids = {e.vorgang_id for e in erfassungen if _in(e.abgesendet_am)}
+    versendet_ids = {a.vorgang_id for a in angebote if _in(a.versendet_am)}
+    gewonnen_ids = {a.vorgang_id for a in angebote if _in(a.angenommen_am)}
+    stufen = [("Eingang", len(eingang)), ("erreicht", len(erreicht)),
+              ("qualifiziert", len(qualifiziert)),
+              ("terminiert", len(terminiert)),
+              ("VOT erfolgt", len(erfolgt_ids)), ("erfasst", len(erfasst_ids)),
+              ("Angebot versendet", len(versendet_ids)),
+              ("gewonnen", len(gewonnen_ids))]
+    trichter = []
+    maximal = max((z for _, z in stufen), default=0) or 1
+    for i, (name, zahl) in enumerate(stufen):
+        vorher = stufen[i - 1][1] if i else None
+        trichter.append({
+            "name": name, "anzahl": zahl,
+            "quote": round(zahl / vorher * 100) if vorher else None,
+            "breite": round(zahl / maximal * 100, 1),
+        })
+
+    # Speed-to-Lead (Minuten innerhalb der LM-Arbeitszeit) + SLA-Anteil
+    try:
+        sla_gelb = int(parameter_holen(session, "sla_gelb_min", "60"))
+    except ValueError:
+        sla_gelb = 60
+    bis_versuch = [arbeitsminuten(session, v.eingang_am, v.erstkontakt_am)
+                   for v in eingang if v.erstkontakt_am]
+    bis_erreicht = [arbeitsminuten(session, v.eingang_am, v.erreicht_am)
+                    for v in eingang if v.erreicht_am]
+    im_sla = sum(1 for m in bis_versuch if m < sla_gelb)
+
+    # Show-/No-Show-Quote je AD und je Wunschzeit-Typ
+    fenster = logik.wunschzeiten
+    def _fenster_typ(beginn):
+        tag = ("mo", "di", "mi", "do", "fr", "sa", "so")[beginn.weekday()]
+        for w in fenster:
+            tage = ("mo", "di", "mi", "do", "fr") if w.wochentage == "mo-fr" \
+                else (w.wochentage,)
+            if tag in tage and w.von <= beginn.strftime("%H:%M") < w.bis:
+                return w.bezeichnung
+        return "außerhalb"
+    show_je_ad: dict = {}
+    show_je_typ: dict = {}
+    for t in termine:
+        if t.status not in ("erfolgt", "no_show") or not _in(t.beginn):
+            continue
+        ad = benutzer_map.get(t.ad_id)
+        eintrag = show_je_ad.setdefault(ad.name if ad else "?",
+                                        {"erfolgt": 0, "no_show": 0})
+        eintrag[t.status] += 1
+        eintrag2 = show_je_typ.setdefault(_fenster_typ(t.beginn),
+                                          {"erfolgt": 0, "no_show": 0})
+        eintrag2[t.status] += 1
+
+    # Quoten je Quelle (Angebot / Abschluss)
+    je_quelle: dict = {}
+    for v in eingang:
+        quelle = quellen.get(v.quelle_id)
+        name = quelle.name if quelle else "ohne Quelle"
+        eintrag = je_quelle.setdefault(name, {"eingang": 0, "angebot": 0,
+                                              "gewonnen": 0})
+        eintrag["eingang"] += 1
+        if v.id in versendet_ids:
+            eintrag["angebot"] += 1
+        if v.id in gewonnen_ids:
+            eintrag["gewonnen"] += 1
+
+    # Durchlaufzeiten (Median Tage)
+    d_eingang_termin = [(v.terminiert_am - v.eingang_am).total_seconds() / 86400
+                        for v in vorgaenge
+                        if v.terminiert_am and v.eingang_am
+                        and _in(v.terminiert_am)]
+    versand_je_vorgang: dict[int, datetime] = {}
+    entscheidung_je_vorgang: dict[int, datetime] = {}
+    for a in angebote:
+        if a.versendet_am and (a.vorgang_id not in versand_je_vorgang
+                               or a.versendet_am < versand_je_vorgang[a.vorgang_id]):
+            versand_je_vorgang[a.vorgang_id] = a.versendet_am
+        ende = a.angenommen_am or a.abgelehnt_am
+        if ende and (a.vorgang_id not in entscheidung_je_vorgang
+                     or ende > entscheidung_je_vorgang[a.vorgang_id]):
+            entscheidung_je_vorgang[a.vorgang_id] = ende
+    d_termin_angebot = [(versand_je_vorgang[v.id] - v.terminiert_am)
+                        .total_seconds() / 86400
+                        for v in vorgaenge
+                        if v.terminiert_am and v.id in versand_je_vorgang
+                        and _in(versand_je_vorgang[v.id])]
+    d_angebot_entscheid = [
+        (entscheidung_je_vorgang[vid] - versand_je_vorgang[vid])
+        .total_seconds() / 86400
+        for vid in versand_je_vorgang
+        if vid in entscheidung_je_vorgang
+        and _in(entscheidung_je_vorgang[vid])]
+
+    # Aktivität je Leadmanager
+    lm_aktivitaet: dict = {}
+    for a in (session.query(LeadAktivitaet)
+              .filter(LeadAktivitaet.typ == "anruf",
+                      LeadAktivitaet.zeitpunkt >= von,
+                      LeadAktivitaet.zeitpunkt < bis,
+                      LeadAktivitaet.vorgang_id.in_(ids))):
+        name = (benutzer_map[a.benutzer_id].name
+                if a.benutzer_id in benutzer_map else "?")
+        eintrag = lm_aktivitaet.setdefault(name, {"anrufe": 0, "erreicht": 0})
+        eintrag["anrufe"] += 1
+        if a.ergebnis == "erreicht":
+            eintrag["erreicht"] += 1
+
+    # Gründe-Verteilungen
+    gruende: dict[str, dict] = {"unqualifiziert": {}, "no_show": {},
+                                "ablehnung": {}}
+    for v in vorgaenge:
+        if v.unqualifiziert_grund:
+            gruende["unqualifiziert"][v.unqualifiziert_grund] = \
+                gruende["unqualifiziert"].get(v.unqualifiziert_grund, 0) + 1
+    for t in termine:
+        if t.status == "no_show" and t.grund_text:
+            grund = t.grund_text.split(" – ")[0]
+            gruende["no_show"][grund] = gruende["no_show"].get(grund, 0) + 1
+    for a in angebote:
+        if a.status == "Abgelehnt" and a.ablehnungsgrund:
+            gruende["ablehnung"][a.ablehnungsgrund] = \
+                gruende["ablehnung"].get(a.ablehnungsgrund, 0) + 1
+
+    erreichte_versuche = [v.versuch_nr for v in erreicht if v.versuch_nr]
+    return {
+        "trichter": trichter,
+        "speed": {
+            "median_versuch": _median(bis_versuch),
+            "median_erreicht": _median(bis_erreicht),
+            "im_sla": im_sla, "gesamt": len(bis_versuch),
+            "anteil_sla": round(im_sla / len(bis_versuch) * 100)
+                          if bis_versuch else None,
+        },
+        "kontaktquote": round(len(erreicht) / len(eingang) * 100)
+                        if eingang else None,
+        "versuche_bis_erreicht": (round(sum(erreichte_versuche)
+                                        / len(erreichte_versuche), 1)
+                                  if erreichte_versuche else None),
+        "terminquote_quali": round(len(terminiert) / len(qualifiziert) * 100)
+                             if qualifiziert else None,
+        "terminquote_eingang": round(len(terminiert) / len(eingang) * 100)
+                               if eingang else None,
+        "show_je_ad": show_je_ad, "show_je_typ": show_je_typ,
+        "je_quelle": je_quelle,
+        "durchlauf": {
+            "eingang_termin": _median(d_eingang_termin),
+            "termin_angebot": _median(d_termin_angebot),
+            "angebot_entscheidung": _median(d_angebot_entscheid),
+        },
+        "lm_aktivitaet": lm_aktivitaet,
+        "gruende": gruende,
+        "pipeline_wert": pipeline_wert(session),
+    }
+
+
+def kanal_report(session: Session, monate: int = 12,
+                 mit_demo: bool = False) -> dict:
+    """Kanal-Report (Plan 80): je Quelle × Monat Leads, Termine, Aufträge,
+    Auftragswert, Kosten, Kosten je Termin/Auftrag, Umsatz je € Lead-Kosten."""
+    jetzt = datetime.now()
+    start_monat = (jetzt.year, jetzt.month)
+    monats_liste = []
+    jahr, monat = start_monat
+    for _ in range(monate):
+        monats_liste.append(f"{jahr:04d}-{monat:02d}")
+        monat -= 1
+        if monat == 0:
+            jahr, monat = jahr - 1, 12
+    monats_liste.reverse()
+    quellen = {q.id: q for q in session.query(LeadQuelle)}
+
+    abfrage = session.query(Vorgang).filter(Vorgang.eingang_am.isnot(None))
+    if not mit_demo:
+        abfrage = ohne_demo(abfrage)
+    vorgaenge = abfrage.all()
+    ids = {v.id for v in vorgaenge} or {0}
+    angebote = (session.query(Angebot)
+                .filter(Angebot.vorgang_id.in_(ids)).all())
+    angenommen_je_vorgang: dict[int, int] = {}
+    for a in angebote:
+        if a.status == "Angenommen" and a.angenommen_am is not None:
+            try:
+                betrag = a.summen()["endbetrag"] if not a.extern else \
+                    (a.extern_endbetrag_cent or 0)
+            except Exception:
+                betrag = 0
+            angenommen_je_vorgang[a.vorgang_id] = \
+                angenommen_je_vorgang.get(a.vorgang_id, 0) + betrag
+
+    zeilen: dict[tuple, dict] = {}
+    for v in vorgaenge:
+        monat_key = v.eingang_am.strftime("%Y-%m")
+        if monat_key not in monats_liste:
+            continue
+        quelle = quellen.get(v.quelle_id)
+        name = quelle.name if quelle else "ohne Quelle"
+        eintrag = zeilen.setdefault((name, monat_key), {
+            "leads": 0, "termine": 0, "auftraege": 0, "wert": 0,
+            "kosten": 0, "quelle": quelle})
+        eintrag["leads"] += 1
+        if v.terminiert_am is not None:
+            eintrag["termine"] += 1
+        if v.id in angenommen_je_vorgang:
+            eintrag["auftraege"] += 1
+            eintrag["wert"] += angenommen_je_vorgang[v.id]
+    ohne_kosten = set()
+    for (name, _), eintrag in zeilen.items():
+        quelle = eintrag["quelle"]
+        if quelle is not None and quelle.kosten_je_lead_cent:
+            eintrag["kosten"] = quelle.kosten_je_lead_cent * eintrag["leads"]
+        else:
+            ohne_kosten.add(name)
+    return {"zeilen": zeilen, "monate": monats_liste,
+            "ohne_kosten": sorted(ohne_kosten)}

@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block titel %}Lead-Statistik – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Statistik → Leads</h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/statistik/kanal">Kanal-Report</a>
+        <a class="knopf klein zweitrangig" href="/statistik">Angebots-Statistik</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<form method="get" action="/lead-management/statistik" class="suchleiste">
+    <select name="zeitraum" onchange="document.getElementById('freifelder').hidden = this.value != 'frei'; if (this.value != 'frei') this.form.submit();">
+        {% for wert, name in zeitraeume %}
+            <option value="{{ wert }}" {{ 'selected' if zeitraum == wert }}>{{ name }}</option>
+        {% endfor %}
+    </select>
+    <span id="freifelder" {% if zeitraum != 'frei' %}hidden{% endif %}>
+        <input type="date" name="von" value="{{ von }}">
+        <input type="date" name="bis" value="{{ bis }}">
+    </span>
+    <label class="kontrollfeld">Quelle
+        <select name="quelle_id">
+            <option value="">alle</option>
+            {% for q in quellen %}
+                <option value="{{ q.id }}" {{ 'selected' if filter_werte.quelle_id == q.id | string }}>{{ q.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="kontrollfeld">Kampagne
+        <select name="kampagne_id">
+            <option value="">alle</option>
+            {% for k in kampagnen %}
+                <option value="{{ k.id }}" {{ 'selected' if filter_werte.kampagne_id == k.id | string }}>{{ k.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="kontrollfeld">Kanal <input type="text" name="kanal" size="8"
+           value="{{ filter_werte.kanal }}"></label>
+    <label class="kontrollfeld">Sparte
+        <select name="sparte">
+            <option value="">alle</option>
+            {% for s in ('WP', 'PV', 'KL', 'WB') %}
+                <option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }}>{{ s }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="kontrollfeld">Leadmanager
+        <select name="leadmanager_id">
+            <option value="">alle</option>
+            {% for b in leadmanager %}
+                <option value="{{ b.id }}" {{ 'selected' if filter_werte.leadmanager_id == b.id | string }}>{{ b.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="kontrollfeld">AD
+        <select name="ad_id">
+            <option value="">alle</option>
+            {% for b in alle_ad %}
+                <option value="{{ b.id }}" {{ 'selected' if filter_werte.ad_id == b.id | string }}>{{ b.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="kontrollfeld"><input type="checkbox" name="demo" value="1"
+           {{ 'checked' if filter_werte.demo }}> Demo-Leads einbeziehen</label>
+    <button class="knopf klein" type="submit">Anwenden</button>
+</form>
+
+<h2>Trichter</h2>
+<table class="tabelle" style="max-width:900px">
+    <tbody>
+    {% for stufe in trichter %}
+        <tr>
+            <td style="width:11rem">{{ stufe.name }}</td>
+            <td style="width:5rem" class="rechts"><strong>{{ stufe.anzahl }}</strong></td>
+            <td style="width:5rem" class="dezent">{{ stufe.quote ~ ' %' if stufe.quote is not none }}</td>
+            <td><div class="ae-balken" style="width: {{ stufe.breite }}%">&nbsp;</div></td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Kennzahlen</h2>
+<div class="kacheln">
+    <div class="kachel stat">
+        <span class="stat-zahl">{{ speed.median_versuch | round(0) | int if speed.median_versuch is not none else '–' }}</span>
+        <span>Speed-to-Lead (Min bis 1. Versuch, Median)</span>
+        <span class="dezent">bis erreicht: {{ speed.median_erreicht | round(0) | int if speed.median_erreicht is not none else '–' }} Min</span>
+    </div>
+    <div class="kachel stat">
+        <span class="stat-zahl">{{ speed.anteil_sla ~ ' %' if speed.anteil_sla is not none else '–' }}</span>
+        <span>Anteil im SLA</span>
+        <span class="dezent">{{ speed.im_sla }}/{{ speed.gesamt }}</span>
+    </div>
+    <div class="kachel stat">
+        <span class="stat-zahl">{{ kontaktquote ~ ' %' if kontaktquote is not none else '–' }}</span>
+        <span>Kontaktquote</span>
+        <span class="dezent">Ø {{ versuche_bis_erreicht or '–' }} Versuche bis erreicht</span>
+    </div>
+    <div class="kachel stat">
+        <span class="stat-zahl">{{ terminquote_quali ~ ' %' if terminquote_quali is not none else '–' }}</span>
+        <span>Terminquote (÷ qualifiziert)</span>
+        <span class="dezent">÷ Eingang: {{ terminquote_eingang ~ ' %' if terminquote_eingang is not none else '–' }}</span>
+    </div>
+    <div class="kachel stat">
+        <span class="stat-zahl">{{ pipeline_wert | euro }}</span>
+        <span>Pipeline-Wert</span>
+        <span class="dezent">gewichtete Erwartungswerte offener Leads</span>
+    </div>
+</div>
+
+<h2>Durchlaufzeiten (Median, Tage)</h2>
+<p>Eingang → Termin: <strong>{{ durchlauf.eingang_termin | round(1) if durchlauf.eingang_termin is not none else '–' }}</strong>
+   · Termin → Angebot: <strong>{{ durchlauf.termin_angebot | round(1) if durchlauf.termin_angebot is not none else '–' }}</strong>
+   · Angebot → Entscheidung: <strong>{{ durchlauf.angebot_entscheidung | round(1) if durchlauf.angebot_entscheidung is not none else '–' }}</strong></p>
+
+<div class="konfigurator-spalten" style="align-items:flex-start; gap:2rem; display:flex; flex-wrap:wrap">
+<div>
+<h2>Show-Quote je AD</h2>
+<table class="tabelle">
+    <thead><tr><th>AD</th><th>erfolgt</th><th>No-Show</th><th>Show-Quote</th></tr></thead>
+    <tbody>
+    {% for name, z in show_je_ad.items() %}
+        <tr><td>{{ name }}</td><td class="rechts">{{ z.erfolgt }}</td>
+            <td class="rechts">{{ z.no_show }}</td>
+            <td class="rechts">{{ (z.erfolgt / (z.erfolgt + z.no_show) * 100) | round(0) | int }} %</td></tr>
+    {% else %}<tr><td colspan="4" class="dezent">Keine Termine im Zeitraum.</td></tr>{% endfor %}
+    </tbody>
+</table>
+<h2>Show-Quote je Wunschzeit-Typ</h2>
+<table class="tabelle">
+    <tbody>
+    {% for name, z in show_je_typ.items() %}
+        <tr><td>{{ name }}</td><td class="rechts">{{ z.erfolgt }}/{{ z.erfolgt + z.no_show }}</td></tr>
+    {% else %}<tr><td class="dezent">–</td></tr>{% endfor %}
+    </tbody>
+</table>
+</div>
+<div>
+<h2>Quoten je Quelle</h2>
+<table class="tabelle">
+    <thead><tr><th>Quelle</th><th>Eingang</th><th>Angebot</th><th>gewonnen</th></tr></thead>
+    <tbody>
+    {% for name, z in je_quelle.items() %}
+        <tr><td>{{ name }}</td><td class="rechts">{{ z.eingang }}</td>
+            <td class="rechts">{{ z.angebot }}</td>
+            <td class="rechts">{{ z.gewonnen }}</td></tr>
+    {% else %}<tr><td colspan="4" class="dezent">–</td></tr>{% endfor %}
+    </tbody>
+</table>
+<h2>Aktivität je Leadmanager</h2>
+<table class="tabelle">
+    <thead><tr><th>Leadmanager</th><th>Anrufe</th><th>erreicht</th></tr></thead>
+    <tbody>
+    {% for name, z in lm_aktivitaet.items() %}
+        <tr><td>{{ name }}</td><td class="rechts">{{ z.anrufe }}</td>
+            <td class="rechts">{{ z.erreicht }}</td></tr>
+    {% else %}<tr><td colspan="3" class="dezent">–</td></tr>{% endfor %}
+    </tbody>
+</table>
+</div>
+<div>
+{% for phase, verteilung in gruende.items() %}
+<h2>Gründe: {{ {'unqualifiziert': 'Unqualifiziert', 'no_show': 'No-Show',
+                'ablehnung': 'Ablehnung'}[phase] }}</h2>
+<table class="tabelle">
+    <tbody>
+    {% for grund, anzahl in verteilung.items() | sort(attribute='1', reverse=true) %}
+        <tr><td>{{ grund }}</td><td class="rechts">{{ anzahl }}</td></tr>
+    {% else %}<tr><td class="dezent">–</td></tr>{% endfor %}
+    </tbody>
+</table>
+{% endfor %}
+</div>
+</div>
+{% endblock %}

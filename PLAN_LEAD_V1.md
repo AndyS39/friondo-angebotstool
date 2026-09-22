@@ -507,7 +507,7 @@ Terminal-Server weiterhin nacheinander (update.bat).
 
 ## Phase 80 – Kennzahlen: Statistik-Reiter „Leads" und Kanal-Report
 
-- [ ] **Statistik → Reiter „Leads"** (nur `lead_modul_sichtbar`), Zeitraumwahl wie bestehend,
+- [x] **Statistik → Reiter „Leads"** (nur `lead_modul_sichtbar`), Zeitraumwahl wie bestehend,
   Filter Quelle/Kampagne/Kanal/Sparte/Leadmanager/AD, Häkchen „Demo-Leads einbeziehen"
   (Standard: im Demo-Modus **an**, sonst aus). **Trichter** (Anzahl + Quote zum
   Vorschritt): Eingang → erreicht → qualifiziert → terminiert → VOT erfolgt → erfasst →
@@ -518,14 +518,14 @@ Terminal-Server weiterhin nacheinander (update.bat).
   Angebot), Aktivität je Leadmanager, Gründe-Verteilungen (unqualifiziert, no_show,
   Ablehnung). Darstellung: Zahlenkacheln + einfache Balken (bestehende Chart-Technik
   der Statistik-Seite wiederverwenden).
-- [ ] **Kanal-Report** `/leads/statistik/kanal`: Tabelle je Quelle × Monat: Leads, Termine,
+- [x] **Kanal-Report** `/leads/statistik/kanal`: Tabelle je Quelle × Monat: Leads, Termine,
   Aufträge, Auftragswert (aus angenommenen Angeboten der Vorgänge, brutto wie Deal-Wert),
   Kosten (= `kosten_je_lead` × Leads), Kosten je Termin, Kosten je Auftrag,
   Umsatz je Euro Lead-Kosten. CSV-Export. Hinweis, wenn eine Quelle keine Kosten hat.
-- [ ] **Pipeline-Wert**: Summe `erwartungswert_<sparte>` × Phasen-Quote (Parameter je Phase,
+- [x] **Pipeline-Wert**: Summe `erwartungswert_<sparte>` × Phasen-Quote (Parameter je Phase,
   Standard neu 5 % · in_kontaktierung 8 % · qualifiziert 15 % · terminiert 30 % ·
   erfasst 40 % · angebot 50 %) über offene Vorgänge; Anzeige im Cockpit und Reiter.
-- [ ] Test: Zahlen stimmen mit Board/Liste überein (Stichprobe je Phase); Export öffnet
+- [x] Test: Zahlen stimmen mit Board/Liste überein (Stichprobe je Phase); Export öffnet
   in Excel mit Umlauten.
 
 ## Phase 81 – Rollen, Sichten, Parametrierung, Löschlauf

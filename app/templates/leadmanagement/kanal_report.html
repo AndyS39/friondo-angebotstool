@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block titel %}Kanal-Report – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Kanal-Report (Quelle × Monat)</h1>
+    <div class="aktionen">
+        <a class="knopf klein" href="/lead-management/statistik/kanal?export=csv&demo={{ '1' if mit_demo else '0' }}">CSV-Export</a>
+        <a class="knopf klein zweitrangig" href="/lead-management/statistik">Lead-Statistik</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+{% if ohne_kosten %}
+<p class="hinweis">Ohne hinterlegte Kosten je Lead (Quelle pflegen):
+    {{ ohne_kosten | join(', ') }}</p>
+{% endif %}
+
+<div style="overflow-x:auto">
+<table class="tabelle">
+    <thead><tr><th>Quelle</th><th>Monat</th><th>Leads</th><th>Termine</th>
+        <th>Aufträge</th><th>Auftragswert</th><th>Kosten</th>
+        <th>Kosten/Termin</th><th>Kosten/Auftrag</th>
+        <th title="Auftragswert ÷ Lead-Kosten">Umsatz je €</th></tr></thead>
+    <tbody>
+    {% for (name, monat), z in zeilen.items() | sort %}
+        <tr>
+            <td>{{ name }}</td><td>{{ monat }}</td>
+            <td class="rechts">{{ z.leads }}</td>
+            <td class="rechts">{{ z.termine }}</td>
+            <td class="rechts">{{ z.auftraege }}</td>
+            <td class="rechts">{{ z.wert | euro }}</td>
+            <td class="rechts">{{ z.kosten | euro if z.kosten else '–' }}</td>
+            <td class="rechts">{{ (z.kosten / z.termine) | round | int | euro if z.kosten and z.termine else '–' }}</td>
+            <td class="rechts">{{ (z.kosten / z.auftraege) | round | int | euro if z.kosten and z.auftraege else '–' }}</td>
+            <td class="rechts">{{ ('%.2f' | format(z.wert / z.kosten)) | replace('.', ',') if z.kosten else '–' }}</td>
+        </tr>
+    {% else %}
+        <tr><td colspan="10" class="dezent">Keine Leads in den letzten 12 Monaten.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

@@ -1308,4 +1308,86 @@ async def cockpit(request: Request, session: Session = Depends(get_session)):
     daten = kern.cockpit_daten(session)
     return render(request, "leadmanagement/cockpit.html",
                   aktiv="/lead-management", **daten,
+                  pipeline_wert=kern.pipeline_wert(session),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+# --- Phase 80: Statistik-Reiter Leads + Kanal-Report --------------------------------
+
+@router.get("/statistik")
+async def lead_statistik(request: Request,
+                         session: Session = Depends(get_session)):
+    _gate(request, session)
+    from app.routers.statistik import ZEITRAEUME, _zeitraum
+    zeitraum = request.query_params.get("zeitraum", "monat")
+    von, bis, zeitraum = _zeitraum(zeitraum,
+                                   request.query_params.get("von", ""),
+                                   request.query_params.get("bis", ""))
+    filter_werte = {
+        "quelle_id": request.query_params.get("quelle_id", ""),
+        "kampagne_id": request.query_params.get("kampagne_id", ""),
+        "kanal": request.query_params.get("kanal", ""),
+        "sparte": request.query_params.get("sparte", ""),
+        "leadmanager_id": request.query_params.get("leadmanager_id", ""),
+        "ad_id": request.query_params.get("ad_id", ""),
+        # Demo-Leads: im Demo-Modus Standard AN, sonst aus (Plan 80)
+        "demo": request.query_params.get(
+            "demo", "1" if kern.demo_aktiv(session) else "0") == "1",
+    }
+    daten = kern.statistik_leads(session, von, bis, filter_werte)
+    return render(request, "leadmanagement/statistik.html",
+                  aktiv="/lead-management", zeitraum=zeitraum,
+                  zeitraeume=ZEITRAEUME,
+                  von=request.query_params.get("von", ""),
+                  bis=request.query_params.get("bis", ""),
+                  filter_werte=filter_werte, quellen=_quellen(session),
+                  kampagnen=session.query(Kampagne)
+                  .order_by(Kampagne.name).all(),
+                  leadmanager=[b for b in session.query(Benutzer)
+                               .filter(Benutzer.aktiv.is_(True))
+                               .order_by(Benutzer.name)],
+                  alle_ad=[b for b in session.query(Benutzer)
+                           .filter(Benutzer.aktiv.is_(True),
+                                   Benutzer.rolle == "aussendienst")
+                           .order_by(Benutzer.name)],
+                  **daten,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.get("/statistik/kanal")
+async def lead_kanal_report(request: Request,
+                            session: Session = Depends(get_session)):
+    _gate(request, session)
+    mit_demo = request.query_params.get(
+        "demo", "1" if kern.demo_aktiv(session) else "0") == "1"
+    daten = kern.kanal_report(session, mit_demo=mit_demo)
+    if request.query_params.get("export") == "csv":
+        import csv
+        import io
+
+        from fastapi.responses import Response
+        puffer = io.StringIO()
+        schreiber = csv.writer(puffer, delimiter=";")
+        schreiber.writerow(["Quelle", "Monat", "Leads", "Termine", "Aufträge",
+                            "Auftragswert (€)", "Kosten (€)",
+                            "Kosten je Termin (€)", "Kosten je Auftrag (€)",
+                            "Umsatz je € Lead-Kosten"])
+        for (name, monat), z in sorted(daten["zeilen"].items()):
+            kosten = z["kosten"]
+            schreiber.writerow([
+                name, monat, z["leads"], z["termine"], z["auftraege"],
+                f"{z['wert'] / 100:.2f}".replace(".", ","),
+                f"{kosten / 100:.2f}".replace(".", ",") if kosten else "",
+                f"{kosten / z['termine'] / 100:.2f}".replace(".", ",")
+                if kosten and z["termine"] else "",
+                f"{kosten / z['auftraege'] / 100:.2f}".replace(".", ",")
+                if kosten and z["auftraege"] else "",
+                f"{z['wert'] / kosten:.2f}".replace(".", ",")
+                if kosten else ""])
+        return Response(puffer.getvalue().encode("utf-8-sig"),
+                        media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition":
+                                 "attachment; filename=kanal-report.csv"})
+    return render(request, "leadmanagement/kanal_report.html",
+                  aktiv="/lead-management", mit_demo=mit_demo, **daten,
                   meldung=request.query_params.get("meldung", ""))

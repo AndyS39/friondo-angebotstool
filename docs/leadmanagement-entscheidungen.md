@@ -162,3 +162,19 @@ nach V1 durch.
   ohne Internet erscheinen weiterhin die Pins auf grauem Grund.
 - **Gewonnen/Verloren im Board** zeigen die Endzustände (Verloren
   eingeklappt); die 30-Tage-Grenze betrifft die eingeklappte Anzeige.
+
+## Phase 80 – Kennzahlen
+
+- **Reiter „Leads“ als eigene Seite** unter /lead-management/statistik,
+  von der bestehenden Statistik-Seite verlinkt (Reiter-Knopf, nur bei
+  Modul-Sichtbarkeit) – die Angebots-Statistik selbst bleibt unangetastet;
+  Zeitraumwahl und Balken-Technik (ae-balken) werden wiederverwendet.
+- **Trichter-Zählweise**: je Stufe zählt der ZEITPUNKT des Ereignisses im
+  Zeitraum (eingang_am, erreicht_am, erste Qualifizierung, terminiert_am,
+  erfolgter Termin, Erfassung abgesendet, Angebot versendet, angenommen) –
+  die Quote bezieht sich auf die Vorstufe desselben Zeitraums.
+- **Speed-to-Lead in Arbeitsminuten** (Mo–Fr, arbeitszeit_lm) – konsistent
+  mit der SLA-Ampel.
+- **Kanal-Report immer letzte 12 Monate** (unabhängig von der
+  Zeitraumwahl des Reiters); Kosten = kosten_je_lead × Leads des Monats,
+  der Kosten-Monatsimport folgt in V2 wie geplant.

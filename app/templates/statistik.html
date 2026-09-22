@@ -5,6 +5,9 @@
 {% block inhalt %}
 <h1>Statistik{% if eigene_ansicht %} <span class="dezent">(eigene Zahlen)</span>{% endif %}</h1>
 
+{% if request.state.lead_modul_ok | default(false) %}
+<p><a class="knopf klein zweitrangig" href="/lead-management/statistik">Reiter „Leads" (Lead-Management) →</a></p>
+{% endif %}
 <form method="get" action="/statistik" class="suchleiste">
     <select name="zeitraum" onchange="document.getElementById('freifelder').hidden = this.value != 'frei'; if (this.value != 'frei') this.form.submit();">
         {% for wert, name in zeitraeume %}
