@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block titel %}Angebot → Projekt – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<h1>Angebot → Projekt
+    <a class="knopf klein zweitrangig" href="/angebote/{{ angebot.id }}">Zurück zum Angebot</a>
+</h1>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<div class="akte-kopf">
+    <p><strong>{{ kunde.anzeige_name if kunde else '?' }}</strong>
+        · Angebot {% if angebot.extern %}<span class="abzeichen">TAIFUN</span>
+        {{ angebot.taifun_nummer or angebot.nummer }}{% else %}{{ angebot.nummer }}{% endif %}
+        · Endbetrag <strong>{{ angebot.summen().endbetrag | euro }}</strong></p>
+</div>
+
+<form method="post" action="/projektierung/angebot/{{ angebot.id }}/projekt" class="formular"
+      style="max-width:720px">
+    {% if offenes %}
+    <p><strong>Zum Vorgang existiert ein offenes Projekt:</strong></p>
+    <label class="kontrollfeld">
+        <input type="radio" name="projekt_wahl" value="vorhanden" checked>
+        Zu Projekt <strong>{{ offenes.nummer }}</strong> hinzufügen
+        {% if belegt %}<span class="dezent">(vorhandene Gewerke: {{ belegt | join(', ') }})</span>{% endif %}
+    </label><br>
+    <label class="kontrollfeld">
+        <input type="radio" name="projekt_wahl" value="neu"> Neues Projekt anlegen
+    </label>
+    {% else %}
+    <input type="hidden" name="projekt_wahl" value="neu">
+    {% endif %}
+
+    <h2>Ausführungsadresse</h2>
+    <div class="formzeile">
+        <label>Straße <input type="text" name="strasse" size="28"
+               value="{{ kunde.strasse if kunde }}"></label>
+        <label>PLZ <input type="text" name="plz" size="6"
+               value="{{ kunde.plz if kunde }}"></label>
+        <label>Ort <input type="text" name="ort" size="18"
+               value="{{ kunde.ort if kunde }}"></label>
+    </div>
+
+    <h2>Gewerke (Sparten)</h2>
+    <div class="formzeile">
+        {% for s in sparten_waehlbar %}
+        <label class="kontrollfeld">
+            <input type="checkbox" name="sparte_{{ s }}"
+                   {{ 'checked' if s == sparte_vorbelegt }}
+                   {{ 'disabled' if s in belegt }}> {{ s }}
+            {% if s in belegt %}<span class="dezent">(bereits im Projekt)</span>{% endif %}
+        </label>
+        {% endfor %}
+    </div>
+
+    <h2>Zuweisungen</h2>
+    <div class="formzeile">
+        <label>Projektleiter (Pflicht)
+            <select name="projektleiter_id" required>
+                <option value="">– wählen –</option>
+                {% for b in projektleiter %}
+                    <option value="{{ b.id }}" {{ 'selected' if b.id == standard_pl }}>{{ b.name }}</option>
+                {% endfor %}
+            </select></label>
+        <label>Feinplaner
+            <select name="feinplaner_id">
+                <option value="0">– Standard –</option>
+                {% for b in projektleiter %}
+                    <option value="{{ b.id }}" {{ 'selected' if b.id == standard_fp }}>{{ b.name }}</option>
+                {% endfor %}
+            </select></label>
+        <label>Elektroplaner
+            <select name="elektroplaner_id">
+                <option value="0">– Standard –</option>
+                {% for b in projektleiter %}
+                    <option value="{{ b.id }}" {{ 'selected' if b.id == standard_ep }}>{{ b.name }}</option>
+                {% endfor %}
+            </select></label>
+    </div>
+
+    <label>Bemerkung für die Technik<br>
+        <textarea name="notiz_kopf" rows="3" style="width:100%"
+                  placeholder="z. B. Zugang über Hof, Hund, Besonderheiten …"></textarea></label>
+
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Projekt anlegen</button>
+        <span class="dezent">Je Sparte entsteht ein Gewerk in Phase „Feinplanung“;
+            die IMMER-Aufgabenpakete werden aktiviert, Ordner und Dokumente
+            automatisch angelegt.</span>
+    </div>
+</form>
+{% endblock %}

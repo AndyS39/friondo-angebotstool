@@ -24,6 +24,15 @@
         <form method="post" action="/angebote/{{ angebot.id }}/duplizieren">
             <button class="knopf klein zweitrangig" type="submit">Duplizieren</button>
         </form>
+        {% if projekt_modul_ok %}
+            {% if projekt_obj %}
+                <a class="knopf klein zweitrangig" href="/projektierung/projekt/{{ projekt_obj.id }}"
+                   title="Zur Projektakte">→ Projekt {{ projekt_obj.nummer }}</a>
+            {% elif angebot.status == 'Angenommen' %}
+                <a class="knopf klein" href="/projektierung/angebot/{{ angebot.id }}/projekt"
+                   title="Projekt/Gewerk aus diesem Auftrag anlegen">Angebot → Projekt</a>
+            {% endif %}
+        {% endif %}
         {% if angebot.status in ('Versendet', 'Angenommen') and not angebot.extern %}
         <form method="post" action="/angebote/{{ angebot.id }}/ueberarbeiten"
               onsubmit="return confirm('Neue Version {{ angebot.stamm_nummer }}.x als Entwurf erstellen? {{ angebot.nummer }} wird dadurch als „Überholt“ markiert.');">

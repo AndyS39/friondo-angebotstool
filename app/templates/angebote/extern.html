@@ -68,6 +68,16 @@
     · Endbetrag brutto: <strong>{{ angebot.summen().endbetrag | euro }}</strong>
 </p>
 
+{% if projekt_modul_ok %}
+<p>
+    {% if projekt_obj %}
+        <a class="knopf klein zweitrangig" href="/projektierung/projekt/{{ projekt_obj.id }}">→ Projekt {{ projekt_obj.nummer }}</a>
+    {% elif angebot.status == 'Angenommen' %}
+        <a class="knopf klein" href="/projektierung/angebot/{{ angebot.id }}/projekt">Angebot → Projekt</a>
+    {% endif %}
+</p>
+{% endif %}
+
 <p class="hinweis">Dieses Angebot wurde in <strong>TAIFUN</strong> geschrieben –
 im Tool gibt es dafür kein PDF, keinen Editor und keinen E-Mail-Versand.
 Statuspflege (Angenommen/Abgelehnt), Verfolgung und Notizen laufen hier weiter.</p>

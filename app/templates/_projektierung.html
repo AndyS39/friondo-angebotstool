@@ -1,0 +1,16 @@
+{# Projektierungs-Makros (v11): Phasennamen + Ampel-Punkt #}
+
+{% macro phase_name(phase) -%}
+    {{- {"feinplanung": "Feinplanung",
+         "feinplanung_abgeschlossen": "Feinplanung abgeschlossen",
+         "montage_geplant": "Montage geplant",
+         "in_ausfuehrung": "In Ausführung",
+         "abnahme_offen": "Abnahme offen",
+         "abgeschlossen": "Abgeschlossen",
+         "storniert": "Storniert"}.get(phase, phase) -}}
+{%- endmacro %}
+
+{% macro ampel_punkt(ampel) -%}
+    <span class="ampel-punkt ampel-{{ ampel.farbe }}"
+          title="Planungs-Ampel: {{ ampel.erledigt }} von {{ ampel.gesamt }} Pflichtaufgaben{{ ', ' ~ ampel.ueberfaellig ~ ' überfällig' if ampel.ueberfaellig }}"></span>
+{%- endmacro %}

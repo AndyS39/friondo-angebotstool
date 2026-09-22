@@ -74,6 +74,18 @@ async def liste(request: Request, q: str = "", status: str = "", interesse: str 
     if kanal:       # Vertriebskanal des Kunden (v6)
         angebote = [a for a in angebote
                     if a.kunde_id in kunden and kunden[a.kunde_id].vertriebskanal == kanal]
+    # v11 (Phase 66): Projekt-Verknüpfung je Angebot (Zeilenaktion)
+    from app import projektierung as projektierung_modul
+    from app.models import Gewerk as GewerkModell, Projekt as ProjektModell
+    gewerk_map = {g.id: g for g in session.query(GewerkModell)}
+    projekt_map = {p.id: p for p in session.query(ProjektModell)}
+    projekt_je_angebot = {}
+    for a in angebote:
+        if a.projekt_gewerk_id and a.projekt_gewerk_id in gewerk_map:
+            g = gewerk_map[a.projekt_gewerk_id]
+            if g.projekt_id in projekt_map:
+                projekt_je_angebot[a.id] = projekt_map[g.projekt_id]
+    projekt_modul_ok = projektierung_modul.modul_sichtbar(session, request.state.benutzer)
     # Verfolgung (v10): Ampel/Wiedervorlage des VORGANGS je Angebot
     from app.models import Vorgang
     vorgaenge_map = {v.id: v for v in session.query(Vorgang)}
@@ -140,6 +152,8 @@ async def liste(request: Request, q: str = "", status: str = "", interesse: str 
                   interesse=interesse, vertriebler_id=vertriebler_id, sortierung=sortierung,
                   kanal=kanal, verfolgung=verfolgung, sparte=sparte,
                   vorgaenge_map=vorgaenge_map,
+                  projekt_je_angebot=projekt_je_angebot,
+                  projekt_modul_ok=projekt_modul_ok,
                   heute=__import__("datetime").datetime.now(),
                   kanal_werte=sorted({kunden[a.kunde_id].vertriebskanal for a in angebote
                                       if a.kunde_id in kunden and kunden[a.kunde_id].vertriebskanal}
@@ -296,7 +310,11 @@ async def editor(request: Request, angebot_id: int,
         from app import vorgaenge as vorgaenge_modul
         vorgang = vorgaenge_modul.vorgang_fuer_angebot(session, angebot)
         session.commit()
+        from app import projektierung as projektierung_modul
+        projekt_obj, _gewerk = projektierung_modul.projekt_zu_angebot(session, angebot)
+        projekt_modul_ok = projektierung_modul.modul_sichtbar(session, request.state.benutzer)
         return render(request, "angebote/extern.html", aktiv="/angebote",
+                      projekt_obj=projekt_obj, projekt_modul_ok=projekt_modul_ok,
                       angebot=angebot, kunde=kunde, erfassung=erfassung,
                       vertriebler=vertriebler, notizen=notizen,
                       ablehnungsgruende=gruende, vorgang=vorgang,
@@ -352,6 +370,10 @@ async def editor(request: Request, angebot_id: int,
                .order_by(AngebotsNotiz.angelegt_am.desc()).all())
     vorgang = vorgaenge_modul.vorgang_fuer_angebot(session, angebot)
     session.commit()
+    # v11 (Phase 66): „Angebot → Projekt"-Button bzw. Link zum Projekt
+    from app import projektierung as projektierung_modul
+    projekt_obj, _gewerk = projektierung_modul.projekt_zu_angebot(session, angebot)
+    projekt_modul_ok = projektierung_modul.modul_sichtbar(session, request.state.benutzer)
     # v10 (Phase 61): Geschwister-Angebote als Verknüpfungsziele fürs
     # Alternativ-Kennzeichen (z. B. „PV-Angebot AN-…“)
     geschwister = [f"{(a.konfigurator_typ or 'WP')}-Angebot {a.nummer}"
@@ -393,6 +415,7 @@ async def editor(request: Request, angebot_id: int,
                   profil=profil, profile=profile, profil_hinweise=profil_hinweise,
                   fachhinweise=fachhinweise, versionen=versionen,
                   vorgang=vorgang, geschwister=geschwister,
+                  projekt_obj=projekt_obj, projekt_modul_ok=projekt_modul_ok,
                   vortext_standard=angebotsprofile.vortext_fuer_angebot(session, angebot),
                   angebot=angebot, kunde=kunde, gruppen=gruppen,
                   summen=angebot.summen(), artikel_liste=artikel_liste,
@@ -1080,6 +1103,11 @@ async def status_aendern(request: Request, angebot_id: int,
               and alter_status in ("Versendet", "Versendet (extern)", "Angenommen")):
             from app import monday_rueckspielung
             monday_rueckspielung.wert_aktualisieren(session, angebot, "Ablehnung")
+        # v11 (Phase 66): neue Version „Angenommen" → Gewerk nachziehen
+        if neuer_status == "Angenommen":
+            from app import projektierung as projektierung_modul
+            projektierung_modul.version_nachziehen(session, angebot)
+            session.commit()
     return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
 
 

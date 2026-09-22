@@ -82,6 +82,19 @@
     {% if kunde %}<a href="/erfassung/sparten?kunde_id={{ kunde.id }}{{ '&lead_id=' ~ lead.id if lead }}">Erfassung starten</a>{% endif %}</p>
 {% endif %}
 
+{% if projekt_modul_ok and vorgang_projekte %}
+{% from "_projektierung.html" import phase_name %}
+<div class="akte-kopf">
+    {% for eintrag in vorgang_projekte %}
+    <p><strong>Projekt <a href="/projektierung/projekt/{{ eintrag.projekt.id }}">{{ eintrag.projekt.nummer }}</a></strong>
+        {% for g in eintrag.gewerke %}
+            · {{ g.sparte }}: {{ phase_name(g.phase) }}
+        {% endfor %}
+    </p>
+    {% endfor %}
+</div>
+{% endif %}
+
 <h2>Angebote</h2>
 {% if gewerke_hinweise %}
 <div class="warnblock">
@@ -117,6 +130,13 @@
             <td class="rechts">{{ a.summen().endbetrag | euro }}</td>
             <td>{{ a.datum.strftime('%d.%m.%Y') if a.datum }}</td>
             <td class="aktionen">
+                {% if projekt_modul_ok %}
+                    {% if a.id in projekt_je_angebot %}
+                        <a class="knopf klein zweitrangig" href="/projektierung/projekt/{{ projekt_je_angebot[a.id] }}">→ Projekt</a>
+                    {% elif a.status == 'Angenommen' %}
+                        <a class="knopf klein" href="/projektierung/angebot/{{ a.id }}/projekt">Angebot → Projekt</a>
+                    {% endif %}
+                {% endif %}
                 {% if benutzer.rolle in ('admin', 'innendienst') %}
                     <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">Öffnen</a>
                 {% elif not a.extern %}

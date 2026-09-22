@@ -121,6 +121,15 @@
             {% endif %}
             <td class="aktionen">
                 <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">Öffnen</a>
+                {% if projekt_modul_ok %}
+                    {% if a.id in projekt_je_angebot %}
+                        <a class="knopf klein zweitrangig" href="/projektierung/projekt/{{ projekt_je_angebot[a.id].id }}"
+                           title="Zur Projektakte">→ {{ projekt_je_angebot[a.id].nummer }}</a>
+                    {% elif a.status == 'Angenommen' %}
+                        <a class="knopf klein" href="/projektierung/angebot/{{ a.id }}/projekt"
+                           title="Projekt/Gewerk aus diesem Auftrag anlegen">→ Projekt</a>
+                    {% endif %}
+                {% endif %}
                 {% if not a.extern %}
                 <form method="post" action="/angebote/{{ a.id }}/duplizieren">
                     <button class="knopf klein zweitrangig" type="submit">Duplizieren</button>

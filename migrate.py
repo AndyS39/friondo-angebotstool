@@ -284,6 +284,12 @@ def _daten() -> list[str]:
             meldungen.append(f"{rollen_befuellt} Benutzer auf Mehrfachrollen "
                              "umgestellt (rollen = bisherige Rolle)")
         session.commit()
+        # Phase 66: Altbestand – alle angenommenen Angebote ohne Gewerk →
+        # Projekt + Gewerk (Phase Feinplanung); Angebote desselben Vorgangs
+        # werden zu EINEM Projekt zusammengefasst (Schalter-idempotent).
+        # Läuft auch im Demo-Modus sofort, damit die Demo echte Daten zeigt.
+        meldungen += projektierung.altbestand_migrieren(session)
+        session.commit()
     finally:
         session.close()
     return meldungen

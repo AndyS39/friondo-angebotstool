@@ -162,21 +162,21 @@ Server – dieser Plan setzt darauf auf und nummeriert ab Phase 64 weiter.
 
 ## Phase 66 – „Angebot → Projekt", Storno, Migration
 
-- [ ] Button **„Angebot → Projekt"** im Angebots-Editor und in der Angebotsliste
+- [x] Button **„Angebot → Projekt"** im Angebots-Editor und in der Angebotsliste
   (Zeilenaktion) für Status „Angenommen" (Tool und TAIFUN), Rollen Innendienst/Admin/
   Projektierung. Ausgeblendet, wenn `projekt_gewerk_id` gesetzt ist (dann Link
   „→ Projekt PR-…").
-- [ ] Button zusätzlich in der **Vorgangsakte** (v10) im Bereich Angebote je angenommenem
+- [x] Button zusätzlich in der **Vorgangsakte** (v10) im Bereich Angebote je angenommenem
   Angebot; die Vorgangsakte zeigt nach Anlage einen Block „Projekt PR-… · Phase je Gewerk"
   mit Link zur Projektakte.
-- [ ] Dialog: Kopf mit Kunde + Ausführungsadresse (aus dem Vorgang, editierbar). Wenn zum
+- [x] Dialog: Kopf mit Kunde + Ausführungsadresse (aus dem Vorgang, editierbar). Wenn zum
   **Vorgang** bereits ein offenes Projekt existiert → Auswahl
   „Zu Projekt PR-… hinzufügen" (vorausgewählt) oder „Neues Projekt anlegen".
   Sparten-Häkchen (Vorbelegung: Sparte des Angebots; bei TAIFUN-Angebot alle
   Interessen des Leads wählbar). Projektleiter (Pflicht, Vorbelegung Standard),
   Feinplaner, Elektroplaner (Vorbelegung Standard), Bemerkung für die Technik.
   Button „Projekt anlegen".
-- [ ] Anlage: Projekt (falls neu) + je Sparte ein Gewerk in Phase „Feinplanung";
+- [x] Anlage: Projekt (falls neu) + je Sparte ein Gewerk in Phase „Feinplanung";
   Auftragswert = Endbetrag brutto; `IMMER`-Pakete der Sparte + `ALLE` aktivieren,
   Fälligkeiten berechnen (`+N` ab heute; `FP+N` und `M-N` bleiben leer, bis der
   jeweilige Termin existiert, und werden beim Anlegen des Termins nachberechnet);
@@ -184,19 +184,19 @@ Server – dieser Plan setzt darauf auf und nummeriert ab Phase 64 weiter.
   (bei Tool-Angebot) und Erfassungsprotokoll-PDF automatisch in `01 Angebot & Erfassung`
   ablegen; Verlaufseintrag; Benachrichtigung an Projektleiter, Feinplaner, Elektroplaner
   („Neues Gewerk WP im Projekt PR-26xxxx – Müller, Duisburg").
-- [ ] Versionsfolge: Wenn zu einem verknüpften Angebot eine neue Version „Angenommen"
+- [x] Versionsfolge: Wenn zu einem verknüpften Angebot eine neue Version „Angenommen"
   wird, `gewerke.angebot_id` und `auftragswert_aktuell` automatisch nachziehen,
   Verlaufseintrag „Auftragswert geändert von … auf … (Version .2)".
-- [ ] **Storno**: Button am Gewerk (Projektierung/Innendienst/Admin), Pflichtdialog
+- [x] **Storno**: Button am Gewerk (Projektierung/Innendienst/Admin), Pflichtdialog
   Grund + Text, setzt Gewerk „Storniert", Angebot „Abgelehnt" mit Grund
   „Storno nach Auftrag: <Grund>" (bestehende Ablehnungslogik wiederverwenden,
   inkl. monday-Rückspielung wie bei Ablehnung). Projektstatus neu berechnen.
-- [ ] **Migration Altbestand** (einmalig in migrate.py, idempotent über Markierung):
+- [x] **Migration Altbestand** (einmalig in migrate.py, idempotent über Markierung):
   alle Angebote „Angenommen" ohne `projekt_gewerk_id` → Projekt + Gewerk wie oben,
   `quelle = migration`, Projektleiter = Standard (ist der Standard leer: erster
   Admin), Verlaufseintrag „Automatisch aus Altbestand angelegt". Angebote desselben
   Vorgangs werden zu einem Projekt zusammengefasst.
-- [ ] Test: Tool-Angebot annehmen → Projekt; zweites Angebot (PV) desselben Kunden →
+- [x] Test: Tool-Angebot annehmen → Projekt; zweites Angebot (PV) desselben Kunden →
   Dialog schlägt vorhandenes Projekt vor; TAIFUN-Angebot → Projekt; Storno → Angebot
   abgelehnt; Migration mit Test-DB.
 

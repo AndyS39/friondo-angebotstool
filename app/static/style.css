@@ -859,6 +859,37 @@ main.breit { max-width: 1720px; }
 .ae-balken { height: 14px; background: var(--friondo-blau, #4a90d9);
     border-radius: 3px; min-width: 2px; }
 
+/* v11: Projektierung – Akte, Stepper, Ampel, Kanban */
+.gewerk-spalten { display: grid; gap: 1.2rem; align-items: start; }
+.gewerk-spalten.gewerke-1 { grid-template-columns: 1fr; }
+.gewerk-spalten.gewerke-2 { grid-template-columns: 1fr 1fr; }
+.gewerk-spalten.gewerke-3 { grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); }
+.gewerk-spalte { border: 1px solid #d4d9e4; border-radius: 10px;
+    padding: 0.9rem 1.1rem; background: #fff; }
+.gewerk-spalte h3 { margin: 0.9rem 0 0.3rem; font-size: 0.95rem; }
+.gewerk-storniert { opacity: 0.6; }
+.gewerk-storniert h2 { text-decoration: line-through; }
+.phase-stepper { display: flex; gap: 0.3rem; margin: 0.4rem 0; }
+.phase-stepper .schritt { width: 1.6rem; height: 1.6rem; border-radius: 50%;
+    border: 2px solid #d4d9e4; display: inline-flex; align-items: center;
+    justify-content: center; font-size: 0.78rem; color: #5a6478; }
+.phase-stepper .schritt.erledigt { background: #e8f4e5; border-color: #4c9a3d;
+    color: #4c9a3d; }
+.phase-stepper .schritt.aktiv { background: var(--friondo-blau, #4a90d9);
+    border-color: var(--friondo-blau, #4a90d9); color: #fff; font-weight: 700; }
+.ampel-punkt { display: inline-block; width: 0.85rem; height: 0.85rem;
+    border-radius: 50%; vertical-align: middle; margin-right: 0.25rem; }
+.ampel-punkt.ampel-gruen { background: #4c9a3d; }
+.ampel-punkt.ampel-gelb { background: #e0a800; }
+.ampel-punkt.ampel-rot { background: #c0392b; }
+.aufgabe-zeile { border-bottom: 1px dashed #e3e7ef; padding: 0.25rem 0; }
+.aufgabe-form { display: flex; gap: 0.4rem; align-items: flex-start; }
+.aufgabe-erledigt summary { text-decoration: line-through; color: #8a93a5; }
+.aufgabe-ueberfaellig summary { color: #c0392b; }
+.paket-gruppe { margin: 0.3rem 0; }
+.termin-liste { margin: 0.2rem 0 0.4rem 1.1rem; padding: 0; }
+.dokument-baum ul { margin: 0.2rem 0 0.4rem 1.1rem; }
+
 /* v10: Vorgangsakte + Notizen-Chat */
 .akte-kopf { border: 1px solid #d4d9e4; border-radius: 10px;
     padding: 0.8rem 1.2rem; background: #f8f9fc; margin-bottom: 1rem; }

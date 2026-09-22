@@ -363,6 +363,16 @@ def projektstatus_berechnen(session: Session, projekt: Projekt) -> str:
     return status
 
 
+def projekt_zu_angebot(session: Session, angebot: Angebot):
+    """(Projekt, Gewerk) zum Angebot über projekt_gewerk_id – sonst (None, None)."""
+    if not angebot.projekt_gewerk_id:
+        return None, None
+    gewerk = session.get(Gewerk, angebot.projekt_gewerk_id)
+    if gewerk is None:
+        return None, None
+    return session.get(Projekt, gewerk.projekt_id), gewerk
+
+
 def offenes_projekt_fuer_vorgang(session: Session, vorgang_id: int | None) -> Projekt | None:
     """Pro Vorgang höchstens ein OFFENES Projekt (Konzept 3)."""
     if not vorgang_id:

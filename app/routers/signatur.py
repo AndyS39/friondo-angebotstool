@@ -99,6 +99,8 @@ async def signieren(request: Request, angebot_id: int,
         f"erfasst von: {benutzer.name} · IP: {ip} · Gerät: {geraet}")
     from app.models import angebot_status_setzen
     angebot_status_setzen(angebot, "Angenommen")
+    from app import projektierung as projektierung_modul
+    projektierung_modul.version_nachziehen(session, angebot)
     erfassung = (session.query(Erfassung)
                  .filter(Erfassung.angebot_id == angebot.id).first())
     if erfassung is not None:
@@ -226,6 +228,8 @@ async def fern_signieren(request: Request, token: str,
         f"Fern-Signatur durch den Kunden (Token-Link) · IP: {ip} · Gerät: {geraet}")
     from app.models import angebot_status_setzen
     angebot_status_setzen(angebot, "Angenommen")
+    from app import projektierung as projektierung_modul
+    projektierung_modul.version_nachziehen(session, angebot)
     # Einmal-Token: nach der Signatur sofort entwerten
     angebot.signatur_token = None
     angebot.signatur_token_gueltig_bis = None

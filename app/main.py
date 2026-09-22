@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from app.auth import RollenMiddleware, standardbenutzer_anlegen
 from app.db import init_db
 from app.routers import (angebote, anmeldung, artikel, benutzer, erfassung, vorgaenge,
+                         projektierung as projektierung_router,
                          meine_angebote,
                          erfassungsliste, konfiguration, konfigurator, kunden,
                          leads, signatur, statistik, versand)
@@ -48,6 +49,7 @@ app.mount("/static", StaticFiles(directory=APP_ORDNER / "static"), name="static"
 
 app.include_router(anmeldung.router)
 app.include_router(vorgaenge.router)
+app.include_router(projektierung_router.router)
 app.include_router(benutzer.router)
 app.include_router(erfassung.router)
 app.include_router(erfassungsliste.router)

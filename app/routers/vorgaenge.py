@@ -175,6 +175,25 @@ async def akte(request: Request, vorgang_id: int,
     erfassung_offen = next((e for e in erfassungen if e.status == "Entwurf"), None)
     aussendienst = [b for b in benutzer_map.values()
                     if b.rolle == "aussendienst" and b.aktiv]
+    # v11 (Phase 66): Projektstand + „Angebot → Projekt" je angenommenem Angebot
+    from app import projektierung as projektierung_modul
+    from app.models import Gewerk as GewerkModell, Projekt as ProjektModell
+    projekt_modul_ok = projektierung_modul.modul_sichtbar(session, benutzer)
+    vorgang_projekte = []
+    if projekt_modul_ok:
+        for projekt in (session.query(ProjektModell)
+                        .filter(ProjektModell.vorgang_id == vorgang.id)
+                        .order_by(ProjektModell.id)):
+            projekt_gewerke = (session.query(GewerkModell)
+                               .filter(GewerkModell.projekt_id == projekt.id)
+                               .order_by(GewerkModell.id).all())
+            vorgang_projekte.append({"projekt": projekt, "gewerke": projekt_gewerke})
+    projekt_je_angebot = {}
+    for a in angebote:
+        if a.projekt_gewerk_id:
+            gewerk = session.get(GewerkModell, a.projekt_gewerk_id)
+            if gewerk is not None:
+                projekt_je_angebot[a.id] = gewerk.projekt_id
     # Kombi-Versand (Phase 61): Wählbarkeit je Angebot + fachliche Hinweise
     from app import kombi_versand as kombi_modul
     kombi_info = {a.id: kombi_modul.waehlbar(a) for a in angebote}
@@ -193,6 +212,9 @@ async def akte(request: Request, vorgang_id: int,
                   erfassung_offen=erfassung_offen,
                   kombi_info=kombi_info, gewerke_hinweise=gewerke_hinweise,
                   kombi_doppelt=kombi_doppelt,
+                  projekt_modul_ok=projekt_modul_ok,
+                  vorgang_projekte=vorgang_projekte,
+                  projekt_je_angebot=projekt_je_angebot,
                   aussendienst=sorted(aussendienst, key=lambda b: b.name),
                   heute=datetime.now(),
                   meldung=request.query_params.get("meldung", ""))
