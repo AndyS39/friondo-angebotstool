@@ -79,3 +79,19 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
   und Elektroplaner des Gewerks (= „Benutzer, die zugewiesen sind").
 - **Vorgangs-Notizen** (Vertriebsphase) erscheinen in der Akte nur, wenn
   welche existieren (read-only, aufklappbar unter dem Projektverlauf).
+
+## Phase 68 – Kanban, Liste, Startseite
+
+- **Drag & Drop bei blockiertem Wächter**: Das Board zeigt die Wächter-Meldung
+  als Hinweis mit Link „→ Projektakte" statt eines eigenen Override-Dialogs auf
+  dem Board. Der Override mit Begründung bleibt bewusst in der Akte (dort steht
+  der volle Kontext: offene Pflichtaufgaben, Termine). Kein hartes Sperren –
+  Konzept Annahme 13 bleibt gewahrt.
+- **Startseiten-Shortcut „Meine Aufgaben"**: Die Portal-Karte ist laut finaler
+  Portal-Fassung (v9) EIN Klickziel ohne eingebettete Buttons. Der Shortcut
+  läuft daher über die Kachel „Überfällige Aufgaben" (Hinweistext „→ Meine
+  Aufgaben") und den Kopf-Link „Meine Aufgaben" auf dem Board – kein eigener
+  Link im Portal.
+- **CSV-Export** mit `utf-8-sig` und Semikolon-Trenner, damit Excel (deutsche
+  Locale) die Datei direkt korrekt öffnet – gleiches Muster wie bestehende
+  Exporte.

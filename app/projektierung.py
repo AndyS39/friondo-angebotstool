@@ -540,6 +540,31 @@ def _erfassungsprotokoll_ablegen(session: Session, projekt: Projekt,
                       gewerk.id, benutzer)
 
 
+def startseiten_kacheln(session: Session) -> dict:
+    """Phase 68: Kacheln zählen GEWERKE je Phase (mit Sparten-Untertitel)
+    plus überfällige Aufgaben."""
+    zaehler = {p: {"anzahl": 0, "sparten": {}} for p in
+               ("feinplanung", "feinplanung_abgeschlossen", "montage_geplant",
+                "in_ausfuehrung", "abnahme_offen")}
+    for g in session.query(Gewerk):
+        if g.phase not in zaehler:
+            continue
+        zaehler[g.phase]["anzahl"] += 1
+        zaehler[g.phase]["sparten"][g.sparte] = (
+            zaehler[g.phase]["sparten"].get(g.sparte, 0) + 1)
+    for eintrag in zaehler.values():
+        eintrag["untertitel"] = " / ".join(
+            f"{n} {s}" for s, n in sorted(eintrag["sparten"].items(),
+                                          key=lambda kv: -kv[1]))
+    jetzt = datetime.now()
+    ueberfaellig = (session.query(Aufgabe)
+                    .filter(Aufgabe.status.in_(["offen", "in_arbeit", "wartet"]),
+                            Aufgabe.faellig_am.isnot(None),
+                            Aufgabe.faellig_am < jetzt).count())
+    zaehler["ueberfaellig"] = ueberfaellig
+    return zaehler
+
+
 # --- Phasenwechsel + Freigabe (Phase 67) --------------------------------------------
 
 def waechter_pruefen(session: Session, gewerk: Gewerk, ziel: str) -> list[str]:

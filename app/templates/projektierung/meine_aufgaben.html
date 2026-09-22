@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block titel %}Meine Aufgaben – Projektierung{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Meine Aufgaben</h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/projektierung">Board</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% macro aufgaben_tabelle(liste) %}
+{% if liste %}
+<table class="tabelle" style="max-width:1000px">
+    <tbody>
+    {% for a in liste %}
+        {% set projekt = projekte.get(a.projekt_id) %}
+        {% set gewerk = gewerke.get(a.gewerk_id) %}
+        <tr class="{{ 'aufgabe-ueberfaellig' if a.faellig_am and a.faellig_am < heute }}">
+            <td>
+                <form method="post" action="/projektierung/aufgabe/{{ a.id }}/erledigt-umschalten" style="display:inline">
+                    <input type="checkbox" onchange="this.form.submit()" title="Erledigt">
+                </form>
+            </td>
+            <td>{{ a.titel }}{{ ' *' if a.pflicht }}</td>
+            <td>{% if projekt %}<a href="/projektierung/projekt/{{ projekt.id }}">{{ projekt.nummer }}</a>
+                {{ '· ' ~ gewerk.sparte if gewerk }}
+                · {{ kunden[projekt.kunde_id].anzeige_name if projekt.kunde_id in kunden else '' }}{% endif %}</td>
+            <td>{{ a.faellig_am.strftime('%d.%m.%Y') if a.faellig_am else '–' }}</td>
+            <td>
+                <form method="post" action="/projektierung/aufgabe/{{ a.id }}/status">
+                    <select name="status" onchange="this.form.submit()">
+                        {% for wert, name in status_namen.items() %}
+                            <option value="{{ wert }}" {{ 'selected' if a.status == wert }}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}<p class="dezent">Keine Aufgaben.</p>{% endif %}
+{% endmacro %}
+
+<h2 style="color:#c0392b">Überfällig ({{ gruppen.ueberfaellig | length }})</h2>
+{{ aufgaben_tabelle(gruppen.ueberfaellig) }}
+<h2>Heute ({{ gruppen.heute | length }})</h2>
+{{ aufgaben_tabelle(gruppen.heute) }}
+<h2>Diese Woche ({{ gruppen.woche | length }})</h2>
+{{ aufgaben_tabelle(gruppen.woche) }}
+<h2>Später / ohne Fälligkeit ({{ gruppen.spaeter | length }})</h2>
+{{ aufgaben_tabelle(gruppen.spaeter) }}
+<h2>Neu zugewiesen (7 Tage, {{ neu_zugewiesen | length }})</h2>
+{{ aufgaben_tabelle(neu_zugewiesen) }}
+{% endblock %}

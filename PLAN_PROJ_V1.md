@@ -240,7 +240,7 @@ Server – dieser Plan setzt darauf auf und nummeriert ab Phase 64 weiter.
 
 ## Phase 68 – Kanban, Liste, Startseite
 
-- [ ] Route `/projektierung` = **Kanban**. Spalten: Feinplanung · Feinplanung
+- [x] Route `/projektierung` = **Kanban**. Spalten: Feinplanung · Feinplanung
   abgeschlossen · Montage geplant · In Ausführung · Abnahme offen · (Abgeschlossen,
   eingeklappt, letzte 30 Tage). Karte = Projekt in der Spalte seines abgeleiteten
   Status. Karteninhalt: PR-Nr., Kunde, Ort, Projektleiter-Kürzel, Kanal-Badge,
@@ -250,22 +250,22 @@ Server – dieser Plan setzt darauf auf und nummeriert ab Phase 64 weiter.
   der Akte), bei mehreren Dialog „Welches Gewerk verschieben?".
   Filterleiste: Sparte (schaltet auf Karte-je-Gewerk um), Projektleiter, Team,
   Kanal, PLZ-Präfix, Suche Kunde/PR-Nr., Häkchen „Storniert anzeigen".
-- [ ] **Liste** `/projektierung/liste`: Gewerke als Tabelle (PR-Nr., Kunde, Ort,
+- [x] **Liste** `/projektierung/liste`: Gewerke als Tabelle (PR-Nr., Kunde, Ort,
   Sparte, Phase, Ampel, Projektleiter, nächster Termin, Auftragswert, überfällig,
   Kanal, Angebotsnummer), Sortierung, dieselben Filter, Summenzeile Auftragswert,
   CSV-Export.
-- [ ] **Terminübersicht** `/projektierung/termine`: Wochen- und Monatsansicht aller
+- [x] **Terminübersicht** `/projektierung/termine`: Wochen- und Monatsansicht aller
   Termine (Filter Team/Person/Typ), Klick → Akte. Termin-Dialog (Typ, Beginn/Ende,
   Team/Person/Sub, Kunde bestätigt, Notiz) aus Akte und Übersicht; beim Anlegen
   eines Montage- oder Feinplanungs-Termins werden `M-N`/`FP+N`-Fälligkeiten des
   Gewerks (nach)berechnet.
-- [ ] **Startseite**: Bereich Projektierung – Kacheln zählen Gewerke je Phase mit
+- [x] **Startseite**: Bereich Projektierung – Kacheln zählen Gewerke je Phase mit
   Sparten-Untertitel; Kachel „Überfällige Aufgaben" (Anzahl, Klick → Meine Aufgaben
   mit Filter). Neue Seite **„Meine Aufgaben"** `/projektierung/meine-aufgaben`:
   Gruppen Überfällig · Heute · Diese Woche · Später · Neu zugewiesen (7 Tage);
   Zeile: Aufgabe, Projekt/Gewerk, Fälligkeit, Status-Dropdown, Erledigt-Checkbox.
   Startseiten-Shortcut „Meine Aufgaben" für Rollen Projektierung/Innendienst/Admin.
-- [ ] Test: 10 Testprojekte, Board-Filter, Drag & Drop, Kachelzahlen stimmen mit
+- [x] Test: 10 Testprojekte, Board-Filter, Drag & Drop, Kachelzahlen stimmen mit
   Liste überein.
 
 ## Phase 69 – Kommunikation und Benachrichtigungen

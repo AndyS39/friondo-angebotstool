@@ -119,7 +119,21 @@ async def startseite(request: Request):
     benutzer = request.state.benutzer
     if benutzer is not None and benutzer.rolle == "aussendienst":
         return RedirectResponse("/erfassung", status_code=303)
-    return render(request, "index.html", aktiv=None, **_start_kontext())
+    # v11 (Phase 68/70): Projektierungs-Karte – Live-Kacheln nur, wenn das
+    # Modul für den Benutzer sichtbar ist (Demo-Modus: nur Admin)
+    from app import projektierung as projektierung_modul
+    from app.db import SessionLocal
+    sitzung = SessionLocal()
+    try:
+        projekt_kacheln = None
+        demo_badge = projektierung_modul.freigabe_modus(sitzung) == "admin"
+        if projektierung_modul.modul_sichtbar(sitzung, benutzer):
+            projekt_kacheln = projektierung_modul.startseiten_kacheln(sitzung)
+    finally:
+        sitzung.close()
+    return render(request, "index.html", aktiv=None,
+                  projekt_kacheln=projekt_kacheln, demo_badge=demo_badge,
+                  **_start_kontext())
 
 
 @app.get("/angebotstool")
@@ -138,14 +152,8 @@ async def lead_management(request: Request):
                           "das Angebotstool (Leads VOT).")
 
 
-@app.get("/projektierung")
-async def projektierung(request: Request):
-    """Platzhalterseite (v9-Portal): Projektierung ist im Aufbau."""
-    return render(request, "platzhalter.html", aktiv=None,
-                  titel="Projektierung",
-                  hinweis="Dieser Bereich ist im Aufbau (Coming soon). "
-                          "Auftragsabwicklung und Montageplanung folgen in "
-                          "einer späteren Version.")
+# v11 (Phase 68): /projektierung ist jetzt das Kanban-Board des
+# Projektierungs-Routers; die v9-Platzhalterseite entfällt.
 
 
 def _offene_leads_anzahl(session) -> int:

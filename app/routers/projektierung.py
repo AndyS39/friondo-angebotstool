@@ -4,7 +4,7 @@
 # Demo-Gate (freigabe_modus, Phase 70): Standard = nur Admin.
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -46,6 +46,359 @@ def _benutzer_mit_rolle(session: Session, rolle: str) -> list[Benutzer]:
     return sorted(treffer or [b for b in alle
                               if b.rolle in ("admin", "innendienst")],
                   key=lambda b: b.name)
+
+
+# --- Phase 68: Kanban · Liste · Termine · Meine Aufgaben -------------------------
+
+def _gewerk_zeilen(session: Session, benutzer, sparte: str = "",
+                   projektleiter_id: int = 0, team_id: int = 0,
+                   kanal: str = "", plz: str = "", q: str = "",
+                   storniert: bool = False) -> list[dict]:
+    """Gefilterte Gewerk-Zeilen (Basis für Kanban, Liste, Kacheln): je Gewerk
+    Projekt, Kunde, Ampel, nächster Termin, offene/überfällige Aufgaben."""
+    projekte = {p.id: p for p in session.query(Projekt)}
+    kunden = {k.id: k for k in session.query(Kunde)}
+    jetzt = datetime.now()
+    termine_je_gewerk: dict[int, datetime] = {}
+    teams_je_gewerk: dict[int, set[int]] = {}
+    for t in (session.query(ProjektTermin)
+              .filter(ProjektTermin.beginn.isnot(None))
+              .order_by(ProjektTermin.beginn)):
+        if t.gewerk_id and t.beginn >= jetzt and t.gewerk_id not in termine_je_gewerk:
+            termine_je_gewerk[t.gewerk_id] = t.beginn
+        if t.gewerk_id and t.team_id:
+            teams_je_gewerk.setdefault(t.gewerk_id, set()).add(t.team_id)
+    offene_je_gewerk: dict[int, int] = {}
+    ueberfaellig_je_gewerk: dict[int, int] = {}
+    pflicht_je_gewerk: dict[int, list] = {}
+    for a in session.query(Aufgabe).filter(Aufgabe.status != "entfaellt"):
+        if not a.gewerk_id:
+            continue
+        if a.status != "erledigt":
+            offene_je_gewerk[a.gewerk_id] = offene_je_gewerk.get(a.gewerk_id, 0) + 1
+            if a.faellig_am is not None and a.faellig_am < jetzt:
+                ueberfaellig_je_gewerk[a.gewerk_id] = (
+                    ueberfaellig_je_gewerk.get(a.gewerk_id, 0) + 1)
+        if a.pflicht:
+            pflicht_je_gewerk.setdefault(a.gewerk_id, []).append(a)
+    zeilen = []
+    for g in session.query(Gewerk).order_by(Gewerk.id):
+        projekt = projekte.get(g.projekt_id)
+        if projekt is None:
+            continue
+        if not storniert and g.phase == "storniert":
+            continue
+        if sparte and g.sparte != sparte:
+            continue
+        if projektleiter_id and projekt.projektleiter_id != projektleiter_id:
+            continue
+        if team_id and team_id not in teams_je_gewerk.get(g.id, set()):
+            continue
+        if kanal and (projekt.kanal or "") != kanal:
+            continue
+        if plz and not (projekt.ausfuehrung_plz or "").startswith(plz):
+            continue
+        kunde = kunden.get(projekt.kunde_id)
+        if q:
+            suchwort = q.lower()
+            if not (suchwort in projekt.nummer.lower()
+                    or (kunde is not None
+                        and suchwort in kunde.anzeige_name.lower())):
+                continue
+        pflicht = pflicht_je_gewerk.get(g.id, [])
+        erledigt = sum(1 for a in pflicht if a.status == "erledigt")
+        ueberfaellig = ueberfaellig_je_gewerk.get(g.id, 0)
+        farbe = ("gruen" if pflicht and erledigt == len(pflicht)
+                 else ("rot" if ueberfaellig else "gelb"))
+        if not pflicht:
+            farbe = "gruen"
+        zeilen.append({
+            "gewerk": g, "projekt": projekt, "kunde": kunde,
+            "ampel": {"farbe": farbe, "erledigt": erledigt,
+                      "gesamt": len(pflicht), "ueberfaellig": ueberfaellig},
+            "naechster_termin": termine_je_gewerk.get(g.id),
+            "offen": offene_je_gewerk.get(g.id, 0),
+            "ueberfaellig": ueberfaellig,
+        })
+    return zeilen
+
+
+def _filter_werte(session: Session) -> dict:
+    projekte = session.query(Projekt).all()
+    benutzer_map = {b.id: b for b in session.query(Benutzer)}
+    return {
+        "benutzer_map": benutzer_map,
+        "projektleiter_werte": sorted(
+            {p.projektleiter_id for p in projekte if p.projektleiter_id},
+            key=lambda i: benutzer_map[i].name if i in benutzer_map else ""),
+        "kanal_werte": sorted({p.kanal for p in projekte if p.kanal}),
+        "teams": (session.query(Team).filter(Team.aktiv.is_(True))
+                  .order_by(Team.name).all()),
+    }
+
+
+@router.get("")
+async def kanban(request: Request, sparte: str = "", projektleiter_id: int = 0,
+                 team_id: int = 0, kanal: str = "", plz: str = "", q: str = "",
+                 storniert: int = 0, session: Session = Depends(get_session)):
+    """Kanban (Phase 68): Karte = Projekt in der Spalte seines abgeleiteten
+    Status; der Sparten-Filter schaltet auf Karte-je-Gewerk um."""
+    if (umleitung := _gate(request, session)) is not None:
+        return umleitung
+    zeilen = _gewerk_zeilen(session, request.state.benutzer, sparte=sparte,
+                            projektleiter_id=projektleiter_id, team_id=team_id,
+                            kanal=kanal, plz=plz, q=q,
+                            storniert=bool(storniert))
+    karte_je_gewerk = bool(sparte)
+    spalten: dict[str, list] = {p: [] for p in GEWERK_PHASEN[:5]}
+    spalten["abgeschlossen"] = []
+    grenze_30 = datetime.now() - timedelta(days=30)
+    if karte_je_gewerk:
+        for zeile in zeilen:
+            phase = zeile["gewerk"].phase
+            if phase == "storniert":
+                phase = zeile["projekt"].status_cache
+                if bool(storniert):
+                    spalten.setdefault("storniert", []).append(
+                        {"projekt": zeile["projekt"], "zeilen": [zeile]})
+                    continue
+            if phase == "abgeschlossen" and (
+                    zeile["gewerk"].phase_geaendert_am or datetime.now()) < grenze_30:
+                continue
+            spalten.setdefault(phase, []).append(
+                {"projekt": zeile["projekt"], "zeilen": [zeile]})
+    else:
+        karten: dict[int, dict] = {}
+        for zeile in zeilen:
+            karte = karten.setdefault(zeile["projekt"].id,
+                                      {"projekt": zeile["projekt"], "zeilen": []})
+            karte["zeilen"].append(zeile)
+        for karte in karten.values():
+            status = karte["projekt"].status_cache
+            if status == "abgeschlossen" and (
+                    karte["projekt"].abgeschlossen_am or datetime.now()) < grenze_30:
+                continue
+            spalten.setdefault(status if status in spalten else "feinplanung",
+                               []).append(karte)
+    from datetime import timedelta as _td
+    return render(request, "projektierung/kanban.html", aktiv="/projektierung",
+                  spalten=spalten, phasen_namen=GEWERK_PHASEN_NAMEN,
+                  karte_je_gewerk=karte_je_gewerk,
+                  sparte=sparte, projektleiter_id=projektleiter_id,
+                  team_id=team_id, kanal=kanal, plz=plz, q=q,
+                  storniert=bool(storniert), heute=datetime.now(),
+                  benutzer=request.state.benutzer,
+                  **_filter_werte(session),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/gewerk/{gewerk_id}/phase-drop")
+async def phase_drop(request: Request, gewerk_id: int,
+                     session: Session = Depends(get_session)):
+    """Drag & Drop vom Board: wie Phasenwechsel, mit optionaler Begründung
+    (der Wächter-Hinweis erscheint als Meldung über dem Board)."""
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    form = await request.form()
+    ok, meldung = kern.phase_wechseln(session, gewerk, form.get("phase") or "",
+                                      form.get("begruendung") or "",
+                                      benutzer=request.state.benutzer)
+    if ok:
+        session.commit()
+    else:
+        session.rollback()
+        meldung += " – Override mit Begründung in der Projektakte."
+    return RedirectResponse("/projektierung?meldung=" + quote_plus(meldung),
+                            status_code=303)
+
+
+@router.get("/liste")
+async def liste(request: Request, sparte: str = "", projektleiter_id: int = 0,
+                team_id: int = 0, kanal: str = "", plz: str = "", q: str = "",
+                storniert: int = 0, sortierung: str = "projekt",
+                export: str = "", session: Session = Depends(get_session)):
+    """Gewerke als Tabelle (Phase 68) mit Summenzeile und CSV-Export."""
+    if (umleitung := _gate(request, session)) is not None:
+        return umleitung
+    zeilen = _gewerk_zeilen(session, request.state.benutzer, sparte=sparte,
+                            projektleiter_id=projektleiter_id, team_id=team_id,
+                            kanal=kanal, plz=plz, q=q, storniert=bool(storniert))
+    if sortierung == "kunde":
+        zeilen.sort(key=lambda z: (z["kunde"].anzeige_name.lower()
+                                   if z["kunde"] else "zzz"))
+    elif sortierung == "phase":
+        zeilen.sort(key=lambda z: GEWERK_PHASEN.index(z["gewerk"].phase))
+    elif sortierung == "termin":
+        zeilen.sort(key=lambda z: z["naechster_termin"] or datetime.max)
+    elif sortierung == "wert":
+        zeilen.sort(key=lambda z: -z["gewerk"].auftragswert_aktuell)
+    else:
+        sortierung = "projekt"
+        zeilen.sort(key=lambda z: z["projekt"].nummer, reverse=True)
+    angebote = {a.id: a for a in session.query(Angebot)
+                .filter(Angebot.id.in_([z["gewerk"].angebot_id for z in zeilen
+                                        if z["gewerk"].angebot_id] or [0]))}
+    summe = sum(z["gewerk"].auftragswert_aktuell for z in zeilen
+                if z["gewerk"].phase != "storniert")
+    if export == "csv":
+        import csv
+        import io
+        from fastapi.responses import Response
+        puffer = io.StringIO()
+        schreiber = csv.writer(puffer, delimiter=";")
+        schreiber.writerow(["PR-Nr.", "Kunde", "Ort", "Sparte", "Phase",
+                            "Ampel", "Projektleiter", "Nächster Termin",
+                            "Auftragswert (EUR)", "Überfällig", "Kanal",
+                            "Angebotsnummer"])
+        filter_werte = _filter_werte(session)
+        for z in zeilen:
+            angebot = angebote.get(z["gewerk"].angebot_id)
+            pl = filter_werte["benutzer_map"].get(z["projekt"].projektleiter_id)
+            schreiber.writerow([
+                z["projekt"].nummer,
+                z["kunde"].anzeige_name if z["kunde"] else "",
+                z["projekt"].ausfuehrung_ort,
+                z["gewerk"].sparte,
+                GEWERK_PHASEN_NAMEN.get(z["gewerk"].phase, z["gewerk"].phase),
+                z["ampel"]["farbe"],
+                pl.name if pl else "",
+                z["naechster_termin"].strftime("%d.%m.%Y %H:%M")
+                if z["naechster_termin"] else "",
+                f"{z['gewerk'].auftragswert_aktuell / 100:.2f}".replace(".", ","),
+                z["ueberfaellig"],
+                z["projekt"].kanal,
+                (angebot.taifun_nummer or angebot.nummer) if angebot else "",
+            ])
+        return Response(puffer.getvalue().encode("utf-8-sig"),
+                        media_type="text/csv",
+                        headers={"Content-Disposition":
+                                 'attachment; filename="projektierung.csv"'})
+    return render(request, "projektierung/liste.html", aktiv="/projektierung",
+                  zeilen=zeilen, angebote=angebote, summe=summe,
+                  phasen_namen=GEWERK_PHASEN_NAMEN, sortierung=sortierung,
+                  sparte=sparte, projektleiter_id=projektleiter_id,
+                  team_id=team_id, kanal=kanal, plz=plz, q=q,
+                  storniert=bool(storniert), heute=datetime.now(),
+                  benutzer=request.state.benutzer,
+                  **_filter_werte(session),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.get("/termine")
+async def termine(request: Request, ansicht: str = "woche", start: str = "",
+                  team_id: int = 0, person_id: int = 0, typ: str = "",
+                  session: Session = Depends(get_session)):
+    """Terminübersicht (Phase 68): Wochen-/Monatsansicht, Filter Team/Person/Typ."""
+    if (umleitung := _gate(request, session)) is not None:
+        return umleitung
+    from datetime import date, timedelta as _td
+    try:
+        start_datum = datetime.strptime(start, "%Y-%m-%d").date() if start else date.today()
+    except ValueError:
+        start_datum = date.today()
+    if ansicht == "monat":
+        von = start_datum.replace(day=1)
+        bis = (von.replace(month=von.month + 1, day=1) if von.month < 12
+               else von.replace(year=von.year + 1, month=1, day=1))
+    else:
+        ansicht = "woche"
+        von = start_datum - _td(days=start_datum.weekday())
+        bis = von + _td(days=7)
+    abfrage = (session.query(ProjektTermin)
+               .filter(ProjektTermin.beginn.isnot(None),
+                       ProjektTermin.beginn >= datetime.combine(von, datetime.min.time()),
+                       ProjektTermin.beginn < datetime.combine(bis, datetime.min.time())))
+    if team_id:
+        abfrage = abfrage.filter(ProjektTermin.team_id == team_id)
+    if person_id:
+        abfrage = abfrage.filter(ProjektTermin.person_id == person_id)
+    if typ:
+        abfrage = abfrage.filter(ProjektTermin.typ == typ)
+    termine_liste = abfrage.order_by(ProjektTermin.beginn).all()
+    tage: dict = {}
+    for t in termine_liste:
+        tage.setdefault(t.beginn.date(), []).append(t)
+    projekte = {p.id: p for p in session.query(Projekt)}
+    gewerke = {g.id: g for g in session.query(Gewerk)}
+    kunden = {k.id: k for k in session.query(Kunde)}
+    subs = {su.id: su for su in session.query(Subunternehmer)}
+    alle_gewerke = [(g, projekte.get(g.projekt_id), kunden.get(
+        projekte[g.projekt_id].kunde_id) if g.projekt_id in projekte else None)
+        for g in gewerke.values()
+        if g.phase not in ("abgeschlossen", "storniert")]
+    return render(request, "projektierung/termine.html", aktiv="/projektierung",
+                  tage=sorted(tage.items()), von=von, bis=bis, ansicht=ansicht,
+                  team_id=team_id, person_id=person_id, typ=typ,
+                  projekte=projekte, gewerke=gewerke, kunden=kunden, subs=subs,
+                  alle_gewerke=sorted(alle_gewerke,
+                                      key=lambda e: e[1].nummer if e[1] else ""),
+                  vor=(von + (_td(days=7) if ansicht == "woche" else _td(days=32))
+                       ).strftime("%Y-%m-%d"),
+                  zurueck=(von - (_td(days=7) if ansicht == "woche" else _td(days=1))
+                           ).strftime("%Y-%m-%d"),
+                  benutzer=request.state.benutzer,
+                  **_filter_werte(session),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.get("/meine-aufgaben")
+async def meine_aufgaben(request: Request, ueberfaellig: int = 0,
+                         session: Session = Depends(get_session)):
+    """„Meine Aufgaben" (Phase 68): Überfällig · Heute · Diese Woche ·
+    Später · Neu zugewiesen (7 Tage)."""
+    if (umleitung := _gate(request, session)) is not None:
+        return umleitung
+    benutzer = request.state.benutzer
+    from datetime import timedelta as _td
+    jetzt = datetime.now()
+    heute_ende = jetzt.replace(hour=23, minute=59, second=59)
+    woche_ende = heute_ende + _td(days=6 - jetzt.weekday())
+    aufgaben = (session.query(Aufgabe)
+                .filter(Aufgabe.verantwortlich_id == benutzer.id,
+                        Aufgabe.status.in_(["offen", "in_arbeit", "wartet"]))
+                .order_by(Aufgabe.faellig_am.isnot(None).desc(),
+                          Aufgabe.faellig_am).all())
+    gruppen = {"ueberfaellig": [], "heute": [], "woche": [], "spaeter": []}
+    for a in aufgaben:
+        if a.faellig_am is not None and a.faellig_am < jetzt:
+            gruppen["ueberfaellig"].append(a)
+        elif a.faellig_am is not None and a.faellig_am <= heute_ende:
+            gruppen["heute"].append(a)
+        elif a.faellig_am is not None and a.faellig_am <= woche_ende:
+            gruppen["woche"].append(a)
+        else:
+            gruppen["spaeter"].append(a)
+    neu_zugewiesen = [a for a in aufgaben
+                      if a.erstellt_am and a.erstellt_am >= jetzt - _td(days=7)]
+    projekte = {p.id: p for p in session.query(Projekt)}
+    gewerke = {g.id: g for g in session.query(Gewerk)}
+    kunden = {k.id: k for k in session.query(Kunde)}
+    return render(request, "projektierung/meine_aufgaben.html",
+                  aktiv="/projektierung", gruppen=gruppen,
+                  neu_zugewiesen=neu_zugewiesen, projekte=projekte,
+                  gewerke=gewerke, kunden=kunden, heute=jetzt,
+                  status_namen=AUFGABE_STATUS_NAMEN,
+                  benutzer=benutzer,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/termine")
+async def termin_aus_uebersicht(request: Request,
+                                session: Session = Depends(get_session)):
+    """Termin-Dialog aus der Übersicht: Gewerk wählen, dann wie in der Akte."""
+    if (umleitung := _gate(request, session, schreiben=True)) is not None:
+        return umleitung
+    form = await request.form()
+    try:
+        gewerk_id = int(form.get("gewerk_id") or 0)
+    except ValueError:
+        gewerk_id = 0
+    if not gewerk_id:
+        return RedirectResponse("/projektierung/termine?meldung="
+                                + quote_plus("Bitte ein Gewerk wählen."),
+                                status_code=303)
+    return await termin_anlegen(request, gewerk_id, session)
 
 
 # --- Phase 66: Angebot → Projekt ------------------------------------------------

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% import "_sparten.html" as sparten_ui %}
+{% from "_projektierung.html" import ampel_punkt %}
+
+{% block titel %}Projektierung – Liste{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Projektierung – Liste</h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/projektierung">Board</a>
+        <a class="knopf klein zweitrangig" href="/projektierung/termine">Termine</a>
+        <a class="knopf klein" href="/projektierung/liste?export=csv&sparte={{ sparte }}&projektleiter_id={{ projektleiter_id }}&team_id={{ team_id }}&kanal={{ kanal }}&plz={{ plz }}&q={{ q }}&storniert={{ 1 if storniert else 0 }}&sortierung={{ sortierung }}">CSV-Export</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<form method="get" action="/projektierung/liste" class="suchleiste">
+    <select name="sparte"><option value="">Alle Sparten</option>
+        {% for s in ('WP', 'PV', 'KL', 'WB') %}
+            <option value="{{ s }}" {{ 'selected' if sparte == s }}>{{ s }}</option>
+        {% endfor %}</select>
+    <select name="projektleiter_id"><option value="0">Alle Projektleiter</option>
+        {% for bid in projektleiter_werte %}
+            <option value="{{ bid }}" {{ 'selected' if projektleiter_id == bid }}>{{ benutzer_map[bid].name if bid in benutzer_map else bid }}</option>
+        {% endfor %}</select>
+    <select name="team_id"><option value="0">Alle Teams</option>
+        {% for t in teams %}
+            <option value="{{ t.id }}" {{ 'selected' if team_id == t.id }}>{{ t.name }}</option>
+        {% endfor %}</select>
+    <input type="text" name="kanal" value="{{ kanal }}" size="10" placeholder="Kanal">
+    <input type="text" name="plz" value="{{ plz }}" size="5" placeholder="PLZ…">
+    <input type="text" name="q" value="{{ q }}" size="16" placeholder="Kunde / PR-Nr.">
+    <select name="sortierung">
+        {% for wert, name in [('projekt', 'PR-Nr.'), ('kunde', 'Kunde'),
+                              ('phase', 'Phase'), ('termin', 'Termin'), ('wert', 'Wert')] %}
+            <option value="{{ wert }}" {{ 'selected' if sortierung == wert }}>Sortierung: {{ name }}</option>
+        {% endfor %}
+    </select>
+    <label class="kontrollfeld"><input type="checkbox" name="storniert" value="1"
+        {{ 'checked' if storniert }}> Storniert</label>
+    <button class="knopf" type="submit">Filtern</button>
+</form>
+
+{% if zeilen %}
+<table class="tabelle">
+    <thead><tr><th>PR-Nr.</th><th>Kunde</th><th>Ort</th><th>Sparte</th><th>Phase</th>
+        <th>Ampel</th><th>Projektleiter</th><th>Nächster Termin</th>
+        <th class="rechts">Auftragswert</th><th>Überfällig</th><th>Kanal</th><th>Angebot</th></tr></thead>
+    <tbody>
+    {% for z in zeilen %}
+        {% set angebot = angebote.get(z.gewerk.angebot_id) %}
+        <tr class="{{ 'dezent' if z.gewerk.phase == 'storniert' }}">
+            <td><a href="/projektierung/projekt/{{ z.projekt.id }}">{{ z.projekt.nummer }}</a></td>
+            <td>{{ z.kunde.anzeige_name if z.kunde else '?' }}</td>
+            <td>{{ z.projekt.ausfuehrung_ort }}</td>
+            <td>{{ sparten_ui.chip(z.gewerk.sparte) }}</td>
+            <td>{{ phasen_namen.get(z.gewerk.phase, z.gewerk.phase) }}</td>
+            <td>{{ ampel_punkt(z.ampel) }} {{ z.ampel.erledigt }}/{{ z.ampel.gesamt }}</td>
+            <td class="dezent">{{ benutzer_map[z.projekt.projektleiter_id].name if z.projekt.projektleiter_id in benutzer_map else '–' }}</td>
+            <td>{{ z.naechster_termin.strftime('%d.%m.%Y %H:%M') if z.naechster_termin else '–' }}</td>
+            <td class="rechts">{{ z.gewerk.auftragswert_aktuell | euro }}</td>
+            <td>{% if z.ueberfaellig %}<span class="abzeichen ep">{{ z.ueberfaellig }}</span>{% else %}–{% endif %}</td>
+            <td class="dezent">{{ z.projekt.kanal or '–' }}</td>
+            <td class="dezent">{{ (angebot.taifun_nummer or angebot.nummer) if angebot else '–' }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<table class="tabelle zusammenfassung summenblock">
+    <tr><th>Summe Auftragswert ({{ zeilen | length }} Gewerke, ohne stornierte)</th>
+        <td class="rechts"><strong>{{ summe | euro }}</strong></td></tr>
+</table>
+{% else %}
+<p class="hinweis">Keine Gewerke im Filter.</p>
+{% endif %}
+{% endblock %}

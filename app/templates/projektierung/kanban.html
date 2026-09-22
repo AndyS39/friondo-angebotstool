@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% import "_sparten.html" as sparten_ui %}
+{% from "_projektierung.html" import ampel_punkt %}
+
+{% block titel %}Projektierung – Friondo{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Projektierung</h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/projektierung/liste">Liste</a>
+        <a class="knopf klein zweitrangig" href="/projektierung/termine">Termine</a>
+        <a class="knopf klein zweitrangig" href="/projektierung/meine-aufgaben">Meine Aufgaben</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<form method="get" action="/projektierung" class="suchleiste">
+    <select name="sparte" title="Sparte (schaltet auf Karte je Gewerk um)">
+        <option value="">Alle Sparten (Karte = Projekt)</option>
+        {% for s in ('WP', 'PV', 'KL', 'WB') %}
+            <option value="{{ s }}" {{ 'selected' if sparte == s }}>{{ s }} (Karte = Gewerk)</option>
+        {% endfor %}
+    </select>
+    <select name="projektleiter_id">
+        <option value="0">Alle Projektleiter</option>
+        {% for bid in projektleiter_werte %}
+            <option value="{{ bid }}" {{ 'selected' if projektleiter_id == bid }}>{{ benutzer_map[bid].name if bid in benutzer_map else bid }}</option>
+        {% endfor %}
+    </select>
+    <select name="team_id">
+        <option value="0">Alle Teams</option>
+        {% for t in teams %}
+            <option value="{{ t.id }}" {{ 'selected' if team_id == t.id }}>{{ t.name }}</option>
+        {% endfor %}
+    </select>
+    {% if kanal_werte %}
+    <select name="kanal">
+        <option value="">Alle Kanäle</option>
+        {% for k in kanal_werte %}
+            <option value="{{ k }}" {{ 'selected' if kanal == k }}>{{ k }}</option>
+        {% endfor %}
+    </select>
+    {% endif %}
+    <input type="text" name="plz" value="{{ plz }}" size="5" placeholder="PLZ…">
+    <input type="text" name="q" value="{{ q }}" size="16" placeholder="Kunde / PR-Nr.">
+    <label class="kontrollfeld"><input type="checkbox" name="storniert" value="1"
+        {{ 'checked' if storniert }}> Storniert anzeigen</label>
+    <button class="knopf" type="submit">Filtern</button>
+</form>
+
+<div class="kanban">
+    {% for phase, karten in spalten.items() %}
+    <div class="kanban-spalte {{ 'kanban-abgeschlossen' if phase == 'abgeschlossen' }}"
+         data-phase="{{ phase }}"
+         ondragover="event.preventDefault()" ondrop="kartenDrop(event, '{{ phase }}')">
+        {% if phase == 'abgeschlossen' %}
+        <details>
+            <summary><strong>{{ phasen_namen[phase] }}</strong>
+                <span class="dezent">({{ karten | length }}, letzte 30 Tage)</span></summary>
+        {% else %}
+        <h2>{{ phasen_namen.get(phase, phase) }} <span class="dezent">({{ karten | length }})</span></h2>
+        {% endif %}
+        {% for karte in karten %}
+        {% set offene_gewerke = karte.zeilen | rejectattr('gewerk.phase', 'in', ['abgeschlossen', 'storniert']) | list %}
+        <a class="kanban-karte" href="/projektierung/projekt/{{ karte.projekt.id }}"
+           draggable="true"
+           ondragstart="kartenStart(event, {{ (offene_gewerke or karte.zeilen) | map(attribute='gewerk.id') | list | tojson }}, {{ (offene_gewerke or karte.zeilen) | map(attribute='gewerk.sparte') | list | tojson }})">
+            <strong>{{ karte.projekt.nummer }}</strong>
+            {% set gesamt_ueberfaellig = karte.zeilen | sum(attribute='ueberfaellig') %}
+            {% if gesamt_ueberfaellig %}
+                <span class="abzeichen ep" title="Überfällige Pflichtaufgaben">{{ gesamt_ueberfaellig }} überfällig</span>
+            {% endif %}
+            {% if karte.projekt.kanal %}<span class="abzeichen">{{ karte.projekt.kanal }}</span>{% endif %}
+            <br>{{ karte.zeilen[0].kunde.anzeige_name if karte.zeilen[0].kunde else '?' }}
+            · {{ karte.projekt.ausfuehrung_ort or '–' }}
+            <span class="dezent" title="Projektleiter">
+                {{ (benutzer_map[karte.projekt.projektleiter_id].name | truncate(2, true, '') | upper)
+                   if karte.projekt.projektleiter_id in benutzer_map else '–' }}</span>
+            {% for z in karte.zeilen %}
+            <div class="karte-gewerk {{ 'gewerk-storniert' if z.gewerk.phase == 'storniert' }}">
+                {{ sparten_ui.chip(z.gewerk.sparte) }}
+                <span class="dezent">{{ phasen_namen.get(z.gewerk.phase, z.gewerk.phase) }}</span>
+                {{ ampel_punkt(z.ampel) }}
+                {% if z.naechster_termin %}<span title="nächster Termin">📅 {{ z.naechster_termin.strftime('%d.%m.') }}</span>{% endif %}
+                <span class="dezent">{{ z.offen }} offen{{ ' / ' ~ z.ueberfaellig ~ ' überfällig' if z.ueberfaellig }}</span>
+            </div>
+            {% endfor %}
+            <div class="dezent">Gesamt:
+                {{ karte.zeilen | rejectattr('gewerk.phase', 'equalto', 'storniert') | sum(attribute='gewerk.auftragswert_aktuell') | euro }}</div>
+        </a>
+        {% endfor %}
+        {% if phase == 'abgeschlossen' %}</details>{% endif %}
+    </div>
+    {% endfor %}
+</div>
+
+{# Drop-Dialog: bei mehreren offenen Gewerken „Welches Gewerk verschieben?" #}
+<dialog id="gewerkdialog">
+    <p><strong>Welches Gewerk verschieben?</strong></p>
+    <div id="gewerkknoepfe"></div>
+    <button class="knopf klein zweitrangig" onclick="document.getElementById('gewerkdialog').close()">Abbrechen</button>
+</dialog>
+<form method="post" id="dropform" hidden>
+    <input type="hidden" name="phase" id="dropphase">
+</form>
+
+<script>
+let dragGewerke = [];
+let dragSparten = [];
+function kartenStart(ereignis, gewerke, sparten) {
+    dragGewerke = gewerke;
+    dragSparten = sparten;
+    ereignis.dataTransfer.effectAllowed = 'move';
+}
+function kartenDrop(ereignis, phase) {
+    ereignis.preventDefault();
+    if (!dragGewerke.length || phase === 'abgeschlossen') { return; }
+    if (dragGewerke.length === 1) {
+        dropSenden(dragGewerke[0], phase);
+        return;
+    }
+    const dialog = document.getElementById('gewerkdialog');
+    const kasten = document.getElementById('gewerkknoepfe');
+    kasten.innerHTML = '';
+    dragGewerke.forEach((id, i) => {
+        const knopf = document.createElement('button');
+        knopf.className = 'knopf klein';
+        knopf.textContent = dragSparten[i];
+        knopf.onclick = () => { dialog.close(); dropSenden(id, phase); };
+        kasten.appendChild(knopf);
+    });
+    dialog.showModal();
+}
+function dropSenden(gewerkId, phase) {
+    const formular = document.getElementById('dropform');
+    formular.action = '/projektierung/gewerk/' + gewerkId + '/phase-drop';
+    document.getElementById('dropphase').value = phase;
+    formular.submit();
+}
+</script>
+{% endblock %}

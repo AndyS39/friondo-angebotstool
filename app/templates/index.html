@@ -57,8 +57,37 @@
         </div>
     </a>
 
+    {# v11 (Phase 68/70): Live-Kacheln nur, wenn das Modul für den Benutzer
+       sichtbar ist (Demo-Modus: Admin); andere Rollen sehen Null-Kacheln #}
+    {% if projekt_kacheln %}
     <a class="portal-karte" href="/projektierung">
-        <h2 class="portal-titel">Projektierung <span class="coming-soon">Coming soon</span></h2>
+        <h2 class="portal-titel">Projektierung
+            {% if demo_badge %}<span class="demo-badge">Demo · Coming soon</span>{% endif %}
+        </h2>
+        <div class="kacheln bereich-kacheln">
+            {% for phase, titel in [('feinplanung', 'Aufträge in Feinplanung'),
+                                    ('feinplanung_abgeschlossen', 'Feinplanung abgeschlossen'),
+                                    ('montage_geplant', 'Montage geplant'),
+                                    ('in_ausfuehrung', 'In Ausführung'),
+                                    ('abnahme_offen', 'Abnahme offen')] %}
+            <div class="kachel stat">
+                <span class="stat-zahl">{{ projekt_kacheln[phase].anzahl }}</span>
+                <span>{{ titel }}</span>
+                <span class="dezent">{{ projekt_kacheln[phase].untertitel or 'Gewerke je Phase' }}</span>
+            </div>
+            {% endfor %}
+            <div class="kachel stat">
+                <span class="stat-zahl" {% if projekt_kacheln.ueberfaellig %}style="color:#c0392b"{% endif %}>{{ projekt_kacheln.ueberfaellig }}</span>
+                <span>Überfällige Aufgaben</span>
+                <span class="dezent">→ Meine Aufgaben (im Board)</span>
+            </div>
+        </div>
+    </a>
+    {% else %}
+    <div class="portal-karte" style="cursor:default">
+        <h2 class="portal-titel">Projektierung
+            <span class="demo-badge">Demo · Coming soon</span>
+        </h2>
         <div class="kacheln bereich-kacheln">
             {% for titel in ['Aufträge in Feinplanung', 'Feinplanung abgeschlossen',
                              'Montage geplant', 'In Ausführung', 'Abnahme offen'] %}
@@ -68,6 +97,8 @@
             </div>
             {% endfor %}
         </div>
-    </a>
+        <p class="dezent">Das Modul befindet sich im Aufbau.</p>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

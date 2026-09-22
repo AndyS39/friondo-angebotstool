@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block titel %}Projektierung – Termine{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Terminübersicht</h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/projektierung">Board</a>
+        <a class="knopf klein zweitrangig" href="/projektierung/liste">Liste</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<form method="get" action="/projektierung/termine" class="suchleiste">
+    <a class="knopf klein zweitrangig" href="/projektierung/termine?ansicht={{ ansicht }}&start={{ zurueck }}&team_id={{ team_id }}&person_id={{ person_id }}&typ={{ typ }}">◀</a>
+    <strong>{{ von.strftime('%d.%m.%Y') }} – {{ (bis - bis.resolution) if false else '' }}{{ bis.strftime('%d.%m.%Y') }}</strong>
+    <a class="knopf klein zweitrangig" href="/projektierung/termine?ansicht={{ ansicht }}&start={{ vor }}&team_id={{ team_id }}&person_id={{ person_id }}&typ={{ typ }}">▶</a>
+    <select name="ansicht">
+        <option value="woche" {{ 'selected' if ansicht == 'woche' }}>Woche</option>
+        <option value="monat" {{ 'selected' if ansicht == 'monat' }}>Monat</option>
+    </select>
+    <select name="team_id"><option value="0">Alle Teams</option>
+        {% for t in teams %}
+            <option value="{{ t.id }}" {{ 'selected' if team_id == t.id }}>{{ t.name }}</option>
+        {% endfor %}</select>
+    <select name="person_id"><option value="0">Alle Personen</option>
+        {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
+            <option value="{{ b.id }}" {{ 'selected' if person_id == b.id }}>{{ b.name }}</option>
+        {% endfor %}</select>
+    <select name="typ"><option value="">Alle Typen</option>
+        {% for t in ('feinplanung', 'montage', 'abnahme', 'sub', 'sonstige') %}
+            <option value="{{ t }}" {{ 'selected' if typ == t }}>{{ t | capitalize }}</option>
+        {% endfor %}</select>
+    <button class="knopf" type="submit">Anzeigen</button>
+</form>
+
+{% if tage %}
+{% for tag, liste in tage %}
+<h2>{{ tag.strftime('%A, %d.%m.%Y') }}</h2>
+<table class="tabelle" style="max-width:1000px">
+    <tbody>
+    {% for t in liste %}
+        {% set gewerk = gewerke.get(t.gewerk_id) %}
+        {% set projekt = projekte.get(t.projekt_id) %}
+        <tr>
+            <td>{{ t.beginn.strftime('%H:%M') }}{{ ' – ' ~ t.ende.strftime('%H:%M') if t.ende }}</td>
+            <td><span class="abzeichen">{{ t.typ | capitalize }}</span></td>
+            <td>{% if projekt %}<a href="/projektierung/projekt/{{ projekt.id }}">{{ projekt.nummer }}</a>
+                · {{ kunden[projekt.kunde_id].anzeige_name if projekt.kunde_id in kunden else '?' }}
+                {{ '· ' ~ gewerk.sparte if gewerk }}{% endif %}</td>
+            <td class="dezent">
+                {% if t.team_id and t.team_id in teams | map(attribute='id') | list %}
+                    {% for team in teams if team.id == t.team_id %}{{ team.name }}{% endfor %}
+                {% elif t.person_id %}{{ benutzer_map[t.person_id].name if t.person_id in benutzer_map else '' }}
+                {% elif t.sub_id %}{{ subs[t.sub_id].firma if t.sub_id in subs else '' }}{% endif %}
+            </td>
+            <td>{{ '✓ Kunde bestätigt' if t.kunde_bestaetigt }}</td>
+            <td class="dezent">{{ t.notiz }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endfor %}
+{% else %}
+<p class="hinweis">Keine Termine im Zeitraum/Filter.</p>
+{% endif %}
+
+<h2>Termin anlegen</h2>
+<form method="post" action="/projektierung/termine" class="formular" style="max-width:900px">
+    <div class="formzeile">
+        <select name="gewerk_id" required>
+            <option value="">– Projekt / Gewerk –</option>
+            {% for g, projekt, kunde in alle_gewerke %}
+                <option value="{{ g.id }}">{{ projekt.nummer if projekt }} · {{ g.sparte }}
+                    · {{ kunde.anzeige_name if kunde else '?' }}</option>
+            {% endfor %}
+        </select>
+        <select name="typ">
+            {% for t in ('feinplanung', 'montage', 'abnahme', 'sub', 'sonstige') %}
+                <option value="{{ t }}">{{ t | capitalize }}</option>
+            {% endfor %}
+        </select>
+        <input type="datetime-local" name="beginn" required>
+        <input type="datetime-local" name="ende">
+    </div>
+    <div class="formzeile">
+        <select name="team_id"><option value="0">– Team –</option>
+            {% for t in teams %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}</select>
+        <select name="person_id"><option value="0">– Person –</option>
+            {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
+                <option value="{{ b.id }}">{{ b.name }}</option>
+            {% endfor %}</select>
+        <label class="kontrollfeld"><input type="checkbox" name="kunde_bestaetigt"> Kunde bestätigt</label>
+        <input type="text" name="notiz" size="24" placeholder="Notiz">
+        <button class="knopf" type="submit">Anlegen</button>
+    </div>
+    <p class="dezent">Feinplanungs- und Montage-Termine berechnen die FP+N/M±N-Fälligkeiten
+        der Aufgaben des Gewerks automatisch (nach).</p>
+</form>
+{% endblock %}
