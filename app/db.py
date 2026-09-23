@@ -94,6 +94,8 @@ _NACHTRAEGLICHE_SPALTEN = {
         "bauseits": "BOOLEAN NOT NULL DEFAULT 0",
     },
     "angebote": {
+        "liefer_anschrift": "VARCHAR(300) NOT NULL DEFAULT ''",   # v11 Phase 66
+        "kopie_von": "VARCHAR(30) NOT NULL DEFAULT ''",           # v11 Phase 66
         "projekt_gewerk_id": "INTEGER",     # v11 Projektierung
         "vorgang_id": "INTEGER",            # v10 Vorgangsakte
         "extern_pdf_pfad": "VARCHAR(300) NOT NULL DEFAULT ''",   # v10 TAIFUN-PDF

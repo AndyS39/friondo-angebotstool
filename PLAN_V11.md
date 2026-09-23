@@ -106,25 +106,25 @@ ZULIEFERUNGEN (blockieren einzelne Checkboxen, nicht den Start):
       [WARTET auf Zulieferung – Rest von Phase 65 nicht blockieren]
 
 ## Phase 66 – Editor & Angebote
-- [ ] Freitextpositionen: Bezeichnung optional (leer erlaubt, PDF zeigt
+- [x] Freitextpositionen: Bezeichnung optional (leer erlaubt, PDF zeigt
       dann nur die Beschreibung); zusätzliches EK-Feld (netto) für die
       korrekte DB-Berechnung
-- [ ] Abweichende Lieferanschrift (optional, z. B. Contracting):
+- [x] Abweichende Lieferanschrift (optional, z. B. Contracting):
       Feld in Erfassung und Editor, eigene Zeile im PDF unterhalb von
       Rechnungs-/Ausführungsanschrift
-- [ ] Angebot kopieren → anderem Kunden zuordnen: Aktion „Für anderen
+- [x] Angebot kopieren → anderem Kunden zuordnen: Aktion „Für anderen
       Kunden kopieren" (bestehenden Kunden wählen oder neu anlegen);
       erzeugt neuen Vorgang + neues Angebot (neue Nummer, Entwurf) mit
       allen Positionen, Texten und Einstellungen; Anrede/Adressen vom
       Zielkunden; KfW-Eingaben werden übernommen und mit fachlichem
       Hinweis „Förderdaten prüfen (kopiert)" markiert; Kennzeichen
       „Kopie von AN-…" in der Detailansicht
-- [ ] AD-Statuswechsel: Außendienst kann eigene Angebote auf
+- [x] AD-Statuswechsel: Außendienst kann eigene Angebote auf
       Angenommen / Abgelehnt / zurück auf Versendet („Offen") setzen –
       Abgelehnt mit Pflichtdialog Ablehnungsgrund; jeder Wechsel wird
       im Notizen-Chat des Vorgangs protokolliert; monday-Summenlogik
       und Statistik greifen wie beim ID
-- [ ] Neuer Zusatzartikel „Elektroarbeiten – im PV-Angebot enthalten"
+- [x] Neuer Zusatzartikel „Elektroarbeiten – im PV-Angebot enthalten"
       (pauschal, 0,00 €/0,00 €), beim Einfügen automatisch mit
       Alternativ-Kennzeichen und Verknüpfungs-Freitext „PV-Angebot"
       vorbelegt – für den schnellen Griff im Kombi-Fall

@@ -24,6 +24,12 @@
         <form method="post" action="/angebote/{{ angebot.id }}/duplizieren">
             <button class="knopf klein zweitrangig" type="submit">Duplizieren</button>
         </form>
+        {% if not nur_lesen and not angebot.extern %}
+        <button class="knopf klein zweitrangig" type="button"
+                onclick="document.getElementById('kopie-dialog').hidden = false;"
+                title="Kopie mit neuer Nummer und neuem Vorgang beim Zielkunden">
+            Für anderen Kunden kopieren</button>
+        {% endif %}
         {% if projekt_modul_ok %}
             {% if projekt_obj %}
                 <a class="knopf klein zweitrangig" href="/projektierung/projekt/{{ projekt_obj.id }}"
@@ -97,6 +103,21 @@
     {% endif %}
 </p>
 
+{# v11 (Phase 66): abweichende Lieferanschrift (optional, z. B. Contracting) #}
+<p class="dezent">Lieferanschrift:
+{% if nur_lesen %}
+    <strong>{{ angebot.liefer_anschrift or '– wie Ausführungsort –' }}</strong>
+{% else %}
+<form method="post" action="/angebote/{{ angebot.id }}/lieferanschrift" style="display:inline">
+    <input type="text" name="liefer_anschrift" size="50" maxlength="300"
+           value="{{ angebot.liefer_anschrift }}"
+           placeholder="abweichend, z. B. Contracting – leer = wie Ausführungsort"
+           title="Erscheint als eigene Zeile im Angebots-PDF unterhalb der Anschriften">
+    <button class="knopf klein zweitrangig" type="submit">Speichern</button>
+</form>
+{% endif %}
+</p>
+
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
 {% if angebot.monday_rueck_status == 'fehler' %}
@@ -138,6 +159,56 @@
 {% if angebot.ablehnungsgrund %}
 <p class="dezent">Ablehnungsgrund: <strong>{{ angebot.ablehnungsgrund }}</strong>
     {% if angebot.ablehnungsgrund_text %}– {{ angebot.ablehnungsgrund_text }}{% endif %}</p>
+{% endif %}
+
+{# v11 (Phase 66): Für anderen Kunden kopieren #}
+<form method="post" action="/angebote/{{ angebot.id }}/kopieren" id="kopie-dialog"
+      class="formular warnblock" hidden>
+    <p><strong>Für anderen Kunden kopieren</strong>
+        <span class="dezent">– neue Nummer als Entwurf, Vorgang beim Zielkunden;
+        Anrede und Adressen kommen vom Zielkunden.</span></p>
+    <div class="formzeile">
+        <label class="breit">Bestehenden Kunden wählen
+            <input type="text" name="kunde_suche" list="kundenstamm"
+                   placeholder="Tippen zum Suchen …" autocomplete="off">
+            <datalist id="kundenstamm">
+                {% for k in kunden_liste %}
+                    <option value="#{{ k.id }} · {{ k.anzeige_name }} · {{ k.plz }} {{ k.ort }}">
+                {% endfor %}
+            </datalist>
+        </label>
+    </div>
+    <p class="dezent">… oder neuen Kunden anlegen (Feld oben leer lassen):</p>
+    <div class="formzeile">
+        <label class="schmal">Anrede
+            <select name="neu_anrede"><option value=""></option>
+                <option>Herr</option><option>Frau</option><option>Firma</option></select></label>
+        <label>Vorname <input type="text" name="neu_vorname"></label>
+        <label>Nachname <input type="text" name="neu_nachname"></label>
+        <label>Firma <input type="text" name="neu_firma"></label>
+    </div>
+    <div class="formzeile">
+        <label>Straße <input type="text" name="neu_strasse"></label>
+        <label class="schmal">PLZ <input type="text" name="neu_plz"></label>
+        <label>Ort <input type="text" name="neu_ort"></label>
+    </div>
+    <div class="formzeile">
+        <label>E-Mail <input type="text" name="neu_email"></label>
+        <label>Telefon <input type="text" name="neu_telefon"></label>
+    </div>
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Kopie anlegen</button>
+        <button class="knopf zweitrangig" type="button"
+                onclick="this.closest('form').hidden = true;">Abbrechen</button>
+    </div>
+</form>
+
+{% if angebot.kopie_von %}
+<div class="warnblock">
+    <strong>Kopie von {{ angebot.kopie_von }}</strong> –
+    Förderdaten prüfen (kopiert): die KfW-Eingaben stammen vom
+    Ursprungsangebot und gehören ggf. nicht zum neuen Kunden/Objekt.
+</div>
 {% endif %}
 
 {% if fachhinweise %}
@@ -530,7 +601,8 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
     <form method="post" action="/angebote/{{ angebot.id }}/position-neu" class="formular konfigurator-protokoll">
         <p><strong>Freitextposition</strong></p>
         <div class="formzeile">
-            <label>Bezeichnung <input type="text" name="bezeichnung"></label>
+            <label>Bezeichnung <input type="text" name="bezeichnung"
+                   placeholder="optional – PDF zeigt sonst nur die Beschreibung"></label>
         </div>
         <div class="formzeile">
             <label class="breit">Beschreibung <textarea name="beschreibung" rows="2"></textarea></label>
@@ -539,6 +611,8 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
             <label class="schmal">Menge <input type="text" name="menge" value="1"></label>
             <label class="schmal">Einheit <input type="text" name="einheit"></label>
             <label class="schmal">E-Preis (€) <input type="text" name="e_preis"></label>
+            <label class="schmal" title="Einkaufspreis netto – nur für den Deckungsbeitrag, nie im PDF">
+                EK netto (€) <input type="text" name="ek_preis"></label>
         </div>
         <label class="kontrollfeld"><input type="checkbox" name="ep_flag"> Eventualposition (EP.)</label>
         <div class="formaktionen"><button class="knopf" type="submit">Hinzufügen</button></div>

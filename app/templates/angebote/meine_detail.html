@@ -19,6 +19,36 @@
         <a class="knopf klein zweitrangig" href="/vorgaenge/zu-angebot/{{ angebot.id }}">Vorgangsakte</a>
     </p>
 
+    {# v11 (Phase 66): AD-Statuswechsel Angenommen / Abgelehnt / Offen #}
+    {% if status_erlaubt %}
+    <form method="post" action="/meine-angebote/{{ angebot.id }}/status" class="formzeile">
+        <label>Status setzen
+            <select name="status"
+                    onchange="document.getElementById('ad-ablehnung').hidden = (this.value !== 'Abgelehnt');">
+                {% for s in ('Versendet', 'Angenommen', 'Abgelehnt') %}
+                    <option value="{{ s }}" {{ 'selected' if angebot.status == s }}>
+                        {{ 'Versendet (offen)' if s == 'Versendet' else s }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <span id="ad-ablehnung" {{ 'hidden' if angebot.status != 'Abgelehnt' }}>
+            <label>Grund der Ablehnung (Pflicht)
+                <select name="ablehnungsgrund">
+                    <option value="">– bitte wählen –</option>
+                    {% for g in ablehnungsgruende %}
+                        <option value="{{ g.name }}" {{ 'selected' if angebot.ablehnungsgrund == g.name }}>{{ g.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>Ergänzung (optional)
+                <input type="text" name="ablehnungsgrund_text" maxlength="500"
+                       value="{{ angebot.ablehnungsgrund_text }}">
+            </label>
+        </span>
+        <button class="knopf klein" type="submit">Übernehmen</button>
+    </form>
+    {% endif %}
+
     {# Vollansicht (v10): alle Positionen mit Kundenpreisen – ohne EK/DB #}
     {% for gruppe in gruppen %}
         {% if gruppe.name %}<h2 class="gruppentitel">{{ gruppe.name }}</h2>{% endif %}

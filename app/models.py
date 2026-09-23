@@ -795,6 +795,10 @@ class Angebot(Base):
     rechnung_strasse: Mapped[str] = mapped_column(String(200), default="")
     rechnung_plz: Mapped[str] = mapped_column(String(10), default="")
     rechnung_ort: Mapped[str] = mapped_column(String(100), default="")
+    # v11 (Phase 66): abweichende Lieferanschrift (optional, z. B. Contracting)
+    # und Kennzeichen fuer kopierte Angebote ("Kopie von AN-...")
+    liefer_anschrift: Mapped[str] = mapped_column(String(300), default="")
+    kopie_von: Mapped[str] = mapped_column(String(30), default="")
     # Angebotsverfolgung (v6): Hot-Ampel (heiss/warm/kalt/""), Wiedervorlage
     verfolgung_ampel: Mapped[str] = mapped_column(String(10), default="")
     wiedervorlage_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

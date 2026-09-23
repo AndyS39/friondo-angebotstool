@@ -19,7 +19,7 @@ from app.logik import logik_einlesen
 KONTROLL_SZENARIO = {
     # Objektdaten
     "O01": "EFH", "O02": 1995, "O03": 1, "O04": "Nein", "O05": 180,
-    "O06": "Ja", "O08": "",
+    "O06": "Ja", "O08": "", "O13": "",
     # Alte Anlage (Öl-Zweig, Erdleitung 8 m, Kunststofftank 5.000 L)
     "A01": "Öl", "A02": 2001, "A03": 15000, "A04": "KG", "A05": 8,
     "A07": "Ja", "A08": "Kunststoff", "A09": "bis 5.000 L",

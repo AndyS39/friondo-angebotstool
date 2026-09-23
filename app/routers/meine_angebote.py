@@ -230,6 +230,14 @@ async def detail(request: Request, angebot_id: int,
     # v11 (Phase 70): Projektstand-Block am eigenen Angebot (read-only) –
     # nur wenn das Modul für den Benutzer sichtbar ist (Demo-Modus: Admin)
     projektstand = _projektstand(session, angebot, benutzer)
+    # v11 (Phase 66): AD-Statuswechsel (Angenommen/Abgelehnt/zurück auf
+    # Versendet) mit Pflichtdialog Ablehnungsgrund
+    from app.models import AblehnungsGrund
+    status_erlaubt = (not angebot.extern
+                      and angebot.status in ("Versendet", "Angenommen", "Abgelehnt"))
+    ablehnungsgruende = (session.query(AblehnungsGrund)
+                         .filter(AblehnungsGrund.aktiv.is_(True))
+                         .order_by(AblehnungsGrund.sort, AblehnungsGrund.id).all())
     return render(request, "angebote/meine_detail.html", aktiv=None, mobil=True,
                   projektstand=projektstand,
                   benutzer=benutzer, angebot=angebot, kunde=kunde,
@@ -238,7 +246,67 @@ async def detail(request: Request, angebot_id: int,
                   db_ampel=_db_ampel(session, angebot.deckungsbeitrag()["db"]),
                   freigabe_offen=freigabe_offen,
                   rabatt_erlaubt=rabatt_erlaubt and freigabe_offen is None,
+                  status_erlaubt=status_erlaubt,
+                  ablehnungsgruende=ablehnungsgruende,
                   meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/{angebot_id}/status")
+async def status_setzen(request: Request, angebot_id: int,
+                        session: Session = Depends(get_session)):
+    """v11 (Phase 66): AD setzt eigene Angebote auf Angenommen / Abgelehnt /
+    zurück auf Versendet („Offen“). Abgelehnt nur mit Pflichtgrund; jeder
+    Wechsel landet im Notizen-Chat des Vorgangs; monday-Summenlogik und
+    Statistik greifen wie beim Innendienst."""
+    from app.models import AblehnungsGrund, angebot_status_setzen
+    benutzer = request.state.benutzer
+    angebot = session.get(Angebot, angebot_id)
+    if (angebot is None or angebot.extern
+            or not _gehoert_mir(session, angebot, benutzer.id)):
+        return RedirectResponse("/meine-angebote", status_code=303)
+    form = await request.form()
+    neuer_status = form.get("status", "")
+    if (neuer_status not in ("Versendet", "Angenommen", "Abgelehnt")
+            or angebot.status not in ("Versendet", "Angenommen", "Abgelehnt")
+            or neuer_status == angebot.status):
+        return RedirectResponse(f"/meine-angebote/{angebot_id}", status_code=303)
+    grund = ""
+    if neuer_status == "Abgelehnt":
+        grund = (form.get("ablehnungsgrund") or "").strip()
+        bekannt = {g.name for g in session.query(AblehnungsGrund)
+                   .filter(AblehnungsGrund.aktiv.is_(True))}
+        if grund not in bekannt:
+            return RedirectResponse(f"/meine-angebote/{angebot_id}?meldung="
+                                    + quote_plus("Bitte den Grund der Ablehnung "
+                                                 "angeben."), status_code=303)
+        angebot.ablehnungsgrund = grund
+        angebot.ablehnungsgrund_text = (form.get("ablehnungsgrund_text") or "").strip()[:500]
+    alter_status = angebot.status
+    angebot_status_setzen(angebot, neuer_status)
+    vorgang = vorgaenge_modul.vorgang_fuer_angebot(session, angebot)
+    text = (f"Status von {angebot.nummer}: {alter_status} → {neuer_status}"
+            + (f" – Grund: {grund}" if grund else "")
+            + (f" ({angebot.ablehnungsgrund_text})"
+               if grund and angebot.ablehnungsgrund_text else ""))
+    vorgaenge_modul.notiz_anlegen(session, vorgang.id, benutzer, text,
+                                  herkunft="AD-Statuswechsel")
+    session.commit()
+    # monday-Summenlogik wie beim Innendienst (app/routers/angebote.py)
+    from app import monday_rueckspielung
+    if neuer_status == "Versendet":
+        monday_rueckspielung.bei_versand(session, angebot)
+    elif neuer_status == "Abgelehnt" and alter_status in ("Versendet", "Angenommen"):
+        monday_rueckspielung.wert_aktualisieren(session, angebot, "Ablehnung (AD)")
+    if neuer_status == "Angenommen":
+        from app import projektierung as projektierung_modul
+        projektierung_modul.version_nachziehen(session, angebot)
+        session.commit()
+    from app import leadmanagement
+    leadmanagement.phase_neu_berechnen(session, angebot.vorgang_id)
+    session.commit()
+    return RedirectResponse(f"/meine-angebote/{angebot_id}?meldung="
+                            + quote_plus(f"Status auf „{neuer_status}“ gesetzt."),
+                            status_code=303)
 
 
 @router.post("/{angebot_id}/rabatt")

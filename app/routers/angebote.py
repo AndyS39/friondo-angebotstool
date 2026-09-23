@@ -334,6 +334,9 @@ async def editor(request: Request, angebot_id: int,
     kunde = session.get(Kunde, angebot.kunde_id)
     artikel_liste = (session.query(Artikel).filter(Artikel.aktiv.is_(True))
                      .order_by(Artikel.pos_nr).all())
+    # v11 (Phase 66): Zielkunden-Auswahl für „Für anderen Kunden kopieren"
+    kunden_liste = (session.query(Kunde).filter(Kunde.aktiv.is_(True))
+                    .order_by(Kunde.nachname, Kunde.firma).all())
     protokoll = json.loads(angebot.protokoll_json or "[]")
 
     # Anzeigenummern (Phase 18/v5): eigene Nummer oder fortlaufend 001, 002, …;
@@ -425,6 +428,7 @@ async def editor(request: Request, angebot_id: int,
                   vortext_standard=angebotsprofile.vortext_fuer_angebot(session, angebot),
                   angebot=angebot, kunde=kunde, gruppen=gruppen,
                   summen=angebot.summen(), artikel_liste=artikel_liste,
+                  kunden_liste=kunden_liste,
                   deckung=angebot.deckungsbeitrag(),
                   protokoll=protokoll, status_liste=ANGEBOT_STATUS,
                   kfw_ergebnis=kfw_ergebnis, kfw_warnung=kfw_warnung,
@@ -435,6 +439,23 @@ async def editor(request: Request, angebot_id: int,
                   versand=request.query_params.get("versand", ""),
                   weblink=request.query_params.get("weblink", ""),
                   meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/{angebot_id}/lieferanschrift")
+async def lieferanschrift_setzen(request: Request, angebot_id: int,
+                                 session: Session = Depends(get_session)):
+    """v11 (Phase 66): abweichende Lieferanschrift (optional, z. B.
+    Contracting) – eigene Zeile im PDF unter Rechnungs-/Ausführungsanschrift."""
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote", status_code=303)
+    form = await request.form()
+    angebot.liefer_anschrift = (form.get("liefer_anschrift") or "").strip()[:300]
+    session.commit()
+    return RedirectResponse(
+        f"/angebote/{angebot_id}?meldung=Lieferanschrift+gespeichert", status_code=303)
 
 
 @router.post("/{angebot_id}/sperre")
@@ -623,32 +644,42 @@ async def position_neu(request: Request, angebot_id: int,
     if artikel_id:
         artikel = session.get(Artikel, int(artikel_id))
         if artikel is not None:
-            angebot.positionen.append(AngebotsPosition(
+            position = AngebotsPosition(
                 sort=max_sort + 1, block_nr=letzter_block, gruppe=letzte_gruppe,
                 pos_nr=artikel.pos_nr, bezeichnung=artikel.bezeichnung,
                 beschreibung=artikel.beschreibung, menge=artikel.menge_standard,
                 einheit=artikel.einheit, e_preis_cent=artikel.e_preis_cent,
                 ep_flag=artikel.ep_flag, ek_cent=artikel.ek_cent,
-                guid=artikel.guid))
+                guid=artikel.guid)
+            # v11 (Phase 66): Z26 „Elektroarbeiten – im PV-Angebot enthalten"
+            # kommt automatisch als Alternativ-Position mit Verknüpfung
+            if artikel.pos_nr == "Z26":
+                position.alternativ = True
+                position.alternativ_zu = "PV-Angebot"
+            angebot.positionen.append(position)
             session.commit()
         return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
 
-    # Freitextposition
+    # Freitextposition – v11: Bezeichnung optional (PDF zeigt dann nur die
+    # Beschreibung), zusätzliches EK-Feld (netto) für den Deckungsbeitrag
     bezeichnung = (form.get("bezeichnung") or "").strip()
+    beschreibung = (form.get("beschreibung") or "").strip()
     preis = preis_parsen(form.get("e_preis") or "")
+    ek = preis_parsen(form.get("ek_preis") or "")
     from app.konfigurator import zahl_parsen
     menge = zahl_parsen(form.get("menge") or "1") or 1
-    if bezeichnung and preis is not None:
+    if (bezeichnung or beschreibung) and preis is not None:
         angebot.positionen.append(AngebotsPosition(
             sort=max_sort + 1, block_nr=letzter_block, gruppe=letzte_gruppe,
             bezeichnung=bezeichnung,
-            beschreibung=(form.get("beschreibung") or "").strip(),
+            beschreibung=beschreibung,
             menge=menge, einheit=(form.get("einheit") or "").strip(),
-            e_preis_cent=preis, ep_flag=form.get("ep_flag") == "on"))
+            e_preis_cent=preis, ep_flag=form.get("ep_flag") == "on",
+            ek_cent=ek or 0))
         session.commit()
         return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
     return RedirectResponse(
-        f"/angebote/{angebot_id}?meldung=Freitextposition:+Bezeichnung+und+Preis+erforderlich",
+        f"/angebote/{angebot_id}?meldung=Freitextposition:+Bezeichnung+oder+Beschreibung+und+Preis+erforderlich",
         status_code=303)
 
 
@@ -1351,3 +1382,97 @@ async def duplizieren(angebot_id: int, session: Session = Depends(get_session)):
             ek_cent=p.ek_cent, guid=p.guid))
     session.commit()
     return RedirectResponse(f"/angebote/{kopie.id}?meldung=Angebot+dupliziert", status_code=303)
+
+
+@router.post("/{angebot_id}/kopieren")
+async def fuer_anderen_kunden_kopieren(request: Request, angebot_id: int,
+                                       session: Session = Depends(get_session)):
+    """v11 (Phase 66): Angebot für einen ANDEREN Kunden kopieren – neuer
+    Vorgang beim Zielkunden (bzw. dessen Sammel-Vorgang, v10-Regel: ein
+    Sammel-Vorgang je Kunde), neue Nummer als Entwurf, alle Positionen,
+    Texte und Einstellungen; Anrede/Adressen kommen vom Zielkunden. Die
+    KfW-Eingaben werden übernommen und als „Förderdaten prüfen (kopiert)“
+    gekennzeichnet (kopie_von in der Detailansicht)."""
+    import re as _re
+    from urllib.parse import quote_plus
+    original = session.get(Angebot, angebot_id)
+    if original is None:
+        return RedirectResponse("/angebote", status_code=303)
+    if original.extern:
+        return RedirectResponse(
+            f"/angebote/{angebot_id}?meldung=Externer+Eintrag+nicht+kopierbar",
+            status_code=303)
+    form = await request.form()
+    # Zielkunde: Auswahl aus dem Bestand ("#<id> · Name …") oder Neuanlage
+    ziel_id = None
+    suche = (form.get("kunde_suche") or "").strip()
+    m = _re.match(r"#(\d+)\b", suche)
+    if m:
+        ziel_id = int(m.group(1))
+        if session.get(Kunde, ziel_id) is None:
+            ziel_id = None
+    if ziel_id is None:
+        nachname = (form.get("neu_nachname") or "").strip()
+        firma = (form.get("neu_firma") or "").strip()
+        if not (nachname or firma):
+            return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+                "Kopieren: bitte einen Kunden aus der Liste wählen oder "
+                "Nachname/Firma für die Neuanlage angeben."), status_code=303)
+        ziel = Kunde(anrede=(form.get("neu_anrede") or "").strip(),
+                     firma=firma,
+                     vorname=(form.get("neu_vorname") or "").strip(),
+                     nachname=nachname,
+                     strasse=(form.get("neu_strasse") or "").strip(),
+                     plz=(form.get("neu_plz") or "").strip(),
+                     ort=(form.get("neu_ort") or "").strip(),
+                     email=(form.get("neu_email") or "").strip(),
+                     telefon=(form.get("neu_telefon") or "").strip())
+        session.add(ziel)
+        session.flush()
+        ziel_id = ziel.id
+    if ziel_id == original.kunde_id:
+        return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+            "Kopieren: bitte einen ANDEREN Kunden wählen – für denselben "
+            "Kunden gibt es „Duplizieren“."), status_code=303)
+
+    kopie = angebot_aufbau.angebot_anlegen(session, ziel_id)
+    kopie.protokoll_json = original.protokoll_json
+    kopie.kfw_json = original.kfw_json
+    kopie.vermerke_json = original.vermerke_json
+    kopie.konfigurator_typ = original.konfigurator_typ
+    kopie.profil_id = original.profil_id
+    kopie.vortext_text = original.vortext_text
+    kopie.rabatt_cent = original.rabatt_cent
+    kopie.rabatt_prozent = original.rabatt_prozent
+    kopie.rabatt_bezeichnung = original.rabatt_bezeichnung
+    kopie.foerderung_manuell_cent = original.foerderung_manuell_cent
+    kopie.foerderung_ausblenden = original.foerderung_ausblenden
+    kopie.foerder_grund_prozent = original.foerder_grund_prozent
+    kopie.foerder_klima_prozent = original.foerder_klima_prozent
+    kopie.foerder_einkommen_prozent = original.foerder_einkommen_prozent
+    kopie.foerder_hoechstkosten_cent = original.foerder_hoechstkosten_cent
+    kopie.kopie_von = original.nummer
+    # bewusst NICHT kopiert: rechnung_*/liefer_anschrift (gehören zum alten
+    # Kunden), Vertriebler, Versand-/monday-Zustand
+    kopie.positionen.clear()   # Profil-Positionsregeln liefen bereits im Original
+    for p in original.positionen:
+        kopie.positionen.append(AngebotsPosition(
+            sort=p.sort, block_nr=p.block_nr, gruppe=p.gruppe, pos_nr=p.pos_nr,
+            bezeichnung=p.bezeichnung, beschreibung=p.beschreibung, menge=p.menge,
+            einheit=p.einheit, e_preis_cent=p.e_preis_cent, ep_flag=p.ep_flag,
+            ek_cent=p.ek_cent, guid=p.guid, anzeige_nr=p.anzeige_nr,
+            original_preis_cent=p.original_preis_cent,
+            rabatt_prozent=p.rabatt_prozent, rabatt_cent=p.rabatt_cent,
+            bauseits=p.bauseits, sonderpreis=p.sonderpreis,
+            alternativ=p.alternativ, alternativ_zu=p.alternativ_zu))
+    from app import vorgaenge as vorgaenge_modul
+    vorgang = vorgaenge_modul.vorgang_fuer_angebot(session, kopie)
+    benutzer = request.state.benutzer
+    vorgaenge_modul.notiz_anlegen(
+        session, vorgang.id, benutzer,
+        f"Angebot {kopie.nummer} als Kopie von {original.nummer} angelegt – "
+        "Förderdaten prüfen (kopiert).", herkunft="Kopie")
+    session.commit()
+    return RedirectResponse(f"/angebote/{kopie.id}?meldung=" + quote_plus(
+        f"Kopie von {original.nummer} angelegt – Förderdaten prüfen."),
+        status_code=303)

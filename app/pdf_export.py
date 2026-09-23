@@ -249,6 +249,11 @@ def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde, vortext_text: str,
         ausfuehrung = f"{kunde.strasse}, {kunde.plz} {kunde.ort}".strip(", ")
         pdf.cell(0, 5, f"Ausführungsort: {ausfuehrung}",
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    if angebot.liefer_anschrift:
+        # v11 (Phase 66): abweichende Lieferanschrift (z. B. Contracting)
+        pdf.set_font("Arial", "", 9)
+        pdf.cell(0, 5, f"Lieferanschrift: {angebot.liefer_anschrift}",
+                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     if ersetzt_hinweis:
         # v9: neue Version ersetzt ein früheres Angebot
         pdf.set_font("Arial", "", 9)

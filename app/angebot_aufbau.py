@@ -422,6 +422,9 @@ def angebot_anlegen(session: Session, kunde_id: int,
                     "rechnung_strasse": str(antworten.get("O10") or "")[:200],
                     "rechnung_plz": str(antworten.get("O11") or "")[:10],
                     "rechnung_ort": str(antworten.get("O12") or "")[:100]}
+    # v11 (Phase 66): abweichende Lieferanschrift aus der Erfassung (O13)
+    if (antworten or {}).get("O13"):
+        rechnung["liefer_anschrift"] = str(antworten.get("O13") or "")[:300]
 
     for _versuch in range(5):
         angebot = Angebot(
