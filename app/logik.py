@@ -121,6 +121,9 @@ class Anhang:
     antwort: str = ""
     positionen: list[str] = field(default_factory=list)
     bemerkung: str = ""
+    # v11 (Phase 67): Profile, bei denen der Anhang NICHT mitgeht
+    # (Spalte "Nicht bei Profil", kommagetrennt, z. B. "Enni, SWD")
+    nicht_bei_profil: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -316,12 +319,15 @@ def _anhaenge_einlesen(wb, bericht: Pruefbericht) -> list[Anhang]:
         bericht.warnungen.append("Blatt „Anhänge“ fehlt – es werden keine Anhänge geregelt.")
         return []
     anhaenge = []
-    for datei, regel, bemerkung in wb["Anhänge"].iter_rows(min_row=2, values_only=True):
+    for zeile in wb["Anhänge"].iter_rows(min_row=2, values_only=True):
+        datei, regel, bemerkung, nicht_bei = (tuple(zeile) + (None,) * 4)[:4]
         datei = _zelle(datei)
         regel = _zelle(regel)
         if not datei or datei.startswith("("):
             continue  # Platzhalterzeile
-        eintrag = Anhang(datei, regel, "unbekannt", bemerkung=_zelle(bemerkung))
+        eintrag = Anhang(datei, regel, "unbekannt", bemerkung=_zelle(bemerkung),
+                         nicht_bei_profil=[p.strip() for p in
+                                           _zelle(nicht_bei).split(",") if p.strip()])
         if regel == "immer":
             eintrag.art = "immer"
         elif (m := re.match(r"wenn\s+([A-Z]\d{2})\s*=\s*(.+)$", regel)):

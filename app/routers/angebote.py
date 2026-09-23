@@ -367,7 +367,8 @@ async def editor(request: Request, angebot_id: int,
     # Anhänge-Vorschau (Phase 15): was würde beim Versand mitgehen?
     from app import anhaenge as anhaenge_modul
     logik, _bericht = logik_modul.hole_logik(session)
-    anhaenge_liste = anhaenge_modul.fuer_angebot(logik, angebot)
+    anhaenge_liste = anhaenge_modul.fuer_angebot(
+        logik, angebot, anhaenge_modul.profilname_fuer(session, angebot))
     vollmacht = anhaenge_modul.vollmacht_erforderlich(angebot)
 
     # Angebotsverfolgung: Alt-Notizen (Historie) + Vorgang (v10: die
@@ -812,7 +813,8 @@ async def email_entwurf(request: Request, angebot_id: int,
 
     pdf_pfad = pdf_export.pdf_fuer_angebot(session, angebot)
     logik, _ = logik_modul.hole_logik(session)
-    anhaenge = anhaenge_modul.fuer_angebot(logik, angebot)
+    anhaenge = anhaenge_modul.fuer_angebot(
+        logik, angebot, anhaenge_modul.profilname_fuer(session, angebot))
     # Fern-Signatur (Phase 28): bei aktivem Schalter Einmal-Link in die Mail
     signatur_link = ""
     from app.routers.signatur import fern_aktiv, fern_token_ausstellen

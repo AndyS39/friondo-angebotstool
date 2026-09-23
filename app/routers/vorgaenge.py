@@ -286,7 +286,8 @@ async def kombi_versand(request: Request, vorgang_id: int,
     for angebot in angebote:
         if angebot.extern:
             continue
-        for anhang in anhaenge_modul.fuer_angebot(logik, angebot):
+        for anhang in anhaenge_modul.fuer_angebot(
+                logik, angebot, anhaenge_modul.profilname_fuer(session, angebot)):
             if anhang.datei in gesehen:
                 continue
             gesehen.add(anhang.datei)

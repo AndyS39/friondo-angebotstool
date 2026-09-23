@@ -131,12 +131,12 @@ ZULIEFERUNGEN (blockieren einzelne Checkboxen, nicht den Start):
       (Klärung siehe Chat)
 
 ## Phase 67 – Profile, Anhänge & Preise
-- [ ] Anhänge profilabhängig: Blatt „Anhänge" erhält eine Spalte
+- [x] Anhänge profilabhängig: Blatt „Anhänge" erhält eine Spalte
       „Nicht bei Profil" (kommagetrennt). Eintragen: „Broschüre
       Ratenkauf.pdf" → nicht bei Enni, SWD; „Friondo SpotDynamic.pdf"
       → nicht bei Enni, SWD. Engine wertet die Spalte beim
       Zusammenstellen der Mail-Anhänge aus (auch im Kombi-Versand)
-- [ ] CS8800-Broschüre: Zeile im Blatt „Anhänge" – „Bosch
+- [x] CS8800-Broschüre: Zeile im Blatt „Anhänge" – „Bosch
       CS8800iAW.pdf" wenn Pos. 030 oder 031 im Angebot (Datei aus
       Zulieferung 3; solange sie fehlt, greift die bestehende
       „Datei fehlt"-Warnung)

@@ -19,6 +19,13 @@ class AngebotsAnhang:
     regel: str
 
 
+def profilname_fuer(session, angebot: Angebot) -> str:
+    """v11 (Phase 67): Profilname des Angebots für die Anhangs-Regeln."""
+    from app import angebotsprofile
+    profil = angebotsprofile.profil_fuer_angebot(session, angebot)
+    return profil.name if profil is not None else ""
+
+
 def _antworten_aus_protokoll(angebot: Angebot) -> dict[str, str]:
     """Frage-ID -> Antworttext aus dem am Angebot gespeicherten Protokoll."""
     try:
@@ -28,12 +35,18 @@ def _antworten_aus_protokoll(angebot: Angebot) -> dict[str, str]:
     return {e.get("frage_id"): e.get("antwort", "") for e in eintraege}
 
 
-def fuer_angebot(logik: Logik, angebot: Angebot) -> list[AngebotsAnhang]:
-    """Alle Anhänge, die nach den Regeln zu diesem Angebot mitgehen würden."""
+def fuer_angebot(logik: Logik, angebot: Angebot,
+                 profil_name: str = "") -> list[AngebotsAnhang]:
+    """Alle Anhänge, die nach den Regeln zu diesem Angebot mitgehen würden.
+    v11 (Phase 67): profil_name filtert Anhänge mit "Nicht bei Profil"
+    (z. B. Ratenkauf/SpotDynamic nicht bei Enni und SWD)."""
     antworten = _antworten_aus_protokoll(angebot)
     positionen = {p.pos_nr for p in angebot.positionen}
     ergebnis: list[AngebotsAnhang] = []
     for anhang in logik.anhaenge:
+        if profil_name and any(profil_name.lower() == p.lower()
+                               for p in anhang.nicht_bei_profil):
+            continue
         passt = False
         if anhang.art == "immer":
             passt = True
