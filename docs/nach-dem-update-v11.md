@@ -6,11 +6,13 @@ Tool heißt der Abschnitt in CLAUDE.md „Neu in v13", weil v11
 
 ## Für das ganze Team
 
-- **50-l-Puffer:** Bei den 3800er-Klassen (4–13 kW) wird der 50-l-Puffer
-  nicht mehr als eigene Position berechnet – er steckt laut TAIFUN-Text
-  im Paket (AN-C-261082). Angebote werden dadurch 405,00 € netto
-  günstiger als bisher. Größere Puffer (100/200/300/500 l) kommen
-  unverändert als Zusatzposition.
+- **50-l-Puffer:** Der Puffer bleibt eine eigene berechnete Position
+  (405,00 € netto) – stattdessen wurde die Zeile „Pufferspeicher BST 50
+  Ehp …" aus den Beschreibungen aller 3800er-Pakete (045–054) entfernt,
+  damit er nicht doppelt erscheint (AN-C-261082, Entscheidung Andreas
+  23.09.2026). Die Bereinigung läuft als Textregel bei jedem
+  Preislisten-Re-Import automatisch mit. Preise ändern sich dadurch
+  nicht.
 - **CS8800 (15 kW):** Außeneinheit steht jetzt auf Position 1,
   Inneneinheit auf Position 2, danach Puffer/Warmwasser (AN-C-261127).
   Wenn eine ältere Erfassung noch offene Fragen hat (z. B. Farbe/

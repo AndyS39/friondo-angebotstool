@@ -383,10 +383,12 @@ Graph-Versand über Innendienst, Terminal-Server-Betrieb.
 (Umsetzung des Plans PLAN_V11.md; die Zählung v11/v12 war zu diesem
 Zeitpunkt bereits durch Projektierung und Lead-Management belegt.)
 
-- Kalkulation: 50-l-Puffer ist Bestandteil der 3800er-Pakete –
-  keine Zusatzposition mehr bei Pufferwahl 50 l (Doppler-Wächter warnt);
-  Pakettexte gegen TAIFUN geprüft (identisch, das Doppel war die separate
-  Position). Kontrollwerte der Tests entsprechend neu (Netto 29.840,43 €).
+- Kalkulation: Der 50-l-Puffer bleibt eine eigene Position (Z15,
+  Entscheidung 23.09.2026); die doppelte DARSTELLUNG ist behoben, indem
+  eine Textregel die Pufferzeile aus den Pakettexten 045–054 entfernt
+  (Blatt „Textregeln", neue Regelform „Positionen 045–054" + „Zeile '…'
+  aus der Beschreibung entfernen" – greift bei jedem Re-Import).
+  Kontrollwerte unverändert (Netto 30.245,43 €).
   CS8800: Außen-/Inneneinheit stehen auf Position 1+2, eigene
   Broschüren-Regel (Bosch CS8800iAW.pdf bei 030/031), Fehlerfall „Klasse 15
   ohne Paket" behoben (Angebot-erzeugen prüft auf offene Fragen).

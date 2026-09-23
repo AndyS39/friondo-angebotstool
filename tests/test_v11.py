@@ -25,16 +25,34 @@ class TestPufferUndCS8800(unittest.TestCase):
     def tearDownClass(cls):
         cls.session.close()
 
-    def test_awm6_mit_50l_ohne_zusatzposition(self):
+    def test_awm6_mit_50l_position_und_bereinigter_pakettext(self):
+        # Entscheidung 23.09.2026: Der 50-l-Puffer bleibt eine eigene Position
+        # (Z15); dafür entfernt die Textregel die Pufferzeile aus den
+        # Pakettexten 045–054 – keine doppelte Darstellung (AN-C-261082).
         antworten = {"A03": 12000, "N02": "Ja", "N03": "bis 200 l",
                      "N06": "50 l", "A10": "Nein"}
         refs = [a.ref for a in angebot_aufbau.artikel_ermitteln(self.logik, antworten)]
-        self.assertNotIn("Z15", refs)          # 50-l-Puffer ist Paketbestandteil
+        self.assertIn("Z15", refs)
         self.assertIn("046", refs)
-        # größere Puffer bleiben Zusatz
         refs2 = [a.ref for a in angebot_aufbau.artikel_ermitteln(
             self.logik, dict(antworten, N06="100 l"))]
         self.assertIn("Z16", refs2)
+
+    def test_pakettexte_ohne_pufferzeile(self):
+        from app.models import Artikel
+        for pos in ("045", "046", "047", "048", "049",
+                    "050", "051", "052", "053", "054"):
+            artikel = (self.session.query(Artikel)
+                       .filter(Artikel.pos_nr == pos, Artikel.aktiv.is_(True))
+                       .first())
+            self.assertIsNotNone(artikel, pos)
+            self.assertNotIn("BST 50", artikel.beschreibung or "", pos)
+
+    def test_textregel_zeile_entfernen(self):
+        from app import import_preisliste
+        text = "Zeile A\nPufferspeicher BST 50 Ehp, 540x530, Nutzinhalt 50 L\nZeile C"
+        self.assertEqual(import_preisliste.zeile_entfernen(text, "Pufferspeicher BST 50"),
+                         "Zeile A\nZeile C")
 
     def test_cs8800_reihenfolge_block1(self):
         antworten = {"A03": 32000, "N02": "Ja", "N08": "Weiß", "N07": "200 l",
@@ -52,20 +70,17 @@ class TestPufferUndCS8800(unittest.TestCase):
         namen = {a.datei for a in anhaenge_modul.fuer_angebot(self.logik, angebot)}
         self.assertIn("Bosch CS8800iAW.pdf", namen)
 
-    def test_doppler_schutz_50l(self):
-        from app.logik import (Aktion, ArtikelRef, Pruefbericht,
-                               _doppelquellen_pruefen)
-        bericht = Pruefbericht()
-        self.logik.aktionen.append(Aktion(
-            frage="N06", antwort="50 l", aktion_roh="Artikel: Z15 ×1",
-            typ="normal", ampel_grund="", artikel=[ArtikelRef("Z15")],
-            bemerkung=""))
-        try:
-            _doppelquellen_pruefen(self.logik, bericht)
-        finally:
-            self.logik.aktionen.pop()
-        self.assertTrue(any("Puffer-Doppelberechnung" in w
-                            for w in bericht.warnungen))
+    def test_textregel_bereich_geparst(self):
+        # "Positionen 045–054" + "Zeile '…' aus der Beschreibung entfernen"
+        import openpyxl
+
+        from app import config, import_preisliste
+        wb = openpyxl.load_workbook(config.LOGIK_EXCEL_PFAD, read_only=True)
+        regeln = import_preisliste.lade_textregeln(wb)
+        wb.close()
+        for pos in ("045", "050", "054"):
+            self.assertEqual(regeln.zeile_entfernen.get(pos),
+                             "Pufferspeicher BST 50")
 
 
 class TestFlaechenAuslegung(unittest.TestCase):

@@ -82,6 +82,7 @@ def _header_indizes(kopfzeile, bericht_warnungen: list[str]) -> dict[str, int]:
 @dataclass
 class Textregeln:
     begriff_entfernen: dict[str, str] = field(default_factory=dict)   # pos_nr -> Begriff
+    zeile_entfernen: dict[str, str] = field(default_factory=dict)     # v11: pos_nr -> Zeilen-Begriff
     ueberschrift_ersetzen: dict[str, str] = field(default_factory=dict)
     ueberschrift_entfaellt: set[str] = field(default_factory=set)
     nicht_anwendbar: list[str] = field(default_factory=list)          # Warnungen
@@ -97,11 +98,21 @@ def lade_textregeln(wb_logik) -> Textregeln:
         if betrifft == "Import allgemein":
             continue  # _x000D_-Bereinigung und Kategoriezeilen sind fest eingebaut
         m_pos = re.fullmatch(r"Position\s+(\w+)", betrifft)
+        # v11: Positionsbereich "Positionen 045–054"
+        m_bereich = re.fullmatch(r"Positionen\s+(\d{1,3})\s*[–-]\s*(\d{1,3})", betrifft)
         m_kopf = re.fullmatch(r"Überschrift\s+'(.+)'", betrifft)
         m_entf = re.search(r"Alle\s+'(.+)'-Nennungen.*entfernen", regel)
+        # v11: ganze Beschreibungszeile entfernen (z. B. 50-l-Puffer im Pakettext)
+        m_zeile = re.search(r"Zeile\s+'(.+)'\s+aus der Beschreibung entfernen", regel)
         m_ers = re.search(r"Ersetzen durch\s+'(.+)'", regel)
         if m_pos and m_entf:
             regeln.begriff_entfernen[m_pos.group(1)] = m_entf.group(1)
+        elif m_zeile and (m_pos or m_bereich):
+            nummern = ([m_pos.group(1)] if m_pos else
+                       [f"{n:03d}" for n in range(int(m_bereich.group(1)),
+                                                  int(m_bereich.group(2)) + 1)])
+            for nummer in nummern:
+                regeln.zeile_entfernen[nummer] = m_zeile.group(1)
         elif m_kopf and m_ers:
             regeln.ueberschrift_ersetzen[m_kopf.group(1)] = m_ers.group(1)
         elif m_kopf and regel.lower().startswith("entfällt"):
@@ -121,6 +132,13 @@ def begriff_entfernen(text: str, begriff: str) -> str:
         if zeile:
             zeilen.append(zeile)
     return "\n".join(zeilen)
+
+
+def zeile_entfernen(text: str, begriff: str) -> str:
+    """v11: Entfernt jede Beschreibungszeile, die den Begriff enthält
+    (z. B. die 50-l-Puffer-Zeile der Pakettexte 045–054)."""
+    return "\n".join(zeile for zeile in text.splitlines()
+                     if begriff.lower() not in zeile.lower())
 
 
 # --- Preisliste + Zusatzartikel lesen ------------------------------------
@@ -170,6 +188,8 @@ def lese_dateien() -> ImportErgebnis:
         text = text_bereinigen(beschreibung)
         if pos_nr in regeln.begriff_entfernen:
             text = begriff_entfernen(text, regeln.begriff_entfernen[pos_nr])
+        if pos_nr in regeln.zeile_entfernen:
+            text = zeile_entfernen(text, regeln.zeile_entfernen[pos_nr])
         g_preis = zelle(row, "G-Preis")
         e_preis = zelle(row, "E-Preis")
         ep_flag = isinstance(g_preis, str) and "EP" in g_preis

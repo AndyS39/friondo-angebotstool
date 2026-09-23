@@ -23,7 +23,9 @@ ZULIEFERUNGEN (blockieren einzelne Checkboxen, nicht den Start):
    („Vermerk Heizungsumverlegung").
 
 ## Phase 64 – Kritische Bugfixes (Kalkulation, Status, Bedienung)
-- [x] PUFFER-DOPPELBERECHNUNG (AN-C-261082): Gegen die TAIFUN-Preisliste
+- [x] PUFFER-DOPPELBERECHNUNG (AN-C-261082) – ENTSCHEIDUNG 23.09.2026
+      (Andreas): Puffer bleibt eigene Position (Z15); stattdessen entfernt
+      eine Textregel die 50-l-Puffer-Zeile aus den Pakettexten 045–054: Gegen die TAIFUN-Preisliste
       klären, ob die Pakete 045–054 den 50-l-Puffer im Paketpreis
       enthalten (laut Team: ja, zumindest AWM). Dann Regel: Pufferwahl
       „50 l" bei den 3800er-Klassen → KEINE Zusatzposition (Pos. 002
