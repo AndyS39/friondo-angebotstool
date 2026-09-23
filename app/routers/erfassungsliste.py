@@ -387,6 +387,17 @@ async def angebot_erzeugen(erfassung_id: int, session: Session = Depends(get_ses
     if not bericht.ok:
         return RedirectResponse("/parametrierung", status_code=303)
     antworten = json.loads(erfassung.antworten_json or "{}")
+    # v11 (AN-C-261127): Wächter gegen unvollständige Antworten – z. B. wenn
+    # nach einer Logik-Aktualisierung neue Fragen gelten (Klasse 15: N07/N08)
+    # oder Antworten nachträglich in eine andere Klasse korrigiert wurden.
+    # Ohne diesen Check entstand ein Angebot OHNE Außen-/Inneneinheit.
+    offen = engine.naechste_frage(logik, antworten)
+    if offen is not None:
+        from urllib.parse import quote_plus
+        return RedirectResponse("/erfassungen?meldung=" + quote_plus(
+            f"Angebot nicht erzeugt: In Erfassung {erfassung.id} fehlen Antworten "
+            f"(z. B. {offen.id} – {offen.text}). Bitte die Erfassung öffnen und "
+            "vervollständigen."), status_code=303)
     angebot = angebot_aufbau.angebot_anlegen(session, erfassung.kunde_id,
                                              antworten=antworten, logik=logik)
     angebot.konfigurator_typ = erfassung.konfigurator_typ or "WP"   # v5

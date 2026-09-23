@@ -43,6 +43,8 @@ async def uebersicht(request: Request, session: Session = Depends(get_session)):
                   kombi_text=einstellung_holen(session, "kombi_vorlage_text", "")
                   or __import__("app.mail_vorlagen", fromlist=["x"]).KOMBI_TEXT,
                   sync_status=mail_sync.status,
+                  versand_protokoll=__import__("json").loads(
+                      einstellung_holen(session, "versand_erkennung_protokoll", "[]")),
                   loeschungen=(session.query(AngebotsLoeschung)
                                .order_by(AngebotsLoeschung.geloescht_am.desc())
                                .limit(50).all()),

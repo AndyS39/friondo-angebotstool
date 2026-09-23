@@ -77,19 +77,25 @@ def rabatt_anwenden(session: Session, angebot: Angebot, cent, prozent,
 
 
 def _rabatt_lesen(form):
-    """Formularwerte → (cent, prozent, bezeichnung, fehlertext)."""
+    """Formularwerte → (cent, prozent, bezeichnung, fehlertext).
+    v11: leeres Feld oder 0 bedeutet „Rabatt entfernen“ (cent und prozent
+    None bei leerem Fehlertext)."""
     from app.konfigurator import zahl_parsen
     from app.routers.artikel import preis_parsen
     wert = (form.get("rabatt_wert") or "").strip()
     bezeichnung = (form.get("rabatt_bezeichnung") or "").strip()
     if not wert:
-        return None, None, bezeichnung, "Bitte einen Rabattwert eingeben."
+        return None, None, bezeichnung, ""
     if form.get("rabatt_typ") == "prozent":
         prozent = zahl_parsen(wert)
+        if prozent == 0:
+            return None, None, bezeichnung, ""
         if prozent is None or not (0 < prozent <= 100):
             return None, None, bezeichnung, "Ungültiger Prozentwert."
         return None, float(prozent), bezeichnung, ""
     cent = preis_parsen(wert)
+    if cent == 0:
+        return None, None, bezeichnung, ""
     if cent is None or cent <= 0:
         return None, None, bezeichnung, "Ungültiger Betrag."
     return cent, None, bezeichnung, ""
@@ -262,6 +268,24 @@ async def rabatt(request: Request, angebot_id: int,
         return RedirectResponse(f"/meine-angebote/{angebot_id}?meldung="
                                 + quote_plus(fehler), status_code=303)
     vorgang = vorgaenge_modul.vorgang_fuer_angebot(session, angebot)
+    # v11: Eingabe 0 oder leeres Feld entfernt den Rabatt (statt Fehlermeldung)
+    if cent is None and prozent is None:
+        if not (angebot.rabatt_cent or angebot.rabatt_prozent):
+            return RedirectResponse(f"/meine-angebote/{angebot_id}?meldung=" + quote_plus(
+                "Kein Rabatt gesetzt."), status_code=303)
+        ziel = rabatt_anwenden(session, angebot, None, None, "")
+        if ziel.id != angebot.id:
+            from app import monday_rueckspielung
+            monday_rueckspielung.wert_aktualisieren(session, ziel,
+                                                    "neue Version (Rabatt entfernt)")
+        vorgaenge_modul.notiz_anlegen(
+            session, vorgang.id, benutzer,
+            f"Rabatt auf {ziel.nummer} entfernt"
+            + (f" (neue Version von {angebot.nummer})" if ziel.id != angebot.id else "")
+            + ".", herkunft="Rabatt-Workflow")
+        session.commit()
+        return RedirectResponse(f"/meine-angebote/{ziel.id}?meldung=" + quote_plus(
+            "Rabatt entfernt."), status_code=303)
     rabatt_text = (f"{prozent:g} %" if prozent
                    else f"{cent / 100:.2f} €".replace(".", ","))
     db_neu = _db_mit_rabatt(angebot, cent, prozent)

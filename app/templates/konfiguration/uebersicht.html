@@ -91,6 +91,23 @@ BCC-Adressen mit Komma trennen; leer = kein BCC.
     Letzter Abgleich: {{ sync_status.letzter_lauf.strftime('%d.%m.%Y %H:%M') }}
     ({{ sync_status.versendet }} als versendet erkannt, {{ sync_status.neu }} neue Mails).
 {% endif %}</p>
+{% if versand_protokoll %}
+<details>
+    <summary>Versand-Erkennung: Protokoll der letzten Prüfläufe ({{ versand_protokoll | length }})</summary>
+    <table class="tabelle">
+        <thead><tr><th>Zeit</th><th>Angebot</th><th>Nachrichten</th><th>Ergebnis</th></tr></thead>
+        <tbody>
+        {% for e in versand_protokoll | reverse %}
+            <tr><td>{{ e.zeit }}</td><td>{{ e.angebot }}</td>
+                <td class="rechts">{{ e.nachrichten }}</td><td>{{ e.ergebnis }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <p class="dezent">Nur Angebote im Status „Versand vorbereitet“ werden geprüft.
+        Greift die Erkennung nicht, steht hier warum – als Fallback gibt es am
+        Angebot den Button „Als versendet markieren“.</p>
+</details>
+{% endif %}
 
 <h2>Kombi-Versand (v10)</h2>
 <form method="post" action="/parametrierung/einstellungen" class="formular">

@@ -549,6 +549,16 @@ async def sortierung(request: Request, angebot_id: int,
     if set(ids) == set(positionen):
         for index, pid in enumerate(ids, 1):
             positionen[pid].sort = index
+        # v11 (AN-C-261127): Die verschobene Position übernimmt Block und
+        # Gruppe ihres Ziel-Blocks – sonst zerreißt sie die Gruppenbildung
+        # der Anzeige und die Blocküberschrift rutscht unter den Artikel.
+        bewegt_id = form.get("bewegt_id") or ""
+        if bewegt_id.strip().isdigit() and int(bewegt_id) in positionen:
+            bewegt = positionen[int(bewegt_id)]
+            ziel_block = form.get("ziel_block") or ""
+            if ziel_block.strip().lstrip("-").isdigit():
+                bewegt.block_nr = int(ziel_block)
+            bewegt.gruppe = form.get("ziel_gruppe") or ""
         session.commit()
     return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
 
@@ -662,6 +672,11 @@ async def rabatt_setzen(request: Request, angebot_id: int,
         if typ == "prozent":
             from app.konfigurator import zahl_parsen
             prozent = zahl_parsen(wert)
+            # v11: 0 = Rabatt entfernen (wie leeres Feld), keine Fehlermeldung
+            if prozent == 0:
+                session.commit()
+                return RedirectResponse(
+                    f"/angebote/{angebot_id}?meldung=Rabatt+entfernt", status_code=303)
             if prozent is None or not (0 < prozent <= 100):
                 return RedirectResponse(
                     f"/angebote/{angebot_id}?meldung=Ung%C3%BCltiger+Prozentwert",
@@ -669,6 +684,10 @@ async def rabatt_setzen(request: Request, angebot_id: int,
             angebot.rabatt_prozent = prozent
         else:
             betrag = preis_parsen(wert)
+            if betrag == 0:
+                session.commit()
+                return RedirectResponse(
+                    f"/angebote/{angebot_id}?meldung=Rabatt+entfernt", status_code=303)
             if betrag is None or betrag <= 0:
                 return RedirectResponse(
                     f"/angebote/{angebot_id}?meldung=Ung%C3%BCltiger+Rabattbetrag",
@@ -1087,6 +1106,17 @@ async def status_aendern(request: Request, angebot_id: int,
                      + (f" ({angebot.ablehnungsgrund_text})" if angebot.ablehnungsgrund_text else "")))
         alter_status = angebot.status
         angebot_status_setzen(angebot, neuer_status)
+        # v11 (AN-C-261083): manueller Fallback „Als versendet markieren" –
+        # mit Protokolleintrag, damit nachvollziehbar bleibt, dass die
+        # automatische Versand-Erkennung nicht griff
+        if neuer_status == "Versendet" and alter_status == "Versand vorbereitet":
+            from app.models import AngebotsNotiz
+            benutzer = request.state.benutzer
+            session.add(AngebotsNotiz(
+                angebot_id=angebot.id,
+                benutzer_name=benutzer.name if benutzer else "?",
+                text="Manuell als versendet markiert (automatische "
+                     "Versand-Erkennung griff nicht)."))
         # v7: „Individuell“ archiviert NICHT mehr automatisch – individuelle
         # Fälle laufen über die Erfassungs-Statuskette (TAIFUN-Warteschlange)
         # verknüpfte Erfassung automatisch pflegen (Phase 14); eine als

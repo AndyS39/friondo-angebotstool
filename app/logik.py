@@ -601,6 +601,17 @@ def _doppelquellen_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
                     f"über die Paketmatrix ({', '.join(sorted(set(matrix_refs[ref.ref])))}) – "
                     "der Artikel würde doppelt im Angebot landen. Die Paketmatrix ist "
                     "die einzige Quelle; Aktionszeile bitte auf „… lt. Paketmatrix“ umstellen.")
+        # v11 (AN-C-261082): Der 50-l-Puffer ist Bestandteil aller 3800er-Pakete
+        # (045–054, laut TAIFUN-Pakettext „Pufferspeicher BST 50 Ehp“) – die
+        # Pufferwahl „50 l“ (N06) darf deshalb KEINEN Zusatzartikel liefern.
+        if aktion.frage == "N06" and aktion.artikel:
+            teile = [t.strip() for t in antwort_teile(aktion.antwort)]
+            if "50 l" in teile:
+                bericht.warnungen.append(
+                    "Puffer-Doppelberechnung: Die Antwort „50 l“ (N06) liefert einen "
+                    "Zusatzartikel, obwohl der 50-l-Puffer Bestandteil der 3800er-Pakete "
+                    "045–054 ist – er würde doppelt berechnet (AN-C-261082). "
+                    "Aktionszeile bitte ohne die 50-l-Antwort führen.")
 
 
 def _querbezuege_pruefen(logik: Logik, bericht: Pruefbericht) -> None:

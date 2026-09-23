@@ -80,7 +80,7 @@ class TestKontrollSzenario(unittest.TestCase):
         p103 = [p for p in positionen if p["pos_nr"] == "103"]
         self.assertEqual([p["menge"] for p in p103], [3.0])
         netto = sum(round(p["menge"] * p["e_preis_cent"]) for p in positionen if not p["ep_flag"])
-        self.assertEqual(netto, 3024543 + 26700)   # 30.512,43 € (v9: inkl. Pos. 067)
+        self.assertEqual(netto, 2984043 + 26700)   # 30.107,43 € (v11: 50-l-Puffer im Paket)
         self.assertIsNone(engine.naechste_frage(self.logik, antworten))
 
     def test_a09_kombination_stahl_5000l_ergibt_z10(self):
@@ -108,9 +108,9 @@ class TestKontrollSzenario(unittest.TestCase):
     def test_summen(self):
         netto = self._netto_cent()
         ust = int(Decimal(netto) * Decimal("0.19"))
-        self.assertEqual(netto, 3024543)            # 30.245,43 € (v9: inkl. Pos. 067)
-        self.assertEqual(ust, 574663)               # 5.746,63 €
-        self.assertEqual(netto + ust, 3599206)      # 35.992,06 €
+        self.assertEqual(netto, 2984043)            # 29.840,43 € (v11: 50-l-Puffer im Paket, kein Z15)
+        self.assertEqual(ust, 566968)               # 5.669,68 €
+        self.assertEqual(netto + ust, 3551011)      # 35.510,11 €
 
     def test_kfw(self):
         parameter, warnungen = kfw.parameter_lesen(self.logik)
@@ -120,7 +120,7 @@ class TestKontrollSzenario(unittest.TestCase):
             engine.kfw_daten(KONTROLL_SZENARIO), brutto)
         ergebnis = kfw.berechnen(parameter, eingaben)
         self.assertEqual(ergebnis.zuschuss_cent, 1960000)      # 19.600,00 €
-        self.assertEqual(ergebnis.eigenanteil_cent, 1639206)   # 16.392,06 €
+        self.assertEqual(ergebnis.eigenanteil_cent, 1591011)   # 15.910,11 € (v11)
         self.assertIn("70 %", ergebnis.satz_text)
         self.assertIn("KfW 458", ergebnis.programm)
 
@@ -234,11 +234,11 @@ class TestRabatt(unittest.TestCase):
         self.angebot.rabatt_cent = 50000
         self.angebot.rabatt_prozent = None
         s = self.angebot.summen()
-        self.assertEqual(s["netto"], 3024543)
-        self.assertEqual(s["ust"], 574663)                  # 5.746,63 €
-        self.assertEqual(s["brutto"], 3599206)              # 35.992,06 €
+        self.assertEqual(s["netto"], 2984043)
+        self.assertEqual(s["ust"], 566968)                  # 5.669,68 €
+        self.assertEqual(s["brutto"], 3551011)              # 35.510,11 €
         self.assertEqual(s["rabatt"], 50000)
-        self.assertEqual(s["endbetrag"], 3549206)           # 35.492,06 € (v9)
+        self.assertEqual(s["endbetrag"], 3501011)           # 35.010,11 € (v11)
 
     def test_kfw_mit_rabatt(self):
         self.angebot.rabatt_cent = 50000
@@ -248,14 +248,14 @@ class TestRabatt(unittest.TestCase):
             engine.kfw_daten(KONTROLL_SZENARIO), self.angebot.summen()["endbetrag"])
         ergebnis = kfw.berechnen(parameter, eingaben)
         self.assertEqual(ergebnis.zuschuss_cent, 1960000)     # Deckel weiter erreicht
-        self.assertEqual(ergebnis.eigenanteil_cent, 1589206)  # 15.892,06 €
+        self.assertEqual(ergebnis.eigenanteil_cent, 1541011)  # 15.410,11 € (v11)
 
     def test_prozent_rabatt_vom_brutto(self):
         self.angebot.rabatt_cent = None
         self.angebot.rabatt_prozent = 10.0
         s = self.angebot.summen()
-        self.assertEqual(s["rabatt"], 359921)   # 10 % von 35.992,06, kaufmännisch
-        self.assertEqual(s["endbetrag"], 3239285)   # 32.392,85 € (v9)
+        self.assertEqual(s["rabatt"], 355101)   # 10 % von 35.510,11, kaufmännisch
+        self.assertEqual(s["endbetrag"], 3195910)   # 31.959,10 € (v11)
 
     def test_deckungsbeitrag_sinkt_um_netto_anteil(self):
         # DB sinkt um den Netto-Anteil des Brutto-Rabatts (÷ 1,19)
@@ -272,7 +272,7 @@ class TestRabatt(unittest.TestCase):
         self.angebot.rabatt_prozent = None
         s = self.angebot.summen()
         self.assertEqual(s["rabatt"], 0)
-        self.assertEqual(s["endbetrag"], 3599206)
+        self.assertEqual(s["endbetrag"], 3551011)   # v11: 50-l-Puffer im Paket
 
 
 if __name__ == "__main__":

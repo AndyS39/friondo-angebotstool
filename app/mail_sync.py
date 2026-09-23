@@ -68,19 +68,42 @@ def _eigene_adressen(*adressen: str) -> set[str]:
 
 
 def versand_erkennen(session, angebot: Angebot, nachrichten: list[dict],
-                     eigene: set[str]) -> bool:
+                     eigene: set[str], protokoll: list | None = None) -> bool:
     """Phase 31: Liegt in der Konversation eine gesendete (nicht-Entwurf)
-    Nachricht von uns vor? Dann Status „Versendet“ setzen. True = umgestellt."""
+    Nachricht von uns vor? Dann Status „Versendet“ setzen. True = umgestellt.
+    v11 (AN-C-261083): jeder Prüflauf wird protokolliert – auch WARUM eine
+    Mail nicht als Versand zählte (Entwurf, fremder Absender, kein Sendedatum)."""
     if angebot.status != "Versand vorbereitet":
         return False
+
+    def merken(ergebnis: str) -> None:
+        if protokoll is not None:
+            protokoll.append({
+                "zeit": datetime.now().strftime("%d.%m.%Y %H:%M"),
+                "angebot": angebot.nummer,
+                "nachrichten": len(nachrichten),
+                "ergebnis": ergebnis})
+
+    if not nachrichten:
+        merken("keine Nachrichten zur Konversation/Nummer gefunden")
+        return False
+    gruende = []
     for n in nachrichten:
-        if n.get("isDraft"):
-            continue
         absender = ((n.get("from") or {}).get("emailAddress") or {}).get("address", "")
-        if absender and absender.lower() in eigene and n.get("sentDateTime"):
-            from app.models import angebot_status_setzen
-            angebot_status_setzen(angebot, "Versendet")
-            return True
+        if n.get("isDraft"):
+            gruende.append(f"{absender or '?'}: noch Entwurf")
+            continue
+        if not n.get("sentDateTime"):
+            gruende.append(f"{absender or '?'}: kein Sendedatum")
+            continue
+        if not absender or absender.lower() not in eigene:
+            gruende.append(f"{absender or '?'}: nicht als eigene Adresse erkannt")
+            continue
+        from app.models import angebot_status_setzen
+        angebot_status_setzen(angebot, "Versendet")
+        merken(f"als versendet erkannt (Absender {absender})")
+        return True
+    merken("nicht erkannt – " + "; ".join(gruende[:4]))
     return False
 
 
@@ -137,6 +160,14 @@ def sync() -> int:
         postfach = einstellung_holen(session, "mail_postfach", "angebot@friondo.de")
         absender = einstellung_holen(session, "mail_absender", "angebot@friondo.de")
         eigene = _eigene_adressen(konto, postfach, absender)
+        # v11 (AN-C-261083): Auch die Postfächer der Benutzer zählen als eigene
+        # Absender – „Senden im Auftrag“ trägt sonst die persönliche Adresse
+        # und der Versand wurde nie erkannt.
+        from app.models import Benutzer
+        for b in session.query(Benutzer).filter(Benutzer.aktiv.is_(True)):
+            if b.email:
+                eigene.add(b.email.lower())
+        erkennungs_protokoll: list[dict] = []
         angebote = (session.query(Angebot)
                     .filter(Angebot.status.in_(["Versand vorbereitet", "Versendet",
                                                 "Angenommen", "Abgelehnt"]),
@@ -149,7 +180,8 @@ def sync() -> int:
                         token, angebot.graph_conversation_id, postfach)
                 else:
                     nachrichten = nachrichten_je_betreff(token, angebot.nummer, postfach)
-                if versand_erkennen(session, angebot, nachrichten, eigene):
+                if versand_erkennen(session, angebot, nachrichten, eigene,
+                                    erkennungs_protokoll):
                     versendet_gesamt += 1
                     session.commit()
                     _nach_versand(session, angebot)
@@ -157,11 +189,28 @@ def sync() -> int:
             except Exception as problem:
                 fehler.append(f"{angebot.nummer}: {problem}")
         session.commit()
+        _protokoll_sichern(session, erkennungs_protokoll)
     finally:
         session.close()
     status.update(letzter_lauf=datetime.now(), neu=neu_gesamt,
-                  versendet=versendet_gesamt, fehler=fehler)
+                  versendet=versendet_gesamt, fehler=fehler,
+                  erkennung=erkennungs_protokoll)
     return neu_gesamt
+
+
+def _protokoll_sichern(session, eintraege: list[dict]) -> None:
+    """v11: Erkennungs-Protokoll persistent halten (letzte 50 Einträge) –
+    einsehbar in der Parametrierung, überlebt Neustarts."""
+    if not eintraege:
+        return
+    from app.models import einstellung_setzen
+    try:
+        alt = json.loads(einstellung_holen(session, "versand_erkennung_protokoll", "[]"))
+    except ValueError:
+        alt = []
+    einstellung_setzen(session, "versand_erkennung_protokoll",
+                       json.dumps((alt + eintraege)[-50:], ensure_ascii=False))
+    session.commit()
 
 
 def _nach_versand(session, angebot: Angebot) -> None:

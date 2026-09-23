@@ -244,9 +244,10 @@
     <span class="dezent">Der Entwurf liegt in Outlook. Nach dem Senden erkennt das Tool den
         Versand automatisch (Abgleich alle 15 Min) und setzt „Versendet“ –
         alternativ manuell:</span>
-    <form method="post" action="/angebote/{{ angebot.id }}/status">
+    <form method="post" action="/angebote/{{ angebot.id }}/status"
+          onsubmit="return confirm('Angebot manuell als versendet markieren? Die monday-Rückspielung läuft wie beim automatischen Versand.');">
         <input type="hidden" name="status" value="Versendet">
-        <button class="knopf klein" type="submit">Jetzt auf „Versendet“ setzen</button>
+        <button class="knopf klein" type="submit">Als versendet markieren</button>
     </form>
 </div>
 {% endif %}
@@ -259,6 +260,11 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
 </form></div>
 <form method="post" action="/angebote/{{ angebot.id }}/sortierung" id="sortierform">
     <input type="hidden" name="reihenfolge" id="reihenfolge">
+    {# v11: verschobene Position übernimmt Block/Gruppe des Ziel-Blocks –
+       die Blocküberschrift bleibt dadurch immer vor der ersten Position #}
+    <input type="hidden" name="bewegt_id" id="bewegt_id">
+    <input type="hidden" name="ziel_block" id="ziel_block">
+    <input type="hidden" name="ziel_gruppe" id="ziel_gruppe">
 </form>
 {% endif %}
 {% for gruppe in gruppen %}
@@ -277,7 +283,7 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
                 <th></th>
             </tr>
         </thead>
-        <tbody class="sortierbar">
+        <tbody class="sortierbar" data-block="{{ gruppe.block }}" data-gruppe="{{ gruppe.name }}">
         {% for p in gruppe.positionen %}
             <tr data-pos-id="{{ p.id }}" class="{{ 'bauseits' if p.bauseits }}"{% if not nur_lesen %} draggable="true"{% endif %}>
                 {% if not nur_lesen %}<td class="griff" title="Ziehen zum Umsortieren">☰</td>{% endif %}
@@ -665,6 +671,15 @@ function textBearbeiten(id, zu) {
             e.preventDefault();
             const ids = Array.from(document.querySelectorAll('tr[data-pos-id]')).map(function (z) { return z.dataset.posId; });
             document.getElementById('reihenfolge').value = ids.join(',');
+            // v11: Ziel-Block der bewegten Zeile mitschicken, damit sie dem
+            // Block ihres neuen Nachbarn zugeordnet wird (Überschrift bleibt oben)
+            const bewegt = document.querySelector('tr.wird-gezogen');
+            const ziel = bewegt ? bewegt.closest('tbody.sortierbar') : null;
+            if (bewegt && ziel) {
+                document.getElementById('bewegt_id').value = bewegt.dataset.posId;
+                document.getElementById('ziel_block').value = ziel.dataset.block || '';
+                document.getElementById('ziel_gruppe').value = ziel.dataset.gruppe || '';
+            }
             sessionStorage.setItem(merker, String(window.scrollY));
             document.getElementById('sortierform').submit();
         });
