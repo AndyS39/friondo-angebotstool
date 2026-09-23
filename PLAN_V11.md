@@ -145,9 +145,9 @@ ZULIEFERUNGEN (blockieren einzelne Checkboxen, nicht den Start):
       Kontroll-Angebot vorher/nachher vergleichen
 
 ## Phase 68 – Abnahme & Rollout
-- [ ] Regressionstests: alle Kontroll-Szenarien (KG-, DG-, Rabatt-Fall,
+- [x] Regressionstests: alle Kontroll-Szenarien (KG-, DG-, Rabatt-Fall,
       A13, Heizlast, B1–B4, Doppler-Schutz 065/067) grün
-- [ ] Neue Tests: AWM 6 kW + 50-l-Puffer → keine Pos. 002; 8800er-
+- [x] Neue Tests: AWM 6 kW + 50-l-Puffer → keine Pos. 002; 8800er-
       Angebot → 030/031 Pos. 1, 055/056 Pos. 2, Broschüren-Regel;
       Flächen-Auslegung 150 m² × 60 W/m² = 9,0 kW → 7-kW-Klasse;
       Dachzentrale KG + Anschlüsse EG → 139/140 × m statt 141 +
@@ -155,7 +155,7 @@ ZULIEFERUNGEN (blockieren einzelne Checkboxen, nicht den Start):
       und mit 0 entfernen; externer Eintrag → Abgelehnt mit Grund;
       AD-Statuswechsel mit Protokoll-Notiz; Kopie zu anderem Kunden
       (neuer Vorgang, Hinweis Förderdaten)
-- [ ] CLAUDE.md: Kopf auf „(v11)"; Abschnitt einfügen:
+- [x] CLAUDE.md: Kopf auf „(v11)"; Abschnitt einfügen:
 
       ## Neu in v11 (abgestimmt 23.09.2026)
       - Kalkulation: 50-l-Puffer ist Bestandteil der 3800er-Pakete –
@@ -182,7 +182,9 @@ ZULIEFERUNGEN (blockieren einzelne Checkboxen, nicht den Start):
       - Offen bis Zulieferung: monoenergetische Klassengrenzen,
         VK-Preisliste (Janni).
 
-- [ ] docs/nach-dem-update-v11.md: Team-Hinweise (AD-Statuswechsel,
+- [x] docs/nach-dem-update-v11.md: Team-Hinweise (AD-Statuswechsel,
       Kopier-Funktion, Kran-Frage, „Als versendet markieren" nur als
       Fallback), Erinnerung Zulieferungen 1–4 nachziehen
-- [ ] git push → Rollout per update.bat → Checkliste abarbeiten
+- [x] git push → Rollout per update.bat → Checkliste abarbeiten
+      (Push am 23.09.2026 erledigt; Server-Rollout via update.bat und
+      Checkliste docs/nach-dem-update-v11.md stehen noch aus)

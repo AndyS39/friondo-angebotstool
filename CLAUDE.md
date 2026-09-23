@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v12)
+# Friondo Angebotstool – Projektkontext (v13)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -36,9 +36,11 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
 - **PDF-Nummerierung:** Positionen im Angebot werden fortlaufend neu nummeriert
   (001, 002, …) – Editor und PDF identisch. TAIFUN-Pos./Z-Nr./GUID bleiben intern
   gespeichert und sind im Editor als Zusatzinfo sichtbar.
-- **Dachzentrale:** Bei alter Anlage im DG immer Pos. 163. D-Block steuert 141 bzw.
-  139/140 × Meter. Fassadenleitung nur bei OG oder (DG und WP bleibt im DG);
-  Erdleitung bei KG/EG oder (DG und WP zieht nach unten).
+- **Dachzentrale:** Bei alter Anlage im DG immer Pos. 163. D-Block (seit v13:
+  Etagen-Frage D06) steuert 141 (gleiche Etage) bzw. 139/140 × Meter über die
+  getrennten Abfragen D07/D08. Fassadenleitung bei OG, (DG und WP bleibt im DG)
+  oder Dachaufstellung der Außeneinheit (N10); Erdleitung bei KG/EG oder
+  (DG und WP zieht nach unten).
 - SLS/ÜSS/APZ werden nicht mehr abgefragt – die Komponenten sind in Pos. 011
   enthalten; Pos. 149/150/153 bleiben ungenutzt im Artikelstamm.
 - EK-Preise sind unter „Artikel bearbeiten" änderbar (Innendienst/Admin).
@@ -375,3 +377,47 @@ Graph-Versand über Innendienst, Terminal-Server-Betrieb.
   der Nähe", Gebietskarte, KI-Extraktion (Schalter), CTI, Webhook extern; V3
   Online-Terminwahl, WhatsApp, Cross-Selling-Trigger, Score-Kalibrierung; V4
   KI-Sprachschicht, Voice-/Chat-Vorqualifizierung.
+
+## Neu in v13 – Team-Feedback (abgestimmt 23.09.2026)
+
+(Umsetzung des Plans PLAN_V11.md; die Zählung v11/v12 war zu diesem
+Zeitpunkt bereits durch Projektierung und Lead-Management belegt.)
+
+- Kalkulation: 50-l-Puffer ist Bestandteil der 3800er-Pakete –
+  keine Zusatzposition mehr bei Pufferwahl 50 l (Doppler-Wächter warnt);
+  Pakettexte gegen TAIFUN geprüft (identisch, das Doppel war die separate
+  Position). Kontrollwerte der Tests entsprechend neu (Netto 29.840,43 €).
+  CS8800: Außen-/Inneneinheit stehen auf Position 1+2, eigene
+  Broschüren-Regel (Bosch CS8800iAW.pdf bei 030/031), Fehlerfall „Klasse 15
+  ohne Paket" behoben (Angebot-erzeugen prüft auf offene Fragen).
+- Konfigurator: Auslegung ohne Verbrauch über Fläche × Gebäudestandard
+  (40/60/70 W/m², Fragen A17/A18 nach A03 = „Verbrauch unbekannt") mit
+  ausgewiesener Herleitung im Protokoll; Auslegungszeile in Block 1
+  (0,00 €, Wortlaut vorläufig bis TAIFUN-Muster); Fassadenleitung auch bei
+  Dachaufstellung (N10); Kran-Frage N09 statt EP-Automatik;
+  Tankgrößen-Nachfrage A19 ab 9.000 l; Dachzentrale-KG-Kette mit
+  Etagen-Frage D06 und Meterabfragen D07/D08 (139 = Heizung, 140 =
+  Warmwasser laut Artikeltexten); Vermerk Heizungsumverlegung als
+  0,00-€-Position Z25 (nach Zulieferung auf TAIFUN-Pos. 124 umstellen);
+  Erdleitung im Fundament-Block (Block 6, seit v10); Blocküberschrift
+  „Elektroarbeiten" (Block 7).
+- Editor: Freitextpositionen ohne Bezeichnung und mit EK-Feld (netto, nur
+  für den DB); abweichende Lieferanschrift (Erfassungsfrage O13, Feld im
+  Editor, eigene PDF-Zeile); „Für anderen Kunden kopieren" (Zielkunde
+  wählen/anlegen, neuer Vorgang, Kennzeichen „Kopie von AN-…" +
+  Warnblock „Förderdaten prüfen (kopiert)"). Zusatzartikel Z26
+  „Elektroarbeiten – im PV-Angebot enthalten" (0,00 €) kommt beim
+  Einfügen automatisch als Alternativ-Position mit Verknüpfung
+  „PV-Angebot".
+- Rollen: AD setzt eigene Angebote auf Angenommen/Abgelehnt/Offen
+  (Grund-Pflicht, Notiz-Protokoll im Vorgangs-Chat, monday/Statistik wie
+  beim ID). Externe Einträge vollständig ablehnbar (bestand schon, per
+  Test abgesichert).
+- Versand: Anhänge-Regeln profilabhängig (Spalte „Nicht bei Profil":
+  Enni/SWD ohne Ratenkauf/SpotDynamic); Versand-Erkennung robuster
+  (Benutzer-Postfächer zählen als eigene Absender) mit Protokoll der
+  Prüfläufe in der Parametrierung + Button „Als versendet markieren" mit
+  Protokoll-Notiz; Rabatt mit 0 oder leerem Feld entfernbar (ID und AD).
+- Offen bis Zulieferung: monoenergetische Klassengrenzen (Paketmatrix),
+  VK-Preisliste (Janni), Bosch-CS8800iAW-Broschüre (anlagen/),
+  TAIFUN-Wortlaute (Auslegungszeile, Pos.-124-Text).

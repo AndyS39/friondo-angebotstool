@@ -580,15 +580,17 @@ def main():
     pruefe("v9 Solar", "Übernahme → 069, keine 065/067 (N03 entfällt)",
            "069" in nummern_u and not ({"065", "067"} & nummern_u)
            and engine.naechste_frage(logik, ueber) is None)
-    # Vermerk: DG ohne Aufzug → Heizungsumverlegungs-Vermerk im PDF
+    # Vermerk (v11): Heizungsumverlegung kommt als 0,00-€-Position Z25 im
+    # Montage-Block statt als Vermerke-Blatt-Textabsatz (eine Quelle)
     vermerke_dg = engine.vermerke_fuer(logik, dg)
     v9dg = angebot_aufbau.angebot_anlegen(s, kunde_t.id, antworten=dg, logik=logik)
     s.commit()
     pfad_dg = pdf_export.pdf_fuer_angebot(s, v9dg)
     text_dg = "".join(seite.extract_text() for seite in pypdf.PdfReader(str(pfad_dg)).pages)
-    pruefe("v9 Vermerk", "DG + kein Kran → Vermerk am Positionsteil-Ende im PDF",
-           len(vermerke_dg) == 1 and vermerke_dg[0].splitlines()[0] in text_dg.replace("\n", " ")
-           or (len(vermerke_dg) == 1 and "Vermerk" in text_dg))
+    pruefe("v9 Vermerk", "DG → Vermerk Heizungsumverlegung als Position Z25 (0,00 €) im PDF",
+           vermerke_dg == []
+           and any(p.pos_nr == "Z25" and p.e_preis_cent == 0 for p in v9dg.positionen)
+           and "Heizungsumverlegung" in text_dg.replace("\n", " "))
     # Versionierung: Versendet → Überarbeiten → .2, Original „Überholt“
     v9ang.status = "Versendet"
     s.commit()
