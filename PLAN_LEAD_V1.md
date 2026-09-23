@@ -587,7 +587,7 @@ Terminal-Server weiterhin nacheinander (update.bat).
   Demo-Modus und Umstellung auf `alle`), `docs/leads-api.md`, `docs/leadmanagement-
   entscheidungen.md`, `docs/graph-einrichtung.md` (Kalender-Rechte, Postfach leads@ und
   Testpostfach – Aufgaben für den M365-Admin).
-- [ ] *(offen auf Anweisung von Andreas: „Noch nicht pushen“ – gilt weiter, v11+v12 liegen auf demselben Branch)* git push → Absprache mit dem Angebotstool-Chat (kein PROJ-Rollout am selben Tag) →
+- [x] *(Push am 23.09.2026 auf Freigabe von Andreas, v11+v12 gemeinsam; Rest des Rollouts auf dem Terminal-Server offen)* git push → Absprache mit dem Angebotstool-Chat (kein PROJ-Rollout am selben Tag) →
   update.bat auf dem Terminal-Server → migrate-Log prüfen → als Admin: Demo-Daten
   erzeugen, Sync-Lauf anstoßen, Board und Assistent öffnen. Als Innendienst gegenprüfen:
   nichts Neues sichtbar.

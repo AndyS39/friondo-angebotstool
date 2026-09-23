@@ -337,7 +337,7 @@ Server – dieser Plan setzt darauf auf und nummeriert ab Phase 64 weiter.
   von Claude Code während der Umsetzung).
 - [x] `docs/graph-einrichtung.md` ergänzen: Shared-Postfach `projektierung@friondo.de`
   anlegen, „Senden als" für die Projektierungs-Benutzer (Aufgabe für den M365-Admin).
-- [ ] *(offen auf Anweisung von Andreas: „Noch nicht pushen“)* git push → Absprache mit dem Angebotstool-Chat → update.bat auf dem Terminal-
+- [x] *(Push am 23.09.2026 auf Freigabe von Andreas; Rest des Rollouts auf dem Terminal-Server offen)* git push → Absprache mit dem Angebotstool-Chat → update.bat auf dem Terminal-
   Server → Migration prüfen (Anzahl migrierter Projekte im Log) → Board öffnen und
   Altbestand einmalig sortieren.
 
