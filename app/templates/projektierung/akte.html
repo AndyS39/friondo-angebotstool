@@ -1,421 +1,576 @@
 {% extends "base.html" %}
-{% import "_sparten.html" as sparten_ui %}
+{% from "_projektierung.html" import pj_dot %}
 
 {% block titel %}{{ projekt.nummer }} – Projektakte{% endblock %}
 
 {% block mainklasse %}breit{% endblock %}
 
+{% set SPARTEN_NAMEN = {'WP': 'Wärmepumpe', 'PV': 'Photovoltaik',
+                        'KL': 'Klima', 'WB': 'Wallbox'} %}
+
 {% block inhalt %}
-<div class="seitenkopf">
-    <h1>Projekt {{ projekt.nummer }} · {{ kunde.anzeige_name if kunde else '?' }}
-        <span class="abzeichen">{{ phasen_namen.get(projekt.status_cache, projekt.status_cache) }}</span>
-    </h1>
-    <div class="aktionen">
-        <a class="knopf klein zweitrangig" href="/projektierung">Zum Board</a>
-        {% if projekt.vorgang_id %}
-            <a class="knopf klein zweitrangig" href="/vorgaenge/{{ projekt.vorgang_id }}">Vorgangsakte</a>
-        {% endif %}
-    </div>
+<div class="pj-btnrow" style="margin-top:0">
+    <a class="pj-btn" href="/projektierung">← Board</a>
+    {% if projekt.vorgang_id %}
+        <a class="pj-btn" href="/vorgaenge/{{ projekt.vorgang_id }}">Vorgangsakte</a>
+    {% endif %}
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-<div class="akte-kopf">
-    <p>
-        <strong>Kunde:</strong>
-        {% if kunde %}<a href="/kunden/{{ kunde.id }}">{{ kunde.anzeige_name }}</a>
-            {% if kunde.telefon %} · ☎ {{ kunde.telefon }}{% endif %}
-            {% if kunde.email %} · ✉ {{ kunde.email }}{% endif %}{% else %}?{% endif %}<br>
-        <strong>Ausführungsort:</strong>
-        {{ ((projekt.ausfuehrung_strasse ~ ', ' if projekt.ausfuehrung_strasse)
-            ~ projekt.ausfuehrung_plz ~ ' ' ~ projekt.ausfuehrung_ort) | trim or '–' }}
-        {% if kunde and (kunde.rechnung_name is defined) %}{% endif %}
-        · <strong>Kanal:</strong> {% if projekt.kanal %}<span class="abzeichen">{{ projekt.kanal }}</span>{% else %}–{% endif %}
-        · <strong>Vertriebler:</strong>
-        {{ benutzer_map[projekt.vertriebler_id].name if projekt.vertriebler_id in benutzer_map else '–' }}<br>
-        <strong>Projektleiter:</strong>
-        {% if benutzer.rolle in ('admin', 'innendienst') or benutzer.hat_rolle('projektierung') %}
-        <form method="post" action="/projektierung/projekt/{{ projekt.id }}/projektleiter" style="display:inline">
-            <select name="projektleiter_id" onchange="this.form.submit()">
-                {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
-                    <option value="{{ b.id }}" {{ 'selected' if projekt.projektleiter_id == b.id }}>{{ b.name }}</option>
-                {% endfor %}
-            </select>
-        </form>
-        {% else %}
-        {{ benutzer_map[projekt.projektleiter_id].name if projekt.projektleiter_id in benutzer_map else '–' }}
+{# ===== Kopfblock (Prototyp .akte-head) ===== #}
+<div class="pj-akte-head">
+    <div class="pj-eyebrow">Projektakte</div>
+    <h2><span class="pj-mono">{{ projekt.nummer }}</span>
+        · {{ kunde.anzeige_name if kunde else '?' }}{{ ', ' ~ projekt.ausfuehrung_ort if projekt.ausfuehrung_ort }}</h2>
+    <div class="row">
+        <div><span>Ausführung</span><br>
+            {{ ((projekt.ausfuehrung_strasse ~ ', ' if projekt.ausfuehrung_strasse)
+                ~ projekt.ausfuehrung_plz ~ ' ' ~ projekt.ausfuehrung_ort) | trim or '–' }}</div>
+        <div><span>Rechnung</span><br>
+            {% if kunde and (kunde.strasse or kunde.plz or kunde.ort) and
+                  (kunde.strasse != projekt.ausfuehrung_strasse
+                   or kunde.plz != projekt.ausfuehrung_plz
+                   or kunde.ort != projekt.ausfuehrung_ort) %}
+                {{ ((kunde.strasse ~ ', ' if kunde.strasse) ~ kunde.plz ~ ' ' ~ kunde.ort) | trim }}
+            {% else %}identisch{% endif %}</div>
+        <div><span>Kontakt</span><br>
+            {% if kunde %}{{ kunde.telefon or '–' }}{{ ' · ' ~ kunde.email if kunde.email }}
+            {% else %}–{% endif %}</div>
+        <div><span>Vertrieb</span><br>
+            {{ benutzer_map[projekt.vertriebler_id].name if projekt.vertriebler_id in benutzer_map else '–' }}
+            {% if projekt.kanal %} <span class="pj-badge kanal">{{ projekt.kanal }}</span>{% endif %}</div>
+        <div><span>Projektleiter</span><br>
+            {% if benutzer.rolle in ('admin', 'innendienst') or benutzer.hat_rolle('projektierung') %}
+            <form method="post" action="/projektierung/projekt/{{ projekt.id }}/projektleiter" style="display:inline">
+                <select name="projektleiter_id" onchange="this.form.submit()">
+                    {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
+                        <option value="{{ b.id }}" {{ 'selected' if projekt.projektleiter_id == b.id }}>{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+            {% else %}
+            {{ benutzer_map[projekt.projektleiter_id].name if projekt.projektleiter_id in benutzer_map else '–' }}
+            {% endif %}</div>
+        <div><span>Gesamt-Auftragswert</span><br><b class="pj-mono">{{ gesamtwert | euro }}</b></div>
+        <div><span>Projektstatus</span><br>
+            {{ phasen_namen.get(projekt.status_cache, projekt.status_cache) }}
+            {%- for g in gewerke if g.phase == projekt.status_cache %}{% if loop.first %} ({{ g.sparte }}){% endif %}{% endfor %}</div>
+    </div>
+    {% if projekt.notiz_kopf %}<div class="pj-note">📌 {{ projekt.notiz_kopf }}</div>{% endif %}
+    <div class="pj-btnrow">
+        <button class="pj-btn" type="button" onclick="pjTabOeffnen('verlauf'); document.getElementById('kommentarfeld').focus()">💬 Kommentar</button>
+        <button class="pj-btn" type="button" onclick="pjTabOeffnen('dokumente')">⬆ Dokument</button>
+        {% if gewerke %}
+        <button class="pj-btn" type="button" onclick="pjDialog('dlg-termin-{{ gewerke[0].id }}')">📅 Termin</button>
         {% endif %}
-        · <strong>Gesamt-Auftragswert:</strong> {{ gesamtwert | euro }}
-    </p>
-    {% if projekt.notiz_kopf %}<p class="dezent">📌 {{ projekt.notiz_kopf }}</p>{% endif %}
+    </div>
 </div>
 
-<div class="gewerk-spalten gewerke-{{ [gewerke | length, 3] | min }}">
+{# ===== Gewerk-Spalten (Prototyp .gewerke/.gcol) ===== #}
+<div class="pj-gewerke">
 {% for g in gewerke %}
     {% set ampel = ampeln[g.id] %}
     {% set angebot = angebote.get(g.angebot_id) %}
-    <section class="gewerk-spalte {{ 'gewerk-storniert' if g.phase == 'storniert' }}">
-        <h2>{{ sparten_ui.chip(g.sparte) }}
-            {{ phasen_namen.get(g.phase, g.phase) }}
-            {% if g.phase == 'storniert' %}<span class="abzeichen ep">{{ g.storno_grund }}</span>{% endif %}
-        </h2>
+    {% set gewerk_termine = termine | selectattr('gewerk_id', 'equalto', g.id) | list %}
+    {% set fp_termine = gewerk_termine | selectattr('typ', 'equalto', 'feinplanung') | list %}
+    {% set montage_termine = gewerk_termine | selectattr('typ', 'equalto', 'montage') | list %}
+    {% set phase_idx = phasen.index(g.phase) if g.phase in phasen else -1 %}
+    <section class="pj-gcol {{ g.sparte }} {{ 'storniert' if g.phase == 'storniert' }}">
+        <h3><span class="pj-sp {{ g.sparte }}">{{ g.sparte }}</span>
+            {{ SPARTEN_NAMEN.get(g.sparte, g.sparte) }}
+            {% if g.phase == 'storniert' %}
+                <span class="pj-badge crit">{{ g.storno_grund }}</span>
+            {% elif angebot %}
+                <span class="pj-badge" title="Gerät/Kurzbeschreibung aus dem Auftrag">
+                    {%- if angebot.extern %}TAIFUN {{ angebot.taifun_nummer or angebot.nummer }}
+                    {%- elif angebot.positionen %}{{ angebot.positionen[0].bezeichnung | truncate(30, true) }}
+                    {%- else %}{{ angebot.nummer }}{% endif %}</span>
+            {% endif %}
+        </h3>
 
-        {# Phase als Stepper (5 Schritte) #}
-        <div class="phase-stepper">
+        <div class="pj-stepper">
             {% for p in phasen[:5] %}
-                <span class="schritt {{ 'aktiv' if p == g.phase }} {{ 'erledigt' if phasen.index(g.phase) > loop.index0 and g.phase != 'storniert' }}"
-                      title="{{ phasen_namen[p] }}">{{ loop.index }}</span>
+                <i class="{{ 'done' if (g.phase == 'abgeschlossen' or (phase_idx > loop.index0 and g.phase != 'storniert')) else ('cur' if p == g.phase) }}"
+                   title="{{ phasen_namen[p] }}"></i>
             {% endfor %}
         </div>
+        <div class="pj-steplbl">
+            <span>Phase: <b>{{ phasen_namen.get(g.phase, g.phase) }}</b></span>
+            {% if g.phase_geaendert_am %}<span>seit {{ g.phase_geaendert_am.strftime('%d.%m.') }}</span>{% endif %}
+        </div>
 
-        <p>
-            <span class="ampel-punkt ampel-{{ ampel.farbe }}" title="Planungs-Ampel"></span>
-            <strong>{{ ampel.erledigt }} von {{ ampel.gesamt }}</strong> Pflichtaufgaben
-            {% if ampel.ueberfaellig %}<span class="abzeichen ep">{{ ampel.ueberfaellig }} überfällig</span>{% endif %}
-            <br><span class="dezent">Auftragswert: {{ g.auftragswert_aktuell | euro }}
-                {% if g.auftragswert_aktuell != g.auftragswert_original %}
-                    (ursprünglich {{ g.auftragswert_original | euro }}){% endif %}</span>
-        </p>
+        <div class="pj-ampel">
+            {{ pj_dot(ampel.farbe) }}
+            <div class="pj-bar"><i class="{{ {'gelb': 'y', 'rot': 'r'}.get(ampel.farbe, '') }}"
+                 style="width:{{ (ampel.erledigt / ampel.gesamt * 100) | round if ampel.gesamt else 0 }}%"></i></div>
+            <span>{{ ampel.erledigt }} / {{ ampel.gesamt }} Pflicht{{ ' · ' ~ ampel.ueberfaellig ~ ' überfällig' if ampel.ueberfaellig }}</span>
+        </div>
 
-        {# Zuweisungen #}
-        <form method="post" action="/projektierung/gewerk/{{ g.id }}/zuweisung" class="suchleiste">
-            <label class="kontrollfeld">Feinplaner
-                <select name="feinplaner_id" onchange="this.form.submit()">
-                    <option value="0">–</option>
-                    {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
-                        <option value="{{ b.id }}" {{ 'selected' if g.feinplaner_id == b.id }}>{{ b.name }}</option>
+        <div class="pj-kv">
+            <span>Auftrag</span>
+            <div>{% if angebot %}
+                {% if angebot.extern %}{{ angebot.taifun_nummer or angebot.nummer }}
+                    · <span class="pj-mono">{{ g.auftragswert_aktuell | euro }}</span>
+                    <span class="pj-badge">TAIFUN</span>
+                {% else %}<a href="/angebote/{{ angebot.id }}">{{ angebot.nummer }}</a>
+                    · <span class="pj-mono">{{ g.auftragswert_aktuell | euro }}</span>
+                    {% if g.auftragswert_aktuell != g.auftragswert_original %}
+                        <small style="color:var(--pj-muted)">(urspr. {{ g.auftragswert_original | euro }})</small>
+                    {% endif %}
+                    · <a href="/angebote/{{ angebot.id }}/pdf" target="_blank">PDF</a>
+                {% endif %}
+                {% if not angebot.extern and angebot.positionen %}
+                <details><summary class="dezent" style="cursor:pointer">Positionen ({{ angebot.positionen | length }})</summary>
+                    <table class="tabelle"><tbody>
+                    {% for p in angebot.positionen %}
+                        <tr><td>{{ p.bezeichnung }}</td>
+                            <td class="rechts">{{ p.menge | menge }} {{ p.einheit }}</td>
+                            <td class="rechts pj-mono">{{ p.e_preis_cent | euro }}</td>
+                            {% if ek_sichtbar %}<td class="rechts dezent pj-mono" title="EK">{{ (p.ek_cent or 0) | euro }}</td>{% endif %}
+                        </tr>
                     {% endfor %}
-                </select></label>
-            <label class="kontrollfeld">Elektroplaner
-                <select name="elektroplaner_id" onchange="this.form.submit()">
-                    <option value="0">–</option>
-                    {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
-                        <option value="{{ b.id }}" {{ 'selected' if g.elektroplaner_id == b.id }}>{{ b.name }}</option>
-                    {% endfor %}
-                </select></label>
-        </form>
+                    </tbody></table>
+                </details>
+                {% endif %}
+                {% else %}– kein Angebot verknüpft –{% endif %}</div>
 
-        {# Heizlast (Phase 67) #}
-        {% if g.sparte == 'WP' %}
-        <details class="heizlast-block">
-            <summary class="dezent">Heizlast:
-                {% if g.heizlast_kw %}<strong>{{ ('%g' | format(g.heizlast_kw)) | replace('.', ',') }} kW</strong>
-                    ({{ g.heizlast_datum.strftime('%d.%m.%Y') if g.heizlast_datum }})
-                {% else %}– noch nicht eingetragen –{% endif %}
-                {% if g.heizlast_link %}· <a href="{{ g.heizlast_link }}" target="_blank">Heizreport</a>{% endif %}
-            </summary>
-            <form method="post" action="/projektierung/gewerk/{{ g.id }}/heizlast" class="suchleiste">
-                <input type="text" name="heizlast_kw" size="6" placeholder="kW"
-                       value="{{ ('%g' | format(g.heizlast_kw)) | replace('.', ',') if g.heizlast_kw }}">
-                <input type="text" name="heizlast_link" size="24" placeholder="Heizreport-Link"
-                       value="{{ g.heizlast_link }}">
-                <button class="knopf klein" type="submit">Speichern</button>
+            <form method="post" action="/projektierung/gewerk/{{ g.id }}/zuweisung"
+                  style="display:contents">
+                <span>Feinplaner</span>
+                <div>
+                    <select name="feinplaner_id" onchange="this.form.submit()">
+                        <option value="0">–</option>
+                        {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
+                            <option value="{{ b.id }}" {{ 'selected' if g.feinplaner_id == b.id }}>{{ b.name }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if fp_termine %}
+                        {% set fp = fp_termine | sort(attribute='beginn') | last %}
+                        · Termin {{ 'war' if fp.beginn < heute }} {{ fp.beginn.strftime('%d.%m.') }}
+                    {% else %}· <b>Termin fehlt</b>{% endif %}
+                </div>
+                <span>Elektroplaner</span>
+                <div>
+                    <select name="elektroplaner_id" onchange="this.form.submit()">
+                        <option value="0">–</option>
+                        {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
+                            <option value="{{ b.id }}" {{ 'selected' if g.elektroplaner_id == b.id }}>{{ b.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
             </form>
-            <form method="post" action="/projektierung/projekt/{{ projekt.id }}/dokument"
-                  enctype="multipart/form-data" class="suchleiste">
-                <input type="hidden" name="gewerk_id" value="{{ g.id }}">
-                <input type="hidden" name="ordner" value="{{ g.sparte }}/02 Feinplanung & Heizlast">
-                <input type="file" name="datei">
-                <button class="knopf klein zweitrangig" type="submit">Heizlast-PDF hochladen</button>
-            </form>
-        </details>
-        {% endif %}
 
-        {# Aufgaben gruppiert nach Paket #}
-        <h3>Aufgaben</h3>
+            {% if g.sparte == 'WP' %}
+            <span>Heizlast</span>
+            <div>
+                {% if g.heizlast_kw %}<span class="pj-mono">{{ ('%g' | format(g.heizlast_kw)) | replace('.', ',') }} kW</span>
+                    {{ '· ' ~ g.heizlast_datum.strftime('%d.%m.') if g.heizlast_datum }}
+                {% else %}–{% endif %}
+                {% if g.heizlast_link %}· <a href="{{ g.heizlast_link }}" target="_blank">Heizreport-PDF</a>{% endif %}
+                <details><summary class="dezent" style="cursor:pointer">bearbeiten / Upload</summary>
+                    <form method="post" action="/projektierung/gewerk/{{ g.id }}/heizlast" class="pj-btnrow">
+                        <input type="text" name="heizlast_kw" size="5" placeholder="kW"
+                               value="{{ ('%g' | format(g.heizlast_kw)) | replace('.', ',') if g.heizlast_kw }}">
+                        <input type="text" name="heizlast_link" size="18" placeholder="Heizreport-Link"
+                               value="{{ g.heizlast_link }}">
+                        <button class="pj-btn" type="submit">Speichern</button>
+                    </form>
+                    <form method="post" action="/projektierung/projekt/{{ projekt.id }}/dokument"
+                          enctype="multipart/form-data" class="pj-btnrow">
+                        <input type="hidden" name="gewerk_id" value="{{ g.id }}">
+                        <input type="hidden" name="ordner" value="{{ g.sparte }}/02 Feinplanung & Heizlast">
+                        <input type="file" name="datei">
+                        <button class="pj-btn" type="submit">Heizlast-PDF hochladen</button>
+                    </form>
+                </details>
+            </div>
+            {% endif %}
+
+            <span>Montage</span>
+            <div>{% if montage_termine %}
+                {% set m = montage_termine | sort(attribute='beginn') | last %}
+                <b>{{ m.beginn.strftime('%a %d.%m.') }}{{ ' – ' ~ m.ende.strftime('%a %d.%m.') if m.ende and m.ende.date() != m.beginn.date() }}</b>
+                {% if m.team_id and m.team_id in teams_map %} · {{ teams_map[m.team_id].name }}{% endif %}
+                {% if m.kunde_bestaetigt %} · Kunde bestätigt ✔{% endif %}
+                {% if m.notiz %} <small style="color:var(--pj-muted)">{{ m.notiz }}</small>{% endif %}
+            {% else %}– noch nicht terminiert{% endif %}</div>
+        </div>
+
+        {# weitere Termine (Abnahme/Sub/Sonstige) #}
+        {% set weitere = gewerk_termine | rejectattr('typ', 'in', ['feinplanung', 'montage']) | list %}
+        {% for t in weitere %}
+        <div class="pj-term"><span class="d">{{ t.beginn.strftime('%d.%m.') if t.beginn }}</span>
+            <div>{{ t.typ | capitalize }}{{ ' · ' ~ t.notiz if t.notiz }}
+                {{ '· Kunde bestätigt ✔' if t.kunde_bestaetigt }}</div></div>
+        {% endfor %}
+
+        {# Aufgaben als Pakete (Prototyp .paket/.task) #}
         {% for instanz_id, gruppe in aufgaben_gruppen.get(g.id, []) %}
-        <details class="paket-gruppe" open>
-            <summary><strong>{{ instanzen[instanz_id].paket_name if instanz_id in instanzen else 'Einzelaufgaben' }}</strong>
-                <span class="dezent">{{ gruppe | selectattr('status', 'equalto', 'erledigt') | list | length }}/{{ gruppe | length }}</span>
+        {% set erledigt_anzahl = gruppe | selectattr('status', 'equalto', 'erledigt') | list | length %}
+        {% set offene_pflicht = gruppe | rejectattr('status', 'in', ['erledigt', 'entfaellt']) | selectattr('pflicht') | list | length %}
+        <details class="pj-paket" {{ 'open' if offene_pflicht }}>
+            <summary>{{ instanzen[instanz_id].paket_name if instanz_id in instanzen else 'Einzelaufgaben' }}
+                <span class="cnt">{{ 'alle erledigt' if erledigt_anzahl == gruppe | length else erledigt_anzahl ~ ' / ' ~ gruppe | length }}</span>
             </summary>
             {% for a in gruppe %}
-            <div class="aufgabe-zeile {{ 'aufgabe-erledigt' if a.status == 'erledigt' }} {{ 'aufgabe-ueberfaellig' if a.status != 'erledigt' and a.faellig_am and a.faellig_am < heute }}">
+            {% set ueberfaellig = a.status not in ('erledigt', 'entfaellt') and a.faellig_am and a.faellig_am < heute %}
+            <div class="pj-task {{ 'done' if a.status == 'erledigt' }}">
                 <form method="post" action="/projektierung/aufgabe/{{ a.id }}/erledigt-umschalten"
                       style="display:inline">
                     <input type="checkbox" onchange="this.form.submit()"
                            {{ 'checked' if a.status == 'erledigt' }} title="Erledigt">
                 </form>
-                <form method="post" action="/projektierung/aufgabe/{{ a.id }}/status" class="aufgabe-form">
-                    <details class="aufgabe-detail">
+                <div class="t">
+                    <details>
                         <summary>{{ a.titel }}{{ ' *' if a.pflicht }}
-                            <span class="dezent">· {{ benutzer_map[a.verantwortlich_id].name if a.verantwortlich_id in benutzer_map else a.rolle }}
-                            {% if a.faellig_am %}· fällig {{ a.faellig_am.strftime('%d.%m.%Y') }}{% endif %}</span>
+                            <small>{{ benutzer_map[a.verantwortlich_id].name if a.verantwortlich_id in benutzer_map else a.rolle }}
+                                {%- if a.status == 'erledigt' and a.erledigt_am %} · erledigt {{ a.erledigt_am.strftime('%d.%m.') }}
+                                {%- elif a.status == 'wartet' %} · wartet{{ ' · Frist ' ~ a.wartet_frist_am.strftime('%d.%m.') if a.wartet_frist_am }}
+                                {%- elif a.status == 'entfaellt' %} · entfällt{% endif %}
+                                {%- if kommentar_zaehler.get(a.id) %} · 💬 {{ kommentar_zaehler[a.id] }}{% endif %}</small>
                         </summary>
-                        {% if a.beschreibung %}<p class="dezent">{{ a.beschreibung }}</p>{% endif %}
-                        <select name="status" onchange="this.form.submit()">
-                            {% for wert, name in status_namen.items() %}
-                                <option value="{{ wert }}" {{ 'selected' if a.status == wert }}>{{ name }}</option>
-                            {% endfor %}
-                        </select>
-                        <select name="verantwortlich_id" onchange="this.form.submit()"
-                                title="Verantwortlicher">
-                            <option value="0">– Verantwortlicher –</option>
-                            {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
-                                <option value="{{ b.id }}" {{ 'selected' if a.verantwortlich_id == b.id }}>{{ b.name }}</option>
-                            {% endfor %}
-                        </select>
-                        {% if a.status == 'wartet' and a.wartet_frist_am %}
-                            <span class="dezent">Warte-Frist: {{ a.wartet_frist_am.strftime('%d.%m.%Y') }}</span>
-                        {% endif %}
+                        {% if a.beschreibung %}<small>{{ a.beschreibung }}</small>{% endif %}
+                        <form method="post" action="/projektierung/aufgabe/{{ a.id }}/status" class="detail">
+                            <select name="status" onchange="this.form.submit()">
+                                {% for wert, name in status_namen.items() %}
+                                    <option value="{{ wert }}" {{ 'selected' if a.status == wert }}>{{ name }}</option>
+                                {% endfor %}
+                            </select>
+                            <select name="verantwortlich_id" onchange="this.form.submit()"
+                                    title="Verantwortlicher">
+                                <option value="0">– Verantwortlicher –</option>
+                                {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
+                                    <option value="{{ b.id }}" {{ 'selected' if a.verantwortlich_id == b.id }}>{{ b.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                        <form method="post" action="/projektierung/projekt/{{ projekt.id }}/kommentar" class="detail">
+                            <input type="hidden" name="aufgabe_id" value="{{ a.id }}">
+                            <input type="hidden" name="gewerk_id" value="{{ g.id }}">
+                            <input type="text" name="text" size="22" placeholder="Kommentar zur Aufgabe …">
+                        </form>
                     </details>
-                </form>
-                {% if kommentar_zaehler.get(a.id) %}
-                    <span class="dezent" title="Kommentare zu dieser Aufgabe (im Verlauf)">💬 {{ kommentar_zaehler[a.id] }}</span>
+                </div>
+                {% if a.status == 'wartet' %}
+                    <span class="due wait">wartet</span>
+                {% elif ueberfaellig %}
+                    <span class="due over">{{ a.faellig_am.strftime('%d.%m.') }} überfällig</span>
+                {% elif a.faellig_am and a.status not in ('erledigt', 'entfaellt') %}
+                    <span class="due">{{ a.faellig_am.strftime('%d.%m.') }}</span>
                 {% endif %}
-                <form method="post" action="/projektierung/projekt/{{ projekt.id }}/kommentar" class="suchleiste">
-                    <input type="hidden" name="aufgabe_id" value="{{ a.id }}">
-                    <input type="hidden" name="gewerk_id" value="{{ g.id }}">
-                    <input type="text" name="text" size="18" placeholder="Kommentar zur Aufgabe …">
-                </form>
             </div>
             {% endfor %}
         </details>
         {% endfor %}
 
         {% if g.phase != 'storniert' %}
-        <div class="formaktionen">
-            <form method="post" action="/projektierung/gewerk/{{ g.id }}/aufgabe" class="suchleiste">
-                <input type="text" name="titel" size="22" placeholder="Neue Aufgabe …" required>
-                <button class="knopf klein zweitrangig" type="submit">Aufgabe hinzufügen</button>
+        <div class="pj-btnrow">
+            <button class="pj-btn" type="button" onclick="pjDialog('dlg-aufgabe-{{ g.id }}')">+ Aufgabe</button>
+            <button class="pj-btn" type="button" onclick="pjDialog('dlg-paket-{{ g.id }}')">+ Paket</button>
+            {% if not fp_termine %}
+            <button class="pj-btn" type="button"
+                    onclick="pjDialog('dlg-termin-{{ g.id }}', 'feinplanung')">📅 Feinplanungstermin</button>
+            {% else %}
+            <button class="pj-btn" type="button" onclick="pjDialog('dlg-termin-{{ g.id }}')">📅 Termin</button>
+            {% endif %}
+            <button class="pj-btn primary" type="button" onclick="pjDialog('dlg-phase-{{ g.id }}')">Phase ändern</button>
+            <button class="pj-btn danger" type="button" onclick="pjDialog('dlg-storno-{{ g.id }}')">Stornieren</button>
+            {% if g.phase == 'abnahme_offen' %}
+            <button class="pj-btn primary" type="button" onclick="pjDialog('dlg-freigabe-{{ g.id }}')">Rechnung freigeben</button>
+            {% endif %}
+        </div>
+
+        {# Dialoge des Gewerks (bestehende Formulare, Prototyp-Stil) #}
+        <dialog class="pj-dlg" id="dlg-aufgabe-{{ g.id }}">
+            <h3>Aufgabe hinzufügen · {{ g.sparte }}</h3>
+            <form method="post" action="/projektierung/gewerk/{{ g.id }}/aufgabe">
+                <label>Titel</label>
+                <input type="text" name="titel" required placeholder="Neue Aufgabe …">
+                <div class="pj-btnrow">
+                    <button class="pj-btn primary" type="submit">Hinzufügen</button>
+                    <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+                </div>
             </form>
-            <form method="post" action="/projektierung/gewerk/{{ g.id }}/paket" class="suchleiste">
+        </dialog>
+        <dialog class="pj-dlg" id="dlg-paket-{{ g.id }}">
+            <h3>Paket aktivieren · {{ g.sparte }}</h3>
+            <form method="post" action="/projektierung/gewerk/{{ g.id }}/paket">
+                <label>Aufgabenpaket</label>
                 <select name="paket_key">
                     {% for p in pakete_je_sparte[g.id] %}
                         <option value="{{ p.key }}">{{ p.name }}</option>
                     {% endfor %}
                 </select>
-                <button class="knopf klein zweitrangig" type="submit">Paket aktivieren</button>
-            </form>
-        </div>
-        {% endif %}
-
-        {# Termine des Gewerks #}
-        <h3>Termine</h3>
-        {% set gewerk_termine = termine | selectattr('gewerk_id', 'equalto', g.id) | list %}
-        {% if gewerk_termine %}
-        <ul class="termin-liste">
-            {% for t in gewerk_termine %}
-            <li>{{ t.typ | capitalize }} · {{ t.beginn.strftime('%d.%m.%Y %H:%M') if t.beginn }}
-                {% if t.kunde_bestaetigt %}<span title="Kunde hat bestätigt">✓ Kunde</span>{% endif %}
-                {% if t.notiz %}<span class="dezent">– {{ t.notiz }}</span>{% endif %}</li>
-            {% endfor %}
-        </ul>
-        {% else %}<p class="dezent">Noch keine Termine.</p>{% endif %}
-        {% if g.phase != 'storniert' %}
-        <details>
-            <summary class="dezent">Termin anlegen</summary>
-            <form method="post" action="/projektierung/gewerk/{{ g.id }}/termin" class="formular">
-                <div class="formzeile">
-                    <select name="typ">
-                        {% for t in ('feinplanung', 'montage', 'abnahme', 'sub', 'sonstige') %}
-                            <option value="{{ t }}">{{ t | capitalize }}</option>
-                        {% endfor %}
-                    </select>
-                    <input type="datetime-local" name="beginn" required>
-                    <input type="datetime-local" name="ende">
-                    <label class="kontrollfeld"><input type="checkbox" name="kunde_bestaetigt"> Kunde bestätigt</label>
-                </div>
-                <div class="formzeile">
-                    <input type="text" name="notiz" size="30" placeholder="Notiz">
-                    <button class="knopf klein" type="submit">Anlegen</button>
+                <div class="pj-btnrow">
+                    <button class="pj-btn primary" type="submit">Aktivieren</button>
+                    <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
                 </div>
             </form>
-        </details>
+        </dialog>
+        <dialog class="pj-dlg" id="dlg-termin-{{ g.id }}">
+            <h3>Termin anlegen · {{ g.sparte }}</h3>
+            <form method="post" action="/projektierung/gewerk/{{ g.id }}/termin">
+                <label>Typ</label>
+                <select name="typ">
+                    {% for t in ('feinplanung', 'montage', 'abnahme', 'sub', 'sonstige') %}
+                        <option value="{{ t }}">{{ t | capitalize }}</option>
+                    {% endfor %}
+                </select>
+                <label>Beginn</label>
+                <input type="datetime-local" name="beginn" required>
+                <label>Ende (optional)</label>
+                <input type="datetime-local" name="ende">
+                <label>Notiz</label>
+                <input type="text" name="notiz" placeholder="Notiz">
+                <div class="opt" style="margin-top:8px">
+                    <input type="checkbox" name="kunde_bestaetigt" id="kb-{{ g.id }}">
+                    <label for="kb-{{ g.id }}" style="margin:0">Kunde hat bestätigt</label>
+                </div>
+                <div class="pj-btnrow">
+                    <button class="pj-btn primary" type="submit">Anlegen</button>
+                    <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+                </div>
+            </form>
+        </dialog>
+        <dialog class="pj-dlg" id="dlg-phase-{{ g.id }}">
+            <h3>Phase ändern · {{ g.sparte }}</h3>
+            <form method="post" action="/projektierung/gewerk/{{ g.id }}/phase">
+                <label>Zielphase (aktuell: {{ phasen_namen.get(g.phase, g.phase) }})</label>
+                <select name="phase">
+                    {% for p in phasen if p != 'storniert' %}
+                        <option value="{{ p }}" {{ 'selected' if p == g.phase }}>{{ phasen_namen[p] }}</option>
+                    {% endfor %}
+                </select>
+                <div class="pj-note crit">Wächter werden beim Übernehmen geprüft
+                    (Pflichtaufgaben, Montagetermin) – Override und Rückwärts nur
+                    mit Begründung, protokolliert im Verlauf.</div>
+                <label>Begründung (bei Override/rückwärts Pflicht)</label>
+                <input type="text" name="begruendung" placeholder="z. B. Netzbetreiber telefonisch zugesagt">
+                <div class="pj-btnrow">
+                    <button class="pj-btn primary" type="submit">Übernehmen</button>
+                    <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+                </div>
+            </form>
+        </dialog>
+        <dialog class="pj-dlg" id="dlg-storno-{{ g.id }}">
+            <h3>Gewerk stornieren · {{ g.sparte }}</h3>
+            <form method="post" action="/projektierung/gewerk/{{ g.id }}/storno"
+                  onsubmit="return confirm('Gewerk wirklich stornieren? Das verknüpfte Angebot wird auf Abgelehnt gesetzt.');">
+                <label>Grund (Pflicht)</label>
+                <select name="grund" required>
+                    <option value="">– Grund wählen –</option>
+                    {% for grund in storno_gruende %}
+                        <option value="{{ grund }}">{{ grund }}</option>
+                    {% endfor %}
+                </select>
+                <label>Erläuterung (bei Sonstiges Pflicht)</label>
+                <input type="text" name="text">
+                {% if angebot %}
+                <div style="font-size:12px;color:var(--pj-muted);margin-top:8px">
+                    Setzt {{ angebot.taifun_nummer or angebot.nummer }} auf
+                    „Abgelehnt" mit diesem Grund, monday wird aktualisiert.</div>
+                {% endif %}
+                <div class="pj-btnrow">
+                    <button class="pj-btn danger" type="submit">Stornieren</button>
+                    <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+                </div>
+            </form>
+        </dialog>
+        {% if g.phase == 'abnahme_offen' %}
+        <dialog class="pj-dlg" id="dlg-freigabe-{{ g.id }}">
+            <h3>Rechnung freigeben · {{ g.sparte }}</h3>
+            <form method="post" action="/projektierung/gewerk/{{ g.id }}/freigabe">
+                <div class="opt"><input type="radio" name="restarbeiten" value="keine"
+                     id="ra1-{{ g.id }}" checked><label for="ra1-{{ g.id }}" style="margin:0">keine Restarbeiten</label></div>
+                <div class="opt"><input type="radio" name="restarbeiten" value="ja"
+                     id="ra2-{{ g.id }}"><label for="ra2-{{ g.id }}" style="margin:0">Restarbeiten/Reklamationen:</label></div>
+                <label>Pflichttext bei Restarbeiten</label>
+                <input type="text" name="restarbeiten_text">
+                <div class="pj-btnrow">
+                    <button class="pj-btn primary" type="submit">Freigeben</button>
+                    <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+                </div>
+            </form>
+        </dialog>
         {% endif %}
-
-        {# Auftrag #}
-        <h3>Auftrag</h3>
-        {% if angebot %}
-        <p>{% if angebot.extern %}<span class="abzeichen">TAIFUN</span> {{ angebot.taifun_nummer or angebot.nummer }}
-            {% else %}<a href="/angebote/{{ angebot.id }}">{{ angebot.nummer }}</a>
-            · <a href="/angebote/{{ angebot.id }}/pdf" target="_blank">PDF</a>{% endif %}
-            · Endbetrag <strong>{{ angebot.summen().endbetrag | euro }}</strong></p>
-        {% if not angebot.extern %}
-        <details>
-            <summary class="dezent">Positionen ({{ angebot.positionen | length }})</summary>
-            <table class="tabelle">
-                <tbody>
-                {% for p in angebot.positionen %}
-                    <tr><td>{{ p.bezeichnung }}</td>
-                        <td class="rechts">{{ p.menge | menge }} {{ p.einheit }}</td>
-                        <td class="rechts">{{ p.e_preis_cent | euro }}</td>
-                        {% if ek_sichtbar %}<td class="rechts dezent" title="EK">{{ (p.ek_cent or 0) | euro }}</td>{% endif %}
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </details>
-        {% endif %}
-        {% else %}<p class="dezent">Kein Angebot verknüpft.</p>{% endif %}
-
-        {# Aktionen #}
-        {% if g.phase not in ('storniert',) %}
-        <div class="formaktionen">
-            <details>
-                <summary class="knopf klein">Phase ändern</summary>
-                <form method="post" action="/projektierung/gewerk/{{ g.id }}/phase" class="formular">
-                    <select name="phase">
-                        {% for p in phasen if p != 'storniert' %}
-                            <option value="{{ p }}" {{ 'selected' if p == g.phase }}>{{ phasen_namen[p] }}</option>
-                        {% endfor %}
-                    </select>
-                    <input type="text" name="begruendung" size="26"
-                           placeholder="Begründung (bei Override/rückwärts Pflicht)">
-                    <button class="knopf klein" type="submit">Übernehmen</button>
-                </form>
-            </details>
-            <details>
-                <summary class="knopf klein zweitrangig">Stornieren</summary>
-                <form method="post" action="/projektierung/gewerk/{{ g.id }}/storno" class="formular"
-                      onsubmit="return confirm('Gewerk wirklich stornieren? Das verknüpfte Angebot wird auf Abgelehnt gesetzt.');">
-                    <select name="grund" required>
-                        <option value="">– Grund wählen –</option>
-                        {% for grund in storno_gruende %}
-                            <option value="{{ grund }}">{{ grund }}</option>
-                        {% endfor %}
-                    </select>
-                    <input type="text" name="text" size="26" placeholder="Freitext (bei Sonstiges Pflicht)">
-                    <button class="knopf klein zweitrangig" type="submit">Stornieren</button>
-                </form>
-            </details>
-            {% if g.phase == 'abnahme_offen' %}
-            <details>
-                <summary class="knopf">Rechnung freigeben</summary>
-                <form method="post" action="/projektierung/gewerk/{{ g.id }}/freigabe" class="formular">
-                    <label class="kontrollfeld"><input type="radio" name="restarbeiten" value="keine" checked> keine Restarbeiten</label>
-                    <label class="kontrollfeld"><input type="radio" name="restarbeiten" value="ja"> Restarbeiten/Reklamationen:</label>
-                    <input type="text" name="restarbeiten_text" size="30" placeholder="Pflichttext bei Restarbeiten">
-                    <button class="knopf" type="submit">Freigeben</button>
-                </form>
-            </details>
-            {% endif %}
-        </div>
         {% endif %}
     </section>
 {% endfor %}
 </div>
 
-{# Reiter: Dokumente · Verlauf & Kommentare · Subs (Phase 67) #}
-<h2 id="dokumente">Dokumente</h2>
-<div class="formaktionen">
+{# ===== Reiter (Prototyp .tabs/.pane) ===== #}
+<div class="pj-tabs">
+    <button class="pj-tab on" type="button" data-pane="dokumente" onclick="pjTab(this)">Dokumente</button>
+    <button class="pj-tab" type="button" data-pane="verlauf" onclick="pjTab(this)">Verlauf &amp; Kommentare</button>
+    <button class="pj-tab" type="button" data-pane="subs" onclick="pjTab(this)">Subs &amp; Bestellungen</button>
+    <button class="pj-tab" type="button" data-pane="mails" onclick="pjTab(this)">Mail-Verlauf</button>
+    <button class="pj-tab" type="button" data-pane="rechnungen" onclick="pjTab(this)">Rechnungen</button>
+</div>
+
+<div class="pj-pane on" id="dokumente">
     <form method="post" action="/projektierung/projekt/{{ projekt.id }}/dokument"
-          enctype="multipart/form-data" class="suchleiste">
+          enctype="multipart/form-data" class="pj-btnrow" style="margin-top:0">
         <select name="ordner">
             {% for eintrag in dokument_ordner | default([]) %}
                 <option value="{{ eintrag }}">{{ eintrag }}</option>
             {% endfor %}
         </select>
         <input type="file" name="datei" accept="*/*" capture="environment">
-        <button class="knopf klein" type="submit">Hochladen</button>
+        <button class="pj-btn primary" type="submit">Hochladen</button>
     </form>
-</div>
-<div class="dokument-baum">
-    {% for ordner, dateien in dokumente | default({}) | dictsort %}
-    <details open>
-        <summary><strong>{{ ordner }}</strong> <span class="dezent">({{ dateien | length }})</span></summary>
-        <ul>
+    <div class="pj-tree" style="margin-top:8px">
+        {% for ordner, dateien in dokumente | default({}) | dictsort %}
+        <div>📁 {{ ordner }} <span style="color:var(--pj-muted)">({{ dateien | length }})</span></div>
         {% for d in dateien %}
-            <li><a href="/projektierung/dokument/{{ d.id }}" target="_blank">{{ d.dateiname }}</a>
-                <span class="dezent">{{ d.erstellt_am.strftime('%d.%m.%y') }}
-                    {{ '· auto' if d.quelle == 'auto' }}</span>
-                {% if benutzer.rolle in ('admin',) or benutzer.hat_rolle('projektierung') %}
-                <form method="post" action="/projektierung/dokument/{{ d.id }}/loeschen" style="display:inline"
-                      onsubmit="return confirm('Datei wirklich löschen? Die Löschung wird protokolliert.');">
-                    <button class="knopf klein zweitrangig" type="submit" title="Löschen (protokolliert)">✕</button>
-                </form>
-                {% endif %}
-            </li>
+        <div class="f"><a href="/projektierung/dokument/{{ d.id }}" target="_blank">{{ d.dateiname }}</a>
+            · {{ d.erstellt_am.strftime('%d.%m.%y') }}{{ ' · auto' if d.quelle == 'auto' }}
+            {% if benutzer.rolle in ('admin',) or benutzer.hat_rolle('projektierung') %}
+            <form method="post" action="/projektierung/dokument/{{ d.id }}/loeschen" style="display:inline"
+                  onsubmit="return confirm('Datei wirklich löschen? Die Löschung wird protokolliert.');">
+                <button class="pj-btn" type="submit" title="Löschen (protokolliert)"
+                        style="padding:0 6px">✕</button>
+            </form>
+            {% endif %}
+        </div>
         {% endfor %}
-        </ul>
+        {% else %}
+        <div style="color:var(--pj-muted)">Noch keine Dokumente.</div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="pj-pane" id="verlauf">
+    <div class="pj-log" id="pj-verlauf">
+        {% for e in verlauf %}
+        <div>
+            {% if e.art == 'system' %}
+                <span class="sys">System · {{ e.text }}</span><time>{{ e.erstellt_am.strftime('%d.%m.%y %H:%M') }}</time>
+            {% else %}
+                <span class="who">{{ benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else 'System' }}</span><time>{{ e.erstellt_am.strftime('%d.%m.%y %H:%M') }}</time>
+                <br><span class="text">{{ e.text }}</span>
+            {% endif %}
+        </div>
+        {% else %}
+        <div style="color:var(--pj-muted);border-bottom:0">Noch keine Einträge.</div>
+        {% endfor %}
+    </div>
+    <form method="post" action="/projektierung/projekt/{{ projekt.id }}/kommentar">
+        <textarea name="text" rows="2" id="kommentarfeld" required
+                  placeholder="Kommentar … @Name erwähnen"></textarea>
+        <div class="pj-btnrow">
+            <button class="pj-btn primary" type="submit">Senden</button>
+        </div>
+    </form>
+    {% if vorgang_notizen | default(false) %}
+    <details style="margin-top:8px">
+        <summary class="dezent" style="cursor:pointer">Notizen-Chat des Vorgangs (Vertriebsphase, read-only)</summary>
+        <div class="pj-log">
+            {% for n in vorgang_notizen %}
+            <div><span class="who">{{ n.benutzer_name }}</span><time>{{ n.zeit.strftime('%d.%m.%y %H:%M') }}</time>
+                <br>{{ n.text }}</div>
+            {% endfor %}
+        </div>
     </details>
-    {% else %}
-    <p class="dezent">Noch keine Dokumente.</p>
-    {% endfor %}
+    {% endif %}
 </div>
 
-<h2 id="verlauf">Verlauf &amp; Kommentare</h2>
-<form method="post" action="/projektierung/projekt/{{ projekt.id }}/kommentar" class="notiz-eingabe">
-    <textarea name="text" rows="2" id="kommentarfeld" required
-              placeholder="Kommentar schreiben … (@Name erwähnt einen Benutzer)"></textarea>
-    <button class="knopf" type="submit">Kommentar speichern</button>
-</form>
-<div class="notizen-chat" style="margin-top:0.6rem">
-    {% for e in verlauf %}
-    <div class="notiz {{ 'eigene' if e.benutzer_id == benutzer.id and e.art == 'kommentar' }}">
-        <span class="notiz-kopf">
-            {{ benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else 'System' }}
-            {{ e.erstellt_am.strftime('%d.%m.%y %H:%M') }} Uhr:</span>
-        {% if e.art == 'system' %}<span class="abzeichen">System</span>{% endif %}
-        <div class="notiz-text">{{ e.text }}</div>
+<div class="pj-pane" id="subs">
+    {% for zeile in projekt_subs | default([]) %}
+    <div class="pj-term">
+        <span class="d">{{ zeile.sub.firma if zeile.sub else '?' }}</span>
+        <div style="flex:1">{{ zeile.eintrag.leistung }}
+            · <form method="post" action="/projektierung/sub/{{ zeile.eintrag.id }}/status" style="display:inline">
+                <select name="status" onchange="this.form.submit()">
+                    {% for s in ('angefragt', 'beauftragt', 'bestaetigt', 'erledigt') %}
+                        <option value="{{ s }}" {{ 'selected' if zeile.eintrag.status == s }}>{{ s | capitalize }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+            {{ '· Termin ' ~ zeile.eintrag.termin.strftime('%d.%m.%Y') if zeile.eintrag.termin }}
+            {% if zeile.eintrag.notiz %}<small style="color:var(--pj-muted)"> · {{ zeile.eintrag.notiz }}</small>{% endif %}
+        </div>
     </div>
     {% else %}
-    <p class="dezent">Noch keine Einträge.</p>
+    <div style="color:var(--pj-muted);font-size:13px">Noch keine Sub-Beauftragungen.</div>
     {% endfor %}
-</div>
-{% if vorgang_notizen | default(false) %}
-<details style="margin-top:0.6rem">
-    <summary class="dezent">Notizen-Chat des Vorgangs (Vertriebsphase, read-only)</summary>
-    <div class="notizen-chat">
-        {% for n in vorgang_notizen %}
-        <div class="notiz"><span class="notiz-kopf">{{ n.benutzer_name }}
-            {{ n.zeit.strftime('%d.%m.%y %H:%M') }} Uhr:</span>
-            <div class="notiz-text">{{ n.text }}</div></div>
-        {% endfor %}
+    <div class="pj-btnrow">
+        <button class="pj-btn" type="button" onclick="pjDialog('dlg-sub')">+ Sub beauftragen</button>
+        <button class="pj-btn" type="button" title="Collin-Bestellung aus Stückliste – ab V3"
+                onclick="alert('Collin-Bestellung aus Stückliste – ab V3')">Material bestellen</button>
     </div>
-</details>
-{% endif %}
+    <p class="dezent" style="font-size:12px">Subunternehmer-Stamm: Parametrierung → Subunternehmer.
+        Mailversand folgt in V2.</p>
+</div>
 
-<h2 id="subs">Subs &amp; Bestellungen</h2>
-{% if projekt_subs | default([]) %}
-<table class="tabelle" style="max-width:900px">
-    <thead><tr><th>Firma</th><th>Typ</th><th>Leistung</th><th>Status</th><th>Termin</th><th>Notiz</th><th></th></tr></thead>
-    <tbody>
-    {% for zeile in projekt_subs %}
-        <tr>
-            <td>{{ zeile.sub.firma if zeile.sub else '?' }}</td>
-            <td class="dezent">{{ zeile.sub.typ if zeile.sub else '' }}</td>
-            <td>{{ zeile.eintrag.leistung }}</td>
-            <td>
-                <form method="post" action="/projektierung/sub/{{ zeile.eintrag.id }}/status">
-                    <select name="status" onchange="this.form.submit()">
-                        {% for s in ('angefragt', 'beauftragt', 'bestaetigt', 'erledigt') %}
-                            <option value="{{ s }}" {{ 'selected' if zeile.eintrag.status == s }}>{{ s | capitalize }}</option>
-                        {% endfor %}
-                    </select>
-                </form>
-            </td>
-            <td>{{ zeile.eintrag.termin.strftime('%d.%m.%Y') if zeile.eintrag.termin }}</td>
-            <td class="dezent">{{ zeile.eintrag.notiz }}</td>
-            <td class="dezent">Mailversand ab V2</td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-{% else %}<p class="dezent">Noch keine Sub-Beauftragungen.</p>{% endif %}
-<details>
-    <summary class="dezent">Sub zuordnen</summary>
-    <form method="post" action="/projektierung/projekt/{{ projekt.id }}/sub" class="suchleiste">
+<div class="pj-pane" id="mails">
+    <span style="color:var(--pj-muted)">Antworten auf Projekt-Mails (Betreff
+        „{{ projekt.nummer }}") erscheinen hier – ab V2.</span>
+</div>
+
+<div class="pj-pane" id="rechnungen">
+    <span style="color:var(--pj-muted)">Rechnungsdaten, offene Posten, Mahnstufen – ab V4.</span>
+</div>
+
+<dialog class="pj-dlg" id="dlg-sub">
+    <h3>Sub beauftragen</h3>
+    <form method="post" action="/projektierung/projekt/{{ projekt.id }}/sub">
+        <label>Subunternehmer</label>
         <select name="sub_id" required>
             <option value="">– Subunternehmer –</option>
             {% for sub in subs_stamm | default([]) %}
                 <option value="{{ sub.id }}">{{ sub.firma }} ({{ sub.typ }})</option>
             {% endfor %}
         </select>
+        <label>Gewerk</label>
         <select name="gewerk_id">
             <option value="0">Projekt</option>
             {% for g in gewerke %}<option value="{{ g.id }}">{{ g.sparte }}</option>{% endfor %}
         </select>
-        <input type="text" name="leistung" size="22" placeholder="Leistung" required>
+        <label>Leistung</label>
+        <input type="text" name="leistung" required placeholder="Leistung">
+        <label>Termin</label>
         <input type="date" name="termin">
-        <input type="text" name="notiz" size="18" placeholder="Notiz">
-        <button class="knopf klein" type="submit">Zuordnen</button>
+        <label>Notiz</label>
+        <input type="text" name="notiz">
+        <div class="pj-btnrow">
+            <button class="pj-btn primary" type="submit">Zuordnen</button>
+            <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
     </form>
-    <p class="dezent">Subunternehmer-Stamm: Parametrierung → Subunternehmer. Mailversand folgt in V2.</p>
-</details>
-
-<h2 id="mails">Mail-Verlauf</h2>
-<p class="hinweis">Projekt-Mail-Verlauf ab V2 (Betreff-Anker PR-…).</p>
+</dialog>
 
 <script>
+// Reiter (Prototyp .tabs) – Wechsel ohne Neuladen; #verlauf/#dokumente aus
+// Redirect-Ankern öffnen den passenden Reiter
+function pjTab(el) {
+    document.querySelectorAll('.pj-tab').forEach(t => t.classList.remove('on'));
+    el.classList.add('on');
+    document.querySelectorAll('.pj-pane').forEach(p =>
+        p.classList.toggle('on', p.id === el.dataset.pane));
+}
+function pjTabOeffnen(id) {
+    const knopf = document.querySelector('.pj-tab[data-pane="' + id + '"]');
+    if (knopf) { pjTab(knopf); knopf.scrollIntoView({block: 'center'}); }
+}
+if (location.hash) {
+    const ziel = location.hash.slice(1);
+    if (document.querySelector('.pj-tab[data-pane="' + ziel + '"]')) pjTabOeffnen(ziel);
+}
+function pjDialog(id, terminTyp) {
+    const dlg = document.getElementById(id);
+    if (!dlg) return;
+    if (terminTyp) {
+        const auswahl = dlg.querySelector('select[name=typ]');
+        if (auswahl) auswahl.value = terminTyp;
+    }
+    dlg.showModal();
+}
+// @Erwähnungen im Verlauf blau hervorheben (Prototyp .log .m)
+document.querySelectorAll('#pj-verlauf .text').forEach(el => {
+    el.innerHTML = el.innerHTML.replace(/@([\wäöüÄÖÜß.-]+)/g,
+        '<span class="m">@$1</span>');
+});
+
 // @Erwähnung (Phase 69): „@“ im Kommentarfeld öffnet die Benutzerliste,
 // Klick (oder Enter auf dem ersten Treffer) fügt @Name ein.
 const feld = document.getElementById('kommentarfeld');

@@ -1,6 +1,5 @@
 {% extends "base.html" %}
-{% import "_sparten.html" as sparten_ui %}
-{% from "_projektierung.html" import ampel_punkt %}
+{% from "_projektierung.html" import pj_dot %}
 
 {% block titel %}Projektierung – Liste{% endblock %}
 
@@ -8,40 +7,57 @@
 
 {% block inhalt %}
 <div class="seitenkopf">
-    <h1>Projektierung – Liste</h1>
+    <div>
+        <div class="pj-eyebrow">Projektierung</div>
+        <h1>Liste</h1>
+    </div>
     <div class="aktionen">
-        <a class="knopf klein zweitrangig" href="/projektierung">Board</a>
-        <a class="knopf klein zweitrangig" href="/projektierung/termine">Termine</a>
-        <a class="knopf klein" href="/projektierung/liste?export=csv&sparte={{ sparte }}&projektleiter_id={{ projektleiter_id }}&team_id={{ team_id }}&kanal={{ kanal }}&plz={{ plz }}&q={{ q }}&storniert={{ 1 if storniert else 0 }}&sortierung={{ sortierung }}">CSV-Export</a>
+        <a class="pj-btn" href="/projektierung">Board</a>
+        <a class="pj-btn" href="/projektierung/termine">Termine</a>
+        <a class="pj-btn primary" href="/projektierung/liste?export=csv&sparte={{ sparte }}&projektleiter_id={{ projektleiter_id }}&team_id={{ team_id }}&kanal={{ kanal }}&plz={{ plz }}&q={{ q }}&storniert={{ 1 if storniert else 0 }}&sortierung={{ sortierung }}">CSV-Export</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-<form method="get" action="/projektierung/liste" class="suchleiste">
-    <select name="sparte"><option value="">Alle Sparten</option>
-        {% for s in ('WP', 'PV', 'KL', 'WB') %}
-            <option value="{{ s }}" {{ 'selected' if sparte == s }}>{{ s }}</option>
-        {% endfor %}</select>
-    <select name="projektleiter_id"><option value="0">Alle Projektleiter</option>
+<form method="get" action="/projektierung/liste" class="pj-filters">
+    {% for wert, name in [('', 'Alle'), ('WP', 'WP'), ('PV', 'PV'),
+                          ('KL', 'KL'), ('WB', 'WB')] %}
+        <label class="pj-chip {{ 'on' if sparte == wert }}">
+            <input type="radio" name="sparte" value="{{ wert }}" hidden
+                   {{ 'checked' if sparte == wert }}
+                   onchange="this.form.submit()">{{ name }}</label>
+    {% endfor %}
+    <select name="projektleiter_id" class="pj-chip {{ 'on' if projektleiter_id }}"
+            onchange="this.form.submit()">
+        <option value="0">Projektleiter ▾</option>
         {% for bid in projektleiter_werte %}
             <option value="{{ bid }}" {{ 'selected' if projektleiter_id == bid }}>{{ benutzer_map[bid].name if bid in benutzer_map else bid }}</option>
-        {% endfor %}</select>
-    <select name="team_id"><option value="0">Alle Teams</option>
+        {% endfor %}
+    </select>
+    <select name="team_id" class="pj-chip {{ 'on' if team_id }}"
+            onchange="this.form.submit()">
+        <option value="0">Team ▾</option>
         {% for t in teams %}
             <option value="{{ t.id }}" {{ 'selected' if team_id == t.id }}>{{ t.name }}</option>
-        {% endfor %}</select>
-    <input type="text" name="kanal" value="{{ kanal }}" size="10" placeholder="Kanal">
-    <input type="text" name="plz" value="{{ plz }}" size="5" placeholder="PLZ…">
-    <input type="text" name="q" value="{{ q }}" size="16" placeholder="Kunde / PR-Nr.">
-    <select name="sortierung">
+        {% endfor %}
+    </select>
+    <input type="text" name="kanal" value="{{ kanal }}" size="8" placeholder="Kanal"
+           class="pj-chip">
+    <input type="text" name="plz" value="{{ plz }}" size="5" placeholder="PLZ…"
+           class="pj-chip">
+    <input type="text" name="q" value="{{ q }}" size="14" placeholder="Kunde / PR-Nr."
+           class="pj-chip">
+    <select name="sortierung" class="pj-chip" onchange="this.form.submit()">
         {% for wert, name in [('projekt', 'PR-Nr.'), ('kunde', 'Kunde'),
                               ('phase', 'Phase'), ('termin', 'Termin'), ('wert', 'Wert')] %}
             <option value="{{ wert }}" {{ 'selected' if sortierung == wert }}>Sortierung: {{ name }}</option>
         {% endfor %}
     </select>
-    <label class="kontrollfeld"><input type="checkbox" name="storniert" value="1"
-        {{ 'checked' if storniert }}> Storniert</label>
-    <button class="knopf" type="submit">Filtern</button>
+    <label class="pj-chip {{ 'on' if storniert }}">
+        <input type="checkbox" name="storniert" value="1"
+               {{ 'checked' if storniert }} onchange="this.form.submit()">
+        Storniert</label>
+    <button class="pj-chip" type="submit">Filtern</button>
 </form>
 
 {% if zeilen %}
@@ -53,25 +69,25 @@
     {% for z in zeilen %}
         {% set angebot = angebote.get(z.gewerk.angebot_id) %}
         <tr class="{{ 'dezent' if z.gewerk.phase == 'storniert' }}">
-            <td><a href="/projektierung/projekt/{{ z.projekt.id }}">{{ z.projekt.nummer }}</a></td>
+            <td><a href="/projektierung/projekt/{{ z.projekt.id }}" class="pj-mono">{{ z.projekt.nummer }}</a></td>
             <td>{{ z.kunde.anzeige_name if z.kunde else '?' }}</td>
             <td>{{ z.projekt.ausfuehrung_ort }}</td>
-            <td>{{ sparten_ui.chip(z.gewerk.sparte) }}</td>
+            <td><span class="pj-sp {{ z.gewerk.sparte }}">{{ z.gewerk.sparte }}</span></td>
             <td>{{ phasen_namen.get(z.gewerk.phase, z.gewerk.phase) }}</td>
-            <td>{{ ampel_punkt(z.ampel) }} {{ z.ampel.erledigt }}/{{ z.ampel.gesamt }}</td>
+            <td>{{ pj_dot(z.ampel.farbe) }} <span class="pj-mono">{{ z.ampel.erledigt }}/{{ z.ampel.gesamt }}</span></td>
             <td class="dezent">{{ benutzer_map[z.projekt.projektleiter_id].name if z.projekt.projektleiter_id in benutzer_map else '–' }}</td>
             <td>{{ z.naechster_termin.strftime('%d.%m.%Y %H:%M') if z.naechster_termin else '–' }}</td>
-            <td class="rechts">{{ z.gewerk.auftragswert_aktuell | euro }}</td>
-            <td>{% if z.ueberfaellig %}<span class="abzeichen ep">{{ z.ueberfaellig }}</span>{% else %}–{% endif %}</td>
-            <td class="dezent">{{ z.projekt.kanal or '–' }}</td>
-            <td class="dezent">{{ (angebot.taifun_nummer or angebot.nummer) if angebot else '–' }}</td>
+            <td class="rechts pj-mono">{{ z.gewerk.auftragswert_aktuell | euro }}</td>
+            <td>{% if z.ueberfaellig %}<span class="pj-badge crit">{{ z.ueberfaellig }} überfällig</span>{% else %}–{% endif %}</td>
+            <td>{% if z.projekt.kanal %}<span class="pj-badge kanal">{{ z.projekt.kanal }}</span>{% else %}–{% endif %}</td>
+            <td class="dezent pj-mono">{{ (angebot.taifun_nummer or angebot.nummer) if angebot else '–' }}</td>
         </tr>
     {% endfor %}
     </tbody>
 </table>
 <table class="tabelle zusammenfassung summenblock">
     <tr><th>Summe Auftragswert ({{ zeilen | length }} Gewerke, ohne stornierte)</th>
-        <td class="rechts"><strong>{{ summe | euro }}</strong></td></tr>
+        <td class="rechts"><strong class="pj-mono">{{ summe | euro }}</strong></td></tr>
 </table>
 {% else %}
 <p class="hinweis">Keine Gewerke im Filter.</p>

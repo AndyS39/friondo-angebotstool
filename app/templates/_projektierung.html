@@ -14,3 +14,17 @@
     <span class="ampel-punkt ampel-{{ ampel.farbe }}"
           title="Planungs-Ampel: {{ ampel.erledigt }} von {{ ampel.gesamt }} Pflichtaufgaben{{ ', ' ~ ampel.ueberfaellig ~ ' überfällig' if ampel.ueberfaellig }}"></span>
 {%- endmacro %}
+
+{# v11b (Phase 73, Prototyp): Ampel-Punkt und Gewerk-Zeile im pj-Stil #}
+{% macro pj_dot(farbe) -%}
+    <span class="pj-dot {{ {'gruen': 'g', 'gelb': 'y', 'rot': 'r'}.get(farbe, 'b') }}"></span>
+{%- endmacro %}
+
+{% macro pj_gw_zeile(sparte, phase_text, ampel_farbe, rechts='', storniert=false) -%}
+    <div class="pj-gw {{ 'storniert' if storniert }}">
+        <span class="pj-sp {{ sparte }}">{{ sparte }}</span>
+        <span class="ph">{{ phase_text }}</span>
+        {{ pj_dot(ampel_farbe) }}
+        {% if rechts %}<span class="dt">{{ rechts }}</span>{% endif %}
+    </div>
+{%- endmacro %}

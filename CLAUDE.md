@@ -286,7 +286,7 @@ EP-Regel, Decimal/Cent, 19 % USt, KfW-Modul mit Testfällen gegen den HTML-Rechn
 PDF nach Referenz AN250096, Vollmacht nur bei iMSys/SpotDynamic, Anhänge-Bibliothek,
 Graph-Versand über Innendienst, Terminal-Server-Betrieb.
 
-## Neu in v10 – Projektierung V1 (abgestimmt 20.09.2026)
+## Neu in v11 – Projektierung V1 (abgestimmt 22.09.2026)
 
 - **Projektierung V1:** Projekt = Bauvorhaben am v10-Vorgang (höchstens ein
   offenes Projekt je Vorgang, Nummer PR-JJNNNN) mit Gewerken je Sparte WP/PV/KL/WB; jedes Gewerk hat eigene Phase
@@ -320,6 +320,9 @@ Graph-Versand über Innendienst, Terminal-Server-Betrieb.
 - Geplant: V2 Feinplanungs-Erfassung + Sub-Mails + Kalender, V3 Montage-
   Formulare + Collin-Bestellung (UGL/IDS), V4 Rechnungen/OP/Mahnwesen +
   Heizreport-/SpotmyEnergy-Anbindung.
+- Oberfläche der Projektierung folgt der Design-Vorlage
+  `docs/projektierung-prototyp.html` (CSS-Präfix `pj-`); spätere Änderungen am
+  Modul-Layout zuerst im Prototyp, dann im Tool.
 
 ## Neu in v12 – Lead-Management V1 Demo (abgestimmt 22.09.2026)
 

@@ -3,31 +3,47 @@
 {% block titel %}Meine Einsätze – Montage{% endblock %}
 
 {% block inhalt %}
-<h1>Meine Einsätze</h1>
-{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+{% set ich = request.state.benutzer %}
+<div class="pj-mob">
+    <div class="pj-eyebrow">Rolle Montage{{ ' · ' ~ ich.name if ich }}</div>
+    <h2>Meine Einsätze</h2>
+    {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-{% macro einsatz_karten(liste) %}
-{% if liste %}
-<div class="einsatz-liste">
+    {% macro einsatz_karten(liste) %}
     {% for t in liste %}
         {% set projekt = projekte.get(t.projekt_id) %}
         {% set gewerk = gewerke.get(t.gewerk_id) %}
         {% set kunde = kunden.get(projekt.kunde_id) if projekt else none %}
-        <a class="einsatz-karte" href="/montage/einsatz/{{ t.id }}">
-            <strong>{{ t.beginn.strftime('%a %d.%m. %H:%M') }} Uhr
-                · {{ gewerk.sparte if gewerk else t.typ }}</strong>
-            <span>{{ kunde.anzeige_name if kunde else '?' }}</span>
-            <span class="dezent">{{ projekt.ausfuehrung_ort if projekt else '' }}
-                · {{ projekt.nummer if projekt else '' }}
-                {{ '· ' ~ t.notiz if t.notiz }}</span>
-        </a>
+        <div class="pj-einsatz">
+            <div class="d">{{ t.beginn.strftime('%a %d.%m.') }}{{ ' · ' ~ t.beginn.strftime('%H:%M') }}</div>
+            <b>{{ kunde.anzeige_name if kunde else '?' }} · {{ projekt.ausfuehrung_ort if projekt else '?' }}</b><br>
+            {% if gewerk %}<span class="pj-sp {{ gewerk.sparte }}">{{ gewerk.sparte }}</span>{% endif %}
+            {{ t.typ | capitalize if not gewerk }}
+            {% if t.notiz %} {{ t.notiz }}{% endif %}
+            <div class="pj-btnrow">
+                <a class="pj-btn primary" href="/montage/einsatz/{{ t.id }}">Steckbrief</a>
+                <a class="pj-btn" href="/montage/einsatz/{{ t.id }}#foto">📷 Foto</a>
+                {% if gewerk and gewerk.phase in ('feinplanung', 'feinplanung_abgeschlossen', 'montage_geplant') %}
+                <form method="post" action="/montage/einsatz/{{ t.id }}/phase" style="display:inline">
+                    <input type="hidden" name="aktion" value="gestartet">
+                    <button class="pj-btn" type="submit">Montage gestartet</button>
+                </form>
+                {% elif gewerk and gewerk.phase == 'in_ausfuehrung' %}
+                <a class="pj-btn" href="/montage/einsatz/{{ t.id }}#status">Montage fertig</a>
+                {% endif %}
+            </div>
+        </div>
     {% endfor %}
-</div>
-{% else %}<p class="dezent">Keine Einsätze.</p>{% endif %}
-{% endmacro %}
+    {% endmacro %}
 
-<h2>Heute ({{ heute_liste | length }})</h2>
-{{ einsatz_karten(heute_liste) }}
-<h2>Diese Woche ({{ woche_liste | length }})</h2>
-{{ einsatz_karten(woche_liste) }}
+    <h3 style="font-size:13px;margin:10px 0 0">Heute · {{ heute_liste | length }}</h3>
+    {{ einsatz_karten(heute_liste) }}
+    {% if not heute_liste %}<p class="dezent" style="font-size:12px">Keine Einsätze heute.</p>{% endif %}
+    <h3 style="font-size:13px;margin:10px 0 0">Diese Woche · {{ woche_liste | length }}</h3>
+    {{ einsatz_karten(woche_liste) }}
+    {% if not woche_liste %}<p class="dezent" style="font-size:12px">Keine Einsätze diese Woche.</p>{% endif %}
+
+    <div class="pj-note">Keine Preise, keine anderen Projekte. Formulare
+        (Montagebericht, Inbetriebnahme, Abnahme mit Unterschrift) folgen in V3.</div>
+</div>
 {% endblock %}

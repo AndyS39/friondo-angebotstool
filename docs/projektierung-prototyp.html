@@ -1,0 +1,442 @@
+<title>Projektierung Prototyp</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+:root{
+  --bg:#f3f5f4;--surface:#ffffff;--surface2:#e9edeb;--line:#d5dcd9;--text:#17211d;--muted:#5d6b66;
+  --accent:#0f6e56;--accent-soft:#d9efe7;--ok:#1f9d55;--warn:#d98b0a;--crit:#cf3b2c;--info:#2d6bd6;
+  --wp:#0f6e56;--pv:#c47a12;--kl:#2d6bd6;--wb:#7a3fbf;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121816;--surface:#1b2421;--surface2:#243029;--line:#33413b;--text:#e8eeeb;--muted:#9aaaa3;
+  --accent:#4fc3a1;--accent-soft:#1d3a31;--ok:#4fc37c;--warn:#f0a83a;--crit:#f06a5c;--info:#6f9cf0;
+  --wp:#4fc3a1;--pv:#f0a83a;--kl:#6f9cf0;--wb:#b48be8;}}
+:root[data-theme="dark"]{
+  --bg:#121816;--surface:#1b2421;--surface2:#243029;--line:#33413b;--text:#e8eeeb;--muted:#9aaaa3;
+  --accent:#4fc3a1;--accent-soft:#1d3a31;--ok:#4fc37c;--warn:#f0a83a;--crit:#f06a5c;--info:#6f9cf0;
+  --wp:#4fc3a1;--pv:#f0a83a;--kl:#6f9cf0;--wb:#b48be8;}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:14px;line-height:1.45;padding:0 0 76px}
+h1,h2,h3{margin:0;text-wrap:balance}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;align-items:center;gap:10px}
+.top .brand{font-weight:700;color:var(--accent);letter-spacing:.02em}
+.top .sub{color:var(--muted);font-size:12px}
+.top .proto{margin-left:auto;font-size:11px;background:var(--warn);color:#fff;padding:2px 8px;border-radius:99px;font-weight:600}
+.bell{position:relative;width:32px;height:32px;border:1px solid var(--line);border-radius:8px;background:var(--surface);display:grid;place-items:center;cursor:pointer}
+.bell b{position:absolute;top:-6px;right:-6px;background:var(--crit);color:#fff;font-size:10px;border-radius:99px;padding:1px 5px}
+.wrap{padding:14px 16px;max-width:1100px;margin:0 auto}
+.view{display:none}.view.active{display:block}
+.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:10px 0 14px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.tile .n{font-size:22px;font-weight:700;line-height:1.1}
+.tile .l{font-size:12px;color:var(--muted)}
+.tile .s{font-size:11px;color:var(--muted);margin-top:2px}
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:4px 10px;font-size:12px;cursor:pointer}
+.chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+.board{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;scroll-snap-type:x mandatory}
+.col{flex:0 0 280px;scroll-snap-align:start;background:var(--surface2);border-radius:12px;padding:10px;min-height:200px}
+.col h3{font-size:13px;display:flex;justify-content:space-between;margin-bottom:8px}
+.col h3 span{color:var(--muted);font-weight:500}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.card:hover{border-color:var(--accent)}
+.card .hd{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.card .pr{font-size:11px;color:var(--muted)}
+.card .name{font-weight:600}
+.card .meta{font-size:12px;color:var(--muted);margin:2px 0 6px}
+.gw{display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 6px;border-radius:6px;background:var(--surface2);margin-top:4px}
+.sp{font-weight:700;font-size:11px;padding:1px 6px;border-radius:4px;color:#fff}
+.sp.WP{background:var(--wp)}.sp.PV{background:var(--pv)}.sp.KL{background:var(--kl)}.sp.WB{background:var(--wb)}
+.dot{width:9px;height:9px;border-radius:99px;flex:0 0 9px}
+.dot.g{background:var(--ok)}.dot.y{background:var(--warn)}.dot.r{background:var(--crit)}
+.gw .ph{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gw .dt{color:var(--muted);white-space:nowrap}
+.card .ft{display:flex;justify-content:space-between;margin-top:6px;font-size:12px}
+.badge{font-size:11px;padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.badge.crit{background:var(--crit);color:#fff;border-color:var(--crit)}
+.badge.kanal{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+/* Akte */
+.akte-head{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
+.akte-head .row{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;margin-top:6px}
+.akte-head .row div span{color:var(--muted)}
+.btnrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;color:var(--text);font-family:inherit}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+.btn.danger{color:var(--crit);border-color:var(--crit)}
+.btn:focus-visible,.card:focus-visible,.chip:focus-visible{outline:2px solid var(--info);outline-offset:2px}
+.gewerke{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:12px}
+.gcol{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;border-top:4px solid var(--line)}
+.gcol.WP{border-top-color:var(--wp)}.gcol.PV{border-top-color:var(--pv)}
+.gcol h3{display:flex;align-items:center;gap:8px;font-size:15px}
+.stepper{display:flex;gap:3px;margin:10px 0 6px}
+.stepper i{flex:1;height:6px;border-radius:3px;background:var(--surface2)}
+.stepper i.done{background:var(--accent)}.stepper i.cur{background:var(--accent);opacity:.55}
+.steplbl{font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+.ampel{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px}
+.bar{flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ok)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13px;margin:8px 0}
+.kv span{color:var(--muted)}
+.paket{margin-top:10px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.paket summary{padding:7px 10px;font-weight:600;font-size:13px;cursor:pointer;background:var(--surface2);display:flex;justify-content:space-between;list-style:none}
+.paket summary::-webkit-details-marker{display:none}
+.paket summary .cnt{color:var(--muted);font-weight:500}
+.task{display:flex;gap:8px;padding:7px 10px;border-top:1px solid var(--line);align-items:flex-start;font-size:13px}
+.task input{margin-top:3px;accent-color:var(--accent)}
+.task .t{flex:1}.task .t small{display:block;color:var(--muted);font-size:11px}
+.task.done .t{text-decoration:line-through;color:var(--muted)}
+.task .due{font-size:11px;white-space:nowrap;padding:1px 6px;border-radius:4px;background:var(--surface2)}
+.task .due.over{background:var(--crit);color:#fff}.task .due.wait{background:var(--info);color:#fff}
+.term{display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:13px}
+.term .d{font-weight:600;min-width:64px}
+.tabs{display:flex;gap:4px;margin-top:14px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;color:var(--muted)}
+.tab.on{border-bottom-color:var(--accent);color:var(--accent);font-weight:600}
+.pane{display:none;background:var(--surface);border:1px solid var(--line);border-top:0;border-radius:0 0 12px 12px;padding:12px}
+.pane.on{display:block}
+.tree div{padding:4px 0;font-size:13px}.tree .f{padding-left:18px;color:var(--muted)}
+.log{font-size:13px}.log div{padding:6px 0;border-bottom:1px solid var(--line)}
+.log .who{font-weight:600}.log .sys{color:var(--muted);font-style:italic}.log .m{color:var(--accent);font-weight:600}
+.log time{color:var(--muted);font-size:11px;margin-left:6px}
+textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:inherit;font-size:13px;background:var(--surface2);color:var(--text);margin-top:8px}
+/* Meine Aufgaben */
+.grp{margin-top:12px}
+.grp h3{font-size:13px;margin-bottom:4px}
+.grp h3.over{color:var(--crit)}
+.grp .task{background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-bottom:6px}
+/* Montage */
+.mob{max-width:420px;margin:0 auto;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+.mob .einsatz{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px}
+.mob .einsatz .d{font-weight:700;color:var(--accent)}
+.note{background:var(--accent-soft);color:var(--accent);border-radius:8px;padding:8px 10px;font-size:12px;margin:8px 0}
+.nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--line);display:flex;padding:6px 0 calc(6px + env(safe-area-inset-bottom,0px));z-index:5}
+.nav button{flex:1;border:0;background:none;font-family:inherit;font-size:11px;color:var(--muted);cursor:pointer;padding:4px 0}
+.nav button b{display:block;font-size:16px;font-weight:500}
+.nav button.on{color:var(--accent);font-weight:600}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:8px 14px;border-radius:99px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+.toast.show{opacity:1}
+.dialog{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;place-items:center;z-index:8;padding:16px}
+.dialog.on{display:grid}
+.dialog .box{background:var(--surface);border-radius:14px;padding:16px;max-width:420px;width:100%}
+.dialog .box h3{margin-bottom:8px}
+.dialog label{display:block;font-size:13px;margin:8px 0 3px;color:var(--muted)}
+.dialog select,.dialog input[type=text]{width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface2);color:var(--text);font-family:inherit}
+.dialog .opt{display:flex;gap:8px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:8px;margin-top:6px;font-size:13px}
+.dialog .opt.sel{border-color:var(--accent);background:var(--accent-soft)}
+.portal{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.pcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
+.pcard h3{font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pcard.demo{border-color:var(--accent);cursor:pointer}
+.dbadge{font-size:11px;font-weight:600;background:var(--warn);color:#fff;padding:2px 8px;border-radius:99px}
+.pk{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0}
+.pk.five{grid-template-columns:repeat(auto-fit,minmax(90px,1fr))}
+.pk div{background:var(--surface2);border-radius:8px;padding:8px;font-size:11px;color:var(--muted);line-height:1.2}
+.pk div b{display:block;font-size:20px;color:var(--text);font-weight:700}
+.plinks{font-size:12px;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+
+<div class="top">
+  <span class="brand">FRIONDO</span><span class="sub">Tool · Admin</span>
+  <span class="proto">Prototyp · Beispieldaten</span>
+  <div class="bell" title="Benachrichtigungen" onclick="toast('3 neue: Zuweisung, @Erwähnung, Fälligkeit')">🔔<b>3</b></div>
+</div>
+
+<div class="wrap">
+
+<!-- ===== STARTPORTAL ===== -->
+<section class="view active" id="v-start">
+  <div class="eyebrow">Startportal · angemeldet als Admin</div>
+  <h2 style="font-size:20px;margin:4px 0 12px">Friondo-Tool</h2>
+  <div class="portal">
+    <div class="pcard"><h3>Lead-Management</h3><div class="pk"><div><b>12</b>Offene Leads VOT</div><div><b>7</b>Offene Erfassungen</div><div><b>3</b>Individuell offen</div></div><div class="plinks">Leads VOT · Erfassungen</div></div>
+    <div class="pcard"><h3>Angebotstool</h3><div class="pk"><div><b>38</b>Versendete Angebote</div><div><b>5</b>Wiedervorlage fällig</div><div><b>4</b>In TAIFUN zu schreiben</div></div><div class="plinks">Angebote · Statistik</div></div>
+    <div class="pcard demo" onclick="show('board')" tabindex="0"><h3>Projektierung <span class="dbadge">Demo · Coming soon</span></h3><div class="pk five"><div><b>4</b>Aufträge in Feinplanung</div><div><b>2</b>Feinplanung abgeschl.</div><div><b>3</b>Montage geplant</div><div><b>1</b>In Ausführung</div><div><b>2</b>Abnahme offen</div></div><div class="plinks">Nur für Admins sichtbar · andere Rollen sehen Null-Kacheln und „Das Modul befindet sich im Aufbau."</div></div>
+  </div>
+  <div class="note">Tippe auf die Projektierungs-Karte, um ins Modul zu gehen. Menü-Eintrag, Routen und Button „Angebot → Projekt" sind im Demo-Modus server-seitig auf Admin beschränkt.</div>
+</section>
+
+<!-- ===== BOARD ===== -->
+<section class="view" id="v-board">
+  <div class="eyebrow">Startseite · Bereich Projektierung</div>
+  <div class="tiles" id="tiles"></div>
+  <div class="filters">
+    <span class="chip on" data-f="alle">Alle</span><span class="chip" data-f="WP">WP</span><span class="chip" data-f="PV">PV</span><span class="chip" data-f="WB">WB</span>
+    <span class="chip" onclick="toast('Filter Projektleiter (Demo)')">Projektleiter ▾</span><span class="chip" onclick="toast('Filter Team (Demo)')">Team ▾</span>
+    <span class="chip" onclick="dlg('d-neu')">+ Angebot → Projekt</span>
+  </div>
+  <div class="board" id="board"></div>
+  <div class="note">Karte = Projekt. Die Spalte richtet sich nach dem Gewerk, das am weitesten zurückliegt; die Chips zeigen jedes Gewerk einzeln. Tippe auf eine Karte für die Akte.</div>
+</section>
+
+<!-- ===== AKTE ===== -->
+<section class="view" id="v-akte">
+  <button class="btn" onclick="show('board')">← Board</button>
+  <div class="akte-head" style="margin-top:10px">
+    <div class="eyebrow">Projektakte</div>
+    <h2 style="font-size:20px"><span class="mono">PR-260041</span> · Müller, Duisburg-Rheinhausen</h2>
+    <div class="row">
+      <div><span>Ausführung</span><br>Rheinhauser Str. 112, 47228 Duisburg</div>
+      <div><span>Rechnung</span><br>identisch</div>
+      <div><span>Kontakt</span><br>0203 44 12 87 · h.mueller@web.de</div>
+      <div><span>Vertrieb</span><br>Simon K. · <span class="badge kanal">Enni</span></div>
+      <div><span>Projektleiter</span><br>Thorsten B.</div>
+      <div><span>Gesamt-Auftragswert</span><br><b class="mono">41.890 €</b></div>
+      <div><span>Projektstatus</span><br>Feinplanung (PV)</div>
+    </div>
+    <div class="btnrow">
+      <button class="btn" onclick="toast('Kommentar-Feld unten im Reiter Verlauf')">💬 Kommentar</button>
+      <button class="btn" onclick="toast('Upload-Dialog (Demo)')">⬆ Dokument</button>
+      <button class="btn" onclick="toast('Termin-Dialog (Demo)')">📅 Termin</button>
+    </div>
+  </div>
+
+  <div class="gewerke">
+    <!-- WP -->
+    <div class="gcol WP">
+      <h3><span class="sp WP">WP</span> Wärmepumpe <span class="badge" style="margin-left:auto">Bosch CS5800i 7 kW</span></h3>
+      <div class="stepper"><i class="done"></i><i class="done"></i><i class="cur"></i><i></i><i></i></div>
+      <div class="steplbl"><span>Phase: <b>Montage geplant</b></span><span>seit 12.09.</span></div>
+      <div class="ampel"><span class="dot g"></span><div class="bar"><i id="bar-wp" style="width:83%"></i></div><span id="cnt-wp">15 / 18 Pflicht</span></div>
+      <div class="kv">
+        <span>Auftrag</span><div>AN-C-260318.2 · <span class="mono">29.990 €</span> <small style="color:var(--muted)">(urspr. 28.450 €)</small></div>
+        <span>Feinplaner</span><div>Kai R. · Termin war 04.09.</div>
+        <span>Elektroplaner</span><div>Deniz A.</div>
+        <span>Heizlast</span><div><span class="mono">6,4 kW</span> · 04.09. · <a href="#" onclick="toast('Heizreport-PDF (Demo)');return false">Heizreport-PDF</a></div>
+        <span>Montage</span><div><b>Mo 13.10. – Mi 15.10.</b> · SHK-Team 1 + Elektro-Team 2 · Kunde bestätigt ✔</div>
+      </div>
+      <details class="paket" open><summary>Elektroplanung WP <span class="cnt">4 / 5</span></summary>
+        <div class="task done"><input type="checkbox" checked><div class="t">Zählerschrank/Unterverteilung bewertet<small>Deniz A. · erledigt 08.09.</small></div></div>
+        <div class="task done"><input type="checkbox" checked><div class="t">Leitungsweg und Querschnitt festgelegt<small>Deniz A.</small></div></div>
+        <div class="task done"><input type="checkbox" checked><div class="t">Netzbetreiber-Anmeldung §14a eingereicht<small>Deniz A. · 09.09.</small></div></div>
+        <div class="task"><input type="checkbox" onchange="tick(this,'wp')"><div class="t">Zustimmung Netzbetreiber liegt vor<small>Deniz A. · wartet seit 11 Tagen</small></div><span class="due wait">wartet</span></div>
+        <div class="task done"><input type="checkbox" checked><div class="t">Elektro-Team 2 eingeplant<small>Deniz A.</small></div></div>
+      </details>
+      <details class="paket"><summary>SpotDynamic / iMSys <span class="cnt">2 / 7</span></summary>
+        <div class="task done"><input type="checkbox" checked><div class="t">Tarifvertrag SpotDynamic unterschrieben<small>Thorsten B.</small></div></div>
+        <div class="task done"><input type="checkbox" checked><div class="t">Smart-Meter-Bestellung beim Partner ausgelöst<small>Thorsten B.</small></div></div>
+        <div class="task"><input type="checkbox" onchange="tick(this,'wp')"><div class="t">Zählerwechsel-Termin abgestimmt<small>Thorsten B.</small></div><span class="due">06.10.</span></div>
+        <div class="task"><input type="checkbox" disabled><div class="t">iMSys eingebaut, Zählernummer eingetragen<small>Montage · am Montagetag</small></div><span class="due">13.10.</span></div>
+        <div class="task"><input type="checkbox" disabled><div class="t">HEMS eingerichtet und mit WP verbunden<small>Montage</small></div><span class="due">15.10.</span></div>
+        <div class="task"><input type="checkbox" disabled><div class="t">Tarifstart bestätigt<small>Thorsten B.</small></div><span class="due">29.10.</span></div>
+        <div class="task"><input type="checkbox" disabled><div class="t">Kunde in App eingewiesen<small>Montage · optional</small></div><span class="due">15.10.</span></div>
+      </details>
+      <details class="paket"><summary>Fundament GaLa-Bau <span class="cnt">3 / 4</span></summary>
+        <div class="task done"><input type="checkbox" checked><div class="t">Fundamentmaße festgelegt (CS5800i: 120 × 60 cm)</div></div>
+        <div class="task done"><input type="checkbox" checked><div class="t">GaLa Wessels beauftragt – Mail mit 4 Fotos „Außengerät"<small>ab V2 automatisch</small></div></div>
+        <div class="task done"><input type="checkbox" checked><div class="t">Fundamenttermin bestätigt: 02.10.</div></div>
+        <div class="task"><input type="checkbox" onchange="tick(this,'wp')"><div class="t">Fundament fertig, Foto abgelegt<small>Thorsten B.</small></div><span class="due">10.10.</span></div>
+      </details>
+      <details class="paket"><summary>Öltank-Entsorgung <span class="cnt">2 / 3</span></summary>
+        <div class="task done"><input type="checkbox" checked><div class="t">Entsorger beauftragt – 4.000-l-Kunststofftank, Mauer muss weg<small>Fotos aus „03 Fotos/Öltank"</small></div></div>
+        <div class="task done"><input type="checkbox" checked><div class="t">Termin vor Montage bestätigt: 09.10.</div></div>
+        <div class="task"><input type="checkbox" disabled><div class="t">Entsorgungsnachweis abgelegt</div><span class="due">18.10.</span></div>
+      </details>
+      <details class="paket"><summary>Beschaffung · Förderung · Montagevorbereitung <span class="cnt">alle erledigt</span></summary>
+        <div class="task done"><input type="checkbox" checked><div class="t">Material bei Collin bestellt – Liefertermin 08.10. bestätigt<small>ab V3 per UGL-Datei</small></div></div>
+        <div class="task done"><input type="checkbox" checked><div class="t">BzA an Kunden · Förderantrag gestellt (Nachweis liegt vor)</div></div>
+        <div class="task done"><input type="checkbox" checked><div class="t">Montagetermin mit Kunde bestätigt · Teams zugewiesen · Steckbrief geprüft</div></div>
+      </details>
+      <div class="btnrow">
+        <button class="btn" onclick="toast('Aufgabe hinzufügen (Demo)')">+ Aufgabe</button>
+        <button class="btn" onclick="toast('Paket aktivieren: Lift/Kran, Dach/Statik … (Demo)')">+ Paket</button>
+        <button class="btn primary" onclick="dlg('d-phase')">Phase ändern</button>
+        <button class="btn danger" onclick="dlg('d-storno')">Stornieren</button>
+      </div>
+    </div>
+
+    <!-- PV -->
+    <div class="gcol PV">
+      <h3><span class="sp PV">PV</span> Photovoltaik <span class="badge" style="margin-left:auto">9,8 kWp + 10 kWh Speicher</span></h3>
+      <div class="stepper"><i class="cur"></i><i></i><i></i><i></i><i></i></div>
+      <div class="steplbl"><span>Phase: <b>Feinplanung</b></span><span>seit 16.09.</span></div>
+      <div class="ampel"><span class="dot r"></span><div class="bar"><i id="bar-pv" style="width:17%;background:var(--crit)"></i></div><span id="cnt-pv">1 / 6 Pflicht · 1 überfällig</span></div>
+      <div class="kv">
+        <span>Auftrag</span><div>TAIFUN 26-0877 · <span class="mono">11.900 €</span> <span class="badge">TAIFUN</span></div>
+        <span>Feinplaner</span><div>Kai R. · <b>Termin fehlt</b></div>
+        <span>Elektroplaner</span><div>Deniz A.</div>
+        <span>Montage</span><div>– noch nicht terminiert</div>
+      </div>
+      <details class="paket" open><summary>PV Standard <span class="cnt">1 / 6</span></summary>
+        <div class="task"><input type="checkbox" onchange="tick(this,'pv')"><div class="t">Feinplanung Dach / Strang / Speicherort<small>Kai R.</small></div><span class="due over">18.09. überfällig</span></div>
+        <div class="task"><input type="checkbox" disabled><div class="t">Netzanschlussbegehren beim Netzbetreiber<small>Deniz A. · nach Feinplanung</small></div></div>
+        <div class="task"><input type="checkbox" disabled><div class="t">Gerüst bestellen<small>14 Tage vor Montage</small></div></div>
+        <div class="task"><input type="checkbox" disabled><div class="t">Material bestellen</div></div>
+        <div class="task"><input type="checkbox" disabled><div class="t">Inbetriebnahme + Fertigmeldung Netzbetreiber</div></div>
+        <div class="task"><input type="checkbox" disabled><div class="t">Marktstammdatenregister eingetragen</div></div>
+      </details>
+      <details class="paket"><summary>Auftragseingang <span class="cnt">3 / 3</span></summary>
+        <div class="task done"><input type="checkbox" checked><div class="t">Auftragsunterlagen geprüft</div></div>
+        <div class="task done"><input type="checkbox" checked><div class="t">Kunde kontaktiert, Ablauf erklärt</div></div>
+        <div class="task done"><input type="checkbox" checked><div class="t">Auftrag in TAIFUN angelegt</div></div>
+      </details>
+      <div class="btnrow">
+        <button class="btn" onclick="toast('Aufgabe hinzufügen (Demo)')">+ Aufgabe</button>
+        <button class="btn" onclick="toast('Termin Feinplanung anlegen (Demo)')">📅 Feinplanungstermin</button>
+        <button class="btn primary" onclick="dlg('d-phase')">Phase ändern</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <span class="tab on" onclick="tab(this,'p-dok')">Dokumente</span>
+    <span class="tab" onclick="tab(this,'p-log')">Verlauf & Kommentare</span>
+    <span class="tab" onclick="tab(this,'p-sub')">Subs & Bestellungen</span>
+    <span class="tab" onclick="tab(this,'p-mail')">Mail-Verlauf</span>
+    <span class="tab" onclick="tab(this,'p-re')">Rechnungen</span>
+  </div>
+  <div class="pane on" id="p-dok"><div class="tree">
+    <div>📁 01 Angebot & Erfassung</div><div class="f">AN-C-260318.2.pdf · Erfassungsprotokoll_WP.pdf · TAIFUN_26-0877.pdf</div>
+    <div>📁 02 Feinplanung & Heizlast</div><div class="f">Heizreport_Mueller.pdf · Feinplanung_WP_040926.pdf</div>
+    <div>📁 03 Fotos / WP</div><div class="f">Außengerät (4) · Heizungsraum (6) · Öltank (3) · Zählerschrank (2) · Alte Anlage (5)</div>
+    <div>📁 03 Fotos / PV</div><div class="f">– leer, Feinplanung steht aus –</div>
+    <div>📁 04 Bestellungen & Subs</div><div class="f">Collin_Bestellung_UGL.txt · Auftrag_GaLa_Wessels.pdf · Auftrag_Entsorgung.pdf</div>
+    <div>📁 05 Montage & Protokolle</div><div class="f">– ab Montage –</div>
+    <div>📁 06 Rechnungen</div><div class="f">Anzahlung_26-1104.pdf</div>
+  </div></div>
+  <div class="pane" id="p-log"><div class="log">
+    <div><span class="who">Deniz A.</span><time>heute 09:12</time><br>Netzbetreiber hat zurückgefragt: Leistung der Außeneinheit? Habe 7 kW gemeldet. <span class="m">@Thorsten</span> bitte im Blick behalten.</div>
+    <div><span class="sys">System · Phase WP: Feinplanung abgeschlossen → Montage geplant (Thorsten B.)</span><time>12.09. 14:40</time></div>
+    <div><span class="who">Simon K. (Vertrieb)</span><time>11.09.</time><br>Kunde fragt, ob Öltank-Ausbau wirklich vor der Montage passiert – bitte kurz bestätigen.</div>
+    <div><span class="who">Thorsten B.</span><time>11.09.</time><br><span class="m">@Simon</span> ja, 09.10., Kunde bekommt die Terminbestätigung.</div>
+    <div><span class="sys">System · Auftragswert WP geändert 28.450 € → 29.990 € (Version .2: zusätzliche Leitungslänge)</span><time>10.09.</time></div>
+    <div><span class="sys">System · Gewerk PV aus TAIFUN 26-0877 hinzugefügt (Anna M., Innendienst)</span><time>16.09.</time></div>
+    <div><span class="sys">System · Projekt angelegt aus AN-C-260318 (Anna M.)</span><time>29.08.</time></div>
+  </div><textarea rows="2" placeholder="Kommentar … @Name erwähnen"></textarea><div class="btnrow"><button class="btn primary" onclick="toast('Kommentar gespeichert (Demo)')">Senden</button></div></div>
+  <div class="pane" id="p-sub">
+    <div class="term"><span class="d">GaLa Wessels</span><div>Fundament 120 × 60 · <b>beauftragt</b> · Termin 02.10. · Mail 15.09. mit 4 Fotos</div></div>
+    <div class="term"><span class="d">Tankschutz Rhein</span><div>Öltank 4.000 l Kunststoff, Mauer entfernen · <b>bestätigt</b> · 09.10.</div></div>
+    <div class="term"><span class="d">Collin KG</span><div>Materialbestellung WP · <b>Liefertermin 08.10.</b> · UGL A2609150.001</div></div>
+    <div class="btnrow"><button class="btn" onclick="toast('Sub beauftragen: Vorlage + Fotos + Steckbrief (ab V2)')">+ Sub beauftragen</button><button class="btn" onclick="toast('Collin-Bestellung aus Stückliste (ab V3)')">Material bestellen</button></div>
+  </div>
+  <div class="pane" id="p-mail"><span style="color:var(--muted)">Antworten auf Projekt-Mails (Betreff „PR-260041") erscheinen hier – ab V2.</span></div>
+  <div class="pane" id="p-re"><span style="color:var(--muted)">Rechnungsdaten, offene Posten, Mahnstufen – ab V4. Anzahlung 26-1104 über 8.000 € bezahlt 05.09.</span></div>
+</section>
+
+<!-- ===== MEINE AUFGABEN ===== -->
+<section class="view" id="v-aufgaben">
+  <div class="eyebrow">Angemeldet als Thorsten B. · Projektierung</div>
+  <h2 style="font-size:20px;margin-top:4px">Meine Aufgaben</h2>
+  <div class="grp"><h3 class="over">Überfällig · 2</h3>
+    <div class="task"><input type="checkbox" onchange="done(this)"><div class="t">Zählerwechsel-Termin abstimmen (SpotDynamic)<small>PR-260039 Yilmaz · WP</small></div><span class="due over">16.09.</span></div>
+    <div class="task"><input type="checkbox" onchange="done(this)"><div class="t">Abweichungen zum Angebot prüfen, ggf. Nachtrag<small>PR-260043 Schröder · WP</small></div><span class="due over">18.09.</span></div>
+  </div>
+  <div class="grp"><h3>Heute · 3</h3>
+    <div class="task"><input type="checkbox" onchange="done(this)"><div class="t">Steckbrief für Montage prüfen<small>PR-260035 Kowalski · WP · Montage Mo 22.09.</small></div><span class="due">heute</span></div>
+    <div class="task"><input type="checkbox" onchange="done(this)"><div class="t">Kunde kontaktieren, Feinplanungstermin abstimmen<small>PR-260046 Becker · WP + WB</small></div><span class="due">heute</span></div>
+    <div class="task"><input type="checkbox" onchange="done(this)"><div class="t">Liefertermin bestätigt?<small>PR-260041 Müller · WP</small></div><span class="due">heute</span></div>
+  </div>
+  <div class="grp"><h3>Diese Woche · 4</h3>
+    <div class="task"><input type="checkbox" onchange="done(this)"><div class="t">Fundament fertig, Foto abgelegt<small>PR-260041 Müller · WP</small></div><span class="due">10.10.</span></div>
+    <div class="task"><input type="checkbox" onchange="done(this)"><div class="t">Restarbeiten: Kondensatablauf nacharbeiten<small>PR-260028 Hoffmann · WP · aus Freigabe</small></div><span class="due">25.09.</span></div>
+    <div class="task"><input type="checkbox" onchange="done(this)"><div class="t">Lift/Kran bestellen<small>PR-260039 Yilmaz · WP</small></div><span class="due">26.09.</span></div>
+    <div class="task"><input type="checkbox" onchange="done(this)"><div class="t">Gerät/Paket final festgelegt<small>PR-260043 Schröder · WP</small></div><span class="due">26.09.</span></div>
+  </div>
+  <div class="grp"><h3>Neu zugewiesen · 1</h3>
+    <div class="task"><input type="checkbox" onchange="done(this)"><div class="t">Auftragsunterlagen prüfen<small>PR-260047 Neumann · PV · von Anna M. heute 08:30</small></div><span class="due">22.09.</span></div>
+  </div>
+</section>
+
+<!-- ===== MONTAGE ===== -->
+<section class="view" id="v-montage">
+  <div class="eyebrow">Rolle Montage · reduzierte mobile Sicht</div>
+  <div class="mob">
+    <div class="eyebrow">SHK-Team 1 · Marco</div>
+    <h2 style="font-size:18px">Meine Einsätze</h2>
+    <div class="einsatz">
+      <div class="d">Mo 22.09. – Di 23.09.</div>
+      <b>Kowalski · Duisburg-Homberg</b><br><span class="sp WP">WP</span> Bosch CS5800i 5 kW · mit Elektro-Team 2
+      <div class="btnrow"><button class="btn primary" onclick="toast('Steckbrief: Kunde, Adresse, Gerät, Besonderheiten, Fotos, offene Aufgaben Montage')">Steckbrief</button><button class="btn" onclick="toast('Fotos in Ordner (Demo)')">📷 Foto</button><button class="btn" onclick="toast('Gewerk → In Ausführung, Verlaufseintrag')">Montage gestartet</button></div>
+    </div>
+    <div class="einsatz">
+      <div class="d">Mo 13.10. – Mi 15.10.</div>
+      <b>Müller · Duisburg-Rheinhausen</b><br><span class="sp WP">WP</span> Bosch CS5800i 7 kW · Öltank raus am 09.10. · Fundament fertig 10.10.
+      <div class="btnrow"><button class="btn primary" onclick="toast('Steckbrief (Demo)')">Steckbrief</button></div>
+    </div>
+    <div class="note">Keine Preise, keine anderen Projekte. Formulare (Montagebericht, Inbetriebnahme, Abnahme mit Unterschrift) folgen in V3.</div>
+  </div>
+</section>
+
+</div>
+
+<nav class="nav">
+  <button class="on" data-v="start" onclick="show('start')"><b>⌂</b>Start</button>
+  <button data-v="board" onclick="show('board')"><b>▦</b>Board</button>
+  <button data-v="aufgaben" onclick="show('aufgaben')"><b>☑</b>Meine Aufgaben</button>
+  <button data-v="akte" onclick="show('akte')"><b>▤</b>Akte Müller</button>
+  <button data-v="montage" onclick="show('montage')"><b>▣</b>Montage</button>
+</nav>
+<div class="toast" id="toast"></div>
+
+<!-- Dialoge -->
+<div class="dialog" id="d-neu" onclick="if(event.target===this)this.classList.remove('on')"><div class="box">
+  <h3>Angebot → Projekt</h3>
+  <div style="font-size:13px">AN-C-260352 · Becker, Wallbox · <span class="mono">2.890 €</span> · Angenommen 19.09.</div>
+  <label>Zuordnung</label>
+  <div class="opt sel">◉ Zu Projekt <b>PR-260046 Becker</b> hinzufügen (WP in Feinplanung)</div>
+  <div class="opt">○ Neues Projekt anlegen</div>
+  <label>Sparten</label><div style="font-size:13px">☑ WB &nbsp; ☐ WP &nbsp; ☐ PV &nbsp; ☐ KL</div>
+  <label>Projektleiter (Pflicht)</label><select><option>Thorsten B.</option><option>Lena F.</option></select>
+  <label>Elektroplaner</label><select><option>Deniz A.</option></select>
+  <label>Bemerkung für die Technik</label><input type="text" placeholder="z. B. Wallbox in Garage, Leitung über Außenwand">
+  <div class="btnrow"><button class="btn primary" onclick="closeD('d-neu');toast('Gewerk WB an PR-260046 angehängt – Pakete Wallbox + Auftragseingang aktiv')">Projekt anlegen</button><button class="btn" onclick="closeD('d-neu')">Abbrechen</button></div>
+</div></div>
+<div class="dialog" id="d-phase" onclick="if(event.target===this)this.classList.remove('on')"><div class="box">
+  <h3>Phase ändern · WP</h3>
+  <div style="font-size:13px">Montage geplant → <b>In Ausführung</b></div>
+  <div class="note" style="background:var(--crit);color:#fff">Wächter: 3 Pflichtaufgaben offen (Zustimmung Netzbetreiber, Zählerwechsel-Termin, Fundament fertig)</div>
+  <label>Begründung für Override (Pflicht)</label><input type="text" placeholder="z. B. Netzbetreiber telefonisch zugesagt">
+  <div class="btnrow"><button class="btn primary" onclick="closeD('d-phase');toast('Phase geändert – Override im Verlauf protokolliert')">Trotzdem ändern</button><button class="btn" onclick="closeD('d-phase')">Abbrechen</button></div>
+</div></div>
+<div class="dialog" id="d-storno" onclick="if(event.target===this)this.classList.remove('on')"><div class="box">
+  <h3>Gewerk stornieren · WP</h3>
+  <label>Grund (Pflicht)</label><select><option>Kunde widerrufen</option><option>Finanzierung/Förderung nicht erhalten</option><option>Technisch nicht umsetzbar</option><option>Kunde hat anderen Anbieter gewählt</option><option>Sonstiges</option></select>
+  <label>Erläuterung</label><input type="text">
+  <div style="font-size:12px;color:var(--muted);margin-top:8px">Setzt AN-C-260318.2 auf „Abgelehnt" mit diesem Grund, monday wird aktualisiert.</div>
+  <div class="btnrow"><button class="btn danger" onclick="closeD('d-storno');toast('Demo: nicht storniert')">Stornieren</button><button class="btn" onclick="closeD('d-storno')">Abbrechen</button></div>
+</div></div>
+
+<script>
+const P=[
+ {nr:'260041',name:'Müller',ort:'DU-Rheinhausen',pl:'TB',kanal:'Enni',wert:'41.890',gw:[{s:'WP',ph:'Montage geplant',a:'g',d:'13.10.'},{s:'PV',ph:'Feinplanung',a:'r',d:'1/6 · 1 überf.'}],over:1},
+ {nr:'260046',name:'Becker',ort:'DU-Walsum',pl:'TB',kanal:'Standard',wert:'31.200',gw:[{s:'WP',ph:'Feinplanung',a:'y',d:'FP 25.09.'}],over:0},
+ {nr:'260047',name:'Neumann',ort:'Moers',pl:'LF',kanal:'SWD',wert:'14.750',gw:[{s:'PV',ph:'Feinplanung',a:'y',d:'0/6'}],over:0},
+ {nr:'260043',name:'Schröder',ort:'Oberhausen',pl:'TB',kanal:'Standard',wert:'27.900',gw:[{s:'WP',ph:'Feinplanung',a:'r',d:'9/18 · 1 überf.'}],over:1},
+ {nr:'260039',name:'Yilmaz',ort:'DU-Meiderich',pl:'TB',kanal:'Sparkasse DU',wert:'33.400',gw:[{s:'WP',ph:'Feinplanung abgeschl.',a:'r',d:'Lift offen'}],over:1},
+ {nr:'260037',name:'Krause',ort:'Dinslaken',pl:'LF',kanal:'Enni',wert:'26.100',gw:[{s:'WP',ph:'Feinplanung abgeschl.',a:'g',d:'Termin fehlt'}],over:0},
+ {nr:'260035',name:'Kowalski',ort:'DU-Homberg',pl:'TB',kanal:'Standard',wert:'24.900',gw:[{s:'WP',ph:'Montage geplant',a:'g',d:'22.09.'}],over:0},
+ {nr:'260032',name:'Fischer',ort:'Krefeld',pl:'LF',kanal:'Standard',wert:'38.600',gw:[{s:'WP',ph:'Montage geplant',a:'g',d:'29.09.'},{s:'WB',ph:'Montage geplant',a:'g',d:'30.09.'}],over:0},
+ {nr:'260030',name:'Wagner',ort:'DU-Buchholz',pl:'TB',kanal:'Enni',wert:'29.300',gw:[{s:'WP',ph:'In Ausführung',a:'g',d:'seit 18.09.'}],over:0},
+ {nr:'260028',name:'Hoffmann',ort:'DU-Süd',pl:'LF',kanal:'Standard',wert:'30.100',gw:[{s:'WP',ph:'Abnahme offen',a:'y',d:'Restarbeit'}],over:0},
+ {nr:'260026',name:'Lange',ort:'Mülheim',pl:'TB',kanal:'SWD',wert:'12.400',gw:[{s:'PV',ph:'Abnahme offen',a:'r',d:'MaStR überf.'}],over:1},
+];
+const PH=['Feinplanung','Feinplanung abgeschl.','Montage geplant','In Ausführung','Abnahme offen'];
+const rank=p=>PH.indexOf(p);
+let filter='alle';
+function render(){
+ const cols=PH.map(p=>({p,items:[]}));
+ P.forEach(pr=>{
+   let gws=filter==='alle'?pr.gw:pr.gw.filter(g=>g.s===filter);
+   if(!gws.length)return;
+   const minPh=gws.reduce((m,g)=>rank(g.ph)<rank(m)?g.ph:m,gws[0].ph);
+   cols[rank(minPh)].items.push({...pr,gws});
+ });
+ document.getElementById('board').innerHTML=cols.map(c=>`<div class="col"><h3>${c.p}<span>${c.items.length}</span></h3>${c.items.map(card).join('')||'<div style="color:var(--muted);font-size:12px;padding:6px">–</div>'}</div>`).join('');
+ const cnt={};PH.forEach(p=>cnt[p]={n:0,s:{}});
+ P.forEach(pr=>pr.gw.forEach(g=>{cnt[g.ph].n++;cnt[g.ph].s[g.s]=(cnt[g.ph].s[g.s]||0)+1;}));
+ const over=P.reduce((a,p)=>a+p.over,0);
+ document.getElementById('tiles').innerHTML=PH.map(p=>`<div class="tile"><div class="n">${cnt[p].n}</div><div class="l">${p}</div><div class="s">${Object.entries(cnt[p].s).map(([k,v])=>v+' '+k).join(' / ')||'–'}</div></div>`).join('')+`<div class="tile" style="border-color:var(--crit)"><div class="n" style="color:var(--crit)">${over}</div><div class="l">Überfällige Aufgaben</div><div class="s">→ Meine Aufgaben</div></div>`;
+}
+function card(p){return `<div class="card" tabindex="0" onclick="show('akte')"><div class="hd"><span class="pr mono">PR-${p.nr}</span>${p.over?`<span class="badge crit">${p.over} überfällig</span>`:''}</div><div class="name">${p.name}</div><div class="meta">${p.ort} · PL ${p.pl} · <span class="badge kanal">${p.kanal}</span></div>${p.gws.map(g=>`<div class="gw"><span class="sp ${g.s}">${g.s}</span><span class="ph">${g.ph}</span><span class="dot ${g.a}"></span><span class="dt">${g.d}</span></div>`).join('')}<div class="ft"><span class="mono">${p.wert} €</span><span style="color:var(--muted)">${p.gw.length>1?p.gw.length+' Gewerke':''}</span></div></div>`;}
+document.querySelectorAll('.chip[data-f]').forEach(c=>c.onclick=()=>{document.querySelectorAll('.chip[data-f]').forEach(x=>x.classList.remove('on'));c.classList.add('on');filter=c.dataset.f;render();});
+function show(v){document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id==='v-'+v));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));window.scrollTo(0,0);}
+function tab(el,id){el.parentElement.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));el.classList.add('on');document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id===id));}
+function toast(t){const e=document.getElementById('toast');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),2600);}
+function dlg(id){document.getElementById(id).classList.add('on');}
+function closeD(id){document.getElementById(id).classList.remove('on');}
+const st={wp:{d:15,t:18},pv:{d:1,t:6}};
+function tick(cb,k){const row=cb.closest('.task');row.classList.toggle('done',cb.checked);st[k].d+=cb.checked?1:-1;const pct=Math.round(st[k].d/st[k].t*100);const bar=document.getElementById('bar-'+k);bar.style.width=pct+'%';bar.style.background=pct===100?'var(--ok)':(k==='pv'&&st.pv.d<2?'var(--crit)':'var(--warn)');document.getElementById('cnt-'+k).textContent=`${st[k].d} / ${st[k].t} Pflicht`;const dot=bar.closest('.ampel').querySelector('.dot');dot.className='dot '+(pct===100?'g':(k==='pv'&&st.pv.d<2?'r':'y'));toast(cb.checked?'Erledigt – Verlaufseintrag, Ampel aktualisiert':'Wieder offen');}
+function done(cb){cb.closest('.task').classList.toggle('done',cb.checked);if(cb.checked)toast('Erledigt · Projektleiter sieht es im Verlauf');}
+render();
+</script>

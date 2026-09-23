@@ -184,6 +184,8 @@ async def kanban(request: Request, sparte: str = "", projektleiter_id: int = 0,
     return render(request, "projektierung/kanban.html", aktiv="/projektierung",
                   spalten=spalten, phasen_namen=GEWERK_PHASEN_NAMEN,
                   karte_je_gewerk=karte_je_gewerk,
+                  # v11b (Phase 73, nur Anzeige): Kachelzeile über dem Board
+                  kacheln=kern.startseiten_kacheln(session),
                   sparte=sparte, projektleiter_id=projektleiter_id,
                   team_id=team_id, kanal=kanal, plz=plz, q=q,
                   storniert=bool(storniert), heute=datetime.now(),
@@ -638,6 +640,9 @@ async def akte(request: Request, projekt_id: int,
                                     for g in gewerke},
                   ek_sichtbar=ek_sichtbar, gesamtwert=gesamtwert,
                   heute=datetime.now(),
+                  # v11b (Phase 73, nur Anzeige): Team-Namen für die Montage-
+                  # Zeile im Datenraster des Prototyp-Layouts
+                  teams_map={t.id: t for t in session.query(Team)},
                   meldung=request.query_params.get("meldung", ""))
 
 

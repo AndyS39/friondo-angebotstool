@@ -3,56 +3,65 @@
 {% block titel %}Meine Aufgaben – Projektierung{% endblock %}
 
 {% block inhalt %}
+{% set ich = request.state.benutzer %}
 <div class="seitenkopf">
-    <h1>Meine Aufgaben</h1>
+    <div>
+        <div class="pj-eyebrow">Angemeldet als {{ ich.name if ich }} · {{ ich.rolle | capitalize if ich }}</div>
+        <h1>Meine Aufgaben</h1>
+    </div>
     <div class="aktionen">
-        <a class="knopf klein zweitrangig" href="/projektierung">Board</a>
+        <a class="pj-btn" href="/projektierung">Board</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-{% macro aufgaben_tabelle(liste) %}
-{% if liste %}
-<table class="tabelle" style="max-width:1000px">
-    <tbody>
+{% macro aufgaben_gruppe(titel, liste, rot=false) %}
+<div class="pj-grp">
+    <h3 class="{{ 'over' if rot }}">{{ titel }} · {{ liste | length }}</h3>
     {% for a in liste %}
         {% set projekt = projekte.get(a.projekt_id) %}
         {% set gewerk = gewerke.get(a.gewerk_id) %}
-        <tr class="{{ 'aufgabe-ueberfaellig' if a.faellig_am and a.faellig_am < heute }}">
-            <td>
-                <form method="post" action="/projektierung/aufgabe/{{ a.id }}/erledigt-umschalten" style="display:inline">
-                    <input type="checkbox" onchange="this.form.submit()" title="Erledigt">
-                </form>
-            </td>
-            <td>{{ a.titel }}{{ ' *' if a.pflicht }}</td>
-            <td>{% if projekt %}<a href="/projektierung/projekt/{{ projekt.id }}">{{ projekt.nummer }}</a>
-                {{ '· ' ~ gewerk.sparte if gewerk }}
-                · {{ kunden[projekt.kunde_id].anzeige_name if projekt.kunde_id in kunden else '' }}{% endif %}</td>
-            <td>{{ a.faellig_am.strftime('%d.%m.%Y') if a.faellig_am else '–' }}</td>
-            <td>
-                <form method="post" action="/projektierung/aufgabe/{{ a.id }}/status">
-                    <select name="status" onchange="this.form.submit()">
-                        {% for wert, name in status_namen.items() %}
-                            <option value="{{ wert }}" {{ 'selected' if a.status == wert }}>{{ name }}</option>
-                        {% endfor %}
-                    </select>
-                </form>
-            </td>
-        </tr>
+        {% set ueberfaellig = a.faellig_am and a.faellig_am < heute %}
+        <div class="pj-task {{ 'done' if a.status == 'erledigt' }}">
+            <form method="post" action="/projektierung/aufgabe/{{ a.id }}/erledigt-umschalten"
+                  style="display:inline">
+                <input type="checkbox" onchange="this.form.submit()"
+                       {{ 'checked' if a.status == 'erledigt' }} title="Erledigt">
+            </form>
+            <div class="t">
+                <details>
+                    <summary>{{ a.titel }}{{ ' *' if a.pflicht }}
+                        <small>{% if projekt %}<a href="/projektierung/projekt/{{ projekt.id }}"
+                               class="pj-mono">{{ projekt.nummer }}</a>
+                            {{ kunden[projekt.kunde_id].anzeige_name if projekt.kunde_id in kunden else '' }}
+                            {{ '· ' ~ gewerk.sparte if gewerk }}{% endif %}</small>
+                    </summary>
+                    <form method="post" action="/projektierung/aufgabe/{{ a.id }}/status" class="detail">
+                        <select name="status" onchange="this.form.submit()">
+                            {% for wert, name in status_namen.items() %}
+                                <option value="{{ wert }}" {{ 'selected' if a.status == wert }}>{{ name }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                </details>
+            </div>
+            {% if a.status == 'wartet' %}
+                <span class="due wait">wartet</span>
+            {% elif ueberfaellig and a.status != 'erledigt' %}
+                <span class="due over">{{ a.faellig_am.strftime('%d.%m.') }} überfällig</span>
+            {% elif a.faellig_am %}
+                <span class="due">{{ a.faellig_am.strftime('%d.%m.') }}</span>
+            {% endif %}
+        </div>
+    {% else %}
+        <div style="color:var(--pj-muted);font-size:13px">Keine Aufgaben.</div>
     {% endfor %}
-    </tbody>
-</table>
-{% else %}<p class="dezent">Keine Aufgaben.</p>{% endif %}
+</div>
 {% endmacro %}
 
-<h2 style="color:#c0392b">Überfällig ({{ gruppen.ueberfaellig | length }})</h2>
-{{ aufgaben_tabelle(gruppen.ueberfaellig) }}
-<h2>Heute ({{ gruppen.heute | length }})</h2>
-{{ aufgaben_tabelle(gruppen.heute) }}
-<h2>Diese Woche ({{ gruppen.woche | length }})</h2>
-{{ aufgaben_tabelle(gruppen.woche) }}
-<h2>Später / ohne Fälligkeit ({{ gruppen.spaeter | length }})</h2>
-{{ aufgaben_tabelle(gruppen.spaeter) }}
-<h2>Neu zugewiesen (7 Tage, {{ neu_zugewiesen | length }})</h2>
-{{ aufgaben_tabelle(neu_zugewiesen) }}
+{{ aufgaben_gruppe('Überfällig', gruppen.ueberfaellig, rot=true) }}
+{{ aufgaben_gruppe('Heute', gruppen.heute) }}
+{{ aufgaben_gruppe('Diese Woche', gruppen.woche) }}
+{{ aufgaben_gruppe('Später / ohne Fälligkeit', gruppen.spaeter) }}
+{{ aufgaben_gruppe('Neu zugewiesen (7 Tage)', neu_zugewiesen) }}
 {% endblock %}

@@ -3,110 +3,109 @@
 {% block titel %}Einsatz {{ projekt.nummer }} – Montage{% endblock %}
 
 {% block inhalt %}
-<div class="seitenkopf">
-    <h1>{{ kunde.anzeige_name }} · {{ gewerk.sparte if gewerk else termin.typ }}</h1>
-    <div class="aktionen"><a class="knopf klein zweitrangig" href="/montage">← Einsätze</a></div>
-</div>
-{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+<div class="pj-mob">
+    <div class="pj-btnrow" style="margin-top:0">
+        <a class="pj-btn" href="/montage">← Einsätze</a>
+    </div>
+    <div class="pj-eyebrow">Steckbrief</div>
+    <h2>{{ kunde.anzeige_name }}
+        {% if gewerk %}<span class="pj-sp {{ gewerk.sparte }}">{{ gewerk.sparte }}</span>{% endif %}</h2>
+    {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-{# Steckbrief read-only – bewusst OHNE Preise (Plan Phase 70) #}
-<div class="kacheln">
-    <div class="kachel">
-        <h3>Termin</h3>
-        <p><strong>{{ termin.beginn.strftime('%A, %d.%m.%Y %H:%M') }} Uhr</strong>
-            {% if termin.ende %} – {{ termin.ende.strftime('%H:%M') }} Uhr{% endif %}</p>
-        {% if termin.notiz %}<p>{{ termin.notiz }}</p>{% endif %}
-        {% if gewerk %}<p class="dezent">Status: {{ phasen_namen[gewerk.phase] }}</p>{% endif %}
+    <div class="pj-kv">
+        <span>Termin</span>
+        <div><b>{{ termin.beginn.strftime('%a %d.%m.%Y %H:%M') }} Uhr</b>
+            {% if termin.ende %} – {{ termin.ende.strftime('%H:%M') }} Uhr{% endif %}
+            {% if termin.notiz %}<br><small style="color:var(--pj-muted)">{{ termin.notiz }}</small>{% endif %}</div>
+        <span>Adresse</span>
+        <div>{{ adresse or 'Keine Ausführungsadresse hinterlegt' }}
+            {% if adresse %}<br><a href="{{ karten_link }}" target="_blank">In Karten öffnen ↗</a>{% endif %}</div>
+        {% if kunde.telefon %}
+        <span>Telefon</span>
+        <div><a href="tel:{{ kunde.telefon }}">{{ kunde.telefon }}</a></div>
+        {% endif %}
+        {% if gewerk %}
+        <span>Status</span>
+        <div>{{ phasen_namen[gewerk.phase] }}</div>
+        {% endif %}
+        {% if gewerk and gewerk.heizlast_kw %}
+        <span>Heizlast</span>
+        <div><span class="pj-mono">{{ ('%.1f' | format(gewerk.heizlast_kw)) | replace('.', ',') }} kW</span>
+            {% if gewerk.heizlast_datum %} · {{ gewerk.heizlast_datum.strftime('%d.%m.%Y') }}{% endif %}</div>
+        {% endif %}
+        {% if projekt.notiz_kopf %}
+        <span>Technik</span>
+        <div>{{ projekt.notiz_kopf }}</div>
+        {% endif %}
     </div>
-    <div class="kachel">
-        <h3>Adresse &amp; Kontakt</h3>
-        <p>{{ adresse or 'Keine Ausführungsadresse hinterlegt' }}</p>
-        {% if adresse %}<p><a href="{{ karten_link }}" target="_blank">In Karten öffnen ↗</a></p>{% endif %}
-        {% if kunde.telefon %}<p>Telefon: <a href="tel:{{ kunde.telefon }}">{{ kunde.telefon }}</a></p>{% endif %}
-    </div>
-    {% if gewerk and gewerk.heizlast_kw %}
-    <div class="kachel">
-        <h3>Heizlast</h3>
-        <p><strong>{{ ('%.1f' | format(gewerk.heizlast_kw)) | replace('.', ',') }} kW</strong>
-            {% if gewerk.heizlast_datum %} ({{ gewerk.heizlast_datum.strftime('%d.%m.%Y') }}){% endif %}</p>
-    </div>
+
+    {% if positionen %}
+    <details class="pj-paket">
+        <summary>Gerät &amp; Positionen (ohne Preise) <span class="cnt">{{ positionen | length }}</span></summary>
+        {% for p in positionen %}
+        <div class="pj-task">
+            <div class="t">{{ p.bezeichnung }}
+                <small>{{ ('%g' | format(p.menge)) | replace('.', ',') }} {{ p.einheit }}</small></div>
+        </div>
+        {% endfor %}
+    </details>
     {% endif %}
-</div>
 
-{% if projekt.notiz_kopf %}
-<h2>Bemerkung für die Technik</h2>
-<p class="hinweis">{{ projekt.notiz_kopf }}</p>
-{% endif %}
+    <details class="pj-paket" {{ 'open' if aufgaben }}>
+        <summary>Offene Montage-Aufgaben <span class="cnt">{{ aufgaben | length }}</span></summary>
+        {% for a in aufgaben %}
+        <div class="pj-task">
+            <form method="post" action="/montage/aufgabe/{{ a.id }}/erledigt" style="display:inline">
+                <input type="hidden" name="termin_id" value="{{ termin.id }}">
+                <input type="checkbox" onchange="this.form.submit()" title="Erledigt">
+            </form>
+            <div class="t">{{ a.titel }}{{ ' *' if a.pflicht }}</div>
+            {% if a.faellig_am %}<span class="due">{{ a.faellig_am.strftime('%d.%m.') }}</span>{% endif %}
+        </div>
+        {% else %}
+        <div class="pj-task"><div class="t" style="color:var(--pj-muted)">Keine offenen Montage-Aufgaben.</div></div>
+        {% endfor %}
+    </details>
 
-{% if positionen %}
-<h2>Gerät &amp; Positionen (ohne Preise)</h2>
-<table class="tabelle" style="max-width:800px">
-    <tbody>
-    {% for p in positionen %}
-        <tr>
-            <td>{{ p.bezeichnung }}</td>
-            <td class="rechts">{{ ('%g' | format(p.menge)) | replace('.', ',') }} {{ p.einheit }}</td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-{% endif %}
+    <h3 id="foto" style="font-size:13px;margin:12px 0 4px">📁 Fotos</h3>
+    <form method="post" action="/montage/einsatz/{{ termin.id }}/foto"
+          enctype="multipart/form-data" class="pj-btnrow" style="margin-top:4px">
+        <input type="file" name="datei" accept="image/*" capture="environment" required>
+        <button class="pj-btn primary" type="submit">📷 Foto hochladen</button>
+    </form>
+    <div class="pj-tree">
+        {% for d in dokumente %}
+        <div class="f"><a href="/montage/dokument/{{ d.id }}" target="_blank">{{ d.dateiname }}</a></div>
+        {% else %}
+        <div class="f">– noch keine Fotos –</div>
+        {% endfor %}
+    </div>
 
-<h2>Offene Montage-Aufgaben ({{ aufgaben | length }})</h2>
-{% if aufgaben %}
-<table class="tabelle" style="max-width:800px">
-    <tbody>
-    {% for a in aufgaben %}
-        <tr>
-            <td>{{ a.titel }}{{ ' *' if a.pflicht }}</td>
-            <td>{{ a.faellig_am.strftime('%d.%m.%Y') if a.faellig_am else '–' }}</td>
-            <td>
-                <form method="post" action="/montage/aufgabe/{{ a.id }}/erledigt">
-                    <input type="hidden" name="termin_id" value="{{ termin.id }}">
-                    <button class="knopf klein" type="submit">Erledigt</button>
-                </form>
-            </td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-{% else %}<p class="dezent">Keine offenen Montage-Aufgaben.</p>{% endif %}
-
-<h2>Fotos</h2>
-<form method="post" action="/montage/einsatz/{{ termin.id }}/foto"
-      enctype="multipart/form-data" class="formzeile">
-    <input type="file" name="datei" accept="image/*" capture="environment" required>
-    <button class="knopf" type="submit">Foto hochladen</button>
-</form>
-{% if dokumente %}
-<div class="foto-galerie">
-    {% for d in dokumente %}
-        <a href="/montage/dokument/{{ d.id }}" target="_blank" class="dezent">
-            📷 {{ d.dateiname }}</a>
-    {% endfor %}
-</div>
-{% else %}<p class="dezent">Noch keine Fotos.</p>{% endif %}
-
-{% if gewerk %}
-<h2>Montage-Status</h2>
-<div class="kachel" style="max-width:800px">
+    {% if gewerk %}
+    <h3 id="status" style="font-size:13px;margin:12px 0 4px">Montage-Status</h3>
     {% if gewerk.phase in ('feinplanung', 'feinplanung_abgeschlossen', 'montage_geplant') %}
     <form method="post" action="/montage/einsatz/{{ termin.id }}/phase">
         <input type="hidden" name="aktion" value="gestartet">
-        <button class="knopf" type="submit">Montage gestartet</button>
+        <button class="pj-btn primary" type="submit">Montage gestartet</button>
     </form>
     {% elif gewerk.phase == 'in_ausfuehrung' %}
     <form method="post" action="/montage/einsatz/{{ termin.id }}/phase">
         <input type="hidden" name="aktion" value="fertig">
-        <label>Kurzbericht (Pflicht)
-            <textarea name="bericht" rows="3" required
-                      placeholder="Was wurde gemacht? Besonderheiten?"></textarea>
-        </label>
-        <button class="knopf" type="submit">Montage fertig</button>
+        <label style="display:block;font-size:13px;color:var(--pj-muted);margin:4px 0 2px">
+            Kurzbericht (Pflicht)</label>
+        <textarea name="bericht" rows="3" required
+                  style="width:100%;border:1px solid var(--pj-line);border-radius:8px;padding:8px;font-family:inherit"
+                  placeholder="Was wurde gemacht? Besonderheiten?"></textarea>
+        <div class="pj-btnrow">
+            <button class="pj-btn primary" type="submit">Montage fertig</button>
+        </div>
     </form>
     {% else %}
-    <p class="dezent">Status: {{ phasen_namen[gewerk.phase] }}</p>
+    <p class="dezent" style="font-size:12px">Status: {{ phasen_namen[gewerk.phase] }}</p>
     {% endif %}
+    {% endif %}
+
+    <div class="pj-note">Formulare (Montagebericht, Inbetriebnahme, Abnahme mit
+        Unterschrift) folgen in V3.</div>
 </div>
-{% endif %}
 {% endblock %}

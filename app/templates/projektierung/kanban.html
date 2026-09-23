@@ -1,6 +1,5 @@
 {% extends "base.html" %}
-{% import "_sparten.html" as sparten_ui %}
-{% from "_projektierung.html" import ampel_punkt %}
+{% from "_projektierung.html" import pj_gw_zeile %}
 
 {% block titel %}Projektierung – Friondo{% endblock %}
 
@@ -8,100 +7,141 @@
 
 {% block inhalt %}
 <div class="seitenkopf">
-    <h1>Projektierung</h1>
+    <div>
+        <div class="pj-eyebrow">Startseite · Bereich Projektierung</div>
+        <h1>Projektierung</h1>
+    </div>
     <div class="aktionen">
-        <a class="knopf klein zweitrangig" href="/projektierung/liste">Liste</a>
-        <a class="knopf klein zweitrangig" href="/projektierung/termine">Termine</a>
-        <a class="knopf klein zweitrangig" href="/projektierung/meine-aufgaben">Meine Aufgaben</a>
+        <a class="pj-btn" href="/projektierung/liste">Liste</a>
+        <a class="pj-btn" href="/projektierung/termine">Termine</a>
+        <a class="pj-btn" href="/projektierung/meine-aufgaben">Meine Aufgaben</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-<form method="get" action="/projektierung" class="suchleiste">
-    <select name="sparte" title="Sparte (schaltet auf Karte je Gewerk um)">
-        <option value="">Alle Sparten (Karte = Projekt)</option>
-        {% for s in ('WP', 'PV', 'KL', 'WB') %}
-            <option value="{{ s }}" {{ 'selected' if sparte == s }}>{{ s }} (Karte = Gewerk)</option>
-        {% endfor %}
-    </select>
-    <select name="projektleiter_id">
-        <option value="0">Alle Projektleiter</option>
+{# Kachelzeile (Prototyp .tiles): Gewerke je Phase + Überfällig #}
+<div class="pj-tiles">
+    {% for phase in ('feinplanung', 'feinplanung_abgeschlossen', 'montage_geplant',
+                     'in_ausfuehrung', 'abnahme_offen') %}
+    <div class="pj-tile">
+        <div class="n">{{ kacheln[phase].anzahl }}</div>
+        <div class="l">{{ phasen_namen[phase] }}</div>
+        <div class="s">{{ kacheln[phase].untertitel or '–' }}</div>
+    </div>
+    {% endfor %}
+    <a class="pj-tile crit" href="/projektierung/meine-aufgaben">
+        <div class="n">{{ kacheln.ueberfaellig }}</div>
+        <div class="l">Überfällige Aufgaben</div>
+        <div class="s">→ Meine Aufgaben</div>
+    </a>
+</div>
+
+{# Filterleiste als Chips (Prototyp .filters) – derselbe GET-Filter wie bisher #}
+<form method="get" action="/projektierung" class="pj-filters" id="pj-filter">
+    {% for wert, name in [('', 'Alle'), ('WP', 'WP'), ('PV', 'PV'),
+                          ('KL', 'KL'), ('WB', 'WB')] %}
+        <label class="pj-chip {{ 'on' if sparte == wert }}"
+               title="{{ 'Karte = Projekt' if not wert else 'Karte = Gewerk (' ~ name ~ ')' }}">
+            <input type="radio" name="sparte" value="{{ wert }}" hidden
+                   {{ 'checked' if sparte == wert }}
+                   onchange="this.form.submit()">{{ name }}</label>
+    {% endfor %}
+    <select name="projektleiter_id" class="pj-chip {{ 'on' if projektleiter_id }}"
+            onchange="this.form.submit()">
+        <option value="0">Projektleiter ▾</option>
         {% for bid in projektleiter_werte %}
             <option value="{{ bid }}" {{ 'selected' if projektleiter_id == bid }}>{{ benutzer_map[bid].name if bid in benutzer_map else bid }}</option>
         {% endfor %}
     </select>
-    <select name="team_id">
-        <option value="0">Alle Teams</option>
+    <select name="team_id" class="pj-chip {{ 'on' if team_id }}"
+            onchange="this.form.submit()">
+        <option value="0">Team ▾</option>
         {% for t in teams %}
             <option value="{{ t.id }}" {{ 'selected' if team_id == t.id }}>{{ t.name }}</option>
         {% endfor %}
     </select>
     {% if kanal_werte %}
-    <select name="kanal">
-        <option value="">Alle Kanäle</option>
+    <select name="kanal" class="pj-chip {{ 'on' if kanal }}"
+            onchange="this.form.submit()">
+        <option value="">Kanal ▾</option>
         {% for k in kanal_werte %}
             <option value="{{ k }}" {{ 'selected' if kanal == k }}>{{ k }}</option>
         {% endfor %}
     </select>
     {% endif %}
-    <input type="text" name="plz" value="{{ plz }}" size="5" placeholder="PLZ…">
-    <input type="text" name="q" value="{{ q }}" size="16" placeholder="Kunde / PR-Nr.">
-    <label class="kontrollfeld"><input type="checkbox" name="storniert" value="1"
-        {{ 'checked' if storniert }}> Storniert anzeigen</label>
-    <button class="knopf" type="submit">Filtern</button>
+    <input type="text" name="plz" value="{{ plz }}" size="5" placeholder="PLZ…"
+           class="pj-chip">
+    <input type="text" name="q" value="{{ q }}" size="14"
+           placeholder="Kunde / PR-Nr." class="pj-chip">
+    <label class="pj-chip {{ 'on' if storniert }}">
+        <input type="checkbox" name="storniert" value="1"
+               {{ 'checked' if storniert }} onchange="this.form.submit()">
+        Storniert</label>
+    <button class="pj-chip" type="submit">Filtern</button>
+    <a class="pj-chip" href="/angebote"
+       title="Angenommenes Angebot in der Angebotsliste wählen">+ Angebot → Projekt</a>
 </form>
 
-<div class="kanban">
+<div class="pj-board">
     {% for phase, karten in spalten.items() %}
-    <div class="kanban-spalte {{ 'kanban-abgeschlossen' if phase == 'abgeschlossen' }}"
-         data-phase="{{ phase }}"
+    <div class="pj-col" data-phase="{{ phase }}"
          ondragover="event.preventDefault()" ondrop="kartenDrop(event, '{{ phase }}')">
         {% if phase == 'abgeschlossen' %}
         <details>
-            <summary><strong>{{ phasen_namen[phase] }}</strong>
-                <span class="dezent">({{ karten | length }}, letzte 30 Tage)</span></summary>
+            <summary class="pj-colkopf">{{ phasen_namen[phase] }}
+                <span>{{ karten | length }} · letzte 30 Tage</span></summary>
         {% else %}
-        <h2>{{ phasen_namen.get(phase, phase) }} <span class="dezent">({{ karten | length }})</span></h2>
+        <h3>{{ phasen_namen.get(phase, phase) }} <span>{{ karten | length }}</span></h3>
         {% endif %}
         {% for karte in karten %}
         {% set offene_gewerke = karte.zeilen | rejectattr('gewerk.phase', 'in', ['abgeschlossen', 'storniert']) | list %}
-        <a class="kanban-karte" href="/projektierung/projekt/{{ karte.projekt.id }}"
-           draggable="true"
+        {% set gesamt_ueberfaellig = karte.zeilen | sum(attribute='ueberfaellig') %}
+        <a class="pj-card" href="/projektierung/projekt/{{ karte.projekt.id }}"
+           draggable="true" tabindex="0"
            ondragstart="kartenStart(event, {{ (offene_gewerke or karte.zeilen) | map(attribute='gewerk.id') | list | tojson }}, {{ (offene_gewerke or karte.zeilen) | map(attribute='gewerk.sparte') | list | tojson }})">
-            <strong>{{ karte.projekt.nummer }}</strong>
-            {% set gesamt_ueberfaellig = karte.zeilen | sum(attribute='ueberfaellig') %}
-            {% if gesamt_ueberfaellig %}
-                <span class="abzeichen ep" title="Überfällige Pflichtaufgaben">{{ gesamt_ueberfaellig }} überfällig</span>
-            {% endif %}
-            {% if karte.projekt.kanal %}<span class="abzeichen">{{ karte.projekt.kanal }}</span>{% endif %}
-            <br>{{ karte.zeilen[0].kunde.anzeige_name if karte.zeilen[0].kunde else '?' }}
-            · {{ karte.projekt.ausfuehrung_ort or '–' }}
-            <span class="dezent" title="Projektleiter">
-                {{ (benutzer_map[karte.projekt.projektleiter_id].name | truncate(2, true, '') | upper)
-                   if karte.projekt.projektleiter_id in benutzer_map else '–' }}</span>
-            {% for z in karte.zeilen %}
-            <div class="karte-gewerk {{ 'gewerk-storniert' if z.gewerk.phase == 'storniert' }}">
-                {{ sparten_ui.chip(z.gewerk.sparte) }}
-                <span class="dezent">{{ phasen_namen.get(z.gewerk.phase, z.gewerk.phase) }}</span>
-                {{ ampel_punkt(z.ampel) }}
-                {% if z.naechster_termin %}<span title="nächster Termin">📅 {{ z.naechster_termin.strftime('%d.%m.') }}</span>{% endif %}
-                <span class="dezent">{{ z.offen }} offen{{ ' / ' ~ z.ueberfaellig ~ ' überfällig' if z.ueberfaellig }}</span>
+            <div class="hd">
+                <span class="pr pj-mono">{{ karte.projekt.nummer }}</span>
+                {% if gesamt_ueberfaellig %}
+                    <span class="pj-badge crit">{{ gesamt_ueberfaellig }} überfällig</span>
+                {% endif %}
             </div>
+            <div class="name">{{ karte.zeilen[0].kunde.anzeige_name if karte.zeilen[0].kunde else '?' }}</div>
+            <div class="meta">{{ karte.projekt.ausfuehrung_ort or '–' }}
+                · PL {{ (benutzer_map[karte.projekt.projektleiter_id].name | truncate(2, true, '') | upper)
+                        if karte.projekt.projektleiter_id in benutzer_map else '–' }}
+                {% if karte.projekt.kanal %}· <span class="pj-badge kanal">{{ karte.projekt.kanal }}</span>{% endif %}
+            </div>
+            {% for z in karte.zeilen %}
+                {{ pj_gw_zeile(z.gewerk.sparte, phasen_namen.get(z.gewerk.phase, z.gewerk.phase),
+                               z.ampel.farbe,
+                               z.naechster_termin.strftime('%d.%m.') if z.naechster_termin
+                               else (z.ueberfaellig ~ ' überf.' if z.ueberfaellig
+                                     else z.ampel.erledigt ~ '/' ~ z.ampel.gesamt),
+                               storniert=(z.gewerk.phase == 'storniert')) }}
             {% endfor %}
-            <div class="dezent">Gesamt:
-                {{ karte.zeilen | rejectattr('gewerk.phase', 'equalto', 'storniert') | sum(attribute='gewerk.auftragswert_aktuell') | euro }}</div>
+            <div class="ft">
+                <span class="pj-mono">{{ karte.zeilen | rejectattr('gewerk.phase', 'equalto', 'storniert') | sum(attribute='gewerk.auftragswert_aktuell') | euro }}</span>
+                <span style="color:var(--pj-muted)">{{ karte.zeilen | length ~ ' Gewerke' if karte.zeilen | length > 1 }}</span>
+            </div>
         </a>
+        {% else %}
+        <div style="color:var(--pj-muted);font-size:12px;padding:6px">–</div>
         {% endfor %}
         {% if phase == 'abgeschlossen' %}</details>{% endif %}
     </div>
     {% endfor %}
 </div>
 
+<div class="pj-note">Karte = Projekt. Die Spalte richtet sich nach dem Gewerk,
+    das am weitesten zurückliegt; die Chips zeigen jedes Gewerk einzeln.</div>
+
 {# Drop-Dialog: bei mehreren offenen Gewerken „Welches Gewerk verschieben?" #}
-<dialog id="gewerkdialog">
-    <p><strong>Welches Gewerk verschieben?</strong></p>
-    <div id="gewerkknoepfe"></div>
-    <button class="knopf klein zweitrangig" onclick="document.getElementById('gewerkdialog').close()">Abbrechen</button>
+<dialog id="gewerkdialog" class="pj-dlg">
+    <h3>Welches Gewerk verschieben?</h3>
+    <div id="gewerkknoepfe" class="pj-btnrow"></div>
+    <div class="pj-btnrow">
+        <button class="pj-btn" onclick="document.getElementById('gewerkdialog').close()">Abbrechen</button>
+    </div>
 </dialog>
 <form method="post" id="dropform" hidden>
     <input type="hidden" name="phase" id="dropphase">
@@ -127,7 +167,7 @@ function kartenDrop(ereignis, phase) {
     kasten.innerHTML = '';
     dragGewerke.forEach((id, i) => {
         const knopf = document.createElement('button');
-        knopf.className = 'knopf klein';
+        knopf.className = 'pj-btn primary';
         knopf.textContent = dragSparten[i];
         knopf.onclick = () => { dialog.close(); dropSenden(id, phase); };
         kasten.appendChild(knopf);

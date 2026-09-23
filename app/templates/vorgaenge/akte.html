@@ -92,15 +92,21 @@
 
 {% if projekt_modul_ok and vorgang_projekte %}
 {% from "_projektierung.html" import phase_name %}
-<div class="akte-kopf">
-    {% for eintrag in vorgang_projekte %}
-    <p><strong>Projekt <a href="/projektierung/projekt/{{ eintrag.projekt.id }}">{{ eintrag.projekt.nummer }}</a></strong>
-        {% for g in eintrag.gewerke %}
-            · {{ g.sparte }}: {{ phase_name(g.phase) }}
-        {% endfor %}
-    </p>
+{# v11b (Phase 73): Projekt-Block als Mini-Karte im Prototyp-Stil #}
+{% for eintrag in vorgang_projekte %}
+<a class="pj-card" style="max-width:420px"
+   href="/projektierung/projekt/{{ eintrag.projekt.id }}">
+    <div class="hd"><span class="pr pj-mono">{{ eintrag.projekt.nummer }}</span>
+        <span class="pj-badge">Projektakte →</span></div>
+    <div class="name">Projekt</div>
+    {% for g in eintrag.gewerke %}
+    <div class="pj-gw {{ 'storniert' if g.phase == 'storniert' }}">
+        <span class="pj-sp {{ g.sparte }}">{{ g.sparte }}</span>
+        <span class="ph">{{ phase_name(g.phase) }}</span>
+    </div>
     {% endfor %}
-</div>
+</a>
+{% endfor %}
 {% endif %}
 
 <h2>Angebote</h2>

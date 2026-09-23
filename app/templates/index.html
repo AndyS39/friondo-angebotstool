@@ -94,29 +94,25 @@
 
     {# v11 (Phase 68/70): Live-Kacheln nur, wenn das Modul für den Benutzer
        sichtbar ist (Demo-Modus: Admin); andere Rollen sehen Null-Kacheln #}
+    {# v11b (Phase 73): Projektierungs-Karte nach Prototyp (.pcard.demo) #}
     {% if projekt_kacheln %}
-    <a class="portal-karte" href="/projektierung">
+    <a class="portal-karte pj-demo" href="/projektierung">
         <h2 class="portal-titel">Projektierung
-            {% if demo_badge %}<span class="demo-badge">Demo · Coming soon</span>{% endif %}
+            {% if demo_badge %}<span class="pj-dbadge">Demo · Coming soon</span>{% endif %}
         </h2>
-        <div class="kacheln bereich-kacheln">
+        <div class="pj-pk">
             {% for phase, titel in [('feinplanung', 'Aufträge in Feinplanung'),
-                                    ('feinplanung_abgeschlossen', 'Feinplanung abgeschlossen'),
+                                    ('feinplanung_abgeschlossen', 'Feinplanung abgeschl.'),
                                     ('montage_geplant', 'Montage geplant'),
                                     ('in_ausfuehrung', 'In Ausführung'),
                                     ('abnahme_offen', 'Abnahme offen')] %}
-            <div class="kachel stat">
-                <span class="stat-zahl">{{ projekt_kacheln[phase].anzahl }}</span>
-                <span>{{ titel }}</span>
-                <span class="dezent">{{ projekt_kacheln[phase].untertitel or 'Gewerke je Phase' }}</span>
-            </div>
+            <div><b>{{ projekt_kacheln[phase].anzahl }}</b>{{ titel }}</div>
             {% endfor %}
-            <div class="kachel stat">
-                <span class="stat-zahl" {% if projekt_kacheln.ueberfaellig %}style="color:#c0392b"{% endif %}>{{ projekt_kacheln.ueberfaellig }}</span>
-                <span>Überfällige Aufgaben</span>
-                <span class="dezent">→ Meine Aufgaben (im Board)</span>
-            </div>
+            <div class="{{ 'crit' if projekt_kacheln.ueberfaellig }}">
+                <b>{{ projekt_kacheln.ueberfaellig }}</b>Überfällige Aufgaben</div>
         </div>
+        <div class="pj-plinks">Nur für Admins sichtbar · andere Rollen sehen
+            Null-Kacheln und „Das Modul befindet sich im Aufbau."</div>
     </a>
     {% else %}
     <div class="portal-karte" style="cursor:default">

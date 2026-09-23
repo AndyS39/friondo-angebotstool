@@ -101,21 +101,15 @@
    an die Projektierung; erscheint nur, wenn ein Projekt verknüpft und das
    Modul für den Benutzer freigegeben ist (Demo-Modus: Admin) #}
 {% if projektstand %}
-{% from "_projektierung.html" import ampel_punkt %}
-<div class="karte" id="projektstand">
-    <h2>Projektstand · {{ projektstand.projekt.nummer }}</h2>
-    <table class="tabelle">
-        <tbody>
-        {% for z in projektstand.zeilen %}
-            <tr>
-                <td><strong>{{ z.gewerk.sparte }}</strong></td>
-                <td>{{ z.phase_name }} {{ ampel_punkt(z.ampel) }}</td>
-                <td>{{ z.termin.beginn.strftime('%d.%m.%Y %H:%M') ~ ' Uhr'
-                       if z.termin else 'kein Termin' }}</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+{% from "_projektierung.html" import pj_gw_zeile %}
+<div class="pj-card" id="projektstand" style="cursor:default">
+    <div class="hd"><span class="pr pj-mono">{{ projektstand.projekt.nummer }}</span></div>
+    <div class="name">Projektstand</div>
+    {% for z in projektstand.zeilen %}
+        {{ pj_gw_zeile(z.gewerk.sparte, z.phase_name, z.ampel.farbe,
+                       z.termin.beginn.strftime('%d.%m. %H:%M') if z.termin else 'kein Termin',
+                       storniert=(z.gewerk.phase == 'storniert')) }}
+    {% endfor %}
     {% if projektstand.projektleiter %}
     <p>Projektleiter: <strong>{{ projektstand.projektleiter.name }}</strong>
         {% if projektstand.projektleiter.telefon %}
