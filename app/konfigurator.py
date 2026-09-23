@@ -26,6 +26,11 @@ ID_SOLARTHERMIE = "A10"       # v9: Übernahme steuert die Warmwasser-Schiene
 SOLAR_UEBERNAHME = "Ja, soll übernommen werden"
 ID_HEIZUNG_BAUJAHR = "A02"
 FRIONDO_FRAGEN = ("P01", "P02", "P03")
+# v11: Flächen-Auslegung ohne Verbrauch (A03 = "Verbrauch unbekannt")
+VERBRAUCH_UNBEKANNT = "Verbrauch unbekannt"
+ID_AUSLEGUNG_FLAECHE = "A17"  # Beheizte Wohnfläche in m²
+ID_GEBAEUDESTANDARD = "A18"   # saniert – 40 W/m² | Altbau – 60 | Altbau unsaniert – 70
+ID_TANKGROESSE = "A19"        # v11: tatsächliche Tankgröße ab 9.000 L
 
 EFH_ARTEN = ("EFH", "REH", "RMH")
 
@@ -273,16 +278,55 @@ def ampel_gruende(logik: Logik, antworten: dict) -> list[str]:
         treffer = aktion_finden(logik, frage, wert, antworten)
         if treffer and treffer[0].typ == "ampel":
             merken(treffer[0].ampel_grund)
+    # v11: Flächen-Auslegung außerhalb der Leistungsklassen (z. B. > 18,5 kW)
+    # → gleicher Grund wie bei der direkten Heizlast-Eingabe (A15)
+    if (flaechen_heizlast(antworten) is not None
+            and leistungsklasse(logik, antworten) is None):
+        merken("Leistungsklasse zu hoch")
     return gruende
 
 
 # --- Leistungsklasse und Paketauflösung -----------------------------------
 
-def heizlast_wert(antworten: dict) -> Optional[float]:
-    """v8: angegebene Heizlast in kW (nur wenn A14 = Ja), sonst None."""
-    if str(antworten.get(ID_HEIZLAST_BEKANNT) or "") != "Ja":
+def flaechen_faktor(antworten: dict) -> Optional[int]:
+    """v11: W/m²-Faktor aus dem Gebäudestandard (A18), z. B. „Altbau – 60 W/m²“."""
+    m = re.search(r"(\d+)\s*W/m", str(antworten.get(ID_GEBAEUDESTANDARD) or ""))
+    return int(m.group(1)) if m else None
+
+
+def flaechen_heizlast(antworten: dict) -> Optional[float]:
+    """v11: Heizlast aus Fläche × Gebäudestandard ÷ 1000 – nur wenn der
+    Verbrauch unbekannt ist und keine Heizlast angegeben wurde."""
+    if str(antworten.get(ID_VERBRAUCH) or "") != VERBRAUCH_UNBEKANNT:
         return None
-    return zahl_parsen(antworten.get(ID_HEIZLAST))
+    if str(antworten.get(ID_HEIZLAST_BEKANNT) or "") == "Ja":
+        return None   # angegebene Heizlast (A15) hat Vorrang
+    flaeche = zahl_parsen(antworten.get(ID_AUSLEGUNG_FLAECHE))
+    faktor = flaechen_faktor(antworten)
+    if flaeche is None or faktor is None:
+        return None
+    return round(flaeche * faktor / 1000, 1)
+
+
+def flaechen_herleitung(antworten: dict) -> str:
+    """v11: „Auslegung über Fläche: 150 m² × 60 W/m² = 9,0 kW“."""
+    heizlast = flaechen_heizlast(antworten)
+    if heizlast is None:
+        return ""
+    flaeche = zahl_parsen(antworten.get(ID_AUSLEGUNG_FLAECHE))
+    flaeche_text = (str(int(flaeche)) if flaeche == int(flaeche)
+                    else f"{flaeche:g}".replace(".", ","))
+    return (f"Auslegung über Fläche: {flaeche_text} m² × "
+            f"{flaechen_faktor(antworten)} W/m² = "
+            f"{heizlast:.1f}".replace(".", ",") + " kW")
+
+
+def heizlast_wert(antworten: dict) -> Optional[float]:
+    """v8: angegebene Heizlast in kW (nur wenn A14 = Ja); v11 zusätzlich die
+    aus Fläche × Gebäudestandard abgeleitete Heizlast (Verbrauch unbekannt)."""
+    if str(antworten.get(ID_HEIZLAST_BEKANNT) or "") == "Ja":
+        return zahl_parsen(antworten.get(ID_HEIZLAST))
+    return flaechen_heizlast(antworten)
 
 
 def leistungsklasse(logik: Logik, antworten: dict) -> Optional[PaketZeile]:
@@ -331,6 +375,31 @@ def paket_aufloesen(logik: Logik, antworten: dict) -> Optional[list[ArtikelRef]]
     if groesse.startswith("300"):
         return zeile.ww_300
     return None
+
+
+def auslegungs_text(logik: Logik, antworten: dict) -> str:
+    """v11: Heizlast-/Auslegungszeile für Block 1 des Angebots. Vorläufiger
+    Wortlaut – wird nach Vorlage des TAIFUN-Musters (Zulieferung 4) angepasst.
+    Leer, wenn keine Leistungsklasse ermittelt werden kann."""
+    zeile = leistungsklasse(logik, antworten)
+    if zeile is None:
+        return ""
+    klasse = zeile.leistungsklasse
+    if str(antworten.get(ID_HEIZLAST_BEKANNT) or "") == "Ja":
+        heizlast = zahl_parsen(antworten.get(ID_HEIZLAST))
+        if heizlast is not None:
+            wert = f"{heizlast:.1f}".replace(".", ",")
+            return (f"Auslegung nach angegebener Heizlast: {wert} kW "
+                    f"→ Leistungsklasse {klasse}")
+    herleitung = flaechen_herleitung(antworten)
+    if herleitung:
+        return f"{herleitung} → Leistungsklasse {klasse}"
+    verbrauch = zahl_parsen(antworten.get(ID_VERBRAUCH))
+    if verbrauch is not None:
+        wert = f"{int(verbrauch):,}".replace(",", ".")
+        return (f"Auslegung auf Basis des Jahresverbrauchs: {wert} kWh/Jahr "
+                f"→ Leistungsklasse {klasse}")
+    return ""
 
 
 # --- Vorbelegungen (Blatt "KfW" / Fragen-Hinweise) -------------------------
@@ -408,6 +477,15 @@ def protokoll(logik: Logik, antworten: dict) -> list[dict]:
             "antwort": antwort_anzeige(frage, antworten[frage.id]),
             "ampel_grund": gruende.get(frage.id, ""),
         })
+        # v11: Herleitung der Flächen-Auslegung direkt unter dem Gebäudestandard
+        if frage.id == ID_GEBAEUDESTANDARD:
+            herleitung = flaechen_herleitung(antworten)
+            if herleitung:
+                eintraege.append({
+                    "frage_id": "", "seite": frage.seite,
+                    "frage": "Auslegung", "antwort": herleitung,
+                    "ampel_grund": "",
+                })
     return eintraege
 
 

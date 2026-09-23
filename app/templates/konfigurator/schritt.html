@@ -78,10 +78,19 @@
                     </label>
                 </div>
             {% elif frage.typ in ('Zahleneingabe', 'Betragseingabe') %}
+                {% set ist_alt = frage.antworten and wert is string and wert in frage.antworten %}
                 <div class="formzeile">
                     <label class="schmal">{{ 'Betrag in €' if frage.typ == 'Betragseingabe' else 'Wert' }}
-                        <input type="text" name="wert" value="{{ wert if wert is not none }}" autofocus>
+                        <input type="text" name="wert" value="{{ wert if wert is not none and not ist_alt }}" autofocus>
                     </label>
+                    {# v11: Text-Alternative zur Zahl (A03: „Verbrauch unbekannt") #}
+                    {% for alt in frage.antworten %}
+                    <label class="kontrollfeld">
+                        <input type="checkbox" name="wert_alt" value="{{ alt }}"
+                               {{ 'checked' if wert == alt }}
+                               onchange="if (this.checked) this.closest('.formzeile').querySelector('input[name=wert]').value = '';">
+                        {{ alt }}</label>
+                    {% endfor %}
                     <button class="knopf" type="submit">Weiter</button>
                 </div>
 

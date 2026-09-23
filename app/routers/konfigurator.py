@@ -163,6 +163,11 @@ def _wert_lesen(frage, form, antworten):
         return roh, ""
 
     if frage.typ in ("Zahleneingabe", "Betragseingabe"):
+        # v11: Zahleneingaben können eine Text-Alternative tragen
+        # (A03: „Verbrauch unbekannt“ → Flächen-Auslegung)
+        alt = (form.get("wert_alt") or "").strip()
+        if alt and alt in frage.antworten:
+            return alt, ""
         roh = (form.get("wert") or "").strip()
         optional = "leer" in frage.hinweis.lower()
         if not roh and optional:

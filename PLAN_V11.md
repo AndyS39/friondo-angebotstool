@@ -60,7 +60,7 @@ ZULIEFERUNGEN (blockieren einzelne Checkboxen, nicht den Start):
       Ablauf wie bei Lead-Erfassungen (siehe VORAB-CHECK)
 
 ## Phase 65 – Logik-Excel: Konfigurator-Erweiterungen
-- [ ] FLÄCHEN-AUSLEGUNG OHNE VERBRAUCH: A03 erhält die Alternative
+- [x] FLÄCHEN-AUSLEGUNG OHNE VERBRAUCH: A03 erhält die Alternative
       „Verbrauch unbekannt". Dann Folgefragen: „Beheizte Wohnfläche in
       m²" (Zahl) und „Gebäudestandard" (saniert – 40 W/m² |
       Altbau – 60 W/m² | Altbau unsaniert – 70 W/m²). Heizlast =
@@ -68,21 +68,21 @@ ZULIEFERUNGEN (blockieren einzelne Checkboxen, nicht den Start):
       Heizlast-Klassenlogik (inkl. 15-kW-Klasse und Ampel). Protokoll
       und Angebots-Auslegungszeile weisen die Herleitung aus
       („Auslegung über Fläche: 150 m² × 60 W/m² = 9,0 kW")
-- [ ] Heizlast-/Auslegungstext im Angebot: Zeile im Block 1 nach dem
+- [x] Heizlast-/Auslegungstext im Angebot: Zeile im Block 1 nach dem
       TAIFUN-Muster (Zulieferung 4) – bei Verbrauchs-Auslegung mit
       kWh-Wert, bei Heizlast/Fläche mit der Herleitung
-- [ ] Fassadenleitung bei Dachaufstellung: Wird als Aufstellort der
+- [x] Fassadenleitung bei Dachaufstellung: Wird als Aufstellort der
       Außeneinheit eine Dach-Variante gewählt (Garagendach etc.),
       erscheint die Fassadenleitungs-Abfrage analog zur bestehenden
       OG-Logik (Pos. 134, ggf. mit Meterangabe wie bisher)
-- [ ] Mobiler Kran: automatische EP-Position entfernen; stattdessen bei
+- [x] Mobiler Kran: automatische EP-Position entfernen; stattdessen bei
       Dachaufstellung neue Frage „Mobiler Kran erforderlich?" (Ja |
       Nein), Ja → Kran-Position als EP ins Angebot
       (Entscheidung siehe Chat – Veto möglich)
-- [ ] Öltank-Entsorgung „ab 9.000 l": Folgefrage „Tatsächliche
+- [x] Öltank-Entsorgung „ab 9.000 l": Folgefrage „Tatsächliche
       Tankgröße in Litern" (Zahl) – landet im Protokoll und als
       Zusatz im Positionstext der Entsorgung
-- [ ] DACHZENTRALE → KG, ANSCHLÜSSE IN ANDERER ETAGE (Kette
+- [x] DACHZENTRALE → KG, ANSCHLÜSSE IN ANDERER ETAGE (Kette
       überarbeiten): Bei Ziel Kellergeschoss zusätzlich abfragen, in
       welcher Etage die Anschlüsse (Heizung/Warmwasser) liegen.
       Gleiche Etage (KG) → Pauschale 141 wie bisher. Andere Etage
@@ -90,15 +90,15 @@ ZULIEFERUNGEN (blockieren einzelne Checkboxen, nicht den Start):
       „Rohrleitung Heizung in m" und „Rohrleitung Warmwasser in m"
       → Artikel 139/140 × Meter (Zuordnung der beiden Artikel zu
       Heizung/WW anhand der Artikeltexte prüfen und dokumentieren)
-- [ ] Vermerk Heizungsumverlegung als Position: TAIFUN-Artikel 124
+- [x] Vermerk Heizungsumverlegung als Position: TAIFUN-Artikel 124
       (0,00 €, Text laut Zulieferung 4) wird bei jeder
       KG-Verlegung der Dachzentrale im Montage-/Demontage-Block
       ausgegeben. Der v9-Vermerke-Blatt-Eintrag (Textabsatz) wird auf
       diese Positionsausgabe umgestellt – EINE Quelle, kein Doppel
-- [ ] Erdleitung (Pos. 102) in Block 6 „Aufstellung der Außeneinheit
+- [x] Erdleitung (Pos. 102) in Block 6 „Aufstellung der Außeneinheit
       und Hauseinführung" (siehe VORAB-CHECK; Fassadenleitung bleibt
       in Block 2)
-- [ ] Blocküberschrift für die Elektroarbeiten ergänzen (Block 7),
+- [x] Blocküberschrift für die Elektroarbeiten ergänzen (Block 7),
       Wortlaut analog TAIFUN-Muster, sonst „Elektroarbeiten"
 - [ ] Leistungsklassen monoenergetisch: NEUE GRENZEN gemäß
       Zulieferung 1 in Paketmatrix (kWh- und Heizlast-Spalte)

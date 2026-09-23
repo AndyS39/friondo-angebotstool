@@ -42,8 +42,18 @@
             {% elif frage.typ == 'Datum' %}
                 <input type="date" name="f_{{ frage.id }}" value="{{ werte.get(frage.id) or '' }}">
             {% elif frage.typ in ('Zahleneingabe', 'Betragseingabe') %}
+                {% set zwert = werte.get(frage.id) %}
+                {% set ist_alt = frage.antworten and zwert is string and zwert in frage.antworten %}
                 <input type="text" name="f_{{ frage.id }}" inputmode="decimal"
-                       value="{{ werte.get(frage.id) | menge if werte.get(frage.id) not in (None, '') else '' }}">
+                       value="{{ zwert | menge if zwert not in (None, '') and not ist_alt else '' }}">
+                {# v11: Text-Alternative zur Zahl (A03: „Verbrauch unbekannt") #}
+                {% for alt in frage.antworten %}
+                <label class="kontrollfeld">
+                    <input type="checkbox" name="f_{{ frage.id }}_alt" value="{{ alt }}"
+                           {{ 'checked' if zwert == alt }}
+                           onchange="if (this.checked) this.closest('.fragefeld').querySelector('input[name=\'f_{{ frage.id }}\']').value = '';">
+                    {{ alt }}</label>
+                {% endfor %}
             {% elif frage.typ == 'Mengenmaske' %}
                 <div class="mengen-gruppe">
                 {% for option in frage.antworten %}

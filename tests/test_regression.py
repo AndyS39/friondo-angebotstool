@@ -27,8 +27,11 @@ KONTROLL_SZENARIO = {
     # v8: Heizlast unbekannt, keine Stemmarbeiten -> Ergebnis unverändert
     "A14": "Nein", "A16": "Nein",
     # Neue Anlage (7-kW-AWM-Paket, 50-l-Puffer, Garagendach ohne Bitumen)
+    # v11: N09 Kran-Frage (statt EP-Automatik), N10 Fassadenleitung bei
+    # Dachaufstellung (0 m -> keine Position, Ergebnis unveraendert)
     "N01": "Luft/Wasser", "N02": "Ja", "N03": "bis 200 l",
     "N04": "Garagendach", "N05": "Nein", "N06": "50 l",
+    "N09": "Nein", "N10": 0,
     # Heizverteilung (2 Heizkreise, 1 Heizkörper S, 2 Verteiler mit je 4 Gruppen)
     "H01": "2", "H02": "Heizkörper und Fußbodenheizung",
     "H03": "Ja", "H04": {"S": 1, "M": 0, "L": 0, "XL": 0},
@@ -163,10 +166,11 @@ class TestDachzentrale(unittest.TestCase):
         assert not bericht.fehler, bericht.fehler
         cls.session = SessionLocal()
         cls.antworten = dict(KONTROLL_SZENARIO)
+        # v11: Etagen-Frage D06 + getrennte Meterabfragen D07/D08 (statt D03/D05)
         cls.antworten.update({
-            "A04": "DG", "D01": "Nein", "D02": "Nein", "D03": "Nein",
-            "D04": "Ja", "D05": {"Heizung VL/RL (m)": 6,
-                                 "Trinkwasser TWK/TWW/Zirkulation (m)": 4},
+            "A04": "DG", "D01": "Nein", "D02": "Nein",
+            "D06": "Andere Etage (z. B. EG)", "D04": "Ja",
+            "D07": 6, "D08": 4,
             "A05": 8,   # Erdleitung wird gefragt (DG und D01 = Nein)
         })
         cls.positionen = angebot_aufbau.positionen_zusammenstellen(
@@ -179,7 +183,8 @@ class TestDachzentrale(unittest.TestCase):
         self.assertEqual(self._mengen("163"), [1.0])     # immer bei A04 = DG
         self.assertEqual(self._mengen("139"), [6.0])     # Heizung 6 m
         self.assertEqual(self._mengen("140"), [4.0])     # Trinkwasser 4 m
-        self.assertEqual(self._mengen("141"), [])        # D03 = Nein
+        self.assertEqual(self._mengen("141"), [])        # D06 = andere Etage (v11)
+        self.assertEqual(self._mengen("Z25"), [1.0])     # v11: Vermerk-Position
 
     def test_bloecke(self):
         block_163 = [p["block_nr"] for p in self.positionen if p["pos_nr"] == "163"]
@@ -196,7 +201,7 @@ class TestDachzentrale(unittest.TestCase):
 
     def test_fassade_bei_d01_ja(self):
         antworten = dict(self.antworten, D01="Ja")
-        for entfaellt in ("D02", "D03", "D04", "D05", "A05"):
+        for entfaellt in ("D02", "D06", "D04", "D07", "D08", "A05"):
             antworten.pop(entfaellt, None)
         fragen = self.logik.fragen
         self.assertTrue(engine.ist_sichtbar(fragen["A06"], antworten, fragen))
@@ -204,7 +209,8 @@ class TestDachzentrale(unittest.TestCase):
 
     def test_ampel_grund_15(self):
         antworten = dict(self.antworten, D04="Nein")
-        antworten.pop("D05", None)
+        antworten.pop("D07", None)
+        antworten.pop("D08", None)
         gruende = engine.ampel_gruende(self.logik, antworten)
         self.assertTrue(any("Dachzentrale" in g for g in gruende))
 

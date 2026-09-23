@@ -109,8 +109,10 @@ def main():
     pruefe("Kontroll KG", "KfW Zuschuss 19.600 € (Satz 70)", erg.zuschuss_cent == 1960000, euro(erg.zuschuss_cent))
 
     dg = dict(KONTROLL_SZENARIO)
-    dg.update({"A04": "DG", "D01": "Nein", "D02": "Nein", "D03": "Nein", "D04": "Ja",
-               "D05": {"Heizung VL/RL (m)": 6, "Trinkwasser TWK/TWW/Zirkulation (m)": 4}, "A05": 8})
+    # v11: Etagen-Frage D06 + getrennte Meterabfragen D07/D08 (statt D03/D05)
+    dg.update({"A04": "DG", "D01": "Nein", "D02": "Nein",
+               "D06": "Andere Etage (z. B. EG)", "D04": "Ja",
+               "D07": 6, "D08": 4, "A05": 8})
     posdg = angebot_aufbau.positionen_zusammenstellen(logik, dg, s)
     nummern = {p["pos_nr"] for p in posdg}
     pruefe("Kontroll DG", "Katalog vollständig (inkl. A13)", engine.naechste_frage(logik, dg) is None)

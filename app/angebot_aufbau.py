@@ -280,6 +280,29 @@ def positionen_zusammenstellen(logik: Logik, antworten: dict,
             if p["block_nr"] == block_nr:
                 p["gruppe"] = ueberschrift
 
+    # v11: Heizlast-/Auslegungszeile am Ende von Block 1 (0,00 €, kein EP) –
+    # Wortlaut vorläufig bis zum TAIFUN-Muster (Zulieferung 4)
+    auslegung = engine.auslegungs_text(logik, antworten)
+    if auslegung and any(p["block_nr"] == 1 for p in positionen):
+        letzte1 = max(i for i, p in enumerate(positionen) if p["block_nr"] == 1)
+        positionen.insert(letzte1 + 1, {
+            "block_nr": 1,
+            "gruppe": positionen[letzte1]["gruppe"],
+            "pos_nr": "", "bezeichnung": "Auslegung der Wärmepumpe",
+            "beschreibung": auslegung, "menge": 1.0, "einheit": "pauschal",
+            "e_preis_cent": 0, "ep_flag": False, "ek_cent": 0, "guid": "",
+        })
+
+    # v11: tatsächliche Tankgröße (A19, ab 9.000 L) als Zusatz im Text der
+    # Öltank-Entsorgung – greift, falls doch eine Entsorgungsposition vorliegt
+    tank = engine.zahl_parsen(antworten.get(engine.ID_TANKGROESSE))
+    if tank:
+        tank_text = f"{int(tank):,}".replace(",", ".")
+        for p in positionen:
+            if p["pos_nr"] in [f"Z{n:02d}" for n in range(1, 15)] or p["pos_nr"] == "107":
+                p["beschreibung"] = (p["beschreibung"].rstrip()
+                                     + f"\nTatsächliche Tankgröße: {tank_text} Liter")
+
     for sort, p in enumerate(positionen, 1):
         p["sort"] = sort
     return positionen

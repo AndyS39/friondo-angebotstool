@@ -456,6 +456,11 @@ def _wert_lesen(frage, form, antworten):
             return wert, "Ungültiges Datum."
         return wert, ""
     if frage.typ in ("Zahleneingabe", "Betragseingabe"):
+        # v11: Zahleneingaben können eine Text-Alternative tragen
+        # (A03: „Verbrauch unbekannt“ → Flächen-Auslegung über A17/A18)
+        alt = (form.get(f"{name}_alt") or "").strip()
+        if alt and alt in frage.antworten:
+            return alt, ""
         roh = (form.get(name) or "").strip()
         if not roh:
             return "", ("" if _ist_optional(frage) else "Bitte eine Zahl eingeben.")
