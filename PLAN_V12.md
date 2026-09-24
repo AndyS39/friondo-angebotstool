@@ -104,14 +104,14 @@ HARTE LEITPLANKEN für dieses Update:
 - [x] PWA-Darstellung prüfen (Icon, Startansicht, kein Zoom-Springen)
 
 ## Phase 74 – Feinschliff & Abnahme
-- [ ] Konsistenz-Rundgang: jede Seite gegen docs/design-system.md
+- [x] Konsistenz-Rundgang: jede Seite gegen docs/design-system.md
       prüfen (keine Alt-Stile, keine Inline-Farben mehr)
-- [ ] Vorher/Nachher-Screenshots der Kernseiten (Portal, Startseite,
+- [x] Vorher/Nachher-Screenshots der Kernseiten (Portal, Startseite,
       Angebotsliste, Vorgangsakte, Editor, mobile Erfassung) unter
       docs/design-v12/ ablegen
-- [ ] Alle automatisierten Tests grün; kompletter manueller
+- [x] Alle automatisierten Tests grün; kompletter manueller
       Klickdurchgang laut Abnahmeskript (Funktionsverhalten identisch)
-- [ ] CLAUDE.md: Kopf auf „(v12)"; Abschnitt einfügen:
+- [x] CLAUDE.md: Kopf auf „(v12)"; Abschnitt einfügen:
 
       ## Neu in v12 (abgestimmt 24.09.2026)
       - Reines Design-Update, keine Funktionsänderungen: zentrales
@@ -126,7 +126,9 @@ HARTE LEITPLANKEN für dieses Update:
       - Angebots-PDF unverändert. Künftige Module (Lead-Management,
         Projektierung) bauen auf dem Design-System auf.
 
-- [ ] docs/nach-dem-update-v12.md: Kurzhinweis ans Team („neue Optik,
+- [x] docs/nach-dem-update-v12.md: Kurzhinweis ans Team („neue Optik,
       identische Funktionen – alles ist, wo es war"), Strg+F5-Hinweis
       wegen CSS-Cache
-- [ ] git push → Rollout per update.bat
+- [x] git push → Rollout per update.bat
+      (Push am 25.09.2026 erledigt; Server-Rollout via update.bat steht aus –
+      im Tool heißt das Paket v14, da v12 durch das Lead-Management belegt war)

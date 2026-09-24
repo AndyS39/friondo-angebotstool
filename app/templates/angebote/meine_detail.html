@@ -86,8 +86,7 @@
 
     <h2>Gesamtrabatt</h2>
     <p>DB-Ampel:
-        <span class="ampel {{ {'gruen': 'gruen', 'orange': 'orange', 'rot': 'orange'}[db_ampel] }}"
-              style="{{ 'color:#c0392b' if db_ampel == 'rot' }}">● {{ {'gruen': 'Grün', 'orange': 'Orange', 'rot': 'Rot'}[db_ampel] }}</span>
+        <span class="ampel {{ {'gruen': 'gruen', 'orange': 'orange', 'rot': 'rot'}[db_ampel] }}">● {{ {'gruen': 'Grün', 'orange': 'Orange', 'rot': 'Rot'}[db_ampel] }}</span>
         <span class="dezent">(Rabatt ist möglich, solange die Ampel nicht auf Rot fällt)</span>
     </p>
     {% if freigabe_offen %}

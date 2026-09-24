@@ -2516,3 +2516,6 @@ td.aktionen form { display: inline-flex; vertical-align: middle; margin: 0 0 0 0
     backdrop-filter: blur(4px);
 }
 .akte-kopfkarte .kundenname .wv-chip { vertical-align: middle; }
+
+/* Phase 74: letzte Inline-Farben abgeloest */
+.ampel.rot { color: var(--status-rot); }

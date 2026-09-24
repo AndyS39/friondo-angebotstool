@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v13)
+# Friondo Angebotstool – Projektkontext (v14)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -423,3 +423,32 @@ Zeitpunkt bereits durch Projektierung und Lead-Management belegt.)
 - Offen bis Zulieferung: monoenergetische Klassengrenzen (Paketmatrix),
   VK-Preisliste (Janni), Bosch-CS8800iAW-Broschüre (anlagen/),
   TAIFUN-Wortlaute (Auslegungszeile, Pos.-124-Text).
+
+## Neu in v14 – Design-Update (abgestimmt 24.09.2026)
+
+(Umsetzung des Plans PLAN_V12.md; die Zählung v12 war bereits durch das
+Lead-Management belegt.)
+
+- Reines Design-Update, keine Funktionsänderungen: zentrales
+  Design-System (CSS-Tokens in style.css, Komponenten-Baukasten, lokale
+  SVG-Icons in `_symbole.html`, gemeinsame Makros in
+  `_komponenten.html`: status_badge · statuskette · wiedervorlage_chip
+  · leer_zustand; Dokumentation in docs/design-system.md). Keine
+  externen CDNs/Webfonts – alles lokal.
+- Überarbeitet: Portal, Angebotstool-Startseite (Icon-Kacheln,
+  dringliche Zahlen rot), alle Listen (Filterleiste als Karte mit
+  Chip-Selects, Sticky-Tabellenkopf, Zebra + Hover, EIN
+  Status-Badge-Schema, kompakte Icon-Aktionen, dunkle Summenzeile),
+  Vorgangsakte (Kundenkopfkarte mit Hot-Ampel + Wiedervorlage-Chip,
+  zweispaltig, Angebots-Karten mit Status-Schrittleiste,
+  Notizen-Chat-Optik mit eigenen Einträgen rechts), Angebots-Editor
+  (Kopfkarte mit Schrittleiste, abgesetzte Blocküberschriften, sticky
+  Aktionsleiste unten), Parametrierung/Statistik, mobile Erfassung
+  (Seite x von y + Balken, Frage-Karten, sticky Weiter-Leiste,
+  Einschätzung als große Buttons, PWA-Manifest + theme-color).
+- Bestands-Bugfix: `td.aktionen` fiel durch `display:flex` aus dem
+  Tabellenlayout (Aktions-Buttons standen seit v6 versetzt neben den
+  Listen) – jetzt table-cell.
+- Angebots-PDF unverändert. Künftige Module bauen auf den Tokens auf;
+  Screenshots vorher/nachher unter docs/design-v12/, Screenshot-Helfer
+  scripts/design_screenshots.py (Playwright + lokales Chrome).

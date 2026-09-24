@@ -24,7 +24,7 @@
                    if z.freigabe.rabatt_prozent else (z.freigabe.rabatt_cent | euro) }}
                 {% if z.freigabe.rabatt_bezeichnung %}<span class="dezent">({{ z.freigabe.rabatt_bezeichnung }})</span>{% endif %}</td>
             <td class="rechts">{{ z.db_alt | euro }}</td>
-            <td class="rechts" style="color:#c0392b"><strong>{{ z.db_neu | euro }}</strong>
+            <td class="rechts db-rot"><strong>{{ z.db_neu | euro }}</strong>
                 <span class="dezent">(Ampel {{ z.ampel_neu }})</span></td>
             <td class="aktionen">
                 <form method="post" action="/angebote/rabatt-freigaben/{{ z.freigabe.id }}/entscheiden">

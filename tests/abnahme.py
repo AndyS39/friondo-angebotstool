@@ -221,7 +221,10 @@ def main():
     antwort_mail["from"] = antwort_mail.pop("from_")
     mail_sync.nachrichten_verarbeiten(s, ang, [gesendet, antwort_mail], {"angebot@friondo.de"}); s.commit()
     liste = client.get("/angebote").text
-    pruefe("Versand", "Antwort → Brief-Symbol mit Zähler in der Liste", f'/angebote/{ang.id}/mails' in liste and "✉ 1" in liste)
+    # v14 (PLAN_V12): Brief-Symbol ist jetzt ein Inline-SVG im mail-abzeichen
+    pruefe("Versand", "Antwort → Brief-Symbol mit Zähler in der Liste",
+           f'/angebote/{ang.id}/mails' in liste
+           and 'class="mail-abzeichen"' in liste and "1 Antwort zur Angebots-Mail" in liste)
     from app.models import AngebotsMail
     aufraeumen.extend(s.query(AngebotsMail).filter(AngebotsMail.angebot_id == ang.id).all())
 
@@ -666,8 +669,10 @@ def main():
     akte = client.get(f"/vorgaenge/{v10vorgang.id}").text
     v10notiz = (s.query(VorgangsNotiz)
                 .filter(VorgangsNotiz.vorgang_id == v10vorgang.id).first())
+    # v14 (PLAN_V12): Chat-Kopf ist jetzt Autor fett + Zeit dezent (ohne Doppelpunkt)
     pruefe("v10 Akte", "Notiz mit Autor + Zeitstempel im Chat-Format",
-           "Abnahme-Notiz v10" in akte and "Uhr:" in akte
+           "Abnahme-Notiz v10" in akte and 'class="notiz-kopf"' in akte
+           and "Uhr</span>" in akte
            and v10notiz is not None and v10notiz.benutzer_name == "Admin")
     pruefe("v10 Akte", "Notizen unveränderlich (kein Bearbeiten/Löschen-Endpunkt)",
            client.post(f"/vorgaenge/{v10vorgang.id}/notiz/{v10notiz.id}/loeschen")
