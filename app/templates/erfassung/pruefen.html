@@ -33,7 +33,7 @@
         </div>
     {% endfor %}
 
-    <div class="mobil-aktionen">
+    <div class="mobil-aktionen sticky-fuss">
         <a class="knopf zweitrangig gross" href="/erfassung/{{ erfassung.id }}/seite/{{ seiten | length - 1 }}">← Zurück</a>
         {% if not offen and erfassung.status == 'Entwurf' %}
         <form method="post" action="/erfassung/{{ erfassung.id }}/absenden">

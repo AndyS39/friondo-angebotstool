@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block titel %}Friondo Angebotstool{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v={{ css_version }}">
+    {# v14 (Phase 73): PWA-Darstellung - Startansicht, Icon, Farbe #}
+    <meta name="theme-color" content="#1b2a5e">
+    <link rel="manifest" href="/static/manifest.webmanifest">
+    <link rel="icon" href="/static/logo.png">
+    <link rel="apple-touch-icon" href="/static/logo.png">
 </head>
 <body>
 {% set benutzer_angemeldet = request.state.benutzer if request.state is defined else None %}

@@ -1,0 +1,11 @@
+{
+    "name": "Friondo Angebotstool",
+    "short_name": "Angebotstool",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#f6f8fa",
+    "theme_color": "#1b2a5e",
+    "icons": [
+        { "src": "/static/logo.png", "sizes": "any", "type": "image/png" }
+    ]
+}

@@ -93,15 +93,15 @@ HARTE LEITPLANKEN für dieses Update:
       Farben je Sparte/Kanal
 
 ## Phase 73 – Mobile Erfassung (Außendienst)
-- [ ] Fragebogen: Fortschrittsanzeige („Seite 3 von 8" + Balken),
+- [x] Fragebogen: Fortschrittsanzeige („Seite 3 von 8" + Balken),
       Seitentitel groß, eine Frage-Karte pro Frage, große Touch-Ziele
       (Radio-/Checkbox-Flächen komplett tippbar), Zahlenfelder mit
       passender Handy-Tastatur, Weiter/Zurück als sticky Fußleiste
-- [ ] Sparten-Weiche und Freitext-Umschalter als große, klare Karten
-- [ ] Einschätzungs-Seite: Ampelwahl als drei große Buttons
-- [ ] AD-Listen (Leads VOT, Meine Angebote/Vorgänge): Karten-Layout
+- [x] Sparten-Weiche und Freitext-Umschalter als große, klare Karten
+- [x] Einschätzungs-Seite: Ampelwahl als drei große Buttons
+- [x] AD-Listen (Leads VOT, Meine Angebote/Vorgänge): Karten-Layout
       fürs Handy, Badges/Chips wie am Desktop, Wiedervorlagen-Anzeige
-- [ ] PWA-Darstellung prüfen (Icon, Startansicht, kein Zoom-Springen)
+- [x] PWA-Darstellung prüfen (Icon, Startansicht, kein Zoom-Springen)
 
 ## Phase 74 – Feinschliff & Abnahme
 - [ ] Konsistenz-Rundgang: jede Seite gegen docs/design-system.md

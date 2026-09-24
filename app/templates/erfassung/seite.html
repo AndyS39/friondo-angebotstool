@@ -6,13 +6,15 @@
 <div class="mobil-inhalt">
     <p class="dezent">Kunde: <strong>{{ kunde.anzeige_name }}</strong></p>
 
-    <div class="fortschritt">
-        {% for s in seiten %}
-            <span class="schritt {{ 'aktuell' if loop.index0 == nr else ('fertig' if loop.index0 < nr) }}"
-                  title="{{ s }}"></span>
-        {% endfor %}
+    {# v14 (Phase 73): Fortschritt als "Seite x von y" + Balken #}
+    <div class="erfassung-fortschritt">
+        <div class="fortschritt-text">
+            <span>Seite {{ nr + 1 }} von {{ seiten | length }}</span>
+            <span>{{ ((nr + 1) * 100 / (seiten | length)) | round | int }} %</span>
+        </div>
+        <div class="balken"><i style="width: {{ ((nr + 1) * 100 / (seiten | length)) | round | int }}%"></i></div>
     </div>
-    <h1>{{ seiten[nr] }} <span class="dezent">({{ nr + 1 }}/{{ seiten | length }})</span></h1>
+    <h1>{{ seiten[nr] }}</h1>
 
     <form method="post" action="/erfassung/{{ erfassung.id }}/seite/{{ nr }}" class="mobil-formular" id="seitenform">
         {% for frage in fragen %}
@@ -26,7 +28,8 @@
             {% if fehler.get(frage.id) %}<p class="feldfehler">{{ fehler[frage.id] }}</p>{% endif %}
 
             {% if frage.typ == 'Auswahl' %}
-                <div class="wahl-gruppe">
+                {# v14: Einschätzungs-Ampel (S01) als drei grosse Buttons #}
+                <div class="wahl-gruppe {{ 'einschaetzung' if frage.id == 'S01' }}">
                 {% for option in frage.antworten %}
                     <label class="wahl">
                         <input type="radio" name="f_{{ frage.id }}" value="{{ option }}"
@@ -76,7 +79,7 @@
         </div>
         {% endfor %}
 
-        <div class="mobil-aktionen">
+        <div class="mobil-aktionen sticky-fuss">
             {% if nr > 0 %}
                 <button class="knopf zweitrangig gross" type="submit" name="richtung" value="zurueck">← Zurück</button>
             {% endif %}
