@@ -154,8 +154,12 @@ def _daten() -> list[str]:
         meldungen += angebotsprofile.seed(session)
         # v8/v9: neue Zusatzartikel (Z23 MID-Zähler, Z24 Solar-Rückbau) müssen
         # im Artikelstamm liegen, sonst blockiert die Logik-Validierung –
-        # fehlen sie, läuft der Preislisten-/Zusatzartikel-Import automatisch
-        fehlend = [nr for nr in ("Z23", "Z24")
+        # fehlen sie, läuft der Preislisten-/Zusatzartikel-Import automatisch.
+        # v13: ebenso Z25 (Vermerk Heizungsumverlegung, referenziert in
+        # Aktionen D01 + Angebotsaufbau Block 5) und Z26 (Elektroarbeiten im
+        # PV-Angebot) – ohne diesen Schritt blockierte die Validierung nach
+        # dem Server-Update, weil update.bat keinen Import ausführt
+        fehlend = [nr for nr in ("Z23", "Z24", "Z25", "Z26")
                    if session.query(Artikel).filter(Artikel.pos_nr == nr,
                                                     Artikel.aktiv.is_(True)).count() == 0]
         if fehlend:
