@@ -2496,3 +2496,23 @@ td.aktionen {
 }
 td.aktionen .knopf,
 td.aktionen form { display: inline-flex; vertical-align: middle; margin: 0 0 0 0.25rem; }
+
+/* Phase 71: Vorgangsakte */
+.angebot-karte.ueberholt-karte { opacity: 0.6; }
+.mailzeile {
+    margin: 0.45rem 0;
+    padding-bottom: 0.45rem;
+    border-bottom: 1px solid var(--g-100);
+    font-size: var(--t-m);
+}
+.mailzeile:last-child { border-bottom: none; }
+.chat-eingabe {
+    position: sticky;
+    bottom: 0.5rem;
+    background: rgba(246, 248, 250, 0.96);
+    padding: var(--a-2);
+    border-radius: var(--r-m);
+    box-shadow: var(--schatten-1);
+    backdrop-filter: blur(4px);
+}
+.akte-kopfkarte .kundenname .wv-chip { vertical-align: middle; }

@@ -1,94 +1,158 @@
 {% extends "base.html" %}
 {% import "_sparten.html" as sparten_ui %}
+{% from "_komponenten.html" import status_badge, statuskette, wiedervorlage_chip, leer_zustand %}
+{% from "_symbole.html" import symbol %}
 
 {% block titel %}Vorgang {{ kunde.anzeige_name if kunde else vorgang.id }} – Friondo Angebotstool{% endblock %}
 
+{% block mainklasse %}breit{% endblock %}
+
 {% block inhalt %}
-<h1>Vorgangsakte: {{ kunde.anzeige_name if kunde else '?' }}
-    <a class="knopf klein zweitrangig" href="/vorgaenge">Zur Vorgangsliste</a>
-</h1>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-<div class="akte-kopf">
-    <p>
-        {% if kunde %}<strong>Ausführungsort:</strong>
-            {{ ((kunde.strasse ~ ', ' if kunde.strasse) ~ kunde.plz ~ ' ' ~ kunde.ort) | trim or '–' }}
-            {% if kunde.telefon %} · ☎ {{ kunde.telefon }}{% endif %}
-            {% if kunde.email %} · ✉ {{ kunde.email }}{% endif %}
-        {% endif %}<br>
-        <strong>Kanal/Profil:</strong> {{ kanal or '–' }}{% if profil %} → {{ profil.name }}{% endif %}
-        · <strong>Vertriebler:</strong>
-        {% for b in vertriebler %}{{ b.name }}{{ ', ' if not loop.last }}{% else %}–{% endfor %}
-        {% if lead and lead.vot_datum %} · <strong>VOT:</strong> {{ lead.vot_datum.strftime('%d.%m.%Y %H:%M') }}{% endif %}
-    </p>
-    <p><span class="sparten-chips">
-        {% for sparte, status in chips %}{{ sparten_ui.chip(sparte, status) }}{% endfor %}
-    </span></p>
-    {# Verfolgung (Phase 60): EINE Ampel + Wiedervorlage je Vorgang #}
-    <form method="post" action="/vorgaenge/{{ vorgang.id }}/verfolgung" class="suchleiste">
-        <strong>Verfolgung:</strong>
-        <select name="verfolgung_ampel">
-            <option value="" {{ 'selected' if not vorgang.verfolgung_ampel }}>– keine Einstufung –</option>
-            <option value="heiss" {{ 'selected' if vorgang.verfolgung_ampel == 'heiss' }}>🔥 heiß</option>
-            <option value="warm" {{ 'selected' if vorgang.verfolgung_ampel == 'warm' }}>🌤 warm</option>
-            <option value="kalt" {{ 'selected' if vorgang.verfolgung_ampel == 'kalt' }}>❄ kalt</option>
-        </select>
-        <label class="kontrollfeld">Wiedervorlage
-            <input type="date" name="wiedervorlage_am"
-                   value="{{ vorgang.wiedervorlage_am.strftime('%Y-%m-%d') if vorgang.wiedervorlage_am }}"
-                   class="{{ 'wv-faellig' if vorgang.wiedervorlage_am and vorgang.wiedervorlage_am <= heute }}"></label>
-        {% if benutzer.rolle in ('admin', 'innendienst') %}
-        <label class="kontrollfeld">Verantwortlich
-            <select name="wv_verantwortlicher">
-                <option value="0" {{ 'selected' if not vorgang.wiedervorlage_benutzer_id }}>– Innendienst –</option>
-                {% for b in aussendienst %}
-                    <option value="{{ b.id }}" {{ 'selected' if vorgang.wiedervorlage_benutzer_id == b.id }}>{{ b.name }}</option>
-                {% endfor %}
-            </select></label>
-        {% elif vorgang.wiedervorlage_benutzer_id %}
-            <span class="dezent">Verantwortlich: {{ benutzer_map[vorgang.wiedervorlage_benutzer_id].name
-                                                    if vorgang.wiedervorlage_benutzer_id in benutzer_map else '?' }}</span>
+{# v14 (PLAN_V12, Phase 71): Kopfkarte – Kundenname gross, Kontakt,
+   Kanal/Profil, Sparten, Hot-Ampel + Wiedervorlage prominent;
+   Schnellaktionen rechts. Formularnamen unverändert (v10). #}
+<div class="akte-kopfkarte">
+    <div>
+        <h1 class="kundenname">{{ kunde.anzeige_name if kunde else '?' }}
+            {% if vorgang.verfolgung_ampel %}
+                <span title="Verfolgung: {{ vorgang.verfolgung_ampel }}">{{ {'heiss': '🔥', 'warm': '🌤', 'kalt': '❄'}[vorgang.verfolgung_ampel] }}</span>
+            {% endif %}
+            {{ wiedervorlage_chip(vorgang.wiedervorlage_am, heute) }}
+        </h1>
+        <p class="dezent" style="margin:0.15rem 0">
+            {% if kunde %}{{ symbol('ort') }}
+                {{ ((kunde.strasse ~ ', ' if kunde.strasse) ~ kunde.plz ~ ' ' ~ kunde.ort) | trim or '–' }}
+                {% if kunde.telefon %} · {{ symbol('telefon') }} {{ kunde.telefon }}{% endif %}
+                {% if kunde.email %} · {{ symbol('brief') }} {{ kunde.email }}{% endif %}
+            {% endif %}
+        </p>
+        <p style="margin:0.35rem 0 0">
+            {% if kanal or profil %}<span class="abzeichen status-versendet">{{ kanal or '–' }}{% if profil %} → {{ profil.name }}{% endif %}</span>{% endif %}
+            <span class="sparten-chips">
+                {% for sparte, status in chips %}{{ sparten_ui.chip(sparte, status) }}{% endfor %}
+            </span>
+            · {{ symbol('nutzer') }}
+            {% for b in vertriebler %}{{ b.name }}{{ ', ' if not loop.last }}{% else %}–{% endfor %}
+            {% if lead and lead.vot_datum %} · {{ symbol('uhr') }} VOT {{ lead.vot_datum.strftime('%d.%m.%Y %H:%M') }}{% endif %}
+        </p>
+        {# Verfolgung (Phase 60): EINE Ampel + Wiedervorlage je Vorgang #}
+        <form method="post" action="/vorgaenge/{{ vorgang.id }}/verfolgung" class="suchleiste" style="margin-bottom:0">
+            <strong>Verfolgung:</strong>
+            <select name="verfolgung_ampel">
+                <option value="" {{ 'selected' if not vorgang.verfolgung_ampel }}>– keine Einstufung –</option>
+                <option value="heiss" {{ 'selected' if vorgang.verfolgung_ampel == 'heiss' }}>🔥 heiß</option>
+                <option value="warm" {{ 'selected' if vorgang.verfolgung_ampel == 'warm' }}>🌤 warm</option>
+                <option value="kalt" {{ 'selected' if vorgang.verfolgung_ampel == 'kalt' }}>❄ kalt</option>
+            </select>
+            <label class="kontrollfeld">Wiedervorlage
+                <input type="date" name="wiedervorlage_am"
+                       value="{{ vorgang.wiedervorlage_am.strftime('%Y-%m-%d') if vorgang.wiedervorlage_am }}"
+                       class="{{ 'wv-faellig' if vorgang.wiedervorlage_am and vorgang.wiedervorlage_am <= heute }}"></label>
+            {% if benutzer.rolle in ('admin', 'innendienst') %}
+            <label class="kontrollfeld">Verantwortlich
+                <select name="wv_verantwortlicher">
+                    <option value="0" {{ 'selected' if not vorgang.wiedervorlage_benutzer_id }}>– Innendienst –</option>
+                    {% for b in aussendienst %}
+                        <option value="{{ b.id }}" {{ 'selected' if vorgang.wiedervorlage_benutzer_id == b.id }}>{{ b.name }}</option>
+                    {% endfor %}
+                </select></label>
+            {% elif vorgang.wiedervorlage_benutzer_id %}
+                <span class="dezent">Verantwortlich: {{ benutzer_map[vorgang.wiedervorlage_benutzer_id].name
+                                                        if vorgang.wiedervorlage_benutzer_id in benutzer_map else '?' }}</span>
+            {% endif %}
+            <input type="text" name="notiz" size="24" placeholder="Notiz in den Chat (optional)">
+            <button class="knopf klein" type="submit">Speichern</button>
+        </form>
+    </div>
+    <div class="akte-schnellaktionen">
+        <a class="knopf zweitrangig klein" href="/vorgaenge">Zur Vorgangsliste</a>
+        {% if kunde and not vorgang.demo %}
+        <a class="knopf" href="/erfassung/sparten?kunde_id={{ kunde.id }}{{ '&lead_id=' ~ lead.id if lead }}">
+            {{ symbol('plus') }} Neue Erfassung</a>
         {% endif %}
-        <input type="text" name="notiz" size="24" placeholder="Notiz in den Chat (optional)">
-        <button class="knopf klein" type="submit">Speichern</button>
-    </form>
+        {% if angebote and benutzer.rolle in ('admin', 'innendienst') %}
+        <a class="knopf zweitrangig" href="#angebote">{{ symbol('brief') }} Gemeinsam versenden</a>
+        {% endif %}
+        <a class="knopf zweitrangig" href="#notizen">{{ symbol('notiz') }} Notiz</a>
+    </div>
 </div>
+
+{# Fachliche Hinweise als einheitliche Warn-Karte oben in der Akte #}
+{% if gewerke_hinweise %}
+<div class="warnblock">
+    <strong>{{ symbol('warnung') }} Gewerkeübergreifende Artikel (Mehr-Sparten-Vorgang)</strong>
+    <ul>{% for h in gewerke_hinweise %}<li>{{ h }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
 
 {% if lead_kontext is defined and lead_kontext %}
     {% include "vorgaenge/_lead_kopf.html" %}
 {% endif %}
 
-<h2>Erfassungen</h2>
-{% if vorgang.demo %}
-<p class="hinweis">Demo-Lead – keine Erfassung möglich.</p>
-{% else %}
-{% if erfassungen %}
-<table class="tabelle">
-    <thead><tr><th>Sparte</th><th>Art</th><th>Status</th><th>Vertriebler</th><th>Erfasst am</th><th></th></tr></thead>
-    <tbody>
-    {% for e in erfassungen %}
-        <tr>
-            <td>{{ sparten_ui.chip(e.sparte or 'WP') }}</td>
-            <td>{{ 'Freitext' if e.typ == 'freitext' else 'Katalog' }}</td>
-            <td><span class="abzeichen">{{ e.status }}</span></td>
-            <td class="dezent">{{ benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '–' }}</td>
-            <td>{{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am else '–' }}</td>
-            <td class="aktionen">
-                {% if benutzer.rolle in ('admin', 'innendienst') %}
-                    <a class="knopf klein zweitrangig" href="/erfassungen/{{ e.id }}">Öffnen</a>
-                {% elif e.status == 'Entwurf' %}
-                    <a class="knopf klein zweitrangig" href="/erfassung/{{ e.id }}/weiche">Fortsetzen</a>
+<div class="akte-spalten">
+<div>{# ---------- linke Spalte: Angebote + Erfassungen ---------- #}
+
+<h2 id="angebote" style="margin-top:0">Angebote</h2>
+{% if angebote %}
+{% set kombi_erlaubt = benutzer.rolle in ('admin', 'innendienst') %}
+<form method="post" action="/vorgaenge/{{ vorgang.id }}/kombi-versand" id="kombiform"
+      onsubmit="return confirm('Gewählte Angebote in EINER Mail (je ein PDF) als Entwurf vorbereiten?');">
+{% for a in angebote %}
+    {% set waehlbar, grund = kombi_info[a.id] %}
+    <div class="angebot-karte {{ 'ueberholt-karte' if a.status == 'Überholt' }}">
+        <div class="kartenkopf">
+            {% if kombi_erlaubt %}
+                {% if waehlbar %}
+                    <input type="checkbox" name="angebot_ids" value="{{ a.id }}"
+                           title="Für den Kombi-Versand auswählen">
+                {% else %}
+                    <span class="dezent" title="{{ grund }}">–</span>
                 {% endif %}
-            </td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-{% else %}
-<p class="dezent">Noch keine Erfassungen.
-    {% if kunde %}<a href="/erfassung/sparten?kunde_id={{ kunde.id }}{{ '&lead_id=' ~ lead.id if lead }}">Erfassung starten</a>{% endif %}</p>
+            {% endif %}
+            <strong>
+                {% if a.extern %}<span class="abzeichen status-taifun">TAIFUN</span> {{ a.taifun_nummer or a.nummer }}
+                {% else %}{{ a.nummer }}{% endif %}
+            </strong>
+            {% if '.' in a.nummer and a.stamm_nummer != a.nummer %}<span class="abzeichen" title="Version">v{{ a.nummer.rpartition('.')[2] }}</span>{% endif %}
+            {% if a.extern and a.extern_pdf_pfad %}<span class="abzeichen" title="PDF hinterlegt (Kombi-fähig)">PDF ✓</span>{% endif %}
+            {{ sparten_ui.chip(a.konfigurator_typ or 'WP') }}
+            <span class="dezent">{{ a.datum.strftime('%d.%m.%Y') if a.datum }}</span>
+            <span class="betrag">{{ a.summen().endbetrag | euro }}</span>
+        </div>
+        {{ statuskette(a.status) }}
+        <div class="kartenfuss">
+            {% if projekt_modul_ok %}
+                {% if a.id in projekt_je_angebot %}
+                    <a class="knopf klein zweitrangig" href="/projektierung/projekt/{{ projekt_je_angebot[a.id] }}">→ Projekt</a>
+                {% elif a.status == 'Angenommen' %}
+                    <a class="knopf klein" href="/projektierung/angebot/{{ a.id }}/projekt">Angebot → Projekt</a>
+                {% endif %}
+            {% endif %}
+            {% if benutzer.rolle in ('admin', 'innendienst') %}
+                <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">{{ symbol('stift') }} Öffnen</a>
+            {% elif not a.extern %}
+                <a class="knopf klein zweitrangig" href="/meine-angebote/{{ a.id }}">Ansehen</a>
+                <a class="knopf klein zweitrangig" href="/meine-angebote/{{ a.id }}/pdf" target="_blank">{{ symbol('pdf') }} PDF</a>
+            {% endif %}
+        </div>
+    </div>
+{% endfor %}
+{% if kombi_erlaubt %}
+<div class="formaktionen">
+    <button class="knopf" type="submit">{{ symbol('brief') }} Gemeinsam versenden (eine Mail, mehrere PDFs)</button>
+    <span class="dezent">Wählbar: Entwurf/Versand vorbereitet; TAIFUN nur mit hinterlegtem PDF.
+        Der Einzelversand über das Angebot bleibt unverändert.</span>
+    {% if kombi_doppelt %}
+        <span class="abzeichen ep" title="Diese Artikelnummern sind in mehreren Tool-Angeboten voll berechnet – ggf. Alternativ-Kennzeichen setzen">{{ symbol('warnung') }} doppelt: {{ kombi_doppelt | join(', ') }}</span>
+    {% endif %}
+</div>
 {% endif %}
-{% endif %}{# /vorgang.demo #}
+</form>
+{% else %}
+{{ leer_zustand('Noch kein Angebot – über eine Erfassung starten.') }}
+{% endif %}
 
 {% if projekt_modul_ok and vorgang_projekte %}
 {% from "_projektierung.html" import phase_name %}
@@ -109,107 +173,78 @@
 {% endfor %}
 {% endif %}
 
-<h2>Angebote</h2>
-{% if gewerke_hinweise %}
-<div class="warnblock">
-    <strong>⚠ Gewerkeübergreifende Artikel (Mehr-Sparten-Vorgang)</strong>
-    <ul>{% for h in gewerke_hinweise %}<li>{{ h }}</li>{% endfor %}</ul>
-</div>
-{% endif %}
-{% if angebote %}
-{% set kombi_erlaubt = benutzer.rolle in ('admin', 'innendienst') %}
-<form method="post" action="/vorgaenge/{{ vorgang.id }}/kombi-versand" id="kombiform"
-      onsubmit="return confirm('Gewählte Angebote in EINER Mail (je ein PDF) als Entwurf vorbereiten?');">
-<table class="tabelle">
-    <thead><tr>{% if kombi_erlaubt %}<th title="Für den Kombi-Versand auswählen">✉</th>{% endif %}
-        <th>Nummer</th><th>Sparte</th><th>Status</th><th class="rechts">Endbetrag</th><th>Datum</th><th></th></tr></thead>
-    <tbody>
-    {% for a in angebote %}
-        {% set waehlbar, grund = kombi_info[a.id] %}
-        <tr class="{{ 'dezent' if a.status == 'Überholt' }}">
-            {% if kombi_erlaubt %}
-            <td>{% if waehlbar %}
-                    <input type="checkbox" name="angebot_ids" value="{{ a.id }}"
-                           title="Für den Kombi-Versand auswählen">
-                {% else %}
-                    <span class="dezent" title="{{ grund }}">–</span>
-                {% endif %}</td>
+<h2>Erfassungen</h2>
+{% if vorgang.demo %}
+<p class="hinweis">Demo-Lead – keine Erfassung möglich.</p>
+{% else %}
+{% if erfassungen %}
+{% for e in erfassungen %}
+    <div class="angebot-karte">
+        <div class="kartenkopf">
+            {{ sparten_ui.chip(e.sparte or 'WP') }}
+            <strong>{{ 'Freitext' if e.typ == 'freitext' else 'Katalog' }}</strong>
+            {{ status_badge(e.status) }}
+            <span class="dezent">{{ symbol('nutzer') }} {{ benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '–' }}</span>
+            <span class="dezent" style="margin-left:auto">{{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am else '– noch nicht abgesendet –' }}</span>
+        </div>
+        <div class="kartenfuss">
+            {% if benutzer.rolle in ('admin', 'innendienst') %}
+                <a class="knopf klein zweitrangig" href="/erfassungen/{{ e.id }}">{{ symbol('stift') }} Öffnen</a>
+            {% elif e.status == 'Entwurf' %}
+                <a class="knopf klein zweitrangig" href="/erfassung/{{ e.id }}/weiche">Fortsetzen</a>
             {% endif %}
-            <td>{% if a.extern %}<span class="abzeichen">TAIFUN</span> {{ a.taifun_nummer or a.nummer }}
-                {% if a.extern_pdf_pfad %}<span class="abzeichen" title="PDF hinterlegt (Kombi-fähig)">PDF ✓</span>{% endif %}
-                {% else %}{{ a.nummer }}{% endif %}
-                {% if '.' in a.nummer and a.stamm_nummer != a.nummer %}<span class="abzeichen" title="Version">v{{ a.nummer.rpartition('.')[2] }}</span>{% endif %}</td>
-            <td>{{ sparten_ui.chip(a.konfigurator_typ or 'WP') }}</td>
-            <td><span class="abzeichen">{{ a.status }}</span></td>
-            <td class="rechts">{{ a.summen().endbetrag | euro }}</td>
-            <td>{{ a.datum.strftime('%d.%m.%Y') if a.datum }}</td>
-            <td class="aktionen">
-                {% if projekt_modul_ok %}
-                    {% if a.id in projekt_je_angebot %}
-                        <a class="knopf klein zweitrangig" href="/projektierung/projekt/{{ projekt_je_angebot[a.id] }}">→ Projekt</a>
-                    {% elif a.status == 'Angenommen' %}
-                        <a class="knopf klein" href="/projektierung/angebot/{{ a.id }}/projekt">Angebot → Projekt</a>
-                    {% endif %}
-                {% endif %}
-                {% if benutzer.rolle in ('admin', 'innendienst') %}
-                    <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">Öffnen</a>
-                {% elif not a.extern %}
-                    <a class="knopf klein zweitrangig" href="/meine-angebote/{{ a.id }}">Ansehen</a>
-                    <a class="knopf klein zweitrangig" href="/meine-angebote/{{ a.id }}/pdf" target="_blank">PDF</a>
-                {% endif %}
-            </td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-{% if kombi_erlaubt %}
-<div class="formaktionen">
-    <button class="knopf" type="submit">Gemeinsam versenden (eine Mail, mehrere PDFs)</button>
-    <span class="dezent">Wählbar: Entwurf/Versand vorbereitet; TAIFUN nur mit hinterlegtem PDF.
-        Der Einzelversand über das Angebot bleibt unverändert.</span>
-    {% if kombi_doppelt %}
-        <span class="abzeichen ep" title="Diese Artikelnummern sind in mehreren Tool-Angeboten voll berechnet – ggf. Alternativ-Kennzeichen setzen">⚠ doppelt: {{ kombi_doppelt | join(', ') }}</span>
-    {% endif %}
-</div>
-{% endif %}
-</form>
+        </div>
+    </div>
+{% endfor %}
 {% else %}
-<p class="dezent">Noch keine Angebote.</p>
+{% if kunde %}
+{{ leer_zustand('Noch keine Erfassung zu diesem Vorgang.',
+                '/erfassung/sparten?kunde_id=' ~ kunde.id ~ ('&lead_id=' ~ lead.id if lead else ''),
+                'Erfassung starten') }}
+{% else %}
+{{ leer_zustand('Noch keine Erfassungen.') }}
 {% endif %}
+{% endif %}
+{% endif %}{# /vorgang.demo #}
 
-<h2>Mail-Verlauf</h2>
+</div>
+<div>{# ---------- rechte Spalte: Mail-Verlauf + Notizen-Chat ---------- #}
+
+<h2 style="margin-top:0">Mail-Verlauf</h2>
 {% if mails %}
-<table class="tabelle">
-    <thead><tr><th>Zeit</th><th>Richtung</th><th>Von</th><th>Betreff</th></tr></thead>
-    <tbody>
+<div class="karte" style="padding:0.5rem 1rem">
     {% for m in mails %}
-        <tr>
-            <td>{{ m.empfangen_am.strftime('%d.%m.%Y %H:%M') if m.empfangen_am }}</td>
-            <td>{{ '⬅ Antwort' if m.eingehend else '➡ gesendet' }}</td>
-            <td class="dezent">{{ m.von_name or m.von_email }}</td>
-            <td title="{{ m.vorschau | truncate(300) }}">{{ m.betreff }}</td>
-        </tr>
+    <p class="mailzeile" title="{{ m.vorschau | truncate(300) }}">
+        <span class="{{ 'wv-datum' if m.eingehend else 'dezent' }}">{{ symbol('brief') }}</span>
+        <span class="dezent">{{ m.empfangen_am.strftime('%d.%m.%y %H:%M') if m.empfangen_am }}
+            · {{ 'Antwort von ' ~ (m.von_name or m.von_email) if m.eingehend else 'gesendet' }}</span><br>
+        {{ m.betreff }}
+    </p>
     {% endfor %}
-    </tbody>
-</table>
+</div>
 {% else %}
-<p class="dezent">Noch kein Mail-Verlauf.</p>
+{{ leer_zustand('Noch kein Mail-Verlauf.') }}
 {% endif %}
 
 <h2 id="notizen">Notizen</h2>
 <div class="notizen-chat">
     {% for n in notizen %}
         <div class="notiz {{ 'eigene' if n.benutzer_id == benutzer.id }}">
-            <span class="notiz-kopf">{{ n.benutzer_name }} {{ n.zeit.strftime('%d.%m.%y %H:%M') }} Uhr:</span>
-            {% if n.herkunft %}<span class="abzeichen" title="{{ n.herkunft }}">{{ n.herkunft | truncate(40) }}</span>{% endif %}
+            <span class="notiz-kopf"><strong>{{ n.benutzer_name }}</strong>
+                <span class="dezent">{{ n.zeit.strftime('%d.%m.%y %H:%M') }} Uhr</span>
+                {% if n.herkunft %}<span class="abzeichen" title="{{ n.herkunft }}">{{ n.herkunft | truncate(40) }}</span>{% endif %}
+            </span>
             <div class="notiz-text">{{ n.text }}</div>
         </div>
     {% else %}
-        <p class="dezent">Noch keine Notizen.</p>
+        {{ leer_zustand('Noch keine Notizen – die erste Notiz startet den Verlauf.') }}
     {% endfor %}
 </div>
-<form method="post" action="/vorgaenge/{{ vorgang.id }}/notiz" class="notiz-eingabe">
+<form method="post" action="/vorgaenge/{{ vorgang.id }}/notiz" class="notiz-eingabe chat-eingabe">
     <textarea name="text" rows="2" placeholder="Notiz schreiben … (Einträge sind unveränderlich)" required></textarea>
-    <button class="knopf" type="submit">Notiz speichern</button>
+    <button class="knopf" type="submit">Senden</button>
 </form>
+
+</div>
+</div>
 {% endblock %}

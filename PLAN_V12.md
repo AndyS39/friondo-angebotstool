@@ -56,24 +56,24 @@ HARTE LEITPLANKEN für dieses Update:
       (horizontales Scrollen nur innerhalb von Tabellen)
 
 ## Phase 71 – Vorgangsakte (Schwerpunkt „anschaulich")
-- [ ] Kopfbereich als Karte: Kundenname groß, Ausführungsort/
+- [x] Kopfbereich als Karte: Kundenname groß, Ausführungsort/
       Rechnungsanschrift, Kanal-/Profil-Badge, Sparten-Chips,
       Hot-Ampel + Wiedervorlage prominent (mit Fälligkeits-Farbe),
       Vertriebler; Schnellaktionen rechts (Neue Erfassung, Gemeinsam
       versenden, Notiz)
-- [ ] Zweispaltiges Layout (Desktop): links Angebote und Erfassungen
+- [x] Zweispaltiges Layout (Desktop): links Angebote und Erfassungen
       als Karten – je Angebot: Nummer + Version, Sparten-Badge,
       Endbetrag, TAIFUN-Kennzeichen, und eine STATUS-SCHRITTLEISTE
       (Entwurf → Versand vorbereitet → Versendet → Angenommen/
       Abgelehnt; „Überholt" ausgegraut) als Mini-Pipeline; rechts
       Verfolgung, Mail-Verlauf (Betreffliste mit Brief-Icon) und der
       Notizen-Chat
-- [ ] Notizen-Chat in Chat-Optik: Einträge als Zeilen/Blasen mit Name
+- [x] Notizen-Chat in Chat-Optik: Einträge als Zeilen/Blasen mit Name
       fett + Zeitstempel dezent, eigene Einträge leicht abgesetzt,
       Eingabefeld unten fixiert, „neue Notizen"-Punkt sichtbar
-- [ ] Fachliche Hinweise (Widerspruch, Förderdaten prüfen …) als
+- [x] Fachliche Hinweise (Widerspruch, Förderdaten prüfen …) als
       einheitliche Warn-Karten oben in der Akte
-- [ ] Leerzustände je Bereich („Noch kein Angebot – Erfassung starten")
+- [x] Leerzustände je Bereich („Noch kein Angebot – Erfassung starten")
 
 ## Phase 72 – Angebots-Editor & Parametrierung
 - [ ] Editor in klare Zonen: oben Verfolgungs-/Kopfkarte (Status-
