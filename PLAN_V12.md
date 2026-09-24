@@ -41,18 +41,18 @@ HARTE LEITPLANKEN für dieses Update:
       verspielten Animationen
 
 ## Phase 70 – Portal, Angebotstool-Startseite & Listen
-- [ ] Portal: die drei Karten auf das neue System heben (Titelgrößen,
+- [x] Portal: die drei Karten auf das neue System heben (Titelgrößen,
       Hover, Kachel-Optik), Coming-soon-Badges einheitlich
-- [ ] Angebotstool-Startseite: Shortcuts und „Auf einen Blick"-Kacheln
+- [x] Angebotstool-Startseite: Shortcuts und „Auf einen Blick"-Kacheln
       als Karten mit Icon, Zahl groß, Beschriftung klein; fällige
       Wiedervorlagen visuell dringlich (rot), aber nicht schreiend
-- [ ] Listen (Leads VOT, Erfassungen, Angebote, Warteschlange):
+- [x] Listen (Leads VOT, Erfassungen, Angebote, Warteschlange):
       einheitliche Filterleiste (Suchfeld + Filter-Chips statt verstreuter
       Dropdowns), Sticky-Tabellenkopf, Zebra + Hover, Status-Badges und
       Chips aus dem Baukasten, Beträge rechtsbündig, Aktions-Buttons
       als kompakte Icon-Buttons mit Tooltip; Summenzeile der
       Angebotsliste klar abgesetzt
-- [ ] Responsivität der ID-Ansichten bis Laptop-Breite prüfen
+- [x] Responsivität der ID-Ansichten bis Laptop-Breite prüfen
       (horizontales Scrollen nur innerhalb von Tabellen)
 
 ## Phase 71 – Vorgangsakte (Schwerpunkt „anschaulich")

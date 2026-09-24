@@ -2472,3 +2472,27 @@ tr[draggable="true"]:hover .griff { color: var(--friondo-blau); }
     letter-spacing: 0.05em;
     white-space: nowrap;
 }
+
+/* Phase 70: Listen + Startseiten-Feinschliff */
+.stat-zahl.dringend { color: var(--status-rot); }
+.aktionen { white-space: nowrap; }
+.aktionen .knopf { vertical-align: middle; }
+.tabelle tr.summenzeile th {
+    background: var(--friondo-dunkel);
+    color: #fff;
+    text-transform: none;
+    letter-spacing: 0;
+    border-bottom: none;
+}
+.kachel .kachel-icon { display: block; margin: 0 auto var(--a-1); }
+.wv-datum { white-space: nowrap; font-size: var(--t-s); color: var(--g-500); }
+.wv-datum.wv-faellig { color: var(--status-rot); font-weight: 600; }
+
+/* Bugfix (Bestand): td.aktionen war durch display:flex aus dem
+   Tabellenlayout gefallen und stand versetzt neben der Tabelle */
+td.aktionen {
+    display: table-cell;
+    text-align: right;
+}
+td.aktionen .knopf,
+td.aktionen form { display: inline-flex; vertical-align: middle; margin: 0 0 0 0.25rem; }

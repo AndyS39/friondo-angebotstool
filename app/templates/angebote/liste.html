@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% import "_interesse.html" as interesse_ui %}
 {% import "_sparten.html" as sparten_ui %}
+{% from "_komponenten.html" import status_badge %}
+{% from "_symbole.html" import symbol %}
 
 {% block titel %}Angebote – Friondo Angebotstool{% endblock %}
 
@@ -92,7 +94,7 @@
                 {% if mail_zaehler.get(a.id) %}
                     <a class="mail-abzeichen" href="/angebote/{{ a.id }}/mails"
                        title="{{ mail_zaehler[a.id] }} Antwort{{ 'en' if mail_zaehler[a.id] != 1 }} zur Angebots-Mail">
-                        ✉ {{ mail_zaehler[a.id] }}</a>
+                        {{ symbol('brief') }} {{ mail_zaehler[a.id] }}</a>
                 {% endif %}
             </td>
             <td><a href="/vorgaenge/zu-angebot/{{ a.id }}" title="Vorgangsakte öffnen">{{ kunden[a.kunde_id].anzeige_name if a.kunde_id in kunden else '?' }}</a>
@@ -101,11 +103,11 @@
             <td class="dezent">{% set vid = angebot_vertriebler.get(a.id) %}{{ vertriebler[vid].name if vid in vertriebler else '–' }}</td>
             <td>{{ a.datum.strftime('%d.%m.%Y') }}</td>
             {% set v = vorgaenge_map.get(a.vorgang_id) %}
-            <td><span class="abzeichen status-{{ a.status | lower | replace(' ', '-') | replace('(', '') | replace(')', '') }}">{{ a.status }}</span>
+            <td>{{ status_badge(a.status) }}
                 {% if v and v.verfolgung_ampel %}<span title="Verfolgung des Vorgangs: {{ v.verfolgung_ampel }}">{{ {'heiss': '🔥', 'warm': '🌤', 'kalt': '❄'}[v.verfolgung_ampel] }}</span>{% endif %}
                 {% if v and v.wiedervorlage_am %}
-                    <br><span class="{{ 'wv-faellig' if v.wiedervorlage_am <= heute else 'dezent' }}"
-                          title="Wiedervorlage des Vorgangs">↻ {{ v.wiedervorlage_am.strftime('%d.%m.%Y') }}</span>
+                    <br><span class="wv-datum {{ 'wv-faellig' if v.wiedervorlage_am <= heute }}"
+                          title="Wiedervorlage des Vorgangs">{{ symbol('wiedervorlage') }} {{ v.wiedervorlage_am.strftime('%d.%m.%Y') }}</span>
                 {% endif %}</td>
             <td class="rechts">{{ a.summen().brutto | euro }}</td>
             {% if not kalk_sichtbar %}
@@ -122,34 +124,38 @@
             {% endif %}
             <td class="aktionen">
                 {% if nur_lesend %}
-                    <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}/pdf" target="_blank">PDF</a>
+                    <a class="knopf symbol" href="/angebote/{{ a.id }}/pdf" target="_blank"
+                       title="Angebots-PDF anzeigen">{{ symbol('pdf') }}</a>
                 {% else %}
-                    <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">Öffnen</a>
+                    <a class="knopf symbol" href="/angebote/{{ a.id }}"
+                       title="Angebot öffnen">{{ symbol('stift') }}</a>
                 {% endif %}
                 {% if projekt_modul_ok %}
                     {% if a.id in projekt_je_angebot %}
                         <a class="knopf klein zweitrangig" href="/projektierung/projekt/{{ projekt_je_angebot[a.id].id }}"
-                           title="Zur Projektakte">→ {{ projekt_je_angebot[a.id].nummer }}</a>
+                           title="Zur Projektakte">{{ projekt_je_angebot[a.id].nummer }}</a>
                     {% elif a.status == 'Angenommen' %}
                         <a class="knopf klein" href="/projektierung/angebot/{{ a.id }}/projekt"
                            title="Projekt/Gewerk aus diesem Auftrag anlegen">→ Projekt</a>
                     {% endif %}
                 {% endif %}
                 {% if not a.extern %}
-                <form method="post" action="/angebote/{{ a.id }}/duplizieren">
-                    <button class="knopf klein zweitrangig" type="submit">Duplizieren</button>
+                <form method="post" action="/angebote/{{ a.id }}/duplizieren" style="display:inline">
+                    <button class="knopf symbol" type="submit"
+                            title="Angebot duplizieren">{{ symbol('kopie') }}</button>
                 </form>
                 {% endif %}
                 {% if a.status == 'Entwurf' %}
-                <form method="post" action="/angebote/{{ a.id }}/loeschen"
+                <form method="post" action="/angebote/{{ a.id }}/loeschen" style="display:inline"
                       onsubmit="return confirm('Entwurf {{ a.nummer }} wirklich löschen?');">
-                    <button class="knopf klein zweitrangig" type="submit" title="Entwurf löschen">✕</button>
+                    <button class="knopf symbol gefaehrlich" type="submit"
+                            title="Entwurf löschen">{{ symbol('muell') }}</button>
                 </form>
                 {% else %}
-                <form method="post" action="/angebote/{{ a.id }}/archivieren">
-                    <button class="knopf klein zweitrangig" type="submit"
+                <form method="post" action="/angebote/{{ a.id }}/archivieren" style="display:inline">
+                    <button class="knopf symbol" type="submit"
                             title="{{ 'Aus dem Archiv zurückholen' if a.archiviert else 'Archivieren' }}">
-                        {{ '↩' if a.archiviert else '🗄' }}</button>
+                        {{ symbol('wiederherstellen' if a.archiviert else 'archiv') }}</button>
                 </form>
                 {% endif %}
             </td>
@@ -158,7 +164,7 @@
     </tbody>
 </table>
 <table class="tabelle zusammenfassung summenblock">
-    <tr>
+    <tr class="summenzeile">
         <th>Summe ({{ angebote | length }} Angebot{{ 'e' if angebote | length != 1 }})</th>
         <td class="rechts">Netto: <strong>{{ summen_gesamt.netto | euro }}</strong></td>
         <td class="rechts">Endbetrag (brutto): <strong>{{ summen_gesamt.endbetrag | euro }}</strong></td>
@@ -171,7 +177,8 @@ sind dort unbekannt und bleiben außen vor.</p>
 {% endif %}
 {{ sparten_ui.legende() }}
 {% else %}
-<p class="hinweis">Noch keine Angebote. Über eine <a href="/erfassung/neu">neue Erfassung</a>
-oder als manuelles Angebot über einen Kunden starten.</p>
+<div class="leer-zustand">Noch keine Angebote – über eine neue Erfassung
+oder als manuelles Angebot über einen Kunden starten.
+    <br><a class="knopf klein" href="/erfassung/neu">Neue Erfassung starten</a></div>
 {% endif %}
 {% endblock %}

@@ -18,7 +18,7 @@
         </h2>
         <div class="kacheln bereich-kacheln">
             <div class="kachel stat">
-                <span class="stat-zahl" {% if lead_kacheln.sla_rot %}style="color:#c0392b"{% endif %}>{{ lead_kacheln.neue }}</span>
+                <span class="stat-zahl {{ 'dringend' if lead_kacheln.sla_rot }}">{{ lead_kacheln.neue }}</span>
                 <span>Neue Leads</span>
                 <span class="dezent">{{ lead_kacheln.sla_rot }} × SLA rot</span>
             </div>
@@ -76,7 +76,7 @@
                 <span class="dezent">zu prüfen / in TAIFUN zu schreiben</span>
             </div>
             <div class="kachel stat">
-                <span class="stat-zahl" {% if faellige %}style="color:#c0392b"{% endif %}>{{ faellige }}</span>
+                <span class="stat-zahl {{ 'dringend' if faellige }}">{{ faellige }}</span>
                 <span>Fällige Wiedervorlagen</span>
             </div>
             <div class="kachel stat">
@@ -85,7 +85,7 @@
                 <span class="dezent">warten auf Antwort</span>
             </div>
             <div class="kachel stat">
-                <span class="stat-zahl" {% if rabatt_freigaben %}style="color:#c0392b"{% endif %}>{{ rabatt_freigaben }}</span>
+                <span class="stat-zahl {{ 'dringend' if rabatt_freigaben }}">{{ rabatt_freigaben }}</span>
                 <span>Rabatt-Freigaben offen</span>
                 <span class="dezent">Anfragen vom Außendienst</span>
             </div>

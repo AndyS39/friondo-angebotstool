@@ -1,9 +1,12 @@
 {# Angebotstool-Kacheln (Phase 19, seit v9 auch im mittleren Startseiten-
-   Bereich eingebunden): drei Shortcuts + klickbare Statistik-Kacheln. #}
+   Bereich eingebunden): drei Shortcuts + klickbare Statistik-Kacheln.
+   v14 (PLAN_V12, Phase 70): Karten mit Icon, Zahl groß, Beschriftung
+   klein; fällige Zahlen rot über die Klasse "dringend". #}
+{% from "_symbole.html" import symbol %}
 <div class="kacheln start-shortcuts">
-    <a class="kachel" href="/leads">Leads VOT</a>
-    <a class="kachel" href="/erfassungen">Erfassungen</a>
-    <a class="kachel" href="/angebote">Angebote</a>
+    <a class="kachel" href="/leads"><span class="kachel-icon">{{ symbol('telefon') }}</span>Leads VOT</a>
+    <a class="kachel" href="/erfassungen"><span class="kachel-icon">{{ symbol('stift') }}</span>Erfassungen</a>
+    <a class="kachel" href="/angebote"><span class="kachel-icon">{{ symbol('pdf') }}</span>Angebote</a>
 </div>
 
 <h2>Auf einen Blick</h2>
@@ -27,15 +30,16 @@
     {% endif %}
     {% if rabatt_freigaben %}
     <a class="kachel stat" href="/angebote/rabatt-freigaben">
-        <span class="stat-zahl" style="color:#c0392b">{{ rabatt_freigaben }}</span>
+        <span class="stat-zahl dringend">{{ rabatt_freigaben }}</span>
         <span>Rabatt-Freigaben offen</span>
         <span class="dezent">Anfragen vom Außendienst</span>
     </a>
     {% endif %}
     {% if faellige %}
     <a class="kachel stat" href="/vorgaenge?verfolgung=faellig">
-        <span class="stat-zahl" style="color:#c0392b">{{ faellige }}</span>
-        Fällige Wiedervorlagen
+        <span class="stat-zahl dringend">{{ faellige }}</span>
+        <span>Fällige Wiedervorlagen</span>
+        <span class="dezent">{{ symbol('wiedervorlage') }} jetzt nachfassen</span>
     </a>
     {% endif %}
     <a class="kachel stat" href="/angebote?status=Versendet">

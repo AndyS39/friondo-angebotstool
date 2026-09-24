@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from "_komponenten.html" import status_badge %}
+{% from "_symbole.html" import symbol %}
 {% import "_interesse.html" as interesse_ui %}
 {% import "_sparten.html" as sparten_ui %}
 
@@ -63,10 +65,10 @@
                     <span class="abzeichen ep" title="Freitext wurde geändert, während der Vorgang bereits lief – Details im Änderungsprotokoll.">Freitext geändert</span>
                 {% endif %}
                 {% if e.id in fachhinweis_ids %}
-                    <span title="{{ fachhinweis_ids[e.id] }}">⚠</span>
+                    <span class="wv-faellig" title="{{ fachhinweis_ids[e.id] }}">{{ symbol('warnung') }}</span>
                 {% endif %}
                 {% if e.id in bemerkungen %}
-                    <span class="bemerkung-symbol" title="{{ bemerkungen[e.id] | truncate(300) }}">📝</span>
+                    <span class="bemerkung-symbol dezent" title="{{ bemerkungen[e.id] | truncate(300) }}">{{ symbol('notiz') }}</span>
                 {% endif %}
             </td>
             <td>{{ benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '?' }}</td>
@@ -77,15 +79,16 @@
                     <span class="ampel gruen">● Konfigurierbar</span>
                 {% endif %}
             </td>
-            <td><span class="abzeichen">{{ e.status }}</span></td>
+            <td>{{ status_badge(e.status) }}</td>
             <td>{% if e.angebot_id and e.angebot_id in angebote %}
                 <a href="/angebote/{{ e.angebot_id }}">{% if angebote[e.angebot_id].extern %}<span class="abzeichen">TAIFUN</span> {{ angebote[e.angebot_id].taifun_nummer }}{% else %}{{ angebote[e.angebot_id].nummer }}{% endif %}</a>
             {% endif %}</td>
             <td class="aktionen">
-                <a class="knopf klein zweitrangig" href="/erfassungen/{{ e.id }}">Öffnen</a>
+                <a class="knopf symbol" href="/erfassungen/{{ e.id }}"
+                   title="Erfassung öffnen">{{ symbol('stift') }}</a>
                 {% if e.status == 'In TAIFUN zu schreiben' %}
                     <a class="knopf klein" href="/erfassungen/{{ e.id }}/protokoll.pdf"
-                       target="_blank" title="Übergabezettel für TAIFUN">Protokoll-PDF</a>
+                       target="_blank" title="Übergabezettel für TAIFUN">{{ symbol('pdf') }} Protokoll</a>
                 {% endif %}
             </td>
         </tr>
