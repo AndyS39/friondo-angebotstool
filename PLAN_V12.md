@@ -76,20 +76,20 @@ HARTE LEITPLANKEN für dieses Update:
 - [x] Leerzustände je Bereich („Noch kein Angebot – Erfassung starten")
 
 ## Phase 72 – Angebots-Editor & Parametrierung
-- [ ] Editor in klare Zonen: oben Verfolgungs-/Kopfkarte (Status-
+- [x] Editor in klare Zonen: oben Verfolgungs-/Kopfkarte (Status-
       Schrittleiste, Ampel, Profil), Mitte Positionsliste, unten
       Summen-/Förderblock als ruhige Karte; Aktionsleiste (Speichern,
       PDF, Versand vorbereiten, Überarbeiten) sticky am Seitenende
-- [ ] Positionsliste: Blocküberschriften deutlich abgesetzt (und vom
+- [x] Positionsliste: Blocküberschriften deutlich abgesetzt (und vom
       Drag & Drop sichtbar ausgenommen), Kennzeichen EP/bauseits/Alt./
       Sonderpreis als kleine einheitliche Badges an der Position,
       Drag-Handle klar erkennbar, „manuell geändert"-Markierungen dezent
-- [ ] Förder-Baustein-Editor und Rabattbereich optisch beruhigen
+- [x] Förder-Baustein-Editor und Rabattbereich optisch beruhigen
       (Eingaben + Live-Ergebnis als zusammengehörige Karte)
-- [ ] Parametrierung: Unterseiten mit einheitlichen Karten je Themen-
+- [x] Parametrierung: Unterseiten mit einheitlichen Karten je Themen-
       block, Validierungs-Ausgabe (Fehler rot / Hinweise gelb) im neuen
       Hinweis-Box-Stil, Speichern-Feedback einheitlich
-- [ ] Statistik-Seite: Kacheln + Diagramme im neuen Stil, einheitliche
+- [x] Statistik-Seite: Kacheln + Diagramme im neuen Stil, einheitliche
       Farben je Sparte/Kanal
 
 ## Phase 73 – Mobile Erfassung (Außendienst)

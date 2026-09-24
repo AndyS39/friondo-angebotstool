@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from "_komponenten.html" import statuskette %}
+{% from "_symbole.html" import symbol %}
 
 {% block titel %}{{ angebot.nummer }} – Friondo Angebotstool{% endblock %}
 
@@ -79,7 +81,10 @@
 </div>
 {% endif %}
 
-<p class="dezent">
+{# v14 (Phase 72): Kopfkarte mit Status-Schrittleiste #}
+<div class="editor-kopfkarte">
+{{ statuskette(angebot.status) }}
+<p class="dezent" style="margin:0.3rem 0 0">
     Kunde: <strong>{{ kunde.anzeige_name if kunde }}</strong>
     {% if kunde and (kunde.strasse or kunde.ort) %} · {{ kunde.strasse }}, {{ kunde.plz }} {{ kunde.ort }}{% endif %}
     · Datum: {{ angebot.datum.strftime('%d.%m.%Y') }}
@@ -117,6 +122,8 @@
 </form>
 {% endif %}
 </p>
+
+</div>{# /editor-kopfkarte #}
 
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
@@ -769,5 +776,22 @@ setInterval(function () {
     fetch('/angebote/{{ angebot.id }}/sperre', { method: 'POST' });
 }, 2 * 60 * 1000);
 </script>
+{% endif %}
+{% if not nur_lesen %}
+{# v14 (Phase 72): Kernaktionen sticky am Seitenende #}
+<div class="aktionsleiste-unten">
+    <span class="dezent">{{ angebot.nummer }} · {{ summen.endbetrag | euro }}</span>
+    <a class="knopf zweitrangig" href="/angebote/{{ angebot.id }}/pdf" target="_blank">{{ symbol('pdf') }} PDF</a>
+    <a class="knopf zweitrangig" href="/signatur/{{ angebot.id }}">{{ symbol('stift') }} Signieren</a>
+    {% if angebot.status in ('Versendet', 'Angenommen') and not angebot.extern %}
+    <form method="post" action="/angebote/{{ angebot.id }}/ueberarbeiten"
+          onsubmit="return confirm('Neue Version {{ angebot.stamm_nummer }}.x als Entwurf erstellen? {{ angebot.nummer }} wird dadurch als „Überholt“ markiert.');">
+        <button class="knopf zweitrangig" type="submit">Überarbeiten</button>
+    </form>
+    {% endif %}
+    <form method="post" action="/angebote/{{ angebot.id }}/email">
+        <button class="knopf" type="submit">{{ symbol('brief') }} Versand vorbereiten</button>
+    </form>
+</div>
 {% endif %}
 {% endblock %}
