@@ -8,7 +8,10 @@ Angebots-PDF wurde geändert; auch die Rollen/Rechte sind exakt gleich.
 
 - **Einmal Strg+F5 drücken** (bzw. am Handy die Seite neu laden):
   Das Stylesheet ist neu, der Browser-Cache zeigt sonst noch die alte
-  Optik oder eine Mischung aus beidem.
+  Optik oder eine Mischung aus beidem (typisches Bild: riesige graue
+  Symbole, blaue Quadrat-Buttons). Das ist nur EINMAL nötig – ab
+  diesem Update erneuert das Tool die Stylesheet-Version bei jeder
+  Änderung automatisch.
 
 ## Was anders aussieht
 

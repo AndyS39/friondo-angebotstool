@@ -32,12 +32,18 @@ def menge_format(wert) -> str:
 templates.env.filters["euro"] = euro
 templates.env.filters["menge"] = menge_format
 
-# Cache-Busting: Browser laden style.css nach jeder Änderung neu (Phase 18 Nachfix)
-try:
-    templates.env.globals["css_version"] = int(
-        (APP_ORDNER / "static" / "style.css").stat().st_mtime)
-except OSError:
-    templates.env.globals["css_version"] = 0
+# Cache-Busting: Browser laden style.css nach jeder Änderung neu (Phase 18
+# Nachfix). v14: pro Request frisch statt einmal beim Start – ein laufender
+# Server lieferte sonst nach CSS-Änderungen weiter die alte Versionsnummer
+# aus, und die Browser zeigten neue Templates mit gecachtem altem CSS.
+def _css_version() -> int:
+    try:
+        return int((APP_ORDNER / "static" / "style.css").stat().st_mtime)
+    except OSError:
+        return 0
+
+
+templates.env.globals["css_version"] = _css_version()   # Fallback
 
 # Menü-Einträge (Phase 19: Dropdown oben rechts, rollenabhängig gefiltert)
 NAVIGATION = [
@@ -55,5 +61,6 @@ NAVIGATION = [
 
 
 def render(request: Request, template: str, **kontext):
-    kontext.update({"request": request, "navigation": NAVIGATION})
+    kontext.update({"request": request, "navigation": NAVIGATION,
+                    "css_version": _css_version()})
     return templates.TemplateResponse(request, template, kontext)
