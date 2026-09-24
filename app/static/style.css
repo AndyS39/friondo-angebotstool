@@ -1,11 +1,57 @@
-/* Friondo Angebotstool – Basis-Layout
-   Farben angelehnt ans Logo: Blau #4A90D9, Dunkelblau #1B2A5E */
+/* Friondo Angebotstool – Design-System (v14, PLAN_V12)
+   Dokumentation: docs/design-system.md
+   CI: Primärblau aus dem Logo (#4088c8), Dunkelblau der Kopfzeile.
+   Alle Farben, Abstände, Radien und Schatten NUR über diese Tokens –
+   keine Inline-Farben in Templates. */
 
 :root {
-    --friondo-blau: #4a90d9;
-    --friondo-dunkel: #1b2a5e;
-    --grau-hell: #f4f6f9;
-    --grau-linie: #dde3ea;
+    /* --- Markenfarben (CI) --- */
+    --friondo-blau: #3f86c6;          /* Primärblau aus dem Logo */
+    --friondo-blau-dunkel: #326ea5;
+    --friondo-blau-hell: #eaf2fa;     /* Tint für Hover/aktive Flächen */
+    --friondo-dunkel: #1b2a5e;        /* Dunkelblau der Kopfzeile */
+
+    /* --- Neutrale Grautöne --- */
+    --g-50: #f6f8fa;
+    --g-100: #eef1f5;
+    --g-200: #dde3ea;
+    --g-300: #c6cfda;
+    --g-500: #64748b;
+    --g-700: #334155;
+    --text: #1f2937;
+    --grau-hell: var(--g-50);         /* Alias (Bestand) */
+    --grau-linie: var(--g-200);       /* Alias (Bestand) */
+
+    /* --- Statusfarben (EIN Schema für alle Status) --- */
+    --status-gruen: #2e7d32;   --status-gruen-bg: #e6f4e6;   /* Angenommen / OK */
+    --status-orange: #b45f06;  --status-orange-bg: #fdf1dc;  /* Vorbereitet / Warnung */
+    --status-rot: #c0392b;     --status-rot-bg: #fdeaea;     /* Abgelehnt / fällig */
+    --status-blau: #2c6cb0;    --status-blau-bg: #e3effa;    /* Versendet */
+    --status-grau: #64748b;    --status-grau-bg: #eef1f5;    /* Entwurf / Überholt */
+    --status-violett: #6b3fa0; --status-violett-bg: #efe6f7; /* Individuell / TAIFUN */
+
+    /* --- Abstände-Skala --- */
+    --a-1: 0.25rem;
+    --a-2: 0.5rem;
+    --a-3: 0.75rem;
+    --a-4: 1rem;
+    --a-5: 1.5rem;
+    --a-6: 2rem;
+
+    /* --- Radien + Schatten --- */
+    --r-s: 6px;
+    --r-m: 10px;
+    --r-l: 14px;
+    --schatten-1: 0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.07);
+    --schatten-2: 0 8px 24px rgba(16, 24, 40, 0.14);
+
+    /* --- Typografie (Systemschriften) --- */
+    --schrift: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+    --t-xs: 0.78rem;
+    --t-s: 0.875rem;
+    --t-m: 0.95rem;
+    --t-l: 1.15rem;
+    --t-xl: 1.5rem;
 }
 
 * { box-sizing: border-box; }
@@ -1798,4 +1844,631 @@ dialog.pj-dlg .opt.sel { border-color: var(--pj-accent);
     .pj-gewerke { grid-template-columns: 1fr; }
     .pj-akte-head .row { gap: 6px 12px; }
     .pj-grp, .pj-mob { margin-left: 0; margin-right: 0; }
+}
+
+
+/* ==================================================================== */
+/* v14 Design-System (PLAN_V12, Phase 69): Komponenten-Baukasten.       */
+/* Überschreibt die historischen Regeln oben (Kaskade); neue Seiten     */
+/* nutzen direkt diese Klassen. Dokumentation: docs/design-system.md.   */
+/* ==================================================================== */
+
+body {
+    font-family: var(--schrift);
+    color: var(--text);
+    font-size: var(--t-m);
+}
+
+h1 { font-size: 1.65rem; letter-spacing: -0.01em; }
+h2 { font-size: var(--t-l); }
+
+main { padding: var(--a-5) var(--a-5) var(--a-6); }
+
+/* --- Kopfzeile ------------------------------------------------------- */
+
+.kopfleiste {
+    background: linear-gradient(180deg, #20336e 0%, var(--friondo-dunkel) 100%);
+    box-shadow: var(--schatten-1);
+}
+
+.kopfleiste nav a.aktiv { border-bottom-color: var(--friondo-blau); }
+
+.menue[open] .menue-liste {
+    border-radius: var(--r-m);
+    box-shadow: var(--schatten-2);
+    overflow: hidden;
+    padding: var(--a-1) 0;
+}
+
+.menue-liste a { border-bottom: none; font-size: var(--t-m); }
+.menue-liste a:hover { background: var(--friondo-blau-hell); }
+.menue-liste a.aktiv { font-weight: 700; color: var(--friondo-blau) !important; }
+
+/* --- Karten (generisch) ---------------------------------------------- */
+
+.karte {
+    background: #fff;
+    border: 1px solid var(--grau-linie);
+    border-radius: var(--r-m);
+    box-shadow: var(--schatten-1);
+    padding: var(--a-4) var(--a-5);
+}
+
+.kachel {
+    border-radius: var(--r-m);
+    box-shadow: var(--schatten-1);
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.kachel:hover {
+    border-color: var(--friondo-blau);
+    box-shadow: var(--schatten-2);
+    transform: translateY(-1px);
+}
+
+.kachel.stat .stat-zahl { font-weight: 700; letter-spacing: -0.02em; }
+
+.kachel-icon { color: var(--friondo-blau); margin-bottom: var(--a-1); }
+
+.portal-karte {
+    border-radius: var(--r-l);
+    box-shadow: var(--schatten-1);
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.portal-karte:hover {
+    box-shadow: var(--schatten-2);
+    transform: translateY(-2px);
+    border-color: var(--friondo-blau);
+}
+
+/* --- Buttons --------------------------------------------------------- */
+
+.knopf {
+    border-radius: var(--r-s);
+    font-weight: 600;
+    line-height: 1.25;
+    padding: 0.5rem 1rem;
+    transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+}
+
+.knopf:hover { background: var(--friondo-blau-dunkel); }
+
+.knopf.zweitrangig { background: #fff; color: var(--friondo-dunkel); }
+.knopf.zweitrangig:hover { background: var(--friondo-blau-hell); border-color: var(--friondo-blau); }
+
+.knopf.gefaehrlich { background: var(--status-rot); }
+.knopf.gefaehrlich:hover { background: #a53125; }
+
+.knopf.ghost {
+    background: transparent;
+    color: var(--friondo-blau);
+    border: none;
+    padding: 0.35rem 0.5rem;
+}
+.knopf.ghost:hover { background: var(--friondo-blau-hell); }
+
+.knopf.klein { padding: 0.3rem 0.65rem; font-size: var(--t-s); }
+
+/* kompakter Icon-Button (Listen-Aktionen) – Beschriftung über title */
+.knopf.symbol {
+    padding: 0.35rem 0.45rem;
+    background: #fff;
+    color: var(--g-500);
+    border: 1px solid var(--grau-linie);
+}
+.knopf.symbol:hover { color: var(--friondo-blau); border-color: var(--friondo-blau); background: var(--friondo-blau-hell); }
+.knopf.symbol.gefaehrlich { color: var(--status-rot); background: #fff; }
+.knopf.symbol.gefaehrlich:hover { background: var(--status-rot-bg); border-color: var(--status-rot); }
+
+/* --- Inline-SVG-Icons (_symbole.html) -------------------------------- */
+
+.symbol-svg {
+    width: 1.05em;
+    height: 1.05em;
+    vertical-align: -0.18em;
+    flex: none;
+}
+
+/* --- Status-Badges: EIN Farbschema für alle Status ------------------- */
+
+.abzeichen {
+    font-weight: 600;
+    padding: 0.14rem 0.6rem;
+    border-radius: 999px;
+    background: var(--status-grau-bg);
+    color: var(--status-grau);
+    white-space: nowrap;
+}
+
+.abzeichen.status-entwurf,
+.abzeichen.status-ueberholt { background: var(--status-grau-bg); color: var(--status-grau); }
+.abzeichen.status-ueberholt { text-decoration: line-through; }
+.abzeichen.status-versand-vorbereitet { background: var(--status-orange-bg); color: var(--status-orange); }
+.abzeichen.status-versendet,
+.abzeichen.status-versendet-extern { background: var(--status-blau-bg); color: var(--status-blau); }
+.abzeichen.status-angenommen,
+.abzeichen.status-erledigt { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.abzeichen.status-abgelehnt { background: var(--status-rot-bg); color: var(--status-rot); }
+.abzeichen.status-individuell,
+.abzeichen.status-taifun { background: var(--status-violett-bg); color: var(--status-violett); }
+.abzeichen.status-neu,
+.abzeichen.status-in-bearbeitung { background: var(--status-blau-bg); color: var(--status-blau); }
+.abzeichen.ep { background: var(--status-orange-bg); color: var(--status-orange); }
+
+/* --- Tabellen --------------------------------------------------------- */
+
+.tabelle {
+    border-radius: var(--r-m);
+    box-shadow: var(--schatten-1);
+    font-variant-numeric: tabular-nums;
+}
+
+.tabelle th {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--g-100);
+    font-weight: 700;
+}
+
+.tabelle tbody tr:nth-child(even) td { background: var(--g-50); }
+.tabelle tbody tr:hover td { background: var(--friondo-blau-hell); }
+.tabelle td { font-size: var(--t-m); }
+.tabelle .rechts { font-variant-numeric: tabular-nums; }
+
+/* Zebra/Hover nicht in verschachtelten Formular-/Summentabellen */
+.tabelle.zusammenfassung tbody tr:nth-child(even) td,
+.tabelle.zusammenfassung tbody tr:hover td,
+.tabelle.summenblock tbody tr:nth-child(even) td,
+.tabelle.summenblock tbody tr:hover td { background: transparent; }
+
+/* Summenzeile der Angebotsliste klar abgesetzt */
+.tabelle tr.summenzeile td,
+.tabelle tfoot td {
+    background: var(--friondo-dunkel) !important;
+    color: #fff;
+    font-weight: 600;
+    border-bottom: none;
+}
+.tabelle tr.summenzeile a { color: #fff; }
+
+/* horizontales Scrollen nur innerhalb der Tabelle (Laptop-Breite) */
+@media (max-width: 1180px) {
+    .tabelle { display: block; overflow-x: auto; }
+}
+
+/* --- Filterleiste (Suchfeld + Filter-Chips) --------------------------- */
+
+.suchleiste {
+    background: #fff;
+    border: 1px solid var(--grau-linie);
+    border-radius: var(--r-m);
+    box-shadow: var(--schatten-1);
+    padding: var(--a-2) var(--a-3);
+    flex-wrap: wrap;
+    gap: var(--a-2);
+}
+
+.suchleiste input[type="text"] {
+    border-radius: var(--r-s);
+    background: var(--g-50);
+    border-color: transparent;
+}
+
+.suchleiste input[type="text"]:focus { background: #fff; }
+
+.suchleiste select {
+    border-radius: 999px;
+    padding: 0.35rem 0.75rem;
+    font-size: var(--t-s);
+    background: var(--g-50);
+    border: 1px solid var(--grau-linie);
+    cursor: pointer;
+    max-width: 240px;
+}
+
+.suchleiste select:hover { border-color: var(--friondo-blau); background: var(--friondo-blau-hell); }
+
+/* --- Meldungen + Hinweis-Boxen ---------------------------------------- */
+
+.meldung {
+    border-radius: var(--r-s);
+    background: var(--status-gruen-bg);
+    border-color: #bfe0bf;
+    border-left: 4px solid var(--status-gruen);
+    box-shadow: var(--schatten-1);
+}
+
+.meldung.fehler {
+    background: var(--status-rot-bg);
+    border-color: #ecc7c3;
+    border-left-color: var(--status-rot);
+}
+
+.hinweis {
+    border-radius: var(--r-s);
+    box-shadow: var(--schatten-1);
+}
+
+.warnblock {
+    border-radius: var(--r-s);
+    background: var(--status-orange-bg);
+    border-color: #eedab0;
+    border-left: 4px solid var(--status-orange);
+    box-shadow: var(--schatten-1);
+}
+
+.warnblock.fehlerblock {
+    background: var(--status-rot-bg);
+    border-color: #ecc7c3;
+    border-left-color: var(--status-rot);
+}
+
+/* --- Formulare --------------------------------------------------------- */
+
+.formular {
+    border-radius: var(--r-m);
+    box-shadow: var(--schatten-1);
+}
+
+.formular input[type="text"],
+.formular select,
+.formular textarea {
+    border-radius: var(--r-s);
+    transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.formular input:focus,
+.formular select:focus,
+.formular textarea:focus,
+.suchleiste input:focus {
+    outline: none;
+    border-color: var(--friondo-blau);
+    box-shadow: 0 0 0 3px rgba(63, 134, 198, 0.2);
+}
+
+/* --- Tabs -------------------------------------------------------------- */
+
+.tab-leiste { gap: var(--a-1); border-bottom: 1px solid var(--grau-linie); }
+
+.tab-leiste .tab {
+    border: none;
+    border-radius: var(--r-s) var(--r-s) 0 0;
+    background: transparent;
+    color: var(--g-500);
+    border-bottom: 2px solid transparent;
+}
+
+.tab-leiste .tab:hover { color: var(--friondo-dunkel); background: var(--friondo-blau-hell); }
+
+.tab-leiste .tab.aktiv {
+    background: transparent;
+    color: var(--friondo-blau);
+    border-bottom-color: var(--friondo-blau);
+}
+
+/* --- Status-Schrittleiste (Mini-Pipeline, Phase 71) -------------------- */
+
+.statuskette {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin: var(--a-2) 0;
+    flex-wrap: wrap;
+}
+
+.statuskette .kettenschritt {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: var(--t-xs);
+    color: var(--g-500);
+    white-space: nowrap;
+}
+
+.statuskette .kettenschritt::before {
+    content: "";
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    background: var(--g-200);
+    border: 2px solid var(--g-200);
+    flex: none;
+}
+
+.statuskette .kettenschritt + .kettenschritt { margin-left: 0.35rem; }
+
+.statuskette .kettenschritt + .kettenschritt::after { content: none; }
+
+.statuskette .verbinder {
+    width: 1.1rem;
+    height: 2px;
+    background: var(--g-200);
+    margin: 0 0.3rem;
+    flex: none;
+}
+
+.statuskette .kettenschritt.fertig { color: var(--status-gruen); }
+.statuskette .kettenschritt.fertig::before { background: var(--status-gruen); border-color: var(--status-gruen); }
+
+.statuskette .kettenschritt.aktiv { color: var(--friondo-dunkel); font-weight: 700; }
+.statuskette .kettenschritt.aktiv::before { background: var(--friondo-blau); border-color: var(--friondo-blau); box-shadow: 0 0 0 3px rgba(63, 134, 198, 0.25); }
+
+.statuskette .kettenschritt.abgelehnt { color: var(--status-rot); font-weight: 700; }
+.statuskette .kettenschritt.abgelehnt::before { background: var(--status-rot); border-color: var(--status-rot); }
+
+.statuskette .kettenschritt.ueberholt { color: var(--g-300); text-decoration: line-through; }
+
+/* --- Leerzustände ------------------------------------------------------ */
+
+.leer-zustand {
+    border: 1.5px dashed var(--g-300);
+    border-radius: var(--r-m);
+    padding: var(--a-5);
+    text-align: center;
+    color: var(--g-500);
+    background: var(--g-50);
+    font-size: var(--t-m);
+}
+
+.leer-zustand .knopf { margin-top: var(--a-3); }
+
+/* --- Notizen-Chat (Phase 71) ------------------------------------------- */
+
+.notizen-chat { gap: var(--a-2); }
+
+.notiz {
+    border-radius: var(--r-m);
+    box-shadow: var(--schatten-1);
+    max-width: 85%;
+    align-self: flex-start;
+}
+
+.notiz.eigene {
+    align-self: flex-end;
+    background: var(--friondo-blau-hell);
+    border-color: #cadff2;
+}
+
+.notiz.systemnotiz {
+    align-self: stretch;
+    max-width: none;
+    background: var(--g-50);
+    box-shadow: none;
+    color: var(--g-500);
+    font-size: var(--t-s);
+}
+
+.notiz-kopf { color: var(--g-500); }
+.notiz-kopf strong { color: var(--friondo-dunkel); }
+
+.notiz-eingabe textarea { border-radius: var(--r-m); }
+
+/* --- Sticky-Aktionsleiste (Editor, Phase 72) --------------------------- */
+
+.aktionsleiste-unten {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    display: flex;
+    gap: var(--a-2);
+    align-items: center;
+    justify-content: flex-end;
+    background: rgba(255, 255, 255, 0.96);
+    border-top: 1px solid var(--grau-linie);
+    box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.08);
+    padding: var(--a-2) var(--a-4);
+    margin: var(--a-5) calc(-1 * var(--a-5)) calc(-1 * var(--a-6));
+    backdrop-filter: blur(4px);
+}
+
+.aktionsleiste-unten form { margin: 0; }
+
+/* --- Editor-Zonen (Phase 72) ------------------------------------------- */
+
+.editor-kopfkarte {
+    background: #fff;
+    border: 1px solid var(--grau-linie);
+    border-radius: var(--r-m);
+    box-shadow: var(--schatten-1);
+    padding: var(--a-3) var(--a-4);
+    margin: var(--a-3) 0;
+}
+
+.gruppentitel {
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--g-500);
+    border-left: 3px solid var(--friondo-blau);
+    padding-left: var(--a-2);
+    user-select: none;
+}
+
+.positionen .eigene-nr,
+.positionen .preis-geaendert { background: var(--status-orange-bg); border-radius: var(--r-s); }
+
+tr[draggable="true"] .griff {
+    color: var(--g-300);
+    font-size: 1.05rem;
+    padding: 0 0.2rem;
+    border-radius: var(--r-s);
+}
+tr[draggable="true"]:hover .griff { color: var(--friondo-blau); }
+
+.db-box, .foerder-editor {
+    border-radius: var(--r-m);
+    box-shadow: var(--schatten-1);
+}
+
+/* --- Vorgangsakte (Phase 71) ------------------------------------------- */
+
+.akte-kopfkarte {
+    background: #fff;
+    border: 1px solid var(--grau-linie);
+    border-radius: var(--r-l);
+    box-shadow: var(--schatten-1);
+    padding: var(--a-4) var(--a-5);
+    margin-bottom: var(--a-4);
+    display: flex;
+    gap: var(--a-4);
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+.akte-kopfkarte .kundenname {
+    margin: 0 0 var(--a-1);
+    font-size: 1.45rem;
+}
+
+.akte-schnellaktionen {
+    display: flex;
+    flex-direction: column;
+    gap: var(--a-2);
+    align-items: stretch;
+    min-width: 220px;
+}
+
+.akte-spalten {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: var(--a-4);
+    align-items: start;
+}
+
+@media (max-width: 1100px) {
+    .akte-spalten { grid-template-columns: 1fr; }
+}
+
+.angebot-karte {
+    background: #fff;
+    border: 1px solid var(--grau-linie);
+    border-radius: var(--r-m);
+    box-shadow: var(--schatten-1);
+    padding: var(--a-3) var(--a-4);
+    margin-bottom: var(--a-3);
+}
+
+.angebot-karte .kartenkopf {
+    display: flex;
+    align-items: baseline;
+    gap: var(--a-2);
+    flex-wrap: wrap;
+}
+
+.angebot-karte .kartenkopf .betrag {
+    margin-left: auto;
+    font-weight: 700;
+    font-size: var(--t-l);
+    font-variant-numeric: tabular-nums;
+}
+
+.angebot-karte .kartenfuss {
+    display: flex;
+    gap: var(--a-2);
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: var(--a-2);
+}
+
+.wv-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 999px;
+    padding: 0.18rem 0.7rem;
+    font-size: var(--t-s);
+    font-weight: 600;
+    background: var(--status-grau-bg);
+    color: var(--status-grau);
+}
+
+.wv-chip.faellig { background: var(--status-rot-bg); color: var(--status-rot); }
+.wv-chip.geplant { background: var(--status-blau-bg); color: var(--status-blau); }
+
+/* --- Mobile Erfassung (Phase 73) ---------------------------------------- */
+
+.erfassung-fortschritt { margin: var(--a-3) 0 var(--a-2); }
+
+.erfassung-fortschritt .fortschritt-text {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--t-s);
+    color: var(--g-500);
+    margin-bottom: 0.3rem;
+}
+
+.erfassung-fortschritt .balken {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--g-200);
+    overflow: hidden;
+}
+
+.erfassung-fortschritt .balken i {
+    display: block;
+    height: 100%;
+    background: var(--friondo-blau);
+    border-radius: 999px;
+    transition: width 0.2s;
+}
+
+.fragefeld {
+    border-radius: var(--r-m);
+    box-shadow: var(--schatten-1);
+    padding: var(--a-3) var(--a-4);
+}
+
+.wahl span {
+    border-radius: var(--r-m);
+    padding: 0.8rem 1.1rem;
+    min-width: 3.2rem;
+    text-align: center;
+    transition: border-color 0.12s, background 0.12s;
+}
+
+.wahl input:focus-visible + span { box-shadow: 0 0 0 3px rgba(63, 134, 198, 0.35); }
+
+.mobil-aktionen.sticky-fuss {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    background: rgba(246, 248, 250, 0.96);
+    padding: var(--a-2) 0;
+    margin: var(--a-4) 0 0;
+    border-top: 1px solid var(--grau-linie);
+    backdrop-filter: blur(4px);
+}
+
+/* Einschätzungs-Ampel als drei große Buttons */
+.wahl.einschaetzung span {
+    font-size: 1.15rem;
+    padding: 1rem 1.4rem;
+    flex: 1;
+}
+
+@media (max-width: 640px) {
+    /* kein Zoom-Springen: Eingaben mindestens 16px */
+    input, select, textarea { font-size: 16px !important; }
+    .mobil-aktionen .knopf { padding: 0.9rem 1rem; }
+}
+
+/* --- Coming-soon / Demo-Badges vereinheitlicht -------------------------- */
+
+.coming-soon, .demo-badge, .pj-dbadge {
+    color: var(--status-orange);
+    background: var(--status-orange-bg);
+    border: 1px solid #ecd9a7;
+    border-radius: 999px;
+    padding: 0.12rem 0.6rem;
+    font-size: var(--t-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
 }

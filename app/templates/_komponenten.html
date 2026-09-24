@@ -1,0 +1,73 @@
+{# v14 (PLAN_V12, Phase 69): gemeinsame UI-Bausteine des Design-Systems.
+   Dokumentation: docs/design-system.md #}
+{% from "_symbole.html" import symbol %}
+
+{# EIN Farbschema für alle Status – überall identisch (Angebote + Erfassungen) #}
+{% macro status_badge(status) -%}
+{%- set klasse = {
+    'Entwurf': 'status-entwurf',
+    'Versand vorbereitet': 'status-versand-vorbereitet',
+    'Versendet': 'status-versendet',
+    'Versendet (extern)': 'status-versendet-extern',
+    'Angenommen': 'status-angenommen',
+    'Abgelehnt': 'status-abgelehnt',
+    'Überholt': 'status-ueberholt',
+    'Individuell': 'status-individuell',
+    'Neu': 'status-neu',
+    'In Bearbeitung': 'status-in-bearbeitung',
+    'Individuell – zu prüfen': 'status-individuell',
+    'In TAIFUN zu schreiben': 'status-taifun',
+    'Erledigt': 'status-erledigt',
+    'Erledigt (extern)': 'status-erledigt',
+}.get(status, '') -%}
+<span class="abzeichen {{ klasse }}">{{ status }}</span>
+{%- endmacro %}
+
+{# Status-Schrittleiste (Mini-Pipeline) eines Angebots:
+   Entwurf → Versand vorbereitet → Versendet → Angenommen/Abgelehnt;
+   Überholt wird komplett ausgegraut. #}
+{% macro statuskette(status) -%}
+{%- set reihenfolge = ['Entwurf', 'Versand vorbereitet', 'Versendet'] -%}
+{%- set index = {'Entwurf': 0, 'Versand vorbereitet': 1, 'Versendet': 2,
+                 'Versendet (extern)': 2, 'Angenommen': 3, 'Abgelehnt': 3}.get(status, -1) -%}
+<div class="statuskette" title="Status: {{ status }}">
+    {%- if status == 'Überholt' -%}
+        <span class="kettenschritt ueberholt">Entwurf</span><span class="verbinder"></span>
+        <span class="kettenschritt ueberholt">Versendet</span><span class="verbinder"></span>
+        <span class="kettenschritt ueberholt">Überholt</span>
+    {%- elif status == 'Individuell' -%}
+        <span class="kettenschritt aktiv">Individuell</span>
+    {%- else -%}
+        {%- for schritt in reihenfolge -%}
+            {%- set fertig = index > loop.index0 -%}
+            {%- set aktiv = index == loop.index0 and status not in ('Angenommen', 'Abgelehnt') -%}
+            <span class="kettenschritt {{ 'fertig' if fertig }} {{ 'aktiv' if aktiv }}">
+                {{- 'Versendet (extern)' if (schritt == 'Versendet' and status == 'Versendet (extern)') else schritt -}}
+            </span><span class="verbinder"></span>
+        {%- endfor -%}
+        {%- if status == 'Angenommen' -%}
+            <span class="kettenschritt fertig aktiv">Angenommen</span>
+        {%- elif status == 'Abgelehnt' -%}
+            <span class="kettenschritt abgelehnt">Abgelehnt</span>
+        {%- else -%}
+            <span class="kettenschritt">Angenommen / Abgelehnt</span>
+        {%- endif -%}
+    {%- endif -%}
+</div>
+{%- endmacro %}
+
+{# Wiedervorlage-Chip mit Fälligkeits-Farbe (rot = fällig, blau = geplant) #}
+{% macro wiedervorlage_chip(datum, heute) -%}
+{%- if datum -%}
+<span class="wv-chip {{ 'faellig' if datum.date() <= heute else 'geplant' }}">
+    {{ symbol('wiedervorlage') }} {{ datum.strftime('%d.%m.%Y') }}</span>
+{%- endif -%}
+{%- endmacro %}
+
+{# Leerzustand mit optionaler Aktion #}
+{% macro leer_zustand(text, aktion_url='', aktion_text='') -%}
+<div class="leer-zustand">
+    {{ text }}
+    {% if aktion_url %}<br><a class="knopf klein" href="{{ aktion_url }}">{{ aktion_text }}</a>{% endif %}
+</div>
+{%- endmacro %}
