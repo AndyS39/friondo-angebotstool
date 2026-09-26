@@ -360,6 +360,12 @@ def _daten() -> list[str]:
             session.commit()
             meldungen.append(f"Projektierung V2: {umgezogen} Gewerke auf die "
                              "neuen Kanban-Phasen migriert")
+        # Phase 75: Team-Stammdaten (Montageteam 1-10, Subteam 1-5), idempotent
+        neue_teams = projektierung.teams_vorbelegen(session)
+        if neue_teams:
+            session.commit()
+            meldungen.append(f"Projektierung V2: {neue_teams} Teams angelegt "
+                             "(Montageteam 1-10, Subteam 1-5)")
     finally:
         session.close()
     return meldungen

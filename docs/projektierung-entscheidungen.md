@@ -182,3 +182,22 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
 - **Montage-Backend:** „Montage gestartet" setzt jetzt Phase `montage`,
   „Montage fertig" setzt `abnahme_freigabe` (vorher in_ausfuehrung/
   abnahme_offen); erlaubt ist der Start aus allen Phasen vor Montage.
+
+## Phase 75 (26.09.2026)
+
+- **Team-Typen:** neu `montage` / `sub`; Alt-Typen (SHK/Elektro/Sonstige)
+  bleiben lesbar und zählen im Kalender zu den Montage-Zeilen. Der Seed legt
+  „Montageteam 1–10" und „Subteam 1–5" idempotent **je Name** an – umbenannte
+  Teams werden bei erneuter Migration nicht neu erzeugt, gelöschte schon
+  (gewollt: Stammdaten „fest angelegt").
+- **Ende-Vorbelegung** (+4 Arbeitstage) läuft doppelt: im Dialog per JS beim
+  Setzen des Beginns und serverseitig, falls Ende leer ankommt.
+- **Kalender-Drag:** Drop in eine andere Team-Zeile wechselt zusätzlich zum
+  Datum auch das Team des Termins (protokolliert) – der Plan nennt nur das
+  Datum, Zeile = Team macht den Teamwechsel aber zur natürlichen Geste.
+  „Ende ziehen" nutzt einen eigenen Griff (▐) am Balken.
+- **„ohne Team"-Zeile** erscheint nur, wenn es Montagetermine ohne Team gibt
+  (Altbestand); Neuanlagen erzwingen seit dieser Phase ein Team.
+- **Montagetermin-Pflichtteam** gilt für die Termin-Dialoge der Akte und den
+  Zuweisungsdialog; die Terminübersicht (/projektierung/termine) nutzt
+  dieselbe Route und erbt die Prüfung.

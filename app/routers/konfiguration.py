@@ -543,6 +543,9 @@ async def teams_seite(request: Request, session: Session = Depends(get_session))
                 benutzer_map[m.benutzer_id].name)
     return render(request, "konfiguration/teams.html", aktiv="/parametrierung",
                   teams=teams, mitglieder=mitglieder,
+                  benutzer_liste=sorted(
+                      [b for b in benutzer_map.values() if b.aktiv],
+                      key=lambda b: b.name),
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -554,7 +557,12 @@ async def team_speichern(request: Request, session: Session = Depends(get_sessio
     form = await request.form()
     team_id = form.get("team_id") or ""
     name = (form.get("name") or "").strip()
-    typ = form.get("typ") if form.get("typ") in ("SHK", "Elektro", "Sonstige") else "SHK"
+    # v15 (Phase 75): Typen montage | sub (Altwerte bleiben lesbar)
+    typ = (form.get("typ") if form.get("typ")
+           in ("montage", "sub", "SHK", "Elektro", "Sonstige") else "montage")
+    leiter = form.get("leiter_id") or "0"
+    farbe = (form.get("farbe") or "").strip()[:20]
+    outlook = (form.get("outlook_adresse") or "").strip()[:200]
     if team_id.isdigit():
         team = session.get(Team, int(team_id))
         if team is not None:
@@ -562,8 +570,13 @@ async def team_speichern(request: Request, session: Session = Depends(get_sessio
                 team.name = name
             team.typ = typ
             team.aktiv = form.get("aktiv") == "on"
+            team.leiter_id = int(leiter) if leiter.isdigit() and int(leiter) else None
+            team.farbe = farbe
+            team.outlook_adresse = outlook
     elif name:
-        session.add(Team(name=name, typ=typ, aktiv=True,
+        session.add(Team(name=name, typ=typ, aktiv=True, farbe=farbe,
+                         leiter_id=int(leiter) if leiter.isdigit() and int(leiter) else None,
+                         outlook_adresse=outlook,
                          erstellt_von=request.state.benutzer.id))
     else:
         return RedirectResponse("/parametrierung/teams?meldung="

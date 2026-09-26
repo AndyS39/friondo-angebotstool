@@ -518,6 +518,10 @@ class Gewerk(Base):
     # Erfassung in Phase 80 kommt) – Wächter Feinplanung VOT → Planung
     feinplanung_erfasst: Mapped[bool] = mapped_column(Boolean, default=False)
     feinplanung_erfasst_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # v15 (Phase 75): Team-Zuweisungen am Gewerk
+    wp_team_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    elektro_team_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    sub_team_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     angebot_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     angebot_id_original: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     auftragswert_original: Mapped[int] = mapped_column(Integer, default=0)  # Cent brutto
@@ -602,6 +606,12 @@ class ProjektTermin(Base):
     sub_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     kunde_bestaetigt: Mapped[bool] = mapped_column(Boolean, default=False)
     notiz: Mapped[str] = mapped_column(String(500), default="")
+    # v15 (Phase 75): Kalender-Felder
+    dauer_tage: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    ganztaegig: Mapped[bool] = mapped_column(Boolean, default=True)
+    outlook_event_id: Mapped[str] = mapped_column(String(200), default="")
+    bestaetigt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    bestaetigt_quelle: Mapped[str] = mapped_column(String(20), default="")  # manuell | mail
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
@@ -667,8 +677,12 @@ class Team(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), default="")
-    typ: Mapped[str] = mapped_column(String(20), default="SHK")  # SHK | Elektro | Sonstige
+    typ: Mapped[str] = mapped_column(String(20), default="montage")  # montage | sub (Alt: SHK/Elektro/Sonstige)
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
+    # v15 (Phase 75): Leiter, Kalenderfarbe, Outlook-Kalenderadresse (Phase 81)
+    leiter_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    farbe: Mapped[str] = mapped_column(String(20), default="")
+    outlook_adresse: Mapped[str] = mapped_column(String(200), default="")
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,

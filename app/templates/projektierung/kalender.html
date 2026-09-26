@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% from "_projektierung.html" import pj_gw_zeile, pj_terminstatus %}
+
+{% block titel %}Projektierung – Kalender{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <div>
+        <div class="pj-eyebrow">Projektierung</div>
+        <h1>{{ 'Chronologisch' if ansicht == 'chrono' else 'Kalender' }}</h1>
+    </div>
+    <div class="aktionen">
+        <a class="pj-chip" href="/projektierung">Board</a>
+        <span class="pj-chip {{ 'on' if ansicht != 'chrono' }}"
+              {% if ansicht == 'chrono' %}onclick="location.href='/projektierung/kalender'" style="cursor:pointer"{% endif %}>Kalender</span>
+        <span class="pj-chip {{ 'on' if ansicht == 'chrono' }}"
+              {% if ansicht != 'chrono' %}onclick="location.href='/projektierung/kalender?ansicht=chrono'" style="cursor:pointer"{% endif %}>Chronologisch</span>
+        <a class="pj-btn" href="/projektierung/termine">Terminliste</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<form method="get" action="/projektierung/kalender" class="pj-filters">
+    <input type="hidden" name="ansicht" value="{{ ansicht }}">
+    {% if ansicht != 'chrono' %}
+    <a class="pj-chip" href="/projektierung/kalender?ansicht={{ ansicht }}&start={{ zurueck }}&team_id={{ team_id }}&sparte={{ sparte }}&terminstatus={{ terminstatus }}">◀</a>
+    <strong>{{ von.strftime('%d.%m.%Y') }} – {{ bis.strftime('%d.%m.%Y') }}</strong>
+    <a class="pj-chip" href="/projektierung/kalender?ansicht={{ ansicht }}&start={{ vor }}&team_id={{ team_id }}&sparte={{ sparte }}&terminstatus={{ terminstatus }}">▶</a>
+    <a class="pj-chip {{ 'on' if ansicht == 'woche' }}" href="/projektierung/kalender?ansicht=woche&start={{ von.isoformat() }}&team_id={{ team_id }}&sparte={{ sparte }}&terminstatus={{ terminstatus }}">Woche</a>
+    <a class="pj-chip {{ 'on' if ansicht == 'monat' }}" href="/projektierung/kalender?ansicht=monat&start={{ von.isoformat() }}&team_id={{ team_id }}&sparte={{ sparte }}&terminstatus={{ terminstatus }}">Monat</a>
+    {% endif %}
+    <select name="team_id" class="pj-chip {{ 'on' if team_id }}" onchange="this.form.submit()">
+        <option value="0">Team ▾</option>
+        {% for te in montage_teams + sub_teams %}
+            <option value="{{ te.id }}" {{ 'selected' if team_id == te.id }}>{{ te.name }}</option>
+        {% endfor %}
+    </select>
+    <select name="sparte" class="pj-chip {{ 'on' if sparte }}" onchange="this.form.submit()">
+        <option value="">Sparte ▾</option>
+        {% for s in ('WP', 'PV', 'KL', 'WB') %}
+            <option value="{{ s }}" {{ 'selected' if sparte == s }}>{{ s }}</option>
+        {% endfor %}
+    </select>
+    <select name="terminstatus" class="pj-chip {{ 'on' if terminstatus }}" onchange="this.form.submit()">
+        <option value="">Terminstatus ▾</option>
+        <option value="terminiert" {{ 'selected' if terminstatus == 'terminiert' }}>Terminiert</option>
+        <option value="unbestaetigt" {{ 'selected' if terminstatus == 'unbestaetigt' }}>Termin unbestätigt</option>
+        <option value="unterminiert" {{ 'selected' if terminstatus == 'unterminiert' }}>Unterminiert</option>
+    </select>
+    <button class="pj-chip" type="submit">Anzeigen</button>
+</form>
+
+{% if ansicht == 'chrono' %}
+{# Chronologisch: Gewerke nach Montagebeginn, Unterminierte unten (rot) #}
+<div style="max-width:760px">
+    {% for z in chrono %}
+    <a class="pj-card" style="margin-bottom:8px" href="/projektierung/projekt/{{ z.projekt.id }}">
+        <div class="hd">
+            <span class="pr pj-mono">{{ z.projekt.nummer }}</span>
+            {% if z.ueberfaellig %}<span class="pj-badge crit">{{ z.ueberfaellig }} überfällig</span>{% endif %}
+            {{ pj_terminstatus(z.terminstatus, teams_map) }}
+        </div>
+        <div class="name">{{ z.kunde.anzeige_name if z.kunde else '?' }}</div>
+        <div class="meta">{{ z.projekt.ausfuehrung_ort or '–' }}
+            {% if z.projekt.kanal %}· <span class="pj-badge kanal">{{ z.projekt.kanal }}</span>{% endif %}</div>
+        {{ pj_gw_zeile(z.gewerk.sparte, phasen_namen.get(z.gewerk.phase, z.gewerk.phase),
+                       z.ampel.farbe, ts=z.terminstatus) }}
+    </a>
+    {% else %}
+    <p class="hinweis">Keine Gewerke im Filter.</p>
+    {% endfor %}
+</div>
+
+{% else %}
+{# Kalender-Raster: Zeilen = Teams, Spalten = Tage, Balken über die Dauer #}
+<div class="pj-kal" style="--tage: {{ tage | length }}">
+    <div class="pj-kal-zeile pj-kal-kopf">
+        <div class="pj-kal-team">Team</div>
+        {% for tag in tage %}
+        <div class="pj-kal-tag {{ 'we' if tag.weekday() >= 5 }} {{ 'heute' if tag == heute }}">
+            {{ ['Mo','Di','Mi','Do','Fr','Sa','So'][tag.weekday()] }}<br>{{ tag.strftime('%d.%m.') }}
+        </div>
+        {% endfor %}
+    </div>
+    {% for te in montage_teams + sub_teams + [none] %}
+    {% set team_key = te.id if te else none %}
+    {% if te or balken.get(none) %}
+    <div class="pj-kal-zeile" data-team="{{ te.id if te else 0 }}">
+        <div class="pj-kal-team">
+            <i style="background: {{ te.farbe or '#5a6478' if te else '#5a6478' }}"></i>
+            {{ te.name if te else 'ohne Team' }}{{ ' (Sub)' if te and te.typ == 'sub' }}
+        </div>
+        {% for tag in tage %}
+        <div class="pj-kal-zelle {{ 'we' if tag.weekday() >= 5 }}"
+             style="grid-column: {{ loop.index + 1 }}"
+             data-team="{{ te.id if te else 0 }}" data-datum="{{ tag.isoformat() }}"
+             ondragover="event.preventDefault(); this.classList.add('drop')"
+             ondragleave="this.classList.remove('drop')"
+             ondrop="pjKalDrop(event, this)">
+            {% set m = marker.get((team_key, loop.index0)) %}
+            {% if m %}
+            <span class="pj-kal-marker">
+                {% for e in m %}<b class="{{ 'fp' if e.termin.typ == 'feinplanung' else 'ab' }}"
+                    title="{{ e.termin.typ | capitalize }} {{ e.zeile.projekt.nummer }} · {{ e.zeile.kunde.anzeige_name if e.zeile.kunde }}"></b>{% endfor %}
+            </span>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% for b in balken.get(team_key, []) %}
+        <a class="pj-kal-balken {{ 'unbest' if not b.termin.kunde_bestaetigt }}"
+           style="grid-column: {{ b.start + 1 }} / {{ b.ende + 1 }};
+                  background-color: {{ te.farbe or '#5a6478' if te else '#5a6478' }}"
+           href="/projektierung/projekt/{{ b.zeile.projekt.id }}"
+           draggable="true"
+           ondragstart="pjKalStart(event, {{ b.termin.id }}, 'verschieben')"
+           title="{{ b.zeile.projekt.nummer }} · {{ b.zeile.kunde.anzeige_name if b.zeile.kunde }} · {{ b.zeile.gewerk.sparte }}{{ ' · unbestätigt' if not b.termin.kunde_bestaetigt }} – ziehen zum Verschieben, ▐ zieht das Ende">
+            {{ '…' if b.links_offen }}{{ b.zeile.projekt.nummer }} · {{ b.zeile.kunde.anzeige_name | truncate(14, true) if b.zeile.kunde }} · {{ b.zeile.gewerk.sparte }}
+            <span class="ende-griff" draggable="true"
+                  ondragstart="event.stopPropagation(); pjKalStart(event, {{ b.termin.id }}, 'ende')">▐</span>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+<div class="pj-kal-legende">
+    <span><b style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#5a6478"></b> Balken = Montagetermin (Farbe = Team, Schraffur = Kunde unbestätigt)</span>
+    <span><b style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#2d6bd6"></b> Feinplanung</span>
+    <span><b style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#7a3fbf"></b> Abnahme</span>
+    <span>Ziehen verschiebt den Termin (protokolliert), ▐ verlängert das Ende.</span>
+</div>
+
+<form method="post" id="pj-kal-form" hidden>
+    <input type="hidden" name="datum"><input type="hidden" name="team_id">
+    <input type="hidden" name="art"><input type="hidden" name="zurueck">
+</form>
+<script>
+var pjKalDrag = null;
+function pjKalStart(ev, terminId, art) {
+    pjKalDrag = {id: terminId, art: art};
+    ev.dataTransfer.effectAllowed = 'move';
+    ev.dataTransfer.setData('text/plain', String(terminId));
+}
+function pjKalDrop(ev, zelle) {
+    ev.preventDefault();
+    zelle.classList.remove('drop');
+    if (!pjKalDrag) return;
+    var form = document.getElementById('pj-kal-form');
+    form.action = '/projektierung/termin/' + pjKalDrag.id + '/kalender-drop';
+    form.datum.value = zelle.dataset.datum;
+    form.team_id.value = pjKalDrag.art === 'verschieben' ? zelle.dataset.team : '0';
+    form.art.value = pjKalDrag.art;
+    form.zurueck.value = location.pathname + location.search;
+    pjKalDrag = null;
+    form.submit();
+}
+</script>
+{% endif %}
+{% endblock %}

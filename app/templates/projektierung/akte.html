@@ -212,6 +212,17 @@
             {% else %}– noch nicht terminiert{% endif %}</div>
         </div>
 
+        {% if g.wp_team_id or g.elektro_team_id or g.sub_team_id %}
+        <div class="pj-kv" style="margin-top:4px">
+            <span>Teams</span>
+            <div>
+                {% if g.wp_team_id and g.wp_team_id in teams_map %}WP: <b>{{ teams_map[g.wp_team_id].name }}</b>{% endif %}
+                {% if g.elektro_team_id and g.elektro_team_id in teams_map %} · Elektro: <b>{{ teams_map[g.elektro_team_id].name }}</b>{% endif %}
+                {% if g.sub_team_id and g.sub_team_id in teams_map %} · Sub: <b>{{ teams_map[g.sub_team_id].name }}</b>{% endif %}
+            </div>
+        </div>
+        {% endif %}
+
         {# weitere Termine (Abnahme/Sub/Sonstige) #}
         {% set weitere = gewerk_termine | rejectattr('typ', 'in', ['feinplanung', 'montage']) | list %}
         {% for t in weitere %}
@@ -286,6 +297,8 @@
             {% if not fp_termine %}
             <button class="pj-btn" type="button"
                     onclick="pjDialog('dlg-termin-{{ g.id }}', 'feinplanung')">📅 Feinplanungstermin</button>
+            <button class="pj-btn" type="button"
+                    onclick="document.getElementById('dlg-team-{{ g.id }}').showModal()">👥 Team + Termin</button>
             {% else %}
             <button class="pj-btn" type="button" onclick="pjDialog('dlg-termin-{{ g.id }}')">📅 Termin</button>
             {% endif %}
@@ -323,7 +336,37 @@
                 </div>
             </form>
         </dialog>
-        <dialog class="pj-dlg" id="dlg-termin-{{ g.id }}">
+        <dialog class="pj-dlg" id="dlg-team-{{ g.id }}">
+        {# v15 (Phase 75): Zuweisung mit Terminwahl; Ende = Beginn + 4 Arbeitstage #}
+        <form method="post" action="/projektierung/gewerk/{{ g.id }}/team-termin" class="box">
+            <h3>Team + Termin · {{ g.sparte }}</h3>
+            <label>Zuweisung
+                <select name="zweck">
+                    <option value="wp">Montageteam (WP)</option>
+                    <option value="elektro">Elektro-Montageteam</option>
+                    <option value="sub">Subteam</option>
+                </select></label>
+            <label>Team
+                <select name="team_id" required>
+                    <option value="">– bitte wählen –</option>
+                    {% for te in teams %}
+                        <option value="{{ te.id }}">{{ te.name }}{{ ' (Sub)' if te.typ == 'sub' }}</option>
+                    {% endfor %}
+                </select></label>
+            <label>Beginn <input type="date" name="beginn" required
+                   onchange="pjEndeVorbelegen(this)"></label>
+            <label>Ende <input type="date" name="ende"
+                   title="leer = Beginn + 4 Arbeitstage (1 Woche)"></label>
+            <label class="kontrollfeld"><input type="checkbox" name="kunde_bestaetigt"> Kunde bestätigt</label>
+            <div class="pj-btnrow">
+                <button class="pj-btn primary" type="submit">Zuweisen + Termin anlegen</button>
+                <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+            </div>
+            <div class="pj-note">Konflikte (Team am selben Tag woanders) werden
+                nach dem Speichern als Warnung angezeigt – kein Verbot.</div>
+        </form>
+    </dialog>
+    <dialog class="pj-dlg" id="dlg-termin-{{ g.id }}">
             <h3>Termin anlegen · {{ g.sparte }}</h3>
             <form method="post" action="/projektierung/gewerk/{{ g.id }}/termin">
                 <label>Typ</label>
@@ -571,6 +614,19 @@ function pjTabOeffnen(id) {
 if (location.hash) {
     const ziel = location.hash.slice(1);
     if (document.querySelector('.pj-tab[data-pane="' + ziel + '"]')) pjTabOeffnen(ziel);
+}
+function pjEndeVorbelegen(beginnFeld) {
+    // v15 (Phase 75): Ende = Beginn + 4 Arbeitstage (Mo–Fr)
+    var form = beginnFeld.closest('form');
+    var endeFeld = form.querySelector('input[name=ende]');
+    if (!beginnFeld.value || (endeFeld.value && endeFeld.dataset.manuell)) return;
+    var d = new Date(beginnFeld.value + 'T12:00:00');
+    var rest = 4;
+    while (rest > 0) {
+        d.setDate(d.getDate() + 1);
+        if (d.getDay() !== 0 && d.getDay() !== 6) rest -= 1;
+    }
+    endeFeld.value = d.toISOString().slice(0, 10);
 }
 function pjDialog(id, terminTyp) {
     const dlg = document.getElementById(id);

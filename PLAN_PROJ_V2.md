@@ -60,19 +60,19 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
 
 ## Phase 75 – Teams, Zuweisung, Kalender im Tool
 
-- [ ] Stammdaten Teams fest anlegen (idempotent): **Montageteam 1–10** (Typ
+- [x] Stammdaten Teams fest anlegen (idempotent): **Montageteam 1–10** (Typ
   `montage`) und **Subteam 1–5** (Typ `sub`), umbenennbar, deaktivierbar;
   je Team optional Leiter (Benutzer), Farbe (für den Kalender), Outlook-
   Kalenderadresse (Phase 81). Mitglieder = Benutzer mit Rolle Montage.
-- [ ] Zuweisung am Gewerk: `wp_team_id` (Montageteam), `elektro_team_id`
+- [x] Zuweisung am Gewerk: `wp_team_id` (Montageteam), `elektro_team_id`
   (Montageteam), `sub_team_id` (Subteam, optional). Im Steckbrief und in der
   Gewerk-Spalte sichtbar; Aufgaben „Montageteam zuweisen" / „Elektro-Montageteam
   zuweisen" (Phase 78) öffnen den Zuweisungsdialog **mit Terminwahl**: Team,
   Beginn, Ende (Vorbelegung Beginn + 4 Arbeitstage = 1 Woche), Kunde bestätigt.
-- [ ] Termin-Entität erweitern: `dauer_tage`, `team_id` Pflicht bei Typ Montage,
+- [x] Termin-Entität erweitern: `dauer_tage`, `team_id` Pflicht bei Typ Montage,
   `ganztaegig` (Standard ja), `outlook_event_id` (Phase 81), `bestaetigt_am`,
   `bestaetigt_quelle` (manuell / mail).
-- [ ] **Kalender** `/projektierung/kalender`: Wochen- und Monatsansicht.
+- [x] **Kalender** `/projektierung/kalender`: Wochen- und Monatsansicht.
   Zeilen = Teams (Montageteam 1–10, Subteam 1–5, „ohne Team"), Spalten = Tage;
   Projekte als Balken über ihre Dauer (PR-Nr. · Kunde · Sparte, Farbe des
   Teams, Muster bei unbestätigt), Klick → Akte, Balken per Drag verschiebbar
@@ -80,10 +80,10 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
   Ansicht „Chronologisch" = Liste aller Gewerke nach Montagebeginn (Unterminierte
   ganz unten, rot) mit denselben Karten wie im Board. Filter Team / Sparte /
   Terminstatus. Feinplanungs- und Abnahmetermine als kleine Marker.
-- [ ] Umschalter aus Phase 74 zeigt jetzt Board | Kalender | Chronologisch.
-- [ ] Konflikthinweis: Team an zwei Projekten am selben Tag → Warnung im
+- [x] Umschalter aus Phase 74 zeigt jetzt Board | Kalender | Chronologisch.
+- [x] Konflikthinweis: Team an zwei Projekten am selben Tag → Warnung im
   Dialog (kein Verbot).
-- [ ] Test: Zuweisung, Balken, Verschieben, Konfliktwarnung.
+- [x] Test: Zuweisung, Balken, Verschieben, Konfliktwarnung.
 
 ## Phase 76 – Galerie am Vorgang
 

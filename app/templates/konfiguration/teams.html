@@ -11,19 +11,35 @@
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-<table class="tabelle" style="max-width:900px">
-    <thead><tr><th>Name</th><th>Typ</th><th>Mitglieder</th><th>Aktiv</th><th></th></tr></thead>
+<table class="tabelle">
+    <thead><tr><th>Name</th><th>Typ</th><th>Leiter</th><th>Farbe</th>
+        <th>Outlook-Kalender</th><th>Mitglieder</th><th>Aktiv</th><th></th></tr></thead>
     <tbody>
     {% for t in teams %}
         <tr class="{{ 'inaktiv' if not t.aktiv }}">
             <td><input form="t{{ t.id }}" type="text" name="name" value="{{ t.name }}" size="20"></td>
             <td>
                 <select form="t{{ t.id }}" name="typ">
-                    {% for typ in ('SHK', 'Elektro', 'Sonstige') %}
-                        <option value="{{ typ }}" {{ 'selected' if t.typ == typ }}>{{ typ }}</option>
+                    {% for typ, tname in [('montage', 'Montage'), ('sub', 'Sub')] %}
+                        <option value="{{ typ }}" {{ 'selected' if t.typ == typ }}>{{ tname }}</option>
+                    {% endfor %}
+                    {% if t.typ not in ('montage', 'sub') %}
+                        <option value="{{ t.typ }}" selected>{{ t.typ }} (alt)</option>
+                    {% endif %}
+                </select>
+            </td>
+            <td>
+                <select form="t{{ t.id }}" name="leiter_id">
+                    <option value="0">–</option>
+                    {% for b in benutzer_liste %}
+                        <option value="{{ b.id }}" {{ 'selected' if t.leiter_id == b.id }}>{{ b.name }}</option>
                     {% endfor %}
                 </select>
             </td>
+            <td><input form="t{{ t.id }}" type="color" name="farbe"
+                       value="{{ t.farbe or '#2d6bd6' }}" title="Kalenderfarbe"></td>
+            <td><input form="t{{ t.id }}" type="text" name="outlook_adresse" size="18"
+                       value="{{ t.outlook_adresse }}" placeholder="team1@… (Phase 81)"></td>
             <td class="dezent">{{ mitglieder.get(t.id) | join(', ') if mitglieder.get(t.id) else '– (Zuordnung in der Benutzerverwaltung)' }}</td>
             <td><input form="t{{ t.id }}" type="checkbox" name="aktiv" {{ 'checked' if t.aktiv }}></td>
             <td>
@@ -34,7 +50,7 @@
             </td>
         </tr>
     {% else %}
-        <tr><td colspan="5" class="dezent">Noch keine Teams.</td></tr>
+        <tr><td colspan="8" class="dezent">Noch keine Teams.</td></tr>
     {% endfor %}
     </tbody>
 </table>
@@ -44,9 +60,11 @@
     <label>Name <input type="text" name="name" required placeholder="z. B. Montage-Team 1"></label>
     <label>Typ
         <select name="typ">
-            {% for typ in ('SHK', 'Elektro', 'Sonstige') %}<option value="{{ typ }}">{{ typ }}</option>{% endfor %}
+            <option value="montage">Montage</option>
+            <option value="sub">Sub</option>
         </select>
     </label>
+    <label>Farbe <input type="color" name="farbe" value="#2d6bd6"></label>
     <button class="knopf" type="submit">Anlegen</button>
 </form>
 <p class="dezent">Die Mitglieder werden in der Benutzerverwaltung je Benutzer

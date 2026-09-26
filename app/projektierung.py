@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app import config
 from app.models import (Angebot, Aufgabe, AufgabenpaketInstanz, Benachrichtigung,
                         Benutzer, Gewerk, Kunde, Projekt, ProjektDokument,
-                        ProjektTermin, ProjektVerlauf, Vorgang)
+                        ProjektTermin, ProjektVerlauf, Team, Vorgang)
 
 PROJEKT_PREFIX = "PR-"
 PROJEKTE_ORDNER = config.DATA_ORDNER / "projekte"
@@ -538,6 +538,151 @@ def _erfassungsprotokoll_ablegen(session: Session, projekt: Projekt,
         freitext=erfassung.freitext if erfassung.typ == "freitext" else "")
     _dokument_ablegen(session, projekt, Path(pfad), "01 Angebot & Erfassung",
                       gewerk.id, benutzer)
+
+
+# --- Teams & Kalender (v15, Phase 75) ---------------------------------------
+
+TEAM_FARBEN = ["#2d6bd6", "#1f9d55", "#c47a12", "#7a3fbf", "#cf3b2c",
+               "#0f6e56", "#b0567a", "#5a6478", "#8a6d00", "#2a8fbd"]
+SUB_FARBEN = ["#7d8f69", "#a8763e", "#6b7aa1", "#9a5b88", "#708090"]
+
+
+def teams_vorbelegen(session: Session) -> int:
+    """Stammdaten fest anlegen (idempotent je Name): Montageteam 1–10
+    (Typ montage) und Subteam 1–5 (Typ sub); umbenennbar/deaktivierbar."""
+    vorhanden = {t.name for t in session.query(Team)}
+    neu = 0
+    for i in range(1, 11):
+        name = f"Montageteam {i}"
+        if name not in vorhanden:
+            session.add(Team(name=name, typ="montage",
+                             farbe=TEAM_FARBEN[(i - 1) % len(TEAM_FARBEN)]))
+            neu += 1
+    for i in range(1, 6):
+        name = f"Subteam {i}"
+        if name not in vorhanden:
+            session.add(Team(name=name, typ="sub",
+                             farbe=SUB_FARBEN[(i - 1) % len(SUB_FARBEN)]))
+            neu += 1
+    session.flush()
+    return neu
+
+
+def arbeitstage_addieren(start: datetime, tage: int) -> datetime:
+    """Beginn + N Arbeitstage (Mo–Fr); Standard-Vorbelegung Ende = +4."""
+    aktuell = start
+    rest = tage
+    while rest > 0:
+        aktuell += timedelta(days=1)
+        if aktuell.weekday() < 5:
+            rest -= 1
+    return aktuell
+
+
+def team_konflikte(session: Session, team_id: int, beginn: datetime,
+                   ende: datetime, ausser_termin_id: int = 0) -> list[str]:
+    """Konflikthinweis (kein Verbot): Termine desselben Teams, die sich mit
+    dem Zeitraum überschneiden – als Textliste „PR-… (Kunde) 13.10.–16.10.“."""
+    if not team_id or beginn is None:
+        return []
+    ende = ende or beginn
+    treffer = []
+    for t in (session.query(ProjektTermin)
+              .filter(ProjektTermin.team_id == team_id,
+                      ProjektTermin.typ == "montage",
+                      ProjektTermin.beginn.isnot(None),
+                      ProjektTermin.id != ausser_termin_id)):
+        t_ende = t.ende or t.beginn
+        if t.beginn.date() <= ende.date() and beginn.date() <= t_ende.date():
+            projekt = session.get(Projekt, t.projekt_id)
+            kunde = session.get(Kunde, projekt.kunde_id) if projekt else None
+            zeitraum = t.beginn.strftime("%d.%m.")
+            if t_ende.date() != t.beginn.date():
+                zeitraum += "–" + t_ende.strftime("%d.%m.")
+            treffer.append(f"{projekt.nummer if projekt else '?'} "
+                           f"({kunde.anzeige_name if kunde else '?'}) {zeitraum}")
+    return treffer
+
+
+ZUWEISUNGS_FELDER = {"wp": ("wp_team_id", "Montageteam"),
+                     "elektro": ("elektro_team_id", "Elektro-Montageteam"),
+                     "sub": ("sub_team_id", "Subteam")}
+
+
+def team_termin_zuweisen(session: Session, gewerk: Gewerk, zweck: str,
+                         team_id: int, beginn: datetime, ende,
+                         kunde_bestaetigt: bool, benutzer=None
+                         ) -> tuple[bool, str, list[str]]:
+    """v15 (Phase 75): Zuweisungsdialog „Team + Termin“ – setzt das
+    Zuweisungsfeld am Gewerk und legt einen (ganztägigen) Montagetermin an.
+    Liefert (ok, meldung, konflikte). Ende leer = Beginn + 4 Arbeitstage."""
+    if zweck not in ZUWEISUNGS_FELDER:
+        return False, "Unbekannter Zuweisungszweck.", []
+    feld, name = ZUWEISUNGS_FELDER[zweck]
+    team = session.get(Team, team_id) if team_id else None
+    if team is None:
+        return False, f"{name}: bitte ein Team wählen.", []
+    if beginn is None:
+        return False, "Bitte einen Beginn wählen.", []
+    if ende is None:
+        ende = arbeitstage_addieren(beginn, 4)
+    konflikte = team_konflikte(session, team.id, beginn, ende)
+    setattr(gewerk, feld, team.id)
+    termin = ProjektTermin(
+        projekt_id=gewerk.projekt_id, gewerk_id=gewerk.id, typ="montage",
+        beginn=beginn, ende=ende, team_id=team.id, ganztaegig=True,
+        dauer_tage=max(1, (ende.date() - beginn.date()).days + 1),
+        kunde_bestaetigt=bool(kunde_bestaetigt),
+        bestaetigt_am=datetime.now() if kunde_bestaetigt else None,
+        bestaetigt_quelle="manuell" if kunde_bestaetigt else "",
+        erstellt_von=benutzer.id if benutzer else None)
+    session.add(termin)
+    session.flush()
+    faelligkeiten_nachberechnen(session, gewerk)
+    verlauf(session, gewerk.projekt_id,
+            f"{name} zugewiesen: {team.name} · Montagetermin "
+            f"{beginn.strftime('%d.%m.%Y')}–{ende.strftime('%d.%m.%Y')}"
+            + (" · Kunde bestätigt" if kunde_bestaetigt else ""),
+            benutzer=benutzer, gewerk_id=gewerk.id)
+    meldung = f"{name} {team.name} zugewiesen, Termin angelegt."
+    return True, meldung, konflikte
+
+
+def termin_verschieben(session: Session, termin: ProjektTermin,
+                       neues_datum, neues_team_id: int = 0,
+                       art: str = "verschieben", benutzer=None) -> str:
+    """Kalender-Drag (v15): Balken verschieben (Beginn-Delta auf Beginn+Ende,
+    optional Teamwechsel) oder Ende ziehen. Protokolliert im Verlauf."""
+    alt_text = termin.beginn.strftime("%d.%m.%Y")
+    if termin.ende and termin.ende.date() != termin.beginn.date():
+        alt_text += "–" + termin.ende.strftime("%d.%m.%Y")
+    if art == "ende":
+        neues_ende = datetime.combine(neues_datum, (termin.ende or termin.beginn).time())
+        if neues_ende.date() < termin.beginn.date():
+            neues_ende = datetime.combine(termin.beginn.date(), neues_ende.time())
+        termin.ende = neues_ende
+    else:
+        delta = neues_datum - termin.beginn.date()
+        termin.beginn = termin.beginn + delta
+        if termin.ende:
+            termin.ende = termin.ende + delta
+        if neues_team_id and neues_team_id != (termin.team_id or 0):
+            neues_team = session.get(Team, neues_team_id)
+            if neues_team is not None:
+                termin.team_id = neues_team.id
+    termin.dauer_tage = max(1, ((termin.ende or termin.beginn).date()
+                                - termin.beginn.date()).days + 1)
+    gewerk = session.get(Gewerk, termin.gewerk_id) if termin.gewerk_id else None
+    if gewerk is not None:
+        faelligkeiten_nachberechnen(session, gewerk)
+    neu_text = termin.beginn.strftime("%d.%m.%Y")
+    if termin.ende and termin.ende.date() != termin.beginn.date():
+        neu_text += "–" + termin.ende.strftime("%d.%m.%Y")
+    verlauf(session, termin.projekt_id,
+            f"Termin im Kalender {'verlängert' if art == 'ende' else 'verschoben'}: "
+            f"{alt_text} → {neu_text}", benutzer=benutzer,
+            gewerk_id=termin.gewerk_id)
+    return neu_text
 
 
 def startseiten_kacheln(session: Session) -> dict:

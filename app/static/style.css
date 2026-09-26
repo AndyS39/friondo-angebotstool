@@ -2536,3 +2536,36 @@ td.aktionen form { display: inline-flex; vertical-align: middle; margin: 0 0 0 0
 .pj-ts.s { font-size: 10px; padding: 0 6px; font-weight: 600; }
 .pj-card .hd .pj-ts { margin-left: auto; }
 .pj-gw .dt .pj-ts { margin: 0; }
+
+/* v15 (Phase 75): Team-Kalender – Zeilen = Teams, Spalten = Tage, Balken */
+.pj-kal { overflow-x: auto; background: #fff; border: 1px solid var(--pj-line, #d5dcd9);
+    border-radius: 12px; padding: 8px; }
+.pj-kal-zeile { display: grid; grid-template-columns: 150px repeat(var(--tage, 7), minmax(34px, 1fr));
+    border-bottom: 1px solid var(--pj-line, #e9edeb); position: relative; min-height: 34px; }
+.pj-kal-zeile:last-child { border-bottom: none; }
+.pj-kal-team { font-size: 12px; font-weight: 600; padding: 8px 6px; display: flex;
+    align-items: center; gap: 6px; position: sticky; left: 0; background: #fff; z-index: 3; }
+.pj-kal-team i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
+.pj-kal-kopf { font-weight: 700; background: var(--pj-surface2, #f3f5f4);
+    border-radius: 8px 8px 0 0; }
+.pj-kal-tag { font-size: 11px; text-align: center; padding: 6px 2px; color: var(--pj-muted, #5d6b66);
+    border-left: 1px solid var(--pj-line, #e9edeb); }
+.pj-kal-tag.we { background: var(--pj-surface2, #f3f5f4); }
+.pj-kal-tag.heute { color: var(--pj-akzent, #3f86c6); font-weight: 700; }
+.pj-kal-zelle { border-left: 1px solid var(--pj-line, #e9edeb); min-height: 34px; position: relative; }
+.pj-kal-zelle.we { background: var(--pj-surface2, #f3f5f4); }
+.pj-kal-zelle.drop { outline: 2px dashed var(--pj-akzent, #3f86c6); outline-offset: -2px; }
+.pj-kal-balken { grid-row: 1; margin: 4px 2px; border-radius: 8px; color: #fff;
+    font-size: 11px; font-weight: 600; padding: 3px 8px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; cursor: grab; z-index: 2;
+    display: flex; align-items: center; gap: 4px; text-decoration: none; }
+.pj-kal-balken.unbest { background-image: repeating-linear-gradient(45deg,
+    rgba(255,255,255,0.28) 0 6px, transparent 6px 12px); }
+.pj-kal-balken .ende-griff { margin-left: auto; cursor: ew-resize; padding: 0 2px;
+    opacity: 0.85; flex: none; }
+.pj-kal-marker { position: absolute; bottom: 2px; left: 4px; display: flex; gap: 3px; z-index: 1; }
+.pj-kal-marker b { width: 8px; height: 8px; border-radius: 50%; display: block; }
+.pj-kal-marker b.fp { background: #2d6bd6; }
+.pj-kal-marker b.ab { background: #7a3fbf; }
+.pj-kal-legende { display: flex; gap: 14px; font-size: 11px; color: var(--pj-muted, #5d6b66);
+    margin-top: 6px; flex-wrap: wrap; align-items: center; }

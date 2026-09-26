@@ -936,11 +936,23 @@ async def termin_anlegen(request: Request, gewerk_id: int,
             return int(form.get(name) or 0) or None
         except ValueError:
             return None
+    # v15 (Phase 75): Montagetermine brauchen ein Team
+    if typ == "montage" and not _id("team_id"):
+        return RedirectResponse(
+            f"/projektierung/projekt/{gewerk.projekt_id}?meldung="
+            + quote_plus("Montagetermine brauchen ein Team (Phase 75) – "
+                         "bitte Team wählen."), status_code=303)
+    ende = _zeit("ende")
+    bestaetigt = form.get("kunde_bestaetigt") == "on"
     session.add(ProjektTermin(
         gewerk_id=gewerk.id, projekt_id=gewerk.projekt_id, typ=typ,
-        beginn=beginn, ende=_zeit("ende"), team_id=_id("team_id"),
+        beginn=beginn, ende=ende, team_id=_id("team_id"),
         person_id=_id("person_id"), sub_id=_id("sub_id"),
-        kunde_bestaetigt=form.get("kunde_bestaetigt") == "on",
+        kunde_bestaetigt=bestaetigt,
+        bestaetigt_am=datetime.now() if bestaetigt else None,
+        bestaetigt_quelle="manuell" if bestaetigt else "",
+        dauer_tage=(max(1, (ende.date() - beginn.date()).days + 1)
+                    if ende else 1),
         notiz=(form.get("notiz") or "").strip()[:500],
         erstellt_von=request.state.benutzer.id if request.state.benutzer else None))
     session.flush()
@@ -956,6 +968,165 @@ async def termin_anlegen(request: Request, gewerk_id: int,
     session.commit()
     return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}",
                             status_code=303)
+
+
+@router.post("/gewerk/{gewerk_id}/team-termin")
+async def team_termin(request: Request, gewerk_id: int,
+                      session: Session = Depends(get_session)):
+    """v15 (Phase 75): Zuweisungsdialog „Team + Termin“ – Team ans Gewerk
+    (WP-/Elektro-/Sub-Zuweisung) plus Montagetermin; Konflikt = Warnung."""
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    form = await request.form()
+
+    def _datum(name):
+        roh = (form.get(name) or "").strip()
+        try:
+            return datetime.strptime(roh, "%Y-%m-%d")
+        except ValueError:
+            return None
+    try:
+        team_id = int(form.get("team_id") or 0)
+    except ValueError:
+        team_id = 0
+    ok, meldung, konflikte = kern.team_termin_zuweisen(
+        session, gewerk, (form.get("zweck") or "wp").lower(), team_id,
+        _datum("beginn"), _datum("ende"),
+        form.get("kunde_bestaetigt") == "on",
+        benutzer=request.state.benutzer)
+    if ok:
+        session.commit()
+        if konflikte:
+            meldung += (" ⚠ Konflikt: Team am selben Tag auch bei "
+                        + "; ".join(konflikte[:3]))
+    else:
+        session.rollback()
+    return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}"
+                            "?meldung=" + quote_plus(meldung), status_code=303)
+
+
+@router.get("/kalender")
+async def kalender(request: Request, ansicht: str = "woche", start: str = "",
+                   team_id: int = 0, sparte: str = "", terminstatus: str = "",
+                   session: Session = Depends(get_session)):
+    """v15 (Phase 75): Kalender – Zeilen = Teams, Spalten = Tage, Projekte
+    als Balken über ihre Dauer; Ansicht chrono = Gewerke nach Montagebeginn."""
+    if (umleitung := _gate(request, session)) is not None:
+        return umleitung
+    heute = datetime.now().date()
+    try:
+        start_datum = datetime.strptime(start, "%Y-%m-%d").date() if start else heute
+    except ValueError:
+        start_datum = heute
+    if ansicht not in ("woche", "monat", "chrono"):
+        ansicht = "woche"
+    if ansicht == "monat":
+        von = start_datum.replace(day=1)
+        if von.month == 12:
+            bis = von.replace(year=von.year + 1, month=1, day=1) - timedelta(days=1)
+        else:
+            bis = von.replace(month=von.month + 1, day=1) - timedelta(days=1)
+        zurueck = (von - timedelta(days=1)).replace(day=1).isoformat()
+        vor = (bis + timedelta(days=1)).isoformat()
+    else:
+        von = start_datum - timedelta(days=start_datum.weekday())
+        bis = von + timedelta(days=6)
+        zurueck = (von - timedelta(days=7)).isoformat()
+        vor = (von + timedelta(days=7)).isoformat()
+    tage = [von + timedelta(days=i) for i in range((bis - von).days + 1)]
+
+    zeilen = _gewerk_zeilen(session, request.state.benutzer, sparte=sparte,
+                            terminstatus=terminstatus, team_id=team_id)
+    gewerk_map = {z["gewerk"].id: z for z in zeilen}
+    projekte = {z["projekt"].id: z["projekt"] for z in zeilen}
+    kunden = {z["gewerk"].id: z["kunde"] for z in zeilen}
+
+    teams = (session.query(Team).filter(Team.aktiv.is_(True))
+             .order_by(Team.typ.desc(), Team.id).all())
+    montage_teams = [te for te in teams if te.typ != "sub"]
+    sub_teams = [te for te in teams if te.typ == "sub"]
+
+    balken: dict[int | None, list[dict]] = {}
+    marker: dict[tuple, list[dict]] = {}
+    for termin in (session.query(ProjektTermin)
+                   .filter(ProjektTermin.beginn.isnot(None))
+                   .order_by(ProjektTermin.beginn)):
+        if termin.gewerk_id not in gewerk_map:
+            continue
+        t_beginn = termin.beginn.date()
+        t_ende = (termin.ende or termin.beginn).date()
+        if t_ende < von or t_beginn > bis:
+            continue
+        z = gewerk_map[termin.gewerk_id]
+        if termin.typ == "montage":
+            start_idx = max(0, (t_beginn - von).days)
+            ende_idx = min(len(tage) - 1, (t_ende - von).days)
+            balken.setdefault(termin.team_id, []).append({
+                "termin": termin, "zeile": z,
+                "start": start_idx + 1, "ende": ende_idx + 2,
+                "links_offen": t_beginn < von, "rechts_offen": t_ende > bis,
+            })
+        elif termin.typ in ("feinplanung", "abnahme"):
+            idx = (t_beginn - von).days
+            if 0 <= idx < len(tage):
+                marker.setdefault((termin.team_id, idx), []).append(
+                    {"termin": termin, "zeile": z})
+
+    # Chronologisch: Gewerke nach Montagebeginn, Unterminierte unten
+    chrono = sorted(
+        [z for z in zeilen if z["gewerk"].phase not in ("abgeschlossen", "storniert")],
+        key=lambda z: (z["terminstatus"]["termin"] is None,
+                       z["terminstatus"]["termin"].beginn
+                       if z["terminstatus"]["termin"] else datetime.max))
+
+    return render(request, "projektierung/kalender.html",
+                  aktiv="/projektierung", ansicht=ansicht,
+                  von=von, bis=bis, tage=tage, heute=heute,
+                  zurueck=zurueck, vor=vor,
+                  montage_teams=montage_teams, sub_teams=sub_teams,
+                  balken=balken, marker=marker, chrono=chrono,
+                  teams_map={te.id: te for te in teams},
+                  phasen_namen=GEWERK_PHASEN_NAMEN,
+                  team_id=team_id, sparte=sparte, terminstatus=terminstatus,
+                  benutzer=request.state.benutzer,
+                  **_filter_werte(session),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/termin/{termin_id}/kalender-drop")
+async def kalender_drop(request: Request, termin_id: int,
+                        session: Session = Depends(get_session)):
+    """v15 (Phase 75): Balken per Drag verschoben (Datum/Team) oder Ende
+    gezogen – protokolliert, Fälligkeiten nachberechnet."""
+    if (umleitung := _gate(request, session)) is not None:
+        return umleitung
+    termin = session.get(ProjektTermin, termin_id)
+    form = await request.form()
+    zurueck_url = form.get("zurueck") or "/projektierung/kalender"
+    if termin is None or termin.beginn is None:
+        return RedirectResponse(zurueck_url, status_code=303)
+    try:
+        datum = datetime.strptime(form.get("datum") or "", "%Y-%m-%d").date()
+    except ValueError:
+        return RedirectResponse(zurueck_url, status_code=303)
+    try:
+        neues_team = int(form.get("team_id") or 0)
+    except ValueError:
+        neues_team = 0
+    neu_text = kern.termin_verschieben(session, termin, datum,
+                                       neues_team_id=neues_team,
+                                       art=form.get("art") or "verschieben",
+                                       benutzer=request.state.benutzer)
+    konflikte = kern.team_konflikte(session, termin.team_id, termin.beginn,
+                                    termin.ende, ausser_termin_id=termin.id)
+    session.commit()
+    meldung = f"Termin: {neu_text}"
+    if konflikte:
+        meldung += " ⚠ Konflikt: " + "; ".join(konflikte[:3])
+    trenner = "&" if "?" in zurueck_url else "?"
+    return RedirectResponse(zurueck_url + trenner + "meldung="
+                            + quote_plus(meldung), status_code=303)
 
 
 @router.post("/gewerk/{gewerk_id}/phase")
