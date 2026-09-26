@@ -341,7 +341,7 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
 
 ## Phase 83 – Live-Master, Docs, Rollout
 
-- [ ] `CLAUDE.md`: neuen Abschnitt „## Neu in v<nächste freie Nummer> –
+- [x] `CLAUDE.md`: neuen Abschnitt „## Neu in v<nächste freie Nummer> –
   Projektierung V2 (abgestimmt 26.09.2026)" anhängen (Nummer = höchste
   vorhandene + 1; Kopfzeile anpassen), Inhalt wörtlich:
 
@@ -378,7 +378,7 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
   >   Blatt „Formulare", PDF in Galerie, Kundenunterschrift über Signatur).
   > - Kunden-Terminbestätigung per Mail mit Antwort-Erkennung.
 
-- [ ] `docs/projektierung.md` fortschreiben; `docs/graph-einrichtung.md` um
+- [x] `docs/projektierung.md` fortschreiben; `docs/graph-einrichtung.md` um
   Team-Kalender ergänzen; `docs/projektierung-entscheidungen.md` pflegen.
 - [ ] Rollout nach Absprache (Lead-Management-Chat!): git push, update.bat,
   Migrationslog prüfen (Phasen, Galerie-Umzug).

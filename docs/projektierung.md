@@ -1,4 +1,4 @@
-# Projektierung V1 – Bedienanleitung (v11)
+# Projektierung – Bedienanleitung (v15, Projektierung V2)
 
 Kurzer Leitfaden für den Alltag. Grundlage: PROJEKTIERUNG-KONZEPT.md
 (abgestimmt 20.09.2026). V1 läuft als **Demo im Live-Tool**: solange der
@@ -95,3 +95,58 @@ Projektierung-Einstellungen → „Alle berechtigten Rollen“.
 `data/projekte/<PR-Nr.>/` mit der Standardstruktur aus dem Konzept (3.5);
 Ordner der Ebene „gewerk“ liegen je Sparte unter `<Sparte>/<Ordner>`.
 Änderbar über die Steuerdatei (Blatt Ordnerstruktur), wirkt auf neue Projekte.
+
+## Neu in V2 (v15, 26.09.2026) – Kurzüberblick
+
+- **Phasen**: Auftragseingang → Feinplanung VOT → Planung →
+  Montagevorbereitung → Montage → Abnahme & Freigabe → Abgeschlossen
+  (+ Storniert). Terminstatus-Badge je Gewerk (grün terminiert /
+  gelb unbestätigt / rot unterminiert), Filter in Board und Liste,
+  Sichten **Board | Kalender | Chronologisch**.
+- **Teams & Kalender**: Stammdaten unter Parametrierung → Teams
+  (Leiter, Farbe, Outlook-Adresse). Zuweisung über „👥 Team + Termin"
+  am Gewerk; der Kalender zeigt Balken je Team über die Projektdauer,
+  Drag verschiebt (Zeile = Teamwechsel), ▐ zieht das Ende,
+  Konfliktwarnung bei Doppelbelegung. **Outlook-Sync** in beide
+  Richtungen (Einrichtung: docs/graph-einrichtung.md; Warnsymbol am
+  Termin + „Erneut senden" bei Fehlern).
+- **Galerie**: Ablage am Vorgang mit acht festen Ordnern; Upload mobil
+  per Kamera (Vertrieb im eigenen Vorgang, Projektierung, Montage);
+  der Dokumente-Reiter der Projektakte zeigt dieselbe Galerie.
+- **Steckbrief** ganz oben in der Projektakte: abgeleitet aus Erfassung,
+  Auftragspositionen und Feinplanung (Logik-Blatt „Steckbrief");
+  Klick ins Feld = manuell überschreiben (✎, wird nie überschrieben),
+  „Neu ableiten" aktualisiert den Rest.
+- **Aufgabenpakete v2**: Reihenfolge = Boardspalten, das Paket der
+  aktuellen Phase ist aufgeklappt. Aktionstypen an den Aufgaben:
+  Radio-Auswahl (Option mit * = erledigt), Link (Portal-URLs aus der
+  Parametrierung), ✉ Sub-Mail, 📅 Termin, 🖼 Galerie (hakt sich selbst
+  ab, wenn alle geforderten Ordner ein Bild haben), Formular, API.
+  Alte V1-Pakete tragen ein V1-Kennzeichen und lassen sich per Knopf
+  entfernen. Restarbeiten/Reklamationen als Liste je Gewerk.
+- **Sub-Beauftragung per Mail**: „✉ Mail senden" an den Planungs-
+  Aufgaben öffnet den Dialog (Vorlage je Sub-Typ aus der Logik-Excel,
+  Fotos aus den Vorlage-Ordnern auf 1600 px, Steckbrief-PDF, CC
+  Projektleiter, Absender projektierung@). Antworten landen im Reiter
+  „Mails"; die Akte schlägt „bestätigt" vor. Standard-Sub je Typ in
+  der Parametrierung.
+- **Feinplanungs-Erfassung** (Aufgabe „Feinplanungs-Erfassung" oder
+  /projektierung/gewerk/<id>/feinplanung): mobil, seitenweise,
+  vorbelegt aus der Vertriebs-Erfassung („vom Vertrieb" bestätigen);
+  der Abschluss schreibt Steckbrief + Heizlast und setzt das Häkchen
+  „Feinplanung erfasst".
+- **UGL-Bestellung Collin**: „📦 Material bestellen (UGL)" erzeugt die
+  Bestelldatei aus Auftrag × Blatt „Stücklisten" (Lieferdatum =
+  Montagebeginn − 3 Werktage), zeigt fehlende Zuordnungen, legt sie in
+  „Montagedokumente" ab; Upload in GC Online Plus manuell.
+- **BzA**: Link-Aufgabe öffnet das Portal; „📋 BzA-Datenblatt" zeigt
+  alle Antragsfelder mit Kopier-Buttons und Druckansicht.
+- **Kunden-Terminbestätigung**: „✉ Termin an Kunden" am Montagetermin
+  (Vorlage in der Parametrierung); die Antwort erzeugt den Ein-Klick-
+  Vorschlag „Kunde hat geantwortet – bestätigen".
+- **Montage-Backend /montage**: Team-Auswahl → Liste/Wochenkalender;
+  Auftragsdetail mit Steckbrief, Galerie (ansehen + aufnehmen),
+  Montage-Aufgaben, „Montage gestartet/fertig", Restarbeit melden und
+  den drei Formularen (Montagebericht, Inbetriebnahme-, Abnahme-
+  protokoll; Felder im Blatt „Formulare", Unterschrift auf dem Gerät,
+  PDF in der Galerie „Inbetrieb-/Abnahme"). Keine Preise.

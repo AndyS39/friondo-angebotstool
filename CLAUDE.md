@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v14)
+# Friondo Angebotstool – Projektkontext (v15)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -452,3 +452,38 @@ Lead-Management belegt.)
 - Angebots-PDF unverändert. Künftige Module bauen auf den Tokens auf;
   Screenshots vorher/nachher unter docs/design-v12/, Screenshot-Helfer
   scripts/design_screenshots.py (Playwright + lokales Chrome).
+
+## Neu in v15 – Projektierung V2 (abgestimmt 26.09.2026)
+
+- Kanban-Phasen: Auftragseingang · Feinplanung VOT · Planung ·
+  Montagevorbereitung · Montage · Abnahme & Freigabe · Abgeschlossen ·
+  Storniert; Terminstatus je Gewerk (terminiert / unbestätigt /
+  unterminiert) als Badge; Sichten Board | Kalender | Chronologisch.
+- Teams: Montageteam 1–10, Subteam 1–5 (Stammdaten, Farbe, Outlook-
+  Kalender); Zuweisung am Gewerk (WP-/Elektro-/Sub-Team) und je Termin;
+  Kalender mit Balken über die Projektdauer (Standard 1 Woche), Drag,
+  Konfliktwarnung; Outlook-Sync über Graph in beide Richtungen.
+- Galerie am Vorgang mit festen Ordnern (Alte Heizung · Elektro ·
+  Außengerät · Öl-Tank · Montagedokumente · Inbetrieb-/Abnahme · Neue
+  Anlage · Allgemein), Upload mobil per Kamera für Vertrieb (auch ohne
+  Auftrag), Planung und Montage; Projektakte zeigt dieselbe Galerie.
+- Projektsteckbrief über den To-dos (Hersteller, Leistungsklasse,
+  Innengerät, Zählerschrank, Öltank, Aufstellort, Tarif/iMSys/HEMS,
+  Folierung …), abgeleitet über Logik-Blatt „Steckbrief", editierbar.
+- Aufgabenpakete v2 mit Aktionstypen (Häkchen, Auswahl, Link, Mail,
+  Formular, Kalender, Galerie, API) und Fristen; Pakete Auftragseingang ·
+  Feinplanung VOT · Planung WP · Planung Elektro · Friondo Fit for Future ·
+  Montagevorbereitung · Abnahme & Freigabe; Restarbeiten-Liste je Gewerk.
+- Sub-Beauftragung per Mail aus der Aufgabe (Vorlagen je Sub-Typ,
+  Fotos aus Galerie-Ordner, Steckbrief-PDF), Absender projektierung@.
+- Feinplanungs-Erfassung WP (Blatt „Fragen FP-WP", vorbelegt aus der
+  Vertriebs-Erfassung), Heizreport-Link/Upload (API vorbereitet),
+  UGL-Bestelldatei für Collin aus Stücklisten (Blatt „Stücklisten",
+  Artikelstamm-Feld Lieferanten-Artikelnummer), Portal-Links (BzA,
+  SpotmyEnergy, Heizreport, GC Online Plus), BzA-Datenblatt mit
+  Kopier-Buttons.
+- Montage-Backend `/montage`: Team-Auswahl, chronologische Liste,
+  Wochenkalender, Auftragsdetail mit Steckbrief und Galerie,
+  Montagebericht · Inbetriebnahmeprotokoll · Abnahmeprotokoll (Felder im
+  Blatt „Formulare", PDF in Galerie, Kundenunterschrift über Signatur).
+- Kunden-Terminbestätigung per Mail mit Antwort-Erkennung.

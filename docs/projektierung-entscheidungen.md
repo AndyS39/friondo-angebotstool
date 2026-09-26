@@ -429,3 +429,15 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
 - **Kein Preiszugriff:** das Detail zeigt Positionen ohne Preise (V1) und
   bleibt auf /montage beschränkt; Ansprechpartner ist der Projektleiter
   (Name + E-Mail – Benutzer haben kein Telefonfeld).
+
+## Phase 83 (26.09.2026)
+
+- CLAUDE.md auf v15 gehoben (Abschnitt wörtlich aus PLAN_PROJ_V2);
+  docs/projektierung.md um den V2-Überblick ergänzt,
+  docs/graph-einrichtung.md trägt die Team-Kalender-Einrichtung.
+- **Rollout bewusst offen** (Plan: „nach Absprache – Lead-Management-
+  Chat!"): git push + update.bat + Migrationslog-Prüfung (Phasen-Umzug,
+  Galerie-Umzug, Paket-V1-Kennzeichnung) erst nach Freigabe durch Andreas.
+  Beim Rollout zusätzlich prüfen: echter Sub-Mail-Testversand, Outlook-
+  Rundlauf, UGL-Datei mit Collin abstimmen, echte Collin-Artikelnummern
+  im Blatt „Stücklisten".
