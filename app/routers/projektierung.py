@@ -1006,7 +1006,7 @@ async def termin_anlegen(request: Request, gewerk_id: int,
                          "bitte Team wählen."), status_code=303)
     ende = _zeit("ende")
     bestaetigt = form.get("kunde_bestaetigt") == "on"
-    session.add(ProjektTermin(
+    termin = ProjektTermin(
         gewerk_id=gewerk.id, projekt_id=gewerk.projekt_id, typ=typ,
         beginn=beginn, ende=ende, team_id=_id("team_id"),
         person_id=_id("person_id"), sub_id=_id("sub_id"),
@@ -1016,8 +1016,12 @@ async def termin_anlegen(request: Request, gewerk_id: int,
         dauer_tage=(max(1, (ende.date() - beginn.date()).days + 1)
                     if ende else 1),
         notiz=(form.get("notiz") or "").strip()[:500],
-        erstellt_von=request.state.benutzer.id if request.state.benutzer else None))
+        erstellt_von=request.state.benutzer.id if request.state.benutzer else None)
+    session.add(termin)
     session.flush()
+    # v15 (Phase 81): Outlook-Sync (best effort, blockiert nie)
+    from app import outlook_kalender
+    outlook_kalender.event_senden(session, termin)
     nachberechnet = 0
     if typ in ("feinplanung", "montage"):
         nachberechnet = kern.faelligkeiten_nachberechnen(session, gewerk)
@@ -1029,6 +1033,61 @@ async def termin_anlegen(request: Request, gewerk_id: int,
                  benutzer=request.state.benutzer, gewerk_id=gewerk.id)
     session.commit()
     return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}",
+                            status_code=303)
+
+
+@router.post("/termin/{termin_id}/outlook")
+async def termin_outlook_senden(request: Request, termin_id: int,
+                                session: Session = Depends(get_session)):
+    """v15 (Phase 81): „Erneut senden“ am Termin mit Sync-Warnsymbol."""
+    from app import outlook_kalender
+    termin = session.get(ProjektTermin, termin_id)
+    if termin is None:
+        return RedirectResponse("/projektierung", status_code=303)
+    ok, fehler = outlook_kalender.event_senden(session, termin)
+    session.commit()
+    meldung = "Termin nach Outlook übertragen." if ok else fehler
+    return RedirectResponse(f"/projektierung/projekt/{termin.projekt_id}"
+                            "?meldung=" + quote_plus(meldung), status_code=303)
+
+
+@router.post("/termin/{termin_id}/kundenmail")
+async def termin_kundenmail(request: Request, termin_id: int,
+                            session: Session = Depends(get_session)):
+    """v15 (Phase 81): Terminbestätigung an den Kunden (Vorlage in der
+    Parametrierung); die Antwort setzt später den Bestätigungs-Vorschlag."""
+    from app import terminmail
+    termin = session.get(ProjektTermin, termin_id)
+    if termin is None:
+        return RedirectResponse("/projektierung", status_code=303)
+    ok, meldung = terminmail.senden(session, termin,
+                                    benutzer=request.state.benutzer)
+    if ok:
+        session.commit()
+    else:
+        session.rollback()
+    return RedirectResponse(f"/projektierung/projekt/{termin.projekt_id}"
+                            "?meldung=" + quote_plus(meldung), status_code=303)
+
+
+@router.post("/termin/{termin_id}/kunde-bestaetigt")
+async def termin_kunde_bestaetigt(request: Request, termin_id: int,
+                                  session: Session = Depends(get_session)):
+    termin = session.get(ProjektTermin, termin_id)
+    if termin is None:
+        return RedirectResponse("/projektierung", status_code=303)
+    form = await request.form()
+    termin.kunde_bestaetigt = True
+    termin.bestaetigt_am = datetime.now()
+    termin.bestaetigt_quelle = ("mail" if form.get("quelle") == "mail"
+                                else "manuell")
+    kern.verlauf(session, termin.projekt_id,
+                 "Kunde hat den Termin bestätigt ("
+                 + ("Mail-Antwort" if termin.bestaetigt_quelle == "mail"
+                    else "manuell") + ")",
+                 benutzer=request.state.benutzer, gewerk_id=termin.gewerk_id)
+    session.commit()
+    return RedirectResponse(f"/projektierung/projekt/{termin.projekt_id}",
                             status_code=303)
 
 
@@ -1560,6 +1619,15 @@ async def team_termin(request: Request, gewerk_id: int,
         if konflikte:
             meldung += (" ⚠ Konflikt: Team am selben Tag auch bei "
                         + "; ".join(konflikte[:3]))
+        # v15 (Phase 81): neuen Montagetermin nach Outlook spiegeln
+        from app import outlook_kalender
+        neuer_termin = (session.query(ProjektTermin)
+                        .filter(ProjektTermin.gewerk_id == gewerk.id,
+                                ProjektTermin.typ == "montage")
+                        .order_by(ProjektTermin.id.desc()).first())
+        if neuer_termin is not None:
+            outlook_kalender.event_senden(session, neuer_termin)
+            session.commit()
     else:
         session.rollback()
     return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}"
@@ -1692,6 +1760,9 @@ async def kalender_drop(request: Request, termin_id: int,
                                        benutzer=request.state.benutzer)
     konflikte = kern.team_konflikte(session, termin.team_id, termin.beginn,
                                     termin.ende, ausser_termin_id=termin.id)
+    # v15 (Phase 81): verschobenen Termin nach Outlook spiegeln
+    from app import outlook_kalender
+    outlook_kalender.event_senden(session, termin)
     session.commit()
     meldung = f"Termin: {neu_text}"
     if konflikte:

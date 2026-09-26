@@ -81,6 +81,9 @@ _NACHTRAEGLICHE_SPALTEN = {
         "outlook_adresse": "VARCHAR(200) NOT NULL DEFAULT ''",  # v15 Phase 75
     },
     "projekt_termine": {
+        "outlook_fehler": "VARCHAR(300) NOT NULL DEFAULT ''", # v15 Phase 81
+        "graph_conversation_id": "VARCHAR(200)",              # v15 Phase 81
+        "kunden_antwort_am": "DATETIME",                      # v15 Phase 81
         "dauer_tage": "INTEGER",                                # v15 Phase 75
         "ganztaegig": "BOOLEAN NOT NULL DEFAULT 1",             # v15 Phase 75
         "outlook_event_id": "VARCHAR(200) NOT NULL DEFAULT ''", # v15 Phase 75

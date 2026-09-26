@@ -629,6 +629,13 @@ class ProjektTermin(Base):
     dauer_tage: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     ganztaegig: Mapped[bool] = mapped_column(Boolean, default=True)
     outlook_event_id: Mapped[str] = mapped_column(String(200), default="")
+    # v15 (Phase 81): Sync-Fehler (Warnsymbol + "Erneut senden") und
+    # Kunden-Terminbestaetigung per Mail (Konversation + Antwortzeit)
+    outlook_fehler: Mapped[str] = mapped_column(String(300), default="")
+    graph_conversation_id: Mapped[Optional[str]] = mapped_column(String(200),
+                                                                 nullable=True)
+    kunden_antwort_am: Mapped[Optional[datetime]] = mapped_column(DateTime,
+                                                                  nullable=True)
     bestaetigt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     bestaetigt_quelle: Mapped[str] = mapped_column(String(20), default="")  # manuell | mail
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

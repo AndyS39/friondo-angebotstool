@@ -254,6 +254,20 @@ def scheduler_starten() -> None:
                 except Exception as problem:
                     status.setdefault("fehler", []).append(
                         f"Sub-Antworten fehlgeschlagen: {problem}")
+                # v15 (Phase 81): Outlook-Kalender zuruecklesen + Kunden-
+                # Terminantworten – Fehler blockieren nie
+                try:
+                    from app import outlook_kalender
+                    outlook_kalender.ruecklesen()
+                except Exception as problem:
+                    status.setdefault("fehler", []).append(
+                        f"Outlook-Rücklauf fehlgeschlagen: {problem}")
+                try:
+                    from app import terminmail
+                    terminmail.antworten_abgleichen()
+                except Exception as problem:
+                    status.setdefault("fehler", []).append(
+                        f"Terminantworten fehlgeschlagen: {problem}")
             time.sleep(SYNC_INTERVALL_SEKUNDEN)
 
     threading.Thread(target=schleife, daemon=True).start()

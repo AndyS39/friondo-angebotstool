@@ -682,6 +682,22 @@ async def projektierung_einstellungen(request: Request,
                   lager_adresse=kern.parameter_holen(session, "lager_adresse", ""),
                   bza_fachunternehmer=kern.parameter_holen(
                       session, "bza_fachunternehmer", "Friondo GmbH"),
+                  # v15 (Phase 81): Outlook-Kalender + Terminmail
+                  outlook_kalender_modus=kern.parameter_holen(
+                      session, "outlook_kalender_modus", "postfach"),
+                  outlook_kalender_adresse=kern.parameter_holen(
+                      session, "outlook_kalender_adresse", ""),
+                  basis_url=kern.parameter_holen(session, "basis_url", ""),
+                  terminmail_betreff=kern.parameter_holen(
+                      session, "terminmail_betreff",
+                      __import__("app.terminmail", fromlist=["x"]).BETREFF_STANDARD),
+                  terminmail_text=kern.parameter_holen(
+                      session, "terminmail_text",
+                      __import__("app.terminmail", fromlist=["x"]).TEXT_STANDARD),
+                  terminmail_vorbereitung=kern.parameter_holen(
+                      session, "terminmail_vorbereitung",
+                      __import__("app.terminmail",
+                                 fromlist=["x"]).VORBEREITUNG_STANDARD),
                   benutzer_liste=benutzer_liste,
                   standard_pl=kern.parameter_holen(session, "standard_projektleiter"),
                   standard_fp=kern.parameter_holen(session, "standard_feinplaner"),
@@ -723,6 +739,20 @@ async def projektierung_einstellungen_speichern(
     if (form.get("bza_fachunternehmer") or "").strip():
         kern.parameter_setzen(session, "bza_fachunternehmer",
                               form.get("bza_fachunternehmer").strip()[:300])
+    # v15 (Phase 81): Outlook-Kalender + Terminmail-Vorlage
+    if form.get("outlook_kalender_modus") in ("postfach", "kategorien"):
+        kern.parameter_setzen(session, "outlook_kalender_modus",
+                              form.get("outlook_kalender_modus"))
+    for schluessel, laenge in (("outlook_kalender_adresse", 200),
+                               ("basis_url", 300),
+                               ("terminmail_betreff", 300),
+                               ("terminmail_vorbereitung", 500)):
+        wert = (form.get(schluessel) or "").strip()
+        if schluessel in form:
+            kern.parameter_setzen(session, schluessel, wert[:laenge])
+    if (form.get("terminmail_text") or "").strip():
+        kern.parameter_setzen(session, "terminmail_text",
+                              form.get("terminmail_text").strip()[:5000])
     if form.get("freigabe_modus") in ("admin", "alle"):
         kern.parameter_setzen(session, "freigabe_modus", form.get("freigabe_modus"))
     for feld, name in (("standard_pl", "standard_projektleiter"),

@@ -376,3 +376,29 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
   1:1 aus dem Förder-Editor-Ergebnis; Fachunternehmer ist der Parameter
   bza_fachunternehmer (Standard „Friondo GmbH"). Druck/PDF über die
   Browser-Druckfunktion (print-CSS blendet Knöpfe aus).
+
+## Phase 81 (26.09.2026)
+
+- **Outlook-Sync als best effort:** event_senden/loeschen fangen jede
+  Exception; der Fehlertext landet am Termin (outlook_fehler) und die Akte
+  zeigt „⚠ Outlook erneut senden". Gesynct werden Montage-, Feinplanungs-
+  und Abnahmetermine beim Anlegen (Termin-Dialog, Team+Termin-Dialog) und
+  beim Kalender-Drag; Rücklesen (Datum/Dauer) alle 15 Minuten im
+  mail_sync-Scheduler mit Verlaufseintrag „Termin in Outlook verschoben
+  von …" und Fälligkeits-Nachberechnung.
+- **Beide Kalender-Wege** (Team-Postfächer über Team.outlook_adresse ODER
+  gemeinsamer Kalender mit Kategorie = Teamname) sind implementiert; die
+  Wahl steht in der Parametrierung, die Einrichtung in
+  docs/graph-einrichtung.md (Calendars.ReadWrite.Shared).
+- **Kalendereintrag:** Betreff „PR-… · Kunde · Sparte" (andere Typen mit
+  Präfix), Ort = Ausführungsadresse, Text = die ersten 8 gefüllten
+  Steckbrief-Felder + Akten-Link über den neuen Parameter basis_url.
+- **Terminmail:** Vorlage (Betreff/Text/Vorbereitungs-Hinweis) liegt in der
+  Parametrierung mit Platzhaltern wie bei den Sub-Mails; Versand über die
+  Phase-79-Graph-Funktion (Konversation wird am Termin gemerkt). Die
+  Kundenantwort setzt nur kunden_antwort_am + Benachrichtigung – bestätigt
+  wird per Ein-Klick-Vorschlag in der Akte (bestaetigt_quelle=mail);
+  das manuelle Häkchen (telefonisch) bleibt daneben bestehen.
+- **Test ohne M365:** Graph-Aufrufe und Konversationsabruf sind im
+  Phasentest gemockt; echter Rundlauf (Outlook-Eintrag, Verschieben,
+  Kundenmail) ist beim Rollout mit angemeldetem Konto zu prüfen.

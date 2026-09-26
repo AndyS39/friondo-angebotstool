@@ -91,6 +91,28 @@
         wird aktiviert, sobald die Anbindung mit Collin steht.</p>
     <label>Fachunternehmer (BzA-Datenblatt)</label>
     <input type="text" name="bza_fachunternehmer" value="{{ bza_fachunternehmer }}">
+    <h3 style="margin-top:16px">Outlook-Kalender (Phase 81)</h3>
+    <label>Sync-Modus</label>
+    <select name="outlook_kalender_modus">
+        <option value="postfach" {{ 'selected' if outlook_kalender_modus != 'kategorien' }}>Team-Postfächer (Outlook-Adresse je Team)</option>
+        <option value="kategorien" {{ 'selected' if outlook_kalender_modus == 'kategorien' }}>Gemeinsamer Kalender mit Kategorie je Team</option>
+    </select>
+    <label>Gemeinsamer Kalender (nur Modus Kategorien)</label>
+    <input type="text" name="outlook_kalender_adresse" value="{{ outlook_kalender_adresse }}"
+           placeholder="montage@friondo.de">
+    <label>Basis-URL des Tools (Link in Kalendereinträgen)</label>
+    <input type="text" name="basis_url" value="{{ basis_url }}"
+           placeholder="https://tool.friondo.de">
+    <p class="dezent" style="font-size:12px">Einrichtung beider Wege:
+        docs/graph-einrichtung.md (Calendars.ReadWrite.Shared).</p>
+    <h3 style="margin-top:16px">Terminbestätigung an Kunden (Phase 81)</h3>
+    <label>Betreff</label>
+    <input type="text" name="terminmail_betreff" value="{{ terminmail_betreff }}">
+    <label>Text (Platzhalter: {kunde} {termin} {team} {sparte} {projektnummer}
+        {ansprechpartner_friondo} {vorbereitung})</label>
+    <textarea name="terminmail_text" rows="8">{{ terminmail_text }}</textarea>
+    <label>Vorbereitungs-Hinweis ({vorbereitung})</label>
+    <input type="text" name="terminmail_vorbereitung" value="{{ terminmail_vorbereitung }}">
 </form>
 
 <h2>Ordnervorlage (Anzeige)</h2>

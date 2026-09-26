@@ -219,6 +219,30 @@
                 {% if m.team_id and m.team_id in teams_map %} · {{ teams_map[m.team_id].name }}{% endif %}
                 {% if m.kunde_bestaetigt %} · Kunde bestätigt ✔{% endif %}
                 {% if m.notiz %} <small style="color:var(--pj-muted)">{{ m.notiz }}</small>{% endif %}
+                {# v15 (Phase 81): Outlook-Sync + Kunden-Terminbestätigung #}
+                {% if m.outlook_fehler %}
+                <form method="post" action="/projektierung/termin/{{ m.id }}/outlook" style="display:inline">
+                    <button class="pj-btn" type="submit" title="{{ m.outlook_fehler }}">⚠ Outlook erneut senden</button>
+                </form>
+                {% elif m.outlook_event_id %} · <span title="In Outlook eingetragen">📅✓</span>
+                {% endif %}
+                {% if not m.kunde_bestaetigt %}
+                <form method="post" action="/projektierung/termin/{{ m.id }}/kundenmail" style="display:inline">
+                    <button class="pj-btn" type="submit"
+                            title="Terminbestätigung per Mail (Vorlage: Parametrierung)">✉ Termin an Kunden</button>
+                </form>
+                {% if m.kunden_antwort_am %}
+                <form method="post" action="/projektierung/termin/{{ m.id }}/kunde-bestaetigt" style="display:inline">
+                    <input type="hidden" name="quelle" value="mail">
+                    <button class="pj-btn primary" type="submit"
+                            title="Antwort vom {{ m.kunden_antwort_am.strftime('%d.%m.%Y') }} – siehe Reiter Mails">✉ Kunde hat geantwortet – bestätigen</button>
+                </form>
+                {% else %}
+                <form method="post" action="/projektierung/termin/{{ m.id }}/kunde-bestaetigt" style="display:inline">
+                    <button class="pj-btn" type="submit" title="Manuelles Häkchen (z. B. telefonisch bestätigt)">✓ bestätigt</button>
+                </form>
+                {% endif %}
+                {% endif %}
             {% else %}– noch nicht terminiert{% endif %}</div>
         </div>
 

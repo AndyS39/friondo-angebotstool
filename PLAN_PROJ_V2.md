@@ -275,24 +275,24 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
 
 ## Phase 81 – Outlook-Kalender-Sync, Kunden-Terminbestätigung
 
-- [ ] Je Team eine Outlook-Kalenderadresse (Team-Postfach oder Gruppen-
+- [x] Je Team eine Outlook-Kalenderadresse (Team-Postfach oder Gruppen-
   kalender; Einrichtung in `docs/graph-einrichtung.md` beschreiben: Graph-
   Berechtigung Calendars.ReadWrite.Shared, Postfächer `team1@…` bis
   `team10@…`, `subteam1@…` bis `subteam5@…` oder ein gemeinsamer Kalender
   mit Kategorie je Team – Claude Code beschreibt beide Wege, Wahl in der
   Parametrierung).
-- [ ] Tool → Outlook: Anlegen/Ändern/Löschen von Montage-, Feinplanungs- und
+- [x] Tool → Outlook: Anlegen/Ändern/Löschen von Montage-, Feinplanungs- und
   Abnahmeterminen als Kalendereinträge (Betreff „PR-… Kunde · Sparte",
   Ort = Ausführungsadresse, Text = Steckbrief-Kurzfassung + Link). Outlook →
   Tool: alle 15 Minuten Änderungen an Datum/Dauer zurücklesen, Verlaufseintrag
   „Termin in Outlook verschoben von …". Fehler blockieren nie; Warnsymbol am
   Termin mit „Erneut senden".
-- [ ] Kunden-Terminbestätigung: Button „Termin an Kunden senden" (Mail-Vorlage
+- [x] Kunden-Terminbestätigung: Button „Termin an Kunden senden" (Mail-Vorlage
   in der Parametrierung, Platzhalter Termin/Team/Ansprechpartner/Vorbereitung
   wie „Zugang Heizungsraum freihalten"), Versand über Graph; Kundenantwort im
   Postfach → Vorschlag „Kunde hat bestätigt" (ein Klick); manuelles Häkchen
   bleibt.
-- [ ] Test: Termin anlegen → in Outlook; in Outlook verschieben → im Tool;
+- [x] Test: Termin anlegen → in Outlook; in Outlook verschieben → im Tool;
   Kundenmail.
 
 ## Phase 82 – Montage-Backend

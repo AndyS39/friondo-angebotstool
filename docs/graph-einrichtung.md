@@ -147,3 +147,46 @@ Aufgaben für den M365-Admin (Terminassistent, Mail-Parser, Kundenmails):
 4. Ohne Kalender-Recht arbeitet der Assistent nur mit Tool-Terminen
    (Frei/Belegt aus Outlook entfällt) – das Tool blockiert nie; ein Hinweis
    erscheint in der Parametrierung.
+
+
+## Outlook-Kalender-Sync der Montageteams (v15, Phase 81)
+
+Das Tool spiegelt Montage-, Feinplanungs- und Abnahmetermine nach Outlook
+und liest Verschiebungen alle 15 Minuten zurück. Zwei Wege – die Wahl
+trifft die Parametrierung (Projektierung-Einstellungen → Outlook-Kalender):
+
+### Weg A: Team-Postfächer (Standard)
+
+1. In Microsoft 365 je Team ein Postfach oder eine freigegebene Mailbox
+   anlegen: `team1@friondo.de` … `team10@friondo.de`,
+   `subteam1@friondo.de` … `subteam5@friondo.de`.
+2. Dem in der Azure-App angemeldeten Konto die Berechtigung
+   **Calendars.ReadWrite.Shared** (delegiert) erteilen und die Kalender
+   der Team-Postfächer für dieses Konto freigeben (Bearbeiter-Rechte).
+3. Im Tool unter Parametrierung → Teams je Team die **Outlook-Adresse**
+   des Postfachs eintragen.
+4. Sync-Modus in den Projektierung-Einstellungen auf
+   „Team-Postfächer“ lassen.
+
+Vorteil: jedes Team sieht nur den eigenen Kalender (auch am Handy).
+
+### Weg B: Gemeinsamer Kalender mit Kategorien
+
+1. EIN Postfach (z. B. `montage@friondo.de`) anlegen und dessen Kalender
+   für alle freigeben; Berechtigung wie oben.
+2. Sync-Modus „Gemeinsamer Kalender mit Kategorie je Team“ wählen und
+   die Adresse eintragen; jeder Eintrag bekommt die Kategorie mit dem
+   Teamnamen (Farben in Outlook einmalig je Kategorie festlegen).
+
+Vorteil: eine einzige Kalenderfreigabe, Filterung über Kategorien.
+
+### Verhalten
+
+- Betreff: „PR-… · Kunde · Sparte“, Ort = Ausführungsadresse, Text =
+  Steckbrief-Kurzfassung + Link in die Projektakte (Basis-URL in der
+  Parametrierung).
+- Outlook → Tool: Datum/Dauer-Änderungen werden alle 15 Minuten
+  übernommen (Verlaufseintrag „Termin in Outlook verschoben von …“);
+  alles andere (Teilnehmer, Text) bleibt Outlook.
+- Fehler blockieren nie: der Termin zeigt ein Warnsymbol mit
+  „Erneut senden“.
