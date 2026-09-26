@@ -53,7 +53,8 @@ def _benutzer_mit_rolle(session: Session, rolle: str) -> list[Benutzer]:
 def _gewerk_zeilen(session: Session, benutzer, sparte: str = "",
                    projektleiter_id: int = 0, team_id: int = 0,
                    kanal: str = "", plz: str = "", q: str = "",
-                   storniert: bool = False) -> list[dict]:
+                   storniert: bool = False,
+                   terminstatus: str = "") -> list[dict]:
     """Gefilterte Gewerk-Zeilen (Basis für Kanban, Liste, Kacheln): je Gewerk
     Projekt, Kunde, Ampel, nächster Termin, offene/überfällige Aufgaben."""
     projekte = {p.id: p for p in session.query(Projekt)}
@@ -120,6 +121,14 @@ def _gewerk_zeilen(session: Session, benutzer, sparte: str = "",
             "offen": offene_je_gewerk.get(g.id, 0),
             "ueberfaellig": ueberfaellig,
         })
+    # v15 (Phase 74): Terminstatus je Gewerk berechnen + optional filtern
+    ts_map = kern.terminstatus_map(session, [z["gewerk"].id for z in zeilen])
+    for z in zeilen:
+        z["terminstatus"] = ts_map.get(z["gewerk"].id,
+                                       {"status": "unterminiert", "termin": None})
+    if terminstatus:
+        zeilen = [z for z in zeilen
+                  if z["terminstatus"]["status"] == terminstatus]
     return zeilen
 
 
@@ -140,17 +149,19 @@ def _filter_werte(session: Session) -> dict:
 @router.get("")
 async def kanban(request: Request, sparte: str = "", projektleiter_id: int = 0,
                  team_id: int = 0, kanal: str = "", plz: str = "", q: str = "",
-                 storniert: int = 0, session: Session = Depends(get_session)):
+                 storniert: int = 0, terminstatus: str = "",
+                 session: Session = Depends(get_session)):
     """Kanban (Phase 68): Karte = Projekt in der Spalte seines abgeleiteten
     Status; der Sparten-Filter schaltet auf Karte-je-Gewerk um."""
     if (umleitung := _gate(request, session)) is not None:
         return umleitung
     zeilen = _gewerk_zeilen(session, request.state.benutzer, sparte=sparte,
+                            terminstatus=terminstatus,
                             projektleiter_id=projektleiter_id, team_id=team_id,
                             kanal=kanal, plz=plz, q=q,
                             storniert=bool(storniert))
     karte_je_gewerk = bool(sparte)
-    spalten: dict[str, list] = {p: [] for p in GEWERK_PHASEN[:5]}
+    spalten: dict[str, list] = {p: [] for p in GEWERK_PHASEN[:6]}
     spalten["abgeschlossen"] = []
     grenze_30 = datetime.now() - timedelta(days=30)
     if karte_je_gewerk:
@@ -178,7 +189,7 @@ async def kanban(request: Request, sparte: str = "", projektleiter_id: int = 0,
             if status == "abgeschlossen" and (
                     karte["projekt"].abgeschlossen_am or datetime.now()) < grenze_30:
                 continue
-            spalten.setdefault(status if status in spalten else "feinplanung",
+            spalten.setdefault(status if status in spalten else "auftragseingang",
                                []).append(karte)
     from datetime import timedelta as _td
     return render(request, "projektierung/kanban.html", aktiv="/projektierung",
@@ -189,9 +200,35 @@ async def kanban(request: Request, sparte: str = "", projektleiter_id: int = 0,
                   sparte=sparte, projektleiter_id=projektleiter_id,
                   team_id=team_id, kanal=kanal, plz=plz, q=q,
                   storniert=bool(storniert), heute=datetime.now(),
+                  terminstatus=terminstatus,
+                  teams_map={te.id: te for te in session.query(Team)},
                   benutzer=request.state.benutzer,
                   **_filter_werte(session),
                   meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/gewerk/{gewerk_id}/feinplanung-erfasst")
+async def feinplanung_erfasst(request: Request, gewerk_id: int,
+                              session: Session = Depends(get_session)):
+    """v15 (Phase 74): Häkchen „Feinplanung erfasst“ am Gewerk – Wächter
+    Feinplanung VOT → Planung, bis die Feinplanungs-Erfassung (Phase 80)
+    kommt. Toggle mit Verlaufseintrag."""
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    form = await request.form()
+    neu_wert = form.get("erfasst") == "1"
+    if neu_wert != bool(gewerk.feinplanung_erfasst):
+        gewerk.feinplanung_erfasst = neu_wert
+        gewerk.feinplanung_erfasst_am = datetime.now() if neu_wert else None
+        kern.verlauf(session, gewerk.projekt_id,
+                     ("Feinplanung erfasst (Häkchen gesetzt)" if neu_wert
+                      else "Häkchen „Feinplanung erfasst“ entfernt")
+                     + f" – Gewerk {gewerk.sparte}",
+                     benutzer=request.state.benutzer, gewerk_id=gewerk.id)
+        session.commit()
+    return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}",
+                            status_code=303)
 
 
 @router.post("/gewerk/{gewerk_id}/phase-drop")
@@ -219,11 +256,13 @@ async def phase_drop(request: Request, gewerk_id: int,
 async def liste(request: Request, sparte: str = "", projektleiter_id: int = 0,
                 team_id: int = 0, kanal: str = "", plz: str = "", q: str = "",
                 storniert: int = 0, sortierung: str = "projekt",
-                export: str = "", session: Session = Depends(get_session)):
+                export: str = "", terminstatus: str = "",
+                session: Session = Depends(get_session)):
     """Gewerke als Tabelle (Phase 68) mit Summenzeile und CSV-Export."""
     if (umleitung := _gate(request, session)) is not None:
         return umleitung
     zeilen = _gewerk_zeilen(session, request.state.benutzer, sparte=sparte,
+                            terminstatus=terminstatus,
                             projektleiter_id=projektleiter_id, team_id=team_id,
                             kanal=kanal, plz=plz, q=q, storniert=bool(storniert))
     if sortierung == "kunde":
@@ -279,6 +318,8 @@ async def liste(request: Request, sparte: str = "", projektleiter_id: int = 0,
     return render(request, "projektierung/liste.html", aktiv="/projektierung",
                   zeilen=zeilen, angebote=angebote, summe=summe,
                   phasen_namen=GEWERK_PHASEN_NAMEN, sortierung=sortierung,
+                  terminstatus=terminstatus,
+                  teams_map={te.id: te for te in session.query(Team)},
                   sparte=sparte, projektleiter_id=projektleiter_id,
                   team_id=team_id, kanal=kanal, plz=plz, q=q,
                   storniert=bool(storniert), heute=datetime.now(),

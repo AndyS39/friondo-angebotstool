@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_projektierung.html" import pj_gw_zeile %}
+{% from "_projektierung.html" import pj_gw_zeile, pj_terminstatus %}
 
 {% block titel %}Projektierung – Friondo{% endblock %}
 
@@ -12,8 +12,11 @@
         <h1>Projektierung</h1>
     </div>
     <div class="aktionen">
+        {# v15 (Phase 74): Umschalter – Kalender zeigt bis Phase 75 die Terminübersicht #}
+        <span class="pj-chip on" title="Kanban-Board">Board</span>
+        <a class="pj-chip" href="/projektierung/termine"
+           title="Kalendersicht (bis Phase 75: Terminübersicht)">Kalender</a>
         <a class="pj-btn" href="/projektierung/liste">Liste</a>
-        <a class="pj-btn" href="/projektierung/termine">Termine</a>
         <a class="pj-btn" href="/projektierung/meine-aufgaben">Meine Aufgaben</a>
     </div>
 </div>
@@ -21,14 +24,20 @@
 
 {# Kachelzeile (Prototyp .tiles): Gewerke je Phase + Überfällig #}
 <div class="pj-tiles">
-    {% for phase in ('feinplanung', 'feinplanung_abgeschlossen', 'montage_geplant',
-                     'in_ausfuehrung', 'abnahme_offen') %}
+    {% for phase in ('auftragseingang', 'feinplanung_vot', 'planung',
+                     'montagevorbereitung', 'montage', 'abnahme_freigabe') %}
     <div class="pj-tile">
         <div class="n">{{ kacheln[phase].anzahl }}</div>
         <div class="l">{{ phasen_namen[phase] }}</div>
         <div class="s">{{ kacheln[phase].untertitel or '–' }}</div>
     </div>
     {% endfor %}
+    <a class="pj-tile crit" href="/projektierung/liste?terminstatus=unterminiert"
+       title="Gewerke ab Phase Planung ohne Montagetermin">
+        <div class="n">{{ kacheln.unterminiert }}</div>
+        <div class="l">Unterminiert</div>
+        <div class="s">ab Planung ohne Termin</div>
+    </a>
     <a class="pj-tile crit" href="/projektierung/meine-aufgaben">
         <div class="n">{{ kacheln.ueberfaellig }}</div>
         <div class="l">Überfällige Aufgaben</div>
@@ -73,6 +82,13 @@
            class="pj-chip">
     <input type="text" name="q" value="{{ q }}" size="14"
            placeholder="Kunde / PR-Nr." class="pj-chip">
+    <select name="terminstatus" class="pj-chip {{ 'on' if terminstatus }}"
+            onchange="this.form.submit()">
+        <option value="">Terminstatus ▾</option>
+        <option value="terminiert" {{ 'selected' if terminstatus == 'terminiert' }}>Terminiert</option>
+        <option value="unbestaetigt" {{ 'selected' if terminstatus == 'unbestaetigt' }}>Termin unbestätigt</option>
+        <option value="unterminiert" {{ 'selected' if terminstatus == 'unterminiert' }}>Unterminiert</option>
+    </select>
     <label class="pj-chip {{ 'on' if storniert }}">
         <input type="checkbox" name="storniert" value="1"
                {{ 'checked' if storniert }} onchange="this.form.submit()">
@@ -99,11 +115,15 @@
         <a class="pj-card" href="/projektierung/projekt/{{ karte.projekt.id }}"
            draggable="true" tabindex="0"
            ondragstart="kartenStart(event, {{ (offene_gewerke or karte.zeilen) | map(attribute='gewerk.id') | list | tojson }}, {{ (offene_gewerke or karte.zeilen) | map(attribute='gewerk.sparte') | list | tojson }})">
+            {# v15: Terminstatus des Gewerks, das die Spalte bestimmt #}
+            {% set bestimmend = ((karte.zeilen | selectattr('gewerk.phase', 'equalto', phase) | list)
+                                 or offene_gewerke or karte.zeilen) | first %}
             <div class="hd">
                 <span class="pr pj-mono">{{ karte.projekt.nummer }}</span>
                 {% if gesamt_ueberfaellig %}
                     <span class="pj-badge crit">{{ gesamt_ueberfaellig }} überfällig</span>
                 {% endif %}
+                {{ pj_terminstatus(bestimmend.terminstatus, teams_map) }}
             </div>
             <div class="name">{{ karte.zeilen[0].kunde.anzeige_name if karte.zeilen[0].kunde else '?' }}</div>
             <div class="meta">{{ karte.projekt.ausfuehrung_ort or '–' }}
@@ -114,10 +134,9 @@
             {% for z in karte.zeilen %}
                 {{ pj_gw_zeile(z.gewerk.sparte, phasen_namen.get(z.gewerk.phase, z.gewerk.phase),
                                z.ampel.farbe,
-                               z.naechster_termin.strftime('%d.%m.') if z.naechster_termin
-                               else (z.ueberfaellig ~ ' überf.' if z.ueberfaellig
-                                     else z.ampel.erledigt ~ '/' ~ z.ampel.gesamt),
-                               storniert=(z.gewerk.phase == 'storniert')) }}
+                               storniert=(z.gewerk.phase == 'storniert'),
+                               ts=(none if z.gewerk.phase in ('abgeschlossen', 'storniert')
+                                   else z.terminstatus)) }}
             {% endfor %}
             <div class="ft">
                 <span class="pj-mono">{{ karte.zeilen | rejectattr('gewerk.phase', 'equalto', 'storniert') | sum(attribute='gewerk.auftragswert_aktuell') | euro }}</span>

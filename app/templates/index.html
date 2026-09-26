@@ -101,15 +101,16 @@
             {% if demo_badge %}<span class="pj-dbadge">Demo · Coming soon</span>{% endif %}
         </h2>
         <div class="pj-pk">
-            {% for phase, titel in [('feinplanung', 'Aufträge in Feinplanung'),
-                                    ('feinplanung_abgeschlossen', 'Feinplanung abgeschl.'),
-                                    ('montage_geplant', 'Montage geplant'),
-                                    ('in_ausfuehrung', 'In Ausführung'),
-                                    ('abnahme_offen', 'Abnahme offen')] %}
+            {% for phase, titel in [('auftragseingang', 'Auftragseingang'),
+                                    ('feinplanung_vot', 'Feinplanung VOT'),
+                                    ('planung', 'Planung'),
+                                    ('montagevorbereitung', 'Montagevorb.'),
+                                    ('montage', 'Montage'),
+                                    ('abnahme_freigabe', 'Abnahme & Freigabe')] %}
             <div><b>{{ projekt_kacheln[phase].anzahl }}</b>{{ titel }}</div>
             {% endfor %}
-            <div class="{{ 'crit' if projekt_kacheln.ueberfaellig }}">
-                <b>{{ projekt_kacheln.ueberfaellig }}</b>Überfällige Aufgaben</div>
+            <div class="{{ 'crit' if projekt_kacheln.unterminiert }}">
+                <b>{{ projekt_kacheln.unterminiert }}</b>Unterminiert</div>
         </div>
         <div class="pj-plinks">Nur für Admins sichtbar · andere Rollen sehen
             Null-Kacheln und „Das Modul befindet sich im Aufbau."</div>
@@ -120,8 +121,8 @@
             <span class="demo-badge">Demo · Coming soon</span>
         </h2>
         <div class="kacheln bereich-kacheln">
-            {% for titel in ['Aufträge in Feinplanung', 'Feinplanung abgeschlossen',
-                             'Montage geplant', 'In Ausführung', 'Abnahme offen'] %}
+            {% for titel in ['Auftragseingang', 'Feinplanung VOT', 'Planung',
+                             'Montagevorbereitung', 'Montage', 'Abnahme & Freigabe'] %}
             <div class="kachel stat inaktiv">
                 <span class="stat-zahl">0</span>
                 <span>{{ titel }}</span>

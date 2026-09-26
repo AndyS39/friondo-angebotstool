@@ -89,7 +89,7 @@
         </h3>
 
         <div class="pj-stepper">
-            {% for p in phasen[:5] %}
+            {% for p in phasen[:6] %}
                 <i class="{{ 'done' if (g.phase == 'abgeschlossen' or (phase_idx > loop.index0 and g.phase != 'storniert')) else ('cur' if p == g.phase) }}"
                    title="{{ phasen_namen[p] }}"></i>
             {% endfor %}
@@ -159,6 +159,22 @@
                     </select>
                 </div>
             </form>
+
+            <span>Feinplanung</span>
+            <div>
+                <form method="post" action="/projektierung/gewerk/{{ g.id }}/feinplanung-erfasst"
+                      style="display:inline">
+                    <input type="hidden" name="erfasst" value="0">
+                    <label class="kontrollfeld" style="display:inline-flex"
+                           title="Wächter Feinplanung VOT → Planung (bis die Feinplanungs-Erfassung in Phase 80 kommt)">
+                        <input type="checkbox" name="erfasst" value="1"
+                               {{ 'checked' if g.feinplanung_erfasst }}
+                               onchange="this.form.submit()"> erfasst</label>
+                </form>
+                {% if g.feinplanung_erfasst_am %}
+                    <small style="color:var(--pj-muted)">am {{ g.feinplanung_erfasst_am.strftime('%d.%m.%Y') }}</small>
+                {% endif %}
+            </div>
 
             {% if g.sparte == 'WP' %}
             <span>Heizlast</span>
@@ -275,7 +291,7 @@
             {% endif %}
             <button class="pj-btn primary" type="button" onclick="pjDialog('dlg-phase-{{ g.id }}')">Phase ändern</button>
             <button class="pj-btn danger" type="button" onclick="pjDialog('dlg-storno-{{ g.id }}')">Stornieren</button>
-            {% if g.phase == 'abnahme_offen' %}
+            {% if g.phase == 'abnahme_freigabe' %}
             <button class="pj-btn primary" type="button" onclick="pjDialog('dlg-freigabe-{{ g.id }}')">Rechnung freigeben</button>
             {% endif %}
         </div>
@@ -376,7 +392,7 @@
                 </div>
             </form>
         </dialog>
-        {% if g.phase == 'abnahme_offen' %}
+        {% if g.phase == 'abnahme_freigabe' %}
         <dialog class="pj-dlg" id="dlg-freigabe-{{ g.id }}">
             <h3>Rechnung freigeben · {{ g.sparte }}</h3>
             <form method="post" action="/projektierung/gewerk/{{ g.id }}/freigabe">

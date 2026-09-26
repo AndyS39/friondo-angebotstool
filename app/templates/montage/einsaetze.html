@@ -23,12 +23,12 @@
             <div class="pj-btnrow">
                 <a class="pj-btn primary" href="/montage/einsatz/{{ t.id }}">Steckbrief</a>
                 <a class="pj-btn" href="/montage/einsatz/{{ t.id }}#foto">📷 Foto</a>
-                {% if gewerk and gewerk.phase in ('feinplanung', 'feinplanung_abgeschlossen', 'montage_geplant') %}
+                {% if gewerk and gewerk.phase in ('auftragseingang', 'feinplanung_vot', 'planung', 'montagevorbereitung') %}
                 <form method="post" action="/montage/einsatz/{{ t.id }}/phase" style="display:inline">
                     <input type="hidden" name="aktion" value="gestartet">
                     <button class="pj-btn" type="submit">Montage gestartet</button>
                 </form>
-                {% elif gewerk and gewerk.phase == 'in_ausfuehrung' %}
+                {% elif gewerk and gewerk.phase == 'montage' %}
                 <a class="pj-btn" href="/montage/einsatz/{{ t.id }}#status">Montage fertig</a>
                 {% endif %}
             </div>

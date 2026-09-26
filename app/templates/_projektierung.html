@@ -1,11 +1,12 @@
 {# Projektierungs-Makros (v11): Phasennamen + Ampel-Punkt #}
 
 {% macro phase_name(phase) -%}
-    {{- {"feinplanung": "Feinplanung",
-         "feinplanung_abgeschlossen": "Feinplanung abgeschlossen",
-         "montage_geplant": "Montage geplant",
-         "in_ausfuehrung": "In Ausführung",
-         "abnahme_offen": "Abnahme offen",
+    {{- {"auftragseingang": "Auftragseingang",
+         "feinplanung_vot": "Feinplanung VOT",
+         "planung": "Planung",
+         "montagevorbereitung": "Montagevorbereitung",
+         "montage": "Montage",
+         "abnahme_freigabe": "Abnahme & Freigabe",
          "abgeschlossen": "Abgeschlossen",
          "storniert": "Storniert"}.get(phase, phase) -}}
 {%- endmacro %}
@@ -20,11 +21,37 @@
     <span class="pj-dot {{ {'gruen': 'g', 'gelb': 'y', 'rot': 'r'}.get(farbe, 'b') }}"></span>
 {%- endmacro %}
 
-{% macro pj_gw_zeile(sparte, phase_text, ampel_farbe, rechts='', storniert=false) -%}
+{% macro pj_gw_zeile(sparte, phase_text, ampel_farbe, rechts='', storniert=false, ts=none) -%}
     <div class="pj-gw {{ 'storniert' if storniert }}">
         <span class="pj-sp {{ sparte }}">{{ sparte }}</span>
         <span class="ph">{{ phase_text }}</span>
         {{ pj_dot(ampel_farbe) }}
-        {% if rechts %}<span class="dt">{{ rechts }}</span>{% endif %}
+        {% if ts %}<span class="dt">{{ pj_terminstatus(ts, klein=true) }}</span>
+        {% elif rechts %}<span class="dt">{{ rechts }}</span>{% endif %}
     </div>
+{%- endmacro %}
+
+{# v15 (Phase 74): Terminstatus-Badge – grün terminiert, gelb unbestätigt,
+   rot unterminiert. teams_map optional für den Team-Namen. #}
+{% macro pj_terminstatus(ts, teams_map=none, klein=false) -%}
+{%- if ts -%}
+{%- set t = ts.termin -%}
+{%- if ts.status == 'terminiert' -%}
+    <span class="pj-ts g {{ 's' if klein }}"
+          title="Montagetermin mit Team, Kunde bestätigt">
+        {{- '' if klein else 'Terminiert · ' -}}
+        {{- t.beginn.strftime('%d.%m.') -}}
+        {{- '–' ~ t.ende.strftime('%d.%m.') if t.ende and t.ende.date() != t.beginn.date() -}}
+        {{- ' · ' ~ teams_map[t.team_id].name if teams_map and t.team_id in teams_map -}}
+    </span>
+{%- elif ts.status == 'unbestaetigt' -%}
+    {%- set grund = 'Termin ohne Team' if (t.kunde_bestaetigt and not t.team_id) else 'Termin unbestätigt' -%}
+    <span class="pj-ts y {{ 's' if klein }}" title="Montagetermin vorhanden, aber {{ 'kein Team zugewiesen' if grund == 'Termin ohne Team' else 'Kunde hat noch nicht bestätigt' }}">
+        {{- ('unbest. ' if klein else grund ~ ' · ') ~ t.beginn.strftime('%d.%m.') -}}
+    </span>
+{%- else -%}
+    <span class="pj-ts r {{ 's' if klein }}" title="Kein Montagetermin angelegt">
+        {{- 'untermin.' if klein else 'Unterminiert' -}}</span>
+{%- endif -%}
+{%- endif -%}
 {%- endmacro %}

@@ -455,17 +455,24 @@ class RabattFreigabe(Base):
 # Aufgaben (aus Paket-Vorlagen der projektierung_logik_v1.xlsx), Terminen,
 # Dokumenten (data/projekte/<PR>/…), Verlauf und Benachrichtigungen.
 
-GEWERK_PHASEN = ["feinplanung", "feinplanung_abgeschlossen", "montage_geplant",
-                 "in_ausfuehrung", "abnahme_offen", "abgeschlossen", "storniert"]
+# v15 (PLAN_PROJ_V2, Phase 74): neue Kanban-Phasen je Gewerk
+GEWERK_PHASEN = ["auftragseingang", "feinplanung_vot", "planung",
+                 "montagevorbereitung", "montage", "abnahme_freigabe",
+                 "abgeschlossen", "storniert"]
 GEWERK_PHASEN_NAMEN = {
-    "feinplanung": "Feinplanung",
-    "feinplanung_abgeschlossen": "Feinplanung abgeschlossen",
-    "montage_geplant": "Montage geplant",
-    "in_ausfuehrung": "In Ausführung",
-    "abnahme_offen": "Abnahme offen",
+    "auftragseingang": "Auftragseingang",
+    "feinplanung_vot": "Feinplanung VOT",
+    "planung": "Planung",
+    "montagevorbereitung": "Montagevorbereitung",
+    "montage": "Montage",
+    "abnahme_freigabe": "Abnahme & Freigabe",
     "abgeschlossen": "Abgeschlossen",
     "storniert": "Storniert",
 }
+# Terminstatus je Gewerk (berechnet, Phase 74)
+TERMINSTATUS_NAMEN = {"terminiert": "Terminiert",
+                      "unbestaetigt": "Termin unbestätigt",
+                      "unterminiert": "Unterminiert"}
 AUFGABE_STATUS = ["offen", "in_arbeit", "wartet", "erledigt", "entfaellt"]
 AUFGABE_STATUS_NAMEN = {"offen": "Offen", "in_arbeit": "In Arbeit",
                         "wartet": "Wartet auf Dritte", "erledigt": "Erledigt",
@@ -489,7 +496,7 @@ class Projekt(Base):
     projektleiter_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     vertriebler_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     kanal: Mapped[str] = mapped_column(String(100), default="")
-    status_cache: Mapped[str] = mapped_column(String(30), default="feinplanung")
+    status_cache: Mapped[str] = mapped_column(String(30), default="auftragseingang")
     abgeschlossen_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     notiz_kopf: Mapped[str] = mapped_column(String(500), default="")
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
@@ -506,7 +513,11 @@ class Gewerk(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     projekt_id: Mapped[int] = mapped_column(Integer, index=True)
     sparte: Mapped[str] = mapped_column(String(4), default="WP")
-    phase: Mapped[str] = mapped_column(String(30), default="feinplanung")
+    phase: Mapped[str] = mapped_column(String(30), default="auftragseingang")
+    # v15 (Phase 74): Häkchen "Feinplanung erfasst" (bis die Feinplanungs-
+    # Erfassung in Phase 80 kommt) – Wächter Feinplanung VOT → Planung
+    feinplanung_erfasst: Mapped[bool] = mapped_column(Boolean, default=False)
+    feinplanung_erfasst_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     angebot_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     angebot_id_original: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     auftragswert_original: Mapped[int] = mapped_column(Integer, default=0)  # Cent brutto

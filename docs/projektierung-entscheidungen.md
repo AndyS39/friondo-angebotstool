@@ -143,3 +143,42 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
   Teams-Seite zeigt die Mitglieder nur an.
 - **Einsatz-Sichtbarkeit Montage**: Termine der eigenen Teams sowie direkt
   als Person zugeteilte Termine; Admin sieht alle (für die Demo).
+
+## Phase 74 (PLAN_PROJ_V2, 26.09.2026)
+
+- **Schreibweise Terminstatus:** Der Plan schreibt einmal „untermininiert" –
+  umgesetzt als `unterminiert` (Anzeigename „Unterminiert").
+- **Wächter-Fallbacks bis Phase 78** (die V2-Pakete existieren noch nicht):
+  Auftragseingang → Feinplanung VOT prüft das Paket „Auftragseingang" nur,
+  wenn eine solche Paket-Instanz am Gewerk aktiv ist (V1-Paket heißt genauso –
+  greift also auch für Altbestand). Planung → Montagevorbereitung prüft die
+  Pakete „Planung WP / Planung Elektro / (Friondo) Fit for Future"; solange
+  keines existiert, gilt wie in V1 die Gesamt-Ampel (alle Pflichtaufgaben).
+  Montagevorbereitung → Montage verlangt die Aufgabe „Projekt zur Montage
+  freigegeben" nur, wenn sie existiert (kommt mit Paket Montagevorbereitung
+  v2 in Phase 78); der Montagetermin mit Team/Person ist immer Pflicht.
+- **„Termin ohne Team":** Ein bestätigter Montagetermin ohne Team zählt als
+  `unbestaetigt` (gelbes Badge mit Text „Termin ohne Team · Datum") – erst
+  Team + Bestätigung ergeben grün, wie im Plan definiert.
+- **Maßgeblicher Montagetermin** für den Terminstatus: der früheste
+  zukünftige; gibt es nur vergangene, der letzte.
+- **Kacheln:** Startportal zeigt laut Plan sechs Phasen + „Unterminiert"
+  (die bisherige Überfällig-Kachel entfällt dort). Im Board-Kopf bleiben
+  zusätzlich die Überfällig-Kachel (Link „Meine Aufgaben") und neu die
+  Unterminiert-Kachel (Link Liste mit Filter) erhalten.
+- **„Feinplanung erfasst":** als Häkchen am Gewerk (Spalten
+  `feinplanung_erfasst`/`_am`, Route `/projektierung/gewerk/<id>/
+  feinplanung-erfasst`, Verlaufseintrag). Phase 80 ersetzt das Häkchen durch
+  den Abschluss der Feinplanungs-Erfassung.
+- **Migration feinplanung → planung:** Das Plan-Kriterium „Feinplanungs-
+  Erfassung abgeschlossen" existiert in V1-Daten nicht; das neue Häkchen ist
+  bei Bestandsgewerken immer leer, daher wandern alle „feinplanung"-Gewerke
+  nach Auftragseingang (der Sonderweg nach Planung ist implementiert und
+  greift, sobald das Häkchen vor einer erneuten Migration gesetzt wäre).
+- **Prototyp:** Die Terminstatus-Badges (`.pj-ts g/y/r`, kleine Variante
+  `.s`) wurden gemäß Design-Regel zuerst im Prototyp
+  `docs/projektierung-prototyp.html` ergänzt und dann in style.css
+  übernommen.
+- **Montage-Backend:** „Montage gestartet" setzt jetzt Phase `montage`,
+  „Montage fertig" setzt `abnahme_freigabe` (vorher in_ausfuehrung/
+  abnahme_offen); erlaubt ist der Start aus allen Phasen vor Montage.

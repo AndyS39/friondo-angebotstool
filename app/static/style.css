@@ -2519,3 +2519,20 @@ td.aktionen form { display: inline-flex; vertical-align: middle; margin: 0 0 0 0
 
 /* Phase 74: letzte Inline-Farben abgeloest */
 .ampel.rot { color: var(--status-rot); }
+
+/* v15 (PLAN_PROJ_V2, Phase 74): Terminstatus-Badges der Projektierung */
+.pj-ts {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 1px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+.pj-ts.g { background: #e3f4e8; color: #1f9d55; }
+.pj-ts.y { background: #fdf1dc; color: #d98b0a; }
+.pj-ts.r { background: #fdeaea; color: #cf3b2c; }
+.pj-ts.s { font-size: 10px; padding: 0 6px; font-weight: 600; }
+.pj-card .hd .pj-ts { margin-left: auto; }
+.pj-gw .dt .pj-ts { margin: 0; }

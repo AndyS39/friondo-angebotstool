@@ -324,6 +324,42 @@ def _daten() -> list[str]:
         if neue_vorlagen:
             meldungen.append(f"{neue_vorlagen} Lead-Mail-Vorlagen vorbelegt")
         session.commit()
+
+        # ---------------- v15: Projektierung V2 (Phase 74) ----------------
+        # Neue Kanban-Phasen je Gewerk: bestehende Gewerke einmalig umziehen
+        # (feinplanung → auftragseingang bzw. planung, wenn die Feinplanung
+        # bereits erfasst wurde; die übrigen Phasen 1:1 laut Plan) und den
+        # Projektstatus neu ableiten. Verlaufseintrag je geändertem Gewerk.
+        if einstellung_holen(session, "migration_projv2_phasen", "") != "erledigt":
+            from app.models import Gewerk as _Gewerk
+            from app.models import Projekt as _Projekt
+            mapping = {"feinplanung_abgeschlossen": "montagevorbereitung",
+                       "montage_geplant": "montagevorbereitung",
+                       "in_ausfuehrung": "montage",
+                       "abnahme_offen": "abnahme_freigabe"}
+            umgezogen = 0
+            for g in session.query(_Gewerk):
+                if g.phase == "feinplanung":
+                    neu_phase = ("planung" if g.feinplanung_erfasst
+                                 else "auftragseingang")
+                elif g.phase in mapping:
+                    neu_phase = mapping[g.phase]
+                else:
+                    continue
+                alt_phase = g.phase
+                g.phase = neu_phase
+                projektierung.verlauf(
+                    session, g.projekt_id,
+                    f"Phase migriert (V2): {alt_phase} → {neu_phase} "
+                    f"(Gewerk {g.sparte})", gewerk_id=g.id)
+                umgezogen += 1
+            session.flush()
+            for p in session.query(_Projekt):
+                projektierung.projektstatus_berechnen(session, p)
+            einstellung_setzen(session, "migration_projv2_phasen", "erledigt")
+            session.commit()
+            meldungen.append(f"Projektierung V2: {umgezogen} Gewerke auf die "
+                             "neuen Kanban-Phasen migriert")
     finally:
         session.close()
     return meldungen

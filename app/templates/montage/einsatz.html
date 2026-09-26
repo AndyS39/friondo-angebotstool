@@ -83,12 +83,12 @@
 
     {% if gewerk %}
     <h3 id="status" style="font-size:13px;margin:12px 0 4px">Montage-Status</h3>
-    {% if gewerk.phase in ('feinplanung', 'feinplanung_abgeschlossen', 'montage_geplant') %}
+    {% if gewerk.phase in ('auftragseingang', 'feinplanung_vot', 'planung', 'montagevorbereitung') %}
     <form method="post" action="/montage/einsatz/{{ termin.id }}/phase">
         <input type="hidden" name="aktion" value="gestartet">
         <button class="pj-btn primary" type="submit">Montage gestartet</button>
     </form>
-    {% elif gewerk.phase == 'in_ausfuehrung' %}
+    {% elif gewerk.phase == 'montage' %}
     <form method="post" action="/montage/einsatz/{{ termin.id }}/phase">
         <input type="hidden" name="aktion" value="fertig">
         <label style="display:block;font-size:13px;color:var(--pj-muted);margin:4px 0 2px">

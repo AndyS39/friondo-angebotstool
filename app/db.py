@@ -75,6 +75,10 @@ def taegliches_backup(aufbewahrung_tage: int = 30) -> None:
 # Nachträglich eingeführte Spalten (SQLite: create_all ergänzt keine Spalten).
 # Format: Tabelle -> {Spaltenname: SQL-Typdefinition}
 _NACHTRAEGLICHE_SPALTEN = {
+    "gewerke": {
+        "feinplanung_erfasst": "BOOLEAN NOT NULL DEFAULT 0",   # v15 Phase 74
+        "feinplanung_erfasst_am": "DATETIME",                  # v15 Phase 74
+    },
     "artikel": {
         "artikelnummer": "VARCHAR(50) NOT NULL DEFAULT ''",
         "multi": "FLOAT",

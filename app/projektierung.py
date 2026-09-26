@@ -47,9 +47,9 @@ ORDNERVORLAGE_STANDARD = [
 SUB_TYPEN_STANDARD = ["GaLa-Bau", "Elektro", "Dachdecker", "Entsorgung",
                       "Lift-Kran", "Gerüst", "Sonstige"]
 
-# Phasen-Rangfolge für den abgeleiteten Projektstatus
-_PHASEN_RANG = {"feinplanung": 0, "feinplanung_abgeschlossen": 1,
-                "montage_geplant": 2, "in_ausfuehrung": 3, "abnahme_offen": 4}
+# Phasen-Rangfolge für den abgeleiteten Projektstatus (v15: neue Phasen)
+_PHASEN_RANG = {"auftragseingang": 0, "feinplanung_vot": 1, "planung": 2,
+                "montagevorbereitung": 3, "montage": 4, "abnahme_freigabe": 5}
 
 
 # --- Parameter (Key-Value) --------------------------------------------------
@@ -350,7 +350,7 @@ def projektstatus_berechnen(session: Session, projekt: Projekt) -> str:
                .filter(Gewerk.projekt_id == projekt.id).all())
     offene = [g for g in gewerke if g.phase not in ("abgeschlossen", "storniert")]
     if not gewerke:
-        status = "feinplanung"
+        status = "auftragseingang"
     elif not offene:
         status = "abgeschlossen"
     else:
@@ -456,7 +456,7 @@ def gewerk_anlegen(session: Session, projekt: Projekt, angebot: Angebot,
 
     endbetrag = angebot.summen()["endbetrag"]
     gewerk = Gewerk(
-        projekt_id=projekt.id, sparte=sparte, phase="feinplanung",
+        projekt_id=projekt.id, sparte=sparte, phase="auftragseingang",
         angebot_id=angebot.id, angebot_id_original=angebot.id,
         auftragswert_original=endbetrag, auftragswert_aktuell=endbetrag,
         feinplaner_id=feinplaner_id or _standard("standard_feinplaner"),
@@ -544,9 +544,10 @@ def startseiten_kacheln(session: Session) -> dict:
     """Phase 68: Kacheln zählen GEWERKE je Phase (mit Sparten-Untertitel)
     plus überfällige Aufgaben."""
     zaehler = {p: {"anzahl": 0, "sparten": {}} for p in
-               ("feinplanung", "feinplanung_abgeschlossen", "montage_geplant",
-                "in_ausfuehrung", "abnahme_offen")}
-    for g in session.query(Gewerk):
+               ("auftragseingang", "feinplanung_vot", "planung",
+                "montagevorbereitung", "montage", "abnahme_freigabe")}
+    gewerke = session.query(Gewerk).all()
+    for g in gewerke:
         if g.phase not in zaehler:
             continue
         zaehler[g.phase]["anzahl"] += 1
@@ -562,28 +563,83 @@ def startseiten_kacheln(session: Session) -> dict:
                             Aufgabe.faellig_am.isnot(None),
                             Aufgabe.faellig_am < jetzt).count())
     zaehler["ueberfaellig"] = ueberfaellig
+    # v15 (Phase 74): Unterminiert = Gewerke ab Phase Planung ohne Montagetermin
+    ts = terminstatus_map(session, [g.id for g in gewerke])
+    zaehler["unterminiert"] = sum(
+        1 for g in gewerke
+        if g.phase in ("planung", "montagevorbereitung", "montage")
+        and ts.get(g.id, {}).get("status") == "unterminiert")
     return zaehler
 
 
 # --- Phasenwechsel + Freigabe (Phase 67) --------------------------------------------
 
+def _pflicht_offen_in_paketen(session: Session, gewerk: Gewerk,
+                              paket_namen: tuple[str, ...]) -> tuple[int, int, bool]:
+    """(offen, gesamt, paket_vorhanden) der Pflichtaufgaben in aktiven
+    Paket-Instanzen, deren Name einem der übergebenen entspricht (v15)."""
+    instanzen = [i for i in (session.query(AufgabenpaketInstanz)
+                             .filter(AufgabenpaketInstanz.gewerk_id == gewerk.id,
+                                     AufgabenpaketInstanz.deaktiviert_am.is_(None)))
+                 if (i.paket_name or "").strip().lower()
+                 in {n.lower() for n in paket_namen}]
+    if not instanzen:
+        return 0, 0, False
+    ids = {i.id for i in instanzen}
+    aufgaben = [a for a in session.query(Aufgabe)
+                .filter(Aufgabe.gewerk_id == gewerk.id,
+                        Aufgabe.pflicht.is_(True),
+                        Aufgabe.status != "entfaellt")
+                if a.paket_instanz_id in ids]
+    offen = sum(1 for a in aufgaben if a.status != "erledigt")
+    return offen, len(aufgaben), True
+
+
 def waechter_pruefen(session: Session, gewerk: Gewerk, ziel: str) -> list[str]:
-    """Unerfüllte Bedingungen für den Wechsel NACH RECHTS (Konzept 3.1);
-    leer = Wechsel frei. Rückwärts liefert [] (Begründung regelt die Route)."""
+    """Unerfüllte Bedingungen für den Wechsel NACH RECHTS (v15, Phase 74);
+    leer = Wechsel frei. Rückwärts liefert [] (Begründung regelt die Route).
+    Solange die V2-Pakete (Phase 78) nicht existieren, greift je Stufe der
+    dokumentierte Fallback (docs/projektierung-entscheidungen.md)."""
     reihen = {p: i for i, p in enumerate(
-        ["feinplanung", "feinplanung_abgeschlossen", "montage_geplant",
-         "in_ausfuehrung", "abnahme_offen", "abgeschlossen"])}
+        ["auftragseingang", "feinplanung_vot", "planung",
+         "montagevorbereitung", "montage", "abnahme_freigabe", "abgeschlossen"])}
     if ziel not in reihen or reihen.get(gewerk.phase, 0) >= reihen[ziel]:
         return []
     offen: list[str] = []
-    # ab „Feinplanung abgeschlossen": alle Pflichtaufgaben der aktiven Pakete
-    if reihen[ziel] >= reihen["feinplanung_abgeschlossen"]:
-        ampel = planungs_ampel(session, gewerk)
-        if ampel["erledigt"] < ampel["gesamt"]:
-            offen.append(f"{ampel['gesamt'] - ampel['erledigt']} Pflichtaufgaben offen "
-                         f"({ampel['erledigt']} von {ampel['gesamt']} erledigt)")
-    # ab „Montage geplant": mindestens ein Montagetermin mit Team/Person
-    if reihen[ziel] >= reihen["montage_geplant"]:
+    # Auftragseingang → Feinplanung VOT: Pflichtaufgaben Paket "Auftragseingang"
+    if reihen[ziel] >= reihen["feinplanung_vot"]:
+        anz_offen, gesamt, da = _pflicht_offen_in_paketen(
+            session, gewerk, ("Auftragseingang",))
+        if da and anz_offen:
+            offen.append(f"Paket Auftragseingang: {anz_offen} von {gesamt} "
+                         "Pflichtaufgaben offen")
+    # Feinplanung VOT → Planung: Feinplanung erfasst (Häkchen bis Phase 80)
+    if reihen[ziel] >= reihen["planung"] and not gewerk.feinplanung_erfasst:
+        offen.append("Feinplanung nicht erfasst (Häkchen „Feinplanung erfasst“ "
+                     "in der Akte)")
+    # Planung → Montagevorbereitung: Pflicht der Planungs-Pakete; ohne diese
+    # Pakete (V1-Bestand) zählen alle Pflichtaufgaben (bisheriges Verhalten)
+    if reihen[ziel] >= reihen["montagevorbereitung"]:
+        anz_offen, gesamt, da = _pflicht_offen_in_paketen(
+            session, gewerk, ("Planung WP", "Planung Elektro",
+                              "Friondo Fit for Future", "Fit for Future"))
+        if da:
+            if anz_offen:
+                offen.append(f"Planungs-Pakete: {anz_offen} von {gesamt} "
+                             "Pflichtaufgaben offen")
+        else:
+            ampel = planungs_ampel(session, gewerk)
+            if ampel["erledigt"] < ampel["gesamt"]:
+                offen.append(f"{ampel['gesamt'] - ampel['erledigt']} Pflichtaufgaben "
+                             f"offen ({ampel['erledigt']} von {ampel['gesamt']} erledigt)")
+    # Montagevorbereitung → Montage: Freigabe-Aufgabe erledigt UND Termin
+    if reihen[ziel] >= reihen["montage"]:
+        freigabe = (session.query(Aufgabe)
+                    .filter(Aufgabe.gewerk_id == gewerk.id,
+                            Aufgabe.titel == "Projekt zur Montage freigegeben",
+                            Aufgabe.status != "entfaellt").first())
+        if freigabe is not None and freigabe.status != "erledigt":
+            offen.append("Aufgabe „Projekt zur Montage freigegeben“ offen")
         termin = (session.query(ProjektTermin)
                   .filter(ProjektTermin.gewerk_id == gewerk.id,
                           ProjektTermin.typ == "montage",
@@ -592,10 +648,52 @@ def waechter_pruefen(session: Session, gewerk: Gewerk, ziel: str) -> list[str]:
             offen.append("Kein Montagetermin angelegt")
         elif not (termin.team_id or termin.person_id):
             offen.append("Montagetermin ohne Team/Person")
-    # „Abgeschlossen" nur über die Rechnungsfreigabe
+    # Montage → Abnahme & Freigabe: Häkchen "Montage fertig"
+    if reihen[ziel] >= reihen["abnahme_freigabe"] and gewerk.montage_fertig_am is None:
+        offen.append("Montage nicht fertig gemeldet (Montage-Backend oder "
+                     "Projektierer)")
+    # Abgeschlossen nur über die Rechnungsfreigabe
     if ziel == "abgeschlossen" and gewerk.freigabe_am is None:
         offen.append("Rechnung nicht freigegeben – bitte „Rechnung freigeben“ nutzen")
     return offen
+
+
+def terminstatus_map(session: Session, gewerk_ids: list[int]) -> dict[int, dict]:
+    """v15 (Phase 74): Terminstatus je Gewerk (berechnet).
+    terminiert = Montagetermin mit Team UND Kunde bestätigt · unbestaetigt =
+    Montagetermin vorhanden (ohne Bestätigung oder ohne Team) · unterminiert =
+    kein Montagetermin. Maßgeblich ist der früheste zukünftige Montagetermin,
+    sonst der letzte."""
+    ergebnis: dict[int, dict] = {
+        gid: {"status": "unterminiert", "termin": None} for gid in gewerk_ids}
+    if not gewerk_ids:
+        return ergebnis
+    jetzt = datetime.now()
+    beste: dict[int, ProjektTermin] = {}
+    for t in (session.query(ProjektTermin)
+              .filter(ProjektTermin.typ == "montage",
+                      ProjektTermin.beginn.isnot(None),
+                      ProjektTermin.gewerk_id.in_(gewerk_ids))
+              .order_by(ProjektTermin.beginn)):
+        aktuell = beste.get(t.gewerk_id)
+        if aktuell is None:
+            beste[t.gewerk_id] = t
+        elif aktuell.beginn < jetzt:
+            # spätere Termine gewinnen, bis der erste zukünftige gefunden ist
+            beste[t.gewerk_id] = t
+        # aktuell ist bereits der früheste zukünftige → behalten
+    for gid, termin in beste.items():
+        if termin.team_id and termin.kunde_bestaetigt:
+            status = "terminiert"
+        else:
+            status = "unbestaetigt"
+        ergebnis[gid] = {"status": status, "termin": termin}
+    return ergebnis
+
+
+def terminstatus(session: Session, gewerk: Gewerk) -> dict:
+    """Terminstatus eines einzelnen Gewerks (v15, Phase 74)."""
+    return terminstatus_map(session, [gewerk.id])[gewerk.id]
 
 
 def phase_wechseln(session: Session, gewerk: Gewerk, ziel: str,
@@ -622,8 +720,8 @@ def phase_wechseln(session: Session, gewerk: Gewerk, ziel: str,
     alt = gewerk.phase
     gewerk.phase = ziel
     gewerk.phase_geaendert_am = datetime.now()
-    if ziel == "abnahme_offen" and gewerk.montage_fertig_am is None:
-        gewerk.montage_fertig_am = datetime.now()   # V1: Häkchen „Montage fertig"
+    if ziel == "abnahme_freigabe" and gewerk.montage_fertig_am is None:
+        gewerk.montage_fertig_am = datetime.now()   # Häkchen „Montage fertig" (Override)
     projekt = session.get(Projekt, gewerk.projekt_id)
     if projekt is not None:
         projektstatus_berechnen(session, projekt)
@@ -651,8 +749,8 @@ def rechnung_freigeben(session: Session, gewerk: Gewerk, restarbeiten: str,
     """„Rechnung freigeben“ (Phase 67): Restarbeiten-Pflichtfrage, Phase
     Abgeschlossen, Benachrichtigung an die Buchhaltung, Verlaufseintrag;
     Restarbeiten erzeugen automatisch eine Pflicht-Aufgabe (+14)."""
-    if gewerk.phase != "abnahme_offen":
-        return False, "Freigabe nur in Phase „Abnahme offen“ möglich."
+    if gewerk.phase != "abnahme_freigabe":
+        return False, "Freigabe nur in Phase „Abnahme & Freigabe“ möglich."
     restarbeiten_text = (restarbeiten_text or "").strip()[:1000]
     if restarbeiten == "ja" and not restarbeiten_text:
         return False, "Bitte die Restarbeiten/Reklamationen beschreiben (Pflicht)."

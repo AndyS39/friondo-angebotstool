@@ -236,7 +236,7 @@ async def montage_phase(request: Request, termin_id: int,
     bericht = (form.get("bericht") or "").strip()
     ziel_meldung = f"/montage/einsatz/{termin_id}?meldung="
     if aktion == "gestartet":
-        ok, meldung = kern.phase_wechseln(session, gewerk, "in_ausfuehrung",
+        ok, meldung = kern.phase_wechseln(session, gewerk, "montage",
                                           "Montage gestartet (mobil)",
                                           benutzer=benutzer)
     elif aktion == "fertig":
@@ -244,7 +244,7 @@ async def montage_phase(request: Request, termin_id: int,
             return RedirectResponse(ziel_meldung + quote_plus(
                 "Bitte einen Kurzbericht eintragen (Pflicht bei Montage fertig)."),
                 status_code=303)
-        ok, meldung = kern.phase_wechseln(session, gewerk, "abnahme_offen",
+        ok, meldung = kern.phase_wechseln(session, gewerk, "abnahme_freigabe",
                                           "Montage fertig (mobil)",
                                           benutzer=benutzer)
         if ok:
