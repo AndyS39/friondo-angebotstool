@@ -329,6 +329,10 @@
                         <small class="pj-akt-hinweis">Link-URL in der Parametrierung pflegen
                             ({{ a.aktion_wert[6:] if a.aktion_wert.startswith('param:') else a.aktion_wert }})</small>
                         {% endif %}
+                        {% if a.aktion_wert == 'param:url_bza_portal' %}
+                        <a class="pj-btn" href="/projektierung/gewerk/{{ g.id }}/bza"
+                           title="Alle Antragsfelder mit Kopier-Buttons (Phase 80)">📋 BzA-Datenblatt</a>
+                        {% endif %}
                     </div>
                     {% elif a.aktion_typ == 'kalender' %}
                     <div class="pj-akt">
@@ -348,7 +352,17 @@
                         <small class="pj-akt-hinweis">{{ a.aktion_wert.replace('|', ' · ') }}</small>
                     </div>
                     {% elif a.aktion_typ == 'formular' %}
-                    <div class="pj-akt"><small class="pj-akt-hinweis">Formular folgt (Phase 80) – bis dahin Häkchen</small></div>
+                    <div class="pj-akt">
+                        {% if a.aktion_wert == 'feinplanung_wp' %}
+                        <a class="pj-btn" href="/projektierung/gewerk/{{ g.id }}/feinplanung">📝 Feinplanungs-Erfassung</a>
+                        {% else %}
+                        <small class="pj-akt-hinweis">Formular folgt (Phase 82)</small>
+                        {% endif %}
+                    </div>
+                    {% elif a.aktion_typ == 'api' and a.aktion_wert == 'ugl_collin' %}
+                    <div class="pj-akt">
+                        <a class="pj-btn" href="/projektierung/gewerk/{{ g.id }}/ugl">📦 Material bestellen (UGL)</a>
+                    </div>
                     {% elif a.aktion_typ == 'api' %}
                     <div class="pj-akt">
                         {% set url = link_parameter.get('url_' ~ a.aktion_wert, '') %}
@@ -698,8 +712,9 @@
     {% endfor %}
     <div class="pj-btnrow">
         <button class="pj-btn" type="button" onclick="pjDialog('dlg-sub')">+ Sub beauftragen</button>
-        <button class="pj-btn" type="button" title="Collin-Bestellung aus Stückliste – ab V3"
-                onclick="alert('Collin-Bestellung aus Stückliste – ab V3')">Material bestellen</button>
+        {% for g in gewerke if g.sparte == 'WP' and g.phase != 'storniert' %}
+        <a class="pj-btn" href="/projektierung/gewerk/{{ g.id }}/ugl">Material bestellen (UGL{{ ' · ' ~ g.sparte if gewerke | length > 1 }})</a>
+        {% endfor %}
     </div>
     <p class="dezent" style="font-size:12px">Subunternehmer-Stamm: Parametrierung → Subunternehmer.
         Mail-Anfragen laufen über den Knopf „✉ Mail senden“ an den Planungs-Aufgaben.</p>

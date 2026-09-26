@@ -75,6 +75,35 @@ class SteckbriefRegel:
     regel: str
 
 
+FP_FRAGE_TYPEN = ("text", "zahl", "ja_nein", "auswahl")
+
+
+@dataclass
+class FpFrage:
+    """v15 (Phase 80): Zeile des Blatts "Fragen FP-WP" (Feinplanungs-
+    Erfassung; Antworten schreiben den Steckbrief via quelle_typ fp_frage)."""
+    seite: str
+    key: str
+    frage: str
+    typ: str
+    optionen: str
+    pflicht: bool
+    vorbelegung_aus: str
+
+    def optionen_liste(self) -> list[str]:
+        return [o.strip() for o in (self.optionen or "").split("|") if o.strip()]
+
+
+@dataclass
+class StuecklistenZeile:
+    """v15 (Phase 80): Blatt "Stücklisten" – Auftragsposition -> Material."""
+    position: str
+    lieferant_artnr: str
+    menge_je_einheit: float
+    bezeichnung: str
+    lieferant: str
+
+
 @dataclass
 class SubMailVorlage:
     """v15 (Phase 79): Zeile des Blatts "Sub-Mailvorlagen"."""
@@ -93,6 +122,17 @@ class ProjektierungsLogik:
     ordner: list[dict] = field(default_factory=list)
     sub_typen: list[str] = field(default_factory=list)
     sub_vorlagen: dict[str, "SubMailVorlage"] = field(default_factory=dict)
+    fp_fragen: list["FpFrage"] = field(default_factory=list)
+    stuecklisten: dict[str, list["StuecklistenZeile"]] = field(default_factory=dict)
+
+    def fp_seiten(self) -> list[tuple[str, list["FpFrage"]]]:
+        """Fragen nach Seite gruppiert (Blattreihenfolge)."""
+        seiten: list[tuple[str, list[FpFrage]]] = []
+        for frage in self.fp_fragen:
+            if not seiten or seiten[-1][0] != frage.seite:
+                seiten.append((frage.seite, []))
+            seiten[-1][1].append(frage)
+        return seiten
     fehler: list[str] = field(default_factory=list)
     warnungen: list[str] = field(default_factory=list)
     stand: str = ""
@@ -256,6 +296,45 @@ def einlesen(pfad: Path | None = None) -> ProjektierungsLogik:
             typ = _text(zeile[0])
             if typ:
                 logik.sub_typen.append(typ)
+
+    # --- Fragen FP-WP (v15, Phase 80) ---
+    if "Fragen FP-WP" in wb.sheetnames:
+        for zeile in wb["Fragen FP-WP"].iter_rows(min_row=2, values_only=True):
+            werte = [_text(z) for z in (tuple(zeile) + ("",) * 7)[:7]]
+            seite, key, frage, typ, optionen, pflicht, vorbelegung = werte
+            if not key or not frage:
+                continue
+            typ = (typ or "text").lower()
+            if typ not in FP_FRAGE_TYPEN:
+                logik.warnungen.append(
+                    f"FP-Frage {key}: unbekannter Typ „{typ}“ – wird zu text.")
+                typ = "text"
+            if typ == "auswahl" and "|" not in optionen:
+                logik.warnungen.append(f"FP-Frage {key}: auswahl ohne Optionen.")
+            logik.fp_fragen.append(FpFrage(
+                seite=seite or "Allgemein", key=key, frage=frage, typ=typ,
+                optionen=optionen,
+                pflicht=pflicht.upper() in ("J", "JA", "X", "1"),
+                vorbelegung_aus=vorbelegung))
+
+    # --- Stücklisten (v15, Phase 80: UGL-Bestellung) ---
+    if "Stücklisten" in wb.sheetnames:
+        for zeile in wb["Stücklisten"].iter_rows(min_row=2, values_only=True):
+            werte = [(_text(z)) for z in (tuple(zeile) + ("",) * 5)[:5]]
+            position, artnr, menge, bezeichnung, lieferant = werte
+            if not position or not artnr:
+                continue
+            try:
+                menge_zahl = float(str(menge).replace(",", ".")) if menge else 1.0
+            except ValueError:
+                logik.warnungen.append(
+                    f"Stückliste {position}: Menge „{menge}“ nicht lesbar.")
+                menge_zahl = 1.0
+            logik.stuecklisten.setdefault(position, []).append(
+                StuecklistenZeile(position=position, lieferant_artnr=artnr,
+                                  menge_je_einheit=menge_zahl,
+                                  bezeichnung=bezeichnung,
+                                  lieferant=lieferant or "Collin"))
 
     # --- Sub-Mailvorlagen (v15, Phase 79) ---
     if "Sub-Mailvorlagen" in wb.sheetnames:

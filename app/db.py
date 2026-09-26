@@ -102,6 +102,10 @@ _NACHTRAEGLICHE_SPALTEN = {
         "version": "VARCHAR(5) NOT NULL DEFAULT 'v2'",         # v15 Phase 78
     },
     "gewerke": {
+        "fp_antworten_json": "TEXT NOT NULL DEFAULT '{}'",     # v15 Phase 80
+        "fp_vorbelegt_json": "TEXT NOT NULL DEFAULT '{}'",     # v15 Phase 80
+        "fp_seite_index": "INTEGER NOT NULL DEFAULT 0",        # v15 Phase 80
+        "fp_abgeschlossen_am": "DATETIME",                     # v15 Phase 80
         "zaehlerwechsel_termin": "DATETIME",                   # v15 Phase 78
         "feinplanung_erfasst": "BOOLEAN NOT NULL DEFAULT 0",   # v15 Phase 74
         "feinplanung_erfasst_am": "DATETIME",                  # v15 Phase 74
@@ -110,6 +114,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "sub_team_id": "INTEGER",                              # v15 Phase 75
     },
     "artikel": {
+        "lieferant_artnr": "VARCHAR(50) NOT NULL DEFAULT ''",  # v15 Phase 80
         "artikelnummer": "VARCHAR(50) NOT NULL DEFAULT ''",
         "multi": "FLOAT",
         "ek_cent": "INTEGER",

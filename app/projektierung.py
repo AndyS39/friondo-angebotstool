@@ -883,6 +883,137 @@ def sub_mail_text(vorlage_text: str, platzhalter: dict[str, str]) -> str:
     return text
 
 
+# --- Feinplanungs-Erfassung (v15, Phase 80) ----------------------------------
+
+def fp_antworten(gewerk: Gewerk) -> dict:
+    import json as _json
+    try:
+        return _json.loads(gewerk.fp_antworten_json or "{}")
+    except ValueError:
+        return {}
+
+
+def fp_vorbelegen(session: Session, gewerk: Gewerk) -> int:
+    """Beim ersten Öffnen: Antworten aus der Vertriebs-Erfassung übernehmen
+    (Spalte vorbelegung_aus); vorbelegte Felder sind „vom Vertrieb“ markiert
+    und müssen bestätigt oder geändert werden (Speichern der Seite hebt die
+    Markierung auf)."""
+    import json as _json
+
+    from app import projektierung_logik
+    logik = projektierung_logik.hole_logik(session)
+    antworten = fp_antworten(gewerk)
+    vertrieb, _positionen, _profil = _steckbrief_quellen(session, gewerk)
+    try:
+        vorbelegt = _json.loads(gewerk.fp_vorbelegt_json or "{}")
+    except ValueError:
+        vorbelegt = {}
+    neu = 0
+    for frage in logik.fp_fragen:
+        if not frage.vorbelegung_aus or frage.key in antworten:
+            continue
+        wert = vertrieb.get(frage.vorbelegung_aus)
+        if wert in (None, ""):
+            continue
+        antworten[frage.key] = str(wert)
+        vorbelegt[frage.key] = "vom Vertrieb"
+        neu += 1
+    if neu:
+        gewerk.fp_antworten_json = _json.dumps(antworten, ensure_ascii=False)
+        gewerk.fp_vorbelegt_json = _json.dumps(vorbelegt, ensure_ascii=False)
+        session.flush()
+    return neu
+
+
+def fp_seite_speichern(session: Session, gewerk: Gewerk, fragen,
+                       form) -> None:
+    """Antworten einer Seite übernehmen; bestätigte Felder verlieren das
+    „vom Vertrieb“-Kennzeichen."""
+    import json as _json
+    antworten = fp_antworten(gewerk)
+    try:
+        vorbelegt = _json.loads(gewerk.fp_vorbelegt_json or "{}")
+    except ValueError:
+        vorbelegt = {}
+    for frage in fragen:
+        wert = (form.get(frage.key) or "").strip()[:500]
+        if frage.typ == "zahl" and wert:
+            wert = wert.replace(",", ".")
+        antworten[frage.key] = wert
+        vorbelegt.pop(frage.key, None)
+    gewerk.fp_antworten_json = _json.dumps(antworten, ensure_ascii=False)
+    gewerk.fp_vorbelegt_json = _json.dumps(vorbelegt, ensure_ascii=False)
+    session.flush()
+
+
+def fp_offene_pflicht(session: Session, gewerk: Gewerk) -> list[str]:
+    from app import projektierung_logik
+    logik = projektierung_logik.hole_logik(session)
+    antworten = fp_antworten(gewerk)
+    return [f.frage for f in logik.fp_fragen
+            if f.pflicht and not str(antworten.get(f.key) or "").strip()]
+
+
+def fp_abschliessen(session: Session, gewerk: Gewerk,
+                    benutzer=None) -> tuple[bool, str]:
+    """Abschluss der Feinplanungs-Erfassung: Pflichtfragen prüfen, Steckbrief
+    aus den FP-Antworten ableiten (fp-Regeln stehen im Blatt zuerst), Heizlast
+    übernehmen, Häkchen „Feinplanung erfasst“ setzen, Formular-Aufgabe
+    erledigen und bedingte Pakete (bedingung KEY=Wert) aktivieren."""
+    offen = fp_offene_pflicht(session, gewerk)
+    if offen:
+        return False, ("Pflichtfragen offen: " + " · ".join(offen[:4])
+                       + (" …" if len(offen) > 4 else ""))
+    from app import projektierung_logik
+    logik = projektierung_logik.hole_logik(session)
+    antworten = fp_antworten(gewerk)
+    steckbrief_ableiten(session, gewerk, benutzer=benutzer,
+                        fp_antworten=antworten)
+    # Heizlast (FP-L01) in die bestehenden Gewerk-Felder übernehmen
+    try:
+        kw = float(str(antworten.get("FP-L01") or "").replace(",", "."))
+        if kw > 0:
+            gewerk.heizlast_kw = kw
+            gewerk.heizlast_datum = datetime.now()
+    except ValueError:
+        pass
+    gewerk.fp_abgeschlossen_am = datetime.now()
+    if not gewerk.feinplanung_erfasst:
+        gewerk.feinplanung_erfasst = True
+        gewerk.feinplanung_erfasst_am = datetime.now()
+    # Formular-Aufgabe "Feinplanungs-Erfassung" erledigen
+    for aufgabe in (session.query(Aufgabe)
+                    .filter(Aufgabe.gewerk_id == gewerk.id,
+                            Aufgabe.aktion_typ == "formular",
+                            Aufgabe.aktion_wert == "feinplanung_wp",
+                            Aufgabe.status != "erledigt")):
+        aufgabe.status = "erledigt"
+        aufgabe.erledigt_am = datetime.now()
+        aufgabe.erledigt_von = benutzer.id if benutzer else None
+    # Bedingte Pakete: Paketregeln mit "KEY=Wert" auf die FP-Antworten
+    aktiviert = []
+    for regel in logik.regeln:
+        bedingung = (regel.bedingung or "").strip()
+        if bedingung.upper() == "IMMER" or "=" not in bedingung:
+            continue
+        if regel.sparte not in ("ALLE", gewerk.sparte):
+            continue
+        key, _, soll = bedingung.partition("=")
+        ist = str(antworten.get(key.strip()) or "").strip().lower()
+        if ist == soll.strip().lower():
+            paket = logik.pakete.get(regel.paket_key)
+            if paket is not None and paket_aktivieren(
+                    session, gewerk, paket, benutzer=benutzer) is not None:
+                aktiviert.append(paket.name)
+    verlauf(session, gewerk.projekt_id,
+            "Feinplanungs-Erfassung abgeschlossen"
+            + (f" – Pakete aktiviert: {', '.join(aktiviert)}" if aktiviert else "")
+            + f" (Gewerk {gewerk.sparte})",
+            benutzer=benutzer, gewerk_id=gewerk.id)
+    session.flush()
+    return True, "Feinplanung erfasst – Steckbrief aktualisiert."
+
+
 # --- Teams & Kalender (v15, Phase 75) ---------------------------------------
 
 TEAM_FARBEN = ["#2d6bd6", "#1f9d55", "#c47a12", "#7a3fbf", "#cf3b2c",

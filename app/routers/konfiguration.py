@@ -673,6 +673,15 @@ async def projektierung_einstellungen(request: Request,
                                                         "url_spotmyenergy", ""),
                   url_heizreport=kern.parameter_holen(session,
                                                       "url_heizreport", ""),
+                  # v15 (Phase 80): UGL/Collin + GC Online Plus
+                  url_gc_online=kern.parameter_holen(session, "url_gc_online", ""),
+                  collin_kundennummer=kern.parameter_holen(
+                      session, "collin_kundennummer", ""),
+                  ugl_lieferadresse=kern.parameter_holen(
+                      session, "ugl_lieferadresse", "ausfuehrung"),
+                  lager_adresse=kern.parameter_holen(session, "lager_adresse", ""),
+                  bza_fachunternehmer=kern.parameter_holen(
+                      session, "bza_fachunternehmer", "Friondo GmbH"),
                   benutzer_liste=benutzer_liste,
                   standard_pl=kern.parameter_holen(session, "standard_projektleiter"),
                   standard_fp=kern.parameter_holen(session, "standard_feinplaner"),
@@ -702,9 +711,18 @@ async def projektierung_einstellungen_speichern(
     kern.parameter_setzen(session, "galerie_original_behalten",
                           "an" if form.get("galerie_original") == "on" else "aus")
     # v15 (Phase 78): Portal-URLs (BzA, SpotmyEnergy, Heizreport)
-    for schluessel in ("url_bza_portal", "url_spotmyenergy", "url_heizreport"):
+    for schluessel in ("url_bza_portal", "url_spotmyenergy", "url_heizreport",
+                       "url_gc_online", "collin_kundennummer"):
         kern.parameter_setzen(session, schluessel,
                               (form.get(schluessel) or "").strip()[:300])
+    if form.get("ugl_lieferadresse") in ("ausfuehrung", "lager"):
+        kern.parameter_setzen(session, "ugl_lieferadresse",
+                              form.get("ugl_lieferadresse"))
+    kern.parameter_setzen(session, "lager_adresse",
+                          (form.get("lager_adresse") or "").strip()[:500])
+    if (form.get("bza_fachunternehmer") or "").strip():
+        kern.parameter_setzen(session, "bza_fachunternehmer",
+                              form.get("bza_fachunternehmer").strip()[:300])
     if form.get("freigabe_modus") in ("admin", "alle"):
         kern.parameter_setzen(session, "freigabe_modus", form.get("freigabe_modus"))
     for feld, name in (("standard_pl", "standard_projektleiter"),

@@ -1074,6 +1074,238 @@ async def aufgabe_in_arbeit(request: Request, aufgabe_id: int,
     return {"ok": True}
 
 
+@router.get("/gewerk/{gewerk_id}/feinplanung")
+async def feinplanung_erfassung(request: Request, gewerk_id: int,
+                                session: Session = Depends(get_session)):
+    """v15 (Phase 80): mobile Feinplanungs-Erfassung (Blatt Fragen FP-WP),
+    vorbelegt aus der Vertriebs-Erfassung („vom Vertrieb“-Markierung)."""
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    logik = projektierung_logik.hole_logik(session)
+    seiten = logik.fp_seiten()
+    if not seiten:
+        return RedirectResponse(
+            f"/projektierung/projekt/{gewerk.projekt_id}?meldung="
+            + quote_plus("Blatt „Fragen FP-WP“ ist leer – bitte in der "
+                         "Logik-Excel pflegen."), status_code=303)
+    if kern.fp_vorbelegen(session, gewerk):
+        session.commit()
+    try:
+        seite = max(0, min(int(request.query_params.get("seite", gewerk.fp_seite_index or 0)),
+                           len(seiten) - 1))
+    except ValueError:
+        seite = 0
+    import json as json_modul
+    return render(request, "projektierung/feinplanung.html",
+                  aktiv="/projektierung",
+                  gewerk=gewerk, projekt=session.get(Projekt, gewerk.projekt_id),
+                  seiten=seiten, seite=seite,
+                  seiten_name=seiten[seite][0], fragen=seiten[seite][1],
+                  antworten=kern.fp_antworten(gewerk),
+                  vorbelegt=json_modul.loads(gewerk.fp_vorbelegt_json or "{}"),
+                  offene_pflicht=kern.fp_offene_pflicht(session, gewerk),
+                  benutzer=request.state.benutzer,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/gewerk/{gewerk_id}/feinplanung")
+async def feinplanung_speichern(request: Request, gewerk_id: int,
+                                session: Session = Depends(get_session)):
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    form = await request.form()
+    logik = projektierung_logik.hole_logik(session)
+    seiten = logik.fp_seiten()
+    try:
+        seite = max(0, min(int(form.get("seite") or 0), len(seiten) - 1))
+    except ValueError:
+        seite = 0
+    kern.fp_seite_speichern(session, gewerk, seiten[seite][1], form)
+    aktion = form.get("aktion") or "weiter"
+    if aktion == "abschliessen":
+        ok, meldung = kern.fp_abschliessen(session, gewerk,
+                                           benutzer=request.state.benutzer)
+        session.commit()
+        if ok:
+            return RedirectResponse(
+                f"/projektierung/projekt/{gewerk.projekt_id}?meldung="
+                + quote_plus(meldung), status_code=303)
+        return RedirectResponse(
+            f"/projektierung/gewerk/{gewerk.id}/feinplanung?seite={seite}"
+            f"&meldung=" + quote_plus(meldung), status_code=303)
+    ziel = seite - 1 if aktion == "zurueck" else min(seite + 1, len(seiten) - 1)
+    gewerk.fp_seite_index = max(0, ziel)
+    session.commit()
+    return RedirectResponse(
+        f"/projektierung/gewerk/{gewerk.id}/feinplanung?seite={max(0, ziel)}",
+        status_code=303)
+
+
+@router.get("/gewerk/{gewerk_id}/bza")
+async def bza_datenblatt(request: Request, gewerk_id: int,
+                         session: Session = Depends(get_session)):
+    """v15 (Phase 80): BzA-Datenblatt – alle Antragsfelder aus Vorgang,
+    Angebot und Förder-Editor in Portal-Reihenfolge mit Kopier-Buttons;
+    fehlende Felder werden ausgewiesen. Druck über die Browser-Funktion."""
+    import json as json_modul
+
+    from app import kfw
+    from app import logik as logik_modul
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    projekt = session.get(Projekt, gewerk.projekt_id)
+    kunde = session.get(Kunde, projekt.kunde_id) if projekt else None
+    angebot = session.get(Angebot, gewerk.angebot_id) if gewerk.angebot_id else None
+    kfw_daten = json_modul.loads(angebot.kfw_json or "{}") if angebot else {}
+    antworten, _positionen, _profil = kern._steckbrief_quellen(session, gewerk)
+    steck = kern.steckbrief_daten(session, [gewerk.id])[gewerk.id]
+
+    def wert(*quellen, einheit=""):
+        for q in quellen:
+            if q not in (None, ""):
+                return f"{q}{einheit}"
+        return ""
+
+    kfw_ergebnis = None
+    if angebot is not None and not angebot.extern and kfw_daten.get("O01"):
+        logik, bericht = logik_modul.hole_logik(session)
+        if bericht is not None:
+            parameter, _ = kfw.parameter_lesen(logik)
+            eingaben = kfw.eingaben_aus_antworten(
+                kfw_daten, angebot.summen()["endbetrag"])
+            if eingaben is not None:
+                kfw_ergebnis = kfw.ergebnis_fuer_angebot(parameter, eingaben,
+                                                         angebot)
+    geraet = " · ".join(steck[f].wert for f in ("hersteller", "leistungsklasse")
+                          if f in steck and steck[f].wert)
+    felder = [
+        ("Antragsteller", [
+            ("Name", kunde.anzeige_name if kunde else ""),
+            ("Straße und Hausnummer", kunde.strasse if kunde else ""),
+            ("PLZ / Ort", f"{kunde.plz} {kunde.ort}".strip() if kunde else ""),
+            ("Telefon", kunde.telefon if kunde else ""),
+            ("E-Mail", kunde.email if kunde else ""),
+        ]),
+        ("Ausführungsadresse (Investitionsobjekt)", [
+            ("Straße und Hausnummer",
+             projekt.ausfuehrung_strasse if projekt else ""),
+            ("PLZ / Ort", f"{projekt.ausfuehrung_plz} "
+                          f"{projekt.ausfuehrung_ort}".strip() if projekt else ""),
+        ]),
+        ("Gebäude", [
+            ("Objektart", wert(kfw_daten.get("O01"), antworten.get("O01"))),
+            ("Baujahr", wert(kfw_daten.get("O02"), antworten.get("O02"))),
+            ("Wohneinheiten", wert(kfw_daten.get("O03"), antworten.get("O03"))),
+            ("Beheizte Fläche", wert(kfw_daten.get("O05"),
+                                        antworten.get("O05"), einheit=" m²")),
+        ]),
+        ("Maßnahme", [
+            ("Maßnahme", "Heizungstausch: Einbau einer Wärmepumpe"
+             if gewerk.sparte == "WP" else gewerk.sparte),
+            ("Gerät", geraet),
+            ("Alte Anlage", wert(steck["alte_anlage"].wert
+                                 if "alte_anlage" in steck else "",
+                                 antworten.get("A01"))),
+        ]),
+    ]
+    if kfw_ergebnis is not None:
+        felder.append(("Förderfähige Kosten & Zuschuss (Förder-Editor)", [
+            (name, w) for name, w, _fett in kfw_ergebnis.zeilen]))
+    else:
+        felder.append(("Förderfähige Kosten & Zuschuss", [
+            ("Hinweis", "Keine KfW-Daten am Angebot (TAIFUN-Auftrag oder "
+                        "Förder-Editor nicht ausgefüllt)")]))
+    felder.append(("Bonus-Bausteine", [
+        ("Klimageschwindigkeits-Bonus", wert(kfw_daten.get("K02"))),
+        ("Einkommensbonus (zu versteuerndes Einkommen)",
+         wert(kfw_daten.get("K03"), einheit=" €")),
+        ("Selbstnutzung", wert(kfw_daten.get("K01"))),
+    ]))
+    felder.append(("Fachunternehmer", [
+        ("Fachunternehmer", kern.parameter_holen(
+            session, "bza_fachunternehmer", "Friondo GmbH")),
+    ]))
+    fehlend = [f"{gruppe}: {name}" for gruppe, eintraege in felder
+               for name, w in eintraege if not str(w).strip()]
+    return render(request, "projektierung/bza.html",
+                  aktiv="/projektierung",
+                  gewerk=gewerk, projekt=projekt, felder=felder,
+                  fehlend=fehlend,
+                  url_bza=kern.parameter_holen(session, "url_bza_portal", ""),
+                  benutzer=request.state.benutzer,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.get("/gewerk/{gewerk_id}/ugl")
+async def ugl_seite(request: Request, gewerk_id: int,
+                    session: Session = Depends(get_session)):
+    """v15 (Phase 80): UGL-Bestellung Collin – Vorschau der Materialzeilen
+    (Auftrag × Stücklisten-Blatt) mit fehlenden Zuordnungen + Erzeugen."""
+    from app import ugl as ugl_modul
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    zeilen, fehlend = ugl_modul.material_fuer_gewerk(session, gewerk)
+    ts = kern.terminstatus(session, gewerk)
+    termin = ts.get("termin")
+    lieferdatum = (ugl_modul.werktage_zurueck(termin.beginn, 3)
+                   if termin is not None and termin.beginn else None)
+    return render(request, "projektierung/ugl.html",
+                  aktiv="/projektierung",
+                  gewerk=gewerk, projekt=session.get(Projekt, gewerk.projekt_id),
+                  zeilen=zeilen, fehlend=fehlend, lieferdatum=lieferdatum,
+                  kundennummer=kern.parameter_holen(session,
+                                                    "collin_kundennummer", ""),
+                  lieferadresse=kern.parameter_holen(session, "ugl_lieferadresse",
+                                                     "ausfuehrung"),
+                  url_gc=kern.parameter_holen(session, "url_gc_online", ""),
+                  benutzer=request.state.benutzer,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/gewerk/{gewerk_id}/ugl")
+async def ugl_erzeugen(request: Request, gewerk_id: int,
+                       session: Session = Depends(get_session)):
+    """UGL-Datei erzeugen: Ablage in der Galerie „Montagedokumente“ +
+    direkter Download; die zugehörige api-Aufgabe springt auf „in Arbeit“
+    (Bestellung in GC Online Plus erfolgt manuell)."""
+    from fastapi.responses import Response
+
+    from app import galerie as galerie_modul
+    from app import ugl as ugl_modul
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    inhalt, dateiname, _fehlend, fehler = ugl_modul.ugl_erzeugen(session, gewerk)
+    if inhalt is None:
+        return RedirectResponse(
+            f"/projektierung/gewerk/{gewerk.id}/ugl?meldung=" + quote_plus(fehler),
+            status_code=303)
+    angebot = session.get(Angebot, gewerk.angebot_id) if gewerk.angebot_id else None
+    if angebot is not None and angebot.vorgang_id:
+        galerie_modul.speichern(session, angebot.vorgang_id, "Montagedokumente",
+                                dateiname, inhalt,
+                                benutzer=request.state.benutzer,
+                                bemerkung="UGL-Bestelldatei (Collin)",
+                                quelle="formular")
+    for aufgabe in (session.query(Aufgabe)
+                    .filter(Aufgabe.gewerk_id == gewerk.id,
+                            Aufgabe.aktion_typ == "api",
+                            Aufgabe.aktion_wert == "ugl_collin",
+                            Aufgabe.status == "offen")):
+        aufgabe.status = "in_arbeit"
+    kern.verlauf(session, gewerk.projekt_id,
+                 f"UGL-Bestelldatei erzeugt ({dateiname})",
+                 benutzer=request.state.benutzer, gewerk_id=gewerk.id)
+    session.commit()
+    return Response(content=inhalt, media_type="application/octet-stream",
+                    headers={"Content-Disposition":
+                             f'attachment; filename="{dateiname}"'})
+
+
 @router.get("/aufgabe/{aufgabe_id}/sub-mail")
 async def sub_mail_dialog(request: Request, aufgabe_id: int,
                           session: Session = Depends(get_session)):

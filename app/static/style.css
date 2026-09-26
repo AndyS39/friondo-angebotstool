@@ -2649,3 +2649,36 @@ td.aktionen form { display: inline-flex; vertical-align: middle; margin: 0 0 0 0
 .pj-mailfotos .foto input { position: absolute; top: 6px; left: 6px;
     transform: scale(1.2); }
 .pj-mailfotos .foto:has(input:not(:checked)) img { opacity: .35; }
+
+/* v15 (Phase 80): Feinplanungs-Erfassung (mobil) */
+.pj-fp { max-width: 560px; }
+.pj-fp-frage { margin-bottom: 12px; }
+.pj-fp-frage > label { display: block; font-size: 13px; font-weight: 600;
+    margin-bottom: 4px; }
+.pj-fp-frage input[type=text] { width: 100%; padding: 8px 10px; font: inherit;
+    border: 1px solid var(--pj-line, #d5dcd9); border-radius: 8px; }
+.pj-fp-radios { display: flex; flex-wrap: wrap; gap: 6px; }
+.pj-fp-radios label { display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--pj-line, #d5dcd9); border-radius: 999px;
+    padding: 6px 12px; cursor: pointer; font-size: 13px; background: #fff; }
+.pj-fp-radios label:has(input:checked) { border-color: var(--pj-akzent, #3f86c6);
+    background: #eef5fb; }
+.pj-fp-vertrieb { display: inline-block; margin-left: 6px; padding: 0 8px;
+    border-radius: 999px; background: #fdf1dc; color: #8a6116;
+    font-size: 11px; font-weight: 600; }
+
+/* v15 (Phase 80): BzA-Datenblatt (Kopier-Buttons, Druckansicht) */
+.pj-bza-gruppe { margin: 14px 0 6px; color: var(--pj-akzent, #1b2a5e); }
+.pj-bza-raster { display: grid; grid-template-columns: 240px 1fr auto;
+    gap: 2px 10px; align-items: center; max-width: 720px; font-size: 13px; }
+.pj-bza-raster .k { color: var(--pj-muted, #5d6b66); }
+.pj-bza-raster .w { background: #fff; border: 1px solid var(--pj-line, #d5dcd9);
+    border-radius: 6px; padding: 4px 8px; }
+.pj-bza-raster .w.fehlt { color: #b3382c; border-color: #e5b5af; background: #fdf3f2; }
+.pj-copy { padding: 2px 8px; }
+@media print {
+    .pj-btnrow, .pj-copy, nav, header, .seitenmenue { display: none !important; }
+    .pj-bza-raster .w { border: none; padding: 1px 0; }
+    .pj-bza-raster { grid-template-columns: 240px 1fr; }
+    .pj-bza-raster .c { display: none; }
+}

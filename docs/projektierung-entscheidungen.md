@@ -339,3 +339,40 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
 - **Test ohne M365-Anmeldung:** der Phasentest mockt den Graph-Versand und
   den Konversationsabruf; der echte Testversand an eine Testadresse ist
   beim Server-Rollout mit angemeldetem Konto nachzuholen (Lead-Chat).
+
+## Phase 80 (26.09.2026)
+
+- **FP-Erfassung ohne eigenes Modell:** Antworten/Vorbelegung/Seite/Abschluss
+  liegen als Felder am Gewerk (fp_antworten_json usw.) – die Vertriebs-
+  Erfassung bleibt unangetastet, die FP-Erfassung ist bewusst leichter
+  (keine Ampel, keine Artikel-Aktionen). Fragen-Keys FP-A/E/O/H/L nach
+  Seiten; Andreas ersetzt die Startfragen später durch das TAIFUN-Formular.
+- **„vom Vertrieb"-Markierung:** Vorbelegte Antworten (Spalte
+  vorbelegung_aus) tragen ein Badge; das Speichern der jeweiligen Seite
+  gilt als Bestätigung und entfernt die Markierung.
+- **fp_frage-Regeln stehen im Steckbrief-Blatt VOR den Vertriebsregeln**
+  (erste passende Regel je Feld gewinnt): beim FP-Abschluss überschreiben
+  sie nicht-manuelle Vertriebswerte, bei der Projektanlage (ohne
+  FP-Antworten) greifen weiterhin die Vertriebsregeln.
+- **FP-Abschluss** setzt zusätzlich das Häkchen „Feinplanung erfasst"
+  (Wächter), übernimmt FP-L01 in die Heizlast-Felder, erledigt die
+  Formular-Aufgabe feinplanung_wp und wertet bedingte Paketregeln
+  (bedingung `KEY=Wert` gegen die FP-Antworten) aus – das Blatt enthält
+  derzeit nur IMMER-Regeln, die Mechanik steht für später.
+- **Heizreport:** heizreport_api.py ist ein sauberer Stub (Parameter
+  heizreport_api_url/_key), aktiv erst mit API-Doku; bis dahin Link
+  (url_heizreport) + PDF-Upload in „Montagedokumente" + Heizlast-Felder.
+- **UGL:** Feldbelegung der Sätze KOP/ADR/POA/END ist vereinfacht nach
+  UGL 4.0 (200 Byte, latin-1, CRLF, Anfrageart BE) – beim ersten echten
+  Upload in GC Online Plus mit Collin abgleichen. Lieferdatum =
+  Montagebeginn − 3 Werktage (ohne Termin: heute + 7 Tage). Z-Positionen
+  (Arbeitspakete) werden nicht bestellt; Positionen ohne Stücklisten-
+  Zuordnung erscheinen als Warnliste. Die Datei landet in der Galerie
+  „Montagedokumente"; die api-Aufgabe springt nur auf „in Arbeit", weil
+  die Bestellung in GC Online Plus manuell erfolgt. Stücklisten-Blatt
+  enthält BEISPIEL-Artikelnummern – Andreas füllt echte Collin-Nummern.
+- **BzA-Datenblatt** zieht Gebäudedaten aus kfw_json (O01/O02/O03/O05,
+  K01–K04) mit Fallback auf die Erfassungs-Antworten, die Förderzeilen
+  1:1 aus dem Förder-Editor-Ergebnis; Fachunternehmer ist der Parameter
+  bza_fachunternehmer (Standard „Friondo GmbH"). Druck/PDF über die
+  Browser-Druckfunktion (print-CSS blendet Knöpfe aus).

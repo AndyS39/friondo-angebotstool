@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block titel %}UGL-Bestellung · {{ projekt.nummer }}{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <div>
+        <div class="pj-eyebrow">Projektierung · {{ projekt.nummer }} · {{ gewerk.sparte }}</div>
+        <h1>UGL-Bestellung (Collin)</h1>
+    </div>
+    <a class="pj-btn" href="/projektierung/projekt/{{ projekt.id }}">Zurück zur Akte</a>
+</div>
+
+{% if meldung %}<div class="pj-note crit">{{ meldung }}</div>{% endif %}
+
+<div class="pj-kv" style="max-width:560px">
+    <span>Kundennummer</span>
+    <div>{{ kundennummer or 'FEHLT – Parametrierung → Projektierung-Einstellungen' }}</div>
+    <span>Lieferdatum</span>
+    <div>{{ lieferdatum.strftime('%d.%m.%Y') if lieferdatum else 'kein Montagetermin – heute + 7 Tage' }}
+        <small class="dezent">(Montagebeginn − 3 Werktage)</small></div>
+    <span>Lieferadresse</span>
+    <div>{{ 'Lager (Parametrierung)' if lieferadresse == 'lager' else 'Ausführungsadresse' }}</div>
+</div>
+
+<h3 style="margin-top:14px">Materialzeilen <small class="dezent">{{ zeilen | length }} Artikel</small></h3>
+<table class="tabelle">
+    <thead><tr><th>Artikelnummer (Collin)</th><th>Bezeichnung</th>
+        <th style="text-align:right">Menge</th></tr></thead>
+    <tbody>
+    {% for z in zeilen %}
+    <tr><td class="pj-mono">{{ z.artnr }}</td><td>{{ z.bezeichnung }}</td>
+        <td style="text-align:right">{{ '%g' | format(z.menge) }}</td></tr>
+    {% else %}
+    <tr><td colspan="3" class="dezent">Keine Zuordnungen – Blatt „Stücklisten“
+        in der Logik-Excel pflegen.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{% if fehlend %}
+<div class="pj-note crit" style="margin-top:8px">
+    <b>Positionen ohne Stücklisten-Zuordnung</b> (werden NICHT bestellt):<br>
+    {{ fehlend | join('<br>') | safe }}
+</div>
+{% endif %}
+
+<div class="pj-btnrow" style="margin-top:14px">
+    <form method="post" action="/projektierung/gewerk/{{ gewerk.id }}/ugl">
+        <button class="pj-btn primary" type="submit"
+                {{ 'disabled' if not zeilen or not kundennummer }}>UGL-Datei erzeugen + herunterladen</button>
+    </form>
+    {% if url_gc %}<a class="pj-btn" href="{{ url_gc }}" target="_blank" rel="noopener">GC Online Plus öffnen ↗</a>{% endif %}
+</div>
+<p class="dezent" style="font-size:12px">Die Datei landet zusätzlich in der
+    Galerie „Montagedokumente“. Upload in GC Online Plus manuell;
+    IDS-Connect folgt als Schalter, sobald die Anbindung steht.</p>
+{% endblock %}

@@ -234,7 +234,7 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
 
 ## Phase 80 – Feinplanungs-Erfassung, Heizreport, UGL, Portale, BzA-Datenblatt
 
-- [ ] **Feinplanungs-Erfassung WP** als zweiter Fragenkatalog auf der
+- [x] **Feinplanungs-Erfassung WP** als zweiter Fragenkatalog auf der
   Erfassungs-Infrastruktur: Blatt **„Fragen FP-WP"** in der Projektierungs-
   Logik (Seiten, Fragen-Keys `FP-…`, Typen wie im Konfigurator, ohne Artikel-
   Aktionen). Vorbelegung aus der Vertriebs-Erfassung: je FP-Frage optional
@@ -249,11 +249,11 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
   (kW, Quelle). Abschluss schreibt Antworten in den Steckbrief (Mapping im
   Blatt Steckbrief, `quelle_typ = fp_frage`) und aktiviert Pakete nach
   Paketregeln. Mobil bedienbar (Rolle Projektierung).
-- [ ] **Heizreport:** Button „Heizreport öffnen" (Link) + Upload des Ergebnis-
+- [x] **Heizreport:** Button „Heizreport öffnen" (Link) + Upload des Ergebnis-
   PDFs in „Montagedokumente" + Felder kW/Datum. API-Anbindung als Modul
   `heizreport_api.py` vorbereiten (Projekt anlegen, Ergebnis abrufen), aktiv
   erst mit Zugangsdaten/Doku in der Parametrierung.
-- [ ] **UGL-Bestellung Collin:** Blatt **„Stücklisten"** in der Logik
+- [x] **UGL-Bestellung Collin:** Blatt **„Stücklisten"** in der Logik
   (`position`, `lieferant_artnr`, `menge_je_einheit`, `bezeichnung`,
   `lieferant`) – Claude Code legt es leer mit Beispielzeilen an; Artikelstamm
   bekommt Feld `lieferant_artnr`. Button „Material bestellen" erzeugt die
@@ -263,14 +263,14 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
   zeigt fehlende Zuordnungen, legt die Datei in „Montagedokumente" ab und
   bietet Download an (Upload in GC Online Plus manuell). IDS-Connect als
   späterer Schalter vorbereiten. Kundennummer Collin in der Parametrierung.
-- [ ] **Portale:** Parametrierung „Projektierung-Einstellungen" bekommt URLs:
+- [x] **Portale:** Parametrierung „Projektierung-Einstellungen" bekommt URLs:
   BzA-Portal, SpotmyEnergy-Partnerportal, Heizreport, GC Online Plus.
-- [ ] **BzA-Datenblatt:** Seite `/projektierung/gewerk/<id>/bza` mit allen
+- [x] **BzA-Datenblatt:** Seite `/projektierung/gewerk/<id>/bza` mit allen
   Feldern (Antragsteller, Adressen, Gebäude/Baujahr, Wohneinheiten,
   Maßnahme, förderfähige Kosten, Bonus-Bausteine, Fachunternehmer) aus
   Vorgang, Angebot und Förder-Editor, je Feld Kopier-Button; Hinweis, welche
   Felder fehlen. Druck-/PDF-Ansicht.
-- [ ] Test: FP-Erfassung mobil, Steckbrief aktualisiert, Pakete aktiviert;
+- [x] Test: FP-Erfassung mobil, Steckbrief aktualisiert, Pakete aktiviert;
   UGL-Datei mit Testpositionen; Datenblatt vollständig.
 
 ## Phase 81 – Outlook-Kalender-Sync, Kunden-Terminbestätigung

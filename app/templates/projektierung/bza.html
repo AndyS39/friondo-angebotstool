@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block titel %}BzA-Datenblatt · {{ projekt.nummer }}{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf pj-bza-kopf">
+    <div>
+        <div class="pj-eyebrow">Projektierung · {{ projekt.nummer }} · {{ gewerk.sparte }}</div>
+        <h1>BzA-Datenblatt</h1>
+    </div>
+    <div class="pj-btnrow">
+        {% if url_bza %}<a class="pj-btn" href="{{ url_bza }}" target="_blank" rel="noopener">BzA-Portal öffnen ↗</a>{% endif %}
+        <button class="pj-btn" type="button" onclick="window.print()">Drucken / PDF</button>
+        <a class="pj-btn" href="/projektierung/projekt/{{ projekt.id }}">Zurück</a>
+    </div>
+</div>
+
+{% if fehlend %}
+<div class="pj-note crit pj-bza-fehlt">Fehlende Angaben ({{ fehlend | length }}):
+    {{ fehlend | join(' · ') }}</div>
+{% endif %}
+
+{% for gruppe, eintraege in felder %}
+<h3 class="pj-bza-gruppe">{{ gruppe }}</h3>
+<div class="pj-bza-raster">
+    {% for name, wert in eintraege %}
+    <span class="k">{{ name }}</span>
+    <span class="w {{ 'fehlt' if not wert }}">{{ wert or '– fehlt –' }}</span>
+    <span class="c">{% if wert %}
+        <button class="pj-btn pj-copy" type="button"
+                onclick="pjKopieren(this, {{ wert | tojson }})">⧉</button>
+    {% endif %}</span>
+    {% endfor %}
+</div>
+{% endfor %}
+
+<script>
+function pjKopieren(knopf, text) {
+    navigator.clipboard.writeText(String(text)).then(function () {
+        knopf.textContent = '✓';
+        setTimeout(function () { knopf.textContent = '⧉'; }, 1200);
+    });
+}
+</script>
+{% endblock %}

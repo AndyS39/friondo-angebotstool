@@ -114,6 +114,8 @@ class Artikel(Base):
     quelle: Mapped[str] = mapped_column(String(20), default=QUELLE_MANUELL)
     # Preisliste v2 (Phase 11): Einkaufsdaten – nur Innendienst, nie im PDF
     artikelnummer: Mapped[str] = mapped_column(String(50), default="")
+    # v15 (Phase 80): Artikelnummer des Grosshaendlers (UGL-Bestellung)
+    lieferant_artnr: Mapped[str] = mapped_column(String(50), default="")
     multi: Mapped[Optional[float]] = mapped_column(Float, nullable=True)     # VK = EK × Multi
     ek_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)   # Einkaufspreis Material
     ek_datum: Mapped[str] = mapped_column(String(20), default="")
@@ -524,6 +526,12 @@ class Gewerk(Base):
     sub_team_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     angebot_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     angebot_id_original: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # v15 (Phase 80): Feinplanungs-Erfassung (Fragen FP-WP)
+    fp_antworten_json: Mapped[str] = mapped_column(Text, default="{}")
+    fp_vorbelegt_json: Mapped[str] = mapped_column(Text, default="{}")
+    fp_seite_index: Mapped[int] = mapped_column(Integer, default=0)
+    fp_abgeschlossen_am: Mapped[Optional[datetime]] = mapped_column(DateTime,
+                                                                    nullable=True)
     # v15 (Phase 78, Fit for Future): Zaehlerwechseltermin (Marker im Kalender)
     zaehlerwechsel_termin: Mapped[Optional[datetime]] = mapped_column(DateTime,
                                                                       nullable=True)

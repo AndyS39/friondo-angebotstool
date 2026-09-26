@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block titel %}Feinplanung · {{ projekt.nummer }}{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <div>
+        <div class="pj-eyebrow">Feinplanung VOT · {{ projekt.nummer }} · {{ gewerk.sparte }}</div>
+        <h1>{{ seiten_name }} <small class="dezent">Seite {{ seite + 1 }} / {{ seiten | length }}</small></h1>
+    </div>
+    <a class="pj-btn" href="/projektierung/projekt/{{ projekt.id }}">Zur Akte</a>
+</div>
+
+{% if meldung %}<div class="pj-note crit">{{ meldung }}</div>{% endif %}
+{% if gewerk.fp_abgeschlossen_am %}
+<div class="pj-note">Bereits abgeschlossen am {{ gewerk.fp_abgeschlossen_am.strftime('%d.%m.%Y %H:%M') }}
+    – Änderungen aktualisieren den Steckbrief beim erneuten Abschließen.</div>
+{% endif %}
+
+<form method="post" action="/projektierung/gewerk/{{ gewerk.id }}/feinplanung"
+      class="pj-fp">
+    <input type="hidden" name="seite" value="{{ seite }}">
+    {% for f in fragen %}
+    <div class="pj-fp-frage">
+        <label for="fp-{{ f.key }}">{{ f.frage }}{{ ' *' if f.pflicht }}
+            {% if f.key in vorbelegt %}<span class="pj-fp-vertrieb"
+                title="Vorbelegt aus der Vertriebs-Erfassung – bitte bestätigen oder ändern">vom Vertrieb</span>{% endif %}
+        </label>
+        {% set wert = antworten.get(f.key, '') %}
+        {% if f.typ == 'ja_nein' %}
+        <div class="pj-fp-radios">
+            {% for option in ['Ja', 'Nein'] %}
+            <label><input type="radio" name="{{ f.key }}" value="{{ option }}"
+                   {{ 'checked' if wert == option }}> {{ option }}</label>
+            {% endfor %}
+        </div>
+        {% elif f.typ == 'auswahl' %}
+        <div class="pj-fp-radios">
+            {% for option in f.optionen_liste() %}
+            <label><input type="radio" name="{{ f.key }}" value="{{ option }}"
+                   {{ 'checked' if wert == option }}> {{ option }}</label>
+            {% endfor %}
+        </div>
+        {% elif f.typ == 'zahl' %}
+        <input id="fp-{{ f.key }}" type="text" inputmode="decimal"
+               name="{{ f.key }}" value="{{ wert }}">
+        {% else %}
+        <input id="fp-{{ f.key }}" type="text" name="{{ f.key }}" value="{{ wert }}">
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="pj-btnrow" style="margin-top:14px">
+        {% if seite > 0 %}
+        <button class="pj-btn" type="submit" name="aktion" value="zurueck">‹ Zurück</button>
+        {% endif %}
+        {% if seite + 1 < seiten | length %}
+        <button class="pj-btn primary" type="submit" name="aktion" value="weiter">Weiter ›</button>
+        {% else %}
+        <button class="pj-btn primary" type="submit" name="aktion" value="abschliessen">Abschließen ✓</button>
+        {% endif %}
+    </div>
+    {% if seite + 1 == seiten | length and offene_pflicht %}
+    <p class="dezent" style="font-size:12px">Noch offen (Pflicht):
+        {{ offene_pflicht | join(' · ') }}</p>
+    {% endif %}
+</form>
+{% endblock %}

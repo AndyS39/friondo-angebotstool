@@ -74,6 +74,23 @@
     <label>Heizreport</label>
     <input type="text" name="url_heizreport" value="{{ url_heizreport }}"
            placeholder="https://…">
+    <label>GC Online Plus</label>
+    <input type="text" name="url_gc_online" value="{{ url_gc_online }}"
+           placeholder="https://…">
+    <h3 style="margin-top:16px">UGL-Bestellung Collin (Phase 80)</h3>
+    <label>Collin-Kundennummer</label>
+    <input type="text" name="collin_kundennummer" value="{{ collin_kundennummer }}">
+    <label>Lieferadresse</label>
+    <select name="ugl_lieferadresse">
+        <option value="ausfuehrung" {{ 'selected' if ugl_lieferadresse != 'lager' }}>Ausführungsadresse des Projekts</option>
+        <option value="lager" {{ 'selected' if ugl_lieferadresse == 'lager' }}>Lager (Adresse unten)</option>
+    </select>
+    <label>Lager-Adresse (eine Angabe je Zeile)</label>
+    <textarea name="lager_adresse" rows="3">{{ lager_adresse }}</textarea>
+    <p class="dezent" style="font-size:12px">IDS-Connect ist vorbereitet und
+        wird aktiviert, sobald die Anbindung mit Collin steht.</p>
+    <label>Fachunternehmer (BzA-Datenblatt)</label>
+    <input type="text" name="bza_fachunternehmer" value="{{ bza_fachunternehmer }}">
 </form>
 
 <h2>Ordnervorlage (Anzeige)</h2>
