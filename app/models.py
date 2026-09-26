@@ -618,6 +618,23 @@ class ProjektTermin(Base):
                                                   onupdate=datetime.now)
 
 
+class GalerieDatei(Base):
+    """v15 (Phase 76): Galerie am VORGANG mit festen Unterordnern;
+    Ablage data/vorgaenge/<vorgang_id>/galerie/<ordner>/."""
+    __tablename__ = "galerie_dateien"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    vorgang_id: Mapped[int] = mapped_column(Integer, index=True)
+    ordner: Mapped[str] = mapped_column(String(100), default="Allgemein")
+    dateiname: Mapped[str] = mapped_column(String(300), default="")
+    pfad: Mapped[str] = mapped_column(String(500), default="")
+    bild: Mapped[bool] = mapped_column(Boolean, default=False)
+    bemerkung: Mapped[str] = mapped_column(String(300), default="")
+    quelle: Mapped[str] = mapped_column(String(20), default="upload")  # upload | erfassung | migration | formular
+    hochgeladen_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    hochgeladen_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
 class ProjektDokument(Base):
     """Datei in der Projekt-Ordnerstruktur data/projekte/<PR>/…"""
     __tablename__ = "projekt_dokumente"

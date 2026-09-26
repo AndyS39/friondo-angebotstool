@@ -16,7 +16,8 @@
     </div>
     <h1>{{ seiten[nr] }}</h1>
 
-    <form method="post" action="/erfassung/{{ erfassung.id }}/seite/{{ nr }}" class="mobil-formular" id="seitenform">
+    <form method="post" action="/erfassung/{{ erfassung.id }}/seite/{{ nr }}"
+          class="mobil-formular" id="seitenform" enctype="multipart/form-data">
         {% for frage in fragen %}
         <div class="fragefeld {{ 'verborgen' if not sichtbar[frage.id] }}"
              data-frage="{{ frage.id }}" data-regel='{{ client_regel(frage) }}'>
@@ -79,6 +80,22 @@
         </div>
         {% endfor %}
 
+        {# v15 (Phase 76): Fotos für die Galerie auf der Einschätzungs-Seite #}
+        {% if seiten[nr] == 'Einschätzung' and galerie_ordner is defined %}
+        <div class="fragefeld">
+            <label class="fragetitel">Fotos für die Galerie</label>
+            <p class="frage-hinweis">Landen im Vorgang – sichtbar für Innendienst,
+                Projektierung und Montage.</p>
+            {% for ordner in galerie_ordner %}
+            <div class="formzeile" style="align-items:center">
+                <span style="flex:1">{{ ordner }}</span>
+                <input type="file" name="galerie_{{ loop.index0 }}" accept="image/*"
+                       capture="environment" multiple>
+                <input type="hidden" name="galerie_ordner_{{ loop.index0 }}" value="{{ ordner }}">
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
         <div class="mobil-aktionen sticky-fuss">
             {% if nr > 0 %}
                 <button class="knopf zweitrangig gross" type="submit" name="richtung" value="zurueck">← Zurück</button>

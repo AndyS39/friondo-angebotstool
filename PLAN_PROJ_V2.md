@@ -87,18 +87,18 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
 
 ## Phase 76 – Galerie am Vorgang
 
-- [ ] **Galerie** hängt an der **Vorgangsakte** (v10), nicht am Projekt. Feste
+- [x] **Galerie** hängt an der **Vorgangsakte** (v10), nicht am Projekt. Feste
   Unterordner (Reihenfolge und Namen exakt): `Alte Heizung` · `Elektro` ·
   `Außengerät` · `Öl-Tank` · `Montagedokumente` · `Inbetrieb-/Abnahme` ·
   `Neue Anlage` · `Allgemein`. Ordnerliste in der Parametrierung erweiterbar
   (Standardordner nicht löschbar). Ablage `data/vorgaenge/<vorgang_id>/galerie/<ordner>/`.
-- [ ] Migration: bestehende `data/projekte/<PR>/…`-Dateien in die Galerie des
+- [x] Migration: bestehende `data/projekte/<PR>/…`-Dateien in die Galerie des
   zugehörigen Vorgangs verschieben (Zuordnung alter Ordner → neuer Ordner:
   Fotos/Alte Anlage → Alte Heizung, Fotos/Zählerschrank → Elektro, Fotos/
   Außengerät → Außengerät, Fotos/Öltank → Öl-Tank, 05 Montage & Protokolle →
   Montagedokumente, Fotos/Neue Anlage → Neue Anlage, Rest → Allgemein).
   Angebots-PDFs bleiben am Angebot (Vorgangsakte zeigt sie ohnehin).
-- [ ] Galerie-Ansicht (Vorgangsakte Reiter „Galerie", Projektakte Reiter
+- [x] Galerie-Ansicht (Vorgangsakte Reiter „Galerie", Projektakte Reiter
   „Galerie" – dieselbe Komponente): Ordner als Kacheln mit Anzahl und
   Vorschaubild, darin Bildraster mit Lightbox, Dokumente als Liste, Upload per
   Drag & Drop, **mobil: Button „📷 Foto aufnehmen" je Ordner** (`<input
@@ -106,13 +106,13 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
   serverseitig auf max. 2000 px verkleinert (Original optional behalten),
   Metadaten: Ordner, Hochgeladen von/am, Bemerkung. Verschieben zwischen Ordnern,
   Löschen nur Innendienst/Projektierung/Admin (protokolliert).
-- [ ] **Rechte:** Vertrieb (Außendienst) darf in eigenen Vorgängen hochladen und
+- [x] **Rechte:** Vertrieb (Außendienst) darf in eigenen Vorgängen hochladen und
   ansehen – **auch ohne Auftrag**; Innendienst/Projektierung/Admin alles;
   Montage in zugewiesenen Aufträgen ansehen und hochladen (Phase 82). Der
   mobile Erfassungsbogen bekommt am Ende (Seite „Einschätzung") einen Block
   „Fotos für die Galerie" mit den acht Ordnern.
-- [ ] Sub-Mails (Phase 79) und Steckbrief (Phase 82) greifen auf diese Ordner zu.
-- [ ] Test: Upload am Handy in Ordner, Vertrieb ohne Auftrag, Migration.
+- [x] Sub-Mails (Phase 79) und Steckbrief (Phase 82) greifen auf diese Ordner zu.
+- [x] Test: Upload am Handy in Ordner, Vertrieb ohne Auftrag, Migration.
 
 ## Phase 77 – Projektsteckbrief (Zusammenfassung über den To-dos)
 

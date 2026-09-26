@@ -665,6 +665,13 @@ async def akte(request: Request, projekt_id: int,
             kommentar_zaehler[e.aufgabe_id] = kommentar_zaehler.get(e.aufgabe_id, 0) + 1
     return render(request, "projektierung/akte.html", aktiv="/projektierung",
                   dokumente=dokumente, dokument_ordner=dokument_ordner,
+                  # v15 (Phase 76): Galerie des Vorgangs in der Projektakte
+                  galerie_daten=__import__("app.galerie", fromlist=["x"])
+                  .uebersicht(session, projekt.vorgang_id or 0),
+                  galerie_ordner=__import__("app.galerie", fromlist=["x"])
+                  .ordner_liste(session),
+                  galerie_darf_loeschen=__import__("app.galerie", fromlist=["x"])
+                  .darf_loeschen(request.state.benutzer),
                   projekt_subs=projekt_subs, subs_stamm=subs_stamm,
                   vorgang_notizen=vorgang_notizen,
                   kommentar_zaehler=kommentar_zaehler,

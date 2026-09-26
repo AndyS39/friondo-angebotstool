@@ -342,10 +342,12 @@ async def seite(request: Request, erfassung_id: int, nr: int,
             if vor is not None:
                 wert = vor
         werte[f.id] = wert
+    from app import galerie as galerie_modul
     return render(request, "erfassung/seite.html", aktiv=None, mobil=True,
                   benutzer=_benutzer(request), erfassung=erfassung, kunde=kunde,
                   seiten=seiten, nr=nr, fragen=fragen, sichtbar=sichtbar,
                   werte=werte, fehler={},
+                  galerie_ordner=galerie_modul.ordner_liste(session),
                   vorbelegt=json.loads(erfassung.vorbelegt_json or "{}"),
                   client_regel=lambda f: _client_regel(f, antworten, logik),
                   wiederhol_id=engine.ID_WIEDERHOL_ANZAHL)
@@ -396,6 +398,25 @@ async def seite_speichern(request: Request, erfassung_id: int, nr: int,
     erfassung.antworten_json = json.dumps(antworten, ensure_ascii=False)
     _korrekturen_protokollieren(erfassung, antworten_vorher, antworten,
                                 _benutzer(request), logik)
+    # v15 (Phase 76): Fotos der Einschätzungs-Seite in die Vorgangs-Galerie
+    galerie_uploads = [k for k in form if k.startswith("galerie_")
+                       and not k.startswith("galerie_ordner_")]
+    if galerie_uploads:
+        from app import galerie as galerie_modul
+        from app import vorgaenge as vorgaenge_modul
+        vorgang = vorgaenge_modul.vorgang_fuer_erfassung(session, erfassung)
+        gespeichert = 0
+        for schluessel in galerie_uploads:
+            index = schluessel.rsplit("_", 1)[-1]
+            ordner = form.get(f"galerie_ordner_{index}") or "Allgemein"
+            for datei in form.getlist(schluessel):
+                if getattr(datei, "filename", ""):
+                    inhalt = await datei.read()
+                    if galerie_modul.speichern(session, vorgang.id, ordner,
+                                               datei.filename, inhalt,
+                                               benutzer=_benutzer(request),
+                                               quelle="erfassung"):
+                        gespeichert += 1
     if richtung == "freitext":   # v7: Wechsel in die Freitext-Erfassung –
         session.commit()         # bereits gegebene Antworten bleiben erhalten
         return RedirectResponse(f"/erfassung/{erfassung.id}/freitext", status_code=303)

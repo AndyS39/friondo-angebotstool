@@ -180,6 +180,11 @@ async def akte(request: Request, vorgang_id: int,
     from app import projektierung as projektierung_modul
     from app.models import Gewerk as GewerkModell, Projekt as ProjektModell
     projekt_modul_ok = projektierung_modul.modul_sichtbar(session, benutzer)
+    # v15 (Phase 76): Galerie am Vorgang
+    from app import galerie as galerie_modul
+    galerie_daten = galerie_modul.uebersicht(session, vorgang.id)
+    galerie_ordner = galerie_modul.ordner_liste(session)
+    galerie_darf_loeschen = galerie_modul.darf_loeschen(benutzer)
     vorgang_projekte = []
     if projekt_modul_ok:
         for projekt in (session.query(ProjektModell)
@@ -216,6 +221,8 @@ async def akte(request: Request, vorgang_id: int,
         lead_kontext = None
     return render(request, "vorgaenge/akte.html", aktiv="/vorgaenge",
                   mobil=benutzer.rolle == "aussendienst",
+                  galerie_daten=galerie_daten, galerie_ordner=galerie_ordner,
+                  galerie_darf_loeschen=galerie_darf_loeschen,
                   lead_kontext=lead_kontext, lead_readonly=lead_readonly,
                   lead_phasen_namen=__import__("app.models", fromlist=["x"]).LEAD_PHASEN_NAMEN,
                   vorgang=vorgang, kunde=kunde, lead=lead, kanal=kanal,
@@ -397,3 +404,104 @@ async def notiz(request: Request, vorgang_id: int,
             marker.gelesen_bis = datetime.now()
         session.commit()
     return RedirectResponse(f"/vorgaenge/{vorgang_id}#notizen", status_code=303)
+
+
+# --- Galerie am Vorgang (v15, Phase 76) -------------------------------------
+
+@router.post("/{vorgang_id}/galerie/upload")
+async def galerie_upload(request: Request, vorgang_id: int,
+                         session: Session = Depends(get_session)):
+    """Upload in einen Galerie-Ordner (mehrere Dateien, mobil per Kamera);
+    Vertrieb in eigenen Vorgängen auch ohne Auftrag."""
+    from app import galerie as galerie_modul
+    benutzer = request.state.benutzer
+    vorgang = session.get(Vorgang, vorgang_id)
+    if vorgang is None:
+        return RedirectResponse("/vorgaenge", status_code=303)
+    if not galerie_modul.darf_hochladen(session, vorgang, benutzer):
+        return RedirectResponse(f"/vorgaenge/{vorgang_id}?meldung="
+                                + quote_plus("Kein Upload-Recht für diesen Vorgang."),
+                                status_code=303)
+    form = await request.form()
+    ordner = form.get("ordner") or "Allgemein"
+    bemerkung = form.get("bemerkung") or ""
+    anzahl = 0
+    for datei in form.getlist("dateien"):
+        if getattr(datei, "filename", ""):
+            inhalt = await datei.read()
+            if galerie_modul.speichern(session, vorgang_id, ordner,
+                                       datei.filename, inhalt,
+                                       benutzer=benutzer, bemerkung=bemerkung):
+                anzahl += 1
+    session.commit()
+    ziel = form.get("zurueck") or f"/vorgaenge/{vorgang_id}"
+    trenner = "&" if "?" in ziel else "?"
+    return RedirectResponse(ziel + trenner + "meldung=" + quote_plus(
+        f"{anzahl} Datei(en) in „{ordner}“ abgelegt.") + "#galerie",
+        status_code=303)
+
+
+@router.get("/galerie/datei/{datei_id}")
+async def galerie_datei(request: Request, datei_id: int,
+                        session: Session = Depends(get_session)):
+    from fastapi.responses import FileResponse
+
+    from app import config as config_modul
+    from app import galerie as galerie_modul
+    from app.models import GalerieDatei
+    datei = session.get(GalerieDatei, datei_id)
+    if datei is None:
+        return RedirectResponse("/vorgaenge", status_code=303)
+    vorgang = session.get(Vorgang, datei.vorgang_id)
+    if not galerie_modul.darf_hochladen(session, vorgang, request.state.benutzer):
+        return RedirectResponse("/vorgaenge", status_code=303)
+    pfad = config_modul.DATA_ORDNER / datei.pfad
+    if not pfad.exists():
+        return RedirectResponse(f"/vorgaenge/{datei.vorgang_id}", status_code=303)
+    return FileResponse(str(pfad), filename=datei.dateiname)
+
+
+@router.post("/galerie/datei/{datei_id}/verschieben")
+async def galerie_verschieben(request: Request, datei_id: int,
+                              session: Session = Depends(get_session)):
+    from app import galerie as galerie_modul
+    from app.models import GalerieDatei
+    datei = session.get(GalerieDatei, datei_id)
+    if datei is None:
+        return RedirectResponse("/vorgaenge", status_code=303)
+    vorgang = session.get(Vorgang, datei.vorgang_id)
+    benutzer = request.state.benutzer
+    if not galerie_modul.darf_hochladen(session, vorgang, benutzer):
+        return RedirectResponse("/vorgaenge", status_code=303)
+    form = await request.form()
+    if galerie_modul.verschieben(session, datei, form.get("ordner") or ""):
+        session.commit()
+    return RedirectResponse(f"/vorgaenge/{datei.vorgang_id}#galerie",
+                            status_code=303)
+
+
+@router.post("/galerie/datei/{datei_id}/loeschen")
+async def galerie_loeschen(request: Request, datei_id: int,
+                           session: Session = Depends(get_session)):
+    """Löschen nur Innendienst/Projektierung/Admin – protokolliert im Chat."""
+    from app import galerie as galerie_modul
+    from app import vorgaenge as vorgaenge_modul
+    from app.models import GalerieDatei
+    benutzer = request.state.benutzer
+    datei = session.get(GalerieDatei, datei_id)
+    if datei is None:
+        return RedirectResponse("/vorgaenge", status_code=303)
+    vorgang_id = datei.vorgang_id
+    if not galerie_modul.darf_loeschen(benutzer):
+        return RedirectResponse(f"/vorgaenge/{vorgang_id}?meldung="
+                                + quote_plus("Löschen nur für Innendienst/"
+                                             "Projektierung/Admin."),
+                                status_code=303)
+    name, ordner = datei.dateiname, datei.ordner
+    galerie_modul.loeschen(session, datei)
+    vorgaenge_modul.notiz_anlegen(
+        session, vorgang_id, benutzer,
+        f"Galerie: „{name}“ aus Ordner {ordner} gelöscht.",
+        herkunft="Galerie")
+    session.commit()
+    return RedirectResponse(f"/vorgaenge/{vorgang_id}#galerie", status_code=303)

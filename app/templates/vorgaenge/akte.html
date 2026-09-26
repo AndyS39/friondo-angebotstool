@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_galerie.html" import galerie %}
 {% import "_sparten.html" as sparten_ui %}
 {% from "_komponenten.html" import status_badge, statuskette, wiedervorlage_chip, leer_zustand %}
 {% from "_symbole.html" import symbol %}
@@ -206,6 +207,10 @@
 {% endif %}
 {% endif %}
 {% endif %}{# /vorgang.demo #}
+
+<h2>Galerie</h2>
+{{ galerie(vorgang.id, galerie_daten, galerie_ordner, galerie_darf_loeschen,
+           '/vorgaenge/' ~ vorgang.id) }}
 
 </div>
 <div>{# ---------- rechte Spalte: Mail-Verlauf + Notizen-Chat ---------- #}

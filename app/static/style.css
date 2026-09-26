@@ -2569,3 +2569,37 @@ td.aktionen form { display: inline-flex; vertical-align: middle; margin: 0 0 0 0
 .pj-kal-marker b.ab { background: #7a3fbf; }
 .pj-kal-legende { display: flex; gap: 14px; font-size: 11px; color: var(--pj-muted, #5d6b66);
     margin-top: 6px; flex-wrap: wrap; align-items: center; }
+
+/* v15 (Phase 76): Galerie am Vorgang (Ordner-Kacheln, Raster, Lightbox) */
+.pj-galerie { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.pj-gal-ordner { background: #fff; border: 1px solid var(--pj-line, #d5dcd9);
+    border-radius: 12px; overflow: hidden; }
+.pj-gal-ordner[open] { grid-column: 1 / -1; }
+.pj-gal-ordner summary { display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    cursor: pointer; list-style: none; font-weight: 600; font-size: 13px; }
+.pj-gal-ordner summary::-webkit-details-marker { display: none; }
+.pj-gal-ordner summary img { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; flex: none; }
+.pj-gal-leer { width: 44px; height: 44px; display: flex; align-items: center;
+    justify-content: center; background: var(--pj-surface2, #f3f5f4); border-radius: 8px; flex: none; }
+.pj-gal-ordner summary .t { flex: 1; }
+.pj-gal-ordner summary .n { background: var(--pj-surface2, #f3f5f4); border-radius: 999px;
+    padding: 1px 9px; font-size: 11px; }
+.pj-gal-inhalt { padding: 10px 12px; border-top: 1px solid var(--pj-line, #e9edeb); }
+.pj-gal-raster { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px; margin-bottom: 8px; }
+.pj-gal-raster figure { margin: 0; }
+.pj-gal-raster img { width: 100%; height: 110px; object-fit: cover; border-radius: 8px;
+    border: 1px solid var(--pj-line, #e9edeb); display: block; }
+.pj-gal-raster figcaption { font-size: 10px; color: var(--pj-muted, #5d6b66);
+    display: flex; gap: 4px; align-items: center; margin-top: 2px; }
+.pj-gal-raster figcaption select { font-size: 10px; max-width: 40px; border: none; background: none; }
+.pj-gal-raster figcaption button { border: none; background: none; color: #cf3b2c; cursor: pointer; }
+.pj-gal-upload { display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    border: 1.5px dashed var(--pj-line, #d5dcd9); border-radius: 10px; padding: 8px; font-size: 12px; }
+.pj-gal-upload.drop { border-color: var(--pj-akzent, #3f86c6); background: #eaf2fa; }
+.pj-gal-kamera { cursor: pointer; }
+.pj-lightbox { border: none; border-radius: 12px; padding: 6px; max-width: min(92vw, 1100px); }
+.pj-lightbox img { max-width: 100%; max-height: 82vh; display: block; border-radius: 8px; }
+.pj-lightbox .bu { font-size: 12px; padding: 6px 4px 2px; color: #5d6b66; }
+.pj-lightbox::backdrop { background: rgba(10, 15, 20, 0.7); }
+@media (max-width: 640px) { .pj-gal-raster { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); } }

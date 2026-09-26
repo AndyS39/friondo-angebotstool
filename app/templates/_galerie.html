@@ -1,0 +1,105 @@
+{# v15 (Phase 76): Galerie-Komponente – identisch in Vorgangs- und Projektakte.
+   Erwarteter Kontext: galerie_vorgang_id, galerie_daten (Ordner → {eintraege,
+   vorschau}), galerie_ordner (Liste), galerie_darf_loeschen (bool),
+   galerie_zurueck (URL der aktuellen Seite). #}
+{% macro galerie(galerie_vorgang_id, galerie_daten, galerie_ordner,
+                 galerie_darf_loeschen, galerie_zurueck) %}
+<div class="pj-galerie" id="galerie">
+    {% for ordner in galerie_ordner %}
+    {% set eintrag = galerie_daten.get(ordner, {'eintraege': [], 'vorschau': None}) %}
+    <details class="pj-gal-ordner" {{ 'open' if eintrag.eintraege and loop.first }}>
+        <summary>
+            {% if eintrag.vorschau %}
+                <img src="/vorgaenge/galerie/datei/{{ eintrag.vorschau.id }}" alt="" loading="lazy">
+            {% else %}<span class="pj-gal-leer">📁</span>{% endif %}
+            <span class="t">{{ ordner }}</span>
+            <span class="n">{{ eintrag.eintraege | length }}</span>
+        </summary>
+        <div class="pj-gal-inhalt">
+            {% set bilder = eintrag.eintraege | selectattr('bild') | list %}
+            {% if bilder %}
+            <div class="pj-gal-raster">
+                {% for d in bilder %}
+                <figure>
+                    <a href="/vorgaenge/galerie/datei/{{ d.id }}" target="_blank"
+                       onclick="return pjLightbox(event, '/vorgaenge/galerie/datei/{{ d.id }}', {{ (d.dateiname ~ (' – ' ~ d.bemerkung if d.bemerkung else '')) | tojson }})">
+                        <img src="/vorgaenge/galerie/datei/{{ d.id }}" alt="{{ d.dateiname }}" loading="lazy">
+                    </a>
+                    <figcaption title="{{ d.bemerkung }}">{{ d.hochgeladen_am.strftime('%d.%m.') }}
+                        {% if galerie_darf_loeschen or galerie_ordner | length > 1 %}
+                        <form method="post" action="/vorgaenge/galerie/datei/{{ d.id }}/verschieben" style="display:inline">
+                            <select name="ordner" onchange="this.form.submit()" title="In Ordner verschieben">
+                                <option value="">→</option>
+                                {% for o in galerie_ordner if o != ordner %}<option value="{{ o }}">{{ o }}</option>{% endfor %}
+                            </select>
+                        </form>
+                        {% endif %}
+                        {% if galerie_darf_loeschen %}
+                        <form method="post" action="/vorgaenge/galerie/datei/{{ d.id }}/loeschen" style="display:inline"
+                              onsubmit="return confirm('Bild {{ d.dateiname }} löschen?');">
+                            <button type="submit" title="Löschen (protokolliert)">✕</button>
+                        </form>
+                        {% endif %}
+                    </figcaption>
+                </figure>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% set doks = eintrag.eintraege | rejectattr('bild') | list %}
+            {% if doks %}
+            <div class="pj-tree">
+                {% for d in doks %}
+                <div class="f"><a href="/vorgaenge/galerie/datei/{{ d.id }}" target="_blank">{{ d.dateiname }}</a>
+                    <small>{{ d.hochgeladen_am.strftime('%d.%m.%y') }}{{ ' · ' ~ d.bemerkung if d.bemerkung }}</small>
+                    {% if galerie_darf_loeschen %}
+                    <form method="post" action="/vorgaenge/galerie/datei/{{ d.id }}/loeschen" style="display:inline"
+                          onsubmit="return confirm('Datei {{ d.dateiname }} löschen?');">
+                        <button type="submit" title="Löschen">✕</button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            <form method="post" action="/vorgaenge/{{ galerie_vorgang_id }}/galerie/upload"
+                  enctype="multipart/form-data" class="pj-gal-upload"
+                  ondragover="event.preventDefault(); this.classList.add('drop')"
+                  ondragleave="this.classList.remove('drop')"
+                  ondrop="pjGalDrop(event, this)">
+                <input type="hidden" name="ordner" value="{{ ordner }}">
+                <input type="hidden" name="zurueck" value="{{ galerie_zurueck }}">
+                <input type="file" name="dateien" multiple>
+                <label class="pj-btn pj-gal-kamera">📷 Foto aufnehmen
+                    <input type="file" name="dateien" accept="image/*"
+                           capture="environment" multiple hidden
+                           onchange="this.closest('form').submit()"></label>
+                <input type="text" name="bemerkung" placeholder="Bemerkung (optional)" size="14">
+                <button class="pj-btn primary" type="submit">Hochladen</button>
+                <span class="dezent">oder Dateien hierher ziehen</span>
+            </form>
+        </div>
+    </details>
+    {% endfor %}
+</div>
+<dialog class="pj-dlg pj-lightbox" id="pj-lightbox" onclick="this.close()">
+    <img src="" alt=""><div class="bu"></div>
+</dialog>
+<script>
+function pjLightbox(ev, url, text) {
+    if (ev.ctrlKey || ev.metaKey) return true;
+    ev.preventDefault();
+    var box = document.getElementById('pj-lightbox');
+    box.querySelector('img').src = url;
+    box.querySelector('.bu').textContent = text;
+    box.showModal();
+    return false;
+}
+function pjGalDrop(ev, form) {
+    ev.preventDefault();
+    form.classList.remove('drop');
+    if (!ev.dataTransfer.files.length) return;
+    form.querySelector('input[type=file][multiple]:not([hidden])').files = ev.dataTransfer.files;
+    form.submit();
+}
+</script>
+{% endmacro %}

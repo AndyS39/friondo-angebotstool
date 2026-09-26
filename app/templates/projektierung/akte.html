@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_galerie.html" import galerie as galerie_komponente %}
 {% from "_projektierung.html" import pj_dot %}
 
 {% block titel %}{{ projekt.nummer }} – Projektakte{% endblock %}
@@ -467,6 +468,13 @@
 </div>
 
 <div class="pj-pane on" id="dokumente">
+    {% if projekt.vorgang_id %}
+    {{ galerie_komponente(projekt.vorgang_id, galerie_daten, galerie_ordner,
+                          galerie_darf_loeschen,
+                          '/projektierung/projekt/' ~ projekt.id) }}
+    <hr style="border:none;border-top:1px solid var(--pj-line);margin:12px 0">
+    <details><summary class="dezent" style="cursor:pointer">Alte Projekt-Ordnerstruktur (Restbestand)</summary>
+    {% endif %}
     <form method="post" action="/projektierung/projekt/{{ projekt.id }}/dokument"
           enctype="multipart/form-data" class="pj-btnrow" style="margin-top:0">
         <select name="ordner">
@@ -496,6 +504,7 @@
         <div style="color:var(--pj-muted)">Noch keine Dokumente.</div>
         {% endfor %}
     </div>
+{% if projekt.vorgang_id %}</details>{% endif %}
 </div>
 
 <div class="pj-pane" id="verlauf">

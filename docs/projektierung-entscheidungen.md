@@ -201,3 +201,23 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
 - **Montagetermin-Pflichtteam** gilt für die Termin-Dialoge der Akte und den
   Zuweisungsdialog; die Terminübersicht (/projektierung/termine) nutzt
   dieselbe Route und erbt die Prüfung.
+
+## Phase 76 (26.09.2026)
+
+- **Galerie ersetzt die Projekt-Ordnerstruktur als führende Ablage:** Der
+  Dokumente-Reiter der Projektakte zeigt jetzt die Vorgangs-Galerie; die alte
+  Ordnerstruktur bleibt eingeklappt als „Restbestand" sichtbar (nach der
+  Migration normalerweise leer). Der Heizlast-/Projekt-Upload existiert
+  weiter, neue Ablagen laufen über die Galerie.
+- **Migration-Mapping über Teilstrings** („Alte Anlage" → Alte Heizung usw.);
+  „02 Feinplanung & Heizlast" wandert nach Montagedokumente, unbekannte
+  Ordner (inkl. 01/04/06) nach Allgemein. Angebots-PDFs liegen am Angebot
+  und waren nie ProjektDokumente – nichts zu tun.
+- **Original behalten** ist ein Parametrierungs-Schalter
+  (galerie_original_behalten, Standard aus): an = Original als
+  original_<name> neben der 2000-px-Fassung.
+- **Erfassungs-Fotoblock** hängt an der Seite „Einschätzung" (Seitenname aus
+  der Logik-Excel); der Vorgang wird dafür beim Seiten-Speichern über die
+  bestehende vorgang_fuer_erfassung-Logik erzeugt/geholt.
+- **Rechteprüfung der Datei-Auslieferung** nutzt dieselbe Regel wie der
+  Upload (Vertrieb nur eigene Vorgänge) – Montage folgt in Phase 82.

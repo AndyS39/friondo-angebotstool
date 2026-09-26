@@ -646,6 +646,10 @@ async def projektierung_einstellungen(request: Request,
     return render(request, "konfiguration/projektierung_einstellungen.html",
                   aktiv="/parametrierung",
                   freigabe_modus=kern.freigabe_modus(session),
+                  galerie_zusatzordner=kern.parameter_holen(
+                      session, "galerie_zusatzordner", ""),
+                  galerie_original=kern.parameter_holen(
+                      session, "galerie_original_behalten", "aus"),
                   benutzer_liste=benutzer_liste,
                   standard_pl=kern.parameter_holen(session, "standard_projektleiter"),
                   standard_fp=kern.parameter_holen(session, "standard_feinplaner"),
@@ -669,6 +673,11 @@ async def projektierung_einstellungen_speichern(
     if (umleitung := _nur_admin(request)) is not None:
         return umleitung
     form = await request.form()
+    # v15 (Phase 76): Galerie-Zusatzordner (Standardordner nicht löschbar)
+    kern.parameter_setzen(session, "galerie_zusatzordner",
+                          (form.get("galerie_zusatzordner") or "").strip()[:500])
+    kern.parameter_setzen(session, "galerie_original_behalten",
+                          "an" if form.get("galerie_original") == "on" else "aus")
     if form.get("freigabe_modus") in ("admin", "alle"):
         kern.parameter_setzen(session, "freigabe_modus", form.get("freigabe_modus"))
     for feld, name in (("standard_pl", "standard_projektleiter"),

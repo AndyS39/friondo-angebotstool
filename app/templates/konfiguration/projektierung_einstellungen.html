@@ -55,6 +55,14 @@
         <textarea name="gruende" rows="6">{{ gruende }}</textarea>
     </label>
 
+    <label>Galerie: Zusatzordner (| getrennt; Standardordner sind fest)<br>
+        <input type="text" name="galerie_zusatzordner" size="60"
+               value="{{ galerie_zusatzordner }}"
+               placeholder="z. B. Statik | Genehmigungen"></label><br>
+    <label class="kontrollfeld">
+        <input type="checkbox" name="galerie_original"
+               {{ 'checked' if galerie_original == 'an' }}>
+        Original-Bilder zusätzlich behalten (Uploads werden auf 2000 px verkleinert)</label><br>
     <button class="knopf" type="submit">Speichern</button>
 </form>
 

@@ -360,6 +360,15 @@ def _daten() -> list[str]:
             session.commit()
             meldungen.append(f"Projektierung V2: {umgezogen} Gewerke auf die "
                              "neuen Kanban-Phasen migriert")
+        # Phase 76: Galerie am Vorgang – Altbestand aus data/projekte umziehen
+        if einstellung_holen(session, "migration_projv2_galerie", "") != "erledigt":
+            from app import galerie as galerie_modul
+            umgezogen_g = galerie_modul.altbestand_migrieren(session)
+            einstellung_setzen(session, "migration_projv2_galerie", "erledigt")
+            session.commit()
+            if umgezogen_g:
+                meldungen.append(f"Projektierung V2: {umgezogen_g} Dokumente in "
+                                 "die Vorgangs-Galerie umgezogen")
         # Phase 75: Team-Stammdaten (Montageteam 1-10, Subteam 1-5), idempotent
         neue_teams = projektierung.teams_vorbelegen(session)
         if neue_teams:
