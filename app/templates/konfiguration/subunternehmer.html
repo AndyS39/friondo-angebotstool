@@ -13,7 +13,8 @@
 
 <table class="tabelle">
     <thead><tr><th>Firma</th><th>Typ</th><th>Ansprechpartner</th><th>E-Mail</th>
-        <th>Telefon</th><th>Notiz</th><th>Aktiv</th><th></th></tr></thead>
+        <th>Telefon</th><th>Notiz</th><th>Aktiv</th>
+        <th title="Standard-Sub des Typs – Vorbelegung im Mail-Dialog (Phase 79)">Standard</th><th></th></tr></thead>
     <tbody>
     {% for sub in subs %}
         <tr class="{{ 'inaktiv' if not sub.aktiv }}">
@@ -33,6 +34,8 @@
             <td><input form="s{{ sub.id }}" type="tel" name="telefon" value="{{ sub.telefon }}" size="12"></td>
             <td><input form="s{{ sub.id }}" type="text" name="notiz" value="{{ sub.notiz }}" size="18"></td>
             <td><input form="s{{ sub.id }}" type="checkbox" name="aktiv" {{ 'checked' if sub.aktiv }}></td>
+            <td><input form="s{{ sub.id }}" type="checkbox" name="standard"
+                       {{ 'checked' if standards.get(sub.typ) == sub.id }}></td>
             <td>
                 <form id="s{{ sub.id }}" method="post" action="/parametrierung/subunternehmer">
                     <input type="hidden" name="sub_id" value="{{ sub.id }}">
@@ -41,7 +44,7 @@
             </td>
         </tr>
     {% else %}
-        <tr><td colspan="8" class="dezent">Noch keine Subunternehmer.</td></tr>
+        <tr><td colspan="9" class="dezent">Noch keine Subunternehmer.</td></tr>
     {% endfor %}
     </tbody>
 </table>
@@ -57,6 +60,8 @@
     <label>Ansprechpartner <input type="text" name="ansprechpartner"></label>
     <label>E-Mail <input type="email" name="email"></label>
     <label>Telefon <input type="tel" name="telefon"></label>
+    <label title="Standard-Sub des Typs – Vorbelegung im Mail-Dialog">
+        <input type="checkbox" name="standard"> Standard</label>
     <button class="knopf" type="submit">Anlegen</button>
 </form>
 <p class="dezent">Die Typen kommen aus der Projektierung-Logik (Blatt

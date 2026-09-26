@@ -76,12 +76,23 @@ class SteckbriefRegel:
 
 
 @dataclass
+class SubMailVorlage:
+    """v15 (Phase 79): Zeile des Blatts "Sub-Mailvorlagen"."""
+    sub_typ: str
+    betreff: str
+    text: str
+    ordner: list[str]           # Galerie-Ordner, deren Fotos angehaengt werden
+    anhang_steckbrief: bool
+
+
+@dataclass
 class ProjektierungsLogik:
     pakete: dict[str, Paket] = field(default_factory=dict)
     regeln: list[PaketRegel] = field(default_factory=list)
     steckbrief: list["SteckbriefRegel"] = field(default_factory=list)
     ordner: list[dict] = field(default_factory=list)
     sub_typen: list[str] = field(default_factory=list)
+    sub_vorlagen: dict[str, "SubMailVorlage"] = field(default_factory=dict)
     fehler: list[str] = field(default_factory=list)
     warnungen: list[str] = field(default_factory=list)
     stand: str = ""
@@ -245,6 +256,25 @@ def einlesen(pfad: Path | None = None) -> ProjektierungsLogik:
             typ = _text(zeile[0])
             if typ:
                 logik.sub_typen.append(typ)
+
+    # --- Sub-Mailvorlagen (v15, Phase 79) ---
+    if "Sub-Mailvorlagen" in wb.sheetnames:
+        for zeile in wb["Sub-Mailvorlagen"].iter_rows(min_row=2, values_only=True):
+            werte = [_text(z) for z in (tuple(zeile) + ("",) * 5)[:5]]
+            sub_typ, betreff, text_, ordner, anhang = werte
+            if not sub_typ:
+                continue
+            if logik.sub_typen and sub_typ not in logik.sub_typen:
+                logik.warnungen.append(
+                    f"Sub-Mailvorlage „{sub_typ}“: Typ fehlt im Blatt Sub-Typen.")
+            if not betreff or not text_:
+                logik.warnungen.append(
+                    f"Sub-Mailvorlage „{sub_typ}“: Betreff oder Text leer.")
+                continue
+            logik.sub_vorlagen[sub_typ] = SubMailVorlage(
+                sub_typ=sub_typ, betreff=betreff, text=text_,
+                ordner=[o.strip() for o in ordner.split("|") if o.strip()],
+                anhang_steckbrief=anhang.upper() in ("J", "JA", "X", "1"))
 
     import datetime
     logik.stand = (f"{datetime.datetime.fromtimestamp(pfad.stat().st_mtime):%d.%m.%Y %H:%M}"

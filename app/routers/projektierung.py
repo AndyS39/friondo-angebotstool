@@ -710,6 +710,12 @@ async def akte(request: Request, projekt_id: int,
                                             "url_spotmyenergy",
                                             "url_heizreport")},
                   restarbeiten=_restarbeiten_je_gewerk(session, gewerke),
+                  # v15 (Phase 79): Mail-Verlauf des Projekts (Sub-Anfragen)
+                  projekt_mails=(session.query(
+                      __import__("app.models", fromlist=["x"]).ProjektMail)
+                      .filter_by(projekt_id=projekt.id)
+                      .order_by(__import__("app.models", fromlist=["x"])
+                                .ProjektMail.id.desc()).limit(100).all()),
                   # v15 (Phase 77): Projektsteckbrief über den To-dos
                   steckbrief_daten=kern.steckbrief_daten(
                       session, [g.id for g in gewerke]),
@@ -1066,6 +1072,86 @@ async def aufgabe_in_arbeit(request: Request, aufgabe_id: int,
         aufgabe.status = "in_arbeit"
         session.commit()
     return {"ok": True}
+
+
+@router.get("/aufgabe/{aufgabe_id}/sub-mail")
+async def sub_mail_dialog(request: Request, aufgabe_id: int,
+                          session: Session = Depends(get_session)):
+    """v15 (Phase 79): Sub-Beauftragung per Mail – Vorlage vorbefüllt,
+    Foto-Anhänge abwählbar, Steckbrief-PDF optional."""
+    from app import sub_mail as sub_mail_modul
+    aufgabe = session.get(Aufgabe, aufgabe_id)
+    if aufgabe is None or aufgabe.gewerk_id is None:
+        return RedirectResponse("/projektierung", status_code=303)
+    gewerk, umleitung = _gewerk_laden(request, session, aufgabe.gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    projekt = session.get(Projekt, gewerk.projekt_id)
+    sub_typ, ordner_fallback = sub_mail_modul.aktion_parsen(aufgabe.aktion_wert)
+    logik = projektierung_logik.hole_logik(session)
+    vorlage = logik.sub_vorlagen.get(sub_typ)
+    if vorlage is None:
+        return RedirectResponse(
+            f"/projektierung/projekt/{gewerk.projekt_id}?meldung="
+            + quote_plus(f"Keine Sub-Mailvorlage für „{sub_typ}“ im Blatt "
+                         "Sub-Mailvorlagen – bitte in der Logik-Excel pflegen."),
+            status_code=303)
+    ordner = vorlage.ordner or ([ordner_fallback] if ordner_fallback else [])
+    platzhalter = kern.sub_mail_platzhalter(session, gewerk)
+    subs = (session.query(Subunternehmer)
+            .filter(Subunternehmer.aktiv.is_(True))
+            .order_by(Subunternehmer.typ != sub_typ, Subunternehmer.firma).all())
+    return render(request, "projektierung/sub_mail.html",
+                  aktiv="/projektierung",
+                  aufgabe=aufgabe, gewerk=gewerk, projekt=projekt,
+                  sub_typ=sub_typ, vorlage=vorlage,
+                  betreff=kern.sub_mail_text(vorlage.betreff, platzhalter),
+                  text=kern.sub_mail_text(vorlage.text, platzhalter),
+                  fotos=sub_mail_modul.fotos_fuer(session, gewerk, ordner),
+                  ordner=ordner, subs=subs,
+                  standard_id=sub_mail_modul.standard_sub_id(session, sub_typ),
+                  platzhalter=platzhalter,
+                  benutzer=request.state.benutzer,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/aufgabe/{aufgabe_id}/sub-mail")
+async def sub_mail_senden(request: Request, aufgabe_id: int,
+                          session: Session = Depends(get_session)):
+    from app import sub_mail as sub_mail_modul
+    aufgabe = session.get(Aufgabe, aufgabe_id)
+    if aufgabe is None or aufgabe.gewerk_id is None:
+        return RedirectResponse("/projektierung", status_code=303)
+    gewerk, umleitung = _gewerk_laden(request, session, aufgabe.gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    form = await request.form()
+    try:
+        sub = session.get(Subunternehmer, int(form.get("sub_id") or 0))
+    except ValueError:
+        sub = None
+    foto_ids = []
+    for wert in form.getlist("foto_ids"):
+        try:
+            foto_ids.append(int(wert))
+        except ValueError:
+            continue
+    ok, meldung = sub_mail_modul.senden(
+        session, aufgabe, gewerk, sub,
+        betreff=(form.get("betreff") or "").strip()[:300],
+        text=(form.get("text") or "").strip()[:10000],
+        foto_ids=foto_ids,
+        mit_steckbrief=form.get("steckbrief") == "on",
+        benutzer=request.state.benutzer)
+    if ok:
+        session.commit()
+        return RedirectResponse(
+            f"/projektierung/projekt/{gewerk.projekt_id}?meldung="
+            + quote_plus(meldung) + "#subs", status_code=303)
+    session.rollback()
+    return RedirectResponse(
+        f"/projektierung/aufgabe/{aufgabe_id}/sub-mail?meldung="
+        + quote_plus(meldung), status_code=303)
 
 
 @router.post("/gewerk/{gewerk_id}/v1-entfernen")

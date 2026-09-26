@@ -830,6 +830,59 @@ def steckbrief_daten(session: Session, gewerk_ids: list[int]) -> dict[int, dict]
     return daten
 
 
+def sub_mail_platzhalter(session: Session, gewerk: Gewerk,
+                         bemerkung: str = "") -> dict[str, str]:
+    """v15 (Phase 79): Platzhalter der Sub-Mailvorlagen aus Projekt, Kunde,
+    Steckbrief und Montagetermin. Fehlende Werte werden zu „–“, damit die
+    Vorlage nie mit leeren Platzhaltern rausgeht."""
+    projekt = session.get(Projekt, gewerk.projekt_id)
+    kunde = session.get(Kunde, projekt.kunde_id) if projekt else None
+    werte = steckbrief_daten(session, [gewerk.id])[gewerk.id]
+
+    def steck(*felder) -> str:
+        teile = [werte[f].wert for f in felder if f in werte and werte[f].wert]
+        return " · ".join(teile)
+
+    ts = terminstatus(session, gewerk)
+    termin = ts.get("termin")
+    if termin is not None and termin.beginn:
+        montagetermin = termin.beginn.strftime("%d.%m.%Y")
+        if termin.ende and termin.ende.date() != termin.beginn.date():
+            montagetermin += " – " + termin.ende.strftime("%d.%m.%Y")
+        if not termin.kunde_bestaetigt:
+            montagetermin += " (unbestätigt)"
+    else:
+        montagetermin = "noch nicht terminiert"
+    projektleiter = (session.get(Benutzer, projekt.projektleiter_id)
+                     if projekt and projekt.projektleiter_id else None)
+    adresse = " ".join(t for t in [
+        projekt.ausfuehrung_strasse if projekt else "",
+        f"{projekt.ausfuehrung_plz} {projekt.ausfuehrung_ort}".strip()
+        if projekt else ""] if t).strip()
+    daten = {
+        "kunde": kunde.anzeige_name if kunde else "–",
+        "ausfuehrungsadresse": adresse or "–",
+        "telefon_kunde": (kunde.telefon if kunde else "") or "–",
+        "projektnummer": projekt.nummer if projekt else "–",
+        "geraet": steck("hersteller", "leistungsklasse", "innengeraet") or "–",
+        "aussengeraet_details": steck("aufstellort", "kran") or "–",
+        "oeltank": steck("oeltank", "oeltank_groesse", "oeltank_material") or "–",
+        "zaehlerschrank": steck("zaehlerschrank") or "–",
+        "montagetermin": montagetermin,
+        "ansprechpartner_friondo": projektleiter.name if projektleiter else "Friondo-Team",
+        "bemerkung": (bemerkung or "").strip(),
+    }
+    return daten
+
+
+def sub_mail_text(vorlage_text: str, platzhalter: dict[str, str]) -> str:
+    """Platzhalter {name} ersetzen; unbekannte bleiben sichtbar stehen."""
+    text = vorlage_text or ""
+    for name, wert in platzhalter.items():
+        text = text.replace("{" + name + "}", wert)
+    return text
+
+
 # --- Teams & Kalender (v15, Phase 75) ---------------------------------------
 
 TEAM_FARBEN = ["#2d6bd6", "#1f9d55", "#c47a12", "#7a3fbf", "#cf3b2c",

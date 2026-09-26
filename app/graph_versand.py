@@ -198,6 +198,54 @@ def text_mail_senden(empfaenger: str, betreff: str, text: str,
         return False, str(fehler)
 
 
+def mail_mit_anhaengen_senden(empfaenger: str, betreff: str, text: str,
+                              anhaenge: list[tuple[str, bytes, str]] | None = None,
+                              cc: list[str] | None = None,
+                              absender: str = "") -> tuple[bool, str, str]:
+    """v15 (Phase 79, Sub-Mails): Direktversand mit Anhängen als Bytes.
+    Läuft über Entwurf + Einzel-Anhänge + /send, damit die conversationId
+    für die Antwort-Erkennung bekannt ist. Liefert (erfolg, fehlertext,
+    conversation_id) – wirft nie. Schlägt „Senden als“ fehl, folgt ein
+    zweiter Versuch über das angemeldete Postfach."""
+    token = _token()
+    if token is None:
+        return False, "Nicht bei Microsoft angemeldet – bitte unter „Versand“ anmelden.", ""
+
+    def _versuch(von: str) -> tuple[bool, str, str]:
+        nachricht = {
+            "subject": betreff,
+            "body": {"contentType": "text", "content": text},
+            "toRecipients": [{"emailAddress": {"address": empfaenger}}],
+        }
+        if cc:
+            nachricht["ccRecipients"] = [{"emailAddress": {"address": a}}
+                                         for a in cc if a]
+        if von:
+            nachricht["from"] = {"emailAddress": {"address": von}}
+        entwurf = _graph_aufruf("POST", "/me/messages", token, nachricht)
+        nachricht_id = entwurf["id"]
+        for name, inhalt, mime in anhaenge or []:
+            _graph_aufruf("POST", f"/me/messages/{nachricht_id}/attachments",
+                          token, {
+                              "@odata.type": "#microsoft.graph.fileAttachment",
+                              "name": name,
+                              "contentType": mime,
+                              "contentBytes": base64.b64encode(inhalt).decode(),
+                          })
+        _graph_aufruf("POST", f"/me/messages/{nachricht_id}/send", token, {})
+        return True, "", entwurf.get("conversationId", "")
+
+    try:
+        return _versuch(absender)
+    except Exception as fehler:
+        if absender:
+            try:
+                return _versuch("")
+            except Exception as zweiter:
+                return False, f"Versand fehlgeschlagen: {zweiter}", ""
+        return False, f"Versand fehlgeschlagen: {fehler}", ""
+
+
 def entwurf_erstellen(kunde: Kunde, angebot: Angebot, pdf_pfad: Path,
                       betreff: str, text: str,
                       weitere_anhaenge: list[Path] | None = None,

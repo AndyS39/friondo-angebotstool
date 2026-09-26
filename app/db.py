@@ -87,6 +87,11 @@ _NACHTRAEGLICHE_SPALTEN = {
         "bestaetigt_am": "DATETIME",                            # v15 Phase 75
         "bestaetigt_quelle": "VARCHAR(20) NOT NULL DEFAULT ''", # v15 Phase 75
     },
+    "projekt_subs": {
+        "graph_conversation_id": "VARCHAR(200)",               # v15 Phase 79
+        "angefragt_am": "DATETIME",                            # v15 Phase 79
+        "antwort_am": "DATETIME",                              # v15 Phase 79
+    },
     "aufgaben": {
         "aktion_typ": "VARCHAR(20) NOT NULL DEFAULT ''",       # v15 Phase 78
         "aktion_wert": "VARCHAR(300) NOT NULL DEFAULT ''",     # v15 Phase 78

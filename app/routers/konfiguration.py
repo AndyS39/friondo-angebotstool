@@ -589,10 +589,18 @@ async def team_speichern(request: Request, session: Session = Depends(get_sessio
 
 @router.get("/subunternehmer")
 async def subs_seite(request: Request, session: Session = Depends(get_session)):
-    from app import projektierung_logik
+    import json as json_modul
+
+    from app import projektierung, projektierung_logik
     from app.models import Subunternehmer
+    # v15 (Phase 79): Standard-Sub je Typ (Vorbelegung im Mail-Dialog)
+    try:
+        standards = {str(k): int(v) for k, v in json_modul.loads(
+            projektierung.parameter_holen(session, "sub_standards", "{}")).items()}
+    except (ValueError, TypeError):
+        standards = {}
     return render(request, "konfiguration/subunternehmer.html",
-                  aktiv="/parametrierung",
+                  aktiv="/parametrierung", standards=standards,
                   subs=session.query(Subunternehmer)
                   .order_by(Subunternehmer.firma).all(),
                   typen=projektierung_logik.sub_typen(session),
@@ -618,13 +626,22 @@ async def sub_speichern(request: Request, session: Session = Depends(get_session
                 setattr(sub, name, wert)
             sub.aktiv = form.get("aktiv") == "on"
     elif felder["firma"]:
-        session.add(Subunternehmer(aktiv=True,
-                                   erstellt_von=request.state.benutzer.id,
-                                   **felder))
+        sub = Subunternehmer(aktiv=True,
+                             erstellt_von=request.state.benutzer.id,
+                             **felder)
+        session.add(sub)
     else:
         return RedirectResponse("/parametrierung/subunternehmer?meldung="
                                 + quote_plus("Bitte eine Firma angeben."),
                                 status_code=303)
+    session.flush()
+    # v15 (Phase 79): Standard-Sub je Typ (Vorbelegung im Mail-Dialog)
+    if sub is not None:
+        from app import sub_mail as sub_mail_modul
+        if form.get("standard") == "on":
+            sub_mail_modul.standard_sub_setzen(session, sub.typ, sub.id)
+        elif sub_mail_modul.standard_sub_id(session, sub.typ) == sub.id:
+            sub_mail_modul.standard_sub_setzen(session, sub.typ, None)
     session.commit()
     return RedirectResponse("/parametrierung/subunternehmer?meldung=Gespeichert",
                             status_code=303)

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block titel %}Sub-Anfrage · {{ projekt.nummer }}{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <div>
+        <div class="pj-eyebrow">Projektierung · {{ projekt.nummer }} · {{ gewerk.sparte }}</div>
+        <h1>Sub-Anfrage · {{ sub_typ }}</h1>
+    </div>
+    <a class="pj-btn" href="/projektierung/projekt/{{ projekt.id }}">Zurück zur Akte</a>
+</div>
+
+{% if meldung %}<div class="pj-note crit">{{ meldung }}</div>{% endif %}
+
+<form method="post" action="/projektierung/aufgabe/{{ aufgabe.id }}/sub-mail"
+      class="pj-mailform">
+    <div class="pj-kv">
+        <span>Aufgabe</span><div>{{ aufgabe.titel }}</div>
+        <span>Subunternehmer</span>
+        <div>
+            <select name="sub_id" required>
+                <option value="">– bitte wählen –</option>
+                {% for s in subs %}
+                <option value="{{ s.id }}"
+                        {{ 'selected' if (standard_id and s.id == standard_id) }}>
+                    {{ s.firma }} ({{ s.typ }}){{ ' – ohne E-Mail!' if not s.email }}</option>
+                {% endfor %}
+            </select>
+            <small class="dezent">Vorbelegt ist der Standard-Sub des Typs
+                (Parametrierung → Subunternehmer); CC geht an den Projektleiter.</small>
+        </div>
+        <span>Termin-Anfrage</span>
+        <div>Montagetermin laut Projekt: <b>{{ platzhalter.montagetermin }}</b>
+            – die Vorlage bittet den Sub um seinen frühesten Termin.</div>
+        <span>Betreff</span>
+        <div><input type="text" name="betreff" value="{{ betreff }}" required style="width:100%"></div>
+    </div>
+    <label style="display:block;margin-top:8px">Text (Platzhalter bereits ersetzt – frei editierbar)</label>
+    <textarea name="text" rows="16" style="width:100%">{{ text }}</textarea>
+
+    <h3 style="margin-top:14px">Foto-Anhänge
+        <small class="dezent">aus {{ ordner | join(' · ') }} – abwählbar, Versand auf 1600 px verkleinert, max. 20 MB</small></h3>
+    {% if fotos %}
+    <div class="pj-mailfotos">
+        {% for f in fotos %}
+        <label class="foto">
+            <input type="checkbox" name="foto_ids" value="{{ f.id }}" checked>
+            <img src="/vorgaenge/galerie/datei/{{ f.id }}" alt="{{ f.dateiname }}" loading="lazy">
+            <span>{{ f.ordner }}</span>
+        </label>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="dezent">Keine Bilder in den Ordnern {{ ordner | join(', ') }} –
+        Fotos zuerst in der Galerie ablegen.</p>
+    {% endif %}
+
+    <label class="kontrollfeld" style="margin-top:10px">
+        <input type="checkbox" name="steckbrief" {{ 'checked' if vorlage.anhang_steckbrief }}>
+        Projekt-Steckbrief als PDF anhängen</label>
+
+    <div class="pj-btnrow" style="margin-top:12px">
+        <button class="pj-btn primary" type="submit">✉ Mail senden</button>
+        <a class="pj-btn" href="/projektierung/projekt/{{ projekt.id }}">Abbrechen</a>
+    </div>
+</form>
+{% endblock %}

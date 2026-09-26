@@ -247,6 +247,13 @@ def scheduler_starten() -> None:
                     sync()
                 except Exception as problem:   # nie durchschlagen lassen
                     status["fehler"] = [f"Mail-Abgleich fehlgeschlagen: {problem}"]
+                # v15 (Phase 79): Antworten auf Sub-Anfragen (PR-…)
+                try:
+                    from app import sub_mail
+                    sub_mail.antworten_abgleichen()
+                except Exception as problem:
+                    status.setdefault("fehler", []).append(
+                        f"Sub-Antworten fehlgeschlagen: {problem}")
             time.sleep(SYNC_INTERVALL_SEKUNDEN)
 
     threading.Thread(target=schleife, daemon=True).start()

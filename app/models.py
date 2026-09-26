@@ -629,6 +629,24 @@ class ProjektTermin(Base):
                                                   onupdate=datetime.now)
 
 
+class ProjektMail(Base):
+    """v15 (Phase 79): Mail-Verlauf am Projekt (Sub-Anfragen und Antworten,
+    Betreff PR-…) – analog AngebotsMail, Dedup über graph_id."""
+    __tablename__ = "projekt_mails"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    projekt_id: Mapped[int] = mapped_column(Integer, index=True)
+    sub_eintrag_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    graph_id: Mapped[str] = mapped_column(String(200), unique=True)
+    von_name: Mapped[str] = mapped_column(String(200), default="")
+    von_email: Mapped[str] = mapped_column(String(200), default="")
+    empfangen_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    betreff: Mapped[str] = mapped_column(String(300), default="")
+    vorschau: Mapped[str] = mapped_column(Text, default="")
+    eingehend: Mapped[bool] = mapped_column(Boolean, default=True)
+    angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
 class Restarbeit(Base):
     """v15 (Phase 78): Restarbeiten/Reklamationen als eigene Liste am Gewerk
     (Text, optional Foto aus der Galerie, Verantwortlicher, offen/erledigt)."""
@@ -788,7 +806,12 @@ class ProjektSub(Base):
     gewerk_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     sub_id: Mapped[int] = mapped_column(Integer)
     leistung: Mapped[str] = mapped_column(String(300), default="")
-    status: Mapped[str] = mapped_column(String(20), default="angefragt")  # angefragt|beauftragt|bestaetigt|erledigt
+    status: Mapped[str] = mapped_column(String(20), default="angefragt")
+    # v15 (Phase 79): Mail-Anfrage – Konversation für die Antwort-Erkennung
+    graph_conversation_id: Mapped[Optional[str]] = mapped_column(String(200),
+                                                                 nullable=True)
+    angefragt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    antwort_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # angefragt|beauftragt|bestaetigt|erledigt
     termin: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     notiz: Mapped[str] = mapped_column(String(500), default="")
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

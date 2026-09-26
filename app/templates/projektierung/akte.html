@@ -315,8 +315,8 @@
                                onchange="this.form.submit()"> {{ text }}</label>
                         {% endfor %}
                         {% if a.aktion_wert.startswith('mail:') %}
-                        <button class="pj-btn" type="button" disabled
-                                title="Sub-Beauftragung per Mail folgt (Phase 79)">✉ Mail</button>
+                        <a class="pj-btn" href="/projektierung/aufgabe/{{ a.id }}/sub-mail"
+                           title="Sub-Anfrage per Mail mit Fotos + Steckbrief">✉ Mail senden</a>
                         {% endif %}
                     </form>
                     {% elif a.aktion_typ == 'link' %}
@@ -681,7 +681,16 @@
                 </select>
             </form>
             {{ '· Termin ' ~ zeile.eintrag.termin.strftime('%d.%m.%Y') if zeile.eintrag.termin }}
+            {% if zeile.eintrag.angefragt_am %}<small style="color:var(--pj-muted)"> · angefragt {{ zeile.eintrag.angefragt_am.strftime('%d.%m.') }}</small>{% endif %}
             {% if zeile.eintrag.notiz %}<small style="color:var(--pj-muted)"> · {{ zeile.eintrag.notiz }}</small>{% endif %}
+            {% if zeile.eintrag.antwort_am and zeile.eintrag.status in ('angefragt', 'beauftragt') %}
+            <form method="post" action="/projektierung/sub/{{ zeile.eintrag.id }}/status" style="display:inline">
+                <input type="hidden" name="status" value="bestaetigt">
+                <button class="pj-btn" type="submit"
+                        title="Antwort vom {{ zeile.eintrag.antwort_am.strftime('%d.%m.%Y') }} – siehe Reiter Mails">
+                    ✉ Antwort erhalten – als bestätigt markieren</button>
+            </form>
+            {% endif %}
         </div>
     </div>
     {% else %}
@@ -693,12 +702,24 @@
                 onclick="alert('Collin-Bestellung aus Stückliste – ab V3')">Material bestellen</button>
     </div>
     <p class="dezent" style="font-size:12px">Subunternehmer-Stamm: Parametrierung → Subunternehmer.
-        Mailversand folgt in V2.</p>
+        Mail-Anfragen laufen über den Knopf „✉ Mail senden“ an den Planungs-Aufgaben.</p>
 </div>
 
 <div class="pj-pane" id="mails">
-    <span style="color:var(--pj-muted)">Antworten auf Projekt-Mails (Betreff
-        „{{ projekt.nummer }}") erscheinen hier – ab V2.</span>
+    {# v15 (Phase 79): Mail-Verlauf des Projekts (Sub-Anfragen + Antworten) #}
+    {% for m in projekt_mails | default([]) %}
+    <div class="pj-term">
+        <span class="d">{{ m.empfangen_am.strftime('%d.%m. %H:%M') if m.empfangen_am }}</span>
+        <div style="flex:1">
+            <b>{{ '⬅' if m.eingehend else '➡' }} {{ m.von_name or m.von_email }}</b>
+            · {{ m.betreff }}
+            {% if m.vorschau %}<br><small style="color:var(--pj-muted)">{{ m.vorschau | truncate(220) }}</small>{% endif %}
+        </div>
+    </div>
+    {% else %}
+    <span style="color:var(--pj-muted)">Noch keine Projekt-Mails – Sub-Anfragen
+        und Antworten (Abgleich alle 15 Minuten) erscheinen hier.</span>
+    {% endfor %}
 </div>
 
 <div class="pj-pane" id="rechnungen">

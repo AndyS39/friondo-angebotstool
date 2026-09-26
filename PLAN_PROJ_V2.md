@@ -211,10 +211,10 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
 
 ## Phase 79 – Sub-Beauftragung per Mail
 
-- [ ] Subunternehmer-Stamm: `typ` erweitern um `GaLa-Bau`, `WP-Montage`,
+- [x] Subunternehmer-Stamm: `typ` erweitern um `GaLa-Bau`, `WP-Montage`,
   `Elektro`, `Entsorgung`, `Dachdecker`, `Lift-Kran`, `Gerüst`, `Sonstige`;
   je Typ ein Standard-Sub (Vorbelegung), mehrere Adressen möglich.
-- [ ] Blatt **Sub-Mailvorlagen** in der Logik-Excel: `sub_typ`, `betreff`,
+- [x] Blatt **Sub-Mailvorlagen** in der Logik-Excel: `sub_typ`, `betreff`,
   `text` (Platzhalter: {kunde}, {ausfuehrungsadresse}, {telefon_kunde},
   {projektnummer}, {geraet} (Hersteller + Leistungsklasse aus Steckbrief),
   {aussengeraet_details} (Aufstellort, Fundamentmaße aus Gerätedaten),
@@ -222,7 +222,7 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
   {montagetermin}, {ansprechpartner_friondo}, {bemerkung}), `ordner` (Fotos,
   die angehängt werden, mehrere durch `|`), `anhang_steckbrief` (J/N).
   Startinhalte für GaLa-Bau (Fundament), WP-Montage, Elektro, Entsorgung.
-- [ ] Button „Mail senden" an der Aufgabe: Dialog mit Sub-Auswahl (Vorbelegung
+- [x] Button „Mail senden" an der Aufgabe: Dialog mit Sub-Auswahl (Vorbelegung
   Standard), Betreff/Text vorbefüllt (editierbar), Foto-Anhänge aus dem
   Ordner (Vorschau, abwählbar, Bilder auf 1600 px verkleinert, max. 20 MB
   gesamt), Steckbrief-PDF (fpdf2, eine Seite), Termin-Anfrage-Zeile. Versand
@@ -230,7 +230,7 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
   Projektleiter. Setzt Auswahl auf „beauftragt", legt Sub-Beauftragung an
   (Status angefragt), Mail in den Mail-Verlauf des Projekts; Antwort im
   Postfach (Betreff PR-…) → Status „bestätigt" vorschlagen.
-- [ ] Test: Mail mit 3 Fotos + PDF an Testadresse, Verlaufseintrag, Status.
+- [x] Test: Mail mit 3 Fotos + PDF an Testadresse, Verlaufseintrag, Status.
 
 ## Phase 80 – Feinplanungs-Erfassung, Heizreport, UGL, Portale, BzA-Datenblatt
 

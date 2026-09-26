@@ -299,3 +299,43 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
   „ohne Team" im Kalender.
 - **BzA-Datenblatt-Knopf** an der Auftragseingangs-Aufgabe folgt mit der
   Datenblatt-Seite in Phase 80 (bis dahin nur der Portal-Link).
+
+## Phase 79 (26.09.2026)
+
+- **Versandweg:** neue generische Funktion graph_versand.
+  mail_mit_anhaengen_senden (Entwurf → Einzel-Anhänge als Bytes → /send),
+  weil nur so die conversationId für die Antwort-Erkennung bekannt wird.
+  Absender ist das Projektierungs-Postfach (Parameter absender_postfach,
+  Standard projektierung@friondo.de); schlägt „Senden als" fehl, folgt ein
+  zweiter Versuch über das angemeldete Postfach. CC geht an den
+  Projektleiter (dessen Benutzer-E-Mail).
+- **Foto-Anhänge** werden beim Versand auf 1600 px verkleinert (JPEG 85 %);
+  bei Überschreiten der 20-MB-Grenze werden weitere Fotos weggelassen und
+  in der Erfolgsmeldung ausgewiesen. Das Steckbrief-PDF (steckbrief_pdf.py,
+  eine Seite nach protokoll_pdf-Muster) hängt an, wenn die Vorlage
+  anhang_steckbrief=J hat (im Dialog abwählbar).
+- **Dialog als eigene Seite** (/projektierung/aufgabe/<id>/sub-mail) statt
+  <dialog>, weil Foto-Vorschauen und vorbefüllte Texte je Aufgabe geladen
+  werden; erreichbar über „✉ Mail senden" an Auswahl-Aufgaben mit
+  aktion_wert mail:<Typ>@<Ordner>. Die Ordner der Vorlage haben Vorrang
+  vor dem Ordner aus aktion_wert.
+- **Termin-Anfrage-Zeile:** steckt als Satz in den Vorlagen („Bitte
+  antworten Sie … mit Ihrem frühesten Termin"), der Montagetermin kommt
+  über {montagetermin}; keine eigene Formular-Mechanik.
+- **Folgeaktionen des Versands:** ProjektSub (Status angefragt,
+  graph_conversation_id, angefragt_am), Eintrag im neuen Projekt-
+  Mail-Verlauf (ProjektMail), Verlaufseintrag, und die Aufgabe springt auf
+  die mit * markierte „beauftragt"-Option.
+- **Antwort-Erkennung:** sub_mail.antworten_abgleichen läuft im
+  15-Minuten-Scheduler von mail_sync, liest das Projektierungs-Postfach
+  je Konversation der offenen Anfragen (angefragt/beauftragt), legt neue
+  Nachrichten dedupliziert in ProjektMail ab und setzt beim ersten
+  eingehenden Treffer antwort_am + Benachrichtigung. Die Akte zeigt dann
+  „Antwort erhalten – als bestätigt markieren" (Status wird NICHT
+  automatisch umgestellt, nur vorgeschlagen).
+- **Standard-Sub je Typ** liegt als Parameter sub_standards (JSON
+  {typ: sub_id}), gepflegt über eine Standard-Checkbox in der
+  Subunternehmer-Tabelle; er belegt die Sub-Auswahl im Mail-Dialog vor.
+- **Test ohne M365-Anmeldung:** der Phasentest mockt den Graph-Versand und
+  den Konversationsabruf; der echte Testversand an eine Testadresse ist
+  beim Server-Rollout mit angemeldetem Konto nachzuholen (Lead-Chat).
