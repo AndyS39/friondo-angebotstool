@@ -64,6 +64,16 @@
                {{ 'checked' if galerie_original == 'an' }}>
         Original-Bilder zusätzlich behalten (Uploads werden auf 2000 px verkleinert)</label><br>
     <button class="knopf" type="submit">Speichern</button>
+    <h3 style="margin-top:16px">Portal-URLs (Link-Aufgaben, Phase 78)</h3>
+    <label>BzA-Portal (KfW)</label>
+    <input type="text" name="url_bza_portal" value="{{ url_bza_portal }}"
+           placeholder="https://…">
+    <label>SpotmyEnergy-Portal (iMSys / SpotDynamic)</label>
+    <input type="text" name="url_spotmyenergy" value="{{ url_spotmyenergy }}"
+           placeholder="https://…">
+    <label>Heizreport</label>
+    <input type="text" name="url_heizreport" value="{{ url_heizreport }}"
+           placeholder="https://…">
 </form>
 
 <h2>Ordnervorlage (Anzeige)</h2>

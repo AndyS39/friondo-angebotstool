@@ -87,7 +87,17 @@ _NACHTRAEGLICHE_SPALTEN = {
         "bestaetigt_am": "DATETIME",                            # v15 Phase 75
         "bestaetigt_quelle": "VARCHAR(20) NOT NULL DEFAULT ''", # v15 Phase 75
     },
+    "aufgaben": {
+        "aktion_typ": "VARCHAR(20) NOT NULL DEFAULT ''",       # v15 Phase 78
+        "aktion_wert": "VARCHAR(300) NOT NULL DEFAULT ''",     # v15 Phase 78
+        "optionen": "VARCHAR(300) NOT NULL DEFAULT ''",        # v15 Phase 78
+        "auswahl": "VARCHAR(100) NOT NULL DEFAULT ''",         # v15 Phase 78
+    },
+    "aufgabenpaket_instanzen": {
+        "version": "VARCHAR(5) NOT NULL DEFAULT 'v2'",         # v15 Phase 78
+    },
     "gewerke": {
+        "zaehlerwechsel_termin": "DATETIME",                   # v15 Phase 78
         "feinplanung_erfasst": "BOOLEAN NOT NULL DEFAULT 0",   # v15 Phase 74
         "feinplanung_erfasst_am": "DATETIME",                  # v15 Phase 74
         "wp_team_id": "INTEGER",                               # v15 Phase 75

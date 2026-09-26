@@ -375,6 +375,36 @@ def _daten() -> list[str]:
             session.commit()
             meldungen.append(f"Projektierung V2: {neue_teams} Teams angelegt "
                              "(Montageteam 1-10, Subteam 1-5)")
+        # Phase 78: Aufgabenpakete v2 – Bestandsinstanzen der ersetzten Pakete
+        # als V1 kennzeichnen (Knopf „V1-Aufgaben entfernen" räumt später auf)
+        # und die neuen IMMER-Pakete an offenen Gewerken zusätzlich aktivieren
+        if einstellung_holen(session, "migration_projv2_pakete", "") != "erledigt":
+            from app import projektierung_logik as _pl
+            from app.models import AufgabenpaketInstanz as _Instanz
+            from app.models import Gewerk as _Gewerk
+            ersetzt = {"feinplanung_wp", "elektroplanung_wp", "beschaffung_wp",
+                       "spotdynamic_imsys", "fundament_gala",
+                       "oeltank_entsorgung", "lift_kran", "dach_statik",
+                       "auftragseingang", "montagevorbereitung", "foerderung"}
+            alte = 0
+            for instanz in session.query(_Instanz):
+                if (instanz.version or "") != "v1" and instanz.paket_key in ersetzt:
+                    instanz.version = "v1"
+                    alte += 1
+            session.flush()
+            logik = _pl.hole_logik(session)
+            aktiviert = 0
+            if not logik.fehler:
+                for g in session.query(_Gewerk).filter(
+                        ~_Gewerk.phase.in_(["abgeschlossen", "storniert"])):
+                    for paket in logik.immer_pakete(g.sparte):
+                        if projektierung.paket_aktivieren(
+                                session, g, paket, quelle="migration") is not None:
+                            aktiviert += 1
+            einstellung_setzen(session, "migration_projv2_pakete", "erledigt")
+            session.commit()
+            meldungen.append(f"Projektierung V2: {alte} Paket-Instanzen als V1 "
+                             f"markiert, {aktiviert} v2-Pakete aktiviert")
     finally:
         session.close()
     return meldungen

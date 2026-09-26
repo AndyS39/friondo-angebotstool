@@ -253,6 +253,120 @@ def _erster_termin(session: Session, gewerk: Gewerk, typ: str) -> datetime | Non
     return termin.beginn if termin is not None else None
 
 
+# v15 (Phase 78): Paket-Rang = Boardspalte (Sortierung + Aufklapp-Logik)
+PAKET_PHASEN_RANG = {
+    "auftragseingang": 0,
+    "feinplanung vot": 1,
+    "planung wp": 2, "planung elektro": 2, "friondo fit for future": 2,
+    "fit for future": 2, "förderung": 2, "förderung (bza/bnd)": 2,
+    "montagevorbereitung": 3,
+    "abnahme & freigabe": 5,
+}
+
+
+def paket_rang(paket_name: str) -> int:
+    """Rang eines Pakets in der Boardspalten-Reihenfolge (unbekannt = 4,
+    zwischen Montage und Abnahme, damit Sonderpakete nicht oben landen)."""
+    return PAKET_PHASEN_RANG.get((paket_name or "").strip().lower(), 4)
+
+
+def _schritt_sichtbar(session: Session, gewerk: Gewerk, bedingung: str) -> bool:
+    """sichtbar_wenn "steckbrief:<feld>=<wert>": Schritt nur anlegen, wenn das
+    Steckbrief-Feld den Wert hat (Vergleich ohne Gross/Klein)."""
+    bedingung = (bedingung or "").strip()
+    if not bedingung:
+        return True
+    if bedingung.lower().startswith("steckbrief:") and "=" in bedingung:
+        feld, _, soll = bedingung[len("steckbrief:"):].partition("=")
+        from app.models import SteckbriefWert
+        eintrag = (session.query(SteckbriefWert)
+                   .filter(SteckbriefWert.gewerk_id == gewerk.id,
+                           SteckbriefWert.feld == feld.strip()).first())
+        ist = (eintrag.wert if eintrag is not None else "").strip().lower()
+        return ist == soll.strip().lower()
+    return True   # unbekannte Bedingung blockiert nie (Warnung kommt im Blatt)
+
+
+def aufgabe_auswahl_setzen(session: Session, aufgabe: Aufgabe, auswahl: str,
+                           benutzer=None) -> bool:
+    """v15 (Phase 78): Radio-Auswahl an einer Aufgabe. Option mit * im Blatt
+    gilt als erledigt, Optionen ohne * setzen "entfaellt" (beantwortet, nichts
+    zu tun). Leere Auswahl -> zurueck auf offen."""
+    gueltige = {}
+    for teil in (aufgabe.optionen or "").split("|"):
+        teil = teil.strip()
+        if teil:
+            gueltige[teil.rstrip("*").strip()] = teil.endswith("*")
+    auswahl = (auswahl or "").strip()
+    if auswahl and auswahl not in gueltige:
+        return False
+    aufgabe.auswahl = auswahl
+    if not auswahl:
+        aufgabe.status = "offen"
+        aufgabe.erledigt_am = None
+        aufgabe.erledigt_von = None
+    elif gueltige[auswahl]:
+        aufgabe.status = "erledigt"
+        aufgabe.erledigt_am = datetime.now()
+        aufgabe.erledigt_von = benutzer.id if benutzer else None
+    else:
+        aufgabe.status = "entfaellt"
+        aufgabe.erledigt_am = None
+    session.flush()
+    return True
+
+
+def galerie_haekchen_pruefen(session: Session, gewerk: Gewerk) -> int:
+    """v15 (Phase 78): offene Galerie-Aufgaben automatisch erledigen, wenn in
+    allen geforderten Ordnern (aktion_wert "A|B|C") mindestens ein Bild des
+    Vorgangs liegt. Laeuft beim Oeffnen der Projektakte."""
+    from app.models import GalerieDatei
+    angebot = session.get(Angebot, gewerk.angebot_id) if gewerk.angebot_id else None
+    vorgang_id = angebot.vorgang_id if angebot is not None else None
+    if not vorgang_id:
+        return 0
+    belegt = {zeile[0] for zeile in
+              session.query(GalerieDatei.ordner)
+              .filter(GalerieDatei.vorgang_id == vorgang_id,
+                      GalerieDatei.bild.is_(True)).distinct()}
+    erledigt = 0
+    for aufgabe in (session.query(Aufgabe)
+                    .filter(Aufgabe.gewerk_id == gewerk.id,
+                            Aufgabe.aktion_typ == "galerie",
+                            Aufgabe.status.in_(["offen", "in_arbeit", "wartet"]))):
+        ordner = [o.strip() for o in (aufgabe.aktion_wert or "").split("|")
+                  if o.strip()]
+        if ordner and all(o in belegt for o in ordner):
+            aufgabe.status = "erledigt"
+            aufgabe.erledigt_am = datetime.now()
+            erledigt += 1
+    if erledigt:
+        session.flush()
+    return erledigt
+
+
+def v1_aufgaben_entfernen(session: Session, gewerk: Gewerk, benutzer=None) -> int:
+    """v15 (Phase 78): alle als V1 gekennzeichneten Paket-Instanzen samt
+    Aufgaben am Gewerk loeschen (Knopf in der Akte)."""
+    instanzen = (session.query(AufgabenpaketInstanz)
+                 .filter(AufgabenpaketInstanz.gewerk_id == gewerk.id,
+                         AufgabenpaketInstanz.version == "v1").all())
+    geloescht = 0
+    for instanz in instanzen:
+        for aufgabe in (session.query(Aufgabe)
+                        .filter(Aufgabe.paket_instanz_id == instanz.id)):
+            session.delete(aufgabe)
+            geloescht += 1
+        session.delete(instanz)
+    if instanzen:
+        verlauf(session, gewerk.projekt_id,
+                f"V1-Aufgaben entfernt ({len(instanzen)} Pakete, "
+                f"{geloescht} Aufgaben) – Gewerk {gewerk.sparte}",
+                benutzer=benutzer, gewerk_id=gewerk.id)
+        session.flush()
+    return geloescht
+
+
 def paket_aktivieren(session: Session, gewerk: Gewerk, paket: "object",
                      benutzer=None, quelle: str = "regel") -> AufgabenpaketInstanz | None:
     """Aktiviert eine Paket-Vorlage (aus projektierung_logik_v1.xlsx) am
@@ -261,6 +375,7 @@ def paket_aktivieren(session: Session, gewerk: Gewerk, paket: "object",
     vorhanden = (session.query(AufgabenpaketInstanz)
                  .filter(AufgabenpaketInstanz.gewerk_id == gewerk.id,
                          AufgabenpaketInstanz.paket_key == paket.key,
+                         AufgabenpaketInstanz.version != "v1",   # v15 Phase 78
                          AufgabenpaketInstanz.deaktiviert_am.is_(None)).first())
     if vorhanden is not None:
         return None
@@ -276,6 +391,11 @@ def paket_aktivieren(session: Session, gewerk: Gewerk, paket: "object",
     montage_termin = _erster_termin(session, gewerk, "montage")
     zugewiesene: set[int] = set()
     for schritt in paket.schritte:
+        # v15 (Phase 78): Sichtbarkeitsbedingung (steckbrief:<feld>=<wert>) -
+        # nicht erfuellte Schritte werden gar nicht erst angelegt
+        if not _schritt_sichtbar(session, gewerk, getattr(schritt,
+                                                          "sichtbar_wenn", "")):
+            continue
         verantwortlich = _standard_benutzer(session, schritt.rolle, gewerk, projekt)
         session.add(Aufgabe(
             gewerk_id=gewerk.id, projekt_id=gewerk.projekt_id,
@@ -286,6 +406,9 @@ def paket_aktivieren(session: Session, gewerk: Gewerk, paket: "object",
                                              fp_termin, montage_termin),
             faellig_regel=schritt.faellig_regel, pflicht=schritt.pflicht,
             reihenfolge=schritt.nr, wartet_frist_tage=schritt.wartet_frist_tage,
+            aktion_typ=getattr(schritt, "aktion_typ", "") or "",
+            aktion_wert=getattr(schritt, "aktion_wert", "") or "",
+            optionen=getattr(schritt, "optionen", "") or "",
             erstellt_von=benutzer.id if benutzer else None))
         if verantwortlich:
             zugewiesene.add(verantwortlich)
@@ -926,9 +1049,16 @@ def waechter_pruefen(session: Session, gewerk: Gewerk, ziel: str) -> list[str]:
             offen.append(f"Paket Auftragseingang: {anz_offen} von {gesamt} "
                          "Pflichtaufgaben offen")
     # Feinplanung VOT → Planung: Feinplanung erfasst (Häkchen bis Phase 80)
-    if reihen[ziel] >= reihen["planung"] and not gewerk.feinplanung_erfasst:
-        offen.append("Feinplanung nicht erfasst (Häkchen „Feinplanung erfasst“ "
-                     "in der Akte)")
+    # + Pflichtaufgaben des V2-Pakets "Feinplanung VOT" (Phase 78)
+    if reihen[ziel] >= reihen["planung"]:
+        if not gewerk.feinplanung_erfasst:
+            offen.append("Feinplanung nicht erfasst (Häkchen „Feinplanung "
+                         "erfasst“ in der Akte)")
+        anz_offen, gesamt, da = _pflicht_offen_in_paketen(
+            session, gewerk, ("Feinplanung VOT",))
+        if da and anz_offen:
+            offen.append(f"Paket Feinplanung VOT: {anz_offen} von {gesamt} "
+                         "Pflichtaufgaben offen")
     # Planung → Montagevorbereitung: Pflicht der Planungs-Pakete; ohne diese
     # Pakete (V1-Bestand) zählen alle Pflichtaufgaben (bisheriges Verhalten)
     if reihen[ziel] >= reihen["montagevorbereitung"]:

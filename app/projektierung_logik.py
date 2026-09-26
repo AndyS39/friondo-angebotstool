@@ -20,6 +20,11 @@ ROLLEN = ("projektierer", "elektroplaner", "feinplaner", "innendienst",
           "buchhaltung", "montage")
 
 
+AKTION_TYPEN = ("keine", "auswahl", "link", "mail", "formular",
+                "kalender", "galerie", "api")
+FRIST_BEZUEGE = ("aktivierung", "feinplanung", "montage")
+
+
 @dataclass
 class PaketSchritt:
     nr: int
@@ -29,6 +34,20 @@ class PaketSchritt:
     pflicht: bool
     faellig_regel: str
     wartet_frist_tage: int | None
+    # v15 (Phase 78): Aktionstypen, Optionen, Sichtbarkeit
+    aktion_typ: str = "keine"
+    aktion_wert: str = ""
+    optionen: str = ""           # "a | b | c*" – * = gilt als erledigt
+    sichtbar_wenn: str = ""      # z. B. steckbrief:folierung=ja
+
+    def optionen_liste(self) -> list[tuple[str, bool]]:
+        """[(Text, erledigt_option), ...] aus der |-Liste."""
+        ergebnis = []
+        for teil in (self.optionen or "").split("|"):
+            teil = teil.strip()
+            if teil:
+                ergebnis.append((teil.rstrip("*").strip(), teil.endswith("*")))
+        return ergebnis
 
 
 @dataclass
@@ -138,12 +157,45 @@ def einlesen(pfad: Path | None = None) -> ProjektierungsLogik:
                         f"„{zeile[9]}“ nicht lesbar.")
             paket = logik.pakete.setdefault(key, Paket(key=key, name=name,
                                                        sparte=sparte))
+            # v15 (Phase 78): Aktionstyp, Optionen, Fristen, Sichtbarkeit
+            zeile = tuple(zeile) + (None,) * 16
+            aktion_typ = (_text(zeile[10]) or "keine").lower()
+            if aktion_typ not in AKTION_TYPEN:
+                logik.warnungen.append(
+                    f"Paket {key} Schritt {nr}: unbekannter aktion_typ "
+                    f"„{aktion_typ}“ – wird zu „keine“.")
+                aktion_typ = "keine"
+            optionen = _text(zeile[12])
+            if aktion_typ == "auswahl" and "|" not in optionen:
+                logik.warnungen.append(
+                    f"Paket {key} Schritt {nr}: auswahl ohne Optionen-Liste.")
+            faellig_regel = _text(zeile[8]).upper().replace(" ", "")
+            frist_bezug = (_text(zeile[14]) or "").lower()
+            if _text(zeile[13]):
+                try:
+                    frist_tage = int(float(zeile[13]))
+                    if frist_bezug == "feinplanung":
+                        faellig_regel = f"FP{frist_tage:+d}"
+                    elif frist_bezug == "montage":
+                        faellig_regel = f"M{frist_tage:+d}"
+                    elif frist_bezug in ("aktivierung", ""):
+                        faellig_regel = f"{frist_tage:+d}"
+                    else:
+                        logik.warnungen.append(
+                            f"Paket {key} Schritt {nr}: unbekannter "
+                            f"frist_bezug „{frist_bezug}“.")
+                except (TypeError, ValueError):
+                    logik.warnungen.append(
+                        f"Paket {key} Schritt {nr}: frist_tage "
+                        f"„{zeile[13]}“ nicht lesbar.")
             paket.schritte.append(PaketSchritt(
                 nr=nr, titel=_text(zeile[4]), beschreibung=_text(zeile[5]),
                 rolle=rolle if rolle in ROLLEN else "projektierer",
                 pflicht=_text(zeile[7]).upper() in ("J", "JA", "X", "1"),
-                faellig_regel=_text(zeile[8]).upper().replace(" ", ""),
-                wartet_frist_tage=wartet))
+                faellig_regel=faellig_regel,
+                wartet_frist_tage=wartet,
+                aktion_typ=aktion_typ, aktion_wert=_text(zeile[11]),
+                optionen=optionen, sichtbar_wenn=_text(zeile[15])))
         for paket in logik.pakete.values():
             paket.schritte.sort(key=lambda s: s.nr)
 

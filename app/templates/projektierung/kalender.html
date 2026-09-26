@@ -86,7 +86,7 @@
     </div>
     {% for te in montage_teams + sub_teams + [none] %}
     {% set team_key = te.id if te else none %}
-    {% if te or balken.get(none) %}
+    {% if te or balken.get(none) or marker_ohne_team %}
     <div class="pj-kal-zeile" data-team="{{ te.id if te else 0 }}">
         <div class="pj-kal-team">
             <i style="background: {{ te.farbe or '#5a6478' if te else '#5a6478' }}"></i>
@@ -102,8 +102,8 @@
             {% set m = marker.get((team_key, loop.index0)) %}
             {% if m %}
             <span class="pj-kal-marker">
-                {% for e in m %}<b class="{{ 'fp' if e.termin.typ == 'feinplanung' else 'ab' }}"
-                    title="{{ e.termin.typ | capitalize }} {{ e.zeile.projekt.nummer }} · {{ e.zeile.kunde.anzeige_name if e.zeile.kunde }}"></b>{% endfor %}
+                {% for e in m %}<b class="{{ {'feinplanung': 'fp', 'abnahme': 'ab', 'zaehlerwechsel': 'zw'}.get(e.art, 'fp') }}"
+                    title="{{ 'Zählerwechsel' if e.art == 'zaehlerwechsel' else e.art | capitalize }} {{ e.zeile.projekt.nummer }} · {{ e.zeile.kunde.anzeige_name if e.zeile.kunde }}"></b>{% endfor %}
             </span>
             {% endif %}
         </div>

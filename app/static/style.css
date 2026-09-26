@@ -2621,3 +2621,15 @@ td.aktionen form { display: inline-flex; vertical-align: middle; margin: 0 0 0 0
 .pj-steck-raster .w input:focus { border-color: var(--pj-akzent, #3f86c6);
     background: #fff; outline: none; }
 @media (max-width: 900px) { .pj-steck-raster { grid-template-columns: auto 1fr; } }
+
+/* v15 (Phase 78): Aufgaben-Aktionen, V1-Kennzeichen, Restarbeiten */
+.pj-akt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+    margin: 2px 0 4px; font-size: 12px; }
+.pj-akt label { display: inline-flex; align-items: center; gap: 4px;
+    color: var(--pj-muted, #5d6b66); cursor: pointer; }
+.pj-akt-hinweis { color: var(--pj-muted, #5d6b66); }
+.pj-v1 { display: inline-block; background: #e8e2d4; color: #7a6a3a;
+    border-radius: 6px; padding: 0 6px; font-size: 10px; font-weight: 600;
+    vertical-align: 1px; }
+.pj-rest summary { color: #7a4a12; }
+.pj-kal-marker b.zw { background: #7a4fbf; }

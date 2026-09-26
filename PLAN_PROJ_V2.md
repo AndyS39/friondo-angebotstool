@@ -146,18 +146,18 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
 
 ## Phase 78 – Aufgabenpakete v2: Aktionstypen, Optionen, Fristen
 
-- [ ] Blatt **Aufgabenpakete** erweitern um: `aktion_typ` (`keine` / `auswahl` /
+- [x] Blatt **Aufgabenpakete** erweitern um: `aktion_typ` (`keine` / `auswahl` /
   `link` / `mail` / `formular` / `kalender` / `galerie` / `api`), `aktion_wert`
   (URL, Sub-Typ + Ordner, Formularname, Ordnername, API-Name), `optionen`
   (durch `|` getrennt, für `auswahl`; die Option, die „erledigt" bedeutet, mit
   `*`), `frist_tage` (leer = später nachtragen), `frist_bezug` (`aktivierung` /
   `feinplanung` / `montage`).
-- [ ] Aufgabenzeile in der Akte rendert je Aktionstyp: Häkchen · Radio-Auswahl
+- [x] Aufgabenzeile in der Akte rendert je Aktionstyp: Häkchen · Radio-Auswahl
   (z. B. „erfolgt bauseits | nicht erforderlich | beauftragt*") · Button mit
   Link (öffnet neuen Tab, setzt „in Arbeit") · Button „Mail senden" (Phase 79)
   · Button zum Formular · Button „Team + Termin" (Phase 75) · Button „Galerie
   → Ordner" · Button API (Phase 80).
-- [ ] **Neue Paketinhalte (ersetzen die V1-Pakete für WP; Andreas' Liste):**
+- [x] **Neue Paketinhalte (ersetzen die V1-Pakete für WP; Andreas' Liste):**
   - **Auftragseingang** (ALLE): 1 Auftragsunterlagen prüfen · 2 Kunde
     kontaktieren, Ablauf erklären, Feinplanungstermin abstimmen (kalender:
     Feinplanung) · 3 Auftrag in TAIFUN anlegen · 4 **BzA erstellen und
@@ -202,12 +202,12 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
     Gewerk (Text, Foto, Verantwortlicher, Status offen/erledigt).
   - PV-, KL-, WB-Pakete aus V1 bleiben, bekommen dieselben Aktionstypen
     (Team zuweisen, Galerie, Mail), Inhalte später mit Andreas.
-- [ ] Paket-Reihenfolge in der Akte = Spaltenreihenfolge des Boards; das Paket
+- [x] Paket-Reihenfolge in der Akte = Spaltenreihenfolge des Boards; das Paket
   der aktuellen Phase ist aufgeklappt, erledigte eingeklappt.
-- [ ] Bestehende Gewerke: neue Pakete werden zusätzlich aktiviert, alte
+- [x] Bestehende Gewerke: neue Pakete werden zusätzlich aktiviert, alte
   Aufgaben bleiben (Kennzeichen „V1") und können per Knopf „V1-Aufgaben
   entfernen" bereinigt werden.
-- [ ] Test: alle Aktionstypen, Auswahl setzt erledigt korrekt, Wächter greifen.
+- [x] Test: alle Aktionstypen, Auswahl setzt erledigt korrekt, Wächter greifen.
 
 ## Phase 79 – Sub-Beauftragung per Mail
 

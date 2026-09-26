@@ -599,16 +599,51 @@ async def akte(request: Request, projekt_id: int,
         aufgaben_je_gewerk.setdefault(aufgabe.gewerk_id or 0, []).append(aufgabe)
     # Aufgaben je Gewerk nach Paket-Instanz gruppiert (None = Einzelaufgaben,
     # ans Ende) – vorgruppiert, weil Jinja-groupby None nicht sortieren kann
+    # v15 (Phase 78): Galerie-Aufgaben automatisch abhaken (alle Ordner belegt)
+    galerie_haekchen = sum(kern.galerie_haekchen_pruefen(session, g)
+                           for g in gewerke)
+    if galerie_haekchen:
+        session.commit()
+        aufgaben_je_gewerk = {}
+        for aufgabe in (session.query(Aufgabe)
+                        .filter(Aufgabe.projekt_id == projekt.id)
+                        .order_by(Aufgabe.reihenfolge, Aufgabe.id)):
+            aufgaben_je_gewerk.setdefault(aufgabe.gewerk_id or 0, []).append(aufgabe)
+    instanzen = {i.id: i for i in session.query(AufgabenpaketInstanz)
+                 .filter(AufgabenpaketInstanz.gewerk_id.in_(
+                     [g.id for g in gewerke] or [0]))}
+    # v15 (Phase 78): Reihenfolge = Boardspalten, V1-Pakete ans Ende
+    phasen_rang = {ph: i for i, ph in enumerate(GEWERK_PHASEN)}
     aufgaben_gruppen: dict[int, list[tuple[int, list[Aufgabe]]]] = {}
+    paket_offen: dict[tuple[int, int], bool] = {}
     for gewerk_id, liste in aufgaben_je_gewerk.items():
         gruppen: dict[int, list[Aufgabe]] = {}
         for aufgabe in liste:
             gruppen.setdefault(aufgabe.paket_instanz_id or 0, []).append(aufgabe)
-        aufgaben_gruppen[gewerk_id] = sorted(
-            gruppen.items(), key=lambda paar: (paar[0] == 0, paar[0]))
-    instanzen = {i.id: i for i in session.query(AufgabenpaketInstanz)
-                 .filter(AufgabenpaketInstanz.gewerk_id.in_(
-                     [g.id for g in gewerke] or [0]))}
+
+        def _sortier(paar):
+            iid = paar[0]
+            instanz = instanzen.get(iid)
+            if iid == 0 or instanz is None:
+                return (2, 99, iid)          # Einzelaufgaben ans Ende
+            ist_v1 = (instanz.version or "") == "v1"
+            return (1 if ist_v1 else 0, kern.paket_rang(instanz.paket_name), iid)
+        aufgaben_gruppen[gewerk_id] = sorted(gruppen.items(), key=_sortier)
+        gewerk_obj = next((g for g in gewerke if g.id == gewerk_id), None)
+        rang = phasen_rang.get(gewerk_obj.phase, 0) if gewerk_obj else 0
+        for iid, gruppe in gruppen.items():
+            alle_erledigt = all(a.status in ("erledigt", "entfaellt")
+                                for a in gruppe)
+            instanz = instanzen.get(iid)
+            if iid == 0 or instanz is None:
+                paket_offen[(gewerk_id, iid)] = any(
+                    a.pflicht and a.status not in ("erledigt", "entfaellt")
+                    for a in gruppe)
+            else:
+                paket_offen[(gewerk_id, iid)] = (
+                    not alle_erledigt
+                    and kern.paket_rang(instanz.paket_name) == rang
+                    and (instanz.version or "") != "v1")
     termine = (session.query(ProjektTermin)
                .filter(ProjektTermin.projekt_id == projekt.id)
                .order_by(ProjektTermin.beginn).all())
@@ -665,6 +700,16 @@ async def akte(request: Request, projekt_id: int,
             kommentar_zaehler[e.aufgabe_id] = kommentar_zaehler.get(e.aufgabe_id, 0) + 1
     return render(request, "projektierung/akte.html", aktiv="/projektierung",
                   dokumente=dokumente, dokument_ordner=dokument_ordner,
+                  # v15 (Phase 78): Aktionstypen, V1-Pakete, Restarbeiten
+                  paket_offen=paket_offen,
+                  v1_vorhanden={g.id: any(
+                      (i.version or "") == "v1" and i.gewerk_id == g.id
+                      for i in instanzen.values()) for g in gewerke},
+                  link_parameter={k: kern.parameter_holen(session, k, "")
+                                  for k in ("url_bza_portal",
+                                            "url_spotmyenergy",
+                                            "url_heizreport")},
+                  restarbeiten=_restarbeiten_je_gewerk(session, gewerke),
                   # v15 (Phase 77): Projektsteckbrief über den To-dos
                   steckbrief_daten=kern.steckbrief_daten(
                       session, [g.id for g in gewerke]),
@@ -981,6 +1026,146 @@ async def termin_anlegen(request: Request, gewerk_id: int,
                             status_code=303)
 
 
+def _restarbeiten_je_gewerk(session: Session, gewerke) -> dict[int, list]:
+    """v15 (Phase 78): Restarbeiten/Reklamationen je Gewerk (offene zuerst)."""
+    from app.models import Restarbeit
+    daten: dict[int, list] = {g.id: [] for g in gewerke}
+    if not daten:
+        return daten
+    for r in (session.query(Restarbeit)
+              .filter(Restarbeit.gewerk_id.in_(list(daten)))
+              .order_by(Restarbeit.status.desc(), Restarbeit.id)):
+        daten.setdefault(r.gewerk_id, []).append(r)
+    return daten
+
+
+@router.post("/aufgabe/{aufgabe_id}/auswahl")
+async def aufgabe_auswahl(request: Request, aufgabe_id: int,
+                          session: Session = Depends(get_session)):
+    """v15 (Phase 78): Radio-Auswahl an einer Aufgabe (Option mit * im Blatt
+    = erledigt, ohne * = entfaellt/beantwortet)."""
+    aufgabe = session.get(Aufgabe, aufgabe_id)
+    if aufgabe is None:
+        return RedirectResponse("/projektierung", status_code=303)
+    form = await request.form()
+    if kern.aufgabe_auswahl_setzen(session, aufgabe,
+                                   form.get("auswahl") or "",
+                                   benutzer=request.state.benutzer):
+        session.commit()
+    return RedirectResponse(f"/projektierung/projekt/{aufgabe.projekt_id}",
+                            status_code=303)
+
+
+@router.post("/aufgabe/{aufgabe_id}/in-arbeit")
+async def aufgabe_in_arbeit(request: Request, aufgabe_id: int,
+                            session: Session = Depends(get_session)):
+    """v15 (Phase 78): Link-Aufgaben setzen sich beim Klick auf "in Arbeit"
+    (Aufruf per fetch aus der Akte, keine Navigation)."""
+    aufgabe = session.get(Aufgabe, aufgabe_id)
+    if aufgabe is not None and aufgabe.status == "offen":
+        aufgabe.status = "in_arbeit"
+        session.commit()
+    return {"ok": True}
+
+
+@router.post("/gewerk/{gewerk_id}/v1-entfernen")
+async def v1_entfernen(request: Request, gewerk_id: int,
+                       session: Session = Depends(get_session)):
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    anzahl = kern.v1_aufgaben_entfernen(session, gewerk,
+                                        benutzer=request.state.benutzer)
+    session.commit()
+    return RedirectResponse(
+        f"/projektierung/projekt/{gewerk.projekt_id}?meldung="
+        + quote_plus(f"{anzahl} V1-Aufgaben entfernt."), status_code=303)
+
+
+@router.post("/gewerk/{gewerk_id}/restarbeit")
+async def restarbeit_anlegen(request: Request, gewerk_id: int,
+                             session: Session = Depends(get_session)):
+    """v15 (Phase 78): Restarbeit/Reklamation am Gewerk – Text, optionales
+    Foto (landet in der Galerie unter Inbetrieb-/Abnahme), Verantwortlicher."""
+    from app.models import Restarbeit
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    form = await request.form()
+    text = (form.get("text") or "").strip()[:500]
+    if not text:
+        return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}",
+                                status_code=303)
+    try:
+        verantwortlich_id = int(form.get("verantwortlich_id") or 0) or None
+    except ValueError:
+        verantwortlich_id = None
+    eintrag = Restarbeit(gewerk_id=gewerk.id, projekt_id=gewerk.projekt_id,
+                         text=text, verantwortlich_id=verantwortlich_id,
+                         erstellt_von=(request.state.benutzer.id
+                                       if request.state.benutzer else None))
+    datei = form.get("datei")
+    if datei is not None and getattr(datei, "filename", ""):
+        from app import galerie as galerie_modul
+        angebot = (session.get(Angebot, gewerk.angebot_id)
+                   if gewerk.angebot_id else None)
+        if angebot is not None and angebot.vorgang_id:
+            inhalt = await datei.read()
+            galerie_datei = galerie_modul.speichern(
+                session, angebot.vorgang_id, "Inbetrieb-/Abnahme",
+                datei.filename, inhalt, benutzer=request.state.benutzer,
+                bemerkung=f"Restarbeit: {text[:100]}", quelle="formular")
+            if galerie_datei is not None:
+                eintrag.galerie_datei_id = galerie_datei.id
+    session.add(eintrag)
+    kern.verlauf(session, gewerk.projekt_id,
+                 f"Restarbeit erfasst: {text[:120]} – Gewerk {gewerk.sparte}",
+                 benutzer=request.state.benutzer, gewerk_id=gewerk.id)
+    session.commit()
+    return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}",
+                            status_code=303)
+
+
+@router.post("/restarbeit/{restarbeit_id}/status")
+async def restarbeit_status(request: Request, restarbeit_id: int,
+                            session: Session = Depends(get_session)):
+    from app.models import Restarbeit
+    eintrag = session.get(Restarbeit, restarbeit_id)
+    if eintrag is None:
+        return RedirectResponse("/projektierung", status_code=303)
+    if eintrag.status == "erledigt":
+        eintrag.status = "offen"
+        eintrag.erledigt_am = None
+    else:
+        eintrag.status = "erledigt"
+        eintrag.erledigt_am = datetime.now()
+    session.commit()
+    return RedirectResponse(f"/projektierung/projekt/{eintrag.projekt_id}",
+                            status_code=303)
+
+
+@router.post("/gewerk/{gewerk_id}/zaehlerwechsel")
+async def zaehlerwechsel_setzen(request: Request, gewerk_id: int,
+                                session: Session = Depends(get_session)):
+    """v15 (Phase 78, Fit for Future): Zählerwechseltermin am Gewerk –
+    erscheint als Marker im Team-Kalender."""
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    form = await request.form()
+    roh = (form.get("datum") or "").strip()
+    if roh:
+        try:
+            gewerk.zaehlerwechsel_termin = datetime.strptime(roh, "%Y-%m-%d")
+        except ValueError:
+            pass
+    else:
+        gewerk.zaehlerwechsel_termin = None
+    session.commit()
+    return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}",
+                            status_code=303)
+
+
 @router.post("/gewerk/{gewerk_id}/steckbrief")
 async def steckbrief_speichern(request: Request, gewerk_id: int,
                                session: Session = Depends(get_session)):
@@ -1128,7 +1313,17 @@ async def kalender(request: Request, ansicht: str = "woche", start: str = "",
             idx = (t_beginn - von).days
             if 0 <= idx < len(tage):
                 marker.setdefault((termin.team_id, idx), []).append(
-                    {"termin": termin, "zeile": z})
+                    {"termin": termin, "zeile": z, "art": termin.typ})
+
+    # v15 (Phase 78): Zählerwechseltermine (Fit for Future) als Marker
+    for z in zeilen:
+        g = z["gewerk"]
+        if g.zaehlerwechsel_termin is None:
+            continue
+        idx = (g.zaehlerwechsel_termin.date() - von).days
+        if 0 <= idx < len(tage):
+            marker.setdefault((g.wp_team_id, idx), []).append(
+                {"termin": None, "zeile": z, "art": "zaehlerwechsel"})
 
     # Chronologisch: Gewerke nach Montagebeginn, Unterminierte unten
     chrono = sorted(
@@ -1143,6 +1338,8 @@ async def kalender(request: Request, ansicht: str = "woche", start: str = "",
                   zurueck=zurueck, vor=vor,
                   montage_teams=montage_teams, sub_teams=sub_teams,
                   balken=balken, marker=marker, chrono=chrono,
+                  # v15 (Phase 78): "ohne Team"-Zeile auch für Marker rendern
+                  marker_ohne_team=any(k[0] is None for k in marker),
                   teams_map={te.id: te for te in teams},
                   phasen_namen=GEWERK_PHASEN_NAMEN,
                   team_id=team_id, sparte=sparte, terminstatus=terminstatus,

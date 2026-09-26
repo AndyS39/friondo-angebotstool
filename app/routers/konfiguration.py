@@ -650,6 +650,12 @@ async def projektierung_einstellungen(request: Request,
                       session, "galerie_zusatzordner", ""),
                   galerie_original=kern.parameter_holen(
                       session, "galerie_original_behalten", "aus"),
+                  # v15 (Phase 78): Portal-URLs für Link-Aufgaben
+                  url_bza_portal=kern.parameter_holen(session, "url_bza_portal", ""),
+                  url_spotmyenergy=kern.parameter_holen(session,
+                                                        "url_spotmyenergy", ""),
+                  url_heizreport=kern.parameter_holen(session,
+                                                      "url_heizreport", ""),
                   benutzer_liste=benutzer_liste,
                   standard_pl=kern.parameter_holen(session, "standard_projektleiter"),
                   standard_fp=kern.parameter_holen(session, "standard_feinplaner"),
@@ -678,6 +684,10 @@ async def projektierung_einstellungen_speichern(
                           (form.get("galerie_zusatzordner") or "").strip()[:500])
     kern.parameter_setzen(session, "galerie_original_behalten",
                           "an" if form.get("galerie_original") == "on" else "aus")
+    # v15 (Phase 78): Portal-URLs (BzA, SpotmyEnergy, Heizreport)
+    for schluessel in ("url_bza_portal", "url_spotmyenergy", "url_heizreport"):
+        kern.parameter_setzen(session, schluessel,
+                              (form.get(schluessel) or "").strip()[:300])
     if form.get("freigabe_modus") in ("admin", "alle"):
         kern.parameter_setzen(session, "freigabe_modus", form.get("freigabe_modus"))
     for feld, name in (("standard_pl", "standard_projektleiter"),

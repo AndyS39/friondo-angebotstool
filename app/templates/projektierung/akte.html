@@ -233,6 +233,22 @@
         </div>
         {% endif %}
 
+        {% if g.sparte == 'WP' %}
+        {# v15 (Phase 78, Fit for Future): Zählerwechseltermin (Kalender-Marker) #}
+        <div class="pj-kv" style="margin-top:4px">
+            <span>Zählerwechsel</span>
+            <div>
+                <form method="post" action="/projektierung/gewerk/{{ g.id }}/zaehlerwechsel"
+                      style="display:inline">
+                    <input type="date" name="datum"
+                           value="{{ g.zaehlerwechsel_termin.strftime('%Y-%m-%d') if g.zaehlerwechsel_termin }}"
+                           onchange="this.form.submit()"
+                           title="iMSys-Zählerwechseltermin – erscheint als Marker im Kalender">
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
         {# weitere Termine (Abnahme/Sub/Sonstige) #}
         {% set weitere = gewerk_termine | rejectattr('typ', 'in', ['feinplanung', 'montage']) | list %}
         {% for t in weitere %}
@@ -244,9 +260,11 @@
         {# Aufgaben als Pakete (Prototyp .paket/.task) #}
         {% for instanz_id, gruppe in aufgaben_gruppen.get(g.id, []) %}
         {% set erledigt_anzahl = gruppe | selectattr('status', 'equalto', 'erledigt') | list | length %}
-        {% set offene_pflicht = gruppe | rejectattr('status', 'in', ['erledigt', 'entfaellt']) | selectattr('pflicht') | list | length %}
-        <details class="pj-paket" {{ 'open' if offene_pflicht }}>
+        {% set ist_v1 = instanz_id in instanzen and instanzen[instanz_id].version == 'v1' %}
+        {# v15 (Phase 78): aufgeklappt ist das Paket der aktuellen Phase #}
+        <details class="pj-paket" {{ 'open' if paket_offen.get((g.id, instanz_id)) }}>
             <summary>{{ instanzen[instanz_id].paket_name if instanz_id in instanzen else 'Einzelaufgaben' }}
+                {% if ist_v1 %}<span class="pj-v1" title="Aufgaben aus den alten V1-Paketen – über „V1-Aufgaben entfernen“ löschbar">V1</span>{% endif %}
                 <span class="cnt">{{ 'alle erledigt' if erledigt_anzahl == gruppe | length else erledigt_anzahl ~ ' / ' ~ gruppe | length }}</span>
             </summary>
             {% for a in gruppe %}
@@ -287,6 +305,63 @@
                             <input type="text" name="text" size="22" placeholder="Kommentar zur Aufgabe …">
                         </form>
                     </details>
+                    {# v15 (Phase 78): Aktion je Aufgabentyp #}
+                    {% if a.aktion_typ == 'auswahl' and a.optionen %}
+                    <form method="post" action="/projektierung/aufgabe/{{ a.id }}/auswahl" class="pj-akt">
+                        {% for option in a.optionen.split('|') %}
+                        {% set text = option.strip().rstrip('*').strip() %}
+                        <label><input type="radio" name="auswahl" value="{{ text }}"
+                               {{ 'checked' if a.auswahl == text }}
+                               onchange="this.form.submit()"> {{ text }}</label>
+                        {% endfor %}
+                        {% if a.aktion_wert.startswith('mail:') %}
+                        <button class="pj-btn" type="button" disabled
+                                title="Sub-Beauftragung per Mail folgt (Phase 79)">✉ Mail</button>
+                        {% endif %}
+                    </form>
+                    {% elif a.aktion_typ == 'link' %}
+                    <div class="pj-akt">
+                        {% set url = link_parameter.get(a.aktion_wert[6:], '') if a.aktion_wert.startswith('param:') else a.aktion_wert %}
+                        {% if url %}
+                        <a class="pj-btn" href="{{ url }}" target="_blank" rel="noopener"
+                           onclick="pjAufgabeLink({{ a.id }})">↗ Öffnen</a>
+                        {% else %}
+                        <small class="pj-akt-hinweis">Link-URL in der Parametrierung pflegen
+                            ({{ a.aktion_wert[6:] if a.aktion_wert.startswith('param:') else a.aktion_wert }})</small>
+                        {% endif %}
+                    </div>
+                    {% elif a.aktion_typ == 'kalender' %}
+                    <div class="pj-akt">
+                        {% if a.aktion_wert == 'montage' %}
+                        <button class="pj-btn" type="button"
+                                onclick="document.getElementById('dlg-team-{{ g.id }}').showModal()">👥 Team + Termin</button>
+                        {% else %}
+                        <button class="pj-btn" type="button"
+                                onclick="pjDialog('dlg-termin-{{ g.id }}', '{{ a.aktion_wert or 'sonstige' }}')">📅 Termin</button>
+                        {% endif %}
+                    </div>
+                    {% elif a.aktion_typ == 'galerie' %}
+                    <div class="pj-akt">
+                        {% if projekt.vorgang_id %}
+                        <a class="pj-btn" href="/vorgaenge/{{ projekt.vorgang_id }}#galerie">🖼 Galerie</a>
+                        {% endif %}
+                        <small class="pj-akt-hinweis">{{ a.aktion_wert.replace('|', ' · ') }}</small>
+                    </div>
+                    {% elif a.aktion_typ == 'formular' %}
+                    <div class="pj-akt"><small class="pj-akt-hinweis">Formular folgt (Phase 80) – bis dahin Häkchen</small></div>
+                    {% elif a.aktion_typ == 'api' %}
+                    <div class="pj-akt">
+                        {% set url = link_parameter.get('url_' ~ a.aktion_wert, '') %}
+                        {% if url %}
+                        <a class="pj-btn" href="{{ url }}" target="_blank" rel="noopener"
+                           onclick="pjAufgabeLink({{ a.id }})">↗ Öffnen</a>
+                        {% endif %}
+                        {% if projekt.vorgang_id and a.aktion_wert == 'heizreport' %}
+                        <a class="pj-btn" href="/vorgaenge/{{ projekt.vorgang_id }}#galerie">🖼 Ablage</a>
+                        {% endif %}
+                        <small class="pj-akt-hinweis">API-Anbindung folgt (Phase 80)</small>
+                    </div>
+                    {% endif %}
                 </div>
                 {% if a.status == 'wartet' %}
                     <span class="due wait">wartet</span>
@@ -300,8 +375,50 @@
         </details>
         {% endfor %}
 
+        {# v15 (Phase 78): Restarbeiten/Reklamationen als eigene Liste #}
+        {% set rest = restarbeiten.get(g.id, []) %}
+        {% set rest_offen = rest | selectattr('status', 'equalto', 'offen') | list | length %}
+        {% if rest or g.phase in ('montage', 'abnahme_freigabe', 'abgeschlossen') %}
+        <details class="pj-paket pj-rest" {{ 'open' if rest_offen }}>
+            <summary>Restarbeiten / Reklamationen
+                <span class="cnt">{{ rest_offen ~ ' offen' if rest_offen else ('alle erledigt' if rest else 'keine') }}</span>
+            </summary>
+            {% for r in rest %}
+            <div class="pj-task {{ 'done' if r.status == 'erledigt' }}">
+                <form method="post" action="/projektierung/restarbeit/{{ r.id }}/status" style="display:inline">
+                    <input type="checkbox" onchange="this.form.submit()"
+                           {{ 'checked' if r.status == 'erledigt' }} title="Erledigt"></form>
+                <div class="t">{{ r.text }}
+                    <small>{{ benutzer_map[r.verantwortlich_id].name if r.verantwortlich_id in benutzer_map }}
+                        {% if r.galerie_datei_id %} · <a href="/vorgaenge/galerie/datei/{{ r.galerie_datei_id }}" target="_blank">Foto</a>{% endif %}
+                        {{ '· erledigt ' ~ r.erledigt_am.strftime('%d.%m.') if r.erledigt_am }}</small>
+                </div>
+            </div>
+            {% endfor %}
+            <form method="post" action="/projektierung/gewerk/{{ g.id }}/restarbeit"
+                  enctype="multipart/form-data" class="pj-btnrow" style="margin-top:6px">
+                <input type="text" name="text" required placeholder="Neue Restarbeit / Reklamation …" style="flex:1">
+                <select name="verantwortlich_id" title="Verantwortlicher">
+                    <option value="0">– Verantwortlicher –</option>
+                    {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
+                    <option value="{{ b.id }}">{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+                <input type="file" name="datei" accept="image/*" style="max-width:150px">
+                <button class="pj-btn" type="submit">Erfassen</button>
+            </form>
+        </details>
+        {% endif %}
+
         {% if g.phase != 'storniert' %}
         <div class="pj-btnrow">
+            {% if v1_vorhanden.get(g.id) %}
+            <form method="post" action="/projektierung/gewerk/{{ g.id }}/v1-entfernen"
+                  style="display:inline"
+                  onsubmit="return confirm('Alle V1-Aufgabenpakete dieses Gewerks entfernen?')">
+                <button class="pj-btn danger" type="submit">V1-Aufgaben entfernen</button>
+            </form>
+            {% endif %}
             <button class="pj-btn" type="button" onclick="pjDialog('dlg-aufgabe-{{ g.id }}')">+ Aufgabe</button>
             <button class="pj-btn" type="button" onclick="pjDialog('dlg-paket-{{ g.id }}')">+ Paket</button>
             {% if not fp_termine %}
@@ -633,6 +750,15 @@ if (location.hash) {
     const ziel = location.hash.slice(1);
     if (document.querySelector('.pj-tab[data-pane="' + ziel + '"]')) pjTabOeffnen(ziel);
 }
+function pjAufgabeLink(aufgabeId) {
+    /* v15 (Phase 78): Link-Klick setzt die Aufgabe auf "in Arbeit" */
+    try {
+        fetch('/projektierung/aufgabe/' + aufgabeId + '/in-arbeit',
+              {method: 'POST', keepalive: true});
+    } catch (fehler) { /* Navigation nie blockieren */ }
+    return true;
+}
+
 function pjEndeVorbelegen(beginnFeld) {
     // v15 (Phase 75): Ende = Beginn + 4 Arbeitstage (Mo–Fr)
     var form = beginnFeld.closest('form');

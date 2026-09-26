@@ -251,3 +251,51 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
     falls die Logik-Excel dort andere Texte nutzt, Blatt anpassen.
   - **Hersteller** ist pauschal „Bosch", solange nur Bosch-Pakete im
     Artikelstamm sind (Positionen 030/031/045-056).
+
+## Phase 78 (26.09.2026)
+
+- **Neue Blatt-Spalten** aktion_typ/aktion_wert/optionen/frist_tage/
+  frist_bezug/sichtbar_wenn; frist_tage+frist_bezug werden beim Einlesen auf
+  die bestehende faellig_regel-Mechanik abgebildet (aktivierung→+N,
+  feinplanung→FP±N, montage→M±N), die Nachberechnung beim Terminanlegen
+  greift damit unverändert.
+- **Auswahl-Semantik:** Option mit `*` → Aufgabe erledigt; Option ohne `*`
+  (z. B. „erfolgt bauseits", „nicht erforderlich") → Status „entfällt"
+  (beantwortet, zählt nicht als offene Pflicht); Auswahl leeren → wieder
+  offen. Bei „Ja* | Nein*" gelten beide Antworten als erledigt.
+- **auswahl + mail kombiniert:** trägt eine Auswahl-Aufgabe in aktion_wert
+  `mail:<Sub-Typ>@<Ordner>`, erscheint zusätzlich der Mail-Knopf
+  (deaktiviert bis Phase 79).
+- **sichtbar_wenn** (`steckbrief:<feld>=<wert>`): nicht erfüllte Schritte
+  werden bei der Paket-Aktivierung gar nicht erst angelegt (Folierung).
+  Ändert sich der Steckbrief später, Paket entfernen und neu aktivieren
+  oder Aufgabe manuell ergänzen.
+- **Galerie-Häkchen** prüft beim Öffnen der Projektakte, ob in allen in
+  aktion_wert genannten Ordnern mindestens ein BILD des Vorgangs liegt,
+  und erledigt die Aufgabe automatisch.
+- **Link-/api-Aufgaben:** aktion_wert `param:<schlüssel>` löst auf die neuen
+  Parametrierungs-URLs auf (url_bza_portal, url_spotmyenergy,
+  url_heizreport); ohne gepflegte URL erscheint ein Hinweis statt Button.
+  Der Klick setzt die Aufgabe per fetch auf „in Arbeit". api-Aufgaben
+  (heizreport, ugl_collin) rendern bis Phase 80 Link + Galerie-Ablage.
+- **Förderung bleibt eigenes WP-Paket** (Antrag/Zusage/BnD) – nur der
+  BzA-Schritt ist in den Auftragseingang gewandert; sonst verlöre BnD nach
+  Abnahme seine Heimat. Fit for Future wird IMMER aktiviert (die erste
+  Auswahl-Aufgabe „HEMS geplant Ja/Nein" ersetzt die alte FP-A05-Regel).
+- **V1-Migration:** die Instanzen der ersetzten bzw. inhaltlich geänderten
+  Pakete (alte WP-Pakete + auftragseingang/montagevorbereitung/foerderung)
+  werden als V1 markiert; unveränderte (abnahme_freigabe, pv/wb/kl_standard)
+  behalten ihren Stand. paket_aktivieren ignoriert V1-Instanzen, damit die
+  v2-Pakete zusätzlich aktiviert werden können; „V1-Aufgaben entfernen"
+  löscht Instanzen samt Aufgaben mit Verlaufseintrag.
+- **Paket-Reihenfolge/Aufklappen:** Rang über den Paketnamen (Auftragseingang
+  0 … Abnahme & Freigabe 5, unbekannte Pakete 4); aufgeklappt ist das nicht
+  fertige Paket, dessen Rang der aktuellen Gewerk-Phase entspricht.
+- **Restarbeiten/Reklamationen** als eigene Tabelle am Gewerk; ein Foto
+  wandert in die Galerie „Inbetrieb-/Abnahme" (quelle formular) und wird
+  verknüpft. Block erscheint ab Phase Montage oder sobald Einträge da sind.
+- **Zählerwechseltermin** ist ein Datumsfeld am WP-Gewerk (KV-Zeile) und
+  erscheint als violetter Marker (zw) in der Zeile des WP-Teams bzw.
+  „ohne Team" im Kalender.
+- **BzA-Datenblatt-Knopf** an der Auftragseingangs-Aufgabe folgt mit der
+  Datenblatt-Seite in Phase 80 (bis dahin nur der Portal-Link).

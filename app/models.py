@@ -524,6 +524,9 @@ class Gewerk(Base):
     sub_team_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     angebot_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     angebot_id_original: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # v15 (Phase 78, Fit for Future): Zaehlerwechseltermin (Marker im Kalender)
+    zaehlerwechsel_termin: Mapped[Optional[datetime]] = mapped_column(DateTime,
+                                                                      nullable=True)
     auftragswert_original: Mapped[int] = mapped_column(Integer, default=0)  # Cent brutto
     auftragswert_aktuell: Mapped[int] = mapped_column(Integer, default=0)
     feinplaner_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -565,6 +568,11 @@ class Aufgabe(Base):
     reihenfolge: Mapped[int] = mapped_column(Integer, default=0)
     wartet_frist_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     wartet_frist_tage: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # v15 (Phase 78): Aktionstyp der Paketvorlage (Kopie bei Aktivierung)
+    aktion_typ: Mapped[str] = mapped_column(String(20), default="")
+    aktion_wert: Mapped[str] = mapped_column(String(300), default="")
+    optionen: Mapped[str] = mapped_column(String(300), default="")
+    auswahl: Mapped[str] = mapped_column(String(100), default="")  # gewaehlte Option
     erledigt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     erledigt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
@@ -579,6 +587,9 @@ class AufgabenpaketInstanz(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     gewerk_id: Mapped[int] = mapped_column(Integer, index=True)
+    # v15 (Phase 78): V1-Instanzen bleiben gekennzeichnet und sind per Knopf
+    # "V1-Aufgaben entfernen" loeschbar
+    version: Mapped[str] = mapped_column(String(5), default="v2")
     paket_key: Mapped[str] = mapped_column(String(50), default="")
     paket_name: Mapped[str] = mapped_column(String(200), default="")
     aktiviert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
@@ -616,6 +627,23 @@ class ProjektTermin(Base):
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
                                                   onupdate=datetime.now)
+
+
+class Restarbeit(Base):
+    """v15 (Phase 78): Restarbeiten/Reklamationen als eigene Liste am Gewerk
+    (Text, optional Foto aus der Galerie, Verantwortlicher, offen/erledigt)."""
+    __tablename__ = "restarbeiten"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    gewerk_id: Mapped[int] = mapped_column(Integer, index=True)
+    projekt_id: Mapped[int] = mapped_column(Integer, index=True)
+    text: Mapped[str] = mapped_column(String(500), default="")
+    galerie_datei_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    verantwortlich_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="offen")  # offen | erledigt
+    erledigt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
 
 class SteckbriefWert(Base):
