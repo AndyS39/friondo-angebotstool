@@ -618,6 +618,21 @@ class ProjektTermin(Base):
                                                   onupdate=datetime.now)
 
 
+class SteckbriefWert(Base):
+    """v15 (Phase 77): Projektsteckbrief je Gewerk als Feld/Wert-Zeilen;
+    manuell geaenderte Felder werden bei der Ableitung nicht ueberschrieben."""
+    __tablename__ = "steckbrief_werte"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    gewerk_id: Mapped[int] = mapped_column(Integer, index=True)
+    feld: Mapped[str] = mapped_column(String(60), default="")
+    wert: Mapped[str] = mapped_column(String(500), default="")
+    manuell: Mapped[bool] = mapped_column(Boolean, default=False)
+    geaendert_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
 class GalerieDatei(Base):
     """v15 (Phase 76): Galerie am VORGANG mit festen Unterordnern;
     Ablage data/vorgaenge/<vorgang_id>/galerie/<ordner>/."""

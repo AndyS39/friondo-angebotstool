@@ -47,9 +47,20 @@ class PaketRegel:
 
 
 @dataclass
+class SteckbriefRegel:
+    """v15 (Phase 77): Ableitungszeile des Blatts "Steckbrief"."""
+    feld: str
+    sparte: str
+    quelle_typ: str      # frage | position | fp_frage | profil
+    quelle: str
+    regel: str
+
+
+@dataclass
 class ProjektierungsLogik:
     pakete: dict[str, Paket] = field(default_factory=dict)
     regeln: list[PaketRegel] = field(default_factory=list)
+    steckbrief: list["SteckbriefRegel"] = field(default_factory=list)
     ordner: list[dict] = field(default_factory=list)
     sub_typen: list[str] = field(default_factory=list)
     fehler: list[str] = field(default_factory=list)
@@ -162,6 +173,21 @@ def einlesen(pfad: Path | None = None) -> ProjektierungsLogik:
                                      "ebene": (_text(zeile[1]) or "projekt").lower()})
 
     # --- Sub-Typen ---
+    # --- Steckbrief-Ableitungsregeln (v15, Phase 77) ---
+    if "Steckbrief" in wb.sheetnames:
+        for zeile in wb["Steckbrief"].iter_rows(min_row=2, values_only=True):
+            werte = [_text(z) for z in (tuple(zeile) + ("",) * 5)[:5]]
+            feld, sparte, quelle_typ, quelle, regel = werte
+            if not feld or not quelle_typ:
+                continue
+            if quelle_typ not in ("frage", "position", "fp_frage", "profil"):
+                logik.warnungen.append(
+                    f"Steckbrief: unbekannter quelle_typ „{quelle_typ}“ ({feld})")
+                continue
+            logik.steckbrief.append(SteckbriefRegel(
+                feld=feld, sparte=sparte or "ALLE",
+                quelle_typ=quelle_typ, quelle=quelle, regel=regel))
+
     if "Sub-Typen" in wb.sheetnames:
         for zeile in wb["Sub-Typen"].iter_rows(min_row=2, values_only=True):
             typ = _text(zeile[0])

@@ -468,6 +468,11 @@ def gewerk_anlegen(session: Session, projekt: Projekt, angebot: Angebot,
     angebot.projekt_gewerk_id = gewerk.id
     if projekt.vertriebler_id is None and angebot.vertriebler_id:
         projekt.vertriebler_id = angebot.vertriebler_id
+    # v15 (Phase 77): Steckbrief aus Erfassung + Auftragspositionen ableiten
+    try:
+        steckbrief_ableiten(session, gewerk, benutzer=benutzer)
+    except Exception:
+        pass   # Ableitung darf die Projektanlage nie blockieren
     # Ordner + automatische Ablage (Angebots-PDF nur bei Tool-Angeboten)
     ordner_anlegen(session, projekt)
     try:
@@ -538,6 +543,168 @@ def _erfassungsprotokoll_ablegen(session: Session, projekt: Projekt,
         freitext=erfassung.freitext if erfassung.typ == "freitext" else "")
     _dokument_ablegen(session, projekt, Path(pfad), "01 Angebot & Erfassung",
                       gewerk.id, benutzer)
+
+
+# --- Projektsteckbrief (v15, Phase 77) ---------------------------------------
+
+# Felder je Sparte (Reihenfolge = Anzeige im KV-Raster, zweispaltig)
+STECKBRIEF_FELDER = {
+    "WP": [("hersteller", "Hersteller"),
+           ("leistungsklasse", "Leistungsklasse"),
+           ("innengeraet", "Innengerät-Variante"),
+           ("warmwasser", "Warmwasser"),
+           ("aufstellort", "Aufstellort Außengerät"),
+           ("zaehlerschrank", "Zählerschrank"),
+           ("oeltank", "Öltankentsorgung"),
+           ("oeltank_groesse", "Öltank: Größe"),
+           ("oeltank_material", "Öltank: Material/Zugang"),
+           ("alte_anlage", "Alte Anlage"),
+           ("alte_anlage_standort", "Standort alte Anlage"),
+           ("dyn_tarif", "Dynamischer Tarif"),
+           ("imsys", "iMSys"),
+           ("hems", "HEMS"),
+           ("folierung", "Folierung"),
+           ("kran", "Materiallift/Kran"),
+           ("besonderheiten", "Besonderheiten")],
+    "PV": [("module_kwp", "Module / kWp"),
+           ("speicher", "Speicher"),
+           ("wechselrichter", "Wechselrichter"),
+           ("dach", "Dach"),
+           ("geruest", "Gerüst"),
+           ("besonderheiten", "Besonderheiten")],
+    "KL": [("geraete", "Geräte"), ("besonderheiten", "Besonderheiten")],
+    "WB": [("geraet", "Wallbox"), ("besonderheiten", "Besonderheiten")],
+}
+
+
+def steckbrief_felder(sparte: str) -> list[tuple[str, str]]:
+    return STECKBRIEF_FELDER.get(sparte, STECKBRIEF_FELDER["KL"])
+
+
+def _steckbrief_quellen(session: Session, gewerk: Gewerk) -> tuple[dict, set, str]:
+    """(Erfassungs-Antworten, Positionsnummern des Auftrags, Profilname)."""
+    from app.models import Erfassung
+    antworten: dict = {}
+    positionen: set[str] = set()
+    profil_name = ""
+    angebot = session.get(Angebot, gewerk.angebot_id) if gewerk.angebot_id else None
+    if angebot is not None:
+        import json as _json
+        erfassung = (session.query(Erfassung)
+                     .filter(Erfassung.angebot_id == angebot.id).first())
+        if erfassung is not None and erfassung.antworten_json:
+            try:
+                antworten = _json.loads(erfassung.antworten_json)
+            except ValueError:
+                antworten = {}
+        positionen = {p.pos_nr for p in angebot.positionen if p.pos_nr}
+        from app import anhaenge as anhaenge_modul
+        profil_name = anhaenge_modul.profilname_fuer(session, angebot)
+    return antworten, positionen, profil_name
+
+
+def _positions_treffer(quelle: str, positionen: set[str]) -> bool:
+    """Quelle "030/031/045-056": Slash-Liste, Bereiche mit Bindestrich."""
+    for teil in (quelle or "").split("/"):
+        teil = teil.strip()
+        if not teil:
+            continue
+        if "-" in teil:
+            von, _, bis = teil.partition("-")
+            if von.strip().isdigit() and bis.strip().isdigit():
+                for n in range(int(von), int(bis) + 1):
+                    if f"{n:03d}" in positionen:
+                        return True
+                continue
+        if teil in positionen or teil.zfill(3) in positionen:
+            return True
+    return False
+
+
+def _regel_anwenden(regel_text: str, roh_wert) -> str | None:
+    """Mapping "Antwort→Text | Antwort2→Text2 | *→Text"; leer = Antwort 1:1.
+    None = Regel passt nicht (keine Zuordnung gefunden)."""
+    wert = "" if roh_wert is None else str(roh_wert).strip()
+    regel_text = (regel_text or "").strip()
+    if not regel_text:
+        return wert or None
+    stern = None
+    for teil in regel_text.split("|"):
+        teil = teil.strip()
+        if "→" not in teil:
+            # fester Text ohne Mapping (Positionsregeln)
+            return teil
+        links, _, rechts = teil.partition("→")
+        links, rechts = links.strip(), rechts.strip()
+        if links == "*":
+            stern = rechts
+        elif links.lower() == wert.lower():
+            return rechts
+    return stern
+
+
+def steckbrief_ableiten(session: Session, gewerk: Gewerk, benutzer=None,
+                        fp_antworten: dict | None = None) -> int:
+    """v15 (Phase 77): Steckbrief aus Erfassungsantworten, Auftragspositionen
+    und (ab Phase 80) FP-Antworten ableiten. Erste passende Regel je Feld
+    gewinnt; manuell geänderte Felder werden nie überschrieben."""
+    from app import projektierung_logik
+    from app.models import SteckbriefWert
+    logik = projektierung_logik.hole_logik(session)
+    antworten, positionen, profil_name = _steckbrief_quellen(session, gewerk)
+    fp_antworten = fp_antworten or {}
+    vorhanden = {w.feld: w for w in
+                 session.query(SteckbriefWert)
+                 .filter(SteckbriefWert.gewerk_id == gewerk.id)}
+    gesetzt: set[str] = set()
+    geaendert = 0
+    for regel in logik.steckbrief:
+        if regel.sparte not in ("ALLE", gewerk.sparte):
+            continue
+        if regel.feld in gesetzt:
+            continue
+        eintrag = vorhanden.get(regel.feld)
+        if eintrag is not None and eintrag.manuell:
+            gesetzt.add(regel.feld)   # manuell hat Vorrang – Feld ist erledigt
+            continue
+        wert = None
+        if regel.quelle_typ == "frage":
+            if regel.quelle in antworten:
+                wert = _regel_anwenden(regel.regel, antworten.get(regel.quelle))
+        elif regel.quelle_typ == "fp_frage":
+            if regel.quelle in fp_antworten:
+                wert = _regel_anwenden(regel.regel, fp_antworten.get(regel.quelle))
+        elif regel.quelle_typ == "position":
+            if _positions_treffer(regel.quelle, positionen):
+                wert = _regel_anwenden(regel.regel, "")
+        elif regel.quelle_typ == "profil":
+            wert = _regel_anwenden(regel.regel, profil_name)
+        if wert is None or wert == "":
+            continue
+        wert = str(wert)[:500]
+        if eintrag is None:
+            session.add(SteckbriefWert(gewerk_id=gewerk.id, feld=regel.feld,
+                                       wert=wert, manuell=False,
+                                       geaendert_von=benutzer.id if benutzer else None))
+            geaendert += 1
+        elif eintrag.wert != wert:
+            eintrag.wert = wert
+            geaendert += 1
+        gesetzt.add(regel.feld)
+    session.flush()
+    return geaendert
+
+
+def steckbrief_daten(session: Session, gewerk_ids: list[int]) -> dict[int, dict]:
+    """Feld → SteckbriefWert je Gewerk (für Akte, Sub-Mails, Montage)."""
+    from app.models import SteckbriefWert
+    daten: dict[int, dict] = {gid: {} for gid in gewerk_ids}
+    if not gewerk_ids:
+        return daten
+    for w in (session.query(SteckbriefWert)
+              .filter(SteckbriefWert.gewerk_id.in_(gewerk_ids))):
+        daten.setdefault(w.gewerk_id, {})[w.feld] = w
+    return daten
 
 
 # --- Teams & Kalender (v15, Phase 75) ---------------------------------------

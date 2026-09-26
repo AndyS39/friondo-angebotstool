@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_galerie.html" import galerie as galerie_komponente %}
+{% from "_steckbrief.html" import steckbrief %}
 {% from "_projektierung.html" import pj_dot %}
 
 {% block titel %}{{ projekt.nummer }} – Projektakte{% endblock %}
@@ -68,6 +69,14 @@
 </div>
 
 {# ===== Gewerk-Spalten (Prototyp .gewerke/.gcol) ===== #}
+{# v15 (Phase 77): Steckbrief ganz oben – über Gewerk-Spalten und Aufgaben #}
+<div class="pj-steckreihe">
+    {% for g in gewerke if g.phase != 'storniert' %}
+        {{ steckbrief(g, steckbrief_daten.get(g.id, {}), steckbrief_felder(g.sparte),
+                      '/projektierung/projekt/' ~ projekt.id) }}
+    {% endfor %}
+</div>
+
 <div class="pj-gewerke">
 {% for g in gewerke %}
     {% set ampel = ampeln[g.id] %}

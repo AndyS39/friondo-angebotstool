@@ -116,7 +116,7 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
 
 ## Phase 77 – Projektsteckbrief (Zusammenfassung über den To-dos)
 
-- [ ] Block **„Steckbrief"** ganz oben in der Projektakte (über Gewerk-Spalten
+- [x] Block **„Steckbrief"** ganz oben in der Projektakte (über Gewerk-Spalten
   und Aufgaben) und als Reiter in der Vorgangsakte nach Auftrag. Felder je
   WP-Gewerk (KV-Raster, zweispaltig, editierbar per Klick):
   Hersteller (Bosch / Mitsubishi / …) · Leistungsklasse (kW / Serie) ·
@@ -127,7 +127,7 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
   Standort, Dachzentrale) · Dynamischer Tarif / iMSys / HEMS (ja/nein) ·
   Folierung (nein/ja) · Materiallift/Kran · Besonderheiten (Freitext).
   Für PV: Module/kWp, Speicher, Wechselrichter, Dach, Gerüst. KL/WB: kompakt.
-- [ ] **Ableitung** aus Erfassungsantworten und Angebotspositionen über ein
+- [x] **Ableitung** aus Erfassungsantworten und Angebotspositionen über ein
   neues Blatt **„Steckbrief"** in `projektierung_logik_v1.xlsx`: Spalten
   `feld`, `sparte`, `quelle_typ` (frage / position / profil), `quelle`
   (Fragen-Key oder Positionsnummer), `wert_oder_regel` (z. B. `Pos 045-049 →
@@ -137,11 +137,11 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
   füllt das Blatt mit dem, was aus `konfigurator_logik_v5.xlsx` und den
   vorhandenen Fragen-Keys eindeutig ableitbar ist, und markiert Unsicheres in
   `docs/projektierung-entscheidungen.md`. Andreas ergänzt später.
-- [ ] Ableitung läuft bei Projektanlage und auf Knopfdruck „Neu ableiten";
+- [x] Ableitung läuft bei Projektanlage und auf Knopfdruck „Neu ableiten";
   manuell geänderte Felder werden nicht überschrieben (Kennzeichen).
-- [ ] Der Steckbrief ist die Datenquelle für Sub-Mails (Phase 79) und das
+- [x] Der Steckbrief ist die Datenquelle für Sub-Mails (Phase 79) und das
   Montage-Backend (Phase 82).
-- [ ] Test: Projekt aus Tool-Angebot → Felder vorbelegt; TAIFUN-Angebot → leer,
+- [x] Test: Projekt aus Tool-Angebot → Felder vorbelegt; TAIFUN-Angebot → leer,
   editierbar.
 
 ## Phase 78 – Aufgabenpakete v2: Aktionstypen, Optionen, Fristen

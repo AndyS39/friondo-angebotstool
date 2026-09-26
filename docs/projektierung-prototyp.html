@@ -209,6 +209,24 @@ textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px;f
 .pj-lightbox .bu { font-size: 12px; padding: 6px 4px 2px; color: #5d6b66; }
 .pj-lightbox::backdrop { background: rgba(10, 15, 20, 0.7); }
 @media (max-width: 640px) { .pj-gal-raster { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); } }
+
+/* v15 (Phase 77): Projektsteckbrief (KV-Raster zweispaltig, editierbar) */
+.pj-steckreihe { display: grid; gap: 10px; margin-bottom: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+.pj-steck { background: #fff; border: 1px solid var(--pj-line, #d5dcd9);
+    border-radius: 12px; padding: 10px 12px; }
+.pj-steck-kopf { display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; margin-bottom: 6px; }
+.pj-steck-raster { display: grid; grid-template-columns: auto 1fr auto 1fr;
+    gap: 2px 10px; font-size: 12px; align-items: center; }
+.pj-steck-raster .k { color: var(--pj-muted, #5d6b66); white-space: nowrap; }
+.pj-steck-raster .k i { color: #c47a12; font-style: normal; }
+.pj-steck-raster .w input { width: 100%; border: 1px solid transparent;
+    border-radius: 6px; padding: 2px 6px; font: inherit; background: transparent; }
+.pj-steck-raster .w input:hover { border-color: var(--pj-line, #d5dcd9); background: #fff; }
+.pj-steck-raster .w input:focus { border-color: var(--pj-akzent, #3f86c6);
+    background: #fff; outline: none; }
+@media (max-width: 900px) { .pj-steck-raster { grid-template-columns: auto 1fr; } }
 </style>
 
 <div class="top">

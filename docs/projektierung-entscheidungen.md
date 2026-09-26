@@ -221,3 +221,33 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
   bestehende vorgang_fuer_erfassung-Logik erzeugt/geholt.
 - **Rechteprüfung der Datei-Auslieferung** nutzt dieselbe Regel wie der
   Upload (Vertrieb nur eigene Vorgänge) – Montage folgt in Phase 82.
+
+## Phase 77 (26.09.2026)
+
+- **Regel-Syntax im Blatt „Steckbrief":** `wert_oder_regel` kennt drei Formen:
+  fester Text (typisch für Positionsregeln), leer (= Antwort wird 1:1
+  übernommen, z. B. Öltank-Größe) und Mapping `Antwort→Text | Antwort2→Text2 |
+  *→Text` (Pfeil U+2192, `*` = alles andere; `*→` ohne Text heißt „kein
+  Eintrag"). Groß-/Kleinschreibung der Antwort ist egal.
+- **Erste passende Regel je Feld gewinnt** (Blattreihenfolge = Priorität);
+  z. B. steht Pos. 055 (AWMB) vor dem Bereich 045-049 (AWM), damit die
+  Varianten-Position das Paket schlägt. Positionsangaben: Slash-Liste und
+  Bereiche („045-056"); nackte Zahlen werden auf 3 Stellen aufgefüllt.
+- **Manuell-Schutz:** Jede Änderung über die Akte setzt `manuell` am
+  SteckbriefWert; Ableitung (bei Projektanlage und „Neu ableiten")
+  überschreibt solche Felder nie. Kennzeichen in der Akte: ✎.
+- **Ableitung bei Projektanlage ist fehlertolerant** (try/except): eine
+  kaputte Regel darf die Projektanlage nie blockieren.
+- **quelle_typ `fp_frage` ist vorbereitet** (Parameter fp_antworten der
+  Ableitung), wird aber erst mit der Feinplanungs-Erfassung in Phase 80
+  befüllt.
+- **Unsicheres in der Blatt-Befüllung (Andreas ergänzt später):**
+  - **Folierung** hat keine Quelle in der Vertriebs-Erfassung – Feld bleibt
+    leer (manuell bzw. FP-Frage in Phase 80).
+  - **PV-Regeln** fehlen bis auf die Dach-Frage: die PV-Positionsnummern sind
+    im Tool noch nicht im Einsatz (PV-Aufträge laufen bislang über TAIFUN).
+  - **E03-Mapping** (Zählerschrank 2-/3-/4-Feld) nimmt die heutigen
+    Antworttexte der Erfassung an („2-Feld", „3-Feld", „4-Feld und mehr") –
+    falls die Logik-Excel dort andere Texte nutzt, Blatt anpassen.
+  - **Hersteller** ist pauschal „Bosch", solange nur Bosch-Pakete im
+    Artikelstamm sind (Positionen 030/031/045-056).

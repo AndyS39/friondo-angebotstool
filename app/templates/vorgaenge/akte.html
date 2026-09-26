@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_galerie.html" import galerie %}
+{% from "_steckbrief.html" import steckbrief %}
 {% import "_sparten.html" as sparten_ui %}
 {% from "_komponenten.html" import status_badge, statuskette, wiedervorlage_chip, leer_zustand %}
 {% from "_symbole.html" import symbol %}
@@ -172,6 +173,19 @@
     {% endfor %}
 </a>
 {% endfor %}
+{# v15 (Phase 77): Steckbrief nach Auftrag (Vertrieb read-only) #}
+{% if steckbrief_daten %}
+<div class="pj-steckreihe" style="margin-top:8px">
+    {% for eintrag in vorgang_projekte %}
+        {% for g in eintrag.gewerke if g.phase != 'storniert' %}
+            {{ steckbrief(g, steckbrief_daten.get(g.id, {}),
+                          steckbrief_felder(g.sparte),
+                          '/vorgaenge/' ~ vorgang.id,
+                          nur_lesen=steckbrief_nur_lesen) }}
+        {% endfor %}
+    {% endfor %}
+</div>
+{% endif %}
 {% endif %}
 
 <h2>Erfassungen</h2>

@@ -665,6 +665,10 @@ async def akte(request: Request, projekt_id: int,
             kommentar_zaehler[e.aufgabe_id] = kommentar_zaehler.get(e.aufgabe_id, 0) + 1
     return render(request, "projektierung/akte.html", aktiv="/projektierung",
                   dokumente=dokumente, dokument_ordner=dokument_ordner,
+                  # v15 (Phase 77): Projektsteckbrief über den To-dos
+                  steckbrief_daten=kern.steckbrief_daten(
+                      session, [g.id for g in gewerke]),
+                  steckbrief_felder=kern.steckbrief_felder,
                   # v15 (Phase 76): Galerie des Vorgangs in der Projektakte
                   galerie_daten=__import__("app.galerie", fromlist=["x"])
                   .uebersicht(session, projekt.vorgang_id or 0),
@@ -975,6 +979,52 @@ async def termin_anlegen(request: Request, gewerk_id: int,
     session.commit()
     return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}",
                             status_code=303)
+
+
+@router.post("/gewerk/{gewerk_id}/steckbrief")
+async def steckbrief_speichern(request: Request, gewerk_id: int,
+                               session: Session = Depends(get_session)):
+    """v15 (Phase 77): Steckbrief-Feld per Klick editieren – manuell
+    geänderte Felder werden bei „Neu ableiten“ nicht überschrieben."""
+    from app.models import SteckbriefWert
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    form = await request.form()
+    feld = (form.get("feld") or "").strip()[:60]
+    wert = (form.get("wert") or "").strip()[:500]
+    gueltig = {f for f, _ in kern.steckbrief_felder(gewerk.sparte)}
+    if feld not in gueltig:
+        return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}",
+                                status_code=303)
+    eintrag = (session.query(SteckbriefWert)
+               .filter(SteckbriefWert.gewerk_id == gewerk.id,
+                       SteckbriefWert.feld == feld).first())
+    if eintrag is None:
+        eintrag = SteckbriefWert(gewerk_id=gewerk.id, feld=feld)
+        session.add(eintrag)
+    eintrag.wert = wert
+    eintrag.manuell = True
+    eintrag.geaendert_von = (request.state.benutzer.id
+                             if request.state.benutzer else None)
+    session.commit()
+    zurueck = form.get("zurueck") or f"/projektierung/projekt/{gewerk.projekt_id}"
+    return RedirectResponse(zurueck, status_code=303)
+
+
+@router.post("/gewerk/{gewerk_id}/steckbrief-ableiten")
+async def steckbrief_neu_ableiten(request: Request, gewerk_id: int,
+                                  session: Session = Depends(get_session)):
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    anzahl = kern.steckbrief_ableiten(session, gewerk,
+                                      benutzer=request.state.benutzer)
+    session.commit()
+    return RedirectResponse(
+        f"/projektierung/projekt/{gewerk.projekt_id}?meldung="
+        + quote_plus(f"Steckbrief neu abgeleitet ({anzahl} Felder aktualisiert; "
+                     "manuell geänderte blieben stehen)."), status_code=303)
 
 
 @router.post("/gewerk/{gewerk_id}/team-termin")

@@ -1,0 +1,33 @@
+{# v15 (Phase 77): Projektsteckbrief je Gewerk – KV-Raster zweispaltig,
+   editierbar per Klick (Eingabe + Enter speichert, manuell = ✎).
+   Kontext: gewerk, werte (feld → SteckbriefWert), felder (Liste), zurueck. #}
+{% macro steckbrief(gewerk, werte, felder, zurueck, nur_lesen=false) %}
+<div class="pj-steck" id="steckbrief-{{ gewerk.id }}">
+    <div class="pj-steck-kopf">
+        <b>Steckbrief · {{ gewerk.sparte }}</b>
+        {% if not nur_lesen %}
+        <form method="post" action="/projektierung/gewerk/{{ gewerk.id }}/steckbrief-ableiten"
+              style="display:inline">
+            <button class="pj-btn" type="submit"
+                    title="Aus Erfassung und Auftrag neu ableiten – manuell geänderte Felder bleiben">Neu ableiten</button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="pj-steck-raster">
+        {% for feld, name in felder %}
+        {% set w = werte.get(feld) %}
+        <span class="k">{{ name }}{% if w and w.manuell %} <i title="manuell geändert – wird nicht überschrieben">✎</i>{% endif %}</span>
+        {% if nur_lesen %}
+        <span class="w">{{ w.wert if w else '–' }}</span>
+        {% else %}
+        <form method="post" action="/projektierung/gewerk/{{ gewerk.id }}/steckbrief" class="w">
+            <input type="hidden" name="feld" value="{{ feld }}">
+            <input type="hidden" name="zurueck" value="{{ zurueck }}">
+            <input type="text" name="wert" value="{{ w.wert if w }}"
+                   placeholder="–" onchange="this.form.submit()">
+        </form>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endmacro %}

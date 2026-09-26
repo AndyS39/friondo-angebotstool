@@ -223,6 +223,11 @@ async def akte(request: Request, vorgang_id: int,
                   mobil=benutzer.rolle == "aussendienst",
                   galerie_daten=galerie_daten, galerie_ordner=galerie_ordner,
                   galerie_darf_loeschen=galerie_darf_loeschen,
+                  steckbrief_daten=(projektierung_modul.steckbrief_daten(
+                      session, [g.id for e in vorgang_projekte for g in e["gewerke"]])
+                      if vorgang_projekte else {}),
+                  steckbrief_felder=projektierung_modul.steckbrief_felder,
+                  steckbrief_nur_lesen=benutzer.rolle == "aussendienst",
                   lead_kontext=lead_kontext, lead_readonly=lead_readonly,
                   lead_phasen_namen=__import__("app.models", fromlist=["x"]).LEAD_PHASEN_NAMEN,
                   vorgang=vorgang, kunde=kunde, lead=lead, kanal=kanal,
