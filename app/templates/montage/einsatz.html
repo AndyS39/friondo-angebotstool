@@ -24,6 +24,11 @@
         <span>Telefon</span>
         <div><a href="tel:{{ kunde.telefon }}">{{ kunde.telefon }}</a></div>
         {% endif %}
+        {% if projektleiter %}
+        <span>Friondo</span>
+        <div>{{ projektleiter.name }}
+            {% if projektleiter.email %} · <a href="mailto:{{ projektleiter.email }}">{{ projektleiter.email }}</a>{% endif %}</div>
+        {% endif %}
         {% if gewerk %}
         <span>Status</span>
         <div>{{ phasen_namen[gewerk.phase] }}</div>
@@ -38,6 +43,38 @@
         <div>{{ projekt.notiz_kopf }}</div>
         {% endif %}
     </div>
+
+    {% if steckbrief_felder %}
+    {# v15 (Phase 82): Projektsteckbrief (read-only, Phase 77) #}
+    <details class="pj-paket" open>
+        <summary>Steckbrief</summary>
+        <div class="pj-steck-raster" style="padding:4px 2px">
+            {% for feld, name in steckbrief_felder %}
+            {% set w = steckbrief.get(feld) %}
+            {% if w and w.wert %}
+            <span class="k">{{ name }}</span><span class="w">{{ w.wert }}</span>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </details>
+    {% endif %}
+
+    {% if team_termine %}
+    <details class="pj-paket">
+        <summary>Teams &amp; Termine <span class="cnt">{{ team_termine | length }}</span></summary>
+        {% for t in team_termine %}
+        <div class="pj-task"><div class="t">{{ t.beginn.strftime('%d.%m.') }}{{ ' – ' ~ t.ende.strftime('%d.%m.') if t.ende and t.ende.date() != t.beginn.date() }}
+            · {{ t.typ | capitalize }}
+            {{ '· ' ~ teams_map[t.team_id].name if t.team_id in teams_map }}
+            {{ '· Kunde bestätigt ✔' if t.kunde_bestaetigt }}</div></div>
+        {% endfor %}
+        {% for zeile in subs %}
+        <div class="pj-task"><div class="t">Sub: {{ zeile.sub.firma if zeile.sub }}
+            · {{ zeile.eintrag.leistung }} · {{ zeile.eintrag.status | capitalize }}
+            {{ '· ' ~ zeile.eintrag.termin.strftime('%d.%m.%Y') if zeile.eintrag.termin }}</div></div>
+        {% endfor %}
+    </details>
+    {% endif %}
 
     {% if positionen %}
     <details class="pj-paket">
@@ -67,19 +104,58 @@
         {% endfor %}
     </details>
 
-    <h3 id="foto" style="font-size:13px;margin:12px 0 4px">📁 Fotos</h3>
-    <form method="post" action="/montage/einsatz/{{ termin.id }}/foto"
-          enctype="multipart/form-data" class="pj-btnrow" style="margin-top:4px">
-        <input type="file" name="datei" accept="image/*" capture="environment" required>
-        <button class="pj-btn primary" type="submit">📷 Foto hochladen</button>
-    </form>
-    <div class="pj-tree">
-        {% for d in dokumente %}
-        <div class="f"><a href="/montage/dokument/{{ d.id }}" target="_blank">{{ d.dateiname }}</a></div>
+    <h3 id="foto" style="font-size:13px;margin:12px 0 4px">📁 Galerie</h3>
+    {% if vorgang_id %}
+    {# v15 (Phase 82): alle acht Ordner der Vorgangs-Galerie – ansehen +
+       Foto aufnehmen; Montagedokumente (Hydraulikschema usw.) direkt öffnen #}
+    {% for ordner, eintrag in galerie_daten.items() %}
+    <details class="pj-paket" {{ 'open' if ordner == 'Montagedokumente' and eintrag.eintraege }}>
+        <summary>{{ ordner }} <span class="cnt">{{ eintrag.eintraege | length }}</span></summary>
+        <div class="pj-mob-galerie">
+        {% for d in eintrag.eintraege %}
+            <a href="/vorgaenge/galerie/datei/{{ d.id }}" target="_blank">
+                {% if d.bild %}<img src="/vorgaenge/galerie/datei/{{ d.id }}" loading="lazy" alt="{{ d.dateiname }}">
+                {% else %}📄 {{ d.dateiname }}{% endif %}</a>
         {% else %}
-        <div class="f">– noch keine Fotos –</div>
+            <span class="dezent" style="font-size:12px">leer</span>
+        {% endfor %}
+        </div>
+        <form method="post" action="/vorgaenge/{{ vorgang_id }}/galerie/upload"
+              enctype="multipart/form-data" class="pj-btnrow">
+            <input type="hidden" name="ordner" value="{{ ordner }}">
+            <input type="hidden" name="zurueck" value="/montage/einsatz/{{ termin.id }}">
+            <input type="file" name="dateien" accept="image/*" capture="environment" required>
+            <button class="pj-btn" type="submit">📷 Aufnehmen</button>
+        </form>
+    </details>
+    {% endfor %}
+    {% else %}
+    <p class="dezent" style="font-size:12px">Kein Vorgang am Auftrag – Galerie
+        nicht verfügbar.</p>
+    {% endif %}
+
+    <h3 style="font-size:13px;margin:12px 0 4px">📋 Formulare</h3>
+    <div class="pj-btnrow">
+        {% for f in formulare %}
+        <a class="pj-btn {{ 'primary' if not (f.eintrag and f.eintrag.status == 'abgeschlossen') }}"
+           href="/montage/einsatz/{{ termin.id }}/formular/{{ f.name }}">
+            {{ f.titel }}{{ ' ✓' if f.eintrag and f.eintrag.status == 'abgeschlossen' }}</a>
         {% endfor %}
     </div>
+
+    <h3 style="font-size:13px;margin:12px 0 4px">🔧 Restarbeiten</h3>
+    {% for r in restarbeiten %}
+    <div class="pj-task {{ 'done' if r.status == 'erledigt' }}">
+        <div class="t">{{ r.text }}
+            {% if r.galerie_datei_id %} · <a href="/vorgaenge/galerie/datei/{{ r.galerie_datei_id }}" target="_blank">Foto</a>{% endif %}</div>
+    </div>
+    {% endfor %}
+    <form method="post" action="/montage/einsatz/{{ termin.id }}/restarbeit"
+          enctype="multipart/form-data" class="pj-btnrow">
+        <input type="text" name="text" required placeholder="Restarbeit melden …" style="flex:1">
+        <input type="file" name="datei" accept="image/*" capture="environment" style="max-width:130px">
+        <button class="pj-btn" type="submit">Melden</button>
+    </form>
 
     {% if gewerk %}
     <h3 id="status" style="font-size:13px;margin:12px 0 4px">Montage-Status</h3>
@@ -105,7 +181,7 @@
     {% endif %}
     {% endif %}
 
-    <div class="pj-note">Formulare (Montagebericht, Inbetriebnahme, Abnahme mit
-        Unterschrift) folgen in V3.</div>
+    <div class="pj-note">Keine Preise, keine anderen Projekte – Fragen an
+        den Projektleiter (oben).</div>
 </div>
 {% endblock %}

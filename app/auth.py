@@ -44,6 +44,11 @@ PROJEKTIERUNG_PFADE = ("/projektierung", "/montage", "/benachrichtigungen",
 PROJEKTIERUNG_SCHREIBEN = ("/projektierung", "/montage", "/benachrichtigungen",
                            "/parametrierung", "/login", "/logout")
 MONTAGE_PFADE = ("/montage", "/benachrichtigungen", "/login", "/logout", "/static")
+# v15 (Phase 82): Montage erreicht die Vorgangs-Galerie (ansehen + Upload –
+# die Datei-/Upload-Routen prüfen selbst über galerie.darf_hochladen, dass
+# der Vorgang zu einem eigenen Team-Einsatz gehört); löschen/verschieben
+# bleiben gesperrt
+_MONTAGE_GALERIE = re.compile(r"^/vorgaenge/(galerie/datei/\d+|\d+/galerie/upload)$")
 _ANGEBOTE_LESEPFAD = re.compile(r"^/angebote(/\d+/pdf)?$")
 # v12 (Phase 81): Hauptrolle leadmanagement – Lead-Modul voll, Kunden
 # lesend/schreibend, Vorgangsakte, Angebote nur Liste+PDF, Erfassungen lesend;
@@ -163,7 +168,8 @@ class RollenMiddleware(BaseHTTPMiddleware):
                 if pfad.startswith("/angebote") and not _ANGEBOTE_LESEPFAD.match(pfad):
                     return RedirectResponse("/angebote", status_code=303)
             elif benutzer.rolle == "montage":
-                if pfad != "/" and not pfad.startswith(MONTAGE_PFADE):
+                if (pfad != "/" and not pfad.startswith(MONTAGE_PFADE)
+                        and not _MONTAGE_GALERIE.match(pfad)):
                     return RedirectResponse("/montage", status_code=303)
             elif benutzer.rolle == "leadmanagement":
                 if pfad != "/" and not pfad.startswith(LEADMANAGEMENT_PFADE):

@@ -134,9 +134,33 @@ def loeschen(session: Session, datei: GalerieDatei) -> None:
     session.delete(datei)
 
 
+def _montage_zugriff(session: Session, vorgang: Vorgang, benutzer) -> bool:
+    """v15 (Phase 82): Montage sieht die Galerie der Vorgänge, deren Gewerke
+    einem eigenen Team zugewiesen oder terminiert sind."""
+    from app.models import Angebot, Gewerk, ProjektTermin, TeamMitglied
+    team_ids = [m.team_id for m in session.query(TeamMitglied)
+                .filter(TeamMitglied.benutzer_id == benutzer.id)]
+    if not team_ids:
+        return False
+    gewerk_ids = [g.id for g in
+                  session.query(Gewerk)
+                  .join(Angebot, Angebot.projekt_gewerk_id == Gewerk.id)
+                  .filter(Angebot.vorgang_id == vorgang.id)]
+    if not gewerk_ids:
+        return False
+    for g in session.query(Gewerk).filter(Gewerk.id.in_(gewerk_ids)):
+        if any(tid in team_ids for tid in
+               (g.wp_team_id, g.elektro_team_id, g.sub_team_id) if tid):
+            return True
+    return bool(session.query(ProjektTermin)
+                .filter(ProjektTermin.gewerk_id.in_(gewerk_ids),
+                        ProjektTermin.team_id.in_(team_ids)).first())
+
+
 def darf_hochladen(session: Session, vorgang: Vorgang, benutzer) -> bool:
     """Vertrieb: eigene Vorgänge (auch ohne Auftrag); ID/Projektierung/Admin:
-    alles. Montage folgt in Phase 82 (zugewiesene Aufträge)."""
+    alles; Montage (v15, Phase 82): Vorgänge der eigenen Team-Einsätze
+    (ansehen + hochladen, nie löschen)."""
     if benutzer is None:
         return False
     if benutzer.rolle in ("admin", "innendienst", "projektierung"):
@@ -144,6 +168,8 @@ def darf_hochladen(session: Session, vorgang: Vorgang, benutzer) -> bool:
     if benutzer.rolle == "aussendienst":
         from app.routers.vorgaenge import _eigener
         return _eigener(session, vorgang, benutzer)
+    if benutzer.hat_rolle("montage"):
+        return _montage_zugriff(session, vorgang, benutzer)
     return False
 
 

@@ -297,20 +297,20 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
 
 ## Phase 82 – Montage-Backend
 
-- [ ] Eigener mobiler Bereich `/montage` (Rolle Montage; Login wie bisher
+- [x] Eigener mobiler Bereich `/montage` (Rolle Montage; Login wie bisher
   per PIN). Startseite je Benutzer: **Team-Auswahl** (Teams, in denen er
   Mitglied ist) → **Chronologische Liste** der Aufträge des Teams (heute,
   diese Woche, danach; vergangene eingeklappt) als `.mob .einsatz`-Karten
   (Datum, Kunde, Ort, Sparte, Gerät, Besonderheiten, Terminstatus) und
   **Kalendersicht** (Woche, nur eigenes Team) mit Klick in den Auftrag.
-- [ ] **Auftragsdetail**: Steckbrief (Phase 77), Ausführungsadresse mit
+- [x] **Auftragsdetail**: Steckbrief (Phase 77), Ausführungsadresse mit
   Karten-Link und Telefon des Kunden, Ansprechpartner Friondo (Projektleiter,
   Telefon), zugewiesene Teams/Subs mit Terminen, offene Aufgaben mit Rolle
   montage (abhakbar), **Galerie** (alle acht Ordner, ansehen + Foto aufnehmen;
   Hydraulikschema u. Ä. aus „Montagedokumente" direkt öffnen), Buttons
   „Montage gestartet" / „Montage fertig", Restarbeiten melden (Text + Foto).
   Keine Preise, keine anderen Projekte.
-- [ ] **Drei Formulare** (mobil, seitenweise, Zwischenspeichern, am Ende PDF
+- [x] **Drei Formulare** (mobil, seitenweise, Zwischenspeichern, am Ende PDF
   in Galerie „Inbetrieb-/Abnahme" und Aufgabe im Paket „Abnahme & Freigabe"
   erledigt). Felder als Vorlage in der Logik-Excel, Blatt **„Formulare"**
   (`formular`, `seite`, `feld_key`, `bezeichnung`, `typ` (text / zahl / ja_nein /
@@ -334,9 +334,9 @@ Design-Vorlage bleibt `docs/projektierung-prototyp.html`; neue Sichten
     **Unterschrift Kunde** (bestehende Vor-Ort-Signatur) + Unterschrift
     Monteur; Restarbeiten aus dem Protokoll erzeugen automatisch Einträge in
     der Restarbeiten-Liste des Gewerks.
-- [ ] Rechte: Montage sieht nur Aufträge seiner Teams; Vorgangs-/Angebotsdaten
+- [x] Rechte: Montage sieht nur Aufträge seiner Teams; Vorgangs-/Angebotsdaten
   ohne Preise; Galerie ansehen/hochladen; keine Löschung.
-- [ ] Test je Formular am Handy inkl. Unterschrift und PDF; Team 3 sieht nur
+- [x] Test je Formular am Handy inkl. Unterschrift und PDF; Team 3 sieht nur
   seine Aufträge.
 
 ## Phase 83 – Live-Master, Docs, Rollout

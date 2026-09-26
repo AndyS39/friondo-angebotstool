@@ -662,6 +662,28 @@ class ProjektMail(Base):
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
+class MontageFormular(Base):
+    """v15 (Phase 82): ausgefülltes Montage-Formular (Montagebericht,
+    Inbetriebnahme-, Abnahmeprotokoll) – seitenweise zwischengespeichert,
+    beim Abschluss entsteht das PDF in der Galerie „Inbetrieb-/Abnahme“."""
+    __tablename__ = "montage_formulare"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    gewerk_id: Mapped[int] = mapped_column(Integer, index=True)
+    projekt_id: Mapped[int] = mapped_column(Integer, index=True)
+    formular: Mapped[str] = mapped_column(String(40), default="")
+    antworten_json: Mapped[str] = mapped_column(Text, default="{}")
+    status: Mapped[str] = mapped_column(String(20), default="entwurf")
+    seite_index: Mapped[int] = mapped_column(Integer, default=0)
+    pdf_galerie_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    abgeschlossen_am: Mapped[Optional[datetime]] = mapped_column(DateTime,
+                                                                 nullable=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
 class Restarbeit(Base):
     """v15 (Phase 78): Restarbeiten/Reklamationen als eigene Liste am Gewerk
     (Text, optional Foto aus der Galerie, Verantwortlicher, offen/erledigt)."""

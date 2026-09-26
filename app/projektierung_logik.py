@@ -104,6 +104,28 @@ class StuecklistenZeile:
     lieferant: str
 
 
+FORMULAR_FELD_TYPEN = ("text", "zahl", "ja_nein", "auswahl", "foto",
+                       "unterschrift", "datum")
+FORMULAR_NAMEN = {"montagebericht": "Montagebericht",
+                  "inbetriebnahme": "Inbetriebnahmeprotokoll",
+                  "abnahme": "Abnahmeprotokoll"}
+
+
+@dataclass
+class FormularFeld:
+    """v15 (Phase 82): Zeile des Blatts "Formulare" (Montage-Backend)."""
+    formular: str
+    seite: str
+    feld_key: str
+    bezeichnung: str
+    typ: str
+    pflicht: bool
+    optionen: str      # auswahl: |-Liste · foto: Galerie-Zielordner
+
+    def optionen_liste(self) -> list[str]:
+        return [o.strip() for o in (self.optionen or "").split("|") if o.strip()]
+
+
 @dataclass
 class SubMailVorlage:
     """v15 (Phase 79): Zeile des Blatts "Sub-Mailvorlagen"."""
@@ -124,6 +146,15 @@ class ProjektierungsLogik:
     sub_vorlagen: dict[str, "SubMailVorlage"] = field(default_factory=dict)
     fp_fragen: list["FpFrage"] = field(default_factory=list)
     stuecklisten: dict[str, list["StuecklistenZeile"]] = field(default_factory=dict)
+    formulare: dict[str, list["FormularFeld"]] = field(default_factory=dict)
+
+    def formular_seiten(self, formular: str) -> list[tuple[str, list["FormularFeld"]]]:
+        seiten: list[tuple[str, list[FormularFeld]]] = []
+        for feld in self.formulare.get(formular, []):
+            if not seiten or seiten[-1][0] != feld.seite:
+                seiten.append((feld.seite, []))
+            seiten[-1][1].append(feld)
+        return seiten
 
     def fp_seiten(self) -> list[tuple[str, list["FpFrage"]]]:
         """Fragen nach Seite gruppiert (Blattreihenfolge)."""
@@ -335,6 +366,25 @@ def einlesen(pfad: Path | None = None) -> ProjektierungsLogik:
                                   menge_je_einheit=menge_zahl,
                                   bezeichnung=bezeichnung,
                                   lieferant=lieferant or "Collin"))
+
+    # --- Formulare (v15, Phase 82: Montage-Backend) ---
+    if "Formulare" in wb.sheetnames:
+        for zeile in wb["Formulare"].iter_rows(min_row=2, values_only=True):
+            werte = [_text(z) for z in (tuple(zeile) + ("",) * 7)[:7]]
+            formular, seite, feld_key, bezeichnung, typ, pflicht, optionen = werte
+            if not formular or not feld_key:
+                continue
+            typ = (typ or "text").lower()
+            if typ not in FORMULAR_FELD_TYPEN:
+                logik.warnungen.append(
+                    f"Formular {formular}/{feld_key}: unbekannter Typ "
+                    f"„{typ}“ – wird zu text.")
+                typ = "text"
+            logik.formulare.setdefault(formular, []).append(FormularFeld(
+                formular=formular, seite=seite or "Allgemein",
+                feld_key=feld_key, bezeichnung=bezeichnung or feld_key,
+                typ=typ, pflicht=pflicht.upper() in ("J", "JA", "X", "1"),
+                optionen=optionen))
 
     # --- Sub-Mailvorlagen (v15, Phase 79) ---
     if "Sub-Mailvorlagen" in wb.sheetnames:

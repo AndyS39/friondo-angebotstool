@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block titel %}{{ titel }} · {{ projekt.nummer }}{% endblock %}
+
+{% block inhalt %}
+<div class="pj-mob">
+    <div class="pj-btnrow" style="margin-top:0">
+        <a class="pj-btn" href="/montage/einsatz/{{ termin.id }}">← Auftrag</a>
+    </div>
+    <div class="pj-eyebrow">{{ projekt.nummer }} · {{ gewerk.sparte }}</div>
+    <h2>{{ titel }} <small class="dezent">{{ seiten_name }} · {{ seite + 1 }}/{{ seiten | length }}</small></h2>
+    {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+    {% if eintrag.status == 'abgeschlossen' %}
+    <div class="pj-note">Abgeschlossen am {{ eintrag.abgeschlossen_am.strftime('%d.%m.%Y %H:%M') }}
+        {% if eintrag.pdf_galerie_id %} · <a href="/vorgaenge/galerie/datei/{{ eintrag.pdf_galerie_id }}" target="_blank">PDF ansehen</a>{% endif %}
+        – erneutes Abschließen erzeugt ein neues PDF.</div>
+    {% endif %}
+
+    <form method="post" action="/montage/einsatz/{{ termin.id }}/formular/{{ name }}"
+          enctype="multipart/form-data" class="pj-fp">
+        <input type="hidden" name="seite" value="{{ seite }}">
+        {% for f in felder %}
+        {% set wert = antworten.get(f.feld_key, '') %}
+        <div class="pj-fp-frage">
+            <label>{{ f.bezeichnung }}{{ ' *' if f.pflicht }}</label>
+            {% if f.typ == 'ja_nein' %}
+            <div class="pj-fp-radios">
+                {% for option in ['Ja', 'Nein'] %}
+                <label><input type="radio" name="{{ f.feld_key }}" value="{{ option }}"
+                       {{ 'checked' if wert == option }}> {{ option }}</label>
+                {% endfor %}
+            </div>
+            {% elif f.typ == 'auswahl' %}
+            <div class="pj-fp-radios">
+                {% for option in f.optionen_liste() %}
+                <label><input type="radio" name="{{ f.feld_key }}" value="{{ option }}"
+                       {{ 'checked' if wert == option }}> {{ option }}</label>
+                {% endfor %}
+            </div>
+            {% elif f.typ == 'datum' %}
+            <input type="date" name="{{ f.feld_key }}" value="{{ wert }}">
+            {% elif f.typ == 'zahl' %}
+            <input type="text" inputmode="decimal" name="{{ f.feld_key }}" value="{{ wert }}">
+            {% elif f.typ == 'foto' %}
+            {% if wert.startswith('galerie:') %}
+            <div class="dezent" style="font-size:12px">✓ {{ wert.split(':', 2)[2] }}
+                (<a href="/vorgaenge/galerie/datei/{{ wert.split(':')[1] }}" target="_blank">ansehen</a>)
+                – neues Foto ersetzt den Verweis</div>
+            {% endif %}
+            <input type="file" name="{{ f.feld_key }}" accept="image/*" capture="environment">
+            {% elif f.typ == 'unterschrift' %}
+            <canvas class="pj-signatur" data-ziel="sig-{{ f.feld_key }}"
+                    width="560" height="160"></canvas>
+            <input type="hidden" name="{{ f.feld_key }}" id="sig-{{ f.feld_key }}"
+                   value="{{ wert }}">
+            <div class="pj-btnrow" style="margin-top:2px">
+                <button class="pj-btn" type="button"
+                        onclick="pjSigLeeren(this)">Neu unterschreiben</button>
+                {% if wert %}<span class="dezent" style="font-size:12px">✓ Unterschrift gespeichert</span>{% endif %}
+            </div>
+            {% else %}
+            <input type="text" name="{{ f.feld_key }}" value="{{ wert }}">
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <div class="pj-btnrow" style="margin-top:14px">
+            {% if seite > 0 %}
+            <button class="pj-btn" type="submit" name="aktion" value="zurueck">‹ Zurück</button>
+            {% endif %}
+            {% if seite + 1 < seiten | length %}
+            <button class="pj-btn primary" type="submit" name="aktion" value="weiter">Speichern + Weiter ›</button>
+            {% else %}
+            <button class="pj-btn" type="submit" name="aktion" value="weiter">Zwischenspeichern</button>
+            <button class="pj-btn primary" type="submit" name="aktion" value="abschliessen">Abschließen ✓</button>
+            {% endif %}
+        </div>
+        {% if seite + 1 == seiten | length and offene_pflicht %}
+        <p class="dezent" style="font-size:12px">Noch offen (Pflicht):
+            {{ offene_pflicht | join(' · ') }}</p>
+        {% endif %}
+    </form>
+</div>
+
+<script>
+/* v15 (Phase 82): Unterschrift per Finger/Maus (Muster: Vor-Ort-Signatur) */
+document.querySelectorAll('canvas.pj-signatur').forEach(function (feld) {
+    var stift = feld.getContext('2d');
+    stift.lineWidth = 2.2; stift.lineCap = 'round'; stift.strokeStyle = '#1b2a5e';
+    var ziel = document.getElementById(feld.dataset.ziel);
+    if (ziel.value.startsWith('data:image')) {
+        var bild = new Image();
+        bild.onload = function () { stift.drawImage(bild, 0, 0); };
+        bild.src = ziel.value;
+    }
+    var aktiv = false;
+    function punkt(ereignis) {
+        var box = feld.getBoundingClientRect();
+        var quelle = ereignis.touches ? ereignis.touches[0] : ereignis;
+        return [(quelle.clientX - box.left) * feld.width / box.width,
+                (quelle.clientY - box.top) * feld.height / box.height];
+    }
+    function start(ereignis) {
+        aktiv = true; var p = punkt(ereignis);
+        stift.beginPath(); stift.moveTo(p[0], p[1]);
+        ereignis.preventDefault();
+    }
+    function ziehen(ereignis) {
+        if (!aktiv) { return; }
+        var p = punkt(ereignis);
+        stift.lineTo(p[0], p[1]); stift.stroke();
+        ziel.value = feld.toDataURL('image/png');
+        ereignis.preventDefault();
+    }
+    function ende() { aktiv = false; }
+    feld.addEventListener('mousedown', start);
+    feld.addEventListener('mousemove', ziehen);
+    feld.addEventListener('mouseup', ende);
+    feld.addEventListener('touchstart', start, {passive: false});
+    feld.addEventListener('touchmove', ziehen, {passive: false});
+    feld.addEventListener('touchend', ende);
+});
+function pjSigLeeren(knopf) {
+    var feld = knopf.closest('.pj-fp-frage').querySelector('canvas');
+    feld.getContext('2d').clearRect(0, 0, feld.width, feld.height);
+    document.getElementById(feld.dataset.ziel).value = '';
+}
+</script>
+{% endblock %}

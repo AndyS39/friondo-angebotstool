@@ -402,3 +402,30 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
 - **Test ohne M365:** Graph-Aufrufe und Konversationsabruf sind im
   Phasentest gemockt; echter Rundlauf (Outlook-Eintrag, Verschieben,
   Kundenmail) ist beim Rollout mit angemeldetem Konto zu prüfen.
+
+## Phase 82 (26.09.2026)
+
+- **Startseite:** Team-Auswahl (Teams über TeamMitglied; bei genau einem
+  Team direkt die Liste, Admin sieht alle Teams); chronologische Liste in
+  Heute / Diese Woche / Danach mit eingeklapptem „Vergangene Einsätze".
+  Der Wochenkalender ist mobil als Tagesliste Mo–So gebaut (statt des
+  Desktop-Grids) – ein Tag pro Karte, Einsätze als Links, unbestätigte
+  schraffiert.
+- **Galerie für Montage:** Rolle montage erreicht in der Auth-Middleware
+  gezielt nur die zwei Galerie-Routen (Datei ansehen, Upload); die Routen
+  prüfen über galerie.darf_hochladen, dass der Vorgang zu einem Einsatz
+  der eigenen Teams gehört (Team-Zuweisung am Gewerk oder Termin).
+  Verschieben/Löschen bleiben komplett gesperrt.
+- **Formulare** laufen generisch über das Blatt „Formulare" (49 Startfelder
+  in 3 Formularen, Entwurf laut Plan – Andreas nimmt die Inhalte ab):
+  seitenweise mit Zwischenspeichern (MontageFormular je Gewerk+Formular);
+  Foto-Felder laden sofort in die Galerie (Zielordner = Spalte optionen),
+  Unterschriften als Canvas → PNG-Daten-URL (Muster der Vor-Ort-Signatur).
+- **Abschluss** erzeugt das PDF (fpdf2, Unterschriften eingebettet) in der
+  Galerie „Inbetrieb-/Abnahme", erledigt die zugehörige Aufgabe im Paket
+  Abnahme & Freigabe (Titel-Mapping) und übernimmt beim Abnahmeprotokoll
+  jede Mängel-Zeile als Restarbeit (Frist als Textzusatz, Foto am ersten
+  Eintrag). Erneutes Abschließen erzeugt ein neues PDF.
+- **Kein Preiszugriff:** das Detail zeigt Positionen ohne Preise (V1) und
+  bleibt auf /montage beschränkt; Ansprechpartner ist der Projektleiter
+  (Name + E-Mail – Benutzer haben kein Telefonfeld).
