@@ -1,19 +1,17 @@
 {% extends "base.html" %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
 
 {% block titel %}Pipeline – Lead-Management{% endblock %}
 
 {% block mainklasse %}breit{% endblock %}
 
 {% block inhalt %}
+{{ lm_nav('board') }}
 <div class="seitenkopf">
     <h1>Pipeline
         {% if demo_badge %}<span class="demo-badge">Demo · Coming soon</span>{% endif %}
     </h1>
     <div class="aktionen">
-        <a class="knopf klein zweitrangig" href="/lead-management/anrufliste">Anrufliste</a>
-        <a class="knopf klein zweitrangig" href="/lead-management/kalender">Kalender</a>
-        <a class="knopf klein zweitrangig" href="/lead-management/karte">Karte</a>
-        <a class="knopf klein zweitrangig" href="/lead-management/cockpit">Cockpit</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
@@ -76,7 +74,7 @@
     <span>
         Klasse <strong>{{ k.vorgang.score_klasse or '–' }}</strong>
         {% if k.sla and k.sla.farbe and k.sla.farbe != 'erfuellt' %}
-            <span class="sla-chip sla-{{ k.sla.farbe }}">{{ k.sla.minuten }} Min</span>
+            <span class="sla-chip sla-{{ k.sla.farbe }}" title="{{ 'Erstkontakt nach ' if k.sla.erfuellt else 'wartet seit ' }}{{ k.sla.text }} (AT = Arbeitstage)">{{ k.sla.text }}</span>
         {% endif %}
         {% if k.vorgang.naechste_aktion_am %}
             <span class="{{ 'ueberfaellig-rot' if k.ueberfaellig else 'dezent' }}">

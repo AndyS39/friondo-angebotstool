@@ -1,0 +1,17 @@
+{# Lead-Management: einheitliche Unternavigation (Design-Fix 27.09.2026) –
+   vorher hatte jede Seite andere Querlinks oben rechts. #}
+{% macro lm_nav(aktiv) %}
+<nav class="lm-nav">
+    {% for pfad, key, name in [
+        ('/lead-management/anrufliste', 'anrufliste', 'Anrufliste'),
+        ('/lead-management/board', 'board', 'Pipeline'),
+        ('/lead-management/kalender', 'kalender', 'Kalender'),
+        ('/lead-management/karte', 'karte', 'Karte'),
+        ('/lead-management/cockpit', 'cockpit', 'Cockpit'),
+        ('/lead-management/posteingang', 'posteingang', 'Posteingang'),
+        ('/lead-management/statistik', 'statistik', 'Statistik'),
+        ('/lead-management/import', 'import', 'Import')] %}
+    <a href="{{ pfad }}" class="{{ 'aktiv' if aktiv == key }}">{{ name }}</a>
+    {% endfor %}
+</nav>
+{% endmacro %}

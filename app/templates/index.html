@@ -112,8 +112,10 @@
             <div class="{{ 'crit' if projekt_kacheln.unterminiert }}">
                 <b>{{ projekt_kacheln.unterminiert }}</b>Unterminiert</div>
         </div>
-        <div class="pj-plinks">Nur für Admins sichtbar · andere Rollen sehen
-            Null-Kacheln und „Das Modul befindet sich im Aufbau."</div>
+        <div class="pj-plinks">{% if demo_badge %}Demo-Modus: nur Admins sehen
+            das Modul – freischalten unter Parametrierung →
+            Projektierung-Einstellungen.{% else %}Board · Kalender · Liste –
+            Klick öffnet die Projektierung.{% endif %}</div>
     </a>
     {% else %}
     <div class="portal-karte" style="cursor:default">

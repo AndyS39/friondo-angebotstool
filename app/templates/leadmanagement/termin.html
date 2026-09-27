@@ -31,7 +31,7 @@
 <div class="vorschlag-karten">
 {% for v in vorschlaege %}
     <div class="vorschlag-karte">
-        <h3>{{ v.beginn.strftime('%a %d.%m.%Y · %H:%M') }} Uhr</h3>
+        <h3>{{ v.beginn | de_datum('%a %d.%m.%Y · %H:%M') }} Uhr</h3>
         <p><strong>{{ v.ad.name }}</strong>
             · Umweg +{{ v.umweg }} Min{{ ' (geschätzt)' if v.geschaetzt }}</p>
         <p class="dezent">
@@ -120,7 +120,7 @@
 </form>
 {% if kalender_ad %}
 <table class="tabelle" style="max-width:1100px">
-    <thead><tr>{% for tag in woche.tage %}<th>{{ tag.strftime('%a %d.%m.') }}</th>{% endfor %}</tr></thead>
+    <thead><tr>{% for tag in woche.tage %}<th>{{ tag | de_datum('%a %d.%m.') }}</th>{% endfor %}</tr></thead>
     <tbody><tr>
     {% for tag in woche.tage %}
         <td style="vertical-align:top">

@@ -1,10 +1,12 @@
 {% extends "base.html" %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
 
 {% block titel %}Lead-Statistik – Lead-Management{% endblock %}
 
 {% block mainklasse %}breit{% endblock %}
 
 {% block inhalt %}
+{{ lm_nav('statistik') }}
 <div class="seitenkopf">
     <h1>Statistik → Leads</h1>
     <div class="aktionen">

@@ -1,12 +1,13 @@
 {% extends "base.html" %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
 
 {% block titel %}Posteingang unklar – Lead-Management{% endblock %}
 
 {% block inhalt %}
+{{ lm_nav('posteingang') }}
 <div class="seitenkopf">
     <h1>Posteingang unklar ({{ eintraege | length }})</h1>
     <div class="aktionen">
-        <a class="knopf klein zweitrangig" href="/lead-management/anrufliste">Anrufliste</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}

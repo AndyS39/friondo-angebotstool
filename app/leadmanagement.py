@@ -204,13 +204,29 @@ def arbeitsminuten(session: Session, von: datetime, bis: datetime) -> int:
     return minuten
 
 
+def sla_text(session: Session, minuten: int) -> str:
+    """Wartezeit lesbar statt roher Minuten (Design-Fix 27.09.2026):
+    „16291 Min" wird zu „30 AT" (Arbeitstage der LM-Arbeitszeit)."""
+    if minuten < 60:
+        return f"{minuten} Min"
+    start_min, ende_min = _arbeitszeit(session)
+    tagesminuten = max(ende_min - start_min, 60)
+    if minuten < tagesminuten:
+        stunden = minuten / 60
+        return (f"{stunden:.1f}".replace(".", ",").replace(",0", "")
+                + " Std")
+    tage = minuten / tagesminuten
+    return f"{tage:.1f}".replace(".", ",").replace(",0", "") + " AT"
+
+
 def sla_status(session: Session, vorgang: Vorgang,
                jetzt: datetime | None = None) -> dict:
     """Berechnet, nie gespeichert (Phase 75): Minuten seit Eingang innerhalb
-    der Arbeitszeit bis zum ersten Versuch."""
+    der Arbeitszeit bis zum ersten Versuch. „text" ist die lesbare Form
+    (Min / Std / AT = Arbeitstage) für die Chips."""
     jetzt = jetzt or datetime.now()
     if vorgang.eingang_am is None:
-        return {"farbe": "", "minuten": 0, "erfuellt": False}
+        return {"farbe": "", "minuten": 0, "erfuellt": False, "text": ""}
     try:
         gruen = int(parameter_holen(session, "sla_gruen_min", "30"))
         gelb = int(parameter_holen(session, "sla_gelb_min", "60"))
@@ -218,10 +234,12 @@ def sla_status(session: Session, vorgang: Vorgang,
         gruen, gelb = 30, 60
     ende = vorgang.erstkontakt_am or jetzt
     minuten = arbeitsminuten(session, vorgang.eingang_am, ende)
+    text = sla_text(session, minuten)
     if vorgang.erstkontakt_am is not None:
-        return {"farbe": "erfuellt", "minuten": minuten, "erfuellt": True}
+        return {"farbe": "erfuellt", "minuten": minuten, "erfuellt": True,
+                "text": text}
     farbe = "gruen" if minuten < gruen else ("gelb" if minuten < gelb else "rot")
-    return {"farbe": farbe, "minuten": minuten, "erfuellt": False}
+    return {"farbe": farbe, "minuten": minuten, "erfuellt": False, "text": text}
 
 
 # --- monday-Quelle + abgeleitete Lead-Phase (Phase 73) -------------------------------

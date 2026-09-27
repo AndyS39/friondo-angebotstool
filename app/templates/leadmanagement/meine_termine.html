@@ -11,7 +11,7 @@
 <div class="einsatz-liste">
     {% for z in liste %}
     <div class="einsatz-karte" style="cursor:default">
-        <strong>{{ z.termin.beginn.strftime('%a %d.%m. %H:%M') }} Uhr
+        <strong>{{ z.termin.beginn | de_datum('%a %d.%m. %H:%M') }} Uhr
             · {{ z.kunde.anzeige_name }}</strong>
         <span>{{ z.termin.adresse or '–' }}
             {% if z.termin.adresse %}

@@ -1,26 +1,30 @@
 {% extends "base.html" %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
 
 {% block titel %}Anrufliste – Lead-Management{% endblock %}
 
 {% block mainklasse %}breit{% endblock %}
 
 {% block inhalt %}
+{{ lm_nav('anrufliste') }}
 <div class="seitenkopf">
     <h1>Anrufliste
         {% if demo_badge %}<span class="demo-badge">Demo · Coming soon</span>{% endif %}
     </h1>
     <div class="aktionen">
         <a class="knopf klein" href="/lead-management/neu">+ Neuer Lead</a>
-        <a class="knopf klein zweitrangig" href="/lead-management/import">Import</a>
-        <a class="knopf klein zweitrangig" href="/lead-management/posteingang">Posteingang</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+{% if freie_anzahl %}
+<p class="lm-hinweis" title="Leads ohne Leadmanager sind in „Meine + freie Leads“ enthalten – Zuordnung im Lead-Kopf (Feld Leadmanager)">
+    ⚠ <b>{{ freie_anzahl }}</b> Lead{{ 's' if freie_anzahl != 1 }} ohne Leadmanager – bitte übernehmen.</p>
+{% endif %}
 
 <form method="get" action="/lead-management/anrufliste" class="suchleiste">
     <label class="kontrollfeld">
         <select name="meine">
-            <option value="1" {{ 'selected' if filter_werte.meine }}>Meine Leads</option>
+            <option value="1" {{ 'selected' if filter_werte.meine }}>Meine + freie Leads</option>
             <option value="0" {{ 'selected' if not filter_werte.meine }}>Alle</option>
         </select>
     </label>
@@ -76,6 +80,7 @@
                     <strong>{{ z.kunde.anzeige_name }}</strong></a>
                 <span class="dezent">{{ z.kunde.ort or '?' }} ({{ z.kunde.plz or '–' }})</span>
                 {% if z.vorgang.demo %}<span class="demo-badge">Demo</span>{% endif %}
+                {% if z.frei %}<span class="abzeichen frei" title="Noch kein Leadmanager zugeordnet">frei</span>{% endif %}
                 {% if z.monday %}<span class="abzeichen">monday</span>{% endif %}
                 {% if z.wiederkehrer %}<span class="abzeichen ep">Wiederkehrer</span>{% endif %}
                 {% if z.nummer_pruefen %}<span class="abzeichen ep">Nummer prüfen</span>{% endif %}
@@ -88,9 +93,9 @@
             <td><strong>{{ z.vorgang.score_klasse or '–' }}</strong>
                 <span class="dezent">{{ z.vorgang.score_punkte if z.vorgang.score_punkte is not none }}</span></td>
             <td>{% if z.sla.farbe == 'erfuellt' %}
-                    <span class="sla-chip sla-erfuellt">erfüllt ({{ z.sla.minuten }} Min)</span>
+                    <span class="sla-chip sla-erfuellt" title="Zeit bis zum Erstkontakt (innerhalb der LM-Arbeitszeit)">erfüllt · {{ z.sla.text }}</span>
                 {% elif z.sla.farbe %}
-                    <span class="sla-chip sla-{{ z.sla.farbe }}">{{ z.sla.minuten }} Min</span>
+                    <span class="sla-chip sla-{{ z.sla.farbe }}" title="wartet seit {{ z.sla.text }} auf den Erstkontakt (AT = Arbeitstage)">{{ z.sla.text }}</span>
                 {% endif %}</td>
             <td>{{ z.vorgang.versuch_nr or 0 }}</td>
             <td class="dezent">{% if z.letzter %}{{ ergebnis_namen.get(z.letzter.ergebnis, '') }}
@@ -214,7 +219,8 @@ const panel = document.getElementById('lead-panel');
 document.querySelectorAll('.panel-link').forEach(a => {
     a.addEventListener('click', e => {
         e.preventDefault();
-        document.getElementById('panel-frame').src = a.dataset.ziel;
+        /* einbett=1: Akte ohne Kopf-/Fusszeile im Panel (Design-Fix 27.09.2026) */
+        document.getElementById('panel-frame').src = a.dataset.ziel + '?einbett=1';
         document.getElementById('panel-voll').href = a.dataset.ziel;
         panel.hidden = false;
         aktiveZeile = a.closest('tr');

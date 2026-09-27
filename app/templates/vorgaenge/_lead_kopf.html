@@ -21,9 +21,9 @@
             ({{ vorgang.eingang_art or '–' }})</span>
         <span>SLA:
             {% if lead_kontext.sla.farbe == 'erfuellt' %}
-                <span class="sla-chip sla-erfuellt">erfüllt ({{ lead_kontext.sla.minuten }} Min)</span>
+                <span class="sla-chip sla-erfuellt" title="Zeit bis zum Erstkontakt (innerhalb der LM-Arbeitszeit)">erfüllt · {{ lead_kontext.sla.text }}</span>
             {% elif lead_kontext.sla.farbe %}
-                <span class="sla-chip sla-{{ lead_kontext.sla.farbe }}">{{ lead_kontext.sla.minuten }} Min</span>
+                <span class="sla-chip sla-{{ lead_kontext.sla.farbe }}" title="wartet seit {{ lead_kontext.sla.text }} auf den Erstkontakt (AT = Arbeitstage)">{{ lead_kontext.sla.text }}</span>
             {% else %}–{% endif %}</span>
         <span title="{{ lead_kontext.score_teile | join('&#10;') }}">Score:
             <strong>{{ vorgang.score_punkte if vorgang.score_punkte is not none else '–' }}
@@ -109,7 +109,7 @@
             {% else %} – kein aktiver Termin{% endif %}</summary>
         {% if lead_kontext.aktiver_termin %}
             {% set t = lead_kontext.aktiver_termin %}
-            <p><strong>{{ t.beginn.strftime('%A, %d.%m.%Y %H:%M') }} Uhr</strong>
+            <p><strong>{{ t.beginn | de_datum('%A, %d.%m.%Y %H:%M') }} Uhr</strong>
                 · {{ lead_kontext.ad.name if lead_kontext.ad else '?' }}
                 {{ '· Umweg +' ~ t.umweg_min ~ ' Min' if t.umweg_min is not none }}
                 · Status {{ t.status }}

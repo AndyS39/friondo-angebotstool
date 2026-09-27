@@ -29,8 +29,29 @@ def menge_format(wert) -> str:
     return f"{wert}".replace(".", ",")
 
 
+_WOCHENTAGE = [("Mon", "Monday", "Mo", "Montag"),
+               ("Tue", "Tuesday", "Di", "Dienstag"),
+               ("Wed", "Wednesday", "Mi", "Mittwoch"),
+               ("Thu", "Thursday", "Do", "Donnerstag"),
+               ("Fri", "Friday", "Fr", "Freitag"),
+               ("Sat", "Saturday", "Sa", "Samstag"),
+               ("Sun", "Sunday", "So", "Sonntag")]
+
+
+def de_datum(wert, format="%d.%m.%Y"):
+    """strftime mit deutschen Wochentagen (Design-Fix 27.09.2026): %a/%A
+    liefern in der C-Locale englische Namen (MON/TUE) – dieser Filter
+    ersetzt sie, z. B. {{ termin | de_datum('%a %d.%m.') }} -> 'Mo 28.09.'."""
+    if wert is None:
+        return ""
+    text = wert.strftime(format)
+    en_kurz, en_lang, kurz, lang = _WOCHENTAGE[wert.weekday()]
+    return text.replace(en_lang, lang).replace(en_kurz, kurz)
+
+
 templates.env.filters["euro"] = euro
 templates.env.filters["menge"] = menge_format
+templates.env.filters["de_datum"] = de_datum
 
 # Cache-Busting: Browser laden style.css nach jeder Änderung neu (Phase 18
 # Nachfix). v14: pro Request frisch statt einmal beim Start – ein laufender

@@ -2705,3 +2705,24 @@ td.aktionen form { display: inline-flex; vertical-align: middle; margin: 0 0 0 0
 .pj-signatur { width: 100%; max-width: 560px; height: 160px;
     border: 1px dashed var(--pj-akzent, #3f86c6); border-radius: 10px;
     background: #fff; touch-action: none; }
+
+/* Design-Fix 27.09.2026: Lead-Management-Unternavigation + Hinweise */
+.lm-nav { display: flex; flex-wrap: wrap; gap: 4px; margin: -4px 0 14px;
+    border-bottom: 1px solid var(--pj-line, #d5dcd9); padding-bottom: 8px; }
+.lm-nav a { padding: 5px 12px; border-radius: 999px; font-size: 13px;
+    text-decoration: none; color: var(--pj-muted, #5d6b66);
+    border: 1px solid transparent; }
+.lm-nav a:hover { background: #eef2f6; }
+.lm-nav a.aktiv { background: var(--dunkelblau, #1b2a5e); color: #fff;
+    font-weight: 600; }
+.lm-hinweis { background: #fdf1dc; border: 1px solid #ecd9ae;
+    border-radius: 10px; padding: 8px 12px; font-size: 13px; color: #7a5c14; }
+.abzeichen.frei { background: #fdf1dc; color: #8a6116; border-color: #ecd9ae; }
+
+/* Design-Fix 27.09.2026: eingebettete Akte (Anrufliste-Panel) ohne
+   doppelte Kopf-/Fusszeile; Kopf-Aktionen duerfen umbrechen statt aus dem
+   Bild zu laufen (Parametrierung hat inzwischen 13 Reiter). */
+body.einbett .kopfleiste, body.einbett .fusszeile { display: none; }
+body.einbett main { padding: 10px 14px; }
+.seitenkopf .aktionen { flex-wrap: wrap; white-space: normal;
+    row-gap: 6px; justify-content: flex-end; }

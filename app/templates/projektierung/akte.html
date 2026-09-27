@@ -215,7 +215,7 @@
             <span>Montage</span>
             <div>{% if montage_termine %}
                 {% set m = montage_termine | sort(attribute='beginn') | last %}
-                <b>{{ m.beginn.strftime('%a %d.%m.') }}{{ ' – ' ~ m.ende.strftime('%a %d.%m.') if m.ende and m.ende.date() != m.beginn.date() }}</b>
+                <b>{{ m.beginn | de_datum('%a %d.%m.') }}{{ ' – ' ~ (m.ende | de_datum('%a %d.%m.')) if m.ende and m.ende.date() != m.beginn.date() }}</b>
                 {% if m.team_id and m.team_id in teams_map %} · {{ teams_map[m.team_id].name }}{% endif %}
                 {% if m.kunde_bestaetigt %} · Kunde bestätigt ✔{% endif %}
                 {% if m.notiz %} <small style="color:var(--pj-muted)">{{ m.notiz }}</small>{% endif %}

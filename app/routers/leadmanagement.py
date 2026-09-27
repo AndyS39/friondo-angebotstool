@@ -385,7 +385,13 @@ def _anruf_zeilen(session: Session, benutzer, filter_werte: dict) -> list[dict]:
         abfrage = abfrage.filter(Vorgang.lead_phase.in_(
             ("neu", "in_kontaktierung", "zurueckgestellt", "nicht_erreicht")))
     if filter_werte.get("meine") and benutzer is not None:
-        abfrage = abfrage.filter(Vorgang.leadmanager_id == benutzer.id)
+        # Design-/Prozess-Fix 27.09.2026: „Meine Leads" enthält auch die noch
+        # NICHT zugeordneten – sonst liegen neue Leads unsichtbar herum,
+        # bis jemand zufällig auf „Alle" stellt (Cockpit zeigte 15 x SLA rot
+        # „ohne LM", die Arbeitsliste war leer).
+        abfrage = abfrage.filter(
+            (Vorgang.leadmanager_id == benutzer.id)
+            | (Vorgang.leadmanager_id.is_(None)))
     if filter_werte.get("quelle_id"):
         abfrage = abfrage.filter(Vorgang.quelle_id == int(filter_werte["quelle_id"]))
     if filter_werte.get("klasse"):
@@ -447,6 +453,7 @@ def _anruf_zeilen(session: Session, benutzer, filter_werte: dict) -> list[dict]:
             "sla": sla, "letzter": letzter,
             "wiederkehrer": mehrfach.get(v.kunde_id, 0) > 1,
             "monday": v.eingang_art == "monday",
+            "frei": v.leadmanager_id is None,
             "nummer_pruefen": letzter is not None
                               and letzter.ergebnis == "falsche_nummer",
             "_sortierung": (gruppe, schluessel),
@@ -476,8 +483,15 @@ async def anrufliste_voll(request: Request,
         filter_werte["meine"] = False   # ohne eigene Leads direkt „Alle“
         zeilen = _anruf_zeilen(session, benutzer, filter_werte)
     logik = leadmanagement_logik.hole_logik()
+    # Prozess-Fix 27.09.2026: freie Leads sichtbar machen (Banner + Badge)
+    freie_anzahl = (session.query(Vorgang)
+                    .filter(Vorgang.leadmanager_id.is_(None),
+                            Vorgang.lead_phase.in_(
+                                ("neu", "in_kontaktierung", "zurueckgestellt",
+                                 "nicht_erreicht"))).count())
     return render(request, "leadmanagement/anrufliste.html",
                   aktiv="/lead-management", zeilen=zeilen,
+                  freie_anzahl=freie_anzahl,
                   filter_werte=filter_werte, quellen=_quellen(session),
                   phasen_namen=LEAD_PHASEN_NAMEN,
                   ergebnis_namen=ANRUF_ERGEBNIS_NAMEN,

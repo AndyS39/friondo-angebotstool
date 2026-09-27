@@ -152,6 +152,13 @@ class RollenMiddleware(BaseHTTPMiddleware):
                         leadmanagement.lead_ad_sicht(session, benutzer))
                 except Exception:
                     pass
+                # Design-Fix 27.09.2026: Projektierung fehlte im Hauptmenü
+                try:
+                    from app import projektierung
+                    request.state.projektierung_ok = (
+                        projektierung.modul_sichtbar(session, benutzer))
+                except Exception:
+                    pass
             if pfad.startswith(OFFENE_PFADE):
                 return await call_next(request)
             if benutzer is None:

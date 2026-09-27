@@ -39,7 +39,7 @@
         {% set kunde = kunden.get(projekt.kunde_id) if projekt else none %}
         {% set steck = steckbriefe.get(gewerk.id, {}) if gewerk else {} %}
         <div class="pj-einsatz">
-            <div class="d">{{ t.beginn.strftime('%a %d.%m.') }}{{ ' – ' ~ t.ende.strftime('%a %d.%m.') if t.ende and t.ende.date() != t.beginn.date() }}
+            <div class="d">{{ t.beginn | de_datum('%a %d.%m.') }}{{ ' – ' ~ (t.ende | de_datum('%a %d.%m.')) if t.ende and t.ende.date() != t.beginn.date() }}
                 {% if gewerk and ts_map.get(gewerk.id) %}
                     {% set ts = ts_map[gewerk.id] %}
                     <span class="pj-ts {{ {'terminiert': 'g', 'unbestaetigt': 'y', 'unterminiert': 'r'}.get(ts.status, 'y') }}">{{ ts.status }}</span>

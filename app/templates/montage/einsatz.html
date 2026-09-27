@@ -14,7 +14,7 @@
 
     <div class="pj-kv">
         <span>Termin</span>
-        <div><b>{{ termin.beginn.strftime('%a %d.%m.%Y %H:%M') }} Uhr</b>
+        <div><b>{{ termin.beginn | de_datum('%a %d.%m.%Y %H:%M') }} Uhr</b>
             {% if termin.ende %} – {{ termin.ende.strftime('%H:%M') }} Uhr{% endif %}
             {% if termin.notiz %}<br><small style="color:var(--pj-muted)">{{ termin.notiz }}</small>{% endif %}</div>
         <span>Adresse</span>

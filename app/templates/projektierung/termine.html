@@ -50,7 +50,7 @@
 
 {% if tage %}
 {% for tag, liste in tage %}
-<h2 style="font-size:15px;margin:14px 0 2px">{{ tag.strftime('%A, %d.%m.%Y') }}</h2>
+<h2 style="font-size:15px;margin:14px 0 2px">{{ tag | de_datum('%A, %d.%m.%Y') }}</h2>
 <div style="max-width:1000px">
 {% for t in liste %}
     {% set gewerk = gewerke.get(t.gewerk_id) %}
