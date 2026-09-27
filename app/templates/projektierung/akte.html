@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_galerie.html" import galerie as galerie_komponente %}
+{% from "_galerie.html" import galerie as galerie_komponente, galerie_fuss %}
 {% from "_steckbrief.html" import steckbrief %}
 {% from "_projektierung.html" import pj_dot %}
 
@@ -633,9 +633,14 @@
 
 <div class="pj-pane on" id="dokumente">
     {% if projekt.vorgang_id %}
-    {{ galerie_komponente(projekt.vorgang_id, galerie_daten, galerie_ordner,
-                          galerie_darf_loeschen,
-                          '/projektierung/projekt/' ~ projekt.id) }}
+    {# 27.09.2026 (Andreas): eigene Galerie je Gewerk-Sparte #}
+    {% for sp in galerie_sparten %}
+    {% if galerie_sparten | length > 1 %}<h3 style="margin:10px 0 4px">Galerie {{ sp }}</h3>{% endif %}
+    {{ galerie_komponente(projekt.vorgang_id, galerie_daten[sp],
+                          galerie_ordner[sp], galerie_darf_loeschen,
+                          '/projektierung/projekt/' ~ projekt.id, sparte=sp) }}
+    {% endfor %}
+    {{ galerie_fuss() }}
     <hr style="border:none;border-top:1px solid var(--pj-line);margin:12px 0">
     <details><summary class="dezent" style="cursor:pointer">Alte Projekt-Ordnerstruktur (Restbestand)</summary>
     {% endif %}

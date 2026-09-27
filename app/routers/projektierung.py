@@ -721,10 +721,19 @@ async def akte(request: Request, projekt_id: int,
                       session, [g.id for g in gewerke]),
                   steckbrief_felder=kern.steckbrief_felder,
                   # v15 (Phase 76): Galerie des Vorgangs in der Projektakte
-                  galerie_daten=__import__("app.galerie", fromlist=["x"])
-                  .uebersicht(session, projekt.vorgang_id or 0),
-                  galerie_ordner=__import__("app.galerie", fromlist=["x"])
-                  .ordner_liste(session),
+                  # 27.09.2026 (Andreas): Galerie je Gewerk-Sparte
+                  galerie_sparten=[sp for sp in ("WP", "PV", "KL", "WB")
+                                   if any(g.sparte == sp for g in gewerke)]
+                  or ["WP"],
+                  galerie_daten={sp: __import__("app.galerie", fromlist=["x"])
+                                 .uebersicht(session, projekt.vorgang_id or 0, sp)
+                                 for sp in ("WP", "PV", "KL", "WB")
+                                 if any(g.sparte == sp for g in gewerke)}
+                  or {"WP": __import__("app.galerie", fromlist=["x"])
+                      .uebersicht(session, projekt.vorgang_id or 0, "WP")},
+                  galerie_ordner={sp: __import__("app.galerie", fromlist=["x"])
+                                  .ordner_liste(session, sp)
+                                  for sp in ("WP", "PV", "KL", "WB")},
                   galerie_darf_loeschen=__import__("app.galerie", fromlist=["x"])
                   .darf_loeschen(request.state.benutzer),
                   projekt_subs=projekt_subs, subs_stamm=subs_stamm,
@@ -1349,7 +1358,7 @@ async def ugl_erzeugen(request: Request, gewerk_id: int,
                                 dateiname, inhalt,
                                 benutzer=request.state.benutzer,
                                 bemerkung="UGL-Bestelldatei (Collin)",
-                                quelle="formular")
+                                quelle="formular", sparte=gewerk.sparte)
     for aufgabe in (session.query(Aufgabe)
                     .filter(Aufgabe.gewerk_id == gewerk.id,
                             Aufgabe.aktion_typ == "api",
@@ -1491,7 +1500,8 @@ async def restarbeit_anlegen(request: Request, gewerk_id: int,
             galerie_datei = galerie_modul.speichern(
                 session, angebot.vorgang_id, "Inbetrieb-/Abnahme",
                 datei.filename, inhalt, benutzer=request.state.benutzer,
-                bemerkung=f"Restarbeit: {text[:100]}", quelle="formular")
+                bemerkung=f"Restarbeit: {text[:100]}", quelle="formular",
+                sparte=gewerk.sparte)
             if galerie_datei is not None:
                 eintrag.galerie_datei_id = galerie_datei.id
     session.add(eintrag)

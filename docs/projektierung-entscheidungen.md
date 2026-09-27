@@ -464,3 +464,28 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
   freigegeben" und „BnD nach Abnahme erstellt" rücken auf 6/7. Migration
   migration_abweichung_abnahme ergänzt den Punkt an bestehenden offenen
   Gewerken (4 lokal) und zieht die Reihenfolge nach.
+
+## 27.09.2026 – Galerie je Sparte + Foto-Sammelbox (Andreas)
+
+- **V1-Aufgabenpakete restlos entfernt** (auch abgeschlossene/stornierte
+  Gewerke, Migration migration_v1_restlos) – die Doppelung verwirrte.
+- **Eigene Galerie je Sparte**: GalerieDatei.sparte (Bestand = WP); die
+  Vorgangsakte zeigt Reiter je Sparte (aus Gewerken/Kunden-Interessen),
+  Projekt- und Montageakte die Galerie der Gewerk-Sparte. Ordnersets:
+  WP wie bisher; PV = Dachfläche · Zählerschrank · Speicher-Standort;
+  KL = Innengeräte · Außengerät · Leitungsweg; WB = Stellplatz ·
+  Zählerschrank · Leitungsweg; + gemeinsam Montagedokumente ·
+  Inbetrieb-/Abnahme · Neue Anlage · Allgemein (Vorschlag – Namen bei
+  Bedarf anpassen). Ablage neuer Dateien unter galerie/<sparte>/<ordner>;
+  Verschieben nur innerhalb der Sparte.
+- **Foto-Sammelbox** (Vorgangs-, Projekt- und Montageakte): mehrere Fotos
+  nacheinander aufnehmen ODER mehrfach auswählen, je Foto den Zielordner
+  im Vorschau-Raster zuweisen, EIN Upload am Ende (Route nimmt
+  datei_ordner je Datei entgegen). Das capture-Attribut mit Sofort-Upload
+  war der Grund für „ein Foto pro Upload"; im Erfassungs-Fotoblock wurde
+  capture entfernt (Handy bietet dann Kamera UND Mehrfachauswahl).
+- **Demo-Projekte** über scripts/demo_projekte.py (idempotent):
+  PR „Demo Planung, Petra" (WP in Feinplanung VOT, Steckbrief aus der
+  Erfassung, FP-Termin, Galerie-Reiter WP/PV) und „Demo Montage, Bernd"
+  (WP in Montage, Montageteam 1 übermorgen bestätigt, FP abgeschlossen,
+  Fotos in vier Ordnern – sichtbar im Team-Kalender und unter /montage).

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_galerie.html" import galerie %}
+{% from "_galerie.html" import galerie, galerie_fuss %}
 {% from "_steckbrief.html" import steckbrief %}
 {% import "_sparten.html" as sparten_ui %}
 {% from "_komponenten.html" import status_badge, statuskette, wiedervorlage_chip, leer_zustand %}
@@ -222,9 +222,33 @@
 {% endif %}
 {% endif %}{# /vorgang.demo #}
 
-<h2>Galerie</h2>
-{{ galerie(vorgang.id, galerie_daten, galerie_ordner, galerie_darf_loeschen,
-           '/vorgaenge/' ~ vorgang.id) }}
+<h2 id="galerie">Galerie</h2>
+{# 27.09.2026 (Andreas): eigene Galerie je Sparte (WP / PV / KL / WB) #}
+{% if galerie_sparten | length > 1 %}
+<div class="pj-gal-tabs">
+    {% for sp in galerie_sparten %}
+    <button type="button" class="pj-btn {{ 'primary' if loop.first }}"
+            onclick="pjGalTab(this, '{{ sp }}')">{{ sp }}</button>
+    {% endfor %}
+</div>
+{% endif %}
+{% for sp in galerie_sparten %}
+<div class="pj-gal-tab" data-sparte="{{ sp }}"
+     {% if not loop.first %}hidden{% endif %}>
+    {{ galerie(vorgang.id, galerie_daten[sp], galerie_ordner[sp],
+               galerie_darf_loeschen, '/vorgaenge/' ~ vorgang.id, sparte=sp) }}
+</div>
+{% endfor %}
+<script>
+function pjGalTab(knopf, sparte) {
+    knopf.parentElement.querySelectorAll('button')
+        .forEach(function (b) { b.classList.remove('primary'); });
+    knopf.classList.add('primary');
+    document.querySelectorAll('.pj-gal-tab')
+        .forEach(function (t) { t.hidden = t.dataset.sparte !== sparte; });
+}
+</script>
+{{ galerie_fuss() }}
 
 </div>
 <div>{# ---------- rechte Spalte: Mail-Verlauf + Notizen-Chat ---------- #}

@@ -169,8 +169,10 @@ async def einsatz(request: Request, termin_id: int,
     steckbrief = (kern.steckbrief_daten(session, [gewerk.id])[gewerk.id]
                   if gewerk is not None else {})
     vorgang_id = angebot.vorgang_id if angebot is not None else None
-    galerie_daten = (galerie_modul.uebersicht(session, vorgang_id)
-                     if vorgang_id else [])
+    galerie_sparte = gewerk.sparte if gewerk is not None else "WP"
+    galerie_daten = (galerie_modul.uebersicht(session, vorgang_id,
+                                              galerie_sparte)
+                     if vorgang_id else {})
     projektleiter = (session.get(Benutzer, projekt.projektleiter_id)
                      if projekt.projektleiter_id else None)
     team_termine = (session.query(ProjektTermin)
@@ -209,7 +211,9 @@ async def einsatz(request: Request, termin_id: int,
                   steckbrief_felder=(kern.steckbrief_felder(gewerk.sparte)
                                      if gewerk is not None else []),
                   galerie_daten=galerie_daten, vorgang_id=vorgang_id,
-                  galerie_ordner=galerie_modul.ordner_liste(session),
+                  galerie_sparte=galerie_sparte,
+                  galerie_ordner=galerie_modul.ordner_liste(session,
+                                                            galerie_sparte),
                   projektleiter=projektleiter,
                   team_termine=team_termine, teams_map=teams_map,
                   subs=subs, restarbeiten=restarbeiten, formulare=formulare,
@@ -418,7 +422,8 @@ async def restarbeit_melden(request: Request, termin_id: int,
             galerie_datei = galerie_modul.speichern(
                 session, angebot.vorgang_id, "Inbetrieb-/Abnahme",
                 datei.filename, inhalt, benutzer=benutzer,
-                bemerkung=f"Restarbeit: {text[:100]}", quelle="formular")
+                bemerkung=f"Restarbeit: {text[:100]}", quelle="formular",
+                sparte=gewerk.sparte)
             if galerie_datei is not None:
                 eintrag.galerie_datei_id = galerie_datei.id
     session.add(eintrag)

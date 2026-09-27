@@ -1,10 +1,39 @@
-{# v15 (Phase 76): Galerie-Komponente – identisch in Vorgangs- und Projektakte.
-   Erwarteter Kontext: galerie_vorgang_id, galerie_daten (Ordner → {eintraege,
-   vorschau}), galerie_ordner (Liste), galerie_darf_loeschen (bool),
-   galerie_zurueck (URL der aktuellen Seite). #}
+{# v15 (Phase 76) · 27.09.2026 (Andreas): Galerie-Komponente je SPARTE mit
+   Foto-Sammelbox: erst mehrere Fotos aufnehmen/auswählen, je Foto den
+   Zielordner zuweisen, dann EIN Upload. Kontext siehe Makro-Parameter;
+   galerie_fuss() einmal pro Seite einbinden (Lightbox + JS). #}
 {% macro galerie(galerie_vorgang_id, galerie_daten, galerie_ordner,
-                 galerie_darf_loeschen, galerie_zurueck) %}
-<div class="pj-galerie" id="galerie">
+                 galerie_darf_loeschen, galerie_zurueck, sparte='WP',
+                 darf_verschieben=True) %}
+<div class="pj-galerie" id="galerie-{{ sparte }}">
+    {# Foto-Sammelbox (27.09.2026): Kamera-Serie oder Mehrfachauswahl,
+       Ordner je Foto, ein Upload für alles #}
+    <div class="pj-gal-sammel" data-vorgang="{{ galerie_vorgang_id }}"
+         data-sparte="{{ sparte }}" data-zurueck="{{ galerie_zurueck }}">
+        <div class="kopf">
+            <label class="pj-btn primary">📷 Foto aufnehmen
+                <input type="file" accept="image/*" capture="environment"
+                       hidden onchange="pjSammelAdd(this)"></label>
+            <label class="pj-btn">🖼 Fotos wählen
+                <input type="file" accept="image/*,application/pdf" multiple
+                       hidden onchange="pjSammelAdd(this)"></label>
+            <label class="dezent">Standard-Ordner
+                <select class="haupt-ordner">
+                    {% for o in galerie_ordner %}<option value="{{ o }}">{{ o }}</option>{% endfor %}
+                </select></label>
+        </div>
+        <div class="liste"></div>
+        <div class="fuss" hidden>
+            <input type="text" class="bemerkung" placeholder="Bemerkung (optional)" size="18">
+            <button class="pj-btn primary" type="button"
+                    onclick="pjSammelHochladen(this)">⬆ <span class="zahl">0</span> Fotos hochladen</button>
+            <button class="pj-btn" type="button" onclick="pjSammelLeeren(this)">Leeren</button>
+        </div>
+        <p class="dezent hinweis">Nacheinander fotografieren – jedes Foto landet
+            erst in dieser Liste (Ordner je Foto wählbar), hochgeladen wird
+            einmal am Ende.</p>
+    </div>
+
     {% for ordner in galerie_ordner %}
     {% set eintrag = galerie_daten.get(ordner, {'eintraege': [], 'vorschau': None}) %}
     <details class="pj-gal-ordner" {{ 'open' if eintrag.eintraege and loop.first }}>
@@ -26,7 +55,7 @@
                         <img src="/vorgaenge/galerie/datei/{{ d.id }}" alt="{{ d.dateiname }}" loading="lazy">
                     </a>
                     <figcaption title="{{ d.bemerkung }}">{{ d.hochgeladen_am.strftime('%d.%m.') }}
-                        {% if galerie_darf_loeschen or galerie_ordner | length > 1 %}
+                        {% if darf_verschieben %}
                         <form method="post" action="/vorgaenge/galerie/datei/{{ d.id }}/verschieben" style="display:inline">
                             <select name="ordner" onchange="this.form.submit()" title="In Ordner verschieben">
                                 <option value="">→</option>
@@ -67,12 +96,9 @@
                   ondragleave="this.classList.remove('drop')"
                   ondrop="pjGalDrop(event, this)">
                 <input type="hidden" name="ordner" value="{{ ordner }}">
+                <input type="hidden" name="sparte" value="{{ sparte }}">
                 <input type="hidden" name="zurueck" value="{{ galerie_zurueck }}">
                 <input type="file" name="dateien" multiple>
-                <label class="pj-btn pj-gal-kamera">📷 Foto aufnehmen
-                    <input type="file" name="dateien" accept="image/*"
-                           capture="environment" multiple hidden
-                           onchange="this.closest('form').submit()"></label>
                 <input type="text" name="bemerkung" placeholder="Bemerkung (optional)" size="14">
                 <button class="pj-btn primary" type="submit">Hochladen</button>
                 <span class="dezent">oder Dateien hierher ziehen</span>
@@ -81,6 +107,9 @@
     </details>
     {% endfor %}
 </div>
+{% endmacro %}
+
+{% macro galerie_fuss() %}
 <dialog class="pj-dlg pj-lightbox" id="pj-lightbox" onclick="this.close()">
     <img src="" alt=""><div class="bu"></div>
 </dialog>
@@ -100,6 +129,75 @@ function pjGalDrop(ev, form) {
     if (!ev.dataTransfer.files.length) return;
     form.querySelector('input[type=file][multiple]:not([hidden])').files = ev.dataTransfer.files;
     form.submit();
+}
+/* Foto-Sammelbox (27.09.2026): mehrere Fotos sammeln, Ordner je Foto,
+   ein Upload am Ende */
+function pjSammelBox(el) { return el.closest('.pj-gal-sammel'); }
+function pjSammelAdd(input) {
+    var box = pjSammelBox(input);
+    box._dateien = box._dateien || [];
+    var haupt = box.querySelector('.haupt-ordner');
+    Array.from(input.files).forEach(function (datei) {
+        var eintrag = {datei: datei};
+        box._dateien.push(eintrag);
+        var zeile = document.createElement('div');
+        zeile.className = 'foto';
+        var bild = document.createElement('img');
+        if (datei.type.indexOf('image') === 0) {
+            bild.src = URL.createObjectURL(datei);
+        }
+        zeile.appendChild(bild);
+        var wahl = haupt.cloneNode(true);
+        wahl.className = '';
+        wahl.value = haupt.value;
+        zeile.appendChild(wahl);
+        eintrag.wahl = wahl;
+        var weg = document.createElement('button');
+        weg.type = 'button';
+        weg.textContent = '✕';
+        weg.title = 'Foto aus der Liste entfernen';
+        weg.onclick = function () {
+            box._dateien.splice(box._dateien.indexOf(eintrag), 1);
+            zeile.remove();
+            pjSammelZahl(box);
+        };
+        zeile.appendChild(weg);
+        box.querySelector('.liste').appendChild(zeile);
+    });
+    input.value = '';
+    pjSammelZahl(box);
+}
+function pjSammelZahl(box) {
+    var n = (box._dateien || []).length;
+    box.querySelector('.fuss').hidden = n === 0;
+    box.querySelector('.zahl').textContent = n;
+}
+function pjSammelLeeren(knopf) {
+    var box = pjSammelBox(knopf);
+    box._dateien = [];
+    box.querySelector('.liste').innerHTML = '';
+    pjSammelZahl(box);
+}
+function pjSammelHochladen(knopf) {
+    var box = pjSammelBox(knopf);
+    if (!box._dateien || !box._dateien.length) return;
+    knopf.disabled = true;
+    var daten = new FormData();
+    daten.append('ordner', box.querySelector('.haupt-ordner').value);
+    daten.append('sparte', box.dataset.sparte);
+    daten.append('zurueck', box.dataset.zurueck);
+    daten.append('bemerkung', box.querySelector('.bemerkung').value);
+    box._dateien.forEach(function (e) {
+        daten.append('dateien', e.datei);
+        daten.append('datei_ordner', e.wahl.value);
+    });
+    fetch('/vorgaenge/' + box.dataset.vorgang + '/galerie/upload',
+          {method: 'POST', body: daten})
+        .then(function (antwort) { window.location = antwort.url; })
+        .catch(function () {
+            knopf.disabled = false;
+            alert('Upload fehlgeschlagen – bitte erneut versuchen.');
+        });
 }
 </script>
 {% endmacro %}

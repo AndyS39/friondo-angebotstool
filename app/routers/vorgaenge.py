@@ -182,8 +182,21 @@ async def akte(request: Request, vorgang_id: int,
     projekt_modul_ok = projektierung_modul.modul_sichtbar(session, benutzer)
     # v15 (Phase 76): Galerie am Vorgang
     from app import galerie as galerie_modul
-    galerie_daten = galerie_modul.uebersicht(session, vorgang.id)
-    galerie_ordner = galerie_modul.ordner_liste(session)
+    # 27.09.2026 (Andreas): eigene Galerie je Sparte - Reiter fuer jede
+    # Sparte aus Gewerken, Kunden-Interessen oder vorhandenen Dateien
+    from app.models import GalerieDatei as _GalerieDatei
+    _datei_sparten = {z[0] for z in session.query(_GalerieDatei.sparte)
+                      .filter(_GalerieDatei.vorgang_id == vorgang.id)
+                      .distinct()}
+    _interessen = set(kunde.interessen if kunde else [])
+    galerie_sparten = [sp for sp in ("WP", "PV", "KL", "WB")
+                       if sp in _interessen or sp in _datei_sparten]
+    if not galerie_sparten:
+        galerie_sparten = ["WP"]
+    galerie_daten = {sp: galerie_modul.uebersicht(session, vorgang.id, sp)
+                     for sp in galerie_sparten}
+    galerie_ordner = {sp: galerie_modul.ordner_liste(session, sp)
+                      for sp in galerie_sparten}
     galerie_darf_loeschen = galerie_modul.darf_loeschen(benutzer)
     vorgang_projekte = []
     if projekt_modul_ok:
@@ -222,6 +235,7 @@ async def akte(request: Request, vorgang_id: int,
     return render(request, "vorgaenge/akte.html", aktiv="/vorgaenge",
                   mobil=benutzer.rolle == "aussendienst",
                   galerie_daten=galerie_daten, galerie_ordner=galerie_ordner,
+                  galerie_sparten=galerie_sparten,
                   galerie_darf_loeschen=galerie_darf_loeschen,
                   steckbrief_daten=(projektierung_modul.steckbrief_daten(
                       session, [g.id for e in vorgang_projekte for g in e["gewerke"]])
@@ -429,21 +443,31 @@ async def galerie_upload(request: Request, vorgang_id: int,
                                 status_code=303)
     form = await request.form()
     ordner = form.get("ordner") or "Allgemein"
+    sparte = form.get("sparte") or "WP"
     bemerkung = form.get("bemerkung") or ""
+    # 27.09.2026 (Andreas): Foto-Sammelbox schickt je Datei einen eigenen
+    # Zielordner (datei_ordner parallel zur Dateireihenfolge)
+    je_datei_ordner = form.getlist("datei_ordner")
     anzahl = 0
-    for datei in form.getlist("dateien"):
+    ordner_benutzt: set[str] = set()
+    for nr, datei in enumerate(form.getlist("dateien")):
         if getattr(datei, "filename", ""):
             inhalt = await datei.read()
-            if galerie_modul.speichern(session, vorgang_id, ordner,
+            ziel_ordner = (je_datei_ordner[nr]
+                           if nr < len(je_datei_ordner)
+                           and je_datei_ordner[nr] else ordner)
+            if galerie_modul.speichern(session, vorgang_id, ziel_ordner,
                                        datei.filename, inhalt,
-                                       benutzer=benutzer, bemerkung=bemerkung):
+                                       benutzer=benutzer, bemerkung=bemerkung,
+                                       sparte=sparte):
                 anzahl += 1
+                ordner_benutzt.add(ziel_ordner)
     session.commit()
     ziel = form.get("zurueck") or f"/vorgaenge/{vorgang_id}"
     trenner = "&" if "?" in ziel else "?"
     return RedirectResponse(ziel + trenner + "meldung=" + quote_plus(
-        f"{anzahl} Datei(en) in „{ordner}“ abgelegt.") + "#galerie",
-        status_code=303)
+        f"{anzahl} Datei(en) abgelegt ({', '.join(sorted(ordner_benutzt)) or ordner}).")
+        + "#galerie", status_code=303)
 
 
 @router.get("/galerie/datei/{datei_id}")

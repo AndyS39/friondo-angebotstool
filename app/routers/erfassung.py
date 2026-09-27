@@ -347,7 +347,8 @@ async def seite(request: Request, erfassung_id: int, nr: int,
                   benutzer=_benutzer(request), erfassung=erfassung, kunde=kunde,
                   seiten=seiten, nr=nr, fragen=fragen, sichtbar=sichtbar,
                   werte=werte, fehler={},
-                  galerie_ordner=galerie_modul.ordner_liste(session),
+                  galerie_ordner=galerie_modul.ordner_liste(
+                      session, erfassung.sparte or "WP"),
                   vorbelegt=json.loads(erfassung.vorbelegt_json or "{}"),
                   client_regel=lambda f: _client_regel(f, antworten, logik),
                   wiederhol_id=engine.ID_WIEDERHOL_ANZAHL)
@@ -415,7 +416,8 @@ async def seite_speichern(request: Request, erfassung_id: int, nr: int,
                     if galerie_modul.speichern(session, vorgang.id, ordner,
                                                datei.filename, inhalt,
                                                benutzer=_benutzer(request),
-                                               quelle="erfassung"):
+                                               quelle="erfassung",
+                                               sparte=erfassung.sparte or "WP"):
                         gespeichert += 1
     if richtung == "freitext":   # v7: Wechsel in die Freitext-Erfassung –
         session.commit()         # bereits gegebene Antworten bleiben erhalten

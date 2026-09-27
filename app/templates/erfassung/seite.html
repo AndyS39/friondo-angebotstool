@@ -89,8 +89,10 @@
             {% for ordner in galerie_ordner %}
             <div class="formzeile" style="align-items:center">
                 <span style="flex:1">{{ ordner }}</span>
+                {# 27.09.2026: ohne capture - so bietet das Handy Kamera UND
+                   Mehrfachauswahl an (capture erzwang genau 1 Foto) #}
                 <input type="file" name="galerie_{{ loop.index0 }}" accept="image/*"
-                       capture="environment" multiple>
+                       multiple>
                 <input type="hidden" name="galerie_ordner_{{ loop.index0 }}" value="{{ ordner }}">
             </div>
             {% endfor %}

@@ -56,6 +56,7 @@ def fotos_fuer(session, gewerk, ordner: list[str]) -> list:
         return []
     return (session.query(GalerieDatei)
             .filter(GalerieDatei.vorgang_id == angebot.vorgang_id,
+                    GalerieDatei.sparte == gewerk.sparte,   # 27.09.2026
                     GalerieDatei.ordner.in_(ordner),
                     GalerieDatei.bild.is_(True))
             .order_by(GalerieDatei.id.desc()).all())

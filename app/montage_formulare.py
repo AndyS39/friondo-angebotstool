@@ -71,7 +71,7 @@ async def seite_speichern(session, eintrag, gewerk, felder, form,
                 feld.optionen or "Inbetrieb-/Abnahme", datei.filename,
                 inhalt, benutzer=benutzer,
                 bemerkung=f"{feld.bezeichnung} ({eintrag.formular})",
-                quelle="formular")
+                quelle="formular", sparte=gewerk.sparte)
             if galerie_datei is not None:
                 daten[feld.feld_key] = (f"galerie:{galerie_datei.id}:"
                                         f"{galerie_datei.dateiname}")
@@ -196,7 +196,8 @@ def abschliessen(session, logik, eintrag, gewerk,
         galerie_datei = galerie_modul.speichern(
             session, angebot.vorgang_id, "Inbetrieb-/Abnahme",
             f"{titel}_{projekt.nummer if projekt else ''}.pdf", inhalt,
-            benutzer=benutzer, bemerkung=titel, quelle="formular")
+            benutzer=benutzer, bemerkung=titel, quelle="formular",
+            sparte=gewerk.sparte)
         if galerie_datei is not None:
             eintrag.pdf_galerie_id = galerie_datei.id
     eintrag.status = "abgeschlossen"

@@ -2735,3 +2735,33 @@ body.einbett main { padding: 10px 14px; }
 /* Design-Fix 27.09.2026: Warn-Kachel im LM-Cockpit */
 .kachel.kachel-warn { border-color: #e5b5af; background: #fdf3f2; }
 .kachel.kachel-warn .stat-zahl { color: #b3382c; }
+
+/* 27.09.2026 (Andreas): Galerie je Sparte + Foto-Sammelbox */
+.pj-gal-tabs { display: flex; gap: 6px; margin: 0 0 10px; }
+.pj-gal-sammel { border: 1px dashed var(--pj-akzent, #3f86c6);
+    border-radius: 12px; background: #f6faff; padding: 10px 12px;
+    margin-bottom: 12px; }
+.pj-gal-sammel .kopf { display: flex; flex-wrap: wrap; gap: 8px 14px;
+    align-items: center; }
+.pj-gal-sammel .kopf label.dezent { display: inline-flex; gap: 6px;
+    align-items: center; font-size: 12px; }
+.pj-gal-sammel .liste { display: flex; flex-wrap: wrap; gap: 8px;
+    margin-top: 8px; }
+.pj-gal-sammel .liste .foto { display: flex; flex-direction: column;
+    gap: 4px; width: 110px; background: #fff; border: 1px solid
+    var(--pj-line, #d5dcd9); border-radius: 10px; padding: 6px;
+    position: relative; }
+.pj-gal-sammel .liste img { width: 100%; height: 74px; object-fit: cover;
+    border-radius: 6px; background: #eef2f6; }
+.pj-gal-sammel .liste select { width: 100%; font-size: 11px; }
+.pj-gal-sammel .liste button { position: absolute; top: 2px; right: 2px;
+    border: none; background: rgba(255,255,255,.9); border-radius: 50%;
+    width: 22px; height: 22px; cursor: pointer; }
+.pj-gal-sammel .fuss { display: flex; flex-wrap: wrap; gap: 8px;
+    align-items: center; margin-top: 10px; }
+.pj-gal-sammel .hinweis { font-size: 11px; margin: 6px 0 0; }
+@media (max-width: 700px) {
+    .pj-gal-sammel .kopf .pj-btn { flex: 1; text-align: center; }
+}
+
+.pj-gal-sammel .fuss[hidden] { display: none; }

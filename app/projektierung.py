@@ -328,6 +328,7 @@ def galerie_haekchen_pruefen(session: Session, gewerk: Gewerk) -> int:
     belegt = {zeile[0] for zeile in
               session.query(GalerieDatei.ordner)
               .filter(GalerieDatei.vorgang_id == vorgang_id,
+                      GalerieDatei.sparte == gewerk.sparte,   # 27.09.2026
                       GalerieDatei.bild.is_(True)).distinct()}
     erledigt = 0
     for aufgabe in (session.query(Aufgabe)

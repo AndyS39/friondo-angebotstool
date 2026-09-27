@@ -14,22 +14,39 @@ from sqlalchemy.orm import Session
 from app import config
 from app.models import GalerieDatei, Projekt, ProjektDokument, Vorgang
 
-# Reihenfolge und Namen exakt laut Plan (Standardordner nicht löschbar)
-STANDARD_ORDNER = ["Alte Heizung", "Elektro", "Außengerät", "Öl-Tank",
-                   "Montagedokumente", "Inbetrieb-/Abnahme", "Neue Anlage",
-                   "Allgemein"]
+# Reihenfolge und Namen exakt laut Plan (Standardordner nicht löschbar).
+# 27.09.2026 (Andreas): eigene Galerie je Sparte - WP behaelt die acht
+# Plan-Ordner, PV/KL/WB bekommen passende Ordner + die gemeinsamen vier.
+GEMEINSAME_ORDNER = ["Montagedokumente", "Inbetrieb-/Abnahme", "Neue Anlage",
+                     "Allgemein"]
+SPARTEN_ORDNER = {
+    "WP": ["Alte Heizung", "Elektro", "Außengerät", "Öl-Tank"]
+          + GEMEINSAME_ORDNER,
+    "PV": ["Dachfläche", "Zählerschrank", "Speicher-Standort"]
+          + GEMEINSAME_ORDNER,
+    "KL": ["Innengeräte", "Außengerät", "Leitungsweg"]
+          + GEMEINSAME_ORDNER,
+    "WB": ["Stellplatz", "Zählerschrank", "Leitungsweg"]
+          + GEMEINSAME_ORDNER,
+}
+STANDARD_ORDNER = SPARTEN_ORDNER["WP"]   # Rueckwaerts-Kompatibilitaet
+
+
+def sparte_pruefen(sparte: str) -> str:
+    return sparte if sparte in SPARTEN_ORDNER else "WP"
 
 BILD_ENDUNGEN = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".bmp"}
 MAX_KANTE = 2000
 
 
-def ordner_liste(session: Session) -> list[str]:
-    """Standardordner + Zusatzordner aus der Parametrierung (| getrennt)."""
+def ordner_liste(session: Session, sparte: str = "WP") -> list[str]:
+    """Sparten-Ordner + Zusatzordner aus der Parametrierung (| getrennt)."""
     from app import projektierung as kern
+    basis = SPARTEN_ORDNER[sparte_pruefen(sparte)]
     zusatz = [o.strip() for o in
               kern.parameter_holen(session, "galerie_zusatzordner", "").split("|")
               if o.strip()]
-    return STANDARD_ORDNER + [o for o in zusatz if o not in STANDARD_ORDNER]
+    return basis + [o for o in zusatz if o not in basis]
 
 
 def _sicherer_name(name: str) -> str:
@@ -63,14 +80,15 @@ def _verkleinern(pfad: Path) -> None:
 
 def speichern(session: Session, vorgang_id: int, ordner: str, dateiname: str,
               inhalt: bytes, benutzer=None, bemerkung: str = "",
-              quelle: str = "upload") -> GalerieDatei | None:
-    """Datei in den Galerie-Ordner legen (Bilder verkleinert) + DB-Eintrag."""
-    if ordner not in ordner_liste(session):
+              quelle: str = "upload", sparte: str = "WP") -> GalerieDatei | None:
+    """Datei in den Galerie-Ordner der Sparte legen (Bilder verkleinert)."""
+    sparte = sparte_pruefen(sparte)
+    if ordner not in ordner_liste(session, sparte):
         ordner = "Allgemein"
     if not inhalt:
         return None
     name = _sicherer_name(dateiname)
-    ziel_ordner = _basis(vorgang_id) / ordner.replace("/", "-")
+    ziel_ordner = _basis(vorgang_id) / sparte / ordner.replace("/", "-")
     ziel_ordner.mkdir(parents=True, exist_ok=True)
     ziel = ziel_ordner / name
     zaehler = 1
@@ -85,7 +103,8 @@ def speichern(session: Session, vorgang_id: int, ordner: str, dateiname: str,
             shutil.copy2(ziel, original)
         _verkleinern(ziel)
     eintrag = GalerieDatei(
-        vorgang_id=vorgang_id, ordner=ordner, dateiname=ziel.name,
+        vorgang_id=vorgang_id, sparte=sparte, ordner=ordner,
+        dateiname=ziel.name,
         pfad=str(ziel.relative_to(config.DATA_ORDNER)),
         bild=ist_bild(ziel.name), bemerkung=(bemerkung or "").strip()[:300],
         quelle=quelle,
@@ -95,11 +114,14 @@ def speichern(session: Session, vorgang_id: int, ordner: str, dateiname: str,
     return eintrag
 
 
-def uebersicht(session: Session, vorgang_id: int) -> dict:
-    """Je Ordner: Anzahl, Vorschaubild (erste Bilddatei), Einträge."""
-    daten = {o: {"eintraege": [], "vorschau": None} for o in ordner_liste(session)}
+def uebersicht(session: Session, vorgang_id: int, sparte: str = "WP") -> dict:
+    """Je Ordner der Sparte: Anzahl, Vorschaubild, Einträge."""
+    sparte = sparte_pruefen(sparte)
+    daten = {o: {"eintraege": [], "vorschau": None}
+             for o in ordner_liste(session, sparte)}
     for d in (session.query(GalerieDatei)
-              .filter(GalerieDatei.vorgang_id == vorgang_id)
+              .filter(GalerieDatei.vorgang_id == vorgang_id,
+                      GalerieDatei.sparte == sparte)
               .order_by(GalerieDatei.hochgeladen_am.desc(), GalerieDatei.id.desc())):
         eintrag = daten.setdefault(d.ordner, {"eintraege": [], "vorschau": None})
         eintrag["eintraege"].append(d)
@@ -109,10 +131,12 @@ def uebersicht(session: Session, vorgang_id: int) -> dict:
 
 
 def verschieben(session: Session, datei: GalerieDatei, ziel_ordner: str) -> bool:
-    if ziel_ordner not in ordner_liste(session) or ziel_ordner == datei.ordner:
+    if (ziel_ordner not in ordner_liste(session, datei.sparte)
+            or ziel_ordner == datei.ordner):
         return False
     quelle = config.DATA_ORDNER / datei.pfad
-    ziel_dir = _basis(datei.vorgang_id) / ziel_ordner.replace("/", "-")
+    ziel_dir = (_basis(datei.vorgang_id) / sparte_pruefen(datei.sparte)
+                / ziel_ordner.replace("/", "-"))
     ziel_dir.mkdir(parents=True, exist_ok=True)
     ziel = ziel_dir / datei.dateiname
     zaehler = 1

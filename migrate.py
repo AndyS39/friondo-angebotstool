@@ -430,6 +430,18 @@ def _daten() -> list[str]:
             meldungen.append(f"Foerderungs-Paket aufgeloest: {geloescht} "
                              f"Aufgaben entfernt, BnD-Punkt an {ergaenzt} "
                              "Abnahme-Pakete gehaengt")
+        # 27.09.2026 (Andreas): V1-Aufgabenpakete restlos entfernen - die
+        # erste Bereinigung liess abgeschlossene/stornierte Gewerke aus,
+        # die Doppelung verwirrte in der Demo
+        if einstellung_holen(session, "migration_v1_restlos", "") != "erledigt":
+            from app.models import Gewerk as _GewerkV1b
+            weg = 0
+            for g in session.query(_GewerkV1b):
+                weg += projektierung.v1_aufgaben_entfernen(session, g)
+            einstellung_setzen(session, "migration_v1_restlos", "erledigt")
+            session.commit()
+            if weg:
+                meldungen.append(f"V1-Restbestand entfernt ({weg} Aufgaben)")
         # 27.09.2026 (Andreas, Nachtrag): "Abweichungen zum Angebot geprueft,
         # ggf. Nachtrag" als Pflicht-Schritt 5 im Paket Abnahme & Freigabe -
         # bestehende Instanzen bekommen die Aufgabe, Rechnung/BnD ruecken

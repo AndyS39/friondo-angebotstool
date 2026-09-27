@@ -723,6 +723,8 @@ class GalerieDatei(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     vorgang_id: Mapped[int] = mapped_column(Integer, index=True)
+    # 27.09.2026 (Andreas): eigene Galerie je Sparte - Bestand ist WP
+    sparte: Mapped[str] = mapped_column(String(5), default="WP")
     ordner: Mapped[str] = mapped_column(String(100), default="Allgemein")
     dateiname: Mapped[str] = mapped_column(String(300), default="")
     pfad: Mapped[str] = mapped_column(String(500), default="")

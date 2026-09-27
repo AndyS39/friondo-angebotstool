@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_galerie.html" import galerie as galerie_makro, galerie_fuss %}
 
 {% block titel %}Einsatz {{ projekt.nummer }} – Montage{% endblock %}
 
@@ -104,31 +105,15 @@
         {% endfor %}
     </details>
 
-    <h3 id="foto" style="font-size:13px;margin:12px 0 4px">📁 Galerie</h3>
+    <h3 id="foto" style="font-size:13px;margin:12px 0 4px">📁 Galerie {{ galerie_sparte }}</h3>
     {% if vorgang_id %}
-    {# v15 (Phase 82): alle acht Ordner der Vorgangs-Galerie – ansehen +
-       Foto aufnehmen; Montagedokumente (Hydraulikschema usw.) direkt öffnen #}
-    {% for ordner, eintrag in galerie_daten.items() %}
-    <details class="pj-paket" {{ 'open' if ordner == 'Montagedokumente' and eintrag.eintraege }}>
-        <summary>{{ ordner }} <span class="cnt">{{ eintrag.eintraege | length }}</span></summary>
-        <div class="pj-mob-galerie">
-        {% for d in eintrag.eintraege %}
-            <a href="/vorgaenge/galerie/datei/{{ d.id }}" target="_blank">
-                {% if d.bild %}<img src="/vorgaenge/galerie/datei/{{ d.id }}" loading="lazy" alt="{{ d.dateiname }}">
-                {% else %}📄 {{ d.dateiname }}{% endif %}</a>
-        {% else %}
-            <span class="dezent" style="font-size:12px">leer</span>
-        {% endfor %}
-        </div>
-        <form method="post" action="/vorgaenge/{{ vorgang_id }}/galerie/upload"
-              enctype="multipart/form-data" class="pj-btnrow">
-            <input type="hidden" name="ordner" value="{{ ordner }}">
-            <input type="hidden" name="zurueck" value="/montage/einsatz/{{ termin.id }}">
-            <input type="file" name="dateien" accept="image/*" capture="environment" required>
-            <button class="pj-btn" type="submit">📷 Aufnehmen</button>
-        </form>
-    </details>
-    {% endfor %}
+    {# 27.09.2026 (Andreas): zentrale Galerie-Komponente mit Foto-Sammelbox
+       (mehrere Fotos aufnehmen, Ordner je Foto zuweisen, EIN Upload) –
+       Montage darf ansehen + hochladen, nie verschieben/löschen #}
+    {{ galerie_makro(vorgang_id, galerie_daten, galerie_ordner, false,
+                     '/montage/einsatz/' ~ termin.id, sparte=galerie_sparte,
+                     darf_verschieben=false) }}
+    {{ galerie_fuss() }}
     {% else %}
     <p class="dezent" style="font-size:12px">Kein Vorgang am Auftrag – Galerie
         nicht verfügbar.</p>

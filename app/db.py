@@ -95,6 +95,9 @@ _NACHTRAEGLICHE_SPALTEN = {
         "angefragt_am": "DATETIME",                            # v15 Phase 79
         "antwort_am": "DATETIME",                              # v15 Phase 79
     },
+    "galerie_dateien": {
+        "sparte": "VARCHAR(5) NOT NULL DEFAULT 'WP'",          # 27.09.2026
+    },
     "aufgaben": {
         "aktion_typ": "VARCHAR(20) NOT NULL DEFAULT ''",       # v15 Phase 78
         "aktion_wert": "VARCHAR(300) NOT NULL DEFAULT ''",     # v15 Phase 78
