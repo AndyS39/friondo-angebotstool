@@ -258,7 +258,7 @@ PAKET_PHASEN_RANG = {
     "auftragseingang": 0,
     "feinplanung vot": 1,
     "planung wp": 2, "planung elektro": 2, "friondo fit for future": 2,
-    "fit for future": 2, "förderung": 2, "förderung (bza/bnd)": 2,
+    "fit for future": 2,
     "montagevorbereitung": 3,
     "abnahme & freigabe": 5,
 }

@@ -375,6 +375,61 @@ def _daten() -> list[str]:
             session.commit()
             meldungen.append(f"Projektierung V2: {neue_teams} Teams angelegt "
                              "(Montageteam 1-10, Subteam 1-5)")
+        # 27.09.2026 (Andreas): Paket "Foerderung" entfaellt komplett;
+        # "BnD nach Abnahme erstellt" wandert ins Paket Abnahme & Freigabe.
+        # Bestand: Foerderungs-Instanzen samt Aufgaben loeschen (erledigter
+        # BnD-Status wird in die neue Aufgabe uebernommen).
+        if einstellung_holen(session, "migration_bnd_abnahme", "") != "erledigt":
+            from app.models import Aufgabe as _Aufgabe
+            from app.models import AufgabenpaketInstanz as _Instanz
+            from app.models import Gewerk as _GewerkBnd
+            geloescht = ergaenzt = 0
+            bnd_status: dict[int, tuple] = {}
+            for instanz in (session.query(_Instanz)
+                            .filter(_Instanz.paket_key == "foerderung")):
+                for aufgabe in (session.query(_Aufgabe)
+                                .filter(_Aufgabe.paket_instanz_id == instanz.id)):
+                    if "BnD" in (aufgabe.titel or ""):
+                        bnd_status[instanz.gewerk_id] = (
+                            aufgabe.status, aufgabe.erledigt_am,
+                            aufgabe.erledigt_von)
+                    session.delete(aufgabe)
+                    geloescht += 1
+                session.delete(instanz)
+            session.flush()
+            # BnD-Aufgabe an bestehende aktive Abnahme-&-Freigabe-Instanzen
+            for instanz in (session.query(_Instanz)
+                            .filter(_Instanz.paket_key == "abnahme_freigabe",
+                                    _Instanz.version != "v1",
+                                    _Instanz.deaktiviert_am.is_(None))):
+                vorhanden = (session.query(_Aufgabe)
+                             .filter(_Aufgabe.paket_instanz_id == instanz.id,
+                                     _Aufgabe.titel
+                                     == "BnD nach Abnahme erstellt").count())
+                if vorhanden:
+                    continue
+                status, erledigt_am, erledigt_von = bnd_status.get(
+                    instanz.gewerk_id, ("offen", None, None))
+                gewerk = session.get(_GewerkBnd, instanz.gewerk_id)
+                if gewerk is None:
+                    continue
+                session.add(_Aufgabe(
+                    gewerk_id=instanz.gewerk_id,
+                    projekt_id=gewerk.projekt_id,
+                    paket_instanz_id=instanz.id,
+                    titel="BnD nach Abnahme erstellt",
+                    beschreibung="Bestätigung nach Durchführung (KfW) – "
+                                 "nur bei gefördertem Auftrag, sonst auf "
+                                 "„entfällt“ setzen.",
+                    rolle="projektierer", pflicht=True, reihenfolge=6,
+                    faellig_regel="M+10", status=status,
+                    erledigt_am=erledigt_am, erledigt_von=erledigt_von))
+                ergaenzt += 1
+            einstellung_setzen(session, "migration_bnd_abnahme", "erledigt")
+            session.commit()
+            meldungen.append(f"Foerderungs-Paket aufgeloest: {geloescht} "
+                             f"Aufgaben entfernt, BnD-Punkt an {ergaenzt} "
+                             "Abnahme-Pakete gehaengt")
         # Phase 78: Aufgabenpakete v2 – Bestandsinstanzen der ersetzten Pakete
         # als V1 kennzeichnen (Knopf „V1-Aufgaben entfernen" räumt später auf)
         # und die neuen IMMER-Pakete an offenen Gewerken zusätzlich aktivieren

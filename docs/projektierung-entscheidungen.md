@@ -441,3 +441,18 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
   Beim Rollout zusätzlich prüfen: echter Sub-Mail-Testversand, Outlook-
   Rundlauf, UGL-Datei mit Collin abstimmen, echte Collin-Artikelnummern
   im Blatt „Stücklisten".
+
+## 27.09.2026 – Paket „Förderung" entfällt (Andreas)
+
+- Das eigenständige WP-Paket „Förderung" ist komplett raus (Blatt
+  Aufgabenpakete + Paketregel); die Punkte „Förderantrag durch Kunden
+  gestellt" und „Zusage liegt vor" entfallen ersatzlos, der BzA-Punkt lag
+  ohnehin schon im Auftragseingang.
+- **„BnD nach Abnahme erstellt"** ist jetzt Schritt 6 im Paket
+  **Abnahme & Freigabe** (M+10, Pflicht; Beschreibung weist darauf hin,
+  ihn bei ungeförderten Aufträgen auf „entfällt" zu setzen – das Paket
+  gilt für alle Sparten).
+- Migration migration_bnd_abnahme: bestehende Förderungs-Instanzen samt
+  Aufgaben gelöscht (28 Aufgaben lokal), der BnD-Punkt wurde an die
+  aktiven Abnahme-&-Freigabe-Instanzen gehängt (5 lokal) – ein bereits
+  erledigter BnD-Status wäre übernommen worden.
