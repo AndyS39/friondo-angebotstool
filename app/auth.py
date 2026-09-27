@@ -175,7 +175,9 @@ class RollenMiddleware(BaseHTTPMiddleware):
                 if pfad.startswith("/angebote") and not _ANGEBOTE_LESEPFAD.match(pfad):
                     return RedirectResponse("/angebote", status_code=303)
             elif benutzer.rolle == "montage":
-                if (pfad != "/" and not pfad.startswith(MONTAGE_PFADE)
+                # Bugfix 27.09.2026: auch "/" umleiten - das Portal hat fuer
+                # die Rolle Montage nichts Klickbares (Handy-Login strandete)
+                if (not pfad.startswith(MONTAGE_PFADE)
                         and not _MONTAGE_GALERIE.match(pfad)):
                     return RedirectResponse("/montage", status_code=303)
             elif benutzer.rolle == "leadmanagement":

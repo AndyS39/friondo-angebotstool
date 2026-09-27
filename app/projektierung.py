@@ -104,6 +104,12 @@ def modul_sichtbar(session: Session, benutzer) -> bool:
         return False
     if benutzer.rolle == "admin":
         return True
+    # Bugfix 27.09.2026: HAUPTROLLE projektierung/montage sieht ihr Modul
+    # auch im Demo-Modus - wer diese Rolle bekommt, wurde bewusst angelegt;
+    # ein Monteur landete sonst nach dem Login auf dem leeren Portal.
+    # Der Demo-Schalter versteckt das Modul weiter vor Innendienst/Vertrieb.
+    if benutzer.rolle in ("projektierung", "montage"):
+        return True
     if freigabe_modus(session) != "alle":
         return False
     return (benutzer.rolle in ("innendienst",)
