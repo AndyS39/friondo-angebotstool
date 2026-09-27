@@ -40,7 +40,7 @@
                      {% if b.rolle != 'montage' and not b_teams %}hidden{% endif %}>
                     <div class="chips">
                         {% for t in teams %}
-                        <label class="chip"><input form="f{{ b.id }}" type="checkbox"
+                        <label class="ben-chip"><input form="f{{ b.id }}" type="checkbox"
                                name="team_ids" value="{{ t.id }}"
                                {{ 'checked' if t.id in b_teams }}>{{ t.name }}</label>
                         {% endfor %}
@@ -92,7 +92,7 @@
                           title="Nur für Sonderfälle: schaltet ein Modul ZUSÄTZLICH zur Hauptrolle frei, z. B. ein Innendienstler, der auch das Montage-Backend sehen soll. Normalerweise leer lassen – die Rolle regelt alles.">
                         Zusätzliche Module (Sonderfall):</span>
                     {% for r in zusatzrollen %}
-                        <label class="kontrollfeld chip">
+                        <label class="kontrollfeld ben-chip">
                             <input form="f{{ b.id }}" type="checkbox" name="zusatz_{{ r }}"
                                    {{ 'checked' if b.hat_rolle(r) and b.rolle != r }}> {{ rollen_namen.get(r, r) }}</label>
                     {% endfor %}
@@ -130,7 +130,7 @@
         <span class="dezent">Montageteam(s):</span>
         <div class="chips">
             {% for t in teams %}
-            <label class="chip"><input type="checkbox" name="team_ids" value="{{ t.id }}">{{ t.name }}</label>
+            <label class="ben-chip"><input type="checkbox" name="team_ids" value="{{ t.id }}">{{ t.name }}</label>
             {% endfor %}
         </div>
     </div>
