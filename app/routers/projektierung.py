@@ -755,6 +755,11 @@ async def akte(request: Request, projekt_id: int,
                   # v11b (Phase 73, nur Anzeige): Team-Namen für die Montage-
                   # Zeile im Datenraster des Prototyp-Layouts
                   teams_map={t.id: t for t in session.query(Team)},
+                  # Bugfix 27.09.2026: das Team-Dropdown im Dialog
+                  # „Team + Termin" war LEER – die Liste fehlte im Kontext,
+                  # dadurch ließ sich kein Montageteam zuweisen
+                  teams=(session.query(Team).filter(Team.aktiv.is_(True))
+                         .order_by(Team.typ, Team.name).all()),
                   meldung=request.query_params.get("meldung", ""))
 
 

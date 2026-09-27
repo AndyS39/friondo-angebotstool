@@ -489,3 +489,21 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
   Erfassung, FP-Termin, Galerie-Reiter WP/PV) und „Demo Montage, Bernd"
   (WP in Montage, Montageteam 1 übermorgen bestätigt, FP abgeschlossen,
   Fotos in vier Ordnern – sichtbar im Team-Kalender und unter /montage).
+
+## 27.09.2026 – Team-Zuweisung repariert, Benutzer-Seite neu (Andreas)
+
+- **Bugfix:** Das Team-Dropdown im Dialog „Team + Termin" der Projektakte
+  war leer (Variable `teams` fehlte im Kontext) – deshalb ließ sich kein
+  Montageteam zuweisen. Die Zuordnung Mitarbeiter→Team unter Benutzer war
+  korrekt gespeichert.
+- **Benutzer-Seite entrümpelt:** kompakte Hauptzeile (Name, Rolle mit
+  sprechenden Namen, E-Mail, Montageteam, Aktiv); PIN, Telefon,
+  Benachrichtigungs-Mail, Kalkulation, Leadmanager-Häkchen, Zusatzrollen
+  und Löschen liegen in einer aufklappbaren Details-Zeile. Team-Chips
+  erscheinen NUR bei der Rolle Montage (live beim Rollenwechsel);
+  Zusatzrollen sind als „Zusätzliche Module (Sonderfall)" erklärt.
+  Neuer Benutzer: Team-Auswahl erscheint bei Rolle Montage, die
+  Anlegen-Route übernimmt sie direkt. Die Änderungs-Route fasst Teams
+  nur noch an, wenn das Formular sie mitschickt (teams_dabei) –
+  vorher hätte ein Formular ohne Team-Block alle Zuordnungen gelöscht.
+  Rollen-Erklärung als aufklappbarer Hilfetext unter der Seite.

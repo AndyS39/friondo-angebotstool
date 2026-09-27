@@ -20,6 +20,11 @@ ROLLEN = ["admin", "innendienst", "aussendienst", "projektierung", "montage",
 # v11 (Phase 70): Zusatzrollen als Häkchen – die Hauptrolle steuert weiterhin
 # die Grundsicht, Zusatzrollen schalten Projektierung/Montage frei
 ZUSATZROLLEN = ["projektierung", "montage", "leadmanagement"]
+# 27.09.2026: sprechende Namen fuer die neue Benutzer-Seite
+ROLLEN_NAMEN = {"admin": "Admin", "innendienst": "Innendienst",
+                "aussendienst": "Außendienst",
+                "projektierung": "Projektierung", "montage": "Montage",
+                "leadmanagement": "Lead-Management"}
 _EMAIL_MUSTER = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -51,13 +56,14 @@ async def liste(request: Request, session: Session = Depends(get_session)):
     benutzer = session.query(Benutzer).order_by(Benutzer.name).all()
     loeschbar = {b.id: not verknuepfungen(session, b.id) for b in benutzer}
     teams = (session.query(Team).filter(Team.aktiv.is_(True))
-             .order_by(Team.name).all())
+             .order_by(Team.typ, Team.name).all())
     team_je_benutzer: dict[int, set[int]] = {}
     for m in session.query(TeamMitglied):
         team_je_benutzer.setdefault(m.benutzer_id, set()).add(m.team_id)
     return render(request, "benutzer/liste.html", aktiv="/benutzer",
                   benutzer=benutzer, rollen=ROLLEN, loeschbar=loeschbar,
                   zusatzrollen=ZUSATZROLLEN, teams=teams,
+                  rollen_namen=ROLLEN_NAMEN,
                   team_je_benutzer=team_je_benutzer,
                   meldung=request.query_params.get("meldung", ""))
 
@@ -78,7 +84,17 @@ async def anlegen(request: Request, session: Session = Depends(get_session)):
     fehler = _email_pruefen(rolle, email)
     if fehler:
         return RedirectResponse(f"/benutzer?meldung={quote_plus(fehler)}", status_code=303)
-    session.add(Benutzer(name=name, rolle=rolle, pin_hash=auth.pin_hash(pin), email=email))
+    neuer = Benutzer(name=name, rolle=rolle, pin_hash=auth.pin_hash(pin),
+                     email=email)
+    session.add(neuer)
+    session.flush()
+    # 27.09.2026: Montage-Benutzer direkt beim Anlegen einem Team zuordnen
+    from app.models import Team, TeamMitglied
+    gueltig = {t.id for t in session.query(Team)}
+    for team_id in {int(t) for t in form.getlist("team_ids")
+                    if str(t).isdigit()} & gueltig:
+        session.add(TeamMitglied(team_id=team_id, benutzer_id=neuer.id,
+                                 erstellt_von=request.state.benutzer.id))
     session.commit()
     return RedirectResponse("/benutzer?meldung=Benutzer+angelegt", status_code=303)
 
@@ -116,18 +132,22 @@ async def aendern(request: Request, benutzer_id: int,
     benutzer.lm_aktiv = form.get("lm_aktiv") == "on"
     benutzer.lm_arbeitszeit = (form.get("lm_arbeitszeit") or "").strip() or None
     from app.models import Team, TeamMitglied
-    gewaehlt = {int(t) for t in form.getlist("team_ids") if str(t).isdigit()}
-    gueltig = {t.id for t in session.query(Team)}
-    gewaehlt &= gueltig
-    for m in (session.query(TeamMitglied)
-              .filter(TeamMitglied.benutzer_id == benutzer.id)):
-        if m.team_id in gewaehlt:
-            gewaehlt.discard(m.team_id)
-        else:
-            session.delete(m)
-    for team_id in gewaehlt:
-        session.add(TeamMitglied(team_id=team_id, benutzer_id=benutzer.id,
-                                 erstellt_von=request.state.benutzer.id))
+    # 27.09.2026: Teams nur aendern, wenn das Formular sie mitschickt
+    # (teams_dabei) - sonst wuerde ein Formular ohne Team-Block alle
+    # Zuordnungen loeschen
+    if form.get("teams_dabei") == "1":
+        gewaehlt = {int(t) for t in form.getlist("team_ids") if str(t).isdigit()}
+        gueltig = {t.id for t in session.query(Team)}
+        gewaehlt &= gueltig
+        for m in (session.query(TeamMitglied)
+                  .filter(TeamMitglied.benutzer_id == benutzer.id)):
+            if m.team_id in gewaehlt:
+                gewaehlt.discard(m.team_id)
+            else:
+                session.delete(m)
+        for team_id in gewaehlt:
+            session.add(TeamMitglied(team_id=team_id, benutzer_id=benutzer.id,
+                                     erstellt_von=request.state.benutzer.id))
     pin = (form.get("pin") or "").strip()
     if pin:
         if not pin.isdigit() or len(pin) < 4:

@@ -2765,3 +2765,24 @@ body.einbett main { padding: 10px 14px; }
 }
 
 .pj-gal-sammel .fuss[hidden] { display: none; }
+
+/* 27.09.2026 (Andreas): Benutzer-Seite entruempelt */
+.ben-tabelle td { vertical-align: middle; }
+.ben-teams .chips, .formular .chips { display: flex; flex-wrap: wrap;
+    gap: 4px; max-width: 420px; }
+.chip { display: inline-flex; align-items: center; gap: 4px;
+    border: 1px solid var(--pj-line, #d5dcd9); border-radius: 999px;
+    padding: 2px 9px; font-size: 12px; background: #fff; cursor: pointer;
+    white-space: nowrap; }
+.chip:has(input:checked) { border-color: var(--dunkelblau, #1b2a5e);
+    background: #eef2fa; font-weight: 600; }
+.chip input { margin: 0; }
+tr.ben-details > td { background: #f7f9fb; border-top: none; }
+.ben-detail-raster { display: flex; flex-wrap: wrap; gap: 10px 22px;
+    align-items: end; font-size: 13px; }
+.ben-detail-raster label { display: flex; flex-direction: column; gap: 3px; }
+.ben-detail-raster label.kontrollfeld { flex-direction: row;
+    align-items: center; gap: 6px; }
+
+.ben-teams { min-width: 340px; }
+.ben-tabelle .chip { padding: 1px 7px; font-size: 11px; }
