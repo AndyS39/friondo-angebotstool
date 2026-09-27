@@ -430,6 +430,55 @@ def _daten() -> list[str]:
             meldungen.append(f"Foerderungs-Paket aufgeloest: {geloescht} "
                              f"Aufgaben entfernt, BnD-Punkt an {ergaenzt} "
                              "Abnahme-Pakete gehaengt")
+        # 27.09.2026 (Andreas): Alt-Gewerke bereinigen - V1-Aufgabenpakete
+        # entfernen und das Paket Abnahme & Freigabe auf die vollen sechs
+        # Schritte auffuellen (alte v2-Instanzen aus der V1-Aera waren leer,
+        # die BnD-Migration haengte dort nur den einen Punkt an)
+        if einstellung_holen(session, "migration_v1_bereinigung", "") != "erledigt":
+            from app import projektierung_logik as _pl
+            from app.models import Aufgabe as _AufgabeV1
+            from app.models import AufgabenpaketInstanz as _InstanzV1
+            from app.models import Gewerk as _GewerkV1
+            logik = _pl.hole_logik(session)
+            paket_ab = logik.pakete.get("abnahme_freigabe")
+            v1_weg = aufgefuellt = 0
+            for g in session.query(_GewerkV1).filter(
+                    ~_GewerkV1.phase.in_(["abgeschlossen", "storniert"])):
+                v1_weg += projektierung.v1_aufgaben_entfernen(session, g)
+                if paket_ab is None:
+                    continue
+                instanz = (session.query(_InstanzV1)
+                           .filter(_InstanzV1.gewerk_id == g.id,
+                                   _InstanzV1.paket_key == "abnahme_freigabe",
+                                   _InstanzV1.version != "v1",
+                                   _InstanzV1.deaktiviert_am.is_(None)).first())
+                if instanz is None:
+                    if projektierung.paket_aktivieren(
+                            session, g, paket_ab, quelle="migration") is not None:
+                        aufgefuellt += 1
+                    continue
+                vorhanden = {a.titel for a in
+                             session.query(_AufgabeV1)
+                             .filter(_AufgabeV1.paket_instanz_id == instanz.id)}
+                fehlt = [sch for sch in paket_ab.schritte
+                         if sch.titel not in vorhanden]
+                for schritt in fehlt:
+                    session.add(_AufgabeV1(
+                        gewerk_id=g.id, projekt_id=g.projekt_id,
+                        paket_instanz_id=instanz.id, titel=schritt.titel,
+                        beschreibung=schritt.beschreibung, rolle=schritt.rolle,
+                        pflicht=schritt.pflicht, reihenfolge=schritt.nr,
+                        faellig_regel=schritt.faellig_regel,
+                        aktion_typ=schritt.aktion_typ or "",
+                        aktion_wert=schritt.aktion_wert or "",
+                        optionen=schritt.optionen or ""))
+                if fehlt:
+                    aufgefuellt += 1
+            einstellung_setzen(session, "migration_v1_bereinigung", "erledigt")
+            session.commit()
+            meldungen.append(f"Alt-Gewerke bereinigt: {v1_weg} V1-Aufgaben "
+                             f"entfernt, Abnahme & Freigabe an {aufgefuellt} "
+                             "Gewerken aufgefuellt")
         # Phase 78: Aufgabenpakete v2 – Bestandsinstanzen der ersetzten Pakete
         # als V1 kennzeichnen (Knopf „V1-Aufgaben entfernen" räumt später auf)
         # und die neuen IMMER-Pakete an offenen Gewerken zusätzlich aktivieren
