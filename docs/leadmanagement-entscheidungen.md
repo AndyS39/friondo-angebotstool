@@ -211,3 +211,48 @@ nach V1 durch.
   v11-Auftrag gilt weiter): v11 (Projektierung) und v12 (Lead-Management)
   liegen ungepusht auf demselben Branch – ein Push würde beide Module
   gleichzeitig ausrollen; der Plan verlangt Rollouts nacheinander.
+
+## Review 27.09.2026 – Prozess- und Design-Durchgang (gesamtes Tool)
+
+Vollständiger Rundgang durch alle Module mit Fokus Lead-Management.
+Umgesetzt (Commits d797ad4, 5f5c17a, 3eb856e, 3737053):
+
+**Übergabe Lead → Außendienst** (war der größte Bruch): Lead-Akte gehört
+jetzt auch dem AD des VOT-Termins; „Meine Termine" hat „Erfassung starten";
+der AD bekommt die Glocke „Neuer VOT-Termin"; der monday-Sync legt den
+Vorgang sofort an; ein gemeldeter No-Show wird nicht mehr vom Sync auf
+„terminiert" zurückgedreht.
+
+**Mail-Sicherheit vor mail_modus=live**: Umbuchen/No-Show/Absage stornieren
+geplante Termin-Mails; der Versand prüft zusätzlich den Terminstatus;
+Nurture geht erst zur 30-Tage-Wiedervorlage raus (nicht sofort).
+
+**Arbeitsvorrat ohne tote Enden**: „Meine + freie Leads" enthält nicht
+zugeordnete Leads (Banner + frei-Badge); qualifizierte Leads ohne aktiven
+Termin stehen wieder in der Anrufliste; „falsche Nummer" bekommt eine
+Wiedervorlage; Kundenantworten wecken den Lead; Tagesdigest (SLA rot je LM,
+freie Leads an die Leitung); Cockpit-Liste „Termin-Rückmeldung offen";
+Pfad „Verloren vor Termin" mit Gründen aus der Steuerdatei; „Leads VOT"
+markiert überfällige Termine ohne Erfassung.
+
+**Konsistenz**: Lead-Phase zieht bei automatischem Versand, 90-Tage-Ablauf
+und Projekt-Storno nach; Board zeigt Gewonnen/Verloren nur 30 Tage
+(Maßstab letzte Aktivität); Gründe in qualifizierung_fertig aus der Logik.
+
+**Design**: gemeinsame LM-Unternavigation; SLA-Chips lesbar (Min/Std/AT
+statt „16291 Min"); deutsche Wochentage (de_datum-Filter, auch
+Projektierung/Montage); Anrufliste-Panel ohne doppelte Kopfzeile
+(einbett=1); Icons statt Emojis (Anrufliste + Lead-Kopf, neue Symbole in
+_symbole.html); Cockpit-Kennzahlen als Kacheln; Hauptmenü mit Start/
+Lead-Management/Projektierung/Montage; Parametrierungs-Reiter umbrechen.
+
+**Bewusst offen gelassen** (größer, mit Andreas zu priorisieren):
+- Kohorten-Conversion je Eingangsmonat/Quelle statt Zeitraum-Zählung;
+  monday-Leads ohne erstkontakt_am/terminiert_am verfälschen den Trichter.
+- Haupt-Statistik zählt „Leads" nur aus der monday-Tabelle (zwei Funnels).
+- „Leads VOT" und Lead-Modul-Termine sind weiter zwei Listen; gemeinsame
+  Sicht „Meine Aufgaben heute" (Lead-Aktionen + Angebots-Wiedervorlagen).
+- Qualifizierung → Erfassung vorbelegen auch bei freigabe_modus=admin.
+- /api/leads hat kein Demo-Gate (legt aber demo=1-Leads an).
+- Karte/Terminassistent: harte Hex-Farben; „Meine Termine" ohne
+  v14-Karten-Layout.

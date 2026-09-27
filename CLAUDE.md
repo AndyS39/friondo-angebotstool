@@ -487,3 +487,20 @@ Lead-Management belegt.)
   Montagebericht · Inbetriebnahmeprotokoll · Abnahmeprotokoll (Felder im
   Blatt „Formulare", PDF in Galerie, Kundenunterschrift über Signatur).
 - Kunden-Terminbestätigung per Mail mit Antwort-Erkennung.
+
+## Neu 27.09.2026 – Review: Lead-Prozess + Design (v15-Nachtrag)
+
+- Lead→AD-Übergabe repariert (Akte-Zugriff über VOT-Termin, „Erfassung
+  starten" in Meine Termine, AD-Glocke, Vorgang direkt beim monday-Sync,
+  No-Show bleibt No-Show).
+- Mail-Warteschlange an den Terminstatus gekoppelt (Storno bei Umbuchung/
+  No-Show/Absage, Statusprüfung im Versand, Nurture +30 Tage) – Pflicht
+  vor mail_modus=live.
+- Arbeitsvorrat: freie + qualifizierte Leads in der Anrufliste, Kunden-
+  antwort weckt den Lead, Tagesdigest, Cockpit „Termin-Rückmeldung offen",
+  Pfad „Verloren vor Termin", Überfällig-Banner in Leads VOT.
+- Design: LM-Unternavigation, lesbare SLA-Chips (Min/Std/AT), de_datum-
+  Filter (deutsche Wochentage), Icons statt Emojis, Cockpit-Kacheln,
+  einbett=1 für das Anrufliste-Panel, Hauptmenü + Parametrierungs-Reiter.
+- Details + bewusst offene Punkte: docs/leadmanagement-entscheidungen.md
+  (Abschnitt Review 27.09.2026).
