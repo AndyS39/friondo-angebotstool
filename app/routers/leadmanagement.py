@@ -1007,6 +1007,31 @@ async def termin_verschieben(request: Request, termin_id: int,
                             status_code=303)
 
 
+@router.post("/lead/{vorgang_id}/verloren")
+async def lead_verloren_setzen(request: Request, vorgang_id: int,
+                               session: Session = Depends(get_session)):
+    """Prozess-Fix 27.09.2026: "Verloren vor Termin" mit Grund aus der
+    Steuerdatei (Blatt Gruende, Phase verloren_vor_termin)."""
+    from urllib.parse import quote_plus
+    _gate(request, session)
+    vorgang = session.get(Vorgang, vorgang_id)
+    if vorgang is None:
+        return RedirectResponse("/lead-management/anrufliste", status_code=303)
+    form = await request.form()
+    grund = (form.get("grund") or "").strip()
+    text = (form.get("grund_text") or "").strip()
+    fehler = _grund_pruefen(session, "verloren_vor_termin", grund, text)
+    if fehler:
+        return RedirectResponse(f"/vorgaenge/{vorgang.id}?meldung="
+                                + quote_plus(fehler), status_code=303)
+    kern.lead_verloren(session, vorgang, grund, text,
+                       benutzer=request.state.benutzer)
+    session.commit()
+    return RedirectResponse(f"/vorgaenge/{vorgang.id}?meldung="
+                            + quote_plus(f"Lead verloren ({grund})."),
+                            status_code=303)
+
+
 @router.get("/kalender")
 async def terminkalender(request: Request,
                          session: Session = Depends(get_session)):

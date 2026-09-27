@@ -70,7 +70,30 @@
         {% endfor %}
         <a class="knopf klein" href="/lead-management/lead/{{ vorgang.id }}/termin">Termin vorschlagen</a>
         <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}/kommunikation">Mail mit Vorlage</a>
+        {% if vorgang.lead_phase not in ('gewonnen', 'verloren') %}
+        <button class="knopf klein zweitrangig" type="button"
+                onclick="document.getElementById('dlg-lead-verloren').showModal()"
+                title="Kunde springt vor dem Termin ab (Mitbewerber, abgesagt …)">Verloren …</button>
+        {% endif %}
     </div>
+    <dialog id="dlg-lead-verloren">
+        <form method="post" class="formular"
+              action="/lead-management/lead/{{ vorgang.id }}/verloren">
+            <h3>Lead verloren (vor Auftrag)</h3>
+            <label>Grund
+                <select name="grund" required>
+                    {% for g in lead_kontext.verloren_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}
+                </select>
+            </label>
+            <label>Freitext <input type="text" name="grund_text"
+                   placeholder="Pflicht bei Sonstiges"></label>
+            <div class="formzeile">
+                <button class="knopf" type="submit">Verloren setzen</button>
+                <button class="knopf zweitrangig" type="button"
+                        onclick="this.closest('dialog').close()">Abbrechen</button>
+            </div>
+        </form>
+    </dialog>
     {% endif %}
 
     <details>

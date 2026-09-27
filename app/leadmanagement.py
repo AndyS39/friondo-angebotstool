@@ -1438,6 +1438,28 @@ def termin_buchen(session: Session, vorgang: Vorgang, ad_id: int,
     return termin, "Termin gebucht."
 
 
+def lead_verloren(session: Session, vorgang: Vorgang, grund: str,
+                  text: str = "", benutzer=None) -> None:
+    """Prozess-Fix 27.09.2026: "Verloren vor Termin" - die Gruende standen
+    schon im Excel-Blatt (verloren_vor_termin), es gab aber keinen Codepfad.
+    Setzt die Endphase, storniert aktive Termine + geplante Mails."""
+    vorgang.lead_phase = "verloren"
+    vorgang.naechste_aktion_am = None
+    vorgang.zurueckgestellt_bis = None
+    for termin in (session.query(VotTermin)
+                   .filter(VotTermin.vorgang_id == vorgang.id,
+                           VotTermin.status.in_(("geplant", "bestaetigt")))):
+        termin.status = "abgesagt"
+        termin.grund_text = f"Lead verloren: {grund}"
+        geplante_mails_stornieren(session, termin.id)
+        from app import kalender as kalender_modul
+        kalender_modul.termin_loeschen(session, termin)
+    aktivitaet(session, vorgang.id, "status",
+               f"Verloren (vor Auftrag): {grund}"
+               + (f" – {text}" if text else ""), benutzer=benutzer)
+    session.flush()
+
+
 def termin_no_show(session: Session, termin: VotTermin, grund: str,
                    text: str, status: str = "no_show",
                    benutzer=None) -> None:
@@ -1718,6 +1740,7 @@ def akte_kontext(session: Session, vorgang: Vorgang) -> dict:
         "termine": termine, "aktiver_termin": aktiver_termin,
         "kommunikation": kommunikation,
         "wiederkehrer": mehrfach,
+        "verloren_gruende": __import__("app.leadmanagement_logik", fromlist=["x"]).hole_logik().gruende_der_phase("verloren_vor_termin"),
         "leadmanager_wahl": [b for b in benutzer_map.values()
                              if b.aktiv and (b.lm_aktiv or b.rolle == "admin"
                                              or b.hat_rolle("leadmanagement")
@@ -1832,10 +1855,22 @@ def cockpit_daten(session: Session) -> dict:
     sla_rot = [v for v in session.query(Vorgang)
                .filter(Vorgang.lead_phase == "neu")
                if sla_status(session, v, jetzt)["farbe"] == "rot"]
+    # Prozess-Fix 27.09.2026: vergangene Termine ohne Rueckmeldung
+    # (geplant/bestaetigt, Terminende vorbei) - vorher ein totes Ende:
+    # niemand fragte nach, ob der VOT stattgefunden hat
+    rueckmeldung_offen = (session.query(VotTermin)
+                          .filter(VotTermin.status.in_(("geplant",
+                                                        "bestaetigt")),
+                                  VotTermin.beginn.isnot(None),
+                                  VotTermin.beginn < jetzt
+                                  - timedelta(hours=4))
+                          .order_by(VotTermin.beginn).all())
     return {
         "heute": _lm_zahlen(heute_start), "woche": _lm_zahlen(woche_start),
         "ueberfaellig": ueberfaellig, "ad": ad_zahlen,
         "sla_rot": sla_rot, "benutzer_map": benutzer_map,
+        "rueckmeldung_offen": rueckmeldung_offen,
+        "vorgaenge_map": {v.id: v for v in session.query(Vorgang)},
         "kunden_map": {k.id: k for k in session.query(Kunde)},
     }
 

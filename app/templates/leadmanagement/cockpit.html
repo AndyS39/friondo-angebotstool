@@ -69,6 +69,26 @@
     </tbody>
 </table>
 
+<h2>Termin-Rückmeldung offen ({{ rueckmeldung_offen | length }})</h2>
+{% if rueckmeldung_offen %}
+<p class="dezent" style="font-size:12px">Der Termin ist vorbei, aber weder
+    „erfolgt“ noch No-Show gemeldet – bitte beim AD nachfragen
+    (Knöpfe in der Lead-Akte).</p>
+<table class="tabelle" style="max-width:700px">
+    <tbody>
+    {% for t in rueckmeldung_offen %}
+        {% set v = vorgaenge_map.get(t.vorgang_id) %}
+        <tr>
+            <td><a href="/lead-management/lead/{{ t.vorgang_id }}">
+                {{ kunden_map[v.kunde_id].anzeige_name if v and v.kunde_id in kunden_map else '?' }}</a></td>
+            <td>{{ t.beginn | de_datum('%a %d.%m.%Y %H:%M') }}</td>
+            <td>{{ benutzer_map[t.ad_id].name if t.ad_id in benutzer_map else '?' }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}<p class="dezent">Alle vergangenen Termine sind zurückgemeldet.</p>{% endif %}
+
 <h2 class="ueberfaellig-rot">SLA rot jetzt ({{ sla_rot | length }})</h2>
 {% if sla_rot %}
 <table class="tabelle" style="max-width:700px">

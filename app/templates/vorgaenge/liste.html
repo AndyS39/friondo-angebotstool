@@ -24,7 +24,7 @@
     {% for v in vorgaenge %}
         {% set kunde = kunden.get(v.kunde_id) %}
         <tr>
-            <td><a href="/vorgaenge/{{ v.id }}">{{ kunde.anzeige_name if kunde else '?' }}</a>
+            <td><a href="/vorgaenge/{{ v.id }}">{{ kunde.anzeige_name if kunde else '(ohne Kunde)' }}</a>
                 {% if v.id in neue_notizen %}
                     <span class="notiz-punkt" title="Neue Notizen seit dem letzten Öffnen">●</span>
                 {% endif %}
