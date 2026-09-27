@@ -45,7 +45,10 @@ def _sichtbar_fuer(session: Session, benutzer) -> bool:
 
 def _lead_sichtbar_fuer(session: Session, benutzer) -> bool:
     from app import leadmanagement
-    return leadmanagement.lead_modul_sichtbar(session, benutzer)
+    # Prozess-Fix 27.09.2026: der Aussendienst bekommt die Glocke
+    # "Neuer VOT-Termin" (lead_ad_sicht), auch ohne volles Lead-Modul
+    return (leadmanagement.lead_modul_sichtbar(session, benutzer)
+            or leadmanagement.lead_ad_sicht(session, benutzer))
 
 
 def _gefiltert(session: Session, benutzer, abfrage):

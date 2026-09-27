@@ -87,6 +87,14 @@ async def liste(request: Request, q: str = "", interesse: str = "",
         leads = [l for l in leads if l.status_text == lead_status]
     if kanal:   # Vertriebskanal (v6)
         leads = [l for l in leads if l.vertriebskanal == kanal]
+    # Prozess-Fix 27.09.2026: VOT liegt in der Vergangenheit, aber keine
+    # Sparte ist erfasst - vorher stand so ein Lead wochenlang unauffaellig
+    # als "Terminiert" in der Liste
+    jetzt = datetime.now()
+    ueberfaellige = [l for l in leads
+                     if l.vot_datum is not None and l.vot_datum < jetzt]
+    if ansicht == "ueberfaellig":
+        leads = ueberfaellige
     # Sortierung (v5): Termin (Standard), Vertriebler, Status – jeweils dann Termin
     if sortierung == "vertriebler":
         leads.sort(key=lambda l: ((vertriebler[l.benutzer_id].name if l.benutzer_id in vertriebler
@@ -109,7 +117,8 @@ async def liste(request: Request, q: str = "", interesse: str = "",
                   q=q, interesse=interesse, vertriebler_id=vertriebler_id,
                   lead_status=lead_status, sortierung=sortierung, ansicht=ansicht,
                   ausgeblendet=ausgeblendet, kanal=kanal, kanal_werte=kanal_werte,
-                  ohne_ad=ohne_ad,
+                  ohne_ad=ohne_ad, ueberfaellig_anzahl=len(ueberfaellige),
+                  heute=datetime.now(),
                   status_werte=status_werte, vertriebler_werte=vertriebler_werte,
                   sync_status=monday_sync.status,
                   meldung=request.query_params.get("meldung", ""))

@@ -1490,6 +1490,11 @@ def gewerk_stornieren(session: Session, gewerk: Gewerk, grund: str, text: str,
         angebot_status_setzen(angebot, "Abgelehnt")
         angebot.ablehnungsgrund = f"Storno nach Auftrag: {grund}"
         angebot.ablehnungsgrund_text = gewerk.storno_text
+        try:   # Prozess-Fix 27.09.2026: Lead-Phase mitziehen (Storno)
+            from app import leadmanagement
+            leadmanagement.phase_neu_berechnen(session, angebot.vorgang_id)
+        except Exception:
+            pass
         session.flush()
         if alter_status in ("Versendet", "Versendet (extern)", "Angenommen"):
             try:

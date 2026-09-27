@@ -209,6 +209,14 @@ def mail_verarbeiten(session: Session, graph_id: str, absender: str,
         kern.aktivitaet(session, vorgang.id, "mail_ein",
                         f"Antwort von {absender}: {betreff} – "
                         f"{(body or '')[:200]}")
+        # Prozess-Fix 27.09.2026: eine Kundenantwort weckt den Lead –
+        # zurückgestellte/nicht erreichte kommen zurück in die Arbeitsliste,
+        # nächste Aktion = sofort (vorher blieb die Antwort folgenlos)
+        from datetime import datetime as _dt
+        vorgang.naechste_aktion_am = _dt.now()
+        if vorgang.lead_phase in ("zurueckgestellt", "nicht_erreicht"):
+            vorgang.lead_phase = "in_kontaktierung"
+            vorgang.zurueckgestellt_bis = None
         if vorgang.leadmanager_id:
             kern.benachrichtigen(session, [vorgang.leadmanager_id],
                                  f"Antwort-Mail von {absender}: {betreff}",

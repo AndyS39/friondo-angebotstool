@@ -15,6 +15,15 @@
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
+{% if ueberfaellig_anzahl and ansicht != 'ueberfaellig' %}
+<div class="warnblock">⏰ <strong>{{ ueberfaellig_anzahl }} Termin{{ 'e' if ueberfaellig_anzahl != 1 }} in der Vergangenheit ohne Erfassung</strong> –
+    bitte nachfassen (Erfassung starten oder Lead ausblenden).
+    <a href="/leads?ansicht=ueberfaellig">Nur überfällige zeigen</a></div>
+{% endif %}
+{% if ansicht == 'ueberfaellig' %}
+<div class="warnblock">Gefiltert: nur überfällige VOT-Termine –
+    <a href="/leads">alle offenen Leads zeigen</a></div>
+{% endif %}
 {% if ohne_ad %}
 <div class="warnblock">⚠ <strong>{{ ohne_ad }} Lead{{ 's' if ohne_ad != 1 }} ohne Vertriebler</strong> –
 bitte die <a href="/parametrierung/monday">Personen-Zuordnung</a> prüfen oder in der
@@ -77,7 +86,7 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
     <tbody>
     {% for lead in leads %}
         <tr>
-            <td>{{ lead.vot_datum.strftime('%d.%m.%Y %H:%M') if lead.vot_datum }}</td>
+            <td>{% if lead.vot_datum %}<span {% if lead.vot_datum < heute %}style="color:#b3382c;font-weight:600" title="Termin liegt in der Vergangenheit – Erfassung fehlt"{% endif %}>{{ lead.vot_datum.strftime('%d.%m.%Y %H:%M') }}</span>{% endif %}</td>
             <td><a href="/vorgaenge/zu-lead/{{ lead.id }}" title="Vorgangsakte öffnen">{{ lead.anzeige_name }}</a>
                 <span class="sparten-chips">
                 {% for sparte, status in chips.get(lead.id, []) %}

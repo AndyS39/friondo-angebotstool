@@ -284,6 +284,21 @@ def eintrag_verarbeiten(session: Session, eintrag: KommunikationLog) -> str:
         eintrag.status = "fehler"
         eintrag.fehler_text = "Vorgang fehlt"
         return "fehler"
+    # Prozess-Fix 27.09.2026: Termin-Mails nur fuer aktive, kuenftige
+    # Termine - Umbuchung/No-Show stornieren zwar (leadmanagement.
+    # geplante_mails_stornieren), aber diese Pruefung faengt auch alle
+    # Altbestaende und Randfaelle ab
+    if eintrag.termin_id and eintrag.vorlage_key in ("terminerinnerung",
+                                                     "terminbestaetigung"):
+        from app.models import VotTermin
+        termin = session.get(VotTermin, eintrag.termin_id)
+        if (termin is None or termin.status not in ("geplant", "bestaetigt")
+                or (eintrag.vorlage_key == "terminerinnerung"
+                    and termin.beginn is not None
+                    and termin.beginn < datetime.now())):
+            eintrag.status = "storniert"
+            eintrag.fehler_text = "Termin nicht mehr aktiv"
+            return "storniert"
     # Nurture nur mit Werbe-Einwilligung (§7 UWG); Terminorganisation und
     # Eingangsbestätigung sind von der Anfrage gedeckt
     if eintrag.vorlage_key == "nurture" and not vorgang.einwilligung_werbung:

@@ -101,6 +101,13 @@ def versand_erkennen(session, angebot: Angebot, nachrichten: list[dict],
             continue
         from app.models import angebot_status_setzen
         angebot_status_setzen(angebot, "Versendet")
+        # Prozess-Fix 27.09.2026: Lead-Phase mitziehen (Pipeline zeigte
+        # sonst nach automatisch erkanntem Versand weiter "erfasst")
+        try:
+            from app import leadmanagement
+            leadmanagement.phase_neu_berechnen(session, angebot.vorgang_id)
+        except Exception:
+            pass
         merken(f"als versendet erkannt (Absender {absender})")
         return True
     merken("nicht erkannt – " + "; ".join(gruende[:4]))

@@ -20,7 +20,10 @@
         {% if z.kunde.telefon %}
             <span>Telefon: <a href="tel:{{ z.kunde.telefon }}">{{ z.kunde.telefon }}</a></span>
         {% endif %}
-        <span><a href="/vorgaenge/{{ z.vorgang.id }}">Lead-Akte öffnen</a></span>
+        <span class="formzeile" style="margin-top:4px">
+            <a class="knopf klein" href="/erfassung/sparten?kunde_id={{ z.kunde.id }}{{ '&lead_id=' ~ z.vorgang.lead_id if z.vorgang.lead_id }}">Erfassung starten</a>
+            <a class="knopf klein zweitrangig" href="/vorgaenge/{{ z.vorgang.id }}">Lead-Akte öffnen</a>
+        </span>
         {% if z.steckbrief %}
         <details>
             <summary class="dezent">Steckbrief aus der Qualifizierung</summary>

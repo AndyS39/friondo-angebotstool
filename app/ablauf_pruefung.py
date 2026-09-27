@@ -46,6 +46,11 @@ def lauf(session=None, trocken: bool = False) -> dict:
                     "nummern": [a.nummer for a in faellig]}
         for a in faellig:
             angebot_status_setzen(a, "Abgelehnt")
+            try:   # Prozess-Fix 27.09.2026: Lead-Phase mitziehen
+                from app import leadmanagement
+                leadmanagement.phase_neu_berechnen(session, a.vorgang_id)
+            except Exception:
+                pass
             a.ablehnungsgrund = AUTO_GRUND
             session.add(AngebotsNotiz(
                 angebot_id=a.id, benutzer_name="Prüflauf",

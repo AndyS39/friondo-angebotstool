@@ -281,7 +281,13 @@ def lead_phase_berechnen(session: Session, vorgang: Vorgang) -> str:
                         .filter(VotTermin.vorgang_id == vorgang.id,
                                 VotTermin.status.in_(("geplant", "bestaetigt")))
                         .count())
-        if (lead is not None and lead.vot_datum is not None) or termin_aktiv:
+        termine_gesamt = (session.query(VotTermin)
+                          .filter(VotTermin.vorgang_id == vorgang.id).count())
+        # Prozess-Fix 27.09.2026: lead.vot_datum zaehlt nur, solange KEIN
+        # VotTermin-Datensatz existiert - sonst drehte der 15-Minuten-Sync
+        # einen gemeldeten No-Show wieder auf "terminiert" zurueck
+        if termin_aktiv or (termine_gesamt == 0 and lead is not None
+                            and lead.vot_datum is not None):
             phase = "terminiert"
         elif (session.query(LeadQualifizierung)
               .filter(LeadQualifizierung.vorgang_id == vorgang.id,
@@ -741,6 +747,25 @@ def mail_planen(session: Session, vorgang: Vorgang, vorlage_key: str,
     return eintrag
 
 
+def geplante_mails_stornieren(session: Session, termin_id: int,
+                              nur_vorlagen: tuple[str, ...] = ()) -> int:
+    """Prozess-Fix 27.09.2026: geplante Warteschlangen-Mails eines Termins
+    stornieren (Umbuchung/No-Show/Absage) - der Kunde bekam sonst die
+    Erinnerung fuer den alten oder abgesagten Termin."""
+    from app.models import KommunikationLog
+    anzahl = 0
+    abfrage = (session.query(KommunikationLog)
+               .filter(KommunikationLog.termin_id == termin_id,
+                       KommunikationLog.status == "geplant"))
+    if nur_vorlagen:
+        abfrage = abfrage.filter(KommunikationLog.vorlage_key.in_(nur_vorlagen))
+    for eintrag in abfrage:
+        eintrag.status = "storniert"
+        eintrag.fehler_text = "Termin umgebucht/abgesagt"
+        anzahl += 1
+    return anzahl
+
+
 def kaskade_anwenden(session: Session, vorgang: Vorgang, benutzer=None) -> str:
     """Nach Nicht erreicht / Besetzt / Mailbox: Wiedervorlage + Aktion aus dem
     Blatt Kaskade; nach dem letzten Versuch Phase „Nicht erreicht“ (+30 Tage,
@@ -760,7 +785,11 @@ def kaskade_anwenden(session: Session, vorgang: Vorgang, benutzer=None) -> str:
         mail_planen(session, vorgang, "nicht_erreicht")
     vorgang.lead_phase = "nicht_erreicht"
     vorgang.naechste_aktion_am = datetime.now() + timedelta(days=30)
-    mail_planen(session, vorgang, "nurture")
+    # Prozess-Fix 27.09.2026: Nurture zur Wiedervorlage in 30 Tagen planen -
+    # sie ging sonst SOFORT raus, direkt nach der "Nicht erreicht"-Mail
+    # (Text "vor einiger Zeit..." passte nicht)
+    mail_planen(session, vorgang, "nurture",
+                geplant_am=vorgang.naechste_aktion_am)
     aktivitaet(session, vorgang.id, "status",
                "Kaskade ausgeschöpft – Phase Nicht erreicht, Wiedervorlage +30 Tage",
                benutzer=benutzer)
@@ -956,6 +985,37 @@ def taeglicher_lauf_leads(session: Session | None = None,
                                 f"Wiedervorlage fällig: {kunde.anzeige_name if kunde else '?'}",
                                 f"/lead-management/lead/{vorgang.id}")
             anzahl += 1
+        # Prozess-Fix 27.09.2026: Tagesdigest an die Leadmanager - SLA-rote
+        # und freie Leads wurden vorher nirgends aktiv gemeldet (nur passiv
+        # im Cockpit sichtbar)
+        try:
+            jetzt = datetime.now()
+            offene = (session.query(Vorgang)
+                      .filter(Vorgang.lead_phase.in_(
+                          ("neu", "in_kontaktierung"))).all())
+            rote = [v for v in offene
+                    if sla_status(session, v, jetzt)["farbe"] == "rot"]
+            freie = [v for v in offene if v.leadmanager_id is None]
+            je_lm: dict[int, int] = {}
+            for v in rote:
+                if v.leadmanager_id:
+                    je_lm[v.leadmanager_id] = je_lm.get(v.leadmanager_id, 0) + 1
+            for lm_id, zahl in je_lm.items():
+                benachrichtigen(session, [lm_id],
+                                f"{zahl} Lead{'s' if zahl != 1 else ''} ueber "
+                                "dem SLA (rot) - bitte heute anrufen",
+                                "/lead-management/anrufliste")
+            if freie:
+                leiter = [b.id for b in session.query(Benutzer)
+                          .filter(Benutzer.aktiv.is_(True),
+                                  Benutzer.rolle.in_(("admin",
+                                                      "leadmanagement")))]
+                benachrichtigen(session, leiter,
+                                f"{len(freie)} Lead{'s' if len(freie) != 1 else ''} "
+                                "ohne Leadmanager in der Anrufliste",
+                                "/lead-management/anrufliste")
+        except Exception:
+            pass   # Digest darf den Tageslauf nie blockieren
         parameter_setzen(session, "lm_lauf_datum", heute.isoformat())
         session.commit()
         return {"reaktiviert": anzahl}
@@ -1352,6 +1412,7 @@ def termin_buchen(session: Session, vorgang: Vorgang, ad_id: int,
     if alter_termin is not None:
         alter_termin.status = "verschoben"
         kalender_modul.termin_loeschen(session, alter_termin)
+        geplante_mails_stornieren(session, alter_termin.id)
         mail_planen(session, vorgang, "terminaenderung", termin=termin)
         aktivitaet(session, vorgang.id, "termin",
                    f"Termin umgebucht auf {beginn.strftime('%d.%m.%Y %H:%M')} "
@@ -1386,6 +1447,7 @@ def termin_no_show(session: Session, termin: VotTermin, grund: str,
     termin.status = status
     termin.grund_text = grund + (f" – {text}" if text else "")
     kalender_modul.termin_loeschen(session, termin)
+    geplante_mails_stornieren(session, termin.id)
     vorgang = session.get(Vorgang, termin.vorgang_id)
     if vorgang is not None:
         vorgang.lead_phase = "qualifiziert"
@@ -1511,9 +1573,17 @@ def board_daten(session: Session, benutzer, filter_werte: dict) -> dict:
                 or v.eingang_am > filter_werte["eingang_bis"]):
             continue
         if (v.lead_phase in ("gewonnen", "verloren")
-                and (v.eingang_am or v.angelegt_am) < grenze_30
                 and not filter_werte.get("seiten")):
-            pass   # Endzustände bleiben (eingeklappte Spalte zeigt 30 Tage)
+            # Prozess-Fix 27.09.2026: Endzustände nur 30 Tage im Board
+            # (Maßstab = letzte Aktivität, nicht der Lead-Eingang) -
+            # das "pass" ließ Gewonnen/Verloren unbegrenzt wachsen
+            letzter = (session.query(LeadAktivitaet.zeitpunkt)
+                       .filter(LeadAktivitaet.vorgang_id == v.id)
+                       .order_by(LeadAktivitaet.zeitpunkt.desc()).first())
+            stand = (letzter[0] if letzter else None) or v.eingang_am \
+                or v.angelegt_am
+            if stand < grenze_30:
+                continue
         termin = aktive_termine.get(v.id)
         spalten[v.lead_phase].append({
             "vorgang": v, "kunde": kunde,
@@ -1677,11 +1747,20 @@ def startseiten_kacheln_leads(session: Session) -> dict:
                        Vorgang.naechste_aktion_am.isnot(None),
                        Vorgang.naechste_aktion_am <= jetzt).count())
     heute_ende = jetzt.replace(hour=23, minute=59, second=59)
+    # Prozess-Fix 27.09.2026: beide Wiedervorlage-Wege zaehlen - der
+    # 7-Uhr-Lauf setzt Zurueckgestellte auf "neu", die Kachel stand
+    # danach immer auf 0
     wiedervorlagen = (session.query(Vorgang)
                       .filter(Vorgang.lead_phase == "zurueckgestellt",
                               Vorgang.zurueckgestellt_bis.isnot(None),
                               Vorgang.zurueckgestellt_bis <= heute_ende)
                       .count())
+    wiedervorlagen += (session.query(Vorgang)
+                       .filter(Vorgang.lead_phase.in_(
+                           ("neu", "in_kontaktierung", "nicht_erreicht",
+                            "qualifiziert")),
+                           Vorgang.naechste_aktion_am.isnot(None),
+                           Vorgang.naechste_aktion_am <= heute_ende).count())
     woche_ende = jetzt + timedelta(days=7 - jetzt.weekday())
     termine = (session.query(VotTermin)
                .filter(VotTermin.status.in_(("geplant", "bestaetigt")),

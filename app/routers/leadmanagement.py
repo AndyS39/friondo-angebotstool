@@ -382,8 +382,12 @@ def _anruf_zeilen(session: Session, benutzer, filter_werte: dict) -> list[dict]:
     if phase_filter:
         abfrage = abfrage.filter(Vorgang.lead_phase == phase_filter)
     else:
+        # Prozess-Fix 27.09.2026: auch "qualifiziert" gehoert in die
+        # Arbeitsliste, solange kein aktiver Termin existiert (z. B. nach
+        # einem No-Show) - vorher fiel der Lead komplett aus der Liste
         abfrage = abfrage.filter(Vorgang.lead_phase.in_(
-            ("neu", "in_kontaktierung", "zurueckgestellt", "nicht_erreicht")))
+            ("neu", "in_kontaktierung", "zurueckgestellt", "nicht_erreicht",
+             "qualifiziert")))
     if filter_werte.get("meine") and benutzer is not None:
         # Design-/Prozess-Fix 27.09.2026: „Meine Leads" enthält auch die noch
         # NICHT zugeordneten – sonst liegen neue Leads unsichtbar herum,
@@ -434,6 +438,14 @@ def _anruf_zeilen(session: Session, benutzer, filter_werte: dict) -> list[dict]:
         if not phase_filter and v.lead_phase == "nicht_erreicht" and (
                 v.naechste_aktion_am is None or v.naechste_aktion_am > jetzt):
             continue
+        # qualifiziert nur ohne aktiven Termin (Termin-Vergabe steht aus)
+        if not phase_filter and v.lead_phase == "qualifiziert":
+            from app.models import VotTermin as _VotTermin
+            if (session.query(_VotTermin)
+                    .filter(_VotTermin.vorgang_id == v.id,
+                            _VotTermin.status.in_(("geplant", "bestaetigt")))
+                    .count()):
+                continue
         sla = kern.sla_status(session, v, jetzt)
         letzter = letzte_anrufe.get(v.id)
         if v.lead_phase == "neu" and sla["farbe"] in ("gelb", "rot"):
@@ -553,7 +565,12 @@ async def anruf_ergebnis(request: Request, vorgang_id: int,
         meldung = (f"{ANRUF_ERGEBNIS_NAMEN[ergebnis]} – "
                    + kern.kaskade_anwenden(session, vorgang, benutzer))
     elif ergebnis == "falsche_nummer":
-        meldung = "Falsche Nummer – Lead bleibt mit Kennzeichen „Nummer prüfen“."
+        # Prozess-Fix 27.09.2026: mit Wiedervorlage morgen, sonst rutschte
+        # der Lead ohne naechsten Schritt ans Listenende
+        vorgang.naechste_aktion_am = kern.kaskade_zeitpunkt(session, "+1d")
+        meldung = ("Falsche Nummer – Wiedervorlage "
+                   + vorgang.naechste_aktion_am.strftime("%d.%m.%Y %H:%M")
+                   + " (Nummer prüfen).")
     elif ergebnis == "kein_interesse":
         grund = (form.get("grund") or "").strip()
         text = (form.get("grund_text") or "").strip()
@@ -782,10 +799,16 @@ async def qualifizierung_speichern(request: Request, vorgang_id: int,
               and not (session.query(type(zeile))
                        .filter_by(vorgang_id=vorgang.id, sparte=s.strip())
                        .filter(type(zeile).abgeschlossen_am.isnot(None)).count())]
+    from app import leadmanagement_logik
+    logik = leadmanagement_logik.hole_logik()
     return render(request, "leadmanagement/qualifizierung_fertig.html",
                   aktiv="/lead-management", vorgang=vorgang, kunde=kunde,
                   sparte=sparte, punkte=zeile.score_punkte,
                   klasse=zeile.score_klasse, offene_sparten=offene,
+                  # Fix 27.09.2026: Gruende aus der Steuerdatei (vorher
+                  # hart kodierte Kopie im Template)
+                  unq_gruende=logik.gruende_der_phase("unqualifiziert"),
+                  zurueck_gruende=logik.gruende_der_phase("zurueckgestellt"),
                   meldung="")
 
 

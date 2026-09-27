@@ -33,10 +33,7 @@
         <label>Bis (Pflicht) <input type="date" name="bis" required></label>
         <label>Grund
             <select name="grund" required>
-                <option>Kunde meldet sich selbst</option>
-                <option>Bauphase später</option>
-                <option>Förderung/Finanzierung abwarten</option>
-                <option>Sonstiges</option>
+                {% for g in zurueck_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}
             </select>
         </label>
         <label>Freitext <input type="text" name="grund_text"></label>
@@ -53,14 +50,7 @@
         <h3>Unqualifiziert</h3>
         <label>Grund
             <select name="grund" required>
-                <option>Mieter/kein Eigentümer</option>
-                <option>außerhalb Vertriebsgebiet</option>
-                <option>kein Bedarf, nur Information</option>
-                <option>Budget/Finanzierung</option>
-                <option>technisch nicht geeignet</option>
-                <option>Doppelter</option>
-                <option>Spam/Fehleingabe</option>
-                <option>Sonstiges</option>
+                {% for g in unq_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}
             </select>
         </label>
         <label>Freitext <input type="text" name="grund_text"></label>

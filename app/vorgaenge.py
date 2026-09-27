@@ -31,6 +31,7 @@ def vorgang_fuer_kunde(session: Session, kunde_id: int) -> Vorgang:
     Vorgänge (eine Kundenanfrage = ein Vorgang)."""
     vorgang = (session.query(Vorgang)
                .filter(Vorgang.kunde_id == kunde_id, Vorgang.lead_id.is_(None))
+               .order_by(Vorgang.id.desc())   # Fix 27.09.2026: neuester zuerst
                .first())
     if vorgang is None:
         vorgang = Vorgang(kunde_id=kunde_id)
@@ -96,6 +97,14 @@ def gehoert_benutzer(session: Session, vorgang: Vorgang, benutzer_id: int) -> bo
     if (session.query(Erfassung)
             .filter(Erfassung.vorgang_id == vorgang.id,
                     Erfassung.benutzer_id == benutzer_id).count()):
+        return True
+    # Prozess-Fix 27.09.2026: auch der AD eines VOT-Termins aus dem
+    # Lead-Modul darf die Akte oeffnen ("Lead-Akte oeffnen" lief sonst
+    # auf "Kein Zugriff")
+    from app.models import VotTermin
+    if (session.query(VotTermin)
+            .filter(VotTermin.vorgang_id == vorgang.id,
+                    VotTermin.ad_id == benutzer_id).count()):
         return True
     return bool(session.query(Angebot)
                 .filter(Angebot.vorgang_id == vorgang.id,

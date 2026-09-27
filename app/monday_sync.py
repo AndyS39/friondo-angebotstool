@@ -316,6 +316,14 @@ def _quelle_syncen(session: Session, quelle: MondayQuelle,
             session.add(lead)
             gesehen[schluessel] = lead.monday_item_id
         kunde_fuer_lead(session, lead)   # Kunden sofort anlegen/aktualisieren (Phase 24)
+        # Prozess-Fix 27.09.2026: Vorgang sofort anlegen - sonst fehlen neue
+        # monday-Leads in Board/Statistik/Karte und ihre VOT-Termine dem
+        # Terminassistenten (Doppelbuchungs-Gefahr)
+        try:
+            from app.vorgaenge import vorgang_fuer_lead
+            vorgang_fuer_lead(session, lead)
+        except Exception:
+            pass   # Sync nie an der Vorgangs-Anlage scheitern lassen
         anzahl += 1
     return anzahl
 
