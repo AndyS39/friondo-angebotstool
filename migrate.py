@@ -430,6 +430,49 @@ def _daten() -> list[str]:
             meldungen.append(f"Foerderungs-Paket aufgeloest: {geloescht} "
                              f"Aufgaben entfernt, BnD-Punkt an {ergaenzt} "
                              "Abnahme-Pakete gehaengt")
+        # 27.09.2026 (Andreas, Nachtrag): "Abweichungen zum Angebot geprueft,
+        # ggf. Nachtrag" als Pflicht-Schritt 5 im Paket Abnahme & Freigabe -
+        # bestehende Instanzen bekommen die Aufgabe, Rechnung/BnD ruecken
+        # in der Reihenfolge auf 6/7
+        if einstellung_holen(session, "migration_abweichung_abnahme", "") != "erledigt":
+            from app.models import Aufgabe as _AufgAbw
+            from app.models import AufgabenpaketInstanz as _InstAbw
+            from app.models import Gewerk as _GewAbw
+            ergaenzt = 0
+            for instanz in (session.query(_InstAbw)
+                            .filter(_InstAbw.paket_key == "abnahme_freigabe",
+                                    _InstAbw.version != "v1",
+                                    _InstAbw.deaktiviert_am.is_(None))):
+                gewerk = session.get(_GewAbw, instanz.gewerk_id)
+                if gewerk is None or gewerk.phase in ("abgeschlossen",
+                                                      "storniert"):
+                    continue
+                aufgaben = (session.query(_AufgAbw)
+                            .filter(_AufgAbw.paket_instanz_id == instanz.id)
+                            .all())
+                if any(a.titel.startswith("Abweichungen zum Angebot")
+                       for a in aufgaben):
+                    continue
+                for a in aufgaben:
+                    if a.titel == "Rechnung freigegeben":
+                        a.reihenfolge = 6
+                    elif a.titel == "BnD nach Abnahme erstellt":
+                        a.reihenfolge = 7
+                session.add(_AufgAbw(
+                    gewerk_id=instanz.gewerk_id, projekt_id=gewerk.projekt_id,
+                    paket_instanz_id=instanz.id,
+                    titel="Abweichungen zum Angebot geprüft, ggf. Nachtrag",
+                    beschreibung="Mehr-/Minderleistungen aus der Montage mit "
+                                 "dem Auftrag abgleichen, bevor die Rechnung "
+                                 "freigegeben wird.",
+                    rolle="projektierer", pflicht=True, reihenfolge=5,
+                    faellig_regel="M+4"))
+                ergaenzt += 1
+            einstellung_setzen(session, "migration_abweichung_abnahme",
+                               "erledigt")
+            session.commit()
+            meldungen.append(f"Abnahme & Freigabe: Abweichungs-Pruefung an "
+                             f"{ergaenzt} Gewerke gehaengt")
         # 27.09.2026 (Andreas): Alt-Gewerke bereinigen - V1-Aufgabenpakete
         # entfernen und das Paket Abnahme & Freigabe auf die vollen sechs
         # Schritte auffuellen (alte v2-Instanzen aus der V1-Aera waren leer,

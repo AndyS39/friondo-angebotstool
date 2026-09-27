@@ -456,3 +456,11 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
   Aufgaben gelöscht (28 Aufgaben lokal), der BnD-Punkt wurde an die
   aktiven Abnahme-&-Freigabe-Instanzen gehängt (5 lokal) – ein bereits
   erledigter BnD-Status wäre übernommen worden.
+
+## 27.09.2026 – Nachtrag Abnahme & Freigabe (Andreas)
+
+- Neuer Pflicht-Schritt 5 „Abweichungen zum Angebot geprüft, ggf. Nachtrag"
+  (M+4) im Paket Abnahme & Freigabe, vor der Rechnungsfreigabe; „Rechnung
+  freigegeben" und „BnD nach Abnahme erstellt" rücken auf 6/7. Migration
+  migration_abweichung_abnahme ergänzt den Punkt an bestehenden offenen
+  Gewerken (4 lokal) und zieht die Reihenfolge nach.
