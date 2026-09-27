@@ -14,8 +14,18 @@
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-<p>Pipeline-Wert (gewichtete Erwartungswerte offener Leads):
-    <strong>{{ pipeline_wert | euro }}</strong></p>
+{# Design-Fix 27.09.2026: Kennzahlen als Kacheln (v14-Baukasten) statt Fließtext #}
+{% set anrufe_heute = heute.values() | map(attribute='anrufe') | sum %}
+{% set termine_woche = ad.values() | map(attribute='termine') | sum %}
+{% set noshows_woche = ad.values() | map(attribute='no_shows') | sum %}
+<div class="kacheln" style="margin-bottom:14px">
+    <div class="kachel stat"><span class="stat-zahl">{{ pipeline_wert | euro }}</span>Pipeline-Wert
+        <span class="dezent" style="font-size:11px">gewichtete offene Leads</span></div>
+    <div class="kachel stat {{ 'kachel-warn' if sla_rot }}"><span class="stat-zahl">{{ sla_rot | length }}</span>SLA rot jetzt</div>
+    <div class="kachel stat"><span class="stat-zahl">{{ anrufe_heute }}</span>Anrufe heute</div>
+    <div class="kachel stat"><span class="stat-zahl">{{ termine_woche }}</span>VOT-Termine diese Woche</div>
+    <div class="kachel stat {{ 'kachel-warn' if noshows_woche }}"><span class="stat-zahl">{{ noshows_woche }}</span>No-Shows diese Woche</div>
+</div>
 
 {% macro lm_tabelle(zahlen, titel) %}
 <h2>{{ titel }}</h2>
@@ -59,7 +69,7 @@
     </tbody>
 </table>
 
-<h2 style="color:#c0392b">SLA rot jetzt ({{ sla_rot | length }})</h2>
+<h2 class="ueberfaellig-rot">SLA rot jetzt ({{ sla_rot | length }})</h2>
 {% if sla_rot %}
 <table class="tabelle" style="max-width:700px">
     <tbody>

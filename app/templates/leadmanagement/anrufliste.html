@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
 {% from "leadmanagement/_nav.html" import lm_nav %}
 
 {% block titel %}Anrufliste – Lead-Management{% endblock %}
@@ -102,24 +103,25 @@
                 · {{ z.letzter.zeitpunkt.strftime('%d.%m. %H:%M') }}{% endif %}</td>
             <td>{% if z.kunde.telefon %}<a href="tel:{{ z.kunde.telefon }}">{{ z.kunde.telefon }}</a>{% endif %}</td>
             <td class="anruf-buttons">
+                {# Design-Fix 27.09.2026: symbol()-Icons statt Emojis #}
                 <form method="post" action="/lead-management/anruf/{{ z.vorgang.id }}" style="display:inline">
-                    <button class="knopf klein" name="ergebnis" value="erreicht" title="1 – Erreicht">✅</button>
-                    <button class="knopf klein zweitrangig" name="ergebnis" value="nicht_erreicht" title="2 – Nicht erreicht">📵</button>
-                    <button class="knopf klein zweitrangig" name="ergebnis" value="besetzt" title="3 – Besetzt">⛔</button>
-                    <button class="knopf klein zweitrangig" name="ergebnis" value="mailbox" title="4 – Mailbox">📼</button>
+                    <button class="knopf klein anruf-ok" name="ergebnis" value="erreicht" title="1 – Erreicht">{{ symbol('haken') }}</button>
+                    <button class="knopf klein zweitrangig" name="ergebnis" value="nicht_erreicht" title="2 – Nicht erreicht">{{ symbol('telefon-aus') }}</button>
+                    <button class="knopf klein zweitrangig" name="ergebnis" value="besetzt" title="3 – Besetzt">{{ symbol('besetzt') }}</button>
+                    <button class="knopf klein zweitrangig" name="ergebnis" value="mailbox" title="4 – Mailbox">{{ symbol('voicemail') }}</button>
                 </form>
                 <button class="knopf klein zweitrangig" title="5 – Rückruf gewünscht"
-                        onclick="dialogOeffnen('rueckruf', {{ z.vorgang.id }})">📅</button>
+                        onclick="dialogOeffnen('rueckruf', {{ z.vorgang.id }})">{{ symbol('kalender') }}</button>
                 <form method="post" action="/lead-management/anruf/{{ z.vorgang.id }}" style="display:inline">
-                    <button class="knopf klein zweitrangig" name="ergebnis" value="falsche_nummer" title="6 – Falsche Nummer">❓</button>
+                    <button class="knopf klein zweitrangig" name="ergebnis" value="falsche_nummer" title="6 – Falsche Nummer">{{ symbol('fragezeichen') }}</button>
                 </form>
                 <button class="knopf klein zweitrangig" title="7 – Kein Interesse"
-                        onclick="dialogOeffnen('keininteresse', {{ z.vorgang.id }})">🚫</button>
+                        onclick="dialogOeffnen('keininteresse', {{ z.vorgang.id }})">{{ symbol('verbot') }}</button>
                 <button class="knopf klein zweitrangig" title="Zurückstellen"
-                        onclick="dialogOeffnen('zurueck', {{ z.vorgang.id }})">⏸</button>
+                        onclick="dialogOeffnen('zurueck', {{ z.vorgang.id }})">{{ symbol('pause') }}</button>
                 {% if z.vorgang.lead_phase in ('nicht_erreicht', 'zurueckgestellt', 'unqualifiziert') %}
                 <button class="knopf klein zweitrangig" title="Erneut aktivieren"
-                        onclick="dialogOeffnen('reaktivieren', {{ z.vorgang.id }})">▶</button>
+                        onclick="dialogOeffnen('reaktivieren', {{ z.vorgang.id }})">{{ symbol('abspielen') }}</button>
                 {% endif %}
             </td>
         </tr>

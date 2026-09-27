@@ -332,6 +332,15 @@ body.einbett .kopfleiste, body.einbett .fusszeile { display: none; }
 body.einbett main { padding: 10px 14px; }
 .seitenkopf .aktionen { flex-wrap: wrap; white-space: normal;
     row-gap: 6px; justify-content: flex-end; }
+
+/* Design-Fix 27.09.2026: Anruf-Ergebnisknoepfe (Icons statt Emojis) */
+.anruf-buttons .knopf { padding: 4px 7px; }
+.anruf-buttons .anruf-ok { background: #2e7d32; border-color: #2e7d32; }
+.anruf-buttons .anruf-ok:hover { background: #256628; }
+
+/* Design-Fix 27.09.2026: Warn-Kachel im LM-Cockpit */
+.kachel.kachel-warn { border-color: #e5b5af; background: #fdf3f2; }
+.kachel.kachel-warn .stat-zahl { color: #b3382c; }
 </style>
 
 <div class="top">

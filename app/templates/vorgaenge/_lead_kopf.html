@@ -1,3 +1,4 @@
+{% from "_symbole.html" import symbol %}
 {# v12 (Phase 79): Lead-Kopfblock + Reiter der Lead-Akte – erscheint in der
    Vorgangsakte nur bei Modul-Sichtbarkeit (Demo: Admin). #}
 <div class="karte lead-kopf">
@@ -54,10 +55,13 @@
     </div>
     {% if not (lead_readonly | default(false)) %}
     <div class="formzeile">
-        {% for wert, name in [('erreicht', '✅ Erreicht'), ('nicht_erreicht', '📵 Nicht erreicht'),
-                              ('besetzt', '⛔ Besetzt'), ('mailbox', '📼 Mailbox')] %}
+        {# Design-Fix 27.09.2026: Icons aus der v14-Sammlung statt Emojis #}
+        {% for wert, icon, name in [('erreicht', 'haken', 'Erreicht'),
+                                    ('nicht_erreicht', 'telefon-aus', 'Nicht erreicht'),
+                                    ('besetzt', 'besetzt', 'Besetzt'),
+                                    ('mailbox', 'voicemail', 'Mailbox')] %}
         <form method="post" action="/lead-management/anruf/{{ vorgang.id }}" style="display:inline">
-            <button class="knopf klein zweitrangig" name="ergebnis" value="{{ wert }}">{{ name }}</button>
+            <button class="knopf klein zweitrangig" name="ergebnis" value="{{ wert }}">{{ symbol(icon) }} {{ name }}</button>
         </form>
         {% endfor %}
         {% for s in lead_kontext.sparten %}
