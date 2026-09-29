@@ -70,9 +70,22 @@ class SteckbriefRegel:
     """v15 (Phase 77): Ableitungszeile des Blatts "Steckbrief"."""
     feld: str
     sparte: str
-    quelle_typ: str      # frage | position | fp_frage | profil
+    quelle_typ: str      # frage | position | fp_frage | profil | fest | auftragsdaten
     quelle: str
     regel: str
+    # V3 (Phase 84): Eingabe im Auftragsdaten-Formular für TAIFUN-Aufträge –
+    # text | zahl | ja_nein | auswahl:A|B|C (leer = nicht im Formular)
+    eingabe: str = ""
+    bezeichnung: str = ""
+
+
+@dataclass
+class AuftragsdatenFeld:
+    """V3 (Phase 84): Feld des Auftragsdaten-Formulars (aus Blatt Steckbrief)."""
+    feld: str
+    bezeichnung: str
+    typ: str                     # text | zahl | ja_nein | auswahl
+    optionen: list[str]
 
 
 FP_FRAGE_TYPEN = ("text", "zahl", "ja_nein", "auswahl")
@@ -179,6 +192,25 @@ class ProjektierungsLogik:
     fehler: list[str] = field(default_factory=list)
     warnungen: list[str] = field(default_factory=list)
     stand: str = ""
+
+    def auftragsdaten_felder(self, sparte: str) -> list[AuftragsdatenFeld]:
+        """V3 (Phase 84): Formularfelder für TAIFUN-Aufträge der Sparte –
+        Zeilen des Blatts Steckbrief mit Spalte `eingabe`, Blattreihenfolge,
+        je Feld die erste Zeile mit Eingabe."""
+        felder: list[AuftragsdatenFeld] = []
+        gesehen: set[str] = set()
+        for regel in self.steckbrief:
+            if not regel.eingabe or regel.sparte not in ("ALLE", sparte):
+                continue
+            if regel.feld in gesehen:
+                continue
+            gesehen.add(regel.feld)
+            typ, _, rest = regel.eingabe.partition(":")
+            felder.append(AuftragsdatenFeld(
+                feld=regel.feld, bezeichnung=regel.bezeichnung or regel.feld,
+                typ=typ.strip().lower(),
+                optionen=[o.strip() for o in rest.split("|") if o.strip()]))
+        return felder
 
     def pakete_fuer_sparte(self, sparte: str) -> list[Paket]:
         return [p for p in self.pakete.values()
@@ -322,18 +354,26 @@ def einlesen(pfad: Path | None = None) -> ProjektierungsLogik:
     # --- Steckbrief-Ableitungsregeln (v15, Phase 77) ---
     if "Steckbrief" in wb.sheetnames:
         for zeile in wb["Steckbrief"].iter_rows(min_row=2, values_only=True):
-            werte = [_text(z) for z in (tuple(zeile) + ("",) * 5)[:5]]
-            feld, sparte, quelle_typ, quelle, regel = werte
+            werte = [_text(z) for z in (tuple(zeile) + ("",) * 7)[:7]]
+            feld, sparte, quelle_typ, quelle, regel, eingabe, bezeichnung = werte
             if not feld or not quelle_typ:
                 continue
             # V4 (Phase 91.3): „fest“ = Standardwert, wenn keine Regel davor griff
-            if quelle_typ not in ("frage", "position", "fp_frage", "profil", "fest"):
+            # V3 (Phase 84): „auftragsdaten“ = nur Formular-Definition, keine Ableitung
+            if quelle_typ not in ("frage", "position", "fp_frage", "profil", "fest",
+                                  "auftragsdaten"):
                 logik.warnungen.append(
                     f"Steckbrief: unbekannter quelle_typ „{quelle_typ}“ ({feld})")
                 continue
+            typ = eingabe.split(":", 1)[0].strip().lower()
+            if eingabe and typ not in FP_FRAGE_TYPEN:
+                logik.warnungen.append(
+                    f"Steckbrief: unbekannte Eingabe „{eingabe}“ ({feld})")
+                eingabe = ""
             logik.steckbrief.append(SteckbriefRegel(
                 feld=feld, sparte=sparte or "ALLE",
-                quelle_typ=quelle_typ, quelle=quelle, regel=regel))
+                quelle_typ=quelle_typ, quelle=quelle, regel=regel,
+                eingabe=eingabe, bezeichnung=bezeichnung))
 
     if "Sub-Typen" in wb.sheetnames:
         for zeile in wb["Sub-Typen"].iter_rows(min_row=2, values_only=True):

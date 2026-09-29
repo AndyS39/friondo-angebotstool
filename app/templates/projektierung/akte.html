@@ -73,7 +73,8 @@
 <div class="pj-steckreihe">
     {% for g in gewerke if g.phase != 'storniert' %}
         {{ steckbrief(g, steckbrief_daten.get(g.id, {}), steckbrief_felder(g.sparte),
-                      '/projektierung/projekt/' ~ projekt.id) }}
+                      '/projektierung/projekt/' ~ projekt.id,
+                      taifun=(angebote.get(g.angebot_id).extern if angebote.get(g.angebot_id) else false)) }}
     {% endfor %}
 </div>
 

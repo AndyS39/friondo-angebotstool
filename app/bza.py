@@ -38,12 +38,13 @@ def _angebot(session, gewerk):
 def ist_gefoerdert(session, gewerk) -> bool | None:
     """True = Förderblock im Tool-Angebot aktiv (KfW-Daten, nicht
     ausgeblendet); False = Tool-Angebot ohne Förderung; None = unbekannt
-    (TAIFUN-Auftrag – die Auftragsdaten mit „gefördert“ kommen mit PLAN_PROJ_V3)."""
+    (TAIFUN-Auftrag, an dem „KfW-gefördert“ noch nicht beantwortet ist).
+    V3 (Phase 84) / Phase 96: TAIFUN-Einträge tragen kfw_gefoerdert ja/nein."""
     angebot = _angebot(session, gewerk)
     if angebot is None:
         return None
     if angebot.extern:
-        return None
+        return {"ja": True, "nein": False}.get((angebot.kfw_gefoerdert or "").lower())
     try:
         kfw_daten = json.loads(angebot.kfw_json or "{}")
     except ValueError:

@@ -1,10 +1,15 @@
 {# v15 (Phase 77): Projektsteckbrief je Gewerk – KV-Raster zweispaltig,
    editierbar per Klick (Eingabe + Enter speichert, manuell = ✎).
    Kontext: gewerk, werte (feld → SteckbriefWert), felder (Liste), zurueck. #}
-{% macro steckbrief(gewerk, werte, felder, zurueck, nur_lesen=false) %}
+{% macro steckbrief(gewerk, werte, felder, zurueck, nur_lesen=false, taifun=false) %}
 <div class="pj-steck" id="steckbrief-{{ gewerk.id }}">
     <div class="pj-steck-kopf">
         <b>Steckbrief · {{ gewerk.sparte }}</b>
+        {% if taifun and not nur_lesen %}
+        {# V3 (Phase 84): TAIFUN-Auftrag – Steckbrief aus den Auftragsdaten #}
+        <a class="pj-btn" href="/projektierung/gewerk/{{ gewerk.id }}/auftragsdaten">Auftragsdaten bearbeiten</a>
+        {% if not gewerk.auftragsdaten_am %}<span class="pj-badge crit" title="TAIFUN-Auftrag ohne erfasste Auftragsdaten">Auftragsdaten fehlen</span>{% endif %}
+        {% endif %}
         {% if not nur_lesen %}
         <form method="post" action="/projektierung/gewerk/{{ gewerk.id }}/steckbrief-ableiten"
               style="display:inline">
@@ -16,7 +21,7 @@
     <div class="pj-steck-raster">
         {% for feld, name in felder %}
         {% set w = werte.get(feld) %}
-        <span class="k">{{ name }}{% if w and w.manuell %} <i title="manuell geändert – wird nicht überschrieben">✎</i>{% endif %}</span>
+        <span class="k">{{ name }}{% if w and w.manuell %} <i title="manuell geändert – wird nicht überschrieben">✎</i>{% elif w and w.quelle == 'auftragsdaten' %} <i title="aus den TAIFUN-Auftragsdaten">A</i>{% endif %}</span>
         {% if nur_lesen %}
         <span class="w">{{ w.wert if w else '–' }}</span>
         {% else %}

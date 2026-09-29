@@ -563,6 +563,8 @@ class Gewerk(Base):
     # v15 (Phase 78, Fit for Future): Zaehlerwechseltermin (Marker im Kalender)
     zaehlerwechsel_termin: Mapped[Optional[datetime]] = mapped_column(DateTime,
                                                                       nullable=True)
+    # V3 (Phase 84): Auftragsdaten eines TAIFUN-Auftrags erfasst am
+    auftragsdaten_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # V4 (PLAN_PROJ_V4 Phase 92): BzA + KfW (vorbereitet, kein Wächter)
     bza_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     bza_erstellt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -771,6 +773,9 @@ class SteckbriefWert(Base):
     feld: Mapped[str] = mapped_column(String(60), default="")
     wert: Mapped[str] = mapped_column(String(500), default="")
     manuell: Mapped[bool] = mapped_column(Boolean, default=False)
+    # V3 (Phase 84): Herkunft – "" (Ableitung/manuell) | "auftragsdaten"
+    # (TAIFUN-Auftragsdaten; nur die FP-Erfassung darf sie überschreiben)
+    quelle: Mapped[str] = mapped_column(String(20), default="")
     geaendert_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
                                                   onupdate=datetime.now)
@@ -1023,6 +1028,9 @@ class Angebot(Base):
     # v10 (Phase 61/62): externer TAIFUN-Eintrag kann übergangsweise ein PDF
     # tragen – nur damit ist er im Kombi-Versand wählbar
     extern_pdf_pfad: Mapped[str] = mapped_column(String(300), default="")
+    # V3 (Phase 84) / Phase 96: KfW-gefördert? "ja" | "nein" | "" = unbekannt
+    # (Tool-Angebote leiten es aus dem Förderblock ab, TAIFUN-Einträge fragen)
+    kfw_gefoerdert: Mapped[str] = mapped_column(String(10), default="")
     extern_pdf_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # v11 (Projektierung, Phase 64): Verknüpfung zum Gewerk nach „Angebot → Projekt"
     projekt_gewerk_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)

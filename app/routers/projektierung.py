@@ -93,6 +93,9 @@ def _aufgabe_kontext(session: Session, aufgabe: Aufgabe) -> dict:
                            for k in LINK_PARAMETER},
         "steckbrief_werte": (kern.steckbrief_daten(session, [gewerk.id])[gewerk.id]
                              if gewerk is not None else {}),
+        # V3 (Phase 84): TAIFUN-Gewerk → Materialhinweis statt UGL-Button
+        "angebote": ({gewerk.angebot_id: session.get(Angebot, gewerk.angebot_id)}
+                     if gewerk is not None and gewerk.angebot_id else {}),
         # V4 (Phase 93.1): Heizreport-API konfiguriert → Buttons statt Link/Upload
         "heizreport_konfiguriert": __import__(
             "app.heizreport_api", fromlist=["x"]).konfiguriert(session),
@@ -715,6 +718,19 @@ async def projekt_anlegen(request: Request, angebot_id: int,
             f"/projektierung/projekt/{projekt.id}?meldung=" + quote_plus(
                 "Keine neuen Gewerke – die gewählten Sparten existieren bereits."),
             status_code=303)
+    # V3 (Phase 84): TAIFUN-Auftrag → zweite Seite „Auftragsdaten“ (Pflicht)
+    if angebot.extern:
+        erstes = (session.query(Gewerk)
+                  .filter(Gewerk.projekt_id == projekt.id,
+                          Gewerk.angebot_id == angebot.id,
+                          Gewerk.phase != "storniert")
+                  .order_by(Gewerk.id).first())
+        if erstes is not None:
+            return RedirectResponse(
+                f"/projektierung/gewerk/{erstes.id}/auftragsdaten?meldung="
+                + quote_plus(f"Projekt {projekt.nummer} angelegt – bitte jetzt die "
+                             "Auftragsdaten aus dem TAIFUN-Angebot erfassen."),
+                status_code=303)
     return RedirectResponse(f"/projektierung/projekt/{projekt.id}?meldung="
                             + quote_plus(f"Projekt {projekt.nummer}: Gewerk"
                                          f"{'e' if len(angelegt) > 1 else ''} "
@@ -1965,6 +1981,106 @@ async def steckbrief_speichern(request: Request, gewerk_id: int,
         return _meldung_json(f"Steckbrief: {feld} gespeichert.")
     zurueck = form.get("zurueck") or f"/projektierung/projekt/{gewerk.projekt_id}"
     return RedirectResponse(zurueck, status_code=303)
+
+
+# --- V3 (Phase 84): Auftragsdaten für TAIFUN-Aufträge ---------------------------
+
+def _auftragsdaten_gewerke(session: Session, gewerk: Gewerk) -> list[Gewerk]:
+    """Alle offenen Gewerke desselben TAIFUN-Angebots im Projekt."""
+    return (session.query(Gewerk)
+            .filter(Gewerk.projekt_id == gewerk.projekt_id,
+                    Gewerk.angebot_id == gewerk.angebot_id,
+                    Gewerk.phase != "storniert")
+            .order_by(Gewerk.id).all())
+
+
+@router.get("/gewerk/{gewerk_id}/auftragsdaten")
+async def auftragsdaten_seite(request: Request, gewerk_id: int,
+                              session: Session = Depends(get_session)):
+    from app.models import SteckbriefWert
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    angebot = session.get(Angebot, gewerk.angebot_id) if gewerk.angebot_id else None
+    if angebot is None or not angebot.extern:
+        return RedirectResponse(
+            f"/projektierung/projekt/{gewerk.projekt_id}?meldung=" + quote_plus(
+                "Auftragsdaten gibt es nur für TAIFUN-Aufträge."), status_code=303)
+    projekt = session.get(Projekt, gewerk.projekt_id)
+    gewerke = _auftragsdaten_gewerke(session, gewerk)
+    werte_je_gewerk, manuell_je_gewerk = {}, {}
+    vorbelegung = kern.auftragsdaten_aus_pdf(angebot.extern_pdf_pfad or "")
+    for g in gewerke:
+        werte_je_gewerk[g.id] = {**vorbelegung, **kern.auftragsdaten_werte(session, g)}
+        manuell_je_gewerk[g.id] = {w.feld for w in session.query(SteckbriefWert)
+                                   .filter(SteckbriefWert.gewerk_id == g.id,
+                                           SteckbriefWert.manuell.is_(True))}
+    return render(request, "projektierung/auftragsdaten.html", aktiv="/projektierung",
+                  projekt=projekt, angebot=angebot, gewerke=gewerke,
+                  kunde=session.get(Kunde, projekt.kunde_id) if projekt else None,
+                  felder_je_gewerk={g.id: kern.auftragsdaten_felder(session, g.sparte)
+                                    for g in gewerke},
+                  werte_je_gewerk=werte_je_gewerk,
+                  manuell_je_gewerk=manuell_je_gewerk,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/gewerk/{gewerk_id}/auftragsdaten")
+async def auftragsdaten_speichern(request: Request, gewerk_id: int,
+                                  session: Session = Depends(get_session)):
+    from app import config, galerie
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    angebot = session.get(Angebot, gewerk.angebot_id) if gewerk.angebot_id else None
+    if angebot is None or not angebot.extern:
+        return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}",
+                                status_code=303)
+    benutzer = request.state.benutzer
+    projekt = session.get(Projekt, gewerk.projekt_id)
+    form = await request.form()
+    basis = f"/projektierung/gewerk/{gewerk.id}/auftragsdaten"
+    # Pflicht-Upload des Angebots-PDFs, falls am TAIFUN-Eintrag noch keins liegt
+    datei = form.get("pdf_datei")
+    if not angebot.extern_pdf_pfad:
+        if datei is None or not getattr(datei, "filename", ""):
+            return RedirectResponse(basis + "?meldung=" + quote_plus(
+                "Bitte das TAIFUN-Angebot als PDF hochladen (Pflicht)."), status_code=303)
+        inhalt = await datei.read()
+        if not inhalt.startswith(b"%PDF"):
+            return RedirectResponse(basis + "?meldung=" + quote_plus(
+                "Die Datei ist kein PDF."), status_code=303)
+        ordner = config.ANGEBOTE_PDF_ORDNER / "extern"
+        ordner.mkdir(parents=True, exist_ok=True)
+        ziel = ordner / f"{angebot.nummer}.pdf"
+        ziel.write_bytes(inhalt)
+        angebot.extern_pdf_pfad = str(ziel)
+        angebot.extern_pdf_am = datetime.now()
+        if projekt is not None and projekt.vorgang_id:
+            galerie.speichern(session, projekt.vorgang_id, "Allgemein",
+                              f"{angebot.taifun_nummer or angebot.nummer}.pdf",
+                              inhalt, benutzer=benutzer, quelle="auftragsdaten",
+                              bemerkung="TAIFUN-Angebot (Auftragsdaten)",
+                              sparte=gewerk.sparte)
+        if projekt is not None:
+            kern._dokument_ablegen(session, projekt, ziel, "01 Angebot & Erfassung",
+                                   gewerk.id, benutzer)
+    # KfW-gefördert (nur WP relevant) – gleiches Feld wie am TAIFUN-Eintrag
+    if "kfw_gefoerdert" in form:
+        wert = (form.get("kfw_gefoerdert") or "").strip().lower()
+        angebot.kfw_gefoerdert = wert if wert in ("ja", "nein") else ""
+    anzahl = 0
+    for g in _auftragsdaten_gewerke(session, gewerk):
+        praefix = f"g{g.id}__"
+        werte = {k[len(praefix):]: str(v) for k, v in form.items()
+                 if k.startswith(praefix)}
+        anzahl += kern.auftragsdaten_speichern(session, g, werte, benutzer=benutzer)
+        g.auftragsdaten_am = datetime.now()
+    session.commit()
+    return RedirectResponse(
+        f"/projektierung/projekt/{gewerk.projekt_id}?meldung=" + quote_plus(
+            f"Auftragsdaten gespeichert ({anzahl} Steckbrief-Felder)."),
+        status_code=303)
 
 
 @router.post("/gewerk/{gewerk_id}/steckbrief-ableiten")

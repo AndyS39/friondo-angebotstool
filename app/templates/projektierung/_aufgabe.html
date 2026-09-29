@@ -185,8 +185,14 @@
             {% endif %}
         </div>
         {% elif a.aktion_typ == 'api' and a.aktion_wert == 'ugl_collin' %}
+        {% set _auftrag = angebote.get(g.angebot_id) if angebote is defined and g else none %}
         <div class="pj-akt">
+            {% if _auftrag and _auftrag.extern %}
+            {# V3 (Phase 84): TAIFUN-Auftrag hat keine Tool-Positionen #}
+            <small class="pj-akt-hinweis">Bestellung aus TAIFUN-Positionen – Datei manuell in „Montagedokumente“ ablegen</small>
+            {% else %}
             <a class="pj-btn" href="/projektierung/gewerk/{{ g.id }}/ugl">📦 Material bestellen (UGL)</a>
+            {% endif %}
         </div>
         {% elif a.aktion_typ == 'api' and a.aktion_wert == 'heizreport' and heizreport_konfiguriert %}
         {# V4 (Phase 93.1): konfigurierte Heizreport-API #}

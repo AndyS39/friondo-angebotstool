@@ -16,6 +16,31 @@ den Rollout sofort; das Team sieht das Modul erst in Stufe 2.
 
 ---
 
+## Abgleich mit dem umgesetzten V4-Stand (30.09.2026, PLAN_GESAMT B2)
+
+V4 (v17) wurde ohne V3 gebaut; nichts aus V3 ist dort doppelt vorhanden.
+Berührungspunkte und Abweichungen – beim Bau berücksichtigt, nichts doppelt:
+
+- **Phase 84:** Steckbrief-Felder `restoel_liter`, `stemmarbeiten`,
+  `erdleitung_m` gibt es seit V4 → im Auftragsdaten-Formular mit angeboten
+  (löst Provisorium 3). „gefördert“ ist KEIN Steckbrief-Feld, sondern das
+  Angebotsfeld `kfw_gefoerdert` (ja/nein/unbekannt), das PLAN_V14 (B3,
+  Phase 96) auch im „Extern erledigt“-Dialog abfragt – eine Quelle für
+  `bza.ist_gefoerdert` (löst Provisorium 2). Steckbrief-Felder bleiben im
+  Code (`STECKBRIEF_FELDER`), das Blatt ergänzt Zusatzfelder über die
+  neuen Spalten `eingabe`/`bezeichnung` (Zeilen mit `quelle_typ =
+  auftragsdaten`).
+- **Phase 85:** Phasenwerte seit V4: `abnahme` und `freigabe` statt
+  „Abnahme & Freigabe“ (Vorlage und Import nutzen die V4-Werte).
+- **Phase 86:** Die Demo-Sendesperre `projekt_testadresse` (V4, BzA-Mail)
+  gilt jetzt auch im Modus `pilot`. Die Go-live-Prüfpunkte der
+  Stücklisten-Seite (≥ 90 % zugeordnet, Collin-Testdatei) wandern in die
+  Checkliste (Provisorium 1); die Stücklisten-Seite verlinkt dorthin.
+  Portal-URLs umfassen seit V4 auch `url_kfw_zuschussportal`.
+- **CLAUDE.md:** Abschnitt heißt „Neu in v18 – Projektierung Go-live“
+  (v16/v17 belegt).
+- Teil B Stufe 0 (Rollout) ist durch PLAN_GESAMT Teil A abgedeckt.
+
 ## Teil A – Bauphasen
 
 ### Phase 84 – Auftragsdaten für TAIFUN-Aufträge
@@ -24,7 +49,7 @@ Problem: Externe TAIFUN-Angebote tragen nur Nummer, Endbetrag, Datum,
 optional PDF – keine Positionen. Steckbrief-Ableitung, Sub-Mails und
 Stückliste haben damit keine Grundlage.
 
-- [ ] Dialog „Angebot → Projekt" erkennt TAIFUN-Angebote und zeigt nach der
+- [x] Dialog „Angebot → Projekt" erkennt TAIFUN-Angebote und zeigt nach der
   Zuordnung eine zweite Seite **„Auftragsdaten"** (Pflicht, je gewählter Sparte):
   - WP: Hersteller (Bosch / Mitsubishi / Vaillant / Sonstige) · Serie/Modell ·
     Leistungsklasse (kW) · Innengerät-Variante · Puffer (l) · Warmwasser
@@ -42,18 +67,18 @@ Stückliste haben damit keine Grundlage.
     `ja_nein` / `auswahl:A|B|C`).
   - Pflicht-Upload des Angebots-PDFs, falls am TAIFUN-Eintrag noch keins liegt
     (Ablage am Angebot wie bisher + Kopie in Galerie „Allgemein").
-- [ ] Speichern schreibt die Werte als Steckbrief (Kennzeichen `quelle =
+- [x] Speichern schreibt die Werte als Steckbrief (Kennzeichen `quelle =
   auftragsdaten`, nicht `manuell`, damit die FP-Erfassung sie später
   überschreiben darf) und aktiviert Pakete wie bei Tool-Angeboten.
-- [ ] Nachträglich änderbar: Button „Auftragsdaten bearbeiten" am Gewerk
+- [x] Nachträglich änderbar: Button „Auftragsdaten bearbeiten" am Gewerk
   (nur TAIFUN-Gewerke), öffnet dasselbe Formular.
-- [ ] Material-Aufgabe („Stückliste geprüft und Material bestellt") zeigt bei
+- [x] Material-Aufgabe („Stückliste geprüft und Material bestellt") zeigt bei
   TAIFUN-Gewerken den Hinweis „Bestellung aus TAIFUN-Positionen – Datei
   manuell in Montagedokumente ablegen" statt des UGL-Buttons.
-- [ ] Vorbereitung Stufe 2 (nicht bauen, nur Schnittstelle vorsehen):
+- [x] Vorbereitung Stufe 2 (nicht bauen, nur Schnittstelle vorsehen):
   Funktion `auftragsdaten_aus_pdf(pdf) -> dict` als Stub, der später
   Text aus dem TAIFUN-PDF liest und das Formular vorbelegt.
-- [ ] Test: TAIFUN-Angebot → Projekt mit Auftragsdaten → Steckbrief gefüllt,
+- [x] Test: TAIFUN-Angebot → Projekt mit Auftragsdaten → Steckbrief gefüllt,
   Sub-Mail-Platzhalter {geraet}/{oeltank} korrekt.
 
 ### Phase 85 – Bestandsimport laufender Projekte

@@ -440,21 +440,9 @@ def paket_aktivieren(session: Session, gewerk: Gewerk, paket: "object",
         if not _schritt_sichtbar(session, gewerk, getattr(schritt,
                                                           "sichtbar_wenn", "")):
             continue
-        verantwortlich = _standard_benutzer(session, schritt.rolle, gewerk, projekt)
-        session.add(Aufgabe(
-            gewerk_id=gewerk.id, projekt_id=gewerk.projekt_id,
-            paket_instanz_id=instanz.id, titel=schritt.titel,
-            beschreibung=schritt.beschreibung, rolle=schritt.rolle,
-            verantwortlich_id=verantwortlich,
-            faellig_am=faelligkeit_berechnen(schritt.faellig_regel, jetzt,
-                                             fp_termin, montage_termin),
-            faellig_regel=schritt.faellig_regel, pflicht=schritt.pflicht,
-            reihenfolge=schritt.nr, wartet_frist_tage=schritt.wartet_frist_tage,
-            aktion_typ=getattr(schritt, "aktion_typ", "") or "",
-            aktion_wert=getattr(schritt, "aktion_wert", "") or "",
-            optionen=getattr(schritt, "optionen", "") or "",
-            sichtbar_wenn=_laufzeit_bedingung(getattr(schritt, "sichtbar_wenn", "")),
-            erstellt_von=benutzer.id if benutzer else None))
+        verantwortlich = _aufgabe_aus_schritt(session, gewerk, projekt, instanz,
+                                              schritt, jetzt, fp_termin,
+                                              montage_termin, benutzer)
         if verantwortlich:
             zugewiesene.add(verantwortlich)
     session.flush()
@@ -464,6 +452,141 @@ def paket_aktivieren(session: Session, gewerk: Gewerk, paket: "object",
                         f"Neue Aufgaben ({paket.name}) im Projekt {projekt.nummer}",
                         f"/projektierung/projekt/{projekt.id}", art="aufgabe")
     return instanz
+
+
+def _aufgabe_aus_schritt(session: Session, gewerk: Gewerk, projekt, instanz,
+                         schritt, jetzt, fp_termin, montage_termin,
+                         benutzer=None) -> int | None:
+    """Legt die Aufgabe zu einem Paket-Schritt an; liefert den Verantwortlichen."""
+    verantwortlich = _standard_benutzer(session, schritt.rolle, gewerk, projekt)
+    session.add(Aufgabe(
+        gewerk_id=gewerk.id, projekt_id=gewerk.projekt_id,
+        paket_instanz_id=instanz.id, titel=schritt.titel,
+        beschreibung=schritt.beschreibung, rolle=schritt.rolle,
+        verantwortlich_id=verantwortlich,
+        faellig_am=faelligkeit_berechnen(schritt.faellig_regel, jetzt,
+                                         fp_termin, montage_termin),
+        faellig_regel=schritt.faellig_regel, pflicht=schritt.pflicht,
+        reihenfolge=schritt.nr, wartet_frist_tage=schritt.wartet_frist_tage,
+        aktion_typ=getattr(schritt, "aktion_typ", "") or "",
+        aktion_wert=getattr(schritt, "aktion_wert", "") or "",
+        optionen=getattr(schritt, "optionen", "") or "",
+        sichtbar_wenn=_laufzeit_bedingung(getattr(schritt, "sichtbar_wenn", "")),
+        erstellt_von=benutzer.id if benutzer else None))
+    return verantwortlich
+
+
+def steckbrief_schritte_nachziehen(session: Session, gewerk: Gewerk,
+                                   benutzer=None) -> int:
+    """V3 (Phase 84): Schritte mit Bedingung „steckbrief:<feld>=<wert>“, die
+    bei der Paket-Aktivierung fehlten (TAIFUN: Steckbrief kommt erst mit den
+    Auftragsdaten), nachträglich anlegen. Bestehende Aufgaben bleiben."""
+    from app import projektierung_logik
+    logik = projektierung_logik.hole_logik(session)
+    projekt = session.get(Projekt, gewerk.projekt_id)
+    jetzt = datetime.now()
+    fp_termin = _erster_termin(session, gewerk, "feinplanung")
+    montage_termin = _erster_termin(session, gewerk, "montage")
+    angelegt = 0
+    for instanz in (session.query(AufgabenpaketInstanz)
+                    .filter(AufgabenpaketInstanz.gewerk_id == gewerk.id,
+                            AufgabenpaketInstanz.version != "v1",
+                            AufgabenpaketInstanz.deaktiviert_am.is_(None)).all()):
+        paket = logik.pakete.get(instanz.paket_key)
+        if paket is None:
+            continue
+        vorhandene = {a.reihenfolge for a in session.query(Aufgabe)
+                      .filter(Aufgabe.paket_instanz_id == instanz.id)}
+        for schritt in paket.schritte:
+            bedingung = (getattr(schritt, "sichtbar_wenn", "") or "").strip()
+            if not bedingung.lower().startswith("steckbrief:"):
+                continue
+            if schritt.nr in vorhandene:
+                continue
+            if not _schritt_sichtbar(session, gewerk, bedingung):
+                continue
+            _aufgabe_aus_schritt(session, gewerk, projekt, instanz, schritt,
+                                 jetzt, fp_termin, montage_termin, benutzer)
+            angelegt += 1
+    if angelegt:
+        session.flush()
+    return angelegt
+
+
+# --- V3 (Phase 84): Auftragsdaten für TAIFUN-Aufträge ---------------------------
+
+def ist_taifun_gewerk(session: Session, gewerk: Gewerk) -> bool:
+    angebot = session.get(Angebot, gewerk.angebot_id) if gewerk.angebot_id else None
+    return bool(angebot is not None and angebot.extern)
+
+
+def auftragsdaten_felder(session: Session, sparte: str) -> list:
+    from app import projektierung_logik
+    return projektierung_logik.hole_logik(session).auftragsdaten_felder(sparte)
+
+
+def auftragsdaten_normalisieren(feld, roh: str) -> str:
+    """Formularwert → Steckbrief-Text (ja/nein klein, Zahl ohne Einheit)."""
+    wert = (roh or "").strip()
+    if feld.typ == "ja_nein":
+        return {"ja": "ja", "nein": "nein"}.get(wert.lower(), "")
+    if feld.typ == "auswahl" and feld.optionen and wert not in feld.optionen:
+        return ""
+    if feld.typ == "zahl":
+        zahl = _zahl_aus(wert)
+        return _menge_text(zahl) if zahl is not None else ""
+    return wert[:500]
+
+
+def auftragsdaten_werte(session: Session, gewerk: Gewerk) -> dict[str, str]:
+    """Aktuelle Steckbrief-Werte für die Vorbelegung des Formulars."""
+    return {f: w.wert for f, w in steckbrief_daten(session, [gewerk.id])[gewerk.id].items()}
+
+
+def auftragsdaten_speichern(session: Session, gewerk: Gewerk, werte: dict,
+                            benutzer=None) -> int:
+    """Schreibt die Auftragsdaten als Steckbrief (quelle = auftragsdaten, nicht
+    manuell – die FP-Erfassung darf sie später überschreiben). Manuell in der
+    Akte geänderte Felder bleiben unangetastet. Danach werden steckbrief-
+    abhängige Paketschritte nachgezogen."""
+    from app.models import SteckbriefWert
+    vorhanden = {w.feld: w for w in session.query(SteckbriefWert)
+                 .filter(SteckbriefWert.gewerk_id == gewerk.id)}
+    geaendert = 0
+    for feld in auftragsdaten_felder(session, gewerk.sparte):
+        if feld.feld not in werte:
+            continue
+        wert = auftragsdaten_normalisieren(feld, werte.get(feld.feld) or "")
+        eintrag = vorhanden.get(feld.feld)
+        if eintrag is not None and eintrag.manuell:
+            continue
+        if eintrag is None:
+            if not wert:
+                continue
+            session.add(SteckbriefWert(gewerk_id=gewerk.id, feld=feld.feld,
+                                       wert=wert, manuell=False,
+                                       quelle="auftragsdaten",
+                                       geaendert_von=benutzer.id if benutzer else None))
+            geaendert += 1
+        elif eintrag.wert != wert or eintrag.quelle != "auftragsdaten":
+            eintrag.wert = wert
+            eintrag.quelle = "auftragsdaten"
+            eintrag.geaendert_von = benutzer.id if benutzer else None
+            geaendert += 1
+    session.flush()
+    neu = steckbrief_schritte_nachziehen(session, gewerk, benutzer=benutzer)
+    verlauf(session, gewerk.projekt_id,
+            f"Auftragsdaten erfasst (Gewerk {gewerk.sparte}, {geaendert} Felder"
+            + (f", {neu} Schritte nachgezogen" if neu else "") + ")",
+            benutzer=benutzer, gewerk_id=gewerk.id)
+    return geaendert
+
+
+def auftragsdaten_aus_pdf(pdf) -> dict:
+    """Stufe 2 (vorbereitet, nicht gebaut): Text aus dem TAIFUN-Angebots-PDF
+    lesen und das Auftragsdaten-Formular vorbelegen ({feld: wert}). Bis dahin
+    leer – das Formular wird von Hand ausgefüllt."""
+    return {}
 
 
 def _laufzeit_bedingung(bedingung: str) -> str:
@@ -794,7 +917,22 @@ STECKBRIEF_FELDER = {
 
 
 def steckbrief_felder(sparte: str) -> list[tuple[str, str]]:
-    return STECKBRIEF_FELDER.get(sparte, STECKBRIEF_FELDER["KL"])
+    """Feste Felder der Sparte + zusätzliche Felder, die das Blatt Steckbrief
+    (Spalten eingabe/bezeichnung, V3 Phase 84) für die Auftragsdaten definiert."""
+    felder = list(STECKBRIEF_FELDER.get(sparte, STECKBRIEF_FELDER["KL"]))
+    try:
+        from app import projektierung_logik
+        bekannt = {f for f, _ in felder}
+        for zusatz in projektierung_logik.hole_logik().auftragsdaten_felder(sparte):
+            if zusatz.feld not in bekannt:
+                # vor „Besonderheiten“ einsortieren (bleibt letzte Zeile)
+                stelle = next((i for i, (f, _) in enumerate(felder)
+                               if f == "besonderheiten"), len(felder))
+                felder.insert(stelle, (zusatz.feld, zusatz.bezeichnung))
+                bekannt.add(zusatz.feld)
+    except Exception:
+        pass
+    return felder
 
 
 def _positions_mengen(session: Session, gewerk: Gewerk) -> dict[str, float]:
@@ -914,6 +1052,13 @@ def steckbrief_ableiten(session: Session, gewerk: Gewerk, benutzer=None,
         if eintrag is not None and eintrag.manuell:
             gesetzt.add(regel.feld)   # manuell hat Vorrang – Feld ist erledigt
             continue
+        if regel.quelle_typ == "auftragsdaten":
+            continue                  # V3: reine Formular-Definition
+        # V3 (Phase 84): TAIFUN-Auftragsdaten überschreibt nur die FP-Erfassung
+        if (eintrag is not None and (eintrag.quelle or "") == "auftragsdaten"
+                and regel.quelle_typ != "fp_frage"):
+            gesetzt.add(regel.feld)
+            continue
         wert = None
         if regel.quelle_typ == "frage":
             if regel.quelle in antworten:
@@ -942,8 +1087,9 @@ def steckbrief_ableiten(session: Session, gewerk: Gewerk, benutzer=None,
                                        wert=wert, manuell=False,
                                        geaendert_von=benutzer.id if benutzer else None))
             geaendert += 1
-        elif eintrag.wert != wert:
+        elif eintrag.wert != wert or (eintrag.quelle or ""):
             eintrag.wert = wert
+            eintrag.quelle = ""       # FP-Wert ersetzt Auftragsdaten
             geaendert += 1
         gesetzt.add(regel.feld)
     session.flush()
@@ -996,7 +1142,8 @@ def sub_mail_platzhalter(session: Session, gewerk: Gewerk,
         "ausfuehrungsadresse": adresse or "–",
         "telefon_kunde": (kunde.telefon if kunde else "") or "–",
         "projektnummer": projekt.nummer if projekt else "–",
-        "geraet": steck("hersteller", "leistungsklasse", "innengeraet") or "–",
+        "geraet": steck("hersteller", "serie_modell", "leistungsklasse",
+                        "innengeraet") or "–",
         "aussengeraet_details": steck("aufstellort", "kran") or "–",
         "oeltank": steck("oeltank", "oeltank_groesse", "oeltank_material") or "–",
         "zaehlerschrank": steck("zaehlerschrank") or "–",

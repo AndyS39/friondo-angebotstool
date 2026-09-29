@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block titel %}Auftragsdaten – {{ projekt.nummer }} – Friondo Angebotstool{% endblock %}
+
+{# V3 (Phase 84): Auftragsdaten für TAIFUN-Aufträge – Felder aus dem Blatt
+   „Steckbrief“ (Spalte eingabe), je Gewerk des Angebots ein Abschnitt. #}
+{% block inhalt %}
+{% set SPARTEN_NAMEN = {'WP': 'Wärmepumpe', 'PV': 'Photovoltaik', 'KL': 'Klima', 'WB': 'Wallbox'} %}
+<h1>Auftragsdaten
+    <a class="knopf klein zweitrangig" href="/projektierung/projekt/{{ projekt.id }}">Zur Projektakte</a>
+</h1>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<div class="akte-kopf">
+    <p><strong>{{ kunde.anzeige_name if kunde else '?' }}</strong>
+        · Projekt {{ projekt.nummer }}
+        · Angebot <span class="abzeichen">TAIFUN</span> {{ angebot.taifun_nummer or angebot.nummer }}
+        · Endbetrag <strong>{{ angebot.summen().endbetrag | euro }}</strong></p>
+    <p class="dezent">Das TAIFUN-Angebot hat keine Positionen im Tool – diese Angaben
+        füllen den Projektsteckbrief (Grundlage für Sub-Mails, Montage und Stückliste).
+        Die Feinplanungs-Erfassung darf sie später überschreiben; in der Akte von Hand
+        geänderte Felder (✎) bleiben unangetastet.</p>
+</div>
+
+<form method="post" action="/projektierung/gewerk/{{ gewerke[0].id }}/auftragsdaten"
+      enctype="multipart/form-data" class="formular" style="max-width:820px">
+
+    {% if not angebot.extern_pdf_pfad %}
+    <h2>Angebots-PDF (Pflicht)</h2>
+    <p class="dezent">Am TAIFUN-Eintrag liegt noch kein PDF. Es wird am Angebot abgelegt
+        und in die Galerie (Ordner „Allgemein“) kopiert.</p>
+    <label>TAIFUN-Angebot als PDF
+        <input type="file" name="pdf_datei" accept="application/pdf,.pdf" required></label>
+    {% else %}
+    <p class="dezent">Angebots-PDF liegt vor (hochgeladen {{ angebot.extern_pdf_am.strftime('%d.%m.%Y') if angebot.extern_pdf_am }}).</p>
+    {% endif %}
+
+    {% if gewerke | selectattr('sparte', 'equalto', 'WP') | list %}
+    <h2>Förderung</h2>
+    <div class="formzeile">
+        <label>KfW-gefördert?
+            <select name="kfw_gefoerdert">
+                <option value="" {{ 'selected' if not angebot.kfw_gefoerdert }}>– unbekannt –</option>
+                <option value="ja" {{ 'selected' if angebot.kfw_gefoerdert == 'ja' }}>Ja</option>
+                <option value="nein" {{ 'selected' if angebot.kfw_gefoerdert == 'nein' }}>Nein</option>
+            </select></label>
+        <span class="dezent">steuert die BzA-Aufgabe (bei „Nein“ entfällt sie)</span>
+    </div>
+    {% endif %}
+
+    {% for g in gewerke %}
+    <h2>{{ g.sparte }} · {{ SPARTEN_NAMEN.get(g.sparte, g.sparte) }}</h2>
+    {% set werte = werte_je_gewerk[g.id] %}
+    {% set manuell = manuell_je_gewerk[g.id] %}
+    <div class="formzeile" style="flex-wrap:wrap">
+        {% for f in felder_je_gewerk[g.id] %}
+        {% set name = 'g' ~ g.id ~ '__' ~ f.feld %}
+        {% set wert = werte.get(f.feld, '') %}
+        <label style="min-width:230px">{{ f.bezeichnung }}
+            {% if f.feld in manuell %}<i class="dezent" title="in der Akte von Hand geändert – wird hier nicht überschrieben">✎ manuell</i>{% endif %}
+            {% if f.typ == 'ja_nein' %}
+            <select name="{{ name }}" {{ 'disabled' if f.feld in manuell }}>
+                <option value="">–</option>
+                <option value="ja" {{ 'selected' if wert | lower == 'ja' }}>Ja</option>
+                <option value="nein" {{ 'selected' if wert | lower == 'nein' }}>Nein</option>
+            </select>
+            {% elif f.typ == 'auswahl' %}
+            <select name="{{ name }}" {{ 'disabled' if f.feld in manuell }}>
+                <option value="">–</option>
+                {% for o in f.optionen %}
+                <option value="{{ o }}" {{ 'selected' if wert == o }}>{{ o }}</option>
+                {% endfor %}
+                {% if wert and wert not in f.optionen %}
+                <option value="" selected disabled>bisher: {{ wert }}</option>
+                {% endif %}
+            </select>
+            {% elif f.typ == 'zahl' %}
+            <input type="text" inputmode="decimal" name="{{ name }}" size="8" value="{{ wert }}"
+                   {{ 'disabled' if f.feld in manuell }}>
+            {% else %}
+            {% if f.feld == 'besonderheiten' %}
+            <textarea name="{{ name }}" rows="2" style="width:100%" {{ 'disabled' if f.feld in manuell }}>{{ wert }}</textarea>
+            {% else %}
+            <input type="text" name="{{ name }}" size="24" value="{{ wert }}"
+                   {{ 'disabled' if f.feld in manuell }}>
+            {% endif %}
+            {% endif %}
+        </label>
+        {% endfor %}
+    </div>
+    {% endfor %}
+
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Auftragsdaten speichern</button>
+        <span class="dezent">Feldliste und Auswahlwerte kommen aus dem Blatt „Steckbrief“
+            (Spalten eingabe/bezeichnung) der Projektierungs-Steuerdatei.</span>
+    </div>
+</form>
+{% endblock %}

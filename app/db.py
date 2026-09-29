@@ -109,6 +109,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "version": "VARCHAR(5) NOT NULL DEFAULT 'v2'",         # v15 Phase 78
     },
     "gewerke": {
+        "auftragsdaten_am": "DATETIME",                        # V3 Phase 84
         "bza_id": "VARCHAR(100)",                              # V4 Phase 92
         "bza_erstellt_am": "DATETIME",
         "bza_gesendet_am": "DATETIME",
@@ -195,6 +196,11 @@ _NACHTRAEGLICHE_SPALTEN = {
         "versendet_am": "DATETIME",
         "angenommen_am": "DATETIME",
         "abgelehnt_am": "DATETIME",
+        "kfw_gefoerdert": "VARCHAR(10) NOT NULL DEFAULT ''",   # V3 Phase 84
+    },
+    # V3 (Phase 84): Herkunft der Steckbrief-Werte
+    "steckbrief_werte": {
+        "quelle": "VARCHAR(20) NOT NULL DEFAULT ''",
     },
     "benutzer": {
         "email": "VARCHAR(200) NOT NULL DEFAULT ''",
