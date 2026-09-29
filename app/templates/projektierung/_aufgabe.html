@@ -176,7 +176,12 @@
             {% if a.aktion_wert == 'feinplanung_wp' %}
             <a class="pj-btn" href="/projektierung/gewerk/{{ g.id }}/feinplanung">📝 Feinplanungs-Erfassung</a>
             {% else %}
-            <small class="pj-akt-hinweis">Formular folgt (Phase 82)</small>
+            {% if a.aktion_wert in formular_namen %}
+            {# Phase 94: Montage-Formulare werden im Montage-Backend je Einsatz ausgefüllt #}
+            <small class="pj-akt-hinweis">{{ formular_namen[a.aktion_wert] }} – wird im Montage-Backend je Einsatz ausgefüllt (PDF landet in der Galerie)</small>
+            {% else %}
+            <small class="pj-akt-hinweis">Formular „{{ a.aktion_wert }}“ ist nicht hinterlegt – bitte als Häkchen erledigen</small>
+            {% endif %}
             {% endif %}
         </div>
         {% elif a.aktion_typ == 'api' and a.aktion_wert == 'ugl_collin' %}

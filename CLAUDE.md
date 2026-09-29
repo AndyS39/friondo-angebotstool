@@ -9,7 +9,9 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
 ## Rollen & Navigation
 - Rollen: **Admin** (Benutzer verwalten inkl. Namen ändern, alles sehen),
   **Innendienst** (alles außer Benutzerverwaltung), **Außendienst** (nur Leads VOT
-  eigene + Erfassung; nie Preise/EK/DB/Rabatt).
+  eigene + Erfassung; nie Preise/EK/DB/Rabatt), seit v11 **Projektierung** und
+  **Montage** (nur `/montage`), seit v12 **Leadmanagement**; Mehrfachrollen
+  möglich (Details in den jeweiligen Abschnitten).
 - Startseite: Friondo-Logo oben links; nur drei Shortcuts **Leads VOT · Erfassungen ·
   Angebote**; alle weiteren Punkte im Dropdown „Menü" oben rechts; darunter
   Statistik-Kacheln: Offene Leads · Offene Erfassungen · Versendete Angebote.
@@ -19,9 +21,36 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
 ## Zentrale Dateien
 - `konfigurator_logik_v5.xlsx` – Steuerdatei (ersetzt v4): zusätzlich Frage A13
   „Leitungslänge Hauseinführung ↔ WP-Inneneinheit" (immer; Pos. 103 × [Eingabe − 5 m, nie unter 0] – 5 m stecken in Pos. 006),
-  SLS/ÜSS/APZ-Fragen komplett entfernt. 15 AMPEL-Gründe.
-- `Artikel-Preislisten/Angebotserstellung_Tool_mit_EK.xlsx`, `ANGEBOTSTEXTE.md`,
-  `anlagen/`, `Layout - Logo/`, `foerderrechner-website.html` – unverändert.
+  SLS/ÜSS/APZ-Fragen komplett entfernt. 14 AMPEL-Gründe (Blatt Aktionen).
+- `Artikel-Preislisten/Angebotserstellung Tool mit EK.xlsx` (WP-Preisliste),
+  `Artikel-Preislisten/PV/` (PV-Positionslisten, v16), `ANGEBOTSTEXTE.md`,
+  `anlagen/`, `Layout - Logo/`.
+- `projektierung_logik_v1.xlsx` (Projektierung, v11+) und
+  `leadmanagement_logik_v1.xlsx` (Lead-Management, v12).
+
+## Plan ↔ CLAUDE-Version (Zuordnung)
+
+Die Plan-Nummern und die CLAUDE-Versionen laufen seit v11 auseinander.
+Phasennummern sind planübergreifend; ab Phase 94 werden nur noch freie
+Nummern vergeben.
+
+| CLAUDE | Plan-Datei | Phasen |
+|---|---|---|
+| v1–v2 | PLAN.md, PLAN_V2.md | 0–17 |
+| v3–v10 | PLAN_V3.md … PLAN_V10.md | 18–63 |
+| v11 | PLAN_PROJ_V1.md, PLAN_PROJ_V1b.md | 64–73 (kollidiert mit v13/v14) |
+| v12 | PLAN_LEAD_V1.md | 73–82 |
+| v13 | PLAN_V11.md | 64–68 |
+| v14 | PLAN_V12.md | 69–74 |
+| v15 | PLAN_PROJ_V2.md | 74–83 |
+| v15-Nachtrag | Review 27.09.2026 (ohne Plan) | – |
+| v16 | PLAN_V13.md | 75–81 |
+| v17 | PLAN_PROJ_V4.md | 90–93 |
+| – | PLAN_GESAMT.md (Orchestrierung), Doku-Bereinigung | 94 |
+| v18 | PLAN_PROJ_V3_GOLIVE.md | 84–86 |
+| v19 | PLAN_V14.md | 95–97 |
+| v20 | PLAN_GESAMT.md B4 (Anschriften) | 98 |
+| v21 | PLAN_LEAD_V1.1.md | 87–89 |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
@@ -229,8 +258,8 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   auch wenn die Spalte leer ist. Derselbe Kunde in mehreren Boards → deduplizieren.
 - **Interesse (v5):** Mehrfach-Feld WP / PV / KL / WB an Lead und Kunde, aus einer
   monday-Spalte gemappt; Badges + Filter in Leads VOT, Erfassungen und Angeboten.
-  Jeder Vorgang trägt zudem einen **Konfigurator-Typ** (aktuell „WP") als Unterbau
-  für die späteren PV- und Klima-Konfiguratoren.
+  Jeder Vorgang trägt zudem einen **Konfigurator-Typ** („WP" oder – seit v16 –
+  „PV") als Unterbau für weitere Konfiguratoren (Klima folgt).
 - Sync: alle 15 Minuten + Button „Jetzt aktualisieren"; nur lesend, Fehler
   blockieren das Tool nie.
 - Liste „Leads VOT": nur Leads **mit** VOT-Datum und **ohne** verknüpftes Angebot,
@@ -290,10 +319,11 @@ Graph-Versand über Innendienst, Terminal-Server-Betrieb.
 
 ## Neu in v11 – Projektierung V1 (abgestimmt 22.09.2026)
 
+(Plan: PLAN_PROJ_V1.md + PLAN_PROJ_V1b.md)
+
 - **Projektierung V1:** Projekt = Bauvorhaben am v10-Vorgang (höchstens ein
   offenes Projekt je Vorgang, Nummer PR-JJNNNN) mit Gewerken je Sparte WP/PV/KL/WB; jedes Gewerk hat eigene Phase
-  (Feinplanung · Feinplanung abgeschlossen · Montage geplant · In Ausführung ·
-  Abnahme offen · Abgeschlossen · Storniert), Aufgaben, Termine, Auftrag
+  (*überholt – gültige Phasen siehe v17*), Aufgaben, Termine, Auftrag
   (angenommenes Angebot, folgt Versionen). Button „Angebot → Projekt" an
   Angeboten „Angenommen" (Tool + TAIFUN, auch in der Vorgangsakte) mit Vorschlag
   „zu offenem Projekt des Vorgangs hinzufügen"; Vorgangsakte zeigt den Projektstand. Projektstatus abgeleitet vom am wenigsten fortgeschrittenen
@@ -319,14 +349,17 @@ Graph-Versand über Innendienst, Terminal-Server-Betrieb.
   freigeben** mit Restarbeiten-Pflichtfrage → Abgeschlossen. Migration legt für
   alle angenommenen Angebote Projekte an. Absender Projekt-Mails
   `projektierung@friondo.de` (Fallback angebot@).
-- Geplant: V2 Feinplanungs-Erfassung + Sub-Mails + Kalender, V3 Montage-
-  Formulare + Collin-Bestellung (UGL/IDS), V4 Rechnungen/OP/Mahnwesen +
-  Heizreport-/SpotmyEnergy-Anbindung.
+- *Roadmap überholt:* Feinplanung, Sub-Mails, Kalender, Montage-Formulare
+  und Collin-UGL kamen mit v15; „Projektierung V4" (v17) ist Board/BzA/UGL-
+  Feinschliff, V3 (v18) der Go-live. Rechnungen/OP/Mahnwesen und
+  SpotmyEnergy-Anbindung sind **nicht gebaut**.
 - Oberfläche der Projektierung folgt der Design-Vorlage
   `docs/projektierung-prototyp.html` (CSS-Präfix `pj-`); spätere Änderungen am
   Modul-Layout zuerst im Prototyp, dann im Tool.
 
 ## Neu in v12 – Lead-Management V1 Demo (abgestimmt 22.09.2026)
+
+(Plan: PLAN_LEAD_V1.md)
 
 - **Lead-Management V1 (Demo):** Lead = Vorgang (v10) mit Lead-Phase
   (Neu · In Kontaktierung · Qualifiziert · Terminiert · danach abgeleitet
@@ -336,8 +369,10 @@ Graph-Versand über Innendienst, Terminal-Server-Betrieb.
   erhalten die Phase abgeleitet (Badge „monday"); **monday-Sync und -Rückspielung
   unverändert**.
 - **Demo-Modus:** Parameter `lead_freigabe_modus` (admin / alle, Standard admin):
-  bei admin sind alle Routen unter `/leads` und `/api/leads`, Menüpunkte, Reiter,
-  Kacheln nur für Admins (server-seitig, 404 für andere); Startportal-Karte
+  bei admin sind alle Routen unter `/lead-management` (`app/routers/leadmanagement.py`),
+  Menüpunkte, Reiter, Kacheln nur für Admins (server-seitig, 404 für andere);
+  `/leads` bleibt die Liste „Leads VOT", `POST /api/leads` ist nicht
+  Admin-gesperrt, sondern per API-Key je Quelle geschützt; Startportal-Karte
   „Lead-Management" trägt das Badge „Demo · Coming soon". Im Modul angelegte Leads
   tragen `demo = 1` und erscheinen in keiner bestehenden Liste/Statistik/Kachel/
   Rückspielung; Umstellung auf `alle` fragt: Demo-Leads löschen oder behalten.
@@ -380,7 +415,7 @@ Graph-Versand über Innendienst, Terminal-Server-Betrieb.
 
 ## Neu in v13 – Team-Feedback (abgestimmt 23.09.2026)
 
-(Umsetzung des Plans PLAN_V11.md; die Zählung v11/v12 war zu diesem
+(Plan: PLAN_V11.md; die Zählung v11/v12 war zu diesem
 Zeitpunkt bereits durch Projektierung und Lead-Management belegt.)
 
 - Kalkulation: Der 50-l-Puffer bleibt eine eigene Position (Z15,
@@ -426,7 +461,7 @@ Zeitpunkt bereits durch Projektierung und Lead-Management belegt.)
 
 ## Neu in v14 – Design-Update (abgestimmt 24.09.2026)
 
-(Umsetzung des Plans PLAN_V12.md; die Zählung v12 war bereits durch das
+(Plan: PLAN_V12.md; die Zählung v12 war bereits durch das
 Lead-Management belegt.)
 
 - Reines Design-Update, keine Funktionsänderungen: zentrales
@@ -455,17 +490,19 @@ Lead-Management belegt.)
 
 ## Neu in v15 – Projektierung V2 (abgestimmt 26.09.2026)
 
-- Kanban-Phasen: Auftragseingang · Feinplanung VOT · Planung ·
-  Montagevorbereitung · Montage · Abnahme & Freigabe · Abgeschlossen ·
-  Storniert; Terminstatus je Gewerk (terminiert / unbestätigt /
+(Plan: PLAN_PROJ_V2.md)
+
+- Kanban-Phasen (*überholt – „Abnahme & Freigabe" ist seit v17 in
+  `abnahme` und `freigabe` getrennt*): Auftragseingang · Feinplanung VOT ·
+  Planung · Montagevorbereitung · Montage · Abnahme & Freigabe ·
+  Abgeschlossen · Storniert; Terminstatus je Gewerk (terminiert / unbestätigt /
   unterminiert) als Badge; Sichten Board | Kalender | Chronologisch.
 - Teams: Montageteam 1–10, Subteam 1–5 (Stammdaten, Farbe, Outlook-
   Kalender); Zuweisung am Gewerk (WP-/Elektro-/Sub-Team) und je Termin;
   Kalender mit Balken über die Projektdauer (Standard 1 Woche), Drag,
   Konfliktwarnung; Outlook-Sync über Graph in beide Richtungen.
-- Galerie am Vorgang mit festen Ordnern (Alte Heizung · Elektro ·
-  Außengerät · Öl-Tank · Montagedokumente · Inbetrieb-/Abnahme · Neue
-  Anlage · Allgemein), Upload mobil per Kamera für Vertrieb (auch ohne
+- Galerie am Vorgang mit festen Ordnern (*Ordnerliste überholt – seit
+  27.09. Galerie je Sparte + Ordner „Förderung", siehe unten*), Upload mobil per Kamera für Vertrieb (auch ohne
   Auftrag), Planung und Montage; Projektakte zeigt dieselbe Galerie.
 - Projektsteckbrief über den To-dos (Hersteller, Leistungsklasse,
   Innengerät, Zählerschrank, Öltank, Aufstellort, Tarif/iMSys/HEMS,
@@ -473,7 +510,9 @@ Lead-Management belegt.)
 - Aufgabenpakete v2 mit Aktionstypen (Häkchen, Auswahl, Link, Mail,
   Formular, Kalender, Galerie, API) und Fristen; Pakete Auftragseingang ·
   Feinplanung VOT · Planung WP · Planung Elektro · Friondo Fit for Future ·
-  Montagevorbereitung · Abnahme & Freigabe; Restarbeiten-Liste je Gewerk.
+  Montagevorbereitung · Abnahme & Freigabe (*überholt: seit 27.09. ohne
+  Paket „Förderung", BnD unter Abnahme; seit v17 Pakete Abnahme und
+  Freigabe getrennt*); Restarbeiten-Liste je Gewerk.
 - Sub-Beauftragung per Mail aus der Aufgabe (Vorlagen je Sub-Typ,
   Fotos aus Galerie-Ordner, Steckbrief-PDF), Absender projektierung@.
 - Feinplanungs-Erfassung WP (Blatt „Fragen FP-WP", vorbelegt aus der
@@ -504,10 +543,26 @@ Lead-Management belegt.)
   einbett=1 für das Anrufliste-Panel, Hauptmenü + Parametrierungs-Reiter.
 - Details + bewusst offene Punkte: docs/leadmanagement-entscheidungen.md
   (Abschnitt Review 27.09.2026).
+- Projektierung (27.09.): Galerie **je Sparte** mit Foto-Sammelbox
+  (unsortierte Uploads, später einsortieren), Ordner „Förderung";
+  Paket „Förderung" entfällt, BnD liegt im Paket Abnahme (& Freigabe);
+  V1-Reste restlos entfernt; Demo-Projekte (`scripts/demo_projekte.py`);
+  Team-Zuweisung repariert, Benutzer-Seite entrümpelt; Montage-Login im
+  Demo-Modus landet in `/montage` statt am Portal; Sparten-Badges
+  sichtbar (CSS-Kollision `.chip`).
+- CEO-Review 27.09.2026: Kontrolldurchgang des Gesamtprozesses als
+  Besprechungsgrundlage in `docs/ceo-review-2026-09.md` (offene
+  CEO-Entscheidungen dort).
+
+## Hotfix 29.09.2026 (7408bb4)
+
+- Vorgangsakte mit Wiedervorlage warf Internal Server Error: Makro
+  `wiedervorlage_chip` vergleicht nur noch den Tag (date vs. datetime);
+  Regressionstest `tests/test_wiedervorlage_chip.py`.
 
 ## Neu in v16 – PV-Konfigurator (abgestimmt 29.09.2026)
 
-(Umsetzung des Plans PLAN_V13.md; die Zählung v13 war bereits durch das
+(Plan: PLAN_V13.md; die Zählung v13 war bereits durch das
 Team-Feedback belegt – Plan-Text „Neu in v13“ entspricht diesem Abschnitt.)
 
 - PV-Konfigurator: Erfassung erzeugt vollständige PV-Angebote
@@ -544,6 +599,8 @@ Team-Feedback belegt – Plan-Text „Neu in v13“ entspricht diesem Abschnitt.
 
 ## Neu in v17 – Projektierung V4 (abgestimmt 29.09.2026)
 
+(Plan: PLAN_PROJ_V4.md; gültige Kanban-Phasen ab hier.)
+
 - **Board:** Auftragseingang als zwei Spalten (unterminiert | terminiert,
   chronologisch nach Montagebeginn; Drop auf „terminiert" öffnet Team +
   Termin); alle Spalten chronologisch, Unterminierte unten. Phasen
@@ -564,7 +621,8 @@ Team-Feedback belegt – Plan-Text „Neu in v13“ entspricht diesem Abschnitt.
   Fit for Future mit Ja/Nein für HEMS, iMSys und SpotDynamic (vorbelegt aus
   dem Steckbrief, bestätigt per Klick); FP-Fragen FP-E05 iMSys, FP-E06
   HEMS, FP-O04 Restöl; Steckbrief-Felder `restoel_liter`, `stemmarbeiten`
-  (Pos. 126), `erdleitung_m` (Pos. 139/140), `imsys`, `hems` aus FP.
+  (Pos. 126), `erdleitung_m` (Pos. 102 / Erfassung A05 – nicht 139/140,
+  Begründung in docs/projektierung-entscheidungen.md), `imsys`, `hems` aus FP.
 - **Sub-Mails:** Platzhalter {restoel}, {stemmarbeiten}, {erdarbeiten};
   GaLa-Vorlage mit Erdarbeiten, Entsorgungs-Vorlage mit Restöl und
   Stemmarbeiten.

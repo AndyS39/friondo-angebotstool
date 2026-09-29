@@ -1,4 +1,67 @@
-# Friondo-Tool – Modul „Projektierung": Gesamtkonzept (Stand 22.09.2026, Basis CLAUDE.md v10)
+# Friondo-Tool – Modul „Projektierung": Gesamtkonzept (Stand 27.09.2026, Basis CLAUDE.md v15)
+
+> **Umsetzungsstand 27.09.2026:** PLAN_PROJ_V1 (Phasen 64–72), V1b (73) und
+> V2 (74–83) sind lokal umgesetzt; offen ist nur der Rollout (git push +
+> update.bat) nach Absprache mit dem Lead-Management-Chat. Abweichungen
+> gegenüber den ursprünglichen Abschnitten unten sind in **Abschnitt 0**
+> zusammengefasst; die Detail-Entscheidungen von Claude Code stehen in
+> `docs/projektierung-entscheidungen.md`.
+
+## 0. Was seit V1 anders ist (gilt vor allen späteren Abschnitten)
+
+- **Phasen je Gewerk (V2):** Auftragseingang · Feinplanung VOT · Planung ·
+  Montagevorbereitung · Montage · Abnahme & Freigabe · Abgeschlossen ·
+  Storniert. „Angebot → Projekt" legt in Auftragseingang an. Terminstatus
+  (terminiert / unbestätigt / unterminiert) als Badge auf jeder Karte;
+  Sichten Board | Kalender | Chronologisch. Startportal: sechs Phasen-Kacheln
+  + „Unterminiert".
+- **Teams:** Montageteam 1–10, Subteam 1–5 als Stammdaten (Farbe, Outlook-
+  Adresse); Zuweisung WP-/Elektro-/Sub-Team am Gewerk und je Termin;
+  Kalender mit Balken über die Projektdauer (Standard 1 Woche), Drag
+  verschiebt Datum und Team; Outlook-Sync über Graph in beide Richtungen
+  (best effort, Fehler am Termin sichtbar).
+- **Galerie am Vorgang, je Sparte** (ersetzt die Projekt-Ordnerstruktur aus
+  3.5): WP = Alte Heizung · Elektro · Außengerät · Öl-Tank; PV = Dachfläche ·
+  Zählerschrank · Speicher-Standort; KL = Innengeräte · Außengerät ·
+  Leitungsweg; WB = Stellplatz · Zählerschrank · Leitungsweg; gemeinsam
+  Montagedokumente · Inbetrieb-/Abnahme · Neue Anlage · Allgemein.
+  Foto-Sammelbox (mehrere Fotos, Zielordner je Foto, ein Upload); Vertrieb
+  lädt auch ohne Auftrag hoch, Montage nur in eigenen Einsätzen.
+- **Projektsteckbrief** über den To-dos, abgeleitet über Logik-Blatt
+  „Steckbrief" (Regeln: Positionsbereiche, Antwort-Mappings, FP-Fragen haben
+  Vorrang), manuell geänderte Felder geschützt (✎).
+- **Aufgabenpakete v2** mit Aktionstypen (keine / auswahl / link / mail /
+  formular / kalender / galerie / api), Optionen mit `*` = erledigt, Option
+  ohne `*` = entfällt, `sichtbar_wenn steckbrief:<feld>=<wert>`, Fristen
+  (frist_tage + frist_bezug). Pakete: Auftragseingang (inkl. BzA-Link +
+  Datenblatt) · Feinplanung VOT · Planung WP · Planung Elektro · Friondo Fit
+  for Future (immer aktiv) · Montagevorbereitung (Anzahlung, Freigabe) ·
+  Abnahme & Freigabe (Berichte, Abweichungen/Nachtrag, Restarbeiten,
+  Rechnung freigegeben, BnD). **Paket „Förderung" ist entfallen** (27.09.).
+  V1-Pakete sind restlos entfernt.
+- **Sub-Beauftragung per Mail** aus der Aufgabe (Vorlagen je Sub-Typ, Fotos
+  aus Galerie-Ordner auf 1600 px, Steckbrief-PDF, Absender projektierung@,
+  CC Projektleiter, Antwort-Erkennung über Konversation → Vorschlag
+  „bestätigt").
+- **Feinplanungs-Erfassung WP** (Blatt „Fragen FP-WP", Antworten am Gewerk,
+  Vorbelegung „vom Vertrieb" zu bestätigen); Abschluss setzt „Feinplanung
+  erfasst", Heizlast, Steckbrief, Paketregeln. Heizreport = Link + Upload
+  (API-Stub wartet auf Doku). UGL-Bestelldatei für Collin aus Blatt
+  „Stücklisten" (Beispielnummern – echte Collin-Artikelnummern fehlen noch),
+  Upload in GC Online Plus manuell. BzA-Datenblatt mit Kopier-Buttons.
+- **Montage-Backend `/montage`:** Team-Auswahl, Liste Heute/Woche/Danach,
+  mobiler Wochenkalender, Auftragsdetail ohne Preise, Galerie, drei
+  Formulare aus Blatt „Formulare" (Montagebericht, Inbetriebnahme-,
+  Abnahmeprotokoll mit Unterschriften → PDF in „Inbetrieb-/Abnahme",
+  Mängel → Restarbeiten). **Feldinhalte sind Entwurf – Abnahme durch
+  Andreas offen.**
+- **Kunden-Terminbestätigung** per Mail (Vorlage in Parametrierung),
+  Antwort → Ein-Klick „Kunde hat bestätigt".
+- **Rollout-Prüfliste** (aus Phase 83): echter Sub-Mail-Testversand,
+  Outlook-Rundlauf mit angemeldetem Konto, UGL-Datei mit Collin abgleichen,
+  Collin-Artikelnummern eintragen, Formularfelder abnehmen, Fristen je
+  Aufgabe nachtragen, PV/KL/WB-Pakete inhaltlich festlegen.
+
 
 Dieses Dokument ist das Fundament für alle PLAN_PROJ-Dateien. Es hält den
 Soll-Prozess, das Datenmodell, die Rollen, die Schnittstellen und die
@@ -234,8 +297,12 @@ Nur ein Plan gleichzeitig in Umsetzung; Absprache mit dem Angebotstool-Chat.
 
 ## 8. Rollout-Regeln (unverändert)
 
-Plan-Phasen werden global weitergezählt (v10 endete mit Phase 63; PLAN_PROJ_V1
-umfasst Phasen 64–72). CLAUDE.md-Stand nach V1: v11.
+Plan-Phasen werden global weitergezählt (V1 = 64–72, V1b = 73, V2 = 74–83).
+CLAUDE.md-Versionen: v11 Projektierung V1, v12 Lead-Management, v13 Team-Feedback,
+v14 Design-System, v15 Projektierung V2 (+ Nachtrag 27.09.). Design-Regel:
+Layout-Änderungen zuerst in `docs/projektierung-prototyp.html`, dann im Tool;
+seit v14 gibt es ein zentrales Design-System (docs/design-system.md), auf dem
+neue Sichten aufsetzen.
 
 Entwicklung lokal mit Test-DB → git push → update.bat auf dem Terminal-Server
 (sichert, zieht, migriert idempotent per migrate.py, startet neu). CLAUDE.md und

@@ -363,7 +363,7 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
   heizreport_api_url/_key), aktiv erst mit API-Doku; bis dahin Link
   (url_heizreport) + PDF-Upload in „Montagedokumente" + Heizlast-Felder.
 - **UGL:** Feldbelegung der Sätze KOP/ADR/POA/END ist vereinfacht nach
-  UGL 4.0 (200 Byte, latin-1, CRLF, Anfrageart BE) – beim ersten echten
+  UGL 4.0 (200 Byte, cp850 (seit Phase 93, siehe unten), CRLF, Anfrageart BE) – beim ersten echten
   Upload in GC Online Plus mit Collin abgleichen. Lieferdatum =
   Montagebeginn − 3 Werktage (ohne Termin: heute + 7 Tage). Z-Positionen
   (Arbeitspakete) werden nicht bestellt; Positionen ohne Stücklisten-

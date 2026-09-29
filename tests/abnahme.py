@@ -19,6 +19,7 @@ import pypdf
 from fastapi.testclient import TestClient
 
 from app import angebot_aufbau, anhaenge, config, graph_versand, kfw, pdf_export
+from app import mail_vorlagen as mail_vorlagen_modul
 from app import konfigurator as engine
 from app.db import SessionLocal, init_db
 from app.logik import logik_einlesen
@@ -201,9 +202,17 @@ def main():
     pruefe("Versand", "CC = E-Mail des Außendienstlers", adressen("ccRecipients") == ["ad.abnahme@friondo.de"])
     bcc_soll = [a.strip() for a in einstellung_holen(s, "mail_bcc", "").split(",") if a.strip()]
     pruefe("Versand", f"BCC aus Parametrierung ({', '.join(bcc_soll) or 'leer'})", adressen("bccRecipients") == bcc_soll)
+    # datenunabhängig (Phase 94): Erwartung aus der tatsächlich greifenden
+    # Vorlage ableiten – auf dem Server ist der Standardtext angepasst
+    _vt = mail_vorlagen_modul.vertriebler_fuer_angebot(s, ang)
+    _betreff_v, _text_v, _ = mail_vorlagen_modul.vorlage_laden(s, _vt.id if _vt else None)
+    _werte = mail_vorlagen_modul.werte_fuer_angebot(s, ang, s.get(Kunde, ang.kunde_id))
+    _inhalt = nachricht.get("body", {}).get("content", "")
     pruefe("Versand", "Betreff/Text aus Vorlage mit Platzhaltern gefüllt",
-           ang.nummer in nachricht.get("subject", "") and "Sehr geehrte Frau Abnahme," in nachricht.get("body", {}).get("content", "")
-           and "{" not in nachricht.get("body", {}).get("content", ""))
+           nachricht.get("subject", "") == mail_vorlagen_modul.einsetzen(_betreff_v, _werte)
+           and ("{briefanrede}" not in _text_v and "{anrede}" not in _text_v
+                or "Sehr geehrte Frau Abnahme," in _inhalt)
+           and not any("{" + p + "}" in _inhalt for p in _werte))
     anhang_namen = [d["name"] for p, d in payloads if p.endswith("/attachments")]
     pruefe("Versand", "PDF + 4 Broschüren als Anhang", anhang_namen[0] == f"{ang.nummer}.pdf" and len(anhang_namen) == 5, ", ".join(anhang_namen))
     # Mail-Abgleich: gesendete Nachricht → Versendet; Erfassung erledigt; monday übersprungen (kein Lead)
@@ -673,7 +682,7 @@ def main():
     pruefe("v10 Akte", "Notiz mit Autor + Zeitstempel im Chat-Format",
            "Abnahme-Notiz v10" in akte and 'class="notiz-kopf"' in akte
            and "Uhr</span>" in akte
-           and v10notiz is not None and v10notiz.benutzer_name == "Admin")
+           and v10notiz is not None and v10notiz.benutzer_name == s.get(Benutzer, 1).name)
     pruefe("v10 Akte", "Notizen unveränderlich (kein Bearbeiten/Löschen-Endpunkt)",
            client.post(f"/vorgaenge/{v10vorgang.id}/notiz/{v10notiz.id}/loeschen")
            .status_code in (404, 405)

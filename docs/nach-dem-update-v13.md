@@ -75,6 +75,44 @@ Ertüchtigung der bestehenden ZV, mehr als 4 Strings, Wechselrichter über
   „Anhänge“ die vorbereitete Zeile (Regel „wenn Sparte = PV“) mit dem
   Dateinamen füllen.
 
+## Offene fachliche Rückfragen PV (Abschlussbericht 29.09.2026)
+
+Nachgetragen in Phase 94 (vorher nur im Chat-Bericht). In Klammern steht,
+was das Tool bis zur Antwort verwendet.
+
+1. **Preisabweichungen zwischen den Listen**
+   - Energy Gateway: 1.091,80 € (Sigenergy-Liste) vs. 980 € im Muster
+     (1.091,80 €, als Eventualposition)
+   - Zählerzusammenlegung: 448 € („Ersatz Position PV“) vs. 548 €
+     („Elektro Allgemein“) (448 €)
+   - Zählerschrank 2-Feld: EK 1.200 € („Elektro Allgemein“) vs. 1.488 € im
+     Muster (1.200 €)
+   - Hager VA36CN: kein EK in der Liste (0 € – verfälscht den DB)
+   - HEMS: 0 € wie im Muster; die PV-Liste hat eine eigene HEMS-Position zu
+     949 €
+2. **Positionsreihenfolge:** Plan = Module Pos. 1, WR/Speicher Pos. 2; im
+   Muster steht der WR auf Pos. 6 (gebaut nach Plan, im Blatt
+   „Angebotsaufbau PV“ umstellbar).
+3. **Solar/Erdungskabel-Set je String** (× Strings) steht im Muster, nicht im
+   Plan – aufgenommen. Mehrmeter bei DC-Kabelweg > 10 m (PD08) werden nicht
+   berechnet.
+4. **Annahmen bestätigen:** WR-Leistung = kWp ÷ 1,2 · Speicherstufe nach der
+   Nennzahl im Namen („/10“ = real 9,04 kWh) · Walmdach wie Satteldach ohne
+   Quer-Abfrage · **Eigenverbrauch additiv** (32 + 33 + 10 = 75 %) ·
+   Eigenverbrauch nicht auf den tatsächlichen Verbrauch begrenzt.
+5. **PA04 „Ertüchtigung bestehender ZV“** (mit PA05 APZ-Feld, PA06
+   HAK-Leitung): welche Positionen? Bis dahin individuell.
+6. **Zählerschrank 4-Feld** und **kein Speicher** (PA10 = 0): kein Artikel,
+   derzeit individuell – gewollt?
+7. **PD09 (DC-kWp) / PA09 (WR-Leistung)** werden berechnet und nur
+   protokolliert – Fragen aus dem Bogen streichen?
+8. **Mailvorlage:** Standard spricht von „Interesse an einer Wärmepumpe“ –
+   eigene PV-Vorlage anlegen?
+9. **PV-Nachtexte Enni/SWD/Sparkasse** aus den WP-Texten abgeleitet (ohne
+   KfW-Teil) – bitte unter Textblöcke gegenlesen.
+10. **Flachdach:** eine gemeinsame Position „UK Flachdach S od. O/W“ für
+    Ost/West und Süd – passt das?
+
 ## Rollout
 
 `update.bat` auf dem Terminal-Server. Die Migration ergänzt die Spalten

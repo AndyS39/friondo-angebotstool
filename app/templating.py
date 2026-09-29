@@ -66,6 +66,10 @@ def _css_version() -> int:
 
 templates.env.globals["css_version"] = _css_version()   # Fallback
 
+# Phase 94: Titel der Montage-Formulare für Formular-Aktionen in der Projektakte
+from app.projektierung_logik import FORMULAR_NAMEN as _FORMULAR_NAMEN  # noqa: E402
+templates.env.globals["formular_namen"] = _FORMULAR_NAMEN
+
 # Menü-Einträge (Phase 19: Dropdown oben rechts, rollenabhängig gefiltert)
 NAVIGATION = [
     ("/leads", "Leads VOT"),

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lead-Management – Prototyp Übersicht & Anrufliste (v1.1)</title>
+<style>
+/* ===== Friondo Design-Tokens (aus docs/design-system.md, v14) ===== */
+:root{
+  --friondo-blau:#3f86c6; --friondo-blau-dunkel:#326ea5; --friondo-blau-hell:#eaf2fa;
+  --friondo-dunkel:#1b2a5e;
+  --g-50:#f7f8fa; --g-100:#eef0f3; --g-200:#e1e5ea; --g-300:#cbd2da; --g-400:#a5afbb;
+  --g-500:#7d8896; --g-600:#5b6673; --g-700:#3d4650; --text:#1f262e;
+  --status-gruen:#2e7d32; --status-gruen-bg:#e6f3e7;
+  --status-orange:#b45f06; --status-orange-bg:#fbeedd;
+  --status-rot:#c0392b; --status-rot-bg:#fbe7e5;
+  --status-blau:#2c6cb0; --status-blau-bg:#e4eef9;
+  --status-grau:#64748b; --status-grau-bg:#eceff3;
+  --status-violett:#6b3fa0; --status-violett-bg:#eee7f7;
+  --a-1:.25rem; --a-2:.5rem; --a-3:.75rem; --a-4:1rem; --a-5:1.5rem; --a-6:2rem;
+  --r-s:6px; --r-m:10px; --r-l:14px;
+  --schatten-1:0 1px 2px rgba(27,42,94,.08),0 1px 6px rgba(27,42,94,.06);
+  --schrift:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+  --t-xs:11px; --t-s:12.5px; --t-m:14px; --t-l:17px; --t-xl:22px;
+  /* NEU v1.1: Quellen-Typ-Farben (kategorial, feste Reihenfolge; validiert) */
+  --q-website:#2a78d6; --q-landingpage:#eb6834; --q-portal:#1baf7a;
+  --q-partner:#eda100; --q-telefon:#e87ba4; --q-monday:#a5afbb;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--schrift);font-size:var(--t-m);color:var(--text);background:var(--g-50)}
+a{color:var(--friondo-blau);text-decoration:none}
+h1{font-size:var(--t-xl);color:var(--friondo-dunkel);margin:0}
+h2{font-size:var(--t-l);color:var(--friondo-dunkel);margin:0 0 var(--a-3)}
+.kopf{background:var(--friondo-dunkel);color:#fff;padding:10px 20px;display:flex;align-items:center;gap:16px;font-size:var(--t-s)}
+.kopf b{font-size:15px;letter-spacing:.2px}
+.kopf .rechts{margin-left:auto;opacity:.85}
+main{max-width:1380px;margin:0 auto;padding:var(--a-4) var(--a-5) var(--a-6)}
+.proto-hinweis{background:var(--status-orange-bg);border-left:4px solid var(--status-orange);padding:var(--a-3) var(--a-4);border-radius:var(--r-s);font-size:var(--t-s);margin-bottom:var(--a-4)}
+.lm-nav{display:flex;gap:2px;border-bottom:1px solid var(--g-200);margin-bottom:var(--a-4);flex-wrap:wrap}
+.lm-nav a{padding:8px 14px;color:var(--g-600);border-bottom:2px solid transparent;font-weight:500}
+.lm-nav a.aktiv{color:var(--friondo-dunkel);border-color:var(--friondo-blau)}
+.seitenkopf{display:flex;align-items:center;gap:12px;margin-bottom:var(--a-4)}
+.seitenkopf .aktionen{margin-left:auto;display:flex;gap:8px}
+.demo-badge{background:var(--status-orange-bg);color:var(--status-orange);font-size:var(--t-xs);padding:2px 8px;border-radius:999px;font-weight:600;vertical-align:middle}
+.knopf{border:1px solid var(--friondo-blau);background:var(--friondo-blau);color:#fff;border-radius:var(--r-s);padding:6px 12px;font:inherit;font-size:var(--t-s);cursor:pointer;line-height:1.2;white-space:nowrap}
+.knopf.zweitrangig{background:#fff;color:var(--friondo-blau)}
+.knopf.klein{padding:4px 9px;font-size:var(--t-xs)}
+.knopf.ok{background:var(--status-gruen);border-color:var(--status-gruen)}
+.knopf.ghost{background:transparent;border-color:var(--g-300);color:var(--g-600)}
+
+/* ---- Kacheln (Baukasten .kachel.stat) ---- */
+.kacheln{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:var(--a-4)}
+.kachel{background:#fff;border:1px solid var(--g-200);border-radius:var(--r-m);padding:12px 14px;box-shadow:var(--schatten-1)}
+.kachel.stat{display:flex;flex-direction:column;gap:2px;font-size:var(--t-s);color:var(--g-600)}
+.stat-zahl{font-size:28px;font-weight:600;color:var(--friondo-dunkel);line-height:1.1;font-variant-numeric:tabular-nums}
+.stat-zahl.dringend{color:var(--status-rot)}
+.stat-zahl.warn{color:var(--status-orange)}
+.delta{font-size:var(--t-xs);color:var(--g-500)}
+.delta .auf{color:var(--status-gruen);font-weight:600}
+.delta .ab{color:var(--status-rot);font-weight:600}
+.kachel.klick{cursor:pointer}
+.kachel.klick:hover{border-color:var(--friondo-blau)}
+
+/* ---- Karten-Layout Übersicht ---- */
+.zweispaltig{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px;margin-bottom:var(--a-4)}
+@media (max-width:1000px){.zweispaltig{grid-template-columns:1fr}}
+.karte{background:#fff;border:1px solid var(--g-200);border-radius:var(--r-m);padding:14px 16px;box-shadow:var(--schatten-1)}
+.karte h2{display:flex;align-items:baseline;gap:10px}
+.karte h2 .sub{font-size:var(--t-xs);color:var(--g-500);font-weight:400}
+
+/* ---- Gestapelte Balken: Eingänge je Tag (reines CSS, keine Bibliothek) ---- */
+.viz{display:grid;grid-template-columns:repeat(14,1fr);gap:6px;align-items:end;height:170px;padding:6px 0 0;border-bottom:1px solid var(--g-200)}
+.tag{display:flex;flex-direction:column-reverse;gap:2px;position:relative;height:100%;justify-content:flex-start}
+.tag .seg{width:100%;border-radius:0}
+.tag .seg:nth-last-child(2){border-radius:4px 4px 0 0}
+.tag .summe{text-align:center;font-size:var(--t-xs);color:var(--g-600);font-variant-numeric:tabular-nums;margin-bottom:3px}
+.tag.heute .summe{font-weight:700;color:var(--friondo-dunkel)}
+.tag:hover .seg{filter:brightness(.92)}
+.achse{display:grid;grid-template-columns:repeat(14,1fr);gap:6px;font-size:var(--t-xs);color:var(--g-500);text-align:center;margin-top:4px}
+.achse .heute{color:var(--friondo-dunkel);font-weight:700}
+.legende{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:var(--t-xs);color:var(--g-600);margin-top:10px}
+.legende span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:var(--f)}
+.q-website{--f:var(--q-website)} .q-landingpage{--f:var(--q-landingpage)} .q-portal{--f:var(--q-portal)}
+.q-partner{--f:var(--q-partner)} .q-telefon{--f:var(--q-telefon)} .q-monday{--f:var(--q-monday)}
+.seg{background:var(--f)}
+
+/* ---- Tabellen ---- */
+.tabelle{width:100%;border-collapse:collapse;font-size:var(--t-s)}
+.tabelle th{text-align:left;font-weight:600;color:var(--g-600);border-bottom:1px solid var(--g-200);padding:6px 8px;white-space:nowrap}
+.tabelle td{padding:6px 8px;border-bottom:1px solid var(--g-100);vertical-align:middle}
+.tabelle tr:hover td{background:var(--friondo-blau-hell)}
+.tabelle .rechts,.tabelle th.rechts{text-align:right;font-variant-numeric:tabular-nums}
+.tabelle tr.gruppe td{background:var(--g-50);color:var(--g-600);font-weight:600;font-size:var(--t-xs);text-transform:uppercase;letter-spacing:.3px;padding-top:8px}
+.tabelle tr.summenzeile td{font-weight:700;border-top:2px solid var(--g-300)}
+.punkt{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px;background:var(--f)}
+.miniquote{display:inline-block;height:6px;border-radius:3px;background:var(--friondo-blau);vertical-align:middle;margin-right:6px}
+.dezent{color:var(--g-500)}
+.warn-text{color:var(--status-orange);font-weight:600}
+.rot-text{color:var(--status-rot);font-weight:600}
+
+/* ---- Kontaktstatus-Verteilung ---- */
+.verteilung{display:grid;grid-template-columns:110px 1fr 40px;gap:6px 10px;align-items:center;font-size:var(--t-s)}
+.verteilung .balken{height:14px;background:var(--friondo-blau);border-radius:0 4px 4px 0;opacity:.9}
+.verteilung .balken.warn{background:var(--status-orange)}
+.verteilung .balken.rot{background:var(--status-rot)}
+.verteilung .n{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+
+/* ---- Abzeichen / Chips ---- */
+.abzeichen{display:inline-block;font-size:var(--t-xs);padding:1px 7px;border-radius:999px;background:var(--g-100);color:var(--g-700);white-space:nowrap;vertical-align:middle}
+.chip{display:inline-block;font-size:var(--t-xs);font-weight:600;padding:1px 7px;border-radius:4px;border:1px solid currentColor;margin-right:2px;vertical-align:middle}
+.chip-wp{color:#1f6f8b}.chip-pv{color:#b47a00}.chip-kl{color:#2f7d5a}.chip-wb{color:#6b3fa0}
+.quelle{display:inline-flex;align-items:center;gap:5px;font-size:var(--t-xs);padding:1px 8px 1px 6px;border-radius:999px;background:var(--g-100);color:var(--g-700);white-space:nowrap;vertical-align:middle}
+.quelle::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--f)}
+.kanal{display:inline-block;font-size:var(--t-xs);padding:1px 7px;border-radius:999px;background:var(--status-violett-bg);color:var(--status-violett);font-weight:600;vertical-align:middle}
+.sla-chip{display:inline-block;font-size:var(--t-xs);font-weight:600;padding:1px 7px;border-radius:999px}
+.sla-rot{background:var(--status-rot-bg);color:var(--status-rot)}
+.sla-gelb{background:var(--status-orange-bg);color:var(--status-orange)}
+.sla-gruen{background:var(--status-gruen-bg);color:var(--status-gruen)}
+.sla-erfuellt{background:var(--g-100);color:var(--g-600)}
+
+/* ---- Schnellfilter ---- */
+.schnellfilter{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:var(--a-3);align-items:center}
+.schnellfilter .f{border:1px solid var(--g-300);background:#fff;border-radius:999px;padding:4px 11px;font-size:var(--t-s);cursor:pointer;color:var(--g-700)}
+.schnellfilter .f.aktiv{background:var(--friondo-dunkel);color:#fff;border-color:var(--friondo-dunkel)}
+.schnellfilter .f b{font-variant-numeric:tabular-nums}
+.schnellfilter .trenner{width:1px;height:20px;background:var(--g-200);margin:0 4px}
+.schnellfilter select,.schnellfilter input{font:inherit;font-size:var(--t-s);padding:4px 8px;border:1px solid var(--g-300);border-radius:999px;background:#fff}
+
+/* ---- Anrufliste NEU: gruppierte, zweizeilige Arbeitsliste ---- */
+.arbeitsliste{background:#fff;border:1px solid var(--g-200);border-radius:var(--r-m);box-shadow:var(--schatten-1);overflow:hidden}
+.gruppe-kopf{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--g-50);border-top:1px solid var(--g-200);border-bottom:1px solid var(--g-200);font-size:var(--t-s);font-weight:700;color:var(--friondo-dunkel)}
+.gruppe-kopf:first-child{border-top:0}
+.gruppe-kopf .n{background:var(--friondo-dunkel);color:#fff;border-radius:999px;padding:0 8px;font-size:var(--t-xs)}
+.gruppe-kopf .n.rot{background:var(--status-rot)}
+.gruppe-kopf .erkl{font-weight:400;color:var(--g-500)}
+.zeile{display:grid;grid-template-columns:78px minmax(0,1fr) 92px 60px 128px auto;gap:0 12px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--g-100);border-left:4px solid transparent}
+.zeile:hover{background:var(--friondo-blau-hell)}
+.zeile.sla-rot-zeile{border-left-color:var(--status-rot)}
+.zeile.sla-gelb-zeile{border-left-color:var(--status-orange)}
+.zeile.viel-versuche{border-left-color:var(--status-orange)}
+.zeile .versuche{display:flex;flex-direction:column;align-items:flex-start;gap:3px}
+.dots{display:flex;gap:3px}
+.dots i{width:9px;height:9px;border-radius:50%;background:var(--g-200);display:block}
+.dots i.v{background:var(--g-500)}
+.dots.warn i.v{background:var(--status-orange)}
+.dots.rot i.v{background:var(--status-rot)}
+.versuche small{font-size:var(--t-xs);color:var(--g-600);font-weight:600}
+.versuche small.neu{color:var(--status-blau)}
+.zeile .wer{min-width:0}
+.zeile .wer .z1{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.zeile .wer .z1 a{font-weight:700;color:var(--friondo-dunkel);font-size:var(--t-m)}
+.zeile .wer .z1 .ort{color:var(--g-500);font-size:var(--t-s)}
+.zeile .wer .z2{font-size:var(--t-s);color:var(--g-600);margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 10px}
+.zeile .wer .z2 .faellig{color:var(--status-rot);font-weight:600}
+.zeile .wer .z2 .rueckruf{color:var(--status-blau);font-weight:600}
+.flag{display:inline-flex;align-items:center;gap:3px;font-size:var(--t-xs);color:var(--status-orange);font-weight:600}
+.klasse{font-weight:700;color:var(--friondo-dunkel)}
+.klasse small{font-weight:400;color:var(--g-500);font-size:var(--t-xs)}
+.tel a{font-variant-numeric:tabular-nums;font-size:var(--t-s)}
+.aktion{display:flex;gap:4px;justify-content:flex-end}
+.aktion .knopf{padding:5px 8px}
+.aktion .mehr{position:relative}
+.tasten{font-size:var(--t-xs);color:var(--g-400);text-align:right;padding:6px 14px}
+.legende-liste{font-size:var(--t-xs);color:var(--g-500);padding:8px 14px;display:flex;gap:16px;flex-wrap:wrap;border-top:1px solid var(--g-100)}
+.abschnitt{margin-top:var(--a-6);padding-top:var(--a-5);border-top:2px dashed var(--g-300)}
+.abschnitt-titel{font-size:var(--t-xs);text-transform:uppercase;letter-spacing:.5px;color:var(--g-500);margin-bottom:8px}
+@media (max-width:900px){
+  .zeile{grid-template-columns:70px 1fr;grid-auto-rows:auto}
+  .zeile .sla,.zeile .klasse,.zeile .tel{grid-column:2}
+  .zeile .aktion{grid-column:1/-1;justify-content:flex-start;margin-top:6px}
+}
+</style>
+</head>
+<body>
+<div class="kopf"><b>Friondo</b> · Lead-Management <span class="rechts">Prototyp v1.1 · 27.09.2026 · nur Layout, Zahlen sind Beispieldaten</span></div>
+<main>
+
+<div class="proto-hinweis"><b>Prototyp für PLAN_LEAD_V1.1.</b> Zwei Seiten in einer Datei: oben die neue <b>Übersicht</b> (Modul-Einstieg für Leitung/Admin), unten die überarbeitete <b>Anrufliste</b> (Arbeitsseite Leadmanagement). Alle Farben sind Tokens aus dem Friondo-Design-System; die sechs Quellen-Typ-Farben sind neu (<code>--q-*</code>) und mit dem Palette-Validator geprüft (Legende + Tabelle liefern die Pflicht-Beschriftung).</div>
+
+<nav class="lm-nav">
+  <a class="aktiv" href="#uebersicht">Übersicht</a><a href="#anrufliste">Anrufliste</a><a>Pipeline</a><a>Kalender</a><a>Karte</a><a>Posteingang</a><a>Statistik</a><a>Import</a>
+</nav>
+
+<!-- ============================ ÜBERSICHT ============================ -->
+<section id="uebersicht">
+<div class="seitenkopf">
+  <h1>Übersicht <span class="demo-badge">Demo · Coming soon</span></h1>
+  <span class="dezent">Samstag, 27.09.2026 · Stand 09:42</span>
+  <div class="aktionen"><button class="knopf klein zweitrangig">Woche</button><button class="knopf klein zweitrangig">30 Tage</button><a class="knopf klein" href="#anrufliste">Zur Anrufliste →</a></div>
+</div>
+
+<div class="kacheln">
+  <div class="kachel stat klick" title="Klick: Anrufliste, Filter „heute eingegangen“">
+    <span class="stat-zahl">14</span>Eingänge heute
+    <span class="delta">Ø 10 Arbeitstage: 9,2 · <span class="auf">▲ +52 %</span></span>
+  </div>
+  <div class="kachel stat klick"><span class="stat-zahl">61</span>Eingänge 7 Tage<span class="delta">Vorwoche 48 · <span class="auf">▲ +27 %</span></span></div>
+  <div class="kachel stat klick"><span class="stat-zahl dringend">3</span>SLA rot jetzt<span class="delta">&gt; 60 Min ohne 1. Versuch</span></div>
+  <div class="kachel stat klick"><span class="stat-zahl">11</span>Jetzt dran<span class="delta">fällige Rückrufe + Wiedervorlagen</span></div>
+  <div class="kachel stat klick"><span class="stat-zahl warn">7</span>≥ 3 Versuche offen<span class="delta">davon 2 mit 4+ Versuchen</span></div>
+  <div class="kachel stat klick"><span class="stat-zahl">5</span>VOT-Termine heute<span class="delta">Simon 3 · Rene 2</span></div>
+</div>
+
+<div class="zweispaltig">
+  <div class="karte">
+    <h2>Eingänge je Tag <span class="sub">letzte 14 Tage · gestapelt nach Quellen-Typ · Klick auf einen Tag filtert die Anrufliste</span></h2>
+    <div class="viz">
+      <!-- Reihenfolge der Segmente immer gleich: Website · Landingpage · Portal · Partner · Telefon/Empfehlung · monday -->
+      <div class="tag"><div class="seg q-website" style="height:30px"></div><div class="seg q-landingpage" style="height:22px"></div><div class="seg q-portal" style="height:14px"></div><div class="seg q-partner" style="height:8px"></div><div class="seg q-telefon" style="height:8px"></div><div class="seg q-monday" style="height:8px"></div><span class="summe">8</span></div>
+      <div class="tag"><div class="seg q-website" style="height:38px"></div><div class="seg q-landingpage" style="height:30px"></div><div class="seg q-portal" style="height:22px"></div><div class="seg q-partner" style="height:8px"></div><div class="seg q-telefon" style="height:16px"></div><div class="seg q-monday" style="height:8px"></div><span class="summe">11</span></div>
+      <div class="tag"><div class="seg q-website" style="height:22px"></div><div class="seg q-landingpage" style="height:14px"></div><div class="seg q-portal" style="height:14px"></div><div class="seg q-telefon" style="height:8px"></div><div class="seg q-monday" style="height:8px"></div><span class="summe">6</span></div>
+      <div class="tag"><div class="seg q-website" style="height:30px"></div><div class="seg q-landingpage" style="height:30px"></div><div class="seg q-portal" style="height:8px"></div><div class="seg q-partner" style="height:8px"></div><div class="seg q-monday" style="height:16px"></div><span class="summe">9</span></div>
+      <div class="tag"><div class="seg q-website" style="height:8px"></div><div class="seg q-landingpage" style="height:8px"></div><span class="summe">2</span></div>
+      <div class="tag"><div class="seg q-landingpage" style="height:8px"></div><span class="summe">1</span></div>
+      <div class="tag"><div class="seg q-website" style="height:30px"></div><div class="seg q-landingpage" style="height:38px"></div><div class="seg q-portal" style="height:8px"></div><div class="seg q-partner" style="height:16px"></div><div class="seg q-monday" style="height:8px"></div><span class="summe">10</span></div>
+      <div class="tag"><div class="seg q-website" style="height:38px"></div><div class="seg q-landingpage" style="height:38px"></div><div class="seg q-portal" style="height:16px"></div><div class="seg q-partner" style="height:8px"></div><div class="seg q-telefon" style="height:8px"></div><div class="seg q-monday" style="height:16px"></div><span class="summe">12</span></div>
+      <div class="tag"><div class="seg q-website" style="height:22px"></div><div class="seg q-landingpage" style="height:22px"></div><div class="seg q-portal" style="height:8px"></div><div class="seg q-telefon" style="height:8px"></div><div class="seg q-monday" style="height:8px"></div><span class="summe">7</span></div>
+      <div class="tag"><div class="seg q-website" style="height:30px"></div><div class="seg q-landingpage" style="height:22px"></div><div class="seg q-portal" style="height:14px"></div><div class="seg q-partner" style="height:8px"></div><div class="seg q-monday" style="height:16px"></div><span class="summe">9</span></div>
+      <div class="tag"><div class="seg q-website" style="height:38px"></div><div class="seg q-landingpage" style="height:46px"></div><div class="seg q-portal" style="height:14px"></div><div class="seg q-partner" style="height:8px"></div><div class="seg q-telefon" style="height:8px"></div><div class="seg q-monday" style="height:16px"></div><span class="summe">13</span></div>
+      <div class="tag"><div class="seg q-website" style="height:8px"></div><div class="seg q-landingpage" style="height:8px"></div><div class="seg q-telefon" style="height:8px"></div><span class="summe">3</span></div>
+      <div class="tag"><span class="summe">0</span></div>
+      <div class="tag heute"><div class="seg q-website" style="height:38px"></div><div class="seg q-landingpage" style="height:54px"></div><div class="seg q-portal" style="height:16px"></div><div class="seg q-partner" style="height:8px"></div><div class="seg q-telefon" style="height:8px"></div><div class="seg q-monday" style="height:8px"></div><span class="summe">14</span></div>
+    </div>
+    <div class="achse"><span>Sa 14.</span><span>So</span><span>Mo 16.</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr 20.</span><span>Sa</span><span>So</span><span>Mo 23.</span><span>Di</span><span>Mi</span><span>Do</span><span class="heute">heute</span></div>
+    <div class="legende"><span class="q-website">Website / Förderrechner</span><span class="q-landingpage">Landingpages</span><span class="q-portal">Lead-Portale</span><span class="q-partner">Partner (Enni · SWD · Sparkasse)</span><span class="q-telefon">Telefon / Empfehlung / Bestand</span><span class="q-monday">monday (Bestand, grau)</span></div>
+  </div>
+
+  <div class="karte">
+    <h2>Kontaktstatus der offenen Leads <span class="sub">wie oft haben wir schon angerufen?</span></h2>
+    <div class="verteilung">
+      <span>Noch kein Versuch</span><div class="balken" style="width:78%"></div><span class="n">23</span>
+      <span>1 Versuch</span><div class="balken" style="width:58%"></div><span class="n">17</span>
+      <span>2 Versuche</span><div class="balken" style="width:37%"></div><span class="n">11</span>
+      <span class="warn-text">3 Versuche</span><div class="balken warn" style="width:17%"></div><span class="n">5</span>
+      <span class="rot-text">4+ Versuche</span><div class="balken rot" style="width:7%"></div><span class="n">2</span>
+    </div>
+    <p class="dezent" style="font-size:var(--t-xs);margin:10px 0 0">Klick auf eine Zeile öffnet die Anrufliste mit dem Filter „Versuche = …“. Kaskade: +2 h · +1 Tag 18:00 · +3 Tage · +7 Tage → „Nicht erreicht“.</p>
+    <h2 style="margin-top:18px">Erstkontakt heute <span class="sub">Speed-to-Lead</span></h2>
+    <div class="kacheln" style="grid-template-columns:repeat(3,1fr);margin:0">
+      <div class="kachel stat"><span class="stat-zahl" style="font-size:22px">18 Min</span>Median bis 1. Versuch</div>
+      <div class="kachel stat"><span class="stat-zahl" style="font-size:22px">86 %</span>im SLA (&lt; 60 Min)</div>
+      <div class="kachel stat"><span class="stat-zahl" style="font-size:22px">9 / 14</span>heute erreicht</div>
+    </div>
+  </div>
+</div>
+
+<div class="karte" style="margin-bottom:var(--a-4)">
+  <h2>Eingänge je Quelle und Kanal <span class="sub">Quelle = Herkunft · Kanal = Vertriebskanal (steuert das Angebotsprofil) · Klick auf eine Zeile filtert die Anrufliste</span></h2>
+  <table class="tabelle">
+    <thead><tr><th>Quelle</th><th>Kanal</th><th class="rechts">heute</th><th class="rechts">7 Tage</th><th class="rechts">30 Tage</th><th>erreicht</th><th>terminiert</th><th class="rechts" title="offene Leads mit 3 oder mehr Versuchen">≥ 3 Versuche</th><th class="rechts">Kosten/Lead</th></tr></thead>
+    <tbody>
+      <tr class="gruppe"><td colspan="9"><span class="punkt q-website"></span>Website</td></tr>
+      <tr><td>Website-Formular</td><td>Standard</td><td class="rechts">3</td><td class="rechts">14</td><td class="rechts">52</td><td><span class="miniquote" style="width:64px"></span>64 %</td><td><span class="miniquote" style="width:31px"></span>31 %</td><td class="rechts">1</td><td class="rechts dezent">–</td></tr>
+      <tr><td>Förderrechner</td><td>Standard</td><td class="rechts">1</td><td class="rechts">6</td><td class="rechts">21</td><td><span class="miniquote" style="width:71px"></span>71 %</td><td><span class="miniquote" style="width:38px"></span>38 %</td><td class="rechts">0</td><td class="rechts dezent">–</td></tr>
+      <tr class="gruppe"><td colspan="9"><span class="punkt q-landingpage"></span>Landingpages <span class="dezent" style="text-transform:none;font-weight:400">· je Landingpage eine Kampagne</span></td></tr>
+      <tr><td>lp-waermepumpe-duisburg</td><td>Standard</td><td class="rechts">4</td><td class="rechts">15</td><td class="rechts">48</td><td><span class="miniquote" style="width:58px"></span>58 %</td><td><span class="miniquote" style="width:27px"></span>27 %</td><td class="rechts">2</td><td class="rechts">41 €</td></tr>
+      <tr><td>lp-pv-speicher</td><td>Standard</td><td class="rechts">2</td><td class="rechts">9</td><td class="rechts">33</td><td><span class="miniquote" style="width:52px"></span>52 %</td><td><span class="miniquote" style="width:21px"></span>21 %</td><td class="rechts">2</td><td class="rechts">38 €</td></tr>
+      <tr><td>lp-heizung-tauschen-herbst26 <span class="abzeichen" style="background:var(--status-blau-bg);color:var(--status-blau)">neu · automatisch angelegt</span></td><td class="dezent">– bitte zuordnen</td><td class="rechts">1</td><td class="rechts">1</td><td class="rechts">1</td><td class="dezent">–</td><td class="dezent">–</td><td class="rechts">0</td><td class="rechts dezent">–</td></tr>
+      <tr class="gruppe"><td colspan="9"><span class="punkt q-portal"></span>Lead-Portale</td></tr>
+      <tr><td>Portal A (gekauft)</td><td>Standard</td><td class="rechts">1</td><td class="rechts">7</td><td class="rechts">30</td><td><span class="miniquote" style="width:43px"></span>43 %</td><td><span class="miniquote" style="width:13px"></span>13 %</td><td class="rechts">2</td><td class="rechts">95 €</td></tr>
+      <tr class="gruppe"><td colspan="9"><span class="punkt q-partner"></span>Partner</td></tr>
+      <tr><td>Enni-Liste</td><td><span class="kanal">Enni</span></td><td class="rechts">0</td><td class="rechts">4</td><td class="rechts">19</td><td><span class="miniquote" style="width:79px"></span>79 %</td><td><span class="miniquote" style="width:47px"></span>47 %</td><td class="rechts">0</td><td class="rechts dezent">–</td></tr>
+      <tr><td>SWD</td><td><span class="kanal">SWD</span></td><td class="rechts">0</td><td class="rechts">2</td><td class="rechts">8</td><td><span class="miniquote" style="width:75px"></span>75 %</td><td><span class="miniquote" style="width:50px"></span>50 %</td><td class="rechts">0</td><td class="rechts dezent">–</td></tr>
+      <tr class="gruppe"><td colspan="9"><span class="punkt q-telefon"></span>Telefon · Empfehlung · Bestand</td></tr>
+      <tr><td>Telefon</td><td>Standard</td><td class="rechts">1</td><td class="rechts">2</td><td class="rechts">9</td><td><span class="miniquote" style="width:100px"></span>100 %</td><td><span class="miniquote" style="width:67px"></span>67 %</td><td class="rechts">0</td><td class="rechts dezent">–</td></tr>
+      <tr class="gruppe"><td colspan="9"><span class="punkt q-monday"></span>monday (Bestand)</td></tr>
+      <tr><td>monday · Deals / Simon / Rene</td><td class="dezent">Kanal am Kunden</td><td class="rechts">1</td><td class="rechts">1</td><td class="rechts">6</td><td class="dezent">–</td><td class="dezent">–</td><td class="rechts">0</td><td class="rechts dezent">–</td></tr>
+      <tr class="summenzeile"><td>Gesamt</td><td></td><td class="rechts">14</td><td class="rechts">61</td><td class="rechts">227</td><td>61 %</td><td>29 %</td><td class="rechts">7</td><td class="rechts">Ø 23 €</td></tr>
+    </tbody>
+  </table>
+</div>
+</section>
+
+<!-- ============================ ANRUFLISTE ============================ -->
+<section id="anrufliste" class="abschnitt">
+<div class="abschnitt-titel">Seite 2 · Arbeitsseite</div>
+<div class="seitenkopf">
+  <h1>Anrufliste <span class="demo-badge">Demo · Coming soon</span></h1>
+  <span class="dezent">Meine + freie Leads · 41 offen</span>
+  <div class="aktionen"><button class="knopf klein zweitrangig">Alle Leads</button><button class="knopf klein">+ Neuer Lead</button></div>
+</div>
+
+<div class="schnellfilter">
+  <span class="f aktiv">Arbeitsliste <b>41</b></span>
+  <span class="f">Heute eingegangen <b>14</b></span>
+  <span class="f">SLA rot <b>3</b></span>
+  <span class="f">≥ 3 Versuche <b>7</b></span>
+  <span class="f">Rückruf heute <b>4</b></span>
+  <span class="f">Ohne Leadmanager <b>2</b></span>
+  <span class="trenner"></span>
+  <select><option>Quelle: alle</option><option>Website</option><option>Landingpages</option><option>Portale</option><option>Partner</option></select>
+  <select><option>Sparte: alle</option><option>WP</option><option>PV</option><option>KL</option><option>WB</option></select>
+  <select><option>Klasse: alle</option><option>A</option><option>B</option><option>C</option></select>
+  <input type="search" placeholder="Name / Telefon / Ort / PLZ">
+</div>
+
+<div class="arbeitsliste">
+
+  <div class="gruppe-kopf">Jetzt dran <span class="n rot">4</span><span class="erkl">SLA gelb/rot und fällige Rückrufe – in dieser Reihenfolge abarbeiten</span></div>
+
+  <div class="zeile sla-rot-zeile">
+    <div class="versuche"><div class="dots"><i></i><i></i><i></i><i></i><i></i></div><small class="neu">neu</small></div>
+    <div class="wer">
+      <div class="z1"><a href="#">Familie Demolead</a><span class="ort">Moers (47441)</span><span class="chip chip-wp">WP</span><span class="chip chip-pv">PV</span><span class="quelle q-landingpage">lp-waermepumpe-duisburg</span></div>
+      <div class="z2"><span class="faellig">Eingang vor 1 Std 12 Min – noch nicht angerufen</span><span>Wunschzeit: abends</span><span>Öl-Heizung 1998 · Zeitrahmen sofort</span></div>
+    </div>
+    <div class="sla"><span class="sla-chip sla-rot">72 Min</span></div>
+    <div class="klasse">A <small>74</small></div>
+    <div class="tel"><a href="tel:">0203 000 41</a></div>
+    <div class="aktion"><button class="knopf ok" title="1 – Erreicht">✓ Erreicht</button><button class="knopf zweitrangig" title="2 – Nicht erreicht">Nicht erreicht</button><button class="knopf zweitrangig" title="4 – Mailbox">Mailbox</button><button class="knopf zweitrangig" title="5 – Rückruf">Rückruf</button><button class="knopf ghost" title="Besetzt · Falsche Nummer · Kein Interesse · Zurückstellen">⋯</button></div>
+  </div>
+
+  <div class="zeile sla-rot-zeile">
+    <div class="versuche"><div class="dots"><i></i><i></i><i></i><i></i><i></i></div><small class="neu">neu</small></div>
+    <div class="wer">
+      <div class="z1"><a href="#">Herr Testinger</a><span class="ort">Duisburg-Rheinhausen (47228)</span><span class="chip chip-pv">PV</span><span class="quelle q-website">Website-Formular</span><span class="flag" title="Noch kein Leadmanager zugeordnet">⚑ frei</span></div>
+      <div class="z2"><span class="faellig">Eingang vor 1 Std 04 Min – noch nicht angerufen</span><span>Wunschzeit: vormittags</span><span>„Bitte um Rückruf wegen PV mit Speicher“</span></div>
+    </div>
+    <div class="sla"><span class="sla-chip sla-rot">64 Min</span></div>
+    <div class="klasse">B <small>41</small></div>
+    <div class="tel"><a href="tel:">0203 000 17</a></div>
+    <div class="aktion"><button class="knopf ok">✓ Erreicht</button><button class="knopf zweitrangig">Nicht erreicht</button><button class="knopf zweitrangig">Mailbox</button><button class="knopf zweitrangig">Rückruf</button><button class="knopf ghost">⋯</button></div>
+  </div>
+
+  <div class="zeile">
+    <div class="versuche"><div class="dots"><i class="v"></i><i class="v"></i><i></i><i></i><i></i></div><small>2×</small></div>
+    <div class="wer">
+      <div class="z1"><a href="#">Frau Musterfrau</a><span class="ort">Oberhausen (46047)</span><span class="chip chip-wp">WP</span><span class="quelle q-partner">Enni-Liste</span><span class="kanal">Enni</span></div>
+      <div class="z2"><span class="rueckruf">Rückruf gewünscht: heute 10:30</span><span>2× nicht erreicht · zuletzt Do 25.09. 17:40 (Mailbox)</span></div>
+    </div>
+    <div class="sla"><span class="sla-chip sla-erfuellt">erfüllt · 9 Min</span></div>
+    <div class="klasse">A <small>68</small></div>
+    <div class="tel"><a href="tel:">0208 000 88</a></div>
+    <div class="aktion"><button class="knopf ok">✓ Erreicht</button><button class="knopf zweitrangig">Nicht erreicht</button><button class="knopf zweitrangig">Mailbox</button><button class="knopf zweitrangig">Rückruf</button><button class="knopf ghost">⋯</button></div>
+  </div>
+
+  <div class="zeile sla-gelb-zeile">
+    <div class="versuche"><div class="dots"><i></i><i></i><i></i><i></i><i></i></div><small class="neu">neu</small></div>
+    <div class="wer">
+      <div class="z1"><a href="#">Herr Beispielmann</a><span class="ort">Dinslaken (46535)</span><span class="chip chip-kl">KL</span><span class="quelle q-portal">Portal A</span></div>
+      <div class="z2"><span>Eingang vor 38 Min – noch nicht angerufen</span><span>Wunschzeit: nachmittags</span></div>
+    </div>
+    <div class="sla"><span class="sla-chip sla-gelb">38 Min</span></div>
+    <div class="klasse">C <small>22</small></div>
+    <div class="tel"><a href="tel:">02064 000 5</a></div>
+    <div class="aktion"><button class="knopf ok">✓ Erreicht</button><button class="knopf zweitrangig">Nicht erreicht</button><button class="knopf zweitrangig">Mailbox</button><button class="knopf zweitrangig">Rückruf</button><button class="knopf ghost">⋯</button></div>
+  </div>
+
+  <div class="gruppe-kopf">Weiter versuchen <span class="n">7</span><span class="erkl">Kaskade fällig – Leads mit 3 und mehr Versuchen stehen oben</span></div>
+
+  <div class="zeile viel-versuche">
+    <div class="versuche"><div class="dots rot"><i class="v"></i><i class="v"></i><i class="v"></i><i class="v"></i><i></i></div><small class="rot-text">4×</small></div>
+    <div class="wer">
+      <div class="z1"><a href="#">Familie Probekunde</a><span class="ort">Krefeld (47798)</span><span class="chip chip-wp">WP</span><span class="quelle q-landingpage">lp-pv-speicher</span><span class="abzeichen">Wiederkehrer</span></div>
+      <div class="z2"><span class="rot-text">4× nicht erreicht</span><span>zuletzt Fr 26.09. 18:05 (nicht erreicht) · davor Mi 24.09., Mo 22.09., Mo 22.09.</span><span class="faellig">letzter Versuch der Kaskade – danach „Nicht erreicht“ + Nurture-Mail</span></div>
+    </div>
+    <div class="sla"><span class="sla-chip sla-erfuellt">erfüllt · 22 Min</span></div>
+    <div class="klasse">B <small>44</small></div>
+    <div class="tel"><a href="tel:">02151 000 9</a></div>
+    <div class="aktion"><button class="knopf ok">✓ Erreicht</button><button class="knopf zweitrangig">Nicht erreicht</button><button class="knopf zweitrangig">Mailbox</button><button class="knopf zweitrangig">Rückruf</button><button class="knopf ghost">⋯</button></div>
+  </div>
+
+  <div class="zeile viel-versuche">
+    <div class="versuche"><div class="dots warn"><i class="v"></i><i class="v"></i><i class="v"></i><i></i><i></i></div><small class="warn-text">3×</small></div>
+    <div class="wer">
+      <div class="z1"><a href="#">Herr Mustermann</a><span class="ort">Mülheim (45468)</span><span class="chip chip-wp">WP</span><span class="chip chip-wb">WB</span><span class="quelle q-website">Förderrechner</span></div>
+      <div class="z2"><span class="warn-text">3× nicht erreicht</span><span>zuletzt Do 25.09. 18:10 (Mailbox)</span><span>nächster Versuch: Mo 29.09. (Kaskade +7 Tage)</span></div>
+    </div>
+    <div class="sla"><span class="sla-chip sla-erfuellt">erfüllt · 31 Min</span></div>
+    <div class="klasse">A <small>63</small></div>
+    <div class="tel"><a href="tel:">0208 000 12</a></div>
+    <div class="aktion"><button class="knopf ok">✓ Erreicht</button><button class="knopf zweitrangig">Nicht erreicht</button><button class="knopf zweitrangig">Mailbox</button><button class="knopf zweitrangig">Rückruf</button><button class="knopf ghost">⋯</button></div>
+  </div>
+
+  <div class="zeile">
+    <div class="versuche"><div class="dots"><i class="v"></i><i></i><i></i><i></i><i></i></div><small>1×</small></div>
+    <div class="wer">
+      <div class="z1"><a href="#">Frau Demoleadin</a><span class="ort">Duisburg-Walsum (47179)</span><span class="chip chip-pv">PV</span><span class="quelle q-telefon">Telefon</span><span class="flag" title="Letzter Anruf: falsche Nummer">⚑ Nummer prüfen</span></div>
+      <div class="z2"><span>1× falsche Nummer · Fr 26.09. 09:15</span><span>Wiedervorlage heute: Nummer aus der Mail prüfen</span></div>
+    </div>
+    <div class="sla"><span class="sla-chip sla-erfuellt">erfüllt · 5 Min</span></div>
+    <div class="klasse">B <small>39</small></div>
+    <div class="tel"><a href="tel:">0203 000 ??</a></div>
+    <div class="aktion"><button class="knopf ok">✓ Erreicht</button><button class="knopf zweitrangig">Nicht erreicht</button><button class="knopf zweitrangig">Mailbox</button><button class="knopf zweitrangig">Rückruf</button><button class="knopf ghost">⋯</button></div>
+  </div>
+
+  <div class="gruppe-kopf">Neu heute <span class="n">8</span><span class="erkl">eingegangen, SLA noch grün – nach Score sortiert</span></div>
+
+  <div class="zeile">
+    <div class="versuche"><div class="dots"><i></i><i></i><i></i><i></i><i></i></div><small class="neu">neu</small></div>
+    <div class="wer">
+      <div class="z1"><a href="#">Herr Neukunde</a><span class="ort">Moers-Kapellen (47447)</span><span class="chip chip-wp">WP</span><span class="quelle q-landingpage">lp-heizung-tauschen-herbst26</span><span class="abzeichen" style="background:var(--status-blau-bg);color:var(--status-blau)">Kampagne neu</span></div>
+      <div class="z2"><span>Eingang vor 12 Min</span><span>Wunschzeit: samstag</span><span>utm: google / cpc</span></div>
+    </div>
+    <div class="sla"><span class="sla-chip sla-gruen">12 Min</span></div>
+    <div class="klasse">A <small>61</small></div>
+    <div class="tel"><a href="tel:">02841 000 3</a></div>
+    <div class="aktion"><button class="knopf ok">✓ Erreicht</button><button class="knopf zweitrangig">Nicht erreicht</button><button class="knopf zweitrangig">Mailbox</button><button class="knopf zweitrangig">Rückruf</button><button class="knopf ghost">⋯</button></div>
+  </div>
+
+  <div class="zeile">
+    <div class="versuche"><div class="dots"><i></i><i></i><i></i><i></i><i></i></div><small class="neu">neu</small></div>
+    <div class="wer">
+      <div class="z1"><a href="#">Familie Sync</a><span class="ort">Duisburg-Süd (47269)</span><span class="chip chip-wp">WP</span><span class="quelle q-monday">monday · Deals – Simon</span><span class="kanal">Sparkasse DU</span></div>
+      <div class="z2"><span>Eingang (Sync) vor 25 Min</span><span class="dezent">Terminierung in monday – hier nur Verfolgung</span></div>
+    </div>
+    <div class="sla"><span class="sla-chip sla-gruen">25 Min</span></div>
+    <div class="klasse">– <small>vorl.</small></div>
+    <div class="tel"><a href="tel:">0203 000 77</a></div>
+    <div class="aktion"><button class="knopf ok">✓ Erreicht</button><button class="knopf zweitrangig">Nicht erreicht</button><button class="knopf zweitrangig">Mailbox</button><button class="knopf zweitrangig">Rückruf</button><button class="knopf ghost">⋯</button></div>
+  </div>
+
+  <div class="gruppe-kopf">Wiedervorlagen fällig <span class="n">2</span><span class="erkl">zurückgestellte Leads, deren Datum erreicht ist</span></div>
+  <div class="zeile">
+    <div class="versuche"><div class="dots"><i class="v"></i><i></i><i></i><i></i><i></i></div><small>1×</small></div>
+    <div class="wer">
+      <div class="z1"><a href="#">Herr Wartender</a><span class="ort">Kamp-Lintfort (47475)</span><span class="chip chip-pv">PV</span><span class="quelle q-portal">Portal A</span></div>
+      <div class="z2"><span>zurückgestellt am 12.08. („Bauphase später“) · heute fällig</span><span>erreicht am 12.08. 11:20</span></div>
+    </div>
+    <div class="sla"><span class="sla-chip sla-erfuellt">erfüllt · 40 Min</span></div>
+    <div class="klasse">B <small>36</small></div>
+    <div class="tel"><a href="tel:">02842 000 6</a></div>
+    <div class="aktion"><button class="knopf ok">✓ Erreicht</button><button class="knopf zweitrangig">Nicht erreicht</button><button class="knopf zweitrangig">Mailbox</button><button class="knopf zweitrangig">Rückruf</button><button class="knopf ghost">⋯</button></div>
+  </div>
+
+  <div class="legende-liste"><span><b>Punkte</b> = Anrufversuche (grau 1–2 · orange 3 · rot 4+)</span><span><b>Farbbalken links</b> = SLA rot/gelb bzw. viele Versuche</span><span><b>Quelle</b> farbig nach Typ · <b>Kanal</b> violett (steuert Angebotsprofil)</span><span>Tasten 1 Erreicht · 2 Nicht erreicht · 3 Besetzt · 4 Mailbox · 5 Rückruf · 6 Falsche Nummer · 7 Kein Interesse</span></div>
+</div>
+</section>
+
+</main>
+</body>
+</html>
