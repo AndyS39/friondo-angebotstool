@@ -19,8 +19,9 @@ from app.models import (Angebot, Aufgabe, AufgabenpaketInstanz, Benutzer,
                         Gewerk, Kunde, Lead, Projekt, ProjektDokument,
                         ProjektSub, ProjektTermin, ProjektVerlauf,
                         Subunternehmer, Team, Vorgang,
-                        GEWERK_PHASEN, GEWERK_PHASEN_NAMEN, AUFGABE_STATUS_NAMEN)
-from app.templating import render
+                        GEWERK_PHASEN, GEWERK_PHASEN_AKTIV, GEWERK_PHASEN_NAMEN,
+                        AUFGABE_STATUS_NAMEN)
+from app.templating import render, templates
 
 router = APIRouter(prefix="/projektierung")
 
@@ -48,13 +49,108 @@ def _benutzer_mit_rolle(session: Session, rolle: str) -> list[Benutzer]:
                   key=lambda b: b.name)
 
 
+# --- V4 (Phase 90.5): Aktionen ohne Seitensprung (fetch + JSON) ------------------
+
+def _json_gewuenscht(request: Request) -> bool:
+    return "application/json" in (request.headers.get("accept") or "")
+
+
+LINK_PARAMETER = ("url_bza_portal", "url_spotmyenergy", "url_heizreport",
+                  "url_kfw_zuschussportal")
+
+
+def _naechste_phase(phase: str) -> str:
+    folge = GEWERK_PHASEN_AKTIV + ["abgeschlossen"]
+    if phase == "abnahme_freigabe":
+        phase = "abnahme"
+    if phase in folge and folge.index(phase) + 1 < len(folge):
+        return folge[folge.index(phase) + 1]
+    return ""
+
+
+def _waechter_hinweis(session: Session, gewerk: Gewerk) -> str:
+    """Hinweis unter der Ampel: Wächter zur nächsten Phase erfüllt?"""
+    ziel = _naechste_phase(gewerk.phase)
+    if not ziel or ziel == "abgeschlossen":
+        return ""
+    if kern.waechter_pruefen(session, gewerk, ziel):
+        return ""
+    return (f"✓ Wächter für „{GEWERK_PHASEN_NAMEN.get(ziel, ziel)}“ erfüllt – "
+            "Phase kann gewechselt werden.")
+
+
+def _aufgabe_kontext(session: Session, aufgabe: Aufgabe) -> dict:
+    gewerk = session.get(Gewerk, aufgabe.gewerk_id) if aufgabe.gewerk_id else None
+    kommentare = (session.query(ProjektVerlauf)
+                  .filter(ProjektVerlauf.aufgabe_id == aufgabe.id,
+                          ProjektVerlauf.art == "kommentar").count())
+    return {
+        "g": gewerk, "projekt": session.get(Projekt, aufgabe.projekt_id),
+        "benutzer_map": {b.id: b for b in session.query(Benutzer)},
+        "status_namen": AUFGABE_STATUS_NAMEN, "heute": datetime.now(),
+        "kommentar_zaehler": {aufgabe.id: kommentare} if kommentare else {},
+        "link_parameter": {k: kern.parameter_holen(session, k, "")
+                           for k in LINK_PARAMETER},
+        "steckbrief_werte": (kern.steckbrief_daten(session, [gewerk.id])[gewerk.id]
+                             if gewerk is not None else {}),
+    }
+
+
+def _aufgabe_zeile_html(session: Session, aufgabe: Aufgabe) -> str:
+    kontext = _aufgabe_kontext(session, aufgabe)
+    kontext["a"] = aufgabe
+    kontext.update(_bza_kontext(session, kontext["g"]) if kontext["g"] else {})
+    return templates.get_template("projektierung/_aufgabe.html").render(kontext)
+
+
+def _bza_kontext(session: Session, gewerk: Gewerk) -> dict:
+    """Platzhalter – ab Phase 92 BzA-Daten je Gewerk."""
+    return {}
+
+
+def _aufgabe_json(request: Request, session: Session, aufgabe: Aufgabe,
+                  meldung: str = ""):
+    """JSON-Antwort für fetch: neue Zeile(n), Paket-Zähler, Planungs-Ampel,
+    Wächter-Hinweis. Alle Aufgaben desselben Pakets werden mitgeliefert
+    (abhängige Schritte können sich mitändern)."""
+    from fastapi.responses import JSONResponse
+    gewerk = session.get(Gewerk, aufgabe.gewerk_id) if aufgabe.gewerk_id else None
+    weitere = []
+    pakete = []
+    if aufgabe.paket_instanz_id:
+        gruppe = (session.query(Aufgabe)
+                  .filter(Aufgabe.paket_instanz_id == aufgabe.paket_instanz_id)
+                  .order_by(Aufgabe.reihenfolge, Aufgabe.id).all())
+        erledigt = sum(1 for a in gruppe if a.status == "erledigt")
+        pakete.append({"instanz_id": aufgabe.paket_instanz_id,
+                       "text": ("alle erledigt" if erledigt == len(gruppe)
+                                else f"{erledigt} / {len(gruppe)}")})
+        weitere = [{"aufgabe_id": a.id, "zeile_html": _aufgabe_zeile_html(session, a)}
+                   for a in gruppe if a.id != aufgabe.id]
+    daten = {"ok": True, "aufgabe_id": aufgabe.id,
+             "zeile_html": _aufgabe_zeile_html(session, aufgabe),
+             "pakete": pakete, "weitere": weitere, "meldung": meldung}
+    if gewerk is not None:
+        daten["gewerk_id"] = gewerk.id
+        daten["ampel_html"] = templates.get_template(
+            "projektierung/_planungsampel.html").render(
+                ampel=kern.planungs_ampel(session, gewerk))
+        daten["waechter"] = _waechter_hinweis(session, gewerk)
+    return JSONResponse(daten)
+
+
+def _meldung_json(meldung: str, ok: bool = True, **zusatz):
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"ok": ok, "meldung": meldung, **zusatz})
+
+
 # --- Phase 68: Kanban · Liste · Termine · Meine Aufgaben -------------------------
 
 def _gewerk_zeilen(session: Session, benutzer, sparte: str = "",
                    projektleiter_id: int = 0, team_id: int = 0,
                    kanal: str = "", plz: str = "", q: str = "",
                    storniert: bool = False,
-                   terminstatus: str = "") -> list[dict]:
+                   terminstatus: str = "", vorlauf: str = "") -> list[dict]:
     """Gefilterte Gewerk-Zeilen (Basis für Kanban, Liste, Kacheln): je Gewerk
     Projekt, Kunde, Ampel, nächster Termin, offene/überfällige Aufgaben."""
     projekte = {p.id: p for p in session.query(Projekt)}
@@ -129,6 +225,13 @@ def _gewerk_zeilen(session: Session, benutzer, sparte: str = "",
     if terminstatus:
         zeilen = [z for z in zeilen
                   if z["terminstatus"]["status"] == terminstatus]
+    # V4 (Phase 90.3): Vorlauf-Ampel je Gewerk (+ Filter grün/gelb/rot)
+    schwellen = kern.vorlauf_schwellen(session)
+    for z in zeilen:
+        z["vorlauf"] = kern.vorlauf_ampel(session, z["gewerk"], z["terminstatus"],
+                                          schwellen=schwellen, heute=jetzt)
+    if vorlauf in ("gruen", "gelb", "rot"):
+        zeilen = [z for z in zeilen if z["vorlauf"]["farbe"] == vorlauf]
     return zeilen
 
 
@@ -149,19 +252,19 @@ def _filter_werte(session: Session) -> dict:
 @router.get("")
 async def kanban(request: Request, sparte: str = "", projektleiter_id: int = 0,
                  team_id: int = 0, kanal: str = "", plz: str = "", q: str = "",
-                 storniert: int = 0, terminstatus: str = "",
+                 storniert: int = 0, terminstatus: str = "", vorlauf: str = "",
                  session: Session = Depends(get_session)):
     """Kanban (Phase 68): Karte = Projekt in der Spalte seines abgeleiteten
     Status; der Sparten-Filter schaltet auf Karte-je-Gewerk um."""
     if (umleitung := _gate(request, session)) is not None:
         return umleitung
     zeilen = _gewerk_zeilen(session, request.state.benutzer, sparte=sparte,
-                            terminstatus=terminstatus,
+                            terminstatus=terminstatus, vorlauf=vorlauf,
                             projektleiter_id=projektleiter_id, team_id=team_id,
                             kanal=kanal, plz=plz, q=q,
                             storniert=bool(storniert))
     karte_je_gewerk = bool(sparte)
-    spalten: dict[str, list] = {p: [] for p in GEWERK_PHASEN[:6]}
+    spalten: dict[str, list] = {p: [] for p in GEWERK_PHASEN_AKTIV}
     spalten["abgeschlossen"] = []
     grenze_30 = datetime.now() - timedelta(days=30)
     if karte_je_gewerk:
@@ -191,9 +294,35 @@ async def kanban(request: Request, sparte: str = "", projektleiter_id: int = 0,
                 continue
             spalten.setdefault(status if status in spalten else "auftragseingang",
                                []).append(karte)
+    # V4 (Phase 90.1): bestimmendes Gewerk je Karte (Phase = Spalte), Spalten
+    # chronologisch nach Montagebeginn, Unterminierte unten; Auftragseingang
+    # zweigeteilt in unterminiert | terminiert
+    for phase, karten in spalten.items():
+        for karte in karten:
+            passende = [z for z in karte["zeilen"] if z["gewerk"].phase == phase]
+            offene = [z for z in karte["zeilen"]
+                      if z["gewerk"].phase not in ("abgeschlossen", "storniert")]
+            karte["bestimmend"] = (passende or offene or karte["zeilen"])[0]
+        karten.sort(key=lambda k: kern.sortierschluessel_chrono(k["bestimmend"]))
+    ae = spalten.pop("auftragseingang", [])
+    neu_spalten: dict[str, list] = {
+        "auftragseingang_unterminiert": [
+            k for k in ae
+            if k["bestimmend"]["terminstatus"]["status"] == "unterminiert"],
+        "auftragseingang_terminiert": [
+            k for k in ae
+            if k["bestimmend"]["terminstatus"]["status"] != "unterminiert"],
+    }
+    neu_spalten.update(spalten)
+    spalten = neu_spalten
+    spalten_namen = dict(GEWERK_PHASEN_NAMEN)
+    spalten_namen["auftragseingang_unterminiert"] = "Auftragseingang · unterminiert"
+    spalten_namen["auftragseingang_terminiert"] = "Auftragseingang · terminiert"
     from datetime import timedelta as _td
     return render(request, "projektierung/kanban.html", aktiv="/projektierung",
-                  spalten=spalten, phasen_namen=GEWERK_PHASEN_NAMEN,
+                  spalten=spalten, phasen_namen=spalten_namen,
+                  vorlauf=vorlauf,
+                  vorlauf_phasen=kern.VORLAUF_PHASEN,
                   karte_je_gewerk=karte_je_gewerk,
                   # v11b (Phase 73, nur Anzeige): Kachelzeile über dem Board
                   kacheln=kern.startseiten_kacheln(session),
@@ -240,7 +369,11 @@ async def phase_drop(request: Request, gewerk_id: int,
     if umleitung is not None:
         return umleitung
     form = await request.form()
-    ok, meldung = kern.phase_wechseln(session, gewerk, form.get("phase") or "",
+    ziel = form.get("phase") or ""
+    # V4 (Phase 90.1): die beiden Auftragseingangs-Spalten sind EINE Phase
+    if ziel.startswith("auftragseingang_"):
+        ziel = "auftragseingang"
+    ok, meldung = kern.phase_wechseln(session, gewerk, ziel,
                                       form.get("begruendung") or "",
                                       benutzer=request.state.benutzer)
     if ok:
@@ -255,17 +388,24 @@ async def phase_drop(request: Request, gewerk_id: int,
 @router.get("/liste")
 async def liste(request: Request, sparte: str = "", projektleiter_id: int = 0,
                 team_id: int = 0, kanal: str = "", plz: str = "", q: str = "",
-                storniert: int = 0, sortierung: str = "projekt",
-                export: str = "", terminstatus: str = "",
+                storniert: int = 0, sortierung: str = "chrono",
+                export: str = "", terminstatus: str = "", vorlauf: str = "",
                 session: Session = Depends(get_session)):
     """Gewerke als Tabelle (Phase 68) mit Summenzeile und CSV-Export."""
     if (umleitung := _gate(request, session)) is not None:
         return umleitung
     zeilen = _gewerk_zeilen(session, request.state.benutzer, sparte=sparte,
-                            terminstatus=terminstatus,
+                            terminstatus=terminstatus, vorlauf=vorlauf,
                             projektleiter_id=projektleiter_id, team_id=team_id,
                             kanal=kanal, plz=plz, q=q, storniert=bool(storniert))
-    if sortierung == "kunde":
+    if sortierung == "vorlauf":
+        # V4 (Phase 90.3): Vorlauf aufsteigend (knapp zuerst), ohne Ampel unten
+        zeilen.sort(key=lambda z: (z["vorlauf"]["farbe"] is None,
+                                   z["vorlauf"]["wochen"] is not None,
+                                   z["vorlauf"]["wochen"] or 0))
+    elif sortierung == "projekt":
+        zeilen.sort(key=lambda z: z["projekt"].nummer, reverse=True)
+    elif sortierung == "kunde":
         zeilen.sort(key=lambda z: (z["kunde"].anzeige_name.lower()
                                    if z["kunde"] else "zzz"))
     elif sortierung == "phase":
@@ -275,8 +415,10 @@ async def liste(request: Request, sparte: str = "", projektleiter_id: int = 0,
     elif sortierung == "wert":
         zeilen.sort(key=lambda z: -z["gewerk"].auftragswert_aktuell)
     else:
-        sortierung = "projekt"
-        zeilen.sort(key=lambda z: z["projekt"].nummer, reverse=True)
+        # V4 (Phase 90.1): Standard chronologisch nach Montagebeginn,
+        # Unterminierte unten nach Auftragsdatum
+        sortierung = "chrono"
+        zeilen.sort(key=kern.sortierschluessel_chrono)
     angebote = {a.id: a for a in session.query(Angebot)
                 .filter(Angebot.id.in_([z["gewerk"].angebot_id for z in zeilen
                                         if z["gewerk"].angebot_id] or [0]))}
@@ -289,7 +431,7 @@ async def liste(request: Request, sparte: str = "", projektleiter_id: int = 0,
         puffer = io.StringIO()
         schreiber = csv.writer(puffer, delimiter=";")
         schreiber.writerow(["PR-Nr.", "Kunde", "Ort", "Sparte", "Phase",
-                            "Ampel", "Projektleiter", "Nächster Termin",
+                            "Ampel", "Vorlauf", "Projektleiter", "Nächster Termin",
                             "Auftragswert (EUR)", "Überfällig", "Kanal",
                             "Angebotsnummer"])
         filter_werte = _filter_werte(session)
@@ -303,6 +445,7 @@ async def liste(request: Request, sparte: str = "", projektleiter_id: int = 0,
                 z["gewerk"].sparte,
                 GEWERK_PHASEN_NAMEN.get(z["gewerk"].phase, z["gewerk"].phase),
                 z["ampel"]["farbe"],
+                z["vorlauf"]["farbe"] or "",
                 pl.name if pl else "",
                 z["naechster_termin"].strftime("%d.%m.%Y %H:%M")
                 if z["naechster_termin"] else "",
@@ -318,7 +461,7 @@ async def liste(request: Request, sparte: str = "", projektleiter_id: int = 0,
     return render(request, "projektierung/liste.html", aktiv="/projektierung",
                   zeilen=zeilen, angebote=angebote, summe=summe,
                   phasen_namen=GEWERK_PHASEN_NAMEN, sortierung=sortierung,
-                  terminstatus=terminstatus,
+                  terminstatus=terminstatus, vorlauf=vorlauf,
                   teams_map={te.id: te for te in session.query(Team)},
                   sparte=sparte, projektleiter_id=projektleiter_id,
                   team_id=team_id, kanal=kanal, plz=plz, q=q,
@@ -706,9 +849,13 @@ async def akte(request: Request, projekt_id: int,
                       (i.version or "") == "v1" and i.gewerk_id == g.id
                       for i in instanzen.values()) for g in gewerke},
                   link_parameter={k: kern.parameter_holen(session, k, "")
-                                  for k in ("url_bza_portal",
-                                            "url_spotmyenergy",
-                                            "url_heizreport")},
+                                  for k in LINK_PARAMETER},
+                  # V4 (Phase 90): Stepper ohne Endzustände, Vorlauf-Ampel,
+                  # Wächter-Hinweis unter der Planungs-Ampel
+                  phasen_aktiv=GEWERK_PHASEN_AKTIV,
+                  vorlauf={g.id: kern.vorlauf_ampel(session, g) for g in gewerke},
+                  waechter_hinweis={g.id: _waechter_hinweis(session, g)
+                                    for g in gewerke},
                   restarbeiten=_restarbeiten_je_gewerk(session, gewerke),
                   # v15 (Phase 79): Mail-Verlauf des Projekts (Sub-Anfragen)
                   projekt_mails=(session.query(
@@ -833,6 +980,8 @@ async def zuweisung(request: Request, gewerk_id: int,
                                  f"/projektierung/projekt/{gewerk.projekt_id}",
                                  art="gewerk")
     session.commit()
+    if _json_gewuenscht(request):
+        return _meldung_json("Zuweisung gespeichert.")
     return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}",
                             status_code=303)
 
@@ -854,6 +1003,8 @@ async def heizlast(request: Request, gewerk_id: int,
                  f"Heizlast aktualisiert: {form.get('heizlast_kw') or '–'} kW",
                  benutzer=request.state.benutzer, gewerk_id=gewerk.id)
     session.commit()
+    if _json_gewuenscht(request):
+        return _meldung_json("Heizlast gespeichert.")
     return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}",
                             status_code=303)
 
@@ -908,8 +1059,10 @@ async def aufgabe_status(request: Request, aufgabe_id: int,
         elif neuer_status != "wartet":
             aufgabe.wartet_frist_am = None
     session.commit()
-    return RedirectResponse(f"/projektierung/projekt/{aufgabe.projekt_id}",
-                            status_code=303)
+    if _json_gewuenscht(request):
+        return _aufgabe_json(request, session, aufgabe, "Aufgabe gespeichert.")
+    return RedirectResponse(f"/projektierung/projekt/{aufgabe.projekt_id}"
+                            f"#aufgabe-{aufgabe.id}", status_code=303)
 
 
 @router.post("/aufgabe/{aufgabe_id}/erledigt-umschalten")
@@ -931,8 +1084,13 @@ async def aufgabe_umschalten(request: Request, aufgabe_id: int,
         aufgabe.erledigt_am = datetime.now()
         aufgabe.erledigt_von = benutzer.id if benutzer else None
     session.commit()
-    return RedirectResponse(f"/projektierung/projekt/{aufgabe.projekt_id}",
-                            status_code=303)
+    if _json_gewuenscht(request):
+        return _aufgabe_json(request, session, aufgabe)
+    zurueck = request.query_params.get("zurueck") or ""
+    if zurueck.startswith("/projektierung/meine-aufgaben"):
+        return RedirectResponse(zurueck, status_code=303)
+    return RedirectResponse(f"/projektierung/projekt/{aufgabe.projekt_id}"
+                            f"#aufgabe-{aufgabe.id}", status_code=303)
 
 
 @router.post("/gewerk/{gewerk_id}/aufgabe")
@@ -995,7 +1153,9 @@ async def termin_anlegen(request: Request, gewerk_id: int,
         roh = (form.get(name) or "").strip()
         for muster in ("%Y-%m-%dT%H:%M", "%Y-%m-%d"):
             try:
-                return datetime.strptime(roh, muster)
+                # V4 (Phase 90.4): Uhrzeiten serverseitig auf 15 Minuten runden
+                wert = datetime.strptime(roh, muster)
+                return kern.viertelstunde(wert) if "T" in roh else wert
             except ValueError:
                 continue
         return None
@@ -1127,12 +1287,17 @@ async def aufgabe_auswahl(request: Request, aufgabe_id: int,
     if aufgabe is None:
         return RedirectResponse("/projektierung", status_code=303)
     form = await request.form()
+    meldung = ""
     if kern.aufgabe_auswahl_setzen(session, aufgabe,
                                    form.get("auswahl") or "",
                                    benutzer=request.state.benutzer):
+        meldung = kern.auswahl_folgen(session, aufgabe,
+                                      benutzer=request.state.benutzer)
         session.commit()
-    return RedirectResponse(f"/projektierung/projekt/{aufgabe.projekt_id}",
-                            status_code=303)
+    if _json_gewuenscht(request):
+        return _aufgabe_json(request, session, aufgabe, meldung)
+    return RedirectResponse(f"/projektierung/projekt/{aufgabe.projekt_id}"
+                            f"#aufgabe-{aufgabe.id}", status_code=303)
 
 
 @router.post("/aufgabe/{aufgabe_id}/in-arbeit")
@@ -1532,8 +1697,11 @@ async def restarbeit_status(request: Request, restarbeit_id: int,
         eintrag.status = "erledigt"
         eintrag.erledigt_am = datetime.now()
     session.commit()
-    return RedirectResponse(f"/projektierung/projekt/{eintrag.projekt_id}",
-                            status_code=303)
+    if _json_gewuenscht(request):
+        return _meldung_json("", restarbeit={"id": eintrag.id,
+                                             "erledigt": eintrag.status == "erledigt"})
+    return RedirectResponse(f"/projektierung/projekt/{eintrag.projekt_id}"
+                            f"#restarbeit-{eintrag.id}", status_code=303)
 
 
 @router.post("/gewerk/{gewerk_id}/zaehlerwechsel")
@@ -1585,6 +1753,8 @@ async def steckbrief_speichern(request: Request, gewerk_id: int,
     eintrag.geaendert_von = (request.state.benutzer.id
                              if request.state.benutzer else None)
     session.commit()
+    if _json_gewuenscht(request):
+        return _meldung_json(f"Steckbrief: {feld} gespeichert.")
     zurueck = form.get("zurueck") or f"/projektierung/projekt/{gewerk.projekt_id}"
     return RedirectResponse(zurueck, status_code=303)
 
@@ -1645,6 +1815,12 @@ async def team_termin(request: Request, gewerk_id: int,
             session.commit()
     else:
         session.rollback()
+    # V4 (Phase 90.1): Drop auf „Auftragseingang · terminiert“ kommt vom Board
+    zurueck = form.get("zurueck") or ""
+    if zurueck.startswith("/projektierung") and "//" not in zurueck:
+        trenner = "&" if "?" in zurueck else "?"
+        return RedirectResponse(zurueck + trenner + "meldung=" + quote_plus(meldung),
+                                status_code=303)
     return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}"
                             "?meldung=" + quote_plus(meldung), status_code=303)
 
@@ -1729,9 +1905,7 @@ async def kalender(request: Request, ansicht: str = "woche", start: str = "",
     # Chronologisch: Gewerke nach Montagebeginn, Unterminierte unten
     chrono = sorted(
         [z for z in zeilen if z["gewerk"].phase not in ("abgeschlossen", "storniert")],
-        key=lambda z: (z["terminstatus"]["termin"] is None,
-                       z["terminstatus"]["termin"].beginn
-                       if z["terminstatus"]["termin"] else datetime.max))
+        key=kern.sortierschluessel_chrono)
 
     return render(request, "projektierung/kalender.html",
                   aktiv="/projektierung", ansicht=ansicht,
@@ -1859,6 +2033,11 @@ async def kommentar(request: Request, projekt_id: int,
             f"{projekt.nummer} erwähnt: {text[:120]}",
             f"/projektierung/projekt/{projekt.id}#verlauf", art="erwaehnung")
     session.commit()
+    if _json_gewuenscht(request):
+        aufgabe = session.get(Aufgabe, _id("aufgabe_id")) if _id("aufgabe_id") else None
+        if aufgabe is not None:
+            return _aufgabe_json(request, session, aufgabe, "Kommentar gespeichert.")
+        return _meldung_json("Kommentar gespeichert.")
     return RedirectResponse(f"/projektierung/projekt/{projekt_id}#verlauf",
                             status_code=303)
 

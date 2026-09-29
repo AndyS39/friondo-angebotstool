@@ -481,16 +481,21 @@ class RabattFreigabe(Base):
 # Dokumenten (data/projekte/<PR>/…), Verlauf und Benachrichtigungen.
 
 # v15 (PLAN_PROJ_V2, Phase 74): neue Kanban-Phasen je Gewerk
+# V4 (PLAN_PROJ_V4 Phase 90.2): abnahme_freigabe → abnahme + freigabe
 GEWERK_PHASEN = ["auftragseingang", "feinplanung_vot", "planung",
-                 "montagevorbereitung", "montage", "abnahme_freigabe",
+                 "montagevorbereitung", "montage", "abnahme", "freigabe",
                  "abgeschlossen", "storniert"]
+# Board-/Stepper-Phasen (ohne Endzustände)
+GEWERK_PHASEN_AKTIV = GEWERK_PHASEN[:GEWERK_PHASEN.index("abgeschlossen")]
 GEWERK_PHASEN_NAMEN = {
     "auftragseingang": "Auftragseingang",
     "feinplanung_vot": "Feinplanung VOT",
     "planung": "Planung",
     "montagevorbereitung": "Montagevorbereitung",
     "montage": "Montage",
-    "abnahme_freigabe": "Abnahme & Freigabe",
+    "abnahme": "Abnahme",
+    "freigabe": "Freigabe",
+    "abnahme_freigabe": "Abnahme & Freigabe",   # Altwert (vor V4-Migration)
     "abgeschlossen": "Abgeschlossen",
     "storniert": "Storniert",
 }
@@ -604,6 +609,8 @@ class Aufgabe(Base):
     aktion_wert: Mapped[str] = mapped_column(String(300), default="")
     optionen: Mapped[str] = mapped_column(String(300), default="")
     auswahl: Mapped[str] = mapped_column(String(100), default="")  # gewaehlte Option
+    # V4 (Phase 91.2): Laufzeit-Bedingung "<paket>.<nr>=<wert>" (sonst leer)
+    sichtbar_wenn: Mapped[str] = mapped_column(String(100), default="")
     erledigt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     erledigt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

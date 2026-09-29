@@ -392,6 +392,20 @@ tr.ben-details > td { background: #f7f9fb; border-top: none; }
 
 .ben-teams { min-width: 340px; }
 .ben-tabelle .ben-chip { padding: 1px 7px; font-size: 11px; }
+
+/* ===== V4 (Vorlage – im Tool mit pj-Präfix, style.css) (PLAN_PROJ_V4 Phase 90) – Vorlauf-Ampel, Live-Aktionen ===== */
+.pj-ampel-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+                color: var(--pj-muted); min-width: 58px; }
+.pj-vl { display: inline-flex; align-items: center; margin-right: 2px; cursor: help; }
+.pj-task { scroll-margin-top: 90px; }
+.pj-task.entfaellt .t summary { color: var(--pj-muted); text-decoration: line-through; }
+.pj-col-ae { flex-basis: 250px; }
+.pj-col-ae + .pj-col-ae { border-left: 2px dashed var(--pj-line); }
+.pj-live-meldung { position: fixed; right: 16px; bottom: 16px; z-index: 1000;
+                   background: var(--pj-text, #1b2a5e); color: #fff; padding: 8px 14px;
+                   border-radius: 8px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.2); }
+.pj-pk > div small { display: block; font-size: 10px; color: var(--pj-crit); }
+
 </style>
 
 <div class="top">

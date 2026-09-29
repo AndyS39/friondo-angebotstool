@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_projektierung.html" import pj_gw_zeile, pj_terminstatus %}
+{% from "_projektierung.html" import pj_gw_zeile, pj_terminstatus, pj_vorlauf %}
 
 {% block titel %}Projektierung – Friondo{% endblock %}
 
@@ -25,7 +25,7 @@
 {# Kachelzeile (Prototyp .tiles): Gewerke je Phase + Überfällig #}
 <div class="pj-tiles">
     {% for phase in ('auftragseingang', 'feinplanung_vot', 'planung',
-                     'montagevorbereitung', 'montage', 'abnahme_freigabe') %}
+                     'montagevorbereitung', 'montage', 'abnahme', 'freigabe') %}
     <div class="pj-tile">
         <div class="n">{{ kacheln[phase].anzahl }}</div>
         <div class="l">{{ phasen_namen[phase] }}</div>
@@ -36,7 +36,7 @@
        title="Gewerke ab Phase Planung ohne Montagetermin">
         <div class="n">{{ kacheln.unterminiert }}</div>
         <div class="l">Unterminiert</div>
-        <div class="s">ab Planung ohne Termin</div>
+        <div class="s">ab Planung ohne Termin{{ ' + ' ~ kacheln.vorlauf_rot ~ ' rot (< 4 Wochen)' if kacheln.vorlauf_rot }}</div>
     </a>
     <a class="pj-tile crit" href="/projektierung/meine-aufgaben">
         <div class="n">{{ kacheln.ueberfaellig }}</div>
@@ -89,6 +89,13 @@
         <option value="unbestaetigt" {{ 'selected' if terminstatus == 'unbestaetigt' }}>Termin unbestätigt</option>
         <option value="unterminiert" {{ 'selected' if terminstatus == 'unterminiert' }}>Unterminiert</option>
     </select>
+    {# V4 (Phase 90.3): Filter Vorlauf #}
+    <select name="vorlauf" class="pj-chip {{ 'on' if vorlauf }}" onchange="this.form.submit()">
+        <option value="">Vorlauf ▾</option>
+        <option value="gruen" {{ 'selected' if vorlauf == 'gruen' }}>Vorlauf grün (&gt; 8 Wo.)</option>
+        <option value="gelb" {{ 'selected' if vorlauf == 'gelb' }}>Vorlauf gelb (4–8 Wo.)</option>
+        <option value="rot" {{ 'selected' if vorlauf == 'rot' }}>Vorlauf rot (&lt; 4 Wo. / unterminiert)</option>
+    </select>
     <label class="pj-chip {{ 'on' if storniert }}">
         <input type="checkbox" name="storniert" value="1"
                {{ 'checked' if storniert }} onchange="this.form.submit()">
@@ -100,7 +107,7 @@
 
 <div class="pj-board">
     {% for phase, karten in spalten.items() %}
-    <div class="pj-col" data-phase="{{ phase }}"
+    <div class="pj-col {{ 'pj-col-ae' if phase.startswith('auftragseingang') }}" data-phase="{{ phase }}"
          ondragover="event.preventDefault()" ondrop="kartenDrop(event, '{{ phase }}')">
         {% if phase == 'abgeschlossen' %}
         <details>
@@ -115,14 +122,15 @@
         <a class="pj-card" href="/projektierung/projekt/{{ karte.projekt.id }}"
            draggable="true" tabindex="0"
            ondragstart="kartenStart(event, {{ (offene_gewerke or karte.zeilen) | map(attribute='gewerk.id') | list | tojson }}, {{ (offene_gewerke or karte.zeilen) | map(attribute='gewerk.sparte') | list | tojson }})">
-            {# v15: Terminstatus des Gewerks, das die Spalte bestimmt #}
-            {% set bestimmend = ((karte.zeilen | selectattr('gewerk.phase', 'equalto', phase) | list)
-                                 or offene_gewerke or karte.zeilen) | first %}
+            {# v15: Terminstatus des Gewerks, das die Spalte bestimmt (V4: Route) #}
+            {% set bestimmend = karte.bestimmend %}
             <div class="hd">
                 <span class="pr pj-mono">{{ karte.projekt.nummer }}</span>
                 {% if gesamt_ueberfaellig %}
                     <span class="pj-badge crit">{{ gesamt_ueberfaellig }} überfällig</span>
                 {% endif %}
+                {# V4 (Phase 90.3): Vorlauf-Punkt vor dem Termin-Badge #}
+                {% if bestimmend.gewerk.phase in vorlauf_phasen %}{{ pj_vorlauf(bestimmend.vorlauf) }}{% endif %}
                 {{ pj_terminstatus(bestimmend.terminstatus, teams_map) }}
             </div>
             <div class="name">{{ karte.zeilen[0].kunde.anzeige_name if karte.zeilen[0].kunde else '?' }}</div>
@@ -152,7 +160,38 @@
 </div>
 
 <div class="pj-note">Karte = Projekt. Die Spalte richtet sich nach dem Gewerk,
-    das am weitesten zurückliegt; die Chips zeigen jedes Gewerk einzeln.</div>
+    das am weitesten zurückliegt; die Chips zeigen jedes Gewerk einzeln.
+    Spalten chronologisch nach Montagebeginn, Unterminierte unten. Ziehen von
+    „unterminiert“ nach „terminiert“ öffnet „Team + Termin“ (kein Phasenwechsel).
+    Punkt vor dem Termin = Vorlauf (grün &gt; 8 Wochen · gelb 4–8 · rot &lt; 4 / unterminiert).</div>
+
+{# V4 (Phase 90.1): Drop auf „Auftragseingang · terminiert“ = Team + Termin #}
+<dialog id="teamdialog" class="pj-dlg">
+    <form method="post" id="teamform" class="box">
+        <h3>Team + Termin</h3>
+        <input type="hidden" name="zurueck" value="/projektierung">
+        <label>Zuweisung
+            <select name="zweck">
+                <option value="wp">Montageteam (WP)</option>
+                <option value="elektro">Elektro-Montageteam</option>
+                <option value="sub">Subteam</option>
+            </select></label>
+        <label>Team
+            <select name="team_id" required>
+                <option value="">– bitte wählen –</option>
+                {% for te in teams %}
+                    <option value="{{ te.id }}">{{ te.name }}{{ ' (Sub)' if te.typ == 'sub' }}</option>
+                {% endfor %}
+            </select></label>
+        <label>Beginn <input type="date" name="beginn" required></label>
+        <label>Ende <input type="date" name="ende" title="leer = Beginn + 4 Arbeitstage (1 Woche)"></label>
+        <label class="kontrollfeld"><input type="checkbox" name="kunde_bestaetigt"> Kunde bestätigt</label>
+        <div class="pj-btnrow">
+            <button class="pj-btn primary" type="submit">Zuweisen + Termin anlegen</button>
+            <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
 
 {# Drop-Dialog: bei mehreren offenen Gewerken „Welches Gewerk verschieben?" #}
 <dialog id="gewerkdialog" class="pj-dlg">
@@ -169,14 +208,32 @@
 <script>
 let dragGewerke = [];
 let dragSparten = [];
+let dragSpalte = '';
 function kartenStart(ereignis, gewerke, sparten) {
     dragGewerke = gewerke;
     dragSparten = sparten;
+    const spalte = ereignis.target.closest('.pj-col');
+    dragSpalte = spalte ? spalte.dataset.phase : '';
     ereignis.dataTransfer.effectAllowed = 'move';
+}
+function teamDialog(gewerkId) {
+    const form = document.getElementById('teamform');
+    form.action = '/projektierung/gewerk/' + gewerkId + '/team-termin';
+    document.getElementById('teamdialog').showModal();
 }
 function kartenDrop(ereignis, phase) {
     ereignis.preventDefault();
     if (!dragGewerke.length || phase === 'abgeschlossen') { return; }
+    // V4 (Phase 90.1): innerhalb des Auftragseingangs kein Phasenwechsel
+    if (dragSpalte === 'auftragseingang_unterminiert' && phase === 'auftragseingang_terminiert') {
+        teamDialog(dragGewerke[0]);
+        return;
+    }
+    if (dragSpalte === 'auftragseingang_terminiert' && phase === 'auftragseingang_unterminiert') {
+        alert('Zurück nach „unterminiert“ geht nicht per Drag – den Montagetermin bitte in der Projektakte löschen.');
+        return;
+    }
+    if (dragSpalte === phase) { return; }
     if (dragGewerke.length === 1) {
         dropSenden(dragGewerke[0], phase);
         return;

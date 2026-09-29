@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_projektierung.html" import pj_gw_zeile, pj_terminstatus %}
+{% from "_projektierung.html" import pj_gw_zeile, pj_terminstatus, pj_vorlauf %}
 
 {% block titel %}Projektierung – Kalender{% endblock %}
 
@@ -60,6 +60,7 @@
         <div class="hd">
             <span class="pr pj-mono">{{ z.projekt.nummer }}</span>
             {% if z.ueberfaellig %}<span class="pj-badge crit">{{ z.ueberfaellig }} überfällig</span>{% endif %}
+            {{ pj_vorlauf(z.vorlauf) }}
             {{ pj_terminstatus(z.terminstatus, teams_map) }}
         </div>
         <div class="name">{{ z.kunde.anzeige_name if z.kunde else '?' }}</div>

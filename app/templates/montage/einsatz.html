@@ -93,9 +93,9 @@
         <summary>Offene Montage-Aufgaben <span class="cnt">{{ aufgaben | length }}</span></summary>
         {% for a in aufgaben %}
         <div class="pj-task">
-            <form method="post" action="/montage/aufgabe/{{ a.id }}/erledigt" style="display:inline">
+            <form method="post" action="/montage/aufgabe/{{ a.id }}/erledigt" style="display:inline" data-pj-ajax>
                 <input type="hidden" name="termin_id" value="{{ termin.id }}">
-                <input type="checkbox" onchange="this.form.submit()" title="Erledigt">
+                <input type="checkbox" onchange="this.closest('.pj-task').classList.toggle('done', this.checked); pjSenden(this.form)" title="Erledigt">
             </form>
             <div class="t">{{ a.titel }}{{ ' *' if a.pflicht }}</div>
             {% if a.faellig_am %}<span class="due">{{ a.faellig_am.strftime('%d.%m.') }}</span>{% endif %}
@@ -147,6 +147,9 @@
     {% if gewerk.phase in ('auftragseingang', 'feinplanung_vot', 'planung', 'montagevorbereitung') %}
     <form method="post" action="/montage/einsatz/{{ termin.id }}/phase">
         <input type="hidden" name="aktion" value="gestartet">
+        {# V4 (Phase 90.4): Uhrzeit im 15-Minuten-Takt, vorbelegt auf das nächste Viertel #}
+        <label style="font-size:13px;color:var(--pj-muted)">Uhrzeit
+            <input type="time" name="uhrzeit" step="900" class="pj-viertel"></label>
         <button class="pj-btn primary" type="submit">Montage gestartet</button>
     </form>
     {% elif gewerk.phase == 'montage' %}
@@ -158,6 +161,8 @@
                   style="width:100%;border:1px solid var(--pj-line);border-radius:8px;padding:8px;font-family:inherit"
                   placeholder="Was wurde gemacht? Besonderheiten?"></textarea>
         <div class="pj-btnrow">
+            <label style="font-size:13px;color:var(--pj-muted)">Uhrzeit
+                <input type="time" name="uhrzeit" step="900" class="pj-viertel"></label>
             <button class="pj-btn primary" type="submit">Montage fertig</button>
         </div>
     </form>

@@ -93,8 +93,8 @@
                 <option value="{{ t }}">{{ t | capitalize }}</option>
             {% endfor %}
         </select>
-        <input type="datetime-local" name="beginn" required>
-        <input type="datetime-local" name="ende">
+        <input type="datetime-local" name="beginn" required step="900">
+        <input type="datetime-local" name="ende" step="900">
     </div>
     <div class="formzeile">
         <select name="team_id"><option value="0">– Team –</option>

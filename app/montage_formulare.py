@@ -2,7 +2,7 @@
 # Abnahmeprotokoll – Felder aus dem Blatt "Formulare" der Logik-Excel,
 # mobil seitenweise mit Zwischenspeichern; der Abschluss erzeugt ein PDF in
 # der Galerie "Inbetrieb-/Abnahme", erledigt die passende Aufgabe im Paket
-# "Abnahme & Freigabe" und legt Restarbeiten aus dem Abnahmeprotokoll an.
+# "Abnahme" (V4) und legt Restarbeiten aus dem Abnahmeprotokoll an.
 
 import base64
 import io

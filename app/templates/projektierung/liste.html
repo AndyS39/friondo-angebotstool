@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_projektierung.html" import pj_dot, pj_terminstatus %}
+{% from "_projektierung.html" import pj_dot, pj_terminstatus, pj_vorlauf %}
 
 {% block titel %}Projektierung – Liste{% endblock %}
 
@@ -14,7 +14,7 @@
     <div class="aktionen">
         <a class="pj-btn" href="/projektierung">Board</a>
         <a class="pj-btn" href="/projektierung/termine">Termine</a>
-        <a class="pj-btn primary" href="/projektierung/liste?export=csv&sparte={{ sparte }}&projektleiter_id={{ projektleiter_id }}&team_id={{ team_id }}&kanal={{ kanal }}&plz={{ plz }}&q={{ q }}&storniert={{ 1 if storniert else 0 }}&sortierung={{ sortierung }}&terminstatus={{ terminstatus }}">CSV-Export</a>
+        <a class="pj-btn primary" href="/projektierung/liste?export=csv&sparte={{ sparte }}&projektleiter_id={{ projektleiter_id }}&team_id={{ team_id }}&kanal={{ kanal }}&plz={{ plz }}&q={{ q }}&storniert={{ 1 if storniert else 0 }}&sortierung={{ sortierung }}&terminstatus={{ terminstatus }}&vorlauf={{ vorlauf }}">CSV-Export</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
@@ -48,8 +48,9 @@
     <input type="text" name="q" value="{{ q }}" size="14" placeholder="Kunde / PR-Nr."
            class="pj-chip">
     <select name="sortierung" class="pj-chip" onchange="this.form.submit()">
-        {% for wert, name in [('projekt', 'PR-Nr.'), ('kunde', 'Kunde'),
-                              ('phase', 'Phase'), ('termin', 'Termin'), ('wert', 'Wert')] %}
+        {% for wert, name in [('chrono', 'Montagebeginn'), ('vorlauf', 'Vorlauf'),
+                              ('projekt', 'PR-Nr.'), ('kunde', 'Kunde'),
+                              ('phase', 'Phase'), ('termin', 'Nächster Termin'), ('wert', 'Wert')] %}
             <option value="{{ wert }}" {{ 'selected' if sortierung == wert }}>Sortierung: {{ name }}</option>
         {% endfor %}
     </select>
@@ -59,6 +60,12 @@
         <option value="terminiert" {{ 'selected' if terminstatus == 'terminiert' }}>Terminiert</option>
         <option value="unbestaetigt" {{ 'selected' if terminstatus == 'unbestaetigt' }}>Termin unbestätigt</option>
         <option value="unterminiert" {{ 'selected' if terminstatus == 'unterminiert' }}>Unterminiert</option>
+    </select>
+    <select name="vorlauf" class="pj-chip {{ 'on' if vorlauf }}" onchange="this.form.submit()">
+        <option value="">Vorlauf ▾</option>
+        <option value="gruen" {{ 'selected' if vorlauf == 'gruen' }}>Vorlauf grün</option>
+        <option value="gelb" {{ 'selected' if vorlauf == 'gelb' }}>Vorlauf gelb</option>
+        <option value="rot" {{ 'selected' if vorlauf == 'rot' }}>Vorlauf rot</option>
     </select>
     <label class="pj-chip {{ 'on' if storniert }}">
         <input type="checkbox" name="storniert" value="1"
@@ -70,7 +77,7 @@
 {% if zeilen %}
 <table class="tabelle">
     <thead><tr><th>PR-Nr.</th><th>Kunde</th><th>Ort</th><th>Sparte</th><th>Phase</th>
-        <th>Ampel</th><th>Projektleiter</th><th>Terminstatus</th><th>Nächster Termin</th>
+        <th>Planung</th><th><a href="?sortierung=vorlauf&sparte={{ sparte }}&vorlauf={{ vorlauf }}" title="sortieren">Vorlauf</a></th><th>Projektleiter</th><th>Terminstatus</th><th>Nächster Termin</th>
         <th class="rechts">Auftragswert</th><th>Überfällig</th><th>Kanal</th><th>Angebot</th></tr></thead>
     <tbody>
     {% for z in zeilen %}
@@ -82,6 +89,7 @@
             <td><span class="pj-sp {{ z.gewerk.sparte }}">{{ z.gewerk.sparte }}</span></td>
             <td>{{ phasen_namen.get(z.gewerk.phase, z.gewerk.phase) }}</td>
             <td>{{ pj_dot(z.ampel.farbe) }} <span class="pj-mono">{{ z.ampel.erledigt }}/{{ z.ampel.gesamt }}</span></td>
+            <td>{% if z.vorlauf.farbe %}{{ pj_vorlauf(z.vorlauf) }} <span class="pj-mono" title="{{ z.vorlauf.tooltip }}">{{ z.vorlauf.text }}</span>{% else %}–{% endif %}</td>
             <td class="dezent">{{ benutzer_map[z.projekt.projektleiter_id].name if z.projekt.projektleiter_id in benutzer_map else '–' }}</td>
             <td>{% if z.gewerk.phase not in ('abgeschlossen', 'storniert') %}{{ pj_terminstatus(z.terminstatus, teams_map) }}{% else %}–{% endif %}</td>
             <td>{{ z.naechster_termin.strftime('%d.%m.%Y %H:%M') if z.naechster_termin else '–' }}</td>

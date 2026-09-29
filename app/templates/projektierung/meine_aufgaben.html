@@ -23,9 +23,10 @@
         {% set gewerk = gewerke.get(a.gewerk_id) %}
         {% set ueberfaellig = a.faellig_am and a.faellig_am < heute %}
         <div class="pj-task {{ 'done' if a.status == 'erledigt' }}">
-            <form method="post" action="/projektierung/aufgabe/{{ a.id }}/erledigt-umschalten"
-                  style="display:inline">
-                <input type="checkbox" onchange="this.form.submit()"
+            {# V4 (Phase 90.5): Häkchen per fetch – die Seite bleibt an der Stelle #}
+            <form method="post" action="/projektierung/aufgabe/{{ a.id }}/erledigt-umschalten?zurueck=/projektierung/meine-aufgaben"
+                  style="display:inline" data-pj-ajax>
+                <input type="checkbox" onchange="this.closest('.pj-task').classList.toggle('done', this.checked); pjSenden(this.form)"
                        {{ 'checked' if a.status == 'erledigt' }} title="Erledigt">
             </form>
             <div class="t">
@@ -36,8 +37,8 @@
                             {{ kunden[projekt.kunde_id].anzeige_name if projekt.kunde_id in kunden else '' }}
                             {{ '· ' ~ gewerk.sparte if gewerk }}{% endif %}</small>
                     </summary>
-                    <form method="post" action="/projektierung/aufgabe/{{ a.id }}/status" class="detail">
-                        <select name="status" onchange="this.form.submit()">
+                    <form method="post" action="/projektierung/aufgabe/{{ a.id }}/status" class="detail" data-pj-ajax>
+                        <select name="status" onchange="pjSenden(this.form)">
                             {% for wert, name in status_namen.items() %}
                                 <option value="{{ wert }}" {{ 'selected' if a.status == wert }}>{{ name }}</option>
                             {% endfor %}

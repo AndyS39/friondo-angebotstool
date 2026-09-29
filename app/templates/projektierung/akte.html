@@ -85,6 +85,7 @@
     {% set fp_termine = gewerk_termine | selectattr('typ', 'equalto', 'feinplanung') | list %}
     {% set montage_termine = gewerk_termine | selectattr('typ', 'equalto', 'montage') | list %}
     {% set phase_idx = phasen.index(g.phase) if g.phase in phasen else -1 %}
+    {% set steckbrief_werte = steckbrief_daten.get(g.id, {}) %}
     <section class="pj-gcol {{ g.sparte }} {{ 'storniert' if g.phase == 'storniert' }}">
         <h3><span class="pj-sp {{ g.sparte }}">{{ g.sparte }}</span>
             {{ SPARTEN_NAMEN.get(g.sparte, g.sparte) }}
@@ -99,7 +100,7 @@
         </h3>
 
         <div class="pj-stepper">
-            {% for p in phasen[:6] %}
+            {% for p in phasen_aktiv %}
                 <i class="{{ 'done' if (g.phase == 'abgeschlossen' or (phase_idx > loop.index0 and g.phase != 'storniert')) else ('cur' if p == g.phase) }}"
                    title="{{ phasen_namen[p] }}"></i>
             {% endfor %}
@@ -109,12 +110,19 @@
             {% if g.phase_geaendert_am %}<span>seit {{ g.phase_geaendert_am.strftime('%d.%m.') }}</span>{% endif %}
         </div>
 
-        <div class="pj-ampel">
-            {{ pj_dot(ampel.farbe) }}
-            <div class="pj-bar"><i class="{{ {'gelb': 'y', 'rot': 'r'}.get(ampel.farbe, '') }}"
-                 style="width:{{ (ampel.erledigt / ampel.gesamt * 100) | round if ampel.gesamt else 0 }}%"></i></div>
-            <span>{{ ampel.erledigt }} / {{ ampel.gesamt }} Pflicht{{ ' · ' ~ ampel.ueberfaellig ~ ' überfällig' if ampel.ueberfaellig }}</span>
+        {# V4 (Phase 90.3): zwei Ampeln mit klarer Beschriftung – Vorlauf (Zeit)
+           und Planung (Aufgaben); die Planungs-Ampel aktualisiert sich per fetch #}
+        {% set vl = vorlauf.get(g.id) %}
+        {% if vl and vl.farbe %}
+        <div class="pj-ampel" title="{{ vl.tooltip }}">
+            <span class="pj-ampel-lbl">Vorlauf</span>{{ pj_dot(vl.farbe) }}
+            <span>{{ vl.tooltip if vl.wochen is none else vl.text ~ ' bis Montagebeginn' }}</span>
         </div>
+        {% endif %}
+        <div class="pj-ampel" id="pj-ampel-{{ g.id }}">
+            {% include "projektierung/_planungsampel.html" %}
+        </div>
+        <div class="pj-note" id="pj-waechter-{{ g.id }}" {{ 'hidden' if not waechter_hinweis.get(g.id) }}>{{ waechter_hinweis.get(g.id, '') }}</div>
 
         <div class="pj-kv">
             <span>Auftrag</span>
@@ -145,10 +153,10 @@
                 {% else %}– kein Angebot verknüpft –{% endif %}</div>
 
             <form method="post" action="/projektierung/gewerk/{{ g.id }}/zuweisung"
-                  style="display:contents">
+                  style="display:contents" data-pj-ajax>
                 <span>Feinplaner</span>
                 <div>
-                    <select name="feinplaner_id" onchange="this.form.submit()">
+                    <select name="feinplaner_id" onchange="pjSenden(this.form)">
                         <option value="0">–</option>
                         {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
                             <option value="{{ b.id }}" {{ 'selected' if g.feinplaner_id == b.id }}>{{ b.name }}</option>
@@ -161,7 +169,7 @@
                 </div>
                 <span>Elektroplaner</span>
                 <div>
-                    <select name="elektroplaner_id" onchange="this.form.submit()">
+                    <select name="elektroplaner_id" onchange="pjSenden(this.form)">
                         <option value="0">–</option>
                         {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
                             <option value="{{ b.id }}" {{ 'selected' if g.elektroplaner_id == b.id }}>{{ b.name }}</option>
@@ -194,7 +202,7 @@
                 {% else %}–{% endif %}
                 {% if g.heizlast_link %}· <a href="{{ g.heizlast_link }}" target="_blank">Heizreport-PDF</a>{% endif %}
                 <details><summary class="dezent" style="cursor:pointer">bearbeiten / Upload</summary>
-                    <form method="post" action="/projektierung/gewerk/{{ g.id }}/heizlast" class="pj-btnrow">
+                    <form method="post" action="/projektierung/gewerk/{{ g.id }}/heizlast" class="pj-btnrow" data-pj-ajax>
                         <input type="text" name="heizlast_kw" size="5" placeholder="kW"
                                value="{{ ('%g' | format(g.heizlast_kw)) | replace('.', ',') if g.heizlast_kw }}">
                         <input type="text" name="heizlast_link" size="18" placeholder="Heizreport-Link"
@@ -289,126 +297,10 @@
         <details class="pj-paket" {{ 'open' if paket_offen.get((g.id, instanz_id)) }}>
             <summary>{{ instanzen[instanz_id].paket_name if instanz_id in instanzen else 'Einzelaufgaben' }}
                 {% if ist_v1 %}<span class="pj-v1" title="Aufgaben aus den alten V1-Paketen – über „V1-Aufgaben entfernen“ löschbar">V1</span>{% endif %}
-                <span class="cnt">{{ 'alle erledigt' if erledigt_anzahl == gruppe | length else erledigt_anzahl ~ ' / ' ~ gruppe | length }}</span>
+                <span class="cnt" data-paket-cnt="{{ instanz_id }}">{{ 'alle erledigt' if erledigt_anzahl == gruppe | length else erledigt_anzahl ~ ' / ' ~ gruppe | length }}</span>
             </summary>
             {% for a in gruppe %}
-            {% set ueberfaellig = a.status not in ('erledigt', 'entfaellt') and a.faellig_am and a.faellig_am < heute %}
-            <div class="pj-task {{ 'done' if a.status == 'erledigt' }}">
-                <form method="post" action="/projektierung/aufgabe/{{ a.id }}/erledigt-umschalten"
-                      style="display:inline">
-                    <input type="checkbox" onchange="this.form.submit()"
-                           {{ 'checked' if a.status == 'erledigt' }} title="Erledigt">
-                </form>
-                <div class="t">
-                    <details>
-                        <summary>{{ a.titel }}{{ ' *' if a.pflicht }}
-                            <small>{{ benutzer_map[a.verantwortlich_id].name if a.verantwortlich_id in benutzer_map else a.rolle }}
-                                {%- if a.status == 'erledigt' and a.erledigt_am %} · erledigt {{ a.erledigt_am.strftime('%d.%m.') }}
-                                {%- elif a.status == 'wartet' %} · wartet{{ ' · Frist ' ~ a.wartet_frist_am.strftime('%d.%m.') if a.wartet_frist_am }}
-                                {%- elif a.status == 'entfaellt' %} · entfällt{% endif %}
-                                {%- if kommentar_zaehler.get(a.id) %} · 💬 {{ kommentar_zaehler[a.id] }}{% endif %}</small>
-                        </summary>
-                        {% if a.beschreibung %}<small>{{ a.beschreibung }}</small>{% endif %}
-                        <form method="post" action="/projektierung/aufgabe/{{ a.id }}/status" class="detail">
-                            <select name="status" onchange="this.form.submit()">
-                                {% for wert, name in status_namen.items() %}
-                                    <option value="{{ wert }}" {{ 'selected' if a.status == wert }}>{{ name }}</option>
-                                {% endfor %}
-                            </select>
-                            <select name="verantwortlich_id" onchange="this.form.submit()"
-                                    title="Verantwortlicher">
-                                <option value="0">– Verantwortlicher –</option>
-                                {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
-                                    <option value="{{ b.id }}" {{ 'selected' if a.verantwortlich_id == b.id }}>{{ b.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </form>
-                        <form method="post" action="/projektierung/projekt/{{ projekt.id }}/kommentar" class="detail">
-                            <input type="hidden" name="aufgabe_id" value="{{ a.id }}">
-                            <input type="hidden" name="gewerk_id" value="{{ g.id }}">
-                            <input type="text" name="text" size="22" placeholder="Kommentar zur Aufgabe …">
-                        </form>
-                    </details>
-                    {# v15 (Phase 78): Aktion je Aufgabentyp #}
-                    {% if a.aktion_typ == 'auswahl' and a.optionen %}
-                    <form method="post" action="/projektierung/aufgabe/{{ a.id }}/auswahl" class="pj-akt">
-                        {% for option in a.optionen.split('|') %}
-                        {% set text = option.strip().rstrip('*').strip() %}
-                        <label><input type="radio" name="auswahl" value="{{ text }}"
-                               {{ 'checked' if a.auswahl == text }}
-                               onchange="this.form.submit()"> {{ text }}</label>
-                        {% endfor %}
-                        {% if a.aktion_wert.startswith('mail:') %}
-                        <a class="pj-btn" href="/projektierung/aufgabe/{{ a.id }}/sub-mail"
-                           title="Sub-Anfrage per Mail mit Fotos + Steckbrief">✉ Mail senden</a>
-                        {% endif %}
-                    </form>
-                    {% elif a.aktion_typ == 'link' %}
-                    <div class="pj-akt">
-                        {% set url = link_parameter.get(a.aktion_wert[6:], '') if a.aktion_wert.startswith('param:') else a.aktion_wert %}
-                        {% if url %}
-                        <a class="pj-btn" href="{{ url }}" target="_blank" rel="noopener"
-                           onclick="pjAufgabeLink({{ a.id }})">↗ Öffnen</a>
-                        {% else %}
-                        <small class="pj-akt-hinweis">Link-URL in der Parametrierung pflegen
-                            ({{ a.aktion_wert[6:] if a.aktion_wert.startswith('param:') else a.aktion_wert }})</small>
-                        {% endif %}
-                        {% if a.aktion_wert == 'param:url_bza_portal' %}
-                        <a class="pj-btn" href="/projektierung/gewerk/{{ g.id }}/bza"
-                           title="Alle Antragsfelder mit Kopier-Buttons (Phase 80)">📋 BzA-Datenblatt</a>
-                        {% endif %}
-                    </div>
-                    {% elif a.aktion_typ == 'kalender' %}
-                    <div class="pj-akt">
-                        {% if a.aktion_wert == 'montage' %}
-                        <button class="pj-btn" type="button"
-                                onclick="document.getElementById('dlg-team-{{ g.id }}').showModal()">👥 Team + Termin</button>
-                        {% else %}
-                        <button class="pj-btn" type="button"
-                                onclick="pjDialog('dlg-termin-{{ g.id }}', '{{ a.aktion_wert or 'sonstige' }}')">📅 Termin</button>
-                        {% endif %}
-                    </div>
-                    {% elif a.aktion_typ == 'galerie' %}
-                    <div class="pj-akt">
-                        {% if projekt.vorgang_id %}
-                        <a class="pj-btn" href="/vorgaenge/{{ projekt.vorgang_id }}#galerie">🖼 Galerie</a>
-                        {% endif %}
-                        <small class="pj-akt-hinweis">{{ a.aktion_wert.replace('|', ' · ') }}</small>
-                    </div>
-                    {% elif a.aktion_typ == 'formular' %}
-                    <div class="pj-akt">
-                        {% if a.aktion_wert == 'feinplanung_wp' %}
-                        <a class="pj-btn" href="/projektierung/gewerk/{{ g.id }}/feinplanung">📝 Feinplanungs-Erfassung</a>
-                        {% else %}
-                        <small class="pj-akt-hinweis">Formular folgt (Phase 82)</small>
-                        {% endif %}
-                    </div>
-                    {% elif a.aktion_typ == 'api' and a.aktion_wert == 'ugl_collin' %}
-                    <div class="pj-akt">
-                        <a class="pj-btn" href="/projektierung/gewerk/{{ g.id }}/ugl">📦 Material bestellen (UGL)</a>
-                    </div>
-                    {% elif a.aktion_typ == 'api' %}
-                    <div class="pj-akt">
-                        {% set url = link_parameter.get('url_' ~ a.aktion_wert, '') %}
-                        {% if url %}
-                        <a class="pj-btn" href="{{ url }}" target="_blank" rel="noopener"
-                           onclick="pjAufgabeLink({{ a.id }})">↗ Öffnen</a>
-                        {% endif %}
-                        {% if projekt.vorgang_id and a.aktion_wert == 'heizreport' %}
-                        <a class="pj-btn" href="/vorgaenge/{{ projekt.vorgang_id }}#galerie">🖼 Ablage</a>
-                        {% endif %}
-                        <small class="pj-akt-hinweis">API-Anbindung folgt (Phase 80)</small>
-                    </div>
-                    {% endif %}
-                </div>
-                {% if a.status == 'wartet' %}
-                    <span class="due wait">wartet</span>
-                {% elif ueberfaellig %}
-                    <span class="due over">{{ a.faellig_am.strftime('%d.%m.') }} überfällig</span>
-                {% elif a.faellig_am and a.status not in ('erledigt', 'entfaellt') %}
-                    <span class="due">{{ a.faellig_am.strftime('%d.%m.') }}</span>
-                {% endif %}
-            </div>
+            {% include "projektierung/_aufgabe.html" %}
             {% endfor %}
         </details>
         {% endfor %}
@@ -416,15 +308,15 @@
         {# v15 (Phase 78): Restarbeiten/Reklamationen als eigene Liste #}
         {% set rest = restarbeiten.get(g.id, []) %}
         {% set rest_offen = rest | selectattr('status', 'equalto', 'offen') | list | length %}
-        {% if rest or g.phase in ('montage', 'abnahme_freigabe', 'abgeschlossen') %}
+        {% if rest or g.phase in ('montage', 'abnahme', 'freigabe', 'abgeschlossen') %}
         <details class="pj-paket pj-rest" {{ 'open' if rest_offen }}>
             <summary>Restarbeiten / Reklamationen
                 <span class="cnt">{{ rest_offen ~ ' offen' if rest_offen else ('alle erledigt' if rest else 'keine') }}</span>
             </summary>
             {% for r in rest %}
-            <div class="pj-task {{ 'done' if r.status == 'erledigt' }}">
-                <form method="post" action="/projektierung/restarbeit/{{ r.id }}/status" style="display:inline">
-                    <input type="checkbox" onchange="this.form.submit()"
+            <div class="pj-task {{ 'done' if r.status == 'erledigt' }}" id="restarbeit-{{ r.id }}">
+                <form method="post" action="/projektierung/restarbeit/{{ r.id }}/status" style="display:inline" data-pj-ajax>
+                    <input type="checkbox" onchange="pjSenden(this.form)"
                            {{ 'checked' if r.status == 'erledigt' }} title="Erledigt"></form>
                 <div class="t">{{ r.text }}
                     <small>{{ benutzer_map[r.verantwortlich_id].name if r.verantwortlich_id in benutzer_map }}
@@ -469,7 +361,7 @@
             {% endif %}
             <button class="pj-btn primary" type="button" onclick="pjDialog('dlg-phase-{{ g.id }}')">Phase ändern</button>
             <button class="pj-btn danger" type="button" onclick="pjDialog('dlg-storno-{{ g.id }}')">Stornieren</button>
-            {% if g.phase == 'abnahme_freigabe' %}
+            {% if g.phase in ('freigabe', 'abnahme_freigabe') %}
             <button class="pj-btn primary" type="button" onclick="pjDialog('dlg-freigabe-{{ g.id }}')">Rechnung freigeben</button>
             {% endif %}
         </div>
@@ -541,9 +433,9 @@
                     {% endfor %}
                 </select>
                 <label>Beginn</label>
-                <input type="datetime-local" name="beginn" required>
+                <input type="datetime-local" name="beginn" required step="900">
                 <label>Ende (optional)</label>
-                <input type="datetime-local" name="ende">
+                <input type="datetime-local" name="ende" step="900">
                 <label>Notiz</label>
                 <input type="text" name="notiz" placeholder="Notiz">
                 <div class="opt" style="margin-top:8px">
@@ -600,7 +492,7 @@
                 </div>
             </form>
         </dialog>
-        {% if g.phase == 'abnahme_freigabe' %}
+        {% if g.phase in ('freigabe', 'abnahme_freigabe') %}
         <dialog class="pj-dlg" id="dlg-freigabe-{{ g.id }}">
             <h3>Rechnung freigeben · {{ g.sparte }}</h3>
             <form method="post" action="/projektierung/gewerk/{{ g.id }}/freigabe">

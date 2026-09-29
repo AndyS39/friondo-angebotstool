@@ -261,6 +261,10 @@ async def aufgabe_erledigt(request: Request, aufgabe_id: int,
                  benutzer=benutzer, gewerk_id=aufgabe.gewerk_id,
                  aufgabe_id=aufgabe.id)
     session.commit()
+    # V4 (Phase 90.5): fetch-Antwort ohne Seitensprung
+    if "application/json" in (request.headers.get("accept") or ""):
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"ok": True, "meldung": f"Erledigt: {aufgabe.titel}"})
     return RedirectResponse(zurueck, status_code=303)
 
 
@@ -456,17 +460,31 @@ async def montage_phase(request: Request, termin_id: int,
     aktion = form.get("aktion") or ""
     bericht = (form.get("bericht") or "").strip()
     ziel_meldung = f"/montage/einsatz/{termin_id}?meldung="
+    # V4 (Phase 90.4): Uhrzeit im 15-Minuten-Takt (serverseitig gerundet)
+    from datetime import datetime as _dt
+    zeitpunkt = _dt.now()
+    try:
+        stunde, _, minute = (form.get("uhrzeit") or "").partition(":")
+        if stunde:
+            zeitpunkt = zeitpunkt.replace(hour=int(stunde), minute=int(minute or 0),
+                                          second=0, microsecond=0)
+    except ValueError:
+        pass
+    zeitpunkt = kern.viertelstunde(zeitpunkt)
+    zeit_text = zeitpunkt.strftime("%d.%m.%Y %H:%M")
     if aktion == "gestartet":
         ok, meldung = kern.phase_wechseln(session, gewerk, "montage",
-                                          "Montage gestartet (mobil)",
+                                          f"Montage gestartet (mobil, {zeit_text})",
                                           benutzer=benutzer)
     elif aktion == "fertig":
         if not bericht:
             return RedirectResponse(ziel_meldung + quote_plus(
                 "Bitte einen Kurzbericht eintragen (Pflicht bei Montage fertig)."),
                 status_code=303)
-        ok, meldung = kern.phase_wechseln(session, gewerk, "abnahme_freigabe",
-                                          "Montage fertig (mobil)",
+        if gewerk.montage_fertig_am is None:
+            gewerk.montage_fertig_am = zeitpunkt
+        ok, meldung = kern.phase_wechseln(session, gewerk, "abnahme",
+                                          f"Montage fertig (mobil, {zeit_text})",
                                           benutzer=benutzer)
         if ok:
             kern.verlauf(session, gewerk.projekt_id,

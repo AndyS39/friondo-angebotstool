@@ -710,6 +710,9 @@ async def projektierung_einstellungen(request: Request,
                       __import__("app.terminmail",
                                  fromlist=["x"]).VORBEREITUNG_STANDARD),
                   benutzer_liste=benutzer_liste,
+                  # V4 (Phase 90.3): Vorlauf-Ampel-Schwellen (Wochen)
+                  vorlauf_gruen=kern.parameter_holen(session, "vorlauf_gruen_ab_wochen", "8"),
+                  vorlauf_gelb=kern.parameter_holen(session, "vorlauf_gelb_ab_wochen", "4"),
                   standard_pl=kern.parameter_holen(session, "standard_projektleiter"),
                   standard_fp=kern.parameter_holen(session, "standard_feinplaner"),
                   standard_ep=kern.parameter_holen(session, "standard_elektroplaner"),
@@ -766,6 +769,14 @@ async def projektierung_einstellungen_speichern(
                               form.get("terminmail_text").strip()[:5000])
     if form.get("freigabe_modus") in ("admin", "alle"):
         kern.parameter_setzen(session, "freigabe_modus", form.get("freigabe_modus"))
+    # V4 (Phase 90.3): Vorlauf-Schwellen (Wochen, Dezimal erlaubt)
+    for schluessel in ("vorlauf_gruen_ab_wochen", "vorlauf_gelb_ab_wochen"):
+        wert = (form.get(schluessel) or "").strip().replace(",", ".")
+        try:
+            if wert and float(wert) >= 0:
+                kern.parameter_setzen(session, schluessel, wert)
+        except ValueError:
+            pass
     for feld, name in (("standard_pl", "standard_projektleiter"),
                        ("standard_fp", "standard_feinplaner"),
                        ("standard_ep", "standard_elektroplaner"),

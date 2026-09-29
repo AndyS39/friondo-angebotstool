@@ -49,7 +49,8 @@ SUB_TYPEN_STANDARD = ["GaLa-Bau", "Elektro", "Dachdecker", "Entsorgung",
 
 # Phasen-Rangfolge für den abgeleiteten Projektstatus (v15: neue Phasen)
 _PHASEN_RANG = {"auftragseingang": 0, "feinplanung_vot": 1, "planung": 2,
-                "montagevorbereitung": 3, "montage": 4, "abnahme_freigabe": 5}
+                "montagevorbereitung": 3, "montage": 4, "abnahme": 5,
+                "freigabe": 6, "abnahme_freigabe": 5}
 
 
 # --- Parameter (Key-Value) --------------------------------------------------
@@ -266,7 +267,8 @@ PAKET_PHASEN_RANG = {
     "planung wp": 2, "planung elektro": 2, "friondo fit for future": 2,
     "fit for future": 2,
     "montagevorbereitung": 3,
-    "abnahme & freigabe": 5,
+    "abnahme": 5, "abnahme & freigabe": 5,
+    "freigabe": 6,
 }
 
 
@@ -278,10 +280,16 @@ def paket_rang(paket_name: str) -> int:
 
 def _schritt_sichtbar(session: Session, gewerk: Gewerk, bedingung: str) -> bool:
     """sichtbar_wenn "steckbrief:<feld>=<wert>": Schritt nur anlegen, wenn das
-    Steckbrief-Feld den Wert hat (Vergleich ohne Gross/Klein)."""
+    Steckbrief-Feld den Wert hat (Vergleich ohne Gross/Klein).
+    V4 (Phase 91.1): "sparte:PV|KL|WB" – Schritt nur für diese Sparten.
+    Bedingungen der Form "<paket>.<nr>=<wert>" hängen an einer anderen
+    Aufgabe und werden erst zur Laufzeit ausgewertet (abhaengige_pruefen)."""
     bedingung = (bedingung or "").strip()
     if not bedingung:
         return True
+    if bedingung.lower().startswith("sparte:"):
+        erlaubt = {s.strip().upper() for s in bedingung[7:].split("|")}
+        return (gewerk.sparte or "").upper() in erlaubt
     if bedingung.lower().startswith("steckbrief:") and "=" in bedingung:
         feld, _, soll = bedingung[len("steckbrief:"):].partition("=")
         from app.models import SteckbriefWert
@@ -320,6 +328,35 @@ def aufgabe_auswahl_setzen(session: Session, aufgabe: Aufgabe, auswahl: str,
         aufgabe.erledigt_am = None
     session.flush()
     return True
+
+
+def auswahl_folgen(session: Session, aufgabe: Aufgabe, benutzer=None) -> str:
+    """V4 (Phase 91.2): Folgen einer Radio-Auswahl – Rückschreiben in den
+    Steckbrief (aktion_wert „steckbrief:<feld>“, Kennzeichen manuell) und
+    abhängige Schritte (sichtbar_wenn „<paket>.<nr>=<wert>“) nachziehen."""
+    from app.models import SteckbriefWert
+    meldung = ""
+    wert = (aufgabe.aktion_wert or "")
+    if "steckbrief:" in wert and aufgabe.gewerk_id:
+        feld = wert.split("steckbrief:")[1].split(";")[0].strip()
+        neu = {"ja": "ja", "nein": "nein"}.get((aufgabe.auswahl or "").lower())
+        if feld and neu:
+            eintrag = (session.query(SteckbriefWert)
+                       .filter(SteckbriefWert.gewerk_id == aufgabe.gewerk_id,
+                               SteckbriefWert.feld == feld).first())
+            if eintrag is None:
+                eintrag = SteckbriefWert(gewerk_id=aufgabe.gewerk_id, feld=feld)
+                session.add(eintrag)
+            if eintrag.wert != neu:
+                eintrag.wert = neu
+                eintrag.manuell = True
+                eintrag.geaendert_von = benutzer.id if benutzer else None
+                meldung = f"Steckbrief {feld} = {neu} übernommen."
+    gewerk = session.get(Gewerk, aufgabe.gewerk_id) if aufgabe.gewerk_id else None
+    if gewerk is not None:
+        abhaengige_pruefen(session, gewerk)
+    session.flush()
+    return meldung
 
 
 def galerie_haekchen_pruefen(session: Session, gewerk: Gewerk) -> int:
@@ -416,15 +453,61 @@ def paket_aktivieren(session: Session, gewerk: Gewerk, paket: "object",
             aktion_typ=getattr(schritt, "aktion_typ", "") or "",
             aktion_wert=getattr(schritt, "aktion_wert", "") or "",
             optionen=getattr(schritt, "optionen", "") or "",
+            sichtbar_wenn=_laufzeit_bedingung(getattr(schritt, "sichtbar_wenn", "")),
             erstellt_von=benutzer.id if benutzer else None))
         if verantwortlich:
             zugewiesene.add(verantwortlich)
     session.flush()
+    abhaengige_pruefen(session, gewerk)
     if zugewiesene and projekt is not None:
         benachrichtigen(session, zugewiesene,
                         f"Neue Aufgaben ({paket.name}) im Projekt {projekt.nummer}",
                         f"/projektierung/projekt/{projekt.id}", art="aufgabe")
     return instanz
+
+
+def _laufzeit_bedingung(bedingung: str) -> str:
+    """Nur Bedingungen "<paket_key>.<nr>=<wert>" werden an der Aufgabe
+    gespeichert (steckbrief:/sparte: wirken beim Anlegen)."""
+    import re
+    bedingung = (bedingung or "").strip()
+    if re.fullmatch(r"[\w-]+\.\d+\s*=\s*.+", bedingung):
+        return bedingung
+    return ""
+
+
+def abhaengige_pruefen(session: Session, gewerk: Gewerk) -> int:
+    """V4 (Phase 91.2): Aufgaben mit Laufzeit-Bedingung "<paket>.<nr>=<wert>"
+    (z. B. HEMS-Inbetriebnahme nur bei fit_for_future.1 = Ja): trifft die
+    Auswahl der Bezugsaufgabe nicht zu, steht die Aufgabe auf „entfällt“;
+    trifft sie (wieder) zu, geht sie auf „offen“ zurück."""
+    import re
+    geaendert = 0
+    aufgaben = (session.query(Aufgabe)
+                .filter(Aufgabe.gewerk_id == gewerk.id).all())
+    instanzen = {i.id: i for i in session.query(AufgabenpaketInstanz)
+                 .filter(AufgabenpaketInstanz.gewerk_id == gewerk.id)}
+    for aufgabe in aufgaben:
+        m = re.fullmatch(r"([\w-]+)\.(\d+)\s*=\s*(.+)", aufgabe.sichtbar_wenn or "")
+        if not m:
+            continue
+        paket_key, nr, soll = m.group(1), int(m.group(2)), m.group(3).strip().lower()
+        bezug = next((a for a in aufgaben
+                      if a.reihenfolge == nr and a.paket_instanz_id in instanzen
+                      and instanzen[a.paket_instanz_id].paket_key == paket_key
+                      and instanzen[a.paket_instanz_id].deaktiviert_am is None), None)
+        if bezug is None:
+            continue
+        erfuellt = (bezug.auswahl or "").strip().lower() == soll
+        if not erfuellt and aufgabe.status != "entfaellt" and (bezug.auswahl or ""):
+            aufgabe.status = "entfaellt"
+            geaendert += 1
+        elif erfuellt and aufgabe.status == "entfaellt":
+            aufgabe.status = "offen"
+            geaendert += 1
+    if geaendert:
+        session.flush()
+    return geaendert
 
 
 def faelligkeiten_nachberechnen(session: Session, gewerk: Gewerk) -> int:
@@ -1120,6 +1203,16 @@ def team_termin_zuweisen(session: Session, gewerk: Gewerk, zweck: str,
     session.add(termin)
     session.flush()
     faelligkeiten_nachberechnen(session, gewerk)
+    # V4 (Phase 91.1): Aufgabe „<Team> zuweisen“ (kalender/montage) erledigen
+    for aufgabe in (session.query(Aufgabe)
+                    .filter(Aufgabe.gewerk_id == gewerk.id,
+                            Aufgabe.aktion_typ == "kalender",
+                            Aufgabe.aktion_wert == "montage",
+                            Aufgabe.titel == f"{name} zuweisen",
+                            Aufgabe.status.in_(["offen", "in_arbeit", "wartet"]))):
+        aufgabe.status = "erledigt"
+        aufgabe.erledigt_am = datetime.now()
+        aufgabe.erledigt_von = benutzer.id if benutzer else None
     verlauf(session, gewerk.projekt_id,
             f"{name} zugewiesen: {team.name} · Montagetermin "
             f"{beginn.strftime('%d.%m.%Y')}–{ende.strftime('%d.%m.%Y')}"
@@ -1171,7 +1264,7 @@ def startseiten_kacheln(session: Session) -> dict:
     plus überfällige Aufgaben."""
     zaehler = {p: {"anzahl": 0, "sparten": {}} for p in
                ("auftragseingang", "feinplanung_vot", "planung",
-                "montagevorbereitung", "montage", "abnahme_freigabe")}
+                "montagevorbereitung", "montage", "abnahme", "freigabe")}
     gewerke = session.query(Gewerk).all()
     for g in gewerke:
         if g.phase not in zaehler:
@@ -1195,7 +1288,87 @@ def startseiten_kacheln(session: Session) -> dict:
         1 for g in gewerke
         if g.phase in ("planung", "montagevorbereitung", "montage")
         and ts.get(g.id, {}).get("status") == "unterminiert")
+    # V4 (Phase 90.1): Auftragseingang „x unterminiert · y terminiert“
+    ae = [g for g in gewerke if g.phase == "auftragseingang"]
+    ae_unterminiert = sum(1 for g in ae
+                          if ts.get(g.id, {}).get("status") == "unterminiert")
+    zaehler["auftragseingang"]["untertitel"] = (
+        f"{ae_unterminiert} unterminiert · {len(ae) - ae_unterminiert} terminiert")
+    # V4 (Phase 90.3): terminierte Gewerke mit roter Vorlauf-Ampel (< 4 Wochen)
+    zaehler["vorlauf_rot"] = sum(
+        1 for g in gewerke
+        if g.phase in VORLAUF_PHASEN
+        and ts.get(g.id, {}).get("status") != "unterminiert"
+        and vorlauf_ampel(session, g, ts.get(g.id))["farbe"] == "rot")
     return zaehler
+
+
+# --- V4 (PLAN_PROJ_V4 Phase 90.3): Vorlauf-Ampel zum Montagetermin -------------
+
+VORLAUF_PHASEN = ("auftragseingang", "feinplanung_vot", "planung",
+                  "montagevorbereitung")
+
+
+def vorlauf_schwellen(session: Session) -> tuple[float, float]:
+    """(grün ab Wochen, gelb ab Wochen) – Parameter der Projektierung."""
+    def _zahl(name, standard):
+        try:
+            return float(str(parameter_holen(session, name, str(standard))
+                             ).replace(",", "."))
+        except ValueError:
+            return float(standard)
+    return (_zahl("vorlauf_gruen_ab_wochen", 8), _zahl("vorlauf_gelb_ab_wochen", 4))
+
+
+def vorlauf_ampel(session: Session, gewerk: Gewerk, ts: dict | None = None,
+                  schwellen: tuple[float, float] | None = None,
+                  heute: datetime | None = None) -> dict:
+    """Vorlauf bis Montagebeginn: grün > 8 Wochen · gelb 4–8 · rot < 4 bzw.
+    unterminiert. Gilt nur Auftragseingang bis Montagevorbereitung (sonst
+    farbe None). Liefert farbe, wochen (Dezimal), text, tooltip."""
+    if gewerk.phase not in VORLAUF_PHASEN:
+        return {"farbe": None, "wochen": None, "text": "", "tooltip": ""}
+    ts = ts if ts is not None else terminstatus(session, gewerk)
+    termin = (ts or {}).get("termin")
+    if termin is None or termin.beginn is None:
+        return {"farbe": "rot", "wochen": None, "text": "Unterminiert",
+                "tooltip": "Unterminiert – kein Montagetermin"}
+    gruen_ab, gelb_ab = schwellen or vorlauf_schwellen(session)
+    heute = heute or datetime.now()
+    tage = (termin.beginn.date() - heute.date()).days
+    wochen = tage / 7
+    farbe = "gruen" if wochen > gruen_ab else ("gelb" if wochen >= gelb_ab else "rot")
+    if tage < 0:
+        tooltip = f"Montagebeginn war vor {-tage} Tagen"
+    else:
+        w, t = divmod(tage, 7)
+        tooltip = ("noch " + (f"{w} Woche{'n' if w != 1 else ''}" if w else "")
+                   + (" und " if w and t else "")
+                   + (f"{t} Tag{'e' if t != 1 else ''}" if t or not w else "")
+                   + " bis Montagebeginn")
+    return {"farbe": farbe, "wochen": round(wochen, 1),
+            "text": f"{wochen:.1f} Wo.".replace(".", ","), "tooltip": tooltip}
+
+
+def viertelstunde(zeit: datetime | None) -> datetime | None:
+    """V4 (Phase 90.4): Uhrzeit kaufmännisch auf 15 Minuten runden
+    (7:52 → 7:45, 7:53 → 8:00; ab 7:30 Sekunden zählt zur Hälfte)."""
+    if zeit is None:
+        return None
+    minuten = zeit.hour * 60 + zeit.minute + zeit.second / 60
+    gerundet = int((minuten + 7.5) // 15) * 15
+    basis = zeit.replace(hour=0, minute=0, second=0, microsecond=0)
+    return basis + timedelta(minutes=gerundet)
+
+
+def sortierschluessel_chrono(zeile: dict) -> tuple:
+    """V4 (Phase 90.1): Karten/Zeilen mit Montagetermin nach Beginn
+    aufsteigend, unterminierte darunter nach Auftragsdatum (älteste oben)."""
+    termin = (zeile.get("terminstatus") or {}).get("termin")
+    if termin is not None and termin.beginn is not None:
+        return (0, termin.beginn)
+    gewerk = zeile["gewerk"]
+    return (1, gewerk.erstellt_am or datetime.min)
 
 
 # --- Phasenwechsel + Freigabe (Phase 67) --------------------------------------------
@@ -1228,7 +1401,9 @@ def waechter_pruefen(session: Session, gewerk: Gewerk, ziel: str) -> list[str]:
     dokumentierte Fallback (docs/projektierung-entscheidungen.md)."""
     reihen = {p: i for i, p in enumerate(
         ["auftragseingang", "feinplanung_vot", "planung",
-         "montagevorbereitung", "montage", "abnahme_freigabe", "abgeschlossen"])}
+         "montagevorbereitung", "montage", "abnahme", "freigabe",
+         "abgeschlossen"])}
+    reihen["abnahme_freigabe"] = reihen["abnahme"]   # Altwert vor Migration
     if ziel not in reihen or reihen.get(gewerk.phase, 0) >= reihen[ziel]:
         return []
     offen: list[str] = []
@@ -1281,10 +1456,17 @@ def waechter_pruefen(session: Session, gewerk: Gewerk, ziel: str) -> list[str]:
             offen.append("Kein Montagetermin angelegt")
         elif not (termin.team_id or termin.person_id):
             offen.append("Montagetermin ohne Team/Person")
-    # Montage → Abnahme & Freigabe: Häkchen "Montage fertig"
-    if reihen[ziel] >= reihen["abnahme_freigabe"] and gewerk.montage_fertig_am is None:
+    # Montage → Abnahme: Häkchen "Montage fertig"
+    if reihen[ziel] >= reihen["abnahme"] and gewerk.montage_fertig_am is None:
         offen.append("Montage nicht fertig gemeldet (Montage-Backend oder "
                      "Projektierer)")
+    # V4 (Phase 90.2): Abnahme → Freigabe: Pflichtaufgaben des Pakets Abnahme
+    if reihen[ziel] >= reihen["freigabe"]:
+        anz_offen, gesamt, da = _pflicht_offen_in_paketen(
+            session, gewerk, ("Abnahme",))
+        if da and anz_offen:
+            offen.append(f"Paket Abnahme: {anz_offen} von {gesamt} "
+                         "Pflichtaufgaben offen")
     # Abgeschlossen nur über die Rechnungsfreigabe
     if ziel == "abgeschlossen" and gewerk.freigabe_am is None:
         offen.append("Rechnung nicht freigegeben – bitte „Rechnung freigeben“ nutzen")
@@ -1353,7 +1535,7 @@ def phase_wechseln(session: Session, gewerk: Gewerk, ziel: str,
     alt = gewerk.phase
     gewerk.phase = ziel
     gewerk.phase_geaendert_am = datetime.now()
-    if ziel == "abnahme_freigabe" and gewerk.montage_fertig_am is None:
+    if ziel in ("abnahme", "freigabe") and gewerk.montage_fertig_am is None:
         gewerk.montage_fertig_am = datetime.now()   # Häkchen „Montage fertig" (Override)
     projekt = session.get(Projekt, gewerk.projekt_id)
     if projekt is not None:
@@ -1382,8 +1564,8 @@ def rechnung_freigeben(session: Session, gewerk: Gewerk, restarbeiten: str,
     """„Rechnung freigeben“ (Phase 67): Restarbeiten-Pflichtfrage, Phase
     Abgeschlossen, Benachrichtigung an die Buchhaltung, Verlaufseintrag;
     Restarbeiten erzeugen automatisch eine Pflicht-Aufgabe (+14)."""
-    if gewerk.phase != "abnahme_freigabe":
-        return False, "Freigabe nur in Phase „Abnahme & Freigabe“ möglich."
+    if gewerk.phase not in ("freigabe", "abnahme_freigabe"):
+        return False, "Rechnung freigeben nur in Phase „Freigabe“ möglich."
     restarbeiten_text = (restarbeiten_text or "").strip()[:1000]
     if restarbeiten == "ja" and not restarbeiten_text:
         return False, "Bitte die Restarbeiten/Reklamationen beschreiben (Pflicht)."
@@ -1392,6 +1574,14 @@ def rechnung_freigeben(session: Session, gewerk: Gewerk, restarbeiten: str,
     gewerk.freigabe_am = datetime.now()
     gewerk.freigabe_von = benutzer.id if benutzer else None
     gewerk.restarbeiten_text = restarbeiten_text if restarbeiten == "ja" else ""
+    # V4 (Phase 90.2): Aufgabe „Rechnung freigegeben“ (Paket Freigabe) erledigen
+    for aufgabe in (session.query(Aufgabe)
+                    .filter(Aufgabe.gewerk_id == gewerk.id,
+                            Aufgabe.titel == "Rechnung freigegeben",
+                            Aufgabe.status != "erledigt")):
+        aufgabe.status = "erledigt"
+        aufgabe.erledigt_am = datetime.now()
+        aufgabe.erledigt_von = benutzer.id if benutzer else None
     gewerk.phase = "abgeschlossen"
     gewerk.phase_geaendert_am = datetime.now()
     projekt = session.get(Projekt, gewerk.projekt_id)

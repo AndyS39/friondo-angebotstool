@@ -26,6 +26,12 @@
         für Admins sichtbar (server-seitig geprüft). Das Portal-Badge
         „Demo · Coming soon“ verschwindet automatisch bei „Alle“.</p>
 
+    <h2>Vorlauf-Ampel (Board, Liste, Akte)</h2>
+    <label>grün ab mehr als … Wochen bis Montagebeginn
+        <input type="text" name="vorlauf_gruen_ab_wochen" value="{{ vorlauf_gruen }}" size="4"></label>
+    <label>gelb ab … Wochen (darunter rot; unterminiert = rot)
+        <input type="text" name="vorlauf_gelb_ab_wochen" value="{{ vorlauf_gelb }}" size="4"></label>
+
     <h2>Standard-Verantwortliche</h2>
     {% macro benutzer_wahl(name, wert, titel) %}
     <label>{{ titel }}

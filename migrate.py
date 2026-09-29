@@ -589,9 +589,123 @@ def _daten() -> list[str]:
             session.commit()
             meldungen.append(f"Projektierung V2: {alte} Paket-Instanzen als V1 "
                              f"markiert, {aktiviert} v2-Pakete aktiviert")
+        # ---------- V4 (PLAN_PROJ_V4 Phase 90.2): Abnahme / Freigabe ----------
+        if einstellung_holen(session, "migration_abnahme_freigabe_split", "") != "erledigt":
+            meldungen += _v4_abnahme_freigabe_split(session)
+            einstellung_setzen(session, "migration_abnahme_freigabe_split", "erledigt")
+            session.commit()
+        # V4 (Phase 90.3): Vorlauf-Schwellen vorbelegen (idempotent)
+        for name, wert in (("vorlauf_gruen_ab_wochen", "8"),
+                           ("vorlauf_gelb_ab_wochen", "4")):
+            if projektierung.parameter_holen(session, name, "") == "":
+                projektierung.parameter_setzen(session, name, wert)
+                meldungen.append(f"Projektierung V4: Parameter {name} = {wert}")
+        session.commit()
     finally:
         session.close()
     return meldungen
+
+
+def _aufgaben_umhaengen(session, aufgaben, ziel_instanz, reihenfolgen) -> int:
+    """V4-Hilfe: Aufgaben an eine andere Paket-Instanz hängen. Existiert dort
+    schon eine Aufgabe gleichen Titels (z. B. frisch aktiviertes Paket), erbt
+    sie Status/Erledigt-Datum/Auswahl, die alte wird gelöscht – Kommentare
+    (Verlauf mit aufgabe_id) wandern mit."""
+    from app.models import Aufgabe, ProjektVerlauf
+    vorhanden = {a.titel: a for a in session.query(Aufgabe)
+                 .filter(Aufgabe.paket_instanz_id == ziel_instanz.id)}
+    bewegt = 0
+    for alt in aufgaben:
+        ziel = vorhanden.get(alt.titel)
+        if ziel is not None and ziel.id != alt.id:
+            ziel.status = alt.status
+            ziel.erledigt_am = alt.erledigt_am
+            ziel.erledigt_von = alt.erledigt_von
+            ziel.auswahl = alt.auswahl
+            for eintrag in (session.query(ProjektVerlauf)
+                            .filter(ProjektVerlauf.aufgabe_id == alt.id)):
+                eintrag.aufgabe_id = ziel.id
+            session.delete(alt)
+        else:
+            alt.paket_instanz_id = ziel_instanz.id
+            if alt.titel in reihenfolgen:
+                alt.reihenfolge = reihenfolgen[alt.titel]
+        bewegt += 1
+    session.flush()
+    return bewegt
+
+
+def _instanz_holen(session, gewerk, key, name):
+    from app.models import AufgabenpaketInstanz
+    instanz = (session.query(AufgabenpaketInstanz)
+               .filter(AufgabenpaketInstanz.gewerk_id == gewerk.id,
+                       AufgabenpaketInstanz.paket_key == key,
+                       AufgabenpaketInstanz.version != "v1",
+                       AufgabenpaketInstanz.deaktiviert_am.is_(None)).first())
+    if instanz is None:
+        instanz = AufgabenpaketInstanz(gewerk_id=gewerk.id, paket_key=key,
+                                       paket_name=name, quelle="migration")
+        session.add(instanz)
+        session.flush()
+    return instanz
+
+
+def _v4_abnahme_freigabe_split(session) -> list[str]:
+    """Phase 90.2: Gewerke in abnahme_freigabe → abnahme (Pflicht 1–5 offen)
+    bzw. freigabe; Paket-Instanzen „Abnahme & Freigabe“ → Aufgaben 1–5 an
+    „Abnahme“, Rechnung/BnD an „Freigabe“, alte Instanz deaktivieren."""
+    from datetime import datetime
+
+    from app import projektierung
+    from app.models import Aufgabe, AufgabenpaketInstanz, Gewerk, Projekt
+    abnahme_titel = {"Montagebericht liegt vor": 1,
+                     "Inbetriebnahmeprotokoll liegt vor": 2,
+                     "Abnahmeprotokoll mit Kundenunterschrift": 3,
+                     "Restarbeiten/Reklamationen erfasst": 4,
+                     "Abweichungen zum Angebot geprüft, ggf. Nachtrag": 5}
+    freigabe_titel = {"Rechnung freigegeben": 1, "BnD nach Abnahme erstellt": 2}
+    instanzen_neu = phasen_neu = 0
+    for alt in (session.query(AufgabenpaketInstanz)
+                .filter(AufgabenpaketInstanz.paket_key == "abnahme_freigabe",
+                        AufgabenpaketInstanz.version != "v1",
+                        AufgabenpaketInstanz.deaktiviert_am.is_(None)).all()):
+        gewerk = session.get(Gewerk, alt.gewerk_id)
+        if gewerk is None:
+            continue
+        aufgaben = (session.query(Aufgabe)
+                    .filter(Aufgabe.paket_instanz_id == alt.id).all())
+        ab = _instanz_holen(session, gewerk, "abnahme", "Abnahme")
+        fr = _instanz_holen(session, gewerk, "freigabe", "Freigabe")
+        _aufgaben_umhaengen(session, [a for a in aufgaben if a.titel not in freigabe_titel],
+                            ab, abnahme_titel)
+        _aufgaben_umhaengen(session, [a for a in aufgaben if a.titel in freigabe_titel],
+                            fr, freigabe_titel)
+        alt.deaktiviert_am = datetime.now()
+        instanzen_neu += 1
+    session.flush()
+    for gewerk in session.query(Gewerk).filter(Gewerk.phase == "abnahme_freigabe").all():
+        # nur Aufgaben der Abnahme-Instanz zählen (gleichnamige Schritte gibt
+        # es z. B. auch im Paket Feinplanung VOT)
+        ab_ids = [i.id for i in session.query(AufgabenpaketInstanz)
+                  .filter(AufgabenpaketInstanz.gewerk_id == gewerk.id,
+                          AufgabenpaketInstanz.paket_key.in_(["abnahme", "abnahme_freigabe"]),
+                          AufgabenpaketInstanz.deaktiviert_am.is_(None))]
+        offen = (session.query(Aufgabe)
+                 .filter(Aufgabe.gewerk_id == gewerk.id, Aufgabe.pflicht.is_(True),
+                         Aufgabe.paket_instanz_id.in_(ab_ids or [0]),
+                         Aufgabe.titel.in_(list(abnahme_titel)),
+                         Aufgabe.status.notin_(["erledigt", "entfaellt"])).count())
+        gewerk.phase = "abnahme" if offen else "freigabe"
+        projektierung.verlauf(session, gewerk.projekt_id,
+                              "Phase migriert (V4: Abnahme/Freigabe getrennt) → "
+                              + ("Abnahme" if offen else "Freigabe")
+                              + f" (Gewerk {gewerk.sparte})", gewerk_id=gewerk.id)
+        phasen_neu += 1
+    session.flush()
+    for projekt in session.query(Projekt):
+        projektierung.projektstatus_berechnen(session, projekt)
+    return [f"Projektierung V4: {instanzen_neu} Pakete „Abnahme & Freigabe“ in "
+            f"Abnahme/Freigabe getrennt, {phasen_neu} Gewerke umgezogen"]
 
 
 def main() -> int:

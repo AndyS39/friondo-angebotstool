@@ -20,11 +20,11 @@
         {% if nur_lesen %}
         <span class="w">{{ w.wert if w else '–' }}</span>
         {% else %}
-        <form method="post" action="/projektierung/gewerk/{{ gewerk.id }}/steckbrief" class="w">
+        <form method="post" action="/projektierung/gewerk/{{ gewerk.id }}/steckbrief" class="w" data-pj-ajax>
             <input type="hidden" name="feld" value="{{ feld }}">
             <input type="hidden" name="zurueck" value="{{ zurueck }}">
             <input type="text" name="wert" value="{{ w.wert if w }}"
-                   placeholder="–" onchange="this.form.submit()">
+                   placeholder="–" onchange="pjSenden(this.form)">
         </form>
         {% endif %}
         {% endfor %}

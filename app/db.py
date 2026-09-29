@@ -103,6 +103,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "aktion_wert": "VARCHAR(300) NOT NULL DEFAULT ''",     # v15 Phase 78
         "optionen": "VARCHAR(300) NOT NULL DEFAULT ''",        # v15 Phase 78
         "auswahl": "VARCHAR(100) NOT NULL DEFAULT ''",         # v15 Phase 78
+        "sichtbar_wenn": "VARCHAR(100) NOT NULL DEFAULT ''",   # V4 Phase 91.2
     },
     "aufgabenpaket_instanzen": {
         "version": "VARCHAR(5) NOT NULL DEFAULT 'v2'",         # v15 Phase 78

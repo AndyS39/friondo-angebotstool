@@ -507,3 +507,71 @@ Phasen 64–72). Andreas geht die Liste nach V1 durch.
   nur noch an, wenn das Formular sie mitschickt (teams_dabei) –
   vorher hätte ein Formular ohne Team-Block alle Zuordnungen gelöscht.
   Rollen-Erklärung als aufklappbarer Hilfetext unter der Seite.
+
+## PLAN_PROJ_V4 (29.09.2026) – Umsetzung durch Claude Code
+
+**Vorab – Abhängigkeit PLAN_PROJ_V3:** V4 setzt PLAN_PROJ_V3 (Phasen 84–86:
+TAIFUN-Auftragsdaten, Bestandsimport, Go-live-Hilfen) als umgesetzt voraus –
+im Code ist V3 **nicht** vorhanden (Plan ungebaut, 0 Häkchen). V4 wurde so
+gebaut, dass es ohne V3 läuft; die Berührungspunkte sind je Phase notiert
+(Bestandsimport-Vorlage, Auftragsdaten „gefördert“, Go-live-Checkliste,
+Pilot-Sendesperre).
+
+### Phase 90 – Kanban, Ampel, Termine, Bedienung
+
+- **Auftragseingang zweigeteilt** nur im Board (Spalten-Schlüssel
+  `auftragseingang_unterminiert` / `…_terminiert`); die Gewerk-Phase bleibt
+  `auftragseingang`. „terminiert“ = Montagetermin vorhanden, auch
+  unbestätigt oder ohne Team (Terminstatus ≠ unterminiert). Maßgeblich ist
+  das Gewerk, das die Spalte bestimmt (Phase = Spalte, sonst erstes offenes).
+- **Sortierung** überall `kern.sortierschluessel_chrono`: Montagebeginn
+  aufsteigend, Unterminierte darunter nach **Gewerk-Anlagedatum**
+  (= Auftragseingang im Tool; das Angebotsdatum kann Wochen älter sein).
+  Die Liste hat „Montagebeginn“ als neue Standardsortierung; „PR-Nr.“ bleibt
+  wählbar.
+- **Drop „unterminiert → terminiert“** öffnet den Team-+-Termin-Dialog direkt
+  im Board (Route `team-termin` mit `zurueck=/projektierung`); zurück per
+  Drag ist gesperrt (Hinweis). Drop in eine der beiden AE-Spalten aus einer
+  späteren Phase = Rückwärts-Wechsel nach `auftragseingang` (Begründung
+  nötig, wie bisher).
+- **Abnahme/Freigabe:** `abnahme_freigabe` bleibt nur als Altwert im
+  Namens-Mapping (Anzeige vor der Migration). Migration
+  `migration_abnahme_freigabe_split` hängt Aufgaben um; existiert am Gewerk
+  bereits eine frisch aktivierte Instanz gleichen Pakets (Server-Update, bei
+  dem die V2-Migration zuerst die neuen IMMER-Pakete aktiviert), erbt deren
+  gleichnamige Aufgabe Status/Erledigt-Datum/Auswahl/Kommentare und die alte
+  wird gelöscht – keine Doppel. Phasenentscheid zählt nur Pflichtaufgaben
+  der Abnahme-Instanz (der Titel „Abweichungen zum Angebot geprüft“ existiert
+  auch in Feinplanung VOT).
+- **Rechnung freigeben** ist nur noch in Phase **Freigabe** möglich und hakt
+  die Aufgabe „Rechnung freigegeben“ ab. Montage fertig (mobil) setzt
+  `montage_fertig_am` auf die gewählte, gerundete Uhrzeit und wechselt nach
+  `abnahme`.
+- **Bestandsimport (Phase 85)** existiert nicht – die dortige
+  Phasenwert-Anpassung entfällt; beim späteren Bau von V3 bitte „Abnahme“
+  und „Freigabe“ als Phasenwerte vorsehen.
+- **Vorlauf-Ampel:** Wochen = Kalendertage bis Montagebeginn ÷ 7; grün
+  > 8, gelb 4–8 (inkl. Grenzen), rot < 4, unterminiert = rot. Parameter
+  `vorlauf_gruen_ab_wochen` / `vorlauf_gelb_ab_wochen` (Migration belegt 8/4
+  vor; Pflege unter Parametrierung → Projektierung-Einstellungen). Termin in der Vergangenheit bei Phase
+  ≤ Montagevorbereitung = rot. Kachel „Unterminiert“ zeigt zusätzlich
+  „+ n rot (< 4 Wochen)“ = terminierte Gewerke mit roter Ampel.
+- **15-Minuten-Takt:** `step="900"` an allen Datum-Uhrzeit-Feldern der
+  Projektierung (Termin-Dialog Akte, Terminübersicht) und neue Uhrzeit-Felder
+  „Montage gestartet/fertig“ im Montage-Backend; Vorbelegung auf das nächste
+  Viertel und Client-Rundung in `static/projektierung.js`, serverseitig
+  `kern.viertelstunde` (kaufmännisch, 7:52 → 7:45, 7:53 → 8:00).
+  Ganztägige Montagetermine (Team + Termin, Kalender-Drag) bleiben
+  tagesgenau; Zählerwechsel ist ein Datum (unverändert).
+- **Ohne Seitensprung:** fetch mit `Accept: application/json` für Aufgaben-
+  Häkchen, Status/Verantwortlicher, Auswahl, Aufgaben-Kommentar, Restarbeiten-
+  Häkchen, Steckbrief-Feld, Zuweisung und Heizlast (JSON mit Zeilen-HTML aus
+  dem Partial `projektierung/_aufgabe.html`, Paket-Zählern, Planungs-Ampel
+  und Wächter-Hinweis „✓ Wächter für … erfüllt“). Alle anderen POSTs der
+  Projektierung/Montage: Scroll-Position je URL in sessionStorage (auch für
+  `form.submit()` aus onchange-Handlern), Redirects mit Anker
+  `#aufgabe-<id>`. Ohne JavaScript bleiben alle Routen per Redirect nutzbar.
+  Dokument-Upload bleibt ein klassischer POST (Datei) mit Scroll-Erhalt.
+- **Aufgabe „<Team> zuweisen“** (kalender/montage) wird durch „Team +
+  Termin“ automatisch erledigt (Titel = „Montageteam zuweisen“ bzw.
+  „Elektro-Montageteam zuweisen“).

@@ -6,6 +6,8 @@
          "planung": "Planung",
          "montagevorbereitung": "Montagevorbereitung",
          "montage": "Montage",
+         "abnahme": "Abnahme",
+         "freigabe": "Freigabe",
          "abnahme_freigabe": "Abnahme & Freigabe",
          "abgeschlossen": "Abgeschlossen",
          "storniert": "Storniert"}.get(phase, phase) -}}
@@ -29,6 +31,14 @@
         {% if ts %}<span class="dt">{{ pj_terminstatus(ts, klein=true) }}</span>
         {% elif rechts %}<span class="dt">{{ rechts }}</span>{% endif %}
     </div>
+{%- endmacro %}
+
+{# V4 (Phase 90.3): Vorlauf-Ampel – farbiger Punkt vor dem Termin-Badge,
+   Tooltip „noch 3 Wochen und 2 Tage bis Montagebeginn“ #}
+{% macro pj_vorlauf(vl) -%}
+{%- if vl and vl.farbe -%}
+    <span class="pj-vl" title="Vorlauf: {{ vl.tooltip }}">{{ pj_dot(vl.farbe) }}</span>
+{%- endif -%}
 {%- endmacro %}
 
 {# v15 (Phase 74): Terminstatus-Badge – grün terminiert, gelb unbestätigt,

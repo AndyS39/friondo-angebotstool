@@ -1,0 +1,8 @@
+{# V4 (Phase 90.5): Planungs-Ampel (Pflichtaufgaben-Stand) eines Gewerks –
+   in der Akte eingebunden und für die fetch-Antwort (ampel_html) gerendert.
+   Kontext: ampel = kern.planungs_ampel(...) #}
+{% from "_projektierung.html" import pj_dot %}
+<span class="pj-ampel-lbl">Planung</span>{{ pj_dot(ampel.farbe) }}
+<div class="pj-bar"><i class="{{ {'gelb': 'y', 'rot': 'r'}.get(ampel.farbe, '') }}"
+     style="width:{{ (ampel.erledigt / ampel.gesamt * 100) | round if ampel.gesamt else 0 }}%"></i></div>
+<span>{{ ampel.erledigt }} / {{ ampel.gesamt }} Pflicht{{ ' · ' ~ ampel.ueberfaellig ~ ' überfällig' if ampel.ueberfaellig }}</span>

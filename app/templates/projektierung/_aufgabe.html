@@ -1,0 +1,141 @@
+{# V4 (PLAN_PROJ_V4 Phase 90.5): eine Aufgabenzeile der Projektakte – wird in
+   der Akte eingebunden UND für die fetch-Antwort (JSON zeile_html) einzeln
+   gerendert. Kontext: a, g, projekt, benutzer_map, status_namen, heute,
+   kommentar_zaehler, link_parameter (+ optional steckbrief_werte, bza). #}
+{% set ueberfaellig = a.status not in ('erledigt', 'entfaellt') and a.faellig_am and a.faellig_am < heute %}
+<div class="pj-task {{ 'done' if a.status == 'erledigt' }} {{ 'entfaellt' if a.status == 'entfaellt' }}"
+     id="aufgabe-{{ a.id }}">
+    <form method="post" action="/projektierung/aufgabe/{{ a.id }}/erledigt-umschalten"
+          style="display:inline" data-pj-ajax>
+        <input type="checkbox" onchange="pjSenden(this.form)"
+               {{ 'checked' if a.status == 'erledigt' }} title="Erledigt">
+    </form>
+    <div class="t">
+        <details>
+            <summary>{{ a.titel }}{{ ' *' if a.pflicht }}
+                <small>{{ benutzer_map[a.verantwortlich_id].name if a.verantwortlich_id in benutzer_map else a.rolle }}
+                    {%- if a.status == 'erledigt' and a.erledigt_am %} · erledigt {{ a.erledigt_am.strftime('%d.%m.') }}
+                    {%- elif a.status == 'wartet' %} · wartet{{ ' · Frist ' ~ a.wartet_frist_am.strftime('%d.%m.') if a.wartet_frist_am }}
+                    {%- elif a.status == 'entfaellt' %} · entfällt{% endif %}
+                    {%- if kommentar_zaehler.get(a.id) %} · 💬 {{ kommentar_zaehler[a.id] }}{% endif %}</small>
+            </summary>
+            {% if a.beschreibung %}<small>{{ a.beschreibung }}</small>{% endif %}
+            <form method="post" action="/projektierung/aufgabe/{{ a.id }}/status" class="detail" data-pj-ajax>
+                <select name="status" onchange="pjSenden(this.form)">
+                    {% for wert, name in status_namen.items() %}
+                        <option value="{{ wert }}" {{ 'selected' if a.status == wert }}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+                <select name="verantwortlich_id" onchange="pjSenden(this.form)"
+                        title="Verantwortlicher">
+                    <option value="0">– Verantwortlicher –</option>
+                    {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
+                        <option value="{{ b.id }}" {{ 'selected' if a.verantwortlich_id == b.id }}>{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+            <form method="post" action="/projektierung/projekt/{{ projekt.id }}/kommentar" class="detail" data-pj-ajax>
+                <input type="hidden" name="aufgabe_id" value="{{ a.id }}">
+                <input type="hidden" name="gewerk_id" value="{{ g.id }}">
+                <input type="text" name="text" size="22" placeholder="Kommentar zur Aufgabe …">
+            </form>
+        </details>
+        {# v15 (Phase 78): Aktion je Aufgabentyp #}
+        {% if a.aktion_typ == 'auswahl' and a.optionen %}
+        {# V4 (Phase 91.2): Vorbelegung aus dem Steckbrief (steckbrief:<feld>) –
+           vorausgewählt, erledigt erst nach „Übernehmen“ #}
+        {% set steck_feld = (a.aktion_wert.split('steckbrief:')[1].split(';')[0].strip()
+                             if 'steckbrief:' in a.aktion_wert else '') %}
+        {% set steck_wert = ((steckbrief_werte | default({})).get(steck_feld).wert
+                             if steck_feld and (steckbrief_werte | default({})).get(steck_feld) else '') %}
+        {% set vorschlag = ('Ja' if steck_wert | lower == 'ja' else ('Nein' if steck_wert | lower == 'nein' else ''))
+                           if not a.auswahl else '' %}
+        <form method="post" action="/projektierung/aufgabe/{{ a.id }}/auswahl" class="pj-akt" data-pj-ajax>
+            {% for option in a.optionen.split('|') %}
+            {% set text = option.strip().rstrip('*').strip() %}
+            <label><input type="radio" name="auswahl" value="{{ text }}"
+                   {{ 'checked' if a.auswahl == text or (vorschlag and vorschlag == text) }}
+                   {% if not vorschlag %}onchange="pjSenden(this.form)"{% endif %}> {{ text }}</label>
+            {% endfor %}
+            {% if vorschlag %}
+            <button class="pj-btn primary" type="submit"
+                    title="Vorbelegt aus dem Steckbrief ({{ steck_feld }} = {{ steck_wert }}) – bitte bestätigen">Übernehmen</button>
+            <small class="pj-akt-hinweis">aus Steckbrief</small>
+            {% endif %}
+            {% if a.aktion_wert.startswith('mail:') %}
+            <a class="pj-btn" href="/projektierung/aufgabe/{{ a.id }}/sub-mail"
+               title="Sub-Anfrage per Mail mit Fotos + Steckbrief">✉ Mail senden</a>
+            {% endif %}
+            {% if 'param:' in a.aktion_wert %}
+            {% set param = a.aktion_wert.split('param:')[1].split(';')[0].strip() %}
+            {% if link_parameter.get(param) %}
+            <a class="pj-btn" href="{{ link_parameter[param] }}" target="_blank" rel="noopener">↗ Portal</a>
+            {% endif %}
+            {% endif %}
+        </form>
+        {% elif a.aktion_typ == 'link' %}
+        <div class="pj-akt">
+            {% set url = link_parameter.get(a.aktion_wert[6:], '') if a.aktion_wert.startswith('param:') else a.aktion_wert %}
+            {% if url %}
+            <a class="pj-btn" href="{{ url }}" target="_blank" rel="noopener"
+               onclick="pjAufgabeLink({{ a.id }})">↗ Öffnen</a>
+            {% else %}
+            <small class="pj-akt-hinweis">Link-URL in der Parametrierung pflegen
+                ({{ a.aktion_wert[6:] if a.aktion_wert.startswith('param:') else a.aktion_wert }})</small>
+            {% endif %}
+            {% if a.aktion_wert == 'param:url_bza_portal' %}
+            <a class="pj-btn" href="/projektierung/gewerk/{{ g.id }}/bza"
+               title="Alle Antragsfelder mit Kopier-Buttons">📋 BzA-Datenblatt</a>
+            {% endif %}
+        </div>
+        {% elif a.aktion_typ == 'kalender' %}
+        <div class="pj-akt">
+            {% if a.aktion_wert == 'montage' %}
+            <button class="pj-btn" type="button"
+                    onclick="document.getElementById('dlg-team-{{ g.id }}').showModal()">👥 Team + Termin</button>
+            {% else %}
+            <button class="pj-btn" type="button"
+                    onclick="pjDialog('dlg-termin-{{ g.id }}', '{{ a.aktion_wert or 'sonstige' }}')">📅 Termin</button>
+            {% endif %}
+        </div>
+        {% elif a.aktion_typ == 'galerie' %}
+        <div class="pj-akt">
+            {% if projekt.vorgang_id %}
+            <a class="pj-btn" href="/vorgaenge/{{ projekt.vorgang_id }}#galerie">🖼 Galerie</a>
+            {% endif %}
+            <small class="pj-akt-hinweis">{{ a.aktion_wert.replace('|', ' · ') }}</small>
+        </div>
+        {% elif a.aktion_typ == 'formular' %}
+        <div class="pj-akt">
+            {% if a.aktion_wert == 'feinplanung_wp' %}
+            <a class="pj-btn" href="/projektierung/gewerk/{{ g.id }}/feinplanung">📝 Feinplanungs-Erfassung</a>
+            {% else %}
+            <small class="pj-akt-hinweis">Formular folgt (Phase 82)</small>
+            {% endif %}
+        </div>
+        {% elif a.aktion_typ == 'api' and a.aktion_wert == 'ugl_collin' %}
+        <div class="pj-akt">
+            <a class="pj-btn" href="/projektierung/gewerk/{{ g.id }}/ugl">📦 Material bestellen (UGL)</a>
+        </div>
+        {% elif a.aktion_typ == 'api' %}
+        <div class="pj-akt">
+            {% set url = link_parameter.get('url_' ~ a.aktion_wert, '') %}
+            {% if url %}
+            <a class="pj-btn" href="{{ url }}" target="_blank" rel="noopener"
+               onclick="pjAufgabeLink({{ a.id }})">↗ Öffnen</a>
+            {% endif %}
+            {% if projekt.vorgang_id and a.aktion_wert == 'heizreport' %}
+            <a class="pj-btn" href="/vorgaenge/{{ projekt.vorgang_id }}#galerie">🖼 Ablage</a>
+            {% endif %}
+            <small class="pj-akt-hinweis">API-Anbindung folgt (Phase 80)</small>
+        </div>
+        {% endif %}
+    </div>
+    {% if a.status == 'wartet' %}
+        <span class="due wait">wartet</span>
+    {% elif ueberfaellig %}
+        <span class="due over">{{ a.faellig_am.strftime('%d.%m.') }} überfällig</span>
+    {% elif a.faellig_am and a.status not in ('erledigt', 'entfaellt') %}
+        <span class="due">{{ a.faellig_am.strftime('%d.%m.') }}</span>
+    {% endif %}
+</div>

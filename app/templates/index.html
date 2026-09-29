@@ -106,11 +106,12 @@
                                     ('planung', 'Planung'),
                                     ('montagevorbereitung', 'Montagevorb.'),
                                     ('montage', 'Montage'),
-                                    ('abnahme_freigabe', 'Abnahme & Freigabe')] %}
+                                    ('abnahme', 'Abnahme'),
+                                    ('freigabe', 'Freigabe')] %}
             <div><b>{{ projekt_kacheln[phase].anzahl }}</b>{{ titel }}</div>
             {% endfor %}
             <div class="{{ 'crit' if projekt_kacheln.unterminiert }}">
-                <b>{{ projekt_kacheln.unterminiert }}</b>Unterminiert</div>
+                <b>{{ projekt_kacheln.unterminiert }}</b>Unterminiert{% if projekt_kacheln.vorlauf_rot %}<small>+ {{ projekt_kacheln.vorlauf_rot }} rot (&lt; 4 Wo.)</small>{% endif %}</div>
         </div>
         <div class="pj-plinks">{% if demo_badge %}Demo-Modus: nur Admins sehen
             das Modul – freischalten unter Parametrierung →
@@ -124,7 +125,7 @@
         </h2>
         <div class="kacheln bereich-kacheln">
             {% for titel in ['Auftragseingang', 'Feinplanung VOT', 'Planung',
-                             'Montagevorbereitung', 'Montage', 'Abnahme & Freigabe'] %}
+                             'Montagevorbereitung', 'Montage', 'Abnahme', 'Freigabe'] %}
             <div class="kachel stat inaktiv">
                 <span class="stat-zahl">0</span>
                 <span>{{ titel }}</span>
