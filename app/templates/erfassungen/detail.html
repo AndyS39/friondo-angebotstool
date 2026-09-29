@@ -88,6 +88,15 @@
         <a class="knopf" href="/erfassungen/{{ erfassung.id }}/manuelles-angebot">Manuelles Angebot</a>
         <a class="knopf zweitrangig" href="/erfassungen/{{ erfassung.id }}/angebot-erzeugen">Trotzdem automatisch erzeugen</a>
     {% endif %}
+    {# v13-PV (Phase 79): Katalog-Erfassungen mit der aktuellen Logik neu
+       auswerten – z. B. PV-Altfälle der TAIFUN-Warteschlange #}
+    {% if not angebot and erfassung.typ == 'katalog' and (erfassung.sparte or 'WP') in ('WP', 'PV')
+          and erfassung.status in ('Neu', 'Individuell – zu prüfen', 'In TAIFUN zu schreiben') %}
+    <form method="post" action="/erfassungen/{{ erfassung.id }}/erneut-pruefen">
+        <button class="knopf zweitrangig" type="submit"
+                title="Ampel mit der aktuellen Konfigurator-Logik neu berechnen">↻ Erneut prüfen</button>
+    </form>
+    {% endif %}
     <form method="post" action="/erfassungen/{{ erfassung.id }}/archivieren">
         <button class="knopf zweitrangig" type="submit">
             {{ 'Aus Archiv zurückholen' if erfassung.archiviert else 'Archivieren' }}</button>

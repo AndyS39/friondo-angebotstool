@@ -32,7 +32,13 @@ def _antworten_aus_protokoll(angebot: Angebot) -> dict[str, str]:
         eintraege = json.loads(angebot.protokoll_json or "[]")
     except ValueError:
         return {}
-    return {e.get("frage_id"): e.get("antwort", "") for e in eintraege}
+    antworten = {e.get("frage_id"): e.get("antwort", "") for e in eintraege}
+    # v13-PV (Phase 79): PV-Bogen fragt HEMS/iMSys/SpotDynamic als PA11–PA13 –
+    # dieselben Anhangs- und Vollmacht-Regeln wie P01–P03 (WP)
+    for pv_id, wp_id in (("PA11", "P01"), ("PA12", "P02"), ("PA13", "P03")):
+        if pv_id in antworten and wp_id not in antworten:
+            antworten[wp_id] = antworten[pv_id]
+    return antworten
 
 
 def fuer_angebot(logik: Logik, angebot: Angebot,
@@ -59,6 +65,8 @@ def fuer_angebot(logik: Logik, angebot: Angebot,
             passt = wert == soll
         elif anhang.art == "position":
             passt = bool(positionen & set(anhang.positionen))
+        elif anhang.art == "sparte":   # v13-PV: z. B. „wenn Sparte = PV“
+            passt = (angebot.konfigurator_typ or "WP").upper() == anhang.antwort.upper()
         if not passt:
             continue
         pfad = config.ANLAGEN_ORDNER / anhang.datei

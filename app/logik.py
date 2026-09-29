@@ -488,6 +488,9 @@ def _anhaenge_einlesen(wb, bericht: Pruefbericht) -> list[Anhang]:
                                            _zelle(nicht_bei).split(",") if p.strip()])
         if regel == "immer":
             eintrag.art = "immer"
+        elif (m := re.match(r"wenn\s+Sparte\s*=\s*(\w+)$", regel)):
+            eintrag.art = "sparte"          # v13-PV: Anhang je Sparte (z. B. PV)
+            eintrag.antwort = m.group(1)
         elif (m := re.match(r"wenn\s+([A-Z]\d{2})\s*=\s*(.+)$", regel)):
             eintrag.art = "frage"
             eintrag.frage_id = m.group(1)

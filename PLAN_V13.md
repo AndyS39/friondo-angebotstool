@@ -139,16 +139,16 @@ später ersetzt.
       Werte passt der Nutzer später an)
 
 ## Phase 79 – Prozessintegration
-- [ ] PV-Katalog-Erfassungen sind nicht mehr automatisch „Individuell":
+- [x] PV-Katalog-Erfassungen sind nicht mehr automatisch „Individuell":
       grüne Ampel → normaler Weg „Angebot erzeugen" (PV-Angebot mit
       Sparten-Badge, Editor voll nutzbar); Ampel-Fälle → bekannte
       Individuell-Kette. Bestehende PV-Erfassungen der Warteschlange
       bleiben unberührt, können aber neu ausgewertet werden (Button
       „Erneut prüfen" wie bei WP)
-- [ ] Einschätzungs-Seite, Verfolgung, Versionierung, Kombi-Versand,
+- [x] Einschätzungs-Seite, Verfolgung, Versionierung, Kombi-Versand,
       monday, Statistik: für PV-Angebote identisch aktiv (Statistik
       Sparte PV zählt jetzt Tool-Angebote)
-- [ ] Anhänge: bestehende Regeln greifen (HEMS/SpotDynamic über
+- [x] Anhänge: bestehende Regeln greifen (HEMS/SpotDynamic über
       PA-Fragen); Platz für ein Sigenergy-/Modul-Datenblatt als
       weitere Zeile, sobald geliefert
 

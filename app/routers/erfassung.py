@@ -580,9 +580,16 @@ async def absenden(request: Request, erfassung_id: int,
     antworten = _antworten(erfassung)
     if engine.naechste_frage(logik, antworten) is not None:
         return RedirectResponse(f"/erfassung/{erfassung.id}/pruefen", status_code=303)
-    if erfassung.sparte not in ("", "WP"):
-        # v8: PV/KL sind reine Erfassungen – immer individuell, direkt in
-        # die TAIFUN-Warteschlange (das Angebot entsteht extern)
+    # v13-PV (Phase 79): PV-Katalog-Erfassungen laufen jetzt wie WP über die
+    # Ampel (grün → „Angebot erzeugen“); KL bleibt reine Erfassung
+    pv_konfigurator = erfassung.sparte == "PV" and bool(logik.pv_aktionen)
+    if pv_konfigurator:
+        from app import pv_auslegung
+        pv_auslegung.wp_ableitung_aktualisieren(session, erfassung, antworten, logik)
+        erfassung.antworten_json = json.dumps(antworten, ensure_ascii=False)
+    if erfassung.sparte not in ("", "WP") and not pv_konfigurator:
+        # v8: KL (und PV ohne PV-Logik) sind reine Erfassungen – immer
+        # individuell, direkt in die TAIFUN-Warteschlange
         erfassung.ampel = "orange"
         erfassung.gruende_text = (f"reine {erfassung.sparte}-Erfassung – "
                                   "das Angebot wird in TAIFUN geschrieben")

@@ -300,6 +300,58 @@ async def extern_erledigt(request: Request, erfassung_id: int,
         status_code=303)
 
 
+@router.post("/{erfassung_id}/erneut-pruefen")
+async def erneut_pruefen(request: Request, erfassung_id: int,
+                         session: Session = Depends(get_session)):
+    """v13-PV (Phase 79): Katalog-Erfassung mit der aktuellen Logik neu
+    auswerten. Vollständig + grün → normaler Weg („Neu“, Angebot erzeugen);
+    orange → „Individuell – zu prüfen“; unvollständig (z. B. PV-Altfälle ohne
+    die neuen v13-Fragen) → Hinweis mit Link zum Bogen, Status bleibt."""
+    from urllib.parse import quote_plus
+
+    from app.logik import logik_fuer_sparte
+    erfassung = session.get(Erfassung, erfassung_id)
+    if erfassung is None:
+        return RedirectResponse("/erfassungen", status_code=303)
+    ziel = f"/erfassungen/{erfassung_id}?meldung="
+    if erfassung.angebot_id or erfassung.typ != "katalog":
+        return RedirectResponse(ziel + quote_plus(
+            "Erneut prüfen ist nur für Katalog-Erfassungen ohne Angebot möglich."),
+            status_code=303)
+    logik, _ = logik_modul.hole_logik(session)
+    slogik = logik_fuer_sparte(logik, erfassung.sparte or "WP")
+    if slogik is None or (erfassung.sparte == "PV" and not slogik.pv_aktionen):
+        return RedirectResponse(ziel + quote_plus(
+            "Für diese Sparte gibt es keine Konfigurator-Logik."), status_code=303)
+    antworten = json.loads(erfassung.antworten_json or "{}")
+    if erfassung.sparte == "PV":
+        from app import pv_auslegung
+        pv_auslegung.wp_ableitung_aktualisieren(session, erfassung, antworten, slogik)
+        erfassung.antworten_json = json.dumps(antworten, ensure_ascii=False)
+    offen = engine.naechste_frage(slogik, antworten)
+    if offen is not None:
+        seite = slogik.seiten.index(offen.seite) if offen.seite in slogik.seiten else 0
+        _kette_protokollieren(erfassung, request.state.benutzer,
+                              f"Erneut geprüft – Bogen unvollständig ({offen.id})")
+        session.commit()
+        return RedirectResponse(ziel + quote_plus(
+            f"Bogen unvollständig: {offen.id} – {offen.text}. Bitte über "
+            f"/erfassung/{erfassung.id}/seite/{seite} ergänzen und erneut prüfen."),
+            status_code=303)
+    gruende = engine.ampel_gruende(slogik, antworten)
+    erfassung.ampel = "orange" if gruende else "gruen"
+    erfassung.gruende_text = "\n".join(gruende)
+    erfassung.status = "Individuell – zu prüfen" if gruende else "Neu"
+    _kette_protokollieren(erfassung, request.state.benutzer,
+                          "Erneut geprüft – " + ("individuell: " + "; ".join(gruende)
+                                                 if gruende else "konfigurierbar (grün)"))
+    session.commit()
+    return RedirectResponse(ziel + quote_plus(
+        "Erneut geprüft: " + ("weiterhin individuell – " + "; ".join(gruende)
+                              if gruende else "grün – Angebot kann erzeugt werden.")),
+        status_code=303)
+
+
 @router.post("/{erfassung_id}/individuell-bestaetigt")
 async def individuell_bestaetigt(request: Request, erfassung_id: int,
                                  session: Session = Depends(get_session)):

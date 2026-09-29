@@ -392,3 +392,72 @@ class Phase78PdfWirtschaftlichkeit(Basis):
             einstellung_setzen(self.s, "db_ampel_rot_unter_PV", "")
             einstellung_setzen(self.s, "db_ampel_gruen_ueber_PV", "")
             self.s.commit()
+
+
+# --- Phase 79 ---------------------------------------------------------------
+
+class Phase79Prozess(Basis):
+    def setUp(self):
+        self.client = TestClient(app)
+        self.client.post("/login", data={"benutzer_id": "1", "pin": "1234"})
+
+    def neue_erfassung(self, antworten, status="Entwurf"):
+        e = Erfassung(kunde_id=self.kunde.id, benutzer_id=1, sparte="PV",
+                      konfigurator_typ="PV", status=status,
+                      antworten_json=json.dumps(antworten, ensure_ascii=False))
+        self.s.add(e)
+        self.s.commit()
+        return e
+
+    def test_absenden_gruen_und_angebot_erzeugen(self):
+        e = self.neue_erfassung(pv_basis(PD12=18, PA10=10, PA11="Ja"))
+        r = self.client.post(f"/erfassung/{e.id}/absenden", follow_redirects=False)
+        self.assertEqual(r.status_code, 200)
+        self.s.refresh(e)
+        self.assertEqual((e.ampel, e.status), ("gruen", "Neu"))
+        r = self.client.get(f"/erfassungen/{e.id}/angebot-erzeugen", follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        self.s.refresh(e)
+        angebot = self.s.get(Angebot, e.angebot_id)
+        self.assertEqual((angebot.konfigurator_typ, angebot.ust_satz), ("PV", 0.0))
+        self.assertIn("PV073", {p.pos_nr for p in angebot.positionen})   # TP2 08/10
+        # Anhänge/Vollmacht über die PA-Fragen (HEMS-Broschüre bei PA11 = Ja)
+        from app import anhaenge
+        dateien = [x.datei for x in anhaenge.fuer_angebot(self.logik_voll, angebot)]
+        self.assertIn("Friondo HEMS.pdf", dateien)
+        self.assertFalse(anhaenge.vollmacht_erforderlich(angebot))
+        # Editor öffnet PV-Angebot mit 0-%-Zeile
+        r = self.client.get(f"/angebote/{angebot.id}")
+        self.assertIn("Umsatzsteuer 0 % (§ 12 Abs. 3 UStG)", r.text)
+        self.assertIn("kein KfW-Förderblock", r.text)
+
+    def test_ampel_orange_bleibt_individuell(self):
+        e = self.neue_erfassung(pv_basis(PD03="Vollgerüst"))
+        self.client.post(f"/erfassung/{e.id}/absenden", follow_redirects=False)
+        self.s.refresh(e)
+        self.assertEqual((e.ampel, e.status), ("orange", "Individuell – zu prüfen"))
+
+    def test_altfall_erneut_pruefen(self):
+        alt = {k: v for k, v in pv_basis().items()
+               if k not in ("PB01", "PO06", "PO07", "PO08", "PD12", "PD13", "PA15")}
+        alt["PO04"] = 9000
+        e = self.neue_erfassung(alt, status="In TAIFUN zu schreiben")
+        r = self.client.post(f"/erfassungen/{e.id}/erneut-pruefen", follow_redirects=False)
+        self.s.refresh(e)
+        self.assertEqual(e.status, "In TAIFUN zu schreiben")        # unberührt
+        self.assertIn("unvollst", r.headers["location"])
+        # PO04 bleibt im Protokoll des Altfalls sichtbar
+        self.assertIn("PO04", {x["frage_id"] for x in engine.protokoll(self.logik, alt)})
+        e.antworten_json = json.dumps(dict(alt, PB01="Maximalbelegung", PO06=4000, PO07=0,
+                                           PO08="Nein", PD12=20, PD13=0, PA15="Nein"))
+        self.s.commit()
+        self.client.post(f"/erfassungen/{e.id}/erneut-pruefen", follow_redirects=False)
+        self.s.refresh(e)
+        self.assertEqual((e.ampel, e.status), ("gruen", "Neu"))
+
+    def test_vollmacht_bei_pa12(self):
+        angebot = angebot_aufbau.angebot_anlegen(
+            self.s, self.kunde.id, antworten=pv_basis(PA12="Ja"), logik=self.logik,
+            sparte="PV")
+        from app import anhaenge
+        self.assertTrue(anhaenge.vollmacht_erforderlich(angebot))
