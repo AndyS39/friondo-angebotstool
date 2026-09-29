@@ -771,6 +771,9 @@ STECKBRIEF_FELDER = {
            ("oeltank", "Öltankentsorgung"),
            ("oeltank_groesse", "Öltank: Größe"),
            ("oeltank_material", "Öltank: Material/Zugang"),
+           ("restoel_liter", "Öltank: Restöl (Liter)"),          # V4 Phase 91.3
+           ("stemmarbeiten", "Stemmarbeiten"),                    # V4 Phase 91.3
+           ("erdleitung_m", "Erdleitung / Erdarbeiten (m)"),      # V4 Phase 91.3
            ("alte_anlage", "Alte Anlage"),
            ("alte_anlage_standort", "Standort alte Anlage"),
            ("dyn_tarif", "Dynamischer Tarif"),
@@ -792,6 +795,34 @@ STECKBRIEF_FELDER = {
 
 def steckbrief_felder(sparte: str) -> list[tuple[str, str]]:
     return STECKBRIEF_FELDER.get(sparte, STECKBRIEF_FELDER["KL"])
+
+
+def _positions_mengen(session: Session, gewerk: Gewerk) -> dict[str, float]:
+    """V4 (Phase 91.3): Menge je Positionsnummer des Auftrags (voll
+    berechnete Positionen; EP/bauseits/alternativ zählen nicht)."""
+    angebot = session.get(Angebot, gewerk.angebot_id) if gewerk.angebot_id else None
+    mengen: dict[str, float] = {}
+    if angebot is None:
+        return mengen
+    for p in angebot.positionen:
+        if not p.pos_nr or p.ep_flag or p.bauseits or p.alternativ:
+            continue
+        mengen[p.pos_nr] = mengen.get(p.pos_nr, 0.0) + float(p.menge or 0)
+    return mengen
+
+
+def _menge_text(zahl: float) -> str:
+    return (str(int(zahl)) if zahl == int(zahl) else f"{zahl:g}".replace(".", ","))
+
+
+def _quelle_mengen(quelle: str, mengen: dict[str, float]) -> float:
+    """Summe der Mengen aller Positionen der Quelle („126“, „139/140“)."""
+    summe = 0.0
+    for teil in (quelle or "").split("/"):
+        teil = teil.strip()
+        if teil:
+            summe += mengen.get(teil, 0.0) or mengen.get(teil.zfill(3), 0.0)
+    return summe
 
 
 def _steckbrief_quellen(session: Session, gewerk: Gewerk) -> tuple[dict, set, str]:
@@ -837,6 +868,8 @@ def _positions_treffer(quelle: str, positionen: set[str]) -> bool:
 def _regel_anwenden(regel_text: str, roh_wert) -> str | None:
     """Mapping "Antwort→Text | Antwort2→Text2 | *→Text"; leer = Antwort 1:1.
     None = Regel passt nicht (keine Zuordnung gefunden)."""
+    if isinstance(roh_wert, float):
+        roh_wert = _menge_text(roh_wert)     # V4: 8.0 -> "8"
     wert = "" if roh_wert is None else str(roh_wert).strip()
     regel_text = (regel_text or "").strip()
     if not regel_text:
@@ -846,13 +879,13 @@ def _regel_anwenden(regel_text: str, roh_wert) -> str | None:
         teil = teil.strip()
         if "→" not in teil:
             # fester Text ohne Mapping (Positionsregeln)
-            return teil
+            return teil.replace("{wert}", wert)
         links, _, rechts = teil.partition("→")
         links, rechts = links.strip(), rechts.strip()
         if links == "*":
-            stern = rechts
+            stern = rechts.replace("{wert}", wert) if wert else None
         elif links.lower() == wert.lower():
-            return rechts
+            return rechts.replace("{wert}", wert)
     return stern
 
 
@@ -865,6 +898,7 @@ def steckbrief_ableiten(session: Session, gewerk: Gewerk, benutzer=None,
     from app.models import SteckbriefWert
     logik = projektierung_logik.hole_logik(session)
     antworten, positionen, profil_name = _steckbrief_quellen(session, gewerk)
+    mengen = _positions_mengen(session, gewerk)
     fp_antworten = fp_antworten or {}
     vorhanden = {w.feld: w for w in
                  session.query(SteckbriefWert)
@@ -890,6 +924,14 @@ def steckbrief_ableiten(session: Session, gewerk: Gewerk, benutzer=None,
         elif regel.quelle_typ == "position":
             if _positions_treffer(regel.quelle, positionen):
                 wert = _regel_anwenden(regel.regel, "")
+                # V4 (Phase 91.3): {menge} = Summe der Positionsmengen
+                if wert and "{menge}" in wert:
+                    menge = _quelle_mengen(regel.quelle, mengen)
+                    if menge <= 0:
+                        continue
+                    wert = wert.replace("{menge}", _menge_text(menge))
+        elif regel.quelle_typ == "fest":
+            wert = regel.regel
         elif regel.quelle_typ == "profil":
             wert = _regel_anwenden(regel.regel, profil_name)
         if wert is None or wert == "":
@@ -958,11 +1000,49 @@ def sub_mail_platzhalter(session: Session, gewerk: Gewerk,
         "aussengeraet_details": steck("aufstellort", "kran") or "–",
         "oeltank": steck("oeltank", "oeltank_groesse", "oeltank_material") or "–",
         "zaehlerschrank": steck("zaehlerschrank") or "–",
+        # V4 (Phase 91.3): Restöl, Stemmarbeiten, Erdarbeiten
+        "restoel": _restoel_text(steck("restoel_liter")),
+        "stemmarbeiten": ("Stemmarbeiten sind laut Angebot enthalten (Pos. 126) – "
+                          "bitte mit anbieten"
+                          if steck("stemmarbeiten").lower().startswith("ja")
+                          else "Stemmarbeiten nicht Teil des Auftrags"),
+        "erdarbeiten": _erdarbeiten_text(steck("erdleitung_m")),
         "montagetermin": montagetermin,
         "ansprechpartner_friondo": projektleiter.name if projektleiter else "Friondo-Team",
         "bemerkung": (bemerkung or "").strip(),
     }
     return daten
+
+
+def _zahl_aus(text: str) -> float | None:
+    import re
+    m = re.search(r"\d+(?:[.,]\d+)*", text or "")
+    if not m:
+        return None
+    roh = m.group(0)
+    if "," in roh:
+        roh = roh.replace(".", "").replace(",", ".")
+    elif re.fullmatch(r"\d{1,3}(\.\d{3})+", roh):
+        roh = roh.replace(".", "")      # Tausenderpunkte (3.000)
+    try:
+        return float(roh)
+    except ValueError:
+        return None
+
+
+def _restoel_text(wert: str) -> str:
+    zahl = _zahl_aus(wert)
+    if zahl is None or zahl <= 0:
+        return "kein Restöl angegeben"
+    return f"Restöl ca. {_menge_text(zahl)} l"
+
+
+def _erdarbeiten_text(wert: str) -> str:
+    zahl = _zahl_aus(wert)
+    if zahl is None or zahl <= 0:
+        return "keine Erdarbeiten laut Auftrag"
+    return (f"Erdarbeiten: Leitungsgraben ca. {_menge_text(zahl)} m für die "
+            "Erdleitung Außengerät ↔ Haus")
 
 
 def sub_mail_text(vorlage_text: str, platzhalter: dict[str, str]) -> str:
@@ -1040,8 +1120,10 @@ def fp_offene_pflicht(session: Session, gewerk: Gewerk) -> list[str]:
     from app import projektierung_logik
     logik = projektierung_logik.hole_logik(session)
     antworten = fp_antworten(gewerk)
+    # V4 (Phase 91.3): ausgeblendete Fragen (sichtbar_wenn) sind nie Pflicht
     return [f.frage for f in logik.fp_fragen
-            if f.pflicht and not str(antworten.get(f.key) or "").strip()]
+            if f.pflicht and f.sichtbar(antworten)
+            and not str(antworten.get(f.key) or "").strip()]
 
 
 def fp_abschliessen(session: Session, gewerk: Gewerk,

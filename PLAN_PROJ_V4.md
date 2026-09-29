@@ -141,44 +141,44 @@ Phase 91 beschrieben (Startinhalt ergänzen, bestehende Zeilen nicht löschen).
 
 ### 91.1 Paketinhalte verschieben
 
-- [ ] **„Auftragsunterlagen prüfen (Angebot, Protokoll, Fotos)"** wandert aus
+- [x] **„Auftragsunterlagen prüfen (Angebot, Protokoll, Fotos)"** wandert aus
   `auftragseingang` nach **`planung_wp` als Schritt 1** (vor „Stückliste
   geprüft und Material bestellt"); für PV/KL/WB (die kein Paket Planung WP
   haben) bleibt der Punkt im Auftragseingang (Blatt: zweite Zeile mit
   `sparte = PV|KL|WB`, `sichtbar_wenn` entsprechend).
-- [ ] **„Montageteam zuweisen"** wandert aus `planung_wp` in **`auftragseingang`**
+- [x] **„Montageteam zuweisen"** wandert aus `planung_wp` in **`auftragseingang`**
   (Schritt 2, `aktion_typ = kalender`, Team-Typ montage, mit Terminwahl) –
   damit entsteht der Montagetermin schon im Auftragseingang und die Karte
   rutscht in die Spalte „terminiert" (90.1). Pflicht = J; der Wächter
   Auftragseingang → Feinplanung VOT verlangt ihn damit (Override mit
   Begründung bleibt möglich – Annahme, siehe unten). „Elektro-Montageteam
   zuweisen" bleibt in Planung Elektro.
-- [ ] Ergebnis Auftragseingang (ALLE): 1 Kunde kontaktieren, Ablauf erklären,
+- [x] Ergebnis Auftragseingang (ALLE): 1 Kunde kontaktieren, Ablauf erklären,
   Feinplanungstermin abstimmen · 2 Montageteam zuweisen (Team + Termin) ·
   3 Auftrag in TAIFUN anlegen · 4 BzA erstellen und an Kunden senden (Phase
   92) · [nur PV/KL/WB: 5 Auftragsunterlagen prüfen].
   Planung WP: 1 Auftragsunterlagen prüfen · 2 Stückliste geprüft und Material
   bestellt · 3 GaLa-Beauftragung (Fundament + Erdarbeiten) · 4 WP-Montage Sub
   beauftragen · 5 Öltank-Entsorgung · 6 Folierung geplant.
-- [ ] Migration (`migration_pakete_v4`): offene Gewerke – Aufgabe
+- [x] Migration (`migration_pakete_v4`): offene Gewerke – Aufgabe
   „Auftragsunterlagen prüfen" an die Planung-WP-Instanz umhängen (Status
   bleibt), „Montageteam zuweisen" an die Auftragseingang-Instanz; Reihenfolgen
   nachziehen; Verlaufseintrag. Erledigte Gewerke unverändert.
 
 ### 91.2 Fit for Future mit Ja/Nein für iMSys und SpotDynamic
 
-- [ ] Paket `fit_for_future` (WP): alle drei Kernpunkte als **Auswahl** mit
+- [x] Paket `fit_for_future` (WP): alle drei Kernpunkte als **Auswahl** mit
   Link: 1 Friondo HEMS geplant („Ja* | Nein*") · 2 Friondo iMSys geplant
   („Ja* | Nein*", Link SpotmyEnergy-Portal, bei Ja: Feld „Zählerwechsel-
   termin" am Gewerk wie bisher) · 3 Friondo SpotDynamic („Ja* | Nein*", Link
   SpotmyEnergy-Portal) · 4 HEMS-Inbetriebnahme terminiert (kalender,
   `sichtbar_wenn = fit_for_future.1 = Ja`).
-- [ ] **Vorbelegung** der Auswahl aus dem Steckbrief (`hems`, `imsys`,
+- [x] **Vorbelegung** der Auswahl aus dem Steckbrief (`hems`, `imsys`,
   `dyn_tarif`): steht dort ja/nein, ist die Option vorausgewählt, aber die
   Aufgabe erst erledigt, wenn der Projektierer sie bestätigt (Klick auf
   „Übernehmen"); Änderung schreibt zurück in den Steckbrief (Kennzeichen
   manuell).
-- [ ] Feinplanungs-Erfassung: neue Fragen im Blatt „Fragen FP-WP", Seite
+- [x] Feinplanungs-Erfassung: neue Fragen im Blatt „Fragen FP-WP", Seite
   Elektro: **FP-E05 „Friondo iMSys gewünscht"** (ja_nein, Pflicht,
   `vorbelegung_aus = P02`) und **FP-E06 „Friondo HEMS gewünscht"** (ja_nein,
   Pflicht, `vorbelegung_aus = P01`); Steckbrief-Blatt: `imsys ← FP-E05`,
@@ -187,29 +187,29 @@ Phase 91 beschrieben (Startinhalt ergänzen, bestehende Zeilen nicht löschen).
 
 ### 91.3 Restöl, Stemmarbeiten, Erdarbeiten in den Sub-Mails
 
-- [ ] Feinplanungs-Erfassung, Seite „Öltank & Hydraulik": neue Frage
+- [x] Feinplanungs-Erfassung, Seite „Öltank & Hydraulik": neue Frage
   **FP-O04 „Restöl im Tank (Liter, geschätzt)"** (zahl, Pflicht wenn FP-O01 =
   Ja, sonst ausgeblendet – Spalte `sichtbar_wenn` im Blatt ergänzen, falls
   nicht vorhanden). Steckbrief-Feld **`restoel_liter`** (fp_frage FP-O04);
   Anzeige im Steckbrief-Block „Öltankentsorgung: ja · 3.000 l · Stahl, Keller ·
   Restöl ca. 400 l".
-- [ ] Neue Steckbrief-Felder aus dem Auftrag (quelle_typ position):
+- [x] Neue Steckbrief-Felder aus dem Auftrag (quelle_typ position):
   **`stemmarbeiten`** ← Pos. 126 (Menge > 0 → „ja (Pos. 126, Menge n)"), sonst
   „nein"; **`erdleitung_m`** ← Summe der Mengen der Pos. 139 und 140 (Meter
   Erdleitung); Fallback bei fehlender Position: Erfassungsantworten D07/D08
   (quelle_typ frage). Für TAIFUN-Aufträge: beide Felder im Auftragsdaten-
   Formular (Phase 84) eingebbar (`eingabe = zahl` bzw. `ja_nein`).
-- [ ] **Sub-Mail-Platzhalter** ergänzen: `{restoel}` („Restöl ca. 400 l" / „kein
+- [x] **Sub-Mail-Platzhalter** ergänzen: `{restoel}` („Restöl ca. 400 l" / „kein
   Restöl angegeben"), `{stemmarbeiten}` („Stemmarbeiten sind laut Angebot
   enthalten (Pos. 126) – bitte mit anbieten" / „Stemmarbeiten nicht Teil des
   Auftrags"), `{erdarbeiten}` („Erdarbeiten: Leitungsgraben ca. 12 m für die
   Erdleitung Außengerät ↔ Haus" / „keine Erdarbeiten laut Auftrag").
-- [ ] Vorlagen im Blatt „Sub-Mailvorlagen" ergänzen (bestehenden Text behalten,
+- [x] Vorlagen im Blatt „Sub-Mailvorlagen" ergänzen (bestehenden Text behalten,
   Absätze anfügen): **GaLa-Bau**: Absatz „Erdarbeiten" mit `{erdarbeiten}`
   (plus Hinweis auf Fundamentmaße aus `{aussengeraet_details}`);
   **Entsorgung**: Absätze `{restoel}` und `{stemmarbeiten}` sowie Tankgröße/
   Material/Zugang aus `{oeltank}`. Steckbrief-PDF zeigt die drei neuen Felder.
-- [ ] Test: Gewerk mit Öltank + Pos. 126 + 139/140 → Mail-Vorschau Entsorgung
+- [x] Test: Gewerk mit Öltank + Pos. 126 + 139/140 → Mail-Vorschau Entsorgung
   und GaLa enthalten Restöl, Stemmarbeiten, Meter; Gewerk ohne → die
   „nicht"-Varianten.
 

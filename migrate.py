@@ -594,6 +594,11 @@ def _daten() -> list[str]:
             meldungen += _v4_abnahme_freigabe_split(session)
             einstellung_setzen(session, "migration_abnahme_freigabe_split", "erledigt")
             session.commit()
+        # ---------- V4 (Phase 91): Paketinhalte verschieben, Fit for Future ----------
+        if einstellung_holen(session, "migration_pakete_v4", "") != "erledigt":
+            meldungen += _v4_pakete_umbauen(session)
+            einstellung_setzen(session, "migration_pakete_v4", "erledigt")
+            session.commit()
         # V4 (Phase 90.3): Vorlauf-Schwellen vorbelegen (idempotent)
         for name, wert in (("vorlauf_gruen_ab_wochen", "8"),
                            ("vorlauf_gelb_ab_wochen", "4")):
@@ -706,6 +711,105 @@ def _v4_abnahme_freigabe_split(session) -> list[str]:
         projektierung.projektstatus_berechnen(session, projekt)
     return [f"Projektierung V4: {instanzen_neu} Pakete „Abnahme & Freigabe“ in "
             f"Abnahme/Freigabe getrennt, {phasen_neu} Gewerke umgezogen"]
+
+
+def _v4_pakete_umbauen(session) -> list[str]:
+    """Phase 91.1/91.2 für OFFENE Gewerke (erledigte bleiben unverändert):
+    „Auftragsunterlagen prüfen“ → Planung WP Schritt 1 (ohne Planung WP bleibt
+    er als Schritt 5 im Auftragseingang); „Montageteam zuweisen“ → Auftrags-
+    eingang Schritt 2 (Status bleibt; Gewerke ohne Planung WP in Phase
+    Auftragseingang bekommen den Schritt neu); Reihenfolgen nachziehen;
+    GaLa-Titel; Fit for Future als Ja/Nein-Auswahl mit Steckbrief-Bezug."""
+    from datetime import datetime
+
+    from app import projektierung, projektierung_logik
+    from app.models import Aufgabe, AufgabenpaketInstanz, Gewerk, ProjektTermin
+    logik = projektierung_logik.hole_logik(session, erzwingen=True)
+    fff_vorlage = {s.titel: s for s in
+                   getattr(logik.pakete.get("fit_for_future"), "schritte", [])}
+    team_vorlage = next((s for s in getattr(logik.pakete.get("auftragseingang"),
+                                            "schritte", [])
+                         if s.titel == "Montageteam zuweisen"), None)
+
+    def instanz(gewerk, key):
+        return (session.query(AufgabenpaketInstanz)
+                .filter(AufgabenpaketInstanz.gewerk_id == gewerk.id,
+                        AufgabenpaketInstanz.paket_key == key,
+                        AufgabenpaketInstanz.version != "v1",
+                        AufgabenpaketInstanz.deaktiviert_am.is_(None)).first())
+
+    def aufgaben(inst):
+        return (session.query(Aufgabe).filter(Aufgabe.paket_instanz_id == inst.id).all()
+                if inst is not None else [])
+
+    geaendert = 0
+    for gewerk in (session.query(Gewerk)
+                   .filter(~Gewerk.phase.in_(["abgeschlossen", "storniert"])).all()):
+        ae, pw, ff = (instanz(gewerk, "auftragseingang"), instanz(gewerk, "planung_wp"),
+                      instanz(gewerk, "fit_for_future"))
+        aenderung = False
+        ae_aufgaben, pw_aufgaben = aufgaben(ae), aufgaben(pw)
+        unterlagen = next((a for a in ae_aufgaben
+                           if a.titel.startswith("Auftragsunterlagen prüfen")), None)
+        team = next((a for a in pw_aufgaben if a.titel == "Montageteam zuweisen"), None)
+        if unterlagen is not None and pw is not None:
+            unterlagen.paket_instanz_id = pw.id
+            unterlagen.reihenfolge = 1
+            aenderung = True
+        elif unterlagen is not None:
+            unterlagen.reihenfolge = 5
+            aenderung = True
+        if team is not None and ae is not None:
+            team.paket_instanz_id = ae.id
+            team.reihenfolge = 2
+            aenderung = True
+        elif (team is None and ae is not None and pw is None
+              and gewerk.phase == "auftragseingang" and team_vorlage is not None
+              and not any(a.titel == "Montageteam zuweisen" for a in ae_aufgaben)):
+            hat_termin = session.query(ProjektTermin).filter(
+                ProjektTermin.gewerk_id == gewerk.id,
+                ProjektTermin.typ == "montage").count() > 0
+            session.add(Aufgabe(
+                gewerk_id=gewerk.id, projekt_id=gewerk.projekt_id,
+                paket_instanz_id=ae.id, titel=team_vorlage.titel,
+                beschreibung=team_vorlage.beschreibung, rolle=team_vorlage.rolle,
+                pflicht=team_vorlage.pflicht, reihenfolge=2,
+                aktion_typ="kalender", aktion_wert="montage",
+                status="erledigt" if hat_termin else "offen",
+                erledigt_am=datetime.now() if hat_termin else None))
+            aenderung = True
+        for a in ae_aufgaben:
+            if a.titel.startswith("Kunde kontaktieren"):
+                a.reihenfolge = 1
+            elif a.titel == "Auftrag in TAIFUN anlegen":
+                a.reihenfolge = 3
+            elif a.titel.startswith("BzA erstellen"):
+                a.reihenfolge = 4
+        for a in pw_aufgaben:
+            if a.titel == "GaLa-Beauftragung (Fundament)":
+                a.titel = "GaLa-Beauftragung (Fundament + Erdarbeiten)"
+                aenderung = True
+        for a in aufgaben(ff):
+            vorlage = fff_vorlage.get(a.titel)
+            if vorlage is None:
+                continue
+            neu = (vorlage.aktion_typ, vorlage.aktion_wert or "", vorlage.optionen or "",
+                   projektierung._laufzeit_bedingung(vorlage.sichtbar_wenn))
+            if (a.aktion_typ, a.aktion_wert, a.optionen, a.sichtbar_wenn or "") != neu:
+                a.aktion_typ, a.aktion_wert, a.optionen, a.sichtbar_wenn = neu
+                if vorlage.beschreibung:
+                    a.beschreibung = vorlage.beschreibung
+                aenderung = True
+        if aenderung:
+            session.flush()
+            projektierung.abhaengige_pruefen(session, gewerk)
+            projektierung.verlauf(session, gewerk.projekt_id,
+                                  "Aufgabenpakete aktualisiert (V4): Auftragsunterlagen/"
+                                  "Montageteam verschoben, Fit for Future als Ja/Nein "
+                                  f"(Gewerk {gewerk.sparte})", gewerk_id=gewerk.id)
+            geaendert += 1
+    session.flush()
+    return [f"Projektierung V4: Aufgabenpakete an {geaendert} offenen Gewerken angepasst"]
 
 
 def main() -> int:

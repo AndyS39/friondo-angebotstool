@@ -21,7 +21,9 @@
       class="pj-fp">
     <input type="hidden" name="seite" value="{{ seite }}">
     {% for f in fragen %}
-    <div class="pj-fp-frage">
+    {# V4 (Phase 91.3): sichtbar_wenn „KEY=Wert“ – live auf derselben Seite #}
+    <div class="pj-fp-frage" {% if f.sichtbar_wenn %}data-sichtbar="{{ f.sichtbar_wenn }}"
+         {{ 'hidden' if not f.sichtbar(antworten) }}{% endif %}>
         <label for="fp-{{ f.key }}">{{ f.frage }}{{ ' *' if f.pflicht }}
             {% if f.key in vorbelegt %}<span class="pj-fp-vertrieb"
                 title="Vorbelegt aus der Vertriebs-Erfassung – bitte bestätigen oder ändern">vom Vertrieb</span>{% endif %}
@@ -60,6 +62,27 @@
         <button class="pj-btn primary" type="submit" name="aktion" value="abschliessen">Abschließen ✓</button>
         {% endif %}
     </div>
+    <script>
+    (function () {
+        function wertVon(key) {
+            const radio = document.querySelector('input[name="' + key + '"]:checked');
+            if (radio) { return radio.value; }
+            const feld = document.querySelector('[name="' + key + '"]');
+            return feld ? feld.value : null;
+        }
+        function pruefen() {
+            document.querySelectorAll('[data-sichtbar]').forEach(function (el) {
+                const teile = el.dataset.sichtbar.split('=');
+                const ist = wertVon(teile[0].trim());
+                if (ist === null) { return; }   // Bezug auf anderer Seite – Server entschied
+                el.hidden = ist.trim().toLowerCase() !== (teile[1] || '').trim().toLowerCase();
+            });
+        }
+        document.querySelectorAll('.pj-fp input').forEach(function (i) {
+            i.addEventListener('change', pruefen);
+        });
+    })();
+    </script>
     {% if seite + 1 == seiten | length and offene_pflicht %}
     <p class="dezent" style="font-size:12px">Noch offen (Pflicht):
         {{ offene_pflicht | join(' · ') }}</p>

@@ -274,3 +274,138 @@ class Phase90Board(Basis):
         g = self.s.get(Gewerk, g.id)
         self.assertEqual(g.phase, "abnahme")
         self.assertEqual(g.montage_fertig_am.strftime("%H:%M"), "15:45")
+
+
+# --- Phase 91 ---------------------------------------------------------------
+
+class Phase91Pakete(Basis):
+    def test_paketinhalte(self):
+        wp = self.gewerk_neu()
+        titel_ae = [a.titel for a in self.aufgaben(wp, "auftragseingang")]
+        self.assertEqual(titel_ae[:2], ["Kunde kontaktieren, Ablauf erklären, "
+                                        "Feinplanungstermin abstimmen",
+                                        "Montageteam zuweisen"])
+        self.assertFalse(any(t.startswith("Auftragsunterlagen") for t in titel_ae))
+        pw = self.aufgaben(wp, "planung_wp")
+        self.assertTrue(pw[0].titel.startswith("Auftragsunterlagen prüfen"))
+        self.assertNotIn("Montageteam zuweisen", [a.titel for a in pw])
+        self.assertIn("GaLa-Beauftragung (Fundament + Erdarbeiten)", [a.titel for a in pw])
+        pv = self.gewerk_neu(positionen=[("PV001", 10)], sparte="PV")
+        titel_pv = [a.titel for a in self.aufgaben(pv, "auftragseingang")]
+        self.assertTrue(titel_pv[-1].startswith("Auftragsunterlagen prüfen"))
+        self.assertIn("Montageteam zuweisen", titel_pv)
+        # Wächter AE → Feinplanung VOT verlangt jetzt die Team-Zuweisung
+        offen = kern.waechter_pruefen(self.s, wp, "feinplanung_vot")
+        self.assertTrue(any("Auftragseingang" in o for o in offen))
+
+    def test_fit_for_future_steckbrief(self):
+        g = self.gewerk_neu(erfassung={"P01": "Ja", "P02": "Nein", "P03": "Ja"})
+        steck = kern.steckbrief_daten(self.s, [g.id])[g.id]
+        self.assertEqual(steck["hems"].wert, "ja")
+        fff = self.aufgaben(g, "fit_for_future")
+        hems, imsys, spot, ibn = fff[:4]
+        self.assertEqual((hems.aktion_typ, hems.optionen), ("auswahl", "Ja* | Nein*"))
+        self.assertEqual(ibn.sichtbar_wenn, "fit_for_future.1=Ja")
+        # Akte: Vorbelegung aus dem Steckbrief + „Übernehmen“, noch nicht erledigt
+        r = self.client.get(f"/projektierung/projekt/{g.projekt_id}")
+        self.assertIn("aus Steckbrief", r.text)
+        self.assertEqual(hems.status, "offen")
+        # Übernehmen „Nein“ → Steckbrief manuell „nein“, HEMS-IBN entfällt
+        r = self.client.post(f"/projektierung/aufgabe/{hems.id}/auswahl",
+                             data={"auswahl": "Nein"},
+                             headers={"Accept": "application/json"})
+        self.assertEqual(r.status_code, 200)
+        self.s.expire_all()
+        steck = kern.steckbrief_daten(self.s, [g.id])[g.id]
+        self.assertEqual((steck["hems"].wert, steck["hems"].manuell), ("nein", True))
+        self.assertEqual(self.s.get(Aufgabe, hems.id).status, "erledigt")
+        self.assertEqual(self.s.get(Aufgabe, ibn.id).status, "entfaellt")
+        ids = [w["aufgabe_id"] for w in r.json()["weitere"]]
+        self.assertIn(ibn.id, ids)                             # Zeile live ersetzt
+        self.client.post(f"/projektierung/aufgabe/{hems.id}/auswahl",
+                         data={"auswahl": "Ja"}, headers={"Accept": "application/json"})
+        self.s.expire_all()
+        self.assertEqual(self.s.get(Aufgabe, ibn.id).status, "offen")
+        # iMSys/SpotDynamic mit Portal-Link-Bezug
+        self.assertIn("param:url_spotmyenergy", imsys.aktion_wert)
+        self.assertIn("steckbrief:dyn_tarif", spot.aktion_wert)
+
+    def test_feinplanung_neue_fragen(self):
+        g = self.gewerk_neu(erfassung={"P01": "Nein", "P02": "Ja", "A07": "Nein"})
+        kern.fp_vorbelegen(self.s, g)
+        antworten = kern.fp_antworten(g)
+        self.assertEqual((antworten.get("FP-E05"), antworten.get("FP-E06")), ("Ja", "Nein"))
+        offen = kern.fp_offene_pflicht(self.s, g)
+        self.assertNotIn("Restöl im Tank (Liter, geschätzt)", offen)   # FP-O01 ≠ Ja
+        antworten["FP-O01"] = "Ja"
+        g.fp_antworten_json = json.dumps(antworten)
+        self.assertIn("Restöl im Tank (Liter, geschätzt)", kern.fp_offene_pflicht(self.s, g))
+        antworten["FP-O04"] = "400"
+        g.fp_antworten_json = json.dumps(antworten)
+        kern.steckbrief_ableiten(self.s, g, fp_antworten=antworten)
+        steck = kern.steckbrief_daten(self.s, [g.id])[g.id]
+        self.assertEqual(steck["imsys"].wert, "ja")
+        self.assertEqual(steck["hems"].wert, "nein")
+        self.assertEqual(steck["restoel_liter"].wert, "400")
+        self.s.commit()
+
+    def test_sub_mails_restoel_stemm_erd(self):
+        from app import projektierung_logik as pl
+        logik = pl.hole_logik(self.s)
+        g = self.gewerk_neu(positionen=[("047", 1), ("126", 1), ("102", 5)],
+                            erfassung={"A07": "Ja", "A08": "Stahl", "A09": "bis 3.000 L"})
+        kern.steckbrief_ableiten(self.s, g, fp_antworten={"FP-O01": "Ja",
+                                                          "FP-O04": "400"})
+        steck = kern.steckbrief_daten(self.s, [g.id])[g.id]
+        self.assertEqual(steck["stemmarbeiten"].wert, "ja (Pos. 126, Menge 1)")
+        self.assertEqual(steck["erdleitung_m"].wert, "5 m (Pos. 102 Erdleitung)")
+        daten = kern.sub_mail_platzhalter(self.s, g)
+        self.assertEqual(daten["restoel"], "Restöl ca. 400 l")
+        self.assertIn("Stemmarbeiten sind laut Angebot enthalten", daten["stemmarbeiten"])
+        self.assertIn("Leitungsgraben ca. 5 m", daten["erdarbeiten"])
+        entsorgung = kern.sub_mail_text(logik.sub_vorlagen["Entsorgung"].text, daten)
+        gala = kern.sub_mail_text(logik.sub_vorlagen["GaLa-Bau"].text, daten)
+        self.assertIn("Restöl ca. 400 l", entsorgung)
+        self.assertIn("Pos. 126", entsorgung)
+        self.assertIn("Leitungsgraben ca. 5 m", gala)
+        # ohne Positionen → „nicht“-Varianten
+        leer = self.gewerk_neu()
+        daten = kern.sub_mail_platzhalter(self.s, leer)
+        self.assertEqual(daten["restoel"], "kein Restöl angegeben")
+        self.assertEqual(daten["stemmarbeiten"], "Stemmarbeiten nicht Teil des Auftrags")
+        self.assertEqual(daten["erdarbeiten"], "keine Erdarbeiten laut Auftrag")
+        self.assertEqual(kern.steckbrief_daten(self.s, [leer.id])[leer.id]["stemmarbeiten"].wert,
+                         "nein")
+        # Steckbrief-PDF zeigt die neuen Felder
+        import io
+
+        import pypdf
+
+        from app.steckbrief_pdf import steckbrief_pdf_bytes
+        text = "\n".join(s.extract_text() for s in pypdf.PdfReader(
+            io.BytesIO(steckbrief_pdf_bytes(self.s, g))).pages)
+        self.assertIn("Restöl", text)
+        self.assertIn("Stemmarbeiten", text)
+
+    def test_migration_pakete(self):
+        import migrate
+        g = self.gewerk_neu()
+        ae = [a for a in self.aufgaben(g, "auftragseingang")]
+        pw = [a for a in self.aufgaben(g, "planung_wp")]
+        ae_inst, pw_inst = ae[0].paket_instanz_id, pw[0].paket_instanz_id
+        # Altstand herstellen: Unterlagen im AE, Team in Planung WP, FfF als Link
+        unterlagen = pw[0]
+        unterlagen.paket_instanz_id, unterlagen.reihenfolge = ae_inst, 1
+        team = [a for a in ae if a.titel == "Montageteam zuweisen"][0]
+        team.paket_instanz_id, team.reihenfolge, team.status = pw_inst, 1, "erledigt"
+        for a in self.aufgaben(g, "fit_for_future")[1:3]:
+            a.aktion_typ, a.aktion_wert, a.optionen = "link", "param:url_spotmyenergy", ""
+        self.s.commit()
+        migrate._v4_pakete_umbauen(self.s)
+        self.s.commit()
+        self.assertEqual(self.s.get(Aufgabe, unterlagen.id).paket_instanz_id, pw_inst)
+        self.assertEqual(self.s.get(Aufgabe, unterlagen.id).reihenfolge, 1)
+        self.assertEqual(self.s.get(Aufgabe, team.id).paket_instanz_id, ae_inst)
+        self.assertEqual(self.s.get(Aufgabe, team.id).status, "erledigt")   # Status bleibt
+        self.assertTrue(all(a.aktion_typ == "auswahl"
+                            for a in self.aufgaben(g, "fit_for_future")[:3]))

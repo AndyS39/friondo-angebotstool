@@ -21,7 +21,7 @@ ROLLEN = ("projektierer", "elektroplaner", "feinplaner", "innendienst",
 
 
 AKTION_TYPEN = ("keine", "auswahl", "link", "mail", "formular",
-                "kalender", "galerie", "api")
+                "kalender", "galerie", "api", "bza")   # V4 Phase 92: bza
 FRIST_BEZUEGE = ("aktivierung", "feinplanung", "montage")
 
 
@@ -89,9 +89,20 @@ class FpFrage:
     optionen: str
     pflicht: bool
     vorbelegung_aus: str
+    # V4 (Phase 91.3): Spalte H „sichtbar_wenn“, z. B. „FP-O01=Ja“
+    sichtbar_wenn: str = ""
 
     def optionen_liste(self) -> list[str]:
         return [o.strip() for o in (self.optionen or "").split("|") if o.strip()]
+
+    def sichtbar(self, antworten: dict) -> bool:
+        """Leer = immer; „KEY=Wert“ = nur wenn die FP-Antwort passt."""
+        bedingung = (self.sichtbar_wenn or "").strip()
+        if not bedingung or "=" not in bedingung:
+            return True
+        key, _, soll = bedingung.partition("=")
+        return (str(antworten.get(key.strip()) or "").strip().lower()
+                == soll.strip().lower())
 
 
 @dataclass
@@ -314,7 +325,8 @@ def einlesen(pfad: Path | None = None) -> ProjektierungsLogik:
             feld, sparte, quelle_typ, quelle, regel = werte
             if not feld or not quelle_typ:
                 continue
-            if quelle_typ not in ("frage", "position", "fp_frage", "profil"):
+            # V4 (Phase 91.3): „fest“ = Standardwert, wenn keine Regel davor griff
+            if quelle_typ not in ("frage", "position", "fp_frage", "profil", "fest"):
                 logik.warnungen.append(
                     f"Steckbrief: unbekannter quelle_typ „{quelle_typ}“ ({feld})")
                 continue
@@ -331,8 +343,8 @@ def einlesen(pfad: Path | None = None) -> ProjektierungsLogik:
     # --- Fragen FP-WP (v15, Phase 80) ---
     if "Fragen FP-WP" in wb.sheetnames:
         for zeile in wb["Fragen FP-WP"].iter_rows(min_row=2, values_only=True):
-            werte = [_text(z) for z in (tuple(zeile) + ("",) * 7)[:7]]
-            seite, key, frage, typ, optionen, pflicht, vorbelegung = werte
+            werte = [_text(z) for z in (tuple(zeile) + ("",) * 8)[:8]]
+            seite, key, frage, typ, optionen, pflicht, vorbelegung, sichtbar = werte
             if not key or not frage:
                 continue
             typ = (typ or "text").lower()
@@ -346,7 +358,7 @@ def einlesen(pfad: Path | None = None) -> ProjektierungsLogik:
                 seite=seite or "Allgemein", key=key, frage=frage, typ=typ,
                 optionen=optionen,
                 pflicht=pflicht.upper() in ("J", "JA", "X", "1"),
-                vorbelegung_aus=vorbelegung))
+                vorbelegung_aus=vorbelegung, sichtbar_wenn=sichtbar))
 
     # --- Stücklisten (v15, Phase 80: UGL-Bestellung) ---
     if "Stücklisten" in wb.sheetnames:

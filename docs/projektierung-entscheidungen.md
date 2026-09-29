@@ -575,3 +575,46 @@ Pilot-Sendesperre).
 - **Aufgabe „<Team> zuweisen“** (kalender/montage) wird durch „Team +
   Termin“ automatisch erledigt (Titel = „Montageteam zuweisen“ bzw.
   „Elektro-Montageteam zuweisen“).
+
+### Phase 91 – Aufgabenpakete, Feinplanung, Sub-Mails, Fit for Future
+
+- **Sparten-Bedingung für Schritte:** `sichtbar_wenn = sparte:PV|KL|WB` (neu
+  neben `steckbrief:`). Damit steht „Auftragsunterlagen prüfen“ für WP als
+  Schritt 1 in Planung WP und für PV/KL/WB als Schritt 5 im Auftragseingang
+  (zwei Blatt-Zeilen; keine bestehende Zeile gelöscht, nur verschoben).
+- **„Montageteam zuweisen“** ist Pflicht (Annahme 2 des Plans) und wird
+  durch „Team + Termin“ automatisch erledigt. Migration: WP-Gewerke hängen
+  die bestehende Aufgabe mit Status um; Gewerke ohne Planung WP bekommen
+  den Schritt nur, wenn sie noch im Auftragseingang stehen (bei weiter
+  fortgeschrittenen Gewerken hätte ein neuer offener Pflichtschritt die
+  kumulativen Wächter späterer Wechsel blockiert); existiert schon ein
+  Montagetermin, wird er gleich erledigt angelegt.
+- **Fit for Future:** Steckbrief-Bezug steht im `aktion_wert`
+  (`steckbrief:hems`, `param:url_spotmyenergy;steckbrief:imsys` …). Die Akte
+  wählt den Steckbrief-Wert vor, erledigt ist die Aufgabe erst nach
+  „Übernehmen“; jede Auswahl schreibt ja/nein zurück (Kennzeichen manuell).
+- **Laufzeit-Bedingung** `fit_for_future.1=Ja` (HEMS-Inbetriebnahme): der
+  Schritt wird immer angelegt (neue Spalte `aufgaben.sichtbar_wenn`) und
+  steht auf „entfällt“, solange HEMS = Nein ist; bei Ja zurück auf „offen“.
+  Im Board/Wächter zählen entfallene Aufgaben nicht.
+- **FP-Fragen:** FP-E05 iMSys / FP-E06 HEMS (vorbelegt aus P02/P01),
+  FP-O04 Restöl mit neuer Spalte H `sichtbar_wenn` im Blatt „Fragen FP-WP“
+  (`FP-O01=Ja`; ausgeblendete Fragen sind nie Pflicht, live ein-/ausgeblendet).
+- **Steckbrief-Zeilen:** neue `quelle_typ` **fest** (Standardwert, wenn
+  keine Regel davor griff) und Platzhalter **{menge}** (Summe der voll
+  berechneten Positionsmengen) bzw. **{wert}** (Antwort) in Regeln.
+- **WIDERSPRUCH Plan ↔ Code, entschieden im Sinne des Konzepts:** Der Plan
+  nennt für `erdleitung_m` die Pos. 139/140 und als Fallback D07/D08 – laut
+  Artikelstamm und CLAUDE.md sind das die **Dachzentralen-Rohrleitungen**
+  (Heizung bzw. Warmwasser). Die Erdleitung Außengerät ↔ Haus ist
+  **Pos. 102** (Menge = A05 − 3 m). Umgesetzt: `erdleitung_m ← Pos. 102`
+  („{menge} m“), Fallback Erfassung **A05** (volle Grabenlänge). Annahme 8
+  des Plans sieht genau diese Anpassung vor; die Zeile ist in der Excel
+  änderbar.
+- **Stemmarbeiten:** Pos. 126 („ja (Pos. 126, Menge n)“), Fallback A16,
+  sonst „nein“. **TAIFUN-Aufträge:** das Auftragsdaten-Formular (Phase 84)
+  existiert nicht – beide Felder sind wie alle Steckbrief-Felder in der
+  Akte per Klick editierbar.
+- **Sub-Mailvorlagen:** GaLa-Bau ergänzt um den Absatz „Erdarbeiten“ +
+  Fundament-Hinweis, Entsorgung um {restoel} und {stemmarbeiten}
+  (bestehender Text blieb, Absätze eingefügt).
