@@ -45,4 +45,31 @@
     </tbody>
 </table>
 </div>
+
+{# v21 (PLAN_LEAD_V1.1 Phase 87): je Kampagne (= Landingpage/Aktion) #}
+<h2>Je Kampagne (letzte 12 Monate)</h2>
+<table class="tabelle" style="max-width:1100px">
+    <thead><tr><th>Kampagne</th><th>Quelle</th><th class="rechts">Leads</th>
+        <th class="rechts">Termine</th><th class="rechts">Aufträge</th>
+        <th class="rechts">Budget</th><th class="rechts">Kosten/Lead</th>
+        <th class="rechts">Kosten/Termin</th><th class="rechts">Kosten/Auftrag</th></tr></thead>
+    <tbody>
+    {% for e in kampagnen_zeilen %}
+        {% set b = e.kampagne.budget_cent %}
+        <tr>
+            <td>{{ e.kampagne.name }}{% if e.kampagne.auto_angelegt %} <span class="lm-neu">neu</span>{% endif %}</td>
+            <td>{{ e.quelle.name if e.quelle else '–' }}</td>
+            <td class="rechts">{{ e.leads }}</td>
+            <td class="rechts">{{ e.termine }}</td>
+            <td class="rechts">{{ e.auftraege }}</td>
+            <td class="rechts">{{ b | euro if b else '–' }}</td>
+            <td class="rechts">{{ (b / e.leads) | round | int | euro if b and e.leads else '–' }}</td>
+            <td class="rechts">{{ (b / e.termine) | round | int | euro if b and e.termine else '–' }}</td>
+            <td class="rechts">{{ (b / e.auftraege) | round | int | euro if b and e.auftraege else '–' }}</td>
+        </tr>
+    {% else %}
+        <tr><td colspan="9" class="dezent">Keine Leads mit Kampagne in den letzten 12 Monaten.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
 {% endblock %}

@@ -170,20 +170,18 @@ def mail_verarbeiten(session: Session, graph_id: str, absender: str,
     if regel is not None and (daten.get("nachname") or daten.get("telefon")
                               or daten.get("email")):
         regel.zuletzt_getroffen_am = datetime.now()
-        quelle = None
-        if daten.get("quelle_key"):
-            quelle = (session.query(LeadQuelle)
-                      .filter(LeadQuelle.key == daten["quelle_key"]).first())
-        if quelle is None and regel.quelle_id:
-            quelle = session.get(LeadQuelle, regel.quelle_id)
-        kampagne_id = None
-        if daten.get("kampagne_name"):
-            kampagne = (session.query(Kampagne)
-                        .filter(Kampagne.name == daten["kampagne_name"]).first())
-            kampagne_id = kampagne.id if kampagne else None
+        # v21 (Phase 87): ein Auflösungsweg für Quelle/Kampagne inkl.
+        # Auto-Anlage, utm-Abgleich und Fallback „unbekannt“ (vorher ging
+        # die gefundene Kampagne nicht an den Vorgang)
+        quelle, kampagne_id = kern.quelle_kampagne_aufloesen(
+            session, daten.get("quelle_key", ""), daten.get("kampagne_name", ""),
+            daten.get("utm_campaign", ""),
+            standard_quelle=session.get(LeadQuelle, regel.quelle_id)
+            if regel.quelle_id else None)
         daten.setdefault("nachricht", "")
         daten["nachricht"] = (daten.get("nachricht") or body or "")[:4000]
-        vorgang, _ = kern.lead_anlegen(session, daten, quelle, "mail")
+        vorgang, _ = kern.lead_anlegen(session, daten, quelle, "mail",
+                                       kampagne_id=kampagne_id)
         session.add(LeadPosteingang(graph_id=graph_id, absender=absender,
                                     betreff=betreff, body=(body or "")[:8000],
                                     empfangen_am=empfangen_am,

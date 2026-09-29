@@ -1417,6 +1417,9 @@ class LeadQuelle(Base):
     parser_regel_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     api_key: Mapped[str] = mapped_column(String(64), default="")   # REST-Endpunkt
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
+    # v21 (PLAN_LEAD_V1.1 Phase 87): aus einem Eingang automatisch angelegt –
+    # Badge „neu · automatisch angelegt“, bis ein Admin die Zeile speichert
+    auto_angelegt: Mapped[bool] = mapped_column(Boolean, default=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
@@ -1434,6 +1437,7 @@ class Kampagne(Base):
     budget_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     utm_campaign: Mapped[str] = mapped_column(String(200), default="")
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
+    auto_angelegt: Mapped[bool] = mapped_column(Boolean, default=False)   # v21
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,

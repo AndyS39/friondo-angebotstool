@@ -13,16 +13,26 @@
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
+<p class="dezent">Quelle = Herkunft (Kosten je Lead, Typ-Farbe, API-Key) ·
+    Kampagne = Landingpage/Aktion (Budget) · Kanal = Vertriebskanal (steuert das
+    Angebotsprofil; wird beim Eingang an den Kunden gesetzt, falls dort leer).
+    Unbekannte Quellen/Kampagnen aus dem Eingang legen sich selbst an
+    (<span class="lm-neu">neu · automatisch angelegt</span> bis zum ersten Speichern).
+    Formular-Standard für die Agentur: docs/formular-standard-agentur.md.</p>
+
 <h2>Quellen</h2>
 <div style="overflow-x:auto">
 <table class="tabelle">
     <thead><tr><th>Key</th><th>Name</th><th>Typ</th><th>Kanal</th>
+        <th class="rechts" title="Eingänge der letzten 7 Tage">7 T.</th>
+        <th class="rechts" title="Eingänge der letzten 30 Tage">30 T.</th><th>zuletzt</th>
         <th>Kosten je Lead (€)</th><th>Standard-Sparten</th><th>Score-Bonus</th>
         <th>API-Key</th><th>Aktiv</th><th></th></tr></thead>
     <tbody>
     {% for q in quellen %}
         <tr class="{{ 'inaktiv' if not q.aktiv }}">
-            <td><code>{{ q.key }}</code></td>
+            <td><span class="lm-punkt q-{{ gruppe(q) }}"></span><code>{{ q.key }}</code>
+                {% if q.auto_angelegt %}<span class="lm-neu">neu · automatisch angelegt</span>{% endif %}</td>
             <td><input form="q{{ q.id }}" type="text" name="name" value="{{ q.name }}" size="18"></td>
             <td>
                 <select form="q{{ q.id }}" name="typ">
@@ -31,7 +41,19 @@
                     {% endfor %}
                 </select>
             </td>
-            <td><input form="q{{ q.id }}" type="text" name="kanal" value="{{ q.kanal or '' }}" size="10"></td>
+            <td>{% if q.typ == 'monday' %}<span class="dezent">Kanal am Kunden</span>
+                {% else %}
+                <select form="q{{ q.id }}" name="kanal">
+                    {% for w in kanal_werte %}
+                    <option value="{{ w }}" {{ 'selected' if (q.kanal or 'Standard') == w }}>{{ w }}</option>
+                    {% endfor %}
+                    {% if q.kanal and q.kanal not in kanal_werte %}<option value="{{ q.kanal }}" selected>{{ q.kanal }}</option>{% endif %}
+                </select>
+                <span class="dezent" style="white-space:nowrap">→ Profil {{ profil_zum_kanal(q.kanal or '') }}</span>
+                {% endif %}</td>
+            <td class="rechts">{{ q7.get(q.id, 0) }}</td>
+            <td class="rechts">{{ q30.get(q.id, 0) }}</td>
+            <td class="dezent" style="white-space:nowrap">{{ zuletzt[q.id].strftime('%d.%m. %H:%M') if q.id in zuletzt else '–' }}</td>
             <td><input form="q{{ q.id }}" type="text" name="kosten" size="6"
                        value="{{ ('%.2f' | format(q.kosten_je_lead_cent / 100)) | replace('.', ',') if q.kosten_je_lead_cent is not none }}"></td>
             <td>
@@ -70,7 +92,8 @@
             {% endfor %}
         </select>
     </label>
-    <label>Kanal <input type="text" name="kanal" size="10"></label>
+    <label>Kanal
+        <select name="kanal">{% for w in kanal_werte %}<option value="{{ w }}">{{ w }}</option>{% endfor %}</select></label>
     <button class="knopf" type="submit">Anlegen</button>
 </form>
 <p class="dezent">Der API-Key gehört zum REST-Endpunkt <code>POST /api/leads</code>
@@ -80,11 +103,15 @@
 <h2>Kampagnen</h2>
 <table class="tabelle" style="max-width:1000px">
     <thead><tr><th>Name</th><th>Quelle</th><th>Von</th><th>Bis</th>
-        <th>Budget (€)</th><th>utm_campaign</th><th>Aktiv</th><th></th></tr></thead>
+        <th>Budget (€)</th><th>utm_campaign</th>
+        <th class="rechts" title="Eingänge der letzten 30 Tage">30 T.</th>
+        <th class="rechts" title="Budget ÷ Eingänge im Kampagnenzeitraum">Kosten/Lead</th>
+        <th>Aktiv</th><th></th></tr></thead>
     <tbody>
     {% for k in kampagnen %}
         <tr class="{{ 'inaktiv' if not k.aktiv }}">
-            <td><input form="k{{ k.id }}" type="text" name="name" value="{{ k.name }}" size="16"></td>
+            <td><input form="k{{ k.id }}" type="text" name="name" value="{{ k.name }}" size="16">
+                {% if k.auto_angelegt %}<span class="lm-neu">neu · automatisch angelegt</span>{% endif %}</td>
             <td>
                 <select form="k{{ k.id }}" name="quelle_id">
                     <option value="">–</option>
@@ -100,6 +127,8 @@
             <td><input form="k{{ k.id }}" type="text" name="budget" size="8"
                        value="{{ ('%.2f' | format(k.budget_cent / 100)) | replace('.', ',') if k.budget_cent is not none }}"></td>
             <td><input form="k{{ k.id }}" type="text" name="utm_campaign" value="{{ k.utm_campaign }}" size="14"></td>
+            <td class="rechts">{{ k30.get(k.id, 0) }}</td>
+            <td class="rechts">{{ (kpl[k.id] | euro) if kpl.get(k.id) else '–' }}</td>
             <td><input form="k{{ k.id }}" type="checkbox" name="aktiv" {{ 'checked' if k.aktiv }}></td>
             <td>
                 <form id="k{{ k.id }}" method="post" action="/parametrierung/lead-quellen">
@@ -110,7 +139,7 @@
             </td>
         </tr>
     {% else %}
-        <tr><td colspan="8" class="dezent">Noch keine Kampagnen.</td></tr>
+        <tr><td colspan="10" class="dezent">Noch keine Kampagnen.</td></tr>
     {% endfor %}
     </tbody>
 </table>

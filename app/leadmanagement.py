@@ -355,7 +355,111 @@ STARTQUELLEN = [
     ("telefon", "Telefon", "telefon", None),
     ("empfehlung", "Empfehlung", "empfehlung", None),
     ("bestand", "Bestand", "bestand", None),
+    # v21 (Phase 87): Fallback – kein Lead bleibt ohne Quelle
+    ("unbekannt", "Unbekannt (ohne Quellen-Key)", "website", None),
 ]
+
+# v21 (Phase 88): Quellen-Typ-Gruppen – feste Reihenfolge überall (Übersicht,
+# Tabelle, Balken, Filter); Farbe über Token --q-<gruppe>
+QUELLEN_GRUPPEN = [("website", "Website / Förderrechner"),
+                   ("landingpage", "Landingpages"),
+                   ("portal", "Lead-Portale"),
+                   ("partner", "Partner"),
+                   ("telefon", "Telefon / Empfehlung / Bestand"),
+                   ("monday", "monday (Bestand)")]
+
+
+def quelle_gruppe(quelle) -> str:
+    """Typ einer Quelle → eine der sechs Gruppen (telefon fasst
+    telefon/empfehlung/bestand zusammen)."""
+    typ = (getattr(quelle, "typ", "") or "website") if quelle is not None else "website"
+    if typ in ("telefon", "empfehlung", "bestand"):
+        return "telefon"
+    return typ if typ in dict(QUELLEN_GRUPPEN) else "website"
+
+
+# --- v21 (Phase 87): Quelle · Kampagne · Kanal -------------------------------------
+
+def kanal_werte(session: Session) -> list[str]:
+    """Dropdown-Werte für den Kanal an der Quelle: „Standard“ + die Kanalwerte
+    der Angebotsprofile (v9-Zuordnung, erster Wert je Profil)."""
+    from app.models import Profil
+    werte = ["Standard"]
+    for profil in session.query(Profil).order_by(Profil.id):
+        erster = next((w.strip() for w in (profil.kanalwerte or "").split(",")
+                       if w.strip()), "")
+        if erster and erster not in werte:
+            werte.append(erster)
+    return werte
+
+
+def profil_zum_kanal(session: Session, kanal: str) -> str:
+    from app import angebotsprofile
+    profil = angebotsprofile.profil_fuer_kanal(session, kanal or "")
+    return profil.name if profil is not None else "Standard"
+
+
+def _admins(session: Session) -> list[int]:
+    return [b.id for b in session.query(Benutzer).filter(Benutzer.aktiv.is_(True))
+            if b.rolle == "admin"]
+
+
+def unbekannt_quelle(session: Session) -> LeadQuelle:
+    quelle = session.query(LeadQuelle).filter(LeadQuelle.key == "unbekannt").first()
+    if quelle is None:
+        quelle = LeadQuelle(key="unbekannt", name="Unbekannt (ohne Quellen-Key)",
+                            typ="website", aktiv=True)
+        session.add(quelle)
+        session.flush()
+    return quelle
+
+
+def quelle_kampagne_aufloesen(session: Session, quelle_key: str = "",
+                              kampagne_name: str = "", utm_campaign: str = "",
+                              standard_quelle: LeadQuelle | None = None
+                              ) -> tuple[LeadQuelle, int | None]:
+    """Ein Weg für Parser, API und Import (Phase 87): Quelle über den Key
+    (unbekannt → Auto-Anlage Typ landingpage), sonst die Standard-Quelle der
+    Regel/des API-Keys, sonst „unbekannt“. Kampagne über den Namen, sonst
+    utm_campaign gegen kampagnen.utm_campaign bzw. .name; ohne Treffer
+    Auto-Anlage. Jede Auto-Anlage: Glocke an alle Admins."""
+    import re as _re
+    quelle = None
+    key = _re.sub(r"[^a-z0-9_-]", "_", (quelle_key or "").strip().lower())[:100]
+    if key:
+        quelle = session.query(LeadQuelle).filter(LeadQuelle.key == key).first()
+        if quelle is None:
+            quelle = LeadQuelle(key=key, name=key, typ="landingpage", aktiv=True,
+                                auto_angelegt=True)
+            session.add(quelle)
+            session.flush()
+            benachrichtigen(session, _admins(session),
+                            f"Neue Quelle aus Eingang: {key} – bitte Typ/Kanal/Kosten prüfen",
+                            "/parametrierung/lead-quellen")
+    if quelle is None:
+        quelle = standard_quelle
+    if quelle is None:
+        quelle = unbekannt_quelle(session)
+    kampagne = None
+    name = (kampagne_name or "").strip()[:200]
+    utm = (utm_campaign or "").strip()[:200]
+    if name:
+        kampagne = session.query(Kampagne).filter(Kampagne.name == name).first()
+    if kampagne is None and utm and not name:
+        kampagne = (session.query(Kampagne).filter(Kampagne.utm_campaign == utm).first()
+                    or session.query(Kampagne).filter(Kampagne.name == utm).first())
+    if kampagne is None and (name or utm):
+        kampagne = Kampagne(name=name or utm, quelle_id=quelle.id,
+                            utm_campaign=utm if not name else "",
+                            von=datetime.now().replace(hour=0, minute=0, second=0,
+                                                       microsecond=0),
+                            aktiv=True, auto_angelegt=True)
+        session.add(kampagne)
+        session.flush()
+        benachrichtigen(session, _admins(session),
+                        f"Neue Kampagne aus Eingang: {kampagne.name} ({quelle.name})",
+                        "/parametrierung/lead-quellen")
+    return quelle, (kampagne.id if kampagne is not None else None)
 
 
 def quellen_vorbelegen(session: Session) -> int:
@@ -479,6 +583,11 @@ def lead_anlegen(session: Session, daten: dict, quelle: LeadQuelle | None,
         for feld in ("telefon", "email", "strasse", "ort"):
             if not getattr(kunde, feld) and daten.get(feld):
                 setattr(kunde, feld, str(daten[feld]).strip())
+        # v21 (Phase 87): Kanal der Quelle, wenn am Kunden leer; ein im Tool
+        # gesetzter Kanal (kanal_manuell) schlägt die Quelle
+        if (quelle is not None and quelle.kanal and not kunde.kanal_manuell
+                and not (kunde.vertriebskanal or "").strip()):
+            kunde.vertriebskanal = quelle.kanal
     _sparten_mischen(kunde, sparten)
 
     if vorgang is None:
@@ -542,6 +651,52 @@ def lead_anlegen(session: Session, daten: dict, quelle: LeadQuelle | None,
     lead_phase_berechnen(session, vorgang)
     session.flush()
     return vorgang, status
+
+
+# --- v21 (Phase 88): EINE Zählweise für Eingänge -----------------------------------
+
+def _eingang_vorgaenge(session: Session, von: datetime, bis: datetime,
+                       mit_demo: bool | None = None) -> list[Vorgang]:
+    abfrage = (session.query(Vorgang)
+               .filter(Vorgang.eingang_am.isnot(None), Vorgang.eingang_am >= von,
+                       Vorgang.eingang_am < bis))
+    if mit_demo is None:
+        mit_demo = demo_aktiv(session)
+    if not mit_demo:
+        abfrage = ohne_demo(abfrage)
+    return abfrage.all()
+
+
+def eingaenge_zaehlen(session: Session, von: datetime, bis: datetime,
+                      gruppierung: str = "gesamt",
+                      mit_demo: bool | None = None) -> dict:
+    """Eingänge (Vorgang.eingang_am in [von, bis)) für Übersicht, Statistik,
+    Kanal-Report, Quellen-Seite und Portal-Kacheln – keine zweite Zählweise.
+    gruppierung: gesamt | quelle | kampagne | typ | tag | tag_typ | woche_typ.
+    Demo-Leads zählen im Demo-Modus mit (mit_demo=None), sonst nicht."""
+    quellen = {q.id: q for q in session.query(LeadQuelle)}
+    ergebnis: dict = {}
+    for v in _eingang_vorgaenge(session, von, bis, mit_demo):
+        typ = quelle_gruppe(quellen.get(v.quelle_id))
+        if gruppierung == "gesamt":
+            schluessel = "gesamt"
+        elif gruppierung == "quelle":
+            schluessel = v.quelle_id or 0
+        elif gruppierung == "kampagne":
+            schluessel = v.kampagne_id or 0
+        elif gruppierung == "typ":
+            schluessel = typ
+        elif gruppierung == "tag":
+            schluessel = v.eingang_am.date()
+        elif gruppierung == "tag_typ":
+            schluessel = (v.eingang_am.date(), typ)
+        elif gruppierung == "woche_typ":
+            jahr, woche, _ = v.eingang_am.isocalendar()
+            schluessel = (f"{jahr}-KW{woche:02d}", typ)
+        else:
+            raise ValueError(f"unbekannte Gruppierung {gruppierung}")
+        ergebnis[schluessel] = ergebnis.get(schluessel, 0) + 1
+    return ergebnis
 
 
 def score_vorlaeufig(session: Session, vorgang: Vorgang) -> None:
@@ -2181,6 +2336,23 @@ def kanal_report(session: Session, monate: int = 12,
         if v.id in angenommen_je_vorgang:
             eintrag["auftraege"] += 1
             eintrag["wert"] += angenommen_je_vorgang[v.id]
+    # v21 (Phase 87): zusätzlich je Kampagne (Budget, Kosten je Lead/Termin/Auftrag)
+    kampagnen_map = {k.id: k for k in session.query(Kampagne)}
+    kampagnen: dict[int, dict] = {}
+    for v in vorgaenge:
+        if not v.kampagne_id or v.eingang_am.strftime("%Y-%m") not in monats_liste:
+            continue
+        k = kampagnen_map.get(v.kampagne_id)
+        if k is None:
+            continue
+        e = kampagnen.setdefault(k.id, {"kampagne": k, "quelle": quellen.get(k.quelle_id),
+                                        "leads": 0, "termine": 0, "auftraege": 0})
+        e["leads"] += 1
+        if v.terminiert_am is not None:
+            e["termine"] += 1
+        if v.id in angenommen_je_vorgang:
+            e["auftraege"] += 1
+    kampagnen_zeilen = sorted(kampagnen.values(), key=lambda e: -e["leads"])
     ohne_kosten = set()
     for (name, _), eintrag in zeilen.items():
         quelle = eintrag["quelle"]
@@ -2189,7 +2361,7 @@ def kanal_report(session: Session, monate: int = 12,
         else:
             ohne_kosten.add(name)
     return {"zeilen": zeilen, "monate": monats_liste,
-            "ohne_kosten": sorted(ohne_kosten)}
+            "ohne_kosten": sorted(ohne_kosten), "kampagnen_zeilen": kampagnen_zeilen}
 
 
 # --- Phase 81: AD-Sicht, Einstellungs-Protokoll, Demo-Umstellung --------------------

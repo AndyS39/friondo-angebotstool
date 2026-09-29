@@ -1243,12 +1243,40 @@ def _lead_gate(request: Request, session: Session):
 @router.get("/lead-quellen")
 async def lead_quellen_seite(request: Request,
                              session: Session = Depends(get_session)):
-    from app.models import Kampagne, LeadQuelle
+    from datetime import datetime as dt, timedelta
+
+    from app import leadmanagement as lead_kern
+    from app.models import Kampagne, LeadQuelle, Vorgang
     _lead_gate(request, session)
+    # v21 (Phase 87): Eingänge 7/30 Tage, zuletzt, Kosten je Lead (Kampagne)
+    jetzt = dt.now()
+    morgen = (jetzt + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    q7 = lead_kern.eingaenge_zaehlen(session, morgen - timedelta(days=7), morgen, "quelle")
+    q30 = lead_kern.eingaenge_zaehlen(session, morgen - timedelta(days=30), morgen, "quelle")
+    k30 = lead_kern.eingaenge_zaehlen(session, morgen - timedelta(days=30), morgen, "kampagne")
+    zuletzt: dict[int, dt] = {}
+    for v in session.query(Vorgang).filter(Vorgang.eingang_am.isnot(None)):
+        if v.quelle_id and (v.quelle_id not in zuletzt or v.eingang_am > zuletzt[v.quelle_id]):
+            zuletzt[v.quelle_id] = v.eingang_am
+    kampagnen = session.query(Kampagne).all()
+    kpl: dict[int, int | None] = {}
+    for k in kampagnen:
+        if not k.budget_cent:
+            kpl[k.id] = None
+            continue
+        von = k.von or dt(2000, 1, 1)
+        bis = (k.bis + timedelta(days=1)) if k.bis else morgen
+        anzahl = lead_kern.eingaenge_zaehlen(session, von, bis, "kampagne").get(k.id, 0)
+        kpl[k.id] = round(k.budget_cent / anzahl) if anzahl else None
+    kampagnen.sort(key=lambda k: (not k.aktiv, -k30.get(k.id, 0), k.name.lower()))
+    quellen = session.query(LeadQuelle).all()
+    quellen.sort(key=lambda q: (not q.aktiv, -q30.get(q.id, 0), q.name.lower()))
     return render(request, "konfiguration/lead_quellen.html",
-                  aktiv="/parametrierung",
-                  quellen=session.query(LeadQuelle).order_by(LeadQuelle.name).all(),
-                  kampagnen=session.query(Kampagne).order_by(Kampagne.name).all(),
+                  aktiv="/parametrierung", quellen=quellen, kampagnen=kampagnen,
+                  q7=q7, q30=q30, k30=k30, zuletzt=zuletzt, kpl=kpl,
+                  gruppe=lead_kern.quelle_gruppe,
+                  kanal_werte=lead_kern.kanal_werte(session),
+                  profil_zum_kanal=lambda kanal: lead_kern.profil_zum_kanal(session, kanal),
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -1290,6 +1318,7 @@ async def lead_quelle_speichern(request: Request,
                     if feld == "name" and not wert:
                         continue
                     setattr(kampagne, feld, wert)
+                kampagne.auto_angelegt = False   # v21: einmal gespeichert = geprüft
         elif werte["name"]:
             session.add(Kampagne(erstellt_von=request.state.benutzer.id,
                                  **dict(werte, aktiv=True)))
@@ -1307,7 +1336,9 @@ async def lead_quelle_speichern(request: Request,
         typ=(form.get("typ") if form.get("typ") in
              ("website", "landingpage", "portal", "partner", "telefon",
               "empfehlung", "bestand", "monday") else "website"),
-        kanal=(form.get("kanal") or "").strip()[:100] or None,
+        # v21 (Phase 87): Kanal als Dropdown; „Standard“ = kein eigener Kanal
+        kanal=(None if (form.get("kanal") or "").strip() in ("", "Standard")
+               else (form.get("kanal") or "").strip()[:100]),
         kosten_je_lead_cent=(int(float((form.get("kosten") or "0").replace(",", ".")) * 100)
                              if (form.get("kosten") or "").strip() else None),
         standard_sparten=json_modul.dumps(sparten),
@@ -1323,6 +1354,7 @@ async def lead_quelle_speichern(request: Request,
                 setattr(quelle, feld, wert)
             if form.get("api_key_neu") == "on":
                 quelle.api_key = secrets.token_hex(24)
+            quelle.auto_angelegt = False     # v21: einmal gespeichert = geprüft
     elif werte["name"] and schluessel:
         if session.query(LeadQuelle).filter(LeadQuelle.key == schluessel).count():
             return RedirectResponse("/parametrierung/lead-quellen?meldung="

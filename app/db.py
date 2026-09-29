@@ -207,6 +207,9 @@ _NACHTRAEGLICHE_SPALTEN = {
         "liefer_plz": "VARCHAR(10) NOT NULL DEFAULT ''",
         "liefer_ort": "VARCHAR(100) NOT NULL DEFAULT ''",
     },
+    # v21 (PLAN_LEAD_V1.1 Phase 87): Auto-Anlage aus dem Eingang
+    "lead_quellen": {"auto_angelegt": "BOOLEAN NOT NULL DEFAULT 0"},
+    "kampagnen": {"auto_angelegt": "BOOLEAN NOT NULL DEFAULT 0"},
     # V3 (Phase 84): Herkunft der Steckbrief-Werte
     "steckbrief_werte": {
         "quelle": "VARCHAR(20) NOT NULL DEFAULT ''",

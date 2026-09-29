@@ -76,3 +76,26 @@
     {% if aktion_url %}<br><a class="knopf klein" href="{{ aktion_url }}">{{ aktion_text }}</a>{% endif %}
 </div>
 {%- endmacro %}
+
+{# v21 (PLAN_LEAD_V1.1 Phase 88/89): Quelle (Punkt in Typ-Farbe + Name),
+   Kanal (violett, nur wenn ≠ Standard), Versuchs-Punkte (grau 1–2 /
+   orange 3 / rot 4+; mehr als 5 = fünf rote + „n×“). #}
+{% macro quelle_badge(quelle, gruppe='website', text='') -%}
+{%- if quelle -%}<span class="lm-quelle q-{{ gruppe }}" title="Quelle ({{ gruppe }})">{{ text or quelle.name }}</span>{%- endif -%}
+{%- endmacro %}
+
+{% macro kanal_badge(kanal) -%}
+{%- if kanal and kanal | lower != 'standard' -%}<span class="lm-kanal" title="Vertriebskanal – steuert das Angebotsprofil">{{ kanal }}</span>{%- endif -%}
+{%- endmacro %}
+
+{% macro versuche_punkte(vorgang) -%}
+{%- set n = vorgang.versuch_nr or 0 -%}
+<div class="lm-versuche" title="{{ n }} Anrufversuch{{ 'e' if n != 1 }}">
+    <div class="lm-dots {{ 'rot' if n >= 4 else ('warn' if n == 3 else '') }}">
+        {%- for i in range(5) %}<i class="{{ 'v' if i < n }}"></i>{% endfor -%}
+    </div>
+    {%- if n == 0 %}<small class="neu">neu</small>
+    {%- else %}<small class="{{ 'lm-rot' if n >= 4 else ('lm-warn' if n == 3 else '') }}">{{ n }}×</small>{% endif %}
+</div>
+{%- endmacro %}
+

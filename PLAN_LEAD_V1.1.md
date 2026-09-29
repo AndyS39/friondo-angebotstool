@@ -59,7 +59,7 @@ den Key → **Kampagne** über den Namen (sonst Auto-Anlage) → der Vorgang tr�
 Vorgang gesetzt, falls dort noch keiner steht → das Angebotsprofil folgt dem
 Kanal wie bisher. Ein neuer Kanal-Wert am Kunden (manuell) bleibt geschützt.
 
-- [ ] **Auto-Anlage unbekannter Quellen und Kampagnen** (Parser und API):
+- [x] **Auto-Anlage unbekannter Quellen und Kampagnen** (Parser und API):
   Unbekannter Quellen-Key im Betreff/Feld `quelle` → Quelle wird angelegt
   (`typ = landingpage`, `aktiv = 1`, neue Spalte `auto_angelegt = 1`,
   `name = key`); unbekannter Kampagnen-Name → Kampagne angelegt (`quelle_id` =
@@ -69,28 +69,28 @@ Kanal wie bisher. Ein neuer Kanal-Wert am Kunden (manuell) bleibt geschützt.
   Quellen-/Kampagnenpflege und am Lead (Anrufliste, Kopfblock: „Kampagne neu"),
   bis Admin die Zeile einmal speichert (`auto_angelegt = 0`). Glocke an Admin
   bei jeder Auto-Anlage („Neue Quelle/Kampagne aus Eingang: …").
-- [ ] **utm-Abgleich**: liefert der Betreff keine Kampagne, wird `utm_campaign`
+- [x] **utm-Abgleich**: liefert der Betreff keine Kampagne, wird `utm_campaign`
   gegen `kampagnen.utm_campaign` (dann gegen `kampagnen.name`) geprüft; Treffer
   → `kampagne_id`. Ohne Treffer → Auto-Anlage mit Name = utm_campaign.
-- [ ] **Kanal an der Quelle als Dropdown** der bestehenden Kanalwerte (Werte aus
+- [x] **Kanal an der Quelle als Dropdown** der bestehenden Kanalwerte (Werte aus
   der v9-Profil-Zuordnung + „Standard") statt Freitext; daneben read-only das
   zugeordnete Angebotsprofil („→ Profil Enni"). Beim Lead-Eingang (alle
   Eingangswege inkl. Import) Kanal an Kunde und Vorgang setzen, wenn dort leer;
   Feldschutz wie beim monday-Kanal („im Tool geändert schlägt Quelle").
   monday-Quellen behalten „Kanal am Kunden" (kein Wert, Anzeige grau).
-- [ ] **Quellen-Seite erweitern**: je Quelle Typ-Farbpunkt (Token `--q-<typ>`,
+- [x] **Quellen-Seite erweitern**: je Quelle Typ-Farbpunkt (Token `--q-<typ>`,
   Phase 88), Spalten „Eingänge 7 Tage / 30 Tage", „zuletzt", Badge neu;
   Kampagnen-Tabelle: Spalten „Eingänge 30 Tage", „Kosten je Lead" (= Budget ÷
   Eingänge im Kampagnenzeitraum, leer ohne Budget). Sortierung: aktive zuerst,
   dann nach Eingängen 30 Tage.
-- [ ] **Kanal-Report**: zusätzliche Tabelle je Kampagne (Leads, Termine,
+- [x] **Kanal-Report**: zusätzliche Tabelle je Kampagne (Leads, Termine,
   Aufträge, Budget, Kosten je Lead/Termin/Auftrag) unter der Quellen-Tabelle.
-- [ ] **Doku für die Agentur** `docs/formular-standard-agentur.md`: Betreff-
+- [x] **Doku für die Agentur** `docs/formular-standard-agentur.md`: Betreff-
   Format, Feldliste (`Feld: Wert`), Pflichtfelder, Sparten-Schreibweisen,
   utm-Felder als versteckte Formularfelder, je Landingpage ein eigener
   Kampagnen-Slug (`lp-<thema>-<ort>`), Beispielmail, Hinweis auf Testadresse
   im Demo-Modus, Alternativ-Weg API (Verweis auf docs/leads-api.md).
-- [ ] Test: Parser-Test mit unbekanntem Key `lp-test-neu` → Quelle/Kampagne
+- [x] Test: Parser-Test mit unbekanntem Key `lp-test-neu` → Quelle/Kampagne
   entstehen mit Badge; zweiter Eingang hängt an derselben Kampagne; API-Aufruf
   mit `utm_campaign` ohne `kampagne` → Zuordnung; Quelle mit Kanal Enni → Lead
   trägt Kanal Enni, Angebotsprofil Enni greift (nur prüfen, im Demo kein

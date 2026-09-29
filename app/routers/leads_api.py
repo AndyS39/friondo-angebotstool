@@ -68,18 +68,12 @@ async def lead_anlegen(request: Request, session: Session = Depends(get_session)
         return JSONResponse({"fehler": "Pflichtfelder fehlen",
                              "felder": fehlend}, status_code=422)
 
-    # Quelle im Rumpf darf die Schlüssel-Quelle präzisieren (gleicher Betreiber)
-    if daten.get("quelle"):
-        genannt = (session.query(LeadQuelle)
-                   .filter(LeadQuelle.key == str(daten["quelle"]).strip().lower(),
-                           LeadQuelle.aktiv.is_(True)).first())
-        if genannt is not None:
-            quelle = genannt
-    kampagne_id = None
-    if daten.get("kampagne"):
-        kampagne = (session.query(Kampagne)
-                    .filter(Kampagne.name == str(daten["kampagne"]).strip()).first())
-        kampagne_id = kampagne.id if kampagne else None
+    # Quelle im Rumpf darf die Schlüssel-Quelle präzisieren (gleicher
+    # Betreiber); v21 (Phase 87): unbekannte Keys/Kampagnen legen sich an,
+    # utm_campaign ordnet die Kampagne zu
+    quelle, kampagne_id = kern.quelle_kampagne_aufloesen(
+        session, str(daten.get("quelle") or ""), str(daten.get("kampagne") or ""),
+        str(daten.get("utm_campaign") or ""), standard_quelle=quelle)
 
     eingabe = {
         "anrede": str(daten.get("anrede") or "").strip(),
