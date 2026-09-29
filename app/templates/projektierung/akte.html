@@ -90,6 +90,10 @@
     <section class="pj-gcol {{ g.sparte }} {{ 'storniert' if g.phase == 'storniert' }}">
         <h3><span class="pj-sp {{ g.sparte }}">{{ g.sparte }}</span>
             {{ SPARTEN_NAMEN.get(g.sparte, g.sparte) }}
+            {% if g.bestand_import_id %}
+                {# V3 (Phase 85) #}
+                <span class="pj-badge" title="Daten aus dem Bestandsimport – keine Erfassung vorhanden">Bestand</span>
+            {% endif %}
             {% if g.phase == 'storniert' %}
                 <span class="pj-badge crit">{{ g.storno_grund }}</span>
             {% elif angebot %}

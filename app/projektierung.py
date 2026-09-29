@@ -782,7 +782,8 @@ def gewerk_anlegen(session: Session, projekt: Projekt, angebot: Angebot,
                    sparte: str, benutzer=None,
                    feinplaner_id: int | None = None,
                    elektroplaner_id: int | None = None,
-                   quelle: str = "manuell") -> Gewerk:
+                   quelle: str = "manuell",
+                   benachrichtigen_an: bool = True) -> Gewerk:
     """Gewerk aus einem angenommenen Angebot: Phase Feinplanung, Auftragswert
     = Endbetrag brutto, IMMER-Pakete (Sparte + ALLE) aktivieren, Dokumente
     automatisch ablegen, Verlauf + Benachrichtigungen."""
@@ -838,8 +839,11 @@ def gewerk_anlegen(session: Session, projekt: Projekt, angebot: Angebot,
             f"Gewerk {sparte} angelegt aus Angebot "
             f"{angebot.taifun_nummer or angebot.nummer}"
             + (" (automatisch aus Altbestand angelegt)"
-               if quelle == "migration" else ""),
+               if quelle == "migration" else "")
+            + (" (Bestandsimport)" if quelle == "bestand" else ""),
             benutzer=benutzer, gewerk_id=gewerk.id)
+    if not benachrichtigen_an:
+        return gewerk      # V3 (Phase 85): Massenimport ohne Glocken-Flut
     benachrichtigen(
         session,
         [projekt.projektleiter_id, gewerk.feinplaner_id, gewerk.elektroplaner_id],

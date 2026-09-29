@@ -129,6 +129,10 @@
                 {% if gesamt_ueberfaellig %}
                     <span class="pj-badge crit">{{ gesamt_ueberfaellig }} überfällig</span>
                 {% endif %}
+                {# V3 (Phase 85): Gewerke aus dem Bestandsimport #}
+                {% if karte.zeilen | selectattr('gewerk.bestand_import_id') | list %}
+                    <span class="pj-badge" title="Daten aus dem Bestandsimport – keine Erfassung vorhanden">Bestand</span>
+                {% endif %}
                 {# V4 (Phase 90.3): Vorlauf-Punkt vor dem Termin-Badge #}
                 {% if bestimmend.gewerk.phase in vorlauf_phasen %}{{ pj_vorlauf(bestimmend.vorlauf) }}{% endif %}
                 {{ pj_terminstatus(bestimmend.terminstatus, teams_map) }}

@@ -565,6 +565,8 @@ class Gewerk(Base):
                                                                       nullable=True)
     # V3 (Phase 84): Auftragsdaten eines TAIFUN-Auftrags erfasst am
     auftragsdaten_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # V3 (Phase 85): angelegt/aktualisiert durch Bestandsimport (Badge „Bestand“)
+    bestand_import_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # V4 (PLAN_PROJ_V4 Phase 92): BzA + KfW (vorbereitet, kein Wächter)
     bza_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     bza_erstellt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -684,6 +686,24 @@ class ProjektTermin(Base):
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
                                                   onupdate=datetime.now)
+
+
+class Bestandsimport(Base):
+    """V3 (Phase 85): Protokoll je Bestandsimport (Datei, Zeilen angelegt/
+    aktualisiert/übersprungen, angelegte IDs für „Rückgängig“)."""
+    __tablename__ = "bestandsimporte"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dateiname: Mapped[str] = mapped_column(String(200), default="")
+    benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    angelegt: Mapped[int] = mapped_column(Integer, default=0)
+    aktualisiert: Mapped[int] = mapped_column(Integer, default=0)
+    uebersprungen: Mapped[int] = mapped_column(Integer, default=0)
+    protokoll_json: Mapped[str] = mapped_column(Text, default="[]")
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    abgeschlossen_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    rueckgaengig_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    rueckgaengig_hinweis: Mapped[str] = mapped_column(Text, default="")
 
 
 class UglBestellung(Base):
@@ -1031,6 +1051,9 @@ class Angebot(Base):
     # V3 (Phase 84) / Phase 96: KfW-gefördert? "ja" | "nein" | "" = unbekannt
     # (Tool-Angebote leiten es aus dem Förderblock ab, TAIFUN-Einträge fragen)
     kfw_gefoerdert: Mapped[str] = mapped_column(String(10), default="")
+    # V3 (Phase 85): Eintrag aus dem Bestandsimport – zählt nicht in der
+    # Statistik, keine monday-Rückspielung
+    bestand: Mapped[bool] = mapped_column(Boolean, default=False)
     extern_pdf_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # v11 (Projektierung, Phase 64): Verknüpfung zum Gewerk nach „Angebot → Projekt"
     projekt_gewerk_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)

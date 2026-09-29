@@ -892,6 +892,121 @@ def _stuecklisten_zurueck(meldung: str, anker: str = ""):
                             status_code=303)
 
 
+# --- V3 (PLAN_PROJ_V3 Phase 85): Bestandsimport laufender Projekte ------------------
+
+def _bestand_ordner():
+    from app import config
+    ordner = config.BACKUP_ORDNER / "bestandsimport"
+    ordner.mkdir(parents=True, exist_ok=True)
+    return ordner
+
+
+def _bestand_zurueck(meldung: str):
+    from urllib.parse import quote_plus
+    return RedirectResponse("/parametrierung/bestandsimport?meldung=" + quote_plus(meldung),
+                            status_code=303)
+
+
+@router.get("/bestandsimport")
+async def bestandsimport_seite(request: Request, session: Session = Depends(get_session)):
+    from app.models import Bestandsimport, Benutzer
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    importe = (session.query(Bestandsimport)
+               .order_by(Bestandsimport.id.desc()).limit(30).all())
+    return render(request, "konfiguration/bestandsimport.html", aktiv="/parametrierung",
+                  importe=importe, vorschau=None,
+                  benutzer_map={b.id: b for b in session.query(Benutzer)},
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.get("/bestandsimport/vorlage.xlsx")
+async def bestandsimport_vorlage(request: Request):
+    from fastapi.responses import Response
+
+    from app import bestandsimport
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    return Response(
+        content=bestandsimport.vorlage_bytes(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="bestandsimport_vorlage.xlsx"'})
+
+
+@router.post("/bestandsimport/vorschau")
+async def bestandsimport_vorschau(request: Request, session: Session = Depends(get_session)):
+    """Upload → Prüfung je Zeile; die Datei wird für den Import-Schritt
+    zwischengespeichert (data/backups/bestandsimport/<kennung>.xlsx)."""
+    from uuid import uuid4
+
+    from app import bestandsimport
+    from app.models import Benutzer
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    form = await request.form()
+    datei = form.get("datei")
+    if datei is None or not getattr(datei, "filename", ""):
+        return _bestand_zurueck("Bitte eine Excel-Datei (Vorlage) wählen.")
+    inhalt = await datei.read()
+    zeilen, fehler = bestandsimport.einlesen(inhalt)
+    if fehler:
+        return _bestand_zurueck(fehler)
+    if not zeilen:
+        return _bestand_zurueck("Keine Datenzeilen gefunden (Beispielzeile wird ignoriert).")
+    kennung = uuid4().hex
+    (_bestand_ordner() / f"{kennung}.xlsx").write_bytes(inhalt)
+    bestandsimport.pruefen(session, zeilen)
+    return render(request, "konfiguration/bestandsimport.html", aktiv="/parametrierung",
+                  importe=[], vorschau=zeilen, kennung=kennung,
+                  dateiname=datei.filename, spalten=bestandsimport.SPALTEN,
+                  benutzer_map={b.id: b for b in session.query(Benutzer)},
+                  meldung="")
+
+
+@router.post("/bestandsimport/ausfuehren")
+async def bestandsimport_ausfuehren(request: Request, session: Session = Depends(get_session)):
+    from app import bestandsimport
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    form = await request.form()
+    kennung = "".join(z for z in (form.get("kennung") or "") if z.isalnum())[:40]
+    pfad = _bestand_ordner() / f"{kennung}.xlsx"
+    if not kennung or not pfad.exists():
+        return _bestand_zurueck("Vorschau abgelaufen – bitte die Datei erneut hochladen.")
+    if form.get("abbrechen"):
+        pfad.unlink(missing_ok=True)
+        return _bestand_zurueck("Import abgebrochen – nichts geändert.")
+    zeilen, fehler = bestandsimport.einlesen(pfad.read_bytes())
+    if fehler:
+        return _bestand_zurueck(fehler)
+    bestandsimport.pruefen(session, zeilen)
+    imp = bestandsimport.importieren(session, zeilen,
+                                     (form.get("dateiname") or pfad.name)[:200],
+                                     benutzer=request.state.benutzer)
+    session.commit()
+    return _bestand_zurueck(
+        f"Import #{imp.id}: {imp.angelegt} angelegt, {imp.aktualisiert} aktualisiert, "
+        f"{imp.uebersprungen} übersprungen (Fehlerzeilen).")
+
+
+@router.post("/bestandsimport/{import_id}/rueckgaengig")
+async def bestandsimport_rueckgaengig(request: Request, import_id: int,
+                                      session: Session = Depends(get_session)):
+    from app import bestandsimport
+    from app.models import Bestandsimport
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    imp = session.get(Bestandsimport, import_id)
+    if imp is None or imp.rueckgaengig_am is not None:
+        return _bestand_zurueck("Import nicht gefunden oder bereits rückgängig gemacht.")
+    entfernt, behalten = bestandsimport.rueckgaengig(session, imp)
+    session.commit()
+    return _bestand_zurueck(
+        f"Import #{imp.id} rückgängig: {entfernt} Gewerke entfernt"
+        + (f", {len(behalten)} Zeilen bleiben (geändert oder nur aktualisiert)"
+           if behalten else "") + ".")
+
+
 @router.get("/stuecklisten")
 async def stuecklisten_seite(request: Request, session: Session = Depends(get_session)):
     """Stücklisten je Angebotsposition (Artikelstamm) – Excel bleibt Master,

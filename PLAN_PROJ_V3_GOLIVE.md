@@ -86,7 +86,7 @@ Stückliste haben damit keine Grundlage.
 Problem: Die meisten laufenden Aufträge (ausgebucht bis November) sind nie
 durch das Tool gelaufen; die V1-Migration erfasst nur angenommene Tool-Angebote.
 
-- [ ] **Excel-Vorlage** `docs/bestandsimport_vorlage.xlsx` (Claude Code
+- [x] **Excel-Vorlage** `docs/bestandsimport_vorlage.xlsx` (Claude Code
   erzeugt sie, Blatt „Projekte", eine Zeile je Gewerk): Kunde Anrede ·
   Vorname · Nachname · Straße · PLZ · Ort · Telefon · E-Mail ·
   Ausführungsadresse (falls abweichend) · Sparte (WP/PV/KL/WB) ·
@@ -97,13 +97,13 @@ durch das Tool gelaufen; die V1-Migration erfasst nur angenommene Tool-Angebote.
   Subteam · Termin bestätigt (J/N) · Hersteller · Leistungsklasse ·
   Innengerät · Zählerschrank · Öltankentsorgung (J/N) · Bemerkung.
   Zweites Blatt „Anleitung" mit Ausfüllhinweisen und erlaubten Werten.
-- [ ] Parametrierung → Projektierung → **„Bestandsimport"**: Upload der
+- [x] Parametrierung → Projektierung → **„Bestandsimport"**: Upload der
   Excel, **Vorschau** mit Prüfung je Zeile (Kunde vorhanden? → Duplikat-
   abgleich Name + PLZ wie beim monday-Sync; Team/Projektleiter bekannt?;
   Phase gültig?; Datum plausibel?), Fehlerzeilen markiert, Import nur der
   fehlerfreien Zeilen oder Abbruch. Import idempotent über TAIFUN-Nummer +
   Sparte (zweiter Lauf aktualisiert statt dupliziert).
-- [ ] Der Import legt je Zeile an: Kunde (oder nutzt vorhandenen), Vorgang,
+- [x] Der Import legt je Zeile an: Kunde (oder nutzt vorhandenen), Vorgang,
   externen Angebotseintrag (Status Angenommen, Badge TAIFUN, Kennzeichen
   `bestand`), Projekt (oder hängt an offenes Projekt des Vorgangs), Gewerk in
   der angegebenen Phase, Steckbrief aus den Spalten, Pakete aktiviert;
@@ -112,15 +112,16 @@ durch das Tool gelaufen; die V1-Migration erfasst nur angenommene Tool-Angebote.
   pauschal erledigt"), die Aufgaben der aktuellen Phase bleiben offen;
   Montagetermin mit Team und Bestätigung; Verlaufseintrag „Aus Bestandsimport
   angelegt (Datei, Zeile)".
-- [ ] Bestandsgewerke tragen ein Badge **„Bestand"** in Akte und Karte
+- [x] Bestandsgewerke tragen ein Badge **„Bestand"** in Akte und Karte
   (Hinweis: Daten aus Import, keine Erfassung vorhanden). Kein monday-
   Rückspiel, keine Statistik-Zählung als Neuabschluss (Kennzeichen
   `bestand` in der Statistik ausgenommen).
-- [ ] Importprotokoll (Datei, Zeilen angelegt/aktualisiert/übersprungen) in
+- [x] Importprotokoll (Datei, Zeilen angelegt/aktualisiert/übersprungen) in
   der Parametrierung; Rückgängig je Import (löscht nur, was der Import
   angelegt hat und was seither unverändert ist).
-- [ ] Test: Vorlage mit 5 Zeilen (2 Sparten beim selben Kunden, 1 Fehlerzeile,
-  1 Duplikat-Kunde), zweiter Lauf ohne Dubletten.
+- [x] Test: Vorlage mit 5 Zeilen (2 Sparten beim selben Kunden, 1 Fehlerzeile,
+  1 Duplikat-Kunde), zweiter Lauf ohne Dubletten. Trockenlauf gegen die
+  Server-DB-Kopie: docs/bestandsimport-trockenlauf.md.
 
 ### Phase 86 – Go-live-Hilfen
 

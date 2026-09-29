@@ -5,6 +5,7 @@
 # angebot_status_setzen gestempelten Zeitpunkte (Bestand: Näherung
 # Angebotsdatum, siehe migrate.py). Archivierte/„Individuell“ zählen als das,
 # was sie zuletzt waren – über die Zeitstempel automatisch ohne Doppelzählung.
+# V3 (Phase 85): Einträge aus dem Bestandsimport (Angebot.bestand) zählen nie.
 
 from datetime import date, datetime, timedelta
 
@@ -54,7 +55,7 @@ def _zeitraum(name: str, von: str, bis: str) -> tuple[datetime, datetime, str]:
 def _vertriebler_map(session: Session) -> dict[int, int]:
     """Angebot-ID -> Benutzer-ID (Erfassung gewinnt, sonst Override-Feld)."""
     zuordnung: dict[int, int] = {}
-    for a in session.query(Angebot).filter(Angebot.vertriebler_id.isnot(None)):
+    for a in session.query(Angebot).filter(Angebot.bestand.is_(False)).filter(Angebot.vertriebler_id.isnot(None)):
         zuordnung[a.id] = a.vertriebler_id
     for e in session.query(Erfassung).filter(Erfassung.angebot_id.isnot(None)):
         zuordnung[e.angebot_id] = e.benutzer_id
@@ -107,7 +108,7 @@ def kennzahlen(session: Session, von: datetime, bis: datetime,
                                                Erfassung.abgesendet_am < bis):
         kanal = kunden[erf.kunde_id].vertriebskanal if erf.kunde_id in kunden else ""
         zaehle("erfassungen", erf.benutzer_id, kanal, sparte=erf.sparte or "WP")
-    for a in session.query(Angebot):
+    for a in session.query(Angebot).filter(Angebot.bestand.is_(False)):
         if a.status == "Überholt":
             continue   # v9: durch eine neue Version ersetzt – zählt nicht mehr
         ad_id = zuordnung.get(a.id)
@@ -166,7 +167,7 @@ def vorgangs_kennzahlen(session: Session, von: datetime, bis: datetime,
     zuordnung = _vertriebler_map(session)
     versendet_je_vorgang: dict[int, set[str]] = {}
     angenommen_je_vorgang: dict[int, int] = {}
-    for a in session.query(Angebot).filter(Angebot.vorgang_id.isnot(None)):
+    for a in session.query(Angebot).filter(Angebot.bestand.is_(False)).filter(Angebot.vorgang_id.isnot(None)):
         if a.status == "Überholt":
             continue
         if nur_benutzer_id is not None and zuordnung.get(a.id) != nur_benutzer_id:
@@ -211,7 +212,7 @@ def auftragseingang_monate(session: Session, monate: int = 12, ad_id: int = 0,
         monat -= 1
         if monat == 0:
             jahr, monat = jahr - 1, 12
-    for a in session.query(Angebot).filter(Angebot.angenommen_am.isnot(None)):
+    for a in session.query(Angebot).filter(Angebot.bestand.is_(False)).filter(Angebot.angenommen_am.isnot(None)):
         if a.status == "Überholt":
             continue
         schluessel = (a.angenommen_am.year, a.angenommen_am.month)
@@ -248,7 +249,7 @@ def ablehnungsgruende_verteilung(session: Session, von: datetime, bis: datetime,
     zuordnung = _vertriebler_map(session)
     kunden = {k.id: k for k in session.query(Kunde)}
     zaehler: dict[str, int] = {}
-    for a in session.query(Angebot).filter(Angebot.abgelehnt_am.isnot(None),
+    for a in session.query(Angebot).filter(Angebot.bestand.is_(False)).filter(Angebot.abgelehnt_am.isnot(None),
                                            Angebot.abgelehnt_am >= von,
                                            Angebot.abgelehnt_am < bis):
         a_ad = zuordnung.get(a.id)

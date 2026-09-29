@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block titel %}Bestandsimport – Friondo Angebotstool{% endblock %}
+
+{# V3 (PLAN_PROJ_V3 Phase 85): Bestandsimport laufender Projekte #}
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Bestandsimport <small class="dezent">(laufende Projekte ohne Tool-Historie)</small></h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung/bestandsimport/vorlage.xlsx">Excel-Vorlage</a>
+        <a class="knopf zweitrangig" href="/parametrierung">Zur Parametrierung</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% if vorschau is none %}
+<p class="dezent">Eine Zeile je Gewerk. Vorlage herunterladen, befüllen (nur offene
+    Projekte, Phase ehrlich setzen), hochladen – die Vorschau prüft jede Zeile, importiert
+    werden nur fehlerfreie Zeilen. Schlüssel ist TAIFUN-Nummer + Sparte: ein zweiter Lauf
+    aktualisiert statt zu verdoppeln. <strong>Erst gegen eine DB-Kopie testen.</strong></p>
+
+<form method="post" action="/parametrierung/bestandsimport/vorschau" enctype="multipart/form-data"
+      class="suchleiste">
+    <strong>Datei:</strong>
+    <input type="file" name="datei" accept=".xlsx" required>
+    <button class="knopf" type="submit">Vorschau prüfen</button>
+</form>
+
+<h2>Importprotokoll</h2>
+{% if importe %}
+<table class="liste">
+    <thead><tr><th>#</th><th>Datei</th><th>Zeit</th><th>Benutzer</th>
+        <th>angelegt</th><th>aktualisiert</th><th>übersprungen</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for imp in importe %}
+    <tr>
+        <td>{{ imp.id }}</td>
+        <td>{{ imp.dateiname }}</td>
+        <td>{{ imp.erstellt_am.strftime('%d.%m.%Y %H:%M') }}</td>
+        <td>{{ benutzer_map[imp.benutzer_id].name if imp.benutzer_id in benutzer_map else '–' }}</td>
+        <td>{{ imp.angelegt }}</td><td>{{ imp.aktualisiert }}</td><td>{{ imp.uebersprungen }}</td>
+        <td>{% if imp.rueckgaengig_am %}rückgängig {{ imp.rueckgaengig_am.strftime('%d.%m.%Y %H:%M') }}
+            {% if imp.rueckgaengig_hinweis %}<br><small class="dezent" style="white-space:pre-line">{{ imp.rueckgaengig_hinweis }}</small>{% endif %}
+            {% else %}aktiv{% endif %}</td>
+        <td class="aktionen">
+            {% if not imp.rueckgaengig_am %}
+            <form method="post" action="/parametrierung/bestandsimport/{{ imp.id }}/rueckgaengig"
+                  onsubmit="return confirm('Import #{{ imp.id }} rückgängig machen? Entfernt nur, was dieser Import angelegt hat und seither unverändert ist.');">
+                <button class="knopf klein zweitrangig" type="submit">Rückgängig</button>
+            </form>
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="dezent">Noch kein Import durchgeführt.</p>
+{% endif %}
+
+{% else %}
+{% set ok = vorschau | selectattr('ok') | list %}
+<h2>Vorschau: {{ dateiname }}</h2>
+<p><strong>{{ ok | length }}</strong> von {{ vorschau | length }} Zeilen fehlerfrei
+    ({{ ok | selectattr('aktion', 'equalto', 'neu') | list | length }} neu,
+    {{ ok | selectattr('aktion', 'equalto', 'aktualisieren') | list | length }} aktualisieren).
+    Fehlerzeilen (rot) werden nicht importiert.</p>
+<table class="liste">
+    <thead><tr><th>Zeile</th><th>Kunde</th><th>Sparte</th><th>TAIFUN</th><th>Phase</th>
+        <th>Montage</th><th>Aktion</th><th>Prüfung</th></tr></thead>
+    <tbody>
+    {% for z in vorschau %}
+    <tr style="{{ 'background:#fdecea' if not z.ok }}">
+        <td>{{ z.nr }}</td>
+        <td>{{ z.werte.get('nachname') or '' }}{{ ', ' ~ z.werte.get('vorname') if z.werte.get('vorname') }}
+            · {{ z.werte.get('plz') or '' }}
+            {% if z.kunde_id %}<span class="abzeichen" title="Kunde über Name + PLZ gefunden">vorhanden #{{ z.kunde_id }}</span>
+            {% else %}<span class="abzeichen">neu</span>{% endif %}</td>
+        <td>{{ z.werte.get('sparte') or '' }}</td>
+        <td>{{ z.werte.get('taifun_nummer') or '' }}</td>
+        <td>{{ z.werte.get('phase') or '' }}</td>
+        <td>{{ z.montage_von.strftime('%d.%m.%Y') if z.montage_von }}{{ '–' ~ z.montage_bis.strftime('%d.%m.%Y') if z.montage_bis }}</td>
+        <td>{{ z.aktion if z.ok else '–' }}</td>
+        <td>{% for f in z.fehler %}<div style="color:#b3261e">✗ {{ f }}</div>{% endfor %}
+            {% for h in z.hinweise %}<div class="dezent">ℹ {{ h }}</div>{% endfor %}
+            {% if z.ok and not z.hinweise %}✓{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<form method="post" action="/parametrierung/bestandsimport/ausfuehren" class="formaktionen">
+    <input type="hidden" name="kennung" value="{{ kennung }}">
+    <input type="hidden" name="dateiname" value="{{ dateiname }}">
+    <button class="knopf" type="submit" {{ 'disabled' if not ok }}
+            onclick="return confirm('{{ ok | length }} fehlerfreie Zeilen importieren?');">Fehlerfreie Zeilen importieren ({{ ok | length }})</button>
+    <button class="knopf zweitrangig" type="submit" name="abbrechen" value="1">Abbrechen</button>
+</form>
+{% endif %}
+{% endblock %}

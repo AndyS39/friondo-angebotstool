@@ -208,5 +208,175 @@ class Phase84Auftragsdaten(Basis):
         self.assertEqual(kern.auftragsdaten_aus_pdf(b"%PDF"), {})
 
 
+# --- Phase 85 ---------------------------------------------------------------
+
+class Phase85Bestandsimport(Basis):
+    def _datei(self, zeilen):
+        import openpyxl
+        from app import bestandsimport
+        wb = openpyxl.load_workbook(io.BytesIO(bestandsimport.vorlage_bytes()))
+        ws = wb["Projekte"]
+        ws.delete_rows(2, 1)                       # Beispielzeile raus
+        titel = [t for _, t, _, _ in bestandsimport.SPALTEN]
+        for werte in zeilen:
+            ws.append([werte.get(t, "") for t in titel])
+        puffer = io.BytesIO()
+        wb.save(puffer)
+        return puffer.getvalue()
+
+    def test_import_vorschau_zweiter_lauf_rueckgaengig(self):
+        import re
+
+        from app import bestandsimport
+        from app.models import Benutzer, Bestandsimport, Team
+        kern.teams_vorbelegen(self.s)
+        self.s.commit()
+        team = self.s.query(Team).filter(Team.typ == "montage").order_by(Team.id).first()
+        pl = self.s.get(Benutzer, 1).name
+        # vorhandener Kunde (Dublette über Name + PLZ)
+        alt = Kunde(anrede="Herr", vorname="Otto", nachname="Bestand-V3-Alt",
+                    plz="47051", ort="Duisburg", email=TEST_EMAIL)
+        self.s.add(alt)
+        self.s.commit()
+        basis = {"Kunde Anrede": "Frau", "Vorname": "Berta", "Nachname": "Bestand-V3-Test",
+                 "Straße": "Ruhrort 3", "PLZ": "47119", "Ort": "Duisburg",
+                 "E-Mail": TEST_EMAIL, "Auftragswert brutto": "32.450,00",
+                 "Auftragsdatum": "01.08.2026", "Projektleiter (Name)": pl}
+        zeilen = [
+            {**basis, "Sparte": "WP", "TAIFUN-Angebotsnummer": "AN26B001",
+             "Phase": "Montagevorbereitung", "Montage von": "20.10.2026",
+             "Montageteam": team.name, "Termin bestätigt (J/N)": "J",
+             "Hersteller": "Bosch", "Leistungsklasse": "10", "Öltankentsorgung (J/N)": "J"},
+            {**basis, "Sparte": "PV", "TAIFUN-Angebotsnummer": "AN26B002",
+             "Phase": "Planung", "Auftragswert brutto": "18.000"},
+            {**basis, "Nachname": "Bestand-V3-Fehler", "Sparte": "XX",
+             "TAIFUN-Angebotsnummer": "AN26B003", "Phase": "Abnahme & Freigabe"},
+            {**basis, "Vorname": "Otto", "Nachname": "Bestand-V3-Alt", "PLZ": "47051",
+             "Sparte": "WP", "TAIFUN-Angebotsnummer": "AN26B004", "Phase": "Abnahme",
+             "Montage von": "01.09.2026", "Montage bis": "05.09.2026"},
+            {**basis, "Nachname": "Bestand-V3-Zwei", "PLZ": "47057", "Sparte": "KL",
+             "TAIFUN-Angebotsnummer": "AN26B005", "Phase": "Auftragseingang"},
+        ]
+        inhalt = self._datei(zeilen)
+        # Vorschau über die Route
+        vorschau = self.client.post("/parametrierung/bestandsimport/vorschau",
+                                    files={"datei": ("bestand.xlsx", io.BytesIO(inhalt))})
+        self.assertEqual(vorschau.status_code, 200)
+        self.assertIn("4</strong> von 5 Zeilen fehlerfrei", vorschau.text)
+        self.assertIn("seit V4 getrennt", vorschau.text)
+        self.assertIn("vorhanden #", vorschau.text)
+        kennung = re.search(r'name="kennung" value="(\w+)"', vorschau.text).group(1)
+        antwort = self.client.post("/parametrierung/bestandsimport/ausfuehren",
+                                   data={"kennung": kennung, "dateiname": "bestand.xlsx"},
+                                   follow_redirects=False)
+        self.assertEqual(antwort.status_code, 303)
+        self.s.expire_all()
+        imp = self.s.query(Bestandsimport).order_by(Bestandsimport.id.desc()).first()
+        self.assertEqual((imp.angelegt, imp.aktualisiert, imp.uebersprungen), (4, 0, 1))
+        wp = self.s.query(Angebot).filter_by(taifun_nummer="AN26B001").one()
+        pv = self.s.query(Angebot).filter_by(taifun_nummer="AN26B002").one()
+        self.assertTrue(wp.bestand and wp.extern and wp.status == "Angenommen")
+        self.assertEqual(wp.kunde_id, pv.kunde_id)          # zwei Sparten, ein Kunde
+        g_wp = self.s.get(Gewerk, wp.projekt_gewerk_id)
+        g_pv = self.s.get(Gewerk, pv.projekt_gewerk_id)
+        self.assertEqual(g_wp.projekt_id, g_pv.projekt_id)  # ein Projekt
+        self.assertEqual((g_wp.phase, g_pv.phase), ("montagevorbereitung", "planung"))
+        self.assertEqual(g_wp.bestand_import_id, imp.id)
+        # Pflichtaufgaben vor der Phase erledigt, Aufgaben der Phase offen
+        instanzen = {i.id: i for i in self.s.query(AufgabenpaketInstanz)
+                     .filter_by(gewerk_id=g_wp.id)}
+        vorher_offen = []
+        for a in self.s.query(Aufgabe).filter_by(gewerk_id=g_wp.id, pflicht=True):
+            if a.paket_instanz_id not in instanzen or a.status == "entfaellt":
+                continue
+            rang = kern.paket_rang(instanzen[a.paket_instanz_id].paket_name)
+            if rang < 3 and a.status != "erledigt":
+                vorher_offen.append(a.titel)
+        self.assertEqual(vorher_offen, [])
+        self.assertTrue(any(a.status != "erledigt" for a in self.s.query(Aufgabe)
+                            .filter_by(gewerk_id=g_wp.id, pflicht=True)
+                            if a.paket_instanz_id in instanzen and kern.paket_rang(
+                                instanzen[a.paket_instanz_id].paket_name) >= 3))
+        # Termin mit Team + Bestätigung, Steckbrief
+        termin = self.s.query(ProjektTermin).filter_by(gewerk_id=g_wp.id, typ="montage").one()
+        self.assertTrue(termin.kunde_bestaetigt)
+        self.assertEqual(termin.team_id, team.id)
+        werte = kern.steckbrief_daten(self.s, [g_wp.id])[g_wp.id]
+        self.assertEqual(werte["hersteller"].wert, "Bosch")
+        self.assertEqual(werte["oeltank"].wert, "ja")
+        # Dubletten-Kunde wiederverwendet
+        alt_ang = self.s.query(Angebot).filter_by(taifun_nummer="AN26B004").one()
+        self.assertEqual(alt_ang.kunde_id, alt.id)
+        # Badge in Akte + Board, Statistik ausgenommen
+        self.assertIn(">Bestand<", self.client.get(
+            f"/projektierung/projekt/{g_wp.projekt_id}").text)
+        self.assertIn(">Bestand<", self.client.get("/projektierung").text)
+        from app.routers import statistik
+        self.assertNotIn(wp.id, statistik._vertriebler_map(self.s))
+        # zweiter Lauf: aktualisiert statt dupliziert
+        anzahl_vorher = self.s.query(Gewerk).count()
+        zeilen[0]["Phase"] = "Montage"
+        zweit = bestandsimport.einlesen(self._datei(zeilen))[0]
+        bestandsimport.pruefen(self.s, zweit)
+        imp2 = bestandsimport.importieren(self.s, zweit, "bestand2.xlsx")
+        self.s.commit()
+        self.assertEqual((imp2.angelegt, imp2.aktualisiert), (0, 4))
+        self.assertEqual(self.s.query(Gewerk).count(), anzahl_vorher)
+        self.assertEqual(self.s.query(Angebot).filter_by(taifun_nummer="AN26B001").count(), 1)
+        self.assertEqual(self.s.get(Gewerk, g_wp.id).phase, "montage")
+        # Rückgängig Import 2 entfernt nichts (nur aktualisiert)
+        entfernt, _ = bestandsimport.rueckgaengig(self.s, imp2)
+        self.assertEqual(entfernt, 0)
+        # Rückgängig Import 1: alle Gewerke tragen jetzt Import 2 → bleiben;
+        # Import 1 wirkt nur auf das, was seither unverändert ist
+        imp = self.s.get(Bestandsimport, imp.id)
+        entfernt, behalten = bestandsimport.rueckgaengig(self.s, imp)
+        self.s.commit()
+        self.assertEqual(entfernt, 0)
+        self.assertEqual(len(behalten), 4)
+        self.assertIsNotNone(self.s.get(Gewerk, g_wp.id))
+
+    def test_rueckgaengig_unveraendert(self):
+        """Direkt nach dem Import: Rückgängig entfernt alles Angelegte, der
+        vorher vorhandene Kunde bleibt."""
+        from app import bestandsimport
+        from app.models import Benutzer
+        alt = Kunde(anrede="Herr", vorname="Uwe", nachname="Bestand-V3-Undo",
+                    plz="47058", ort="Duisburg", email=TEST_EMAIL)
+        self.s.add(alt)
+        self.s.commit()
+        zeilen = [{"Vorname": "Uwe", "Nachname": "Bestand-V3-Undo", "PLZ": "47058",
+                   "E-Mail": TEST_EMAIL, "Sparte": "WP", "TAIFUN-Angebotsnummer": "AN26U001",
+                   "Auftragswert brutto": "20000", "Auftragsdatum": "02.08.2026",
+                   "Projektleiter (Name)": self.s.get(Benutzer, 1).name,
+                   "Phase": "Planung"},
+                  {"Vorname": "Ina", "Nachname": "Bestand-V3-Undo-Neu", "PLZ": "47059",
+                   "E-Mail": TEST_EMAIL, "Sparte": "PV", "TAIFUN-Angebotsnummer": "AN26U002",
+                   "Auftragswert brutto": "15000", "Auftragsdatum": "02.08.2026",
+                   "Projektleiter (Name)": self.s.get(Benutzer, 1).name,
+                   "Phase": "Auftragseingang"}]
+        z = bestandsimport.einlesen(self._datei(zeilen))[0]
+        bestandsimport.pruefen(self.s, z)
+        imp = bestandsimport.importieren(self.s, z, "undo.xlsx")
+        self.s.commit()
+        self.assertEqual(imp.angelegt, 2)
+        entfernt, behalten = bestandsimport.rueckgaengig(self.s, imp)
+        self.s.commit()
+        self.assertEqual((entfernt, behalten), (2, []))
+        self.assertIsNone(self.s.query(Angebot).filter_by(taifun_nummer="AN26U001").first())
+        self.assertIsNotNone(self.s.get(Kunde, alt.id))
+        self.assertIsNone(self.s.query(Kunde).filter_by(
+            nachname="Bestand-V3-Undo-Neu").first())
+
+    def test_vorlage(self):
+        import openpyxl
+        from app import bestandsimport
+        wb = openpyxl.load_workbook(io.BytesIO(bestandsimport.vorlage_bytes()))
+        self.assertEqual(wb.sheetnames, ["Projekte", "Anleitung"])
+        kopf = [c.value for c in wb["Projekte"][1]]
+        self.assertIn("TAIFUN-Angebotsnummer", kopf)
+        self.assertIn("Termin bestätigt (J/N)", kopf)
+
+
 if __name__ == "__main__":
     unittest.main()
