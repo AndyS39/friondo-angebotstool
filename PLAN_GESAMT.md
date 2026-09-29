@@ -137,14 +137,17 @@ Gesamtübersicht (Testergebnisse, offene Punkte, Rückfragen gebündelt).
 ════════════════════════════════════════════════════════════════════
 TEIL C – GESAMTABNAHME & FINALER ROLLOUT
 ════════════════════════════════════════════════════════════════════
-- [ ] Frische Server-DB-Kopie → migrate (zweimal) → Voll-Crawl alle Rollen
+- [x] Frische Server-DB-Kopie → migrate (zweimal) → Voll-Crawl alle Rollen
       → Abnahmeskript: Ziel 0 Abstürze, Skript grün
-- [ ] Regressionen: WP-Kontroll-Szenarien, B1–B4-Fördertests, PV-Testfälle,
-      Doppler-Schutz – alle grün
+      (30.09.: Kopie vom 29.09. 15:32 · migrate 2× sauber · Crawl 45.252
+      Aufrufe, 0 Abstürze, Rollen Admin/ID/AD/Montage · Abnahme 93/93 ·
+      Logik-Validierung beider Excels grün)
+- [x] Regressionen: WP-Kontroll-Szenarien, B1–B4-Fördertests, PV-Testfälle,
+      Doppler-Schutz – alle grün (Suite 198/198)
 - [ ] git push → Server: DB-Kopie sichern, update.bat, Kontrolldurchgang
       (Angebot, PV-Angebot, Vorgangsakte, Projektakte, BzA-Datenblatt am
       Angebot UND am TAIFUN-Angebot, Anschriften im PDF, Lead-Übersicht)
-- [ ] docs/nach-dem-update-gesamt.md: Team-Hinweise gesammelt (PV live,
+- [x] docs/nach-dem-update-gesamt.md: Team-Hinweise gesammelt (PV live,
       BzA-Weg, Anschriften, Projektierung-Neuerungen für Admins)
 - [ ] Andreas: CLAUDE.md im Projektwissen austauschen; Lead- und
       Projektierungs-Chat über neuen Stand informieren
