@@ -49,7 +49,8 @@ MONTAGE_PFADE = ("/montage", "/benachrichtigungen", "/login", "/logout", "/stati
 # der Vorgang zu einem eigenen Team-Einsatz gehört); löschen/verschieben
 # bleiben gesperrt
 _MONTAGE_GALERIE = re.compile(r"^/vorgaenge/(galerie/datei/\d+|\d+/galerie/upload)$")
-_ANGEBOTE_LESEPFAD = re.compile(r"^/angebote(/\d+/pdf)?$")
+# v13 (Phase 80): Lieferschein (ohne Preise) ist ebenfalls lesend erlaubt
+_ANGEBOTE_LESEPFAD = re.compile(r"^/angebote(/\d+/(pdf|lieferschein\.pdf))?$")
 # v12 (Phase 81): Hauptrolle leadmanagement – Lead-Modul voll, Kunden
 # lesend/schreibend, Vorgangsakte, Angebote nur Liste+PDF, Erfassungen lesend;
 # Parametrierung nur Quellen & Kampagnen + Steuerdatei (Plan 81)

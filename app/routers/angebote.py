@@ -802,6 +802,24 @@ async def pdf_anzeigen(angebot_id: int, session: Session = Depends(get_session))
                         filename=f"{angebot.nummer}.pdf")
 
 
+@router.get("/{angebot_id}/lieferschein.pdf")
+async def lieferschein(angebot_id: int, session: Session = Depends(get_session)):
+    """v13 (PLAN_V13 Phase 80): Lieferschein ohne Preise – nur für Tool-
+    Angebote im Status „Angenommen“; Dateiname LS-<Angebotsnummer>.pdf."""
+    from urllib.parse import quote_plus
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote?meldung=Angebot+nicht+gefunden", status_code=303)
+    if angebot.extern or angebot.status != "Angenommen":
+        return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+            "Lieferschein nur für angenommene Tool-Angebote."), status_code=303)
+    from app import lieferschein_pdf
+    pfad = lieferschein_pdf.erzeuge_lieferschein(angebot, session.get(Kunde, angebot.kunde_id))
+    return FileResponse(pfad, media_type="application/pdf",
+                        content_disposition_type="inline",
+                        filename=f"LS-{angebot.nummer}.pdf")
+
+
 @router.post("/{angebot_id}/email")
 async def email_entwurf(request: Request, angebot_id: int,
                         session: Session = Depends(get_session)):

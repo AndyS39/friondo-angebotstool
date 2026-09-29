@@ -153,7 +153,7 @@ später ersetzt.
       weitere Zeile, sobald geliefert
 
 ## Phase 80 – Lieferschein (spartenübergreifend)
-- [ ] Button „Lieferschein (PDF)" an Angeboten mit Status Angenommen:
+- [x] Button „Lieferschein (PDF)" an Angeboten mit Status Angenommen:
       Friondo-Layout, Ausführungsort, Positionsliste mit Nummer,
       Bezeichnung, Beschreibung (gekürzt) und Menge – OHNE Preise,
       Summen, Rabatte, Förderung; EP-/Alternativ-/bauseits-Positionen

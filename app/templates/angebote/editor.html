@@ -48,6 +48,11 @@
         </form>
         {% endif %}
         <a class="knopf klein" href="/angebote/{{ angebot.id }}/pdf" target="_blank">PDF anzeigen</a>
+        {% if angebot.status == 'Angenommen' and not angebot.extern %}
+        {# v13 (Phase 80): Lieferschein ohne Preise #}
+        <a class="knopf klein zweitrangig" href="/angebote/{{ angebot.id }}/lieferschein.pdf"
+           target="_blank" title="Lieferschein ohne Preise (LS-{{ angebot.nummer }}.pdf)">Lieferschein (PDF)</a>
+        {% endif %}
         {% if not nur_lesen %}
         {% if angebot.status == 'Entwurf' %}
         <form method="post" action="/angebote/{{ angebot.id }}/loeschen"

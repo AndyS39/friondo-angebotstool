@@ -132,6 +132,10 @@
                     <a class="knopf klein" href="/projektierung/angebot/{{ a.id }}/projekt">Angebot → Projekt</a>
                 {% endif %}
             {% endif %}
+            {% if a.status == 'Angenommen' and not a.extern and benutzer.rolle != 'aussendienst' %}
+                {# v13 (Phase 80): Lieferschein ohne Preise #}
+                <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}/lieferschein.pdf" target="_blank">{{ symbol('pdf') }} Lieferschein</a>
+            {% endif %}
             {% if benutzer.rolle in ('admin', 'innendienst') %}
                 <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">{{ symbol('stift') }} Öffnen</a>
             {% elif not a.extern %}

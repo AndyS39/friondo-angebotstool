@@ -461,3 +461,61 @@ class Phase79Prozess(Basis):
             sparte="PV")
         from app import anhaenge
         self.assertTrue(anhaenge.vollmacht_erforderlich(angebot))
+
+
+# --- Phase 80 ---------------------------------------------------------------
+
+class Phase80Lieferschein(Basis):
+    def pdf_text(self, antwort) -> str:
+        import io
+
+        import pypdf
+        return "\n".join(s.extract_text() for s in
+                         pypdf.PdfReader(io.BytesIO(antwort.content)).pages)
+
+    def test_lieferschein_ohne_preise(self):
+        client = TestClient(app)
+        client.post("/login", data={"benutzer_id": "1", "pin": "1234"})
+        angebot = angebot_aufbau.angebot_anlegen(
+            self.s, self.kunde.id, antworten=pv_basis(PD12=20, PA10=10), logik=self.logik,
+            sparte="PV")
+        angebot.positionen.append(AngebotsPosition(
+            sort=90, pos_nr="PV017", beschreibung="Demontage PV-Module ALTERNATIV",
+            menge=3, e_preis_cent=8060, alternativ=True))
+        angebot.positionen.append(AngebotsPosition(
+            sort=91, pos_nr="PV022", beschreibung="SAT Anlage versetzen BAUSEITS",
+            menge=1, e_preis_cent=39500, bauseits=True))
+        self.s.commit()
+        r = client.get(f"/angebote/{angebot.id}/lieferschein.pdf", follow_redirects=False)
+        self.assertEqual(r.status_code, 303)                   # nur „Angenommen“
+        angebot.status = "Angenommen"
+        self.s.commit()
+        r = client.get(f"/angebote/{angebot.id}/lieferschein.pdf")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(f"LS-{angebot.nummer}.pdf", r.headers.get("content-disposition", ""))
+        text = self.pdf_text(r)
+        self.assertIn("L I E F E R S C H E I N", text)
+        self.assertIn("Ware vollständig erhalten", text)
+        self.assertIn("Ausführungsort: Teststr. 1, 47139 Duisburg", text)
+        self.assertIn("Solar Fabrik Mono S4", text)
+        self.assertIn("20,00", text)                               # Menge Module
+        for verboten in ("€", "Netto", "Summe", "Rabatt", "Förder", "Energy Gateway",
+                         "ALTERNATIV", "BAUSEITS", "Auslegung der PV-Anlage", "87,75"):
+            self.assertNotIn(verboten, text)
+        # Button im Editor
+        r = client.get(f"/angebote/{angebot.id}")
+        self.assertIn("Lieferschein (PDF)", r.text)
+
+    def test_lieferschein_wp(self):
+        from tests.test_regression import KONTROLL_SZENARIO
+        client = TestClient(app)
+        client.post("/login", data={"benutzer_id": "1", "pin": "1234"})
+        angebot = angebot_aufbau.angebot_anlegen(
+            self.s, self.kunde.id, antworten=dict(KONTROLL_SZENARIO), logik=self.logik_voll)
+        angebot.status = "Angenommen"
+        self.s.commit()
+        r = client.get(f"/angebote/{angebot.id}/lieferschein.pdf")
+        self.assertEqual(r.status_code, 200)
+        text = self.pdf_text(r)
+        self.assertIn("L I E F E R S C H E I N", text)
+        self.assertNotIn("€", text)
