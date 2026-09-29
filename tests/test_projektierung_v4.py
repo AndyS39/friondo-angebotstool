@@ -27,6 +27,8 @@ def aufraeumen(s):
     for k in s.query(Kunde).filter(Kunde.email == TEST_EMAIL):
         for p in s.query(Projekt).filter_by(kunde_id=k.id):
             for g in s.query(Gewerk).filter_by(projekt_id=p.id):
+                from app.models import UglBestellung
+                s.query(UglBestellung).filter_by(gewerk_id=g.id).delete()
                 s.query(Aufgabe).filter_by(gewerk_id=g.id).delete()
                 s.query(AufgabenpaketInstanz).filter_by(gewerk_id=g.id).delete()
                 s.query(SteckbriefWert).filter_by(gewerk_id=g.id).delete()
@@ -527,3 +529,241 @@ class Phase92Bza(Basis):
         zeile = _aufgabe_zeile_html(self.s, self.bza_aufgabe(g2))
         self.assertIn("/parametrierung/projektierung-einstellungen", zeile)
         self.assertNotIn('name="status" value="entfaellt"', zeile)   # kein Entfällt-Knopf
+
+
+# --- Phase 93 ---------------------------------------------------------------
+
+class _Antwort:
+    """Minimaler Ersatz für urlopen()-Antworten."""
+    def __init__(self, status, daten):
+        self.status = status
+        self._roh = json.dumps(daten).encode()
+
+    def read(self):
+        return self._roh
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+class Phase93Heizreport(Basis):
+    PARAMETER = {"heizreport_api_url": "https://heizreport.test/api/",
+                 "heizreport_auth_art": "body", "heizreport_auth_header": "apiKey",
+                 "heizreport_api_key": "geheim-123",
+                 "heizreport_mapping_zurueck": json.dumps(
+                     {"projekt_key": "projektKey", "heizlast_kw": "ergebnis.heizlast"})}
+
+    def setUp(self):
+        from app import heizreport_api
+        self.alt = {n: kern.parameter_holen(self.s, n, "") for n in heizreport_api.PARAMETER}
+
+    def tearDown(self):
+        for name, wert in self.alt.items():
+            kern.parameter_setzen(self.s, name, wert)
+        self.s.commit()
+
+    def heizlast_aufgabe(self, g):
+        return [a for a in self.aufgaben(g, "feinplanung_vot")
+                if a.aktion_wert == "heizreport"][0]
+
+    def test_ohne_konfiguration_link_und_upload(self):
+        from app.routers.projektierung import _aufgabe_zeile_html
+        kern.parameter_setzen(self.s, "heizreport_api_url", "")
+        self.s.commit()
+        g = self.gewerk_neu()
+        zeile = _aufgabe_zeile_html(self.s, self.heizlast_aufgabe(g))
+        self.assertIn("API nicht konfiguriert", zeile)
+        self.assertNotIn("Projekt im Heizreport anlegen", zeile)
+
+    def test_anlegen_ergebnis_und_verbindungstest(self):
+        import urllib.error
+        from unittest import mock
+
+        from app.routers.projektierung import _aufgabe_zeile_html
+        for name, wert in self.PARAMETER.items():
+            kern.parameter_setzen(self.s, name, wert)
+        self.s.commit()
+        g = self.gewerk_neu()
+        aufgabe = self.heizlast_aufgabe(g)
+        self.assertIn("Projekt im Heizreport anlegen", _aufgabe_zeile_html(self.s, aufgabe))
+        gesendet = []
+
+        def urlopen(anfrage, timeout=None):
+            gesendet.append((anfrage.full_url, anfrage.get_method(),
+                             json.loads(anfrage.data or b"{}")))
+            if len(gesendet) == 1:
+                return _Antwort(200, {"projektKey": "123456789"})
+            return _Antwort(200, {"ergebnis": {"heizlast": "9,4"}})
+        with mock.patch("urllib.request.urlopen", side_effect=urlopen):
+            r = self.client.post(f"/projektierung/gewerk/{g.id}/heizreport/anlegen",
+                                 data={"aufgabe_id": str(aufgabe.id)},
+                                 headers={"Accept": "application/json"})
+            self.assertEqual(r.status_code, 200)
+            self.assertIn("123456789", r.json()["meldung"])
+            r = self.client.post(f"/projektierung/gewerk/{g.id}/heizreport/ergebnis",
+                                 follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        # Auth im Body, Mapping hin mit Adresse
+        url, methode, koerper = gesendet[0]
+        self.assertEqual((url, methode), ("https://heizreport.test/api/", "POST"))
+        self.assertEqual(koerper["apiKey"], "geheim-123")
+        self.assertEqual(koerper["projekt"]["name"], self.s.get(Projekt, g.projekt_id).nummer)
+        self.s.expire_all()
+        g = self.s.get(Gewerk, g.id)
+        self.assertEqual(g.heizreport_projekt_key, "123456789")
+        self.assertAlmostEqual(g.heizlast_kw, 9.4)
+        self.assertEqual(g.heizlast_quelle, "Heizreport API")
+        self.assertEqual(self.s.get(Aufgabe, aufgabe.id).status, "erledigt")
+        r = self.client.get(f"/projektierung/projekt/{g.projekt_id}")
+        self.assertIn("Quelle Heizreport API", r.text)
+        # Verbindungstest: HTTP-Code landet in der Meldung
+        fehler = urllib.error.HTTPError("https://heizreport.test/api/", 400, "Bad", {}, None)
+        fehler.read = lambda: "kein JSON Object empfangen".encode()
+        with mock.patch("urllib.request.urlopen", side_effect=fehler):
+            r = self.client.post("/parametrierung/projektierung-einstellungen/heizreport-test",
+                                 data={"heizreport_api_url": "https://heizreport.test/api/",
+                                       "heizreport_auth_art": "body"})
+        self.assertIn("HTTP 400", r.text)
+        self.assertIn("kein JSON Object", r.text)
+        # Schlüssel bleibt beim Speichern mit leerem Feld erhalten
+        self.assertEqual(kern.parameter_holen(self.s, "heizreport_api_key", ""), "geheim-123")
+
+
+class Phase93Ugl(Basis):
+    def test_satzformat(self):
+        from app import ugl
+        kop = ugl.kop_satz("12345", "L9", "PR-2026-0001-2", "Kommission",
+                           datetime(2026, 10, 5), "Admin", datetime(2026, 9, 29))
+        poa = ugl.poa_satz(10, "ART-1", 12.5, "Kupferrohr", "", "m")
+        pot = ugl.pot_satz(10, "Angebotsposition 047")
+        adr = ugl.adr_satz("Baustelle Müller", "Kommission", "", "Weg 1", "41836", "Hückelhoven")
+        end = ugl.end_satz("Bestellung")
+        for satz in (kop, poa, pot, adr, end):
+            self.assertEqual(len(satz), 200)
+        self.assertEqual(kop[0:3], "KOP")
+        self.assertEqual(kop[3:13], "12345     ")
+        self.assertEqual(kop[13:23], "L9        ")
+        self.assertEqual(kop[23:25], "BE")
+        self.assertEqual(kop[25:40].strip(), "PR-2026-0001-2")
+        self.assertEqual(kop[105:113], "20261005")
+        self.assertEqual(kop[113:121], "EUR04.00")
+        self.assertEqual(kop[161:169], "20260929")
+        self.assertEqual(poa[3:13], "0000000010")
+        self.assertEqual(poa[23:38], "ART-1          ")
+        self.assertEqual(poa[38:49], "00000012500")
+        self.assertEqual(poa[181], "H")
+        self.assertEqual(poa[183:186], "M  ")
+        self.assertEqual(pot[23:63].strip(), "Angebotsposition 047")
+        self.assertEqual(adr[126:132], "41836 ")
+        self.assertEqual(adr[132:162].strip(), "Hückelhoven")
+        self.assertEqual("ü".encode(ugl.ZEICHENSATZ), bytes([0x81]))
+        with open("docs/ugl-beispiel.ugl", "rb") as datei:
+            zeilen = datei.read().split(bytes([13, 10]))
+        self.assertEqual(zeilen[-1], b"")
+        self.assertTrue(all(len(z) == 200 for z in zeilen[:-1]))
+        self.assertEqual([z[:3] for z in zeilen[:3]], [b"KOP", b"ADR", b"POA"])
+
+    def test_bestellung_nachbestellung_hochgeladen(self):
+        from app import ugl
+        from app.models import UglBestellung
+        alt = kern.parameter_holen(self.s, "collin_kundennummer", "")
+        kern.parameter_setzen(self.s, "collin_kundennummer", "0000123456")
+        self.s.commit()
+        try:
+            g = self.gewerk_neu(positionen=[("047", 2), ("998", 1)])
+            r = self.client.get(f"/projektierung/gewerk/{g.id}/ugl")
+            self.assertIn("998 · Pos 998", r.text)
+            self.assertIn("/parametrierung/stuecklisten?pos=998", r.text)
+            r = self.client.post(f"/projektierung/gewerk/{g.id}/ugl",
+                                 data={"lieferdatum": "2026-10-12", "lieferadresse": "lager",
+                                       "bemerkung": "Kran vor Ort"})
+            self.assertEqual(r.status_code, 200)
+            projekt = self.s.get(Projekt, g.projekt_id)
+            self.assertIn(f'filename="{projekt.nummer}.ugl"', r.headers["content-disposition"])
+            text = r.content.decode(ugl.ZEICHENSATZ)
+            saetze = text.split("\r\n")
+            self.assertEqual(saetze[0][105:113], "20261012")
+            self.assertIn("Kran vor Ort", text)
+            # 047 × 2: Dämpfer-Set 2 je Einheit → 4
+            daempfer = [z for z in saetze if z.startswith("POA") and "BEISPIEL-108001" in z][0]
+            self.assertEqual(daempfer[38:49], "00000004000")
+            r = self.client.post(f"/projektierung/gewerk/{g.id}/ugl", data={})
+            self.assertIn(f'filename="{projekt.nummer}-2.ugl"', r.headers["content-disposition"])
+            self.assertIn("Nachbestellung", r.content.decode(ugl.ZEICHENSATZ))
+            self.s.expire_all()
+            bestellungen = (self.s.query(UglBestellung).filter_by(gewerk_id=g.id)
+                            .order_by(UglBestellung.nr).all())
+            self.assertEqual([b.nr for b in bestellungen], [1, 2])
+            self.assertEqual(bestellungen[0].lieferadresse, "lager")
+            aufgabe = [a for a in self.aufgaben(g, "planung_wp")
+                       if a.aktion_wert == "ugl_collin"][0]
+            self.assertEqual(aufgabe.status, "in_arbeit")
+            self.client.post(f"/projektierung/gewerk/{g.id}/ugl/{bestellungen[0].id}/hochgeladen",
+                             data={"datum": "2026-09-30"})
+            self.s.expire_all()
+            self.assertEqual(self.s.get(Aufgabe, aufgabe.id).status, "erledigt")
+            self.assertEqual(self.s.get(UglBestellung, bestellungen[0].id).hochgeladen_am,
+                             datetime(2026, 9, 30))
+            self.assertTrue(self.s.query(ProjektVerlauf).filter(
+                ProjektVerlauf.projekt_id == g.projekt_id,
+                ProjektVerlauf.text.like("UGL-Nachbestellung 2%")).count())
+            r = self.client.get(f"/projektierung/gewerk/{g.id}/ugl")
+            self.assertIn("Nachbestellung 3", r.text)
+        finally:
+            kern.parameter_setzen(self.s, "collin_kundennummer", alt)
+            self.s.commit()
+
+    def test_stuecklisten_pflege(self):
+        import shutil
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+
+        from app import config, stuecklisten
+        ordner = Path(tempfile.mkdtemp())
+        kopie = ordner / "logik.xlsx"
+        shutil.copyfile(projektierung_logik.LOGIK_PFAD, kopie)
+        try:
+            with mock.patch.object(projektierung_logik, "LOGIK_PFAD", kopie), \
+                    mock.patch.object(config, "BACKUP_ORDNER", ordner / "backup"):
+                projektierung_logik.hole_logik(self.s, erzwingen=True)
+                _vorher, gesamt = stuecklisten.fortschritt(self.s)
+                self.assertGreater(gesamt, 0)
+                r = self.client.post("/parametrierung/stuecklisten/998",
+                                     data={"anzahl": "3",
+                                           "artnr_0": "COL-4711", "menge_0": "2,5",
+                                           "bezeichnung_0": "Kabel", "lieferant_0": "Collin",
+                                           "einheit_0": "m", "artnr_1": "", "artnr_2": ""},
+                                     follow_redirects=False)
+                self.assertIn("pos=998", r.headers["location"])
+                logik = projektierung_logik.hole_logik(self.s)
+                zeile = logik.stuecklisten["998"][0]
+                self.assertEqual((zeile.lieferant_artnr, zeile.menge_je_einheit,
+                                  zeile.mengeneinheit), ("COL-4711", 2.5, "M"))
+                self.assertTrue(list((ordner / "backup").glob("projektierung_logik_*.xlsx")))
+                # übrige Blätter unverändert lesbar
+                self.assertFalse(logik.fehler)
+                self.assertIn("abnahme", logik.pakete)
+                r = self.client.get("/parametrierung/stuecklisten?ohne=1")
+                self.assertIn("Go-live-Prüfpunkte", r.text)
+                self.assertNotIn('id="pos-998"', r.text)
+                csv_text = self.client.get("/parametrierung/stuecklisten/export.csv").text
+                self.assertIn("998;COL-4711;2,5;Kabel;Collin;M", csv_text)
+                # Import ersetzt das Blatt
+                neu = ("position;lieferant_artnr;menge_je_einheit;bezeichnung;lieferant;"
+                       "mengeneinheit\n047;X-1;1;Test;Collin;ST\n")
+                r = self.client.post("/parametrierung/stuecklisten/import",
+                                     files={"datei": ("s.csv", neu.encode("utf-8"), "text/csv")})
+                self.assertIn("1 Stücklisten-Zeilen importiert", r.text)
+                self.assertEqual(list(projektierung_logik.hole_logik(self.s).stuecklisten),
+                                 ["047"])
+                # Zuordnung entfernen (leere Artikelnummer)
+                self.client.post("/parametrierung/stuecklisten/047",
+                                 data={"anzahl": "1", "artnr_0": ""})
+                self.assertEqual(projektierung_logik.hole_logik(self.s).stuecklisten, {})
+        finally:
+            projektierung_logik.hole_logik(self.s, erzwingen=True)
+            shutil.rmtree(ordner, ignore_errors=True)

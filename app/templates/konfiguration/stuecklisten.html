@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block titel %}Stücklisten – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Stücklisten <small class="dezent">(UGL-Bestellung Collin)</small></h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung/stuecklisten/export.csv">CSV-Export</a>
+        <a class="knopf zweitrangig" href="/parametrierung">Zur Parametrierung</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<p class="dezent">Master bleibt die Projektierungs-Logik (Blatt „Stücklisten“,
+    Stand {{ stand }}) – Speichern hier schreibt dorthin zurück (Backup vorher).
+    Menge = Stück je Einheit der Angebotsposition; Einheit = UGL-Mengeneinheit (ST, M, PAK …).</p>
+
+<div class="pj-kv" style="max-width:720px;border:1px solid var(--rand, #ddd);padding:10px;border-radius:8px">
+    <span><b>Go-live-Prüfpunkte</b></span><div></div>
+    <span>Stücklisten ≥ 90 % zugeordnet</span>
+    <div>{{ '✓' if quote_ok else '✗' }} {{ zugeordnet }} von {{ gesamt }} Positionen
+        ({{ '%.0f' | format(quote * 100) }} %)
+        <div style="height:6px;background:#eee;border-radius:3px;margin-top:3px">
+            <div style="height:6px;width:{{ '%.0f' | format(quote * 100) }}%;background:{{ '#2e7d32' if quote_ok else '#e0a100' }};border-radius:3px"></div></div></div>
+    <span>Collin-Kundennummer</span>
+    <div>{{ '✓ ' ~ kundennummer if kundennummer else '✗ fehlt (Projektierung-Einstellungen)' }}</div>
+    <span>Testdatei von Collin bestätigt</span>
+    <div>
+        {% if darf_admin %}
+        <form method="post" action="/parametrierung/stuecklisten/golive" class="pj-btnrow">
+            <label class="kontrollfeld"><input type="checkbox" name="bestaetigt"
+                {{ 'checked' if testdatei_bestaetigt }} onchange="this.form.submit()">
+                {{ testdatei_bestaetigt or 'noch offen – docs/ugl-beispiel.ugl an Collin senden' }}</label>
+        </form>
+        {% else %}{{ '✓ ' ~ testdatei_bestaetigt if testdatei_bestaetigt else '✗ offen' }}{% endif %}
+    </div>
+</div>
+
+<form method="get" action="/parametrierung/stuecklisten" class="suchleiste" style="margin-top:12px">
+    <input type="text" name="suche" value="{{ suche }}" placeholder="Position, Titel, Artikelnummer …">
+    <label class="kontrollfeld"><input type="checkbox" name="ohne" value="1" {{ 'checked' if ohne }}
+        onchange="this.form.submit()"> nur ohne Zuordnung</label>
+    <button class="knopf zweitrangig" type="submit">Filtern</button>
+</form>
+
+<form method="post" action="/parametrierung/stuecklisten/import" enctype="multipart/form-data" class="suchleiste">
+    <strong>CSV-Import (ersetzt das ganze Blatt):</strong>
+    <input type="file" name="datei" accept=".csv" required>
+    <button class="knopf zweitrangig" type="submit"
+            onclick="return confirm('Blatt „Stücklisten“ komplett durch die CSV ersetzen? Die alte Datei wird gesichert.');">Importieren</button>
+</form>
+
+{% if editor %}
+{% set p = editor %}
+<div id="editor" style="border:2px solid var(--akzent, #1565c0);border-radius:8px;padding:10px;margin:12px 0">
+    <h3 style="margin-top:0">Stückliste Pos. {{ p.pos_nr }} <small class="dezent">{{ p.titel[:120] }}{{ ' · ' ~ p.einheit if p.einheit }}</small></h3>
+    {% set zeilen = p.zeilen | list %}
+    {% set anzahl = zeilen | length + 3 %}
+    <form method="post" action="/parametrierung/stuecklisten/{{ p.pos_nr | urlencode }}">
+        <input type="hidden" name="anzahl" value="{{ anzahl }}">
+        <table class="tabelle" style="margin:4px 0">
+            <thead><tr><th>Lieferant</th><th>Lieferanten-Artnr.</th><th>Bezeichnung</th><th>Menge je Einheit</th><th>Einheit</th></tr></thead>
+            <tbody>
+            {% for i in range(anzahl) %}
+            {% set z = zeilen[i] if i < zeilen | length else none %}
+            <tr>
+                <td><input type="text" name="lieferant_{{ i }}" size="8" value="{{ z.lieferant if z else standard_lieferant }}"></td>
+                <td><input type="text" name="artnr_{{ i }}" size="16" value="{{ z.lieferant_artnr if z else '' }}" placeholder="leer = entfernen"></td>
+                <td><input type="text" name="bezeichnung_{{ i }}" size="36" value="{{ z.bezeichnung if z else '' }}"></td>
+                <td><input type="text" name="menge_{{ i }}" size="5" value="{{ (('%g' | format(z.menge_je_einheit)) | replace('.', ',')) if z else '1' }}"></td>
+                <td><input type="text" name="einheit_{{ i }}" size="3" value="{{ z.mengeneinheit if z else 'ST' }}"></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <button class="knopf" type="submit">Stückliste {{ p.pos_nr }} speichern</button>
+        <a class="knopf zweitrangig" href="/parametrierung/stuecklisten{{ '?suche=' ~ suche | urlencode if suche }}#pos-{{ p.pos_nr }}">Schließen</a>
+    </form>
+</div>
+{% endif %}
+
+<table class="tabelle">
+    <thead><tr><th style="width:70px">Pos.</th><th>Angebotsposition</th><th>Stückliste</th></tr></thead>
+    <tbody>
+    {% for p in positionen %}
+    <tr id="pos-{{ p.pos_nr }}">
+        <td class="pj-mono">{{ p.pos_nr }}</td>
+        <td>{{ p.titel[:120] }}<br><small class="dezent">{{ (p.kategorie or '')[:90] }}{{ ' · ' ~ p.einheit if p.einheit }}</small></td>
+        <td>
+            {% if p.zeilen %}
+            <div>{% for z in p.zeilen %}<span class="pj-mono">{{ z.lieferant_artnr }}</span> × {{ ('%g' | format(z.menge_je_einheit)) | replace('.', ',') }} {{ z.mengeneinheit }} · {{ z.bezeichnung }} <small class="dezent">({{ z.lieferant }})</small><br>{% endfor %}</div>
+            {% else %}<span style="color:#c62828">ohne Zuordnung</span>{% endif %}
+            <a class="dezent" href="/parametrierung/stuecklisten?pos={{ p.pos_nr | urlencode }}{{ '&suche=' ~ suche | urlencode if suche }}{{ '&ohne=1' if ohne }}#editor">bearbeiten</a>
+        </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="3" class="dezent">Keine Positionen gefunden.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

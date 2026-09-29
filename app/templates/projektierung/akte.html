@@ -199,6 +199,7 @@
             <div>
                 {% if g.heizlast_kw %}<span class="pj-mono">{{ ('%g' | format(g.heizlast_kw)) | replace('.', ',') }} kW</span>
                     {{ '· ' ~ g.heizlast_datum.strftime('%d.%m.') if g.heizlast_datum }}
+                    {% if g.heizlast_quelle %}<small class="dezent">· Quelle {{ g.heizlast_quelle }}</small>{% endif %}
                 {% else %}–{% endif %}
                 {% if g.heizlast_link %}· <a href="{{ g.heizlast_link }}" target="_blank">Heizreport-PDF</a>{% endif %}
                 <details><summary class="dezent" style="cursor:pointer">bearbeiten / Upload</summary>

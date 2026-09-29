@@ -40,6 +40,7 @@ PROJEKTIERUNG_PFADE = ("/projektierung", "/montage", "/benachrichtigungen",
                        "/kunden", "/erfassungen", "/angebote",
                        "/parametrierung/projektierung-logik",
                        "/parametrierung/teams", "/parametrierung/subunternehmer",
+                       "/parametrierung/stuecklisten",       # V4 Phase 93.2
                        "/login", "/logout", "/static")
 PROJEKTIERUNG_SCHREIBEN = ("/projektierung", "/montage", "/benachrichtigungen",
                            "/parametrierung", "/login", "/logout")

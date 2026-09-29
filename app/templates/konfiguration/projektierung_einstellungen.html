@@ -87,8 +87,14 @@
     <input type="text" name="url_gc_online" value="{{ url_gc_online }}"
            placeholder="https://…">
     <h3 style="margin-top:16px">UGL-Bestellung Collin (Phase 80)</h3>
-    <label>Collin-Kundennummer</label>
+    <label>Collin-Kundennummer (UGL KOP, Stellen 4–13)</label>
     <input type="text" name="collin_kundennummer" value="{{ collin_kundennummer }}">
+    <label>Lieferantennummer von Collin in unserem System (KOP 14–23, optional)</label>
+    <input type="text" name="collin_lieferantennummer" value="{{ collin_lieferantennummer }}" maxlength="10">
+    <label>Standard-Lieferant neuer Stücklisten-Zeilen</label>
+    <input type="text" name="stueckliste_standard_lieferant" value="{{ standard_lieferant }}">
+    <p class="dezent" style="font-size:12px">Stücklisten-Pflege und Go-live-Prüfpunkte:
+        <a href="/parametrierung/stuecklisten">Parametrierung → Stücklisten</a>.</p>
     <label>Lieferadresse</label>
     <select name="ugl_lieferadresse">
         <option value="ausfuehrung" {{ 'selected' if ugl_lieferadresse != 'lager' }}>Ausführungsadresse des Projekts</option>
@@ -132,7 +138,49 @@
     <label>Test-Adresse der Projektierung (Demo-Modus: Kundenmails gehen NUR hierhin)</label>
     <input type="text" name="projekt_testadresse" value="{{ projekt_testadresse }}"
            placeholder="test@friondo.de">
+    <h3 style="margin-top:16px" id="heizreport">Heizreport-API (Phase 93)
+        <small class="dezent">{{ 'konfiguriert' if heizreport.konfiguriert else 'nicht konfiguriert – Link + Upload' }}</small></h3>
+    <p class="dezent" style="font-size:12px">Generischer REST-Client – Werte aus
+        der Business-Account-Doku eintragen (docs/heizreport-api.md). Ohne
+        Basis-URL + Schlüssel bleibt es an der Heizlast-Aufgabe beim Link + Upload.</p>
+    {% if heizreport_test %}<p class="meldung">Verbindungstest: {{ heizreport_test }}</p>{% endif %}
+    <label>Basis-URL</label>
+    <input type="text" name="heizreport_api_url" value="{{ heizreport.heizreport_api_url }}"
+           placeholder="https://heizreport.de/api/">
+    <label>Auth-Art</label>
+    <select name="heizreport_auth_art">
+        {% for wert, text in [('header', 'API-Key im Header'), ('bearer', 'Bearer-Token'),
+                              ('basic', 'Basic (Benutzer + Passwort)'), ('body', 'API-Key im JSON-Body')] %}
+        <option value="{{ wert }}" {{ 'selected' if heizreport.heizreport_auth_art == wert }}>{{ text }}</option>
+        {% endfor %}
+    </select>
+    <label>Header-Name (bei Header) bzw. JSON-Feld (bei Body)</label>
+    <input type="text" name="heizreport_auth_header" value="{{ heizreport.heizreport_auth_header }}"
+           placeholder="X-API-Key / apiKey">
+    <label>API-Schlüssel / Token / Passwort {{ '(gesetzt – leer lassen = unverändert)' if heizreport.heizreport_api_key }}</label>
+    <input type="password" name="heizreport_api_key" value="" autocomplete="new-password">
+    {% if heizreport.heizreport_api_key %}<label class="kontrollfeld"><input type="checkbox" name="heizreport_key_leeren"> Schlüssel entfernen</label>{% endif %}
+    <label>Benutzername (nur Basic)</label>
+    <input type="text" name="heizreport_benutzer" value="{{ heizreport.heizreport_benutzer }}">
+    {% for art, titel in [('anlegen', 'Projekt anlegen'), ('status', 'Projekt-Status'), ('ergebnis', 'Ergebnis abrufen')] %}
+    <label>Endpunkt „{{ titel }}“ (Pfad relativ zur Basis-URL, {projekt_key} erlaubt) · Methode</label>
+    <div style="display:flex;gap:6px">
+        <input type="text" name="heizreport_pfad_{{ art }}" value="{{ heizreport['heizreport_pfad_' ~ art] }}" style="flex:1">
+        <select name="heizreport_methode_{{ art }}">
+            {% for m in ['', 'POST', 'GET', 'PUT'] %}
+            <option value="{{ m }}" {{ 'selected' if heizreport['heizreport_methode_' ~ art] == m }}>{{ m or 'Standard' }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endfor %}
+    <label>Feld-Mapping hin (JSON: Zielfeld → Quelle kunde./projekt./gewerk./steckbrief./fp./erfassung./fest:/aktion:)</label>
+    <textarea name="heizreport_mapping_hin" rows="10" class="pj-mono">{{ heizreport.heizreport_mapping_hin }}</textarea>
+    <label>Feld-Mapping zurück (JSON: projekt_key / heizlast_kw / status → Pfad in der Antwort)</label>
+    <textarea name="heizreport_mapping_zurueck" rows="5" class="pj-mono">{{ heizreport.heizreport_mapping_zurueck }}</textarea>
     <button class="knopf" type="submit" style="margin-top:8px">Speichern</button>
+    <button class="knopf zweitrangig" type="submit" style="margin-top:8px"
+            formaction="/parametrierung/projektierung-einstellungen/heizreport-test"
+            {{ 'disabled' if not heizreport.heizreport_api_url }}>Verbindung testen</button>
 </form>
 
 <h2>Ordnervorlage (Anzeige)</h2>

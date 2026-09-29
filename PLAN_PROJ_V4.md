@@ -267,11 +267,11 @@ aber ohne Login nicht erreichbar – **eine öffentliche API-Dokumentation gibt 
 nicht**. Die Anbindung braucht Zugangsdaten und die Doku aus dem Business-
 Account.
 
-- [ ] Claude Code prüft zuerst, ob unter heizreport.com/heiz.report eine
+- [x] Claude Code prüft zuerst, ob unter heizreport.com/heiz.report eine
   Doku (OpenAPI/Swagger, Hilfeseiten, Postman) erreichbar ist; Ergebnis in
   `docs/heizreport-api.md` festhalten (URL, Auth-Verfahren, Endpunkte, oder
   „nicht öffentlich").
-- [ ] `heizreport_api.py` zu einem **generischen REST-Client** ausbauen, der
+- [x] `heizreport_api.py` zu einem **generischen REST-Client** ausbauen, der
   ohne Code-Änderung konfigurierbar ist: Parameter Basis-URL, Auth-Art
   (API-Key-Header / Bearer / Basic), Header-Name, Endpunkt-Pfade für „Projekt
   anlegen", „Projekt-Status", „Ergebnis abrufen", Feld-Mapping (JSON) für
@@ -281,13 +281,13 @@ Account.
   bei konfigurierter API die Buttons „Projekt im Heizreport anlegen" und
   „Ergebnis abrufen" (schreibt kW + Datum + Quelle „Heizreport API"), sonst wie
   bisher Link + Upload.
-- [ ] **Anfragetext für Andreas** in `docs/heizreport-api.md`: Nachricht an den
+- [x] **Anfragetext für Andreas** in `docs/heizreport-api.md`: Nachricht an den
   Heizreport-Support (Business-Account, API-Zugang, Doku, Test-Zugangsdaten,
   Rate-Limits, Datenschutz/AVV) – zum Kopieren.
 
 ### 93.2 UGL-Bestellung Collin zu Ende einrichten
 
-- [ ] **Format-Abgleich**: `ugl.py` gegen die UGL-4.0-Spezifikation prüfen
+- [x] **Format-Abgleich**: `ugl.py` gegen die UGL-4.0-Spezifikation prüfen
   (Satzarten KOP · ADR · POA · POZ (Positionstext) · END; feste 200 Byte;
   Feldpositionen und -längen; Zeichensatz; Anfrageart BE; Lieferdatum; Bestell-
   und Kommissionsnummer = PR-Nummer; Kundennummer Collin; Lieferantennummer;
@@ -296,13 +296,13 @@ Account.
   `docs/ugl-format.md` ablegen; sonst die Annahmen dort kennzeichnen und eine
   **Testdatei** `docs/ugl-beispiel.ugl` erzeugen, die Andreas an Collin zur
   Prüfung schicken kann (Begleittext zum Kopieren).
-- [ ] **Stücklisten-Pflege in der Oberfläche** (statt nur Excel): Parametrierung
+- [x] **Stücklisten-Pflege in der Oberfläche** (statt nur Excel): Parametrierung
   → Projektierung → **„Stücklisten"**: Tabelle je Angebotsposition (aus dem
   Artikelstamm, Positionen mit Artikel-Aktion) mit Zeilen `Lieferant ·
   Lieferanten-Artikelnummer · Bezeichnung · Menge je Einheit`; Filter „ohne
   Zuordnung"; Import/Export zum Blatt „Stücklisten" (Excel bleibt Master,
   UI schreibt zurück); Fortschritt „x von y Positionen zugeordnet".
-- [ ] **Bestell-Dialog** an der Aufgabe „Stückliste geprüft und Material
+- [x] **Bestell-Dialog** an der Aufgabe „Stückliste geprüft und Material
   bestellt": Vorschau der Materialzeilen (Position → Artikelnummer × Menge),
   rote Liste „ohne Zuordnung" mit Sprung in die Stücklisten-Pflege,
   Lieferdatum (Vorbelegung Montagebeginn − 3 Werktage, änderbar, 15-Min-
@@ -310,15 +310,15 @@ Account.
   → **UGL erzeugen** (Datei in Galerie „Montagedokumente" + Download) →
   Häkchen „bei Collin hochgeladen" mit Datum → Aufgabe erledigt; zweite
   Bestellung erzeugt Datei `…-2.ugl` (Nachbestellung, Verlaufseintrag).
-- [ ] Parametrierung: Collin-Kundennummer, Lieferantennummer (falls im Format
+- [x] Parametrierung: Collin-Kundennummer, Lieferantennummer (falls im Format
   nötig), Lager-Adresse, Standard-Lieferant je Stückliste; Go-live-Checkliste
   (Phase 86) prüft „Stücklisten ≥ 90 % zugeordnet" und „Testdatei von Collin
   bestätigt" (Häkchen).
-- [ ] IDS-Connect bleibt vorbereiteter Schalter (kein Bau).
+- [x] IDS-Connect bleibt vorbereiteter Schalter (kein Bau).
 
 ### 93.3 Live-Master und Docs
 
-- [ ] `CLAUDE.md`: Kopf auf nächste freie Versionsnummer (höchste + 1);
+- [x] `CLAUDE.md`: Kopf auf nächste freie Versionsnummer (höchste + 1);
   Abschnitt **„Neu in v<NN> – Projektierung V4 (abgestimmt 29.09.2026)"**
   anhängen, wörtlich:
 
@@ -360,7 +360,7 @@ Account.
   >   Testdatei), Stücklisten-Pflege in der Parametrierung, Bestell-Dialog mit
   >   Vorschau/Lieferdatum/Lieferadresse, Nachbestellungen, Go-live-Prüfpunkte.
 
-- [ ] `docs/projektierung.md` (Board, Ampeln, Pakete, BzA, UGL) und
+- [x] `docs/projektierung.md` (Board, Ampeln, Pakete, BzA, UGL) und
   `docs/projektierung-entscheidungen.md` fortschreiben; Bestandsimport-
   Anleitung (Phasenwerte) anpassen.
 

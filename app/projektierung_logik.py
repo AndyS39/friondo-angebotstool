@@ -113,6 +113,7 @@ class StuecklistenZeile:
     menge_je_einheit: float
     bezeichnung: str
     lieferant: str
+    mengeneinheit: str = "ST"       # V4 (Phase 93.2): Spalte F, UGL-Einheit
 
 
 FORMULAR_FELD_TYPEN = ("text", "zahl", "ja_nein", "auswahl", "foto",
@@ -363,8 +364,8 @@ def einlesen(pfad: Path | None = None) -> ProjektierungsLogik:
     # --- Stücklisten (v15, Phase 80: UGL-Bestellung) ---
     if "Stücklisten" in wb.sheetnames:
         for zeile in wb["Stücklisten"].iter_rows(min_row=2, values_only=True):
-            werte = [(_text(z)) for z in (tuple(zeile) + ("",) * 5)[:5]]
-            position, artnr, menge, bezeichnung, lieferant = werte
+            werte = [(_text(z)) for z in (tuple(zeile) + ("",) * 6)[:6]]
+            position, artnr, menge, bezeichnung, lieferant, einheit = werte
             if not position or not artnr:
                 continue
             try:
@@ -377,7 +378,8 @@ def einlesen(pfad: Path | None = None) -> ProjektierungsLogik:
                 StuecklistenZeile(position=position, lieferant_artnr=artnr,
                                   menge_je_einheit=menge_zahl,
                                   bezeichnung=bezeichnung,
-                                  lieferant=lieferant or "Collin"))
+                                  lieferant=lieferant or "Collin",
+                                  mengeneinheit=(einheit or "ST").upper()[:3]))
 
     # --- Formulare (v15, Phase 82: Montage-Backend) ---
     if "Formulare" in wb.sheetnames:

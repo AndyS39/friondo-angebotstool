@@ -115,6 +115,8 @@ _NACHTRAEGLICHE_SPALTEN = {
         "bza_datei_id": "INTEGER",
         "kfw_antragsnummer": "VARCHAR(60)",
         "kfw_zusage_am": "DATETIME",
+        "heizreport_projekt_key": "VARCHAR(60)",               # V4 Phase 93.1
+        "heizlast_quelle": "VARCHAR(60)",                      # V4 Phase 93.1
         "fp_antworten_json": "TEXT NOT NULL DEFAULT '{}'",     # v15 Phase 80
         "fp_vorbelegt_json": "TEXT NOT NULL DEFAULT '{}'",     # v15 Phase 80
         "fp_seite_index": "INTEGER NOT NULL DEFAULT 0",        # v15 Phase 80

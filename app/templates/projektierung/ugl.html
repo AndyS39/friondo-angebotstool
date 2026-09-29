@@ -6,53 +6,94 @@
 <div class="seitenkopf">
     <div>
         <div class="pj-eyebrow">Projektierung · {{ projekt.nummer }} · {{ gewerk.sparte }}</div>
-        <h1>UGL-Bestellung (Collin)</h1>
+        <h1>UGL-Bestellung (Collin){% if naechste_nr > 1 %} <small class="dezent">· Nachbestellung {{ naechste_nr }}</small>{% endif %}</h1>
     </div>
     <a class="pj-btn" href="/projektierung/projekt/{{ projekt.id }}">Zurück zur Akte</a>
 </div>
 
-{% if meldung %}<div class="pj-note crit">{{ meldung }}</div>{% endif %}
+{% if meldung %}<div class="pj-note {{ 'crit' if 'fehlt' in meldung or 'Keine' in meldung else '' }}">{{ meldung }}</div>{% endif %}
 
-<div class="pj-kv" style="max-width:560px">
-    <span>Kundennummer</span>
-    <div>{{ kundennummer or 'FEHLT – Parametrierung → Projektierung-Einstellungen' }}</div>
-    <span>Lieferdatum</span>
-    <div>{{ lieferdatum.strftime('%d.%m.%Y') if lieferdatum else 'kein Montagetermin – heute + 7 Tage' }}
-        <small class="dezent">(Montagebeginn − 3 Werktage)</small></div>
-    <span>Lieferadresse</span>
-    <div>{{ 'Lager (Parametrierung)' if lieferadresse == 'lager' else 'Ausführungsadresse' }}</div>
-</div>
-
-<h3 style="margin-top:14px">Materialzeilen <small class="dezent">{{ zeilen | length }} Artikel</small></h3>
+<h3 style="margin-top:14px">Vorschau Materialzeilen <small class="dezent">{{ zeilen | length }} Artikel</small></h3>
 <table class="tabelle">
-    <thead><tr><th>Artikelnummer (Collin)</th><th>Bezeichnung</th>
-        <th style="text-align:right">Menge</th></tr></thead>
+    <thead><tr><th>Position</th><th>Artikelnummer (Collin)</th><th>Bezeichnung</th>
+        <th style="text-align:right">Menge</th><th>Einheit</th></tr></thead>
     <tbody>
     {% for z in zeilen %}
-    <tr><td class="pj-mono">{{ z.artnr }}</td><td>{{ z.bezeichnung }}</td>
-        <td style="text-align:right">{{ '%g' | format(z.menge) }}</td></tr>
+    <tr><td class="pj-mono">{{ z.positionen | join(', ') }}</td>
+        <td class="pj-mono">{{ z.artnr }}</td><td>{{ z.bezeichnung }}</td>
+        <td style="text-align:right">{{ ('%g' | format(z.menge)) | replace('.', ',') }}</td>
+        <td>{{ z.einheit }}</td></tr>
     {% else %}
-    <tr><td colspan="3" class="dezent">Keine Zuordnungen – Blatt „Stücklisten“
-        in der Logik-Excel pflegen.</td></tr>
+    <tr><td colspan="5" class="dezent">Keine Zuordnungen – Stücklisten pflegen.</td></tr>
     {% endfor %}
     </tbody>
 </table>
 
 {% if fehlend %}
 <div class="pj-note crit" style="margin-top:8px">
-    <b>Positionen ohne Stücklisten-Zuordnung</b> (werden NICHT bestellt):<br>
-    {{ fehlend | join('<br>') | safe }}
+    <b>Positionen ohne Stücklisten-Zuordnung</b> (werden NICHT bestellt):
+    <ul style="margin:4px 0 0 18px">
+    {% for f in fehlend %}
+        {% set nr = f.split(' · ')[0] %}
+        <li>{{ f }} · <a href="/parametrierung/stuecklisten?pos={{ nr | urlencode }}#editor">Stückliste pflegen →</a></li>
+    {% endfor %}
+    </ul>
 </div>
 {% endif %}
 
-<div class="pj-btnrow" style="margin-top:14px">
-    <form method="post" action="/projektierung/gewerk/{{ gewerk.id }}/ugl">
+<form method="post" action="/projektierung/gewerk/{{ gewerk.id }}/ugl" class="formular"
+      style="max-width:620px;margin-top:14px">
+    <div class="pj-kv">
+        <span>Kundennummer</span>
+        <div>{{ kundennummer or 'FEHLT – Projektierung-Einstellungen' }}</div>
+        <span>Lieferdatum</span>
+        <div><input type="date" name="lieferdatum" value="{{ lieferdatum.strftime('%Y-%m-%d') }}">
+            <small class="dezent">{{ 'Montagebeginn − 3 Werktage' if lieferdatum_aus_termin else 'kein Montagetermin – heute + 7 Tage' }}</small></div>
+        <span>Lieferadresse</span>
+        <div>
+            <label class="kontrollfeld"><input type="radio" name="lieferadresse" value="ausfuehrung"
+                {{ 'checked' if lieferadresse != 'lager' }}> Ausführungsort
+                <small class="dezent">{{ projekt.ausfuehrung_strasse }}, {{ projekt.ausfuehrung_plz }} {{ projekt.ausfuehrung_ort }}</small></label><br>
+            <label class="kontrollfeld"><input type="radio" name="lieferadresse" value="lager"
+                {{ 'checked' if lieferadresse == 'lager' }}> Lager
+                <small class="dezent">{{ lager_adresse | replace('\n', ', ') or '(Adresse in den Einstellungen)' }}</small></label>
+        </div>
+        <span>Bemerkung</span>
+        <div><input type="text" name="bemerkung" maxlength="80" style="width:100%"
+                    placeholder="z. B. Anlieferung ab 8 Uhr, Kran vor Ort"></div>
+    </div>
+    <div class="pj-btnrow" style="margin-top:10px">
         <button class="pj-btn primary" type="submit"
-                {{ 'disabled' if not zeilen or not kundennummer }}>UGL-Datei erzeugen + herunterladen</button>
-    </form>
-    {% if url_gc %}<a class="pj-btn" href="{{ url_gc }}" target="_blank" rel="noopener">GC Online Plus öffnen ↗</a>{% endif %}
-</div>
-<p class="dezent" style="font-size:12px">Die Datei landet zusätzlich in der
-    Galerie „Montagedokumente“. Upload in GC Online Plus manuell;
-    IDS-Connect folgt als Schalter, sobald die Anbindung steht.</p>
+                {{ 'disabled' if not zeilen or not kundennummer }}>UGL erzeugen{{ ' (-' ~ naechste_nr ~ ')' if naechste_nr > 1 }} + herunterladen</button>
+        {% if url_gc %}<a class="pj-btn" href="{{ url_gc }}" target="_blank" rel="noopener">GC Online Plus öffnen ↗</a>{% endif %}
+    </div>
+    <p class="dezent" style="font-size:12px">Die Datei landet zusätzlich in der
+        Galerie „Montagedokumente“. Upload in GC Online Plus manuell; danach
+        unten „bei Collin hochgeladen“ abhaken. IDS-Connect folgt als Schalter.</p>
+</form>
+
+{% if bestellungen %}
+<h3 style="margin-top:14px">Bestellungen</h3>
+<table class="tabelle">
+    <thead><tr><th>Nr.</th><th>Datei</th><th>erzeugt</th><th>Lieferdatum</th><th>Adresse</th>
+        <th>Bemerkung</th><th>bei Collin hochgeladen</th></tr></thead>
+    <tbody>
+    {% for b in bestellungen %}
+    <tr><td>{{ b.nr }}{{ ' (Nachbestellung)' if b.nr > 1 }}</td>
+        <td class="pj-mono">{% if b.galerie_datei_id %}<a href="/vorgaenge/galerie/datei/{{ b.galerie_datei_id }}">{{ b.dateiname }}</a>{% else %}{{ b.dateiname }}{% endif %}</td>
+        <td>{{ b.erstellt_am.strftime('%d.%m.%Y %H:%M') }}</td>
+        <td>{{ b.lieferdatum.strftime('%d.%m.%Y') if b.lieferdatum else '–' }}</td>
+        <td>{{ 'Lager' if b.lieferadresse == 'lager' else 'Ausführungsort' }}</td>
+        <td>{{ b.bemerkung }}</td>
+        <td>{% if b.hochgeladen_am %}✓ {{ b.hochgeladen_am.strftime('%d.%m.%Y') }}
+            {% else %}
+            <form method="post" action="/projektierung/gewerk/{{ gewerk.id }}/ugl/{{ b.id }}/hochgeladen" class="pj-btnrow">
+                <input type="date" name="datum" value="{{ b.erstellt_am.strftime('%Y-%m-%d') }}">
+                <button class="pj-btn" type="submit">✓ hochgeladen</button>
+            </form>
+            {% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
 {% endblock %}

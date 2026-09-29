@@ -654,3 +654,61 @@ Pilot-Sendesperre).
 - Migration `migration_bza_v4`: bestehende BzA-Link-Aufgaben → Typ bza mit
   neuem Titel (Status bleibt); KfW-Schritt an offene Gewerke mit aktiver
   Montagevorbereitung.
+
+### Phase 93 – Heizreport-API, UGL, Docs
+
+- **Heizreport – Recherche:** `https://heizreport.de/api/` antwortet mit
+  HTTP 400 „kein JSON Object empfangen“ (JSON-POST erwartet); die Hilfeseiten
+  zur API sind ohne Login 404, lesbar ist nur die Webhook-Hilfe (`event`,
+  `authenticate`, `projektKey`). **Keine öffentliche Doku** – Details und
+  Anfragetext in docs/heizreport-api.md.
+- **Heizreport – Client:** generisch (Basis-URL, Auth-Art header/bearer/basic/
+  **body**, Header-/Feldname, drei Endpunkte mit Methode, Mapping hin/zurück
+  als JSON). Auth-Art „body“ ergänzt, weil die Recherche auf `apiKey` im
+  JSON-Body deutet. Der Schlüssel wird im Formular nie angezeigt; leeres Feld
+  = unverändert, eigenes Häkchen zum Entfernen. „Verbindung testen“ übernimmt
+  zuerst die Formularwerte der Heizreport-Felder und zeigt HTTP-Code +
+  Antwortauszug (auch 4xx gilt als „erreichbar“). Neue Gewerk-Spalten
+  `heizreport_projekt_key`, `heizlast_quelle` („Heizreport API“ bzw.
+  „manuell“ bei Handeingabe). Webhooks nicht angebunden (Tool nicht
+  öffentlich erreichbar).
+- **UGL – Format:** gegen „UGL Version 4 – Beschreibung Datenaustausch“
+  neu geschrieben (Feldtabelle docs/ugl-format.md). Abweichungen vom Plan /
+  Annahmen: **POT statt POZ** (POZ = Zuschläge laut Spezifikation), Zeichensatz
+  **cp850**, Dokumentdatum `JJJJMMTT` (Spezifikation: „JJJMMTT“ bei 8 Stellen),
+  Dateiname `PR-….ugl` / `PR-…-2.ugl` statt `A<JJJMMTT>.<nnn>` (manueller
+  Upload; Umstellung trivial). Lieferantennummer (KOP 14–23) als neuer
+  Parameter `collin_lieferantennummer`, optional. Mengen je Artikelnummer
+  über alle Positionen summiert; POT nennt die Herkunftspositionen.
+  `.gitattributes`: `*.ugl binary`, damit CR/LF und cp850 im Repo byte-genau
+  bleiben.
+- **UGL – Bestellungen:** neue Tabelle `ugl_bestellungen` (nr, Datei,
+  Lieferdatum, -adresse, Bemerkung, hochgeladen_am). Erzeugen setzt die
+  Aufgabe auf „in Arbeit“, erst „✓ hochgeladen“ erledigt sie. Jede weitere
+  Datei = Nachbestellung (`-2`, `-3` …, Verlaufseintrag,
+  „Nachbestellung“ im Auftragstext und Endesatz).
+- **Stücklisten-Pflege:** Liste = aktive Artikel mit Positionsnummer ohne
+  Z-Pakete (339 im Dev-Stamm) + Stücklisten zu Positionen außerhalb des
+  Stamms. Neue Spalte F `mengeneinheit` im Blatt (Standard ST). Bearbeitet
+  wird immer eine Position im Editor oben (`?pos=`), damit die Seite nicht
+  340 Formulare lädt. Rückschreiben: Blatt komplett neu (sortiert), Backup in
+  `data/backups`, Cache neu laden. Zugriff Admin/Innendienst/Projektierung
+  (Pfad in PROJEKTIERUNG_PFADE ergänzt); das Go-live-Häkchen setzt nur Admin.
+  Parameter `stueckliste_standard_lieferant` (Vorbelegung neuer Zeilen).
+- **Go-live-Prüfpunkte:** Die Go-live-Checkliste aus PLAN_PROJ_V3 Phase 86
+  existiert nicht – die beiden Prüfpunkte („Stücklisten ≥ 90 % zugeordnet“
+  automatisch, „Testdatei von Collin bestätigt“ als Häkchen mit Datum/Name,
+  Parameter `ugl_testdatei_bestaetigt`) stehen deshalb oben auf der
+  Stücklisten-Seite; beim Bau von V3 dorthin verlinken.
+- **RISIKO Server-Update:** `projektierung_logik_v1.xlsx` ist git-verfolgt.
+  Speichern in der Stücklisten-Pflege (wie schon der Excel-Upload) ändert die
+  Datei auf dem Server; `update.bat` (`git pull --ff-only`) bricht dann ab,
+  sobald ein Update dieselbe Datei mitbringt. Vorgehen: vor dem Update die
+  Server-Datei sichern/herunterladen und in den Master übernehmen oder
+  `git checkout -- projektierung_logik_v1.xlsx` vor dem Pull und danach die
+  Stücklisten per CSV-Import zurückspielen. Langfristig: Stücklisten aus
+  der Excel in eine DB-Tabelle verlagern (Excel nur noch Import/Export).
+- **IDS-Connect** bleibt Schalter ohne Funktion.
+- **Bestandsimport:** Phase 85 existiert nicht; die Phasenwerte für einen
+  späteren Import sind in docs/projektierung.md dokumentiert.
+

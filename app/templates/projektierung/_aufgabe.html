@@ -183,6 +183,21 @@
         <div class="pj-akt">
             <a class="pj-btn" href="/projektierung/gewerk/{{ g.id }}/ugl">📦 Material bestellen (UGL)</a>
         </div>
+        {% elif a.aktion_typ == 'api' and a.aktion_wert == 'heizreport' and heizreport_konfiguriert %}
+        {# V4 (Phase 93.1): konfigurierte Heizreport-API #}
+        <div class="pj-akt">
+            <form method="post" action="/projektierung/gewerk/{{ g.id }}/heizreport/anlegen" data-pj-ajax style="display:inline">
+                <input type="hidden" name="aufgabe_id" value="{{ a.id }}">
+                <button class="pj-btn" type="submit">{{ 'Projekt erneut anlegen' if g.heizreport_projekt_key else 'Projekt im Heizreport anlegen' }}</button>
+            </form>
+            {% if g.heizreport_projekt_key %}
+            <form method="post" action="/projektierung/gewerk/{{ g.id }}/heizreport/ergebnis" data-pj-ajax style="display:inline">
+                <input type="hidden" name="aufgabe_id" value="{{ a.id }}">
+                <button class="pj-btn primary" type="submit">Ergebnis abrufen</button>
+            </form>
+            <small class="pj-akt-hinweis">Heizreport-Projekt {{ g.heizreport_projekt_key }}{% if g.heizlast_kw %} · {{ ('%g' | format(g.heizlast_kw)) | replace('.', ',') }} kW ({{ g.heizlast_quelle or 'manuell' }}){% endif %}</small>
+            {% endif %}
+        </div>
         {% elif a.aktion_typ == 'api' %}
         <div class="pj-akt">
             {% set url = link_parameter.get('url_' ~ a.aktion_wert, '') %}
@@ -193,7 +208,9 @@
             {% if projekt.vorgang_id and a.aktion_wert == 'heizreport' %}
             <a class="pj-btn" href="/vorgaenge/{{ projekt.vorgang_id }}#galerie">🖼 Ablage</a>
             {% endif %}
-            <small class="pj-akt-hinweis">API-Anbindung folgt (Phase 80)</small>
+            {% if a.aktion_wert == 'heizreport' %}
+            <small class="pj-akt-hinweis">API nicht konfiguriert – Link + Upload (Projektierung-Einstellungen)</small>
+            {% endif %}
         </div>
         {% endif %}
     </div>

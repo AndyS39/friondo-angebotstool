@@ -150,3 +150,62 @@ Ordner der Ebene „gewerk“ liegen je Sparte unter `<Sparte>/<Ordner>`.
   den drei Formularen (Montagebericht, Inbetriebnahme-, Abnahme-
   protokoll; Felder im Blatt „Formulare", Unterschrift auf dem Gerät,
   PDF in der Galerie „Inbetrieb-/Abnahme"). Keine Preise.
+
+## Neu in V4 (29.09.2026) – Kurzüberblick
+
+- **Board:** Auftragseingang in zwei Spalten – *unterminiert* und
+  *terminiert* (chronologisch nach Montagebeginn). Karte von „unterminiert“
+  auf „terminiert“ ziehen öffnet direkt „Team + Termin“. Alle Spalten sind
+  chronologisch sortiert, Unterminierte stehen unten. Die frühere Phase
+  „Abnahme & Freigabe“ ist geteilt: **Abnahme** (Montagebericht,
+  IBN-Protokoll, Abnahmeprotokoll, Restarbeiten, Abweichungen/Nachtrag) und
+  **Freigabe** (Rechnung freigegeben, BnD). Wechsel Abnahme → Freigabe erst,
+  wenn die Pflichtaufgaben der Abnahme erledigt sind; „Rechnung freigeben“
+  gibt es nur in der Phase Freigabe.
+- **Ampeln:** Die *Vorlauf-Ampel* (Punkt vor dem Termin-Badge, Spalte
+  „Vorlauf“ in der Liste, Filter im Board) zeigt die Zeit bis Montagebeginn:
+  grün > 8 Wochen, gelb 4–8, rot < 4 oder unterminiert (Schwellen in den
+  Projektierung-Einstellungen). Die *Planungs-Ampel* (Aufgabenstand) bleibt
+  davon getrennt; darunter steht, ob der Wächter zur nächsten Phase erfüllt
+  ist.
+- **Bedienung:** Uhrzeiten im 15-Minuten-Takt. Häkchen, Auswahl, Kommentare,
+  Steckbrief-Felder usw. speichern ohne Seitensprung; nach anderen Aktionen
+  steht die Seite wieder an derselben Stelle.
+- **Pakete:** „Montageteam zuweisen“ ist Schritt 2 im Auftragseingang (erledigt
+  sich mit „Team + Termin“), „Auftragsunterlagen prüfen“ Schritt 1 in
+  Planung WP. Fit for Future: HEMS / iMSys / SpotDynamic mit Ja/Nein,
+  vorgewählt aus dem Steckbrief – „Übernehmen“ bestätigt. Neue
+  Feinplanungs-Fragen iMSys, HEMS, Restöl; Steckbrief-Felder Restöl,
+  Stemmarbeiten, Erdleitung. Sub-Mails GaLa/Entsorgung enthalten Erdarbeiten,
+  Restöl und Stemmarbeiten automatisch.
+- **BzA:** Aufgabe „BzA erstellen und an Kunden senden“ (nur bei gefördertem
+  Auftrag): Portal ↗ · 📋 Datenblatt · **BzA erfassen** (BzA-ID, Datum, PDF →
+  Galerie „Förderung“) → Kundenmail „BzA“ mit ID, Förderbetrag und KfW-Link
+  (Vorlage in den Projektierung-Einstellungen; im Demo-Modus nur an die
+  Test-Adresse). KfW-Antragsnummer und Zusage-Datum in der
+  Montagevorbereitung (freiwillig, kein Wächter).
+- **Heizreport:** Ist die API in den Projektierung-Einstellungen konfiguriert
+  („Verbindung testen“), zeigt die Aufgabe „Heizlastberechnung liegt vor“
+  die Knöpfe **Projekt im Heizreport anlegen** und **Ergebnis abrufen**
+  (übernimmt kW, Datum, Quelle „Heizreport API“). Sonst wie bisher Link +
+  Upload. Einrichtung und Anfrage an den Support: docs/heizreport-api.md.
+- **UGL-Bestellung Collin:** „📦 Material bestellen (UGL)“ öffnet den
+  Bestell-Dialog: Vorschau Position → Artikelnummer × Menge, rote Liste
+  „ohne Zuordnung“ mit Sprung in die Stücklisten-Pflege, Lieferdatum
+  (Montagebeginn − 3 Werktage), Lieferadresse (Ausführungsort | Lager),
+  Bemerkung → **UGL erzeugen** (Download + Galerie „Montagedokumente“).
+  Nach dem Upload in GC Online Plus „✓ hochgeladen“ mit Datum → Aufgabe
+  erledigt. Jede weitere Bestellung ist eine Nachbestellung (`PR-…-2.ugl`).
+- **Stücklisten-Pflege:** Parametrierung → **Stücklisten**: je
+  Angebotsposition Lieferant · Artikelnummer · Bezeichnung · Menge je
+  Einheit · Einheit; Filter „nur ohne Zuordnung“, Fortschritt x von y,
+  CSV-Export/-Import. Speichern schreibt in das Blatt „Stücklisten“ der
+  Projektierungs-Logik (Backup vorher). Oben die Go-live-Prüfpunkte
+  (≥ 90 % zugeordnet, Kundennummer, „Testdatei von Collin bestätigt“).
+  Format und Testdatei: docs/ugl-format.md, docs/ugl-beispiel.ugl.
+- **Bestandsimport:** Für einen späteren Import bestehender Projekte gelten
+  die Phasenwerte `auftragseingang`, `feinplanung_vot`, `planung`,
+  `montagevorbereitung`, `montage`, `abnahme`, `freigabe`, `abgeschlossen`,
+  `storniert` (`abnahme_freigabe` ist Altwert und wird von migrate.py auf
+  `abnahme` umgestellt).
+

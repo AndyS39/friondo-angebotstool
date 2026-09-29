@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v16)
+# Friondo Angebotstool – Projektkontext (v17)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -541,3 +541,43 @@ Team-Feedback belegt – Plan-Text „Neu in v13“ entspricht diesem Abschnitt.
   prüfen“ für Katalog-Erfassungen. Tests: `tests/test_pv_v13.py`.
 - Offen/Zulieferung: Dachbelegungstool, Sigenergy-/Modul-Datenblatt;
   fachliche Rückfragen siehe docs/nach-dem-update-v13.md.
+
+## Neu in v17 – Projektierung V4 (abgestimmt 29.09.2026)
+
+- **Board:** Auftragseingang als zwei Spalten (unterminiert | terminiert,
+  chronologisch nach Montagebeginn; Drop auf „terminiert" öffnet Team +
+  Termin); alle Spalten chronologisch, Unterminierte unten. Phasen
+  `abnahme` und `freigabe` ersetzen `abnahme_freigabe` (Pakete Abnahme:
+  Montagebericht · IBN-Protokoll · Abnahmeprotokoll · Restarbeiten ·
+  Abweichungen/Nachtrag; Freigabe: Rechnung freigegeben · BnD); Wächter
+  Abnahme → Freigabe = Pflichtaufgaben Abnahme.
+- **Vorlauf-Ampel** je Gewerk bis Montagebeginn: grün > 8 Wochen, gelb
+  4–8, rot < 4 / unterminiert (Parameter `vorlauf_gruen_ab_wochen`,
+  `vorlauf_gelb_ab_wochen`); Punkt vor dem Termin-Badge, Spalte in Liste,
+  Filter; getrennt von der Planungs-Ampel.
+- **Zeiten im 15-Minuten-Takt** (step 900, serverseitige Rundung) in allen
+  Projektierungs- und Montage-Dialogen; Aktionen in der Akte per fetch
+  ohne Seitensprung (JSON-Antwort bei Accept application/json, Redirect
+  als Fallback), Scroll-Position wird wiederhergestellt.
+- **Pakete:** „Auftragsunterlagen prüfen" jetzt Schritt 1 in Planung WP;
+  „Montageteam zuweisen" (Team + Termin) jetzt Schritt 2 im Auftragseingang;
+  Fit for Future mit Ja/Nein für HEMS, iMSys und SpotDynamic (vorbelegt aus
+  dem Steckbrief, bestätigt per Klick); FP-Fragen FP-E05 iMSys, FP-E06
+  HEMS, FP-O04 Restöl; Steckbrief-Felder `restoel_liter`, `stemmarbeiten`
+  (Pos. 126), `erdleitung_m` (Pos. 139/140), `imsys`, `hems` aus FP.
+- **Sub-Mails:** Platzhalter {restoel}, {stemmarbeiten}, {erdarbeiten};
+  GaLa-Vorlage mit Erdarbeiten, Entsorgungs-Vorlage mit Restöl und
+  Stemmarbeiten.
+- **BzA:** Felder bza_id, bza_erstellt_am, bza_gesendet_am, bza_datei_id,
+  kfw_antragsnummer, kfw_zusage_am; Aufgabe mit Buttons Portal ↗ ·
+  Datenblatt · BzA erfassen (ID, Datum, PDF in Galerie-Ordner „Förderung");
+  automatische Kundenmail „BzA" (Vorlage in der Parametrierung, Platzhalter
+  {bza_id}, {foerderbetrag}, {link_kfw}) über projektierung@; nicht
+  verpflichtende Aufgabe „KfW-Antragsnummer/Zusage" in Montagevorbereitung
+  (kein Wächter).
+- **Heizreport:** generischer, in der Parametrierung konfigurierbarer
+  REST-Client mit Verbindungstest; Buttons an der Heizlast-Aufgabe bei
+  konfigurierter API; `docs/heizreport-api.md` mit Anfragetext (API-Doku
+  nicht öffentlich). **UGL:** Formatabgleich (docs/ugl-format.md,
+  Testdatei), Stücklisten-Pflege in der Parametrierung, Bestell-Dialog mit
+  Vorschau/Lieferdatum/Lieferadresse, Nachbestellungen, Go-live-Prüfpunkte.

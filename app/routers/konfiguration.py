@@ -658,6 +658,60 @@ async def sub_speichern(request: Request, session: Session = Depends(get_session
                             status_code=303)
 
 
+def _heizreport_werte(session) -> dict:
+    """Heizreport-Parameter für das Formular (Mappings mit Startwerten)."""
+    from app import heizreport_api
+    werte = {name: heizreport_api.p(session, name) for name in heizreport_api.PARAMETER}
+    werte["heizreport_mapping_hin"] = (werte["heizreport_mapping_hin"]
+                                       or heizreport_api.MAPPING_HIN_START)
+    werte["heizreport_mapping_zurueck"] = (werte["heizreport_mapping_zurueck"]
+                                           or heizreport_api.MAPPING_ZURUECK_START)
+    werte["heizreport_auth_art"] = werte["heizreport_auth_art"] or "header"
+    werte["konfiguriert"] = heizreport_api.konfiguriert(session)
+    return werte
+
+
+def _heizreport_speichern(session, form) -> None:
+    import json as json_modul
+
+    from app import heizreport_api
+    from app import projektierung as kern
+    if "heizreport_api_url" not in form:
+        return
+    for name in heizreport_api.PARAMETER:
+        wert = (form.get(name) or "").strip()
+        if name == "heizreport_auth_art" and wert not in ("header", "bearer", "basic", "body"):
+            continue
+        if name.startswith("heizreport_methode_") and wert not in ("", "GET", "POST", "PUT"):
+            continue
+        if name.startswith("heizreport_mapping_") and wert:
+            try:
+                json_modul.loads(wert)
+            except ValueError:
+                continue                     # ungültiges JSON: alten Wert behalten
+        # Schlüssel nur überschreiben, wenn etwas eingetragen wurde
+        if name == "heizreport_api_key" and not wert and not form.get("heizreport_key_leeren"):
+            continue
+        kern.parameter_setzen(session, name, wert[:5000])
+
+
+@router.post("/projektierung-einstellungen/heizreport-test")
+async def heizreport_verbindung_testen(request: Request,
+                                       session: Session = Depends(get_session)):
+    """V4 (Phase 93.1): GET auf die Basis-URL mit Auth – Antwort-Code anzeigen."""
+    from urllib.parse import quote_plus
+
+    from app import heizreport_api
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    # Formularwerte der Heizreport-Felder vorher übernehmen (Test = Stand der Maske)
+    _heizreport_speichern(session, await request.form())
+    session.commit()
+    _ok, text = heizreport_api.verbindung_testen(session)
+    return RedirectResponse("/parametrierung/projektierung-einstellungen?heizreport_test="
+                            + quote_plus(text) + "#heizreport", status_code=303)
+
+
 @router.get("/projektierung-einstellungen")
 async def projektierung_einstellungen(request: Request,
                                       session: Session = Depends(get_session)):
@@ -696,6 +750,14 @@ async def projektierung_einstellungen(request: Request,
                   url_gc_online=kern.parameter_holen(session, "url_gc_online", ""),
                   collin_kundennummer=kern.parameter_holen(
                       session, "collin_kundennummer", ""),
+                  # V4 (Phase 93.2): Lieferantennummer (KOP 14–23) + Standard-Lieferant
+                  collin_lieferantennummer=kern.parameter_holen(
+                      session, "collin_lieferantennummer", ""),
+                  standard_lieferant=kern.parameter_holen(
+                      session, "stueckliste_standard_lieferant", "Collin"),
+                  # V4 (Phase 93.1): Heizreport-API (generischer REST-Client)
+                  heizreport=_heizreport_werte(session),
+                  heizreport_test=request.query_params.get("heizreport_test", ""),
                   ugl_lieferadresse=kern.parameter_holen(
                       session, "ugl_lieferadresse", "ausfuehrung"),
                   lager_adresse=kern.parameter_holen(session, "lager_adresse", ""),
@@ -757,6 +819,14 @@ async def projektierung_einstellungen_speichern(
     if form.get("ugl_lieferadresse") in ("ausfuehrung", "lager"):
         kern.parameter_setzen(session, "ugl_lieferadresse",
                               form.get("ugl_lieferadresse"))
+    # V4 (Phase 93.2): Lieferantennummer + Standard-Lieferant
+    kern.parameter_setzen(session, "collin_lieferantennummer",
+                          (form.get("collin_lieferantennummer") or "").strip()[:10])
+    if (form.get("stueckliste_standard_lieferant") or "").strip():
+        kern.parameter_setzen(session, "stueckliste_standard_lieferant",
+                              form.get("stueckliste_standard_lieferant").strip()[:60])
+    # V4 (Phase 93.1): Heizreport-API
+    _heizreport_speichern(session, form)
     kern.parameter_setzen(session, "lager_adresse",
                           (form.get("lager_adresse") or "").strip()[:500])
     if (form.get("bza_fachunternehmer") or "").strip():
@@ -811,6 +881,96 @@ async def projektierung_einstellungen_speichern(
     return RedirectResponse("/parametrierung/projektierung-einstellungen?meldung="
                             + quote_plus("Einstellungen gespeichert."),
                             status_code=303)
+
+
+# --- V4 (PLAN_PROJ_V4 Phase 93.2): Stücklisten-Pflege ------------------------------
+
+def _stuecklisten_zurueck(meldung: str, anker: str = ""):
+    from urllib.parse import quote_plus
+    return RedirectResponse("/parametrierung/stuecklisten?meldung=" + quote_plus(meldung)
+                            + (f"&pos={quote_plus(anker)}#editor" if anker else ""),
+                            status_code=303)
+
+
+@router.get("/stuecklisten")
+async def stuecklisten_seite(request: Request, session: Session = Depends(get_session)):
+    """Stücklisten je Angebotsposition (Artikelstamm) – Excel bleibt Master,
+    die Maske schreibt ins Blatt „Stücklisten“ zurück."""
+    from app import projektierung as kern
+    from app import projektierung_logik, stuecklisten
+    ohne = request.query_params.get("ohne") == "1"
+    suche = (request.query_params.get("suche") or "").strip()
+    zugeordnet, gesamt = stuecklisten.fortschritt(session)
+    quote = zugeordnet / gesamt if gesamt else 0.0
+    pos = (request.query_params.get("pos") or "").strip()
+    editor = next((p for p in stuecklisten.positionen(session) if p["pos_nr"] == pos), None)
+    session.commit()
+    return render(request, "konfiguration/stuecklisten.html", aktiv="/parametrierung",
+                  positionen=stuecklisten.positionen(session, nur_ohne=ohne, suche=suche),
+                  editor=editor,
+                  ohne=ohne, suche=suche, zugeordnet=zugeordnet, gesamt=gesamt,
+                  quote=quote, quote_ok=quote >= stuecklisten.GO_LIVE_QUOTE,
+                  testdatei_bestaetigt=kern.parameter_holen(
+                      session, "ugl_testdatei_bestaetigt", ""),
+                  kundennummer=kern.parameter_holen(session, "collin_kundennummer", ""),
+                  standard_lieferant=kern.parameter_holen(
+                      session, "stueckliste_standard_lieferant", "Collin"),
+                  stand=projektierung_logik.hole_logik(session).stand,
+                  darf_admin=request.state.benutzer.rolle == "admin",
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.get("/stuecklisten/export.csv")
+async def stuecklisten_export(session: Session = Depends(get_session)):
+    from fastapi.responses import Response
+
+    from app import stuecklisten
+    return Response(content=stuecklisten.csv_export(session).encode("utf-8"),
+                    media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition":
+                             'attachment; filename="stuecklisten.csv"'})
+
+
+@router.post("/stuecklisten/import")
+async def stuecklisten_import(request: Request, session: Session = Depends(get_session)):
+    from app import stuecklisten
+    form = await request.form()
+    datei = form.get("datei")
+    if datei is None or not getattr(datei, "filename", ""):
+        return _stuecklisten_zurueck("Bitte eine CSV-Datei wählen.")
+    meldung = stuecklisten.csv_import(session, await datei.read())
+    session.commit()
+    return _stuecklisten_zurueck(meldung)
+
+
+@router.post("/stuecklisten/golive")
+async def stuecklisten_golive(request: Request, session: Session = Depends(get_session)):
+    """Go-live-Prüfpunkt „Testdatei von Collin bestätigt“ (Häkchen, Admin)."""
+    from datetime import datetime as dt
+
+    from app import projektierung as kern
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    form = await request.form()
+    kern.parameter_setzen(session, "ugl_testdatei_bestaetigt",
+                          f"{dt.now():%d.%m.%Y} · {request.state.benutzer.name}"
+                          if form.get("bestaetigt") == "on" else "")
+    session.commit()
+    return _stuecklisten_zurueck("Go-live-Prüfpunkt gespeichert.")
+
+
+@router.post("/stuecklisten/{pos_nr}")
+async def stueckliste_speichern(request: Request, pos_nr: str,
+                                session: Session = Depends(get_session)):
+    from app import stuecklisten
+    form = await request.form()
+    zeilen = []
+    for i in range(int(form.get("anzahl") or 0)):
+        zeilen.append({feld: form.get(f"{feld}_{i}", "")
+                       for feld in ("artnr", "menge", "bezeichnung", "lieferant", "einheit")})
+    meldung = stuecklisten.position_speichern(session, pos_nr, zeilen)
+    session.commit()
+    return _stuecklisten_zurueck(meldung, pos_nr)
 
 
 # --- v12 (Phase 74): Lead-Management – Steuerdatei ---------------------------------

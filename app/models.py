@@ -570,6 +570,9 @@ class Gewerk(Base):
     bza_datei_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     kfw_antragsnummer: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
     kfw_zusage_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # V4 (Phase 93.1): Heizreport-API – Projekt-Key + Herkunft der Heizlast
+    heizreport_projekt_key: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
+    heizlast_quelle: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
     auftragswert_original: Mapped[int] = mapped_column(Integer, default=0)  # Cent brutto
     auftragswert_aktuell: Mapped[int] = mapped_column(Integer, default=0)
     feinplaner_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -679,6 +682,26 @@ class ProjektTermin(Base):
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
                                                   onupdate=datetime.now)
+
+
+class UglBestellung(Base):
+    """V4 (Phase 93.2): UGL-Bestellungen je Gewerk – nr 1 = Erstbestellung,
+    ab 2 Nachbestellung (Datei PR-…-2.ugl); hochgeladen_am = Häkchen
+    "bei Collin hochgeladen"."""
+    __tablename__ = "ugl_bestellungen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    gewerk_id: Mapped[int] = mapped_column(Integer, index=True)
+    nr: Mapped[int] = mapped_column(Integer, default=1)
+    dateiname: Mapped[str] = mapped_column(String(120), default="")
+    galerie_datei_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    lieferdatum: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    lieferadresse: Mapped[str] = mapped_column(String(20), default="ausfuehrung")
+    bemerkung: Mapped[str] = mapped_column(String(500), default="")
+    positionen: Mapped[int] = mapped_column(Integer, default=0)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    hochgeladen_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class ProjektMail(Base):

@@ -93,6 +93,9 @@ def _aufgabe_kontext(session: Session, aufgabe: Aufgabe) -> dict:
                            for k in LINK_PARAMETER},
         "steckbrief_werte": (kern.steckbrief_daten(session, [gewerk.id])[gewerk.id]
                              if gewerk is not None else {}),
+        # V4 (Phase 93.1): Heizreport-API konfiguriert → Buttons statt Link/Upload
+        "heizreport_konfiguriert": __import__(
+            "app.heizreport_api", fromlist=["x"]).konfiguriert(session),
     }
 
 
@@ -854,6 +857,8 @@ async def akte(request: Request, projekt_id: int,
                   # V4 (Phase 90): Stepper ohne Endzustände, Vorlauf-Ampel,
                   # Wächter-Hinweis unter der Planungs-Ampel
                   phasen_aktiv=GEWERK_PHASEN_AKTIV,
+                  heizreport_konfiguriert=__import__(
+                      "app.heizreport_api", fromlist=["x"]).konfiguriert(session),
                   # V4 (Phase 92): BzA-Buttons nur bei gefördertem Auftrag
                   bza_gefoerdert={g.id: __import__("app.bza", fromlist=["x"])
                                   .ist_gefoerdert(session, g) for g in gewerke},
@@ -1002,6 +1007,7 @@ async def heizlast(request: Request, gewerk_id: int,
     if kw:
         gewerk.heizlast_kw = float(kw)
         gewerk.heizlast_datum = datetime.now()
+        gewerk.heizlast_quelle = "manuell"          # V4 (Phase 93.1)
     gewerk.heizlast_link = (form.get("heizlast_link") or "").strip()[:300]
     kern.verlauf(session, gewerk.projekt_id,
                  f"Heizlast aktualisiert: {form.get('heizlast_kw') or '–'} kW",
@@ -1586,29 +1592,62 @@ async def kfw_daten_setzen(request: Request, gewerk_id: int,
                             + quote_plus(meldung), status_code=303)
 
 
+@router.post("/gewerk/{gewerk_id}/heizreport/{aktion}")
+async def heizreport_aktion(request: Request, gewerk_id: int, aktion: str,
+                            session: Session = Depends(get_session)):
+    """V4 (Phase 93.1): Heizreport-API – Projekt anlegen / Ergebnis abrufen
+    (schreibt kW + Datum + Quelle „Heizreport API“, Aufgabe erledigt)."""
+    from app import heizreport_api
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    if aktion == "anlegen":
+        ok, meldung = heizreport_api.projekt_anlegen(session, gewerk,
+                                                     request.state.benutzer)
+    elif aktion == "ergebnis":
+        ok, meldung, _kw = heizreport_api.ergebnis_holen(session, gewerk,
+                                                         request.state.benutzer)
+    else:
+        return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}",
+                                status_code=303)
+    session.commit()
+    form = await request.form()
+    aufgabe_id = form.get("aufgabe_id") or ""
+    if _json_gewuenscht(request) and aufgabe_id.isdigit():
+        aufgabe = session.get(Aufgabe, int(aufgabe_id))
+        if aufgabe is not None:
+            return _aufgabe_json(request, session, aufgabe, meldung)
+    return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}?meldung="
+                            + quote_plus(meldung), status_code=303)
+
+
 @router.get("/gewerk/{gewerk_id}/ugl")
 async def ugl_seite(request: Request, gewerk_id: int,
                     session: Session = Depends(get_session)):
-    """v15 (Phase 80): UGL-Bestellung Collin – Vorschau der Materialzeilen
-    (Auftrag × Stücklisten-Blatt) mit fehlenden Zuordnungen + Erzeugen."""
+    """UGL-Bestell-Dialog (v15 Phase 80, V4 Phase 93.2): Vorschau Position →
+    Artikelnummer × Menge, rote Liste ohne Zuordnung, Lieferdatum /
+    Lieferadresse / Bemerkung, Verlauf der Bestellungen (Nachbestellung)."""
     from app import ugl as ugl_modul
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
     zeilen, fehlend = ugl_modul.material_fuer_gewerk(session, gewerk)
-    ts = kern.terminstatus(session, gewerk)
-    termin = ts.get("termin")
-    lieferdatum = (ugl_modul.werktage_zurueck(termin.beginn, 3)
-                   if termin is not None and termin.beginn else None)
+    vorschlag = ugl_modul.lieferdatum_vorschlag(session, gewerk)
+    bestellungen = ugl_modul.bestellungen(session, gewerk)
     return render(request, "projektierung/ugl.html",
                   aktiv="/projektierung",
                   gewerk=gewerk, projekt=session.get(Projekt, gewerk.projekt_id),
-                  zeilen=zeilen, fehlend=fehlend, lieferdatum=lieferdatum,
+                  zeilen=zeilen, fehlend=fehlend,
+                  lieferdatum=vorschlag or (datetime.now() + timedelta(days=7)),
+                  lieferdatum_aus_termin=vorschlag is not None,
                   kundennummer=kern.parameter_holen(session,
                                                     "collin_kundennummer", ""),
                   lieferadresse=kern.parameter_holen(session, "ugl_lieferadresse",
                                                      "ausfuehrung"),
+                  lager_adresse=kern.parameter_holen(session, "lager_adresse", ""),
                   url_gc=kern.parameter_holen(session, "url_gc_online", ""),
+                  bestellungen=bestellungen,
+                  naechste_nr=len(bestellungen) + 1,
                   benutzer=request.state.benutzer,
                   meldung=request.query_params.get("meldung", ""))
 
@@ -1616,28 +1655,52 @@ async def ugl_seite(request: Request, gewerk_id: int,
 @router.post("/gewerk/{gewerk_id}/ugl")
 async def ugl_erzeugen(request: Request, gewerk_id: int,
                        session: Session = Depends(get_session)):
-    """UGL-Datei erzeugen: Ablage in der Galerie „Montagedokumente“ +
-    direkter Download; die zugehörige api-Aufgabe springt auf „in Arbeit“
-    (Bestellung in GC Online Plus erfolgt manuell)."""
+    """UGL-Datei erzeugen: Bestellung protokollieren (nr 1, 2 … → „-2“),
+    Ablage in der Galerie „Montagedokumente“ + direkter Download; die
+    api-Aufgabe springt auf „in Arbeit“ (erledigt erst mit dem Häkchen
+    „bei Collin hochgeladen“)."""
     from fastapi.responses import Response
 
     from app import galerie as galerie_modul
     from app import ugl as ugl_modul
+    from app.models import UglBestellung
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    inhalt, dateiname, _fehlend, fehler = ugl_modul.ugl_erzeugen(session, gewerk)
+    form = await request.form()
+    lieferdatum = None
+    try:
+        if form.get("lieferdatum"):
+            lieferdatum = datetime.strptime(form.get("lieferdatum"), "%Y-%m-%d")
+    except ValueError:
+        lieferdatum = None
+    art = form.get("lieferadresse") if form.get("lieferadresse") in ("ausfuehrung", "lager") else ""
+    bemerkung = (form.get("bemerkung") or "").strip()[:500]
+    nr = len(ugl_modul.bestellungen(session, gewerk)) + 1
+    benutzer = request.state.benutzer
+    inhalt, dateiname, fehlend, fehler = ugl_modul.ugl_erzeugen(
+        session, gewerk, lieferdatum=lieferdatum, lieferadresse=art,
+        bemerkung=bemerkung, sachbearbeiter=benutzer.name if benutzer else "", nr=nr)
     if inhalt is None:
         return RedirectResponse(
             f"/projektierung/gewerk/{gewerk.id}/ugl?meldung=" + quote_plus(fehler),
             status_code=303)
     angebot = session.get(Angebot, gewerk.angebot_id) if gewerk.angebot_id else None
+    datei = None
     if angebot is not None and angebot.vorgang_id:
-        galerie_modul.speichern(session, angebot.vorgang_id, "Montagedokumente",
-                                dateiname, inhalt,
-                                benutzer=request.state.benutzer,
-                                bemerkung="UGL-Bestelldatei (Collin)",
-                                quelle="formular", sparte=gewerk.sparte)
+        datei = galerie_modul.speichern(
+            session, angebot.vorgang_id, "Montagedokumente", dateiname, inhalt,
+            benutzer=benutzer,
+            bemerkung=("UGL-Nachbestellung" if nr > 1 else "UGL-Bestelldatei") + " (Collin)",
+            quelle="formular", sparte=gewerk.sparte)
+    zeilen, _ = ugl_modul.material_fuer_gewerk(session, gewerk)
+    session.add(UglBestellung(
+        gewerk_id=gewerk.id, nr=nr, dateiname=dateiname,
+        galerie_datei_id=getattr(datei, "id", None),
+        lieferdatum=lieferdatum or ugl_modul.lieferdatum_vorschlag(session, gewerk),
+        lieferadresse=art or kern.parameter_holen(session, "ugl_lieferadresse", "ausfuehrung"),
+        bemerkung=bemerkung, positionen=len(zeilen),
+        erstellt_von=benutzer.id if benutzer else None))
     for aufgabe in (session.query(Aufgabe)
                     .filter(Aufgabe.gewerk_id == gewerk.id,
                             Aufgabe.aktion_typ == "api",
@@ -1645,12 +1708,48 @@ async def ugl_erzeugen(request: Request, gewerk_id: int,
                             Aufgabe.status == "offen")):
         aufgabe.status = "in_arbeit"
     kern.verlauf(session, gewerk.projekt_id,
-                 f"UGL-Bestelldatei erzeugt ({dateiname})",
-                 benutzer=request.state.benutzer, gewerk_id=gewerk.id)
+                 (f"UGL-Nachbestellung {nr} erzeugt ({dateiname})" if nr > 1
+                  else f"UGL-Bestelldatei erzeugt ({dateiname})")
+                 + (f" – {len(fehlend)} Positionen ohne Stückliste" if fehlend else ""),
+                 benutzer=benutzer, gewerk_id=gewerk.id)
     session.commit()
     return Response(content=inhalt, media_type="application/octet-stream",
                     headers={"Content-Disposition":
                              f'attachment; filename="{dateiname}"'})
+
+
+@router.post("/gewerk/{gewerk_id}/ugl/{bestellung_id}/hochgeladen")
+async def ugl_hochgeladen(request: Request, gewerk_id: int, bestellung_id: int,
+                          session: Session = Depends(get_session)):
+    """Häkchen „bei Collin hochgeladen“ mit Datum → Aufgabe erledigt."""
+    from app.models import UglBestellung
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    bestellung = session.get(UglBestellung, bestellung_id)
+    if bestellung is None or bestellung.gewerk_id != gewerk.id:
+        return RedirectResponse(f"/projektierung/gewerk/{gewerk.id}/ugl", status_code=303)
+    form = await request.form()
+    try:
+        datum = datetime.strptime(form.get("datum") or "", "%Y-%m-%d")
+    except ValueError:
+        datum = datetime.now()
+    bestellung.hochgeladen_am = datum
+    for aufgabe in (session.query(Aufgabe)
+                    .filter(Aufgabe.gewerk_id == gewerk.id,
+                            Aufgabe.aktion_typ == "api",
+                            Aufgabe.aktion_wert == "ugl_collin",
+                            Aufgabe.status != "erledigt")):
+        aufgabe.status = "erledigt"
+        aufgabe.erledigt_am = datetime.now()
+        aufgabe.erledigt_von = request.state.benutzer.id if request.state.benutzer else None
+    kern.verlauf(session, gewerk.projekt_id,
+                 f"{bestellung.dateiname} bei Collin hochgeladen ({datum:%d.%m.%Y})",
+                 benutzer=request.state.benutzer, gewerk_id=gewerk.id)
+    session.commit()
+    return RedirectResponse(f"/projektierung/gewerk/{gewerk.id}/ugl?meldung="
+                            + quote_plus("Upload bei Collin vermerkt – Aufgabe erledigt."),
+                            status_code=303)
 
 
 @router.get("/aufgabe/{aufgabe_id}/sub-mail")
