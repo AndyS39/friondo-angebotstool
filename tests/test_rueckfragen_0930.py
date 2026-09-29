@@ -53,6 +53,15 @@ class Basis(unittest.TestCase):
 
 
 class Dubletten(Basis):
+    def setUp(self):
+        from app import kunden_dubletten
+        self.protokoll_vorher = einstellung_holen(self.s, kunden_dubletten.PROTOKOLL, "")
+
+    def tearDown(self):
+        from app import kunden_dubletten
+        einstellung_setzen(self.s, kunden_dubletten.PROTOKOLL, self.protokoll_vorher)
+        self.s.commit()
+
     def test_gruppen_und_zusammenfuehren(self):
         from app import kunden_dubletten
         a = Kunde(anrede="Herr", vorname="Dieter", nachname="Dublette-0930", plz="47139",
