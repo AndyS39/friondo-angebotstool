@@ -29,5 +29,17 @@
         {% endif %}
         {% endfor %}
     </div>
+    {# V4 (Phase 92): Block „Förderung“ – BzA und KfW (Akte, Vorgangsakte) #}
+    {% if gewerk.bza_id or gewerk.kfw_antragsnummer or gewerk.kfw_zusage_am or gewerk.sparte == 'WP' %}
+    <div class="pj-steck-raster pj-steck-foerderung">
+        <span class="k"><b>Förderung</b></span><span class="w"></span>
+        <span class="k">BzA-ID</span>
+        <span class="w">{{ gewerk.bza_id or '–' }}{{ ' · ' ~ gewerk.bza_erstellt_am.strftime('%d.%m.%Y') if gewerk.bza_erstellt_am }}</span>
+        <span class="k">an Kunden gesendet</span>
+        <span class="w">{{ gewerk.bza_gesendet_am.strftime('%d.%m.%Y') if gewerk.bza_gesendet_am else '–' }}</span>
+        <span class="k">KfW-Antragsnummer</span>
+        <span class="w">{{ gewerk.kfw_antragsnummer or '–' }}{{ ' · Zusage ' ~ gewerk.kfw_zusage_am.strftime('%d.%m.%Y') if gewerk.kfw_zusage_am }}</span>
+    </div>
+    {% endif %}
 </div>
 {% endmacro %}

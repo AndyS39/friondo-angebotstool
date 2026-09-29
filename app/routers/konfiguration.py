@@ -680,6 +680,14 @@ async def projektierung_einstellungen(request: Request,
                       session, "galerie_original_behalten", "aus"),
                   # v15 (Phase 78): Portal-URLs für Link-Aufgaben
                   url_bza_portal=kern.parameter_holen(session, "url_bza_portal", ""),
+                  # V4 (Phase 92): KfW-Zuschussportal, Test-Adresse, BzA-Mail
+                  url_kfw_zuschussportal=kern.parameter_holen(
+                      session, "url_kfw_zuschussportal", ""),
+                  projekt_testadresse=kern.parameter_holen(session, "projekt_testadresse", ""),
+                  bza_mail_betreff=kern.parameter_holen(session, "bza_mail_betreff", "")
+                  or __import__("app.bza", fromlist=["x"]).BETREFF_STANDARD,
+                  bza_mail_text=kern.parameter_holen(session, "bza_mail_text", "")
+                  or __import__("app.bza", fromlist=["x"]).TEXT_STANDARD,
                   url_spotmyenergy=kern.parameter_holen(session,
                                                         "url_spotmyenergy", ""),
                   url_heizreport=kern.parameter_holen(session,
@@ -742,7 +750,8 @@ async def projektierung_einstellungen_speichern(
                           "an" if form.get("galerie_original") == "on" else "aus")
     # v15 (Phase 78): Portal-URLs (BzA, SpotmyEnergy, Heizreport)
     for schluessel in ("url_bza_portal", "url_spotmyenergy", "url_heizreport",
-                       "url_gc_online", "collin_kundennummer"):
+                       "url_gc_online", "collin_kundennummer",
+                       "url_kfw_zuschussportal", "projekt_testadresse"):
         kern.parameter_setzen(session, schluessel,
                               (form.get(schluessel) or "").strip()[:300])
     if form.get("ugl_lieferadresse") in ("ausfuehrung", "lager"):
@@ -764,6 +773,13 @@ async def projektierung_einstellungen_speichern(
         wert = (form.get(schluessel) or "").strip()
         if schluessel in form:
             kern.parameter_setzen(session, schluessel, wert[:laenge])
+    # V4 (Phase 92): Vorlage Kundenmail „BzA“
+    if (form.get("bza_mail_betreff") or "").strip():
+        kern.parameter_setzen(session, "bza_mail_betreff",
+                              form.get("bza_mail_betreff").strip()[:300])
+    if (form.get("bza_mail_text") or "").strip():
+        kern.parameter_setzen(session, "bza_mail_text",
+                              form.get("bza_mail_text").strip()[:5000])
     if (form.get("terminmail_text") or "").strip():
         kern.parameter_setzen(session, "terminmail_text",
                               form.get("terminmail_text").strip()[:5000])

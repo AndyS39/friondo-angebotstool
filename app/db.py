@@ -109,6 +109,12 @@ _NACHTRAEGLICHE_SPALTEN = {
         "version": "VARCHAR(5) NOT NULL DEFAULT 'v2'",         # v15 Phase 78
     },
     "gewerke": {
+        "bza_id": "VARCHAR(100)",                              # V4 Phase 92
+        "bza_erstellt_am": "DATETIME",
+        "bza_gesendet_am": "DATETIME",
+        "bza_datei_id": "INTEGER",
+        "kfw_antragsnummer": "VARCHAR(60)",
+        "kfw_zusage_am": "DATETIME",
         "fp_antworten_json": "TEXT NOT NULL DEFAULT '{}'",     # v15 Phase 80
         "fp_vorbelegt_json": "TEXT NOT NULL DEFAULT '{}'",     # v15 Phase 80
         "fp_seite_index": "INTEGER NOT NULL DEFAULT 0",        # v15 Phase 80

@@ -563,6 +563,13 @@ class Gewerk(Base):
     # v15 (Phase 78, Fit for Future): Zaehlerwechseltermin (Marker im Kalender)
     zaehlerwechsel_termin: Mapped[Optional[datetime]] = mapped_column(DateTime,
                                                                       nullable=True)
+    # V4 (PLAN_PROJ_V4 Phase 92): BzA + KfW (vorbereitet, kein Wächter)
+    bza_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    bza_erstellt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    bza_gesendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    bza_datei_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    kfw_antragsnummer: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
+    kfw_zusage_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     auftragswert_original: Mapped[int] = mapped_column(Integer, default=0)  # Cent brutto
     auftragswert_aktuell: Mapped[int] = mapped_column(Integer, default=0)
     feinplaner_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

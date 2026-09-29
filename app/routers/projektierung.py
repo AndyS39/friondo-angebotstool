@@ -104,8 +104,9 @@ def _aufgabe_zeile_html(session: Session, aufgabe: Aufgabe) -> str:
 
 
 def _bza_kontext(session: Session, gewerk: Gewerk) -> dict:
-    """Platzhalter – ab Phase 92 BzA-Daten je Gewerk."""
-    return {}
+    """V4 (Phase 92): gefördert? (True/False/None = unbekannt, TAIFUN)."""
+    from app import bza as bza_modul
+    return {"bza_gefoerdert": {gewerk.id: bza_modul.ist_gefoerdert(session, gewerk)}}
 
 
 def _aufgabe_json(request: Request, session: Session, aufgabe: Aufgabe,
@@ -853,6 +854,9 @@ async def akte(request: Request, projekt_id: int,
                   # V4 (Phase 90): Stepper ohne Endzustände, Vorlauf-Ampel,
                   # Wächter-Hinweis unter der Planungs-Ampel
                   phasen_aktiv=GEWERK_PHASEN_AKTIV,
+                  # V4 (Phase 92): BzA-Buttons nur bei gefördertem Auftrag
+                  bza_gefoerdert={g.id: __import__("app.bza", fromlist=["x"])
+                                  .ist_gefoerdert(session, g) for g in gewerke},
                   vorlauf={g.id: kern.vorlauf_ampel(session, g) for g in gewerke},
                   waechter_hinweis={g.id: _waechter_hinweis(session, g)
                                     for g in gewerke},
@@ -1466,8 +1470,20 @@ async def bza_datenblatt(request: Request, gewerk_id: int,
         ("Fachunternehmer", kern.parameter_holen(
             session, "bza_fachunternehmer", "Friondo GmbH")),
     ]))
+    # V4 (Phase 92): Stand der BzA / KfW (nicht Pflicht – fehlt nicht)
+    bza_stand = [
+        ("BzA-ID", gewerk.bza_id or "noch nicht erfasst"),
+        ("BzA erstellt am", gewerk.bza_erstellt_am.strftime("%d.%m.%Y")
+         if gewerk.bza_erstellt_am else "–"),
+        ("An Kunden gesendet am", gewerk.bza_gesendet_am.strftime("%d.%m.%Y")
+         if gewerk.bza_gesendet_am else "–"),
+        ("KfW-Antragsnummer", gewerk.kfw_antragsnummer or "–"),
+        ("KfW-Zusage am", gewerk.kfw_zusage_am.strftime("%d.%m.%Y")
+         if gewerk.kfw_zusage_am else "–"),
+    ]
     fehlend = [f"{gruppe}: {name}" for gruppe, eintraege in felder
                for name, w in eintraege if not str(w).strip()]
+    felder.append(("Stand BzA / KfW", bza_stand))
     return render(request, "projektierung/bza.html",
                   aktiv="/projektierung",
                   gewerk=gewerk, projekt=projekt, felder=felder,
@@ -1475,6 +1491,99 @@ async def bza_datenblatt(request: Request, gewerk_id: int,
                   url_bza=kern.parameter_holen(session, "url_bza_portal", ""),
                   benutzer=request.state.benutzer,
                   meldung=request.query_params.get("meldung", ""))
+
+
+# --- V4 (Phase 92): BzA erfassen, Kundenmail, KfW-Daten ----------------------
+
+@router.post("/gewerk/{gewerk_id}/bza-erfassen")
+async def bza_erfassen(request: Request, gewerk_id: int,
+                       session: Session = Depends(get_session)):
+    from app import bza as bza_modul
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    form = await request.form()
+    try:
+        datum = datetime.strptime((form.get("datum") or "").strip(), "%Y-%m-%d")
+    except ValueError:
+        datum = datetime.now()
+    datei = form.get("datei")
+    inhalt = await datei.read() if getattr(datei, "filename", "") else b""
+    ok, meldung = bza_modul.erfassen(session, gewerk, form.get("bza_id") or "",
+                                     datum, getattr(datei, "filename", "") or "",
+                                     inhalt, benutzer=request.state.benutzer)
+    if not ok:
+        session.rollback()
+        return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}?meldung="
+                                + quote_plus(meldung), status_code=303)
+    session.commit()
+    if form.get("sofort_senden") == "on":
+        return RedirectResponse(f"/projektierung/gewerk/{gewerk.id}/bza-mail",
+                                status_code=303)
+    return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}?meldung="
+                            + quote_plus(meldung), status_code=303)
+
+
+@router.get("/gewerk/{gewerk_id}/bza-mail")
+async def bza_mail_vorschau(request: Request, gewerk_id: int,
+                            session: Session = Depends(get_session)):
+    """Vorschau der Kundenmail „BzA“ mit Bearbeiten vor dem Senden."""
+    from app import bza as bza_modul
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    empfaenger, betreff, text = bza_modul.mail_entwurf(session, gewerk)
+    ziel, hinweis = bza_modul.empfaenger_pruefen(session, empfaenger)
+    return render(request, "projektierung/bza_mail.html", aktiv="/projektierung",
+                  gewerk=gewerk, projekt=session.get(Projekt, gewerk.projekt_id),
+                  empfaenger=empfaenger, ziel=ziel, hinweis=hinweis,
+                  betreff=betreff, text=text, benutzer=request.state.benutzer,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/gewerk/{gewerk_id}/bza-mail")
+async def bza_mail_senden(request: Request, gewerk_id: int,
+                          session: Session = Depends(get_session)):
+    from app import bza as bza_modul
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    form = await request.form()
+    ok, meldung = bza_modul.mail_senden(session, gewerk,
+                                        (form.get("betreff") or "").strip()[:300],
+                                        (form.get("text") or "").strip()[:8000],
+                                        benutzer=request.state.benutzer)
+    if not ok:
+        session.rollback()
+        return RedirectResponse(f"/projektierung/gewerk/{gewerk.id}/bza-mail?meldung="
+                                + quote_plus(meldung), status_code=303)
+    session.commit()
+    return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}?meldung="
+                            + quote_plus(meldung), status_code=303)
+
+
+@router.post("/gewerk/{gewerk_id}/kfw")
+async def kfw_daten_setzen(request: Request, gewerk_id: int,
+                           session: Session = Depends(get_session)):
+    from app import bza as bza_modul
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    form = await request.form()
+    try:
+        zusage = datetime.strptime((form.get("kfw_zusage_am") or "").strip(), "%Y-%m-%d")
+    except ValueError:
+        zusage = None
+    meldung = bza_modul.kfw_setzen(session, gewerk, form.get("kfw_antragsnummer") or "",
+                                   zusage, benutzer=request.state.benutzer)
+    session.commit()
+    aufgabe_id = int(form.get("aufgabe_id") or 0) if (form.get("aufgabe_id") or "").isdigit() else 0
+    if _json_gewuenscht(request) and aufgabe_id:
+        aufgabe = session.get(Aufgabe, aufgabe_id)
+        if aufgabe is not None:
+            return _aufgabe_json(request, session, aufgabe, meldung)
+    return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}?meldung="
+                            + quote_plus(meldung), status_code=303)
 
 
 @router.get("/gewerk/{gewerk_id}/ugl")

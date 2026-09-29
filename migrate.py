@@ -599,6 +599,11 @@ def _daten() -> list[str]:
             meldungen += _v4_pakete_umbauen(session)
             einstellung_setzen(session, "migration_pakete_v4", "erledigt")
             session.commit()
+        # ---------- V4 (Phase 92): BzA-Aufgabe + KfW-Schritt ----------
+        if einstellung_holen(session, "migration_bza_v4", "") != "erledigt":
+            meldungen += _v4_bza_umbauen(session)
+            einstellung_setzen(session, "migration_bza_v4", "erledigt")
+            session.commit()
         # V4 (Phase 90.3): Vorlauf-Schwellen vorbelegen (idempotent)
         for name, wert in (("vorlauf_gruen_ab_wochen", "8"),
                            ("vorlauf_gelb_ab_wochen", "4")):
@@ -810,6 +815,44 @@ def _v4_pakete_umbauen(session) -> list[str]:
             geaendert += 1
     session.flush()
     return [f"Projektierung V4: Aufgabenpakete an {geaendert} offenen Gewerken angepasst"]
+
+
+def _v4_bza_umbauen(session) -> list[str]:
+    """Phase 92: bestehende BzA-Aufgaben (Link auf das Portal) → Aktionstyp
+    bza mit neuem Titel (Status bleibt); offene Gewerke bekommen im Paket
+    Montagevorbereitung den nicht verpflichtenden Schritt „KfW-Antragsnummer/
+    Zusage eingetragen“."""
+    from app.models import Aufgabe, AufgabenpaketInstanz, Gewerk
+    umgestellt = ergaenzt = 0
+    for aufgabe in (session.query(Aufgabe)
+                    .filter(Aufgabe.titel.like("BzA erstellen%")).all()):
+        if aufgabe.aktion_typ != "bza":
+            aufgabe.titel = "BzA erstellen und an Kunden senden"
+            aufgabe.aktion_typ = "bza"
+            aufgabe.aktion_wert = ""
+            umgestellt += 1
+    for instanz in (session.query(AufgabenpaketInstanz)
+                    .filter(AufgabenpaketInstanz.paket_key == "montagevorbereitung",
+                            AufgabenpaketInstanz.version != "v1",
+                            AufgabenpaketInstanz.deaktiviert_am.is_(None)).all()):
+        gewerk = session.get(Gewerk, instanz.gewerk_id)
+        if gewerk is None or gewerk.phase in ("abgeschlossen", "storniert"):
+            continue
+        if session.query(Aufgabe).filter(
+                Aufgabe.paket_instanz_id == instanz.id,
+                Aufgabe.aktion_typ == "bza", Aufgabe.aktion_wert == "kfw").count():
+            continue
+        session.add(Aufgabe(
+            gewerk_id=gewerk.id, projekt_id=gewerk.projekt_id,
+            paket_instanz_id=instanz.id, titel="KfW-Antragsnummer/Zusage eingetragen",
+            beschreibung="Antragsnummer und Zusage-Datum der KfW eintragen "
+                         "(kein Wächter – Frist folgt).",
+            rolle="projektierer", pflicht=False, reihenfolge=4,
+            aktion_typ="bza", aktion_wert="kfw"))
+        ergaenzt += 1
+    session.flush()
+    return [f"Projektierung V4: {umgestellt} BzA-Aufgaben umgestellt, KfW-Schritt an "
+            f"{ergaenzt} Gewerken ergänzt"]
 
 
 def main() -> int:

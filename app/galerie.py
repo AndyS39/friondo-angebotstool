@@ -17,8 +17,9 @@ from app.models import GalerieDatei, Projekt, ProjektDokument, Vorgang
 # Reihenfolge und Namen exakt laut Plan (Standardordner nicht löschbar).
 # 27.09.2026 (Andreas): eigene Galerie je Sparte - WP behaelt die acht
 # Plan-Ordner, PV/KL/WB bekommen passende Ordner + die gemeinsamen vier.
-GEMEINSAME_ORDNER = ["Montagedokumente", "Inbetrieb-/Abnahme", "Neue Anlage",
-                     "Allgemein"]
+# V4 (Phase 92): „Förderung“ (BzA-PDF u. a.) für alle Sparten
+GEMEINSAME_ORDNER = ["Montagedokumente", "Förderung", "Inbetrieb-/Abnahme",
+                     "Neue Anlage", "Allgemein"]
 SPARTEN_ORDNER = {
     "WP": ["Alte Heizung", "Elektro", "Außengerät", "Öl-Tank"]
           + GEMEINSAME_ORDNER,

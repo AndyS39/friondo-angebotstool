@@ -74,6 +74,9 @@
     <label>BzA-Portal (KfW)</label>
     <input type="text" name="url_bza_portal" value="{{ url_bza_portal }}"
            placeholder="https://…">
+    <label>KfW-Zuschussportal (Link in der BzA-Mail, {link_kfw})</label>
+    <input type="text" name="url_kfw_zuschussportal" value="{{ url_kfw_zuschussportal }}"
+           placeholder="https://…">
     <label>SpotmyEnergy-Portal (iMSys / SpotDynamic)</label>
     <input type="text" name="url_spotmyenergy" value="{{ url_spotmyenergy }}"
            placeholder="https://…">
@@ -119,6 +122,17 @@
     <textarea name="terminmail_text" rows="8">{{ terminmail_text }}</textarea>
     <label>Vorbereitungs-Hinweis ({vorbereitung})</label>
     <input type="text" name="terminmail_vorbereitung" value="{{ terminmail_vorbereitung }}">
+    <h3 style="margin-top:16px">Kundenmail „BzA“ (Phase 92)</h3>
+    <label>Betreff</label>
+    <input type="text" name="bza_mail_betreff" value="{{ bza_mail_betreff }}">
+    <label>Text (Platzhalter: {briefanrede} {kunde} {projektnummer} {bza_id}
+        {link_kfw} {foerderbetrag} {ansprechpartner_friondo}; Zeilen mit
+        {foerderbetrag} entfallen, wenn kein Betrag bekannt ist)</label>
+    <textarea name="bza_mail_text" rows="12">{{ bza_mail_text }}</textarea>
+    <label>Test-Adresse der Projektierung (Demo-Modus: Kundenmails gehen NUR hierhin)</label>
+    <input type="text" name="projekt_testadresse" value="{{ projekt_testadresse }}"
+           placeholder="test@friondo.de">
+    <button class="knopf" type="submit" style="margin-top:8px">Speichern</button>
 </form>
 
 <h2>Ordnervorlage (Anzeige)</h2>

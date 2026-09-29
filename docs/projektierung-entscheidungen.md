@@ -618,3 +618,39 @@ Pilot-Sendesperre).
 - **Sub-Mailvorlagen:** GaLa-Bau ergänzt um den Absatz „Erdarbeiten“ +
   Fundament-Hinweis, Entsorgung um {restoel} und {stemmarbeiten}
   (bestehender Text blieb, Absätze eingefügt).
+
+### Phase 92 – BzA: Link, BzA-ID, Kundenmail, KfW-Felder
+
+- Neuer Aktionstyp **bza** (Blatt Aufgabenpakete): Auftragseingang Schritt 4
+  „BzA erstellen und an Kunden senden“ zeigt Portal ↗ · Datenblatt · BzA
+  erfassen; aktion_wert `kfw` = Montagevorbereitung Schritt 4
+  „KfW-Antragsnummer/Zusage eingetragen“ (pflicht N, Eingabefelder, kein
+  Wächter – CEO-Review Entscheidung 2 offen). Die Portal-URL bleibt unter
+  dem bestehenden Parameter **url_bza_portal** (der Plan nennt `url_bza`);
+  fehlt sie, führt der Knopf zu den Projektierung-Einstellungen.
+- **Gefördert?** Tool-Angebot mit KfW-Daten und nicht ausgeblendetem
+  Förderblock = gefördert; ohne = „entfällt (nicht gefördert)“ statt der
+  Buttons. **TAIFUN-Aufträge:** das Auftragsdaten-Feld „gefördert“ (PLAN_PROJ_V3
+  Phase 84) existiert nicht → Status „unbekannt“: Buttons UND
+  „entfällt“-Knopf werden angeboten.
+- **Galerie-Ordner „Förderung“** ist neuer Standardordner aller Sparten
+  (direkt hinter Montagedokumente); das BzA-PDF landet dort (Pflicht, .pdf).
+- **Kundenmail „BzA“:** Vorlage (Betreff/Text) in den Projektierung-
+  Einstellungen, Startinhalt laut Plan; Platzhalter {briefanrede} {kunde}
+  {projektnummer} {bza_id} {link_kfw} {foerderbetrag}
+  {ansprechpartner_friondo}. Ohne bekannten Förderbetrag (TAIFUN, ungefördert)
+  entfallen alle Textzeilen mit {foerderbetrag}. Betrag = Zuschuss aus dem
+  Förder-Editor (kfw.ergebnis_fuer_angebot). Versand über Graph wie die
+  Sub-Mails (projektierung@, Fallback angebot@, CC Projektleiter), Eintrag im
+  Mail-Verlauf des Projekts, Aufgabe → erledigt, `bza_gesendet_am`.
+- **Demo-/Pilot-Sperre:** eine „bestehende Sendesperre/Testadresse der
+  Projektierung“ gab es nicht (gehört zu PLAN_PROJ_V3). Neu: Parameter
+  **projekt_testadresse**; solange das Modul im Demo-Modus
+  (`freigabe_modus = admin`) steht, geht die BzA-Mail ausschließlich an diese
+  Adresse – ist sie leer, wird nicht versendet (Hinweis in der Vorschau).
+- Anzeige des BzA/KfW-Stands im Steckbrief-Block „Förderung“ (Akte und
+  Vorgangsakte über dasselbe Makro), im Steckbrief-PDF und auf dem
+  BzA-Datenblatt (Gruppe „Stand BzA / KfW“, nicht als „fehlend“ gewertet).
+- Migration `migration_bza_v4`: bestehende BzA-Link-Aufgaben → Typ bza mit
+  neuem Titel (Status bleibt); KfW-Schritt an offene Gewerke mit aktiver
+  Montagevorbereitung.

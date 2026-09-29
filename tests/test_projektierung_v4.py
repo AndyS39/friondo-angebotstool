@@ -409,3 +409,121 @@ class Phase91Pakete(Basis):
         self.assertEqual(self.s.get(Aufgabe, team.id).status, "erledigt")   # Status bleibt
         self.assertTrue(all(a.aktion_typ == "auswahl"
                             for a in self.aufgaben(g, "fit_for_future")[:3]))
+
+
+# --- Phase 92 ---------------------------------------------------------------
+
+class Phase92Bza(Basis):
+    def gefoerdert(self):
+        from app import konfigurator as engine
+        from tests.test_regression import KONTROLL_SZENARIO
+        return self.gewerk_neu(positionen=[("047", 1)],
+                               kfw=engine.kfw_daten(dict(KONTROLL_SZENARIO)))
+
+    def bza_aufgabe(self, g):
+        return [a for a in self.aufgaben(g, "auftragseingang") if a.aktion_typ == "bza"][0]
+
+    def test_bza_erfassen_mail_und_kfw(self):
+        from unittest import mock
+
+        from app import bza as bza_modul
+        from app.models import GalerieDatei, ProjektMail
+        g = self.gefoerdert()
+        self.assertTrue(bza_modul.ist_gefoerdert(self.s, g))
+        betrag = bza_modul.foerderbetrag_cent(self.s, g)
+        self.assertTrue(betrag and betrag > 0)
+        aufgabe = self.bza_aufgabe(g)
+        self.assertEqual(aufgabe.titel, "BzA erstellen und an Kunden senden")
+        r = self.client.get(f"/projektierung/projekt/{g.projekt_id}")
+        for text in ("BzA-Portal ↗", "📋 Datenblatt", "BzA erfassen"):
+            self.assertIn(text, r.text)
+        # Pflichtprüfung: ohne PDF kein Speichern
+        r = self.client.post(f"/projektierung/gewerk/{g.id}/bza-erfassen",
+                             data={"bza_id": "BZA-4711"}, follow_redirects=False)
+        self.assertIn("PDF", r.headers["location"].encode().decode())
+        r = self.client.post(f"/projektierung/gewerk/{g.id}/bza-erfassen",
+                             data={"bza_id": "BZA-4711", "datum": "2026-09-29",
+                                   "sofort_senden": "on"},
+                             files={"datei": ("bza.pdf", b"%PDF-1.4 Test-BzA", "application/pdf")},
+                             follow_redirects=False)
+        self.assertEqual(r.headers["location"], f"/projektierung/gewerk/{g.id}/bza-mail")
+        self.s.expire_all()
+        g = self.s.get(Gewerk, g.id)
+        self.assertEqual(g.bza_id, "BZA-4711")
+        datei = self.s.get(GalerieDatei, g.bza_datei_id)
+        self.assertEqual(datei.ordner, "Förderung")
+        # Vorschau: ID, Betrag, KfW-Link; Demo-Modus ohne Test-Adresse → gesperrt
+        kern.parameter_setzen(self.s, "projekt_testadresse", "")
+        kern.parameter_setzen(self.s, "url_kfw_zuschussportal", "https://kfw.test/zuschuss")
+        self.s.commit()
+        r = self.client.get(f"/projektierung/gewerk/{g.id}/bza-mail")
+        self.assertIn("BZA-4711", r.text)
+        self.assertIn("https://kfw.test/zuschuss", r.text)
+        self.assertIn("vor Beginn der Arbeiten", r.text)
+        from app.templating import euro
+        self.assertIn(euro(betrag), r.text)
+        modus = kern.freigabe_modus(self.s)
+        if modus == "admin":
+            self.assertIn("keine Test-Adresse", r.text)
+            kern.parameter_setzen(self.s, "projekt_testadresse", "test@friondo.test")
+            self.s.commit()
+        with mock.patch("app.graph_versand.mail_mit_anhaengen_senden",
+                        return_value=(True, "", "konv-1")) as senden:
+            r = self.client.post(f"/projektierung/gewerk/{g.id}/bza-mail",
+                                 data={"betreff": "BzA Test", "text": "Hallo BZA-4711"},
+                                 follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        empfaenger, betreff, text, anhaenge = senden.call_args.args[:4]
+        self.assertEqual(empfaenger, "test@friondo.test" if modus == "admin" else TEST_EMAIL)
+        self.assertEqual(anhaenge[0][2], "application/pdf")
+        self.s.expire_all()
+        g = self.s.get(Gewerk, g.id)
+        self.assertIsNotNone(g.bza_gesendet_am)
+        self.assertEqual(self.s.get(Aufgabe, aufgabe.id).status, "erledigt")
+        self.assertTrue(self.s.query(ProjektMail).filter(
+            ProjektMail.projekt_id == g.projekt_id, ProjektMail.betreff == "BzA Test").count())
+        kern.parameter_setzen(self.s, "projekt_testadresse", "")
+        kern.parameter_setzen(self.s, "url_kfw_zuschussportal", "")
+        self.s.commit()
+        # KfW-Antragsnummer/Zusage (Montagevorbereitung, nicht Pflicht)
+        kfw_aufgabe = [a for a in self.aufgaben(g, "montagevorbereitung")
+                       if a.aktion_wert == "kfw"][0]
+        self.assertFalse(kfw_aufgabe.pflicht)
+        r = self.client.post(f"/projektierung/gewerk/{g.id}/kfw",
+                             data={"kfw_antragsnummer": "KFW-123", "kfw_zusage_am": "2026-10-05",
+                                   "aufgabe_id": str(kfw_aufgabe.id)},
+                             headers={"Accept": "application/json"})
+        self.assertEqual(r.status_code, 200)
+        self.s.expire_all()
+        self.assertEqual(self.s.get(Aufgabe, kfw_aufgabe.id).status, "erledigt")
+        # Anzeige: Steckbrief-Block, Datenblatt, Steckbrief-PDF
+        r = self.client.get(f"/projektierung/projekt/{g.projekt_id}")
+        self.assertIn("KFW-123", r.text)
+        r = self.client.get(f"/projektierung/gewerk/{g.id}/bza")
+        self.assertIn("Stand BzA / KfW", r.text)
+        self.assertIn("BZA-4711", r.text)
+        import io
+
+        import pypdf
+
+        from app.steckbrief_pdf import steckbrief_pdf_bytes
+        text = "\n".join(s.extract_text() for s in pypdf.PdfReader(io.BytesIO(
+            steckbrief_pdf_bytes(self.s, self.s.get(Gewerk, g.id)))).pages)
+        self.assertIn("BZA-4711", text)
+        self.assertIn("KFW-123", text)
+
+    def test_ungefoerdert_entfaellt(self):
+        from app import bza as bza_modul
+        from app.routers.projektierung import _aufgabe_zeile_html
+        g = self.gewerk_neu()               # Angebot ohne KfW-Daten
+        self.assertIs(bza_modul.ist_gefoerdert(self.s, g), False)
+        zeile = _aufgabe_zeile_html(self.s, self.bza_aufgabe(g))
+        self.assertIn("entfällt (nicht gefördert)", zeile)
+        self.assertNotIn("dlg-bza-", zeile)
+        # Portal-URL fehlt → Hinweis-Button zu den Einstellungen (gefördert)
+        g2 = self.gefoerdert()
+        kern.parameter_setzen(self.s, "url_bza_portal", "")
+        self.s.commit()
+        zeile = _aufgabe_zeile_html(self.s, self.bza_aufgabe(g2))
+        self.assertIn("/parametrierung/projektierung-einstellungen", zeile)
+        self.assertNotIn('name="status" value="entfaellt"', zeile)   # kein Entfällt-Knopf

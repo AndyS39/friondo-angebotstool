@@ -88,6 +88,72 @@
                title="Alle Antragsfelder mit Kopier-Buttons">📋 BzA-Datenblatt</a>
             {% endif %}
         </div>
+        {% elif a.aktion_typ == 'bza' and a.aktion_wert == 'kfw' %}
+        {# V4 (Phase 92): KfW-Antragsnummer/Zusage – Häkchen mit Eingabefeldern #}
+        <form method="post" action="/projektierung/gewerk/{{ g.id }}/kfw" class="pj-akt" data-pj-ajax>
+            <input type="hidden" name="aufgabe_id" value="{{ a.id }}">
+            <input type="text" name="kfw_antragsnummer" size="14" placeholder="KfW-Antragsnummer"
+                   value="{{ g.kfw_antragsnummer or '' }}">
+            <label style="font-size:12px">Zusage am
+                <input type="date" name="kfw_zusage_am"
+                       value="{{ g.kfw_zusage_am.strftime('%Y-%m-%d') if g.kfw_zusage_am }}"></label>
+            <button class="pj-btn" type="submit">Speichern</button>
+        </form>
+        {% elif a.aktion_typ == 'bza' %}
+        {# V4 (Phase 92): BzA – Portal ↗ · Datenblatt · BzA erfassen (nur gefördert) #}
+        {% set gefoerdert = (bza_gefoerdert | default({})).get(g.id) %}
+        <div class="pj-akt">
+            {% if gefoerdert is sameas false %}
+            <small class="pj-akt-hinweis">Kein Förderblock im Auftrag (nicht gefördert).</small>
+            {% else %}
+            {% if link_parameter.get('url_bza_portal') %}
+            <a class="pj-btn" href="{{ link_parameter['url_bza_portal'] }}" target="_blank" rel="noopener"
+               onclick="pjAufgabeLink({{ a.id }})">BzA-Portal ↗</a>
+            {% else %}
+            <a class="pj-btn" href="/parametrierung/projektierung-einstellungen"
+               title="Die URL des BzA-Portals ist noch nicht hinterlegt – bitte in den Projektierung-Einstellungen eintragen">BzA-Portal ↗ (URL fehlt)</a>
+            {% endif %}
+            <a class="pj-btn" href="/projektierung/gewerk/{{ g.id }}/bza"
+               title="Alle Antragsfelder mit Kopier-Buttons">📋 Datenblatt</a>
+            <button class="pj-btn primary" type="button"
+                    onclick="document.getElementById('dlg-bza-{{ g.id }}').showModal()">BzA erfassen</button>
+            {% if g.bza_id %}
+            <small class="pj-akt-hinweis">BzA {{ g.bza_id }}
+                {{- ' vom ' ~ g.bza_erstellt_am.strftime('%d.%m.%Y') if g.bza_erstellt_am }}
+                {%- if g.bza_gesendet_am %} · an Kunden gesendet {{ g.bza_gesendet_am.strftime('%d.%m.%Y') }}{% endif %}</small>
+            {% if not g.bza_gesendet_am %}
+            <a class="pj-btn" href="/projektierung/gewerk/{{ g.id }}/bza-mail">✉ Mail an Kunden</a>
+            {% endif %}
+            {% endif %}
+            {% endif %}
+            {% if gefoerdert is not sameas true and a.status != 'entfaellt' %}
+            <form method="post" action="/projektierung/aufgabe/{{ a.id }}/status" data-pj-ajax style="display:inline">
+                <input type="hidden" name="status" value="entfaellt">
+                <button class="pj-btn" type="submit"
+                        title="{{ 'TAIFUN-Auftrag: Förderstatus unbekannt' if gefoerdert is none else 'Auftrag ohne Förderung' }}">entfällt (nicht gefördert)</button>
+            </form>
+            {% endif %}
+        </div>
+        {% if gefoerdert is not sameas false %}
+        <dialog class="pj-dlg" id="dlg-bza-{{ g.id }}">
+            <form method="post" action="/projektierung/gewerk/{{ g.id }}/bza-erfassen"
+                  enctype="multipart/form-data" class="box">
+                <h3>BzA erfassen · {{ g.sparte }}</h3>
+                <label>BzA-ID (Pflicht, aus dem Portal)
+                    <input type="text" name="bza_id" required value="{{ g.bza_id or '' }}"></label>
+                <label>Datum
+                    <input type="date" name="datum" value="{{ (g.bza_erstellt_am or heute).strftime('%Y-%m-%d') }}"></label>
+                <label>BzA-PDF (Pflicht) – Ablage in der Galerie „Förderung“
+                    <input type="file" name="datei" accept="application/pdf,.pdf" required></label>
+                <label class="kontrollfeld"><input type="checkbox" name="sofort_senden" checked>
+                    Sofort an Kunden senden (Vorschau mit Bearbeiten)</label>
+                <div class="pj-btnrow">
+                    <button class="pj-btn primary" type="submit">Speichern</button>
+                    <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+                </div>
+            </form>
+        </dialog>
+        {% endif %}
         {% elif a.aktion_typ == 'kalender' %}
         <div class="pj-akt">
             {% if a.aktion_wert == 'montage' %}

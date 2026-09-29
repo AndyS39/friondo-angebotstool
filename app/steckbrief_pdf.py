@@ -79,4 +79,22 @@ def steckbrief_pdf_bytes(session, gewerk) -> bytes:
         pdf.set_font("Arial", "", 10)
         pdf.multi_cell(0, 6, (eintrag.wert if eintrag else "") or "–",
                        new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    # V4 (Phase 92): Förderung (BzA/KfW)
+    if gewerk.bza_id or gewerk.kfw_antragsnummer or gewerk.sparte == "WP":
+        pdf.ln(3)
+        pdf.set_font("Arial", "B", 11)
+        pdf.set_text_color(*DUNKELBLAU)
+        pdf.cell(0, 7, "Förderung", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_text_color(0, 0, 0)
+        for name, wert in (
+                ("BzA-ID", (gewerk.bza_id or "–")
+                 + (f" · {gewerk.bza_erstellt_am:%d.%m.%Y}" if gewerk.bza_erstellt_am else "")),
+                ("An Kunden gesendet", f"{gewerk.bza_gesendet_am:%d.%m.%Y}"
+                 if gewerk.bza_gesendet_am else "–"),
+                ("KfW-Antragsnummer", (gewerk.kfw_antragsnummer or "–")
+                 + (f" · Zusage {gewerk.kfw_zusage_am:%d.%m.%Y}" if gewerk.kfw_zusage_am else ""))):
+            pdf.set_font("Arial", "B", 10)
+            pdf.cell(55, 6, name)
+            pdf.set_font("Arial", "", 10)
+            pdf.multi_cell(0, 6, wert, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     return bytes(pdf.output())

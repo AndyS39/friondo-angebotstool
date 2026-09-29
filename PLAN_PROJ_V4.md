@@ -215,23 +215,23 @@ Phase 91 beschrieben (Startinhalt ergänzen, bestehende Zeilen nicht löschen).
 
 ## Phase 92 – BzA: Link, BzA-ID, Kundenmail, KfW-Felder
 
-- [ ] Felder am Gewerk (nullable): `bza_id` (Text – ID/Vorgangsnummer der BzA aus
+- [x] Felder am Gewerk (nullable): `bza_id` (Text – ID/Vorgangsnummer der BzA aus
   dem Portal), `bza_erstellt_am`, `bza_gesendet_am`, `bza_datei_id` (Galerie),
   `kfw_antragsnummer`, `kfw_zusage_am` (vorbereitet, kein Wächter – Entscheidung
   aus dem CEO-Review steht noch aus).
-- [ ] Aufgabe **„BzA erstellen und an Kunden senden"** (Auftragseingang, Schritt
+- [x] Aufgabe **„BzA erstellen und an Kunden senden"** (Auftragseingang, Schritt
   4) zeigt **immer drei Buttons**: „BzA-Portal ↗" (Link `url_bza`; fehlt die
   URL, führt der Button zu den Projektierungs-Einstellungen mit Hinweis),
   „Datenblatt" (bestehende Seite `/projektierung/gewerk/<id>/bza`) und
   **„BzA erfassen"**. Nur sichtbar bei gefördertem Auftrag (Förderblock im
   Angebot aktiv oder TAIFUN-Auftragsdaten „gefördert = ja"); sonst Option
   „entfällt (nicht gefördert)".
-- [ ] Dialog **„BzA erfassen"**: BzA-ID (Pflicht), Datum (Vorbelegung heute),
+- [x] Dialog **„BzA erfassen"**: BzA-ID (Pflicht), Datum (Vorbelegung heute),
   PDF-Upload der BzA (Pflicht; Ablage in Galerie-Ordner **„Förderung"** – neuer
   Standardordner für alle Sparten neben Montagedokumente), Häkchen „Sofort an
   Kunden senden" (Standard an). Speichern setzt die Felder, Verlaufseintrag,
   und – bei gesetztem Häkchen – erzeugt die Kundenmail.
-- [ ] **Kundenmail „BzA"**: neue Vorlage in Parametrierung → Projektierungs-
+- [x] **Kundenmail „BzA"**: neue Vorlage in Parametrierung → Projektierungs-
   Vorlagen (neben der Kunden-Terminbestätigung). Betreff „Ihre Bestätigung zum
   Antrag (BzA) für die Förderung Ihrer Wärmepumpe – {projektnummer}". Text
   (Startinhalt, von Andreas anzupassen): Anrede {briefanrede}; die BzA liegt
@@ -245,14 +245,14 @@ Phase 91 beschrieben (Startinhalt ergänzen, bestehende Zeilen nicht löschen).
   Demo-/Pilot-Modus gilt die bestehende Sendesperre/Testadresse der
   Projektierung. Vorschau mit Bearbeiten vor dem Senden; Eintrag im Mail-
   Verlauf des Projekts; `bza_gesendet_am` gesetzt; Aufgabe → erledigt.
-- [ ] Anzeige: BzA-ID, Datum, „an Kunden gesendet am" und KfW-Antragsnummer/
+- [x] Anzeige: BzA-ID, Datum, „an Kunden gesendet am" und KfW-Antragsnummer/
   Zusage im Steckbrief-Block „Förderung" (Akte, Vorgangsakte-Reiter Projekt,
   Steckbrief-PDF) und auf dem BzA-Datenblatt. Neue, nicht verpflichtende
   Aufgabe in **Montagevorbereitung**: „KfW-Antragsnummer/Zusage eingetragen"
   (Häkchen mit Eingabefeldern; Frist später).
-- [ ] Parametrierung → Projektierungs-Einstellungen: `url_bza` prüfen/eintragen,
+- [x] Parametrierung → Projektierungs-Einstellungen: `url_bza` prüfen/eintragen,
   neu `url_kfw_zuschussportal`, Vorlage BzA.
-- [ ] Test: gefördertes Gewerk → Buttons sichtbar, BzA erfassen mit PDF →
+- [x] Test: gefördertes Gewerk → Buttons sichtbar, BzA erfassen mit PDF →
   Mail-Vorschau mit ID und Betrag → Versand an Testadresse → Aufgabe erledigt,
   Felder gefüllt; ungefördertes Gewerk → Option „entfällt".
 

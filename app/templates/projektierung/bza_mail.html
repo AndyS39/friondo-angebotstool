@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block titel %}BzA-Mail · {{ projekt.nummer }}{% endblock %}
+
+{% block inhalt %}
+{# V4 (PLAN_PROJ_V4 Phase 92): Kundenmail „BzA“ – Vorschau mit Bearbeiten #}
+<div class="seitenkopf">
+    <div>
+        <div class="pj-eyebrow">Projektierung · {{ projekt.nummer }} · {{ gewerk.sparte }}</div>
+        <h1>BzA an Kunden senden</h1>
+    </div>
+    <a class="pj-btn" href="/projektierung/projekt/{{ projekt.id }}">Zurück zur Akte</a>
+</div>
+{% if meldung %}<div class="pj-note crit">{{ meldung }}</div>{% endif %}
+{% if hinweis %}<div class="pj-note crit">{{ hinweis }}</div>{% endif %}
+
+<form method="post" action="/projektierung/gewerk/{{ gewerk.id }}/bza-mail"
+      class="formular" style="max-width:760px">
+    <div class="pj-kv">
+        <span>An</span>
+        <div>{{ ziel or '–' }}{% if ziel and ziel != empfaenger %}
+            <small class="dezent">(Kunde: {{ empfaenger or 'keine E-Mail' }})</small>{% endif %}</div>
+        <span>Anhang</span>
+        <div>BzA-PDF (BzA {{ gewerk.bza_id }}) · CC Projektleiter · Absender projektierung@</div>
+    </div>
+    <label>Betreff
+        <input type="text" name="betreff" value="{{ betreff }}" style="width:100%"></label>
+    <label>Text
+        <textarea name="text" rows="18" style="width:100%">{{ text }}</textarea></label>
+    <div class="pj-btnrow">
+        <button class="pj-btn primary" type="submit" {{ 'disabled' if not ziel }}>Senden</button>
+        <a class="pj-btn" href="/projektierung/projekt/{{ projekt.id }}">Abbrechen</a>
+    </div>
+    <p class="dezent" style="font-size:12px">Vorlage: Parametrierung →
+        Projektierung-Einstellungen → Kundenmail „BzA“.</p>
+</form>
+{% endblock %}
