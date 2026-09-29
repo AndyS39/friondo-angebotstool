@@ -130,9 +130,9 @@ Gesamtübersicht (Testergebnisse, offene Punkte, Rückfragen gebündelt).
       (Nummer = höchste + 1)
 
 ## B5 – PLAN_LEAD_V1.1 (Phasen 87–89)
-- [ ] Umsetzen wie geschrieben (Demo-Modus, risikoarm); kann nach B1 auch
+- [x] Umsetzen wie geschrieben (Demo-Modus, risikoarm); kann nach B1 auch
       parallel zu B2–B4 laufen, falls gewünscht
-- [ ] CLAUDE-Abschnitt (Nummer = höchste + 1)
+- [x] CLAUDE-Abschnitt (Nummer = höchste + 1)
 
 ════════════════════════════════════════════════════════════════════
 TEIL C – GESAMTABNAHME & FINALER ROLLOUT

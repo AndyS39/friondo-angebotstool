@@ -2944,3 +2944,13 @@ table.tabelle tr.lm-klick { cursor: pointer; }
     .lm-zeile .lm-aktion { grid-column: 1 / -1; justify-content: flex-start; margin-top: 6px; }
 }
 
+/* v21 (Phase 89): Bestands-Bugfix – #lead-panel {display:flex} hob das
+   hidden-Attribut auf, das leere Panel nahm immer die halbe Breite ein */
+#lead-panel[hidden] { display: none; }
+/* Panel offen → Arbeitsliste schmal: Zeilen umbrechen wie mobil */
+.anruf-layout:has(#lead-panel:not([hidden])) .lm-zeile { grid-template-columns: 70px 1fr; }
+.anruf-layout:has(#lead-panel:not([hidden])) .lm-zeile .sla,
+.anruf-layout:has(#lead-panel:not([hidden])) .lm-zeile .klasse,
+.anruf-layout:has(#lead-panel:not([hidden])) .lm-zeile .tel { grid-column: 2; }
+.anruf-layout:has(#lead-panel:not([hidden])) .lm-zeile .lm-aktion { grid-column: 1 / -1;
+    justify-content: flex-start; margin-top: 6px; }

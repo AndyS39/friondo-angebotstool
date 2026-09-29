@@ -3,11 +3,11 @@
 {% macro lm_nav(aktiv) %}
 <nav class="lm-nav">
     {% for pfad, key, name in [
+        ('/lead-management/uebersicht', 'uebersicht', 'Übersicht'),
         ('/lead-management/anrufliste', 'anrufliste', 'Anrufliste'),
         ('/lead-management/board', 'board', 'Pipeline'),
         ('/lead-management/kalender', 'kalender', 'Kalender'),
         ('/lead-management/karte', 'karte', 'Karte'),
-        ('/lead-management/cockpit', 'cockpit', 'Cockpit'),
         ('/lead-management/posteingang', 'posteingang', 'Posteingang'),
         ('/lead-management/statistik', 'statistik', 'Statistik'),
         ('/lead-management/import', 'import', 'Import')] %}

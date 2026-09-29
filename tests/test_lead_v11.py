@@ -164,5 +164,156 @@ class Phase87Quellen(Basis):
         self.assertEqual(kern.kanal_werte(self.s)[0], "Standard")
 
 
+class Phase88Uebersicht(Basis):
+    def test_zaehlung_und_seite(self):
+        from app import lead_uebersicht
+        jetzt = datetime.now()
+        heute = jetzt.replace(hour=9, minute=0, second=0, microsecond=0)
+        if heute > jetzt:
+            heute = jetzt - timedelta(minutes=1)
+        self.lead(801, "website", eingang=heute)
+        self.lead(802, "landingpage", eingang=heute - timedelta(days=2))
+        self.lead(803, "portal", eingang=heute - timedelta(days=2), versuche=3)
+        self.lead(804, "telefon", eingang=heute - timedelta(days=20), versuche=4,
+                  naechste_aktion_am=jetzt - timedelta(hours=1))
+        von = heute.replace(hour=0) - timedelta(days=13)
+        morgen = heute.replace(hour=0) + timedelta(days=1)
+        je_typ = kern.eingaenge_zaehlen(self.s, von, morgen, "typ")
+        self.assertGreaterEqual(je_typ.get("website", 0), 1)
+        self.assertGreaterEqual(je_typ.get("landingpage", 0), 1)
+        tage = lead_uebersicht.eingaenge_je_tag(self.s, jetzt)
+        summe_balken = sum(t["summe"] for t in tage["tage"])
+        self.assertEqual(summe_balken, sum(je_typ.values()))
+        k = lead_uebersicht.kpis(self.s, jetzt)
+        self.assertGreaterEqual(k["heute"], 1)
+        self.assertGreaterEqual(k["drei_versuche"], 2)
+        self.assertGreaterEqual(k["vier_versuche"], 1)
+        self.assertGreaterEqual(k["jetzt_dran"], 1)
+        kontakt = {z["titel"]: z["n"] for z in lead_uebersicht.kontaktstatus(k["_offene"])}
+        self.assertGreaterEqual(kontakt["3 Versuche"], 1)
+        self.assertGreaterEqual(kontakt["4+ Versuche"], 1)
+        tab = lead_uebersicht.tabelle(self.s, jetzt, "30")
+        self.assertEqual(tab["summe"]["zeitraum"],
+                         kern.eingaenge_zaehlen(self.s, tab["von"], morgen).get("gesamt", 0))
+        # Seite, Umschalter, Cockpit-Redirect, Nav, Statistik-Tabelle + CSV
+        seite = self.client.get("/lead-management/uebersicht")
+        self.assertEqual(seite.status_code, 200)
+        self.assertIn("Eingänge je Tag", seite.text)
+        self.assertIn("Kontaktstatus der offenen Leads", seite.text)
+        self.assertIn("Termin-Rückmeldung offen", seite.text)      # Cockpit-Block
+        self.assertIn('href="/lead-management/uebersicht"', seite.text)
+        self.assertNotIn(">Cockpit<", seite.text)
+        self.assertIn("Woche", self.client.get("/lead-management/uebersicht?zeitraum=woche").text)
+        r = self.client.get("/lead-management/cockpit", follow_redirects=False)
+        self.assertEqual((r.status_code, r.headers["location"]),
+                         (303, "/lead-management/uebersicht"))
+        r = self.client.get("/lead-management", follow_redirects=False)
+        self.assertEqual(r.headers["location"], "/lead-management/uebersicht")
+        stat = self.client.get("/lead-management/statistik").text
+        self.assertIn("Eingänge je Woche × Quellen-Typ", stat)
+        csv = self.client.get("/lead-management/statistik?export=wochen")
+        self.assertTrue(csv.text.startswith("﻿Woche;ab;"))
+        # Portal-Karte mit den neuen Kacheln
+        portal = self.client.get("/").text
+        self.assertIn("Eingänge heute", portal)
+        self.assertIn("Jetzt dran", portal)
+        # Innendienst im Demo: 404
+        from app.models import Benutzer
+        innen = self.s.query(Benutzer).filter_by(rolle="innendienst", aktiv=True).first()
+        if innen is not None:
+            c2 = TestClient(app)
+            c2.post("/login", data={"benutzer_id": str(innen.id), "pin": "1234"})
+            self.assertEqual(c2.get("/lead-management/uebersicht").status_code, 404)
+
+    def test_startseite_nach_rolle(self):
+        from types import SimpleNamespace
+
+        from app import lead_uebersicht
+        kern.parameter_setzen(self.s, "lm_startseite", "")
+        self.assertEqual(lead_uebersicht.startseite(self.s, SimpleNamespace(rolle="admin")),
+                         "uebersicht")
+        self.assertEqual(lead_uebersicht.startseite(
+            self.s, SimpleNamespace(rolle="leadmanagement")), "anrufliste")
+        kern.parameter_setzen(self.s, "lm_startseite", "anrufliste")
+        self.assertEqual(lead_uebersicht.startseite(self.s, SimpleNamespace(rolle="admin")),
+                         "anrufliste")
+        kern.parameter_setzen(self.s, "lm_startseite", "")
+        self.s.commit()
+
+
+class Phase89Anrufliste(Basis):
+    def test_gruppen_chips_satz(self):
+        from app import lead_anrufliste
+        jetzt = datetime.now()
+        # SLA rot ohne Versuch (Eingang vor 3 Arbeitstagen), Rückruf fällig,
+        # Kaskade fällig mit 3 Versuchen, neu heute grün, zurückgestellt fällig
+        rot = self.lead(901, "website", eingang=jetzt - timedelta(days=3))
+        rueck = self.lead(902, "portal", eingang=jetzt - timedelta(days=1), versuche=1,
+                          naechste_aktion_am=jetzt - timedelta(minutes=30))
+        kern.aktivitaet(self.s, rueck.id, "anruf", "Anruf: Rückruf gewünscht",
+                        ergebnis="rueckruf_gewuenscht", naechste_aktion_am=rueck.naechste_aktion_am)
+        rueck.versuch_nr = 2
+        weiter = self.lead(903, "landingpage", eingang=jetzt - timedelta(days=2), versuche=3,
+                           naechste_aktion_am=jetzt - timedelta(hours=2))
+        neu = self.lead(904, "telefon", eingang=jetzt - timedelta(minutes=5))
+        zur = self.lead(905, "partner_enni", eingang=jetzt - timedelta(days=10),
+                        versuche=1, lead_phase="zurueckgestellt",
+                        zurueckgestellt_bis=jetzt - timedelta(hours=1),
+                        zurueckgestellt_grund="Bauphase später")
+        self.s.commit()
+        f = lead_anrufliste.filter_aus_query({"meine": "0"})
+        d = lead_anrufliste.daten(self.s, None, f)
+        gruppen = {g["key"]: [z["vorgang"].id for z in g["zeilen"]] for g in d["gruppen"]}
+        self.assertIn(rot.id, gruppen["dran"])
+        self.assertIn(rueck.id, gruppen["dran"])
+        self.assertIn(weiter.id, gruppen["weiter"])
+        self.assertIn(neu.id, gruppen["neu"])
+        self.assertIn(zur.id, gruppen["wiedervorlage"])
+        # Reihenfolge Jetzt dran: SLA rot vor Rückruf
+        self.assertLess(gruppen["dran"].index(rot.id), gruppen["dran"].index(rueck.id))
+        # Sätze
+        satz = {z["vorgang"].id: " · ".join(t for t, _ in z["satz"])
+                for g in d["gruppen"] for z in g["zeilen"]}
+        self.assertIn("noch nicht angerufen", satz[rot.id])
+        self.assertIn("Rückruf gewünscht", satz[rueck.id])
+        self.assertIn("3× nicht erreicht", satz[weiter.id])
+        self.assertIn("nächster Versuch", satz[weiter.id])
+        self.assertIn("zurückgestellt", satz[zur.id])
+        self.assertIn("heute fällig", satz[zur.id])
+        # Chips zählen wie die Filter treffen
+        self.assertEqual(d["zaehler"]["arbeitsliste"], d["offen"])
+        for chip, param in (("sla_rot", {"sla": "rot"}), ("drei", {"versuche_min": "3"}),
+                            ("rueckruf", {"rueckruf": "heute"}), ("frei", {"frei": "1"})):
+            g = lead_anrufliste.daten(self.s, None, lead_anrufliste.filter_aus_query(
+                {"meine": "0", **param}))
+            self.assertEqual(d["zaehler"][chip], g["offen"], chip)
+        # Filter aus der Übersicht
+        g = lead_anrufliste.daten(self.s, None, lead_anrufliste.filter_aus_query(
+            {"meine": "0", "versuche": "3"}))
+        self.assertTrue(all((z["vorgang"].versuch_nr or 0) == 3
+                            for gr in g["gruppen"] for z in gr["zeilen"]))
+        self.assertIn(weiter.id, [z["vorgang"].id for gr in g["gruppen"] for z in gr["zeilen"]])
+        g = lead_anrufliste.daten(self.s, None, lead_anrufliste.filter_aus_query(
+            {"meine": "0", "quelle_typ": "portal"}))
+        self.assertTrue(all(z["quelle_gruppe"] == "portal" for gr in g["gruppen"] for z in gr["zeilen"]))
+        # Seite: Chips, Gruppenköpfe, Punkte, ⋯-Menü, Panel, Legende
+        seite = self.client.get("/lead-management/anrufliste?meine=0").text
+        for text in ("Jetzt dran", "Weiter versuchen", "Neu heute", "Wiedervorlagen fällig",
+                     "Sonstige offene", 'class="lm-dots', "lm-menue", 'id="lead-panel"',
+                     "Tasten 1 Erreicht", "Arbeitsliste <b>"):
+            self.assertIn(text, seite)
+        # Kopfblock zeigt dieselben Punkte
+        akte = self.client.get(f"/vorgaenge/{weiter.id}").text
+        self.assertIn("Kontaktstatus:", akte)
+        self.assertIn("3× nicht erreicht", akte)
+        self.assertEqual(akte.count('<i class="v"></i>'), 3)
+        # Tasten/Buttons: Ergebnis-Route unverändert
+        r = self.client.post(f"/lead-management/anruf/{neu.id}", data={"ergebnis": "mailbox"},
+                             follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        self.s.expire_all()
+        self.assertEqual(self.s.get(Vorgang, neu.id).versuch_nr, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

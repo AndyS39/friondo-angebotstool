@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v20)
+# Friondo Angebotstool – Projektkontext (v21)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -745,3 +745,37 @@ v14“ entspricht diesem Abschnitt.)
   abweichender Rechnungsadresse, „Lieferanschrift: …“ nur, wenn sie vom
   Ausführungsort abweicht; der **Lieferschein** (v16) ist an die
   Lieferanschrift adressiert. Tests: `tests/test_anschriften_v20.py`.
+
+## Neu in v21 – Lead-Management V1.1 (abgestimmt 27.09.2026)
+
+(Plan: PLAN_LEAD_V1.1.md, Phasen 87–89; Vorlage docs/leadmanagement-prototyp.html.)
+
+- **Quelle · Kampagne · Kanal:** Quelle = Herkunft (Kosten, Typ-Farbe,
+  API-Key), Kampagne = Landingpage/Aktion (Budget), Kanal = Vertriebskanal
+  (Dropdown an der Quelle, wird beim Eingang an Kunde/Vorgang gesetzt, falls
+  leer; manuell gesetzter Kanal bleibt). Unbekannte Quellen-Keys und
+  Kampagnen aus Betreff `[LEAD] <quelle> <kampagne>`, API oder utm_campaign
+  legen sich selbst an (Badge „neu · automatisch angelegt", Glocke an Admin);
+  Fallback-Quelle `unbekannt`. Quellen-/Kampagnenpflege zeigt Eingänge 7/30
+  Tage und Kosten je Lead; Kanal-Report zusätzlich je Kampagne;
+  `docs/formular-standard-agentur.md`.
+- **Übersicht** `/lead-management/uebersicht` als Modul-Einstieg
+  (`lm_startseite`): Kacheln Eingänge heute (Ø 10 AT) / 7 Tage / SLA rot /
+  Jetzt dran / ≥ 3 Versuche offen / Termine heute; Eingänge je Tag (14 Tage,
+  gestapelt nach Quellen-Typ, Tokens `--q-*`, feste Reihenfolge, Legende);
+  Kontaktstatus offener Leads nach Versuchen; Erstkontakt heute; Tabelle
+  Quelle × Kanal × Zeitraum mit erreicht-/terminiert-Quote (Kohorte),
+  ≥ 3 Versuche und Kosten je Lead; Cockpit darin aufgegangen. Eine
+  Zählfunktion `eingaenge_zaehlen` für Übersicht, Statistik, Kanal-Report
+  und Portal-Kacheln.
+- **Anrufliste neu:** Schnellfilter-Chips mit Zählern (Heute eingegangen ·
+  SLA rot · ≥ 3 Versuche · Rückruf heute · Ohne Leadmanager), Gruppen Jetzt
+  dran · Weiter versuchen · Neu heute · Wiedervorlagen fällig · Sonstige;
+  zweizeilige Zeile mit Versuchs-Punkten (`versuche_punkte`, grau 1–2 /
+  orange 3 / rot 4+), Kontaktstatus-Satz („3× nicht erreicht · zuletzt … ·
+  nächster Versuch …"), Quelle-/Kanal-Badges, ⚑-Flags, Aktionen Erreicht /
+  Nicht erreicht / Mailbox / Rückruf / ⋯-Menü; Tasten 1–7 unverändert;
+  derselbe Kontaktstatus im Lead-Kopfblock der Vorgangsakte.
+- Technik: `app/lead_uebersicht.py`, `app/lead_anrufliste.py`, Spalten
+  `lead_quellen.auto_angelegt` / `kampagnen.auto_angelegt`, Parameter
+  `lm_startseite`; Tests `tests/test_lead_v11.py`.

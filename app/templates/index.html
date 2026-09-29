@@ -12,34 +12,42 @@
     {# v12 (Phase 79): Live-Kacheln nur bei Modul-Sichtbarkeit (Demo: Admin);
        alle anderen Rollen sehen die Karte unverändert wie bisher #}
     {% if lead_kacheln %}
+    {# v21 (PLAN_LEAD_V1.1 Phase 88): Kacheln wie die Übersicht, Klick → lm_startseite #}
+    {% set k = lead_kacheln.v21 %}
     <a class="portal-karte" href="/lead-management">
         <h2 class="portal-titel">Lead-Management
             {% if lead_demo_badge %}<span class="demo-badge">{{ lead_badge_text }}</span>{% endif %}
         </h2>
         <div class="kacheln bereich-kacheln">
             <div class="kachel stat">
-                <span class="stat-zahl {{ 'dringend' if lead_kacheln.sla_rot }}">{{ lead_kacheln.neue }}</span>
-                <span>Neue Leads</span>
-                <span class="dezent">{{ lead_kacheln.sla_rot }} × SLA rot</span>
+                <span class="stat-zahl">{{ k.heute }}</span>
+                <span>Eingänge heute</span>
+                <span class="dezent">Ø 10 AT: {{ k.schnitt_10at | replace('.', ',') }}</span>
             </div>
             <div class="kachel stat">
-                <span class="stat-zahl">{{ lead_kacheln.faellig }}</span>
-                <span>Jetzt anrufen</span>
-                <span class="dezent">fällige Aktionen</span>
+                <span class="stat-zahl {{ 'dringend' if k.sla_rot }}">{{ k.sla_rot }}</span>
+                <span>SLA rot</span>
             </div>
             <div class="kachel stat">
-                <span class="stat-zahl">{{ lead_kacheln.wiedervorlagen }}</span>
-                <span>Wiedervorlagen heute</span>
+                <span class="stat-zahl">{{ k.jetzt_dran }}</span>
+                <span>Jetzt dran</span>
             </div>
             <div class="kachel stat">
-                <span class="stat-zahl">{{ lead_kacheln.termine_woche }}</span>
-                <span>Termine diese Woche</span>
-                <span class="dezent">{{ lead_kacheln.termine_untertitel or 'je AD' }}</span>
+                <span class="stat-zahl {{ 'warn' if k.drei_versuche }}">{{ k.drei_versuche }}</span>
+                <span>≥ 3 Versuche offen</span>
             </div>
+            {% if k.posteingang %}
             <div class="kachel stat">
-                <span class="stat-zahl">{{ lead_kacheln.posteingang }}</span>
+                <span class="stat-zahl warn">{{ k.posteingang }}</span>
                 <span>Posteingang unklar</span>
             </div>
+            {% else %}
+            <div class="kachel stat">
+                <span class="stat-zahl">{{ k.termine_heute }}</span>
+                <span>Termine heute</span>
+                <span class="dezent">{{ k.termine_text or 'je AD' }}</span>
+            </div>
+            {% endif %}
         </div>
     </a>
     {% else %}
@@ -113,7 +121,9 @@
             <div class="{{ 'crit' if projekt_kacheln.unterminiert }}">
                 <b>{{ projekt_kacheln.unterminiert }}</b>Unterminiert{% if projekt_kacheln.vorlauf_rot %}<small>+ {{ projekt_kacheln.vorlauf_rot }} rot (&lt; 4 Wo.)</small>{% endif %}</div>
         </div>
-        <div class="pj-plinks">{% if demo_badge %}Demo-Modus: nur Admins sehen
+        <div class="pj-plinks">{% if demo_badge == 'Pilot' %}Pilot: Admins und die
+            Pilot-Benutzer sehen das Modul (Parametrierung → Projektierung-
+            Einstellungen).{% elif demo_badge %}Demo-Modus: nur Admins sehen
             das Modul – freischalten unter Parametrierung →
             Projektierung-Einstellungen.{% else %}Board · Kalender · Liste –
             Klick öffnet die Projektierung.{% endif %}</div>

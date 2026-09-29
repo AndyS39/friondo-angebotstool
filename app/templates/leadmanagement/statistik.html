@@ -73,6 +73,20 @@
     <button class="knopf klein" type="submit">Anwenden</button>
 </form>
 
+{# v21 (Phase 88): dieselbe Zählweise wie die Übersicht (eingaenge_zaehlen) #}
+<h2>Eingänge je Woche × Quellen-Typ <small class="dezent">letzte 12 Wochen</small>
+    <a class="knopf klein zweitrangig" href="/lead-management/statistik?export=wochen">CSV</a></h2>
+<table class="tabelle" style="max-width:900px">
+    <thead><tr><th>Woche</th>{% for typ, name in wochen.typen %}<th class="rechts"><span class="lm-punkt q-{{ typ }}"></span>{{ name }}</th>{% endfor %}<th class="rechts">Summe</th></tr></thead>
+    <tbody>
+    {% for z in wochen.zeilen %}
+    <tr><td>{{ z.woche }} <span class="dezent">ab {{ z.von.strftime('%d.%m.') }}</span></td>
+        {% for typ, n in z.werte %}<td class="rechts">{{ n }}</td>{% endfor %}
+        <td class="rechts"><strong>{{ z.summe }}</strong></td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
 <h2>Trichter</h2>
 <table class="tabelle" style="max-width:900px">
     <tbody>

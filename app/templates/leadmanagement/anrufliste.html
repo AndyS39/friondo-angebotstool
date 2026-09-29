@@ -1,135 +1,137 @@
 {% extends "base.html" %}
 {% from "_symbole.html" import symbol %}
 {% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "_komponenten.html" import quelle_badge, kanal_badge, versuche_punkte %}
 
 {% block titel %}Anrufliste – Lead-Management{% endblock %}
 
 {% block mainklasse %}breit{% endblock %}
 
+{# v21 (PLAN_LEAD_V1.1 Phase 89): gruppierte, zweizeilige Arbeitsliste nach
+   docs/leadmanagement-prototyp.html. Route, Ergebnis-Buttons, Dialoge, das
+   Seitenpanel (einbett=1) und die Tasten 1–7 sind unverändert (v12). #}
 {% block inhalt %}
 {{ lm_nav('anrufliste') }}
 <div class="seitenkopf">
-    <h1>Anrufliste
-        {% if demo_badge %}<span class="demo-badge">Demo · Coming soon</span>{% endif %}
-    </h1>
+    <h1>Anrufliste {% if demo_badge %}<span class="demo-badge">Demo · Coming soon</span>{% endif %}</h1>
+    <span class="dezent">{{ 'Meine + freie Leads' if filter_werte.meine else 'Alle Leads' }} · {{ offen }} offen</span>
     <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/anrufliste?meine={{ '0' if filter_werte.meine else '1' }}">{{ 'Alle Leads' if filter_werte.meine else 'Meine + freie Leads' }}</a>
         <a class="knopf klein" href="/lead-management/neu">+ Neuer Lead</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
-{% if freie_anzahl %}
-<p class="lm-hinweis" title="Leads ohne Leadmanager sind in „Meine + freie Leads“ enthalten – Zuordnung im Lead-Kopf (Feld Leadmanager)">
-    ⚠ <b>{{ freie_anzahl }}</b> Lead{{ 's' if freie_anzahl != 1 }} ohne Leadmanager – bitte übernehmen.</p>
-{% endif %}
 
-<form method="get" action="/lead-management/anrufliste" class="suchleiste">
-    <label class="kontrollfeld">
-        <select name="meine">
-            <option value="1" {{ 'selected' if filter_werte.meine }}>Meine + freie Leads</option>
-            <option value="0" {{ 'selected' if not filter_werte.meine }}>Alle</option>
-        </select>
-    </label>
-    <label class="kontrollfeld">Quelle
-        <select name="quelle_id">
-            <option value="">alle</option>
-            {% for q in quellen %}
-                <option value="{{ q.id }}" {{ 'selected' if filter_werte.quelle_id == q.id | string }}>{{ q.name }}</option>
-            {% endfor %}
-        </select>
-    </label>
-    <label class="kontrollfeld">Sparte
-        <select name="sparte">
-            <option value="">alle</option>
-            {% for s in ('WP', 'PV', 'KL', 'WB') %}
-                <option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }}>{{ s }}</option>
-            {% endfor %}
-        </select>
-    </label>
-    <label class="kontrollfeld">Klasse
-        <select name="klasse">
-            <option value="">alle</option>
-            {% for k in ('A', 'B', 'C') %}
-                <option value="{{ k }}" {{ 'selected' if filter_werte.klasse == k }}>{{ k }}</option>
-            {% endfor %}
-        </select>
-    </label>
-    <label class="kontrollfeld">PLZ <input type="text" name="plz" size="5"
-           value="{{ filter_werte.plz }}"></label>
-    <label class="kontrollfeld">Phase
-        <select name="phase">
-            <option value="">Arbeitsliste</option>
-            {% for wert, name in phasen_namen.items() %}
-                <option value="{{ wert }}" {{ 'selected' if filter_werte.phase == wert }}>{{ name }}</option>
-            {% endfor %}
-        </select>
-    </label>
-    <input type="search" name="q" value="{{ filter_werte.q }}"
-           placeholder="Name / Telefon / Ort">
-    <button class="knopf klein" type="submit">Filtern</button>
+{% set meine_param = 'meine=' ~ ('1' if filter_werte.meine else '0') %}
+<form method="get" action="/lead-management/anrufliste" class="lm-schnellfilter" id="filterform">
+    <input type="hidden" name="meine" value="{{ '1' if filter_werte.meine else '0' }}">
+    {% for key, name in chips %}
+    {% set url = {'arbeitsliste': '', 'heute': '&eingang_von=' ~ heute_param ~ '&eingang_bis=' ~ heute_param,
+                  'sla_rot': '&sla=rot', 'drei': '&versuche_min=3', 'rueckruf': '&rueckruf=heute', 'frei': '&frei=1'}[key] %}
+    <a class="f {{ 'aktiv' if chip == key }}" href="/lead-management/anrufliste?{{ meine_param }}{{ url }}">{{ name }} <b>{{ zaehler[key] }}</b></a>
+    {% endfor %}
+    <span class="trenner"></span>
+    <select name="quelle_typ" onchange="this.form.submit()" title="Quelle nach Typ-Gruppe">
+        <option value="">Quelle: alle</option>
+        {% for typ, name in quellen_gruppen %}
+        <option value="{{ typ }}" {{ 'selected' if filter_werte.quelle_typ == typ }}>{{ name }}</option>
+        {% endfor %}
+    </select>
+    <select name="quelle_id" onchange="this.form.submit()">
+        <option value="">Einzelquelle: alle</option>
+        {% for q in quellen %}<option value="{{ q.id }}" {{ 'selected' if filter_werte.quelle_id == q.id | string }}>{{ q.name }}</option>{% endfor %}
+    </select>
+    <select name="sparte" onchange="this.form.submit()">
+        <option value="">Sparte: alle</option>
+        {% for s in ('WP', 'PV', 'KL', 'WB') %}<option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }}>{{ s }}</option>{% endfor %}
+    </select>
+    <select name="klasse" onchange="this.form.submit()">
+        <option value="">Klasse: alle</option>
+        {% for k in ('A', 'B', 'C') %}<option value="{{ k }}" {{ 'selected' if filter_werte.klasse == k }}>{{ k }}</option>{% endfor %}
+    </select>
+    <select name="phase" onchange="this.form.submit()" title="Phase (Standard: Arbeitsliste)">
+        <option value="">Phase: Arbeitsliste</option>
+        {% for wert, name in phasen_namen.items() %}<option value="{{ wert }}" {{ 'selected' if filter_werte.phase == wert }}>{{ name }}</option>{% endfor %}
+    </select>
+    <input type="search" name="q" value="{{ filter_werte.q }}" placeholder="Name / Telefon / Ort / PLZ">
+    {% if filter_werte.kampagne_id not in ('', none) %}<input type="hidden" name="kampagne_id" value="{{ filter_werte.kampagne_id }}">{% endif %}
+    {% if filter_werte.eingang_von and chip != 'heute' %}<input type="hidden" name="eingang_von" value="{{ filter_werte.eingang_von }}"><input type="hidden" name="eingang_bis" value="{{ filter_werte.eingang_bis }}">
+        <span class="abzeichen">Eingang {{ filter_werte.eingang_von }}{{ ' – ' ~ filter_werte.eingang_bis if filter_werte.eingang_bis != filter_werte.eingang_von }}</span>{% endif %}
+    {% if filter_werte.versuche is not none %}<input type="hidden" name="versuche" value="{{ filter_werte.versuche }}"><span class="abzeichen">Versuche = {{ filter_werte.versuche }}</span>{% endif %}
+    {% if filter_werte.versuche_min is not none and chip != 'drei' %}<input type="hidden" name="versuche_min" value="{{ filter_werte.versuche_min }}"><span class="abzeichen">Versuche ≥ {{ filter_werte.versuche_min }}</span>{% endif %}
+    {% if filter_werte.gruppe %}<input type="hidden" name="gruppe" value="{{ filter_werte.gruppe }}"><span class="abzeichen">nur „Jetzt dran“</span>{% endif %}
+    <button class="knopf klein zweitrangig" type="submit">Filtern</button>
 </form>
 
 <div class="anruf-layout">
-<table class="tabelle" id="anruftabelle">
-    <thead><tr><th>Lead</th><th>Sparten</th><th>Quelle</th><th>Klasse</th>
-        <th>SLA</th><th title="Versuch-Nr.">V.</th><th>Letztes Ergebnis</th>
-        <th>Telefon</th><th>Ergebnis (Tasten 1–7)</th></tr></thead>
-    <tbody>
-    {% for z in zeilen %}
-        <tr class="anruf-zeile" data-vorgang="{{ z.vorgang.id }}">
-            <td>
-                <a href="#" class="panel-link" data-ziel="/vorgaenge/{{ z.vorgang.id }}">
-                    <strong>{{ z.kunde.anzeige_name }}</strong></a>
-                <span class="dezent">{{ z.kunde.ort or '?' }} ({{ z.kunde.plz or '–' }})</span>
-                {% if z.vorgang.demo %}<span class="demo-badge">Demo</span>{% endif %}
-                {% if z.frei %}<span class="abzeichen frei" title="Noch kein Leadmanager zugeordnet">frei</span>{% endif %}
-                {% if z.monday %}<span class="abzeichen">monday</span>{% endif %}
-                {% if z.wiederkehrer %}<span class="abzeichen ep">Wiederkehrer</span>{% endif %}
-                {% if z.nummer_pruefen %}<span class="abzeichen ep">Nummer prüfen</span>{% endif %}
-                {% if z.vorgang.naechste_aktion_am %}
-                    <span class="dezent">→ {{ z.vorgang.naechste_aktion_am.strftime('%d.%m. %H:%M') }}</span>
-                {% endif %}
-            </td>
-            <td>{% for s in z.sparten %}<span class="abzeichen">{{ s }}</span>{% endfor %}</td>
-            <td>{% if z.quelle %}<span class="abzeichen">{{ z.quelle.name }}</span>{% endif %}</td>
-            <td><strong>{{ z.vorgang.score_klasse or '–' }}</strong>
-                <span class="dezent">{{ z.vorgang.score_punkte if z.vorgang.score_punkte is not none }}</span></td>
-            <td>{% if z.sla.farbe == 'erfuellt' %}
-                    <span class="sla-chip sla-erfuellt" title="Zeit bis zum Erstkontakt (innerhalb der LM-Arbeitszeit)">erfüllt · {{ z.sla.text }}</span>
-                {% elif z.sla.farbe %}
-                    <span class="sla-chip sla-{{ z.sla.farbe }}" title="wartet seit {{ z.sla.text }} auf den Erstkontakt (AT = Arbeitstage)">{{ z.sla.text }}</span>
-                {% endif %}</td>
-            <td>{{ z.vorgang.versuch_nr or 0 }}</td>
-            <td class="dezent">{% if z.letzter %}{{ ergebnis_namen.get(z.letzter.ergebnis, '') }}
-                · {{ z.letzter.zeitpunkt.strftime('%d.%m. %H:%M') }}{% endif %}</td>
-            <td>{% if z.kunde.telefon %}<a href="tel:{{ z.kunde.telefon }}">{{ z.kunde.telefon }}</a>{% endif %}</td>
-            <td class="anruf-buttons">
-                {# Design-Fix 27.09.2026: symbol()-Icons statt Emojis #}
-                <form method="post" action="/lead-management/anruf/{{ z.vorgang.id }}" style="display:inline">
-                    <button class="knopf klein anruf-ok" name="ergebnis" value="erreicht" title="1 – Erreicht">{{ symbol('haken') }}</button>
-                    <button class="knopf klein zweitrangig" name="ergebnis" value="nicht_erreicht" title="2 – Nicht erreicht">{{ symbol('telefon-aus') }}</button>
-                    <button class="knopf klein zweitrangig" name="ergebnis" value="besetzt" title="3 – Besetzt">{{ symbol('besetzt') }}</button>
-                    <button class="knopf klein zweitrangig" name="ergebnis" value="mailbox" title="4 – Mailbox">{{ symbol('voicemail') }}</button>
+<div class="lm-arbeitsliste" id="anruftabelle">
+    {% for g in gruppen %}
+    {% set n_rot = g.zeilen | selectattr('balken', 'equalto', 'sla-rot-zeile') | list | length %}
+    <details {{ '' if g.eingeklappt else 'open' }}>
+        <summary class="lm-gruppe-kopf">{{ g.titel }} <span class="n {{ 'rot' if n_rot and g.key == 'dran' }}">{{ g.zeilen | length }}</span><span class="erkl">{{ g.erkl }}</span></summary>
+        {% for z in g.zeilen %}
+        <div class="lm-zeile anruf-zeile {{ z.balken }}" data-vorgang="{{ z.vorgang.id }}">
+            {{ versuche_punkte(z.vorgang) }}
+            <div class="wer">
+                <div class="z1">
+                    <a href="#" class="panel-link" data-ziel="/vorgaenge/{{ z.vorgang.id }}">{{ z.kunde.anzeige_name }}</a>
+                    <span class="ort">{{ z.kunde.ort or '?' }} ({{ z.kunde.plz or '–' }})</span>
+                    {% for s in z.sparten %}<span class="chip chip-{{ s | lower }}">{{ s }}</span>{% endfor %}
+                    {{ quelle_badge(z.quelle, z.quelle_gruppe, z.kampagne.name if (z.kampagne and z.quelle_gruppe == 'landingpage') else '') }}
+                    {{ kanal_badge(z.kanal) }}
+                    {% if z.frei %}<span class="lm-flag" title="Noch kein Leadmanager zugeordnet">⚑ frei</span>{% endif %}
+                    {% if z.nummer_pruefen %}<span class="lm-flag" title="Letzter Anruf: falsche Nummer">⚑ Nummer prüfen</span>{% endif %}
+                    {% if z.wiederkehrer %}<span class="abzeichen">Wiederkehrer</span>{% endif %}
+                    {% if z.vorgang.demo %}<span class="abzeichen">Demo</span>{% endif %}
+                    {% if z.kampagne and z.kampagne.auto_angelegt %}<span class="lm-neu">Kampagne neu</span>{% endif %}
+                </div>
+                <div class="z2">
+                    {% for text, klasse in z.satz %}<span class="{{ {'faellig': 'lm-rot', 'rueckruf': 'lm-blau', 'warn': 'lm-warn', 'rot': 'lm-rot', 'dezent': 'dezent'}.get(klasse, '') }}">{{ text }}</span>{% endfor %}
+                </div>
+            </div>
+            <div class="sla">{% if z.sla.farbe == 'erfuellt' %}
+                <span class="sla-chip sla-erfuellt" title="Zeit bis zum Erstkontakt (innerhalb der LM-Arbeitszeit)">erfüllt · {{ z.sla.text }}</span>
+            {% elif z.sla.farbe %}
+                <span class="sla-chip sla-{{ z.sla.farbe }}" title="wartet seit {{ z.sla.text }} auf den Erstkontakt (AT = Arbeitstage)">{{ z.sla.text }}</span>
+            {% elif z.sla.monday %}
+                <span class="sla-chip sla-erfuellt" title="monday-Lead – Terminierung in monday, kein SLA im Tool">monday</span>
+            {% endif %}</div>
+            <div class="klasse">{{ z.vorgang.score_klasse or '–' }} <small>{{ z.vorgang.score_punkte if z.vorgang.score_punkte is not none else 'vorl.' }}</small></div>
+            <div class="tel">{% if z.kunde.telefon %}<a href="tel:{{ z.kunde.telefon }}">{{ z.kunde.telefon }}</a>{% endif %}</div>
+            <div class="lm-aktion anruf-buttons">
+                <form method="post" action="/lead-management/anruf/{{ z.vorgang.id }}">
+                    <button class="knopf klein lm-ok" name="ergebnis" value="erreicht" title="1 – Erreicht">✓ Erreicht</button>
+                    <button class="knopf klein zweitrangig" name="ergebnis" value="nicht_erreicht" title="2 – Nicht erreicht">Nicht erreicht</button>
+                    <button class="knopf klein zweitrangig" name="ergebnis" value="mailbox" title="4 – Mailbox">Mailbox</button>
                 </form>
-                <button class="knopf klein zweitrangig" title="5 – Rückruf gewünscht"
-                        onclick="dialogOeffnen('rueckruf', {{ z.vorgang.id }})">{{ symbol('kalender') }}</button>
-                <form method="post" action="/lead-management/anruf/{{ z.vorgang.id }}" style="display:inline">
-                    <button class="knopf klein zweitrangig" name="ergebnis" value="falsche_nummer" title="6 – Falsche Nummer">{{ symbol('fragezeichen') }}</button>
-                </form>
-                <button class="knopf klein zweitrangig" title="7 – Kein Interesse"
-                        onclick="dialogOeffnen('keininteresse', {{ z.vorgang.id }})">{{ symbol('verbot') }}</button>
-                <button class="knopf klein zweitrangig" title="Zurückstellen"
-                        onclick="dialogOeffnen('zurueck', {{ z.vorgang.id }})">{{ symbol('pause') }}</button>
-                {% if z.vorgang.lead_phase in ('nicht_erreicht', 'zurueckgestellt', 'unqualifiziert') %}
-                <button class="knopf klein zweitrangig" title="Erneut aktivieren"
-                        onclick="dialogOeffnen('reaktivieren', {{ z.vorgang.id }})">{{ symbol('abspielen') }}</button>
-                {% endif %}
-            </td>
-        </tr>
+                <button class="knopf klein zweitrangig" title="5 – Rückruf gewünscht" onclick="dialogOeffnen('rueckruf', {{ z.vorgang.id }})">Rückruf</button>
+                <details>
+                    <summary class="knopf klein zweitrangig" title="Besetzt · Falsche Nummer · Kein Interesse · Zurückstellen">⋯</summary>
+                    <div class="lm-menue">
+                        <form method="post" action="/lead-management/anruf/{{ z.vorgang.id }}">
+                            <button class="knopf klein zweitrangig" name="ergebnis" value="besetzt" title="3 – Besetzt">{{ symbol('besetzt') }} Besetzt</button>
+                        </form>
+                        <form method="post" action="/lead-management/anruf/{{ z.vorgang.id }}">
+                            <button class="knopf klein zweitrangig" name="ergebnis" value="falsche_nummer" title="6 – Falsche Nummer">{{ symbol('fragezeichen') }} Falsche Nummer</button>
+                        </form>
+                        <button class="knopf klein zweitrangig" title="7 – Kein Interesse" onclick="dialogOeffnen('keininteresse', {{ z.vorgang.id }})">{{ symbol('verbot') }} Kein Interesse</button>
+                        <button class="knopf klein zweitrangig" title="Zurückstellen" onclick="dialogOeffnen('zurueck', {{ z.vorgang.id }})">{{ symbol('pause') }} Zurückstellen</button>
+                        {% if z.vorgang.lead_phase in ('nicht_erreicht', 'zurueckgestellt', 'unqualifiziert') %}
+                        <button class="knopf klein zweitrangig" title="Erneut aktivieren" onclick="dialogOeffnen('reaktivieren', {{ z.vorgang.id }})">{{ symbol('abspielen') }} Reaktivieren</button>
+                        {% endif %}
+                    </div>
+                </details>
+            </div>
+        </div>
+        {% else %}
+        <div class="lm-zeile"><span></span><span class="dezent">Keine Leads in dieser Gruppe.</span></div>
+        {% endfor %}
+    </details>
     {% else %}
-        <tr><td colspan="9" class="dezent">Keine Leads in der Arbeitsliste.</td></tr>
+    <div class="lm-zeile"><span></span><span class="dezent">Keine Leads in der Arbeitsliste.</span></div>
     {% endfor %}
-    </tbody>
-</table>
+    <div class="lm-legende-liste"><span><b>Punkte</b> = Anrufversuche (grau 1–2 · orange 3 · rot 4+)</span><span><b>Farbbalken links</b> = SLA rot/gelb bzw. viele Versuche</span><span><b>Quelle</b> farbig nach Typ · <b>Kanal</b> violett (steuert Angebotsprofil)</span><span>Tasten 1 Erreicht · 2 Nicht erreicht · 3 Besetzt · 4 Mailbox · 5 Rückruf · 6 Falsche Nummer · 7 Kein Interesse</span></div>
+</div>
 <aside id="lead-panel" hidden>
     <div class="panel-kopf">
         <a id="panel-voll" class="knopf klein zweitrangig" href="#" target="_blank">Vollansicht ↗</a>
@@ -139,7 +141,7 @@
 </aside>
 </div>
 
-{# Dialoge: Rückruf, Kein Interesse, Zurückstellen, Reaktivieren #}
+{# Dialoge: Rückruf, Kein Interesse, Zurückstellen, Reaktivieren (unverändert v12) #}
 <dialog id="dlg-rueckruf">
     <form method="post" class="formular">
         <input type="hidden" name="ergebnis" value="rueckruf_gewuenscht">
@@ -214,8 +216,15 @@ let aktiveZeile = null;
 function dialogOeffnen(art, vorgangId) {
     const dlg = document.getElementById('dlg-' + art);
     dlg.querySelector('form').action = dialogZiele[art](vorgangId);
+    document.querySelectorAll('.lm-aktion details[open]').forEach(d => d.removeAttribute('open'));
     dlg.showModal();
 }
+// nur ein ⋯-Menü offen; Klick außerhalb schließt
+document.addEventListener('click', e => {
+    document.querySelectorAll('.lm-aktion details[open]').forEach(d => {
+        if (!d.contains(e.target)) d.removeAttribute('open');
+    });
+});
 // Seitenpanel: Klick auf den Namen öffnet die Akte rechts ohne Seitenwechsel
 const panel = document.getElementById('lead-panel');
 document.querySelectorAll('.panel-link').forEach(a => {
@@ -225,7 +234,7 @@ document.querySelectorAll('.panel-link').forEach(a => {
         document.getElementById('panel-frame').src = a.dataset.ziel + '?einbett=1';
         document.getElementById('panel-voll').href = a.dataset.ziel;
         panel.hidden = false;
-        aktiveZeile = a.closest('tr');
+        aktiveZeile = a.closest('.anruf-zeile');
         document.querySelectorAll('.anruf-zeile.aktiv')
             .forEach(z => z.classList.remove('aktiv'));
         aktiveZeile.classList.add('aktiv');
@@ -233,6 +242,7 @@ document.querySelectorAll('.panel-link').forEach(a => {
 });
 function panelSchliessen() { panel.hidden = true; }
 // Tastaturkürzel 1–7 wirken auf die im Seitenpanel geöffnete Zeile
+// (3 = Besetzt, 6 = Falsche Nummer und 7 = Kein Interesse liegen im ⋯-Menü)
 const tasten = {"1": "erreicht", "2": "nicht_erreicht", "3": "besetzt",
                 "4": "mailbox", "6": "falsche_nummer"};
 document.addEventListener('keydown', e => {

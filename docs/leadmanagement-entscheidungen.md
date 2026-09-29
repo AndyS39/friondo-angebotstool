@@ -256,3 +256,34 @@ Lead-Management/Projektierung/Montage; Parametrierungs-Reiter umbrechen.
 - /api/leads hat kein Demo-Gate (legt aber demo=1-Leads an).
 - Karte/Terminassistent: harte Hex-Farben; „Meine Termine" ohne
   v14-Karten-Layout.
+
+## PLAN_LEAD_V1.1 (30.09.2026) – Umsetzung durch Claude Code (v21)
+
+- **Auflösung Quelle/Kampagne** an einer Stelle (`quelle_kampagne_aufloesen`)
+  für Parser, API und Import; Schnellanlage/Import wählen Quelle/Kampagne
+  weiter per Dropdown (dort gibt es nichts Unbekanntes). Nebenbefund
+  behoben: der Parser fand die Kampagne, gab sie aber nicht an
+  `lead_anlegen` weiter.
+- **Kanal „Standard“** = kein eigener Kanal (`kanal = NULL`); die
+  Dropdown-Werte sind der jeweils erste Kanalwert der Angebotsprofile.
+  monday-Quellen bleiben ohne Kanal („Kanal am Kunden“).
+- **Kosten je Lead einer Kampagne** = Budget ÷ Eingänge im Kampagnen-
+  zeitraum (leer ohne Budget); in der Übersichtstabelle ersetzt der
+  Kampagnen-CPL den Quellenwert.
+- **Quellen-Typ-Farben** aus dem Prototyp übernommen; der Paletten-
+  Validator (Node) ist auf dem Entwicklungs-PC nicht installiert – der
+  Prototyp gilt laut Plan als validiert. Jede Farbfläche trägt Zahl +
+  Legende.
+- **Jetzt dran** enthält SLA gelb/rot ohne ersten Versuch und fällige
+  Rückrufwünsche; fällige Kaskaden-Schritte stehen in „Weiter versuchen“
+  (sonst wäre die Gruppe „Weiter versuchen“ leer). „Rückruf heute“ =
+  letztes Ergebnis Rückruf gewünscht mit `naechste_aktion_am` heute.
+- **Stichworte** der Zeile 2 kommen über die Fragetexte der Qualifizierung
+  („Heizung“/„Energieträger“, „Baujahr“, „Zeitrahmen“/„wann“) – das Blatt
+  braucht keine Sonderspalte.
+- **Chip-Zähler** zählen auf der Basisliste (nur Meine/Alle wirkt), die
+  Gruppen auf der gefilterten Liste; „Sonstige“ ist nur in der reinen
+  Arbeitsliste eingeklappt.
+- **Modul-Einstieg** `lm_startseite`: leer = nach Rolle (Hauptrolle
+  Leadmanagement → Anrufliste, sonst Übersicht).
+- Nebenbefund B2 behoben: Portal-Text der Projektierung im Pilot-Modus.

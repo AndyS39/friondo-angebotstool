@@ -1,4 +1,5 @@
 {% from "_symbole.html" import symbol %}
+{% from "_komponenten.html" import quelle_badge, kanal_badge, versuche_punkte %}
 {# v12 (Phase 79): Lead-Kopfblock + Reiter der Lead-Akte – erscheint in der
    Vorgangsakte nur bei Modul-Sichtbarkeit (Demo: Admin). #}
 <div class="karte lead-kopf">
@@ -16,8 +17,11 @@
         {% endif %}
     </div>
     <div class="formzeile" style="flex-wrap:wrap">
-        <span>Quelle: <strong>{{ lead_kontext.quelle.name if lead_kontext.quelle else '–' }}</strong>
-            {{ '· Kampagne ' ~ lead_kontext.kampagne.name if lead_kontext.kampagne }}</span>
+        {# v21 (Phase 89): Badges wie in der Anrufliste #}
+        <span>Quelle: {{ quelle_badge(lead_kontext.quelle, lead_kontext.quelle_gruppe) if lead_kontext.quelle else '–' }}
+            {% if lead_kontext.kampagne %}· Kampagne <strong>{{ lead_kontext.kampagne.name }}</strong>
+                {% if lead_kontext.kampagne.auto_angelegt %}<span class="lm-neu">Kampagne neu</span>{% endif %}{% endif %}
+            {{ kanal_badge(lead_kontext.kanal) }}</span>
         <span>Eingang: {{ vorgang.eingang_am.strftime('%d.%m.%Y %H:%M') if vorgang.eingang_am else '–' }}
             ({{ vorgang.eingang_art or '–' }})</span>
         <span>SLA:
@@ -31,6 +35,8 @@
             · {{ vorgang.score_klasse or '–' }}</strong>
             {% if not lead_kontext.qualifizierungen %}<span class="dezent">(vorläufig)</span>{% endif %}</span>
         <span>Wunschzeiten: {{ lead_kontext.wunschzeiten | join(', ') or '–' }}</span>
+        <span style="display:inline-flex;align-items:center;gap:8px">Kontaktstatus: {{ versuche_punkte(vorgang) }}
+            <span>{% for text, klasse in lead_kontext.kontakt_satz %}<span class="{{ {'faellig': 'lm-rot', 'rueckruf': 'lm-blau', 'warn': 'lm-warn', 'rot': 'lm-rot', 'dezent': 'dezent'}.get(klasse, '') }}">{{ text }}</span>{{ ' · ' if not loop.last }}{% endfor %}</span></span>
         <span>Einwilligung Werbung:
             {{ '✓ ' ~ vorgang.einwilligung_werbung_am.strftime('%d.%m.%Y')
                ~ ' (' ~ (vorgang.einwilligung_quelle or '?') ~ ')'

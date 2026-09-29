@@ -37,6 +37,7 @@ PARAMETER_START = {
     "zuweisung_lm": "round_robin",
     "arbeitszeit_lm": "08:00-17:00",
     "demo_badge_text": "Demo · Coming soon",
+    "lm_startseite": "",   # v21: uebersicht | anrufliste | leer = nach Rolle
     "firmen_adresse": "Duisburg",
     # Erwartungswerte je Sparte (brutto, Cent) + Phasen-Quoten (Phase 79/80)
     "erwartungswert_WP": "3000000",
@@ -1895,6 +1896,8 @@ def akte_kontext(session: Session, vorgang: Vorgang) -> dict:
         "termine": termine, "aktiver_termin": aktiver_termin,
         "kommunikation": kommunikation,
         "wiederkehrer": mehrfach,
+        # v21 (Phase 89): Kontaktstatus-Satz + Quellen-Gruppe wie in der Anrufliste
+        **__import__("app.lead_anrufliste", fromlist=["x"]).kopf_kontext(session, vorgang),
         "verloren_gruende": __import__("app.leadmanagement_logik", fromlist=["x"]).hole_logik().gruende_der_phase("verloren_vor_termin"),
         "leadmanager_wahl": [b for b in benutzer_map.values()
                              if b.aktiv and (b.lm_aktiv or b.rolle == "admin"
@@ -1911,9 +1914,18 @@ LEAD_PHASEN_ANZEIGE = ["neu", "in_kontaktierung", "qualifiziert", "terminiert",
 
 
 def startseiten_kacheln_leads(session: Session) -> dict:
-    """Portal-Karte Lead-Management (Phase 79): Neue Leads (+SLA rot),
-    Jetzt anrufen, Wiedervorlagen heute, Termine diese Woche (je AD),
-    Posteingang unklar."""
+    """Portal-Karte Lead-Management – v21 (Phase 88): Kacheln aus den
+    Übersichts-KPIs (Eingänge heute Ø 10 AT · SLA rot · Jetzt dran · ≥ 3
+    Versuche offen · Termine heute; Posteingang unklar ersetzt die letzte
+    Kachel, wenn > 0). Die v12-Werte bleiben für Bestandsaufrufer erhalten."""
+    from app import lead_uebersicht
+    k = lead_uebersicht.kpis(session)
+    k.pop("_offene", None)
+    alt = _startseiten_kacheln_v12(session)
+    return {**alt, "v21": k}
+
+
+def _startseiten_kacheln_v12(session: Session) -> dict:
     from app.models import LeadPosteingang
     jetzt = datetime.now()
     neue = (session.query(Vorgang)

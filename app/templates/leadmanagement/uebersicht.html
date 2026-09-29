@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "_komponenten.html" import kanal_badge %}
+
+{% block titel %}Übersicht – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{# v21 (PLAN_LEAD_V1.1 Phase 88): Modul-Einstieg nach docs/leadmanagement-prototyp.html #}
+{% block inhalt %}
+{{ lm_nav('uebersicht') }}
+<div class="seitenkopf">
+    <h1>Übersicht {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
+    <span class="dezent">{{ jetzt | de_datum('%A, %d.%m.%Y') }} · Stand {{ jetzt.strftime('%H:%M') }}{% if mit_demo %} · inkl. Demo{% endif %}</span>
+    <div class="aktionen">
+        <a class="knopf klein {{ 'zweitrangig' if zeitraum != 'woche' }}" href="?zeitraum=woche">Woche</a>
+        <a class="knopf klein {{ 'zweitrangig' if zeitraum != '30' }}" href="?zeitraum=30">30 Tage</a>
+        <a class="knopf klein" href="/lead-management/anrufliste">Zur Anrufliste →</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% macro delta(d, basis) %}
+{% if d.prozent is not none %}<span class="{{ d.richtung }}">{{ '▲' if d.richtung == 'auf' else ('▼' if d.richtung == 'ab' else '=') }} {{ '%+d' | format(d.prozent) }} %</span>{% endif %}
+{% endmacro %}
+
+<div class="lm-kacheln">
+    <a class="kachel stat" href="/lead-management/anrufliste?eingang_von={{ heute_param }}&eingang_bis={{ heute_param }}" title="Anrufliste: heute eingegangen">
+        <span class="stat-zahl">{{ kpis.heute }}</span>Eingänge heute
+        <span class="lm-delta">Ø 10 Arbeitstage: {{ kpis.schnitt_10at | replace('.', ',') }}{% if kpis.delta_heute.prozent is not none %} · {{ delta(kpis.delta_heute) }}{% endif %}</span></a>
+    <a class="kachel stat" href="/lead-management/anrufliste?eingang_von={{ tage.tage[7].datum.strftime('%Y-%m-%d') }}&eingang_bis={{ heute_param }}">
+        <span class="stat-zahl">{{ kpis.woche }}</span>Eingänge 7 Tage
+        <span class="lm-delta">Vorwoche {{ kpis.vorwoche }}{% if kpis.delta_woche.prozent is not none %} · {{ delta(kpis.delta_woche) }}{% endif %}</span></a>
+    <a class="kachel stat" href="/lead-management/anrufliste?sla=rot">
+        <span class="stat-zahl {{ 'dringend' if kpis.sla_rot }}">{{ kpis.sla_rot }}</span>SLA rot jetzt
+        <span class="lm-delta">&gt; {{ erstkontakt.sla_gelb }} Min ohne 1. Versuch</span></a>
+    <a class="kachel stat" href="/lead-management/anrufliste?gruppe=dran">
+        <span class="stat-zahl">{{ kpis.jetzt_dran }}</span>Jetzt dran
+        <span class="lm-delta">fällige Rückrufe + Wiedervorlagen + SLA gelb/rot</span></a>
+    <a class="kachel stat" href="/lead-management/anrufliste?versuche_min=3">
+        <span class="stat-zahl {{ 'warn' if kpis.drei_versuche }}">{{ kpis.drei_versuche }}</span>≥ 3 Versuche offen
+        <span class="lm-delta">davon {{ kpis.vier_versuche }} mit 4+ Versuchen</span></a>
+    <a class="kachel stat" href="/lead-management/kalender">
+        <span class="stat-zahl">{{ kpis.termine_heute }}</span>VOT-Termine heute
+        <span class="lm-delta">{{ kpis.termine_text or 'je AD' }}</span></a>
+    {% if kpis.posteingang %}
+    <a class="kachel stat" href="/lead-management/posteingang">
+        <span class="stat-zahl warn">{{ kpis.posteingang }}</span>Posteingang unklar
+        <span class="lm-delta">bitte zuordnen</span></a>
+    {% endif %}
+</div>
+
+<div class="lm-zweispaltig">
+    <div class="lm-karte">
+        <h2>Eingänge je Tag <span class="sub">letzte 14 Tage · gestapelt nach Quellen-Typ · Klick auf einen Tag filtert die Anrufliste</span></h2>
+        <div class="lm-viz" role="img" aria-label="Eingänge je Tag der letzten 14 Tage">
+            {% for t in tage.tage %}
+            {% set param = t.datum.strftime('%Y-%m-%d') %}
+            <a class="lm-tag {{ 'heute' if t.heute }}" href="/lead-management/anrufliste?eingang_von={{ param }}&eingang_bis={{ param }}"
+               title="{{ t.datum | de_datum('%a %d.%m.') }}: {{ t.summe }}{% for typ, n in t.segmente if n %} · {{ typ }} {{ n }}{% endfor %}">
+                {% for typ, n in t.segmente if n %}
+                <div class="seg q-{{ typ }}" style="height:{{ (n / tage.maximum * 140) | round(1) }}px" title="{{ typ }}: {{ n }}"></div>
+                {% endfor %}
+                <span class="summe">{{ t.summe }}</span>
+            </a>
+            {% endfor %}
+        </div>
+        <div class="lm-achse">{% for t in tage.tage %}<span class="{{ 'heute' if t.heute }}">{{ t.achse }}</span>{% endfor %}</div>
+        <div class="lm-legende">{% for typ, name in tage.legende %}<span class="q-{{ typ }}">{{ name }}</span>{% endfor %}</div>
+    </div>
+
+    <div class="lm-karte">
+        <h2>Kontaktstatus der offenen Leads <span class="sub">wie oft haben wir schon angerufen? · {{ kpis.offene }} offen</span></h2>
+        <div class="lm-verteilung">
+            {% for k in kontakt %}
+            <a class="{{ 'lm-warn' if k.klasse == 'warn' }}{{ 'lm-rot' if k.klasse == 'rot' }}" href="/lead-management/anrufliste?{{ k.filter }}">{{ k.titel }}</a>
+            <a href="/lead-management/anrufliste?{{ k.filter }}"><div class="balken {{ k.klasse }}" style="width:{{ k.breite }}%"></div></a>
+            <span class="n">{{ k.n }}</span>
+            {% endfor %}
+        </div>
+        <p class="dezent" style="font-size:var(--t-xs);margin:10px 0 0">Klick auf eine Zeile öffnet die Anrufliste mit dem Filter „Versuche = …“.{% if kaskade %} {{ kaskade }}{% endif %}</p>
+        <h2 style="margin-top:18px">Erstkontakt heute <span class="sub">Speed-to-Lead</span></h2>
+        <div class="lm-kacheln" style="grid-template-columns:repeat(3,1fr);margin:0">
+            <div class="kachel stat"><span class="stat-zahl" style="font-size:22px">{{ (erstkontakt.median | round | int ~ ' Min') if erstkontakt.median is not none else '–' }}</span>Median bis 1. Versuch</div>
+            <div class="kachel stat"><span class="stat-zahl" style="font-size:22px">{{ (erstkontakt.sla_quote ~ ' %') if erstkontakt.sla_quote is not none else '–' }}</span>im SLA (&lt; {{ erstkontakt.sla_gelb }} Min)</div>
+            <div class="kachel stat"><span class="stat-zahl" style="font-size:22px">{{ erstkontakt.erreicht }} / {{ erstkontakt.gesamt }}</span>heute erreicht</div>
+        </div>
+    </div>
+</div>
+
+<div class="lm-karte">
+    <h2>Eingänge je Quelle und Kanal <span class="sub">Quelle = Herkunft · Kanal = Vertriebskanal (steuert das Angebotsprofil) · erreicht/terminiert = Kohorte der Eingänge im Zeitraum · Klick filtert die Anrufliste</span></h2>
+    <table class="tabelle">
+        <thead><tr><th>Quelle</th><th>Kanal</th><th class="rechts">heute</th><th class="rechts">7 Tage</th>
+            <th class="rechts">{{ tabelle.tage }} Tage</th><th>erreicht</th><th>terminiert</th>
+            <th class="rechts" title="offene Leads mit 3 oder mehr Versuchen">≥ 3 Versuche</th><th class="rechts">Kosten/Lead</th></tr></thead>
+        <tbody>
+        {% for g in tabelle.gruppen %}
+            <tr class="lm-gruppe lm-klick" onclick="location.href='{{ g.link }}'"><td colspan="9"><span class="lm-punkt q-{{ g.typ }}"></span>{{ g.name }}{% if g.typ == 'landingpage' %} <span class="dezent" style="text-transform:none;font-weight:400">· je Landingpage eine Kampagne</span>{% endif %}</td></tr>
+            {% for z in g.zeilen %}
+            <tr class="lm-klick" onclick="location.href='{{ z.link }}'">
+                <td>{{ z.name }}{% if z.kampagne and z.kampagne.auto_angelegt %} <span class="lm-neu">neu – bitte zuordnen</span>{% endif %}</td>
+                <td>{% if z.kanal in ('Kanal am Kunden', '– bitte zuordnen') %}<span class="dezent">{{ z.kanal }}</span>{% elif z.kanal == 'Standard' %}Standard{% else %}{{ kanal_badge(z.kanal) }}{% endif %}</td>
+                <td class="rechts">{{ z.heute }}</td>
+                <td class="rechts">{{ z.woche }}</td>
+                <td class="rechts">{{ z.zeitraum }}</td>
+                <td>{% if z.erreicht is not none %}<span class="lm-miniquote" style="width:{{ z.erreicht }}px"></span>{{ z.erreicht }} %{% else %}<span class="dezent">–</span>{% endif %}</td>
+                <td>{% if z.terminiert is not none %}<span class="lm-miniquote" style="width:{{ z.terminiert }}px"></span>{{ z.terminiert }} %{% else %}<span class="dezent">–</span>{% endif %}</td>
+                <td class="rechts">{{ z.drei }}</td>
+                <td class="rechts {{ 'dezent' if not z.kosten }}" title="{{ 'Kampagnen-Budget ÷ Eingänge' if z.kampagne and z.kampagne.budget_cent else 'Kosten je Lead der Quelle' }}">{{ z.kosten | euro if z.kosten else '–' }}</td>
+            </tr>
+            {% endfor %}
+        {% else %}
+            <tr><td colspan="9" class="dezent">Keine Eingänge im Zeitraum.</td></tr>
+        {% endfor %}
+        <tr class="lm-summe"><td>Gesamt</td><td></td>
+            <td class="rechts">{{ tabelle.summe.heute }}</td><td class="rechts">{{ tabelle.summe.woche }}</td>
+            <td class="rechts">{{ tabelle.summe.zeitraum }}</td>
+            <td>{{ (tabelle.summe.erreicht ~ ' %') if tabelle.summe.erreicht is not none else '–' }}</td>
+            <td>{{ (tabelle.summe.terminiert ~ ' %') if tabelle.summe.terminiert is not none else '–' }}</td>
+            <td class="rechts">{{ tabelle.summe.drei }}</td>
+            <td class="rechts">{{ ('Ø ' ~ (tabelle.summe.kosten_schnitt | euro)) if tabelle.summe.kosten_schnitt else '–' }}</td></tr>
+        </tbody>
+    </table>
+</div>
+
+{# Das bisherige Cockpit (v12 Phase 79) geht hier auf – aufklappbar #}
+{% set heute = cockpit.heute %}{% set woche = cockpit.woche %}{% set ad = cockpit.ad %}
+{% set benutzer_map = cockpit.benutzer_map %}{% set ueberfaellig = cockpit.ueberfaellig %}
+{% set sla_rot = cockpit.sla_rot %}{% set rueckmeldung_offen = cockpit.rueckmeldung_offen %}
+{% set vorgaenge_map = cockpit.vorgaenge_map %}{% set kunden_map = cockpit.kunden_map %}
+{% macro lm_tabelle(zahlen, titel) %}
+<details class="lm-karte"><summary><strong>{{ titel }}</strong></summary>
+<table class="tabelle" style="max-width:800px;margin-top:8px">
+    <thead><tr><th>Leadmanager</th><th>Anrufe</th><th>erreicht</th>
+        <th>qualifiziert</th><th>terminiert</th><th>überfällige Aktionen</th></tr></thead>
+    <tbody>
+    {% for benutzer_id, z in zahlen.items() %}
+        <tr><td>{{ benutzer_map[benutzer_id].name if benutzer_id in benutzer_map else '?' }}</td>
+            <td class="rechts">{{ z.anrufe }}</td><td class="rechts">{{ z.erreicht }}</td>
+            <td class="rechts">{{ z.qualifiziert }}</td><td class="rechts">{{ z.terminiert }}</td>
+            <td class="rechts {{ 'ueberfaellig-rot' if ueberfaellig.get(benutzer_id) }}">{{ ueberfaellig.get(benutzer_id, 0) }}</td></tr>
+    {% else %}<tr><td colspan="6" class="dezent">Keine Aktivitäten.</td></tr>{% endfor %}
+    </tbody>
+</table></details>
+{% endmacro %}
+<p class="dezent">Pipeline-Wert (gewichtete offene Leads): <strong>{{ pipeline_wert | euro }}</strong></p>
+{{ lm_tabelle(heute, 'Team heute je Leadmanager') }}
+{{ lm_tabelle(woche, 'Team diese Woche je Leadmanager') }}
+<details class="lm-karte"><summary><strong>Diese Woche je Außendienstler</strong></summary>
+<table class="tabelle" style="max-width:500px;margin-top:8px">
+    <thead><tr><th>AD</th><th>Termine</th><th>No-Shows</th></tr></thead>
+    <tbody>{% for ad_id, z in ad.items() %}
+        <tr><td>{{ benutzer_map[ad_id].name if ad_id in benutzer_map else '?' }}</td>
+            <td class="rechts">{{ z.termine }}</td><td class="rechts {{ 'ueberfaellig-rot' if z.no_shows }}">{{ z.no_shows }}</td></tr>
+    {% else %}<tr><td colspan="3" class="dezent">Keine Termine diese Woche.</td></tr>{% endfor %}</tbody>
+</table></details>
+<details class="lm-karte" {{ 'open' if rueckmeldung_offen }}><summary><strong>Termin-Rückmeldung offen ({{ rueckmeldung_offen | length }})</strong></summary>
+{% if rueckmeldung_offen %}
+<p class="dezent" style="font-size:12px">Der Termin ist vorbei, aber weder „erfolgt“ noch No-Show gemeldet – bitte beim AD nachfragen (Knöpfe in der Lead-Akte).</p>
+<div style="max-height:320px;overflow:auto"><table class="tabelle" style="max-width:700px"><tbody>
+    {% for t in rueckmeldung_offen %}{% set v = vorgaenge_map.get(t.vorgang_id) %}
+    <tr><td><a href="/lead-management/lead/{{ t.vorgang_id }}">{{ kunden_map[v.kunde_id].anzeige_name if v and v.kunde_id in kunden_map else '?' }}</a></td>
+        <td>{{ t.beginn | de_datum('%a %d.%m.%Y %H:%M') }}</td>
+        <td>{{ benutzer_map[t.ad_id].name if t.ad_id in benutzer_map else '?' }}</td></tr>
+    {% endfor %}</tbody></table></div>
+{% else %}<p class="dezent">Alle vergangenen Termine sind zurückgemeldet.</p>{% endif %}
+</details>
+<details class="lm-karte"><summary><strong class="{{ 'ueberfaellig-rot' if sla_rot }}">SLA rot jetzt ({{ sla_rot | length }})</strong></summary>
+{% if sla_rot %}
+<table class="tabelle" style="max-width:700px;margin-top:8px"><tbody>
+    {% for v in sla_rot %}
+    <tr><td><a href="/lead-management/lead/{{ v.id }}">{{ kunden_map[v.kunde_id].anzeige_name if v.kunde_id in kunden_map else '?' }}</a></td>
+        <td>{{ v.eingang_am.strftime('%d.%m. %H:%M') if v.eingang_am }}</td>
+        <td>{{ benutzer_map[v.leadmanager_id].name if v.leadmanager_id in benutzer_map else 'ohne LM' }}</td></tr>
+    {% endfor %}</tbody></table>
+{% else %}<p class="dezent">Keine roten SLA-Fälle – gut so.</p>{% endif %}
+</details>
+{% endblock %}

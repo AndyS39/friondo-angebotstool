@@ -1605,7 +1605,7 @@ async def lead_einstellungen(request: Request,
                   "zuweisung_lm", "vorschlag_horizont_tage",
                   "vorschlag_raster_min", "absender_postfach",
                   "kerngebiet_plz", "loeschlauf", "loeschfrist_monate",
-                  "firmen_adresse", "demo_badge_text",
+                  "firmen_adresse", "demo_badge_text", "lm_startseite",
                   "erwartungswert_WP", "erwartungswert_PV",
                   "erwartungswert_KL", "erwartungswert_WB",
                   "quote_neu", "quote_in_kontaktierung", "quote_qualifiziert",
@@ -1690,6 +1690,9 @@ async def lead_einstellungen_speichern(request: Request,
     einfache = ["mail_testadresse", "kalender_testpostfach", "arbeitszeit_lm",
                 "absender_postfach", "kerngebiet_plz", "firmen_adresse",
                 "demo_badge_text"]
+    # v21 (Phase 88): Modul-Einstieg
+    if form.get("lm_startseite") in ("", "uebersicht", "anrufliste"):
+        lead_kern.parameter_setzen(session, "lm_startseite", form.get("lm_startseite") or "")
     zahlen = ["sla_gruen_min", "sla_gelb_min", "vorschlag_horizont_tage",
               "vorschlag_raster_min", "loeschfrist_monate",
               "erwartungswert_WP", "erwartungswert_PV", "erwartungswert_KL",

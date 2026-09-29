@@ -38,7 +38,26 @@ async def startseite(request: Request, session: Session = Depends(get_session)):
                       hinweis="Dieser Bereich ist im Aufbau (Coming soon). "
                               "Die Lead-Arbeit läuft bis dahin wie gewohnt über "
                               "das Angebotstool (Leads VOT).")
-    return RedirectResponse("/lead-management/anrufliste", status_code=303)
+    # v21 (Phase 88): Modul-Einstieg über lm_startseite
+    from app import lead_uebersicht
+    ziel = lead_uebersicht.startseite(session, request.state.benutzer)
+    return RedirectResponse(f"/lead-management/{ziel}", status_code=303)
+
+
+@router.get("/uebersicht")
+async def uebersicht(request: Request, session: Session = Depends(get_session)):
+    """v21 (PLAN_LEAD_V1.1 Phase 88): Übersicht – Kacheln, Eingänge je Tag,
+    Kontaktstatus, Erstkontakt, Quelle × Kanal; Cockpit-Blöcke unten."""
+    _gate(request, session)
+    from app import lead_uebersicht
+    zeitraum = "woche" if request.query_params.get("zeitraum") == "woche" else "30"
+    daten = lead_uebersicht.uebersicht_daten(session, zeitraum)
+    return render(request, "leadmanagement/uebersicht.html",
+                  aktiv="/lead-management", **daten,
+                  demo_badge=kern.demo_aktiv(session),
+                  badge_text=kern.parameter_holen(session, "demo_badge_text",
+                                                  "Demo · Coming soon"),
+                  meldung=request.query_params.get("meldung", ""))
 
 
 # --- Phase 75: Schnellanlage, Import, Posteingang unklar ---------------------------
@@ -477,33 +496,25 @@ def _anruf_zeilen(session: Session, benutzer, filter_werte: dict) -> list[dict]:
 @router.get("/anrufliste")
 async def anrufliste_voll(request: Request,
                           session: Session = Depends(get_session)):
+    """v21 (PLAN_LEAD_V1.1 Phase 89): gruppierte Arbeitsliste mit
+    Schnellfilter-Chips (app/lead_anrufliste.py); Ergebnis-Buttons, Dialoge,
+    Panel und Tasten unverändert."""
     _gate(request, session)
-    from app import leadmanagement_logik
+    from datetime import datetime as dt
+
+    from app import lead_anrufliste, leadmanagement_logik
     benutzer = request.state.benutzer
-    filter_werte = {
-        "meine": request.query_params.get("meine", "1") == "1",
-        "quelle_id": request.query_params.get("quelle_id", ""),
-        "sparte": request.query_params.get("sparte", ""),
-        "klasse": request.query_params.get("klasse", ""),
-        "plz": request.query_params.get("plz", ""),
-        "phase": request.query_params.get("phase", ""),
-        "q": request.query_params.get("q", ""),
-    }
-    zeilen = _anruf_zeilen(session, benutzer, filter_werte)
-    if filter_werte["meine"] and not zeilen and not any(
-            v for k, v in filter_werte.items() if k != "meine" and v):
+    filter_werte = lead_anrufliste.filter_aus_query(request.query_params)
+    daten = lead_anrufliste.daten(session, benutzer, filter_werte)
+    if filter_werte["meine"] and not daten["offen"] and "meine" not in request.query_params \
+            and not any(v for k, v in filter_werte.items() if k != "meine" and v):
         filter_werte["meine"] = False   # ohne eigene Leads direkt „Alle“
-        zeilen = _anruf_zeilen(session, benutzer, filter_werte)
+        daten = lead_anrufliste.daten(session, benutzer, filter_werte)
     logik = leadmanagement_logik.hole_logik()
-    # Prozess-Fix 27.09.2026: freie Leads sichtbar machen (Banner + Badge)
-    freie_anzahl = (session.query(Vorgang)
-                    .filter(Vorgang.leadmanager_id.is_(None),
-                            Vorgang.lead_phase.in_(
-                                ("neu", "in_kontaktierung", "zurueckgestellt",
-                                 "nicht_erreicht"))).count())
     return render(request, "leadmanagement/anrufliste.html",
-                  aktiv="/lead-management", zeilen=zeilen,
-                  freie_anzahl=freie_anzahl,
+                  aktiv="/lead-management", **daten,
+                  chips=lead_anrufliste.CHIPS, quellen_gruppen=kern.QUELLEN_GRUPPEN,
+                  heute_param=dt.now().strftime("%Y-%m-%d"),
                   filter_werte=filter_werte, quellen=_quellen(session),
                   phasen_namen=LEAD_PHASEN_NAMEN,
                   ergebnis_namen=ANRUF_ERGEBNIS_NAMEN,
@@ -1371,12 +1382,9 @@ async def karte_termine_tag(request: Request,
 
 @router.get("/cockpit")
 async def cockpit(request: Request, session: Session = Depends(get_session)):
+    """v21 (Phase 88): das Cockpit ist in der Übersicht aufgegangen."""
     _gate(request, session)
-    daten = kern.cockpit_daten(session)
-    return render(request, "leadmanagement/cockpit.html",
-                  aktiv="/lead-management", **daten,
-                  pipeline_wert=kern.pipeline_wert(session),
-                  meldung=request.query_params.get("meldung", ""))
+    return RedirectResponse("/lead-management/uebersicht", status_code=303)
 
 
 # --- Phase 80: Statistik-Reiter Leads + Kanal-Report --------------------------------
@@ -1402,7 +1410,25 @@ async def lead_statistik(request: Request,
             "demo", "1" if kern.demo_aktiv(session) else "0") == "1",
     }
     daten = kern.statistik_leads(session, von, bis, filter_werte)
-    return render(request, "leadmanagement/statistik.html",
+    # v21 (Phase 88): Eingänge je Woche × Quellen-Typ (12 Wochen) + CSV
+    from app import lead_uebersicht
+    wochen = lead_uebersicht.wochen_typ(session)
+    if request.query_params.get("export") == "wochen":
+        import csv
+        import io
+
+        from fastapi.responses import Response
+        puffer = io.StringIO()
+        schreiber = csv.writer(puffer, delimiter=";")
+        schreiber.writerow(["Woche", "ab"] + [name for _, name in wochen["typen"]] + ["Summe"])
+        for z in wochen["zeilen"]:
+            schreiber.writerow([z["woche"], z["von"].strftime("%d.%m.%Y")]
+                               + [n for _, n in z["werte"]] + [z["summe"]])
+        return Response(puffer.getvalue().encode("utf-8-sig"),
+                        media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition":
+                                 "attachment; filename=eingaenge-je-woche.csv"})
+    return render(request, "leadmanagement/statistik.html", wochen=wochen,
                   aktiv="/lead-management", zeitraum=zeitraum,
                   zeitraeume=ZEITRAEUME,
                   von=request.query_params.get("von", ""),

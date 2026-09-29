@@ -23,19 +23,38 @@ Testpostfach, monday-Leads nicht buchbar.
 - **Mail-Parser** (Postfach leads@friondo.de, Abruf alle 2 Minuten – nur bei
   `parser_modus = an`): Regeln je Quelle (zeilen/html_tabelle/json) mit
   Test-Funktion; Formular-Standard für die Agentur: Betreff
-  `[LEAD] <quelle> <kampagne>`, Body `Feld: Wert`. Nicht erkannte Mails →
+  `[LEAD] <quelle> <kampagne>`, Body `Feld: Wert`
+  (docs/formular-standard-agentur.md). Nicht erkannte Mails →
   **Posteingang unklar** (Ein-Klick-Anlage oder Ignorieren); Antworten mit
   Betreff „Rückruf V<Nr>“ oder AN-C-Nummer landen als Aktivität am Vorgang.
+- **Quelle · Kampagne · Kanal (v21):** Quelle = Herkunft (Kosten je Lead,
+  Typ-Farbe, API-Key), Kampagne = Landingpage/Aktion (Budget), Kanal =
+  Vertriebskanal (Dropdown an der Quelle → Angebotsprofil). Unbekannte
+  Quellen-Keys und Kampagnen aus Betreff, API oder `utm_campaign` legen
+  sich selbst an (Badge „neu · automatisch angelegt“ bis zum ersten
+  Speichern, Glocke an Admins); Fallback-Quelle `unbekannt`. Der Kanal der
+  Quelle wird beim Eingang an Kunde/Vorgang gesetzt, falls dort leer – ein
+  manuell gesetzter Kanal bleibt.
 - Jeder Eingang: Eingangsbestätigung (Warteschlange), vorläufiger Score
   (Kerngebiet + Quellen-Bonus), Round-Robin-Zuweisung (lm_aktiv-Benutzer),
   Glocken-Benachrichtigung, SLA-Timer (Arbeitszeit Mo–Fr).
 
 ## 2. Anrufliste und Kaskade
 
-- **/lead-management/anrufliste** ist die Arbeitsseite: sortiert nach
-  (1) SLA gelb/rot, (2) fällige Aktionen/Rückrufe, (3) fällige
-  Zurückgestellte, (4) Rest nach Score-Klasse. Klick auf den Namen öffnet
-  die Akte als Seitenpanel; Tastatur 1–7 für die Ergebnis-Buttons.
+- **/lead-management/anrufliste** ist die Arbeitsseite (v21 als
+  gruppierte, zweizeilige Liste): Schnellfilter-Chips mit Zählern
+  (Arbeitsliste · Heute eingegangen · SLA rot · ≥ 3 Versuche · Rückruf heute
+  · Ohne Leadmanager), Gruppen **Jetzt dran** (SLA gelb/rot ohne Versuch,
+  fällige Rückrufe) · **Weiter versuchen** (Kaskade fällig, 3+ Versuche
+  oben) · **Neu heute** · **Wiedervorlagen fällig** · **Sonstige** (einge-
+  klappt). Je Zeile Versuchs-Punkte (grau 1–2 / orange 3 / rot 4+), Name ·
+  Ort · Sparten · Quelle (Typ-Farbe) · Kanal · ⚑-Flags und ein
+  Kontaktstatus-Satz („3× nicht erreicht · zuletzt … · nächster Versuch
+  …“). URL-Parameter (auch von der Übersicht): `eingang_von/_bis`,
+  `sla=rot`, `versuche`, `versuche_min`, `rueckruf=heute`, `frei=1`,
+  `quelle_id`, `kampagne_id`, `quelle_typ`, `gruppe=dran`. Klick auf den
+  Namen öffnet die Akte als Seitenpanel; Tastatur 1–7 für die
+  Ergebnis-Buttons (3/6/7 im ⋯-Menü).
 - **Ein Klick je Anruf**: Erreicht → Qualifizierungsbogen · Nicht erreicht/
   Besetzt/Mailbox → Kaskade (+2 h · +1 Tag 18:00 · +3 Tage · +7 Tage, danach
   „Nicht erreicht“ +30 Tage mit Nurture-Mail) · Rückruf gewünscht (Datum
@@ -93,11 +112,20 @@ angebot@); Reiter „Kommunikation“ in der Akte mit „Jetzt senden“ und
   Spaltenköpfe ab „Terminiert“ mit Summe der Erwartungswerte.
 - **Karte**: Leaflet (lokal) mit OSM-Kacheln – Leads (Farbe je Phase, Größe
   je Klasse), Termine, AD-Startadressen.
-- **Cockpit**: heute/Woche je Leadmanager, je AD (Termine/No-Shows),
-  SLA-rot-Liste, Pipeline-Wert.
-- **Statistik → Leads**: Trichter, Speed-to-Lead, Kontakt-/Termin-/
-  Show-Quoten, Durchlaufzeiten, Gründe; **Kanal-Report** (Kosten je
-  Lead/Termin/Auftrag, CSV).
+- **Übersicht** (`/lead-management/uebersicht`, v21, Modul-Einstieg über
+  `lm_startseite`): Kacheln Eingänge heute (Ø 10 AT) · 7 Tage · SLA rot ·
+  Jetzt dran · ≥ 3 Versuche offen · Termine heute (· Posteingang unklar);
+  Eingänge je Tag (14 Tage, gestapelt nach Quellen-Typ, Tokens `--q-*`);
+  Kontaktstatus der offenen Leads; Erstkontakt heute; Tabelle Quelle ×
+  Kanal × Zeitraum mit erreicht-/terminiert-Quote (Kohorte), ≥ 3 Versuche,
+  Kosten je Lead. Das frühere **Cockpit** (je Leadmanager/AD, Termin-Rück-
+  meldung, SLA rot) steht darunter aufklappbar; `/cockpit` leitet um.
+  Eine Zählfunktion `eingaenge_zaehlen` für Übersicht, Statistik, Kanal-
+  Report und Portal-Kacheln.
+- **Statistik → Leads**: Eingänge je Woche × Quellen-Typ (12 Wochen, CSV),
+  Trichter, Speed-to-Lead, Kontakt-/Termin-/Show-Quoten, Durchlaufzeiten,
+  Gründe; **Kanal-Report** (Kosten je Lead/Termin/Auftrag, zusätzlich je
+  Kampagne, CSV).
 
 ## 7. Rollen
 

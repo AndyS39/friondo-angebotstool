@@ -136,6 +136,13 @@
     </div>
     <label class="schmal">Demo-Badge-Text <input type="text" name="demo_badge_text"
            value="{{ werte.demo_badge_text }}"></label>
+    {# v21 (Phase 88): Modul-Einstieg #}
+    <label class="schmal">Modul-Einstieg
+        <select name="lm_startseite">
+            <option value="" {{ 'selected' if not werte.lm_startseite }}>nach Rolle (Übersicht · Leadmanagement: Anrufliste)</option>
+            <option value="uebersicht" {{ 'selected' if werte.lm_startseite == 'uebersicht' }}>immer Übersicht</option>
+            <option value="anrufliste" {{ 'selected' if werte.lm_startseite == 'anrufliste' }}>immer Anrufliste</option>
+        </select></label>
     <button class="knopf" type="submit">Speichern</button>
 </form>
 

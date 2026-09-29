@@ -100,7 +100,7 @@ Kanal wie bisher. Ein neuer Kanal-Wert am Kunden (manuell) bleibt geschützt.
 
 Vorlage: Abschnitt „Übersicht" im Prototyp.
 
-- [ ] **Quellen-Typ-Farben als Tokens** in `style.css` (Werte aus dem Prototyp,
+- [x] **Quellen-Typ-Farben als Tokens** in `style.css` (Werte aus dem Prototyp,
   mit dem Paletten-Validator geprüft): `--q-website #2a78d6`,
   `--q-landingpage #eb6834`, `--q-portal #1baf7a`, `--q-partner #eda100`,
   `--q-telefon #e87ba4` (auch empfehlung/bestand), `--q-monday #a5afbb`
@@ -110,7 +110,7 @@ Vorlage: Abschnitt „Übersicht" im Prototyp.
   Neue Makros in `_komponenten.html`: `quelle_badge(quelle)` (Punkt in
   Typ-Farbe + Name), `kanal_badge(kanal)` (violett, nur wenn ≠ Standard),
   `versuche_punkte(vorgang)` (Phase 89).
-- [ ] **Route `/lead-management/uebersicht`**, in `lm_nav` an erster Stelle.
+- [x] **Route `/lead-management/uebersicht`**, in `lm_nav` an erster Stelle.
   Modul-Einstieg (Portal-Karte, Hauptmenü): Übersicht für Admin/Innendienst,
   Anrufliste für Benutzer mit Hauptrolle Leadmanagement (Parameter
   `lm_startseite = uebersicht | anrufliste`, Standard wie beschrieben).
@@ -118,29 +118,29 @@ Vorlage: Abschnitt „Übersicht" im Prototyp.
   (Teamtabellen heute/Woche, je AD, Termin-Rückmeldung offen, SLA-rot-Liste)
   stehen unten als aufklappbare Abschnitte; `/lead-management/cockpit` leitet
   weiter, Nav-Eintrag „Cockpit" entfällt.
-- [ ] **Zeitbezug**: Kopfzeile mit Datum/Stand; Umschalter „Woche | 30 Tage"
+- [x] **Zeitbezug**: Kopfzeile mit Datum/Stand; Umschalter „Woche | 30 Tage"
   wirkt nur auf die Tabelle (Spalte „Zeitraum"); die Tageskacheln bleiben.
-- [ ] **KPI-Kacheln** (sechs, klickbar → Anrufliste mit Filter):
+- [x] **KPI-Kacheln** (sechs, klickbar → Anrufliste mit Filter):
   *Eingänge heute* (Untertitel „Ø 10 Arbeitstage: x · ▲/▼ %") · *Eingänge 7
   Tage* (Vorwoche + %) · *SLA rot jetzt* · *Jetzt dran* (fällige Rückrufe +
   Wiedervorlagen + SLA gelb/rot) · *≥ 3 Versuche offen* (Untertitel „davon n
   mit 4+") · *VOT-Termine heute* (Untertitel je AD). „Posteingang unklar" nur
   als siebte Kachel, wenn > 0.
-- [ ] **Eingänge je Tag** (letzte 14 Kalendertage inkl. heute): gestapelte
+- [x] **Eingänge je Tag** (letzte 14 Kalendertage inkl. heute): gestapelte
   CSS-Balken je Tag nach Quellen-Typ (Technik wie `ae-balken`, keine
   Bibliothek), Segmentreihenfolge fix, 2 px Abstand zwischen Segmenten,
   Tagessumme über dem Balken, heute fett, Wochentag + Datum an der Achse,
   Legende darunter, Hover-Titel je Segment („Landingpages: 5"). Klick auf einen
   Tag → Anrufliste `?eingang_von=<Tag>&eingang_bis=<Tag>`.
-- [ ] **Kontaktstatus der offenen Leads**: horizontale Balken „Noch kein Versuch
+- [x] **Kontaktstatus der offenen Leads**: horizontale Balken „Noch kein Versuch
   / 1 / 2 / 3 / 4+ Versuche" mit Anzahl (offene Leads = Phasen neu,
   in_kontaktierung, qualifiziert ohne Termin, zurueckgestellt fällig);
   3 = orange, 4+ = rot (Status-Tokens); Klick → Anrufliste `?versuche=3`
   bzw. `?versuche_min=4`. Darunter Hinweiszeile mit der Kaskade aus der
   Steuerdatei.
-- [ ] **Erstkontakt heute** (drei Mini-Kacheln): Median Minuten bis 1. Versuch
+- [x] **Erstkontakt heute** (drei Mini-Kacheln): Median Minuten bis 1. Versuch
   (Arbeitsminuten, wie Statistik), Anteil im SLA, „heute erreicht x / y".
-- [ ] **Tabelle „Eingänge je Quelle und Kanal"**: Gruppen nach Quellen-Typ
+- [x] **Tabelle „Eingänge je Quelle und Kanal"**: Gruppen nach Quellen-Typ
   (Zeile mit Farbpunkt), je Quelle: Kanal (Badge), heute, 7 Tage, 30 Tage
   (bzw. gewählter Zeitraum), **erreicht %** und **terminiert %** (Kohorte: von
   den Eingängen des Zeitraums haben x % `erreicht_am` bzw. `terminiert_am`;
@@ -150,16 +150,16 @@ Vorlage: Abschnitt „Übersicht" im Prototyp.
   `landingpage` (Kampagne = Landingpage); auto-angelegte mit Badge „neu –
   bitte zuordnen". Klick auf eine Zeile → Anrufliste mit Quellen-/Kampagnen-
   Filter. Demo-Leads im Demo-Modus enthalten (Kennzeichen im Kopf „inkl. Demo").
-- [ ] **Startportal-Karte Lead-Management** (nur bei Modul-Sichtbarkeit): Kacheln
+- [x] **Startportal-Karte Lead-Management** (nur bei Modul-Sichtbarkeit): Kacheln
   neu = *Eingänge heute (Ø 10 AT)* · *SLA rot* · *Jetzt dran* · *≥ 3 Versuche
   offen* · *Termine heute*; „Posteingang unklar" ersetzt die letzte Kachel,
   wenn > 0. Klick auf die Karte → `lm_startseite`.
-- [ ] **Statistik → Leads**: neue Tabelle „Eingänge je Woche × Quellen-Typ"
+- [x] **Statistik → Leads**: neue Tabelle „Eingänge je Woche × Quellen-Typ"
   (letzte 12 Wochen) mit CSV-Export – dieselben Zähldefinitionen wie die
   Übersicht (eine Funktion `eingaenge_zaehlen(session, von, bis, gruppierung)`
   für Übersicht, Statistik, Kanal-Report und Portal-Kacheln – keine zweite
   Zählweise).
-- [ ] Test: Demo-Daten erzeugen, Zahlen der Kacheln = Summen der Tabelle =
+- [x] Test: Demo-Daten erzeugen, Zahlen der Kacheln = Summen der Tabelle =
   Balkenhöhen; Klicks führen zu korrekt gefilterten Anruflisten; Übersicht
   lädt < 1 s bei 500 Vorgängen; als Innendienst weiterhin 404.
 
@@ -169,7 +169,7 @@ Vorlage: Abschnitt „Anrufliste" im Prototyp. Die Route, die Ergebnis-Buttons,
 die Dialoge, das Seitenpanel (einbett=1) und die Tasten 1–7 bleiben – nur
 Filterleiste, Sortierung/Gruppierung und Zeilenaufbau ändern sich.
 
-- [ ] **Schnellfilter-Chips** mit Zählern statt Dropdown-Leiste (Dropdowns
+- [x] **Schnellfilter-Chips** mit Zählern statt Dropdown-Leiste (Dropdowns
   Quelle/Sparte/Klasse und Suche bleiben rechts daneben): *Arbeitsliste* ·
   *Heute eingegangen* · *SLA rot* · *≥ 3 Versuche* · *Rückruf heute* · *Ohne
   Leadmanager*. URL-Parameter (auch von der Übersicht genutzt): `eingang_von`,
@@ -177,7 +177,7 @@ Filterleiste, Sortierung/Gruppierung und Zeilenaufbau ändern sich.
   `frei=1`, `quelle_id`, `kampagne_id`, `quelle_typ`. Filter „Quelle" bietet
   Typ-Gruppen (Website / Landingpages / Portale / Partner / Telefon / monday)
   und einzelne Quellen.
-- [ ] **Gruppen** (feste Reihenfolge, Kopfzeile mit Zähler und Erklärtext, sticky):
+- [x] **Gruppen** (feste Reihenfolge, Kopfzeile mit Zähler und Erklärtext, sticky):
   1. **Jetzt dran** – SLA gelb/rot ohne ersten Versuch, fällige Rückrufwünsche,
      fällige `naechste_aktion_am` ≤ jetzt; Reihenfolge: SLA rot → Rückruf-
      Uhrzeit → SLA gelb.
@@ -190,7 +190,7 @@ Filterleiste, Sortierung/Gruppierung und Zeilenaufbau ändern sich.
      mit Zähler; aufklappbar.
   Ist ein Filter-Chip außer „Arbeitsliste" aktiv, bleiben die Gruppen, leere
   Gruppen werden ausgeblendet.
-- [ ] **Zeile zweizeilig** (Grid wie Prototyp, linker 4-px-Farbbalken: rot bei
+- [x] **Zeile zweizeilig** (Grid wie Prototyp, linker 4-px-Farbbalken: rot bei
   SLA rot, orange bei SLA gelb oder `versuch_nr ≥ 3`):
   - **Spalte Versuche**: Makro `versuche_punkte(vorgang)` – fünf Punkte,
     gefüllt = `versuch_nr` (grau bei 1–2, orange bei 3, rot ab 4; mehr als 5
@@ -219,19 +219,19 @@ Filterleiste, Sortierung/Gruppierung und Zeilenaufbau ändern sich.
     Interesse, Zurückstellen, Reaktivieren bei Seitenzuständen). Tasten 1–7
     unverändert (3 = Besetzt, 6 = Falsche Nummer, 7 = Kein Interesse über das
     Menü).
-- [ ] **Kopfzeile**: „Anrufliste · Meine + freie Leads · <n> offen", Umschalter
+- [x] **Kopfzeile**: „Anrufliste · Meine + freie Leads · <n> offen", Umschalter
   „Alle Leads", Button „+ Neuer Lead". Hinweisbanner „x Leads ohne
   Leadmanager" entfällt (Chip „Ohne Leadmanager" mit Zähler übernimmt).
-- [ ] **Legende** am Listenende (Punkte, Farbbalken, Quelle/Kanal, Tasten).
-- [ ] **Mobil** (< 900 px): Zeile bricht auf zwei Reihen um (Prototyp-CSS),
+- [x] **Legende** am Listenende (Punkte, Farbbalken, Quelle/Kanal, Tasten).
+- [x] **Mobil** (< 900 px): Zeile bricht auf zwei Reihen um (Prototyp-CSS),
   Aktionen in einer Reihe darunter.
-- [ ] **Lead-Kopfblock der Vorgangsakte**: Zeile „Kontaktstatus" mit
+- [x] **Lead-Kopfblock der Vorgangsakte**: Zeile „Kontaktstatus" mit
   `versuche_punkte` + demselben Satz wie Zeile 2; Quelle/Kanal/Kampagne mit den
   neuen Badges; Badge „Kampagne neu".
-- [ ] **Docs**: `docs/leadmanagement.md` Abschnitte 1, 2 und 6 anpassen
+- [x] **Docs**: `docs/leadmanagement.md` Abschnitte 1, 2 und 6 anpassen
   (Übersicht, Anrufliste neu, Quelle/Kampagne/Kanal); `docs/leadmanagement-
   entscheidungen.md` fortschreiben.
-- [ ] **CLAUDE.md**: Kopf auf die nächste freie Versionsnummer (höchste + 1);
+- [x] **CLAUDE.md**: Kopf auf die nächste freie Versionsnummer (höchste + 1);
   Abschnitt **„Neu in v<NN> – Lead-Management V1.1 (abgestimmt 27.09.2026)"**
   anhängen, wörtlich:
 
@@ -262,7 +262,7 @@ Filterleiste, Sortierung/Gruppierung und Zeilenaufbau ändern sich.
   >   Nicht erreicht / Mailbox / Rückruf / ⋯-Menü; Tasten 1–7 unverändert;
   >   derselbe Kontaktstatus im Lead-Kopfblock der Vorgangsakte.
 
-- [ ] Test: 30 Demo-Leads mit 0–5 Versuchen; Gruppen und Reihenfolge stimmen;
+- [x] Test: 30 Demo-Leads mit 0–5 Versuchen; Gruppen und Reihenfolge stimmen;
   Chip-Zähler = Zeilen nach Klick; Tasten 1–7 wirken im Panel; Übersicht-Klicks
   landen in der richtigen Gruppe/Filter; Kopfblock zeigt dieselben Punkte wie
   die Liste; als Innendienst 404.
