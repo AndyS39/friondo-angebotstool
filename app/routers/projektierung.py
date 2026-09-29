@@ -1410,90 +1410,38 @@ async def feinplanung_speichern(request: Request, gewerk_id: int,
 @router.get("/gewerk/{gewerk_id}/bza")
 async def bza_datenblatt(request: Request, gewerk_id: int,
                          session: Session = Depends(get_session)):
-    """v15 (Phase 80): BzA-Datenblatt – alle Antragsfelder aus Vorgang,
-    Angebot und Förder-Editor in Portal-Reihenfolge mit Kopier-Buttons;
-    fehlende Felder werden ausgewiesen. Druck über die Browser-Funktion."""
-    import json as json_modul
-
-    from app import kfw
-    from app import logik as logik_modul
+    """v15 (Phase 80): BzA-Datenblatt mit Kopier-Buttons; fehlende Felder
+    werden ausgewiesen. v19 (PLAN_V14 Phase 96): Abschnitte kommen aus dem
+    gemeinsamen Generator app/bza_datenblatt.py (KfW-Muster-Struktur, wie das
+    PDF am Angebot); dazu Kundendaten und der Stand BzA / KfW (v17)."""
+    from app import bza_datenblatt
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
     projekt = session.get(Projekt, gewerk.projekt_id)
     kunde = session.get(Kunde, projekt.kunde_id) if projekt else None
     angebot = session.get(Angebot, gewerk.angebot_id) if gewerk.angebot_id else None
-    kfw_daten = json_modul.loads(angebot.kfw_json or "{}") if angebot else {}
-    antworten, _positionen, _profil = kern._steckbrief_quellen(session, gewerk)
-    steck = kern.steckbrief_daten(session, [gewerk.id])[gewerk.id]
-
-    def wert(*quellen, einheit=""):
-        for q in quellen:
-            if q not in (None, ""):
-                return f"{q}{einheit}"
-        return ""
-
-    kfw_ergebnis = None
-    if angebot is not None and not angebot.extern and kfw_daten.get("O01"):
-        logik, bericht = logik_modul.hole_logik(session)
-        if bericht is not None:
-            parameter, _ = kfw.parameter_lesen(logik)
-            eingaben = kfw.eingaben_aus_antworten(
-                kfw_daten, angebot.summen()["endbetrag"])
-            if eingaben is not None:
-                kfw_ergebnis = kfw.ergebnis_fuer_angebot(parameter, eingaben,
-                                                         angebot)
-    geraet = " · ".join(steck[f].wert for f in ("hersteller", "leistungsklasse")
-                          if f in steck and steck[f].wert)
-    felder = [
-        ("Antragsteller", [
-            ("Name", kunde.anzeige_name if kunde else ""),
-            ("Straße und Hausnummer", kunde.strasse if kunde else ""),
-            ("PLZ / Ort", f"{kunde.plz} {kunde.ort}".strip() if kunde else ""),
-            ("Telefon", kunde.telefon if kunde else ""),
-            ("E-Mail", kunde.email if kunde else ""),
-        ]),
-        ("Ausführungsadresse (Investitionsobjekt)", [
-            ("Straße und Hausnummer",
-             projekt.ausfuehrung_strasse if projekt else ""),
-            ("PLZ / Ort", f"{projekt.ausfuehrung_plz} "
-                          f"{projekt.ausfuehrung_ort}".strip() if projekt else ""),
-        ]),
-        ("Gebäude", [
-            ("Objektart", wert(kfw_daten.get("O01"), antworten.get("O01"))),
-            ("Baujahr", wert(kfw_daten.get("O02"), antworten.get("O02"))),
-            ("Wohneinheiten", wert(kfw_daten.get("O03"), antworten.get("O03"))),
-            ("Beheizte Fläche", wert(kfw_daten.get("O05"),
-                                        antworten.get("O05"), einheit=" m²")),
-        ]),
-        ("Maßnahme", [
-            ("Maßnahme", "Heizungstausch: Einbau einer Wärmepumpe"
-             if gewerk.sparte == "WP" else gewerk.sparte),
-            ("Gerät", geraet),
-            ("Alte Anlage", wert(steck["alte_anlage"].wert
-                                 if "alte_anlage" in steck else "",
-                                 antworten.get("A01"))),
-        ]),
-    ]
-    if kfw_ergebnis is not None:
-        felder.append(("Förderfähige Kosten & Zuschuss (Förder-Editor)", [
-            (name, w) for name, w, _fett in kfw_ergebnis.zeilen]))
-    else:
-        felder.append(("Förderfähige Kosten & Zuschuss", [
-            ("Hinweis", "Keine KfW-Daten am Angebot (TAIFUN-Auftrag oder "
-                        "Förder-Editor nicht ausgefüllt)")]))
-    felder.append(("Bonus-Bausteine", [
-        ("Klimageschwindigkeits-Bonus", wert(kfw_daten.get("K02"))),
-        ("Einkommensbonus (zu versteuerndes Einkommen)",
-         wert(kfw_daten.get("K03"), einheit=" €")),
-        ("Selbstnutzung", wert(kfw_daten.get("K01"))),
-    ]))
-    felder.append(("Fachunternehmer", [
-        ("Fachunternehmer", kern.parameter_holen(
-            session, "bza_fachunternehmer", "Friondo GmbH")),
+    felder: list = []
+    fehlend: list[str] = []
+    geraet = ""
+    if angebot is not None:
+        # TAIFUN: Gerät aus dem Steckbrief ist kein BAFA-Schlüssel – das PDF am
+        # Angebot fragt es ab; hier bleibt es als „fehlt“ sichtbar
+        blatt = bza_datenblatt.erstellen(
+            session, angebot, gewerk=gewerk,
+            ersteller=bza_datenblatt.ersteller_standard(session, request.state.benutzer))
+        felder = bza_datenblatt.fuer_gewerk_seite(blatt)
+        fehlend = blatt.fehlend
+        geraet = blatt.geraet_schluessel
+    felder.append(("Antragsteller (Kunde, zur Info)", [
+        ("Name", kunde.anzeige_name if kunde else ""),
+        ("Straße und Hausnummer", kunde.strasse if kunde else ""),
+        ("PLZ / Ort", f"{kunde.plz} {kunde.ort}".strip() if kunde else ""),
+        ("Telefon", kunde.telefon if kunde else ""),
+        ("E-Mail", kunde.email if kunde else ""),
     ]))
     # V4 (Phase 92): Stand der BzA / KfW (nicht Pflicht – fehlt nicht)
-    bza_stand = [
+    felder.append(("Stand BzA / KfW", [
         ("BzA-ID", gewerk.bza_id or "noch nicht erfasst"),
         ("BzA erstellt am", gewerk.bza_erstellt_am.strftime("%d.%m.%Y")
          if gewerk.bza_erstellt_am else "–"),
@@ -1502,14 +1450,11 @@ async def bza_datenblatt(request: Request, gewerk_id: int,
         ("KfW-Antragsnummer", gewerk.kfw_antragsnummer or "–"),
         ("KfW-Zusage am", gewerk.kfw_zusage_am.strftime("%d.%m.%Y")
          if gewerk.kfw_zusage_am else "–"),
-    ]
-    fehlend = [f"{gruppe}: {name}" for gruppe, eintraege in felder
-               for name, w in eintraege if not str(w).strip()]
-    felder.append(("Stand BzA / KfW", bza_stand))
+    ]))
     return render(request, "projektierung/bza.html",
                   aktiv="/projektierung",
                   gewerk=gewerk, projekt=projekt, felder=felder,
-                  fehlend=fehlend,
+                  fehlend=fehlend, angebot=angebot, geraet=geraet,
                   url_bza=kern.parameter_holen(session, "url_bza_portal", ""),
                   benutzer=request.state.benutzer,
                   meldung=request.query_params.get("meldung", ""))

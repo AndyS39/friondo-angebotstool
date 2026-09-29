@@ -604,6 +604,17 @@ def _daten() -> list[str]:
             meldungen += _v4_bza_umbauen(session)
             einstellung_setzen(session, "migration_bza_v4", "erledigt")
             session.commit()
+        # v19 (PLAN_V14 Phase 95): Ersteller-Parameter des BzA-Datenblatts
+        # (leer = angemeldeter Benutzer). Neue Erfassungsfragen A20/N11 stecken
+        # im JSON der Erfassung, die BAFA-Stammdaten im Logik-Blatt – beides
+        # braucht keine Schemaänderung; kfw_gefoerdert (Bestand = unbekannt)
+        # ergänzt _NACHTRAEGLICHE_SPALTEN.
+        if einstellung_holen(session, "migration_v19_bza", "") != "erledigt":
+            if einstellung_holen(session, "bza_ersteller_standard", None) is None:
+                einstellung_setzen(session, "bza_ersteller_standard", "")
+            einstellung_setzen(session, "migration_v19_bza", "erledigt")
+            session.commit()
+            meldungen.append("v19: BzA-Ersteller-Parameter angelegt")
         # V4 (Phase 90.3): Vorlauf-Schwellen vorbelegen (idempotent)
         for name, wert in (("vorlauf_gruen_ab_wochen", "8"),
                            ("vorlauf_gelb_ab_wochen", "4")):

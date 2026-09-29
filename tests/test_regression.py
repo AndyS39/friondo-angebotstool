@@ -26,12 +26,15 @@ KONTROLL_SZENARIO = {
     "A10": "Nein", "A11": "Nein", "A12": "", "A13": 4,
     # v8: Heizlast unbekannt, keine Stemmarbeiten -> Ergebnis unverändert
     "A14": "Nein", "A16": "Nein",
+    # v19 (PLAN_V14 Phase 95): Nennleistung Altanlage (nur BzA-Datenblatt)
+    "A20": 18,
     # Neue Anlage (7-kW-AWM-Paket, 50-l-Puffer, Garagendach ohne Bitumen)
     # v11: N09 Kran-Frage (statt EP-Automatik), N10 Fassadenleitung bei
     # Dachaufstellung (0 m -> keine Position, Ergebnis unveraendert)
     "N01": "Luft/Wasser", "N02": "Ja", "N03": "bis 200 l",
     "N04": "Garagendach", "N05": "Nein", "N06": "50 l",
     "N09": "Nein", "N10": 0,
+    "N11": "Nein",   # v19: Contracting (nur BzA-Datenblatt)
     # Heizverteilung (2 Heizkreise, 1 Heizkörper S, 2 Verteiler mit je 4 Gruppen)
     "H01": "2", "H02": "Heizkörper und Fußbodenheizung",
     "H03": "Ja", "H04": {"S": 1, "M": 0, "L": 0, "XL": 0},

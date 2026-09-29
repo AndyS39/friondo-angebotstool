@@ -139,6 +139,26 @@ class Vermerk:
 
 
 @dataclass
+class BafaAnlage:
+    """v19 (PLAN_V14 Phase 95): Zeile des Blatts "BAFA-Anlagen" – Schlüssel
+    = WP-Paket-Position ("045") bzw. Klasse + Inneneinheit ("15+055");
+    "vorrat:…" = Stammdaten ohne Konfigurator-Anbindung."""
+    schluessel: str
+    nummer: str
+    hersteller: str
+    bezeichnung: str
+    kw: Optional[float]
+    kaeltemittel: str = ""
+    netzdienlich: str = ""
+    ee_anzeige: str = ""
+    hinweis: str = ""
+
+    @property
+    def anzeige(self) -> str:
+        return f"{self.bezeichnung} · BAFA {self.nummer}"
+
+
+@dataclass
 class Logik:
     fragen: dict[str, Frage]
     aktionen: list[Aktion]
@@ -160,6 +180,7 @@ class Logik:
     pv_parameter: dict[str, tuple[str, str]] = field(default_factory=dict)
     sparte: str = "WP"
     pv_kombis: list[tuple[str, float, float, str]] = field(default_factory=list)
+    bafa_anlagen: list[BafaAnlage] = field(default_factory=list)   # v19
 
     @property
     def seiten(self) -> list[str]:
@@ -326,6 +347,7 @@ def logik_einlesen() -> tuple[Logik, Pruefbericht]:
 
     logik = Logik(fragen, aktionen, pakete, bloecke, kfw, datetime.now(), anhaenge,
                   sparten_fragen, _vermerke_einlesen(wb, bericht))
+    logik.bafa_anlagen = _bafa_einlesen(wb, bericht)   # v19 (PLAN_V14 Phase 95)
     _querbezuege_pruefen(logik, bericht)
     for sparte, sfragen in sparten_fragen.items():
         _bedingungen_pruefen(sfragen, bericht, f"Fragen {sparte}")
@@ -508,6 +530,52 @@ def _anhaenge_einlesen(wb, bericht: Pruefbericht) -> list[Anhang]:
             bericht.warnungen.append(f"Anhänge: Regel „{regel}“ für {datei} nicht lesbar.")
         anhaenge.append(eintrag)
     return anhaenge
+
+
+def _bafa_einlesen(wb, bericht: Pruefbericht) -> list[BafaAnlage]:
+    """v19: Blatt "BAFA-Anlagen" (Schlüssel · Nummer · Hersteller ·
+    Gerätebezeichnung · kW · Kältemittel · Netzdienlichkeit · E/E-Anzeige ·
+    Hinweis). Fehlt das Blatt, gibt es eine Warnung – das BzA-Datenblatt
+    markiert Gerät/Nummer dann als „fehlt“."""
+    if "BAFA-Anlagen" not in wb.sheetnames:
+        bericht.warnungen.append("Blatt „BAFA-Anlagen“ fehlt – BzA-Datenblatt ohne "
+                                 "Anlagennummern.")
+        return []
+    anlagen: list[BafaAnlage] = []
+    gesehen: set[str] = set()
+    for row in wb["BAFA-Anlagen"].iter_rows(min_row=2, values_only=True):
+        werte = [_zelle(v) for v in (tuple(row) + (None,) * 9)[:9]]
+        schluessel, nummer = werte[0], werte[1]
+        if not schluessel:
+            continue
+        if schluessel in gesehen:
+            bericht.warnungen.append(f"BAFA-Anlagen: Schlüssel {schluessel} doppelt.")
+            continue
+        gesehen.add(schluessel)
+        if not nummer.isdigit():
+            bericht.warnungen.append(f"BAFA-Anlagen: Nummer für {schluessel} fehlt/ungültig.")
+        try:
+            kw = float(str(row[4]).replace(",", ".")) if row[4] not in (None, "") else None
+        except (TypeError, ValueError):
+            kw = None
+        anlagen.append(BafaAnlage(schluessel, nummer, werte[2], werte[3], kw,
+                                  werte[5], werte[6], werte[7], werte[8]))
+    return anlagen
+
+
+def bafa_fuer_positionen(logik: Logik, positionen: set[str]) -> Optional[BafaAnlage]:
+    """Gerät zum Angebot: Paket-Position 045–054 direkt; Klasse 15 (030/031)
+    über die Inneneinheit 055/056. Alternativ-/EP-Positionen zählen nicht
+    (Aufrufer übergibt nur voll berechnete Positionen)."""
+    nach = {a.schluessel: a for a in logik.bafa_anlagen}
+    for nr in sorted(positionen):
+        if nr in nach and not nr.startswith(("15+", "vorrat")):
+            return nach[nr]
+    if positionen & {"030", "031"}:
+        for innen in ("055", "056"):
+            if innen in positionen and f"15+{innen}" in nach:
+                return nach[f"15+{innen}"]
+    return None
 
 
 def _vermerke_einlesen(wb, bericht: Pruefbericht) -> list["Vermerk"]:

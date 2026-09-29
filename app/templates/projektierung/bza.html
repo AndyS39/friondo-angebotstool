@@ -10,7 +10,11 @@
     </div>
     <div class="pj-btnrow">
         {% if url_bza %}<a class="pj-btn" href="{{ url_bza }}" target="_blank" rel="noopener">BzA-Portal öffnen ↗</a>{% endif %}
-        <button class="pj-btn" type="button" onclick="window.print()">Drucken / PDF</button>
+        {% if angebot and benutzer.rolle in ('admin', 'innendienst') %}
+        {# v19: dasselbe Datenblatt als PDF am Angebot (Dialog: WE, Ersteller, Gerät) #}
+        <a class="pj-btn" href="/angebote/{{ angebot.id }}/bza-datenblatt{{ '?geraet=' ~ geraet if geraet }}">Datenblatt-PDF</a>
+        {% endif %}
+        <button class="pj-btn" type="button" onclick="window.print()">Drucken</button>
         <a class="pj-btn" href="/projektierung/projekt/{{ projekt.id }}">Zurück</a>
     </div>
 </div>

@@ -48,6 +48,11 @@
         </form>
         {% endif %}
         <a class="knopf klein" href="/angebote/{{ angebot.id }}/pdf" target="_blank">PDF anzeigen</a>
+        {% if (angebot.konfigurator_typ or 'WP') == 'WP' %}
+        {# v19 (PLAN_V14 Phase 96): internes Arbeitsblatt fürs KfW-Portal #}
+        <a class="knopf klein zweitrangig" href="/angebote/{{ angebot.id }}/bza-datenblatt"
+           title="BzA-Datenblatt-{{ angebot.nummer }}.pdf – internes Arbeitsblatt zur Portaleingabe">BzA-Datenblatt (PDF)</a>
+        {% endif %}
         {% if angebot.status == 'Angenommen' and not angebot.extern %}
         {# v13 (Phase 80): Lieferschein ohne Preise #}
         <a class="knopf klein zweitrangig" href="/angebote/{{ angebot.id }}/lieferschein.pdf"

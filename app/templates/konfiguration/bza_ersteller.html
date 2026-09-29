@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block titel %}BzA-Ersteller – Friondo Angebotstool{% endblock %}
+
+{# v19 (PLAN_V14 Phase 95): Ersteller-Block des BzA-Datenblatts #}
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>BzA-Ersteller <small class="dezent">(Abschnitt 6 des BzA-Datenblatts)</small></h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung">Zur Parametrierung</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<h2>Firmenblock (fest)</h2>
+<table class="liste" style="max-width:640px">
+    <tbody>
+    <tr><td>Unternehmen</td><td>{{ firma.name }}</td></tr>
+    <tr><td>Anschrift</td><td>{{ firma.strasse }}, {{ firma.plz_ort }}</td></tr>
+    <tr><td>Handwerkskammer-Betriebsnummer</td><td>{{ firma.hwk }}</td></tr>
+    </tbody>
+</table>
+
+<h2>Ersteller-Person</h2>
+<form method="post" action="/parametrierung/bza-ersteller" class="formular" style="max-width:640px">
+    <label>Standard (Vorbelegung im Datenblatt-Dialog)
+        <select name="standard">
+            <option value="">– angemeldeter Benutzer –</option>
+            {% for b in kandidaten %}
+            <option value="{{ b.id }}" {{ 'selected' if standard == b.id | string }}>{{ b.name }}{{ ' · ' ~ b.email if b.email }}{{ ' · ' ~ b.telefon if b.telefon }}</option>
+            {% endfor %}
+        </select></label>
+    <p class="dezent">Name, E-Mail und Telefon kommen aus der Benutzerverwaltung
+        (Innendienst und Admin). Im Datenblatt-Dialog ist die Person je Datenblatt wählbar.</p>
+    <div class="formaktionen"><button class="knopf" type="submit">Speichern</button></div>
+</form>
+{% endblock %}

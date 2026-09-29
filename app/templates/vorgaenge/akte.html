@@ -136,6 +136,10 @@
                 {# v13 (Phase 80): Lieferschein ohne Preise #}
                 <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}/lieferschein.pdf" target="_blank">{{ symbol('pdf') }} Lieferschein</a>
             {% endif %}
+            {% if benutzer.rolle in ('admin', 'innendienst') and (a.konfigurator_typ or 'WP') == 'WP' %}
+                {# v19 (Phase 96): BzA-Datenblatt – Tool- und TAIFUN-WP-Angebote #}
+                <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}/bza-datenblatt">{{ symbol('pdf') }} BzA-Datenblatt</a>
+            {% endif %}
             {% if benutzer.rolle in ('admin', 'innendienst') %}
                 <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">{{ symbol('stift') }} Öffnen</a>
             {% elif not a.extern %}

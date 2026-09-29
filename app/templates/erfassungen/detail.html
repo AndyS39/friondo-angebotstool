@@ -113,6 +113,16 @@
                 <input type="text" name="endbetrag" inputmode="decimal" required placeholder="z. B. 32.500,00"></label>
             <label>Datum *
                 <input type="date" name="datum" required value="{{ heute }}"></label>
+            {% if (erfassung.sparte or 'WP') == 'WP' %}
+            {# v19 (PLAN_V14 Phase 96): steuert später die BzA-Aufgabe #}
+            <label>KfW-gefördert? *
+                <select name="kfw_gefoerdert" required>
+                    <option value="">– wählen –</option>
+                    <option value="ja">Ja</option>
+                    <option value="nein">Nein</option>
+                    <option value="offen">noch unklar</option>
+                </select></label>
+            {% endif %}
         </div>
         <button class="knopf" type="submit">Externen Angebotseintrag anlegen</button>
     </form>

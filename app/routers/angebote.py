@@ -820,6 +820,92 @@ async def lieferschein(angebot_id: int, session: Session = Depends(get_session))
                         filename=f"LS-{angebot.nummer}.pdf")
 
 
+# --- v19 (PLAN_V14 Phase 96): BzA-Datenblatt am Angebot -------------------------
+
+def _datenblatt_parameter(request: Request, session: Session, angebot):
+    from app import bza_datenblatt
+    from app.models import Benutzer
+    q = request.query_params
+    try:
+        we = int(q.get("we") or 0) or None
+    except ValueError:
+        we = None
+    ersteller = None
+    if (q.get("ersteller") or "").isdigit():
+        ersteller = session.get(Benutzer, int(q.get("ersteller")))
+    if ersteller is None:
+        ersteller = bza_datenblatt.ersteller_standard(session, request.state.benutzer)
+    return we, ersteller, (q.get("geraet") or "").strip()[:40]
+
+
+@router.get("/{angebot_id}/bza-datenblatt")
+async def bza_datenblatt_dialog(request: Request, angebot_id: int,
+                                session: Session = Depends(get_session)):
+    """Dialog + Vorschau: WE übersteuern, Ersteller wählen, bei TAIFUN-WP
+    das Gerät aus dem Blatt „BAFA-Anlagen“ (Pflicht)."""
+    from urllib.parse import quote_plus
+
+    from app import bza_datenblatt
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote", status_code=303)
+    if not bza_datenblatt.ist_wp(angebot):
+        return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+            "BzA-Datenblatt gibt es nur für Wärmepumpen-Angebote."), status_code=303)
+    we, ersteller, geraet = _datenblatt_parameter(request, session, angebot)
+    blatt = bza_datenblatt.erstellen(session, angebot, we_foerdern=we,
+                                     ersteller=ersteller, geraet_schluessel=geraet)
+    we_vorbelegt = next((f.wert for titel, felder in blatt.abschnitte for f in felder
+                         if f.name.startswith("Anzahl der zu fördernden") and not f.fehlt), "")
+    return render(request, "angebote/bza_datenblatt.html", aktiv="/angebote",
+                  angebot=angebot, blatt=blatt, we_vorbelegt=we_vorbelegt,
+                  ersteller=bza_datenblatt.ersteller_kandidaten(session),
+                  standard=ersteller, anlagen=bza_datenblatt.bafa_liste(session),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.get("/{angebot_id}/bza-datenblatt.pdf")
+async def bza_datenblatt_pdf(request: Request, angebot_id: int,
+                             session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+
+    from fastapi.responses import Response
+
+    from app import bza_datenblatt
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None or not bza_datenblatt.ist_wp(angebot):
+        return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+    we, ersteller, geraet = _datenblatt_parameter(request, session, angebot)
+    blatt = bza_datenblatt.erstellen(session, angebot, we_foerdern=we,
+                                     ersteller=ersteller, geraet_schluessel=geraet)
+    if blatt.geraet_auswahl_noetig:
+        return RedirectResponse(f"/angebote/{angebot_id}/bza-datenblatt?meldung=" + quote_plus(
+            "TAIFUN-Angebot: bitte das Gerät aus der BAFA-Liste wählen (Pflicht)."),
+            status_code=303)
+    name = bza_datenblatt.dateiname(blatt)
+    return Response(content=bza_datenblatt.pdf_bytes(blatt), media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{name}"'})
+
+
+@router.post("/{angebot_id}/kfw-gefoerdert")
+async def kfw_gefoerdert_setzen(request: Request, angebot_id: int,
+                                session: Session = Depends(get_session)):
+    """v19 (Phase 96): „KfW-gefördert“ am externen TAIFUN-Eintrag nachträglich
+    ändern – steuert die BzA-Aufgabe der Projektierung (bza.ist_gefoerdert)."""
+    from urllib.parse import quote_plus
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None or not angebot.extern:
+        return RedirectResponse("/angebote", status_code=303)
+    form = await request.form()
+    wert = (form.get("kfw_gefoerdert") or "").strip().lower()
+    angebot.kfw_gefoerdert = wert if wert in ("ja", "nein") else ""
+    session.commit()
+    return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+        "KfW-gefördert: " + {"ja": "Ja", "nein": "Nein"}.get(angebot.kfw_gefoerdert,
+                                                              "unbekannt")),
+        status_code=303)
+
+
 @router.post("/{angebot_id}/email")
 async def email_entwurf(request: Request, angebot_id: int,
                         session: Session = Depends(get_session)):

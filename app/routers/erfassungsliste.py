@@ -268,7 +268,10 @@ async def extern_erledigt(request: Request, erfassung_id: int,
                       taifun_nummer=(form.get("taifun_nummer") or "").strip()[:30],
                       extern_endbetrag_cent=endbetrag, datum=datum,
                       vertriebler_id=erfassung.benutzer_id,
-                      konfigurator_typ=erfassung.konfigurator_typ or "WP")
+                      konfigurator_typ=erfassung.konfigurator_typ or "WP",
+                      # v19 (Phase 96): KfW-gefördert (ja/nein, sonst unbekannt)
+                      kfw_gefoerdert=({"ja": "ja", "nein": "nein"}.get(
+                          (form.get("kfw_gefoerdert") or "").strip().lower(), "")))
     session.add(angebot)
     session.flush()
     angebot.nummer = f"EXT-{angebot.id}"   # interne Kennung, nie AN-C-Kreis

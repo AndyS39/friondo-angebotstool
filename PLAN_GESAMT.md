@@ -89,10 +89,10 @@ Gesamtübersicht (Testergebnisse, offene Punkte, Rückfragen gebündelt).
 - [x] CLAUDE-Abschnitt „Projektierung Go-live" (Nummer = höchste + 1)
 
 ## B3 – PLAN_V14 als Phasen 95–97 (BzA-Datenblatt, BAFA-Nummern)
-- [ ] Vorab: PLAN_V14.md umnummerieren (82–84 → 95–97, Kollisions-
+- [x] Vorab: PLAN_V14.md umnummerieren (82–84 → 95–97, Kollisions-
       empfehlung aus STATUS-GESAMT) und den CLAUDE-Abschnitt auf
       „Nummer = höchste + 1" stellen
-- [ ] ABGLEICH STATT NEUBAU: Es existieren bereits das BzA-Datenblatt am
+- [x] ABGLEICH STATT NEUBAU: Es existieren bereits das BzA-Datenblatt am
       Gewerk (v15, projektierung/bza.html) und die BzA-Erfassung aus v17
       (Phase 92: BzA-ID, Kundenmail, KfW-Felder). Den bestehenden
       Generator wiederverwenden: der neue Button am ANGEBOT ruft dieselbe
@@ -101,15 +101,15 @@ Gesamtübersicht (Testergebnisse, offene Punkte, Rückfragen gebündelt).
       die vier neuen Erfassungsfragen (Heizflächen → 35/55 °C,
       Nennleistung Altanlage, Inbetriebnahmejahr, Contracting) und die
       Feldlücken laut Abgleich mit Phase 92
-- [ ] ÄNDERUNG gegenüber PLAN_V14 (Chat-Abstimmung 29.09.): Button auch an
+- [x] ÄNDERUNG gegenüber PLAN_V14 (Chat-Abstimmung 29.09.): Button auch an
       EXTERNEN TAIFUN-WP-Angeboten – Gerät dann als Pflichtauswahl aus dem
       BAFA-Blatt im Datenblatt-Dialog (Erfassungsdaten liegen ja vor);
       nur bei Nicht-WP-Sparten kein Button
-- [ ] NEU: Feld „KfW-gefördert" (Ja | Nein) am externen Angebotseintrag –
+- [x] NEU: Feld „KfW-gefördert" (Ja | Nein) am externen Angebotseintrag –
       im „Extern erledigt"-Dialog abgefragt, nachträglich änderbar,
       Migration Bestand = unbekannt; app/bza.py wertet es aus und bietet
       nur noch bei „unbekannt" beide Wege an (löst Provisorium 2 endgültig)
-- [ ] Übrige PLAN_V14-Checkboxen wie geschrieben (Ersteller-Parametrierung
+- [x] Übrige PLAN_V14-Checkboxen wie geschrieben (Ersteller-Parametrierung
       HWK 1862718, rote „fehlt"-Markierungen, Tests); offene Zulieferungen
       (weiße 8800er-Nummer, Hybrox) blockieren nur ihre Zeilen
 

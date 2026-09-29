@@ -10,8 +10,40 @@ Referenz im Projektordner/Uploads: ausgefülltes KfW-Muster
 „BZA-AKP-GQ6-XJY-BV3" (Bestätigung zum Antrag, Programm 458) – das
 BzA-Datenblatt bildet dessen Abschnitte und Feldbezeichnungen exakt ab.
 
-## Phase 82 – BAFA-Stammdaten & Erfassungs-Ergänzungen
-- [ ] Neues Logik-Blatt „BAFA-Anlagen" mit Spalten: Schlüssel (WP-Paket-
+## Umnummerierung und Abgleich (30.09.2026, PLAN_GESAMT B3)
+
+- **Phasen 82–84 → 95–97** (Kollision mit PLAN_PROJ_V2/V3, Empfehlung aus
+  docs/STATUS-GESAMT.md); CLAUDE-Abschnitt „Neu in v19“ (v14 belegt,
+  v18 = Projektierung Go-live).
+- **ABGLEICH STATT NEUBAU:** Es gibt bereits das BzA-Datenblatt am Gewerk
+  (v15, `projektierung/bza.html`, HTML mit Kopier-Knöpfen) und die
+  BzA-Erfassung aus v17 (BzA-ID, Kundenmail, KfW-Felder). Beide nutzen jetzt
+  EINEN Generator `app/bza_datenblatt.py` in KfW-Muster-Struktur; der neue
+  Button am Angebot erzeugt daraus das PDF (funktioniert ohne Projekt), die
+  Gewerk-Seite zeigt dieselben Abschnitte + „Stand BzA / KfW“.
+- **Erfassungsfragen – Abgleich mit dem Bogen:**
+  · „Vorhandene Heizflächen“ = bestehende Frage **H02 „Verteilsystem“**
+    (Heizkörper | Fußbodenheizung | Heizkörper und Fußbodenheizung |
+    Sonstiges) → 35 °C nur bei „Fußbodenheizung“, sonst 55 °C. Keine
+    neue Frage.
+  · „Inbetriebnahmejahr“ = bestehende Frage **A02** (bisher „Baujahr der
+    alten Heizung“, steuert K02 schon heute) → nur neuer Fragetext, keine
+    neue Frage; Bestandswerte bleiben gültig.
+  · NEU: **A20 „Nennleistung der bestehenden Heizung in kW“** (Alte Anlage,
+    nach A02) und **N11 „Contracting-Modell?“** (Neue Anlage, Vorbelegung
+    Nein – im KfW-Muster Teil der geplanten Wärmeversorgung).
+- **Änderung laut Chat 29.09.:** Button auch an externen TAIFUN-WP-
+  Einträgen (Gerät als Pflichtauswahl aus dem Blatt „BAFA-Anlagen“, die
+  Erfassungsdaten liegen über „Extern erledigt“ vor); kein Button bei
+  Nicht-WP. Die Checkbox „Bei externen TAIFUN-Angeboten … ausgeblendet“
+  (Phase 96) gilt damit nur noch für Nicht-WP.
+- **KfW-gefördert** am externen Eintrag: Feld `angebote.kfw_gefoerdert`
+  existiert seit PLAN_PROJ_V3 Phase 84 (Auftragsdaten) – hier kommt die
+  Abfrage im „Extern erledigt“-Dialog und am Eintrag dazu.
+- Rollout (Phase 97, letzte Checkbox) läuft über PLAN_GESAMT Teil C.
+
+## Phase 95 – BAFA-Stammdaten & Erfassungs-Ergänzungen
+- [x] Neues Logik-Blatt „BAFA-Anlagen" mit Spalten: Schlüssel (WP-Paket-
       Position bzw. Klasse+Inneneinheit) | BAFA-Anlagennummer | Hersteller |
       Gerätebezeichnung (exakter Listentext) | Nennwärmeleistung kW |
       Kältemittel | Netzdienlichkeit | E/E-Anzeige. Startbefüllung:
@@ -47,7 +79,7 @@ BzA-Datenblatt bildet dessen Abschnitte und Feldbezeichnungen exakt ab.
       Vorrats-Stammdaten ohne Konfigurator-Anbindung (für später, aus den
       gelieferten Screenshots): CS5800-Serie und alpha innotec Hybrox
       (u. a. Hybrox 21 → 16017387 · ait-deutschland GmbH · 21,00 kW).
-- [ ] Erfassungsbogen WP – vier neue Fragen (Platzierung bei den
+- [x] Erfassungsbogen WP – vier neue Fragen (Platzierung bei den
       Anlagen-/Altanlagen-Fragen):
       · „Vorhandene Heizflächen" (nur Fußbodenheizung | Heizkörper |
         Heizkörper und Fußbodenheizung) → Vorlauftemperatur 35 °C nur
@@ -60,20 +92,20 @@ BzA-Datenblatt bildet dessen Abschnitte und Feldbezeichnungen exakt ab.
         Bestandserfassungen behalten ihre Werte, im Datenblatt
         erscheint sonst „Jahr fehlt – bitte nachfragen"
       · „Contracting-Modell?" (Ja | Nein, Vorbelegung Nein)
-- [ ] Parametrierung „BzA-Ersteller": Firmenblock fest (Friondo GmbH,
+- [x] Parametrierung „BzA-Ersteller": Firmenblock fest (Friondo GmbH,
       Arnold-Overbeck-Str. 63-65, 47139 Duisburg, Handwerkskammer-
       Betriebsnummer 1862718); Ersteller-Person wählbar aus den
       ID-Benutzern (Name, E-Mail, Telefon), Vorbelegung = angemeldeter
       Benutzer
-- [ ] migrate.py: neue Erfassungsfelder, Stammdaten, Ersteller-Parameter
+- [x] migrate.py: neue Erfassungsfelder, Stammdaten, Ersteller-Parameter
 
-## Phase 83 – BzA-Datenblatt (PDF) am Angebot
-- [ ] Button „BzA-Datenblatt (PDF)" an jedem WP-Tool-Angebot (Editor-Kopf
+## Phase 96 – BzA-Datenblatt (PDF) am Angebot
+- [x] Button „BzA-Datenblatt (PDF)" an jedem WP-Tool-Angebot (Editor-Kopf
       und Vorgangsakte, jeder Status); Dateiname
       BzA-Datenblatt-<Angebotsnummer>.pdf; Kopf mit Friondo-Logo,
       Angebotsnummer, Kunde, Erstellungsdatum und deutlichem Vermerk
       „Internes Arbeitsblatt zur Portaleingabe – keine KfW-Unterlage"
-- [ ] Inhalt exakt in der Reihenfolge und mit den Feldbezeichnungen des
+- [x] Inhalt exakt in der Reihenfolge und mit den Feldbezeichnungen des
       KfW-Musters:
       1. Daten zum Investitionsobjekt: Straße, Hausnummer, PLZ, Ort,
          Land (= Ausführungsort); Wohneinheiten im Gebäude nach
@@ -107,24 +139,24 @@ BzA-Datenblatt bildet dessen Abschnitte und Feldbezeichnungen exakt ab.
          Stufe (aus den K-Fragen) und Hinweis „Nachweis:
          Einkommensteuerbescheide"
       6. Ersteller: Person + Firmenblock aus der Parametrierung
-- [ ] Fehlende Pflichtangaben erscheinen rot als „— fehlt: bitte beim
+- [x] Fehlende Pflichtangaben erscheinen rot als „— fehlt: bitte beim
       Kunden erfragen" (Datenblatt wird trotzdem erzeugt); Solarthermie-
       Übernahme, 8800er-Farb-Prüfpunkt und Alternativ-Positionen ändern
       nichts an Gerät/Nummer-Logik
-- [ ] Bei externen TAIFUN-Angeboten und Nicht-WP-Sparten ist der Button
+- [x] Bei externen TAIFUN-Angeboten und Nicht-WP-Sparten ist der Button
       ausgeblendet
 
-## Phase 84 – Abnahme & Rollout
-- [ ] Tests: Angebot mit Paket 048 → Datenblatt zeigt 16019892 +
+## Phase 97 – Abnahme & Rollout
+- [x] Tests: Angebot mit Paket 048 → Datenblatt zeigt 16019892 +
       „Compress CS3800iAW 10 OM-T …" + 10,00 kW; Klasse 15 + AWMB →
       16019200; Heizflächen „nur FBH" → 35 °C, „HK+FBH" → 55 °C;
       Klimabonus-Kategorie bei Öl/1985; fehlendes Inbetriebnahmejahr →
       roter Hinweis; Kosten-Zeilen (Endbetrag + nachrichtliche Werte)
       stimmen mit dem Angebot überein; Button fehlt bei PV/TAIFUN
-- [ ] Regressionen: Kontroll-Szenarien und B1–B4 unverändert grün
-- [ ] CLAUDE.md: Kopf „(v14)"; Abschnitt einfügen:
+- [x] Regressionen: Kontroll-Szenarien und B1–B4 unverändert grün
+- [x] CLAUDE.md: Kopf „(v19)" (Nummer = höchste + 1); Abschnitt einfügen:
 
-      ## Neu in v14 (abgestimmt 29.09.2026)
+      ## Neu in v19 (abgestimmt 29.09.2026)
       - BzA-Datenblatt (KfW „Bestätigung zum Antrag", Programm 458):
         Button am WP-Tool-Angebot erzeugt ein internes Arbeitsblatt in
         exakter Portal-Struktur – Investitionsobjekt, Altanlage
@@ -142,8 +174,8 @@ BzA-Datenblatt bildet dessen Abschnitte und Feldbezeichnungen exakt ab.
       - Klimabonus wird aus dem Inbetriebnahmejahr der Altheizung
         abgeleitet (präziser als die bisherige Altersfrage).
 
-- [ ] docs/nach-dem-update-v14.md: Team-Hinweis an den AD (vier neue
+- [x] docs/nach-dem-update-v19.md: Team-Hinweis an den AD (vier neue
       Pflichtfragen im WP-Bogen und warum), ID-Anleitung Datenblatt →
       Portal; offene Punkte: weiße 8800er-Nummer prüfen, Hybrox-21-
       Erweiterung wartet auf Komponenten/Preise/Klassengrenzen
-- [ ] git push → Rollout per update.bat → Checkliste abarbeiten
+- [ ] git push → Rollout per update.bat → Checkliste abarbeiten (läuft über PLAN_GESAMT Teil C – wartet auf Freigabe)

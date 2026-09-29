@@ -423,6 +423,8 @@ def vorbelegung(frage: Frage, antworten: dict) -> Optional[str]:
         if str(antworten.get(ID_OBJEKTART) or "") == "2FH":
             return "2"
         return None
+    if frage.id == "N11":            # v19: Contracting-Modell, Vorbelegung Nein
+        return "Nein"
     if frage.id == "K02" and len(frage.antworten) >= 3:
         energietraeger = str(antworten.get(ID_ENERGIETRAEGER) or "")
         if energietraeger in ("Öl", "Nachtspeicher"):

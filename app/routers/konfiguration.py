@@ -897,6 +897,32 @@ def _stuecklisten_zurueck(meldung: str, anker: str = ""):
                             status_code=303)
 
 
+# --- v19 (PLAN_V14 Phase 95): BzA-Ersteller ------------------------------------------
+
+@router.get("/bza-ersteller")
+async def bza_ersteller_seite(request: Request, session: Session = Depends(get_session)):
+    from app import bza_datenblatt
+    from app.models import einstellung_holen
+    return render(request, "konfiguration/bza_ersteller.html", aktiv="/parametrierung",
+                  firma=bza_datenblatt.FIRMA,
+                  kandidaten=bza_datenblatt.ersteller_kandidaten(session),
+                  standard=einstellung_holen(session, "bza_ersteller_standard", ""),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/bza-ersteller")
+async def bza_ersteller_speichern(request: Request, session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+
+    from app.models import einstellung_setzen
+    form = await request.form()
+    wert = (form.get("standard") or "").strip()
+    einstellung_setzen(session, "bza_ersteller_standard", wert if wert.isdigit() else "")
+    session.commit()
+    return RedirectResponse("/parametrierung/bza-ersteller?meldung="
+                            + quote_plus("BzA-Ersteller gespeichert."), status_code=303)
+
+
 # --- V3 (PLAN_PROJ_V3 Phase 86): Go-live-Checkliste ---------------------------------
 
 def _golive_zurueck(meldung: str):

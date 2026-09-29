@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v18)
+# Friondo Angebotstool – Projektkontext (v19)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -682,3 +682,39 @@ Team-Feedback belegt – Plan-Text „Neu in v13“ entspricht diesem Abschnitt.
   Collin-Kundennummer, Stücklisten ≥ 90 % ohne BEISPIEL-Nummern,
   Collin-Testdatei (Häkchen, von der Stücklisten-Seite umgezogen), Formulare
   abgenommen (Häkchen), Bestandsimport). Tests: `tests/test_projektierung_v3.py`.
+
+## Neu in v19 – BzA-Datenblatt & BAFA-Anlagen (abgestimmt 29.09.2026)
+
+(Plan: PLAN_V14.md, umnummeriert auf Phasen 95–97; der Plan-Text „Neu in
+v14“ entspricht diesem Abschnitt.)
+
+- **BzA-Datenblatt** (KfW „Bestätigung zum Antrag“, Programm 458): EIN
+  Generator `app/bza_datenblatt.py` in exakter Portal-Struktur (1
+  Investitionsobjekt · 2 Wärmeversorgung vor Sanierung · 3 Geplante
+  Wärmeversorgung · 4 Geplante Kosten · 5 Boni · 6 Ersteller). Button
+  „BzA-Datenblatt (PDF)“ an jedem WP-Angebot (Editor-Kopf, Vorgangsakte,
+  jeder Status) **und an TAIFUN-WP-Einträgen** (Gerät dann Pflichtauswahl aus
+  dem Blatt „BAFA-Anlagen“); Dialog `/angebote/<id>/bza-datenblatt` (WE
+  übersteuerbar, Ersteller wählbar), PDF `BzA-Datenblatt-<Nr>.pdf` mit Vermerk
+  „Internes Arbeitsblatt … keine KfW-Unterlage“. Fehlende Angaben rot
+  („— fehlt: bitte beim Kunden erfragen“). Die Projektierungs-Seite
+  `/projektierung/gewerk/<id>/bza` (v15/v17) nutzt denselben Generator
+  (+ Kundendaten, Stand BzA/KfW, Link zum PDF).
+- **Erfassung WP:** A02 heißt „Inbetriebnahmejahr (Baujahr) der bestehenden
+  Heizung“ (steuert K02 wie bisher, Boni-Kategorie im Datenblatt); neu A20
+  „Nennleistung der bestehenden Heizung in kW“ (Pflicht) und N11
+  „Contracting-Modell?“ (Vorbelegung Nein). Heizflächen = bestehende Frage
+  H02 (nur Fußbodenheizung → 35 °C, sonst 55 °C).
+- **Blatt „BAFA-Anlagen“** (konfigurator_logik_v5.xlsx, `logik.bafa_anlagen`,
+  `bafa_fuer_positionen`): 045–054 und 15+055 / 15+056 → Anlagennummer,
+  Hersteller, Gerätebezeichnung, kW, Kältemittel, Netzdienlichkeit,
+  E/E-Anzeige, Hinweis; Schlüssel `vorrat:…` (Hybrox 21) ohne Konfigurator-
+  Anbindung. Offener Prüfpunkt: eigene Nummer der weißen 8800er-Außeneinheit.
+- **Parametrierung „BzA-Ersteller“:** Firmenblock fest (Friondo GmbH,
+  Arnold-Overbeck-Str. 63-65, 47139 Duisburg, HWK-Nr. 1862718), Standard-
+  Ersteller `bza_ersteller_standard` (leer = angemeldeter Benutzer).
+- **KfW-gefördert am TAIFUN-Eintrag** (`angebote.kfw_gefoerdert`, Bestand =
+  unbekannt): Abfrage im Dialog „Extern erledigt“ (WP), nachträglich am
+  Eintrag änderbar; `bza.ist_gefoerdert` bietet nur noch bei „unbekannt“
+  beide Wege an. Tests: `tests/test_bza_v19.py`; Team-Hinweise:
+  docs/nach-dem-update-v19.md.
