@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.models import Angebot, Benutzer, Erfassung, Kunde, einstellung_holen
 
 FEHLT = "— fehlt: bitte beim Kunden erfragen"
+FEHLT_ERSTELLER = "— fehlt: in der Benutzerverwaltung pflegen"
 VERMERK = "Internes Arbeitsblatt zur Portaleingabe – keine KfW-Unterlage"
 # Firmenblock (fest laut PLAN_V14; HWK-Betriebsnummer der Handwerkskammer)
 FIRMA = {"name": "Friondo GmbH", "strasse": "Arnold-Overbeck-Str. 63-65",
@@ -313,9 +314,9 @@ def erstellen(session: Session, angebot: Angebot, gewerk=None,
         Feld("Unternehmen", FIRMA["name"]),
         Feld("Anschrift", f"{FIRMA['strasse']}, {FIRMA['plz_ort']}"),
         Feld("Handwerkskammer-Betriebsnummer", FIRMA["hwk"]),
-        _feld("Ansprechpartner", person.name if person else ""),
-        _feld("E-Mail", (person.email if person else "") or ""),
-        _feld("Telefon", (person.telefon if person else "") or ""),
+        _feld("Ansprechpartner", person.name if person else "", leer=FEHLT_ERSTELLER),
+        _feld("E-Mail", (person.email if person else "") or "", leer=FEHLT_ERSTELLER),
+        _feld("Telefon", (person.telefon if person else "") or "", leer=FEHLT_ERSTELLER),
     ]))
     return blatt
 
@@ -337,8 +338,7 @@ def pdf_bytes(blatt: Datenblatt) -> bytes:
             self.cell(0, 5, f"BzA-Datenblatt zu {blatt.nummer} · Seite {self.page_no()}")
             self.set_y(22)
 
-    pdf = DatenblattPdf(blatt.nummer)
-    pdf.set_auto_page_break(True, 30)
+    pdf = DatenblattPdf(blatt.nummer)     # Umbruchrand 42 mm (Fußzeile) wie Angebot
     pdf.add_page()
     pdf.set_font("Arial", "", 6.5)
     pdf.set_text_color(100, 100, 100)
@@ -376,10 +376,14 @@ def pdf_bytes(blatt: Datenblatt) -> bytes:
         pdf.ln(1)
         for f in felder:
             wert = f.wert + (f"  ({f.hinweis})" if f.hinweis else "")
-            pdf.set_font("Arial", "", 8.5)
+            pdf.set_font("Arial", "B" if f.fehlt else "", 8.5)
             zeilen = pdf.multi_cell(breite_wert, 4.4, wert, dry_run=True, output="LINES")
-            if pdf.get_y() + 4.4 * len(zeilen) > pdf.page_break_trigger:
-                pdf.add_page()
+            pdf.set_font("Arial", "", 8.5)
+            zeilen_name = pdf.multi_cell(breite_name, 4.4, f.name, dry_run=True,
+                                         output="LINES")
+            hoehe = 4.4 * max(len(zeilen), len(zeilen_name)) + 0.6
+            if pdf.get_y() + hoehe > pdf.page_break_trigger:
+                pdf.add_page()   # Zeile nie über den Seitenumbruch zerreißen
             y = pdf.get_y()
             pdf.set_text_color(90, 90, 90)
             pdf.multi_cell(breite_name, 4.4, f.name)
