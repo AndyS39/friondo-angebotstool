@@ -167,7 +167,13 @@
     {% if p.seite != ns.seite %}
         {% set ns.seite = p.seite %}
         <h2 class="gruppentitel">{{ p.seite }}
+            {# Bugfix 30.09.2026: berechnete Abschnitte (PV-„Auslegung“, v16) sind
+               keine Bogenseite – kein Korrektur-Link (vorher ValueError/500) #}
+            {% if p.seite in seiten %}
             <a class="aendern" href="/erfassung/{{ erfassung.id }}/seite/{{ seiten.index(p.seite) }}">korrigieren</a>
+            {% else %}
+            <span class="dezent" title="aus den Antworten berechnet – über die Bogenseiten korrigieren">berechnet</span>
+            {% endif %}
         </h2>
     {% endif %}
     <div class="protokoll-zeile {{ 'ampel-zeile' if p.get('ampel_grund') }}">

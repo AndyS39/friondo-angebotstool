@@ -431,6 +431,22 @@ class Phase79Prozess(Basis):
         self.assertIn("Umsatzsteuer 0 % (§ 12 Abs. 3 UStG)", r.text)
         self.assertIn("kein KfW-Förderblock", r.text)
 
+    def test_detailseite_mit_auslegung(self):
+        """Bugfix 30.09.2026: Erfassungs-Detail einer vollständigen PV-
+        Katalog-Erfassung warf 500 (Abschnitt „Auslegung“ ist keine
+        Bogenseite, seiten.index(...) → ValueError)."""
+        e = self.neue_erfassung(pv_basis(PD12=18, PA10=10))
+        from app import konfigurator as engine
+        self.assertIn("Auslegung", {p["seite"] for p in engine.protokoll(
+            self.logik, json.loads(e.antworten_json))})
+        r = self.client.get(f"/erfassungen/{e.id}")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("Auslegung PV", r.text)
+        self.assertIn("berechnet", r.text)
+        # Protokoll-PDF und Prüfseite mit derselben Erfassung
+        self.assertEqual(self.client.get(f"/erfassungen/{e.id}/protokoll.pdf").status_code, 200)
+        self.assertLess(self.client.get(f"/erfassung/{e.id}/pruefen").status_code, 500)
+
     def test_ampel_orange_bleibt_individuell(self):
         e = self.neue_erfassung(pv_basis(PD03="Vollgerüst"))
         self.client.post(f"/erfassung/{e.id}/absenden", follow_redirects=False)
