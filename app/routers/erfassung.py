@@ -208,6 +208,10 @@ async def sparten_start(request: Request, session: Session = Depends(get_session
         if enni and sparte == "WP":
             erfassung.antworten_json = json.dumps({"P02": "Nein", "P03": "Nein"},
                                                   ensure_ascii=False)
+        elif enni and sparte == "PV":
+            # v13-PV: Enni-Profil im PV-Bogen identisch – nur die HEMS-Frage
+            erfassung.antworten_json = json.dumps({"PA12": "Nein", "PA13": "Nein"},
+                                                  ensure_ascii=False)
         session.add(erfassung)
         neu.append(erfassung)
     session.flush()
@@ -332,7 +336,7 @@ async def seite(request: Request, erfassung_id: int, nr: int,
     # v9: Enni-Bogen zeigt nur die HEMS-Frage (P02/P03 sind mit Nein vorbelegt)
     from app import angebotsprofile
     if angebotsprofile.enni_bogen(session, erfassung):
-        fragen = [f for f in fragen if f.id not in ("P02", "P03")]
+        fragen = [f for f in fragen if f.id not in ("P02", "P03", "PA12", "PA13")]
     sichtbar = {f.id: engine.ist_sichtbar(f, antworten, logik.fragen, logik) for f in fragen}
     werte = {}
     for f in fragen:
@@ -383,6 +387,17 @@ async def seite_speichern(request: Request, erfassung_id: int, nr: int,
             fehler[frage.id] = problem
             continue
         antworten[frage.id] = wert
+
+    # v13-PV: WP-Stromverbrauch „Aus WP-Erfassung ermitteln“ – Gas-/Ölverbrauch
+    # der WP-Erfassung des Vorgangs ÷ 3,5; ohne WP-Verbrauch → Hinweis und
+    # manuelle Eingabe
+    if (erfassung.sparte or "") == "PV" and any(f.id == "PO07" for f in fragen):
+        from app import pv_auslegung
+        if (pv_auslegung.wp_ableitung_aktualisieren(session, erfassung, antworten, logik)
+                is None and antworten.get("PO07") == pv_auslegung.AUS_WP):
+            fehler["PO07"] = ("Keine WP-Erfassung mit Verbrauch in diesem Vorgang gefunden – "
+                              "bitte den Stromverbrauch der Wärmepumpe manuell eingeben "
+                              "(0 = keine Wärmepumpe).")
 
     richtung = form.get("richtung", "weiter")
     if fehler and richtung == "weiter":

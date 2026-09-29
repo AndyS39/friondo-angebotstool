@@ -82,6 +82,29 @@ async def import_ausfuehren(session: Session = Depends(get_session)):
                             status_code=303)
 
 
+# --- v13-PV: PV-Positionslisten (Artikel-Preislisten/PV/) ------------------
+
+@router.get("/import-pv")
+async def import_pv_vorschau(request: Request, session: Session = Depends(get_session)):
+    from app import import_pv
+    if not config.PV_PREISLISTEN_ORDNER.exists():
+        return render(request, "artikel/import_vorschau.html", aktiv="/artikel",
+                      diff=None, dateifehler=[str(config.PV_PREISLISTEN_ORDNER)], pv=True)
+    diff = import_pv.berechne_diff(session)
+    return render(request, "artikel/import_vorschau.html", aktiv="/artikel",
+                  diff=diff, dateifehler=[], pv=True)
+
+
+@router.post("/import-pv")
+async def import_pv_ausfuehren(session: Session = Depends(get_session)):
+    from app import import_pv
+    from app import logik as logik_modul
+    _diff, meldung = import_pv.import_ausfuehren(session)
+    logik_modul.neu_einlesen(session)   # WR/Speicher-Kombis + Validierung neu
+    return RedirectResponse(f"/artikel?q=PV&meldung=Import+abgeschlossen:+{meldung.replace(' ', '+')}",
+                            status_code=303)
+
+
 # --- Manuelles Anlegen / Bearbeiten --------------------------------------
 
 def _formular_lesen(form) -> dict:

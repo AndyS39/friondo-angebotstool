@@ -350,7 +350,10 @@ def _bestand_finden(daten: dict, nach_guid: dict, zusatz_nach_pos: dict):
 
 def berechne_diff(session: Session, ergebnis: ImportErgebnis) -> Diff:
     diff = Diff(warnungen=list(ergebnis.warnungen))
-    bestand = session.query(Artikel).filter(Artikel.quelle != "manuell").all()
+    # v13-PV: nur Preisliste + Zusatzartikel – PV-Artikel (eigener Import)
+    # und manuelle Artikel fasst dieser Import nie an
+    bestand = (session.query(Artikel)
+               .filter(Artikel.quelle.in_([QUELLE_PREISLISTE, QUELLE_ZUSATZ])).all())
     nach_guid = {a.guid: a for a in bestand if a.guid}
     zusatz_nach_pos = {a.pos_nr: a for a in bestand if a.quelle == QUELLE_ZUSATZ}
     bestand_nach_pos = {a.pos_nr: a for a in bestand if a.pos_nr}
@@ -396,7 +399,8 @@ def import_ausfuehren(session: Session) -> tuple[Diff, str]:
     ergebnis = lese_dateien()
     diff = berechne_diff(session, ergebnis)
 
-    nach_guid = {a.guid: a for a in session.query(Artikel).filter(Artikel.guid.isnot(None))}
+    nach_guid = {a.guid: a for a in session.query(Artikel).filter(
+        Artikel.guid.isnot(None), Artikel.quelle.in_([QUELLE_PREISLISTE, QUELLE_ZUSATZ]))}
     zusatz_nach_pos = {a.pos_nr: a for a in
                        session.query(Artikel).filter(Artikel.quelle == QUELLE_ZUSATZ)}
     for daten in ergebnis.artikel:

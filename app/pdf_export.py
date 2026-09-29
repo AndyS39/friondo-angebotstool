@@ -421,8 +421,11 @@ def _positionsteil(pdf: AngebotsPdf, angebot: Angebot):
 
 def _summen_zeile(pdf: AngebotsPdf, name: str, betrag_cent: int, fett=False):
     pdf.set_font("Arial", "B" if fett else "", 9)
-    pdf.set_x(pdf.l_margin + 70)
-    pdf.cell(60, 5, name)
+    # v13-PV: lange Beschriftungen („Umsatzsteuer 0 % (§ 12 Abs. 3 UStG)“)
+    # wachsen nach links, das €-Zeichen bleibt in seiner Spalte
+    breite = max(60.0, pdf.get_string_width(name) + 2)
+    pdf.set_x(pdf.l_margin + 130 - breite)
+    pdf.cell(breite, 5, name)
     pdf.cell(10, 5, "€")
     pdf.cell(30, 5, _euro_betrag(betrag_cent), align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
@@ -437,7 +440,7 @@ def _summen_und_kfw(pdf: AngebotsPdf, angebot: Angebot, ergebnis):
     pdf.ln(1.5)
     # Phase 26: Netto → USt → Gesamt-Betrag → − Rabatt (brutto) → = Endbetrag
     _summen_zeile(pdf, "Netto-Summe", summen["netto"])
-    _summen_zeile(pdf, "19,00 % USt.", summen["ust"])
+    _summen_zeile(pdf, angebot.ust_bezeichnung, summen["ust"])   # v13-PV
     if summen.get("rabatt"):
         _summen_zeile(pdf, "Gesamt-Betrag", summen["brutto"])
         bezeichnung = angebot.rabatt_bezeichnung
@@ -678,7 +681,9 @@ def signiertes_pdf_erzeugen(session, angebot: Angebot, png_bytes: bytes,
     kunde = session.get(Kunde, angebot.kunde_id)
     ergebnis = None
     kfw_daten = json.loads(angebot.kfw_json or "{}")
-    if kfw_daten.get("O01") and not angebot.foerderung_ausblenden:
+    # v13-PV: bei PV nie ein Förderblock (0 % USt, keine KfW)
+    if (kfw_daten.get("O01") and not angebot.foerderung_ausblenden
+            and (angebot.konfigurator_typ or "WP") != "PV"):
         logik, _ = logik_modul.hole_logik(session)
         parameter, _warn = kfw.parameter_lesen(logik)
         eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["endbetrag"])
@@ -721,7 +726,9 @@ def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
     kunde = session.get(Kunde, angebot.kunde_id)
     ergebnis = None
     kfw_daten = json.loads(angebot.kfw_json or "{}")
-    if kfw_daten.get("O01") and not angebot.foerderung_ausblenden:
+    # v13-PV: bei PV nie ein Förderblock (0 % USt, keine KfW)
+    if (kfw_daten.get("O01") and not angebot.foerderung_ausblenden
+            and (angebot.konfigurator_typ or "WP") != "PV"):
         logik, _ = logik_modul.hole_logik(session)
         parameter, _warn = kfw.parameter_lesen(logik)
         eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["endbetrag"])

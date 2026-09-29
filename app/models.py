@@ -96,6 +96,7 @@ def interesse_text(codes) -> str:
 QUELLE_PREISLISTE = "preisliste"   # TAIFUN-Preisliste (Anker: GUID)
 QUELLE_ZUSATZ = "zusatz"           # Zusatzartikel Z01–Z22 aus der Logik-Excel (Anker: Pos-Nr.)
 QUELLE_MANUELL = "manuell"         # im Tool angelegt, wird vom Import nie verändert
+QUELLE_PV = "pv"                   # v13-PV: PV-Positionslisten (PV001 …, Anker: GUID)
 
 
 class Artikel(Base):
@@ -240,6 +241,28 @@ def einstellung_setzen(session, name: str, wert: str) -> None:
         zeile = Einstellung(name=name)
         session.add(zeile)
     zeile.wert = wert
+
+
+def ust_standard(sparte: str) -> float:
+    """v13-PV: Standard-Steuersatz je Sparte – PV 0 % (§ 12 Abs. 3 UStG),
+    alle anderen 19 %."""
+    return 0.0 if (sparte or "").upper() == "PV" else 19.0
+
+
+DB_AMPEL_SPARTEN = ("WP", "PV", "KL", "WB")
+
+
+def db_schwellen(session, sparte: str = "") -> tuple[int, int]:
+    """v13-PV (Phase 78): DB-Ampel-Schwellen in Euro je Sparte
+    (rot unter, grün über). Eigene Werte db_ampel_rot_unter_<SPARTE> /
+    db_ampel_gruen_ueber_<SPARTE>; leer = die allgemeinen Schwellen
+    (Start: PV wie WP)."""
+    rot = einstellung_holen(session, "db_ampel_rot_unter", "9000")
+    gruen = einstellung_holen(session, "db_ampel_gruen_ueber", "10000")
+    if sparte:
+        rot = einstellung_holen(session, f"db_ampel_rot_unter_{sparte}", rot)
+        gruen = einstellung_holen(session, f"db_ampel_gruen_ueber_{sparte}", gruen)
+    return int(rot), int(gruen)
 
 
 class MondayQuelle(Base):
@@ -982,10 +1005,25 @@ class Angebot(Base):
     angenommen_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     abgelehnt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    # v13-PV (PLAN_V13 Phase 75): Steuersatz je Angebot in Prozent –
+    # WP/KL/WB 19 %, PV 0 % (§ 12 Abs. 3 UStG); Bestand bleibt 19 %
+    ust_satz: Mapped[float] = mapped_column(Float, default=19.0)
 
     positionen: Mapped[list["AngebotsPosition"]] = relationship(
         back_populates="angebot", order_by="AngebotsPosition.sort",
         cascade="all, delete-orphan")
+
+    @property
+    def ust_prozent(self) -> Decimal:
+        return Decimal(str(19.0 if self.ust_satz is None else self.ust_satz))
+
+    @property
+    def ust_bezeichnung(self) -> str:
+        """Beschriftung der Steuerzeile (Editor, PDF): „19,00 % USt.“ bzw.
+        bei 0 % „Umsatzsteuer 0 % (§ 12 Abs. 3 UStG)“."""
+        if self.ust_prozent == 0:
+            return "Umsatzsteuer 0 % (§ 12 Abs. 3 UStG)"
+        return f"{self.ust_prozent:.2f}".replace(".", ",") + " % USt."
 
     @property
     def stamm_nummer(self) -> str:
@@ -1018,7 +1056,8 @@ class Angebot(Base):
             # bauseits (v5) und Alternativ-Positionen (v10) zählen nie mit
             if not p.ep_flag and not p.bauseits and not p.alternativ:
                 netto += p.gesamt_cent
-        ust = int(Decimal(netto) * Decimal("0.19"))
+        # v13-PV: Steuersatz je Angebot (bei 0 % ist brutto = netto)
+        ust = int(Decimal(netto) * self.ust_prozent / 100)
         brutto = netto + ust
         rabatt = self.rabatt_effektiv_cent(brutto)
         return {"netto": netto, "ust": ust, "brutto": brutto,
@@ -1050,7 +1089,7 @@ class Angebot(Base):
                 ek += int((Decimal(str(p.menge)) * Decimal(p.ek_cent))
                           .quantize(Decimal("1")))
         rabatt_brutto = self.rabatt_effektiv_cent(self.summen()["brutto"])
-        rabatt_netto = int((Decimal(rabatt_brutto) / Decimal("1.19"))
+        rabatt_netto = int((Decimal(rabatt_brutto) / (1 + self.ust_prozent / 100))
                            .quantize(Decimal("1")))
         vk_nach_rabatt = max(0, vk - rabatt_netto)
         db = vk_nach_rabatt - ek

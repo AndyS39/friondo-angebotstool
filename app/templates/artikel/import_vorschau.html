@@ -3,18 +3,27 @@
 {% block titel %}Preislisten-Import – Friondo Angebotstool{% endblock %}
 
 {% block inhalt %}
-<h1>Preislisten-Import – Vorschau</h1>
+<h1>{{ 'PV-Positionslisten-Import' if pv is defined and pv else 'Preislisten-Import' }} – Vorschau</h1>
 
 {% if dateifehler %}
     <p class="meldung fehler">Folgende Dateien wurden nicht gefunden:</p>
     <ul>{% for d in dateifehler %}<li><code>{{ d }}</code></li>{% endfor %}</ul>
 {% else %}
 
+{% if pv is defined and pv %}
+<p>
+    Quelle: die vier TAIFUN-Positionslisten in <code>Artikel-Preislisten/PV/</code>
+    (Ersatz Position PV · Sigenergy · Elektro Allgemein · Musterangebot PV) –
+    Nummern PV001 … laut Blatt „PV-Artikel“ der Logik-Excel (GUID-Anker).
+    Es wird noch nichts gespeichert – erst mit „Import ausführen“.
+</p>
+{% else %}
 <p>
     Quelle: <code>{{ 'Artikel-Preislisten/Angebotserstellung Tool.xlsx' }}</code>
     und Zusatzartikel/Textregeln aus <code>konfigurator_logik.xlsx</code>.
     Es wird noch nichts gespeichert – erst mit „Import ausführen“.
 </p>
+{% endif %}
 
 {% if diff.warnungen %}
 <div class="warnblock">
@@ -81,7 +90,7 @@
 </table>
 {% endif %}
 
-<form method="post" action="/artikel/import" class="formaktionen">
+<form method="post" action="{{ '/artikel/import-pv' if pv is defined and pv else '/artikel/import' }}" class="formaktionen">
     <button class="knopf" type="submit">Import ausführen</button>
     <a class="knopf zweitrangig" href="/artikel">Abbrechen</a>
 </form>

@@ -459,6 +459,25 @@ async def lieferanschrift_setzen(request: Request, angebot_id: int,
         f"/angebote/{angebot_id}?meldung=Lieferanschrift+gespeichert", status_code=303)
 
 
+@router.post("/{angebot_id}/ust")
+async def ust_setzen(request: Request, angebot_id: int,
+                     session: Session = Depends(get_session)):
+    """v13-PV (Phase 75): Steuersatz je Angebot (19 % oder 0 % nach
+    § 12 Abs. 3 UStG) – wirkt auf Summen, Rabatt, DB, monday, Statistik."""
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None or angebot.extern:
+        return RedirectResponse("/angebote", status_code=303)
+    form = await request.form()
+    wert = (form.get("ust_satz") or "").strip()
+    if wert in ("0", "19"):
+        angebot.ust_satz = float(wert)
+        session.commit()
+    return RedirectResponse(
+        f"/angebote/{angebot_id}?meldung=Steuersatz+gespeichert", status_code=303)
+
+
 @router.post("/{angebot_id}/sperre")
 async def sperre_verlaengern(request: Request, angebot_id: int):
     """Heartbeat des offenen Editors (alle 4 Minuten per JS)."""
@@ -1373,9 +1392,11 @@ async def duplizieren(angebot_id: int, session: Session = Depends(get_session)):
     if original.extern:   # v7: externe TAIFUN-Einträge werden nicht dupliziert
         return RedirectResponse(f"/angebote/{angebot_id}?meldung=Externer+Eintrag+nicht+duplizierbar",
                                 status_code=303)
-    kopie = angebot_aufbau.angebot_anlegen(session, original.kunde_id)
+    kopie = angebot_aufbau.angebot_anlegen(
+        session, original.kunde_id, sparte=original.konfigurator_typ or "WP")
     kopie.protokoll_json = original.protokoll_json
     kopie.kfw_json = original.kfw_json
+    kopie.ust_satz = original.ust_satz   # v13-PV
     for p in original.positionen:
         kopie.positionen.append(AngebotsPosition(
             sort=p.sort, block_nr=p.block_nr, gruppe=p.gruppe, pos_nr=p.pos_nr,
@@ -1437,11 +1458,13 @@ async def fuer_anderen_kunden_kopieren(request: Request, angebot_id: int,
             "Kopieren: bitte einen ANDEREN Kunden wählen – für denselben "
             "Kunden gibt es „Duplizieren“."), status_code=303)
 
-    kopie = angebot_aufbau.angebot_anlegen(session, ziel_id)
+    kopie = angebot_aufbau.angebot_anlegen(
+        session, ziel_id, sparte=original.konfigurator_typ or "WP")
     kopie.protokoll_json = original.protokoll_json
     kopie.kfw_json = original.kfw_json
     kopie.vermerke_json = original.vermerke_json
     kopie.konfigurator_typ = original.konfigurator_typ
+    kopie.ust_satz = original.ust_satz   # v13-PV
     kopie.profil_id = original.profil_id
     kopie.vortext_text = original.vortext_text
     kopie.rabatt_cent = original.rabatt_cent

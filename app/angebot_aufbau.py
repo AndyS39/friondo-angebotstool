@@ -331,6 +331,7 @@ def version_erzeugen(session: Session, original: Angebot) -> Angebot:
         rabatt_cent=original.rabatt_cent, rabatt_prozent=original.rabatt_prozent,
         rabatt_bezeichnung=original.rabatt_bezeichnung,
         konfigurator_typ=original.konfigurator_typ,
+        ust_satz=original.ust_satz,
         vertriebler_id=original.vertriebler_id,
         profil_id=original.profil_id, vortext_text=original.vortext_text,
         rechnung_name=original.rechnung_name,
@@ -392,23 +393,35 @@ def angebot_anlegen(session: Session, kunde_id: int,
                     antworten: dict | None = None,
                     logik: Logik | None = None,
                     konfiguration_id: int | None = None,
-                    nur_protokoll: bool = False) -> Angebot:
+                    nur_protokoll: bool = False,
+                    sparte: str = "WP",
+                    erfassung=None) -> Angebot:
     """Legt ein Angebot mit transaktionssicherer Nummer an (Retry bei Kollision).
     Mit Antworten + Logik werden Positionen, Protokoll und KfW-Daten erzeugt;
     nur_protokoll=True übernimmt Protokoll/KfW ohne Positionen (manuelles Angebot
-    zu einer orangen Erfassung)."""
+    zu einer orangen Erfassung). v13-PV: sparte steuert Steuersatz (PV 0 %)
+    und bei PV die Positionslogik aus den PV-Blättern (app.pv_auslegung)."""
+    from app.models import ust_standard
+    sparte = (sparte or "WP").upper()
     protokoll_json = "[]"
     kfw_json = "{}"
     positionen: list[dict] = []
     vermerke_json = "[]"
     if antworten is not None and logik is not None:
         protokoll_json = json.dumps(engine.protokoll(logik, antworten), ensure_ascii=False)
-        kfw_json = json.dumps(engine.kfw_daten(antworten), ensure_ascii=False)
+        # v13-PV: kein KfW-/Förderblock bei PV (keine KfW-Daten am Angebot)
+        kfw_json = ("{}" if sparte == "PV"
+                    else json.dumps(engine.kfw_daten(antworten), ensure_ascii=False))
         # v9: bedingte Angebotsvermerke (Blatt "Vermerke") am Angebot ablegen
         vermerke_json = json.dumps(engine.vermerke_fuer(logik, antworten),
                                    ensure_ascii=False)
         if not nur_protokoll:
-            positionen = positionen_zusammenstellen(logik, antworten, session)
+            if sparte == "PV":
+                from app import pv_auslegung
+                positionen = pv_auslegung.positionen_zusammenstellen(
+                    logik, antworten, session, erfassung=erfassung)
+            else:
+                positionen = positionen_zusammenstellen(logik, antworten, session)
     # v10 (Phase 60): Die Verfolgung lebt auf VORGANGSEBENE – die Felder am
     # Angebot sind stillgelegt (Bestand bleibt lesbar). Die Einschätzung
     # (S01/S02) schreibt ihre Startwerte beim Absenden der Erfassung auf den
@@ -434,6 +447,8 @@ def angebot_anlegen(session: Session, kunde_id: int,
             protokoll_json=protokoll_json,
             kfw_json=kfw_json,
             vermerke_json=vermerke_json,
+            konfigurator_typ=sparte,
+            ust_satz=ust_standard(sparte),
             verfolgung_ampel=verfolgung_ampel,
             wiedervorlage_am=wiedervorlage,
             **rechnung,

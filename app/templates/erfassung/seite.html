@@ -30,7 +30,8 @@
 
             {% if frage.typ == 'Auswahl' %}
                 {# v14: Einschätzungs-Ampel (S01) als drei grosse Buttons #}
-                <div class="wahl-gruppe {{ 'einschaetzung' if frage.id == 'S01' }}">
+                {# v13-PV: Belegungsart (PB01) ebenfalls als zwei grosse Buttons #}
+                <div class="wahl-gruppe {{ 'einschaetzung' if frage.id in ('S01', 'PB01') }}">
                 {% for option in frage.antworten %}
                     <label class="wahl">
                         <input type="radio" name="f_{{ frage.id }}" value="{{ option }}"

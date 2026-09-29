@@ -386,6 +386,15 @@ async def angebot_erzeugen(erfassung_id: int, session: Session = Depends(get_ses
     logik, bericht = logik_modul.hole_logik(session)
     if not bericht.ok:
         return RedirectResponse("/parametrierung", status_code=303)
+    sparte = (erfassung.sparte or "WP").upper()
+    # v13-PV: PV-Katalog-Erfassungen erzeugen jetzt echte Tool-Angebote;
+    # KL/WB bleiben reine Erfassungen (TAIFUN-Schiene)
+    if sparte not in ("WP", "PV"):
+        from urllib.parse import quote_plus
+        return RedirectResponse(f"/erfassungen/{erfassung.id}?meldung=" + quote_plus(
+            f"Für die Sparte {sparte} erzeugt das Tool kein Angebot – bitte in TAIFUN "
+            "schreiben („Extern erledigt“)."), status_code=303)
+    logik = logik_modul.logik_fuer_sparte(logik, sparte) or logik
     antworten = json.loads(erfassung.antworten_json or "{}")
     # v11 (AN-C-261127): Wächter gegen unvollständige Antworten – z. B. wenn
     # nach einer Logik-Aktualisierung neue Fragen gelten (Klasse 15: N07/N08)
@@ -399,8 +408,8 @@ async def angebot_erzeugen(erfassung_id: int, session: Session = Depends(get_ses
             f"(z. B. {offen.id} – {offen.text}). Bitte die Erfassung öffnen und "
             "vervollständigen."), status_code=303)
     angebot = angebot_aufbau.angebot_anlegen(session, erfassung.kunde_id,
-                                             antworten=antworten, logik=logik)
-    angebot.konfigurator_typ = erfassung.konfigurator_typ or "WP"   # v5
+                                             antworten=antworten, logik=logik,
+                                             sparte=sparte, erfassung=erfassung)
     erfassung.angebot_id = angebot.id
     from app import vorgaenge as vorgaenge_modul
     vorgaenge_modul.vorgang_fuer_angebot(session, angebot)   # v10: Akte
@@ -417,11 +426,12 @@ async def manuelles_angebot(erfassung_id: int, session: Session = Depends(get_se
     if erfassung is None:
         return RedirectResponse("/erfassungen", status_code=303)
     logik, _ = logik_modul.hole_logik(session)
+    sparte = (erfassung.konfigurator_typ or erfassung.sparte or "WP").upper()
+    logik = logik_modul.logik_fuer_sparte(logik, sparte) or logik   # v13-PV
     antworten = json.loads(erfassung.antworten_json or "{}")
     angebot = angebot_aufbau.angebot_anlegen(session, erfassung.kunde_id,
                                              antworten=antworten, logik=logik,
-                                             nur_protokoll=True)
-    angebot.konfigurator_typ = erfassung.konfigurator_typ or "WP"   # v5
+                                             nur_protokoll=True, sparte=sparte)
     erfassung.angebot_id = angebot.id
     from app import vorgaenge as vorgaenge_modul
     vorgaenge_modul.vorgang_fuer_angebot(session, angebot)   # v10: Akte

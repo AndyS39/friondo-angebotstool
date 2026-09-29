@@ -234,6 +234,12 @@ def aktion_finden(logik: Logik, frage: Frage, wert,
             continue
         index = _teil_index(frage, aktion.antwort, wert, antworten, logik.fragen)
         if index is not None:
+            # v13-PV: optionale Zusatzbedingung der Aktionszeile
+            b = getattr(aktion, "zusatz_bedingung", None)
+            if b is not None and not ist_sichtbar(
+                    Frage("_", 0, "", "Auswahl", [], b, ""), antworten,
+                    logik.fragen, logik):
+                continue
             return aktion, index
     return None
 
@@ -283,6 +289,12 @@ def ampel_gruende(logik: Logik, antworten: dict) -> list[str]:
     if (flaechen_heizlast(antworten) is not None
             and leistungsklasse(logik, antworten) is None):
         merken("Leistungsklasse zu hoch")
+    # v13-PV: berechnete Gründe der PV-Auslegung (WR > 30 kW, Kombination
+    # nicht im Sortiment, > 4 Strings, Maximalbelegung fehlt …)
+    if getattr(logik, "sparte", "WP") == "PV" and logik.pv_aktionen:
+        from app import pv_auslegung
+        for grund in pv_auslegung.ampel_gruende(logik, antworten):
+            merken(grund)
     return gruende
 
 
@@ -486,6 +498,10 @@ def protokoll(logik: Logik, antworten: dict) -> list[dict]:
                     "frage": "Auslegung", "antwort": herleitung,
                     "ampel_grund": "",
                 })
+    # v13-PV: Auslegungs-Zusammenfassung (Module, kWp, Strings, WR/Speicher)
+    if getattr(logik, "sparte", "WP") == "PV" and logik.pv_aktionen:
+        from app import pv_auslegung
+        eintraege.extend(pv_auslegung.protokoll_zeilen(logik, antworten))
     return eintraege
 
 

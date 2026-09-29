@@ -460,7 +460,16 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
 
 <table class="tabelle zusammenfassung summenblock">
     <tr><th>Netto-Summe</th><td class="rechts">{{ summen.netto | euro }}</td></tr>
-    <tr><th>19 % USt.</th><td class="rechts">{{ summen.ust | euro }}</td></tr>
+    <tr><th>{{ angebot.ust_bezeichnung }}
+        {% if not nur_lesen %}
+        {# v13-PV (Phase 75): Steuersatz je Angebot – PV 0 %, sonst 19 % #}
+        <form method="post" action="/angebote/{{ angebot.id }}/ust" style="display:inline">
+            <select name="ust_satz" onchange="this.form.submit()" title="Steuersatz dieses Angebots">
+                <option value="19" {{ 'selected' if angebot.ust_prozent == 19 }}>19 %</option>
+                <option value="0" {{ 'selected' if angebot.ust_prozent == 0 }}>0 % (§ 12 Abs. 3 UStG)</option>
+            </select>
+        </form>
+        {% endif %}</th><td class="rechts">{{ summen.ust | euro }}</td></tr>
     <tr><th>Gesamt-Betrag</th><td class="rechts">{{ summen.brutto | euro }}</td></tr>
     {% if summen.rabatt %}
     <tr><th>− Rabatt{{ ' (' ~ angebot.rabatt_bezeichnung ~ ')' if angebot.rabatt_bezeichnung }}</th>
@@ -513,7 +522,10 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
 <div class="warnblock fehlerblock"><strong>{{ kfw_warnung }}</strong></div>
 {% endif %}
 
-{% if not nur_lesen %}
+{% if (angebot.konfigurator_typ or 'WP') == 'PV' %}
+{# v13-PV: PV-Angebote haben keinen KfW-/Förderblock (0 % USt, § 12 Abs. 3 UStG) #}
+<p class="dezent">PV-Angebot: kein KfW-Förderblock – Nullsteuersatz nach § 12 Abs. 3 UStG.</p>
+{% elif not nur_lesen %}
 <form method="post" action="/angebote/{{ angebot.id }}/foerderung" class="formular foerder-editor">
     <strong>Förderung
         {% set bausteine_aktiv = angebot.foerder_grund_prozent is not none

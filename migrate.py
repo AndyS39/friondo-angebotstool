@@ -172,6 +172,30 @@ def _daten() -> list[str]:
                 meldungen.append(f"WARNUNG: Zusatzartikel {', '.join(fehlend)} fehlen "
                                  f"und der Import schlug fehl: {problem} – bitte "
                                  "Artikel → Preisliste importieren ausführen!")
+        # v13-PV (PLAN_V13 Phase 75): PV-Artikel (PV001 …), auf die die Blätter
+        # „Aktionen PV“/„Angebotsaufbau PV“ verweisen, müssen im Stamm liegen –
+        # fehlen welche, läuft der PV-Positionslisten-Import automatisch
+        # (update.bat führt sonst keinen Import aus → roter Validierungsfehler)
+        try:
+            from app import logik as _logik
+            _l, _b = _logik.logik_einlesen()
+            pv_refs = sorted(r for r in _logik.artikel_referenzen(_l) if r.startswith("PV"))
+        except Exception:
+            pv_refs = []
+        vorhandene_pv = {nr for (nr,) in session.query(Artikel.pos_nr)
+                         .filter(Artikel.pos_nr.like("PV%"), Artikel.aktiv.is_(True))}
+        pv_fehlend = [r for r in pv_refs if r not in vorhandene_pv]
+        if pv_fehlend:
+            try:
+                from app import import_pv
+                _, pv_meldung = import_pv.import_ausfuehren(session)
+                meldungen.append(f"PV-Artikel fehlten ({len(pv_fehlend)}, z. B. "
+                                 f"{pv_fehlend[0]}) – PV-Positionslisten-Import "
+                                 f"ausgeführt ({pv_meldung})")
+            except Exception as problem:
+                meldungen.append(f"WARNUNG: PV-Artikel fehlen und der PV-Import schlug "
+                                 f"fehl: {problem} – bitte Artikel → PV-Positionslisten "
+                                 "importieren ausführen!")
         session.commit()
         artikel_162 = (session.query(Artikel)
                        .filter(Artikel.pos_nr == "162", Artikel.aktiv.is_(True)).first())

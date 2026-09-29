@@ -2446,7 +2446,8 @@ tr[draggable="true"]:hover .griff { color: var(--friondo-blau); }
 }
 
 /* Einschätzungs-Ampel als drei große Buttons */
-.wahl.einschaetzung span {
+.wahl.einschaetzung span,
+.wahl-gruppe.einschaetzung .wahl span {   /* v13-PV: Selektor griff bisher nicht */
     font-size: 1.15rem;
     padding: 1rem 1.4rem;
     flex: 1;

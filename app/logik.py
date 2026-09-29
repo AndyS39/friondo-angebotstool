@@ -86,6 +86,9 @@ class Aktion:
     ampel_grund: str              # Klartext-Grund bei AMPEL-Antworten (v2: kein Abbruch)
     artikel: list[ArtikelRef]
     bemerkung: str
+    # v13-PV: optionale Zusatzbedingung (Blatt „Aktionen PV“, Spalte E),
+    # z. B. „nur wenn PA02 = Nein“ – die Zeile greift nur, wenn sie erfüllt ist
+    zusatz_bedingung: Optional["Bedingung"] = None
 
 
 @dataclass
@@ -148,6 +151,15 @@ class Logik:
     # ohne Artikel-Aktionen – laufen über die TAIFUN-Schiene
     sparten_fragen: dict[str, dict[str, Frage]] = field(default_factory=dict)
     vermerke: list[Vermerk] = field(default_factory=list)   # v9
+    # v13-PV (PLAN_V13): PV-Konfigurator – Blätter „Aktionen PV“,
+    # „Angebotsaufbau PV“, „PV-Parameter“; sparte kennzeichnet die Sicht
+    # aus logik_fuer_sparte; pv_kombis = WR/Speicher-Kombis aus dem
+    # Artikelstamm (Serie, WR-kW, Speicher-Stufe, PV-Nr.)
+    pv_aktionen: list[Aktion] = field(default_factory=list)
+    pv_bloecke: list[AngebotsBlock] = field(default_factory=list)
+    pv_parameter: dict[str, tuple[str, str]] = field(default_factory=dict)
+    sparte: str = "WP"
+    pv_kombis: list[tuple[str, float, float, str]] = field(default_factory=list)
 
     @property
     def seiten(self) -> list[str]:
@@ -193,6 +205,14 @@ def refs_extrahieren(text: str) -> list[ArtikelRef]:
             gefunden.append((m.start() + i,
                              ArtikelRef(nummer.zfill(3), menge, bool(ep) or ep_nach,
                                         kein_ep)))
+
+    # v13-PV: PV-Artikel „PV013“, optional „(EP)“ und Menge „× Modulanzahl“
+    for m in re.finditer(r"\bPV(\d{3})\b(\s*\(EP\))?", text):
+        rest = text[m.end():]
+        m_menge = re.match(menge_muster, rest)
+        menge = m_menge.group(1).strip() if m_menge else "1"
+        gefunden.append((m.start(), ArtikelRef(f"PV{m.group(1)}", menge,
+                                               bool(m.group(2)))))
 
     for m in re.finditer(r"\bZ(\d{2})\b(?:\s*[–-]\s*Z(\d{2}))?", text):
         von, bis = int(m.group(1)), int(m.group(2) or m.group(1))
@@ -309,7 +329,131 @@ def logik_einlesen() -> tuple[Logik, Pruefbericht]:
     _querbezuege_pruefen(logik, bericht)
     for sparte, sfragen in sparten_fragen.items():
         _bedingungen_pruefen(sfragen, bericht, f"Fragen {sparte}")
+    _pv_einlesen(wb, logik, bericht)   # v13-PV
     return logik, bericht
+
+
+# --- v13-PV: PV-Konfigurator ------------------------------------------------
+
+# Spezialzeilen im Blatt „Aktionen PV“ (keine Frage des Bogens)
+PV_SPEZIAL = {"Grundpaket", "Gruppen-Trigger", "Strings", "WR/Speicher",
+              "Ampel-Auswertung"}
+
+PFLICHT_PV_PARAMETER = [
+    "Modulleistung", "Modul-Leerlaufspannung", "Max. Stringspannung",
+    "Faktor Haushalt", "Faktor Wärmepumpe", "Spezifischer Ertrag",
+    "JAZ-Umrechnung Gas/Öl → Strom", "WR-Faktor (kWp ÷ WR-Leistung)",
+    "WR-Stufen TP2", "WR-Stufen SigenStor", "Max. WR-Leistung",
+    "Eigenverbrauchsquote PV", "Eigenverbrauch Zuschlag Speicher",
+    "Eigenverbrauch Zuschlag HEMS", "Strompreis", "Einspeisevergütung",
+]
+
+
+def _pv_einlesen(wb, logik: Logik, bericht: Pruefbericht) -> None:
+    """Blätter „Aktionen PV“ (Frage · Antwort · Aktion · Bemerkung ·
+    Zusatzbedingung), „Angebotsaufbau PV“ (wie „Angebotsaufbau“) und
+    „PV-Parameter“ (Parameter · Wert · Einheit · Bemerkung). Fehlen sie,
+    bleibt PV ein reiner Erfassungsbogen (TAIFUN-Schiene)."""
+    if "Aktionen PV" not in wb.sheetnames:
+        return
+    for blatt in ("Angebotsaufbau PV", "PV-Parameter"):
+        if blatt not in wb.sheetnames:
+            bericht.fehler.append(f"Blatt „{blatt}“ fehlt (Pflicht zu „Aktionen PV“).")
+            return
+    for row in wb["Aktionen PV"].iter_rows(min_row=2, values_only=True):
+        frage, antwort, aktion_roh, bemerkung, zusatz = (
+            _zelle(v) for v in (tuple(row) + (None,) * 5)[:5])
+        if not frage:
+            continue
+        if aktion_roh.startswith("AMPEL"):
+            m = re.search(r"Grund:\s*(.+)$", aktion_roh)
+            typ, grund = "ampel", (m.group(1).strip() if m else aktion_roh)
+        else:
+            typ, grund = "normal", ""
+        zusatz_b = None
+        if zusatz:
+            zusatz_b = bedingung_parsen(zusatz)
+            if zusatz_b is None:
+                bericht.fehler.append(
+                    f"Aktionen PV {frage}: Zusatzbedingung „{zusatz}“ nicht parsebar.")
+        logik.pv_aktionen.append(Aktion(frage, antwort, aktion_roh, typ, grund,
+                                        refs_extrahieren(aktion_roh), bemerkung,
+                                        zusatz_b))
+    for row in wb["Angebotsaufbau PV"].iter_rows(min_row=2, values_only=True):
+        nr, ueberschrift, inhalt, wann = (_zelle(v) for v in (tuple(row) + (None,) * 4)[:4])
+        if not nr:
+            continue
+        try:
+            block_nr = int(float(nr))
+        except ValueError:
+            continue   # Erläuterungszeilen (z. B. „Nachtexte“)
+        bedingung = bedingung_parsen(wann)
+        if bedingung is None:
+            bericht.fehler.append(
+                f"Angebotsaufbau PV Block {block_nr}: Bedingung „{wann}“ nicht parsebar.")
+        logik.pv_bloecke.append(AngebotsBlock(block_nr, ueberschrift, inhalt,
+                                              bedingung, refs_extrahieren(inhalt)))
+    for row in wb["PV-Parameter"].iter_rows(min_row=2, values_only=True):
+        name, wert, _einheit, bemerkung = (_zelle(v) for v in (tuple(row) + (None,) * 4)[:4])
+        if name:
+            logik.pv_parameter[name] = (wert, bemerkung)
+    _pv_pruefen(logik, bericht)
+
+
+def _pv_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
+    fragen = logik.sparten_fragen.get("PV", {})
+    for name in PFLICHT_PV_PARAMETER:
+        if name not in logik.pv_parameter:
+            bericht.fehler.append(f"PV-Parameter: „{name}“ fehlt.")
+            continue
+        wert = logik.pv_parameter[name][0]
+        teile = [t for t in re.split(r"[;,]\s+|\s*;\s*", wert) if t] if "Stufen" in name else [wert]
+        for teil in teile:
+            if _pv_zahl(teil) is None:
+                bericht.fehler.append(f"PV-Parameter „{name}“: „{wert}“ ist keine Zahl.")
+                break
+    for aktion in logik.pv_aktionen:
+        if aktion.frage in PV_SPEZIAL:
+            continue
+        if aktion.frage not in fragen:
+            bericht.fehler.append(
+                f"Aktionen PV: unbekannte Frage „{aktion.frage}“ (Antwort „{aktion.antwort}“).")
+            continue
+        problem = _antwort_pruefen(fragen[aktion.frage], aktion.antwort, fragen)
+        if problem:
+            bericht.fehler.append(f"Aktionen PV {aktion.frage}: {problem}")
+        b = aktion.zusatz_bedingung
+        if b is not None:
+            terme = ([(b.frage_id, b.werte)] if b.art == "antwort"
+                     else [t for k in b.klauseln for t in k])
+            for fid, _werte in terme:
+                if fid not in fragen:
+                    bericht.fehler.append(
+                        f"Aktionen PV {aktion.frage}: Zusatzbedingung verweist auf "
+                        f"unbekannte Frage {fid}.")
+    # jede Auswahl-Option der PV-Fragen, die eine Aktionszeile hat, vollständig?
+    for frage in fragen.values():
+        zeilen = [a for a in logik.pv_aktionen if a.frage == frage.id]
+        if frage.typ != "Auswahl" or not zeilen:
+            continue
+        abgedeckt = {o for a in zeilen for t in [a.antwort] + antwort_teile(a.antwort)
+                     if (o := _alias_aufloesen(t, frage.antworten))}
+        fehlend = [o for o in frage.antworten if o not in abgedeckt]
+        if fehlend:
+            bericht.warnungen.append(
+                f"Aktionen PV {frage.id}: keine Aktionszeile für Option(en) {', '.join(fehlend)}.")
+
+
+def _pv_zahl(text) -> Optional[float]:
+    t = str(text or "").strip().replace(" ", "").replace("%", "")
+    if not t:
+        return None
+    if "," in t:
+        t = t.replace(".", "").replace(",", ".")
+    try:
+        return float(t)
+    except ValueError:
+        return None
 
 
 def _anhaenge_einlesen(wb, bericht: Pruefbericht) -> list[Anhang]:
@@ -711,6 +855,10 @@ def artikel_referenzen(logik: Logik) -> dict[str, list[str]]:
         merken(paket.ww_300, f"Paketmatrix {paket.leistungsklasse}")
     for block in logik.bloecke:
         merken(block.refs, f"Angebotsaufbau Block {block.nr}")
+    for aktion in logik.pv_aktionen:   # v13-PV
+        merken(aktion.artikel, f"Aktionen PV {aktion.frage} („{aktion.antwort}“)")
+    for block in logik.pv_bloecke:
+        merken(block.refs, f"Angebotsaufbau PV Block {block.nr}")
     return fundstellen
 
 
@@ -725,9 +873,20 @@ def artikel_pruefen(logik: Logik, session: Session, bericht: Pruefbericht) -> No
         return
     for ref, quellen in sorted(artikel_referenzen(logik).items()):
         if ref not in vorhanden:
+            hinweis = (" – bitte Artikel → PV-Positionslisten importieren"
+                       if ref.startswith("PV") else "")
             bericht.fehler.append(
-                f"Artikel {('Pos. ' + ref) if not ref.startswith('Z') else ref} "
-                f"fehlt im Artikelstamm – referenziert in: {'; '.join(sorted(set(quellen)))}.")
+                f"Artikel {ref if ref[0] in 'ZP' and not ref.isdigit() else 'Pos. ' + ref} "
+                f"fehlt im Artikelstamm – referenziert in: {'; '.join(sorted(set(quellen)))}"
+                f"{hinweis}.")
+    # v13-PV: WR/Speicher-Kombinationen aus den importierten PV-Artikeln
+    if logik.pv_aktionen:
+        from app import pv_auslegung
+        logik.pv_kombis = pv_auslegung.kombis_laden(session)
+        if not logik.pv_kombis:
+            bericht.warnungen.append(
+                "PV: keine Sigenergy-WR/Speicher-Kombinationen im Artikelstamm – "
+                "PV-Angebote werden individuell (Artikel → PV-Positionslisten importieren).")
 
 
 def logik_fuer_sparte(logik: Logik, sparte: str) -> Optional[Logik]:
@@ -739,7 +898,14 @@ def logik_fuer_sparte(logik: Logik, sparte: str) -> Optional[Logik]:
     fragen = logik.sparten_fragen.get(sparte)
     if not fragen:
         return None
-    return Logik(fragen, [], [], [], logik.kfw, logik.geladen_am, [])
+    if sparte == "PV" and logik.pv_aktionen:
+        # v13-PV: PV ist jetzt ein Konfigurator (Aktionen + Aufbau + Parameter)
+        return Logik(fragen, logik.pv_aktionen, [], logik.pv_bloecke, logik.kfw,
+                     logik.geladen_am, logik.anhaenge,
+                     pv_aktionen=logik.pv_aktionen, pv_bloecke=logik.pv_bloecke,
+                     pv_parameter=logik.pv_parameter, sparte="PV",
+                     pv_kombis=logik.pv_kombis)
+    return Logik(fragen, [], [], [], logik.kfw, logik.geladen_am, [], sparte=sparte)
 
 
 # --- Cache / öffentliche API ---------------------------------------------

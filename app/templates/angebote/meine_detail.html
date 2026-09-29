@@ -70,7 +70,7 @@
 
     <table class="tabelle zusammenfassung">
         <tr><th>Netto</th><td class="rechts">{{ summen.netto | euro }}</td></tr>
-        <tr><th>19 % USt</th><td class="rechts">{{ summen.ust | euro }}</td></tr>
+        <tr><th>{{ angebot.ust_bezeichnung }}</th><td class="rechts">{{ summen.ust | euro }}</td></tr>
         <tr><th>Gesamt-Betrag</th><td class="rechts">{{ summen.brutto | euro }}</td></tr>
         {% if summen.rabatt %}
         <tr><th>− Rabatt{{ ' (' ~ angebot.rabatt_bezeichnung ~ ')' if angebot.rabatt_bezeichnung }}</th>
