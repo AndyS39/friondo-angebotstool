@@ -58,19 +58,19 @@ später ersetzt.
 - [x] migrate.py: ust_satz, neue Erfassungsfelder, PV-Artikel
 
 ## Phase 76 – Auslegungsmodul (pv_auslegung)
-- [ ] Modulanzahl: Maximalbelegung → Anzahl = Interim-Feld (später
+- [x] Modulanzahl: Maximalbelegung → Anzahl = Interim-Feld (später
       Dachbelegungstool). Bedarfsorientiert → Bedarf =
       (Haushalt × 1,3) + (WP × 1,5, falls vorhanden) + (Wallbox, falls
       vorhanden); kWp = Bedarf ÷ 960; Module = aufrunden(kWp ÷ 0,455);
       Deckel: nie mehr als die Maximalbelegung – wird gedeckelt, gilt
       Maximalbelegung (mit Vermerk in Protokoll und Auslegungstext)
-- [ ] kWp der Anlage = Module × 0,455 (für Anzeige, WR-Wahl,
+- [x] kWp der Anlage = Module × 0,455 (für Anzeige, WR-Wahl,
       Wirtschaftlichkeit)
-- [ ] Strings: max. 27 Module je String (1.000 V ÷ 36,19 V = 27,6 →
+- [x] Strings: max. 27 Module je String (1.000 V ÷ 36,19 V = 27,6 →
       abrunden). Anzahl Strings = max(Anzahl belegter Dachseiten
       [PD07: Nein = 1, Ja = 2], aufrunden(Module ÷ 27))
       [ANNAHME – siehe Chat, Veto möglich]
-- [ ] Wechselrichter/Speicher (Sigenergy): benötigte WR-Leistung =
+- [x] Wechselrichter/Speicher (Sigenergy): benötigte WR-Leistung =
       kleinste verfügbare Stufe ≥ kWp ÷ 1,2 [ANNAHME – siehe Chat].
       Stufen 6/8/10/12 → „Hybrid System TP2 <WR>/<Bat>";
       ab 15 kW → „SigenStor <WR>/<Bat>" (15/17/20/25/30).
@@ -78,10 +78,10 @@ später ersetzt.
       [ANNAHME]. Die konkrete Kombi-Position aus den importierten
       PV-Artikeln wählen; existiert die Kombination nicht → AMPEL
       „WR/Speicher-Kombination nicht im Sortiment"
-- [ ] Auslegungs-Zusammenfassung im Protokoll und als Textzeile im
+- [x] Auslegungs-Zusammenfassung im Protokoll und als Textzeile im
       Angebot: Module, kWp, Strings, WR/Speicher, Belegungsart mit
       Herleitung (bei Bedarf: die Formel mit Zahlen)
-- [ ] AMPEL-Gründe PV: WR-Bedarf über 30 kW; Belegungsart-Konflikt
+- [x] AMPEL-Gründe PV: WR-Bedarf über 30 kW; Belegungsart-Konflikt
       ohne Maximalangabe; PD01 = Sonstige; PD03 = Vollgerüst oder
       Sonstiges [ANNAHMEN – siehe Chat]
 

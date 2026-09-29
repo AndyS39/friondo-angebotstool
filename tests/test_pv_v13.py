@@ -162,3 +162,73 @@ class Phase75Fundament(Basis):
         antworten = json.loads(pv_e.antworten_json)
         self.assertEqual(antworten[pv_auslegung.SCHLUESSEL_WP_ABGELEITET]["strom_kwh"],
                          round(20000 / 3.5, 2))
+
+
+# --- Phase 76 ---------------------------------------------------------------
+
+def bedarf_fall(max_module=40, **zusatz) -> dict:
+    """Plan-Beispiel: HH 4.000 + WP aus 20.000 kWh Gas + WB 2.500."""
+    return pv_basis(PB01="Bedarfsorientierte Belegung", PO06=4000,
+                    PO07="Aus WP-Erfassung ermitteln", PO08="Ja", PO09=2500,
+                    PD12=max_module, PD07="Ja",
+                    **{pv_auslegung.SCHLUESSEL_WP_ABGELEITET:
+                       {"erfassung_id": 0, "verbrauch_kwh": 20000,
+                        "strom_kwh": round(20000 / 3.5, 2)}}, **zusatz)
+
+
+class Phase76Auslegung(Basis):
+    def test_bedarfsauslegung_plan_beispiel(self):
+        a = pv_auslegung.auslegen(self.logik, bedarf_fall())
+        self.assertAlmostEqual(a.bedarf_kwh, 16271.43, delta=0.05)
+        self.assertAlmostEqual(a.bedarf_kwp, 16.95, delta=0.005)
+        self.assertEqual((a.bedarf_module, a.module, a.gedeckelt), (38, 38, False))
+        self.assertAlmostEqual(a.kwp, 17.29, places=2)
+        self.assertIn("16.271 kWh", a.herleitung)
+
+    def test_deckel_maximalbelegung(self):
+        a = pv_auslegung.auslegen(self.logik, bedarf_fall(max_module=30))
+        self.assertEqual((a.module, a.gedeckelt), (30, True))
+        self.assertIn("gedeckelt", pv_auslegung.auslegungs_text(a))
+
+    def test_strings(self):
+        a = pv_auslegung.auslegen(self.logik, bedarf_fall())      # 38 Module, 2 Seiten
+        self.assertEqual((a.max_je_string, a.strings), (27, 2))
+        a = pv_auslegung.auslegen(self.logik, pv_basis(PD12=60))  # 1 Seite
+        self.assertEqual(a.strings, 3)
+        a = pv_auslegung.auslegen(self.logik, pv_basis(PD12=10, PD07="Ja"))
+        self.assertEqual(a.strings, 2)
+
+    def test_wr_und_speicher(self):
+        # 38 Module = 17,29 kWp ÷ 1,2 = 14,4 kW → SigenStor 15; Speicher 10 → 15/10
+        a = pv_auslegung.auslegen(self.logik, bedarf_fall(PA10=10))
+        self.assertEqual((a.serie, a.wr_kw, a.speicher_stufe, a.kombi_nr),
+                         ("SigenStor", 15.0, 10.0, "PV089"))
+        a = pv_auslegung.auslegen(self.logik, bedarf_fall(PA10=11))
+        self.assertEqual((a.speicher_stufe, a.kombi_nr), (12.0, "PV090"))
+        # Musterangebot AN261699: 13 Module (5,92 kWp) → TP2 06/06
+        a = pv_auslegung.auslegen(self.logik, pv_basis(PD12=13, PA10=6))
+        self.assertEqual((a.kombi_text, a.kombi_nr), ("Hybrid System TP2 06/06", "PV071"))
+        # 18 Module (8,19 kWp) ÷ 1,2 = 6,8 → TP2 08; Speicher 10 → 08/10
+        a = pv_auslegung.auslegen(self.logik, pv_basis(PD12=18, PA10=10))
+        self.assertEqual(a.kombi_nr, "PV073")
+
+    def test_ampel_gruende(self):
+        gruende = engine.ampel_gruende(self.logik, pv_basis(PD12=80))  # 36,4 kWp
+        self.assertTrue(any("WR-Bedarf über 30" in g for g in gruende), gruende)
+        gruende = engine.ampel_gruende(self.logik, pv_basis(PD12=13, PA10=25))
+        self.assertTrue(any("nicht im Sortiment" in g for g in gruende), gruende)
+        self.assertIn("Dachart nicht konfigurierbar",
+                      engine.ampel_gruende(self.logik, pv_basis(PD01="Sonstige")))
+        self.assertTrue(engine.ampel_gruende(self.logik, pv_basis(PD03="Vollgerüst")))
+        self.assertTrue(engine.ampel_gruende(self.logik, pv_basis(PD03="Sonstiges")))
+        self.assertEqual(engine.ampel_gruende(self.logik, pv_basis()), [])
+        # Belegungsart-Konflikt: Bedarf ohne Maximalangabe (Dachbelegung = 0)
+        self.assertIn("Maximale Modulanzahl fehlt (Dachbelegung)",
+                      engine.ampel_gruende(self.logik, bedarf_fall(max_module=0)))
+
+    def test_protokoll_mit_auslegung(self):
+        prot = engine.protokoll(self.logik, bedarf_fall())
+        zeile = [e for e in prot if e["frage"] == "Auslegung PV"]
+        self.assertTrue(zeile)
+        self.assertIn("38 Module", zeile[0]["antwort"])
+        self.assertIn("SigenStor 15/", zeile[0]["antwort"])
