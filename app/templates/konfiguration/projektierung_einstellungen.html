@@ -145,6 +145,11 @@
     <label>Vorbereitungs-Hinweis ({vorbereitung})</label>
     <input type="text" name="terminmail_vorbereitung" value="{{ terminmail_vorbereitung }}">
     <h3 style="margin-top:16px">Kundenmail „BzA“ (Phase 92)</h3>
+    {# 30.09.2026: Versand per Häkchen abschaltbar #}
+    <input type="hidden" name="bza_mail_dabei" value="1">
+    <label class="kontrollfeld"><input type="checkbox" name="bza_mail_aktiv"
+        {{ 'checked' if bza_mail_aktiv }}> BzA-Kundenmail versenden
+        <span class="dezent">(aus = kein Mail-Knopf; „BzA erfassen“ schließt die Aufgabe ohne Mail ab)</span></label>
     <label>Betreff</label>
     <input type="text" name="bza_mail_betreff" value="{{ bza_mail_betreff }}">
     <label>Text (Platzhalter: {briefanrede} {kunde} {projektnummer} {bza_id}

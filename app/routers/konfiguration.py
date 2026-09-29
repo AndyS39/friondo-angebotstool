@@ -739,6 +739,7 @@ async def projektierung_einstellungen(request: Request,
                   url_kfw_zuschussportal=kern.parameter_holen(
                       session, "url_kfw_zuschussportal", ""),
                   projekt_testadresse=kern.parameter_holen(session, "projekt_testadresse", ""),
+                  bza_mail_aktiv=__import__("app.bza", fromlist=["x"]).mail_aktiv(session),
                   bza_mail_betreff=kern.parameter_holen(session, "bza_mail_betreff", "")
                   or __import__("app.bza", fromlist=["x"]).BETREFF_STANDARD,
                   bza_mail_text=kern.parameter_holen(session, "bza_mail_text", "")
@@ -845,6 +846,9 @@ async def projektierung_einstellungen_speichern(
         if schluessel in form:
             kern.parameter_setzen(session, schluessel, wert[:laenge])
     # V4 (Phase 92): Vorlage Kundenmail „BzA“
+    if form.get("bza_mail_dabei"):
+        kern.parameter_setzen(session, "bza_mail_aktiv",
+                              "an" if form.get("bza_mail_aktiv") == "on" else "aus")
     if (form.get("bza_mail_betreff") or "").strip():
         kern.parameter_setzen(session, "bza_mail_betreff",
                               form.get("bza_mail_betreff").strip()[:300])
@@ -921,6 +925,51 @@ async def bza_ersteller_speichern(request: Request, session: Session = Depends(g
     session.commit()
     return RedirectResponse("/parametrierung/bza-ersteller?meldung="
                             + quote_plus("BzA-Ersteller gespeichert."), status_code=303)
+
+
+# --- 30.09.2026: Kunden-Dubletten zusammenführen (Admin) ------------------------------
+
+@router.get("/kunden-dubletten")
+async def kunden_dubletten_seite(request: Request, session: Session = Depends(get_session)):
+    from app import kunden_dubletten
+    from app.models import einstellung_holen
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    return render(request, "konfiguration/kunden_dubletten.html", aktiv="/parametrierung",
+                  gruppen=kunden_dubletten.gruppen(session),
+                  protokoll=einstellung_holen(session, kunden_dubletten.PROTOKOLL, ""),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/kunden-dubletten")
+async def kunden_dubletten_zusammenfuehren(request: Request,
+                                           session: Session = Depends(get_session)):
+    from urllib.parse import quote_plus
+
+    from app import kunden_dubletten
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    form = await request.form()
+    try:
+        haupt_id = int(form.get("haupt_id") or 0)
+        dubletten = [int(x) for x in form.getlist("dublette_id") if str(x).isdigit()]
+    except ValueError:
+        haupt_id, dubletten = 0, []
+    dubletten = [d for d in dubletten if d != haupt_id]
+    if not haupt_id or not dubletten:
+        return RedirectResponse("/parametrierung/kunden-dubletten?meldung=" + quote_plus(
+            "Bitte einen Hauptdatensatz und mindestens eine Dublette wählen."), status_code=303)
+    try:
+        ergebnis = kunden_dubletten.zusammenfuehren(session, haupt_id, dubletten,
+                                                    benutzer=request.state.benutzer)
+    except ValueError as fehler:
+        session.rollback()
+        return RedirectResponse("/parametrierung/kunden-dubletten?meldung="
+                                + quote_plus(str(fehler)), status_code=303)
+    session.commit()
+    return RedirectResponse("/parametrierung/kunden-dubletten?meldung=" + quote_plus(
+        f"Zusammengeführt in #{ergebnis['haupt']}: "
+        + ", ".join(f"#{i}" for i in ergebnis["entfernt"]) + " entfernt."), status_code=303)
 
 
 # --- V3 (PLAN_PROJ_V3 Phase 86): Go-live-Checkliste ---------------------------------

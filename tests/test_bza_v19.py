@@ -146,7 +146,8 @@ class Phase96Datenblatt(Basis):
         a = self.tool_angebot([("030", "Außeneinheit weiß"), ("055", "AWMB")], antworten)
         w = self.werte(bza_datenblatt.erstellen(self.s, a))
         self.assertEqual(w["Anlagennummer (BAFA-Liste)"].wert, "16019200")
-        self.assertIn("PRÜFPUNKT", w["Anlagennummer (BAFA-Liste)"].hinweis)
+        # 30.09.2026 bestätigt: weiße 8800er ohne eigene Nummer
+        self.assertIn("keine eigene Nummer", w["Anlagennummer (BAFA-Liste)"].hinweis)
         self.assertEqual(w["Vorlauftemperatur"].wert, "55 °C")
         self.assertTrue(w["Inbetriebnahme"].fehlt)
         self.assertIn("Jahr fehlt", w["Inbetriebnahme"].wert)

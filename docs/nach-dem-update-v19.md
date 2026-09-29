@@ -46,9 +46,8 @@ zum Dialog am Angebot.
 
 ## Offene Punkte
 
-- **Weiße CS8800-Außeneinheit (Pos. 030):** Die Anlagennummern 16019200 /
-  16019199 tragen den Zusatz „(B)“. Bis zur Klärung gelten sie für beide
-  Farben; das Datenblatt zeigt den Prüfhinweis.
+- **Weiße CS8800-Außeneinheit (Pos. 030):** erledigt (30.09.2026) – keine
+  eigene Nummer; 16019200 / 16019199 gelten für beide Farben.
 - **Hybrox 21** (16017387, ait-deutschland) steht als Vorrat im Blatt; die
   Klassenerweiterung wartet auf Komponenten, Preise und Klassengrenzen.
 - **CS5800-Serie:** Die Nummern aus den Screenshots lagen nicht im Projekt

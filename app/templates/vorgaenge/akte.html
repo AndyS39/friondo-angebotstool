@@ -39,8 +39,9 @@
             {% for b in vertriebler %}{{ b.name }}{{ ', ' if not loop.last }}{% else %}–{% endfor %}
             {% if lead and lead.vot_datum %} · {{ symbol('uhr') }} VOT {{ lead.vot_datum.strftime('%d.%m.%Y %H:%M') }}{% endif %}
         </p>
-        {% if kunde and benutzer.rolle in ('admin', 'innendienst') %}
-        {# v20 (Phase 98): Standard-Anschriften des Kunden für neue Erfassungen/Angebote #}
+        {% if kunde and benutzer.rolle in ('admin', 'innendienst', 'aussendienst') %}
+        {# v20 (Phase 98): Standard-Anschriften des Kunden für neue Erfassungen/Angebote
+           (30.09.2026: auch Außendienst – die Akte sieht er nur bei eigenen Vorgängen) #}
         {% from "_anschriften.html" import anschriften_karten %}
         <details class="anschriften-block">
             <summary class="dezent">Anschriften (Standard für neue Erfassungen/Angebote)

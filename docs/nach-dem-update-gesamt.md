@@ -14,8 +14,8 @@ jeweiligen `nach-dem-update-*.md`.
   Straße, PLZ, Ort). Änderbar nur im Entwurf – bei versendeten Angeboten
   über „Überarbeiten“. Im PDF erscheint nur, was vom Ausführungsort
   abweicht; der Lieferschein geht an die Lieferanschrift. Standard-
-  Anschriften je Kunde pflegt der Innendienst in der Vorgangsakte
-  (aufklappen „Anschriften“).
+  Anschriften je Kunde pflegen Innendienst und Außendienst (eigene Vorgänge)
+  in der Vorgangsakte (aufklappen „Anschriften“).
 
 ## Außendienst (WP-Erfassungsbogen)
 
@@ -40,6 +40,10 @@ jeweiligen `nach-dem-update-*.md`.
 
 - v17: Board zweigeteilt, Abnahme/Freigabe getrennt, Vorlauf-Ampel,
   BzA-Erfassung + Kundenmail, UGL-Bestellung, Stücklisten-Pflege.
+- **BzA-Kundenmail:** Betreff/Text und das Häkchen „BzA-Kundenmail
+  versenden“ unter Parametrierung → Projektierung-Einstellungen („Kundenmail
+  BzA“). Versand immer erst nach Vorschau + Klick; „ohne Mail abschließen“,
+  wenn der Kunde die BzA anders bekommt.
 - v18: **Auftragsdaten** bei TAIFUN-Aufträgen (Pflichtseite nach „Angebot →
   Projekt“), **Bestandsimport** laufender Projekte (Parametrierung →
   Bestandsimport; erst gegen eine DB-Kopie testen, Trockenlauf:
@@ -59,6 +63,9 @@ jeweiligen `nach-dem-update-*.md`.
 
 ## Admin – nach dem Update prüfen
 
+0. **Vor dem Bestandsimport:** Parametrierung → Kunden-Dubletten (auf der
+   Server-Kopie vom 29.09.: 4 Gruppen mit 10 Kunden, u. a. #1/#2/#3; die
+   Gruppe #299/#398 hat abweichende Straßen – einzeln prüfen).
 1. Migrationslog: Spalten v16–v21, 176 PV-Artikel, V4-Paketumbau,
    „v19: BzA-Ersteller-Parameter angelegt“, „v20: … Lieferanschriften
    strukturiert“, Lead-Startquelle `unbekannt`.

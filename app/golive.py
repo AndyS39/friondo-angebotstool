@@ -72,13 +72,17 @@ def pruefen(session: Session) -> list[Pruefpunkt]:
     punkte.append(Pruefpunkt(
         "Montageteams mit Mitgliedern", bool(besetzt),
         f"{len(besetzt)} von {len(teams)} Montageteams besetzt", "/parametrierung/teams"))
-    # 5 Sub je Typ
+    # 5 Standard-Sub je Typ (Parametrierung → Subunternehmer, Spalte „Standard“;
+    #   muss aktiv sein und eine E-Mail haben)
+    from app import sub_mail
     typen = projektierung_logik.sub_typen(session)
-    vorhanden = {s.typ for s in session.query(Subunternehmer)
-                 .filter(Subunternehmer.aktiv.is_(True), Subunternehmer.email != "")}
-    fehlend = [t for t in typen if t not in vorhanden]
+    fehlend = []
+    for typ in typen:
+        sub = session.get(Subunternehmer, sub_mail.standard_sub_id(session, typ) or 0)
+        if sub is None or not sub.aktiv or not (sub.email or "").strip():
+            fehlend.append(typ)
     punkte.append(Pruefpunkt(
-        "Subunternehmer (mit E-Mail) je Sub-Typ", not fehlend,
+        "Standard-Subunternehmer (aktiv, mit E-Mail) je Sub-Typ", not fehlend,
         "alle Typen belegt" if not fehlend else "fehlt: " + ", ".join(fehlend),
         "/parametrierung/subunternehmer"))
     # 6 Portal-URLs

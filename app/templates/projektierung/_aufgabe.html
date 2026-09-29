@@ -121,8 +121,14 @@
             <small class="pj-akt-hinweis">BzA {{ g.bza_id }}
                 {{- ' vom ' ~ g.bza_erstellt_am.strftime('%d.%m.%Y') if g.bza_erstellt_am }}
                 {%- if g.bza_gesendet_am %} · an Kunden gesendet {{ g.bza_gesendet_am.strftime('%d.%m.%Y') }}{% endif %}</small>
-            {% if not g.bza_gesendet_am %}
+            {% if not g.bza_gesendet_am and a.status != 'erledigt' %}
+            {% if bza_mail_aktiv | default(true) %}
             <a class="pj-btn" href="/projektierung/gewerk/{{ g.id }}/bza-mail">✉ Mail an Kunden</a>
+            {% endif %}
+            {# 30.09.2026: Aufgabe ohne Kundenmail abschließen #}
+            <form method="post" action="/projektierung/gewerk/{{ g.id }}/bza-ohne-mail" style="display:inline">
+                <button class="pj-btn" type="submit" title="Kunde erhält die BzA auf anderem Weg">ohne Mail abschließen</button>
+            </form>
             {% endif %}
             {% endif %}
             {% endif %}
@@ -145,8 +151,12 @@
                     <input type="date" name="datum" value="{{ (g.bza_erstellt_am or heute).strftime('%Y-%m-%d') }}"></label>
                 <label>BzA-PDF (Pflicht) – Ablage in der Galerie „Förderung“
                     <input type="file" name="datei" accept="application/pdf,.pdf" required></label>
+                {% if bza_mail_aktiv | default(true) %}
                 <label class="kontrollfeld"><input type="checkbox" name="sofort_senden" checked>
-                    Sofort an Kunden senden (Vorschau mit Bearbeiten)</label>
+                    Mail an Kunden senden (Vorschau mit Bearbeiten, Versand erst nach Klick)</label>
+                {% else %}
+                <p class="dezent">Die BzA-Kundenmail ist abgeschaltet – die Aufgabe wird mit dem Speichern erledigt.</p>
+                {% endif %}
                 <div class="pj-btnrow">
                     <button class="pj-btn primary" type="submit">Speichern</button>
                     <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>

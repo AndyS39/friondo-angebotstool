@@ -396,7 +396,8 @@ async def kombi_versand(request: Request, vorgang_id: int,
 @router.post("/{vorgang_id}/anschriften")
 async def anschriften_standard(request: Request, vorgang_id: int,
                                session: Session = Depends(get_session)):
-    """v20 (Phase 98): Standard-Rechnungs-/Lieferanschrift am Kunden (ID/Admin).
+    """v20 (Phase 98): Standard-Rechnungs-/Lieferanschrift am Kunden –
+    ID/Admin überall, Außendienst an eigenen Vorgängen (30.09.2026).
     Werte, die dem Kundennamen/Ausführungsort entsprechen, werden nicht
     gespeichert (leer = Standard)."""
     from app import anschriften
@@ -404,7 +405,8 @@ async def anschriften_standard(request: Request, vorgang_id: int,
     benutzer = request.state.benutzer
     vorgang = session.get(Vorgang, vorgang_id)
     if (vorgang is None or benutzer is None
-            or benutzer.rolle not in ("admin", "innendienst")):
+            or benutzer.rolle not in ("admin", "innendienst", "aussendienst")
+            or not _eigener(session, vorgang, benutzer)):
         return RedirectResponse("/vorgaenge", status_code=303)
     kunde = session.get(Kunde, vorgang.kunde_id) if vorgang.kunde_id else None
     if kunde is None:

@@ -30,6 +30,31 @@ TEXT_STANDARD = (
     "Mit freundlichen Grüßen\n{ansprechpartner_friondo}\nFriondo GmbH")
 
 
+def mail_aktiv(session) -> bool:
+    """30.09.2026: BzA-Kundenmail per Häkchen in den Projektierung-
+    Einstellungen abschaltbar (Standard: an)."""
+    return kern.parameter_holen(session, "bza_mail_aktiv", "an") != "aus"
+
+
+def ohne_mail_abschliessen(session, gewerk, benutzer=None) -> tuple[bool, str]:
+    """BzA-Aufgabe ohne Kundenmail erledigen (Kunde erhält die BzA auf
+    anderem Weg oder der Versand ist abgeschaltet)."""
+    from app.models import Aufgabe
+    if not gewerk.bza_id:
+        return False, "Bitte zuerst die BzA erfassen (ID + PDF)."
+    for aufgabe in (session.query(Aufgabe)
+                    .filter(Aufgabe.gewerk_id == gewerk.id, Aufgabe.aktion_typ == "bza",
+                            Aufgabe.aktion_wert != "kfw", Aufgabe.status != "erledigt")):
+        aufgabe.status = "erledigt"
+        aufgabe.erledigt_am = datetime.now()
+        aufgabe.erledigt_von = benutzer.id if benutzer else None
+    kern.verlauf(session, gewerk.projekt_id,
+                 f"BzA {gewerk.bza_id} ohne Kundenmail abgeschlossen",
+                 benutzer=benutzer, gewerk_id=gewerk.id)
+    session.flush()
+    return True, f"BzA {gewerk.bza_id} ohne Kundenmail abgeschlossen."
+
+
 def _angebot(session, gewerk):
     from app.models import Angebot
     return session.get(Angebot, gewerk.angebot_id) if gewerk.angebot_id else None
@@ -157,6 +182,9 @@ def mail_senden(session, gewerk, betreff: str, text: str,
     from app import benachrichtigungen, config, graph_versand
     from app.models import Aufgabe, Benutzer, GalerieDatei, Projekt, ProjektMail
     kunde_mail, _b, _t = mail_entwurf(session, gewerk)
+    if not mail_aktiv(session):
+        return False, ("Der Versand der BzA-Kundenmail ist abgeschaltet "
+                       "(Parametrierung → Projektierung-Einstellungen).")
     if not gewerk.bza_id or not gewerk.bza_datei_id:
         return False, "Bitte zuerst die BzA erfassen (ID + PDF)."
     empfaenger, hinweis = empfaenger_pruefen(session, kunde_mail)

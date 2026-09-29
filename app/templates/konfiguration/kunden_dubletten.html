@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block titel %}Kunden-Dubletten – Friondo Angebotstool{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{# 30.09.2026: Kunden gleicher Name + PLZ zusammenführen (vor dem Bestandsimport) #}
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Kunden-Dubletten <small class="dezent">gleicher Nachname, Vorname und PLZ</small></h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung">Zur Parametrierung</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<p class="dezent" style="max-width:900px">Je Gruppe den Hauptdatensatz wählen (Vorschlag: der älteste)
+    und die zu übernehmenden Dubletten anhaken. Alle Vorgänge, Angebote, Erfassungen,
+    Leads und Projekte der Dubletten wandern auf den Hauptdatensatz; leere Felder
+    (Telefon, E-Mail, Straße, Anschriften …) werden ergänzt, Interessen und Notizen
+    gemischt. Die Dubletten werden danach gelöscht – das lässt sich <strong>nicht
+    rückgängig</strong> machen. Vorher eine DB-Sicherung ziehen.
+    <strong>Gruppen mit abweichender Straße</strong> können verschiedene Personen sein –
+    dort ist nichts vorausgewählt.</p>
+
+<p><strong>{{ gruppen | length }}</strong> Gruppe{{ 'n' if gruppen | length != 1 }} gefunden.</p>
+
+{% for g in gruppen %}
+<form method="post" action="/parametrierung/kunden-dubletten" class="lm-karte"
+      onsubmit="return confirm('Ausgewählte Dubletten in den Hauptdatensatz übernehmen und löschen? Das ist endgültig.');">
+    <input type="hidden" name="schluessel" value="{{ g.schluessel }}">
+    <h2 style="margin:0 0 8px">{{ g.kunden[0].kunde.anzeige_name }} · {{ g.kunden[0].kunde.plz }}
+        {% if g.strasse_abweichend %}<span class="lm-neu" style="background:var(--status-orange-bg);color:var(--status-orange)">Straße abweichend – einzeln prüfen</span>{% endif %}</h2>
+    <table class="tabelle">
+        <thead><tr><th>Haupt</th><th>übernehmen</th><th>#</th><th>Name</th><th>Straße · Ort</th>
+            <th>Telefon</th><th>E-Mail</th><th>angelegt</th><th>Verweise</th></tr></thead>
+        <tbody>
+        {% for e in g.kunden %}{% set k = e.kunde %}
+        <tr>
+            <td><input type="radio" name="haupt_id" value="{{ k.id }}" {{ 'checked' if k.id == g.vorschlag }}></td>
+            <td><input type="checkbox" name="dublette_id" value="{{ k.id }}"
+                       {{ 'checked' if k.id != g.vorschlag and not g.strasse_abweichend }}></td>
+            <td>{{ k.id }}{% if e.demo %} <span class="abzeichen">Demo</span>{% endif %}{% if not k.aktiv %} <span class="abzeichen">inaktiv</span>{% endif %}</td>
+            <td>{{ k.anzeige_name }}</td>
+            <td>{{ k.strasse or '–' }} · {{ k.ort or '–' }}</td>
+            <td>{{ k.telefon or '–' }}</td>
+            <td>{{ k.email or '–' }}</td>
+            <td>{{ k.angelegt_am.strftime('%d.%m.%Y') if k.angelegt_am }}</td>
+            <td class="dezent">{% for name, n in e.verweise.items() if n %}{{ n }} {{ name }}{{ ' · ' if not loop.last }}{% else %}keine{% endfor %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <div class="formaktionen"><button class="knopf klein" type="submit">Zusammenführen</button>
+        <span class="dezent">Der als „Haupt“ gewählte Datensatz bleibt, auch wenn er zusätzlich angehakt ist.</span></div>
+</form>
+{% else %}
+<p class="dezent">Keine Dubletten gefunden.</p>
+{% endfor %}
+
+{% if protokoll %}
+<h2>Protokoll</h2>
+<pre class="hinweis" style="white-space:pre-wrap">{{ protokoll }}</pre>
+{% endif %}
+{% endblock %}

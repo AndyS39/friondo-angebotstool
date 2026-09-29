@@ -91,6 +91,7 @@ def _aufgabe_kontext(session: Session, aufgabe: Aufgabe) -> dict:
         "kommentar_zaehler": {aufgabe.id: kommentare} if kommentare else {},
         "link_parameter": {k: kern.parameter_holen(session, k, "")
                            for k in LINK_PARAMETER},
+        "bza_mail_aktiv": __import__("app.bza", fromlist=["x"]).mail_aktiv(session),
         "steckbrief_werte": (kern.steckbrief_daten(session, [gewerk.id])[gewerk.id]
                              if gewerk is not None else {}),
         # V3 (Phase 84): TAIFUN-Gewerk → Materialhinweis statt UGL-Button
@@ -870,6 +871,7 @@ async def akte(request: Request, projekt_id: int,
                       for i in instanzen.values()) for g in gewerke},
                   link_parameter={k: kern.parameter_holen(session, k, "")
                                   for k in LINK_PARAMETER},
+                  bza_mail_aktiv=__import__("app.bza", fromlist=["x"]).mail_aktiv(session),
                   # V4 (Phase 90): Stepper ohne Endzustände, Vorlauf-Ampel,
                   # Wächter-Hinweis unter der Planungs-Ampel
                   phasen_aktiv=GEWERK_PHASEN_AKTIV,
@@ -1483,10 +1485,29 @@ async def bza_erfassen(request: Request, gewerk_id: int,
         session.rollback()
         return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}?meldung="
                                 + quote_plus(meldung), status_code=303)
+    # 30.09.2026: Mail-Versand abgeschaltet → Aufgabe direkt erledigen
+    if not bza_modul.mail_aktiv(session):
+        _ok, meldung = bza_modul.ohne_mail_abschliessen(session, gewerk,
+                                                        benutzer=request.state.benutzer)
     session.commit()
-    if form.get("sofort_senden") == "on":
+    if form.get("sofort_senden") == "on" and bza_modul.mail_aktiv(session):
         return RedirectResponse(f"/projektierung/gewerk/{gewerk.id}/bza-mail",
                                 status_code=303)
+    return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}?meldung="
+                            + quote_plus(meldung), status_code=303)
+
+
+@router.post("/gewerk/{gewerk_id}/bza-ohne-mail")
+async def bza_ohne_mail(request: Request, gewerk_id: int,
+                        session: Session = Depends(get_session)):
+    """30.09.2026: BzA-Aufgabe ohne Kundenmail abschließen."""
+    from app import bza as bza_modul
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    _ok, meldung = bza_modul.ohne_mail_abschliessen(session, gewerk,
+                                                    benutzer=request.state.benutzer)
+    session.commit()
     return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}?meldung="
                             + quote_plus(meldung), status_code=303)
 

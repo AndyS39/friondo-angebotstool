@@ -709,7 +709,8 @@ v14“ entspricht diesem Abschnitt.)
   `bafa_fuer_positionen`): 045–054 und 15+055 / 15+056 → Anlagennummer,
   Hersteller, Gerätebezeichnung, kW, Kältemittel, Netzdienlichkeit,
   E/E-Anzeige, Hinweis; Schlüssel `vorrat:…` (Hybrox 21) ohne Konfigurator-
-  Anbindung. Offener Prüfpunkt: eigene Nummer der weißen 8800er-Außeneinheit.
+  Anbindung. Die weiße 8800er-Außeneinheit (030) hat KEINE eigene Nummer
+  (bestätigt 30.09.2026) – 16019200/16019199 gelten für beide Farben.
 - **Parametrierung „BzA-Ersteller“:** Firmenblock fest (Friondo GmbH,
   Arnold-Overbeck-Str. 63-65, 47139 Duisburg, HWK-Nr. 1862718), Standard-
   Ersteller `bza_ersteller_standard` (leer = angemeldeter Benutzer).
@@ -734,7 +735,8 @@ v14“ entspricht diesem Abschnitt.)
 - **Regel:** editierbar nur im Entwurf (`POST /angebote/<id>/anschriften`);
   versendete Angebote über „Überarbeiten“ → Version .2 (kopiert alle
   Anschriftsfelder).
-- **Kunden-Standard** in der Vorgangsakte (aufklappbar, ID/Admin,
+- **Kunden-Standard** in der Vorgangsakte (aufklappbar, ID/Admin und AD an
+  eigenen Vorgängen,
   `POST /vorgaenge/<id>/anschriften`; Werte gleich Kundenname/Ausführungsort
   werden nicht gespeichert): Spalten `kunden.rechnung_*` / `kunden.liefer_*`;
   wirkt auf NEUE Angebote (`anschriften.angebot_vorbelegen`) und neue
@@ -779,3 +781,23 @@ v14“ entspricht diesem Abschnitt.)
 - Technik: `app/lead_uebersicht.py`, `app/lead_anrufliste.py`, Spalten
   `lead_quellen.auto_angelegt` / `kampagnen.auto_angelegt`, Parameter
   `lm_startseite`; Tests `tests/test_lead_v11.py`.
+
+## Nachtrag 30.09.2026 – Rückfragen und Bugfix
+
+- **Bugfix:** Erfassungs-Detail einer vollständigen PV-Katalog-Erfassung warf
+  500 (berechneter Protokoll-Abschnitt „Auslegung“ ist keine Bogenseite) –
+  Korrektur-Link nur noch für echte Bogenseiten (`ad57a28`).
+- **Kunden-Dubletten** (`app/kunden_dubletten.py`, Parametrierung →
+  Kunden-Dubletten, Admin): Gruppen gleicher Nachname + Vorname + PLZ,
+  Hauptdatensatz wählbar (Vorschlag: ältester), Verweise (Vorgänge,
+  Angebote, Erfassungen, Leads, Projekte, Konfigurationen) wandern um, leere
+  Felder werden ergänzt, Dubletten gelöscht, Protokoll
+  `kunden_zusammenfuehrung_protokoll`. Gruppen mit abweichender Straße sind
+  nicht vorausgewählt. Vor dem Bestandsimport ausführen.
+- **BzA-Kundenmail per Häkchen** (Projektierung-Einstellungen, Parameter
+  `bza_mail_aktiv`, Standard an): aus = kein Mail-Knopf, „BzA erfassen“
+  erledigt die Aufgabe ohne Mail; zusätzlich Knopf „ohne Mail abschließen“.
+  Text/Betreff wie bisher dort unter „Kundenmail BzA“.
+- **Go-live-Checkliste:** prüft das echte Standard-Kennzeichen je Sub-Typ
+  (Parametrierung → Subunternehmer, Spalte „Standard“; aktiv + E-Mail).
+- Tests: `tests/test_rueckfragen_0930.py`.
