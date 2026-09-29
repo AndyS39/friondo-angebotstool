@@ -129,9 +129,11 @@ async def liste(request: Request, q: str = "", status: str = "", interesse: str 
     else:
         sortierung = "nummer"
     # DB-Farbampel (Phase 24): Schwellen in Euro, in der Parametrierung pflegbar
-    from app.models import einstellung_holen
-    rot_unter = int(einstellung_holen(session, "db_ampel_rot_unter", "9000"))
-    gruen_ueber = int(einstellung_holen(session, "db_ampel_gruen_ueber", "10000"))
+    # v13-PV (Phase 78): Schwellen je Sparte (leer = allgemeine Schwellen)
+    from app.models import DB_AMPEL_SPARTEN, db_schwellen
+    rot_unter, gruen_ueber = db_schwellen(session)
+    db_schwellen_cent = {sp: tuple(w * 100 for w in db_schwellen(session, sp))
+                         for sp in DB_AMPEL_SPARTEN}
     # Mail-Verlauf (Phase 27): eingehende Antworten je Angebot zählen
     from sqlalchemy import func
 
@@ -162,6 +164,7 @@ async def liste(request: Request, q: str = "", status: str = "", interesse: str 
                   vertriebler_werte=vertriebler_werte,
                   status_liste=ANGEBOT_STATUS, mail_zaehler=mail_zaehler,
                   db_rot_cent=rot_unter * 100, db_gruen_cent=gruen_ueber * 100,
+                  db_schwellen_cent=db_schwellen_cent,
                   # v11 (Phase 70): Rolle projektierung sieht die Liste lesend –
                   # DB-Spalte nur mit kalkulation_sichtbar, Öffnen → PDF
                   kalk_sichtbar=(request.state.benutzer.rolle in ("admin", "innendienst")
@@ -195,7 +198,8 @@ async def rabatt_freigaben(request: Request, session: Session = Depends(get_sess
                        "ad": benutzer_map.get(f.benutzer_id),
                        "db_alt": angebot.deckungsbeitrag()["db"],
                        "db_neu": db_neu,
-                       "ampel_neu": _db_ampel(session, db_neu)})
+                       "ampel_neu": _db_ampel(session, db_neu,
+                                              angebot.konfigurator_typ or "WP")})
     return render(request, "angebote/rabatt_freigaben.html", aktiv="/angebote",
                   zeilen=zeilen,
                   meldung=request.query_params.get("meldung", ""))
@@ -1397,6 +1401,7 @@ async def duplizieren(angebot_id: int, session: Session = Depends(get_session)):
     kopie.protokoll_json = original.protokoll_json
     kopie.kfw_json = original.kfw_json
     kopie.ust_satz = original.ust_satz   # v13-PV
+    kopie.pv_json = original.pv_json
     for p in original.positionen:
         kopie.positionen.append(AngebotsPosition(
             sort=p.sort, block_nr=p.block_nr, gruppe=p.gruppe, pos_nr=p.pos_nr,
@@ -1465,6 +1470,7 @@ async def fuer_anderen_kunden_kopieren(request: Request, angebot_id: int,
     kopie.vermerke_json = original.vermerke_json
     kopie.konfigurator_typ = original.konfigurator_typ
     kopie.ust_satz = original.ust_satz   # v13-PV
+    kopie.pv_json = original.pv_json
     kopie.profil_id = original.profil_id
     kopie.vortext_text = original.vortext_text
     kopie.rabatt_cent = original.rabatt_cent

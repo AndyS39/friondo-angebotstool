@@ -339,3 +339,56 @@ class Phase77Positionen(Basis):
         hinweise = kombi_versand.gewerke_hinweise(self.s, vorgang, [wp, pv])
         self.assertTrue(any("(PV)" in h and "ins WP-Angebot" in h for h in hinweise), hinweise)
         self.assertTrue(any("(WP)" in h and "ins PV-Angebot" in h for h in hinweise), hinweise)
+
+
+# --- Phase 78 ---------------------------------------------------------------
+
+class Phase78PdfWirtschaftlichkeit(Basis):
+    def test_wirtschaftlichkeit_zahlen(self):
+        w = pv_auslegung.wirtschaftlichkeit(self.logik, 13.65, True, False, 2000000)
+        self.assertAlmostEqual(w["ertrag"], 13104.0)
+        self.assertEqual(w["quote"], 65)
+        self.assertAlmostEqual(w["ersparnis"], 8517.6 * 0.32 + 4586.4 * 0.078, places=2)
+        self.assertAlmostEqual(w["amortisation"], 20000 / w["ersparnis"], places=3)
+        w_hems = pv_auslegung.wirtschaftlichkeit(self.logik, 13.65, True, True, 2000000)
+        self.assertEqual(w_hems["quote"], 75)
+
+    def test_pv_pdf(self):
+        import pypdf
+        angebot = angebot_aufbau.angebot_anlegen(
+            self.s, self.kunde.id, antworten=pv_basis(PD12=30, PA10=10, PA11="Ja"),
+            logik=self.logik, sparte="PV")
+        pfad = pdf_export.pdf_fuer_angebot(self.s, angebot)
+        text = "\n".join(s.extract_text() for s in pypdf.PdfReader(str(pfad)).pages)
+        pfad.unlink(missing_ok=True)
+        su = angebot.summen()
+        self.assertEqual((su["ust"], su["brutto"]), (0, su["netto"]))
+        self.assertIn("Umsatzsteuer 0 % (§ 12 Abs. 3 UStG)", text)
+        self.assertIn("Ihr individuelles PV-Angebot zum Festpreis", text)
+        self.assertIn("Komplettpaket 13,65 kWp PV-Anlage", text)
+        self.assertIn("Anwendung des Nullsteuersatzes", text)
+        self.assertIn("Ihre Beispielrechnung", text)
+        self.assertIn("13.104 kWh", text)
+        self.assertIn("Amortisation", text)
+        self.assertIn("keine Garantie", text)
+        self.assertNotIn("KfW-Förderung", text)
+        self.assertNotIn("Eigenanteil", text)
+        self.assertIn("Auslegung: 30 Module", text)
+
+    def test_db_schwellen_je_sparte(self):
+        from app.models import db_schwellen, einstellung_setzen
+        allgemein = db_schwellen(self.s)
+        self.assertEqual(db_schwellen(self.s, "PV"), allgemein)     # Start: PV wie WP
+        einstellung_setzen(self.s, "db_ampel_rot_unter_PV", "3000")
+        einstellung_setzen(self.s, "db_ampel_gruen_ueber_PV", "4000")
+        self.s.commit()
+        try:
+            self.assertEqual(db_schwellen(self.s, "PV"), (3000, 4000))
+            self.assertEqual(db_schwellen(self.s, "WP"), allgemein)
+            from app.routers.meine_angebote import _db_ampel
+            self.assertEqual(_db_ampel(self.s, 350000, "PV"), "orange")
+            self.assertEqual(_db_ampel(self.s, 450000, "PV"), "gruen")
+        finally:
+            einstellung_setzen(self.s, "db_ampel_rot_unter_PV", "")
+            einstellung_setzen(self.s, "db_ampel_gruen_ueber_PV", "")
+            self.s.commit()

@@ -69,6 +69,20 @@
     <button class="knopf" type="submit">Speichern</button>
     <span class="dezent">dazwischen = orange</span>
 </form>
+{# v13-PV (Phase 78): eigene Schwellen je Sparte – leer = allgemeine Werte oben #}
+<form method="post" action="/parametrierung/einstellungen" class="suchleiste">
+    <input type="hidden" name="db_sparten_formular" value="1">
+    <strong>je Sparte:</strong>
+    {% for sp, werte in db_sparten.items() %}
+    <span class="kontrollfeld">{{ sp }}
+        <input type="text" name="db_ampel_rot_unter_{{ sp }}" value="{{ werte[0] }}" size="6"
+               placeholder="{{ db_rot }}" title="{{ sp }}: rot unter (€)">
+        <input type="text" name="db_ampel_gruen_ueber_{{ sp }}" value="{{ werte[1] }}" size="6"
+               placeholder="{{ db_gruen }}" title="{{ sp }}: grün über (€)"></span>
+    {% endfor %}
+    <button class="knopf" type="submit">Speichern</button>
+    <span class="dezent">leer = allgemeine Schwellen (Start: PV wie WP)</span>
+</form>
 
 <h2>E-Mail-Versand</h2>
 <form method="post" action="/parametrierung/einstellungen" class="suchleiste">

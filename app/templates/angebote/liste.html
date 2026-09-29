@@ -115,8 +115,10 @@
             <td class="rechts dezent" title="Externer TAIFUN-Eintrag – kein DB im Tool">–</td>
             {% else %}
             {% set deckung = a.deckungsbeitrag() %}
-            {% set db_farbe = 'db-rot' if deckung.db < db_rot_cent
-               else ('db-gruen' if deckung.db > db_gruen_cent else 'db-orange') %}
+            {# v13-PV: Schwellen je Sparte #}
+            {% set schwelle = db_schwellen_cent.get(a.konfigurator_typ or 'WP', (db_rot_cent, db_gruen_cent)) %}
+            {% set db_farbe = 'db-rot' if deckung.db < schwelle[0]
+               else ('db-gruen' if deckung.db > schwelle[1] else 'db-orange') %}
             <td class="rechts {{ db_farbe }}" title="{{ ('%.1f' | format(deckung.prozent)) | replace('.', ',') }} % · VK netto {{ deckung.vk | euro }} − EK {{ deckung.ek | euro }}{% if deckung.ohne_ek %} · EK fehlt bei {{ deckung.ohne_ek | length }} Pos.{% endif %}">
                 {{ deckung.db | euro }}
                 {% if deckung.ohne_ek %}<span class="abzeichen ep">!</span>{% endif %}

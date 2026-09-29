@@ -152,6 +152,7 @@ def _daten() -> list[str]:
         from app import angebotsprofile
         from app.models import Artikel
         meldungen += angebotsprofile.seed(session)
+        meldungen += angebotsprofile.seed_pv(session)   # v13-PV: PV-Vor-/Nachtexte
         # v8/v9: neue Zusatzartikel (Z23 MID-Zähler, Z24 Solar-Rückbau) müssen
         # im Artikelstamm liegen, sonst blockiert die Logik-Validierung –
         # fehlen sie, läuft der Preislisten-/Zusatzartikel-Import automatisch.

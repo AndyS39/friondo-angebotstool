@@ -331,7 +331,7 @@ def version_erzeugen(session: Session, original: Angebot) -> Angebot:
         rabatt_cent=original.rabatt_cent, rabatt_prozent=original.rabatt_prozent,
         rabatt_bezeichnung=original.rabatt_bezeichnung,
         konfigurator_typ=original.konfigurator_typ,
-        ust_satz=original.ust_satz,
+        ust_satz=original.ust_satz, pv_json=original.pv_json,
         vertriebler_id=original.vertriebler_id,
         profil_id=original.profil_id, vortext_text=original.vortext_text,
         rechnung_name=original.rechnung_name,
@@ -407,6 +407,7 @@ def angebot_anlegen(session: Session, kunde_id: int,
     kfw_json = "{}"
     positionen: list[dict] = []
     vermerke_json = "[]"
+    pv_json = ""
     if antworten is not None and logik is not None:
         protokoll_json = json.dumps(engine.protokoll(logik, antworten), ensure_ascii=False)
         # v13-PV: kein KfW-/Förderblock bei PV (keine KfW-Daten am Angebot)
@@ -422,6 +423,10 @@ def angebot_anlegen(session: Session, kunde_id: int,
                     logik, antworten, session, erfassung=erfassung)
             else:
                 positionen = positionen_zusammenstellen(logik, antworten, session)
+        if sparte == "PV" and getattr(logik, "pv_aktionen", None):
+            from app import pv_auslegung
+            pv_json = json.dumps(pv_auslegung.auslegen(logik, antworten).als_dict(),
+                                 ensure_ascii=False)
     # v10 (Phase 60): Die Verfolgung lebt auf VORGANGSEBENE – die Felder am
     # Angebot sind stillgelegt (Bestand bleibt lesbar). Die Einschätzung
     # (S01/S02) schreibt ihre Startwerte beim Absenden der Erfassung auf den
@@ -449,6 +454,7 @@ def angebot_anlegen(session: Session, kunde_id: int,
             vermerke_json=vermerke_json,
             konfigurator_typ=sparte,
             ust_satz=ust_standard(sparte),
+            pv_json=pv_json,
             verfolgung_ampel=verfolgung_ampel,
             wiedervorlage_am=wiedervorlage,
             **rechnung,

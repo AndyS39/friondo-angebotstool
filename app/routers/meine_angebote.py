@@ -45,10 +45,11 @@ def _gehoert_mir(session: Session, angebot: Angebot, benutzer_id: int) -> bool:
                     Erfassung.benutzer_id == benutzer_id).count() > 0)
 
 
-def _db_ampel(session: Session, db_cent: int) -> str:
-    """DB-Farbampel (Schwellen wie in der Angebotsliste, Parametrierung)."""
-    rot = int(einstellung_holen(session, "db_ampel_rot_unter", "9000")) * 100
-    gruen = int(einstellung_holen(session, "db_ampel_gruen_ueber", "10000")) * 100
+def _db_ampel(session: Session, db_cent: int, sparte: str = "") -> str:
+    """DB-Farbampel (Schwellen wie in der Angebotsliste, Parametrierung;
+    v13-PV: je Sparte, leer = allgemeine Schwellen)."""
+    from app.models import db_schwellen
+    rot, gruen = (w * 100 for w in db_schwellen(session, sparte))
     return "rot" if db_cent < rot else ("gruen" if db_cent > gruen else "orange")
 
 
@@ -243,7 +244,8 @@ async def detail(request: Request, angebot_id: int,
                   benutzer=benutzer, angebot=angebot, kunde=kunde,
                   gruppen=gruppen, summen=angebot.summen(),
                   kfw_ergebnis=kfw_ergebnis,
-                  db_ampel=_db_ampel(session, angebot.deckungsbeitrag()["db"]),
+                  db_ampel=_db_ampel(session, angebot.deckungsbeitrag()["db"],
+                                     angebot.konfigurator_typ or "WP"),
                   freigabe_offen=freigabe_offen,
                   rabatt_erlaubt=rabatt_erlaubt and freigabe_offen is None,
                   status_erlaubt=status_erlaubt,
@@ -357,7 +359,7 @@ async def rabatt(request: Request, angebot_id: int,
     rabatt_text = (f"{prozent:g} %" if prozent
                    else f"{cent / 100:.2f} €".replace(".", ","))
     db_neu = _db_mit_rabatt(angebot, cent, prozent)
-    if _db_ampel(session, db_neu) == "rot":
+    if _db_ampel(session, db_neu, angebot.konfigurator_typ or "WP") == "rot":
         # Freigabe-Anfrage an den Innendienst – nichts wird geändert
         session.add(RabattFreigabe(
             angebot_id=angebot.id, vorgang_id=vorgang.id,
@@ -380,7 +382,7 @@ async def rabatt(request: Request, angebot_id: int,
         session, vorgang.id, benutzer,
         f"Rabatt {rabatt_text} auf {ziel.nummer} gesetzt"
         + (f" (neue Version von {angebot.nummer})" if ziel.id != angebot.id else "")
-        + f" – DB-Ampel {_db_ampel(session, db_neu)}.",
+        + f" – DB-Ampel {_db_ampel(session, db_neu, angebot.konfigurator_typ or 'WP')}.",
         herkunft="Rabatt-Workflow")
     session.commit()
     zusatz = (f" Neue Version {ziel.nummer} als Entwurf – bereit für "

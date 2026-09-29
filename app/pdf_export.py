@@ -150,7 +150,8 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
                 ziel: Path | None = None,
                 vortext_text: str | None = None,
                 nachtext_text: str | None = None,
-                ersetzt_hinweis: str = "") -> Path:
+                ersetzt_hinweis: str = "",
+                beispielrechnung: dict | None = None) -> Path:
     """signatur (Phase 23): {"png_pfad", "name", "zeit"} – wird auf der
     Unterschriften-Seite eingebettet; ziel überschreibt den Ablageort.
     v9: Vor- und Nachtext kommen als Textblöcke (Profil/Parametrierung);
@@ -165,7 +166,8 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
     _vermerke_rendern(pdf, angebot)
     _summen_und_kfw(pdf, angebot, kfw_ergebnis)
     _nachtext_rendern(pdf, nachtext_text if nachtext_text is not None
-                      else angebotsprofile.STANDARD_NACHTEXT, signatur)
+                      else angebotsprofile.STANDARD_NACHTEXT, signatur,
+                      beispielrechnung)
     if mit_vollmacht:
         # Nachtext D nur bei iMSys (P02) und/oder SpotDynamic (P03) – Phase 15
         _nachtext_d(pdf, kunde, angebot)
@@ -509,13 +511,17 @@ def _absatz(pdf: AngebotsPdf, text: str, fett=False, groesse=9):
 
 
 def _nachtext_rendern(pdf: AngebotsPdf, text: str,
-                      signatur: dict | None = None) -> None:
+                      signatur: dict | None = None,
+                      beispielrechnung: dict | None = None) -> None:
     """v9: Nachtext-Blocktext rendern. Konventionen: "# " Seitenüberschrift ·
     "## " fette Zwischenzeile (10 pt) · "### " fette Absatz-Überschrift ·
     "---" allein = Seitenumbruch · "~ " kleine kursive Fußnote ·
     "[UNTERSCHRIFT]" = Ort/Datum-Unterschriftenblock (inkl. elektronischer
     Signatur). Aufeinanderfolgende Zeilen bilden EINEN Absatz."""
     for seite in text.split("\n---\n"):
+        # v13-PV: Seite nur mit [BEISPIELRECHNUNG] entfällt ohne Auslegungsdaten
+        if seite.strip() == "[BEISPIELRECHNUNG]" and beispielrechnung is None:
+            continue
         pdf.add_page()
         puffer: list[str] = []
 
@@ -532,6 +538,10 @@ def _nachtext_rendern(pdf: AngebotsPdf, text: str,
             if zeile.strip() == "[UNTERSCHRIFT]":
                 puffer_leeren()
                 _unterschrift_block(pdf, signatur)
+            elif zeile.strip() == "[BEISPIELRECHNUNG]":
+                puffer_leeren()
+                if beispielrechnung is not None:
+                    _beispielrechnung(pdf, beispielrechnung)
             elif zeile.startswith("# "):
                 puffer_leeren()
                 _ueberschrift(pdf, zeile[2:])
@@ -549,6 +559,75 @@ def _nachtext_rendern(pdf: AngebotsPdf, text: str,
             else:
                 puffer.append(zeile)
         puffer_leeren()
+
+
+def _zahl(wert: float, stellen: int = 0) -> str:
+    text = f"{wert:,.{stellen}f}"
+    return text.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _beispielrechnung(pdf: AngebotsPdf, w: dict) -> None:
+    """v13-PV (Phase 78): Abschnitt „Ihre Beispielrechnung“ – personalisierte
+    Wirtschaftlichkeit aus Anlagengröße, Ausbau (Speicher/HEMS) und Endbetrag."""
+    _ueberschrift(pdf, "Ihre Beispielrechnung")
+    _absatz(pdf, "So kann sich Ihre neue PV-Anlage rechnen – auf Basis Ihrer "
+                 "Anlagengröße und üblicher Annahmen:")
+    quote_teile = [f"PV {_zahl(w['ev_pv'])} %"]
+    if w["ev_speicher"]:
+        quote_teile.append(f"Speicher + {_zahl(w['ev_speicher'])} %")
+    if w["ev_hems"]:
+        quote_teile.append(f"Friondo HEMS + {_zahl(w['ev_hems'])} %")
+    zeilen = [
+        ("Anlagenleistung", f"{_zahl(w['kwp'], 2)} kWp", False),
+        ("Jahresertrag (ca.)", f"{_zahl(w['ertrag'])} kWh", False),
+        (f"Eigenverbrauch {_zahl(w['quote'])} % ({' · '.join(quote_teile)})",
+         f"{_zahl(w['eigen'])} kWh", False),
+        (f"Ersparnis Eigenverbrauch ({_zahl(w['strompreis'], 2)} €/kWh)",
+         f"{_zahl(w['ersparnis_eigen'], 2)} €", False),
+        (f"Einspeisung {_zahl(w['einspeisung'])} kWh × {_zahl(w['verguetung'], 3)} €/kWh",
+         f"{_zahl(w['ersparnis_einspeisung'], 2)} €", False),
+        ("Ihr jährlicher Vorteil (ca.)", f"{_zahl(w['ersparnis'], 2)} €", True),
+        ("Investition (Endbetrag dieses Angebots)", f"{_zahl(w['investition'], 2)} €", False),
+    ]
+    if w["amortisation"] is not None:
+        zeilen.append(("Grobe Amortisation", f"ca. {_zahl(w['amortisation'], 1)} Jahre", True))
+    pdf.ln(1)
+    for name, wert, fett in zeilen:
+        pdf.set_font("Arial", "B" if fett else "", 9)
+        pdf.cell(120, 5.5, name)
+        pdf.cell(50, 5.5, wert, align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.ln(3)
+    pdf.set_font("Arial", "I", 7.5)
+    ertrag_je_kwp = w["ertrag"] / w["kwp"] if w["kwp"] else 0
+    pdf.multi_cell(0, 3.8, "Beispielrechnung auf Basis üblicher Annahmen (spezifischer "
+                           f"Ertrag {_zahl(ertrag_je_kwp)} kWh/kWp, Strompreis "
+                           f"{_zahl(w['strompreis'], 2)} €/kWh, Einspeisevergütung "
+                           f"{_zahl(w['verguetung'], 3)} €/kWh), keine Garantie. Tatsächliche "
+                           "Erträge und Einsparungen hängen u. a. von Ausrichtung, Verschattung, "
+                           "Wetter, Verbrauchsverhalten und Energiepreisen ab.")
+
+
+def beispielrechnung_fuer(session, angebot: Angebot) -> dict | None:
+    """Daten der Beispielrechnung für PV-Angebote mit gespeicherter Auslegung."""
+    if (angebot.konfigurator_typ or "WP") != "PV" or not (angebot.pv_json or "").strip():
+        return None
+    from app import logik as logik_modul
+    from app import pv_auslegung
+    daten = json.loads(angebot.pv_json)
+    kwp = float(daten.get("kwp") or 0)
+    if kwp <= 0:
+        return None
+    aktiv = [p for p in angebot.positionen
+             if not (p.ep_flag or p.bauseits or p.alternativ)]
+    mit_speicher = any(pv_auslegung.KOMBI_MUSTER.search(p.beschreibung or "")
+                       or "SigenStor Batterie" in (p.beschreibung or "")
+                       for p in aktiv)
+    mit_hems = any(p.pos_nr == "015" for p in aktiv)
+    logik, _ = logik_modul.hole_logik(session)
+    if not logik.pv_parameter:
+        return None
+    return pv_auslegung.wirtschaftlichkeit(logik, kwp, mit_speicher, mit_hems,
+                                          angebot.summen()["endbetrag"])
 
 
 def _unterschrift_block(pdf: AngebotsPdf, signatur: dict | None = None) -> None:
@@ -702,7 +781,8 @@ def signiertes_pdf_erzeugen(session, angebot: Angebot, png_bytes: bytes,
                            ziel=ziel,
                            vortext_text=angebotsprofile.vortext_fuer_angebot(session, angebot),
                            nachtext_text=angebotsprofile.nachtext_fuer_angebot(session, angebot),
-                           ersetzt_hinweis=_ersetzt_hinweis(session, angebot))
+                           ersetzt_hinweis=_ersetzt_hinweis(session, angebot),
+                           beispielrechnung=beispielrechnung_fuer(session, angebot))
     finally:
         Path(png_pfad).unlink(missing_ok=True)
 
@@ -740,4 +820,5 @@ def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
                                       and angebotsprofile.vollmacht_erlaubt(session, angebot)),
                        vortext_text=angebotsprofile.vortext_fuer_angebot(session, angebot),
                        nachtext_text=angebotsprofile.nachtext_fuer_angebot(session, angebot),
-                       ersetzt_hinweis=_ersetzt_hinweis(session, angebot))
+                       ersetzt_hinweis=_ersetzt_hinweis(session, angebot),
+                       beispielrechnung=beispielrechnung_fuer(session, angebot))

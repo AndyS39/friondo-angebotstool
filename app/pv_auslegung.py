@@ -488,7 +488,7 @@ def positionen_zusammenstellen(logik: Logik, antworten: dict, session,
         positionen.insert(letzte + 1, {
             "block_nr": erster, "gruppe": positionen[letzte]["gruppe"],
             "pos_nr": "", "bezeichnung": "Auslegung der PV-Anlage",
-            "beschreibung": text, "menge": 1.0, "einheit": "pauschal",
+            "beschreibung": text, "menge": 1.0, "einheit": "psl.",
             "e_preis_cent": 0, "ep_flag": False, "ek_cent": 0, "guid": ""})
     for sort, x in enumerate(positionen, 1):
         x["sort"] = sort

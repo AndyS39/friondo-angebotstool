@@ -1008,6 +1008,9 @@ class Angebot(Base):
     # v13-PV (PLAN_V13 Phase 75): Steuersatz je Angebot in Prozent –
     # WP/KL/WB 19 %, PV 0 % (§ 12 Abs. 3 UStG); Bestand bleibt 19 %
     ust_satz: Mapped[float] = mapped_column(Float, default=19.0)
+    # v13-PV: Auslegung der PV-Anlage (Module, kWp, Strings, Kombi …) –
+    # Basis der Beispielrechnung im Nachtext; leer bei anderen Sparten
+    pv_json: Mapped[str] = mapped_column(Text, default="")
 
     positionen: Mapped[list["AngebotsPosition"]] = relationship(
         back_populates="angebot", order_by="AngebotsPosition.sort",

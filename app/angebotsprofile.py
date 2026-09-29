@@ -194,6 +194,142 @@ Saubere Energie. Faire Raten. Maximale Freiheit.
 ---
 """ + _ABSCHLUSS
 
+# --- v13-PV (PLAN_V13 Phase 78): PV-Texte nach Muster AN261699 -------------
+PV_VORTEXT = """## Ihr individuelles PV-Angebot zum Festpreis
+## Effizienz, Komfort und zukunftssicher
+
+{briefanrede}
+
+vielen Dank für Ihr Vertrauen in die Friondo GmbH. Sie haben eine zukunftssichere Entscheidung getroffen – eine moderne PV-Anlage sorgt für Unabhängigkeit und Kosteneinsparungen.
+
+Anbei erhalten Sie Ihr maßgeschneidertes Angebot.
+
+- Ihre individuelle PV-Anlage – optimal dimensioniert für Ihre Immobilie
+- Detaillierte Installationsleistungen – fachgerecht, sauber und termingerecht
+- Transparent zum Festpreis – klar verständlich und ohne versteckte Kosten
+- Unser Rundum-Sorglos-Service – von der Planung bis zur Inbetriebnahme
+
+## Warum Friondo?
+
+* Fachkompetenz & Qualität – Als Meisterbetrieb, Mitglied der Innung und VDI-zertifiziertes Fachunternehmen setzen wir auf höchste Standards.
+* Zertifizierte Sachkundige – Fundiertes Fachwissen und tiefgehende Expertise für energieeffiziente und leistungsstarke PV-Systeme.
+* Persönliche Beratung – Wir begleiten Sie von der ersten Idee bis zur optimalen PV-Lösung für Ihr Zuhause oder Unternehmen.
+* Effizienz & Nachhaltigkeit – Unsere modernen PV-Anlagen reduzieren den Energieverbrauch spürbar und steigern Ihre Autarkie.
+* Fördermittel-Check & Unterstützung – Wir helfen Ihnen, staatliche Zuschüsse bestmöglich zu nutzen.
+
+**Wir sind auf PV-Anlagen, Wärmepumpen und Klimaanlage spezialisiert und gehören in der Region zu den führenden Anbieter.**
+
+Lassen Sie uns gemeinsam Ihr Objekt zukunftsfähig machen!
+
+Mit herzlichen Grüßen,
+Ihr Friondo-Team"""
+
+_PV_NULLSTEUER = """~ *Anwendung des Nullsteuersatzes: § 12 Absatz 3 UStG regelt, dass auf die Lieferung von Photovoltaikanlagen ab 1. Januar 2023 u. a. dann keine Umsatzsteuer mehr anfällt, wenn diese auf oder in der Nähe eines Wohngebäudes installiert werden (Nullsteuersatz)."""
+
+_PV_ABSCHLUSS = """Wir sichern Ihnen eine fach- und zeitgerechte Ausführung aller angebotenen Leistungen zu.
+
+Sie haben Fragen oder wünschen weitere Informationen? Rufen Sie uns an - wir sind für Sie da.
+
+Mit freundlichen Grüßen,
+
+Ihr Friondo-Team
+
+Sollte Ihnen das Angebot zusagen, senden Sie uns bitte zur Auftragserteilung das unterschriebene Angebot zurück.
+
+[UNTERSCHRIFT]"""
+
+# [BEISPIELRECHNUNG] = personalisierte Wirtschaftlichkeitsrechnung (pdf_export)
+_PV_BEISPIEL = "[BEISPIELRECHNUNG]"
+
+PV_STANDARD_NACHTEXT = _PV_NULLSTEUER + """
+
+# Ihre Zahlungsoptionen bei Friondo
+## Barkauf oder Finanzierung
+Saubere Energie. Faire Raten. Maximale Freiheit.
+
+## Finanzierung mit Cloover
+Investieren Sie jetzt in Ihre Energie- oder Wärmelösung – ohne hohe Einmalzahlung und bequem in festen Monatsraten über bis zu 20 Jahre.
+
+### Sofort starten
+• Keine Anzahlung, Keine Grundbuchbelastung, Schnelle - digitale Prüfung, Finanzierungszusage in wenigen Minuten, 100 % digital, Kein Papierkram und keine Banktermine
+
+### Planbare Monatsraten
+• z. B. PV-Anlage ab 119 € pro Monat
+
+So bleibt Ihr Budget flexibel und Ihre Energiekosten sinken langfristig.
+
+### Maximale Flexibilität
+• Kostenlose Sondertilgungen
+• Vorzeitige Rückzahlung ohne Strafgebühren
+• Individuell anpassbare Laufzeiten
+
+### Ihre Vorteile
+• Sofort investieren · Monatlich entspannt zahlen · Energiekosten senken · Unabhängiger werden
+
+### Kundenzufriedenheit: 4,8 von 5
+„Dank Cloover konnten wir unsere PV-Anlage einfach, fair und transparent finanzieren.“
+
+Starten Sie jetzt mit Friondo und Cloover in eine nachhaltige Zukunft.
+---
+""" + _PV_BEISPIEL + """
+---
+# Installationsvoraussetzungen
+""" + _RECHT_UND_ZAHLUNG + "\n\n" + _BINDUNG + "\n\n" + _PV_ABSCHLUSS
+
+
+def _pv_variante(kopf: str) -> str:
+    """PV-Nachtext der Kanal-Profile: eigener Finanzierungs-Kopf, sonst wie
+    PV Standard (ohne KfW-Hinweis/aufschiebende Bedingung – kein Förderblock)."""
+    return (_PV_NULLSTEUER + "\n\n" + kopf + "\n---\n" + _PV_BEISPIEL + "\n---\n"
+            + _LEISTUNGEN_UND_VORAUSSETZUNGEN.replace("gewünschte Wärmepumpe",
+                                                      "gewünschte PV-Anlage")
+            + "\n\n" + _RECHT_UND_ZAHLUNG + "\n\n" + _ANMELDUNG_NETZBETREIBER
+            + "\n\n" + _BINDUNG + "\n---\n" + _PV_ABSCHLUSS)
+
+
+PV_SEED_BLOECKE = [
+    ("vortext", "Friondo PV Standard", PV_VORTEXT),
+    ("nachtext", "Friondo PV Standard", PV_STANDARD_NACHTEXT),
+    ("nachtext", "Friondo PV Enni", _pv_variante(
+        "# Ihre Zahlungsoptionen bei Friondo\n## Barkauf oder Enni Contracting\n"
+        "Saubere Energie. Faire Raten. Maximale Freiheit.")),
+    ("nachtext", "Friondo PV SWD", _pv_variante(
+        "# Ihre Zahlungsoptionen bei Friondo\n## Barkauf oder Contracting\n"
+        "Saubere Energie. Faire Raten. Maximale Freiheit.")),
+    ("nachtext", "Friondo PV Sparkasse DU", _pv_variante(
+        "# Ihre Zahlungsoptionen bei Friondo\n## Barkauf oder Finanzierung\n"
+        "Saubere Energie. Faire Raten. Maximale Freiheit.\n\n"
+        "## Finanzierung mit Sparkasse Duisburg")),
+]
+
+
+def seed_pv(session: Session) -> list[str]:
+    """v13-PV: PV-Textblöcke nachträglich anlegen (idempotent, je Name)."""
+    vorhanden = {(b.art, b.name) for b in session.query(Textblock)}
+    neu = 0
+    for art, name, text in PV_SEED_BLOECKE:
+        if (art, name) not in vorhanden:
+            session.add(Textblock(art=art, name=name, text=text))
+            neu += 1
+    return [f"{neu} PV-Textblöcke (Vor-/Nachtexte PV) angelegt"] if neu else []
+
+
+def _pv_block(session: Session, art: str, profil: Profil | None) -> str:
+    """PV-Textblock des Profils („Friondo PV <Profil>“), sonst PV Standard."""
+    namen = ([f"Friondo PV {profil.name}"] if profil is not None else []) \
+        + ["Friondo PV Standard"]
+    for name in namen:
+        block = (session.query(Textblock)
+                 .filter(Textblock.art == art, Textblock.name == name).first())
+        if block is not None and block.text.strip():
+            return block.text
+    return PV_VORTEXT if art == "vortext" else PV_STANDARD_NACHTEXT
+
+
+def ist_pv(angebot: Angebot) -> bool:
+    return (angebot.konfigurator_typ or "WP").upper() == "PV"
+
+
 SEED_BLOECKE = [
     ("nachtext", "Friondo Standard", STANDARD_NACHTEXT),
     ("nachtext", "Friondo Enni", ENNI_NACHTEXT),
@@ -277,6 +413,8 @@ def profil_fuer_erfassung(session: Session, erfassung) -> Profil | None:
 
 def nachtext_fuer_angebot(session: Session, angebot: Angebot) -> str:
     profil = profil_fuer_angebot(session, angebot)
+    if ist_pv(angebot):   # v13-PV: eigene PV-Nachtexte je Profil
+        return _pv_block(session, "nachtext", profil)
     if profil is not None and profil.nachtext_id:
         block = session.get(Textblock, profil.nachtext_id)
         if block is not None and block.text.strip():
@@ -288,6 +426,8 @@ def vortext_fuer_angebot(session: Session, angebot: Angebot) -> str:
     if (angebot.vortext_text or "").strip():
         return angebot.vortext_text
     profil = profil_fuer_angebot(session, angebot)
+    if ist_pv(angebot):   # v13-PV
+        return _pv_block(session, "vortext", profil)
     if profil is not None and profil.vortext_id:
         block = session.get(Textblock, profil.vortext_id)
         if block is not None and block.text.strip():

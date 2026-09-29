@@ -120,11 +120,11 @@ später ersetzt.
 - [x] Doppler-Schutz und Validierung decken die PV-Blätter ab
 
 ## Phase 78 – PV-PDF & Wirtschaftlichkeitsberechnung
-- [ ] Angebots-PDF PV: Aufbau, Blocküberschriften, Vor-/Nachtexte am
+- [x] Angebots-PDF PV: Aufbau, Blocküberschriften, Vor-/Nachtexte am
       Muster-PDF ausrichten; Kopf/Fußzeile, Nummernkreis, Briefanrede,
       Profile und Versand identisch zur WP-Strecke; 0-%-USt-Summen-
       block; Auslegungszeile (Phase 76); kein Förderblock
-- [ ] WIRTSCHAFTLICHKEITSBERECHNUNG im Nachtext (eigener Abschnitt
+- [x] WIRTSCHAFTLICHKEITSBERECHNUNG im Nachtext (eigener Abschnitt
       „Ihre Beispielrechnung"): personalisiert aus den Angebotsdaten –
       Jahresertrag = kWp × 960 kWh; Eigenverbrauchsquote nach Ausbau
       (PV 32 % / + Speicher 33 % / + HEMS 10 % – Annahmen aus der
@@ -135,7 +135,7 @@ später ersetzt.
       grobe Amortisation in Jahren. Fußnote „Beispielrechnung auf
       Basis üblicher Annahmen, keine Garantie" [Annahme-Werte siehe
       Chat – anpassbar]
-- [ ] DB-Ampel-Schwellen je Sparte parametrierbar (Start: PV wie WP;
+- [x] DB-Ampel-Schwellen je Sparte parametrierbar (Start: PV wie WP;
       Werte passt der Nutzer später an)
 
 ## Phase 79 – Prozessintegration
