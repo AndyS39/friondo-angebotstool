@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v15)
+# Friondo Angebotstool – Projektkontext (v16)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -504,3 +504,40 @@ Lead-Management belegt.)
   einbett=1 für das Anrufliste-Panel, Hauptmenü + Parametrierungs-Reiter.
 - Details + bewusst offene Punkte: docs/leadmanagement-entscheidungen.md
   (Abschnitt Review 27.09.2026).
+
+## Neu in v16 – PV-Konfigurator (abgestimmt 29.09.2026)
+
+(Umsetzung des Plans PLAN_V13.md; die Zählung v13 war bereits durch das
+Team-Feedback belegt – Plan-Text „Neu in v13“ entspricht diesem Abschnitt.)
+
+- PV-Konfigurator: Erfassung erzeugt vollständige PV-Angebote
+  (0 % USt gem. § 12 Abs. 3 UStG, kein Förderblock). Auslegung:
+  Maximal- oder Bedarfsbelegung ((HH×1,3 + WP×1,5 + WB) ÷ 960,
+  Module à 0,455 kWp, Deckel = Dachbelegung), Strings (max. 27
+  Module, 1.000 V), Sigenergy TP2/SigenStor-Auswahl aus kWp und
+  Speicherwunsch; Parameter im Blatt „PV-Parameter“. Positions-
+  logik: UK je Dachart inkl. Kreuz-Verlegung, Montage je Modul,
+  Tigo-Optimierer, Gerüst (Vollgerüst → individuell), Elektro-
+  Kette (Zählerschrank/UV/Zusammenlegung/Erdungsspieß/DC-ÜSS
+  nach Strings), Immer-Positionen, Fit for Future analog WP
+  inkl. Profile. Wirtschaftlichkeits-Beispielrechnung im
+  Nachtext (parametrierbare Annahmen). Dachbelegungstool folgt –
+  bis dahin Interim-Felder für Modulanzahl/Quer-Anteil.
+- Steuersatz je Angebot (PV 0 %, sonst 19 %) in Summen, DB,
+  monday und Statistik. DB-Ampel-Schwellen je Sparte
+  parametrierbar.
+- Lieferschein-PDF (ohne Preise) für angenommene Angebote
+  aller Sparten.
+- Technik: PV-Artikel PV001–PV176 aus den vier TAIFUN-Positionslisten
+  in `Artikel-Preislisten/PV/` (Import „Artikel → PV-Positionslisten
+  importieren“, GUID-Pinning im Blatt „PV-Artikel“, migrate.py importiert
+  automatisch, wenn referenzierte PV-Artikel fehlen; der WP-Import fasst
+  PV nie an). Logik-Blätter „Aktionen PV“ (Spalte Zusatzbedingung),
+  „Angebotsaufbau PV“, „PV-Parameter“; Modul `app/pv_auslegung.py`
+  (Schnittstelle Dachbelegungstool: `dachbelegung_setzen`). Fit for Future
+  nutzt die WP-Artikel 014–017 (Enni/SWD-Regeln greifen identisch).
+  PV-Vor-/Nachtexte als Textblöcke „Friondo PV <Profil>“, Platzhalter
+  `[BEISPIELRECHNUNG]`. Anhangsregel „wenn Sparte = PV“. Button „Erneut
+  prüfen“ für Katalog-Erfassungen. Tests: `tests/test_pv_v13.py`.
+- Offen/Zulieferung: Dachbelegungstool, Sigenergy-/Modul-Datenblatt;
+  fachliche Rückfragen siehe docs/nach-dem-update-v13.md.

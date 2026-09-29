@@ -519,3 +519,36 @@ class Phase80Lieferschein(Basis):
         text = self.pdf_text(r)
         self.assertIn("L I E F E R S C H E I N", text)
         self.assertNotIn("€", text)
+
+
+# --- Phase 81 (Abnahme) -----------------------------------------------------
+
+class Phase81Abnahme(Basis):
+    def test_kombi_wp_pv_alternativ_hems(self):
+        """WP- und PV-Angebot im selben Vorgang mit HEMS (Pos. 015): voll in
+        beiden → Doppelungs-Warnung; HEMS im WP-Angebot als Alternativ
+        („im PV-Angebot enthalten“) → keine Warnung, WP-Summe ohne HEMS."""
+        from app import kombi_versand
+        from tests.test_regression import KONTROLL_SZENARIO
+        vorgang = Vorgang(kunde_id=self.kunde.id)
+        self.s.add(vorgang)
+        self.s.flush()
+        wp = angebot_aufbau.angebot_anlegen(
+            self.s, self.kunde.id, antworten=dict(KONTROLL_SZENARIO, P01="Ja"),
+            logik=self.logik_voll)
+        pv = angebot_aufbau.angebot_anlegen(
+            self.s, self.kunde.id, antworten=pv_basis(PA11="Ja"), logik=self.logik,
+            sparte="PV")
+        wp.vorgang_id = pv.vorgang_id = vorgang.id
+        hems_wp = [p for p in wp.positionen if p.pos_nr == "015"][0]
+        hems_wp.e_preis_cent = 94900          # HEMS mit Preis → Doppelung sichtbar
+        self.s.commit()
+        self.assertIn("015", kombi_versand.doppelte_artikel([wp, pv]))
+        netto_vorher = wp.summen()["netto"]
+        hems_wp.alternativ = True
+        hems_wp.alternativ_zu = f"PV-Angebot {pv.nummer}"
+        self.s.commit()
+        self.assertNotIn("015", kombi_versand.doppelte_artikel([wp, pv]))
+        self.assertEqual(wp.summen()["netto"], netto_vorher - 94900)
+        self.assertEqual(pv.summen()["ust"], 0)
+        self.assertEqual(wp.summen()["ust"], int(wp.summen()["netto"] * 19 / 100))

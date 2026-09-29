@@ -162,15 +162,15 @@ später ersetzt.
       Aktion im Editor-Kopf und in der Vorgangsakte
 
 ## Phase 81 – Abnahme & Rollout
-- [ ] Tests: Bedarfsauslegung (Beispiel: HH 4.000, WP aus 20.000 kWh
+- [x] Tests: Bedarfsauslegung (Beispiel: HH 4.000, WP aus 20.000 kWh
       Gas → 5.714 × 1,5, WB 2.500 → Bedarf 16.271 kWh → 16,95 kWp →
       38 Module, Deckel prüfen); Maximalbelegung 30 Module davon 4
       quer → UK 26 + UK Kreuz 4; Strings 38 Module/2 Seiten → 2;
       WR-Wahl und Speicher-Stufen; 0-%-USt-Summenblock; Zählerschrank-
       Kette; Wirtschaftlichkeitsabschnitt mit Zahlen; Lieferschein
       ohne Preise; Enni-Profil im PV; Kombi WP+PV mit Alternativ-HEMS
-- [ ] Regressionen: alle WP-Kontroll-Szenarien und B1–B4 unverändert
-- [ ] CLAUDE.md: Kopf „(v13)"; Abschnitt einfügen:
+- [x] Regressionen: alle WP-Kontroll-Szenarien und B1–B4 unverändert
+- [x] CLAUDE.md: Kopf „(v13)"; Abschnitt einfügen:
 
       ## Neu in v13 (abgestimmt 29.09.2026)
       - PV-Konfigurator: Erfassung erzeugt vollständige PV-Angebote
@@ -192,7 +192,7 @@ später ersetzt.
       - Lieferschein-PDF (ohne Preise) für angenommene Angebote
         aller Sparten.
 
-- [ ] docs/nach-dem-update-v13.md: Team-Anleitung PV-Erfassung neu
+- [x] docs/nach-dem-update-v13.md: Team-Anleitung PV-Erfassung neu
       (Belegungsart, Interim-Felder, Verbrauchsfragen), Hinweis
       Warteschlangen-Altfälle optional neu prüfen, DB-Schwellen PV
       setzen; Zulieferungen offen: Dachbelegungstool,
