@@ -33,12 +33,15 @@ Berührungspunkte und Abweichungen – beim Bau berücksichtigt, nichts doppelt:
 - **Phase 85:** Phasenwerte seit V4: `abnahme` und `freigabe` statt
   „Abnahme & Freigabe“ (Vorlage und Import nutzen die V4-Werte).
 - **Phase 86:** Die Demo-Sendesperre `projekt_testadresse` (V4, BzA-Mail)
-  gilt jetzt auch im Modus `pilot`. Die Go-live-Prüfpunkte der
+  bleibt auf den Modus `admin` beschränkt – im `pilot` werden Kundenmails
+  echt versendet (Stufe 1 = echte Aufträge, „Sub-Mail echt versenden“). Die Go-live-Prüfpunkte der
   Stücklisten-Seite (≥ 90 % zugeordnet, Collin-Testdatei) wandern in die
   Checkliste (Provisorium 1); die Stücklisten-Seite verlinkt dorthin.
   Portal-URLs umfassen seit V4 auch `url_kfw_zuschussportal`.
 - **CLAUDE.md:** Abschnitt heißt „Neu in v18 – Projektierung Go-live“
   (v16/v17 belegt).
+- „Standard-Sub je Typ“: Subunternehmer haben kein Standard-Kennzeichen –
+  geprüft wird „mindestens ein aktiver Sub mit E-Mail je Sub-Typ“.
 - Teil B Stufe 0 (Rollout) ist durch PLAN_GESAMT Teil A abgedeckt.
 
 ## Teil A – Bauphasen
@@ -125,13 +128,13 @@ durch das Tool gelaufen; die V1-Migration erfasst nur angenommene Tool-Angebote.
 
 ### Phase 86 – Go-live-Hilfen
 
-- [ ] **Freigabe je Rolle statt nur admin/alle:** `freigabe_modus` erweitern
+- [x] **Freigabe je Rolle statt nur admin/alle:** `freigabe_modus` erweitern
   um `pilot` = Admin + ausgewählte Benutzer (Liste in der Parametrierung);
   damit läuft Stufe 1 mit dem Projektierer und einem Montageteam, während
   der Rest weiter Null-Kacheln sieht.
-- [ ] Startportal-Badge: „Demo · Coming soon" bei admin, „Pilot" bei pilot,
+- [x] Startportal-Badge: „Demo · Coming soon" bei admin, „Pilot" bei pilot,
   kein Badge bei alle.
-- [ ] Checkliste „Bereit für Go-live" als Seite in der Parametrierung mit
+- [x] Checkliste „Bereit für Go-live" als Seite in der Parametrierung mit
   Live-Prüfung: Absender-Postfach hinterlegt und Testmail erfolgreich ·
   Kalender-Modus gewählt und Test-Termin in Outlook angelegt · mindestens
   ein Benutzer je Rolle Projektierung/Montage · Teams mit Mitgliedern ·
@@ -139,7 +142,7 @@ durch das Tool gelaufen; die V1-Migration erfasst nur angenommene Tool-Angebote.
   Stücklisten-Blatt ohne Beispielnummern · Formulare abgenommen (Häkchen
   durch Admin) · Bestandsimport durchgeführt. Jede Zeile grün/rot mit
   Link zur Stelle.
-- [ ] `CLAUDE.md`: Abschnitt „Neu in v16 – Projektierung Go-live" (Nummer =
+- [x] `CLAUDE.md`: Abschnitt „Neu in v18 – Projektierung Go-live" (Nummer =
   höchste + 1) mit den drei Punkten Auftragsdaten TAIFUN, Bestandsimport,
   Freigabe pilot + Go-live-Checkliste.
 

@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v17)
+# Friondo Angebotstool – Projektkontext (v18)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -639,3 +639,46 @@ Team-Feedback belegt – Plan-Text „Neu in v13“ entspricht diesem Abschnitt.
   nicht öffentlich). **UGL:** Formatabgleich (docs/ugl-format.md,
   Testdatei), Stücklisten-Pflege in der Parametrierung, Bestell-Dialog mit
   Vorschau/Lieferdatum/Lieferadresse, Nachbestellungen, Go-live-Prüfpunkte.
+
+## Neu in v18 – Projektierung Go-live (abgestimmt 30.09.2026)
+
+(Plan: PLAN_PROJ_V3_GOLIVE.md, Phasen 84–86; Abgleich mit V4 im Plan-Vorspann.)
+
+- **Auftragsdaten TAIFUN:** „Angebot → Projekt“ führt bei TAIFUN-Aufträgen
+  auf die Pflichtseite „Auftragsdaten“ (`/projektierung/gewerk/<id>/auftragsdaten`,
+  je Gewerk des Angebots ein Abschnitt). Feldliste aus Blatt „Steckbrief“:
+  neue Spalten `eingabe` (`text` / `zahl` / `ja_nein` / `auswahl:A|B`) und
+  `bezeichnung`, Zeilen mit `quelle_typ = auftragsdaten` (reine Definition).
+  Werte landen im Steckbrief mit `steckbrief_werte.quelle = auftragsdaten`
+  (nicht manuell – nur die FP-Erfassung überschreibt sie; „Neu ableiten“
+  nicht). Pflicht-PDF, falls am Eintrag keins liegt (Angebot + Galerie
+  „Allgemein“ + Projektablage). **KfW-gefördert** ist das Angebotsfeld
+  `kfw_gefoerdert` (ja/nein/leer = unbekannt) – `bza.ist_gefoerdert` wertet
+  es für TAIFUN aus. Knopf „Auftragsdaten bearbeiten“ + Badge „Auftragsdaten
+  fehlen“ im Steckbrief, Material-Aufgabe zeigt bei TAIFUN den Hinweis statt
+  UGL; steckbrief-abhängige Paketschritte werden nachgezogen
+  (`steckbrief_schritte_nachziehen`). Stub `auftragsdaten_aus_pdf` (Stufe 2).
+- **Bestandsimport** (`app/bestandsimport.py`, Parametrierung →
+  Bestandsimport, nur Admin): Vorlage `docs/bestandsimport_vorlage.xlsx`
+  (Blätter Projekte + Anleitung, eine Zeile je Gewerk), Vorschau mit
+  Prüfung je Zeile, Import nur fehlerfreier Zeilen, idempotent über
+  TAIFUN-Nr. + Sparte, Kunde über Name + PLZ, weitere Aufträge derselben
+  Sparte → eigenes Projekt. Legt Kunde/Vorgang/externen Eintrag
+  (`angebote.bestand = 1`, Status Angenommen)/Projekt/Gewerk in der Phase an,
+  Pflichtaufgaben der Pakete vor der Phase pauschal erledigt (Verlauf „Bestand
+  – pauschal erledigt“), Montagetermin mit Team/Bestätigung, Steckbrief.
+  Badge „Bestand“ (`gewerke.bestand_import_id`) in Akte und Board; Statistik
+  zählt `bestand` nie. Protokoll-Tabelle `bestandsimporte` mit „Rückgängig“
+  (nur Angelegtes, das seither unverändert ist). Trockenlauf:
+  docs/bestandsimport-trockenlauf.md.
+- **Freigabe pilot + Go-live-Checkliste:** `freigabe_modus` admin / **pilot**
+  / alle; pilot = Admin + Pilotliste (`pilot_benutzer`, Häkchen in den
+  Projektierung-Einstellungen; Hauptrolle Projektierung/Montage sieht das
+  Modul immer). Portal-Badge „Demo · Coming soon“ / „Pilot“ / keins. BzA-
+  Kundenmail nur im Demo-Modus an `projekt_testadresse`, im Pilot echt.
+  Parametrierung → **Go-live-Checkliste** (`app/golive.py`, 11 Live-Punkte
+  mit Link: Absender + Testmail ohne Fallback, Kalender-Modus + Outlook-
+  Termin, Benutzer je Rolle, Teams mit Mitgliedern, Sub je Typ, Portal-URLs,
+  Collin-Kundennummer, Stücklisten ≥ 90 % ohne BEISPIEL-Nummern,
+  Collin-Testdatei (Häkchen, von der Stücklisten-Seite umgezogen), Formulare
+  abgenommen (Häkchen), Bestandsimport). Tests: `tests/test_projektierung_v3.py`.

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block titel %}Go-live-Checkliste – Friondo Angebotstool{% endblock %}
+
+{# V3 (PLAN_PROJ_V3 Phase 86): „Bereit für Go-live“ mit Live-Prüfung #}
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Go-live-Checkliste <small class="dezent">Projektierung</small></h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung/projektierung-einstellungen">Freigabe &amp; Einstellungen</a>
+        <a class="knopf zweitrangig" href="/parametrierung">Zur Parametrierung</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% set gruen = punkte | selectattr('ok') | list | length %}
+<p>Freigabe-Modus: <strong>{{ {'admin': 'Demo (nur Admin)', 'pilot': 'Pilot', 'alle': 'Alle'}[freigabe_modus] }}</strong>
+    {% if freigabe_modus == 'pilot' %}· {{ pilot_anzahl }} Pilot-Benutzer{% endif %}
+    · <strong>{{ gruen }} von {{ punkte | length }}</strong> Punkten erfüllt.</p>
+
+<table class="liste">
+    <thead><tr><th></th><th>Prüfpunkt</th><th>Stand</th><th></th></tr></thead>
+    <tbody>
+    {% for p in punkte %}
+    <tr>
+        <td style="width:2.5em;text-align:center">
+            <span class="status-badge {{ 'erfolg' if p.ok else 'fehler' }}"
+                  style="background:{{ '#e6f4ea' if p.ok else '#fdecea' }};color:{{ '#1e7b34' if p.ok else '#b3261e' }};padding:2px 8px;border-radius:10px;font-weight:600">{{ '✓' if p.ok else '✗' }}</span></td>
+        <td>{{ p.titel }}</td>
+        <td class="dezent">{{ p.detail }}</td>
+        <td class="aktionen">
+            {% if p.haekchen %}
+            <form method="post" action="/parametrierung/golive/haekchen" style="display:inline">
+                <input type="hidden" name="name" value="{{ p.haekchen }}">
+                <label class="kontrollfeld"><input type="checkbox" name="an"
+                    {{ 'checked' if p.ok }} onchange="this.form.submit()"> bestätigt</label>
+            </form>
+            {% elif p.titel.startswith('Absender-Postfach') %}
+            <form method="post" action="/parametrierung/golive/testmail" style="display:inline">
+                <button class="knopf klein zweitrangig" type="submit">Testmail an mich</button>
+            </form>
+            <a class="knopf klein zweitrangig" href="{{ p.link }}">öffnen</a>
+            {% else %}
+            <a class="knopf klein zweitrangig" href="{{ p.link }}">öffnen</a>
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<p class="dezent">Die Punkte werden bei jedem Aufruf live geprüft. Stufenplan und
+    organisatorische Schritte: PLAN_PROJ_V3_GOLIVE.md, Teil B.</p>
+{% endblock %}

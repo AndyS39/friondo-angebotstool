@@ -94,9 +94,22 @@ def ordnervorlage(session: Session) -> list[dict]:
 
 
 def freigabe_modus(session: Session) -> str:
-    """Demo-Schalter (Phase 70): admin (Standard) = Modul nur für Admins."""
+    """Demo-Schalter (Phase 70): admin (Standard) = Modul nur für Admins.
+    V3 (Phase 86): pilot = Admin + ausgewählte Benutzer (Pilotliste)."""
     wert = parameter_holen(session, "freigabe_modus", "admin").strip().lower()
-    return wert if wert in ("admin", "alle") else "admin"
+    return wert if wert in ("admin", "pilot", "alle") else "admin"
+
+
+def pilot_benutzer_ids(session: Session) -> set[int]:
+    """V3 (Phase 86): Benutzer-IDs der Pilotliste (Parameter pilot_benutzer)."""
+    roh = parameter_holen(session, "pilot_benutzer", "")
+    return {int(t) for t in roh.replace(";", ",").split(",") if t.strip().isdigit()}
+
+
+def portal_badge(session: Session) -> str:
+    """Startportal-Badge: Demo bei admin, „Pilot“ bei pilot, keins bei alle."""
+    return {"admin": "Demo · Coming soon", "pilot": "Pilot"}.get(
+        freigabe_modus(session), "")
 
 
 def modul_sichtbar(session: Session, benutzer) -> bool:
@@ -111,7 +124,11 @@ def modul_sichtbar(session: Session, benutzer) -> bool:
     # Der Demo-Schalter versteckt das Modul weiter vor Innendienst/Vertrieb.
     if benutzer.rolle in ("projektierung", "montage"):
         return True
-    if freigabe_modus(session) != "alle":
+    modus = freigabe_modus(session)
+    if modus == "pilot":
+        # V3 (Phase 86): Stufe 1 – nur die Benutzer der Pilotliste
+        return benutzer.id in pilot_benutzer_ids(session)
+    if modus != "alle":
         return False
     return (benutzer.rolle in ("innendienst",)
             or benutzer.hat_rolle("projektierung") or benutzer.hat_rolle("montage")

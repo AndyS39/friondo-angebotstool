@@ -728,6 +728,7 @@ async def projektierung_einstellungen(request: Request,
     return render(request, "konfiguration/projektierung_einstellungen.html",
                   aktiv="/parametrierung",
                   freigabe_modus=kern.freigabe_modus(session),
+                  pilot_ids=kern.pilot_benutzer_ids(session),
                   galerie_zusatzordner=kern.parameter_holen(
                       session, "galerie_zusatzordner", ""),
                   galerie_original=kern.parameter_holen(
@@ -853,8 +854,12 @@ async def projektierung_einstellungen_speichern(
     if (form.get("terminmail_text") or "").strip():
         kern.parameter_setzen(session, "terminmail_text",
                               form.get("terminmail_text").strip()[:5000])
-    if form.get("freigabe_modus") in ("admin", "alle"):
+    if form.get("freigabe_modus") in ("admin", "pilot", "alle"):
         kern.parameter_setzen(session, "freigabe_modus", form.get("freigabe_modus"))
+    # V3 (Phase 86): Pilotliste (nur wenn das Formular sie mitschickt)
+    if form.get("pilot_dabei"):
+        kern.parameter_setzen(session, "pilot_benutzer", ",".join(
+            str(int(w)) for w in form.getlist("pilot_benutzer") if str(w).isdigit()))
     # V4 (Phase 90.3): Vorlauf-Schwellen (Wochen, Dezimal erlaubt)
     for schluessel in ("vorlauf_gruen_ab_wochen", "vorlauf_gelb_ab_wochen"):
         wert = (form.get(schluessel) or "").strip().replace(",", ".")
@@ -890,6 +895,51 @@ def _stuecklisten_zurueck(meldung: str, anker: str = ""):
     return RedirectResponse("/parametrierung/stuecklisten?meldung=" + quote_plus(meldung)
                             + (f"&pos={quote_plus(anker)}#editor" if anker else ""),
                             status_code=303)
+
+
+# --- V3 (PLAN_PROJ_V3 Phase 86): Go-live-Checkliste ---------------------------------
+
+def _golive_zurueck(meldung: str):
+    from urllib.parse import quote_plus
+    return RedirectResponse("/parametrierung/golive?meldung=" + quote_plus(meldung),
+                            status_code=303)
+
+
+@router.get("/golive")
+async def golive_seite(request: Request, session: Session = Depends(get_session)):
+    from app import golive
+    from app import projektierung as kern
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    punkte = golive.pruefen(session)
+    return render(request, "konfiguration/golive.html", aktiv="/parametrierung",
+                  punkte=punkte, freigabe_modus=kern.freigabe_modus(session),
+                  pilot_anzahl=len(kern.pilot_benutzer_ids(session)),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/golive/haekchen")
+async def golive_haekchen(request: Request, session: Session = Depends(get_session)):
+    from app import golive
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    form = await request.form()
+    name = form.get("name") or ""
+    if name not in ("ugl_testdatei_bestaetigt", "golive_formulare_abgenommen"):
+        return _golive_zurueck("Unbekannter Prüfpunkt.")
+    golive.haekchen_setzen(session, name, form.get("an") == "on", request.state.benutzer)
+    session.commit()
+    return _golive_zurueck("Prüfpunkt gespeichert.")
+
+
+@router.post("/golive/testmail")
+async def golive_testmail(request: Request, session: Session = Depends(get_session)):
+    from app import golive
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    _ok, meldung = golive.testmail_senden(session, request.state.benutzer)
+    session.commit()
+    return _golive_zurueck(meldung)
 
 
 # --- V3 (PLAN_PROJ_V3 Phase 85): Bestandsimport laufender Projekte ------------------

@@ -148,7 +148,8 @@ async def startseite(request: Request):
     sitzung = SessionLocal()
     try:
         projekt_kacheln = None
-        demo_badge = projektierung_modul.freigabe_modus(sitzung) == "admin"
+        # V3 (Phase 86): „Demo · Coming soon“ / „Pilot“ / kein Badge
+        demo_badge = projektierung_modul.portal_badge(sitzung)
         if projektierung_modul.modul_sichtbar(sitzung, benutzer):
             projekt_kacheln = projektierung_modul.startseiten_kacheln(sitzung)
         # v12 (Phase 79): Lead-Management-Karte – live nur bei Sichtbarkeit

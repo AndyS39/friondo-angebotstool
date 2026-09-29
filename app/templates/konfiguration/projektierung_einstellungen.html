@@ -17,14 +17,30 @@
     <label>Modul sichtbar für
         <select name="freigabe_modus">
             <option value="admin" {{ 'selected' if freigabe_modus == 'admin' }}>Nur Admin (Demo · Coming soon)</option>
+            <option value="pilot" {{ 'selected' if freigabe_modus == 'pilot' }}>Pilot: Admin + ausgewählte Benutzer</option>
             <option value="alle" {{ 'selected' if freigabe_modus == 'alle' }}>Alle berechtigten Rollen</option>
         </select>
     </label>
+    {# V3 (Phase 86): Pilotliste – wirkt nur im Modus „Pilot“ #}
+    <input type="hidden" name="pilot_dabei" value="1">
+    <fieldset style="border:1px solid var(--rand, #ddd);border-radius:8px;padding:8px 12px">
+        <legend>Pilot-Benutzer (nur im Modus „Pilot“)</legend>
+        {% for b in benutzer_liste %}
+        <label class="kontrollfeld" style="display:inline-block;min-width:220px">
+            <input type="checkbox" name="pilot_benutzer" value="{{ b.id }}"
+                   {{ 'checked' if b.id in pilot_ids }}> {{ b.name }}
+            <span class="dezent">({{ b.rolle }})</span></label>
+        {% endfor %}
+        <p class="dezent">Benutzer mit Hauptrolle Projektierung oder Montage sehen das
+            Modul immer. Status des Go-live: <a href="/parametrierung/golive">Go-live-Checkliste</a>.</p>
+    </fieldset>
     <p class="dezent">Bei „Nur Admin“ sind alle Projektierungs- und
         Montage-Seiten, der Button „Angebot → Projekt“, der Projektstand-Block
         am Angebot und die Glocken-Ereignisse der Projektierung ausschließlich
         für Admins sichtbar (server-seitig geprüft). Das Portal-Badge
-        „Demo · Coming soon“ verschwindet automatisch bei „Alle“.</p>
+        „Demo · Coming soon“ wird bei „Pilot“ zu „Pilot“ und verschwindet bei „Alle“.
+        Kundenmails (BzA) gehen nur im Demo-Modus an die Test-Adresse; im Pilot
+        werden sie echt versendet (Stufe 1 = echte Aufträge).</p>
 
     <h2>Vorlauf-Ampel (Board, Liste, Akte)</h2>
     <label>grün ab mehr als … Wochen bis Montagebeginn

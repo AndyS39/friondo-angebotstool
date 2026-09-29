@@ -16,26 +16,11 @@
     Stand {{ stand }}) – Speichern hier schreibt dorthin zurück (Backup vorher).
     Menge = Stück je Einheit der Angebotsposition; Einheit = UGL-Mengeneinheit (ST, M, PAK …).</p>
 
-<div class="pj-kv" style="max-width:720px;border:1px solid var(--rand, #ddd);padding:10px;border-radius:8px">
-    <span><b>Go-live-Prüfpunkte</b></span><div></div>
-    <span>Stücklisten ≥ 90 % zugeordnet</span>
-    <div>{{ '✓' if quote_ok else '✗' }} {{ zugeordnet }} von {{ gesamt }} Positionen
-        ({{ '%.0f' | format(quote * 100) }} %)
-        <div style="height:6px;background:#eee;border-radius:3px;margin-top:3px">
-            <div style="height:6px;width:{{ '%.0f' | format(quote * 100) }}%;background:{{ '#2e7d32' if quote_ok else '#e0a100' }};border-radius:3px"></div></div></div>
-    <span>Collin-Kundennummer</span>
-    <div>{{ '✓ ' ~ kundennummer if kundennummer else '✗ fehlt (Projektierung-Einstellungen)' }}</div>
-    <span>Testdatei von Collin bestätigt</span>
-    <div>
-        {% if darf_admin %}
-        <form method="post" action="/parametrierung/stuecklisten/golive" class="pj-btnrow">
-            <label class="kontrollfeld"><input type="checkbox" name="bestaetigt"
-                {{ 'checked' if testdatei_bestaetigt }} onchange="this.form.submit()">
-                {{ testdatei_bestaetigt or 'noch offen – docs/ugl-beispiel.ugl an Collin senden' }}</label>
-        </form>
-        {% else %}{{ '✓ ' ~ testdatei_bestaetigt if testdatei_bestaetigt else '✗ offen' }}{% endif %}
-    </div>
-</div>
+{# V3 (Phase 86): Go-live-Prüfpunkte sind in die Go-live-Checkliste umgezogen #}
+<p class="dezent" style="max-width:720px">Zuordnung: <strong>{{ zugeordnet }} von {{ gesamt }}</strong>
+    Positionen ({{ '%.0f' | format(quote * 100) }} %{{ ' ✓' if quote_ok else '' }}) ·
+    Collin-Kundennummer {{ '✓' if kundennummer else 'fehlt' }} ·
+    Go-live-Prüfpunkte (≥ 90 %, Collin-Testdatei): <a href="/parametrierung/golive">Go-live-Checkliste</a></p>
 
 <form method="get" action="/parametrierung/stuecklisten" class="suchleiste" style="margin-top:12px">
     <input type="text" name="suche" value="{{ suche }}" placeholder="Position, Titel, Artikelnummer …">

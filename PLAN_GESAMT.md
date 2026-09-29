@@ -75,18 +75,18 @@ Gesamtübersicht (Testergebnisse, offene Punkte, Rückfragen gebündelt).
       PA04, 4-Feld, Set je String, Mailtext)
 
 ## B2 – PLAN_PROJ_V3 (Phasen 84–86) mit V4-Abgleich
-- [ ] Vorspann: PLAN_PROJ_V3 gegen den umgesetzten V4-Stand und
+- [x] Vorspann: PLAN_PROJ_V3 gegen den umgesetzten V4-Stand und
       docs/projektierung-entscheidungen.md abgleichen – bereits Erledigtes/
       Überholtes im Plan streichen mit Vermerk „durch V4 erledigt";
       Abweichungen melden statt doppelt bauen
-- [ ] Dann Phasen 84–86 umsetzen wie geschrieben; dabei lösen sich die
+- [x] Dann Phasen 84–86 umsetzen wie geschrieben; dabei lösen sich die
       Provisorien 1–3, 14 und 19 aus STATUS-GESAMT ab (Go-live-Prüfpunkte
       von der Stücklisten-Seite in die Checkliste; TAIFUN-Auftragsdaten
       mit „gefördert"; Steckbrief-Übernahme; Pilot-Sendesperre;
       Bestandsimport)
-- [ ] Bestandsimport (Phase 85) NUR gegen eine DB-Kopie testen, nie direkt
+- [x] Bestandsimport (Phase 85) NUR gegen eine DB-Kopie testen, nie direkt
       produktiv; Trockenlauf-Protokoll für Andreas
-- [ ] CLAUDE-Abschnitt „Projektierung Go-live" (Nummer = höchste + 1)
+- [x] CLAUDE-Abschnitt „Projektierung Go-live" (Nummer = höchste + 1)
 
 ## B3 – PLAN_V14 als Phasen 95–97 (BzA-Datenblatt, BAFA-Nummern)
 - [ ] Vorab: PLAN_V14.md umnummerieren (82–84 → 95–97, Kollisions-

@@ -712,3 +712,65 @@ Pilot-Sendesperre).
 - **Bestandsimport:** Phase 85 existiert nicht; die Phasenwerte für einen
   späteren Import sind in docs/projektierung.md dokumentiert.
 
+## PLAN_PROJ_V3 (30.09.2026) – Umsetzung durch Claude Code (v18)
+
+Gebaut NACH V4; Abgleich im Plan-Vorspann (PLAN_PROJ_V3_GOLIVE.md).
+
+### Phase 84 – Auftragsdaten TAIFUN
+
+- **Feldliste:** Die Steckbrief-Felder stehen weiter im Code
+  (`STECKBRIEF_FELDER`, Anzeige-Reihenfolge); das Blatt „Steckbrief“ definiert
+  das Formular über zwei neue Spalten F `eingabe` und G `bezeichnung` auf
+  eigenen Zeilen mit `quelle_typ = auftragsdaten` (werden bei der Ableitung
+  übersprungen). Zusatzfelder aus dem Blatt (serie_modell, puffer_l,
+  unterverteilung, wallbox, anzahl) erscheinen automatisch im Steckbrief
+  (vor „Besonderheiten“).
+- **Vorrang:** manuell (✎) > FP-Erfassung > Auftragsdaten > übrige Ableitung.
+  Auftragsdaten-Werte überschreibt nur eine `fp_frage`-Regel; danach ist die
+  Herkunft wieder leer. Das Formular zeigt manuell geänderte Felder gesperrt.
+- **„gefördert“** ist kein Steckbrief-Feld, sondern `angebote.kfw_gefoerdert`
+  (dieselbe Quelle nutzt PLAN_V14 Phase 96 im „Extern erledigt“-Dialog).
+- **Pflicht:** Die Seite ist Pflicht im Ablauf (Weiterleitung nach der
+  Anlage, Badge „Auftragsdaten fehlen“ bis zum ersten Speichern,
+  `gewerke.auftragsdaten_am`); einzelne Felder sind nicht Pflicht, nur das
+  PDF, wenn noch keins am Eintrag liegt.
+- **Pakete:** IMMER-Pakete kommen wie bei Tool-Angeboten mit der
+  Gewerk-Anlage. Schritte mit `steckbrief:`-Bedingung, die mangels
+  Steckbrief fehlten, legt `steckbrief_schritte_nachziehen` nach dem
+  Speichern an (bestehende Aufgaben bleiben).
+
+### Phase 85 – Bestandsimport
+
+- Phasenwerte `abnahme`/`freigabe` (V4); „Abnahme & Freigabe“ wird mit
+  Hinweis abgewiesen. Pflicht: Nachname, PLZ, Sparte, TAIFUN-Nr.,
+  Auftragswert, Auftragsdatum, Phase; Projektleiter Pflicht, außer ein
+  Standard-Projektleiter ist gesetzt. Unbekannte Vertriebler = Hinweis.
+- **Dubletten:** Kunde über Nachname + Vorname + PLZ (erster Treffer). Die
+  Server-DB enthält echte Namensdubletten (#1–#3) – vor dem echten Import
+  zusammenführen oder bewusst akzeptieren.
+- **Projekt-Zuordnung:** offenes Projekt des Vorgangs, außer dort existiert
+  schon ein offenes Gewerk derselben Sparte → neues Projekt (Befund aus dem
+  Trockenlauf).
+- **Pauschal erledigt** werden nur Pflichtaufgaben aus Paketen mit
+  Paket-Rang < Phasen-Rang (`paket_rang`), erledigt_von = importierender
+  Admin, Verlaufseintrag je Gewerk. Montagetermin nur, wenn noch keiner
+  existiert (zweiter Lauf verschiebt ihn); Team-Reihenfolge Montage >
+  Elektro > Sub.
+- **Keine Glocken-Flut:** `gewerk_anlegen(..., benachrichtigen_an=False)`.
+- **Rückgängig:** nur Gewerke, die DIESER Import angelegt hat und die
+  unverändert sind (gleiche Phase, gleicher `bestand_import_id`, keine
+  späteren Aufgaben-Erledigungen/Verlaufseinträge/Handablagen). Projekt,
+  Vorgang, Angebot, Kunde nur, wenn vom Import angelegt und leer.
+  Nummernkreis PR wird nicht zurückgedreht.
+
+### Phase 86 – Go-live-Hilfen
+
+- `pilot`: Sichtbarkeit = Admin, Hauptrolle Projektierung/Montage (wie
+  bisher immer) + Pilotliste. Glocke folgt `modul_sichtbar`.
+- **Sendesperre:** nur im Demo (`admin`) an `projekt_testadresse`; im Pilot
+  echter Versand (Stufe 1 laut Plan mit echten Sub-Mails/Kundenterminen).
+- **Checkliste:** Testmail bewusst ohne Fallback auf angebot@ (sonst wäre
+  ein fehlendes „Senden als“ unsichtbar). Stücklisten-Punkt verlangt ≥ 90 %
+  UND keine `BEISPIEL-`Artikelnummern. Die alte Route
+  `/parametrierung/stuecklisten/golive` bleibt als Kompatibilität bestehen,
+  die Stücklisten-Seite verlinkt auf die Checkliste.

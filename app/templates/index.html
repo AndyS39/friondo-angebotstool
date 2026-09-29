@@ -98,7 +98,7 @@
     {% if projekt_kacheln %}
     <a class="portal-karte pj-demo" href="/projektierung">
         <h2 class="portal-titel">Projektierung
-            {% if demo_badge %}<span class="pj-dbadge">Demo · Coming soon</span>{% endif %}
+            {% if demo_badge %}<span class="pj-dbadge">{{ demo_badge }}</span>{% endif %}
         </h2>
         <div class="pj-pk">
             {% for phase, titel in [('auftragseingang', 'Auftragseingang'),

@@ -368,6 +368,10 @@ class Phase85Bestandsimport(Basis):
         self.assertIsNone(self.s.query(Kunde).filter_by(
             nachname="Bestand-V3-Undo-Neu").first())
 
+    def test_vorlage_datei_im_repo(self):
+        from pathlib import Path
+        self.assertTrue(Path("docs/bestandsimport_vorlage.xlsx").exists())
+
     def test_vorlage(self):
         import openpyxl
         from app import bestandsimport
@@ -376,6 +380,106 @@ class Phase85Bestandsimport(Basis):
         kopf = [c.value for c in wb["Projekte"][1]]
         self.assertIn("TAIFUN-Angebotsnummer", kopf)
         self.assertIn("Termin bestätigt (J/N)", kopf)
+
+
+# --- Phase 86 ---------------------------------------------------------------
+
+class Phase86GoLive(Basis):
+    def setUp(self):
+        self.modus_vorher = kern.parameter_holen(self.s, "freigabe_modus", "admin")
+        self.pilot_vorher = kern.parameter_holen(self.s, "pilot_benutzer", "")
+
+    def tearDown(self):
+        kern.parameter_setzen(self.s, "freigabe_modus", self.modus_vorher)
+        kern.parameter_setzen(self.s, "pilot_benutzer", self.pilot_vorher)
+        self.s.commit()
+
+    def test_pilot_sichtbarkeit_und_badge(self):
+        from app.models import Benutzer
+        innendienst = (self.s.query(Benutzer)
+                       .filter(Benutzer.rolle == "innendienst",
+                               Benutzer.aktiv.is_(True)).first())
+        if innendienst is None:
+            self.skipTest("kein Innendienst-Benutzer in der Test-DB")
+        admin = self.s.get(Benutzer, 1)
+        kern.parameter_setzen(self.s, "freigabe_modus", "admin")
+        self.assertEqual(kern.portal_badge(self.s), "Demo · Coming soon")
+        self.assertFalse(kern.modul_sichtbar(self.s, innendienst))
+        kern.parameter_setzen(self.s, "freigabe_modus", "pilot")
+        kern.parameter_setzen(self.s, "pilot_benutzer", "")
+        self.assertEqual(kern.portal_badge(self.s), "Pilot")
+        self.assertFalse(kern.modul_sichtbar(self.s, innendienst))
+        self.assertTrue(kern.modul_sichtbar(self.s, admin))
+        kern.parameter_setzen(self.s, "pilot_benutzer", str(innendienst.id))
+        self.assertTrue(kern.modul_sichtbar(self.s, innendienst))
+        kern.parameter_setzen(self.s, "freigabe_modus", "alle")
+        self.assertEqual(kern.portal_badge(self.s), "")
+        self.assertTrue(kern.modul_sichtbar(self.s, innendienst))
+        self.s.commit()
+        # Portal zeigt das Pilot-Badge
+        kern.parameter_setzen(self.s, "freigabe_modus", "pilot")
+        self.s.commit()
+        self.assertIn(">Pilot</span>", self.client.get("/").text)
+
+    def test_einstellungen_speichern_pilot(self):
+        from app.models import Benutzer
+        ids = [b.id for b in self.s.query(Benutzer).filter(Benutzer.aktiv.is_(True))
+               .order_by(Benutzer.id).limit(2)]
+        antwort = self.client.post("/parametrierung/projektierung-einstellungen",
+                                   data={"freigabe_modus": "pilot", "pilot_dabei": "1",
+                                         "pilot_benutzer": [str(i) for i in ids]},
+                                   follow_redirects=False)
+        self.assertEqual(antwort.status_code, 303)
+        self.s.expire_all()
+        self.assertEqual(kern.freigabe_modus(self.s), "pilot")
+        self.assertEqual(kern.pilot_benutzer_ids(self.s), set(ids))
+        seite = self.client.get("/parametrierung/projektierung-einstellungen").text
+        self.assertIn('value="pilot" selected', seite)
+
+    def test_checkliste(self):
+        from unittest import mock
+
+        from app import golive, graph_versand
+        seite = self.client.get("/parametrierung/golive")
+        self.assertEqual(seite.status_code, 200)
+        punkte = golive.pruefen(self.s)
+        self.assertEqual(len(punkte), 11)
+        titel = [p.titel for p in punkte]
+        self.assertIn("UGL-Testdatei von Collin bestätigt", titel)
+        self.assertIn("Bestandsimport durchgeführt", titel)
+        # BEISPIEL-Nummern im Blatt → Stücklisten-Punkt rot
+        stueck = next(p for p in punkte if p.titel.startswith("Stücklisten"))
+        self.assertFalse(stueck.ok)
+        self.assertIn("BEISPIEL", stueck.detail)
+        # Häkchen Formulare
+        vorher = kern.parameter_holen(self.s, "golive_formulare_abgenommen", "")
+        self.client.post("/parametrierung/golive/haekchen",
+                         data={"name": "golive_formulare_abgenommen", "an": "on"})
+        self.s.expire_all()
+        self.assertTrue(next(p for p in golive.pruefen(self.s)
+                             if p.titel.startswith("Montage-Formulare")).ok)
+        kern.parameter_setzen(self.s, "golive_formulare_abgenommen", vorher)
+        # Testmail (Graph gemockt, ohne Fallback)
+        testmail_vorher = kern.parameter_holen(self.s, "golive_testmail", "")
+        from app.models import Benutzer
+        admin = self.s.get(Benutzer, 1)
+        mail_vorher = admin.email
+        admin.email = admin.email or "admin@test.local"
+        self.s.commit()
+        with mock.patch.object(graph_versand, "text_mail_senden",
+                               return_value=(True, "")) as gesendet:
+            ok, _ = golive.testmail_senden(self.s, admin)
+        self.assertTrue(ok)
+        self.assertEqual(gesendet.call_count, 1)
+        self.assertTrue(kern.parameter_holen(self.s, "golive_testmail", ""))
+        kern.parameter_setzen(self.s, "golive_testmail", testmail_vorher)
+        admin.email = mail_vorher
+        self.s.commit()
+
+    def test_stuecklisten_seite_verlinkt_checkliste(self):
+        seite = self.client.get("/parametrierung/stuecklisten").text
+        self.assertIn("/parametrierung/golive", seite)
+        self.assertNotIn("Testdatei von Collin bestätigt</span>", seite)
 
 
 if __name__ == "__main__":
