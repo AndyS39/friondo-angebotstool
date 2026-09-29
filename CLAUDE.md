@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v19)
+# Friondo Angebotstool – Projektkontext (v20)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -718,3 +718,30 @@ v14“ entspricht diesem Abschnitt.)
   Eintrag änderbar; `bza.ist_gefoerdert` bietet nur noch bei „unbekannt“
   beide Wege an. Tests: `tests/test_bza_v19.py`; Team-Hinweise:
   docs/nach-dem-update-v19.md.
+
+## Neu in v20 – Anschriften (abgestimmt 29.09.2026)
+
+(Plan: PLAN_GESAMT.md B4, Phase 98 – Chat-Abstimmung 29.09.)
+
+- **Editor-Bereich „Anschriften“** mit zwei Karten Rechnungsanschrift und
+  Lieferanschrift (Name/Firma, Zusatz optional, Straße + Nr., PLZ, Ort; Makro
+  `_anschriften.html`, CSS `.anschrift-karten`). Vorbelegung: Rechnung aus
+  Erfassung (O06/O09–O12) bzw. Kunden-Standard, sonst Kundenname +
+  Ausführungsort; Lieferung aus O13 (strukturiert geparst) bzw. Kunden-
+  Standard, sonst Ausführungsort. Neue Spalten `angebote.rechnung_zusatz`,
+  `liefer_name/_zusatz/_strasse/_plz/_ort` (`liefer_anschrift` = Alt-Text
+  v13, Migration `migration_v20_anschriften` strukturiert ihn).
+- **Regel:** editierbar nur im Entwurf (`POST /angebote/<id>/anschriften`);
+  versendete Angebote über „Überarbeiten“ → Version .2 (kopiert alle
+  Anschriftsfelder).
+- **Kunden-Standard** in der Vorgangsakte (aufklappbar, ID/Admin,
+  `POST /vorgaenge/<id>/anschriften`; Werte gleich Kundenname/Ausführungsort
+  werden nicht gespeichert): Spalten `kunden.rechnung_*` / `kunden.liefer_*`;
+  wirkt auf NEUE Angebote (`anschriften.angebot_vorbelegen`) und neue
+  WP-Erfassungen (O06 = Nein + O09–O12, O13; `vorbelegt_json`).
+- **PDF:** Logik in `app/anschriften.py` – der Rechnungs-Name ersetzt bei
+  Abweichung den Kundennamen im Empfängerblock (Briefanrede bleibt der
+  Ansprechpartner), Zusatz als eigene Zeile, „Ausführungsort: …“ nur bei
+  abweichender Rechnungsadresse, „Lieferanschrift: …“ nur, wenn sie vom
+  Ausführungsort abweicht; der **Lieferschein** (v16) ist an die
+  Lieferanschrift adressiert. Tests: `tests/test_anschriften_v20.py`.

@@ -114,19 +114,19 @@ Gesamtübersicht (Testergebnisse, offene Punkte, Rückfragen gebündelt).
       (weiße 8800er-Nummer, Hybrox) blockieren nur ihre Zeilen
 
 ## B4 – Phase 98: Anschriften-Ausbau (Chat-Abstimmung 29.09.)
-- [ ] Editor-Bereich „Anschriften" mit zwei Karten – Rechnungsanschrift und
+- [x] Editor-Bereich „Anschriften" mit zwei Karten – Rechnungsanschrift und
       Lieferanschrift – Felder je: Name/Firma, Zusatz (optional), Straße
       und Hausnummer, PLZ, Ort. Vorbelegung: Rechnung aus Erfassung/Kunde,
       Lieferung = Ausführungsort; frei überschreibbar
-- [ ] Beide Anschriften auch am Kunden in der Vorgangsakte pflegbar als
+- [x] Beide Anschriften auch am Kunden in der Vorgangsakte pflegbar als
       Standard für neue Erfassungen/Angebote
-- [ ] PDF: Rechnungs-Name ersetzt bei Abweichung den Kundennamen im
+- [x] PDF: Rechnungs-Name ersetzt bei Abweichung den Kundennamen im
       Empfängerblock (Briefanrede bleibt der Ansprechpartner);
       Lieferanschrift als eigene Zeile/Block, wenn abweichend vom
       Ausführungsort; Lieferschein (v16) adressiert an die Lieferanschrift
-- [ ] Regel: editierbar im Entwurf; bei versendeten Angeboten läuft die
+- [x] Regel: editierbar im Entwurf; bei versendeten Angeboten läuft die
       Änderung über „Überarbeiten" → Version .2
-- [ ] migrate.py: Anschriftenfelder an Angebot und Kunde; CLAUDE-Abschnitt
+- [x] migrate.py: Anschriftenfelder an Angebot und Kunde; CLAUDE-Abschnitt
       (Nummer = höchste + 1)
 
 ## B5 – PLAN_LEAD_V1.1 (Phasen 87–89)

@@ -74,10 +74,9 @@ def erzeuge_lieferschein(angebot: Angebot, kunde: Kunde, ziel: Path | None = Non
     y_start = pdf.get_y() + 3
     pdf.set_font("Arial", "", 10)
     pdf.set_xy(pdf.l_margin, y_start)
-    person = " ".join(t for t in (kunde.anrede if kunde.anrede != "Firma" else "",
-                                  kunde.vorname, kunde.nachname) if t)
-    empfaenger = [t for t in (kunde.firma, person, kunde.strasse,
-                              f"{kunde.plz} {kunde.ort}".strip()) if t]
+    # v20 (Phase 98): Lieferschein adressiert an die Lieferanschrift
+    from app import anschriften
+    empfaenger = anschriften.zeilen(anschriften.lieferung(angebot, kunde))
     pdf.multi_cell(100, 4.8, "\n".join(empfaenger))
     from datetime import date
     pdf.set_font("Arial", "", 9)
@@ -97,9 +96,9 @@ def erzeuge_lieferschein(angebot: Angebot, kunde: Kunde, ziel: Path | None = Non
     pdf.set_font("Arial", "", 9)
     ausfuehrung = f"{kunde.strasse}, {kunde.plz} {kunde.ort}".strip(", ")
     pdf.cell(0, 5, f"Ausführungsort: {ausfuehrung}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    if angebot.liefer_anschrift:
-        pdf.cell(0, 5, f"Lieferanschrift: {angebot.liefer_anschrift}",
-                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    if anschriften.lieferzeile(angebot, kunde):
+        pdf.multi_cell(0, 5, "Lieferanschrift: "
+                       + anschriften.einzeilig(anschriften.lieferung(angebot, kunde)))
     pdf.ln(4)
 
     breiten = {"pos": 14, "menge": 16, "einheit": 14, "text": 126}

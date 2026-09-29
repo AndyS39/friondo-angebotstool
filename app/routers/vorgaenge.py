@@ -232,7 +232,25 @@ async def akte(request: Request, vorgang_id: int,
             lead_readonly = True
     except Exception:
         lead_kontext = None
+    # v20 (Phase 98): Standard-Anschriften des Kunden (leer = Name + Ausführungsort)
+    from types import SimpleNamespace
+
+    from app import anschriften as anschriften_modul
+    _leer = SimpleNamespace(**{f"{p}_{f}": "" for p in ("rechnung", "liefer")
+                               for f in anschriften_modul.FELDER}, liefer_anschrift="")
+    anschrift_kontext = {}
+    if kunde is not None:
+        _re = anschriften_modul.rechnung(_leer, kunde)
+        _li = anschriften_modul.lieferung(_leer, kunde)
+        hinweise = []
+        if any(getattr(kunde, f"rechnung_{f}", "") for f in anschriften_modul.FELDER):
+            hinweise.append("Rechnung abweichend")
+        if any(getattr(kunde, f"liefer_{f}", "") for f in anschriften_modul.FELDER):
+            hinweise.append("Lieferung abweichend")
+        anschrift_kontext = {"kunde_rechnung": _re, "kunde_liefer": _li,
+                             "kunde_anschrift_hinweis": " · ".join(hinweise)}
     return render(request, "vorgaenge/akte.html", aktiv="/vorgaenge",
+                  **anschrift_kontext,
                   mobil=benutzer.rolle == "aussendienst",
                   galerie_daten=galerie_daten, galerie_ordner=galerie_ordner,
                   galerie_sparten=galerie_sparten,
@@ -373,6 +391,34 @@ async def kombi_versand(request: Request, vorgang_id: int,
         return RedirectResponse(ziel + quote_plus(
             f"Kombi-Entwurf für {nummern} erstellt. " + meldung), status_code=303)
     return RedirectResponse(ziel + quote_plus(meldung), status_code=303)
+
+
+@router.post("/{vorgang_id}/anschriften")
+async def anschriften_standard(request: Request, vorgang_id: int,
+                               session: Session = Depends(get_session)):
+    """v20 (Phase 98): Standard-Rechnungs-/Lieferanschrift am Kunden (ID/Admin).
+    Werte, die dem Kundennamen/Ausführungsort entsprechen, werden nicht
+    gespeichert (leer = Standard)."""
+    from app import anschriften
+    from app.models import Kunde
+    benutzer = request.state.benutzer
+    vorgang = session.get(Vorgang, vorgang_id)
+    if (vorgang is None or benutzer is None
+            or benutzer.rolle not in ("admin", "innendienst")):
+        return RedirectResponse("/vorgaenge", status_code=303)
+    kunde = session.get(Kunde, vorgang.kunde_id) if vorgang.kunde_id else None
+    if kunde is None:
+        return RedirectResponse(f"/vorgaenge/{vorgang_id}", status_code=303)
+    form = await request.form()
+    for praefix in ("rechnung", "liefer"):
+        werte = anschriften.aus_formular(form, praefix)
+        gleich = (not anschriften.adresse_abweichend(werte, kunde)
+                  and not anschriften.name_abweichend(werte, kunde)
+                  and not werte.get("zusatz"))
+        anschriften.setzen(kunde, praefix, {} if gleich else werte)
+    session.commit()
+    return RedirectResponse(f"/vorgaenge/{vorgang_id}?meldung=" + quote_plus(
+        "Standard-Anschriften gespeichert."), status_code=303)
 
 
 @router.post("/{vorgang_id}/verfolgung")

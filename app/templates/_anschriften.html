@@ -1,0 +1,37 @@
+{# v20 (Phase 98): Anschriften-Karten (Rechnungs- und Lieferanschrift) –
+   genutzt im Angebots-Editor und in der Vorgangsakte (Kunden-Standard).
+   rechnung/liefer: dict name/zusatz/strasse/plz/ort (effektive Werte). #}
+{% macro anschrift_felder(praefix, werte, gesperrt) %}
+<label>Name / Firma
+    <input type="text" name="{{ praefix }}_name" maxlength="200" value="{{ werte.name }}" {{ 'disabled' if gesperrt }}></label>
+<label>Zusatz <span class="dezent">(optional)</span>
+    <input type="text" name="{{ praefix }}_zusatz" maxlength="200" value="{{ werte.zusatz }}"
+           placeholder="z. B. c/o, Abteilung, Contracting-Geber" {{ 'disabled' if gesperrt }}></label>
+<label>Straße und Hausnummer
+    <input type="text" name="{{ praefix }}_strasse" maxlength="200" value="{{ werte.strasse }}" {{ 'disabled' if gesperrt }}></label>
+<div class="anschrift-plzort">
+    <label>PLZ
+        <input type="text" name="{{ praefix }}_plz" maxlength="10" value="{{ werte.plz }}" {{ 'disabled' if gesperrt }}></label>
+    <label>Ort
+        <input type="text" name="{{ praefix }}_ort" maxlength="100" value="{{ werte.ort }}" {{ 'disabled' if gesperrt }}></label>
+</div>
+{% endmacro %}
+
+{% macro anschriften_karten(aktion, rechnung, liefer, gesperrt=false, hinweis='',
+                            titel_rechnung='Rechnungsanschrift', titel_liefer='Lieferanschrift',
+                            knopf='Anschriften speichern') %}
+<form method="post" action="{{ aktion }}" class="anschriften">
+    <div class="anschrift-karten">
+        <fieldset class="anschrift-karte">
+            <legend>{{ titel_rechnung }}</legend>
+            {{ anschrift_felder('rechnung', rechnung, gesperrt) }}
+        </fieldset>
+        <fieldset class="anschrift-karte">
+            <legend>{{ titel_liefer }}</legend>
+            {{ anschrift_felder('liefer', liefer, gesperrt) }}
+        </fieldset>
+    </div>
+    {% if hinweis %}<p class="dezent">{{ hinweis }}</p>{% endif %}
+    {% if not gesperrt %}<button class="knopf klein" type="submit">{{ knopf }}</button>{% endif %}
+</form>
+{% endmacro %}

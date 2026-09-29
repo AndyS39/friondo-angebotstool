@@ -2800,3 +2800,13 @@ tr.ben-details > td { background: #f7f9fb; border-top: none; }
                    background: var(--pj-text, #1b2a5e); color: #fff; padding: 8px 14px;
                    border-radius: 8px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.2); }
 .pj-pk > div small { display: block; font-size: 10px; color: var(--pj-crit); }
+
+/* v20 (Phase 98): Anschriften-Karten (Editor + Vorgangsakte) */
+.anschrift-karten { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: var(--a-3); margin: var(--a-2) 0; }
+.anschrift-karte { border: 1px solid var(--g-200); border-radius: var(--r-m);
+    padding: var(--a-2) var(--a-3); background: #fff; margin: 0; }
+.anschrift-karte legend { font-weight: 600; padding: 0 var(--a-1); }
+.anschrift-karte label { display: block; margin: var(--a-1) 0; font-size: var(--t-s); }
+.anschrift-karte input { width: 100%; box-sizing: border-box; }
+.anschrift-plzort { display: grid; grid-template-columns: 7rem 1fr; gap: var(--a-2); }

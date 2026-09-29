@@ -39,6 +39,18 @@
             {% for b in vertriebler %}{{ b.name }}{{ ', ' if not loop.last }}{% else %}–{% endfor %}
             {% if lead and lead.vot_datum %} · {{ symbol('uhr') }} VOT {{ lead.vot_datum.strftime('%d.%m.%Y %H:%M') }}{% endif %}
         </p>
+        {% if kunde and benutzer.rolle in ('admin', 'innendienst') %}
+        {# v20 (Phase 98): Standard-Anschriften des Kunden für neue Erfassungen/Angebote #}
+        {% from "_anschriften.html" import anschriften_karten %}
+        <details class="anschriften-block">
+            <summary class="dezent">Anschriften (Standard für neue Erfassungen/Angebote)
+                {% if kunde_anschrift_hinweis %}· <strong>{{ kunde_anschrift_hinweis }}</strong>{% endif %}</summary>
+            {{ anschriften_karten('/vorgaenge/' ~ vorgang.id ~ '/anschriften',
+                                  kunde_rechnung, kunde_liefer,
+                                  hinweis='Leer lassen = Kundenname + Ausführungsort. Wirkt auf NEUE Erfassungen und Angebote; bestehende Angebote behalten ihre Anschriften.',
+                                  knopf='Standard speichern') }}
+        </details>
+        {% endif %}
         {# Verfolgung (Phase 60): EINE Ampel + Wiedervorlage je Vorgang #}
         <form method="post" action="/vorgaenge/{{ vorgang.id }}/verfolgung" class="suchleiste" style="margin-bottom:0">
             <strong>Verfolgung:</strong>

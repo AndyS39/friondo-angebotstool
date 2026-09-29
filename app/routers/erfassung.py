@@ -212,6 +212,18 @@ async def sparten_start(request: Request, session: Session = Depends(get_session
             # v13-PV: Enni-Profil im PV-Bogen identisch – nur die HEMS-Frage
             erfassung.antworten_json = json.dumps({"PA12": "Nein", "PA13": "Nein"},
                                                   ensure_ascii=False)
+        # v20 (Phase 98): Standard-Anschriften des Kunden vorbelegen (WP-Bogen)
+        if sparte == "WP":
+            from app import anschriften
+            vorbelegung_adr = anschriften.erfassung_vorbelegung(kunde)
+            if vorbelegung_adr:
+                antworten_adr = json.loads(erfassung.antworten_json or "{}")
+                for key, wert in vorbelegung_adr.items():
+                    antworten_adr.setdefault(key, wert)
+                erfassung.antworten_json = json.dumps(antworten_adr, ensure_ascii=False)
+                erfassung.vorbelegt_json = json.dumps(
+                    {k: "aus Kunden-Standard (Vorgangsakte)" for k in vorbelegung_adr},
+                    ensure_ascii=False)
         session.add(erfassung)
         neu.append(erfassung)
     session.flush()

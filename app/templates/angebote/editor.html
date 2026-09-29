@@ -118,20 +118,20 @@
     {% endif %}
 </p>
 
-{# v11 (Phase 66): abweichende Lieferanschrift (optional, z. B. Contracting) #}
-<p class="dezent">Lieferanschrift:
-{% if nur_lesen %}
-    <strong>{{ angebot.liefer_anschrift or '– wie Ausführungsort –' }}</strong>
-{% else %}
-<form method="post" action="/angebote/{{ angebot.id }}/lieferanschrift" style="display:inline">
-    <input type="text" name="liefer_anschrift" size="50" maxlength="300"
-           value="{{ angebot.liefer_anschrift }}"
-           placeholder="abweichend, z. B. Contracting – leer = wie Ausführungsort"
-           title="Erscheint als eigene Zeile im Angebots-PDF unterhalb der Anschriften">
-    <button class="knopf klein zweitrangig" type="submit">Speichern</button>
-</form>
-{% endif %}
-</p>
+{# v20 (Phase 98): Anschriften – Rechnungs- und Lieferanschrift als Karten
+   (vorher: v8-Rechnungsfelder aus der Erfassung + v11-Freitext-Lieferzeile).
+   Editierbar nur im Entwurf; danach über „Überarbeiten“ → neue Version. #}
+{% from "_anschriften.html" import anschriften_karten %}
+<details class="anschriften-block" {{ 'open' if anschrift_abweichend }}>
+    <summary><strong>Anschriften</strong>
+        <span class="dezent">– Rechnung: {{ anschrift_rechnung_text }} · Lieferung: {{ anschrift_liefer_text }}</span></summary>
+    {{ anschriften_karten('/angebote/' ~ angebot.id ~ '/anschriften',
+                          anschrift_rechnung, anschrift_liefer,
+                          gesperrt=(nur_lesen or angebot.status != 'Entwurf'),
+                          hinweis=('Vorbelegung: Rechnung aus Erfassung/Kunde, Lieferung = Ausführungsort – frei überschreibbar. Im PDF erscheint nur, was vom Ausführungsort abweicht.'
+                                   if angebot.status == 'Entwurf' else
+                                   'Anschriften sind nur im Entwurf änderbar – bei versendeten Angeboten über „Überarbeiten“ (neue Version).')) }}
+</details>
 
 </div>{# /editor-kopfkarte #}
 

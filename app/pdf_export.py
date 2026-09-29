@@ -211,25 +211,10 @@ def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde, vortext_text: str,
     y_start = pdf.get_y() + 3
     pdf.set_font("Arial", "", 10)
     pdf.set_xy(pdf.l_margin, y_start)
-    person = " ".join(t for t in (kunde.anrede if kunde.anrede != "Firma" else "",
-                                  kunde.vorname, kunde.nachname) if t)
-    abweichend = bool(angebot.rechnung_strasse or angebot.rechnung_ort)
-    empfaenger = []
-    if abweichend:
-        empfaenger.append(angebot.rechnung_name or kunde.firma or person)
-        if angebot.rechnung_strasse:
-            empfaenger.append(angebot.rechnung_strasse)
-        if angebot.rechnung_plz or angebot.rechnung_ort:
-            empfaenger.append(f"{angebot.rechnung_plz} {angebot.rechnung_ort}".strip())
-    else:
-        if kunde.firma:
-            empfaenger.append(kunde.firma)
-        if person:
-            empfaenger.append(person)
-        if kunde.strasse:
-            empfaenger.append(kunde.strasse)
-        if kunde.plz or kunde.ort:
-            empfaenger.append(f"{kunde.plz} {kunde.ort}".strip())
+    # v20 (Phase 98): Rechnungs-Name/-Zusatz/-Adresse aus app/anschriften.py –
+    # die Briefanrede bleibt beim Ansprechpartner (Kunde)
+    from app import anschriften
+    empfaenger, abweichend = anschriften.empfaenger(angebot, kunde)
     pdf.multi_cell(100, 4.8, "\n".join(empfaenger))
 
     pdf.set_font("Arial", "", 9)
@@ -251,11 +236,11 @@ def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde, vortext_text: str,
         ausfuehrung = f"{kunde.strasse}, {kunde.plz} {kunde.ort}".strip(", ")
         pdf.cell(0, 5, f"Ausführungsort: {ausfuehrung}",
                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    if angebot.liefer_anschrift:
-        # v11 (Phase 66): abweichende Lieferanschrift (z. B. Contracting)
+    lieferzeile = anschriften.lieferzeile(angebot, kunde)
+    if lieferzeile:
+        # v11 (Phase 66) / v20: abweichende Lieferanschrift (z. B. Contracting)
         pdf.set_font("Arial", "", 9)
-        pdf.cell(0, 5, f"Lieferanschrift: {angebot.liefer_anschrift}",
-                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.multi_cell(0, 5, f"Lieferanschrift: {lieferzeile}")
     if ersetzt_hinweis:
         # v9: neue Version ersetzt ein früheres Angebot
         pdf.set_font("Arial", "", 9)

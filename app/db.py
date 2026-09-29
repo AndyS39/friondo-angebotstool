@@ -199,6 +199,13 @@ _NACHTRAEGLICHE_SPALTEN = {
         "abgelehnt_am": "DATETIME",
         "kfw_gefoerdert": "VARCHAR(10) NOT NULL DEFAULT ''",   # V3 Phase 84
         "bestand": "BOOLEAN NOT NULL DEFAULT 0",                # V3 Phase 85
+        # v20 (Phase 98): strukturierte Anschriften
+        "rechnung_zusatz": "VARCHAR(200) NOT NULL DEFAULT ''",
+        "liefer_name": "VARCHAR(200) NOT NULL DEFAULT ''",
+        "liefer_zusatz": "VARCHAR(200) NOT NULL DEFAULT ''",
+        "liefer_strasse": "VARCHAR(200) NOT NULL DEFAULT ''",
+        "liefer_plz": "VARCHAR(10) NOT NULL DEFAULT ''",
+        "liefer_ort": "VARCHAR(100) NOT NULL DEFAULT ''",
     },
     # V3 (Phase 84): Herkunft der Steckbrief-Werte
     "steckbrief_werte": {
@@ -249,6 +256,17 @@ _NACHTRAEGLICHE_SPALTEN = {
         "demo": "BOOLEAN NOT NULL DEFAULT 0",
     },
     "kunden": {
+        # v20 (Phase 98): Standard-Anschriften
+        "rechnung_name": "VARCHAR(200) NOT NULL DEFAULT ''",
+        "rechnung_zusatz": "VARCHAR(200) NOT NULL DEFAULT ''",
+        "rechnung_strasse": "VARCHAR(200) NOT NULL DEFAULT ''",
+        "rechnung_plz": "VARCHAR(10) NOT NULL DEFAULT ''",
+        "rechnung_ort": "VARCHAR(100) NOT NULL DEFAULT ''",
+        "liefer_name": "VARCHAR(200) NOT NULL DEFAULT ''",
+        "liefer_zusatz": "VARCHAR(200) NOT NULL DEFAULT ''",
+        "liefer_strasse": "VARCHAR(200) NOT NULL DEFAULT ''",
+        "liefer_plz": "VARCHAR(10) NOT NULL DEFAULT ''",
+        "liefer_ort": "VARCHAR(100) NOT NULL DEFAULT ''",
         "interesse": "VARCHAR(50) NOT NULL DEFAULT ''",
         "kanal_manuell": "BOOLEAN NOT NULL DEFAULT 0",
         "vertriebskanal": "VARCHAR(100) NOT NULL DEFAULT ''",

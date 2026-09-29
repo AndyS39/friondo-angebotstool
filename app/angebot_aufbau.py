@@ -337,6 +337,12 @@ def version_erzeugen(session: Session, original: Angebot) -> Angebot:
         rechnung_name=original.rechnung_name,
         rechnung_strasse=original.rechnung_strasse,
         rechnung_plz=original.rechnung_plz, rechnung_ort=original.rechnung_ort,
+        # v20 (Phase 98): Zusatz + strukturierte Lieferanschrift
+        rechnung_zusatz=original.rechnung_zusatz,
+        liefer_anschrift=original.liefer_anschrift,
+        liefer_name=original.liefer_name, liefer_zusatz=original.liefer_zusatz,
+        liefer_strasse=original.liefer_strasse, liefer_plz=original.liefer_plz,
+        liefer_ort=original.liefer_ort,
         foerderung_manuell_cent=original.foerderung_manuell_cent,
         foerderung_ausblenden=original.foerderung_ausblenden,
         foerder_grund_prozent=original.foerder_grund_prozent,
@@ -443,6 +449,10 @@ def angebot_anlegen(session: Session, kunde_id: int,
     # v11 (Phase 66): abweichende Lieferanschrift aus der Erfassung (O13)
     if (antworten or {}).get("O13"):
         rechnung["liefer_anschrift"] = str(antworten.get("O13") or "")[:300]
+        # v20 (Phase 98): zusätzlich strukturiert (Editor-Karte „Lieferanschrift“)
+        from app import anschriften as _anschriften
+        for feld, wert in _anschriften.alt_text_parsen(rechnung["liefer_anschrift"]).items():
+            rechnung[f"liefer_{feld}"] = wert
 
     for _versuch in range(5):
         angebot = Angebot(
@@ -459,6 +469,9 @@ def angebot_anlegen(session: Session, kunde_id: int,
             wiedervorlage_am=wiedervorlage,
             **rechnung,
         )
+        # v20 (Phase 98): ohne Erfassungs-Anschriften → Kunden-Standards
+        from app import anschriften as _anschriften_v20
+        _anschriften_v20.angebot_vorbelegen(angebot, session.get(Kunde, kunde_id))
         for p in positionen:
             angebot.positionen.append(AngebotsPosition(**p))
         # v9: Angebotsprofil über den Kanal des Kunden + Positionsregeln

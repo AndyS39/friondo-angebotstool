@@ -615,6 +615,20 @@ def _daten() -> list[str]:
             einstellung_setzen(session, "migration_v19_bza", "erledigt")
             session.commit()
             meldungen.append("v19: BzA-Ersteller-Parameter angelegt")
+        # v20 (Phase 98): v13-Freitext-Lieferanschriften strukturieren
+        # (liefer_anschrift bleibt als Alt-Text stehen, die Felder gewinnen)
+        if einstellung_holen(session, "migration_v20_anschriften", "") != "erledigt":
+            from app import anschriften
+            from app.models import Angebot as _Angebot
+            umgestellt = 0
+            for a in session.query(_Angebot).filter(_Angebot.liefer_anschrift != ""):
+                if any(getattr(a, f"liefer_{f}", "") for f in anschriften.FELDER):
+                    continue
+                anschriften.setzen(a, "liefer", anschriften.alt_text_parsen(a.liefer_anschrift))
+                umgestellt += 1
+            einstellung_setzen(session, "migration_v20_anschriften", "erledigt")
+            session.commit()
+            meldungen.append(f"v20: {umgestellt} Lieferanschriften strukturiert")
         # V4 (Phase 90.3): Vorlauf-Schwellen vorbelegen (idempotent)
         for name, wert in (("vorlauf_gruen_ab_wochen", "8"),
                            ("vorlauf_gelb_ab_wochen", "4")):

@@ -424,7 +424,20 @@ async def editor(request: Request, angebot_id: int,
     from app import konfigurator as engine_modul
     fachhinweise = engine_modul.hinweise_aus_protokoll(protokoll)
     profil_hinweise = {p_.id: angebotsprofile.regeln_beschreibung(p_) for p_ in profile}
+    # v20 (Phase 98): effektive Anschriften für die Karten
+    from app import anschriften as anschriften_modul
+    _re = anschriften_modul.rechnung(angebot, kunde)
+    _li = anschriften_modul.lieferung(angebot, kunde)
+    anschrift_kontext = dict(
+        anschrift_rechnung=_re, anschrift_liefer=_li,
+        anschrift_abweichend=bool(anschriften_modul.empfaenger(angebot, kunde)[1]
+                                  or anschriften_modul.lieferzeile(angebot, kunde)),
+        anschrift_rechnung_text=anschriften_modul.einzeilig(_re),
+        anschrift_liefer_text=(anschriften_modul.einzeilig(_li)
+                               if anschriften_modul.lieferzeile(angebot, kunde)
+                               else "wie Ausführungsort"))
     return render(request, "angebote/editor.html", aktiv="/angebote",
+                  **anschrift_kontext,
                   ablehnungsgruende=ablehnungsgruende,
                   profil=profil, profile=profile, profil_hinweise=profil_hinweise,
                   fachhinweise=fachhinweise, versionen=versionen,
@@ -444,6 +457,32 @@ async def editor(request: Request, angebot_id: int,
                   versand=request.query_params.get("versand", ""),
                   weblink=request.query_params.get("weblink", ""),
                   meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/{angebot_id}/anschriften")
+async def anschriften_setzen(request: Request, angebot_id: int,
+                             session: Session = Depends(get_session)):
+    """v20 (Phase 98): Rechnungs- und Lieferanschrift (Karten im Editor) –
+    nur im Entwurf; versendete Angebote über „Überarbeiten“ (.2)."""
+    from urllib.parse import quote_plus
+
+    from app import anschriften
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None:
+        return RedirectResponse("/angebote", status_code=303)
+    if angebot.status != "Entwurf" or angebot.extern:
+        return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+            "Anschriften sind nur im Entwurf änderbar – bitte „Überarbeiten“ "
+            "(neue Version) nutzen."), status_code=303)
+    form = await request.form()
+    anschriften.setzen(angebot, "rechnung", anschriften.aus_formular(form, "rechnung"))
+    anschriften.setzen(angebot, "liefer", anschriften.aus_formular(form, "liefer"))
+    angebot.liefer_anschrift = ""        # Alt-Text v13 ist jetzt strukturiert
+    session.commit()
+    return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+        "Anschriften gespeichert."), status_code=303)
 
 
 @router.post("/{angebot_id}/lieferanschrift")

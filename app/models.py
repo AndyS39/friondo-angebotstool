@@ -31,6 +31,17 @@ class Kunde(Base):
     interesse: Mapped[str] = mapped_column(String(50), default="")
     vertriebskanal: Mapped[str] = mapped_column(String(100), default="")   # v6, aus monday
     kanal_manuell: Mapped[bool] = mapped_column(Boolean, default=False)    # v9: Sync-Schutz
+    # v20 (Phase 98): Standard-Anschriften für neue Erfassungen/Angebote
+    rechnung_name: Mapped[str] = mapped_column(String(200), default="")
+    rechnung_zusatz: Mapped[str] = mapped_column(String(200), default="")
+    rechnung_strasse: Mapped[str] = mapped_column(String(200), default="")
+    rechnung_plz: Mapped[str] = mapped_column(String(10), default="")
+    rechnung_ort: Mapped[str] = mapped_column(String(100), default="")
+    liefer_name: Mapped[str] = mapped_column(String(200), default="")
+    liefer_zusatz: Mapped[str] = mapped_column(String(200), default="")
+    liefer_strasse: Mapped[str] = mapped_column(String(200), default="")
+    liefer_plz: Mapped[str] = mapped_column(String(10), default="")
+    liefer_ort: Mapped[str] = mapped_column(String(100), default="")
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
@@ -1030,6 +1041,13 @@ class Angebot(Base):
     # v11 (Phase 66): abweichende Lieferanschrift (optional, z. B. Contracting)
     # und Kennzeichen fuer kopierte Angebote ("Kopie von AN-...")
     liefer_anschrift: Mapped[str] = mapped_column(String(300), default="")
+    # v20 (Phase 98): strukturierte Anschriften (liefer_anschrift = Alt-Text v13)
+    rechnung_zusatz: Mapped[str] = mapped_column(String(200), default="")
+    liefer_name: Mapped[str] = mapped_column(String(200), default="")
+    liefer_zusatz: Mapped[str] = mapped_column(String(200), default="")
+    liefer_strasse: Mapped[str] = mapped_column(String(200), default="")
+    liefer_plz: Mapped[str] = mapped_column(String(10), default="")
+    liefer_ort: Mapped[str] = mapped_column(String(100), default="")
     kopie_von: Mapped[str] = mapped_column(String(30), default="")
     # Angebotsverfolgung (v6): Hot-Ampel (heiss/warm/kalt/""), Wiedervorlage
     verfolgung_ampel: Mapped[str] = mapped_column(String(10), default="")
