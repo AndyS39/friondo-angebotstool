@@ -56,10 +56,15 @@
 </div>
 {%- endmacro %}
 
-{# Wiedervorlage-Chip mit Fälligkeits-Farbe (rot = fällig, blau = geplant) #}
+{# Wiedervorlage-Chip mit Fälligkeits-Farbe (rot = fällig, blau = geplant).
+   datum und heute dürfen date oder datetime sein – verglichen wird nur der
+   Tag (Hotfix 29.09.2026: die Vorgangsakte übergibt heute als datetime,
+   date <= datetime warf TypeError → Internal Server Error). #}
 {% macro wiedervorlage_chip(datum, heute) -%}
 {%- if datum -%}
-<span class="wv-chip {{ 'faellig' if datum.date() <= heute else 'geplant' }}">
+{%- set tag = datum.date() if datum.date is defined else datum -%}
+{%- set stichtag = heute.date() if heute.date is defined else heute -%}
+<span class="wv-chip {{ 'faellig' if tag <= stichtag else 'geplant' }}">
     {{ symbol('wiedervorlage') }} {{ datum.strftime('%d.%m.%Y') }}</span>
 {%- endif -%}
 {%- endmacro %}
