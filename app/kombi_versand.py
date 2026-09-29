@@ -36,18 +36,40 @@ def waehlbar(angebot: Angebot) -> tuple[bool, str]:
     return True, ""
 
 
+def _titel_schluessel(position) -> str:
+    """v13-PV: gleiche Leistung unter verschiedenen Nummern erkennen (WP-Pos. 104
+    und PV123 heißen beide „Zähler-Komplettschrank 2-Feld inkl. Anbindung“) –
+    normalisierte erste Zeile von Bezeichnung bzw. Beschreibung."""
+    import re
+    text = position.bezeichnung or ""
+    if not text:
+        zeilen = [z.strip() for z in (position.beschreibung or "").splitlines() if z.strip()]
+        if len(zeilen) > 1 and zeilen[0].lower().startswith("(optionale position"):
+            zeilen = zeilen[1:]
+        text = zeilen[0] if zeilen else ""
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
 def doppelte_artikel(angebote: list[Angebot]) -> list[str]:
     """Artikelnummern, die in MEHREREN Tool-Angeboten voll berechnet sind
-    (EP/bauseits/Alternativ zählen nicht; TAIFUN-PDFs sind nicht prüfbar)."""
-    vorkommen: dict[str, set[int]] = {}
+    (EP/bauseits/Alternativ zählen nicht; TAIFUN-PDFs sind nicht prüfbar).
+    v13-PV: WP- und PV-Angebote werden zusätzlich über die Bezeichnung
+    verglichen (Ausgabe dann „104/PV123“)."""
+    vorkommen: dict[str, dict[int, str]] = {}
     for angebot in angebote:
         if angebot.extern:
             continue
         for p in angebot.positionen:
             if p.ep_flag or p.bauseits or p.alternativ or not p.pos_nr:
                 continue
-            vorkommen.setdefault(p.pos_nr, set()).add(angebot.id)
-    return sorted(nr for nr, ids in vorkommen.items() if len(ids) > 1)
+            titel = _titel_schluessel(p)
+            schluessel = f"t:{titel}" if titel else f"n:{p.pos_nr}"
+            vorkommen.setdefault(schluessel, {}).setdefault(angebot.id, p.pos_nr)
+    doppelt = []
+    for ids in vorkommen.values():
+        if len(ids) > 1:
+            doppelt.append("/".join(sorted(set(ids.values()))))
+    return sorted(set(doppelt))
 
 
 def gewerke_hinweise(session: Session, vorgang: Vorgang,
@@ -59,17 +81,27 @@ def gewerke_hinweise(session: Session, vorgang: Vorgang,
     if len(sparten) < 2:
         return []
     liste = set(gewerke_artikel(session))
+    # v13-PV: Listen-Artikel auch über die Bezeichnung erkennen (PV-Angebote
+    # tragen eigene Nummern PV…, z. B. PV123 = WP-Pos. 104)
+    from app.models import Artikel
+    listen_titel = set()
+    for artikel in session.query(Artikel).filter(Artikel.pos_nr.in_(liste)):
+        listen_titel.add(_titel_schluessel(artikel))
+    listen_titel.discard("")
     hinweise = []
     for angebot in aktive:
         if angebot.extern:
             continue
         voll = sorted({p.pos_nr for p in angebot.positionen
-                       if p.pos_nr in liste
+                       if (p.pos_nr in liste or _titel_schluessel(p) in listen_titel)
                        and not (p.ep_flag or p.bauseits or p.alternativ)})
         if voll:
+            eigene = angebot.konfigurator_typ or "WP"
+            andere = sorted(s for s in sparten if s != eigene)
+            ziel = " bzw. ".join(f"{s}-Angebot" for s in andere) or "andere Angebot"
             hinweise.append(
-                f"{angebot.nummer}: Pos. {', '.join(voll)} voll berechnet – "
-                "prüfen: ggf. ins PV-Angebot verlagern oder Alternativ-"
+                f"{angebot.nummer} ({eigene}): Pos. {', '.join(voll)} voll berechnet – "
+                f"prüfen: ggf. ins {ziel} verlagern oder Alternativ-"
                 "Kennzeichen setzen (Förder-/USt-Optimierung).")
     return hinweise
 

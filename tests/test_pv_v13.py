@@ -232,3 +232,110 @@ class Phase76Auslegung(Basis):
         self.assertTrue(zeile)
         self.assertIn("38 Module", zeile[0]["antwort"])
         self.assertIn("SigenStor 15/", zeile[0]["antwort"])
+
+
+# --- Phase 77 ---------------------------------------------------------------
+
+def mengen(positionen) -> dict:
+    ergebnis: dict = {}
+    for p in positionen:
+        if p["pos_nr"]:
+            ergebnis[p["pos_nr"]] = ergebnis.get(p["pos_nr"], 0) + p["menge"]
+    return ergebnis
+
+
+class Phase77Positionen(Basis):
+    def pos(self, antworten):
+        return pv_auslegung.positionen_zusammenstellen(self.logik, antworten, self.s)
+
+    def test_maximalbelegung_quer(self):
+        pos = self.pos(pv_basis(PD12=30, PD13=4, PA10=10))
+        m = mengen(pos)
+        self.assertEqual((m["PV001"], m["PV162"], m["PV013"], m["PV163"]),
+                         (30, 26, 4, 30))
+        self.assertEqual(pos[0]["pos_nr"], "PV001")                 # Pos. 1 Module
+        self.assertEqual(pos[1]["pos_nr"], "PV079")   # Pos. 2: 13,65 kWp ÷ 1,2 → TP2 12/10
+        self.assertIn("Die angebotenen PV-Modultypen", pos[0]["beschreibung"])
+        self.assertTrue(pos[0]["gruppe"].startswith("Komplettpaket 13,65 kWp PV-Anlage"))
+        self.assertEqual(m["PV161"], 2)                            # 30 Module → 2 Strings
+        self.assertEqual(m["PV169"], 1)                            # DC-ÜSS 2 MPPT
+        self.assertEqual(m["PV164"], 1)                            # Fanggerüst
+        for immer in ("PV065", "PV167", "PV170", "PV171"):
+            self.assertIn(immer, m)
+        self.assertTrue([p for p in pos if p["pos_nr"] == "PV065"][0]["ep_flag"])
+        zeile = [p for p in pos if p["bezeichnung"] == "Auslegung der PV-Anlage"]
+        self.assertTrue(zeile and zeile[0]["e_preis_cent"] == 0)
+        self.assertNotIn("PV010", m)                               # keine Optimierer
+        self.assertNotIn("014", m)
+
+    def test_walm_flach_tigo(self):
+        m = mengen(self.pos(pv_basis(PD01="Walmdach", PD12=20)))
+        self.assertEqual((m["PV162"], m.get("PV013", 0)), (20, 0))
+        m = mengen(self.pos(pv_basis(PD01="Flachdach", PD11="Süd", PD12=20)))
+        self.assertEqual(m["PV014"], 20)
+        self.assertNotIn("PV162", m)
+        m = mengen(self.pos(pv_basis(PD05="Ja", PD06=5)))
+        self.assertEqual(m["PV010"], 5)
+
+    def test_elektro_kette(self):
+        m = mengen(self.pos(pv_basis(PA02="Ja", PA03="2-Feld", PA07="Ja")))
+        self.assertIn("PV123", m)
+        self.assertNotIn("PV132", m)          # UV nur ohne neue ZV
+        m = mengen(self.pos(pv_basis(PA02="Nein", PA07="Ja", PA15="Ja", PA08="Nein")))
+        self.assertEqual((m.get("PV132"), m.get("PV052"), m.get("PV049")), (1, 1, 1))
+        self.assertTrue(engine.ampel_gruende(self.logik,
+                                             pv_basis(PA02="Ja", PA03="Sonstige")))
+        self.assertTrue(engine.ampel_gruende(self.logik,
+                                             pv_basis(PA02="Ja", PA03="4-Feld")))
+
+    def test_dc_ueberspannungsschutz(self):
+        # Strings 3 (60 Module, 1 Seite) → Typ 2, 3 MPPT
+        m = mengen(self.pos(pv_basis(PD12=60, PA10=10)))
+        self.assertEqual((m.get("PV023"), m.get("PV169")), (1, None))
+        # Strings 4 (100 Module) → 2 × 2 MPPT (WR-Ampel wegen 45,5 kWp)
+        a = pv_auslegung.auslegen(self.logik, pv_basis(PD12=100))
+        self.assertEqual(a.strings, 4)
+        m = mengen(self.pos(pv_basis(PD12=100)))
+        self.assertEqual(m.get("PV169"), 2)
+        gruende = engine.ampel_gruende(self.logik, pv_basis(PD12=130))
+        self.assertTrue(any("mehr als 4 Strings" in g for g in gruende), gruende)
+
+    def test_fit_for_future_und_enni(self):
+        m = mengen(self.pos(pv_basis(PA11="Ja", PA12="Ja")))
+        self.assertEqual({k: m.get(k) for k in ("014", "015", "016", "017")},
+                         {"014": 1, "015": 1, "016": 1, "017": None})
+        from app import angebotsprofile
+        kunde = Kunde(nachname="PV-Test v13 Enni", email=TEST_EMAIL,
+                      vertriebskanal="Enni Energie")
+        self.s.add(kunde)
+        self.s.commit()
+        angebot = angebot_aufbau.angebot_anlegen(
+            self.s, kunde.id, antworten=pv_basis(PA11="Ja"), logik=self.logik,
+            sparte="PV")
+        nummern = {p.pos_nr: p for p in angebot.positionen}
+        self.assertEqual(nummern["015"].e_preis_cent, angebotsprofile.ENNI_SONDERPREIS_CENT)
+        self.assertNotIn("014", nummern)
+        self.assertIn("162", nummern)
+        self.assertEqual(angebot.ust_satz, 0.0)
+        self.assertEqual(angebot.kfw_json, "{}")
+
+    def test_kombi_pv_wp(self):
+        from app import kombi_versand
+        vorgang = Vorgang(kunde_id=self.kunde.id)
+        self.s.add(vorgang)
+        self.s.flush()
+        wp = angebot_aufbau.angebot_anlegen(self.s, self.kunde.id)
+        pv = angebot_aufbau.angebot_anlegen(self.s, self.kunde.id, sparte="PV")
+        stamm = {a.pos_nr: a for a in self.s.query(Artikel)
+                 .filter(Artikel.pos_nr.in_(["104", "PV123"]))}
+        for angebot, nr in ((wp, "104"), (pv, "PV123")):
+            angebot.vorgang_id = vorgang.id
+            angebot.positionen.append(AngebotsPosition(
+                sort=1, pos_nr=nr, bezeichnung=stamm[nr].bezeichnung,
+                beschreibung=stamm[nr].beschreibung, menge=1,
+                e_preis_cent=stamm[nr].e_preis_cent))
+        self.s.commit()
+        self.assertEqual(kombi_versand.doppelte_artikel([wp, pv]), ["104/PV123"])
+        hinweise = kombi_versand.gewerke_hinweise(self.s, vorgang, [wp, pv])
+        self.assertTrue(any("(PV)" in h and "ins WP-Angebot" in h for h in hinweise), hinweise)
+        self.assertTrue(any("(WP)" in h and "ins PV-Angebot" in h for h in hinweise), hinweise)

@@ -431,6 +431,20 @@ def _pv_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
                     bericht.fehler.append(
                         f"Aktionen PV {aktion.frage}: Zusatzbedingung verweist auf "
                         f"unbekannte Frage {fid}.")
+    # Doppler-Schutz (wie _doppelquellen_pruefen bei WP): ein Artikel aus
+    # Grundpaket/Gruppen-Trigger darf nicht zusätzlich über eine Fragezeile
+    # kommen – er würde sonst doppelt berechnet
+    immer_refs = {r.ref: a.frage for a in logik.pv_aktionen
+                  if a.frage in ("Grundpaket", "Gruppen-Trigger") for r in a.artikel}
+    for aktion in logik.pv_aktionen:
+        if aktion.typ != "normal" or aktion.frage in PV_SPEZIAL:
+            continue
+        for ref in aktion.artikel:
+            if ref.ref in immer_refs:
+                bericht.warnungen.append(
+                    f"Doppelte Artikelquelle PV: {ref.ref} kommt über „{immer_refs[ref.ref]}“ "
+                    f"UND über die Aktionszeile {aktion.frage} („{aktion.antwort}“) – "
+                    "der Artikel würde doppelt im Angebot landen.")
     # jede Auswahl-Option der PV-Fragen, die eine Aktionszeile hat, vollständig?
     for frage in fragen.values():
         zeilen = [a for a in logik.pv_aktionen if a.frage == frage.id]

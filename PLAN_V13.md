@@ -86,18 +86,18 @@ später ersetzt.
       Sonstiges [ANNAHMEN – siehe Chat]
 
 ## Phase 77 – Positionslogik PV (Aktionen)
-- [ ] Block PV-Anlage: Module-Position × Anzahl (Pos. 1);
+- [x] Block PV-Anlage: Module-Position × Anzahl (Pos. 1);
       WR/Speicher-Kombi (Pos. 2)
-- [ ] Unterkonstruktion nach PD01: Satteldach → „UK Satteldach"
+- [x] Unterkonstruktion nach PD01: Satteldach → „UK Satteldach"
       × (Module − quer) und, wenn quer > 0, „UK Satteldach Kreuz"
       × quer; Walmdach → wie Satteldach [ANNAHME]; Flachdach →
       „UK Flachdach Ost/West" bzw. „UK Flachdach Süd" je Belegungs-
       antwort × Module
-- [ ] „Montage je Modul" × Modulanzahl
-- [ ] Tigo TS4 Optimierer × PD06-Anzahl (nur wenn > 0)
-- [ ] Gerüst: PD03 = Fanggerüst → „Gerüst / Absturzsicherung";
+- [x] „Montage je Modul" × Modulanzahl
+- [x] Tigo TS4 Optimierer × PD06-Anzahl (nur wenn > 0)
+- [x] Gerüst: PD03 = Fanggerüst → „Gerüst / Absturzsicherung";
       Vollgerüst/Sonstiges → AMPEL (Phase 76)
-- [ ] Elektro-Kette: „Elektroarbeiten AC ab Wechselrichter" immer;
+- [x] Elektro-Kette: „Elektroarbeiten AC ab Wechselrichter" immer;
       PA02 = Ja → Zählerschrank-Position gemäß PA03-Feldanzahl (Zu-
       ordnung aus den PV-Positionslisten; PA03 = Sonstige → AMPEL);
       PA02 = Nein UND PA07 = Ja → „Hager VA36CN AP Kleinverteiler
@@ -106,18 +106,18 @@ später ersetzt.
       „Erdungsspieß"; DC-Überspannungsschutz: Strings ≤ 2 → „Typ 2,
       2 MPPT" ×1; genau 3 → „Typ 2, 3 MPPT" ×1; genau 4 → „Typ 2,
       2 MPPT" ×2; über 4 → AMPEL
-- [ ] Immer-Positionen: „Sigenergy Energy Gateway 3Ph Ersatzstrom
+- [x] Immer-Positionen: „Sigenergy Energy Gateway 3Ph Ersatzstrom
       inkl. Installation" als EP; „Planung, Netzanmeldung …";
       „An-/Abfahrt & Müllentsorgung"
-- [ ] Friondo Fit for Future analog WP über PA11/PA12/PA13
+- [x] Friondo Fit for Future analog WP über PA11/PA12/PA13
       (014-Paket bzw. 015/016/017-Logik, Vollmacht-Regeln bei
       PA12/PA13, Angebotsprofile Enni/SWD/Sparkasse greifen identisch –
       Enni: nur HEMS-Frage, 015 à 599 €, Pos. 162, keine Vollmacht)
-- [ ] Gewerkeübergreifende Artikel: der v10-Hinweis („ggf. ins
+- [x] Gewerkeübergreifende Artikel: der v10-Hinweis („ggf. ins
       PV-Angebot verlagern") funktioniert jetzt in beide Richtungen
       zwischen zwei Tool-Angeboten; Kombi-Doppelungs-Warnung erfasst
       PV-Angebote mit
-- [ ] Doppler-Schutz und Validierung decken die PV-Blätter ab
+- [x] Doppler-Schutz und Validierung decken die PV-Blätter ab
 
 ## Phase 78 – PV-PDF & Wirtschaftlichkeitsberechnung
 - [ ] Angebots-PDF PV: Aufbau, Blocküberschriften, Vor-/Nachtexte am
