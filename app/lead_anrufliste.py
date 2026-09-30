@@ -336,10 +336,7 @@ def daten(session: Session, benutzer, f: dict) -> dict:
                                             kunde.telefon or "", kunde.ort or "",
                                             kunde.plz or "")).lower():
             continue
-        try:
-            wunsch = ", ".join(wunsch_namen.get(w, w) for w in json.loads(v.wunschzeiten or "[]"))
-        except ValueError:
-            wunsch = ""
+        wunsch = ", ".join(wunsch_namen.get(w, w) for w in kern.wunschzeiten_liste(v))
         z["satz"] = kontaktstatus(session, v, z["anrufe"], status_akt.get(v.id, []), z["sla"],
                                   jetzt, logik, wunsch,
                                   stichworte(session, v, logik) if not (v.versuch_nr or 0) else [])
@@ -373,10 +370,7 @@ def kopf_kontext(session: Session, vorgang: Vorgang) -> dict:
     status_akt = [a for a in akt if a.typ == "status"]
     sla = kern.sla_status(session, vorgang, jetzt)
     wunsch_namen = {w.key: w.bezeichnung for w in logik.wunschzeiten}
-    try:
-        wunsch = ", ".join(wunsch_namen.get(w, w) for w in json.loads(vorgang.wunschzeiten or "[]"))
-    except ValueError:
-        wunsch = ""
+    wunsch = ", ".join(wunsch_namen.get(w, w) for w in kern.wunschzeiten_liste(vorgang))
     quelle = session.get(LeadQuelle, vorgang.quelle_id) if vorgang.quelle_id else None
     kunde = session.get(Kunde, vorgang.kunde_id)
     return {"kontakt_satz": kontaktstatus(session, vorgang, anrufe, status_akt, sla, jetzt,

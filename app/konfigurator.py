@@ -39,10 +39,13 @@ EFH_ARTEN = ("EFH", "REH", "RMH")
 
 def zahl_parsen(text) -> Optional[float]:
     """Deutsche Zahleneingabe: '8.000' -> 8000, '12,5' -> 12.5, '' -> None."""
+    import math
     if text is None:
         return None
     if isinstance(text, (int, float)):
-        return float(text)
+        # Bugfix 30.09.2026: inf/nan/1e400 wurden gespeichert – die Erfassung
+        # ließ sich danach nicht mehr öffnen (int(inf) → OverflowError)
+        return float(text) if math.isfinite(text) else None
     t = str(text).strip().replace(" ", "")
     if not t:
         return None
@@ -51,9 +54,10 @@ def zahl_parsen(text) -> Optional[float]:
     elif re.fullmatch(r"\d{1,3}(\.\d{3})+", t):
         t = t.replace(".", "")
     try:
-        return float(t)
+        zahl = float(t)
     except ValueError:
         return None
+    return zahl if math.isfinite(zahl) and abs(zahl) < 1e12 else None
 
 
 def _bereich_passt(text: str, zahl: float) -> bool:

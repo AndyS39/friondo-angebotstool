@@ -96,8 +96,10 @@ def erzeuge_protokoll_pdf(dateiname: str, titelzeile: str, kopfdaten: list[tuple
         if pdf.get_y() > pdf.page_break_trigger - 16:
             pdf.add_page()
             aktuelle_seite = None
-        if eintrag["seite"] != aktuelle_seite:
-            aktuelle_seite = eintrag["seite"]
+        # 30.09.2026: Altbestand (Logik v1) hat keine Seite im Protokoll
+        seite = eintrag.get("seite") or "Antworten"
+        if seite != aktuelle_seite:
+            aktuelle_seite = seite
             pdf.ln(2)
             pdf.set_font("Arial", "B", 10.5)
             pdf.set_text_color(*DUNKELBLAU)

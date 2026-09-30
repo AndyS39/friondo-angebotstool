@@ -68,7 +68,18 @@ class Anschriften(unittest.TestCase):
         w = anschriften.alt_text_parsen("Contracting GmbH, Lager 2, Hafenstr. 9, 47119 Duisburg")
         self.assertEqual((w["name"], w["zusatz"], w["strasse"], w["plz"], w["ort"]),
                          ("Contracting GmbH", "Lager 2", "Hafenstr. 9", "47119", "Duisburg"))
-        self.assertEqual(anschriften.alt_text_parsen("nur Text")["name"], "nur Text")
+        # Bugfix 30.09.2026: nicht sicher Erkennbares bleibt Zusatz
+        self.assertEqual(anschriften.alt_text_parsen("nur Text")["zusatz"], "nur Text")
+        w = anschriften.alt_text_parsen("Musterweg 5, 12345 Ort, Hinterhaus")
+        self.assertEqual((w["name"], w["strasse"], w["plz"], w["ort"], w["zusatz"]),
+                         ("", "Musterweg 5", "12345", "Ort", "Hinterhaus"))
+        w = anschriften.alt_text_parsen("Musterweg 5, D-12345 Musterstadt")
+        self.assertEqual((w["strasse"], w["plz"], w["ort"]), ("Musterweg 5", "12345", "Musterstadt"))
+        w = anschriften.alt_text_parsen("Lagerweg 7 47138 Duisburg")
+        self.assertEqual((w["strasse"], w["plz"], w["ort"]), ("Lagerweg 7", "47138", "Duisburg"))
+        w = anschriften.alt_text_parsen("bitte beim Nachbarn Müller abgeben")
+        self.assertEqual((w["name"], w["strasse"], w["zusatz"]),
+                         ("", "", "bitte beim Nachbarn Müller abgeben"))
 
     def test_standardfall_unveraendert(self):
         k = self.kunde()

@@ -724,6 +724,8 @@ async def qualifizierung_bogen(request: Request, vorgang_id: int, sparte: str,
     if vorgang is None or sparte not in SPARTEN:
         return RedirectResponse("/lead-management/anrufliste", status_code=303)
     kunde = session.get(Kunde, vorgang.kunde_id)
+    if kunde is None:   # 30.09.2026: verwaister Vorgang → vorher 500
+        return RedirectResponse("/lead-management/anrufliste", status_code=303)
     logik = leadmanagement_logik.hole_logik()
     fragen = logik.fragen_der_sparte(sparte)
     interessen = [s.strip() for s in (kunde.interesse or "").split(",")
@@ -855,10 +857,7 @@ async def termin_assistent(request: Request, vorgang_id: int,
                          if ergebnis["kandidaten"] else None))
     woche = _wochenraster(session, [kalender_ad] if kalender_ad else [])
     buchbar = not (kern.demo_aktiv(session) and not vorgang.demo)
-    try:
-        wunschzeiten = json_modul.loads(vorgang.wunschzeiten or "[]")
-    except ValueError:
-        wunschzeiten = []
+    wunschzeiten = kern.wunschzeiten_liste(vorgang)
     return render(request, "leadmanagement/termin.html",
                   aktiv="/lead-management", vorgang=vorgang, kunde=kunde,
                   vorschlaege=ergebnis["vorschlaege"],

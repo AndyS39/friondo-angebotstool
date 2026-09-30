@@ -1434,7 +1434,7 @@ async def bza_datenblatt(request: Request, gewerk_id: int,
             ersteller=bza_datenblatt.ersteller_standard(session, request.state.benutzer))
         felder = bza_datenblatt.fuer_gewerk_seite(blatt)
         fehlend = blatt.fehlend
-        geraet = blatt.geraet_schluessel
+        geraet = blatt.geraet_schluessel if angebot.extern else ""
     felder.append(("Antragsteller (Kunde, zur Info)", [
         ("Name", kunde.anzeige_name if kunde else ""),
         ("Straße und Hausnummer", kunde.strasse if kunde else ""),
@@ -1974,6 +1974,10 @@ async def auftragsdaten_seite(request: Request, gewerk_id: int,
                 "Auftragsdaten gibt es nur für TAIFUN-Aufträge."), status_code=303)
     projekt = session.get(Projekt, gewerk.projekt_id)
     gewerke = _auftragsdaten_gewerke(session, gewerk)
+    if not gewerke:   # Bugfix 30.09.2026: storniertes Gewerk → vorher 500
+        return RedirectResponse(
+            f"/projektierung/projekt/{gewerk.projekt_id}?meldung=" + quote_plus(
+                "Das Gewerk ist storniert – keine Auftragsdaten."), status_code=303)
     werte_je_gewerk, manuell_je_gewerk = {}, {}
     vorbelegung = kern.auftragsdaten_aus_pdf(angebot.extern_pdf_pfad or "")
     for g in gewerke:

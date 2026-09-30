@@ -17,10 +17,12 @@ VERWEISE = [(Vorgang, "Vorgänge"), (Angebot, "Angebote"), (Erfassung, "Erfassun
             (Lead, "Leads"), (Projekt, "Projekte"), (Konfiguration, "Konfigurationen")]
 # Felder, die aus Dubletten ergänzt werden, wenn sie am Hauptdatensatz leer sind
 ERGAENZEN = ("anrede", "firma", "strasse", "ort", "email", "telefon", "kunden_nr",
-             "vertriebskanal",
-             "rechnung_name", "rechnung_zusatz", "rechnung_strasse", "rechnung_plz",
-             "rechnung_ort", "liefer_name", "liefer_zusatz", "liefer_strasse",
-             "liefer_plz", "liefer_ort")
+             "vertriebskanal")
+# Standard-Anschriften nur als GANZE Gruppe übernehmen (keine Mischanschrift
+# aus Name von A und Straße von B)
+ANSCHRIFT_GRUPPEN = {praefix: tuple(f"{praefix}_{f}" for f in
+                                    ("name", "zusatz", "strasse", "plz", "ort"))
+                     for praefix in ("rechnung", "liefer")}
 PROTOKOLL = "kunden_zusammenfuehrung_protokoll"
 
 
@@ -88,6 +90,11 @@ def zusammenfuehren(session: Session, haupt_id: int, dubletten_ids: list[int],
         for feld in ERGAENZEN:
             if not (getattr(haupt, feld, "") or "").strip() and (getattr(d, feld, "") or "").strip():
                 setattr(haupt, feld, getattr(d, feld))
+        for felder in ANSCHRIFT_GRUPPEN.values():
+            if (not any((getattr(haupt, f, "") or "").strip() for f in felder)
+                    and any((getattr(d, f, "") or "").strip() for f in felder)):
+                for f in felder:
+                    setattr(haupt, f, getattr(d, f, "") or "")
         interessen = [s for s in (haupt.interesse or "").split(",") if s.strip()]
         for s in (d.interesse or "").split(","):
             if s.strip() and s.strip() not in interessen:

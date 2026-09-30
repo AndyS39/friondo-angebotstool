@@ -477,6 +477,28 @@ def quellen_vorbelegen(session: Session) -> int:
     return neu
 
 
+def wunschzeiten_liste(vorgang) -> list[str]:
+    """Wunschzeiten robust lesen (30.09.2026): kaputtes oder nicht-listiges
+    JSON ergibt eine leere Liste statt eines Absturzes der ganzen Liste."""
+    try:
+        wert = json.loads(getattr(vorgang, "wunschzeiten", None) or "[]")
+    except (ValueError, TypeError):
+        return []
+    if isinstance(wert, str):
+        return [wert] if wert.strip() else []
+    if not isinstance(wert, (list, tuple)):
+        return []
+    return [str(w) for w in wert if str(w).strip()]
+
+
+def _int_oder_none(wert) -> int | None:
+    """Filterwert aus der URL – ungültige Werte (quelle_id=abc) ignorieren."""
+    try:
+        return int(str(wert).strip())
+    except (ValueError, TypeError):
+        return None
+
+
 def telefon_normalisieren(telefon: str) -> str:
     """E.164 für den Duplikatabgleich: 0203… → +49203…, Trennzeichen raus."""
     ziffern = re.sub(r"[^\d+]", "", telefon or "")
@@ -1373,10 +1395,7 @@ def ad_kandidaten(session: Session, vorgang: Vorgang,
 def _wunschzeit_fenster(session: Session, vorgang: Vorgang) -> list:
     from app import leadmanagement_logik
     logik = leadmanagement_logik.hole_logik()
-    try:
-        gewuenscht = json.loads(vorgang.wunschzeiten or "[]")
-    except ValueError:
-        gewuenscht = []
+    gewuenscht = wunschzeiten_liste(vorgang)
     return [w for w in logik.wunschzeiten if w.key in gewuenscht]
 
 
@@ -1706,8 +1725,8 @@ def board_daten(session: Session, benutzer, filter_werte: dict) -> dict:
     abfrage = session.query(Vorgang).filter(Vorgang.lead_phase.isnot(None))
     if filter_werte.get("meine") and benutzer is not None:
         abfrage = abfrage.filter(Vorgang.leadmanager_id == benutzer.id)
-    if filter_werte.get("quelle_id"):
-        abfrage = abfrage.filter(Vorgang.quelle_id == int(filter_werte["quelle_id"]))
+    if _int_oder_none(filter_werte.get("quelle_id")) is not None:
+        abfrage = abfrage.filter(Vorgang.quelle_id == _int_oder_none(filter_werte["quelle_id"]))
     if filter_werte.get("klasse"):
         abfrage = abfrage.filter(Vorgang.score_klasse == filter_werte["klasse"])
     vorgaenge = abfrage.all()
@@ -1872,10 +1891,7 @@ def akte_kontext(session: Session, vorgang: Vorgang) -> dict:
                .order_by(VotTermin.beginn.desc()).all())
     aktiver_termin = next((t for t in termine
                            if t.status in ("geplant", "bestaetigt")), None)
-    try:
-        wunschzeiten = json_modul.loads(vorgang.wunschzeiten or "[]")
-    except ValueError:
-        wunschzeiten = []
+    wunschzeiten = wunschzeiten_liste(vorgang)
     kommunikation = (session.query(KommunikationLog)
                      .filter(KommunikationLog.vorgang_id == vorgang.id)
                      .order_by(KommunikationLog.geplant_am.desc())
@@ -2091,11 +2107,11 @@ def statistik_leads(session: Session, von: datetime, bis: datetime,
         kunde = kunden.get(v.kunde_id)
         if kunde is None:
             continue
-        if filter_werte.get("quelle_id") and \
-                v.quelle_id != int(filter_werte["quelle_id"]):
+        if _int_oder_none(filter_werte.get("quelle_id")) is not None and \
+                v.quelle_id != _int_oder_none(filter_werte["quelle_id"]):
             continue
-        if filter_werte.get("kampagne_id") and \
-                v.kampagne_id != int(filter_werte["kampagne_id"]):
+        if _int_oder_none(filter_werte.get("kampagne_id")) is not None and \
+                v.kampagne_id != _int_oder_none(filter_werte["kampagne_id"]):
             continue
         if filter_werte.get("kanal") and \
                 filter_werte["kanal"].lower() not in \
@@ -2104,16 +2120,16 @@ def statistik_leads(session: Session, von: datetime, bis: datetime,
         if filter_werte.get("sparte") and \
                 filter_werte["sparte"] not in (kunde.interesse or ""):
             continue
-        if filter_werte.get("leadmanager_id") and \
-                v.leadmanager_id != int(filter_werte["leadmanager_id"]):
+        if _int_oder_none(filter_werte.get("leadmanager_id")) is not None and \
+                v.leadmanager_id != _int_oder_none(filter_werte["leadmanager_id"]):
             continue
         vorgaenge.append(v)
     ids = {v.id for v in vorgaenge} or {0}
 
     termine = (session.query(VotTermin)
                .filter(VotTermin.vorgang_id.in_(ids)).all())
-    if filter_werte.get("ad_id"):
-        ad_id = int(filter_werte["ad_id"])
+    if _int_oder_none(filter_werte.get("ad_id")) is not None:
+        ad_id = _int_oder_none(filter_werte["ad_id"])
         erlaubt = {t.vorgang_id for t in termine if t.ad_id == ad_id}
         vorgaenge = [v for v in vorgaenge if v.id in erlaubt]
         ids = {v.id for v in vorgaenge} or {0}

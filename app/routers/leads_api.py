@@ -53,6 +53,22 @@ async def lead_anlegen(request: Request, session: Session = Depends(get_session)
         return JSONResponse({"fehler": "Rumpf muss ein JSON-Objekt sein"},
                             status_code=422)
 
+    # Bugfix 30.09.2026: Agenturen senden PLZ/Telefon oft als Zahl und Sparten
+    # als Text – vorher 500 (int hat kein .strip / ist nicht iterierbar)
+    for feld in ("anrede", "vorname", "nachname", "strasse", "plz", "ort", "telefon",
+                 "email", "nachricht", "quelle", "kampagne", "utm_source", "utm_medium",
+                 "utm_campaign", "utm_content"):
+        wert = daten.get(feld)
+        if wert is not None and not isinstance(wert, str):
+            daten[feld] = "" if isinstance(wert, (dict, list, bool)) else str(wert)
+    for feld in ("sparten", "wunschzeiten"):
+        wert = daten.get(feld)
+        if isinstance(wert, str):
+            daten[feld] = [t.strip() for t in wert.replace(";", ",").split(",") if t.strip()]
+        elif not isinstance(wert, list):
+            daten[feld] = []
+    if len(str(daten.get("plz") or "")) == 4 and str(daten["plz"]).isdigit():
+        daten["plz"] = "0" + str(daten["plz"])   # führende Null ging als Zahl verloren
     fehlend = []
     if not (daten.get("nachname") or "").strip():
         fehlend.append("nachname")
@@ -60,8 +76,8 @@ async def lead_anlegen(request: Request, session: Session = Depends(get_session)
         fehlend.append("plz")
     if not (daten.get("telefon") or "").strip() and not (daten.get("email") or "").strip():
         fehlend.append("telefon oder email")
-    sparten = [s for s in (daten.get("sparten") or [])
-               if s in ("WP", "PV", "KL", "WB")]
+    sparten = [str(s).strip().upper() for s in (daten.get("sparten") or [])
+               if str(s).strip().upper() in ("WP", "PV", "KL", "WB")]
     if not sparten:
         fehlend.append("sparten (WP/PV/KL/WB)")
     if fehlend:

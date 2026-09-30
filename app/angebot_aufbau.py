@@ -363,7 +363,10 @@ def version_erzeugen(session: Session, original: Angebot) -> Angebot:
             ek_cent=p.ek_cent, guid=p.guid, anzeige_nr=p.anzeige_nr,
             original_preis_cent=p.original_preis_cent,
             rabatt_prozent=p.rabatt_prozent, rabatt_cent=p.rabatt_cent,
-            bauseits=p.bauseits, sonderpreis=p.sonderpreis))
+            bauseits=p.bauseits, sonderpreis=p.sonderpreis,
+            # Bugfix 30.09.2026: fehlte seit v10 – die Version berechnete
+            # Alternativ-Positionen voll (Endbetrag stieg)
+            alternativ=p.alternativ, alternativ_zu=p.alternativ_zu))
     session.add(version)
     session.flush()
     original.status = "Überholt"
@@ -471,7 +474,8 @@ def angebot_anlegen(session: Session, kunde_id: int,
         )
         # v20 (Phase 98): ohne Erfassungs-Anschriften → Kunden-Standards
         from app import anschriften as _anschriften_v20
-        _anschriften_v20.angebot_vorbelegen(angebot, session.get(Kunde, kunde_id))
+        _anschriften_v20.angebot_vorbelegen(angebot, session.get(Kunde, kunde_id),
+                                            antworten)
         for p in positionen:
             angebot.positionen.append(AngebotsPosition(**p))
         # v9: Angebotsprofil über den Kanal des Kunden + Positionsregeln

@@ -1356,8 +1356,9 @@ async def lead_quelle_speichern(request: Request,
             quelle_id=(int(form.get("quelle_id"))
                        if str(form.get("quelle_id") or "").isdigit() else None),
             von=_datum("von"), bis=_datum("bis"),
-            budget_cent=(int(float((form.get("budget") or "0").replace(",", ".")) * 100)
-                         if (form.get("budget") or "").strip() else None),
+            # Bugfix 30.09.2026: „1.500,00“ warf ValueError (500)
+            budget_cent=__import__("app.routers.artikel", fromlist=["x"]).preis_parsen(
+                form.get("budget") or ""),
             utm_campaign=(form.get("utm_campaign") or "").strip()[:200],
             aktiv=form.get("aktiv") == "on")
         if kampagne_id.isdigit():
@@ -1388,8 +1389,8 @@ async def lead_quelle_speichern(request: Request,
         # v21 (Phase 87): Kanal als Dropdown; „Standard“ = kein eigener Kanal
         kanal=(None if (form.get("kanal") or "").strip() in ("", "Standard")
                else (form.get("kanal") or "").strip()[:100]),
-        kosten_je_lead_cent=(int(float((form.get("kosten") or "0").replace(",", ".")) * 100)
-                             if (form.get("kosten") or "").strip() else None),
+        kosten_je_lead_cent=__import__("app.routers.artikel", fromlist=["x"]).preis_parsen(
+            form.get("kosten") or ""),
         standard_sparten=json_modul.dumps(sparten),
         score_bonus=(int(form.get("score_bonus"))
                      if str(form.get("score_bonus") or "").lstrip("-").isdigit() else 0),

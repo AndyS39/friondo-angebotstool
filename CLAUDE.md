@@ -801,3 +801,19 @@ v14“ entspricht diesem Abschnitt.)
 - **Go-live-Checkliste:** prüft das echte Standard-Kennzeichen je Sub-Typ
   (Parametrierung → Subunternehmer, Spalte „Standard“; aktiv + E-Mail).
 - Tests: `tests/test_rueckfragen_0930.py`.
+- **Fehlersuche mit Daten im neuen Format (30.09.):** Anschriften – kein
+  Rückgriff auf den Kunden-Standard zur Anzeigezeit (Standard wird nur beim
+  Anlegen kopiert; versendete Angebote bleiben unverändert), die Erfassung
+  gewinnt (O06 beantwortet bzw. O13 vorhanden → kein Standard), O13-Freitext
+  wird nur bei sicher erkennbarer Adresse strukturiert (sonst Zusatz), ein
+  Zusatz allein behält den Ansprechpartner, keine leere Zeile
+  „Ausführungsort:“, lange Anschriften schieben die Überschrift.
+  „Überarbeiten“ behält das Alternativ-Kennzeichen (Bug seit v10),
+  „Duplizieren“ behält bauseits/Rabatt/Sonderpreis/Alternativ.
+  `zahl_parsen` weist inf/nan ab. Lead: `wunschzeiten_liste` (robust),
+  ungültige Filter-IDs werden ignoriert, `POST /api/leads` akzeptiert Zahlen
+  (PLZ/Telefon) und Sparten als Text, Budget/Kosten im deutschen Format.
+  Auftragsdaten bei storniertem Gewerk leiten um; BzA-Dialog mit
+  Geräteauswahl auch für Tool-Angebote; Dubletten übernehmen Anschriften nur
+  als ganze Gruppe. Tests: `tests/test_sweep_0930.py`.
+

@@ -216,6 +216,7 @@ def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde, vortext_text: str,
     from app import anschriften
     empfaenger, abweichend = anschriften.empfaenger(angebot, kunde)
     pdf.multi_cell(100, 4.8, "\n".join(empfaenger))
+    y_empfaenger = pdf.get_y()   # 30.09.2026: lange Anschriften schieben die Überschrift
 
     pdf.set_font("Arial", "", 9)
     rechts_x = pdf.w - pdf.r_margin - 55
@@ -226,7 +227,7 @@ def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde, vortext_text: str,
     pdf.cell(25, 4.6, "Datum")
     pdf.cell(30, 4.6, f": {angebot.datum.strftime('%d.%m.%Y')}", new_x=XPos.LEFT, new_y=YPos.NEXT)
 
-    pdf.set_xy(pdf.l_margin, max(pdf.get_y(), y_start + 26) + 6)
+    pdf.set_xy(pdf.l_margin, max(pdf.get_y(), y_empfaenger, y_start + 26) + 6)
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 6, f"A N G E B O T - Nr.: {angebot.nummer}",
              new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -234,8 +235,8 @@ def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde, vortext_text: str,
         # v8: abweichender Ausführungsort (= Kundenadresse aus monday)
         pdf.set_font("Arial", "", 9)
         ausfuehrung = f"{kunde.strasse}, {kunde.plz} {kunde.ort}".strip(", ")
-        pdf.cell(0, 5, f"Ausführungsort: {ausfuehrung}",
-                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        if ausfuehrung:   # 30.09.2026: keine leere Zeile bei Kunde ohne Adresse
+            pdf.multi_cell(0, 5, f"Ausführungsort: {ausfuehrung}")
     lieferzeile = anschriften.lieferzeile(angebot, kunde)
     if lieferzeile:
         # v11 (Phase 66) / v20: abweichende Lieferanschrift (z. B. Contracting)

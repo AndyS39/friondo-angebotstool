@@ -42,13 +42,32 @@ def _hat_adresse(werte: dict) -> bool:
     return bool(werte.get("strasse") or werte.get("ort"))
 
 
-def rechnung(angebot, kunde) -> dict:
-    """Effektive Rechnungsanschrift (Angebot > Kunden-Standard > Kunde)."""
-    werte = _feldsatz(angebot, "rechnung")
-    standard = _feldsatz(kunde, "rechnung") if kunde is not None else {}
+def _auffuellen(werte: dict, kunde) -> dict:
     basis = ausfuehrungsort(kunde)
-    if not any(werte.values()) and any(standard.values()):
-        werte = standard
+    if not _hat_adresse(werte):
+        for f in ("strasse", "plz", "ort"):
+            werte[f] = basis[f]
+    werte["name"] = werte["name"] or basis["name"]
+    return werte
+
+
+def standard_rechnung(kunde) -> dict:
+    """Standard-Rechnungsanschrift des Kunden (für die Pflege in der Akte)."""
+    return _auffuellen(_feldsatz(kunde, "rechnung"), kunde)
+
+
+def standard_lieferung(kunde) -> dict:
+    return _auffuellen(_feldsatz(kunde, "liefer"), kunde)
+
+
+def rechnung(angebot, kunde) -> dict:
+    """Effektive Rechnungsanschrift: Felder des Angebots, sonst Kundenname +
+    Ausführungsort. Bugfix 30.09.2026: KEIN Rückgriff auf den Kunden-Standard
+    zur Anzeigezeit – der Standard wird nur beim Anlegen kopiert
+    (angebot_vorbelegen); sonst änderte ein später gepflegter Standard bereits
+    versendete/angenommene Angebote (PDF, Lieferschein)."""
+    werte = _feldsatz(angebot, "rechnung")
+    basis = ausfuehrungsort(kunde)
     if not _hat_adresse(werte):
         for f in ("strasse", "plz", "ort"):
             werte[f] = basis[f]
@@ -57,14 +76,11 @@ def rechnung(angebot, kunde) -> dict:
 
 
 def lieferung(angebot, kunde) -> dict:
-    """Effektive Lieferanschrift (Angebot > Alt-Text v13 > Kunden-Standard >
-    Ausführungsort)."""
+    """Effektive Lieferanschrift (Angebot > Alt-Text v13 > Ausführungsort);
+    wie bei rechnung() kein Rückgriff auf den Kunden-Standard zur Anzeigezeit."""
     werte = _feldsatz(angebot, "liefer")
     if not any(werte.values()) and (getattr(angebot, "liefer_anschrift", "") or "").strip():
         werte = alt_text_parsen(angebot.liefer_anschrift)
-    standard = _feldsatz(kunde, "liefer") if kunde is not None else {}
-    if not any(werte.values()) and any(standard.values()):
-        werte = standard
     basis = ausfuehrungsort(kunde)
     if not _hat_adresse(werte):
         for f in ("strasse", "plz", "ort"):
@@ -97,11 +113,12 @@ def empfaenger(angebot, kunde) -> tuple[list[str], bool]:
     Rechnungsadresse steht der Ausführungsort als eigene Zeile darunter."""
     werte = rechnung(angebot, kunde)
     adr_abw = adresse_abweichend(werte, kunde)
-    if not adr_abw and not name_abweichend(werte, kunde) and not werte.get("zusatz"):
-        # Standardfall wie bisher: Firma, Person, Kundenadresse
+    if not adr_abw and not name_abweichend(werte, kunde):
+        # Standardfall wie bisher: Firma, Person, Kundenadresse – ein Zusatz
+        # allein ergänzt nur eine Zeile (der Ansprechpartner bleibt stehen)
         person = " ".join(t for t in (kunde.anrede if kunde.anrede != "Firma" else "",
                                       kunde.vorname, kunde.nachname) if t)
-        return [t for t in (kunde.firma, person, kunde.strasse,
+        return [t for t in (kunde.firma, person, werte.get("zusatz"), kunde.strasse,
                             f"{kunde.plz} {kunde.ort}".strip()) if t], False
     return zeilen(werte), adr_abw
 
@@ -115,21 +132,31 @@ def lieferzeile(angebot, kunde) -> str:
     return einzeilig(werte)
 
 
+_PLZ_ORT = re.compile(r"^(?P<vor>.*?)[,\s]*(?:D[-\s])?(?P<plz>\d{5})\s+(?P<ort>[^,]+?)\s*(?:,\s*(?P<nach>.*))?$")
+
+
 def alt_text_parsen(text: str) -> dict:
-    """v13-Freitext („Name, Straße 1, 12345 Ort“) → Felder (bestmöglich)."""
-    teile = [t.strip() for t in (text or "").split(",") if t.strip()]
+    """Freitext-Lieferanschrift (Erfassung O13, v13) → Felder. Strukturiert
+    wird nur, was sicher erkennbar ist: „[Name, [Zusatz,]] Straße Nr[,]
+    PLZ Ort[, Zusatz]“ – auch mit „D-“ vor der PLZ und ohne Komma vor der
+    PLZ. Alles andere (Hinweise wie „beim Nachbarn abgeben“) landet
+    unverändert im Zusatz: Name und Adresse bleiben dann die des Kunden
+    (Bugfix 30.09.2026: vorher wurde der erste Teil immer zum Empfängernamen)."""
+    roh = " ".join((text or "").split())
     werte = {f: "" for f in FELDER}
-    if teile and re.match(r"^\d{5}\s+\S", teile[-1]):
-        plz, _, ort = teile.pop().partition(" ")
-        werte["plz"], werte["ort"] = plz, ort.strip()
-    if teile and re.search(r"\d", teile[-1]):
-        werte["strasse"] = teile.pop()
-    if teile:
-        werte["name"] = teile.pop(0)
-    if teile:
-        werte["zusatz"] = ", ".join(teile)
-    if not any(werte.values()) and text:
-        werte["zusatz"] = text.strip()
+    if not roh:
+        return werte
+    m = _PLZ_ORT.match(roh)
+    vor = [t.strip() for t in (m.group("vor") if m else "").split(",") if t.strip()]
+    if not m or not vor:
+        werte["zusatz"] = roh
+        return {f: werte[f][:LAENGEN[f]] for f in FELDER}
+    werte["plz"], werte["ort"] = m.group("plz"), m.group("ort").strip()
+    werte["strasse"] = vor.pop()
+    if vor:
+        werte["name"] = vor.pop(0)
+    zusatz = vor + ([m.group("nach").strip()] if (m.group("nach") or "").strip() else [])
+    werte["zusatz"] = ", ".join(zusatz)
     return {f: werte[f][:LAENGEN[f]] for f in FELDER}
 
 
@@ -158,19 +185,28 @@ def setzen(obj, praefix: str, werte: dict) -> None:
         setattr(obj, f"{praefix}_{f}", (werte.get(f) or "")[:LAENGEN[f]])
 
 
-def angebot_vorbelegen(angebot, kunde) -> None:
-    """Neues Angebot ohne Erfassungs-Anschriften: Kunden-Standards übernehmen."""
+def angebot_vorbelegen(angebot, kunde, antworten: dict | None = None) -> None:
+    """Kunden-Standards in ein NEUES Angebot kopieren. Bei Angeboten aus einer
+    Erfassung gewinnt die Erfassung: hat der Bogen O06 beantwortet (auch
+    „Ja“ = identisch), greift der Rechnungs-Standard nicht; ist O13 im Bogen
+    vorhanden (auch leer), greift der Liefer-Standard nicht (Bugfix
+    30.09.2026). Bögen ohne diese Fragen (PV/KL) und manuelle Angebote
+    übernehmen die Standards."""
     if kunde is None:
         return
+    antworten = antworten or {}
     standard = _feldsatz(kunde, "rechnung")
     eigene = _feldsatz(angebot, "rechnung")
-    if not any(eigene.values()):
-        if any(standard.values()):
+    if "O06" not in antworten:
+        if not any(eigene.values()) and any(standard.values()):
             setzen(angebot, "rechnung", standard)
-    elif (standard["zusatz"] and not eigene["zusatz"]
+    elif (standard["zusatz"] and not eigene["zusatz"] and eigene["strasse"]
           and _norm(eigene["strasse"]) == _norm(standard["strasse"])):
-        angebot.rechnung_zusatz = standard["zusatz"]   # Erfassung kennt keinen Zusatz
-    if not any(_feldsatz(angebot, "liefer").values()) and not angebot.liefer_anschrift:
-        standard = _feldsatz(kunde, "liefer")
-        if any(standard.values()):
+        angebot.rechnung_zusatz = standard["zusatz"]   # der Bogen kennt keinen Zusatz
+    standard = _feldsatz(kunde, "liefer")
+    if "O13" not in antworten:
+        if not any(_feldsatz(angebot, "liefer").values()) and not angebot.liefer_anschrift \
+                and any(standard.values()):
             setzen(angebot, "liefer", standard)
+    elif any(standard.values()) and _norm(str(antworten.get("O13") or "")) == _norm(einzeilig(standard)):
+        setzen(angebot, "liefer", standard)   # unveränderte Vorbelegung: exakt übernehmen

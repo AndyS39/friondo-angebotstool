@@ -38,7 +38,7 @@
         <span style="display:inline-flex;align-items:center;gap:8px">Kontaktstatus: {{ versuche_punkte(vorgang) }}
             <span>{% for text, klasse in lead_kontext.kontakt_satz %}<span class="{{ {'faellig': 'lm-rot', 'rueckruf': 'lm-blau', 'warn': 'lm-warn', 'rot': 'lm-rot', 'dezent': 'dezent'}.get(klasse, '') }}">{{ text }}</span>{{ ' · ' if not loop.last }}{% endfor %}</span></span>
         <span>Einwilligung Werbung:
-            {{ '✓ ' ~ vorgang.einwilligung_werbung_am.strftime('%d.%m.%Y')
+            {{ '✓ ' ~ (vorgang.einwilligung_werbung_am.strftime('%d.%m.%Y') if vorgang.einwilligung_werbung_am else 'ohne Datum')
                ~ ' (' ~ (vorgang.einwilligung_quelle or '?') ~ ')'
                if vorgang.einwilligung_werbung else 'nein' }}</span>
         {% if lead_readonly | default(false) %}
@@ -138,7 +138,7 @@
     <details>
         <summary><strong>Termin</strong>
             {% if lead_kontext.aktiver_termin %}
-                – {{ lead_kontext.aktiver_termin.beginn.strftime('%d.%m.%Y %H:%M') }} Uhr
+                – {{ lead_kontext.aktiver_termin.beginn.strftime('%d.%m.%Y %H:%M') ~ ' Uhr' if lead_kontext.aktiver_termin.beginn else 'ohne Uhrzeit' }}
             {% else %} – kein aktiver Termin{% endif %}</summary>
         {% if lead_kontext.aktiver_termin %}
             {% set t = lead_kontext.aktiver_termin %}

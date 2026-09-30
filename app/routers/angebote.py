@@ -1550,7 +1550,14 @@ async def duplizieren(angebot_id: int, session: Session = Depends(get_session)):
             sort=p.sort, block_nr=p.block_nr, gruppe=p.gruppe, pos_nr=p.pos_nr,
             bezeichnung=p.bezeichnung, beschreibung=p.beschreibung, menge=p.menge,
             einheit=p.einheit, e_preis_cent=p.e_preis_cent, ep_flag=p.ep_flag,
-            ek_cent=p.ek_cent, guid=p.guid))
+            ek_cent=p.ek_cent, guid=p.guid,
+            # Bugfix 30.09.2026: Kennzeichen wie bei „Kopieren“ mitnehmen –
+            # vorher gingen bauseits, Positionsrabatt, Sonderpreis, manuell
+            # geänderter Preis und Alternativ verloren (Endbetrag stieg)
+            anzeige_nr=p.anzeige_nr, original_preis_cent=p.original_preis_cent,
+            rabatt_prozent=p.rabatt_prozent, rabatt_cent=p.rabatt_cent,
+            bauseits=p.bauseits, sonderpreis=p.sonderpreis,
+            alternativ=p.alternativ, alternativ_zu=p.alternativ_zu))
     session.commit()
     return RedirectResponse(f"/angebote/{kopie.id}?meldung=Angebot+dupliziert", status_code=303)
 

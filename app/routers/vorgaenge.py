@@ -233,15 +233,11 @@ async def akte(request: Request, vorgang_id: int,
     except Exception:
         lead_kontext = None
     # v20 (Phase 98): Standard-Anschriften des Kunden (leer = Name + Ausführungsort)
-    from types import SimpleNamespace
-
     from app import anschriften as anschriften_modul
-    _leer = SimpleNamespace(**{f"{p}_{f}": "" for p in ("rechnung", "liefer")
-                               for f in anschriften_modul.FELDER}, liefer_anschrift="")
     anschrift_kontext = {}
     if kunde is not None:
-        _re = anschriften_modul.rechnung(_leer, kunde)
-        _li = anschriften_modul.lieferung(_leer, kunde)
+        _re = anschriften_modul.standard_rechnung(kunde)
+        _li = anschriften_modul.standard_lieferung(kunde)
         hinweise = []
         if any(getattr(kunde, f"rechnung_{f}", "") for f in anschriften_modul.FELDER):
             hinweise.append("Rechnung abweichend")

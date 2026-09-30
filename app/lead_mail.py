@@ -139,10 +139,8 @@ def werte_fuer(session: Session, vorgang: Vorgang,
         briefanrede = f"Sehr geehrter Herr {kunde.nachname}"
     else:
         briefanrede = "Guten Tag"
-    try:
-        wunschzeiten = ", ".join(json_modul.loads(vorgang.wunschzeiten or "[]"))
-    except ValueError:
-        wunschzeiten = ""
+    from app.leadmanagement import wunschzeiten_liste
+    wunschzeiten = ", ".join(wunschzeiten_liste(vorgang))
     absender = _absender(session)
     return {
         "briefanrede": briefanrede,

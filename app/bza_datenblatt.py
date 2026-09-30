@@ -231,7 +231,10 @@ def erstellen(session: Session, angebot: Angebot, gewerk=None,
         if logik is not None:
             anlage = bafa_fuer_positionen(logik, _voll_berechnete_positionen(angebot))
     blatt.geraet_auswahl_noetig = bool(angebot.extern and anlage is None)
-    blatt.geraet_schluessel = anlage.schluessel if anlage else ""
+    # im Dialog nur vorauswählen, was ausdrücklich gewählt wurde bzw. bei
+    # TAIFUN nötig ist – Tool-Angebote erkennen das Gerät sonst automatisch
+    blatt.geraet_schluessel = (anlage.schluessel if anlage and (geraet_schluessel or angebot.extern)
+                               else "")
     heizflaechen = str(antworten.get("H02") or "")
     vorlauf = ("35 °C" if heizflaechen == "Fußbodenheizung"
                else "55 °C" if heizflaechen else "")

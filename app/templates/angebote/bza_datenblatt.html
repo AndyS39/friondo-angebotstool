@@ -27,15 +27,14 @@
                 {% endfor %}
             </select></label>
     </div>
-    {% if angebot.extern %}
-    <label>Gerät (Pflicht bei TAIFUN-Angeboten)
-        <select name="geraet" required>
-            <option value="">– aus der BAFA-Liste wählen –</option>
+    {# 30.09.2026: Auswahl auch bei Tool-Angeboten (manuelle Angebote ohne Paket) #}
+    <label>{{ 'Gerät (Pflicht bei TAIFUN-Angeboten)' if angebot.extern else 'Gerät (nur wählen, wenn es nicht automatisch erkannt wird)' }}
+        <select name="geraet" {{ 'required' if angebot.extern }}>
+            <option value="">{{ '– aus der BAFA-Liste wählen –' if angebot.extern else '– automatisch aus den Angebotspositionen –' }}</option>
             {% for a in anlagen %}
             <option value="{{ a.schluessel }}" {{ 'selected' if a.schluessel == blatt.geraet_schluessel }}>{{ a.bezeichnung }} · {{ '%.2f' | format(a.kw) if a.kw }} kW · BAFA {{ a.nummer }}{{ ' (Vorrat)' if a.schluessel.startswith('vorrat') }}</option>
             {% endfor %}
         </select></label>
-    {% endif %}
     <div class="formaktionen">
         <button class="knopf" type="submit">PDF erzeugen (BzA-Datenblatt-{{ blatt.nummer }}.pdf)</button>
     </div>
