@@ -6,8 +6,12 @@ data/
 
 # Python
 venv/
+venv_alt_py312/
 __pycache__/
 *.pyc
+
+# Diagnose: Server-DB-Kopien, Crawl-Berichte, Sicherungen (Kundendaten!)
+diagnose/
 
 # Betriebssystem / Editor
 Thumbs.db
