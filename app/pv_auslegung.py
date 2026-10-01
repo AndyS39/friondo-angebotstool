@@ -124,6 +124,10 @@ class Auslegung:
     speicher_stufe: Optional[float] = None
     kombi_nr: str = ""
     gruende: list[str] = field(default_factory=list)
+    # v22 (Phase 100): Verbrauchsbasis für die Wirtschaftlichkeit (kWh/Jahr)
+    hh_kwh: float = 0.0
+    wp_kwh: float = 0.0
+    wb_kwh: float = 0.0
 
     @property
     def kombi_text(self) -> str:
@@ -139,7 +143,10 @@ class Auslegung:
                 "wr_kw": self.wr_kw, "speicher_stufe": self.speicher_stufe,
                 "kombi": self.kombi_text, "kombi_nr": self.kombi_nr,
                 "gedeckelt": self.gedeckelt, "herleitung": self.herleitung,
-                "bedarf_kwh": self.bedarf_kwh}
+                "bedarf_kwh": self.bedarf_kwh,
+                # v22: Verbrauchsbasis + Speicherwunsch (PA10) für app.wirtschaftlichkeit
+                "hh_kwh": self.hh_kwh, "wp_kwh": self.wp_kwh, "wb_kwh": self.wb_kwh,
+                "speicher_kwh": self.speicher_wunsch or 0.0}
 
 
 def _de(zahl: float, stellen: int = 0) -> str:
@@ -170,12 +177,17 @@ def auslegen(logik: Logik, antworten: dict) -> Auslegung:
     if str(antworten.get(ID_DACHART) or "") == "Satteldach":
         a.quer = int(engine.zahl_parsen(antworten.get(ID_QUER)) or 0)
 
+    # Verbrauchsbasis immer ermitteln (v22: auch bei Maximalbelegung für die
+    # Wirtschaftlichkeit); der Ampel-Grund „nicht ermittelbar“ gilt nur für
+    # die Bedarfsauslegung, die den WP-Strom zwingend braucht
+    hh = engine.zahl_parsen(antworten.get(ID_STROM_HAUSHALT)) or 0.0
+    wp, wp_info = wp_strom(antworten, p)
+    wb = 0.0
+    if antworten.get(ID_WALLBOX) == "Ja":
+        wb = engine.zahl_parsen(antworten.get(ID_STROM_WALLBOX)) or 0.0
+    a.hh_kwh, a.wp_kwh, a.wb_kwh = float(hh), float(wp or 0.0), float(wb)
+
     if a.belegungsart == BEDARF:
-        hh = engine.zahl_parsen(antworten.get(ID_STROM_HAUSHALT)) or 0.0
-        wp, wp_info = wp_strom(antworten, p)
-        wb = 0.0
-        if antworten.get(ID_WALLBOX) == "Ja":
-            wb = engine.zahl_parsen(antworten.get(ID_STROM_WALLBOX)) or 0.0
         if wp is None:
             a.gruende.append("WP-Stromverbrauch nicht ermittelbar (keine WP-Erfassung "
                              "mit Verbrauch im Vorgang)")

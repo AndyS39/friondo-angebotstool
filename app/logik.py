@@ -178,6 +178,8 @@ class Logik:
     pv_aktionen: list[Aktion] = field(default_factory=list)
     pv_bloecke: list[AngebotsBlock] = field(default_factory=list)
     pv_parameter: dict[str, tuple[str, str]] = field(default_factory=dict)
+    # v22: Einheit je PV-Parameter (nur Anzeige in der Parametrierung)
+    pv_parameter_einheit: dict[str, str] = field(default_factory=dict)
     sparte: str = "WP"
     pv_kombis: list[tuple[str, float, float, str]] = field(default_factory=list)
     bafa_anlagen: list[BafaAnlage] = field(default_factory=list)   # v19
@@ -416,9 +418,10 @@ def _pv_einlesen(wb, logik: Logik, bericht: Pruefbericht) -> None:
         logik.pv_bloecke.append(AngebotsBlock(block_nr, ueberschrift, inhalt,
                                               bedingung, refs_extrahieren(inhalt)))
     for row in wb["PV-Parameter"].iter_rows(min_row=2, values_only=True):
-        name, wert, _einheit, bemerkung = (_zelle(v) for v in (tuple(row) + (None,) * 4)[:4])
+        name, wert, einheit, bemerkung = (_zelle(v) for v in (tuple(row) + (None,) * 4)[:4])
         if name:
             logik.pv_parameter[name] = (wert, bemerkung)
+            logik.pv_parameter_einheit[name] = einheit
     _pv_pruefen(logik, bericht)
 
 
@@ -434,6 +437,23 @@ def _pv_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
             if _pv_zahl(teil) is None:
                 bericht.fehler.append(f"PV-Parameter „{name}“: „{wert}“ ist keine Zahl.")
                 break
+    # v22 (PLAN_V15 Phase 102): Parameter der Wirtschaftlichkeit – fehlende
+    # Zeilen blockieren nicht (Standardwert im Code), werden aber mit dem
+    # Standardwert als Hinweis gemeldet; vorhandene, unlesbare Werte sind Fehler
+    from app import wirtschaftlichkeit
+    _param, fehlende = wirtschaftlichkeit.parameter_lesen(logik.pv_parameter)
+    neue_namen = {zeile[0] for zeile in wirtschaftlichkeit.NEUE_PARAMETER_ZEILEN}
+    for name in fehlende:
+        if name not in neue_namen:
+            continue        # Ertrag/Strompreis/Vergütung sind bereits Pflicht (oben)
+        if name in logik.pv_parameter:
+            bericht.fehler.append(
+                f"PV-Parameter „{name}“: „{logik.pv_parameter[name][0]}“ ist nicht lesbar.")
+        else:
+            bericht.warnungen.append(
+                f"PV-Parameter „{name}“ fehlt – Standardwert "
+                f"{wirtschaftlichkeit.standardwert_text(name)} wird verwendet "
+                "(Wirtschaftlichkeit v22).")
     for aktion in logik.pv_aktionen:
         if aktion.frage in PV_SPEZIAL:
             continue
@@ -988,7 +1008,8 @@ def logik_fuer_sparte(logik: Logik, sparte: str) -> Optional[Logik]:
         return Logik(fragen, logik.pv_aktionen, [], logik.pv_bloecke, logik.kfw,
                      logik.geladen_am, logik.anhaenge,
                      pv_aktionen=logik.pv_aktionen, pv_bloecke=logik.pv_bloecke,
-                     pv_parameter=logik.pv_parameter, sparte="PV",
+                     pv_parameter=logik.pv_parameter,
+                     pv_parameter_einheit=logik.pv_parameter_einheit, sparte="PV",
                      pv_kombis=logik.pv_kombis)
     return Logik(fragen, [], [], [], logik.kfw, logik.geladen_am, [], sparte=sparte)
 

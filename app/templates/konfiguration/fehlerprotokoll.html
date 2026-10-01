@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{# v22 (PLAN_V15 Phase 103): Fehlerprotokoll – unbehandelte Ausnahmen mit
+   Fehler-Nr.; Formdaten + Traceback aufklappbar, erledigt-Flag, Leeren #}
+
+{% block titel %}Fehlerprotokoll – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Fehlerprotokoll</h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung">Parametrierung</a>
+        {% if darf_admin %}
+            <form method="post" action="/parametrierung/fehlerprotokoll/leeren"
+                  onsubmit="return confirm('Alle als erledigt markierten Einträge endgültig löschen?');">
+                <input type="hidden" name="offen" value="{{ '1' if offen else '' }}">
+                <input type="hidden" name="pfad" value="{{ pfad }}">
+                <button class="knopf zweitrangig" type="submit">Erledigte löschen</button>
+            </form>
+        {% endif %}
+    </div>
+</div>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<p class="dezent">
+    Jede unbehandelte Ausnahme (Internal Server Error) erhält eine Fehler-Nr., die der
+    Benutzer auf der Fehlerseite sieht. Primärquelle mit vollständigem Traceback ist das
+    Datei-Log <code>{{ log_pfad }}</code> (rotierend, 5 × 1 MB) – dort landen auch
+    Einträge, die wegen einer gesperrten Datenbank nicht in diese Tabelle geschrieben
+    werden konnten. Offen: {{ offen_anzahl }} · gesamt: {{ gesamt_anzahl }}
+    {% if eintraege | length == 200 %} · Anzeige auf 200 Einträge begrenzt{% endif %}
+</p>
+
+<form method="get" action="/parametrierung/fehlerprotokoll" class="suchleiste">
+    <label>Pfad enthält
+        <input type="text" name="pfad" value="{{ pfad }}" placeholder="z. B. /angebote/">
+    </label>
+    <label><input type="checkbox" name="offen" value="1" {{ 'checked' if offen }}> nur offene</label>
+    <button class="knopf klein zweitrangig" type="submit">Filtern</button>
+    {% if offen or pfad %}
+        <a class="knopf klein zweitrangig" href="/parametrierung/fehlerprotokoll">Filter zurücksetzen</a>
+    {% endif %}
+</form>
+
+{% if eintraege %}
+<table class="tabelle">
+    <thead>
+        <tr>
+            <th>Nr.</th>
+            <th>Zeit</th>
+            <th>Benutzer / Rolle</th>
+            <th>Methode + Pfad</th>
+            <th>Fehlertyp + Meldung</th>
+            <th>Angebot</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for e in eintraege %}
+        <tr class="{{ 'inaktiv' if e.erledigt else '' }}">
+            <td><code>{{ e.fehler_nr }}</code></td>
+            <td>{{ e.zeit.strftime('%d.%m.%Y %H:%M:%S') if e.zeit else '' }}</td>
+            <td>{{ e.benutzer_name or '–' }}<br><span class="dezent">{{ e.rolle }}</span></td>
+            <td>
+                <strong>{{ e.methode }}</strong> <code>{{ e.pfad }}</code>
+                {% if e.query %}<br><span class="dezent">?{{ e.query }}</span>{% endif %}
+                {% if e.formdaten %}
+                    <details>
+                        <summary class="dezent">Formdaten</summary>
+                        <pre>{{ e.formdaten }}</pre>
+                    </details>
+                {% endif %}
+            </td>
+            <td>
+                <strong>{{ e.fehlertyp }}</strong><br>
+                <span class="dezent">{{ e.meldung | truncate(200) }}</span>
+                {% if e.traceback %}
+                    <details>
+                        <summary class="dezent">Traceback</summary>
+                        <pre>{{ e.traceback }}</pre>
+                    </details>
+                {% endif %}
+            </td>
+            <td>
+                {% if e.angebot_id %}
+                    <a href="/angebote/{{ e.angebot_id }}">#{{ e.angebot_id }}</a>
+                {% else %}
+                    <span class="dezent">–</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if e.erledigt %}
+                    <span class="dezent">erledigt</span>
+                {% else %}
+                    <form method="post" action="/parametrierung/fehlerprotokoll/{{ e.id }}/erledigt">
+                        <input type="hidden" name="offen" value="{{ '1' if offen else '' }}">
+                        <input type="hidden" name="pfad" value="{{ pfad }}">
+                        <button class="knopf klein zweitrangig" type="submit">Als erledigt markieren</button>
+                    </form>
+                {% endif %}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="leer-zustand">
+    <p>Keine Einträge{% if offen or pfad %} für diesen Filter{% endif %}.</p>
+</div>
+{% endif %}
+{% endblock %}

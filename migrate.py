@@ -153,6 +153,40 @@ def _daten() -> list[str]:
         from app.models import Artikel
         meldungen += angebotsprofile.seed(session)
         meldungen += angebotsprofile.seed_pv(session)   # v13-PV: PV-Vor-/Nachtexte
+        # v22 (PLAN_V15 Phase 101): Platzhalter der PV-Nachtexte umstellen
+        meldungen += angebotsprofile.migriere_pv_platzhalter(session)
+        # v22 (PLAN_V15 Phase 103): Einheit der WP-Auslegungszeile „pauschal“
+        # → „psl.“ (wie PV); idempotent – nach dem ersten Lauf trifft der
+        # Query keine Zeile mehr
+        from app.models import AngebotsPosition as _AP
+        n = (session.query(_AP)
+             .filter(_AP.bezeichnung == "Auslegung der Wärmepumpe",
+                     _AP.einheit == "pauschal")
+             .update({"einheit": "psl."}, synchronize_session=False))
+        session.commit()
+        if n:
+            meldungen.append(f"{n} WP-Auslegungszeilen: Einheit pauschal → psl. (v22)")
+        # v22 (Voll-Crawl 30.09.2026): signierte PDFs mit absoluten Pfaden
+        # eines anderen Rechners → Pfad im aktuellen Signatur-Ordner, wenn die
+        # Datei dort liegt (idempotent; sonst bleibt der Eintrag, die Route
+        # meldet die fehlende Datei statt abzustürzen)
+        from pathlib import Path as _Path
+
+        from app import config as _config
+        from app.models import Angebot as _Angebot
+        umgezogen = 0
+        for a in session.query(_Angebot).filter(_Angebot.signierte_datei != ""):
+            alt = _Path(a.signierte_datei)
+            if alt.is_file():
+                continue
+            neu = _config.SIGNIERT_ORDNER / alt.name
+            if neu.is_file() and str(neu) != a.signierte_datei:
+                a.signierte_datei = str(neu)
+                umgezogen += 1
+        if umgezogen:
+            session.commit()
+            meldungen.append(f"{umgezogen} signierte PDF-Pfade auf den aktuellen "
+                             "Signatur-Ordner umgestellt (v22)")
         # v8/v9: neue Zusatzartikel (Z23 MID-Zähler, Z24 Solar-Rückbau) müssen
         # im Artikelstamm liegen, sonst blockiert die Logik-Validierung –
         # fehlen sie, läuft der Preislisten-/Zusatzartikel-Import automatisch.

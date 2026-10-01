@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v21)
+# Friondo Angebotstool – Projektkontext (v22)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -51,6 +51,7 @@ Nummern vergeben.
 | v19 | PLAN_V14.md | 95–97 |
 | v20 | PLAN_GESAMT.md B4 (Anschriften) | 98 |
 | v21 | PLAN_LEAD_V1.1.md | 87–89 |
+| v22 | PLAN_V15.md | 99–103 |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
@@ -576,8 +577,9 @@ Team-Feedback belegt – Plan-Text „Neu in v13“ entspricht diesem Abschnitt.
   Kette (Zählerschrank/UV/Zusammenlegung/Erdungsspieß/DC-ÜSS
   nach Strings), Immer-Positionen, Fit for Future analog WP
   inkl. Profile. Wirtschaftlichkeits-Beispielrechnung im
-  Nachtext (parametrierbare Annahmen). Dachbelegungstool folgt –
-  bis dahin Interim-Felder für Modulanzahl/Quer-Anteil.
+  Nachtext (parametrierbare Annahmen) – *seit v22 ersetzt durch die
+  drei Wirtschaftlichkeitsseiten (Energiebilanz)*. Dachbelegungstool
+  folgt – bis dahin Interim-Felder für Modulanzahl/Quer-Anteil.
 - Steuersatz je Angebot (PV 0 %, sonst 19 %) in Summen, DB,
   monday und Statistik. DB-Ampel-Schwellen je Sparte
   parametrierbar.
@@ -816,4 +818,110 @@ v14“ entspricht diesem Abschnitt.)
   Auftragsdaten bei storniertem Gewerk leiten um; BzA-Dialog mit
   Geräteauswahl auch für Tool-Angebote; Dubletten übernehmen Anschriften nur
   als ganze Gruppe. Tests: `tests/test_sweep_0930.py`.
+
+## Neu in v22 – Wirtschaftlichkeit PV & PA04 (abgestimmt 30.09.2026)
+
+(Plan: PLAN_V15.md, Phasen 99–103; Team-Feedback 30.09. = Phase 103.)
+
+- **PA04 „Ertüchtigung bestehender ZV?“** (Phase 99): Ja löst keine
+  Positionen und keine Ampel mehr aus – Antwort (mit PA05/PA06) nur im
+  Protokoll; Zeile im Blatt „Aktionen PV“ auf „–“ gesetzt. Es gibt keine
+  weiteren Platzhalter-Gründe „… noch nicht hinterlegt“ im PV-Konfigurator;
+  die übrigen AMPEL-Gründe (Dachart Sonstige, Vollgerüst/Sonstiges,
+  Zählerschrank 4-Feld/Sonstige, > 4 Strings, WR/Speicher nicht im
+  Sortiment) sind fachlich gewollt (offene Rückfragen in
+  docs/nach-dem-update-v13.md).
+- **Rechenkern `app/wirtschaftlichkeit.py`** (Phase 100): reine Funktion
+  `berechnen(param, anlage)` – **Saisonmodell (Entscheidung 01.10.2026,
+  PLAN_V15 Anhang B):** Energiebilanz je Monat mit Monatsprofilen (PV nach
+  typischer Ertragsverteilung Deutschland, Haushalt angelehnt an BDEW H0,
+  Wärmepumpe 80 % Heizung nach VDI-2067-Gradtagszahlen + 20 % Warmwasser,
+  Wallbox flach; alle vier im Blatt „PV-Parameter“ als 12 Werte „Jan; …;
+  Dez“ parametrierbar): Direktverbrauch = Direktanteil × Monatsverbrauch ×
+  Sonnenfaktor (Monatsertrag ÷ Durchschnittsmonat), höchstens 90 % der
+  Monatsproduktion; Speicher = min(kWh × Zyklen × Tage ÷ 365, Überschuss ×
+  Wirkungsgrad, Restlast); Jahreswerte = Summe der Monate; mit flachen
+  Profilen ergibt sich das Jahresmodell aus Anhang A. Danach Kosten
+  ohne/mit Anlage (Degradation, Strompreissteigerung, SpotDynamic-
+  Bezugspreis), Break-even, Baustein-Treppe PV → + Speicher → + HEMS →
+  + SpotDynamic mit Upsell-Hinweis, Szenarien 1/3/5 %, CO₂. Parameter aus
+  dem Blatt „PV-Parameter“ (24 neue Zeilen, Prozent als Zahl mit Einheit
+  „%“, Listen mit Semikolon, Standardwerte im Code, `parameter_lesen`
+  meldet fehlende Zeilen).
+  Anlagendaten: `pv_auslegung.als_dict()` liefert zusätzlich
+  hh_kwh/wp_kwh/wb_kwh/speicher_kwh (Verbrauch jetzt auch bei
+  Maximalbelegung ermittelt); `pdf_export.wirtschaftlichkeit_fuer` (Alias
+  `beispielrechnung_fuer`) holt Speicher/HEMS/SpotDynamic aus den aktiven
+  Positionen (KOMBI_MUSTER bzw. „SigenStor Batterie“, 015, 017), fällt bei
+  altem pv_json auf die verknüpfte PV-Erfassung zurück (auch über
+  Versionskette/Vorgang), Investition = Endbetrag, Startjahr = Angebotsjahr
+  + Versatz. Kontrollwerte: `tests/test_wirtschaftlichkeit_v22.py`.
+  `pv_auslegung.wirtschaftlichkeit` (additive Quote) bleibt nur als
+  Übergang und ist nicht mehr im PDF-Weg.
+- **Drei PDF-Seiten `app/wirtschaftlichkeit_pdf.py`** (Phase 101): feste
+  A4-Seiten (Auf einen Blick · Ersparnis im Detail · Sicherheit &
+  Transparenz) nach `docs/wirtschaftlichkeit-mockup/seite1–3.html`, mit
+  fpdf2-Primitiven, Schrift Poppins (`app/static/pdf/fonts`, OFL; Fallback
+  Arial mit Log-Warnung; „₂“ in CO₂ wird als tiefgestellte Ziffer
+  gezeichnet, da Poppins die Glyphe nicht hat), kompakter Kopf über
+  `AngebotsPdf.kompakt_kopf` (header() verzweigt), Fußzeile unverändert,
+  Auto-Page-Break für den Block aus. Einbindung in `_nachtext_rendern` am
+  Platzhalter `[WIRTSCHAFTLICHKEIT]` (Alias `[BEISPIELRECHNUNG]`); reine
+  Platzhalter-Seiten entfallen ohne Auslegungsdaten; Migration
+  `angebotsprofile.migriere_pv_platzhalter` stellt bestehende PV-Nachtexte
+  um. Varianten: ohne Speicher/HEMS/SpotDynamic entfallen Stufen (Spot-
+  Hinweis nur, wenn Netzbezug > 0), ohne Wärmepumpe Karte „Ihr Verbrauch“,
+  ohne Break-even neutraler Satz. Abnahme-PDF:
+  `docs/wirtschaftlichkeit-mockup/abnahme-AN-C-261021.pdf`.
+- **Einbindung** (Phase 102): Häkchen „Wirtschaftlichkeit im PDF
+  ausblenden“ (`angebote.wirtschaftlichkeit_ausblenden`, nur PV, Route
+  `POST /angebote/<id>/wirtschaftlichkeit`; Überarbeiten/Duplizieren/
+  Kopieren übernehmen es); Parametrierung zeigt die Tabelle „PV-Parameter“
+  mit Einheit, fehlende v22-Zeilen als Hinweis mit Standardwert
+  (`logik.pv_parameter_einheit`). Team-Hinweise: docs/nach-dem-update-v22.md.
+- **Team-Feedback 30.09.** (Phase 103): **Fehlerprotokoll** – Tabelle
+  `fehlerprotokoll` + `data/fehler.log` (`app/fehlerprotokoll.py`), globaler
+  Exception-Handler in `app/main.py` (Fehlerseite bzw. Editor-Meldung mit
+  Fehler-Nr., JSON bei Accept application/json), Ansicht Parametrierung →
+  Fehlerprotokoll. **Diagnose des sporadischen Internal Server Error** beim
+  Löschen/Verschieben von Positionen: die Positionsrouten sind gegen stale
+  IDs, Doppelklick, leere/fremde Sortier-Payloads, letzte Position und
+  Fremdsperre robust (reproduziert: alle 303); bestätigte Ursache ist
+  `sqlite3.OperationalError: database is locked` – Hintergrundläufe
+  (Geocoding alle 5 min mit flush je Adresse und Nominatim-Wartezeiten,
+  monday-Sync alle 15 min, Mail-Läufe 07:00/07:15 mit Graph-Aufruf) halten
+  nach dem ersten Schreibzugriff die SQLite-Schreibsperre während der
+  Netz-I/O; ein Editor-POST wartet busy_timeout (5 s) und stirbt. Abgefangen
+  durch `_speichern` in `routers/angebote.py` (Rollback + eine Wiederholung
+  nach 0,7 s für entfernen/sortierung/aendern/menge/neu-nummerieren;
+  Sortierung mit robustem Parser und Rückmeldung bei geänderten
+  Positionen), das Fehlerprotokoll (Meldung „Datenbank kurz belegt …“) und
+  Timeouts für Graph-Aufrufe (`graph_versand`, `mail_sync`); Test mit echter
+  Schreibsperre `tests/test_v22_positionen.py`. **Folgeänderung offen:**
+  Transaktionen der Scheduler verkürzen (commit vor Netz-I/O,
+  Geocoding-Backoff für „fehler“-Adressen). Weitere Punkte: Editor behält
+  die Scroll-Position (Scroll-Restore aus `projektierung.js` gilt auch für
+  `/angebote/<id>`, Anker für neue Positionen), Gruppen-Überschriften je
+  Angebot editierbar (`POST /angebote/<id>/gruppe`, wirkt auf alle Positionen
+  des Blocks), Auslegungszeile WP mit Einheit „psl.“ (Migration für den
+  Bestand), BzA-Datenblatt im Dialog vollständig übersteuerbar inkl.
+  Contracting (Vorbelegung Nein; statuslos, nur für das erzeugte PDF).
+  Tests: `tests/test_v22_feedback.py`, `tests/test_fehlerprotokoll_v22.py`,
+  `tests/test_bza_v19.py` (Phase103Uebersteuern).
+- **Voll-Crawl als Skript** `scripts/voll_crawl.py` (neu; vorher nur ad hoc):
+  alle GET-Routen × alle IDs einer DB-Kopie für die Rollen admin/innendienst/
+  aussendienst/montage, Aufruf `venv\Scripts\python scripts\voll_crawl.py
+  --data diagnose\test_v22\data` (DATA_ORDNER-Umlenkung, Cookie-Login ohne
+  PIN, Nebenwirkungs-Routen ausgeschlossen, Bericht mit Tracebacks). Befund
+  30.09. gegen die Server-Kopie vom 29.09.: 44.812 Aufrufe, eine
+  Absturzursache – `GET /signatur/<id>/signiert.pdf` mit absoluten
+  Altpfaden des früheren Entwicklungs-PCs (`angebote.signierte_datei`) warf
+  RuntimeError; jetzt Auflösung über den Dateinamen im Signatur-Ordner bzw.
+  Meldung (`signatur.signierte_datei_pfad`) + Datenmigration der Pfade.
+- **Umgebung 30.09.2026:** Entwicklungs-PC neu (kein Git installiert, kein
+  `.git` im Projektordner – Commit von v22 steht aus); venv mit Python
+  3.14 neu angelegt (`venv_alt_py312` = unbrauchbare Kopie des alten
+  Rechners); Server-DB-Kopie in diagnose\ (29.09. 15:32) ist Vor-v16-Stand
+  und wird für Crawl/Abnahme nach diagnose\test_v22\data kopiert und
+  migriert.
 

@@ -15,6 +15,7 @@
         <a class="knopf zweitrangig" href="/parametrierung/stuecklisten">Stücklisten</a>
         <a class="knopf zweitrangig" href="/parametrierung/teams">Teams</a>
         <a class="knopf zweitrangig" href="/parametrierung/subunternehmer">Subunternehmer</a>
+        <a class="knopf zweitrangig" href="/parametrierung/fehlerprotokoll">Fehlerprotokoll</a>
         {% if request.state.benutzer and request.state.benutzer.rolle == 'admin' %}
             <a class="knopf zweitrangig" href="/parametrierung/projektierung-einstellungen">Projektierung-Einstellungen</a>
             <a class="knopf zweitrangig" href="/parametrierung/bestandsimport">Bestandsimport</a>
@@ -239,6 +240,7 @@ wird der Status auf „Angenommen" gesetzt und der Innendienst per E-Mail inform
     <tr><th>Paketmatrix-Zeilen</th><td>{{ logik.pakete | length }}</td></tr>
     <tr><th>Angebots-Blöcke</th><td>{{ logik.bloecke | length }}</td></tr>
     <tr><th>KfW-Parameter</th><td>{{ logik.kfw | length }}</td></tr>
+    <tr><th>PV-Parameter</th><td>{{ logik.pv_parameter | length }}</td></tr>
 </table>
 
 <h2>Fragen</h2>
@@ -284,6 +286,37 @@ wird der Status auf „Angenommen" gesetzt und der Innendienst per E-Mail inform
     {% endfor %}
     </tbody>
 </table>
+
+{% if logik.pv_parameter %}
+<h2>PV-Parameter</h2>
+<p class="dezent">Blatt „PV-Parameter“ der Logik-Excel: Auslegung (v16) und
+    Wirtschaftlichkeit (v22). Prozentwerte als Zahl mit Einheit „%“ (z. B. 3),
+    Tausender ohne Punkt; Änderungen wirken nach „Parametrierung neu einlesen“.</p>
+{% if pv_fehlende %}
+<div class="warnblock">
+    <strong>Fehlende Wirtschaftlichkeits-Parameter</strong> – bis zur Ergänzung im
+    Blatt gilt der Standardwert:
+    <ul>
+    {% for name in pv_fehlende %}
+        <li>{{ name }} – Standard {{ pv_standard[name] }}</li>
+    {% endfor %}
+    </ul>
+</div>
+{% endif %}
+<table class="tabelle">
+    <thead><tr><th>Parameter</th><th>Wert</th><th>Einheit</th><th>Bemerkung</th></tr></thead>
+    <tbody>
+    {% for name, (wert, bemerkung) in logik.pv_parameter.items() %}
+        <tr>
+            <td>{{ name }}</td>
+            <td>{{ wert | truncate(60) }}</td>
+            <td class="dezent">{{ logik.pv_parameter_einheit.get(name, '') }}</td>
+            <td class="dezent">{{ bemerkung | truncate(70) }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
 
 {% endif %}
 {% endblock %}

@@ -18,11 +18,18 @@ async def uebersicht(request: Request, session: Session = Depends(get_session)):
         return render(request, "konfiguration/uebersicht.html", aktiv="/parametrierung",
                       logik=None, bericht=None, dateifehler=str(config.LOGIK_EXCEL_PFAD),
                       meldung="")
-    from app import mail_sync
+    from app import mail_sync, wirtschaftlichkeit
     from app.models import AblehnungsGrund, AngebotsLoeschung, einstellung_holen
     logik, bericht = logik_modul.hole_logik(session)
+    # v22 (Phase 102): fehlende Wirtschaftlichkeits-Parameter mit Standardwert
+    _pv_param, pv_fehlende = wirtschaftlichkeit.parameter_lesen(logik.pv_parameter)
+    pv_neue = {zeile[0] for zeile in wirtschaftlichkeit.NEUE_PARAMETER_ZEILEN}
+    pv_fehlende = [name for name in pv_fehlende if name in pv_neue]
     return render(request, "konfiguration/uebersicht.html", aktiv="/parametrierung",
                   logik=logik, bericht=bericht, dateifehler=None,
+                  pv_fehlende=pv_fehlende,
+                  pv_standard={name: wirtschaftlichkeit.standardwert_text(name)
+                               for name in pv_fehlende},
                   ablehnungsgruende=(session.query(AblehnungsGrund)
                                      .order_by(AblehnungsGrund.sort, AblehnungsGrund.id).all()),
                   ablehnung_tage=einstellung_holen(session, "ablehnung_auto_tage", "90"),
@@ -1771,3 +1778,88 @@ async def lead_einstellungen_speichern(request: Request,
     return RedirectResponse("/parametrierung/lead-einstellungen?meldung="
                             + quote_plus("Einstellungen gespeichert."),
                             status_code=303)
+
+
+# --- v22 (PLAN_V15 Phase 103): Fehlerprotokoll ---------------------------------
+
+def _fehlerprotokoll_gate(request: Request):
+    """Nur Admin/Innendienst (die RollenMiddleware sperrt /parametrierung
+    bereits für AD/Montage/Projektierung/Leadmanagement – doppelt hält besser)."""
+    from app.auth import BUERO_ROLLEN
+    benutzer = request.state.benutzer
+    if benutzer is None or benutzer.rolle not in BUERO_ROLLEN:
+        return RedirectResponse("/", status_code=303)
+    return None
+
+
+def _fehlerprotokoll_zurueck(form, meldung: str) -> RedirectResponse:
+    """Zurück zur Liste – Filter (offen/pfad) aus dem Formular übernehmen."""
+    from urllib.parse import urlencode
+    parameter = {"meldung": meldung}
+    if (form.get("offen") or "") == "1":
+        parameter["offen"] = "1"
+    if (form.get("pfad") or "").strip():
+        parameter["pfad"] = form.get("pfad").strip()
+    return RedirectResponse("/parametrierung/fehlerprotokoll?" + urlencode(parameter),
+                            status_code=303)
+
+
+@router.get("/fehlerprotokoll")
+async def fehlerprotokoll_seite(request: Request,
+                                session: Session = Depends(get_session)):
+    """Fehlerprotokoll: unbehandelte Ausnahmen mit Fehler-Nr., neueste zuerst
+    (max. 200). Filter ?offen=1 (nur offene) und ?pfad= (Teilstring)."""
+    from app import fehlerprotokoll as fp_modul
+    from app.models import Fehlerprotokoll
+    sperre = _fehlerprotokoll_gate(request)
+    if sperre is not None:
+        return sperre
+    offen = request.query_params.get("offen") == "1"
+    pfad = (request.query_params.get("pfad") or "").strip()
+    abfrage = session.query(Fehlerprotokoll)
+    if offen:
+        abfrage = abfrage.filter(Fehlerprotokoll.erledigt.is_(False))
+    if pfad:
+        abfrage = abfrage.filter(Fehlerprotokoll.pfad.contains(pfad))
+    eintraege = (abfrage.order_by(Fehlerprotokoll.zeit.desc(), Fehlerprotokoll.id.desc())
+                 .limit(200).all())
+    return render(request, "konfiguration/fehlerprotokoll.html",
+                  aktiv="/parametrierung", eintraege=eintraege, offen=offen, pfad=pfad,
+                  offen_anzahl=(session.query(Fehlerprotokoll)
+                                .filter(Fehlerprotokoll.erledigt.is_(False)).count()),
+                  gesamt_anzahl=session.query(Fehlerprotokoll).count(),
+                  log_pfad=str(fp_modul.log_pfad()),
+                  darf_admin=request.state.benutzer.rolle == "admin",
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/fehlerprotokoll/{eintrag_id}/erledigt")
+async def fehlerprotokoll_erledigt(request: Request, eintrag_id: int,
+                                   session: Session = Depends(get_session)):
+    """Eintrag als erledigt markieren (Admin/Innendienst)."""
+    from app.models import Fehlerprotokoll
+    sperre = _fehlerprotokoll_gate(request)
+    if sperre is not None:
+        return sperre
+    form = await request.form()
+    eintrag = session.get(Fehlerprotokoll, eintrag_id)
+    if eintrag is None:
+        return _fehlerprotokoll_zurueck(form, "Eintrag nicht gefunden.")
+    eintrag.erledigt = True
+    session.commit()
+    return _fehlerprotokoll_zurueck(form, f"{eintrag.fehler_nr} als erledigt markiert.")
+
+
+@router.post("/fehlerprotokoll/leeren")
+async def fehlerprotokoll_leeren(request: Request,
+                                 session: Session = Depends(get_session)):
+    """Alle erledigten Einträge löschen (nur Admin; Datei-Log bleibt)."""
+    from app.models import Fehlerprotokoll
+    sperre = _fehlerprotokoll_gate(request) or _nur_admin(request)
+    if sperre is not None:
+        return sperre
+    form = await request.form()
+    anzahl = (session.query(Fehlerprotokoll)
+              .filter(Fehlerprotokoll.erledigt.is_(True)).delete())
+    session.commit()
+    return _fehlerprotokoll_zurueck(form, f"{anzahl} erledigte Einträge gelöscht.")

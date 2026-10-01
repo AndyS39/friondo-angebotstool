@@ -1,12 +1,16 @@
 # FastAPI-Grundgerüst des Friondo Angebotstools.
 # Start: start.bat  bzw.  venv\Scripts\uvicorn app.main:app --host 0.0.0.0 --port 8000
 
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from app import fehlerprotokoll
 from app.auth import RollenMiddleware, standardbenutzer_anlegen
 from app.db import init_db
 from app.routers import (angebote, anmeldung, artikel, benutzer, erfassung, vorgaenge,
@@ -59,6 +63,54 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Friondo Angebotstool", lifespan=lifespan)
+
+# v22 (Phase 103): Datei-Log data/fehler.log ab dem Start (auch uvicorn.error)
+fehlerprotokoll.logging_einrichten()
+
+
+@app.exception_handler(Exception)
+def unbehandelte_ausnahme(request: Request, exc: Exception):
+    """v22 (PLAN_V15 Phase 103): jede unbehandelte Ausnahme wird mit
+    Fehler-Nr. protokolliert (data/fehler.log + Tabelle fehlerprotokoll) und
+    der Benutzer bekommt eine lesbare Antwort statt „Internal Server Error“.
+    Der Handler liegt in Starlettes ServerErrorMiddleware: die Antwort wird
+    gesendet, die Ausnahme danach immer erneut geworfen (uvicorn druckt sie
+    zusätzlich – unschädlich). Sync-Funktion → läuft im Threadpool, damit
+    der Wiederholungsversuch des Protokoll-INSERTs die Event-Loop nicht
+    blockiert. Darf selbst nie werfen: komplett gekapselt."""
+    from starlette.requests import ClientDisconnect
+
+    if isinstance(exc, ClientDisconnect):
+        # Doppelklick/Abbruch durch den Browser – kein Fehler, kein Protokoll
+        return PlainTextResponse("Verbindung abgebrochen", status_code=400)
+    nr = "?"
+    try:
+        nr = fehlerprotokoll.eintragen(request, exc)
+        gesperrt = fehlerprotokoll.ist_datenbank_gesperrt(exc)
+        if gesperrt:
+            meldung = ("Datenbank kurz belegt – Änderung nicht gespeichert, "
+                       f"bitte erneut versuchen (Fehler-Nr. {nr})")
+        else:
+            meldung = f"Aktion fehlgeschlagen – Fehler-Nr. {nr} im Fehlerprotokoll"
+        if "application/json" in (request.headers.get("accept") or ""):
+            return JSONResponse({"ok": False, "meldung": meldung, "fehler_nr": nr},
+                                status_code=500)
+        treffer = re.match(r"^/angebote/(\d+)/", request.url.path)
+        if request.method == "POST" and treffer:
+            # zurück in den Editor, Meldung oben auf der Seite
+            return RedirectResponse(
+                f"/angebote/{treffer.group(1)}?meldung=" + quote_plus(meldung),
+                status_code=303)
+        zurueck = request.headers.get("referer") or ""
+        if not zurueck.startswith(("/", "http://", "https://")):
+            zurueck = ""
+        antwort = render(request, "fehler.html", aktiv=None, fehler_nr=nr,
+                         gesperrt=gesperrt, zurueck=zurueck)
+        antwort.status_code = 500
+        return antwort
+    except Exception:
+        return PlainTextResponse(f"Interner Fehler – Fehler-Nr. {nr}", status_code=500)
+
 
 app.add_middleware(RollenMiddleware)
 

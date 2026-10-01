@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{# v22 (Phase 103): lesbare Fehlerseite statt „Internal Server Error“ –
+   der Handler in app/main.py setzt Status 500 und übergibt die Fehler-Nr. #}
+
+{% block titel %}Fehler – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Es ist ein Fehler aufgetreten</h1>
+</div>
+
+<div class="warnblock fehlerblock">
+    <strong>Fehler-Nr. {{ fehler_nr }}</strong>
+    {% if gesperrt %}
+        <p>Die Datenbank war kurz belegt – die Änderung wurde <strong>nicht gespeichert</strong>.
+           Bitte die Aktion in einem Moment erneut versuchen.</p>
+    {% else %}
+        <p>Es ist ein Fehler aufgetreten (Fehler-Nr. {{ fehler_nr }}).</p>
+    {% endif %}
+    <p>Der Innendienst findet Details unter Parametrierung → Fehlerprotokoll.
+       Bitte die Fehler-Nr. bei einer Rückfrage mit angeben.</p>
+</div>
+
+<p>
+    {% if zurueck %}
+        <a class="knopf zweitrangig" href="{{ zurueck }}">Zurück</a>
+    {% endif %}
+    <a class="knopf zweitrangig" href="/">Startseite</a>
+    {% set b = request.state.benutzer | default(none) %}
+    {% if b and b.rolle in ('admin', 'innendienst') %}
+        <a class="knopf zweitrangig" href="/parametrierung/fehlerprotokoll">Fehlerprotokoll</a>
+    {% endif %}
+</p>
+{% endblock %}

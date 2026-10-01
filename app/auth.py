@@ -12,6 +12,7 @@ from fastapi import Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import ClientDisconnect
 
 from app import config
 from app.db import SessionLocal
@@ -130,6 +131,17 @@ class RollenMiddleware(BaseHTTPMiddleware):
         try:
             benutzer = benutzer_aus_cookie(request.cookies.get(COOKIE_NAME, ""), session)
             request.state.benutzer = benutzer
+            # v22 (Phase 103): Formdaten vor dem Endpunkt puffern, damit das
+            # Fehlerprotokoll sie bei einer Ausnahme noch kennt (PIN/Passwort
+            # maskiert, nur Formulare bis 64 KB; ClientDisconnect reicht durch)
+            request.state.formdaten = None
+            try:
+                from app import fehlerprotokoll
+                request.state.formdaten = await fehlerprotokoll.formdaten_puffern(request)
+            except ClientDisconnect:
+                raise
+            except Exception:
+                pass
             # v11 (Phase 69): Glocke in der Kopfzeile – Zähler + letzte 20
             # für jede gerenderte Seite (Fehler blockieren die Seite nie)
             request.state.glocke_ungelesen = 0

@@ -28,7 +28,7 @@ def _graph_get(pfad: str, token: str) -> dict:
     anfrage = urllib.request.Request(
         GRAPH + pfad,
         headers={"Authorization": f"Bearer {token}"})
-    with urllib.request.urlopen(anfrage) as antwort:
+    with urllib.request.urlopen(anfrage, timeout=60) as antwort:   # v22: Timeout
         return json.loads(antwort.read())
 
 

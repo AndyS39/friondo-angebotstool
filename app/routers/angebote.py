@@ -34,6 +34,37 @@ def _sperr_umleitung(request: Request, angebot_id: int):
         status_code=303)
 
 
+def _speichern(session: Session, aktion, wiederholungen: int = 1) -> None:
+    """v22 (PLAN_V15 Phase 103): aktion() ausführen und committen. Bei
+    „database is locked“ (ein Hintergrundlauf hält die SQLite-Schreibsperre
+    länger als der busy_timeout – bestätigte Ursache des sporadischen
+    Internal Server Error beim Löschen/Verschieben) wird zurückgerollt, kurz
+    gewartet und die Aktion einmal erneut ausgeführt. Bleibt die Sperre,
+    läuft die Ausnahme in den globalen Handler (Fehlerprotokoll + Meldung
+    „Datenbank kurz belegt“ statt Internal Server Error)."""
+    import time
+
+    from sqlalchemy.exc import OperationalError
+    for versuch in range(wiederholungen + 1):
+        try:
+            aktion()
+            session.commit()
+            return
+        except OperationalError as problem:
+            session.rollback()
+            if "locked" not in str(problem).lower() or versuch >= wiederholungen:
+                raise
+            time.sleep(0.7)
+
+
+def _ganzzahl(text) -> int | None:
+    """v22: robustes int() für Formularwerte (auch „−5“, Unicode-Ziffern)."""
+    try:
+        return int(str(text or "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
 def _kunden_map(session: Session, angebote) -> dict[int, Kunde]:
     ids = {a.kunde_id for a in angebote}
     if not ids:
@@ -521,6 +552,31 @@ async def ust_setzen(request: Request, angebot_id: int,
         f"/angebote/{angebot_id}?meldung=Steuersatz+gespeichert", status_code=303)
 
 
+@router.post("/{angebot_id}/wirtschaftlichkeit")
+async def wirtschaftlichkeit_setzen(request: Request, angebot_id: int,
+                                    session: Session = Depends(get_session)):
+    """v22 (PLAN_V15 Phase 102): Häkchen „Wirtschaftlichkeit im PDF
+    ausblenden“ – nur bei PV-Angeboten; die drei Wirtschaftlichkeitsseiten
+    entfallen dann im PDF (pdf_export.wirtschaftlichkeit_fuer liefert None).
+    Überarbeiten/Duplizieren/Kopieren übernehmen das Häkchen."""
+    from urllib.parse import quote_plus
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None or angebot.extern:
+        return RedirectResponse("/angebote", status_code=303)
+    if (angebot.konfigurator_typ or "WP") != "PV":
+        return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+    form = await request.form()
+    angebot.wirtschaftlichkeit_ausblenden = form.get("ausblenden") == "on"
+    session.commit()
+    meldung = ("Wirtschaftlichkeit im PDF ausgeblendet"
+               if angebot.wirtschaftlichkeit_ausblenden
+               else "Wirtschaftlichkeit im PDF wieder eingeblendet")
+    return RedirectResponse(
+        f"/angebote/{angebot_id}?meldung=" + quote_plus(meldung), status_code=303)
+
+
 @router.post("/{angebot_id}/sperre")
 async def sperre_verlaengern(request: Request, angebot_id: int):
     """Heartbeat des offenen Editors (alle 4 Minuten per JS)."""
@@ -552,8 +608,9 @@ async def menge_aendern(request: Request, angebot_id: int, position_id: int,
         from app.konfigurator import zahl_parsen
         zahl = zahl_parsen(form.get("menge"))
         if zahl is not None and zahl > 0:
-            position.menge = zahl
-            session.commit()
+            def aktion():
+                session.get(AngebotsPosition, position_id).menge = zahl
+            _speichern(session, aktion)
     return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
 
 
@@ -572,48 +629,54 @@ async def position_aendern(request: Request, angebot_id: int, position_id: int,
     if position is None or position.angebot_id != angebot_id:
         return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
     fehler = []
-    position.anzeige_nr = (form.get("anzeige_nr") or "").strip()[:10]
-    menge = zahl_parsen(form.get("menge"))
-    if menge is not None and menge > 0:
-        position.menge = menge
-    elif (form.get("menge") or "").strip():
-        fehler.append("Menge ungültig")
-    preis_text = (form.get("e_preis") or "").strip()
-    if preis_text:
-        preis = preis_parsen(preis_text)
-        if preis is None or preis < 0:
-            fehler.append("Einzelpreis ungültig")
-        elif preis != position.e_preis_cent:
-            if position.original_preis_cent is None:
-                position.original_preis_cent = position.e_preis_cent
-            position.e_preis_cent = preis
-    # Positionsrabatt: leer = kein Rabatt
-    rabatt_wert = (form.get("rabatt_wert") or "").strip()
-    position.rabatt_cent = None
-    position.rabatt_prozent = None
-    if rabatt_wert:
-        if form.get("rabatt_typ") == "prozent":
-            prozent = zahl_parsen(rabatt_wert)
-            if prozent is None or not 0 < prozent <= 100:
-                fehler.append("Rabatt-Prozent ungültig (0–100)")
+
+    def aktion():
+        # v22: bei Wiederholung nach „database is locked“ frisch laden
+        fehler.clear()
+        position = session.get(AngebotsPosition, position_id)
+        position.anzeige_nr = (form.get("anzeige_nr") or "").strip()[:10]
+        menge = zahl_parsen(form.get("menge"))
+        if menge is not None and menge > 0:
+            position.menge = menge
+        elif (form.get("menge") or "").strip():
+            fehler.append("Menge ungültig")
+        preis_text = (form.get("e_preis") or "").strip()
+        if preis_text:
+            preis = preis_parsen(preis_text)
+            if preis is None or preis < 0:
+                fehler.append("Einzelpreis ungültig")
+            elif preis != position.e_preis_cent:
+                if position.original_preis_cent is None:
+                    position.original_preis_cent = position.e_preis_cent
+                position.e_preis_cent = preis
+        # Positionsrabatt: leer = kein Rabatt
+        rabatt_wert = (form.get("rabatt_wert") or "").strip()
+        position.rabatt_cent = None
+        position.rabatt_prozent = None
+        if rabatt_wert:
+            if form.get("rabatt_typ") == "prozent":
+                prozent = zahl_parsen(rabatt_wert)
+                if prozent is None or not 0 < prozent <= 100:
+                    fehler.append("Rabatt-Prozent ungültig (0–100)")
+                else:
+                    position.rabatt_prozent = prozent
             else:
-                position.rabatt_prozent = prozent
+                cent = preis_parsen(rabatt_wert)
+                if cent is None or cent <= 0:
+                    fehler.append("Rabatt-Betrag ungültig")
+                else:
+                    position.rabatt_cent = cent
+        position.bauseits = form.get("bauseits") == "on"
+        position.ep_flag = form.get("ep_flag") == "on"   # v6: EP-Kästchen je Position
+        # v10 (Phase 61): „Alternativ – in anderem Angebot enthalten“ – zählt wie
+        # EP nicht mit; die Verknüpfung nennt das Geschwister-Angebot (oder Text)
+        position.alternativ = form.get("alternativ") == "on"
+        if position.alternativ:
+            position.alternativ_zu = (form.get("alternativ_zu") or "").strip()[:200]
         else:
-            cent = preis_parsen(rabatt_wert)
-            if cent is None or cent <= 0:
-                fehler.append("Rabatt-Betrag ungültig")
-            else:
-                position.rabatt_cent = cent
-    position.bauseits = form.get("bauseits") == "on"
-    position.ep_flag = form.get("ep_flag") == "on"   # v6: EP-Kästchen je Position
-    # v10 (Phase 61): „Alternativ – in anderem Angebot enthalten“ – zählt wie
-    # EP nicht mit; die Verknüpfung nennt das Geschwister-Angebot (oder Text)
-    position.alternativ = form.get("alternativ") == "on"
-    if position.alternativ:
-        position.alternativ_zu = (form.get("alternativ_zu") or "").strip()[:200]
-    else:
-        position.alternativ_zu = ""
-    session.commit()
+            position.alternativ_zu = ""
+
+    _speichern(session, aktion)
     ziel = f"/angebote/{angebot_id}"
     if fehler:
         ziel += "?meldung=" + quote_plus("Position teilweise nicht übernommen: " + ", ".join(fehler))
@@ -626,25 +689,70 @@ async def sortierung(request: Request, angebot_id: int,
     """Drag & Drop (v5): Reihenfolge aller Positions-IDs kommagetrennt."""
     if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
         return umleitung
+    from urllib.parse import quote_plus
     form = await request.form()
-    ids = [int(t) for t in (form.get("reihenfolge") or "").split(",") if t.strip().isdigit()]
+    # v22: robustes Parsen (int() nach isdigit() warf bei Unicode-Ziffern)
+    ids = [z for z in (_ganzzahl(t) for t in (form.get("reihenfolge") or "").split(",")
+                       if t.strip()) if z is not None]
     positionen = {p.id: p for p in session.query(AngebotsPosition)
                   .filter(AngebotsPosition.angebot_id == angebot_id)}
-    if set(ids) == set(positionen):
+    if set(ids) != set(positionen) or len(ids) != len(set(ids)):
+        # v22: vorher still ignoriert – jetzt Rückmeldung (Positionen wurden
+        # zwischenzeitlich geändert/gelöscht, z. B. zweiter Tab)
+        return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+            "Reihenfolge nicht übernommen – die Positionen haben sich zwischenzeitlich "
+            "geändert, bitte erneut sortieren."), status_code=303)
+    bewegt_id = _ganzzahl(form.get("bewegt_id"))
+    ziel_block = _ganzzahl(form.get("ziel_block"))
+    ziel_gruppe = form.get("ziel_gruppe") or ""
+
+    def aktion():
+        aktuell = {p.id: p for p in session.query(AngebotsPosition)
+                   .filter(AngebotsPosition.angebot_id == angebot_id)}
         for index, pid in enumerate(ids, 1):
-            positionen[pid].sort = index
+            if pid in aktuell:
+                aktuell[pid].sort = index
         # v11 (AN-C-261127): Die verschobene Position übernimmt Block und
         # Gruppe ihres Ziel-Blocks – sonst zerreißt sie die Gruppenbildung
         # der Anzeige und die Blocküberschrift rutscht unter den Artikel.
-        bewegt_id = form.get("bewegt_id") or ""
-        if bewegt_id.strip().isdigit() and int(bewegt_id) in positionen:
-            bewegt = positionen[int(bewegt_id)]
-            ziel_block = form.get("ziel_block") or ""
-            if ziel_block.strip().lstrip("-").isdigit():
-                bewegt.block_nr = int(ziel_block)
-            bewegt.gruppe = form.get("ziel_gruppe") or ""
-        session.commit()
+        if bewegt_id in aktuell:
+            bewegt = aktuell[bewegt_id]
+            if ziel_block is not None:
+                bewegt.block_nr = ziel_block
+            bewegt.gruppe = ziel_gruppe
+
+    _speichern(session, aktion)
     return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+
+
+@router.post("/{angebot_id}/gruppe")
+async def gruppe_umbenennen(request: Request, angebot_id: int,
+                            session: Session = Depends(get_session)):
+    """v22 (PLAN_V15 Phase 103): Gruppen-Überschrift nur in diesem Angebot
+    ändern. Der Text steht auf jeder Position des Blocks – alle Positionen mit
+    (block_nr, bisheriger Text) bekommen den neuen Text; leer entfernt die
+    Überschrift. Editor, PDF und AD-Ansicht gruppieren weiter nach dem Text,
+    der Angebotsaufbau (Logik-Blätter) bleibt unberührt."""
+    from urllib.parse import quote_plus
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
+    form = await request.form()
+    block_text = (form.get("block_nr") or "").strip()
+    if not block_text.lstrip("-").isdigit():
+        return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+    alt = form.get("alt") or ""
+    neu = (form.get("neu") or "").strip()[:300]
+    # Gruppe ohne Namen: leerer Text oder (Altbestand) NULL
+    alt_filter = (or_(AngebotsPosition.gruppe == "", AngebotsPosition.gruppe.is_(None))
+                  if alt == "" else AngebotsPosition.gruppe == alt)
+    (session.query(AngebotsPosition)
+     .filter(AngebotsPosition.angebot_id == angebot_id,
+             AngebotsPosition.block_nr == int(block_text), alt_filter)
+     .update({"gruppe": neu}, synchronize_session=False))
+    session.commit()
+    meldung = "Überschrift gespeichert" if neu else "Überschrift entfernt"
+    return RedirectResponse(
+        f"/angebote/{angebot_id}?meldung=" + quote_plus(meldung), status_code=303)
 
 
 @router.post("/{angebot_id}/neu-nummerieren")
@@ -653,9 +761,10 @@ async def neu_nummerieren(request: Request, angebot_id: int,
     """Eigene Nummern verwerfen → wieder fortlaufend 001, 002, … (v5)."""
     if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
         return umleitung
-    for p in session.query(AngebotsPosition).filter(AngebotsPosition.angebot_id == angebot_id):
-        p.anzeige_nr = ""
-    session.commit()
+    def aktion():
+        for p in session.query(AngebotsPosition).filter(AngebotsPosition.angebot_id == angebot_id):
+            p.anzeige_nr = ""
+    _speichern(session, aktion)
     return RedirectResponse(f"/angebote/{angebot_id}?meldung=Neu+durchnummeriert", status_code=303)
 
 
@@ -666,8 +775,11 @@ async def position_entfernen(request: Request, angebot_id: int, position_id: int
         return umleitung
     position = session.get(AngebotsPosition, position_id)
     if position and position.angebot_id == angebot_id:
-        session.delete(position)
-        session.commit()
+        def aktion():
+            aktuell = session.get(AngebotsPosition, position_id)
+            if aktuell is not None:
+                session.delete(aktuell)
+        _speichern(session, aktion)
     return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
 
 
@@ -706,6 +818,7 @@ async def position_neu(request: Request, angebot_id: int,
                     status_code=303)
     if artikel_id:
         artikel = session.get(Artikel, int(artikel_id))
+        ziel = f"/angebote/{angebot_id}"
         if artikel is not None:
             position = AngebotsPosition(
                 sort=max_sort + 1, block_nr=letzter_block, gruppe=letzte_gruppe,
@@ -721,7 +834,9 @@ async def position_neu(request: Request, angebot_id: int,
                 position.alternativ_zu = "PV-Angebot"
             angebot.positionen.append(position)
             session.commit()
-        return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+            # v22 (Phase 103): direkt zur neuen Zeile springen (Anker = Zeilenform)
+            ziel += f"#pos{position.id}"
+        return RedirectResponse(ziel, status_code=303)
 
     # Freitextposition – v11: Bezeichnung optional (PDF zeigt dann nur die
     # Beschreibung), zusätzliches EK-Feld (netto) für den Deckungsbeitrag
@@ -732,15 +847,17 @@ async def position_neu(request: Request, angebot_id: int,
     from app.konfigurator import zahl_parsen
     menge = zahl_parsen(form.get("menge") or "1") or 1
     if (bezeichnung or beschreibung) and preis is not None:
-        angebot.positionen.append(AngebotsPosition(
+        position = AngebotsPosition(
             sort=max_sort + 1, block_nr=letzter_block, gruppe=letzte_gruppe,
             bezeichnung=bezeichnung,
             beschreibung=beschreibung,
             menge=menge, einheit=(form.get("einheit") or "").strip(),
             e_preis_cent=preis, ep_flag=form.get("ep_flag") == "on",
-            ek_cent=ek or 0))
+            ek_cent=ek or 0)
+        angebot.positionen.append(position)
         session.commit()
-        return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+        # v22 (Phase 103): direkt zur neuen Zeile springen (Anker = Zeilenform)
+        return RedirectResponse(f"/angebote/{angebot_id}#pos{position.id}", status_code=303)
     return RedirectResponse(
         f"/angebote/{angebot_id}?meldung=Freitextposition:+Bezeichnung+oder+Beschreibung+und+Preis+erforderlich",
         status_code=303)
@@ -874,7 +991,11 @@ def _datenblatt_parameter(request: Request, session: Session, angebot):
         ersteller = session.get(Benutzer, int(q.get("ersteller")))
     if ersteller is None:
         ersteller = bza_datenblatt.ersteller_standard(session, request.state.benutzer)
-    return we, ersteller, (q.get("geraet") or "").strip()[:40]
+    # PLAN_V15 Phase 103: Übersteuerungen „f_<schluessel>“ aus dem Dialog –
+    # statuslos, nur für dieses PDF; leer = automatischer Wert
+    uebersteuert = {k[2:]: v.strip()[:bza_datenblatt.UEBERSTEUERUNG_MAX]
+                    for k, v in q.multi_items() if k.startswith("f_") and v.strip()}
+    return we, ersteller, (q.get("geraet") or "").strip()[:40], uebersteuert
 
 
 @router.get("/{angebot_id}/bza-datenblatt")
@@ -891,15 +1012,22 @@ async def bza_datenblatt_dialog(request: Request, angebot_id: int,
     if not bza_datenblatt.ist_wp(angebot):
         return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
             "BzA-Datenblatt gibt es nur für Wärmepumpen-Angebote."), status_code=303)
-    we, ersteller, geraet = _datenblatt_parameter(request, session, angebot)
+    we, ersteller, geraet, uebersteuert = _datenblatt_parameter(request, session, angebot)
     blatt = bza_datenblatt.erstellen(session, angebot, we_foerdern=we,
-                                     ersteller=ersteller, geraet_schluessel=geraet)
-    we_vorbelegt = next((f.wert for titel, felder in blatt.abschnitte for f in felder
-                         if f.name.startswith("Anzahl der zu fördernden") and not f.fehlt), "")
+                                     ersteller=ersteller, geraet_schluessel=geraet,
+                                     uebersteuert=uebersteuert)
+    # WE-Feld zeigt den automatischen/gewählten Wert – nicht eine f_-Übersteuerung
+    we_vorbelegt = str(we) if we else next(
+        (f.wert for titel, felder in blatt.abschnitte for f in felder
+         if f.schluessel == "we_foerdern" and not f.fehlt
+         and f.hinweis != bza_datenblatt.HINWEIS_MANUELL), "")
     return render(request, "angebote/bza_datenblatt.html", aktiv="/angebote",
                   angebot=angebot, blatt=blatt, we_vorbelegt=we_vorbelegt,
                   ersteller=bza_datenblatt.ersteller_kandidaten(session),
                   standard=ersteller, anlagen=bza_datenblatt.bafa_liste(session),
+                  uebersteuert=uebersteuert,
+                  ja_nein=bza_datenblatt.JA_NEIN_SCHLUESSEL,
+                  abgeleitet=bza_datenblatt.DIALOG_ABGELEITET,
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -914,13 +1042,17 @@ async def bza_datenblatt_pdf(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     if angebot is None or not bza_datenblatt.ist_wp(angebot):
         return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
-    we, ersteller, geraet = _datenblatt_parameter(request, session, angebot)
+    we, ersteller, geraet, uebersteuert = _datenblatt_parameter(request, session, angebot)
     blatt = bza_datenblatt.erstellen(session, angebot, we_foerdern=we,
-                                     ersteller=ersteller, geraet_schluessel=geraet)
+                                     ersteller=ersteller, geraet_schluessel=geraet,
+                                     uebersteuert=uebersteuert)
     if blatt.geraet_auswahl_noetig:
-        return RedirectResponse(f"/angebote/{angebot_id}/bza-datenblatt?meldung=" + quote_plus(
-            "TAIFUN-Angebot: bitte das Gerät aus der BAFA-Liste wählen (Pflicht)."),
-            status_code=303)
+        # Phase 103: eingetippte Werte (we/ersteller/f_…) über die Umleitung erhalten
+        ziel = f"/angebote/{angebot_id}/bza-datenblatt?meldung=" + quote_plus(
+            "TAIFUN-Angebot: bitte das Gerät aus der BAFA-Liste wählen (Pflicht).")
+        if request.url.query:
+            ziel += "&" + request.url.query
+        return RedirectResponse(ziel, status_code=303)
     name = bza_datenblatt.dateiname(blatt)
     return Response(content=bza_datenblatt.pdf_bytes(blatt), media_type="application/pdf",
                     headers={"Content-Disposition": f'inline; filename="{name}"'})
@@ -1545,6 +1677,7 @@ async def duplizieren(angebot_id: int, session: Session = Depends(get_session)):
     kopie.kfw_json = original.kfw_json
     kopie.ust_satz = original.ust_satz   # v13-PV
     kopie.pv_json = original.pv_json
+    kopie.wirtschaftlichkeit_ausblenden = original.wirtschaftlichkeit_ausblenden   # v22
     for p in original.positionen:
         kopie.positionen.append(AngebotsPosition(
             sort=p.sort, block_nr=p.block_nr, gruppe=p.gruppe, pos_nr=p.pos_nr,
@@ -1628,6 +1761,7 @@ async def fuer_anderen_kunden_kopieren(request: Request, angebot_id: int,
     kopie.rabatt_bezeichnung = original.rabatt_bezeichnung
     kopie.foerderung_manuell_cent = original.foerderung_manuell_cent
     kopie.foerderung_ausblenden = original.foerderung_ausblenden
+    kopie.wirtschaftlichkeit_ausblenden = original.wirtschaftlichkeit_ausblenden   # v22
     kopie.foerder_grund_prozent = original.foerder_grund_prozent
     kopie.foerder_klima_prozent = original.foerder_klima_prozent
     kopie.foerder_einkommen_prozent = original.foerder_einkommen_prozent

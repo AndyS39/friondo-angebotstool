@@ -118,6 +118,22 @@
     {% endif %}
 </p>
 
+{% if (angebot.konfigurator_typ or 'WP') == 'PV' %}
+{# v22 (PLAN_V15 Phase 102): die drei Wirtschaftlichkeitsseiten im PV-PDF
+   je Angebot abschaltbar (Überarbeiten/Duplizieren/Kopieren übernehmen es) #}
+{% if not nur_lesen %}
+<form method="post" action="/angebote/{{ angebot.id }}/wirtschaftlichkeit"
+      class="wirtschaftlichkeit-schalter" style="margin:0.3rem 0 0">
+    <label class="kontrollfeld" title="Die drei Seiten Wirtschaftlichkeit entfallen im PDF">
+        <input type="checkbox" name="ausblenden" {{ 'checked' if angebot.wirtschaftlichkeit_ausblenden }}
+               onchange="this.form.submit()"> Wirtschaftlichkeit im PDF ausblenden</label>
+</form>
+{% endif %}
+{% if angebot.wirtschaftlichkeit_ausblenden %}
+<p class="dezent" style="margin:0.2rem 0 0">Wirtschaftlichkeit wird im PDF nicht angezeigt.</p>
+{% endif %}
+{% endif %}
+
 {# v20 (Phase 98): Anschriften – Rechnungs- und Lieferanschrift als Karten
    (vorher: v8-Rechnungsfelder aus der Erfassung + v11-Freitext-Lieferzeile).
    Editierbar nur im Entwurf; danach über „Überarbeiten“ → neue Version. #}
@@ -356,7 +372,34 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
 </form>
 {% endif %}
 {% for gruppe in gruppen %}
-    {% if gruppe.name %}<h2 class="gruppentitel">{{ gruppe.name }}</h2>{% endif %}
+    {# v22 (PLAN_V15 Phase 103): Überschrift nur in diesem Angebot ändern –
+       der Text liegt auf jeder Position des Blocks (Route /gruppe) #}
+    {% set gi = loop.index %}
+    {% if gruppe.name %}
+    <h2 class="gruppentitel" id="gruppentitel{{ gi }}">{{ gruppe.name }}
+        {% if not nur_lesen %}
+        <a href="#" class="gruppe-bearbeiten" onclick="gruppeBearbeiten({{ gi }}); return false;"
+           title="Überschrift nur in diesem Angebot ändern">✎</a>
+        {% endif %}
+    </h2>
+    {% elif not nur_lesen %}
+    <p class="dezent gruppe-leer" id="gruppentitel{{ gi }}">
+        <a href="#" onclick="gruppeBearbeiten({{ gi }}); return false;"
+           title="Überschrift nur in diesem Angebot ergänzen">+ Überschrift</a>
+    </p>
+    {% endif %}
+    {% if not nur_lesen %}
+    <form method="post" action="/angebote/{{ angebot.id }}/gruppe" class="suchleiste gruppenform"
+          id="gruppenform{{ gi }}" hidden>
+        <input type="hidden" name="block_nr" value="{{ gruppe.block }}">
+        <input type="hidden" name="alt" value="{{ gruppe.name or '' }}">
+        <input type="text" name="neu" maxlength="300" value="{{ gruppe.name or '' }}"
+               placeholder="Überschrift (leer = entfernen)" title="Überschrift nur in diesem Angebot">
+        <button class="knopf klein" type="submit">Speichern</button>
+        <button class="knopf klein zweitrangig" type="button"
+                onclick="gruppeBearbeiten({{ gi }}, true)">Abbrechen</button>
+    </form>
+    {% endif %}
     <table class="tabelle positionen">
         <thead>
             <tr>
@@ -729,20 +772,24 @@ function textBearbeiten(id, zu) {
     form.hidden = zu === true ? true : !form.hidden;
     anzeige.hidden = !form.hidden;
 }
+// v22 (Phase 103): Gruppen-Überschrift inline bearbeiten (i = Gruppenindex)
+function gruppeBearbeiten(i, zu) {
+    var form = document.getElementById('gruppenform' + i);
+    var titel = document.getElementById('gruppentitel' + i);
+    if (!form) return;
+    form.hidden = zu === true ? true : !form.hidden;
+    if (titel) titel.hidden = !form.hidden;
+    if (!form.hidden) { form.neu.focus(); form.neu.select(); }
+}
 </script>
 {% if not nur_lesen %}
 <script>
 // Drag & Drop der Positionen (v5, v8: ohne Scroll-Sprung + Auto-Scroll):
 // Zeilen über alle Gruppen hinweg ziehen, danach die Reihenfolge senden.
-// Die Scroll-Position wird vor dem Submit gemerkt und nach dem Neuladen
-// wiederhergestellt; beim Ziehen an den Fensterrand scrollt die Seite mit.
+// Scroll-Merken/-Wiederherstellen übernimmt seit v22 (Phase 103) zentral
+// projektierung.js für alle POST-Formulare des Editors (auch form.submit());
+// beim Ziehen an den Fensterrand scrollt die Seite mit.
 (function () {
-    const merker = 'editor-scroll-{{ angebot.id }}';
-    const gemerkt = sessionStorage.getItem(merker);
-    if (gemerkt !== null) {
-        window.scrollTo(0, parseInt(gemerkt));
-        sessionStorage.removeItem(merker);
-    }
     let gezogen = null;
     let autoScroll = 0;
     document.addEventListener('dragover', function (e) {
@@ -783,7 +830,6 @@ function textBearbeiten(id, zu) {
                 document.getElementById('ziel_block').value = ziel.dataset.block || '';
                 document.getElementById('ziel_gruppe').value = ziel.dataset.gruppe || '';
             }
-            sessionStorage.setItem(merker, String(window.scrollY));
             document.getElementById('sortierform').submit();
         });
     });

@@ -6,7 +6,11 @@
       an Ort und Stelle ersetzt, Zähler/Ampel aktualisiert; schlägt fetch fehl,
       wird das Formular klassisch abgeschickt (Server-Redirect als Fallback).
    3. Alle übrigen POST-Formulare: Scroll-Position je URL in sessionStorage
-      merken und nach dem Redirect wiederherstellen. */
+      merken und nach dem Redirect wiederherstellen. Gilt seit v22 (PLAN_V15
+      Phase 103) auch für den Angebots-Editor /angebote/<id> (Zeilen-Editor,
+      USt, Vertriebler, Profil, Sortierung, Texte …) – nicht für die Liste
+      /angebote. Mit Anker (#pos<id> nach „Position hinzufügen“) wird nicht
+      wiederhergestellt, der Anker gewinnt. */
 (function () {
     'use strict';
 
@@ -146,7 +150,8 @@
     }, true);
 
     // ---------- 3. Scroll-Position bei klassischen POSTs ----------
-    const bereich = /^\/(projektierung|montage)(\/|$)/.test(location.pathname);
+    // v22: zusätzlich der Angebots-Editor /angebote/<Ziffern> (nicht die Liste)
+    const bereich = /^\/(projektierung|montage)(\/|$)|^\/angebote\/\d+(\/|$)/.test(location.pathname);
 
     function schluessel() { return 'pjScroll:' + location.pathname; }
 

@@ -792,7 +792,15 @@ tr.bauseits td { color: #888; }
 .positionen input[type="text"] { padding: 0.15rem 0.3rem; }
 .positionen .eigene-nr { font-weight: 600; background: #fdf3dc; }
 .positionen .preis-geaendert { background: #fdf3dc; }
-.zeilenform { display: inline-flex; gap: 0.3rem; align-items: center; }
+.zeilenform { display: inline-flex; gap: 0.3rem; align-items: center;
+              scroll-margin-top: 90px; }   /* v22: Anker #pos<id> unter dem Kopf */
+/* v22 (Phase 103): Gruppen-Überschrift inline bearbeiten */
+.gruppenform { margin: 1.5rem 0 0.5rem; }
+.gruppenform[hidden], .gruppentitel[hidden], .gruppe-leer[hidden] { display: none; }
+.gruppentitel .gruppe-bearbeiten { margin-left: 0.5rem; text-decoration: none;
+                                   text-transform: none; letter-spacing: 0; }
+.gruppentitel .gruppe-bearbeiten:hover { text-decoration: underline; }
+.gruppe-leer { margin: 1rem 0 0.2rem; }
 .zeilenform .kontrollfeld { font-size: 0.8rem; white-space: nowrap; }
 .positions-hilfe { margin: 0.4rem 0; }
 

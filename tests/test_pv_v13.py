@@ -367,10 +367,14 @@ class Phase78PdfWirtschaftlichkeit(Basis):
         self.assertIn("Ihr individuelles PV-Angebot zum Festpreis", text)
         self.assertIn("Komplettpaket 13,65 kWp PV-Anlage", text)
         self.assertIn("Anwendung des Nullsteuersatzes", text)
-        self.assertIn("Ihre Beispielrechnung", text)
+        # v22: drei Wirtschaftlichkeitsseiten statt der Text-Beispielrechnung
+        self.assertNotIn("Ihre Beispielrechnung", text)
+        self.assertIn("So rechnet sich Ihre Energielösung", text)
+        self.assertIn("Was Sie Jahr für Jahr sparen", text)
+        self.assertIn("So sicher ist Ihre Rechnung", text)
         self.assertIn("13.104 kWh", text)
         self.assertIn("Amortisation", text)
-        self.assertIn("keine Garantie", text)
+        self.assertIn("Keine Garantie", text.replace("\n", " "))
         self.assertNotIn("KfW-Förderung", text)
         self.assertNotIn("Eigenanteil", text)
         self.assertIn("Auslegung: 30 Module", text)
@@ -535,6 +539,42 @@ class Phase80Lieferschein(Basis):
         text = self.pdf_text(r)
         self.assertIn("L I E F E R S C H E I N", text)
         self.assertNotIn("€", text)
+
+
+# --- Phase 99 (v22, PLAN_V15): PA04 nur Protokoll --------------------------
+
+class Phase99PA04(Basis):
+    def test_pa04_ja_keine_ampel_keine_positionen(self):
+        antworten = pv_basis(PA02="Nein", PA04="Ja", PA05="Ja", PA06="Nein")
+        self.assertIsNone(engine.naechste_frage(self.logik, antworten))
+        self.assertEqual(engine.ampel_gruende(self.logik, antworten), [])
+        self.assertFalse([a for a in self.logik.pv_aktionen
+                          if a.frage == "PA04" and a.typ == "ampel"])
+        # Antwort (und Folgefragen) nur im Protokoll
+        prot = {e["frage_id"]: e for e in engine.protokoll(self.logik, antworten)}
+        self.assertEqual(prot["PA04"]["antwort"], "Ja")
+        self.assertIn("PA05", prot)
+        # identische Positionen wie mit PA04 = Nein
+        mit = mengen(pv_auslegung.positionen_zusammenstellen(self.logik, antworten, self.s))
+        ohne = mengen(pv_auslegung.positionen_zusammenstellen(
+            self.logik, pv_basis(PA02="Nein", PA04="Nein"), self.s))
+        self.assertEqual(mit, ohne)
+
+    def test_erneut_pruefen_holt_pa04_fall_auf_gruen(self):
+        client = TestClient(app)
+        client.post("/login", data={"benutzer_id": "1", "pin": "1234"})
+        e = Erfassung(kunde_id=self.kunde.id, benutzer_id=1, sparte="PV",
+                      konfigurator_typ="PV", status="In TAIFUN zu schreiben",
+                      ampel="orange",
+                      antworten_json=json.dumps(
+                          pv_basis(PA02="Nein", PA04="Ja", PA05="Nein", PA06="Nein"),
+                          ensure_ascii=False))
+        self.s.add(e)
+        self.s.commit()
+        r = client.post(f"/erfassungen/{e.id}/erneut-pruefen", follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        self.s.refresh(e)
+        self.assertEqual((e.ampel, e.status), ("gruen", "Neu"))
 
 
 # --- Phase 81 (Abnahme) -----------------------------------------------------

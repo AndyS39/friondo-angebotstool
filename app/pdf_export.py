@@ -30,6 +30,11 @@ FUSSZEILE = [
 ]
 
 ABSENDERZEILE = "Friondo GmbH · Arnold-Overbeck-Str. 63-65 · 47139 Duisburg"
+AUSSTELLUNGSORT = "Duisburg"   # v22: Ort in der Kopfzeile der Wirtschaftlichkeitsseiten
+
+# v22 (Phase 101): Platzhalter im PV-Nachtext für die drei gestalteten
+# Wirtschaftlichkeitsseiten; der alte Platzhalter bleibt als Alias gültig
+PLATZHALTER_WIRTSCHAFTLICHKEIT = ("[WIRTSCHAFTLICHKEIT]", "[BEISPIELRECHNUNG]")
 
 # Logo-Leiste Seite 1: Positionen/Größen exakt aus dem Referenz-PDF ausgelesen
 # (pdfplumber-Image-BBoxen, Phase 26) – zweizeilige Anordnung wie im Original.
@@ -70,6 +75,9 @@ class AngebotsPdf(FPDF):
         self.add_font("Arial", "B", ARIAL / "arialbd.ttf")
         self.add_font("Arial", "I", ARIAL / "ariali.ttf")
         self.add_font("Arial", "BI", ARIAL / "arialbi.ttf")
+        # v22 (Phase 101): kompakter Seitenkopf der Wirtschaftlichkeitsseiten –
+        # dict {eyebrow, zeile, seite, von} solange das Modul zeichnet, sonst None
+        self.kompakt_kopf = None
 
     @property
     def inhaltsbreite(self) -> float:
@@ -85,6 +93,10 @@ class AngebotsPdf(FPDF):
     # --- Kopf / Fuß -------------------------------------------------------
 
     def header(self):
+        if self.kompakt_kopf:
+            from app import wirtschaftlichkeit_pdf
+            wirtschaftlichkeit_pdf.kompakter_kopf(self, self.kompakt_kopf)
+            return
         if self.page_no() == 1:
             self._logo_leiste()
         else:
@@ -151,12 +163,26 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
                 vortext_text: str | None = None,
                 nachtext_text: str | None = None,
                 ersetzt_hinweis: str = "",
-                beispielrechnung: dict | None = None) -> Path:
+                beispielrechnung: dict | None = None,
+                wirtschaftlichkeit: dict | None = None) -> Path:
     """signatur (Phase 23): {"png_pfad", "name", "zeit"} – wird auf der
     Unterschriften-Seite eingebettet; ziel überschreibt den Ablageort.
     v9: Vor- und Nachtext kommen als Textblöcke (Profil/Parametrierung);
-    None = Standard-Blöcke aus app.angebotsprofile."""
+    None = Standard-Blöcke aus app.angebotsprofile.
+    v22: wirtschaftlichkeit = Daten aus wirtschaftlichkeit_fuer() für die drei
+    PV-Seiten (beispielrechnung = alter Parametername, Alias)."""
     from app import angebotsprofile
+    if wirtschaftlichkeit is None:
+        wirtschaftlichkeit = beispielrechnung
+    if wirtschaftlichkeit is not None:
+        wirtschaftlichkeit = dict(wirtschaftlichkeit, kopf={
+            "nummer": angebot.nummer, "ort": AUSSTELLUNGSORT,
+            "datum": angebot.datum.strftime("%d.%m.%Y"),
+            "kunde": kunde.firma or " ".join(
+                t for t in ((kunde.anrede if (kunde.anrede or "") in ("Familie", "Eheleute")
+                             else ""), kunde.vorname, kunde.nachname) if t),
+            "adresse": f"{kunde.strasse}, {kunde.plz} {kunde.ort}".strip(", "),
+        })
     pdf = AngebotsPdf(angebot.nummer)
     _seite1(pdf, angebot, kunde,
             vortext_text if vortext_text is not None
@@ -167,7 +193,7 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
     _summen_und_kfw(pdf, angebot, kfw_ergebnis)
     _nachtext_rendern(pdf, nachtext_text if nachtext_text is not None
                       else angebotsprofile.STANDARD_NACHTEXT, signatur,
-                      beispielrechnung)
+                      wirtschaftlichkeit)
     if mit_vollmacht:
         # Nachtext D nur bei iMSys (P02) und/oder SpotDynamic (P03) – Phase 15
         _nachtext_d(pdf, kunde, angebot)
@@ -498,15 +524,23 @@ def _absatz(pdf: AngebotsPdf, text: str, fett=False, groesse=9):
 
 def _nachtext_rendern(pdf: AngebotsPdf, text: str,
                       signatur: dict | None = None,
-                      beispielrechnung: dict | None = None) -> None:
+                      wirtschaftlichkeit: dict | None = None) -> None:
     """v9: Nachtext-Blocktext rendern. Konventionen: "# " Seitenüberschrift ·
     "## " fette Zwischenzeile (10 pt) · "### " fette Absatz-Überschrift ·
     "---" allein = Seitenumbruch · "~ " kleine kursive Fußnote ·
     "[UNTERSCHRIFT]" = Ort/Datum-Unterschriftenblock (inkl. elektronischer
-    Signatur). Aufeinanderfolgende Zeilen bilden EINEN Absatz."""
+    Signatur) · "[WIRTSCHAFTLICHKEIT]" (v22, Alias "[BEISPIELRECHNUNG]") =
+    die drei gestalteten Wirtschaftlichkeitsseiten des PV-Angebots (eigene
+    Seiten; ohne Auslegungsdaten entfällt der Block). Aufeinanderfolgende
+    Zeilen bilden EINEN Absatz."""
+    from app import wirtschaftlichkeit_pdf
     for seite in text.split("\n---\n"):
-        # v13-PV: Seite nur mit [BEISPIELRECHNUNG] entfällt ohne Auslegungsdaten
-        if seite.strip() == "[BEISPIELRECHNUNG]" and beispielrechnung is None:
+        # v22: Seite nur mit dem Platzhalter → das Modul legt seine drei
+        # Seiten selbst an (kein generisches add_page, sonst Leerseite);
+        # ohne Auslegungsdaten entfällt die Seite wie bisher
+        if seite.strip() in PLATZHALTER_WIRTSCHAFTLICHKEIT:
+            if wirtschaftlichkeit is not None:
+                wirtschaftlichkeit_pdf.seiten_zeichnen(pdf, wirtschaftlichkeit)
             continue
         pdf.add_page()
         puffer: list[str] = []
@@ -516,7 +550,8 @@ def _nachtext_rendern(pdf: AngebotsPdf, text: str,
                 _absatz(pdf, "\n".join(puffer))
                 puffer.clear()
 
-        for zeile in seite.splitlines():
+        zeilen = seite.splitlines()
+        for index, zeile in enumerate(zeilen):
             zeile = zeile.rstrip()
             if not zeile.strip():
                 puffer_leeren()
@@ -524,10 +559,15 @@ def _nachtext_rendern(pdf: AngebotsPdf, text: str,
             if zeile.strip() == "[UNTERSCHRIFT]":
                 puffer_leeren()
                 _unterschrift_block(pdf, signatur)
-            elif zeile.strip() == "[BEISPIELRECHNUNG]":
+            elif zeile.strip() in PLATZHALTER_WIRTSCHAFTLICHKEIT:
+                # Platzhalter zwischen anderem Text (frei editierbare Blöcke):
+                # Text davor abschließen, drei Seiten zeichnen, Rest auf einer
+                # normalen Folgeseite weiterführen
                 puffer_leeren()
-                if beispielrechnung is not None:
-                    _beispielrechnung(pdf, beispielrechnung)
+                if wirtschaftlichkeit is not None:
+                    wirtschaftlichkeit_pdf.seiten_zeichnen(pdf, wirtschaftlichkeit)
+                    if any(z.strip() for z in zeilen[index + 1:]):
+                        pdf.add_page()
             elif zeile.startswith("# "):
                 puffer_leeren()
                 _ueberschrift(pdf, zeile[2:])
@@ -552,53 +592,71 @@ def _zahl(wert: float, stellen: int = 0) -> str:
     return text.replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def _beispielrechnung(pdf: AngebotsPdf, w: dict) -> None:
-    """v13-PV (Phase 78): Abschnitt „Ihre Beispielrechnung“ – personalisierte
-    Wirtschaftlichkeit aus Anlagengröße, Ausbau (Speicher/HEMS) und Endbetrag."""
-    _ueberschrift(pdf, "Ihre Beispielrechnung")
-    _absatz(pdf, "So kann sich Ihre neue PV-Anlage rechnen – auf Basis Ihrer "
-                 "Anlagengröße und üblicher Annahmen:")
-    quote_teile = [f"PV {_zahl(w['ev_pv'])} %"]
-    if w["ev_speicher"]:
-        quote_teile.append(f"Speicher + {_zahl(w['ev_speicher'])} %")
-    if w["ev_hems"]:
-        quote_teile.append(f"Friondo HEMS + {_zahl(w['ev_hems'])} %")
-    zeilen = [
-        ("Anlagenleistung", f"{_zahl(w['kwp'], 2)} kWp", False),
-        ("Jahresertrag (ca.)", f"{_zahl(w['ertrag'])} kWh", False),
-        (f"Eigenverbrauch {_zahl(w['quote'])} % ({' · '.join(quote_teile)})",
-         f"{_zahl(w['eigen'])} kWh", False),
-        (f"Ersparnis Eigenverbrauch ({_zahl(w['strompreis'], 2)} €/kWh)",
-         f"{_zahl(w['ersparnis_eigen'], 2)} €", False),
-        (f"Einspeisung {_zahl(w['einspeisung'])} kWh × {_zahl(w['verguetung'], 3)} €/kWh",
-         f"{_zahl(w['ersparnis_einspeisung'], 2)} €", False),
-        ("Ihr jährlicher Vorteil (ca.)", f"{_zahl(w['ersparnis'], 2)} €", True),
-        ("Investition (Endbetrag dieses Angebots)", f"{_zahl(w['investition'], 2)} €", False),
-    ]
-    if w["amortisation"] is not None:
-        zeilen.append(("Grobe Amortisation", f"ca. {_zahl(w['amortisation'], 1)} Jahre", True))
-    pdf.ln(1)
-    for name, wert, fett in zeilen:
-        pdf.set_font("Arial", "B" if fett else "", 9)
-        pdf.cell(120, 5.5, name)
-        pdf.cell(50, 5.5, wert, align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.ln(3)
-    pdf.set_font("Arial", "I", 7.5)
-    ertrag_je_kwp = w["ertrag"] / w["kwp"] if w["kwp"] else 0
-    pdf.multi_cell(0, 3.8, "Beispielrechnung auf Basis üblicher Annahmen (spezifischer "
-                           f"Ertrag {_zahl(ertrag_je_kwp)} kWh/kWp, Strompreis "
-                           f"{_zahl(w['strompreis'], 2)} €/kWh, Einspeisevergütung "
-                           f"{_zahl(w['verguetung'], 3)} €/kWh), keine Garantie. Tatsächliche "
-                           "Erträge und Einsparungen hängen u. a. von Ausrichtung, Verschattung, "
-                           "Wetter, Verbrauchsverhalten und Energiepreisen ab.")
+# v22: die v16-Textrechnung „Ihre Beispielrechnung“ (_beispielrechnung /
+# beispielrechnung_fuer) ist durch die drei gestalteten Seiten in
+# app/wirtschaftlichkeit_pdf.py ersetzt (Datenlieferant: wirtschaftlichkeit_fuer).
 
 
-def beispielrechnung_fuer(session, angebot: Angebot) -> dict | None:
-    """Daten der Beispielrechnung für PV-Angebote mit gespeicherter Auslegung."""
+def _pv_erfassung_fuer(session, angebot: Angebot):
+    """v22: verknüpfte PV-Erfassung (auch über die Versionskette .2/.3 …
+    und den Vorgang) für den Verbrauchs-Fallback alter PV-Angebote."""
+    from app.models import Erfassung
+    ids: list[int] = []
+    a = angebot
+    while a is not None and a.id not in ids:
+        ids.append(a.id)
+        a = session.get(Angebot, a.vorgaenger_id) if getattr(a, "vorgaenger_id", None) else None
+    e = (session.query(Erfassung)
+         .filter(Erfassung.angebot_id.in_(ids), Erfassung.sparte == "PV")
+         .order_by(Erfassung.id.desc()).first())
+    if e is None and getattr(angebot, "vorgang_id", None):
+        e = (session.query(Erfassung)
+             .filter(Erfassung.vorgang_id == angebot.vorgang_id, Erfassung.sparte == "PV")
+             .order_by(Erfassung.id.desc()).first())
+    return e
+
+
+def _pv_verbrauch(session, angebot: Angebot, daten: dict, logik) -> dict:
+    """v22: Verbrauchsbasis (hh/wp/wb kWh) und Speicherwunsch – zuerst aus
+    pv_json (seit v22 in als_dict), sonst aus der verknüpften Erfassung
+    (PO06, PO07 bzw. _PO07_aus_wp, PO08/PO09, PA10; Altfälle: PO04)."""
+    from app import pv_auslegung
+    from app.konfigurator import zahl_parsen
+    if daten.get("hh_kwh") is not None or daten.get("wp_kwh") is not None:
+        return {"hh_kwh": float(daten.get("hh_kwh") or 0),
+                "wp_kwh": float(daten.get("wp_kwh") or 0),
+                "wb_kwh": float(daten.get("wb_kwh") or 0),
+                "speicher_kwh": float(daten.get("speicher_kwh") or 0)}
+    ergebnis = {"hh_kwh": 0.0, "wp_kwh": 0.0, "wb_kwh": 0.0, "speicher_kwh": 0.0}
+    erfassung = _pv_erfassung_fuer(session, angebot)
+    if erfassung is None:
+        return ergebnis
+    antworten = json.loads(erfassung.antworten_json or "{}")
+    hh = zahl_parsen(antworten.get(pv_auslegung.ID_STROM_HAUSHALT))
+    if hh is None:
+        hh = zahl_parsen(antworten.get("PO04"))   # Altfrage „inkl. WP & WB“
+    wp, _info = pv_auslegung.wp_strom(antworten, pv_auslegung.parameter(logik))
+    wb = 0.0
+    if antworten.get(pv_auslegung.ID_WALLBOX) == "Ja":
+        wb = zahl_parsen(antworten.get(pv_auslegung.ID_STROM_WALLBOX)) or 0.0
+    ergebnis.update(hh_kwh=float(hh or 0.0), wp_kwh=float(wp or 0.0), wb_kwh=float(wb),
+                    speicher_kwh=float(zahl_parsen(antworten.get(pv_auslegung.ID_SPEICHER)) or 0.0))
+    return ergebnis
+
+
+def wirtschaftlichkeit_fuer(session, angebot: Angebot) -> dict | None:
+    """v22 (PLAN_V15 Phase 100): Anlagendaten + Rechenergebnis für die drei
+    Wirtschaftlichkeitsseiten eines PV-Angebots mit gespeicherter Auslegung.
+    None → Block entfällt (WP, ohne Auslegung, ohne PV-Parameter oder per
+    Häkchen ausgeblendet). Speicher/HEMS/SpotDynamic kommen aus den aktiven
+    Positionen (ep/bauseits/alternativ zählen nicht), Investition =
+    Endbetrag, Startjahr = Angebotsjahr + Inbetriebnahme-Versatz."""
     if (angebot.konfigurator_typ or "WP") != "PV" or not (angebot.pv_json or "").strip():
         return None
+    if getattr(angebot, "wirtschaftlichkeit_ausblenden", False):
+        return None
     from app import logik as logik_modul
-    from app import pv_auslegung
+    from app import pv_auslegung, wirtschaftlichkeit
     daten = json.loads(angebot.pv_json)
     kwp = float(daten.get("kwp") or 0)
     if kwp <= 0:
@@ -609,11 +667,33 @@ def beispielrechnung_fuer(session, angebot: Angebot) -> dict | None:
                        or "SigenStor Batterie" in (p.beschreibung or "")
                        for p in aktiv)
     mit_hems = any(p.pos_nr == "015" for p in aktiv)
+    mit_spot = any(p.pos_nr == "017" for p in aktiv)
     logik, _ = logik_modul.hole_logik(session)
     if not logik.pv_parameter:
         return None
-    return pv_auslegung.wirtschaftlichkeit(logik, kwp, mit_speicher, mit_hems,
-                                          angebot.summen()["endbetrag"])
+    param, fehlende = wirtschaftlichkeit.parameter_lesen(logik.pv_parameter)
+    verbrauch = _pv_verbrauch(session, angebot, daten, logik)
+    speicher_kwh = 0.0
+    if mit_speicher:
+        speicher_kwh = float(verbrauch.get("speicher_kwh") or daten.get("speicher_stufe") or 0)
+        if speicher_kwh <= 0:
+            # Speicher im Angebot, aber kein Wunschwert: Stufe aus der Kombi
+            m = next((pv_auslegung.KOMBI_MUSTER.search(p.beschreibung or "") for p in aktiv
+                      if pv_auslegung.KOMBI_MUSTER.search(p.beschreibung or "")), None)
+            speicher_kwh = float(m.group(3)) if m else 0.0
+    anlage = {
+        "kwp": kwp, "module": int(daten.get("module") or 0),
+        "speicher_kwh": speicher_kwh, "hems": mit_hems, "spot": mit_spot,
+        "hh_kwh": verbrauch["hh_kwh"], "wp_kwh": verbrauch["wp_kwh"],
+        "wb_kwh": verbrauch["wb_kwh"],
+        "investition_eur": angebot.summen()["endbetrag"] / 100,
+        "startjahr": angebot.datum.year + int(param["versatz"]),
+    }
+    return {"anlage": anlage, "param": param, "fehlende_parameter": fehlende,
+            "ergebnis": wirtschaftlichkeit.berechnen(param, anlage)}
+
+
+beispielrechnung_fuer = wirtschaftlichkeit_fuer   # alter Name (v16) als Alias
 
 
 def _unterschrift_block(pdf: AngebotsPdf, signatur: dict | None = None) -> None:
@@ -768,7 +848,7 @@ def signiertes_pdf_erzeugen(session, angebot: Angebot, png_bytes: bytes,
                            vortext_text=angebotsprofile.vortext_fuer_angebot(session, angebot),
                            nachtext_text=angebotsprofile.nachtext_fuer_angebot(session, angebot),
                            ersetzt_hinweis=_ersetzt_hinweis(session, angebot),
-                           beispielrechnung=beispielrechnung_fuer(session, angebot))
+                           wirtschaftlichkeit=wirtschaftlichkeit_fuer(session, angebot))
     finally:
         Path(png_pfad).unlink(missing_ok=True)
 
@@ -807,4 +887,4 @@ def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
                        vortext_text=angebotsprofile.vortext_fuer_angebot(session, angebot),
                        nachtext_text=angebotsprofile.nachtext_fuer_angebot(session, angebot),
                        ersetzt_hinweis=_ersetzt_hinweis(session, angebot),
-                       beispielrechnung=beispielrechnung_fuer(session, angebot))
+                       wirtschaftlichkeit=wirtschaftlichkeit_fuer(session, angebot))

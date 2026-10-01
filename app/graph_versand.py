@@ -143,7 +143,9 @@ def _graph_aufruf(methode: str, pfad: str, token: str, daten: dict | None = None
         method=methode,
         headers={"Authorization": f"Bearer {token}",
                  "Content-Type": "application/json"})
-    with urllib.request.urlopen(anfrage) as antwort:
+    # v22: Timeout, damit ein hängender Graph-Aufruf keinen Hintergrundlauf
+    # (und damit die SQLite-Schreibsperre) unbegrenzt hält
+    with urllib.request.urlopen(anfrage, timeout=60) as antwort:
         inhalt = antwort.read()
     return json.loads(inhalt) if inhalt else {}
 

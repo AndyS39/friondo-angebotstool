@@ -175,6 +175,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "vertriebler_id": "INTEGER",
         "foerderung_manuell_cent": "INTEGER",
         "foerderung_ausblenden": "BOOLEAN NOT NULL DEFAULT 0",
+        "wirtschaftlichkeit_ausblenden": "BOOLEAN NOT NULL DEFAULT 0",   # v22 Phase 102
         "extern": "BOOLEAN NOT NULL DEFAULT 0",
         "taifun_nummer": "VARCHAR(30) NOT NULL DEFAULT ''",
         "extern_endbetrag_cent": "INTEGER",

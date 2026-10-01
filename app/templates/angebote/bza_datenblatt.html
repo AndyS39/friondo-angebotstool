@@ -3,7 +3,11 @@
 {% block titel %}BzA-Datenblatt {{ blatt.nummer }} – Friondo Angebotstool{% endblock %}
 
 {# v19 (PLAN_V14 Phase 96): Dialog vor dem PDF – WE übersteuern, Ersteller,
-   bei TAIFUN-Angeboten Gerät als Pflichtauswahl aus dem Blatt „BAFA-Anlagen“ #}
+   bei TAIFUN-Angeboten Gerät als Pflichtauswahl aus dem Blatt „BAFA-Anlagen“.
+   PLAN_V15 Phase 103 (30.09.2026): jedes Feld der Vorschau ist ein Eingabefeld
+   „f_<schluessel>“ und übersteuert das PDF – statuslos (nur GET-Parameter,
+   nichts wird gespeichert). Aus we/ersteller/geraet abgeleitete Felder sind
+   nicht vorbelegt (Platzhalter), damit die Auswahl oben nicht übersteuert wird. #}
 {% block inhalt %}
 <div class="seitenkopf">
     <h1>BzA-Datenblatt <small class="dezent">{{ blatt.nummer }} · {{ blatt.kunde.anzeige_name if blatt.kunde else '?' }}</small></h1>
@@ -16,7 +20,7 @@
     Struktur wie das KfW-Muster „Bestätigung zum Antrag“ (Programm 458).</p>
 
 <form method="get" action="/angebote/{{ angebot.id }}/bza-datenblatt.pdf" target="_blank"
-      class="formular" style="max-width:820px">
+      class="formular" style="max-width:900px">
     <div class="formzeile">
         <label>Anzahl der zu fördernden Wohneinheiten
             <input type="number" name="we" min="1" max="999" value="{{ we_vorbelegt or '' }}"></label>
@@ -35,25 +39,48 @@
             <option value="{{ a.schluessel }}" {{ 'selected' if a.schluessel == blatt.geraet_schluessel }}>{{ a.bezeichnung }} · {{ '%.2f' | format(a.kw) if a.kw }} kW · BAFA {{ a.nummer }}{{ ' (Vorrat)' if a.schluessel.startswith('vorrat') }}</option>
             {% endfor %}
         </select></label>
+    {# „Vorschau aktualisieren“ steht zuerst, damit Enter im Textfeld die Vorschau
+       neu lädt statt ein PDF im neuen Tab zu öffnen #}
     <div class="formaktionen">
+        <button class="knopf zweitrangig" type="submit" formaction="/angebote/{{ angebot.id }}/bza-datenblatt" formtarget="_self">Vorschau aktualisieren</button>
         <button class="knopf" type="submit">PDF erzeugen (BzA-Datenblatt-{{ blatt.nummer }}.pdf)</button>
+        <a class="knopf ghost" href="/angebote/{{ angebot.id }}/bza-datenblatt">Zurücksetzen</a>
+    </div>
+
+    <h2>Vorschau – Felder übersteuerbar</h2>
+    <p class="dezent">Leer = automatischer Wert · rot = fehlt · grau = aus der Auswahl oben abgeleitet ·
+        Änderungen gelten nur für das erzeugte PDF und werden nicht gespeichert.</p>
+    {% if blatt.fehlend %}
+    <p class="fehlertext">Fehlende Angaben ({{ blatt.fehlend | length }}): {{ blatt.fehlend | join(' · ') }}</p>
+    {% endif %}
+    {% for titel, felder in blatt.abschnitte %}
+    <h3>{{ titel }}</h3>
+    <table class="tabelle">
+        <tbody>
+        {% for f in felder %}
+        <tr><td style="width:40%">{{ f.name }}</td>
+            <td class="{{ 'feld-fehler' if f.fehlt }}">
+                {% if f.schluessel in ja_nein %}
+                <select name="f_{{ f.schluessel }}">
+                    <option value="Ja" {{ 'selected' if f.wert == 'Ja' }}>Ja</option>
+                    <option value="Nein" {{ 'selected' if f.wert == 'Nein' }}>Nein</option>
+                </select>
+                {% elif f.schluessel in abgeleitet %}
+                <input type="text" name="f_{{ f.schluessel }}" maxlength="200" style="width:100%"
+                       value="{{ uebersteuert.get(f.schluessel, '') }}" placeholder="{{ f.wert }}">
+                {% else %}
+                <input type="text" name="f_{{ f.schluessel }}" maxlength="200" style="width:100%"
+                       value="{{ '' if f.fehlt else f.wert }}" placeholder="{{ f.wert if f.fehlt else '' }}">
+                {% endif %}
+                {% if f.hinweis %}<span class="dezent">({{ f.hinweis }})</span>{% endif %}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endfor %}
+    <div class="formaktionen">
+        <button class="knopf zweitrangig" type="submit" formaction="/angebote/{{ angebot.id }}/bza-datenblatt" formtarget="_self">Vorschau aktualisieren</button>
+        <button class="knopf" type="submit">PDF erzeugen (BzA-Datenblatt-{{ blatt.nummer }}.pdf)</button>
+        <a class="knopf ghost" href="/angebote/{{ angebot.id }}/bza-datenblatt">Zurücksetzen</a>
     </div>
 </form>
-
-<h2>Vorschau</h2>
-{% if blatt.fehlend %}
-<p class="warnung" style="color:#b3261e">Fehlende Angaben ({{ blatt.fehlend | length }}): {{ blatt.fehlend | join(' · ') }}</p>
-{% endif %}
-{% for titel, felder in blatt.abschnitte %}
-<h3>{{ titel }}</h3>
-<table class="liste">
-    <tbody>
-    {% for f in felder %}
-    <tr><td style="width:45%">{{ f.name }}</td>
-        <td style="{{ 'color:#b3261e;font-weight:600' if f.fehlt }}">{{ f.wert }}
-            {% if f.hinweis %}<span class="dezent">({{ f.hinweis }})</span>{% endif %}</td></tr>
-    {% endfor %}
-    </tbody>
-</table>
-{% endfor %}
 {% endblock %}

@@ -119,9 +119,33 @@ async def signiertes_pdf(request: Request, angebot_id: int,
     if (angebot is None or not _berechtigt(request, angebot, session)
             or not angebot.signierte_datei):
         return RedirectResponse("/erfassung", status_code=303)
-    return FileResponse(angebot.signierte_datei, media_type="application/pdf",
+    pfad = signierte_datei_pfad(angebot.signierte_datei)
+    if pfad is None:
+        # v22 (Voll-Crawl 30.09.2026): Altlast – absolute Pfade des früheren
+        # Entwicklungs-PCs; FileResponse warf sonst RuntimeError (500)
+        from urllib.parse import quote_plus
+        return RedirectResponse("/angebote/%d?meldung=%s" % (angebot.id, quote_plus(
+            "Signierte PDF-Datei nicht gefunden – bitte unter data/angebote/signiert prüfen.")),
+            status_code=303)
+    return FileResponse(pfad, media_type="application/pdf",
                         content_disposition_type="inline",
                         filename=f"{angebot.nummer}-signiert.pdf")
+
+
+def signierte_datei_pfad(gespeichert: str):
+    """v22: gespeicherten Pfad auflösen – wie gespeichert, sonst über den
+    Dateinamen im aktuellen Signatur-Ordner (Altbestand mit absoluten
+    Pfaden eines anderen Rechners); None, wenn die Datei fehlt."""
+    from pathlib import Path
+
+    from app import config
+    if not gespeichert:
+        return None
+    direkt = Path(gespeichert)
+    if direkt.is_file():
+        return direkt
+    ersatz = config.SIGNIERT_ORDNER / direkt.name
+    return ersatz if ersatz.is_file() else None
 
 
 # --- Fern-Modus (Phase 28): Kunde signiert selbst über einen Token-Link ----

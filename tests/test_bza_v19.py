@@ -238,5 +238,138 @@ class Phase96Datenblatt(Basis):
                 v4.TEST_EMAIL = alt
 
 
+class Phase103Uebersteuern(Basis):
+    """PLAN_V15 Phase 103 (Team-Feedback 30.09.2026): alle Felder des
+    Datenblatts im Dialog übersteuerbar (statuslos, nur für das PDF),
+    Contracting mit Vorbelegung „Nein“."""
+
+    def taifun_angebot(self, nummer):
+        k = self.kunde()
+        erf = Erfassung(kunde_id=k.id, benutzer_id=1, sparte="WP", konfigurator_typ="WP",
+                        status="In TAIFUN zu schreiben", typ="katalog",
+                        antworten_json=json.dumps(ANTWORTEN))
+        self.s.add(erf)
+        self.s.commit()
+        antwort = self.client.post(f"/erfassungen/{erf.id}/extern-erledigt",
+                                   data={"taifun_nummer": nummer, "endbetrag": "30.000,00",
+                                         "datum": datetime.now().strftime("%Y-%m-%d"),
+                                         "kfw_gefoerdert": "ja"}, follow_redirects=False)
+        self.assertEqual(antwort.status_code, 303)
+        self.s.expire_all()
+        return self.s.get(Angebot, self.s.get(Erfassung, erf.id).angebot_id)
+
+    def test_uebersteuerung_greift(self):
+        a = self.tool_angebot([("048", "WP 10 kW AWM")])
+        blatt = bza_datenblatt.erstellen(
+            self.s, a, uebersteuert={"contracting": "Ja", "nennleistung_alt": "24 kW",
+                                     "inbetriebnahme": "01.01.1990"})
+        w = self.werte(blatt)
+        for name, wert in (("Contracting", "Ja"), ("Nennleistung", "24 kW"),
+                           ("Inbetriebnahme", "01.01.1990")):
+            self.assertEqual(w[name].wert, wert)
+            self.assertFalse(w[name].fehlt)
+            self.assertEqual(w[name].hinweis, "manuell im Dialog geändert")
+        # nicht übersteuerte Felder bleiben automatisch
+        self.assertEqual(w["Straße"].wert, "Musterweg")
+        self.assertEqual(w["Anlagennummer (BAFA-Liste)"].wert, "16019892")
+        self.assertEqual(w["Art des Wärmeerzeugers"].hinweis, "")
+        # jedes Feld trägt einen eindeutigen Schlüssel (Formularname f_<schluessel>)
+        schluessel = [f.schluessel for _, felder in blatt.abschnitte for f in felder]
+        self.assertTrue(all(schluessel))
+        self.assertEqual(len(schluessel), len(set(schluessel)))
+        for erwartet in ("strasse", "we_foerdern", "contracting", "anlagennummer",
+                         "kosten", "zuschuss", "klimabonus", "ansprechpartner"):
+            self.assertIn(erwartet, schluessel)
+        # Übersteuerung gewinnt auch über we/ersteller/geraet
+        w2 = self.werte(bza_datenblatt.erstellen(
+            self.s, a, we_foerdern=2, uebersteuert={"we_foerdern": "3", "hersteller": "Testfirma"}))
+        self.assertEqual(w2["Anzahl der zu fördernden Wohneinheiten"].wert, "3")
+        self.assertEqual(w2["Hersteller"].wert, "Testfirma")
+
+    def test_leere_und_unbekannte_uebersteuerungen(self):
+        a = self.tool_angebot([("048", "WP 10 kW AWM")])
+        ohne = self.werte(bza_datenblatt.erstellen(self.s, a))
+        mit = self.werte(bza_datenblatt.erstellen(
+            self.s, a, uebersteuert={"strasse": "", "plz": "   ", "gibtsnicht": "x",
+                                     "contracting": "Vielleicht", "klimabonus": "ja",
+                                     "ort": "Duisburg"}))   # = automatischer Wert
+        self.assertEqual({n: (f.wert, f.fehlt, f.hinweis) for n, f in ohne.items()},
+                         {n: (f.wert, f.fehlt, f.hinweis) for n, f in mit.items()})
+        # fehlendes Feld: leer lassen → bleibt „fehlt“; Wert setzen → hebt es auf
+        antworten = {k: v for k, v in ANTWORTEN.items() if k != "A02"}
+        b = self.tool_angebot([("048", "WP 10 kW AWM")], antworten)
+        leer = self.werte(bza_datenblatt.erstellen(self.s, b, uebersteuert={"inbetriebnahme": ""}))
+        self.assertTrue(leer["Inbetriebnahme"].fehlt)
+        gesetzt = self.werte(bza_datenblatt.erstellen(
+            self.s, b, uebersteuert={"inbetriebnahme": "01.01.1999"}))["Inbetriebnahme"]
+        self.assertFalse(gesetzt.fehlt)
+        self.assertEqual(gesetzt.wert, "01.01.1999")
+        # Kürzung auf 200 Zeichen
+        lang = self.werte(bza_datenblatt.erstellen(self.s, a, uebersteuert={"ort": "x" * 300}))
+        self.assertEqual(len(lang["Ort"].wert), 200)
+
+    def test_contracting_vorbelegung_nein(self):
+        antworten = {k: v for k, v in ANTWORTEN.items() if k != "N11"}
+        a = self.tool_angebot([("048", "WP 10 kW AWM")], antworten)
+        f = self.werte(bza_datenblatt.erstellen(self.s, a))["Contracting"]
+        self.assertEqual(f.wert, "Nein")
+        self.assertEqual(f.hinweis, "Vorbelegung (Frage N11 nicht erfasst)")
+        self.assertFalse(f.fehlt)
+        self.assertEqual(f.schluessel, "contracting")
+        # N11 erfasst → kein Vorbelegungs-Hinweis
+        b = self.tool_angebot([("048", "WP 10 kW AWM")], {**ANTWORTEN, "N11": "Ja"})
+        g = self.werte(bza_datenblatt.erstellen(self.s, b))["Contracting"]
+        self.assertEqual((g.wert, g.hinweis), ("Ja", ""))
+
+    def test_dialog_und_pdf(self):
+        a = self.tool_angebot([("048", "WP 10 kW AWM")])
+        dialog = self.client.get(f"/angebote/{a.id}/bza-datenblatt")
+        self.assertEqual(dialog.status_code, 200)
+        self.assertIn('name="f_contracting"', dialog.text)
+        self.assertIn('name="f_strasse"', dialog.text)
+        self.assertIn('name="f_klimabonus"', dialog.text)
+        self.assertIn("Vorschau aktualisieren", dialog.text)
+        self.assertIn("16019892", dialog.text)
+        # Vorschau mit Übersteuerung zeigt die Eingabe und den Hinweis
+        vorschau = self.client.get(f"/angebote/{a.id}/bza-datenblatt?f_contracting=Ja&f_ort=Essen")
+        self.assertEqual(vorschau.status_code, 200)
+        self.assertIn("manuell im Dialog geändert", vorschau.text)
+        self.assertIn('value="Essen"', vorschau.text)
+        pdf = self.client.get(f"/angebote/{a.id}/bza-datenblatt.pdf?f_contracting=Ja&we=1")
+        self.assertEqual(pdf.status_code, 200)
+        self.assertTrue(pdf.content.startswith(b"%PDF"))
+        import io
+
+        import pypdf
+        text = "\n".join(p.extract_text() for p in pypdf.PdfReader(io.BytesIO(pdf.content)).pages)
+        self.assertIn("Contracting", text)
+        self.assertIn("Ja", text)
+        self.assertIn("manuell im Dialog", text)
+
+    def test_taifun_ohne_geraet_behaelt_eingaben(self):
+        a = self.taifun_angebot("AN26V103")
+        ohne = self.client.get(f"/angebote/{a.id}/bza-datenblatt.pdf?we=1&f_contracting=Ja&f_ort=Essen",
+                               follow_redirects=False)
+        self.assertEqual(ohne.status_code, 303)
+        ziel = ohne.headers["location"]
+        self.assertIn("bza-datenblatt", ziel)
+        self.assertIn("meldung=", ziel)
+        self.assertIn("f_contracting=Ja", ziel)
+        self.assertIn("f_ort=Essen", ziel)
+        # der Dialog nach der Umleitung zeigt die Eingaben weiter
+        dialog = self.client.get(ziel)
+        self.assertEqual(dialog.status_code, 200)
+        self.assertIn('value="Essen"', dialog.text)
+        self.assertIn("BAFA-Liste wählen", dialog.text)
+        # mit Gerät und Übersteuerung → PDF
+        mit = self.client.get(f"/angebote/{a.id}/bza-datenblatt.pdf?geraet=049&f_hersteller=Testfirma")
+        self.assertEqual(mit.status_code, 200)
+        self.assertTrue(mit.content.startswith(b"%PDF"))
+        w = self.werte(bza_datenblatt.erstellen(self.s, a, geraet_schluessel="049",
+                                                uebersteuert={"hersteller": "Testfirma"}))
+        self.assertEqual(w["Hersteller"].wert, "Testfirma")
+        self.assertEqual(w["Anlagennummer (BAFA-Liste)"].wert, "16019894")
+
+
 if __name__ == "__main__":
     unittest.main()

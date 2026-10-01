@@ -1027,6 +1027,8 @@ class Angebot(Base):
     # und beim Speichern der Bausteine zurückgesetzt.
     foerderung_manuell_cent: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     foerderung_ausblenden: Mapped[bool] = mapped_column(Boolean, default=False)
+    # v22 (PLAN_V15 Phase 102): Wirtschaftlichkeitsseiten im PV-PDF ausblenden
+    wirtschaftlichkeit_ausblenden: Mapped[bool] = mapped_column(Boolean, default=False)
     # Förder-Bausteine (v8): einzelne Overrides, None = automatisch
     foerder_grund_prozent: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     foerder_klima_prozent: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -1286,7 +1288,9 @@ class Textblock(Base):
     Text: "# " = große Überschrift, "## " = fette Absatz-Überschrift,
     "---" allein = Seitenumbruch, "[UNTERSCHRIFT]" = Ort/Datum-Unterschriften-
     block (inkl. elektronischer Signatur), "- " = Haken-Aufzählung (Vortext),
-    {briefanrede} = Anrede-Platzhalter (Vortext)."""
+    {briefanrede} = Anrede-Platzhalter (Vortext), "[WIRTSCHAFTLICHKEIT]" (v22,
+    nur PV-Nachtexte; Alias "[BEISPIELRECHNUNG]") = die drei gestalteten
+    Wirtschaftlichkeitsseiten als eigene Seiten."""
     __tablename__ = "textbloecke"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -1350,6 +1354,30 @@ class AngebotsLoeschung(Base):
     endbetrag_cent: Mapped[int] = mapped_column(Integer, default=0)
     benutzer_name: Mapped[str] = mapped_column(String(100), default="")
     geloescht_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class Fehlerprotokoll(Base):
+    """v22 (PLAN_V15 Phase 103): jede unbehandelte Ausnahme (Internal Server
+    Error) bekommt eine Fehler-Nr. und landet hier – einsehbar unter
+    Parametrierung → Fehlerprotokoll. Primärquelle bleibt data/fehler.log
+    (der Tabelleneintrag kann bei gesperrter DB selbst scheitern)."""
+    __tablename__ = "fehlerprotokoll"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    fehler_nr: Mapped[str] = mapped_column(String(30), index=True)   # F-JJJJMMTT-HHMMSS-4hex
+    zeit: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    benutzer_name: Mapped[str] = mapped_column(String(200), default="")
+    rolle: Mapped[str] = mapped_column(String(30), default="")
+    methode: Mapped[str] = mapped_column(String(10), default="")
+    pfad: Mapped[str] = mapped_column(String(300), default="")
+    query: Mapped[str] = mapped_column(String(500), default="")
+    formdaten: Mapped[str] = mapped_column(Text, default="")        # JSON, PIN/Passwort maskiert
+    fehlertyp: Mapped[str] = mapped_column(String(100), default="")
+    meldung: Mapped[str] = mapped_column(String(500), default="")
+    traceback: Mapped[str] = mapped_column(Text, default="")        # auf 20.000 Zeichen gekürzt
+    angebot_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # aus /angebote/<id>/…
+    erledigt: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class AngebotsMail(Base):

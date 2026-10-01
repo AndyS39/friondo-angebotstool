@@ -238,8 +238,11 @@ Sollte Ihnen das Angebot zusagen, senden Sie uns bitte zur Auftragserteilung das
 
 [UNTERSCHRIFT]"""
 
-# [BEISPIELRECHNUNG] = personalisierte Wirtschaftlichkeitsrechnung (pdf_export)
-_PV_BEISPIEL = "[BEISPIELRECHNUNG]"
+# [WIRTSCHAFTLICHKEIT] = die drei gestalteten Wirtschaftlichkeitsseiten (v22,
+# app/wirtschaftlichkeit_pdf.py); der alte Platzhalter [BEISPIELRECHNUNG]
+# (v16) bleibt im Renderer als Alias gültig
+_PV_BEISPIEL = "[WIRTSCHAFTLICHKEIT]"
+_PV_BEISPIEL_ALT = "[BEISPIELRECHNUNG]"
 
 PV_STANDARD_NACHTEXT = _PV_NULLSTEUER + """
 
@@ -312,6 +315,21 @@ def seed_pv(session: Session) -> list[str]:
             session.add(Textblock(art=art, name=name, text=text))
             neu += 1
     return [f"{neu} PV-Textblöcke (Vor-/Nachtexte PV) angelegt"] if neu else []
+
+
+def migriere_pv_platzhalter(session: Session) -> list[str]:
+    """v22 (PLAN_V15 Phase 101): bestehende PV-Nachtexte von [BEISPIELRECHNUNG]
+    auf [WIRTSCHAFTLICHKEIT] umstellen (alle Profile; idempotent – zweiter
+    Lauf findet nichts mehr). Umbenannte/zusätzliche Blöcke behalten den
+    alten Platzhalter und funktionieren über den Alias weiter."""
+    anzahl = 0
+    for block in (session.query(Textblock)
+                  .filter(Textblock.art == "nachtext",
+                          Textblock.name.like("Friondo PV %"))):
+        if _PV_BEISPIEL_ALT in (block.text or ""):
+            block.text = block.text.replace(_PV_BEISPIEL_ALT, _PV_BEISPIEL)
+            anzahl += 1
+    return [f"{anzahl} PV-Textblöcke auf [WIRTSCHAFTLICHKEIT] umgestellt"] if anzahl else []
 
 
 def _pv_block(session: Session, art: str, profil: Profil | None) -> str:

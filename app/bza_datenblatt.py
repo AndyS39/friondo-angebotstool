@@ -27,6 +27,18 @@ WAERMEERZEUGER = {"Gas": "Gasheizung", "Öl": "Ölheizung",
                   "Nachtspeicher": "Nachtspeicherheizung", "Sonstiges": "Sonstiges"}
 KLIMA_KATEGORIE_OEL = "Austausch Öl-, Kohle-, Gasetagen- oder Nachtspeicherheizung"
 KLIMA_KATEGORIE_GAS = "Austausch mindestens 20 Jahre alte Gasheizung"
+# PLAN_V15 Phase 103 (30.09.2026): alle Felder im Dialog übersteuerbar –
+# statuslos, nur für das erzeugte PDF (keine DB-Spalte). Schlüssel je Feld
+# (Feld.schluessel), Formularname im Dialog „f_<schluessel>“.
+HINWEIS_MANUELL = "manuell im Dialog geändert"
+JA_NEIN_SCHLUESSEL = {"contracting", "klimabonus"}   # nur „Ja“/„Nein“ zulässig
+UEBERSTEUERUNG_MAX = 200
+# Felder, die aus den Dialog-Auswahlen we/ersteller/geraet abgeleitet werden –
+# im Dialog nicht vorbelegt (Platzhalter), sonst würde ein alter Vorbelegungs-
+# wert die geänderte Auswahl übersteuern
+DIALOG_ABGELEITET = {"we_foerdern", "ansprechpartner", "email", "telefon",
+                     "anlagennummer", "hersteller", "geraetebezeichnung",
+                     "nennwaermeleistung"}
 
 
 @dataclass
@@ -35,6 +47,7 @@ class Feld:
     wert: str
     fehlt: bool = False
     hinweis: str = ""
+    schluessel: str = ""
 
 
 @dataclass
@@ -98,11 +111,26 @@ def _euro(cent: int) -> str:
 
 
 def _feld(name: str, wert, pflicht: bool = True, hinweis: str = "",
-          leer: str = FEHLT) -> Feld:
+          leer: str = FEHLT, schluessel: str = "") -> Feld:
     text = "" if wert is None else str(wert).strip()
     if not text:
-        return Feld(name, leer if pflicht else "–", fehlt=pflicht, hinweis=hinweis)
-    return Feld(name, text, hinweis=hinweis)
+        return Feld(name, leer if pflicht else "–", fehlt=pflicht, hinweis=hinweis,
+                    schluessel=schluessel)
+    return Feld(name, text, hinweis=hinweis, schluessel=schluessel)
+
+
+def uebersteuerungen_bereinigen(uebersteuert: dict[str, str] | None) -> dict[str, str]:
+    """Phase 103: Dialog-Übersteuerungen normieren – leer = automatischer Wert,
+    Ja/Nein-Felder nur mit „Ja“/„Nein“, alles auf 200 Zeichen gekürzt."""
+    ergebnis: dict[str, str] = {}
+    for schluessel, wert in (uebersteuert or {}).items():
+        neu = ("" if wert is None else str(wert)).strip()[:UEBERSTEUERUNG_MAX]
+        if not neu:
+            continue
+        if schluessel in JA_NEIN_SCHLUESSEL and neu not in ("Ja", "Nein"):
+            continue
+        ergebnis[schluessel] = neu
+    return ergebnis
 
 
 def bafa_liste(session: Session):
@@ -137,8 +165,10 @@ def ersteller_standard(session: Session, angemeldet) -> Benutzer | None:
 
 def erstellen(session: Session, angebot: Angebot, gewerk=None,
               we_foerdern: int | None = None, ersteller: Benutzer | None = None,
-              geraet_schluessel: str = "") -> Datenblatt:
-    """Alle Abschnitte in KfW-Muster-Reihenfolge."""
+              geraet_schluessel: str = "",
+              uebersteuert: dict[str, str] | None = None) -> Datenblatt:
+    """Alle Abschnitte in KfW-Muster-Reihenfolge. `uebersteuert` (Phase 103):
+    {schluessel: wert} aus dem Dialog – greift zuletzt, nur für dieses Blatt."""
     from app import kfw
     from app import konfigurator as engine
     from app import logik as logik_modul
@@ -178,16 +208,19 @@ def erstellen(session: Session, angebot: Angebot, gewerk=None,
     foerdern = we_foerdern if we_foerdern else (int(we_zahl) if we_zahl else None)
     flaeche = _zahl(antworten.get("O05") or kfw_daten.get("O05") or antworten.get("A17"))
     blatt.abschnitte.append(("1. Daten zum Investitionsobjekt", [
-        _feld("Straße", strasse),
-        _feld("Hausnummer", hausnummer),
-        _feld("PLZ", plz),
-        _feld("Ort", ort),
-        Feld("Land", "Deutschland"),
-        _feld("Wohneinheiten im Gebäude nach Abschluss des Vorhabens", we_text),
+        _feld("Straße", strasse, schluessel="strasse"),
+        _feld("Hausnummer", hausnummer, schluessel="hausnummer"),
+        _feld("PLZ", plz, schluessel="plz"),
+        _feld("Ort", ort, schluessel="ort"),
+        Feld("Land", "Deutschland", schluessel="land"),
+        _feld("Wohneinheiten im Gebäude nach Abschluss des Vorhabens", we_text,
+              schluessel="we_gebaeude"),
         _feld("Anzahl der zu fördernden Wohneinheiten", foerdern,
-              hinweis="im Datenblatt-Dialog übersteuerbar" if foerdern else ""),
+              hinweis="im Datenblatt-Dialog übersteuerbar" if foerdern else "",
+              schluessel="we_foerdern"),
         _feld("Wohnfläche der zu fördernden Wohneinheiten",
-              f"{_zahl_text(flaeche)} m²" if flaeche else "", pflicht=False),
+              f"{_zahl_text(flaeche)} m²" if flaeche else "", pflicht=False,
+              schluessel="wohnflaeche"),
     ]))
 
     # 2. Wärmeversorgung vor Sanierung
@@ -198,24 +231,31 @@ def erstellen(session: Session, angebot: Angebot, gewerk=None,
     verbrauch = _zahl(verbrauch_roh)
     if angebot.extern:
         ausgebaut = Feld("Im Zuge der Sanierung ausgebaut", "Ja",
-                         hinweis="TAIFUN-Angebot: Demontage angenommen")
+                         hinweis="TAIFUN-Angebot: Demontage angenommen",
+                         schluessel="ausgebaut")
     else:
         demontage = any("demontage" in f"{p.bezeichnung} {p.beschreibung}".lower()
                         for p in angebot.positionen
                         if not (p.ep_flag or p.bauseits or p.alternativ))
         ausgebaut = Feld("Im Zuge der Sanierung ausgebaut", "Ja" if demontage else "Nein",
-                         hinweis="" if demontage else "keine Demontage-Position im Angebot")
+                         hinweis="" if demontage else "keine Demontage-Position im Angebot",
+                         schluessel="ausgebaut")
     blatt.abschnitte.append(("2. Wärmeversorgung vor Sanierung", [
-        _feld("Art des Wärmeerzeugers", WAERMEERZEUGER.get(traeger, traeger)),
+        _feld("Art des Wärmeerzeugers", WAERMEERZEUGER.get(traeger, traeger),
+              schluessel="waermeerzeuger"),
         _feld("Nennleistung", f"{_zahl_text(nenn, 1 if nenn % 1 else 0)} kW"
-              if nenn else ""),
-        (_feld("Inbetriebnahme", f"01.01.{int(jahr)}", hinweis="Jahr aus Erfassung")
-         if jahr else Feld("Inbetriebnahme", "Jahr fehlt – bitte nachfragen", fehlt=True)),
-        (Feld("Endenergieverbrauch", f"{_zahl_text(verbrauch)} kWh/a")
+              if nenn else "", schluessel="nennleistung_alt"),
+        (_feld("Inbetriebnahme", f"01.01.{int(jahr)}", hinweis="Jahr aus Erfassung",
+               schluessel="inbetriebnahme")
+         if jahr else Feld("Inbetriebnahme", "Jahr fehlt – bitte nachfragen", fehlt=True,
+                           schluessel="inbetriebnahme")),
+        (Feld("Endenergieverbrauch", f"{_zahl_text(verbrauch)} kWh/a",
+              schluessel="endenergieverbrauch")
          if verbrauch else Feld("Endenergieverbrauch", "–",
                                 hinweis="Flächen-Auslegung (Verbrauch unbekannt)"
-                                if str(verbrauch_roh or "").startswith("Verbrauch") else "")),
-        Feld("Endenergiebedarf", "–"),
+                                if str(verbrauch_roh or "").startswith("Verbrauch") else "",
+                                schluessel="endenergieverbrauch")),
+        Feld("Endenergiebedarf", "–", schluessel="endenergiebedarf"),
         ausgebaut,
     ]))
 
@@ -241,27 +281,31 @@ def erstellen(session: Session, angebot: Angebot, gewerk=None,
     contracting = str(antworten.get("N11") or "")
     pruefhinweis = anlage.hinweis if anlage and anlage.hinweis else ""
     blatt.abschnitte.append(("3. Geplante Wärmeversorgung", [
-        Feld("Maßnahme", "Wärmepumpe"),
+        Feld("Maßnahme", "Wärmepumpe", schluessel="massnahme"),
         Feld("Contracting", contracting or "Nein",
-             hinweis="" if contracting else "Vorbelegung (Frage N11 nicht erfasst)"),
+             hinweis="" if contracting else "Vorbelegung (Frage N11 nicht erfasst)",
+             schluessel="contracting"),
         _feld("Anlagennummer (BAFA-Liste)", anlage.nummer if anlage else "",
-              hinweis=pruefhinweis),
-        _feld("Hersteller", anlage.hersteller if anlage else ""),
-        _feld("Gerätebezeichnung", anlage.bezeichnung if anlage else ""),
-        Feld("Pumpentyp", "Luft / Wasser"),
+              hinweis=pruefhinweis, schluessel="anlagennummer"),
+        _feld("Hersteller", anlage.hersteller if anlage else "", schluessel="hersteller"),
+        _feld("Gerätebezeichnung", anlage.bezeichnung if anlage else "",
+              schluessel="geraetebezeichnung"),
+        Feld("Pumpentyp", "Luft / Wasser", schluessel="pumpentyp"),
         _feld("Nennwärmeleistung", f"{_zahl_text(anlage.kw, 2)} kW"
-              if anlage and anlage.kw else ""),
+              if anlage and anlage.kw else "", schluessel="nennwaermeleistung"),
         _feld("Vorlauftemperatur", vorlauf,
-              hinweis=f"Heizflächen: {heizflaechen}" if heizflaechen else ""),
-        Feld("Wärmequelle", "Luft"),
-        Feld("Anzahl geplanter Anlagen", "1"),
+              hinweis=f"Heizflächen: {heizflaechen}" if heizflaechen else "",
+              schluessel="vorlauf"),
+        Feld("Wärmequelle", "Luft", schluessel="waermequelle"),
+        Feld("Anzahl geplanter Anlagen", "1", schluessel="anzahl_anlagen"),
     ]))
 
     # 4. Geplante Kosten
     endbetrag = (angebot.extern_endbetrag_cent or 0) if angebot.extern \
         else angebot.summen()["endbetrag"]
     kosten = [_feld("Geplante förderfähige Kosten", _euro(endbetrag) if endbetrag else "",
-                    hinweis="Endbetrag brutto nach Rabatt – wie im KfW-Muster ungedeckelt")]
+                    hinweis="Endbetrag brutto nach Rabatt – wie im KfW-Muster ungedeckelt",
+                    schluessel="kosten")]
     ergebnis = None
     logik, bericht = logik_modul.hole_logik(session)
     eingaben = kfw.eingaben_aus_antworten(kfw_daten, endbetrag) if endbetrag else None
@@ -272,12 +316,13 @@ def erstellen(session: Session, angebot: Angebot, gewerk=None,
                     else kfw.ergebnis_fuer_angebot(parameter, eingaben, angebot))
     if ergebnis is not None:
         kosten.append(Feld("nachrichtlich: davon förderfähig gemäß Höchstkostengrenze",
-                           _euro(ergebnis.foerderfaehig_cent)))
+                           _euro(ergebnis.foerderfaehig_cent), schluessel="foerderfaehig"))
         kosten.append(Feld("nachrichtlich: voraussichtlicher Zuschuss lt. Angebot",
-                           _euro(ergebnis.zuschuss_cent)))
+                           _euro(ergebnis.zuschuss_cent), schluessel="zuschuss"))
     else:
         kosten.append(Feld("nachrichtlich: Förderwerte", "–",
-                           hinweis="keine Förderdaten (Objektart/K-Fragen) erfasst"))
+                           hinweis="keine Förderdaten (Objektart/K-Fragen) erfasst",
+                           schluessel="foerderwerte"))
     blatt.abschnitte.append(("4. Geplante Kosten", kosten))
 
     # 5. Boni
@@ -304,23 +349,39 @@ def erstellen(session: Session, angebot: Angebot, gewerk=None,
                 break
     blatt.abschnitte.append(("5. Boni", [
         Feld("Klimageschwindigkeitsbonus", "Ja" if kategorie else "Nein",
-             hinweis="" if selbst else "nur bei Selbstnutzung"),
+             hinweis="" if selbst else "nur bei Selbstnutzung", schluessel="klimabonus"),
         Feld("Kategorie Klimageschwindigkeitsbonus", kategorie or "–",
-             hinweis="aus A01 + Inbetriebnahmejahr" if kategorie else ""),
+             hinweis="aus A01 + Inbetriebnahmejahr" if kategorie else "",
+             schluessel="klima_kategorie"),
         Feld("Einkommensbonus", f"Ja – Stufe {stufe}" if stufe else "Nein",
-             hinweis="Nachweis: Einkommensteuerbescheide" if stufe else ""),
+             hinweis="Nachweis: Einkommensteuerbescheide" if stufe else "",
+             schluessel="einkommensbonus"),
     ]))
 
     # 6. Ersteller
     person = ersteller
     blatt.abschnitte.append(("6. Ersteller", [
-        Feld("Unternehmen", FIRMA["name"]),
-        Feld("Anschrift", f"{FIRMA['strasse']}, {FIRMA['plz_ort']}"),
-        Feld("Handwerkskammer-Betriebsnummer", FIRMA["hwk"]),
-        _feld("Ansprechpartner", person.name if person else "", leer=FEHLT_ERSTELLER),
-        _feld("E-Mail", (person.email if person else "") or "", leer=FEHLT_ERSTELLER),
-        _feld("Telefon", (person.telefon if person else "") or "", leer=FEHLT_ERSTELLER),
+        Feld("Unternehmen", FIRMA["name"], schluessel="unternehmen"),
+        Feld("Anschrift", f"{FIRMA['strasse']}, {FIRMA['plz_ort']}", schluessel="anschrift"),
+        Feld("Handwerkskammer-Betriebsnummer", FIRMA["hwk"], schluessel="hwk"),
+        _feld("Ansprechpartner", person.name if person else "", leer=FEHLT_ERSTELLER,
+              schluessel="ansprechpartner"),
+        _feld("E-Mail", (person.email if person else "") or "", leer=FEHLT_ERSTELLER,
+              schluessel="email"),
+        _feld("Telefon", (person.telefon if person else "") or "", leer=FEHLT_ERSTELLER,
+              schluessel="telefon"),
     ]))
+
+    # Phase 103: Übersteuerungen aus dem Dialog greifen zuletzt (auch über
+    # we/ersteller/geraet). Leer = automatischer Wert, gleicher Wert = keine
+    # Änderung; ein gesetzter Wert hebt „fehlt“ auf.
+    manuell = uebersteuerungen_bereinigen(uebersteuert)
+    if manuell:
+        for _, felder in blatt.abschnitte:
+            for f in felder:
+                neu = manuell.get(f.schluessel, "")
+                if neu and neu != f.wert:
+                    f.wert, f.fehlt, f.hinweis = neu, False, HINWEIS_MANUELL
     return blatt
 
 

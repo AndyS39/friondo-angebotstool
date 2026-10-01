@@ -289,7 +289,7 @@ def positionen_zusammenstellen(logik: Logik, antworten: dict,
             "block_nr": 1,
             "gruppe": positionen[letzte1]["gruppe"],
             "pos_nr": "", "bezeichnung": "Auslegung der Wärmepumpe",
-            "beschreibung": auslegung, "menge": 1.0, "einheit": "pauschal",
+            "beschreibung": auslegung, "menge": 1.0, "einheit": "psl.",   # v22: wie PV
             "e_preis_cent": 0, "ep_flag": False, "ek_cent": 0, "guid": "",
         })
 
@@ -345,6 +345,7 @@ def version_erzeugen(session: Session, original: Angebot) -> Angebot:
         liefer_ort=original.liefer_ort,
         foerderung_manuell_cent=original.foerderung_manuell_cent,
         foerderung_ausblenden=original.foerderung_ausblenden,
+        wirtschaftlichkeit_ausblenden=original.wirtschaftlichkeit_ausblenden,   # v22
         foerder_grund_prozent=original.foerder_grund_prozent,
         foerder_klima_prozent=original.foerder_klima_prozent,
         foerder_einkommen_prozent=original.foerder_einkommen_prozent,

@@ -33,8 +33,9 @@ im Tool – wie bei der Wärmepumpe. PV-Angebote rechnen mit **0 % USt**
 
 Individuell (orange) wird eine PV-Erfassung u. a. bei: Dachart
 „Sonstige“, Vollgerüst/Sonstiges, Zählerschrank 4-Feld/Sonstige,
-Ertüchtigung der bestehenden ZV, mehr als 4 Strings, Wechselrichter über
-30 kW, keine passende Sigenergy-WR/Speicher-Kombination.
+mehr als 4 Strings, Wechselrichter über 30 kW, keine passende
+Sigenergy-WR/Speicher-Kombination. (Seit v22 löst „Ertüchtigung der
+bestehenden ZV“ keine Ampel mehr aus – die Antwort steht nur im Protokoll.)
 
 ## Für den Innendienst
 
@@ -102,6 +103,12 @@ was das Tool bis zur Antwort verwendet.
    Eigenverbrauch nicht auf den tatsächlichen Verbrauch begrenzt.
 5. **PA04 „Ertüchtigung bestehender ZV“** (mit PA05 APZ-Feld, PA06
    HAK-Leitung): welche Positionen? Bis dahin individuell.
+   **Beantwortet 30.09.2026 (v22, PLAN_V15 Phase 99):** PA04 = Ja löst
+   keine Positionen und keine Ampel aus – die Antwort steht nur im
+   Protokoll. Die Ampel-Zeile „Individuell: Ertüchtigung bestehender ZV –
+   Positionen noch nicht hinterlegt“ ist aus dem Blatt „Aktionen PV“
+   entfernt; liegende PV-Erfassungen mit PA04 = Ja holt „Erneut prüfen“
+   auf Grün.
 6. **Zählerschrank 4-Feld** und **kein Speicher** (PA10 = 0): kein Artikel,
    derzeit individuell – gewollt?
 7. **PD09 (DC-kWp) / PA09 (WR-Leistung)** werden berechnet und nur
