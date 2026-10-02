@@ -29,6 +29,31 @@ VORLAGEN_START = {
         "Falls Sie vorab Fragen haben, antworten Sie einfach auf diese "
         "E-Mail oder nutzen Sie den Rückruf-Link: {link_rueckruf}\n\n"
         "Mit freundlichen Grüßen\nIhr Friondo-Team"),
+    # v23 (Phase 104, C4): nach dem letzten Versuch der Kaskade (Stufe 5);
+    # Texte laut F9 Platzhalter – Andreas ersetzt sie in der Vorlagenpflege
+    "disqualifiziert": (
+        "Disqualifiziert / Nicht erreicht",
+        "Ihre Anfrage bei Friondo – wir konnten Sie nicht erreichen",
+        "{briefanrede},\n\n"
+        "wir haben in den vergangenen Wochen mehrfach versucht, Sie zu Ihrer "
+        "Anfrage ({sparten}) telefonisch zu erreichen – leider ohne Erfolg. "
+        "Wir schließen den Vorgang daher vorerst ab.\n\n"
+        "Sollte das Thema für Sie weiterhin aktuell sein, melden Sie sich "
+        "jederzeit gern: {rueckruf_telefon} oder einfach als Antwort auf "
+        "diese E-Mail. Ihr Ansprechpartner ist {vertriebler}.\n\n"
+        "Mit freundlichen Grüßen\nIhr Friondo-Team"),
+    # v23 (Phase 104, F12): Online-Termin per Teams – Kunde wählt den Slot
+    # über den Outlook-Buchungslink des Kollegen
+    "online_termin_einladung": (
+        "Online-Termin (Teams) – Einladung",
+        "Ihr Online-Termin mit Friondo – bitte Wunschzeit wählen",
+        "{briefanrede},\n\n"
+        "gern besprechen wir Ihre Fragen zu {sparten} vorab in einem kurzen "
+        "Online-Termin (Microsoft Teams) mit {kollege}.\n\n"
+        "Wählen Sie hier einfach einen passenden Zeitpunkt: {buchungslink}\n\n"
+        "Sie erhalten anschließend automatisch eine Kalendereinladung mit dem "
+        "Teams-Link.\n\n"
+        "Mit freundlichen Grüßen\nIhr Friondo-Team"),
     "nicht_erreicht": (
         "Nicht erreicht",
         "Wir haben Sie leider nicht erreicht",
@@ -160,7 +185,19 @@ def werte_fuer(session: Session, vorgang: Vorgang,
         "wunschzeiten": wunschzeiten,
         "link_rueckruf": (f"mailto:{absender}?subject="
                           f"R%C3%BCckruf%20V{vorgang.id}"),
+        # v23 (Phase 104): Rückruf-Telefon (Leadmanager, sonst Parameter
+        # rueckruf_telefon), Kollege + Buchungslink für Online-Termine (F12)
+        "rueckruf_telefon": (leadmanager.telefon if leadmanager and leadmanager.telefon
+                             else _parameter(session, "rueckruf_telefon")),
+        "kollege": vertriebler.name if vertriebler else "einem Kollegen",
+        "buchungslink": (getattr(vertriebler, "buchungslink", "") or "")
+                        if vertriebler else "",
     }
+
+
+def _parameter(session: Session, name: str, standard: str = "") -> str:
+    from app import leadmanagement as kern
+    return kern.parameter_holen(session, name, standard)
 
 
 def _absender(session: Session) -> str:

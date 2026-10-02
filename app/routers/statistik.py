@@ -289,7 +289,7 @@ async def seite(request: Request, zeitraum: str = "monat", von: str = "",
                        key=lambda kv: benutzer_map[kv[0]].name
                        if kv[0] in benutzer_map else "")
     kanal_zeilen = sorted(daten["je_kanal"].items())
-    reihenfolge = {"WP": 0, "PV": 1, "KL": 2, "WB": 3}
+    reihenfolge = {"WP": 0, "PV": 1, "KL": 2, "WB": 3, "GW": 4}
     sparten_zeilen = sorted(daten["je_sparte"].items(),
                             key=lambda kv: reihenfolge.get(kv[0], 9))
     return render(request, "statistik.html", aktiv="/statistik",

@@ -384,6 +384,22 @@ def _daten() -> list[str]:
             meldungen.append(f"{neue_vorlagen} Lead-Mail-Vorlagen vorbelegt")
         session.commit()
 
+        # ---------------- v23: Lead-Management V2 (PLAN_LEAD_V2, Phase 104) ----------------
+        # Parameter, Quellen und Mail-Vorlagen kommen über die Vorbelegungen
+        # oben (PARAMETER_START / STARTQUELLEN / VORLAGEN_START erweitert).
+        # Hier: Info-Veranstaltungen rollierend anlegen (idempotent, Schlüssel =
+        # Beginn) und den Bestand einmalig nachziehen (Schalter).
+        from app import lead_info, lead_v2
+        neue_veranstaltungen = lead_info.veranstaltungen_anlegen(session)
+        if neue_veranstaltungen:
+            meldungen.append(f"{neue_veranstaltungen} Info-Veranstaltungen angelegt "
+                             "(1. Donnerstag 18:00, NRW-Feiertagsregel)")
+        if einstellung_holen(session, "migration_v23_leads", "") != "erledigt":
+            meldungen += lead_v2.bestand_nachziehen(session)
+            einstellung_setzen(session, "migration_v23_leads", "erledigt")
+            meldungen.append("Lead-Management V2: Bestand nachgezogen")
+        session.commit()
+
         # ---------------- v15: Projektierung V2 (Phase 74) ----------------
         # Neue Kanban-Phasen je Gewerk: bestehende Gewerke einmalig umziehen
         # (feinplanung → auftragseingang bzw. planung, wenn die Feinplanung

@@ -241,7 +241,7 @@ def pruefen(session: Session, zeilen: list[Zeile]) -> list[Zeile]:
             if pflicht and not w.get(schluessel):
                 z.fehler.append(f"{titel} fehlt")
         sparte = w.get("sparte", "").upper()
-        if sparte and sparte not in ("WP", "PV", "KL", "WB"):
+        if sparte and sparte not in ("WP", "PV", "KL", "WB", "GW"):
             z.fehler.append(f"Sparte „{w['sparte']}“ ungültig (WP/PV/KL/WB)")
         if w.get("plz") and not (w["plz"].isdigit() and len(w["plz"]) == 5):
             z.fehler.append(f"PLZ „{w['plz']}“ ungültig")

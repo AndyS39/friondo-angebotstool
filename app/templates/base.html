@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block titel %}Friondo Angebotstool{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v={{ css_version }}">
+    {# v23 (Lead-Management V2): ergänzende Styles, Blöcke je Phase #}
+    <link rel="stylesheet" href="/static/lead_v2.css?v={{ css_version }}">
     {# v14 (Phase 73): PWA-Darstellung - Startansicht, Icon, Farbe #}
     <meta name="theme-color" content="#1b2a5e">
     <link rel="manifest" href="/static/manifest.webmanifest">

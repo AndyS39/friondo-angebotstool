@@ -1,5 +1,6 @@
 # Lead-Steuerdatei (v12, Phase 74): liest leadmanagement_logik_v1.xlsx
-# (Blätter Qualifizierung, Scoring, Klassen, Kaskade, Gruende, Wunschzeiten).
+# (Blätter Qualifizierung, Scoring, Klassen, Kaskade, Gruende, Wunschzeiten;
+# v23 zusätzlich Objektarten und Status – beide optional, fehlen = Warnung).
 # Muster wie app/projektierung_logik.py: Datei-basiert, mtime-Cache,
 # Fehler/Warnungen statt Abbruch. Änderungen wirken auf NEUE Qualifizierungen.
 
@@ -14,7 +15,7 @@ LOGIK_PFAD = Path(getattr(config, "LEADMANAGEMENT_LOGIK_PFAD",
                           Path(config.LOGIK_EXCEL_PFAD).parent
                           / "leadmanagement_logik_v1.xlsx"))
 
-SPARTEN = ("WP", "PV", "KL", "WB")
+SPARTEN = ("WP", "PV", "KL", "WB", "GW")   # v23: GW = Gewerbe (A-10)
 
 
 @dataclass
@@ -63,6 +64,28 @@ class Wunschzeit:
 
 
 @dataclass
+class Objektart:
+    """v23 (B3): Objektart des Kunden – Code, Bezeichnung, Parteien-Pflicht
+    (MFH), Wert für die Vorbelegung des Erfassungsbogens (O01/PO01)."""
+    code: str
+    bezeichnung: str
+    parteien_pflicht: bool
+    erfassungs_wert: str = ""
+
+
+@dataclass
+class StatusZeile:
+    """v23 (H2/5a): Lead-Phase → Label, Farbe, Board, Gruppe; monday_status
+    = die monday-Statuswerte, die auf diese Phase abgebildet werden."""
+    phase: str
+    label: str
+    farbe: str
+    board: str                    # hauptboard | terminiert
+    gruppe: str
+    monday_status: list[str]
+
+
+@dataclass
 class LeadLogik:
     fragen: list[Frage] = field(default_factory=list)
     scoring: list[ScoringRegel] = field(default_factory=list)
@@ -70,6 +93,8 @@ class LeadLogik:
     kaskade: list[KaskadenStufe] = field(default_factory=list)
     gruende: list[Grund] = field(default_factory=list)
     wunschzeiten: list[Wunschzeit] = field(default_factory=list)
+    objektarten: list[Objektart] = field(default_factory=list)     # v23
+    status_zeilen: list[StatusZeile] = field(default_factory=list)  # v23
     fehler: list[str] = field(default_factory=list)
     warnungen: list[str] = field(default_factory=list)
     stand: str = ""
@@ -101,6 +126,31 @@ class LeadLogik:
 
     def gruende_der_phase(self, phase: str) -> list[Grund]:
         return [g for g in self.gruende if g.phase == phase]
+
+    # --- v23 (Phase 104) ---
+    def objektart(self, code: str) -> Objektart | None:
+        for o in self.objektarten:
+            if o.code == (code or "").upper():
+                return o
+        return None
+
+    def status_zeile(self, phase: str) -> StatusZeile | None:
+        for z in self.status_zeilen:
+            if z.phase == phase:
+                return z
+        return None
+
+    def board_fuer(self, phase: str) -> tuple[str, str]:
+        """(board, gruppe) einer Phase – Fallback Hauptboard/Neu."""
+        z = self.status_zeile(phase)
+        return (z.board, z.gruppe) if z else ("hauptboard", "neu")
+
+    def phase_fuer_monday(self, status_text: str) -> str | None:
+        gesucht = (status_text or "").strip().lower()
+        for z in self.status_zeilen:
+            if gesucht in [m.lower() for m in z.monday_status]:
+                return z.phase
+        return None
 
 
 def _ja(wert) -> bool:
@@ -214,6 +264,33 @@ def einlesen(pfad: Path | None = None) -> LeadLogik:
         logik.gruende.append(Grund(
             phase=str(z[0] or "").strip(), grund=str(z[1] or "").strip(),
             freitext_pflicht=_ja(z[2])))
+
+    # v23 (Phase 104): optionale Blätter Objektarten + Status
+    if "Objektarten" in wb.sheetnames:
+        for z in zeilen("Objektarten"):
+            code = str(z[0] or "").strip().upper()
+            if not code:
+                continue
+            logik.objektarten.append(Objektart(
+                code=code, bezeichnung=str(z[1] or "").strip(),
+                parteien_pflicht=_ja(z[2]) if len(z) > 2 else False,
+                erfassungs_wert=str(z[3] or "").strip() if len(z) > 3 else ""))
+    else:
+        logik.warnungen.append("Blatt „Objektarten“ fehlt – Objektart-Auswahl leer")
+    if "Status" in wb.sheetnames:
+        for z in zeilen("Status"):
+            phase = str(z[0] or "").strip()
+            if not phase:
+                continue
+            logik.status_zeilen.append(StatusZeile(
+                phase=phase, label=str(z[1] or phase).strip(),
+                farbe=str(z[2] or "").strip(),
+                board=str(z[3] or "hauptboard").strip() or "hauptboard",
+                gruppe=str(z[4] or "neu").strip() or "neu",
+                monday_status=[m.strip() for m in str(z[5] or "").split("|")
+                               if m.strip()] if len(z) > 5 else []))
+    else:
+        logik.warnungen.append("Blatt „Status“ fehlt – Boards nutzen Standardzuordnung")
 
     for z in zeilen("Wunschzeiten"):
         logik.wunschzeiten.append(Wunschzeit(

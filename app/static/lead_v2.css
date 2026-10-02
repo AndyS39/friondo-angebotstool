@@ -1,0 +1,7 @@
+/* Lead-Management V2 (v23, PLAN_LEAD_V2 Phasen 104–112).
+   Ergänzt style.css (Design-System v14, Tokens aus :root). Jede Phase hängt
+   ihren Block unten an (nur anhängen, nie überschreiben). */
+:root { --q-veranstaltung: #8e44ad; }
+.q-veranstaltung { --f: var(--q-veranstaltung); }
+.abzeichen.interesse-gw { background: #fff1e0; color: #a35a00; margin-left: 0.2rem; }
+.chip-gw { --chip-farbe: #c47a1a; }   /* Gewerbe – Ocker */

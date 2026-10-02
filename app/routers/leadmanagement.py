@@ -62,7 +62,7 @@ async def uebersicht(request: Request, session: Session = Depends(get_session)):
 
 # --- Phase 75: Schnellanlage, Import, Posteingang unklar ---------------------------
 
-SPARTEN = ("WP", "PV", "KL", "WB")
+SPARTEN = ("WP", "PV", "KL", "WB", "GW")
 
 
 def _quellen(session: Session) -> list[LeadQuelle]:

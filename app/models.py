@@ -31,6 +31,11 @@ class Kunde(Base):
     interesse: Mapped[str] = mapped_column(String(50), default="")
     vertriebskanal: Mapped[str] = mapped_column(String(100), default="")   # v6, aus monday
     kanal_manuell: Mapped[bool] = mapped_column(Boolean, default=False)    # v9: Sync-Schutz
+    # v23 (Lead-Management V2, Phase 104): Objektart EFH|RH|REH|MFH (Blatt
+    # Objektarten) + Anzahl Parteien bei Mehrfamilienhaus; Rechnungsadresse
+    # = bestehende rechnung_* (v20)
+    objektart: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    parteien: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # v20 (Phase 98): Standard-Anschriften für neue Erfassungen/Angebote
     rechnung_name: Mapped[str] = mapped_column(String(200), default="")
     rechnung_zusatz: Mapped[str] = mapped_column(String(200), default="")
@@ -72,7 +77,9 @@ class Kunde(Base):
 
 
 # Interesse (v5): Codes und Anzeigenamen; Reihenfolge = Anzeigereihenfolge
-INTERESSEN = [("WP", "Wärmepumpe"), ("PV", "Photovoltaik"), ("KL", "Klima"), ("WB", "Wallbox")]
+# v23 (Phase 104): Sparte GW (Gewerbe) – wie WB nur Freitext-Erfassung
+INTERESSEN = [("WP", "Wärmepumpe"), ("PV", "Photovoltaik"), ("KL", "Klima"),
+              ("WB", "Wallbox"), ("GW", "Gewerbe")]
 INTERESSE_CODES = [code for code, _ in INTERESSEN]
 
 # Konfigurator-Typ (v5): aktuell nur WP; PV/Klima docken später als eigene
@@ -178,6 +185,10 @@ class Benutzer(Base):
     # v12 (Lead-Management, Phase 73): Leadmanager-Einstellungen
     lm_aktiv: Mapped[bool] = mapped_column(Boolean, default=False)   # Round-Robin
     lm_arbeitszeit: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # v23 (Phase 104): Outlook-Buchungslink (Book with me, F12) und
+    # Nebenstelle (Vorbereitung CTI, D1)
+    buchungslink: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    nebenstelle: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     @property
     def rollen_liste(self) -> list[str]:
@@ -436,6 +447,13 @@ class Vorgang(Base):
     naechste_aktion_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     loeschen_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     demo: Mapped[bool] = mapped_column(Boolean, default=False)
+    # v23 (Lead-Management V2, Phase 104): zuständiger Außendienst/
+    # Handelsvertreter (A-7), Kennzeichen Vorab-Angebot (F10), Zuordnung zur
+    # Info-Veranstaltung + Teilnahme (I3)
+    ad_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    vorab_angebot: Mapped[bool] = mapped_column(Boolean, default=False)
+    veranstaltung_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    teilgenommen: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
 
 class VorgangsNotiz(Base):
@@ -1429,6 +1447,15 @@ VOT_STATUS_NAMEN = {"geplant": "Geplant", "bestaetigt": "Bestätigt",
                     "verschoben": "Verschoben", "no_show": "No-Show",
                     "erfolgt": "Erfolgt", "abgesagt": "Abgesagt"}
 
+# v23 (Lead-Management V2, Phase 104): Terminarten (A-2), Objektarten (B3,
+# Codes – Bezeichnungen aus dem Blatt Objektarten), To-Do-Status
+TERMIN_TYPEN = ["vot", "telefon", "online"]
+TERMIN_TYP_NAMEN = {"vot": "Vor-Ort-Termin", "telefon": "Telefongespräch",
+                    "online": "Online-Termin (Teams)"}
+TERMIN_MEDIEN = {"vot": "vor_ort", "telefon": "telefon", "online": "teams"}
+OBJEKTART_CODES = ["EFH", "RH", "REH", "MFH"]
+TODO_STATUS = ["offen", "erledigt"]
+
 
 class LeadQuelle(Base):
     """Woher der Lead kommt (Website, Landingpage, Portal, Partner, monday …)."""
@@ -1486,6 +1513,11 @@ class LeadAktivitaet(Base):
     benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     zeitpunkt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     naechste_aktion_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # v23 (Phase 104, D1): Vorbereitung CTI – Anruf-ID der Anlage, Richtung
+    # ein|aus, Nebenstelle; heute nur manuell/leer
+    call_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    richtung: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
+    nebenstelle: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
@@ -1530,6 +1562,12 @@ class VotTermin(Base):
     quelle: Mapped[str] = mapped_column(String(10), default="manuell")  # assistent|manuell|monday
     grund_text: Mapped[str] = mapped_column(String(500), default="")
     demo: Mapped[bool] = mapped_column(Boolean, default=False)
+    # v23 (Phase 104): Terminart vot|telefon|online (A-2), Medium
+    # vor_ort|telefon|teams, ICS-UID/SEQUENCE für Umbuchung/Absage (E4)
+    typ: Mapped[str] = mapped_column(String(10), default="vot")
+    medium: Mapped[str] = mapped_column(String(10), default="vor_ort")
+    ics_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    ics_sequence: Mapped[int] = mapped_column(Integer, default=0)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
@@ -1552,6 +1590,14 @@ class AdProfil(Base):
     gebiet_plz_praefixe: Mapped[str] = mapped_column(String(300), default="[]")  # JSON
     kalender_postfach: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     aktiv_terminierung: Mapped[bool] = mapped_column(Boolean, default=False)
+    # v23 (Phase 104): Kennzeichen Handelsvertreter „terminiert selbst“ (A-1)
+    # und Produktkompetenz (F3): Sparten als JSON-Liste, Kombi WP+PV(+KL),
+    # Objektkompetenz MFH und Gewerbe
+    terminiert_selbst: Mapped[bool] = mapped_column(Boolean, default=False)
+    kompetenz_sparten: Mapped[str] = mapped_column(String(100), default="[]")  # JSON
+    kompetenz_kombi: Mapped[bool] = mapped_column(Boolean, default=False)
+    kompetenz_mfh: Mapped[bool] = mapped_column(Boolean, default=False)
+    kompetenz_gewerbe: Mapped[bool] = mapped_column(Boolean, default=False)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
@@ -1662,6 +1708,64 @@ class LeadPosteingang(Base):
     empfangen_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(10), default="offen")  # offen|ignoriert|angelegt
     vorgang_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+# --- v23: Lead-Management V2 (Phase 104) ------------------------------------------
+
+class Todo(Base):
+    """To-Do am Vorgang (A2/F7): jeder darf jedem zuweisen; Glocke mit
+    Zähler-Badge, keine Mail. Fälligkeit optional."""
+    __tablename__ = "todos"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    vorgang_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    titel: Mapped[str] = mapped_column(String(300), default="")
+    text: Mapped[str] = mapped_column(Text, default="")
+    faellig_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    an_benutzer_id: Mapped[int] = mapped_column(Integer, index=True)
+    von_benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(10), default="offen")   # offen|erledigt
+    erledigt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class InfoVeranstaltung(Base):
+    """Info-Veranstaltung (I1/I2): eine Zeile je Termin = eine Gruppe auf dem
+    Board; Termine entstehen rollierend aus app.lead_info (1. Donnerstag
+    18:00, NRW-Feiertagsregel)."""
+    __tablename__ = "info_veranstaltungen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    beginn: Mapped[datetime] = mapped_column(DateTime, unique=True)
+    ort: Mapped[str] = mapped_column(String(300), default="")
+    titel: Mapped[str] = mapped_column(String(200), default="")
+    verschoben: Mapped[bool] = mapped_column(Boolean, default=False)   # Feiertagsregel griff
+    archiviert: Mapped[bool] = mapped_column(Boolean, default=False)
+    notiz: Mapped[str] = mapped_column(Text, default="")
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class BenutzerEinstellung(Base):
+    """Benutzerindividuelle Einstellungen (A-14): Spaltenkonfiguration der
+    Boards u. ä. als key/wert (JSON-Text)."""
+    __tablename__ = "benutzer_einstellungen"
+    __table_args__ = (UniqueConstraint("benutzer_id", "key",
+                                       name="uq_benutzer_einstellung"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    benutzer_id: Mapped[int] = mapped_column(Integer, index=True)
+    key: Mapped[str] = mapped_column(String(100))
+    wert: Mapped[str] = mapped_column(Text, default="")
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,

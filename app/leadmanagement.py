@@ -46,6 +46,28 @@ PARAMETER_START = {
     "erwartungswert_WB": "250000",
     "quote_neu": "5", "quote_in_kontaktierung": "8", "quote_qualifiziert": "15",
     "quote_terminiert": "30", "quote_erfasst": "40", "quote_angebot": "50",
+    "erwartungswert_GW": "5000000",   # v23: Sparte Gewerbe
+    # --- v23: Lead-Management V2 (PLAN_LEAD_V2, Phase 104) ---
+    "versuche_max": "5",                 # C1: höchstens 5 Anrufversuche
+    "wv_meldet_sich_tage": "14",         # 5a: „Will sich selber zurückmelden“
+    "rueckruf_telefon": "",              # Platzhalter {rueckruf_telefon}
+    "kanal_farben": "",                  # JSON {kanal: #hex}, leer = Automatik
+    "pflichtfelder": "anrede; nachname; telefon; strasse; plz; ort; "
+                     "vertriebskanal; interesse; objektart",   # B2
+    "hv_ausschluss": "Empfehlung; Messe; Sparkasse Duisburg; "
+                     "Stadtwerke Düsseldorf; SWD; Enni; "
+                     "empfehlung; partner_sparkasse_du; partner_swd; partner_enni",  # F14
+    "hv_standard_benutzer": "",          # F13: leer = Namenssuche „Simon“
+    "ersatz_radius_stufen": "5; 10",     # F8 (km)
+    "ersatz_alter_tage": "14",           # F8
+    "info_wochentag": "3",               # I1: 0=Mo … 3=Do
+    "info_woche": "1",                   # 1. Donnerstag im Monat
+    "info_uhrzeit": "18:00",
+    "info_ort": "Friondo, Königstraße 102-104, 47798 Krefeld",
+    "info_vorlauf_tage": "3",            # A-8 [OFFEN 1]
+    "info_rollierend_monate": "12",      # I2
+    "puffer_min": "30",                  # F4: Puffer = max(30, Fahrzeit)
+    "max_termine_tag_start": "3",        # A-13: Startwert neuer AD-Profile
 }
 
 
@@ -356,6 +378,7 @@ STARTQUELLEN = [
     ("telefon", "Telefon", "telefon", None),
     ("empfehlung", "Empfehlung", "empfehlung", None),
     ("bestand", "Bestand", "bestand", None),
+    ("info_veranstaltung", "Info-Veranstaltung", "veranstaltung", None),   # v23 (I3)
     # v21 (Phase 87): Fallback – kein Lead bleibt ohne Quelle
     ("unbekannt", "Unbekannt (ohne Quellen-Key)", "website", None),
 ]
@@ -367,6 +390,7 @@ QUELLEN_GRUPPEN = [("website", "Website / Förderrechner"),
                    ("portal", "Lead-Portale"),
                    ("partner", "Partner"),
                    ("telefon", "Telefon / Empfehlung / Bestand"),
+                   ("veranstaltung", "Info-Veranstaltung"),   # v23 (I3)
                    ("monday", "monday (Bestand)")]
 
 
@@ -573,7 +597,7 @@ def lead_anlegen(session: Session, daten: dict, quelle: LeadQuelle | None,
     abgeschlossener → neuer Vorgang „Wiederkehrer“; entscheidung='neu'
     erzwingt einen eigenen Vorgang. Liefert (vorgang, status) mit status
     neu | angehaengt | wiederkehrer."""
-    sparten = [s for s in (daten.get("sparten") or []) if s in ("WP", "PV", "KL", "WB")]
+    sparten = [s for s in (daten.get("sparten") or []) if s in ("WP", "PV", "KL", "WB", "GW")]
     duplikat = duplikat_pruefen(
         session, telefon=daten.get("telefon", ""), email=daten.get("email", ""),
         name=f"{daten.get('vorname', '')} {daten.get('nachname', '')}",
@@ -944,6 +968,30 @@ def geplante_mails_stornieren(session: Session, termin_id: int,
     return anzahl
 
 
+def versuche_max(session: Session) -> int:
+    """v23 (C1): höchstens so viele Anrufversuche (Parameter versuche_max,
+    Standard 5 = letzte Stufe der Kaskade)."""
+    try:
+        return max(1, int(parameter_holen(session, "versuche_max", "5")))
+    except ValueError:
+        return 5
+
+
+def versuche_gesperrt(session: Session, vorgang: Vorgang) -> bool:
+    """v23 (C1): nach dem letzten Versuch sind Nicht erreicht/Besetzt/Mailbox
+    gesperrt – der Lead steht auf „Nicht erreicht“ (Nurture +30)."""
+    return ((vorgang.versuch_nr or 0) >= versuche_max(session)
+            and vorgang.lead_phase == "nicht_erreicht")
+
+
+def _kaskaden_mail(session: Session, vorgang: Vorgang, aktion: str) -> None:
+    """Aktion einer Kaskadenstufe: keine | mail_nicht_erreicht |
+    mail_disqualifiziert (v23) | mail_<vorlage_key> allgemein."""
+    aktion = (aktion or "keine").strip()
+    if aktion.startswith("mail_"):
+        mail_planen(session, vorgang, aktion[5:])
+
+
 def kaskade_anwenden(session: Session, vorgang: Vorgang, benutzer=None) -> str:
     """Nach Nicht erreicht / Besetzt / Mailbox: Wiedervorlage + Aktion aus dem
     Blatt Kaskade; nach dem letzten Versuch Phase „Nicht erreicht“ (+30 Tage,
@@ -951,16 +999,19 @@ def kaskade_anwenden(session: Session, vorgang: Vorgang, benutzer=None) -> str:
     from app import leadmanagement_logik
     logik = leadmanagement_logik.hole_logik()
     stufe = logik.stufe(vorgang.versuch_nr)
-    if stufe is not None and not stufe.letzter:
+    # v23 (Phase 104, A-5): Stufen über versuche_max gelten als letzte Stufe
+    letzte = (stufe is None or stufe.letzter
+              or (vorgang.versuch_nr or 0) >= versuche_max(session))
+    if not letzte:
         vorgang.naechste_aktion_am = kaskade_zeitpunkt(
             session, stufe.wiedervorlage_nach)
-        if stufe.aktion == "mail_nicht_erreicht":
-            mail_planen(session, vorgang, "nicht_erreicht")
+        _kaskaden_mail(session, vorgang, stufe.aktion)
         return ("Wiedervorlage "
                 + vorgang.naechste_aktion_am.strftime("%d.%m.%Y %H:%M"))
-    # letzter Versuch (oder Versuch über der Kaskade)
-    if stufe is not None and stufe.aktion == "mail_nicht_erreicht":
-        mail_planen(session, vorgang, "nicht_erreicht")
+    # letzter Versuch (oder Versuch über der Kaskade): Mail laut Blatt,
+    # ohne Eintrag die Vorlage disqualifiziert (C4)
+    _kaskaden_mail(session, vorgang,
+                   stufe.aktion if stufe is not None else "mail_disqualifiziert")
     vorgang.lead_phase = "nicht_erreicht"
     vorgang.naechste_aktion_am = datetime.now() + timedelta(days=30)
     # Prozess-Fix 27.09.2026: Nurture zur Wiedervorlage in 30 Tagen planen -
@@ -1046,7 +1097,7 @@ def qualifizierung_abschliessen(session: Session, vorgang: Vorgang, sparte: str,
     # gemeinsame Fragen (gleicher Fragetext) in die anderen Interessen-Sparten
     kunde = session.get(Kunde, vorgang.kunde_id)
     interessen = [s.strip() for s in (kunde.interesse or "").split(",")
-                  if s.strip() in ("WP", "PV", "KL", "WB")]
+                  if s.strip() in ("WP", "PV", "KL", "WB", "GW")]
     for frage in logik.fragen_der_sparte(sparte):
         if frage.key not in antworten:
             continue
@@ -1710,7 +1761,7 @@ def erwartungswert(session: Session, kunde: Kunde | None) -> int:
     summe = 0
     for sparte in (kunde.interesse or "").split(","):
         sparte = sparte.strip()
-        if sparte in ("WP", "PV", "KL", "WB"):
+        if sparte in ("WP", "PV", "KL", "WB", "GW"):
             try:
                 summe += int(parameter_holen(session,
                                              f"erwartungswert_{sparte}", "0"))

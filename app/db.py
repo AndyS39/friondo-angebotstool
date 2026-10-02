@@ -210,12 +210,33 @@ _NACHTRAEGLICHE_SPALTEN = {
     },
     # v21 (PLAN_LEAD_V1.1 Phase 87): Auto-Anlage aus dem Eingang
     "lead_quellen": {"auto_angelegt": "BOOLEAN NOT NULL DEFAULT 0"},
+    # v23 (Lead-Management V2, Phase 104)
+    "vot_termine": {
+        "typ": "VARCHAR(10) NOT NULL DEFAULT 'vot'",
+        "medium": "VARCHAR(10) NOT NULL DEFAULT 'vor_ort'",
+        "ics_uid": "VARCHAR(100)",
+        "ics_sequence": "INTEGER NOT NULL DEFAULT 0",
+    },
+    "ad_profile": {
+        "terminiert_selbst": "BOOLEAN NOT NULL DEFAULT 0",
+        "kompetenz_sparten": "VARCHAR(100) NOT NULL DEFAULT '[]'",
+        "kompetenz_kombi": "BOOLEAN NOT NULL DEFAULT 0",
+        "kompetenz_mfh": "BOOLEAN NOT NULL DEFAULT 0",
+        "kompetenz_gewerbe": "BOOLEAN NOT NULL DEFAULT 0",
+    },
+    "lead_aktivitaeten": {
+        "call_id": "VARCHAR(100)",
+        "richtung": "VARCHAR(5)",
+        "nebenstelle": "VARCHAR(20)",
+    },
     "kampagnen": {"auto_angelegt": "BOOLEAN NOT NULL DEFAULT 0"},
     # V3 (Phase 84): Herkunft der Steckbrief-Werte
     "steckbrief_werte": {
         "quelle": "VARCHAR(20) NOT NULL DEFAULT ''",
     },
     "benutzer": {
+        "buchungslink": "VARCHAR(500)",                         # v23 Phase 104
+        "nebenstelle": "VARCHAR(20)",                           # v23 Phase 104
         "email": "VARCHAR(200) NOT NULL DEFAULT ''",
         "rollen": "VARCHAR(100) NOT NULL DEFAULT ''",           # v11 Mehrfachrollen
         "kalkulation_sichtbar": "BOOLEAN NOT NULL DEFAULT 0",   # v11
@@ -258,8 +279,14 @@ _NACHTRAEGLICHE_SPALTEN = {
         "naechste_aktion_am": "DATETIME",
         "loeschen_am": "DATETIME",
         "demo": "BOOLEAN NOT NULL DEFAULT 0",
+        "ad_id": "INTEGER",                                     # v23 Phase 104
+        "vorab_angebot": "BOOLEAN NOT NULL DEFAULT 0",          # v23 Phase 104
+        "veranstaltung_id": "INTEGER",                          # v23 Phase 104
+        "teilgenommen": "BOOLEAN",                              # v23 Phase 104
     },
     "kunden": {
+        "objektart": "VARCHAR(10)",                             # v23 Phase 104
+        "parteien": "INTEGER",                                  # v23 Phase 104
         # v20 (Phase 98): Standard-Anschriften
         "rechnung_name": "VARCHAR(200) NOT NULL DEFAULT ''",
         "rechnung_zusatz": "VARCHAR(200) NOT NULL DEFAULT ''",

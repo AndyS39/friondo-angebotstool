@@ -17,6 +17,8 @@ from app.routers import (angebote, anmeldung, artikel, benutzer, erfassung, vorg
                          projektierung as projektierung_router,
                          glocke, leadmanagement as leadmanagement_router,
                          leads_api,
+                         lm_anruf, lm_boards, lm_dashboard, lm_hv, lm_info,
+                         lm_kartei, lm_termin,   # v23: Lead-Management V2
                          meine_angebote, montage,
                          erfassungsliste, konfiguration, konfigurator, kunden,
                          leads, signatur, statistik, versand)
@@ -121,6 +123,9 @@ app.include_router(vorgaenge.router)
 app.include_router(projektierung_router.router)
 app.include_router(glocke.router)
 app.include_router(montage.router)
+# v23 (Lead-Management V2): V2-Router zuerst – gleiche Pfade haben Vorrang
+for _v2 in (lm_dashboard, lm_boards, lm_kartei, lm_anruf, lm_termin, lm_hv, lm_info):
+    app.include_router(_v2.router)
 app.include_router(leadmanagement_router.router)
 app.include_router(leads_api.router)
 app.include_router(benutzer.router)

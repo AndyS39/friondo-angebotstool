@@ -19,7 +19,7 @@ from app.templating import render
 router = APIRouter(prefix="/erfassung")
 
 SPARTEN_NAMEN = {"WP": "Wärmepumpe", "PV": "Photovoltaik",
-                 "KL": "Klima", "WB": "Wallbox"}
+                 "KL": "Klima", "WB": "Wallbox", "GW": "Gewerbe"}   # v23: GW
 
 
 def _benutzer(request: Request):
@@ -254,7 +254,7 @@ async def sparten_start(request: Request, session: Session = Depends(get_session
         lead.erfassung_id = neu[0].id   # Alt-Verknüpfung (erste Erfassung)
     session.commit()
     erste = neu[0]
-    if erste.sparte == "WB":   # Wallbox: vorerst immer Freitext
+    if erste.sparte in ("WB", "GW"):   # Wallbox/Gewerbe (v23): immer Freitext
         return RedirectResponse(f"/erfassung/{erste.id}/freitext", status_code=303)
     return RedirectResponse(f"/erfassung/{erste.id}/weiche", status_code=303)
 

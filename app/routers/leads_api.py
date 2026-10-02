@@ -77,7 +77,7 @@ async def lead_anlegen(request: Request, session: Session = Depends(get_session)
     if not (daten.get("telefon") or "").strip() and not (daten.get("email") or "").strip():
         fehlend.append("telefon oder email")
     sparten = [str(s).strip().upper() for s in (daten.get("sparten") or [])
-               if str(s).strip().upper() in ("WP", "PV", "KL", "WB")]
+               if str(s).strip().upper() in ("WP", "PV", "KL", "WB", "GW")]
     if not sparten:
         fehlend.append("sparten (WP/PV/KL/WB)")
     if fehlend:
