@@ -313,3 +313,88 @@ def bestand_nachziehen(session: Session) -> list:
         meldungen.append(f"{hv} Handelsvertreter gekennzeichnet (terminiert selbst)")
     session.flush()
     return meldungen
+
+
+# --- Zugriff und Zuweisung (gemeinsam fuer Phasen 105-111) --------------------------
+
+def zugriff_erlaubt(session: Session, benutzer, vorgang: Vorgang | None = None) -> bool:
+    """Darf dieser Benutzer das Lead-Modul bzw. diesen Vorgang bearbeiten?
+    Modul-Sichtbare (kern.lead_modul_sichtbar) immer; Handelsvertreter (A-1)
+    nur an Vorgaengen mit vorgaenge.ad_id = eigene ID (ohne Vorgang: ja, die
+    Sicht filtert dann server-seitig auf eigene Leads)."""
+    from app import leadmanagement as kern
+    if benutzer is None:
+        return False
+    if kern.lead_modul_sichtbar(session, benutzer):
+        return True
+    if ist_handelsvertreter(session, benutzer):
+        return vorgang is None or vorgang.ad_id == benutzer.id
+    return False
+
+
+def gate(request, session: Session, vorgang: Vorgang | None = None) -> None:
+    """404 statt 403 (Demo-Modus: Modul unsichtbar) – Ersatz fuer _gate der
+    V1-Router, zusaetzlich mit Handelsvertreter-Freigabe."""
+    from fastapi import HTTPException
+    if not zugriff_erlaubt(session, request.state.benutzer, vorgang):
+        raise HTTPException(status_code=404)
+
+
+def ad_zuweisen(session: Session, vorgang: Vorgang, ad_id: int | None,
+                benutzer=None, erzwingen: bool = False) -> str:
+    """Aussendienst/Handelsvertreter am Vorgang setzen (A-7, G3, F13):
+    Ausschlussliste pruefen (F14; erzwingen=True nur Innendienst/Admin),
+    Aktivitaet „zugewiesen an …“, Glocke an den neuen Zustaendigen.
+    Liefert eine Meldung; leerer Text = Fehler bereits als Meldung."""
+    from app import leadmanagement as kern
+    alt_id = vorgang.ad_id
+    if ad_id in (None, 0, ""):
+        vorgang.ad_id = None
+        kern.aktivitaet(session, vorgang.id, "status", "Außendienst-Zuweisung entfernt",
+                        benutzer=benutzer)
+        session.flush()
+        return "Zuweisung entfernt."
+    neu = session.get(Benutzer, int(ad_id))
+    if neu is None or not neu.aktiv:
+        return "Außendienstler nicht gefunden."
+    if ist_handelsvertreter(session, neu) and not erzwingen:
+        grund = hv_ausgeschlossen(session, vorgang)
+        if grund:
+            return "Nicht möglich: " + grund
+    if alt_id == neu.id:
+        return f"{neu.name} ist bereits zugewiesen."
+    vorgang.ad_id = neu.id
+    wer = f" (vorher {session.get(Benutzer, alt_id).name})" if alt_id and session.get(Benutzer, alt_id) else ""
+    kern.aktivitaet(session, vorgang.id, "status", f"Zugewiesen an {neu.name}{wer}",
+                    benutzer=benutzer)
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    kern.benachrichtigen(session, [neu.id],
+                         f"Lead zugewiesen: {kunde.anzeige_name if kunde else '?'}"
+                         f"{', ' + kunde.ort if kunde and kunde.ort else ''}",
+                         f"/lead-management/lead/{vorgang.id}")
+    session.flush()
+    return f"Zugewiesen an {neu.name}."
+
+
+def leadmanager_zuweisen(session: Session, vorgang: Vorgang, benutzer_id: int | None,
+                         benutzer=None) -> str:
+    """Innendienst/Leadmanager am Vorgang (A3-Spalte „Innendienst“)."""
+    from app import leadmanagement as kern
+    if benutzer_id in (None, 0, ""):
+        vorgang.leadmanager_id = None
+        kern.aktivitaet(session, vorgang.id, "status", "Leadmanager entfernt", benutzer=benutzer)
+        session.flush()
+        return "Leadmanager entfernt."
+    neu = session.get(Benutzer, int(benutzer_id))
+    if neu is None or not neu.aktiv:
+        return "Benutzer nicht gefunden."
+    if vorgang.leadmanager_id == neu.id:
+        return f"{neu.name} ist bereits Leadmanager."
+    vorgang.leadmanager_id = neu.id
+    kern.aktivitaet(session, vorgang.id, "status", f"Leadmanager: {neu.name}", benutzer=benutzer)
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    kern.benachrichtigen(session, [neu.id],
+                         f"Lead übernommen: {kunde.anzeige_name if kunde else '?'}",
+                         f"/lead-management/lead/{vorgang.id}")
+    session.flush()
+    return f"Leadmanager: {neu.name}."

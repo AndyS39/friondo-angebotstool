@@ -104,7 +104,7 @@
 
     <h2>Erwartungswerte (Cent, brutto) + Phasen-Quoten (%)</h2>
     <div class="formzeile">
-        {% for s in ('WP', 'PV', 'KL', 'WB') %}
+        {% for s in ('WP', 'PV', 'KL', 'WB', 'GW') %}
         <label class="schmal">{{ s }}
             <input type="number" name="erwartungswert_{{ s }}"
                    value="{{ werte['erwartungswert_' ~ s] }}"></label>
@@ -142,7 +142,67 @@
             <option value="" {{ 'selected' if not werte.lm_startseite }}>nach Rolle (Übersicht · Leadmanagement: Anrufliste)</option>
             <option value="uebersicht" {{ 'selected' if werte.lm_startseite == 'uebersicht' }}>immer Übersicht</option>
             <option value="anrufliste" {{ 'selected' if werte.lm_startseite == 'anrufliste' }}>immer Anrufliste</option>
+            <option value="dashboard" {{ 'selected' if werte.lm_startseite == 'dashboard' }}>immer Dashboard (V2)</option>
+            <option value="hauptboard" {{ 'selected' if werte.lm_startseite == 'hauptboard' }}>immer Hauptboard (V2)</option>
         </select></label>
+
+    {# v23 (Lead-Management V2, PLAN_LEAD_V2): Prozessparameter – Gründe,
+       Kaskade, Status und Objektarten liegen in der Steuerdatei #}
+    <h2>Lead-Management V2 – Anrufe, Kartei, Handelsvertreter</h2>
+    <div class="formzeile">
+        <label class="schmal">Max. Anrufversuche
+            <input type="number" name="versuche_max" min="1" max="9" value="{{ werte.versuche_max }}"></label>
+        <label class="schmal">„Meldet sich selbst“ WV (Tage)
+            <input type="number" name="wv_meldet_sich_tage" value="{{ werte.wv_meldet_sich_tage }}"></label>
+        <label>Rückruf-Telefon ({rueckruf_telefon})
+            <input type="text" name="rueckruf_telefon" value="{{ werte.rueckruf_telefon }}" placeholder="Zentrale, Fallback"></label>
+        <label class="schmal">Dashboard-Horizont (Tage)
+            <input type="number" name="dashboard_horizont_tage" value="{{ werte.dashboard_horizont_tage or 7 }}"></label>
+    </div>
+    <label>Pflichtfelder der Kartei (Semikolon; Felder des Kunden, dazu interesse und vertriebskanal)
+        <input type="text" name="pflichtfelder" value="{{ werte.pflichtfelder }}"></label>
+    <label>Kanal-Farben (JSON {"Kanal": "#hex"}, leer = Automatik)
+        <input type="text" name="kanal_farben" value="{{ werte.kanal_farben }}" placeholder='{"Sparkasse": "#e87ba4"}'></label>
+    <div class="formzeile">
+        <label>Handelsvertreter-Ausschluss (Kanäle/Quellen-Keys, Semikolon)
+            <input type="text" name="hv_ausschluss" value="{{ werte.hv_ausschluss }}"></label>
+        <label>Standard-Verantwortlicher HV (F13)
+            <select name="hv_standard_benutzer">
+                <option value="" {{ 'selected' if not werte.hv_standard_benutzer }}>automatisch (Name „Simon“)</option>
+                {% for hv in handelsvertreter %}
+                <option value="{{ hv.id }}" {{ 'selected' if werte.hv_standard_benutzer == hv.id|string }}>{{ hv.name }}</option>
+                {% endfor %}
+            </select></label>
+    </div>
+
+    <h2>Lead-Management V2 – Terminassistent &amp; Ersatzkunde</h2>
+    <div class="formzeile">
+        <label class="schmal">Puffer mind. (Min)
+            <input type="number" name="puffer_min" value="{{ werte.puffer_min }}"></label>
+        <label class="schmal">Termine/Tag Startwert
+            <input type="number" name="max_termine_tag_start" value="{{ werte.max_termine_tag_start }}"></label>
+        <label class="schmal">Ersatz-Radius (km, Stufen)
+            <input type="text" name="ersatz_radius_stufen" value="{{ werte.ersatz_radius_stufen }}" placeholder="5; 10"></label>
+        <label class="schmal">Ältere Leads ab (Tage)
+            <input type="number" name="ersatz_alter_tage" value="{{ werte.ersatz_alter_tage }}"></label>
+    </div>
+
+    <h2>Lead-Management V2 – Info-Veranstaltung</h2>
+    <div class="formzeile">
+        <label class="schmal">Wochentag (0=Mo … 6=So)
+            <input type="number" name="info_wochentag" min="0" max="6" value="{{ werte.info_wochentag }}"></label>
+        <label class="schmal">n-ter im Monat
+            <input type="number" name="info_woche" min="1" max="4" value="{{ werte.info_woche }}"></label>
+        <label class="schmal">Uhrzeit
+            <input type="time" name="info_uhrzeit" value="{{ werte.info_uhrzeit }}"></label>
+        <label class="schmal">Vorlauf (Tage, A-8)
+            <input type="number" name="info_vorlauf_tage" value="{{ werte.info_vorlauf_tage }}"></label>
+        <label class="schmal">Rollierend (Monate)
+            <input type="number" name="info_rollierend_monate" value="{{ werte.info_rollierend_monate }}"></label>
+    </div>
+    <label>Ort <input type="text" name="info_ort" value="{{ werte.info_ort }}"></label>
+    <p class="dezent">Feiertagsregel NRW (feste und bewegliche Feiertage, Osterformel) ist im Tool
+        hinterlegt; fällt der Regeltermin auf einen Feiertag, rückt er eine Woche nach hinten.</p>
     <button class="knopf" type="submit">Speichern</button>
 </form>
 

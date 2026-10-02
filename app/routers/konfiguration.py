@@ -1666,14 +1666,25 @@ async def lead_einstellungen(request: Request,
                   "erwartungswert_WP", "erwartungswert_PV",
                   "erwartungswert_KL", "erwartungswert_WB",
                   "quote_neu", "quote_in_kontaktierung", "quote_qualifiziert",
-                  "quote_terminiert", "quote_erfasst", "quote_angebot"]
+                  "quote_terminiert", "quote_erfasst", "quote_angebot",
+                  # v23 (Lead-Management V2, Phase 104/112)
+                  "erwartungswert_GW", "versuche_max", "wv_meldet_sich_tage",
+                  "rueckruf_telefon", "kanal_farben", "pflichtfelder",
+                  "hv_ausschluss", "hv_standard_benutzer",
+                  "ersatz_radius_stufen", "ersatz_alter_tage",
+                  "info_wochentag", "info_woche", "info_uhrzeit", "info_ort",
+                  "info_vorlauf_tage", "info_rollierend_monate", "puffer_min",
+                  "max_termine_tag_start", "dashboard_horizont_tage"]
     werte = {name: lead_kern.parameter_holen(session, name)
              for name in schluessel}
+    from app import lead_v2
+    handelsvertreter = lead_v2.handelsvertreter_liste(session)
     vorschau = None
     if request.query_params.get("loeschvorschau") == "1":
         vorschau = lead_kern.loeschlauf(session, trocken=True)
     return render(request, "konfiguration/lead_einstellungen.html",
                   aktiv="/parametrierung", werte=werte,
+                  handelsvertreter=handelsvertreter,
                   demo_anzahl=session.query(Vorgang)
                   .filter(Vorgang.demo.is_(True)).count(),
                   protokoll=lead_kern.parameter_holen(
@@ -1746,16 +1757,26 @@ async def lead_einstellungen_speichern(request: Request,
 
     einfache = ["mail_testadresse", "kalender_testpostfach", "arbeitszeit_lm",
                 "absender_postfach", "kerngebiet_plz", "firmen_adresse",
-                "demo_badge_text"]
-    # v21 (Phase 88): Modul-Einstieg
-    if form.get("lm_startseite") in ("", "uebersicht", "anrufliste"):
+                "demo_badge_text",
+                # v23 (Lead-Management V2)
+                "rueckruf_telefon", "kanal_farben", "pflichtfelder",
+                "hv_ausschluss", "hv_standard_benutzer",
+                "ersatz_radius_stufen", "info_uhrzeit", "info_ort"]
+    # v21 (Phase 88) / v23: Modul-Einstieg
+    if form.get("lm_startseite") in ("", "uebersicht", "anrufliste",
+                                     "dashboard", "hauptboard"):
         lead_kern.parameter_setzen(session, "lm_startseite", form.get("lm_startseite") or "")
     zahlen = ["sla_gruen_min", "sla_gelb_min", "vorschlag_horizont_tage",
               "vorschlag_raster_min", "loeschfrist_monate",
               "erwartungswert_WP", "erwartungswert_PV", "erwartungswert_KL",
               "erwartungswert_WB", "quote_neu", "quote_in_kontaktierung",
               "quote_qualifiziert", "quote_terminiert", "quote_erfasst",
-              "quote_angebot"]
+              "quote_angebot",
+              # v23 (Lead-Management V2)
+              "erwartungswert_GW", "versuche_max", "wv_meldet_sich_tage",
+              "ersatz_alter_tage", "info_wochentag", "info_woche",
+              "info_vorlauf_tage", "info_rollierend_monate", "puffer_min",
+              "max_termine_tag_start", "dashboard_horizont_tage"]
     for name in einfache:
         if form.get(name) is not None:
             lead_kern.parameter_setzen(session, name,
