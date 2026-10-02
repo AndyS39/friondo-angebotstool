@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
+
+{% block titel %}Info-Veranstaltung – Termine – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{# v23 (PLAN_LEAD_V2 Phase 111, I1/I2): Veranstaltungs-Pflege – alle Termine
+   (kommend + Archiv) mit Zählern, Notiz, manuell verschieben, archivieren/
+   reaktivieren, zusätzliche Veranstaltung anlegen, Regeltermine nachlegen.
+   Die Parameter info_* werden nur angezeigt (Pflege: Parametrierung →
+   Lead-Einstellungen). Kontrollliste: die nächsten 12 Regeltermine mit
+   Feiertagsregel (I2). #}
+{% block inhalt %}
+{{ lm_nav('info') }}
+<div class="seitenkopf lm-boardkopf">
+    <h1>Info-Veranstaltung · Termine {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
+    <span class="dezent">Veranstaltungen pflegen – Leads behalten ihre Zuordnung, auch wenn ein Termin verschoben oder archiviert wird.</span>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/info-veranstaltung">{{ symbol('board') }} Zum Board</a>
+        <form method="post" action="/lead-management/info-veranstaltung/termine" class="li-inline-form">
+            <input type="hidden" name="aktion" value="nachlegen">
+            <button class="knopf klein zweitrangig" title="Fehlende Regeltermine der nächsten {{ parameter.monate }} Monate anlegen (idempotent)">{{ symbol('aktualisieren') }} Regeltermine nachlegen</button>
+        </form>
+    </div>
+</div>
+<p class="meldung {{ 'fehler' if fehler }}" {{ '' if meldung else 'hidden' }} role="status">{{ meldung }}</p>
+
+<div class="li-termine-raster">
+<section class="karte li-termine">
+    <h2>Veranstaltungen</h2>
+    <div class="tabelle-wrap">
+    <table class="tabelle li-termine-tabelle">
+        <thead><tr><th>Termin</th><th>Ort</th><th>Kennzeichen</th><th class="rechts">Leads</th><th class="rechts">Teilgenommen</th><th>Notiz</th><th>Aktionen</th></tr></thead>
+        <tbody>
+        {% for t in termine %}
+        <tr class="{{ 'li-archiv' if t.v.archiviert }}">
+            <td class="nowrap"><a href="/lead-management/info-veranstaltung?veranstaltung_id={{ t.v.id }}{{ '&archiv=1' if t.v.archiviert }}" title="Gruppe im Board öffnen"><b>{{ t.titel }}</b></a></td>
+            <td>{{ t.v.ort or '–' }}</td>
+            <td>{% if t.v.verschoben %}<span class="abzeichen li-verschoben">verschoben (Feiertag)</span>{% endif %}
+                {% if t.v.archiviert %}<span class="abzeichen">archiviert</span>{% elif t.vergangen %}<span class="abzeichen">vorbei</span>{% endif %}</td>
+            <td class="rechts">{{ t.leads }}</td>
+            <td class="rechts nowrap" title="Ja / Nein / offen">{{ t.ja }} / {{ t.nein }} / {{ t.leads - t.ja - t.nein }}</td>
+            <td class="li-notiz-zelle">
+                <form method="post" action="/lead-management/info-veranstaltung/termine" class="li-notiz-form">
+                    <input type="hidden" name="aktion" value="notiz"><input type="hidden" name="id" value="{{ t.v.id }}">
+                    <textarea name="notiz" rows="2" placeholder="Notiz zur Veranstaltung …" aria-label="Notiz">{{ t.v.notiz or '' }}</textarea>
+                    <button class="knopf klein zweitrangig" title="Notiz speichern">{{ symbol('haken') }}</button>
+                </form>
+            </td>
+            <td class="li-aktionen">
+                <form method="post" action="/lead-management/info-veranstaltung/termine" class="li-inline-form" title="Manuell verschieben (Leads bleiben zugeordnet)">
+                    <input type="hidden" name="aktion" value="verschieben"><input type="hidden" name="id" value="{{ t.v.id }}">
+                    <input type="datetime-local" name="beginn" value="{{ t.v.beginn.strftime('%Y-%m-%dT%H:%M') }}" aria-label="Neuer Termin">
+                    <button class="knopf klein zweitrangig">{{ symbol('kalender') }} Verschieben</button>
+                </form>
+                <form method="post" action="/lead-management/info-veranstaltung/termine" class="li-inline-form">
+                    <input type="hidden" name="aktion" value="archiv"><input type="hidden" name="id" value="{{ t.v.id }}">
+                    <input type="hidden" name="archiviert" value="{{ '0' if t.v.archiviert else '1' }}">
+                    <button class="knopf klein zweitrangig" title="{{ 'Wieder aktiv setzen' if t.v.archiviert else 'Archivieren (Filter Archiv im Board)' }}">{{ symbol('wiederherstellen' if t.v.archiviert else 'archiv') }} {{ 'Reaktivieren' if t.v.archiviert else 'Archivieren' }}</button>
+                </form>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="dezent">Noch keine Veranstaltungen.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    <details class="li-anlegen">
+        <summary>Zusätzliche Veranstaltung anlegen (außerhalb der Regel)</summary>
+        <form method="post" action="/lead-management/info-veranstaltung/termine" class="formzeile li-inline-form">
+            <input type="hidden" name="aktion" value="anlegen">
+            <label>Beginn <input type="datetime-local" name="beginn" required></label>
+            <label>Ort <input type="text" name="ort" value="{{ parameter.ort }}" size="40"></label>
+            <button class="knopf klein">{{ symbol('plus') }} Anlegen</button>
+        </form>
+    </details>
+</section>
+
+<aside class="li-seitenleiste">
+    <section class="karte li-parameter">
+        <h2>Regel (Parameter)</h2>
+        <dl class="li-dl">
+            <dt>Termin</dt><dd>{{ parameter.woche }}. {{ wochentag_name }} im Monat, {{ parameter.uhrzeit }} Uhr</dd>
+            <dt>Ort</dt><dd>{{ parameter.ort }}</dd>
+            <dt>Vorlauf (A-8)</dt><dd>{{ parameter.vorlauf_tage }} Tage – Lead → nächste Veranstaltung ab Eingang + Vorlauf</dd>
+            <dt>Rollierend</dt><dd>{{ parameter.monate }} Monate voraus</dd>
+            <dt>Feiertage</dt><dd>gesetzliche Feiertage NRW (fest + beweglich, Osterformel) → eine Woche später</dd>
+        </dl>
+        <p class="dezent">Pflege der Parameter <code>info_*</code>: <a href="/parametrierung/lead-einstellungen">Parametrierung → Lead-Einstellungen</a>.</p>
+    </section>
+    <section class="karte li-kontrolle">
+        <h2>Kontrolle: nächste 12 Regeltermine</h2>
+        <ul class="li-kontrollliste">
+            {% for t, verschoben, feiertag in kontrolle %}
+            <li>{{ t | de_datum('%a %d.%m.%Y %H:%M') }}{% if verschoben %} <span class="abzeichen li-verschoben" title="{{ feiertag }}">verschoben{% if feiertag %} ({{ feiertag }}){% endif %}</span>{% endif %}</li>
+            {% endfor %}
+        </ul>
+        <details>
+            <summary class="dezent">Feiertage NRW {{ jahr }}</summary>
+            <ul class="li-kontrollliste dezent">
+                {% for tag, name in feiertage %}<li>{{ tag | de_datum('%a %d.%m.%Y') }} – {{ name }}</li>{% endfor %}
+            </ul>
+        </details>
+    </section>
+</aside>
+</div>
+{% endblock %}

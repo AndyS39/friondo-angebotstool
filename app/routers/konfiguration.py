@@ -1386,13 +1386,13 @@ async def lead_quelle_speichern(request: Request,
     quelle_id = form.get("id") or ""
     schluessel = (form.get("key") or "").strip().lower()
     schluessel = re_modul.sub(r"[^a-z0-9_]", "_", schluessel)[:100]
-    sparten = [s for s in form.getlist("standard_sparten")
-               if s in ("WP", "PV", "KL", "WB")]
+    from app.models import INTERESSE_CODES
+    sparten = [s for s in form.getlist("standard_sparten") if s in INTERESSE_CODES]   # v23: inkl. GW
     werte = dict(
         name=(form.get("name") or "").strip()[:200],
         typ=(form.get("typ") if form.get("typ") in
              ("website", "landingpage", "portal", "partner", "telefon",
-              "empfehlung", "bestand", "monday") else "website"),
+              "empfehlung", "bestand", "veranstaltung", "monday") else "website"),   # v23: Info-Veranstaltung
         # v21 (Phase 87): Kanal als Dropdown; „Standard“ = kein eigener Kanal
         kanal=(None if (form.get("kanal") or "").strip() in ("", "Standard")
                else (form.get("kanal") or "").strip()[:100]),
@@ -1674,7 +1674,9 @@ async def lead_einstellungen(request: Request,
                   "ersatz_radius_stufen", "ersatz_alter_tage",
                   "info_wochentag", "info_woche", "info_uhrzeit", "info_ort",
                   "info_vorlauf_tage", "info_rollierend_monate", "puffer_min",
-                  "max_termine_tag_start", "dashboard_horizont_tage"]
+                  "max_termine_tag_start", "dashboard_horizont_tage",
+                  "kanal_ad_regel", "vorab_dauer_min", "ersatz_min_treffer",
+                  "termin_konflikt_modus", "vorschlag_raster_manuell_min"]
     werte = {name: lead_kern.parameter_holen(session, name)
              for name in schluessel}
     from app import lead_v2
@@ -1761,7 +1763,11 @@ async def lead_einstellungen_speichern(request: Request,
                 # v23 (Lead-Management V2)
                 "rueckruf_telefon", "kanal_farben", "pflichtfelder",
                 "hv_ausschluss", "hv_standard_benutzer",
-                "ersatz_radius_stufen", "info_uhrzeit", "info_ort"]
+                "ersatz_radius_stufen", "info_uhrzeit", "info_ort",
+                "kanal_ad_regel"]
+    if form.get("termin_konflikt_modus") in ("warnen", "sperren"):
+        lead_kern.parameter_setzen(session, "termin_konflikt_modus",
+                                   form.get("termin_konflikt_modus"))
     # v21 (Phase 88) / v23: Modul-Einstieg
     if form.get("lm_startseite") in ("", "uebersicht", "anrufliste",
                                      "dashboard", "hauptboard"):
@@ -1776,7 +1782,8 @@ async def lead_einstellungen_speichern(request: Request,
               "erwartungswert_GW", "versuche_max", "wv_meldet_sich_tage",
               "ersatz_alter_tage", "info_wochentag", "info_woche",
               "info_vorlauf_tage", "info_rollierend_monate", "puffer_min",
-              "max_termine_tag_start", "dashboard_horizont_tage"]
+              "max_termine_tag_start", "dashboard_horizont_tage",
+              "vorab_dauer_min", "ersatz_min_treffer", "vorschlag_raster_manuell_min"]
     for name in einfache:
         if form.get(name) is not None:
             lead_kern.parameter_setzen(session, name,

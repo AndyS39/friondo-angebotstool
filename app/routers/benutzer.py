@@ -206,12 +206,24 @@ async def ad_profil_seite(request: Request, benutzer_id: int,
         gebiet = json_modul.loads(profil.gebiet_plz_praefixe) if profil else []
     except ValueError:
         gebiet = []
+    # v23 (Phase 108, F3/F4/A-1): Produktkompetenz, Handelsvertreter-Kennzeichen,
+    # Kanal-Regel, Buchungslink, Startwerte aus den Parametern
+    from app import lead_termin, lead_v2
+    from app import leadmanagement as kern
+    from app.models import INTERESSEN
     return render(request, "benutzer/ad_profil.html", aktiv="/benutzer",
                   person=person, profil=profil, zeiten=zeiten,
                   gebiet=", ".join(str(p) for p in gebiet),
                   wochentage=[("mo", "Montag"), ("di", "Dienstag"),
                               ("mi", "Mittwoch"), ("do", "Donnerstag"),
                               ("fr", "Freitag"), ("sa", "Samstag")],
+                  sparten=INTERESSEN,
+                  kompetenz=lead_v2.kompetenz_sparten(profil) if profil else [],
+                  startwerte=lead_v2.kompetenz_startwerte(person.name),
+                  puffer_param=lead_termin._int(kern.parameter_holen(session, "puffer_min", "30"), 30),
+                  max_start=lead_termin._int(kern.parameter_holen(session, "max_termine_tag_start", "3"), 3),
+                  kanaele=[k for k in kern.kanal_werte(session) if k.lower() != "standard"],
+                  kanal_zustaendig=lead_termin.kanal_regel_fuer_ad(session, person.id),
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -249,13 +261,36 @@ async def ad_profil_speichern(request: Request, benutzer_id: int,
             return max(1, int(form.get(name) or standard))
         except ValueError:
             return standard
+    # v23 (Phase 108, F4/A-13): Startwerte aus den Parametern puffer_min (30)
+    # und max_termine_tag_start (3)
+    from app import lead_termin, leadmanagement as kern
+    from app.models import INTERESSE_CODES
+    puffer_start = lead_termin._int(kern.parameter_holen(session, "puffer_min", "30"), 30)
+    max_start = lead_termin._int(kern.parameter_holen(session, "max_termine_tag_start", "3"), 3)
     profil.termin_dauer_min = _zahl("termin_dauer_min", 90)
-    profil.puffer_min = _zahl("puffer_min", 15)
-    profil.max_termine_tag = _zahl("max_termine_tag", 4)
+    profil.puffer_min = _zahl("puffer_min", puffer_start)
+    profil.max_termine_tag = _zahl("max_termine_tag", max_start)
     profil.gebiet_plz_praefixe = json_modul.dumps(
         [p.strip() for p in (form.get("gebiet") or "").split(",") if p.strip()])
     profil.kalender_postfach = (form.get("kalender_postfach") or "").strip() or None
     profil.aktiv_terminierung = form.get("aktiv_terminierung") == "on"
+    # v23 (Phase 108, F3/A-1): Produktkompetenz (Sparten WP/PV/KL/WB/GW, Kombi
+    # WP+PV(+KL), Objektkompetenz MFH, Gewerbe), Handelsvertreter, Kanal-Regel,
+    # Buchungslink (Book with me) am Benutzer
+    kompetenz = [code for code in INTERESSE_CODES if form.get(f"kompetenz_{code}") == "on"]
+    profil.kompetenz_sparten = json_modul.dumps(kompetenz)
+    profil.kompetenz_kombi = form.get("kompetenz_kombi") == "on"
+    profil.kompetenz_mfh = form.get("kompetenz_mfh") == "on"
+    profil.kompetenz_gewerbe = form.get("kompetenz_gewerbe") == "on" or "GW" in kompetenz
+    if profil.kompetenz_gewerbe and "GW" not in kompetenz:
+        kompetenz.append("GW")
+        profil.kompetenz_sparten = json_modul.dumps(kompetenz)
+    profil.terminiert_selbst = form.get("terminiert_selbst") == "on"
+    if "buchungslink" in form:
+        person.buchungslink = (form.get("buchungslink") or "").strip()[:500] or None
+    # Kanal-Regel: der AD steht genau in den angehakten Kanälen (leer = keine)
+    lead_termin.kanal_regel_ad_setzen(
+        session, person.id, [str(k) for k in form.getlist("kanal_fest")])
     session.flush()
     if profil.start_adresse and profil.start_lat is None:
         try:   # Startadresse sofort geokodieren (best effort)

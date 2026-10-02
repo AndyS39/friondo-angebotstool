@@ -88,14 +88,45 @@
 {%- if kanal and kanal | lower != 'standard' -%}<span class="lm-kanal" title="Vertriebskanal – steuert das Angebotsprofil">{{ kanal }}</span>{%- endif -%}
 {%- endmacro %}
 
-{% macro versuche_punkte(vorgang) -%}
+{# v23 Phase 107 (C1-c): 5 Punkte = die (letzten) fünf Anrufversuche. Mit
+   `versuche` (Liste aus lead_anrufliste.versuche_fuer_punkte: zeitpunkt,
+   ergebnis, benutzer_name, titel) bekommt jeder Punkt die Farbe seines
+   Ergebnisses (Klasse e-<ergebnis>) und einen Tooltip Datum · Uhrzeit ·
+   Ergebnis · Benutzer; das Label „n×“ färbt weiter nach Eskalation (orange 3,
+   rot 4+). Ohne zweiten Parameter rendert das Makro exakt wie v21 (Aufrufer
+   ohne Versuchsliste bleiben unverändert). #}
+{% macro versuche_punkte(vorgang, versuche=None) -%}
 {%- set n = vorgang.versuch_nr or 0 -%}
-<div class="lm-versuche" title="{{ n }} Anrufversuch{{ 'e' if n != 1 }}">
-    <div class="lm-dots {{ 'rot' if n >= 4 else ('warn' if n == 3 else '') }}">
-        {%- for i in range(5) %}<i class="{{ 'v' if i < n }}"></i>{% endfor -%}
+{%- set liste = (versuche or []) | list -%}
+{%- set liste = liste[-5:] if liste | length > 5 else liste -%}
+<div class="lm-versuche" title="{{ n }} Anrufversuch{{ 'e' if n != 1 }}{% if n > 5 %} – die letzten 5 angezeigt{% endif %}">
+    <div class="lm-dots {{ 'rot' if n >= 4 else ('warn' if n == 3 else '') }}{{ ' je-ergebnis' if liste }}">
+        {%- for i in range(5) -%}
+            {%- if liste and i < liste | length -%}
+                {%- set a = liste[i] -%}
+                <i class="v e-{{ a.ergebnis or 'anruf' }}" title="{{ a.titel if a.titel is defined and a.titel else (a.zeitpunkt.strftime('%d.%m.%Y %H:%M') ~ ' · ' ~ (a.ergebnis_name if a.ergebnis_name is defined else a.ergebnis) ~ (' · ' ~ a.benutzer_name if a.benutzer_name is defined and a.benutzer_name else '')) }}"></i>
+            {%- else -%}
+                <i class="{{ 'v' if i < n }}"></i>
+            {%- endif -%}
+        {%- endfor -%}
     </div>
     {%- if n == 0 %}<small class="neu">neu</small>
     {%- else %}<small class="{{ 'lm-rot' if n >= 4 else ('lm-warn' if n == 3 else '') }}">{{ n }}×</small>{% endif %}
 </div>
+{%- endmacro %}
+
+{# v23 Phase 107 (D1 / F-01): Click-to-Call für jede Telefonnummer – href in
+   E.164 wie lead_anrufliste.tel_href („0203 …“ → tel:+49203…, „0049 …“ → +49…,
+   Klammer-Null nach der Vorwahl entfällt, Leerzeichen/Schrägstriche/Bindestriche
+   raus), Anzeigetext bleibt der Rohwert. Ein Klick startet die Stoppuhr
+   (app/static/lm_anruf.js reagiert auf a[href^="tel:"]). Für Tabelle (A3),
+   Kartei (B1), Boards und Listen gedacht; ohne Nummer wird nichts gerendert. #}
+{% macro telefon_link(nummer, text='', klasse='lm-tel', titel='Anrufen (Click-to-Call)') -%}
+{%- set roh = (nummer or '') | trim -%}
+{%- if roh -%}
+{%- set z = roh | replace('(0)', '') | replace(' ', '') | replace('/', '') | replace('-', '') | replace('(', '') | replace(')', '') | replace('.', '') -%}
+{%- if z.startswith('00') %}{% set z = '+' ~ z[2:] %}{% elif z.startswith('0') %}{% set z = '+49' ~ z[1:] %}{% elif not z.startswith('+') %}{% set z = '+49' ~ z %}{% endif -%}
+<a href="tel:{{ z }}" class="{{ klasse }}" title="{{ titel }}">{{ symbol('telefon') }} {{ text or roh }}</a>
+{%- endif -%}
 {%- endmacro %}
 

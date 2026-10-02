@@ -1,0 +1,79 @@
+{# Lead-Management V2 (v23, Phase 110, A2/F7): To-Do-Bausteine für Dashboard,
+   To-Do-Liste, Meine Termine und Kartei/Akte (B5 – Phase 106 importiert die
+   Makros; Daten über lead_todos.zeilen(session, lead_todos.fuer_vorgang(...))).
+   Formularfelder laut Vertrag: vorgang_id, titel, text, faellig_am, an_benutzer_id,
+   zurueck. Jeder aktive Benutzer ist wählbar. #}
+{% from "_symbole.html" import symbol %}
+
+{% set rollen_namen = {'admin': 'Admin', 'innendienst': 'Innendienst', 'aussendienst': 'Außendienst',
+                       'leadmanagement': 'Leadmanagement', 'projektierung': 'Projektierung',
+                       'montage': 'Montage'} %}
+
+{# Formular „To-Do anlegen“. rahmen=True: aufklappbar (<details>), sonst offen. #}
+{% macro todo_formular(benutzer_liste, benutzer, vorgang_id=None, zurueck='', rahmen=True, offen=False, titel_vorschlag='') %}
+{% if rahmen %}<details class="lm-todo-neu" {{ 'open' if offen }}>
+    <summary class="knopf klein zweitrangig">{{ symbol('plus') }} To-Do anlegen</summary>{% endif %}
+    <form method="post" action="/lead-management/todos/neu" class="formular lm-todo-form">
+        <input type="hidden" name="zurueck" value="{{ zurueck }}">
+        {% if vorgang_id %}<input type="hidden" name="vorgang_id" value="{{ vorgang_id }}">{% endif %}
+        <label class="breit">Titel (Pflicht)
+            <input type="text" name="titel" required maxlength="300" value="{{ titel_vorschlag }}"
+                   placeholder="Was ist zu tun?"></label>
+        <label>Für
+            <select name="an_benutzer_id" required>
+                {% for b in benutzer_liste %}
+                <option value="{{ b.id }}" {{ 'selected' if benutzer and b.id == benutzer.id }}>{{ b.name }}{% if b.rolle != 'innendienst' %} · {{ rollen_namen.get(b.rolle, b.rolle) }}{% endif %}</option>
+                {% endfor %}
+            </select></label>
+        <label>Fällig <input type="datetime-local" name="faellig_am" step="900"></label>
+        {% if not vorgang_id %}
+        <label>Vorgang-Nr. <input type="number" name="vorgang_id" min="1" placeholder="optional"></label>
+        {% endif %}
+        <label class="breit">Details <textarea name="text" rows="2" placeholder="optional"></textarea></label>
+        <div class="formzeile">
+            <button class="knopf klein" type="submit">{{ symbol('plus') }} Anlegen</button>
+            <span class="dezent">Empfänger erhält eine Glocke (keine Mail).</span>
+        </div>
+    </form>
+{% if rahmen %}</details>{% endif %}
+{% endmacro %}
+
+{# Liste von Anzeigezeilen aus lead_todos.zeilen(): Erledigt-Häkchen (Empfänger,
+   Ersteller, Admin), Löschen (Ersteller, Admin). akte_basis: Link zum Vorgang –
+   Modul-Kartei oder (Außendienst) die Vorgangsakte /vorgaenge/. #}
+{% macro todo_liste(zeilen, benutzer, heute, zurueck='', zeige_an=False, akte_basis='/lead-management/lead/', leer_text='Keine To-Dos.') %}
+{% if zeilen %}
+<ul class="lm-todos">
+    {% for z in zeilen %}{% set t = z.todo %}
+    {% set darf = benutzer and (benutzer.rolle == 'admin' or t.an_benutzer_id == benutzer.id or t.von_benutzer_id == benutzer.id) %}
+    {% set darf_loeschen = benutzer and (benutzer.rolle == 'admin' or t.von_benutzer_id == benutzer.id) %}
+    <li class="lm-todo {{ z.klasse }} {{ 'erledigt' if t.status == 'erledigt' }}" id="todo-{{ t.id }}">
+        <form method="post" action="/lead-management/todos/{{ t.id }}/{{ 'offen' if t.status == 'erledigt' else 'erledigt' }}" class="lm-todo-haken">
+            <input type="hidden" name="zurueck" value="{{ zurueck }}">
+            <button type="submit" class="lm-haken {{ 'an' if t.status == 'erledigt' }}"
+                    title="{{ 'Wieder öffnen' if t.status == 'erledigt' else 'Erledigt' }}" {{ 'disabled' if not darf }}>{{ symbol('haken') }}</button>
+        </form>
+        <div class="lm-todo-text">
+            <div class="lm-todo-titel">
+                <strong>{{ t.titel }}</strong>
+                {% if z.kunde %}<a href="{{ akte_basis }}{{ t.vorgang_id }}" title="Vorgang öffnen">{{ symbol('nutzer') }} {{ z.kunde.anzeige_name }}</a>{% endif %}
+                {% if z.demo %}<span class="abzeichen">Demo</span>{% endif %}
+            </div>
+            <div class="lm-todo-meta dezent">
+                {% if t.faellig_am %}<span class="wv-chip {{ 'faellig' if z.klasse in ('faellig', 'heute') else 'geplant' }}">{{ symbol('uhr') }} {{ t.faellig_am | de_datum('%a %d.%m.%Y %H:%M') }}</span>{% endif %}
+                von {{ z.von }}{% if zeige_an or t.an_benutzer_id != benutzer.id %} · für {{ z.an }}{% endif %}
+                {% if t.status == 'erledigt' and t.erledigt_am %} · erledigt {{ t.erledigt_am.strftime('%d.%m.%Y %H:%M') }}{% endif %}
+            </div>
+            {% if t.text %}<div class="lm-todo-details">{{ t.text }}</div>{% endif %}
+        </div>
+        {% if darf_loeschen %}
+        <form method="post" action="/lead-management/todos/{{ t.id }}/loeschen" onsubmit="return confirm('To-Do „{{ t.titel | replace("'", "") | e }}“ löschen?')">
+            <input type="hidden" name="zurueck" value="{{ zurueck }}">
+            <button class="knopf klein zweitrangig symbol" type="submit" title="Löschen">{{ symbol('muell') }}</button>
+        </form>
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% else %}<p class="dezent lm-todo-leer">{{ leer_text }}</p>{% endif %}
+{% endmacro %}

@@ -1,0 +1,75 @@
+{# Phase 109 (F16): Dashboard-Fragment des Handelsvertreters – oben auf der
+   HV-Seite und als eigene Seite /lead-management/handelsvertreter/dashboard.
+   Erwartet `dashboard` aus lead_handelsvertreter.dashboard_daten. #}
+{% from "_symbole.html" import symbol %}
+{% from "_komponenten.html" import wiedervorlage_chip %}
+{% if dashboard %}
+<div class="hv-kacheln">
+    <a class="kachel stat" href="#hv-faellig" title="Wiedervorlagen, deren Zeitpunkt erreicht ist">
+        <span class="stat-zahl {{ 'dringend' if dashboard.kacheln.faellig }}">{{ dashboard.kacheln.faellig }}</span>Wiedervorlagen fällig
+        <span class="lm-delta">{{ dashboard.kacheln.kommend }} in den nächsten 7 Tagen</span></a>
+    <a class="kachel stat" href="#hv-termine">
+        <span class="stat-zahl">{{ dashboard.kacheln.termine }}</span>Termine 7 Tage
+        <span class="lm-delta">eigener Kalender</span></a>
+    <a class="kachel stat" href="#hv-offen">
+        <span class="stat-zahl">{{ dashboard.kacheln.offen }}</span>Offene Leads
+        <span class="lm-delta">Neu · In Kontaktierung · Qualifiziert · Zurückgestellt</span></a>
+    <a class="kachel stat" href="/lead-management/todos" title="To-Dos (Phase 110)">
+        <span class="stat-zahl {{ 'warn' if dashboard.kacheln.todos }}">{{ dashboard.kacheln.todos }}</span>Offene To-Dos
+        <span class="lm-delta">mir zugewiesen</span></a>
+</div>
+<div class="hv-dashboard">
+    <div class="lm-karte" id="hv-faellig">
+        <h2>{{ symbol('wiedervorlage') }} Wiedervorlagen <span class="sub">fällig zuerst, dann die nächsten 7 Tage</span></h2>
+        <ul class="hv-liste">
+            {% for e in dashboard.faellig %}
+            <li><span><a href="/lead-management/lead/{{ e.vorgang.id }}">{{ e.kunde.anzeige_name if e.kunde else '?' }}</a>
+                {% if e.kunde and e.kunde.ort %}<small class="dezent">{{ e.kunde.ort }}</small>{% endif %}
+                {% if e.kunde and e.kunde.telefon %}· <a href="tel:{{ e.kunde.telefon }}">{{ symbol('telefon') }} {{ e.kunde.telefon }}</a>{% endif %}</span>
+                <span class="lm-rot">{{ e.wann | de_datum('%a %d.%m. %H:%M') }}</span></li>
+            {% endfor %}
+            {% for e in dashboard.kommend %}
+            <li><span><a href="/lead-management/lead/{{ e.vorgang.id }}">{{ e.kunde.anzeige_name if e.kunde else '?' }}</a>
+                {% if e.kunde and e.kunde.ort %}<small class="dezent">{{ e.kunde.ort }}</small>{% endif %}</span>
+                <span class="dezent">{{ e.wann | de_datum('%a %d.%m. %H:%M') }}</span></li>
+            {% endfor %}
+            {% if not dashboard.faellig and not dashboard.kommend %}<li class="hv-leer">Keine Wiedervorlagen fällig oder geplant.</li>{% endif %}
+        </ul>
+    </div>
+    <div class="lm-karte" id="hv-termine">
+        <h2>{{ symbol('kalender') }} Meine Termine <span class="sub">nächste 7 Tage</span></h2>
+        <ul class="hv-liste">
+            {% for e in dashboard.termine %}
+            <li><span><b>{{ e.termin.beginn | de_datum('%a %d.%m. %H:%M') }}</b>
+                {% if e.vorgang %}<a href="/lead-management/lead/{{ e.vorgang.id }}">{{ e.kunde.anzeige_name if e.kunde else '?' }}</a>{% endif %}
+                <small class="dezent">{{ e.termin.adresse or (e.kunde.ort if e.kunde else '') }}</small></span>
+                <span class="dezent">{{ e.typ_text }}</span></li>
+            {% else %}
+            <li class="hv-leer">Keine Termine in den nächsten 7 Tagen.</li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div class="lm-karte" id="hv-offen">
+        <h2>{{ symbol('nutzer') }} Offene Leads <span class="sub">{{ dashboard.kacheln.offen }} gesamt</span></h2>
+        <ul class="hv-liste">
+            {% for e in dashboard.offen %}
+            <li><span><a href="/lead-management/lead/{{ e.vorgang.id }}">{{ e.kunde.anzeige_name if e.kunde else '?' }}</a>
+                {% if e.kunde and e.kunde.ort %}<small class="dezent">{{ e.kunde.ort }}</small>{% endif %}
+                {% if e.kunde and e.kunde.telefon %}· <a href="tel:{{ e.kunde.telefon }}">{{ symbol('telefon') }} {{ e.kunde.telefon }}</a>{% endif %}</span>
+                <span class="dezent">{{ e.vorgang.versuch_nr or 0 }}×{% if e.eingang %} · {{ e.eingang.strftime('%d.%m.') }}{% endif %}</span></li>
+            {% else %}
+            <li class="hv-leer">Keine offenen Leads.</li>
+            {% endfor %}
+        </ul>
+        {% if dashboard.todos %}
+        <h2 style="margin-top:12px">{{ symbol('haken') }} To-Dos</h2>
+        <ul class="hv-liste">
+            {% for t in dashboard.todos %}
+            <li><span>{% if t.vorgang_id %}<a href="/lead-management/lead/{{ t.vorgang_id }}">{{ t.titel }}</a>{% else %}{{ t.titel }}{% endif %}</span>
+                <span class="{{ 'lm-rot' if t.faellig_am and t.faellig_am <= dashboard.jetzt else 'dezent' }}">{{ t.faellig_am.strftime('%d.%m.') if t.faellig_am else '' }}</span></li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+</div>
+{% endif %}

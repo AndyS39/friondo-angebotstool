@@ -1,0 +1,244 @@
+{% from "_symbole.html" import symbol %}
+{% from "_komponenten.html" import quelle_badge, kanal_badge %}
+{% import "_sparten.html" as sparten_ui %}
+{# Phase 106 – linke Spalte: Avatar, Name, Telefon (tel:), E-Mail (mailto),
+   Aktions-Icons, Anrufergebnis (Stoppuhr-Vertrag), Stammdaten mit Inline-
+   Speichern und Pflichtfeld-Markierung (B1–B3). #}
+{% set offen = pflicht.offen_keys %}
+{% set pflichtig = pflicht.pflicht %}
+{% macro feldklasse(key) -%}lk-feld{{ ' lk-pflicht-offen' if key in offen }}{{ ' lk-pflicht' if key in pflichtig or key in ('parteien', 'rechnungsadresse') }}{%- endmacro %}
+{% macro stern(key) -%}{% if key in pflichtig or key in ('parteien', 'rechnungsadresse') %}<abbr title="Pflichtfeld">*</abbr>{% endif %}{%- endmacro %}
+
+<div class="lk-person">
+    <div class="lk-avatar" aria-hidden="true">{{ initialen }}</div>
+    <div class="lk-person-text">
+        <h2 class="lk-name">{{ kunde.anzeige_name if kunde else '?' }}</h2>
+        <div class="lk-kontakt">
+            {% if kunde and kunde.telefon %}
+                <a href="tel:{{ kunde.telefon | replace(' ', '') | replace('/', '') }}" class="lk-tel" title="Anrufen (Click-to-Call, Stoppuhr startet)">{{ symbol('telefon') }} {{ kunde.telefon }}</a>
+            {% else %}<span class="dezent">{{ symbol('telefon') }} kein Telefon</span>{% endif %}
+            {% if kunde and kunde.email %}
+                <a href="mailto:{{ kunde.email }}" title="E-Mail im Mailprogramm">{{ symbol('brief') }} {{ kunde.email }}</a>
+            {% else %}<span class="dezent">{{ symbol('brief') }} keine E-Mail</span>{% endif %}
+        </div>
+        <div class="lk-badges">
+            {{ quelle_badge(lead_kontext.quelle, lead_kontext.quelle_gruppe) if lead_kontext.quelle }}
+            {{ kanal_badge(lead_kontext.kanal) }}
+            {% for s in (kunde.interessen if kunde else []) %}{{ sparten_ui.chip(s, 'erfasst') }}{% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="lk-aktionen" role="toolbar" aria-label="Schnellaktionen">
+    {% if kunde and kunde.telefon %}
+        <a class="lk-aktion" href="tel:{{ kunde.telefon | replace(' ', '') | replace('/', '') }}" aria-label="Anrufen" title="Anrufen">{{ symbol('telefon') }}<span>Anrufen</span></a>
+    {% else %}
+        <span class="lk-aktion gesperrt" aria-disabled="true" title="Keine Telefonnummer">{{ symbol('telefon') }}<span>Anrufen</span></span>
+    {% endif %}
+    {% if not readonly %}
+        <button type="button" class="lk-aktion" aria-label="E-Mail mit Vorlage senden" title="E-Mail (Vorlage senden)"
+                onclick="document.getElementById('dlg-mail').showModal()" {{ 'disabled' if not (kunde and kunde.email) }}>{{ symbol('brief') }}<span>E-Mail</span></button>
+    {% elif kunde and kunde.email %}
+        <a class="lk-aktion" href="mailto:{{ kunde.email }}" aria-label="E-Mail" title="E-Mail">{{ symbol('brief') }}<span>E-Mail</span></a>
+    {% endif %}
+    <button type="button" class="lk-aktion" aria-label="Notiz in den Notizen-Chat schreiben" title="Notiz"
+            onclick="document.getElementById('dlg-notiz').showModal()">{{ symbol('notiz') }}<span>Notiz</span></button>
+    {% if not readonly %}
+        <a class="lk-aktion" href="{{ kartei_url }}/termin" aria-label="Termin vorschlagen (Assistent)" title="Termin vorschlagen">{{ symbol('kalender') }}<span>Termin</span></a>
+        <button type="button" class="lk-aktion" aria-label="Wiedervorlage oder Zurückstellen" title="Wiedervorlage"
+                onclick="document.getElementById('dlg-wiedervorlage').showModal()">{{ symbol('wiedervorlage') }}<span>Wiedervorlage</span></button>
+    {% endif %}
+</div>
+
+{% if not readonly %}
+{# Anrufergebnis – Vertrag Phase 107: Formular-Klasse lm-anruf-form, Feld
+   dauer_sek (Stoppuhr, data-vorgang), zurueck = Rücksprung in die Kartei;
+   Folgedialoge (Nicht erreicht mit Kaskaden-Vorschlag C2, Rückruf, Kein
+   Interesse C3) kommen aus leadmanagement/anruf_dialoge.html (kartei_dialoge),
+   Tasten 1–7 wie in der Anrufliste (lm_kartei.js). #}
+<section class="lk-anruf" aria-label="Anruf protokollieren" data-vorgang="{{ vorgang.id }}" data-gesperrt="{{ '1' if anruf_gesperrt else '' }}">
+    <div class="lk-anruf-kopf dezent">Anruf protokollieren · Versuch {{ (vorgang.versuch_nr or 0) + 1 }} von {{ versuche_max }}
+        {% if anruf_gesperrt %}<span class="lm-rot">· Versuche ausgeschöpft (Nicht erreicht)</span>{% endif %}
+        <span class="lk-stoppuhr" data-stoppuhr hidden></span></div>
+    <form method="post" action="/lead-management/anruf/{{ vorgang.id }}" class="lm-anruf-form lk-anruf-form">
+        <input type="hidden" name="dauer_sek" value="">
+        <input type="hidden" name="zurueck" value="{{ kartei_url }}?tab=anrufe">
+        <input type="text" name="notiz" class="lk-anruf-notiz" placeholder="Anrufnotiz (optional)" maxlength="500">
+        <div class="lk-anruf-knoepfe">
+            <button class="knopf klein lm-ok" name="ergebnis" value="erreicht" title="1 – Erreicht (weiter zur Qualifizierung)">{{ symbol('haken') }} Erreicht</button>
+            <button class="knopf klein zweitrangig" type="button" data-ergebnis="nicht_erreicht" data-dialog="nichterreicht"
+                    title="{{ 'Versuche ausgeschöpft' if anruf_gesperrt else '2 – Nicht erreicht (Dialog: Wiedervorlage aus der Kaskade, änderbar)' }}"
+                    onclick="dialogOeffnen('nichterreicht', {{ vorgang.id }})" {{ 'disabled' if anruf_gesperrt }}>{{ symbol('telefon-aus') }} Nicht erreicht</button>
+            <button class="knopf klein zweitrangig" name="ergebnis" value="besetzt" title="3 – Besetzt" {{ 'disabled' if anruf_gesperrt }}>{{ symbol('besetzt') }} Besetzt</button>
+            <button class="knopf klein zweitrangig" name="ergebnis" value="mailbox" title="4 – Mailbox" {{ 'disabled' if anruf_gesperrt }}>{{ symbol('voicemail') }} Mailbox</button>
+            <button class="knopf klein zweitrangig" type="button" data-ergebnis="rueckruf_gewuenscht" data-dialog="rueckruf" title="5 – Rückruf gewünscht (Dialog: Datum/Uhrzeit Pflicht)"
+                    onclick="dialogOeffnen('rueckruf', {{ vorgang.id }})">{{ symbol('wiedervorlage') }} Rückruf</button>
+            <button class="knopf klein zweitrangig" name="ergebnis" value="falsche_nummer" title="6 – Falsche Nummer">{{ symbol('fragezeichen') }} Falsche Nummer</button>
+            <button class="knopf klein zweitrangig" type="button" data-ergebnis="kein_interesse" data-dialog="keininteresse" title="7 – Kein Interesse (Dialog: Pflichtgrund aus dem Blatt Gründe)"
+                    onclick="dialogOeffnen('keininteresse', {{ vorgang.id }})">{{ symbol('verbot') }} Kein Interesse</button>
+        </div>
+        <small class="dezent">Tasten 1 Erreicht · 2 Nicht erreicht · 3 Besetzt · 4 Mailbox · 5 Rückruf · 6 Falsche Nummer · 7 Kein Interesse</small>
+    </form>
+</section>
+{% endif %}
+
+<form method="post" action="{{ kartei_url }}/stammdaten" class="lk-stammdaten" id="lk-stammdaten" autocomplete="off">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <input type="hidden" name="interesse_feld" value="1">
+    <input type="hidden" name="einwilligung_feld" value="1">
+    <fieldset {{ 'disabled' if readonly }}>
+        <legend class="lk-abschnitt">Über diesen Kontakt
+            {% if pflicht_offen %}<span class="lm-rot dezent">{{ pflicht_offen | length }} offen</span>{% endif %}</legend>
+
+        <label class="{{ feldklasse('anrede') }}"><span>Anrede{{ stern('anrede') }}</span>
+            <select name="anrede">
+                {% for a in anreden %}<option value="{{ a }}" {{ 'selected' if (kunde.anrede or '') == a }}>{{ a or '–' }}</option>{% endfor %}
+            </select></label>
+        <label class="{{ feldklasse('vorname') }}"><span>Vorname{{ stern('vorname') }}</span>
+            <input type="text" name="vorname" value="{{ kunde.vorname or '' }}" maxlength="100"></label>
+        <label class="{{ feldklasse('nachname') }}"><span>Nachname{{ stern('nachname') }}</span>
+            <input type="text" name="nachname" value="{{ kunde.nachname or '' }}" maxlength="100"></label>
+        <label class="lk-feld"><span>Firma</span>
+            <input type="text" name="firma" value="{{ kunde.firma or '' }}" maxlength="200"></label>
+        <label class="{{ feldklasse('telefon') }}"><span>Telefon{{ stern('telefon') }}</span>
+            <input type="tel" name="telefon" value="{{ kunde.telefon or '' }}" maxlength="50"></label>
+        <label class="{{ feldklasse('email') }}"><span>E-Mail{{ stern('email') }}</span>
+            <input type="email" name="email" value="{{ kunde.email or '' }}" maxlength="200"></label>
+        <label class="{{ feldklasse('strasse') }}"><span>Straße{{ stern('strasse') }}</span>
+            <input type="text" name="strasse" value="{{ kunde.strasse or '' }}" maxlength="200"></label>
+        <div class="lk-feld-reihe">
+            <label class="{{ feldklasse('plz') }} schmal"><span>PLZ{{ stern('plz') }}</span>
+                <input type="text" name="plz" value="{{ kunde.plz or '' }}" maxlength="10" inputmode="numeric"></label>
+            <label class="{{ feldklasse('ort') }}"><span>Ort{{ stern('ort') }}</span>
+                <input type="text" name="ort" value="{{ kunde.ort or '' }}" maxlength="100"></label>
+        </div>
+
+        <label class="{{ feldklasse('vertriebskanal') }}"><span>Vertriebskanal{{ stern('vertriebskanal') }}</span>
+            <select name="vertriebskanal" title="Änderung setzt den Sync-Schutz (kanal_manuell)">
+                <option value="" {{ 'selected' if not kunde.vertriebskanal }}>–</option>
+                {% for k in kanal_werte %}<option value="{{ k }}" {{ 'selected' if kunde.vertriebskanal == k }}>{{ k }}</option>{% endfor %}
+            </select></label>
+        {% if kunde.kanal_manuell %}<p class="dezent lk-hinweis">Kanal manuell gesetzt – monday-Sync überschreibt ihn nicht.</p>{% endif %}
+
+        <div class="{{ feldklasse('interesse') }} lk-checkboxen" role="group" aria-label="Interessen">
+            <span>Interessen{{ stern('interesse') }}</span>
+            <div>
+                {% for code, name in interessen %}
+                    <label class="lk-check"><input type="checkbox" name="interesse" value="{{ code }}" {{ 'checked' if code in kunde.interessen }}> {{ code }} <small class="dezent">{{ name }}</small></label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <label class="{{ feldklasse('objektart') }}"><span>Objektart{{ stern('objektart') }}</span>
+            <select name="objektart" id="lk-objektart">
+                <option value="" {{ 'selected' if not kunde.objektart }}>–</option>
+                {% for code, bez, parteien_pflicht in objektarten %}
+                    <option value="{{ code }}" data-parteien="{{ '1' if parteien_pflicht else '0' }}" {{ 'selected' if kunde.objektart == code }}>{{ bez }}</option>
+                {% endfor %}
+            </select></label>
+        <div id="lk-mfh" class="lk-mfh" {{ '' if kunde.objektart == 'MFH' else 'hidden' }}>
+            <label class="{{ feldklasse('parteien') }} schmal"><span>Anzahl Parteien{{ stern('parteien') }}</span>
+                <input type="number" name="parteien" min="1" max="999" value="{{ kunde.parteien or '' }}"></label>
+            <div class="{{ feldklasse('rechnungsadresse') }} lk-rechnung" role="group" aria-label="Rechnungsadresse">
+                <span>Rechnungsadresse{{ stern('rechnungsadresse') }} <small class="dezent">(Kunden-Standard, kunden.rechnung_*)</small></span>
+                <input type="text" name="rechnung_name" value="{{ kunde.rechnung_name or '' }}" placeholder="Name / Firma" maxlength="200">
+                <input type="text" name="rechnung_strasse" value="{{ kunde.rechnung_strasse or '' }}" placeholder="Straße" maxlength="200">
+                <div class="lk-feld-reihe">
+                    <input type="text" name="rechnung_plz" value="{{ kunde.rechnung_plz or '' }}" placeholder="PLZ" maxlength="10" class="schmal">
+                    <input type="text" name="rechnung_ort" value="{{ kunde.rechnung_ort or '' }}" placeholder="Ort" maxlength="100">
+                </div>
+            </div>
+        </div>
+
+        <label class="lk-feld"><span>Quelle</span>
+            <select name="quelle_id">
+                <option value="">–</option>
+                {% for q in quellen %}<option value="{{ q.id }}" {{ 'selected' if vorgang.quelle_id == q.id }}>{{ q.name }}</option>{% endfor %}
+            </select></label>
+        <label class="lk-feld"><span>Kampagne</span>
+            <select name="kampagne_id">
+                <option value="">–</option>
+                {% for k in kampagnen %}<option value="{{ k.id }}" {{ 'selected' if vorgang.kampagne_id == k.id }}>{{ k.name }}</option>{% endfor %}
+            </select></label>
+        <label class="lk-feld"><span>Eingangsdatum <small class="dezent">({{ vorgang.eingang_art or '–' }})</small></span>
+            <input type="datetime-local" name="eingang_am" value="{{ vorgang.eingang_am.strftime('%Y-%m-%dT%H:%M') if vorgang.eingang_am }}"></label>
+
+        <div class="lk-feld lk-einwilligung" role="group" aria-label="Einwilligungen">
+            <span>Einwilligung Werbung</span>
+            <div>
+                <label class="lk-check"><input type="checkbox" name="einwilligung_werbung" value="1" {{ 'checked' if vorgang.einwilligung_werbung }}> ja</label>
+                <input type="date" name="einwilligung_am" value="{{ vorgang.einwilligung_werbung_am.strftime('%Y-%m-%d') if vorgang.einwilligung_werbung_am }}" title="Datum der Einwilligung">
+                <input type="text" name="einwilligung_quelle" value="{{ vorgang.einwilligung_quelle or '' }}" placeholder="Quelle (telefonisch, formular …)" maxlength="20" class="schmal">
+            </div>
+            <small class="dezent">Änderungen werden als Aktivität protokolliert (Nachweis).</small>
+        </div>
+
+        <div class="lk-speichern">
+            <button class="knopf" type="submit">{{ symbol('haken') }} Speichern</button>
+            <span class="dezent lk-dirty" hidden>ungespeicherte Änderungen</span>
+        </div>
+    </fieldset>
+</form>
+
+<section class="lk-zustaendig" aria-label="Zuständigkeiten">
+    <h3 class="lk-abschnitt">Zuständig</h3>
+    {% set id_person = benutzer_map.get(vorgang.leadmanager_id) %}
+    {% set ad_person = benutzer_map.get(vorgang.ad_id) %}
+    <div class="lk-feld">
+        <span>Innendienst</span>
+        <div class="lk-zuweisung">
+            <span class="lk-avatar klein" title="{{ id_person.name if id_person else 'nicht zugewiesen' }}">{{ initialen_fn(id_person.name) if id_person else '–' }}</span>
+            {% if readonly %}
+                <span>{{ id_person.name if id_person else '–' }}</span>
+            {% else %}
+            <form method="post" action="{{ kartei_url }}/innendienst" class="lk-inline">
+                <input type="hidden" name="tab" value="{{ tab }}">
+                <select name="leadmanager_id" data-autosubmit aria-label="Innendienst zuweisen">
+                    <option value="">– nicht zugewiesen –</option>
+                    {% for b in innendienst_wahl %}<option value="{{ b.id }}" {{ 'selected' if vorgang.leadmanager_id == b.id }}>{{ b.name }}</option>{% endfor %}
+                </select>
+                <noscript><button class="knopf klein zweitrangig" type="submit">OK</button></noscript>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    <div class="lk-feld">
+        <span>Außendienst{% if ist_hv %} <small class="dezent">(Handelsvertreter: frei umverteilen)</small>{% endif %}</span>
+        <div class="lk-zuweisung">
+            <span class="lk-avatar klein" title="{{ ad_person.name if ad_person else 'nicht zugewiesen' }}">{{ initialen_fn(ad_person.name) if ad_person else '–' }}</span>
+            {% if readonly %}
+                <span>{{ ad_person.name if ad_person else (lead_kontext.ad.name ~ ' (über Termin)' if lead_kontext.ad else '–') }}</span>
+            {% else %}
+            <form method="post" action="{{ kartei_url }}/aussendienst" class="lk-inline lk-ad-form">
+                <input type="hidden" name="tab" value="{{ tab }}">
+                <select name="ad_id" data-autosubmit aria-label="Außendienst zuweisen">
+                    <option value="">– nicht zugewiesen –</option>
+                    {% for e in ad_wahl %}
+                        <option value="{{ e.benutzer.id }}"
+                                {{ 'selected' if vorgang.ad_id == e.benutzer.id }}
+                                {{ 'disabled' if e.gesperrt and vorgang.ad_id != e.benutzer.id }}
+                                title="{{ e.gesperrt or e.kompetenz_grund }}">{{ e.benutzer.name }}{{ ' · HV' if e.hv }}{{ ' – gesperrt: ' ~ e.gesperrt if e.gesperrt }}{{ ' · ' ~ e.kompetenz_grund if not e.kompetenz_ok }}</option>
+                    {% endfor %}
+                </select>
+                {% if hv_sperre and benutzer.rolle in ('admin', 'innendienst') %}
+                    <label class="lk-check dezent" title="Ausschlussliste (F14) nur für diese Zuweisung übergehen"><input type="checkbox" name="erzwingen" value="1"> Ausschluss übergehen</label>
+                {% endif %}
+                <noscript><button class="knopf klein zweitrangig" type="submit">OK</button></noscript>
+            </form>
+            {% endif %}
+        </div>
+        {% if hv_sperre %}<p class="dezent lk-hinweis">{{ symbol('verbot') }} {{ hv_sperre }} Handelsvertreter sind deshalb deaktiviert.</p>{% endif %}
+        {% if lead_kontext.ad and lead_kontext.ad.id != vorgang.ad_id %}
+            <p class="dezent lk-hinweis">Aktiver Termin bei {{ lead_kontext.ad.name }}.</p>
+        {% endif %}
+    </div>
+    {% if lead_kontext.wunschzeiten %}
+    <div class="lk-feld"><span>Wunschzeiten</span><div>{{ lead_kontext.wunschzeiten | join(', ') }}</div></div>
+    {% endif %}
+    {% if vorgang.anfrage_text %}
+    <details class="lk-feld">
+        <summary>Anfragetext</summary>
+        <div class="lk-anfrage">{{ vorgang.anfrage_text }}</div>
+    </details>
+    {% endif %}
+</section>

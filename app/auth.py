@@ -148,6 +148,7 @@ class RollenMiddleware(BaseHTTPMiddleware):
             request.state.glocke_liste = []
             request.state.lead_modul_ok = False
             request.state.lead_ad_ok = False
+            request.state.lead_hv_ok = False
             if benutzer is not None and not pfad.startswith("/static"):
                 try:
                     from app import benachrichtigungen as glocke_modul
@@ -164,6 +165,10 @@ class RollenMiddleware(BaseHTTPMiddleware):
                         leadmanagement.lead_modul_sichtbar(session, benutzer))
                     request.state.lead_ad_ok = (
                         leadmanagement.lead_ad_sicht(session, benutzer))
+                    # v23 (Phase 109): Handelsvertreter-Sicht (Kennzeichen am AD-Profil,
+                    # A-1) – steuert die Menüeinträge „Meine Leads“/„Mein Dashboard“
+                    from app import lead_v2
+                    request.state.lead_hv_ok = lead_v2.ist_handelsvertreter(session, benutzer)
                 except Exception:
                     pass
                 # Design-Fix 27.09.2026: Projektierung fehlte im Hauptmenü

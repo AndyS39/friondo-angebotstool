@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
+{% from "leadmanagement/_nav.html" import lm_nav, lm_umschalter %}
+{% from "leadmanagement/_tabelle.html" import lead_tabelle %}
+
+{% block titel %}{{ board_info.titel }} – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{# v23 (PLAN_LEAD_V2 Phase 105): Board als Tabelle nach monday-Vorbild (A3)
+   mit Gruppen (H4 Hauptboard: Neu · Pausiert · Disqualifiziert; H5 Terminiert
+   über terminiert.html, das dieses Template erbt), Umschalter Tabelle |
+   Anrufliste | Kanban, Suchleiste + Filter, Spalten-Dialog je Nutzer,
+   Markier-Kästchen + Sammelaktionen (H3), Status-Dialog mit Pflichtgründen.
+   Verhalten: app/static/lm_boards.js (über lm_nav eingebunden). #}
+{% block inhalt %}
+{{ lm_nav(board) }}
+<div class="seitenkopf lm-boardkopf" data-lm-board="{{ board }}">
+    <h1>{{ board_info.titel }} {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
+    <span class="dezent">{{ board_info.untertitel }} · <b>{{ anzahl }}</b> Leads{% if ctx.hv %} · nur eigene Leads{% endif %}</span>
+    <div class="aktionen">
+        {{ lm_umschalter('tabelle', board) }}
+        <button type="button" class="knopf klein zweitrangig" id="lm-spalten-knopf" title="Spalten ein-/ausblenden und sortieren (je Nutzer gespeichert)">{{ symbol('spalten') }} Spalten</button>
+        {% if board == 'hauptboard' and not ctx.hv %}<a class="knopf klein" href="/lead-management/neu">{{ symbol('plus') }} Neuer Lead</a>{% endif %}
+    </div>
+</div>
+<p class="meldung {{ 'fehler' if fehler }}" id="lm-meldung" {{ '' if meldung else 'hidden' }} role="status">{{ meldung }}</p>
+
+<form method="get" action="/lead-management/{{ board }}" class="suchleiste lm-suchleiste" id="lm-filterform">
+    <input type="search" name="q" id="lm-suche" value="{{ filter_werte.q }}" placeholder="Suche: Name, Ort, Telefon, E-Mail" aria-label="Suche" autocomplete="off">
+    <label class="kontrollfeld">Status
+        <select name="status">
+            <option value="">alle</option>
+            {% for s in ctx.status_wahl %}<option value="{{ s.key }}" {{ 'selected' if filter_werte.status == s.key }}>{{ s.label }}</option>{% endfor %}
+        </select></label>
+    <label class="kontrollfeld">Kanal
+        <select name="kanal">
+            <option value="">alle</option>
+            {% for kn in ctx.kanaele %}<option value="{{ kn }}" {{ 'selected' if filter_werte.kanal | lower == kn | lower }}>{{ kn }}</option>{% endfor %}
+        </select></label>
+    <label class="kontrollfeld">Sparte
+        <select name="sparte">
+            <option value="">alle</option>
+            {% for s in ('WP', 'PV', 'KL', 'WB', 'GW') %}<option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }}>{{ s }}</option>{% endfor %}
+        </select></label>
+    {% if not ctx.hv %}
+    <label class="kontrollfeld">Außendienst
+        <select name="ad_id">
+            <option value="">alle</option>
+            {% for b in ctx.ad_wahl %}<option value="{{ b.id }}" {{ 'selected' if filter_werte.ad_id == b.id }}>{{ b.name }}{{ ' (HV)' if b.hv }}</option>{% endfor %}
+        </select></label>
+    <label class="kontrollfeld">Innendienst
+        <select name="leadmanager_id">
+            <option value="">alle</option>
+            {% for b in ctx.lm_wahl %}<option value="{{ b.id }}" {{ 'selected' if filter_werte.leadmanager_id == b.id }}>{{ b.name }}</option>{% endfor %}
+        </select></label>
+    <label class="kontrollfeld"><input type="checkbox" name="meine" value="1" {{ 'checked' if filter_werte.meine }}> Meine Leads</label>
+    {% endif %}
+    {% if board == 'terminiert' %}
+    <label class="kontrollfeld" title="Gewonnen/Verloren älter als 30 Tage einblenden"><input type="checkbox" name="archiv" value="1" {{ 'checked' if filter_werte.archiv }}> Archiv</label>
+    {% endif %}
+    <button class="knopf klein zweitrangig" type="submit">{{ symbol('filter') }} Filtern</button>
+    {% if filter_werte.q or filter_werte.status or filter_werte.kanal or filter_werte.sparte or filter_werte.ad_id or filter_werte.leadmanager_id or filter_werte.gruppe or filter_werte.meine %}
+    <a class="knopf klein ghost" href="/lead-management/{{ board }}">Zurücksetzen</a>
+    {% endif %}
+</form>
+
+{% if ctx.sammel and sammelaktionen %}
+<form method="post" action="/lead-management/boards/sammelaktion" id="lm-sammelform" class="lm-sammel" hidden>
+    <input type="hidden" name="board" value="{{ board }}">
+    <strong><span id="lm-sammel-anzahl">0</span> markiert</strong>
+    <label class="kontrollfeld">Aktion
+        <select name="aktion" id="lm-sammel-aktion">
+            {% for a in sammelaktionen %}<option value="{{ a.key }}">{{ a.titel }}</option>{% endfor %}
+        </select></label>
+    <label class="kontrollfeld lm-sammel-status">Neuer Status
+        <select name="status" id="lm-sammel-status">
+            {% for s in ctx.status_wahl if s.setzbar %}<option value="{{ s.key }}" data-grund="{{ s.grund }}">{{ s.label }}</option>{% endfor %}
+        </select></label>
+    <input type="hidden" name="grund"><input type="hidden" name="grund_text"><input type="hidden" name="bis">
+    <button class="knopf klein" type="submit">Ausführen</button>
+    <button class="knopf klein zweitrangig" type="button" id="lm-sammel-leeren">Auswahl aufheben</button>
+    <span class="dezent">Jede Sammelaktion schreibt je Lead eine Aktivität; Pflichtgründe werden einmal abgefragt.</span>
+</form>
+{% endif %}
+
+<div class="lm-gruppen">
+    {% for g in gruppen %}
+    <details class="lm-gruppe" {{ '' if g.eingeklappt else 'open' }} data-gruppe="{{ g.key }}">
+        <summary class="lm-gruppe-kopf">{{ g.titel }} <span class="n">{{ g.zeilen | length }}</span><span class="erkl">{{ g.erkl }}</span></summary>
+        {% if g.zeilen %}
+            {{ lead_tabelle(g.zeilen, spalten, ctx, g.key) }}
+        {% else %}
+            <div class="lm-leer dezent">Keine Leads in dieser Gruppe.</div>
+        {% endif %}
+    </details>
+    {% endfor %}
+</div>
+
+<dialog id="dlg-status" class="lm-dialog">
+    <form method="dialog" class="formular">
+        <h3 id="dlg-status-titel">Status ändern</h3>
+        <p class="dezent" id="dlg-status-hinweis"></p>
+        <label id="dlg-status-bis-feld">Wiedervorlage bis (Pflicht) <input type="date" name="bis"></label>
+        <label>Grund (Pflicht)
+            <select name="grund"></select></label>
+        <label>Freitext <input type="text" name="grund_text" placeholder="Pflicht bei Sonstiges"></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit" value="ok">Übernehmen</button>
+            <button class="knopf zweitrangig" type="button" value="abbrechen">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="dlg-spalten" class="lm-dialog">
+    <form method="dialog" class="formular">
+        <h3>Spalten</h3>
+        <p class="dezent">Reihenfolge per Ziehen, Häkchen = sichtbar. Gilt nur für Sie, je Board.</p>
+        <ul class="lm-spaltenliste" id="lm-spaltenliste">
+            {% for sp in spalten %}
+            <li draggable="{{ 'false' if sp.key == 'lead' else 'true' }}" data-key="{{ sp.key }}" class="{{ 'fest' if sp.key == 'lead' }}">
+                <span class="griff" aria-hidden="true">⋮⋮</span>
+                <label><input type="checkbox" {{ 'checked' if sp.sichtbar }} {{ 'disabled' if sp.key == 'lead' }}> {{ sp.titel }}</label>
+            </li>
+            {% endfor %}
+        </ul>
+        <div class="formzeile">
+            <button class="knopf" type="submit" value="ok">Speichern</button>
+            <button class="knopf zweitrangig" type="button" value="standard">Standard</button>
+            <button class="knopf zweitrangig" type="button" value="abbrechen">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+
+<script type="application/json" id="lm-daten">{{ {'board': board, 'gruende': ctx.gruende, 'status': ctx.status_wahl} | tojson }}</script>
+{% endblock %}

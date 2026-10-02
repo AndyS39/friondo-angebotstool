@@ -73,125 +73,129 @@
 
 ## Phase 104 – Fundament (Datenmodell, Steuerdatei, Parameter, Migration)
 
-- [ ] Spalten: `kunden.objektart`, `kunden.parteien`; `vorgaenge.ad_id`,
+- [x] Spalten: `kunden.objektart`, `kunden.parteien`; `vorgaenge.ad_id`,
   `vorab_angebot`, `veranstaltung_id`, `teilgenommen`; `vot_termine.typ`,
   `medium`, `ics_uid`, `ics_sequence`; `benutzer.buchungslink`, `nebenstelle`;
   `ad_profile.terminiert_selbst`, `kompetenz_sparten` (JSON), `kompetenz_kombi`,
   `kompetenz_mfh`, `kompetenz_gewerbe`; `lead_aktivitaeten.call_id`, `richtung`,
   `nebenstelle`; Tabellen `todos`, `info_veranstaltungen`, `benutzer_einstellungen`.
-- [ ] Sparte `GW` (Gewerbe) in Konstanten, Chips, Interesse-Badges, API.
-- [ ] Steuerdatei: Kaskade 5 Stufen (A-5), Gründe `verloren` (Zu teuer · Kein
+- [x] Sparte `GW` (Gewerbe) in Konstanten, Chips, Interesse-Badges, API.
+- [x] Steuerdatei: Kaskade 5 Stufen (A-5), Gründe `verloren` (Zu teuer · Kein
   Interesse mehr · Bleibt bei Öl/Gas · Woanders unterschrieben · Sonstiges) und
   „Nachbearbeitung, noch nicht bereit für VOT“ (zurueckgestellt), Blatt
   „Objektarten“, Blatt „Status“ (5a → Phase/Board/Gruppe).
-- [ ] LeadParameter: `versuche_max` 5, `wv_meldet_sich_tage` 14, `phasen_farben`,
+- [x] LeadParameter: `versuche_max` 5, `wv_meldet_sich_tage` 14, `phasen_farben`,
   `kanal_farben`, `pflichtfelder`, `hv_ausschluss`, `hv_standard_benutzer`,
   `ersatz_radius_stufen` „5; 10“, `ersatz_alter_tage` 14, `info_wochentag` 3,
   `info_woche` 1, `info_uhrzeit` 18:00, `info_ort`, `info_vorlauf_tage` 3,
   `info_rollierend_monate` 12, `puffer_min` 30, `max_termine_tag_start` 3.
-- [ ] Mail-Vorlagen `disqualifiziert` ({briefanrede} {vertriebler}
+- [x] Mail-Vorlagen `disqualifiziert` ({briefanrede} {vertriebler}
   {rueckruf_telefon} {sparten}) und `online_termin_einladung` ({buchungslink}
   {kollege}) als Starttexte.
-- [ ] `kaskade_anwenden`: Stufe 5, Aktion `mail_disqualifiziert`, Sperre ab
+- [x] `kaskade_anwenden`: Stufe 5, Aktion `mail_disqualifiziert`, Sperre ab
   `versuche_max`.
-- [ ] `app/lead_info.py` Terminregel (1. Donnerstag 18:00, NRW-Feiertage mit
+- [x] `app/lead_info.py` Terminregel (1. Donnerstag 18:00, NRW-Feiertage mit
   Osterformel, Ausweichen +7 Tage) + Kontrollliste Okt 2026–Aug 2027.
-- [ ] `migrate.py`: Parameter/Vorlagen/Veranstaltungen anlegen, `ad_id` aus
+- [x] `migrate.py`: Parameter/Vorlagen/Veranstaltungen anlegen, `ad_id` aus
   aktiven Terminen, Objektart aus Qualifizierungsantworten, Kompetenz-Startwerte
   F3 per Namensabgleich, `terminiert_selbst` für die sechs Handelsvertreter.
-- [ ] Tests `tests/test_lead_v2_fundament.py`.
+- [x] Tests `tests/test_lead_v2_fundament.py`.
 
 ## Phase 105 – Menü, Hauptboard, Terminiert, Kontaktiert (A3/A4/H1–H5/H7/H8)
 
-- [ ] Linke Icon-Leiste (lokale SVGs, Tooltips) mit Hauptboard · Terminiert ·
+- [x] Linke Icon-Leiste (lokale SVGs, Tooltips) mit Hauptboard · Terminiert ·
   Kontaktiert · Info-Veranstaltung · E-Mail-Vorlagen + „Mehr …“; Suchleiste oben.
-- [ ] Tabelle A3 generisch (`app/lead_boards.py`): Pflichtspalten, fixierte
+- [x] Tabelle A3 generisch (`app/lead_boards.py`): Pflichtspalten, fixierte
   Spaltenköpfe, farbige Labels (`phasen_farben`/`kanal_farben`), Avatare mit
   Initialen, Spaltenkonfiguration je Nutzer, Inline-Bearbeitung (Status, Notiz,
   AD, ID, Wiedervorlage) per fetch.
-- [ ] Status → Board → Gruppe (Blatt „Status“), Hauptboard Neu/Pausiert/
+- [x] Status → Board → Gruppe (Blatt „Status“), Hauptboard Neu/Pausiert/
   Disqualifiziert, Board Terminiert Angebotserstellung/Angebotsversand/
   Gewonnen/Verloren; Umschalter Tabelle | Anrufliste | Kanban.
-- [ ] Sammelaktionen registrierbar je Board (Status ändern), Aktivität je Lead.
-- [ ] Reiter Kontaktiert (alle Versuche, Suche, Rufnummernsuche E.164).
-- [ ] Menüpunkt E-Mail-Vorlagen (Vorlagen-Editor im Modul).
-- [ ] Tests `tests/test_lead_v2_boards.py`.
+- [x] Sammelaktionen registrierbar je Board (Status ändern), Aktivität je Lead.
+- [x] Reiter Kontaktiert (alle Versuche, Suche, Rufnummernsuche E.164).
+- [x] Menüpunkt E-Mail-Vorlagen (Vorlagen-Editor im Modul).
+- [x] Tests `tests/test_lead_v2_boards.py`.
 
 ## Phase 106 – Kundenkartei dreispaltig (B1–B8)
 
-- [ ] Dreispaltige Kartei `/lead-management/lead/<id>`: links Kontaktinfos +
+- [x] Dreispaltige Kartei `/lead-management/lead/<id>`: links Kontaktinfos +
   Aktions-Icons, Pflichtfelder rot + Zähler (`pflichtfelder`), Objektart/
   Parteien/Rechnungsadresse (MFH), Innendienst/Außendienst-Dropdowns.
-- [ ] Mitte: Reiter mit Icons – Timeline (Karten, Suche, Filter), E-Mail-Verlauf
+- [x] Mitte: Reiter mit Icons – Timeline (Karten, Suche, Filter), E-Mail-Verlauf
   (eigene/automatisiert/Kollegen, ein/aus), Anrufnotizen, Qualifizierung,
   Termin, Erfassungen/Angebote/Projekt.
-- [ ] Rechts: einklappbare Bereiche mit Zähler (Termine, Angebote, Erfassungen,
+- [x] Rechts: einklappbare Bereiche mit Zähler (Termine, Angebote, Erfassungen,
   Projekt, Anhänge, To-Dos).
-- [ ] Termin vorschlagen (Assistent), manuell (15-Min-Raster, Konfliktwarnung),
+- [x] Termin vorschlagen (Assistent), manuell (15-Min-Raster, Konfliktwarnung),
   Telefongespräch/Online-Termin (A-2), Erfassung ohne Termin (A-3), Button
   „Terminierung“ (B8) mit Fehlliste, „Terminbestätigung erneut senden“ (A-9).
-- [ ] Responsiv: Spalten untereinander auf Tablet/Mobil.
-- [ ] Tests `tests/test_lead_v2_kartei.py`.
+- [x] Responsiv: Spalten untereinander auf Tablet/Mobil.
+- [x] Tests `tests/test_lead_v2_kartei.py`.
 
 ## Phase 107 – Anruf-Workflow & Telefonie (C1–C4, D1–D3)
 
-- [ ] 5 Versuchs-Punkte mit Ergebnisfarbe/Tooltip; Sperre ab `versuche_max`.
-- [ ] „Nicht erreicht“-Dialog mit Kaskaden-Vorschlag (änderbar), Wiedervorlage +
+- [x] 5 Versuchs-Punkte mit Ergebnisfarbe/Tooltip; Sperre ab `versuche_max`.
+- [x] „Nicht erreicht“-Dialog mit Kaskaden-Vorschlag (änderbar), Wiedervorlage +
   Glocke zum Zeitpunkt; Mailbox zählt; Kein Interesse mit Pflichtgrund.
-- [ ] Mail-Regeln: Stufe 2/4 `nicht_erreicht`, Stufe 5 `disqualifiziert`;
+- [x] Mail-Regeln: Stufe 2/4 `nicht_erreicht`, Stufe 5 `disqualifiziert`;
   Doppelversand-Schutz über Warteschlange/Terminstatus.
-- [ ] tel:-Links überall + Stoppuhr (`dauer_sek`, korrigierbar); „Meine Anrufe“;
+- [x] tel:-Links überall + Stoppuhr (`dauer_sek`, korrigierbar); „Meine Anrufe“;
   Rufnummernsuche E.164 (gemeinsam mit H7).
-- [ ] Tests `tests/test_lead_v2_anruf.py`.
+- [x] Tests `tests/test_lead_v2_anruf.py`.
 
 ## Phase 108 – Terminassistent & Routenplaner (E1–E4, F3, F4)
 
-- [ ] AD-Profil: Kompetenzen (Sparten, Kombi WP+PV(+KL), MFH, Gewerbe),
+- [x] AD-Profil: Kompetenzen (Sparten, Kombi WP+PV(+KL), MFH, Gewerbe),
   Kennzeichen Handelsvertreter, Startwerte F3.
-- [ ] Filterregel: Ausschluss = Kanal-Regel, Kompetenz, Kapazität, Arbeitszeit;
+- [x] Filterregel: Ausschluss = Kanal-Regel, Kompetenz, Kapazität, Arbeitszeit;
   Abwertung = Gebiet, Fahrzeit, Wunschzeit; Begründung in Klartext + Mini-Karte.
-- [ ] Puffer = max(30, Fahrzeit), Dauer 90, Raster 30.
-- [ ] Ersatzkunde bei Absage/Umbuchung (Radius 5→10 km, Alter ≥ 14 Tage bevorzugt,
+- [x] Puffer = max(30, Fahrzeit), Dauer 90, Raster 30.
+- [x] Ersatzkunde bei Absage/Umbuchung (Radius 5→10 km, Alter ≥ 14 Tage bevorzugt,
   mehrere Kandidaten mit Begründung), Glocke ans Leadmanagement.
-- [ ] ICS: Titel, Adresse, Berater + Telefon, Erinnerung, Absage-Hinweis;
+- [x] ICS: Titel, Adresse, Berater + Telefon, Erinnerung, Absage-Hinweis;
   Umbuchung gleiche UID + SEQUENCE, Absage METHOD:CANCEL.
-- [ ] Tests `tests/test_lead_v2_termin.py`.
+- [x] Tests `tests/test_lead_v2_termin.py`.
 
 ## Phase 109 – Handelsvertreter (G1–G5, F13–F16)
 
-- [ ] Kennzeichen + Rechte (`lead_handelsvertreter.py`): eigene Leads anrufen,
+- [x] Kennzeichen + Rechte (`lead_handelsvertreter.py`): eigene Leads anrufen,
   Kartei bearbeiten, terminieren (nur eigener Kalender), Terminierung.
-- [ ] Ansicht „Handelsvertreter“ (Gesamtsicht ID/LM/Admin, gefiltert für HV).
-- [ ] Zuweisung per Dropdown (Tabelle, Kartei, Schnellanlage), Ausschlussliste
+- [x] Ansicht „Handelsvertreter“ (Gesamtsicht ID/LM/Admin, gefiltert für HV).
+- [x] Zuweisung per Dropdown (Tabelle, Kartei, Schnellanlage), Ausschlussliste
   `hv_ausschluss` (Dropdown deaktiviert + Hinweis; Kanalwechsel → Hinweis +
   Glocke an Verantwortlichen), Standard Simon O'Grady außer „Deals - Rene“,
   Umverteilung mit Aktivität + Glocke.
-- [ ] Tests `tests/test_lead_v2_handelsvertreter.py`.
+- [x] Tests `tests/test_lead_v2_handelsvertreter.py`.
 
 ## Phase 110 – Dashboard & To-Dos (A1, A2, F7)
 
-- [ ] Persönliches Dashboard beim Modul-Einstieg: fällige/kommende
+- [x] Persönliches Dashboard beim Modul-Einstieg: fällige/kommende
   Wiedervorlagen, eigene Vorgänge, Termine der nächsten Tage, To-Dos.
-- [ ] To-Dos (`todos`): jeder an jeden, Fälligkeit, erledigt; Glocke mit
+- [x] To-Dos (`todos`): jeder an jeden, Fälligkeit, erledigt; Glocke mit
   Zähler-Badge.
-- [ ] Tests `tests/test_lead_v2_dashboard.py`.
+- [x] Tests `tests/test_lead_v2_dashboard.py`.
 
 ## Phase 111 – Info-Veranstaltung (I1–I5)
 
-- [ ] Veranstaltungen rollierend (12 Monate), Board mit Gruppen je Termin,
+- [x] Veranstaltungen rollierend (12 Monate), Board mit Gruppen je Termin,
   Archiv, Spalte „Teilgenommen“, Sammelaktionen „Status ändern“ und „In die
   nächste Veranstaltung verschieben“.
-- [ ] Quelle „Info-Veranstaltung“, API-Zuordnung (A-8), Abgleich E-Mail-oder-
+- [x] Quelle „Info-Veranstaltung“, API-Zuordnung (A-8), Abgleich E-Mail-oder-
   Telefon + Nachname → roter Hinweis „Kunde bereits im System“.
-- [ ] Tests `tests/test_lead_v2_info.py`.
+- [x] Tests `tests/test_lead_v2_info.py`.
 
 ## Phase 112 – Abnahme, Doku, Rollout
 
-- [ ] Alle Tests, Abnahmeskript, Voll-Crawl gegen migrierte DB-Kopie.
-- [ ] `docs/leadmanagement-entscheidungen.md` (V2: Bestandsabgleich, Mapping 5a,
+Ergebnis 02.10.2026: 416 Tests grün (268 Bestand + 148 V2), Abnahmeskript 93/93,
+Voll-Crawl 12.744 Aufrufe über 148 GET-Routen × 4 Rollen ohne Absturz
+(diagnose/test_v23). Commit v23, kein Push ohne Freigabe.
+
+- [x] Alle Tests, Abnahmeskript, Voll-Crawl gegen migrierte DB-Kopie.
+- [x] `docs/leadmanagement-entscheidungen.md` (V2: Bestandsabgleich, Mapping 5a,
   Status → Board → Gruppe), `docs/nach-dem-update-v23.md`, `docs/leads-api.md`,
   Prototyp-Hinweise, CLAUDE.md „Neu in v23“ + Zuordnungstabelle.
-- [ ] Commit, kein Push ohne Freigabe.
+- [x] Commit, kein Push ohne Freigabe.
 
 ---
 

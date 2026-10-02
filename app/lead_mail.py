@@ -98,6 +98,20 @@ VORLAGEN_START = {
         "Der aktualisierte Kalendereintrag liegt bei. Falls der neue Termin "
         "nicht passt, melden Sie sich bitte kurz: {link_rueckruf}\n\n"
         "Mit freundlichen Grüßen\nIhr Friondo-Team"),
+    # v23 (Phase 108, E3/E4): Absage durch Friondo mit Storno-ICS
+    # (METHOD:CANCEL, gleiche UID) – der Kundenkalender entfernt den Eintrag
+    "terminabsage": (
+        "Terminabsage",
+        "Ihr Termin am {termin_datum} um {termin_uhrzeit} Uhr wurde abgesagt",
+        "{briefanrede},\n\n"
+        "Ihr Vor-Ort-Termin am {termin_datum} um {termin_uhrzeit} Uhr mit "
+        "{vertriebler} muss leider entfallen. Die Absage für Ihren Kalender "
+        "liegt bei.\n\n"
+        "Wir melden uns in Kürze mit einem neuen Terminvorschlag. Wenn Sie "
+        "selbst einen Wunschtermin haben, erreichen Sie uns unter "
+        "{rueckruf_telefon} oder einfach als Antwort auf diese E-Mail: "
+        "{link_rueckruf}\n\n"
+        "Mit freundlichen Grüßen\nIhr Friondo-Team"),
     "nurture": (
         "Nurture",
         "Ihre Anfrage bei Friondo – dürfen wir uns wieder melden?",
@@ -218,33 +232,106 @@ def _als_html(text: str) -> str:
         .replace("\n", "<br>") + "</p>"
 
 
-def ics_erstellen(session: Session, termin: VotTermin, vorgang: Vorgang) -> str | None:
-    """ICS-Anhang (METHOD:REQUEST, Organizer = Absender-Postfach)."""
+def _ics_text(text: str) -> str:
+    """Textwert nach RFC 5545 maskieren (Backslash, Semikolon, Komma, Zeilen)."""
+    return ((text or "").replace("\\", "\\\\").replace(";", "\\;")
+            .replace(",", "\\,").replace("\r\n", "\n").replace("\n", "\\n"))
+
+
+def _ics_falten(zeile: str, breite: int = 74) -> str:
+    """Zeilen länger als 75 Zeichen falten (Fortsetzung mit Leerzeichen)."""
+    if len(zeile) <= breite:
+        return zeile
+    teile = [zeile[:breite]]
+    rest = zeile[breite:]
+    while rest:
+        teile.append(" " + rest[:breite - 1])
+        rest = rest[breite - 1:]
+    return "\r\n".join(teile)
+
+
+ICS_TYP_TITEL = {"vot": "Vor-Ort-Termin", "telefon": "Telefongespräch",
+                 "online": "Online-Termin (Teams)"}
+
+
+def ics_erstellen(session: Session, termin: VotTermin, vorgang: Vorgang,
+                  methode: str = "REQUEST") -> str | None:
+    """ICS-Anhang (Organizer = Absender-Postfach). v23 (Phase 108, E4):
+    UID aus vot_termine.ics_uid (beim ersten Mal friondo-vot-{id}@friondo.de),
+    SEQUENCE aus ics_sequence, Titel mit Sparten, LOCATION Kundenadresse,
+    DESCRIPTION mit Berater + Telefon, Absage-Hinweis und Rückruf-Telefon,
+    VALARM 24 h; methode="CANCEL" erzeugt die Storno-ICS (STATUS:CANCELLED,
+    gleiche UID). Bestehende Aufrufer (rendern) bleiben unverändert."""
     from app import config
     kunde = session.get(Kunde, vorgang.kunde_id)
     if termin is None or termin.beginn is None or kunde is None:
         return None
+    methode = "CANCEL" if str(methode).upper() == "CANCEL" else "REQUEST"
     ordner = config.DATA_ORDNER / "lead_ics"
     ordner.mkdir(parents=True, exist_ok=True)
     absender = _absender(session)
     ende = termin.ende or termin.beginn
-    inhalt = "\r\n".join([
+    if not getattr(termin, "ics_uid", None):
+        termin.ics_uid = f"friondo-vot-{termin.id}@friondo.de"
+        session.flush()
+    sequence = int(getattr(termin, "ics_sequence", 0) or 0)
+    sparten = "+".join(s.strip() for s in (kunde.interesse or "").split(",")
+                       if s.strip()) or "Ihre Anfrage"
+    typ = getattr(termin, "typ", "vot") or "vot"
+    titel = f"{ICS_TYP_TITEL.get(typ, 'Vor-Ort-Termin')} Friondo – {sparten}"
+    if methode == "CANCEL":
+        titel = "Abgesagt: " + titel
+    berater = session.get(Benutzer, termin.ad_id) if termin.ad_id else None
+    leadmanager = (session.get(Benutzer, vorgang.leadmanager_id)
+                   if vorgang.leadmanager_id else None)
+    rueckruf = ((leadmanager.telefon if leadmanager and leadmanager.telefon else "")
+                or _parameter(session, "rueckruf_telefon") or "")
+    adresse = termin.adresse or ""
+    if typ == "vot" and not adresse:
+        from app import geocoding
+        adresse = geocoding.lead_adresse(session, vorgang)
+    zeilen = []
+    if methode == "CANCEL":
+        zeilen.append("Dieser Termin wurde abgesagt. Wir melden uns mit einem neuen Vorschlag.")
+    if berater is not None:
+        zeilen.append(f"Ihr Berater: {berater.name}"
+                      + (f", Telefon {berater.telefon}" if berater.telefon else ""))
+    if typ == "vot":
+        zeilen.append("Bitte halten Sie Heizkostenabrechnung, Stromrechnung und "
+                      "Grundriss bereit (Zugang zu Heizungsraum und Zählerschrank).")
+    if methode != "CANCEL":
+        zeilen.append("Falls Sie den Termin nicht wahrnehmen können, sagen Sie bitte "
+                      "rechtzeitig ab" + (f": Telefon {rueckruf}" if rueckruf else "")
+                      + f" oder per E-Mail an {absender}.")
+    elif rueckruf:
+        zeilen.append(f"Rückfragen: Telefon {rueckruf} oder per E-Mail an {absender}.")
+    beschreibung = "\n".join(zeilen)
+    inhalt_zeilen = [
         "BEGIN:VCALENDAR",
         "PRODID:-//Friondo//Angebotstool//DE",
         "VERSION:2.0",
-        "METHOD:REQUEST",
+        f"METHOD:{methode}",
         "BEGIN:VEVENT",
-        f"UID:friondo-vot-{termin.id}@friondo.de",
+        f"UID:{termin.ics_uid}",
+        f"SEQUENCE:{sequence}",
         f"DTSTAMP:{datetime.now().strftime('%Y%m%dT%H%M%S')}",
         f"DTSTART:{termin.beginn.strftime('%Y%m%dT%H%M%S')}",
         f"DTEND:{ende.strftime('%Y%m%dT%H%M%S')}",
-        f"SUMMARY:Vor-Ort-Termin Friondo",
-        f"LOCATION:{(termin.adresse or '').replace(',', '\\,')}",
+        f"SUMMARY:{_ics_text(titel)}",
+        f"LOCATION:{_ics_text(adresse)}",
+        f"DESCRIPTION:{_ics_text(beschreibung)}",
+        f"STATUS:{'CANCELLED' if methode == 'CANCEL' else 'CONFIRMED'}",
         f"ORGANIZER;CN=Friondo:mailto:{absender}",
-        f"ATTENDEE;CN={kunde.anzeige_name}:mailto:{kunde.email}",
-        "END:VEVENT",
-        "END:VCALENDAR", ""])
-    pfad = ordner / f"vot_{termin.id}.ics"
+        f"ATTENDEE;CN={_ics_text(kunde.anzeige_name)};RSVP=FALSE:mailto:{kunde.email}",
+    ]
+    if methode != "CANCEL":
+        inhalt_zeilen += ["BEGIN:VALARM", "TRIGGER:-PT24H", "ACTION:DISPLAY",
+                          f"DESCRIPTION:{_ics_text('Erinnerung: ' + titel)}",
+                          "END:VALARM"]
+    inhalt_zeilen += ["END:VEVENT", "END:VCALENDAR", ""]
+    inhalt = "\r\n".join(_ics_falten(z) for z in inhalt_zeilen)
+    name = f"vot_{termin.id}.ics" if methode != "CANCEL" else f"vot_{termin.id}_storno.ics"
+    pfad = ordner / name
     pfad.write_text(inhalt, encoding="utf-8")
     return str(pfad)
 
@@ -269,6 +356,12 @@ def rendern(session: Session, eintrag: KommunikationLog) -> bool:
     return True
 
 
+def ics_methode(inhalt: bytes | str) -> str:
+    """MIME-Methode eines ICS-Inhalts (REQUEST | CANCEL) aus der METHOD-Zeile."""
+    text = inhalt.decode("utf-8", "ignore") if isinstance(inhalt, bytes) else (inhalt or "")
+    return "CANCEL" if "METHOD:CANCEL" in text.upper() else "REQUEST"
+
+
 def _graph_senden(session: Session, an: str, betreff: str, body_html: str,
                   anhang_pfad: str | None) -> tuple[bool, str]:
     """HTML-Mail (+ ICS) über Graph; Absender leads@, Fallback angebot@."""
@@ -278,12 +371,14 @@ def _graph_senden(session: Session, an: str, betreff: str, body_html: str,
         return False, "Nicht bei Microsoft angemeldet"
     anhaenge = []
     if anhang_pfad and Path(anhang_pfad).exists():
+        ics_bytes = Path(anhang_pfad).read_bytes()
         anhaenge.append({
             "@odata.type": "#microsoft.graph.fileAttachment",
             "name": Path(anhang_pfad).name,
-            "contentType": "text/calendar; method=REQUEST",
-            "contentBytes": base64.b64encode(
-                Path(anhang_pfad).read_bytes()).decode(),
+            # v23 (Phase 108, E4): Storno-ICS mit MIME-Methode CANCEL, damit
+            # Outlook/Apple den Kundeneintrag entfernen statt ihn zu ergänzen
+            "contentType": f"text/calendar; method={ics_methode(ics_bytes)}",
+            "contentBytes": base64.b64encode(ics_bytes).decode(),
         })
     def _senden(absender):
         nachricht = {

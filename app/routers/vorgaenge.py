@@ -232,6 +232,13 @@ async def akte(request: Request, vorgang_id: int,
             lead_readonly = True
     except Exception:
         lead_kontext = None
+    # v23 (Phase 110, A2/F7): To-Dos zum Vorgang – auch in der read-only-Akte des Außendienstes
+    try:
+        from app import lead_todos
+        akte_todos = lead_todos.zeilen(session, lead_todos.fuer_vorgang(session, vorgang.id))
+        todo_empfaenger = lead_todos.empfaenger_liste(session)
+    except Exception:
+        akte_todos, todo_empfaenger = [], []
     # v20 (Phase 98): Standard-Anschriften des Kunden (leer = Name + Ausführungsort)
     from app import anschriften as anschriften_modul
     anschrift_kontext = {}
@@ -246,6 +253,7 @@ async def akte(request: Request, vorgang_id: int,
         anschrift_kontext = {"kunde_rechnung": _re, "kunde_liefer": _li,
                              "kunde_anschrift_hinweis": " · ".join(hinweise)}
     return render(request, "vorgaenge/akte.html", aktiv="/vorgaenge",
+                  akte_todos=akte_todos, todo_empfaenger=todo_empfaenger,   # v23 (Phase 110)
                   **anschrift_kontext,
                   mobil=benutzer.rolle == "aussendienst",
                   galerie_daten=galerie_daten, galerie_ordner=galerie_ordner,

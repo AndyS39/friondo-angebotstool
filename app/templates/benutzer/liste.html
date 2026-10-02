@@ -72,6 +72,11 @@
                     <label>Telefon
                         <input form="f{{ b.id }}" type="tel" name="telefon"
                                value="{{ b.telefon }}" size="14" placeholder="optional"></label>
+                    {# v23 (Phase 108, F12): Buchungslink für Online-Termine (Teams) #}
+                    <label title="Outlook-Buchungslink (Book with me) für Online-Termine (Teams), Vorlage online_termin_einladung">Buchungslink
+                        <input form="f{{ b.id }}" type="url" name="buchungslink"
+                               value="{{ b.buchungslink or '' }}" size="28"
+                               placeholder="https://outlook.office.com/bookwithme/…"></label>
                     <label title="Glocken-Ereignisse zusätzlich als E-Mail">Benachrichtigungs-Mail
                         <select form="f{{ b.id }}" name="benachrichtigung_mail">
                             {% for wert, name in [('aus', 'aus'), ('sofort', 'sofort'), ('digest', 'Tagesdigest 07:15')] %}

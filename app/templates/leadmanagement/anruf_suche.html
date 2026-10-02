@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
+
+{% block titel %}Rufnummernsuche – Lead-Management{% endblock %}
+
+{# v23 Phase 107 (PLAN_LEAD_V2 D3 / H7): „Rufnummer eingeben“ – E.164-
+   normalisiert (kern.telefon_normalisieren), Ziffernfolge-Vergleich in
+   kunden.telefon und leads.telefon (monday). Ein Treffer springt direkt in die
+   Kartei (Route), hier die Trefferliste bzw. „nichts gefunden“. #}
+{% block inhalt %}
+{{ lm_nav('anrufliste') }}
+<div class="seitenkopf">
+    <h1>Rufnummernsuche {% if demo_badge %}<span class="demo-badge">Demo · Coming soon</span>{% endif %}</h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/anruf/meine">Meine Anrufe</a>
+        <a class="knopf klein zweitrangig" href="/lead-management/anrufliste">Zur Anrufliste</a>
+    </div>
+</div>
+
+<div class="karte lm-suche-karte">
+    <form method="get" action="/lead-management/anruf/suche" class="formzeile lm-rufnummer gross">
+        <input type="search" name="q" value="{{ eingabe }}" inputmode="tel" placeholder="Rufnummer eingeben, z. B. 0203 123456 oder +49 203 123456" autofocus autocomplete="off">
+        <input type="hidden" name="liste" value="1">
+        <button class="knopf" type="submit">{{ symbol('suche') }} Suchen</button>
+    </form>
+    {% if eingabe %}
+        {% if zu_kurz %}
+        <p class="meldung fehler">Bitte mindestens {{ min_ziffern }} Ziffern eingeben – „{{ eingabe }}“ ist zu kurz.</p>
+        {% elif not treffer %}
+        <p class="meldung">Keine Rufnummer „{{ eingabe }}“ (+{{ ziffern }}) gefunden – weder bei Kunden noch bei monday-Leads.
+            <a class="knopf klein" href="/lead-management/neu?telefon={{ eingabe | urlencode }}">+ Neuen Lead anlegen</a></p>
+        {% else %}
+        <p class="dezent">{{ treffer | length }} Treffer für +{{ ziffern }} (Vergleich der Ziffernfolge, Schreibweise egal).</p>
+        <table class="tabelle">
+            <thead><tr><th>Kunde</th><th>Rufnummer</th><th>Ort</th><th>Vorgang</th><th>Phase</th><th>Herkunft</th><th></th></tr></thead>
+            <tbody>
+            {% for t in treffer %}
+                <tr>
+                    <td><b>{{ t.kunde.anzeige_name }}</b></td>
+                    <td class="nowrap"><a href="{{ t.tel_href }}" class="lm-tel">{{ symbol('telefon') }} {{ t.kunde.telefon }}</a></td>
+                    <td>{{ t.kunde.plz or '' }} {{ t.kunde.ort or '' }}</td>
+                    <td>{% if t.vorgang %}V{{ t.vorgang.id }}{% if t.vorgaenge | length > 1 %} <span class="dezent">(+{{ t.vorgaenge | length - 1 }} weitere)</span>{% endif %}{% else %}<span class="dezent">kein Vorgang</span>{% endif %}</td>
+                    <td>{% if t.vorgang %}{{ phasen_namen.get(t.vorgang.lead_phase, t.vorgang.lead_phase or '–') }}{% if t.vorgang.demo %} <span class="abzeichen">Demo</span>{% endif %}{% else %}–{% endif %}</td>
+                    <td class="dezent">{{ 'monday-Lead' if t.herkunft == 'monday' else 'Kunde' }}</td>
+                    <td class="aktionen">{% if t.vorgang %}<a class="knopf klein" href="/lead-management/lead/{{ t.vorgang.id }}">Kartei öffnen</a>{% else %}<a class="knopf klein zweitrangig" href="/kunden/{{ t.kunde.id }}/bearbeiten">Kunde</a>{% endif %}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    {% else %}
+    <p class="dezent">Für eingehende Anrufe: Nummer eintippen oder einfügen – „0203 …“, „+49 203 …“, „0049 203 …“ und „+49 (0)203 …“ finden denselben Kunden. Genau ein Treffer öffnet sofort die Kundenkartei. Die automatische Erkennung über eine Telefonanlage folgt später (D1).</p>
+    {% endif %}
+</div>
+{% endblock %}

@@ -139,7 +139,7 @@
     {# v21 (Phase 88): Modul-Einstieg #}
     <label class="schmal">Modul-Einstieg
         <select name="lm_startseite">
-            <option value="" {{ 'selected' if not werte.lm_startseite }}>nach Rolle (Übersicht · Leadmanagement: Anrufliste)</option>
+            <option value="" {{ 'selected' if not werte.lm_startseite }}>Standard: Dashboard „Meine Arbeit“ (V2)</option>
             <option value="uebersicht" {{ 'selected' if werte.lm_startseite == 'uebersicht' }}>immer Übersicht</option>
             <option value="anrufliste" {{ 'selected' if werte.lm_startseite == 'anrufliste' }}>immer Anrufliste</option>
             <option value="dashboard" {{ 'selected' if werte.lm_startseite == 'dashboard' }}>immer Dashboard (V2)</option>
@@ -186,6 +186,21 @@
         <label class="schmal">Ältere Leads ab (Tage)
             <input type="number" name="ersatz_alter_tage" value="{{ werte.ersatz_alter_tage }}"></label>
     </div>
+    <div class="formzeile">
+        <label class="schmal">Mind. Ersatz-Treffer
+            <input type="number" name="ersatz_min_treffer" value="{{ werte.ersatz_min_treffer or 3 }}"></label>
+        <label class="schmal">Vorab-Gespräch (Min)
+            <input type="number" name="vorab_dauer_min" value="{{ werte.vorab_dauer_min or 30 }}"></label>
+        <label class="schmal">Raster manuell (Min)
+            <input type="number" name="vorschlag_raster_manuell_min" value="{{ werte.vorschlag_raster_manuell_min or 15 }}"></label>
+        <label>Konflikte bei manueller Buchung
+            <select name="termin_konflikt_modus">
+                <option value="warnen" {{ 'selected' if werte.termin_konflikt_modus != 'sperren' }}>warnen (Bestätigung)</option>
+                <option value="sperren" {{ 'selected' if werte.termin_konflikt_modus == 'sperren' }}>sperren</option>
+            </select></label>
+    </div>
+    <label>Kanal-Regel Terminassistent (JSON {"Kanal": [AD-IDs]}, leer = keine Einschränkung)
+        <input type="text" name="kanal_ad_regel" value="{{ werte.kanal_ad_regel }}" placeholder='{"Sparkasse": [4, 6]}'></label>
 
     <h2>Lead-Management V2 – Info-Veranstaltung</h2>
     <div class="formzeile">

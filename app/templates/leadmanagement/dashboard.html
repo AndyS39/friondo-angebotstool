@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "_komponenten.html" import wiedervorlage_chip %}
+{% from "_symbole.html" import symbol %}
+{% from "leadmanagement/_todo_formular.html" import todo_formular, todo_liste %}
+
+{% block titel %}Meine Arbeit – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{# v23 (PLAN_LEAD_V2 Phase 110, A1/F6/F16): persönliches Dashboard – Modul-Einstieg.
+   Umschalter „Meine Arbeit | Team“ führt zur bestehenden Team-Übersicht (v21). #}
+{% block inhalt %}
+{{ lm_nav('dashboard') }}
+<div class="seitenkopf lm-dash-kopf">
+    <h1>Meine Arbeit {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
+    <span class="dezent">{{ benutzer.name }} · {{ jetzt | de_datum('%A, %d.%m.%Y') }} · Stand {{ jetzt.strftime('%H:%M') }}{% if mit_demo %} · inkl. Demo{% endif %}{% if hv %} · Handelsvertreter-Sicht: nur eigene Leads{% endif %}</span>
+    <div class="aktionen">
+        <nav class="lm-umschalter" aria-label="Sicht">
+            <a class="aktiv" href="/lead-management/dashboard">Meine Arbeit</a>
+            {% if not hv %}<a href="/lead-management/uebersicht">Team</a>{% endif %}
+        </nav>
+        <details class="menue lm-mehr">
+            <summary class="knopf klein zweitrangig">Mehr …</summary>
+            <div class="menue-liste">
+                <a href="/lead-management/todos">To-Dos</a>
+                {% if hv %}
+                <a href="/lead-management/handelsvertreter">Meine Leads (Handelsvertreter)</a>
+                {% else %}
+                <a href="/lead-management/uebersicht">Team-Übersicht</a>
+                <a href="/lead-management/hauptboard">Hauptboard</a>
+                <a href="/lead-management/terminiert">Terminiert</a>
+                <a href="/lead-management/kontaktiert">Kontaktiert</a>
+                <a href="/lead-management/anrufliste">Anrufliste</a>
+                <a href="/lead-management/board">Pipeline (Kanban)</a>
+                <a href="/lead-management/kalender">Kalender</a>
+                <a href="/lead-management/karte">Karte</a>
+                <a href="/lead-management/handelsvertreter">Handelsvertreter</a>
+                <a href="/lead-management/info-veranstaltung">Info-Veranstaltung</a>
+                <a href="/lead-management/posteingang">Posteingang</a>
+                <a href="/lead-management/statistik">Statistik</a>
+                <a href="/lead-management/import">Import</a>
+                {% endif %}
+            </div>
+        </details>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<div class="lm-kacheln lm-dash-kacheln">
+    <a class="kachel stat" href="#wiedervorlagen" title="Lead- und Angebots-Wiedervorlagen mit Datum bis heute">
+        <span class="stat-zahl {{ 'dringend' if kacheln.faellig }}">{{ kacheln.faellig }}</span>Fällig heute
+        <span class="lm-delta">{% if kacheln.ueberfaellig %}davon {{ kacheln.ueberfaellig }} überfällig{% else %}Wiedervorlagen beider Arten{% endif %}</span></a>
+    <a class="kachel stat" href="#wiedervorlagen">
+        <span class="stat-zahl">{{ kacheln.kommend }}</span>Kommende {{ horizont }} Tage
+        <span class="lm-delta">Wiedervorlagen ab morgen</span></a>
+    <a class="kachel stat" href="/lead-management/todos">
+        <span class="stat-zahl {{ 'warn' if kacheln.todos_faellig }}">{{ kacheln.todos }}</span>Offene To-Dos
+        <span class="lm-delta">{% if kacheln.todos_faellig %}davon {{ kacheln.todos_faellig }} fällig{% else %}Arbeitsaufträge an mich{% endif %}</span></a>
+    <a class="kachel stat" href="#termine">
+        <span class="stat-zahl">{{ kacheln.termine }}</span>Termine {{ horizont }} Tage
+        <span class="lm-delta">{% if kacheln.termine_heute %}heute {{ kacheln.termine_heute }}{% else %}{{ 'eigene Termine' if hv else ('alle Termine' if termine_alle else 'Termine meiner Leads') }}{% endif %}</span></a>
+</div>
+
+{# Wiedervorlage-Zeilen: Chip, Kunde (Kartei), Grund/Phase, Schnellaktionen
+   Erledigt (= Wiedervorlage löschen) / Verschieben – beides mit Dialog im ⋯-Menü #}
+{% macro wv_tabelle(zeilen, titel, art, offen=True, leer='Nichts fällig.') %}
+<details class="lm-wv-gruppe" {{ 'open' if offen }}>
+    <summary class="lm-gruppe-kopf">{{ titel }} <span class="n {{ 'rot' if (zeilen | selectattr('ueberfaellig') | list | length) and offen }}">{{ zeilen | length }}</span></summary>
+    {% if zeilen %}
+    <table class="tabelle lm-wv-tabelle">
+        <tbody>
+        {% for z in zeilen %}
+        <tr class="{{ 'ueberfaellig' if z.ueberfaellig }}">
+            <td class="lm-wv-datum">{{ wiedervorlage_chip(z.datum, heute) }}{% if z.mit_uhrzeit %}<span class="dezent"> {{ z.datum.strftime('%H:%M') }}</span>{% endif %}</td>
+            <td><a href="/lead-management/lead/{{ z.vorgang.id }}"><strong>{{ z.kunde.anzeige_name }}</strong></a>
+                <span class="dezent">{{ z.kunde.ort or '' }}</span>
+                {% if z.kunde.telefon %}<a class="dezent" href="tel:{{ z.kunde.telefon }}" title="Anrufen">{{ symbol('telefon') }}</a>{% endif %}
+                {% if z.demo %}<span class="abzeichen">Demo</span>{% endif %}
+                {% if z.frei and art == 'lead' %}<span class="lm-flag" title="Noch kein Leadmanager zugeordnet">⚑ frei</span>{% endif %}</td>
+            <td class="lm-wv-grund">{{ z.grund }}{% if z.phase %} <span class="dezent">· {{ z.phase }}</span>{% endif %}
+                {% if art == 'angebot' %}<span class="dezent">· {{ z.verantwortlich }}</span>{% endif %}</td>
+            <td class="lm-aktion lm-wv-aktion">
+                <details>
+                    <summary class="knopf klein zweitrangig" title="Erledigt oder verschieben">{{ symbol('haken') }} Erledigt ▾</summary>
+                    <div class="lm-menue lm-wv-menue">
+                        <form method="post" action="/lead-management/dashboard/wiedervorlage/{{ z.vorgang.id }}"
+                              onsubmit="return confirm('Wiedervorlage als erledigt löschen? {{ 'Der Lead geht zurück auf Neu.' if z.quelle == 'zurueckgestellt' }}')">
+                            <input type="hidden" name="art" value="{{ art }}">
+                            <input type="hidden" name="aktion" value="erledigt">
+                            <input type="hidden" name="zurueck" value="/lead-management/dashboard">
+                            <button class="knopf klein" type="submit">{{ symbol('haken') }} Erledigt – Wiedervorlage löschen</button>
+                        </form>
+                        <form method="post" action="/lead-management/dashboard/wiedervorlage/{{ z.vorgang.id }}" class="lm-wv-verschieben">
+                            <input type="hidden" name="art" value="{{ art }}">
+                            <input type="hidden" name="aktion" value="verschieben">
+                            <input type="hidden" name="zurueck" value="/lead-management/dashboard">
+                            <label>Verschieben auf
+                                {% if z.mit_uhrzeit %}<input type="datetime-local" name="datum" step="900" required>
+                                {% else %}<input type="date" name="datum" required>{% endif %}</label>
+                            <button class="knopf klein zweitrangig" type="submit">{{ symbol('wiedervorlage') }} Verschieben</button>
+                        </form>
+                        <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ z.vorgang.id }}">{{ symbol('oeffnen') }} Kartei öffnen</a>
+                    </div>
+                </details>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}<p class="dezent lm-wv-leer">{{ leer }}</p>{% endif %}
+</details>
+{% endmacro %}
+
+<div class="lm-zweispaltig lm-dash-grid" id="wiedervorlagen">
+    <div class="lm-dash-spalte">
+        <div class="lm-karte">
+            <h2>Lead-Wiedervorlagen <span class="sub">Rückruf · Kaskade · Zurückgestellt-bis · {{ 'eigene Leads' if hv else 'meine + freie Leads' }}</span></h2>
+            {{ wv_tabelle(lead_wv_faellig, 'Fällig', 'lead', leer='Keine fällige Lead-Wiedervorlage – gut so.') }}
+            {{ wv_tabelle(lead_wv_kommend, 'Kommende ' ~ horizont ~ ' Tage', 'lead', offen=(lead_wv_faellig | length) == 0, leer='Keine kommenden Lead-Wiedervorlagen.') }}
+        </div>
+        <div class="lm-karte">
+            <h2>Angebots-Wiedervorlagen <span class="sub">Angebotsverfolgung · {{ 'von mir gesetzte' if hv else 'meine + ohne Verantwortlichen (Innendienst)' }}</span></h2>
+            {{ wv_tabelle(angebot_wv_faellig, 'Fällig', 'angebot', leer='Keine fällige Angebots-Wiedervorlage.') }}
+            {{ wv_tabelle(angebot_wv_kommend, 'Kommende ' ~ horizont ~ ' Tage', 'angebot', offen=(angebot_wv_faellig | length) == 0, leer='Keine kommenden Angebots-Wiedervorlagen.') }}
+        </div>
+    </div>
+    <div class="lm-dash-spalte">
+        <div class="lm-karte" id="todos">
+            <h2>Meine To-Dos <span class="sub">offen · fällige zuerst</span>
+                <a class="knopf klein zweitrangig lm-h2-knopf" href="/lead-management/todos">Alle To-Dos →</a></h2>
+            {{ todo_liste(todos, benutzer, heute, zurueck='/lead-management/dashboard', leer_text='Keine offenen To-Dos.') }}
+            {{ todo_formular(empfaenger, benutzer, zurueck='/lead-management/dashboard') }}
+        </div>
+        <div class="lm-karte" id="termine">
+            <h2>Termine · nächste {{ horizont }} Tage <span class="sub">alle Terminarten</span>
+                {% if not hv %}
+                <nav class="lm-umschalter klein lm-h2-knopf" aria-label="Termine">
+                    <a class="{{ 'aktiv' if not termine_alle }}" href="/lead-management/dashboard?termine=meine#termine">Meine Leads</a>
+                    <a class="{{ 'aktiv' if termine_alle }}" href="/lead-management/dashboard?termine=alle#termine">Alle</a>
+                </nav>
+                {% endif %}</h2>
+            {% if termine %}
+            <table class="tabelle lm-termine">
+                <tbody>
+                {% for z in termine %}
+                <tr class="{{ 'heute' if z.heute }}">
+                    <td>{{ z.termin.beginn | de_datum('%a %d.%m.') }} <strong>{{ z.termin.beginn.strftime('%H:%M') }}</strong></td>
+                    <td><span class="abzeichen lm-terminart lm-terminart-{{ z.termin.typ or 'vot' }}">{{ z.typ }}</span>
+                        {% if z.vorgemerkt %}<span class="abzeichen status-entwurf" title="Termin vorgemerkt – Terminierung noch offen">vorgemerkt</span>{% endif %}</td>
+                    <td>{% if z.kunde %}<a href="/lead-management/lead/{{ z.vorgang.id }}">{{ z.kunde.anzeige_name }}</a> <span class="dezent">{{ z.kunde.ort or '' }}</span>{% else %}?{% endif %}
+                        {% if z.demo %}<span class="abzeichen">Demo</span>{% endif %}</td>
+                    <td class="dezent">{{ z.ad }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="dezent">Keine Termine im Zeitraum{% if not hv and not termine_alle %} für meine Leads – <a href="/lead-management/dashboard?termine=alle#termine">alle Termine anzeigen</a>{% endif %}.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="lm-karte" id="zugeteilt">
+    <h2>Mir zugeteilte Vorgänge <span class="sub">{{ 'Außendienst/Handelsvertreter = ich' if hv else 'Leadmanager = ich' }} · {{ zugeteilt.aktiv }} aktiv · {{ zugeteilt.gesamt }} gesamt{% if zugeteilt.demo %} · {{ zugeteilt.demo }} Demo{% endif %}</span></h2>
+    {% if zugeteilt.gruppen %}
+    <div class="lm-phasen">
+        {% for g in zugeteilt.gruppen %}
+        <details class="lm-phase lm-phase-{{ g.phase }}" {{ 'open' if g.offen }}>
+            <summary><span class="lm-phase-name">{{ g.name }}</span><span class="n">{{ g.n }}</span></summary>
+            <ul>
+                {% for z in g.zeilen %}
+                <li><a href="/lead-management/lead/{{ z.vorgang.id }}">{{ z.kunde.anzeige_name if z.kunde else '?' }}</a>
+                    <span class="dezent">{{ z.kunde.ort if z.kunde and z.kunde.ort else '' }}{% if z.vorgang.eingang_am %} · {{ z.vorgang.eingang_am.strftime('%d.%m.') }}{% endif %}</span>
+                    {% if z.vorgang.demo %}<span class="abzeichen">Demo</span>{% endif %}</li>
+                {% endfor %}
+            </ul>
+        </details>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="dezent">Noch keine Vorgänge zugeteilt.{% if not hv %} Freie Leads stehen in der <a href="/lead-management/anrufliste">Anrufliste</a>.{% endif %}</p>
+    {% endif %}
+</div>
+{% endblock %}

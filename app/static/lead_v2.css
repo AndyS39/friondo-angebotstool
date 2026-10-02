@@ -5,3 +5,710 @@
 .q-veranstaltung { --f: var(--q-veranstaltung); }
 .abzeichen.interesse-gw { background: #fff1e0; color: #a35a00; margin-left: 0.2rem; }
 .chip-gw { --chip-farbe: #c47a1a; }   /* Gewerbe – Ocker */
+
+/* Phase 109 – Handelsvertreter (G1–G5, F13–F16): Gruppen je Vertreter,
+   kompakte Tabelle mit fixiertem Kopf, Status-Label aus dem Blatt Status
+   (Farbe inline), Zuweisungs-Dropdown mit Sperren/Hinweisen, HV-Dashboard. */
+.hv-gruppe { background: #fff; border: 1px solid var(--g-200); border-radius: var(--r-m);
+    margin-bottom: var(--a-3); box-shadow: var(--schatten-1); overflow: hidden; }
+.hv-gruppe > summary { list-style: none; border-radius: var(--r-m) var(--r-m) 0 0; }
+.hv-gruppe > summary::-webkit-details-marker { display: none; }
+.hv-gruppe > summary::before { content: "\25B8"; color: var(--g-500); width: 12px; display: inline-block; }
+.hv-gruppe[open] > summary::before { content: "\25BE"; }
+.hv-gruppe:not([open]) > summary { border-radius: var(--r-m); }
+.hv-avatar { display: inline-flex; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--friondo-dunkel); color: #fff; font-size: 11px; font-weight: 700;
+    align-items: center; justify-content: center; letter-spacing: 0.02em; }
+.hv-tabelle-wrap { overflow-x: auto; max-height: 70vh; }
+.hv-tabelle { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--t-s); }
+.hv-tabelle th { position: sticky; top: 0; z-index: 1; background: var(--g-50);
+    color: var(--friondo-dunkel); font-size: var(--t-xs); text-transform: uppercase;
+    letter-spacing: 0.03em; text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--g-200); }
+.hv-tabelle td { padding: 6px 10px; border-bottom: 1px solid var(--g-100); vertical-align: middle;
+    white-space: nowrap; }
+.hv-tabelle tbody tr:nth-child(even) td { background: #fbfcfd; }
+.hv-tabelle tbody tr:hover td { background: var(--friondo-blau-hell); }
+.hv-tabelle tr:last-child td { border-bottom: none; }
+.hv-tabelle td.hv-kunde { white-space: normal; min-width: 180px; }
+.hv-tabelle td.hv-kunde a { color: var(--friondo-dunkel); font-weight: 600; text-decoration: none; }
+.hv-tabelle td.hv-kunde a:hover { text-decoration: underline; }
+.hv-tabelle tr.hv-warn-zeile td:first-child { box-shadow: inset 3px 0 0 var(--status-rot); }
+.hv-tabelle a[href^="tel:"] { color: var(--friondo-blau); text-decoration: none; white-space: nowrap; }
+.hv-status { display: inline-block; --f: var(--g-500); color: var(--f); background: var(--g-100);
+    border: 1px solid var(--g-200); border-radius: 999px; padding: 2px 9px;
+    font-size: var(--t-xs); font-weight: 600; white-space: nowrap; }
+.hv-zuweisung { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0; }
+.hv-zuweisung select { font: inherit; font-size: var(--t-xs); padding: 3px 6px; max-width: 190px;
+    border: 1px solid var(--g-300); border-radius: var(--r-s); background: #fff; }
+.hv-zuweisung select:disabled { background: var(--g-100); color: var(--g-500); }
+.hv-zuweisung .knopf.klein { padding: 2px 8px; font-size: var(--t-xs); }
+.hv-sperre { color: var(--g-500); font-size: var(--t-xs); display: inline-flex; gap: 3px; align-items: center; }
+.hv-warnung { color: var(--status-rot); font-size: var(--t-xs); font-weight: 600;
+    display: inline-flex; gap: 3px; align-items: center; }
+.hv-hinweis { background: var(--status-orange-bg); border: 1px solid #ecd9ae; border-radius: var(--r-m);
+    padding: 8px 12px; font-size: var(--t-s); color: #7a5c14; margin-bottom: var(--a-3);
+    display: flex; gap: 8px; align-items: flex-start; }
+.hv-inline { display: inline; margin: 0; }
+.hv-inline select { font: inherit; font-size: var(--t-s); padding: 4px 8px; border: 1px solid var(--g-300);
+    border-radius: var(--r-s); background: #fff; }
+.hv-filter select, .hv-filter input[type="search"] { font: inherit; font-size: var(--t-s);
+    padding: 4px 8px; border: 1px solid var(--g-300); border-radius: var(--r-s); background: #fff; }
+.hv-kacheln { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px;
+    margin-bottom: var(--a-3); }
+.hv-kacheln a.kachel { text-decoration: none; color: inherit; }
+.hv-kacheln .stat-zahl.dringend { color: var(--status-rot); }
+.hv-dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;
+    margin-bottom: var(--a-4); }
+.hv-dashboard .lm-karte { margin-bottom: 0; }
+.hv-liste { list-style: none; margin: 0; padding: 0; }
+.hv-liste li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0;
+    border-bottom: 1px solid var(--g-100); font-size: var(--t-s); align-items: baseline; }
+.hv-liste li:last-child { border-bottom: none; }
+.hv-liste li a { color: var(--friondo-dunkel); text-decoration: none; font-weight: 600; }
+.hv-liste li a[href^="tel:"] { color: var(--friondo-blau); font-weight: 400; }
+.hv-liste li small { margin-left: 4px; }
+.hv-liste li.hv-leer { color: var(--g-500); justify-content: flex-start; }
+@media (max-width: 900px) {
+    .hv-tabelle td { white-space: normal; }
+    .hv-zuweisung select { max-width: 100%; }
+}
+
+/* Phase 107 – Anruf-Workflow & Telefonie (C1–C4, D1–D3): Versuchs-Punkte je
+   Ergebnis, Stoppuhr, Rufnummernsuche, Meine Anrufe, gesperrte Buttons */
+.lm-dots.je-ergebnis i.v { background: var(--g-500); }
+.lm-dots i.e-erreicht, .lm-leg.e-erreicht, .lm-ergebnis.e-erreicht i { background: var(--status-gruen); }
+.lm-dots i.e-nicht_erreicht, .lm-leg.e-nicht_erreicht, .lm-ergebnis.e-nicht_erreicht i { background: var(--g-500); }
+.lm-dots i.e-besetzt, .lm-leg.e-besetzt, .lm-ergebnis.e-besetzt i { background: var(--status-orange); }
+.lm-dots i.e-mailbox, .lm-leg.e-mailbox, .lm-ergebnis.e-mailbox i { background: var(--status-blau); }
+.lm-dots i.e-rueckruf_gewuenscht, .lm-leg.e-rueckruf_gewuenscht, .lm-ergebnis.e-rueckruf_gewuenscht i { background: var(--friondo-blau); }
+.lm-dots i.e-falsche_nummer, .lm-leg.e-falsche_nummer, .lm-ergebnis.e-falsche_nummer i { background: var(--status-rot); }
+.lm-dots i.e-kein_interesse, .lm-leg.e-kein_interesse, .lm-ergebnis.e-kein_interesse i { background: var(--g-700); }
+.lm-dots.je-ergebnis i[title] { cursor: help; }
+.lm-dots.rot.je-ergebnis i.v, .lm-dots.warn.je-ergebnis i.v { box-shadow: 0 0 0 1px #fff, 0 0 0 2px currentColor; }
+.lm-dots.warn.je-ergebnis { color: var(--status-orange); }
+.lm-dots.rot.je-ergebnis { color: var(--status-rot); }
+.lm-leg { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; margin: 0 1px 0 4px; }
+.lm-ergebnis { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.lm-ergebnis i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; background: var(--g-300); }
+.lm-flag-sperre { color: var(--status-rot); }
+.lm-aktion button[disabled], .lm-menue button[disabled] { opacity: .45; cursor: not-allowed; text-decoration: line-through; }
+.lm-zeile .tel { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+.lm-zeile .tel a.lm-tel { display: inline-flex; align-items: center; gap: 4px; }
+.lm-tel svg { width: 13px; height: 13px; }
+.lm-stoppuhr { font-variant-numeric: tabular-nums; font-size: var(--t-xs); color: var(--g-500);
+    border: 1px solid var(--g-200); border-radius: 999px; padding: 0 7px; line-height: 18px; }
+.lm-stoppuhr.laeuft { color: #fff; background: var(--status-gruen); border-color: var(--status-gruen); }
+.lm-rufnummer { display: inline-flex; gap: 4px; align-items: center; margin: 0; }
+.lm-rufnummer input[type="search"] { font: inherit; font-size: var(--t-s); padding: 4px 8px; border: 1px solid var(--g-300);
+    border-radius: var(--r-m); min-width: 170px; }
+.lm-rufnummer.gross { margin-bottom: var(--a-3); }
+.lm-rufnummer.gross input[type="search"] { flex: 1; font-size: 1.05rem; padding: 8px 12px; }
+.lm-dialog .lm-vorschlag { margin: 0 0 var(--a-3); }
+.lm-dialog .lm-sperre { margin: var(--a-3) 0 0; }
+.lm-anrufe td.nowrap, .lm-anrufe th.nowrap, .tabelle td.nowrap { white-space: nowrap; }
+.lm-anrufe td.zahl, .lm-anrufe th.zahl { text-align: right; }
+.lm-dauer-form { display: inline-flex; gap: 3px; align-items: center; margin: 0; justify-content: flex-end; }
+.lm-dauer-form input { width: 5.5em; font: inherit; font-size: var(--t-s); font-variant-numeric: tabular-nums; text-align: right;
+    padding: 2px 6px; border: 1px solid var(--g-300); border-radius: var(--r-m); }
+.lm-dauer-form.ok input { border-color: var(--status-gruen); }
+.lm-dauer-form.fehler input { border-color: var(--status-rot); }
+.lm-anrufe-karte, .lm-suche-karte { padding: 0; overflow: visible; }
+.lm-suche-karte { padding: var(--a-3); }
+.lm-hinweis { margin-top: var(--a-3); }
+
+/* Phase 110 – Dashboard „Meine Arbeit“ und To-Dos (A1/A2/F7/F16) */
+.lm-umschalter { display: inline-flex; border: 1px solid var(--g-300); border-radius: 999px; overflow: hidden; background: #fff; }
+.lm-umschalter a { padding: 5px 14px; font-size: 13px; font-weight: 600; color: var(--g-700); text-decoration: none; }
+.lm-umschalter a + a { border-left: 1px solid var(--g-200); }
+.lm-umschalter a:hover { background: var(--friondo-blau-hell); }
+.lm-umschalter a.aktiv { background: var(--dunkelblau, #1b2a5e); color: #fff; }
+.lm-umschalter .n { display: inline-block; min-width: 18px; padding: 0 6px; margin-left: 4px; border-radius: 999px; font-size: var(--t-xs); background: var(--g-100); color: var(--g-700); text-align: center; }
+.lm-umschalter a.aktiv .n { background: rgba(255,255,255,0.25); color: #fff; }
+.lm-umschalter.klein a { padding: 2px 10px; font-size: var(--t-xs); }
+.lm-h1-sub { font-size: var(--t-s, 0.9rem); font-weight: 400; }
+.lm-dash-kopf .aktionen { display: flex; align-items: center; gap: var(--a-2, 0.5rem); flex-wrap: wrap; }
+.lm-mehr > summary { color: inherit; padding: 0.25rem 0.6rem; list-style: none; }
+.lm-mehr > summary::-webkit-details-marker { display: none; }
+.lm-dash-kacheln { margin-bottom: 14px; }
+.lm-dash-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+.lm-dash-spalte { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.lm-dash-spalte .lm-karte { margin: 0; }
+.lm-karte h2 .lm-h2-knopf { margin-left: auto; }
+.lm-wv-gruppe { margin-top: 6px; }
+.lm-wv-gruppe > summary { cursor: pointer; list-style: none; border-radius: var(--r-m); }
+.lm-wv-gruppe > summary::-webkit-details-marker { display: none; }
+.lm-wv-tabelle td { padding: 6px 8px; vertical-align: middle; }
+.lm-wv-tabelle tr.ueberfaellig td:first-child { box-shadow: inset 3px 0 var(--status-rot); }
+.lm-wv-datum { white-space: nowrap; width: 1%; }
+.lm-wv-grund { color: var(--g-700); font-size: var(--t-s, 0.9rem); }
+.lm-wv-aktion { text-align: right; width: 1%; white-space: nowrap; }
+.lm-wv-aktion details > summary { list-style: none; cursor: pointer; }
+.lm-wv-aktion details > summary::-webkit-details-marker { display: none; }
+.lm-wv-menue { display: flex; flex-direction: column; gap: 8px; min-width: 260px; padding: 10px; border: 1px solid var(--g-200); border-radius: var(--r-m); box-shadow: var(--schatten-2, 0 6px 18px rgba(0,0,0,0.18)); text-align: left; white-space: normal; }
+.lm-wv-menue form { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.lm-wv-menue label { font-size: var(--t-xs); color: var(--g-700); display: flex; flex-direction: column; gap: 3px; }
+.lm-wv-menue input { padding: 4px 6px; border: 1px solid var(--g-300); border-radius: var(--r-s, 6px); font: inherit; }
+.lm-wv-leer { margin: 6px 0 10px 14px; }
+.lm-todos { list-style: none; margin: 0; padding: 0; }
+.lm-todo { display: flex; align-items: flex-start; gap: 10px; padding: 8px 6px; border-bottom: 1px solid var(--g-100); }
+.lm-todo:last-child { border-bottom: none; }
+.lm-todo-haken { margin: 0; }
+.lm-haken { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--g-300); background: #fff; color: transparent; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.lm-haken:hover { border-color: var(--status-gruen); color: var(--status-gruen); }
+.lm-haken.an { background: var(--status-gruen); border-color: var(--status-gruen); color: #fff; }
+.lm-haken:disabled { cursor: default; opacity: 0.5; }
+.lm-todo.faellig .lm-haken { border-color: var(--status-rot); }
+.lm-todo.heute .lm-haken { border-color: var(--status-orange); }
+.lm-todo-text { flex: 1; min-width: 0; }
+.lm-todo-titel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lm-todo-titel a { font-weight: 600; }
+.lm-todo.erledigt .lm-todo-titel strong { text-decoration: line-through; color: var(--g-500); }
+.lm-todo-meta { font-size: var(--t-xs); margin-top: 2px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.lm-todo-details { font-size: var(--t-s, 0.9rem); color: var(--g-700); margin-top: 3px; white-space: pre-line; }
+.lm-todo-neu { margin-top: 10px; }
+.lm-todo-neu > summary { list-style: none; display: inline-flex; cursor: pointer; }
+.lm-todo-neu > summary::-webkit-details-marker { display: none; }
+.lm-todo-form { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+.lm-todo-form label { flex: 1 1 180px; font-size: var(--t-xs); display: flex; flex-direction: column; gap: 3px; }
+.lm-todo-form label.breit { flex: 1 1 100%; }
+.lm-todo-form .formzeile { flex: 1 1 100%; display: flex; align-items: center; gap: 10px; }
+.lm-todo-filter { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.lm-todo-suche { margin: 0; display: flex; gap: 6px; align-items: center; }
+.lm-todo-vorgang { margin-bottom: 12px; }
+.lm-todo-abgrenzung { margin-top: 12px; font-size: var(--t-xs); }
+.lm-termine td { padding: 6px 8px; vertical-align: middle; }
+.lm-termine tr.heute td { background: var(--friondo-blau-hell); }
+.lm-terminart-vot { background: var(--status-blau-bg); color: var(--status-blau); }
+.lm-terminart-telefon { background: var(--status-orange-bg); color: var(--status-orange); }
+.lm-terminart-online { background: var(--status-violett-bg); color: var(--status-violett); }
+.lm-phasen { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+.lm-phase { border: 1px solid var(--g-200); border-radius: var(--r-m); padding: 6px 10px; background: var(--g-50); }
+.lm-phase > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; font-weight: 600; }
+.lm-phase > summary::-webkit-details-marker { display: none; }
+.lm-phase .n { margin-left: auto; background: var(--dunkelblau, #1b2a5e); color: #fff; border-radius: 999px; padding: 0 8px; font-size: var(--t-xs); }
+.lm-phase ul { list-style: none; margin: 6px 0 0; padding: 0; max-height: 260px; overflow: auto; }
+.lm-phase li { padding: 3px 0; font-size: var(--t-s, 0.9rem); }
+.lm-phase-gewonnen .n { background: var(--status-gruen); }
+.lm-phase-verloren .n, .lm-phase-unqualifiziert .n, .lm-phase-nicht_erreicht .n { background: var(--status-rot); }
+.lm-phase-zurueckgestellt .n { background: var(--status-orange); }
+@media (max-width: 1000px) { .lm-dash-grid { grid-template-columns: 1fr; } }
+
+/* Phase 108 – Terminassistent, Kalender-Terminarten, AD-Profil, Ersatzkunde */
+.lmt-kopf { display: flex; flex-wrap: wrap; gap: 1.2rem; padding: 0.9rem 1.1rem; margin-bottom: 1rem; }
+.lmt-kopf-spalte { flex: 1 1 320px; min-width: 0; }
+.lmt-kopf h2 { margin: 0 0 0.4rem; font-size: 1rem; }
+.lmt-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.lmt-liste li { font-size: 0.9rem; }
+.lmt-aus { color: var(--status-rot); font-weight: 600; }
+.lmt-ausgeschlossen summary { cursor: pointer; margin-top: 0.4rem; }
+.lmt-pflicht { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+.lmt-pflicht strong { color: var(--status-rot); }
+.lmt-vorschlaege { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; }
+.lmt-karten { flex: 1 1 640px; }
+.lmt-vorschlag { border-radius: var(--r-m); transition: border-color 0.15s, box-shadow 0.15s; }
+.lmt-vorschlag.aktiv { border-color: var(--friondo-blau); box-shadow: 0 0 0 2px var(--friondo-blau-hell); }
+.lmt-begruendung { font-size: var(--t-xs); color: var(--g-700); background: var(--g-50);
+    border-radius: 6px; padding: 0.35rem 0.5rem; margin: 0; line-height: 1.45; }
+.lmt-karte-wrap { flex: 1 1 320px; max-width: 520px; }
+.lmt-karte-wrap h3 { margin: 0 0 0.4rem; }
+#lmt-karte { height: 340px; border: 1px solid var(--grau-linie); border-radius: var(--r-m); background: var(--g-50); }
+.lmt-manuell { max-width: 900px; }
+.lmt-konflikte { border-radius: var(--r-m); padding: 0.5rem 0.8rem; font-size: 0.9rem; margin: 0.3rem 0 0.5rem; }
+.lmt-konflikte ul { margin: 0.3rem 0 0; padding-left: 1.2rem; }
+.lmt-konflikte.frei { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.lmt-konflikte.warnung { background: var(--status-orange-bg); color: var(--status-orange); }
+.lmt-konflikte.sperre { background: var(--status-rot-bg); color: var(--status-rot); }
+.lmt-versteckt { display: none !important; }
+.lmt-warnungen { max-width: 900px; }
+.lmt-termine td { vertical-align: top; }
+.lmt-termine tr.lmt-inaktiv td { color: var(--g-500); }
+.lmt-termine .aktionen form { display: inline; }
+.abzeichen.typ-vot { background: var(--status-blau-bg); color: var(--status-blau); }
+.abzeichen.typ-telefon { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.abzeichen.typ-online { background: var(--status-violett-bg); color: var(--status-violett); }
+/* Kalender: Terminarten farblich, vorgemerkt gestrichelt */
+.kalender-eintrag.typ-vot { border-left-color: var(--status-blau); }
+.kalender-eintrag.typ-telefon { border-left-color: var(--status-gruen); background: var(--status-gruen-bg); }
+.kalender-eintrag.typ-online { border-left-color: var(--status-violett); background: var(--status-violett-bg); }
+.kalender-eintrag.vorgemerkt { border-style: dashed; border-left-style: dashed; background: #fff; color: var(--g-700); }
+.kalender-eintrag .lmt-typ { font-size: var(--t-xs); color: var(--g-500); margin-left: 0.25rem; }
+.kalender-eintrag { position: relative; }
+.lmt-absage-knopf { position: absolute; top: 2px; right: 4px; border: 0; background: transparent;
+    color: var(--g-500); cursor: pointer; font-size: 0.95rem; line-height: 1; padding: 0 2px; }
+.lmt-absage-knopf:hover { color: var(--status-rot); }
+.lmt-legende { display: inline-flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+.lmt-legende .kalender-eintrag { margin: 0; padding: 0.1rem 0.45rem; font-size: var(--t-xs); }
+.lmt-reiter { margin-bottom: 0.8rem; }
+.lmt-reiter a { display: inline-flex; align-items: center; gap: 0.35rem; }
+.lmt-vorab .kontrollfeld { align-items: flex-start; }
+.lmt-slot { padding: 0.9rem 1.1rem; margin-bottom: 1rem; }
+.lmt-slot h2 { margin: 0 0 0.3rem; font-size: 1rem; }
+.lmt-ersatz-tabelle tr.lmt-bevorzugt td { background: var(--status-gruen-bg); }
+.lmt-kompetenz { flex-wrap: wrap; gap: 0.6rem 1.2rem; }
+.lmt-kompetenz .kontrollfeld { white-space: nowrap; }
+@media (max-width: 900px) {
+    .lmt-vorschlaege, .lmt-kopf { flex-direction: column; }
+    .lmt-karte-wrap { max-width: none; }
+}
+
+
+/* Phase 105 – Icon-Leiste links (H1), Umschalter, Board-Tabelle (A3), Avatare,
+   Status-/Kanal-Labels, Versuchs-Punkte nach Ergebnis, Sammelaktionen (H3),
+   Spalten-Dialog, Kontaktiert. Nur Tokens aus style.css; Labelfarben kommen
+   als Daten über --f (Blatt Status, Parameter kanal_farben). */
+:root { --lm-leiste-breite: 60px; --lm-kopf: 50px; }
+.lm-leiste { position: fixed; left: 0; top: var(--lm-kopf, 50px); bottom: 0; width: var(--lm-leiste-breite);
+    display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0;
+    background: #fff; border-right: 1px solid var(--g-200); box-shadow: var(--schatten-1); z-index: 40; }
+.lm-leiste-eintrag { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    width: 48px; height: 48px; border-radius: var(--r-m); color: var(--g-500); text-decoration: none;
+    font-size: 0.56rem; line-height: 1; cursor: pointer; border: 1px solid transparent; list-style: none; }
+.lm-leiste-eintrag .symbol-svg { width: 1.35rem; height: 1.35rem; }
+.lm-leiste-eintrag:hover { background: var(--friondo-blau-hell); color: var(--friondo-blau-dunkel); }
+.lm-leiste-eintrag.aktiv { background: var(--friondo-dunkel); color: #fff; }
+.lm-leiste-text { max-width: 46px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lm-leiste-mehr { position: relative; }
+.lm-leiste-mehr > summary::-webkit-details-marker { display: none; }
+.lm-leiste-mehr[open] .lm-leiste-menue { position: absolute; left: calc(100% + 8px); top: 0; min-width: 220px;
+    background: #fff; border: 1px solid var(--g-200); border-radius: var(--r-m); box-shadow: var(--schatten-2);
+    padding: var(--a-1) 0; display: flex; flex-direction: column; z-index: 60; }
+.lm-leiste-menue a { display: flex; align-items: center; gap: 8px; padding: 0.55rem 1rem; color: var(--friondo-dunkel);
+    text-decoration: none; font-size: var(--t-m); }
+.lm-leiste-menue a:hover { background: var(--friondo-blau-hell); }
+.lm-leiste-menue a.aktiv { font-weight: 700; color: var(--friondo-blau); }
+.lm-leiste-demo { margin-top: auto; writing-mode: vertical-rl; transform: rotate(180deg); padding: 0.5rem 0.15rem; }
+main:has(.lm-leiste) { padding-left: calc(var(--lm-leiste-breite) + var(--a-5)); }
+body.einbett .lm-leiste { display: none; }
+body.einbett main:has(.lm-leiste) { padding-left: 14px; }
+.lm-umschalter { display: inline-flex; border: 1px solid var(--g-200); border-radius: 999px; overflow: hidden; background: #fff; }
+.lm-umschalter a { display: inline-flex; align-items: center; gap: 5px; padding: 0.3rem 0.8rem; font-size: var(--t-s);
+    color: var(--g-700); text-decoration: none; border-right: 1px solid var(--g-200); }
+.lm-umschalter a:last-child { border-right: none; }
+.lm-umschalter a:hover { background: var(--friondo-blau-hell); }
+.lm-umschalter a.aktiv { background: var(--friondo-dunkel); color: #fff; font-weight: 600; }
+.lm-boardkopf { flex-wrap: wrap; row-gap: 6px; }
+.lm-boardkopf h1 { margin: 0.4rem 0; }
+.lm-suchleiste input[type="search"] { flex: 1 1 240px; min-width: 180px; border-radius: var(--r-s); border: 1px solid var(--g-200);
+    padding: 0.4rem 0.7rem; font: inherit; background: var(--g-50); }
+.lm-suchleiste input[type="search"]:focus { background: #fff; outline: 2px solid var(--friondo-blau-hell); }
+.lm-gruppen { display: flex; flex-direction: column; gap: var(--a-3); }
+details.lm-gruppe { background: #fff; border: 1px solid var(--g-200); border-radius: var(--r-m); box-shadow: var(--schatten-1); }
+details.lm-gruppe > summary { border-radius: var(--r-m); border-top: none; position: static; }
+details.lm-gruppe[open] > summary { border-radius: var(--r-m) var(--r-m) 0 0; }
+details.lm-gruppe .lm-leer { padding: 10px 14px; }
+details.lm-gruppe .tabelle { box-shadow: none; border-radius: 0 0 var(--r-m) var(--r-m); margin: 0; width: 100%; }
+.lm-tabelle th, .lm-tabelle td { padding: 4px 8px; font-size: var(--t-s); white-space: nowrap; vertical-align: middle; }
+.lm-tabelle th { position: sticky; top: 0; z-index: 5; }
+.lm-tabelle td.sp-lead { white-space: normal; min-width: 180px; }
+.lm-tabelle td.sp-notiz { min-width: 220px; }
+.lm-tabelle td.sp-angebot { white-space: normal; min-width: 220px; }
+.lm-tabelle td.sp-interessen { white-space: normal; }
+.lm-tabelle tr.markiert td { background: var(--friondo-blau-hell) !important; }
+.lm-tabelle tr.lm-geaendert td { animation: lm-blink 1.2s ease-out; }
+.lm-tabelle tr.lm-neu-hier td { animation: lm-blink 1.8s ease-out; }
+@keyframes lm-blink { from { background: var(--status-gruen-bg); } to { background: transparent; } }
+.lm-tabelle .sp-wahl { width: 28px; text-align: center; }
+.lm-lead-name { font-weight: 700; color: var(--friondo-dunkel); text-decoration: none; }
+.lm-lead-name:hover { color: var(--friondo-blau); text-decoration: underline; }
+.lm-zaehler { display: inline-block; font-size: var(--t-xs); font-weight: 700; padding: 0 6px; border-radius: 999px;
+    background: var(--friondo-blau-hell); color: var(--friondo-blau-dunkel); text-decoration: none; margin-left: 3px; }
+.lm-status { --f: #9aa4b2; display: inline-block; font-size: var(--t-xs); font-weight: 600; padding: 2px 9px;
+    border-radius: 999px; background: var(--f); color: #fff; white-space: nowrap; vertical-align: middle;
+    text-shadow: 0 0 2px rgba(0, 0, 0, 0.25); }
+.lm-status-zusatz { background: var(--friondo-blau-hell); color: var(--friondo-blau-dunkel); text-shadow: none; }
+.lm-status-wahl { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.lm-mini { font: inherit; font-size: var(--t-xs); padding: 1px 2px; border: 1px solid transparent; border-radius: var(--r-s);
+    background: transparent; color: var(--g-500); max-width: 26px; cursor: pointer; }
+.lm-mini:hover, .lm-mini:focus { border-color: var(--g-300); background: #fff; color: var(--text); max-width: none; }
+.lm-mini-datum { font: inherit; font-size: var(--t-xs); padding: 1px 4px; border: 1px solid var(--g-200); border-radius: var(--r-s);
+    background: #fff; color: var(--g-700); width: 118px; }
+.lm-notiz { width: 100%; min-width: 200px; font: inherit; font-size: var(--t-s); padding: 3px 6px; border: 1px solid transparent;
+    border-radius: var(--r-s); background: transparent; }
+.lm-notiz:hover { border-color: var(--g-200); background: #fff; }
+.lm-notiz:focus { border-color: var(--friondo-blau); background: #fff; outline: none; }
+.lm-person { display: inline-flex; align-items: center; gap: 4px; }
+.lm-avatar { --f: var(--friondo-blau); display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+    border-radius: 50%; background: var(--f); color: #fff; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em;
+    flex: 0 0 26px; }
+.lm-avatar.leer { background: var(--g-100); color: var(--g-500); border: 1px dashed var(--g-300); }
+.lm-avatar.leer .symbol-svg { width: 0.9rem; height: 0.9rem; }
+.lm-hv-hinweis { color: var(--status-orange); display: inline-flex; }
+.lm-dots-e i.ok { background: var(--status-gruen); }
+.lm-dots-e i.blau { background: var(--status-blau); }
+.lm-dots-e i.grau { background: var(--g-500); }
+.lm-dots-e i.warn { background: var(--status-orange); }
+.lm-dots-e i.rot { background: var(--status-rot); }
+.lm-mini-aktionen { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 2px; }
+.lm-mini-aktionen .knopf { display: inline-flex; align-items: center; gap: 4px; }
+.lm-angebot-zeile { font-size: var(--t-xs); }
+.lm-sammel { display: flex; flex-wrap: wrap; align-items: center; gap: var(--a-2) var(--a-3); margin: 0 0 var(--a-3);
+    padding: var(--a-2) var(--a-3); background: var(--friondo-blau-hell); border: 1px solid var(--friondo-blau);
+    border-radius: var(--r-m); position: sticky; top: 0; z-index: 6; }
+.lm-sammel[hidden] { display: none; }
+.lm-dialog { border: 1px solid var(--g-200); border-radius: var(--r-m); box-shadow: var(--schatten-2); padding: 0; max-width: 520px; width: 92vw; }
+.lm-dialog::backdrop { background: rgba(27, 42, 94, 0.35); }
+.lm-dialog .formular { border: none; box-shadow: none; margin: 0; }
+.lm-dialog label[hidden] { display: none; }
+.lm-spaltenliste { list-style: none; margin: 0 0 var(--a-3); padding: 0; display: flex; flex-direction: column; gap: 3px;
+    max-height: 56vh; overflow: auto; }
+.lm-spaltenliste li { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border: 1px solid var(--g-200);
+    border-radius: var(--r-s); background: #fff; cursor: grab; }
+.lm-spaltenliste li.fest { cursor: default; background: var(--g-50); color: var(--g-500); }
+.lm-spaltenliste li.zieht { opacity: 0.5; border-style: dashed; }
+.lm-spaltenliste .griff { color: var(--g-300); letter-spacing: -2px; }
+.lm-spaltenliste label { display: flex; align-items: center; gap: 6px; flex: 1; cursor: inherit; }
+.lm-ergebnis { display: inline-block; font-size: var(--t-xs); font-weight: 600; padding: 2px 8px; border-radius: 999px;
+    background: var(--g-100); color: var(--g-700); }
+.lm-ergebnis.e-ok { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.lm-ergebnis.e-blau { background: var(--status-blau-bg); color: var(--status-blau); }
+.lm-ergebnis.e-warn { background: var(--status-orange-bg); color: var(--status-orange); }
+.lm-ergebnis.e-rot { background: var(--status-rot-bg); color: var(--status-rot); }
+.lm-treffer { margin-bottom: var(--a-3); }
+.lm-treffer h2 { margin-top: 0; }
+.lm-trefferliste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lm-trefferliste li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lm-kontaktiert td.lm-notiz-text { white-space: normal; max-width: 360px; color: var(--g-700); }
+.lm-seiten { display: flex; gap: 4px; flex-wrap: wrap; margin-top: var(--a-3); }
+.lm-reiter a { display: inline-flex; align-items: center; gap: 5px; }
+.lm-vorlage input[readonly], .lm-vorlage textarea[readonly] { background: var(--g-50); color: var(--g-700); }
+@media (max-width: 900px) {
+    .lm-leiste { top: auto; bottom: 0; left: 0; right: 0; width: auto; height: 58px; flex-direction: row;
+        justify-content: space-around; padding: 4px 6px; border-right: none; border-top: 1px solid var(--g-200); }
+    .lm-leiste-eintrag { width: 52px; height: 48px; }
+    .lm-leiste-mehr[open] .lm-leiste-menue { left: auto; right: 0; top: auto; bottom: calc(100% + 8px); }
+    .lm-leiste-demo { display: none; }
+    main:has(.lm-leiste) { padding-left: var(--a-4); padding-bottom: 80px; }
+    body.einbett main:has(.lm-leiste) { padding-bottom: 10px; }
+    .lm-sammel { position: static; }
+}
+
+
+/* Phase 106 – Kundenkartei dreispaltig (B1–B8). Präfix lk-. Tokens aus
+   style.css (v14); unter 1000 px stehen die Spalten untereinander. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+main.lk-seite { max-width: 1680px; }
+.lk-kopf { display: flex; justify-content: space-between; gap: var(--a-4); flex-wrap: wrap;
+    align-items: flex-start; margin-bottom: var(--a-4); }
+.lk-kopf h1 { margin: 0 0 var(--a-2); font-size: var(--t-xl); display: flex; gap: var(--a-2);
+    align-items: center; flex-wrap: wrap; }
+.lk-kopf-fakten { display: flex; flex-wrap: wrap; gap: var(--a-2) var(--a-4); font-size: var(--t-s);
+    color: var(--g-700); align-items: center; }
+.lk-kopf-fakten .symbol-svg { vertical-align: -0.15em; }
+.lk-versuche { display: inline-flex; align-items: center; gap: var(--a-2); }
+.lk-kopf-aktionen { display: flex; flex-wrap: wrap; gap: var(--a-2); align-items: center;
+    justify-content: flex-end; max-width: 480px; }
+.lk-inline { display: inline; margin: 0; }
+.lk-pflicht-zaehler { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.7rem;
+    border-radius: 999px; font-size: var(--t-s); font-weight: 600; }
+.lk-pflicht-zaehler.offen { background: var(--status-rot-bg); color: var(--status-rot); }
+.lk-pflicht-zaehler.ok { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.lk-fehlliste { flex-basis: 100%; font-size: var(--t-xs); color: var(--g-500); }
+.lk-fehlliste summary { cursor: pointer; }
+.lk-fehlliste ul { margin: var(--a-1) 0 0; padding-left: 1.2rem; }
+.lk-terminierung[disabled] { opacity: 0.55; cursor: not-allowed; }
+.abzeichen.lk-vorab { background: var(--status-blau-bg); color: var(--status-blau); }
+.lk-stepper .schritt.aktiv { color: #fff; }
+
+/* Drei Spalten */
+.lk-spalten { display: grid; grid-template-columns: minmax(300px, 3fr) minmax(0, 6fr) minmax(260px, 3fr);
+    gap: var(--a-4); align-items: start; }
+.lk-links, .lk-mitte { padding: var(--a-4); }
+.lk-rechts { display: flex; flex-direction: column; gap: var(--a-3); }
+@media (max-width: 1000px) {
+    .lk-spalten { grid-template-columns: 1fr; }
+    .lk-kopf-aktionen { justify-content: flex-start; max-width: none; }
+}
+
+/* Links: Person, Aktions-Icons, Anruf */
+.lk-person { display: flex; gap: var(--a-3); align-items: flex-start; }
+.lk-avatar { width: 56px; height: 56px; border-radius: 50%; background: var(--friondo-blau);
+    color: #fff; display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: var(--t-l); flex: 0 0 auto; letter-spacing: 0.02em; }
+.lk-avatar.klein { width: 30px; height: 30px; font-size: var(--t-xs); background: var(--friondo-dunkel); }
+.lk-person-text { min-width: 0; }
+.lk-name { margin: 0 0 var(--a-1); font-size: var(--t-l); overflow-wrap: anywhere; }
+.lk-kontakt { display: flex; flex-direction: column; gap: 0.15rem; font-size: var(--t-s); }
+.lk-kontakt a { color: var(--friondo-dunkel); text-decoration: none; display: inline-flex; gap: 0.3rem; align-items: center; }
+.lk-kontakt a:hover { text-decoration: underline; }
+.lk-badges { margin-top: var(--a-2); display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
+.lk-aktionen { display: flex; flex-wrap: wrap; gap: var(--a-2); margin: var(--a-3) 0; padding-bottom: var(--a-3);
+    border-bottom: 1px solid var(--g-200); }
+.lk-aktion { display: inline-flex; flex-direction: column; align-items: center; gap: 0.2rem; min-width: 64px;
+    padding: 0.45rem 0.5rem; border: 1px solid var(--g-200); border-radius: var(--r-m); background: #fff;
+    color: var(--friondo-dunkel); font: inherit; font-size: var(--t-xs); text-decoration: none; cursor: pointer; }
+.lk-aktion .symbol-svg { width: 1.3em; height: 1.3em; }
+.lk-aktion:hover { background: var(--friondo-blau-hell); border-color: var(--friondo-blau); }
+.lk-aktion[disabled], .lk-aktion.gesperrt { opacity: 0.45; cursor: not-allowed; }
+.lk-anruf { background: var(--g-50); border-radius: var(--r-m); padding: var(--a-3); margin-bottom: var(--a-3); }
+.lk-anruf-kopf { display: flex; gap: var(--a-2); flex-wrap: wrap; margin-bottom: var(--a-2); }
+.lk-stoppuhr { font-variant-numeric: tabular-nums; color: var(--friondo-blau-dunkel); font-weight: 600; }
+.lk-anruf-form { display: flex; flex-direction: column; gap: var(--a-2); }
+.lk-anruf-notiz { width: 100%; padding: 0.4rem 0.6rem; border: 1px solid var(--g-300); border-radius: var(--r-s); font: inherit; }
+.lk-anruf-knoepfe { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.lk-anruf-knoepfe .knopf { display: inline-flex; align-items: center; gap: 0.3rem; }
+
+/* Links: Stammdaten-Formular */
+.lk-stammdaten fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.lk-abschnitt { font-size: var(--t-s); text-transform: uppercase; letter-spacing: 0.06em; color: var(--g-500);
+    margin: var(--a-3) 0 var(--a-2); display: flex; gap: var(--a-2); align-items: center; }
+.lk-feld { display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: var(--a-2); font-size: var(--t-s); }
+.lk-feld > span, .lk-feld > summary { color: var(--g-500); font-size: var(--t-xs); }
+.lk-feld input, .lk-feld select, .lk-feld textarea { width: 100%; padding: 0.4rem 0.6rem; border: 1px solid var(--g-300);
+    border-radius: var(--r-s); font: inherit; background: #fff; }
+.lk-feld input:focus, .lk-feld select:focus { outline: 2px solid var(--friondo-blau-hell); border-color: var(--friondo-blau); }
+.lk-feld.schmal { flex: 0 0 110px; }
+.lk-feld-reihe { display: flex; gap: var(--a-2); }
+.lk-feld-reihe > * { flex: 1 1 auto; min-width: 0; }
+.lk-feld-reihe > .schmal, .lk-feld-reihe input.schmal { flex: 0 0 110px; }
+.lk-pflicht abbr { color: var(--status-rot); text-decoration: none; margin-left: 0.1rem; }
+.lk-pflicht-offen input, .lk-pflicht-offen select, .lk-pflicht-offen > div { border-color: var(--status-rot) !important;
+    box-shadow: 0 0 0 1px var(--status-rot-bg); }
+.lk-pflicht-offen > div { border: 1px solid var(--status-rot); border-radius: var(--r-s); padding: 0.3rem 0.5rem; }
+.lk-pflicht-offen > span { color: var(--status-rot); }
+.lk-checkboxen > div { display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; }
+.lk-check { display: inline-flex; align-items: center; gap: 0.3rem; font-size: var(--t-s); }
+.lk-check input { width: auto; }
+.lk-mfh { background: var(--g-50); border-radius: var(--r-m); padding: var(--a-2) var(--a-3); margin-bottom: var(--a-2); }
+.lk-rechnung { display: flex; flex-direction: column; gap: 0.3rem; }
+.lk-einwilligung > div { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.lk-einwilligung input[type="date"] { width: auto; }
+.lk-hinweis { margin: -0.2rem 0 var(--a-2); font-size: var(--t-xs); }
+.lk-speichern { position: sticky; bottom: 0; background: #fff; padding: var(--a-2) 0; display: flex; gap: var(--a-2);
+    align-items: center; border-top: 1px solid var(--g-200); }
+.lk-speichern.aktiv { border-top-color: var(--friondo-blau); }
+.lk-speichern .knopf { display: inline-flex; align-items: center; gap: 0.3rem; }
+.lk-zustaendig { margin-top: var(--a-3); border-top: 1px solid var(--g-200); }
+.lk-zuweisung { display: flex; gap: var(--a-2); align-items: center; }
+.lk-zuweisung form { flex: 1; display: flex; gap: var(--a-2); align-items: center; flex-wrap: wrap; }
+.lk-zuweisung select { flex: 1; padding: 0.4rem 0.6rem; border: 1px solid var(--g-300); border-radius: var(--r-s); font: inherit; }
+.lk-anfrage { white-space: pre-wrap; font-size: var(--t-s); background: var(--g-50); padding: var(--a-2); border-radius: var(--r-s); }
+
+/* Mitte: Reiter */
+.lk-reiter { display: flex; gap: 0.3rem; border-bottom: 1px solid var(--g-200); padding-bottom: var(--a-2);
+    margin-bottom: var(--a-3); flex-wrap: wrap; }
+.lk-tab { position: relative; display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.5rem 0.75rem;
+    border: 1px solid transparent; border-radius: var(--r-m); background: transparent; color: var(--g-500);
+    cursor: pointer; font: inherit; }
+.lk-tab .symbol-svg { width: 1.25em; height: 1.25em; }
+.lk-tab:hover { background: var(--friondo-blau-hell); color: var(--friondo-dunkel); }
+.lk-tab[aria-selected="true"] { background: var(--friondo-dunkel); color: #fff; border-color: var(--friondo-dunkel); }
+.lk-tab:focus-visible { outline: 2px solid var(--friondo-blau); outline-offset: 2px; }
+.lk-tab-zahl { font-size: var(--t-xs); font-weight: 600; background: var(--g-100); color: var(--g-700);
+    border-radius: 999px; padding: 0 0.4rem; min-width: 1.3rem; text-align: center; }
+.lk-tab[aria-selected="true"] .lk-tab-zahl { background: rgba(255, 255, 255, 0.22); color: #fff; }
+.lk-panel-titel { margin: 0 0 var(--a-3); font-size: var(--t-l); display: flex; gap: var(--a-2); align-items: baseline; flex-wrap: wrap; }
+.lk-panel-titel .dezent { font-weight: 400; font-size: var(--t-s); }
+.lk-werkzeuge { display: flex; flex-wrap: wrap; gap: var(--a-2); align-items: center; margin-bottom: var(--a-3); }
+.lk-werkzeuge .knopf { display: inline-flex; align-items: center; gap: 0.3rem; }
+.lk-suche { display: inline-flex; align-items: center; gap: 0.3rem; flex: 1 1 220px; border: 1px solid var(--g-300);
+    border-radius: 999px; padding: 0.3rem 0.7rem; background: #fff; color: var(--g-500); }
+.lk-suche input { border: 0; outline: 0; flex: 1; font: inherit; min-width: 0; background: transparent; }
+.lk-filter { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.lk-chip { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.6rem; border-radius: 999px;
+    border: 1px solid var(--g-200); background: #fff; font: inherit; font-size: var(--t-xs); color: var(--g-700); cursor: pointer; }
+.lk-chip input { margin: 0; }
+.lk-chip.aktiv { background: var(--friondo-dunkel); color: #fff; border-color: var(--friondo-dunkel); }
+.lk-chipgruppe { padding-right: var(--a-2); border-right: 1px solid var(--g-200); }
+
+/* Mitte: Karten (Timeline, E-Mails) */
+.lk-timeline, .lk-mails { display: flex; flex-direction: column; gap: var(--a-2); position: relative; }
+.lk-karte { border: 1px solid var(--g-200); border-radius: var(--r-m); background: #fff; }
+.lk-karte[open] { border-color: var(--friondo-blau); }
+.lk-karte summary { list-style: none; display: grid; grid-template-columns: auto 1fr; gap: 0.1rem 0.6rem;
+    padding: 0.5rem 0.75rem; cursor: pointer; align-items: center; }
+.lk-karte summary::-webkit-details-marker { display: none; }
+.lk-karte-icon { grid-row: span 2; width: 30px; height: 30px; border-radius: 50%; display: inline-flex;
+    align-items: center; justify-content: center; background: var(--g-100); color: var(--g-700); }
+.lk-typ-anruf .lk-karte-icon { background: var(--status-blau-bg); color: var(--status-blau); }
+.lk-typ-mail .lk-karte-icon, .lk-karte-icon.aus { background: var(--status-violett-bg); color: var(--status-violett); }
+.lk-karte-icon.ein { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.lk-typ-termin .lk-karte-icon { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.lk-typ-notiz .lk-karte-icon { background: var(--status-orange-bg); color: var(--status-orange); }
+.lk-karte-titel { font-weight: 600; font-size: var(--t-m); }
+.lk-karte-meta { font-size: var(--t-xs); color: var(--g-500); }
+.lk-karte-inhalt { padding: 0 0.75rem 0.6rem 3rem; white-space: pre-wrap; font-size: var(--t-s); }
+.lk-karte-inhalt .lk-mail-body { white-space: normal; background: var(--g-50); padding: var(--a-2) var(--a-3);
+    border-radius: var(--r-s); }
+.lk-notiz-eingabe { display: flex; gap: var(--a-2); margin-top: var(--a-3); align-items: flex-start; }
+.lk-notiz-eingabe textarea { flex: 1; padding: 0.4rem 0.6rem; border: 1px solid var(--g-300); border-radius: var(--r-s); font: inherit; }
+.lk-notiz-eingabe .knopf { display: inline-flex; align-items: center; gap: 0.3rem; }
+.abzeichen.lk-herkunft-eigene { background: var(--status-blau-bg); color: var(--status-blau); }
+.abzeichen.lk-herkunft-automatisiert { background: var(--status-grau-bg); color: var(--status-grau); }
+.abzeichen.lk-herkunft-kollegen { background: var(--status-violett-bg); color: var(--status-violett); }
+.abzeichen.lk-herkunft-kunde { background: var(--status-gruen-bg); color: var(--status-gruen); }
+
+/* Mitte: Tabellen, Qualifizierung, Termin */
+.lk-tabelle { width: 100%; }
+.lk-tabelle td { vertical-align: top; }
+.lk-anruf-text { max-width: 420px; }
+.abzeichen.lk-ergebnis-erreicht { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.abzeichen.lk-ergebnis-nicht_erreicht, .abzeichen.lk-ergebnis-besetzt, .abzeichen.lk-ergebnis-mailbox {
+    background: var(--status-orange-bg); color: var(--status-orange); }
+.abzeichen.lk-ergebnis-kein_interesse, .abzeichen.lk-ergebnis-falsche_nummer { background: var(--status-rot-bg); color: var(--status-rot); }
+.abzeichen.lk-ergebnis-rueckruf_gewuenscht { background: var(--status-blau-bg); color: var(--status-blau); }
+.lk-quali h3 { display: flex; gap: var(--a-2); align-items: center; flex-wrap: wrap; font-size: var(--t-m); }
+.lk-terminierung { background: var(--g-50); box-shadow: none; padding: var(--a-3); margin-bottom: var(--a-3); }
+.lk-terminierung .lk-werkzeuge { margin: var(--a-2) 0 0; }
+.lk-termine .lk-termin-aktiv td { background: var(--friondo-blau-hell); }
+.lk-termin-aktionen { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: flex-start; }
+.lk-inline-form { position: relative; }
+.lk-inline-form summary { list-style: none; cursor: pointer; display: inline-block; }
+.lk-inline-form summary::-webkit-details-marker { display: none; }
+.lk-inline-form[open] > form { position: absolute; z-index: 5; right: 0; top: 100%; margin-top: 0.3rem; min-width: 280px;
+    background: #fff; border: 1px solid var(--g-200); border-radius: var(--r-m); box-shadow: var(--schatten-2);
+    padding: var(--a-3); display: flex; flex-direction: column; gap: var(--a-2); }
+.abzeichen.lk-tstatus-vorgemerkt { background: var(--status-orange-bg); color: var(--status-orange); }
+.abzeichen.lk-tstatus-geplant, .abzeichen.lk-tstatus-bestaetigt { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.abzeichen.lk-tstatus-no_show, .abzeichen.lk-tstatus-abgesagt { background: var(--status-rot-bg); color: var(--status-rot); }
+.abzeichen.lk-tstatus-erfolgt { background: var(--status-blau-bg); color: var(--status-blau); }
+.lk-zeile { display: flex; flex-wrap: wrap; gap: var(--a-2); align-items: center; padding: 0.5rem 0;
+    border-bottom: 1px solid var(--g-100); font-size: var(--t-s); }
+.lk-zeile .statuskette { flex-basis: 100%; }
+
+/* Rechts: einklappbare Bereiche */
+.lk-bereich { padding: 0; }
+.lk-bereich > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: var(--a-2);
+    padding: var(--a-3) var(--a-4); font-weight: 600; }
+.lk-bereich > summary::-webkit-details-marker { display: none; }
+.lk-bereich > summary::after { content: "\203A"; margin-left: auto; color: var(--g-500); transition: transform 0.15s; font-size: 1.2em; }
+.lk-bereich[open] > summary::after { transform: rotate(90deg); }
+.lk-zahl { display: inline-flex; min-width: 1.5rem; justify-content: center; padding: 0 0.45rem; border-radius: 999px;
+    background: var(--friondo-blau-hell); color: var(--friondo-blau-dunkel); font-size: var(--t-xs); font-weight: 700; }
+.lk-bereich-inhalt { padding: 0 var(--a-4) var(--a-3); display: flex; flex-direction: column; gap: 0.4rem; font-size: var(--t-s); }
+.lk-bereich-fuss { display: flex; gap: var(--a-2); flex-wrap: wrap; margin-top: var(--a-1); }
+.lk-bereich-fuss .knopf { display: inline-flex; align-items: center; gap: 0.3rem; }
+.lk-mini { display: flex; flex-wrap: wrap; gap: 0.3rem 0.5rem; align-items: center; }
+.lk-galerie { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 0.4rem; }
+.lk-galerie img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--r-s); border: 1px solid var(--g-200); }
+.lk-todo { align-items: flex-start; flex-wrap: nowrap; }
+.lk-todo.erledigt { opacity: 0.6; }
+.lk-todo.erledigt strong { text-decoration: line-through; }
+.lk-todo-haken { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--g-300); background: #fff;
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: transparent; flex: 0 0 auto; }
+.lk-todo-haken:hover { color: var(--status-gruen); border-color: var(--status-gruen); }
+.lk-todo-haken.fertig { color: #fff; background: var(--status-gruen); border-color: var(--status-gruen); cursor: default; }
+.lk-todo-neu { gap: 0.4rem; margin-top: var(--a-2); padding-top: var(--a-2); border-top: 1px dashed var(--g-200); }
+.lk-todo-neu input, .lk-todo-neu select { width: 100%; padding: 0.35rem 0.5rem; border: 1px solid var(--g-300); border-radius: var(--r-s); font: inherit; }
+.lk-todo-neu .knopf { align-self: flex-start; display: inline-flex; align-items: center; gap: 0.3rem; }
+
+/* Dialoge */
+.lk-dialog { border: 0; border-radius: var(--r-l); box-shadow: var(--schatten-2); padding: var(--a-5); max-width: 560px; width: calc(100% - 2rem); }
+.lk-dialog::backdrop { background: rgba(27, 42, 94, 0.35); }
+.lk-dialog h3 { margin-top: 0; display: flex; gap: var(--a-2); align-items: center; }
+.lk-dialog-mehr { margin-top: var(--a-3); border-top: 1px solid var(--g-200); padding-top: var(--a-2); }
+.lk-dialog-mehr summary { cursor: pointer; color: var(--g-500); font-size: var(--t-s); }
+/* Phase 105 – Nachtrag: Leistentexte zweizeilig, Gruppenkarte wächst mit der Tabelle */
+.lm-leiste-text { white-space: normal; text-align: center; line-height: 1.05; max-width: 54px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.lm-leiste-eintrag { width: 54px; height: 50px; }
+details.lm-gruppe { width: max-content; min-width: 100%; max-width: none; }
+
+/* Phase 106 – Nachtrag: gesperrte Knöpfe im Kartei-Kopf lesbar (Phasen-CSS setzt knopf:disabled hell) */
+.lk-kopf-aktionen .knopf[disabled], .lk-terminierung[disabled], .lk-terminierung[disabled]:hover {
+    background: var(--g-100); color: var(--g-500); border-color: var(--g-200); opacity: 1; cursor: not-allowed; }
+.lk-speichern { margin-top: var(--a-2); }
+
+/* Phase 110 – Nachtrag (Prüfung): .lm-umschalter wird auch von Phase 105 definiert –
+   Trennlinie nur einmal (border-left statt zusätzlich border-right), aktive Farbe und
+   Phasen-Zähler über das Token --friondo-dunkel statt des nicht vorhandenen --dunkelblau */
+.lm-umschalter a { border-right: none; }
+.lm-umschalter a + a { border-left: 1px solid var(--g-200); }
+.lm-umschalter a.aktiv { background: var(--friondo-dunkel); color: #fff; }
+.lm-phase .n { background: var(--friondo-dunkel); }
+
+/* Phase 109 – Nachtrag: Zellen des Hauptboard-Makros (_tabelle.html, Phase 105)
+   in der HV-Tabelle – dort gilt .lm-tabelle nicht, Umbruch/Mindestbreite nachziehen */
+.hv-tabelle td.sp-lead, .hv-tabelle td.sp-interessen, .hv-tabelle td.sp-angebot { white-space: normal; }
+.hv-tabelle td.sp-lead { min-width: 180px; }
+.hv-tabelle td.sp-hv { white-space: normal; min-width: 220px; }
+
+/* Phase 111 – Info-Veranstaltung (I1–I5): Gruppen je Termin, Kennzeichen
+   verschoben (Feiertag), Spalte Teilgenommen (Ja/Nein/leer), Veranstaltungs-
+   Dropdown, Ergebnis-Buttons, roter Hinweis Kunde bereits im System, Termine-
+   Pflege. Praefix li-. Nur Tokens aus style.css (v14). */
+.li-gruppe-kopf .symbol-svg { width: 1rem; height: 1rem; vertical-align: -2px; margin-right: 4px; color: var(--friondo-blau); }
+.li-gruppe-kopf .li-titel { font-weight: 700; }
+.li-gruppe-kopf .li-ort { font-weight: 400; text-transform: none; letter-spacing: 0; }
+.li-gruppe.li-vergangen > summary .li-titel { color: var(--g-500); }
+.li-gruppe.li-ohne > summary { border-left: 4px solid var(--status-orange); }
+.abzeichen.li-verschoben { background: var(--status-orange-bg); color: var(--status-orange); margin-left: 6px; }
+.li-notiz { margin: 0; padding: 8px 14px; border-bottom: 1px solid var(--g-100); white-space: pre-line; }
+.li-notiz .symbol-svg { width: 0.9rem; height: 0.9rem; vertical-align: -2px; }
+.li-rot { color: var(--status-rot); font-weight: 600; }
+.li-hinweis { display: flex; align-items: center; gap: 5px; margin-top: 3px; padding: 2px 8px; border-radius: 999px;
+    background: var(--status-rot-bg); color: var(--status-rot); font-size: var(--t-xs); font-weight: 600; white-space: nowrap; width: max-content; max-width: 100%; }
+.li-hinweis .symbol-svg { width: 0.85rem; height: 0.85rem; flex: 0 0 auto; }
+.li-hinweis a { color: inherit; text-decoration: underline; }
+tr.li-hat-hinweis td.sp-lead { box-shadow: inset 3px 0 0 var(--status-rot); }
+.abzeichen.li-terminiert { background: var(--status-gruen-bg); color: var(--status-gruen); text-decoration: none; }
+.li-ergebnis { white-space: nowrap; }
+.li-anruf-form { display: inline-flex; gap: 4px; flex-wrap: wrap; margin: 0; align-items: center; }
+.li-anruf-form .knopf { display: inline-flex; align-items: center; }
+.li-anruf-form .knopf.lm-ok { background: var(--status-gruen); border-color: var(--status-gruen); color: #fff; }
+.li-anruf-form button[disabled] { opacity: .45; cursor: not-allowed; text-decoration: line-through; }
+.li-ergebnis .lm-stoppuhr { margin-left: 6px; }
+.li-teil-zelle { white-space: nowrap; }
+.li-teil { display: inline-flex; gap: 0; margin: 0; border: 1px solid var(--g-200); border-radius: 999px; overflow: hidden; vertical-align: middle; background: #fff; }
+.li-teil-knopf { font: inherit; font-size: var(--t-xs); font-weight: 600; padding: 2px 10px; border: none; background: transparent;
+    color: var(--g-500); cursor: pointer; border-right: 1px solid var(--g-200); }
+.li-teil-knopf:last-child { border-right: none; }
+.li-teil-knopf:hover { background: var(--g-50); color: var(--text); }
+.li-teil-knopf.ja.aktiv { background: var(--status-gruen); color: #fff; }
+.li-teil-knopf.nein.aktiv { background: var(--status-rot); color: #fff; }
+.li-teil-knopf.leer { color: var(--g-300); padding: 2px 7px; }
+.li-teil.pflicht { border-color: var(--status-rot); box-shadow: 0 0 0 2px var(--status-rot-bg); }
+.li-teil-zelle small { display: block; margin-top: 2px; }
+.li-veranst-form { margin: 0; display: inline-flex; gap: 4px; align-items: center; }
+.li-veranst-wahl { font: inherit; font-size: var(--t-xs); padding: 2px 4px; border: 1px solid var(--g-200); border-radius: var(--r-s);
+    background: #fff; color: var(--g-700); max-width: 190px; }
+.li-veranst-wahl:focus { border-color: var(--friondo-blau); outline: none; }
+.lm-sammel .li-sammel-teil[hidden], .lm-sammel .li-sammel-status[hidden] { display: none; }
+/* Termine-Pflege */
+.li-termine-raster { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--a-3); align-items: start; }
+.li-termine .tabelle-wrap { overflow-x: auto; }
+.li-termine-tabelle td { vertical-align: top; }
+.li-termine-tabelle tr.li-archiv td { color: var(--g-500); background: var(--g-50); }
+.li-termine-tabelle td.nowrap, .li-termine-tabelle th.nowrap { white-space: nowrap; }
+.li-termine-tabelle td.rechts, .li-termine-tabelle th.rechts { text-align: right; }
+.li-notiz-form { display: flex; gap: 4px; align-items: flex-start; margin: 0; min-width: 220px; }
+.li-notiz-form textarea { flex: 1; font: inherit; font-size: var(--t-s); padding: 4px 6px; border: 1px solid var(--g-200); border-radius: var(--r-s); resize: vertical; }
+.li-inline-form { display: inline-flex; gap: 4px; align-items: center; margin: 0; flex-wrap: wrap; }
+.li-inline-form input[type="datetime-local"] { font: inherit; font-size: var(--t-xs); padding: 2px 4px; border: 1px solid var(--g-200); border-radius: var(--r-s); }
+.li-aktionen { display: flex; flex-direction: column; gap: 4px; }
+.li-anlegen { margin-top: var(--a-3); }
+.li-anlegen summary { cursor: pointer; color: var(--friondo-blau); }
+.li-anlegen .formzeile { margin-top: var(--a-2); align-items: flex-end; }
+.li-seitenleiste { display: flex; flex-direction: column; gap: var(--a-3); }
+.li-dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: var(--t-s); }
+.li-dl dt { color: var(--g-500); }
+.li-dl dd { margin: 0; }
+.li-kontrollliste { list-style: none; margin: 0; padding: 0; font-size: var(--t-s); display: flex; flex-direction: column; gap: 3px; }
+@media (max-width: 1100px) { .li-termine-raster { grid-template-columns: 1fr; } }
+
+
+/* Phase 108 (Pruefung) – Inline-Formular „Zeit eintragen/Verschieben“ fuer Vorab-Gespraeche in der Terminliste */
+.lmt-termine details.lmt-inline-form { display: inline-block; vertical-align: middle; position: relative; }
+.lmt-termine details.lmt-inline-form > summary { list-style: none; cursor: pointer; display: inline-flex; }
+.lmt-termine details.lmt-inline-form > summary::-webkit-details-marker { display: none; }
+.lmt-termine details.lmt-inline-form[open] > .formular { position: absolute; z-index: 30; right: 0; min-width: 260px;
+    margin-top: 4px; padding: 0.6rem 0.8rem; background: #fff; border: 1px solid var(--g-200);
+    border-radius: var(--r-m); box-shadow: var(--schatten-2); }
+
+/* Phase 105 – Nachtrag (Prüfung): Sortier-Spaltenköpfe (A3), Rückfall-Klasse für
+   Browser ohne :has(), H5-Knopf „Bestätigung erneut“ in der Termin-Zelle, Hot-Ampel
+   der Angebotsverfolgung als Abzeichen (Tokens aus style.css) */
+body.lm-mit-leiste main { padding-left: calc(var(--lm-leiste-breite) + var(--a-5)); }
+.lm-tabelle thead th[data-sort] { cursor: pointer; user-select: none; }
+.lm-tabelle thead th[data-sort]:hover { color: var(--friondo-blau); }
+.lm-tabelle thead th[aria-sort]::after { content: " ▲"; font-size: 0.7em; color: var(--friondo-blau); }
+.lm-tabelle thead th[aria-sort="descending"]::after { content: " ▼"; }
+.lm-inline-form { display: inline-block; margin: 0 0 0 4px; }
+.lm-bestaetigung-erneut { display: inline-flex; align-items: center; gap: 4px; }
+.lm-ampel { font-weight: 600; }
+.lm-ampel-heiss { background: var(--status-rot-bg); color: var(--status-rot); }
+.lm-ampel-warm { background: var(--status-orange-bg); color: var(--status-orange); }
+.lm-ampel-kalt { background: var(--status-blau-bg); color: var(--status-blau); }
+@media (max-width: 900px) {
+    body.lm-mit-leiste main { padding-left: var(--a-4); padding-bottom: 80px; }
+}

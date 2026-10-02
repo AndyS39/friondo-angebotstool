@@ -78,6 +78,15 @@
                 {% endfor %}
             </select>
         </label>
+        {# v23 (Phase 109, G3): Handelsvertreter – Ausschlussliste F14 prüft der Server #}
+        <label>Handelsvertreter
+            <select name="ad_id">
+                <option value="">– nicht zugewiesen –</option>
+                {% for hv in hv_liste | default([]) %}
+                    <option value="{{ hv.id }}" {{ 'selected' if daten.get('ad_id')|string == hv.id|string }}>{{ hv.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
     </div>
     <label>Notiz / Anfragetext
         <textarea name="nachricht" rows="3">{{ daten.get('nachricht', '') }}</textarea>

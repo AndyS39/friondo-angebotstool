@@ -205,7 +205,8 @@ def pflichtfelder_offen(session: Session, kunde: Kunde, vorgang: Vorgang | None 
             continue
         wert = getattr(kunde, feld, None)
         if wert is None or str(wert).strip() == "":
-            offen.append(feld.capitalize() if feld != "plz" else "PLZ")
+            offen.append({"plz": "PLZ", "strasse": "Straße", "email": "E-Mail"}
+                         .get(feld, feld.capitalize()))
     if (kunde.objektart or "").upper() == "MFH":
         if not kunde.parteien:
             offen.append("Anzahl Parteien")

@@ -428,5 +428,29 @@ main{max-width:1380px;margin:0 auto;padding:var(--a-4) var(--a-5) var(--a-6)}
 </section>
 
 </main>
+
+<!-- v23 (PLAN_LEAD_V2): Layout-Aenderungen V2 – Beschreibung statt Nachbau; die
+     umgesetzten Seiten sind die Referenz (Hauptboard, Kartei, Dashboard). -->
+<section style="margin:40px 16px;padding:20px;border:1px dashed #9aa4b2;border-radius:12px;max-width:1100px">
+  <h2>Lead-Management V2 (v23) – Layout-Hinweise</h2>
+  <ul>
+    <li><strong>Modul-Navigation:</strong> schmale Icon-Leiste links unter der Kopfleiste
+      (Hauptboard · Terminiert · Kontaktiert · Info-Veranstaltung · E-Mail-Vorlagen · Mehr …),
+      Tooltips, lokale SVG-Icons, Demo-Badge in der Leiste; unter 900 px untere Icon-Zeile.
+      Die globale Kopfleiste (Logo, Glocke, Menü) bleibt – zwei Ebenen.</li>
+    <li><strong>Boards:</strong> Tabelle nach monday-Vorbild mit fixierten Spaltenköpfen,
+      farbigen Status-/Kanal-Labels (Farben aus Blatt Status bzw. Parameter), fünf
+      Versuchs-Punkten, Avataren mit Initialen, Inline-Feldern, Kästchen für
+      Sammelaktionen, Gruppen einklappbar; Umschalter Tabelle | Anrufliste | Kanban.</li>
+    <li><strong>Kundenkartei:</strong> dreispaltig (HubSpot-Vorbild): links Kontakt +
+      Aktions-Icons + Stammdaten mit roten Pflichtfeldern, Mitte Reiter mit Icons und
+      Timeline-Karten, rechts einklappbare Zuordnungsbereiche mit Zählern; unter 1000 px
+      untereinander.</li>
+    <li><strong>Dashboard „Meine Arbeit“:</strong> Kacheln + Blöcke Wiedervorlagen (Lead /
+      Angebot), zugeteilte Vorgänge, Termine, To-Dos; Umschalter Meine Arbeit | Team.</li>
+    <li>Tokens, Rundungen, Weißraum und Komponenten wie v14 (<code>style.css</code>),
+      Ergänzungen in <code>app/static/lead_v2.css</code>.</li>
+  </ul>
+</section>
 </body>
 </html>

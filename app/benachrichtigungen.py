@@ -32,6 +32,9 @@ PROJEKT_ARTEN = set(ART_NAMEN)
 # v12: Ereignisse des Lead-Moduls, gleicher Demo-Filter über lead_freigabe_modus
 LEAD_ARTEN = {"lead"}
 ART_NAMEN["lead"] = "Lead-Management"
+# v23 (Phase 110, F7): To-Dos nur über die Glocke – nie Sofort-/Digest-Mail
+MAIL_FREIE_ARTEN = {"todo"}
+ART_NAMEN["todo"] = "To-Do"
 
 
 # --- Glocke (Kopfzeile) -----------------------------------------------------------
@@ -47,8 +50,12 @@ def _lead_sichtbar_fuer(session: Session, benutzer) -> bool:
     from app import leadmanagement
     # Prozess-Fix 27.09.2026: der Aussendienst bekommt die Glocke
     # "Neuer VOT-Termin" (lead_ad_sicht), auch ohne volles Lead-Modul
+    from app import lead_v2
     return (leadmanagement.lead_modul_sichtbar(session, benutzer)
-            or leadmanagement.lead_ad_sicht(session, benutzer))
+            or leadmanagement.lead_ad_sicht(session, benutzer)
+            # v23 (Phase 109, R-G5): Handelsvertreter sehen Lead-Glocken
+            # (Zuweisung, Umverteilung, Termine) auch im Demo-Modus
+            or lead_v2.ist_handelsvertreter(session, benutzer))
 
 
 def _gefiltert(session: Session, benutzer, abfrage):
@@ -138,6 +145,8 @@ def sofort_versenden(session: Session, benutzer_ids, text: str, link: str,
                      art: str = "") -> None:
     """Wird von kern.benachrichtigen für jeden Glocken-Eintrag aufgerufen:
     Benutzer mit Einstellung „sofort“ erhalten die Mail direkt."""
+    if art in MAIL_FREIE_ARTEN:
+        return   # F7: To-Dos ohne Mail
     from app.models import Benutzer
     for bid in benutzer_ids:
         benutzer = session.get(Benutzer, bid)
@@ -245,6 +254,7 @@ def digest_versenden(session: Session | None = None, erzwingen: bool = False) ->
                 eintraege = [e for e in eintraege if e.art not in PROJEKT_ARTEN]
             if not _lead_sichtbar_fuer(session, benutzer):
                 eintraege = [e for e in eintraege if e.art not in LEAD_ARTEN]
+            eintraege = [e for e in eintraege if e.art not in MAIL_FREIE_ARTEN]   # v23 F7
             if not eintraege:
                 continue
             if not benutzer.email:

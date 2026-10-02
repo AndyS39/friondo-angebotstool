@@ -41,6 +41,14 @@ async def login(request: Request, session: Session = Depends(get_session)):
             "montage": "/montage",
             "leadmanagement": "/lead-management"}.get(benutzer.rolle,
                                                       "/angebotstool")
+    # v23 (Phase 109): Handelsvertreter landen nach dem Login im Lead-Modul
+    # (Modul-Einstieg → persönliches Dashboard mit eigenen Leads)
+    try:
+        from app import lead_v2
+        if lead_v2.ist_handelsvertreter(session, benutzer):
+            ziel = "/lead-management"
+    except Exception:
+        pass
     antwort = RedirectResponse(ziel, status_code=303)
     antwort.set_cookie(auth.COOKIE_NAME, auth.cookie_wert(benutzer.id),
                        httponly=True, max_age=60 * 60 * 12)

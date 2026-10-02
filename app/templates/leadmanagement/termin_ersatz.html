@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "_symbole.html" import symbol %}
+
+{% block titel %}Ersatzkunde – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{% block inhalt %}
+{{ lm_nav('kalender') }}
+<div class="seitenkopf">
+    <h1>Ersatzkunde für den freien Slot
+        {% if demo_badge %}<span class="demo-badge">Demo</span>{% endif %}</h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}">Kartei {{ kunde.anzeige_name }}</a>
+        <a class="knopf klein zweitrangig" href="/lead-management/kalender?ad_id={{ termin.ad_id or '' }}">Kalender</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<section class="karte lmt-slot">
+    <h2>Freigewordener Slot</h2>
+    <p><strong>{{ termin.beginn | de_datum('%A, %d.%m.%Y · %H:%M') if termin.beginn }} Uhr</strong>
+        · {{ ad.name if ad else '?' }} · {{ termin.adresse or '?' }}
+        · Status {{ status_namen.get(termin.status, termin.status) }}
+        {% if termin.grund_text %}<span class="dezent">– {{ termin.grund_text }}</span>{% endif %}</p>
+    <p class="dezent">Suche: offene qualifizierte Leads (Phase Qualifiziert zuerst, dann
+        In Kontaktierung mit erreichtem Kunden) im Umkreis, Stufen {{ stufen | join(' → ') }} km
+        (Luftlinie) bis mindestens drei Treffer; Leads ab {{ alter_tage }} Tagen bevorzugt,
+        Score-Klasse berücksichtigt.
+        {% if radius %}Verwendeter Radius: <strong>{{ radius | round(0) | int }} km</strong>.{% endif %}
+        {% if not ort %}<span class="lmt-aus">Slot ohne Koordinaten – keine Umkreissuche möglich.</span>{% endif %}</p>
+</section>
+
+<h2>{{ kandidaten | length }} Kandidat{{ 'en' if kandidaten | length != 1 }}</h2>
+{% if kandidaten %}
+<table class="tabelle lmt-ersatz-tabelle">
+    <thead><tr><th>#</th><th>Kunde</th><th>Sparten</th><th>Begründung</th><th>Aktion</th></tr></thead>
+    <tbody>
+    {% for k in kandidaten %}
+        <tr class="{{ 'lmt-bevorzugt' if k.bevorzugt }}">
+            <td>{{ loop.index }}</td>
+            <td><a href="/lead-management/lead/{{ k.vorgang.id }}">{{ k.kunde.anzeige_name if k.kunde else '?' }}</a>
+                <div class="dezent">{{ k.kunde.plz if k.kunde }} {{ k.kunde.ort if k.kunde }}</div></td>
+            <td>{% for s in k.sparten %}<span class="abzeichen interesse-{{ s | lower }}">{{ s }}</span> {% endfor %}</td>
+            <td>{{ k.begruendung }}{% if k.bevorzugt %} <span class="abzeichen ep">bevorzugt</span>{% endif %}</td>
+            <td class="aktionen">
+                <a class="knopf klein"
+                   href="/lead-management/lead/{{ k.vorgang.id }}/termin?ad_id={{ termin.ad_id or '' }}&slot={{ slot }}&ersatz_fuer={{ termin.id }}">
+                    {{ symbol('kalender') }} Termin für Ersatzkunden vorschlagen</a>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="dezent">Keine passenden Leads im Umkreis. Der Slot bleibt frei – der
+    Terminassistent berücksichtigt ihn bei den nächsten Vorschlägen automatisch.</p>
+{% endif %}
+{% endblock %}

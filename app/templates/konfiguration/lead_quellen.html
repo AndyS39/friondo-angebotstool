@@ -36,7 +36,7 @@
             <td><input form="q{{ q.id }}" type="text" name="name" value="{{ q.name }}" size="18"></td>
             <td>
                 <select form="q{{ q.id }}" name="typ">
-                    {% for t in ('website', 'landingpage', 'portal', 'partner', 'telefon', 'empfehlung', 'bestand', 'monday') %}
+                    {% for t in ('website', 'landingpage', 'portal', 'partner', 'telefon', 'empfehlung', 'bestand', 'veranstaltung', 'monday') %}
                         <option value="{{ t }}" {{ 'selected' if q.typ == t }}>{{ t }}</option>
                     {% endfor %}
                 </select>
@@ -57,7 +57,7 @@
             <td><input form="q{{ q.id }}" type="text" name="kosten" size="6"
                        value="{{ ('%.2f' | format(q.kosten_je_lead_cent / 100)) | replace('.', ',') if q.kosten_je_lead_cent is not none }}"></td>
             <td>
-                {% for s in ('WP', 'PV', 'KL', 'WB') %}
+                {% for s in ('WP', 'PV', 'KL', 'WB', 'GW') %}
                     <label style="white-space:nowrap"><input form="q{{ q.id }}" type="checkbox"
                         name="standard_sparten" value="{{ s }}"
                         {{ 'checked' if s in q.standard_sparten }}>{{ s }}</label>
@@ -87,7 +87,7 @@
     <label>Name <input type="text" name="name" required></label>
     <label>Typ
         <select name="typ">
-            {% for t in ('website', 'landingpage', 'portal', 'partner', 'telefon', 'empfehlung', 'bestand') %}
+            {% for t in ('website', 'landingpage', 'portal', 'partner', 'telefon', 'empfehlung', 'bestand', 'veranstaltung') %}
                 <option value="{{ t }}">{{ t }}</option>
             {% endfor %}
         </select>

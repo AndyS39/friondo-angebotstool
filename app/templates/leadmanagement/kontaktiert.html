@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "leadmanagement/_tabelle.html" import avatar %}
+
+{% block titel %}Kontaktiert – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{# v23 (PLAN_LEAD_V2 Phase 105, H7/D3): alle Kontaktversuche (lead_aktivitaeten
+   typ anruf) mit Datum, Uhrzeit, Ergebnis, Benutzer, Lead (Link Kartei),
+   neueste zuerst; Suche Name/Nummer/Benutzer/Ergebnis; Rufnummernsuche
+   E.164 (kern.telefon_normalisieren) gegen kunden.telefon UND leads.telefon –
+   „0203 …“ und „+49 203 …“ sind gleich. Leads bleiben auf ihrem Board. #}
+{% block inhalt %}
+{{ lm_nav('kontaktiert') }}
+<div class="seitenkopf">
+    <h1>Kontaktiert {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
+    <span class="dezent">alle Kontaktversuche · <b>{{ gesamt }}</b> Einträge{% if hv %} · nur eigene Leads{% endif %}</span>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/hauptboard">{{ symbol('board') }} Hauptboard</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<form method="get" action="/lead-management/kontaktiert" class="suchleiste lm-suchleiste">
+    <input type="search" name="q" value="{{ q }}" placeholder="Suche: Name, Ort, Ergebnis, Benutzer" aria-label="Suche">
+    <label class="kontrollfeld">{{ symbol('telefon-eingehend') }} Rufnummer
+        <input type="tel" name="telefon" value="{{ telefon }}" placeholder="z. B. 0203 123456 oder +49 203 …" size="22" aria-label="Rufnummer eingeben"></label>
+    <button class="knopf klein zweitrangig" type="submit">{{ symbol('suche') }} Suchen</button>
+    {% if q or telefon %}<a class="knopf klein ghost" href="/lead-management/kontaktiert">Zurücksetzen</a>{% endif %}
+</form>
+
+{% if telefon %}
+<div class="karte lm-treffer">
+    <h2>Rufnummer {{ telefon }} <small class="dezent">(normalisiert {{ telefon_norm or '–' }})</small></h2>
+    {% if treffer %}
+        <ul class="lm-trefferliste">
+            {% for t in treffer %}
+            <li>
+                <a class="lm-lead-name" href="{{ t.link }}">{{ t.name }}</a>
+                <span class="dezent">{{ t.ort }} · {{ t.telefon }}</span>
+                {% if t.phase %}<span class="abzeichen">{{ phasen_namen.get(t.phase, t.phase) }}</span>{% endif %}
+                {% if t.art == 'monday' %}<span class="abzeichen" title="gesyncter monday-Lead">monday</span>{% endif %}
+                {% if t.anzahl_vorgaenge > 1 %}<span class="lm-zaehler" title="weitere Vorgänge des Kunden">+{{ t.anzahl_vorgaenge - 1 }}</span>{% endif %}
+                <a class="knopf klein" href="{{ t.link }}">{{ symbol('oeffnen') }} Kartei</a>
+            </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="dezent">Kein Lead mit dieser Nummer im Tool (Kunden und monday-Leads durchsucht).
+            <a class="knopf klein zweitrangig" href="/lead-management/neu">{{ symbol('plus') }} Neuen Lead anlegen</a></p>
+    {% endif %}
+</div>
+{% endif %}
+
+<table class="tabelle lm-tabelle lm-kontaktiert">
+    <thead>
+        <tr><th>Datum</th><th>Uhrzeit</th><th>Ergebnis</th><th>Benutzer</th><th>Lead</th><th>Telefon</th><th>Dauer</th><th>Notiz</th></tr>
+    </thead>
+    <tbody>
+        {% for z in zeilen %}
+        <tr>
+            <td>{{ z.aktivitaet.zeitpunkt | de_datum('%a %d.%m.%Y') }}</td>
+            <td>{{ z.aktivitaet.zeitpunkt.strftime('%H:%M') }}</td>
+            <td><span class="lm-ergebnis e-{{ z.ergebnis_klasse }}">{{ z.ergebnis or 'Anruf' }}</span></td>
+            <td><span class="lm-person">{{ avatar(z.benutzer, 'Benutzer') }} <span>{{ z.benutzer.name if z.benutzer else 'System' }}</span></span></td>
+            <td><a class="lm-lead-name" href="/lead-management/lead/{{ z.vorgang.id }}" title="Kundenkartei öffnen">{{ z.kunde.anzeige_name }}</a>
+                <span class="dezent">{{ z.kunde.ort or '' }}</span>
+                <span class="abzeichen">{{ phasen_namen.get(z.vorgang.lead_phase, z.vorgang.lead_phase or '–') }}</span>
+                {% if z.vorgang.demo %}<span class="abzeichen">Demo</span>{% endif %}</td>
+            <td>{% if z.kunde.telefon %}<a href="tel:{{ z.kunde.telefon | replace(' ', '') }}">{{ z.kunde.telefon }}</a>{% endif %}</td>
+            <td>{% if z.aktivitaet.dauer_sek %}{{ (z.aktivitaet.dauer_sek // 60) }}:{{ '%02d' | format(z.aktivitaet.dauer_sek % 60) }} min{% else %}<span class="dezent">–</span>{% endif %}</td>
+            <td class="lm-notiz-text">{{ z.notiz }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="dezent">Keine Kontaktversuche gefunden.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% if seiten > 1 %}
+<nav class="lm-seiten" aria-label="Seiten">
+    {% for n in range(1, seiten + 1) %}
+        <a class="knopf klein {{ 'zweitrangig' if n != seite }}" href="/lead-management/kontaktiert?q={{ q | urlencode }}&telefon={{ telefon | urlencode }}&seite={{ n }}">{{ n }}</a>
+    {% endfor %}
+</nav>
+{% endif %}
+{% endblock %}

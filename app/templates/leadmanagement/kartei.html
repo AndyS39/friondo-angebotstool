@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "_symbole.html" import symbol %}
+{% from "_komponenten.html" import versuche_punkte %}
+{# v23 (PLAN_LEAD_V2 Phase 106): Kundenkartei dreispaltig (B1–B8) –
+   Kopf (Stepper, SLA, Versuche, Pflichtfeld-Zähler, Terminierung B8,
+   Nachbearbeitung F11), links Kontakt + Stammdaten, Mitte Reiter mit Icons,
+   rechts einklappbare Zähler-Bereiche. Unter 1000 px stehen die Spalten
+   untereinander (lead_v2.css, Block Phase 106). #}
+
+{% block titel %}Kundenkartei {{ kunde.anzeige_name if kunde else vorgang.id }} – Friondo Angebotstool{% endblock %}
+{% block mainklasse %}breit lk-seite{% endblock %}
+
+{% block inhalt %}
+{{ lm_nav('hauptboard') }}
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<header class="karte lk-kopf">
+    <div class="lk-kopf-titel">
+        <h1>Kundenkartei
+            {% if vorgang.demo %}<span class="demo-badge">Demo</span>{% endif %}
+            {% if vorgang.eingang_art == 'monday' %}<span class="abzeichen">monday</span>{% endif %}
+            {% if vorgang.vorab_angebot %}<span class="abzeichen lk-vorab" title="Angebot ohne Vor-Ort-Termin – keine Terminbestätigung (F10)">Vorab-Angebot</span>{% endif %}
+            {% if lead_kontext.wiederkehrer %}<span class="abzeichen ep">Wiederkehrer</span>{% endif %}
+            {% if readonly %}<span class="abzeichen" title="Außendienst-Lesesicht: nur ansehen, Notiz, No-Show/Verschieben am eigenen Termin">Lesesicht</span>{% endif %}
+        </h1>
+        <div class="lead-stepper lk-stepper" aria-label="Lead-Phase">
+            {% for phase in lead_kontext.phasen %}
+                <span class="schritt {{ 'aktiv' if vorgang.lead_phase == phase }}"
+                      {% if vorgang.lead_phase == phase and status_farben.get(phase) %}style="background:{{ status_farben[phase] }};border-color:{{ status_farben[phase] }}"{% endif %}>{{ lead_phasen_namen[phase] }}</span>
+            {% endfor %}
+            {% if vorgang.lead_phase in ('zurueckgestellt', 'nicht_erreicht', 'unqualifiziert', 'verloren') %}
+                <span class="schritt seitenzustand aktiv"
+                      {% if status_farben.get(vorgang.lead_phase) %}style="background:{{ status_farben[vorgang.lead_phase] }};border-color:{{ status_farben[vorgang.lead_phase] }}"{% endif %}>{{ lead_phasen_namen[vorgang.lead_phase] }}</span>
+            {% endif %}
+        </div>
+        <div class="lk-kopf-fakten">
+            <span>SLA:
+                {% if lead_kontext.sla.farbe == 'erfuellt' %}
+                    <span class="sla-chip sla-erfuellt" title="Zeit bis zum Erstkontakt (innerhalb der LM-Arbeitszeit)">erfüllt · {{ lead_kontext.sla.text }}</span>
+                {% elif lead_kontext.sla.farbe %}
+                    <span class="sla-chip sla-{{ lead_kontext.sla.farbe }}" title="wartet seit {{ lead_kontext.sla.text }} auf den Erstkontakt">{{ lead_kontext.sla.text }}</span>
+                {% else %}–{% endif %}</span>
+            <span class="lk-versuche">Versuche: {{ versuche_punkte(vorgang) }}
+                <span>{% for text, klasse in lead_kontext.kontakt_satz %}<span class="{{ {'faellig': 'lm-rot', 'rueckruf': 'lm-blau', 'warn': 'lm-warn', 'rot': 'lm-rot', 'dezent': 'dezent'}.get(klasse, '') }}">{{ text }}</span>{{ ' · ' if not loop.last }}{% endfor %}</span></span>
+            <span title="{{ lead_kontext.score_teile | join('&#10;') }}">Score:
+                <strong>{{ vorgang.score_punkte if vorgang.score_punkte is not none else '–' }} · {{ vorgang.score_klasse or '–' }}</strong></span>
+            {% if vorgang.lead_phase == 'zurueckgestellt' %}
+                <span class="lm-warn">{{ symbol('pause') }} Zurückgestellt
+                    {{ 'bis ' ~ vorgang.zurueckgestellt_bis.strftime('%d.%m.%Y') if vorgang.zurueckgestellt_bis }}
+                    {{ '· ' ~ vorgang.zurueckgestellt_grund if vorgang.zurueckgestellt_grund }}</span>
+            {% elif vorgang.naechste_aktion_am %}
+                <span class="{{ 'lm-rot' if vorgang.naechste_aktion_am <= heute else 'lm-blau' }}">{{ symbol('wiedervorlage') }}
+                    Nächste Aktion {{ vorgang.naechste_aktion_am.strftime('%d.%m.%Y %H:%M') }}</span>
+            {% endif %}
+            {% if aktiver_termin %}
+                <span>{{ symbol('kalender') }} Termin
+                    {{ aktiver_termin.beginn | de_datum('%a %d.%m.%Y %H:%M') if aktiver_termin.beginn else 'ohne Uhrzeit' }}
+                    · {{ termin_status_namen.get(aktiver_termin.status, aktiver_termin.status) }}</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="lk-kopf-aktionen">
+        <span class="lk-pflicht-zaehler {{ 'offen' if pflicht_offen else 'ok' }}"
+              title="{{ pflicht_offen | join(', ') if pflicht_offen else 'Alle Pflichtfelder gefüllt' }}">
+            {{ symbol('warnung' if pflicht_offen else 'haken') }}
+            {{ pflicht_offen | length }} Pflichtfeld{{ 'er' if pflicht_offen | length != 1 }} offen</span>
+        {% if not readonly %}
+            <form method="post" action="{{ kartei_url }}/terminierung" class="lk-inline">
+                {% if terminierung.erledigt %}
+                    <button class="knopf" type="button" disabled title="Bereits terminiert – Termin geplant und bestätigt">{{ symbol('haken') }} Terminiert</button>
+                {% elif terminierung.bereit %}
+                    <button class="knopf lk-terminierung" type="submit"
+                            onclick="return confirm('Terminierung: Phase Terminiert, Outlook-Termin schreiben und Terminbestätigung mit ICS planen?')"
+                            title="Phase Terminiert · Outlook · Terminbestätigung (ICS) · Übergabe Leads VOT">{{ symbol('kalender') }} Terminierung</button>
+                {% else %}
+                    <button class="knopf lk-terminierung" type="button" disabled aria-disabled="true"
+                            aria-describedby="lk-fehlliste"
+                            title="Gesperrt – es fehlt: {{ terminierung.fehlend | join(', ') }}">{{ symbol('kalender') }} Terminierung</button>
+                {% endif %}
+            </form>
+            {% if not terminierung.bereit and not terminierung.erledigt %}
+                <details class="lk-fehlliste" id="lk-fehlliste">
+                    <summary>Terminierung gesperrt – was fehlt?</summary>
+                    <ul>{% for f in terminierung.fehlend %}<li>{{ f }}</li>{% endfor %}</ul>
+                </details>
+            {% endif %}
+            {% if vorgang.lead_phase in ('zurueckgestellt', 'nicht_erreicht', 'unqualifiziert') %}
+            <button class="knopf zweitrangig" type="button"
+                    onclick="dialogOeffnen('reaktivieren', {{ vorgang.id }})"
+                    title="Seitenzustand aufheben: Lead erneut aktivieren (Begründung Pflicht, Aktivität)">{{ symbol('abspielen') }} Reaktivieren</button>
+            {% elif vorgang.lead_phase not in ('gewonnen', 'verloren') %}
+            <button class="knopf zweitrangig" type="button"
+                    onclick="document.getElementById('dlg-nachbearbeitung').showModal()"
+                    title="Kunde noch nicht bereit für den Vor-Ort-Termin: Zurückstellen mit Grund „{{ nachbearbeitung_grund }}“ + Pflicht-Wiedervorlage">{{ symbol('pause') }} Nachbearbeitung</button>
+            {% endif %}
+        {% endif %}
+        <a class="knopf zweitrangig klein" href="/vorgaenge/{{ vorgang.id }}" title="Vorgangsakte (Angebote, Galerie, Notizen-Chat)">Vorgangsakte</a>
+    </div>
+</header>
+
+<div class="lk-spalten">
+    <aside class="karte lk-links" aria-label="Kontakt und Stammdaten">
+        {% include "leadmanagement/kartei_links.html" %}
+    </aside>
+    <section class="karte lk-mitte" aria-label="Verlauf">
+        {% include "leadmanagement/kartei_mitte.html" %}
+    </section>
+    <aside class="lk-rechts" aria-label="Zuordnungen">
+        {% include "leadmanagement/kartei_rechts.html" %}
+    </aside>
+</div>
+
+{% include "leadmanagement/kartei_dialoge.html" %}
+{# Stoppuhr-Vertrag Phase 107 (fehlt die Datei noch, bleibt die Seite lauffähig) #}
+<script src="/static/lm_anruf.js?v={{ css_version }}" defer></script>
+<script src="/static/lm_kartei.js?v={{ css_version }}" defer></script>
+{% endblock %}

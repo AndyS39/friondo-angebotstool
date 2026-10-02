@@ -68,6 +68,13 @@ PARAMETER_START = {
     "info_rollierend_monate": "12",      # I2
     "puffer_min": "30",                  # F4: Puffer = max(30, Fahrzeit)
     "max_termine_tag_start": "3",        # A-13: Startwert neuer AD-Profile
+    # v23 (Phase 108): Terminassistent V2 – von app/lead_termin.py mit Standard gelesen
+    "kanal_ad_regel": "",               # E2: JSON {kanal: [ad_ids]}, leer = keine Einschränkung
+    "vorab_dauer_min": "30",            # H6/F12: Dauer Vorab-Gespräch
+    "ersatz_min_treffer": "3",          # F8: ab wann die nächste Radiusstufe geprüft wird
+    "termin_konflikt_modus": "warnen",  # B7: warnen | sperren (Pufferkonflikte)
+    "vorschlag_raster_manuell_min": "15",  # B7: Schrittweite manuelle Eingabe
+    "dashboard_horizont_tage": "7",     # Phase 110: Dashboard – kommende Wiedervorlagen/Termine (Tage, 1-60)
 }
 
 
@@ -302,10 +309,12 @@ def lead_phase_berechnen(session: Session, vorgang: Vorgang) -> str:
         lead = session.get(Lead, vorgang.lead_id) if vorgang.lead_id else None
         termin_aktiv = (session.query(VotTermin)
                         .filter(VotTermin.vorgang_id == vorgang.id,
-                                VotTermin.status.in_(("geplant", "bestaetigt")))
+                                VotTermin.status.in_(("geplant", "bestaetigt")),
+                                VotTermin.typ == "vot")   # v23 (Phase 108, A-2): Vorab-Gespräche zählen nicht
                         .count())
         termine_gesamt = (session.query(VotTermin)
-                          .filter(VotTermin.vorgang_id == vorgang.id).count())
+                          .filter(VotTermin.vorgang_id == vorgang.id,
+                                  VotTermin.typ == "vot").count())
         # Prozess-Fix 27.09.2026: lead.vot_datum zaehlt nur, solange KEIN
         # VotTermin-Datensatz existiert - sonst drehte der 15-Minuten-Sync
         # einen gemeldeten No-Show wieder auf "terminiert" zurueck
@@ -335,6 +344,7 @@ def phase_neu_berechnen(session: Session, vorgang_id: int | None) -> None:
             if vorgang.lead_phase in ("erfasst", "angebot", "gewonnen"):
                 for termin in (session.query(VotTermin)
                                .filter(VotTermin.vorgang_id == vorgang.id,
+                                       VotTermin.typ == "vot",   # v23 (Phase 108)
                                        VotTermin.status.in_(("geplant",
                                                              "bestaetigt")))):
                     termin.status = "erfolgt"
@@ -360,6 +370,14 @@ def nach_sync(session: Session) -> int:
         anzahl += 1
     try:
         monday_termine_ableiten(session)   # Phase 77: VOT-Datum → vot_termine
+    except Exception:
+        pass
+    # v23 (Phase 109, F13): Standard-Zuweisung neuer monday-Leads (Deals - Rene →
+    # René; Personenzuordnung auf HV → dieser; Deals/Deals - Simon ohne Person →
+    # hv_standard_benutzer). Tool-Leads bleiben manuell (keine Automatik).
+    try:
+        from app import lead_handelsvertreter
+        lead_handelsvertreter.standard_nachziehen(session)
     except Exception:
         pass
     session.commit()
@@ -939,6 +957,12 @@ def mail_planen(session: Session, vorgang: Vorgang, vorlage_key: str,
     kunde = session.get(Kunde, vorgang.kunde_id)
     if kunde is None or not kunde.email:
         return None
+    # v23 Phase 107 (C4-d): Doppelversand-Schutz – kein zweiter OFFENER Eintrag
+    # gleicher Vorlage je Vorgang (ohne Termin-Bezug); Termin-Mails bleiben wie bisher
+    if termin is None:
+        from app import lead_anrufliste
+        if lead_anrufliste.mail_bereits_geplant(session, vorgang.id, vorlage_key):
+            return None
     eintrag = KommunikationLog(
         vorgang_id=vorgang.id, termin_id=termin.id if termin else None,
         kanal="mail", vorlage_key=vorlage_key, an=kunde.email,
@@ -1245,6 +1269,13 @@ def taeglicher_lauf_leads(session: Session | None = None,
                                 "/lead-management/anrufliste")
         except Exception:
             pass   # Digest darf den Tageslauf nie blockieren
+        # v23 Phase 111 (I2): Veranstaltungen rollierend nachlegen, vergangene archivieren
+        try:
+            from app import lead_info
+            lead_info.veranstaltungen_anlegen(session)
+            lead_info.archivieren(session)
+        except Exception:
+            pass   # darf den Tageslauf nie blockieren
         parameter_setzen(session, "lm_lauf_datum", heute.isoformat())
         session.commit()
         return {"reaktiviert": anzahl}
@@ -1273,8 +1304,30 @@ def scheduler_starten() -> None:
         while True:
             try:
                 jetzt = datetime.now()
+                # v23 Phase 107 (C2): Glocke zum Wiedervorlage-Zeitpunkt – einmalig je
+                # Fälligkeit (Dedup über Aktivität typ system), an leadmanager_id bzw. Leitung
+                try:
+                    from app import lead_anrufliste
+                    session = SessionLocal()
+                    try:
+                        if lead_anrufliste.faellige_wiedervorlagen_melden(session):
+                            session.commit()
+                    finally:
+                        session.close()
+                except Exception:
+                    pass
                 if jetzt.hour >= 7:
                     taeglicher_lauf_leads()
+                # v23 (Phase 110): Fälligkeits-Glocke für To-Dos (einmal je To-Do, dedupliziert)
+                session = SessionLocal()
+                try:
+                    from app import lead_todos
+                    if lead_todos.faellige_glocken(session):
+                        session.commit()
+                except Exception:
+                    session.rollback()
+                finally:
+                    session.close()
                 if jetzt.hour >= 3:
                     session = SessionLocal()
                     try:
@@ -1424,6 +1477,11 @@ def ad_kandidaten(session: Session, vorgang: Vorgang,
     plz = (kunde.plz or "") if kunde else ""
     alle_ad = [b for b in session.query(Benutzer)
                .filter(Benutzer.aktiv.is_(True), Benutzer.rolle == "aussendienst")]
+    # v23 (Phase 109, OF-G6): Handelsvertreter sind nur für Leads mit eigener
+    # Zuweisung Kandidat – nie als Innendienst-Vorschlag für fremde Leads
+    from app import lead_v2
+    hv_ids = {b.id for b in lead_v2.handelsvertreter_liste(session)}
+    alle_ad = [b for b in alle_ad if b.id not in hv_ids or b.id == vorgang.ad_id]
     if nur_ad_id:
         return [b for b in alle_ad if b.id == nur_ad_id]
     profile = {p.benutzer_id: p for p in session.query(AdProfil)}
@@ -1680,6 +1738,15 @@ def lead_verloren(session: Session, vorgang: Vorgang, grund: str,
         geplante_mails_stornieren(session, termin.id)
         from app import kalender as kalender_modul
         kalender_modul.termin_loeschen(session, termin)
+    # v23 (PLAN_LEAD_V2 Phase 105, H5): Verloren setzt alle offenen Angebote des
+    # Vorgangs auf Abgelehnt mit diesem Grund (angebote.ablehnungsgrund/_text,
+    # Angebotsnotiz, verknüpfte Erfassung erledigt, monday-Wert) – damit gilt die
+    # Regel für ALLE Aufrufer (V1-Route /lead/{id}/verloren, Kartei, Boards).
+    try:
+        from app import lead_boards
+        lead_boards.angebote_ablehnen(session, vorgang, grund, text, benutzer)
+    except Exception:
+        pass
     aktivitaet(session, vorgang.id, "status",
                f"Verloren (vor Auftrag): {grund}"
                + (f" – {text}" if text else ""), benutzer=benutzer)
@@ -1790,7 +1857,8 @@ def board_daten(session: Session, benutzer, filter_werte: dict) -> dict:
         mehrfach[v.kunde_id] = mehrfach.get(v.kunde_id, 0) + 1
     aktive_termine: dict[int, VotTermin] = {}
     for t in (session.query(VotTermin)
-              .filter(VotTermin.status.in_(("geplant", "bestaetigt")))
+              .filter(VotTermin.status.in_(("geplant", "bestaetigt")),
+                      VotTermin.typ == "vot")   # v23 (Phase 108): Vorab-Gespräche sind keine VOT
               .order_by(VotTermin.beginn)):
         aktive_termine.setdefault(t.vorgang_id, t)
 
@@ -1941,7 +2009,12 @@ def akte_kontext(session: Session, vorgang: Vorgang) -> dict:
                .filter(VotTermin.vorgang_id == vorgang.id)
                .order_by(VotTermin.beginn.desc()).all())
     aktiver_termin = next((t for t in termine
-                           if t.status in ("geplant", "bestaetigt")), None)
+                           if t.status in ("geplant", "bestaetigt")
+                           and (t.typ or "vot") == "vot"), None)   # v23 (Phase 108)
+    vorab_termine = [t for t in termine if (t.typ or "vot") != "vot"
+                     and t.status in ("geplant", "bestaetigt", "vorgemerkt")]
+    vorgemerkter_termin = next((t for t in termine
+                                if t.status == "vorgemerkt" and (t.typ or "vot") == "vot"), None)
     wunschzeiten = wunschzeiten_liste(vorgang)
     kommunikation = (session.query(KommunikationLog)
                      .filter(KommunikationLog.vorgang_id == vorgang.id)
@@ -1961,6 +2034,7 @@ def akte_kontext(session: Session, vorgang: Vorgang) -> dict:
         "timeline": timeline,
         "qualifizierungen": qualifizierungen,
         "termine": termine, "aktiver_termin": aktiver_termin,
+        "vorab_termine": vorab_termine, "vorgemerkter_termin": vorgemerkter_termin,   # v23 (Phase 108)
         "kommunikation": kommunikation,
         "wiederkehrer": mehrfach,
         # v21 (Phase 89): Kontaktstatus-Satz + Quellen-Gruppe wie in der Anrufliste
@@ -2021,6 +2095,7 @@ def _startseiten_kacheln_v12(session: Session) -> dict:
     woche_ende = jetzt + timedelta(days=7 - jetzt.weekday())
     termine = (session.query(VotTermin)
                .filter(VotTermin.status.in_(("geplant", "bestaetigt")),
+                       VotTermin.typ == "vot",   # v23 (Phase 108)
                        VotTermin.beginn >= jetzt.replace(hour=0, minute=0),
                        VotTermin.beginn < woche_ende).all())
     je_ad: dict[int, int] = {}

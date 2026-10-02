@@ -1,0 +1,155 @@
+{# v23 (PLAN_LEAD_V2 Phase 111, I3): Tabelle des Boards „Info-Veranstaltung“ –
+   gleiche Spalten wie das Hauptboard. Ist das Tabellen-Makro von Phase 105
+   (leadmanagement/_tabelle.html, Makro zelle) vorhanden, rendert es die
+   Standardspalten (ctx.tabelle_makro); sonst greift die eigene einfache
+   Tabelle (eigene_zelle). Eigene Spalten dieser Phase: Lead (mit rotem Hinweis
+   „Kunde bereits im System“, I5), Ergebnis-Buttons (Vertrag Phase 107:
+   POST /lead-management/anruf/{id}, zurueck = Board), Teilgenommen (Ja/Nein/
+   leer) und Veranstaltung (Dropdown je Lead). Verhalten: app/static/lm_info.js;
+   Stoppuhr: app/static/lm_anruf.js (Formulare .lm-anruf-form, data-vorgang). #}
+{% from "_symbole.html" import symbol %}
+{% from "_sparten.html" import chip %}
+{% from "_komponenten.html" import wiedervorlage_chip %}
+
+{% macro lead_zelle(z, ctx) -%}
+{%- set v = z.vorgang -%}{%- set k = z.kunde -%}
+<td class="sp-lead">
+    <a class="lm-lead-name" href="/lead-management/lead/{{ v.id }}" title="Kundenkartei öffnen">{{ k.anzeige_name or '(ohne Namen)' }}</a>
+    {%- if z.weitere %} <a class="lm-zaehler" href="/kunden/{{ k.id }}" title="{{ z.weitere }} weitere(r) Vorgang/Vorgänge dieses Kunden">+{{ z.weitere }}</a>{% endif %}
+    {%- if v.demo %} <span class="abzeichen">Demo</span>{% endif %}
+    {%- if z.monday %} <span class="abzeichen" title="gesyncter monday-Lead">monday</span>{% endif %}
+    {%- if v.vorab_angebot %} <span class="abzeichen" title="Vorab-Angebot ohne Vor-Ort-Termin (F10)">Vorab-Angebot</span>{% endif %}
+    {%- if z.terminiert %} <a class="abzeichen li-terminiert" href="/lead-management/terminiert" title="Vor-Ort-Termin vereinbart – der Lead steht zusätzlich im Board Terminiert">→ Terminiert</a>{% endif %}
+    {%- if z.zurueck %} <span class="lm-flag" title="Wiedervorlage fällig – zurück aus „Pausiert“">⚑ zurück</span>{% endif %}
+    {%- if z.hinweis %}
+    <div class="li-hinweis" role="note" title="{{ z.hinweis.text }}">{{ symbol('warnung') }} Kunde bereits im System:
+        <a href="{{ z.hinweis.link }}">Vorgang #{{ z.hinweis.vorgang_id }}{% if z.hinweis.phase %} ({{ z.hinweis.phase }}){% endif %}</a></div>
+    {%- endif %}
+</td>
+{%- endmacro %}
+
+{% macro ergebnis_zelle(z, ctx) -%}
+{%- set v = z.vorgang -%}
+<td class="sp-ergebnis li-ergebnis">
+    {%- set sperre = 'Höchstzahl erreicht (' ~ ctx.versuche_max ~ ' Versuche) – Nicht erreicht/Besetzt/Mailbox gesperrt' -%}
+    <form method="post" action="/lead-management/anruf/{{ v.id }}" class="lm-anruf-form li-anruf-form">
+        <input type="hidden" name="zurueck" value="{{ ctx.zurueck }}">
+        <input type="hidden" name="dauer_sek">
+        <button class="knopf klein lm-ok" name="ergebnis" value="erreicht" title="Erreicht – Qualifizierungsbogen öffnet sich">✓ Erreicht</button>
+        {%- if ctx.dialoge_makro %}
+        <button type="button" class="knopf klein zweitrangig" data-ergebnis="nicht_erreicht" onclick="dialogOeffnen('nichterreicht', {{ v.id }})"
+                title="{{ sperre if z.gesperrt else 'Nicht erreicht – Dialog mit Kaskaden-Vorschlag (Wiedervorlage änderbar)' }}" {{ 'disabled' if z.gesperrt }}>Nicht erreicht</button>
+        {%- else %}
+        <button class="knopf klein zweitrangig" name="ergebnis" value="nicht_erreicht" title="{{ sperre if z.gesperrt else 'Nicht erreicht – Kaskade setzt die Wiedervorlage' }}" {{ 'disabled' if z.gesperrt }}>Nicht erreicht</button>
+        {%- endif %}
+        <button class="knopf klein zweitrangig" name="ergebnis" value="mailbox" title="{{ sperre if z.gesperrt else 'Mailbox/AB – zählt als Versuch, Kaskade läuft' }}" {{ 'disabled' if z.gesperrt }}>Mailbox</button>
+        {%- if ctx.dialoge_makro %}
+        <button type="button" class="knopf klein zweitrangig li-kein-interesse" data-ergebnis="kein_interesse" onclick="dialogOeffnen('keininteresse', {{ v.id }})" title="Kein Interesse – Pflichtgrund (Blatt Gründe)">Kein Interesse</button>
+        {%- else %}
+        <button type="button" class="knopf klein zweitrangig li-kein-interesse" data-ergebnis="kein_interesse" data-vorgang="{{ v.id }}" title="Kein Interesse – Pflichtgrund (Blatt Gründe)">Kein Interesse</button>
+        {%- endif %}
+    </form>
+    <span class="lm-stoppuhr" data-vorgang="{{ v.id }}" hidden>00:00</span>
+</td>
+{%- endmacro %}
+
+{% macro teil_zelle(z, ctx) -%}
+{%- set v = z.vorgang -%}
+<td class="sp-teilgenommen li-teil-zelle">
+    <form method="post" action="/lead-management/info-veranstaltung/{{ v.id }}/teilgenommen"
+          class="li-teil {{ 'ja' if z.teilgenommen is true else ('nein' if z.teilgenommen is false else 'offen') }}{{ ' pflicht' if z.vergangen and z.teilgenommen is none }}"
+          data-vorgang="{{ v.id }}" title="{{ 'Teilgenommen: Ja' if z.teilgenommen is true else ('Teilgenommen: Nein' if z.teilgenommen is false else ('Noch nicht erfasst – die Veranstaltung ist vorbei' if z.vergangen else 'Leer bis zur Veranstaltung')) }}">
+        <input type="hidden" name="zurueck" value="{{ ctx.zurueck }}">
+        <button class="li-teil-knopf ja {{ 'aktiv' if z.teilgenommen is true }}" name="wert" value="ja" title="Teilgenommen: Ja" aria-pressed="{{ 'true' if z.teilgenommen is true else 'false' }}">Ja</button>
+        <button class="li-teil-knopf nein {{ 'aktiv' if z.teilgenommen is false }}" name="wert" value="nein" title="Teilgenommen: Nein" aria-pressed="{{ 'true' if z.teilgenommen is false else 'false' }}">Nein</button>
+        {%- if z.teilgenommen is not none %}<button class="li-teil-knopf leer" name="wert" value="leer" title="zurücksetzen (leer)">×</button>{% endif %}
+    </form>
+    {%- if z.teilgenommen is none %}<small class="{{ 'li-rot' if z.vergangen else 'dezent' }}">{{ 'offen' if z.vergangen else 'leer' }}</small>{% endif %}
+</td>
+{%- endmacro %}
+
+{% macro veranst_zelle(z, ctx) -%}
+{%- set v = z.vorgang -%}
+<td class="sp-veranstaltung li-veranst-zelle">
+    {%- if ctx.nur_lesen %}{{ z.veranstaltung.beginn | de_datum('%a %d.%m.%Y %H:%M') if z.veranstaltung else '–' }}
+    {%- else %}
+    <form method="post" action="/lead-management/info-veranstaltung/{{ v.id }}/veranstaltung" class="li-veranst-form" data-vorgang="{{ v.id }}">
+        <input type="hidden" name="zurueck" value="{{ ctx.zurueck }}">
+        <select name="veranstaltung_id" class="li-veranst-wahl" title="Veranstaltung manuell ändern (Aktivität je Lead)" aria-label="Veranstaltung">
+            <option value="" {{ 'selected' if not v.veranstaltung_id }}>– keine –</option>
+            {%- for ve in ctx.veranstaltungen %}
+            <option value="{{ ve.id }}" {{ 'selected' if v.veranstaltung_id == ve.id }}>{{ ve.beginn | de_datum('%a %d.%m.%Y %H:%M') }}{{ ' · verschoben (Feiertag)' if ve.verschoben }}</option>
+            {%- endfor %}
+            {%- if z.veranstaltung and z.veranstaltung.archiviert %}
+            <option value="{{ z.veranstaltung.id }}" selected>{{ z.veranstaltung.beginn | de_datum('%a %d.%m.%Y %H:%M') }} (Archiv)</option>
+            {%- endif %}
+        </select>
+        <noscript><button class="knopf klein zweitrangig">OK</button></noscript>
+    </form>
+    {%- endif %}
+</td>
+{%- endmacro %}
+
+{# Rückfall ohne Phase-105-Makro: einfache Zellen mit den Bestands-Makros #}
+{% macro eigene_zelle(key, z, ctx) -%}
+{%- set v = z.vorgang -%}{%- set k = z.kunde -%}
+{%- if key == 'status' -%}
+<td class="sp-status"><span class="lm-status" style="--f:{{ z.status_farbe }}" title="Lead-Phase (Blatt Status)">{{ z.status_label }}</span></td>
+{%- elif key == 'kanal' -%}
+<td class="sp-kanal">{% if z.kanal %}<span class="lm-status" style="--f:{{ z.kanal_farbe }}">{{ z.kanal }}</span>{% else %}<span class="dezent">–</span>{% endif %}</td>
+{%- elif key == 'versuche' -%}
+<td class="sp-versuche"><div class="lm-versuche" title="{{ z.versuche }} Anrufversuch{{ 'e' if z.versuche != 1 }}">
+    <div class="lm-dots lm-dots-e">{% for p in z.punkte %}<i class="{{ p.klasse }}" title="{{ p.titel }}"></i>{% endfor %}</div>
+    {% if z.versuche == 0 %}<small class="neu">neu</small>{% else %}<small class="{{ 'lm-rot' if z.versuche >= ctx.versuche_max else ('lm-warn' if z.versuche >= 3) }}">{{ z.versuche }}×</small>{% endif %}
+</div></td>
+{%- elif key == 'letzter_kontakt' -%}
+<td class="sp-letzter">{% if z.letzter %}{{ z.letzter.zeitpunkt | de_datum('%a %d.%m.%Y %H:%M') }}<br><small class="dezent">{{ z.letzter_art }}</small>{% else %}<span class="dezent">noch kein Kontakt</span>{% endif %}</td>
+{%- elif key == 'eingang' -%}
+<td class="sp-eingang">{% if z.eingang %}<span title="{{ z.eingang.strftime('%d.%m.%Y %H:%M') }}{{ ' · ' ~ z.quelle.name if z.quelle }}">{{ z.eingang | de_datum('%d.%m.%Y') }}</span>{% else %}–{% endif %}</td>
+{%- elif key == 'ort' -%}<td class="sp-ort">{{ k.plz or '' }} {{ k.ort or '' }}{% if not (k.plz or k.ort) %}–{% endif %}</td>
+{%- elif key == 'interessen' -%}
+<td class="sp-interessen"><span class="sparten-chips">{% for s in z.sparten %}{{ chip(s, 'offen') }}{% else %}<span class="dezent">–</span>{% endfor %}</span></td>
+{%- elif key == 'telefon' -%}
+<td class="sp-telefon">{% if k.telefon %}<a href="tel:{{ k.telefon | replace(' ', '') }}" title="Anrufen (Click-to-Call, Stoppuhr startet)">{{ symbol('telefon') }} {{ k.telefon }}</a>{% else %}<span class="dezent">–</span>{% endif %}</td>
+{%- elif key == 'email' -%}
+<td class="sp-email">{% if k.email %}<a href="mailto:{{ k.email }}">{{ k.email }}</a>{% else %}<span class="dezent">–</span>{% endif %}</td>
+{%- elif key == 'termin' -%}
+<td class="sp-termin">{% if z.termin %}{{ z.termin.beginn | de_datum('%a %d.%m.%Y %H:%M') if z.termin.beginn else 'ohne Zeit' }}{% if (z.termin.typ or 'vot') != 'vot' %} <span class="abzeichen">{{ 'Teams' if z.termin.typ == 'online' else 'Telefon' }}</span>{% endif %}{% else %}<span class="dezent">–</span>{% endif %}</td>
+{%- elif key == 'wiedervorlage' -%}<td class="sp-wv">{{ wiedervorlage_chip(z.wiedervorlage, ctx.jetzt) }}</td>
+{%- elif key == 'ad' -%}<td class="sp-ad">{{ z.ad.name if z.ad else '–' }}</td>
+{%- elif key == 'innendienst' -%}<td class="sp-id">{{ z.leadmanager.name if z.leadmanager else '–' }}</td>
+{%- else -%}<td class="dezent">–</td>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro info_zeile(z, spalten, ctx) -%}
+{%- set k = z.kunde -%}
+<tr data-vorgang="{{ z.vorgang.id }}" data-gruppe="{{ z.gruppe }}" data-phase="{{ z.vorgang.lead_phase }}"
+    class="{{ 'li-hat-hinweis' if z.hinweis }}"
+    data-suche="{{ ((k.vorname or '') ~ ' ' ~ (k.nachname or '') ~ ' ' ~ (k.firma or '') ~ ' ' ~ (k.ort or '') ~ ' ' ~ (k.plz or '') ~ ' ' ~ (k.telefon or '') ~ ' ' ~ (k.email or '')) | lower }}">
+    {%- if ctx.sammel %}<td class="sp-wahl"><input type="checkbox" class="li-wahl" name="ids" value="{{ z.vorgang.id }}" form="li-sammelform" aria-label="Lead markieren"></td>{% endif %}
+    {%- for sp in spalten if sp.sichtbar %}
+        {%- if sp.key == 'lead' %}{{ lead_zelle(z, ctx) }}
+        {%- elif sp.key == 'ergebnis' %}{{ ergebnis_zelle(z, ctx) }}
+        {%- elif sp.key == 'teilgenommen' %}{{ teil_zelle(z, ctx) }}
+        {%- elif sp.key == 'veranstaltung' %}{{ veranst_zelle(z, ctx) }}
+        {%- elif ctx.tabelle_makro %}{% from "leadmanagement/_tabelle.html" import zelle %}{{ zelle(sp.key, z, ctx) }}
+        {%- else %}{{ eigene_zelle(sp.key, z, ctx) }}
+        {%- endif %}
+    {%- endfor %}
+</tr>
+{%- endmacro %}
+
+{% macro info_tabelle(zeilen, spalten, ctx, gruppe='') -%}
+<table class="tabelle lm-tabelle li-tabelle" data-gruppe="{{ gruppe }}">
+    <thead>
+        <tr>
+            {%- if ctx.sammel %}<th class="sp-wahl"><input type="checkbox" class="li-wahl-alle" title="alle sichtbaren markieren" aria-label="alle sichtbaren markieren"></th>{% endif %}
+            {%- for sp in spalten if sp.sichtbar %}<th class="sp-{{ sp.key }}">{{ sp.titel }}</th>{% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {%- for z in zeilen %}{{ info_zeile(z, spalten, ctx) }}{% endfor %}
+    </tbody>
+</table>
+{%- endmacro %}

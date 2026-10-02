@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
+
+{% block titel %}E-Mail-Vorlagen – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{# v23 (PLAN_LEAD_V2 Phase 105, H8): der bestehende Lead-Vorlagen-Editor der
+   Parametrierung (/parametrierung/lead-vorlagen, gleiche Schlüssel und Ablage
+   lead_vorlage_<key>[_<Sparte>]_betreff/_text) direkt im Modul. Rechte wie
+   heute: Admin/Innendienst pflegen, Hauptrolle Leadmanagement liest. #}
+{% block inhalt %}
+{{ lm_nav('vorlagen') }}
+<div class="seitenkopf">
+    <h1>E-Mail-Vorlagen {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
+    <span class="dezent">Gruppe Lead-Management{% if not pflege %} · nur lesend{% endif %}</span>
+    <div class="aktionen">
+        {% if pflege %}
+        <a class="knopf klein zweitrangig" href="/parametrierung/lead-vorlagen?vorlage={{ schluessel }}" title="derselbe Editor in der Parametrierung">{{ symbol('oeffnen') }} In der Parametrierung</a>
+        <a class="knopf klein zweitrangig" href="/parametrierung/vorlagen">Angebots-Vorlagen</a>
+        {% endif %}
+    </div>
+</div>
+{% if meldung %}<p class="meldung {{ 'fehler' if fehler }}">{{ meldung }}</p>{% endif %}
+
+<nav class="reiter lm-reiter">
+    {% for key, (name, _, _) in vorlagen.items() %}
+        <a class="{{ 'aktiv' if key == schluessel }}" href="/lead-management/vorlagen?vorlage={{ key }}">{{ symbol('brief') }} {{ name }}</a>
+    {% endfor %}
+</nav>
+
+<form method="get" action="/lead-management/vorlagen" class="suchleiste">
+    <input type="hidden" name="vorlage" value="{{ schluessel }}">
+    <label class="kontrollfeld">Variante
+        <select name="sparte" onchange="this.form.submit()">
+            <option value="">allgemein (Fallback)</option>
+            {% for s in sparten %}
+                <option value="{{ s }}" {{ 'selected' if sparte == s }}>je Sparte: {{ s }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <noscript><button class="knopf klein zweitrangig" type="submit">Anzeigen</button></noscript>
+</form>
+
+<form method="post" action="/lead-management/vorlagen" class="formular lm-vorlage">
+    <input type="hidden" name="vorlage" value="{{ schluessel }}">
+    <input type="hidden" name="sparte" value="{{ sparte }}">
+    <label>Betreff <input type="text" name="betreff" value="{{ betreff }}" {{ 'readonly' if not pflege }}></label>
+    <label>Text <textarea name="text" rows="14" {{ 'readonly' if not pflege }}>{{ text }}</textarea></label>
+    {% if pflege %}
+    <div class="formzeile">
+        <button class="knopf" type="submit">Speichern</button>
+        {% if sparte %}
+            <button class="knopf zweitrangig" type="submit" name="aktion"
+                    value="entfernen">Sparten-Variante entfernen (allgemein gilt)</button>
+        {% endif %}
+    </div>
+    {% else %}
+    <p class="lm-hinweis">Vorlagen pflegen Admin und Innendienst (Rechte wie bisher). Diese Ansicht ist für Sie nur lesend.</p>
+    {% endif %}
+</form>
+<p class="dezent">Platzhalter zusätzlich zu den bestehenden: {{ platzhalter | join(' · ') }} · {rueckruf_telefon} · {buchungslink} · {kollege}.
+    Terminbestätigung/-änderung erhalten automatisch den ICS-Kalendereintrag. Nurture geht nur an Leads mit
+    Werbe-Einwilligung. Versand nach Mail-Modus (Lead-Einstellungen): protokoll = rendern ohne Senden
+    (Demo-Sendesperre), test = an die Testadresse mit [TEST]-Präfix, live = an den Kunden (nur bei Freigabe „alle“).</p>
+{% endblock %}

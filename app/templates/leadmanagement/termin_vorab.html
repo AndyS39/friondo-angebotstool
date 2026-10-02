@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "_symbole.html" import symbol %}
+
+{% block titel %}Vorab-Gespräch – {{ kunde.anzeige_name }}{% endblock %}
+
+{% block inhalt %}
+{{ lm_nav('kalender') }}
+<div class="seitenkopf">
+    <h1>Vorab-Gespräch · {{ kunde.anzeige_name }}, {{ kunde.ort or '?' }}
+        {% if demo_badge %}<span class="demo-badge">Demo</span>{% endif %}</h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}">Kartei</a>
+        <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}/termin">Terminassistent</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+{% if not buchbar %}
+<p class="warnblock">Im Demo-Modus nur für Demo-Leads.</p>
+{% endif %}
+<p class="dezent">Ein Vorab-Gespräch ist ein Termin eigener Art (kein Vor-Ort-Termin):
+    es erscheint im Tool-Kalender und – bei aktivem Kalenderabgleich – im Outlook
+    des Ansprechpartners, zählt in der Kollisionsprüfung, aber nicht in der
+    Tageskapazität und ändert die Lead-Phase nicht.</p>
+
+<div class="reiter lmt-reiter">
+    <a href="?typ=telefon" class="{{ 'aktiv' if typ == 'telefon' }}">{{ symbol('telefon') }} Telefongespräch mit Vertriebler</a>
+    <a href="?typ=online" class="{{ 'aktiv' if typ == 'online' }}">{{ symbol('nutzer') }} Online-Termin (Teams) mit Kollege</a>
+</div>
+
+<form method="post" action="/lead-management/lead/{{ vorgang.id }}/termin/vorab"
+      class="formular lmt-vorab" style="max-width:760px">
+    <input type="hidden" name="typ" value="{{ typ }}">
+    {% if typ == 'telefon' %}
+    <label>Vertriebler (Außendienst/Handelsvertreter)
+        <select name="person_id" required>
+            {% for b in vertriebler %}
+                <option value="{{ b.id }}" {{ 'selected' if vorgewaehlt | string == b.id | string }}>{{ b.name }}</option>
+            {% endfor %}
+        </select></label>
+    <p class="dezent">Der Vertriebler ruft den Kunden zum vereinbarten Zeitpunkt an
+        (Lead bleibt in der Gruppe Neu, Label „Telefongespräch“).</p>
+    {% else %}
+    <label>Kollege (Innendienst / Admin / Leadmanagement)
+        <select name="person_id" required>
+            {% for b in kollegen %}
+                <option value="{{ b.id }}" {{ 'selected' if benutzer.id == b.id }}
+                        data-buchungslink="{{ '1' if b.buchungslink }}">{{ b.name }}{{ ' · Buchungslink hinterlegt' if b.buchungslink }}</option>
+            {% endfor %}
+        </select></label>
+    <label class="kontrollfeld">
+        <input type="checkbox" name="buchungslink_senden" value="1">
+        Buchungslink senden – der Kunde wählt den Zeitpunkt selbst (Vorlage
+        <code>online_termin_einladung</code>; nur möglich, wenn beim Kollegen ein
+        Outlook-Buchungslink hinterlegt ist – Pflege in der Benutzerverwaltung /
+        im AD-Profil). Datum/Uhrzeit sind dann optional.</label>
+    {% endif %}
+    <div class="formzeile">
+        <label class="schmal">Datum <input type="date" name="datum" {{ 'required' if typ == 'telefon' }}></label>
+        <label class="schmal">Uhrzeit <input type="time" name="uhrzeit" step="900" {{ 'required' if typ == 'telefon' }}></label>
+        <label class="schmal">Dauer (Min) <input type="number" name="dauer" value="{{ dauer }}" min="5" step="5"></label>
+    </div>
+    <button class="knopf" type="submit" {{ 'disabled' if not buchbar }}>
+        {{ 'Telefongespräch eintragen' if typ == 'telefon' else 'Online-Termin eintragen' }}</button>
+</form>
+{% endblock %}

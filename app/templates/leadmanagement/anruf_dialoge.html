@@ -1,0 +1,150 @@
+{# v23 Phase 107 (PLAN_LEAD_V2 C2/C3): die Folgedialoge der Anruf-Ergebnisse
+   als Makro – Anrufliste und (per Import) Kundenkartei/Boards nutzen dieselben
+   Dialoge und dieselben Formularfelder des Vertrags POST /lead-management/anruf/{id}:
+   ergebnis · notiz · dauer_sek (Stoppuhr, app/static/lm_anruf.js) · rueckruf_am
+   bzw. wiedervorlage_am · grund · grund_text · zurueck (Redirect-Ziel, relativ).
+
+   Aufruf: {% from "leadmanagement/anruf_dialoge.html" import anruf_dialoge %}
+           {{ anruf_dialoge(unq_gruende, zurueck_gruende, zurueck='/lead-management/lead/123') }}
+   Öffnen:  dialogOeffnen('nichterreicht' | 'rueckruf' | 'keininteresse' | 'zurueck' |
+                         'reaktivieren', vorgangId)
+   Der „Nicht erreicht“-Dialog lädt den Kaskaden-Vorschlag
+   (GET /lead-management/anruf/{id}/vorschlag) und belegt das Datum/Uhrzeit-Feld
+   vor; leer gelassen setzt die Kaskade den Zeitpunkt wie bisher. #}
+{% macro anruf_dialoge(unq_gruende, zurueck_gruende, zurueck='') %}
+<dialog id="dlg-nichterreicht" class="lm-dialog">
+    <form method="post" class="formular lm-anruf-form">
+        <input type="hidden" name="ergebnis" value="nicht_erreicht">
+        <input type="hidden" name="dauer_sek">
+        {% if zurueck %}<input type="hidden" name="zurueck" value="{{ zurueck }}">{% endif %}
+        <h3>Nicht erreicht</h3>
+        <p class="lm-vorschlag dezent">Kaskaden-Vorschlag wird geladen …</p>
+        <label>Wiedervorlage – Datum/Uhrzeit (Vorschlag aus der Kaskade, änderbar)
+            <input type="datetime-local" name="wiedervorlage_am"></label>
+        <label>Notiz <input type="text" name="notiz" maxlength="300"></label>
+        <p class="lm-sperre meldung fehler" hidden></p>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Nicht erreicht speichern</button>
+            <button class="knopf zweitrangig" type="button"
+                    onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+<dialog id="dlg-rueckruf" class="lm-dialog">
+    <form method="post" class="formular lm-anruf-form">
+        <input type="hidden" name="ergebnis" value="rueckruf_gewuenscht">
+        <input type="hidden" name="dauer_sek">
+        {% if zurueck %}<input type="hidden" name="zurueck" value="{{ zurueck }}">{% endif %}
+        <h3>Rückruf gewünscht</h3>
+        <label>Datum/Uhrzeit (Pflicht)
+            <input type="datetime-local" name="rueckruf_am" required></label>
+        <label>Notiz <input type="text" name="notiz" maxlength="300"></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Speichern</button>
+            <button class="knopf zweitrangig" type="button"
+                    onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+<dialog id="dlg-keininteresse" class="lm-dialog">
+    <form method="post" class="formular lm-anruf-form">
+        <input type="hidden" name="ergebnis" value="kein_interesse">
+        <input type="hidden" name="dauer_sek">
+        {% if zurueck %}<input type="hidden" name="zurueck" value="{{ zurueck }}">{% endif %}
+        <h3>Kein Interesse – Grund (Pflicht)</h3>
+        <label>Grund
+            <select name="grund" required>
+                <option value="">– bitte wählen –</option>
+                {% for g in unq_gruende %}<option value="{{ g.grund }}" data-freitext="{{ '1' if g.freitext_pflicht else '' }}">{{ g.grund }}</option>{% endfor %}
+            </select>
+        </label>
+        <label>Freitext <input type="text" name="grund_text" maxlength="500"
+               placeholder="Pflicht bei Sonstiges"></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Unqualifiziert setzen</button>
+            <button class="knopf zweitrangig" type="button"
+                    onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+<dialog id="dlg-zurueck" class="lm-dialog">
+    <form method="post" class="formular">
+        {% if zurueck %}<input type="hidden" name="zurueck" value="{{ zurueck }}">{% endif %}
+        <h3>Zurückstellen</h3>
+        <label>Bis (Pflicht) <input type="date" name="bis" required></label>
+        <label>Grund
+            <select name="grund" required>
+                {% for g in zurueck_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}
+            </select>
+        </label>
+        <label>Freitext <input type="text" name="grund_text"
+               placeholder="Pflicht bei Sonstiges"></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Zurückstellen</button>
+            <button class="knopf zweitrangig" type="button"
+                    onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+<dialog id="dlg-reaktivieren" class="lm-dialog">
+    <form method="post" class="formular">
+        {% if zurueck %}<input type="hidden" name="zurueck" value="{{ zurueck }}">{% endif %}
+        <h3>Erneut aktivieren</h3>
+        <label>Begründung (Pflicht) <input type="text" name="begruendung" required></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Reaktivieren</button>
+            <button class="knopf zweitrangig" type="button"
+                    onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+<script>
+// Dialoge zielen je nach Art auf /anruf/<id> bzw. /lead/<id>/<aktion>
+const dialogZiele = {
+    nichterreicht: id => `/lead-management/anruf/${id}`,
+    rueckruf: id => `/lead-management/anruf/${id}`,
+    keininteresse: id => `/lead-management/anruf/${id}`,
+    zurueck: id => `/lead-management/lead/${id}/zurueckstellen`,
+    reaktivieren: id => `/lead-management/lead/${id}/reaktivieren`,
+};
+function dialogOeffnen(art, vorgangId) {
+    const dlg = document.getElementById('dlg-' + art);
+    if (!dlg) return;
+    dlg.dataset.vorgang = vorgangId;          // Stoppuhr (lm_anruf.js) findet den Vorgang
+    dlg.querySelector('form').action = dialogZiele[art](vorgangId);
+    document.querySelectorAll('.lm-aktion details[open]').forEach(d => d.removeAttribute('open'));
+    if (art === 'nichterreicht') lmVorschlagLaden(dlg, vorgangId);
+    dlg.showModal();
+}
+// C2: Kaskaden-Vorschlag für die Stufe versuch_nr + 1 vorbelegen (änderbar)
+function lmVorschlagLaden(dlg, vorgangId) {
+    const info = dlg.querySelector('.lm-vorschlag');
+    const feld = dlg.querySelector('input[name="wiedervorlage_am"]');
+    const sperre = dlg.querySelector('.lm-sperre');
+    const senden = dlg.querySelector('button[type="submit"]');
+    info.textContent = 'Kaskaden-Vorschlag wird geladen …';
+    feld.value = ''; sperre.hidden = true; senden.disabled = false;
+    fetch(`/lead-management/anruf/${vorgangId}/vorschlag`, {headers: {Accept: 'application/json'}})
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(d => {
+            if (d.gesperrt) {
+                sperre.textContent = d.sperre_meldung || 'Höchstzahl erreicht';
+                sperre.hidden = false; senden.disabled = true;
+                info.textContent = `${d.versuch_nr} von ${d.versuche_max} Versuchen – Höchstzahl erreicht.`;
+                return;
+            }
+            feld.value = d.zeitpunkt || '';
+            info.textContent = `Versuch ${d.stufe} von ${d.versuche_max} · Vorschlag ${d.zeitpunkt_text}`
+                + (d.regel ? ` (${d.regel})` : '') + (d.aktion_text ? ' · ' + d.aktion_text : '');
+        })
+        .catch(() => { info.textContent = 'Vorschlag nicht verfügbar – die Kaskade setzt den Zeitpunkt automatisch.'; });
+}
+// Kein Interesse: Freitext-Pflicht je Grund (Blatt Gruende, freitext_pflicht) auch im Browser
+document.querySelectorAll('#dlg-keininteresse select[name="grund"]').forEach(sel => {
+    sel.addEventListener('change', () => {
+        const pflicht = sel.selectedOptions[0] && sel.selectedOptions[0].dataset.freitext === '1';
+        sel.form.querySelector('input[name="grund_text"]').required = !!pflicht;
+    });
+});
+</script>
+{% endmacro %}

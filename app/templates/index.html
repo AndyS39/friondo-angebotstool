@@ -48,6 +48,16 @@
                 <span class="dezent">{{ k.termine_text or 'je AD' }}</span>
             </div>
             {% endif %}
+            {# v23 (PLAN_LEAD_V2 Phase 110): persönlicher Zähler – fällige Lead-/Angebots-
+               Wiedervorlagen und To-Dos des angemeldeten Benutzers (lead_dashboard) #}
+            {% set meine = lm_portal_zaehler(request.state.benutzer) if lm_portal_zaehler is defined else none %}
+            {% if meine %}
+            <div class="kachel stat">
+                <span class="stat-zahl {{ 'dringend' if meine.faellig }}">{{ meine.faellig }}</span>
+                <span>Meine fälligen Wiedervorlagen/To-Dos</span>
+                <span class="dezent">{{ meine.wv }} Wiedervorlagen · {{ meine.todos }} To-Dos fällig</span>
+            </div>
+            {% endif %}
         </div>
     </a>
     {% else %}

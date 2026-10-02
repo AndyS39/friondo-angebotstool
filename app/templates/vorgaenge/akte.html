@@ -106,6 +106,15 @@
     {% include "vorgaenge/_lead_kopf.html" %}
 {% endif %}
 
+{# v23 (Phase 110): To-Dos zum Vorgang (A2/F7) – Makros aus leadmanagement/_todo_formular.html #}
+{% if akte_todos is defined %}
+{% from "leadmanagement/_todo_formular.html" import todo_liste, todo_formular %}
+<details class="lm-karte" {{ 'open' if akte_todos }}>
+    <summary><strong>To-Dos zum Vorgang ({{ akte_todos | selectattr('todo.status', 'equalto', 'offen') | list | length }} offen)</strong></summary>
+    {{ todo_liste(akte_todos, benutzer, none, zurueck='/vorgaenge/' ~ vorgang.id, zeige_an=True, akte_basis='/vorgaenge/') }}
+    {{ todo_formular(todo_empfaenger, benutzer, vorgang_id=vorgang.id, zurueck='/vorgaenge/' ~ vorgang.id) }}
+</details>
+{% endif %}
 <div class="akte-spalten">
 <div>{# ---------- linke Spalte: Angebote + Erfassungen ---------- #}
 

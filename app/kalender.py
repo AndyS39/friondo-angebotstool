@@ -91,13 +91,21 @@ def _ereignis_rumpf(session: Session, termin, vorgang, kunde) -> dict:
         *steckbrief,
         f"Lead-Akte: {BASIS_URL}/lead-management/lead/{vorgang.id}",
     ]))
+    # v23 (Phase 108, A-2): Betreff je Terminart – Vorab-Gespräche (Telefon/
+    # Teams) erscheinen nicht als VOT im Kalender des Vertrieblers
+    typ = getattr(termin, "typ", "vot") or "vot"
+    praefix = {"vot": "VOT", "telefon": "Telefongespräch",
+               "online": "Teams"}.get(typ, "VOT")
+    ort = termin.adresse or {"telefon": "Telefon", "online": "Microsoft Teams"}.get(typ, "")
+    from datetime import timedelta
+    ende = termin.ende or (termin.beginn + timedelta(minutes=30))
     return {
-        "subject": f"VOT {sparten} – {kunde.nachname}, {kunde.ort or '?'}",
+        "subject": f"{praefix} {sparten} – {kunde.nachname}, {kunde.ort or '?'}",
         "body": {"contentType": "text", "content": text},
-        "location": {"displayName": termin.adresse or ""},
+        "location": {"displayName": ort},
         "start": {"dateTime": termin.beginn.strftime("%Y-%m-%dT%H:%M:%S"),
                   "timeZone": "W. Europe Standard Time"},
-        "end": {"dateTime": termin.ende.strftime("%Y-%m-%dT%H:%M:%S"),
+        "end": {"dateTime": ende.strftime("%Y-%m-%dT%H:%M:%S"),
                 "timeZone": "W. Europe Standard Time"},
     }
 

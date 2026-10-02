@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "_komponenten.html" import quelle_badge, kanal_badge, versuche_punkte, wiedervorlage_chip %}
+{% from "leadmanagement/hv_zuweisung.html" import hv_zuweisung %}
+
+{% block titel %}Handelsvertreter – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{# Phase 109 (G1–G5, F13–F16): Gesamtsicht (Innendienst/LM/Admin) je Vertreter
+   einklappbar; Handelsvertreter sehen nur eigene Leads + Dashboard (F16).
+   Zeilen = Hauptboard-Pflichtspalten in Kurzform (Rückfall-Tabelle, bis das
+   Makro leadmanagement/_tabelle.html aus Phase 105 übernommen wird). #}
+{% block inhalt %}
+{% if phase105 %}{% from "leadmanagement/_tabelle.html" import zelle %}{% endif %}
+{{ lm_nav('handelsvertreter') }}
+<div class="seitenkopf">
+    <h1>{{ 'Meine Leads' if ist_hv else 'Handelsvertreter' }} {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
+    <span class="dezent">{{ zeilen | length }} von {{ anzahl_gesamt }} Leads{% if ist_hv %} · {{ benutzer.name }}{% else %} · {{ hv_liste | length }} Handelsvertreter{% endif %}</span>
+    <div class="aktionen">
+        {% if ist_hv %}
+            <a class="knopf klein zweitrangig" href="/lead-management/handelsvertreter/dashboard">Mein Dashboard</a>
+        {% else %}
+            <a class="knopf klein zweitrangig" href="/lead-management/handelsvertreter/dashboard" title="Dashboard eines Vertreters ansehen">HV-Dashboard</a>
+            <button class="knopf klein zweitrangig" type="button" data-hv-klappen="zu">Alle zuklappen</button>
+            <button class="knopf klein zweitrangig" type="button" data-hv-klappen="auf">Alle aufklappen</button>
+            <form method="post" action="/lead-management/handelsvertreter/standard-nachziehen" class="hv-inline"
+                  data-bestaetigen="Standard nachziehen: {{ standard_offen }} Bestandslead(s) ohne Außendienst nach der monday-Regel (Deals - Rene → René, sonst {{ standard.name if standard else 'Standard' }}) zuweisen?">
+                <input type="hidden" name="zurueck" value="{{ zurueck }}">
+                <button class="knopf klein" type="submit" {{ 'disabled' if not standard_offen }} title="F13: Bestandsleads aus monday ohne Zuweisung nach Standardregel">Standard nachziehen{% if standard_offen %} ({{ standard_offen }}){% endif %}</button>
+            </form>
+        {% endif %}
+    </div>
+</div>
+{% if meldung %}<p class="meldung {{ 'fehler' if meldung.startswith('Nicht möglich') }}">{{ meldung }}</p>{% endif %}
+
+{% if hinweise and (hinweise.fehlen or hinweise.ohne_kennzeichen) %}
+<div class="hv-hinweis">
+    {{ symbol('warnung') }}
+    {% if hinweise.fehlen %}<b>Noch nicht als Benutzer angelegt:</b> {{ hinweise.fehlen | join(', ') }} (Benutzerverwaltung → Rolle Außendienst, danach AD-Profil „terminiert selbst“).{% endif %}
+    {% if hinweise.ohne_kennzeichen %} <b>Benutzer ohne Kennzeichen „Handelsvertreter“ am AD-Profil:</b> {{ hinweise.ohne_kennzeichen | join(', ') }}.{% endif %}
+</div>
+{% endif %}
+
+{% if dashboard %}{% include "leadmanagement/hv_dashboard_block.html" %}{% endif %}
+
+<form method="get" action="/lead-management/handelsvertreter" class="lm-schnellfilter hv-filter" id="hv-filter">
+    <a class="f {{ 'aktiv' if not filter_werte.offen }}" href="/lead-management/handelsvertreter{{ '?vertreter=' ~ filter_werte.vertreter if filter_werte.vertreter }}">Alle <b>{{ anzahl_gesamt }}</b></a>
+    <a class="f {{ 'aktiv' if filter_werte.offen }}" href="/lead-management/handelsvertreter?offen=1{{ '&vertreter=' ~ filter_werte.vertreter if filter_werte.vertreter }}">Nur offene</a>
+    {% if filter_werte.offen %}<input type="hidden" name="offen" value="1">{% endif %}
+    <span class="trenner"></span>
+    {% if gesamt %}
+    <select name="vertreter" onchange="this.form.submit()" title="Vertreter">
+        <option value="">Vertreter: alle</option>
+        {% for hv_id, paar in kreis.items() %}
+            <option value="{{ hv_id }}" {{ 'selected' if filter_werte.vertreter == hv_id }}>{{ paar[0].name }}{{ '' if paar[1] else ' (ohne Kennzeichen)' }}</option>
+        {% endfor %}
+    </select>
+    {% endif %}
+    <select name="status" onchange="this.form.submit()" title="Status (Blatt Status)">
+        <option value="">Status: alle</option>
+        {% for wert, name in status_optionen %}<option value="{{ wert }}" {{ 'selected' if filter_werte.status == wert }}>{{ name }}</option>{% endfor %}
+    </select>
+    <select name="kanal" onchange="this.form.submit()" title="Vertriebskanal">
+        <option value="">Kanal: alle</option>
+        {% for k in kanal_optionen %}<option value="{{ k }}" {{ 'selected' if filter_werte.kanal | lower == k | lower }}>{{ k }}</option>{% endfor %}
+    </select>
+    <input type="search" name="q" value="{{ filter_werte.q }}" placeholder="Name / Ort / PLZ / Telefon">
+    <button class="knopf klein zweitrangig" type="submit">Filtern</button>
+</form>
+
+{% for g in gruppen %}
+<details class="hv-gruppe" {{ 'open' if g.get('aufgeklappt', True) }} data-hv="{{ g.key }}">
+    <summary class="lm-gruppe-kopf">
+        <span class="hv-avatar" aria-hidden="true">{{ (g.name.split() | map('first') | join(''))[:2] | upper }}</span>
+        {{ g.name }}
+        <span class="n {{ 'rot' if not g.zeilen }}">{{ g.zeilen | length }}</span>
+        <span class="erkl">{{ g.offen }} offen{% if not g.gekennzeichnet and not ist_hv %} · ohne Kennzeichen am AD-Profil{% endif %}{% if g.erkl %} · {{ g.erkl }}{% endif %}</span>
+    </summary>
+    <div class="hv-tabelle-wrap">
+    <table class="hv-tabelle">
+        <thead><tr>
+            <th>Kunde</th><th>Status</th><th>Kanal</th><th>Versuche</th><th>Letzter Kontakt</th>
+            <th>Eingang</th><th>Ort</th><th>Interessen</th><th>Telefon</th><th>Termin</th><th>Vertreter</th>
+        </tr></thead>
+        <tbody>
+        {% for z in g.zeilen %}
+        <tr data-vorgang="{{ z.vorgang.id }}" class="{{ 'hv-warn-zeile' if z.kanal_hinweis }}">
+            {% if phase105 and z.phase105 %}
+            {# Zellen des Hauptboards (Phase 105, _tabelle.html) – gleiche Darstellung #}
+            {{ zelle('lead', z, ctx) }}{{ zelle('status', z, ctx) }}{{ zelle('kanal', z, ctx) }}
+            {{ zelle('versuche', z, ctx) }}{{ zelle('letzter_kontakt', z, ctx) }}{{ zelle('eingang', z, ctx) }}
+            {{ zelle('ort', z, ctx) }}{{ zelle('interessen', z, ctx) }}{{ zelle('telefon', z, ctx) }}{{ zelle('termin', z, ctx) }}
+            {% else %}
+            <td class="hv-kunde"><a href="/lead-management/lead/{{ z.vorgang.id }}">{{ z.kunde.anzeige_name }}</a>
+                {{ quelle_badge(z.quelle, z.quelle_gruppe) }}
+                {% if z.vorgang.demo %}<span class="abzeichen">Demo</span>{% endif %}
+                {% if z.wiedervorlage and z.offen %}{{ wiedervorlage_chip(z.wiedervorlage, jetzt) }}{% endif %}</td>
+            <td><span class="hv-status" {% if z.status_farbe %}style="--f:{{ z.status_farbe }};color:{{ z.status_farbe }};background:{{ z.status_farbe }}1f;border-color:{{ z.status_farbe }}55"{% endif %}>{{ z.status_label }}</span></td>
+            <td>{% if z.kanal %}{% if z.kanal_farbe %}<span class="hv-status" style="color:{{ z.kanal_farbe }};background:{{ z.kanal_farbe }}1f;border-color:{{ z.kanal_farbe }}55">{{ z.kanal }}</span>{% else %}{{ kanal_badge(z.kanal) or z.kanal }}{% endif %}{% else %}<span class="dezent">–</span>{% endif %}</td>
+            <td>{{ versuche_punkte(z.vorgang) }}</td>
+            <td class="dezent">{{ z.kontakt_text or '–' }}</td>
+            <td>{{ z.eingang.strftime('%d.%m.%Y') if z.eingang else '–' }}</td>
+            <td>{{ z.kunde.plz }} {{ z.kunde.ort }}</td>
+            <td>{% for s in z.sparten %}<span class="chip chip-{{ s | lower }}">{{ s }}</span>{% endfor %}</td>
+            <td>{% if z.kunde.telefon %}<a href="tel:{{ z.kunde.telefon }}">{{ symbol('telefon') }} {{ z.kunde.telefon }}</a>{% endif %}</td>
+            <td>{% if z.termin_text %}{{ symbol('kalender') }} {{ z.termin_text }}{% else %}<span class="dezent">–</span>{% endif %}</td>
+            {% endif %}
+            <td class="sp-hv">{{ hv_zuweisung(z, hv_liste, zurueck, gesamt, standard) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="11" class="dezent">Keine Leads{% if filter_werte.q or filter_werte.status or filter_werte.kanal or filter_werte.offen %} für diesen Filter{% endif %}.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</details>
+{% else %}
+<div class="lm-karte"><p class="dezent">Keine Handelsvertreter gekennzeichnet (AD-Profil → „terminiert selbst“).</p></div>
+{% endfor %}
+
+<div class="lm-legende-liste">
+    <span><b>Vertreter</b> = zuständiger Handelsvertreter am Vorgang (ad_id); Wechsel schreibt Aktivität + Glocke</span>
+    <span><b>nur Innendienst</b> = Kanal/Quelle auf der Ausschlussliste (Parametrierung → hv_ausschluss)</span>
+    <span><b>Sonderregel monday</b> = Board „Deals - Rene“, Verantwortlicher immer René Golaschewski</span>
+    <span><b>Ausschlusskanal</b> (rot) = Kanal nachträglich geändert, Zuweisung bleibt bis zur Rücknahme</span>
+</div>
+<script src="/static/lm_hv.js?v={{ css_version }}" defer></script>
+{% endblock %}

@@ -287,3 +287,241 @@ Lead-Management/Projektierung/Montage; Parametrierungs-Reiter umbrechen.
 - **Modul-Einstieg** `lm_startseite`: leer = nach Rolle (Hauptrolle
   Leadmanagement → Anrufliste, sonst Übersicht).
 - Nebenbefund B2 behoben: Portal-Text der Projektierung im Pilot-Modus.
+
+
+---
+
+# Lead-Management V2 (v23, PLAN_LEAD_V2 Phasen 104–112) – Bestandsabgleich und Entscheidungen
+
+Stand 02.10.2026. Andreas hat entschieden, statt eines Lastenhefts direkt zu
+codieren (PLAN_LEAD_V2.md Teil 1). Der Bestandsabgleich, den der Auftrag für
+das Lastenheft verlangte, steht deshalb hier; die Kennzeichnung je Anforderung
+([Bestand] / [Erweiterung] / [Neu]) stammt aus dem Read-only-Abgleich der neun
+Bereiche A–I gegen den Code v22 (Rohdaten lokal in `diagnose/v23_bestand_*.json`).
+Alles läuft weiter im **Demo-Modus** (`lead_freigabe_modus = admin`).
+
+## V2.1 Bestandsabgleich – Überblick
+
+| Einstufung | Anzahl Punkte | Beispiele |
+|---|---|---|
+| [Bestand] | 52 | Anrufliste mit Tasten 1–7, Kaskade aus der Steuerdatei, Vorlagen `nicht_erreicht`/`terminbestaetigung` mit ICS, Terminassistent mit AD-Profilen/Outlook/Routing, Glocke mit Zähler-Badge, Demo-Modus, Duplikatprüfung E.164 |
+| [Erweiterung] | 60 | Kaskade 4 → 5 Stufen, Versuchs-Punkte mit Ergebnisfarbe, Lead-Akte → dreispaltige Kartei, AD-Profil um Kompetenzen/Handelsvertreter, ICS mit UID/SEQUENCE/CANCEL, Übersicht → persönliches Dashboard, API um Veranstaltung/GW |
+| [Neu] | 37 | Tabelle nach monday-Vorbild mit Spaltenkonfiguration, Icon-Leiste, Boards Hauptboard/Terminiert, Reiter Kontaktiert, Sammelaktionen, To-Dos, Objektart, Vorab-Angebot, Vorab-Gespräch (Telefon/Teams), Handelsvertreter-Ansicht, Info-Veranstaltung mit Feiertagsregel, Ersatzkunde bei Absage, Stoppuhr/Meine Anrufe/Rufnummernsuche |
+| [Neu, Bestand unklar] | 3 | Phase-82-Sicherheitstest über alle GET-Routen (im Ordner tests/ nicht auffindbar), Aktivitätstyp `mail_ein`, Status `bestaetigt` an Terminen (wird nie gesetzt) |
+
+Was aus dem Diktat bereits existierte und unverändert bleibt: Anrufliste
+(Ergebnis-Buttons, Tasten 1–7, Panel), Wiedervorlage-Kaskade (Blatt Kaskade),
+Mail-Warteschlange mit Sendesperre, Terminassistent (Top 5, Fahrzeiten,
+Outlook-Frei/Belegt), Lead-Akte als Vorgangsakte, Quelle · Kampagne · Kanal,
+Übersicht/Statistik, Demo-Schalter, Rollenmodell, monday-Sync/Rückspielung.
+
+## V2.2 Datenmodell (Phase 104)
+
+Lead = Vorgang bleibt; alles Neue hängt an bestehenden Tabellen:
+
+| Tabelle | Neue Spalten | Zweck |
+|---|---|---|
+| `kunden` | `objektart` (EFH/RH/REH/MFH), `parteien` | B3 – Rechnungsadresse = bestehende `rechnung_*` (v20) |
+| `vorgaenge` | `ad_id`, `vorab_angebot`, `veranstaltung_id`, `teilgenommen` | A-7 Zuständiger AD/HV ohne Termin, F10, I3 |
+| `vot_termine` | `typ` (vot/telefon/online), `medium`, `ics_uid`, `ics_sequence` | A-2 Vorab-Gespräch, E4 ICS-Umbuchung |
+| `benutzer` | `buchungslink`, `nebenstelle` | F12 Book-with-me, CTI-Vorbereitung |
+| `ad_profile` | `terminiert_selbst`, `kompetenz_sparten`, `kompetenz_kombi`, `kompetenz_mfh`, `kompetenz_gewerbe` | A-1 Handelsvertreter, F3 Produktkompetenz |
+| `lead_aktivitaeten` | `call_id`, `richtung`, `nebenstelle` | D1 Vorbereitung CTI (heute leer) |
+| neu `todos` | – | A2/F7 To-Dos, Glocke ohne Mail |
+| neu `info_veranstaltungen` | – | I1/I2 eine Zeile je Termin |
+| neu `benutzer_einstellungen` | – | A-14 Spaltenkonfiguration je Nutzer |
+
+Sparte **GW (Gewerbe)** als fünfter Code in `INTERESSEN`/`SPARTEN`, Chips und
+Badges; Erfassung startet wie WB im Freitext (kein Fragenkatalog); Statistik
+sortiert GW ans Ende; monday-Mapping bleibt unverändert (Label „Gewerbe“ wird
+dort weiterhin ignoriert – Freigabe durch Andreas nötig).
+
+## V2.3 Steuerdatei `leadmanagement_logik_v1.xlsx`
+
+- **Kaskade** jetzt 5 Stufen: 1 +2h · 2 +1d 18:00 `mail_nicht_erreicht` · 3 +3d ·
+  4 +7d `mail_nicht_erreicht` · 5 +14d `mail_disqualifiziert` (letzter). Nach
+  Stufe 5: Phase Nicht erreicht, Nurture +30 Tage, Buttons Nicht erreicht/
+  Besetzt/Mailbox gesperrt (`versuche_max` = 5). Aktionen heißen generisch
+  `mail_<vorlage>`.
+- **Gründe**: neue Phase `verloren` (Zu teuer · Kein Interesse mehr · Bleibt bei
+  Öl/Gas · Woanders unterschrieben · Sonstiges mit Freitext-Pflicht) und für
+  `zurueckgestellt` „Nachbearbeitung, noch nicht bereit für VOT“ (F11).
+  Bestehende Tabelle `ablehnungsgruende` (Angebote) bleibt; Verloren setzt
+  offene Angebote mit dem Lead-Grund auf Abgelehnt.
+- **Objektarten** (neu): code, bezeichnung, parteien_pflicht, erfassungs_wert
+  (Vorbelegung O01/PO01).
+- **Status** (neu, Mapping 5a + H2): eine Zeile je Lead-Phase mit Label,
+  Farbe, Board, Gruppe und den monday-Statuswerten, die darauf abgebildet
+  werden – die Lead-Phase bleibt die einzige Quelle der Wahrheit, die Gruppe
+  ist eine Sicht darauf.
+
+### Mapping monday-Status → Phase → Board → Gruppe (Blatt Status)
+
+| Lead-Phase | Label / Farbe | Board | Gruppe | monday-Status (5a) |
+|---|---|---|---|---|
+| neu | Neu · grau | Hauptboard | Neu | Neuer Lead |
+| in_kontaktierung | In Kontaktierung · rosa | Hauptboard | Neu | 1.–5. Kontaktversuch, erneuter Anruf, Telefongespräch, E-Mail, WhatsApp |
+| qualifiziert | Qualifiziert · blau | Hauptboard | Neu | – |
+| zurueckgestellt | Zurückgestellt · ocker | Hauptboard | Pausiert | Standby, Will sich selber zurückmelden, Nachbearbeitung |
+| nicht_erreicht | Nicht erreicht · pink | Hauptboard | Disqualifiziert | Disqualifiziert - nicht erreicht |
+| unqualifiziert | Unqualifiziert · rot | Hauptboard | Disqualifiziert | Disqualifiziert |
+| terminiert | Terminiert · hellgrün | Terminiert | Angebotserstellung | Terminiert, Teams Meeting |
+| erfasst | Erfasst · blaugrau | Terminiert | Angebotserstellung | Angebotserstellung, Vorab Angebot |
+| angebot | Angebot · braun | Terminiert | Angebotsversand | Angebot versendet |
+| gewonnen | Gewonnen · grün | Terminiert | Gewonnen | – |
+| verloren | Verloren · grau | Terminiert | Verloren | – (Verloren vor Termin mit Kennzeichen) |
+
+Gestrichene monday-Status (Export, AB gesprochen, Reklamation, Nicht erreicht
+disqualifiziert) haben keine Entsprechung. „Klima“ ist das Interesse KL,
+„E-Mail“/„WhatsApp“/„Telefongespräch“ sind Aktivitäten bzw. Terminarten.
+
+## V2.4 Annahmen (PLAN_LEAD_V2 Teil 1, A-1 … A-15) – Kurzbegründung
+
+- **A-1 Handelsvertreter = Kennzeichen am AD-Profil**, keine Rolle: nutzt
+  Startadresse/Gebiet/Kapazität/Postfach mit; Leads VOT → Erfassung → Angebot
+  unverändert; Rechte zentral in `lead_v2.zugriff_erlaubt`. Nachteil (Rechte an
+  einem Profilfeld) ist durch die zentrale Gate-Funktion begrenzt.
+- **A-2** Telefongespräch/Teams sind Terminarten an `vot_termine` (typ/medium),
+  keine Phasen – sie zählen in der Kollision, nicht in der Tageskapazität.
+- **A-3** Vorab-Angebot = Kennzeichen am Vorgang; Weg „Erfassung ohne Termin“
+  aus der Kartei; keine Terminbestätigung; im Demo nur Kennzeichen testbar.
+- **A-4** Nachbearbeitung = Zurückgestellt mit Grund + Pflicht-Wiedervorlage
+  (sichtbar in Gruppe Pausiert und im Dashboard).
+- **A-5** Kaskade 5 Stufen, Stufe 5 sendet `disqualifiziert`; Nurture +30 bleibt.
+- **A-6** Objektart am Kunden (Objekt = Ausführungsort = Kundenadresse).
+- **A-7** `vorgaenge.ad_id` als Vorzuweisung; der aktive Termin trägt weiter
+  seinen eigenen `ad_id`.
+- **A-8 [OFFEN 1]** Info-Lead → nächste Veranstaltung ab Eingang + 3 Tage
+  Vorlauf (Parameter `info_vorlauf_tage`), API-Feld `veranstaltung` optional.
+- **A-9 [OFFEN 2]** „Terminbestätigung erneut senden“ mit gleicher UID und
+  SEQUENCE+1; Duplikate durch das Tool: Rufnummernsuche/Kontaktiert zeigen
+  dieselbe Nummer in jeder Schreibweise, Zusammenführen bleibt manuell.
+- **A-10** Sparte GW; MFH und Gewerbe sind Objektkompetenzen am AD-Profil.
+- **A-11** Icon-Leiste mit 5 Einträgen + „Mehr …“; kein Einstieg geht verloren.
+- **A-12** Dashboard für ID/LM/Admin und Handelsvertreter (F16); AD unverändert.
+- **A-13** Puffer = max(30 Min, Fahrzeit), Dauer 90, Raster 30, Startwert 3
+  Termine/Tag für neue Profile.
+- **A-14** Spaltenkonfiguration je Nutzer in `benutzer_einstellungen`; Farben,
+  Pflichtfelder, Ausschlussliste, Veranstaltungsparameter als LeadParameter
+  (Parametrierung → Lead-Einstellungen, Abschnitte „Lead-Management V2“).
+- **A-15** Dieser Abschnitt ersetzt das Lastenheft.
+
+## V2.5 Standardantworten aus dem Bestandsabgleich (gelten als Annahme)
+
+- Dashboard zeigt **beide** Wiedervorlage-Mechaniken (Lead: `naechste_aktion_am`
+  / `zurueckgestellt_bis`; Angebotsverfolgung v10: `wiedervorlage_am`) in zwei
+  beschrifteten Blöcken; Umschalter „Meine Arbeit | Team“; Demo-Leads im
+  Demo-Modus eingeschlossen und gekennzeichnet.
+- To-Dos als eigene Tabelle (nicht die Projektierungs-`aufgaben`); Empfänger
+  alle aktiven Benutzer; Glocke art `todo` ohne Mail.
+- Begriff „Innendienst“ in Tabelle/Kartei = `vorgaenge.leadmanager_id`.
+- Versuchszähler: jedes Ergebnis zählt wie bisher; Sperre ab `versuche_max`.
+- Letzter Kontakt (Spalte) = letzter Anruf; Mails stehen in der Timeline.
+- Sparten-Badges einheitlich als v9-Chips; Kanban zeigt nur das aktive Board,
+  Spalten bleiben Phasen.
+- Hauptboard = Phase ohne Termin **und** kein Termin geplant/bestätigt;
+  „Verloren vor Termin“ steht im Board Terminiert mit Kennzeichen.
+- Sammelaktion „Status ändern“ mit einem gemeinsamen Grund/Datum, Aktivität
+  je Lead.
+- Pflichtfeld Vertriebskanal verlangt einen expliziten Wert; Interesse führend
+  am Kunden; Kanaländerung in der Kartei setzt `kanal_manuell`.
+- Konfliktwarnung bei manuellen Terminen: warnen mit Bestätigung, sperren nur
+  bei voller Überlappung desselben AD; Outlook nur bei `kalender_sync = an`.
+- Ersatzkunde: Phase Qualifiziert zuerst, dann In Kontaktierung mit
+  `erreicht_am`; Radius 5 → 10 km; ältere ab 14 Tagen bevorzugt, mehrere
+  Kandidaten mit Begründung.
+- ICS-UID wird bei Umbuchung weitergetragen (SEQUENCE+1), Absage als
+  METHOD:CANCEL; No-Show ohne Kundenmail.
+- Handelsvertreter: kein Kandidat im Innendienst-Assistenten, außer der Lead
+  ist ihm zugewiesen; Standard-Verantwortlicher Simon nur als HV-Zuständiger
+  (`leadmanager_id` bleibt Innendienst); „Deals - Rene“ gesperrt (Sonderregel
+  monday); Kanalwechsel auf Ausschlusskanal: Zuweisung bleibt, roter Hinweis +
+  Glocke, manuelle Rücknahme; fehlende HV-Benutzer (Di Blasi, Lind, Kinkel,
+  Leinenbach) legt Andreas an – das Tool zeigt den Hinweis.
+- Info-Leads: eigene Quelle `info_veranstaltung` (Typ `veranstaltung`, eigene
+  Farbe), bei Treffer „Kunde bereits im System“ immer eigener Vorgang mit
+  rotem Hinweis, kein automatisches Zusammenführen; `standard_sparten` der
+  Quelle greifen, wenn keine Sparte mitkommt.
+- GW: Code `GW`, Freitext-Erfassung, Qualifizierungsfragen pflegt Andreas im
+  Blatt Qualifizierung nach (bis dahin Minimal-Bogen).
+- Telefonie: nur `tel:`-Link + Stoppuhr; keine Anbieterangabe (F2); CTI-Felder
+  bleiben leer.
+
+## V2.6 Umsetzungsentscheidungen der Phasen 105–111 (Agenten, 02.10.2026)
+
+- **Boards (105):** Hauptboard-Kriterium = Blatt Status **und** kein aktiver
+  Vor-Ort-Termin; Seitenzustände bleiben immer im Hauptboard; Endzustände 30 Tage
+  (Filter Archiv). Manuell setzbar: neu/in_kontaktierung/qualifiziert (=
+  Reaktivieren), zurueckgestellt (Datum + Grund; „meldet sich selbst“ ohne
+  Datum → +`wv_meldet_sich_tage`), unqualifiziert, verloren, nicht_erreicht;
+  terminiert/erfasst/angebot/gewonnen sind abgeleitet. Verloren setzt alle nicht
+  archivierten Angebote (Entwurf … Versendet) auf Abgelehnt mit dem Lead-Grund.
+  Versuchs-Punkte zählen nur Anrufe (Farbe je Ergebnis), „Letzter Kontakt“ auch
+  Mails. Notiz-Spalte = `kunden.notizen`. Kanban behält Phasen als Spalten,
+  zeigt nur das aktive Board. Sammelaktionen nie für Außendienst/HV.
+- **Kartei (106):** Terminierung zählt nur VOT (typ vot) mit Status vorgemerkt/
+  geplant; zweiter Klick plant keine zweite Bestätigung; setzt `ad_id`, falls
+  leer. Objektart-Vorbelegung des Bogens über Codes (EFH→EFH, RH→RMH, REH→REH,
+  MFH→MFH; Parteien → O03; PV → PO01); Blatt Objektarten trägt jetzt dieselben
+  Codes. Vertriebskanal gilt nur mit explizitem Wert als gefüllt. E-Mail-Verlauf:
+  eigene/automatisiert/Kollegen aus `kommunikation_log`, Kunde aus
+  `angebots_mails` (Leads ohne Angebot haben keinen eingehenden Verlauf).
+  Kompetenz ist in der Kartei nur Hinweis, keine Sperre.
+- **Anruf (107):** `versuch_nr` zählt wie bisher jedes Ergebnis; Sperre ab
+  `versuche_max` auch nach Reaktivieren; Vorschlag für die letzte Stufe +30
+  Tage, manuell gewählter Zeitpunkt verschiebt die Nurture-Mail mit; Fälligkeits-
+  Glocke für neu/in_kontaktierung/qualifiziert/nicht_erreicht, Dedup über
+  Aktivität typ system; Rufnummernsuche vergleicht Ziffernfolgen (Klammer-Null
+  entfernt, ≥ 7 nationale Ziffern, Durchwahl-Treffer ≥ 9 Ziffern); Dauer-
+  Korrektur nur eigener Eintrag oder Admin, Obergrenze 4 h.
+- **Termin (108):** Kandidatenbasis = Rolle aussendienst (Haupt/Zusatz) oder
+  AD-Profil; ohne gepflegte Kompetenz unbeschränkt; Gebiet nur Abwertung;
+  Kanal-Regel `kanal_ad_regel` (JSON) mit Härte Ausschluss; Kollision zählt alle
+  Terminarten inkl. vorgemerkt, Kapazität nur VOT; Buchung setzt `ad_id`;
+  Konfliktmodus warnen|sperren; Vorab online ohne Datum = vorgemerkt mit
+  Kollege, Zeit später nachtragen; Absage von Vorab-Gesprächen ohne Kundenmail
+  und ohne Ersatzdialog; Ersatzkunde-Punkte = km·2 − 20 (alt) − Klassenbonus +
+  10 (in_kontaktierung); keine Neuoptimierung der Tagesroute (Annahme zu E3);
+  OSM-Kacheln bleiben extern (V1-Ausnahme); Outlook-Rücklesen gebuchter Teams-
+  Termine nicht umgesetzt (manuell nachtragen).
+- **Handelsvertreter (109):** „Eigene Leads“ = `ad_id` = ich oder (ad_id leer
+  und monday `leads.benutzer_id` = ich); HV geben nur an andere HV weiter;
+  Sonderregel „Deals - Rene“ auch für Admin gesperrt (Wahrheit in monday);
+  Tool-Zuweisung an gesyncten Leads schreibt `leads.benutzer_id` +
+  `benutzer_manuell`; Standardregel F13: Deals - Rene → René, Person auf HV →
+  diese, Deals/Deals - Simon ohne Person → Simon, Tool-Leads nie automatisch.
+  Login-Ziel für HV = Modul-Einstieg (Dashboard mit eigenen Leads).
+- **Dashboard/To-Dos (110):** `lm_startseite` leer = Dashboard für alle Rollen;
+  Lead-Wiedervorlagen Büro = leadmanager_id ich oder frei, HV = ad_id;
+  Angebots-Wiedervorlagen = Verantwortlicher ich (Büro auch NULL); „Fällig
+  heute“ inkl. überfällig; Erledigt bei zurückgestelltem Lead = zurück auf Neu;
+  Glocke art `todo` ohne Modul-Filter (auch Außendienst/Projektierung/Montage),
+  keine Mail; Selbstzuweisung ohne Glocke. Projektierung/Montage erreichen
+  `/lead-management/todos` nicht (Pfadlisten) – To-Dos dort nur über die
+  Glocke sichtbar (offen für V3).
+- **Info-Veranstaltung (111):** Info-Leads immer eigener Vorgang (kein 409);
+  Bestandsverweis als Aktivität typ `hinweis` (kein Schema); Abgleich (E-Mail
+  oder Telefon E.164) und Nachname normalisiert; Archivierung 6 h nach Beginn;
+  je Monat höchstens ein Regeltermin (manuell verschobene zählen); Info-Leads
+  ohne VOT stehen zusätzlich im Hauptboard; Statistik-Gruppe „Info-Veranstaltung“.
+
+## V2.7 Offen nach v23 (für Andreas / V3)
+
+- [OFFEN 1] endgültige Zuordnungsregel Info-Lead → Veranstaltung der Agentur
+  (umgesetzt: Standardregel A-8 + API-Feld `veranstaltung`).
+- [OFFEN 2] Rest des Auftragstexts (Duplikate durch das Tool, Punkt 8); umgesetzt
+  sind „Terminbestätigung erneut senden“ und die Rufnummernsuche.
+- Vier Handelsvertreter als Benutzer anlegen (Di Blasi, Lind, Kinkel,
+  Leinenbach), AD-Profile pflegen, Buchungslinks hinterlegen, Mail-Texte F9
+  einsetzen, Kanal „Messe“ pflegen, GW-Qualifizierungsfragen ergänzen.
+- `verloren` steht nicht in `LEAD_PHASEN_MANUELL`: „Verloren vor Termin“ ohne
+  Angebot könnte durch eine spätere Ableitung überschrieben werden – bewusst
+  belassen, damit ein später angenommenes Angebot weiter „gewonnen“ ableitet.
+- Statistik: Gesprächsdauer je Leadmanager nicht ausgewertet (nur in „Meine
+  Anrufe“ je Liste).
+- Performance: Boards laden alle Vorgänge mit Lead-Phase in Python (wie
+  `board_daten`); für große Bestände SQL-Filter/Paginierung nachrüsten.
+- Rollen: Sammelaktions-Sperre, Erzwingen und Vorlagenpflege prüfen die
+  Hauptrolle `benutzer.rolle` (wie im Bestand).
+- Demo-Risiko: `/api/leads` legt im Demo-Modus `demo = 1` an – bei der
+  Umstellung auf „alle“ „Behalten“ wählen.

@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v22)
+# Friondo Angebotstool – Projektkontext (v23)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -26,7 +26,8 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   `Artikel-Preislisten/PV/` (PV-Positionslisten, v16), `ANGEBOTSTEXTE.md`,
   `anlagen/`, `Layout - Logo/`.
 - `projektierung_logik_v1.xlsx` (Projektierung, v11+) und
-  `leadmanagement_logik_v1.xlsx` (Lead-Management, v12).
+  `leadmanagement_logik_v1.xlsx` (Lead-Management, v12; seit v23 zusätzlich die
+  Blätter Objektarten und Status, Kaskade mit 5 Stufen, Gründe `verloren`).
 
 ## Plan ↔ CLAUDE-Version (Zuordnung)
 
@@ -52,6 +53,7 @@ Nummern vergeben.
 | v20 | PLAN_GESAMT.md B4 (Anschriften) | 98 |
 | v21 | PLAN_LEAD_V1.1.md | 87–89 |
 | v22 | PLAN_V15.md | 99–103 |
+| v23 | PLAN_LEAD_V2.md | 104–112 |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
@@ -925,3 +927,114 @@ v14“ entspricht diesem Abschnitt.)
   und wird für Crawl/Abnahme nach diagnose\test_v22\data kopiert und
   migriert.
 
+
+## Neu in v23 – Lead-Management V2 (abgestimmt 02.10.2026)
+
+(Plan: PLAN_LEAD_V2.md Teil 1, Phasen 104–112; Teil 2 = Auftragstext mit
+Anforderungsdiktat A–I, Statusliste 5a, Festlegungen F1–F16. Entscheidung
+Andreas: kein Lastenheft, direkt codieren; offene Punkte als Annahmen A-1…A-15
+im Plan. Alles weiter im **Demo-Modus** `lead_freigabe_modus = admin`; V3 schaltet
+frei. Umsetzung als paralleler Workflow: ein Agent je Fachphase 105–111 plus
+Prüf-Agent, Hook-Änderungen an geteilten Dateien zentral eingespielt.)
+
+- **Fundament (Phase 104):** Lead = Vorgang bleibt. Spalten `kunden.objektart`
+  (EFH/RH/REH/MFH) + `parteien`; `vorgaenge.ad_id` (zuständiger AD/HV, A-7),
+  `vorab_angebot` (F10), `veranstaltung_id`, `teilgenommen`; `vot_termine.typ`
+  (vot|telefon|online, A-2), `medium`, `ics_uid`, `ics_sequence`;
+  `benutzer.buchungslink`, `nebenstelle`; `ad_profile.terminiert_selbst`
+  (Handelsvertreter, A-1), `kompetenz_sparten` (JSON), `kompetenz_kombi`,
+  `kompetenz_mfh`, `kompetenz_gewerbe`; `lead_aktivitaeten.call_id/richtung/
+  nebenstelle` (CTI-Vorbereitung). Tabellen `todos`, `info_veranstaltungen`,
+  `benutzer_einstellungen`. Sparte **GW (Gewerbe)** als fünfter Code (Freitext-
+  Erfassung wie WB). Steuerdatei: Kaskade 5 Stufen (+2h · +1d 18:00 Mail ·
+  +3d · +7d Mail · +14d `mail_disqualifiziert` letzter), Gründe `verloren`
+  (Zu teuer · Kein Interesse mehr · Bleibt bei Öl/Gas · Woanders unterschrieben ·
+  Sonstiges) und „Nachbearbeitung, noch nicht bereit für VOT“, Blätter
+  **Objektarten** und **Status** (Phase → Label/Farbe/Board/Gruppe + monday-Status,
+  Mapping 5a; `logik.board_fuer`, `logik.phase_fuer_monday`). Parameter
+  `versuche_max` 5, `wv_meldet_sich_tage`, `pflichtfelder`, `kanal_farben`,
+  `hv_ausschluss`, `hv_standard_benutzer`, `ersatz_radius_stufen`,
+  `ersatz_alter_tage`, `info_*`, `puffer_min` 30, `max_termine_tag_start` 3,
+  `dashboard_horizont_tage`, `kanal_ad_regel`, `vorab_dauer_min`,
+  `ersatz_min_treffer`, `termin_konflikt_modus`, `vorschlag_raster_manuell_min`
+  (Parametrierung → Lead-Einstellungen, Abschnitte „Lead-Management V2“).
+  Vorlagen `disqualifiziert`, `online_termin_einladung`, `terminabsage`.
+  `app/lead_v2.py`: `zugriff_erlaubt`/`gate` (404-Gate mit HV-Freigabe),
+  `ad_zuweisen`/`leadmanager_zuweisen` (Ausschluss F14, Aktivität, Glocke),
+  Kompetenzregel `kompetenz_passt`, Pflichtfelder, Benutzereinstellungen,
+  Migration `bestand_nachziehen` (ad_id aus Terminen, Objektart aus Q-W02/Q-P02,
+  F3-Startwerte und HV-Kennzeichen per Namensabgleich). `app/lead_info.py`:
+  Terminregel 1. Donnerstag 18:00 Krefeld mit NRW-Feiertagen (Osterformel),
+  Kontrollliste Okt 2026–Aug 2027 (13.05.2027 statt Himmelfahrt), rollierend 12
+  Monate. V2-Router `app/routers/lm_*.py` sind **vor** dem V1-Router eingebunden
+  (gleiche Pfade haben Vorrang); Styles in `app/static/lead_v2.css`.
+- **Menü & Boards (Phase 105, `app/lead_boards.py`):** linke Icon-Leiste
+  (`lm_nav`, 5 Einträge Hauptboard · Terminiert · Kontaktiert · Info-
+  Veranstaltung · E-Mail-Vorlagen + „Mehr …“ mit allen V1-Einstiegen, Demo-Badge,
+  unter 900 px untere Icon-Zeile). Tabelle nach monday-Vorbild (`_tabelle.html`):
+  Status-/Kanal-Labels mit Farbe aus Blatt Status/`kanal_farben`, 5 Versuchs-
+  Punkte, Avatare, tel:/mailto, Spaltenkonfiguration je Nutzer
+  (`benutzer_einstellungen` key `boards_spalten`), Inline-Edit per fetch
+  (`POST /lead-management/boards/zeile/{id}`: status mit Pflichtgründen, notiz,
+  ad_id, leadmanager_id, wiedervorlage), Sammelaktionen registrierbar
+  (`SAMMELAKTIONEN`, `POST /boards/sammelaktion`, Aktivität je Lead).
+  Hauptboard = Phasen ohne aktiven VOT (Neu · Pausiert · Disqualifiziert, Label
+  „Telefongespräch“), Terminiert = mit VOT bzw. terminiert/erfasst/angebot/
+  gewonnen/verloren (Angebotserstellung mit „Erfassung starten“/„Angebot öffnen“,
+  Angebotsversand, Gewonnen, Verloren „vor Termin“); Verloren setzt offene
+  Angebote auf Abgelehnt (`lead_boards.angebote_ablehnen`, Hook in
+  `kern.lead_verloren`). Kanban zeigt nur das aktive Board. Reiter Kontaktiert
+  (alle Versuche, Rufnummernsuche E.164 inkl. monday-Leads), `/vorlagen` =
+  Vorlagen-Editor im Modul.
+- **Kundenkartei (Phase 106, `app/lead_kartei.py`):** `GET /lead-management/lead/
+  {id}` dreispaltig (B1–B8): Stammdaten inline mit roten Pflichtfeldern + Zähler,
+  Objektart/Parteien/Rechnungsadresse (MFH), Zuständige, Einwilligungen; Reiter
+  Timeline · E-Mail-Verlauf · Anrufnotizen · Qualifizierung · Termin ·
+  Erfassungen/Angebote/Projekt; rechts Termine/Angebote/Erfassungen/Projekt/
+  Anhänge/To-Dos. Button **Terminierung** (B8): vorgemerkter Termin → geplant,
+  Terminbestätigung + Erinnerung, Kalender, Phase terminiert. „Erfassung ohne
+  Termin“ = Vorab-Angebot (A-3), „Nachbearbeitung“ (F11/A-4), Wiedervorlage-
+  Dialog, Anruf-Dialoge der Anrufliste. Lead-Kopf der Vorgangsakte reduziert +
+  Link „Zur Kundenkartei“; Objektart belegt O01/O03/PO01 des Bogens vor.
+- **Anruf-Workflow (Phase 107, `app/lead_anrufliste.py`, `lm_anruf.py`):**
+  `POST /anruf/{id}` mit `dauer_sek`, `wiedervorlage_am`, `zurueck`; Sperre ab
+  `versuche_max`; Dialog „Nicht erreicht“ mit Kaskaden-Vorschlag (`GET /anruf/
+  {id}/vorschlag`); Doppelversand-Schutz (`mail_bereits_geplant` in
+  `mail_planen`, Storno offener Kaskaden-Mails bei Erreicht/Rückruf/Kein
+  Interesse); Fälligkeits-Glocke `faellige_wiedervorlagen_melden` (Anrufliste +
+  5-Minuten-Scheduler); Stoppuhr `lm_anruf.js`, `telefon_link`-Makro (E.164),
+  Dauer-Korrektur, „Meine Anrufe“, Rufnummernsuche `/anruf/suche`.
+- **Terminassistent (Phase 108, `app/lead_termin.py`, `lm_termin.py`):**
+  Kandidatenfilter Ausschluss (Kanal-Regel, Kompetenz, Terminierung aktiv, HV nur
+  eigene Leads) / Abwertung (Gebiet, Umweg, Wunschzeit), Puffer = max(30 Min,
+  Fahrzeit), Kapazität nur VOT, Begründung + Mini-Karte; Status **vorgemerkt**
+  bei offenen Pflichtfeldern; manuelle Buchung (15-Min-Raster, Konfliktprüfung
+  warnen|sperren); Vorab-Gespräch telefon/online (Buchungslink-Mail); Absage mit
+  Storno-ICS (`METHOD:CANCEL`, gleiche UID, SEQUENCE+1) und **Ersatzkunde-Dialog**
+  (F8); `bestaetigung-erneut` (A-9); ICS mit UID/SEQUENCE/Berater/Alarm;
+  AD-Profil mit Kompetenzen, HV-Kennzeichen, Kanal-Regel, Buchungslink;
+  Vorab-Gespräche kippen die Phase nicht (Hooks `typ == "vot"` in
+  `lead_phase_berechnen`, Kennzahlen, Board).
+- **Handelsvertreter (Phase 109, `app/lead_handelsvertreter.py`, `lm_hv.py`):**
+  Rechte-Matrix, `GET /lead-management/handelsvertreter` (Gesamtsicht je
+  Vertreter / eigene Leads + Dashboard-Block F16), Zuweisung immer über
+  `lead_handelsvertreter.zuweisen` (Sonderregel „Deals - Rene“, Ausschluss F14,
+  monday-Abgleich `leads.benutzer_id`), Standard F13 (`standard_nachziehen`
+  nach monday-Sync, Button „An Standard geben“), Kanalwechsel-Hinweis + Glocke,
+  Menüeinträge/Login-Ziel für HV, Lead-Glocken für HV auch im Demo.
+- **Dashboard & To-Dos (Phase 110, `app/lead_dashboard.py`, `lead_todos.py`):**
+  `GET /lead-management/dashboard` „Meine Arbeit“ = Modul-Einstieg (Lead- und
+  Angebots-Wiedervorlagen getrennt, fällig/kommende Tage, zugeteilte Vorgänge,
+  Termine, To-Dos, Kacheln); To-Dos jeder an jeden, Glocke art `todo` ohne Mail
+  (F7), Fälligkeits-Glocke im Scheduler, Block in der Vorgangsakte; Außendienst
+  ohne HV → Meine Termine (F6).
+- **Info-Veranstaltung (Phase 111, `lm_info.py`):** Board mit Gruppen je Termin,
+  Archiv, Spalte „Teilgenommen“, Sammelaktionen Status ändern / nächste
+  Veranstaltung / Teilgenommen, Termine-Pflege; `POST /api/leads` mit Feld
+  `veranstaltung`, Standard-Sparten der Quelle, GW; Zuordnung A-8 für API,
+  Parser, Schnellanlage, Import; Abgleich I5 → Aktivität `hinweis` + roter
+  Hinweis „Kunde bereits im System“ (`docs/leads-api.md`).
+- **Tests/Abnahme (Phase 112):** `tests/test_lead_v2_*.py` (8 Dateien),
+  Gesamtlauf 416 Tests grün (268 Bestand + 148 V2), Abnahmeskript und Voll-Crawl gegen die migrierte
+  DB-Kopie (siehe docs/nach-dem-update-v23.md). Offen/Annahmen:
+  docs/leadmanagement-entscheidungen.md Abschnitt V2.

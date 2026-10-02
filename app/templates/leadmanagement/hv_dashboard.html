@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
+
+{% block titel %}Dashboard Handelsvertreter – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{# Phase 109 (F16): persönliches Dashboard des Handelsvertreters; Innendienst/
+   Admin wählen einen Vertreter (?hv=<id>). #}
+{% block inhalt %}
+{{ lm_nav('handelsvertreter') }}
+<div class="seitenkopf">
+    <h1>Dashboard {% if ziel %}· {{ ziel.name }}{% endif %} {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
+    {% if dashboard %}<span class="dezent">{{ dashboard.jetzt | de_datum('%A, %d.%m.%Y') }} · Stand {{ dashboard.jetzt.strftime('%H:%M') }}</span>{% endif %}
+    <div class="aktionen">
+        {% if gesamt %}
+        <form method="get" action="/lead-management/handelsvertreter/dashboard" class="hv-inline">
+            <select name="hv" onchange="this.form.submit()" title="Vertreter wählen">
+                {% for hv in hv_liste %}<option value="{{ hv.id }}" {{ 'selected' if ziel and ziel.id == hv.id }}>{{ hv.name }}</option>{% else %}<option value="">keine Handelsvertreter gekennzeichnet</option>{% endfor %}
+            </select>
+        </form>
+        {% endif %}
+        <a class="knopf klein zweitrangig" href="/lead-management/handelsvertreter">{{ 'Meine Leads' if ist_hv else 'Zur Gesamtsicht' }}</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+{% if dashboard %}
+    {% include "leadmanagement/hv_dashboard_block.html" %}
+{% else %}
+    <div class="lm-karte"><p class="dezent">Kein Handelsvertreter gewählt bzw. gekennzeichnet (AD-Profil → „terminiert selbst“).</p></div>
+{% endif %}
+<script src="/static/lm_hv.js?v={{ css_version }}" defer></script>
+{% endblock %}

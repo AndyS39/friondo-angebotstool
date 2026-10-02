@@ -1,0 +1,39 @@
+{# Phase 109 (G3/F13/F14): Zuweisungs-Dropdown „Vertreter“ – auch von anderen
+   Phasen importierbar (Kartei B1, Tabelle A3):
+   {% from "leadmanagement/hv_zuweisung.html" import hv_zuweisung %}
+   {{ hv_zuweisung(z, hv_liste, zurueck, gesamt, standard) }}
+   z = Zeile aus lead_handelsvertreter.zeilen_bauen (vorgang, hv, sperre,
+   sperre_kurz, kanal_hinweis, aus_monday); gesamt = Innendienst/Admin
+   (darf entziehen), sonst Handelsvertreter (nur weitergeben). #}
+{% from "_symbole.html" import symbol %}
+{% macro hv_zuweisung(z, hv_liste, zurueck, gesamt=True, standard=None) -%}
+<form method="post" action="/lead-management/handelsvertreter/{{ z.vorgang.id }}/zuweisen"
+      class="hv-zuweisung" data-vorgang="{{ z.vorgang.id }}">
+    <input type="hidden" name="zurueck" value="{{ zurueck }}">
+    {% if z.sperre %}
+        <select disabled title="{{ z.sperre }}" aria-label="Vertreter (gesperrt)">
+            <option>{{ z.hv.name if z.hv else '– nicht zugewiesen –' }}</option>
+        </select>
+        <span class="hv-sperre" title="{{ z.sperre }}">{{ symbol('verbot') }} {{ z.sperre_kurz }}</span>
+    {% else %}
+        <select name="ad_id" aria-label="Vertreter" data-aktuell="{{ z.hv.id if z.hv else '' }}"
+                title="{{ 'Zuständiger Handelsvertreter – Umverteilung schreibt Aktivität + Glocke' }}">
+            {% if gesamt %}<option value="" {{ 'selected' if not z.hv }}>– nicht zugewiesen –</option>{% endif %}
+            {% for hv in hv_liste %}
+                <option value="{{ hv.id }}" {{ 'selected' if z.hv and z.hv.id == hv.id }}>{{ hv.name }}</option>
+            {% endfor %}
+            {% if z.hv and z.hv.id not in (hv_liste | map(attribute='id') | list) %}
+                <option value="{{ z.hv.id }}" selected>{{ z.hv.name }} (ohne Kennzeichen)</option>
+            {% endif %}
+        </select>
+        <noscript><button class="knopf klein zweitrangig" type="submit">Zuweisen</button></noscript>
+        {% if gesamt and not z.hv and standard %}
+            <button class="knopf klein zweitrangig" type="submit"
+                    formaction="/lead-management/handelsvertreter/{{ z.vorgang.id }}/standard"
+                    title="F13: Standard-Verantwortlicher für Handelsvertreter-Leads">An Standard ({{ standard.name }}) geben</button>
+        {% endif %}
+    {% endif %}
+    {% if z.aus_monday %}<span class="hv-sperre" title="Zuordnung stammt aus monday (leads.benutzer_id) – „Standard nachziehen“ übernimmt sie an den Vorgang">{{ symbol('oeffnen') }} monday</span>{% endif %}
+    {% if z.kanal_hinweis %}<span class="hv-warnung" title="{{ z.kanal_hinweis }}">{{ symbol('warnung') }} Ausschlusskanal</span>{% endif %}
+</form>
+{%- endmacro %}

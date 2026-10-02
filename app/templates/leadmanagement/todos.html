@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "_symbole.html" import symbol %}
+{% from "leadmanagement/_todo_formular.html" import todo_formular, todo_liste %}
+
+{% block titel %}To-Dos – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{# v23 (PLAN_LEAD_V2 Phase 110, A2/F7): To-Dos = Arbeitsaufträge mit Empfänger,
+   optionalem Vorgangsbezug, Fälligkeit und Erledigt-Häkchen. Abgrenzung:
+   Wiedervorlage = Kundenkontakt zu einem Zeitpunkt (Dashboard). #}
+{% block inhalt %}
+{% if modul %}{{ lm_nav('dashboard') }}{% endif %}
+<div class="seitenkopf">
+    <h1>To-Dos {% if demo_badge and modul %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
+    <span class="dezent">Arbeitsaufträge – jeder darf jedem To-Dos zuweisen · Glocke statt Mail</span>
+    <div class="aktionen">
+        {% if modul %}<a class="knopf klein zweitrangig" href="/lead-management/dashboard">← Meine Arbeit</a>
+        {% elif not hv %}<a class="knopf klein zweitrangig" href="/lead-management/meine-termine">← Meine Termine</a>{% endif %}
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<div class="lm-todo-filter">
+    <nav class="lm-umschalter" aria-label="To-Do-Sicht">
+        <a class="{{ 'aktiv' if sicht == 'meine' and not vorgang }}" href="/lead-management/todos?sicht=meine{{ '&q=' ~ (suche | urlencode) if suche }}">Meine offenen <span class="n">{{ zaehler.meine }}</span></a>
+        <a class="{{ 'aktiv' if sicht == 'vergeben' and not vorgang }}" href="/lead-management/todos?sicht=vergeben{{ '&q=' ~ (suche | urlencode) if suche }}">Von mir vergeben <span class="n">{{ zaehler.vergeben }}</span></a>
+        <a class="{{ 'aktiv' if sicht == 'erledigt' and not vorgang }}" href="/lead-management/todos?sicht=erledigt{{ '&q=' ~ (suche | urlencode) if suche }}">Erledigt <span class="n">{{ zaehler.erledigt }}</span></a>
+    </nav>
+    <form method="get" action="/lead-management/todos" class="suchleiste lm-todo-suche">
+        <input type="hidden" name="sicht" value="{{ sicht }}">
+        {% if vorgang %}<input type="hidden" name="vorgang_id" value="{{ vorgang.id }}">{% endif %}
+        <input type="text" name="q" value="{{ suche }}" placeholder="Titel oder Details durchsuchen">
+        <button class="knopf klein zweitrangig" type="submit">{{ symbol('suche') }} Suchen</button>
+        {% if suche %}<a class="knopf klein zweitrangig" href="/lead-management/todos?sicht={{ sicht }}{{ '&vorgang_id=' ~ vorgang.id if vorgang }}">Zurücksetzen</a>{% endif %}
+    </form>
+</div>
+{% if vorgang %}
+<p class="hinweis lm-todo-vorgang">To-Dos zum Vorgang
+    <a href="{{ '/lead-management/lead/' if modul else '/vorgaenge/' }}{{ vorgang.id }}"><strong>{{ kunde.anzeige_name if kunde else vorgang.id }}</strong></a>
+    {% if vorgang.demo %}<span class="abzeichen">Demo</span>{% endif %}
+    · <a href="/lead-management/todos">alle meine To-Dos</a></p>
+{% endif %}
+
+<div class="lm-zweispaltig lm-todo-seite">
+    <div class="lm-karte">
+        <h2>{% if vorgang %}Zum Vorgang{% elif sicht == 'vergeben' %}Von mir vergeben{% elif sicht == 'erledigt' %}Erledigt{% else %}Meine offenen To-Dos{% endif %}
+            <span class="sub">{{ zeilen | length }} Einträge{% if sicht == 'meine' and not vorgang %} · fällige zuerst{% endif %}</span></h2>
+        {{ todo_liste(zeilen, benutzer, heute, zurueck=zurueck, zeige_an=(sicht == 'vergeben' or vorgang is not none),
+                      akte_basis=('/lead-management/lead/' if modul else '/vorgaenge/'),
+                      leer_text=('Keine Treffer.' if suche else 'Keine To-Dos in dieser Sicht.')) }}
+    </div>
+    <div class="lm-karte">
+        <h2>Neues To-Do <span class="sub">{% if vorgang %}zum Vorgang {{ kunde.anzeige_name if kunde else vorgang.id }}{% else %}optional mit Vorgangsbezug{% endif %}</span></h2>
+        {{ todo_formular(empfaenger, benutzer, vorgang_id=(vorgang.id if vorgang else None), zurueck=zurueck, rahmen=False) }}
+        <p class="dezent lm-todo-abgrenzung">Wiedervorlage = Kundenkontakt zu einem Zeitpunkt (am Lead oder Angebot, siehe Dashboard). To-Do = Arbeitsauftrag an eine Person, mit oder ohne Vorgang.</p>
+    </div>
+</div>
+{% endblock %}

@@ -2,20 +2,31 @@
 {% from "_symbole.html" import symbol %}
 {% from "leadmanagement/_nav.html" import lm_nav %}
 {% from "_komponenten.html" import quelle_badge, kanal_badge, versuche_punkte %}
+{% from "leadmanagement/anruf_dialoge.html" import anruf_dialoge %}
 
 {% block titel %}Anrufliste – Lead-Management{% endblock %}
 
 {% block mainklasse %}breit{% endblock %}
 
 {# v21 (PLAN_LEAD_V1.1 Phase 89): gruppierte, zweizeilige Arbeitsliste nach
-   docs/leadmanagement-prototyp.html. Route, Ergebnis-Buttons, Dialoge, das
-   Seitenpanel (einbett=1) und die Tasten 1–7 sind unverändert (v12). #}
+   docs/leadmanagement-prototyp.html. Route, Seitenpanel (einbett=1) und die
+   Tasten 1–7 sind unverändert (v12).
+   v23 Phase 107 (PLAN_LEAD_V2 C1–C4, D1–D3): Versuchs-Punkte je Ergebnis mit
+   Tooltip, „Nicht erreicht“ öffnet den Dialog mit Kaskaden-Vorschlag (Taste 2
+   unverändert), Buttons Nicht erreicht/Besetzt/Mailbox gesperrt ab versuche_max,
+   tel:-Links in E.164 + Stoppuhr (lm_anruf.js → dauer_sek), Rufnummernsuche,
+   Button „Meine Anrufe“. Dialoge: leadmanagement/anruf_dialoge.html. #}
 {% block inhalt %}
 {{ lm_nav('anrufliste') }}
 <div class="seitenkopf">
     <h1>Anrufliste {% if demo_badge %}<span class="demo-badge">Demo · Coming soon</span>{% endif %}</h1>
     <span class="dezent">{{ 'Meine + freie Leads' if filter_werte.meine else 'Alle Leads' }} · {{ offen }} offen</span>
     <div class="aktionen">
+        <form method="get" action="/lead-management/anruf/suche" class="lm-rufnummer" title="Eingehender Anruf: Rufnummer eingeben (E.164-Vergleich, z. B. 0203 … = +49 203 …) – ein Treffer springt direkt in die Kartei">
+            <input type="search" name="q" inputmode="tel" placeholder="Rufnummer eingeben" autocomplete="off">
+            <button class="knopf klein zweitrangig" type="submit">{{ symbol('telefon') }} Suchen</button>
+        </form>
+        <a class="knopf klein zweitrangig" href="/lead-management/anruf/meine" title="Eigene protokollierte Anrufe mit Datum, Nummer, Vorgang, Ergebnis, Dauer">Meine Anrufe</a>
         <a class="knopf klein zweitrangig" href="/lead-management/anrufliste?meine={{ '0' if filter_werte.meine else '1' }}">{{ 'Alle Leads' if filter_werte.meine else 'Meine + freie Leads' }}</a>
         <a class="knopf klein" href="/lead-management/neu">+ Neuer Lead</a>
     </div>
@@ -43,7 +54,7 @@
     </select>
     <select name="sparte" onchange="this.form.submit()">
         <option value="">Sparte: alle</option>
-        {% for s in ('WP', 'PV', 'KL', 'WB') %}<option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }}>{{ s }}</option>{% endfor %}
+        {% for s in ('WP', 'PV', 'KL', 'WB', 'GW') %}<option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }}>{{ s }}</option>{% endfor %}
     </select>
     <select name="klasse" onchange="this.form.submit()">
         <option value="">Klasse: alle</option>
@@ -70,8 +81,8 @@
     <details {{ '' if g.eingeklappt else 'open' }}>
         <summary class="lm-gruppe-kopf">{{ g.titel }} <span class="n {{ 'rot' if n_rot and g.key == 'dran' }}">{{ g.zeilen | length }}</span><span class="erkl">{{ g.erkl }}</span></summary>
         {% for z in g.zeilen %}
-        <div class="lm-zeile anruf-zeile {{ z.balken }}" data-vorgang="{{ z.vorgang.id }}">
-            {{ versuche_punkte(z.vorgang) }}
+        <div class="lm-zeile anruf-zeile {{ z.balken }}" data-vorgang="{{ z.vorgang.id }}" data-gesperrt="{{ '1' if z.gesperrt else '' }}">
+            {{ versuche_punkte(z.vorgang, z.versuche) }}
             <div class="wer">
                 <div class="z1">
                     <a href="#" class="panel-link" data-ziel="/vorgaenge/{{ z.vorgang.id }}">{{ z.kunde.anzeige_name }}</a>
@@ -81,6 +92,7 @@
                     {{ kanal_badge(z.kanal) }}
                     {% if z.frei %}<span class="lm-flag" title="Noch kein Leadmanager zugeordnet">⚑ frei</span>{% endif %}
                     {% if z.nummer_pruefen %}<span class="lm-flag" title="Letzter Anruf: falsche Nummer">⚑ Nummer prüfen</span>{% endif %}
+                    {% if z.gesperrt %}<span class="lm-flag lm-flag-sperre" title="{{ sperre_meldung }} – nur Erreicht, Rückruf, Falsche Nummer, Kein Interesse oder Reaktivieren">⚑ {{ versuche_max }} Versuche</span>{% endif %}
                     {% if z.wiederkehrer %}<span class="abzeichen">Wiederkehrer</span>{% endif %}
                     {% if z.vorgang.demo %}<span class="abzeichen">Demo</span>{% endif %}
                     {% if z.kampagne and z.kampagne.auto_angelegt %}<span class="lm-neu">Kampagne neu</span>{% endif %}
@@ -97,24 +109,31 @@
                 <span class="sla-chip sla-erfuellt" title="monday-Lead – Terminierung in monday, kein SLA im Tool">monday</span>
             {% endif %}</div>
             <div class="klasse">{{ z.vorgang.score_klasse or '–' }} <small>{{ z.vorgang.score_punkte if z.vorgang.score_punkte is not none else 'vorl.' }}</small></div>
-            <div class="tel">{% if z.kunde.telefon %}<a href="tel:{{ z.kunde.telefon }}">{{ z.kunde.telefon }}</a>{% endif %}</div>
+            <div class="tel">{% if z.kunde.telefon %}<a href="{{ z.tel_href }}" class="lm-tel" title="Anrufen (Click-to-Call) – startet die Stoppuhr">{{ symbol('telefon') }} {{ z.kunde.telefon }}</a>{% endif %}
+                <span class="lm-stoppuhr" data-vorgang="{{ z.vorgang.id }}" title="Gesprächsdauer – wird mit dem Ergebnis gespeichert" hidden>00:00</span></div>
             <div class="lm-aktion anruf-buttons">
-                <form method="post" action="/lead-management/anruf/{{ z.vorgang.id }}">
+                <form method="post" action="/lead-management/anruf/{{ z.vorgang.id }}" class="lm-anruf-form">
+                    <input type="hidden" name="dauer_sek">
+                    <input type="hidden" name="zurueck" value="{{ zurueck_pfad }}">
                     <button class="knopf klein lm-ok" name="ergebnis" value="erreicht" title="1 – Erreicht">✓ Erreicht</button>
-                    <button class="knopf klein zweitrangig" name="ergebnis" value="nicht_erreicht" title="2 – Nicht erreicht">Nicht erreicht</button>
-                    <button class="knopf klein zweitrangig" name="ergebnis" value="mailbox" title="4 – Mailbox">Mailbox</button>
+                    <button class="knopf klein zweitrangig" type="button" data-ergebnis="nicht_erreicht" title="{{ sperre_meldung if z.gesperrt else '2 – Nicht erreicht (Dialog: Wiedervorlage aus der Kaskade, änderbar)' }}" onclick="dialogOeffnen('nichterreicht', {{ z.vorgang.id }})" {{ 'disabled' if z.gesperrt }}>Nicht erreicht</button>
+                    <button class="knopf klein zweitrangig" name="ergebnis" value="mailbox" title="{{ sperre_meldung if z.gesperrt else '4 – Mailbox/AB (zählt als Versuch, Kaskade läuft)' }}" {{ 'disabled' if z.gesperrt }}>Mailbox</button>
                 </form>
-                <button class="knopf klein zweitrangig" title="5 – Rückruf gewünscht" onclick="dialogOeffnen('rueckruf', {{ z.vorgang.id }})">Rückruf</button>
+                <button class="knopf klein zweitrangig" type="button" data-ergebnis="rueckruf_gewuenscht" title="5 – Rückruf gewünscht (Dialog: Datum/Uhrzeit Pflicht)" onclick="dialogOeffnen('rueckruf', {{ z.vorgang.id }})">Rückruf</button>
                 <details>
                     <summary class="knopf klein zweitrangig" title="Besetzt · Falsche Nummer · Kein Interesse · Zurückstellen">⋯</summary>
                     <div class="lm-menue">
-                        <form method="post" action="/lead-management/anruf/{{ z.vorgang.id }}">
-                            <button class="knopf klein zweitrangig" name="ergebnis" value="besetzt" title="3 – Besetzt">{{ symbol('besetzt') }} Besetzt</button>
+                        <form method="post" action="/lead-management/anruf/{{ z.vorgang.id }}" class="lm-anruf-form">
+                            <input type="hidden" name="dauer_sek">
+                            <input type="hidden" name="zurueck" value="{{ zurueck_pfad }}">
+                            <button class="knopf klein zweitrangig" name="ergebnis" value="besetzt" title="{{ sperre_meldung if z.gesperrt else '3 – Besetzt' }}" {{ 'disabled' if z.gesperrt }}>{{ symbol('besetzt') }} Besetzt</button>
                         </form>
-                        <form method="post" action="/lead-management/anruf/{{ z.vorgang.id }}">
+                        <form method="post" action="/lead-management/anruf/{{ z.vorgang.id }}" class="lm-anruf-form">
+                            <input type="hidden" name="dauer_sek">
+                            <input type="hidden" name="zurueck" value="{{ zurueck_pfad }}">
                             <button class="knopf klein zweitrangig" name="ergebnis" value="falsche_nummer" title="6 – Falsche Nummer">{{ symbol('fragezeichen') }} Falsche Nummer</button>
                         </form>
-                        <button class="knopf klein zweitrangig" title="7 – Kein Interesse" onclick="dialogOeffnen('keininteresse', {{ z.vorgang.id }})">{{ symbol('verbot') }} Kein Interesse</button>
+                        <button class="knopf klein zweitrangig" type="button" data-ergebnis="kein_interesse" title="7 – Kein Interesse (Dialog: Pflichtgrund aus dem Blatt Gründe)" onclick="dialogOeffnen('keininteresse', {{ z.vorgang.id }})">{{ symbol('verbot') }} Kein Interesse</button>
                         <button class="knopf klein zweitrangig" title="Zurückstellen" onclick="dialogOeffnen('zurueck', {{ z.vorgang.id }})">{{ symbol('pause') }} Zurückstellen</button>
                         {% if z.vorgang.lead_phase in ('nicht_erreicht', 'zurueckgestellt', 'unqualifiziert') %}
                         <button class="knopf klein zweitrangig" title="Erneut aktivieren" onclick="dialogOeffnen('reaktivieren', {{ z.vorgang.id }})">{{ symbol('abspielen') }} Reaktivieren</button>
@@ -130,7 +149,7 @@
     {% else %}
     <div class="lm-zeile"><span></span><span class="dezent">Keine Leads in der Arbeitsliste.</span></div>
     {% endfor %}
-    <div class="lm-legende-liste"><span><b>Punkte</b> = Anrufversuche (grau 1–2 · orange 3 · rot 4+)</span><span><b>Farbbalken links</b> = SLA rot/gelb bzw. viele Versuche</span><span><b>Quelle</b> farbig nach Typ · <b>Kanal</b> violett (steuert Angebotsprofil)</span><span>Tasten 1 Erreicht · 2 Nicht erreicht · 3 Besetzt · 4 Mailbox · 5 Rückruf · 6 Falsche Nummer · 7 Kein Interesse</span></div>
+    <div class="lm-legende-liste"><span><b>Punkte</b> = Anrufversuche (max. {{ versuche_max }}), Farbe je Ergebnis: <i class="lm-leg e-erreicht"></i> erreicht · <i class="lm-leg e-nicht_erreicht"></i> nicht erreicht · <i class="lm-leg e-besetzt"></i> besetzt · <i class="lm-leg e-mailbox"></i> Mailbox · <i class="lm-leg e-rueckruf_gewuenscht"></i> Rückruf · <i class="lm-leg e-falsche_nummer"></i> falsche Nummer · <i class="lm-leg e-kein_interesse"></i> kein Interesse; Zähler orange ab 3 · rot ab 4 · Tooltip = Datum, Uhrzeit, Ergebnis, Benutzer</span><span><b>Farbbalken links</b> = SLA rot/gelb bzw. viele Versuche</span><span><b>Quelle</b> farbig nach Typ · <b>Kanal</b> violett (steuert Angebotsprofil)</span><span><b>Stoppuhr</b> startet mit Klick auf die Nummer oder ein Ergebnis und speichert die Dauer</span><span>Tasten 1 Erreicht · 2 Nicht erreicht · 3 Besetzt · 4 Mailbox · 5 Rückruf · 6 Falsche Nummer · 7 Kein Interesse</span></div>
 </div>
 <aside id="lead-panel" hidden>
     <div class="panel-kopf">
@@ -141,84 +160,11 @@
 </aside>
 </div>
 
-{# Dialoge: Rückruf, Kein Interesse, Zurückstellen, Reaktivieren (unverändert v12) #}
-<dialog id="dlg-rueckruf">
-    <form method="post" class="formular">
-        <input type="hidden" name="ergebnis" value="rueckruf_gewuenscht">
-        <h3>Rückruf gewünscht</h3>
-        <label>Datum/Uhrzeit (Pflicht)
-            <input type="datetime-local" name="rueckruf_am" required></label>
-        <label>Notiz <input type="text" name="notiz"></label>
-        <div class="formzeile">
-            <button class="knopf" type="submit">Speichern</button>
-            <button class="knopf zweitrangig" type="button"
-                    onclick="this.closest('dialog').close()">Abbrechen</button>
-        </div>
-    </form>
-</dialog>
-<dialog id="dlg-keininteresse">
-    <form method="post" class="formular">
-        <input type="hidden" name="ergebnis" value="kein_interesse">
-        <h3>Kein Interesse – Grund (Pflicht)</h3>
-        <label>Grund
-            <select name="grund" required>
-                {% for g in unq_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}
-            </select>
-        </label>
-        <label>Freitext <input type="text" name="grund_text"
-               placeholder="Pflicht bei Sonstiges"></label>
-        <div class="formzeile">
-            <button class="knopf" type="submit">Unqualifiziert setzen</button>
-            <button class="knopf zweitrangig" type="button"
-                    onclick="this.closest('dialog').close()">Abbrechen</button>
-        </div>
-    </form>
-</dialog>
-<dialog id="dlg-zurueck">
-    <form method="post" class="formular">
-        <h3>Zurückstellen</h3>
-        <label>Bis (Pflicht) <input type="date" name="bis" required></label>
-        <label>Grund
-            <select name="grund" required>
-                {% for g in zurueck_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}
-            </select>
-        </label>
-        <label>Freitext <input type="text" name="grund_text"
-               placeholder="Pflicht bei Sonstiges"></label>
-        <div class="formzeile">
-            <button class="knopf" type="submit">Zurückstellen</button>
-            <button class="knopf zweitrangig" type="button"
-                    onclick="this.closest('dialog').close()">Abbrechen</button>
-        </div>
-    </form>
-</dialog>
-<dialog id="dlg-reaktivieren">
-    <form method="post" class="formular">
-        <h3>Erneut aktivieren</h3>
-        <label>Begründung (Pflicht) <input type="text" name="begruendung" required></label>
-        <div class="formzeile">
-            <button class="knopf" type="submit">Reaktivieren</button>
-            <button class="knopf zweitrangig" type="button"
-                    onclick="this.closest('dialog').close()">Abbrechen</button>
-        </div>
-    </form>
-</dialog>
+{# Dialoge: Nicht erreicht (C2), Rückruf, Kein Interesse, Zurückstellen, Reaktivieren #}
+{{ anruf_dialoge(unq_gruende, zurueck_gruende, zurueck_pfad) }}
 
 <script>
-// Dialoge zielen je nach Art auf /anruf/<id> bzw. /lead/<id>/<aktion>
-const dialogZiele = {
-    rueckruf: id => `/lead-management/anruf/${id}`,
-    keininteresse: id => `/lead-management/anruf/${id}`,
-    zurueck: id => `/lead-management/lead/${id}/zurueckstellen`,
-    reaktivieren: id => `/lead-management/lead/${id}/reaktivieren`,
-};
 let aktiveZeile = null;
-function dialogOeffnen(art, vorgangId) {
-    const dlg = document.getElementById('dlg-' + art);
-    dlg.querySelector('form').action = dialogZiele[art](vorgangId);
-    document.querySelectorAll('.lm-aktion details[open]').forEach(d => d.removeAttribute('open'));
-    dlg.showModal();
-}
 // nur ein ⋯-Menü offen; Klick außerhalb schließt
 document.addEventListener('click', e => {
     document.querySelectorAll('.lm-aktion details[open]').forEach(d => {
@@ -241,19 +187,23 @@ document.querySelectorAll('.panel-link').forEach(a => {
     });
 });
 function panelSchliessen() { panel.hidden = true; }
-// Tastaturkürzel 1–7 wirken auf die im Seitenpanel geöffnete Zeile
-// (3 = Besetzt, 6 = Falsche Nummer und 7 = Kein Interesse liegen im ⋯-Menü)
-const tasten = {"1": "erreicht", "2": "nicht_erreicht", "3": "besetzt",
-                "4": "mailbox", "6": "falsche_nummer"};
+// Tastaturkürzel 1–7 wirken auf die im Seitenpanel geöffnete Zeile – Belegung
+// unverändert (v12): 1 Erreicht · 2 Nicht erreicht (Dialog, v23) · 3 Besetzt ·
+// 4 Mailbox · 5 Rückruf (Dialog) · 6 Falsche Nummer · 7 Kein Interesse (Dialog);
+// 3 und 6 liegen im ⋯-Menü. Gesperrte Buttons (disabled) reagieren nicht.
+const tasten = {"1": "erreicht", "3": "besetzt", "4": "mailbox", "6": "falsche_nummer"};
 document.addEventListener('keydown', e => {
     if (panel.hidden || !aktiveZeile) return;
+    if (document.querySelector('dialog[open]')) return;
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
     const id = aktiveZeile.dataset.vorgang;
     if (tasten[e.key]) {
         const knopf = aktiveZeile.querySelector(`button[value="${tasten[e.key]}"]`);
-        if (knopf) knopf.click();
-    } else if (e.key === '5') { dialogOeffnen('rueckruf', id); }
+        if (knopf && !knopf.disabled) knopf.click();
+    } else if (e.key === '2') { if (aktiveZeile.dataset.gesperrt !== '1') dialogOeffnen('nichterreicht', id); }
+    else if (e.key === '5') { dialogOeffnen('rueckruf', id); }
     else if (e.key === '7') { dialogOeffnen('keininteresse', id); }
 });
 </script>
+<script src="/static/lm_anruf.js?v={{ css_version }}" defer></script>
 {% endblock %}

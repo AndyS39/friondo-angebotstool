@@ -183,6 +183,12 @@ def mail_verarbeiten(session: Session, graph_id: str, absender: str,
         daten["nachricht"] = (daten.get("nachricht") or body or "")[:4000]
         vorgang, _ = kern.lead_anlegen(session, daten, quelle, "mail",
                                        kampagne_id=kampagne_id)
+        # v23 Phase 111 (A-8): Info-Quelle → nächste Veranstaltung ab Eingang + info_vorlauf_tage
+        try:
+            from app import lead_info
+            lead_info.zuordnen_bei_eingang(session, vorgang, quelle)
+        except Exception:
+            pass
         session.add(LeadPosteingang(graph_id=graph_id, absender=absender,
                                     betreff=betreff, body=(body or "")[:8000],
                                     empfangen_am=empfangen_am,

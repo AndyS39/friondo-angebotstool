@@ -1,15 +1,23 @@
 {% extends "base.html" %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "_symbole.html" import symbol %}
 
 {% block titel %}Terminassistent – {{ kunde.anzeige_name }}{% endblock %}
 
 {% block mainklasse %}breit{% endblock %}
 
 {% block inhalt %}
+{{ lm_nav('kalender') }}
+<link rel="stylesheet" href="/static/leaflet/leaflet.css">
 <div class="seitenkopf">
-    <h1>Terminassistent · {{ kunde.anzeige_name }}, {{ kunde.ort or '?' }}</h1>
+    <h1>Terminassistent · {{ kunde.anzeige_name }}, {{ kunde.ort or '?' }}
+        {% if demo_badge %}<span class="demo-badge">Demo</span>{% endif %}</h1>
     <div class="aktionen">
-        <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}">Lead-Akte</a>
-        <a class="knopf klein zweitrangig" href="/lead-management/anrufliste">Anrufliste</a>
+        <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}">Kartei</a>
+        <a class="knopf klein zweitrangig"
+           href="/lead-management/lead/{{ vorgang.id }}/termin/vorab">{{ symbol('telefon') }} Vorab-Gespräch</a>
+        <a class="knopf klein zweitrangig"
+           href="/lead-management/kalender?ad_id={{ kalender_ad or '' }}">{{ symbol('kalender') }} Kalender</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
@@ -20,20 +28,80 @@
     diesen (monday-)Lead bitte in monday terminieren. Die Vorschläge bleiben
     zur Ansicht.</p>
 {% endif %}
+{% if pflicht_offen %}
+<p class="lm-hinweis lmt-pflicht">{{ symbol('warnung') }}
+    <strong>{{ pflicht_offen | length }} Pflichtfeld{{ 'er' if pflicht_offen | length != 1 }} offen:</strong>
+    {{ pflicht_offen | join(', ') }} – ein gewählter Termin wird nur
+    <em>vorgemerkt</em> (ohne Mail, Kalender, Phasenwechsel).
+    Terminierung in der Kartei abschließen.</p>
+{% endif %}
+{% if ersatz %}
+<p class="hinweis lmt-ersatz">{{ symbol('wiederherstellen') }} Ersatz für den abgesagten Termin
+    {{ ersatz.termin.beginn | de_datum('%a %d.%m.%Y · %H:%M') if ersatz.termin.beginn }} Uhr
+    bei <strong>{{ ersatz.ad.name if ersatz.ad else '?' }}</strong>
+    ({{ ersatz.kunde.anzeige_name if ersatz.kunde else '?' }}) – Slot im Formular
+    „Manuell setzen“ vorbelegt, Vorschläge nur für diesen Außendienstler.</p>
+{% endif %}
+{% if umbuchen %}
+<p class="hinweis">Umbuchung des Termins {{ umbuchen.beginn | de_datum('%a %d.%m.%Y · %H:%M') if umbuchen.beginn }} Uhr
+    – der Kunde erhält die Terminänderung mit aktualisiertem Kalendereintrag (gleiche UID).</p>
+{% endif %}
 
-<p class="dezent">Wunschzeiten des Kunden:
-    {{ wunschzeiten | join(', ') if wunschzeiten else 'keine hinterlegt' }}
-    · Kandidaten: {{ kandidaten | map(attribute='name') | join(', ') or 'keine aktiven AD' }}
-    · <a href="?ad_id=">alle AD</a>
-    {% for ad in kandidaten %} · <a href="?ad_id={{ ad.id }}">nur {{ ad.name }}</a>{% endfor %}</p>
+<section class="karte lmt-kopf">
+    <div class="lmt-kopf-spalte">
+        <h2>Lead</h2>
+        <p>
+            {% for s in sparten %}<span class="abzeichen interesse-{{ s | lower }}">{{ s }}</span> {% endfor %}
+            {% if not sparten %}<span class="dezent">keine Sparte</span>{% endif %}
+            {% if kunde.objektart %}<span class="abzeichen">{{ kunde.objektart }}</span>{% endif %}
+            {% if kanal %}<span class="lm-kanal">{{ kanal }}</span>{% endif %}
+        </p>
+        <p class="dezent">PLZ {{ kunde.plz or '?' }} · Wunschzeiten:
+            {{ wunschzeiten | join(', ') if wunschzeiten else 'keine hinterlegt' }}
+            {% if vorgang.score_klasse %} · Klasse {{ vorgang.score_klasse }}{% endif %}</p>
+    </div>
+    <div class="lmt-kopf-spalte">
+        <h2>Kandidaten <span class="dezent">(Ausschluss: Kanal, Kompetenz, Kapazität, Arbeitszeit · Abwertung: Gebiet, Fahrzeit, Wunschzeit)</span></h2>
+        <ul class="lmt-liste">
+        {% for k in kandidaten_info %}
+            <li><strong>{{ k.ad.name }}</strong>
+                {% if k.handelsvertreter %}<span class="abzeichen">Handelsvertreter</span>{% endif %}
+                <span class="dezent">{{ k.gruende | join(' · ') }}</span>
+                {% if not hv_id %}· <a href="?ad_id={{ k.ad.id }}{{ '&umbuchen=' ~ umbuchen_id if umbuchen_id }}">nur {{ k.ad.name.split(' ')[-1] }}</a>{% endif %}</li>
+        {% else %}
+            <li class="dezent">Kein Außendienstler erfüllt die Voraussetzungen.</li>
+        {% endfor %}
+        </ul>
+        {% if ausgeschlossen %}
+        <details class="lmt-ausgeschlossen">
+            <summary class="dezent">{{ ausgeschlossen | length }} ausgeschlossen</summary>
+            <ul class="lmt-liste">
+            {% for a in ausgeschlossen %}
+                <li><span class="lmt-aus">{{ a.ad.name }}</span> <span class="dezent">– {{ a.grund }}</span></li>
+            {% endfor %}
+            </ul>
+        </details>
+        {% endif %}
+        {% if not hv_id and kandidaten_info | length > 1 %}
+            <p class="dezent"><a href="?{{ 'umbuchen=' ~ umbuchen_id if umbuchen_id }}">alle Kandidaten</a></p>
+        {% endif %}
+    </div>
+</section>
 
-<h2>Top {{ vorschlaege | length }} Vorschläge</h2>
-<div class="vorschlag-karten">
+<h2>Top {{ vorschlaege | length }} Vorschläge
+    <span class="dezent">Dauer 90 Min · Raster 30 Min · Puffer = max(Mindestpuffer, Fahrzeit)</span></h2>
+<div class="lmt-vorschlaege">
+<div class="vorschlag-karten lmt-karten">
 {% for v in vorschlaege %}
-    <div class="vorschlag-karte">
-        <h3>{{ v.beginn | de_datum('%a %d.%m.%Y · %H:%M') }} Uhr</h3>
+    <div class="vorschlag-karte lmt-vorschlag {{ 'aktiv' if loop.first }}"
+         data-ad="{{ v.ad.id }}" data-datum="{{ v.beginn.strftime('%Y-%m-%d') }}"
+         data-nr="{{ loop.index }}">
+        <h3>{{ loop.index }}. {{ v.beginn | de_datum('%a %d.%m.%Y · %H:%M') }} Uhr</h3>
         <p><strong>{{ v.ad.name }}</strong>
-            · Umweg +{{ v.umweg }} Min{{ ' (geschätzt)' if v.geschaetzt }}</p>
+            {% if v.wunsch %}<span class="abzeichen">Wunschzeit ✓</span>{% endif %}
+            {% if v.tour_tag %}<span class="abzeichen">Tour-Tag</span>{% endif %}
+            {% if v.leerer_tag %}<span class="abzeichen ep">leerer Tag</span>{% endif %}</p>
+        <p class="lmt-begruendung">{{ v.begruendung }}</p>
         <p class="dezent">
             {% if v.vorher %}davor {{ v.vorher.beginn.strftime('%H:%M') }}
                 ({{ v.vorher.adresse.split(',')[-1] if v.vorher.adresse else '?' }}){% endif %}
@@ -41,91 +109,80 @@
                 ({{ v.nachher.adresse.split(',')[-1] if v.nachher.adresse else '?' }}){% endif %}
             {% if not v.vorher and not v.nachher %}ab Startadresse{% endif %}
         </p>
-        <p>
-            {% if v.wunsch %}<span class="abzeichen">Wunschzeit ✓</span>{% endif %}
-            {% if v.tour_tag %}<span class="abzeichen">Tour-Tag</span>{% endif %}
-            {% if v.leerer_tag %}<span class="abzeichen ep">leerer Tag</span>{% endif %}
-        </p>
-        {% if v.tages_termine %}
-        <p class="dezent">Termine des Tages:
-            {% for t in v.tages_termine %}{{ t.beginn.strftime('%H:%M') }}
-                {{ t.adresse.split(',')[-1] if t.adresse else '' }}{{ ' · ' if not loop.last }}{% endfor %}</p>
-        {% else %}<p class="dezent">Noch keine Termine an diesem Tag.</p>{% endif %}
-        <form method="post" action="/lead-management/lead/{{ vorgang.id }}/termin">
-            <input type="hidden" name="beginn" value="{{ v.beginn.strftime('%Y-%m-%dT%H:%M') }}">
-            <input type="hidden" name="ad_id" value="{{ v.ad.id }}">
-            <input type="hidden" name="umweg" value="{{ v.umweg }}">
-            <input type="hidden" name="umbuchen_id" value="{{ umbuchen_id }}">
-            <button class="knopf" type="submit" {{ 'disabled' if not buchbar }}>
-                {{ 'Umbuchen' if umbuchen_id else 'Buchen' }}</button>
-        </form>
+        <div class="formzeile">
+            <form method="post" action="/lead-management/lead/{{ vorgang.id }}/termin">
+                <input type="hidden" name="beginn" value="{{ v.beginn.strftime('%Y-%m-%dT%H:%M') }}">
+                <input type="hidden" name="ad_id" value="{{ v.ad.id }}">
+                <input type="hidden" name="umweg" value="{{ v.umweg }}">
+                <input type="hidden" name="umbuchen_id" value="{{ umbuchen_id }}">
+                <button class="knopf" type="submit" {{ 'disabled' if not buchbar }}>
+                    {{ 'Umbuchen' if umbuchen_id else ('Vormerken' if pflicht_offen else 'Buchen') }}</button>
+            </form>
+            <button class="knopf klein zweitrangig lmt-karte-knopf" type="button"
+                    title="Tagestour dieses Vorschlags auf der Karte">{{ symbol('ort') }} Karte</button>
+        </div>
     </div>
 {% else %}
     <p class="dezent">Keine freien Slots im Horizont – Horizont/Raster in den
         Lead-Einstellungen prüfen oder manuell setzen (unten).</p>
 {% endfor %}
 </div>
-
 {% if vorschlaege %}
-<h2>Mini-Karte: Tagestour des besten Vorschlags</h2>
-<link rel="stylesheet" href="/static/leaflet/leaflet.css">
-<div id="mini-karte" style="height:320px; max-width:700px;
-     border:1px solid var(--grau-linie); border-radius:8px"></div>
-<script src="/static/leaflet/leaflet.js"></script>
-<script>
-(async () => {
-    const karte = L.map('mini-karte').setView(
-        [{{ vorgang.lat or 51.4344 }}, {{ vorgang.lon or 6.7623 }}], 11);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-    }).addTo(karte);
-    const antwort = await fetch('/lead-management/karte/tag?' +
-        new URLSearchParams({
-            ad_id: '{{ vorschlaege[0].ad.id }}',
-            datum: '{{ vorschlaege[0].beginn.strftime("%Y-%m-%d") }}',
-            lat: '{{ vorgang.lat or '' }}', lon: '{{ vorgang.lon or '' }}'}));
-    const daten = await antwort.json();
-    const punkte = [];
-    for (const p of daten.pins) {
-        if (p.art === 'termin') {
-            L.marker([p.lat, p.lon]).bindTooltip(`${p.nr}. ${p.zeit}`,
-                {permanent: true, direction: 'top'}).addTo(karte);
-            punkte.push([p.lat, p.lon]);
-        } else if (p.art === 'kandidat') {
-            L.circleMarker([p.lat, p.lon], {radius: 11, color: '#d4a017',
-                fillOpacity: 0.9}).bindTooltip('★ Kandidat',
-                {permanent: true, direction: 'top'}).addTo(karte);
-            punkte.push([p.lat, p.lon]);
-        }
-    }
-    if (punkte.length > 1) {
-        L.polyline(punkte, {color: '#2471a3', dashArray: '6 6'}).addTo(karte);
-        karte.fitBounds(punkte, {padding: [30, 30]});
-    }
-    L.Icon.Default.prototype.options.imagePath = '/static/leaflet/images/';
-})();
-</script>
+<div class="lmt-karte-wrap">
+    <h3 class="dezent" id="lmt-karte-titel">Mini-Karte: Tagestour Vorschlag 1</h3>
+    <div id="lmt-karte" data-lat="{{ vorgang.lat or '' }}" data-lon="{{ vorgang.lon or '' }}"
+         data-ad="{{ vorschlaege[0].ad.id }}" data-datum="{{ vorschlaege[0].beginn.strftime('%Y-%m-%d') }}"></div>
+    <p class="dezent">★ Kandidat (dieser Lead) · nummerierte Pins = Termine des Tages. Kacheln © OpenStreetMap.</p>
+</div>
 {% endif %}
+</div>
 
-<h2>Kalender (manuell setzen)</h2>
-<form method="get" action="/lead-management/lead/{{ vorgang.id }}/termin" class="suchleiste">
-    <label class="kontrollfeld">Außendienstler
-        <select name="ad_id" onchange="this.form.submit()">
-            {% for ad in kandidaten %}
-                <option value="{{ ad.id }}" {{ 'selected' if kalender_ad == ad.id }}>{{ ad.name }}</option>
-            {% endfor %}
-        </select>
-    </label>
+<h2 id="manuell">Manuell setzen <span class="dezent">(15-Minuten-Raster, Konfliktprüfung)</span></h2>
+{% if warnungen %}
+<div class="warnblock lmt-warnungen">
+    <strong>Konflikte – bitte prüfen:</strong>
+    <ul>{% for w in warnungen %}<li>{{ w }}</li>{% endfor %}</ul>
+    Mit „Trotzdem buchen“ bestätigen Sie die Warnungen.
+</div>
+{% endif %}
+<form method="post" action="/lead-management/lead/{{ vorgang.id }}/termin/manuell"
+      class="formular lmt-manuell" id="lmt-manuell"
+      data-vorgang="{{ vorgang.id }}" data-konflikt-url="/lead-management/termin/konflikt">
+    <input type="hidden" name="umbuchen_id" value="{{ umbuchen_id }}">
+    <div class="formzeile">
+        <label class="schmal">Datum <input type="date" name="datum" required value="{{ datum }}"></label>
+        <label class="schmal">Uhrzeit <input type="time" name="uhrzeit" required
+                                           step="{{ raster_manuell * 60 }}" value="{{ uhrzeit }}"></label>
+        <label>Außendienstler
+            <select name="ad_id">
+                {% for ad in kandidaten %}
+                    <option value="{{ ad.id }}" {{ 'selected' if (form_ad | string == ad.id | string) or (not form_ad and kalender_ad == ad.id) }}>{{ ad.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+    </div>
+    <div id="lmt-konflikte" class="lmt-konflikte" hidden></div>
+    <div class="formzeile">
+        <label class="kontrollfeld {{ '' if warnungen else 'lmt-versteckt' }}" id="lmt-bestaetigen">
+            <input type="checkbox" name="bestaetigt" value="1" {{ 'checked' if warnungen }}>
+            Konflikte geprüft – trotzdem buchen</label>
+        <button class="knopf" type="submit" {{ 'disabled' if not buchbar or not kandidaten }}>
+            {{ 'Umbuchen' if umbuchen_id else ('Manuell vormerken' if pflicht_offen else 'Manuell buchen') }}</button>
+    </div>
 </form>
+
 {% if kalender_ad %}
-<table class="tabelle" style="max-width:1100px">
+<h3>Woche · {{ benutzer_map[kalender_ad].name if benutzer_map.get(kalender_ad) else '?' }}
+    <span class="dezent">(Tool-Termine aller Arten, Outlook belegt; gestrichelt = vorgemerkt)</span></h3>
+<table class="tabelle kalender-tabelle" style="max-width:1100px">
     <thead><tr>{% for tag in woche.tage %}<th>{{ tag | de_datum('%a %d.%m.') }}</th>{% endfor %}</tr></thead>
     <tbody><tr>
     {% for tag in woche.tage %}
         <td style="vertical-align:top">
             {% for t in woche.je_ad[kalender_ad].termine.get(tag.date(), []) %}
-                <div class="kalender-eintrag">{{ t.beginn.strftime('%H:%M') }}
+                <div class="kalender-eintrag typ-{{ t.typ or 'vot' }} {{ 'vorgemerkt' if t.status == 'vorgemerkt' }}"
+                     title="{{ typ_namen.get(t.typ or 'vot', t.typ) }} · {{ status_namen.get(t.status, t.status) }}">
+                    {{ t.beginn.strftime('%H:%M') }}
                     {{ t.adresse.split(',')[-1] if t.adresse else '' }}</div>
             {% endfor %}
             {% for b in woche.je_ad[kalender_ad].belegt.get(tag.date(), []) %}
@@ -135,18 +192,82 @@
     {% endfor %}
     </tr></tbody>
 </table>
-<form method="post" action="/lead-management/lead/{{ vorgang.id }}/termin" class="formzeile">
-    <input type="hidden" name="quelle" value="manuell">
-    <input type="hidden" name="umbuchen_id" value="{{ umbuchen_id }}">
-    <label>Beginn <input type="datetime-local" name="beginn" required></label>
-    <label>AD
-        <select name="ad_id">
-            {% for ad in kandidaten %}
-                <option value="{{ ad.id }}" {{ 'selected' if kalender_ad == ad.id }}>{{ ad.name }}</option>
-            {% endfor %}
-        </select>
-    </label>
-    <button class="knopf" type="submit" {{ 'disabled' if not buchbar }}>Manuell buchen</button>
-</form>
 {% endif %}
+
+{% if termine %}
+<h2>Termine dieses Leads</h2>
+<table class="tabelle lmt-termine" style="max-width:1100px">
+    <thead><tr><th>Art</th><th>Beginn</th><th>Mit</th><th>Status</th><th>ICS</th><th>Aktionen</th></tr></thead>
+    <tbody>
+    {% for t in termine %}
+        <tr class="{{ 'lmt-inaktiv' if t.status not in ('geplant', 'bestaetigt', 'vorgemerkt') }}">
+            <td><span class="abzeichen typ-{{ t.typ or 'vot' }}">{{ typ_namen.get(t.typ or 'vot', t.typ) }}</span></td>
+            <td>{{ t.beginn | de_datum('%a %d.%m.%Y %H:%M') if t.beginn else 'Kunde wählt (Buchungslink)' }}</td>
+            <td>{{ benutzer_map[t.ad_id].name if t.ad_id and benutzer_map.get(t.ad_id) else '?' }}</td>
+            <td>{{ status_namen.get(t.status, t.status) }}
+                {% if t.quelle == 'monday' %}<span class="abzeichen">monday</span>{% endif %}
+                {% if t.grund_text %}<span class="dezent">– {{ t.grund_text }}</span>{% endif %}</td>
+            <td class="dezent">{{ t.ics_uid or '–' }}{% if t.ics_uid %} · SEQ {{ t.ics_sequence or 0 }}{% endif %}</td>
+            <td class="aktionen">
+                {% if t.status in ('geplant', 'bestaetigt', 'vorgemerkt') and t.quelle != 'monday' %}
+                    {% if (t.typ or 'vot') == 'vot' and t.status != 'vorgemerkt' %}
+                    <a class="knopf klein zweitrangig"
+                       href="/lead-management/lead/{{ vorgang.id }}/termin?umbuchen={{ t.id }}">Umbuchen</a>
+                    <form method="post" action="/lead-management/termin/{{ t.id }}/bestaetigung-erneut" style="display:inline">
+                        <button class="knopf klein zweitrangig" type="submit"
+                                title="Gleiche UID, SEQUENCE + 1">{{ symbol('brief') }} Bestätigung erneut</button>
+                    </form>
+                    {% endif %}
+                    {% if (t.typ or 'vot') != 'vot' %}
+                    <details class="lmt-inline-form">
+                        <summary class="knopf klein zweitrangig"
+                                 title="{{ 'Zeitpunkt eintragen (Rückweg aus Outlook/Buchungslink)' if not t.beginn else 'Vorab-Gespräch verschieben' }}">
+                            {{ 'Zeit eintragen' if not t.beginn else 'Verschieben' }}</summary>
+                        <form method="post" class="formular" action="/lead-management/termin/{{ t.id }}/verschieben">
+                            <label>{{ 'Beginn' if not t.beginn else 'Neuer Beginn' }}
+                                <input type="datetime-local" name="beginn" step="900" required
+                                       value="{{ t.beginn.strftime('%Y-%m-%dT%H:%M') if t.beginn }}"></label>
+                            <input type="hidden" name="ad_id" value="{{ t.ad_id or '' }}">
+                            <button class="knopf klein" type="submit">Speichern</button>
+                        </form>
+                    </details>
+                    {% endif %}
+                    <button class="knopf klein zweitrangig" type="button"
+                            onclick="document.getElementById('dlg-absage-{{ t.id }}').showModal()">Absagen</button>
+                    <dialog id="dlg-absage-{{ t.id }}">
+                        <form method="post" class="formular"
+                              action="/lead-management/termin/{{ t.id }}/absagen">
+                            <h3>Termin absagen</h3>
+                            <p class="dezent">{{ typ_namen.get(t.typ or 'vot', t.typ) }}
+                                {{ t.beginn.strftime('%d.%m.%Y %H:%M') if t.beginn }} ·
+                                {% if (t.typ or 'vot') == 'vot' and t.status != 'vorgemerkt' %}
+                                Der Kunde erhält die Absage mit Storno-ICS; danach Ersatzkunden-Vorschlag.
+                                {% else %}Ohne Kundenmail (Vorab-Gespräch/vorgemerkt).{% endif %}</p>
+                            <label>Grund
+                                <select name="grund">
+                                    <option value="">– Freitext –</option>
+                                    {% for g in absage_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}
+                                </select></label>
+                            <label>Freitext <input type="text" name="grund_text"></label>
+                            <div class="formzeile">
+                                <button class="knopf" type="submit">Absagen</button>
+                                <button class="knopf zweitrangig" type="button"
+                                        onclick="this.closest('dialog').close()">Abbrechen</button>
+                            </div>
+                        </form>
+                    </dialog>
+                {% elif (t.typ or 'vot') == 'vot' and t.status in ('abgesagt', 'verschoben')
+                      and t.beginn and t.beginn > now and t.quelle != 'monday' %}
+                    <a class="knopf klein zweitrangig" href="/lead-management/termin/{{ t.id }}/ersatz"
+                       title="Ersatzkunde für den freigewordenen Slot (E3)">{{ symbol('wiederherstellen') }} Ersatzkunde</a>
+                {% endif %}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<script src="/static/leaflet/leaflet.js"></script>
+<script src="/static/lm_termin.js?v={{ css_version }}" defer></script>
 {% endblock %}

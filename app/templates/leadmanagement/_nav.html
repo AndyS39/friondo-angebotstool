@@ -1,17 +1,78 @@
-{# Lead-Management: einheitliche Unternavigation (Design-Fix 27.09.2026) –
-   vorher hatte jede Seite andere Querlinks oben rechts. #}
+{# Lead-Management: Modul-Navigation. v23 (PLAN_LEAD_V2 Phase 105, H1):
+   schmale Icon-Leiste links (position: fixed unter der Kopfleiste, unter
+   900px als untere Icon-Zeile, in body.einbett ausgeblendet) mit genau fünf
+   Einträgen Hauptboard · Terminiert · Kontaktiert · Info-Veranstaltung ·
+   E-Mail-Vorlagen plus „Mehr …“ (Übersicht/Dashboard, Anrufliste, Pipeline/
+   Kanban, Kalender, Karte, Posteingang, Statistik, Import, Handelsvertreter) –
+   kein bestehender Einstieg geht verloren. Lokale Inline-SVGs (_symbole.html),
+   Tooltips über title/aria-label, Demo-Badge zentral aus dem Parameter
+   demo_badge_text (Jinja-Global lm_demo_badge aus app/routers/lm_boards.py,
+   weil Makros keinen Request-Kontext haben). Das Makro heißt weiterhin
+   lm_nav(aktiv) – alle Modulseiten sind damit automatisch umgestellt.
+   Keys: hauptboard | terminiert | kontaktiert | info | vorlagen; die alten
+   Keys anrufliste/board zählen zum Hauptboard, alles andere zu „Mehr …“. #}
+{% from "_symbole.html" import symbol %}
+
 {% macro lm_nav(aktiv) %}
-<nav class="lm-nav">
-    {% for pfad, key, name in [
-        ('/lead-management/uebersicht', 'uebersicht', 'Übersicht'),
-        ('/lead-management/anrufliste', 'anrufliste', 'Anrufliste'),
-        ('/lead-management/board', 'board', 'Pipeline'),
-        ('/lead-management/kalender', 'kalender', 'Kalender'),
-        ('/lead-management/karte', 'karte', 'Karte'),
-        ('/lead-management/posteingang', 'posteingang', 'Posteingang'),
-        ('/lead-management/statistik', 'statistik', 'Statistik'),
-        ('/lead-management/import', 'import', 'Import')] %}
-    <a href="{{ pfad }}" class="{{ 'aktiv' if aktiv == key }}">{{ name }}</a>
-    {% endfor %}
+{%- set haupt = aktiv in ('hauptboard', 'anrufliste', 'board', 'tabelle') -%}
+{%- set eintraege = [
+    ('hauptboard', '/lead-management/hauptboard', 'board', 'Hauptboard', 'Hauptboard – Leads ohne Vor-Ort-Termin (Tabelle · Anrufliste · Kanban)', haupt),
+    ('terminiert', '/lead-management/terminiert', 'kalender-haken', 'Terminiert', 'Terminiert – Leads mit Vor-Ort-Termin, Angebot nachverfolgen', aktiv == 'terminiert'),
+    ('kontaktiert', '/lead-management/kontaktiert', 'telefon-eingehend', 'Kontaktiert', 'Kontaktiert – alle Kontaktversuche, Rufnummernsuche', aktiv == 'kontaktiert'),
+    ('info', '/lead-management/info-veranstaltung', 'gruppe', 'Info-Veranstaltung', 'Info-Veranstaltung – Anmeldungen je Termin', aktiv in ('info', 'info-veranstaltung')),
+    ('vorlagen', '/lead-management/vorlagen', 'brief', 'E-Mail-Vorlagen', 'E-Mail-Vorlagen des Lead-Managements', aktiv == 'vorlagen'),
+] -%}
+{%- set mehr_aktiv = not (haupt or aktiv in ('terminiert', 'kontaktiert', 'info', 'info-veranstaltung', 'vorlagen')) -%}
+{%- set mehr = [
+    ('/lead-management/dashboard', 'dashboard', 'Dashboard', 'dashboard'),
+    ('/lead-management/uebersicht', 'statistik', 'Übersicht', 'uebersicht'),
+    ('/lead-management/anrufliste', 'telefon', 'Anrufliste', 'anrufliste'),
+    ('/lead-management/board', 'kanban', 'Pipeline / Kanban', 'board'),
+    ('/lead-management/kalender', 'kalender', 'Kalender', 'kalender'),
+    ('/lead-management/karte', 'karte', 'Karte', 'karte'),
+    ('/lead-management/posteingang', 'posteingang', 'Posteingang', 'posteingang'),
+    ('/lead-management/statistik', 'statistik', 'Statistik', 'statistik'),
+    ('/lead-management/import', 'import', 'Import', 'import'),
+    ('/lead-management/handelsvertreter', 'nutzer', 'Handelsvertreter', 'handelsvertreter'),
+    ('/lead-management/todos', 'haken', 'To-Dos', 'todos'),
+    ('/lead-management/neu', 'plus', 'Neuer Lead', 'neu'),
+] -%}
+{%- set demo = lm_demo_badge() if lm_demo_badge is defined else {'aktiv': false, 'text': ''} -%}
+<nav class="lm-leiste" aria-label="Lead-Management">
+    {%- for key, pfad, icon, name, tooltip, ist_aktiv in eintraege %}
+    <a href="{{ pfad }}" class="lm-leiste-eintrag {{ 'aktiv' if ist_aktiv }}" title="{{ tooltip }}"
+       aria-label="{{ name }}" {% if ist_aktiv %}aria-current="page"{% endif %} data-key="{{ key }}">
+        {{ symbol(icon) }}<span class="lm-leiste-text">{{ name }}</span></a>
+    {%- endfor %}
+    <details class="lm-leiste-mehr {{ 'aktiv' if mehr_aktiv }}">
+        <summary class="lm-leiste-eintrag {{ 'aktiv' if mehr_aktiv }}" title="Mehr … – Übersicht, Anrufliste, Kanban, Kalender, Karte, Posteingang, Statistik, Import, Handelsvertreter"
+                 aria-label="Mehr">{{ symbol('mehr') }}<span class="lm-leiste-text">Mehr</span></summary>
+        <div class="lm-leiste-menue">
+            {%- for pfad, icon, name, key in mehr %}
+            <a href="{{ pfad }}" class="{{ 'aktiv' if aktiv == key }}">{{ symbol(icon) }} {{ name }}</a>
+            {%- endfor %}
+        </div>
+    </details>
+    {%- if demo.aktiv %}
+    <span class="demo-badge lm-leiste-demo" title="{{ demo.text }} – Lead-Management im Demo-Modus (lead_freigabe_modus = admin)">Demo</span>
+    {%- endif %}
 </nav>
+<script src="/static/lm_boards.js?v={{ css_version }}" defer></script>
+{% endmacro %}
+
+{# Umschalter Tabelle | Anrufliste | Kanban (A3/A-11) – ansicht: tabelle |
+   anrufliste | kanban; board: hauptboard | terminiert. Die Anrufliste ist die
+   priorisierte Arbeitsliste des Hauptboards; das Kanban zeigt nur das aktive
+   Board (GET /lead-management/board?board=…). #}
+{% macro lm_umschalter(ansicht, board='hauptboard') %}
+<div class="lm-umschalter" role="tablist" aria-label="Ansicht">
+    <a role="tab" class="{{ 'aktiv' if ansicht == 'tabelle' }}" aria-selected="{{ 'true' if ansicht == 'tabelle' else 'false' }}"
+       href="/lead-management/{{ board }}" title="Tabelle nach monday-Vorbild">{{ symbol('board') }} Tabelle</a>
+    {%- if board == 'hauptboard' %}
+    <a role="tab" class="{{ 'aktiv' if ansicht == 'anrufliste' }}" aria-selected="{{ 'true' if ansicht == 'anrufliste' else 'false' }}"
+       href="/lead-management/anrufliste" title="Anrufliste – priorisierte Arbeitsliste">{{ symbol('telefon') }} Anrufliste</a>
+    {%- endif %}
+    <a role="tab" class="{{ 'aktiv' if ansicht == 'kanban' }}" aria-selected="{{ 'true' if ansicht == 'kanban' else 'false' }}"
+       href="/lead-management/board?board={{ board }}" title="Kanban – Karten je Phase">{{ symbol('kanban') }} Kanban</a>
+</div>
 {% endmacro %}

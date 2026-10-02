@@ -1,0 +1,326 @@
+{% from "_symbole.html" import symbol %}
+{% from "_komponenten.html" import status_badge, statuskette, leer_zustand %}
+{% import "_sparten.html" as sparten_ui %}
+{# Phase 106 – Mitte: Reiter mit Icons + Tooltip/aria-label (B4):
+   Timeline · E-Mail-Verlauf · Anrufnotizen · Qualifizierung · Termin ·
+   Erfassungen/Angebote/Projekt. Der aktive Reiter steht als Überschrift. #}
+{% set reiter = [
+    ('timeline', 'Timeline', 'uhr', zaehler.timeline),
+    ('mails', 'E-Mail-Verlauf', 'brief', zaehler.mails),
+    ('anrufe', 'Anrufnotizen', 'telefon', zaehler.anrufe),
+    ('qualifizierung', 'Qualifizierung', 'fragezeichen', zaehler.qualifizierungen),
+    ('termin', 'Termin', 'kalender', zaehler.termine),
+    ('vorgang', 'Erfassungen / Angebote / Projekt', 'archiv', zaehler.erfassungen + zaehler.angebote + zaehler.projekte)] %}
+{% set gruppen_icon = {'anruf': 'telefon', 'notiz': 'notiz', 'mail': 'brief', 'termin': 'kalender', 'status': 'haken', 'system': 'archiv'} %}
+{% set herkunft_namen = {'eigene': 'eigene', 'automatisiert': 'automatisiert', 'kollegen': 'Kollegen', 'kunde': 'Kunde'} %}
+
+<div class="lk-reiter" role="tablist" aria-label="Bereiche der Kundenkartei">
+    {% for key, name, icon, n in reiter %}
+        <button type="button" role="tab" id="tab-{{ key }}" class="lk-tab" data-tab="{{ key }}"
+                aria-controls="panel-{{ key }}" aria-selected="{{ 'true' if tab == key else 'false' }}"
+                tabindex="{{ '0' if tab == key else '-1' }}" aria-label="{{ name }}" title="{{ name }}">
+            {{ symbol(icon) }}<span class="lk-tab-zahl" aria-hidden="true">{{ n }}</span><span class="sr-only">{{ name }}</span>
+        </button>
+    {% endfor %}
+</div>
+
+{# ---------- Timeline ---------- #}
+<section role="tabpanel" id="panel-timeline" aria-labelledby="tab-timeline" class="lk-panel" {{ '' if tab == 'timeline' else 'hidden' }}>
+    <h2 class="lk-panel-titel">Timeline <span class="dezent">Aktivitäten · Notizen · Kommunikation</span></h2>
+    <div class="lk-werkzeuge">
+        <label class="lk-suche">{{ symbol('suche') }}
+            <input type="search" id="lk-tl-suche" placeholder="Timeline durchsuchen …" aria-label="Timeline durchsuchen"></label>
+        <div class="lk-filter" id="lk-tl-filter" role="group" aria-label="Nach Typ filtern">
+            {% for key, name in timeline_gruppen %}
+                <label class="lk-chip"><input type="checkbox" value="{{ key }}" checked> {{ name }}</label>
+            {% endfor %}
+        </div>
+        <span class="dezent" id="lk-tl-zahl">{{ timeline | length }} Einträge</span>
+    </div>
+    <div class="lk-timeline" id="lk-timeline">
+        {% for e in timeline %}
+        <details class="lk-karte lk-typ-{{ e.gruppe }}" data-typ="{{ e.gruppe }}"
+                 data-text="{{ (e.titel ~ ' ' ~ e.text ~ ' ' ~ e.autor) | lower }}">
+            <summary>
+                <span class="lk-karte-icon" aria-hidden="true">{{ symbol(gruppen_icon.get(e.gruppe, 'archiv')) }}</span>
+                <span class="lk-karte-titel">{{ e.titel }}</span>
+                <span class="lk-karte-meta">{{ e.zeit.strftime('%d.%m.%Y %H:%M') if e.zeit }} · {{ e.autor }}{% if e.dauer %} · {{ e.dauer }}{% endif %}{% if e.ergebnis and e.typ != 'anruf' %} · <span class="abzeichen">{{ e.ergebnis }}</span>{% endif %}</span>
+            </summary>
+            <div class="lk-karte-inhalt">{{ e.text or '–' }}
+                {% if e.naechste %}<div class="dezent">Nächste Aktion: {{ e.naechste.strftime('%d.%m.%Y %H:%M') }}</div>{% endif %}
+            </div>
+        </details>
+        {% else %}
+            {{ leer_zustand('Noch keine Aktivitäten.') }}
+        {% endfor %}
+        <p class="dezent lk-leer-filter" hidden>Kein Eintrag passt zu Suche/Filter.</p>
+    </div>
+    <form method="post" action="{{ notiz_url }}" class="lk-notiz-eingabe" data-fetch="reload">
+        <textarea name="text" rows="2" maxlength="2000" placeholder="Notiz schreiben … (Notizen-Chat des Vorgangs, Einträge sind unveränderlich)" required></textarea>
+        <button class="knopf klein" type="submit">{{ symbol('notiz') }} Notiz</button>
+    </form>
+</section>
+
+{# ---------- E-Mail-Verlauf ---------- #}
+<section role="tabpanel" id="panel-mails" aria-labelledby="tab-mails" class="lk-panel" {{ '' if tab == 'mails' else 'hidden' }}>
+    <h2 class="lk-panel-titel">E-Mail-Verlauf <span class="dezent">Warteschlange/Protokoll + Angebots-Konversation</span></h2>
+    <div class="lk-werkzeuge">
+        <div class="lk-filter lk-chipgruppe" id="lk-mail-herkunft" role="group" aria-label="Absender">
+            {% for wert, name in [('', 'Alle'), ('eigene', 'Eigene'), ('automatisiert', 'Automatisiert'), ('kollegen', 'Kollegen'), ('kunde', 'Kunde')] %}
+                <button type="button" class="lk-chip {{ 'aktiv' if not wert }}" data-wert="{{ wert }}" aria-pressed="{{ 'true' if not wert else 'false' }}">{{ name }}</button>
+            {% endfor %}
+        </div>
+        <div class="lk-filter lk-chipgruppe" id="lk-mail-richtung" role="group" aria-label="Richtung">
+            {% for wert, name in [('', 'Ein + Aus'), ('ein', 'Eingehend'), ('aus', 'Ausgehend')] %}
+                <button type="button" class="lk-chip {{ 'aktiv' if not wert }}" data-wert="{{ wert }}" aria-pressed="{{ 'true' if not wert else 'false' }}">{{ name }}</button>
+            {% endfor %}
+        </div>
+        {% if not readonly %}
+            <button type="button" class="knopf klein" onclick="document.getElementById('dlg-mail').showModal()" {{ 'disabled' if not (kunde and kunde.email) }}>{{ symbol('brief') }} Mail mit Vorlage</button>
+            <a class="knopf klein zweitrangig" href="{{ kartei_url }}/kommunikation">Vorschau &amp; Senden</a>
+        {% endif %}
+    </div>
+    <div class="lk-mails" id="lk-mails">
+        {% for m in mails %}
+        <details class="lk-karte lk-mail" data-herkunft="{{ m.herkunft }}" data-richtung="{{ m.richtung }}">
+            <summary>
+                <span class="lk-karte-icon {{ 'ein' if m.richtung == 'ein' else 'aus' }}" aria-hidden="true" title="{{ 'eingehend' if m.richtung == 'ein' else 'ausgehend' }}">{{ symbol('brief') }}</span>
+                <span class="lk-karte-titel">{{ m.betreff }}</span>
+                <span class="lk-karte-meta">{{ m.zeit.strftime('%d.%m.%Y %H:%M') if m.zeit }}
+                    · {{ 'von' if m.richtung == 'ein' else 'an' }} {{ m.partner or '?' }}
+                    · <span class="abzeichen lk-herkunft-{{ m.herkunft }}">{{ herkunft_namen.get(m.herkunft, m.herkunft) }}</span>
+                    {% if m.status %}· <span class="abzeichen">{{ m.status }}</span>{% endif %}
+                    {% if m.anhang %}· ICS{% endif %}</span>
+            </summary>
+            <div class="lk-karte-inhalt">
+                {% if m.html %}<div class="lk-mail-body">{{ m.text | safe }}</div>{% else %}{{ m.text or '–' }}{% endif %}
+                {% if m.fehler %}<p class="lm-rot">{{ m.fehler }}</p>{% endif %}
+                {% if m.log_id and not readonly and m.status in ('fehler', 'storniert', 'protokolliert') %}
+                <form method="post" action="/lead-management/kommunikation/{{ m.log_id }}/senden" class="lk-inline">
+                    <button class="knopf klein zweitrangig" type="submit">Erneut verarbeiten</button>
+                </form>
+                {% endif %}
+            </div>
+        </details>
+        {% else %}
+            {{ leer_zustand('Noch keine E-Mails zu diesem Vorgang.') }}
+        {% endfor %}
+        <p class="dezent lk-leer-filter" hidden>Keine E-Mail passt zum Filter.</p>
+    </div>
+</section>
+
+{# ---------- Anrufnotizen ---------- #}
+<section role="tabpanel" id="panel-anrufe" aria-labelledby="tab-anrufe" class="lk-panel" {{ '' if tab == 'anrufe' else 'hidden' }}>
+    <h2 class="lk-panel-titel">Anrufnotizen <span class="dezent">nur Aktivitäten vom Typ Anruf</span></h2>
+    {% if anrufe %}
+    <table class="tabelle lk-tabelle">
+        <thead><tr><th>Zeitpunkt</th><th>Ergebnis</th><th>Dauer</th><th>Notiz</th><th>Benutzer</th></tr></thead>
+        <tbody>
+        {% for a in anrufe %}
+            <tr>
+                <td>{{ a.zeit.strftime('%d.%m.%Y %H:%M') if a.zeit }}</td>
+                <td><span class="abzeichen lk-ergebnis-{{ a.ergebnis or 'ohne' }}">{{ a.titel | replace('Anruf: ', '') }}</span></td>
+                <td>{{ a.dauer or '–' }}</td>
+                <td class="lk-anruf-text">{{ a.text | replace('Anruf: ', '') }}{% if a.naechste %} <span class="dezent">· nächste Aktion {{ a.naechste.strftime('%d.%m.%Y %H:%M') }}</span>{% endif %}</td>
+                <td>{{ a.autor }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        {{ leer_zustand('Noch kein Anruf protokolliert – Ergebnis-Buttons links in der Kartei.') }}
+    {% endif %}
+</section>
+
+{# ---------- Qualifizierung ---------- #}
+<section role="tabpanel" id="panel-qualifizierung" aria-labelledby="tab-qualifizierung" class="lk-panel" {{ '' if tab == 'qualifizierung' else 'hidden' }}>
+    <h2 class="lk-panel-titel">Qualifizierung <span class="dezent">{{ lead_kontext.qualifizierungen | length }} Sparte(n)</span></h2>
+    {% if not readonly %}
+    <div class="lk-werkzeuge">
+        {% for s in lead_kontext.sparten %}
+            <a class="knopf klein {{ 'zweitrangig' if s in (lead_kontext.qualifizierungen | map(attribute='zeile.sparte') | list) }}"
+               href="{{ kartei_url }}/qualifizierung/{{ s }}">{{ symbol('stift') }} Bogen {{ s }}</a>
+        {% else %}<span class="dezent">Keine Interessen gepflegt – erst links Interessen setzen.</span>{% endfor %}
+    </div>
+    {% endif %}
+    {% for q in lead_kontext.qualifizierungen %}
+        <div class="lk-quali">
+            <h3>{{ sparten_ui.chip(q.zeile.sparte) }} {{ q.zeile.score_punkte }} Punkte · Klasse {{ q.zeile.score_klasse }}
+                <span class="dezent">{{ '· abgeschlossen ' ~ q.zeile.abgeschlossen_am.strftime('%d.%m.%Y') if q.zeile.abgeschlossen_am else '· Entwurf' }}</span>
+                {% if not readonly %}<a class="knopf klein zweitrangig" href="{{ kartei_url }}/qualifizierung/{{ q.zeile.sparte }}">Bearbeiten</a>{% endif %}</h3>
+            <table class="tabelle lk-tabelle"><tbody>
+            {% for frage, wert in q.antworten %}<tr><td>{{ frage }}</td><td>{{ wert }}</td></tr>{% endfor %}
+            </tbody></table>
+        </div>
+    {% else %}
+        {{ leer_zustand('Noch keine Qualifizierung.') }}
+    {% endfor %}
+</section>
+
+{# ---------- Termin ---------- #}
+<section role="tabpanel" id="panel-termin" aria-labelledby="tab-termin" class="lk-panel" {{ '' if tab == 'termin' else 'hidden' }}>
+    <h2 class="lk-panel-titel">Termin <span class="dezent">alle Termine des Vorgangs</span></h2>
+    {% if not readonly %}
+    <div class="lk-terminierung karte">
+        <strong>Terminierung</strong>
+        {% if not buchbar %}<p class="lm-hinweis">Demo-Modus: Terminbuchung nur für Demo-Leads – echte Leads werden in monday terminiert.</p>{% endif %}
+        <div class="lk-werkzeuge">
+            <a class="knopf klein" href="{{ kartei_url }}/termin" title="Terminassistent: Top-5-Slots aus AD-Profilen, Kompetenz, Outlook, Fahrzeit">{{ symbol('kalender') }} Termin vorschlagen</a>
+            <button type="button" class="knopf klein zweitrangig" onclick="document.getElementById('dlg-termin-manuell').showModal()" title="Vor-Ort-Termin manuell (15-Minuten-Raster)">{{ symbol('stift') }} Termin manuell</button>
+            <a class="knopf klein zweitrangig" href="{{ kartei_url }}/termin/vorab" title="Telefongespräch mit Vertriebler oder Teams-Termin mit Kollegen (kein VOT)">{{ symbol('telefon') }} Vorab-Gespräch</a>
+            {% if not vorgang.demo or not vorgang.vorab_angebot %}
+            <form method="post" action="{{ kartei_url }}/vorab-angebot" class="lk-inline"
+                  onsubmit="return confirm('Erfassung ohne Vor-Ort-Termin starten? Der Vorgang erhält das Kennzeichen Vorab-Angebot (keine Terminbestätigung).')">
+                <button class="knopf klein zweitrangig" type="submit" title="Vorab-Angebot (F10): Erfassung ohne VOT, keine Terminbestätigung">{{ symbol('plus') }} Erfassung ohne Termin</button>
+            </form>
+            {% endif %}
+            <form method="post" action="{{ kartei_url }}/terminierung" class="lk-inline">
+                {% if terminierung.erledigt %}
+                    <button class="knopf klein" type="button" disabled>{{ symbol('haken') }} Terminiert</button>
+                {% elif terminierung.bereit %}
+                    <button class="knopf klein" type="submit" onclick="return confirm('Terminierung jetzt ausführen?')">{{ symbol('kalender') }} Terminierung</button>
+                {% else %}
+                    <button class="knopf klein" type="button" disabled title="Gesperrt – es fehlt: {{ terminierung.fehlend | join(', ') }}">{{ symbol('kalender') }} Terminierung</button>
+                {% endif %}
+            </form>
+        </div>
+        {% if terminierung.fehlend and not terminierung.erledigt %}
+            <p class="dezent">Terminierung gesperrt – es fehlt: {{ terminierung.fehlend | join(', ') }}.</p>
+        {% elif terminierung.termin and terminierung.termin.status == 'vorgemerkt' %}
+            <p class="dezent">Vorgemerkter Termin wird mit „Terminierung“ bestätigt (Mail, Kalender, Phase).</p>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% if termine %}
+    <table class="tabelle lk-tabelle lk-termine">
+        <thead><tr><th>Beginn</th><th>Art</th><th>Status</th><th>Außendienst</th><th>Quelle</th><th class="aktionen">Aktionen</th></tr></thead>
+        <tbody>
+        {% for t in termine %}
+            {% set t_ad = benutzer_map.get(t.ad_id) %}
+            <tr class="{{ 'lk-termin-aktiv' if t.status in ('vorgemerkt', 'geplant', 'bestaetigt') }}">
+                <td>{{ t.beginn | de_datum('%a %d.%m.%Y %H:%M') if t.beginn else 'ohne Uhrzeit' }}
+                    {% if t.ende %}<span class="dezent">– {{ t.ende.strftime('%H:%M') }}</span>{% endif %}</td>
+                <td>{{ termin_typ_namen.get(t.typ or 'vot', t.typ) }} <span class="dezent">· {{ termin_medium_namen.get(t.medium or 'vor_ort', t.medium) }}</span></td>
+                <td><span class="abzeichen lk-tstatus-{{ t.status }}">{{ termin_status_namen.get(t.status, t.status) }}</span>
+                    {% if t.quelle == 'monday' %}<span class="abzeichen">monday</span>{% endif %}
+                    {% if t.grund_text %}<div class="dezent">{{ t.grund_text }}</div>{% endif %}</td>
+                <td>{{ t_ad.name if t_ad else '–' }}{% if t.umweg_min is not none %} <span class="dezent">· Umweg +{{ t.umweg_min }} Min</span>{% endif %}</td>
+                <td>{{ t.quelle }}</td>
+                <td class="aktionen lk-termin-aktionen">
+                    {% if readonly %}
+                        {% if t.ad_id == benutzer.id and t.status in ('geplant', 'bestaetigt') %}
+                            <details class="lk-inline-form"><summary class="knopf klein zweitrangig">No-Show melden</summary>
+                                <form method="post" class="formular" action="/lead-management/ad/termin/{{ t.id }}/no-show">
+                                    <label><input type="radio" name="art" value="no_show" checked> No-Show</label>
+                                    <label><input type="radio" name="art" value="absage"> Absage</label>
+                                    <label>Grund <select name="grund" required>{% for g in no_show_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}</select></label>
+                                    <label>Freitext <input type="text" name="grund_text"></label>
+                                    <button class="knopf klein" type="submit">Zurückmelden</button>
+                                </form></details>
+                            <details class="lk-inline-form"><summary class="knopf klein zweitrangig">Verschieben (eigene Woche)</summary>
+                                <form method="post" class="formular" action="/lead-management/ad/termin/{{ t.id }}/verschieben">
+                                    <label>Neuer Beginn <input type="datetime-local" name="beginn" step="900" required></label>
+                                    <label>Grund <input type="text" name="grund" required></label>
+                                    <button class="knopf klein" type="submit">Verschieben</button>
+                                </form></details>
+                        {% endif %}
+                    {% elif t.status in ('vorgemerkt', 'geplant', 'bestaetigt') %}
+                        {% if t.status != 'vorgemerkt' %}
+                        <form method="post" action="/lead-management/termin/{{ t.id }}/bestaetigung-erneut" class="lk-inline"
+                              onsubmit="return confirm('Terminbestätigung mit ICS erneut senden (gleiche UID, SEQUENCE+1)?')">
+                            <button class="knopf klein zweitrangig" type="submit" title="Terminbestätigung erneut senden (A-9)">{{ symbol('brief') }} Bestätigung erneut</button>
+                        </form>
+                        {% endif %}
+                        <details class="lk-inline-form"><summary class="knopf klein zweitrangig" title="Umbuchen auf neuen Beginn">Verschieben</summary>
+                            <form method="post" class="formular" action="/lead-management/termin/{{ t.id }}/verschieben">
+                                <label>Neuer Beginn <input type="datetime-local" name="beginn" step="900" value="{{ t.beginn.strftime('%Y-%m-%dT%H:%M') if t.beginn }}" required></label>
+                                <label>Außendienst <select name="ad_id">{% for e in ad_wahl %}<option value="{{ e.benutzer.id }}" {{ 'selected' if t.ad_id == e.benutzer.id }} {{ 'disabled' if e.gesperrt and t.ad_id != e.benutzer.id }}>{{ e.benutzer.name }}</option>{% endfor %}</select></label>
+                                <button class="knopf klein" type="submit">Umbuchen</button>
+                                <a class="knopf klein zweitrangig" href="{{ kartei_url }}/termin?umbuchen={{ t.id }}">Über Assistent</a>
+                            </form></details>
+                        <details class="lk-inline-form"><summary class="knopf klein zweitrangig">Absagen</summary>
+                            <form method="post" class="formular" action="/lead-management/termin/{{ t.id }}/absagen">
+                                <label>Grund <select name="grund" required>{% for g in no_show_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}</select></label>
+                                <label>Freitext <input type="text" name="grund_text"></label>
+                                <button class="knopf klein gefaehrlich" type="submit">Absagen (Ersatzkunde-Vorschlag)</button>
+                            </form></details>
+                        {% if t.status != 'vorgemerkt' %}
+                        <details class="lk-inline-form"><summary class="knopf klein zweitrangig">No-Show</summary>
+                            <form method="post" class="formular" action="/lead-management/termin/{{ t.id }}/no-show">
+                                <input type="hidden" name="art" value="no_show">
+                                <label>Grund <select name="grund" required>{% for g in no_show_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}</select></label>
+                                <label>Freitext <input type="text" name="grund_text"></label>
+                                <button class="knopf klein" type="submit">No-Show melden</button>
+                            </form></details>
+                        <form method="post" action="/lead-management/termin/{{ t.id }}/erfolgt" class="lk-inline">
+                            <button class="knopf klein" type="submit">{{ symbol('haken') }} Erfolgt</button>
+                        </form>
+                        {% endif %}
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        {{ leer_zustand('Noch kein Termin – Termin vorschlagen, manuell eintragen oder Vorab-Gespräch planen.') }}
+    {% endif %}
+</section>
+
+{# ---------- Erfassungen / Angebote / Projekt ---------- #}
+<section role="tabpanel" id="panel-vorgang" aria-labelledby="tab-vorgang" class="lk-panel" {{ '' if tab == 'vorgang' else 'hidden' }}>
+    <h2 class="lk-panel-titel">Erfassungen / Angebote / Projekt</h2>
+    <h3 class="lk-abschnitt">Erfassungen <span class="lk-zahl">{{ erfassungen | length }}</span></h3>
+    {% if vorgang.demo %}<p class="hinweis">Demo-Lead – keine Erfassung möglich{{ ' (Kennzeichen Vorab-Angebot gesetzt)' if vorgang.vorab_angebot }}.</p>{% endif %}
+    {% for e in erfassungen %}
+        <div class="lk-zeile">
+            {{ sparten_ui.chip(e.sparte or 'WP') }}
+            <strong>{{ 'Freitext' if e.typ == 'freitext' else 'Katalog' }}</strong>
+            {{ status_badge(e.status) }}
+            <span class="dezent">{{ benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '–' }}
+                · {{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am else 'nicht abgesendet' }}</span>
+            {% if benutzer.rolle in ('admin', 'innendienst') or benutzer.hat_rolle('leadmanagement') %}
+                <a class="knopf klein zweitrangig" href="/erfassungen/{{ e.id }}">Öffnen</a>
+            {% elif e.status == 'Entwurf' and not readonly %}
+                <a class="knopf klein zweitrangig" href="/erfassung/{{ e.id }}/weiche">Fortsetzen</a>
+            {% endif %}
+        </div>
+    {% else %}
+        {% if not vorgang.demo %}<p class="dezent">Noch keine Erfassung.</p>{% endif %}
+    {% endfor %}
+    {% if not vorgang.demo and not readonly and erfassung_url %}
+        <a class="knopf klein" href="{{ erfassung_url }}">{{ symbol('plus') }} Neue Erfassung</a>
+    {% endif %}
+
+    <h3 class="lk-abschnitt">Angebote <span class="lk-zahl">{{ angebote | length }}</span></h3>
+    {% for a in angebote %}
+        <div class="lk-zeile lk-angebot">
+            <strong>{% if a.extern %}<span class="abzeichen status-taifun">TAIFUN</span> {{ a.taifun_nummer or a.nummer }}{% else %}{{ a.nummer }}{% endif %}</strong>
+            {{ sparten_ui.chip(a.konfigurator_typ or 'WP') }}
+            <span class="dezent">{{ a.datum.strftime('%d.%m.%Y') if a.datum }}</span>
+            {{ statuskette(a.status) }}
+            {% if benutzer.rolle in ('admin', 'innendienst') %}
+                <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">Öffnen</a>
+            {% elif not a.extern %}
+                <a class="knopf klein zweitrangig" href="/meine-angebote/{{ a.id }}">Ansehen</a>
+            {% endif %}
+        </div>
+    {% else %}
+        <p class="dezent">Noch kein Angebot.</p>
+    {% endfor %}
+
+    <h3 class="lk-abschnitt">Projekt <span class="lk-zahl">{{ projekte | length }}</span></h3>
+    {% if projekt_modul_ok %}
+        {% from "_projektierung.html" import phase_name %}
+        {% for eintrag in projekte %}
+            <a class="pj-card" href="/projektierung/projekt/{{ eintrag.projekt.id }}">
+                <div class="hd"><span class="pr pj-mono">{{ eintrag.projekt.nummer }}</span><span class="pj-badge">Projektakte →</span></div>
+                {% for g in eintrag.gewerke %}
+                    <div class="pj-gw {{ 'storniert' if g.phase == 'storniert' }}"><span class="pj-sp {{ g.sparte }}">{{ g.sparte }}</span><span class="ph">{{ phase_name(g.phase) }}</span></div>
+                {% endfor %}
+            </a>
+        {% else %}<p class="dezent">Noch kein Projekt (entsteht aus einem angenommenen Angebot).</p>{% endfor %}
+    {% else %}
+        <p class="dezent">Projektierung für diese Rolle nicht sichtbar.</p>
+    {% endif %}
+</section>

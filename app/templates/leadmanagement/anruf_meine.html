@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
+
+{% block titel %}Meine Anrufe – Lead-Management{% endblock %}
+
+{% block mainklasse %}breit{% endblock %}
+
+{# v23 Phase 107 (PLAN_LEAD_V2 D2): eigene protokollierte Anrufe aus
+   lead_aktivitaeten (typ anruf) mit Datum, Nummer (tel:), Vorgang (Kartei),
+   Ergebnis, Dauer (korrigierbar, D1) – damit Rückrufe zugeordnet werden können. #}
+{% block inhalt %}
+{{ lm_nav('anrufliste') }}
+<div class="seitenkopf">
+    <h1>{{ 'Alle Anrufe (Team)' if alle else 'Meine Anrufe' }} {% if demo_badge %}<span class="demo-badge">Demo · Coming soon</span>{% endif %}</h1>
+    <span class="dezent">{{ summen.anzahl }} Anruf{{ 'e' if summen.anzahl != 1 }} · {{ summen.erreicht }} erreicht · Gesprächszeit {{ summen.dauer_gesamt }} (Ø {{ summen.dauer_schnitt }})</span>
+    <div class="aktionen">
+        <form method="get" action="/lead-management/anruf/suche" class="lm-rufnummer" title="Eingehender Anruf: Rufnummer eingeben">
+            <input type="search" name="q" inputmode="tel" placeholder="Rufnummer eingeben" autocomplete="off">
+            <button class="knopf klein zweitrangig" type="submit">{{ symbol('telefon') }} Suchen</button>
+        </form>
+        {% if team_sicht_erlaubt %}
+        <a class="knopf klein zweitrangig" href="/lead-management/anruf/meine?zeitraum={{ zeitraum }}{{ '' if alle else '&alle=1' }}">{{ 'Nur meine' if alle else 'Alle Anrufe (Team)' }}</a>
+        {% endif %}
+        <a class="knopf klein zweitrangig" href="/lead-management/anrufliste">Zur Anrufliste</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<form method="get" action="/lead-management/anruf/meine" class="lm-schnellfilter">
+    {% if alle %}<input type="hidden" name="alle" value="1">{% endif %}
+    {% for key, name in zeitraeume %}
+    <a class="f {{ 'aktiv' if zeitraum == key and not von and not bis }}" href="/lead-management/anruf/meine?zeitraum={{ key }}{{ '&alle=1' if alle }}{{ '&ergebnis=' ~ ergebnis if ergebnis }}">{{ name }}</a>
+    {% endfor %}
+    <span class="trenner"></span>
+    <input type="hidden" name="zeitraum" value="{{ zeitraum }}">
+    <label class="dezent">von <input type="date" name="von" value="{{ von }}"></label>
+    <label class="dezent">bis <input type="date" name="bis" value="{{ bis }}"></label>
+    <select name="ergebnis" onchange="this.form.submit()">
+        <option value="">Ergebnis: alle</option>
+        {% for wert, name in ergebnis_namen.items() %}<option value="{{ wert }}" {{ 'selected' if ergebnis == wert }}>{{ name }}</option>{% endfor %}
+    </select>
+    <input type="search" name="q" value="{{ suche }}" placeholder="Name / Nummer / Ort">
+    <button class="knopf klein zweitrangig" type="submit">Filtern</button>
+</form>
+
+<div class="karte lm-anrufe-karte">
+<table class="tabelle lm-anrufe">
+    <thead>
+        <tr>
+            <th>Datum / Uhrzeit</th>
+            <th>Kunde</th>
+            <th>Rufnummer</th>
+            <th>Vorgang</th>
+            <th>Ergebnis</th>
+            <th class="zahl">Dauer</th>
+            <th>Notiz</th>
+            {% if alle %}<th>Benutzer</th>{% endif %}
+        </tr>
+    </thead>
+    <tbody>
+    {% for z in zeilen %}
+        <tr data-aktivitaet="{{ z.aktivitaet.id }}">
+            <td class="nowrap">{{ z.aktivitaet.zeitpunkt | de_datum('%a %d.%m.%Y %H:%M') }}</td>
+            <td>{% if z.kunde %}<a href="/lead-management/lead/{{ z.vorgang.id }}"><b>{{ z.kunde.anzeige_name }}</b></a>
+                <span class="dezent">{{ z.kunde.ort or '' }}</span>{% else %}–{% endif %}</td>
+            <td class="nowrap">{% if z.nummer %}<a href="{{ z.tel_href }}" class="lm-tel" title="Anrufen (Click-to-Call)">{{ symbol('telefon') }} {{ z.nummer }}</a>{% else %}–{% endif %}</td>
+            <td><a href="/lead-management/lead/{{ z.vorgang.id }}">V{{ z.vorgang.id }}</a>
+                {% for s in z.sparten %}<span class="chip chip-{{ s | lower }}">{{ s }}</span>{% endfor %}
+                {% if z.vorgang.demo %}<span class="abzeichen">Demo</span>{% endif %}</td>
+            <td><span class="lm-ergebnis e-{{ z.ergebnis or 'anruf' }}"><i></i> {{ z.ergebnis_name }}</span></td>
+            <td class="zahl nowrap">
+                <form method="post" action="/lead-management/anruf/aktivitaet/{{ z.aktivitaet.id }}/dauer" class="lm-dauer-form" title="Dauer korrigieren (mm:ss oder Sekunden) – die Änderung wird protokolliert">
+                    <input type="hidden" name="zurueck" value="{{ zurueck_pfad }}">
+                    <input type="text" name="dauer_sek" value="{{ z.dauer if z.dauer_sek is not none else '' }}" placeholder="mm:ss" size="6" pattern="^(\d{1,2}:)?\d{1,2}:\d{2}$|^\d+$" inputmode="numeric" class="lm-dauer-wert">
+                    <button class="knopf klein zweitrangig" type="submit" title="Dauer speichern">✓</button>
+                </form>
+            </td>
+            <td class="dezent">{{ z.notiz }}</td>
+            {% if alle %}<td class="dezent">{{ z.benutzer_name }}</td>{% endif %}
+        </tr>
+    {% else %}
+        <tr><td colspan="{{ 8 if alle else 7 }}" class="dezent">Keine Anrufe im gewählten Zeitraum.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+<p class="dezent lm-hinweis">Dauer = Stoppuhr beim Protokollieren (Klick auf die Nummer oder ein Ergebnis in Anrufliste/Kartei); nachträglich korrigierbar nur am eigenen Eintrag (Admin: alle) – jede Korrektur steht als Systemeintrag in der Akte. Telefonanlage/CTI folgt später (Felder sind vorbereitet).</p>
+<script src="/static/lm_anruf.js?v={{ css_version }}" defer></script>
+{% endblock %}

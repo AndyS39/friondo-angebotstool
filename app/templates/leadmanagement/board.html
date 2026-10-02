@@ -1,22 +1,33 @@
 {% extends "base.html" %}
-{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "_symbole.html" import symbol %}
+{% from "leadmanagement/_nav.html" import lm_nav, lm_umschalter %}
 
-{% block titel %}Pipeline – Lead-Management{% endblock %}
+{% block titel %}Kanban {{ board_info.titel if board_info else '' }} – Lead-Management{% endblock %}
 
 {% block mainklasse %}breit{% endblock %}
 
+{# v23 (PLAN_LEAD_V2 Phase 105, A-11): das Kanban zeigt nur noch das aktive
+   Board (?board=hauptboard | terminiert) – Spalten bleiben die Lead-Phasen;
+   Umschalter Tabelle | Anrufliste | Kanban. Drag & Drop wie v12 (Plan 79). #}
 {% block inhalt %}
-{{ lm_nav('board') }}
+{{ lm_nav(board | default('hauptboard')) }}
 <div class="seitenkopf">
-    <h1>Pipeline
-        {% if demo_badge %}<span class="demo-badge">Demo · Coming soon</span>{% endif %}
+    <h1>Kanban · {{ board_info.titel if board_info else 'Pipeline' }}
+        {% if demo_badge %}<span class="demo-badge">{{ badge_text | default('Demo · Coming soon') }}</span>{% endif %}
     </h1>
+    <span class="dezent">{{ board_info.untertitel if board_info }}</span>
     <div class="aktionen">
+        {{ lm_umschalter('kanban', board | default('hauptboard')) }}
+        <span class="lm-umschalter" aria-label="Board">
+            <a class="{{ 'aktiv' if board == 'hauptboard' }}" href="/lead-management/board?board=hauptboard">Hauptboard</a>
+            <a class="{{ 'aktiv' if board == 'terminiert' }}" href="/lead-management/board?board=terminiert">Terminiert</a>
+        </span>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
 <form method="get" action="/lead-management/board" class="suchleiste">
+    <input type="hidden" name="board" value="{{ board | default('hauptboard') }}">
     <label class="kontrollfeld">
         <select name="meine">
             <option value="0" {{ 'selected' if not filter_werte.meine }}>Alle</option>
@@ -34,7 +45,7 @@
     <label class="kontrollfeld">Sparte
         <select name="sparte">
             <option value="">alle</option>
-            {% for s in ('WP', 'PV', 'KL', 'WB') %}
+            {% for s in ('WP', 'PV', 'KL', 'WB', 'GW') %}
                 <option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }}>{{ s }}</option>
             {% endfor %}
         </select>
@@ -54,8 +65,10 @@
     <label class="kontrollfeld">bis <input type="date" name="eingang_bis"
            value="{{ filter_werte.eingang_bis.strftime('%Y-%m-%d') if filter_werte.eingang_bis }}"></label>
     <input type="search" name="q" value="{{ filter_werte.q }}" placeholder="Suche">
+    {% if board != 'terminiert' %}
     <label class="kontrollfeld"><input type="checkbox" name="seiten" value="1"
            {{ 'checked' if filter_werte.seiten }}> Zurückgestellt/Nicht erreicht/Unqualifiziert</label>
+    {% endif %}
     <button class="knopf klein" type="submit">Filtern</button>
 </form>
 
@@ -65,7 +78,7 @@
     <a href="/lead-management/lead/{{ k.vorgang.id }}"><strong>{{ k.kunde.anzeige_name }}</strong></a>
     <span class="dezent">{{ k.kunde.ort or '?' }}</span>
     <span>
-        {% for s in k.sparten %}<span class="abzeichen">{{ s }}</span>{% endfor %}
+        {% for s in k.sparten %}<span class="chip chip-{{ s | lower }} chip-offen">{{ s }}</span>{% endfor %}
         {% if k.quelle %}<span class="abzeichen">{{ k.quelle.name }}</span>{% endif %}
         {% if k.vorgang.demo %}<span class="demo-badge">Demo</span>{% endif %}
         {% if k.monday %}<span class="abzeichen">monday</span>{% endif %}
@@ -89,7 +102,7 @@
 </div>
 {% endmacro %}
 
-<div class="kanban">
+<div class="kanban lm-kanban-{{ board | default('hauptboard') }}">
     {% for phase in spalten_reihenfolge %}
     <div class="kanban-spalte" data-phase="{{ phase }}"
          ondragover="event.preventDefault()" ondrop="kartenDrop(event, '{{ phase }}')">
@@ -100,6 +113,7 @@
         {% for k in spalten[phase] %}{{ lead_karte(k) }}{% endfor %}
     </div>
     {% endfor %}
+    {% if board == 'terminiert' %}
     <div class="kanban-spalte" data-phase="verloren"
          ondragover="event.preventDefault()" ondrop="kartenDrop(event, 'verloren')">
         <details>
@@ -107,6 +121,7 @@
             {% for k in spalten['verloren'] %}{{ lead_karte(k) }}{% endfor %}
         </details>
     </div>
+    {% endif %}
     {% if filter_werte.seiten %}
         {% for phase in seiten_phasen %}
         <div class="kanban-spalte" data-phase="{{ phase }}"
@@ -193,7 +208,7 @@ function kartenDrop(e, ziel) {
             `/lead-management/lead/${boardGezogen}/reaktivieren`;
         dlg.showModal();
     } else {
-        alert('Dieser Wechsel läuft über die Anrufliste bzw. den ' +
+        alert('Dieser Wechsel läuft über die Tabelle (Status-Spalte), die Anrufliste bzw. den ' +
               'Terminassistenten (Terminieren nur über den Assistenten).');
     }
     boardGezogen = null;

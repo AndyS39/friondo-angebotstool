@@ -43,7 +43,8 @@ def offene_leads(session: Session, jetzt: datetime | None = None) -> list[Vorgan
     qualifiziert ohne aktiven Termin, zurückgestellt fällig (Plan 88)."""
     jetzt = jetzt or datetime.now()
     mit_termin = {t.vorgang_id for t in session.query(VotTermin)
-                  .filter(VotTermin.status.in_(("geplant", "bestaetigt")))}
+                  .filter(VotTermin.status.in_(("geplant", "bestaetigt")),
+                          VotTermin.typ == "vot")}   # v23 (Phase 108): nur Vor-Ort-Termine
     ergebnis = []
     for v in (session.query(Vorgang)
               .filter(Vorgang.lead_phase.in_(("neu", "in_kontaktierung", "nicht_erreicht",
@@ -96,6 +97,7 @@ def kpis(session: Session, jetzt: datetime | None = None) -> dict:
     vier = [v for v in drei if (v.versuch_nr or 0) >= 4]
     termine = (session.query(VotTermin)
                .filter(VotTermin.status.in_(("geplant", "bestaetigt")),
+                       VotTermin.typ == "vot",   # v23 (Phase 108)
                        VotTermin.beginn >= heute, VotTermin.beginn < morgen).all())
     je_ad: dict[int, int] = {}
     for t in termine:
@@ -325,12 +327,16 @@ def wochen_typ(session: Session, wochen: int = 12) -> dict:
     return {"zeilen": zeilen, "typen": kern.QUELLEN_GRUPPEN}
 
 
+STARTSEITEN = ("dashboard", "hauptboard", "uebersicht", "anrufliste")
+
+
 def startseite(session: Session, benutzer) -> str:
-    """Modul-Einstieg (Parameter lm_startseite): Übersicht für Admin/
-    Innendienst, Anrufliste für die Hauptrolle Leadmanagement."""
+    """Modul-Einstieg (Parameter lm_startseite): dashboard | hauptboard |
+    uebersicht | anrufliste; leer = persönliches Dashboard „Meine Arbeit“
+    (v23, PLAN_LEAD_V2 Phase 110 – vorher Übersicht bzw. Anrufliste für die
+    Hauptrolle Leadmanagement). Die Team-Übersicht bleibt über den Umschalter
+    „Meine Arbeit | Team“ und „Mehr …“ erreichbar."""
     wert = kern.parameter_holen(session, "lm_startseite", "").strip().lower()
-    if wert in ("uebersicht", "anrufliste"):
+    if wert in STARTSEITEN:
         return wert
-    if benutzer is not None and benutzer.rolle == "leadmanagement":
-        return "anrufliste"
-    return "uebersicht"
+    return "dashboard"

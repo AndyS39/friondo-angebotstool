@@ -209,6 +209,15 @@ async def kanal_aendern(request: Request, lead_id: int,
     if kunde is not None:
         kunde.vertriebskanal = kanal
         kunde.kanal_manuell = bool(kanal)
+    # v23 (Phase 109, G4): Vorgang des Leads auf Ausschlusskanal prüfen
+    try:
+        from app import lead_handelsvertreter
+        from app.models import Vorgang
+        vorgang = session.query(Vorgang).filter(Vorgang.lead_id == lead.id).first()
+        if vorgang is not None:
+            lead_handelsvertreter.kanalwechsel_pruefen(session, vorgang, request.state.benutzer)
+    except Exception:
+        pass
     session.commit()
     return RedirectResponse("/leads?meldung=" + quote_plus(
         f"{lead.anzeige_name}: Kanal "

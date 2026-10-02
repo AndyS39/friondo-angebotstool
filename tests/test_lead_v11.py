@@ -208,7 +208,8 @@ class Phase88Uebersicht(Basis):
         self.assertEqual((r.status_code, r.headers["location"]),
                          (303, "/lead-management/uebersicht"))
         r = self.client.get("/lead-management", follow_redirects=False)
-        self.assertEqual(r.headers["location"], "/lead-management/uebersicht")
+        # v23 (Phase 110): Modul-Einstieg ohne lm_startseite = persönliches Dashboard
+        self.assertEqual(r.headers["location"], "/lead-management/dashboard")
         stat = self.client.get("/lead-management/statistik").text
         self.assertIn("Eingänge je Woche × Quellen-Typ", stat)
         csv = self.client.get("/lead-management/statistik?export=wochen")
@@ -230,10 +231,14 @@ class Phase88Uebersicht(Basis):
 
         from app import lead_uebersicht
         kern.parameter_setzen(self.s, "lm_startseite", "")
+        # v23 (Phase 110): leer = Dashboard „Meine Arbeit“ für alle Rollen
+        self.assertEqual(lead_uebersicht.startseite(self.s, SimpleNamespace(rolle="admin")),
+                         "dashboard")
+        self.assertEqual(lead_uebersicht.startseite(
+            self.s, SimpleNamespace(rolle="leadmanagement")), "dashboard")
+        kern.parameter_setzen(self.s, "lm_startseite", "uebersicht")
         self.assertEqual(lead_uebersicht.startseite(self.s, SimpleNamespace(rolle="admin")),
                          "uebersicht")
-        self.assertEqual(lead_uebersicht.startseite(
-            self.s, SimpleNamespace(rolle="leadmanagement")), "anrufliste")
         kern.parameter_setzen(self.s, "lm_startseite", "anrufliste")
         self.assertEqual(lead_uebersicht.startseite(self.s, SimpleNamespace(rolle="admin")),
                          "anrufliste")

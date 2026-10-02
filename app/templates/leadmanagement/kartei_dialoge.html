@@ -1,0 +1,115 @@
+{% from "_symbole.html" import symbol %}
+{% from "leadmanagement/anruf_dialoge.html" import anruf_dialoge %}
+{# Phase 106 – Dialoge der Kundenkartei: E-Mail (Vorlage), Notiz, Wiedervorlage/
+   Zurückstellen, Nachbearbeitung (F11), Termin manuell. Die Anruf-Folgedialoge
+   (Nicht erreicht mit Kaskaden-Vorschlag, Rückruf, Kein Interesse, Zurückstellen,
+   Reaktivieren) liefert das Makro anruf_dialoge aus Phase 107 (Vertrag:
+   POST /lead-management/anruf/{id} mit zurueck = Kartei). #}
+
+<dialog id="dlg-notiz" class="lk-dialog">
+    <form method="post" action="{{ notiz_url }}" class="formular">
+        <h3>{{ symbol('notiz') }} Notiz</h3>
+        <label class="breit">Text
+            <textarea name="text" rows="4" maxlength="2000" required placeholder="Notiz in den Notizen-Chat des Vorgangs (unveränderlich)"></textarea></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Speichern</button>
+            <button class="knopf zweitrangig" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+
+{% if not readonly %}
+<dialog id="dlg-mail" class="lk-dialog">
+    <form method="post" action="{{ kartei_url }}/mail" class="formular">
+        <h3>{{ symbol('brief') }} E-Mail mit Vorlage</h3>
+        <p class="dezent">An {{ kunde.email if kunde else '–' }} · Versand nach mail_modus (Demo: Sendesperre, nur Protokoll/Testpostfach).</p>
+        <label>Vorlage
+            <select name="vorlage_key">
+                {% for v in vorlagen %}<option value="{{ v }}">{{ v }}</option>{% endfor %}
+            </select></label>
+        <label class="breit">Betreff (leer = aus Vorlage) <input type="text" name="betreff" maxlength="300"></label>
+        <label class="breit">Text (leer = aus Vorlage) <textarea name="text" rows="6"></textarea></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Senden / einreihen</button>
+            <a class="knopf zweitrangig" href="{{ kartei_url }}/kommunikation">Vorschau</a>
+            <button class="knopf zweitrangig" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="dlg-wiedervorlage" class="lk-dialog">
+    <h3>{{ symbol('wiedervorlage') }} Wiedervorlage</h3>
+    <form method="post" action="{{ kartei_url }}/wiedervorlage" class="formular">
+        <input type="hidden" name="art" value="wiedervorlage">
+        <p class="dezent">Kundenkontakt zu einem Zeitpunkt (Anrufliste/Dashboard zeigen ihn als fällig). Für Arbeitsaufträge rechts ein To-Do anlegen.</p>
+        <label>Wann <input type="datetime-local" name="wann" value="{{ wv_vorschlag }}" required></label>
+        <label class="breit">Notiz <input type="text" name="notiz" maxlength="500" placeholder="optional"></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Wiedervorlage setzen</button>
+            <button class="knopf zweitrangig" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+    <details class="lk-dialog-mehr">
+        <summary>Stattdessen zurückstellen (Seitenzustand mit Grund)</summary>
+        <form method="post" action="{{ kartei_url }}/wiedervorlage" class="formular">
+            <input type="hidden" name="art" value="zurueckstellen">
+            <label>Bis <input type="date" name="bis" value="{{ nachbearbeitung_bis }}" required></label>
+            <label>Grund
+                <select name="grund" required>
+                    {% for g in zurueck_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}
+                </select></label>
+            <label class="breit">Freitext <input type="text" name="grund_text" placeholder="Pflicht bei Sonstiges"></label>
+            <div class="formzeile">
+                <button class="knopf" type="submit">{{ symbol('pause') }} Zurückstellen</button>
+            </div>
+        </form>
+    </details>
+</dialog>
+
+<dialog id="dlg-nachbearbeitung" class="lk-dialog">
+    <form method="post" action="{{ kartei_url }}/nachbearbeitung" class="formular">
+        <h3>{{ symbol('pause') }} Nachbearbeitung</h3>
+        <p class="dezent">Kunde ist noch nicht bereit für den Vor-Ort-Termin (Unterlagen, Entscheidung, Finanzierung).
+            Der Lead wird zurückgestellt mit Grund „{{ nachbearbeitung_grund }}“ und erscheint in der Gruppe Pausiert
+            bzw. im Dashboard als Wiedervorlage.</p>
+        <label>Wiedervorlage (Pflicht) <input type="date" name="bis" value="{{ nachbearbeitung_bis }}" min="{{ heute.strftime('%Y-%m-%d') }}" required>
+            <small class="dezent">Vorschlag heute + {{ wv_tage }} Tage</small></label>
+        <label class="breit">Notiz <input type="text" name="notiz" maxlength="500" placeholder="Was fehlt noch? (optional)"></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Nachbearbeitung setzen</button>
+            <button class="knopf zweitrangig" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+
+{# Anruf-Folgedialoge (Phase 107, C2/C3) – Rücksprung in den Reiter Anrufnotizen #}
+{{ anruf_dialoge(unq_gruende, zurueck_gruende, kartei_url ~ '?tab=anrufe') }}
+
+<dialog id="dlg-termin-manuell" class="lk-dialog">
+    {# Vertrag Phase 108: POST /lead-management/lead/{id}/termin/manuell #}
+    <form method="post" action="{{ kartei_url }}/termin/manuell" class="formular">
+        <h3>{{ symbol('kalender') }} Termin manuell eintragen</h3>
+        {% if not buchbar %}<p class="lm-hinweis">Demo-Modus: Buchung nur für Demo-Leads.</p>{% endif %}
+        <input type="hidden" name="quelle" value="manuell">
+        <label>Art
+            <select name="typ">
+                {% for key, name in termin_typ_namen.items() %}<option value="{{ key }}">{{ name }}</option>{% endfor %}
+            </select></label>
+        <label>Beginn <input type="datetime-local" name="beginn" step="900" required>
+            <small class="dezent">15-Minuten-Raster, Dauer 90 Min</small></label>
+        <label>Außendienst
+            <select name="ad_id" required>
+                {% for e in ad_wahl if e.aktiv_terminierung or e.benutzer.id == vorgang.ad_id %}
+                    <option value="{{ e.benutzer.id }}" {{ 'selected' if vorgang.ad_id == e.benutzer.id }}
+                            {{ 'disabled' if e.gesperrt and vorgang.ad_id != e.benutzer.id }}
+                            title="{{ e.gesperrt or e.kompetenz_grund }}">{{ e.benutzer.name }}{{ ' · HV' if e.hv }}{{ ' – ' ~ e.kompetenz_grund if not e.kompetenz_ok }}</option>
+                {% endfor %}
+            </select></label>
+        <p class="dezent">Konfliktwarnung bei Kalenderüberschneidung prüft der Terminassistent (Phase 108) beim Speichern.</p>
+        <div class="formzeile">
+            <button class="knopf" type="submit" {{ 'disabled' if not buchbar }}>Termin eintragen</button>
+            <button class="knopf zweitrangig" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+{% endif %}

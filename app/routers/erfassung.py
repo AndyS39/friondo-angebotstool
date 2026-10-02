@@ -224,6 +224,23 @@ async def sparten_start(request: Request, session: Session = Depends(get_session
                 erfassung.vorbelegt_json = json.dumps(
                     {k: "aus Kunden-Standard (Vorgangsakte)" for k in vorbelegung_adr},
                     ensure_ascii=False)
+        # v23 (Phase 106, B3/A-6): Objektart + Parteien aus der Kundenkartei →
+        # O01/O03 (WP) bzw. PO01 (PV) als Bogen-Codes; wie der Kunden-Standard
+        # immer aktiv (nicht an lead_freigabe_modus gekoppelt)
+        try:
+            from app import lead_kartei
+            vorbelegung_obj = lead_kartei.objektart_vorbelegung_kunde(kunde, sparte)
+        except Exception:
+            vorbelegung_obj = {}
+        if vorbelegung_obj:
+            antworten_obj = json.loads(erfassung.antworten_json or "{}")
+            kennzeichen_obj = json.loads(erfassung.vorbelegt_json or "{}")
+            for key, eintrag in vorbelegung_obj.items():
+                if key not in antworten_obj:
+                    antworten_obj[key] = eintrag["wert"]
+                    kennzeichen_obj[key] = eintrag["info"]
+            erfassung.antworten_json = json.dumps(antworten_obj, ensure_ascii=False)
+            erfassung.vorbelegt_json = json.dumps(kennzeichen_obj, ensure_ascii=False)
         session.add(erfassung)
         neu.append(erfassung)
     session.flush()

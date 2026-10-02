@@ -90,6 +90,10 @@ def notiz_anlegen(session: Session, vorgang_id: int, benutzer, text: str,
 def gehoert_benutzer(session: Session, vorgang: Vorgang, benutzer_id: int) -> bool:
     """AD-Sicht: Ein Vorgang gehört dem Außendienstler, wenn der Lead oder
     eine seiner Erfassungen bzw. Angebote ihm zugeordnet ist."""
+    # v23 (Phase 106/109, A-7): der am Vorgang zugewiesene Außendienst/
+    # Handelsvertreter (vorgaenge.ad_id) darf Akte und Notizen-Chat nutzen
+    if getattr(vorgang, "ad_id", None) == benutzer_id:
+        return True
     if vorgang.lead_id:
         lead = session.get(Lead, vorgang.lead_id)
         if lead is not None and lead.benutzer_id == benutzer_id:

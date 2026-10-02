@@ -46,4 +46,16 @@
 {{ termin_karten(woche_liste) }}
 <p class="dezent">No-Show melden und Verschieben (eigene Woche) direkt in der
     Lead-Akte des Termins.</p>
+
+{# v23 (PLAN_LEAD_V2 Phase 110, A2/F7): der Außendienst sieht seine To-Dos hier
+   (und in der Vorgangsakte) – Erledigt-Häkchen postet an /lead-management/todos/… #}
+{% if todos is defined %}
+{% from "leadmanagement/_todo_formular.html" import todo_liste, todo_formular %}
+<h2 id="todos">Meine To-Dos ({{ todos | length }})</h2>
+{{ todo_liste(todos, benutzer, heute, zurueck='/lead-management/meine-termine#todos',
+              akte_basis='/vorgaenge/', leer_text='Keine offenen To-Dos.') }}
+{% if empfaenger is defined %}
+{{ todo_formular(empfaenger, benutzer, zurueck='/lead-management/meine-termine#todos') }}
+{% endif %}
+{% endif %}
 {% endblock %}

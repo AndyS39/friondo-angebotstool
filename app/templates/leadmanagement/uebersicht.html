@@ -10,9 +10,14 @@
 {% block inhalt %}
 {{ lm_nav('uebersicht') }}
 <div class="seitenkopf">
-    <h1>Übersicht {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
+    <h1>Übersicht <span class="dezent lm-h1-sub">Team</span> {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
     <span class="dezent">{{ jetzt | de_datum('%A, %d.%m.%Y') }} · Stand {{ jetzt.strftime('%H:%M') }}{% if mit_demo %} · inkl. Demo{% endif %}</span>
     <div class="aktionen">
+        {# v23 (Phase 110): Umschalter zum persönlichen Dashboard „Meine Arbeit“ #}
+        <nav class="lm-umschalter" aria-label="Sicht">
+            <a href="/lead-management/dashboard">Meine Arbeit</a>
+            <a class="aktiv" href="/lead-management/uebersicht">Team</a>
+        </nav>
         <a class="knopf klein {{ 'zweitrangig' if zeitraum != 'woche' }}" href="?zeitraum=woche">Woche</a>
         <a class="knopf klein {{ 'zweitrangig' if zeitraum != '30' }}" href="?zeitraum=30">30 Tage</a>
         <a class="knopf klein" href="/lead-management/anrufliste">Zur Anrufliste →</a>

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "_symbole.html" import symbol %}
 
 {% block titel %}Terminkalender – Lead-Management{% endblock %}
 
@@ -22,15 +23,22 @@
 <form method="get" class="suchleiste">
     <input type="hidden" name="woche" value="{{ versatz }}">
     <label class="kontrollfeld">Außendienstler
-        <select name="ad_id" onchange="this.form.submit()">
-            <option value="">alle</option>
+        <select name="ad_id" onchange="this.form.submit()" {{ 'disabled' if hv_id }}>
+            {% if not hv_id %}<option value="">alle</option>{% endif %}
             {% for ad in alle_ad %}
                 <option value="{{ ad.id }}" {{ 'selected' if nur_ad == ad.id | string }}>{{ ad.name }}</option>
             {% endfor %}
         </select>
     </label>
-    <span class="dezent">Ziehen = Umbuchen (mit Bestätigung); monday-Termine
-        sind gesperrt (in monday ändern). Farbe je Sparte.</span>
+    <span class="lmt-legende">
+        <span class="kalender-eintrag typ-vot">Vor-Ort-Termin</span>
+        <span class="kalender-eintrag typ-telefon">Telefongespräch</span>
+        <span class="kalender-eintrag typ-online">Online (Teams)</span>
+        <span class="kalender-eintrag typ-vot vorgemerkt">vorgemerkt</span>
+        <span class="kalender-eintrag belegt">Outlook belegt</span>
+    </span>
+    <span class="dezent">Ziehen = Umbuchen (mit Bestätigung, gleiche ICS-UID); monday-Termine
+        sind gesperrt (in monday ändern).{% if hv_id %} Handelsvertreter: nur eigener Kalender.{% endif %}</span>
 </form>
 
 <div style="overflow-x:auto">
@@ -50,18 +58,27 @@
                 {% for t in woche.je_ad[ad_id].termine.get(tag.date(), []) %}
                     {% set v = vorgaenge.get(t.vorgang_id) %}
                     {% set kunde = kunden_map.get(v.kunde_id) if v else none %}
-                    {% set sparte = (kunde.interesse or 'WP').split(',')[0] if kunde else 'WP' %}
-                    <div class="kalender-eintrag sparte-{{ sparte | lower }}"
+                    {% set typ = t.typ or 'vot' %}
+                    <div class="kalender-eintrag typ-{{ typ }} {{ 'vorgemerkt' if t.status == 'vorgemerkt' }}"
                          draggable="{{ 'false' if t.quelle == 'monday' else 'true' }}"
                          data-termin="{{ t.id }}" data-ad="{{ ad_id }}"
                          data-monday="{{ '1' if t.quelle == 'monday' else '' }}"
                          data-uhrzeit="{{ t.beginn.strftime('%H:%M') }}"
+                         title="{{ typ_namen.get(typ, typ) }} · {{ status_namen.get(t.status, t.status) }}{{ ' · ' ~ t.adresse if t.adresse }}"
                          ondragstart="ziehen(event)">
                         <a href="/lead-management/lead/{{ t.vorgang_id }}">
                             {{ t.beginn.strftime('%H:%M') }}
                             {{ kunde.anzeige_name if kunde else '?' }}</a>
+                        <span class="lmt-typ">{{ {'vot': 'VOT', 'telefon': 'Tel', 'online': 'Teams'}.get(typ, typ) }}</span>
+                        {% if t.status == 'vorgemerkt' %}<span class="abzeichen">vorgemerkt</span>{% endif %}
                         {% if t.demo %}<span class="demo-badge">Demo</span>{% endif %}
                         {% if t.quelle == 'monday' %}<span class="abzeichen">monday</span>{% endif %}
+                        {% if t.quelle != 'monday' %}
+                        <button type="button" class="lmt-absage-knopf" title="Termin absagen"
+                                data-termin="{{ t.id }}" data-typ="{{ typ }}" data-status="{{ t.status }}"
+                                data-text="{{ typ_namen.get(typ, typ) }} {{ t.beginn.strftime('%d.%m.%Y %H:%M') }} · {{ kunde.anzeige_name if kunde else '?' }}"
+                                onclick="absageOeffnen(this)">×</button>
+                        {% endif %}
                     </div>
                 {% endfor %}
                 {% for b in woche.je_ad[ad_id].belegt.get(tag.date(), []) %}
@@ -81,10 +98,29 @@
     <form method="post" class="formular" id="verschieben-form">
         <h3>Termin umbuchen</h3>
         <p id="verschieben-text" class="dezent"></p>
-        <label>Neuer Beginn <input type="datetime-local" name="beginn" required></label>
+        <label>Neuer Beginn <input type="datetime-local" name="beginn" step="900" required></label>
         <input type="hidden" name="ad_id" id="verschieben-ad">
         <div class="formzeile">
             <button class="knopf" type="submit">Umbuchen (Kunde erhält Terminänderung)</button>
+            <button class="knopf zweitrangig" type="button"
+                    onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="dlg-absage">
+    <form method="post" class="formular" id="absage-form">
+        <h3>Termin absagen</h3>
+        <p id="absage-text" class="dezent"></p>
+        <p id="absage-hinweis" class="dezent"></p>
+        <label>Grund
+            <select name="grund">
+                <option value="">– Freitext –</option>
+                {% for g in absage_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}
+            </select></label>
+        <label>Freitext <input type="text" name="grund_text"></label>
+        <div class="formzeile">
+            <button class="knopf" type="submit">Absagen</button>
             <button class="knopf zweitrangig" type="button"
                     onclick="this.closest('dialog').close()">Abbrechen</button>
         </div>
@@ -113,6 +149,16 @@ function ablegen(e) {
         `Neuer Tag: ${zelle.dataset.tag} – Uhrzeit prüfen und bestätigen.`;
     dlg.showModal();
     gezogen = null;
+}
+function absageOeffnen(knopf) {
+    const form = document.getElementById('absage-form');
+    form.action = `/lead-management/termin/${knopf.dataset.termin}/absagen`;
+    document.getElementById('absage-text').textContent = knopf.dataset.text;
+    document.getElementById('absage-hinweis').textContent =
+        (knopf.dataset.typ === 'vot' && knopf.dataset.status !== 'vorgemerkt')
+            ? 'Der Kunde erhält die Absage mit Storno-ICS; anschließend Ersatzkunden-Vorschlag für den Slot.'
+            : 'Ohne Kundenmail (Vorab-Gespräch oder vorgemerkter Termin).';
+    document.getElementById('dlg-absage').showModal();
 }
 </script>
 {% endblock %}

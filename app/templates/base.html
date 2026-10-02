@@ -81,13 +81,11 @@
                         <a href="/parametrierung/teams">Teams</a>
                         <a href="/parametrierung/subunternehmer">Subunternehmer</a>
                     {% elif benutzer_angemeldet.rolle == 'leadmanagement' %}
-                        <a href="/lead-management/anrufliste">Anrufliste</a>
-                        <a href="/lead-management/board">Pipeline</a>
-                        <a href="/lead-management/kalender">Kalender</a>
-                        <a href="/lead-management/karte">Karte</a>
-                        <a href="/lead-management/posteingang">Posteingang</a>
-                        <a href="/lead-management/import">Import</a>
-                        <a href="/lead-management/statistik">Statistik Leads</a>
+                        {# v23 (Phase 105/110): Modulpunkte liegen in der Icon-Leiste (lm_nav) –
+                           hier Einstieg, Dashboard und To-Dos #}
+                        <a href="/lead-management/dashboard">Meine Arbeit</a>
+                        <a href="/lead-management/todos">To-Dos</a>
+                        <a href="/lead-management/hauptboard">Lead-Management</a>
                         <a href="/vorgaenge">Vorgänge</a>
                         <a href="/kunden">Kunden</a>
                         <a href="/angebote">Angebote (lesend)</a>
@@ -103,6 +101,11 @@
                         <a href="/statistik">Meine Statistik</a>
                         {% if request.state.lead_ad_ok | default(false) %}
                             <a href="/lead-management/meine-termine">Meine Termine</a>
+                        {% endif %}
+                        {% if request.state.lead_hv_ok | default(false) %}
+                            {# v23 (Phase 109, G1/F16): Handelsvertreter #}
+                            <a href="/lead-management/handelsvertreter">Meine Leads (Handelsvertreter)</a>
+                            <a href="/lead-management/dashboard">Mein Dashboard</a>
                         {% endif %}
                     {% endif %}
                     <a href="/logout">{{ benutzer_angemeldet.name }} abmelden ⏻</a>
