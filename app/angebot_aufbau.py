@@ -332,6 +332,7 @@ def version_erzeugen(session: Session, original: Angebot) -> Angebot:
         rabatt_bezeichnung=original.rabatt_bezeichnung,
         konfigurator_typ=original.konfigurator_typ,
         ust_satz=original.ust_satz, pv_json=original.pv_json,
+        kl_json=original.kl_json,   # v24
         vertriebler_id=original.vertriebler_id,
         profil_id=original.profil_id, vortext_text=original.vortext_text,
         rechnung_name=original.rechnung_name,
@@ -418,10 +419,14 @@ def angebot_anlegen(session: Session, kunde_id: int,
     positionen: list[dict] = []
     vermerke_json = "[]"
     pv_json = ""
+    kl_json = ""
+    # v24 (PLAN_V16 Phase 114): Klimakonfigurator – nur mit KL-Aktionen
+    # (sonst bleibt KL reiner Bogen / manuelles Angebot)
+    kl_konfigurator = sparte == "KL" and bool(getattr(logik, "kl_aktionen", None))
     if antworten is not None and logik is not None:
         protokoll_json = json.dumps(engine.protokoll(logik, antworten), ensure_ascii=False)
-        # v13-PV: kein KfW-/Förderblock bei PV (keine KfW-Daten am Angebot)
-        kfw_json = ("{}" if sparte == "PV"
+        # v13-PV / v24-KL: kein KfW-/Förderblock (keine KfW-Daten am Angebot)
+        kfw_json = ("{}" if sparte in ("PV", "KL")
                     else json.dumps(engine.kfw_daten(antworten), ensure_ascii=False))
         # v9: bedingte Angebotsvermerke (Blatt "Vermerke") am Angebot ablegen
         vermerke_json = json.dumps(engine.vermerke_fuer(logik, antworten),
@@ -431,12 +436,22 @@ def angebot_anlegen(session: Session, kunde_id: int,
                 from app import pv_auslegung
                 positionen = pv_auslegung.positionen_zusammenstellen(
                     logik, antworten, session, erfassung=erfassung)
+            elif kl_konfigurator:
+                from app import kl_auslegung
+                positionen = kl_auslegung.positionen_zusammenstellen(
+                    logik, antworten, session, erfassung=erfassung)
             else:
                 positionen = positionen_zusammenstellen(logik, antworten, session)
         if sparte == "PV" and getattr(logik, "pv_aktionen", None):
             from app import pv_auslegung
             pv_json = json.dumps(pv_auslegung.auslegen(logik, antworten).als_dict(),
                                  ensure_ascii=False)
+        if kl_konfigurator:
+            from app import kl_auslegung
+            kl_json = json.dumps(
+                kl_auslegung.auslegen(logik, antworten,
+                                      kl_auslegung.artikel_namen(session)).als_dict(),
+                ensure_ascii=False)
     # v10 (Phase 60): Die Verfolgung lebt auf VORGANGSEBENE – die Felder am
     # Angebot sind stillgelegt (Bestand bleibt lesbar). Die Einschätzung
     # (S01/S02) schreibt ihre Startwerte beim Absenden der Erfassung auf den
@@ -467,8 +482,9 @@ def angebot_anlegen(session: Session, kunde_id: int,
             kfw_json=kfw_json,
             vermerke_json=vermerke_json,
             konfigurator_typ=sparte,
-            ust_satz=ust_standard(sparte),
+            ust_satz=ust_standard(sparte),      # KL: 19 % (models.ust_standard)
             pv_json=pv_json,
+            kl_json=kl_json,                    # v24
             verfolgung_ampel=verfolgung_ampel,
             wiedervorlage_am=wiedervorlage,
             **rechnung,

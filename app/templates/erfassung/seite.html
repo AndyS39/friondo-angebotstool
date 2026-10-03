@@ -18,10 +18,20 @@
 
     <form method="post" action="/erfassung/{{ erfassung.id }}/seite/{{ nr }}"
           class="mobil-formular" id="seitenform" enctype="multipart/form-data">
+        {# v24 (Klimakonfigurator, PLAN_V16 Phase 114): je Raumblock eine
+           Zwischenüberschrift „Raum <i>“ – die Klone (KR01#1 …) tragen den Zusatz
+           „Raum i: “ im Fragetext (konfigurator._wiederhol_klone), der hier in die
+           Überschrift wandert; Protokoll/Prüfseite behalten den vollen Text #}
+        {% set raum_ns = namespace(nr='') %}
         {% for frage in fragen %}
+        {% set klon = frage.id.split('#') %}
+        {% if klon | length > 1 and klon[1] != raum_ns.nr %}
+            {% set raum_ns.nr = klon[1] %}
+            <h2 class="raum-titel">Raum {{ raum_ns.nr }}</h2>
+        {% endif %}
         <div class="fragefeld {{ 'verborgen' if not sichtbar[frage.id] }}"
              data-frage="{{ frage.id }}" data-regel='{{ client_regel(frage) }}'>
-            <label class="fragetitel">{{ frage.text }}
+            <label class="fragetitel">{{ frage.text.split(': ', 1)[1] if klon | length > 1 and ': ' in frage.text else frage.text }}
                 {%- if vorbelegt is defined and vorbelegt.get(frage.id) %}
                     <span class="abzeichen" title="{{ vorbelegt[frage.id] }}">{{ 'aus Kunden-Standard' if 'Kunden-Standard' in (vorbelegt[frage.id] | string) else 'aus Qualifizierung' }}</span>
                 {%- endif %}</label>
@@ -49,7 +59,10 @@
             {% elif frage.typ in ('Zahleneingabe', 'Betragseingabe') %}
                 {% set zwert = werte.get(frage.id) %}
                 {% set ist_alt = frage.antworten and zwert is string and zwert in frage.antworten %}
+                {# v24: Raumfläche KR08#i – Dezimalzahl mit Komma (zahl_parsen), Schritt 0,1 #}
                 <input type="text" name="f_{{ frage.id }}" inputmode="decimal"
+                       {% if frage.id.startswith('KR08') %}step="0.1" placeholder="z. B. 22,5"
+                       title="Raumfläche in m² – Dezimalzahl mit Komma möglich, z. B. 22,5"{% endif %}
                        value="{{ zwert | menge if zwert not in (None, '') and not ist_alt else '' }}">
                 {# v11: Text-Alternative zur Zahl (A03: „Verbrauch unbekannt") #}
                 {% for alt in frage.antworten %}
@@ -179,6 +192,19 @@
 
     document.getElementById('seitenform').addEventListener('input', aktualisieren);
     document.getElementById('seitenform').addEventListener('change', aktualisieren);
+    // v24 (Klimakonfigurator): Lage „Dachgeschoss“ (KR02#i) belegt die Wärmelast
+    // (KR10#i) mit „stark …“ vor, solange dort noch nichts gewählt ist – vom AD
+    // änderbar (serverseitig identisch in konfigurator.vorbelegung)
+    document.getElementById('seitenform').addEventListener('change', function (ev) {
+        const ziel = ev.target;
+        if (!ziel || !ziel.name || !ziel.name.startsWith('f_KR02#')) return;
+        if (ziel.value !== 'Dachgeschoss') return;
+        const nr = ziel.name.split('#')[1];
+        const radios = Array.from(document.querySelectorAll(`input[name="f_KR10#${nr}"]`));
+        if (radios.some(r => r.checked)) return;
+        const stark = radios.find(r => r.value.startsWith('stark'));
+        if (stark) stark.checked = true;
+    });
     aktualisieren();
 })();
 </script>

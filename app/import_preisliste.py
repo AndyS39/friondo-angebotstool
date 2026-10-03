@@ -97,6 +97,8 @@ def lade_textregeln(wb_logik) -> Textregeln:
             continue
         if betrifft == "Import allgemein":
             continue  # _x000D_-Bereinigung und Kategoriezeilen sind fest eingebaut
+        if re.match(r"Position(?:en)?\s+KL\d{3}", betrifft):
+            continue  # v24: KL-Textregeln wertet app/import_klima.py aus
         m_pos = re.fullmatch(r"Position\s+(\w+)", betrifft)
         # v11: Positionsbereich "Positionen 045–054"
         m_bereich = re.fullmatch(r"Positionen\s+(\d{1,3})\s*[–-]\s*(\d{1,3})", betrifft)

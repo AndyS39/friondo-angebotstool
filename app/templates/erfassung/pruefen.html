@@ -12,6 +12,15 @@
         {{ offen.text }}). Bitte die Seiten vervollständigen.</p>
     {% endif %}
 
+    {# v24 (Klimakonfigurator): Validierung beim Absenden – jedes Außengerät braucht
+       einen Raum (KR07), Raumfläche KR08 je Raum; blockiert das Absenden #}
+    {% if validierung is defined and validierung %}
+        <div class="meldung fehler">
+            <strong>Bitte vor dem Absenden korrigieren:</strong>
+            <ul>{% for m in validierung %}<li>{{ m }}</li>{% endfor %}</ul>
+        </div>
+    {% endif %}
+
     {% if gruende %}
         <div class="warnblock">
             <strong>Hinweis für den Innendienst: individuelle Prüfung nötig</strong>

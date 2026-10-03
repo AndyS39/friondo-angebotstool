@@ -115,6 +115,7 @@ QUELLE_PREISLISTE = "preisliste"   # TAIFUN-Preisliste (Anker: GUID)
 QUELLE_ZUSATZ = "zusatz"           # Zusatzartikel Z01–Z22 aus der Logik-Excel (Anker: Pos-Nr.)
 QUELLE_MANUELL = "manuell"         # im Tool angelegt, wird vom Import nie verändert
 QUELLE_PV = "pv"                   # v13-PV: PV-Positionslisten (PV001 …, Anker: GUID)
+QUELLE_KL = "kl"   # v24: Klima-Positionslisten (KL001 …, Anker: GUID; KL050 ohne GUID)
 
 
 class Artikel(Base):
@@ -1117,6 +1118,10 @@ class Angebot(Base):
     # v13-PV: Auslegung der PV-Anlage (Module, kWp, Strings, Kombi …) –
     # Basis der Beispielrechnung im Nachtext; leer bei anderen Sparten
     pv_json: Mapped[str] = mapped_column(Text, default="")
+    # v24 (PLAN_V16 Phase 114): Auslegung der Klimaanlage (Räume, Außengeräte,
+    # Kombinationen, Montage) als als_dict() von app.kl_auslegung; leer bei
+    # anderen Sparten
+    kl_json: Mapped[str] = mapped_column(Text, default="")
 
     positionen: Mapped[list["AngebotsPosition"]] = relationship(
         back_populates="angebot", order_by="AngebotsPosition.sort",

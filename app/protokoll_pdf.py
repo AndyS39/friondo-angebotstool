@@ -1,6 +1,13 @@
 # Protokoll-PDF (Phase 25): schlichtes Abfrageprotokoll zum Download an
 # Erfassung und Angebot – Kopf mit Kunde/Datum/Vertriebler, Fragen je
 # Kategorie, AMPEL-Auslöser farblich hervorgehoben mit Grund.
+# Die Einträge kommen aus konfigurator.protokoll (Schlüssel frage_id, seite,
+# frage, antwort, ampel_grund); jede neue „seite“ eröffnet einen Abschnitt.
+# Auslegungszeilen ohne frage_id (WP „Auslegung“ unter dem Gebäudestandard,
+# PV „Auslegung PV“, v24 KL: Seite „Auslegung“ mit je Raum Fläche/Höhe/
+# Wärmelast/Kühllast/Klasse/Außengerät, je Außengerät Gerät + Kombination,
+# Montage – aus kl_auslegung.protokoll_zeilen) werden generisch gerendert:
+# Beschriftung = „frage“ (ohne führende Frage-ID), Wert fett darunter.
 
 from datetime import datetime
 from pathlib import Path
@@ -110,11 +117,16 @@ def erzeuge_protokoll_pdf(dateiname: str, titelzeile: str, kopfdaten: list[tuple
             pdf.ln(1.5)
 
         ampel = bool(eintrag.get("ampel_grund"))
+        # v24: Zeilen ohne Frage-ID (Auslegung WP/PV/KL) nur mit Beschriftung
+        frage_id = str(eintrag.get("frage_id") or "").strip()
+        frage = str(eintrag.get("frage") or "")
+        beschriftung = f"{frage_id} · {frage}" if frage_id else frage
+        antwort = str(eintrag.get("antwort") if eintrag.get("antwort") is not None else "")
         if ampel:
             # AMPEL-Auslöser: rot hinterlegt + Grund (Phase 25)
             y_start = pdf.get_y()
-            text = (f"{eintrag['frage_id']} · {eintrag['frage']}\n"
-                    f"Antwort: {eintrag['antwort']}\n"
+            text = (f"{beschriftung}\n"
+                    f"Antwort: {antwort}\n"
                     f"AMPEL – individuell: {eintrag['ampel_grund']}")
             zeilen = pdf.multi_cell(pdf.epw, 4.6, text, dry_run=True, output="LINES")
             pdf.set_fill_color(*AMPEL_HINTERGRUND)
@@ -127,11 +139,10 @@ def erzeuge_protokoll_pdf(dateiname: str, titelzeile: str, kopfdaten: list[tuple
         else:
             pdf.set_font("Arial", "", 8.5)
             pdf.set_text_color(90, 90, 90)
-            pdf.multi_cell(0, 4.4, f"{eintrag['frage_id']} · {eintrag['frage']}",
-                           new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.multi_cell(0, 4.4, beschriftung, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_text_color(0, 0, 0)
             pdf.set_font("Arial", "B", 9)
-            pdf.multi_cell(0, 4.6, eintrag["antwort"], new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.multi_cell(0, 4.6, antwort, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.ln(1.2)
 
     config.ANGEBOTE_PDF_ORDNER.mkdir(parents=True, exist_ok=True)

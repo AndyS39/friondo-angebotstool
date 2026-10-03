@@ -323,7 +323,9 @@ async def erneut_pruefen(request: Request, erfassung_id: int,
             status_code=303)
     logik, _ = logik_modul.hole_logik(session)
     slogik = logik_fuer_sparte(logik, erfassung.sparte or "WP")
-    if slogik is None or (erfassung.sparte == "PV" and not slogik.pv_aktionen):
+    # v24: PV (v16) und KL (v24) sind Konfiguratoren, sobald ihre Aktionen geladen sind
+    if slogik is None or (erfassung.sparte in ("PV", "KL")
+                          and not (slogik.aktionen or getattr(slogik, "kl_aktionen", None))):
         return RedirectResponse(ziel + quote_plus(
             "Für diese Sparte gibt es keine Konfigurator-Logik."), status_code=303)
     antworten = json.loads(erfassung.antworten_json or "{}")
@@ -442,14 +444,18 @@ async def angebot_erzeugen(erfassung_id: int, session: Session = Depends(get_ses
     if not bericht.ok:
         return RedirectResponse("/parametrierung", status_code=303)
     sparte = (erfassung.sparte or "WP").upper()
-    # v13-PV: PV-Katalog-Erfassungen erzeugen jetzt echte Tool-Angebote;
-    # KL/WB bleiben reine Erfassungen (TAIFUN-Schiene)
-    if sparte not in ("WP", "PV"):
+    # v13-PV: PV-Katalog-Erfassungen erzeugen echte Tool-Angebote; v24: KL ebenso
+    # (sobald die KL-Logik geladen ist); WB/GW bleiben reine Erfassungen (TAIFUN)
+    slogik = logik_modul.logik_fuer_sparte(logik, sparte)
+    konfigurator = sparte == "WP" or (
+        sparte in ("PV", "KL") and slogik is not None
+        and bool(slogik.aktionen or getattr(slogik, "kl_aktionen", None)))
+    if not konfigurator:
         from urllib.parse import quote_plus
         return RedirectResponse(f"/erfassungen/{erfassung.id}?meldung=" + quote_plus(
             f"Für die Sparte {sparte} erzeugt das Tool kein Angebot – bitte in TAIFUN "
             "schreiben („Extern erledigt“)."), status_code=303)
-    logik = logik_modul.logik_fuer_sparte(logik, sparte) or logik
+    logik = slogik or logik
     antworten = json.loads(erfassung.antworten_json or "{}")
     # v11 (AN-C-261127): Wächter gegen unvollständige Antworten – z. B. wenn
     # nach einer Logik-Aktualisierung neue Fragen gelten (Klasse 15: N07/N08)

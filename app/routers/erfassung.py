@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
+from app import kl_auslegung                      # v24: Klimakonfigurator
 from app import konfigurator as engine
 from app import logik as logik_modul
 from app.db import get_session
@@ -34,6 +35,25 @@ def _sparten_logik(session, erfassung: Erfassung):
     """v8: die Logik-Sicht für die Sparte der Erfassung (None = nur Freitext)."""
     logik, bericht = logik_modul.hole_logik(session)
     return logik_fuer_sparte(logik, erfassung.sparte or "WP"), bericht
+
+
+def _ist_konfigurator(erfassung: Erfassung, logik) -> bool:
+    """v16/v24: Katalog-Erfassung mit Konfigurator-Logik – PV (seit v16) und KL
+    (seit v24), sobald die Sparten-Sicht Aktionen trägt. Dann läuft die
+    Erfassung wie WP über die Ampel (grün → „Angebot erzeugen“); sonst ist sie
+    reine Erfassung (TAIFUN-Schiene)."""
+    return (erfassung.sparte in ("PV", "KL")
+            and bool(logik.aktionen or getattr(logik, "kl_aktionen", None)))
+
+
+def _kl_validierung(erfassung: Erfassung, logik, antworten: dict) -> list[str]:
+    """v24: Prüfungen beim Absenden des KL-Bogens (jedes Außengerät hat einen
+    Raum, Raumfläche je Raum) – nur bei vollständigem Bogen."""
+    if erfassung.sparte != "KL" or not _ist_konfigurator(erfassung, logik):
+        return []
+    if engine.naechste_frage(logik, antworten) is not None:
+        return []
+    return kl_auslegung.validierung(logik, antworten)
 
 
 def _fragen_der_seite(logik, seite: str, antworten: dict | None = None):
@@ -230,6 +250,13 @@ async def sparten_start(request: Request, session: Session = Depends(get_session
         try:
             from app import lead_kartei
             vorbelegung_obj = lead_kartei.objektart_vorbelegung_kunde(kunde, sparte)
+            # v24 (PLAN_V16 Phase 114): KL-Bogen → KO01 (gleiche Codes wie O01:
+            # EFH → EFH, RH → RMH, REH → REH, MFH → MFH); Mapping hier im
+            # Router, lead_kartei bleibt unverändert (ohne Parteien/O03)
+            if sparte == "KL" and not vorbelegung_obj:
+                basis = lead_kartei.objektart_vorbelegung_kunde(kunde, "WP")
+                if basis.get("O01"):
+                    vorbelegung_obj = {"KO01": dict(basis["O01"])}
         except Exception:
             vorbelegung_obj = {}
         if vorbelegung_obj:
@@ -371,7 +398,7 @@ async def seite(request: Request, erfassung_id: int, nr: int,
     for f in fragen:
         wert = antworten.get(f.id)
         if wert is None and f.typ == "Auswahl" or wert is None:
-            vor = engine.vorbelegung(f, antworten)
+            vor = engine.vorbelegung(f, antworten, logik)   # v24: KO06/KO08/KR10#i
             if vor is not None:
                 wert = vor
         werte[f.id] = wert
@@ -414,6 +441,12 @@ async def seite_speichern(request: Request, erfassung_id: int, nr: int,
                 antworten[frage.id] = ""
                 continue
             fehler[frage.id] = problem
+            continue
+        # v24: Raumfläche KR08#i (Dezimalkomma erlaubt, zahl_parsen) muss > 0 sein
+        if (frage.id.startswith(f"{kl_auslegung.ID_FLAECHE}#")
+                and isinstance(wert, (int, float)) and wert <= 0):
+            fehler[frage.id] = kl_auslegung.MELDUNG_FLAECHE_FEHLT.format(
+                nr=frage.id.split("#", 1)[1])
             continue
         antworten[frage.id] = wert
 
@@ -574,7 +607,8 @@ async def pruefen(request: Request, erfassung_id: int,
     return render(request, "erfassung/pruefen.html", aktiv=None, mobil=True,
                   benutzer=_benutzer(request), erfassung=erfassung, kunde=kunde,
                   protokoll=prot, gruende=gruende, offen=offen,
-                  seiten=logik.seiten)
+                  seiten=logik.seiten,
+                  validierung=_kl_validierung(erfassung, logik, antworten))   # v24
 
 
 def _verfolgung_startwerte(session, erfassung) -> None:
@@ -609,16 +643,27 @@ async def absenden(request: Request, erfassung_id: int,
     antworten = _antworten(erfassung)
     if engine.naechste_frage(logik, antworten) is not None:
         return RedirectResponse(f"/erfassung/{erfassung.id}/pruefen", status_code=303)
-    # v13-PV (Phase 79): PV-Katalog-Erfassungen laufen jetzt wie WP über die
-    # Ampel (grün → „Angebot erzeugen“); KL bleibt reine Erfassung
-    pv_konfigurator = erfassung.sparte == "PV" and bool(logik.pv_aktionen)
-    if pv_konfigurator:
+    # v13-PV (Phase 79) / v24-KL (Phase 114): Katalog-Erfassungen mit
+    # Konfigurator-Logik laufen wie WP über die Ampel (grün → „Angebot erzeugen“)
+    konfigurator = _ist_konfigurator(erfassung, logik)
+    if konfigurator and erfassung.sparte == "PV":
         from app import pv_auslegung
         pv_auslegung.wp_ableitung_aktualisieren(session, erfassung, antworten, logik)
         erfassung.antworten_json = json.dumps(antworten, ensure_ascii=False)
-    if erfassung.sparte not in ("", "WP") and not pv_konfigurator:
-        # v8: KL (und PV ohne PV-Logik) sind reine Erfassungen – immer
-        # individuell, direkt in die TAIFUN-Warteschlange
+    if konfigurator and erfassung.sparte == "KL":
+        # v24: Validierung beim Absenden – zurück auf die Prüfseite mit Meldung
+        meldungen = kl_auslegung.validierung(logik, antworten)
+        if meldungen:
+            kunde = session.get(Kunde, erfassung.kunde_id)
+            return render(request, "erfassung/pruefen.html", aktiv=None, mobil=True,
+                          benutzer=_benutzer(request), erfassung=erfassung, kunde=kunde,
+                          protokoll=engine.protokoll(logik, antworten),
+                          gruende=engine.ampel_gruende(logik, antworten), offen=None,
+                          seiten=logik.seiten, validierung=meldungen)
+    if erfassung.sparte not in ("", "WP") and not konfigurator:
+        # v8: Sparten ohne Konfigurator-Logik (KL ohne KL-Blätter, PV ohne
+        # PV-Logik) sind reine Erfassungen – immer individuell, direkt in die
+        # TAIFUN-Warteschlange
         erfassung.ampel = "orange"
         erfassung.gruende_text = (f"reine {erfassung.sparte}-Erfassung – "
                                   "das Angebot wird in TAIFUN geschrieben")

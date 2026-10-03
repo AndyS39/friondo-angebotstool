@@ -4,6 +4,7 @@
 # Beschreibung und Menge – OHNE Preise, Summen, Rabatte und Förderung.
 # EP-, Alternativ- und bauseits-Positionen sowie reine Textzeilen (ohne
 # Artikelnummer und ohne Preis, z. B. die Auslegungszeile) entfallen.
+# v24: Gruppen-Überschriften (z. B. „Klimaanlage Bosch“) wie im Angebots-PDF.
 # Abschluss: Unterschriftszeile „Ware vollständig erhalten“ mit Datum.
 
 from pathlib import Path
@@ -115,14 +116,26 @@ def erzeuge_lieferschein(angebot: Angebot, kunde: Kunde, ziel: Path | None = Non
 
     kopf()
     text_x = pdf.l_margin + breiten["pos"] + breiten["menge"] + breiten["einheit"]
+    letzte_gruppe = None
     for nummer, position in lieferschein_positionen(angebot):
         titel, rest = _kurztext(position)
         pdf.set_font("Arial", "", 8)
         zeilen = pdf.multi_cell(breiten["text"], 3.7, titel + ("\n" + rest if rest else ""),
                                 dry_run=True, output="LINES")
-        if pdf.get_y() + len(zeilen) * 3.7 + 3 > pdf.page_break_trigger:
+        # v24: Gruppen-Überschrift (z. B. „Klimaanlage Bosch“, editierbar seit
+        # v22) wie im Angebots-PDF einmal vor der ersten Position der Gruppe
+        gruppe = (position.gruppe or "").strip()
+        neue_gruppe = bool(gruppe) and gruppe != letzte_gruppe
+        gruppen_hoehe = 4.2 + 1.5 if neue_gruppe else 0.0
+        if pdf.get_y() + gruppen_hoehe + len(zeilen) * 3.7 + 3 > pdf.page_break_trigger:
             pdf.add_page()
             kopf()
+        if neue_gruppe:
+            pdf.set_font("Arial", "B", 8.5)
+            pdf.set_x(text_x)
+            pdf.multi_cell(breiten["text"], 4.2, gruppe)
+            pdf.ln(1.5)
+            letzte_gruppe = gruppe
         y = pdf.get_y()
         pdf.set_font("Arial", "", 8)
         pdf.cell(breiten["pos"], 3.7, nummer)

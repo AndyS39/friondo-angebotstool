@@ -8,6 +8,10 @@
     <div class="aktionen">
         <a class="knopf zweitrangig" href="/artikel/import">Preisliste importieren</a>
         <a class="knopf zweitrangig" href="/artikel/import-pv">PV-Positionslisten importieren</a>
+        {# v24 (PLAN_V16 Phase 113/115): Klima-Import neben dem PV-Import – Vorschau und
+           Ausführung in der Parametrierung (app/routers/konfiguration.py) #}
+        <a class="knopf zweitrangig" href="/parametrierung/artikel/kl-import">Klima-Positionslisten importieren</a>
+        <a class="knopf zweitrangig" href="/artikel?q=KL0{{ '&inaktive=true' if inaktive }}">Sparte KL</a>
         <a class="knopf" href="/artikel/neu">+ Neuer Artikel</a>
     </div>
 </div>

@@ -27,6 +27,9 @@ PREISLISTE_PFAD = _pfad(
 # v13-PV (PLAN_V13 Phase 75): TAIFUN-Positionslisten der PV-Strecke
 PV_PREISLISTEN_ORDNER = _pfad("PV_PREISLISTEN_ORDNER",
                               PROJEKT_ORDNER / "Artikel-Preislisten" / "PV")
+# v24 (PLAN_V16 Phase 113): TAIFUN-Positionslisten der Klima-Strecke
+KL_PREISLISTEN_ORDNER = _pfad("KL_PREISLISTEN_ORDNER",
+                              PROJEKT_ORDNER / "Artikel-Preislisten" / "Klima")
 # Seit Phase 35 ist die v5-Logik führend (A13 Anschlussleitung Pos. 103, SLS/ÜSS/APZ entfallen)
 LOGIK_EXCEL_PFAD = _pfad("LOGIK_EXCEL_PFAD", PROJEKT_ORDNER / "konfigurator_logik_v5.xlsx")
 LOGIK_EXCEL_V2_PFAD = LOGIK_EXCEL_PFAD  # Alias (Phase-11-Import nutzt diesen Namen)

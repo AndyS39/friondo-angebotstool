@@ -252,3 +252,162 @@ Kontoinhaber / Adresse / IBAN / Kreditinstitut / Ort, Datum (Formularfelder)
 
 Unterschrift Vollmachtgeber: ______________________
 Unterschrift Kontoinhaber, sofern abweichend: ______________________
+
+## 9. Klima (v24) – Texte des Klimakonfigurators
+
+Quelle: PLAN_V16.md Phase 115 (abgestimmt 03.10.2026). Klima-Angebote
+(`konfigurator_typ = "KL"`, 19 % USt) nutzen eigene Textblöcke
+„Friondo KL Standard" (Vortext + Nachtext), „Friondo KL Enni", „Friondo KL SWD",
+„Friondo KL Sparkasse DU" (Nachtexte) – Seed-Konstanten in
+`app/angebotsprofile.py` (`KL_VORTEXT`, `KL_STANDARD_NACHTEXT`, `KL_SEED_BLOECKE`),
+Migration `seed_kl`, Auswahl `_kl_block` / `ist_kl`, editierbar in der
+Parametrierung → Textblöcke. **Alle KL-Texte sind Entwürfe für das Gegenlesen
+durch den Innendienst (A14)**; Formulierungen zu Zertifizierung/Kältemittel sind
+[ANNAHME]. Kein Platzhalter `[WIRTSCHAFTLICHKEIT]`, kein KfW-/Förderblock, keine
+Vollmacht (Nachtext D), keine Wirtschaftlichkeitsseiten. Nachtext A entfällt bei
+Enni und SWD (wie WP); Sparkasse DU hat den eigenen Finanzierungs-Kopf (wie WP).
+
+### 9.1 Vortext KL (Seite 1)
+
+**Ihr individuelles Klimaanlagen-Angebot zum Festpreis**
+**Angenehmes Raumklima – kühlen im Sommer, heizen in der Übergangszeit**
+
+Sehr geehrte Damen und Herren, *(dynamisch: `{briefanrede}`)*
+
+vielen Dank für Ihr Vertrauen in die Friondo GmbH. Mit einer modernen
+Split-Klimaanlage von Bosch schaffen Sie an heißen Tagen ein angenehmes Raumklima,
+heizen effizient in der Übergangszeit und verbessern die Luftqualität in Ihren
+Räumen.
+
+Anbei erhalten Sie Ihr maßgeschneidertes Angebot. Darin enthalten sind:
+
+- [Haken] Ihre individuelle Klimaanlage – ausgelegt auf Ihre Räume
+- [Haken] Detaillierte Installationsleistungen – fachgerecht, sauber und termingerecht
+- [Haken] Transparent und Festpreis – klar verständlich und ohne versteckte Kosten
+- [Haken] Unser Rundum-Sorglos-Service – von der Planung bis zur Inbetriebnahme
+
+**Warum Friondo?**
+
+- [Haken] **Fachkompetenz & Qualität** – Als Meisterbetrieb, Mitglied der Innung und
+  VDI-zertifiziertes Fachunternehmen setzen wir auf höchste Standards.
+- [Haken] **Fachgerechte Kältetechnik** – Montage, Dichtheitsprüfung und
+  Inbetriebnahme durch geschultes Fachpersonal nach den Vorgaben der
+  F-Gase-Verordnung.
+- [Haken] **Persönliche Beratung** – Wir begleiten Sie von der ersten Idee bis zur
+  perfekten Lösung für Ihr Zuhause.
+- [Haken] **Effizienz & Komfort** – Inverter-Technik mit hoher Energieeffizienz,
+  leiser Betrieb und auf Wunsch Steuerung per App.
+
+**Wir sind auf Wärmepumpen und Klimatechnik spezialisiert und gehören in der
+Region zu den führenden Anbietern.** Lassen Sie uns gemeinsam für ein angenehmes
+Raumklima sorgen!
+
+Ihr Friondo-Team
+
+### 9.2 Nachtext A KL – „Ihre Zahlungsoptionen bei Friondo" (nur Standard und Sparkasse-Kopf)
+
+Wie Abschnitt 5 mit drei Änderungen: „Investieren Sie jetzt in Ihre
+**Klimalösung** – ohne hohe Einmalzahlung …"; der Absatz „Planbare Monatsraten –
+Zum Beispiel: … Oder ab 250 € pro Monat ohne Förderung" entfällt samt Fußnote
+„*Beispielrate …" (der Satz „So bleibt Ihr Budget flexibel und Ihre Energiekosten
+sinken langfristig." bleibt); Kundenstimme „Dank Cloover konnten wir unsere
+**Anlage** einfach, fair und transparent finanzieren."
+
+**Barkauf oder Finanzierung**
+
+Saubere Energie. Faire Raten. Maximale Freiheit.
+
+**Finanzierung mit Cloover**
+
+Investieren Sie jetzt in Ihre Klimalösung – ohne hohe Einmalzahlung und bequem in
+festen Monatsraten über bis zu 20 Jahre.
+
+Sofort starten
+- Keine Anzahlung, Keine Grundbuchbelastung, Schnelle - digitale Prüfung,
+  Finanzierungszusage in wenigen Minuten, 100 % digital, Kein Papierkram und keine
+  Banktermine
+
+So bleibt Ihr Budget flexibel und Ihre Energiekosten sinken langfristig.
+
+Maximale Flexibilität
+- Kostenlose Sondertilgungen
+- Vorzeitige Rückzahlung ohne Strafgebühren
+- Individuell anpassbare Laufzeiten
+
+Ihre Vorteile
+- Sofort investieren · Monatlich entspannt zahlen · Energiekosten senken ·
+  Unabhängiger werden
+
+Kundenzufriedenheit: 4,8 von 5
+
+„Dank Cloover konnten wir unsere Anlage einfach, fair und transparent finanzieren."
+
+Starten Sie jetzt mit Friondo und Cloover in eine nachhaltige Zukunft.
+
+Enni: Kopf „Barkauf oder Enni Contracting" + „Unsere Leistungen /
+Installationsvoraussetzungen" („… die gewünschte Klimaanlage"); SWD: Kopf
+„Barkauf oder Contracting", danach direkt „Installationsvoraussetzungen";
+Sparkasse DU: Kopf „Barkauf oder Finanzierung" + „Finanzierung mit Sparkasse
+Duisburg" + „Unsere Leistungen / Installationsvoraussetzungen".
+
+### 9.3 Nachtext B KL – „Installationsvoraussetzungen"
+
+Haftungsbegrenzung, Rücktrittsrecht im Zusammenhang mit Technischer Feinplanung
+und Zahlung wörtlich wie Abschnitt 6; **ohne** „Hinweis zur KfW-Förderung",
+stattdessen nach „Zahlung" ([ANNAHME], Innendienst liest gegen):
+
+**Hinweis zur Kältetechnik**
+Die angebotenen Geräte arbeiten mit dem Kältemittel R32. Montage, Evakuierung,
+Dichtheitsprüfung und Inbetriebnahme erfolgen durch sachkundiges Personal nach den
+Vorgaben der F-Gase-Verordnung (EU) 2024/573; die Dichtheitsprüfung wird
+dokumentiert. Die Kältemittel-, Kondensat- und Elektroleitungen sind bis 5 m je
+Innengerät enthalten; längere Leitungswege sind als eigene Position ausgewiesen.
+Der Montageort der Außeneinheit wird so gewählt, dass Schall- und Abstandsvorgaben
+eingehalten werden; die endgültige Festlegung erfolgt in der technischen
+Feinplanung vor Ort.
+
+Danach unverändert: Bindefrist („Wir halten uns freibleibend 30 Tage …"), AGB,
+Datenschutz. Der WP-Absatz „Anmeldung … beim Netzbetreiber" und der
+„Heizkörper-Check" (Enni/Sparkasse WP) entfallen bei Klima.
+
+### 9.4 Nachtext C KL – Schlussseite mit Unterschriften
+
+Wie Abschnitt 7 **ohne** den Absatz „Aufschiebende Bedingung" und **ohne** die Zeile
+„Voraussichtliches Datum der Umsetzung … Bewilligungszeitraum nach Nummer 9.4.1.";
+stattdessen:
+
+Voraussichtlicher Ausführungszeitraum: ______________
+
+Unterschriftenblock (Ort, Datum / Unterschrift des Auftraggebers, inkl.
+elektronischer Signatur) unverändert. Kein Nachtext D (Vollmacht) bei Klima.
+
+### 9.5 Positionsteil / Summenblock Klima
+
+Block 1 Montage/Zuschläge und Block 2 Elektro ohne Überschrift, Block 3 mit
+Gruppen-Überschrift „Klimaanlage Bosch" (editierbar wie seit v22), WLAN-Gateway
+KL013 als Eventualposition mit G-Preis „EP.", Auslegungszeile „Auslegung der
+Klimaanlage" (0,00 €, psl.) als letzte Zeile von Block 3. Summenblock:
+
+```
+Netto-Summe            €   x.xxx,xx
+19,00 % USt.           €     xxx,xx
+Gesamt-Betrag          €   x.xxx,xx
+```
+
+ggf. „− Rabatt" / „= Endbetrag"; **kein** KfW-Block, keine Wirtschaftlichkeit.
+
+### 9.6 Anhänge, Lieferschein, Protokoll (Klima)
+
+- **Anhänge:** Regel „wenn Sparte = KL" im Blatt „Anhänge" (Zeile „(Bosch
+  Climate Broschüre – Zulieferung)", Platzhalter in Klammern bleibt bis zur
+  Lieferung unwirksam – A15). Der Parser (`app/logik.py`, Regelart „sparte",
+  seit v13-PV) und die Auswertung (`app/anhaenge.py`, Vergleich mit
+  `konfigurator_typ`) brauchen dafür keinen neuen Code. Unternehmenspräsentation
+  und Ratenkauf greifen über „immer" (Ratenkauf nicht bei Enni/SWD).
+- **Lieferschein:** wie WP/PV ohne Preise; EP-Zeile (Gateway) und die
+  Auslegungszeile entfallen; die Gruppen-Überschrift „Klimaanlage Bosch" steht
+  seit v24 auch im Lieferschein.
+- **Protokoll-PDF:** Seite „Auslegung" mit den Zeilen aus
+  `kl_auslegung.protokoll_zeilen` (je Raum Fläche · Höhe · Wärmelast · Kühllast ·
+  Klasse · Außengerät; je Außengerät Gerät und Kombination; Montage) – Einträge
+  ohne Frage-ID werden nur mit Beschriftung gerendert.

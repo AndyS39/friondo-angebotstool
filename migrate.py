@@ -400,6 +400,44 @@ def _daten() -> list[str]:
             meldungen.append("Lead-Management V2: Bestand nachgezogen")
         session.commit()
 
+        # ---------------- v24: Klimakonfigurator (PLAN_V16, Phasen 113/115) ----------------
+        # Phase 113: KL-Artikel (KL001 … KL050), auf die die Blätter „Aktionen KL“ /
+        # „Paketmatrix KL“ / „Montagematrix KL“ / „Angebotsaufbau KL“ verweisen, müssen
+        # im Stamm liegen – fehlen welche, läuft der Klima-Positionslisten-Import
+        # automatisch (Muster: PV-Block oben; update.bat führt sonst keinen Import
+        # aus → roter Validierungsfehler). Referenzen kommen aus logik.artikel_referenzen,
+        # solange der Lader die KL-Blätter noch nicht kennt aus dem Blatt „KL-Artikel“.
+        # Idempotent: ohne fehlende Artikel passiert nichts.
+        try:
+            from app import import_klima
+            kl_fehlend = import_klima.fehlende_kl_artikel(session)
+        except Exception as problem:
+            kl_fehlend = []
+            meldungen.append(f"WARNUNG: KL-Artikelreferenzen nicht ermittelbar: {problem}")
+        if kl_fehlend:
+            try:
+                _, kl_meldung = import_klima.import_ausfuehren(session)
+                meldungen.append(f"KL-Artikel fehlten ({len(kl_fehlend)}, z. B. "
+                                 f"{kl_fehlend[0]}) – Klima-Positionslisten-Import "
+                                 f"ausgeführt ({kl_meldung})")
+            except Exception as problem:
+                meldungen.append(f"WARNUNG: KL-Artikel fehlen und der Klima-Import schlug "
+                                 f"fehl: {problem} – bitte Artikel → Klima-Positionslisten "
+                                 "importieren ausführen!")
+        # Phase 115: Textblöcke „Friondo KL Standard / Enni / SWD / Sparkasse DU“
+        # (angebotsprofile.seed_kl, idempotent) – fehlt die Funktion noch, nur Meldung
+        try:
+            from app import angebotsprofile as _profile_kl
+            seed_kl = getattr(_profile_kl, "seed_kl", None)
+            if seed_kl is None:
+                meldungen.append("WARNUNG: angebotsprofile.seed_kl fehlt – KL-Textblöcke "
+                                 "nicht angelegt")
+            else:
+                meldungen += list(seed_kl(session) or [])
+        except Exception as problem:
+            meldungen.append(f"WARNUNG: KL-Textblöcke (seed_kl) schlugen fehl: {problem}")
+        session.commit()
+
         # ---------------- v15: Projektierung V2 (Phase 74) ----------------
         # Neue Kanban-Phasen je Gewerk: bestehende Gewerke einmalig umziehen
         # (feinplanung → auftragseingang bzw. planung, wenn die Feinplanung

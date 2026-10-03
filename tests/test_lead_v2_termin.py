@@ -26,8 +26,10 @@ from app.models import (AdProfil, Benachrichtigung, Benutzer, KommunikationLog, 
 
 NACHNAME = "LeadV2T-Test"
 BENUTZER_PRAEFIX = "LeadV2T "
-# Duisburg Innenstadt als Bezugspunkt; 0.01° Breite ≈ 1,11 km
-BASIS = (51.4344, 6.7623)
+# Bezugspunkt abseits aller echten/Demo-Leads (Nordsee vor Helgoland), damit
+# Ersatzkunden-Radien nur die Testleads sehen; 0.01° Breite ≈ 1,11 km
+# (v24: vorher Duisburg Innenstadt – Demo-Leads der Dev-DB verfälschten den Radius)
+BASIS = (54.3, 7.6)
 
 
 def _versatz(km_nord: float) -> tuple[float, float]:

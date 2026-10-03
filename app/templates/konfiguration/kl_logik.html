@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block titel %}Klima-Logik (KL) – Parametrierung – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+{# v24 (PLAN_V16 Phase 113/115): Lesesicht des Klimakonfigurators – nur Anzeige,
+   Live-Master bleibt die Logik-Excel (Blätter Paketmatrix KL, Montagematrix KL,
+   Kombinationen KL, Aktionen KL, KL-Parameter, KL-Artikel). #}
+<div class="seitenkopf">
+    <h1>Klimakonfigurator – Logik (Lesesicht)</h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung">← Parametrierung</a>
+        <form method="post" action="/parametrierung/artikel/kl-import">
+            <button class="knopf" type="submit" {{ 'disabled' if not kl_import_ok }}>
+                Artikel → Klima-Positionslisten importieren</button>
+        </form>
+        <a class="knopf zweitrangig" href="/parametrierung/artikel/kl-import">Import-Vorschau</a>
+        <a class="knopf zweitrangig" href="/artikel?q=KL0">Artikel Sparte KL</a>
+        <form method="post" action="/parametrierung/neu-einlesen">
+            <button class="knopf zweitrangig" type="submit">Parametrierung neu einlesen</button>
+        </form>
+    </div>
+</div>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<p class="dezent">
+    Quelle: <code>konfigurator_logik_v5.xlsx</code> ·
+    zuletzt eingelesen: {{ logik.geladen_am.strftime('%d.%m.%Y %H:%M:%S') }} ·
+    Änderungen nur in der Excel, danach „Parametrierung neu einlesen“.
+</p>
+
+{% if not logik.kl_aktionen %}
+<p class="hinweis">Blatt „Aktionen KL“ fehlt in der Logik-Excel – die Klima-Erfassung läuft als
+    reiner Erfassungsbogen (TAIFUN-Schiene). Für den Klimakonfigurator die Blätter „Aktionen KL“,
+    „Angebotsaufbau KL“, „Paketmatrix KL“, „Kombinationen KL“, „Montagematrix KL“, „KL-Parameter“
+    und „KL-Artikel“ anlegen (PLAN_V16 Phase 113).</p>
+{% else %}
+
+<h2>Logik prüfen – Klima</h2>
+{% if kl_fehler %}
+    <div class="warnblock fehlerblock">
+        <strong>Fehler ({{ kl_fehler | length }}) – bitte Logik-Excel korrigieren und neu einlesen</strong>
+        <ul>{% for f in kl_fehler %}<li>{{ f }}</li>{% endfor %}</ul>
+    </div>
+{% else %}
+    <p class="meldung">Klima-Prüfungen ohne Fehler: jede KL-Referenz steht im Blatt „KL-Artikel“,
+        Kombinationen nur mit den Codes 7/9/12/18/24, Montagematrix ohne Doppelzeilen,
+        KR07-Hinweis mit „Optionen wie … (KO04)“, Pflichtparameter lesbar.</p>
+{% endif %}
+{% if kl_warnungen %}
+    <div class="warnblock">
+        <strong>Hinweise ({{ kl_warnungen | length }})</strong>
+        <ul>{% for w in kl_warnungen %}<li>{{ w }}</li>{% endfor %}</ul>
+    </div>
+{% endif %}
+
+<table class="tabelle zusammenfassung">
+    <tr><th>Fragen KL</th><td>{{ logik.sparten_fragen.get('KL', {}) | length }}</td></tr>
+    <tr><th>Aktionen KL</th><td>{{ logik.kl_aktionen | length }}</td></tr>
+    <tr><th>Angebotsaufbau KL (Blöcke)</th><td>{{ logik.kl_bloecke | length }}</td></tr>
+    <tr><th>Paketmatrix KL (Zeilen)</th><td>{{ logik.kl_paket | length }}</td></tr>
+    <tr><th>Kombinationen KL (Außengeräte)</th><td>{{ logik.kl_kombis | length }}</td></tr>
+    <tr><th>Montagematrix KL (Zeilen)</th><td>{{ logik.kl_montage | length }}</td></tr>
+    <tr><th>KL-Parameter</th><td>{{ logik.kl_parameter | length }}</td></tr>
+    <tr><th>KL-Artikel (Blatt / Artikelstamm aktiv)</th>
+        <td>{{ logik.kl_artikel_nummern | length }} /
+            {{ bestand.values() | selectattr('aktiv') | list | length }}</td></tr>
+</table>
+
+<h2>Paketmatrix KL</h2>
+<p class="dezent">1 Raum am Außengerät → Zeile „Single“ (Serie KO06, Klasse aus der Kühllast);
+    2–5 Räume → Innengeräte je Raum („Multi-Innengerät“) + kleinstes „Multi-Außengerät“ der Serie,
+    dessen Kombination (unten) die aufsteigend sortierten Klassen-Codes enthält.
+    „nicht im Sortiment“ → Ampel.</p>
+<table class="tabelle">
+    <thead><tr><th>Serie (KO06)</th><th>Typ</th><th>Klasse / Außengerät</th><th>Kühllast je Raum</th>
+        <th>Artikel</th><th>Bemerkung</th></tr></thead>
+    <tbody>
+    {% for z in logik.kl_paket %}
+        <tr class="{{ 'inaktiv' if z.nicht_im_sortiment }}">
+            <td>{{ z.serie }}</td>
+            <td class="dezent">{{ z.typ_roh }}</td>
+            <td>{{ z.klasse }}</td>
+            <td class="dezent">{{ z.kuehllast }}</td>
+            <td>{% if z.nicht_im_sortiment %}<span class="abzeichen">nicht im Sortiment</span>
+                {% else %}{% for ref in z.artikel %}<strong>{{ ref }}</strong>
+                    {% if bestand.get(ref) %}<span class="dezent">{{ bestand[ref].titel | truncate(45) }}</span>{% endif %}
+                    {% if not loop.last %} + {% endif %}{% endfor %}{% endif %}</td>
+            <td class="dezent">{{ z.bemerkung | truncate(90) }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Montagematrix KL</h2>
+<p class="dezent">Montagepauschale = <code>kl_montage[(Σ Innengeräte, Außengeräte KO04)]</code>;
+    fehlt die Kombination → Ampel G6 „Montagekombination … nicht hinterlegt“.</p>
+<table class="tabelle">
+    <thead><tr><th class="rechts">Innengeräte gesamt</th><th class="rechts">Außengeräte (KO04)</th>
+        <th>Position</th><th class="rechts">VK netto (Blatt)</th><th>Bemerkung</th></tr></thead>
+    <tbody>
+    {% for m in logik.kl_montage_zeilen %}
+        <tr class="{{ 'inaktiv' if m.position == 'AMPEL' }}">
+            <td class="rechts">{{ m.innen }}</td>
+            <td class="rechts">{{ m.aussen }}</td>
+            <td>{% if m.position.startswith('KL') %}<strong>{{ m.position }}</strong>
+                {% if bestand.get(m.position) %}<span class="dezent">{{ bestand[m.position].titel | truncate(45) }}</span>{% endif %}
+                {% else %}<span class="abzeichen">{{ m.position }}</span>{% endif %}</td>
+            <td class="rechts">{{ (m.vk.replace('.', ',') ~ ' €') if m.vk.replace('.', '', 1).isdigit() else m.vk }}</td>
+            <td class="dezent">{{ m.bemerkung | truncate(140) }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Kombinationen KL</h2>
+<p class="dezent">Freigegebene Innengeräte-Kombinationen je Multi-Außengerät (Bosch Tab. 7 für CL5000M;
+    CL7000M [ANNAHME]); Codes aufsteigend normalisiert, erlaubt nur 7/9/12/18/24 (Code 7 wird nicht vergeben).</p>
+<table class="tabelle">
+    <thead><tr><th>Außengerät</th><th>Artikel</th><th class="rechts">Innengeräte</th><th>Kombinationen</th>
+        <th class="rechts">Anzahl</th></tr></thead>
+    <tbody>
+    {% for name, artikel, anzahl, liste in kombis %}
+        <tr>
+            <td>{{ name }}</td>
+            <td><strong>{{ artikel }}</strong></td>
+            <td class="rechts">{{ anzahl }}</td>
+            <td>{{ liste | join(' · ') }}</td>
+            <td class="rechts">{{ liste | length }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>KL-Parameter</h2>
+{% if kl_fehlende %}
+<div class="warnblock">
+    <strong>Fehlende KL-Parameter</strong> – bis zur Ergänzung im Blatt gilt der Standardwert:
+    <ul>{% for name in kl_fehlende %}<li>{{ name }} – Standard {{ kl_standard[name] }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+<table class="tabelle">
+    <thead><tr><th>Parameter</th><th>Wert</th><th>Einheit</th><th>Bemerkung</th></tr></thead>
+    <tbody>
+    {% for name, (wert, bemerkung) in logik.kl_parameter.items() %}
+        {# Excel-Zahlen (1.1 / 2.6) deutsch anzeigen; Texte unverändert #}
+        <tr><td>{{ name }}</td>
+            <td>{{ wert.replace('.', ',') if wert.replace('.', '', 1).isdigit() else wert | truncate(60) }}</td>
+            <td class="dezent">{{ logik.kl_parameter_einheit.get(name, '') }}</td>
+            <td class="dezent">{{ bemerkung | truncate(90) }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Aktionen KL</h2>
+<details>
+    <summary>{{ logik.kl_aktionen | length }} Zeilen (Frage · Antwort · Aktion · Zusatzbedingung)</summary>
+    <table class="tabelle">
+        <thead><tr><th>Frage</th><th>Antwort / Bedingung</th><th>Aktion</th><th>Typ</th><th>Zusatzbedingung</th></tr></thead>
+        <tbody>
+        {% for a in logik.kl_aktionen %}
+            <tr>
+                <td>{{ a.frage }}</td>
+                <td>{{ a.antwort | truncate(60) }}</td>
+                <td>{{ a.aktion_roh | truncate(110) }}</td>
+                <td class="dezent">{{ a.typ }}</td>
+                <td class="dezent">{{ a.zusatz_bedingung.roh if a.zusatz_bedingung else '' }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</details>
+
+<h2>Angebotsaufbau KL</h2>
+<table class="tabelle">
+    <thead><tr><th>Block</th><th>Überschrift</th><th>Inhalt (Reihenfolge = Sortierung im Block)</th><th>Wann</th></tr></thead>
+    <tbody>
+    {% for b in logik.kl_bloecke %}
+        <tr><td>{{ b.nr }}</td><td>{{ b.ueberschrift }}</td>
+            <td class="dezent">{{ b.inhalt_roh | truncate(200) }}</td>
+            <td class="dezent">{{ b.wann.roh if b.wann else '?' }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>KL-Artikel (Sparte KL)</h2>
+<p class="dezent">Blatt „KL-Artikel“ (GUID-Anker für den Import) und Artikelstamm (pos_nr KL*).
+    Preise pflegt der Innendienst unter Artikel; KL050 (Rollgerüst) hat keinen TAIFUN-GUID und
+    braucht einen EK.</p>
+<table class="tabelle">
+    <thead><tr><th>KL-Nr.</th><th>Datei / Pos.</th><th>Bezeichnung (Blatt)</th>
+        <th class="rechts">VK (Blatt)</th><th>Artikelstamm</th><th class="rechts">E-Preis netto</th>
+        {% if ek_sichtbar %}<th class="rechts">EK Material</th>{% endif %}<th></th></tr></thead>
+    <tbody>
+    {% for z in logik.kl_artikel_zeilen %}
+        {% set a = bestand.get(z.nr) %}
+        <tr class="{{ 'inaktiv' if a and not a.aktiv }}">
+            <td><strong>{{ z.nr }}</strong></td>
+            <td class="dezent">{{ z.datei }} {{ z.pos }}</td>
+            <td title="{{ z.guid }}">{{ z.bezeichnung | truncate(60) }}</td>
+            <td class="rechts">{{ (z.vk.replace('.', ',') ~ ' €') if z.vk.replace('.', '', 1).isdigit() else z.vk }}</td>
+            <td>{% if a is none %}<span class="abzeichen">fehlt – importieren</span>
+                {% elif not a.aktiv %}<span class="abzeichen">inaktiv</span>
+                {% else %}{{ a.titel | truncate(50) }}{% endif %}</td>
+            <td class="rechts {{ 'preis-fehlt' if a and not a.e_preis_cent and z.nr != 'KL049' }}">
+                {{ a.e_preis_cent | euro if a else '' }}</td>
+            {% if ek_sichtbar %}
+            <td class="rechts {{ 'preis-fehlt' if a and a.ek_cent is none }}">
+                {% if a %}{{ a.ek_cent | euro if a.ek_cent is not none else 'fehlt' }}{% endif %}</td>
+            {% endif %}
+            <td class="aktionen">{% if a %}<a class="knopf klein zweitrangig" href="/artikel/{{ a.id }}/bearbeiten">Bearbeiten</a>{% endif %}</td>
+        </tr>
+    {% endfor %}
+    {% for nr, a in bestand.items() if nr not in logik.kl_artikel_nummern %}
+        <tr class="{{ 'inaktiv' if not a.aktiv }}">
+            <td><strong>{{ nr }}</strong></td>
+            <td class="dezent">nicht im Blatt „KL-Artikel“</td>
+            <td>{{ a.titel | truncate(60) }}</td>
+            <td></td>
+            <td>{{ 'aktiv' if a.aktiv else 'inaktiv' }}</td>
+            <td class="rechts">{{ a.e_preis_cent | euro }}</td>
+            {% if ek_sichtbar %}<td class="rechts">{{ a.ek_cent | euro if a.ek_cent is not none else 'fehlt' }}</td>{% endif %}
+            <td class="aktionen"><a class="knopf klein zweitrangig" href="/artikel/{{ a.id }}/bearbeiten">Bearbeiten</a></td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{% endif %}
+{% endblock %}

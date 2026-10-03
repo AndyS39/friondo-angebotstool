@@ -348,6 +348,161 @@ def ist_pv(angebot: Angebot) -> bool:
     return (angebot.konfigurator_typ or "WP").upper() == "PV"
 
 
+# --- v24 (PLAN_V16 Phase 115): Klima-Texte (Klimakonfigurator) --------------
+# Entwürfe für das Gegenlesen durch den Innendienst (A14) – Formulierungen zu
+# Zertifizierung/Kältemittel sind [ANNAHME]. Kein KfW-/Förderteil, kein
+# Platzhalter [WIRTSCHAFTLICHKEIT], keine Vollmacht (Nachtext D), 19 % USt.
+# Vortext wörtlich aus PLAN_V16 Phase 115; [Haken] wie bei WP/PV als "- "
+# (Haken-Zeile) bzw. "* " (Haken-Zeile mit fettem Anfang bis " – ").
+KL_VORTEXT = """## Ihr individuelles Klimaanlagen-Angebot zum Festpreis
+## Angenehmes Raumklima – kühlen im Sommer, heizen in der Übergangszeit
+
+{briefanrede}
+
+vielen Dank für Ihr Vertrauen in die Friondo GmbH. Mit einer modernen Split-Klimaanlage von Bosch schaffen Sie an heißen Tagen ein angenehmes Raumklima, heizen effizient in der Übergangszeit und verbessern die Luftqualität in Ihren Räumen.
+
+Anbei erhalten Sie Ihr maßgeschneidertes Angebot. Darin enthalten sind:
+
+- Ihre individuelle Klimaanlage – ausgelegt auf Ihre Räume
+- Detaillierte Installationsleistungen – fachgerecht, sauber und termingerecht
+- Transparent und Festpreis – klar verständlich und ohne versteckte Kosten
+- Unser Rundum-Sorglos-Service – von der Planung bis zur Inbetriebnahme
+
+## Warum Friondo?
+
+* Fachkompetenz & Qualität – Als Meisterbetrieb, Mitglied der Innung und VDI-zertifiziertes Fachunternehmen setzen wir auf höchste Standards.
+* Fachgerechte Kältetechnik – Montage, Dichtheitsprüfung und Inbetriebnahme durch geschultes Fachpersonal nach den Vorgaben der F-Gase-Verordnung.
+* Persönliche Beratung – Wir begleiten Sie von der ersten Idee bis zur perfekten Lösung für Ihr Zuhause.
+* Effizienz & Komfort – Inverter-Technik mit hoher Energieeffizienz, leiser Betrieb und auf Wunsch Steuerung per App.
+
+**Wir sind auf Wärmepumpen und Klimatechnik spezialisiert und gehören in der Region zu den führenden Anbietern.**
+
+Lassen Sie uns gemeinsam für ein angenehmes Raumklima sorgen!
+
+Ihr Friondo-Team"""
+
+# Nachtext A KL = Nachtext A „Ihre Zahlungsoptionen bei Friondo“ mit den drei
+# Änderungen aus PLAN_V16: „Klimalösung“, ohne „Planbare Monatsraten“ samt
+# Fußnote „*Beispielrate …“, Kundenstimme „unsere Anlage“.
+_KL_ZAHLUNGSOPTIONEN = """# Ihre Zahlungsoptionen bei Friondo
+## Barkauf oder Finanzierung
+Saubere Energie. Faire Raten. Maximale Freiheit.
+
+## Finanzierung mit Cloover
+Investieren Sie jetzt in Ihre Klimalösung – ohne hohe Einmalzahlung und bequem in festen Monatsraten über bis zu 20 Jahre.
+
+### Sofort starten
+• Keine Anzahlung, Keine Grundbuchbelastung, Schnelle - digitale Prüfung, Finanzierungszusage in wenigen Minuten, 100 % digital, Kein Papierkram und keine Banktermine
+
+So bleibt Ihr Budget flexibel und Ihre Energiekosten sinken langfristig.
+
+### Maximale Flexibilität
+• Kostenlose Sondertilgungen
+• Vorzeitige Rückzahlung ohne Strafgebühren
+• Individuell anpassbare Laufzeiten
+
+### Ihre Vorteile
+• Sofort investieren · Monatlich entspannt zahlen · Energiekosten senken · Unabhängiger werden
+
+### Kundenzufriedenheit: 4,8 von 5
+„Dank Cloover konnten wir unsere Anlage einfach, fair und transparent finanzieren.“
+
+Starten Sie jetzt mit Friondo und Cloover in eine nachhaltige Zukunft."""
+
+# Nachtext B KL: statt „Hinweis zur KfW-Förderung“ nach „Zahlung“ (wörtlich
+# PLAN_V16, [ANNAHME] – Innendienst liest gegen)
+_KL_KAELTETECHNIK = """### Hinweis zur Kältetechnik
+Die angebotenen Geräte arbeiten mit dem Kältemittel R32. Montage, Evakuierung, Dichtheitsprüfung und Inbetriebnahme erfolgen durch sachkundiges Personal nach den Vorgaben der F-Gase-Verordnung (EU) 2024/573; die Dichtheitsprüfung wird dokumentiert. Die Kältemittel-, Kondensat- und Elektroleitungen sind bis 5 m je Innengerät enthalten; längere Leitungswege sind als eigene Position ausgewiesen. Der Montageort der Außeneinheit wird so gewählt, dass Schall- und Abstandsvorgaben eingehalten werden; die endgültige Festlegung erfolgt in der technischen Feinplanung vor Ort."""
+
+# Nachtext C KL: Schlussseite ohne „Aufschiebende Bedingung“ und ohne die
+# Zeile „Voraussichtliches Datum der Umsetzung …“; Unterschriftenblock wie WP
+_KL_ABSCHLUSS = """Wir sichern Ihnen eine fach- und zeitgerechte Ausführung aller angebotenen Leistungen zu.
+
+Sie haben Fragen oder wünschen weitere Informationen? Rufen Sie uns an - wir sind für Sie da.
+
+Mit freundlichen Grüßen,
+
+Ihr Friondo-Team
+
+Sollte Ihnen das Angebot zusagen, senden Sie uns bitte zur Auftragserteilung das unterschriebene Angebot zurück.
+
+Voraussichtlicher Ausführungszeitraum: ______________
+
+[UNTERSCHRIFT]"""
+
+_KL_LEISTUNGEN_UND_VORAUSSETZUNGEN = _LEISTUNGEN_UND_VORAUSSETZUNGEN.replace(
+    "gewünschte Wärmepumpe", "gewünschte Klimaanlage")
+
+KL_STANDARD_NACHTEXT = _KL_ZAHLUNGSOPTIONEN + """
+---
+# Installationsvoraussetzungen
+""" + _RECHT_UND_ZAHLUNG + "\n\n" + _KL_KAELTETECHNIK + "\n\n" + _BINDUNG + """
+---
+""" + _KL_ABSCHLUSS
+
+
+def _kl_variante(kopf: str, mit_leistungen: bool = True) -> str:
+    """KL-Nachtext der Kanal-Profile nach dem WP-Muster: Enni/SWD ohne
+    Nachtext A (nur Kopf „Barkauf oder … Contracting“), Sparkasse DU mit
+    eigenem Finanzierungs-Kopf; Enni/Sparkasse mit „Unsere Leistungen /
+    Installationsvoraussetzungen“ (wie WP), SWD ohne. Danach Haftung,
+    Rücktrittsrecht, Zahlung, Hinweis zur Kältetechnik, Bindefrist/AGB/
+    Datenschutz und die Schlussseite – ohne KfW-Hinweis, ohne Heizkörper-
+    Check, ohne Netzbetreiber-Absatz (WP/PV-spezifisch), ohne Vollmacht."""
+    if mit_leistungen:
+        return (kopf + "\n\n" + _KL_LEISTUNGEN_UND_VORAUSSETZUNGEN + "\n---\n"
+                + _RECHT_UND_ZAHLUNG + "\n\n" + _KL_KAELTETECHNIK + "\n\n" + _BINDUNG
+                + "\n---\n" + _KL_ABSCHLUSS)
+    return (kopf + "\n\n# Installationsvoraussetzungen\n" + _RECHT_UND_ZAHLUNG
+            + "\n\n" + _KL_KAELTETECHNIK + "\n\n" + _BINDUNG + "\n---\n" + _KL_ABSCHLUSS)
+
+
+KL_SEED_BLOECKE = [
+    ("vortext", "Friondo KL Standard", KL_VORTEXT),
+    ("nachtext", "Friondo KL Standard", KL_STANDARD_NACHTEXT),
+    ("nachtext", "Friondo KL Enni", _kl_variante(
+        "# Ihre Zahlungsoptionen bei Friondo\n## Barkauf oder Enni Contracting\n"
+        "Saubere Energie. Faire Raten. Maximale Freiheit.")),
+    ("nachtext", "Friondo KL SWD", _kl_variante(
+        "# Ihre Zahlungsoptionen bei Friondo\n## Barkauf oder Contracting\n"
+        "Saubere Energie. Faire Raten. Maximale Freiheit.", mit_leistungen=False)),
+    ("nachtext", "Friondo KL Sparkasse DU", _kl_variante(
+        "# Ihre Zahlungsoptionen bei Friondo\n## Barkauf oder Finanzierung\n"
+        "Saubere Energie. Faire Raten. Maximale Freiheit.\n\n"
+        "## Finanzierung mit Sparkasse Duisburg")),
+]
+
+
+def seed_kl(session: Session) -> list[str]:
+    """v24: KL-Textblöcke nachträglich anlegen (idempotent, je Art + Name;
+    vorhandene – ggf. in der Parametrierung bearbeitete – Blöcke bleiben)."""
+    vorhanden = {(b.art, b.name) for b in session.query(Textblock)}
+    neu = 0
+    for art, name, text in KL_SEED_BLOECKE:
+        if (art, name) not in vorhanden:
+            session.add(Textblock(art=art, name=name, text=text))
+            neu += 1
+    return [f"{neu} KL-Textblöcke (Vor-/Nachtexte Klima) angelegt"] if neu else []
+
+
+def _kl_block(session: Session, art: str, profil: Profil | None) -> str:
+    """KL-Textblock des Profils („Friondo KL <Profil>“), sonst KL Standard;
+    ohne Blöcke in der Datenbank die Seed-Konstanten."""
+    namen = ([f"Friondo KL {profil.name}"] if profil is not None else []) \
+        + ["Friondo KL Standard"]
+    for name in namen:
+        block = (session.query(Textblock)
+                 .filter(Textblock.art == art, Textblock.name == name).first())
+        if block is not None and block.text.strip():
+            return block.text
+    return KL_VORTEXT if art == "vortext" else KL_STANDARD_NACHTEXT
+
+
+def ist_kl(angebot: Angebot) -> bool:
+    """v24: Klima-Angebot aus dem Klimakonfigurator (konfigurator_typ „KL“)."""
+    return (angebot.konfigurator_typ or "WP").upper() == "KL"
+
+
 SEED_BLOECKE = [
     ("nachtext", "Friondo Standard", STANDARD_NACHTEXT),
     ("nachtext", "Friondo Enni", ENNI_NACHTEXT),
@@ -433,6 +588,8 @@ def nachtext_fuer_angebot(session: Session, angebot: Angebot) -> str:
     profil = profil_fuer_angebot(session, angebot)
     if ist_pv(angebot):   # v13-PV: eigene PV-Nachtexte je Profil
         return _pv_block(session, "nachtext", profil)
+    if ist_kl(angebot):   # v24: eigene KL-Nachtexte je Profil
+        return _kl_block(session, "nachtext", profil)
     if profil is not None and profil.nachtext_id:
         block = session.get(Textblock, profil.nachtext_id)
         if block is not None and block.text.strip():
@@ -446,6 +603,8 @@ def vortext_fuer_angebot(session: Session, angebot: Angebot) -> str:
     profil = profil_fuer_angebot(session, angebot)
     if ist_pv(angebot):   # v13-PV
         return _pv_block(session, "vortext", profil)
+    if ist_kl(angebot):   # v24
+        return _kl_block(session, "vortext", profil)
     if profil is not None and profil.vortext_id:
         block = session.get(Textblock, profil.vortext_id)
         if block is not None and block.text.strip():
@@ -480,6 +639,18 @@ def regeln_beschreibung(profil: Profil | None) -> str:
     return ""
 
 
+def regeln_beschreibung_fuer_angebot(angebot: Angebot, profil: Profil | None) -> str:
+    """v24: Umschalt-Hinweis je Angebot – bei Klima-Angeboten gelten nur
+    Nachtext und Versandregeln des Profils (keine Positionsregeln 014–017)."""
+    if ist_kl(angebot) and profil is not None and profil.regel_kennung in ("enni", "swd"):
+        versand = ("Versand zusätzlich CC " + (profil.versand_cc or ENNI_CC)
+                   if profil.regel_kennung == "enni"
+                   else "Versand-Empfänger bleibt leer")
+        return (f"{profil.name}: Klima-Angebot – keine Positionsregeln (kein Friondo "
+                f"Fit for Future); eigener KL-Nachtext; {versand}.")
+    return regeln_beschreibung(profil)
+
+
 def positionsregeln_anwenden(session: Session, angebot: Angebot,
                              profil: Profil | None) -> list[str]:
     """Wendet die Positionsregeln des Profils auf den Angebotsentwurf an.
@@ -487,6 +658,12 @@ def positionsregeln_anwenden(session: Session, angebot: Angebot,
     from app.models import Artikel
     kennung = profil.regel_kennung if profil else "standard"
     meldungen: list[str] = []
+    # v24 (PLAN_V16 Phase 114): Klima-Angebote führen kein Friondo Fit for
+    # Future – die WP-Artikel 014–017 werden weder eingefügt noch entfernt/
+    # umgepreist, Pos. 162 nie ergänzt (kein Gruppen-Trigger). Versandregeln
+    # (Enni-CC, SWD-Empfänger leer) greifen weiterhin über das Profil.
+    if ist_kl(angebot):
+        return meldungen
     if kennung not in ("enni", "swd"):
         return meldungen
 

@@ -19,3 +19,6 @@ Thumbs.db
 
 # Muster-PDF mit Kundendaten (nur lokal, v13-PV)
 Artikel-Preislisten/PV/Beispielangebot.pdf
+
+# Dev-Server-Startkonfiguration der Claude-Desktop-App (lokal)
+.claude/

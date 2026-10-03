@@ -3,6 +3,11 @@
 # Die geparste Logik wird im Prozess gecacht; "Konfiguration neu einlesen"
 # ersetzt den Cache. Die inhaltliche Auswertung (Fragenfluss, KfW-Rechnung)
 # folgt in den Phasen 4–6 – hier geht es um Struktur, Referenzen, Bedingungen.
+# v13: PV-Konfigurator (Blätter „Aktionen PV“, „Angebotsaufbau PV“, „PV-Parameter“).
+# v24 (PLAN_V16 Phase 113): Klimakonfigurator – Blätter „Aktionen KL“,
+# „Angebotsaufbau KL“, „Paketmatrix KL“, „Kombinationen KL“, „Montagematrix KL“,
+# „KL-Parameter“, „KL-Artikel“ (_kl_einlesen/_kl_pruefen, Felder kl_* der Logik,
+# Sicht logik_fuer_sparte(logik, "KL")); Rechenweg in app/kl_auslegung.py.
 
 import re
 from dataclasses import dataclass, field
@@ -116,6 +121,24 @@ class AngebotsBlock:
 
 
 @dataclass
+class KlPaketZeile:
+    """v24 (PLAN_V16 Phase 113): Zeile des Blatts „Paketmatrix KL“ – Serie (KO06),
+    Typ single | multi_innen | multi_aussen, Klasse roh („9“, „18 / 24“, „53/2“),
+    Kühllast-/Innengeräte-Spalte roh, alle KL-Nummern der Artikelzelle in
+    Reihenfolge; „nicht im Sortiment“ → Ampel (Grund aus der Bemerkung nach „→ AMPEL: “)."""
+    serie: str
+    typ: str
+    klasse: str
+    kuehllast: str
+    artikel: list[str]
+    bemerkung: str
+    nicht_im_sortiment: bool = False
+    typ_roh: str = ""
+    artikel_roh: str = ""
+    ampel_grund: str = ""
+
+
+@dataclass
 class Anhang:
     datei: str                              # Dateiname im Ordner anlagen/
     regel_roh: str
@@ -183,6 +206,24 @@ class Logik:
     sparte: str = "WP"
     pv_kombis: list[tuple[str, float, float, str]] = field(default_factory=list)
     bafa_anlagen: list[BafaAnlage] = field(default_factory=list)   # v19
+    # v24 (PLAN_V16 Phase 113): Klimakonfigurator – Blätter „Aktionen KL“,
+    # „Angebotsaufbau KL“, „Paketmatrix KL“, „Kombinationen KL“,
+    # „Montagematrix KL“, „KL-Parameter“, „KL-Artikel“ (vereinbarte Schnittstelle
+    # zu app/kl_auslegung.py, siehe diagnose/v24_agenten_briefing.md)
+    kl_aktionen: list[Aktion] = field(default_factory=list)
+    kl_bloecke: list[AngebotsBlock] = field(default_factory=list)
+    kl_paket: list[KlPaketZeile] = field(default_factory=list)
+    # Außengerät-Bezeichnung → Anzahl Innengeräte → {„9+9+12“, …} (Codes aufsteigend)
+    kl_kombis: dict[str, dict[int, set[str]]] = field(default_factory=dict)
+    kl_kombi_artikel: dict[str, str] = field(default_factory=dict)   # Außengerät → KL-Nr.
+    kl_montage: dict[tuple[int, int], str] = field(default_factory=dict)  # (Innen, Außen) → KL-Nr.
+    kl_montage_zeilen: list[dict] = field(default_factory=list)   # Rohzeilen (Lesesicht)
+    kl_montage_ampel: str = ""                                    # Bemerkung „alle anderen“
+    kl_parameter: dict[str, tuple[str, str]] = field(default_factory=dict)
+    kl_parameter_einheit: dict[str, str] = field(default_factory=dict)
+    kl_artikel: dict[str, str] = field(default_factory=dict)      # GUID → KL-Nr. (Pinning)
+    kl_artikel_nummern: list[str] = field(default_factory=list)   # alle KL-Nr. des Blatts
+    kl_artikel_zeilen: list[dict] = field(default_factory=list)   # Rohzeilen (Lesesicht)
 
     @property
     def seiten(self) -> list[str]:
@@ -236,6 +277,22 @@ def refs_extrahieren(text: str) -> list[ArtikelRef]:
         menge = m_menge.group(1).strip() if m_menge else "1"
         gefunden.append((m.start(), ArtikelRef(f"PV{m.group(1)}", menge,
                                                bool(m.group(2)))))
+
+    # v24 (PLAN_V16 Phase 113): Klima-Artikel „KL013“, optional „(EP)“; Menge als
+    # Zahl („× 5“) oder Mengenwort („× Innengeräte“ = Σ Räume, „× Außengeräte“ =
+    # KO04) – Mengenwörter bleiben als Text in ArtikelRef.menge und werden in
+    # app/kl_auslegung.py aufgelöst. „… als EP“ setzt das EP-Flag (wie WP);
+    # Zeilen-Suffixe „je Außengerät“ / „je betroffenem Außengerät“ / „je Raum“
+    # hängen nur an der letzten Referenz der Zeile und gelten laut Plan für die
+    # ganze Zeile (kl_auslegung liest sie aus aktion_roh) – hier nur abschneiden.
+    for m in re.finditer(r"\bKL(\d{3})\b(\s*\(EP\))?", text):
+        rest = text[m.end():]
+        m_menge = re.match(menge_muster, rest)
+        menge = m_menge.group(1).strip() if m_menge else "1"
+        menge = re.sub(r"\s+(als EP|je)\b.*$", "", menge).strip() or "1"
+        ep_nach = bool(re.match(r"[^+·]*\bals EP\b", rest))
+        gefunden.append((m.start(), ArtikelRef(f"KL{m.group(1)}", menge,
+                                               bool(m.group(2)) or ep_nach)))
 
     for m in re.finditer(r"\bZ(\d{2})\b(?:\s*[–-]\s*Z(\d{2}))?", text):
         von, bis = int(m.group(1)), int(m.group(2) or m.group(1))
@@ -354,6 +411,7 @@ def logik_einlesen() -> tuple[Logik, Pruefbericht]:
     for sparte, sfragen in sparten_fragen.items():
         _bedingungen_pruefen(sfragen, bericht, f"Fragen {sparte}")
     _pv_einlesen(wb, logik, bericht)   # v13-PV
+    _kl_einlesen(wb, logik, bericht)   # v24 Klimakonfigurator
     return logik, bericht
 
 
@@ -510,6 +568,483 @@ def _pv_zahl(text) -> Optional[float]:
         return float(t)
     except ValueError:
         return None
+
+
+# --- v24 (PLAN_V16 Phase 113): Klimakonfigurator ---------------------------------
+
+# Spezialzeilen im Blatt „Aktionen KL“ (keine Frage des Bogens): „Grundpaket“
+# (Systemgarantie, Montagepauschale), „Auslegung“ (Dokumentation des Rechenwegs –
+# ausgewertet in app/kl_auslegung.py), „§14a“ (Parameterliste), „Händisch“
+# (nur im Editor)
+KL_SPEZIAL = {"Grundpaket", "Auslegung", "§14a", "Händisch", "Gruppen-Trigger",
+              "Ampel-Auswertung"}
+
+# zulässige Klassen-Codes im Blatt „Kombinationen KL“ (Bosch; Code 7 wird nicht
+# vergeben, bleibt der Vollständigkeit halber zulässig)
+KL_CODES = ("7", "9", "12", "18", "24")
+
+# Typ-Spalte der Paketmatrix KL → Schnittstellenwert
+KL_PAKET_TYPEN = {
+    "single": "single",
+    "multi-innengerät": "multi_innen", "multi-innengeraet": "multi_innen",
+    "multi innengerät": "multi_innen", "multi_innen": "multi_innen",
+    "multi-außengerät": "multi_aussen", "multi-aussengerät": "multi_aussen",
+    "multi außengerät": "multi_aussen", "multi_aussen": "multi_aussen",
+    "multi": "multi_aussen",
+}
+
+# Pflichtzeilen des Blatts „KL-Parameter“ (Namen wörtlich aus
+# docs/KL-Logik-Entwurf.xlsx) mit ihren Standardwerten. Die Werte im Code sind
+# nur Fallback: fehlt eine Zeile, meldet die Validierung sie als Hinweis mit dem
+# Standardwert (wie die Wirtschaftlichkeits-Parameter PV v22); ein vorhandener,
+# unlesbarer Zahlenwert ist ein Fehler.
+STANDARD_KL_PARAMETER: dict[str, str] = {
+    "W/m² normal": "60",
+    "W/m² stark": "90",
+    "Höhenfaktor bis 2,5 m": "1,0",
+    "Höhenfaktor 2,5–3 m": "1,1",
+    "Höhenfaktor über 3 m": "1,2",
+    "Klasse 9 bis": "2,6",
+    "Klasse 12 bis": "3,5",
+    "Klasse 18 bis": "5,3",
+    "Klasse 24 bis": "7,0",
+    "Leitung je Innengerät inklusive": "5",
+    "Meterposition Zusatzleitung": "KL017",
+    "Standardserie": "Climate 3200i (Standard)",
+    "Max. Innengeräte je Außengerät": "5",
+    "Max. Außengeräte": "3",
+    "§14a-Außengeräte": "CL5000M 105/4 E; CL5000M 125/5 E",
+    "Gewerbe-Verhalten": "Hinweis",
+    "Rollgerüst VK": "499",
+}
+PFLICHT_KL_PARAMETER = list(STANDARD_KL_PARAMETER)
+KL_TEXT_PARAMETER = ("Meterposition Zusatzleitung", "Standardserie",
+                     "§14a-Außengeräte", "Gewerbe-Verhalten")
+KL_ZAHL_PARAMETER = [n for n in PFLICHT_KL_PARAMETER if n not in KL_TEXT_PARAMETER]
+KL_PFLICHT_BLAETTER = ("Angebotsaufbau KL", "Paketmatrix KL", "Kombinationen KL",
+                       "Montagematrix KL", "KL-Parameter", "KL-Artikel")
+# Fragen, ohne die der Rechenkern (app/kl_auslegung.py) nicht arbeiten kann
+KL_PFLICHT_FRAGEN = ("KO04", "KO05", "KO06", "KO08", "KR01", "KR07", "KR08",
+                     "KR09", "KR10")
+
+
+def kl_standardwert_text(name: str) -> str:
+    """Standardwert eines KL-Parameters als Anzeigetext (Parametrierung)."""
+    return STANDARD_KL_PARAMETER.get(name, "")
+
+
+def kl_parameter_fehlende(logik: Logik) -> list[str]:
+    """Pflichtzeilen des Blatts „KL-Parameter“ ohne Wert (Parametrierung zeigt
+    sie mit dem Standardwert an)."""
+    return [name for name in PFLICHT_KL_PARAMETER
+            if not str(logik.kl_parameter.get(name, ("", ""))[0]).strip()]
+
+
+def _kl_zahl(text) -> Optional[float]:
+    """Parameterwert als Zahl: „1,1“ / „1.1“ / „60“ / „2,6 kW“ / „499 € netto“."""
+    t = re.sub(r"\s*(kW|W/m²|m|€.*|%)\s*$", "", str(text or "").strip())
+    return _pv_zahl(t)
+
+
+def _kl_ganzzahl(text: str) -> Optional[int]:
+    """„3“ / „3.0“ → 3; sonst None (Montagematrix, Kombinationen)."""
+    m = re.fullmatch(r"(\d+)(?:[.,]0+)?", str(text or "").strip())
+    return int(m.group(1)) if m else None
+
+
+def _kl_einlesen(wb, logik: Logik, bericht: Pruefbericht) -> None:
+    """Blätter des Klimakonfigurators. Fehlt „Aktionen KL“, bleibt KL ein reiner
+    Erfassungsbogen (TAIFUN-Schiene); mit „Aktionen KL“ sind die übrigen
+    KL-Blätter Pflicht (wie „Angebotsaufbau PV“/„PV-Parameter“ bei PV)."""
+    if "Aktionen KL" not in wb.sheetnames:
+        return
+    fehlend = [blatt for blatt in KL_PFLICHT_BLAETTER if blatt not in wb.sheetnames]
+    if fehlend:
+        for blatt in fehlend:
+            bericht.fehler.append(f"Blatt „{blatt}“ fehlt (Pflicht zu „Aktionen KL“).")
+        return
+    _kl_aktionen_einlesen(wb, logik, bericht)
+    _kl_aufbau_einlesen(wb, logik, bericht)
+    _kl_parameter_einlesen(wb, logik)
+    _kl_paketmatrix_einlesen(wb, logik, bericht)
+    _kl_kombinationen_einlesen(wb, logik, bericht)
+    _kl_montagematrix_einlesen(wb, logik, bericht)
+    _kl_artikel_einlesen(wb, logik, bericht)
+    _kl_pruefen(logik, bericht)
+
+
+def _kl_aktionen_einlesen(wb, logik: Logik, bericht: Pruefbericht) -> None:
+    """Blatt „Aktionen KL“ (Frage · Antwort · Aktion · Bemerkung · Zusatzbedingung).
+    Schreibweisen (PLAN_V16 Phase 113): „Artikel: KL017 × 5“ · „Artikel: KL013 ×
+    Innengeräte als EP“ · „Artikel: KL004 ×1 · KL005 ×1 · KL006 ×1 je Außengerät“ ·
+    „AMPEL: individuell – Grund: <Text>“ · „Hinweis: <Text>“ (fachlicher Hinweis am
+    Vorgang, keine Position, keine Ampel → typ „hinweis“, ampel_grund = Text) · „–“."""
+    for row in wb["Aktionen KL"].iter_rows(min_row=2, values_only=True):
+        frage, antwort, aktion_roh, bemerkung, zusatz = (
+            _zelle(v) for v in (tuple(row) + (None,) * 5)[:5])
+        if not frage:
+            continue
+        m_hinweis = re.match(r"(?:Fachlicher\s+Hinweis|Protokollhinweis|Hinweis)\s*:\s*(.+)$",
+                             aktion_roh, re.S)
+        if aktion_roh.startswith("AMPEL"):
+            m = re.search(r"Grund:\s*(.+)$", aktion_roh)
+            typ, grund = "ampel", (m.group(1).strip() if m else aktion_roh)
+            refs = refs_extrahieren(aktion_roh)
+        elif m_hinweis:
+            typ, grund, refs = "hinweis", m_hinweis.group(1).strip(), []
+        else:
+            typ, grund = "normal", ""
+            # „… lt. Blatt „Montagematrix KL““ / „… lt. Blatt „Paketmatrix KL““ sind
+            # Dokumentation – die Zuordnung rechnet app/kl_auslegung.py; Nummern im
+            # Text wären nur erläuternd (wie „lt. Paketmatrix“ bei WP)
+            refs = [] if re.search(r"\blt\.\s", aktion_roh) else refs_extrahieren(aktion_roh)
+        zusatz_b = None
+        if zusatz:
+            zusatz_b = bedingung_parsen(zusatz)
+            if zusatz_b is None:
+                bericht.fehler.append(
+                    f"Aktionen KL {frage}: Zusatzbedingung „{zusatz}“ nicht parsebar.")
+        logik.kl_aktionen.append(Aktion(frage, antwort, aktion_roh, typ, grund, refs,
+                                        bemerkung, zusatz_b))
+
+
+def _kl_aufbau_einlesen(wb, logik: Logik, bericht: Pruefbericht) -> None:
+    """Blatt „Angebotsaufbau KL“ (Block · Überschrift · Inhalt · Wann) – nur Zeilen
+    mit Blocknummer; Erläuterungszeilen (Auslegungszeile, Summenblock, Nachtexte,
+    Anhänge, Protokoll) bleiben Dokumentation. Die Reihenfolge der KL-Nummern im
+    Inhalt ist die Sortierung im Block (kl_auslegung._index_im_inhalt)."""
+    for row in wb["Angebotsaufbau KL"].iter_rows(min_row=2, values_only=True):
+        nr, ueberschrift, inhalt, wann = (_zelle(v) for v in (tuple(row) + (None,) * 4)[:4])
+        if not nr:
+            continue
+        try:
+            block_nr = int(float(nr))
+        except ValueError:
+            continue
+        bedingung = bedingung_parsen(wann)
+        if bedingung is None:
+            bericht.fehler.append(
+                f"Angebotsaufbau KL Block {block_nr}: Bedingung „{wann}“ nicht parsebar.")
+        refs = refs_extrahieren(inhalt)
+        if not refs:
+            bericht.fehler.append(
+                f"Angebotsaufbau KL Block {block_nr}: Inhalt nennt keine KL-Nummer "
+                "(jede Position muss ausdrücklich stehen, z. B. „KL020 · KL021 …“).")
+        logik.kl_bloecke.append(AngebotsBlock(block_nr, ueberschrift, inhalt, bedingung, refs))
+
+
+def _kl_parameter_einlesen(wb, logik: Logik) -> None:
+    """Blatt „KL-Parameter“ (Parameter · Wert · Einheit · Bemerkung)."""
+    for row in wb["KL-Parameter"].iter_rows(min_row=2, values_only=True):
+        name, wert, einheit, bemerkung = (_zelle(v) for v in (tuple(row) + (None,) * 4)[:4])
+        if name:
+            logik.kl_parameter[name] = (wert, bemerkung)
+            logik.kl_parameter_einheit[name] = einheit
+
+
+def _kl_paketmatrix_einlesen(wb, logik: Logik, bericht: Pruefbericht) -> None:
+    """Blatt „Paketmatrix KL“ (Serie · Typ · Klasse / Außengerät · Kühllast je Raum ·
+    Artikel · Bemerkung). Artikelzelle „KL033 (…) + KL029 (…)“ = zwei Positionen;
+    „nicht im Sortiment“ → Ampel mit dem Grund aus der Bemerkung nach „→ AMPEL: “."""
+    for zeile, row in enumerate(wb["Paketmatrix KL"].iter_rows(min_row=2, values_only=True), 2):
+        serie, typ_roh, klasse, kuehllast, artikel_roh, bemerkung = (
+            _zelle(v) for v in (tuple(row) + (None,) * 6)[:6])
+        if not serie:
+            continue
+        typ = KL_PAKET_TYPEN.get(typ_roh.lower())
+        if typ is None:
+            bericht.fehler.append(
+                f"Paketmatrix KL Zeile {zeile} ({serie}): unbekannter Typ „{typ_roh}“ "
+                "(erwartet Single, Multi-Innengerät, Multi-Außengerät oder Multi).")
+            typ = typ_roh.lower()
+        artikel = re.findall(r"\bKL\d{3}\b", artikel_roh)
+        nicht = "nicht im sortiment" in artikel_roh.lower()
+        m = re.search(r"AMPEL:\s*(.+)$", bemerkung)
+        grund = m.group(1).strip() if m else ""
+        if not artikel and not nicht:
+            bericht.fehler.append(
+                f"Paketmatrix KL {serie} / {typ_roh} / {klasse}: Spalte „Artikel“ ohne "
+                "KL-Referenz (oder „nicht im Sortiment“).")
+        elif nicht and not grund:
+            bericht.warnungen.append(
+                f"Paketmatrix KL {serie} / {typ_roh} / {klasse}: „nicht im Sortiment“ ohne "
+                "„→ AMPEL: <Grund>“ in der Bemerkung – es gilt der Standardgrund G2/G3.")
+        logik.kl_paket.append(KlPaketZeile(serie, typ, klasse, kuehllast, artikel, bemerkung,
+                                           nicht, typ_roh, artikel_roh, grund))
+
+
+def _kl_kombinationen_einlesen(wb, logik: Logik, bericht: Pruefbericht) -> None:
+    """Blatt „Kombinationen KL“ (Außengerät · Artikel · Anzahl Innengeräte ·
+    Kombination · Quelle). Codes werden aufsteigend numerisch normalisiert
+    („12+9“ → „9+12“); nur die Codes 7/9/12/18/24 sind zulässig."""
+    for zeile, row in enumerate(wb["Kombinationen KL"].iter_rows(min_row=2, values_only=True), 2):
+        name, artikel, anzahl_roh, kombi_roh = (
+            _zelle(v) for v in (tuple(row) + (None,) * 4)[:4])
+        if not name:
+            continue
+        codes = [c for c in re.split(r"\s*\+\s*", kombi_roh.strip()) if c]
+        ungueltig = [c for c in codes if c not in KL_CODES]
+        if not codes or ungueltig:
+            bericht.fehler.append(
+                f"Kombinationen KL Zeile {zeile} ({name}): Kombination „{kombi_roh}“ enthält "
+                f"unzulässige Codes ({', '.join(ungueltig) if ungueltig else 'leer'}) – "
+                f"erlaubt sind nur {'/'.join(KL_CODES)}.")
+            continue
+        anzahl = _kl_ganzzahl(anzahl_roh)
+        if anzahl is None:
+            bericht.fehler.append(
+                f"Kombinationen KL Zeile {zeile} ({name}): „Anzahl Innengeräte“ "
+                f"„{anzahl_roh}“ ist keine ganze Zahl.")
+            continue
+        if anzahl != len(codes):
+            bericht.fehler.append(
+                f"Kombinationen KL Zeile {zeile} ({name}): Anzahl Innengeräte {anzahl} passt "
+                f"nicht zur Kombination „{kombi_roh}“ ({len(codes)} Codes).")
+            continue
+        schluessel = "+".join(sorted(codes, key=int))
+        logik.kl_kombis.setdefault(name, {}).setdefault(anzahl, set()).add(schluessel)
+        if artikel:
+            if re.fullmatch(r"KL\d{3}", artikel) is None:
+                bericht.fehler.append(
+                    f"Kombinationen KL Zeile {zeile} ({name}): Artikel „{artikel}“ ist "
+                    "keine KL-Nummer.")
+            elif logik.kl_kombi_artikel.get(name, artikel) != artikel:
+                bericht.fehler.append(
+                    f"Kombinationen KL {name}: unterschiedliche Artikel "
+                    f"({logik.kl_kombi_artikel[name]} und {artikel}, Zeile {zeile}).")
+            else:
+                logik.kl_kombi_artikel[name] = artikel
+
+
+def _kl_montagematrix_einlesen(wb, logik: Logik, bericht: Pruefbericht) -> None:
+    """Blatt „Montagematrix KL“ (Innengeräte gesamt · Außengeräte (KO04) · Position ·
+    VK netto · Bemerkung) – nur Zahlenzeilen; die Sammelzeile „alle anderen … AMPEL“
+    liefert den dokumentierten Ampel-Text (G6 rechnet app/kl_auslegung.py)."""
+    for zeile, row in enumerate(wb["Montagematrix KL"].iter_rows(min_row=2, values_only=True), 2):
+        innen, aussen, position, vk, bemerkung = (
+            _zelle(v) for v in (tuple(row) + (None,) * 5)[:5])
+        if not innen and not position:
+            continue
+        logik.kl_montage_zeilen.append({"innen": innen, "aussen": aussen, "position": position,
+                                        "vk": vk, "bemerkung": bemerkung})
+        n_innen, n_aussen = _kl_ganzzahl(innen), _kl_ganzzahl(aussen)
+        if n_innen is None or n_aussen is None:
+            if position.upper().startswith("AMPEL") or innen.lower().startswith("alle"):
+                logik.kl_montage_ampel = bemerkung
+            else:
+                bericht.warnungen.append(
+                    f"Montagematrix KL Zeile {zeile}: „{innen} / {aussen}“ ist keine "
+                    "Zahlenzeile – ignoriert.")
+            continue
+        if re.fullmatch(r"KL\d{3}", position) is None:
+            bericht.fehler.append(
+                f"Montagematrix KL {n_innen}/{n_aussen}: Position „{position}“ ist keine KL-Nummer.")
+            continue
+        schluessel = (n_innen, n_aussen)
+        if schluessel in logik.kl_montage:
+            bericht.fehler.append(
+                f"Montagematrix KL: Kombination {n_innen} Innengeräte / {n_aussen} Außengeräte "
+                f"doppelt (Zeile {zeile}: {position}, zuvor {logik.kl_montage[schluessel]}).")
+            continue
+        logik.kl_montage[schluessel] = position
+
+
+def _kl_artikel_einlesen(wb, logik: Logik, bericht: Pruefbericht) -> None:
+    """Blatt „KL-Artikel“ (KL-Nr. · Datei · Pos. in Datei · GUID · Bezeichnung (1. Zeile)
+    · VK netto (€) · EK (€) · EP): GUID → KL-Nr. (Pinning für app/import_klima.py)
+    und die Liste aller KL-Nummern (Referenzprüfung; KL050 steht ohne GUID)."""
+    zeilen = wb["KL-Artikel"].iter_rows(values_only=True)
+    kopf = [_zelle(z) for z in next(zeilen, [])]
+    if "KL-Nr." not in kopf or "GUID" not in kopf:
+        bericht.fehler.append("KL-Artikel: Kopfzeile ohne die Spalten „KL-Nr.“ und „GUID“.")
+        return
+    spalten = {name: kopf.index(name) for name in kopf if name}
+
+    def wert(row, name) -> str:
+        i = spalten.get(name)
+        return _zelle(row[i]) if i is not None and i < len(row) else ""
+
+    for zeile, row in enumerate(zeilen, 2):
+        row = tuple(row)
+        nr, guid = wert(row, "KL-Nr."), wert(row, "GUID")
+        if not nr:
+            continue
+        if re.fullmatch(r"KL\d{3}", nr) is None:
+            bericht.fehler.append(f"KL-Artikel Zeile {zeile}: „{nr}“ ist keine KL-Nummer.")
+            continue
+        if nr in logik.kl_artikel_nummern:
+            bericht.fehler.append(f"KL-Artikel: Nummer {nr} doppelt (Zeile {zeile}).")
+            continue
+        logik.kl_artikel_nummern.append(nr)
+        if guid.startswith("{"):
+            if guid in logik.kl_artikel:
+                bericht.fehler.append(
+                    f"KL-Artikel: GUID {guid} doppelt ({logik.kl_artikel[guid]} und {nr}).")
+            else:
+                logik.kl_artikel[guid] = nr
+        logik.kl_artikel_zeilen.append({
+            "nr": nr, "datei": wert(row, "Datei"), "pos": wert(row, "Pos. in Datei"),
+            "guid": guid, "bezeichnung": wert(row, "Bezeichnung (1. Zeile)"),
+            "vk": wert(row, "VK netto (€)"), "ek": wert(row, "EK (€)"), "ep": wert(row, "EP")})
+
+
+def kl_referenzen(logik: Logik) -> dict[str, list[str]]:
+    """Alle KL-Referenzen der Klima-Blätter mit Fundstellen (Validierung gegen das
+    Blatt „KL-Artikel“ und den Artikelstamm)."""
+    fundstellen: dict[str, list[str]] = {}
+
+    def merken(ref: str, quelle: str):
+        fundstellen.setdefault(ref, []).append(quelle)
+
+    for aktion in logik.kl_aktionen:
+        for ref in aktion.artikel:
+            merken(ref.ref, f"Aktionen KL {aktion.frage} („{aktion.antwort}“)")
+    for block in logik.kl_bloecke:
+        for ref in block.refs:
+            merken(ref.ref, f"Angebotsaufbau KL Block {block.nr}")
+    for zeile in logik.kl_paket:
+        for ref in zeile.artikel:
+            merken(ref, f"Paketmatrix KL {zeile.serie} / {zeile.typ_roh} / {zeile.klasse}")
+    for (innen, aussen), ref in logik.kl_montage.items():
+        merken(ref, f"Montagematrix KL {innen}/{aussen}")
+    for name, ref in logik.kl_kombi_artikel.items():
+        merken(ref, f"Kombinationen KL {name}")
+    meter = str(logik.kl_parameter.get("Meterposition Zusatzleitung", ("", ""))[0]).strip()
+    if re.fullmatch(r"KL\d{3}", meter):
+        merken(meter, "KL-Parameter „Meterposition Zusatzleitung“")
+    return fundstellen
+
+
+def _kl_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
+    """Validierung des Klimakonfigurators (Parametrierung → „Logik prüfen“):
+    Pflichtparameter (fehlend = Hinweis mit Standardwert, unlesbar = Fehler),
+    Aktionen gegen den Bogen „Fragen KL“ (Frage/Antwort/Zusatzbedingung), jede
+    KL-Referenz in Aktionen, Angebotsaufbau, Paketmatrix, Montagematrix und
+    Kombinationen existiert im Blatt „KL-Artikel“, Kombinationen nur Codes
+    7/9/12/18/24 (beim Einlesen), Montagematrix ohne Doppelzeilen (beim Einlesen),
+    Hinweis von KR07 enthält „Optionen wie … (KO04)“ (steuert _wiederhol_klone)."""
+    fragen = logik.sparten_fragen.get("KL", {})
+    nummern = set(logik.kl_artikel_nummern)
+
+    # Bogen: Fragen, die der Rechenkern braucht
+    for fid in KL_PFLICHT_FRAGEN:
+        if fid not in fragen:
+            bericht.fehler.append(
+                f"Fragen KL: Frage {fid} fehlt – der Klimakonfigurator (app/kl_auslegung.py) "
+                "braucht sie.")
+    kr07 = fragen.get("KR07")
+    if kr07 is not None and not re.search(r"Optionen wie .*\(KO04\)", kr07.hinweis or ""):
+        bericht.fehler.append(
+            "Fragen KL KR07: Hinweis muss „es erscheinen nur so viele Optionen wie "
+            "Außengeräte (KO04)“ enthalten – er begrenzt die Auswahl je Raum auf KO04.")
+
+    # Parameter
+    for name in PFLICHT_KL_PARAMETER:
+        wert = str(logik.kl_parameter.get(name, ("", ""))[0]).strip()
+        if not wert:
+            bericht.warnungen.append(
+                f"KL-Parameter „{name}“ fehlt – Standardwert {kl_standardwert_text(name)} "
+                "wird verwendet (Klima v24).")
+            continue
+        if name in KL_ZAHL_PARAMETER and _kl_zahl(wert) is None:
+            bericht.fehler.append(f"KL-Parameter „{name}“: „{wert}“ ist keine Zahl.")
+    grenzen = [(_kl_zahl(logik.kl_parameter[n][0]) or 0.0) for n in
+               ("Klasse 9 bis", "Klasse 12 bis", "Klasse 18 bis", "Klasse 24 bis")
+               if n in logik.kl_parameter and _kl_zahl(logik.kl_parameter[n][0]) is not None]
+    if grenzen != sorted(grenzen):
+        bericht.fehler.append(
+            "KL-Parameter: die Klassengrenzen „Klasse 9 bis“ … „Klasse 24 bis“ müssen "
+            "aufsteigend sein.")
+    serie = str(logik.kl_parameter.get("Standardserie", ("", ""))[0]).strip()
+    if serie and "KO06" in fragen and _alias_aufloesen(serie, fragen["KO06"].antworten) is None:
+        bericht.fehler.append(
+            f"KL-Parameter „Standardserie“: „{serie}“ ist keine Option von KO06 "
+            f"({' | '.join(fragen['KO06'].antworten)}).")
+    gewerbe = str(logik.kl_parameter.get("Gewerbe-Verhalten", ("", ""))[0]).strip()
+    if gewerbe and gewerbe not in ("Hinweis", "AMPEL"):
+        bericht.fehler.append(
+            f"KL-Parameter „Gewerbe-Verhalten“: „{gewerbe}“ – erlaubt sind „Hinweis“ oder „AMPEL“.")
+
+    # Aktionen: Frage bekannt, Antwort plausibel, Zusatzbedingung auflösbar
+    for aktion in logik.kl_aktionen:
+        b = aktion.zusatz_bedingung
+        if b is not None:
+            terme = ([(b.frage_id, b.werte)] if b.art == "antwort"
+                     else [t for k in b.klauseln for t in k])
+            for fid, werte in terme:
+                if fid not in fragen:
+                    bericht.fehler.append(
+                        f"Aktionen KL {aktion.frage}: Zusatzbedingung verweist auf "
+                        f"unbekannte Frage {fid}.")
+                    continue
+                if fragen[fid].typ != "Auswahl":
+                    continue
+                for wert in werte:
+                    if _alias_aufloesen(wert, fragen[fid].antworten) is None:
+                        bericht.fehler.append(
+                            f"Aktionen KL {aktion.frage}: Zusatzbedingungswert „{wert}“ ist "
+                            f"keine Option von {fid}.")
+        if aktion.frage in KL_SPEZIAL:
+            continue
+        if aktion.frage not in fragen:
+            bericht.fehler.append(
+                f"Aktionen KL: unbekannte Frage „{aktion.frage}“ (Antwort „{aktion.antwort}“).")
+            continue
+        problem = _antwort_pruefen(fragen[aktion.frage], aktion.antwort, fragen)
+        if problem:
+            bericht.fehler.append(f"Aktionen KL {aktion.frage}: {problem}")
+    # Doppler-Schutz (wie PV): Grundpaket-Artikel nicht zusätzlich über eine Fragezeile
+    immer_refs = {r.ref: a.frage for a in logik.kl_aktionen
+                  if a.frage == "Grundpaket" for r in a.artikel}
+    for aktion in logik.kl_aktionen:
+        if aktion.typ != "normal" or aktion.frage in KL_SPEZIAL:
+            continue
+        for ref in aktion.artikel:
+            if ref.ref in immer_refs:
+                bericht.warnungen.append(
+                    f"Doppelte Artikelquelle KL: {ref.ref} kommt über „{immer_refs[ref.ref]}“ "
+                    f"UND über die Aktionszeile {aktion.frage} („{aktion.antwort}“) – "
+                    "der Artikel würde doppelt im Angebot landen.")
+    # Abdeckung: Auswahl-Fragen mit Positions-/Ampel-Zeilen brauchen je Option eine
+    # Zeile; Fragen, die nur Hinweis-/Dokumentationszeilen haben (KO01, KO03, KO06,
+    # KR03, KR04, KA02), bleiben ohne Vollabdeckung (Entwurf nennt nur die Fälle
+    # mit Wirkung)
+    for frage in fragen.values():
+        zeilen = [a for a in logik.kl_aktionen if a.frage == frage.id]
+        if frage.typ != "Auswahl" or not zeilen:
+            continue
+        if not any(a.typ == "ampel" or (a.typ == "normal" and a.artikel) for a in zeilen):
+            continue
+        abgedeckt = {o for a in zeilen for t in [a.antwort] + antwort_teile(a.antwort)
+                     if (o := _alias_aufloesen(t, frage.antworten))}
+        fehlend = [o for o in frage.antworten if o not in abgedeckt]
+        if fehlend:
+            bericht.warnungen.append(
+                f"Aktionen KL {frage.id}: keine Aktionszeile für Option(en) {', '.join(fehlend)}.")
+
+    # Referenzen: jede KL-Nummer der Klima-Blätter steht im Blatt „KL-Artikel“
+    for ref, quellen in sorted(kl_referenzen(logik).items()):
+        if ref not in nummern:
+            bericht.fehler.append(
+                f"KL-Referenz {ref} fehlt im Blatt „KL-Artikel“ – referenziert in: "
+                f"{'; '.join(sorted(set(quellen)))}.")
+    # Paketmatrix: Multi-Außengeräte brauchen Kombinationszeilen, sonst nie ein Treffer
+    for zeile in logik.kl_paket:
+        if zeile.typ != "multi_aussen" or zeile.nicht_im_sortiment:
+            continue
+        for ref in zeile.artikel:
+            if ref not in logik.kl_kombi_artikel.values():
+                bericht.warnungen.append(
+                    f"Paketmatrix KL {zeile.serie} / {zeile.klasse}: Außengerät {ref} hat keine "
+                    "Zeile im Blatt „Kombinationen KL“ – Multi-Split mit diesem Gerät wird "
+                    "immer zur Ampel (G4).")
+    if not logik.kl_montage:
+        bericht.fehler.append("Montagematrix KL: keine Zahlenzeile (Innengeräte / Außengeräte → "
+                              "KL-Nummer) – jede Montage würde zur Ampel.")
+    if not logik.kl_paket:
+        bericht.fehler.append("Paketmatrix KL: keine Zeile – kein Gerät kann zugeordnet werden.")
+    if not logik.kl_bloecke:
+        bericht.fehler.append("Angebotsaufbau KL: kein Block mit Nummer.")
 
 
 def _anhaenge_einlesen(wb, bericht: Pruefbericht) -> list[Anhang]:
@@ -964,6 +1499,8 @@ def artikel_referenzen(logik: Logik) -> dict[str, list[str]]:
         merken(aktion.artikel, f"Aktionen PV {aktion.frage} („{aktion.antwort}“)")
     for block in logik.pv_bloecke:
         merken(block.refs, f"Angebotsaufbau PV Block {block.nr}")
+    for ref, quellen in kl_referenzen(logik).items():   # v24 Klima
+        fundstellen.setdefault(ref, []).extend(quellen)
     return fundstellen
 
 
@@ -978,10 +1515,14 @@ def artikel_pruefen(logik: Logik, session: Session, bericht: Pruefbericht) -> No
         return
     for ref, quellen in sorted(artikel_referenzen(logik).items()):
         if ref not in vorhanden:
-            hinweis = (" – bitte Artikel → PV-Positionslisten importieren"
-                       if ref.startswith("PV") else "")
+            if ref.startswith("PV"):
+                hinweis = " – bitte Artikel → PV-Positionslisten importieren"
+            elif ref.startswith("KL"):     # v24 Klima
+                hinweis = " – bitte Artikel → Klima-Positionslisten importieren"
+            else:
+                hinweis = ""
             bericht.fehler.append(
-                f"Artikel {ref if ref[0] in 'ZP' and not ref.isdigit() else 'Pos. ' + ref} "
+                f"Artikel {ref if not ref.isdigit() else 'Pos. ' + ref} "
                 f"fehlt im Artikelstamm – referenziert in: {'; '.join(sorted(set(quellen)))}"
                 f"{hinweis}.")
     # v13-PV: WR/Speicher-Kombinationen aus den importierten PV-Artikeln
@@ -1011,6 +1552,21 @@ def logik_fuer_sparte(logik: Logik, sparte: str) -> Optional[Logik]:
                      pv_parameter=logik.pv_parameter,
                      pv_parameter_einheit=logik.pv_parameter_einheit, sparte="PV",
                      pv_kombis=logik.pv_kombis)
+    if sparte == "KL" and logik.kl_aktionen:
+        # v24 (PLAN_V16 Phase 113): KL ist ein Konfigurator, sobald „Aktionen KL“
+        # existiert – Aktionen/Blöcke der Klima-Blätter, alle kl_*-Felder, Anhänge
+        # („wenn Sparte = KL“) und KfW-Parameter (Gebäudetyp-Ableitung) der Voll-Logik
+        return Logik(fragen, logik.kl_aktionen, [], logik.kl_bloecke, logik.kfw,
+                     logik.geladen_am, logik.anhaenge, sparte="KL",
+                     kl_aktionen=logik.kl_aktionen, kl_bloecke=logik.kl_bloecke,
+                     kl_paket=logik.kl_paket, kl_kombis=logik.kl_kombis,
+                     kl_kombi_artikel=logik.kl_kombi_artikel, kl_montage=logik.kl_montage,
+                     kl_montage_zeilen=logik.kl_montage_zeilen,
+                     kl_montage_ampel=logik.kl_montage_ampel,
+                     kl_parameter=logik.kl_parameter,
+                     kl_parameter_einheit=logik.kl_parameter_einheit,
+                     kl_artikel=logik.kl_artikel, kl_artikel_nummern=logik.kl_artikel_nummern,
+                     kl_artikel_zeilen=logik.kl_artikel_zeilen)
     return Logik(fragen, [], [], [], logik.kfw, logik.geladen_am, [], sparte=sparte)
 
 

@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v23)
+# Friondo Angebotstool – Projektkontext (v24)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -23,7 +23,8 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   „Leitungslänge Hauseinführung ↔ WP-Inneneinheit" (immer; Pos. 103 × [Eingabe − 5 m, nie unter 0] – 5 m stecken in Pos. 006),
   SLS/ÜSS/APZ-Fragen komplett entfernt. 14 AMPEL-Gründe (Blatt Aktionen).
 - `Artikel-Preislisten/Angebotserstellung Tool mit EK.xlsx` (WP-Preisliste),
-  `Artikel-Preislisten/PV/` (PV-Positionslisten, v16), `ANGEBOTSTEXTE.md`,
+  `Artikel-Preislisten/PV/` (PV-Positionslisten, v16), `Artikel-Preislisten/Klima/`
+  (Ersatzangebot KL · Musterangebot KL – Klima-Positionen, v24), `ANGEBOTSTEXTE.md`,
   `anlagen/`, `Layout - Logo/`.
 - `projektierung_logik_v1.xlsx` (Projektierung, v11+) und
   `leadmanagement_logik_v1.xlsx` (Lead-Management, v12; seit v23 zusätzlich die
@@ -54,6 +55,7 @@ Nummern vergeben.
 | v21 | PLAN_LEAD_V1.1.md | 87–89 |
 | v22 | PLAN_V15.md | 99–103 |
 | v23 | PLAN_LEAD_V2.md | 104–112 |
+| v24 | PLAN_V16.md | 113–117 |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
@@ -142,7 +144,8 @@ Nummern vergeben.
   ausgeblendet sind. Sparten-Auswahl beim Erfassungsstart
   (Lead-Interessen vorausgewählt); je Sparte Weiche Katalog/Freitext,
   WB vorerst immer Freitext. PV/KL sind reine Erfassungsformulare
-  (Blätter „Fragen PV" / „Fragen KL", ohne Artikel-Aktionen) und laufen
+  (Blätter „Fragen PV" / „Fragen KL", ohne Artikel-Aktionen; PV ist seit v16,
+  KL seit v24 ein vollwertiger Konfigurator – siehe dort) und laufen
   über die TAIFUN-Schiene; Sparten-Badge an Erfassung, Warteschlange,
   externem Angebotseintrag und in der Statistik.
 - WP-Bogen: Heizlast-Abfrage (entscheidet bei Bekanntsein über das
@@ -1038,3 +1041,122 @@ Prüf-Agent, Hook-Änderungen an geteilten Dateien zentral eingespielt.)
   Gesamtlauf 416 Tests grün (268 Bestand + 148 V2), Abnahmeskript und Voll-Crawl gegen die migrierte
   DB-Kopie (siehe docs/nach-dem-update-v23.md). Offen/Annahmen:
   docs/leadmanagement-entscheidungen.md Abschnitt V2.
+
+## Neu in v24 – Klimakonfigurator (abgestimmt 03.10.2026)
+
+(Plan: PLAN_V16.md, Phasen 113–117; fachliche Vorlage docs/KL-Logik-Entwurf.xlsx
+(bleibt als Herkunftsnachweis liegen); Umsetzung parallel durch sechs Agenten
+A–F (Steuerdatei/Import, Lader/Parametrierung, Rechenkern/Einbindung,
+Texte/PDF, Integration/Kontrollfälle, adversarialer Prüfer).)
+
+- **Klima ist jetzt ein vollwertiger Konfigurator** (wie PV seit v16): eine
+  grüne KL-Katalog-Erfassung erzeugt ein Tool-Angebot mit 19 % USt, ohne
+  Förder-/KfW-Block, ohne Wirtschaftlichkeit, ohne Vollmacht; Ampel-Fälle und
+  Freitext-Erfassungen laufen weiter über die TAIFUN-Schiene. Nur Bosch
+  Climate (Wandgeräte), Serien 3200i (Standard, Vorbelegung), 7000i, 8000i;
+  Klassen-Codes 9/12/18/24 (Code 7 wird nicht vergeben).
+- **Steuerdatei `konfigurator_logik_v5.xlsx`** (Phase 113; Sicherung
+  `diagnose/konfigurator_logik_v5.vor_v24.xlsx`): Blatt „Fragen KL“ ersetzt
+  (28 Fragen: neu KO06 Geräteserie vor KO04, KO07 Demontage, KO08
+  WLAN-Steuerung, KO09 Bemerkung, KR08 Raumfläche (Pflicht), KR09 Deckenhöhe,
+  KR10 Wärmelast, KR11 Wanddurchbruch; Raumfragen als Wiederholgruppe „je Raum
+  (KO05)“ in der Reihenfolge KR01, KR08, KR09, KR10, KR02, KR03, KR04, KR05,
+  KR06, KR11, KR07; KE02/KE03 „nur wenn KE01 = Nein oder Unklar“). Neue
+  Blätter: „KL-Artikel“ (GUID → KL-Nr., Pinning wie PV-Artikel), „Paketmatrix
+  KL“ (Serie × Typ Single/Multi-Innengerät/Multi-Außengerät × Klasse →
+  Artikel; „nicht im Sortiment“ mit Ampeltext in der Bemerkung), „Kombinationen
+  KL“ (215 Zeilen: 205 CL5000M aus Bosch Tab. 7 + 10 CL7000M [ANNAHME A5]),
+  „Montagematrix KL“ (1/1, 2/1, 2/2, 3/1, 3/2, 4/1 → KL020–KL025; alles
+  andere Ampel), „Aktionen KL“ (Schreibweisen wie Aktionen PV, zusätzlich
+  `Hinweis: <Text>` = fachlicher Hinweis ohne Position/Ampel, Mengenwörter
+  „× Innengeräte“/„× Außengeräte“/„je Außengerät“/„je Raum“/„als EP“,
+  Zusatzbedingungen ohne ≠), „Angebotsaufbau KL“ (Block 1 Montage/Zuschläge,
+  Block 2 Elektro, Block 3 „Klimaanlage Bosch“ – jede KL-Nummer ausdrücklich,
+  Block 3 endet mit der Auslegungszeile), „KL-Parameter“ (17 Zeilen: W/m²
+  60/90, Höhenfaktoren 1,0/1,1/1,2, Klassengrenzen 2,6/3,5/5,3/7,0 kW,
+  Leitung inklusive 5 m, Meterposition KL017, Standardserie, Max. 5 Innen-/3
+  Außengeräte, §14a-Außengeräte „CL5000M 105/4 E; CL5000M 125/5 E“,
+  Gewerbe-Verhalten Hinweis|AMPEL, Rollgerüst VK 499). Blatt „Textregeln“ +3
+  Zeilen (Leistungsumfang KL020–KL025, KL013-Text, Kurzbezeichnung
+  KL026–KL029), Blatt „Anhänge“ Platzhalter „(Bosch Climate Broschüre –
+  Zulieferung)“ mit Regel „wenn Sparte = KL“, Lesehilfe-Absatz „Klima (v24)“.
+- **Lader `app/logik.py`:** Felder `kl_aktionen`, `kl_bloecke`, `kl_paket`
+  (`KlPaketZeile`), `kl_kombis` (Außengerät → Anzahl → Kombinationen,
+  aufsteigend normalisiert), `kl_kombi_artikel`, `kl_montage`, `kl_parameter`
+  + `kl_parameter_einheit`, `kl_artikel`; `refs_extrahieren` kennt KL-Nummern
+  mit Mengenwörtern und „als EP“; Aktionen „Hinweis:“ haben typ `hinweis`;
+  `logik_fuer_sparte(logik, "KL")` liefert die KL-Sicht, sobald „Aktionen KL“
+  existiert (sonst reiner Bogen). „Logik prüfen“: KL-Referenzen gegen
+  „KL-Artikel“, Kombinationen nur Codes 7/9/12/18/24 und Anzahl = Codes,
+  Montagematrix ohne Doppelzeilen, KR07-Hinweis „Optionen wie … (KO04)“,
+  Standardserie ∈ KO06, Gewerbe-Verhalten, unlesbare Zahlen (Fehler);
+  fehlende Pflichtparameter sind Hinweise mit Standardwert (wie PV v22).
+- **Import `app/import_klima.py`** („Artikel → Klima-Positionslisten
+  importieren“, Parametrierung/Lesesicht/Artikelliste; migrate.py automatisch,
+  wenn referenzierte KL-Artikel fehlen): `Artikel-Preislisten/Klima/
+  Ersatzangebot KL.xlsx` Pos. 001–048 → KL001–KL048, `Musterangebot KL.xlsx`
+  Pos. 006 → KL049 Systemgarantie (0 €), KL050 „Rollgerüst / Arbeitsgerüst,
+  Auf- und Abbau“ ohne TAIFUN-GUID (psl., 499,00 € aus KL-Parameter, EK leer –
+  Innendienst ergänzt); Quelle `QUELLE_KL = "kl"`, GUID-Anker, Re-Import ohne
+  Doppel, WP-/PV-Import fassen KL nicht an; Textregeln bei jedem Import.
+  Stichproben: KL023 3.178,00 € psl., KL038 1.966,24 € Stück, KL034 1.341,60 €
+  Set, KL049 0,00 €, KL050 499,00 €.
+- **Rechenkern `app/kl_auslegung.py`** (Phase 114): je Raum-Klon Kühllast =
+  KR08 × Höhenfaktor(KR09) × W/m²(KR10) ÷ 1000 (kaufmännisch, 2 Stellen),
+  Klasse = kleinste Grenze ≥ Kühllast; je Außengerät (KR07) 1 Raum → Single aus
+  der Paketmatrix, 2–5 Räume → Innengeräte je Raum + kleinstes Multi-Außengerät
+  mit freigegebener Kombination (klein → groß), Montage `kl_montage[(Σ Räume,
+  KO04)]`, §14a KL003 je Treffer der Parameterliste. Ampel-Gründe G1–G8
+  wörtlich (Kühllast > 7,0 kW · Klasse in Serie nicht verfügbar · Multi 8000i ·
+  Kombination nicht freigegeben · > 5 Innengeräte · Montagekombination · Leitung
+  > 15 m · Elektrozuleitung > 15 m); G2/G3 kommen aus der Paketmatrix-Bemerkung
+  „→ AMPEL: …“, die fachlichen Hinweise aus den „Hinweis:“-Zeilen des Blatts
+  „Aktionen KL“ (Platzhalter <Nr> <Name> je Raum), jeweils mit den Plan-Texten
+  als Fallback im Code. Positionen: Block 3 mit Außengeräten/Sets in
+  Außengerät-Reihenfolge, Innengeräten je Klasse gebündelt, KL013 (EP laut
+  KO08), KL049 und der Auslegungszeile „Auslegung der Klimaanlage“ (0,00 €,
+  psl.) als letzter Zeile; `auslegungs_text` wörtlich nach Plan;
+  `validierung` liefert die Absende-Meldungen („Außengerät <n> hat keinen
+  zugeordneten Raum …“, „Raum <Nr>: Raumfläche fehlt“); `protokoll_zeilen`
+  füllt die Seite „Auslegung“ des Protokoll-PDFs. Einbindung:
+  `angebot_aufbau.angebot_anlegen` (KL → `kl_json` neue Spalte, `kfw_json =
+  "{}"`, `konfigurator_typ = "KL"`, 19 %), `konfigurator.*`-Verzweigungen
+  (Vorbelegungen KO06 = Standardserie, KO08 = „als Eventualposition“, KR10#i =
+  stark bei Dachgeschoss, KO01 aus `kunden.objektart`), `routers/erfassung.py`
+  behandelt PV und KL gleich (Validierung beim Absenden, Dezimalkomma bei KR08,
+  Raum-Überschriften, `inputmode="decimal"`), Innendienst-Buttons „Angebot
+  erzeugen“/„Erneut prüfen“ auch für KL; Versionen/Duplikate übernehmen
+  `kl_json`; `positionsregeln_anwenden` fügt bei KL keine Pos. 014–017 ein.
+- **Texte & PDF** (Phase 115): Textblöcke „Friondo KL Standard“ (Vor- +
+  Nachtext), „Friondo KL Enni/SWD/Sparkasse DU“ (Nachtexte) per
+  `angebotsprofile.seed_kl` (migrate.py), Vortext „Ihr individuelles
+  Klimaanlagen-Angebot zum Festpreis“, Nachtext A ohne Monatsraten-Beispiel,
+  Nachtext B mit „Hinweis zur Kältetechnik“ (R32, F-Gase-Verordnung (EU)
+  2024/573) statt KfW-Hinweis, Nachtext C mit „Voraussichtlicher
+  Ausführungszeitraum: ______“; alle KL-Texte sind Entwürfe für das Gegenlesen
+  (A14), Wortlaut in ANGEBOTSTEXTE.md Abschnitt 9. PDF: Gruppe „Klimaanlage
+  Bosch“ (editierbar), „EP.“, „19,00 % USt.“, kein Förderblock; Lieferschein
+  zeigt Gruppen-Überschriften (spartenübergreifend); Protokoll-PDF rendert
+  Einträge ohne Frage-ID (Seite „Auslegung“). Parametrierung: Tabelle
+  „KL-Parameter“ mit Einheit, Import-Button, Lesesicht
+  `/parametrierung/kl-logik` (Paketmatrix, Montagematrix, Kombinationen,
+  Aktionen, Angebotsaufbau, KL-Artikel – nur Anzeige, AD nie EK), Filter
+  „Sparte KL“ (Suchlink KL0), DB-Ampel-Zeile KL.
+- **Kontrollfälle A–H** (Phase 116, `tests/test_kl_v24.py` + Agenten-Tests
+  `test_kl_v24_import/_logik/_auslegung/_texte.py`, 135 KL-Tests): Fall A
+  (Musterangebot) Netto 6.518,66 € exakt, USt/Gesamt 1.238,54 / 7.757,20 €
+  (`Angebot.summen()` schneidet die USt seit Phase 26 ab – Musterangebot
+  rundet kaufmännisch, Abweichung 0,01 € innerhalb der Plan-Toleranz, offene
+  Rückfrage), `kl_json` Kombination „9+9+9“ → CL5000M 79/3 E; Fall B 5.495,00 /
+  1.044,05 / 6.539,05 € exakt; C G6, D1 G3, D2 grün, D3 G2, E G1, F G4, G
+  Validierung, H Dacharbeiten/§14a/kein Rollgerüst – alle wörtlich. Abnahme-
+  PDFs ohne Kundendaten: `docs/klima/abnahme-A-AN-C-261021.pdf`,
+  `abnahme-B-AN-C-261022.pdf`, `abnahme-C-protokoll.pdf`.
+- **Grenzen v1 / Annahmen** (Details docs/nach-dem-update-v24.md): KA01/KA02
+  gelten für alle Außengeräte gemeinsam; Innengeräte je Klasse gebündelt (nicht
+  je Außengerät); keine Heizleistungs-Auslegung (KR03 nur Hinweis); Single
+  Klasse 24 in 3200i = KL033 + KL029 [A1]; KE02-Meterzuschlag [A3]; §14a-Liste
+  [A4]; CL7000M-Kombinationen [A5]; Flachdach Hinweis [A7]; Gewerbe Hinweis
+  [A9]; Leitungsgrenze 15 m [A11]; Leistungsumfang-Text [A13];
+  Auslegungszeile der Single-Sets nennt die generische 1. TAIFUN-Zeile
+  („Klimaanlage Bosch Single-Split“, Rückfrage).

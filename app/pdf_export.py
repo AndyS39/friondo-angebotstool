@@ -3,6 +3,9 @@
 # mit Friondo-Logo rechts, 5-Spalten-Fußzeile, Positionstabelle mit Gruppen-
 # Überschriften und Übertrag-Zeilen, Summen-/KfW-Block und die vier statischen
 # Nachtext-Seiten aus ANGEBOTSTEXTE.md. Ablage: data/angebote/AN-C-<Nr>.pdf
+# Sparten: WP mit KfW-Block und ggf. Vollmacht; PV (v13/v22) ohne Förderblock,
+# mit Wirtschaftlichkeitsseiten; Klima (v24, PLAN_V16 Phase 115) ohne
+# Förderblock, ohne Wirtschaftlichkeit, ohne Vollmacht – Texte „Friondo KL“.
 
 import json
 from pathlib import Path
@@ -647,7 +650,7 @@ def _pv_verbrauch(session, angebot: Angebot, daten: dict, logik) -> dict:
 def wirtschaftlichkeit_fuer(session, angebot: Angebot) -> dict | None:
     """v22 (PLAN_V15 Phase 100): Anlagendaten + Rechenergebnis für die drei
     Wirtschaftlichkeitsseiten eines PV-Angebots mit gespeicherter Auslegung.
-    None → Block entfällt (WP, ohne Auslegung, ohne PV-Parameter oder per
+    None → Block entfällt (WP, KL, ohne Auslegung, ohne PV-Parameter oder per
     Häkchen ausgeblendet). Speicher/HEMS/SpotDynamic kommen aus den aktiven
     Positionen (ep/bauseits/alternativ zählen nicht), Investition =
     Endbetrag, Startjahr = Angebotsjahr + Inbetriebnahme-Versatz."""
@@ -816,24 +819,46 @@ def _nachtext_d(pdf: AngebotsPdf, kunde: Kunde, angebot: Angebot | None = None):
 
 # --- Einstieg für Router ---------------------------------------------------
 
+def foerderblock_moeglich(angebot: Angebot) -> bool:
+    """Sparten ohne KfW-/Förderblock im PDF: PV (v13, 0 % USt, keine KfW) und
+    Klima (v24, 19 % USt, keine Förderung, keine Wirtschaftlichkeit)."""
+    return (angebot.konfigurator_typ or "WP").upper() not in ("PV", "KL")
+
+
+def _kfw_ergebnis_fuer(session, angebot: Angebot):
+    """KfW-Ergebnis für den Förderblock – nur WP mit KfW-Daten am Angebot und
+    nicht ausgeblendet; PV/KL liefern immer None."""
+    from app import logik as logik_modul
+    kfw_daten = json.loads(angebot.kfw_json or "{}")
+    if not (kfw_daten.get("O01") and not angebot.foerderung_ausblenden
+            and foerderblock_moeglich(angebot)):
+        return None
+    logik, _ = logik_modul.hole_logik(session)
+    parameter, _warn = kfw.parameter_lesen(logik)
+    eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["endbetrag"])
+    if eingaben is None:
+        return None
+    return kfw.ergebnis_fuer_angebot(parameter, eingaben, angebot)
+
+
+def _mit_vollmacht(session, angebot: Angebot) -> bool:
+    """Nachtext D (Vollmacht) nur bei iMSys/SpotDynamic und erlaubendem Profil
+    (Phase 15/v9); Klima-Angebote (v24) nie – kein Friondo Fit for Future."""
+    from app import angebotsprofile, anhaenge
+    if angebotsprofile.ist_kl(angebot):
+        return False
+    return (anhaenge.vollmacht_erforderlich(angebot)
+            and angebotsprofile.vollmacht_erlaubt(session, angebot))
+
+
 def signiertes_pdf_erzeugen(session, angebot: Angebot, png_bytes: bytes,
                             name: str, zeit) -> Path:
     """Erzeugt das signierte PDF unter data/angebote/signiert/ (Phase 23)."""
     import tempfile
 
-    from app import anhaenge
-    from app import logik as logik_modul
     kunde = session.get(Kunde, angebot.kunde_id)
-    ergebnis = None
-    kfw_daten = json.loads(angebot.kfw_json or "{}")
-    # v13-PV: bei PV nie ein Förderblock (0 % USt, keine KfW)
-    if (kfw_daten.get("O01") and not angebot.foerderung_ausblenden
-            and (angebot.konfigurator_typ or "WP") != "PV"):
-        logik, _ = logik_modul.hole_logik(session)
-        parameter, _warn = kfw.parameter_lesen(logik)
-        eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["endbetrag"])
-        if eingaben is not None:
-            ergebnis = kfw.ergebnis_fuer_angebot(parameter, eingaben, angebot)
+    # v13-PV / v24-KL: bei PV und Klima nie ein Förderblock
+    ergebnis = _kfw_ergebnis_fuer(session, angebot)
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as datei:
         datei.write(png_bytes)
         png_pfad = datei.name
@@ -841,8 +866,7 @@ def signiertes_pdf_erzeugen(session, angebot: Angebot, png_bytes: bytes,
         ziel = config.SIGNIERT_ORDNER / f"{angebot.nummer}-signiert.pdf"
         from app import angebotsprofile
         return erzeuge_pdf(angebot, kunde, ergebnis,
-                           mit_vollmacht=(anhaenge.vollmacht_erforderlich(angebot)
-                                          and angebotsprofile.vollmacht_erlaubt(session, angebot)),
+                           mit_vollmacht=_mit_vollmacht(session, angebot),
                            signatur={"png_pfad": png_pfad, "name": name, "zeit": zeit},
                            ziel=ziel,
                            vortext_text=angebotsprofile.vortext_fuer_angebot(session, angebot),
@@ -866,24 +890,18 @@ def _ersetzt_hinweis(session, angebot: Angebot) -> str:
 
 def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
     """Erzeugt das PDF inkl. KfW-Block (falls Konfigurator-Daten vorliegen);
-    Vollmacht-Seite nur bei iMSys/SpotDynamic im Angebot."""
-    from app import anhaenge
-    from app import logik as logik_modul
+    Vollmacht-Seite nur bei iMSys/SpotDynamic im Angebot.
+    v24 (PLAN_V16 Phase 115): Klima-Angebote (konfigurator_typ „KL“) nutzen
+    die KL-Textblöcke („Friondo KL <Profil>“), haben keinen KfW-/Förderblock,
+    keine Wirtschaftlichkeitsseiten (wirtschaftlichkeit_fuer → None) und keine
+    Vollmacht; Summenblock „19,00 % USt.“ über angebot.ust_bezeichnung, Gruppe
+    „Klimaanlage Bosch“ und EP-Zeile „EP.“ über die generische Positionstabelle."""
     kunde = session.get(Kunde, angebot.kunde_id)
-    ergebnis = None
-    kfw_daten = json.loads(angebot.kfw_json or "{}")
-    # v13-PV: bei PV nie ein Förderblock (0 % USt, keine KfW)
-    if (kfw_daten.get("O01") and not angebot.foerderung_ausblenden
-            and (angebot.konfigurator_typ or "WP") != "PV"):
-        logik, _ = logik_modul.hole_logik(session)
-        parameter, _warn = kfw.parameter_lesen(logik)
-        eingaben = kfw.eingaben_aus_antworten(kfw_daten, angebot.summen()["endbetrag"])
-        if eingaben is not None:
-            ergebnis = kfw.ergebnis_fuer_angebot(parameter, eingaben, angebot)
+    # v13-PV / v24-KL: bei PV und Klima nie ein Förderblock
+    ergebnis = _kfw_ergebnis_fuer(session, angebot)
     from app import angebotsprofile
     return erzeuge_pdf(angebot, kunde, ergebnis,
-                       mit_vollmacht=(anhaenge.vollmacht_erforderlich(angebot)
-                                      and angebotsprofile.vollmacht_erlaubt(session, angebot)),
+                       mit_vollmacht=_mit_vollmacht(session, angebot),
                        vortext_text=angebotsprofile.vortext_fuer_angebot(session, angebot),
                        nachtext_text=angebotsprofile.nachtext_fuer_angebot(session, angebot),
                        ersetzt_hinweis=_ersetzt_hinweis(session, angebot),

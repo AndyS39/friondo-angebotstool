@@ -232,9 +232,12 @@ def _teil_index(frage: Frage, aktions_antwort: str, wert, antworten: dict,
 
 def aktion_finden(logik: Logik, frage: Frage, wert,
                   antworten: dict) -> Optional[tuple[Aktion, int]]:
-    """Findet die passende Aktionszeile samt Teil-Index (für paarweise Listen)."""
+    """Findet die passende Aktionszeile samt Teil-Index (für paarweise Listen).
+    v24: Raum-Klone („KR05#2“, Klimakonfigurator) treffen die Aktionszeile
+    ihrer Basisfrage („KR05“) – Mengen werden je Klon ermittelt und addiert."""
+    basis_id = frage.id.split("#")[0]
     for aktion in logik.aktionen:
-        if aktion.frage != frage.id:
+        if aktion.frage not in (frage.id, basis_id):
             continue
         index = _teil_index(frage, aktion.antwort, wert, antworten, logik.fragen)
         if index is not None:
@@ -271,10 +274,15 @@ def ampel_gruende(logik: Logik, antworten: dict) -> list[str]:
     # eine kWh-Angabe über 31.000 löst dann keine AMPEL mehr aus
     heizlast_greift = (heizlast_wert(antworten) is not None
                        and leistungsklasse(logik, antworten) is not None)
+    kl = ist_kl_konfigurator(logik)
     for frage in sichtbare_fragen(logik, antworten):
         if frage.id not in antworten:
             continue
         if frage.id == ID_VERBRAUCH and heizlast_greift:
+            continue
+        if kl and "#" in frage.id:
+            # v24: Gründe je Raum (Leitungslänge, Kühllast …) kommen wörtlich
+            # mit Raum-Nr./Name aus kl_auslegung (G1/G7) – nicht doppelt
             continue
         wert = antworten[frage.id]
         if frage.typ == "Wiederholfeld" and isinstance(wert, list):
@@ -299,7 +307,20 @@ def ampel_gruende(logik: Logik, antworten: dict) -> list[str]:
         from app import pv_auslegung
         for grund in pv_auslegung.ampel_gruende(logik, antworten):
             merken(grund)
+    # v24 (PLAN_V16 Phase 114): berechnete Gründe der Klima-Auslegung G1–G8
+    # (Kühllast, Serie/Klasse, Kombination, Montagematrix, Leitungslängen)
+    if kl:
+        from app import kl_auslegung
+        for grund in kl_auslegung.ampel_gruende(logik, antworten):
+            merken(grund)
     return gruende
+
+
+def ist_kl_konfigurator(logik) -> bool:
+    """v24: KL-Sicht der Logik MIT Aktionen (Blatt „Aktionen KL“ vorhanden) –
+    dann ist Klima ein Konfigurator; ohne Aktionen bleibt KL reiner Bogen."""
+    return (getattr(logik, "sparte", "WP") == "KL"
+            and bool(getattr(logik, "kl_aktionen", None)))
 
 
 # --- Leistungsklasse und Paketauflösung -----------------------------------
@@ -420,9 +441,35 @@ def auslegungs_text(logik: Logik, antworten: dict) -> str:
 
 # --- Vorbelegungen (Blatt "KfW" / Fragen-Hinweise) -------------------------
 
-def vorbelegung(frage: Frage, antworten: dict) -> Optional[str]:
+def vorbelegung(frage: Frage, antworten: dict, logik: "Logik | None" = None) -> Optional[str]:
     """Vorbelegte Werte: O03 (2 bei 2FH; Frage nur noch bei 2FH/MFH sichtbar)
-    und K02 (Klima aus A01+A02)."""
+    und K02 (Klima aus A01+A02). v24 (Klimakonfigurator): KO06 = Standardserie
+    (Parameter „Standardserie“), KO08 = „als Eventualposition“, KR10#i = „stark …“,
+    wenn KR02#i = Dachgeschoss (vom AD änderbar)."""
+    basis_id = frage.id.split("#")[0]
+    if basis_id == "KO06" and frage.antworten:
+        standard = ""
+        if logik is not None:
+            from app import kl_auslegung
+            standard = kl_auslegung.parameter(logik)["standardserie"]
+        if standard in frage.antworten:
+            return standard
+        for option in frage.antworten:
+            if "(Standard)" in option:
+                return option
+        return None
+    if basis_id == "KO08":
+        for option in frage.antworten:
+            if option.lower().startswith("als eventualposition"):
+                return option
+        return None
+    if basis_id == "KR10" and "#" in frage.id:
+        nr = frage.id.split("#", 1)[1]
+        if str(antworten.get(f"KR02#{nr}") or "") == "Dachgeschoss":
+            for option in frage.antworten:
+                if option.lower().startswith("stark"):
+                    return option
+        return None
     if frage.id == ID_WOHNEINHEITEN:
         if str(antworten.get(ID_OBJEKTART) or "") == "2FH":
             return "2"
@@ -476,8 +523,19 @@ def ampel_je_frage(logik: Logik, antworten: dict) -> dict[str, str]:
             continue
         treffer = aktion_finden(logik, frage, wert, antworten)
         if treffer and treffer[0].typ == "ampel":
-            gruende[frage.id] = treffer[0].ampel_grund
+            gruende[frage.id] = _klon_platzhalter(treffer[0].ampel_grund, frage.id, antworten)
     return gruende
+
+
+def _klon_platzhalter(grund: str, frage_id: str, antworten: dict) -> str:
+    """v24: Gründe an Raum-Klonen („KR05#2“) tragen im Blatt „Aktionen KL“ die
+    Platzhalter <Nr> und <Name> (Raum-Nummer, Raumbezeichnung KR01)."""
+    if "#" not in frage_id:
+        return grund
+    nr = frage_id.split("#", 1)[1]
+    name = str(antworten.get(f"KR01#{nr}") or "").strip()
+    return (grund.replace("<Nr> <Name>", f"{nr} {name}".rstrip())
+            .replace("<Nr>", nr).replace("<Name>", name))
 
 
 def protokoll(logik: Logik, antworten: dict) -> list[dict]:
@@ -508,6 +566,11 @@ def protokoll(logik: Logik, antworten: dict) -> list[dict]:
     if getattr(logik, "sparte", "WP") == "PV" and logik.pv_aktionen:
         from app import pv_auslegung
         eintraege.extend(pv_auslegung.protokoll_zeilen(logik, antworten))
+    # v24: Seite „Auslegung“ der Klimaanlage (je Raum Fläche/Höhe/Wärmelast/
+    # Kühllast/Klasse/Außengerät, je Außengerät Gerät + Kombination, Montage)
+    if ist_kl_konfigurator(logik):
+        from app import kl_auslegung
+        eintraege.extend(kl_auslegung.protokoll_zeilen(logik, antworten))
     return eintraege
 
 
@@ -518,11 +581,32 @@ def kfw_daten(antworten: dict) -> dict:
             if schluessel in antworten}
 
 
-def fachliche_hinweise(antworten: dict) -> list[str]:
+def _ist_kl_bogen(antworten: dict) -> bool:
+    """v24: Antworten eines KL-Bogens (Zählfrage KO04/KO05 oder Raum-Klone)."""
+    return any(str(k) in ("KO04", "KO05", "KO06") or
+               (str(k).startswith("KR") and "#" in str(k)) for k in antworten)
+
+
+def fachliche_hinweise(antworten: dict, logik: "Logik | None" = None) -> list[str]:
     """v9: generische fachliche Hinweise am Vorgang (keine Blockade) –
     funktioniert mit Roh-Antworten UND mit den Anzeige-Strings aus dem
-    Konfigurationsprotokoll (frage_id -> antwort)."""
+    Konfigurationsprotokoll (frage_id -> antwort). v24: Hinweise des
+    Klimakonfigurators (kl_auslegung.fachliche_hinweise, Texte wörtlich
+    PLAN_V16); ohne übergebene Logik wird die KL-Sicht der geladenen Logik
+    genutzt (Parameter „Gewerbe-Verhalten“), sonst die Standardwerte."""
     hinweise: list[str] = []
+    if _ist_kl_bogen(antworten):
+        from app import kl_auslegung
+        kl_logik = logik if getattr(logik, "sparte", "") == "KL" else None
+        if kl_logik is None:
+            try:
+                from app import logik as logik_modul
+                voll = logik_modul._cache.get("logik")
+                kl_logik = (logik_modul.logik_fuer_sparte(voll, "KL")
+                            if voll is not None else None)
+            except Exception:
+                kl_logik = None
+        hinweise.extend(kl_auslegung.fachliche_hinweise(kl_logik, antworten))
     if str(antworten.get(ID_SOLARTHERMIE) or "") == SOLAR_UEBERNAHME:
         if str(antworten.get(ID_WARMWASSER) or "") == "Nein":
             hinweise.append(

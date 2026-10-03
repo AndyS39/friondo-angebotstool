@@ -25,11 +25,17 @@ async def uebersicht(request: Request, session: Session = Depends(get_session)):
     _pv_param, pv_fehlende = wirtschaftlichkeit.parameter_lesen(logik.pv_parameter)
     pv_neue = {zeile[0] for zeile in wirtschaftlichkeit.NEUE_PARAMETER_ZEILEN}
     pv_fehlende = [name for name in pv_fehlende if name in pv_neue]
+    # v24 (PLAN_V16 Phase 113/115): fehlende KL-Parameter mit Standardwert
+    kl_fehlende = logik_modul.kl_parameter_fehlende(logik) if logik.kl_aktionen else []
     return render(request, "konfiguration/uebersicht.html", aktiv="/parametrierung",
                   logik=logik, bericht=bericht, dateifehler=None,
                   pv_fehlende=pv_fehlende,
                   pv_standard={name: wirtschaftlichkeit.standardwert_text(name)
                                for name in pv_fehlende},
+                  kl_fehlende=kl_fehlende,
+                  kl_standard={name: logik_modul.kl_standardwert_text(name)
+                               for name in kl_fehlende},
+                  kl_import_ok=_import_klima() is not None,
                   ablehnungsgruende=(session.query(AblehnungsGrund)
                                      .order_by(AblehnungsGrund.sort, AblehnungsGrund.id).all()),
                   ablehnung_tage=einstellung_holen(session, "ablehnung_auto_tage", "90"),
@@ -537,6 +543,100 @@ async def neu_einlesen(session: Session = Depends(get_session)):
     else:
         meldung = f"Parametrierung+neu+eingelesen+–+{len(bericht.fehler)}+Fehler+gefunden"
     return RedirectResponse(f"/parametrierung?meldung={meldung}", status_code=303)
+
+
+# --- v24 (PLAN_V16 Phase 113/115): Klimakonfigurator -------------------------------
+
+def _import_klima():
+    """Klima-Import (app/import_klima.py, Agent A) lazy laden – fehlt das Modul,
+    bleibt die Parametrierung nutzbar und der Button meldet es."""
+    try:
+        from app import import_klima
+    except ImportError:
+        return None
+    return import_klima
+
+
+def _kl_zurueck(meldung: str, ziel: str = "/parametrierung") -> RedirectResponse:
+    from urllib.parse import quote_plus
+    return RedirectResponse(f"{ziel}?meldung={quote_plus(meldung)}", status_code=303)
+
+
+def _ist_kl_meldung(text: str) -> bool:
+    """Prüfmeldungen des Klimakonfigurators (Lesesicht zeigt nur diese)."""
+    import re
+    return bool(re.search(r"\bKL\b|KL\d{3}|Klima|Fragen KL|Montagematrix|Paketmatrix KL|"
+                          r"Kombinationen KL|KL-Parameter|KL-Artikel", text))
+
+
+@router.get("/artikel/kl-import")
+async def kl_import_vorschau(request: Request, session: Session = Depends(get_session)):
+    """Vorschau „Artikel → Klima-Positionslisten importieren“ (Ordner
+    Artikel-Preislisten/Klima/): wie der PV-Import erst das Diff zeigen,
+    gespeichert wird erst mit „Import ausführen“ (POST)."""
+    modul = _import_klima()
+    if modul is None:
+        return render(request, "konfiguration/kl_import.html", aktiv="/parametrierung",
+                      diff=None, dateifehler=[], modul_fehlt=True, ordner="")
+    ordner = modul.kl_ordner()
+    if not ordner.exists():
+        return render(request, "konfiguration/kl_import.html", aktiv="/parametrierung",
+                      diff=None, dateifehler=[str(ordner)], modul_fehlt=False,
+                      ordner=str(ordner))
+    return render(request, "konfiguration/kl_import.html", aktiv="/parametrierung",
+                  diff=modul.berechne_diff(session), dateifehler=[], modul_fehlt=False,
+                  ordner=str(ordner))
+
+
+@router.post("/artikel/kl-import")
+async def kl_import_ausfuehren(session: Session = Depends(get_session)):
+    """Button „Artikel → Klima-Positionslisten importieren“: KL001–KL050 anlegen/
+    aktualisieren (GUID-Anker Blatt „KL-Artikel“), danach die Logik neu einlesen,
+    damit die KL-Referenzen gegen den Artikelstamm geprüft werden."""
+    modul = _import_klima()
+    if modul is None:
+        return _kl_zurueck("Klima-Import nicht verfügbar – app/import_klima.py fehlt.")
+    try:
+        _diff, meldung = modul.import_ausfuehren(session)
+    except OSError as exc:        # Positionsliste nicht lesbar – kein Absturz der Seite
+        session.rollback()
+        return _kl_zurueck(f"Klima-Import fehlgeschlagen: {exc}")
+    logik_modul.neu_einlesen(session)
+    return _kl_zurueck(f"Klima-Import abgeschlossen: {meldung}")
+
+
+@router.get("/kl-logik")
+async def kl_logik_seite(request: Request, session: Session = Depends(get_session)):
+    """Lesesicht des Klimakonfigurators: Paketmatrix KL, Montagematrix KL,
+    Kombinationen KL, Aktionen KL, KL-Parameter und die KL-Artikel (Blatt +
+    Artikelstamm, Filter Sparte KL = pos_nr KL*). Nur Anzeige – Live-Master
+    bleibt die Logik-Excel; AD sieht nie EK."""
+    if not config.LOGIK_EXCEL_PFAD.exists():
+        return RedirectResponse("/parametrierung", status_code=303)
+    from app.models import Artikel
+    logik, bericht = logik_modul.hole_logik(session)
+    kombis = []
+    for name, je_anzahl in logik.kl_kombis.items():
+        for anzahl in sorted(je_anzahl):
+            kombis.append((name, logik.kl_kombi_artikel.get(name, ""), anzahl,
+                           sorted(je_anzahl[anzahl],
+                                  key=lambda k: [int(c) for c in k.split("+")])))
+    bestand: dict[str, Artikel] = {}
+    for artikel in (session.query(Artikel).filter(Artikel.pos_nr.like("KL%"))
+                    .order_by(Artikel.aktiv.desc(), Artikel.pos_nr, Artikel.id)):
+        bestand.setdefault(artikel.pos_nr, artikel)
+    benutzer = request.state.benutzer
+    kl_fehlende = logik_modul.kl_parameter_fehlende(logik) if logik.kl_aktionen else []
+    return render(request, "konfiguration/kl_logik.html", aktiv="/parametrierung",
+                  logik=logik, bericht=bericht, kombis=kombis, bestand=bestand,
+                  kl_fehler=[f for f in bericht.fehler if _ist_kl_meldung(f)],
+                  kl_warnungen=[w for w in bericht.warnungen if _ist_kl_meldung(w)],
+                  kl_fehlende=kl_fehlende,
+                  kl_standard={name: logik_modul.kl_standardwert_text(name)
+                               for name in kl_fehlende},
+                  ek_sichtbar=benutzer is not None and benutzer.rolle != "aussendienst",
+                  kl_import_ok=_import_klima() is not None,
+                  meldung=request.query_params.get("meldung", ""))
 
 
 # --- v11 (Phase 70): Stammseiten der Projektierung --------------------------------

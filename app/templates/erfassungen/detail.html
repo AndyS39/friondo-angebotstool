@@ -90,7 +90,7 @@
     {% endif %}
     {# v13-PV (Phase 79): Katalog-Erfassungen mit der aktuellen Logik neu
        auswerten – z. B. PV-Altfälle der TAIFUN-Warteschlange #}
-    {% if not angebot and erfassung.typ == 'katalog' and (erfassung.sparte or 'WP') in ('WP', 'PV')
+    {% if not angebot and erfassung.typ == 'katalog' and (erfassung.sparte or 'WP') in ('WP', 'PV', 'KL')
           and erfassung.status in ('Neu', 'Individuell – zu prüfen', 'In TAIFUN zu schreiben') %}
     <form method="post" action="/erfassungen/{{ erfassung.id }}/erneut-pruefen">
         <button class="knopf zweitrangig" type="submit"

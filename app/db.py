@@ -152,6 +152,7 @@ _NACHTRAEGLICHE_SPALTEN = {
     "angebote": {
         "ust_satz": "FLOAT NOT NULL DEFAULT 19",                 # v13-PV Phase 75
         "pv_json": "TEXT NOT NULL DEFAULT ''",                   # v13-PV Phase 76/78
+        "kl_json": "TEXT NOT NULL DEFAULT ''",                   # v24 Phase 114 (Klima)
         "liefer_anschrift": "VARCHAR(300) NOT NULL DEFAULT ''",   # v11 Phase 66
         "kopie_von": "VARCHAR(30) NOT NULL DEFAULT ''",           # v11 Phase 66
         "projekt_gewerk_id": "INTEGER",     # v11 Projektierung
