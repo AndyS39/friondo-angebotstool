@@ -77,17 +77,28 @@ Projektierung und monday-Sync sind unverändert.
 ## Parametrierung
 
 - Lead-Einstellungen: `score_aktiv` (Standard aus), `ohne_schritt_tage` (Standard 2).
+- **To-do nach dem Pull (Admin):** Parametrierung → „Lead-Quellen & Kampagnen“ →
+  Tabelle Quellen → Zeile mit Key `info_veranstaltung`: Feld „Name“ von
+  „Info-Veranstaltung“ auf „Infoabend“ ändern → „Speichern“ (nur der Name; Key,
+  Eingang und API bleiben). Bis dahin erscheint der alte Name überall, wo der
+  Quellenname aus der Datenbank gezeigt wird (Kanban-Filter und -Abzeichen,
+  Statistik-Filter, Import/Schnellanlage, Kanal-Report, Eingangs-Tooltip).
+- Quellen & Kampagnen: die Spalte „Score-Bonus“ ist als „nicht aktiv“
+  gekennzeichnet, solange `score_aktiv = aus` ist – die Werte bleiben gespeichert.
 - Steuerdatei `leadmanagement_logik_v1.xlsx` (Sicherung
   `diagnose/leadmanagement_logik_v1.vor_v25.xlsx`): Blatt Status mit Label
   „Kontaktiert“ für beide Kontakt-Phasen und neuer Spalte `board_label`
   (Hauptboard / Deals), neues Blatt „Lesehilfe“; Blatt Kaskade: Spalte
   `wiedervorlage_nach` wird nicht mehr ausgewertet.
 
-## Offen / Rückfragen
+## Offen
 
-Siehe Gesamtübersicht zur Übergabe und `docs/leadmanagement-entscheidungen.md`
-Abschnitt V3 ([ANNAHME]-Stellen: Namensspalten nur in Boards ausgeblendet, „eine
-Liste“ = ohne Gruppen, Wunschzeiten bleiben in der Kartei, Alt → Neu in der
-Änderungs-Aktivität, Mailbox/Besetzt wie Nicht erreicht, manuelle HV-Buchung durch
-ID bleibt, Liste „Ohne nächsten Schritt“ als Ersatz für die automatische
-Wiedervorlage).
+Die Rückfragen R1–R12 der Übergabe sind am 05.10.2026 beantwortet
+(`docs/leadmanagement-entscheidungen.md`, Tabelle V3.5; die [ANNAHME]-Stellen aus
+V3.1 – Namensspalten nur in Boards ausgeblendet, „eine Liste“ = ohne Gruppen,
+Wunschzeiten bleiben, Alt → Neu in der Änderungs-Aktivität, Mailbox/Besetzt wie
+Nicht erreicht, manuelle HV-Buchung durch den Innendienst bleibt, „Ohne nächsten
+Schritt“ als Ersatz der automatischen Wiedervorlage – sind damit bestätigt).
+Offen bleiben: manuelle Sichtprüfung in Edge bei 1366 px, das Admin-To-do oben
+(Quelle umbenennen), Freischaltung `lead_freigabe_modus = alle` (eigener Plan),
+[OFFEN 1]/[OFFEN 2] aus V2.

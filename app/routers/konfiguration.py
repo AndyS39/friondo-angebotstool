@@ -1444,6 +1444,8 @@ async def lead_quellen_seite(request: Request,
                   gruppe=lead_kern.quelle_gruppe,
                   kanal_werte=lead_kern.kanal_werte(session),
                   profil_zum_kanal=lambda kanal: lead_kern.profil_zum_kanal(session, kanal),
+                  # v25 (Rückfrage 6): Spalte Score-Bonus bei score_aktiv = aus kennzeichnen
+                  score_aktiv=lead_kern.score_aktiv(session),
                   meldung=request.query_params.get("meldung", ""))
 
 

@@ -363,6 +363,26 @@ class ScoreAus(Basis):
         self.assertEqual(logik.board_label("terminiert"), "Deals")
         self.assertEqual(logik.board_label("hauptboard"), "Hauptboard")
 
+    def test_quellen_seite_kennzeichnet_score_bonus(self):
+        # v25 Rückfrage 6 (Antwort Andreas 05.10.2026): Spalte „Score-Bonus“ bleibt,
+        # ist bei score_aktiv = aus als „nicht aktiv“ gekennzeichnet (Werte bleiben)
+        r = self.client.get("/parametrierung/lead-quellen")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("Score-Bonus (nicht aktiv)", r.text)
+        self.assertIn("nicht aktiv (score_aktiv = aus)", r.text)
+        self.assertIn('name="score_bonus"', r.text)          # Eingabe bleibt erhalten
+        self.assertNotIn("<th>Score-Bonus</th>", r.text)
+        kern.parameter_setzen(self.s, "score_aktiv", "an")
+        self.s.commit()
+        try:
+            seite = self.client.get("/parametrierung/lead-quellen").text
+            self.assertIn("<th>Score-Bonus</th>", seite)
+            self.assertNotIn("Score-Bonus (nicht aktiv)", seite)
+            self.assertNotIn("seit v25 nicht aktiv", seite)
+        finally:
+            kern.parameter_setzen(self.s, "score_aktiv", "aus")
+            self.s.commit()
+
 
 # --- 2. Terminassistent ohne Handelsvertreter -----------------------------------------
 

@@ -1243,6 +1243,9 @@ async def mail_mit_vorlage(request: Request, vorgang_id: int,
 
 # --- Phase 79: Board, Karte, Cockpit, Lead-Kopf-Aktionen ----------------------------
 
+# v25: überdeckt durch lm_boards.board_kanban (V2-Router wird in main.py zuerst
+# eingebunden) – diese V1-Route übergibt kein `board` an board.html/lm_nav und darf
+# nicht wieder wirksam werden (Nav-Markierung des gezeigten Boards, R10).
 @router.get("/board")
 async def board(request: Request, session: Session = Depends(get_session)):
     _gate(request, session)

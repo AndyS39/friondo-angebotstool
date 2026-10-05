@@ -1207,7 +1207,9 @@ Abschnitt V3; Team-Hinweise: docs/nach-dem-update-v25.md.)
   Parameter (`/terminiert`, `/info-veranstaltung`, `info_*`, Quelle
   `info_veranstaltung`), das Phasen-Label „Terminiert“ und der Eingang/API
   bleiben unverändert; der DB-Datensatz `lead_quellen.name = Info-Veranstaltung`
-  ist nicht migriert (Rückfrage).
+  ist nicht migriert (R1: manuell unter Parametrierung → „Lead-Quellen &
+  Kampagnen“ umbenennen; Dev-DB erledigt, Server-To-do in
+  docs/nach-dem-update-v25.md).
 - **Label „Kontaktiert“**: Blatt Status trägt für `in_kontaktierung` und
   `qualifiziert` dasselbe Label (gleiche Farbe); Phasen-Labels in Boards, Kanban,
   Kontaktiert, Kartei-Statuskette, Anrufliste, Dashboard, HV-Ansicht,
@@ -1324,7 +1326,7 @@ Abschnitt V3; Team-Hinweise: docs/nach-dem-update-v25.md.)
   `hv_manuell`); Leads mit `ad_id` = HV liefern `hv_lead`/`hv_hinweis` für den
   Innendienst, termin.html zeigt die HV als optgroup „Handelsvertreter (nur
   manuell)“ – die manuelle Buchung durch den Innendienst bleibt möglich
-  [ANNAHME]. Kontrollwert René Golaschewski: Innendienst sieht den HV-Hinweis,
+  (Annahme 6, bestätigt R8). Kontrollwert René Golaschewski: Innendienst sieht den HV-Hinweis,
   René nur eigene Vorschläge.
 - **„Nicht erreicht“, „Mailbox“ und „Besetzt“ ohne Dialog** (Anrufliste,
   Kartei, Boards-Inline, Infoabend): Klick = `POST /lead-management/anruf/{id}`
@@ -1366,16 +1368,22 @@ Abschnitt V3; Team-Hinweise: docs/nach-dem-update-v25.md.)
 - **Tests / Abnahme** (Phase 121): `tests/test_lead_v3.py` (21: Routen, Nav-
   Keys, Fälle a–k, Kontrollwerte, Prüfklasse L) + `test_lead_v3_boards.py` (17),
   `test_lead_v3_anruf.py` (7), `test_lead_v3_kartei.py` (22),
-  `test_lead_v3_phase120.py` (22); zehn Alt-Tests bewusst angepasst
+  `test_lead_v3_phase120.py` (23); zehn Alt-Tests bewusst angepasst
   (Begründungen in docs/leadmanagement-entscheidungen.md V3.3). Gesamtlauf
-  `pytest tests -q` → **640 passed** (v24: 551), `tests/abnahme.py` 93/93,
+  `pytest tests -q` → **641 passed** (v24: 551), `tests/abnahme.py` 93/93,
   Voll-Crawl admin/innendienst/aussendienst gegen die Server-DB-Kopie ohne
   Absturz, Screenshots vorher/nachher (Kartei, Hauptboard, Anrufliste) als PNG
   in `docs/design-v25/` – nur Demo-Zeilen im Bild, „vorher“ aus einem Worktree
   des v24-Stands (`diagnose/v25_screenshots2.py`, Chrome headless).
-- **Offen / Rückfragen** (Details Gesamtübersicht und V3.4): manuelle
-  Sichtprüfung in Edge bei 1366 px (Drag & Drop, Mehrfach-Dropdown), Datensatz
-  `lead_quellen.name` „Info-Veranstaltung“ umbenennen, Spalte „Score-Bonus“ in
-  der Quellen-Parametrierung kennzeichnen, API-Text „Keine Info-Veranstaltung“,
-  Rang der Zurückgestellten vor SLA rot, Freischaltung `lead_freigabe_modus =
-  alle` (eigener Plan).
+- **Rückfragen R1–R12 beantwortet** (05.10.2026, alle wie vorgeschlagen – Tabelle
+  V3.5 in docs/leadmanagement-entscheidungen.md): Quellen-Datensatz
+  „Info-Veranstaltung“ wird manuell in „Infoabend“ umbenannt (Dev-DB erledigt,
+  Server nach dem Pull), Parametrierung → „Lead-Quellen & Kampagnen“ zeigt
+  „Score-Bonus (nicht aktiv)“ solange `score_aktiv = aus` (Werte bleiben); alles
+  Übrige bleibt wie gebaut (eigene Spalten je Board, Aktivitätstexte intern,
+  Besetzt ohne Dialog, Einstufung „zurückgestellt“ vor der SLA-Einstufung (Rang 3
+  statt 0/1), Trichter-Kohorte, HV-Buchung über POST /termin
+  erlaubt, Rückfall „Ohne nächsten Schritt“, Kanban markiert Board, kein
+  Cockpit-Eintrag, API-Text unverändert). **Offen**: manuelle Sichtprüfung in
+  Edge bei 1366 px (Drag & Drop, Mehrfach-Dropdown), Freischaltung
+  `lead_freigabe_modus = alle` (eigener Plan).

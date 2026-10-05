@@ -332,12 +332,14 @@ aufsetzen.
 
 Alle Phasen 118–121 umgesetzt (sechs Agenten A–F plus zentrale Vorab-/Nacharbeit),
 jede Checkbox nach Umsetzung und Test abgehakt. Gesamtlauf `pytest tests -q`
-640 passed (v24: 551; neu `tests/test_lead_v3*.py` 89 Tests), `tests/abnahme.py`
+641 passed (v24: 551; neu `tests/test_lead_v3*.py` 90 Tests), `tests/abnahme.py`
 93/93, `migrate.py` zweimal gegen die Server-DB-Kopie (2. Lauf ohne Änderungen),
 Voll-Crawl admin/innendienst/aussendienst ohne Absturz (Bericht
 `diagnose/test_v25/crawl_v25_bericht.txt`). Zehn Alt-Tests bewusst angepasst,
 Begründungen in `docs/leadmanagement-entscheidungen.md` Abschnitt V3.3; alle
-[ANNAHME]-Stellen aufgelöst (V3.1), Rückfragen gebündelt in der Gesamtübersicht
-der Übergabe. Offen: manuelle Sichtprüfung in Edge bei 1366 px, Datensatz
-`lead_quellen.name` „Info-Veranstaltung“, Freischaltung `lead_freigabe_modus = alle`.
-Kein git push vor Freigabe.
+[ANNAHME]-Stellen aufgelöst (V3.1). Rückfragen R1–R12 am 05.10.2026 wie
+vorgeschlagen beantwortet (V3.5; Folgeänderung nur R6: Kennzeichnung „Score-Bonus
+(nicht aktiv)“ in der Quellen-Parametrierung, +1 Test). Offen: manuelle
+Sichtprüfung in Edge bei 1366 px, Server-Umbenennung der Quelle „Info-Veranstaltung“
+→ „Infoabend“ (Admin-To-do in docs/nach-dem-update-v25.md), Freischaltung
+`lead_freigabe_modus = alle`. Kein git push vor Freigabe.

@@ -541,8 +541,8 @@ Stand 05.10.2026, Feedback-Runde Claudia Castro. Alles weiter im Demo-Modus.
 | 2 | „Nur eine Liste“ in der Anrufliste = ohne die fünf Gruppen | So umgesetzt: eine durchgehend sortierte Liste (SLA rot → SLA gelb → fällige Wiedervorlagen/Rückrufe nach Uhrzeit → zurückgestellt fällig → Rest nach Eingang, älteste zuerst); Schnellfilter-Chips bleiben, Leiste „Reihenfolge“ statt Gruppenköpfe. |
 | 3 | Wunschzeiten bleiben in der Kartei (der Terminassistent nutzt sie) | So umgesetzt (im Kundeninfo-Block, nur Anzeige). |
 | 4 | Änderungs-Aktivität mit Alt → Neu | So umgesetzt: Aktivität typ `aenderung` „<Feld>: „alt“ → „neu““ bei jeder tatsächlichen Änderung über das Autospeichern; unveränderte Werte erzeugen keine Aktivität. Zuweisungen Innendienst/Außendienst schreiben weiter nur die bestehende `status`-Aktivität der lead_v2-Helfer (keine Doppelprotokollierung). |
-| 5 | „Mailbox“ verhält sich wie „Nicht erreicht“ (kein Dialog, keine Wiedervorlage) | So umgesetzt; ebenso „Besetzt“ (zusätzliche Annahme, Rückfrage R5). |
-| 6 | Manuelle Buchung durch den Innendienst auf einen Handelsvertreter bleibt möglich | So umgesetzt: nur der Assistent schließt HV aus („Handelsvertreter terminieren ihre Leads selbst“); termin.html zeigt sie als optgroup „Handelsvertreter (nur manuell)“; HV-Leads zeigen dem Innendienst den Hinweis „Lead liegt bei <Name> (Handelsvertreter), Terminierung durch den Vertreter“. |
+| 5 | „Mailbox“ verhält sich wie „Nicht erreicht“ (kein Dialog, keine Wiedervorlage) | So umgesetzt; ebenso „Besetzt“ (zusätzliche Annahme, Rückfrage R4 – bestätigt, siehe V3.5). |
+| 6 | Manuelle Buchung durch den Innendienst auf einen Handelsvertreter bleibt möglich | So umgesetzt: nur der Assistent schließt HV aus („Handelsvertreter terminieren ihre Leads selbst“); termin.html zeigt sie als optgroup „Handelsvertreter (nur manuell)“; HV-Leads zeigen dem Innendienst den Hinweis „Lead liegt bei <Name> (Handelsvertreter), Terminierung durch den Vertreter“ (bestätigt R8). |
 | 7 | Liste „Ohne nächsten Schritt“ als Ersatz für die weggefallene automatische Wiedervorlage | So umgesetzt im Dashboard (Parameter `ohne_schritt_tage`, Standard 2): eigene Leads mit Versuch ≥ 1, ohne Wiedervorlage/Zurückstellung, ohne offenen Termin; Leads ohne Anruf-Aktivität fallen auf Erstkontakt bzw. Eingang zurück. |
 | 8 | Nurture-Mail bleibt an die Einwilligung gebunden | Unverändert (Kaskade plant die Nurture-Mail 30 Tage nach dem letzten Versuch, Versand prüft wie bisher). |
 
@@ -555,8 +555,11 @@ Stand 05.10.2026, Feedback-Runde Claudia Castro. Alles weiter im Demo-Modus.
 - **Label „Kontaktiert“** kommt aus dem Blatt Status (zwei Phasen, ein Label); die
   Board-Namen („Hauptboard“, „Deals“) aus der neuen Spalte `board_label`
   (`logik.board_label`). Parameter-Keys `info_*`, Tabellen-, Pfad- und Quellen-Keys
-  bleiben, nur die Oberfläche sagt „Infoabend“/„Deals“. Aktivitätstexte behalten die
-  internen Phasennamen (Protokoll bleibt eindeutig). In Auswahlfeldern erscheint
+  bleiben, nur die Oberfläche sagt „Infoabend“/„Deals“. Aktivitätstexte der Status-Wechsel
+  behalten die internen Phasennamen (Protokoll bleibt eindeutig); einzige Ausnahme
+  ist der Infoabend-Bestandshinweis „Kunde bereits im System: Vorgang #… (Phase
+  Kontaktiert)“ (`lead_info.bestand_hinweis_schreiben`), der als Hinweis im Board
+  angezeigt wird und deshalb das Oberflächen-Label trägt. In Auswahlfeldern erscheint
   „Kontaktiert“ einmal; manuell wird fortan `in_kontaktierung` gesetzt.
 - **Trichter-Stufe „Kontaktiert“** als Kohorte des Zeitraums (erster Kontaktversuch,
   erreicht oder qualifiziert im Zeitraum, ein Lead zählt einmal), Aufteilung nach
@@ -568,7 +571,7 @@ Stand 05.10.2026, Feedback-Runde Claudia Castro. Alles weiter im Demo-Modus.
 - **Spalten je Nutzer für alle vier Boards**: Infoabend (Key `info`) und
   Handelsvertreter-Ansicht (Key `handelsvertreter`) haben eine eigene Konfiguration je
   Nutzer (Katalog = Hauptboard; HV-Standard = v23-Spaltensatz), nicht die
-  Hauptboard-Konfiguration als Ausgangspunkt (Prüfer F, Rückfrage R2). Spalten-Key
+  Hauptboard-Konfiguration als Ausgangspunkt (Prüfer F, Rückfrage R2 – bestätigt, siehe V3.5). Spalten-Key
   `lead` bleibt für „Kundenname“; v23-Listen werden weiter gelesen; ohne gemerkte
   Sortierung Eingang neueste zuerst; eine gemerkte Score-Sortierung ruht bei
   `score_aktiv = aus`. Umbenennen bleibt auch in der HV-Lesesicht möglich
@@ -584,8 +587,8 @@ Stand 05.10.2026, Feedback-Runde Claudia Castro. Alles weiter im Demo-Modus.
 - **Anrufliste**: Filter „Vertriebskanal“ als Checkbox-Dropdown (nur so sind die
   Kanalfarben darstellbar); `gruppe=` in Alt-Links wird ignoriert,
   `quelle_id/quelle_typ/kampagne_id` filtern weiter (Abzeichen). Zurückgestellte mit
-  erreichtem Datum stehen auf Rang 3 – auch ohne Erstkontakt (Vorrang wie v21,
-  Rückfrage R6).
+  erreichtem Datum stehen auf Rang 3 – auch ohne Erstkontakt (Vorrang der Einstufung
+  „zurückgestellt“ vor der SLA-Einstufung wie v21, Rückfrage R5 – bestätigt, siehe V3.5).
 - **Terminvorschläge im Block Termine**: eigene JSON-Route
   `GET /lead-management/lead/{id}/termin/vorschlaege.json` (Top 5, Cache 10 Minuten je
   Lead und Sicht, Invalidierung bei Adressänderung, komplett nach Buchung/Absage,
@@ -601,8 +604,8 @@ Stand 05.10.2026, Feedback-Runde Claudia Castro. Alles weiter im Demo-Modus.
 - **Cache-Busting**: `templating._css_version()` nimmt die jüngste Static-Datei
   (style.css, lead_v2.css, *.js) – einzige Änderung außerhalb des Lead-Moduls,
   damit Browser nach dem Rollout die neuen `lead_v2.css`/`lm_*.js` laden.
-- **Nicht migriert**: Datensatz `lead_quellen.name = Info-Veranstaltung` (Rückfrage R1,
-  manuell in der Parametrierung umbenennbar); `cockpit.html` (toter Code seit v21)
+- **Nicht migriert**: Datensatz `lead_quellen.name = Info-Veranstaltung` (R1 entschieden:
+  manuell in der Parametrierung umbenennen, siehe V3.5); `cockpit.html` (toter Code seit v21)
   bleibt liegen; `leads_api.py` Fehlertext „Keine Info-Veranstaltung am …“ unverändert
   (Eingang/API bleiben laut Plan).
 
@@ -627,14 +630,32 @@ Stand 05.10.2026, Feedback-Runde Claudia Castro. Alles weiter im Demo-Modus.
 - Manuelle Sichtprüfung in **Edge** bei 1366 px (Hauptboard/Deals/Infoabend mit allen
   Spalten, Sticky-Filter, Drag & Drop am Spaltenkopf, Mehrfach-Dropdown
   „Vertriebskanal“) – bisher nur Chromium (Vorschau/Headless) und Tests.
-- Rückfragen R1–R12 der Gesamtübersicht (Quellen-Datensatz „Info-Veranstaltung“,
-  Spalten-Konfiguration Infoabend/HV, Aktivitätstexte, Cockpit, Besetzt, Rang
-  Zurückgestellte vor SLA, „Score-Bonus“ in der Quellen-Parametrierung, API-Text,
-  Trichter-Kohorte, HV-Buchung über POST /termin, „Ohne nächsten Schritt“
-  Rückfall/Phase neu, Kanban-Nav-Markierung).
+- Quellen-Datensatz `lead_quellen.name` „Info-Veranstaltung“ → „Infoabend“ auf dem
+  Server manuell umbenennen (Parametrierung → „Lead-Quellen & Kampagnen“, Tabelle
+  Quellen, Feld „Name“, nur der Name, Key bleibt) – Antwort R1, siehe V3.5; in der
+  Dev-DB bereits erledigt.
 - Vorschlags-Cache enthält `buchbar/pflicht_offen`; Pflichtfeldänderungen ohne
   Adressbezug werden erst nach Ablauf oder „Neu laden“ sichtbar (kosmetisch).
 - [OFFEN 1] Zuordnungsregel Infoabend-Lead → Veranstaltung, [OFFEN 2] Duplikate durch das
   Tool – unverändert aus V2.
 - Freischaltung `lead_freigabe_modus = alle` (eigener Plan / Lead V4).
 - Telefonie/Softphone bleibt ausgeklammert.
+
+## V3.5 Antworten auf die Rückfragen R1–R12 (Andreas, 05.10.2026)
+
+Alle zwölf Rückfragen der Übergabe wurden wie vorgeschlagen entschieden:
+
+| Nr. | Rückfrage | Entscheidung | Folge |
+|---|---|---|---|
+| R1 | Quellen-Datensatz „Info-Veranstaltung“ | umbenennen in „Infoabend“, manuell in der Parametrierung (kein migrate-Schritt) | Dev-DB erledigt; Server: To-do nach dem Pull (docs/nach-dem-update-v25.md) |
+| R2 | Spaltenkonfiguration Infoabend/HV | eigene Konfiguration je Board beibehalten | keine Änderung |
+| R3 | Aktivitätstexte mit internen Phasennamen | belassen | keine Änderung; Ausnahme bleibt der Infoabend-Bestandshinweis mit Oberflächen-Label (siehe V3.2) |
+| R4 | „Besetzt“ wie Nicht erreicht/Mailbox | ja, ohne Dialog und ohne Wiedervorlage | keine Änderung (Annahme 5 bestätigt) |
+| R5 | Einstufung „zurückgestellt“ (Rang 3) hat Vorrang vor der SLA-Einstufung (Rang 0/1) – Zurückgestellte stehen in der Liste nach SLA rot/gelb, auch ohne Erstkontakt | beibehalten | keine Änderung |
+| R6 | Spalte „Score-Bonus“ in der Quellen-Parametrierung | kennzeichnen statt ausblenden | `lead_quellen.html`: Spaltenkopf „Score-Bonus (nicht aktiv)“, Eingabe gedimmt, Hinweiszeile; bei `score_aktiv = an` unverändert (Test `test_quellen_seite_kennzeichnet_score_bonus`) |
+| R7 | Trichter-Stufe „Kontaktiert“ | Kohorte des Zeitraums beibehalten | keine Änderung |
+| R8 | HV-Buchung über `POST /lead/{id}/termin` sperren | nein (Annahme 6: manuelle HV-Buchung bleibt) | keine Änderung |
+| R9 | „Ohne nächsten Schritt“: Rückfall auf Erstkontakt/Eingang | beibehalten | keine Änderung |
+| R10 | Kanban markiert das gezeigte Board | ja belassen | keine Änderung |
+| R11 | V1-Cockpit unter „Mehr …“ | nein | keine Änderung |
+| R12 | API-Fehlertext „Keine Info-Veranstaltung am …“ | Eingang/API unverändert | nur Doku |

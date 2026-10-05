@@ -26,7 +26,10 @@
     <thead><tr><th>Key</th><th>Name</th><th>Typ</th><th>Kanal</th>
         <th class="rechts" title="Eingänge der letzten 7 Tage">7 T.</th>
         <th class="rechts" title="Eingänge der letzten 30 Tage">30 T.</th><th>zuletzt</th>
-        <th>Kosten je Lead (€)</th><th>Standard-Sparten</th><th>Score-Bonus</th>
+        <th>Kosten je Lead (€)</th><th>Standard-Sparten</th>
+        {% if score_aktiv %}<th>Score-Bonus</th>
+        {% else %}<th class="dezent" title="score_aktiv = aus (Lead-Einstellungen): der Bonus wird nicht angewendet, die Werte bleiben für ein späteres Einschalten erhalten">Score-Bonus (nicht aktiv)</th>
+        {% endif %}
         <th>API-Key</th><th>Aktiv</th><th></th></tr></thead>
     <tbody>
     {% for q in quellen %}
@@ -63,7 +66,8 @@
                         {{ 'checked' if s in q.standard_sparten }}>{{ s }}</label>
                 {% endfor %}
             </td>
-            <td><input form="q{{ q.id }}" type="number" name="score_bonus" value="{{ q.score_bonus }}" style="width:4rem"></td>
+            <td><input form="q{{ q.id }}" type="number" name="score_bonus" value="{{ q.score_bonus }}" style="width:4rem"
+                       {% if not score_aktiv %}class="dezent" title="nicht aktiv (score_aktiv = aus)"{% endif %}></td>
             <td>{% if q.api_key %}<code title="{{ q.api_key }}">{{ q.api_key[:8] }}…</code>{% else %}<span class="dezent">–</span>{% endif %}
                 <label class="dezent" style="white-space:nowrap"><input form="q{{ q.id }}" type="checkbox" name="api_key_neu"> neu</label></td>
             <td><input form="q{{ q.id }}" type="checkbox" name="aktiv" {{ 'checked' if q.aktiv }}></td>
@@ -80,6 +84,8 @@
 </table>
 </div>
 
+{% if not score_aktiv %}<p class="dezent">Score-Bonus: seit v25 nicht aktiv (Parameter <code>score_aktiv = aus</code>
+    in den Lead-Einstellungen) – die Werte bleiben gespeichert und wirken erst nach dem Einschalten.</p>{% endif %}
 <h3>Neue Quelle</h3>
 <form method="post" action="/parametrierung/lead-quellen" class="formzeile">
     <input type="hidden" name="art" value="quelle">
