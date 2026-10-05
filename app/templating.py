@@ -57,11 +57,22 @@ templates.env.filters["de_datum"] = de_datum
 # Nachfix). v14: pro Request frisch statt einmal beim Start – ein laufender
 # Server lieferte sonst nach CSS-Änderungen weiter die alte Versionsnummer
 # aus, und die Browser zeigten neue Templates mit gecachtem altem CSS.
+# v25: Cache-Busting – die Versionsnummer hängt an der jüngsten der
+# ausgelieferten Static-Dateien (style.css, lead_v2.css, *.js), nicht nur an
+# style.css; sonst liefern Browser nach einem Update ohne CSS-Änderung alte
+# lead_v2.css/lm_*.js mit derselben ?v=-Nummer aus.
+_STATIC_VERSIONIERT = ("style.css", "lead_v2.css")
+
+
 def _css_version() -> int:
-    try:
-        return int((APP_ORDNER / "static" / "style.css").stat().st_mtime)
-    except OSError:
-        return 0
+    static = APP_ORDNER / "static"
+    zeiten = []
+    for p in list(static.glob("*.js")) + [static / n for n in _STATIC_VERSIONIERT]:
+        try:
+            zeiten.append(int(p.stat().st_mtime))
+        except OSError:
+            pass
+    return max(zeiten) if zeiten else 0
 
 
 templates.env.globals["css_version"] = _css_version()   # Fallback

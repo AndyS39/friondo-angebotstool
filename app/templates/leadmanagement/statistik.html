@@ -47,7 +47,7 @@
     <label class="kontrollfeld">Sparte
         <select name="sparte">
             <option value="">alle</option>
-            {% for s in ('WP', 'PV', 'KL', 'WB') %}
+            {% for s in ('WP', 'PV', 'KL', 'WB', 'GW') %}
                 <option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }}>{{ s }}</option>
             {% endfor %}
         </select>
@@ -87,12 +87,14 @@
     </tbody>
 </table>
 
-<h2>Trichter</h2>
+{# v25 (Phase 118/120): Stufe „Kontaktiert“ = in_kontaktierung + qualifiziert (Label aus
+   dem Blatt Status); keine Score-Verteilung (score_aktiv steuert die Reste) #}
+<h2>Trichter <small class="dezent">„{{ kontaktiert_label or 'Kontaktiert' }}“ = Kontaktversuch, erreicht oder qualifiziert im Zeitraum (Phasen in Kontaktierung + qualifiziert)</small></h2>
 <table class="tabelle" style="max-width:900px">
     <tbody>
     {% for stufe in trichter %}
         <tr>
-            <td style="width:11rem">{{ stufe.name }}</td>
+            <td style="width:11rem" {% if stufe.name == kontaktiert_label %}title="aktuell in Kontaktierung: {{ kontaktiert_phasen.in_kontaktierung }} · qualifiziert: {{ kontaktiert_phasen.qualifiziert }}"{% endif %}>{{ stufe.name }}</td>
             <td style="width:5rem" class="rechts"><strong>{{ stufe.anzahl }}</strong></td>
             <td style="width:5rem" class="dezent">{{ stufe.quote ~ ' %' if stufe.quote is not none }}</td>
             <td><div class="ae-balken" style="width: {{ stufe.breite }}%">&nbsp;</div></td>
@@ -119,14 +121,14 @@
         <span class="dezent">Ø {{ versuche_bis_erreicht or '–' }} Versuche bis erreicht</span>
     </div>
     <div class="kachel stat">
-        <span class="stat-zahl">{{ terminquote_quali ~ ' %' if terminquote_quali is not none else '–' }}</span>
-        <span>Terminquote (÷ qualifiziert)</span>
-        <span class="dezent">÷ Eingang: {{ terminquote_eingang ~ ' %' if terminquote_eingang is not none else '–' }}</span>
+        <span class="stat-zahl">{{ terminquote_kontaktiert ~ ' %' if terminquote_kontaktiert is not none else '–' }}</span>
+        <span>Terminquote (÷ {{ kontaktiert_label or 'Kontaktiert' }})</span>
+        <span class="dezent">÷ Eingang: {{ terminquote_eingang ~ ' %' if terminquote_eingang is not none else '–' }}{% if score_aktiv %} · ÷ qualifiziert: {{ terminquote_quali ~ ' %' if terminquote_quali is not none else '–' }}{% endif %}</span>
     </div>
     <div class="kachel stat">
         <span class="stat-zahl">{{ pipeline_wert | euro }}</span>
         <span>Pipeline-Wert</span>
-        <span class="dezent">gewichtete Erwartungswerte offener Leads</span>
+        <span class="dezent">Erwartungswerte offener Leads · Phasen-Quote</span>
     </div>
 </div>
 

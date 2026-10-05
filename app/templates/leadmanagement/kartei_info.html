@@ -1,0 +1,153 @@
+{% from "_symbole.html" import symbol %}
+{# v25 (Phase 119) – Kundeninformationen als horizontaler Block unter dem Kopf:
+   mehrspaltiges Formular (4 Spalten ab 1200 px, 2 ab 900 px, 1 darunter) mit
+   Autospeichern je Feld (lm_kartei.js → POST /lead/{id}/feld, JSON {feld, wert}),
+   rote Umrandung + Stern an offenen Pflichtfeldern (Parameter pflichtfelder),
+   Häkchen „gespeichert“ 2 s bzw. roter Fehlertext unter dem Feld. Ohne
+   JavaScript greift der <noscript>-Knopf auf POST /stammdaten (Fallback).
+   Felder: Anrede · Vorname · Nachname · Firma · Telefon (tel:) · E-Mail (mailto) ·
+   Straße · PLZ · Ort · Vertriebskanal · Interessen · Objektart (+ Parteien,
+   Rechnungsadresse bei MFH) · Innendienst · Außendienst/Handelsvertreter ·
+   Eingangsdatum (nur Anzeige) · Wunschzeiten (Anzeige, [ANNAHME bleibt]).
+   Entfernt: Score, Quelle/Kampagne, Einwilligungen. #}
+{% set offen = pflicht.offen_keys %}
+{% set pflichtig = pflicht.pflicht %}
+{% macro feldklasse(key) -%}lk-feld{{ ' lk-pflicht-offen' if key in offen }}{{ ' lk-pflicht' if key in pflichtig or key in ('parteien', 'rechnungsadresse') }}{%- endmacro %}
+{% macro stern(key) -%}{% if key in pflichtig or key in ('parteien', 'rechnungsadresse') %}<abbr title="Pflichtfeld">*</abbr>{% endif %}{%- endmacro %}
+{% set id_person = benutzer_map.get(vorgang.leadmanager_id) %}
+{% set ad_person = benutzer_map.get(vorgang.ad_id) %}
+
+<form method="post" action="{{ kartei_url }}/stammdaten" class="lk-stammdaten lk-autospeichern" id="lk-stammdaten"
+      autocomplete="off" data-feld-url="{{ feld_url }}" data-readonly="{{ '1' if readonly else '' }}"
+      data-pflicht-keys="{{ offen | join(',') }}">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <input type="hidden" name="interesse_feld" value="1">
+    <div class="lk-info-kopf">
+        <h2 class="lk-abschnitt">Kundeninformationen
+            <span class="{{ 'lm-rot' if pflicht_offen else 'dezent' }}" data-pflicht-hinweis>
+                <span data-pflicht-text>{{ pflicht_offen | length }} Pflichtfeld{{ 'er' if pflicht_offen | length != 1 }} offen</span></span></h2>
+        <span class="dezent lk-info-hinweis">{% if readonly %}Lesesicht – keine Bearbeitung{% else %}Änderungen werden beim Verlassen des Feldes gespeichert{% endif %}</span>
+    </div>
+    <fieldset {{ 'disabled' if readonly }}>
+        <div class="lk-info-raster">
+            <label class="{{ feldklasse('anrede') }}" data-feld-wrap="anrede"><span>Anrede{{ stern('anrede') }}</span>
+                <select name="anrede" data-feld="anrede">
+                    {% for a in anreden %}<option value="{{ a }}" {{ 'selected' if (kunde.anrede or '') == a }}>{{ a or '–' }}</option>{% endfor %}
+                </select><small class="lk-feld-status" aria-live="polite"></small></label>
+            <label class="{{ feldklasse('vorname') }}" data-feld-wrap="vorname"><span>Vorname{{ stern('vorname') }}</span>
+                <input type="text" name="vorname" data-feld="vorname" value="{{ kunde.vorname or '' }}" maxlength="100"><small class="lk-feld-status" aria-live="polite"></small></label>
+            <label class="{{ feldklasse('nachname') }}" data-feld-wrap="nachname"><span>Nachname{{ stern('nachname') }}</span>
+                <input type="text" name="nachname" data-feld="nachname" value="{{ kunde.nachname or '' }}" maxlength="100"><small class="lk-feld-status" aria-live="polite"></small></label>
+            <label class="lk-feld" data-feld-wrap="firma"><span>Firma</span>
+                <input type="text" name="firma" data-feld="firma" value="{{ kunde.firma or '' }}" maxlength="200"><small class="lk-feld-status" aria-live="polite"></small></label>
+
+            <label class="{{ feldklasse('telefon') }} lk-mit-link" data-feld-wrap="telefon"><span>Telefon{{ stern('telefon') }}
+                    {% if kunde.telefon %}<a href="{{ telefon_href }}" class="lk-feld-link" title="Anrufen (Click-to-Call, Stoppuhr startet)" data-anruf-link>{{ symbol('telefon') }} anrufen</a>{% endif %}</span>
+                <input type="tel" name="telefon" data-feld="telefon" value="{{ kunde.telefon or '' }}" maxlength="50" placeholder="0203 …"><small class="lk-feld-status" aria-live="polite"></small></label>
+            <label class="{{ feldklasse('email') }} lk-mit-link" data-feld-wrap="email"><span>E-Mail{{ stern('email') }}
+                    {% if kunde.email %}<a href="mailto:{{ kunde.email }}" class="lk-feld-link" title="E-Mail im Mailprogramm">{{ symbol('brief') }} schreiben</a>{% endif %}</span>
+                <input type="email" name="email" data-feld="email" value="{{ kunde.email or '' }}" maxlength="200"><small class="lk-feld-status" aria-live="polite"></small></label>
+            <label class="{{ feldklasse('strasse') }}" data-feld-wrap="strasse"><span>Straße{{ stern('strasse') }}</span>
+                <input type="text" name="strasse" data-feld="strasse" value="{{ kunde.strasse or '' }}" maxlength="200"><small class="lk-feld-status" aria-live="polite"></small></label>
+            <div class="lk-feld-reihe">
+                <label class="{{ feldklasse('plz') }} schmal" data-feld-wrap="plz"><span>PLZ{{ stern('plz') }}</span>
+                    <input type="text" name="plz" data-feld="plz" value="{{ kunde.plz or '' }}" maxlength="10" inputmode="numeric" pattern="[0-9]{5}"><small class="lk-feld-status" aria-live="polite"></small></label>
+                <label class="{{ feldklasse('ort') }}" data-feld-wrap="ort"><span>Ort{{ stern('ort') }}</span>
+                    <input type="text" name="ort" data-feld="ort" value="{{ kunde.ort or '' }}" maxlength="100"><small class="lk-feld-status" aria-live="polite"></small></label>
+            </div>
+
+            <label class="{{ feldklasse('vertriebskanal') }}" data-feld-wrap="vertriebskanal"><span>Vertriebskanal{{ stern('vertriebskanal') }}</span>
+                <select name="vertriebskanal" data-feld="vertriebskanal" title="Änderung setzt den Sync-Schutz (kanal_manuell)">
+                    <option value="" {{ 'selected' if not kunde.vertriebskanal }}>–</option>
+                    {% for k in kanal_werte %}<option value="{{ k }}" {{ 'selected' if kunde.vertriebskanal == k }}>{{ k }}</option>{% endfor %}
+                </select><small class="lk-feld-status" aria-live="polite"></small>
+                {% if kunde.kanal_manuell %}<small class="dezent lk-hinweis">Kanal manuell gesetzt – monday-Sync überschreibt ihn nicht.</small>{% endif %}</label>
+            <div class="{{ feldklasse('interesse') }} lk-checkboxen" role="group" aria-label="Interessen" data-feld-wrap="interesse" data-feld-gruppe="interesse">
+                <span>Interessen{{ stern('interesse') }}</span>
+                <div>
+                    {% for code, name in interessen %}
+                        <label class="lk-check" title="{{ name }}"><input type="checkbox" name="interesse" value="{{ code }}" data-feld-teil="interesse" {{ 'checked' if code in kunde.interessen }}> {{ code }}</label>
+                    {% endfor %}
+                </div><small class="lk-feld-status" aria-live="polite"></small>
+            </div>
+            <label class="{{ feldklasse('objektart') }}" data-feld-wrap="objektart"><span>Objektart{{ stern('objektart') }}</span>
+                <select name="objektart" id="lk-objektart" data-feld="objektart">
+                    <option value="" {{ 'selected' if not kunde.objektart }}>–</option>
+                    {% for code, bez, parteien_pflicht in objektarten %}
+                        <option value="{{ code }}" data-parteien="{{ '1' if parteien_pflicht else '0' }}" {{ 'selected' if kunde.objektart == code }}>{{ bez }}</option>
+                    {% endfor %}
+                </select><small class="lk-feld-status" aria-live="polite"></small></label>
+            <div id="lk-mfh" class="lk-mfh" {{ '' if kunde.objektart == 'MFH' else 'hidden' }}>
+                <label class="{{ feldklasse('parteien') }} schmal" data-feld-wrap="parteien"><span>Anzahl Parteien{{ stern('parteien') }}</span>
+                    <input type="number" name="parteien" data-feld="parteien" min="1" max="999" value="{{ kunde.parteien or '' }}"><small class="lk-feld-status" aria-live="polite"></small></label>
+                <div class="{{ feldklasse('rechnungsadresse') }} lk-rechnung" role="group" aria-label="Rechnungsadresse" data-feld-wrap="rechnungsadresse">
+                    <span>Rechnungsadresse{{ stern('rechnungsadresse') }} <small class="dezent">(Kunden-Standard)</small></span>
+                    <input type="text" name="rechnung_name" data-feld="rechnung_name" value="{{ kunde.rechnung_name or '' }}" placeholder="Name / Firma" maxlength="200" aria-label="Rechnung Name">
+                    <input type="text" name="rechnung_strasse" data-feld="rechnung_strasse" value="{{ kunde.rechnung_strasse or '' }}" placeholder="Straße" maxlength="200" aria-label="Rechnung Straße">
+                    <div class="lk-feld-reihe">
+                        <input type="text" name="rechnung_plz" data-feld="rechnung_plz" value="{{ kunde.rechnung_plz or '' }}" placeholder="PLZ" maxlength="10" class="schmal" aria-label="Rechnung PLZ">
+                        <input type="text" name="rechnung_ort" data-feld="rechnung_ort" value="{{ kunde.rechnung_ort or '' }}" placeholder="Ort" maxlength="100" aria-label="Rechnung Ort">
+                    </div><small class="lk-feld-status" aria-live="polite"></small>
+                </div>
+            </div>
+
+            <div class="lk-feld lk-zuweisung-feld" data-feld-wrap="leadmanager_id">
+                <span>Innendienst</span>
+                <div class="lk-zuweisung">
+                    <span class="lk-avatar klein" data-avatar="leadmanager_id" title="{{ id_person.name if id_person else 'nicht zugewiesen' }}">{{ initialen_fn(id_person.name) if id_person else '–' }}</span>
+                    {% if readonly %}
+                        <span>{{ id_person.name if id_person else '–' }}</span>
+                    {% else %}
+                        <select name="leadmanager_id" data-feld="leadmanager_id" aria-label="Innendienst zuweisen">
+                            <option value="">– nicht zugewiesen –</option>
+                            {% for b in innendienst_wahl %}<option value="{{ b.id }}" {{ 'selected' if vorgang.leadmanager_id == b.id }}>{{ b.name }}</option>{% endfor %}
+                        </select>
+                    {% endif %}
+                </div><small class="lk-feld-status" aria-live="polite"></small>
+            </div>
+            <div class="lk-feld lk-zuweisung-feld" data-feld-wrap="ad_id">
+                <span>Außendienst / Handelsvertreter{% if ist_hv %} <small class="dezent">(frei umverteilen)</small>{% endif %}</span>
+                <div class="lk-zuweisung">
+                    <span class="lk-avatar klein" data-avatar="ad_id" title="{{ ad_person.name if ad_person else 'nicht zugewiesen' }}">{{ initialen_fn(ad_person.name) if ad_person else '–' }}</span>
+                    {% if readonly %}
+                        <span>{{ ad_person.name if ad_person else (lead_kontext.ad.name ~ ' (über Termin)' if lead_kontext.ad else '–') }}</span>
+                    {% else %}
+                        <select name="ad_id" data-feld="ad_id" aria-label="Außendienst zuweisen">
+                            <option value="">– nicht zugewiesen –</option>
+                    {% for e in ad_wahl %}
+                        <option value="{{ e.benutzer.id }}"
+                                {{ 'selected' if vorgang.ad_id == e.benutzer.id }}
+                                {{ 'disabled' if e.gesperrt and vorgang.ad_id != e.benutzer.id }}
+                                title="{{ e.gesperrt or e.kompetenz_grund }}">{{ e.benutzer.name }}{{ ' · HV' if e.hv }}{{ ' – gesperrt: ' ~ e.gesperrt if e.gesperrt }}{{ ' · ' ~ e.kompetenz_grund if not e.kompetenz_ok }}</option>
+                    {% endfor %}
+                        </select>
+                    {% endif %}
+                </div>
+                {% if not readonly and hv_sperre and benutzer.rolle in ('admin', 'innendienst') %}
+                    <label class="lk-check dezent" title="Ausschlussliste (F14) nur für diese Zuweisung übergehen"><input type="checkbox" name="erzwingen" value="1" data-erzwingen> Ausschluss übergehen</label>
+                {% endif %}
+                <small class="lk-feld-status" aria-live="polite"></small>
+                {% if hv_sperre %}<small class="dezent lk-hinweis">{{ symbol('verbot') }} {{ hv_sperre }} Handelsvertreter sind deshalb deaktiviert.</small>{% endif %}
+                {% if lead_kontext.ad and lead_kontext.ad.id != vorgang.ad_id %}
+                    <small class="dezent lk-hinweis">Aktiver Termin bei {{ lead_kontext.ad.name }}.</small>
+                {% endif %}
+            </div>
+
+            <div class="lk-feld lk-anzeige"><span>Eingangsdatum</span>
+                <div class="lk-wert">{{ vorgang.eingang_am.strftime('%d.%m.%Y %H:%M') if vorgang.eingang_am else '–' }}
+                    <small class="dezent">({{ vorgang.eingang_art or '–' }})</small></div></div>
+            <div class="lk-feld lk-anzeige"><span>Wunschzeiten <small class="dezent">(für den Terminassistenten)</small></span>
+                <div class="lk-wert">{{ wunschzeiten | join(', ') if wunschzeiten else '–' }}</div></div>
+            {% if vorgang.anfrage_text %}
+            <details class="lk-feld lk-anzeige lk-anfrage-feld">
+                <summary>Anfragetext</summary>
+                <div class="lk-anfrage">{{ vorgang.anfrage_text }}</div>
+            </details>
+            {% endif %}
+        </div>
+        {% if not readonly %}
+        <noscript><div class="lk-speichern"><button class="knopf" type="submit">{{ symbol('haken') }} Speichern</button>
+            <span class="dezent">Ohne JavaScript: alle Felder auf einmal speichern.</span></div></noscript>
+        {% endif %}
+    </fieldset>
+</form>

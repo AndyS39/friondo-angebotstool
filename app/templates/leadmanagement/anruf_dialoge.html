@@ -1,35 +1,32 @@
 {# v23 Phase 107 (PLAN_LEAD_V2 C2/C3): die Folgedialoge der Anruf-Ergebnisse
-   als Makro – Anrufliste und (per Import) Kundenkartei/Boards nutzen dieselben
-   Dialoge und dieselben Formularfelder des Vertrags POST /lead-management/anruf/{id}:
-   ergebnis · notiz · dauer_sek (Stoppuhr, app/static/lm_anruf.js) · rueckruf_am
-   bzw. wiedervorlage_am · grund · grund_text · zurueck (Redirect-Ziel, relativ).
+   als Makro – Anrufliste und (per Import) Kundenkartei/Boards/Infoabend nutzen
+   dieselben Dialoge und dieselben Formularfelder des Vertrags
+   POST /lead-management/anruf/{id}: ergebnis · notiz · dauer_sek (Stoppuhr,
+   app/static/lm_anruf.js) · rueckruf_am · grund · grund_text · zurueck
+   (Redirect-Ziel, relativ).
+
+   v25 (PLAN_LEAD_V3 Phase 120): „Nicht erreicht“ hat KEINEN Dialog mehr – ein
+   Klick protokolliert den Versuch mit Zeitstempel jetzt, ohne Wiedervorlage
+   (Feld wiedervorlage_am entfällt, GET /anruf/{id}/vorschlag wird nicht mehr
+   geladen). Gleiches gilt für „Mailbox“ und „Besetzt“. Damit bestehende
+   Aufrufer (Kartei, Infoabend, lm_kartei.js Taste 2) ohne Änderung weiter-
+   laufen, bleibt die Signatur stabil: dialogOeffnen('nichterreicht' | 'mailbox'
+   | 'besetzt', id) sendet das Ergebnis sofort über das versteckte Formular
+   #lm-direkt-form (Klasse lm-anruf-form → Stoppuhr-Dauer wird eingetragen).
+   „Rückruf gewünscht“ behält den Datum/Uhrzeit-Dialog, „Kein Interesse“ den
+   Grund-Dialog; Zurückstellen und Reaktivieren unverändert.
 
    Aufruf: {% from "leadmanagement/anruf_dialoge.html" import anruf_dialoge %}
            {{ anruf_dialoge(unq_gruende, zurueck_gruende, zurueck='/lead-management/lead/123') }}
-   Öffnen:  dialogOeffnen('nichterreicht' | 'rueckruf' | 'keininteresse' | 'zurueck' |
-                         'reaktivieren', vorgangId)
-   Der „Nicht erreicht“-Dialog lädt den Kaskaden-Vorschlag
-   (GET /lead-management/anruf/{id}/vorschlag) und belegt das Datum/Uhrzeit-Feld
-   vor; leer gelassen setzt die Kaskade den Zeitpunkt wie bisher. #}
+   Öffnen:  dialogOeffnen('rueckruf' | 'keininteresse' | 'zurueck' | 'reaktivieren', vorgangId)
+   Direkt:  dialogOeffnen('nichterreicht' | 'mailbox' | 'besetzt', vorgangId)  → POST ohne Dialog #}
 {% macro anruf_dialoge(unq_gruende, zurueck_gruende, zurueck='') %}
-<dialog id="dlg-nichterreicht" class="lm-dialog">
-    <form method="post" class="formular lm-anruf-form">
-        <input type="hidden" name="ergebnis" value="nicht_erreicht">
-        <input type="hidden" name="dauer_sek">
-        {% if zurueck %}<input type="hidden" name="zurueck" value="{{ zurueck }}">{% endif %}
-        <h3>Nicht erreicht</h3>
-        <p class="lm-vorschlag dezent">Kaskaden-Vorschlag wird geladen …</p>
-        <label>Wiedervorlage – Datum/Uhrzeit (Vorschlag aus der Kaskade, änderbar)
-            <input type="datetime-local" name="wiedervorlage_am"></label>
-        <label>Notiz <input type="text" name="notiz" maxlength="300"></label>
-        <p class="lm-sperre meldung fehler" hidden></p>
-        <div class="formzeile">
-            <button class="knopf" type="submit">Nicht erreicht speichern</button>
-            <button class="knopf zweitrangig" type="button"
-                    onclick="this.closest('dialog').close()">Abbrechen</button>
-        </div>
-    </form>
-</dialog>
+<form id="lm-direkt-form" method="post" class="lm-anruf-form" hidden aria-hidden="true">
+    {# v25: Direktversand für Nicht erreicht / Mailbox / Besetzt (kein Dialog, keine Wiedervorlage) #}
+    <input type="hidden" name="ergebnis" value="">
+    <input type="hidden" name="dauer_sek" value="">
+    {% if zurueck %}<input type="hidden" name="zurueck" value="{{ zurueck }}">{% endif %}
+</form>
 <dialog id="dlg-rueckruf" class="lm-dialog">
     <form method="post" class="formular lm-anruf-form">
         <input type="hidden" name="ergebnis" value="rueckruf_gewuenscht">
@@ -101,43 +98,43 @@
 <script>
 // Dialoge zielen je nach Art auf /anruf/<id> bzw. /lead/<id>/<aktion>
 const dialogZiele = {
-    nichterreicht: id => `/lead-management/anruf/${id}`,
     rueckruf: id => `/lead-management/anruf/${id}`,
     keininteresse: id => `/lead-management/anruf/${id}`,
     zurueck: id => `/lead-management/lead/${id}/zurueckstellen`,
     reaktivieren: id => `/lead-management/lead/${id}/reaktivieren`,
 };
+// v25 (Phase 120): Ergebnisse ohne Dialog – sofort protokollieren, keine Wiedervorlage
+const dialogDirekt = { nichterreicht: 'nicht_erreicht', mailbox: 'mailbox', besetzt: 'besetzt' };
 function dialogOeffnen(art, vorgangId) {
+    document.querySelectorAll('.lm-aktion details[open]').forEach(d => d.removeAttribute('open'));
+    if (dialogDirekt[art]) { lmErgebnisSenden(vorgangId, dialogDirekt[art]); return; }
     const dlg = document.getElementById('dlg-' + art);
     if (!dlg) return;
     dlg.dataset.vorgang = vorgangId;          // Stoppuhr (lm_anruf.js) findet den Vorgang
     dlg.querySelector('form').action = dialogZiele[art](vorgangId);
-    document.querySelectorAll('.lm-aktion details[open]').forEach(d => d.removeAttribute('open'));
-    if (art === 'nichterreicht') lmVorschlagLaden(dlg, vorgangId);
     dlg.showModal();
 }
-// C2: Kaskaden-Vorschlag für die Stufe versuch_nr + 1 vorbelegen (änderbar)
-function lmVorschlagLaden(dlg, vorgangId) {
-    const info = dlg.querySelector('.lm-vorschlag');
-    const feld = dlg.querySelector('input[name="wiedervorlage_am"]');
-    const sperre = dlg.querySelector('.lm-sperre');
-    const senden = dlg.querySelector('button[type="submit"]');
-    info.textContent = 'Kaskaden-Vorschlag wird geladen …';
-    feld.value = ''; sperre.hidden = true; senden.disabled = false;
-    fetch(`/lead-management/anruf/${vorgangId}/vorschlag`, {headers: {Accept: 'application/json'}})
-        .then(r => r.ok ? r.json() : Promise.reject(r.status))
-        .then(d => {
-            if (d.gesperrt) {
-                sperre.textContent = d.sperre_meldung || 'Höchstzahl erreicht';
-                sperre.hidden = false; senden.disabled = true;
-                info.textContent = `${d.versuch_nr} von ${d.versuche_max} Versuchen – Höchstzahl erreicht.`;
-                return;
-            }
-            feld.value = d.zeitpunkt || '';
-            info.textContent = `Versuch ${d.stufe} von ${d.versuche_max} · Vorschlag ${d.zeitpunkt_text}`
-                + (d.regel ? ` (${d.regel})` : '') + (d.aktion_text ? ' · ' + d.aktion_text : '');
-        })
-        .catch(() => { info.textContent = 'Vorschlag nicht verfügbar – die Kaskade setzt den Zeitpunkt automatisch.'; });
+// Direktversand über das versteckte Formular: Klasse lm-anruf-form + data-vorgang,
+// damit lm_anruf.js beim Absenden die Stoppuhr-Dauer in dauer_sek schreibt.
+function lmErgebnisSenden(vorgangId, ergebnis) {
+    const form = document.getElementById('lm-direkt-form');
+    if (!form) {
+        if (window.lmAnruf && window.lmAnruf.ergebnisSenden) window.lmAnruf.ergebnisSenden(vorgangId, ergebnis);
+        return;
+    }
+    form.action = `/lead-management/anruf/${vorgangId}`;
+    form.dataset.vorgang = vorgangId;
+    form.querySelector('input[name="ergebnis"]').value = ergebnis;
+    form.querySelector('input[name="dauer_sek"]').value = '';
+    if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+    } else {
+        if (window.lmAnruf && window.lmAnruf.sekunden) {
+            const sek = window.lmAnruf.sekunden();
+            form.querySelector('input[name="dauer_sek"]').value = sek >= 1 ? String(sek) : '';
+        }
+        form.submit();
+    }
 }
 // Kein Interesse: Freitext-Pflicht je Grund (Blatt Gruende, freitext_pflicht) auch im Browser
 document.querySelectorAll('#dlg-keininteresse select[name="grund"]').forEach(sel => {

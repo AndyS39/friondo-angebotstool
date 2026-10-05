@@ -6,6 +6,10 @@
 # GET /termin/{tid}/ersatz), POST /termin/{tid}/bestaetigung-erneut (A-9),
 # POST /termin/{tid}/verschieben (ICS-UID wird weitergetragen), GET /kalender
 # (Terminarten farblich, vorgemerkt gestrichelt), GET /termin/konflikt (JSON).
+# v25 (PLAN_LEAD_V3 Phase 119/120): GET /lead/{id}/termin/vorschlaege.json
+# (Top 5 für den Block Termine der Kartei, Cache 10 Minuten, Zustände
+# ok|adresse_fehlt|hv_lead|keine), Handelsvertreter sind für den Innendienst
+# keine Kandidaten (manuelle Buchung bleibt möglich), kein Score/Klasse.
 # Alle Routen laufen über lead_v2.gate (Handelsvertreter: nur eigene Leads,
 # nur eigener Kalender).
 
@@ -117,6 +121,30 @@ def _termine_des_vorgangs(session: Session, vorgang_id: int) -> list[VotTermin]:
             .order_by(VotTermin.beginn.desc()).all())
 
 
+# --- v25: Terminvorschläge für den Block Termine der Kartei (Vertrag C/D) ----------
+
+@router.get("/lead/{vorgang_id}/termin/vorschlaege.json")
+async def termin_vorschlaege_json(request: Request, vorgang_id: int,
+                                  session: Session = Depends(get_session)):
+    """Top 5 des Assistenten als JSON (asynchron nach dem Seitenaufbau der
+    Kartei): {status: ok|adresse_fehlt|hv_lead|keine, hinweis, vorschlaege:
+    [{ad_id, ad_name, beginn, beginn_text, begruendung, umweg_min}]}; Cache
+    10 Minuten je Lead (lead_termin.vorschlaege_cache), ?neu=1 erzwingt die
+    Neuberechnung. Buchen: POST /lead/{id}/termin (ad_id, beginn, quelle=assistent)."""
+    vorgang = _vorgang_oder_404(request, session, vorgang_id)
+    if request.query_params.get("neu") == "1":
+        lead_termin.vorschlaege_cache_leeren(vorgang.id)
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    if kunde is not None and not lead_termin.adresse_fehlt(kunde):
+        _geokodieren_bei_bedarf(session, vorgang)
+    antwort = lead_termin.vorschlaege_json(session, vorgang, benutzer=request.state.benutzer)
+    session.commit()   # Routing-/Geocode-Cache behalten
+    antwort["vorgang_id"] = vorgang.id
+    antwort["buchen_url"] = f"/lead-management/lead/{vorgang.id}/termin"
+    antwort["assistent_url"] = f"/lead-management/lead/{vorgang.id}/termin"
+    return JSONResponse(antwort)
+
+
 # --- Assistent (B6/E1/E2) -----------------------------------------------------------
 
 @router.get("/lead/{vorgang_id}/termin")
@@ -160,11 +188,20 @@ async def termin_assistent(request: Request, vorgang_id: int,
     warnungen = [w for w in q.getlist("warnung") if w]
     termine = _termine_des_vorgangs(session, vorgang.id)
     aktive = [t for t in termine if t.status in lead_termin.BELEGT_STATUS]
+    from app import leadmanagement_logik
+    logik = leadmanagement_logik.hole_logik()
+    phase_zeile = logik.status_zeile(vorgang.lead_phase or "neu")
     return render(request, "leadmanagement/termin.html",
                   aktiv="/lead-management", vorgang=vorgang, kunde=kunde,
                   vorschlaege=ergebnis["vorschlaege"], hinweise=ergebnis["hinweise"],
                   kandidaten=kandidaten, kandidaten_info=ergebnis["kandidaten_info"],
                   ausgeschlossen=ergebnis["ausgeschlossen"],
+                  # v25 (Phase 120): kein Score/Klasse (score_aktiv), HV-Hinweis für
+                  # den Innendienst, HV nur manuell buchbar, Phasen-Label aus dem Blatt Status
+                  score_aktiv=lead_v2.score_aktiv(session),
+                  hv_lead=ergebnis["hv_lead"], hv_hinweis=ergebnis["hv_hinweis"],
+                  hv_manuell=ergebnis["hv_manuell"] if not hv_id else [],
+                  phase_label=(phase_zeile.label if phase_zeile else (vorgang.lead_phase or "")),
                   sparten=ergebnis["sparten"], kanal=ergebnis["kanal"],
                   kalender_ad=kalender_ad, woche=woche,
                   wunschzeiten=kern.wunschzeiten_liste(vorgang), buchbar=buchbar,
@@ -250,6 +287,9 @@ async def _manuell(request: Request, session: Session, vorgang: Vorgang, form):
                                 status_code=303)
     vorfilter = lead_termin.kandidaten(session, vorgang, benutzer=benutzer)
     erlaubt = {k["ad"].id for k in vorfilter["kandidaten"]}
+    # v25 [ANNAHME]: manuelle Buchung durch den Innendienst auf einen
+    # Handelsvertreter bleibt möglich – nur die Vorschläge schließen HV aus
+    erlaubt |= {a.id for a in vorfilter["hv_manuell"]}
     if ad_id not in erlaubt:
         grund = next((a["grund"] for a in vorfilter["ausgeschlossen"] if a["ad"].id == ad_id),
                      "nicht in der Vorauswahl")
@@ -410,6 +450,7 @@ async def termin_ersatz(request: Request, termin_id: int,
     daten = lead_termin.ersatz_kandidaten(session, termin)
     return render(request, "leadmanagement/termin_ersatz.html",
                   aktiv="/lead-management", termin=termin, vorgang=vorgang, kunde=kunde,
+                  score_aktiv=lead_v2.score_aktiv(session),
                   ad=session.get(Benutzer, termin.ad_id) if termin.ad_id else None,
                   kandidaten=daten["kandidaten"], radius=daten["radius"],
                   stufen=daten["stufen"], ort=daten["ort"], alter_tage=daten["alter_tage"],

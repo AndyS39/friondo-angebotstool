@@ -24,10 +24,10 @@
         · {{ ad.name if ad else '?' }} · {{ termin.adresse or '?' }}
         · Status {{ status_namen.get(termin.status, termin.status) }}
         {% if termin.grund_text %}<span class="dezent">– {{ termin.grund_text }}</span>{% endif %}</p>
-    <p class="dezent">Suche: offene qualifizierte Leads (Phase Qualifiziert zuerst, dann
-        In Kontaktierung mit erreichtem Kunden) im Umkreis, Stufen {{ stufen | join(' → ') }} km
-        (Luftlinie) bis mindestens drei Treffer; Leads ab {{ alter_tage }} Tagen bevorzugt,
-        Score-Klasse berücksichtigt.
+    <p class="dezent">Suche: offene Leads mit Status „Kontaktiert“ (qualifiziert zuerst, dann
+        erreichte Kunden in Kontaktierung) im Umkreis, Stufen {{ stufen | join(' → ') }} km
+        (Luftlinie) bis mindestens drei Treffer; Leads ab {{ alter_tage }} Tagen bevorzugt{% if score_aktiv %},
+        Score-Klasse berücksichtigt{% endif %}.
         {% if radius %}Verwendeter Radius: <strong>{{ radius | round(0) | int }} km</strong>.{% endif %}
         {% if not ort %}<span class="lmt-aus">Slot ohne Koordinaten – keine Umkreissuche möglich.</span>{% endif %}</p>
 </section>

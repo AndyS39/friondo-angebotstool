@@ -5,7 +5,7 @@
 {% from "_komponenten.html" import wiedervorlage_chip %}
 {% if dashboard %}
 <div class="hv-kacheln">
-    <a class="kachel stat" href="#hv-faellig" title="Wiedervorlagen, deren Zeitpunkt erreicht ist">
+    <a class="kachel stat" href="#hv-faellig" title="Manuell gesetzte Wiedervorlagen, deren Zeitpunkt erreicht ist">
         <span class="stat-zahl {{ 'dringend' if dashboard.kacheln.faellig }}">{{ dashboard.kacheln.faellig }}</span>Wiedervorlagen fällig
         <span class="lm-delta">{{ dashboard.kacheln.kommend }} in den nächsten 7 Tagen</span></a>
     <a class="kachel stat" href="#hv-termine">
@@ -13,14 +13,15 @@
         <span class="lm-delta">eigener Kalender</span></a>
     <a class="kachel stat" href="#hv-offen">
         <span class="stat-zahl">{{ dashboard.kacheln.offen }}</span>Offene Leads
-        <span class="lm-delta">Neu · In Kontaktierung · Qualifiziert · Zurückgestellt</span></a>
+        {# v25: Labels aus dem Blatt Status („Neu · Kontaktiert · Zurückgestellt“) #}
+        <span class="lm-delta">{{ dashboard.offen_labels or 'Neu · Kontaktiert · Zurückgestellt' }}</span></a>
     <a class="kachel stat" href="/lead-management/todos" title="To-Dos (Phase 110)">
         <span class="stat-zahl {{ 'warn' if dashboard.kacheln.todos }}">{{ dashboard.kacheln.todos }}</span>Offene To-Dos
         <span class="lm-delta">mir zugewiesen</span></a>
 </div>
 <div class="hv-dashboard">
     <div class="lm-karte" id="hv-faellig">
-        <h2>{{ symbol('wiedervorlage') }} Wiedervorlagen <span class="sub">fällig zuerst, dann die nächsten 7 Tage</span></h2>
+        <h2>{{ symbol('wiedervorlage') }} Wiedervorlagen <span class="sub">manuell gesetzt · fällig zuerst, dann die nächsten 7 Tage</span></h2>
         <ul class="hv-liste">
             {% for e in dashboard.faellig %}
             <li><span><a href="/lead-management/lead/{{ e.vorgang.id }}">{{ e.kunde.anzeige_name if e.kunde else '?' }}</a>

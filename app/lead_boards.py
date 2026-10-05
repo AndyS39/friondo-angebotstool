@@ -1,9 +1,18 @@
 # Lead-Management V2 (v23, PLAN_LEAD_V2 Phase 105): Boards als Tabelle nach
 # monday-Vorbild (A3/A4), Status → Board → Gruppe (H2, Blatt Status),
-# Hauptboard (H4) und Board Terminiert (H5), generische Sammelaktionen (H3),
-# Reiter Kontaktiert mit Rufnummernsuche E.164 (H7/D3), Spaltenkonfiguration
-# je Nutzer (A-14). Die Lead-Phase bleibt die einzige Quelle der Wahrheit –
-# die Gruppe ist eine Sicht darauf (logik.board_fuer) plus Terminprüfung.
+# Hauptboard (H4) und Board Deals (H5, bis v24 „Terminiert“), generische
+# Sammelaktionen (H3), Reiter Kontaktiert mit Rufnummernsuche E.164 (H7/D3),
+# Spaltenkonfiguration je Nutzer (A-14). Die Lead-Phase bleibt die einzige
+# Quelle der Wahrheit – die Gruppe ist eine Sicht darauf (logik.board_fuer)
+# plus Terminprüfung.
+# v25 (PLAN_LEAD_V3 Phase 118): Board-Anzeigenamen aus logik.board_label
+# (Hauptboard / Deals), Phasen-Labels nur aus dem Blatt Status (beide Kontakt-
+# Phasen „Kontaktiert“), Spaltenkonfiguration je Nutzer mit Umbenennen,
+# gemerkter Sortierung, Aus-/Einblenden und Reihenfolge (Struktur
+# {"<board>": {"spalten": [{key, sichtbar, name}], "sort": {key, richtung}}},
+# die v23-Liste [[key, sichtbar]] wird weiter gelesen), Standard ohne Anrede/
+# Vorname/Nachname mit fester Spalte „Kundenname“, Spalte Score nur bei
+# lead_v2.score_aktiv.
 
 import hashlib
 import json
@@ -22,12 +31,32 @@ from app.models import (Angebot, AngebotsNotiz, Benutzer, Erfassung, Kunde, Lead
 
 # --- Boards, Gruppen, Spalten ------------------------------------------------------
 
+# Board-Keys bleiben (Pfade /hauptboard, /terminiert); der Anzeigename kommt
+# seit v25 aus logik.board_label (Blatt Status, Spalte board_label) – die Titel
+# hier sind nur der statische Rückfall, siehe board_label()/board_info().
 BOARDS = {
     "hauptboard": {"titel": "Hauptboard", "untertitel": "Leads ohne Vor-Ort-Termin",
                    "gruppen": ["neu", "pausiert", "disqualifiziert"]},
-    "terminiert": {"titel": "Terminiert", "untertitel": "Leads mit Vor-Ort-Termin – Angebot nachverfolgen",
+    "terminiert": {"titel": "Deals", "untertitel": "Leads mit Vor-Ort-Termin – Angebot nachverfolgen",
                    "gruppen": ["angebotserstellung", "angebotsversand", "gewonnen", "verloren"]},
 }
+
+
+def board_label(board: str, logik=None) -> str:
+    """v25: Anzeigename eines Boards – IMMER hierüber (Vertrag): Blatt Status
+    Spalte board_label, Fallback Hauptboard / Deals."""
+    try:
+        logik = logik or leadmanagement_logik.hole_logik()
+        return logik.board_label(board)
+    except Exception:
+        return BOARDS.get(board, {}).get("titel", board)
+
+
+def board_info(board: str) -> dict:
+    """BOARDS-Eintrag mit aufgelöstem Anzeigenamen (Titel, Breadcrumb, Kanban)."""
+    basis = BOARDS.get(board) or BOARDS["hauptboard"]
+    return {**basis, "key": board if board in BOARDS else "hauptboard",
+            "titel": board_label(board if board in BOARDS else "hauptboard")}
 GRUPPEN_NAMEN = {
     "neu": "Neu", "pausiert": "Pausiert", "disqualifiziert": "Disqualifiziert",
     "angebotserstellung": "Angebotserstellung", "angebotsversand": "Angebotsversand",
@@ -47,10 +76,16 @@ GRUPPEN_EINGEKLAPPT = {"disqualifiziert", "gewonnen", "verloren"}
 
 # Spalten (key, Titel, Standard sichtbar). Reihenfolge nach Screenshot 1
 # (monday-Zeile); Interessen laut A3 „so weit vorn wie möglich“ nach dem
-# Kanal. Nutzer ordnen/blenden je Board um (benutzer_einstellungen).
+# Kanal. Nutzer ordnen/blenden/benennen je Board um (benutzer_einstellungen).
+# v25: die feste erste Spalte heißt „Kundenname“ (Anrede Vorname Nachname,
+# Anrede nur wenn gesetzt; Key bleibt „lead“ – gespeicherte Konfigurationen und
+# die Makros der Infoabend-/HV-Tabellen kennen ihn); Anrede/Vorname/Nachname
+# sind standardmäßig ausgeblendet und einblendbar. Gespeicherte v23-Einträge
+# mit sichtbaren Namensspalten bleiben unverändert (der Standard greift nur
+# für Spalten ohne Eintrag).
 SPALTEN = [
-    ("lead", "Lead", True), ("anrede", "Anrede", True), ("vorname", "Vorname", True),
-    ("nachname", "Nachname", True), ("status", "Status", True),
+    ("lead", "Kundenname", True), ("anrede", "Anrede", False), ("vorname", "Vorname", False),
+    ("nachname", "Nachname", False), ("status", "Status", True),
     ("kanal", "Vertriebskanal", True), ("interessen", "Interessen", True),
     ("versuche", "Kontaktversuche", True), ("letzter_kontakt", "Letzter Kontakt", True),
     ("eingang", "Eingangsdatum", True), ("notiz", "Notiz", True),
@@ -59,10 +94,16 @@ SPALTEN = [
     ("email", "E-Mail", True), ("termin", "Vor-Ort-Termin", True),
     ("wiedervorlage", "Wiedervorlage", True),
 ]
-# Board Terminiert: zusätzlich Erfassung/Angebot (Buttons + Sparten-Chips)
+# Board Deals: zusätzlich Erfassung/Angebot (Buttons + Sparten-Chips)
 SPALTEN_TERMINIERT = SPALTEN[:5] + [("angebot", "Erfassung / Angebot", True)] + SPALTEN[5:]
+# Spalte Score steht nur im Katalog, wenn lead_v2.score_aktiv(session) (v25, Standard aus)
+SPALTE_SCORE = ("score", "Score", True)
 SPALTEN_FEST = ("lead",)          # immer sichtbar, immer vorn
 EINSTELLUNG_KEY = "boards_spalten"
+# Boards mit eigener Spaltenkonfiguration je Nutzer (Hauptboard, Deals,
+# Infoabend, Handelsvertreter – Infoabend/HV nutzen den Hauptboard-Katalog)
+KONFIG_BOARDS = ("hauptboard", "terminiert", "info", "handelsvertreter")
+SORT_RICHTUNGEN = ("auf", "ab")
 
 # Abgeleitete Phasen sind nicht manuell setzbar (Termin/Erfassung/Angebot)
 PHASEN_ABGELEITET = ("terminiert", "erfasst", "angebot", "gewonnen")
@@ -88,57 +129,249 @@ AVATAR_PALETTE = ["#3f86c6", "#1baf7a", "#8e44ad", "#eb6834", "#c9a227",
 ARCHIV_TAGE = 30
 
 
-def spalten_basis(board: str) -> list:
-    return SPALTEN_TERMINIERT if board == "terminiert" else SPALTEN
+# Standard-Sichtbarkeit je Board, wo sie vom Hauptboard abweicht (v25, Prüfung F):
+# die Handelsvertreter-Ansicht zeigt standardmäßig die v23-Spalten; Außendienst
+# (dort die feste Spalte „Vertreter“), Innendienst, Notiz, Straße, E-Mail und
+# Wiedervorlage sind über den Spaltenwähler einblendbar.
+STANDARD_SICHTBAR = {
+    "handelsvertreter": {"lead", "status", "kanal", "versuche", "letzter_kontakt",
+                         "eingang", "ort", "interessen", "telefon", "termin"},
+}
 
 
-def spalten_fuer(session: Session, benutzer_id: int, board: str) -> list[dict]:
-    """Spaltenreihenfolge + Sichtbarkeit des Nutzers (A-14); unbekannte Keys
-    fallen weg, neue Spalten hängen sich hinten an. ‚lead' bleibt vorn."""
-    basis = spalten_basis(board)
-    titel = {k: t for k, t, _ in basis}
-    standard = {k: s for k, _, s in basis}
-    alle = lead_v2.einstellung_holen(session, benutzer_id, EINSTELLUNG_KEY, {}) or {}
-    konfig = alle.get(board) if isinstance(alle, dict) else None
-    ergebnis, gesehen = [], set()
-    for eintrag in konfig or []:
+def spalten_basis(board: str, score: bool = False) -> list:
+    """Spaltenkatalog eines Boards (info/handelsvertreter nutzen den Hauptboard-
+    Katalog, ggf. mit eigener Standard-Sichtbarkeit); Score nur bei aktivem
+    Scoring (v25)."""
+    basis = SPALTEN_TERMINIERT if board == "terminiert" else SPALTEN
+    if score:
+        stelle = next((i for i, (k, _, _) in enumerate(basis) if k == "status"), 0) + 1
+        basis = basis[:stelle] + [SPALTE_SCORE] + basis[stelle:]
+    sichtbar = STANDARD_SICHTBAR.get(board)
+    if sichtbar is not None:
+        basis = [(k, t, bool(s and k in sichtbar)) for k, t, s in basis]
+    return basis
+
+
+def _benutzer_id(benutzer) -> int:
+    """Vertrag v25: spalten_fuer(session, benutzer, board) nimmt den Benutzer
+    oder (v23) seine ID."""
+    if benutzer is None:
+        return 0
+    return int(getattr(benutzer, "id", benutzer) or 0)
+
+
+def _konfig_normieren(konfig) -> dict:
+    """Gespeicherte Board-Konfiguration in die v25-Struktur bringen:
+    {"spalten": [{key, sichtbar, name}], "sort": {key, richtung} | None}.
+    Liest die v23-Liste [[key, sichtbar]] bzw. [{key, sichtbar}] weiter."""
+    spalten, sort = [], None
+    roh = None
+    if isinstance(konfig, dict):
+        roh = konfig.get("spalten")
+        s = konfig.get("sort")
+        if isinstance(s, dict) and s.get("key"):
+            sort = {"key": str(s["key"]),
+                    "richtung": "ab" if str(s.get("richtung", "auf")) == "ab" else "auf"}
+    elif isinstance(konfig, (list, tuple)):
+        roh = konfig
+    for eintrag in roh or []:
         try:
-            key, sichtbar = eintrag[0], bool(eintrag[1])
+            if isinstance(eintrag, dict):
+                key, sichtbar, name = eintrag.get("key"), eintrag.get("sichtbar", True), eintrag.get("name", "")
+            else:
+                key, sichtbar = eintrag[0], eintrag[1]
+                name = eintrag[2] if len(eintrag) > 2 else ""
         except (TypeError, IndexError, KeyError):
             continue
+        if not key:
+            continue
+        spalten.append({"key": str(key), "sichtbar": bool(sichtbar),
+                        "name": str(name or "").strip()[:60]})
+    return {"spalten": spalten, "sort": sort}
+
+
+def spalten_konfig(session: Session, benutzer, board: str) -> dict:
+    """Rohkonfiguration des Nutzers für ein Board (normiert, ohne Katalogabgleich)."""
+    alle = lead_v2.einstellung_holen(session, _benutzer_id(benutzer), EINSTELLUNG_KEY, {}) or {}
+    konfig = alle.get(board) if isinstance(alle, dict) else None
+    return _konfig_normieren(konfig)
+
+
+def spalten_fuer(session: Session, benutzer, board: str) -> list[dict]:
+    """Spaltenreihenfolge, Sichtbarkeit und eigener Anzeigename des Nutzers
+    (A-14, v25); unbekannte Keys fallen weg, neue Spalten hängen sich hinten
+    an, ‚lead' (Kundenname) bleibt vorn. Je Eintrag: key, titel (Anzeige =
+    eigener Name oder Standard), standard (Standardtitel), name (eigener
+    Name oder ''), sichtbar. `benutzer` = Benutzer oder Benutzer-ID."""
+    basis = spalten_basis(board, score=lead_v2.score_aktiv(session))
+    titel = {k: t for k, t, _ in basis}
+    konfig = spalten_konfig(session, benutzer, board)
+    ergebnis, gesehen = [], set()
+    for sp in konfig["spalten"]:
+        key = sp["key"]
         if key in titel and key not in gesehen:
             gesehen.add(key)
-            ergebnis.append({"key": key, "titel": titel[key],
-                             "sichtbar": sichtbar or key in SPALTEN_FEST})
+            ergebnis.append({"key": key, "titel": sp["name"] or titel[key], "standard": titel[key],
+                             "name": sp["name"], "sichtbar": sp["sichtbar"] or key in SPALTEN_FEST})
     for key, t, s in basis:
         if key not in gesehen:
-            ergebnis.append({"key": key, "titel": t, "sichtbar": s})
+            ergebnis.append({"key": key, "titel": t, "standard": t, "name": "", "sichtbar": s})
     ergebnis.sort(key=lambda sp: 0 if sp["key"] in SPALTEN_FEST else 1)
     return ergebnis
 
 
-def spalten_speichern(session: Session, benutzer_id: int, board: str, liste) -> list[dict]:
-    """liste = [{key, sichtbar}] oder [[key, sichtbar]] in gewünschter Reihenfolge."""
-    gueltig = {k for k, _, _ in spalten_basis(board)}
-    neu = []
-    if not isinstance(liste, (list, tuple)):
-        liste = []
-    for eintrag in liste:
-        if isinstance(eintrag, dict):
-            key, sichtbar = eintrag.get("key"), eintrag.get("sichtbar", True)
+def sortierung_fuer(session: Session, benutzer, board: str) -> dict | None:
+    """Gemerkte Sortierung {key, richtung} des Nutzers für das Board (oder None);
+    Keys außerhalb des AKTIVEN Katalogs zählen nicht (eine gemerkte Score-
+    Sortierung ruht, solange score_aktiv aus ist – gespeichert bleibt sie)."""
+    sort = spalten_konfig(session, benutzer, board)["sort"]
+    if not sort:
+        return None
+    gueltig = {k for k, _, _ in spalten_basis(board, score=lead_v2.score_aktiv(session))}
+    return sort if sort["key"] in gueltig else None
+
+
+_BEHALTEN = object()
+
+
+def spalten_speichern(session: Session, benutzer, board: str, liste=_BEHALTEN,
+                      sort=_BEHALTEN, umbenennen=None, zuruecksetzen: bool = False) -> list[dict]:
+    """Konfiguration des Nutzers schreiben (nur dieser Nutzer, je Board):
+    liste = [{key, sichtbar, name?}] oder [[key, sichtbar]] in gewünschter
+    Reihenfolge (weggelassen = Reihenfolge/Sichtbarkeit bleiben),
+    sort = {key, richtung} | None (weggelassen = bleibt), umbenennen =
+    (key, name) mit leer = Standard, zuruecksetzen = alles auf Standard."""
+    benutzer_id = _benutzer_id(benutzer)
+    gueltig = {k for k, _, _ in spalten_basis(board, score=True)}
+    alt = spalten_konfig(session, benutzer_id, board)
+    namen = {sp["key"]: sp["name"] for sp in alt["spalten"] if sp["name"]}
+    if zuruecksetzen:
+        neu_spalten, neu_sort, namen = [], None, {}
+    else:
+        neu_sort = alt["sort"]
+        if liste is _BEHALTEN:
+            neu_spalten = [dict(sp) for sp in alt["spalten"]]
         else:
-            try:
-                key, sichtbar = eintrag[0], eintrag[1]
-            except (TypeError, IndexError):
-                continue
-        if key in gueltig and key not in [n[0] for n in neu]:
-            neu.append([key, bool(sichtbar) or key in SPALTEN_FEST])
+            neu_spalten = []
+            for sp in _konfig_normieren(liste if isinstance(liste, (list, tuple)) else [])["spalten"]:
+                if sp["key"] in gueltig and sp["key"] not in [n["key"] for n in neu_spalten]:
+                    neu_spalten.append({"key": sp["key"],
+                                        "sichtbar": sp["sichtbar"] or sp["key"] in SPALTEN_FEST,
+                                        "name": sp["name"] or namen.get(sp["key"], "")})
+        if sort is not _BEHALTEN:
+            if isinstance(sort, dict) and sort.get("key") in gueltig:
+                neu_sort = {"key": str(sort["key"]),
+                            "richtung": "ab" if str(sort.get("richtung", "auf")) == "ab" else "auf"}
+            else:
+                neu_sort = None
+        if umbenennen:
+            key, name = umbenennen
+            name = str(name or "").strip()[:60]
+            if key in gueltig:
+                if key not in [n["key"] for n in neu_spalten]:
+                    # Spalte noch ohne Eintrag: Katalogreihenfolge/-sichtbarkeit übernehmen
+                    for k, _, s in spalten_basis(board, score=True):
+                        if k not in [n["key"] for n in neu_spalten]:
+                            neu_spalten.append({"key": k, "sichtbar": s, "name": namen.get(k, "")})
+                for sp in neu_spalten:
+                    if sp["key"] == key:
+                        sp["name"] = name
     alle = lead_v2.einstellung_holen(session, benutzer_id, EINSTELLUNG_KEY, {}) or {}
     if not isinstance(alle, dict):
         alle = {}
-    alle[board] = neu
+    alle[board] = {"spalten": [{"key": sp["key"], "sichtbar": bool(sp["sichtbar"]),
+                                "name": sp.get("name", "")} for sp in neu_spalten],
+                   "sort": neu_sort}
     lead_v2.einstellung_setzen(session, benutzer_id, EINSTELLUNG_KEY, alle)
     return spalten_fuer(session, benutzer_id, board)
+
+
+def kundenname(kunde) -> str:
+    """v25: „Anrede Vorname Nachname“ (Anrede nur wenn gesetzt); Firma davor,
+    falls vorhanden."""
+    if kunde is None:
+        return ""
+    person = " ".join(t.strip() for t in (kunde.anrede, kunde.vorname, kunde.nachname)
+                      if t and t.strip())
+    firma = (kunde.firma or "").strip()
+    if firma and person:
+        return f"{firma} ({person})"
+    return firma or person
+
+
+def phasen_labels(logik=None) -> dict:
+    """v25: Phase → Label ausschließlich aus dem Blatt Status (beide Kontakt-
+    Phasen „Kontaktiert“); Fallback Phasenname."""
+    logik = logik or leadmanagement_logik.hole_logik()
+    return {phase: status_label(logik, phase)[0] for phase in LEAD_PHASEN}
+
+
+def phasen_mit_label(logik, phase: str) -> set:
+    """Alle Phasen, die dasselbe Label tragen wie `phase` (mindestens sie selbst)."""
+    if not phase:
+        return set()
+    label = status_label(logik, phase)[0]
+    return {p for p in LEAD_PHASEN if status_label(logik, p)[0] == label} | {phase}
+
+
+# Sortierwert je Spalte (serverseitig, gemerkte Sortierung); None = ans Ende
+def _sortier_wert(z: dict, key: str):
+    k, v = z["kunde"], z["vorgang"]
+    if key == "lead":
+        return ((k.nachname or k.firma or "") + " " + (k.vorname or "")).strip().lower() or None
+    if key in ("anrede", "vorname", "nachname", "strasse", "telefon", "email"):
+        wert = getattr(k, key, None) or (k.firma if key == "nachname" else None)
+        return (wert or "").strip().lower() or None
+    if key == "status":
+        return (z.get("status_label") or "").lower() or None
+    if key == "score":
+        return v.score_punkte if v.score_punkte is not None else None
+    if key == "kanal":
+        return (z.get("kanal") or "").lower() or None
+    if key == "interessen":
+        return ",".join(z.get("sparten") or []) or None
+    if key == "angebot":
+        angebote = z.get("angebote") or []
+        return angebote[0].nummer if angebote else None
+    if key == "versuche":
+        return z.get("versuche", 0)
+    if key == "letzter_kontakt":
+        return z["letzter"].zeitpunkt if z.get("letzter") else None
+    if key == "eingang":
+        return z.get("eingang")
+    if key == "notiz":
+        return (k.notizen or "").strip().lower() or None
+    if key == "ad":
+        return z["ad"].name.lower() if z.get("ad") else None
+    if key == "innendienst":
+        return z["leadmanager"].name.lower() if z.get("leadmanager") else None
+    if key == "ort":
+        return ((k.plz or "") + " " + (k.ort or "")).strip().lower() or None
+    if key == "termin":
+        return z["termin"].beginn if z.get("termin") and z["termin"].beginn else None
+    if key == "wiedervorlage":
+        return z.get("wiedervorlage")
+    return None
+
+
+def zeilen_sortieren(zeilen: list, sort: dict | None, jetzt=None) -> list:
+    """Zeilen einer Gruppe nach der gemerkten Spalte sortieren (auf/ab, leere
+    Werte immer ans Ende); ohne Sortierung Eingang neueste zuerst."""
+    jetzt = jetzt or datetime.now()
+    if not sort or not sort.get("key"):
+        zeilen.sort(key=lambda z: z["eingang"] or jetzt, reverse=True)
+        return zeilen
+    key, ab = sort["key"], sort.get("richtung") == "ab"
+    mit = [(z, _sortier_wert(z, key)) for z in zeilen]
+    voll = [p for p in mit if p[1] is not None]
+    leer = [p[0] for p in mit if p[1] is None]
+    try:
+        voll.sort(key=lambda p: p[1], reverse=ab)
+    except TypeError:
+        voll.sort(key=lambda p: str(p[1]), reverse=ab)
+    zeilen[:] = [p[0] for p in voll] + leer
+    return zeilen
 
 
 # --- Farben, Avatare -----------------------------------------------------------------
@@ -194,8 +427,9 @@ def avatar_farbe(benutzer_id) -> str:
 
 def board_gruppe(logik, vorgang: Vorgang, aktiver_vot=None) -> tuple[str, str]:
     """Gruppe eines Vorgangs: Blatt Status entscheidet; ein aktiver
-    Vor-Ort-Termin zieht einen Hauptboard-Lead ins Board Terminiert
-    (Angebotserstellung), auch wenn die Phase noch nicht nachgezogen ist."""
+    Vor-Ort-Termin zieht einen Hauptboard-Lead ins Board Deals (Key
+    terminiert, Angebotserstellung), auch wenn die Phase noch nicht
+    nachgezogen ist."""
     board, gruppe = logik.board_fuer(vorgang.lead_phase or "neu")
     if board == "hauptboard" and aktiver_vot is not None \
             and vorgang.lead_phase not in ("zurueckgestellt", "unqualifiziert", "nicht_erreicht"):
@@ -253,6 +487,7 @@ def filter_aus_query(q) -> dict:
         "gruppe": q.get("gruppe", "") or "",
         "archiv": q.get("archiv", "") == "1",
         "meine": q.get("meine", "") == "1",
+        "sort": None,        # v25: gemerkte Sortierung des Nutzers (lm_boards setzt sie)
     }
 
 
@@ -334,6 +569,9 @@ def board_zeilen(session: Session, benutzer, board: str, f: dict | None = None) 
     maximum = kern.versuche_max(session)
     grenze = jetzt - timedelta(days=ARCHIV_TAGE)
     suche = f.get("q", "")
+    # v25: Status-Filter trifft alle Phasen mit demselben Label („Kontaktiert“
+    # = in_kontaktierung + qualifiziert)
+    status_filter = phasen_mit_label(logik, f.get("status") or "")
 
     gruppen = {g: [] for g in BOARDS[board]["gruppen"]}
     for v in vorgaenge:
@@ -350,7 +588,7 @@ def board_zeilen(session: Session, benutzer, board: str, f: dict | None = None) 
             continue
         if f.get("gruppe") and gruppe != f["gruppe"]:
             continue
-        if f.get("status") and v.lead_phase != f["status"]:
+        if status_filter and v.lead_phase not in status_filter:
             continue
         if f.get("kanal") and (kunde.vertriebskanal or "").lower() != f["kanal"].lower():
             continue
@@ -410,7 +648,7 @@ def board_zeilen(session: Session, benutzer, board: str, f: dict | None = None) 
     ergebnis = []
     for key in BOARDS[board]["gruppen"]:
         zeilen = gruppen[key]
-        zeilen.sort(key=lambda z: z["eingang"] or jetzt, reverse=True)
+        zeilen_sortieren(zeilen, f.get("sort"), jetzt)
         ergebnis.append({"key": key, "titel": GRUPPEN_NAMEN[key],
                          "erkl": GRUPPEN_ERKLAERUNG.get(key, ""), "zeilen": zeilen,
                          "eingeklappt": key in GRUPPEN_EINGEKLAPPT and not f.get("gruppe")})
@@ -442,11 +680,20 @@ def auswahl_listen(session: Session) -> dict:
             ad.append(b)
     logik = leadmanagement_logik.hole_logik()
     status = []
+    gesehene_labels: dict[str, str] = {}
     for phase in LEAD_PHASEN:
         label, farbe = status_label(logik, phase)
+        # v25: zwei Phasen dürfen dasselbe Label tragen („Kontaktiert“) – in den
+        # Auswahlfeldern erscheint das Label nur einmal (erste Phase), die
+        # Templates blenden Einträge mit doppelt=True aus, außer sie sind der
+        # aktuelle Wert; gleiche = die anderen Phasen desselben Labels.
         status.append({"key": phase, "label": label, "farbe": farbe,
                        "setzbar": phase not in PHASEN_ABGELEITET,
-                       "grund": PHASEN_MIT_GRUND.get(phase, "")})
+                       "grund": PHASEN_MIT_GRUND.get(phase, ""),
+                       "doppelt": label in gesehene_labels,
+                       "gleiche": [p for p in LEAD_PHASEN
+                                   if p != phase and status_label(logik, p)[0] == label]})
+        gesehene_labels.setdefault(label, phase)
     return {
         "ad_wahl": [{"id": b.id, "name": b.name, "hv": b.id in hv_ids} for b in ad],
         "lm_wahl": [{"id": b.id, "name": b.name} for b in kern.leadmanager_benutzer(session)],
@@ -500,7 +747,7 @@ def angebote_ablehnen(session: Session, vorgang: Vorgang, grund: str, text: str 
             angebot_id=angebot.id, benutzer_name=benutzer.name if benutzer else "System",
             text="Abgelehnt – Grund: " + angebot.ablehnungsgrund
                  + (f" ({angebot.ablehnungsgrund_text})" if angebot.ablehnungsgrund_text else "")
-                 + " · Lead verloren (Board Terminiert)"))
+                 + f" · Lead verloren (Board {board_label('terminiert')})"))
         erfassung = session.query(Erfassung).filter(Erfassung.angebot_id == angebot.id).first()
         if erfassung is not None and erfassung.status != "Erledigt (extern)":
             erfassung.status = "Erledigt"
@@ -706,7 +953,7 @@ def _sammel_status(session: Session, vorgaenge: list, params: dict, benutzer) ->
 
 
 # Registry: board → [(key, Titel, Handler(session, vorgaenge, params, benutzer)
-# → (anzahl_ok, fehlerliste))]. Weitere Aktionen (Phase 111: Info-Veranstaltung)
+# → (anzahl_ok, fehlerliste))]. Weitere Aktionen (Phase 111: Infoabend)
 # registrieren sich über sammelaktion_registrieren().
 SAMMELAKTIONEN: dict[str, list] = {
     "hauptboard": [("status", "Status ändern", _sammel_status)],

@@ -1,5 +1,6 @@
 # Lead-Management V2 (v23) – Router info (PLAN_LEAD_V2 Phase 111: Reiter
-# „Info-Veranstaltung“, Teil 2 I1–I5, A-8). Eigener Router mit demselben Präfix;
+# „Infoabend“ (bis v24 „Info-Veranstaltung“; Pfad /info-veranstaltung, Parameter info_*
+# und Tabellennamen bleiben), Teil 2 I1–I5, A-8). Eigener Router mit demselben Präfix;
 # in app/main.py VOR dem V1-Router eingebunden. Jede Route läuft über
 # lead_v2.gate (404 im Demo-Modus für Nicht-Admins; Handelsvertreter sehen nur
 # eigene Leads). Fachlogik in app/lead_info.py.
@@ -96,6 +97,9 @@ def _ctx(session: Session, benutzer, zurueck: str) -> dict:
     ctx["zurueck"] = zurueck
     ctx["tabelle_makro"] = _template_vorhanden("leadmanagement/_tabelle.html")
     ctx["dialoge_makro"] = _template_vorhanden("leadmanagement/anruf_dialoge.html")
+    ctx["score_aktiv"] = lead_v2.score_aktiv(session)   # v25: Tooltip „Erreicht“ (Kartei statt Bogen)
+    # v25 (Phase 118): gemerkte Sortierung des Nutzers (Board „info“) für aria-sort der Köpfe
+    ctx["sortierung"] = lead_info.sortierung_fuer(session, benutzer)
     return ctx
 
 
@@ -153,14 +157,16 @@ async def info_board(request: Request, session: Session = Depends(get_session)):
     except Exception:
         session.rollback()
     f = lead_info.filter_aus_query(request.query_params)
-    daten = lead_info.board_daten(session, benutzer, f)
     zurueck = _zurueck_aus_query(request)
     ctx = _ctx(session, benutzer, zurueck)
+    f["sort"] = ctx["sortierung"]          # v25: gemerkte Sortierung je Nutzer (Board „info“)
+    daten = lead_info.board_daten(session, benutzer, f)
     p = lead_info.parameter(session)
     from app.models import INTERESSEN
     return render(request, "leadmanagement/info_board.html", aktiv="/lead-management",
                   gruppen=daten["gruppen"], anzahl=daten["anzahl"], jetzt=daten["jetzt"],
                   archiv=daten["archiv"], filter_werte=f, ctx=ctx, sparten_liste=INTERESSEN,
+                  sortierung=ctx["sortierung"], konfig_board=lead_info.KONFIG_BOARD,
                   spalten=lead_info.spalten_fuer(session, benutzer.id, ctx["tabelle_makro"]),
                   sammelaktionen=lead_info.sammelaktionen() if ctx["sammel"] else [],
                   tabelle_makro=ctx["tabelle_makro"], dialoge_makro=ctx["dialoge_makro"],

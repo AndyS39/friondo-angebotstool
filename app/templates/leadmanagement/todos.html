@@ -9,9 +9,13 @@
 
 {# v23 (PLAN_LEAD_V2 Phase 110, A2/F7): To-Dos = Arbeitsaufträge mit Empfänger,
    optionalem Vorgangsbezug, Fälligkeit und Erledigt-Häkchen. Abgrenzung:
-   Wiedervorlage = Kundenkontakt zu einem Zeitpunkt (Dashboard). #}
+   Wiedervorlage = Kundenkontakt zu einem Zeitpunkt (Dashboard).
+   v25 (PLAN_LEAD_V3 Phase 118): Eintrag „To-Dos“ der Icon-Leiste; Sichten Meine
+   offenen · Von mir vergeben · Erledigt, Filter fällig/alle (?faellig=1 = offen mit
+   Fälligkeit bis jetzt), Anlegen inline (rechts). #}
+{% set faellig_param = ('&faellig=1' if faellig else '') | safe %}
 {% block inhalt %}
-{% if modul %}{{ lm_nav('dashboard') }}{% endif %}
+{% if modul %}{{ lm_nav('todos') }}{% endif %}
 <div class="seitenkopf">
     <h1>To-Dos {% if demo_badge and modul %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
     <span class="dezent">Arbeitsaufträge – jeder darf jedem To-Dos zuweisen · Glocke statt Mail</span>
@@ -24,12 +28,19 @@
 
 <div class="lm-todo-filter">
     <nav class="lm-umschalter" aria-label="To-Do-Sicht">
-        <a class="{{ 'aktiv' if sicht == 'meine' and not vorgang }}" href="/lead-management/todos?sicht=meine{{ '&q=' ~ (suche | urlencode) if suche }}">Meine offenen <span class="n">{{ zaehler.meine }}</span></a>
-        <a class="{{ 'aktiv' if sicht == 'vergeben' and not vorgang }}" href="/lead-management/todos?sicht=vergeben{{ '&q=' ~ (suche | urlencode) if suche }}">Von mir vergeben <span class="n">{{ zaehler.vergeben }}</span></a>
-        <a class="{{ 'aktiv' if sicht == 'erledigt' and not vorgang }}" href="/lead-management/todos?sicht=erledigt{{ '&q=' ~ (suche | urlencode) if suche }}">Erledigt <span class="n">{{ zaehler.erledigt }}</span></a>
+        <a class="{{ 'aktiv' if sicht == 'meine' and not vorgang }}" href="/lead-management/todos?sicht=meine{{ faellig_param }}{{ '&q=' ~ (suche | urlencode) if suche }}">Meine offenen <span class="n">{{ zaehler.meine }}</span></a>
+        <a class="{{ 'aktiv' if sicht == 'vergeben' and not vorgang }}" href="/lead-management/todos?sicht=vergeben{{ faellig_param }}{{ '&q=' ~ (suche | urlencode) if suche }}">Von mir vergeben <span class="n">{{ zaehler.vergeben }}</span></a>
+        <a class="{{ 'aktiv' if sicht == 'erledigt' and not vorgang }}" href="/lead-management/todos?sicht=erledigt{{ faellig_param }}{{ '&q=' ~ (suche | urlencode) if suche }}">Erledigt <span class="n">{{ zaehler.erledigt }}</span></a>
+    </nav>
+    {# v25: Filter fällig/alle (fällig = offen, Fälligkeit bis jetzt) #}
+    {% set sicht_param = ('sicht=' ~ sicht ~ ('&vorgang_id=' ~ vorgang.id if vorgang else '') ~ ('&q=' ~ (suche | urlencode) if suche else '')) | safe %}
+    <nav class="lm-umschalter lm-todo-faellig" aria-label="Fälligkeit">
+        <a class="{{ 'aktiv' if not faellig }}" href="/lead-management/todos?{{ sicht_param }}" title="Alle To-Dos der Sicht">Alle</a>
+        <a class="{{ 'aktiv' if faellig }}" href="/lead-management/todos?{{ sicht_param }}&faellig=1" title="Nur fällige (offen, Fälligkeit erreicht)">Fällig <span class="n {{ 'rot' if zaehler.faellig }}">{{ zaehler.faellig }}</span></a>
     </nav>
     <form method="get" action="/lead-management/todos" class="suchleiste lm-todo-suche">
         <input type="hidden" name="sicht" value="{{ sicht }}">
+        {% if faellig %}<input type="hidden" name="faellig" value="1">{% endif %}
         {% if vorgang %}<input type="hidden" name="vorgang_id" value="{{ vorgang.id }}">{% endif %}
         <input type="text" name="q" value="{{ suche }}" placeholder="Titel oder Details durchsuchen">
         <button class="knopf klein zweitrangig" type="submit">{{ symbol('suche') }} Suchen</button>
@@ -46,10 +57,10 @@
 <div class="lm-zweispaltig lm-todo-seite">
     <div class="lm-karte">
         <h2>{% if vorgang %}Zum Vorgang{% elif sicht == 'vergeben' %}Von mir vergeben{% elif sicht == 'erledigt' %}Erledigt{% else %}Meine offenen To-Dos{% endif %}
-            <span class="sub">{{ zeilen | length }} Einträge{% if sicht == 'meine' and not vorgang %} · fällige zuerst{% endif %}</span></h2>
+            <span class="sub">{{ zeilen | length }} Einträge{% if faellig %} · nur fällige{% elif sicht == 'meine' and not vorgang %} · fällige zuerst{% endif %}</span></h2>
         {{ todo_liste(zeilen, benutzer, heute, zurueck=zurueck, zeige_an=(sicht == 'vergeben' or vorgang is not none),
                       akte_basis=('/lead-management/lead/' if modul else '/vorgaenge/'),
-                      leer_text=('Keine Treffer.' if suche else 'Keine To-Dos in dieser Sicht.')) }}
+                      leer_text=('Keine Treffer.' if suche else ('Keine fälligen To-Dos.' if faellig else 'Keine To-Dos in dieser Sicht.'))) }}
     </div>
     <div class="lm-karte">
         <h2>Neues To-Do <span class="sub">{% if vorgang %}zum Vorgang {{ kunde.anzeige_name if kunde else vorgang.id }}{% else %}optional mit Vorgangsbezug{% endif %}</span></h2>

@@ -46,6 +46,13 @@
 <p class="hinweis">Umbuchung des Termins {{ umbuchen.beginn | de_datum('%a %d.%m.%Y · %H:%M') if umbuchen.beginn }} Uhr
     – der Kunde erhält die Terminänderung mit aktualisiertem Kalendereintrag (gleiche UID).</p>
 {% endif %}
+{# v25 (Phase 120): Lead liegt bei einem Handelsvertreter – der Innendienst sieht den
+   Hinweis; der Vertreter wird nicht vorgeschlagen, manuelle Buchung bleibt möglich #}
+{% if hv_hinweis %}
+<p class="lm-hinweis lmt-hv-hinweis">{{ symbol('nutzer') }} {{ hv_hinweis }}
+    <span class="dezent">– Vorschläge unten gelten für die übrigen Außendienstler; der Vertreter
+    ist nur über „Manuell setzen“ wählbar.</span></p>
+{% endif %}
 
 <section class="karte lmt-kopf">
     <div class="lmt-kopf-spalte">
@@ -55,13 +62,14 @@
             {% if not sparten %}<span class="dezent">keine Sparte</span>{% endif %}
             {% if kunde.objektart %}<span class="abzeichen">{{ kunde.objektart }}</span>{% endif %}
             {% if kanal %}<span class="lm-kanal">{{ kanal }}</span>{% endif %}
+            {% if phase_label %}<span class="abzeichen" title="Phase laut Blatt Status">{{ phase_label }}</span>{% endif %}
         </p>
         <p class="dezent">PLZ {{ kunde.plz or '?' }} · Wunschzeiten:
             {{ wunschzeiten | join(', ') if wunschzeiten else 'keine hinterlegt' }}
-            {% if vorgang.score_klasse %} · Klasse {{ vorgang.score_klasse }}{% endif %}</p>
+            {% if score_aktiv and vorgang.score_klasse %} · Klasse {{ vorgang.score_klasse }}{% endif %}</p>
     </div>
     <div class="lmt-kopf-spalte">
-        <h2>Kandidaten <span class="dezent">(Ausschluss: Kanal, Kompetenz, Kapazität, Arbeitszeit · Abwertung: Gebiet, Fahrzeit, Wunschzeit)</span></h2>
+        <h2>Kandidaten <span class="dezent">(Ausschluss: Kanal, Kompetenz, Kapazität, Arbeitszeit, Handelsvertreter · Abwertung: Gebiet, Fahrzeit, Wunschzeit)</span></h2>
         <ul class="lmt-liste">
         {% for k in kandidaten_info %}
             <li><strong>{{ k.ad.name }}</strong>
@@ -158,6 +166,14 @@
                 {% for ad in kandidaten %}
                     <option value="{{ ad.id }}" {{ 'selected' if (form_ad | string == ad.id | string) or (not form_ad and kalender_ad == ad.id) }}>{{ ad.name }}</option>
                 {% endfor %}
+                {% if hv_manuell %}
+                {# v25 [ANNAHME]: Handelsvertreter nur manuell durch den Innendienst buchbar #}
+                <optgroup label="Handelsvertreter (nur manuell)">
+                    {% for ad in hv_manuell %}
+                    <option value="{{ ad.id }}" {{ 'selected' if form_ad | string == ad.id | string }}>{{ ad.name }}</option>
+                    {% endfor %}
+                </optgroup>
+                {% endif %}
             </select>
         </label>
     </div>
@@ -166,7 +182,7 @@
         <label class="kontrollfeld {{ '' if warnungen else 'lmt-versteckt' }}" id="lmt-bestaetigen">
             <input type="checkbox" name="bestaetigt" value="1" {{ 'checked' if warnungen }}>
             Konflikte geprüft – trotzdem buchen</label>
-        <button class="knopf" type="submit" {{ 'disabled' if not buchbar or not kandidaten }}>
+        <button class="knopf" type="submit" {{ 'disabled' if not buchbar or not (kandidaten or hv_manuell) }}>
             {{ 'Umbuchen' if umbuchen_id else ('Manuell vormerken' if pflicht_offen else 'Manuell buchen') }}</button>
     </div>
 </form>

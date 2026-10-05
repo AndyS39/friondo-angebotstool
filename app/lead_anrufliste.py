@@ -1,9 +1,15 @@
-# Anrufliste als gruppierte Arbeitsliste (v21, PLAN_LEAD_V1.1 Phase 89):
-# Schnellfilter mit Zählern, fünf Gruppen (Jetzt dran · Weiter versuchen ·
-# Neu heute · Wiedervorlagen fällig · Sonstige), zweizeilige Zeile mit
-# Versuchs-Punkten und Kontaktstatus-Satz. Derselbe Satz steht im Lead-Kopf
-# der Vorgangsakte (kopf_kontext). Route, Ergebnis-Buttons, Dialoge, Panel
-# und Tasten 1–7 sind unverändert (app/routers/leadmanagement.py).
+# Anrufliste als Arbeitsliste (v21, PLAN_LEAD_V1.1 Phase 89; v25 umgebaut,
+# PLAN_LEAD_V3 Phase 118): Schnellfilter-Chips mit Zählern, EINE durchgehend
+# sortierte Liste ohne Gruppen – Reihenfolge SLA rot → SLA gelb → fällige
+# Wiedervorlagen und Rückrufe (nach Uhrzeit) → Zurückgestellte mit erreichtem
+# Datum → Rest nach Eingangsdatum (älteste zuerst); keine Score-Komponente.
+# Filter „Vertriebskanal“ (Mehrfachauswahl, Farben aus Parameter kanal_farben)
+# ersetzt die Quelle-/Einzelquelle-Selects; die URL-Parameter quelle_id /
+# quelle_typ / kampagne_id der Übersichts-Links wirken weiter (ohne Select),
+# gruppe= wird toleriert und ignoriert. Zweizeilige Zeile mit Versuchs-Punkten
+# und Kontaktstatus-Satz; derselbe Satz steht im Lead-Kopf der Vorgangsakte
+# (kopf_kontext). Route, Ergebnis-Buttons, Panel und Tasten 1–7 liegen in
+# app/routers/leadmanagement.py.
 
 import json
 from datetime import datetime, timedelta
@@ -12,25 +18,48 @@ from sqlalchemy.orm import Session
 
 from app import leadmanagement as kern
 from app.models import (Benutzer, Kampagne, Kunde, LeadAktivitaet, LeadQualifizierung,
-                        LeadQuelle, Vorgang, VotTermin, ANRUF_ERGEBNIS_NAMEN)
+                        LeadQuelle, Vorgang, VotTermin, ANRUF_ERGEBNIS_NAMEN,
+                        LEAD_PHASEN, LEAD_PHASEN_NAMEN)
 
 WOCHENTAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 OFFENE_PHASEN = ("neu", "in_kontaktierung", "zurueckgestellt", "nicht_erreicht",
                  "qualifiziert")
-GRUPPEN = [
-    ("dran", "Jetzt dran", "SLA gelb/rot und fällige Rückrufe – in dieser Reihenfolge abarbeiten"),
-    ("weiter", "Weiter versuchen", "Kaskade fällig – Leads mit 3 und mehr Versuchen stehen oben"),
-    ("neu", "Neu heute", "eingegangen, SLA noch grün – nach Score sortiert"),
-    ("wiedervorlage", "Wiedervorlagen fällig", "zurückgestellte Leads, deren Datum erreicht ist"),
-    ("sonstige", "Sonstige offene", "nicht fällig – aufklappen"),
+# v25 (Phase 118): Sortier-Ränge der einen Liste (statt der v21-Gruppen) –
+# Reihenfolge und Kurztext für Tooltip/Legende
+RAENGE = [
+    (0, "SLA rot", "noch kein Versuch, Erstkontakt überfällig"),
+    (1, "SLA gelb", "noch kein Versuch, Erstkontakt wird knapp"),
+    (2, "fällig", "Wiedervorlage oder Rückruf erreicht – nach Uhrzeit"),
+    (3, "zurückgestellt", "Zurückgestellt, Datum erreicht"),
+    (4, "", "übrige offene Leads nach Eingang, älteste zuerst"),
 ]
 CHIPS = [("arbeitsliste", "Arbeitsliste"), ("heute", "Heute eingegangen"),
          ("sla_rot", "SLA rot"), ("drei", "≥ 3 Versuche"),
          ("rueckruf", "Rückruf heute"), ("frei", "Ohne Leadmanager")]
+# Kanal-Wert für Kunden ohne Vertriebskanal (Filter „Vertriebskanal“)
+KANAL_STANDARD = "Standard"
+
+
+def _liste_aus_query(q, name: str) -> list[str]:
+    """Mehrfach-Parameter (?kanal=A&kanal=B) – auch als Dict mit Liste oder
+    kommagetrennt („A,B“); leer = kein Filter. Werte klein für den Vergleich."""
+    if hasattr(q, "getlist"):
+        roh = q.getlist(name)
+    else:
+        roh = q.get(name, "")
+        roh = roh if isinstance(roh, (list, tuple)) else [roh]
+    werte: list[str] = []
+    for eintrag in roh:
+        for teil in str(eintrag or "").split(","):
+            teil = teil.strip().lower()
+            if teil and teil not in werte:
+                werte.append(teil)
+    return werte
 
 
 def filter_aus_query(q) -> dict:
-    """Alle URL-Parameter der Anrufliste (auch die Links der Übersicht)."""
+    """Alle URL-Parameter der Anrufliste (auch die Links der Übersicht).
+    v25: `kanal` (Mehrfach), `gruppe`/`klasse` werden nur noch toleriert."""
     def _int(name):
         wert = q.get(name, "")
         return int(wert) if str(wert).lstrip("-").isdigit() else None
@@ -39,12 +68,41 @@ def filter_aus_query(q) -> dict:
         "quelle_id": q.get("quelle_id", ""), "kampagne_id": q.get("kampagne_id", ""),
         "quelle_typ": q.get("quelle_typ", ""),
         "sparte": q.get("sparte", ""), "klasse": q.get("klasse", ""),
+        "kanal": _liste_aus_query(q, "kanal"),
         "plz": q.get("plz", ""), "phase": q.get("phase", ""), "q": q.get("q", ""),
         "eingang_von": q.get("eingang_von", ""), "eingang_bis": q.get("eingang_bis", ""),
         "sla": q.get("sla", ""), "versuche": _int("versuche"),
         "versuche_min": _int("versuche_min"), "rueckruf": q.get("rueckruf", ""),
         "frei": q.get("frei", "") == "1", "gruppe": q.get("gruppe", ""),
     }
+
+
+def phasen_labels(logik) -> dict:
+    """Phase → Anzeige-Label aus dem Blatt Status (v25: in_kontaktierung und
+    qualifiziert tragen beide „Kontaktiert“), Fallback LEAD_PHASEN_NAMEN."""
+    labels = {}
+    for phase in LEAD_PHASEN:
+        zeile = logik.status_zeile(phase) if logik is not None else None
+        labels[phase] = (zeile.label if zeile is not None and zeile.label
+                         else LEAD_PHASEN_NAMEN.get(phase, phase))
+    return labels
+
+
+def phasen_optionen(logik) -> list[tuple[str, str]]:
+    """Optionen des Phase-Selects: Phasen mit demselben Label werden zu EINER
+    Option zusammengefasst (Wert = kommagetrennte Phasen, z. B.
+    „in_kontaktierung,qualifiziert“ → „Kontaktiert“)."""
+    labels = phasen_labels(logik)
+    optionen: list[tuple[list[str], str]] = []
+    for phase in LEAD_PHASEN:
+        label = labels[phase]
+        for eintrag in optionen:
+            if eintrag[1] == label:
+                eintrag[0].append(phase)
+                break
+        else:
+            optionen.append(([phase], label))
+    return [(",".join(phasen), label) for phasen, label in optionen]
 
 
 def aktiver_chip(f: dict) -> str:
@@ -178,7 +236,10 @@ def kontaktstatus(session: Session, vorgang: Vorgang, anrufe: list[LeadAktivitae
                                   f"{WOCHENTAGE[a.zeitpunkt.weekday()]} {a.zeitpunkt.strftime('%d.%m.')}"
                                   for a in reversed(davor)) if davor and n >= 4 else ""), ""))
         if vorgang.naechste_aktion_am is not None:
-            teile.append((f"nächster Versuch: {_zeit(vorgang.naechste_aktion_am, jetzt)}", ""))
+            # v25: die Kaskade setzt keine Wiedervorlage mehr – hier steht eine
+            # manuell gesetzte Wiedervorlage (Kartei/Board) oder „Nummer prüfen“ (+1d)
+            teile.append((f"Wiedervorlage: {_zeit(vorgang.naechste_aktion_am, jetzt)}",
+                          "faellig" if vorgang.naechste_aktion_am <= jetzt else ""))
         letzte_stufe = max((s.versuch_nr for s in logik.kaskade if s.letzter), default=0)
         if letzte_stufe and n + 1 >= letzte_stufe and vorgang.lead_phase != "nicht_erreicht":
             teile.append(("letzter Versuch der Kaskade – danach „Nicht erreicht“ + Nurture-Mail",
@@ -188,40 +249,75 @@ def kontaktstatus(session: Session, vorgang: Vorgang, anrufe: list[LeadAktivitae
     return teile
 
 
-def _gruppe(v: Vorgang, sla: dict, letzter, jetzt: datetime, heute: datetime) -> tuple[str, tuple]:
-    n = v.versuch_nr or 0
-    rueckruf = (letzter is not None and letzter.ergebnis == "rueckruf_gewuenscht"
-                and v.naechste_aktion_am is not None)
+def _rang(v: Vorgang, sla: dict, jetzt: datetime) -> tuple[int, tuple]:
+    """v25 (Phase 118): Sortier-Rang der einen Liste + Feinsortierung –
+    0 SLA rot · 1 SLA gelb (je Eingang, älteste zuerst) · 2 fällige
+    Wiedervorlage/Rückruf (nach Uhrzeit) · 3 zurückgestellt mit erreichtem
+    Datum (nach Datum) · 4 Rest nach Eingang (älteste zuerst). Kein Score."""
+    eingang = (v.eingang_am or v.angelegt_am or jetzt).timestamp()
     if v.lead_phase == "zurueckgestellt":
-        return "wiedervorlage", ((v.zurueckgestellt_bis or jetzt).timestamp(),)
-    if rueckruf and v.naechste_aktion_am <= jetzt:
-        return "dran", (1, v.naechste_aktion_am.timestamp())
-    if n == 0 and v.erstkontakt_am is None and sla.get("farbe") in ("gelb", "rot"):
-        return "dran", (0 if sla["farbe"] == "rot" else 2,
-                        (v.eingang_am or v.angelegt_am).timestamp())
+        return 3, ((v.zurueckgestellt_bis or jetzt).timestamp(), eingang)
+    if sla.get("farbe") == "rot":
+        return 0, (eingang,)
+    if sla.get("farbe") == "gelb":
+        return 1, (eingang,)
     if v.naechste_aktion_am is not None and v.naechste_aktion_am <= jetzt:
-        return "weiter", (-n, v.naechste_aktion_am.timestamp())
-    if letzter is not None and letzter.ergebnis == "falsche_nummer":
-        return "weiter", (-n, letzter.zeitpunkt.timestamp())
-    if n == 0 and (v.eingang_am or v.angelegt_am) >= heute:
-        klasse = {"A": 0, "B": 1, "C": 2}.get(v.score_klasse or "C", 2)
-        return "neu", (klasse, (v.eingang_am or v.angelegt_am).timestamp())
-    klasse = {"A": 0, "B": 1, "C": 2}.get(v.score_klasse or "C", 2)
-    return "sonstige", (klasse, (v.eingang_am or v.angelegt_am).timestamp())
+        return 2, (v.naechste_aktion_am.timestamp(), eingang)
+    return 4, (eingang,)
+
+
+def _kanal_farben(session: Session) -> dict:
+    """Parameter kanal_farben wie in den Boards (lead_boards.kanal_farben) –
+    lokaler Import, damit die Anrufliste ohne Boards-Modul ladbar bleibt."""
+    try:
+        from app import lead_boards
+        return lead_boards.kanal_farben(session)
+    except Exception:
+        return {}
+
+
+def kanal_farbe(farben: dict, kanal: str) -> str:
+    """Farbe eines Kanals: Parameter kanal_farben, sonst die Automatik-Palette
+    der Boards; „Standard“/leer bleibt ohne Farbe (grauer Badge)."""
+    kanal = (kanal or "").strip()
+    if not kanal or kanal.lower() == KANAL_STANDARD.lower():
+        return ""
+    try:
+        from app import lead_boards
+        return lead_boards.kanal_farbe(farben, kanal)
+    except Exception:
+        return farben.get(kanal.lower(), "")
+
+
+def kanal_optionen(session: Session, gewaehlt: list[str], zusaetzlich=()) -> list[dict]:
+    """Optionen des Filters „Vertriebskanal“: kern.kanal_werte (Standard + Kanäle
+    der Angebotsprofile) plus Kanäle, die an den gelisteten Kunden stehen,
+    aber in keinem Profil mehr vorkommen; je Eintrag wert, farbe, aktiv."""
+    farben = _kanal_farben(session)
+    werte = list(kern.kanal_werte(session))
+    for extra in zusaetzlich:
+        extra = (extra or "").strip()
+        if extra and extra.lower() not in [w.lower() for w in werte]:
+            werte.append(extra)
+    gewaehlt = [g.lower() for g in (gewaehlt or [])]
+    return [{"wert": w, "farbe": kanal_farbe(farben, w), "aktiv": w.lower() in gewaehlt}
+            for w in werte]
 
 
 def daten(session: Session, benutzer, f: dict) -> dict:
-    """Gruppen + Chip-Zähler. Chips zählen auf der Basisliste (nur der
-    Meine/Alle-Schalter wirkt), die Gruppen auf der gefilterten Liste."""
+    """Eine sortierte Liste (zeilen) + Chip-Zähler. Chips zählen auf der
+    Basisliste (nur der Meine/Alle-Schalter wirkt), die Liste ist gefiltert
+    und nach _rang sortiert. Liefert zusätzlich kanaele (Filteroptionen)."""
     from app import leadmanagement_logik
     logik = leadmanagement_logik.hole_logik()
     jetzt = datetime.now()
     heute = jetzt.replace(hour=0, minute=0, second=0, microsecond=0)
     morgen = heute + timedelta(days=1)
     phase_filter = f.get("phase") or ""
+    phasen = [p.strip() for p in phase_filter.split(",") if p.strip()]
     abfrage = session.query(Vorgang)
-    if phase_filter:
-        abfrage = abfrage.filter(Vorgang.lead_phase == phase_filter)
+    if phasen:
+        abfrage = abfrage.filter(Vorgang.lead_phase.in_(phasen))
     else:
         abfrage = abfrage.filter(Vorgang.lead_phase.in_(OFFENE_PHASEN))
     if f.get("meine") and benutzer is not None:
@@ -254,13 +350,15 @@ def daten(session: Session, benutzer, f: dict) -> dict:
     benutzer_namen = _benutzer_namen(session, {a.benutzer_id for liste in anrufe.values()
                                                for a in liste})
     maximal = kern.versuche_max(session)
+    farben = _kanal_farben(session)
+    rang_texte = {r: text for r, text, _ in RAENGE}
 
     basis = []
     for v in vorgaenge:
         kunde = kunden.get(v.kunde_id)
         if kunde is None:
             continue
-        if not phase_filter:
+        if not phasen:
             if v.lead_phase == "zurueckgestellt" and (
                     v.zurueckgestellt_bis is None or v.zurueckgestellt_bis > jetzt):
                 continue
@@ -272,19 +370,22 @@ def daten(session: Session, benutzer, f: dict) -> dict:
         sla = kern.sla_status(session, v, jetzt)
         if v.eingang_art == "monday" and not v.erstkontakt_am:
             # Plan 1.1: monday-Leads werden in monday terminiert – nur als
-            # Eingang zeigen, nie „Jetzt dran“/SLA rot
+            # Eingang zeigen, nie SLA rot/gelb
             sla = {**sla, "farbe": "", "monday": True}
         liste = anrufe.get(v.id, [])
         letzter = liste[-1] if liste else None
-        gruppe, sortierung = _gruppe(v, sla, letzter, jetzt, heute)
+        rang, sortierung = _rang(v, sla, jetzt)
         eingang = v.eingang_am or v.angelegt_am
+        kanal = (kunde.vertriebskanal or "").strip()
         basis.append({
             "vorgang": v, "kunde": kunde, "sla": sla, "letzter": letzter, "anrufe": liste,
-            "gruppe": gruppe, "_sortierung": sortierung, "eingang": eingang,
+            "rang": rang, "rang_text": rang_texte.get(rang, ""),
+            "_sortierung": (rang,) + tuple(sortierung), "eingang": eingang,
             "quelle": quellen.get(v.quelle_id),
             "quelle_gruppe": kern.quelle_gruppe(quellen.get(v.quelle_id)),
             "kampagne": kampagnen.get(v.kampagne_id),
-            "kanal": (kunde.vertriebskanal or ""),
+            "kanal": kanal,
+            "kanal_farbe": kanal_farbe(farben, kanal),
             "sparten": [s for s in (kunde.interesse or "").split(",") if s.strip()],
             "wiederkehrer": mehrfach.get(v.kunde_id, 0) > 1,
             "monday": v.eingang_art == "monday",
@@ -328,13 +429,16 @@ def daten(session: Session, benutzer, f: dict) -> dict:
             continue
         if f.get("frei") and not z["frei"]:
             continue
-        if f.get("gruppe") and z["gruppe"] != f["gruppe"]:
-            continue
+        # v25: gruppe= (alte Übersichts-Links) wird toleriert und ignoriert –
+        # die Liste ist durchgehend sortiert; quelle_typ/quelle_id/kampagne_id
+        # der Übersichts-Links filtern weiter (ohne eigenes Select)
         if f.get("quelle_typ") and z["quelle_gruppe"] != f["quelle_typ"]:
             continue
         if f.get("quelle_id") and str(v.quelle_id or "") != str(f["quelle_id"]):
             continue
         if f.get("kampagne_id") not in ("", None) and str(v.kampagne_id or 0) != str(f["kampagne_id"]):
+            continue
+        if f.get("kanal") and (z["kanal"] or KANAL_STANDARD).lower() not in f["kanal"]:
             continue
         if f.get("sparte") and f["sparte"] not in z["sparten"]:
             continue
@@ -355,18 +459,12 @@ def daten(session: Session, benutzer, f: dict) -> dict:
                        else "viel-versuche" if (v.versuch_nr or 0) >= 3 else "")
         zeilen.append(z)
 
-    gruppen = []
-    for key, titel, erkl in GRUPPEN:
-        eigene = sorted((z for z in zeilen if z["gruppe"] == key), key=lambda z: z["_sortierung"])
-        gruppen.append({"key": key, "titel": titel, "erkl": erkl, "zeilen": eigene,
-                        "eingeklappt": key == "sonstige" and aktiver_chip(f) == "arbeitsliste"
-                        and not f.get("gruppe")})
-    chip = aktiver_chip(f)
-    if chip != "arbeitsliste" or f.get("gruppe") or f.get("quelle_id") or f.get("kampagne_id") \
-            or f.get("quelle_typ") or von or f.get("versuche") is not None:
-        gruppen = [g for g in gruppen if g["zeilen"]]
-    return {"gruppen": gruppen, "zaehler": zaehler, "chip": chip,
-            "offen": len(zeilen), "jetzt": jetzt}
+    zeilen.sort(key=lambda z: z["_sortierung"])
+    kanaele = kanal_optionen(session, f.get("kanal") or [],
+                             zusaetzlich={z["kanal"] for z in basis if z["kanal"]})
+    return {"zeilen": zeilen, "zaehler": zaehler, "chip": aktiver_chip(f),
+            "offen": len(zeilen), "jetzt": jetzt, "kanaele": kanaele,
+            "raenge": RAENGE}
 
 
 def kopf_kontext(session: Session, vorgang: Vorgang) -> dict:
@@ -425,9 +523,12 @@ def versuche_gesperrt(session: Session, vorgang: Vorgang) -> bool:
 
 def anruf_vorschlag(session: Session, vorgang: Vorgang,
                     jetzt: datetime | None = None) -> dict:
-    """Kaskaden-Vorschlag für den NÄCHSTEN erfolglosen Versuch (Stufe
-    versuch_nr + 1) – Vorbelegung des „Nicht erreicht“-Dialogs (C2).
-    Liefert zeitpunkt (datetime | None), stufe, aktion, letzte, gesperrt."""
+    """Kaskaden-Auskunft für den NÄCHSTEN erfolglosen Versuch (Stufe
+    versuch_nr + 1): Stufe, Mail-Aktion, letzte Stufe, Sperre. v25 (Phase
+    120): der „Nicht erreicht“-Dialog ist entfallen, die Kaskade setzt keine
+    Wiedervorlage mehr – GET /anruf/{id}/vorschlag bleibt nur als Auskunft
+    erreichbar; `zeitpunkt` ist der frühere Vorschlag (Spalte
+    wiedervorlage_nach, nicht mehr angewendet)."""
     from app import leadmanagement_logik
     logik = leadmanagement_logik.hole_logik()
     jetzt = jetzt or datetime.now()
@@ -538,14 +639,17 @@ def versuche_fuer_punkte(session: Session, anrufe: list, benutzer_namen: dict | 
 
 
 # --- Mail-Regeln (C4, F9) und Doppelversand-Schutz (C4-d) ----------------------------
-# Auslöser sind Datenpflege im Blatt Kaskade (Spalte aktion), nicht Code:
-#   Stufe 1 (+2h)        keine
-#   Stufe 2 (+1d 18:00)  mail_nicht_erreicht   → Vorlage nicht_erreicht, sofort geplant
-#   Stufe 3 (+3d)        keine
-#   Stufe 4 (+7d)        mail_nicht_erreicht   → Vorlage nicht_erreicht, sofort geplant
-#   Stufe 5 (+14d, letzter) mail_disqualifiziert → Vorlage disqualifiziert sofort, Phase
-#                        Nicht erreicht, Wiedervorlage +30 Tage, Vorlage nurture zum
-#                        Wiedervorlage-Zeitpunkt (Versand nur mit einwilligung_werbung)
+# Auslöser sind Datenpflege im Blatt Kaskade (Spalte aktion), nicht Code. v25
+# (PLAN_LEAD_V3 Phase 120): die Spalte wiedervorlage_nach wird NICHT mehr
+# ausgewertet – kein Versuch setzt eine Wiedervorlage, die Mails hängen allein an
+# der Versuchsnummer:
+#   Stufe 1              keine
+#   Stufe 2              mail_nicht_erreicht   → Vorlage nicht_erreicht, sofort geplant
+#   Stufe 3              keine
+#   Stufe 4              mail_nicht_erreicht   → Vorlage nicht_erreicht, sofort geplant
+#   Stufe 5 (letzter)    mail_disqualifiziert → Vorlage disqualifiziert sofort, Phase
+#                        Nicht erreicht, Vorlage nurture in 30 Tagen (Versand nur mit
+#                        einwilligung_werbung); naechste_aktion_am wird geleert
 # Kein Interesse (Unqualifiziert) löst KEINE Kundenmail aus (Bestand); Mailbox/Besetzt
 # zählen wie Nicht erreicht. Ab versuche_max sind die drei Ergebnisse gesperrt – die
 # Kaskade kann nicht erneut ausgeschöpft werden (vorher: jeder weitere Versuch plante
@@ -601,8 +705,9 @@ def doppelversand_bereinigen(session: Session, vorgang_id: int) -> int:
 
 
 def nurture_verschieben(session: Session, vorgang: Vorgang, zeitpunkt: datetime) -> int:
-    """Nurture-Mail (geplant, ohne Termin) auf den manuell gewählten
-    Wiedervorlage-Zeitpunkt legen (Prozess-Fix 27.09.: Nurture zur Wiedervorlage)."""
+    """Nurture-Mail (geplant, ohne Termin) auf einen Zeitpunkt legen. v25: von
+    POST /anruf/{id} nicht mehr aufgerufen (kein wiedervorlage_am mehr) –
+    bleibt für manuelle Wiedervorlagen (Kartei) nutzbar."""
     from app.models import KommunikationLog
     anzahl = 0
     for eintrag in (session.query(KommunikationLog)
@@ -653,8 +758,9 @@ def _leitung_ids(session: Session) -> list[int]:
 
 
 def faellige_wiedervorlagen_melden(session: Session, jetzt: datetime | None = None) -> int:
-    """Glocke, sobald naechste_aktion_am erreicht ist (Kaskade, Rückrufwunsch,
-    Nicht erreicht +30 Tage) – einmalig je Fälligkeit: Dedup über eine
+    """Glocke, sobald naechste_aktion_am erreicht ist (Rückrufwunsch, manuell
+    gesetzte Wiedervorlage, „Nummer prüfen“ +1d; v25: die Kaskade setzt keine
+    Wiedervorlage mehr) – einmalig je Fälligkeit: Dedup über eine
     Aktivität typ system „Wiedervorlage fällig gemeldet“ mit demselben
     naechste_aktion_am. Empfänger leadmanager_id, freie Leads → Leitung
     (admin/leadmanagement) wie beim Tagesdigest. Zurückgestellte Leads meldet

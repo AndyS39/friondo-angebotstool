@@ -9,6 +9,11 @@
 # Zuständigkeit = vorgaenge.ad_id, eigene Termine). Außendienst ohne
 # HV-Kennzeichen bleibt bei „Meine Termine“ (F6, Weiterleitung im Router).
 # Demo-Leads werden eingeschlossen und als „inkl. Demo“ gekennzeichnet.
+# v25 (PLAN_LEAD_V3 Phase 120): Wiedervorlagen sind nur noch manuell gesetzte
+# (die Kaskade setzt keine mehr); neue Liste „Ohne nächsten Schritt“ (eigene
+# Leads der Gruppe Neu mit Versuch ≥ 1, ohne Wiedervorlage, ohne Termin,
+# letzter Anruf älter als Parameter ohne_schritt_tage) ersetzt die automatische
+# Wiedervorlage; Phasen-Labels aus dem Blatt Status („Kontaktiert“).
 
 from datetime import datetime, timedelta
 
@@ -25,6 +30,9 @@ ABGESCHLOSSEN = ("gewonnen", "verloren", "unqualifiziert")
 TERMIN_STATUS_OFFEN = ("geplant", "bestaetigt", "vorgemerkt")
 HORIZONT_STANDARD = 7
 AMPEL_NAMEN = {"heiss": "heiß", "warm": "warm", "kalt": "kalt"}
+# Gruppe Neu des Hauptboards (Blatt Status): Phasen ohne aktiven Vor-Ort-Termin
+GRUPPE_NEU = ("neu", "in_kontaktierung", "qualifiziert")
+OHNE_SCHRITT_STANDARD = 2
 
 
 def _tag(zeit: datetime) -> datetime:
@@ -39,6 +47,31 @@ def horizont_tage(session: Session) -> int:
     except ValueError:
         wert = HORIZONT_STANDARD
     return max(1, min(60, wert))
+
+
+def ohne_schritt_tage(session: Session) -> int:
+    """v25: Parameter ohne_schritt_tage (Standard 2, 0–365) – ab wie vielen
+    Tagen seit dem letzten Anruf ein Lead ohne Wiedervorlage/Termin in der
+    Liste „Ohne nächsten Schritt“ steht."""
+    try:
+        wert = int(kern.parameter_holen(session, "ohne_schritt_tage",
+                                        str(OHNE_SCHRITT_STANDARD)) or OHNE_SCHRITT_STANDARD)
+    except ValueError:
+        wert = OHNE_SCHRITT_STANDARD
+    return max(0, min(365, wert))
+
+
+def phase_label(phase: str) -> str:
+    """Anzeige-Label einer Phase aus dem Blatt Status (v25: in_kontaktierung
+    und qualifiziert tragen beide „Kontaktiert“), Fallback LEAD_PHASEN_NAMEN."""
+    try:
+        from app import leadmanagement_logik
+        zeile = leadmanagement_logik.hole_logik().status_zeile(phase or "")
+        if zeile is not None and zeile.label:
+            return zeile.label
+    except Exception:
+        pass
+    return LEAD_PHASEN_NAMEN.get(phase or "", phase or "")
 
 
 def ist_hv(session: Session, benutzer) -> bool:
@@ -91,7 +124,7 @@ def _zeile(vorgang, kunde, datum, art, grund, jetzt, **extra) -> dict:
         ueberfaellig = tag < heute          # Datumsangaben ohne Uhrzeit
     zeile = {
         "vorgang": vorgang, "kunde": kunde, "datum": datum, "art": art,
-        "grund": grund, "phase": LEAD_PHASEN_NAMEN.get(vorgang.lead_phase or "", ""),
+        "grund": grund, "phase": phase_label(vorgang.lead_phase or ""),
         "faellig": tag <= heute, "ueberfaellig": ueberfaellig, "heute": tag == heute,
         "kommend": tag > heute, "demo": bool(vorgang.demo),
         "mit_uhrzeit": art == "lead" and extra.get("quelle") != "zurueckgestellt",
@@ -102,9 +135,10 @@ def _zeile(vorgang, kunde, datum, art, grund, jetzt, **extra) -> dict:
 
 def lead_wiedervorlagen(session: Session, benutzer, jetzt: datetime,
                         horizont: int, hv: bool) -> list[dict]:
-    """Lead-Wiedervorlagen: naechste_aktion_am (Kaskade, Rückruf gewünscht,
-    falsche Nummer, Nurture) und zurueckgestellt_bis – fällig oder innerhalb
-    des Horizonts, nach Datum sortiert."""
+    """Lead-Wiedervorlagen: naechste_aktion_am (v25: nur noch manuell gesetzt
+    – Wiedervorlage-Button, Rückruf gewünscht, falsche Nummer; die Kaskade
+    setzt keine Wiedervorlage mehr) und zurueckgestellt_bis – fällig oder
+    innerhalb des Horizonts, nach Datum sortiert."""
     ende = _tag(jetzt) + timedelta(days=horizont + 1)
     abfrage = (session.query(Vorgang)
                .filter(Vorgang.lead_phase.isnot(None),
@@ -143,11 +177,12 @@ def lead_wiedervorlagen(session: Session, benutzer, jetzt: datetime,
                 grund = "Falsche Nummer – Nummer prüfen"
                 quelle = "nummer"
             elif n:
-                grund = (f"Kaskade · {n}× "
+                # v25: manuell gesetzte Wiedervorlage (die Kaskade setzt keine mehr)
+                grund = (f"Wiedervorlage · {n}× "
                          f"{ANRUF_ERGEBNIS_NAMEN.get(letzter.ergebnis, 'nicht erreicht').lower() if letzter else 'nicht erreicht'}")
-                quelle = "kaskade"
+                quelle = "wiedervorlage"
             else:
-                grund = "Nächste Aktion"
+                grund = "Wiedervorlage"
                 quelle = "aktion"
         if datum is None:
             continue
@@ -189,9 +224,61 @@ def angebots_wiedervorlagen(session: Session, benutzer, jetzt: datetime,
     return zeilen
 
 
+def ohne_naechsten_schritt(session: Session, benutzer, jetzt: datetime,
+                           hv: bool, tage: int | None = None) -> list[dict]:
+    """v25 (Phase 120) [ANNAHME]: Ersatz für die weggefallene automatische
+    Wiedervorlage – eigene Leads der Gruppe Neu (neu/in_kontaktierung/
+    qualifiziert, ohne aktiven VOT) mit Versuch ≥ 1, ohne Wiedervorlage
+    (naechste_aktion_am und zurueckgestellt_bis leer), ohne offenen Termin
+    (geplant/bestätigt/vorgemerkt, alle Terminarten), letzter Anruf älter als
+    ohne_schritt_tage (ohne Anruf-Aktivität: Erstkontakt bzw. Eingang).
+    „Eigene“ wie bei den Wiedervorlagen: HV = ad_id, Büro = Leadmanager ich
+    oder frei (Kennzeichen frei). Älteste zuerst."""
+    tage = ohne_schritt_tage(session) if tage is None else tage
+    grenze = jetzt - timedelta(days=tage)
+    abfrage = (session.query(Vorgang)
+               .filter(Vorgang.lead_phase.in_(GRUPPE_NEU),
+                       Vorgang.versuch_nr.isnot(None), Vorgang.versuch_nr >= 1,
+                       Vorgang.naechste_aktion_am.is_(None),
+                       Vorgang.zurueckgestellt_bis.is_(None)))
+    abfrage = _meine_leads(abfrage, benutzer, hv)
+    vorgaenge = abfrage.all()
+    if not vorgaenge:
+        return []
+    ids = {v.id for v in vorgaenge}
+    mit_termin = {t.vorgang_id for t in session.query(VotTermin.vorgang_id)
+                  .filter(VotTermin.vorgang_id.in_(ids),
+                          VotTermin.status.in_(TERMIN_STATUS_OFFEN))}
+    kunden = _kunden(session, vorgaenge)
+    anrufe = _letzte_anrufe(session, ids)
+    zeilen = []
+    for v in vorgaenge:
+        if v.id in mit_termin:
+            continue
+        kunde = kunden.get(v.kunde_id)
+        if kunde is None:
+            continue
+        letzter = anrufe.get(v.id)
+        zeit = letzter.zeitpunkt if letzter is not None else (v.erstkontakt_am or v.eingang_am)
+        if zeit is None or zeit > grenze:
+            continue
+        ergebnis = (ANRUF_ERGEBNIS_NAMEN.get(letzter.ergebnis, letzter.ergebnis or "Anruf")
+                    if letzter is not None else "kein Anruf protokolliert")
+        zeilen.append({
+            "vorgang": v, "kunde": kunde, "letzter": zeit, "ergebnis": ergebnis,
+            "tage": max(0, (jetzt - zeit).days), "versuche": v.versuch_nr or 0,
+            "phase": phase_label(v.lead_phase or ""), "frei": v.leadmanager_id is None,
+            "demo": bool(v.demo),
+        })
+    zeilen.sort(key=lambda z: z["letzter"])
+    return zeilen
+
+
 def zugeteilte(session: Session, benutzer, hv: bool) -> dict:
     """Mir zugeteilte Vorgänge (HV: ad_id, sonst leadmanager_id), nach
-    Lead-Phase gruppiert mit Zählern; abgeschlossene Phasen eingeklappt."""
+    Lead-Phase gruppiert mit Zählern; abgeschlossene Phasen eingeklappt.
+    v25: Phasen mit demselben Label (in_kontaktierung + qualifiziert →
+    „Kontaktiert“) bilden eine Gruppe."""
     abfrage = session.query(Vorgang).filter(Vorgang.lead_phase.isnot(None))
     abfrage = _meine_leads(abfrage, benutzer, hv, mit_freien=False)
     vorgaenge = abfrage.order_by(Vorgang.eingang_am.desc().nullslast(), Vorgang.id.desc()).all()
@@ -200,13 +287,23 @@ def zugeteilte(session: Session, benutzer, hv: bool) -> dict:
     for v in vorgaenge:
         je_phase.setdefault(v.lead_phase, []).append({"vorgang": v, "kunde": kunden.get(v.kunde_id)})
     gruppen = []
+    je_label: dict[str, dict] = {}
     for phase in LEAD_PHASEN + [p for p in je_phase if p not in LEAD_PHASEN]:
         zeilen = je_phase.get(phase) or []
         if not zeilen:
             continue
-        gruppen.append({"phase": phase, "name": LEAD_PHASEN_NAMEN.get(phase, phase),
-                        "n": len(zeilen), "zeilen": zeilen,
-                        "offen": phase not in ABGESCHLOSSEN})
+        name = phase_label(phase)
+        gruppe = je_label.get(name)
+        if gruppe is not None:
+            gruppe["zeilen"].extend(zeilen)
+            gruppe["n"] = len(gruppe["zeilen"])
+            gruppe["phasen"].append(phase)
+            continue
+        gruppe = {"phase": phase, "phasen": [phase], "name": name,
+                  "n": len(zeilen), "zeilen": list(zeilen),
+                  "offen": phase not in ABGESCHLOSSEN}
+        je_label[name] = gruppe
+        gruppen.append(gruppe)
     aktiv = sum(g["n"] for g in gruppen if g["offen"])
     return {"gruppen": gruppen, "gesamt": len(vorgaenge), "aktiv": aktiv,
             "demo": sum(1 for v in vorgaenge if v.demo)}
@@ -248,7 +345,8 @@ def termine(session: Session, benutzer, jetzt: datetime, horizont: int,
     return zeilen
 
 
-def kacheln(lead_wv: list, angebot_wv: list, todos_zahlen: dict, termine_liste: list) -> dict:
+def kacheln(lead_wv: list, angebot_wv: list, todos_zahlen: dict, termine_liste: list,
+            ohne_schritt: list | None = None) -> dict:
     alle_wv = lead_wv + angebot_wv
     return {
         "faellig": sum(1 for z in alle_wv if z["faellig"]),
@@ -258,6 +356,7 @@ def kacheln(lead_wv: list, angebot_wv: list, todos_zahlen: dict, termine_liste: 
         "todos_faellig": todos_zahlen.get("faellig", 0),
         "termine": len(termine_liste),
         "termine_heute": sum(1 for z in termine_liste if z["heute"]),
+        "ohne_schritt": len(ohne_schritt or []),   # v25 (Phase 120)
     }
 
 
@@ -274,6 +373,8 @@ def daten(session: Session, benutzer, termine_alle: bool = False,
                     "faellig": sum(1 for t in todos_offen
                                    if t.faellig_am and t.faellig_am <= jetzt)}
     termine_liste = termine(session, benutzer, jetzt, horizont, hv, alle=termine_alle)
+    schritt_tage = ohne_schritt_tage(session)
+    ohne_schritt = ohne_naechsten_schritt(session, benutzer, jetzt, hv, tage=schritt_tage)
     return {
         "jetzt": jetzt, "heute": jetzt.date(), "horizont": horizont, "hv": hv,
         "lead_wv": lead_wv, "angebot_wv": angebot_wv,
@@ -284,7 +385,9 @@ def daten(session: Session, benutzer, termine_alle: bool = False,
         "zugeteilt": zugeteilte(session, benutzer, hv),
         "termine": termine_liste, "termine_alle": termine_alle,
         "todos": lead_todos.zeilen(session, todos_offen, jetzt),
-        "kacheln": kacheln(lead_wv, angebot_wv, todos_zahlen, termine_liste),
+        # v25 (Phase 120): Liste „Ohne nächsten Schritt“ + Parameter
+        "ohne_schritt": ohne_schritt, "ohne_schritt_tage": schritt_tage,
+        "kacheln": kacheln(lead_wv, angebot_wv, todos_zahlen, termine_liste, ohne_schritt),
         "mit_demo": kern.demo_aktiv(session),
         "empfaenger": lead_todos.empfaenger_liste(session),
     }

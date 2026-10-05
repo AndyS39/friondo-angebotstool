@@ -209,6 +209,15 @@ def tabelle(session: Session, jetzt: datetime, zeitraum: str) -> dict:
         if (v.versuch_nr or 0) >= 3:
             drei[_schluessel(v)] = drei.get(_schluessel(v), 0) + 1
 
+    def _anrufliste_link(kanal: str) -> str:
+        """v25 (Phase 118): die Anrufliste filtert nicht mehr nach Quelle/
+        Kampagne (Filter „Vertriebskanal“) – Zeilen verlinken auf die Liste
+        mit dem Kanal der Zeile, Platzhalter-Kanäle ohne Parameter."""
+        from urllib.parse import urlencode
+        if kanal and kanal not in ("Kanal am Kunden", "– bitte zuordnen"):
+            return "/lead-management/anrufliste?" + urlencode({"kanal": kanal})
+        return "/lead-management/anrufliste"
+
     def _zeile(name, kanal, schluessel, heute_n, woche_n, kosten_cent, link,
                kampagne=None, quelle=None):
         e = stat.get(schluessel, {"n": 0, "erreicht": 0, "terminiert": 0})
@@ -217,7 +226,7 @@ def tabelle(session: Session, jetzt: datetime, zeitraum: str) -> dict:
                 "erreicht": round(e["erreicht"] / e["n"] * 100) if e["n"] else None,
                 "terminiert": round(e["terminiert"] / e["n"] * 100) if e["n"] else None,
                 "drei": drei.get(schluessel, 0), "kosten": kosten_cent,
-                "link": link, "kampagne": kampagne, "quelle": quelle}
+                "link": _anrufliste_link(kanal), "kampagne": kampagne, "quelle": quelle}
 
     gruppen = []
     summe = {"heute": 0, "woche": 0, "zeitraum": 0, "erreicht": 0, "terminiert": 0,
@@ -258,8 +267,9 @@ def tabelle(session: Session, jetzt: datetime, zeitraum: str) -> dict:
                                      q.kosten_je_lead_cent,
                                      f"/lead-management/anrufliste?quelle_id={q.id}", quelle=q))
         if zeilen:
+            # v25: kein quelle_typ-Filter mehr in der Anrufliste – Gruppenlink ohne Parameter
             gruppen.append({"typ": typ, "name": gruppen_name, "zeilen": zeilen,
-                            "link": f"/lead-management/anrufliste?quelle_typ={typ}"})
+                            "link": "/lead-management/anrufliste"})
         for z in zeilen:
             summe["heute"] += z["heute"]
             summe["woche"] += z["woche"]
@@ -293,17 +303,28 @@ def uebersicht_daten(session: Session, zeitraum: str = "30") -> dict:
         "pipeline_wert": kern.pipeline_wert(session),
         "mit_demo": kern.demo_aktiv(session),
         "heute_param": jetzt.strftime("%Y-%m-%d"),
+        # v25 (Phase 120): kein Score in der Übersicht (Spalte „qualifiziert“ im Cockpit)
+        "score_aktiv": kern.score_aktiv(session),
     }
 
 
 def kaskade_text(session: Session) -> str:
-    """Hinweiszeile aus der Steuerdatei (Blatt Kaskade)."""
+    """Hinweiszeile aus der Steuerdatei (Blatt Kaskade). v25: die Spalte
+    wiedervorlage_nach wird nicht mehr ausgewertet – gezeigt werden die
+    Mail-Aktionen je Versuch und der letzte Versuch (keine automatische
+    Wiedervorlage)."""
     try:
         from app import leadmanagement_logik
         logik = leadmanagement_logik.hole_logik()
-        schritte = [s.wiedervorlage_nach for s in logik.kaskade if s.wiedervorlage_nach]
-        if schritte:
-            return "Kaskade: " + " · ".join(schritte) + " → „Nicht erreicht“"
+        mails = [str(s.versuch_nr) for s in logik.kaskade
+                 if str(s.aktion or "keine").startswith("mail_") and not s.letzter]
+        letzte = logik.letzte_stufe()
+        if letzte:
+            teile = []
+            if mails:
+                teile.append("Mail nach Versuch " + ", ".join(mails))
+            teile.append(f"nach Versuch {letzte} „Nicht erreicht“ (keine automatische Wiedervorlage)")
+            return "Kaskade: " + " · ".join(teile)
     except Exception:
         pass
     return ""

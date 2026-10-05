@@ -3,8 +3,24 @@
 {# v12 (Phase 79): Lead-Kopfblock der Vorgangsakte – erscheint nur bei
    Modul-Sichtbarkeit (Demo: Admin) bzw. in der AD-Lesesicht.
    v23 (Phase 106): vereinfacht – Stepper, Badges, SLA, Kontaktstatus und
-   Zuständige bleiben; alle Reiter und Aktionen liegen jetzt in der
-   dreispaltigen Kundenkartei (/lead-management/lead/{id}). #}
+   Zuständige bleiben; alle Reiter und Aktionen liegen in der Kundenkartei
+   (/lead-management/lead/{id}).
+   v25 (Phase 119): nur Label-Anpassung – Score/Klasse weg, Phasen-Labels aus dem
+   Blatt Status (In Kontaktierung + Qualifiziert = ein Schritt „Kontaktiert“);
+   Quelle/Kampagne bleiben hier (nur aus der Kartei entfernt). Die
+   Labels kommen aus lead_kontext.status_labels, falls die Akte sie liefert
+   (hook_edit an kern.akte_kontext), sonst aus dem Fallback unten. #}
+{% set status_labels = lead_kontext.status_labels if lead_kontext.status_labels is defined and lead_kontext.status_labels
+                       else {'in_kontaktierung': 'Kontaktiert', 'qualifiziert': 'Kontaktiert'} %}
+{% set ns = namespace(schritte=[]) %}
+{% for phase in lead_kontext.phasen %}
+    {% set label = status_labels.get(phase) or lead_phasen_namen[phase] %}
+    {% if ns.schritte and ns.schritte[-1].label == label %}
+        {% set _ = ns.schritte[-1].phasen.append(phase) %}
+    {% else %}
+        {% set _ = ns.schritte.append({'label': label, 'phasen': [phase]}) %}
+    {% endif %}
+{% endfor %}
 <div class="karte lead-kopf">
     <h2>Lead
         {% if vorgang.demo %}<span class="demo-badge">Demo</span>{% endif %}
@@ -12,14 +28,14 @@
         {% if vorgang.vorab_angebot %}<span class="abzeichen lk-vorab" title="Angebot ohne Vor-Ort-Termin (F10)">Vorab-Angebot</span>{% endif %}
         {% if lead_kontext.wiederkehrer %}<span class="abzeichen ep">Wiederkehrer</span>{% endif %}
         <a class="knopf klein" href="/lead-management/lead/{{ vorgang.id }}" style="margin-left:auto"
-           title="Kontaktdaten, Timeline, E-Mails, Anrufe, Qualifizierung, Termine, To-Dos">{{ symbol('oeffnen') }} Zur Kundenkartei</a>
+           title="Kontaktdaten, Termin, Anrufe, E-Mails, Timeline, Angebote, To-Dos">{{ symbol('oeffnen') }} Zur Kundenkartei</a>
     </h2>
     <div class="lead-stepper">
-        {% for phase in lead_kontext.phasen %}
-            <span class="schritt {{ 'aktiv' if vorgang.lead_phase == phase }}">{{ lead_phasen_namen[phase] }}</span>
+        {% for s in ns.schritte %}
+            <span class="schritt {{ 'aktiv' if vorgang.lead_phase in s.phasen }}">{{ s.label }}</span>
         {% endfor %}
         {% if vorgang.lead_phase in ('zurueckgestellt', 'nicht_erreicht', 'unqualifiziert', 'verloren') %}
-            <span class="schritt seitenzustand aktiv">{{ lead_phasen_namen[vorgang.lead_phase] }}</span>
+            <span class="schritt seitenzustand aktiv">{{ status_labels.get(vorgang.lead_phase) or lead_phasen_namen[vorgang.lead_phase] }}</span>
         {% endif %}
     </div>
     <div class="formzeile" style="flex-wrap:wrap">
@@ -36,10 +52,6 @@
             {% elif lead_kontext.sla.farbe %}
                 <span class="sla-chip sla-{{ lead_kontext.sla.farbe }}" title="wartet seit {{ lead_kontext.sla.text }} auf den Erstkontakt (AT = Arbeitstage)">{{ lead_kontext.sla.text }}</span>
             {% else %}–{% endif %}</span>
-        <span title="{{ lead_kontext.score_teile | join('&#10;') }}">Score:
-            <strong>{{ vorgang.score_punkte if vorgang.score_punkte is not none else '–' }}
-            · {{ vorgang.score_klasse or '–' }}</strong>
-            {% if not lead_kontext.qualifizierungen %}<span class="dezent">(vorläufig)</span>{% endif %}</span>
         <span style="display:inline-flex;align-items:center;gap:8px">Kontaktstatus: {{ versuche_punkte(vorgang) }}
             <span>{% for text, klasse in lead_kontext.kontakt_satz %}<span class="{{ {'faellig': 'lm-rot', 'rueckruf': 'lm-blau', 'warn': 'lm-warn', 'rot': 'lm-rot', 'dezent': 'dezent'}.get(klasse, '') }}">{{ text }}</span>{{ ' · ' if not loop.last }}{% endfor %}</span></span>
         <span class="dezent">Leadmanager: {{ lead_kontext.leadmanager.name if lead_kontext.leadmanager else '–' }}</span>
@@ -50,7 +62,7 @@
                 · {{ lead_kontext.aktiver_termin.status }}</span>
         {% endif %}
     </div>
-    <p class="dezent" style="margin:0.4rem 0 0">Aktivitäten ({{ lead_kontext.timeline | length }}) · Qualifizierung ({{ lead_kontext.qualifizierungen | length }}) ·
+    <p class="dezent" style="margin:0.4rem 0 0">Aktivitäten ({{ lead_kontext.timeline | length }}) ·
         Termine ({{ lead_kontext.termine | length }}) · Kommunikation ({{ lead_kontext.kommunikation | length }}) –
         Bearbeitung in der <a href="/lead-management/lead/{{ vorgang.id }}">Kundenkartei</a>.</p>
 </div>

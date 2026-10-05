@@ -8,7 +8,12 @@
 
 {# v23 (PLAN_LEAD_V2 Phase 105, A-11): das Kanban zeigt nur noch das aktive
    Board (?board=hauptboard | terminiert) – Spalten bleiben die Lead-Phasen;
-   Umschalter Tabelle | Anrufliste | Kanban. Drag & Drop wie v12 (Plan 79). #}
+   Umschalter Tabelle | Anrufliste | Kanban. Drag & Drop wie v12 (Plan 79).
+   v25 (PLAN_LEAD_V3 Phase 118): Überschrift/Umschalter mit Board-Namen aus
+   logik.board_label (Deals), Anzeige-Spalte „Kontaktiert“ fasst
+   in_kontaktierung + qualifiziert zusammen (lm_boards.KANBAN_ZUSAMMEN; interne
+   Phasen bleiben), Phasen-Labels aus dem Blatt Status (phasen_namen), Score-
+   Klasse auf Karten und Filter nur bei score_aktiv. #}
 {% block inhalt %}
 {{ lm_nav(board | default('hauptboard')) }}
 <div class="seitenkopf">
@@ -19,8 +24,8 @@
     <div class="aktionen">
         {{ lm_umschalter('kanban', board | default('hauptboard')) }}
         <span class="lm-umschalter" aria-label="Board">
-            <a class="{{ 'aktiv' if board == 'hauptboard' }}" href="/lead-management/board?board=hauptboard">Hauptboard</a>
-            <a class="{{ 'aktiv' if board == 'terminiert' }}" href="/lead-management/board?board=terminiert">Terminiert</a>
+            <a class="{{ 'aktiv' if board == 'hauptboard' }}" href="/lead-management/board?board=hauptboard">{{ lm_board_label('hauptboard') if lm_board_label is defined else 'Hauptboard' }}</a>
+            <a class="{{ 'aktiv' if board == 'terminiert' }}" href="/lead-management/board?board=terminiert">{{ lm_board_label('terminiert') if lm_board_label is defined else 'Deals' }}</a>
         </span>
     </div>
 </div>
@@ -50,6 +55,7 @@
             {% endfor %}
         </select>
     </label>
+    {% if score_aktiv %}
     <label class="kontrollfeld">Klasse
         <select name="klasse">
             <option value="">alle</option>
@@ -58,6 +64,7 @@
             {% endfor %}
         </select>
     </label>
+    {% endif %}
     <label class="kontrollfeld">PLZ <input type="text" name="plz" size="5"
            value="{{ filter_werte.plz }}"></label>
     <label class="kontrollfeld">Eingang von <input type="date" name="eingang_von"
@@ -85,7 +92,7 @@
         {% if k.wiederkehrer %}<span class="abzeichen ep">Wiederkehrer</span>{% endif %}
     </span>
     <span>
-        Klasse <strong>{{ k.vorgang.score_klasse or '–' }}</strong>
+        {% if score_aktiv %}Klasse <strong>{{ k.vorgang.score_klasse or '–' }}</strong>{% endif %}
         {% if k.sla and k.sla.farbe and k.sla.farbe != 'erfuellt' %}
             <span class="sla-chip sla-{{ k.sla.farbe }}" title="{{ 'Erstkontakt nach ' if k.sla.erfuellt else 'wartet seit ' }}{{ k.sla.text }} (AT = Arbeitstage)">{{ k.sla.text }}</span>
         {% endif %}
@@ -117,7 +124,7 @@
     <div class="kanban-spalte" data-phase="verloren"
          ondragover="event.preventDefault()" ondrop="kartenDrop(event, 'verloren')">
         <details>
-            <summary><h3 style="display:inline">Verloren ({{ koepfe['verloren'].anzahl }}) · letzte 30 Tage</h3></summary>
+            <summary><h3 style="display:inline">{{ phasen_namen.get('verloren', 'Verloren') }} ({{ koepfe['verloren'].anzahl }}) · letzte 30 Tage</h3></summary>
             {% for k in spalten['verloren'] %}{{ lead_karte(k) }}{% endfor %}
         </details>
     </div>

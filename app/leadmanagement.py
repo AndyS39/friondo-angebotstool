@@ -75,6 +75,9 @@ PARAMETER_START = {
     "termin_konflikt_modus": "warnen",  # B7: warnen | sperren (Pufferkonflikte)
     "vorschlag_raster_manuell_min": "15",  # B7: Schrittweite manuelle Eingabe
     "dashboard_horizont_tage": "7",     # Phase 110: Dashboard – kommende Wiedervorlagen/Termine (Tage, 1-60)
+    # --- v25: Lead-Management V3 (PLAN_LEAD_V3, Phasen 118–121) ---
+    "score_aktiv": "aus",               # Phase 120: Score/Qualifizierung zentral abgeschaltet
+    "ohne_schritt_tage": "2",           # Phase 120: Dashboard „Ohne nächsten Schritt“ (Tage seit letztem Versuch)
 }
 
 
@@ -117,6 +120,15 @@ def freigabe_modus(session: Session) -> str:
 
 def demo_aktiv(session: Session) -> bool:
     return freigabe_modus(session) == "admin"
+
+
+def score_aktiv(session: Session) -> bool:
+    """v25 (PLAN_LEAD_V3 Phase 120): zentraler Schalter Score/Qualifizierung –
+    eine Wahrheit in lead_v2.score_aktiv (Parameter score_aktiv, Standard aus).
+    Bei aus: keine Score-Berechnung bei Eingang/Qualifizierung, keine
+    Vorbelegung über erfassungs_frage, kein Score-Bonus im Assistenten."""
+    from app import lead_v2
+    return lead_v2.score_aktiv(session)
 
 
 def lead_modul_sichtbar(session: Session, benutzer) -> bool:
@@ -396,7 +408,7 @@ STARTQUELLEN = [
     ("telefon", "Telefon", "telefon", None),
     ("empfehlung", "Empfehlung", "empfehlung", None),
     ("bestand", "Bestand", "bestand", None),
-    ("info_veranstaltung", "Info-Veranstaltung", "veranstaltung", None),   # v23 (I3)
+    ("info_veranstaltung", "Infoabend", "veranstaltung", None),   # v23 (I3); v25: Anzeige „Infoabend“, Key bleibt
     # v21 (Phase 87): Fallback – kein Lead bleibt ohne Quelle
     ("unbekannt", "Unbekannt (ohne Quellen-Key)", "website", None),
 ]
@@ -408,7 +420,7 @@ QUELLEN_GRUPPEN = [("website", "Website / Förderrechner"),
                    ("portal", "Lead-Portale"),
                    ("partner", "Partner"),
                    ("telefon", "Telefon / Empfehlung / Bestand"),
-                   ("veranstaltung", "Info-Veranstaltung"),   # v23 (I3)
+                   ("veranstaltung", "Infoabend"),   # v23 (I3); v25: „Infoabend“
                    ("monday", "monday (Bestand)")]
 
 
@@ -701,8 +713,11 @@ def lead_anlegen(session: Session, daten: dict, quelle: LeadQuelle | None,
         # Phase 78: Eingangsbestätigung sofort (nur mit E-Mail; der
         # Versand-Job entscheidet nach mail_modus – Sendesperre im Demo)
         mail_planen(session, vorgang, "eingangsbestaetigung")
-        # vorläufiger Score (nur Systemregeln) + Zuweisung + Benachrichtigung
-        score_vorlaeufig(session, vorgang)
+        # vorläufiger Score (nur Systemregeln) + Zuweisung + Benachrichtigung –
+        # v25 (Phase 120): nur bei score_aktiv = an, sonst bleiben
+        # score_punkte/score_klasse leer
+        if score_aktiv(session):
+            score_vorlaeufig(session, vorgang)
         if vorgang.leadmanager_id is None:
             vorgang.leadmanager_id = naechster_leadmanager(session, benutzer)
         ziele = ([vorgang.leadmanager_id] if vorgang.leadmanager_id
@@ -765,8 +780,11 @@ def eingaenge_zaehlen(session: Session, von: datetime, bis: datetime,
 
 
 def score_vorlaeufig(session: Session, vorgang: Vorgang) -> None:
-    """Systemregeln vor der Qualifizierung: Kerngebiet-PLZ + Quellen-Bonus."""
+    """Systemregeln vor der Qualifizierung: Kerngebiet-PLZ + Quellen-Bonus.
+    v25: nur bei score_aktiv = an (sonst ohne Wirkung)."""
     from app import leadmanagement_logik
+    if not score_aktiv(session):
+        return
     punkte = 0
     kunde = session.get(Kunde, vorgang.kunde_id)
     kerngebiet = [p.strip() for p in
@@ -818,6 +836,7 @@ def demo_leads_erzeugen(session: Session, benutzer=None) -> dict:
     ad_liste = [b for b in session.query(Benutzer)
                 .filter(Benutzer.aktiv.is_(True), Benutzer.rolle == "aussendienst")]
     logik = leadmanagement_logik.hole_logik()
+    mit_score = score_aktiv(session)   # v25: Score nur bei an
     jetzt = datetime.now()
     angelegt = 0
     for i in range(25):
@@ -852,11 +871,13 @@ def demo_leads_erzeugen(session: Session, benutzer=None) -> dict:
             session.add(LeadQualifizierung(
                 vorgang_id=vorgang.id, sparte=sparte,
                 antworten=json.dumps({"Q-DEMO": "ja"}),
-                score_punkte=40 + i, score_klasse=logik.klasse_fuer(40 + i),
+                score_punkte=(40 + i) if mit_score else 0,
+                score_klasse=logik.klasse_fuer(40 + i) if mit_score else "C",
                 abgeschlossen_am=jetzt,
                 benutzer_id=benutzer.id if benutzer else None))
-            vorgang.score_punkte = 40 + i
-            vorgang.score_klasse = logik.klasse_fuer(40 + i)
+            if mit_score:
+                vorgang.score_punkte = 40 + i
+                vorgang.score_klasse = logik.klasse_fuer(40 + i)
         elif i >= 21:   # terminiert, nächste 10 Werktage
             vorgang.versuch_nr = 1
             vorgang.erstkontakt_am = vorgang.eingang_am + timedelta(hours=1)
@@ -1017,9 +1038,12 @@ def _kaskaden_mail(session: Session, vorgang: Vorgang, aktion: str) -> None:
 
 
 def kaskade_anwenden(session: Session, vorgang: Vorgang, benutzer=None) -> str:
-    """Nach Nicht erreicht / Besetzt / Mailbox: Wiedervorlage + Aktion aus dem
-    Blatt Kaskade; nach dem letzten Versuch Phase „Nicht erreicht“ (+30 Tage,
-    mail_nurture). Liefert einen Meldungstext."""
+    """Nach Nicht erreicht / Besetzt / Mailbox: Mail-Aktion aus dem Blatt
+    Kaskade je Versuchsnummer; nach dem letzten Versuch Phase „Nicht erreicht“
+    (Nurture-Mail +30 Tage). v25 (PLAN_LEAD_V3 Phase 120): die Kaskade setzt
+    KEINE Wiedervorlage mehr (Spalte wiedervorlage_nach bleibt unbenutzt) –
+    Wiedervorlagen setzt der Nutzer über den Wiedervorlage-Button. Liefert
+    einen Meldungstext."""
     from app import leadmanagement_logik
     logik = leadmanagement_logik.hole_logik()
     stufe = logik.stufe(vorgang.versuch_nr)
@@ -1027,32 +1051,35 @@ def kaskade_anwenden(session: Session, vorgang: Vorgang, benutzer=None) -> str:
     letzte = (stufe is None or stufe.letzter
               or (vorgang.versuch_nr or 0) >= versuche_max(session))
     if not letzte:
-        vorgang.naechste_aktion_am = kaskade_zeitpunkt(
-            session, stufe.wiedervorlage_nach)
         _kaskaden_mail(session, vorgang, stufe.aktion)
-        return ("Wiedervorlage "
-                + vorgang.naechste_aktion_am.strftime("%d.%m.%Y %H:%M"))
+        if str(stufe.aktion or "keine").startswith("mail_"):
+            return f"Versuch {vorgang.versuch_nr} protokolliert – Mail geplant."
+        return f"Versuch {vorgang.versuch_nr} protokolliert."
     # letzter Versuch (oder Versuch über der Kaskade): Mail laut Blatt,
     # ohne Eintrag die Vorlage disqualifiziert (C4)
     _kaskaden_mail(session, vorgang,
                    stufe.aktion if stufe is not None else "mail_disqualifiziert")
     vorgang.lead_phase = "nicht_erreicht"
-    vorgang.naechste_aktion_am = datetime.now() + timedelta(days=30)
-    # Prozess-Fix 27.09.2026: Nurture zur Wiedervorlage in 30 Tagen planen -
-    # sie ging sonst SOFORT raus, direkt nach der "Nicht erreicht"-Mail
-    # (Text "vor einiger Zeit..." passte nicht)
+    # v25: keine automatische Wiedervorlage mehr; die Nurture-Mail bleibt in
+    # 30 Tagen geplant (Prozess-Fix 27.09.2026: nicht sofort nach der
+    # „Nicht erreicht“-Mail)
+    vorgang.naechste_aktion_am = None
     mail_planen(session, vorgang, "nurture",
-                geplant_am=vorgang.naechste_aktion_am)
+                geplant_am=datetime.now() + timedelta(days=30))
     aktivitaet(session, vorgang.id, "status",
-               "Kaskade ausgeschöpft – Phase Nicht erreicht, Wiedervorlage +30 Tage",
+               "Kaskade ausgeschöpft – Phase Nicht erreicht (Nurture-Mail in 30 Tagen)",
                benutzer=benutzer)
-    return "Kaskade ausgeschöpft – Lead steht auf „Nicht erreicht“ (+30 Tage)."
+    return "Kaskade ausgeschöpft – Lead steht auf „Nicht erreicht“."
 
 
 def score_berechnen(session: Session, vorgang: Vorgang) -> tuple[int, str]:
     """Summe aus Blatt Scoring über alle Sparten-Antworten (je Frage nur die
-    erste zutreffende Zeile) + Systemregeln (Kerngebiet, Quellen-Bonus)."""
+    erste zutreffende Zeile) + Systemregeln (Kerngebiet, Quellen-Bonus).
+    v25: rechnet nur bei score_aktiv = an; bei aus bleiben die gespeicherten
+    Werte unverändert (Rückgabe = Bestand, keine Neuberechnung)."""
     from app import leadmanagement_logik
+    if not score_aktiv(session):
+        return vorgang.score_punkte or 0, vorgang.score_klasse or ""
     logik = leadmanagement_logik.hole_logik()
     antworten: dict = {}
     for q in (session.query(LeadQualifizierung)
@@ -1161,14 +1188,17 @@ def qualifizierung_abschliessen(session: Session, vorgang: Vorgang, sparte: str,
                 _sparten_mischen(kunde, neue)
     if vorgang.erreicht_am is None:
         vorgang.erreicht_am = datetime.now()
-    punkte, klasse = score_berechnen(session, vorgang)
-    zeile.score_punkte = punkte
-    zeile.score_klasse = klasse
+    mit_score = score_aktiv(session)   # v25 (Phase 120): Score nur bei an
+    if mit_score:
+        punkte, klasse = score_berechnen(session, vorgang)
+        zeile.score_punkte = punkte
+        zeile.score_klasse = klasse
     if vorgang.lead_phase not in ("terminiert", "erfasst", "angebot",
                                   "gewonnen", "verloren"):
         vorgang.lead_phase = "qualifiziert"
     aktivitaet(session, vorgang.id, "status",
-               f"Qualifiziert {sparte} ({klasse}, {punkte} Punkte)",
+               f"Qualifiziert {sparte} ({klasse}, {punkte} Punkte)" if mit_score
+               else f"Qualifiziert {sparte}",
                benutzer=benutzer)
     session.flush()
     return zeile
@@ -1177,10 +1207,14 @@ def qualifizierung_abschliessen(session: Session, vorgang: Vorgang, sparte: str,
 def erfassungs_vorbelegung(session: Session, vorgang: Vorgang) -> dict:
     """Mapping Qualifizierung → Erfassungsbogen über `erfassungs_frage`
     (Phase 76; aktiv erst bei lead_freigabe_modus = alle): liefert
-    {erfassungs_key: {"wert": …, "info": "aus Qualifizierung …"}}."""
+    {erfassungs_key: {"wert": …, "info": "aus Qualifizierung …"}}.
+    v25 (Phase 120): bei score_aktiv = aus wird die Vorbelegung übersprungen
+    (leeres Mapping) – die Vorbelegung aus der Objektart (v23) bleibt."""
     from app import leadmanagement_logik
-    logik = leadmanagement_logik.hole_logik()
     ergebnis: dict = {}
+    if not score_aktiv(session):
+        return ergebnis
+    logik = leadmanagement_logik.hole_logik()
     for q in (session.query(LeadQualifizierung)
               .filter(LeadQualifizierung.vorgang_id == vorgang.id,
                       LeadQualifizierung.abgeschlossen_am.isnot(None))):
@@ -1539,6 +1573,7 @@ def termin_vorschlaege(session: Session, vorgang: Vorgang,
     if lead_ort is None:
         hinweise.append("Lead-Adresse ohne Koordinaten („Adresse prüfen“) – "
                         "Umwege werden ohne Fahrzeit bewertet.")
+    score_an = score_aktiv(session)   # v25: Klassen-Bonus nur bei an
 
     # Werktage des Horizonts
     tage = []
@@ -1638,7 +1673,7 @@ def termin_vorschlaege(session: Session, vorgang: Vorgang,
                     bewertung += 20
                 if beginn.hour < 9 or beginn.hour >= 17:
                     bewertung += 10
-                if (vorgang.score_klasse or "") == "A":
+                if score_an and (vorgang.score_klasse or "") == "A":
                     bewertung += (beginn.date() - jetzt.date()).days * 2
                 vorschlaege.append({
                     "ad": ad, "beginn": beginn, "ende": ende,
@@ -1822,7 +1857,9 @@ SEITEN_PHASEN = ("zurueckgestellt", "nicht_erreicht", "unqualifiziert")
 
 
 def erwartungswert(session: Session, kunde: Kunde | None) -> int:
-    """Erwarteter Auftragswert (Cent, brutto) über die Interessen-Sparten."""
+    """Erwarteter Auftragswert (Cent, brutto) über die Interessen-Sparten.
+    v25 (Phase 120): bewusst ohne Score-Gewichtung – nur Sparten-Parameter
+    erwartungswert_<Sparte>; die Phasen-Quote wendet pipeline_wert an."""
     if kunde is None:
         return 0
     summe = 0
@@ -1845,7 +1882,7 @@ def board_daten(session: Session, benutzer, filter_werte: dict) -> dict:
         abfrage = abfrage.filter(Vorgang.leadmanager_id == benutzer.id)
     if _int_oder_none(filter_werte.get("quelle_id")) is not None:
         abfrage = abfrage.filter(Vorgang.quelle_id == _int_oder_none(filter_werte["quelle_id"]))
-    if filter_werte.get("klasse"):
+    if filter_werte.get("klasse") and score_aktiv(session):   # v25: Klassenfilter nur bei Score an
         abfrage = abfrage.filter(Vorgang.score_klasse == filter_werte["klasse"])
     vorgaenge = abfrage.all()
     kunden = {k.id: k for k in session.query(Kunde)
@@ -2030,6 +2067,9 @@ def akte_kontext(session: Session, vorgang: Vorgang) -> dict:
         "ad": (benutzer_map.get(aktiver_termin.ad_id)
                if aktiver_termin else None),
         "phasen": LEAD_PHASEN_ANZEIGE,
+        # v25 (Phase 119): Phasen-Labels aus dem Blatt Status (in_kontaktierung
+        # und qualifiziert = „Kontaktiert“) für den Lead-Kopf der Vorgangsakte
+        "status_labels": __import__("app.lead_boards", fromlist=["x"]).phasen_labels(),
         "wunschzeiten": wunschzeiten,
         "timeline": timeline,
         "qualifizierungen": qualifizierungen,
@@ -2198,7 +2238,8 @@ def _median(werte: list[float]) -> float | None:
 
 def pipeline_wert(session: Session) -> int:
     """Summe erwarteter Auftragswerte offener Leads, gewichtet nach
-    Phasen-Quote (Cent, brutto)."""
+    Phasen-Quote (Cent, brutto). v25 (Phase 120): rechnet ausschließlich mit
+    der Phasen-Quote (quote_<phase>) – keine Score-/Klassen-Gewichtung."""
     kunden = {k.id: k for k in session.query(Kunde)}
     summe = 0
     for v in (session.query(Vorgang)
@@ -2282,18 +2323,36 @@ def statistik_leads(session: Session, von: datetime, bis: datetime,
     eingang = [v for v in vorgaenge if _in(v.eingang_am)]
     erreicht = [v for v in vorgaenge if _in(v.erreicht_am)]
     qualifiziert = [v for v in vorgaenge if _in(quali_je_vorgang.get(v.id))]
+    # v25 (Phase 118/120): Stufe „Kontaktiert“ = Summe der Phasen
+    # in_kontaktierung + qualifiziert, als Kohorte: erster Kontaktversuch
+    # (erstkontakt_am → in_kontaktierung), erreicht oder qualifiziert im
+    # Zeitraum – ein Lead zählt nur einmal. Das Label kommt aus dem Blatt
+    # Status (beide Phasen tragen „Kontaktiert“).
+    kontaktiert = [v for v in vorgaenge
+                   if _in(v.erstkontakt_am) or _in(v.erreicht_am)
+                   or _in(quali_je_vorgang.get(v.id))]
+    kontakt_zeile = logik.status_zeile("in_kontaktierung")
+    kontakt_label = (kontakt_zeile.label if kontakt_zeile and kontakt_zeile.label
+                     else "Kontaktiert")
+    kontaktiert_phasen = {
+        "in_kontaktierung": sum(1 for v in kontaktiert if v.lead_phase == "in_kontaktierung"),
+        "qualifiziert": sum(1 for v in kontaktiert if v.lead_phase == "qualifiziert"),
+    }
     terminiert = [v for v in vorgaenge if _in(v.terminiert_am)]
     erfolgt_ids = {t.vorgang_id for t in termine
                    if t.status == "erfolgt" and _in(t.beginn)}
     erfasst_ids = {e.vorgang_id for e in erfassungen if _in(e.abgesendet_am)}
     versendet_ids = {a.vorgang_id for a in angebote if _in(a.versendet_am)}
     gewonnen_ids = {a.vorgang_id for a in angebote if _in(a.angenommen_am)}
-    stufen = [("Eingang", len(eingang)), ("erreicht", len(erreicht)),
-              ("qualifiziert", len(qualifiziert)),
-              ("terminiert", len(terminiert)),
-              ("VOT erfolgt", len(erfolgt_ids)), ("erfasst", len(erfasst_ids)),
-              ("Angebot versendet", len(versendet_ids)),
-              ("gewonnen", len(gewonnen_ids))]
+    score_an = score_aktiv(session)
+    stufen = [("Eingang", len(eingang)), (kontakt_label, len(kontaktiert))]
+    if score_an:
+        # Score an (wie v23): zusätzlich die Stufe „qualifiziert“ (Bogen abgeschlossen)
+        stufen.append(("qualifiziert", len(qualifiziert)))
+    stufen += [("terminiert", len(terminiert)),
+               ("VOT erfolgt", len(erfolgt_ids)), ("erfasst", len(erfasst_ids)),
+               ("Angebot versendet", len(versendet_ids)),
+               ("gewonnen", len(gewonnen_ids))]
     trichter = []
     maximal = max((z for _, z in stufen), default=0) or 1
     for i, (name, zahl) in enumerate(stufen):
@@ -2411,6 +2470,15 @@ def statistik_leads(session: Session, von: datetime, bis: datetime,
     erreichte_versuche = [v.versuch_nr for v in erreicht if v.versuch_nr]
     return {
         "trichter": trichter,
+        # v25 (Phase 120): Score-Verteilung ausgeblendet – score_aktiv steuert
+        # die Templates (statistik/uebersicht/kanal_report); Kontaktiert-Stufe
+        # mit Aufteilung nach aktueller Phase (Tooltip)
+        "score_aktiv": score_an,
+        "kontaktiert": len(kontaktiert),
+        "kontaktiert_label": kontakt_label,
+        "kontaktiert_phasen": kontaktiert_phasen,
+        "terminquote_kontaktiert": round(len(terminiert) / len(kontaktiert) * 100)
+                                   if kontaktiert else None,
         "speed": {
             "median_versuch": _median(bis_versuch),
             "median_erreicht": _median(bis_erreicht),

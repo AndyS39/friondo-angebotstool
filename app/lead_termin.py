@@ -33,6 +33,31 @@ BELEGT_STATUS = ("geplant", "bestaetigt", "vorgemerkt")   # zählen in der Kolli
 STATUS_VORGEMERKT = "vorgemerkt"
 VORAB_TYPEN = ("telefon", "online")
 
+# v25 (PLAN_LEAD_V3 Phase 120): Handelsvertreter sind im Assistenten keine
+# Kandidaten, wenn der anfragende Benutzer nicht selbst dieser HV ist –
+# Begründung wörtlich laut Plan; manuelle Buchung durch den Innendienst auf
+# einen HV bleibt möglich (ausgeschlossen[...]["manuell_erlaubt"]).
+HV_GRUND = "Handelsvertreter terminieren ihre Leads selbst"
+HV_HINWEIS = "Lead liegt bei {name} (Handelsvertreter), Terminierung durch den Vertreter"
+ADRESSE_HINWEIS = ("Adresse fehlt – Straße, PLZ und Ort in der Kundenkartei ergänzen, "
+                   "danach erscheinen die Terminvorschläge.")
+
+# Cache der Terminvorschläge für den Block Termine der Kartei (Phase 119/120):
+# {vorgang_id: {sicht: (berechnet_um, antwort)}}, 10 Minuten je Lead; Agent C
+# ruft vorschlaege_cache_leeren(vorgang_id) nach dem Autospeichern einer
+# Adresse auf; Buchungen/Absagen leeren den Cache komplett (Kalender ändert sich).
+VORSCHLAEGE_CACHE_SEKUNDEN = 600
+vorschlaege_cache: dict = {}
+
+
+def vorschlaege_cache_leeren(vorgang_id: int | None = None) -> None:
+    """Cache der Terminvorschläge leeren – für einen Lead (Adressänderung in
+    der Kartei) oder komplett (vorgang_id=None, z. B. nach einer Buchung)."""
+    if vorgang_id is None:
+        vorschlaege_cache.clear()
+    else:
+        vorschlaege_cache.pop(int(vorgang_id), None)
+
 
 def parameter(session: Session, name: str, standard: str | None = None) -> str:
     return kern.parameter_holen(session, name,
@@ -129,11 +154,30 @@ def _gebiet(profil, plz: str) -> tuple[bool, str]:
     return False, f"außerhalb Gebiet ({', '.join(praefixe)}) +20"
 
 
+def hv_des_vorgangs(session: Session, vorgang: Vorgang,
+                    profile: dict | None = None) -> Benutzer | None:
+    """Zugewiesener Handelsvertreter (vorgaenge.ad_id mit Kennzeichen
+    terminiert_selbst) oder None."""
+    if not vorgang.ad_id:
+        return None
+    profil = (profile or {}).get(vorgang.ad_id) if profile is not None else None
+    if profil is None:
+        profil = lead_v2.profil_fuer(session, vorgang.ad_id)
+    if profil is None or not profil.terminiert_selbst:
+        return None
+    hv = session.get(Benutzer, vorgang.ad_id)
+    return hv if hv is not None and hv.aktiv else None
+
+
 def kandidaten(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None,
                benutzer=None) -> dict:
     """Vorfilterung (E2). Ausschluss: Terminierung inaktiv, Handelsvertreter
-    fremder Leads, Kanal-Regel, Produktkompetenz (lead_v2.kompetenz_passt).
-    Abwertung: Gebiet (+20). Handelsvertreter sehen nur den eigenen Kalender."""
+    (v25: nur zugelassen, wenn benutzer.id == hv.id – „Handelsvertreter
+    terminieren ihre Leads selbst“; manuelle Buchung bleibt möglich),
+    Kanal-Regel, Produktkompetenz (lead_v2.kompetenz_passt). Abwertung:
+    Gebiet (+20). Handelsvertreter sehen nur den eigenen Kalender. Liegt der
+    Lead bei einem HV und fragt nicht dieser selbst, steht in hv_lead/
+    hv_hinweis der Hinweis für den Innendienst."""
     kunde = session.get(Kunde, vorgang.kunde_id)
     sparten = sparten_des_kunden(kunde)
     objektart = (kunde.objektart or "") if kunde else ""
@@ -145,17 +189,23 @@ def kandidaten(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None,
         nur_ad_id = benutzer.id
     profile = {p.benutzer_id: p for p in session.query(AdProfil)}
     namen = {b.id: b.name for b in session.query(Benutzer)}
+    benutzer_id = getattr(benutzer, "id", None)
+    hv_lead = hv_des_vorgangs(session, vorgang, profile)
+    if hv_lead is not None and hv_lead.id == benutzer_id:
+        hv_lead = None   # der Vertreter selbst: normale Vorschläge (nur eigener Kalender)
     ergebnis, ausgeschlossen = [], []
     for ad in ad_basis(session, profile):
         if nur_ad_id and ad.id != nur_ad_id:
             continue
         profil = profile.get(ad.id)
         grund_aus = None
+        manuell_erlaubt = False
         gruende = []
         if profil is not None and not profil.aktiv_terminierung:
             grund_aus = "Terminierung nicht aktiv"
-        elif profil is not None and profil.terminiert_selbst and vorgang.ad_id != ad.id:
-            grund_aus = "Handelsvertreter – terminiert nur eigene Leads"
+        elif profil is not None and profil.terminiert_selbst and ad.id != benutzer_id:
+            grund_aus = HV_GRUND
+            manuell_erlaubt = True
         elif kanal_ids and ad.id not in kanal_ids:
             grund_aus = (f"Kanal {kanal} → nur "
                          + ", ".join(namen.get(i, str(i)) for i in kanal_ids))
@@ -171,7 +221,8 @@ def kandidaten(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None,
                     teile += ", Gewerbe"
                 gruende.append(f"Kompetenz {teile} ✓")
         if grund_aus:
-            ausgeschlossen.append({"ad": ad, "grund": grund_aus})
+            ausgeschlossen.append({"ad": ad, "grund": grund_aus,
+                                   "manuell_erlaubt": manuell_erlaubt})
             continue
         if kanal_ids:
             gruende.insert(0, f"Kanal {kanal} ✓")
@@ -183,7 +234,11 @@ def kandidaten(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None,
                          "handelsvertreter": bool(profil and profil.terminiert_selbst)})
     return {"kandidaten": ergebnis, "ausgeschlossen": ausgeschlossen,
             "sparten": sparten, "kanal": kanal, "nur_ad_id": nur_ad_id,
-            "objektart": objektart}
+            "objektart": objektart,
+            "hv_lead": hv_lead,
+            "hv_hinweis": HV_HINWEIS.format(name=hv_lead.name) if hv_lead else "",
+            # HV, die der Innendienst manuell (nicht über Vorschläge) buchen darf
+            "hv_manuell": [a["ad"] for a in ausgeschlossen if a["manuell_erlaubt"]]}
 
 
 # --- Vorschläge (E1/F4) -------------------------------------------------------------
@@ -276,6 +331,7 @@ def vorschlaege(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None
         routing.matrix_fuellen(session, [lead_ort], list(punkte))
         routing.matrix_fuellen(session, list(punkte), [lead_ort])
     fenster = kern._wunschzeit_fenster(session, vorgang)
+    score_an = lead_v2.score_aktiv(session)   # v25: Klassen-Bonus nur bei Score an
     alle = []
     for k in vorfilter["kandidaten"]:
         ad, profil = k["ad"], k["profil"]
@@ -346,7 +402,7 @@ def vorschlaege(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None
                     bewertung += 20
                 if beginn.hour < 9 or beginn.hour >= 17:
                     bewertung += 10
-                if (vorgang.score_klasse or "") == "A":
+                if score_an and (vorgang.score_klasse or "") == "A":
                     bewertung += (beginn.date() - jetzt.date()).days * 2
                 teile = list(k["gruende"])
                 teile.append(f"Umweg {round(umweg)} Min" + (" (geschätzt)" if geschaetzt else ""))
@@ -382,7 +438,83 @@ def vorschlaege(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None
             "kandidaten_info": vorfilter["kandidaten"],
             "ausgeschlossen": vorfilter["ausgeschlossen"],
             "sparten": vorfilter["sparten"], "kanal": vorfilter["kanal"],
-            "nur_ad_id": vorfilter["nur_ad_id"]}
+            "nur_ad_id": vorfilter["nur_ad_id"],
+            "hv_lead": vorfilter["hv_lead"], "hv_hinweis": vorfilter["hv_hinweis"],
+            "hv_manuell": vorfilter["hv_manuell"]}
+
+
+# --- v25 (Phase 119/120): Terminvorschläge für den Block Termine der Kartei --------
+
+def adresse_fehlt(kunde) -> list[str]:
+    """Fehlende Adressteile (Straße, PLZ, Ort) – ohne Adresse keine Vorschläge."""
+    if kunde is None:
+        return ["Straße", "PLZ", "Ort"]
+    fehlt = []
+    for feld, name in (("strasse", "Straße"), ("plz", "PLZ"), ("ort", "Ort")):
+        if not str(getattr(kunde, feld, "") or "").strip():
+            fehlt.append(name)
+    return fehlt
+
+
+def _beginn_text(beginn: datetime) -> str:
+    from app.templating import de_datum
+    return de_datum(beginn, "%a %d.%m.%Y · %H:%M") + " Uhr"
+
+
+def vorschlaege_json(session: Session, vorgang: Vorgang, benutzer=None,
+                     anzahl: int = 5, jetzt: datetime | None = None) -> dict:
+    """Antwort für GET /lead-management/lead/{id}/termin/vorschlaege.json
+    (Vertrag Agent C/D): {status: ok|adresse_fehlt|hv_lead|keine, hinweis,
+    vorschlaege: [{ad_id, ad_name, beginn (ISO), beginn_text, begruendung,
+    umweg_min}]} – Top 5, Cache 10 Minuten je Lead (Sicht Innendienst bzw. je
+    Handelsvertreter getrennt), Zusatzfelder aus_cache/berechnet_um/buchbar/
+    pflicht_offen. Reihenfolge der Zustände: HV-Lead (Innendienst) → Adresse
+    fehlt → Vorschläge (ok) oder keine."""
+    jetzt = jetzt or datetime.now()
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    hv_ich = lead_v2.ist_handelsvertreter(session, benutzer) if benutzer is not None else False
+    sicht = f"hv{benutzer.id}" if hv_ich else "id"
+    eintrag = vorschlaege_cache.get(vorgang.id, {}).get(sicht)
+    if eintrag is not None and (jetzt - eintrag[0]).total_seconds() < VORSCHLAEGE_CACHE_SEKUNDEN:
+        antwort = dict(eintrag[1])
+        antwort["aus_cache"] = True
+        return antwort
+    buchbar = not (kern.demo_aktiv(session) and not vorgang.demo)
+    pflicht_offen = lead_v2.pflichtfelder_offen(session, kunde, vorgang) if kunde else []
+    antwort = {"status": "ok", "hinweis": "", "vorschlaege": [],
+               "buchbar": buchbar, "pflicht_offen": pflicht_offen,
+               "berechnet_um": jetzt.strftime("%H:%M"), "aus_cache": False}
+    hv = hv_des_vorgangs(session, vorgang)
+    if hv is not None and getattr(benutzer, "id", None) != hv.id:
+        antwort.update(status="hv_lead", hinweis=HV_HINWEIS.format(name=hv.name),
+                       hv_id=hv.id, hv_name=hv.name)
+    else:
+        fehlt = adresse_fehlt(kunde)
+        if fehlt:
+            antwort.update(status="adresse_fehlt",
+                           hinweis=ADRESSE_HINWEIS, fehlt=fehlt)
+        else:
+            ergebnis = vorschlaege(session, vorgang, anzahl=anzahl, benutzer=benutzer)
+            liste = [{
+                "ad_id": v["ad"].id, "ad_name": v["ad"].name,
+                "beginn": v["beginn"].strftime("%Y-%m-%dT%H:%M"),
+                "beginn_text": _beginn_text(v["beginn"]),
+                "begruendung": v["begruendung"], "umweg_min": int(v["umweg"]),
+            } for v in ergebnis["vorschlaege"][:anzahl]]
+            antwort["vorschlaege"] = liste
+            antwort["kandidaten"] = [{"ad_id": a.id, "ad_name": a.name}
+                                     for a in ergebnis["kandidaten"]]
+            if not liste:
+                if not ergebnis["kandidaten"]:
+                    hinweis = "Kein Außendienstler erfüllt die Voraussetzungen – manuell setzen."
+                else:
+                    hinweis = ("Keine freien Slots im Horizont – Horizont/Raster in den "
+                               "Lead-Einstellungen prüfen oder manuell setzen.")
+                antwort.update(status="keine", hinweis=hinweis)
+            elif ergebnis["hinweise"]:
+                antwort["hinweis"] = " ".join(ergebnis["hinweise"])
+    vorschlaege_cache.setdefault(vorgang.id, {})[sicht] = (jetzt, dict(antwort))
+    return antwort
 
 
 # --- Konfliktprüfung manuelle Buchung (B7) ------------------------------------------
@@ -527,6 +659,7 @@ def termin_anlegen(session: Session, vorgang: Vorgang, ad_id: int, beginn: datet
                         f"Pflichtfelder offen: {', '.join(offen)}", benutzer=benutzer)
         _ad_am_vorgang(session, vorgang, ad_id, benutzer)
         session.flush()
+        vorschlaege_cache_leeren()   # v25: Kalender geändert – Vorschläge neu rechnen
         return termin, ("Termin vorgemerkt – Terminierung in der Kartei abschließen "
                         f"(offen: {', '.join(offen)})."), True
     umbuchen_echt = alt.id if (alt is not None and alt.status != STATUS_VORGEMERKT) else None
@@ -540,6 +673,7 @@ def termin_anlegen(session: Session, vorgang: Vorgang, ad_id: int, beginn: datet
     _vorgemerkte_aufraeumen(session, vorgang.id, termin.id)
     _ad_am_vorgang(session, vorgang, ad_id, benutzer)
     session.flush()
+    vorschlaege_cache_leeren()   # v25: Kalender geändert – Vorschläge neu rechnen
     return termin, meldung, False
 
 
@@ -618,6 +752,7 @@ def vorab_anlegen(session: Session, vorgang: Vorgang, typ: str, person_id: int,
                              f"{', ' + kunde.ort if kunde.ort else ''}",
                              f"/lead-management/lead/{vorgang.id}")
     session.flush()
+    vorschlaege_cache_leeren()   # v25: Vorab-Gespräche zählen in der Kollision
     return termin, " ".join(hinweise) or f"{name} eingetragen."
 
 
@@ -675,6 +810,7 @@ def absagen(session: Session, termin: VotTermin, grund: str, text: str = "",
                                  f"{kunde.anzeige_name}",
                                  f"/lead-management/lead/{vorgang.id}")
     session.flush()
+    vorschlaege_cache_leeren()   # v25: Slot frei – Vorschläge neu rechnen
     return True, "Termin abgesagt."
 
 
@@ -707,12 +843,19 @@ def radius_stufen(session: Session) -> list[float]:
 
 
 def ersatz_kandidaten(session: Session, termin: VotTermin) -> dict:
-    """Offene qualifizierte Leads (Phase qualifiziert zuerst, dann
-    in_kontaktierung mit erreicht_am) im Radius um den freigewordenen Slot;
-    Stufen 5 → 10 km bis ≥ ersatz_min_treffer Treffer; ältere (≥
-    ersatz_alter_tage) bevorzugt, Score berücksichtigt; Begründung je
-    Kandidat (Entfernung, Alter, Klasse, Phase, Wunschzeit)."""
-    from app import routing
+    """Offene kontaktierte Leads (Phase qualifiziert zuerst, dann
+    in_kontaktierung mit erreicht_am – beide tragen seit v25 das Label
+    „Kontaktiert“) im Radius um den freigewordenen Slot; Stufen 5 → 10 km
+    bis ≥ ersatz_min_treffer Treffer; ältere (≥ ersatz_alter_tage) bevorzugt,
+    Score nur bei score_aktiv = an berücksichtigt; Begründung je Kandidat
+    (Entfernung, Alter, [Klasse], Phase, Wunschzeit)."""
+    from app import leadmanagement_logik, routing
+    logik = leadmanagement_logik.hole_logik()
+    score_an = lead_v2.score_aktiv(session)
+
+    def _label(phase: str) -> str:
+        z = logik.status_zeile(phase)
+        return z.label if z and z.label else phase
     vorgang = session.get(Vorgang, termin.vorgang_id)
     ort = ((termin.lat, termin.lon) if termin.lat is not None
            else ((vorgang.lat, vorgang.lon) if vorgang and vorgang.lat is not None else None))
@@ -748,7 +891,7 @@ def ersatz_kandidaten(session: Session, termin: VotTermin) -> dict:
         radius = stufe
         if len(gewaehlt) >= min_treffer:
             break
-    klasse_bonus = {"A": 15, "B": 5}
+    klasse_bonus = {"A": 15, "B": 5} if score_an else {}
     kandidaten_liste = []
     for v, km, alter in gewaehlt:
         kunde = session.get(Kunde, v.kunde_id)
@@ -757,10 +900,14 @@ def ersatz_kandidaten(session: Session, termin: VotTermin) -> dict:
                   - klasse_bonus.get(v.score_klasse or "", 0)
                   + (10 if v.lead_phase == "in_kontaktierung" else 0))
         gruende = [f"{km:.1f} km Luftlinie",
-                   f"{alter} Tage alt" + (" (bevorzugt)" if bevorzugt else ""),
-                   f"Klasse {v.score_klasse or '–'}",
-                   "Phase Qualifiziert" if v.lead_phase == "qualifiziert"
-                   else "Phase In Kontaktierung (erreicht)"]
+                   f"{alter} Tage alt" + (" (bevorzugt)" if bevorzugt else "")]
+        if score_an:
+            gruende.append(f"Klasse {v.score_klasse or '–'}")
+        # v25: Label aus dem Blatt Status (beide Phasen „Kontaktiert“), die
+        # interne Phase bleibt als Zusatz erkennbar
+        gruende.append(f"Phase {_label('qualifiziert')} (qualifiziert)"
+                       if v.lead_phase == "qualifiziert"
+                       else f"Phase {_label('in_kontaktierung')} (erreicht)")
         wunsch = kern.wunschzeiten_liste(v)
         if wunsch:
             gruende.append("Wunschzeit " + ", ".join(wunsch))

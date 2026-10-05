@@ -7,7 +7,9 @@
 # liegen weiter in app/routers/leadmanagement.py und wurden dort erweitert):
 #   GET  /lead-management/anruf/meine                     – Meine Anrufe (D2)
 #   GET  /lead-management/anruf/suche?q=                  – Rufnummernsuche (D3/H7)
-#   GET  /lead-management/anruf/{vorgang_id}/vorschlag    – Kaskaden-Vorschlag JSON (C2)
+#   GET  /lead-management/anruf/{vorgang_id}/vorschlag    – Kaskaden-Auskunft JSON (C2;
+#        v25 PLAN_LEAD_V3 Phase 120: der „Nicht erreicht“-Dialog ist entfallen, die
+#        Route bleibt erreichbar, wird von der Oberfläche aber nicht mehr aufgerufen)
 #   POST /lead-management/anruf/aktivitaet/{id}/dauer     – Dauer nachträglich korrigieren (D1)
 #
 # =====================================================================================
@@ -52,10 +54,10 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app import lead_anrufliste, lead_v2
+from app import lead_anrufliste, lead_v2, leadmanagement_logik
 from app import leadmanagement as kern
 from app.db import get_session
-from app.models import LeadAktivitaet, Vorgang, ANRUF_ERGEBNIS_NAMEN, LEAD_PHASEN_NAMEN
+from app.models import LeadAktivitaet, Vorgang, ANRUF_ERGEBNIS_NAMEN
 from app.templating import render
 
 router = APIRouter(prefix="/lead-management")
@@ -66,8 +68,11 @@ AKTION_TEXTE = {
     "keine": "",
     "mail_nicht_erreicht": "E-Mail „Nicht erreicht“ geht an den Kunden.",
     "mail_disqualifiziert": "Letzter Versuch: E-Mail „Disqualifiziert“ geht raus, "
-                            "Lead steht auf „Nicht erreicht“, Nurture-Mail zur Wiedervorlage.",
+                            "Lead steht auf „Nicht erreicht“, Nurture-Mail in 30 Tagen.",
 }
+# v25 (Phase 120): Hinweis in der Kaskaden-Auskunft – kein Vorschlag mehr angewendet
+VORSCHLAG_HINWEIS = ("Seit v25 setzt die Kaskade keine Wiedervorlage mehr – Wiedervorlagen "
+                     "setzt der Nutzer über den Wiedervorlage-Button.")
 
 
 def _json_gewuenscht(request: Request) -> bool:
@@ -135,16 +140,21 @@ async def rufnummer_suche(request: Request, session: Session = Depends(get_sessi
     return render(request, "leadmanagement/anruf_suche.html", aktiv="/lead-management",
                   eingabe=eingabe, ziffern=ergebnis["ziffern"], zu_kurz=ergebnis["zu_kurz"],
                   treffer=treffer, min_ziffern=lead_anrufliste.SUCHE_MIN_ZIFFERN,
-                  demo_badge=kern.demo_aktiv(session), phasen_namen=LEAD_PHASEN_NAMEN)
+                  demo_badge=kern.demo_aktiv(session),
+                  # v25 (Phase 118): Phasen-Label aus dem Blatt Status („Kontaktiert“)
+                  phasen_namen=lead_anrufliste.phasen_labels(leadmanagement_logik.hole_logik()))
 
 
-# --- C2: Kaskaden-Vorschlag für den „Nicht erreicht“-Dialog -------------------------
+# --- C2: Kaskaden-Auskunft (v25: nur noch Auskunft, kein Dialog) --------------------
 
 @router.get("/anruf/{vorgang_id}/vorschlag")
 async def anruf_vorschlag(request: Request, vorgang_id: int,
                           session: Session = Depends(get_session)):
     """JSON {zeitpunkt (YYYY-MM-DDTHH:MM | null), zeitpunkt_text, stufe, stufen,
-    regel, aktion, aktion_text, letzte, gesperrt, versuch_nr, versuche_max}."""
+    regel, aktion, aktion_text, letzte, gesperrt, versuch_nr, versuche_max,
+    hinweis}. v25 (Phase 120): bleibt erreichbar (Kompatibilität), die
+    Oberfläche ruft die Route nicht mehr auf – `zeitpunkt` wird nicht mehr als
+    Wiedervorlage angewendet."""
     vorgang = session.get(Vorgang, vorgang_id)
     lead_v2.gate(request, session, vorgang)
     if vorgang is None:
@@ -160,6 +170,7 @@ async def anruf_vorschlag(request: Request, vorgang_id: int,
         "letzte": v["letzte"], "gesperrt": v["gesperrt"],
         "sperre_meldung": lead_anrufliste.SPERRE_MELDUNG if v["gesperrt"] else "",
         "versuch_nr": vorgang.versuch_nr or 0, "versuche_max": v["versuche_max"],
+        "hinweis": VORSCHLAG_HINWEIS,
     })
 
 

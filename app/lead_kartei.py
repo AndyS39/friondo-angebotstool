@@ -1,10 +1,17 @@
-# Lead-Management V2 (v23, PLAN_LEAD_V2 Phase 106): Kundenkartei dreispaltig
+# Lead-Management V2 (v23, PLAN_LEAD_V2 Phase 106): Kundenkartei
 # (B1–B8, F10 Vorab-Angebot, F11 Nachbearbeitung). Fachlogik der Kartei –
 # Kontext für das Template, Stammdaten-Speichern mit Aktivität, Pflichtfeld-
 # Status, Terminierung (B8, Vertrag mit Phase 108: Terminstatus „vorgemerkt“),
 # Wiedervorlage/Zurückstellen/Nachbearbeitung. Router: app/routers/lm_kartei.py.
 # Prozesswissen (Objektarten, Gründe, Status-Farben) kommt aus der Steuerdatei,
 # Pflichtfelder und Fristen aus den LeadParametern.
+# v25 (PLAN_LEAD_V3 Phase 119): Kartei neu aufgeteilt (Kopf mit Statuskette,
+# Kundeninfo-Block, Reiter Termin · Anrufnotizen · E-Mail-Verlauf · Timeline,
+# Blöcke darunter), Autospeichern je Feld (feld_speichern, Aktivität typ
+# `aenderung` „<Feld>: „alt“ → „neu““), Terminvorschläge im Block Termine
+# (Zustand adresse_fehlt / hv_lead / laden; Vorschläge liefert lm_termin
+# GET /lead/{id}/termin/vorschlaege.json), Score/Qualifizierung/Quelle/
+# Einwilligung aus der Kartei entfernt.
 
 import re
 from datetime import datetime, timedelta
@@ -18,18 +25,22 @@ from app.models import (AdProfil, Angebot, Benutzer, Erfassung, GalerieDatei,
                         LeadQuelle, Todo, Vorgang, VorgangsNotiz, VotTermin,
                         ANRUF_ERGEBNIS_NAMEN, INTERESSE_CODES, INTERESSEN,
                         LEAD_PHASEN_NAMEN, TERMIN_TYP_NAMEN, VOT_STATUS_NAMEN)
+# Kampagne/LeadQuelle bleiben für stammdaten_speichern (Fallback-Route, Boards-Inline)
 
 ANREDEN = ["", "Herr", "Frau", "Familie", "Firma"]
 
 # Filtergruppen der Timeline (Reiter Mitte): Aktivitätstyp → Gruppe
 TIMELINE_GRUPPEN = [("anruf", "Anrufe"), ("notiz", "Notizen"), ("mail", "E-Mails"),
-                    ("termin", "Termine"), ("status", "Status"), ("system", "System")]
+                    ("termin", "Termine"), ("status", "Status"),
+                    ("aenderung", "Änderungen"), ("system", "System")]
 _TYP_GRUPPE = {"anruf": "anruf", "notiz": "notiz", "mail_aus": "mail", "mail_ein": "mail",
                "mail": "mail", "termin": "termin", "status": "status",
-               "system": "system", "import": "system", "whatsapp": "mail", "sms": "mail"}
+               "system": "system", "import": "system", "whatsapp": "mail", "sms": "mail",
+               "aenderung": "aenderung"}   # v25: Autospeichern „<Feld>: „alt“ → „neu““
 _TYP_TITEL = {"anruf": "Anruf", "notiz": "Notiz", "mail_aus": "E-Mail gesendet",
               "mail_ein": "E-Mail eingegangen", "termin": "Termin", "status": "Status",
-              "system": "System", "import": "Import", "whatsapp": "WhatsApp", "sms": "SMS"}
+              "system": "System", "import": "Import", "whatsapp": "WhatsApp", "sms": "SMS",
+              "aenderung": "Änderung"}
 
 # Anzeigenamen der Pflichtfeld-Keys (Parameter `pflichtfelder`) – die Zählung
 # selbst liefert lead_v2.pflichtfelder_offen (B2).
@@ -154,6 +165,11 @@ def timeline(session: Session, vorgang: Vorgang, benutzer_map: dict | None = Non
         titel = _TYP_TITEL.get(typ, typ.capitalize())
         if typ == "anruf" and a.ergebnis:
             titel = "Anruf: " + ANRUF_ERGEBNIS_NAMEN.get(a.ergebnis, a.ergebnis)
+        elif typ == "aenderung":
+            # v25: „Telefon: „alt“ → „neu““ → Titel „Änderung: Telefon“
+            kurz = (a.text or "").split(":")[0].strip()
+            if kurz and len(kurz) <= 60:
+                titel = f"Änderung: {kurz}"
         elif typ in ("status", "termin", "system", "import"):
             kurz = (a.text or "").split(":")[0].strip()
             if kurz and len(kurz) <= 60:
@@ -281,8 +297,11 @@ def terminierung_ausfuehren(session: Session, vorgang: Vorgang, benutzer=None) -
     geplant, Terminbestätigung (mit ICS) + Erinnerung planen, Kalender
     schreiben, Phase terminiert + terminiert_am, Aktivität, Glocke an den AD.
     Damit ist die Übergabe an „Leads VOT“ erledigt (Tool-Leads laufen über das
-    Board Terminiert / Meine Termine). Liefert (ok, meldung)."""
+    Board Deals / Meine Termine; Board-Name v25 aus logik.board_label).
+    Liefert (ok, meldung)."""
     from app import kalender as kalender_modul
+    from app import leadmanagement_logik
+    board_deals = leadmanagement_logik.hole_logik().board_label("terminiert")
     kunde = session.get(Kunde, vorgang.kunde_id)
     pruefung = terminierung_pruefung(session, kunde, vorgang)
     if pruefung["erledigt"]:
@@ -332,7 +351,7 @@ def terminierung_ausfuehren(session: Session, vorgang: Vorgang, benutzer=None) -
     session.flush()
     return True, ("Terminiert: Terminbestätigung geplant, Kalender "
                   + ("geschrieben" if kalender_ok else "übersprungen (Sync aus)")
-                  + ", Lead steht in Leads VOT / Board Terminiert.")
+                  + f", Lead steht in Leads VOT / Board {board_deals}.")
 
 
 # --- Vorab-Angebot (F10, A-3) --------------------------------------------------------
@@ -623,6 +642,306 @@ def objektart_vorbelegung_kunde(kunde: Kunde | None, sparte: str = "WP") -> dict
     return ergebnis
 
 
+# --- v25 (Phase 119): Statuskette, Autospeichern, Vorschläge-Zustand -----------------
+
+# Felder des Kundeninfo-Blocks, die POST /lead/{id}/feld annimmt → Anzeigename
+# für die Änderungs-Aktivität. Quelle/Kampagne/Einwilligung/Eingangsdatum sind
+# bewusst nicht dabei (aus der Kartei entfernt bzw. nur Anzeige).
+FELD_LABELS = {"anrede": "Anrede", "vorname": "Vorname", "nachname": "Nachname",
+               "firma": "Firma", "telefon": "Telefon", "email": "E-Mail",
+               "strasse": "Straße", "plz": "PLZ", "ort": "Ort",
+               "vertriebskanal": "Vertriebskanal", "interesse": "Interessen",
+               "objektart": "Objektart", "parteien": "Anzahl Parteien",
+               "rechnung_name": "Rechnung Name", "rechnung_strasse": "Rechnung Straße",
+               "rechnung_plz": "Rechnung PLZ", "rechnung_ort": "Rechnung Ort",
+               "leadmanager_id": "Innendienst", "ad_id": "Außendienst"}
+AUTOSPEICHER_FELDER = tuple(FELD_LABELS)
+ADRESS_FELDER = ("strasse", "plz", "ort")
+_TEXT_LAENGEN = {"vorname": 100, "nachname": 100, "firma": 200, "telefon": 50,
+                 "email": 200, "strasse": 200, "ort": 100, "rechnung_name": 200,
+                 "rechnung_strasse": 200, "rechnung_plz": 10, "rechnung_ort": 100}
+_EMAIL_MUSTER = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
+SEITENZUSTAENDE = ("zurueckgestellt", "nicht_erreicht", "unqualifiziert", "verloren")
+
+# Texte des Blocks Termine (Plan-Wortlaut)
+VORSCHLAEGE_TEXTE = {
+    "laden": "Vorschläge werden berechnet …",
+    "adresse_fehlt": "Adresse fehlt – Straße, PLZ und Ort eintragen",
+    "nicht_verfuegbar": "Vorschläge derzeit nicht verfügbar",
+}
+
+
+def phasen_label(logik, phase: str) -> str:
+    """Anzeigename einer Phase aus dem Blatt Status (v25: in_kontaktierung und
+    qualifiziert tragen beide „Kontaktiert“), Fallback LEAD_PHASEN_NAMEN."""
+    zeile = logik.status_zeile(phase or "") if logik is not None else None
+    if zeile is not None and (zeile.label or "").strip():
+        return zeile.label.strip()
+    return LEAD_PHASEN_NAMEN.get(phase, phase or "–")
+
+
+def phasen_kette(logik, aktuelle_phase: str | None) -> list:
+    """Statuskette des Kopfbereichs: die Anzeige-Phasen (kern.LEAD_PHASEN_ANZEIGE)
+    mit Label/Farbe aus dem Blatt Status. Aufeinanderfolgende Phasen mit
+    demselben Label (In Kontaktierung + Qualifiziert → „Kontaktiert“) werden zu
+    EINEM Schritt zusammengefasst [ANNAHME: wie die Kanban-Spalte]; der Schritt
+    ist aktiv, wenn die aktuelle Phase eine seiner Phasen ist. Seitenzustände
+    (zurückgestellt …) hängt das Template als eigenen Schritt an."""
+    schritte = []
+    for phase in kern.LEAD_PHASEN_ANZEIGE:
+        zeile = logik.status_zeile(phase) if logik is not None else None
+        label = phasen_label(logik, phase)
+        farbe = (zeile.farbe if zeile is not None else "") or ""
+        if schritte and schritte[-1]["label"] == label:
+            schritte[-1]["phasen"].append(phase)
+            if not schritte[-1]["farbe"]:
+                schritte[-1]["farbe"] = farbe
+        else:
+            schritte.append({"label": label, "phasen": [phase], "farbe": farbe})
+    aktiv = next((i for i, s in enumerate(schritte) if aktuelle_phase in s["phasen"]), None)
+    for i, s in enumerate(schritte):
+        s["aktiv"] = aktiv is not None and i == aktiv
+        s["fertig"] = aktiv is not None and i < aktiv
+    return schritte
+
+
+def _norm_text(wert, laenge: int) -> str:
+    if wert is None:
+        return ""
+    if isinstance(wert, (list, tuple)):
+        wert = ",".join(str(w) for w in wert)
+    return re.sub(r"\s+", " ", str(wert)).strip()[:laenge]
+
+
+def telefon_pruefen(wert: str) -> str | None:
+    """Fehlertext oder None: die Nummer muss sich nach E.164 normalisieren
+    lassen (kern.telefon_normalisieren) und mindestens 6 nationale Ziffern
+    haben; nur erlaubte Zeichen (Ziffern, + / - ( ) . Leerzeichen)."""
+    if not wert:
+        return None
+    if re.search(r"[^\d+\s/().\-]", wert):
+        return "Telefonnummer enthält ungültige Zeichen."
+    norm = kern.telefon_normalisieren(wert)
+    ziffern = re.sub(r"\D", "", norm)
+    national = ziffern[2:] if ziffern.startswith("49") else ziffern
+    if len(national) < 6:
+        return "Telefonnummer ist zu kurz – bitte mit Vorwahl eintragen."
+    return None
+
+
+def _aenderung(session: Session, vorgang: Vorgang, label: str, alt, neu, benutzer=None) -> None:
+    """Aktivität typ aenderung „<Feld>: „alt“ → „neu““ (Vertrag Briefing)."""
+    kern.aktivitaet(session, vorgang.id, "aenderung",
+                    f"{label}: „{alt if alt not in (None, '') else '–'}“ → "
+                    f"„{neu if neu not in (None, '') else '–'}“", benutzer=benutzer)
+
+
+def feld_speichern(session: Session, vorgang: Vorgang, kunde: Kunde, feld: str, wert,
+                   benutzer=None, erzwingen: bool = False) -> dict:
+    """Autospeichern eines Feldes (POST /lead/{id}/feld). Serverseitige
+    Validierung: PLZ 5 Ziffern, E-Mail-Form, Telefon normalisierbar, Objektart
+    aus dem Blatt Objektarten, Parteien Zahl > 0, Kanal aus kern.kanal_werte,
+    Interessen aus INTERESSE_CODES, Innendienst/Außendienst über
+    lead_v2.leadmanager_zuweisen / ad_zuweisen (schreiben ihre eigene
+    Aktivität + Glocke). Jede tatsächliche Änderung an Kundenfeldern schreibt
+    eine Aktivität `aenderung` mit Alt → Neu; derselbe Wert erneut → keine
+    Aktivität. Liefert {ok, wert (normalisiert), meldung, geaendert}."""
+    label = FELD_LABELS.get(feld)
+    if label is None:
+        return {"ok": False, "wert": "", "meldung": "Feld unbekannt.", "geaendert": False}
+    if kunde is None and feld not in ("leadmanager_id", "ad_id"):
+        return {"ok": False, "wert": "", "meldung": "Kunde fehlt.", "geaendert": False}
+
+    def fehler(text: str, alt=""):
+        return {"ok": False, "wert": "" if alt is None else alt, "meldung": text, "geaendert": False}
+
+    def ok(neu, meldung: str = "", geaendert: bool = True):
+        return {"ok": True, "wert": "" if neu is None else neu,
+                "meldung": meldung or ("Gespeichert." if geaendert else "Keine Änderung."),
+                "geaendert": geaendert}
+
+    # --- Zuweisungen (eigene Helfer, eigene Aktivität) ---
+    if feld in ("leadmanager_id", "ad_id"):
+        roh = _norm_text(wert, 10)
+        if roh and not roh.isdigit():
+            return fehler(f"{label}: ungültige Auswahl – nichts geändert.",
+                          str(getattr(vorgang, feld) or ""))
+        neu_id = int(roh) if roh else None
+        if neu_id == (getattr(vorgang, feld) or None):
+            return ok(str(neu_id or ""), "Keine Änderung.", geaendert=False)
+        if feld == "leadmanager_id":
+            meldung = lead_v2.leadmanager_zuweisen(session, vorgang, neu_id, benutzer=benutzer)
+        else:
+            meldung = lead_v2.ad_zuweisen(session, vorgang, neu_id, benutzer=benutzer,
+                                          erzwingen=erzwingen)
+        wert_neu = getattr(vorgang, feld)
+        if (neu_id or None) != (wert_neu or None):
+            # Helfer hat abgelehnt (nicht gefunden / Ausschluss F14)
+            return fehler(meldung, str(wert_neu or ""))
+        return ok(str(wert_neu or ""), meldung)
+
+    # --- Kundenfelder ---
+    alt = getattr(kunde, feld, None)
+    if feld == "anrede":
+        neu = _norm_text(wert, 20)
+        if neu not in ANREDEN:
+            return fehler("Anrede unbekannt.", alt or "")
+    elif feld == "nachname":
+        neu = _norm_text(wert, 100)
+        if not neu and not (kunde.firma or "").strip():
+            return fehler("Nachname (oder Firma) ist Pflicht.", alt or "")
+    elif feld == "firma":
+        neu = _norm_text(wert, 200)
+        if not neu and not (kunde.nachname or "").strip():
+            return fehler("Firma (oder Nachname) ist Pflicht.", alt or "")
+    elif feld == "telefon":
+        neu = _norm_text(wert, 50)
+        text = telefon_pruefen(neu)
+        if text:
+            return fehler(text, alt or "")
+    elif feld == "email":
+        neu = _norm_text(wert, 200)
+        if neu and not _EMAIL_MUSTER.match(neu):
+            return fehler("E-Mail-Adresse ist ungültig.", alt or "")
+    elif feld == "plz":
+        neu = _norm_text(wert, 10).replace(" ", "")
+        if neu and not re.fullmatch(r"\d{5}", neu):
+            return fehler("PLZ muss aus 5 Ziffern bestehen.", alt or "")
+    elif feld == "vertriebskanal":
+        neu = _norm_text(wert, 100)
+        werte = kern.kanal_werte(session)
+        if neu and neu not in werte and neu != (alt or ""):
+            return fehler("Vertriebskanal unbekannt.", alt or "")
+    elif feld == "interesse":
+        if isinstance(wert, (list, tuple)):
+            codes = [str(w).strip().upper() for w in wert if str(w).strip()]
+        else:
+            codes = [c.strip().upper() for c in str(wert or "").split(",") if c.strip()]
+        fremd = [c for c in codes if c not in INTERESSE_CODES]
+        if fremd:
+            return fehler("Interesse unbekannt: " + ", ".join(fremd), alt or "")
+        neu = ",".join(c for c in INTERESSE_CODES if c in codes)
+    elif feld == "objektart":
+        neu = _norm_text(wert, 10).upper() or None
+        codes = {code for code, _bez, _p in lead_v2.objektarten(session)}
+        if neu and neu not in codes:
+            return fehler("Objektart unbekannt.", alt or "")
+    elif feld == "parteien":
+        roh = _norm_text(wert, 5)
+        if not roh:
+            neu = None
+        elif roh.isdigit() and int(roh) > 0:
+            neu = int(roh)
+        else:
+            return fehler("Anzahl Parteien muss eine Zahl > 0 sein.",
+                          str(alt) if alt else "")
+    else:
+        neu = _norm_text(wert, _TEXT_LAENGEN.get(feld, 200))
+
+    # Vergleich auf dem gespeicherten Format (None/"" gleichwertig)
+    alt_vgl = "" if alt is None else str(alt)
+    neu_vgl = "" if neu is None else str(neu)
+    if alt_vgl == neu_vgl:
+        return ok(neu_vgl, "Keine Änderung.", geaendert=False)
+    setattr(kunde, feld, neu)
+    meldung = ""
+    if feld == "vertriebskanal":
+        kunde.kanal_manuell = True        # Sync-Schutz (v9/v21)
+    if feld == "interesse":
+        alt_text = ", ".join(a.strip() for a in alt_vgl.split(",") if a.strip())
+        neu_text = ", ".join(n.strip() for n in neu_vgl.split(",") if n.strip())
+        _aenderung(session, vorgang, label, alt_text, neu_text, benutzer)
+    else:
+        _aenderung(session, vorgang, label, alt_vgl, neu_vgl, benutzer)
+    if feld == "vertriebskanal":
+        # v23 (Phase 109, G4/OF-G5): Kanalwechsel auf Ausschlusskanal bei
+        # zugewiesenem Handelsvertreter → Hinweis + Glocke (wie stammdaten_speichern)
+        try:
+            from app import lead_handelsvertreter
+            session.flush()
+            hinweis = lead_handelsvertreter.kanalwechsel_pruefen(session, vorgang, benutzer)
+            if hinweis:
+                meldung = hinweis
+        except Exception:
+            pass
+    session.flush()
+    return ok(neu_vgl, meldung or "Gespeichert.")
+
+
+def adresse_vollstaendig(kunde: Kunde | None) -> bool:
+    return bool(kunde is not None and all((getattr(kunde, f, "") or "").strip()
+                                          for f in ADRESS_FELDER))
+
+
+def hv_am_vorgang(session: Session, vorgang: Vorgang):
+    """Zugewiesener Außendienstler, falls Handelsvertreter (terminiert_selbst),
+    sonst None."""
+    if not vorgang.ad_id:
+        return None
+    ad = session.get(Benutzer, vorgang.ad_id)
+    if ad is not None and lead_v2.ist_handelsvertreter(session, ad):
+        return ad
+    return None
+
+
+def vorschlaege_zustand(session: Session, vorgang: Vorgang, kunde: Kunde | None,
+                        benutzer=None) -> dict:
+    """Startzustand des Blocks Termine (serverseitig, ohne Assistentenlauf) in
+    derselben Reihenfolge wie lead_termin.vorschlaege_json (Agent D):
+    hv_lead (Lead liegt bei einem Handelsvertreter und der Betrachter ist nicht
+    dieser HV – die Adresse ist dann zweitrangig) · adresse_fehlt (Straße/PLZ/
+    Ort leer) · laden (das Template holt GET /lead/{id}/termin/vorschlaege.json
+    nach dem Seitenaufbau). Liefert {status, hinweis, hv_name}."""
+    hv = hv_am_vorgang(session, vorgang)
+    if hv is not None and (benutzer is None or benutzer.id != hv.id):
+        return {"status": "hv_lead", "hv_name": hv.name,
+                "hinweis": f"Lead liegt bei {hv.name} (Handelsvertreter), "
+                           "Terminierung durch den Vertreter"}
+    if not adresse_vollstaendig(kunde):
+        return {"status": "adresse_fehlt", "hinweis": VORSCHLAEGE_TEXTE["adresse_fehlt"],
+                "hv_name": hv.name if hv is not None else ""}
+    return {"status": "laden", "hinweis": VORSCHLAEGE_TEXTE["laden"],
+            "hv_name": hv.name if hv is not None else ""}
+
+
+def vorschlaege_cache_leeren(vorgang_id: int) -> None:
+    """Nach einer Adressänderung per Autospeichern den 10-Minuten-Cache der
+    Terminvorschläge verwerfen (Vertrag Agent D: lead_termin.vorschlaege_cache).
+    Defensiv gegen die konkrete Form: Funktion vorschlaege_cache_leeren/
+    _invalidieren, dict (Schlüssel = vorgang_id oder Tupel damit) oder Objekt
+    mit leeren/invalidieren/pop – fehlt alles, passiert nichts."""
+    try:
+        from app import lead_termin
+    except Exception:
+        return
+    for name in ("vorschlaege_cache_leeren", "vorschlaege_cache_invalidieren",
+                 "cache_invalidieren", "cache_leeren"):
+        fn = getattr(lead_termin, name, None)
+        if callable(fn):
+            try:
+                fn(vorgang_id)
+            except Exception:
+                pass
+            return
+    cache = getattr(lead_termin, "vorschlaege_cache", None)
+    if cache is None:
+        return
+    if isinstance(cache, dict):
+        for key in [k for k in list(cache)
+                    if k == vorgang_id or k == str(vorgang_id)
+                    or (isinstance(k, tuple) and vorgang_id in k)]:
+            cache.pop(key, None)
+        return
+    for name in ("leeren", "invalidieren", "entfernen", "pop"):
+        fn = getattr(cache, name, None)
+        if callable(fn):
+            try:
+                fn(vorgang_id)
+                return
+            except Exception:
+                continue
+
+
 # --- Kontext für das Template --------------------------------------------------------
 
 def _ad_auswahl(session: Session, vorgang: Vorgang, kunde: Kunde) -> list:
@@ -692,19 +1011,33 @@ def kartei_kontext(session: Session, vorgang: Vorgang, benutzer, readonly: bool 
     kanal_werte = kern.kanal_werte(session)
     if kunde and kunde.vertriebskanal and kunde.vertriebskanal not in kanal_werte:
         kanal_werte.append(kunde.vertriebskanal)
-    quellen = session.query(LeadQuelle).filter(LeadQuelle.aktiv.is_(True)).order_by(LeadQuelle.name).all()
-    if akte["quelle"] is not None and akte["quelle"] not in quellen:
-        quellen.append(akte["quelle"])
-    kampagnen = session.query(Kampagne).order_by(Kampagne.name).all()
     aktiver_termin = next((t for t in termine if t.status in TERMIN_OFFEN), None)
     heute = datetime.now()
     hv = lead_v2.ist_handelsvertreter(session, benutzer)
+    # v25 (Phase 119): Statuskette mit Labels aus dem Blatt Status (beide
+    # Kontakt-Phasen „Kontaktiert“), Score-Schalter, Startzustand Block Termine
+    from app import lead_anrufliste
+    phase = vorgang.lead_phase or "neu"
+    seitenzustand = None
+    if phase in SEITENZUSTAENDE:
+        seitenzustand = {"phase": phase, "label": phasen_label(logik, phase),
+                         "farbe": status_farben.get(phase, "")}
     return {
         "vorgang": vorgang, "kunde": kunde, "lead": lead, "benutzer": benutzer,
         "benutzer_map": benutzer_map, "lead_kontext": akte, "readonly": readonly,
         "ist_hv": hv, "heute": heute,
         "lead_phasen_namen": LEAD_PHASEN_NAMEN, "status_zeile": status_zeile,
         "status_farben": status_farben,
+        "phasen_kette": phasen_kette(logik, phase), "seitenzustand": seitenzustand,
+        "phase_label": phasen_label(logik, phase),
+        "score_aktiv": lead_v2.score_aktiv(session),
+        "telefon_href": lead_anrufliste.tel_href(kunde.telefon) if kunde and kunde.telefon else "",
+        "vorschlaege": vorschlaege_zustand(session, vorgang, kunde, benutzer),
+        "vorschlaege_texte": VORSCHLAEGE_TEXTE,
+        "feld_url": f"/lead-management/lead/{vorgang.id}/feld",
+        "vorschlaege_url": f"/lead-management/lead/{vorgang.id}/termin/vorschlaege.json",
+        "buchen_url": f"/lead-management/lead/{vorgang.id}/termin",
+        "wunschzeiten": akte.get("wunschzeiten") or [],
         "initialen": kunden_initialen(kunde), "initialen_fn": initialen,
         "timeline": zeitstrahl, "timeline_gruppen": TIMELINE_GRUPPEN,
         "mails": mails, "anrufe": [e for e in zeitstrahl if e["typ"] == "anruf"],
@@ -720,7 +1053,6 @@ def kartei_kontext(session: Session, vorgang: Vorgang, benutzer, readonly: bool 
         "terminierung": terminierung,
         "objektarten": lead_v2.objektarten(session), "anreden": ANREDEN,
         "interessen": INTERESSEN, "kanal_werte": kanal_werte,
-        "quellen": quellen, "kampagnen": kampagnen,
         "innendienst_wahl": akte["leadmanager_wahl"],
         "ad_wahl": _ad_auswahl(session, vorgang, kunde) if kunde else [],
         "hv_sperre": lead_v2.hv_ausgeschlossen(session, vorgang, kunde) if kunde else "",
@@ -737,6 +1069,10 @@ def kartei_kontext(session: Session, vorgang: Vorgang, benutzer, readonly: bool 
         "wv_tage": wv_tage(session),
         "wv_vorschlag": (heute + timedelta(days=1)).replace(hour=9, minute=0).strftime("%Y-%m-%dT%H:%M"),
         "kartei_url": f"/lead-management/lead/{vorgang.id}",
+        # Prüfung F (Phase 118): die Icon-Leiste markiert das Board des Leads
+        # (Hauptboard bzw. Deals laut Blatt Status), nicht pauschal das Hauptboard
+        "nav_key": ("terminiert" if logik.board_fuer(vorgang.lead_phase or "neu")[0] == "terminiert"
+                    else "hauptboard"),
         "notiz_url": (f"/vorgaenge/{vorgang.id}/notiz" if readonly
                       else f"/lead-management/lead/{vorgang.id}/notiz"),
         "erfassung_url": (f"/erfassung/sparten?kunde_id={kunde.id}"
@@ -745,6 +1081,5 @@ def kartei_kontext(session: Session, vorgang: Vorgang, benutzer, readonly: bool 
                     "erfassungen": len(erfassungen), "projekte": len(projekte),
                     "anhaenge": len(anhaenge), "todos": len(todos_offen),
                     "timeline": len(zeitstrahl), "mails": len(mails),
-                    "anrufe": sum(1 for e in zeitstrahl if e["typ"] == "anruf"),
-                    "qualifizierungen": len(akte["qualifizierungen"])},
+                    "anrufe": sum(1 for e in zeitstrahl if e["typ"] == "anruf")},
     }

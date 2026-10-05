@@ -1,0 +1,194 @@
+{% from "_symbole.html" import symbol %}
+{% from "_komponenten.html" import status_badge, statuskette %}
+{% import "_sparten.html" as sparten_ui %}
+{# v25 (Phase 119) – Blöcke unter den Reitern, volle Breite, einklappbar, in
+   der Reihenfolge Termine · Angebote · Erfassungen · Projekt · Anhänge · To-Dos.
+   Auf-/Zuklappen merkt sich lm_kartei.js je Browser (localStorage, nur Komfort).
+   Block Termine zeigt die Top-Terminvorschläge des Assistenten direkt: nach dem
+   Seitenaufbau holt lm_kartei.js GET /lead-management/lead/{id}/termin/
+   vorschlaege.json (Agent D; Antwort {status: ok|adresse_fehlt|hv_lead|keine,
+   hinweis, vorschlaege: [{ad_id, ad_name, beginn, beginn_text, begruendung,
+   umweg_min}]}); Startzustand serverseitig (lead_kartei.vorschlaege_zustand):
+   adresse_fehlt → „Adresse fehlt – Straße, PLZ und Ort eintragen“ (nach dem
+   Autospeichern der Adresse ohne Neuladen nachgeladen), hv_lead → „Lead liegt
+   bei <Name> (Handelsvertreter), Terminierung durch den Vertreter“, laden →
+   „Vorschläge werden berechnet …“, 404 → „Vorschläge derzeit nicht verfügbar“.
+   „Vormerken“ postet an POST /lead/{id}/termin (ad_id, beginn, quelle=assistent). #}
+
+<details class="karte lk-bereich lk-block" data-bereich="termine" open>
+    <summary>{{ symbol('kalender') }} Termine <span class="lk-zahl">{{ zaehler.termine }}</span>
+        <span class="dezent lk-block-sub">Terminvorschläge des Assistenten · nächste Termine</span></summary>
+    <div class="lk-bereich-inhalt lk-block-raster">
+        {% if not readonly %}
+        <div class="lk-vorschlaege" id="lk-vorschlaege" data-url="{{ vorschlaege_url }}"
+             data-zustand="{{ vorschlaege.status }}" data-buchen="{{ buchen_url }}"
+             data-buchbar="{{ '1' if buchbar else '' }}" data-hv-name="{{ vorschlaege.hv_name }}"
+             data-assistent="{{ kartei_url }}/termin" data-text-laden="{{ vorschlaege_texte.laden }}"
+             data-text-adresse="{{ vorschlaege_texte.adresse_fehlt }}"
+             data-text-fehler="{{ vorschlaege_texte.nicht_verfuegbar }}" aria-live="polite">
+            <div class="lk-vorschlaege-kopf"><strong>Terminvorschläge</strong>
+                <span class="dezent">Top 5 des Assistenten für den vorgefilterten Vertrieblerkreis</span></div>
+            <p class="lk-vorschlaege-hinweis {{ 'lm-warn' if vorschlaege.status == 'adresse_fehlt' else ('lm-blau' if vorschlaege.status == 'hv_lead' else 'dezent') }}"
+               data-rolle="hinweis" data-status="{{ vorschlaege.status }}">{{ symbol('warnung' if vorschlaege.status == 'adresse_fehlt' else ('nutzer' if vorschlaege.status == 'hv_lead' else 'uhr')) }} {{ vorschlaege.hinweis }}</p>
+            <ol class="lk-vorschlaege-liste" data-rolle="liste" hidden></ol>
+            {% if not buchbar %}<p class="lm-hinweis lk-vorschlaege-demo">Demo-Modus: Vormerken nur für Demo-Leads – echte Leads werden in monday terminiert.</p>{% endif %}
+            <div class="lk-bereich-fuss">
+                <a class="knopf klein zweitrangig" href="{{ kartei_url }}/termin" title="Terminassistent mit allen Vorschlägen, Mini-Karte und manueller Buchung">{{ symbol('kalender') }} Alle Vorschläge / manuell</a>
+                <button type="button" class="knopf klein zweitrangig" data-vorschlaege-neu title="Vorschläge neu berechnen">{{ symbol('aktualisieren') }} Neu laden</button>
+            </div>
+        </div>
+        {% endif %}
+        <div class="lk-termine-kurz">
+            <strong class="dezent">Nächste Termine</strong>
+            {% for t in termine[:5] %}
+                <div class="lk-mini">
+                    <strong>{{ t.beginn | de_datum('%a %d.%m.%Y %H:%M') if t.beginn else 'ohne Uhrzeit' }}</strong>
+                    <span class="abzeichen lk-tstatus-{{ t.status }}">{{ termin_status_namen.get(t.status, t.status) }}</span>
+                    <span class="dezent">{{ termin_typ_namen.get(t.typ or 'vot', t.typ) }}{% if benutzer_map.get(t.ad_id) %} · {{ benutzer_map[t.ad_id].name }}{% endif %}</span>
+                </div>
+            {% else %}<p class="dezent">Kein Termin.</p>{% endfor %}
+            <div class="lk-bereich-fuss">
+                <button type="button" class="knopf klein zweitrangig" data-tab-link="termin">Alle Termine · Aktionen</button>
+                {% if not readonly %}<button type="button" class="knopf klein zweitrangig" onclick="document.getElementById('dlg-termin-manuell').showModal()">{{ symbol('stift') }} Termin manuell</button>{% endif %}
+            </div>
+        </div>
+    </div>
+</details>
+
+<details class="karte lk-bereich lk-block" data-bereich="angebote" open>
+    <summary>{{ symbol('euro') }} Angebote <span class="lk-zahl">{{ zaehler.angebote }}</span></summary>
+    <div class="lk-bereich-inhalt">
+        {% for a in angebote %}
+            <div class="lk-zeile lk-angebot">
+                <strong>{% if a.extern %}<span class="abzeichen status-taifun">TAIFUN</span> {{ a.taifun_nummer or a.nummer }}{% else %}{{ a.nummer }}{% endif %}</strong>
+                {{ sparten_ui.chip(a.konfigurator_typ or 'WP') }}
+                <span class="dezent">{{ a.datum.strftime('%d.%m.%Y') if a.datum }}</span>
+                {{ status_badge(a.status) }}
+                {% if benutzer.rolle in ('admin', 'innendienst') %}
+                    <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">Öffnen</a>
+                {% elif not a.extern %}
+                    <a class="knopf klein zweitrangig" href="/meine-angebote/{{ a.id }}">Ansehen</a>
+                {% endif %}
+                {{ statuskette(a.status) }}
+            </div>
+        {% else %}
+            <p class="dezent">Noch kein Angebot.</p>
+        {% endfor %}
+    </div>
+</details>
+
+<details class="karte lk-bereich lk-block" data-bereich="erfassungen" open>
+    <summary>{{ symbol('stift') }} Erfassungen <span class="lk-zahl">{{ zaehler.erfassungen }}</span></summary>
+    <div class="lk-bereich-inhalt">
+        {% if vorgang.demo %}<p class="hinweis">Demo-Lead – keine Erfassung möglich{{ ' (Kennzeichen Vorab-Angebot gesetzt)' if vorgang.vorab_angebot }}.</p>{% endif %}
+        {% for e in erfassungen %}
+            <div class="lk-zeile">
+                {{ sparten_ui.chip(e.sparte or 'WP') }}
+                <strong>{{ 'Freitext' if e.typ == 'freitext' else 'Katalog' }}</strong>
+                {{ status_badge(e.status) }}
+                <span class="dezent">{{ benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '–' }}
+                    · {{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am else 'nicht abgesendet' }}</span>
+                {% if benutzer.rolle in ('admin', 'innendienst') or benutzer.hat_rolle('leadmanagement') %}
+                    <a class="knopf klein zweitrangig" href="/erfassungen/{{ e.id }}">Öffnen</a>
+                {% elif e.status == 'Entwurf' and not readonly %}
+                    <a class="knopf klein zweitrangig" href="/erfassung/{{ e.id }}/weiche">Fortsetzen</a>
+                {% endif %}
+            </div>
+        {% else %}
+            {% if not vorgang.demo %}<p class="dezent">Noch keine Erfassung.</p>{% endif %}
+        {% endfor %}
+        {% if not vorgang.demo and not readonly and erfassung_url %}
+            <div class="lk-bereich-fuss"><a class="knopf klein" href="{{ erfassung_url }}">{{ symbol('plus') }} Neue Erfassung</a></div>
+        {% endif %}
+    </div>
+</details>
+
+<details class="karte lk-bereich lk-block" data-bereich="projekt" {{ 'open' if projekte }}>
+    <summary>{{ symbol('archiv') }} Projekt <span class="lk-zahl">{{ zaehler.projekte }}</span></summary>
+    <div class="lk-bereich-inhalt">
+        {% if projekt_modul_ok %}
+            {% from "_projektierung.html" import phase_name %}
+            {% for eintrag in projekte %}
+                <a class="pj-card" href="/projektierung/projekt/{{ eintrag.projekt.id }}">
+                    <div class="hd"><span class="pr pj-mono">{{ eintrag.projekt.nummer }}</span><span class="pj-badge">Projektakte →</span></div>
+                    {% for g in eintrag.gewerke %}
+                        <div class="pj-gw {{ 'storniert' if g.phase == 'storniert' }}"><span class="pj-sp {{ g.sparte }}">{{ g.sparte }}</span><span class="ph">{{ phase_name(g.phase) }}</span></div>
+                    {% endfor %}
+                </a>
+            {% else %}<p class="dezent">Noch kein Projekt (entsteht aus einem angenommenen Angebot).</p>{% endfor %}
+        {% else %}
+            <p class="dezent">Projektierung für diese Rolle nicht sichtbar.</p>
+        {% endif %}
+    </div>
+</details>
+
+<details class="karte lk-bereich lk-block" data-bereich="anhaenge" {{ 'open' if anhaenge }}>
+    <summary>{{ symbol('kopie') }} Anhänge <span class="lk-zahl">{{ zaehler.anhaenge }}</span></summary>
+    <div class="lk-bereich-inhalt">
+        {% if anhaenge_bilder %}
+        <div class="lk-galerie">
+            {% for d in anhaenge_bilder[:12] %}
+                <a href="/vorgaenge/galerie/datei/{{ d.id }}" target="_blank" rel="noopener" title="{{ d.sparte }} · {{ d.ordner }} · {{ d.dateiname }}">
+                    <img src="/vorgaenge/galerie/datei/{{ d.id }}" alt="{{ d.dateiname }}" loading="lazy"></a>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% set dokumente = anhaenge | rejectattr('bild') | list %}
+        {% for d in dokumente[:10] %}
+            <div class="lk-mini">{{ symbol('pdf' if d.dateiname.lower().endswith('.pdf') else 'kopie') }}
+                <a href="/vorgaenge/galerie/datei/{{ d.id }}" target="_blank" rel="noopener">{{ d.dateiname | truncate(40) }}</a>
+                <span class="dezent">{{ d.sparte }} · {{ d.ordner }}</span></div>
+        {% endfor %}
+        {% if not anhaenge %}<p class="dezent">Keine Anhänge.</p>{% endif %}
+        <div class="lk-bereich-fuss">
+            <a class="knopf klein zweitrangig" href="/vorgaenge/{{ vorgang.id }}#galerie">Galerie{{ ' · Hochladen' if darf_hochladen }}</a>
+        </div>
+    </div>
+</details>
+
+<details class="karte lk-bereich lk-block" data-bereich="todos" open>
+    <summary>{{ symbol('haken') }} To-Dos <span class="lk-zahl">{{ zaehler.todos }}</span><span class="dezent"> offen</span></summary>
+    <div class="lk-bereich-inhalt lk-block-raster">
+        <div>
+        {% for t in todos %}
+            <div class="lk-mini lk-todo {{ 'erledigt' if t.status == 'erledigt' }}">
+                {% if t.status == 'offen' and not readonly %}
+                <form method="post" action="/lead-management/todos/{{ t.id }}/erledigt" class="lk-inline" data-fetch="reload">
+                    <button type="submit" class="lk-todo-haken" title="Erledigt" aria-label="To-Do erledigt">{{ symbol('haken') }}</button>
+                </form>
+                {% else %}<span class="lk-todo-haken fertig" aria-hidden="true">{{ symbol('haken') }}</span>{% endif %}
+                <div>
+                    <strong>{{ t.titel }}</strong>
+                    {% if t.text %}<div class="dezent">{{ t.text | truncate(120) }}</div>{% endif %}
+                    <small class="dezent">
+                        {% if t.faellig_am %}<span class="{{ 'lm-rot' if t.status == 'offen' and t.faellig_am <= heute }}">fällig {{ t.faellig_am.strftime('%d.%m.%Y') }}</span> · {% endif %}
+                        an {{ benutzer_map[t.an_benutzer_id].name if t.an_benutzer_id in benutzer_map else '?' }}
+                        {% if t.von_benutzer_id in benutzer_map %}· von {{ benutzer_map[t.von_benutzer_id].name }}{% endif %}
+                        {% if t.erledigt_am %}· erledigt {{ t.erledigt_am.strftime('%d.%m.') }}{% endif %}
+                    </small>
+                </div>
+            </div>
+        {% else %}<p class="dezent">Keine To-Dos zu diesem Vorgang.</p>{% endfor %}
+            <div class="lk-bereich-fuss"><a class="dezent" href="/lead-management/todos">Alle To-Dos</a></div>
+        </div>
+        {% if not readonly %}
+        {# Vertrag Phase 110: POST /lead-management/todos/neu (vorgang_id, titel,
+           text, faellig_am, an_benutzer_id) #}
+        <form method="post" action="/lead-management/todos/neu" class="lk-todo-neu formular" data-fetch="reload">
+            <input type="hidden" name="vorgang_id" value="{{ vorgang.id }}">
+            <input type="hidden" name="zurueck" value="{{ kartei_url }}">
+            <input type="text" name="titel" placeholder="Neues To-Do …" maxlength="300" required aria-label="Titel">
+            <div class="lk-feld-reihe">
+                <input type="date" name="faellig_am" aria-label="Fällig am" title="Fällig am">
+                <select name="an_benutzer_id" aria-label="An">
+                    {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
+                        <option value="{{ b.id }}" {{ 'selected' if b.id == benutzer.id }}>{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <input type="text" name="text" placeholder="Details (optional)" maxlength="500" aria-label="Text">
+            <button class="knopf klein" type="submit">{{ symbol('plus') }} To-Do</button>
+        </form>
+        {% endif %}
+    </div>
+</details>

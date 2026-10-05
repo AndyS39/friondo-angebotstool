@@ -2,7 +2,7 @@
 {% from "_symbole.html" import symbol %}
 {% from "leadmanagement/_nav.html" import lm_nav %}
 
-{% block titel %}Info-Veranstaltung – Termine – Lead-Management{% endblock %}
+{% block titel %}Infoabend – Termine – Lead-Management{% endblock %}
 
 {% block mainklasse %}breit{% endblock %}
 
@@ -15,7 +15,7 @@
 {% block inhalt %}
 {{ lm_nav('info') }}
 <div class="seitenkopf lm-boardkopf">
-    <h1>Info-Veranstaltung · Termine {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
+    <h1>Infoabend · Termine {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
     <span class="dezent">Veranstaltungen pflegen – Leads behalten ihre Zuordnung, auch wenn ein Termin verschoben oder archiviert wird.</span>
     <div class="aktionen">
         <a class="knopf klein zweitrangig" href="/lead-management/info-veranstaltung">{{ symbol('board') }} Zum Board</a>

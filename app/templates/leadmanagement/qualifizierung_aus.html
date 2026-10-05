@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "_symbole.html" import symbol %}
+
+{% block titel %}Qualifizierung – {{ kunde.anzeige_name }}{% endblock %}
+
+{# v25 (PLAN_LEAD_V3 Phase 120): Score und Qualifizierungsbogen sind abgeschaltet
+   (Parameter score_aktiv = aus). Die Route bleibt erreichbar (alte Links,
+   Lesezeichen), zeigt aber nur diesen Hinweis und führt in die Kartei. #}
+{% block inhalt %}
+{{ lm_nav('hauptboard') }}
+<div class="seitenkopf">
+    <h1>{{ hinweis }}</h1>
+    <div class="aktionen">
+        <a class="knopf" href="/lead-management/lead/{{ vorgang.id }}?tab=termin">{{ symbol('oeffnen') }} Zur Kundenkartei (Reiter Termin)</a>
+        <a class="knopf zweitrangig" href="/lead-management/lead/{{ vorgang.id }}/termin">{{ symbol('kalender') }} Terminassistent</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+<div class="lm-karte lm-quali-aus">
+    <p class="hinweis">{{ hinweis }} – Score, Score-Klasse und Qualifizierungsbogen sind seit Lead-Management V3
+        nicht mehr aktiv (Parameter <code>score_aktiv</code> in den Lead-Einstellungen). „Erreicht“ führt direkt in die
+        Kundenkartei mit dem Reiter Termin; die Terminvorschläge stehen dort im Block Termine.</p>
+    <p class="dezent">Lead: <strong>{{ kunde.anzeige_name }}</strong>{% if kunde.ort %}, {{ kunde.ort }}{% endif %}
+        · Vorhandene Qualifizierungsantworten bleiben gespeichert und sind in der Timeline der Kartei sichtbar.</p>
+</div>
+{% endblock %}

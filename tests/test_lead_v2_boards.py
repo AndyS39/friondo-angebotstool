@@ -137,10 +137,18 @@ class Seiten(Basis):
             self.assertEqual(r.status_code, 200, pfad)
             seite = r.text
             self.assertIn('class="lm-leiste"', seite, pfad)
-            for name in ("Hauptboard", "Terminiert", "Kontaktiert", "Info-Veranstaltung",
-                         "E-Mail-Vorlagen"):
+            # v25 (PLAN_LEAD_V3 Phase 118): Hauptleiste Mein Dashboard · Hauptboard ·
+            # Deals · Kontaktiert · Karte · Infoabend · To-Dos · Handelsvertreter;
+            # E-Mail-Vorlagen stehen jetzt unter „Mehr …“ (vorher: Terminiert,
+            # Info-Veranstaltung und E-Mail-Vorlagen als Hauptleisten-Einträge).
+            for name in ("Mein Dashboard", "Hauptboard", "Deals", "Kontaktiert", "Karte",
+                         "Infoabend", "To-Dos", "Handelsvertreter"):
                 self.assertIn(f'aria-label="{name}"', seite, pfad)
+            self.assertNotIn('aria-label="Terminiert"', seite, pfad)
+            # (die Quelle „Info-Veranstaltung“ darf als Datensatz weiter so heißen – nur die Leiste prüft)
+            self.assertNotIn("Info-Veranstaltung", seite.split('<nav class="lm-leiste"', 1)[1].split("</nav>", 1)[0], pfad)
             self.assertIn('aria-label="Mehr"', seite, pfad)
+            self.assertIn("/lead-management/vorlagen", seite, pfad)
             self.assertIn("/lead-management/handelsvertreter", seite, pfad)
             self.assertIn("/static/lm_boards.js", seite, pfad)
         # Demo-Badge zentral in der Leiste (Parametertext im Tooltip)

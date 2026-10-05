@@ -406,119 +406,24 @@ async def posteingang_anlegen(request: Request, eintrag_id: int,
 
 # --- Phase 76: Anrufliste, Ergebnis-Buttons, Kaskade, Qualifizierung ----------------
 
-def _anruf_zeilen(session: Session, benutzer, filter_werte: dict) -> list[dict]:
-    """Priorisierte Arbeitsliste (Plan 76): (1) SLA gelb/rot, älteste zuerst ·
-    (2) fällige nächste Aktionen/Rückrufe · (3) fällige Zurückgestellte ·
-    (4) Rest nach Score-Klasse, dann Eingang."""
-    from datetime import datetime as dt
-    jetzt = dt.now()
-    phase_filter = filter_werte.get("phase") or ""
-    abfrage = session.query(Vorgang)
-    if phase_filter:
-        abfrage = abfrage.filter(Vorgang.lead_phase == phase_filter)
-    else:
-        # Prozess-Fix 27.09.2026: auch "qualifiziert" gehoert in die
-        # Arbeitsliste, solange kein aktiver Termin existiert (z. B. nach
-        # einem No-Show) - vorher fiel der Lead komplett aus der Liste
-        abfrage = abfrage.filter(Vorgang.lead_phase.in_(
-            ("neu", "in_kontaktierung", "zurueckgestellt", "nicht_erreicht",
-             "qualifiziert")))
-    if filter_werte.get("meine") and benutzer is not None:
-        # Design-/Prozess-Fix 27.09.2026: „Meine Leads" enthält auch die noch
-        # NICHT zugeordneten – sonst liegen neue Leads unsichtbar herum,
-        # bis jemand zufällig auf „Alle" stellt (Cockpit zeigte 15 x SLA rot
-        # „ohne LM", die Arbeitsliste war leer).
-        abfrage = abfrage.filter(
-            (Vorgang.leadmanager_id == benutzer.id)
-            | (Vorgang.leadmanager_id.is_(None)))
-    if filter_werte.get("quelle_id"):
-        abfrage = abfrage.filter(Vorgang.quelle_id == int(filter_werte["quelle_id"]))
-    if filter_werte.get("klasse"):
-        abfrage = abfrage.filter(Vorgang.score_klasse == filter_werte["klasse"])
-    vorgaenge = abfrage.all()
-
-    kunden = {k.id: k for k in session.query(Kunde)
-              .filter(Kunde.id.in_({v.kunde_id for v in vorgaenge} or {0}))}
-    quellen = {q.id: q for q in session.query(LeadQuelle)}
-    mehrfach = {}
-    for v in session.query(Vorgang):
-        mehrfach[v.kunde_id] = mehrfach.get(v.kunde_id, 0) + 1
-    letzte_anrufe: dict[int, LeadAktivitaet] = {}
-    for a in (session.query(LeadAktivitaet)
-              .filter(LeadAktivitaet.typ == "anruf",
-                      LeadAktivitaet.vorgang_id.in_({v.id for v in vorgaenge} or {0}))
-              .order_by(LeadAktivitaet.zeitpunkt)):
-        letzte_anrufe[a.vorgang_id] = a
-
-    zeilen = []
-    for v in vorgaenge:
-        kunde = kunden.get(v.kunde_id)
-        if kunde is None:
-            continue
-        if filter_werte.get("sparte") and \
-                filter_werte["sparte"] not in (kunde.interesse or ""):
-            continue
-        if filter_werte.get("plz") and \
-                not (kunde.plz or "").startswith(filter_werte["plz"]):
-            continue
-        suche = (filter_werte.get("q") or "").lower()
-        if suche and suche not in " ".join(
-                (kunde.vorname or "", kunde.nachname or "",
-                 kunde.telefon or "", kunde.ort or "")).lower():
-            continue
-        # Phasen-Sonderfälle ohne expliziten Filter: nur fällige zeigen
-        if not phase_filter and v.lead_phase == "zurueckgestellt" and (
-                v.zurueckgestellt_bis is None or v.zurueckgestellt_bis > jetzt):
-            continue
-        if not phase_filter and v.lead_phase == "nicht_erreicht" and (
-                v.naechste_aktion_am is None or v.naechste_aktion_am > jetzt):
-            continue
-        # qualifiziert nur ohne aktiven Termin (Termin-Vergabe steht aus)
-        if not phase_filter and v.lead_phase == "qualifiziert":
-            from app.models import VotTermin as _VotTermin
-            if (session.query(_VotTermin)
-                    .filter(_VotTermin.vorgang_id == v.id,
-                            _VotTermin.status.in_(("geplant", "bestaetigt")))
-                    .count()):
-                continue
-        sla = kern.sla_status(session, v, jetzt)
-        letzter = letzte_anrufe.get(v.id)
-        if v.lead_phase == "neu" and sla["farbe"] in ("gelb", "rot"):
-            gruppe, schluessel = 0, (v.eingang_am or v.angelegt_am).timestamp()
-        elif v.naechste_aktion_am is not None and v.naechste_aktion_am <= jetzt:
-            gruppe, schluessel = 1, v.naechste_aktion_am.timestamp()
-        elif v.lead_phase == "zurueckgestellt":
-            gruppe, schluessel = 2, (v.zurueckgestellt_bis or jetzt).timestamp()
-        else:
-            klassen_rang = {"A": 0, "B": 1, "C": 2}.get(v.score_klasse or "C", 2)
-            gruppe, schluessel = 3, klassen_rang * 10 ** 12 + (
-                v.eingang_am or v.angelegt_am).timestamp()
-        zeilen.append({
-            "vorgang": v, "kunde": kunde,
-            "quelle": quellen.get(v.quelle_id),
-            "sparten": [s for s in (kunde.interesse or "").split(",") if s.strip()],
-            "sla": sla, "letzter": letzter,
-            "wiederkehrer": mehrfach.get(v.kunde_id, 0) > 1,
-            "monday": v.eingang_art == "monday",
-            "frei": v.leadmanager_id is None,
-            "nummer_pruefen": letzter is not None
-                              and letzter.ergebnis == "falsche_nummer",
-            "_sortierung": (gruppe, schluessel),
-        })
-    zeilen.sort(key=lambda z: z["_sortierung"])
-    return zeilen
+# v25 (PLAN_LEAD_V3 Phase 118): der V1-Helfer _anruf_zeilen (Plan 76, Rest nach
+# Score-Klasse sortiert) ist entfernt – die Liste kommt seit v21 aus
+# app/lead_anrufliste.py (daten), ohne Gruppen und ohne Score-Komponente.
 
 
 @router.get("/anrufliste")
 async def anrufliste_voll(request: Request,
                           session: Session = Depends(get_session)):
-    """v21 (PLAN_LEAD_V1.1 Phase 89): gruppierte Arbeitsliste mit
-    Schnellfilter-Chips (app/lead_anrufliste.py); Ergebnis-Buttons, Dialoge,
-    Panel und Tasten unverändert."""
+    """v21 (PLAN_LEAD_V1.1 Phase 89): Arbeitsliste mit Schnellfilter-Chips
+    (app/lead_anrufliste.py). v25 (PLAN_LEAD_V3 Phase 118): EINE sortierte
+    Liste ohne Gruppen, Filter „Vertriebskanal“ (Mehrfach) statt Quelle/
+    Einzelquelle, Phasen-Labels aus dem Blatt Status, Score nur bei
+    score_aktiv; alte URL-Parameter (gruppe=, quelle_id=, quelle_typ=) werden
+    toleriert. Ergebnis-Buttons, Panel und Tasten 1–7 unverändert."""
     _gate(request, session)
     from datetime import datetime as dt
 
-    from app import lead_anrufliste, leadmanagement_logik
+    from app import lead_anrufliste, lead_v2, leadmanagement_logik
     benutzer = request.state.benutzer
     # v23 Phase 107 (C2): Glocke zum Wiedervorlage-Zeitpunkt – einmalig je
     # Fälligkeit; läuft hier zusätzlich zum 5-Minuten-Scheduler, damit die
@@ -537,10 +442,15 @@ async def anrufliste_voll(request: Request,
     logik = leadmanagement_logik.hole_logik()
     return render(request, "leadmanagement/anrufliste.html",
                   aktiv="/lead-management", **daten,
-                  chips=lead_anrufliste.CHIPS, quellen_gruppen=kern.QUELLEN_GRUPPEN,
+                  chips=lead_anrufliste.CHIPS,
+                  # nur noch für die Abzeichen der tolerierten Übersichts-Links
+                  quellen_gruppen=dict(kern.QUELLEN_GRUPPEN),
+                  quellen_namen={str(q.id): q.name for q in _quellen(session)},
                   heute_param=dt.now().strftime("%Y-%m-%d"),
-                  filter_werte=filter_werte, quellen=_quellen(session),
-                  phasen_namen=LEAD_PHASEN_NAMEN,
+                  filter_werte=filter_werte,
+                  phasen_namen=lead_anrufliste.phasen_labels(logik),
+                  phasen_optionen=lead_anrufliste.phasen_optionen(logik),
+                  score_aktiv=lead_v2.score_aktiv(session),
                   ergebnis_namen=ANRUF_ERGEBNIS_NAMEN,
                   unq_gruende=logik.gruende_der_phase("unqualifiziert"),
                   zurueck_gruende=logik.gruende_der_phase("zurueckgestellt"),
@@ -563,11 +473,20 @@ async def anruf_ergebnis(request: Request, vorgang_id: int,
     Folgedialog-Aktionen.
 
     v23 Phase 107 (Vertrag im Briefing): Formfelder ergebnis, notiz,
-    dauer_sek (Stoppuhr → lead_aktivitaeten.dauer_sek), rueckruf_am bzw.
-    wiedervorlage_am (überschreibt den Kaskaden-Zeitpunkt), grund, grund_text,
-    zurueck (Redirect-Ziel, nur relative Pfade). Sperre: Nicht erreicht /
-    Besetzt / Mailbox ab versuche_max (kein weiterer Zähler). Zugriff über
-    lead_v2.gate (Handelsvertreter an eigenen Leads)."""
+    dauer_sek (Stoppuhr → lead_aktivitaeten.dauer_sek), rueckruf_am, grund,
+    grund_text, zurueck (Redirect-Ziel, nur relative Pfade). Sperre: Nicht
+    erreicht / Besetzt / Mailbox ab versuche_max (kein weiterer Zähler).
+    Zugriff über lead_v2.gate (Handelsvertreter an eigenen Leads).
+
+    v25 (PLAN_LEAD_V3 Phase 120): Nicht erreicht / Mailbox / Besetzt OHNE
+    Dialog – ein Klick protokolliert den Versuch mit Zeitstempel jetzt,
+    Versuch +1, Stoppuhr-Dauer falls gelaufen; KEINE Wiedervorlage
+    (naechste_aktion_am bleibt unverändert, ein mitgesendetes Feld
+    wiedervorlage_am wird ignoriert). kaskade_anwenden plant nur noch die
+    Mails je Versuchsnummer (2/4 nicht_erreicht, letzte disqualifiziert +
+    Nurture) und setzt beim letzten Versuch die Phase Nicht erreicht.
+    „Erreicht“ führt bei score_aktiv = aus in die Kundenkartei (Reiter
+    Termin) statt in den Qualifizierungsbogen."""
     from datetime import datetime as dt
 
     from app import lead_anrufliste, lead_v2
@@ -587,7 +506,6 @@ async def anruf_ergebnis(request: Request, vorgang_id: int,
             status_code=303)
     jetzt = dt.now()
     dauer_sek = lead_anrufliste.dauer_lesen(form.get("dauer_sek"))
-    manuell = lead_anrufliste.zeitpunkt_lesen(form.get("wiedervorlage_am"))
     if vorgang.erstkontakt_am is None:
         vorgang.erstkontakt_am = jetzt
     vorgang.versuch_nr = (vorgang.versuch_nr or 0) + 1
@@ -595,9 +513,9 @@ async def anruf_ergebnis(request: Request, vorgang_id: int,
         vorgang.lead_phase = "in_kontaktierung"
         vorgang.zurueckgestellt_bis = None
     naechste = None
-    meldung = f"{ANRUF_ERGEBNIS_NAMEN[ergebnis]} protokolliert."
+    meldung = f"{ANRUF_ERGEBNIS_NAMEN[ergebnis]} protokolliert (Versuch {vorgang.versuch_nr})."
     if ergebnis == "rueckruf_gewuenscht":
-        naechste = lead_anrufliste.zeitpunkt_lesen(form.get("rueckruf_am")) or manuell
+        naechste = lead_anrufliste.zeitpunkt_lesen(form.get("rueckruf_am"))
         if naechste is None:
             session.rollback()   # Zähler/Phase oben nicht übernehmen
             return RedirectResponse(
@@ -629,35 +547,39 @@ async def anruf_ergebnis(request: Request, vorgang_id: int,
         # disqualifiziert, nurture) stornieren, bevor sie den Kunden erreichen
         lead_anrufliste.offene_mails_stornieren(session, vorgang.id, grund="Kunde erreicht")
         session.commit()
-        kunde = session.get(Kunde, vorgang.kunde_id)
-        sparte = next((s for s in (kunde.interesse or "").split(",")
-                       if s.strip() in SPARTEN), "WP").strip()
+        if lead_v2.score_aktiv(session):
+            kunde = session.get(Kunde, vorgang.kunde_id)
+            sparte = next((s for s in (kunde.interesse or "").split(",")
+                           if s.strip() in SPARTEN), "WP").strip()
+            return RedirectResponse(
+                f"/lead-management/lead/{vorgang.id}/qualifizierung/{sparte}",
+                status_code=303)
+        # v25 (Phase 120): Qualifizierung abgeschaltet – direkt in die
+        # Kundenkartei, Reiter Termin (Terminvorschläge im Block Termine)
+        meldung = f"Erreicht protokolliert (Versuch {vorgang.versuch_nr}) – jetzt Termin vereinbaren."
+        if dauer_sek:
+            meldung += f" Dauer {lead_anrufliste.dauer_text(dauer_sek)}."
         return RedirectResponse(
-            f"/lead-management/lead/{vorgang.id}/qualifizierung/{sparte}",
+            lead_anrufliste.mit_meldung(f"/lead-management/lead/{vorgang.id}?tab=termin", meldung),
             status_code=303)
     if ergebnis in lead_anrufliste.KASKADEN_ERGEBNISSE:
-        vor_phase = vorgang.lead_phase
-        meldung = (f"{ANRUF_ERGEBNIS_NAMEN[ergebnis]} – "
-                   + kern.kaskade_anwenden(session, vorgang, benutzer))
+        # v25 (Phase 120): keine Wiedervorlage – nur Mail-Aktion je
+        # Versuchsnummer und ggf. Übergang nach Nicht erreicht; die Aktivität
+        # trägt den Zeitstempel jetzt und keine Wiedervorlage
+        kaskade = kern.kaskade_anwenden(session, vorgang, benutzer)
         # C4-d: nie zwei offene Einträge derselben Vorlage je Vorgang
         lead_anrufliste.doppelversand_bereinigen(session, vorgang.id)
-        if manuell is not None:
-            # C2: Dialog-Zeitpunkt überschreibt den Kaskaden-Vorschlag; Mail-
-            # Aktion und „letzter“-Logik der Kaskade sind bereits gelaufen
-            vorgang.naechste_aktion_am = manuell
-            akt.naechste_aktion_am = manuell
-            if vorgang.lead_phase == "nicht_erreicht" and vor_phase != "nicht_erreicht":
-                lead_anrufliste.nurture_verschieben(session, vorgang, manuell)
-            meldung = (f"{ANRUF_ERGEBNIS_NAMEN[ergebnis]} – Wiedervorlage "
-                       f"{manuell.strftime('%d.%m.%Y %H:%M')} (manuell gesetzt)"
-                       + (" – Lead steht auf „Nicht erreicht“"
-                          if vorgang.lead_phase == "nicht_erreicht" else "") + ".")
-        else:
-            akt.naechste_aktion_am = vorgang.naechste_aktion_am
+        meldung = f"{ANRUF_ERGEBNIS_NAMEN[ergebnis]} protokolliert (Versuch {vorgang.versuch_nr})"
+        if "Mail geplant" in kaskade:
+            meldung += " – Mail geplant"
+        if vorgang.lead_phase == "nicht_erreicht":
+            meldung += (" – Kaskade ausgeschöpft, Lead steht auf „Nicht erreicht“"
+                        " (Nurture-Mail in 30 Tagen)")
+        meldung += "."
     elif ergebnis == "falsche_nummer":
         # Prozess-Fix 27.09.2026: mit Wiedervorlage morgen, sonst rutschte
         # der Lead ohne naechsten Schritt ans Listenende
-        vorgang.naechste_aktion_am = manuell or kern.kaskade_zeitpunkt(session, "+1d")
+        vorgang.naechste_aktion_am = kern.kaskade_zeitpunkt(session, "+1d")
         akt.naechste_aktion_am = vorgang.naechste_aktion_am
         meldung = ("Falsche Nummer – Wiedervorlage "
                    + vorgang.naechste_aktion_am.strftime("%d.%m.%Y %H:%M")
@@ -797,6 +719,19 @@ async def reaktivieren(request: Request, vorgang_id: int,
 
 # --- Qualifizierungsbogen -------------------------------------------------------------
 
+QUALIFIZIERUNG_AUS = "Qualifizierung ist abgeschaltet"
+
+
+def _qualifizierung_aus(request: Request, session: Session, vorgang: Vorgang, kunde):
+    """v25 (PLAN_LEAD_V3 Phase 120): bei score_aktiv = aus bleibt die Route
+    erreichbar, zeigt aber statt des Bogens die Hinweisseite „Qualifizierung
+    ist abgeschaltet“ (Link weg aus Kartei/Anrufliste/Kanban)."""
+    return render(request, "leadmanagement/qualifizierung_aus.html",
+                  aktiv="/lead-management", vorgang=vorgang, kunde=kunde,
+                  hinweis=QUALIFIZIERUNG_AUS,
+                  meldung=request.query_params.get("meldung", ""))
+
+
 @router.get("/lead/{vorgang_id}/qualifizierung/{sparte}")
 async def qualifizierung_bogen(request: Request, vorgang_id: int, sparte: str,
                                session: Session = Depends(get_session)):
@@ -810,6 +745,8 @@ async def qualifizierung_bogen(request: Request, vorgang_id: int, sparte: str,
     kunde = session.get(Kunde, vorgang.kunde_id)
     if kunde is None:   # 30.09.2026: verwaister Vorgang → vorher 500
         return RedirectResponse("/lead-management/anrufliste", status_code=303)
+    if not kern.score_aktiv(session):   # v25: Hinweisseite statt Bogen
+        return _qualifizierung_aus(request, session, vorgang, kunde)
     logik = leadmanagement_logik.hole_logik()
     fragen = logik.fragen_der_sparte(sparte)
     interessen = [s.strip() for s in (kunde.interesse or "").split(",")
@@ -849,6 +786,11 @@ async def qualifizierung_speichern(request: Request, vorgang_id: int,
     vorgang = session.get(Vorgang, vorgang_id)
     if vorgang is None or sparte not in SPARTEN:
         return RedirectResponse("/lead-management/anrufliste", status_code=303)
+    if not kern.score_aktiv(session):   # v25: kein Bogen – zurück in die Kartei (Reiter Termin)
+        return RedirectResponse(
+            f"/lead-management/lead/{vorgang.id}?tab=termin&meldung="
+            + quote_plus(QUALIFIZIERUNG_AUS + " – Score und Qualifizierungsbogen sind nicht aktiv "
+                         "(Lead-Einstellungen, score_aktiv)."), status_code=303)
     form = await request.form()
     benutzer = request.state.benutzer
     logik = leadmanagement_logik.hole_logik()

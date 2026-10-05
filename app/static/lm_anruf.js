@@ -8,6 +8,14 @@
      lm-anruf-form (der Vorgang kommt aus dem nächsten [data-vorgang]-Vorfahren
      des Formulars – Zeile oder Dialog), danach Reset.
    Zusätzlich: Dauer-Korrektur (.lm-dauer-form) ohne Seitensprung per fetch.
+   v25 (PLAN_LEAD_V3 Phase 120): „Nicht erreicht“, „Mailbox“ und „Besetzt“
+   laufen OHNE Dialog – in der Anrufliste als normale Ergebnis-Buttons
+   (button[name=ergebnis]), aus Kartei/Boards über lmAnruf.ergebnisSenden
+   (baut ein lm-anruf-form mit data-vorgang und sendet es, Stoppuhr-Dauer
+   wird wie bei jedem Formular eingetragen). Der Kaskaden-Vorschlag
+   (GET /anruf/{id}/vorschlag) wird nicht mehr geladen. Tasten 1–7 liegen in
+   den Seiten (Anrufliste: Inline-Skript, Kartei: lm_kartei.js) und klicken
+   die Buttons bzw. öffnen die verbliebenen Dialoge (Rückruf, Kein Interesse).
    Vanilla JS, kein Framework; andere Phasen binden die Datei nur ein. */
 (function () {
     'use strict';
@@ -83,6 +91,38 @@
 
     // Dialog geschlossen ohne Absenden: Uhr läuft weiter (der Anruf läuft ja noch) – nichts tun.
 
+    // v25 (Phase 120): Ergebnis ohne Dialog direkt senden (Nicht erreicht, Mailbox,
+    // Besetzt): Formular der Klasse lm-anruf-form mit data-vorgang anlegen und
+    // absenden – requestSubmit löst den Submit-Handler oben aus (Dauer der Stoppuhr),
+    // ältere Browser bekommen die Dauer direkt eingetragen.
+    function ergebnisSenden(vorgang, ergebnis, zurueck) {
+        if (!vorgang || !ergebnis) return;
+        const form = document.createElement('form');
+        form.method = 'post';
+        form.action = '/lead-management/anruf/' + encodeURIComponent(String(vorgang));
+        form.className = 'lm-anruf-form';
+        form.hidden = true;
+        form.dataset.vorgang = String(vorgang);
+        const feld = (name, wert) => {
+            const i = document.createElement('input');
+            i.type = 'hidden'; i.name = name; i.value = wert == null ? '' : String(wert);
+            form.appendChild(i);
+            return i;
+        };
+        feld('ergebnis', ergebnis);
+        const dauer = feld('dauer_sek', '');
+        if (zurueck) feld('zurueck', zurueck);
+        document.body.appendChild(form);
+        if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit();
+        } else {
+            const passt = uhr.start && (uhr.vorgang == null || uhr.vorgang === String(vorgang));
+            const sek = passt ? sekunden() : 0;
+            dauer.value = sek >= 1 ? String(sek) : '';
+            form.submit();
+        }
+    }
+
     // D1: Dauer-Korrektur ohne Seitensprung (Accept: application/json, v17-Muster)
     document.addEventListener('submit', e => {
         const form = e.target;
@@ -107,5 +147,5 @@
             .catch(() => { form.classList.add('fehler'); form.title = 'Korrektur nicht möglich'; });
     });
 
-    window.lmAnruf = { start, reset, sekunden, fmt };
+    window.lmAnruf = { start, reset, sekunden, fmt, ergebnisSenden };
 })();

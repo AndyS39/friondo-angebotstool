@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v24)
+# Friondo Angebotstool – Projektkontext (v25)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -56,6 +56,7 @@ Nummern vergeben.
 | v22 | PLAN_V15.md | 99–103 |
 | v23 | PLAN_LEAD_V2.md | 104–112 |
 | v24 | PLAN_V16.md | 113–117 |
+| v25 | PLAN_LEAD_V3.md | 118–121 |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
@@ -364,6 +365,10 @@ Graph-Versand über Innendienst, Terminal-Server-Betrieb.
   Modul-Layout zuerst im Prototyp, dann im Tool.
 
 ## Neu in v12 – Lead-Management V1 Demo (abgestimmt 22.09.2026)
+
+> Hinweis v25: Score, Score-Klassen und der Qualifizierungsbogen sind seit v25
+> abgeschaltet (Parameter `score_aktiv = aus`); die Blätter Qualifizierung/
+> Scoring/Klassen bleiben in der Steuerdatei liegen, Daten bleiben in der DB.
 
 (Plan: PLAN_LEAD_V1.md)
 
@@ -933,6 +938,10 @@ v14“ entspricht diesem Abschnitt.)
 
 ## Neu in v23 – Lead-Management V2 (abgestimmt 02.10.2026)
 
+> Hinweis v25: Score/Qualifizierung abgeschaltet, Board „Terminiert“ heißt „Deals“,
+> „Info-Veranstaltung“ heißt „Infoabend“, „Nicht erreicht“ ohne Dialog und ohne
+> automatische Wiedervorlage, Kundenkartei neu aufgeteilt mit Autospeichern – siehe v25.
+
 (Plan: PLAN_LEAD_V2.md Teil 1, Phasen 104–112; Teil 2 = Auftragstext mit
 Anforderungsdiktat A–I, Statusliste 5a, Festlegungen F1–F16. Entscheidung
 Andreas: kein Lastenheft, direkt codieren; offene Punkte als Annahmen A-1…A-15
@@ -1160,3 +1169,213 @@ Texte/PDF, Integration/Kontrollfälle, adversarialer Prüfer).)
   [A9]; Leitungsgrenze 15 m [A11]; Leistungsumfang-Text [A13];
   Auslegungszeile der Single-Sets nennt die generische 1. TAIFUN-Zeile
   („Klimaanlage Bosch Single-Split“, Rückfrage).
+
+## Neu in v25 – Lead-Management V3 (abgestimmt 05.10.2026)
+
+(Plan: PLAN_LEAD_V3.md, Phasen 118–121; Feedback-Runde Claudia Castro nach V2.
+Umsetzung parallel durch sechs Agenten A–F (Navigation/Boards, Anrufliste/Nicht
+erreicht, Kundenkartei/Autospeichern, Score aus/Terminassistent/Dashboard,
+Integration/Tests, adversarialer Prüfer); Vorab- und Nacharbeiten an geteilten
+Dateien zentral. Alles weiter im **Demo-Modus** `lead_freigabe_modus = admin`.
+Entscheidungen und [ANNAHME]-Auflösung: docs/leadmanagement-entscheidungen.md
+Abschnitt V3; Team-Hinweise: docs/nach-dem-update-v25.md.)
+
+- **Navigation** (Phase 118, Makro `lm_nav(aktiv)` in `_nav.html`): linke
+  Icon-Leiste mit acht Einträgen Mein Dashboard · Hauptboard · Deals ·
+  Kontaktiert · Karte · Infoabend · To-Dos · Handelsvertreter und „Mehr …“
+  (Anrufliste, Kanban, Kalender, E-Mail-Vorlagen, Übersicht, Statistik Leads,
+  Kanal-Report, Posteingang unklar, Import, Schnellanlage, Lead-Einstellungen).
+  Nav-Keys `dashboard | hauptboard | terminiert | kontaktiert | karte | info |
+  todos | handelsvertreter` bzw. `anrufliste | board | kalender | vorlagen |
+  uebersicht | statistik | kanal_report | posteingang | import | neu |
+  lead-einstellungen`; Alt-Keys werden abgebildet, unbekannte markieren „Mehr …“.
+  Jede Seite markiert genau einen Eintrag (Kanban das gezeigte Board, Kartei das
+  Board des Leads, Termin → Kalender, Cockpit → Übersicht). Icons lokal aus
+  `_symbole.html` (neu: deals, aufgaben, einstellungen, griff, sortieren,
+  zuruecksetzen); unter 900 px untere Icon-Zeile. `/lead-management/boards/haupt`
+  leitet auf `/hauptboard`. Neue Seite **To-Dos** (`/lead-management/todos`,
+  `lm_todos.py`/`lead_todos.py`): Sichten Meine offenen · Von mir vergeben ·
+  Erledigt, Umschalter Alle | Fällig (`?faellig=1`), Anlegen inline mit
+  Vorgangsbezug, Erledigen; Dashboard verlinkt dorthin.
+- **Deals / Infoabend / Board-Namen**: Board „Terminiert“ heißt überall „Deals“
+  (Titel, Menü, Kanban-Überschrift, Umschalter, Verschiebe-Meldung), „Info-
+  Veranstaltung“ heißt „Infoabend“ (Menü, Titel, Kacheln, Gruppenüberschriften
+  „Infoabend 05.11.2026“, Quellen-Anzeigename in `QUELLEN_START`/`QUELLEN_GRUPPEN`).
+  Board-Namen kommen ausschließlich aus der neuen Spalte `board_label` im Blatt
+  Status (`logik.board_label(board)`, Fallback Hauptboard/Deals;
+  `lead_boards.board_label`, Jinja-Global `lm_board_label`). Pfade, Keys und
+  Parameter (`/terminiert`, `/info-veranstaltung`, `info_*`, Quelle
+  `info_veranstaltung`), das Phasen-Label „Terminiert“ und der Eingang/API
+  bleiben unverändert; der DB-Datensatz `lead_quellen.name = Info-Veranstaltung`
+  ist nicht migriert (Rückfrage).
+- **Label „Kontaktiert“**: Blatt Status trägt für `in_kontaktierung` und
+  `qualifiziert` dasselbe Label (gleiche Farbe); Phasen-Labels in Boards, Kanban,
+  Kontaktiert, Kartei-Statuskette, Anrufliste, Dashboard, HV-Ansicht,
+  Vorgangsakte und Trichter kommen nur aus `logik.status_zeile(phase).label`
+  (`lead_boards.status_label/phasen_labels/phasen_mit_label`). Auswahlfelder
+  führen das Label einmal (Wert `in_kontaktierung,qualifiziert`, Filter
+  akzeptieren Phasenlisten), das Kanban fasst beide Phasen in der Anzeige-Spalte
+  „kontaktiert“ zusammen (`KANBAN_ZUSAMMEN`), der Statistik-Trichter zeigt die
+  Stufe „Kontaktiert“ als Kohorte (erster Kontaktversuch, erreicht oder
+  qualifiziert im Zeitraum; Tooltip nach aktueller Phase; Terminquote ÷
+  Kontaktiert). Interne Phasen, `lead_phase_berechnen` und Board-Zuordnung
+  unverändert; Aktivitätstexte behalten die internen Phasennamen. Hinweis in der
+  Parametrierung (Logik-Seite), dass zwei Phasen dasselbe Label tragen dürfen.
+- **Spalten je Nutzer** (Hauptboard, Deals, Infoabend, Handelsvertreter;
+  `benutzer_einstellungen` Key `boards_spalten`, Struktur
+  `{"<board>": {"spalten": [{key, sichtbar, name}], "sort": {key, richtung}}}`,
+  v23-Listen werden weiter gelesen): `lead_boards.spalten_fuer(session, benutzer,
+  board)`, `sortierung_fuer`, `spalten_speichern(liste | sort | umbenennen |
+  zuruecksetzen)`, Routen `GET/POST /lead-management/boards/spalten` (JSON).
+  Bedienung in `lm_boards.js` (Makro `spalten_kopf` in `_tabelle.html`): Klick
+  auf den Spaltenkopf sortiert auf/ab und wird gemerkt (serverseitig
+  `zeilen_sortieren`, leere Werte ans Ende), Stift benennt um (leer = Standard),
+  HTML5 Drag & Drop am Kopf verschiebt mit Platzhalter und speichert per fetch,
+  Spaltenwähler „Spalten“ blendet ein/aus, „Zurücksetzen“ stellt den Standard
+  her – alles nur für den angemeldeten Nutzer je Board. Standard-Spaltensatz:
+  feste erste Spalte „Kundenname“ (Key `lead`, „Anrede Vorname Nachname“,
+  `lead_boards.kundenname`), Anrede/Vorname/Nachname ausgeblendet und
+  einblendbar; gespeicherte v23-Einträge mit sichtbaren Namensspalten bleiben.
+  Infoabend konfiguriert unter Board-Key `info` (Kundenname/Status fest vorn,
+  Ergebnis · Teilgenommen · Veranstaltung ohne Werkzeuge), HV-Ansicht unter
+  `handelsvertreter` (Standard = v23-Spaltensatz, `STANDARD_SICHTBAR`; feste
+  Spalte Vertreter); beide mit `data-lm-spalten-board` (nur Spaltenwerkzeuge,
+  Zeilen bleiben bei `lm_info.js`/`lm_hv.js`). Spalte Score steht nur bei
+  `score_aktiv` im Katalog.
+- **Sticky-Filterleiste**: `.lm-filterblock` (Chip-Selects, Suche,
+  Spaltenwähler, Sammelaktionen) liegt außerhalb des horizontal und vertikal
+  scrollenden Tabellen-Containers `.lm-tabellen` und klebt unter der Kopfzeile
+  (`top: var(--lm-kopf-fest)`, Höhe `--lm-tabellen-hoehe` von `lm_boards.js`
+  gesetzt); Sticky-Tabellenkopf bleibt. Hauptboard, Deals, Infoabend; HV-Filter
+  sticky ohne inneren Scroll-Container. Geprüft in der Chromium-Vorschau bei
+  1366 px mit allen Spalten (Edge: manuelle Sichtprüfung offen). CSS nur als
+  Blöcke „Phase 118/119/120“ in `lead_v2.css`.
+- **Anrufliste** (`lead_anrufliste.daten`): die fünf Gruppen sind entfallen –
+  EINE sortierte Liste `zeilen` mit Rang je Zeile (`_rang`/`RAENGE`): 0 SLA rot →
+  1 SLA gelb → 2 fällige Wiedervorlagen/Rückrufe (nach Uhrzeit) → 3 Zurück-
+  gestellte mit erreichtem Datum → 4 Rest nach Eingang (älteste zuerst), ohne
+  Score-Komponente; Leiste „Reihenfolge“ (`lm-sortierung`) statt Gruppenköpfe.
+  Schnellfilter-Chips bleiben; die Selects „Quelle“/„Einzelquelle“ sind durch
+  das Mehrfach-Dropdown **„Vertriebskanal“** ersetzt (Parameter `kanal`, mehrfach
+  oder kommagetrennt, Werte `kern.kanal_werte` + Kanäle der Liste, Farbpunkte aus
+  `kanal_farben`; „Standard“ = ohne Kanal), die Zeile zeigt das farbige
+  Kanal-Badge (`kanal_badge(kanal, farbe)`). Alt-Parameter `gruppe=` wird
+  ignoriert, `quelle_id/quelle_typ/kampagne_id` filtern weiter (Abzeichen).
+  Klasse-Select/-Spalte nur bei `score_aktiv = an`. Tasten 1–7 unverändert. Der
+  tote V1-Helfer `_anruf_zeilen` ist entfernt.
+- **Kundenkartei** (Phase 119, `lead_kartei.py`, `lm_kartei.py`, Templates
+  `kartei.html` + `kartei_info.html` + `kartei_mitte.html` + `kartei_bloecke.html`
+  + `kartei_dialoge.html`; `kartei_links/_rechts` entfallen): Kopf mit
+  Kundenname, Kanal-/Interessen-Badges, Statuskette (`lead_kartei.phasen_kette`,
+  Phasen mit gleichem Label = ein Schritt, Seitenzustände als roter Schritt),
+  rechts oben Button „Terminierung“ (B8 unverändert, ausgegraut mit Tooltip der
+  fehlenden Felder) und die runden Schnellaktionen Anrufen · E-Mail · Notiz ·
+  Wiedervorlage. Darunter der **Kundeninfo-Block** (4 Spalten ab 1200 px, 2 ab
+  900 px, 1 darunter): Anrede · Vorname · Nachname · Firma · Telefon (tel:) ·
+  E-Mail (mailto) · Straße · PLZ · Ort · Vertriebskanal · Interessen · Objektart
+  (+ Parteien, Rechnungsadresse bei MFH) · Innendienst · Außendienst ·
+  Eingangsdatum · Wunschzeiten; Score/Klasse, Quelle/Kampagne und Einwilligungen
+  sind aus der Kartei entfernt (bleiben im Eingang, in der Vorgangsakte und in
+  Kanal-Report/Statistik). **Autospeichern**: `lm_kartei.js` postet bei blur/
+  change JSON `{feld, wert}` an `POST /lead-management/lead/{id}/feld` →
+  `{ok, feld, wert (normalisiert), meldung, geaendert, pflicht_offen,
+  pflicht_anzahl, pflicht_keys, terminierung, adresse_vollstaendig}`;
+  Validierung in `lead_kartei.feld_speichern` (PLZ 5 Ziffern, E-Mail, Telefon,
+  Objektart, Parteien, Kanal, Interessen, Zuweisungen über
+  `lead_v2.leadmanager_zuweisen/ad_zuweisen`), Fehler → HTTP 400 mit altem Wert,
+  Häkchen 2 s, Dubletten client- und serverseitig unterdrückt, jede Änderung
+  schreibt eine Aktivität typ `aenderung` „<Feld>: „alt“ → „neu““
+  (Timeline-Gruppe „Änderungen“); Rechte wie bisher (`lead_v2.gate`, AD-Lesesicht
+  ohne Formular). `POST /stammdaten` bleibt als noscript-Fallback. Reiter Termin
+  (Standard) · Anrufnotizen · E-Mail-Verlauf · Timeline (`?tab=`), Reiter
+  Qualifizierung/Vorgang entfallen. Blöcke in voller Breite Termine · Angebote ·
+  Erfassungen · Projekt · Anhänge · To-Dos; der Block Termine lädt nach dem
+  Seitenaufbau `GET /lead-management/lead/{id}/termin/vorschlaege.json`
+  (`lead_termin.vorschlaege_json`: `{status: ok|adresse_fehlt|hv_lead|keine,
+  hinweis, vorschlaege[{ad_id, ad_name, beginn, beginn_text, begruendung,
+  umweg_min}], kandidaten, buchbar, pflicht_offen, aus_cache, berechnet_um,
+  buchen_url}`, Top 5, Cache 10 Minuten je Lead und Sicht in
+  `lead_termin.vorschlaege_cache`, `vorschlaege_cache_leeren(vorgang_id)` nach
+  Adressänderung, komplett nach Buchung/Absage, `?neu=1` erzwingt) und zeigt
+  „Vormerken“ (POST `/lead/{id}/termin`, `quelle=assistent`), „Adresse fehlt –
+  Straße, PLZ und Ort eintragen“ (nach Autospeichern der Adresse Nachladen ohne
+  Neuladen) oder „Lead liegt bei <Name> (Handelsvertreter), Terminierung durch
+  den Vertreter“. Unter 900 px alles untereinander, Terminierung bleibt oben
+  rechts. Der Lead-Kopf der Vorgangsakte (`_lead_kopf.html`) zeigt Labels aus
+  `akte_kontext["status_labels"]` und keinen Score mehr.
+- **Score und Qualifizierung abgeschaltet** (Phase 120): Parameter `score_aktiv`
+  (Lead-Einstellungen, Standard „aus“, `lead_v2.score_aktiv(session)`) ist der
+  zentrale Schalter: `lead_anlegen` ruft `score_vorlaeufig` nur bei „an“,
+  `score_berechnen` liefert bei „aus“ den Bestand, `qualifizierung_abschliessen`
+  schreibt keine Punkte/Klassen, `erfassungs_vorbelegung` liefert {},
+  `erwartungswert`/`pipeline_wert` rechnen nur Sparten-Erwartungswert ×
+  Phasen-Quote; keine Score-/Klassenanzeige in Kartei, Anrufliste, Boards,
+  Kanban, Dashboard, HV-Ansicht, Statistik, Übersicht, Kanal-Report, Termin-
+  Templates; Hinweis „Score C – Termin trotzdem buchen?“ entfällt. Routen
+  `/lead/{id}/qualifizierung/{sparte}` bleiben erreichbar (GET Hinweisseite
+  `qualifizierung_aus.html`, POST → Kartei `?tab=termin`), „Erreicht“ in der
+  Anrufliste leitet bei „aus“ direkt auf `/lead-management/lead/{id}?tab=termin`
+  (bei „an“ wie v23 in den Bogen); die Logik-Seite meldet die Blätter
+  Qualifizierung/Scoring/Klassen als „vorhanden, nicht aktiv“. Daten und Blätter
+  bleiben unverändert; bei „an“ verhält sich alles wie in V2.
+- **Terminassistent ohne Handelsvertreter**: `lead_termin.kandidaten(...,
+  benutzer)` lässt HV (`terminiert_selbst`) nur zu, wenn `benutzer.id == hv.id`
+  („Handelsvertreter terminieren ihre Leads selbst“, `manuell_erlaubt`/
+  `hv_manuell`); Leads mit `ad_id` = HV liefern `hv_lead`/`hv_hinweis` für den
+  Innendienst, termin.html zeigt die HV als optgroup „Handelsvertreter (nur
+  manuell)“ – die manuelle Buchung durch den Innendienst bleibt möglich
+  [ANNAHME]. Kontrollwert René Golaschewski: Innendienst sieht den HV-Hinweis,
+  René nur eigene Vorschläge.
+- **„Nicht erreicht“, „Mailbox“ und „Besetzt“ ohne Dialog** (Anrufliste,
+  Kartei, Boards-Inline, Infoabend): Klick = `POST /lead-management/anruf/{id}`
+  mit Zeitstempel jetzt, Versuch +1 und Stoppuhr-Dauer; **keine Wiedervorlage**
+  (`naechste_aktion_am` unverändert, mitgesendetes `wiedervorlage_am` wird
+  ignoriert). `kern.kaskade_anwenden` plant nur noch die Mails je Versuchsnummer
+  (Blatt Kaskade Spalte `aktion`: 2./4. Versuch `nicht_erreicht`, letzter
+  `disqualifiziert` + Nurture +30 Tage), Spalte `wiedervorlage_nach` wird nicht
+  mehr ausgewertet, der Übergang nach Nicht erreicht leert die Wiedervorlage;
+  Sperre ab `versuche_max` bleibt. Meldungen „<Ergebnis> protokolliert (Versuch
+  n)[ – Mail geplant].“; `GET /anruf/{id}/vorschlag` bleibt als Auskunft
+  erreichbar, wird aber nicht mehr aufgerufen. Makro
+  `anruf_dialoge(unq_gruende, zurueck_gruende, zurueck)` und
+  `dialogOeffnen(art, id)` behalten ihre Signatur (Direktversand über
+  `#lm-direkt-form`, Fallback `lmAnruf.ergebnisSenden`); „Rückruf gewünscht“ und
+  „Kein Interesse“ behalten ihre Dialoge; Glocke `faellige_wiedervorlagen_melden`
+  bleibt für manuelle Wiedervorlagen. Kontrollwert: 3 Versuche, letzter 14:05 →
+  Aktivität mit Zeitstempel, Wiedervorlage leer, 3 Punkte orange, keine Mail.
+- **Dashboard „Meine Arbeit“**: Wiedervorlagen zeigen nur noch manuell gesetzte;
+  neue Kachel/Liste **„Ohne nächsten Schritt“** (`lead_dashboard.
+  ohne_naechsten_schritt`: eigene Leads der Phasen neu/in_kontaktierung/
+  qualifiziert mit Versuch ≥ 1, ohne Wiedervorlage/Zurückstellung, ohne
+  offenen Termin, letzter Anruf – ohne Anruf-Aktivität Erstkontakt bzw. Eingang –
+  älter als Parameter `ohne_schritt_tage`, Standard 2, 0–365; älteste zuerst,
+  Zeile mit Wiedervorlage-Formular, Links Terminassistent/Kartei).
+  `zugeteilte` fasst Phasen mit gleichem Label zu einer Gruppe „Kontaktiert“.
+- **Steuerdatei `leadmanagement_logik_v1.xlsx`** (Sicherung
+  `diagnose/leadmanagement_logik_v1.vor_v25.xlsx`): Blatt Status – Label
+  „Kontaktiert“ für beide Kontakt-Phasen, neue Spalte G `board_label`
+  (Hauptboard/Deals; `StatusZeile.board_label`); neues Blatt „Lesehilfe“
+  (Kaskade ohne Wiedervorlage, Status-Labels, Score nicht aktiv). Neue Parameter
+  in `PARAMETER_START`: `score_aktiv = aus`, `ohne_schritt_tage = 2` (Lead-
+  Einstellungen, protokolliert). Kein Migrationsschritt nötig (`migrate.py`
+  zweimal gegen die Server-DB-Kopie: 2. Lauf ohne Änderungen).
+- **Cache-Busting**: `templating._css_version()` hängt jetzt an der jüngsten
+  Static-Datei (style.css, lead_v2.css, *.js) statt nur an style.css – nach
+  einem Update ohne CSS-Änderung bekommen Browser sonst alte `lead_v2.css`/
+  `lm_*.js` mit derselben `?v=`-Nummer.
+- **Tests / Abnahme** (Phase 121): `tests/test_lead_v3.py` (21: Routen, Nav-
+  Keys, Fälle a–k, Kontrollwerte, Prüfklasse L) + `test_lead_v3_boards.py` (17),
+  `test_lead_v3_anruf.py` (7), `test_lead_v3_kartei.py` (22),
+  `test_lead_v3_phase120.py` (22); zehn Alt-Tests bewusst angepasst
+  (Begründungen in docs/leadmanagement-entscheidungen.md V3.3). Gesamtlauf
+  `pytest tests -q` → **640 passed** (v24: 551), `tests/abnahme.py` 93/93,
+  Voll-Crawl admin/innendienst/aussendienst gegen die Server-DB-Kopie ohne
+  Absturz, Screenshots vorher/nachher (Kartei, Hauptboard, Anrufliste) als PNG
+  in `docs/design-v25/` – nur Demo-Zeilen im Bild, „vorher“ aus einem Worktree
+  des v24-Stands (`diagnose/v25_screenshots2.py`, Chrome headless).
+- **Offen / Rückfragen** (Details Gesamtübersicht und V3.4): manuelle
+  Sichtprüfung in Edge bei 1366 px (Drag & Drop, Mehrfach-Dropdown), Datensatz
+  `lead_quellen.name` „Info-Veranstaltung“ umbenennen, Spalte „Score-Bonus“ in
+  der Quellen-Parametrierung kennzeichnen, API-Text „Keine Info-Veranstaltung“,
+  Rang der Zurückgestellten vor SLA rot, Freischaltung `lead_freigabe_modus =
+  alle` (eigener Plan).

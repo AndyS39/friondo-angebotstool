@@ -159,23 +159,37 @@ class Parameter(Basis):
 
 
 class Kaskade(Basis):
-    def test_stufe_vier_wiedervorlage_und_mail(self):
+    # v25 (PLAN_LEAD_V3 Phase 120): die Kaskade setzt KEINE Wiedervorlage mehr –
+    # nur noch Mail je Versuchsnummer (Stufe 2/4 nicht_erreicht, letzte
+    # disqualifiziert + Nurture +30 Tage) und Phase Nicht erreicht; vorher
+    # prüfte dieser Test Wiedervorlage +7 Tage bzw. +30 Tage.
+    def test_stufe_vier_mail_ohne_wiedervorlage(self):
         v = self.lead(1, versuche=4)
         meldung = kern.kaskade_anwenden(self.s, v)
         self.s.commit()
-        self.assertTrue(meldung.startswith("Wiedervorlage"))
+        self.assertEqual(meldung, "Versuch 4 protokolliert – Mail geplant.")
         self.assertEqual(v.lead_phase, "in_kontaktierung")
-        self.assertGreater(v.naechste_aktion_am, datetime.now() + timedelta(days=5))
+        self.assertIsNone(v.naechste_aktion_am)
         mails = [m.vorlage_key for m in self.s.query(KommunikationLog)
                  .filter_by(vorgang_id=v.id) if m.vorlage_key != "eingangsbestaetigung"]
         self.assertEqual(mails, ["nicht_erreicht"])
+        # Stufe ohne Mail-Aktion: nur protokolliert, eine vorhandene (manuelle)
+        # Wiedervorlage bleibt unberührt
+        wv = datetime.now() + timedelta(days=2)
+        v3 = self.lead(6, versuche=3, naechste_aktion_am=wv)
+        self.assertEqual(kern.kaskade_anwenden(self.s, v3), "Versuch 3 protokolliert.")
+        self.s.commit()
+        self.assertEqual(v3.naechste_aktion_am, wv)
+        self.assertEqual([m.vorlage_key for m in self.s.query(KommunikationLog)
+                          .filter_by(vorgang_id=v3.id) if m.vorlage_key != "eingangsbestaetigung"], [])
 
     def test_stufe_fuenf_disqualifiziert(self):
-        v = self.lead(2, versuche=5)
+        v = self.lead(2, versuche=5, naechste_aktion_am=datetime.now() + timedelta(days=2))
         meldung = kern.kaskade_anwenden(self.s, v)
         self.s.commit()
         self.assertIn("Nicht erreicht", meldung)
         self.assertEqual(v.lead_phase, "nicht_erreicht")
+        self.assertIsNone(v.naechste_aktion_am)          # v25: Übergang leert die Wiedervorlage
         self.assertTrue(kern.versuche_gesperrt(self.s, v))
         mails = sorted(m.vorlage_key for m in self.s.query(KommunikationLog)
                        .filter_by(vorgang_id=v.id) if m.vorlage_key != "eingangsbestaetigung")

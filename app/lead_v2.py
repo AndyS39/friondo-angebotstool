@@ -399,3 +399,12 @@ def leadmanager_zuweisen(session: Session, vorgang: Vorgang, benutzer_id: int | 
                          f"/lead-management/lead/{vorgang.id}")
     session.flush()
     return f"Leadmanager: {neu.name}."
+
+
+# --- v25 (PLAN_LEAD_V3 Phase 120): zentraler Schalter Score/Qualifizierung ---------
+
+def score_aktiv(session: Session) -> bool:
+    """Parameter score_aktiv (an|aus, Standard aus): bei aus keine Score-
+    Berechnung, keine Anzeige von Score/Klasse, kein Qualifizierungsbogen."""
+    from app import leadmanagement as kern
+    return kern.parameter_holen(session, "score_aktiv", "aus").strip().lower() in ("an", "ja", "1", "true")

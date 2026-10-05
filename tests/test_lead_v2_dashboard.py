@@ -157,10 +157,14 @@ class Dashboard(Basis):
         self.assertNotIn(v_rueckruf.id, ids_angebot)
         self.assertTrue(next(z for z in daten["angebot_wv"]
                              if z["vorgang"].id == v_angebot.id)["faellig"])
-        # zugeteilt nach Phase
-        phasen = {g["phase"]: g for g in daten["zugeteilt"]["gruppen"]}
-        self.assertIn(v_termin.id, [z["vorgang"].id for z in phasen["qualifiziert"]["zeilen"]])
-        self.assertNotIn(v_zurueck.id, [z["vorgang"].id for g in phasen.values() for z in g["zeilen"]])
+        # zugeteilt nach Phase – v25 (Phase 118/120): in_kontaktierung + qualifiziert
+        # bilden EINE Gruppe „Kontaktiert“ (Label aus dem Blatt Status), daher
+        # Suche über die Phasenliste der Gruppe statt über den Gruppenschlüssel
+        gruppen = daten["zugeteilt"]["gruppen"]
+        kontakt = next(g for g in gruppen if "qualifiziert" in g["phasen"])
+        self.assertEqual(kontakt["name"], "Kontaktiert")
+        self.assertIn(v_termin.id, [z["vorgang"].id for z in kontakt["zeilen"]])
+        self.assertNotIn(v_zurueck.id, [z["vorgang"].id for g in gruppen for z in g["zeilen"]])
         # Termine meiner Leads inkl. Terminart
         termin_ids = {z["termin"].vorgang_id for z in daten["termine"]}
         self.assertIn(v_termin.id, termin_ids)

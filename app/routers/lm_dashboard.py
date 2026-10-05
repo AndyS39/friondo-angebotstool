@@ -131,8 +131,14 @@ async def dashboard(request: Request, session: Session = Depends(get_session)):
     lead_v2.gate(request, session)
     termine_alle = request.query_params.get("termine") == "alle"
     daten = lead_dashboard.daten(session, benutzer, termine_alle=termine_alle)
+    # v25: Board-Namen immer aus dem Blatt Status (Hauptboard / Deals), kein Score
+    from app import leadmanagement_logik
+    logik = leadmanagement_logik.hole_logik()
     return render(request, "leadmanagement/dashboard.html",
                   aktiv="/lead-management", benutzer=benutzer, **daten,
+                  hauptboard_label=logik.board_label("hauptboard"),
+                  deals_label=logik.board_label("terminiert"),
+                  score_aktiv=lead_v2.score_aktiv(session),
                   demo_badge=kern.demo_aktiv(session),
                   badge_text=kern.parameter_holen(session, "demo_badge_text",
                                                   "Demo · Coming soon"),
@@ -187,22 +193,30 @@ def _todos_seite(request: Request, session: Session, neu: bool = False):
             vorgang_id = None
             meldung = meldung or "Kein Zugriff auf diesen Vorgang – alle eigenen To-Dos."
         kunde = session.get(Kunde, vorgang.kunde_id) if vorgang else None
+    jetzt = datetime.now()
+    # v25 (PLAN_LEAD_V3 Phase 118): Filter fällig/alle – fällig = offen mit Fälligkeit bis jetzt
+    faellig = q.get("faellig") == "1"
     meine = lead_todos.offene(session, benutzer.id)
     vergeben = lead_todos.vergebene(session, benutzer.id, status=None)
     erledigt = lead_todos.erledigte(session, benutzer.id)
+
+    def _ist_faellig(t) -> bool:
+        return t.status == "offen" and t.faellig_am is not None and t.faellig_am <= jetzt
     zaehler = {"meine": len(meine),
                "vergeben": sum(1 for t in vergeben if t.status == "offen"),
-               "erledigt": len(erledigt)}
+               "erledigt": len(erledigt),
+               "faellig": sum(1 for t in meine if _ist_faellig(t))}
     if vorgang is not None:
         liste = lead_todos.fuer_vorgang(session, vorgang.id)
         if not lead_v2.zugriff_erlaubt(session, benutzer):
             liste = [t for t in liste if lead_todos.darf_sehen(benutzer, t)]
     else:
         liste = {"meine": meine, "vergeben": vergeben, "erledigt": erledigt}[sicht]
+    if faellig:
+        liste = [t for t in liste if _ist_faellig(t)]
     if suche:
         liste = [t for t in liste if suche in (t.titel or "").lower()
                  or suche in (t.text or "").lower()]
-    jetzt = datetime.now()
     zurueck = _ohne_meldung(str(request.url.path) + ("?" + str(request.url.query)
                                                      if request.url.query else ""))
     if zurueck.endswith("/neu"):
@@ -211,7 +225,7 @@ def _todos_seite(request: Request, session: Session, neu: bool = False):
                   aktiv="/lead-management", benutzer=benutzer,
                   modul=lead_v2.zugriff_erlaubt(session, benutzer),
                   hv=lead_v2.ist_handelsvertreter(session, benutzer),
-                  sicht=sicht, suche=q.get("q") or "", zaehler=zaehler,
+                  sicht=sicht, suche=q.get("q") or "", zaehler=zaehler, faellig=faellig,
                   zeilen=lead_todos.zeilen(session, liste, jetzt),
                   vorgang=vorgang, kunde=kunde, heute=jetzt.date(), jetzt=jetzt,
                   empfaenger=lead_todos.empfaenger_liste(session),

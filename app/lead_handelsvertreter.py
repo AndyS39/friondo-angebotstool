@@ -62,6 +62,8 @@ HV_NAMEN = [("golaschewski", "René Golaschewski"), ("grady", "Simon O'Grady"),
             ("kinkel", "Ralf Kinkel"), ("leinenbach", "Hartmut Leinenbach")]
 
 OFFENE_PHASEN = ("neu", "in_kontaktierung", "qualifiziert", "zurueckgestellt")
+# Board-Key der Spaltenkonfiguration je Nutzer (lead_boards.KONFIG_BOARDS, v25)
+KONFIG_BOARD = "handelsvertreter"
 KONTAKT_TYPEN = {"anruf": "Anruf", "mail_aus": "E-Mail", "mail_ein": "E-Mail (Eingang)",
                  "whatsapp": "WhatsApp"}
 
@@ -527,7 +529,10 @@ def zeilen_filtern(zeilen: list, f: dict) -> list:
     for z in zeilen:
         if f.get("vertreter") and z["hv_id"] != f["vertreter"]:
             continue
-        if f.get("status") and (z["vorgang"].lead_phase or "neu") != f["status"]:
+        # v25: ein Status-Filter kann mehrere Phasen tragen (Label „Kontaktiert“
+        # = in_kontaktierung,qualifiziert – siehe status_optionen in ansicht)
+        if f.get("status") and (z["vorgang"].lead_phase or "neu") not in \
+                [p.strip() for p in str(f["status"]).split(",") if p.strip()]:
             continue
         if f.get("kanal") and z["kanal"].lower() != f["kanal"].lower():
             continue
@@ -659,20 +664,51 @@ def ansicht(session: Session, benutzer, f: dict, mit_phase105: bool = True) -> d
     gefiltert = zeilen_filtern(zeilen, f)
     from app import leadmanagement_logik
     logik = leadmanagement_logik.hole_logik()
-    status_optionen = [(z.phase, z.label) for z in logik.status_zeilen] or \
-        list(LEAD_PHASEN_NAMEN.items())
+    # v25 (Phase 118/120): Phasen mit demselben Label (in_kontaktierung +
+    # qualifiziert → „Kontaktiert“) werden zu EINER Option mit Phasenliste
+    # „in_kontaktierung,qualifiziert“ zusammengefasst (Filter in zeilen_filtern)
+    status_optionen = []
+    je_label: dict[str, int] = {}
+    for z in (logik.status_zeilen or []):
+        if z.label in je_label:
+            idx = je_label[z.label]
+            status_optionen[idx] = (status_optionen[idx][0] + "," + z.phase, z.label)
+        else:
+            je_label[z.label] = len(status_optionen)
+            status_optionen.append((z.phase, z.label))
+    status_optionen = status_optionen or list(LEAD_PHASEN_NAMEN.items())
     kanal_optionen = sorted({z["kanal"] for z in zeilen if z["kanal"]}, key=str.lower)
     jetzt = datetime.now()
+    # Prüfung F (PLAN_LEAD_V3 Phase 118): Spalten je Nutzer auch in der HV-Ansicht –
+    # Hauptboard-Katalog in der eigenen Konfiguration des Nutzers unter dem Board-Key
+    # „handelsvertreter“ (Reihenfolge, Sichtbarkeit, eigene Namen, gemerkte Sortierung);
+    # ohne Phase-105-Makro bleibt die feste Rückfall-Tabelle
+    spalten, sortierung = [], None
+    if phase105:
+        try:
+            from app import lead_boards
+            spalten = lead_boards.spalten_fuer(session, benutzer, KONFIG_BOARD)
+            sortierung = lead_boards.sortierung_fuer(session, benutzer, KONFIG_BOARD)
+        except Exception:
+            spalten, sortierung = [], None
     daten = {"gesamt": gesamt, "hv_liste": hv_liste, "kreis": kreis,
              "zeilen": gefiltert, "anzahl_gesamt": len(zeilen),
              "status_optionen": status_optionen, "kanal_optionen": kanal_optionen,
              "standard": lead_v2.hv_standard_benutzer(session),
              "filter_werte": f, "jetzt": jetzt, "phase105": phase105,
+             "spalten": spalten, "sortierung": sortierung, "konfig_board": KONFIG_BOARD,
+             # v25: kein Score/Klasse in der HV-Ansicht, Board-Namen aus dem Blatt Status,
+             # Label der offenen Phasen für die Kacheltexte
+             "score_aktiv": lead_v2.score_aktiv(session),
+             "hauptboard_label": logik.board_label("hauptboard"),
+             "deals_label": logik.board_label("terminiert"),
+             "offen_labels": _offen_labels(logik),
              # Kontext für die Zellen-Makros aus _tabelle.html (nur lesen –
              # die Vertreter-Spalte kommt aus hv_zuweisung.html)
              "ctx": {"nur_lesen": True, "board": "hauptboard", "jetzt": jetzt,
                      "heute": jetzt.date(), "hv": not gesamt, "sammel": False,
-                     "versuche_max": kern.versuche_max(session)}}
+                     "versuche_max": kern.versuche_max(session),
+                     "sortierung": sortierung}}
     if gesamt:
         daten["gruppen"] = gruppieren(gefiltert, kreis)
         daten["hinweise"] = benutzer_abgleich(session)
@@ -696,14 +732,38 @@ def ansicht(session: Session, benutzer, f: dict, mit_phase105: bool = True) -> d
         daten["hinweise"] = None
         daten["standard_offen"] = 0
         daten["dashboard"] = dashboard_daten(session, benutzer)
+    if sortierung:
+        # gemerkte Sortierung je Gruppe (Zeilen aus dem Hauptboard und Rückfall-Zeilen
+        # tragen dieselben Schlüssel für lead_boards._sortier_wert)
+        for g in daten["gruppen"]:
+            try:
+                lead_boards.zeilen_sortieren(g["zeilen"], sortierung, jetzt)
+            except Exception:
+                pass
     return daten
+
+
+def _offen_labels(logik=None) -> str:
+    """v25: Anzeige der offenen Phasen mit Labels aus dem Blatt Status, gleiche
+    Labels nur einmal („Neu · Kontaktiert · Zurückgestellt“)."""
+    if logik is None:
+        from app import leadmanagement_logik
+        logik = leadmanagement_logik.hole_logik()
+    labels = []
+    for phase in OFFENE_PHASEN:
+        z = logik.status_zeile(phase)
+        label = (z.label if z and z.label else LEAD_PHASEN_NAMEN.get(phase, phase))
+        if label not in labels:
+            labels.append(label)
+    return " · ".join(labels)
 
 
 # --- Dashboard (F16) ------------------------------------------------------------------
 
 def dashboard_daten(session: Session, benutzer) -> dict:
-    """Persönliches HV-Dashboard: fällige/kommende Wiedervorlagen, eigene
-    Termine der nächsten 7 Tage, offene Leads, offene To-Dos."""
+    """Persönliches HV-Dashboard: fällige/kommende Wiedervorlagen (v25: nur
+    manuell gesetzte), eigene Termine der nächsten 7 Tage, offene Leads
+    (Neu · Kontaktiert · Zurückgestellt), offene To-Dos – ohne Score."""
     jetzt = datetime.now()
     horizont = jetzt + timedelta(days=7)
     eigene = eigene_vorgaenge(session, benutzer)
@@ -733,6 +793,7 @@ def dashboard_daten(session: Session, benutzer) -> dict:
              .order_by(Todo.faellig_am.is_(None), Todo.faellig_am).limit(20).all())
     return {
         "jetzt": jetzt, "benutzer": benutzer,
+        "offen_labels": _offen_labels(),
         "kacheln": {"faellig": len(faellig), "kommend": len(kommend),
                     "termine": len(termine), "offen": len(offen), "todos": len(todos)},
         "faellig": [{"vorgang": v, "kunde": kunden.get(v.kunde_id), "wann": _wv(v)}

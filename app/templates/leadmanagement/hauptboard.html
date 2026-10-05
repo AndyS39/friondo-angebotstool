@@ -8,10 +8,16 @@
 {% block mainklasse %}breit{% endblock %}
 
 {# v23 (PLAN_LEAD_V2 Phase 105): Board als Tabelle nach monday-Vorbild (A3)
-   mit Gruppen (H4 Hauptboard: Neu · Pausiert · Disqualifiziert; H5 Terminiert
+   mit Gruppen (H4 Hauptboard: Neu · Pausiert · Disqualifiziert; H5 Deals
    über terminiert.html, das dieses Template erbt), Umschalter Tabelle |
-   Anrufliste | Kanban, Suchleiste + Filter, Spalten-Dialog je Nutzer,
-   Markier-Kästchen + Sammelaktionen (H3), Status-Dialog mit Pflichtgründen.
+   Anrufliste | Kanban, Suchleiste + Filter, Markier-Kästchen + Sammelaktionen
+   (H3), Status-Dialog mit Pflichtgründen.
+   v25 (PLAN_LEAD_V3 Phase 118): Board-Name aus logik.board_label (Deals),
+   Filterblock (Chip-Selects, Suchfeld, Spaltenwähler „Spalten“, Sammelaktionen)
+   sticky unter der Kopfzeile und außerhalb des horizontal scrollenden
+   Tabellen-Containers (.lm-tabellen; Sticky-Tabellenkopf bleibt), Spalten je
+   Nutzer: Häkchen = ein-/ausblenden, Spaltenkopf ziehen = Reihenfolge,
+   Stift = umbenennen, Klick = sortieren (gemerkt), „Zurücksetzen“ = Standard.
    Verhalten: app/static/lm_boards.js (über lm_nav eingebunden). #}
 {% block inhalt %}
 {{ lm_nav(board) }}
@@ -20,18 +26,19 @@
     <span class="dezent">{{ board_info.untertitel }} · <b>{{ anzahl }}</b> Leads{% if ctx.hv %} · nur eigene Leads{% endif %}</span>
     <div class="aktionen">
         {{ lm_umschalter('tabelle', board) }}
-        <button type="button" class="knopf klein zweitrangig" id="lm-spalten-knopf" title="Spalten ein-/ausblenden und sortieren (je Nutzer gespeichert)">{{ symbol('spalten') }} Spalten</button>
         {% if board == 'hauptboard' and not ctx.hv %}<a class="knopf klein" href="/lead-management/neu">{{ symbol('plus') }} Neuer Lead</a>{% endif %}
     </div>
 </div>
 <p class="meldung {{ 'fehler' if fehler }}" id="lm-meldung" {{ '' if meldung else 'hidden' }} role="status">{{ meldung }}</p>
 
+<div class="lm-filterblock" id="lm-filterblock">
 <form method="get" action="/lead-management/{{ board }}" class="suchleiste lm-suchleiste" id="lm-filterform">
     <input type="search" name="q" id="lm-suche" value="{{ filter_werte.q }}" placeholder="Suche: Name, Ort, Telefon, E-Mail" aria-label="Suche" autocomplete="off">
     <label class="kontrollfeld">Status
         <select name="status">
             <option value="">alle</option>
-            {% for s in ctx.status_wahl %}<option value="{{ s.key }}" {{ 'selected' if filter_werte.status == s.key }}>{{ s.label }}</option>{% endfor %}
+            {#- v25: gleiche Labels nur einmal; der Filter trifft alle Phasen des Labels #}
+            {% for s in ctx.status_wahl if not s.doppelt %}<option value="{{ s.key }}" {{ 'selected' if filter_werte.status in ([s.key] + (s.gleiche or [])) }}>{{ s.label }}</option>{% endfor %}
         </select></label>
     <label class="kontrollfeld">Kanal
         <select name="kanal">
@@ -61,8 +68,26 @@
     {% endif %}
     <button class="knopf klein zweitrangig" type="submit">{{ symbol('filter') }} Filtern</button>
     {% if filter_werte.q or filter_werte.status or filter_werte.kanal or filter_werte.sparte or filter_werte.ad_id or filter_werte.leadmanager_id or filter_werte.gruppe or filter_werte.meine %}
-    <a class="knopf klein ghost" href="/lead-management/{{ board }}">Zurücksetzen</a>
+    <a class="knopf klein ghost" href="/lead-management/{{ board }}" title="Filter zurücksetzen">Filter zurücksetzen</a>
     {% endif %}
+    {#- v25: Spaltenwähler in der Filterleiste – Häkchen = sichtbar, gilt nur für den angemeldeten Nutzer, je Board #}
+    <details class="lm-spaltenwahl" id="lm-spaltenwahl">
+        <summary class="knopf klein zweitrangig" id="lm-spalten-knopf" title="Spalten ein-/ausblenden (je Nutzer gespeichert) · Reihenfolge: Spaltenkopf ziehen · Umbenennen: Stift im Spaltenkopf · Sortieren: Klick auf den Spaltenkopf">{{ symbol('spalten') }} Spalten</summary>
+        <div class="lm-spaltenmenue" role="group" aria-label="Spalten">
+            <ul class="lm-spaltenliste-neu" id="lm-spaltenliste">
+                {% for sp in spalten %}
+                <li data-key="{{ sp.key }}" class="{{ 'fest' if sp.key == 'lead' }}">
+                    <label><input type="checkbox" data-key="{{ sp.key }}" {{ 'checked' if sp.sichtbar }} {{ 'disabled' if sp.key == 'lead' }}>
+                        <span class="lm-sp-name">{{ sp.titel }}</span>{% if sp.name %} <small title="Standardname">({{ sp.standard }})</small>{% endif %}</label>
+                </li>
+                {% endfor %}
+            </ul>
+            <div class="lm-spalten-fuss">
+                <button type="button" class="knopf klein zweitrangig" id="lm-spalten-reset" title="Spalten auf den Standard zurücksetzen (Reihenfolge, Sichtbarkeit, Namen, Sortierung) – nur für Sie">{{ symbol('zuruecksetzen') }} Zurücksetzen</button>
+                <span class="dezent">Gilt nur für Sie, je Board. Reihenfolge: Spaltenkopf ziehen · Umbenennen: Stift im Spaltenkopf · Sortieren: Klick auf den Spaltenkopf (wird gemerkt).</span>
+            </div>
+        </div>
+    </details>
 </form>
 
 {% if ctx.sammel and sammelaktionen %}
@@ -75,7 +100,7 @@
         </select></label>
     <label class="kontrollfeld lm-sammel-status">Neuer Status
         <select name="status" id="lm-sammel-status">
-            {% for s in ctx.status_wahl if s.setzbar %}<option value="{{ s.key }}" data-grund="{{ s.grund }}">{{ s.label }}</option>{% endfor %}
+            {% for s in ctx.status_wahl if s.setzbar and not s.doppelt %}<option value="{{ s.key }}" data-grund="{{ s.grund }}">{{ s.label }}</option>{% endfor %}
         </select></label>
     <input type="hidden" name="grund"><input type="hidden" name="grund_text"><input type="hidden" name="bis">
     <button class="knopf klein" type="submit">Ausführen</button>
@@ -83,7 +108,9 @@
     <span class="dezent">Jede Sammelaktion schreibt je Lead eine Aktivität; Pflichtgründe werden einmal abgefragt.</span>
 </form>
 {% endif %}
+</div>
 
+<div class="lm-tabellen" id="lm-tabellen">
 <div class="lm-gruppen">
     {% for g in gruppen %}
     <details class="lm-gruppe" {{ '' if g.eingeklappt else 'open' }} data-gruppe="{{ g.key }}">
@@ -95,6 +122,7 @@
         {% endif %}
     </details>
     {% endfor %}
+</div>
 </div>
 
 <dialog id="dlg-status" class="lm-dialog">
@@ -112,25 +140,5 @@
     </form>
 </dialog>
 
-<dialog id="dlg-spalten" class="lm-dialog">
-    <form method="dialog" class="formular">
-        <h3>Spalten</h3>
-        <p class="dezent">Reihenfolge per Ziehen, Häkchen = sichtbar. Gilt nur für Sie, je Board.</p>
-        <ul class="lm-spaltenliste" id="lm-spaltenliste">
-            {% for sp in spalten %}
-            <li draggable="{{ 'false' if sp.key == 'lead' else 'true' }}" data-key="{{ sp.key }}" class="{{ 'fest' if sp.key == 'lead' }}">
-                <span class="griff" aria-hidden="true">⋮⋮</span>
-                <label><input type="checkbox" {{ 'checked' if sp.sichtbar }} {{ 'disabled' if sp.key == 'lead' }}> {{ sp.titel }}</label>
-            </li>
-            {% endfor %}
-        </ul>
-        <div class="formzeile">
-            <button class="knopf" type="submit" value="ok">Speichern</button>
-            <button class="knopf zweitrangig" type="button" value="standard">Standard</button>
-            <button class="knopf zweitrangig" type="button" value="abbrechen">Abbrechen</button>
-        </div>
-    </form>
-</dialog>
-
-<script type="application/json" id="lm-daten">{{ {'board': board, 'gruende': ctx.gruende, 'status': ctx.status_wahl} | tojson }}</script>
+<script type="application/json" id="lm-daten">{{ {'board': board, 'gruende': ctx.gruende, 'status': ctx.status_wahl, 'sort': sortierung, 'spalten': spalten} | tojson }}</script>
 {% endblock %}

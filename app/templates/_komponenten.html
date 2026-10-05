@@ -84,8 +84,12 @@
 {%- if quelle -%}<span class="lm-quelle q-{{ gruppe }}" title="Quelle ({{ gruppe }})">{{ text or quelle.name }}</span>{%- endif -%}
 {%- endmacro %}
 
-{% macro kanal_badge(kanal) -%}
-{%- if kanal and kanal | lower != 'standard' -%}<span class="lm-kanal" title="Vertriebskanal – steuert das Angebotsprofil">{{ kanal }}</span>{%- endif -%}
+{# v25 (PLAN_LEAD_V3 Phase 118): optional `farbe` (Parameter kanal_farben bzw.
+   Automatik-Palette der Boards, lead_anrufliste.kanal_farbe) → gefüllter Badge
+   in der Kanalfarbe über --f wie das Kanal-Label der Board-Tabelle; ohne
+   zweiten Parameter rendert das Makro exakt wie v21 (violett). #}
+{% macro kanal_badge(kanal, farbe='') -%}
+{%- if kanal and kanal | lower != 'standard' -%}<span class="lm-kanal{{ ' mit-farbe' if farbe }}"{% if farbe %} style="--f:{{ farbe }}"{% endif %} title="Vertriebskanal – steuert das Angebotsprofil">{{ kanal }}</span>{%- endif -%}
 {%- endmacro %}
 
 {# v23 Phase 107 (C1-c): 5 Punkte = die (letzten) fünf Anrufversuche. Mit

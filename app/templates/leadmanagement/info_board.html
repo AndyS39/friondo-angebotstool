@@ -3,24 +3,31 @@
 {% from "leadmanagement/_nav.html" import lm_nav %}
 {% from "leadmanagement/info_tabelle.html" import info_tabelle %}
 
-{% block titel %}Info-Veranstaltung – Lead-Management{% endblock %}
+{% block titel %}Infoabend – Lead-Management{% endblock %}
 
 {% block mainklasse %}breit{% endblock %}
 
-{# v23 (PLAN_LEAD_V2 Phase 111, I1–I5): Board „Info-Veranstaltung“ – je
+{# v23 (PLAN_LEAD_V2 Phase 111, I1–I5): Board „Infoabend“ (bis v24 „Info-Veranstaltung“;
+   Parameter info_*, Tabelle info_veranstaltungen und Quelle info_veranstaltung bleiben) – je
    Veranstaltung eine einklappbare Gruppe (Titel Datum/Uhrzeit/Ort, Kennzeichen
    „verschoben (Feiertag)“, Zähler), Filter „Archiv“ (vergangene Termine), Spalten
    wie Hauptboard + Ergebnis-Buttons (Vertrag Phase 107) + Teilgenommen +
    Veranstaltung, roter Hinweis „Kunde bereits im System“ (I5), Sammelaktionen
    „Status ändern“ · „In die nächste Veranstaltung verschieben“ · „Teilgenommen
    setzen“ (H3). Info-Leads sind normale Vorgänge (Quelle info_veranstaltung bzw.
-   veranstaltung_id); nach Terminierung stehen sie zusätzlich im Board Terminiert.
+   veranstaltung_id); nach Terminierung stehen sie zusätzlich im Board Deals.
+   v25 (Phase 118): Gruppenüberschrift „Infoabend 05.11.2026“ + Wochentag/Uhrzeit/Ort.
    Verhalten: app/static/lm_info.js (eigene Datei, kein data-lm-board – die
-   Board-Logik von lm_boards.js bleibt hier bewusst aus). #}
+   Zeilen-/Sammel-Logik von lm_boards.js bleibt hier bewusst aus).
+   Prüfung F (Phase 118): Filterblock sticky unter der Kopfzeile und außerhalb des
+   horizontal scrollenden Tabellen-Containers (.lm-filterblock / .lm-tabellen wie im
+   Hauptboard), Spaltenwähler „Spalten“ + Spaltenwerkzeuge im Kopf (Sortieren,
+   Umbenennen, Ziehen) mit eigener Konfiguration je Nutzer unter dem Board-Key „info“
+   (data-lm-spalten-board → nur Teil 3 von lm_boards.js; POST /boards/spalten). #}
 {% block inhalt %}
 {{ lm_nav('info') }}
-<div class="seitenkopf lm-boardkopf" data-li-board="info">
-    <h1>Info-Veranstaltung {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
+<div class="seitenkopf lm-boardkopf" data-li-board="info" data-lm-spalten-board="{{ konfig_board | default('info') }}">
+    <h1>Infoabend {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
     <span class="dezent">{{ 'Vergangene Veranstaltungen (Archiv)' if archiv else 'Anmeldungen je Veranstaltung' }} · <b>{{ anzahl }}</b> Leads{% if ctx.hv %} · nur eigene Leads{% endif %}
         · Regel: {{ parameter.woche }}. {{ wochentag_name }} im Monat, {{ parameter.uhrzeit }} Uhr, {{ parameter.ort }}</span>
     <div class="aktionen">
@@ -31,6 +38,7 @@
 </div>
 <p class="meldung {{ 'fehler' if fehler }}" id="li-meldung" {{ '' if meldung else 'hidden' }} role="status">{{ meldung }}</p>
 
+<div class="lm-filterblock" id="lm-filterblock">
 <form method="get" action="/lead-management/info-veranstaltung" class="suchleiste lm-suchleiste" id="li-filterform">
     <input type="search" name="q" id="li-suche" value="{{ filter_werte.q }}" placeholder="Suche: Name, Ort, Telefon, E-Mail" aria-label="Suche" autocomplete="off">
     <label class="kontrollfeld">Veranstaltung
@@ -61,6 +69,29 @@
     {% if filter_werte.q or filter_werte.status or filter_werte.sparte or filter_werte.veranstaltung_id or filter_werte.teilgenommen or filter_werte.meine or archiv %}
     <a class="knopf klein ghost" href="/lead-management/info-veranstaltung">Zurücksetzen</a>
     {% endif %}
+    {#- Prüfung F (Phase 118): Spaltenwähler wie im Hauptboard – Häkchen = sichtbar, nur für den
+        angemeldeten Nutzer, Board „info“; Kundenname/Status sowie Ergebnis · Teilgenommen ·
+        Veranstaltung sind feste Spalten #}
+    {% if tabelle_makro %}
+    <details class="lm-spaltenwahl" id="lm-spaltenwahl">
+        <summary class="knopf klein zweitrangig" id="lm-spalten-knopf" title="Spalten ein-/ausblenden (je Nutzer gespeichert) · Reihenfolge: Spaltenkopf ziehen · Umbenennen: Stift im Spaltenkopf · Sortieren: Klick auf den Spaltenkopf">{{ symbol('spalten') }} Spalten</summary>
+        <div class="lm-spaltenmenue" role="group" aria-label="Spalten">
+            <ul class="lm-spaltenliste-neu" id="lm-spaltenliste">
+                {% for sp in spalten %}
+                {% set fest = sp.key in ('lead', 'ergebnis', 'teilgenommen', 'veranstaltung') %}
+                <li data-key="{{ sp.key }}" class="{{ 'fest' if fest }}">
+                    <label><input type="checkbox" data-key="{{ sp.key }}" {{ 'checked' if sp.sichtbar }} {{ 'disabled' if fest }}>
+                        <span class="lm-sp-name">{{ sp.titel }}</span>{% if sp.name %} <small title="Standardname">({{ sp.standard }})</small>{% endif %}</label>
+                </li>
+                {% endfor %}
+            </ul>
+            <div class="lm-spalten-fuss">
+                <button type="button" class="knopf klein zweitrangig" id="lm-spalten-reset" title="Spalten auf den Standard zurücksetzen (Reihenfolge, Sichtbarkeit, Namen, Sortierung) – nur für Sie">{{ symbol('zuruecksetzen') }} Zurücksetzen</button>
+                <span class="dezent">Gilt nur für Sie, nur für den Infoabend. Reihenfolge: Spaltenkopf ziehen · Umbenennen: Stift im Spaltenkopf · Sortieren: Klick auf den Spaltenkopf (wird gemerkt).</span>
+            </div>
+        </div>
+    </details>
+    {% endif %}
 </form>
 
 {% if ctx.sammel and sammelaktionen %}
@@ -85,17 +116,20 @@
     <span class="dezent">Jede Sammelaktion schreibt je Lead eine Aktivität; Pflichtgründe werden einmal abgefragt.</span>
 </form>
 {% endif %}
+</div>
 
+<div class="lm-tabellen" id="lm-tabellen">
 <div class="lm-gruppen li-gruppen">
     {% for g in gruppen %}
     <details class="lm-gruppe li-gruppe{{ ' li-vergangen' if g.vergangen }}{{ ' li-ohne' if not g.veranstaltung }}" {{ '' if g.eingeklappt else 'open' }} data-gruppe="{{ g.key }}">
         <summary class="lm-gruppe-kopf li-gruppe-kopf">
-            {{ symbol('gruppe') }} <span class="li-titel">{{ g.titel }}</span>
+            {{ symbol('gruppe') }} <span class="li-titel">{% if g.veranstaltung %}Infoabend {{ g.veranstaltung.beginn | de_datum('%d.%m.%Y') }}{% else %}{{ g.titel }}{% endif %}</span>
+            {%- if g.veranstaltung %} <span class="li-ort dezent">· {{ g.veranstaltung.beginn | de_datum('%a %H:%M') }} Uhr</span>{% endif %}
             {%- if g.ort %} <span class="li-ort dezent">· {{ g.ort }}</span>{% endif %}
             {%- if g.verschoben %} <span class="abzeichen li-verschoben" title="Der Regeltermin fiel auf einen gesetzlichen Feiertag in NRW – eine Woche später">verschoben (Feiertag)</span>{% endif %}
             {%- if g.vergangen and g.veranstaltung %} <span class="abzeichen">vorbei</span>{% endif %}
             <span class="n">{{ g.zeilen | length }}</span>
-            <span class="erkl">{% if g.veranstaltung %}{{ g.teilgenommen_ja }} teilgenommen · {{ g.teilgenommen_nein }} nicht · {{ g.teilgenommen_offen }} offen{% else %}Quelle Info-Veranstaltung ohne Termin – bitte zuordnen{% endif %}{% if g.hinweise %} · <span class="li-rot">{{ g.hinweise }}× bereits im System</span>{% endif %}</span>
+            <span class="erkl">{% if g.veranstaltung %}{{ g.teilgenommen_ja }} teilgenommen · {{ g.teilgenommen_nein }} nicht · {{ g.teilgenommen_offen }} offen{% else %}Quelle Infoabend ohne Termin – bitte zuordnen{% endif %}{% if g.hinweise %} · <span class="li-rot">{{ g.hinweise }}× bereits im System</span>{% endif %}</span>
         </summary>
         {% if g.notiz %}<p class="li-notiz dezent">{{ symbol('notiz') }} {{ g.notiz }}</p>{% endif %}
         {% if g.zeilen %}
@@ -107,6 +141,7 @@
     {% else %}
     <div class="karte"><p class="dezent">{{ 'Keine archivierten Veranstaltungen.' if archiv else 'Keine Veranstaltungen angelegt – die Termine entstehen rollierend aus der Regel.' }}</p></div>
     {% endfor %}
+</div>
 </div>
 
 <dialog id="dlg-li-status" class="lm-dialog">
@@ -149,6 +184,8 @@
 {% endif %}
 
 <script type="application/json" id="li-daten">{{ {'gruende': ctx.gruende, 'status': ctx.status_wahl, 'zurueck': zurueck_pfad} | tojson }}</script>
+{# Spaltenwerkzeuge (lm_boards.js, Teil 3): Konfiguration + gemerkte Sortierung des Nutzers #}
+<script type="application/json" id="lm-daten">{{ {'board': konfig_board | default('info'), 'sort': sortierung | default(none), 'spalten': spalten} | tojson }}</script>
 <script src="/static/lm_info.js?v={{ css_version }}" defer></script>
 <script src="/static/lm_anruf.js?v={{ css_version }}" defer></script>
 {% endblock %}

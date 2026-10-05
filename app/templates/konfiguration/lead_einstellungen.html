@@ -111,8 +111,9 @@
         {% endfor %}
     </div>
     <div class="formzeile">
-        {% for phase, name in [('neu', 'Neu'), ('in_kontaktierung', 'Kontakt'),
-                               ('qualifiziert', 'Qualif.'), ('terminiert', 'Termin'),
+        {# v25: beide Kontakt-Phasen tragen das Label „Kontaktiert“ (Blatt Status) #}
+        {% for phase, name in [('neu', 'Neu'), ('in_kontaktierung', 'Kontaktiert'),
+                               ('qualifiziert', 'Kontaktiert (qualifiziert)'), ('terminiert', 'Termin'),
                                ('erfasst', 'Erfasst'), ('angebot', 'Angebot')] %}
         <label class="schmal">{{ name }}
             <input type="number" name="quote_{{ phase }}"
@@ -202,7 +203,23 @@
     <label>Kanal-Regel Terminassistent (JSON {"Kanal": [AD-IDs]}, leer = keine Einschränkung)
         <input type="text" name="kanal_ad_regel" value="{{ werte.kanal_ad_regel }}" placeholder='{"Sparkasse": [4, 6]}'></label>
 
-    <h2>Lead-Management V2 – Info-Veranstaltung</h2>
+    {# v25 (PLAN_LEAD_V3 Phase 120): zentraler Score-Schalter + Dashboard-Liste #}
+    <h2>Lead-Management V3 – Score &amp; Dashboard</h2>
+    <div class="formzeile">
+        <label>Score / Qualifizierung
+            <select name="score_aktiv">
+                <option value="aus" {{ 'selected' if werte.score_aktiv != 'an' }}>aus (Standard seit V3)</option>
+                <option value="an" {{ 'selected' if werte.score_aktiv == 'an' }}>an (wie V2: Score, Klassen, Bogen)</option>
+            </select></label>
+        <label class="schmal">„Ohne nächsten Schritt“ ab (Tage)
+            <input type="number" name="ohne_schritt_tage" min="0" max="365" value="{{ werte.ohne_schritt_tage or 2 }}"></label>
+    </div>
+    <p class="dezent">Bei „aus“: keine Score-Berechnung bei Eingang/Qualifizierung, keine Anzeige von Score/Klasse,
+        kein Qualifizierungsbogen (Route zeigt „Qualifizierung ist abgeschaltet“), Pipeline-Wert nur nach Phasen-Quote;
+        die Steuerdatei-Blätter Qualifizierung/Scoring/Klassen bleiben liegen. Das Dashboard listet Leads der Gruppe Neu
+        mit Versuch, aber ohne Wiedervorlage und ohne Termin, wenn der letzte Anruf länger als die angegebenen Tage zurückliegt.</p>
+
+    <h2>Lead-Management V2 – Infoabend</h2>
     <div class="formzeile">
         <label class="schmal">Wochentag (0=Mo … 6=So)
             <input type="number" name="info_wochentag" min="0" max="6" value="{{ werte.info_wochentag }}"></label>

@@ -109,28 +109,35 @@ class Basis(unittest.TestCase):
 
 
 class Rendern(Basis):
-    def test_kartei_rendert_drei_spalten(self):
+    def test_kartei_rendert_v3_layout(self):
+        """v25 (PLAN_LEAD_V3 Phase 119): statt drei Spalten jetzt Kopf (Statuskette)
+        → Kundeninfo-Block → Reiter Termin · Anrufnotizen · E-Mail-Verlauf ·
+        Timeline → Blöcke; Reiter Qualifizierung/Vorgang und der Dialog
+        „Nicht erreicht“ (Phase 120: ohne Dialog) existieren nicht mehr."""
         v = self.lead(1)
         r = self.kartei(v)
         self.assertEqual(r.status_code, 200)
         seite = r.text
-        for text in ('class="karte lk-links"', 'class="karte lk-mitte"', 'class="lk-rechts"',
+        for text in ('class="lk-statuskette"', 'id="lk-kundeninfo"', 'class="karte lk-mitte"',
+                     'id="lk-bloecke"',
                      'role="tablist"', 'id="tab-timeline"', 'id="tab-mails"', 'id="tab-anrufe"',
-                     'id="tab-qualifizierung"', 'id="tab-termin"', 'id="tab-vorgang"',
+                     'id="tab-termin"',
                      'aria-label="E-Mail-Verlauf"', 'class="lm-anruf-form', 'name="dauer_sek"',
                      'href="tel:', 'href="mailto:v2k1@test.local"', "lm_kartei.js", "lm_anruf.js",
-                     "Pflichtfeld", 'id="lk-stammdaten"', "Zuständig", "To-Dos",
+                     "Pflichtfeld", 'id="lk-stammdaten"', "Innendienst", "To-Dos",
                      "Anhänge", 'action="/lead-management/todos/neu"', "Terminierung",
                      "Nachbearbeitung", "Vorab-Gespräch", "Erfassung ohne Termin",
                      'class="demo-badge"', 'data-bereich="termine"', "Termin manuell",
                      "Wiedervorlage",
                      # C1/C2/C3: Ergebnis-Buttons 1–7 + Folgedialoge aus Phase 107
                      f'class="lk-anruf" aria-label="Anruf protokollieren" data-vorgang="{v.id}"',
-                     'value="falsche_nummer"', "Kein Interesse", 'id="dlg-nichterreicht"',
+                     'value="falsche_nummer"', "Kein Interesse", 'name="ergebnis" value="nicht_erreicht"',
                      'id="dlg-rueckruf"', 'id="dlg-keininteresse"', 'id="dlg-reaktivieren"',
-                     f"dialogOeffnen('nichterreicht', {v.id})",
                      f'name="zurueck" value="/lead-management/lead/{v.id}?tab=anrufe"'):
             self.assertIn(text, seite, text)
+        for weg in ('class="karte lk-links"', 'class="lk-rechts"', 'id="tab-qualifizierung"',
+                    'id="tab-vorgang"', f"dialogOeffnen('nichterreicht', {v.id})"):
+            self.assertNotIn(weg, seite, weg)
         # V1-Weiterleitung übernommen: kein Redirect mehr auf die Vorgangsakte
         self.assertEqual(self.client.get(f"/lead-management/lead/{v.id}",
                                          follow_redirects=False).status_code, 200)

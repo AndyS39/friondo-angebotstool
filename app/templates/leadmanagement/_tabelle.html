@@ -6,7 +6,14 @@
    Status-/Kanal-Labels kommen als Daten (Blatt Status, Parameter kanal_farben)
    über die CSS-Variable --f, nie als feste Farbe im Template.
    Inline-Felder tragen .lm-inline + data-feld/data-vorgang (lm_boards.js →
-   POST /lead-management/boards/zeile/{id}). #}
+   POST /lead-management/boards/zeile/{id}).
+   v25 (PLAN_LEAD_V3 Phase 118): feste erste Spalte „Kundenname“ (Anrede
+   Vorname Nachname, Key lead), Spaltenkopf-Makro spalten_kopf mit Sortier-
+   Zustand (aria-sort aus ctx.sortierung), Stift zum Umbenennen und Drag &
+   Drop (draggable) – Verhalten in lm_boards.js; Phasen-Labels kommen als
+   z.status_label / ctx.status_wahl aus dem Blatt Status (beide Kontakt-Phasen
+   „Kontaktiert“, Einträge mit doppelt=True erscheinen nur als aktueller
+   Wert); Zelle score nur, wenn die Spalte im Katalog ist (score_aktiv). #}
 {% from "_symbole.html" import symbol %}
 {% from "_sparten.html" import chip %}
 {% from "_komponenten.html" import wiedervorlage_chip, status_badge %}
@@ -36,8 +43,8 @@
 {% macro zelle(key, z, ctx) -%}
 {%- set v = z.vorgang -%}{%- set k = z.kunde -%}
 {%- if key == 'lead' -%}
-<td class="sp-lead">
-    <a class="lm-lead-name" href="/lead-management/lead/{{ v.id }}" title="Kundenkartei öffnen">{{ k.anzeige_name or '(ohne Namen)' }}</a>
+<td class="sp-lead" data-wert="{{ ((k.nachname or k.firma or '') ~ ' ' ~ (k.vorname or '')) | trim | lower }}">
+    <a class="lm-lead-name" href="/lead-management/lead/{{ v.id }}" title="Kundenkartei öffnen">{{ (lm_kundenname(k) if lm_kundenname is defined else k.anzeige_name) or '(ohne Namen)' }}</a>
     {%- if z.weitere %} <a class="lm-zaehler" href="/kunden/{{ k.id }}" title="{{ z.weitere }} weitere(r) Vorgang/Vorgänge dieses Kunden">+{{ z.weitere }}</a>{% endif %}
     {%- if v.demo %} <span class="abzeichen">Demo</span>{% endif %}
     {%- if z.monday %} <span class="abzeichen" title="gesyncter monday-Lead – Terminierung in monday">monday</span>{% endif %}
@@ -53,13 +60,16 @@
     {%- if not ctx.nur_lesen %}
     <select class="lm-inline lm-mini" data-feld="status" data-vorgang="{{ v.id }}" data-aktuell="{{ v.lead_phase }}"
             title="Status ändern (Pflichtgründe im Dialog)" aria-label="Status ändern">
-        {%- for s in ctx.status_wahl %}
+        {#- v25: gleiche Labels („Kontaktiert“) nur einmal – die zweite Phase nur, wenn sie der aktuelle Wert ist #}
+        {%- for s in ctx.status_wahl if s.key == v.lead_phase or (not s.doppelt and v.lead_phase not in (s.gleiche or [])) %}
         <option value="{{ s.key }}" data-grund="{{ s.grund }}" {{ 'selected' if s.key == v.lead_phase }}
                 {{ 'disabled' if not s.setzbar and s.key != v.lead_phase }}>{{ s.label }}{{ '' if s.setzbar else ' (abgeleitet)' }}</option>
         {%- endfor %}
     </select>
     {%- endif %}</span>
 </td>
+{%- elif key == 'score' -%}
+<td class="sp-score" data-wert="{{ v.score_punkte if v.score_punkte is not none else '' }}">{% if v.score_klasse %}<span class="abzeichen" title="Score-Klasse {{ v.score_klasse }}{{ ' · ' ~ v.score_punkte ~ ' Punkte' if v.score_punkte is not none }}">{{ v.score_klasse }}</span>{% if v.score_punkte is not none %} <small class="dezent">{{ v.score_punkte }}</small>{% endif %}{% else %}<span class="dezent">–</span>{% endif %}</td>
 {%- elif key == 'kanal' -%}
 <td class="sp-kanal">{% if z.kanal %}<span class="lm-status lm-kanal-label" style="--f:{{ z.kanal_farbe }}" title="Vertriebskanal – steuert das Angebotsprofil">{{ z.kanal }}</span>{% else %}<span class="dezent">–</span>{% endif %}</td>
 {%- elif key == 'interessen' -%}
@@ -118,7 +128,7 @@
     {%- if (z.termin.typ or 'vot') != 'vot' %} <span class="abzeichen">{{ 'Teams' if z.termin.typ == 'online' else 'Telefon' }}</span>{% endif %}
     {%- if z.termin.status == 'vorgemerkt' %} <span class="abzeichen" title="vorgemerkt – Terminierung (Pflichtfelder) steht noch aus">vorgemerkt</span>{% endif %}
     {%- if z.termin_ad %} <small class="dezent">{{ lm_initialen(z.termin_ad.name) }}</small>{% endif %}
-    {#- H5/A-9: an jedem Lead des Boards Terminiert – Terminbestätigung erneut senden
+    {#- H5/A-9: an jedem Lead des Boards Deals (Key terminiert) – Terminbestätigung erneut senden
         (Route Phase 108: gleiche ICS-UID, SEQUENCE+1, Aktivität; Rücksprung über Referer) #}
     {%- if ctx.board == 'terminiert' and not ctx.nur_lesen and (z.termin.typ or 'vot') == 'vot' and z.termin.status in ('geplant', 'bestaetigt') %}
     <form method="post" action="/lead-management/termin/{{ z.termin.id }}/bestaetigung-erneut" class="lm-inline-form"
@@ -144,12 +154,30 @@
 </tr>
 {%- endmacro %}
 
+{# v25: Spaltenköpfe mit gemerkter Sortierung (aria-sort), Stift zum Umbenennen
+   (eigener Anzeigename je Nutzer, leer = Standard) und Drag & Drop am Kopf
+   (draggable; „Kundenname“ bleibt fest vorn, `fest` nennt weitere Spalten mit
+   fester Position – der Infoabend hält Status an zweiter Stelle). Umbenennen ist
+   eine persönliche Ansichtseinstellung und bleibt auch in der Lesesicht
+   (ctx.nur_lesen, HV-Ansicht) möglich. Nutzbar auch von Infoabend/HV. #}
+{% macro spalten_kopf(spalten, ctx, fest=('lead',)) -%}
+{%- set sort = ctx.sortierung or {} -%}
+{%- for sp in spalten if sp.sichtbar -%}
+<th class="sp-{{ sp.key }}" data-sort="{{ sp.key }}" data-key="{{ sp.key }}" data-standard="{{ sp.standard or sp.titel }}" data-name="{{ sp.name or '' }}"
+    {%- if sort.key == sp.key %} aria-sort="{{ 'descending' if sort.richtung == 'ab' else 'ascending' }}"{% endif %}
+    draggable="{{ 'false' if sp.key in fest else 'true' }}"
+    title="{{ sp.titel }} – Klick sortiert (auf/ab, wird gemerkt){{ '' if sp.key in fest else ' · Ziehen verschiebt die Spalte' }}"><span class="lm-th-text">{{ sp.titel }}</span>
+    <button type="button" class="lm-th-stift" data-key="{{ sp.key }}" title="Spalte umbenennen (leer = Standard „{{ sp.standard or sp.titel }}“)" aria-label="Spalte {{ sp.titel }} umbenennen">{{ symbol('stift') }}</button>
+</th>
+{%- endfor -%}
+{%- endmacro %}
+
 {% macro lead_tabelle(zeilen, spalten, ctx, gruppe='') -%}
 <table class="tabelle lm-tabelle" data-gruppe="{{ gruppe }}">
     <thead>
         <tr>
             {%- if ctx.sammel %}<th class="sp-wahl"><input type="checkbox" class="lm-wahl-alle" title="alle sichtbaren markieren" aria-label="alle sichtbaren markieren"></th>{% endif %}
-            {%- for sp in spalten if sp.sichtbar %}<th class="sp-{{ sp.key }}" data-sort="{{ sp.key }}" title="{{ sp.titel }} – Klick sortiert (auf/ab)">{{ sp.titel }}</th>{% endfor %}
+            {{- spalten_kopf(spalten, ctx) }}
         </tr>
     </thead>
     <tbody>

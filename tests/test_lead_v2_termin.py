@@ -195,13 +195,22 @@ class Kandidatenfilter(Basis):
         ergebnis = lead_termin.kandidaten(self.s, v3)
         self.assertEqual(self.namen(ergebnis["kandidaten"]), [])
         self.assertTrue(any("MFH" in a["grund"] for a in ergebnis["ausgeschlossen"]))
-        # Handelsvertreter nur bei eigenem Lead – und dann nur er (eigener Kalender)
+        # v25 (PLAN_LEAD_V3 Phase 120): Handelsvertreter werden NUR vorgeschlagen,
+        # wenn der anfragende Benutzer selbst dieser HV ist – auch bei eigenem Lead
+        # sieht der Innendienst (bzw. ein Aufruf ohne Benutzer) ihn nicht, dafür den
+        # Hinweis „Lead liegt bei … (Handelsvertreter), Terminierung durch den Vertreter“;
+        # der HV selbst bekommt nur sich (eigener Kalender). Vorher (v23): HV bei
+        # eigenem Lead immer Kandidat.
         v3.ad_id = self.ads["hv"].id
         self.s.commit()
         ergebnis = lead_termin.kandidaten(self.s, v3)
-        self.assertIn("Hv", self.namen(ergebnis["kandidaten"]))
+        self.assertNotIn("Hv", self.namen(ergebnis["kandidaten"]))
+        self.assertEqual(ergebnis["hv_lead"].id, self.ads["hv"].id)
+        self.assertIn("Terminierung durch den Vertreter", ergebnis["hv_hinweis"])
+        self.assertIn(self.ads["hv"].id, [a.id for a in ergebnis["hv_manuell"]])
         ergebnis = lead_termin.kandidaten(self.s, v3, benutzer=self.ads["hv"])
         self.assertEqual(self.namen(ergebnis["kandidaten"]), ["Hv"])
+        self.assertIsNone(ergebnis["hv_lead"])
 
     def test_kanal_regel(self):
         v = self.lead(4, sparten=("WP",))
@@ -490,8 +499,15 @@ class AbsageUndErsatz(Basis):
         self.assertTrue(daten["kandidaten"][0]["bevorzugt"])
         self.assertIn("30 Tage alt (bevorzugt)", daten["kandidaten"][0]["begruendung"])
         self.assertIn("km Luftlinie", daten["kandidaten"][0]["begruendung"])
-        self.assertIn("Klasse", daten["kandidaten"][0]["begruendung"])
-        self.assertIn("Phase In Kontaktierung", daten["kandidaten"][1]["begruendung"])
+        # v25 (Phase 120): Score ist abgeschaltet (score_aktiv = aus) – keine
+        # Klassen-Angabe mehr in der Begründung; beide Kontakt-Phasen tragen das
+        # Label „Kontaktiert“ (Blatt Status), die interne Phase steht als Zusatz
+        if lead_v2.score_aktiv(self.s):
+            self.assertIn("Klasse", daten["kandidaten"][0]["begruendung"])
+        else:
+            self.assertNotIn("Klasse", daten["kandidaten"][0]["begruendung"])
+        self.assertIn("Phase Kontaktiert (erreicht)", daten["kandidaten"][1]["begruendung"])
+        self.assertIn("Phase Kontaktiert (qualifiziert)", daten["kandidaten"][0]["begruendung"])
         seite = self.client.get(f"/lead-management/termin/{termin.id}/ersatz")
         self.assertEqual(seite.status_code, 200)
         self.assertIn("Termin für Ersatzkunden vorschlagen", seite.text)

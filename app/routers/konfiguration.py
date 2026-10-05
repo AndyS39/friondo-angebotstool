@@ -1334,9 +1334,13 @@ async def lead_logik_seite(request: Request,
     if not leadmanagement.lead_modul_sichtbar(session, request.state.benutzer):
         raise HTTPException(status_code=404)   # Demo-Modus: unsichtbar
     logik = leadmanagement_logik.hole_logik()
+    # v25 (PLAN_LEAD_V3 Phase 120): Blätter Qualifizierung/Scoring/Klassen werden
+    # eingelesen, aber bei score_aktiv = aus nicht angewendet; Blatt Status mit
+    # Hinweis „zwei Phasen dürfen dasselbe Label tragen“
     return render(request, "konfiguration/lead_logik.html",
                   aktiv="/parametrierung", logik=logik,
                   pfad=str(leadmanagement_logik.LOGIK_PFAD),
+                  score_aktiv=leadmanagement.score_aktiv(session),
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -1379,9 +1383,16 @@ async def lead_logik_upload(request: Request,
                                 status_code=303)
     meldung = (f"Steuerdatei übernommen – {len(logik.fragen)} Fragen, "
                f"{len(logik.scoring)} Scoring-Regeln, "
-               f"{len(logik.kaskade)} Kaskaden-Stufen"
+               f"{len(logik.kaskade)} Kaskaden-Stufen, "
+               f"{len(logik.status_zeilen)} Status-Zeilen"
                + (f", {len(logik.warnungen)} Warnungen" if logik.warnungen else "")
                + (f". Backup: {sicherung.name}" if sicherung else "."))
+    # v25 (Phase 120): Import-Hinweise – Score aus, Labels dürfen doppelt sein
+    if not leadmanagement.score_aktiv(session):
+        meldung += " Blätter Qualifizierung/Scoring/Klassen vorhanden, nicht aktiv (score_aktiv = aus)."
+    labels = [z.label for z in logik.status_zeilen]
+    if len(labels) != len(set(labels)):
+        meldung += " Hinweis Blatt Status: zwei Phasen dürfen dasselbe Label tragen."
     return RedirectResponse("/parametrierung/lead-logik?meldung="
                             + quote_plus(meldung), status_code=303)
 
@@ -1776,7 +1787,9 @@ async def lead_einstellungen(request: Request,
                   "info_vorlauf_tage", "info_rollierend_monate", "puffer_min",
                   "max_termine_tag_start", "dashboard_horizont_tage",
                   "kanal_ad_regel", "vorab_dauer_min", "ersatz_min_treffer",
-                  "termin_konflikt_modus", "vorschlag_raster_manuell_min"]
+                  "termin_konflikt_modus", "vorschlag_raster_manuell_min",
+                  # v25 (Lead-Management V3, Phase 120)
+                  "score_aktiv", "ohne_schritt_tage"]
     werte = {name: lead_kern.parameter_holen(session, name)
              for name in schluessel}
     from app import lead_v2
@@ -1883,7 +1896,16 @@ async def lead_einstellungen_speichern(request: Request,
               "ersatz_alter_tage", "info_wochentag", "info_woche",
               "info_vorlauf_tage", "info_rollierend_monate", "puffer_min",
               "max_termine_tag_start", "dashboard_horizont_tage",
-              "vorab_dauer_min", "ersatz_min_treffer", "vorschlag_raster_manuell_min"]
+              "vorab_dauer_min", "ersatz_min_treffer", "vorschlag_raster_manuell_min",
+              # v25 (Phase 120): Dashboard „Ohne nächsten Schritt“
+              "ohne_schritt_tage"]
+    # v25 (Phase 120): zentraler Schalter Score/Qualifizierung (an|aus), protokolliert
+    if form.get("score_aktiv") in ("an", "aus"):
+        alt = lead_kern.parameter_holen(session, "score_aktiv", "aus")
+        if form.get("score_aktiv") != alt:
+            lead_kern.einstellungs_protokoll(
+                session, f"score_aktiv {alt} → {form.get('score_aktiv')}", benutzer)
+        lead_kern.parameter_setzen(session, "score_aktiv", form.get("score_aktiv"))
     for name in einfache:
         if form.get(name) is not None:
             lead_kern.parameter_setzen(session, name,

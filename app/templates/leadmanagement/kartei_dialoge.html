@@ -2,9 +2,11 @@
 {% from "leadmanagement/anruf_dialoge.html" import anruf_dialoge %}
 {# Phase 106 – Dialoge der Kundenkartei: E-Mail (Vorlage), Notiz, Wiedervorlage/
    Zurückstellen, Nachbearbeitung (F11), Termin manuell. Die Anruf-Folgedialoge
-   (Nicht erreicht mit Kaskaden-Vorschlag, Rückruf, Kein Interesse, Zurückstellen,
-   Reaktivieren) liefert das Makro anruf_dialoge aus Phase 107 (Vertrag:
-   POST /lead-management/anruf/{id} mit zurueck = Kartei). #}
+   (Rückruf, Kein Interesse, Zurückstellen, Reaktivieren; v25: „Nicht erreicht“
+   wird ohne Dialog gepostet) liefert das Makro anruf_dialoge aus Phase 107
+   (Vertrag: POST /lead-management/anruf/{id} mit zurueck = Kartei). Ändert
+   Agent B die Makro-Signatur, bleibt der Aufruf unten positionsgleich;
+   lm_kartei.js bringt einen Fallback für dialogOeffnen mit. #}
 
 <dialog id="dlg-notiz" class="lk-dialog">
     <form method="post" action="{{ notiz_url }}" class="formular">
@@ -41,7 +43,7 @@
     <h3>{{ symbol('wiedervorlage') }} Wiedervorlage</h3>
     <form method="post" action="{{ kartei_url }}/wiedervorlage" class="formular">
         <input type="hidden" name="art" value="wiedervorlage">
-        <p class="dezent">Kundenkontakt zu einem Zeitpunkt (Anrufliste/Dashboard zeigen ihn als fällig). Für Arbeitsaufträge rechts ein To-Do anlegen.</p>
+        <p class="dezent">Kundenkontakt zu einem Zeitpunkt (Anrufliste/Dashboard zeigen ihn als fällig). Für Arbeitsaufträge unten im Block To-Dos ein To-Do anlegen.</p>
         <label>Wann <input type="datetime-local" name="wann" value="{{ wv_vorschlag }}" required></label>
         <label class="breit">Notiz <input type="text" name="notiz" maxlength="500" placeholder="optional"></label>
         <div class="formzeile">

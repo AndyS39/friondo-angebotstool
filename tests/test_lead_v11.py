@@ -247,11 +247,16 @@ class Phase88Uebersicht(Basis):
 
 
 class Phase89Anrufliste(Basis):
-    def test_gruppen_chips_satz(self):
+    def test_liste_chips_satz(self):
+        """v21 Gruppen-Test, v25 (PLAN_LEAD_V3 Phase 118) angepasst: die fünf
+        Gruppen sind entfallen – EINE sortierte Liste (SLA rot → SLA gelb →
+        fällige Wiedervorlagen/Rückrufe nach Uhrzeit → zurückgestellt → Rest nach
+        Eingang); Chips, Sätze (Wiedervorlage statt „nächster Versuch“) und die
+        URL-Filter der Übersicht (versuche, quelle_typ) wirken weiter."""
         from app import lead_anrufliste
         jetzt = datetime.now()
         # SLA rot ohne Versuch (Eingang vor 3 Arbeitstagen), Rückruf fällig,
-        # Kaskade fällig mit 3 Versuchen, neu heute grün, zurückgestellt fällig
+        # Wiedervorlage fällig mit 3 Versuchen, neu heute grün, zurückgestellt fällig
         rot = self.lead(901, "website", eingang=jetzt - timedelta(days=3))
         rueck = self.lead(902, "portal", eingang=jetzt - timedelta(days=1), versuche=1,
                           naechste_aktion_am=jetzt - timedelta(minutes=30))
@@ -268,21 +273,24 @@ class Phase89Anrufliste(Basis):
         self.s.commit()
         f = lead_anrufliste.filter_aus_query({"meine": "0"})
         d = lead_anrufliste.daten(self.s, None, f)
-        gruppen = {g["key"]: [z["vorgang"].id for z in g["zeilen"]] for g in d["gruppen"]}
-        self.assertIn(rot.id, gruppen["dran"])
-        self.assertIn(rueck.id, gruppen["dran"])
-        self.assertIn(weiter.id, gruppen["weiter"])
-        self.assertIn(neu.id, gruppen["neu"])
-        self.assertIn(zur.id, gruppen["wiedervorlage"])
-        # Reihenfolge Jetzt dran: SLA rot vor Rückruf
-        self.assertLess(gruppen["dran"].index(rot.id), gruppen["dran"].index(rueck.id))
+        self.assertNotIn("gruppen", d)
+        ids = [z["vorgang"].id for z in d["zeilen"]]
+        rang = {z["vorgang"].id: z["rang"] for z in d["zeilen"]}
+        self.assertEqual((rang[rot.id], rang[rueck.id], rang[weiter.id], rang[neu.id], rang[zur.id]),
+                         (0, 2, 2, 4, 3))
+        # Reihenfolge: SLA rot → fällig nach Uhrzeit (WV −2h vor Rückruf −30 min)
+        # → zurückgestellt → Rest
+        self.assertLess(ids.index(rot.id), ids.index(weiter.id))
+        self.assertLess(ids.index(weiter.id), ids.index(rueck.id))
+        self.assertLess(ids.index(rueck.id), ids.index(zur.id))
+        self.assertLess(ids.index(zur.id), ids.index(neu.id))
         # Sätze
-        satz = {z["vorgang"].id: " · ".join(t for t, _ in z["satz"])
-                for g in d["gruppen"] for z in g["zeilen"]}
+        satz = {z["vorgang"].id: " · ".join(t for t, _ in z["satz"]) for z in d["zeilen"]}
         self.assertIn("noch nicht angerufen", satz[rot.id])
         self.assertIn("Rückruf gewünscht", satz[rueck.id])
         self.assertIn("3× nicht erreicht", satz[weiter.id])
-        self.assertIn("nächster Versuch", satz[weiter.id])
+        self.assertIn("Wiedervorlage", satz[weiter.id])
+        self.assertNotIn("nächster Versuch", satz[weiter.id])
         self.assertIn("zurückgestellt", satz[zur.id])
         self.assertIn("heute fällig", satz[zur.id])
         # Chips zählen wie die Filter treffen
@@ -292,21 +300,24 @@ class Phase89Anrufliste(Basis):
             g = lead_anrufliste.daten(self.s, None, lead_anrufliste.filter_aus_query(
                 {"meine": "0", **param}))
             self.assertEqual(d["zaehler"][chip], g["offen"], chip)
-        # Filter aus der Übersicht
+        # Filter aus der Übersicht (URL-Parameter bleiben, Quelle-Select entfällt)
         g = lead_anrufliste.daten(self.s, None, lead_anrufliste.filter_aus_query(
             {"meine": "0", "versuche": "3"}))
-        self.assertTrue(all((z["vorgang"].versuch_nr or 0) == 3
-                            for gr in g["gruppen"] for z in gr["zeilen"]))
-        self.assertIn(weiter.id, [z["vorgang"].id for gr in g["gruppen"] for z in gr["zeilen"]])
+        self.assertTrue(all((z["vorgang"].versuch_nr or 0) == 3 for z in g["zeilen"]))
+        self.assertIn(weiter.id, [z["vorgang"].id for z in g["zeilen"]])
         g = lead_anrufliste.daten(self.s, None, lead_anrufliste.filter_aus_query(
             {"meine": "0", "quelle_typ": "portal"}))
-        self.assertTrue(all(z["quelle_gruppe"] == "portal" for gr in g["gruppen"] for z in gr["zeilen"]))
-        # Seite: Chips, Gruppenköpfe, Punkte, ⋯-Menü, Panel, Legende
+        self.assertTrue(all(z["quelle_gruppe"] == "portal" for z in g["zeilen"]))
+        self.assertIn(rueck.id, [z["vorgang"].id for z in g["zeilen"]])
+        # Seite: Chips, Sortierhinweis statt Gruppenköpfe, Punkte, ⋯-Menü, Panel, Legende
         seite = self.client.get("/lead-management/anrufliste?meine=0").text
+        inhalt = seite.split("<main", 1)[1]
+        for text in ('class="lm-sortierung"', "Vertriebskanal", 'class="lm-dots', "lm-menue",
+                     'id="lead-panel"', "Tasten 1 Erreicht", "Arbeitsliste <b>"):
+            self.assertIn(text, inhalt)
         for text in ("Jetzt dran", "Weiter versuchen", "Neu heute", "Wiedervorlagen fällig",
-                     "Sonstige offene", 'class="lm-dots', "lm-menue", 'id="lead-panel"',
-                     "Tasten 1 Erreicht", "Arbeitsliste <b>"):
-            self.assertIn(text, seite)
+                     "Sonstige offene", "lm-gruppe-kopf", 'name="quelle_typ"', 'name="quelle_id"'):
+            self.assertNotIn(text, inhalt)
         # Kopfblock zeigt dieselben Punkte
         akte = self.client.get(f"/vorgaenge/{weiter.id}").text
         self.assertIn("Kontaktstatus:", akte)

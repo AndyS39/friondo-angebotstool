@@ -18,6 +18,13 @@
     · Änderungen wirken auf neue Qualifizierungen; abgeschlossene behalten
     ihre Antworten.</p>
 
+{# v25 (PLAN_LEAD_V3 Phase 120): Score/Qualifizierung zentral abgeschaltet #}
+{% if not score_aktiv %}
+<p class="hinweis">Blätter Qualifizierung/Scoring/Klassen vorhanden, nicht aktiv – Parameter
+    <code>score_aktiv = aus</code> (Lead-Einstellungen). Die Blätter werden eingelesen, aber weder
+    Score noch Klassen noch der Qualifizierungsbogen angewendet.</p>
+{% endif %}
+
 {% if logik.fehler %}
 <div class="warnblock fehlerblock">
     <strong>Fehler ({{ logik.fehler | length }})</strong>
@@ -37,7 +44,35 @@
     <button class="knopf" type="submit">Neue Steuerdatei einlesen</button>
 </form>
 
-<h2>Qualifizierung ({{ logik.fragen | length }} Fragen)</h2>
+{# v25: Blatt Status (Phase → Label/Farbe/Board/Gruppe/board_label) – zwei Phasen
+   dürfen dasselbe Label tragen (in_kontaktierung + qualifiziert → „Kontaktiert“) #}
+<h2>Status ({{ logik.status_zeilen | length }} Phasen)</h2>
+<p class="dezent">Hinweis zum Import: zwei Phasen dürfen dasselbe Label tragen – die interne Phase
+    bleibt eindeutig, die Oberfläche zeigt das Label (z. B. „Kontaktiert“ für in_kontaktierung und
+    qualifiziert). Spalte <code>board_label</code> = Anzeigename des Boards (Hauptboard / Deals).</p>
+<div style="overflow-x:auto">
+<table class="tabelle" style="max-width:1000px">
+    <thead><tr><th>Phase</th><th>Label</th><th>Farbe</th><th>Board</th><th>Board-Label</th>
+        <th>Gruppe</th><th>monday-Status</th></tr></thead>
+    <tbody>
+    {% for z in logik.status_zeilen %}
+        <tr>
+            <td><code>{{ z.phase }}</code></td>
+            <td>{{ z.label }}</td>
+            <td><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:{{ z.farbe or '#ccc' }};vertical-align:middle"></span> <code>{{ z.farbe }}</code></td>
+            <td>{{ z.board }}</td>
+            <td>{{ z.board_label or '–' }}</td>
+            <td>{{ z.gruppe }}</td>
+            <td class="dezent">{{ z.monday_status | join(' | ') }}</td>
+        </tr>
+    {% else %}
+        <tr><td colspan="7" class="dezent">Blatt „Status“ fehlt – Boards nutzen die Standardzuordnung.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<h2>Qualifizierung ({{ logik.fragen | length }} Fragen){% if not score_aktiv %} <small class="dezent">vorhanden, nicht aktiv</small>{% endif %}</h2>
 <div style="overflow-x:auto">
 <table class="tabelle">
     <thead><tr><th>Sparte</th><th>Key</th><th>Frage</th><th>Typ</th>
@@ -61,7 +96,7 @@
 </div>
 
 <h2>Scoring ({{ logik.scoring | length }} Regeln) · Klassen:
-    {% for klasse, ab in logik.klassen %}{{ klasse }} ≥ {{ ab }}{{ ' · ' if not loop.last }}{% endfor %}</h2>
+    {% for klasse, ab in logik.klassen %}{{ klasse }} ≥ {{ ab }}{{ ' · ' if not loop.last }}{% endfor %}{% if not score_aktiv %} <small class="dezent">vorhanden, nicht aktiv</small>{% endif %}</h2>
 <table class="tabelle" style="max-width:700px">
     <thead><tr><th>Frage</th><th>Bedingung</th><th>Punkte</th><th>Bemerkung</th></tr></thead>
     <tbody>
@@ -84,8 +119,9 @@
     {% endfor %}
     </tbody>
 </table>
-<p class="dezent">Nach dem letzten Versuch: Phase „Nicht erreicht“,
-    Wiedervorlage +30 Tage, Aktion mail_nurture.</p>
+<p class="dezent">Nach dem letzten Versuch: Phase „Nicht erreicht“, Nurture-Mail in 30 Tagen.
+    Seit V3 wird die Spalte „Wiedervorlage nach“ nicht mehr ausgewertet – „Nicht erreicht“/„Mailbox“
+    setzen keine automatische Wiedervorlage; die Mail-Aktionen bleiben an die Versuchsnummer gekoppelt.</p>
 
 <h2>Gründe</h2>
 <table class="tabelle" style="max-width:700px">

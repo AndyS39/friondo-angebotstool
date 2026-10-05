@@ -151,9 +151,11 @@ class Board(Basis):
             self.assertIn(knopf, text)
         self.assertIn(f'action="{BOARD}/{v.id}/teilgenommen"', text)
         self.assertIn(f'action="{BOARD}/{v.id}/veranstaltung"', text)
-        for kopf in ("<th class=\"sp-status\">", "<th class=\"sp-teilgenommen\">",
+        # v25 (Prüfung F): konfigurierbare Spaltenköpfe tragen die Werkzeug-Attribute
+        # (data-sort/data-key/draggable), die Infoabend-Spalten bleiben schlichte <th>
+        for kopf in ("<th class=\"sp-status\"", "<th class=\"sp-teilgenommen\">",
                      "<th class=\"sp-veranstaltung\">", "<th class=\"sp-ergebnis\">",
-                     "<th class=\"sp-telefon\">", "<th class=\"sp-interessen\">"):
+                     "<th class=\"sp-telefon\"", "<th class=\"sp-interessen\""):
             self.assertIn(kopf, text)
         self.assertIn("tel:", text)
         self.assertIn("li-sammelform", text)        # Sammelaktionen für Admin
@@ -258,7 +260,8 @@ class Board(Basis):
         self.assertIn("Vorab-Angebot", zeile)
 
     def test_statistik_quellen_typ_veranstaltung(self):
-        self.assertIn(("veranstaltung", "Info-Veranstaltung"), kern.QUELLEN_GRUPPEN)
+        # v25 (PLAN_LEAD_V3 Phase 118): Gruppen-/Anzeigename „Infoabend“, Key veranstaltung bleibt
+        self.assertIn(("veranstaltung", "Infoabend"), kern.QUELLEN_GRUPPEN)
         self.assertEqual(kern.quelle_gruppe(self.quelle), "veranstaltung")
         r = self.client.get("/lead-management/uebersicht")
         self.assertEqual(r.status_code, 200)

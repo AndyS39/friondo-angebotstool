@@ -1,10 +1,14 @@
 # Tests PLAN_LEAD_V2 Phase 107 (CLAUDE v23): Anruf-Workflow & Telefonie –
-# Ergebnis mit Dauer, Sperre ab versuche_max, Kaskaden-Vorschlag (JSON),
-# Dialog-Zeitpunkt überschreibt die Kaskade, Kein Interesse Pflichtgrund,
-# Meine Anrufe, Rufnummernsuche E.164, Dauer-Korrektur, Fälligkeits-Glocke
-# einmalig, Doppelversand-Schutz, Versuchs-Punkte, Handelsvertreter-Gate.
-# Laufen im Demo-Modus gegen die Entwicklungs-DB; Testleads tragen den
-# Nachnamen „LeadV2A-Test“ und werden aufgeräumt.
+# Ergebnis mit Dauer, Sperre ab versuche_max, Kaskaden-Auskunft (JSON),
+# Kein Interesse Pflichtgrund, Meine Anrufe, Rufnummernsuche E.164,
+# Dauer-Korrektur, Fälligkeits-Glocke einmalig, Doppelversand-Schutz,
+# Versuchs-Punkte, Handelsvertreter-Gate.
+# v25 (PLAN_LEAD_V3 Phase 120): der „Nicht erreicht“-Dialog ist entfallen –
+# das Feld wiedervorlage_am wird ignoriert, die Kaskade setzt keine
+# Wiedervorlage mehr (Test „Dialog-Zeitpunkt überschreibt die Kaskade“ wurde
+# dafür zu „wiedervorlage_am wird ignoriert“; Punkte-Test prüft dlg-rueckruf
+# statt dlg-nichterreicht). Laufen im Demo-Modus gegen die Entwicklungs-DB;
+# Testleads tragen den Nachnamen „LeadV2A-Test“ und werden aufgeräumt.
 import unittest
 import warnings
 from datetime import datetime, timedelta
@@ -200,7 +204,11 @@ class Ergebnis(Basis):
         self.assertEqual(d["sperre_meldung"], lead_anrufliste.SPERRE_MELDUNG)
         self.assertEqual(self.client.get("/lead-management/anruf/99999999/vorschlag").status_code, 404)
 
-    def test_dialog_zeitpunkt_ueberschreibt_kaskade(self):
+    def test_wiedervorlage_am_wird_ignoriert(self):
+        """v25 (PLAN_LEAD_V3 Phase 120, vorher „Dialog-Zeitpunkt überschreibt die
+        Kaskade“): kein Dialog mehr – ein mitgesendetes wiedervorlage_am wird
+        ignoriert, die Kaskade setzt keine Wiedervorlage, Mails bleiben an der
+        Versuchsnummer, die letzte Stufe leert naechste_aktion_am (Nurture +30)."""
         v = self.lead(7, email="v2a7@test.local")
         wunsch = (datetime.now() + timedelta(days=3)).replace(hour=10, minute=30, second=0, microsecond=0)
         r = self.client.post(f"/lead-management/anruf/{v.id}",
@@ -208,40 +216,41 @@ class Ergebnis(Basis):
                                    "wiedervorlage_am": wunsch.strftime("%Y-%m-%dT%H:%M"),
                                    "notiz": "Nachbar sagt: im Urlaub"},
                              follow_redirects=False)
-        self.assertIn("manuell gesetzt", self.meldung(r))
+        self.assertEqual(self.meldung(r), "Nicht erreicht protokolliert (Versuch 1).")
         self.s.expire_all()
         v = self.s.get(Vorgang, v.id)
-        self.assertEqual(v.naechste_aktion_am, wunsch)
+        self.assertIsNone(v.naechste_aktion_am)
         self.assertEqual(v.versuch_nr, 1)
         self.assertEqual(v.lead_phase, "in_kontaktierung")
         akt = self.anrufe(v.id)[-1]
-        self.assertEqual(akt.naechste_aktion_am, wunsch)
+        self.assertIsNone(akt.naechste_aktion_am)
         self.assertIn("im Urlaub", akt.text)
-        # Ohne Feld: Kaskade wie bisher (Stufe 2 → Mail nicht_erreicht geplant)
+        # Stufe 2 → Mail nicht_erreicht geplant, weiterhin keine Wiedervorlage
         r = self.client.post(f"/lead-management/anruf/{v.id}", data={"ergebnis": "nicht_erreicht"},
                              follow_redirects=False)
-        self.assertIn("Wiedervorlage", self.meldung(r))
+        self.assertEqual(self.meldung(r), "Nicht erreicht protokolliert (Versuch 2) – Mail geplant.")
         self.s.expire_all()
         v = self.s.get(Vorgang, v.id)
-        self.assertNotEqual(v.naechste_aktion_am, wunsch)
+        self.assertIsNone(v.naechste_aktion_am)
         mails = [m.vorlage_key for m in self.s.query(KommunikationLog).filter_by(vorgang_id=v.id)
                  if m.vorlage_key != "eingangsbestaetigung"]
         self.assertEqual(mails, ["nicht_erreicht"])
-        # Letzte Stufe mit manuellem Datum: Nurture wandert mit, Phase Nicht erreicht
+        # Letzte Stufe: Phase Nicht erreicht, Nurture +30 Tage, keine Wiedervorlage
         v2 = self.lead(8, versuche=kern.versuche_max(self.s) - 1, email="v2a8@test.local")
         wunsch2 = (datetime.now() + timedelta(days=45)).replace(hour=9, minute=0, second=0, microsecond=0)
         r = self.client.post(f"/lead-management/anruf/{v2.id}",
                              data={"ergebnis": "mailbox",
                                    "wiedervorlage_am": wunsch2.strftime("%Y-%m-%dT%H:%M")},
                              follow_redirects=False)
-        self.assertIn("Nicht erreicht", self.meldung(r))
+        self.assertIn("Lead steht auf „Nicht erreicht“", self.meldung(r))
         self.s.expire_all()
         v2 = self.s.get(Vorgang, v2.id)
         self.assertEqual(v2.lead_phase, "nicht_erreicht")
-        self.assertEqual(v2.naechste_aktion_am, wunsch2)
+        self.assertIsNone(v2.naechste_aktion_am)
         nurture = (self.s.query(KommunikationLog)
                    .filter_by(vorgang_id=v2.id, vorlage_key="nurture").one())
-        self.assertEqual(nurture.geplant_am, wunsch2)
+        self.assertGreater(nurture.geplant_am, datetime.now() + timedelta(days=29))
+        self.assertLess(nurture.geplant_am, datetime.now() + timedelta(days=31))
         self.assertTrue(lead_anrufliste.versuche_gesperrt(self.s, v2))
 
     def test_kein_interesse_pflichtgrund(self):
@@ -622,10 +631,11 @@ class Punkte(Basis):
         akte = self.client.get(f"/vorgaenge/{v.id}").text
         self.assertEqual(akte.count('<i class="v"></i>'), 3)
         self.assertIn('class="lm-dots warn"', akte)
-        # Legende und Tasten unverändert, Stoppuhr-Markup vorhanden
+        # Legende und Tasten unverändert, Stoppuhr-Markup vorhanden (v25: Rückruf-
+        # Dialog statt des entfallenen Nicht-erreicht-Dialogs)
         for text in ("Tasten 1 Erreicht · 2 Nicht erreicht · 3 Besetzt · 4 Mailbox · 5 Rückruf · 6 Falsche Nummer · 7 Kein Interesse",
                      'id="lead-panel"', "lm-menue", 'class="lm-stoppuhr"', 'name="dauer_sek"',
-                     "lm-anruf-form", "/static/lm_anruf.js", 'id="dlg-nichterreicht"',
+                     "lm-anruf-form", "/static/lm_anruf.js", 'id="dlg-rueckruf"',
                      'href="tel:+49203'):
             self.assertIn(text, seite, text)
         punkte = lead_anrufliste.versuche_fuer_punkte(self.s, self.anrufe(v.id))

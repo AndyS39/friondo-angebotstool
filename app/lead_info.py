@@ -1,4 +1,6 @@
-# Info-Veranstaltung (v23, PLAN_LEAD_V2 Phase 104/111, Abschnitt I):
+# Infoabend (v23, PLAN_LEAD_V2 Phase 104/111, Abschnitt I; bis v24 „Info-Veranstaltung“ –
+# seit v25 heißt die Seite „Infoabend“, Parameter info_*, Tabelle info_veranstaltungen und
+# Quelle info_veranstaltung bleiben):
 # Terminregel „jeden Monat am 1. Donnerstag 18:00 Uhr in Krefeld“ mit
 # NRW-Feiertagsregel (fällt der Termin auf einen gesetzlichen Feiertag, eine
 # Woche später). Feste und bewegliche Feiertage werden berechnet (Osterformel
@@ -130,7 +132,7 @@ def veranstaltungen_anlegen(session: Session, ab=None, monate=None) -> int:
             continue
         session.add(InfoVeranstaltung(
             beginn=beginn, ort=p["ort"], verschoben=verschoben,
-            titel="Info-Veranstaltung " + beginn.strftime("%d.%m.%Y")))
+            titel="Infoabend " + beginn.strftime("%d.%m.%Y")))
         neu += 1
     session.flush()
     return neu
@@ -179,11 +181,11 @@ KONTROLLTERMINE = ["01.10.2026", "05.11.2026", "03.12.2026", "07.01.2027",
 
 
 # =====================================================================================
-# Phase 111 – Board Info-Veranstaltung (I2/I3), Zuordnung Lead → Veranstaltung (I4,
+# Phase 111 – Board Infoabend (I2/I3), Zuordnung Lead → Veranstaltung (I4,
 # A-8 [OFFEN 1]), Abgleich „Kunde bereits im System“ (I5), Sammelaktionen (H3).
 # Leads dieses Boards sind normale Vorgänge: Quelle info_veranstaltung (Typ
 # veranstaltung) bzw. vorgaenge.veranstaltung_id gesetzt. Lead-Phasen bleiben
-# unverändert; nach Terminierung erscheinen sie zusätzlich im Board Terminiert.
+# unverändert; nach Terminierung erscheinen sie zusätzlich im Board Deals.
 # Der Bestandsverweis (I5) ist KEINE neue Spalte, sondern eine Aktivität vom Typ
 # „hinweis“ („Kunde bereits im System: Vorgang #… (Phase …)“), die das Board
 # ausliest – so bleibt app/models.py unberührt.
@@ -448,9 +450,9 @@ def bestand_hinweis_schreiben(session: Session, vorgang, treffer: dict, benutzer
     """Aktivität typ hinweis am NEUEN Vorgang: „Kunde bereits im System:
     Vorgang #… (Phase …)“ – das Board liest sie als roten Hinweis (I5)."""
     from app import leadmanagement as kern
-    from app.models import LEAD_PHASEN_NAMEN
     alt = treffer["vorgang"]
-    phase = LEAD_PHASEN_NAMEN.get(alt.lead_phase or "", alt.lead_phase or "ohne Lead-Phase")
+    # v25: Phasen-Label aus dem Blatt Status (beide Kontakt-Phasen „Kontaktiert“)
+    phase = _status_label(_logik(), alt.lead_phase)[0] if alt.lead_phase else "ohne Lead-Phase"
     kunde = treffer.get("kunde")
     text = (f"{HINWEIS_PRAEFIX}: Vorgang #{alt.id} (Phase {phase})"
             + (f" – {kunde.anzeige_name}" if kunde is not None else ""))
@@ -462,9 +464,10 @@ def bestand_hinweis_schreiben(session: Session, vorgang, treffer: dict, benutzer
 def bestand_hinweise(session: Session, vorgang_ids) -> dict:
     """Jüngster Bestandshinweis je Vorgang: {vorgang_id: {vorgang_id, text, phase,
     link}} – aus den Aktivitäten (kein Schema-Zusatz)."""
-    from app.models import LeadAktivitaet, Vorgang, LEAD_PHASEN_NAMEN
+    from app.models import LeadAktivitaet, Vorgang
     ids = {i for i in vorgang_ids if i} or {0}
     ergebnis = {}
+    logik = _logik()   # v25: Phasen-Label aus dem Blatt Status
     for a in (session.query(LeadAktivitaet)
               .filter(LeadAktivitaet.vorgang_id.in_(ids), LeadAktivitaet.typ == HINWEIS_TYP)
               .order_by(LeadAktivitaet.zeitpunkt)):
@@ -475,7 +478,7 @@ def bestand_hinweise(session: Session, vorgang_ids) -> dict:
         ziel = session.get(Vorgang, ziel_id)
         ergebnis[a.vorgang_id] = {
             "vorgang_id": ziel_id, "text": a.text, "zeitpunkt": a.zeitpunkt,
-            "phase": LEAD_PHASEN_NAMEN.get(ziel.lead_phase or "", ziel.lead_phase or "")
+            "phase": (_status_label(logik, ziel.lead_phase)[0] if ziel.lead_phase else "")
             if ziel is not None else "",
             "link": f"/lead-management/lead/{ziel_id}" if (ziel is not None and ziel.lead_phase)
             else f"/vorgaenge/{ziel_id}",
@@ -701,9 +704,11 @@ def board_daten(session: Session, benutzer, f: dict | None = None) -> dict:
         reihe = [v for v in reihe if v.id == f["veranstaltung_id"]]
     gruppen = []
     offen_gesetzt = 0
+    sort = f.get("sort") if isinstance(f, dict) else None   # v25: gemerkte Sortierung (Board „info“)
     for v in reihe:
         zeilen = zeilen_je.get(f"v{v.id}", [])
         zeilen.sort(key=lambda z: z["eingang"] or jetzt, reverse=True)
+        _zeilen_sortieren(zeilen, sort, jetzt)
         eingeklappt = not zeilen if archiv else (not zeilen and offen_gesetzt >= 2)
         if zeilen or not eingeklappt:
             offen_gesetzt += 1
@@ -719,6 +724,7 @@ def board_daten(session: Session, benutzer, f: dict | None = None) -> dict:
     ohne = zeilen_je.get(GRUPPE_OHNE, [])
     if ohne and not archiv:
         ohne.sort(key=lambda z: z["eingang"] or jetzt, reverse=True)
+        _zeilen_sortieren(ohne, sort, jetzt)
         gruppen.insert(0, {
             "key": GRUPPE_OHNE, "veranstaltung": None, "titel": "Ohne Veranstaltung",
             "ort": "", "verschoben": False, "notiz": "", "vergangen": False, "zeilen": ohne,
@@ -792,16 +798,53 @@ SPALTEN_RUECKFALL = [
 ]
 
 
+# Board-Key der Spaltenkonfiguration je Nutzer (lead_boards.KONFIG_BOARDS; der
+# Katalog ist der des Hauptboards, die Einstellungen – Reihenfolge, Sichtbarkeit,
+# eigene Namen, gemerkte Sortierung – gelten nur für den Infoabend)
+KONFIG_BOARD = "info"
+
+
 def spalten_fuer(session: Session, benutzer_id: int, tabelle_makro: bool) -> list:
+    """Spalten des Infoabends: Hauptboard-Katalog in der Konfiguration des
+    Nutzers für das Board „info“ (v25: eigene Konfiguration, nicht die des
+    Hauptboards) + Ergebnis, Teilgenommen (nach Status) und Veranstaltung
+    (hinten); Kundenname und Status bleiben vorn."""
     lb = _lead_boards()
     if tabelle_makro and lb is not None:
-        basis = lb.spalten_fuer(session, benutzer_id, "hauptboard")
+        basis = lb.spalten_fuer(session, benutzer_id, KONFIG_BOARD)
     else:
         basis = [{"key": k, "titel": t, "sichtbar": s} for k, t, s in SPALTEN_RUECKFALL]
     rest = [sp for sp in basis if sp["key"] not in ("lead", "status")]
     vorn = [sp for sp in basis if sp["key"] == "lead"] + [sp for sp in basis if sp["key"] == "status"]
     ergebnis, teil, veranst = ({"key": k, "titel": t, "sichtbar": s} for k, t, s in SPALTEN_INFO)
     return vorn + [ergebnis, teil] + rest + [veranst]
+
+
+def sortierung_fuer(session: Session, benutzer) -> dict | None:
+    """Gemerkte Sortierung des Nutzers für den Infoabend ({key, richtung} oder
+    None) – lead_boards.sortierung_fuer mit dem Board-Key „info“."""
+    lb = _lead_boards()
+    if lb is None:
+        return None
+    try:
+        return lb.sortierung_fuer(session, benutzer, KONFIG_BOARD)
+    except Exception:
+        return None
+
+
+def _zeilen_sortieren(zeilen: list, sort: dict | None, jetzt) -> None:
+    """Gruppe nach der gemerkten Spalte sortieren (lead_boards.zeilen_sortieren);
+    ohne gemerkte Sortierung bleibt die Infoabend-Reihenfolge (Eingang neueste
+    zuerst) unverändert."""
+    if not sort:
+        return
+    lb = _lead_boards()
+    if lb is None:
+        return
+    try:
+        lb.zeilen_sortieren(zeilen, sort, jetzt)
+    except Exception:
+        pass
 
 
 # --- Sammelaktionen (H3) – Registrierung in der Registry von Phase 105 ----------------
@@ -945,7 +988,7 @@ def veranstaltung_verschieben(session: Session, veranstaltung, neuer_beginn: dat
         return f"Zu diesem Zeitpunkt gibt es bereits eine Veranstaltung (#{doppelt.id})."
     alt = titel(veranstaltung)
     veranstaltung.beginn = neuer_beginn
-    veranstaltung.titel = "Info-Veranstaltung " + neuer_beginn.strftime("%d.%m.%Y")
+    veranstaltung.titel = "Infoabend " + neuer_beginn.strftime("%d.%m.%Y")
     wer = f", {benutzer.name}" if benutzer is not None else ""
     zeile = (f"Manuell verschoben: {alt} → {titel(veranstaltung)} "
              f"({datetime.now().strftime('%d.%m.%Y %H:%M')}{wer})")
@@ -965,7 +1008,7 @@ def veranstaltung_anlegen_manuell(session: Session, beginn: datetime, ort: str =
     if session.query(InfoVeranstaltung).filter(InfoVeranstaltung.beginn == beginn).first():
         return None, "Zu diesem Zeitpunkt gibt es bereits eine Veranstaltung."
     v = InfoVeranstaltung(beginn=beginn, ort=(ort or parameter(session)["ort"])[:300],
-                          titel="Info-Veranstaltung " + beginn.strftime("%d.%m.%Y"),
+                          titel="Infoabend " + beginn.strftime("%d.%m.%Y"),
                           verschoben=False, archiviert=beginn <= datetime.now(),
                           erstellt_von=benutzer.id if benutzer is not None else None,
                           notiz=f"Manuell angelegt ({datetime.now().strftime('%d.%m.%Y %H:%M')})")

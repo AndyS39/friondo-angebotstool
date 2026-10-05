@@ -1,4 +1,4 @@
-/* Lead-Management V2, Phase 111 (PLAN_LEAD_V2 I2–I5): Board „Info-Veranstaltung“.
+/* Lead-Management V2, Phase 111 (PLAN_LEAD_V2 I2–I5): Board „Infoabend“ (bis v24 „Info-Veranstaltung“).
    Vanilla JS, kein Framework. Wird nur auf Seiten mit [data-li-board] aktiv.
    - Markier-Kästchen + „alle sichtbaren markieren“ + Sammelaktions-Leiste
      (Status ändern mit Pflichtgründen im Dialog, nächste Veranstaltung,

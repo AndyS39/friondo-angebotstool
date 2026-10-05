@@ -712,3 +712,230 @@ body.lm-mit-leiste main { padding-left: calc(var(--lm-leiste-breite) + var(--a-5
 @media (max-width: 900px) {
     body.lm-mit-leiste main { padding-left: var(--a-4); padding-bottom: 80px; }
 }
+
+/* Phase 118 – Lead-Management V3 (v25): Icon-Leiste mit 8 Einträgen + „Mehr …“,
+   Filterblock der Boards sticky (Chip-Selects, Suchfeld, Spaltenwähler,
+   Sammelaktionen) außerhalb des horizontal scrollenden Tabellen-Containers
+   (.lm-tabellen, Sticky-Tabellenkopf aus v14 bleibt), Spaltenwerkzeuge im Kopf
+   (Stift = umbenennen, Ziehen = verschieben mit Platzhalter, Sortierpfeil),
+   Spaltenwähler als Aufklapper, Kanban-Spalte „Kontaktiert“. Nur Tokens aus
+   style.css; --lm-kopf-fest/--lm-tabellen-hoehe setzt lm_boards.js. */
+:root { --lm-kopf-fest: 0px; }
+.lm-leiste { gap: 2px; padding: 6px 0; overflow-y: auto; overflow-x: visible; }
+.lm-leiste-eintrag { height: 46px; }
+.lm-leiste-eintrag .lm-leiste-text { font-size: 0.55rem; }
+.lm-leiste-mehr .lm-leiste-eintrag .symbol-svg { width: 1.25rem; height: 1.25rem; }
+.lm-filterblock { position: sticky; top: var(--lm-kopf-fest, 0px); z-index: 30;
+    background: var(--grau-hell, #f3f5f8); margin: 0 0 var(--a-3); padding-top: 2px; }
+.lm-filterblock .lm-suchleiste { margin: 0 0 var(--a-2); }
+.lm-filterblock .lm-sammel { position: static; margin: 0 0 var(--a-2); }
+.lm-tabellen { overflow: auto; max-height: var(--lm-tabellen-hoehe, calc(100vh - 230px)); min-height: 240px;
+    padding-bottom: 4px; overscroll-behavior-x: contain; }
+.lm-tabellen .lm-gruppen { min-width: max-content; }
+details.lm-gruppe .tabelle { overflow: visible; }
+.lm-tabelle thead th { position: sticky; top: 0; z-index: 5; }
+.lm-tabelle thead th .lm-th-text { display: inline; }
+.lm-th-stift { border: 0; background: transparent; padding: 0 2px; margin-left: 3px; color: var(--g-300);
+    cursor: pointer; vertical-align: middle; line-height: 1; opacity: 0; transition: opacity 0.1s; }
+.lm-tabelle thead th:hover .lm-th-stift, .lm-th-stift:focus-visible { opacity: 1; }
+.lm-th-stift:hover, .lm-th-stift:focus-visible { color: var(--friondo-blau); }
+.lm-th-stift .symbol-svg { width: 0.95em; height: 0.95em; }
+.lm-th-stift[hidden] { display: none; }
+.lm-tabelle thead th[draggable="true"] { cursor: grab; }
+.lm-tabelle thead th.lm-th-zieht { opacity: 0.45; cursor: grabbing; }
+.lm-tabelle thead th.lm-th-ziel-vor { box-shadow: inset 3px 0 0 var(--friondo-blau); }
+.lm-tabelle thead th.lm-th-ziel-nach { box-shadow: inset -3px 0 0 var(--friondo-blau); }
+.lm-tabelle th.lm-sp-platzhalter, .lm-tabelle td.lm-sp-platzhalter { background: var(--friondo-blau-hell) !important;
+    outline: 1px dashed var(--friondo-blau); outline-offset: -1px; }
+.lm-th-eingabe { font: inherit; font-size: var(--t-xs); text-transform: none; letter-spacing: 0; padding: 2px 6px;
+    border: 1px solid var(--friondo-blau); border-radius: var(--r-s); width: 150px; background: #fff; }
+.lm-tabelle thead th[data-name]:not([data-name=""]) .lm-th-text { text-decoration: underline dotted var(--g-300); text-underline-offset: 3px; }
+.lm-spaltenwahl { position: relative; margin: 0; }
+.lm-spaltenwahl > summary { list-style: none; display: inline-flex; align-items: center; gap: 4px; }
+.lm-spaltenwahl > summary::-webkit-details-marker { display: none; }
+.lm-spaltenwahl[open] > summary { border-color: var(--friondo-blau); }
+.lm-spaltenwahl[open] > .lm-spaltenmenue { position: absolute; right: 0; top: calc(100% + 6px); z-index: 80;
+    min-width: 280px; max-height: 60vh; overflow: auto; background: #fff; border: 1px solid var(--g-200);
+    border-radius: var(--r-m); box-shadow: var(--schatten-2); padding: var(--a-2) var(--a-3); white-space: normal; }
+.lm-spaltenliste-neu { list-style: none; margin: 0 0 var(--a-2); padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.lm-spaltenliste-neu li label { display: flex; align-items: center; gap: 8px; padding: 3px 4px; border-radius: var(--r-s);
+    cursor: pointer; font-size: var(--t-s); white-space: nowrap; color: var(--text); }
+.lm-spaltenliste-neu li label:hover { background: var(--friondo-blau-hell); }
+.lm-spaltenliste-neu li.fest label { color: var(--g-500); cursor: default; }
+.lm-spaltenliste-neu li small { color: var(--g-500); font-size: var(--t-xs); }
+.lm-spalten-fuss { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--g-200);
+    padding-top: var(--a-2); font-size: var(--t-xs); }
+.lm-spalten-fuss .knopf { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; }
+.lm-kanban-hauptboard .kanban-spalte[data-phase="kontaktiert"] h3 { white-space: nowrap; }
+@media (max-width: 900px) {
+    .lm-leiste { overflow: visible; gap: 0; padding: 4px 2px; justify-content: space-between; }
+    .lm-leiste-eintrag, .lm-leiste-mehr { flex: 1 1 0; min-width: 0; width: auto; }
+    .lm-leiste-mehr > .lm-leiste-eintrag { width: 100%; }
+    .lm-leiste-eintrag .lm-leiste-text { font-size: 0.5rem; max-width: 100%; }
+    .lm-leiste-eintrag .symbol-svg { width: 1.2rem; height: 1.2rem; }
+    .lm-filterblock { position: static; }
+    .lm-tabellen { max-height: none; overflow: visible; }
+    .lm-spaltenwahl[open] > .lm-spaltenmenue { right: auto; left: 0; }
+}
+
+/* Phase 118/120 – Anrufliste als EINE sortierte Liste (PLAN_LEAD_V3): keine
+   Gruppenköpfe, Sortierhinweis statt Gruppen, ohne Score-Spalte (Klasse nur bei
+   score_aktiv), Filter „Vertriebskanal“ als Mehrfachauswahl mit Kanalfarben
+   (--f aus Parameter kanal_farben bzw. Automatik-Palette), Kanal-Badge farbig
+   wie das Kanal-Label der Board-Tabelle. Tokens aus style.css. */
+.lm-arbeitsliste.ohne-klasse .lm-zeile { grid-template-columns: 78px minmax(0, 1fr) 92px 128px auto; }
+.lm-sortierung { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 14px;
+    font-size: var(--t-xs); color: var(--g-700); background: var(--g-50); border-bottom: 1px solid var(--g-200); }
+.lm-sortierung b { color: var(--friondo-dunkel); margin-right: 4px; }
+.lm-sortierung span[title] { cursor: help; }
+.lm-kanal.mit-farbe { --f: var(--status-violett); background: var(--f); color: #fff; }
+.lm-mehrfach { position: relative; display: inline-block; }
+.lm-mehrfach > summary { list-style: none; cursor: pointer; font: inherit; font-size: var(--t-s); color: var(--g-700);
+    padding: 4px 10px; border: 1px solid var(--g-300); border-radius: 999px; background: #fff;
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+.lm-mehrfach > summary::-webkit-details-marker { display: none; }
+.lm-mehrfach > summary::after { content: "▾"; font-size: 0.75em; color: var(--g-500); }
+.lm-mehrfach.aktiv > summary { border-color: var(--friondo-dunkel); color: var(--friondo-dunkel); font-weight: 600; }
+.lm-mehrfach[open] > .lm-mehrfach-liste { position: absolute; left: 0; top: 100%; z-index: 6; margin-top: 4px; min-width: 230px;
+    background: #fff; border: 1px solid var(--g-200); border-radius: var(--r-s); box-shadow: var(--schatten-2);
+    padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.lm-mehrfach-liste label { display: flex; align-items: center; gap: 8px; font-size: var(--t-s); padding: 4px 6px;
+    border-radius: var(--r-s); cursor: pointer; white-space: nowrap; }
+.lm-mehrfach-liste label:hover { background: var(--friondo-blau-hell); }
+.lm-mehrfach-liste input[type="checkbox"] { margin: 0; }
+.lm-kanal-punkt { --f: var(--g-300); width: 10px; height: 10px; border-radius: 50%; background: var(--f); display: inline-block; flex: none; }
+.lm-mehrfach-fuss { display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    padding-top: 6px; margin-top: 4px; border-top: 1px solid var(--g-100); font-size: var(--t-xs); }
+@media (max-width: 900px) {
+    .lm-arbeitsliste.ohne-klasse .lm-zeile { grid-template-columns: 70px 1fr; }
+    .lm-mehrfach > summary { max-width: 100%; }
+}
+
+/* Phase 120 (v25, PLAN_LEAD_V3) – Score aus, Terminassistent ohne HV, Dashboard „Ohne nächsten Schritt“ */
+.lm-ohne-schritt h2 .n { margin-left: auto; font-weight: 600; }
+.lm-ohne-schritt h2 .n.warn { color: var(--status-orange); }
+.lm-ohne-schritt-tabelle .lm-tage { display: inline-block; font-size: var(--t-xs); font-weight: 600;
+    padding: 2px 8px; border-radius: 999px; background: var(--status-orange-bg); color: var(--status-orange); white-space: nowrap; }
+.lm-ohne-schritt-tabelle .lm-tage.rot { background: var(--status-rot-bg); color: var(--status-rot); }
+.lmt-hv-hinweis { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 var(--a-3); }
+.lmt-hv-hinweis svg { flex: none; width: 18px; height: 18px; margin-top: 2px; }
+.lm-quali-aus { max-width: 760px; }
+.lm-quali-aus .hinweis { margin: 0 0 var(--a-2); }
+
+
+/* Phase 119 – Kundenkartei V3 (PLAN_LEAD_V3): Kopf mit Statuskette und runden
+   Schnellaktionen, Kundeninformationen als horizontaler Block mit Autospeichern,
+   Reiter in voller Breite, Blöcke darunter, Terminvorschläge im Block Termine.
+   Tokens aus style.css (v14); unter 900 px alles untereinander. Präfix lk-. */
+main.lk-v3 .lk-kopf-v3 { align-items: flex-start; }
+.lk-kopf-haupt { flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; gap: var(--a-3); }
+.lk-kopf-v3 .lk-person { align-items: center; }
+.lk-kopf-v3 .lk-name { font-size: var(--t-xl); display: flex; gap: var(--a-2); align-items: center; flex-wrap: wrap; margin: 0; }
+.lk-kopf-v3 .lk-badges { margin-top: var(--a-1); }
+.lk-kopf-ort { display: inline-flex; align-items: center; gap: 0.2rem; font-size: var(--t-xs); }
+.lk-statuskette { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
+.lk-schritt { position: relative; padding: 0.25rem 0.8rem; border-radius: 999px; border: 1px solid var(--g-200);
+    background: var(--g-50); color: var(--g-700); font-size: var(--t-s); line-height: 1.3; white-space: nowrap; }
+.lk-schritt + .lk-schritt::before { content: ""; position: absolute; left: -0.3rem; top: 50%; width: 0.3rem; height: 1px; background: var(--g-300); }
+.lk-schritt.fertig { background: var(--friondo-blau-hell); border-color: var(--friondo-blau-hell); color: var(--friondo-blau-dunkel); }
+.lk-schritt.aktiv { background: var(--friondo-blau); border-color: var(--friondo-blau); color: #fff; font-weight: 600; }
+.lk-schritt.seitenzustand.aktiv { background: var(--status-rot); border-color: var(--status-rot); }
+.lk-kopf-v3 .lk-kopf-aktionen { flex: 0 1 auto; max-width: 460px; align-items: center; justify-content: flex-end; gap: var(--a-2) var(--a-3); }
+.lk-kopf-v3 .lk-kopf-aktionen > form .knopf { display: inline-flex; align-items: center; gap: 0.35rem; }
+.lk-schnell { display: inline-flex; gap: 0.4rem; align-items: center; }
+.lk-rund { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--g-200); background: #fff; color: var(--friondo-dunkel);
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font: inherit; text-decoration: none; padding: 0;
+    transition: background 0.12s, border-color 0.12s, transform 0.12s; }
+.lk-rund .symbol-svg { width: 1.25em; height: 1.25em; }
+.lk-rund:hover { background: var(--friondo-blau-hell); border-color: var(--friondo-blau); transform: translateY(-1px); }
+.lk-rund:focus-visible { outline: 2px solid var(--friondo-blau); outline-offset: 2px; }
+.lk-rund[disabled], .lk-rund.gesperrt { opacity: 0.45; cursor: not-allowed; transform: none; }
+.lk-kopf-v3 .lk-fehlliste { flex-basis: 100%; text-align: right; }
+.lk-kopf-v3 .lk-fehlliste ul { display: inline-block; text-align: left; }
+
+/* Kundeninformationen – horizontaler Block */
+.lk-info { padding: var(--a-4); margin-bottom: var(--a-4); }
+.lk-info-kopf { display: flex; justify-content: space-between; align-items: baseline; gap: var(--a-3); flex-wrap: wrap; }
+.lk-info-kopf .lk-abschnitt { margin: 0; }
+.lk-info-hinweis { font-size: var(--t-xs); }
+.lk-info-raster { display: grid; grid-template-columns: 1fr; gap: var(--a-2) var(--a-4); margin-top: var(--a-3); align-items: start; }
+.lk-info-raster .lk-feld { margin-bottom: 0; min-width: 0; }
+.lk-info-raster .lk-feld-reihe { gap: var(--a-3); }
+.lk-info-raster .lk-feld > span { display: flex; justify-content: space-between; gap: var(--a-2); align-items: center; }
+.lk-feld-link { font-size: var(--t-xs); color: var(--friondo-blau); text-decoration: none; display: inline-flex; gap: 0.2rem; align-items: center; white-space: nowrap; }
+.lk-feld-link:hover { text-decoration: underline; }
+.lk-feld-status { display: block; min-height: 1em; font-size: var(--t-xs); color: var(--g-500); margin-top: 0.1rem; }
+.lk-feld-status.ok { color: var(--status-gruen); font-weight: 600; }
+.lk-feld-status.fehler { color: var(--status-rot); font-weight: 600; }
+.lk-feld-status.laeuft { color: var(--g-500); }
+.lk-feld-fehlerhaft input, .lk-feld-fehlerhaft select { border-color: var(--status-rot) !important; box-shadow: 0 0 0 1px var(--status-rot-bg); }
+.lk-speichert input, .lk-speichert select { background-image: linear-gradient(90deg, var(--friondo-blau-hell), #fff); }
+.lk-feld-info { display: block; font-size: var(--t-xs); margin-top: 0.1rem; }
+.lk-info-raster .lk-mfh { grid-column: 1 / -1; display: grid; grid-template-columns: 140px 1fr; gap: var(--a-3); align-items: start; }
+.lk-info-raster .lk-mfh[hidden] { display: none; }
+.lk-info-raster .lk-checkboxen > div { padding: 0.45rem 0.6rem; border: 1px solid var(--g-300); border-radius: var(--r-s); background: #fff; }
+.lk-zuweisung-feld .lk-zuweisung select { width: auto; flex: 1; }
+.lk-anzeige .lk-wert { font-size: var(--t-s); padding: 0.4rem 0; color: var(--text); }
+.lk-anfrage-feld summary { cursor: pointer; }
+.lk-info .lk-speichern { position: static; border-top: 1px dashed var(--g-200); }
+@media (min-width: 900px) {
+    .lk-info-raster { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lk-info-raster .lk-anfrage-feld { grid-column: 1 / -1; }
+}
+@media (min-width: 1200px) {
+    .lk-info-raster { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .lk-info-raster .lk-checkboxen { grid-column: span 2; }
+    .lk-info-raster .lk-mfh { grid-column: 1 / -1; grid-template-columns: 140px 2fr 1fr; }
+    .lk-info-raster .lk-anfrage-feld { grid-column: span 2; }
+}
+
+/* Reiter in voller Breite, Blöcke darunter */
+main.lk-v3 .lk-mitte { padding: var(--a-4); margin-bottom: var(--a-4); }
+.lk-bloecke { display: flex; flex-direction: column; gap: var(--a-3); }
+.lk-block > summary { font-size: var(--t-m); }
+.lk-block-sub { font-weight: 400; font-size: var(--t-xs); margin-left: var(--a-2); }
+.lk-block-raster { display: grid; grid-template-columns: 1fr; gap: var(--a-4); align-items: start; }
+@media (min-width: 900px) { .lk-block-raster { grid-template-columns: minmax(0, 3fr) minmax(260px, 2fr); } }
+.lk-termine-kurz { display: flex; flex-direction: column; gap: 0.4rem; }
+
+/* Terminvorschläge im Block Termine */
+.lk-vorschlaege { background: var(--g-50); border-radius: var(--r-m); padding: var(--a-3) var(--a-4); display: flex; flex-direction: column; gap: var(--a-2); }
+.lk-vorschlaege-kopf { display: flex; gap: var(--a-2); align-items: baseline; flex-wrap: wrap; }
+.lk-vorschlaege-hinweis { margin: 0; display: flex; gap: 0.4rem; align-items: center; font-size: var(--t-s); }
+.lk-vorschlaege-hinweis.lm-warn { color: var(--status-orange); font-weight: 600; }
+.lk-vorschlaege-hinweis.lm-blau { color: var(--status-blau); font-weight: 600; }
+.lk-vorschlaege-liste { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: var(--a-2); }
+@media (min-width: 1200px) { .lk-vorschlaege-liste { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); } }
+.lk-vorschlag { background: #fff; border: 1px solid var(--g-200); border-radius: var(--r-m); padding: var(--a-2) var(--a-3);
+    display: flex; flex-direction: column; gap: 0.3rem; }
+.lk-vorschlag-kopf { font-size: var(--t-s); }
+.lk-vorschlag-grund { font-size: var(--t-xs); }
+.lk-vormerken { align-self: flex-start; }
+.lk-vorschlaege-demo { margin: 0; }
+
+/* Responsiv: unter 900 px Kopf → Kundeninfo → Reiter → Blöcke untereinander,
+   Terminierung bleibt oben rechts im Kopf */
+@media (max-width: 900px) {
+    .lk-kopf-v3 { flex-direction: column; }
+    /* in Spaltenrichtung wäre flex-basis 520px eine Mindesthöhe – zurück auf auto */
+    .lk-kopf-v3 .lk-kopf-haupt { flex: 0 1 auto; }
+    .lk-kopf-v3 .lk-kopf-aktionen { width: 100%; max-width: none; justify-content: flex-start; order: -1; }
+    .lk-kopf-v3 .lk-kopf-aktionen > form:first-child { margin-left: auto; order: 10; }
+    /* Fehlliste (100 % breit) hinter den Terminierung-Button, damit der in der ersten Zeile rechts bleibt */
+    .lk-kopf-v3 .lk-fehlliste { text-align: left; order: 20; }
+    .lk-statuskette { gap: 0.25rem; }
+    .lk-schritt { font-size: var(--t-xs); padding: 0.2rem 0.6rem; }
+    .lk-info-raster .lk-mfh { grid-template-columns: 1fr; }
+    .lk-block-raster { grid-template-columns: 1fr; }
+}
+
+/* Phase 118 – Prüfung F (v25, PLAN_LEAD_V3): Spaltenwerkzeuge und Sticky-Filter auch
+   im Infoabend und in der Handelsvertreter-Ansicht (Konfiguration je Nutzer unter den
+   Board-Keys info / handelsvertreter), Filter fällig/alle der To-Dos. Tokens aus style.css. */
+.hv-tabelle.lm-tabelle td { padding: 6px 10px; }
+.hv-tabelle.lm-tabelle td.sp-lead, .hv-tabelle.lm-tabelle td.sp-interessen, .hv-tabelle.lm-tabelle td.sp-angebot { white-space: normal; }
+.lm-filterblock .hv-filter, .lm-filterblock #li-filterform { margin-bottom: var(--a-2); }
+.lm-filterblock .lm-spaltenwahl { margin-left: auto; }
+.lm-todo-filter .lm-umschalter + .lm-umschalter { margin-left: var(--a-2); }
+.lm-umschalter .n.rot { background: var(--status-rot-bg); color: var(--status-rot); }
+.lm-umschalter a.aktiv .n.rot { background: rgba(255,255,255,0.25); color: #fff; }

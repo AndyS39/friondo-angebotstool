@@ -11,11 +11,42 @@
 {# Phase 109 (G1–G5, F13–F16): Gesamtsicht (Innendienst/LM/Admin) je Vertreter
    einklappbar; Handelsvertreter sehen nur eigene Leads + Dashboard (F16).
    Zeilen = Hauptboard-Pflichtspalten in Kurzform (Rückfall-Tabelle, bis das
-   Makro leadmanagement/_tabelle.html aus Phase 105 übernommen wird). #}
+   Makro leadmanagement/_tabelle.html aus Phase 105 übernommen wird).
+   v25 (PLAN_LEAD_V3 Phase 118, Prüfung F): mit Phase-105-Makro sind die Spalten
+   je Nutzer konfigurierbar (Hauptboard-Katalog, eigene Konfiguration unter dem
+   Board-Key „handelsvertreter“: Spaltenwähler, Klick sortiert, Stift benennt um,
+   Ziehen verschiebt – lm_boards.js über data-lm-spalten-board, Zellen aus
+   _tabelle.html bzw. hv_zelle für Zeilen ohne Hauptboard-Treffer); die Spalte
+   „Vertreter“ bleibt fest hinten, der Filter steht sticky unter der Kopfzeile. #}
 {% block inhalt %}
-{% if phase105 %}{% from "leadmanagement/_tabelle.html" import zelle %}{% endif %}
+{% if phase105 %}{% from "leadmanagement/_tabelle.html" import zelle, spalten_kopf %}{% endif %}
+{% set konfig = phase105 and spalten %}
+{# Rückfall-Zellen (Zeile ohne Hauptboard-Treffer) je Spalten-Key #}
+{% macro hv_zelle(key, z, jetzt) -%}
+{%- if key == 'lead' -%}
+<td class="hv-kunde sp-lead"><a href="/lead-management/lead/{{ z.vorgang.id }}">{{ z.kunde.anzeige_name }}</a>
+    {{ quelle_badge(z.quelle, z.quelle_gruppe) }}
+    {% if z.vorgang.demo %}<span class="abzeichen">Demo</span>{% endif %}
+    {% if z.wiedervorlage and z.offen %}{{ wiedervorlage_chip(z.wiedervorlage, jetzt) }}{% endif %}</td>
+{%- elif key == 'status' -%}
+<td><span class="hv-status" {% if z.status_farbe %}style="--f:{{ z.status_farbe }};color:{{ z.status_farbe }};background:{{ z.status_farbe }}1f;border-color:{{ z.status_farbe }}55"{% endif %}>{{ z.status_label }}</span></td>
+{%- elif key == 'kanal' -%}
+<td>{% if z.kanal %}{% if z.kanal_farbe %}<span class="hv-status" style="color:{{ z.kanal_farbe }};background:{{ z.kanal_farbe }}1f;border-color:{{ z.kanal_farbe }}55">{{ z.kanal }}</span>{% else %}{{ kanal_badge(z.kanal) or z.kanal }}{% endif %}{% else %}<span class="dezent">–</span>{% endif %}</td>
+{%- elif key == 'versuche' -%}<td>{{ versuche_punkte(z.vorgang) }}</td>
+{%- elif key == 'letzter_kontakt' -%}<td class="dezent">{{ z.kontakt_text or '–' }}</td>
+{%- elif key == 'eingang' -%}<td>{{ z.eingang.strftime('%d.%m.%Y') if z.eingang else '–' }}</td>
+{%- elif key == 'ort' -%}<td>{{ z.kunde.plz }} {{ z.kunde.ort }}</td>
+{%- elif key == 'interessen' -%}<td>{% for s in z.sparten %}<span class="chip chip-{{ s | lower }}">{{ s }}</span>{% endfor %}</td>
+{%- elif key == 'telefon' -%}<td>{% if z.kunde.telefon %}<a href="tel:{{ z.kunde.telefon }}">{{ symbol('telefon') }} {{ z.kunde.telefon }}</a>{% endif %}</td>
+{%- elif key == 'termin' -%}<td>{% if z.termin_text %}{{ symbol('kalender') }} {{ z.termin_text }}{% else %}<span class="dezent">–</span>{% endif %}</td>
+{%- elif key == 'strasse' -%}<td>{{ z.kunde.strasse or '–' }}</td>
+{%- elif key == 'email' -%}<td>{% if z.kunde.email %}<a href="mailto:{{ z.kunde.email }}">{{ z.kunde.email }}</a>{% else %}<span class="dezent">–</span>{% endif %}</td>
+{%- elif key == 'wiedervorlage' -%}<td>{% if z.wiedervorlage %}{{ wiedervorlage_chip(z.wiedervorlage, jetzt) }}{% else %}<span class="dezent">–</span>{% endif %}</td>
+{%- else -%}<td class="dezent">–</td>
+{%- endif -%}
+{%- endmacro %}
 {{ lm_nav('handelsvertreter') }}
-<div class="seitenkopf">
+<div class="seitenkopf" {% if konfig %}data-lm-spalten-board="{{ konfig_board }}"{% endif %}>
     <h1>{{ 'Meine Leads' if ist_hv else 'Handelsvertreter' }} {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
     <span class="dezent">{{ zeilen | length }} von {{ anzahl_gesamt }} Leads{% if ist_hv %} · {{ benutzer.name }}{% else %} · {{ hv_liste | length }} Handelsvertreter{% endif %}</span>
     <div class="aktionen">
@@ -45,6 +76,7 @@
 
 {% if dashboard %}{% include "leadmanagement/hv_dashboard_block.html" %}{% endif %}
 
+<div class="lm-filterblock" id="lm-filterblock">
 <form method="get" action="/lead-management/handelsvertreter" class="lm-schnellfilter hv-filter" id="hv-filter">
     <a class="f {{ 'aktiv' if not filter_werte.offen }}" href="/lead-management/handelsvertreter{{ '?vertreter=' ~ filter_werte.vertreter if filter_werte.vertreter }}">Alle <b>{{ anzahl_gesamt }}</b></a>
     <a class="f {{ 'aktiv' if filter_werte.offen }}" href="/lead-management/handelsvertreter?offen=1{{ '&vertreter=' ~ filter_werte.vertreter if filter_werte.vertreter }}">Nur offene</a>
@@ -68,7 +100,29 @@
     </select>
     <input type="search" name="q" value="{{ filter_werte.q }}" placeholder="Name / Ort / PLZ / Telefon">
     <button class="knopf klein zweitrangig" type="submit">Filtern</button>
+    {% if konfig %}
+    {#- Spaltenwähler wie im Hauptboard – Häkchen = sichtbar, nur für den angemeldeten Nutzer,
+        Board „handelsvertreter“; Kundenname bleibt fest #}
+    <details class="lm-spaltenwahl" id="lm-spaltenwahl">
+        <summary class="knopf klein zweitrangig" id="lm-spalten-knopf" title="Spalten ein-/ausblenden (je Nutzer gespeichert) · Reihenfolge: Spaltenkopf ziehen · Umbenennen: Stift im Spaltenkopf · Sortieren: Klick auf den Spaltenkopf">{{ symbol('spalten') }} Spalten</summary>
+        <div class="lm-spaltenmenue" role="group" aria-label="Spalten">
+            <ul class="lm-spaltenliste-neu" id="lm-spaltenliste">
+                {% for sp in spalten %}
+                <li data-key="{{ sp.key }}" class="{{ 'fest' if sp.key == 'lead' }}">
+                    <label><input type="checkbox" data-key="{{ sp.key }}" {{ 'checked' if sp.sichtbar }} {{ 'disabled' if sp.key == 'lead' }}>
+                        <span class="lm-sp-name">{{ sp.titel }}</span>{% if sp.name %} <small title="Standardname">({{ sp.standard }})</small>{% endif %}</label>
+                </li>
+                {% endfor %}
+            </ul>
+            <div class="lm-spalten-fuss">
+                <button type="button" class="knopf klein zweitrangig" id="lm-spalten-reset" title="Spalten auf den Standard zurücksetzen (Reihenfolge, Sichtbarkeit, Namen, Sortierung) – nur für Sie">{{ symbol('zuruecksetzen') }} Zurücksetzen</button>
+                <span class="dezent">Gilt nur für Sie, nur für die Handelsvertreter-Ansicht. Reihenfolge: Spaltenkopf ziehen · Umbenennen: Stift im Spaltenkopf · Sortieren: Klick auf den Spaltenkopf (wird gemerkt).</span>
+            </div>
+        </div>
+    </details>
+    {% endif %}
 </form>
+</div>
 
 {% for g in gruppen %}
 <details class="hv-gruppe" {{ 'open' if g.get('aufgeklappt', True) }} data-hv="{{ g.key }}">
@@ -79,15 +133,22 @@
         <span class="erkl">{{ g.offen }} offen{% if not g.gekennzeichnet and not ist_hv %} · ohne Kennzeichen am AD-Profil{% endif %}{% if g.erkl %} · {{ g.erkl }}{% endif %}</span>
     </summary>
     <div class="hv-tabelle-wrap">
-    <table class="hv-tabelle">
+    <table class="hv-tabelle{{ ' lm-tabelle' if konfig }}">
         <thead><tr>
+            {% if konfig %}
+            {{ spalten_kopf(spalten, ctx) }}<th class="sp-hv">Vertreter</th>
+            {% else %}
             <th>Kunde</th><th>Status</th><th>Kanal</th><th>Versuche</th><th>Letzter Kontakt</th>
             <th>Eingang</th><th>Ort</th><th>Interessen</th><th>Telefon</th><th>Termin</th><th>Vertreter</th>
+            {% endif %}
         </tr></thead>
         <tbody>
         {% for z in g.zeilen %}
         <tr data-vorgang="{{ z.vorgang.id }}" class="{{ 'hv-warn-zeile' if z.kanal_hinweis }}">
-            {% if phase105 and z.phase105 %}
+            {% if konfig %}
+            {# Spalten je Nutzer: Hauptboard-Zellen, sonst Rückfall-Zellen je Key #}
+            {% for sp in spalten if sp.sichtbar %}{% if z.phase105 %}{{ zelle(sp.key, z, ctx) }}{% else %}{{ hv_zelle(sp.key, z, jetzt) }}{% endif %}{% endfor %}
+            {% elif phase105 and z.phase105 %}
             {# Zellen des Hauptboards (Phase 105, _tabelle.html) – gleiche Darstellung #}
             {{ zelle('lead', z, ctx) }}{{ zelle('status', z, ctx) }}{{ zelle('kanal', z, ctx) }}
             {{ zelle('versuche', z, ctx) }}{{ zelle('letzter_kontakt', z, ctx) }}{{ zelle('eingang', z, ctx) }}
@@ -110,7 +171,7 @@
             <td class="sp-hv">{{ hv_zuweisung(z, hv_liste, zurueck, gesamt, standard) }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="11" class="dezent">Keine Leads{% if filter_werte.q or filter_werte.status or filter_werte.kanal or filter_werte.offen %} für diesen Filter{% endif %}.</td></tr>
+        <tr><td colspan="{{ (spalten | selectattr('sichtbar') | list | length) + 1 if konfig else 11 }}" class="dezent">Keine Leads{% if filter_werte.q or filter_werte.status or filter_werte.kanal or filter_werte.offen %} für diesen Filter{% endif %}.</td></tr>
         {% endfor %}
         </tbody>
     </table>
@@ -119,6 +180,10 @@
 {% else %}
 <div class="lm-karte"><p class="dezent">Keine Handelsvertreter gekennzeichnet (AD-Profil → „terminiert selbst“).</p></div>
 {% endfor %}
+{% if konfig %}
+{# Spaltenwerkzeuge (lm_boards.js, Teil 3): Konfiguration + gemerkte Sortierung des Nutzers #}
+<script type="application/json" id="lm-daten">{{ {'board': konfig_board, 'sort': sortierung, 'spalten': spalten} | tojson }}</script>
+{% endif %}
 
 <div class="lm-legende-liste">
     <span><b>Vertreter</b> = zuständiger Handelsvertreter am Vorgang (ad_id); Wechsel schreibt Aktivität + Glocke</span>

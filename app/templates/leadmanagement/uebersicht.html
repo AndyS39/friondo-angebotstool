@@ -39,7 +39,8 @@
     <a class="kachel stat" href="/lead-management/anrufliste?sla=rot">
         <span class="stat-zahl {{ 'dringend' if kpis.sla_rot }}">{{ kpis.sla_rot }}</span>SLA rot jetzt
         <span class="lm-delta">&gt; {{ erstkontakt.sla_gelb }} Min ohne 1. Versuch</span></a>
-    <a class="kachel stat" href="/lead-management/anrufliste?gruppe=dran">
+    {# v25: Anrufliste ohne Gruppen – Link ohne gruppe=-Parameter (eine sortierte Liste) #}
+    <a class="kachel stat" href="/lead-management/anrufliste">
         <span class="stat-zahl">{{ kpis.jetzt_dran }}</span>Jetzt dran
         <span class="lm-delta">fällige Rückrufe + Wiedervorlagen + SLA gelb/rot</span></a>
     <a class="kachel stat" href="/lead-management/anrufliste?versuche_min=3">
@@ -134,22 +135,23 @@
 {% set benutzer_map = cockpit.benutzer_map %}{% set ueberfaellig = cockpit.ueberfaellig %}
 {% set sla_rot = cockpit.sla_rot %}{% set rueckmeldung_offen = cockpit.rueckmeldung_offen %}
 {% set vorgaenge_map = cockpit.vorgaenge_map %}{% set kunden_map = cockpit.kunden_map %}
+{# v25 (Phase 120): Spalte „qualifiziert“ (Bogen abgeschlossen) nur bei score_aktiv #}
 {% macro lm_tabelle(zahlen, titel) %}
 <details class="lm-karte"><summary><strong>{{ titel }}</strong></summary>
 <table class="tabelle" style="max-width:800px;margin-top:8px">
     <thead><tr><th>Leadmanager</th><th>Anrufe</th><th>erreicht</th>
-        <th>qualifiziert</th><th>terminiert</th><th>überfällige Aktionen</th></tr></thead>
+        {% if score_aktiv %}<th>qualifiziert</th>{% endif %}<th>terminiert</th><th>überfällige Wiedervorlagen</th></tr></thead>
     <tbody>
     {% for benutzer_id, z in zahlen.items() %}
         <tr><td>{{ benutzer_map[benutzer_id].name if benutzer_id in benutzer_map else '?' }}</td>
             <td class="rechts">{{ z.anrufe }}</td><td class="rechts">{{ z.erreicht }}</td>
-            <td class="rechts">{{ z.qualifiziert }}</td><td class="rechts">{{ z.terminiert }}</td>
+            {% if score_aktiv %}<td class="rechts">{{ z.qualifiziert }}</td>{% endif %}<td class="rechts">{{ z.terminiert }}</td>
             <td class="rechts {{ 'ueberfaellig-rot' if ueberfaellig.get(benutzer_id) }}">{{ ueberfaellig.get(benutzer_id, 0) }}</td></tr>
     {% else %}<tr><td colspan="6" class="dezent">Keine Aktivitäten.</td></tr>{% endfor %}
     </tbody>
 </table></details>
 {% endmacro %}
-<p class="dezent">Pipeline-Wert (gewichtete offene Leads): <strong>{{ pipeline_wert | euro }}</strong></p>
+<p class="dezent">Pipeline-Wert (offene Leads, gewichtet nach Phasen-Quote): <strong>{{ pipeline_wert | euro }}</strong></p>
 {{ lm_tabelle(heute, 'Team heute je Leadmanager') }}
 {{ lm_tabelle(woche, 'Team diese Woche je Leadmanager') }}
 <details class="lm-karte"><summary><strong>Diese Woche je Außendienstler</strong></summary>

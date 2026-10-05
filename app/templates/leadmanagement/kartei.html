@@ -1,39 +1,63 @@
 {% extends "base.html" %}
 {% from "leadmanagement/_nav.html" import lm_nav %}
 {% from "_symbole.html" import symbol %}
-{% from "_komponenten.html" import versuche_punkte %}
-{# v23 (PLAN_LEAD_V2 Phase 106): Kundenkartei dreispaltig (B1–B8) –
-   Kopf (Stepper, SLA, Versuche, Pflichtfeld-Zähler, Terminierung B8,
-   Nachbearbeitung F11), links Kontakt + Stammdaten, Mitte Reiter mit Icons,
-   rechts einklappbare Zähler-Bereiche. Unter 1000 px stehen die Spalten
-   untereinander (lead_v2.css, Block Phase 106). #}
+{% from "_komponenten.html" import versuche_punkte, kanal_badge %}
+{% import "_sparten.html" as sparten_ui %}
+{# v25 (PLAN_LEAD_V3 Phase 119): Kundenkartei neu aufgeteilt –
+   Kopfbereich (Kundenname, Kanal-/Interessen-Badges, Statuskette der Phasen mit
+   Label aus dem Blatt Status, rechts oben Button „Terminierung“ B8 und die
+   Schnellaktionen Anrufen · E-Mail · Notiz · Wiedervorlage als runde Icon-Buttons),
+   darunter Kundeninformationen als horizontaler Block mit Autospeichern
+   (kartei_info.html), darunter die Reiter Termin · Anrufnotizen · E-Mail-Verlauf ·
+   Timeline (kartei_mitte.html), darunter die Blöcke Termine · Angebote ·
+   Erfassungen · Projekt · Anhänge · To-Dos in voller Breite (kartei_bloecke.html).
+   Unter 900 px steht alles untereinander (lead_v2.css, Block Phase 119).
+   Entfernt aus der Kartei: Score/Klasse, Quelle/Kampagne, Einwilligungen,
+   Reiter Qualifizierung (bei score_aktiv nur noch ein Link). #}
 
 {% block titel %}Kundenkartei {{ kunde.anzeige_name if kunde else vorgang.id }} – Friondo Angebotstool{% endblock %}
-{% block mainklasse %}breit lk-seite{% endblock %}
+{% block mainklasse %}breit lk-seite lk-v3{% endblock %}
 
 {% block inhalt %}
-{{ lm_nav('hauptboard') }}
+{{ lm_nav(nav_key | default('hauptboard')) }}
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-<header class="karte lk-kopf">
-    <div class="lk-kopf-titel">
-        <h1>Kundenkartei
-            {% if vorgang.demo %}<span class="demo-badge">Demo</span>{% endif %}
-            {% if vorgang.eingang_art == 'monday' %}<span class="abzeichen">monday</span>{% endif %}
-            {% if vorgang.vorab_angebot %}<span class="abzeichen lk-vorab" title="Angebot ohne Vor-Ort-Termin – keine Terminbestätigung (F10)">Vorab-Angebot</span>{% endif %}
-            {% if lead_kontext.wiederkehrer %}<span class="abzeichen ep">Wiederkehrer</span>{% endif %}
-            {% if readonly %}<span class="abzeichen" title="Außendienst-Lesesicht: nur ansehen, Notiz, No-Show/Verschieben am eigenen Termin">Lesesicht</span>{% endif %}
-        </h1>
-        <div class="lead-stepper lk-stepper" aria-label="Lead-Phase">
-            {% for phase in lead_kontext.phasen %}
-                <span class="schritt {{ 'aktiv' if vorgang.lead_phase == phase }}"
-                      {% if vorgang.lead_phase == phase and status_farben.get(phase) %}style="background:{{ status_farben[phase] }};border-color:{{ status_farben[phase] }}"{% endif %}>{{ lead_phasen_namen[phase] }}</span>
-            {% endfor %}
-            {% if vorgang.lead_phase in ('zurueckgestellt', 'nicht_erreicht', 'unqualifiziert', 'verloren') %}
-                <span class="schritt seitenzustand aktiv"
-                      {% if status_farben.get(vorgang.lead_phase) %}style="background:{{ status_farben[vorgang.lead_phase] }};border-color:{{ status_farben[vorgang.lead_phase] }}"{% endif %}>{{ lead_phasen_namen[vorgang.lead_phase] }}</span>
-            {% endif %}
+<header class="karte lk-kopf lk-kopf-v3" data-vorgang="{{ vorgang.id }}">
+    <div class="lk-kopf-haupt">
+        <div class="lk-person">
+            <div class="lk-avatar" aria-hidden="true">{{ initialen }}</div>
+            <div class="lk-person-text">
+                <h1 class="lk-name">{{ kunde.anzeige_name if kunde else 'Kundenkartei ' ~ vorgang.id }}
+                    {% if vorgang.demo %}<span class="demo-badge">Demo</span>{% endif %}
+                    {% if vorgang.eingang_art == 'monday' %}<span class="abzeichen">monday</span>{% endif %}
+                    {% if vorgang.vorab_angebot %}<span class="abzeichen lk-vorab" title="Angebot ohne Vor-Ort-Termin – keine Terminbestätigung (F10)">Vorab-Angebot</span>{% endif %}
+                    {% if lead_kontext.wiederkehrer %}<span class="abzeichen ep">Wiederkehrer</span>{% endif %}
+                    {% if readonly %}<span class="abzeichen" title="Außendienst-Lesesicht: nur ansehen, Notiz, No-Show/Verschieben am eigenen Termin">Lesesicht</span>{% endif %}
+                </h1>
+                <div class="lk-badges" aria-label="Kanal und Interessen">
+                    {{ kanal_badge(lead_kontext.kanal) }}
+                    {% for s in (kunde.interessen if kunde else []) %}{{ sparten_ui.chip(s, 'erfasst') }}{% endfor %}
+                    <span class="dezent lk-kopf-ort">{{ symbol('ort') }} {{ ((kunde.plz ~ ' ' ~ kunde.ort) | trim) if kunde and (kunde.plz or kunde.ort) else 'kein Ort' }}</span>
+                </div>
+            </div>
         </div>
+
+        {# Statuskette der Phasen: Labels aus dem Blatt Status (lead_kartei.phasen_kette –
+           In Kontaktierung + Qualifiziert = ein Schritt „Kontaktiert“), Farbe des aktiven
+           Schritts aus der Steuerdatei; Seitenzustände als eigener roter Schritt. #}
+        <ol class="lk-statuskette" aria-label="Lead-Phase">
+            {% for s in phasen_kette %}
+                <li class="lk-schritt {{ 'aktiv' if s.aktiv }} {{ 'fertig' if s.fertig }}"
+                    data-phasen="{{ s.phasen | join(',') }}"
+                    {% if s.aktiv %}aria-current="step"{% endif %}
+                    {% if s.aktiv and s.farbe %}style="background:{{ s.farbe }};border-color:{{ s.farbe }}"{% endif %}>{{ s.label }}</li>
+            {% endfor %}
+            {% if seitenzustand %}
+                <li class="lk-schritt seitenzustand aktiv" aria-current="step"
+                    {% if seitenzustand.farbe %}style="background:{{ seitenzustand.farbe }};border-color:{{ seitenzustand.farbe }}"{% endif %}>{{ seitenzustand.label }}</li>
+            {% endif %}
+        </ol>
+
         <div class="lk-kopf-fakten">
             <span>SLA:
                 {% if lead_kontext.sla.farbe == 'erfuellt' %}
@@ -41,10 +65,8 @@
                 {% elif lead_kontext.sla.farbe %}
                     <span class="sla-chip sla-{{ lead_kontext.sla.farbe }}" title="wartet seit {{ lead_kontext.sla.text }} auf den Erstkontakt">{{ lead_kontext.sla.text }}</span>
                 {% else %}–{% endif %}</span>
-            <span class="lk-versuche">Versuche: {{ versuche_punkte(vorgang) }}
+            <span class="lk-versuche">Versuche: {{ versuche_punkte(vorgang, lead_kontext.versuche) }}
                 <span>{% for text, klasse in lead_kontext.kontakt_satz %}<span class="{{ {'faellig': 'lm-rot', 'rueckruf': 'lm-blau', 'warn': 'lm-warn', 'rot': 'lm-rot', 'dezent': 'dezent'}.get(klasse, '') }}">{{ text }}</span>{{ ' · ' if not loop.last }}{% endfor %}</span></span>
-            <span title="{{ lead_kontext.score_teile | join('&#10;') }}">Score:
-                <strong>{{ vorgang.score_punkte if vorgang.score_punkte is not none else '–' }} · {{ vorgang.score_klasse or '–' }}</strong></span>
             {% if vorgang.lead_phase == 'zurueckgestellt' %}
                 <span class="lm-warn">{{ symbol('pause') }} Zurückgestellt
                     {{ 'bis ' ~ vorgang.zurueckgestellt_bis.strftime('%d.%m.%Y') if vorgang.zurueckgestellt_bis }}
@@ -58,57 +80,89 @@
                     {{ aktiver_termin.beginn | de_datum('%a %d.%m.%Y %H:%M') if aktiver_termin.beginn else 'ohne Uhrzeit' }}
                     · {{ termin_status_namen.get(aktiver_termin.status, aktiver_termin.status) }}</span>
             {% endif %}
+            <span class="lk-pflicht-zaehler {{ 'offen' if pflicht_offen else 'ok' }}" id="lk-pflicht-zaehler"
+                  title="{{ pflicht_offen | join(', ') if pflicht_offen else 'Alle Pflichtfelder gefüllt' }}">
+                {{ symbol('warnung' if pflicht_offen else 'haken') }}
+                <span data-pflicht-text>{{ pflicht_offen | length }} Pflichtfeld{{ 'er' if pflicht_offen | length != 1 }} offen</span></span>
+            {% if score_aktiv and not readonly %}
+                <a class="dezent" href="{{ kartei_url }}/qualifizierung/{{ lead_kontext.sparten[0] if lead_kontext.sparten else 'WP' }}" title="Qualifizierungsbogen (Score aktiv)">{{ symbol('fragezeichen') }} Qualifizierung</a>
+            {% endif %}
         </div>
     </div>
+
     <div class="lk-kopf-aktionen">
-        <span class="lk-pflicht-zaehler {{ 'offen' if pflicht_offen else 'ok' }}"
-              title="{{ pflicht_offen | join(', ') if pflicht_offen else 'Alle Pflichtfelder gefüllt' }}">
-            {{ symbol('warnung' if pflicht_offen else 'haken') }}
-            {{ pflicht_offen | length }} Pflichtfeld{{ 'er' if pflicht_offen | length != 1 }} offen</span>
         {% if not readonly %}
-            <form method="post" action="{{ kartei_url }}/terminierung" class="lk-inline">
+            <form method="post" action="{{ kartei_url }}/terminierung" class="lk-inline" id="lk-terminierung-form">
                 {% if terminierung.erledigt %}
                     <button class="knopf" type="button" disabled title="Bereits terminiert – Termin geplant und bestätigt">{{ symbol('haken') }} Terminiert</button>
                 {% elif terminierung.bereit %}
-                    <button class="knopf lk-terminierung" type="submit"
+                    <button class="knopf lk-terminierung" type="submit" id="lk-terminierung-knopf"
                             onclick="return confirm('Terminierung: Phase Terminiert, Outlook-Termin schreiben und Terminbestätigung mit ICS planen?')"
                             title="Phase Terminiert · Outlook · Terminbestätigung (ICS) · Übergabe Leads VOT">{{ symbol('kalender') }} Terminierung</button>
                 {% else %}
-                    <button class="knopf lk-terminierung" type="button" disabled aria-disabled="true"
+                    <button class="knopf lk-terminierung" type="button" disabled aria-disabled="true" id="lk-terminierung-knopf"
                             aria-describedby="lk-fehlliste"
                             title="Gesperrt – es fehlt: {{ terminierung.fehlend | join(', ') }}">{{ symbol('kalender') }} Terminierung</button>
                 {% endif %}
             </form>
-            {% if not terminierung.bereit and not terminierung.erledigt %}
-                <details class="lk-fehlliste" id="lk-fehlliste">
-                    <summary>Terminierung gesperrt – was fehlt?</summary>
-                    <ul>{% for f in terminierung.fehlend %}<li>{{ f }}</li>{% endfor %}</ul>
-                </details>
+        {% endif %}
+        <div class="lk-schnell" role="toolbar" aria-label="Schnellaktionen">
+            {% if kunde and kunde.telefon %}
+                <a class="lk-rund" href="{{ telefon_href }}" aria-label="Anrufen" title="Anrufen {{ kunde.telefon }} (Click-to-Call, Stoppuhr startet)" data-anruf-link>{{ symbol('telefon') }}</a>
+            {% else %}
+                <span class="lk-rund gesperrt" aria-disabled="true" title="Keine Telefonnummer">{{ symbol('telefon') }}</span>
             {% endif %}
+            {% if not readonly %}
+                <button type="button" class="lk-rund" aria-label="E-Mail mit Vorlage senden" title="E-Mail (Vorlage senden)"
+                        onclick="document.getElementById('dlg-mail').showModal()" {{ 'disabled' if not (kunde and kunde.email) }}>{{ symbol('brief') }}</button>
+            {% elif kunde and kunde.email %}
+                <a class="lk-rund" href="mailto:{{ kunde.email }}" aria-label="E-Mail" title="E-Mail">{{ symbol('brief') }}</a>
+            {% endif %}
+            <button type="button" class="lk-rund" aria-label="Notiz in den Notizen-Chat schreiben" title="Notiz"
+                    onclick="document.getElementById('dlg-notiz').showModal()">{{ symbol('notiz') }}</button>
+            {% if not readonly %}
+                <button type="button" class="lk-rund" aria-label="Wiedervorlage oder Zurückstellen" title="Wiedervorlage"
+                        onclick="document.getElementById('dlg-wiedervorlage').showModal()">{{ symbol('wiedervorlage') }}</button>
+            {% endif %}
+        </div>
+        {% if not readonly %}
             {% if vorgang.lead_phase in ('zurueckgestellt', 'nicht_erreicht', 'unqualifiziert') %}
-            <button class="knopf zweitrangig" type="button"
+            <button class="knopf zweitrangig klein" type="button"
                     onclick="dialogOeffnen('reaktivieren', {{ vorgang.id }})"
                     title="Seitenzustand aufheben: Lead erneut aktivieren (Begründung Pflicht, Aktivität)">{{ symbol('abspielen') }} Reaktivieren</button>
             {% elif vorgang.lead_phase not in ('gewonnen', 'verloren') %}
-            <button class="knopf zweitrangig" type="button"
+            <button class="knopf zweitrangig klein" type="button"
                     onclick="document.getElementById('dlg-nachbearbeitung').showModal()"
                     title="Kunde noch nicht bereit für den Vor-Ort-Termin: Zurückstellen mit Grund „{{ nachbearbeitung_grund }}“ + Pflicht-Wiedervorlage">{{ symbol('pause') }} Nachbearbeitung</button>
             {% endif %}
         {% endif %}
         <a class="knopf zweitrangig klein" href="/vorgaenge/{{ vorgang.id }}" title="Vorgangsakte (Angebote, Galerie, Notizen-Chat)">Vorgangsakte</a>
+        {% if not readonly and not terminierung.bereit and not terminierung.erledigt %}
+            <details class="lk-fehlliste" id="lk-fehlliste">
+                <summary data-rolle="fehlliste-titel">Terminierung gesperrt – was fehlt?</summary>
+                <ul data-rolle="fehlliste">{% for f in terminierung.fehlend %}<li>{{ f }}</li>{% endfor %}</ul>
+            </details>
+        {% elif not readonly %}
+            {# leerer Platzhalter: lm_kartei.js füllt Titel + Liste, falls ein Autospeichern
+               die Terminierung wieder sperrt (z. B. Pflichtfeld geleert) #}
+            <details class="lk-fehlliste" id="lk-fehlliste" hidden>
+                <summary data-rolle="fehlliste-titel"></summary>
+                <ul data-rolle="fehlliste"></ul>
+            </details>
+        {% endif %}
     </div>
 </header>
 
-<div class="lk-spalten">
-    <aside class="karte lk-links" aria-label="Kontakt und Stammdaten">
-        {% include "leadmanagement/kartei_links.html" %}
-    </aside>
-    <section class="karte lk-mitte" aria-label="Verlauf">
-        {% include "leadmanagement/kartei_mitte.html" %}
-    </section>
-    <aside class="lk-rechts" aria-label="Zuordnungen">
-        {% include "leadmanagement/kartei_rechts.html" %}
-    </aside>
+<section class="karte lk-info" id="lk-kundeninfo" aria-label="Kundeninformationen">
+    {% include "leadmanagement/kartei_info.html" %}
+</section>
+
+<section class="karte lk-mitte" id="lk-verlauf" aria-label="Verlauf">
+    {% include "leadmanagement/kartei_mitte.html" %}
+</section>
+
+<div class="lk-bloecke" id="lk-bloecke" aria-label="Termine, Angebote, Erfassungen, Projekt, Anhänge, To-Dos">
+    {% include "leadmanagement/kartei_bloecke.html" %}
 </div>
 
 {% include "leadmanagement/kartei_dialoge.html" %}

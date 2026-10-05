@@ -1,15 +1,17 @@
 # Lead-Management V2 (v23, PLAN_LEAD_V2 Phase 106) – Router Kundenkartei.
 # Eigener Router mit demselben Präfix; in app/main.py VOR dem V1-Router
 # eingebunden, damit GET /lead-management/lead/{vorgang_id} (V1: Weiterleitung
-# auf die Vorgangsakte) hier die dreispaltige Kartei rendert.
+# auf die Vorgangsakte) hier die Kartei rendert.
 # Rechte: lead_v2.gate (404 im Demo-Modus, Handelsvertreter nur an eigenen
 # Vorgängen); die Außendienst-Lesesicht (kern.lead_ad_sicht) bleibt read-only.
+# v25 (PLAN_LEAD_V3 Phase 119): Autospeichern POST /lead/{id}/feld (JSON),
+# Reiter-Default Termin; POST /stammdaten bleibt als Fallback ohne JavaScript.
 
 from datetime import datetime
 from urllib.parse import quote_plus
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -21,6 +23,12 @@ from app.models import Kunde, Vorgang, VorgangNotizGelesen
 from app.templating import render
 
 router = APIRouter(prefix="/lead-management")
+
+# v25 (Phase 119): Reiter Termin (Standard) · Anrufnotizen · E-Mail-Verlauf ·
+# Timeline; die v23-Reiter qualifizierung/vorgang gibt es nicht mehr (Blöcke
+# bzw. abgeschaltet) – alte Links landen auf dem Standard-Reiter.
+TABS = ("termin", "anrufe", "mails", "timeline")
+TAB_STANDARD = "termin"
 
 
 def _vorgang(session: Session, vorgang_id: int) -> Vorgang:
@@ -57,7 +65,8 @@ def _zurueck(vorgang_id: int, meldung: str = "", tab: str = "") -> RedirectRespo
 
 
 def _tab(form) -> str:
-    return (form.get("tab") or "").strip()[:30]
+    tab = (form.get("tab") or "").strip()[:30]
+    return tab if tab in TABS else ""
 
 
 def _id_lesen(form, name: str):
@@ -76,7 +85,8 @@ def _id_lesen(form, name: str):
 @router.get("/lead/{vorgang_id}")
 async def kartei(request: Request, vorgang_id: int,
                  session: Session = Depends(get_session)):
-    """Dreispaltige Kundenkartei (B1–B8) – übernimmt die V1-Weiterleitung."""
+    """Kundenkartei (B1–B8; v25: Kopf mit Statuskette, Kundeninfo-Block,
+    Reiter, Blöcke) – übernimmt die V1-Weiterleitung."""
     vorgang = _vorgang(session, vorgang_id)
     readonly = _lesegate(request, session, vorgang)
     benutzer = request.state.benutzer
@@ -96,15 +106,87 @@ async def kartei(request: Request, vorgang_id: int,
         session.rollback()
         vorgang = _vorgang(session, vorgang_id)
     kontext = lead_kartei.kartei_kontext(session, vorgang, benutzer, readonly)
-    tab = request.query_params.get("tab", "timeline")
-    if tab not in ("timeline", "mails", "anrufe", "qualifizierung", "termin", "vorgang"):
-        tab = "timeline"
+    tab = request.query_params.get("tab", TAB_STANDARD)
+    if tab not in TABS:
+        tab = TAB_STANDARD
     return render(request, "leadmanagement/kartei.html", aktiv="/lead-management",
                   **kontext, tab=tab,
                   demo_badge=kern.demo_aktiv(session),
                   badge_text=kern.parameter_holen(session, "demo_badge_text",
                                                   "Demo · Coming soon"),
                   meldung=request.query_params.get("meldung", ""))
+
+
+# --- Autospeichern (v25, Phase 119) --------------------------------------------------
+
+async def _json_oder_form(request: Request) -> dict:
+    """Body als JSON ({feld, wert}) oder – Fallback – als Formular lesen."""
+    typ = (request.headers.get("content-type") or "").lower()
+    if "application/json" in typ:
+        try:
+            daten = await request.json()
+        except ValueError:
+            return {}
+        return daten if isinstance(daten, dict) else {}
+    form = await request.form()
+    daten = {k: form.get(k) for k in form.keys()}
+    if hasattr(form, "getlist") and len(form.getlist("wert")) > 1:
+        daten["wert"] = form.getlist("wert")
+    return daten
+
+
+def _pflicht_antwort(session: Session, vorgang: Vorgang, kunde: Kunde | None) -> dict:
+    """Pflichtfeld-Zähler + Terminierungszustand (B8) für die JSON-Antwort,
+    damit die Kartei Zähler, rote Umrandung und den Button ohne Neuladen
+    nachführen kann."""
+    if kunde is None:
+        return {"pflicht_offen": [], "pflicht_anzahl": 0, "pflicht_keys": [],
+                "terminierung": {"bereit": False, "fehlend": ["Kunde"], "erledigt": False}}
+    status = lead_kartei.pflicht_status(session, kunde, vorgang)
+    pruefung = lead_kartei.terminierung_pruefung(session, kunde, vorgang)
+    return {"pflicht_offen": status["offen"], "pflicht_anzahl": len(status["offen"]),
+            "pflicht_keys": sorted(status["offen_keys"]),
+            "terminierung": {"bereit": pruefung["bereit"], "fehlend": pruefung["fehlend"],
+                             "erledigt": pruefung["erledigt"]},
+            "adresse_vollstaendig": lead_kartei.adresse_vollstaendig(kunde)}
+
+
+@router.post("/lead/{vorgang_id}/feld")
+async def feld(request: Request, vorgang_id: int,
+               session: Session = Depends(get_session)):
+    """Autospeichern eines Feldes des Kundeninfo-Blocks (Vertrag Briefing):
+    JSON {feld, wert} → {ok, wert (normalisiert), meldung, pflicht_offen,
+    pflicht_anzahl}. Rechte wie bisher: lead_v2.gate (ID/LM/Admin alle,
+    Handelsvertreter nur eigene Leads, Außendienst-Lesesicht 404). Fehler →
+    HTTP 400, nichts gespeichert (alter Wert bleibt). Adressänderungen
+    verwerfen den Cache der Terminvorschläge."""
+    vorgang = _vorgang(session, vorgang_id)
+    lead_v2.gate(request, session, vorgang)
+    benutzer = request.state.benutzer
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    daten = await _json_oder_form(request)
+    feld_name = str(daten.get("feld") or "").strip()
+    if feld_name not in lead_kartei.AUTOSPEICHER_FELDER:
+        return JSONResponse({"ok": False, "feld": feld_name, "wert": "",
+                             "meldung": "Feld unbekannt.", **_pflicht_antwort(session, vorgang, kunde)},
+                            status_code=400)
+    erzwingen = (str(daten.get("erzwingen") or "") in ("1", "true", "on")
+                 and benutzer.rolle in ("admin", "innendienst"))
+    ergebnis = lead_kartei.feld_speichern(session, vorgang, kunde, feld_name,
+                                          daten.get("wert"), benutzer=benutzer,
+                                          erzwingen=erzwingen)
+    if ergebnis["ok"]:
+        session.commit()
+        if feld_name in lead_kartei.ADRESS_FELDER and ergebnis["geaendert"]:
+            lead_kartei.vorschlaege_cache_leeren(vorgang.id)
+    else:
+        session.rollback()
+        vorgang = _vorgang(session, vorgang_id)
+        kunde = session.get(Kunde, vorgang.kunde_id)
+    antwort = {"ok": ergebnis["ok"], "feld": feld_name, "wert": ergebnis["wert"],
+               "meldung": ergebnis["meldung"], "geaendert": ergebnis["geaendert"],
+               **_pflicht_antwort(session, vorgang, kunde)}
+    return JSONResponse(antwort, status_code=200 if ergebnis["ok"] else 400)
 
 
 # --- Stammdaten / Zuweisungen (B1–B3) ------------------------------------------------
@@ -274,4 +356,4 @@ async def vorab_angebot(request: Request, vorgang_id: int,
     session.commit()
     if ziel:
         return RedirectResponse(ziel, status_code=303)
-    return _zurueck(vorgang_id, meldung, "vorgang")
+    return _zurueck(vorgang_id, meldung)

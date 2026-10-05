@@ -1,4 +1,4 @@
-{# v23 (PLAN_LEAD_V2 Phase 111, I3): Tabelle des Boards „Info-Veranstaltung“ –
+{# v23 (PLAN_LEAD_V2 Phase 111, I3): Tabelle des Boards „Infoabend“ (bis v24 „Info-Veranstaltung“) –
    gleiche Spalten wie das Hauptboard. Ist das Tabellen-Makro von Phase 105
    (leadmanagement/_tabelle.html, Makro zelle) vorhanden, rendert es die
    Standardspalten (ctx.tabelle_makro); sonst greift die eigene einfache
@@ -19,7 +19,7 @@
     {%- if v.demo %} <span class="abzeichen">Demo</span>{% endif %}
     {%- if z.monday %} <span class="abzeichen" title="gesyncter monday-Lead">monday</span>{% endif %}
     {%- if v.vorab_angebot %} <span class="abzeichen" title="Vorab-Angebot ohne Vor-Ort-Termin (F10)">Vorab-Angebot</span>{% endif %}
-    {%- if z.terminiert %} <a class="abzeichen li-terminiert" href="/lead-management/terminiert" title="Vor-Ort-Termin vereinbart – der Lead steht zusätzlich im Board Terminiert">→ Terminiert</a>{% endif %}
+    {%- if z.terminiert %} <a class="abzeichen li-terminiert" href="/lead-management/terminiert" title="Vor-Ort-Termin vereinbart – der Lead steht zusätzlich im Board Deals">→ Deals</a>{% endif %}
     {%- if z.zurueck %} <span class="lm-flag" title="Wiedervorlage fällig – zurück aus „Pausiert“">⚑ zurück</span>{% endif %}
     {%- if z.hinweis %}
     <div class="li-hinweis" role="note" title="{{ z.hinweis.text }}">{{ symbol('warnung') }} Kunde bereits im System:
@@ -35,14 +35,12 @@
     <form method="post" action="/lead-management/anruf/{{ v.id }}" class="lm-anruf-form li-anruf-form">
         <input type="hidden" name="zurueck" value="{{ ctx.zurueck }}">
         <input type="hidden" name="dauer_sek">
-        <button class="knopf klein lm-ok" name="ergebnis" value="erreicht" title="Erreicht – Qualifizierungsbogen öffnet sich">✓ Erreicht</button>
-        {%- if ctx.dialoge_makro %}
-        <button type="button" class="knopf klein zweitrangig" data-ergebnis="nicht_erreicht" onclick="dialogOeffnen('nichterreicht', {{ v.id }})"
-                title="{{ sperre if z.gesperrt else 'Nicht erreicht – Dialog mit Kaskaden-Vorschlag (Wiedervorlage änderbar)' }}" {{ 'disabled' if z.gesperrt }}>Nicht erreicht</button>
-        {%- else %}
-        <button class="knopf klein zweitrangig" name="ergebnis" value="nicht_erreicht" title="{{ sperre if z.gesperrt else 'Nicht erreicht – Kaskade setzt die Wiedervorlage' }}" {{ 'disabled' if z.gesperrt }}>Nicht erreicht</button>
-        {%- endif %}
-        <button class="knopf klein zweitrangig" name="ergebnis" value="mailbox" title="{{ sperre if z.gesperrt else 'Mailbox/AB – zählt als Versuch, Kaskade läuft' }}" {{ 'disabled' if z.gesperrt }}>Mailbox</button>
+        <button class="knopf klein lm-ok" name="ergebnis" value="erreicht" title="Erreicht – {{ 'öffnet den Qualifizierungsbogen' if ctx.score_aktiv else 'öffnet die Kundenkartei, Reiter Termin' }}">✓ Erreicht</button>
+        {#- v25 (PLAN_LEAD_V3 Phase 120): Nicht erreicht/Mailbox ohne Dialog – Ergebnis-Button im
+            lm-anruf-form wie in der Anrufliste (Versuch +1 mit Zeitstempel, Stoppuhr-Dauer,
+            keine automatische Wiedervorlage) #}
+        <button class="knopf klein zweitrangig" name="ergebnis" value="nicht_erreicht" title="{{ sperre if z.gesperrt else 'Nicht erreicht (zählt als Versuch mit Zeitstempel, keine automatische Wiedervorlage)' }}" {{ 'disabled' if z.gesperrt }}>Nicht erreicht</button>
+        <button class="knopf klein zweitrangig" name="ergebnis" value="mailbox" title="{{ sperre if z.gesperrt else 'Mailbox/AB (zählt als Versuch mit Zeitstempel, keine automatische Wiedervorlage)' }}" {{ 'disabled' if z.gesperrt }}>Mailbox</button>
         {%- if ctx.dialoge_makro %}
         <button type="button" class="knopf klein zweitrangig li-kein-interesse" data-ergebnis="kein_interesse" onclick="dialogOeffnen('keininteresse', {{ v.id }})" title="Kein Interesse – Pflichtgrund (Blatt Gründe)">Kein Interesse</button>
         {%- else %}
@@ -140,12 +138,27 @@
 </tr>
 {%- endmacro %}
 
+{# v25 (PLAN_LEAD_V3 Phase 118, Prüfung F): Spaltenköpfe mit den Spaltenwerkzeugen
+   des Hauptboards (Klick sortiert, Stift benennt um, Ziehen verschiebt – Makro
+   spalten_kopf aus _tabelle.html, Konfiguration je Nutzer unter dem Board-Key
+   „info“); Kundenname und Status bleiben fest vorn, die Infoabend-Spalten
+   Ergebnis · Teilgenommen · Veranstaltung haben feste Plätze und keine Werkzeuge. #}
+{% macro info_kopf(spalten, ctx) -%}
+{%- for sp in spalten if sp.sichtbar -%}
+{%- if sp.key in ('ergebnis', 'teilgenommen', 'veranstaltung') or not ctx.tabelle_makro -%}
+<th class="sp-{{ sp.key }}">{{ sp.titel }}</th>
+{%- else -%}
+{%- from "leadmanagement/_tabelle.html" import spalten_kopf -%}{{ spalten_kopf([sp], ctx, ('lead', 'status')) }}
+{%- endif -%}
+{%- endfor -%}
+{%- endmacro %}
+
 {% macro info_tabelle(zeilen, spalten, ctx, gruppe='') -%}
 <table class="tabelle lm-tabelle li-tabelle" data-gruppe="{{ gruppe }}">
     <thead>
         <tr>
             {%- if ctx.sammel %}<th class="sp-wahl"><input type="checkbox" class="li-wahl-alle" title="alle sichtbaren markieren" aria-label="alle sichtbaren markieren"></th>{% endif %}
-            {%- for sp in spalten if sp.sichtbar %}<th class="sp-{{ sp.key }}">{{ sp.titel }}</th>{% endfor %}
+            {{- info_kopf(spalten, ctx) }}
         </tr>
     </thead>
     <tbody>

@@ -83,6 +83,7 @@ class StatusZeile:
     board: str                    # hauptboard | terminiert
     gruppe: str
     monday_status: list[str]
+    board_label: str = ""          # v25: Anzeigename des Boards (Hauptboard / Deals)
 
 
 @dataclass
@@ -144,6 +145,14 @@ class LeadLogik:
         """(board, gruppe) einer Phase – Fallback Hauptboard/Neu."""
         z = self.status_zeile(phase)
         return (z.board, z.gruppe) if z else ("hauptboard", "neu")
+
+    def board_label(self, board: str) -> str:
+        """v25: Anzeigename eines Boards aus dem Blatt Status (Spalte
+        board_label), Fallback Hauptboard / Deals."""
+        for z in self.status_zeilen:
+            if z.board == board and z.board_label:
+                return z.board_label
+        return {"hauptboard": "Hauptboard", "terminiert": "Deals"}.get(board, board)
 
     def phase_fuer_monday(self, status_text: str) -> str | None:
         gesucht = (status_text or "").strip().lower()
@@ -288,7 +297,8 @@ def einlesen(pfad: Path | None = None) -> LeadLogik:
                 board=str(z[3] or "hauptboard").strip() or "hauptboard",
                 gruppe=str(z[4] or "neu").strip() or "neu",
                 monday_status=[m.strip() for m in str(z[5] or "").split("|")
-                               if m.strip()] if len(z) > 5 else []))
+                               if m.strip()] if len(z) > 5 else [],
+                board_label=str(z[6] or "").strip() if len(z) > 6 else ""))
     else:
         logik.warnungen.append("Blatt „Status“ fehlt – Boards nutzen Standardzuordnung")
 

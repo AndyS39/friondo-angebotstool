@@ -525,3 +525,116 @@ disqualifiziert) haben keine Entsprechung. „Klima“ ist das Interesse KL,
   Hauptrolle `benutzer.rolle` (wie im Bestand).
 - Demo-Risiko: `/api/leads` legt im Demo-Modus `demo = 1` an – bei der
   Umstellung auf „alle“ „Behalten“ wählen.
+
+
+---
+
+# Lead-Management V3 (v25, PLAN_LEAD_V3 Phasen 118–121) – Annahmen und Entscheidungen
+
+Stand 05.10.2026, Feedback-Runde Claudia Castro. Alles weiter im Demo-Modus.
+
+## V3.1 [ANNAHME]-Stellen des Plans und ihre Auflösung
+
+| Nr. | Annahme (PLAN_LEAD_V3) | Umsetzung |
+|---|---|---|
+| 1 | Anrede/Vorname/Nachname nur in den Boards ausgeblendet, in der Kartei sichtbar | So umgesetzt: Standard-Spaltensatz der Boards ohne die drei Spalten (einblendbar), Spalte „Kundenname“ mit vollem Namen; die Kartei zeigt die drei Felder im Kundeninfo-Block. Vorhandene `boards_spalten`-Einträge bleiben unverändert. |
+| 2 | „Nur eine Liste“ in der Anrufliste = ohne die fünf Gruppen | So umgesetzt: eine durchgehend sortierte Liste (SLA rot → SLA gelb → fällige Wiedervorlagen/Rückrufe nach Uhrzeit → zurückgestellt fällig → Rest nach Eingang, älteste zuerst); Schnellfilter-Chips bleiben, Leiste „Reihenfolge“ statt Gruppenköpfe. |
+| 3 | Wunschzeiten bleiben in der Kartei (der Terminassistent nutzt sie) | So umgesetzt (im Kundeninfo-Block, nur Anzeige). |
+| 4 | Änderungs-Aktivität mit Alt → Neu | So umgesetzt: Aktivität typ `aenderung` „<Feld>: „alt“ → „neu““ bei jeder tatsächlichen Änderung über das Autospeichern; unveränderte Werte erzeugen keine Aktivität. Zuweisungen Innendienst/Außendienst schreiben weiter nur die bestehende `status`-Aktivität der lead_v2-Helfer (keine Doppelprotokollierung). |
+| 5 | „Mailbox“ verhält sich wie „Nicht erreicht“ (kein Dialog, keine Wiedervorlage) | So umgesetzt; ebenso „Besetzt“ (zusätzliche Annahme, Rückfrage R5). |
+| 6 | Manuelle Buchung durch den Innendienst auf einen Handelsvertreter bleibt möglich | So umgesetzt: nur der Assistent schließt HV aus („Handelsvertreter terminieren ihre Leads selbst“); termin.html zeigt sie als optgroup „Handelsvertreter (nur manuell)“; HV-Leads zeigen dem Innendienst den Hinweis „Lead liegt bei <Name> (Handelsvertreter), Terminierung durch den Vertreter“. |
+| 7 | Liste „Ohne nächsten Schritt“ als Ersatz für die weggefallene automatische Wiedervorlage | So umgesetzt im Dashboard (Parameter `ohne_schritt_tage`, Standard 2): eigene Leads mit Versuch ≥ 1, ohne Wiedervorlage/Zurückstellung, ohne offenen Termin; Leads ohne Anruf-Aktivität fallen auf Erstkontakt bzw. Eingang zurück. |
+| 8 | Nurture-Mail bleibt an die Einwilligung gebunden | Unverändert (Kaskade plant die Nurture-Mail 30 Tage nach dem letzten Versuch, Versand prüft wie bisher). |
+
+## V3.2 Entscheidungen beim Bau (Koordination und Agenten)
+
+- **Kaskade ohne Wiedervorlage** zentral in `kaskade_anwenden`: Mails je Versuchsnummer
+  bleiben (Blatt Kaskade, Spalte `aktion`), Spalte `wiedervorlage_nach` wird nicht mehr
+  ausgewertet; beim Übergang nach Nicht erreicht wird `naechste_aktion_am` geleert und die
+  Nurture-Mail +30 Tage geplant. Meldung „Versuch n protokolliert[ – Mail geplant]“.
+- **Label „Kontaktiert“** kommt aus dem Blatt Status (zwei Phasen, ein Label); die
+  Board-Namen („Hauptboard“, „Deals“) aus der neuen Spalte `board_label`
+  (`logik.board_label`). Parameter-Keys `info_*`, Tabellen-, Pfad- und Quellen-Keys
+  bleiben, nur die Oberfläche sagt „Infoabend“/„Deals“. Aktivitätstexte behalten die
+  internen Phasennamen (Protokoll bleibt eindeutig). In Auswahlfeldern erscheint
+  „Kontaktiert“ einmal; manuell wird fortan `in_kontaktierung` gesetzt.
+- **Trichter-Stufe „Kontaktiert“** als Kohorte des Zeitraums (erster Kontaktversuch,
+  erreicht oder qualifiziert im Zeitraum, ein Lead zählt einmal), Aufteilung nach
+  aktueller Phase im Tooltip; Stufe „qualifiziert“ nur bei `score_aktiv = an`.
+- **`score_aktiv`** (Standard aus) ist der zentrale Schalter (`lead_v2.score_aktiv`);
+  bei an verhält sich das Modul wie v23 (Score, Qualifizierung, Vorbelegung
+  `erfassungs_frage`, Link zum Bogen im Kartei-Kopf). Daten und Steuerdatei-Blätter
+  bleiben unverändert.
+- **Spalten je Nutzer für alle vier Boards**: Infoabend (Key `info`) und
+  Handelsvertreter-Ansicht (Key `handelsvertreter`) haben eine eigene Konfiguration je
+  Nutzer (Katalog = Hauptboard; HV-Standard = v23-Spaltensatz), nicht die
+  Hauptboard-Konfiguration als Ausgangspunkt (Prüfer F, Rückfrage R2). Spalten-Key
+  `lead` bleibt für „Kundenname“; v23-Listen werden weiter gelesen; ohne gemerkte
+  Sortierung Eingang neueste zuerst; eine gemerkte Score-Sortierung ruht bei
+  `score_aktiv = aus`. Umbenennen bleibt auch in der HV-Lesesicht möglich
+  (persönliche Ansicht).
+- **Sticky-Filterleiste**: `top = var(--lm-kopf-fest)` (Kopfzeilenhöhe nur, wenn sie
+  sticky/fixed ist) mit eigenem Scroll-Container `.lm-tabellen`, damit die Leiste auch
+  beim horizontalen Scrollen in voller Breite steht.
+- **Navigation**: „Übersicht/Statistik Leads“ als zwei Einträge plus „Kanal-Report“;
+  Kanban markiert in der Icon-Leiste das gezeigte Board (Ansicht des Boards), die
+  Kartei das Board des Leads (Blatt Status), das V1-Cockpit „Übersicht“ ohne eigenen
+  Eintrag; `/boards/haupt` leitet auf `/hauptboard`. To-Dos-Seite mit Umschalter
+  Alle | Fällig (`?faellig=1` = offen mit Fälligkeit bis jetzt, wirkt in allen Sichten).
+- **Anrufliste**: Filter „Vertriebskanal“ als Checkbox-Dropdown (nur so sind die
+  Kanalfarben darstellbar); `gruppe=` in Alt-Links wird ignoriert,
+  `quelle_id/quelle_typ/kampagne_id` filtern weiter (Abzeichen). Zurückgestellte mit
+  erreichtem Datum stehen auf Rang 3 – auch ohne Erstkontakt (Vorrang wie v21,
+  Rückfrage R6).
+- **Terminvorschläge im Block Termine**: eigene JSON-Route
+  `GET /lead-management/lead/{id}/termin/vorschlaege.json` (Top 5, Cache 10 Minuten je
+  Lead und Sicht, Invalidierung bei Adressänderung, komplett nach Buchung/Absage,
+  `?neu=1`), asynchron nach dem Seitenaufbau; Zustands-Reihenfolge hv_lead →
+  adresse_fehlt → ok/keine (HV-Lead ohne Adresse zeigt dem Innendienst den HV-Hinweis).
+- **Autospeichern** über `POST /lead-management/lead/{id}/feld` (ein Feld je Aufruf,
+  serverseitige Validierung, Pflichtfeld-Zähler in der Antwort, Fehler = HTTP 400 mit
+  altem Wert); die alte Stammdaten-Route bleibt als noscript-Fallback. Feld „Firma“
+  bleibt im Kundeninfo-Block (Pflicht Nachname ODER Firma). Blöcke Projekt/Anhänge
+  zugeklappt, wenn leer (Zustand je Browser in localStorage).
+- **Vorgangsakte**: `_lead_kopf.html` ohne Score, Labels aus
+  `akte_kontext["status_labels"]`; Quelle/Kampagne bleiben dort sichtbar.
+- **Cache-Busting**: `templating._css_version()` nimmt die jüngste Static-Datei
+  (style.css, lead_v2.css, *.js) – einzige Änderung außerhalb des Lead-Moduls,
+  damit Browser nach dem Rollout die neuen `lead_v2.css`/`lm_*.js` laden.
+- **Nicht migriert**: Datensatz `lead_quellen.name = Info-Veranstaltung` (Rückfrage R1,
+  manuell in der Parametrierung umbenennbar); `cockpit.html` (toter Code seit v21)
+  bleibt liegen; `leads_api.py` Fehlertext „Keine Info-Veranstaltung am …“ unverändert
+  (Eingang/API bleiben laut Plan).
+
+## V3.3 Angepasste Alt-Tests (Begründung)
+
+| Test | Anpassung | Begründung |
+|---|---|---|
+| `test_lead_v2_boards.py::Seiten::test_boards_rendern_mit_leiste` | aria-labels der Leiste von (Hauptboard, Terminiert, Kontaktiert, Info-Veranstaltung, E-Mail-Vorlagen) auf die acht v25-Einträge; E-Mail-Vorlagen nur unter „Mehr …“; kein „Terminiert“/„Info-Veranstaltung“ in der Leiste | Phase 118 ändert Reihenfolge und Bezeichnungen der Icon-Leiste. |
+| `test_lead_v2_info.py::…::test_statistik_quellen_typ_veranstaltung` | erwartet („veranstaltung“, „Infoabend“) statt „Info-Veranstaltung“ | Phase 118: Anzeigename in `QUELLEN_START`/`QUELLEN_GRUPPEN` (Key bleibt). |
+| `test_lead_v2_info.py::Board::test_gruppen_kennzeichen_spalten_und_buttons` | Spaltenköpfe als Präfix `<th class="sp-…"` statt mit schließendem `>` | Phase 118: Infoabend-Spalten sind jetzt je Nutzer konfigurierbar (Makro `spalten_kopf` mit data-sort/data-key/draggable/Stift). |
+| `test_lead_v11.py::Phase89Anrufliste::test_gruppen_chips_satz → test_liste_chips_satz` | prüft Ränge und Reihenfolge der einen Liste statt `d['gruppen']`; Satz „Wiedervorlage“ statt „nächster Versuch“; keine Gruppenköpfe, kein quelle_typ/quelle_id-Select | Phase 118 [ANNAHME 2]: Gruppen entfallen; Phase 120: keine automatische Wiedervorlage. |
+| `test_lead_v2_anruf.py::Ergebnis::test_dialog_zeitpunkt_ueberschreibt_kaskade → test_wiedervorlage_am_wird_ignoriert` | mitgesendetes `wiedervorlage_am` wird ignoriert (`naechste_aktion_am` None), Meldungen „Nicht erreicht protokolliert (Versuch n)[ – Mail geplant].“, letzte Stufe Nurture +30 Tage | Phase 120: „Nicht erreicht“ ohne Dialog und ohne Wiedervorlage; Kaskaden-Mails an der Versuchsnummer. |
+| `test_lead_v2_anruf.py::Punkte` (Legende/Tasten/Stoppuhr) | erwartet `id="dlg-rueckruf"` statt `id="dlg-nichterreicht"` | Phase 120: das Makro `anruf_dialoge` rendert keinen Nicht-erreicht-Dialog mehr. |
+| `test_lead_v2_fundament.py::Kaskade::test_stufe_vier_wiedervorlage_und_mail → test_stufe_vier_mail_ohne_wiedervorlage`, `test_stufe_fuenf_disqualifiziert` | Stufe 4: „Versuch 4 protokolliert – Mail geplant.“, keine Wiedervorlage +7 Tage; Stufe 3 ohne Mail lässt eine manuelle Wiedervorlage unberührt; Stufe 5 leert die Wiedervorlage | Phase 120 (Vorab-Änderung `kaskade_anwenden`): Spalte `wiedervorlage_nach` wird nicht mehr ausgewertet. |
+| `test_lead_v2_dashboard.py::Dashboard::test_rendert_alle_bloecke_und_beide_wiedervorlagen` | Zugeteilt-Gruppe über `g['phasen']` gesucht, Name „Kontaktiert“ | Phase 118/120: in_kontaktierung + qualifiziert bilden im Dashboard eine Gruppe mit dem Label aus dem Blatt Status. |
+| `test_lead_v2_kartei.py::Rendern::test_kartei_rendert_drei_spalten → test_kartei_rendert_v3_layout` | erwartet lk-statuskette/lk-kundeninfo/lk-bloecke, vier Reiter, Ergebnis-Button `nicht_erreicht`; alte Marker (lk-links/lk-rechts, tab-qualifizierung, dlg-nichterreicht) als nicht vorhanden | Phase 119: Kartei neu aufgeteilt, Reiter Qualifizierung entfällt; Phase 120: Nicht erreicht ohne Dialog. Vier weitere Kartei-Tests blieben unverändert – stattdessen wurde das Markup des Pflichtfeld-Zählers wieder als zusammenhängender Text gerendert. |
+| `test_lead_v2_termin.py::Kandidatenfilter::test_kompetenz_schliesst_aus` | HV ist für Innendienst/ohne Benutzer auch bei eigenem Lead kein Kandidat (hv_lead/hv_hinweis/hv_manuell); HV selbst nur er | Phase 120: HV werden nur vorgeschlagen, wenn der Anfragende selbst dieser HV ist. |
+| `test_lead_v2_termin.py::AbsageUndErsatz::test_absage_cancel_ics_und_ersatzkandidaten` | „Klasse“ nur bei `score_aktiv`; Phasen-Text „Phase Kontaktiert (erreicht/qualifiziert)“ | Phase 120: Score abgeschaltet; Phase 118: Label „Kontaktiert“. |
+
+## V3.4 Offen nach v25
+
+- Manuelle Sichtprüfung in **Edge** bei 1366 px (Hauptboard/Deals/Infoabend mit allen
+  Spalten, Sticky-Filter, Drag & Drop am Spaltenkopf, Mehrfach-Dropdown
+  „Vertriebskanal“) – bisher nur Chromium (Vorschau/Headless) und Tests.
+- Rückfragen R1–R12 der Gesamtübersicht (Quellen-Datensatz „Info-Veranstaltung“,
+  Spalten-Konfiguration Infoabend/HV, Aktivitätstexte, Cockpit, Besetzt, Rang
+  Zurückgestellte vor SLA, „Score-Bonus“ in der Quellen-Parametrierung, API-Text,
+  Trichter-Kohorte, HV-Buchung über POST /termin, „Ohne nächsten Schritt“
+  Rückfall/Phase neu, Kanban-Nav-Markierung).
+- Vorschlags-Cache enthält `buchbar/pflicht_offen`; Pflichtfeldänderungen ohne
+  Adressbezug werden erst nach Ablauf oder „Neu laden“ sichtbar (kosmetisch).
+- [OFFEN 1] Zuordnungsregel Infoabend-Lead → Veranstaltung, [OFFEN 2] Duplikate durch das
+  Tool – unverändert aus V2.
+- Freischaltung `lead_freigabe_modus = alle` (eigener Plan / Lead V4).
+- Telefonie/Softphone bleibt ausgeklammert.
