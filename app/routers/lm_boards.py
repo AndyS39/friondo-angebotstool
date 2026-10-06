@@ -23,6 +23,7 @@ from app import leadmanagement as kern
 from app.db import SessionLocal, get_session
 from app.models import Benutzer, Vorgang
 from app.templating import render, templates
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/lead-management")
 
@@ -31,8 +32,14 @@ router = APIRouter(prefix="/lead-management")
 
 def lm_demo_badge() -> dict:
     """Demo-Badge zentral in der Icon-Leiste: Parameter lead_freigabe_modus +
-    demo_badge_text (eigene kurze Sitzung, da Makros keinen Request-Kontext
-    haben). Fehler blenden den Badge aus, nie die Seite."""
+    demo_badge_text. v27 (Befund B7 der Inventur): den Wert liefert die
+    RollenMiddleware über anfrage.KONTEXT (gelesen mit ihrer Sitzung) – keine
+    zweite Verbindung je Lead-Seite mehr; die eigene kurze Sitzung bleibt nur
+    als Rückfallweg (Rendern ohne Middleware, z. B. in Tests). Fehler blenden
+    den Badge aus, nie die Seite."""
+    aus_kontext = anfrage.kontext_wert("lm_demo_badge")
+    if aus_kontext is not None:
+        return aus_kontext
     sitzung = SessionLocal()
     try:
         return {"aktiv": kern.demo_aktiv(sitzung),
@@ -102,13 +109,13 @@ def _board_seite(request: Request, session: Session, board: str):
 
 
 @router.get("/hauptboard")
-async def hauptboard(request: Request, session: Session = Depends(get_session)):
+def hauptboard(request: Request, session: Session = Depends(get_session)):
     """H4: Leads ohne Vor-Ort-Termin – Gruppen Neu · Pausiert · Disqualifiziert."""
     return _board_seite(request, session, "hauptboard")
 
 
 @router.get("/boards/haupt")
-async def hauptboard_alias(request: Request, session: Session = Depends(get_session)):
+def hauptboard_alias(request: Request, session: Session = Depends(get_session)):
     """v25: Pfad aus PLAN_LEAD_V3 (Phase 118) – Weiterleitung auf das bestehende
     /lead-management/hauptboard (Pfad bleibt, kein Einstieg geht verloren)."""
     lead_v2.gate(request, session)
@@ -119,7 +126,7 @@ async def hauptboard_alias(request: Request, session: Session = Depends(get_sess
 
 
 @router.get("/terminiert")
-async def terminiert(request: Request, session: Session = Depends(get_session)):
+def terminiert(request: Request, session: Session = Depends(get_session)):
     """H5: Board Deals (Key terminiert) – Leads mit Vor-Ort-Termin:
     Angebotserstellung · Angebotsversand · Gewonnen · Verloren."""
     return _board_seite(request, session, "terminiert")
@@ -150,7 +157,7 @@ def kanban_spalten_zusammenfassen(spalten: dict, koepfe: dict) -> tuple[dict, di
 
 
 @router.get("/board")
-async def board_kanban(request: Request, session: Session = Depends(get_session)):
+def board_kanban(request: Request, session: Session = Depends(get_session)):
     lead_v2.gate(request, session)
     from app import leadmanagement_logik
     benutzer = request.state.benutzer
@@ -210,7 +217,7 @@ async def board_kanban(request: Request, session: Session = Depends(get_session)
 # --- Inline-Bearbeitung (fetch, JSON) ----------------------------------------------------
 
 @router.post("/boards/zeile/{vorgang_id}")
-async def zeile_aendern(request: Request, vorgang_id: int,
+def zeile_aendern(request: Request, vorgang_id: int,
                         session: Session = Depends(get_session)):
     """JSON {feld, wert, grund?, grund_text?, bis?, board?} → {ok, meldung,
     zeile_html?}. Felder: status, notiz, ad_id, leadmanager_id, wiedervorlage."""
@@ -220,9 +227,9 @@ async def zeile_aendern(request: Request, vorgang_id: int,
     lead_v2.gate(request, session, vorgang)
     benutzer = request.state.benutzer
     try:
-        daten = await request.json()
+        daten = anfrage.json_lesen(request)
     except Exception:
-        form = await request.form()
+        form = anfrage.formular(request)
         daten = dict(form)
     if not isinstance(daten, dict):
         return JSONResponse({"ok": False, "meldung": "Ungültige Anfrage."}, status_code=400)
@@ -257,17 +264,17 @@ async def zeile_aendern(request: Request, vorgang_id: int,
 # --- Sammelaktionen (H3) -------------------------------------------------------------------
 
 @router.post("/boards/sammelaktion")
-async def sammelaktion(request: Request, session: Session = Depends(get_session)):
+def sammelaktion(request: Request, session: Session = Depends(get_session)):
     """ids[] + aktion + board + Parameter (status, grund, grund_text, bis);
     Formular → Redirect mit Meldung, Accept application/json → JSON."""
     lead_v2.gate(request, session)
     benutzer = request.state.benutzer
     if "application/json" in (request.headers.get("content-type") or ""):
-        daten = await request.json()
+        daten = anfrage.json_lesen(request)
         ids = daten.get("ids") or []
         params = {k: v for k, v in daten.items() if k not in ("ids",)}
     else:
-        form = await request.form()
+        form = anfrage.formular(request)
         ids = form.getlist("ids") or form.getlist("ids[]")
         params = {k: form.get(k) for k in form.keys() if k not in ("ids", "ids[]")}
     board = (params.get("board") or "hauptboard").strip()
@@ -287,7 +294,7 @@ async def sammelaktion(request: Request, session: Session = Depends(get_session)
 # --- Spaltenkonfiguration je Nutzer (A-14, v25 erweitert) ------------------------------------
 
 @router.get("/boards/spalten")
-async def spalten_holen(request: Request, session: Session = Depends(get_session)):
+def spalten_holen(request: Request, session: Session = Depends(get_session)):
     """{board, spalten: [{key, titel, standard, name, sichtbar}], sort: {key, richtung} | null}"""
     lead_v2.gate(request, session)
     board = request.query_params.get("board", "hauptboard")
@@ -300,7 +307,7 @@ async def spalten_holen(request: Request, session: Session = Depends(get_session
 
 
 @router.post("/boards/spalten")
-async def spalten_speichern(request: Request, session: Session = Depends(get_session)):
+def spalten_speichern(request: Request, session: Session = Depends(get_session)):
     """JSON {board, spalten?: [{key, sichtbar, name?}] in Reihenfolge,
     sort?: {key, richtung: auf|ab} | null, umbenennen?: {key, name} (leer =
     Standard), zuruecksetzen?: true} → gespeicherte Liste + Sortierung. Gilt
@@ -308,9 +315,9 @@ async def spalten_speichern(request: Request, session: Session = Depends(get_ses
     kaputte Daten setzen die Konfiguration nie still zurück."""
     lead_v2.gate(request, session)
     try:
-        daten = await request.json()
+        daten = anfrage.json_lesen(request)
     except Exception:
-        form = await request.form()
+        form = anfrage.formular(request)
         try:
             daten = json.loads(form.get("daten") or "{}")
         except ValueError:
@@ -358,7 +365,7 @@ async def spalten_speichern(request: Request, session: Session = Depends(get_ses
 # --- Reiter Kontaktiert (H7) ----------------------------------------------------------------
 
 @router.get("/kontaktiert")
-async def kontaktiert(request: Request, session: Session = Depends(get_session)):
+def kontaktiert(request: Request, session: Session = Depends(get_session)):
     lead_v2.gate(request, session)
     q = request.query_params
     try:
@@ -390,7 +397,7 @@ def _vorlagen_gate(request: Request, session: Session) -> None:
 
 
 @router.get("/vorlagen")
-async def vorlagen(request: Request, session: Session = Depends(get_session)):
+def vorlagen(request: Request, session: Session = Depends(get_session)):
     """Bestehender Lead-Vorlagen-Editor (Parametrierung) im Modul: gleiche
     Schlüssel/Ablage (lead_vorlage_<key>[_<Sparte>]_betreff/_text)."""
     from app import lead_mail, leadmanagement_logik
@@ -412,11 +419,11 @@ async def vorlagen(request: Request, session: Session = Depends(get_session)):
 
 
 @router.post("/vorlagen")
-async def vorlagen_speichern(request: Request, session: Session = Depends(get_session)):
+def vorlagen_speichern(request: Request, session: Session = Depends(get_session)):
     from app import lead_mail, leadmanagement_logik
     from app.models import einstellung_setzen
     _vorlagen_gate(request, session)
-    form = await request.form()
+    form = anfrage.formular(request)
     schluessel = form.get("vorlage") or ""
     if schluessel not in lead_mail.VORLAGEN_START:
         return RedirectResponse("/lead-management/vorlagen", status_code=303)

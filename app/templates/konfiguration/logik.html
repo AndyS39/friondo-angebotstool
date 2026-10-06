@@ -9,8 +9,12 @@
 <div class="seitenkopf">
     <h1>Logik &amp; Importe</h1>
     <div class="aktionen">
-        <form method="post" action="/parametrierung/neu-einlesen">
-            <button class="knopf" type="submit">Parametrierung neu einlesen</button>
+        {# v27 (PLAN_V17 Phase 128): Hinweis vor dem Start – Bestätigung per confirm()
+           plus verstecktes Feld „bestaetigt“ (serverseitig geprüft) #}
+        <form method="post" action="/parametrierung/neu-einlesen"
+              onsubmit="return confirm('Logik-Excel neu einlesen: {{ import_hinweise.logik }}. Jetzt starten?');">
+            <input type="hidden" name="bestaetigt" value="1">
+            <button class="knopf" type="submit" title="{{ import_hinweise.logik }}">Parametrierung neu einlesen</button>
         </form>
         <a class="knopf zweitrangig" href="/parametrierung/kl-logik">Klima-Logik (KL)</a>
         <a class="knopf zweitrangig" href="/parametrierung/angebotstool">Angebotstool-Einstellungen</a>
@@ -39,6 +43,8 @@
     Quelle: <code>konfigurator_logik.xlsx</code> ·
     zuletzt eingelesen: {{ logik.geladen_am.strftime('%d.%m.%Y %H:%M:%S') }}
 </p>
+<p class="hinweis" id="import-hinweis-logik"><strong>Neu einlesen:</strong> {{ import_hinweise.logik }}
+    – der Knopf fragt vor dem Start nach einer Bestätigung.</p>
 
 {% if bericht.ok %}
     <p class="meldung">Validierung erfolgreich – keine Fehler gefunden.</p>
@@ -163,15 +169,21 @@
 <section class="pe-abschnitt" id="klima">
 <h2>Klimakonfigurator (v24)</h2>
 <div class="aktionen">
-    <form method="post" action="/parametrierung/artikel/kl-import">
+    {# v27 (PLAN_V17 Phase 128): Hinweis vor dem Start – Bestätigung per confirm()
+       plus verstecktes Feld „bestaetigt“ (serverseitig geprüft) #}
+    <form method="post" action="/parametrierung/artikel/kl-import"
+          onsubmit="return confirm('Klima-Positionslisten importieren: {{ import_hinweise.klima }}. Jetzt starten?');">
+        <input type="hidden" name="bestaetigt" value="1">
         <button class="knopf" type="submit" {{ 'disabled' if not kl_import_ok }}
-                title="Liest Artikel-Preislisten/Klima/ (Ersatzangebot KL · Musterangebot KL) → KL001–KL050">
+                title="Liest Artikel-Preislisten/Klima/ (Ersatzangebot KL · Musterangebot KL) → KL001–KL050. {{ import_hinweise.klima }}">
             Artikel → Klima-Positionslisten importieren</button>
     </form>
     <a class="knopf zweitrangig" href="/parametrierung/artikel/kl-import">Import-Vorschau</a>
     <a class="knopf zweitrangig" href="/parametrierung/kl-logik">Paketmatrix / Montagematrix / Kombinationen KL</a>
     <a class="knopf zweitrangig" href="/artikel?q=KL0">Artikel Sparte KL</a>
 </div>
+<p class="hinweis" id="import-hinweis-klima"><strong>Klima-Import:</strong> {{ import_hinweise.klima }}
+    – der Knopf fragt vor dem Start nach einer Bestätigung.</p>
 {% if not kl_import_ok %}
 <p class="meldung fehler">Klima-Import nicht verfügbar – <code>app/import_klima.py</code> fehlt.</p>
 {% endif %}

@@ -59,6 +59,7 @@ from app import leadmanagement as kern
 from app.db import get_session
 from app.models import LeadAktivitaet, Vorgang, ANRUF_ERGEBNIS_NAMEN
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/lead-management")
 
@@ -90,7 +91,7 @@ def _eigene_sicht(session: Session, benutzer) -> int | None:
 # --- D2: Meine Anrufe ----------------------------------------------------------------
 
 @router.get("/anruf/meine")
-async def meine_anrufe(request: Request, session: Session = Depends(get_session)):
+def meine_anrufe(request: Request, session: Session = Depends(get_session)):
     """Eigene protokollierte Anrufe (lead_aktivitaeten typ anruf, benutzer_id =
     ich) mit Datum, Nummer (tel:), Vorgang (Link Kartei), Ergebnis, Dauer;
     Filter Zeitraum/Ergebnis/Suche. alle=1 (nur Modul-Sichtbare): Team-Sicht."""
@@ -122,7 +123,7 @@ async def meine_anrufe(request: Request, session: Session = Depends(get_session)
 # --- D3 / H7: Rufnummernsuche --------------------------------------------------------
 
 @router.get("/anruf/suche")
-async def rufnummer_suche(request: Request, session: Session = Depends(get_session)):
+def rufnummer_suche(request: Request, session: Session = Depends(get_session)):
     """„Rufnummer eingeben“: E.164-normalisiert (kern.telefon_normalisieren),
     Ziffernfolge-Vergleich in kunden.telefon und leads.telefon (monday).
     Genau ein Kunde mit Vorgang → direkt in die Kartei, sonst Trefferliste."""
@@ -148,7 +149,7 @@ async def rufnummer_suche(request: Request, session: Session = Depends(get_sessi
 # --- C2: Kaskaden-Auskunft (v25: nur noch Auskunft, kein Dialog) --------------------
 
 @router.get("/anruf/{vorgang_id}/vorschlag")
-async def anruf_vorschlag(request: Request, vorgang_id: int,
+def anruf_vorschlag(request: Request, vorgang_id: int,
                           session: Session = Depends(get_session)):
     """JSON {zeitpunkt (YYYY-MM-DDTHH:MM | null), zeitpunkt_text, stufe, stufen,
     regel, aktion, aktion_text, letzte, gesperrt, versuch_nr, versuche_max,
@@ -177,12 +178,12 @@ async def anruf_vorschlag(request: Request, vorgang_id: int,
 # --- D1: Dauer nachträglich korrigieren ---------------------------------------------
 
 @router.post("/anruf/aktivitaet/{aktivitaet_id}/dauer")
-async def dauer_korrigieren(request: Request, aktivitaet_id: int,
+def dauer_korrigieren(request: Request, aktivitaet_id: int,
                             session: Session = Depends(get_session)):
     """Formfeld dauer_sek (Sekunden oder mm:ss), optional zurueck. Nur eigener
     Eintrag oder Admin, nur typ anruf; Änderung als Aktivität typ system.
     Antwort JSON bei Accept: application/json (v17-Muster), sonst Redirect."""
-    form = await request.form()
+    form = anfrage.formular(request)
     akt = session.get(LeadAktivitaet, aktivitaet_id)
     vorgang = session.get(Vorgang, akt.vorgang_id) if akt is not None else None
     lead_v2.gate(request, session, vorgang)

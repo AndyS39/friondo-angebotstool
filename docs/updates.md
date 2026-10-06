@@ -1,21 +1,28 @@
 # Updates ausliefern: Entwicklungs-PC → GitHub → Server
 
 Ablauf ab v5: Änderungen werden am Entwicklungs-PC committet und nach GitHub
-gepusht; auf dem Terminal Server holt `update.bat` den neuen Stand, migriert
-die Datenbank und startet den Dienst neu. `rollback.bat` nimmt ein Update
-zurück.
+gepusht; auf dem Server holt `update.bat` den neuen Stand, migriert die
+Datenbank und startet das Tool neu. `rollback.bat` nimmt ein Update zurück.
+**Seit v27:** Updates nur im **Wartungsfenster** (Standard Dienstag 18:30–19:30
+[ANNAHME]) mit vorher gesetztem Wartungsbanner; das Tool läuft als Dienst bzw.
+Aufgabe (`update.bat`/`rollback.bat` erkennen den Weg), nach jedem Update läuft
+der **Smoke-Test** `scripts\smoke.bat`, und `rollback.bat --nur-code` nimmt nur
+den Code zurück (Datenbank bleibt). Das vollständige Runbook mit Reihenfolge,
+Störungen und Ansprechpartnern steht in `docs/betrieb.md`.
 
 ## 1. Einmalige Einrichtung (GitHub, privates Repository)
 
 **Stand 20.08.2026: komplett eingerichtet** – Repository
 `https://github.com/AndyS39/friondo-angebotstool` (privat), Entwicklungs-PC pusht,
-Server (`C:\Friondo\Angebotstool`) ist per `git init` + `git checkout -f -B master
-origin/master` verbunden (Dateikopie ohne `.git` nachträglich angebunden). Die
-Schritte hier nur zur Dokumentation bzw. für eine Neuinstallation:**
+Server ist per `git init` + `git checkout -f -B master origin/master` verbunden
+(Dateikopie ohne `.git` nachträglich angebunden; Projektordner auf dem Server
+heute `C:\Users\kdadmin\Desktop\Angebotstool`). Die Schritte hier nur zur
+Dokumentation bzw. für eine Neuinstallation:
 
 1. Auf https://github.com/new ein **privates** Repository anlegen, Name z. B.
    `friondo-angebotstool`, **ohne** README/.gitignore/Lizenz (leer lassen).
-2. Am Entwicklungs-PC im Projektordner `C:\Users\Andreas\Documents\Claude\Angebotserstellungtool`:
+2. Am Entwicklungs-PC im Projektordner (heute fr-wts-02,
+   `C:\Users\a.scheelen\Tools\Angebotstool`):
 
    ```bat
    scripts\github-einrichten.bat https://github.com/AndyS39/friondo-angebotstool.git
@@ -24,7 +31,7 @@ Schritte hier nur zur Dokumentation bzw. für eine Neuinstallation:**
    Das Skript setzt `origin`, pusht `master` und setzt den Upstream. Beim ersten
    Push öffnet der **Git Credential Manager** ein Browserfenster zur Anmeldung
    bei GitHub (einmalig; danach ist die Anmeldung gespeichert).
-3. Auf dem **Server** einmalig als Administrator in `C:\Friondo\Angebotstool`:
+3. Auf dem **Server** einmalig als Administrator im Projektordner:
 
    ```bat
    git remote add origin https://github.com/AndyS39/friondo-angebotstool.git
@@ -39,17 +46,23 @@ Schritte hier nur zur Dokumentation bzw. für eine Neuinstallation:**
    anlegen.
 
 Was **nie** auf GitHub landet (`.gitignore`): `data\` (Datenbank, PDFs,
-Backups), `.env` (Tokens), `venv\`.
+Backups, Logs), `.env` (Tokens), `venv\`, `diagnose\`, `docs\betrieb\`
+(Restore-Protokolle).
 
-## 2. Jedes Update
+## 2. Jedes Update (im Wartungsfenster)
 
-Am Entwicklungs-PC (nach Commit):
+Vorher am Entwicklungs-PC (Rollout-Grundregel, Details `docs/betrieb.md`
+Abschnitt „Update im Wartungsfenster“): aktuelle Server-DB-Kopie nach
+`diagnose\`, `migrate.py --db` zweimal auf der Kopie, Voll-Crawl
+(`scripts\voll_crawl.py`) + Abnahmeskript (`tests\abnahme.py`) grün, dann:
 
 ```bat
 git push
 ```
 
-Auf dem Server als Administrator im Projektordner:
+Auf dem Server als Administrator im Projektordner (Banner vorher unter
+Parametrierung → Betrieb → Wartungshinweis setzen, mindestens 30 Minuten
+vor dem Fenster):
 
 ```bat
 update.bat
@@ -59,34 +72,58 @@ update.bat
 
 | Schritt | Was passiert | Bei Fehler |
 |---|---|---|
-| 1 | Dienst „Friondo Angebotstool“ stoppen | – |
+| 0 | Hinweis auf Wartungsfenster und Banner (10 s, Abbruch mit Strg+C – keine Blockade) | – |
+| 1 | Tool stoppen über `scripts\dienst-neustart.bat --stop`: Dienst `FriondoAngebotstool` (NSSM) → `net stop`; Aufgabe „Friondo Angebotstool“ → `schtasks /End`; sonst Konsolenfenster beenden. Setzt `data\log\wartung.marker` (Wächter greift nicht ein) | Abbruch, nichts geändert |
 | 2 | **Backup** von `data\*.db` und `.env` nach `data\backups\update_<JJJJ-MM-TT_HHMM>\` (Pfad wird angezeigt) | – |
 | 3 | `git pull --ff-only` (prüft vorher, ob `origin` eingerichtet ist) | **alter Stand wird wieder gestartet**, nichts geändert |
 | 4 | `pip install -r requirements.txt` | Tool bleibt **gestoppt**, Meldung mit Backup-Hinweis |
 | 5 | `migrate.py` (nur wenn vorhanden; idempotent) | Tool bleibt **gestoppt**, Meldung mit Backup-Hinweis, kein „Fertig“ |
-| 6 | Dienst starten, „Fertig“ + Backup-Pfad | – |
+| 6 | Tool starten (`--start`), `/health` abwarten (bis 45 s), Marker entfernen | Meldung, Hinweis `rollback.bat` |
+| 7 | **Smoke-Test** `scripts\smoke.bat` (etwa 2 Minuten; Ergebnis als Tabelle, Protokoll `data\log\smoke-<Datum>.txt`) | Tool läuft mit neuem Stand, Hinweis `rollback.bat` / `rollback.bat --nur-code` |
 
 Am Ende und bei jedem Fehler wartet das Fenster mit `pause`, damit die
-Meldung lesbar bleibt. Danach `http://localhost:8000` prüfen.
+Meldung lesbar bleibt. Danach `http://localhost:8000` prüfen und das
+Wartungsbanner wieder entfernen (Parametrierung → Betrieb → „Hinweis
+entfernen“). `update.bat --ohne-smoke` überspringt Schritt 7.
+
+Läuft das Tool noch als Konsolenfenster (kein Dienst, keine Aufgabe), beendet
+`update.bat` das Fenster und fragt am Ende, ob `start.bat` neu gestartet werden
+soll – dauerhaft richtig ist aber `scripts\dienst-installieren.bat`
+(`docs/installation-terminal-server.md`, Abschnitt 4).
 
 ## 3. Rollback
 
-Wenn nach einem Update etwas nicht stimmt (oder die Migration abgebrochen hat):
+Wenn nach einem Update etwas nicht stimmt (Smoke-Test rot, Migration
+abgebrochen, Fehler im Betrieb), gibt es zwei Wege:
+
+```bat
+rollback.bat --nur-code
+```
+
+- setzt nur den **Code** auf den Stand vor dem letzten `git pull` zurück
+  (`ORIG_HEAD`), installiert die passenden Abhängigkeiten und startet das Tool;
+- **Datenbank und `.env` bleiben** – seit v27 sind alle Datenbankänderungen
+  additiv (neue Spalten/Tabellen/Indizes), der vorherige Code läuft auf der
+  neueren Datenbank weiter, nichts geht verloren; deshalb keine Rückfrage;
+- Sitzungs-Cookies der neuen Fassung weist der alte Code ab → alle Nutzer
+  melden sich einmal neu an. Nach dem Rollback fehlen nur die neuen
+  Zusatzfunktionen (z. B. Betriebs-Seite, Login-Protokoll, Wartungsbanner).
 
 ```bat
 rollback.bat
 ```
 
-- setzt den **Code** auf den Stand vor dem letzten `git pull` zurück
-  (`ORIG_HEAD`),
-- spielt **Datenbank und .env** aus dem jüngsten `data\backups\update_*`
-  zurück (optional einen bestimmten Ordner als Parameter übergeben:
-  `rollback.bat data\backups\update_2026-08-19_1622`),
-- installiert die zum alten Stand passenden Abhängigkeiten und startet den
-  Dienst.
+- setzt den **Code** zurück (wie oben) **und** spielt **Datenbank und .env**
+  aus dem jüngsten `data\backups\update_*` zurück (optional einen bestimmten
+  Ordner als Parameter: `rollback.bat data\backups\update_2026-10-07_1830`),
+- **Achtung:** Alles, was nach dem Update erfasst wurde, geht verloren – das
+  Skript fragt deshalb vorher nach (j/n). Nur nötig, wenn die Datenbank selbst
+  beschädigt wurde oder eine Migration halb durchgelaufen ist.
 
-**Achtung:** Alles, was nach dem Update erfasst wurde, geht mit dem Rollback
-verloren – das Skript fragt deshalb vorher nach (j/n).
+Beide Varianten erkennen Dienst/Aufgabe/Konsolenfenster wie `update.bat`.
+Hinweis: `/health` gibt es erst ab v27 – nach einem Rollback auf einen Stand
+davor meldet die Kontrolle „HTTP 404“ (normal). Nach dem Rollback
+`scripts\smoke.bat` bzw. eine Sichtprüfung im Browser.
 
 ## 4. Typische Fehler
 
@@ -101,9 +138,23 @@ verloren – das Skript fragt deshalb vorher nach (j/n).
   neu anmelden.
 - **Migration fehlgeschlagen** → Meldung lesen; Backup liegt unter dem
   angezeigten Pfad; `rollback.bat` stellt den Vorzustand her. Fehler bitte
-  mit der Meldung an die Entwicklung geben.
+  mit der Meldung an die Entwicklung geben. Solange `data\log\wartung.marker`
+  liegt, startet der Wächter nichts neu.
+- **Stoppen fehlgeschlagen / Port 8000 bleibt belegt** → ein anderer Prozess
+  hält den Port (z. B. Konsolenfenster in einer anderen Sitzung):
+  `scripts\dienst-status.bat` zeigt die PID, im Task-Manager beenden, dann
+  `update.bat` erneut.
+- **Smoke-Test rot** → Protokoll `data\log\smoke-<Datum>.txt` lesen (welche
+  Seite, HTTP-Status, Zeit). 303 auf `/login` = Anmeldung defekt; „zu langsam“
+  kurz nach dem Start einmal wiederholen (`scripts\smoke.bat`); bleibt es rot
+  → `rollback.bat --nur-code`.
+- **`/health` nach dem Start `fehler` (HTTP 503)** → Datenbank nicht
+  erreichbar: `data\fehler.log` und `data\log\dienst-err.log` lesen, Pfad
+  `data\angebotstool.db` und Rechte des Dienstkontos prüfen.
 
 ## 5. Versionsstand prüfen
 
-Auf PC und Server zeigt `git log --oneline -1` den aktuellen Commit – stimmen
-beide überein, ist der Server auf dem neuesten Stand.
+Auf PC und Server zeigt `git log --oneline -1` den aktuellen Commit; auf dem
+Server zusätzlich `http://192.168.35.4:8000/health` (Felder `version` und
+`commit`) oder Parametrierung → Betrieb – stimmen beide überein, ist der
+Server auf dem neuesten Stand.

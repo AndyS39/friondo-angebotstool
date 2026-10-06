@@ -38,6 +38,9 @@ PV_DATEIEN = [
 FELDER_PV = ["kategorie", "beschreibung", "menge_standard", "einheit",
              "e_preis_cent", "ep_flag", "ek_cent"]
 
+# v27 (PLAN_V17 Phase 128): Blockgröße – Commit je BLOCK geschriebene Zeilen
+BLOCK = 200
+
 
 def pv_ordner():
     return config.PV_PREISLISTEN_ORDNER
@@ -238,26 +241,38 @@ def berechne_diff(session: Session, ergebnis: PvLeseErgebnis | None = None) -> D
 
 
 def import_ausfuehren(session: Session) -> tuple[Diff, str]:
-    ergebnis = lese_pv_dateien()
-    diff = berechne_diff(session, ergebnis)
-    # Abgleich erneut ausführen (berechne_diff vergibt Nummern nur in den Daten)
-    ergebnis = lese_pv_dateien()
-    paare, _bestand = _zuordnen(session, ergebnis)
-    fremde_guids = {g for (g,) in session.query(Artikel.guid)
-                    .filter(Artikel.quelle != QUELLE_PV, Artikel.guid.isnot(None))}
-    for daten, vorhanden in paare:
-        werte = {k: v for k, v in daten.items() if not k.startswith("_")}
-        if werte["guid"] in fremde_guids:   # GUID gehört einem WP-Artikel
-            werte["guid"] = None
-        if vorhanden is None:
-            session.add(Artikel(**werte, aktiv=True))
-        else:
-            for feld in FELDER_PV + ["pos_nr", "guid"]:
-                setattr(vorhanden, feld, werte[feld])
-            vorhanden.aktiv = True
-    for artikel in diff.entfallen:
-        artikel.aktiv = False
-    session.commit()
+    """v27 (PLAN_V17 Phase 128): Schreiben in Blöcken mit Commit je BLOCK Zeilen.
+    Anker je Zeile ist die PV-Nummer (Pin) bzw. die GUID bzw. die Bezeichnung
+    derselben Datei; jede Zeile ist ein Upsert, Verwaiste werden erst nach allen
+    Zeilen deaktiviert. Abbruch nach Block n: die gespeicherten Artikel behalten ihre
+    Nummern, der nächste Lauf findet sie über GUID/Nummer wieder und vergibt für den
+    Rest die nächsten freien Nummern – also dieselben wie im abgebrochenen Lauf."""
+    from app import betrieb
+    with betrieb.import_markieren("PV-Positionslisten"):
+        ergebnis = lese_pv_dateien()
+        diff = berechne_diff(session, ergebnis)
+        # Abgleich erneut ausführen (berechne_diff vergibt Nummern nur in den Daten)
+        ergebnis = lese_pv_dateien()
+        paare, _bestand = _zuordnen(session, ergebnis)
+        fremde_guids = {g for (g,) in session.query(Artikel.guid)
+                        .filter(Artikel.quelle != QUELLE_PV, Artikel.guid.isnot(None))}
+        zaehler = 0
+        for daten, vorhanden in paare:
+            werte = {k: v for k, v in daten.items() if not k.startswith("_")}
+            if werte["guid"] in fremde_guids:   # GUID gehört einem WP-Artikel
+                werte["guid"] = None
+            if vorhanden is None:
+                session.add(Artikel(**werte, aktiv=True))
+            else:
+                for feld in FELDER_PV + ["pos_nr", "guid"]:
+                    setattr(vorhanden, feld, werte[feld])
+                vorhanden.aktiv = True
+            zaehler += 1
+            if zaehler % BLOCK == 0:
+                session.commit()      # Block abschließen – Schreibsperre freigeben
+        for artikel in diff.entfallen:
+            artikel.aktiv = False
+        session.commit()
     meldung = (f"PV: {len(diff.neu)} neu, {len(diff.geaendert)} geändert, "
                f"{diff.unveraendert} unverändert, {len(diff.entfallen)} deaktiviert")
     return diff, meldung

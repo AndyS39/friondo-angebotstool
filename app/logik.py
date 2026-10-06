@@ -1576,8 +1576,14 @@ _cache: dict = {"logik": None, "bericht": None}
 
 
 def neu_einlesen(session: Session) -> tuple[Logik, Pruefbericht]:
-    logik, bericht = logik_einlesen()
-    artikel_pruefen(logik, session, bericht)
+    # v27 (PLAN_V17 Phase 128): „Logik neu einlesen“ erscheint während des Laufs im
+    # Betriebs-Status und in /health. Das Einlesen schreibt nichts in die Datenbank
+    # (Logik liegt im Speicher-Cache, artikel_pruefen/kombis_laden lesen nur) –
+    # deshalb gibt es hier keinen Schreibpfad und keine Blockbildung.
+    from app import betrieb
+    with betrieb.import_markieren("Logik-Excel"):
+        logik, bericht = logik_einlesen()
+        artikel_pruefen(logik, session, bericht)
     _cache["logik"], _cache["bericht"] = logik, bericht
     return logik, bericht
 

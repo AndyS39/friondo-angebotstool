@@ -30,6 +30,7 @@ from app import lead_info
 from app import leadmanagement as kern
 from app.db import get_session
 from app.models import Kampagne, LeadQuelle
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/api/leads")
 
@@ -87,7 +88,7 @@ def _quelle_vorab(session: Session, quelle_key: str, schluessel_quelle: LeadQuel
 
 
 @router.post("")
-async def lead_anlegen(request: Request, session: Session = Depends(get_session)):
+def lead_anlegen(request: Request, session: Session = Depends(get_session)):
     schluessel = request.headers.get("X-Api-Key", "").strip()
     quelle = None
     if schluessel:
@@ -101,7 +102,7 @@ async def lead_anlegen(request: Request, session: Session = Depends(get_session)
         return JSONResponse({"fehler": "Rate-Limit erreicht (60/min)"},
                             status_code=429)
     try:
-        daten = await request.json()
+        daten = anfrage.json_lesen(request)
         assert isinstance(daten, dict)
     except Exception:
         return JSONResponse({"fehler": "Rumpf muss ein JSON-Objekt sein"},

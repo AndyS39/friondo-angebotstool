@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block titel %}Benutzer importieren – Friondo Angebotstool{% endblock %}
+
+{# v27 (PLAN_V17 Phase 130): CSV-Import von Benutzern in drei Schritten –
+   formular (Datei wählen, Beispiel-CSV), vorschau (Tabelle mit Prüfung; der
+   CSV-Text wandert als verstecktes Feld zum zweiten POST, nichts wird in der
+   Datenbank zwischengespeichert), ergebnis (einmalige, druckbare Start-PIN-
+   Liste – nicht gespeichert, nicht protokolliert). #}
+{% block inhalt %}
+<link rel="stylesheet" href="/static/login_v27.css?v={{ css_version }}">
+<div class="seitenkopf nicht-drucken">
+    <h1>Benutzer importieren (CSV)</h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/benutzer">← Benutzer</a>
+    </div>
+</div>
+
+{% if schritt == 'formular' %}
+    {% if fehler %}<p class="meldung fehler">{{ fehler }}</p>{% endif %}
+    <form method="post" action="/benutzer/import" enctype="multipart/form-data"
+          class="formular karte import-karte">
+        <input type="hidden" name="aktion" value="vorschau">
+        <div class="formzeile">
+            <label>CSV-Datei
+                <input type="file" name="datei" accept=".csv,text/csv,text/plain" required>
+            </label>
+        </div>
+        <p class="dezent">Spalten: <code>{{ spalten|join(';') }}</code> – Trennzeichen „;“ oder „,“,
+            UTF-8 (mit oder ohne BOM; Excel-Export „CSV (Trennzeichen-getrennt)“ wird ebenfalls gelesen),
+            Kopfzeile ist Pflicht. <b>Team</b> und <b>Vertriebskanal</b> sind optional.</p>
+        <ul class="dezent ben-regeln">
+            <li>Name muss eindeutig sein (auch gegenüber vorhandenen Benutzern).</li>
+            <li>Rolle: Admin, Innendienst, Außendienst, Projektierung, Montage, Lead-Management.</li>
+            <li>E-Mail ist für Außendienst Pflicht (CC im Versand).</li>
+            <li>Team: Name eines aktiven Teams aus <a href="/parametrierung/teams">Parametrierung → Teams</a>.</li>
+            <li>Vertriebskanal nur für Außendienst{% if kanaele %} – erlaubt: {{ kanaele|join(', ') }}{% else %} – zurzeit sind keine Kanäle hinterlegt (Angebotsprofile){% endif %}.</li>
+            <li>Jeder importierte Benutzer erhält eine zufällige Start-PIN und muss sie beim ersten Login ändern.</li>
+        </ul>
+        <p class="dezent">Beispiel (<a href="/benutzer/import/vorlage.csv">Vorlage herunterladen</a>):</p>
+        <pre class="import-beispiel">{{ beispiel }}</pre>
+        <div class="formaktionen">
+            <button class="knopf" type="submit">Vorschau anzeigen</button>
+        </div>
+    </form>
+
+{% elif schritt == 'vorschau' %}
+    {% if hinweis %}<p class="meldung fehler">{{ hinweis }}</p>{% endif %}
+    {% for f in fehler_datei %}<p class="meldung fehler">{{ f }}</p>{% endfor %}
+    {% if zeilen %}
+    <p class="dezent">{{ zeilen|length }} Zeile(n) gelesen –
+        {% if fehler_anzahl %}<b>{{ fehler_anzahl }} mit Fehlern</b>: bitte die Datei korrigieren und erneut hochladen.
+        Es wird nichts angelegt, solange eine Zeile fehlerhaft ist.{% else %}alle Zeilen fehlerfrei.{% endif %}</p>
+    <table class="tabelle kompakt import-vorschau">
+        <thead><tr>
+            <th>Zeile</th><th>Name</th><th>Rolle</th><th>E-Mail</th><th>Team</th>
+            <th>Vertriebskanal</th><th>Prüfung</th>
+        </tr></thead>
+        <tbody>
+        {% for z in zeilen %}
+            <tr class="{{ 'fehler' if z.fehler }}">
+                <td class="nr">{{ z.nr }}</td>
+                <td>{{ z.name }}</td>
+                <td>{{ z.rolle_name if z.rolle else z.rolle_roh }}</td>
+                <td>{{ z.email }}</td>
+                <td>{{ z.team }}</td>
+                <td>{{ z.kanal }}</td>
+                {% if z.fehler %}
+                    <td class="pruefung fehlertext">{{ z.fehler|join('; ') }}</td>
+                {% else %}
+                    <td class="pruefung ok">OK</td>
+                {% endif %}
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    <div class="import-aktionen">
+        {% if zeilen and not fehler_anzahl %}
+        <form method="post" action="/benutzer/import"
+              onsubmit="return confirm('{{ zeilen|length }} Benutzer jetzt anlegen? Die Start-PINs werden danach genau einmal angezeigt.');">
+            <input type="hidden" name="aktion" value="ausfuehren">
+            <textarea name="csv_text" hidden readonly>{{ csv_text }}</textarea>
+            <button class="knopf" type="submit">{{ zeilen|length }} Benutzer jetzt anlegen</button>
+        </form>
+        {% endif %}
+        <a class="knopf zweitrangig" href="/benutzer/import">Andere Datei wählen</a>
+    </div>
+
+{% elif schritt == 'ergebnis' %}
+    <div class="karte import-ergebnis">
+        <h2>{{ ergebnis|length }} Benutzer angelegt – Start-PINs</h2>
+        <div class="warnblock nicht-drucken">
+            <b>Diese Liste wird nur einmal angezeigt.</b> Die Start-PINs sind nirgends gespeichert –
+            jetzt drucken oder sicher weitergeben. Jeder Benutzer muss die Start-PIN beim ersten
+            Login durch eine eigene PIN ersetzen.
+        </div>
+        <div class="import-aktionen nicht-drucken">
+            <button class="knopf" type="button" onclick="window.print()">Liste drucken</button>
+            <a class="knopf zweitrangig" href="/benutzer">Zur Benutzerliste</a>
+        </div>
+        <table class="tabelle kompakt import-ergebnis-tabelle">
+            <thead><tr><th>Name</th><th>Rolle</th><th>Start-PIN</th></tr></thead>
+            <tbody>
+            {% for e in ergebnis %}
+                <tr>
+                    <td>{{ e.name }}</td>
+                    <td>{{ e.rolle_name }}</td>
+                    <td class="start-pin">{{ e.pin }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <p class="dezent" style="margin-top:0.8rem">Angelegt durch {{ request.state.benutzer.name }} ·
+            Anmeldung: Benutzer wählen, Start-PIN eingeben, dann neue PIN vergeben (mindestens 6 Ziffern,
+            keine Zahlenfolgen, Wiederholungen oder Jahreszahlen).</p>
+    </div>
+{% endif %}
+{% endblock %}

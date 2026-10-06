@@ -62,6 +62,9 @@ BLATT_TEXTREGELN = "Textregeln"
 FELDER_KL = ["kategorie", "bezeichnung", "beschreibung", "menge_standard", "einheit",
              "e_preis_cent", "ep_flag", "ek_cent"]
 
+# v27 (PLAN_V17 Phase 128): Blockgröße – Commit je BLOCK geschriebene Zeilen
+BLOCK = 200
+
 # --- Textregeln (Standardtexte aus PLAN_V16 Phase 113 – Fallback) ----------
 
 LEISTUNGSUMFANG_ANKER = "Diese Leistung besteht aus folgenden Positionen"
@@ -506,38 +509,51 @@ def berechne_diff(session: Session, ergebnis: KlLeseErgebnis | None = None) -> D
 
 
 def import_ausfuehren(session: Session) -> tuple[Diff, str]:
-    """Wendet den Import an; Rückgabe wie import_pv.import_ausfuehren (Diff, Meldung)."""
-    ergebnis = lese_kl_dateien()
-    diff = berechne_diff(session, ergebnis)
-    paare, _bestand = _zuordnen(session, ergebnis)
-    fremde_guids = {g for (g,) in session.query(Artikel.guid)
-                    .filter(Artikel.quelle != QUELLE_KL, Artikel.guid.isnot(None))}
-    # GUID-Wechsel in zwei Schritten (guid ist eindeutig): erst alte Anker lösen
-    neue_guids = {d["guid"] for d in ergebnis.artikel if d["guid"]}
-    for _daten, vorhanden in paare:
-        if vorhanden is not None and vorhanden.guid and vorhanden.guid in neue_guids:
-            ziel = next((d for d in ergebnis.artikel if d["guid"] == vorhanden.guid), None)
-            if ziel is not None and ziel["pos_nr"] != vorhanden.pos_nr:
-                vorhanden.guid = None
-    session.flush()
-    for daten, vorhanden in paare:
-        werte = {k: v for k, v in daten.items() if not k.startswith("_")}
-        if werte["guid"] in fremde_guids:    # GUID gehört einem WP-/PV-Artikel
-            diff.warnungen.append(
-                f"{werte['pos_nr']}: GUID {werte['guid']} gehört bereits einem anderen Artikel – "
-                "ohne GUID angelegt.")
-            werte["guid"] = None
-        if vorhanden is None:
-            session.add(Artikel(**werte, aktiv=True))
-        else:
-            for feld in _felder_fuer(daten, vorhanden) + ["pos_nr", "quelle"]:
-                setattr(vorhanden, feld, werte[feld])
-            if werte["guid"]:
-                vorhanden.guid = werte["guid"]
-            vorhanden.aktiv = True
-    for artikel in diff.entfallen:
-        artikel.aktiv = False
-    session.commit()
+    """Wendet den Import an; Rückgabe wie import_pv.import_ausfuehren (Diff, Meldung).
+
+    v27 (PLAN_V17 Phase 128): Schreiben in Blöcken mit Commit je BLOCK Zeilen.
+    Anker je Zeile ist die KL-Nummer (Position bzw. Pin), sonst die GUID; jede Zeile
+    ist ein Upsert, Verwaiste werden erst nach allen Zeilen deaktiviert. Abbruch
+    nach Block n: die Blöcke 1…n sind gespeichert; ein bereits gelöster alter
+    GUID-Anker (Schritt 1) wird beim nächsten Lauf über die KL-Nummer wieder aus
+    der Datei gesetzt – keine Doppelanlage, kein Datenverlust."""
+    from app import betrieb
+    with betrieb.import_markieren("Klima-Positionslisten"):
+        ergebnis = lese_kl_dateien()
+        diff = berechne_diff(session, ergebnis)
+        paare, _bestand = _zuordnen(session, ergebnis)
+        fremde_guids = {g for (g,) in session.query(Artikel.guid)
+                        .filter(Artikel.quelle != QUELLE_KL, Artikel.guid.isnot(None))}
+        # GUID-Wechsel in zwei Schritten (guid ist eindeutig): erst alte Anker lösen
+        neue_guids = {d["guid"] for d in ergebnis.artikel if d["guid"]}
+        for _daten, vorhanden in paare:
+            if vorhanden is not None and vorhanden.guid and vorhanden.guid in neue_guids:
+                ziel = next((d for d in ergebnis.artikel if d["guid"] == vorhanden.guid), None)
+                if ziel is not None and ziel["pos_nr"] != vorhanden.pos_nr:
+                    vorhanden.guid = None
+        session.flush()
+        zaehler = 0
+        for daten, vorhanden in paare:
+            werte = {k: v for k, v in daten.items() if not k.startswith("_")}
+            if werte["guid"] in fremde_guids:    # GUID gehört einem WP-/PV-Artikel
+                diff.warnungen.append(
+                    f"{werte['pos_nr']}: GUID {werte['guid']} gehört bereits einem anderen "
+                    "Artikel – ohne GUID angelegt.")
+                werte["guid"] = None
+            if vorhanden is None:
+                session.add(Artikel(**werte, aktiv=True))
+            else:
+                for feld in _felder_fuer(daten, vorhanden) + ["pos_nr", "quelle"]:
+                    setattr(vorhanden, feld, werte[feld])
+                if werte["guid"]:
+                    vorhanden.guid = werte["guid"]
+                vorhanden.aktiv = True
+            zaehler += 1
+            if zaehler % BLOCK == 0:
+                session.commit()      # Block abschließen – Schreibsperre freigeben
+        for artikel in diff.entfallen:
+            artikel.aktiv = False
+        session.commit()
     meldung = (f"KL: {len(diff.neu)} neu, {len(diff.geaendert)} geändert, "
                f"{diff.unveraendert} unverändert, {len(diff.entfallen)} deaktiviert")
     return diff, meldung

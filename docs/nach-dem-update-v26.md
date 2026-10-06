@@ -114,6 +114,11 @@ Lead-Management, monday-Sync und PDF-Erzeugung der Angebote sind unverändert.
 
 ## Backup-Aufgabe „Friondo Backup“ (Übergangslösung bis PLAN_V17)
 
+> **Überholt durch v27:** Die Sicherung läuft seit v27 im Tool (Scheduler 02:30 mit
+> Spiegelung nach `BACKUP_ZIEL`). Die Aufgabe „Friondo Backup“ wird von
+> `scripts\dienst-installieren.bat` entfernt bzw. von Hand mit
+> `schtasks /Delete /TN "Friondo Backup" /F` – siehe `docs/nach-dem-update-v27.md`.
+
 `scripts\backup-nacht.bat` sichert die Datenbank über die bestehende Funktion
 `db.taegliches_backup()` nach `data\backups` (eine Datei je Tag, 30 Tage) und spiegelt
 danach `data\backups`, `data\angebote` und `data\projekte` per robocopy nach

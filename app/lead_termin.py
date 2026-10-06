@@ -328,8 +328,11 @@ def vorschlaege(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None
         if k["profil"].start_lat is not None:
             punkte.add((k["profil"].start_lat, k["profil"].start_lon))
     if lead_ort is not None and punkte:
-        routing.matrix_fuellen(session, [lead_ort], list(punkte))
-        routing.matrix_fuellen(session, list(punkte), [lead_ort])
+        # v27 (PLAN_V17 Phase 131, Lasttest-Befund): EIN Matrix-Aufruf für beide
+        # Richtungen (Quellen = Ziele = Lead + Punkte) statt zwei Netzaufrufe –
+        # bei 2 s Latenz je Aufruf halbiert das die Wartezeit der Vorschläge
+        alle = [lead_ort] + [p for p in punkte if p != lead_ort][:49]
+        routing.matrix_fuellen(session, alle, alle)
     fenster = kern._wunschzeit_fenster(session, vorgang)
     score_an = lead_v2.score_aktiv(session)   # v25: Klassen-Bonus nur bei Score an
     alle = []

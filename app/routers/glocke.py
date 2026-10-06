@@ -15,7 +15,7 @@ router = APIRouter(prefix="/benachrichtigungen")
 
 
 @router.get("/{eintrag_id}/oeffnen")
-async def oeffnen(request: Request, eintrag_id: int,
+def oeffnen(request: Request, eintrag_id: int,
                   session: Session = Depends(get_session)):
     benutzer = request.state.benutzer
     eintrag = session.get(Benachrichtigung, eintrag_id)
@@ -32,7 +32,7 @@ async def oeffnen(request: Request, eintrag_id: int,
 
 
 @router.post("/alle-gelesen")
-async def alle_gelesen(request: Request, session: Session = Depends(get_session)):
+def alle_gelesen(request: Request, session: Session = Depends(get_session)):
     benutzer = request.state.benutzer
     if benutzer is not None:
         jetzt = datetime.now()

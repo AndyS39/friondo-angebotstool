@@ -2,6 +2,9 @@
 # Die Modelle der einzelnen Phasen registrieren sich an Base; init_db() legt
 # beim App-Start alle noch fehlenden Tabellen an.
 
+from contextlib import contextmanager
+from pathlib import Path
+
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -13,9 +16,11 @@ from app import config
 # RollenMiddleware hielt je Anfrage eine zweite. Größerer Pool, kurzer Timeout
 # (Anfragen scheitern nach 10 s mit klarer Meldung statt 30 s zu hängen) und die
 # Regel „keine offene Sitzung während Netz-I/O“ (verbindung_freigeben unten).
-POOL_SIZE = 20
-MAX_OVERFLOW = 40
-POOL_TIMEOUT = 10
+# v27 (PLAN_V17 Phase 128): Werte aus der .env (DB_POOL_SIZE, DB_POOL_OVERFLOW,
+# DB_POOL_TIMEOUT), Standard wie im Hotfix.
+POOL_SIZE = config.DB_POOL_SIZE
+MAX_OVERFLOW = config.DB_POOL_OVERFLOW
+POOL_TIMEOUT = config.DB_POOL_TIMEOUT
 
 engine = create_engine(
     config.DB_URL,
@@ -32,6 +37,73 @@ def pool_status() -> str:
         return engine.pool.status()
     except Exception as fehler:   # Pool ohne status() (z. B. StaticPool)
         return f"Pool-Status nicht verfügbar ({type(fehler).__name__})"
+
+
+def pool_kennzahlen() -> dict:
+    """v27: Pool-Belegung als Zahlen für /health und die Betriebs-Seite."""
+    try:
+        pool = engine.pool
+        belegt = int(pool.checkedout())
+        ueberlauf = max(0, int(pool.overflow()))
+    except Exception:
+        belegt, ueberlauf = 0, 0
+    maximum = POOL_SIZE + MAX_OVERFLOW
+    return {"size": POOL_SIZE, "checked_out": belegt, "overflow": ueberlauf,
+            "maximum": maximum, "timeout_s": POOL_TIMEOUT,
+            "prozent": round(100.0 * belegt / maximum, 1) if maximum else 0.0}
+
+
+def pool_invariante(anzahl_scheduler: int) -> tuple[bool, str]:
+    """v27 (Phase 128): beim Start geprüft und protokolliert – der Pool muss
+    alle Worker-Threads, alle Scheduler-Läufe und 5 Reserve-Verbindungen
+    gleichzeitig bedienen können."""
+    gesamt = POOL_SIZE + MAX_OVERFLOW
+    noetig = config.WORKER_THREADS + int(anzahl_scheduler) + 5
+    ok = gesamt >= noetig
+    return ok, (f"Pool {gesamt} (= {POOL_SIZE} + {MAX_OVERFLOW} Überlauf) "
+                f"{'≥' if ok else '<'} Threads {config.WORKER_THREADS} + "
+                f"Scheduler {anzahl_scheduler} + 5 = {noetig}")
+
+
+@contextmanager
+def kurz():
+    """v27 (PLAN_V17 Phase 128) – kurze Sitzung für Scheduler und Hilfsfunktionen:
+    ``with db.kurz() as s:`` committet bei Erfolg, rollt bei einer Ausnahme
+    zurück und schließt immer. Muster für Hintergrundläufe: lesen → Sitzung
+    schließen → Netzaufruf → neue kurze Sitzung zum Zurückschreiben. Anfragen
+    behalten die Dependency get_session."""
+    session: Session = SessionLocal()
+    try:
+        yield session
+        session.commit()
+    except BaseException:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+def wal_groesse_mb() -> float:
+    """Größe der SQLite-WAL-Datei (angebotstool.db-wal) in MB – 0, wenn keine da."""
+    try:
+        pfad = Path(str(config.DB_PFAD) + "-wal")
+        return round(pfad.stat().st_size / 1_000_000, 2) if pfad.exists() else 0.0
+    except OSError:
+        return 0.0
+
+
+def wal_pflege() -> dict:
+    """v27 (Phase 128) SQLite-Pflege, nächtlich 02:40 per Scheduler:
+    ``PRAGMA wal_checkpoint(TRUNCATE)`` (WAL in die Datei einspielen und auf 0
+    kürzen) und ``PRAGMA optimize`` (Statistiken für den Abfrageplaner).
+    Liefert busy/log/checkpointed des Checkpoints und die WAL-Größe danach."""
+    vorher = wal_groesse_mb()
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as v:
+        zeile = v.exec_driver_sql("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        v.exec_driver_sql("PRAGMA optimize")
+    busy, log_seiten, eingespielt = (zeile or (None, None, None))[:3]
+    return {"busy": busy, "wal_seiten": log_seiten, "eingespielt": eingespielt,
+            "wal_mb_vorher": vorher, "wal_mb_nachher": wal_groesse_mb()}
 
 
 def verbindung_freigeben(session) -> None:
@@ -82,8 +154,10 @@ def init_db() -> None:
     # Modelle importieren, damit sie an Base registriert sind, bevor create_all läuft.
     from app import models  # noqa: F401
 
+    config.LOG_ORDNER.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
     _spalten_ergaenzen()
+    indizes_anlegen()
     taegliches_backup()
 
 
@@ -279,6 +353,14 @@ _NACHTRAEGLICHE_SPALTEN = {
         "quelle": "VARCHAR(20) NOT NULL DEFAULT ''",
     },
     "benutzer": {
+        # v27 (PLAN_V17 Phase 130): Login-Härtung – nur additiv, v26 liest weiter
+        # pin_hash (Rollback-Sicherheit, Phase 132)
+        "pin_hash_v2": "VARCHAR(200)",
+        "fehlversuche": "INTEGER NOT NULL DEFAULT 0",
+        "gesperrt_bis": "DATETIME",
+        "pin_wechsel_noetig": "BOOLEAN NOT NULL DEFAULT 0",
+        "sitzungszaehler": "INTEGER NOT NULL DEFAULT 0",
+        "letzter_login": "DATETIME",
         "buchungslink": "VARCHAR(500)",                         # v23 Phase 104
         "nebenstelle": "VARCHAR(20)",                           # v23 Phase 104
         "email": "VARCHAR(200) NOT NULL DEFAULT ''",
@@ -367,6 +449,8 @@ _NACHTRAEGLICHE_SPALTEN = {
         "sparte": "VARCHAR(4) NOT NULL DEFAULT 'WP'",
         "lead_id": "INTEGER",
     },
+    # v27 (Phase 128): Geocoding-Backoff für Adressen mit Status „fehler“
+    "geocode_cache": {"versuche": "INTEGER NOT NULL DEFAULT 0"},
     "monday_quellen": {
         "rueck_modus": "VARCHAR(10) NOT NULL DEFAULT 'aus'",
         "rueck_status_spalte": "VARCHAR(100) NOT NULL DEFAULT ''",
@@ -390,6 +474,72 @@ def _spalten_ergaenzen() -> None:
                 if name not in vorhanden:
                     verbindung.execute(
                         text(f"ALTER TABLE {tabelle} ADD COLUMN {name} {typdef}"))
+
+
+# v27 (PLAN_V17 Phase 128): Indizes der häufigsten Abfragen (Indexprüfung mit
+# EXPLAIN QUERY PLAN, scripts/index_pruefung.py). Format: (Indexname, Tabelle,
+# Spaltenliste); CREATE INDEX IF NOT EXISTS ist idempotent und nur additiv –
+# v26 läuft auf einer Datenbank mit diesen Indizes unverändert.
+_INDIZES = [
+    ("ix_v27_vorgaenge_lead_phase", "vorgaenge", "lead_phase"),
+    ("ix_v27_angebote_status", "angebote", "status"),
+    ("ix_v27_angebote_archiviert_status", "angebote", "archiviert, status"),
+    ("ix_v27_erfassungen_status", "erfassungen", "status"),
+    ("ix_v27_erfassungen_archiviert", "erfassungen", "archiviert"),
+    ("ix_v27_erfassungen_angebot_id", "erfassungen", "angebot_id"),
+    ("ix_v27_lead_aktivitaeten_vorgang_zeit", "lead_aktivitaeten", "vorgang_id, erstellt_am"),
+    ("ix_v27_benachrichtigungen_benutzer_gelesen", "benachrichtigungen", "benutzer_id, gelesen_am"),
+    ("ix_v27_vot_termine_beginn", "vot_termine", "beginn"),
+    ("ix_v27_vot_termine_status_typ", "vot_termine", "status, typ"),
+    ("ix_v27_vorgaenge_wiedervorlage", "vorgaenge", "wiedervorlage_am"),
+    ("ix_v27_vorgaenge_naechste_aktion", "vorgaenge", "naechste_aktion_am"),
+    ("ix_v27_leads_benutzer", "leads", "benutzer_id"),
+    ("ix_v27_leads_vot_datum", "leads", "vot_datum"),
+    ("ix_v27_aufgaben_status", "aufgaben", "status"),
+    ("ix_v27_aufgaben_verantwortlich_status", "aufgaben", "verantwortlich_id, status"),
+    ("ix_v27_login_protokoll_benutzer_zeit", "login_protokoll", "benutzer_id, zeit"),
+]
+
+
+def vorhandene_indizes() -> set[str]:
+    from sqlalchemy import text
+    with engine.connect() as v:
+        return {z[0] for z in v.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='index'"))}
+
+
+def indizes_anlegen() -> list[str]:
+    """Fehlende Indizes anlegen (idempotent); liefert die neu angelegten
+    Indizes (für migrate.py und die Gesamtübersicht). Zwei Quellen:
+    (1) die im Modell deklarierten Indizes (`index=True`) – für Spalten, die
+    nachträglich per ALTER TABLE kamen (z. B. erfassungen.vorgang_id,
+    angebote.vorgang_id), hat create_all sie nie angelegt (Befund der
+    Indexprüfung v27: volle Scans in Vorgangsakte und Kundenkartei);
+    (2) die Liste _INDIZES aus der Indexprüfung (EXPLAIN QUERY PLAN)."""
+    from sqlalchemy import text
+    vorher = vorhandene_indizes()
+    neu = []
+    with engine.begin() as v:
+        tabellen = {z[0] for z in v.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table'"))}
+        for tabelle in Base.metadata.sorted_tables:
+            if tabelle.name not in tabellen:
+                continue
+            for index in tabelle.indexes:
+                if index.name in vorher:
+                    continue
+                index.create(v, checkfirst=True)
+                neu.append(f"{index.name} ON {tabelle.name} "
+                           f"({', '.join(s.name for s in index.columns)})")
+        for name, tabelle, spalten in _INDIZES:
+            if tabelle not in tabellen or name in vorher:
+                continue
+            vorhanden = {z[1] for z in v.execute(text(f"PRAGMA table_info({tabelle})"))}
+            if not all(s.strip() in vorhanden for s in spalten.split(",")):
+                continue
+            v.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {tabelle} ({spalten})"))
+            neu.append(f"{name} ON {tabelle} ({spalten})")
+    return neu
 
 
 def get_session():

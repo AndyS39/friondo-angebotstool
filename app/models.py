@@ -190,6 +190,15 @@ class Benutzer(Base):
     # Nebenstelle (Vorbereitung CTI, D1)
     buchungslink: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     nebenstelle: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # v27 (PLAN_V17 Phase 130): Login-Härtung – alle Spalten additiv, v26 liest
+    # weiter pin_hash (bei jeder PIN-Änderung werden BEIDE Spalten geschrieben,
+    # damit ein Rollback auf v26 mit alter und neuer PIN funktioniert)
+    pin_hash_v2: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    fehlversuche: Mapped[int] = mapped_column(Integer, default=0)
+    gesperrt_bis: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    pin_wechsel_noetig: Mapped[bool] = mapped_column(Boolean, default=False)
+    sitzungszaehler: Mapped[int] = mapped_column(Integer, default=0)   # „Alle Sitzungen beenden“
+    letzter_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     @property
     def rollen_liste(self) -> list[str]:
@@ -1665,6 +1674,8 @@ class GeocodeCache(Base):
     anbieter: Mapped[str] = mapped_column(String(20), default="")
     stand: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     status: Mapped[str] = mapped_column(String(10), default="ok")   # ok | fehler
+    # v27 (Phase 128): Fehlversuche je Adresse → Backoff 1 h / 6 h / 24 h
+    versuche: Mapped[int] = mapped_column(Integer, default=0)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
@@ -1778,3 +1789,62 @@ class BenutzerEinstellung(Base):
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
                                                   onupdate=datetime.now)
+
+
+# --- v27 (PLAN_V17, Betriebsreife für 50 Nutzer) ---------------------------------
+
+class SchedulerStatus(Base):
+    """v27 (Phase 128): Status je Hintergrundlauf (app/scheduler.py) – wird
+    nach jedem Lauf in einer kurzen Sitzung fortgeschrieben; Anzeige unter
+    Parametrierung → Betrieb und in GET /health. Nur additiv."""
+    __tablename__ = "scheduler_status"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(60), unique=True)
+    beschreibung: Mapped[str] = mapped_column(String(200), default="")
+    intervall_s: Mapped[int] = mapped_column(Integer, default=0)
+    letzter_start: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    letzte_dauer_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    letzter_fehler: Mapped[str] = mapped_column(String(500), default="")
+    letztes_ergebnis: Mapped[str] = mapped_column(String(300), default="")
+    laeufe: Mapped[int] = mapped_column(Integer, default=0)
+    fehler: Mapped[int] = mapped_column(Integer, default=0)
+    naechster_start: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    zustand: Mapped[str] = mapped_column(String(100), default="")
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class LoginProtokoll(Base):
+    """v27 (Phase 130): jeder Login-Versuch (Erfolg/Fehler, Benutzer,
+    IP-Kurzform, Zeit); 90 Tage Aufbewahrung (Scheduler). Ansicht unter
+    Parametrierung → Benutzer → Login-Protokoll."""
+    __tablename__ = "login_protokoll"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    zeit: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)
+    benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    benutzer_name: Mapped[str] = mapped_column(String(200), default="")
+    ip_kurz: Mapped[str] = mapped_column(String(60), default="")
+    erfolg: Mapped[bool] = mapped_column(Boolean, default=False)
+    grund: Mapped[str] = mapped_column(String(100), default="")   # ok | pin_falsch | gesperrt | ip_limit | inaktiv
+
+
+class MailAusgang(Base):
+    """v27 (PLAN_V17 Phase 128, Antwort Andreas 06.10.2026): Ausgangs-Warteschlange
+    für Sofort-Mails der Glocke. Einträge entstehen in derselben Transaktion wie
+    die Benachrichtigung; der Scheduler-Lauf „mail-ausgang“ sendet nach dem
+    Commit über Graph (kurze Sitzung, Verbindung vor dem Netzaufruf frei) –
+    kein Commit mehr mitten in der Anfrage des Aufrufers."""
+    __tablename__ = "mail_ausgang"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    empfaenger: Mapped[str] = mapped_column(String(300))
+    betreff: Mapped[str] = mapped_column(String(300), default="")
+    text: Mapped[str] = mapped_column(Text, default="")
+    art: Mapped[str] = mapped_column(String(30), default="")
+    status: Mapped[str] = mapped_column(String(15), default="offen", index=True)   # offen | gesendet | fehler
+    versuche: Mapped[int] = mapped_column(Integer, default=0)
+    fehler_text: Mapped[str] = mapped_column(String(500), default="")
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    gesendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

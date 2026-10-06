@@ -7,6 +7,8 @@
    (wie artikel/import_vorschau.html für PV) – gespeichert wird erst mit „Import ausführen“. #}
 <h1>Klima-Positionslisten-Import – Vorschau</h1>
 
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
 {% if modul_fehlt %}
     <p class="meldung fehler">Klima-Import nicht verfügbar – <code>app/import_klima.py</code> fehlt.</p>
     <p><a class="knopf zweitrangig" href="/parametrierung">← Parametrierung</a></p>
@@ -93,7 +95,12 @@
 </table>
 {% endif %}
 
+{# v27 (PLAN_V17 Phase 128): Hinweis vor dem Start mit Bestätigungs-Häkchen –
+   der POST prüft das Feld „bestaetigt“ serverseitig. #}
+<p class="hinweis" id="import-hinweis">{{ hinweis }}</p>
 <form method="post" action="/parametrierung/artikel/kl-import" class="formaktionen">
+    <label><input type="checkbox" name="bestaetigt" value="1" required>
+        Hinweis gelesen – Import jetzt starten</label>
     <button class="knopf" type="submit">Import ausführen</button>
     <a class="knopf zweitrangig" href="/parametrierung/kl-logik">Abbrechen</a>
 </form>

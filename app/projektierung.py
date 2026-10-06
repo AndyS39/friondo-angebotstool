@@ -210,21 +210,14 @@ def benachrichtigen(session: Session, benutzer_ids, text: str, link: str,
     session.flush()
     if gesehen:
         from app import benachrichtigungen as mail_modul
-        # Hotfix 06.10.2026: die Sofort-Mail läuft über Netz-I/O und gibt dort
-        # die Verbindung frei (= commit). Damit ein Commit-Fehler nicht vom
-        # Mail-Fallback verschluckt wird, wird HIER bewusst committet, wenn
-        # mindestens ein Empfänger eine Sofort-Mail bekommt – ein Fehler
-        # bricht wie bisher den Aufrufer ab, statt still Daten zu verlieren.
-        if (art not in mail_modul.MAIL_FREIE_ARTEN
-                and session.query(Benutzer).filter(
-                    Benutzer.id.in_(sorted(gesehen)), Benutzer.aktiv.is_(True),
-                    Benutzer.benachrichtigung_mail == "sofort").count()):
-            from app.db import verbindung_freigeben
-            verbindung_freigeben(session)
+        # v27 (PLAN_V17 Phase 128, Antwort Andreas 06.10.2026): Sofort-Mails gehen
+        # in die Ausgangs-Warteschlange mail_ausgang (gleiche Transaktion wie die
+        # Glocke, kein Netzaufruf hier); der Scheduler-Lauf „mail-ausgang“ sendet
+        # nach dem Commit. Der Hotfix-Commit mitten in der Anfrage entfällt damit.
         try:
             mail_modul.sofort_versenden(session, sorted(gesehen), text, link, art)
         except Exception:
-            pass   # Mail-Fehler blockieren das Tool nie
+            pass   # Warteschlangen-Fehler blockieren das Tool nie
 
 
 # --- Aufgabenpakete + Fälligkeiten ----------------------------------------------

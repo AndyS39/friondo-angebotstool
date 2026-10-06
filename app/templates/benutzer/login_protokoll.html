@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block titel %}Login-Protokoll – Friondo Angebotstool{% endblock %}
+
+{# v27 (PLAN_V17 Phase 130): Anmeldeversuche (Tabelle login_protokoll, 90 Tage,
+   Aufräumen per Scheduler). Letzte 500 Einträge, Filter Benutzer / nur Fehler,
+   Zähler 24 h, aktuell gesperrte Benutzer mit „Sperre aufheben“. Verlinkt aus
+   Parametrierung → System & Protokolle. #}
+{% block inhalt %}
+<link rel="stylesheet" href="/static/login_v27.css?v={{ css_version }}">
+<div class="seitenkopf">
+    <h1>Login-Protokoll</h1>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/benutzer">Benutzer</a>
+        <a class="knopf klein zweitrangig" href="/parametrierung">Parametrierung</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<div class="lp-zaehler">
+    <div class="karte">
+        <span class="wert">{{ versuche_24h }}</span>
+        <span class="bez">Anmeldeversuche 24 h</span>
+    </div>
+    <div class="karte">
+        <span class="wert {{ 'warn' if fehlversuche_24h }}">{{ fehlversuche_24h }}</span>
+        <span class="bez">Fehlversuche 24 h</span>
+    </div>
+    <div class="karte lp-gesperrt-karte">
+        <span class="wert {{ 'warn' if gesperrte }}">{{ gesperrte|length }}</span>
+        <span class="bez">Aktuell gesperrte Benutzer</span>
+        {% if gesperrte %}
+        <ul class="lp-gesperrt">
+            {% for b in gesperrte %}
+            <li>
+                <span>{{ b.name }} – gesperrt bis {{ b.gesperrt_bis.strftime('%d.%m.%Y %H:%M') }} Uhr</span>
+                <form method="post" action="/benutzer/{{ b.id }}/sperre-aufheben">
+                    <input type="hidden" name="zurueck" value="protokoll">
+                    <button class="knopf klein zweitrangig" type="submit">Sperre aufheben</button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <span class="dezent">Sperre nach {{ max_fehlversuche }} Fehlversuchen für {{ sperre_minuten }} Minuten.</span>
+        {% endif %}
+    </div>
+</div>
+
+<form method="get" action="/benutzer/login-protokoll" class="lp-filter">
+    <label>Benutzer
+        <select name="benutzer_id" onchange="this.form.submit()">
+            <option value="">alle</option>
+            {% for b in alle_benutzer %}
+                <option value="{{ b.id }}" {{ 'selected' if b.id == benutzer_id }}>{{ b.name }}{{ '' if b.aktiv else ' (inaktiv)' }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label class="kontrollfeld">
+        <input type="checkbox" name="nur_fehler" value="1" {{ 'checked' if nur_fehler }}
+               onchange="this.form.submit()"> nur Fehlversuche
+    </label>
+    <button class="knopf klein zweitrangig" type="submit">Filtern</button>
+    {% if benutzer_id or nur_fehler %}<a class="dezent" href="/benutzer/login-protokoll">Filter zurücksetzen</a>{% endif %}
+</form>
+
+<table class="tabelle kompakt lp-tabelle">
+    <thead><tr>
+        <th>Zeit</th><th>Benutzer</th><th>IP-Kurzform</th><th>Erfolg</th><th>Grund</th>
+    </tr></thead>
+    <tbody>
+    {% for e in eintraege %}
+        <tr id="lp-{{ e.id }}">
+            <td class="zeit">{{ e.zeit.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+            <td>{% if e.benutzer_name %}{{ e.benutzer_name }}{% else %}<span class="dezent">– (Nr. {{ e.benutzer_id or '?' }})</span>{% endif %}</td>
+            <td>{{ e.ip_kurz }}</td>
+            <td class="{{ 'erfolg-ja' if e.erfolg else 'erfolg-nein' }}">{{ 'ja' if e.erfolg else 'nein' }}</td>
+            <td>{{ grund_texte.get(e.grund, e.grund) }}</td>
+        </tr>
+    {% else %}
+        <tr><td colspan="5" class="dezent">Keine Einträge{% if benutzer_id or nur_fehler %} für diesen Filter{% endif %}.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+<p class="dezent">Angezeigt werden höchstens die letzten {{ maximum }} Einträge; Einträge älter als 90 Tage
+    werden nachts entfernt. IP-Adressen sind gekürzt (a.b.c.x).</p>
+{% endblock %}

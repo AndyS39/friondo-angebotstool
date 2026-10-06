@@ -49,7 +49,7 @@ def antworten(eintrag) -> dict:
         return {}
 
 
-async def seite_speichern(session, eintrag, gewerk, felder, form,
+def seite_speichern(session, eintrag, gewerk, felder, form,
                           benutzer=None) -> None:
     """Feldwerte einer Seite übernehmen; Fotos landen sofort in der Galerie
     (Zielordner = optionen-Spalte), Unterschriften als PNG-Daten-URL."""
@@ -65,7 +65,7 @@ async def seite_speichern(session, eintrag, gewerk, felder, form,
                        if gewerk.angebot_id else None)
             if angebot is None or not angebot.vorgang_id:
                 continue
-            inhalt = await datei.read()
+            inhalt = datei.file.read()
             galerie_datei = galerie_modul.speichern(
                 session, angebot.vorgang_id,
                 feld.optionen or "Inbetrieb-/Abnahme", datei.filename,

@@ -20,6 +20,8 @@
     aktualisiert statt zu verdoppeln. <strong>Erst gegen eine DB-Kopie testen.</strong>
     Vorher <a href="/parametrierung/kunden-dubletten">Kunden-Dubletten zusammenführen</a> –
     der Import ordnet bei gleichem Namen + PLZ sonst immer dem ältesten Kunden zu.</p>
+{# v27 (PLAN_V17 Phase 128): Hinweis vor dem Start (Bestätigung in der Vorschau) #}
+<p class="hinweis" id="import-hinweis"><strong>Vor dem Import:</strong> {{ hinweis }}</p>
 
 <form method="post" action="/parametrierung/bestandsimport/vorschau" enctype="multipart/form-data"
       class="suchleiste">
@@ -43,6 +45,8 @@
         <td>{{ imp.angelegt }}</td><td>{{ imp.aktualisiert }}</td><td>{{ imp.uebersprungen }}</td>
         <td>{% if imp.rueckgaengig_am %}rückgängig {{ imp.rueckgaengig_am.strftime('%d.%m.%Y %H:%M') }}
             {% if imp.rueckgaengig_hinweis %}<br><small class="dezent" style="white-space:pre-line">{{ imp.rueckgaengig_hinweis }}</small>{% endif %}
+            {% elif not imp.abgeschlossen_am %}{# v27 (Phase 128): Lauf nach Block n abgebrochen – Teilstand gespeichert #}
+            abgebrochen (Teilstand – erneut importieren oder rückgängig machen)
             {% else %}aktiv{% endif %}</td>
         <td class="aktionen">
             {% if not imp.rueckgaengig_am %}
@@ -90,12 +94,17 @@
     {% endfor %}
     </tbody>
 </table>
+{# v27 (PLAN_V17 Phase 128): Hinweis vor dem Start mit Bestätigungs-Häkchen –
+   der POST prüft das Feld „bestaetigt“ serverseitig; „Abbrechen“ braucht es nicht. #}
+<p class="hinweis" id="import-hinweis">{{ hinweis }}</p>
 <form method="post" action="/parametrierung/bestandsimport/ausfuehren" class="formaktionen">
     <input type="hidden" name="kennung" value="{{ kennung }}">
     <input type="hidden" name="dateiname" value="{{ dateiname }}">
+    <label><input type="checkbox" name="bestaetigt" value="1" required>
+        Hinweis gelesen – Import jetzt starten</label>
     <button class="knopf" type="submit" {{ 'disabled' if not ok }}
             onclick="return confirm('{{ ok | length }} fehlerfreie Zeilen importieren?');">Fehlerfreie Zeilen importieren ({{ ok | length }})</button>
-    <button class="knopf zweitrangig" type="submit" name="abbrechen" value="1">Abbrechen</button>
+    <button class="knopf zweitrangig" type="submit" name="abbrechen" value="1" formnovalidate>Abbrechen</button>
 </form>
 {% endif %}
 {% endblock %}

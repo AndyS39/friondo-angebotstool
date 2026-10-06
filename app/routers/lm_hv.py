@@ -17,6 +17,7 @@ from app import leadmanagement as kern
 from app.db import get_session
 from app.models import Benutzer, Vorgang
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/lead-management")
 
@@ -54,7 +55,7 @@ def _kontext(request: Request, session: Session) -> dict:
 
 
 @router.get("/handelsvertreter")
-async def uebersicht(request: Request, session: Session = Depends(get_session)):
+def uebersicht(request: Request, session: Session = Depends(get_session)):
     """G1: Innendienst/Leadmanagement/Admin – alle Handelsvertreter-Leads
     gruppiert je Vertreter (einklappbar, Zähler, Filter, Suche); ein
     Handelsvertreter sieht nur seine eigenen Leads plus sein Dashboard (F16)."""
@@ -73,7 +74,7 @@ async def uebersicht(request: Request, session: Session = Depends(get_session)):
 
 
 @router.get("/handelsvertreter/dashboard")
-async def dashboard(request: Request, session: Session = Depends(get_session)):
+def dashboard(request: Request, session: Session = Depends(get_session)):
     """F16: persönliches Dashboard des Handelsvertreters (fällige
     Wiedervorlagen, eigene Termine der nächsten 7 Tage, offene Leads,
     To-Dos). Innendienst/Admin wählen über ?hv=<id> einen Vertreter."""
@@ -99,7 +100,7 @@ async def dashboard(request: Request, session: Session = Depends(get_session)):
 
 
 @router.post("/handelsvertreter/{vorgang_id}/zuweisen")
-async def zuweisen(request: Request, vorgang_id: int,
+def zuweisen(request: Request, vorgang_id: int,
                    session: Session = Depends(get_session)):
     """G3/F13: Dropdown „Vertreter“ – Innendienst/Admin weisen zu oder nehmen
     zurück (erzwingen=False: Ausschlussliste F14 greift immer); ein
@@ -107,7 +108,7 @@ async def zuweisen(request: Request, vorgang_id: int,
     weitergeben (Aktivität + Glocke über lead_v2.ad_zuweisen)."""
     vorgang = _vorgang(request, session, vorgang_id)
     benutzer = request.state.benutzer
-    form = await request.form()
+    form = anfrage.formular(request)
     ad_id = (form.get("ad_id") or "").strip()
     zurueck = _zurueck(form.get("zurueck"))
     if hv_modul.gesamtsicht(session, benutzer):
@@ -125,25 +126,25 @@ async def zuweisen(request: Request, vorgang_id: int,
 
 
 @router.post("/handelsvertreter/{vorgang_id}/standard")
-async def an_standard(request: Request, vorgang_id: int,
+def an_standard(request: Request, vorgang_id: int,
                       session: Session = Depends(get_session)):
     """F13: Button „An Standard (Simon) geben“ – für Tool-Leads ohne Automatik
     und für Umverteilungen; Ausschluss und Sonderregel greifen."""
     vorgang = _vorgang(request, session, vorgang_id)
-    form = await request.form()
+    form = anfrage.formular(request)
     meldung = hv_modul.an_standard(session, vorgang, benutzer=request.state.benutzer)
     session.commit()
     return _mit_meldung(_zurueck(form.get("zurueck")), meldung)
 
 
 @router.post("/handelsvertreter/standard-nachziehen")
-async def standard_nachziehen(request: Request, session: Session = Depends(get_session)):
+def standard_nachziehen(request: Request, session: Session = Depends(get_session)):
     """F13: Bestandsleads (monday) ohne ad_id nach Standardregel zuweisen –
     nur Innendienst/Leadmanagement/Admin."""
     lead_v2.gate(request, session)
     if not hv_modul.gesamtsicht(session, request.state.benutzer):
         raise HTTPException(status_code=404)
-    form = await request.form()
+    form = anfrage.formular(request)
     anzahl = hv_modul.standard_nachziehen(session, benutzer=request.state.benutzer)
     session.commit()
     meldung = (f"Standard nachgezogen: {anzahl} Zuweisung(en) gesetzt."

@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v26)
+# Friondo Angebotstool – Projektkontext (v27)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -35,6 +35,12 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
 - `projektierung_logik_v1.xlsx` (Projektierung, v11+) und
   `leadmanagement_logik_v1.xlsx` (Lead-Management, v12; seit v23 zusätzlich die
   Blätter Objektarten und Status, Kaskade mit 5 Stufen, Gründe `verloren`).
+- Betrieb (v27): `docs/betrieb.md` (Runbook, Ist-Aufnahme, Inventar),
+  `docs/betrieb-it-uebergabe.md`, `docs/lasttest-v27.md`; Skripte
+  `scripts/dienst-installieren.bat`, `dienst-neustart.bat`, `dienst-status.bat`,
+  `dienst-entfernen.bat`, `waechter.ps1`, `health-pruefen.ps1`, `smoke.bat`/`smoke.py`,
+  `restore-test.bat`, `lasttest.py`/`lasttest_server.py`, `index_pruefung.py`,
+  `backup-nacht.bat` (nur Handläufe); `update.bat`, `rollback.bat --nur-code`.
 
 ## Plan ↔ CLAUDE-Version (Zuordnung)
 
@@ -64,6 +70,7 @@ Nummern vergeben.
 | v24 | PLAN_V16.md | 113–117 |
 | v25 | PLAN_LEAD_V3.md | 118–121 |
 | v26 | PLAN_PROJ_V5.md | 122–126 |
+| v27 | PLAN_V17.md | 127–132 |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
@@ -102,6 +109,31 @@ Nummern vergeben.
   „Sehr geehrte Frau <Nachname>,"; ohne eindeutige Anrede Fallback „Sehr geehrte
   Damen und Herren," – identischer Baustein als Platzhalter {briefanrede} in den
   Mail-Vorlagen.
+- **Betrieb (v27, PLAN_V17 Phase 132 – verbindlich für jeden weiteren Plan):**
+  - **Keine offene Datenbanksitzung während Netz-I/O** (monday, Graph/Outlook,
+    Nominatim, openrouteservice, Heizreport, SMTP, HTTP allgemein): vor dem
+    Netzaufruf alle Daten lesen, `db.verbindung_freigeben(session)` (Anfragen)
+    bzw. Sitzung schließen (`with db.kurz() as s:` lesen → Netz → neue kurze
+    Sitzung zum Zurückschreiben, Hintergrundläufe). Der Wächter-Test
+    `tests/test_v27_sitzungen.py` prüft das per AST über ganz `app/` – Ausnahmen
+    nur mit Kommentar `netz-ohne-sitzung-ok` und Begründung.
+  - **Alle Endpunkte sind `def`-Routen** (Threadpool, `WORKER_THREADS`); Formulare
+    über `anfrage.formular(request)`, JSON über `anfrage.json_lesen(request)`,
+    Uploads über `datei.file` (Streaming) – kein `async def`/`await` in Routern,
+    PDF-Erzeugung und Excel-Importe laufen nie in der Event-Loop.
+  - **Jede neue Hintergrundaufgabe läuft über `app/scheduler.py`**
+    (`scheduler.registrieren(...)` im `scheduler_starten()` des Moduls, kein
+    eigener `threading.Thread`); kein Lauf hält eine Sitzung länger als 2 s ohne
+    Netz-I/O, große Mengen in Blöcken mit Commit je Block (≤ 50 Datensätze).
+  - **Importe nur außerhalb der Kernzeit**, in Blöcken mit Commit je 200 Zeilen,
+    mit Hinweis und Bestätigung in der Parametrierung; laufende Importe stehen im
+    Betriebs-Status (`betrieb.import_markieren`).
+  - **Rollout nur im Wartungsfenster** (Dienstag 18:30–19:30 [ANNAHME]) mit
+    Wartungsbanner vorher, `update.bat` und `scripts\smoke.bat` danach; Hotfixes
+    außerhalb nur mit Freigabe von Andreas. Datenbankänderungen bleiben additiv
+    (Rückweg `rollback.bat --nur-code`).
+  - **Jeder Plan mit neuen Netzaufrufen ergänzt das Inventar** in
+    `docs/betrieb.md` (Modul, Auslöser, Intervall, Netzaufruf, Freigabe, Maßnahme).
 
 ## Neu in v6 (abgestimmt 21.08.2026)
 - **Lead-Zuordnung:** Personen-Zuordnung wirkt sofort rückwirkend auf bestehende
@@ -916,9 +948,10 @@ v14“ entspricht diesem Abschnitt.)
   Sortierung mit robustem Parser und Rückmeldung bei geänderten
   Positionen), das Fehlerprotokoll (Meldung „Datenbank kurz belegt …“) und
   Timeouts für Graph-Aufrufe (`graph_versand`, `mail_sync`); Test mit echter
-  Schreibsperre `tests/test_v22_positionen.py`. **Folgeänderung offen:**
-  Transaktionen der Scheduler verkürzen (commit vor Netz-I/O,
-  Geocoding-Backoff für „fehler“-Adressen). Weitere Punkte: Editor behält
+  Schreibsperre `tests/test_v22_positionen.py`. **Folgeänderung (seit v27
+  erledigt):** Transaktionen der Scheduler verkürzen (commit vor Netz-I/O,
+  Geocoding-Backoff für „fehler“-Adressen) – umgesetzt mit dem Scheduler-Rahmen
+  `app/scheduler.py` und `db.kurz()` (PLAN_V17 Phase 128). Weitere Punkte: Editor behält
   die Scroll-Position (Scroll-Restore aus `projektierung.js` gilt auch für
   `/angebote/<id>`, Anker für neue Positionen), Gruppen-Überschriften je
   Angebot editierbar (`POST /angebote/<id>/gruppe`, wirkt auf alle Positionen
@@ -1663,3 +1696,239 @@ Freigabe davor ist ein Fehler.
   (benachrichtigungen, golive, lead_mail, lead_parser, monday_sync, outlook_kalender,
   mail_sync, terminmail, sub_mail) `pool.checkedout() == 0` im Moment des gemockten
   Netzaufrufs (drei Schleifen ohne passende Dev-DB-Daten werden übersprungen).
+
+## Neu in v27 – Betriebsreife für 50 Nutzer (abgestimmt 06.10.2026)
+
+(Plan: PLAN_V17.md, Phasen 127–132; baut auf dem Hotfix 06.10.2026 auf. Alle
+Datenbankänderungen sind additiv – der v26-Code läuft auf einer v27-Datenbank
+weiter, Rückweg `rollback.bat --nur-code`. Rollout nur im Wartungsfenster.)
+
+- **Ist-Aufnahme und Inventar (Phase 127):** `docs/betrieb.md` – Abschnitt „Ist
+  10/2026“ (Server läuft als Konsolenfenster aus `start.bat` in der Sitzung
+  kdadmin = Risiko Nr. 1, Pfad `C:\Users\kdadmin\Desktop\Angebotstool`, Firmennetz
+  `http://192.168.35.4:8000`, Außendienst über WireGuard-VPN – vorhanden) und die
+  Inventartabelle aller `SessionLocal()`-Stellen, Scheduler-Läufe, Netzaufrufe aus
+  Anfragen, Importe und PDF-Erzeugungen (Modul | Auslöser | Intervall | Netzaufruf |
+  hält Sitzung während Netz-I/O | Schreibtransaktion | Maßnahme). Jeder Plan mit
+  neuen Netzaufrufen ergänzt diese Tabelle (Fachliche Regeln → Betrieb).
+- **Zugriffsprotokoll mit Dauer** (`app/zugriffslog.py`): die RollenMiddleware
+  schreibt je Anfrage eine Zeile nach `data\log\zugriff.log` (RotatingFileHandler
+  10 × 10 MB; Zeit | Benutzer-ID | Rolle | Methode | Pfad ohne Query | Status |
+  Dauer ms | Pool-Checkouts zu Beginn – keine Formdaten, keine Namen; /static und
+  /health ausgenommen). `zugriffslog.auswerten(24)` (60 s zwischengespeichert,
+  höchstens die jüngsten 40 MB) liefert Anfragen/Minute, p50/p95 je Route (Top 20,
+  `/angebote/{id}`-Normalisierung), Anteil > 2 s, langsamste 20 Anfragen, Pool-Spitze.
+- **Lastmodell und Zielwerte** [ANNAHME, Phase 127/131]: `docs/lasttest-v27.md`
+  Abschnitt 1/2 – 50 Nutzer, 35 gleichzeitig (15 AD mobil, 12 ID, 6 LM, 4
+  Projektierung/Montage), Denkzeit 5–15 s; Zielwerte p95 Listen/Akten ≤ 1,5 s,
+  Editor ≤ 1,0 s, Angebots-PDF ≤ 4 s, Protokoll-PDF ≤ 3 s, Terminvorschläge ≤ 6 s,
+  0 TimeoutError, 0 „database is locked“, Pool-Spitze ≤ 60 %, Fehlerquote < 0,1 %.
+- **`def`-Routen statt `async def` (Phase 128):** alle 379 Endpunkte laufen im
+  Starlette-Threadpool (`WORKER_THREADS`, Standard 64, in `main.lifespan` über
+  `anyio.to_thread.current_default_thread_limiter().total_tokens` gesetzt);
+  Formulare `anfrage.formular(request)`, JSON `anfrage.json_lesen(request)`, Uploads
+  `datei.file` – `galerie.speichern` streamt Datei-Objekte in 1-MB-Blöcken auf die
+  Platte (`_datei_schreiben`). Umstellungsskript (AST-gestützt, Kommentare bleiben):
+  `diagnose/v27_patches/async_umstellen.py`. Die Middleware (`auth.RollenMiddleware`)
+  erledigt ihre Datenbankarbeit in `_laden()` im Threadpool, schließt die Sitzung VOR
+  `call_next` (Hotfix) und reicht Werte für Jinja-Globals ohne Request-Kontext über
+  `anfrage.KONTEXT` (ContextVar) durch – `lm_demo_badge` öffnet keine zweite Sitzung
+  mehr (Befund B7); der Wartungshinweis liest mit der Middleware-Sitzung (B8).
+- **Pool, Threads, Invariante:** `.env`-Schlüssel `DB_POOL_SIZE` (20),
+  `DB_POOL_OVERFLOW` (**70** – Plan 40; mit 64 Threads und 13 Scheduler-Läufen
+  verlangt die Invariante 64 + 13 + 5 = 82 Verbindungen), `DB_POOL_TIMEOUT` (10),
+  `WORKER_THREADS` (64). `db.pool_invariante(anzahl_scheduler)` wird beim Start
+  geprüft, protokolliert (`data\fehler.log`, Betriebs-Seite, /health „Pool-Invariante
+  verletzt“) und bei Verletzung ins Fehlerprotokoll geschrieben.
+- **`db.kurz()`** (Kontextmanager, commit bei Erfolg / rollback bei Fehler / immer
+  close) für Scheduler und Hilfsfunktionen; Anfragen behalten `get_session`.
+- **Scheduler-Rahmen `app/scheduler.py`:** `scheduler.registrieren(name, intervall_s,
+  funktion, beschreibung=, start_verzoegerung_s=, taeglich_um=, aktiv=)` je Lauf;
+  Single-Flight-Sperre, Zufallsversatz 0–30 s beim ersten Start, Laufzeitmessung,
+  letzter Fehler (mit Traceback in `data\fehler.log` – kein `except Exception: pass`
+  mehr), Zähler, Tabelle `scheduler_status`; `ausfuehren(name)` synchron (Tests),
+  `im_hintergrund_ausfuehren(name)` (Knopf „jetzt ausführen“, eigener Thread),
+  `starten_alle()`/`stoppen()` nur in `main.lifespan`. Läufe: `monday-sync` 900 s
+  (aktiv nur mit Token), `mail-sync` 900 s (Graph eingerichtet), `ablauf-pruefung`
+  24 h, `benachrichtigungen` 300 s, `lead-parser` 120 s (parser_modus an),
+  `leadmanagement` 300 s, `geocoding` 300 s, `lead-mail` 60 s, **`mail-ausgang`**
+  60 s, `backup` täglich 02:30, `sqlite-pflege` täglich 02:40, `betrieb-wache` 300 s,
+  `login-protokoll` täglich 03:10. Inaktive Läufe melden „inaktiv (Grund)“ – kein
+  Fehler.
+- **Sitzungsdisziplin der Läufe (Agent A):** `mail_sync.sync`, `sub_mail`/
+  `terminmail.antworten_abgleichen`, `outlook_kalender.ruecklesen`, der monday-
+  Scheduler-Pfad, `geocoding.hintergrund_lauf`, `lead_mail.versand_job` arbeiten mit
+  `db.kurz()` (lesen → Sitzung zu → Netz → kurze Sitzung schreiben); geteilte
+  Funktionen mit Request-Session behalten die Hotfix-Freigabe (`geokodieren`,
+  `postfach_abrufen`, `_graph_senden`, `mail_senden`, `_quelle_syncen`). Blöcke mit
+  Commit: Geocoding je Adresse, Lead-Mail je Eintrag, Glocken/Reaktivierung/Löschlauf
+  je 50 (`leadmanagement.BLOCK_GROESSE`), monday je 200 Items und je Quelle
+  (`monday_sync.BLOCK_GROESSE`); Teilschritte je für sich abgesichert, Ausnahme nur,
+  wenn alle Teilschritte (bzw. alle monday-Quellen) scheitern. **Geocoding-Backoff:**
+  `geocode_cache.versuche`/`stand` – nach dem 1. Fehlversuch 1 h, nach dem 2. 6 h, ab
+  dem 3. 24 h (`geocoding.backoff_pause`, `erneut_faellig`); Erfolg/manueller Pin
+  setzen 0; Vorgänge mit `geocode_status = fehler` werden nach der Pause wieder
+  versucht (vorher nie – Befund), Kundenkartei/Terminassistent überspringen „fehler“
+  nicht mehr dauerhaft (in der Pause nur eine Cache-Abfrage). Löschlauf mit
+  Mengenabfragen (`loeschlauf_kandidaten`) in 50er-Blöcken.
+- **Mail-Ausgangswarteschlange `mail_ausgang`** (Antwort Andreas 06.10.2026 zum
+  Hotfix): `benachrichtigungen.sofort_versenden` reiht Sofort-Mails in derselben
+  Transaktion wie die Glocke ein (Tabelle `MailAusgang`: empfaenger, betreff, text,
+  art, status offen|gesendet|fehler, versuche, fehler_text); der Lauf `mail-ausgang`
+  sendet jede Minute bis zu 50 Einträge (lesen → Sitzung zu → Graph mit
+  Fallback-Absender → kurze Sitzung je Eintrag), nach 3 Fehlversuchen „fehler“ mit
+  Protokollzeile, ohne Graph-Einrichtung sofort „fehler: Graph nicht eingerichtet“.
+  Der Hotfix-Commit mitten in `projektierung.benachrichtigen` entfällt damit (Befund
+  B9); `/health` warnt ab 50 offenen Mails, die Betriebs-Seite zeigt offen/Fehler 24 h.
+- **Importe in Blöcken (Agent D):** `import_preisliste`, `import_pv`, `import_klima`
+  committen je `BLOCK = 200` Zeilen, `bestandsimport.importieren` je `BLOCK = 10`
+  [ANNAHME: 95 ms je Bestandszeile gemessen ≈ 1 s Schreibsperre]; vor jedem
+  Block-Commit Zwischenstand am `Bestandsimport`-Datensatz (`_zwischenstand`),
+  `abgeschlossen_am` bleibt bei Abbruch leer („abgebrochen (Teilstand)“). Jeder
+  Import ist je Schlüssel ein Upsert und nach Abbruch wiederholbar; Verwaiste werden
+  erst nach allen Zeilen deaktiviert; „Logik neu einlesen“ schreibt nichts (nur
+  Cache). Laufende Importe: `betrieb.import_markieren("Preisliste" |
+  "PV-Positionslisten" | "Klima-Positionslisten" | "Logik-Excel" | "Bestandsimport" |
+  "monday-Sync")` – Betriebs-Seite und `/health` (`importe`). **Hinweis vor dem Start**
+  (nur Routen): `import_preisliste.import_hinweis(session, schluessel)` („Dauer etwa
+  <n> s – während des Imports können Speichern-Aktionen anderer Nutzer kurz warten;
+  empfohlen außerhalb der Kernzeit“), Bestätigung `import_bestaetigt(form)` (Feld
+  `bestaetigt`, sonst Redirect „Bitte den Hinweis bestätigen“), Dauer
+  `import_dauer_merken(session, schluessel, start)` → Einstellung
+  `import_dauer_<schluessel>` (Standards preisliste 20, pv 10, klima 10, logik 15,
+  bestand 30, monday 30 s). Betroffene Routen: `/artikel/import`, `/artikel/import-pv`,
+  `/parametrierung/artikel/kl-import`, `/parametrierung/neu-einlesen` (Knöpfe auf
+  Übersicht, Logik & Importe, Klima-Logik mit `confirm()` + verstecktem Feld),
+  `/parametrierung/bestandsimport/ausfuehren`, `/leads/sync` (monday-Vollabgleich).
+  Tests, die Import-Routen posten, senden `bestaetigt=1`; `migrate.py`-Aufrufe
+  verlangen keine Bestätigung.
+- **SQLite-Pflege und Indizes:** Lauf `sqlite-pflege` 02:40 (`db.wal_pflege()`:
+  `PRAGMA wal_checkpoint(TRUNCATE)` + `PRAGMA optimize`), WAL-Größe in /health und
+  Betriebs-Seite, `busy_timeout` bleibt 5000 ms. Indexprüfung mit `EXPLAIN QUERY PLAN`
+  (`scripts/index_pruefung.py --data <Kopie>`, Bericht
+  `diagnose/test_v27_index/index_bericht.txt`): Befund – die im Modell mit
+  `index=True` deklarierten Indizes auf nachträglich per ALTER TABLE ergänzten Spalten
+  (`erfassungen.vorgang_id`, `erfassungen.lead_id`, `angebote.vorgang_id`,
+  `angebote.projekt_gewerk_id` u. a.) hatte `create_all` nie angelegt → `db.indizes_anlegen()`
+  legt jetzt alle Modell-Indizes nach und zusätzlich `_INDIZES`
+  (`ix_v27_*`: vorgaenge.lead_phase, angebote.status, angebote(archiviert, status),
+  erfassungen.status, erfassungen.archiviert, erfassungen.angebot_id,
+  lead_aktivitaeten(vorgang_id, erstellt_am), benachrichtigungen(benutzer_id, gelesen_am),
+  vot_termine.beginn, vot_termine(status, typ), vorgaenge.wiedervorlage_am,
+  vorgaenge.naechste_aktion_am, leads.benutzer_id, leads.vot_datum, aufgaben.status,
+  aufgaben(verantwortlich_id, status), login_protokoll(benutzer_id, zeit)); `migrate.py`
+  meldet neue Tabellen und Indizes.
+- **Betrieb (Phase 129):** `scripts\dienst-installieren.bat` erkennt NSSM
+  (`nssm.exe` neben dem Skript/im Projektordner/`C:\Friondo\`) → Dienst
+  `FriondoAngebotstool` (AppDirectory = Projektordner, Autostart, Neustart nach 5 s,
+  Logs `data\log\dienst-out.log`/`dienst-err.log` mit 10-MB-Rotation, Konto SYSTEM),
+  sonst Aufgabe „Friondo Angebotstool“ (ONSTART, SYSTEM) plus Wächter-Aufgabe alle
+  5 Minuten (`scripts\waechter.ps1`: `/health`, Neustart bei Ausfall,
+  `data\log\waechter.log`); beendet ein laufendes Konsolenfenster nach Rückfrage,
+  entfernt die Hotfix-Aufgabe „Friondo Backup“. `scripts\dienst-neustart.bat`,
+  `dienst-status.bat`, `dienst-entfernen.bat`; `update.bat`/`rollback.bat` erkennen
+  Dienst/Aufgabe/Konsole, `rollback.bat --nur-code`; `start.bat` warnt auf dem Server;
+  `scripts\smoke.bat` (+ `smoke.py`: /health, Login-Cookie, Startseite, Erfassungs- und
+  Angebotsliste, Vorgangsakte, Angebots-PDF, Hauptboard, Projektboard – je 200 und
+  < 3 s, `data\log\smoke-<Datum>.txt`); `scripts\restore-test.bat` (jüngste Sicherung →
+  `diagnose\restore_<Datum>`, migrate, Crawl `--max-ids 20`, Protokoll
+  `docs\betrieb\restore-<Datum>.txt`, gitignored); `scripts\health-pruefen.ps1` für
+  fr-wts-02. **`GET /health`** (ohne Anmeldung, `app/routers/betrieb.py`): JSON mit
+  status ok|warn|fehler, version, commit (aus `.git`), db/db_ms (eigene sqlite3-Probe,
+  nicht über den Pool), pool, threads, scheduler[], backup_letztes/backup_ziel_status,
+  wal_mb, uptime_s, importe[], mail_ausgang, schreibsperre_max_ms/locked, prozess
+  (RSS über psapi, CPU-Sekunden), gruende[]; warn bei Pool > 70 % (oder erschöpft),
+  Scheduler > 2 Intervalle ohne Lauf, letztes Backup > 26 h, kein Backup-Ziel,
+  Spiegelung fehlgeschlagen, Pool-Invariante verletzt, > 50 offene Mails; HTTP 503
+  nur bei fehler. **Betriebs-Seite** `/parametrierung/betrieb` (Admin, Template
+  `konfiguration/betrieb.html`): Kacheln, Wartungshinweis-Formular, Scheduler-Tabelle
+  (mit Stand vor Neustart aus `scheduler_status`) und „jetzt ausführen“ (Hintergrund),
+  „Backup jetzt“, „SQLite-Pflege jetzt“, Zugriffsstatistik 24 h. **Admin-Glocke:**
+  Lauf `betrieb-wache` alle 5 Minuten – bei warn/fehler eine Glocke an alle Admins
+  (art `system`, höchstens eine je Stunde). **Backup:** Lauf `backup` 02:30
+  (`betrieb.backup_lauf`): `db.taegliches_backup()` + Spiegelung von `backups`
+  (90 Tage am Ziel), `angebote` (/MIR), `projekte` (/MIR) und `.env` per robocopy
+  nach `BACKUP_ZIEL` (Log `data\backups\ziel.log`), Ergebnis in Einstellung
+  `backup_letztes`; Fehlschlag → Fehlerprotokoll + Admin-Glocke; ohne Ziel nur lokal.
+  **Proxy/HTTPS-Vorbereitung:** `HTTPS_AKTIV=1` → Cookie `secure` (immer `httponly`,
+  `samesite=lax`), `BASIS_URL` (Mails, ICS, Signatur-Links – `BASIS_URL_AUS_ENV` geht
+  der Einstellung `signatur_fern_basis_url` vor), `PROXY_IPS` für die Start-Skripte
+  (`--proxy-headers --forwarded-allow-ips`), `/health` ohne Login. Serverressourcen-
+  Empfehlung in `docs/betrieb.md` (4 vCPU / 8 GB / SSD, `data\` lokal, NTP,
+  Virenscanner-Ausnahme).
+- **Login-Härtung (Phase 130, `app/auth.py` + Agent B):** `pin_hash_v2` =
+  PBKDF2-HMAC-SHA256 (200.000 Runden, 16-Byte-Salz, Format
+  `pbkdf2_sha256$Runden$Salz$Hash`); Login: v2 gesetzt → PBKDF2, sonst SHA-256
+  (`pin_hash`), stille Umstellung beim nächsten Erfolg; `pin_setzen` schreibt BEIDE
+  Spalten (Rollback-Sicherheit). PIN-Regeln für neue PINs (`pin_regel_pruefen`):
+  nur Ziffern, Mindestlänge 6 [ANNAHME, Parameter `pin_mindestlaenge` 4–12],
+  Sperrliste (`pin_sperrliste`, Standard 123456/111111/…), keine Wiederholung, keine
+  Zahlenfolge, kein Jahreszahl-Muster 19xx/20xx. Fehlversuchssperre: 5 Fehlversuche in
+  15 Minuten (seit dem letzten erfolgreichen Login) → 15 Minuten Sperre
+  (`fehlversuche`, `gesperrt_bis`, Text wörtlich laut Plan); je IP höchstens 30
+  **Fehl**versuche in 15 Minuten [ANNAHME statt „Versuche“ – gemeinsame Adressen];
+  Tabelle `login_protokoll` (zeit, benutzer_id, benutzer_name, ip_kurz a.b.c.x, erfolg,
+  grund; 90 Tage, Lauf `login-protokoll`). Cookie v2 `v2:<id>:<Ablauf>:<Sitzungszähler>:
+  <HMAC>` mit Ablauf (Büro 12 h, Außendienst/Montage mit Häkchen „Auf diesem Gerät
+  angemeldet bleiben“ 30 Tage – Parameter `sitzung_stunden_buero`/`sitzung_tage_mobil`
+  [ANNAHME]), `benutzer.sitzungszaehler` („Alle Sitzungen beenden“), v26-Cookies werden
+  abgewiesen (einmal neu anmelden). `pin_wechsel_noetig` (Erst-Login, Admin-Reset,
+  Standard-Admin einer leeren DB) → Middleware leitet auf `/pin-wechsel`.
+  Oberfläche (Agent B): `/login` mit Häkchen, `GET/POST /pin-wechsel` (jede Rolle, Menü
+  „PIN ändern“), Benutzerverwaltung mit Filter Rolle/aktiv, Spalte „Letzter Login“,
+  „Sperre aufheben“, „Alle Sitzungen beenden“, Einstellungen-Block, CSV-Import
+  `/benutzer/import` (`app/benutzer_import.py`: `Name;Rolle;E-Mail;Team;Vertriebskanal`,
+  Vorschau, Start-PINs einmalig angezeigt, nicht gespeichert), Login-Protokoll
+  `/benutzer/login-protokoll`; Styles in `app/static/login_v27.css`. Tests:
+  `tests/test_v27_login.py`; `tests/conftest.py` setzt den IP-Zähler je Test zurück.
+- **Befunde aus Lauf 1 des Lasttests, behoben vor Lauf 2:** (1) `lead_termin.vorschlaege`
+  rief die Routing-Matrix zweimal (hin/zurück) – jetzt EIN gebündelter Aufruf
+  (Quellen = Ziele = Lead + Punkte, `routing.matrix_fuellen(session, alle, alle)`);
+  (2) `leadmanagement.parameter_holen` lief auf dem Deals-Board 835-mal je Seite
+  (je eine Abfrage) – jetzt je Transaktion zwischengespeichert (`session.info`,
+  geleert bei `after_begin`, gepflegt von `parameter_setzen`): Deals-Board 856 → 29
+  Abfragen, 840 → 420 ms (Einzelaufruf). Nicht geändert (Befunde für einen eigenen
+  Plan): PDF-Erzeugung CPU-gebunden (fpdf2, 4 gleichzeitige Renderings ≈ 3× Einzelzeit),
+  „Versand vorbereiten“ = 7 sequenzielle Graph-Aufrufe, Deals-Board rendert alle Zeilen
+  ohne Blättern, Bestands-Erfassungen ohne spätere optionale Fragen (O13/O09/A20) gelten
+  für „Angebot erzeugen“ als unvollständig (Rückfrage).
+- **Lasttest (Phase 131, Agent E):** `scripts/lasttest_server.py` (uvicorn 8001 gegen
+  `diagnose/test_v27/data`, Lifespan mit allen Läufen, externe Dienste mit 2 s
+  simulierter Latenz) + `scripts/lasttest.py` (httpx, Thread je virtuellem Nutzer,
+  Profile `normal` | `schreibsturm` | `stress`, `--nutzer --dauer --seed --latenz
+  --bericht`, Messung je Route p50/p95/p99/Fehler, /health-Polling: Pool-Spitze,
+  WAL, Schreibsperre, RSS/CPU; Bericht `docs/lasttest-v27.md`, Rohdaten
+  `diagnose/test_v27/lasttest_<zeit>.json`). Ergebnis und PostgreSQL-Entscheidung:
+  `docs/lasttest-v27.md` Abschnitt 4. **Ergebnis 06.10.2026:** Lauf 2 (50 Nutzer, 35
+  aktiv, 20 min, 6.602 Anfragen) erfüllt alle Zielwerte – p95 Listen/Akten 494 ms,
+  Editor 291 ms, Angebots-PDF 1.887 ms, Protokoll-PDF 649 ms, Terminvorschläge
+  4.206 ms, 0 TimeoutError, 0 „database is locked“, Pool-Spitze 17,8 %, Fehlerquote
+  0 %; Schreibsturm 190/190 Positionen korrekt; Stressstufe (100 Nutzer) zeigt die
+  Ein-Schreiber-Grenze (Schreibsperre bis 5,9 s, 7 × „Datenbank kurz belegt“,
+  Reserve-Faktor 0,69). **Entscheidung: SQLite bestätigt**, kein PostgreSQL-Umstieg in
+  v27; Reserve ≈ 40 % über dem Lastmodell, nächster Lasttest nach dem nächsten großen
+  Modul.
+- **Rollout-Regeln (Phase 132):** Wartungshinweis (Einstellungen `wartung_von`,
+  `wartung_bis`, `wartung_text`; Banner-Wortlaut „Wartung heute von <von> bis <bis>
+  Uhr – bitte Arbeit bis dahin speichern. Das Tool ist in dieser Zeit kurz nicht
+  erreichbar.“ für alle Rollen und auf /login, `betrieb.wartungshinweis`, 60-s-Cache
+  in der Middleware), Standardfenster Dienstag 18:30–19:30 [ANNAHME]
+  (`betrieb.naechstes_wartungsfenster`). Rollback-Probe auf der DB-Kopie
+  (`diagnose/v27_patches/rollback_probe.py`, Worktree `diagnose/wt_v26` = da9df30):
+  v26 gegen v27-DB – Login mit alter und unter v27 geänderter PIN, Angebotsliste, PDF,
+  Hauptboard, Anrufliste = 200, v27-Cookie abgewiesen; danach v27 wieder ok. Runbook
+  `docs/betrieb.md`, IT-Übergabe `docs/betrieb-it-uebergabe.md`, Team-Hinweise
+  `docs/nach-dem-update-v27.md`; `UMZUGS-BRIEFING.md` Abschnitt 2 um das
+  Wartungsfenster ergänzt; `docs/mobilzugriff.md` als umgesetzt (Variante A)
+  gekennzeichnet.
+- **Tests v27:** `tests/test_v27_sitzungen.py` (Wächter-AST-Test über `app/`:
+  Netzaufruf nur nach Freigabe/close/commit der Sitzung, Fixpunkt über Aufrufketten,
+  Ausnahme-Marker `netz-ohne-sitzung-ok`; 40 parallele Terminvorschläge mit 3-s-Mock
+  ohne gehaltene Verbindung; Pool-Invariante, `kurz()`), `tests/test_v27_betrieb.py`
+  (/health, Betriebs-Seite, Wartungsbanner, Scheduler-Rahmen, Zugriffslog, Backup mit
+  Spiegelung, SQLite-Pflege, Indizes, Mail-Ausgang), `tests/test_v27_scheduler.py`
+  (Agent A: Registrierung ohne Threads, Single-Flight, Status-Tabelle, Backoff, 1.000
+  Geocoding-Adressen ≤ 1 s Schreibsperre, Blöcke), `tests/test_v27_login.py` (Agent B),
+  `tests/test_v27_importe.py` (Agent D). `tests/test_pool_hotfix.py` prüft die
+  Pool-Werte jetzt gegen `db.POOL_SIZE/MAX_OVERFLOW/POOL_TIMEOUT` (Zeitgrenze 30 s je
+  Welle, CPU-Last durch parallele Läufe).

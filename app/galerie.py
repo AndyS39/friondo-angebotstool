@@ -79,14 +79,40 @@ def _verkleinern(pfad: Path) -> None:
         pass   # nicht lesbare Bilder bleiben unverändert
 
 
+STREAM_BLOCK = 1024 * 1024
+
+
+def _datei_schreiben(ziel: Path, inhalt) -> int:
+    """v27 (PLAN_V17 Phase 128): Bytes direkt schreiben, Datei-Objekte
+    (UploadFile.file) in 1-MB-Blöcken auf die Platte streamen – keine
+    50-MB-Datei im Speicher. Liefert die geschriebene Größe."""
+    if isinstance(inhalt, (bytes, bytearray)):
+        ziel.write_bytes(inhalt)
+        return len(inhalt)
+    try:
+        inhalt.seek(0)
+    except Exception:
+        pass
+    groesse = 0
+    with ziel.open("wb") as ausgabe:
+        while True:
+            block = inhalt.read(STREAM_BLOCK)
+            if not block:
+                break
+            ausgabe.write(block)
+            groesse += len(block)
+    return groesse
+
+
 def speichern(session: Session, vorgang_id: int, ordner: str, dateiname: str,
-              inhalt: bytes, benutzer=None, bemerkung: str = "",
+              inhalt, benutzer=None, bemerkung: str = "",
               quelle: str = "upload", sparte: str = "WP") -> GalerieDatei | None:
-    """Datei in den Galerie-Ordner der Sparte legen (Bilder verkleinert)."""
+    """Datei in den Galerie-Ordner der Sparte legen (Bilder verkleinert).
+    `inhalt` ist bytes oder ein Datei-Objekt (v27: Upload wird gestreamt)."""
     sparte = sparte_pruefen(sparte)
     if ordner not in ordner_liste(session, sparte):
         ordner = "Allgemein"
-    if not inhalt:
+    if inhalt is None or (isinstance(inhalt, (bytes, bytearray)) and not inhalt):
         return None
     name = _sicherer_name(dateiname)
     ziel_ordner = _basis(vorgang_id) / sparte / ordner.replace("/", "-")
@@ -96,7 +122,9 @@ def speichern(session: Session, vorgang_id: int, ordner: str, dateiname: str,
     while ziel.exists():
         ziel = ziel_ordner / f"{Path(name).stem}_{zaehler}{Path(name).suffix}"
         zaehler += 1
-    ziel.write_bytes(inhalt)
+    if _datei_schreiben(ziel, inhalt) == 0:
+        ziel.unlink(missing_ok=True)
+        return None
     if ist_bild(name):
         from app import projektierung as kern
         if kern.parameter_holen(session, "galerie_original_behalten", "aus") == "an":

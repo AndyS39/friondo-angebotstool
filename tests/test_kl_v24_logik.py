@@ -503,7 +503,7 @@ class Parametrierung(Basis):
         self.assertEqual(r.status_code, 200)
         self.assertIn("Klima-Positionslisten-Import", r.text)
         self.assertIn("Import ausführen", r.text)
-        r = self.client.post("/parametrierung/artikel/kl-import", follow_redirects=False)
+        r = self.client.post("/parametrierung/artikel/kl-import", data={"bestaetigt": "1"}, follow_redirects=False)
         self.assertEqual(r.status_code, 303)
         # v26 (Phase 125): KL-Import kehrt nach Logik & Importe zurück
         self.assertIn("/parametrierung/logik?meldung=", r.headers["location"])

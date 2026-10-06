@@ -173,52 +173,56 @@ def antworten_abgleichen() -> int:
     eingehende Mails landen im Projekt-Mail-Verlauf; die erste Antwort setzt
     antwort_am (die Akte schlägt dann „bestätigt“ vor)."""
     from app import graph_versand, mail_sync
-    from app.db import SessionLocal, verbindung_freigeben
+    from app.db import kurz
     from app.models import Benutzer, ProjektMail, ProjektSub
 
     token = graph_versand._token()
     if token is None:
         return 0
-    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben – das angemeldete
-    # Konto wird wie das Token VOR der Sitzung ermittelt (msal kann es über
-    # das Netz erneuern)
+    # Hotfix 06.10.2026: das angemeldete Konto wird wie das Token VOR der
+    # Sitzung ermittelt (msal kann es über das Netz erneuern)
     konto = (graph_versand.angemeldeter_benutzer() or "").lower()
-    session = SessionLocal()
-    neu_gesamt = 0
-    try:
-        from app import benachrichtigungen
-        from app import projektierung as kern
-        postfach = benachrichtigungen._absender(session)
+    # v27 (PLAN_V17 Phase 128): Lesephase in einer kurzen Sitzung (Postfach,
+    # eigene Adressen, offene Sub-Einträge), dann je Eintrag der Graph-Abruf
+    # OHNE Sitzung und eine kurze Sitzung zum Zurückschreiben mit Commit
+    from app import benachrichtigungen
+    from app import projektierung as kern
+    with kurz() as s:
+        postfach = benachrichtigungen._absender(s)
         eigene = {postfach.lower(), konto}
-        for b in session.query(Benutzer).filter(Benutzer.aktiv.is_(True)):
+        for b in s.query(Benutzer).filter(Benutzer.aktiv.is_(True)):
             if b.email:
                 eigene.add(b.email.lower())
-        offene = (session.query(ProjektSub)
+        offene = [(z[0], z[1]) for z in
+                  s.query(ProjektSub.id, ProjektSub.graph_conversation_id)
                   .filter(ProjektSub.graph_conversation_id.isnot(None),
                           ProjektSub.status.in_(["angefragt", "beauftragt"]))
-                  .all())
-        for eintrag in offene:
-            # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (vor JEDEM
-            # Graph-Abruf; der commit speichert die Antworten des vorherigen
-            # Eintrags – wie bisher am Ende des Laufs)
-            verbindung_freigeben(session)
-            try:
-                nachrichten = mail_sync.nachrichten_je_konversation(
-                    token, eintrag.graph_conversation_id, postfach)
-            except Exception:
+                  .order_by(ProjektSub.id).all()]
+    neu_gesamt = 0
+    for eintrag_id, conversation_id in offene:
+        try:
+            nachrichten = mail_sync.nachrichten_je_konversation(
+                token, conversation_id, postfach)
+        except Exception:
+            continue
+        if not nachrichten:
+            continue
+        with kurz() as s:
+            eintrag = s.get(ProjektSub, eintrag_id)
+            if eintrag is None:
                 continue
             for nachricht in nachrichten:
                 graph_id = nachricht.get("id") or ""
                 if not graph_id or nachricht.get("isDraft"):
                     continue
-                if session.query(ProjektMail).filter(
+                if s.query(ProjektMail).filter(
                         ProjektMail.graph_id == graph_id).first() is not None:
                     continue
                 absender = ((nachricht.get("from") or {})
                             .get("emailAddress") or {})
                 von_email = absender.get("address") or ""
                 eingehend = bool(von_email) and von_email.lower() not in eigene
-                session.add(ProjektMail(
+                s.add(ProjektMail(
                     projekt_id=eintrag.projekt_id, sub_eintrag_id=eintrag.id,
                     graph_id=graph_id,
                     von_name=absender.get("name") or "",
@@ -233,14 +237,11 @@ def antworten_abgleichen() -> int:
                 if eingehend and eintrag.antwort_am is None:
                     eintrag.antwort_am = datetime.now()
                     from app.models import Projekt
-                    projekt = session.get(Projekt, eintrag.projekt_id)
+                    projekt = s.get(Projekt, eintrag.projekt_id)
                     if projekt is not None:
                         kern.benachrichtigen(
-                            session, [projekt.projektleiter_id],
+                            s, [projekt.projektleiter_id],
                             f"Sub-Antwort zu {projekt.nummer} eingegangen",
                             f"/projektierung/projekt/{projekt.id}#subs",
                             art="sub")
-        session.commit()
-    finally:
-        session.close()
     return neu_gesamt

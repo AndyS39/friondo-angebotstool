@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{# v27 (PLAN_V17 Phase 129): Betriebs-Seite (Admin) – Kacheln, Scheduler-Tabelle
+   mit „jetzt ausführen“, Zugriffsstatistik 24 h, Importe, Wartungshinweis #}
+
+{% block titel %}Betrieb – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Betrieb</h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung">Parametrierung</a>
+        <a class="knopf zweitrangig" href="/parametrierung/fehlerprotokoll">Fehlerprotokoll</a>
+        <a class="knopf zweitrangig" href="/health" target="_blank" rel="noopener">/health</a>
+    </div>
+</div>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% set status_klasse = {'ok': 'betrieb-ok', 'warn': 'betrieb-warn', 'fehler': 'betrieb-fehler'}[health.status] %}
+<p class="hinweis {{ status_klasse }}" id="betrieb-status">
+    <strong>Status: {{ health.status | upper }}</strong>
+    {% if health.gruende %} – {{ health.gruende | join('; ') }}{% else %} – keine Auffälligkeiten{% endif %}
+</p>
+
+<div class="betrieb-kacheln" id="betrieb-kacheln">
+    <div class="karte betrieb-kachel"><span class="kachel-titel">Version / Commit</span>
+        <span class="kachel-wert">{{ health.version }} · {{ health.commit }}</span></div>
+    <div class="karte betrieb-kachel"><span class="kachel-titel">Uptime</span>
+        <span class="kachel-wert">{{ uptime_text }}</span>
+        <span class="dezent">seit {{ health.zeit | de_datum('%d.%m.%Y %H:%M') if health.zeit else '' }} (Abfrage)</span></div>
+    <div class="karte betrieb-kachel"><span class="kachel-titel">Pool (aktuell / Spitze 24 h)</span>
+        <span class="kachel-wert">{{ pool.checked_out }} / {{ zugriffe.pool_spitze }} von {{ pool.maximum }}</span>
+        <span class="dezent">{{ pool_groesse }} Überlauf, Timeout {{ pool_timeout }} s · {{ pool.prozent }} % belegt</span></div>
+    <div class="karte betrieb-kachel"><span class="kachel-titel">Threads</span>
+        <span class="kachel-wert">{{ threads_gesetzt or threads }}</span>
+        <span class="dezent">{% if pool_invariante %}{{ 'Invariante ok' if pool_invariante[0] else 'Invariante VERLETZT' }}: {{ pool_invariante[1] }}{% else %}Invariante noch nicht geprüft (kein Lifespan){% endif %}</span></div>
+    <div class="karte betrieb-kachel"><span class="kachel-titel">WAL-Datei</span>
+        <span class="kachel-wert">{{ wal_mb }} MB</span>
+        <form method="post" action="/parametrierung/betrieb/pflege"><button class="knopf klein zweitrangig" type="submit">SQLite-Pflege jetzt</button></form></div>
+    <div class="karte betrieb-kachel"><span class="kachel-titel">Letztes Backup</span>
+        <span class="kachel-wert">{{ backup.lokal_zeit | de_datum('%d.%m.%Y %H:%M') if backup.lokal_zeit else 'noch keins' }}</span>
+        <span class="dezent">Ziel: {% if backup_ziel %}<code>{{ backup_ziel }}</code> – {{ backup.ziel_status or 'noch nicht gespiegelt' }}{% if backup.ziel_zeit %} ({{ backup.ziel_zeit | de_datum('%d.%m. %H:%M') }}){% endif %}{% else %}kein Backup-Ziel (BACKUP_ZIEL in der .env){% endif %}</span>
+        <form method="post" action="/parametrierung/betrieb/backup"><button class="knopf klein zweitrangig" type="submit">Backup jetzt</button></form></div>
+    <div class="karte betrieb-kachel"><span class="kachel-titel">Prozess</span>
+        <span class="kachel-wert">{{ prozess.rss_mb if prozess.rss_mb is not none else '?' }} MB RAM</span>
+        <span class="dezent">CPU {{ prozess.cpu_s }} s · {{ prozess.threads }} Threads · Schreibsperre max. {{ schreibsperre.max_ms }} ms ({{ schreibsperre.locked }}× belegt)</span></div>
+    <div class="karte betrieb-kachel"><span class="kachel-titel">Laufende Importe</span>
+        <span class="kachel-wert">{{ importe | length }}</span>
+        <span class="dezent">{% for i in importe %}{{ i.name }} (seit {{ i.sekunden }} s){% if not loop.last %}, {% endif %}{% else %}keine{% endfor %}</span></div>
+    <div class="karte betrieb-kachel"><span class="kachel-titel">Mail-Ausgang (Sofort-Mails)</span>
+        <span class="kachel-wert">{{ health.mail_ausgang.offen if health.mail_ausgang.offen is not none else '?' }} offen</span>
+        <span class="dezent">{{ health.mail_ausgang.fehler_24h or 0 }} Fehler in 24 h · Versand durch Lauf „mail-ausgang“ (jede Minute)</span></div>
+</div>
+
+<section class="karte" id="wartung">
+    <h2>Wartungshinweis</h2>
+    {% if wartung %}
+        <p class="meldung">Aktiv: {{ wartung.banner }}{% if wartung.text and wartung.text != wartung.banner %} <span class="dezent">({{ wartung.text }})</span>{% endif %}</p>
+        <form method="post" action="/parametrierung/betrieb/wartung" class="zeile">
+            <input type="hidden" name="loeschen" value="1">
+            <button class="knopf klein zweitrangig" type="submit">Hinweis entfernen</button>
+        </form>
+    {% else %}
+        <p class="dezent">Kein Wartungshinweis gesetzt. Standard-Wartungsfenster: {{ wartung_standard }} – Updates nur in diesem Fenster, Banner mindestens 30 Minuten vorher.</p>
+    {% endif %}
+    <form method="post" action="/parametrierung/betrieb/wartung" class="formular-zeile">
+        <label>Von <input type="datetime-local" name="von" value="{{ von_vorschlag }}" required></label>
+        <label>Bis <input type="datetime-local" name="bis" value="{{ bis_vorschlag }}" required></label>
+        <label>Text (leer = Standardtext) <input type="text" name="text" maxlength="300" placeholder="Wartung heute von … bis … Uhr – bitte Arbeit bis dahin speichern."></label>
+        <button class="knopf klein" type="submit">Banner setzen</button>
+    </form>
+</section>
+
+<section class="karte" id="scheduler">
+    <h2>Hintergrundläufe (Scheduler)</h2>
+    <table class="tabelle kompakt">
+        <thead><tr><th>Lauf</th><th>Intervall</th><th>Letzter Start</th><th>Dauer</th><th>Läufe / Fehler</th><th>Zustand</th><th>Letztes Ergebnis / Fehler</th><th></th></tr></thead>
+        <tbody>
+        {% for l in laeufe %}
+            <tr class="{{ 'zeile-fehler' if l.letzter_fehler or l.ueberfaellig else '' }}">
+                <td><strong>{{ l.name }}</strong><br><span class="dezent">{{ l.beschreibung }}</span></td>
+                <td>{% if l.taeglich_um %}täglich {{ l.taeglich_um }}{% else %}{{ l.intervall_s }} s{% endif %}</td>
+                <td>{{ l.letzter_start | de_datum('%d.%m. %H:%M:%S') if l.letzter_start else '–' }}{% if l.vor_neustart %} <span class="dezent">(vor Neustart)</span>{% endif %}
+                    {% if l.naechster_start %}<br><span class="dezent">nächster {{ l.naechster_start | de_datum('%d.%m. %H:%M') }}</span>{% endif %}</td>
+                <td>{{ l.letzte_dauer_ms ~ ' ms' if l.letzte_dauer_ms is not none else '–' }}</td>
+                <td>{{ l.laeufe }} / {{ l.fehler }}</td>
+                <td>{{ l.zustand }}{% if l.laeuft %} (läuft gerade){% endif %}{% if l.ueberfaellig %} – <strong>überfällig</strong>{% endif %}</td>
+                <td class="dezent">{% if l.letzter_fehler %}<span class="fehler-text">{{ l.letzter_fehler }}</span>{% else %}{{ l.letztes_ergebnis or '' }}{% endif %}</td>
+                <td>{% if l.aktiv or l.zustand.startswith('inaktiv') %}
+                    <form method="post" action="/parametrierung/betrieb/lauf/{{ l.name }}">
+                        <button class="knopf klein zweitrangig" type="submit" {% if l.laeuft %}disabled{% endif %}>jetzt ausführen</button>
+                    </form>{% endif %}</td>
+            </tr>
+        {% else %}
+            <tr><td colspan="8" class="dezent">Keine Läufe registriert (der Scheduler startet mit dem Server).</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section class="karte" id="zugriffe">
+    <h2>Zugriffe der letzten 24 h</h2>
+    <p class="dezent">
+        {{ zugriffe.gesamt }} Anfragen · {{ zugriffe.pro_minute }} je Minute · {{ zugriffe.anteil_ueber_2s }} % über 2 s
+        ({{ zugriffe.ueber_2s }}) · {{ zugriffe.fehler_5xx }}× HTTP 5xx · Pool-Spitze {{ zugriffe.pool_spitze }}
+        {% if zugriffe.pool_spitze_zeit %}({{ zugriffe.pool_spitze_zeit[:16] | replace('T', ' ') }}){% endif %}
+        · Quelle <code>{{ zugriff_log }}</code>
+    </p>
+    <div class="betrieb-zweispaltig">
+    <div>
+        <h3>Top 20 Routen (p50 / p95 in ms)</h3>
+        <table class="tabelle kompakt">
+            <thead><tr><th>Route</th><th>Anzahl</th><th>p50</th><th>p95</th><th>max</th><th>5xx</th></tr></thead>
+            <tbody>
+            {% for r in zugriffe.routen %}
+                <tr class="{{ 'zeile-fehler' if r.p95 > 2000 else '' }}"><td><code>{{ r.route }}</code></td><td>{{ r.anzahl }}</td><td>{{ r.p50 }}</td><td>{{ r.p95 }}</td><td>{{ r.max }}</td><td>{{ r.fehler }}</td></tr>
+            {% else %}
+                <tr><td colspan="6" class="dezent">Noch keine Zugriffe protokolliert.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div>
+        <h3>Langsamste 20 Anfragen</h3>
+        <table class="tabelle kompakt">
+            <thead><tr><th>Zeit</th><th>Route</th><th>Dauer</th><th>Status</th><th>Benutzer</th></tr></thead>
+            <tbody>
+            {% for a in zugriffe.langsamste %}
+                <tr><td>{{ a.zeit[5:19] | replace('T', ' ') }}</td><td><code>{{ a.route }}</code></td><td>{{ a.dauer_ms }} ms</td><td>{{ a.status }}</td><td>{{ a.benutzer_id }} ({{ a.rolle }})</td></tr>
+            {% else %}
+                <tr><td colspan="5" class="dezent">–</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    </div>
+</section>
+
+<p class="dezent">Protokolle: <code>{{ fehler_log }}</code> (Fehler), <code>{{ zugriff_log }}</code> (Zugriffe), <code>data\backups\ziel.log</code> (Spiegelung), <code>data\log\dienst-*.log</code> (Dienst). Runbook: <code>docs/betrieb.md</code>.</p>
+{% endblock %}

@@ -16,6 +16,7 @@ from app import config
 from app.db import get_session
 from app.models import Angebot, Erfassung, Kunde
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/signatur")
 
@@ -33,7 +34,7 @@ def _berechtigt(request: Request, angebot: Angebot, session: Session) -> bool:
 
 
 @router.get("/{angebot_id}")
-async def seite(request: Request, angebot_id: int,
+def seite(request: Request, angebot_id: int,
                 session: Session = Depends(get_session)):
     angebot = session.get(Angebot, angebot_id)
     if angebot is None or not _berechtigt(request, angebot, session):
@@ -47,7 +48,7 @@ async def seite(request: Request, angebot_id: int,
 
 
 @router.get("/{angebot_id}/pdf")
-async def pdf_vorschau(request: Request, angebot_id: int,
+def pdf_vorschau(request: Request, angebot_id: int,
                        session: Session = Depends(get_session)):
     """PDF-Vorschau mit Signatur-Berechtigung (auch für den Außendienst)."""
     angebot = session.get(Angebot, angebot_id)
@@ -61,12 +62,12 @@ async def pdf_vorschau(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}")
-async def signieren(request: Request, angebot_id: int,
+def signieren(request: Request, angebot_id: int,
                     session: Session = Depends(get_session)):
     angebot = session.get(Angebot, angebot_id)
     if angebot is None or not _berechtigt(request, angebot, session):
         return RedirectResponse("/erfassung", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     name = (form.get("name") or "").strip()
     daten_url = form.get("signatur") or ""
     m = re.match(r"data:image/png;base64,(.+)$", daten_url)
@@ -113,7 +114,7 @@ async def signieren(request: Request, angebot_id: int,
 
 
 @router.get("/{angebot_id}/signiert.pdf")
-async def signiertes_pdf(request: Request, angebot_id: int,
+def signiertes_pdf(request: Request, angebot_id: int,
                          session: Session = Depends(get_session)):
     angebot = session.get(Angebot, angebot_id)
     if (angebot is None or not _berechtigt(request, angebot, session)
@@ -184,7 +185,7 @@ def _fern_angebot(session: Session, token: str) -> Angebot | None:
 
 
 @router.get("/extern/{token}")
-async def fern_signatur(request: Request, token: str,
+def fern_signatur(request: Request, token: str,
                         session: Session = Depends(get_session)):
     """Mobile Signaturseite für den Kunden (öffentliche Route, nur mit Token)."""
     angebot = _fern_angebot(session, token)
@@ -198,7 +199,7 @@ async def fern_signatur(request: Request, token: str,
 
 
 @router.get("/extern/{token}/pdf")
-async def fern_pdf(request: Request, token: str,
+def fern_pdf(request: Request, token: str,
                    session: Session = Depends(get_session)):
     angebot = _fern_angebot(session, token)
     if angebot is None:
@@ -211,7 +212,7 @@ async def fern_pdf(request: Request, token: str,
 
 
 @router.post("/extern/{token}")
-async def fern_signieren(request: Request, token: str,
+def fern_signieren(request: Request, token: str,
                          session: Session = Depends(get_session)):
     """Signatur durch den Kunden: wie Vor-Ort (Einbettung, Status, Ablage,
     Protokoll), zusätzlich Info-Mail an das Innendienst-Postfach."""
@@ -219,7 +220,7 @@ async def fern_signieren(request: Request, token: str,
     if angebot is None:
         return render(request, "signatur/fern_inaktiv.html", aktiv=None, mobil=True)
     kunde = session.get(Kunde, angebot.kunde_id)
-    form = await request.form()
+    form = anfrage.formular(request)
     name = (form.get("name") or "").strip()
     daten_url = form.get("signatur") or ""
     m = re.match(r"data:image/png;base64,(.+)$", daten_url)
@@ -265,9 +266,10 @@ async def fern_signieren(request: Request, token: str,
                  .filter(Erfassung.angebot_id == angebot.id).first())
     if erfassung is not None:
         erfassung.status = "Erledigt"
-    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben – dieser commit gibt
-    # die Verbindung frei; bis zur Info-Mail folgt kein weiterer DB-Zugriff
-    session.commit()
+    # Hotfix 06.10.2026 / v27 (Befund B11): Verbindung vor Netz-I/O freigeben –
+    # committet und gibt die Verbindung frei; bis zur Info-Mail kein DB-Zugriff
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
 
     # Info-Mail an den Innendienst-Postfachinhaber (best effort)
     gesendet = graph_versand.info_mail_senden(

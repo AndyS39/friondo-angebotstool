@@ -259,15 +259,19 @@ def zeilen(session: Session, todos: list[Todo], jetzt: datetime | None = None) -
 
 # --- Fälligkeits-Glocke (einmal je To-Do, beim ersten Erreichen) -------------------
 
-def faellige_glocken(session: Session, jetzt: datetime | None = None) -> int:
+def faellige_glocken(session: Session, jetzt: datetime | None = None,
+                     block: int = 0) -> int:
     """Glocke „To-Do fällig“ an den Empfänger, sobald faellig_am erreicht ist;
     dedupliziert über einen bestehenden Glocken-Eintrag mit demselben Link
-    (kann aus dem 5-Minuten-Lead-Scheduler aufgerufen werden)."""
+    (kann aus dem 5-Minuten-Lead-Scheduler aufgerufen werden). v27 (PLAN_V17
+    Phase 128): block > 0 → Commit je `block` Glocken (Scheduler-Lauf); die
+    Liste wird vorab geladen, damit der Commit den Cursor nicht trifft."""
     jetzt = jetzt or datetime.now()
     anzahl = 0
     for t in (session.query(Todo)
               .filter(Todo.status == "offen", Todo.faellig_am.isnot(None),
-                      Todo.faellig_am <= jetzt)):
+                      Todo.faellig_am <= jetzt)
+              .order_by(Todo.id).all()):
         link = link_fuer(session, t.an_benutzer_id, t)
         schon = (session.query(Benachrichtigung)
                  .filter(Benachrichtigung.benutzer_id == t.an_benutzer_id,
@@ -280,4 +284,6 @@ def faellige_glocken(session: Session, jetzt: datetime | None = None) -> int:
         _glocke(session, t.an_benutzer_id,
                 f"To-Do fällig: {t.titel}" + (f" – {kunde}" if kunde else ""), link)
         anzahl += 1
+        if block and anzahl % block == 0:
+            session.commit()   # v27: Block-Commit im Scheduler-Lauf
     return anzahl

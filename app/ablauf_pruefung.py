@@ -3,8 +3,9 @@
 # „Abgelehnt“ mit Grund „90 Tage Ablauf“ gesetzt – außer eine Wiedervorlage
 # liegt in der Zukunft. Läuft täglich (Scheduler) und einmal beim Start;
 # jeder Lauf wird protokolliert (Einstellung + Notiz je Angebot).
+# v27 (PLAN_V17 Phase 128): am Scheduler-Rahmen (app/scheduler.py) registriert
+# statt eigenem Thread; der Lauf arbeitet in einer kurzen Sitzung (db.kurz).
 
-import threading
 from datetime import datetime, timedelta
 
 AUTO_GRUND = "90 Tage Ablauf"
@@ -73,26 +74,21 @@ def lauf(session=None, trocken: bool = False) -> dict:
             session.close()
 
 
-_scheduler_laeuft = False
+def scheduler_lauf() -> dict:
+    """v27 (PLAN_V17 Phase 128): ein Prüflauf in einer kurzen Sitzung – reine
+    Datenbankarbeit ohne Netz-I/O, wenige Kandidaten je Tag (ein Commit)."""
+    from app.db import kurz
+    with kurz() as s:
+        return lauf(s)
 
 
 def scheduler_starten() -> None:
-    """Täglicher Lauf: erster Durchgang kurz nach dem Start, danach alle 24 h.
-    Fehler blockieren das Tool nie."""
-    global _scheduler_laeuft
-    if _scheduler_laeuft:
-        return
-    _scheduler_laeuft = True
-
-    def schleife():
-        import time
-        time.sleep(120)   # dem Serverstart Zeit lassen
-        while True:
-            try:
-                lauf()
-            except Exception:
-                pass
-            time.sleep(24 * 60 * 60)
-
-    threading.Thread(target=schleife, daemon=True,
-                     name="ablauf-pruefung").start()
+    """v27 (PLAN_V17 Phase 128): registriert den täglichen Lauf nur noch am
+    Scheduler-Rahmen (erster Durchgang 120 s nach dem Start, danach alle 24 h);
+    Threads startet ausschließlich main.lifespan über scheduler.starten_alle().
+    Fehler protokolliert der Rahmen (data/fehler.log, Betriebs-Seite)."""
+    from app import scheduler
+    scheduler.registrieren(
+        "ablauf-pruefung", 24 * 60 * 60, scheduler_lauf,
+        beschreibung="90-Tage-Prüflauf: versendete Angebote ohne Reaktion auf Abgelehnt setzen",
+        start_verzoegerung_s=120)

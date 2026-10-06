@@ -27,6 +27,7 @@ from app import leadmanagement as kern
 from app.db import get_session
 from app.models import InfoVeranstaltung, Vorgang, LEAD_PHASEN_NAMEN
 from app.templating import render, templates
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/lead-management")
 
@@ -73,15 +74,15 @@ def _zurueck_aus_query(request: Request) -> str:
     return BOARD_PFAD + ("?" + urlencode(params) if params else "")
 
 
-async def _daten(request: Request) -> dict:
+def _daten(request: Request) -> dict:
     """JSON-Rumpf oder Formular → dict (Listen als Listen)."""
     if "application/json" in (request.headers.get("content-type") or ""):
         try:
-            daten = await request.json()
+            daten = anfrage.json_lesen(request)
         except Exception:
             daten = {}
         return daten if isinstance(daten, dict) else {}
-    form = await request.form()
+    form = anfrage.formular(request)
     daten = {k: form.get(k) for k in form.keys()}
     daten["ids"] = form.getlist("ids") or form.getlist("ids[]")
     return daten
@@ -142,7 +143,7 @@ def _antwort(request: Request, session: Session, vorgang: Vorgang, ok: bool, mel
 # --- Board (I2/I3) --------------------------------------------------------------------------
 
 @router.get("/info-veranstaltung")
-async def info_board(request: Request, session: Session = Depends(get_session)):
+def info_board(request: Request, session: Session = Depends(get_session)):
     """Gruppen je Veranstaltung (Titel mit Datum/Uhrzeit/Ort, Kennzeichen
     „verschoben (Feiertag)“, Zähler, einklappbar), Filter Archiv, Spalten wie
     Hauptboard + Teilgenommen + Veranstaltung + Ergebnis-Buttons, roter Hinweis
@@ -180,13 +181,13 @@ async def info_board(request: Request, session: Session = Depends(get_session)):
 # --- Sammelaktionen (H3) ---------------------------------------------------------------------
 
 @router.post("/info-veranstaltung/sammelaktion")
-async def info_sammelaktion(request: Request, session: Session = Depends(get_session)):
+def info_sammelaktion(request: Request, session: Session = Depends(get_session)):
     """ids[] + aktion (status | naechste | teilgenommen) + Parameter (status, grund,
     grund_text, bis, teilgenommen, zurueck). Formular → Redirect mit Meldung,
     Accept application/json → JSON. Je Lead eine Aktivität."""
     lead_v2.gate(request, session)
     benutzer = request.state.benutzer
-    daten = await _daten(request)
+    daten = _daten(request)
     ids = daten.get("ids") or []
     if isinstance(ids, str):
         ids = [ids]
@@ -206,12 +207,12 @@ async def info_sammelaktion(request: Request, session: Session = Depends(get_ses
 # --- Teilgenommen (I3) ------------------------------------------------------------------------
 
 @router.post("/info-veranstaltung/{vorgang_id}/teilgenommen")
-async def info_teilgenommen(request: Request, vorgang_id: int,
+def info_teilgenommen(request: Request, vorgang_id: int,
                             session: Session = Depends(get_session)):
     """wert (oder teilgenommen) = ja | nein | leer → vorgaenge.teilgenommen,
     Aktivität typ status. JSON-Antwort mit zeile_html bei Accept: application/json."""
     vorgang = _vorgang_laden(request, session, vorgang_id)
-    daten = await _daten(request)
+    daten = _daten(request)
     zurueck = _pfad_sicher(daten.get("zurueck"))
     gueltig, wert = lead_info.teilgenommen_lesen(
         daten.get("wert") if daten.get("wert") is not None else daten.get("teilgenommen"))
@@ -228,11 +229,11 @@ async def info_teilgenommen(request: Request, vorgang_id: int,
 # --- Veranstaltung je Lead ändern (I4, manuell) ---------------------------------------------
 
 @router.post("/info-veranstaltung/{vorgang_id}/veranstaltung")
-async def info_veranstaltung_setzen(request: Request, vorgang_id: int,
+def info_veranstaltung_setzen(request: Request, vorgang_id: int,
                                     session: Session = Depends(get_session)):
     """veranstaltung_id (leer = Zuordnung aufheben) → Aktivität je Lead."""
     vorgang = _vorgang_laden(request, session, vorgang_id)
-    daten = await _daten(request)
+    daten = _daten(request)
     zurueck = _pfad_sicher(daten.get("zurueck"))
     roh = str(daten.get("veranstaltung_id") or "").strip()
     veranstaltung = None
@@ -252,13 +253,13 @@ async def info_veranstaltung_setzen(request: Request, vorgang_id: int,
 # --- Inline-Felder der Tabelle (Status/Notiz/AD/ID/Wiedervorlage) ----------------------------
 
 @router.post("/info-veranstaltung/{vorgang_id}/zeile")
-async def info_zeile_aendern(request: Request, vorgang_id: int,
+def info_zeile_aendern(request: Request, vorgang_id: int,
                              session: Session = Depends(get_session)):
     """JSON {feld, wert, grund?, grund_text?, bis?} → {ok, meldung, phase,
     zeile_html}. Nutzt lead_boards.zeile_aendern (Phase 105: Pflichtgründe,
     Zuweisung über lead_v2); ohne das Modul 422."""
     vorgang = _vorgang_laden(request, session, vorgang_id)
-    daten = await _daten(request)
+    daten = _daten(request)
     zurueck = _pfad_sicher(daten.get("zurueck"))
     try:
         from app import lead_boards
@@ -317,7 +318,7 @@ def _termine_seite(request: Request, session: Session):
 
 
 @router.get("/info-veranstaltung/termine")
-async def info_termine(request: Request, session: Session = Depends(get_session)):
+def info_termine(request: Request, session: Session = Depends(get_session)):
     """Liste aller Veranstaltungen (kommend + archiviert) mit Zählern, Notiz,
     manuell verschieben/archivieren/anlegen; Parameter info_* nur anzeigen
     (Pflege in Parametrierung → Lead-Einstellungen)."""
@@ -326,12 +327,12 @@ async def info_termine(request: Request, session: Session = Depends(get_session)
 
 
 @router.post("/info-veranstaltung/termine")
-async def info_termine_speichern(request: Request, session: Session = Depends(get_session)):
+def info_termine_speichern(request: Request, session: Session = Depends(get_session)):
     """aktion = notiz | verschieben | archiv | anlegen | nachlegen (+ id, notiz,
     beginn, archiviert, ort)."""
     _pflege_gate(request, session)
     benutzer = request.state.benutzer
-    form = await request.form()
+    form = anfrage.formular(request)
     aktion = (form.get("aktion") or "").strip()
     v = None
     if str(form.get("id") or "").isdigit():

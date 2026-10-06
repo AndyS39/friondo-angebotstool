@@ -11,7 +11,9 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-BASIS_URL = "http://192.168.35.4:8000"
+from app import config
+
+BASIS_URL = config.BASIS_URL   # v27: aus der .env (BASIS_URL), Standard wie bisher
 
 
 def aktiv(session: Session) -> bool:

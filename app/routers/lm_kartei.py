@@ -21,6 +21,7 @@ from app import vorgaenge as vorgaenge_modul
 from app.db import get_session
 from app.models import Kunde, Vorgang, VorgangNotizGelesen
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/lead-management")
 
@@ -83,7 +84,7 @@ def _id_lesen(form, name: str):
 # --- Kartei --------------------------------------------------------------------------
 
 @router.get("/lead/{vorgang_id}")
-async def kartei(request: Request, vorgang_id: int,
+def kartei(request: Request, vorgang_id: int,
                  session: Session = Depends(get_session)):
     """Kundenkartei (B1–B8; v25: Kopf mit Statuskette, Kundeninfo-Block,
     Reiter, Blöcke) – übernimmt die V1-Weiterleitung."""
@@ -119,16 +120,16 @@ async def kartei(request: Request, vorgang_id: int,
 
 # --- Autospeichern (v25, Phase 119) --------------------------------------------------
 
-async def _json_oder_form(request: Request) -> dict:
+def _json_oder_form(request: Request) -> dict:
     """Body als JSON ({feld, wert}) oder – Fallback – als Formular lesen."""
     typ = (request.headers.get("content-type") or "").lower()
     if "application/json" in typ:
         try:
-            daten = await request.json()
+            daten = anfrage.json_lesen(request)
         except ValueError:
             return {}
         return daten if isinstance(daten, dict) else {}
-    form = await request.form()
+    form = anfrage.formular(request)
     daten = {k: form.get(k) for k in form.keys()}
     if hasattr(form, "getlist") and len(form.getlist("wert")) > 1:
         daten["wert"] = form.getlist("wert")
@@ -152,7 +153,7 @@ def _pflicht_antwort(session: Session, vorgang: Vorgang, kunde: Kunde | None) ->
 
 
 @router.post("/lead/{vorgang_id}/feld")
-async def feld(request: Request, vorgang_id: int,
+def feld(request: Request, vorgang_id: int,
                session: Session = Depends(get_session)):
     """Autospeichern eines Feldes des Kundeninfo-Blocks (Vertrag Briefing):
     JSON {feld, wert} → {ok, wert (normalisiert), meldung, pflicht_offen,
@@ -164,7 +165,7 @@ async def feld(request: Request, vorgang_id: int,
     lead_v2.gate(request, session, vorgang)
     benutzer = request.state.benutzer
     kunde = session.get(Kunde, vorgang.kunde_id)
-    daten = await _json_oder_form(request)
+    daten = _json_oder_form(request)
     feld_name = str(daten.get("feld") or "").strip()
     if feld_name not in lead_kartei.AUTOSPEICHER_FELDER:
         return JSONResponse({"ok": False, "feld": feld_name, "wert": "",
@@ -192,14 +193,14 @@ async def feld(request: Request, vorgang_id: int,
 # --- Stammdaten / Zuweisungen (B1–B3) ------------------------------------------------
 
 @router.post("/lead/{vorgang_id}/stammdaten")
-async def stammdaten(request: Request, vorgang_id: int,
+def stammdaten(request: Request, vorgang_id: int,
                      session: Session = Depends(get_session)):
     vorgang = _vorgang(session, vorgang_id)
     lead_v2.gate(request, session, vorgang)
     kunde = session.get(Kunde, vorgang.kunde_id)
     if kunde is None:
         return _zurueck(vorgang_id, "Kunde fehlt.")
-    form = await request.form()
+    form = anfrage.formular(request)
     meldung, fehler = lead_kartei.stammdaten_speichern(session, vorgang, kunde, form,
                                                         benutzer=request.state.benutzer)
     if fehler:
@@ -210,12 +211,12 @@ async def stammdaten(request: Request, vorgang_id: int,
 
 
 @router.post("/lead/{vorgang_id}/innendienst")
-async def innendienst(request: Request, vorgang_id: int,
+def innendienst(request: Request, vorgang_id: int,
                       session: Session = Depends(get_session)):
     """Innendienst-Dropdown → lead_v2.leadmanager_zuweisen (Aktivität + Glocke)."""
     vorgang = _vorgang(session, vorgang_id)
     lead_v2.gate(request, session, vorgang)
-    form = await request.form()
+    form = anfrage.formular(request)
     neu_id, gueltig = _id_lesen(form, "leadmanager_id")
     if not gueltig:
         return _zurueck(vorgang_id, "Innendienst: ungültige Auswahl – nichts geändert.", _tab(form))
@@ -226,13 +227,13 @@ async def innendienst(request: Request, vorgang_id: int,
 
 
 @router.post("/lead/{vorgang_id}/aussendienst")
-async def aussendienst(request: Request, vorgang_id: int,
+def aussendienst(request: Request, vorgang_id: int,
                        session: Session = Depends(get_session)):
     """Außendienst-Dropdown → lead_v2.ad_zuweisen (Ausschlussprüfung F14,
     Aktivität, Glocke). erzwingen=1 nur Innendienst/Admin."""
     vorgang = _vorgang(session, vorgang_id)
     lead_v2.gate(request, session, vorgang)
-    form = await request.form()
+    form = anfrage.formular(request)
     benutzer = request.state.benutzer
     neu_id, gueltig = _id_lesen(form, "ad_id")
     if not gueltig:
@@ -248,11 +249,11 @@ async def aussendienst(request: Request, vorgang_id: int,
 # --- Notiz (Notizen-Chat des Vorgangs, Rücksprung in die Kartei) ---------------------
 
 @router.post("/lead/{vorgang_id}/notiz")
-async def notiz(request: Request, vorgang_id: int,
+def notiz(request: Request, vorgang_id: int,
                 session: Session = Depends(get_session)):
     vorgang = _vorgang(session, vorgang_id)
     lead_v2.gate(request, session, vorgang)
-    form = await request.form()
+    form = anfrage.formular(request)
     text = (form.get("text") or "").strip()
     if text:
         vorgaenge_modul.notiz_anlegen(session, vorgang.id, request.state.benutzer, text[:2000])
@@ -264,13 +265,13 @@ async def notiz(request: Request, vorgang_id: int,
 # --- Wiedervorlage / Zurückstellen / Nachbearbeitung (F11) ---------------------------
 
 @router.post("/lead/{vorgang_id}/wiedervorlage")
-async def wiedervorlage(request: Request, vorgang_id: int,
+def wiedervorlage(request: Request, vorgang_id: int,
                         session: Session = Depends(get_session)):
     """Dialog „Wiedervorlage“: art=wiedervorlage (naechste_aktion_am) oder
     art=zurueckstellen (bis + Grund aus dem Blatt Gruende)."""
     vorgang = _vorgang(session, vorgang_id)
     lead_v2.gate(request, session, vorgang)
-    form = await request.form()
+    form = anfrage.formular(request)
     benutzer = request.state.benutzer
     art = (form.get("art") or "wiedervorlage").strip()
     if art == "zurueckstellen":
@@ -304,13 +305,13 @@ async def wiedervorlage(request: Request, vorgang_id: int,
 
 
 @router.post("/lead/{vorgang_id}/nachbearbeitung")
-async def nachbearbeitung(request: Request, vorgang_id: int,
+def nachbearbeitung(request: Request, vorgang_id: int,
                           session: Session = Depends(get_session)):
     """Schnellaktion „Nachbearbeitung“ (F11/A-4): Zurückstellen mit Grund
     „Nachbearbeitung, noch nicht bereit für VOT“ + Pflicht-Wiedervorlage."""
     vorgang = _vorgang(session, vorgang_id)
     lead_v2.gate(request, session, vorgang)
-    form = await request.form()
+    form = anfrage.formular(request)
     roh = (form.get("bis") or "").strip()
     bis = None
     if roh:
@@ -331,7 +332,7 @@ async def nachbearbeitung(request: Request, vorgang_id: int,
 # --- Terminierung (B8) / Vorab-Angebot (F10) -----------------------------------------
 
 @router.post("/lead/{vorgang_id}/terminierung")
-async def terminierung(request: Request, vorgang_id: int,
+def terminierung(request: Request, vorgang_id: int,
                        session: Session = Depends(get_session)):
     vorgang = _vorgang(session, vorgang_id)
     lead_v2.gate(request, session, vorgang)
@@ -345,7 +346,7 @@ async def terminierung(request: Request, vorgang_id: int,
 
 
 @router.post("/lead/{vorgang_id}/vorab-angebot")
-async def vorab_angebot(request: Request, vorgang_id: int,
+def vorab_angebot(request: Request, vorgang_id: int,
                         session: Session = Depends(get_session)):
     """„Erfassung ohne Termin“ (A-3/F10): Kennzeichen + Aktivität, dann in die
     bestehende Erfassung; Demo-Leads bekommen nur Kennzeichen/Badge."""

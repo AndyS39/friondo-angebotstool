@@ -23,6 +23,7 @@ from app.routers import (angebote, anmeldung, artikel, benutzer, erfassung, vorg
                          erfassungsliste, konfiguration, konfigurator, kunden,
                          leads, signatur, statistik, versand)
 from app.routers import konfiguration_heizreport   # v26: Parametrierung → Heizreport
+from app.routers import betrieb as betrieb_router   # v27: /health + Parametrierung → Betrieb
 from app.templating import render
 
 APP_ORDNER = Path(__file__).resolve().parent
@@ -32,6 +33,17 @@ APP_ORDNER = Path(__file__).resolve().parent
 async def lifespan(app: FastAPI):
     init_db()
     standardbenutzer_anlegen()
+    # v27 (PLAN_V17 Phase 127/128): Zugriffsprotokoll, Threadpool-Größe aus der
+    # .env (WORKER_THREADS), Scheduler-Rahmen, Pool-Invariante beim Start
+    from app import betrieb, config, scheduler, zugriffslog
+    from app import db as db_modul
+    zugriffslog.einrichten()
+    try:
+        import anyio
+        anyio.to_thread.current_default_thread_limiter().total_tokens = config.WORKER_THREADS
+        betrieb.THREADS_GESETZT = config.WORKER_THREADS
+    except Exception as problem:
+        fehlerprotokoll.logger.warning("Threadpool-Größe nicht gesetzt: %s", problem)
     # monday-Lesesync (Phase 22): Quellen vorbelegen + 15-Minuten-Scheduler
     from app import monday_sync
     from app.db import SessionLocal
@@ -62,7 +74,20 @@ async def lifespan(app: FastAPI):
     # v12 (Phase 78): Mail-Warteschlange (jede Minute, Sendesperre je Modus)
     from app import lead_mail
     lead_mail.scheduler_starten()
+    # v27 (Phase 129): Backup 02:30, SQLite-Pflege 02:40, Betriebs-Wache, Login-Protokoll
+    betrieb.scheduler_registrieren()
+    ok, text = db_modul.pool_invariante(scheduler.anzahl())
+    betrieb.POOL_INVARIANTE = (ok, text)
+    fehlerprotokoll.logger.info("Start %s (Commit %s): Threads %s, %s, Scheduler-Läufe %s",
+                                config.VERSION, betrieb.commit_hash(), config.WORKER_THREADS,
+                                text, scheduler.anzahl())
+    if not ok:
+        fehlerprotokoll.eintragen_text("Betrieb", "Pool-Invariante verletzt – Pool vergrößern "
+                                       "(DB_POOL_SIZE/DB_POOL_OVERFLOW in der .env)", text)
+    gestartet = scheduler.starten_alle()
+    fehlerprotokoll.logger.info("Scheduler gestartet: %s Läufe", gestartet)
     yield
+    scheduler.stoppen()
 
 
 app = FastAPI(title="Friondo Angebotstool", lifespan=lifespan)
@@ -126,6 +151,7 @@ app.add_middleware(RollenMiddleware)
 app.mount("/static", StaticFiles(directory=APP_ORDNER / "static"), name="static")
 
 app.include_router(anmeldung.router)
+app.include_router(betrieb_router.router)   # v27 (PLAN_V17 Phase 129)
 app.include_router(vorgaenge.router)
 app.include_router(projektierung_router.router)
 app.include_router(glocke.router)
@@ -197,7 +223,7 @@ def _start_kontext() -> dict:
 
 
 @app.get("/")
-async def startseite(request: Request):
+def startseite(request: Request):
     """Portal (v9-Finale): drei große klickbare Karten – Lead-Management und
     Projektierung als „Coming soon“, in der Mitte das Angebotstool mit den
     „Auf einen Blick“-Zahlen. Nur Innendienst/Admin; Außendienst leitet die
@@ -235,7 +261,7 @@ async def startseite(request: Request):
 
 
 @app.get("/angebotstool")
-async def angebotstool(request: Request):
+def angebotstool(request: Request):
     """Angebotstool-Startansicht (Ebene 2): Shortcuts + klickbare Kacheln."""
     return render(request, "angebotstool.html", aktiv=None, **_start_kontext())
 
@@ -255,7 +281,7 @@ def _offene_leads_anzahl(session) -> int:
 
 
 @app.get("/konfiguration")
-async def konfiguration_umleitung():
+def konfiguration_umleitung():
     """Alte Adresse – der Bereich heißt seit Phase 18 „Parametrierung“."""
     from fastapi.responses import RedirectResponse
     return RedirectResponse("/parametrierung", status_code=301)

@@ -9,6 +9,12 @@
    ein weiteres Dropdown (Klon der Vorlage #ben-team-vorlage) ein, „×“ nimmt
    eines weg. Gespeichert wird unverändert über team_ids + teams_dabei; leere
    Dropdowns ignoriert die Route, doppelte Teams dedupliziert sie (set()). #}
+{# v27 (PLAN_V17 Phase 130): Filter Rolle/aktiv, Spalte „Letzter Login“ mit den
+   Hinweisen „gesperrt bis …“ (+ Sperre aufheben) und „PIN-Wechsel offen“,
+   PIN-Regeln (Mindestlänge aus dem Parameter), Häkchen „PIN-Wechsel beim
+   nächsten Login verlangen“, „Alle Sitzungen beenden“, Block „Sitzung &
+   PIN-Regeln“, Links zu CSV-Import und Login-Protokoll. Eigene Styles in
+   /static/login_v27.css. #}
 {# Reihenfolge der Dropdown-Einträge: Typ montage zuerst, dann sub (bzw. alles
    andere), innerhalb des Typs alphabetisch – die Route liefert bereits
    order_by(typ, name); hier nur abgesichert, falls Alt-Typen auftauchen.
@@ -33,6 +39,7 @@
    Rolle, E-Mail, Team, Aktiv), alles Seltene in einer aufklappbaren
    Detailzeile. Teams erscheinen nur bei der Rolle Montage; Zusatzrollen
    sind ein Sonderfall und wandern erklärt in die Details. #}
+<link rel="stylesheet" href="/static/login_v27.css?v={{ css_version }}">
 <style>
 /* v26 (Phase 125): Team-Dropdowns – Kleinst-Styles mit den Tokens aus style.css */
 .ben-team-wahl { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
@@ -51,14 +58,45 @@
 </style>
 <div class="seitenkopf">
     <h1>Benutzer</h1>
+    <div class="aktionen">
+        {# v27 (Phase 130): Massenanlage und Protokoll #}
+        <a class="knopf klein zweitrangig" href="/benutzer/import"
+           title="Benutzer aus einer CSV-Datei anlegen (Vorschau, Start-PINs)">CSV-Import</a>
+        <a class="knopf klein zweitrangig" href="/benutzer/login-protokoll"
+           title="Anmeldeversuche, Fehlversuche, Sperren">Login-Protokoll</a>
+    </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{# v27 (Phase 130): Filter Rolle (Hauptrolle) und aktiv/inaktiv – GET-Parameter rolle, aktiv #}
+<form method="get" action="/benutzer" class="ben-filter" id="ben-filter">
+    <label>Rolle
+        <select name="rolle" onchange="this.form.submit()">
+            <option value="">alle</option>
+            {% for r in rollen %}
+                <option value="{{ r }}" {{ 'selected' if r == rolle_filter }}>{{ rollen_namen.get(r, r) }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <label>Status
+        <select name="aktiv" onchange="this.form.submit()">
+            <option value="" {{ 'selected' if aktiv_filter == '' }}>alle</option>
+            <option value="1" {{ 'selected' if aktiv_filter == '1' }}>nur aktive</option>
+            <option value="0" {{ 'selected' if aktiv_filter == '0' }}>nur inaktive</option>
+        </select>
+    </label>
+    <button class="knopf klein zweitrangig" type="submit">Filtern</button>
+    {% if rolle_filter or aktiv_filter %}<a class="dezent" href="/benutzer">Filter zurücksetzen</a>{% endif %}
+    <span class="dezent">{{ benutzer|length }} Benutzer</span>
+</form>
 
 <table class="tabelle ben-tabelle">
     <thead><tr>
         <th>Name</th><th>Rolle</th><th>E-Mail</th>
         <th title="Team-Zuordnung – nur für die Rolle Montage relevant">Montageteam</th>
-        <th>Aktiv</th><th></th>
+        <th>Aktiv</th>
+        <th title="Letzte erfolgreiche Anmeldung; Sperre nach Fehlversuchen und offener PIN-Wechsel">Letzter Login</th>
+        <th></th>
     </tr></thead>
     <tbody>
     {% for b in benutzer %}
@@ -66,6 +104,7 @@
         {# zugeordnete (aktive) Teams in Dropdown-Reihenfolge #}
         {% set zugeordnet = teams_sortiert|selectattr('id', 'in', b_teams)|list %}
         {% set zeigt_teams = b.rolle == 'montage' or zugeordnet %}
+        {% set gesperrt = b.gesperrt_bis and b.gesperrt_bis > jetzt %}
         <tr class="{{ 'inaktiv' if not b.aktiv }}" id="zeile-{{ b.id }}">
             <td><input form="f{{ b.id }}" type="text" name="name" value="{{ b.name }}" size="16"></td>
             <td>
@@ -97,13 +136,27 @@
                       {% if zeigt_teams %}hidden{% endif %}>–</span>
             </td>
             <td><input form="f{{ b.id }}" type="checkbox" name="aktiv" {{ 'checked' if b.aktiv }}></td>
+            <td class="ben-login-zelle">
+                {% if b.letzter_login %}{{ b.letzter_login.strftime('%d.%m.%Y %H:%M') }}{% else %}<span class="dezent">noch nie</span>{% endif %}
+                {% if gesperrt %}
+                    <br><span class="ben-status gesperrt" title="Zu viele Fehlversuche">gesperrt bis {{ b.gesperrt_bis.strftime('%H:%M') }} Uhr</span>
+                    <form method="post" action="/benutzer/{{ b.id }}/sperre-aufheben">
+                        <button class="knopf klein zweitrangig" type="submit"
+                                title="Fehlversuche zurücksetzen, Anmeldung sofort wieder möglich">Sperre aufheben</button>
+                    </form>
+                {% endif %}
+                {% if b.pin_wechsel_noetig %}
+                    <br><span class="ben-status pin-offen"
+                              title="Beim nächsten Login muss eine neue PIN vergeben werden">PIN-Wechsel offen</span>
+                {% endif %}
+            </td>
             <td class="aktionen">
                 <form id="f{{ b.id }}" method="post" action="/benutzer/{{ b.id }}/aendern">
                     <button class="knopf klein" type="submit">Speichern</button>
                 </form>
                 <button class="knopf klein zweitrangig" type="button"
                         onclick="benDetails({{ b.id }})"
-                        title="PIN, Telefon, Benachrichtigungen, Sonderrechte">Details ▾</button>
+                        title="PIN, Telefon, Benachrichtigungen, Sonderrechte, Sitzungen">Details ▾</button>
                 {% if b.rolle == 'aussendienst' %}
                     <a class="knopf klein zweitrangig" href="/benutzer/{{ b.id }}/ad-profil"
                        title="Startadresse, Arbeitszeiten, Gebiet (Terminassistent)">AD-Profil</a>
@@ -111,11 +164,16 @@
             </td>
         </tr>
         <tr class="ben-details" id="details-{{ b.id }}" hidden>
-            <td colspan="6">
+            <td colspan="7">
                 <div class="ben-detail-raster">
-                    <label>Neue PIN
+                    <label title="Neue PIN: mindestens {{ pin_mindestlaenge }} Ziffern, keine Zahlenfolgen, Wiederholungen oder Jahreszahlen">Neue PIN
                         <input form="f{{ b.id }}" type="password" name="pin"
                                placeholder="unverändert" size="8" inputmode="numeric"></label>
+                    {# v27 (Phase 130): Admin-Reset verlangt standardmäßig einen PIN-Wechsel #}
+                    <label class="kontrollfeld"
+                           title="Wirkt nur zusammen mit einer neuen PIN: der Benutzer muss sie beim nächsten Login ändern">
+                        <input form="f{{ b.id }}" type="checkbox" name="pin_wechsel" checked>
+                        PIN-Wechsel beim nächsten Login verlangen</label>
                     <label>Telefon
                         <input form="f{{ b.id }}" type="tel" name="telefon"
                                value="{{ b.telefon }}" size="14" placeholder="optional"></label>
@@ -150,6 +208,12 @@
                                    {{ 'checked' if b.hat_rolle(r) and b.rolle != r }}> {{ rollen_namen.get(r, r) }}</label>
                     {% endfor %}
                     <span style="flex:1"></span>
+                    {# v27 (Phase 130): Abmelden überall – Sitzungszähler im Cookie #}
+                    <form method="post" action="/benutzer/{{ b.id }}/sitzungen-beenden"
+                          onsubmit="return confirm('Alle Sitzungen von {{ b.name }} beenden? Der Benutzer muss sich auf jedem Gerät neu anmelden{{ ' (dieses Gerät bleibt angemeldet)' if request.state.benutzer and b.id == request.state.benutzer.id }}.');">
+                        <button class="knopf klein zweitrangig" type="submit"
+                                title="Alle Cookies dieses Benutzers ungültig machen (z. B. Gerät verloren)">Alle Sitzungen beenden</button>
+                    </form>
                     <form method="post" action="/benutzer/{{ b.id }}/loeschen"
                           onsubmit="return confirm('{{ b.name }} wirklich {{ 'löschen' if loeschbar[b.id] else 'deaktivieren' }}?');">
                         <button class="knopf klein zweitrangig" type="submit"
@@ -161,6 +225,8 @@
                 </div>
             </td>
         </tr>
+    {% else %}
+        <tr><td colspan="7" class="dezent">Keine Benutzer für diesen Filter.</td></tr>
     {% endfor %}
     </tbody>
 </table>
@@ -175,8 +241,8 @@
             </select>
         </label>
         <label>E-Mail <input type="email" name="email" placeholder="vorname.nachname@friondo.de"></label>
-        <label class="schmal">PIN (mind. 4 Ziffern)
-            <input type="password" name="pin" inputmode="numeric" required>
+        <label class="schmal" title="Keine Zahlenfolgen, Wiederholungen oder Jahreszahlen">Start-PIN (mind. {{ pin_mindestlaenge }} Ziffern)
+            <input type="password" name="pin" inputmode="numeric" required minlength="{{ pin_mindestlaenge }}">
         </label>
     </div>
     <div class="ben-teams" id="teams-neu" hidden>
@@ -185,7 +251,38 @@
         <a href="#" class="ben-team-plus dezent"
            onclick="benTeamHinzu(this.parentNode); return false;">+ weiteres Team</a>
     </div>
+    {# v27 (Phase 130): neue Benutzer müssen die Start-PIN beim ersten Login ändern #}
+    <div class="formzeile">
+        <label class="kontrollfeld" title="Der Benutzer vergibt beim ersten Login eine eigene PIN">
+            <input type="checkbox" name="pin_wechsel" checked> PIN-Wechsel beim nächsten Login verlangen</label>
+    </div>
     <button class="knopf" type="submit">Anlegen</button>
+</form>
+
+{# v27 (Phase 130): Parameter sitzung_stunden_buero, sitzung_tage_mobil,
+   pin_mindestlaenge, pin_sperrliste (Tabelle einstellungen) #}
+<h2 id="einstellungen">Sitzung &amp; PIN-Regeln</h2>
+<form method="post" action="/benutzer/einstellungen" class="formular karte ben-einstellungen">
+    <div class="formzeile">
+        <label class="schmal" title="Büro-Rollen (Admin, Innendienst, Projektierung, Lead-Management) werden nach dieser Zeit abgemeldet">Sitzung Büro (Stunden)
+            <input type="number" name="sitzung_stunden_buero" min="1" max="168" required
+                   value="{{ einstellungen.sitzung_stunden_buero }}"></label>
+        <label class="schmal" title="Außendienst und Montage mit Häkchen „Auf diesem Gerät angemeldet bleiben“">Sitzung mobil (Tage)
+            <input type="number" name="sitzung_tage_mobil" min="1" max="365" required
+                   value="{{ einstellungen.sitzung_tage_mobil }}"></label>
+        <label class="schmal" title="Gilt für neue PINs (4–12); bestehende PINs bleiben gültig">Mindestlänge neuer PINs
+            <input type="number" name="pin_mindestlaenge" min="4" max="12" required
+                   value="{{ einstellungen.pin_mindestlaenge }}"></label>
+    </div>
+    <div class="formzeile">
+        <label class="breit" title="Kommagetrennte Ziffernfolgen, die als PIN nicht erlaubt sind; leer = Standardliste">PIN-Sperrliste (zu einfache PINs, kommagetrennt)
+            <textarea name="pin_sperrliste" rows="2">{{ einstellungen.pin_sperrliste }}</textarea></label>
+    </div>
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Einstellungen speichern</button>
+        <span class="dezent">Sperre nach 5 Fehlversuchen für 15 Minuten; Fehlversuche und Sperren stehen im
+            <a href="/benutzer/login-protokoll">Login-Protokoll</a>.</span>
+    </div>
 </form>
 
 <details style="margin-top:14px">
@@ -203,6 +300,10 @@
     <p class="dezent" style="font-size:13px">Löschen ist nur möglich, solange keine
         Erfassungen, Leads oder monday-Zuordnungen am Benutzer hängen – sonst wird er
         deaktiviert (Historie bleibt lesbar).</p>
+    <p class="dezent" style="font-size:13px">PINs: neue PINs haben mindestens {{ pin_mindestlaenge }} Ziffern,
+        keine Zahlenfolgen (123456), Wiederholungen (111111) oder Jahreszahlen (1985…); bestehende PINs
+        bleiben gültig. Nach 5 Fehlversuchen ist ein Benutzer 15 Minuten gesperrt – „Sperre aufheben“
+        gibt ihn sofort frei. „Alle Sitzungen beenden“ meldet einen Benutzer auf allen Geräten ab.</p>
 </details>
 
 {# Vorlage für „+ weiteres Team“ und für das Umschalten auf Montage (inert,

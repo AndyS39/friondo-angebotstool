@@ -268,7 +268,7 @@ def ablehnungsgruende_verteilung(session: Session, von: datetime, bis: datetime,
 
 
 @router.get("")
-async def seite(request: Request, zeitraum: str = "monat", von: str = "",
+def seite(request: Request, zeitraum: str = "monat", von: str = "",
                 bis: str = "", grund_ad: int = 0, grund_kanal: str = "",
                 grund_sparte: str = "", ae_ad: int = 0, ae_kanal: str = "",
                 ae_sparte: str = "", ae_quelle: str = "",

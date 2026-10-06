@@ -19,14 +19,27 @@ def _schema() -> list[str]:
     from app import db
     from sqlalchemy import text
 
+    def _objekte(v, typ):
+        return {z[0] for z in v.execute(text(
+            f"SELECT name FROM sqlite_master WHERE type='{typ}'"))}
+
     vorher = {}
     with db.engine.begin() as v:
         for tabelle in db._NACHTRAEGLICHE_SPALTEN:
             vorher[tabelle] = {z[1] for z in
                                v.execute(text(f"PRAGMA table_info({tabelle})"))}
+        tabellen_vorher = _objekte(v, "table")
+        indizes_vorher = _objekte(v, "index")
     db.init_db()
     meldungen = []
     with db.engine.begin() as v:
+        # v27 (PLAN_V17 Phase 128/132): neue Tabellen und Indizes melden – alle
+        # Änderungen sind additiv (Rückweg auf v26 ohne Datenverlust)
+        for name in sorted(_objekte(v, "table") - tabellen_vorher):
+            meldungen.append(f"Tabelle angelegt: {name}")
+        for name in sorted(_objekte(v, "index") - indizes_vorher):
+            if not name.startswith("sqlite_autoindex"):
+                meldungen.append(f"Index angelegt: {name}")
         for tabelle, spalten in db._NACHTRAEGLICHE_SPALTEN.items():
             jetzt = {z[1] for z in v.execute(text(f"PRAGMA table_info({tabelle})"))}
             for name in spalten:
@@ -987,7 +1000,12 @@ def main() -> int:
     argumente = parser.parse_args()
     if argumente.db:
         import os
-        os.environ["DB_PFAD_OVERRIDE"] = str(Path(argumente.db).resolve())
+        kopie = Path(argumente.db).resolve()
+        os.environ["DB_PFAD_OVERRIDE"] = str(kopie)
+        # v27 (Agent-C-Befund): init_db() legt die Tagessicherung und Protokolle
+        # unter DATA_ORDNER an – bei einem Testlauf gegen eine Kopie gehören sie
+        # neben die Kopie, nicht ins Live-data\ (Standard: Ordner der Kopie)
+        os.environ.setdefault("DATA_ORDNER", str(kopie.parent))
 
     from app import config
     print(f"Datenbank: {config.DB_PFAD}")

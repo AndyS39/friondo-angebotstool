@@ -69,7 +69,7 @@ class Basis(unittest.TestCase):
         cls.s.close()
 
     def anlegen(self, name, rolle, team_ids=()):
-        daten = {"name": f"{PRAEFIX}{name}", "rolle": rolle, "pin": "4321", "email": ""}
+        daten = {"name": f"{PRAEFIX}{name}", "rolle": rolle, "pin": "482913", "email": ""}
         if team_ids:
             daten["team_ids"] = [str(t) for t in team_ids]
         r = self.client.post("/benutzer/neu", data=daten, follow_redirects=False)

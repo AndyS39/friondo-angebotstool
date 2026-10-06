@@ -267,7 +267,7 @@ class Phase85Bestandsimport(Basis):
         self.assertIn("vorhanden #", vorschau.text)
         kennung = re.search(r'name="kennung" value="(\w+)"', vorschau.text).group(1)
         antwort = self.client.post("/parametrierung/bestandsimport/ausfuehren",
-                                   data={"kennung": kennung, "dateiname": "bestand.xlsx"},
+                                   data={"kennung": kennung, "dateiname": "bestand.xlsx", "bestaetigt": "1"},
                                    follow_redirects=False)
         self.assertEqual(antwort.status_code, 303)
         self.s.expire_all()

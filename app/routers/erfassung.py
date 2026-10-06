@@ -16,6 +16,7 @@ from app.db import get_session
 from app.logik import FREITEXT_TYPEN, logik_fuer_sparte
 from app.models import INTERESSE_CODES, Erfassung, Kunde
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/erfassung")
 
@@ -105,7 +106,7 @@ def _client_regel(frage, antworten=None, logik=None) -> str:
 
 
 @router.get("")
-async def uebersicht(request: Request, session: Session = Depends(get_session)):
+def uebersicht(request: Request, session: Session = Depends(get_session)):
     benutzer = _benutzer(request)
     erfassungen = (session.query(Erfassung)
                    .filter(Erfassung.benutzer_id == benutzer.id)
@@ -128,7 +129,7 @@ async def uebersicht(request: Request, session: Session = Depends(get_session)):
 
 
 @router.get("/neu")
-async def neu_formular(request: Request, session: Session = Depends(get_session)):
+def neu_formular(request: Request, session: Session = Depends(get_session)):
     kunden = (session.query(Kunde).filter(Kunde.aktiv.is_(True))
               .order_by(Kunde.firma, Kunde.nachname).all())
     return render(request, "erfassung/neu.html", aktiv=None, mobil=True,
@@ -136,8 +137,8 @@ async def neu_formular(request: Request, session: Session = Depends(get_session)
 
 
 @router.post("/neu")
-async def neu(request: Request, session: Session = Depends(get_session)):
-    form = await request.form()
+def neu(request: Request, session: Session = Depends(get_session)):
+    form = anfrage.formular(request)
     kunde = None
     if form.get("kunde_id"):
         try:
@@ -170,7 +171,7 @@ async def neu(request: Request, session: Session = Depends(get_session)):
 
 
 @router.get("/sparten")
-async def sparten_auswahl(request: Request, kunde_id: int = 0, lead_id: int = 0,
+def sparten_auswahl(request: Request, kunde_id: int = 0, lead_id: int = 0,
                           session: Session = Depends(get_session)):
     """v8: Sparten-Auswahl beim Erfassungsstart – Lead-Interessen sind
     vorausgewählt, weitere Sparten zuwählbar; je Sparte entsteht eine
@@ -200,11 +201,11 @@ async def sparten_auswahl(request: Request, kunde_id: int = 0, lead_id: int = 0,
 
 
 @router.post("/sparten-start")
-async def sparten_start(request: Request, session: Session = Depends(get_session)):
+def sparten_start(request: Request, session: Session = Depends(get_session)):
     """v8: legt je gewählter Sparte eine eigene Erfassung an und öffnet die
     erste (WB startet immer direkt im Freitext)."""
     from app.models import Lead
-    form = await request.form()
+    form = anfrage.formular(request)
     kunde = session.get(Kunde, int(form.get("kunde_id") or 0))
     lead = session.get(Lead, int(form.get("lead_id") or 0)) if form.get("lead_id") else None
     if kunde is None:
@@ -304,7 +305,7 @@ async def sparten_start(request: Request, session: Session = Depends(get_session
 
 
 @router.get("/{erfassung_id}/weiche")
-async def weiche(request: Request, erfassung_id: int,
+def weiche(request: Request, erfassung_id: int,
                  session: Session = Depends(get_session)):
     """Startweiche (v7): Erfassungsbogen (Katalog) oder Freitext-Erfassung.
     v8: je Sparte – WB (oder Sparten ohne Bogen) startet direkt im Freitext."""
@@ -321,7 +322,7 @@ async def weiche(request: Request, erfassung_id: int,
 
 
 @router.get("/{erfassung_id}/freitext")
-async def freitext_formular(request: Request, erfassung_id: int,
+def freitext_formular(request: Request, erfassung_id: int,
                             session: Session = Depends(get_session)):
     """Freitext-Erfassung (v7): großes Pflicht-Textfeld; bei Wechsel aus dem
     Katalog bleiben die bereits gegebenen Antworten im Protokoll erhalten."""
@@ -336,14 +337,14 @@ async def freitext_formular(request: Request, erfassung_id: int,
 
 
 @router.post("/{erfassung_id}/freitext")
-async def freitext_absenden(request: Request, erfassung_id: int,
+def freitext_absenden(request: Request, erfassung_id: int,
                             session: Session = Depends(get_session)):
     """Freitext absenden (v7): keine Vorprüfung – Ampel Individuell und
     Status direkt „In TAIFUN zu schreiben“."""
     erfassung = _erfassung_laden(request, erfassung_id, session)
     if erfassung is None:
         return RedirectResponse("/erfassung", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     text = (form.get("freitext") or "").strip()
     if not text:
         kunde = session.get(Kunde, erfassung.kunde_id)
@@ -373,7 +374,7 @@ def _erfassung_laden(request: Request, erfassung_id: int, session: Session):
 
 
 @router.get("/{erfassung_id}/seite/{nr}")
-async def seite(request: Request, erfassung_id: int, nr: int,
+def seite(request: Request, erfassung_id: int, nr: int,
                 session: Session = Depends(get_session)):
     erfassung = _erfassung_laden(request, erfassung_id, session)
     if erfassung is None:
@@ -415,7 +416,7 @@ async def seite(request: Request, erfassung_id: int, nr: int,
 
 
 @router.post("/{erfassung_id}/seite/{nr}")
-async def seite_speichern(request: Request, erfassung_id: int, nr: int,
+def seite_speichern(request: Request, erfassung_id: int, nr: int,
                           session: Session = Depends(get_session)):
     erfassung = _erfassung_laden(request, erfassung_id, session)
     if erfassung is None:
@@ -425,7 +426,7 @@ async def seite_speichern(request: Request, erfassung_id: int, nr: int,
         return RedirectResponse(f"/erfassung/{erfassung.id}/freitext", status_code=303)
     seiten = logik.seiten
     nr = max(0, min(nr, len(seiten) - 1))
-    form = await request.form()
+    form = anfrage.formular(request)
     antworten = _antworten(erfassung)
     antworten_vorher = dict(antworten)
     fragen = _fragen_der_seite(logik, seiten[nr], antworten)
@@ -489,7 +490,7 @@ async def seite_speichern(request: Request, erfassung_id: int, nr: int,
             ordner = form.get(f"galerie_ordner_{index}") or "Allgemein"
             for datei in form.getlist(schluessel):
                 if getattr(datei, "filename", ""):
-                    inhalt = await datei.read()
+                    inhalt = datei.file   # v27 (Phase 128): wird in galerie.speichern gestreamt
                     if galerie_modul.speichern(session, vorgang.id, ordner,
                                                datei.filename, inhalt,
                                                benutzer=_benutzer(request),
@@ -591,7 +592,7 @@ def _wert_lesen(frage, form, antworten):
 
 
 @router.get("/{erfassung_id}/pruefen")
-async def pruefen(request: Request, erfassung_id: int,
+def pruefen(request: Request, erfassung_id: int,
                   session: Session = Depends(get_session)):
     erfassung = _erfassung_laden(request, erfassung_id, session)
     if erfassung is None:
@@ -632,7 +633,7 @@ def _verfolgung_startwerte(session, erfassung) -> None:
 
 
 @router.post("/{erfassung_id}/absenden")
-async def absenden(request: Request, erfassung_id: int,
+def absenden(request: Request, erfassung_id: int,
                    session: Session = Depends(get_session)):
     erfassung = _erfassung_laden(request, erfassung_id, session)
     if erfassung is None:

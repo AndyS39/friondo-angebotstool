@@ -19,6 +19,7 @@ from app.models import (Benutzer, Kampagne, Kunde, LeadAktivitaet,
                         LeadQualifizierung, LeadQuelle, Vorgang, VotTermin,
                         ANRUF_ERGEBNIS_NAMEN, LEAD_PHASEN, LEAD_PHASEN_NAMEN)
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/lead-management")
 
@@ -30,7 +31,7 @@ def _gate(request: Request, session: Session) -> None:
 
 
 @router.get("")
-async def startseite(request: Request, session: Session = Depends(get_session)):
+def startseite(request: Request, session: Session = Depends(get_session)):
     """Einstieg: Sichtbare landen auf der Anrufliste (Phase 76); alle anderen
     sehen die alte Platzhalterseite – exakt wie vor dem Modul."""
     if not kern.lead_modul_sichtbar(session, request.state.benutzer):
@@ -46,7 +47,7 @@ async def startseite(request: Request, session: Session = Depends(get_session)):
 
 
 @router.get("/uebersicht")
-async def uebersicht(request: Request, session: Session = Depends(get_session)):
+def uebersicht(request: Request, session: Session = Depends(get_session)):
     """v21 (PLAN_LEAD_V1.1 Phase 88): Übersicht – Kacheln, Eingänge je Tag,
     Kontaktstatus, Erstkontakt, Quelle × Kanal; Cockpit-Blöcke unten."""
     _gate(request, session)
@@ -77,7 +78,7 @@ def _wunschzeiten_liste() -> list:
 
 
 @router.get("/lead/{vorgang_id}")
-async def lead_akte(request: Request, vorgang_id: int,
+def lead_akte(request: Request, vorgang_id: int,
                     session: Session = Depends(get_session)):
     """Lead-Akte = Vorgangsakte (v10) mit Lead-Kopf (Phase 79) – bis dahin
     Weiterleitung auf die bestehende Akte."""
@@ -86,7 +87,7 @@ async def lead_akte(request: Request, vorgang_id: int,
 
 
 @router.get("/neu")
-async def schnellanlage_formular(request: Request,
+def schnellanlage_formular(request: Request,
                                  session: Session = Depends(get_session)):
     _gate(request, session)
     return render(request, "leadmanagement/neu.html", aktiv="/lead-management",
@@ -100,9 +101,9 @@ async def schnellanlage_formular(request: Request,
 
 
 @router.post("/neu")
-async def schnellanlage(request: Request, session: Session = Depends(get_session)):
+def schnellanlage(request: Request, session: Session = Depends(get_session)):
     _gate(request, session)
-    form = await request.form()
+    form = anfrage.formular(request)
     benutzer = request.state.benutzer
     daten = {feld: (form.get(feld) or "").strip()
              for feld in ("anrede", "vorname", "nachname", "telefon", "email",
@@ -209,7 +210,7 @@ def _import_lesen(pfad) -> list[list[str]]:
 
 
 @router.get("/import")
-async def import_formular(request: Request,
+def import_formular(request: Request,
                           session: Session = Depends(get_session)):
     _gate(request, session)
     return render(request, "leadmanagement/import.html",
@@ -223,7 +224,7 @@ async def import_formular(request: Request,
 
 
 @router.post("/import")
-async def import_verarbeiten(request: Request,
+def import_verarbeiten(request: Request,
                              session: Session = Depends(get_session)):
     """Zweistufig: Upload → Vorschau (Spaltenzuordnung, Duplikat-Markierung)
     → Import mit Protokoll. Die Datei liegt kurz unter data/lead_import_tmp."""
@@ -232,7 +233,7 @@ async def import_verarbeiten(request: Request,
     from pathlib import Path
     from urllib.parse import quote_plus
     _gate(request, session)
-    form = await request.form()
+    form = anfrage.formular(request)
     benutzer = request.state.benutzer
     schritt = form.get("schritt") or "upload"
     kontext = dict(aktiv="/lead-management", quellen=_quellen(session),
@@ -247,7 +248,7 @@ async def import_verarbeiten(request: Request,
             return RedirectResponse("/lead-management/import?meldung="
                                     + quote_plus("Bitte eine Datei wählen."),
                                     status_code=303)
-        inhalt = await datei.read()
+        inhalt = datei.file.read()
         token = secrets.token_hex(8)
         endung = ".xlsx" if datei.filename.lower().endswith(".xlsx") else ".csv"
         (_import_ablage() / f"{token}{endung}").write_bytes(inhalt)
@@ -356,7 +357,7 @@ async def import_verarbeiten(request: Request,
 # --- Posteingang unklar ---------------------------------------------------------------
 
 @router.get("/posteingang")
-async def posteingang(request: Request, session: Session = Depends(get_session)):
+def posteingang(request: Request, session: Session = Depends(get_session)):
     _gate(request, session)
     from app.models import LeadPosteingang
     eintraege = (session.query(LeadPosteingang)
@@ -368,7 +369,7 @@ async def posteingang(request: Request, session: Session = Depends(get_session))
 
 
 @router.post("/posteingang/{eintrag_id}/ignorieren")
-async def posteingang_ignorieren(request: Request, eintrag_id: int,
+def posteingang_ignorieren(request: Request, eintrag_id: int,
                                  session: Session = Depends(get_session)):
     _gate(request, session)
     from app.models import LeadPosteingang
@@ -380,7 +381,7 @@ async def posteingang_ignorieren(request: Request, eintrag_id: int,
 
 
 @router.get("/posteingang/{eintrag_id}/anlegen")
-async def posteingang_anlegen(request: Request, eintrag_id: int,
+def posteingang_anlegen(request: Request, eintrag_id: int,
                               session: Session = Depends(get_session)):
     """„Als Lead anlegen“: Schnellanlage-Formular, soweit möglich vorbefüllt."""
     _gate(request, session)
@@ -412,7 +413,7 @@ async def posteingang_anlegen(request: Request, eintrag_id: int,
 
 
 @router.get("/anrufliste")
-async def anrufliste_voll(request: Request,
+def anrufliste_voll(request: Request,
                           session: Session = Depends(get_session)):
     """v21 (PLAN_LEAD_V1.1 Phase 89): Arbeitsliste mit Schnellfilter-Chips
     (app/lead_anrufliste.py). v25 (PLAN_LEAD_V3 Phase 118): EINE sortierte
@@ -467,7 +468,7 @@ async def anrufliste_voll(request: Request,
 
 
 @router.post("/anruf/{vorgang_id}")
-async def anruf_ergebnis(request: Request, vorgang_id: int,
+def anruf_ergebnis(request: Request, vorgang_id: int,
                          session: Session = Depends(get_session)):
     """Ein-Klick-Anrufergebnis (Plan 76): Aktivität, Zähler, Kaskade bzw.
     Folgedialog-Aktionen.
@@ -490,7 +491,7 @@ async def anruf_ergebnis(request: Request, vorgang_id: int,
     from datetime import datetime as dt
 
     from app import lead_anrufliste, lead_v2
-    form = await request.form()
+    form = anfrage.formular(request)
     benutzer = request.state.benutzer
     vorgang = session.get(Vorgang, vorgang_id)
     lead_v2.gate(request, session, vorgang)
@@ -621,12 +622,12 @@ def _grund_pruefen(session: Session, phase: str, grund: str,
 
 
 @router.post("/lead/{vorgang_id}/zurueckstellen")
-async def zurueckstellen(request: Request, vorgang_id: int,
+def zurueckstellen(request: Request, vorgang_id: int,
                          session: Session = Depends(get_session)):
     from datetime import datetime as dt
     from urllib.parse import quote_plus
     _gate(request, session)
-    form = await request.form()
+    form = anfrage.formular(request)
     benutzer = request.state.benutzer
     vorgang = session.get(Vorgang, vorgang_id)
     if vorgang is None:
@@ -657,11 +658,11 @@ async def zurueckstellen(request: Request, vorgang_id: int,
 
 
 @router.post("/lead/{vorgang_id}/unqualifiziert")
-async def unqualifiziert(request: Request, vorgang_id: int,
+def unqualifiziert(request: Request, vorgang_id: int,
                          session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
     _gate(request, session)
-    form = await request.form()
+    form = anfrage.formular(request)
     benutzer = request.state.benutzer
     vorgang = session.get(Vorgang, vorgang_id)
     if vorgang is None:
@@ -686,12 +687,12 @@ async def unqualifiziert(request: Request, vorgang_id: int,
 
 
 @router.post("/lead/{vorgang_id}/reaktivieren")
-async def reaktivieren(request: Request, vorgang_id: int,
+def reaktivieren(request: Request, vorgang_id: int,
                        session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
     # v23 (Phase 112): Gate mit Vorgang – Handelsvertreter an eigenen Leads (lead_v2.gate)
     lead_v2.gate(request, session, session.get(Vorgang, vorgang_id))
-    form = await request.form()
+    form = anfrage.formular(request)
     benutzer = request.state.benutzer
     vorgang = session.get(Vorgang, vorgang_id)
     if vorgang is None:
@@ -733,7 +734,7 @@ def _qualifizierung_aus(request: Request, session: Session, vorgang: Vorgang, ku
 
 
 @router.get("/lead/{vorgang_id}/qualifizierung/{sparte}")
-async def qualifizierung_bogen(request: Request, vorgang_id: int, sparte: str,
+def qualifizierung_bogen(request: Request, vorgang_id: int, sparte: str,
                                session: Session = Depends(get_session)):
     import json as json_modul
     _gate(request, session)
@@ -776,7 +777,7 @@ async def qualifizierung_bogen(request: Request, vorgang_id: int, sparte: str,
 
 
 @router.post("/lead/{vorgang_id}/qualifizierung/{sparte}")
-async def qualifizierung_speichern(request: Request, vorgang_id: int,
+def qualifizierung_speichern(request: Request, vorgang_id: int,
                                    sparte: str,
                                    session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
@@ -791,7 +792,7 @@ async def qualifizierung_speichern(request: Request, vorgang_id: int,
             f"/lead-management/lead/{vorgang.id}?tab=termin&meldung="
             + quote_plus(QUALIFIZIERUNG_AUS + " – Score und Qualifizierungsbogen sind nicht aktiv "
                          "(Lead-Einstellungen, score_aktiv)."), status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     benutzer = request.state.benutzer
     logik = leadmanagement_logik.hole_logik()
     antworten: dict = {}
@@ -854,7 +855,7 @@ async def qualifizierung_speichern(request: Request, vorgang_id: int,
 # --- Phase 77: Terminassistent, Terminkalender, Adresse prüfen ----------------------
 
 @router.get("/lead/{vorgang_id}/termin")
-async def termin_assistent(request: Request, vorgang_id: int,
+def termin_assistent(request: Request, vorgang_id: int,
                            session: Session = Depends(get_session)):
     import json as json_modul
     _gate(request, session)
@@ -864,10 +865,9 @@ async def termin_assistent(request: Request, vorgang_id: int,
         return RedirectResponse("/lead-management/anrufliste", status_code=303)
     kunde = session.get(Kunde, vorgang.kunde_id)
     # Adresse bei Bedarf sofort geokodieren (Fortschritt < 3 s dank Cache);
-    # nach einem Fehlschlag NICHT erneut synchron nach außen rufen – der
-    # Hintergrund-Job und „Adresse prüfen“ übernehmen (nie blockieren)
-    if vorgang.lat is None and vorgang.geocode_status not in ("manuell",
-                                                              "fehler"):
+    # v27 (Phase 128): nach einem Fehlschlag greift der Backoff in
+    # geocoding.geokodieren (1 h / 6 h / 24 h, in der Pause nur Cache-Abfrage)
+    if vorgang.lat is None and vorgang.geocode_status != "manuell":
         adresse = geocoding.lead_adresse(session, vorgang)
         lat, lon, status = geocoding.geokodieren(session, adresse)
         vorgang.lat, vorgang.lon, vorgang.geocode_status = lat, lon, status
@@ -930,11 +930,11 @@ def _wochenraster(session: Session, ad_ids: list[int], start=None) -> dict:
 
 
 @router.post("/lead/{vorgang_id}/termin")
-async def termin_buchen(request: Request, vorgang_id: int,
+def termin_buchen(request: Request, vorgang_id: int,
                         session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
     _gate(request, session)
-    form = await request.form()
+    form = anfrage.formular(request)
     benutzer = request.state.benutzer
     vorgang = session.get(Vorgang, vorgang_id)
     if vorgang is None:
@@ -971,11 +971,11 @@ async def termin_buchen(request: Request, vorgang_id: int,
 
 
 @router.post("/termin/{termin_id}/no-show")
-async def termin_no_show(request: Request, termin_id: int,
+def termin_no_show(request: Request, termin_id: int,
                          session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
     _gate(request, session)
-    form = await request.form()
+    form = anfrage.formular(request)
     termin = session.get(VotTermin, termin_id)
     if termin is None:
         return RedirectResponse("/lead-management/kalender", status_code=303)
@@ -996,7 +996,7 @@ async def termin_no_show(request: Request, termin_id: int,
 
 
 @router.post("/termin/{termin_id}/erfolgt")
-async def termin_erfolgt(request: Request, termin_id: int,
+def termin_erfolgt(request: Request, termin_id: int,
                          session: Session = Depends(get_session)):
     _gate(request, session)
     termin = session.get(VotTermin, termin_id)
@@ -1012,13 +1012,13 @@ async def termin_erfolgt(request: Request, termin_id: int,
 
 
 @router.post("/termin/{termin_id}/verschieben")
-async def termin_verschieben(request: Request, termin_id: int,
+def termin_verschieben(request: Request, termin_id: int,
                              session: Session = Depends(get_session)):
     """Drag & Drop im Terminkalender: Umbuchung mit Bestätigungsdialog;
     monday-Termine sind gesperrt (in monday ändern)."""
     from urllib.parse import quote_plus
     _gate(request, session)
-    form = await request.form()
+    form = anfrage.formular(request)
     termin = session.get(VotTermin, termin_id)
     if termin is None:
         return RedirectResponse("/lead-management/kalender", status_code=303)
@@ -1044,7 +1044,7 @@ async def termin_verschieben(request: Request, termin_id: int,
 
 
 @router.post("/lead/{vorgang_id}/verloren")
-async def lead_verloren_setzen(request: Request, vorgang_id: int,
+def lead_verloren_setzen(request: Request, vorgang_id: int,
                                session: Session = Depends(get_session)):
     """Prozess-Fix 27.09.2026: "Verloren vor Termin" mit Grund aus der
     Steuerdatei (Blatt Gruende, Phase verloren_vor_termin)."""
@@ -1053,7 +1053,7 @@ async def lead_verloren_setzen(request: Request, vorgang_id: int,
     vorgang = session.get(Vorgang, vorgang_id)
     if vorgang is None:
         return RedirectResponse("/lead-management/anrufliste", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     grund = (form.get("grund") or "").strip()
     text = (form.get("grund_text") or "").strip()
     fehler = _grund_pruefen(session, "verloren_vor_termin", grund, text)
@@ -1069,7 +1069,7 @@ async def lead_verloren_setzen(request: Request, vorgang_id: int,
 
 
 @router.get("/kalender")
-async def terminkalender(request: Request,
+def terminkalender(request: Request,
                          session: Session = Depends(get_session)):
     _gate(request, session)
     from datetime import datetime as dt
@@ -1096,7 +1096,7 @@ async def terminkalender(request: Request,
 
 
 @router.get("/adressen")
-async def adressen_pruefen(request: Request,
+def adressen_pruefen(request: Request,
                            session: Session = Depends(get_session)):
     """Liste „Adresse prüfen“ (Geocode-Fehler) mit manueller Koordinaten-
     Setzung; die Karten-Pin-Setzung kommt mit der Leaflet-Karte (Phase 79)."""
@@ -1115,12 +1115,12 @@ async def adressen_pruefen(request: Request,
 
 
 @router.post("/adressen/{vorgang_id}")
-async def adresse_setzen(request: Request, vorgang_id: int,
+def adresse_setzen(request: Request, vorgang_id: int,
                          session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
     _gate(request, session)
     from app import geocoding
-    form = await request.form()
+    form = anfrage.formular(request)
     vorgang = session.get(Vorgang, vorgang_id)
     if vorgang is None:
         return RedirectResponse("/lead-management/adressen", status_code=303)
@@ -1144,7 +1144,7 @@ async def adresse_setzen(request: Request, vorgang_id: int,
 # --- Phase 78: Kommunikation (Warteschlange, Vorschau, Senden) ----------------------
 
 @router.get("/lead/{vorgang_id}/kommunikation")
-async def kommunikation(request: Request, vorgang_id: int,
+def kommunikation(request: Request, vorgang_id: int,
                         session: Session = Depends(get_session)):
     # v23 (Phase 112): Gate mit Vorgang – Handelsvertreter an eigenen Leads (lead_v2.gate)
     lead_v2.gate(request, session, session.get(Vorgang, vorgang_id))
@@ -1172,7 +1172,7 @@ async def kommunikation(request: Request, vorgang_id: int,
 
 
 @router.post("/kommunikation/{eintrag_id}/senden")
-async def kommunikation_senden(request: Request, eintrag_id: int,
+def kommunikation_senden(request: Request, eintrag_id: int,
                                session: Session = Depends(get_session)):
     """„Jetzt senden / erneut senden“ – verarbeitet nach mail_modus."""
     from urllib.parse import quote_plus
@@ -1196,7 +1196,7 @@ async def kommunikation_senden(request: Request, eintrag_id: int,
 
 
 @router.post("/lead/{vorgang_id}/mail")
-async def mail_mit_vorlage(request: Request, vorgang_id: int,
+def mail_mit_vorlage(request: Request, vorgang_id: int,
                            session: Session = Depends(get_session)):
     """„Mail mit Vorlage“: Auswahl + Editierfeld; landet als geplanter
     Eintrag und wird sofort nach mail_modus verarbeitet."""
@@ -1206,7 +1206,7 @@ async def mail_mit_vorlage(request: Request, vorgang_id: int,
     from app.models import KommunikationLog
     # v23 (Phase 112): Gate mit Vorgang – Handelsvertreter an eigenen Leads (lead_v2.gate)
     lead_v2.gate(request, session, session.get(Vorgang, vorgang_id))
-    form = await request.form()
+    form = anfrage.formular(request)
     vorgang = session.get(Vorgang, vorgang_id)
     kunde = session.get(Kunde, vorgang.kunde_id) if vorgang else None
     if vorgang is None or kunde is None:
@@ -1247,7 +1247,7 @@ async def mail_mit_vorlage(request: Request, vorgang_id: int,
 # eingebunden) – diese V1-Route übergibt kein `board` an board.html/lm_nav und darf
 # nicht wieder wirksam werden (Nav-Markierung des gezeigten Boards, R10).
 @router.get("/board")
-async def board(request: Request, session: Session = Depends(get_session)):
+def board(request: Request, session: Session = Depends(get_session)):
     _gate(request, session)
     from datetime import datetime as dt
     benutzer = request.state.benutzer
@@ -1286,11 +1286,11 @@ async def board(request: Request, session: Session = Depends(get_session)):
 
 
 @router.post("/lead/{vorgang_id}/leadmanager")
-async def leadmanager_setzen(request: Request, vorgang_id: int,
+def leadmanager_setzen(request: Request, vorgang_id: int,
                              session: Session = Depends(get_session)):
     # v23 (Phase 112): Gate mit Vorgang – Handelsvertreter an eigenen Leads (lead_v2.gate)
     lead_v2.gate(request, session, session.get(Vorgang, vorgang_id))
-    form = await request.form()
+    form = anfrage.formular(request)
     vorgang = session.get(Vorgang, vorgang_id)
     if vorgang is not None and str(form.get("leadmanager_id") or "").isdigit():
         neu = int(form.get("leadmanager_id"))
@@ -1310,7 +1310,7 @@ async def leadmanager_setzen(request: Request, vorgang_id: int,
 # --- Karte (Leaflet lokal, OSM-Kacheln) ----------------------------------------------
 
 @router.get("/karte")
-async def karte(request: Request, session: Session = Depends(get_session)):
+def karte(request: Request, session: Session = Depends(get_session)):
     _gate(request, session)
     return render(request, "leadmanagement/karte.html",
                   aktiv="/lead-management",
@@ -1323,7 +1323,7 @@ async def karte(request: Request, session: Session = Depends(get_session)):
 
 
 @router.get("/karte/daten")
-async def karte_daten(request: Request, session: Session = Depends(get_session)):
+def karte_daten(request: Request, session: Session = Depends(get_session)):
     """JSON für die Karte: offene Leads (Farbe je Phase, Größe je Klasse),
     Termine (Symbol je AD), AD-Startadressen. Filter Phase/Sparte/AD/Zeitraum."""
     from datetime import datetime as dt
@@ -1374,7 +1374,7 @@ async def karte_daten(request: Request, session: Session = Depends(get_session))
 
 
 @router.get("/karte/tag")
-async def karte_termine_tag(request: Request,
+def karte_termine_tag(request: Request,
                             session: Session = Depends(get_session)):
     """Mini-Karten-Komponente (Assistent): Termine eines AD-Tages als
     nummerierte Pins + Kandidat als Stern, Linie in Reihenfolge."""
@@ -1413,7 +1413,7 @@ async def karte_termine_tag(request: Request,
 
 
 @router.get("/cockpit")
-async def cockpit(request: Request, session: Session = Depends(get_session)):
+def cockpit(request: Request, session: Session = Depends(get_session)):
     """v21 (Phase 88): das Cockpit ist in der Übersicht aufgegangen."""
     _gate(request, session)
     return RedirectResponse("/lead-management/uebersicht", status_code=303)
@@ -1422,7 +1422,7 @@ async def cockpit(request: Request, session: Session = Depends(get_session)):
 # --- Phase 80: Statistik-Reiter Leads + Kanal-Report --------------------------------
 
 @router.get("/statistik")
-async def lead_statistik(request: Request,
+def lead_statistik(request: Request,
                          session: Session = Depends(get_session)):
     _gate(request, session)
     from app.routers.statistik import ZEITRAEUME, _zeitraum
@@ -1480,7 +1480,7 @@ async def lead_statistik(request: Request,
 
 
 @router.get("/statistik/kanal")
-async def lead_kanal_report(request: Request,
+def lead_kanal_report(request: Request,
                             session: Session = Depends(get_session)):
     _gate(request, session)
     mit_demo = request.query_params.get(
@@ -1533,13 +1533,13 @@ def _ad_termin(request: Request, session: Session, termin_id: int):
 
 
 @router.post("/ad/termin/{termin_id}/no-show")
-async def ad_no_show(request: Request, termin_id: int,
+def ad_no_show(request: Request, termin_id: int,
                      session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
     termin = _ad_termin(request, session, termin_id)
     if termin is None:
         return RedirectResponse("/erfassung", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     grund = (form.get("grund") or "").strip()
     text = (form.get("grund_text") or "").strip()
     fehler = _grund_pruefen(session, "no_show", grund, text)
@@ -1556,7 +1556,7 @@ async def ad_no_show(request: Request, termin_id: int,
 
 
 @router.post("/ad/termin/{termin_id}/verschieben")
-async def ad_verschieben(request: Request, termin_id: int,
+def ad_verschieben(request: Request, termin_id: int,
                          session: Session = Depends(get_session)):
     """AD darf eigene Termine verschieben – nur innerhalb derselben Woche;
     der Kunde erhält die Terminänderung nach mail_modus, der Leadmanager
@@ -1565,7 +1565,7 @@ async def ad_verschieben(request: Request, termin_id: int,
     termin = _ad_termin(request, session, termin_id)
     if termin is None:
         return RedirectResponse("/erfassung", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     try:
         beginn = datetime.strptime((form.get("beginn") or "").strip(),
                                    "%Y-%m-%dT%H:%M")
@@ -1605,7 +1605,7 @@ async def ad_verschieben(request: Request, termin_id: int,
 
 
 @router.get("/meine-termine")
-async def meine_termine(request: Request,
+def meine_termine(request: Request,
                         session: Session = Depends(get_session)):
     """Mobil für den AD (Freigabe „alle“): heute/diese Woche mit Karten-Link,
     Telefon und Steckbrief aus der Qualifizierung."""

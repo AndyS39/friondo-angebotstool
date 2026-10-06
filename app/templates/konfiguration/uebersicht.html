@@ -105,6 +105,11 @@
     <ul class="param-liste">
         {{ eintrag('Fehlerprotokoll', 'Unbehandelte Ausnahmen mit Fehler-Nr., erledigen, leeren', '/parametrierung/fehlerprotokoll') }}
         {% if ist_admin %}
+            {# v27 (PLAN_V17 Phase 129): Betriebs-Status, Scheduler, Zugriffe, Wartungsbanner #}
+            {{ eintrag('Betrieb', 'Status (/health), Pool, Scheduler mit „jetzt ausführen“, Zugriffe 24 h, Backup, Wartungshinweis', '/parametrierung/betrieb') }}
+            {{ eintrag('Login-Protokoll', 'Anmeldeversuche (Erfolg/Fehler, Benutzer, IP-Kurzform), Sperren aufheben', '/benutzer/login-protokoll') }}
+        {% endif %}
+        {% if ist_admin %}
         {{ eintrag('Kunden-Dubletten', 'Doppelte Kunden (Name + PLZ) zusammenführen', '/parametrierung/kunden-dubletten') }}
         {% endif %}
         {{ eintrag('Lösch-Protokoll Angebote', 'Gelöschte Angebote – wann, wer, Status, Betrag', '/parametrierung/angebotstool#loeschprotokoll') }}
@@ -114,8 +119,11 @@
         {{ eintrag('Mail-Protokoll Projektierung', 'Letzte 20 Benachrichtigungs-Mails der Projektierung', '/parametrierung/projektierung-einstellungen#mailprotokoll') }}
         {% endif %}
         <li class="param-eintrag param-aktion">
-            <form method="post" action="/parametrierung/neu-einlesen">
-                <button class="knopf zweitrangig klein" type="submit">Parametrierung neu einlesen</button>
+            {# v27 (PLAN_V17 Phase 128): Hinweis + Bestätigung vor dem Import (Agent D, 3a) #}
+            <form method="post" action="/parametrierung/neu-einlesen"
+                  onsubmit="return confirm('Logik-Excel neu einlesen: {{ import_hinweise.logik if import_hinweise is defined else 'Dauer etwa 15 s – während des Imports können Speichern-Aktionen anderer Nutzer kurz warten; empfohlen außerhalb der Kernzeit' }}. Jetzt starten?');">
+                <input type="hidden" name="bestaetigt" value="1">
+                <button class="knopf zweitrangig klein" type="submit" title="{{ import_hinweise.logik if import_hinweise is defined else '' }}">Parametrierung neu einlesen</button>
                 <span class="kurz">Logik-Excel neu laden und prüfen – Bericht unter Logik &amp; Importe</span>
             </form>
         </li>

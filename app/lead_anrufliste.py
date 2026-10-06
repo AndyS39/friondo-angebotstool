@@ -757,7 +757,8 @@ def _leitung_ids(session: Session) -> list[int]:
                     Benutzer.rolle.in_(("admin", "leadmanagement")))]
 
 
-def faellige_wiedervorlagen_melden(session: Session, jetzt: datetime | None = None) -> int:
+def faellige_wiedervorlagen_melden(session: Session, jetzt: datetime | None = None,
+                                   block: int = 0) -> int:
     """Glocke, sobald naechste_aktion_am erreicht ist (Rückrufwunsch, manuell
     gesetzte Wiedervorlage, „Nummer prüfen“ +1d; v25: die Kaskade setzt keine
     Wiedervorlage mehr) – einmalig je Fälligkeit: Dedup über eine
@@ -765,7 +766,9 @@ def faellige_wiedervorlagen_melden(session: Session, jetzt: datetime | None = No
     naechste_aktion_am. Empfänger leadmanager_id, freie Leads → Leitung
     (admin/leadmanagement) wie beim Tagesdigest. Zurückgestellte Leads meldet
     weiter der Tageslauf (zurueckgestellt_bis). Aufruf: 5-Minuten-Scheduler
-    (hook_edit) und beim Rendern der Anrufliste. Liefert die Anzahl Meldungen."""
+    (hook_edit) und beim Rendern der Anrufliste. Liefert die Anzahl Meldungen.
+    v27 (PLAN_V17 Phase 128): block > 0 → Commit je `block` Meldungen (Scheduler;
+    beim Rendern bleibt block=0, der Aufrufer committet wie bisher)."""
     jetzt = jetzt or datetime.now()
     phasen = tuple(p for p in OFFENE_PHASEN if p != "zurueckgestellt")
     faellig = (session.query(Vorgang)
@@ -820,6 +823,8 @@ def faellige_wiedervorlagen_melden(session: Session, jetzt: datetime | None = No
                         naechste_aktion_am=v.naechste_aktion_am)
         gemeldet.add(schluessel)
         anzahl += 1
+        if block and anzahl % block == 0:
+            session.commit()   # v27: Block-Commit im Scheduler-Lauf
     return anzahl
 
 

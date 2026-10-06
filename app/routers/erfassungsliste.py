@@ -13,6 +13,7 @@ from app import logik as logik_modul
 from app.db import get_session
 from app.models import (ERFASSUNG_STATUS, Angebot, Benutzer, Erfassung, Kunde)
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/erfassungen")
 
@@ -28,7 +29,7 @@ def _kontext(session: Session, erfassungen):
 
 
 @router.get("")
-async def liste(request: Request, q: str = "", status: str = "", ampel: str = "",
+def liste(request: Request, q: str = "", status: str = "", ampel: str = "",
                 interesse: str = "", vertriebler_id: int = 0, sparte: str = "",
                 session: Session = Depends(get_session)):
     abfrage = session.query(Erfassung).filter(Erfassung.status != "Entwurf")
@@ -92,7 +93,7 @@ async def liste(request: Request, q: str = "", status: str = "", ampel: str = ""
 
 
 @router.get("/{erfassung_id}")
-async def detail(request: Request, erfassung_id: int,
+def detail(request: Request, erfassung_id: int,
                  session: Session = Depends(get_session)):
     erfassung = session.get(Erfassung, erfassung_id)
     if erfassung is None:
@@ -123,7 +124,7 @@ async def detail(request: Request, erfassung_id: int,
 
 
 @router.get("/{erfassung_id}/protokoll.pdf")
-async def protokoll_pdf(erfassung_id: int, session: Session = Depends(get_session)):
+def protokoll_pdf(erfassung_id: int, session: Session = Depends(get_session)):
     """Abfrageprotokoll als PDF (Phase 25)."""
     from fastapi.responses import FileResponse
 
@@ -159,9 +160,9 @@ async def protokoll_pdf(erfassung_id: int, session: Session = Depends(get_sessio
 
 
 @router.post("/{erfassung_id}/status")
-async def status_aendern(request: Request, erfassung_id: int,
+def status_aendern(request: Request, erfassung_id: int,
                          session: Session = Depends(get_session)):
-    form = await request.form()
+    form = anfrage.formular(request)
     erfassung = session.get(Erfassung, erfassung_id)
     if erfassung is not None and form.get("status") in ERFASSUNG_STATUS:
         erfassung.status = form.get("status")
@@ -172,14 +173,14 @@ async def status_aendern(request: Request, erfassung_id: int,
 
 
 @router.post("/{erfassung_id}/freitext")
-async def freitext_aendern(request: Request, erfassung_id: int,
+def freitext_aendern(request: Request, erfassung_id: int,
                            session: Session = Depends(get_session)):
     """v9 (Phase 57): Freitext nachträglich editierbar – Innendienst/Admin
     überall, Außendienst nur an eigenen Erfassungen; jede Änderung wird mit
     Name und Zeit protokolliert. Läuft der Vorgang bereits (in Bearbeitung
     oder mit Angebot), erscheint zusätzlich der Hinweis „Freitext geändert“."""
     from urllib.parse import quote_plus
-    form = await request.form()
+    form = anfrage.formular(request)
     erfassung = session.get(Erfassung, erfassung_id)
     benutzer = request.state.benutzer
     if erfassung is None or erfassung.typ != "freitext":
@@ -216,7 +217,7 @@ def _kette_protokollieren(erfassung: Erfassung, benutzer, text: str) -> None:
 
 
 @router.post("/{erfassung_id}/doch-konfigurierbar")
-async def doch_konfigurierbar(request: Request, erfassung_id: int,
+def doch_konfigurierbar(request: Request, erfassung_id: int,
                               session: Session = Depends(get_session)):
     """v7: „Individuell – zu prüfen“ zurück auf den normalen Tool-Weg –
     die Antworten sind korrigierbar, danach „Angebot erzeugen“ wie gewohnt."""
@@ -234,7 +235,7 @@ async def doch_konfigurierbar(request: Request, erfassung_id: int,
 
 
 @router.post("/{erfassung_id}/extern-erledigt")
-async def extern_erledigt(request: Request, erfassung_id: int,
+def extern_erledigt(request: Request, erfassung_id: int,
                           session: Session = Depends(get_session)):
     """v7: Dialog „Extern erledigt“ – das Angebot wurde in TAIFUN geschrieben.
     Erzeugt einen externen Angebotseintrag (Badge „TAIFUN“, kein PDF/Editor/
@@ -252,7 +253,7 @@ async def extern_erledigt(request: Request, erfassung_id: int,
     if erfassung.angebot_id:
         return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
             "Mit dieser Erfassung ist bereits ein Angebot verknüpft."), status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     endbetrag = preis_parsen((form.get("endbetrag") or "").strip())
     if endbetrag is None or endbetrag <= 0:
         return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
@@ -304,7 +305,7 @@ async def extern_erledigt(request: Request, erfassung_id: int,
 
 
 @router.post("/{erfassung_id}/erneut-pruefen")
-async def erneut_pruefen(request: Request, erfassung_id: int,
+def erneut_pruefen(request: Request, erfassung_id: int,
                          session: Session = Depends(get_session)):
     """v13-PV (Phase 79): Katalog-Erfassung mit der aktuellen Logik neu
     auswerten. Vollständig + grün → normaler Weg („Neu“, Angebot erzeugen);
@@ -358,7 +359,7 @@ async def erneut_pruefen(request: Request, erfassung_id: int,
 
 
 @router.post("/{erfassung_id}/individuell-bestaetigt")
-async def individuell_bestaetigt(request: Request, erfassung_id: int,
+def individuell_bestaetigt(request: Request, erfassung_id: int,
                                  session: Session = Depends(get_session)):
     """v7: Prüfung abgeschlossen – der Fall wandert in die TAIFUN-Warteschlange."""
     from urllib.parse import quote_plus
@@ -375,7 +376,7 @@ async def individuell_bestaetigt(request: Request, erfassung_id: int,
 
 
 @router.post("/{erfassung_id}/vertriebler")
-async def vertriebler_aendern(request: Request, erfassung_id: int,
+def vertriebler_aendern(request: Request, erfassung_id: int,
                               session: Session = Depends(get_session)):
     """Vertriebler des Vorgangs ändern (v5-Nachtrag, nur Innendienst/Admin –
     die Erfassungsliste ist ohnehin Büro-only). Wirkt auf CC und Vorlagenwahl
@@ -384,7 +385,7 @@ async def vertriebler_aendern(request: Request, erfassung_id: int,
     erfassung = session.get(Erfassung, erfassung_id)
     if erfassung is None:
         return RedirectResponse("/erfassungen", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     wert = form.get("benutzer_id") or ""
     if wert.isdigit() and session.get(Benutzer, int(wert)) is not None:
         erfassung.benutzer_id = int(wert)
@@ -394,7 +395,7 @@ async def vertriebler_aendern(request: Request, erfassung_id: int,
 
 
 @router.post("/{erfassung_id}/archivieren")
-async def archivieren(erfassung_id: int, session: Session = Depends(get_session)):
+def archivieren(erfassung_id: int, session: Session = Depends(get_session)):
     """Erfassung ins Archiv bzw. zurück (v6, Innendienst/Admin)."""
     from urllib.parse import quote_plus
     erfassung = session.get(Erfassung, erfassung_id)
@@ -411,7 +412,7 @@ async def archivieren(erfassung_id: int, session: Session = Depends(get_session)
 
 
 @router.post("/{erfassung_id}/loeschen")
-async def loeschen(erfassung_id: int, session: Session = Depends(get_session)):
+def loeschen(erfassung_id: int, session: Session = Depends(get_session)):
     """Erfassung löschen (v5, Innendienst/Admin): gesperrt, sobald ein Angebot
     verknüpft ist. Ein verknüpfter Lead wird gelöst und erscheint wieder in
     „Leads VOT“."""
@@ -435,7 +436,7 @@ async def loeschen(erfassung_id: int, session: Session = Depends(get_session)):
 
 
 @router.get("/{erfassung_id}/angebot-erzeugen")
-async def angebot_erzeugen(erfassung_id: int, session: Session = Depends(get_session)):
+def angebot_erzeugen(erfassung_id: int, session: Session = Depends(get_session)):
     """Grün: Antworten durch die Logik -> Angebotsentwurf; Erfassung verknüpfen."""
     erfassung = session.get(Erfassung, erfassung_id)
     if erfassung is None:
@@ -481,7 +482,7 @@ async def angebot_erzeugen(erfassung_id: int, session: Session = Depends(get_ses
 
 
 @router.get("/{erfassung_id}/manuelles-angebot")
-async def manuelles_angebot(erfassung_id: int, session: Session = Depends(get_session)):
+def manuelles_angebot(erfassung_id: int, session: Session = Depends(get_session)):
     """Orange: leerer Editor mit Abfrageprotokoll als Seitenpanel."""
     erfassung = session.get(Erfassung, erfassung_id)
     if erfassung is None:

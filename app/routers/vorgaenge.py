@@ -16,6 +16,7 @@ from app.db import get_session
 from app.models import (Angebot, AngebotsMail, Benutzer, Erfassung, Kunde,
                         Lead, Vorgang, VorgangNotizGelesen, VorgangsNotiz)
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/vorgaenge")
 
@@ -42,7 +43,7 @@ def _chips_fuer_vorgang(session: Session, vorgang: Vorgang,
 
 
 @router.get("")
-async def liste(request: Request, q: str = "", verfolgung: str = "",
+def liste(request: Request, q: str = "", verfolgung: str = "",
                 session: Session = Depends(get_session)):
     """Vorgangsliste mit Suche (Kunde, Ort, Angebotsnummer); AD nur eigene.
     verfolgung=faellig zeigt rollenbezogen die fälligen Wiedervorlagen."""
@@ -101,7 +102,7 @@ async def liste(request: Request, q: str = "", verfolgung: str = "",
 
 
 @router.get("/zu-lead/{lead_id}")
-async def zu_lead(lead_id: int, session: Session = Depends(get_session)):
+def zu_lead(lead_id: int, session: Session = Depends(get_session)):
     lead = session.get(Lead, lead_id)
     if lead is None:
         return RedirectResponse("/vorgaenge", status_code=303)
@@ -111,7 +112,7 @@ async def zu_lead(lead_id: int, session: Session = Depends(get_session)):
 
 
 @router.get("/zu-erfassung/{erfassung_id}")
-async def zu_erfassung(erfassung_id: int, session: Session = Depends(get_session)):
+def zu_erfassung(erfassung_id: int, session: Session = Depends(get_session)):
     erfassung = session.get(Erfassung, erfassung_id)
     if erfassung is None:
         return RedirectResponse("/vorgaenge", status_code=303)
@@ -121,7 +122,7 @@ async def zu_erfassung(erfassung_id: int, session: Session = Depends(get_session
 
 
 @router.get("/zu-angebot/{angebot_id}")
-async def zu_angebot(angebot_id: int, session: Session = Depends(get_session)):
+def zu_angebot(angebot_id: int, session: Session = Depends(get_session)):
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
         return RedirectResponse("/vorgaenge", status_code=303)
@@ -131,7 +132,7 @@ async def zu_angebot(angebot_id: int, session: Session = Depends(get_session)):
 
 
 @router.get("/{vorgang_id}")
-async def akte(request: Request, vorgang_id: int,
+def akte(request: Request, vorgang_id: int,
                session: Session = Depends(get_session)):
     benutzer = request.state.benutzer
     vorgang = session.get(Vorgang, vorgang_id)
@@ -285,7 +286,7 @@ async def akte(request: Request, vorgang_id: int,
 
 
 @router.post("/{vorgang_id}/kombi-versand")
-async def kombi_versand(request: Request, vorgang_id: int,
+def kombi_versand(request: Request, vorgang_id: int,
                         session: Session = Depends(get_session)):
     """Kombi-Versand (v10, Phase 61): EINE Mail mit mehreren Angebots-PDFs.
     Nur Innendienst/Admin; Betreff/Text aus der Kombi-Vorlage; die Versand-
@@ -299,7 +300,7 @@ async def kombi_versand(request: Request, vorgang_id: int,
     vorgang = session.get(Vorgang, vorgang_id)
     if vorgang is None or benutzer.rolle not in ("admin", "innendienst"):
         return RedirectResponse("/vorgaenge", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     ids = [int(w) for w in form.getlist("angebot_ids") if str(w).isdigit()]
     angebote = [a for a in session.query(Angebot)
                 .filter(Angebot.id.in_(ids or [0]),
@@ -406,7 +407,7 @@ async def kombi_versand(request: Request, vorgang_id: int,
 
 
 @router.post("/{vorgang_id}/anschriften")
-async def anschriften_standard(request: Request, vorgang_id: int,
+def anschriften_standard(request: Request, vorgang_id: int,
                                session: Session = Depends(get_session)):
     """v20 (Phase 98): Standard-Rechnungs-/Lieferanschrift am Kunden –
     ID/Admin überall, Außendienst an eigenen Vorgängen (30.09.2026).
@@ -423,7 +424,7 @@ async def anschriften_standard(request: Request, vorgang_id: int,
     kunde = session.get(Kunde, vorgang.kunde_id) if vorgang.kunde_id else None
     if kunde is None:
         return RedirectResponse(f"/vorgaenge/{vorgang_id}", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     for praefix in ("rechnung", "liefer"):
         werte = anschriften.aus_formular(form, praefix)
         gleich = (not anschriften.adresse_abweichend(werte, kunde)
@@ -436,7 +437,7 @@ async def anschriften_standard(request: Request, vorgang_id: int,
 
 
 @router.post("/{vorgang_id}/verfolgung")
-async def verfolgung(request: Request, vorgang_id: int,
+def verfolgung(request: Request, vorgang_id: int,
                      session: Session = Depends(get_session)):
     """Phase 60: Verfolgung des Vorgangs aus der Akte setzen (ID überall,
     AD an eigenen Vorgängen; den Verantwortlichen ändert nur der ID)."""
@@ -444,7 +445,7 @@ async def verfolgung(request: Request, vorgang_id: int,
     vorgang = session.get(Vorgang, vorgang_id)
     if vorgang is None or not _eigener(session, vorgang, benutzer):
         return RedirectResponse("/vorgaenge", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     verantwortlicher_id = None
     if benutzer.rolle in ("admin", "innendienst"):
         try:
@@ -461,7 +462,7 @@ async def verfolgung(request: Request, vorgang_id: int,
 
 
 @router.post("/{vorgang_id}/notiz")
-async def notiz(request: Request, vorgang_id: int,
+def notiz(request: Request, vorgang_id: int,
                 session: Session = Depends(get_session)):
     """Notizen-Chat: append-only – jeder Eintrag mit Autor + Zeitstempel,
     kein Bearbeiten/Löschen. AD nur an eigenen Vorgängen."""
@@ -471,7 +472,7 @@ async def notiz(request: Request, vorgang_id: int,
         return RedirectResponse("/vorgaenge", status_code=303)
     if not _eigener(session, vorgang, benutzer):
         return RedirectResponse("/vorgaenge", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     text = (form.get("text") or "").strip()
     if text:
         vorgaenge_modul.notiz_anlegen(session, vorgang.id, benutzer, text[:2000])
@@ -488,7 +489,7 @@ async def notiz(request: Request, vorgang_id: int,
 # --- Galerie am Vorgang (v15, Phase 76) -------------------------------------
 
 @router.post("/{vorgang_id}/galerie/upload")
-async def galerie_upload(request: Request, vorgang_id: int,
+def galerie_upload(request: Request, vorgang_id: int,
                          session: Session = Depends(get_session)):
     """Upload in einen Galerie-Ordner (mehrere Dateien, mobil per Kamera);
     Vertrieb in eigenen Vorgängen auch ohne Auftrag."""
@@ -501,7 +502,7 @@ async def galerie_upload(request: Request, vorgang_id: int,
         return RedirectResponse(f"/vorgaenge/{vorgang_id}?meldung="
                                 + quote_plus("Kein Upload-Recht für diesen Vorgang."),
                                 status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     ordner = form.get("ordner") or "Allgemein"
     sparte = form.get("sparte") or "WP"
     bemerkung = form.get("bemerkung") or ""
@@ -512,7 +513,7 @@ async def galerie_upload(request: Request, vorgang_id: int,
     ordner_benutzt: set[str] = set()
     for nr, datei in enumerate(form.getlist("dateien")):
         if getattr(datei, "filename", ""):
-            inhalt = await datei.read()
+            inhalt = datei.file   # v27 (Phase 128): wird in galerie.speichern gestreamt
             ziel_ordner = (je_datei_ordner[nr]
                            if nr < len(je_datei_ordner)
                            and je_datei_ordner[nr] else ordner)
@@ -531,7 +532,7 @@ async def galerie_upload(request: Request, vorgang_id: int,
 
 
 @router.get("/galerie/datei/{datei_id}")
-async def galerie_datei(request: Request, datei_id: int,
+def galerie_datei(request: Request, datei_id: int,
                         session: Session = Depends(get_session)):
     from fastapi.responses import FileResponse
 
@@ -551,7 +552,7 @@ async def galerie_datei(request: Request, datei_id: int,
 
 
 @router.post("/galerie/datei/{datei_id}/verschieben")
-async def galerie_verschieben(request: Request, datei_id: int,
+def galerie_verschieben(request: Request, datei_id: int,
                               session: Session = Depends(get_session)):
     from app import galerie as galerie_modul
     from app.models import GalerieDatei
@@ -562,7 +563,7 @@ async def galerie_verschieben(request: Request, datei_id: int,
     benutzer = request.state.benutzer
     if not galerie_modul.darf_hochladen(session, vorgang, benutzer):
         return RedirectResponse("/vorgaenge", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     if galerie_modul.verschieben(session, datei, form.get("ordner") or ""):
         session.commit()
     return RedirectResponse(f"/vorgaenge/{datei.vorgang_id}#galerie",
@@ -570,7 +571,7 @@ async def galerie_verschieben(request: Request, datei_id: int,
 
 
 @router.post("/galerie/datei/{datei_id}/loeschen")
-async def galerie_loeschen(request: Request, datei_id: int,
+def galerie_loeschen(request: Request, datei_id: int,
                            session: Session = Depends(get_session)):
     """Löschen nur Innendienst/Projektierung/Admin – protokolliert im Chat."""
     from app import galerie as galerie_modul

@@ -3,16 +3,21 @@
 # ([LEAD] <quelle> <kampagne> + Feld: Wert), Postfach-Abruf über Graph alle
 # 2 Minuten – NUR bei parser_modus = an (Standard aus). Nicht erkannte Mails
 # landen in „Posteingang unklar“. Fehler blockieren nie.
+# v27 (PLAN_V17 Phase 128): Abruf am Scheduler-Rahmen registriert (aktiv nur
+# bei parser_modus = an), kein eigener Thread mehr.
 
 import json
 import re
-import threading
 from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from app.models import (Kampagne, LeadPosteingang, LeadQuelle, ParserRegel,
                         Vorgang)
+
+# v27: Zustand „kein Graph-Token“ – der Scheduler-Lauf meldet ihn als Ergebnis,
+# nicht als Fehler (sonst alle 2 Minuten ein Eintrag im Datei-Log)
+NICHT_ANGEMELDET = "Nicht bei Microsoft angemeldet"
 
 # Feldnamen der API/des Formular-Standards → Lead-Felder (Kleinschreibung)
 STANDARD_FELDER = {
@@ -255,7 +260,7 @@ def postfach_abrufen(session: Session) -> dict:
     verbindung_freigeben(session)
     token = graph_versand._token()
     if token is None:
-        return {"fehler": "Nicht bei Microsoft angemeldet"}
+        return {"fehler": NICHT_ANGEMELDET}
     ergebnis = {"leads": 0, "unklar": 0}
     try:
         antwort = graph_versand._graph_aufruf(
@@ -287,31 +292,37 @@ def postfach_abrufen(session: Session) -> dict:
     return ergebnis
 
 
-_scheduler_laeuft = False
+def parser_aktiv():
+    """aktiv-Bedingung des Scheduler-Laufs: parser_modus = an (je Lauf in einer
+    kurzen Sitzung gelesen, damit das Umschalten ohne Neustart wirkt)."""
+    from app import leadmanagement as kern
+    from app.db import kurz
+    with kurz() as s:
+        an = kern.parameter_holen(s, "parser_modus", "aus") == "an"
+    return True if an else "Parser aus"
+
+
+def scheduler_lauf() -> dict:
+    """v27 (PLAN_V17 Phase 128): Postfach-Abruf in einer kurzen Sitzung; die
+    Sitzung hält während der Graph-Aufrufe keine Verbindung (Freigabe in
+    postfach_abrufen), je Mail wird committet (mail_verarbeiten). Ein
+    Abruf-Fehler wird hochgeworfen (Datei-Log, Betriebs-Seite); „nicht
+    angemeldet“ ist ein Zustand, kein Fehler."""
+    from app.db import kurz
+    with kurz() as s:
+        ergebnis = postfach_abrufen(s)
+    fehler = ergebnis.get("fehler")
+    if fehler and fehler != NICHT_ANGEMELDET:
+        raise RuntimeError(f"Postfach-Abruf: {fehler}"[:500])
+    return ergebnis
 
 
 def scheduler_starten() -> None:
-    """Abruf alle 2 Minuten (nur bei parser_modus = an; der Schalter wird je
-    Lauf geprüft, damit das Umschalten ohne Neustart wirkt)."""
-    global _scheduler_laeuft
-    if _scheduler_laeuft:
-        return
-    _scheduler_laeuft = True
-
-    def schleife():
-        import time
-
-        from app.db import SessionLocal
-        time.sleep(240)
-        while True:
-            try:
-                session = SessionLocal()
-                try:
-                    postfach_abrufen(session)
-                finally:
-                    session.close()
-            except Exception:
-                pass
-            time.sleep(120)
-
-    threading.Thread(target=schleife, daemon=True, name="lead-parser").start()
+    """v27 (PLAN_V17 Phase 128): registriert den 2-Minuten-Abruf nur noch am
+    Scheduler-Rahmen (Startverzögerung 240 s wie bisher, aktiv nur bei
+    parser_modus = an); Threads startet main.lifespan über scheduler.starten_alle()."""
+    from app import scheduler
+    scheduler.registrieren(
+        "lead-parser", 120, scheduler_lauf,
+        beschreibung="Lead-Postfach über Graph abrufen und Mails zu Leads parsen",
+        start_verzoegerung_s=240, aktiv=parser_aktiv)

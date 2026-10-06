@@ -26,6 +26,7 @@ from app.db import get_session
 from app.models import (Benutzer, Kunde, Vorgang, VotTermin, TERMIN_TYP_NAMEN,
                         VOT_STATUS_NAMEN)
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/lead-management")
 
@@ -94,9 +95,11 @@ def _datum_uhrzeit(form) -> datetime | None:
 
 
 def _geokodieren_bei_bedarf(session: Session, vorgang: Vorgang) -> None:
-    """Wie V1: Adresse einmalig synchron geokodieren (Cache), nie erneut
-    nach einem Fehlschlag (Hintergrundlauf/„Adresse prüfen“ übernehmen)."""
-    if vorgang.lat is None and vorgang.geocode_status not in ("manuell", "fehler"):
+    """Adresse bei Bedarf synchron geokodieren (Cache). v27 (Phase 128): nach
+    einem Fehlschlag greift der Backoff in geocoding.geokodieren (1 h / 6 h /
+    24 h – in der Pause nur eine Cache-Abfrage), deshalb wird „fehler“ nicht
+    mehr dauerhaft übersprungen."""
+    if vorgang.lat is None and vorgang.geocode_status != "manuell":
         from app import geocoding
         adresse = geocoding.lead_adresse(session, vorgang)
         if adresse:
@@ -124,7 +127,7 @@ def _termine_des_vorgangs(session: Session, vorgang_id: int) -> list[VotTermin]:
 # --- v25: Terminvorschläge für den Block Termine der Kartei (Vertrag C/D) ----------
 
 @router.get("/lead/{vorgang_id}/termin/vorschlaege.json")
-async def termin_vorschlaege_json(request: Request, vorgang_id: int,
+def termin_vorschlaege_json(request: Request, vorgang_id: int,
                                   session: Session = Depends(get_session)):
     """Top 5 des Assistenten als JSON (asynchron nach dem Seitenaufbau der
     Kartei): {status: ok|adresse_fehlt|hv_lead|keine, hinweis, vorschlaege:
@@ -148,7 +151,7 @@ async def termin_vorschlaege_json(request: Request, vorgang_id: int,
 # --- Assistent (B6/E1/E2) -----------------------------------------------------------
 
 @router.get("/lead/{vorgang_id}/termin")
-async def termin_assistent(request: Request, vorgang_id: int,
+def termin_assistent(request: Request, vorgang_id: int,
                            session: Session = Depends(get_session)):
     vorgang = _vorgang_oder_404(request, session, vorgang_id)
     benutzer = request.state.benutzer
@@ -220,14 +223,14 @@ async def termin_assistent(request: Request, vorgang_id: int,
 
 
 @router.post("/lead/{vorgang_id}/termin")
-async def termin_buchen(request: Request, vorgang_id: int,
+def termin_buchen(request: Request, vorgang_id: int,
                         session: Session = Depends(get_session)):
     """Buchen/Umbuchen aus den Vorschlägen (V1-kompatibel: beginn, ad_id,
     umweg, umbuchen_id; quelle=manuell läuft über die Konfliktprüfung)."""
     vorgang = _vorgang_oder_404(request, session, vorgang_id)
-    form = await request.form()
+    form = anfrage.formular(request)
     if (form.get("quelle") or "") == "manuell":
-        return await _manuell(request, session, vorgang, form)
+        return _manuell(request, session, vorgang, form)
     benutzer = request.state.benutzer
     beginn = _datum_uhrzeit(form)
     ad_id = int(form.get("ad_id") or 0) if str(form.get("ad_id") or "").isdigit() else 0
@@ -252,7 +255,7 @@ async def termin_buchen(request: Request, vorgang_id: int,
     return RedirectResponse(_kartei(vorgang.id, meldung), status_code=303)
 
 
-async def _manuell(request: Request, session: Session, vorgang: Vorgang, form):
+def _manuell(request: Request, session: Session, vorgang: Vorgang, form):
     """B7: Datum + Uhrzeit im 15-Minuten-Raster, AD aus den vorgefilterten
     Kandidaten, Konfliktwarnung (bestaetigt=1 übergeht Warnungen), Sperre bei
     voller Überlappung desselben AD."""
@@ -323,15 +326,15 @@ async def _manuell(request: Request, session: Session, vorgang: Vorgang, form):
 
 
 @router.post("/lead/{vorgang_id}/termin/manuell")
-async def termin_manuell(request: Request, vorgang_id: int,
+def termin_manuell(request: Request, vorgang_id: int,
                          session: Session = Depends(get_session)):
     vorgang = _vorgang_oder_404(request, session, vorgang_id)
-    form = await request.form()
-    return await _manuell(request, session, vorgang, form)
+    form = anfrage.formular(request)
+    return _manuell(request, session, vorgang, form)
 
 
 @router.get("/termin/konflikt")
-async def termin_konflikt(request: Request, session: Session = Depends(get_session)):
+def termin_konflikt(request: Request, session: Session = Depends(get_session)):
     """Live-Konfliktprüfung des manuellen Formulars (fetch aus lm_termin.js)."""
     lead_v2.gate(request, session)
     q = request.query_params
@@ -356,7 +359,7 @@ async def termin_konflikt(request: Request, session: Session = Depends(get_sessi
 # --- Vorab-Gespräch (H6/F12) --------------------------------------------------------
 
 @router.get("/lead/{vorgang_id}/termin/vorab")
-async def vorab_formular(request: Request, vorgang_id: int,
+def vorab_formular(request: Request, vorgang_id: int,
                          session: Session = Depends(get_session)):
     vorgang = _vorgang_oder_404(request, session, vorgang_id)
     kunde = session.get(Kunde, vorgang.kunde_id)
@@ -379,10 +382,10 @@ async def vorab_formular(request: Request, vorgang_id: int,
 
 
 @router.post("/lead/{vorgang_id}/termin/vorab")
-async def vorab_anlegen(request: Request, vorgang_id: int,
+def vorab_anlegen(request: Request, vorgang_id: int,
                         session: Session = Depends(get_session)):
     vorgang = _vorgang_oder_404(request, session, vorgang_id)
-    form = await request.form()
+    form = anfrage.formular(request)
     typ = form.get("typ") or "telefon"
     person = str(form.get("person_id") or "")
     beginn = _datum_uhrzeit(form)
@@ -410,10 +413,10 @@ async def vorab_anlegen(request: Request, vorgang_id: int,
 # --- Absage, Ersatzkunde, Bestätigung erneut, Umbuchung (E3/E4/F8/A-9) --------------
 
 @router.post("/termin/{termin_id}/absagen")
-async def termin_absagen(request: Request, termin_id: int,
+def termin_absagen(request: Request, termin_id: int,
                          session: Session = Depends(get_session)):
     termin, vorgang = _termin_oder_404(request, session, termin_id)
-    form = await request.form()
+    form = anfrage.formular(request)
     grund = (form.get("grund") or "").strip()
     text = (form.get("grund_text") or "").strip()
     passend = next((g for g in _absage_gruende(session) if g.grund == grund), None)
@@ -443,7 +446,7 @@ async def termin_absagen(request: Request, termin_id: int,
 
 
 @router.get("/termin/{termin_id}/ersatz")
-async def termin_ersatz(request: Request, termin_id: int,
+def termin_ersatz(request: Request, termin_id: int,
                         session: Session = Depends(get_session)):
     termin, vorgang = _termin_oder_404(request, session, termin_id)
     kunde = session.get(Kunde, vorgang.kunde_id)
@@ -460,7 +463,7 @@ async def termin_ersatz(request: Request, termin_id: int,
 
 
 @router.post("/termin/{termin_id}/bestaetigung-erneut")
-async def termin_bestaetigung_erneut(request: Request, termin_id: int,
+def termin_bestaetigung_erneut(request: Request, termin_id: int,
                                      session: Session = Depends(get_session)):
     termin, vorgang = _termin_oder_404(request, session, termin_id)
     ok, meldung = lead_termin.bestaetigung_erneut(session, termin,
@@ -474,13 +477,13 @@ async def termin_bestaetigung_erneut(request: Request, termin_id: int,
 
 
 @router.post("/termin/{termin_id}/verschieben")
-async def termin_verschieben(request: Request, termin_id: int,
+def termin_verschieben(request: Request, termin_id: int,
                              session: Session = Depends(get_session)):
     """Umbuchung aus Kalender (Drag & Drop) oder Kartei – wie V1, zusätzlich
     Konfliktsperre, Weitergabe der ICS-UID (SEQUENCE + 1) an den neuen Termin
     und Ersatzkunden-Dialog für den freigewordenen VOT-Slot (E3)."""
     termin, vorgang = _termin_oder_404(request, session, termin_id)
-    form = await request.form()
+    form = anfrage.formular(request)
     ziel = _zurueck(request, "/lead-management/kalender")
     if termin.quelle == "monday":
         return RedirectResponse(_mit_meldung(ziel, "monday-Termin – bitte in monday ändern."),
@@ -552,7 +555,7 @@ async def termin_verschieben(request: Request, termin_id: int,
 # --- Kalender (Terminarten, vorgemerkt) ---------------------------------------------
 
 @router.get("/kalender")
-async def terminkalender(request: Request, session: Session = Depends(get_session)):
+def terminkalender(request: Request, session: Session = Depends(get_session)):
     lead_v2.gate(request, session)
     benutzer = request.state.benutzer
     versatz = request.query_params.get("woche", "0")

@@ -5,6 +5,8 @@
 {% block inhalt %}
 <h1>{{ 'PV-Positionslisten-Import' if pv is defined and pv else 'Preislisten-Import' }} – Vorschau</h1>
 
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
 {% if dateifehler %}
     <p class="meldung fehler">Folgende Dateien wurden nicht gefunden:</p>
     <ul>{% for d in dateifehler %}<li><code>{{ d }}</code></li>{% endfor %}</ul>
@@ -90,7 +92,12 @@
 </table>
 {% endif %}
 
+{# v27 (PLAN_V17 Phase 128): Hinweis vor dem Start mit Bestätigungs-Häkchen –
+   der POST prüft das Feld „bestaetigt“ serverseitig. #}
+<p class="hinweis" id="import-hinweis">{{ hinweis }}</p>
 <form method="post" action="{{ '/artikel/import-pv' if pv is defined and pv else '/artikel/import' }}" class="formaktionen">
+    <label><input type="checkbox" name="bestaetigt" value="1" required>
+        Hinweis gelesen – Import jetzt starten</label>
     <button class="knopf" type="submit">Import ausführen</button>
     <a class="knopf zweitrangig" href="/artikel">Abbrechen</a>
 </form>

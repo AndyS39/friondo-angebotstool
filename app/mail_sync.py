@@ -7,15 +7,21 @@
 #     dem Angebot zugeordnet; Fallback ohne conversationId: Betreff mit AN-C-Nr.
 # Postfach: das Versand-Postfach angebot@friondo.de (Parametrierung
 # mail_postfach; leer = eigenes Postfach /me). Delegiertes Token aus graph_versand.
+# v27 (PLAN_V17 Phase 128): der 15-Minuten-Lauf ist am Scheduler-Rahmen
+# registriert (aktiv nur mit eingerichtetem Graph); sync() liest in einer kurzen
+# Sitzung, ruft Graph OHNE Sitzung und schreibt je Angebot in einer kurzen
+# Sitzung mit Commit zurück. Die vier Teilschritte (Mail-Abgleich, Sub-
+# Antworten, Outlook-Rücklauf, Terminantworten) sind je für sich abgesichert.
 
 import json
-import threading
+import logging
 import urllib.parse
 import urllib.request
 from datetime import datetime
 
-from app.db import SessionLocal, verbindung_freigeben
 from app.models import Angebot, AngebotsMail, einstellung_holen
+
+_logger = logging.getLogger("angebotstool")
 
 SYNC_INTERVALL_SEKUNDEN = 15 * 60
 GRAPH = "https://graph.microsoft.com/v1.0"
@@ -153,56 +159,58 @@ def nachrichten_verarbeiten(session, angebot: Angebot, nachrichten: list[dict],
 
 def sync() -> int:
     """Ein Abgleichlauf: Versand-Erkennung + Mail-Verlauf über alle offenen
-    Angebote (nicht archiviert)."""
+    Angebote (nicht archiviert). v27 (PLAN_V17 Phase 128): Token und Konto vor
+    jeder Sitzung; Lesephase (Postfach, eigene Adressen, Angebotsliste) in
+    einer kurzen Sitzung; je Angebot der Graph-Abruf OHNE Sitzung und danach
+    eine kurze Sitzung zum Zurückschreiben mit Commit (Block = ein Angebot);
+    das Erkennungs-Protokoll zum Schluss in einer kurzen Sitzung."""
     from app import graph_versand
+    from app.db import kurz
 
     token = graph_versand._token()
     if token is None:
         return 0
     konto = graph_versand.angemeldeter_benutzer() or ""
-    session = SessionLocal()
     neu_gesamt = versendet_gesamt = 0
     fehler: list[str] = []
-    try:
-        postfach = einstellung_holen(session, "mail_postfach", "angebot@friondo.de")
-        absender = einstellung_holen(session, "mail_absender", "angebot@friondo.de")
+    erkennungs_protokoll: list[dict] = []
+    with kurz() as s:
+        postfach = einstellung_holen(s, "mail_postfach", "angebot@friondo.de")
+        absender = einstellung_holen(s, "mail_absender", "angebot@friondo.de")
         eigene = _eigene_adressen(konto, postfach, absender)
         # v11 (AN-C-261083): Auch die Postfächer der Benutzer zählen als eigene
         # Absender – „Senden im Auftrag“ trägt sonst die persönliche Adresse
         # und der Versand wurde nie erkannt.
         from app.models import Benutzer
-        for b in session.query(Benutzer).filter(Benutzer.aktiv.is_(True)):
+        for b in s.query(Benutzer).filter(Benutzer.aktiv.is_(True)):
             if b.email:
                 eigene.add(b.email.lower())
-        erkennungs_protokoll: list[dict] = []
-        angebote = (session.query(Angebot)
+        angebote = [(z[0], z[1], z[2]) for z in
+                    s.query(Angebot.id, Angebot.nummer, Angebot.graph_conversation_id)
                     .filter(Angebot.status.in_(["Versand vorbereitet", "Versendet",
                                                 "Angenommen", "Abgelehnt"]),
                             Angebot.archiviert.is_(False))
-                    .all())
-        for angebot in angebote:
-            try:
-                # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (vor JEDEM
-                # Graph-Abruf; der commit speichert die Mails des vorherigen
-                # Angebots – wie bisher am Ende des Laufs)
-                verbindung_freigeben(session)
-                if angebot.graph_conversation_id:
-                    nachrichten = nachrichten_je_konversation(
-                        token, angebot.graph_conversation_id, postfach)
-                else:
-                    nachrichten = nachrichten_je_betreff(token, angebot.nummer, postfach)
-                if versand_erkennen(session, angebot, nachrichten, eigene,
+                    .order_by(Angebot.id).all()]
+    for angebot_id, nummer, conversation_id in angebote:
+        try:
+            if conversation_id:
+                nachrichten = nachrichten_je_konversation(token, conversation_id, postfach)
+            else:
+                nachrichten = nachrichten_je_betreff(token, nummer, postfach)
+            with kurz() as s:
+                angebot = s.get(Angebot, angebot_id)
+                if angebot is None or angebot.archiviert:
+                    continue   # inzwischen archiviert/gelöscht
+                if versand_erkennen(s, angebot, nachrichten, eigene,
                                     erkennungs_protokoll):
                     versendet_gesamt += 1
-                    session.commit()
-                    _nach_versand(session, angebot)
-                neu_gesamt += nachrichten_verarbeiten(session, angebot, nachrichten, eigene)
-            except Exception as problem:
-                fehler.append(f"{angebot.nummer}: {problem}")
-        session.commit()
-        _protokoll_sichern(session, erkennungs_protokoll)
-    finally:
-        session.close()
+                    s.commit()
+                    _nach_versand(s, angebot)
+                neu_gesamt += nachrichten_verarbeiten(s, angebot, nachrichten, eigene)
+        except Exception as problem:
+            fehler.append(f"{nummer}: {problem}")
+    with kurz() as s:
+        _protokoll_sichern(s, erkennungs_protokoll)
     status.update(letzter_lauf=datetime.now(), neu=neu_gesamt,
                   versendet=versendet_gesamt, fehler=fehler,
                   erkennung=erkennungs_protokoll)
@@ -238,47 +246,68 @@ def _nach_versand(session, angebot: Angebot) -> None:
         status.setdefault("fehler", []).append(f"monday {angebot.nummer}: {problem}")
 
 
-# --- Hintergrund-Scheduler (alle 15 Minuten) ------------------------------
+# --- Hintergrund-Scheduler (alle 15 Minuten, v27 am Rahmen registriert) ------
 
-_scheduler_gestartet = False
+def graph_aktiv():
+    """aktiv-Bedingung des Laufs: Graph in der .env eingerichtet (GRAPH_CLIENT_ID)."""
+    from app import graph_versand
+    return True if graph_versand.konfiguriert() else "Graph nicht eingerichtet"
+
+
+def _sub_antworten() -> int:
+    from app import sub_mail                      # v15 (Phase 79): Antworten auf Sub-Anfragen
+    return sub_mail.antworten_abgleichen()
+
+
+def _outlook_ruecklauf() -> int:
+    from app import outlook_kalender              # v15 (Phase 81): Outlook → Tool
+    return outlook_kalender.ruecklesen()
+
+
+def _terminantworten() -> int:
+    from app import terminmail                    # v15 (Phase 81): Kunden-Terminantworten
+    return terminmail.antworten_abgleichen()
+
+
+def scheduler_lauf() -> dict:
+    """15-Minuten-Lauf: Mail-Abgleich, Sub-Antworten, Outlook-Rücklauf,
+    Terminantworten – jeder Teilschritt für sich abgesichert (ein Fehler
+    blockiert die anderen nicht). v27 (PLAN_V17 Phase 128): Fehler werden nicht
+    mehr verschluckt, sondern im Rückgabe-dict genannt (fehler = Anzahl,
+    hinweis = erster Fehler), im Datei-Log protokolliert und – wenn ALLE vier
+    Teilschritte scheiterten – als Ausnahme hochgeworfen (Lauf = fehler)."""
+    schritte = (("mail-abgleich", "Mail-Abgleich fehlgeschlagen", sync),
+                ("sub-antworten", "Sub-Antworten fehlgeschlagen", _sub_antworten),
+                ("outlook-ruecklauf", "Outlook-Rücklauf fehlgeschlagen", _outlook_ruecklauf),
+                ("terminantworten", "Terminantworten fehlgeschlagen", _terminantworten))
+    ergebnis: dict = {}
+    fehler: list[str] = []
+    for name, meldung, funktion in schritte:
+        try:
+            ergebnis[name] = funktion()
+        except Exception as problem:
+            text = f"{meldung}: {type(problem).__name__}: {problem}"[:300]
+            fehler.append(text)
+            _logger.error("Mail-Sync – Teilschritt %s: %s", name, text, exc_info=True)
+            if name == "mail-abgleich":
+                status["fehler"] = [text]            # wie bisher: Anzeige in der Parametrierung
+            else:
+                status.setdefault("fehler", []).append(text)
+    if fehler:
+        ergebnis["fehler"] = fehler
+        ergebnis["hinweis"] = fehler[0][:120]
+        if len(fehler) == len(schritte):
+            raise RuntimeError("Alle Teilschritte fehlgeschlagen – " + "; ".join(fehler)[:450])
+    return ergebnis
 
 
 def scheduler_starten() -> None:
-    global _scheduler_gestartet
-    if _scheduler_gestartet:
-        return
-    _scheduler_gestartet = True
-
-    def schleife():
-        import time
-        from app import graph_versand
-        while True:
-            if graph_versand.konfiguriert():
-                try:
-                    sync()
-                except Exception as problem:   # nie durchschlagen lassen
-                    status["fehler"] = [f"Mail-Abgleich fehlgeschlagen: {problem}"]
-                # v15 (Phase 79): Antworten auf Sub-Anfragen (PR-…)
-                try:
-                    from app import sub_mail
-                    sub_mail.antworten_abgleichen()
-                except Exception as problem:
-                    status.setdefault("fehler", []).append(
-                        f"Sub-Antworten fehlgeschlagen: {problem}")
-                # v15 (Phase 81): Outlook-Kalender zuruecklesen + Kunden-
-                # Terminantworten – Fehler blockieren nie
-                try:
-                    from app import outlook_kalender
-                    outlook_kalender.ruecklesen()
-                except Exception as problem:
-                    status.setdefault("fehler", []).append(
-                        f"Outlook-Rücklauf fehlgeschlagen: {problem}")
-                try:
-                    from app import terminmail
-                    terminmail.antworten_abgleichen()
-                except Exception as problem:
-                    status.setdefault("fehler", []).append(
-                        f"Terminantworten fehlgeschlagen: {problem}")
-            time.sleep(SYNC_INTERVALL_SEKUNDEN)
-
-    threading.Thread(target=schleife, daemon=True).start()
+    """v27 (PLAN_V17 Phase 128): registriert den 15-Minuten-Lauf nur noch am
+    Scheduler-Rahmen (aktiv nur mit eingerichtetem Graph); Threads startet
+    main.lifespan über scheduler.starten_alle()."""
+    from app import scheduler
+    scheduler.registrieren(
+        "mail-sync", SYNC_INTERVALL_SEKUNDEN, scheduler_lauf,
+        beschreibung="Graph-Mailabgleich: Versand-Erkennung, Mail-Verlauf, Sub-/Terminantworten, "
+                     "Outlook-Rücklauf",
+        aktiv=graph_aktiv)

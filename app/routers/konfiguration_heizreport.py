@@ -17,6 +17,7 @@ from app import galerie, heizreport_api
 from app import projektierung as kern
 from app.db import get_session
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/parametrierung")
 
@@ -116,7 +117,7 @@ def _speichern(session, form, benutzer) -> tuple[str, str]:
 
 
 @router.get("/heizreport")
-async def heizreport_seite(request: Request, session: Session = Depends(get_session)):
+def heizreport_seite(request: Request, session: Session = Depends(get_session)):
     if (umleitung := _nur_admin(request)) is not None:
         return umleitung
     return render(request, "konfiguration/heizreport.html", aktiv="/parametrierung",
@@ -142,10 +143,10 @@ async def heizreport_seite(request: Request, session: Session = Depends(get_sess
 
 
 @router.post("/heizreport")
-async def heizreport_speichern(request: Request, session: Session = Depends(get_session)):
+def heizreport_speichern(request: Request, session: Session = Depends(get_session)):
     if (umleitung := _nur_admin(request)) is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     meldung, _fehler = _speichern(session, form, request.state.benutzer)
     session.commit()
     return RedirectResponse("/parametrierung/heizreport?meldung=" + quote_plus(meldung),
@@ -153,13 +154,13 @@ async def heizreport_speichern(request: Request, session: Session = Depends(get_
 
 
 @router.post("/heizreport/test")
-async def heizreport_verbindung_testen(request: Request,
+def heizreport_verbindung_testen(request: Request,
                                        session: Session = Depends(get_session)):
     """Button „Verbindung testen“: Formularstand zuerst übernehmen, dann
     v2: GET /health → GET / → GET /reports (Meldung wörtlich laut Plan)."""
     if (umleitung := _nur_admin(request)) is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     _speichern(session, form, request.state.benutzer)
     session.commit()
     _ok, text = heizreport_api.verbindung_testen(session)

@@ -108,12 +108,19 @@
                             <a href="/lead-management/dashboard">Mein Dashboard</a>
                         {% endif %}
                     {% endif %}
+                    {# v27 (PLAN_V17 Phase 130): eigene PIN ändern – für jede Rolle #}
+                    <a href="/pin-wechsel">PIN ändern</a>
                     <a href="/logout">{{ benutzer_angemeldet.name }} abmelden ⏻</a>
                 </div>
             </details>
         {% endif %}
     </nav>
 </header>
+{# v27 (PLAN_V17 Phase 132): Wartungsbanner für alle Rollen (Parametrierung → Betrieb) #}
+{% set wartung = request.state.wartung | default(none) if request.state is defined else none %}
+{% if wartung %}
+<div class="wartung-banner" role="status" id="wartung-banner">⚠ {{ wartung.banner }}</div>
+{% endif %}
 <main class="{% block mainklasse %}{% endblock %}">
     {% block inhalt %}{% endblock %}
 </main>

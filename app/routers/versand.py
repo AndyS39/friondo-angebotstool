@@ -11,7 +11,7 @@ router = APIRouter(prefix="/versand")
 
 
 @router.get("")
-async def status(request: Request):
+def status(request: Request):
     return render(request, "versand/status.html", aktiv="/versand",
                   konfiguriert=graph_versand.konfiguriert(),
                   konto=graph_versand.angemeldeter_benutzer(),
@@ -20,12 +20,12 @@ async def status(request: Request):
 
 
 @router.post("/anmelden")
-async def anmelden():
+def anmelden():
     graph_versand.anmeldung_starten()
     return RedirectResponse("/versand", status_code=303)
 
 
 @router.post("/abmelden")
-async def abmelden():
+def abmelden():
     graph_versand.abmelden()
     return RedirectResponse("/versand?meldung=Abgemeldet", status_code=303)

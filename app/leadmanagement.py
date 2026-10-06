@@ -5,15 +5,22 @@
 # gesyncten Vorgänge nur mit und leitet ihre Lead-Phase ab.
 
 import json
+import logging
 import re
 from datetime import datetime, timedelta
 
+from sqlalchemy import event
 from sqlalchemy.orm import Session
 
 from app.models import (Angebot, Benutzer, Erfassung, Kampagne, Kunde, Lead,
                         LeadAktivitaet, LeadParameter, LeadQualifizierung,
                         LeadQuelle, Vorgang, VotTermin,
                         LEAD_PHASEN_MANUELL)
+
+_logger = logging.getLogger("angebotstool")
+# v27 (PLAN_V17 Phase 128): Blockgröße der Scheduler-Läufe (Commit je Block –
+# Tageslauf, Löschlauf, Wiedervorlage-/To-Do-Glocken)
+BLOCK_GROESSE = 50
 
 # Startwerte der Parametrierung (Phase 73); Andreas passt sie später an
 PARAMETER_START = {
@@ -81,12 +88,41 @@ PARAMETER_START = {
 }
 
 
+# v27 (PLAN_V17 Phase 131, Lasttest-Befund): Parameter je Transaktion zwischen-
+# speichern – das Deals-Board rief parameter_holen 835-mal je Seitenaufruf (je eine
+# Abfrage). Der Cache liegt in session.info, wird bei jedem Transaktionsbeginn
+# (after_begin, also nach commit/rollback) geleert und von parameter_setzen gepflegt.
+_PARAM_CACHE = "lead_param_cache"
+_PARAM_FEHLT = object()
+
+
+def _param_cache_leeren(session, transaction, connection) -> None:
+    session.info.pop(_PARAM_CACHE, None)
+
+
+event.listens_for(Session, "after_begin")(_param_cache_leeren)
+
+
 def parameter_holen(session: Session, name: str, standard: str = "") -> str:
-    zeile = (session.query(LeadParameter)
-             .filter(LeadParameter.name == name).first())
-    if zeile is not None:
-        return zeile.wert
-    return PARAMETER_START.get(name, standard)
+    # Cache nur innerhalb einer Anfrage (anfrage.KONTEXT ist von der Middleware
+    # gesetzt): kurze Request-Sitzungen lesen Parameter dann höchstens einmal;
+    # langlebige Sitzungen (Tests, Hintergrundläufe) lesen immer frisch.
+    from app import anfrage
+    if anfrage.KONTEXT.get() is None:
+        zeile = (session.query(LeadParameter)
+                 .filter(LeadParameter.name == name).first())
+        return zeile.wert if zeile is not None else PARAMETER_START.get(name, standard)
+    cache = session.info.setdefault(_PARAM_CACHE, {})
+    if name in cache:
+        wert = cache[name]
+    else:
+        zeile = (session.query(LeadParameter)
+                 .filter(LeadParameter.name == name).first())
+        wert = zeile.wert if zeile is not None else _PARAM_FEHLT
+        session.info.setdefault(_PARAM_CACHE, {})[name] = wert
+    if wert is _PARAM_FEHLT:
+        return PARAMETER_START.get(name, standard)
+    return wert
 
 
 def parameter_setzen(session: Session, name: str, wert: str) -> None:
@@ -97,6 +133,7 @@ def parameter_setzen(session: Session, name: str, wert: str) -> None:
         session.flush()   # autoflush ist aus – sofort abfragbar
     else:
         zeile.wert = wert
+    session.info.setdefault(_PARAM_CACHE, {})[name] = wert
 
 
 def parameter_vorbelegen(session: Session) -> int:
@@ -1256,11 +1293,14 @@ def taeglicher_lauf_leads(session: Session | None = None,
                 == heute.isoformat()):
             return {"uebersprungen": True}
         anzahl = 0
+        # v27 (PLAN_V17 Phase 128): Liste vorab laden (Commit je Block darf den
+        # Cursor nicht treffen), Commit je BLOCK_GROESSE Reaktivierungen
         for vorgang in (session.query(Vorgang)
                         .filter(Vorgang.lead_phase == "zurueckgestellt",
                                 Vorgang.zurueckgestellt_bis.isnot(None),
                                 Vorgang.zurueckgestellt_bis
-                                <= datetime.now())):
+                                <= datetime.now())
+                        .order_by(Vorgang.id).all()):
             vorgang.lead_phase = "neu"
             vorgang.naechste_aktion_am = datetime.now()
             aktivitaet(session, vorgang.id, "status",
@@ -1272,6 +1312,8 @@ def taeglicher_lauf_leads(session: Session | None = None,
                                 f"Wiedervorlage fällig: {kunde.anzeige_name if kunde else '?'}",
                                 f"/lead-management/lead/{vorgang.id}")
             anzahl += 1
+            if anzahl % BLOCK_GROESSE == 0:
+                session.commit()
         # Prozess-Fix 27.09.2026: Tagesdigest an die Leadmanager - SLA-rote
         # und freie Leads wurden vorher nirgends aktiv gemeldet (nur passiv
         # im Cockpit sichtbar)
@@ -1318,62 +1360,130 @@ def taeglicher_lauf_leads(session: Session | None = None,
             session.close()
 
 
-_scheduler_laeuft = False
+def _kurz_text(ergebnis) -> object:
+    """Ergebnis eines Teilschritts als kurzer Wert für die Betriebs-Seite."""
+    if isinstance(ergebnis, dict):
+        if ergebnis.get("uebersprungen"):
+            return "übersprungen"
+        return ", ".join(f"{k}={v}" for k, v in ergebnis.items())[:60]
+    return ergebnis
+
+
+def scheduler_lauf() -> dict:
+    """5-Minuten-Lauf (v27 am Scheduler-Rahmen): Wiedervorlage-Glocken (v23
+    Phase 107, C2), Tageslauf ab 07:00 (Datums-Schalter), To-Do-Glocken (v23
+    Phase 110), Löschlauf ab 03:00 (Datums-Schalter + Parameter). Jeder
+    Teilschritt in eigener kurzer Sitzung und je für sich abgesichert (wie
+    bisher); Fehler stehen im Rückgabe-dict und im Datei-Log, eine Ausnahme gibt
+    es nur, wenn alle Teilschritte scheiterten."""
+    from app.db import kurz
+    jetzt = datetime.now()
+    ergebnis: dict = {}
+    fehler: list[str] = []
+
+    def wiedervorlagen():
+        from app import lead_anrufliste
+        with kurz() as s:
+            return lead_anrufliste.faellige_wiedervorlagen_melden(s, block=BLOCK_GROESSE)
+
+    def todos():
+        from app import lead_todos
+        with kurz() as s:
+            return lead_todos.faellige_glocken(s, block=BLOCK_GROESSE)
+
+    def loeschen():
+        with kurz() as s:
+            return _kurz_text(loeschlauf(s))
+
+    schritte = [("wiedervorlagen", wiedervorlagen)]
+    if jetzt.hour >= 7:
+        schritte.append(("tageslauf", lambda: _kurz_text(taeglicher_lauf_leads())))
+    schritte.append(("todos", todos))
+    if jetzt.hour >= 3:
+        schritte.append(("loeschlauf", loeschen))
+    for name, funktion in schritte:
+        try:
+            ergebnis[name] = funktion()
+        except Exception as problem:
+            fehler.append(f"{name}: {type(problem).__name__}: {problem}"[:200])
+            _logger.error("Leadmanagement – Teilschritt %s fehlgeschlagen: %s",
+                          name, problem, exc_info=True)
+    if fehler:
+        ergebnis["fehler"] = fehler
+        ergebnis["hinweis"] = fehler[0][:120]
+        if len(fehler) == len(schritte):
+            raise RuntimeError("Alle Teilschritte fehlgeschlagen – " + "; ".join(fehler)[:450])
+    return ergebnis
 
 
 def scheduler_starten() -> None:
-    """5-Minuten-Schleife: ab 07:00 der Wiedervorlage-Lauf (Datums-Schalter);
-    der Löschlauf 03:00 (Phase 81) hängt an derselben Schleife."""
-    global _scheduler_laeuft
-    if _scheduler_laeuft:
-        return
-    _scheduler_laeuft = True
+    """v27 (PLAN_V17 Phase 128): registriert den 5-Minuten-Lauf nur noch am
+    Scheduler-Rahmen (Startverzögerung 200 s wie bisher); Threads startet
+    main.lifespan über scheduler.starten_alle()."""
+    from app import scheduler
+    scheduler.registrieren(
+        "leadmanagement", 300, scheduler_lauf,
+        beschreibung="Lead-Management: Wiedervorlage-Glocken, Tageslauf ab 07:00, "
+                     "To-Do-Glocken, Löschlauf ab 03:00",
+        start_verzoegerung_s=200)
 
-    def schleife():
-        import threading as _t   # noqa: F401 (Muster wie die anderen Scheduler)
-        import time
 
-        from app.db import SessionLocal
-        time.sleep(200)
-        while True:
+def _in_bloecken(werte: list, groesse: int = 400):
+    """Teilstücke für IN-Abfragen (Grenze der SQLite-Hostparameter)."""
+    for i in range(0, len(werte), groesse):
+        yield werte[i:i + groesse]
+
+
+def loeschlauf_kandidaten(session: Session, grenze: datetime) -> list[int]:
+    """Vorgangs-IDs, die der Löschlauf anonymisieren würde – v27 (PLAN_V17
+    Phase 128): Mengenabfragen (letzte Aktivität je Vorgang, angenommene
+    Angebote, Projekte, bereits anonymisierte Kunden) statt vier Abfragen je
+    Vorgang; die Lesephase bleibt damit auch bei tausenden Vorgängen kurz."""
+    from sqlalchemy import func
+    from app.models import Projekt
+    nur_demo = demo_aktiv(session)
+    vorgaenge = [z for z in
+                 session.query(Vorgang.id, Vorgang.kunde_id, Vorgang.demo,
+                               Vorgang.eingang_am, Vorgang.angelegt_am)
+                 .filter(Vorgang.lead_phase.in_(
+                     ("unqualifiziert", "nicht_erreicht", "verloren")))
+                 .order_by(Vorgang.id)
+                 if not nur_demo or z[2]]
+    if not vorgaenge:
+        return []
+    ids = [z[0] for z in vorgaenge]
+    kunden_ids = [z[1] for z in vorgaenge if z[1]]
+    letzte: dict[int, datetime] = {}
+    angenommen: set[int] = set()
+    mit_projekt: set[int] = set()
+    anonymisiert: set[int] = set()
+    for block in _in_bloecken(ids):
+        letzte.update(dict(session.query(LeadAktivitaet.vorgang_id,
+                                         func.max(LeadAktivitaet.zeitpunkt))
+                           .filter(LeadAktivitaet.vorgang_id.in_(block))
+                           .group_by(LeadAktivitaet.vorgang_id).all()))
+        angenommen.update(z[0] for z in session.query(Angebot.vorgang_id)
+                          .filter(Angebot.vorgang_id.in_(block),
+                                  Angebot.status == "Angenommen"))
+        mit_projekt.update(z[0] for z in session.query(Projekt.vorgang_id)
+                           .filter(Projekt.vorgang_id.in_(block)))
+    for block in _in_bloecken(kunden_ids):
+        anonymisiert.update(z[0] for z in session.query(Kunde.id)
+                            .filter(Kunde.id.in_(block), Kunde.nachname == "Gelöscht"))
+    kandidaten = []
+    for vorgang_id, kunde_id, _demo, eingang_am, angelegt_am in vorgaenge:
+        if kunde_id in anonymisiert or vorgang_id in angenommen or vorgang_id in mit_projekt:
+            continue
+        letzter_zeitpunkt = letzte.get(vorgang_id) or eingang_am or angelegt_am
+        if isinstance(letzter_zeitpunkt, str):   # SQLite liefert max() als Text
             try:
-                jetzt = datetime.now()
-                # v23 Phase 107 (C2): Glocke zum Wiedervorlage-Zeitpunkt – einmalig je
-                # Fälligkeit (Dedup über Aktivität typ system), an leadmanager_id bzw. Leitung
-                try:
-                    from app import lead_anrufliste
-                    session = SessionLocal()
-                    try:
-                        if lead_anrufliste.faellige_wiedervorlagen_melden(session):
-                            session.commit()
-                    finally:
-                        session.close()
-                except Exception:
-                    pass
-                if jetzt.hour >= 7:
-                    taeglicher_lauf_leads()
-                # v23 (Phase 110): Fälligkeits-Glocke für To-Dos (einmal je To-Do, dedupliziert)
-                session = SessionLocal()
-                try:
-                    from app import lead_todos
-                    if lead_todos.faellige_glocken(session):
-                        session.commit()
-                except Exception:
-                    session.rollback()
-                finally:
-                    session.close()
-                if jetzt.hour >= 3:
-                    session = SessionLocal()
-                    try:
-                        loeschlauf(session)
-                    finally:
-                        session.close()
-            except Exception:
-                pass
-            time.sleep(300)
-
-    import threading
-    threading.Thread(target=schleife, daemon=True, name="leadmanagement").start()
+                letzter_zeitpunkt = datetime.fromisoformat(letzter_zeitpunkt)
+            except ValueError:
+                letzter_zeitpunkt = None
+        if letzter_zeitpunkt is None or letzter_zeitpunkt > grenze:
+            continue
+        kandidaten.append(vorgang_id)
+    return kandidaten
 
 
 def loeschlauf(session: Session, erzwingen: bool = False,
@@ -1381,7 +1491,8 @@ def loeschlauf(session: Session, erzwingen: bool = False,
     """DSGVO-Anonymisierung (Phase 81, täglich 03:00, nur bei loeschlauf=an):
     unqualifiziert / nicht_erreicht / verloren, letzte Aktivität älter als
     loeschfrist_monate, kein angenommenes Angebot, kein Projekt. Im Demo-Modus
-    zusätzlich nur Demo-Leads."""
+    zusätzlich nur Demo-Leads. v27 (PLAN_V17 Phase 128): Kandidaten über
+    Mengenabfragen, Anonymisierung in Blöcken mit Commit je BLOCK_GROESSE."""
     if not trocken and not erzwingen:
         if parameter_holen(session, "loeschlauf", "aus") != "an":
             return {"uebersprungen": True}
@@ -1393,34 +1504,14 @@ def loeschlauf(session: Session, erzwingen: bool = False,
     except ValueError:
         monate = 12
     grenze = datetime.now() - timedelta(days=monate * 30)
-    from app.models import Projekt
-    kandidaten = []
-    for vorgang in (session.query(Vorgang)
-                    .filter(Vorgang.lead_phase.in_(
-                        ("unqualifiziert", "nicht_erreicht", "verloren")))):
-        if demo_aktiv(session) and not vorgang.demo:
-            continue
-        kunde = session.get(Kunde, vorgang.kunde_id)
-        if kunde is not None and kunde.nachname == "Gelöscht":
-            continue
-        letzte = (session.query(LeadAktivitaet)
-                  .filter(LeadAktivitaet.vorgang_id == vorgang.id)
-                  .order_by(LeadAktivitaet.zeitpunkt.desc()).first())
-        letzter_zeitpunkt = (letzte.zeitpunkt if letzte else
-                             vorgang.eingang_am or vorgang.angelegt_am)
-        if letzter_zeitpunkt is None or letzter_zeitpunkt > grenze:
-            continue
-        if (session.query(Angebot)
-                .filter(Angebot.vorgang_id == vorgang.id,
-                        Angebot.status == "Angenommen").count()):
-            continue
-        if (session.query(Projekt)
-                .filter(Projekt.vorgang_id == vorgang.id).count()):
-            continue
-        kandidaten.append(vorgang)
+    kandidaten = loeschlauf_kandidaten(session, grenze)
     if trocken:
-        return {"kandidaten": [v.id for v in kandidaten]}
-    for vorgang in kandidaten:
+        return {"kandidaten": kandidaten}
+    anzahl = 0
+    for vorgang_id in kandidaten:
+        vorgang = session.get(Vorgang, vorgang_id)
+        if vorgang is None:
+            continue
         kunde = session.get(Kunde, vorgang.kunde_id)
         vorgang.anfrage_text = ""
         vorgang.anfrage_rohdaten = ""
@@ -1440,6 +1531,9 @@ def loeschlauf(session: Session, erzwingen: bool = False,
             kunde.aktiv = False
         aktivitaet(session, vorgang.id, "system",
                    "Anonymisiert (Löschlauf)")
+        anzahl += 1
+        if anzahl % BLOCK_GROESSE == 0:
+            session.commit()   # Block-Commit: Schreibsperre nie lange am Stück
     parameter_setzen(session, "loeschlauf_datum",
                      datetime.now().date().isoformat())
     if kandidaten:

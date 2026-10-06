@@ -8,8 +8,11 @@
 <div class="seitenkopf">
     <h1>Leads VOT</h1>
     {% if benutzer.rolle != 'aussendienst' %}
-        <form method="post" action="/leads/sync">
-            <button class="knopf zweitrangig" type="submit">Jetzt aktualisieren</button>
+        {# v27 (PLAN_V17 Phase 128): Hinweis + Bestätigung vor dem monday-Vollabgleich #}
+        <form method="post" action="/leads/sync"
+              onsubmit="return confirm('monday-Vollabgleich: {{ monday_hinweis }}. Jetzt starten?');">
+            <input type="hidden" name="bestaetigt" value="1">
+            <button class="knopf zweitrangig" type="submit" title="{{ monday_hinweis }}">Jetzt aktualisieren</button>
         </form>
     {% endif %}
 </div>

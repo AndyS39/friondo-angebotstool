@@ -23,6 +23,14 @@ from app.models import (Angebot, Aufgabe, AufgabenpaketInstanz, Benutzer,
 
 BLATT = "Projekte"
 
+# v27 (PLAN_V17 Phase 128): Blockgröße – Commit je BLOCK importierte Zeilen.
+# [ANNAHME] 10 statt der 200 der Artikel-Importe: jede Bestandszeile legt Kunde,
+# Angebot, Vorgang, Projekt, Gewerk, Aufgabenpakete und Termine an (gemessen
+# 95 ms je neuer Zeile) – 200 Zeilen hielten die Schreibsperre ~19 s, länger als
+# der busy_timeout (5 s) anderer Nutzer; 10 Zeilen ≈ 1 s (Regel „höchstens 1 s
+# Schreibsperre am Stück“).
+BLOCK = 10
+
 # (Schlüssel, Spaltenüberschrift, Pflicht, Hinweis für das Blatt „Anleitung“)
 SPALTEN = [
     ("anrede", "Kunde Anrede", False, "Herr | Frau | Firma"),
@@ -534,31 +542,54 @@ def _zeile_importieren(session: Session, z: Zeile, imp: Bestandsimport,
     return eintrag
 
 
+def _zwischenstand(imp: Bestandsimport, protokoll: list, angelegt: int,
+                   aktualisiert: int, uebersprungen: int) -> None:
+    """v27 (PLAN_V17 Phase 128): Zähler und Protokoll am Import-Datensatz
+    nachführen – vor jedem Block-Commit, damit ein abgebrochener Lauf sein
+    Protokoll behält und über „Rückgängig“ zurückgenommen werden kann."""
+    imp.angelegt, imp.aktualisiert, imp.uebersprungen = angelegt, aktualisiert, uebersprungen
+    imp.protokoll_json = json.dumps(protokoll, ensure_ascii=False, default=str)
+
+
 def importieren(session: Session, zeilen: list[Zeile], dateiname: str,
                 benutzer=None) -> Bestandsimport:
-    """Importiert NUR fehlerfreie Zeilen (Vorschau vorher). Protokoll am Import."""
+    """Importiert NUR fehlerfreie Zeilen (Vorschau vorher). Protokoll am Import.
+
+    v27 (PLAN_V17 Phase 128): Schreiben in Blöcken mit Commit je BLOCK importierte
+    Zeilen. Schlüssel je Zeile ist TAIFUN-Nummer + Sparte (Upsert: zweiter Lauf
+    aktualisiert statt anzulegen); vor jedem Block-Commit werden Zähler und
+    Protokoll am Import-Datensatz nachgeführt. Abbruch nach Block n: die Zeilen der
+    Blöcke 1…n sind mit Protokoll gespeichert (abgeschlossen_am bleibt leer), ein
+    erneuter Lauf derselben Datei findet sie über den Schlüssel und aktualisiert
+    sie nur – keine doppelten Kunden, Angebote, Projekte oder Gewerke."""
+    from app import betrieb
     imp = Bestandsimport(dateiname=(dateiname or "")[:200],
                          benutzer_id=benutzer.id if benutzer else None)
     session.add(imp)
     session.flush()
     protokoll = []
     angelegt = aktualisiert = uebersprungen = 0
-    for z in zeilen:
-        if not z.ok:
-            uebersprungen += 1
-            protokoll.append({"zeile": z.nr, "aktion": "übersprungen",
-                              "fehler": z.fehler})
-            continue
-        eintrag = _zeile_importieren(session, z, imp, benutzer)
-        protokoll.append(eintrag)
-        if eintrag["aktion"] == "angelegt":
-            angelegt += 1
-        else:
-            aktualisiert += 1
-    imp.angelegt, imp.aktualisiert, imp.uebersprungen = angelegt, aktualisiert, uebersprungen
-    imp.protokoll_json = json.dumps(protokoll, ensure_ascii=False, default=str)
-    imp.abgeschlossen_am = datetime.now()
-    session.flush()
+    zaehler = 0
+    with betrieb.import_markieren("Bestandsimport"):
+        for z in zeilen:
+            if not z.ok:
+                uebersprungen += 1
+                protokoll.append({"zeile": z.nr, "aktion": "übersprungen",
+                                  "fehler": z.fehler})
+                continue
+            eintrag = _zeile_importieren(session, z, imp, benutzer)
+            protokoll.append(eintrag)
+            if eintrag["aktion"] == "angelegt":
+                angelegt += 1
+            else:
+                aktualisiert += 1
+            zaehler += 1
+            if zaehler % BLOCK == 0:
+                _zwischenstand(imp, protokoll, angelegt, aktualisiert, uebersprungen)
+                session.commit()      # Block abschließen – Schreibsperre freigeben
+        _zwischenstand(imp, protokoll, angelegt, aktualisiert, uebersprungen)
+        imp.abgeschlossen_am = datetime.now()
+        session.flush()
     return imp
 
 

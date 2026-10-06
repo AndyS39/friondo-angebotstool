@@ -3061,3 +3061,22 @@ table.tabelle tr.lm-klick { cursor: pointer; }
     .seitenkopf .param-suche { width: 100%; }
     .pe-nav { top: 0; }
 }
+
+/* v27 (PLAN_V17 Phase 129/132): Wartungsbanner + Betriebs-Seite */
+.wartung-banner { background: #b45309; color: #fff; padding: 8px 16px; text-align: center;
+    font-weight: 600; position: sticky; top: 0; z-index: 50; }
+.betrieb-kacheln { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 12px; margin: 12px 0 18px; }
+.betrieb-kachel { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; }
+.betrieb-kachel .kachel-titel { font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.03em; }
+.betrieb-kachel .kachel-wert { font-size: 1.25rem; font-weight: 700; }
+.betrieb-kachel form { margin-top: 6px; }
+.betrieb-ok { border-left: 4px solid #15803d; }
+.betrieb-warn { border-left: 4px solid #b45309; background: #fff7ed; }
+.betrieb-fehler { border-left: 4px solid #b91c1c; background: #fef2f2; }
+.betrieb-zweispaltig { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 900px) { .betrieb-zweispaltig { grid-template-columns: 1fr; } }
+.tabelle.kompakt td, .tabelle.kompakt th { padding: 4px 8px; font-size: 0.9rem; vertical-align: top; }
+.zeile-fehler td { background: #fff7ed; }
+.fehler-text { color: #b91c1c; }
+.formular-zeile { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-top: 8px; }

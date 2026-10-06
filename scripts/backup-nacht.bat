@@ -1,6 +1,9 @@
 @echo off
-rem Friondo Angebotstool - naechtliche Sicherung (Hotfix 06.10.2026, Uebergangsloesung
-rem bis PLAN_V17). Laeuft als geplante Aufgabe "Friondo Backup" taeglich 02:30:
+rem Friondo Angebotstool - Sicherung von Hand (seit v27 laeuft die naechtliche
+rem Sicherung IM Tool: Scheduler 02:30, Spiegelung nach BACKUP_ZIEL, Parametrierung
+rem -> Betrieb -> "Backup jetzt"; die Hotfix-Aufgabe "Friondo Backup" ist damit
+rem ueberfluessig - schtasks /Delete /TN "Friondo Backup" /F). Dieses Skript bleibt
+rem fuer Handlaeufe und als Rueckfalloesung erhalten:
 rem   1) SQLite-Datenbank ueber db.taegliches_backup() nach data\backups sichern
 rem      (SQLite-Backup-API, WAL-sicher, eine Datei je Tag, 30 Tage Aufbewahrung)
 rem   2) data\backups, data\angebote und data\projekte per robocopy nach

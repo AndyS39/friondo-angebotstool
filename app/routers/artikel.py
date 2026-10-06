@@ -12,6 +12,7 @@ from app import config, import_preisliste
 from app.db import get_session
 from app.models import Artikel, QUELLE_MANUELL
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/artikel")
 
@@ -30,7 +31,7 @@ def preis_parsen(text: str):
 
 
 @router.get("")
-async def liste(request: Request, q: str = "", kategorie: str = "", inaktive: bool = False,
+def liste(request: Request, q: str = "", kategorie: str = "", inaktive: bool = False,
                 fehlend: bool = False, session: Session = Depends(get_session)):
     abfrage = session.query(Artikel)
     if not inaktive:
@@ -61,23 +62,41 @@ async def liste(request: Request, q: str = "", kategorie: str = "", inaktive: bo
 
 
 # --- Import ---------------------------------------------------------------
+# v27 (PLAN_V17 Phase 128): Die Vorschau zeigt den Hinweis „Dauer etwa <n> s …“
+# mit Bestätigungs-Häkchen; der POST prüft das Häkchen serverseitig (sonst
+# Redirect zur Vorschau mit Meldung) und merkt sich die Dauer des Laufs
+# (Einstellung import_dauer_<schluessel>). Beides nur hier in den Routen –
+# migrate.py ruft die Modulfunktionen ohne Bestätigung auf.
+
+def _import_abgewiesen(ziel: str) -> RedirectResponse:
+    from urllib.parse import quote_plus
+    return RedirectResponse(f"{ziel}?meldung={quote_plus(import_preisliste.HINWEIS_BESTAETIGEN)}",
+                            status_code=303)
+
 
 @router.get("/import")
-async def import_vorschau(request: Request, session: Session = Depends(get_session)):
+def import_vorschau(request: Request, session: Session = Depends(get_session)):
+    hinweis = import_preisliste.import_hinweis(session, "preisliste")
+    meldung = request.query_params.get("meldung", "")
     fehlend = [str(p) for p in (config.PREISLISTE_PFAD, config.LOGIK_EXCEL_PFAD)
                if not p.exists()]
     if fehlend:
         return render(request, "artikel/import_vorschau.html", aktiv="/artikel",
-                      diff=None, dateifehler=fehlend)
+                      diff=None, dateifehler=fehlend, hinweis=hinweis, meldung=meldung)
     ergebnis = import_preisliste.lese_dateien()
     diff = import_preisliste.berechne_diff(session, ergebnis)
     return render(request, "artikel/import_vorschau.html", aktiv="/artikel",
-                  diff=diff, dateifehler=[])
+                  diff=diff, dateifehler=[], hinweis=hinweis, meldung=meldung)
 
 
 @router.post("/import")
-async def import_ausfuehren(session: Session = Depends(get_session)):
+def import_ausfuehren(request: Request, session: Session = Depends(get_session)):
+    import time
+    if not import_preisliste.import_bestaetigt(anfrage.formular(request)):
+        return _import_abgewiesen("/artikel/import")
+    start = time.perf_counter()
     diff, meldung = import_preisliste.import_ausfuehren(session)
+    import_preisliste.import_dauer_merken(session, "preisliste", start)
     return RedirectResponse(f"/artikel?meldung=Import+abgeschlossen:+{meldung.replace(' ', '+')}",
                             status_code=303)
 
@@ -85,22 +104,31 @@ async def import_ausfuehren(session: Session = Depends(get_session)):
 # --- v13-PV: PV-Positionslisten (Artikel-Preislisten/PV/) ------------------
 
 @router.get("/import-pv")
-async def import_pv_vorschau(request: Request, session: Session = Depends(get_session)):
+def import_pv_vorschau(request: Request, session: Session = Depends(get_session)):
     from app import import_pv
+    hinweis = import_preisliste.import_hinweis(session, "pv")
+    meldung = request.query_params.get("meldung", "")
     if not config.PV_PREISLISTEN_ORDNER.exists():
         return render(request, "artikel/import_vorschau.html", aktiv="/artikel",
-                      diff=None, dateifehler=[str(config.PV_PREISLISTEN_ORDNER)], pv=True)
+                      diff=None, dateifehler=[str(config.PV_PREISLISTEN_ORDNER)], pv=True,
+                      hinweis=hinweis, meldung=meldung)
     diff = import_pv.berechne_diff(session)
     return render(request, "artikel/import_vorschau.html", aktiv="/artikel",
-                  diff=diff, dateifehler=[], pv=True)
+                  diff=diff, dateifehler=[], pv=True, hinweis=hinweis, meldung=meldung)
 
 
 @router.post("/import-pv")
-async def import_pv_ausfuehren(session: Session = Depends(get_session)):
+def import_pv_ausfuehren(request: Request, session: Session = Depends(get_session)):
+    import time
+
     from app import import_pv
     from app import logik as logik_modul
+    if not import_preisliste.import_bestaetigt(anfrage.formular(request)):
+        return _import_abgewiesen("/artikel/import-pv")
+    start = time.perf_counter()
     _diff, meldung = import_pv.import_ausfuehren(session)
     logik_modul.neu_einlesen(session)   # WR/Speicher-Kombis + Validierung neu
+    import_preisliste.import_dauer_merken(session, "pv", start)
     return RedirectResponse(f"/artikel?q=PV&meldung=Import+abgeschlossen:+{meldung.replace(' ', '+')}",
                             status_code=303)
 
@@ -150,14 +178,14 @@ def _kategorien(session: Session) -> list[str]:
 
 
 @router.get("/neu")
-async def neu_formular(request: Request, session: Session = Depends(get_session)):
+def neu_formular(request: Request, session: Session = Depends(get_session)):
     return render(request, "artikel/formular.html", aktiv="/artikel",
                   artikel=None, daten={}, fehler={}, kategorien=_kategorien(session))
 
 
 @router.post("/neu")
-async def neu_speichern(request: Request, session: Session = Depends(get_session)):
-    daten = _formular_lesen(await request.form())
+def neu_speichern(request: Request, session: Session = Depends(get_session)):
+    daten = _formular_lesen(anfrage.formular(request))
     fehler = _validieren(daten)
     if fehler:
         return render(request, "artikel/formular.html", aktiv="/artikel",
@@ -171,7 +199,7 @@ async def neu_speichern(request: Request, session: Session = Depends(get_session
 
 
 @router.get("/{artikel_id}/bearbeiten")
-async def bearbeiten_formular(request: Request, artikel_id: int,
+def bearbeiten_formular(request: Request, artikel_id: int,
                               session: Session = Depends(get_session)):
     artikel = session.get(Artikel, artikel_id)
     if artikel is None:
@@ -181,12 +209,12 @@ async def bearbeiten_formular(request: Request, artikel_id: int,
 
 
 @router.post("/{artikel_id}/bearbeiten")
-async def bearbeiten_speichern(request: Request, artikel_id: int,
+def bearbeiten_speichern(request: Request, artikel_id: int,
                                session: Session = Depends(get_session)):
     artikel = session.get(Artikel, artikel_id)
     if artikel is None:
         return RedirectResponse("/artikel?meldung=Artikel+nicht+gefunden", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     daten = _formular_lesen(form)
     fehler = _validieren(daten)
     if fehler:

@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 from app.db import get_session
 from app.models import Benutzer, Erfassung, Lead
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
+from app import import_preisliste   # v27: Hinweis/Bestätigung monday-Vollabgleich
 
 router = APIRouter(prefix="/leads")
 
@@ -55,7 +57,7 @@ def offene_leads(session: Session, benutzer=None, ausgeblendet: bool = False):
 
 
 @router.get("")
-async def liste(request: Request, q: str = "", interesse: str = "",
+def liste(request: Request, q: str = "", interesse: str = "",
                 vertriebler_id: int = 0, lead_status: str = "", sortierung: str = "termin",
                 ansicht: str = "", kanal: str = "", session: Session = Depends(get_session)):
     from app import monday_sync
@@ -121,16 +123,27 @@ async def liste(request: Request, q: str = "", interesse: str = "",
                   heute=datetime.now(),
                   status_werte=status_werte, vertriebler_werte=vertriebler_werte,
                   sync_status=monday_sync.status,
+                  # v27 (Phase 128): Hinweistext vor dem monday-Vollabgleich
+                  monday_hinweis=import_preisliste.import_hinweis(session, "monday"),
                   meldung=request.query_params.get("meldung", ""))
 
 
 @router.post("/sync")
-async def jetzt_aktualisieren(request: Request, session: Session = Depends(get_session)):
-    """Button „Jetzt aktualisieren“ – Fehler werden angezeigt, blockieren nichts."""
+def jetzt_aktualisieren(request: Request, session: Session = Depends(get_session)):
+    """Button „Jetzt aktualisieren“ – Fehler werden angezeigt, blockieren nichts.
+    v27 (PLAN_V17 Phase 128): Vollabgleich ist ein Import – Hinweis mit Bestätigung
+    (Feld bestaetigt), Dauer wird als import_dauer_monday gemerkt, der Lauf steht
+    währenddessen im Betriebs-Status (monday_sync.sync markiert ihn)."""
+    import time
     from urllib.parse import quote_plus
 
     from app import monday_sync
+    if not import_preisliste.import_bestaetigt(anfrage.formular(request)):
+        return RedirectResponse(
+            "/leads?meldung=" + quote_plus(import_preisliste.HINWEIS_BESTAETIGEN), status_code=303)
+    start = time.perf_counter()
     ergebnis = monday_sync.sync(session)
+    import_preisliste.import_dauer_merken(session, "monday", start)
     if ergebnis["fehler"]:
         meldung = "Sync mit Hinweisen: " + " · ".join(ergebnis["fehler"])[:300]
     else:
@@ -139,7 +152,7 @@ async def jetzt_aktualisieren(request: Request, session: Session = Depends(get_s
 
 
 @router.post("/{lead_id}/vertriebler")
-async def vertriebler_aendern(request: Request, lead_id: int,
+def vertriebler_aendern(request: Request, lead_id: int,
                               session: Session = Depends(get_session)):
     """Innendienst/Admin ordnet den Lead einem anderen Außendienstler zu
     (v5-Nachtrag); der monday-Sync überschreibt das beim nächsten Lauf nur,
@@ -152,7 +165,7 @@ async def vertriebler_aendern(request: Request, lead_id: int,
     lead = session.get(Lead, lead_id)
     if lead is None:
         return RedirectResponse("/leads", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     wert = form.get("benutzer_id") or ""
     if wert.isdigit() and int(wert) > 0:
         lead.benutzer_id = int(wert)
@@ -168,7 +181,7 @@ async def vertriebler_aendern(request: Request, lead_id: int,
 
 
 @router.post("/{lead_id}/ausblenden")
-async def ausblenden(request: Request, lead_id: int,
+def ausblenden(request: Request, lead_id: int,
                      session: Session = Depends(get_session)):
     """Lead aus „Leads VOT“ nehmen (optional mit Grund); nicht löschen – der
     Sync lässt das Kennzeichen stehen, der Lead taucht nicht erneut auf."""
@@ -177,7 +190,7 @@ async def ausblenden(request: Request, lead_id: int,
     lead = session.get(Lead, lead_id)
     if lead is None or (benutzer.rolle == "aussendienst" and lead.benutzer_id != benutzer.id):
         return RedirectResponse("/leads", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     lead.ausgeblendet = True
     lead.ausgeblendet_grund = (form.get("grund") or "").strip()[:300]
     lead.ausgeblendet_am = datetime.now()
@@ -188,7 +201,7 @@ async def ausblenden(request: Request, lead_id: int,
 
 
 @router.post("/{lead_id}/kanal")
-async def kanal_aendern(request: Request, lead_id: int,
+def kanal_aendern(request: Request, lead_id: int,
                         session: Session = Depends(get_session)):
     """v9: Vertriebskanal manuell setzen (Vorrang vor dem monday-Sync);
     wirkt auf Lead UND Kunden. Leer = zurück zur Sync-Automatik."""
@@ -201,7 +214,7 @@ async def kanal_aendern(request: Request, lead_id: int,
     lead = session.get(Lead, lead_id)
     if lead is None:
         return RedirectResponse("/leads", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     kanal = (form.get("kanal") or "").strip()[:100]
     lead.vertriebskanal = kanal
     lead.kanal_manuell = bool(kanal)
@@ -226,7 +239,7 @@ async def kanal_aendern(request: Request, lead_id: int,
 
 
 @router.post("/{lead_id}/sparte-ausblenden")
-async def sparte_ausblenden(request: Request, lead_id: int,
+def sparte_ausblenden(request: Request, lead_id: int,
                             session: Session = Depends(get_session)):
     """v8: eine einzelne Sparte (Interesse) des Leads ausblenden bzw.
     zurückholen – der Lead bleibt sichtbar, solange andere Sparten offen sind."""
@@ -237,7 +250,7 @@ async def sparte_ausblenden(request: Request, lead_id: int,
     lead = session.get(Lead, lead_id)
     if lead is None or (benutzer.rolle == "aussendienst" and lead.benutzer_id != benutzer.id):
         return RedirectResponse("/leads", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     sparte = (form.get("sparte") or "").strip().upper()
     if sparte not in lead.sparten:
         return RedirectResponse("/leads", status_code=303)
@@ -254,7 +267,7 @@ async def sparte_ausblenden(request: Request, lead_id: int,
 
 
 @router.post("/{lead_id}/zurueckholen")
-async def zurueckholen(request: Request, lead_id: int,
+def zurueckholen(request: Request, lead_id: int,
                        session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
     benutzer = request.state.benutzer
@@ -270,7 +283,7 @@ async def zurueckholen(request: Request, lead_id: int,
 
 
 @router.get("/{lead_id}/erfassen")
-async def erfassen(request: Request, lead_id: int,
+def erfassen(request: Request, lead_id: int,
                    session: Session = Depends(get_session)):
     """Klick auf den Lead: Erfassung mit dem (per Sync angelegten) Kunden
     starten, Lead ↔ Kunde ↔ Erfassung verknüpfen."""

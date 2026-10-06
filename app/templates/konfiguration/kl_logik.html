@@ -10,14 +10,21 @@
     <h1>Klimakonfigurator – Logik (Lesesicht)</h1>
     <div class="aktionen">
         <a class="knopf zweitrangig" href="/parametrierung">← Parametrierung</a>
-        <form method="post" action="/parametrierung/artikel/kl-import">
-            <button class="knopf" type="submit" {{ 'disabled' if not kl_import_ok }}>
+        {# v27 (PLAN_V17 Phase 128): Hinweis vor dem Start – Bestätigung per confirm()
+           plus verstecktes Feld „bestaetigt“ (serverseitig geprüft) #}
+        <form method="post" action="/parametrierung/artikel/kl-import"
+              onsubmit="return confirm('Klima-Positionslisten importieren: {{ import_hinweise.klima }}. Jetzt starten?');">
+            <input type="hidden" name="bestaetigt" value="1">
+            <button class="knopf" type="submit" {{ 'disabled' if not kl_import_ok }}
+                    title="{{ import_hinweise.klima }}">
                 Artikel → Klima-Positionslisten importieren</button>
         </form>
         <a class="knopf zweitrangig" href="/parametrierung/artikel/kl-import">Import-Vorschau</a>
         <a class="knopf zweitrangig" href="/artikel?q=KL0">Artikel Sparte KL</a>
-        <form method="post" action="/parametrierung/neu-einlesen">
-            <button class="knopf zweitrangig" type="submit">Parametrierung neu einlesen</button>
+        <form method="post" action="/parametrierung/neu-einlesen"
+              onsubmit="return confirm('Logik-Excel neu einlesen: {{ import_hinweise.logik }}. Jetzt starten?');">
+            <input type="hidden" name="bestaetigt" value="1">
+            <button class="knopf zweitrangig" type="submit" title="{{ import_hinweise.logik }}">Parametrierung neu einlesen</button>
         </form>
     </div>
 </div>

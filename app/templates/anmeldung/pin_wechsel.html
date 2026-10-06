@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block titel %}PIN ändern – Friondo Angebotstool{% endblock %}
+
+{# v27 (PLAN_V17 Phase 130): PIN-Wechsel für jede Rolle, mobil tauglich wie
+   login.html. Pflichtwechsel (pin_wechsel_noetig) nach dem ersten Login, nach
+   einem Admin-Reset und nach dem CSV-Import – die Middleware leitet bis dahin
+   jede Seite hierher. Regeln: auth.pin_regel_pruefen (Mindestlänge aus dem
+   Parameter pin_mindestlaenge, Sperrliste, keine Folgen/Wiederholungen/Jahreszahlen). #}
+{% block inhalt %}
+<link rel="stylesheet" href="/static/login_v27.css?v={{ css_version }}">
+<div class="login-karte pin-wechsel">
+    <h1>PIN ändern</h1>
+    {% if pflicht %}
+        <p class="hinweis">Bitte vergeben Sie jetzt eine eigene PIN – die Start-PIN gilt nur
+            für die erste Anmeldung. Erst danach ist das Tool wieder erreichbar.</p>
+    {% endif %}
+    {% if fehler %}<p class="meldung fehler">{{ fehler }}</p>{% endif %}
+    <form method="post" action="/pin-wechsel">
+        <label>Aktuelle PIN
+            <input type="password" name="pin_alt" inputmode="numeric"
+                   autocomplete="current-password" required autofocus>
+        </label>
+        <label>Neue PIN
+            <input type="password" name="pin_neu" inputmode="numeric"
+                   autocomplete="new-password" required minlength="{{ mindestlaenge }}">
+        </label>
+        <label>Neue PIN wiederholen
+            <input type="password" name="pin_neu2" inputmode="numeric"
+                   autocomplete="new-password" required minlength="{{ mindestlaenge }}">
+        </label>
+        <button class="knopf gross" type="submit">PIN speichern</button>
+    </form>
+    <p class="dezent" style="margin-bottom:0">Regeln für die neue PIN:</p>
+    <ul class="pin-regeln dezent">
+        <li>mindestens {{ mindestlaenge }} Ziffern, nur Ziffern</li>
+        <li>keine Zahlenfolgen (123456, 654321) und keine Wiederholungen (111111)</li>
+        <li>keine Jahreszahlen wie 1985 oder 2024 (Geburtsjahr-Muster)</li>
+        <li>keine zu einfache PIN aus der Sperrliste (z. B. 123456, 111111)</li>
+        <li>nicht die bisherige PIN</li>
+    </ul>
+    <p class="dezent">
+        {% if not pflicht %}<a href="{{ zurueck }}">Zurück ohne Änderung</a> ·{% endif %}
+        <a href="/logout">Abmelden</a>
+    </p>
+</div>
+{% endblock %}

@@ -39,6 +39,12 @@ Deckungsbeiträge.
   dann git push und auf dem Server update.bat (als Administrator; sichert,
   zieht, migriert, startet). Danach docs/nach-dem-update-*.md abarbeiten
   und die CLAUDE.md hier im Projektwissen austauschen.
+- **Wartungsfenster (seit v27, PLAN_V17 Phase 132):** Updates nur im festen
+  Fenster **Dienstag 18:30–19:30** [ANNAHME], nie zur Arbeitszeit; vorher
+  Wartungsbanner über Parametrierung → Betrieb setzen (mindestens 30 Minuten
+  vorher), nach update.bat `scripts\smoke.bat`, Banner wieder entfernen.
+  Hotfixes außerhalb des Fensters nur mit Freigabe von Andreas. Der Server
+  läuft als Dienst (NSSM bzw. Aufgabe + Wächter, `docs/betrieb.md`).
 
 ## 3. Dateien und Ablage
 - **Projektwissen (hier):** CLAUDE.md (kanonisch), PLAN_GESAMT.md, aktive

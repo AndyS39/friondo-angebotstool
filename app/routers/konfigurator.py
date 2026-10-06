@@ -13,6 +13,7 @@ from app import logik as logik_modul
 from app.db import get_session
 from app.models import Konfiguration, Kunde
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/konfigurator")
 
@@ -33,7 +34,7 @@ def _status_aktualisieren(konfig: Konfiguration, logik, antworten: dict) -> None
 
 
 @router.get("")
-async def start(request: Request, kunde_id: int = 0,
+def start(request: Request, kunde_id: int = 0,
                 session: Session = Depends(get_session)):
     """v10-Bugfix (Phase 59): Der Direkt-Konfigurator aus dem Angebote-Bereich
     erzeugte Angebote OHNE Erfassung – dadurch fehlten Absenden-Schritt und
@@ -45,8 +46,8 @@ async def start(request: Request, kunde_id: int = 0,
 
 
 @router.post("/start")
-async def starten(request: Request, session: Session = Depends(get_session)):
-    form = await request.form()
+def starten(request: Request, session: Session = Depends(get_session)):
+    form = anfrage.formular(request)
     try:
         kunde_id = int(form.get("kunde_id") or 0)
     except ValueError:
@@ -61,7 +62,7 @@ async def starten(request: Request, session: Session = Depends(get_session)):
 
 
 @router.get("/{konfig_id}")
-async def schritt(request: Request, konfig_id: int, frage: str = "",
+def schritt(request: Request, konfig_id: int, frage: str = "",
                   session: Session = Depends(get_session)):
     konfig = session.get(Konfiguration, konfig_id)
     if konfig is None:
@@ -104,13 +105,13 @@ async def schritt(request: Request, konfig_id: int, frage: str = "",
 
 
 @router.post("/{konfig_id}/antwort")
-async def antwort(request: Request, konfig_id: int,
+def antwort(request: Request, konfig_id: int,
                   session: Session = Depends(get_session)):
     konfig = session.get(Konfiguration, konfig_id)
     if konfig is None:
         return RedirectResponse("/konfigurator", status_code=303)
     logik, _ = logik_modul.hole_logik(session)
-    form = await request.form()
+    form = anfrage.formular(request)
     frage_id = form.get("frage_id", "")
     frage = logik.fragen.get(frage_id)
     if frage is None:

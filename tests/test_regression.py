@@ -61,6 +61,10 @@ class TestKontrollSzenario(unittest.TestCase):
         cls.positionen = angebot_aufbau.positionen_zusammenstellen(
             cls.logik, KONTROLL_SZENARIO, cls.session)
 
+    @classmethod
+    def tearDownClass(cls):
+        cls.session.close()   # v27: keine Verbindung über die Suite offen halten
+
     def _netto_cent(self):
         return sum(round(p["menge"] * p["e_preis_cent"])
                    for p in self.positionen if not p["ep_flag"])
@@ -163,6 +167,10 @@ class TestDachzentrale(unittest.TestCase):
     """Neuer v3-Testfall lt. PLAN_V3 Phase 20: alte Anlage im DG."""
 
     @classmethod
+    def tearDownClass(cls):
+        cls.session.close()   # v27: keine Verbindung über die Suite offen halten
+
+    @classmethod
     def setUpClass(cls):
         init_db()
         cls.logik, bericht = logik_einlesen()
@@ -234,6 +242,7 @@ class TestRabatt(unittest.TestCase):
         session = SessionLocal()
         positionen = angebot_aufbau.positionen_zusammenstellen(
             cls.logik, KONTROLL_SZENARIO, session)
+        session.close()   # v27: Positionen sind Dicts – Sitzung sofort zu
         cls.angebot = Angebot(nummer="TEST-RABATT", kunde_id=0)
         for p in positionen:
             cls.angebot.positionen.append(AngebotsPosition(**p))

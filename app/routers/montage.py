@@ -18,6 +18,7 @@ from app.models import (Angebot, Aufgabe, Benutzer, Gewerk, Kunde, Projekt,
                         ProjektDokument, ProjektTermin, Team, TeamMitglied,
                         AUFGABE_STATUS_NAMEN, GEWERK_PHASEN_NAMEN)
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/montage")
 
@@ -52,7 +53,7 @@ def _einsatz_erlaubt(session: Session, benutzer, termin: ProjektTermin) -> bool:
 
 
 @router.get("")
-async def meine_einsaetze(request: Request, team_id: int = 0,
+def meine_einsaetze(request: Request, team_id: int = 0,
                           ansicht: str = "liste", start: str = "",
                           session: Session = Depends(get_session)):
     """v15 (Phase 82): Team-Auswahl → chronologische Liste (heute, diese
@@ -128,7 +129,7 @@ async def meine_einsaetze(request: Request, team_id: int = 0,
 
 
 @router.get("/einsatz/{termin_id}")
-async def einsatz(request: Request, termin_id: int,
+def einsatz(request: Request, termin_id: int,
                   session: Session = Depends(get_session)):
     """Steckbrief read-only: Kunde, Ausführungsadresse (Karten-Link), Sparte,
     Positionen OHNE Preise, Bemerkung, Heizlast, Montage-Aufgaben, Fotos."""
@@ -223,7 +224,7 @@ async def einsatz(request: Request, termin_id: int,
 
 
 @router.get("/dokument/{dokument_id}")
-async def dokument_anzeigen(request: Request, dokument_id: int,
+def dokument_anzeigen(request: Request, dokument_id: int,
                             session: Session = Depends(get_session)):
     """Fotos/Dokumente ansehen – die Rolle montage darf /projektierung nicht
     aufrufen, deshalb ein eigener Lesepfad."""
@@ -243,11 +244,11 @@ async def dokument_anzeigen(request: Request, dokument_id: int,
 
 
 @router.post("/aufgabe/{aufgabe_id}/erledigt")
-async def aufgabe_erledigt(request: Request, aufgabe_id: int,
+def aufgabe_erledigt(request: Request, aufgabe_id: int,
                            session: Session = Depends(get_session)):
     if (umleitung := _gate(request, session)) is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     zurueck = f"/montage/einsatz/{form.get('termin_id', '')}"
     aufgabe = session.get(Aufgabe, aufgabe_id)
     if aufgabe is None or aufgabe.rolle != "montage":
@@ -269,7 +270,7 @@ async def aufgabe_erledigt(request: Request, aufgabe_id: int,
 
 
 @router.post("/einsatz/{termin_id}/foto")
-async def foto_hochladen(request: Request, termin_id: int,
+def foto_hochladen(request: Request, termin_id: int,
                          session: Session = Depends(get_session)):
     """Foto-Upload vom Handy in den Foto-Ordner des Gewerks (max. 20 MB)."""
     if (umleitung := _gate(request, session)) is not None:
@@ -280,13 +281,13 @@ async def foto_hochladen(request: Request, termin_id: int,
         return RedirectResponse("/montage", status_code=303)
     projekt = session.get(Projekt, termin.projekt_id)
     gewerk = session.get(Gewerk, termin.gewerk_id) if termin.gewerk_id else None
-    form = await request.form()
+    form = anfrage.formular(request)
     datei = form.get("datei")
     ziel_meldung = f"/montage/einsatz/{termin_id}?meldung="
     if datei is None or not getattr(datei, "filename", ""):
         return RedirectResponse(ziel_meldung + quote_plus(
             "Bitte ein Foto wählen."), status_code=303)
-    inhalt = await datei.read()
+    inhalt = datei.file.read()
     if len(inhalt) > 20 * 1024 * 1024:
         return RedirectResponse(ziel_meldung + quote_plus(
             "Datei größer als 20 MB – bitte kleinere Auflösung wählen."),
@@ -316,7 +317,7 @@ async def foto_hochladen(request: Request, termin_id: int,
 
 
 @router.get("/einsatz/{termin_id}/formular/{name}")
-async def formular_seite(request: Request, termin_id: int, name: str,
+def formular_seite(request: Request, termin_id: int, name: str,
                          session: Session = Depends(get_session)):
     """v15 (Phase 82): mobiles Formular (Blatt "Formulare"), seitenweise mit
     Zwischenspeichern; Felder inkl. Foto und Unterschrift (Canvas)."""
@@ -354,7 +355,7 @@ async def formular_seite(request: Request, termin_id: int, name: str,
 
 
 @router.post("/einsatz/{termin_id}/formular/{name}")
-async def formular_speichern(request: Request, termin_id: int, name: str,
+def formular_speichern(request: Request, termin_id: int, name: str,
                              session: Session = Depends(get_session)):
     from app import montage_formulare, projektierung_logik
     if (umleitung := _gate(request, session)) is not None:
@@ -369,12 +370,12 @@ async def formular_speichern(request: Request, termin_id: int, name: str,
     if gewerk is None or not seiten:
         return RedirectResponse(f"/montage/einsatz/{termin_id}", status_code=303)
     eintrag = montage_formulare.formular_holen(session, gewerk, name, benutzer)
-    form = await request.form()
+    form = anfrage.formular(request)
     try:
         seite = max(0, min(int(form.get("seite") or 0), len(seiten) - 1))
     except ValueError:
         seite = 0
-    await montage_formulare.seite_speichern(session, eintrag, gewerk,
+    montage_formulare.seite_speichern(session, eintrag, gewerk,
                                             seiten[seite][1], form, benutzer)
     aktion = form.get("aktion") or "weiter"
     basis = f"/montage/einsatz/{termin_id}/formular/{name}"
@@ -394,7 +395,7 @@ async def formular_speichern(request: Request, termin_id: int, name: str,
 
 
 @router.post("/einsatz/{termin_id}/restarbeit")
-async def restarbeit_melden(request: Request, termin_id: int,
+def restarbeit_melden(request: Request, termin_id: int,
                             session: Session = Depends(get_session)):
     """v15 (Phase 82): Restarbeit/Reklamation aus der Montage (Text + Foto
     in die Galerie Inbetrieb-/Abnahme)."""
@@ -407,7 +408,7 @@ async def restarbeit_melden(request: Request, termin_id: int,
     gewerk = session.get(Gewerk, termin.gewerk_id) if termin.gewerk_id else None
     if gewerk is None:
         return RedirectResponse(f"/montage/einsatz/{termin_id}", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     text = (form.get("text") or "").strip()[:500]
     if not text:
         return RedirectResponse(f"/montage/einsatz/{termin_id}?meldung="
@@ -422,7 +423,7 @@ async def restarbeit_melden(request: Request, termin_id: int,
         angebot = (session.get(Angebot, gewerk.angebot_id)
                    if gewerk.angebot_id else None)
         if angebot is not None and angebot.vorgang_id:
-            inhalt = await datei.read()
+            inhalt = datei.file   # v27 (Phase 128): wird in galerie.speichern gestreamt
             galerie_datei = galerie_modul.speichern(
                 session, angebot.vorgang_id, "Inbetrieb-/Abnahme",
                 datei.filename, inhalt, benutzer=benutzer,
@@ -441,7 +442,7 @@ async def restarbeit_melden(request: Request, termin_id: int,
 
 
 @router.post("/einsatz/{termin_id}/phase")
-async def montage_phase(request: Request, termin_id: int,
+def montage_phase(request: Request, termin_id: int,
                         session: Session = Depends(get_session)):
     """„Montage gestartet“ → In Ausführung; „Montage fertig“ → Abnahme offen
     (Pflichtfeld Kurzbericht → Verlauf)."""
@@ -456,7 +457,7 @@ async def montage_phase(request: Request, termin_id: int,
         return RedirectResponse(f"/montage/einsatz/{termin_id}?meldung="
                                 + quote_plus("Kein Gewerk am Termin."),
                                 status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     aktion = form.get("aktion") or ""
     bericht = (form.get("bericht") or "").strip()
     ziel_meldung = f"/montage/einsatz/{termin_id}?meldung="

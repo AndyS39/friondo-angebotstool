@@ -3,6 +3,8 @@
 {% block titel %}Anmeldung – Friondo Angebotstool{% endblock %}
 
 {% block inhalt %}
+{# v27 (PLAN_V17 Phase 130): eigene Styles der Login-Härtung (nicht style.css) #}
+<link rel="stylesheet" href="/static/login_v27.css?v={{ css_version }}">
 <div class="login-karte">
     <h1>Anmeldung</h1>
     {% if fehler %}<p class="meldung fehler">{{ fehler }}</p>{% endif %}
@@ -18,6 +20,15 @@
         <label>PIN
             <input type="password" name="pin" inputmode="numeric" autocomplete="off" autofocus>
         </label>
+        {# v27 (Phase 130): 30 Tage Sitzung für Außendienst/Montage – Büro-Rollen
+           bleiben bei 12 h, auch mit Häkchen (auth.sitzungsdauer_s entscheidet) #}
+        <label class="kontrollfeld login-bleiben">
+            <input type="checkbox" name="angemeldet_bleiben" value="on"
+                   {{ 'checked' if angemeldet_bleiben }}>
+            Auf diesem Gerät angemeldet bleiben
+        </label>
+        <span class="dezent login-hinweis">Gilt für Außendienst und Montage ({{ tage_mobil }} Tage);
+            Büro-Rollen bleiben {{ stunden_buero }} Stunden angemeldet.</span>
         <button class="knopf gross" type="submit">Anmelden</button>
     </form>
     {% else %}

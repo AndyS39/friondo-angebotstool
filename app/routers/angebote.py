@@ -16,6 +16,7 @@ from app.models import (ANGEBOT_STATUS, Angebot, AngebotsPosition, Artikel,
                         Konfiguration, Kunde)
 from app.routers.artikel import preis_parsen
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/angebote")
 
@@ -45,14 +46,23 @@ def _speichern(session: Session, aktion, wiederholungen: int = 1) -> None:
     import time
 
     from sqlalchemy.exc import OperationalError
+
+    from app import betrieb
     for versuch in range(wiederholungen + 1):
+        start = time.perf_counter()
         try:
             aktion()
             session.commit()
+            # v27 (PLAN_V17 Phase 131): Wartezeit auf die Schreibsperre messen
+            # (Commit-Dauer; Betriebs-Seite, /health, Lasttest-Bericht)
+            betrieb.schreibsperre_messen(int((time.perf_counter() - start) * 1000))
             return
         except OperationalError as problem:
             session.rollback()
-            if "locked" not in str(problem).lower() or versuch >= wiederholungen:
+            gesperrt = "locked" in str(problem).lower()
+            betrieb.schreibsperre_messen(int((time.perf_counter() - start) * 1000),
+                                         locked=gesperrt)
+            if not gesperrt or versuch >= wiederholungen:
                 raise
             time.sleep(0.7)
 
@@ -73,7 +83,7 @@ def _kunden_map(session: Session, angebote) -> dict[int, Kunde]:
 
 
 @router.get("")
-async def liste(request: Request, q: str = "", status: str = "", interesse: str = "",
+def liste(request: Request, q: str = "", status: str = "", interesse: str = "",
                 vertriebler_id: int = 0, sortierung: str = "nummer", kanal: str = "",
                 verfolgung: str = "", sparte: str = "",
                 session: Session = Depends(get_session)):
@@ -206,7 +216,7 @@ async def liste(request: Request, q: str = "", status: str = "", interesse: str 
 
 
 @router.get("/rabatt-freigaben")
-async def rabatt_freigaben(request: Request, session: Session = Depends(get_session)):
+def rabatt_freigaben(request: Request, session: Session = Depends(get_session)):
     """v10 (Phase 59): offene AD-Rabatt-Anfragen – der Innendienst sieht die
     €-Auswirkung auf den DB und genehmigt oder lehnt mit Kommentar ab."""
     from app.models import Benutzer, RabattFreigabe
@@ -237,7 +247,7 @@ async def rabatt_freigaben(request: Request, session: Session = Depends(get_sess
 
 
 @router.post("/rabatt-freigaben/{freigabe_id}/entscheiden")
-async def rabatt_entscheiden(request: Request, freigabe_id: int,
+def rabatt_entscheiden(request: Request, freigabe_id: int,
                              session: Session = Depends(get_session)):
     """Genehmigen wendet den Rabatt an (Entwurf direkt, versendet → neue
     Version); Ablehnen verlangt einen Kommentar. Beides landet im
@@ -250,7 +260,7 @@ async def rabatt_entscheiden(request: Request, freigabe_id: int,
     freigabe = session.get(RabattFreigabe, freigabe_id)
     if freigabe is None or freigabe.status != "offen":
         return RedirectResponse("/angebote/rabatt-freigaben", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     aktion = form.get("aktion", "")
     kommentar = (form.get("kommentar") or "").strip()[:500]
     benutzer = request.state.benutzer
@@ -303,7 +313,7 @@ async def rabatt_entscheiden(request: Request, freigabe_id: int,
 
 
 @router.get("/aus-konfiguration/{konfig_id}")
-async def aus_konfiguration(konfig_id: int, session: Session = Depends(get_session)):
+def aus_konfiguration(konfig_id: int, session: Session = Depends(get_session)):
     konfig = session.get(Konfiguration, konfig_id)
     if konfig is None or konfig.status != "fertig":
         return RedirectResponse("/angebote?meldung=Konfiguration+nicht+gefunden+oder+nicht+fertig",
@@ -318,7 +328,7 @@ async def aus_konfiguration(konfig_id: int, session: Session = Depends(get_sessi
 
 
 @router.get("/neu")
-async def neu(kunde_id: int = 0, session: Session = Depends(get_session)):
+def neu(kunde_id: int = 0, session: Session = Depends(get_session)):
     kunde = session.get(Kunde, kunde_id)
     if kunde is None:
         return RedirectResponse("/konfigurator", status_code=303)
@@ -327,7 +337,7 @@ async def neu(kunde_id: int = 0, session: Session = Depends(get_session)):
 
 
 @router.get("/{angebot_id}")
-async def editor(request: Request, angebot_id: int,
+def editor(request: Request, angebot_id: int,
                  session: Session = Depends(get_session)):
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
@@ -491,7 +501,7 @@ async def editor(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/anschriften")
-async def anschriften_setzen(request: Request, angebot_id: int,
+def anschriften_setzen(request: Request, angebot_id: int,
                              session: Session = Depends(get_session)):
     """v20 (Phase 98): Rechnungs- und Lieferanschrift (Karten im Editor) –
     nur im Entwurf; versendete Angebote über „Überarbeiten“ (.2)."""
@@ -507,7 +517,7 @@ async def anschriften_setzen(request: Request, angebot_id: int,
         return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
             "Anschriften sind nur im Entwurf änderbar – bitte „Überarbeiten“ "
             "(neue Version) nutzen."), status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     anschriften.setzen(angebot, "rechnung", anschriften.aus_formular(form, "rechnung"))
     anschriften.setzen(angebot, "liefer", anschriften.aus_formular(form, "liefer"))
     angebot.liefer_anschrift = ""        # Alt-Text v13 ist jetzt strukturiert
@@ -517,7 +527,7 @@ async def anschriften_setzen(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/lieferanschrift")
-async def lieferanschrift_setzen(request: Request, angebot_id: int,
+def lieferanschrift_setzen(request: Request, angebot_id: int,
                                  session: Session = Depends(get_session)):
     """v11 (Phase 66): abweichende Lieferanschrift (optional, z. B.
     Contracting) – eigene Zeile im PDF unter Rechnungs-/Ausführungsanschrift."""
@@ -526,7 +536,7 @@ async def lieferanschrift_setzen(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
         return RedirectResponse("/angebote", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     angebot.liefer_anschrift = (form.get("liefer_anschrift") or "").strip()[:300]
     session.commit()
     return RedirectResponse(
@@ -534,7 +544,7 @@ async def lieferanschrift_setzen(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/ust")
-async def ust_setzen(request: Request, angebot_id: int,
+def ust_setzen(request: Request, angebot_id: int,
                      session: Session = Depends(get_session)):
     """v13-PV (Phase 75): Steuersatz je Angebot (19 % oder 0 % nach
     § 12 Abs. 3 UStG) – wirkt auf Summen, Rabatt, DB, monday, Statistik."""
@@ -543,7 +553,7 @@ async def ust_setzen(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     if angebot is None or angebot.extern:
         return RedirectResponse("/angebote", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     wert = (form.get("ust_satz") or "").strip()
     if wert in ("0", "19"):
         angebot.ust_satz = float(wert)
@@ -553,7 +563,7 @@ async def ust_setzen(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/wirtschaftlichkeit")
-async def wirtschaftlichkeit_setzen(request: Request, angebot_id: int,
+def wirtschaftlichkeit_setzen(request: Request, angebot_id: int,
                                     session: Session = Depends(get_session)):
     """v22 (PLAN_V15 Phase 102): Häkchen „Wirtschaftlichkeit im PDF
     ausblenden“ – nur bei PV-Angeboten; die drei Wirtschaftlichkeitsseiten
@@ -567,7 +577,7 @@ async def wirtschaftlichkeit_setzen(request: Request, angebot_id: int,
         return RedirectResponse("/angebote", status_code=303)
     if (angebot.konfigurator_typ or "WP") != "PV":
         return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     angebot.wirtschaftlichkeit_ausblenden = form.get("ausblenden") == "on"
     session.commit()
     meldung = ("Wirtschaftlichkeit im PDF ausgeblendet"
@@ -578,7 +588,7 @@ async def wirtschaftlichkeit_setzen(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/sperre")
-async def sperre_verlaengern(request: Request, angebot_id: int):
+def sperre_verlaengern(request: Request, angebot_id: int):
     """Heartbeat des offenen Editors (alle 4 Minuten per JS)."""
     benutzer = request.state.benutzer
     ok = sperren.verlaengern(angebot_id, benutzer.id if benutzer else 0)
@@ -587,7 +597,7 @@ async def sperre_verlaengern(request: Request, angebot_id: int):
 
 
 @router.post("/{angebot_id}/sperre-frei")
-async def sperre_freigeben(request: Request, angebot_id: int):
+def sperre_freigeben(request: Request, angebot_id: int):
     """Freigabe beim Verlassen der Seite (sendBeacon); sonst läuft die
     Sperre nach 10 Minuten ohne Heartbeat von selbst ab."""
     benutzer = request.state.benutzer
@@ -598,11 +608,11 @@ async def sperre_freigeben(request: Request, angebot_id: int):
 
 
 @router.post("/{angebot_id}/position/{position_id}/menge")
-async def menge_aendern(request: Request, angebot_id: int, position_id: int,
+def menge_aendern(request: Request, angebot_id: int, position_id: int,
                         session: Session = Depends(get_session)):
     if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     position = session.get(AngebotsPosition, position_id)
     if position and position.angebot_id == angebot_id:
         from app.konfigurator import zahl_parsen
@@ -615,7 +625,7 @@ async def menge_aendern(request: Request, angebot_id: int, position_id: int,
 
 
 @router.post("/{angebot_id}/position/{position_id}/aendern")
-async def position_aendern(request: Request, angebot_id: int, position_id: int,
+def position_aendern(request: Request, angebot_id: int, position_id: int,
                            session: Session = Depends(get_session)):
     """Zeilen-Editor (v5, Phase 34): Anzeigenummer, Menge, Einzelpreis
     (Original bleibt erhalten), Positionsrabatt (% oder €), bauseits."""
@@ -624,7 +634,7 @@ async def position_aendern(request: Request, angebot_id: int, position_id: int,
     from urllib.parse import quote_plus
 
     from app.konfigurator import zahl_parsen
-    form = await request.form()
+    form = anfrage.formular(request)
     position = session.get(AngebotsPosition, position_id)
     if position is None or position.angebot_id != angebot_id:
         return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
@@ -684,13 +694,13 @@ async def position_aendern(request: Request, angebot_id: int, position_id: int,
 
 
 @router.post("/{angebot_id}/sortierung")
-async def sortierung(request: Request, angebot_id: int,
+def sortierung(request: Request, angebot_id: int,
                      session: Session = Depends(get_session)):
     """Drag & Drop (v5): Reihenfolge aller Positions-IDs kommagetrennt."""
     if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
         return umleitung
     from urllib.parse import quote_plus
-    form = await request.form()
+    form = anfrage.formular(request)
     # v22: robustes Parsen (int() nach isdigit() warf bei Unicode-Ziffern)
     ids = [z for z in (_ganzzahl(t) for t in (form.get("reihenfolge") or "").split(",")
                        if t.strip()) if z is not None]
@@ -726,7 +736,7 @@ async def sortierung(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/gruppe")
-async def gruppe_umbenennen(request: Request, angebot_id: int,
+def gruppe_umbenennen(request: Request, angebot_id: int,
                             session: Session = Depends(get_session)):
     """v22 (PLAN_V15 Phase 103): Gruppen-Überschrift nur in diesem Angebot
     ändern. Der Text steht auf jeder Position des Blocks – alle Positionen mit
@@ -736,7 +746,7 @@ async def gruppe_umbenennen(request: Request, angebot_id: int,
     from urllib.parse import quote_plus
     if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     block_text = (form.get("block_nr") or "").strip()
     if not block_text.lstrip("-").isdigit():
         return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
@@ -756,7 +766,7 @@ async def gruppe_umbenennen(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/neu-nummerieren")
-async def neu_nummerieren(request: Request, angebot_id: int,
+def neu_nummerieren(request: Request, angebot_id: int,
                           session: Session = Depends(get_session)):
     """Eigene Nummern verwerfen → wieder fortlaufend 001, 002, … (v5)."""
     if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
@@ -769,7 +779,7 @@ async def neu_nummerieren(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/position/{position_id}/entfernen")
-async def position_entfernen(request: Request, angebot_id: int, position_id: int,
+def position_entfernen(request: Request, angebot_id: int, position_id: int,
                              session: Session = Depends(get_session)):
     if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
         return umleitung
@@ -784,14 +794,14 @@ async def position_entfernen(request: Request, angebot_id: int, position_id: int
 
 
 @router.post("/{angebot_id}/position-neu")
-async def position_neu(request: Request, angebot_id: int,
+def position_neu(request: Request, angebot_id: int,
                        session: Session = Depends(get_session)):
     if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
         return umleitung
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
         return RedirectResponse("/angebote", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     max_sort = max((p.sort for p in angebot.positionen), default=0)
     letzte_gruppe = angebot.positionen[-1].gruppe if angebot.positionen else ""
     letzter_block = angebot.positionen[-1].block_nr if angebot.positionen else 0
@@ -864,7 +874,7 @@ async def position_neu(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/rabatt")
-async def rabatt_setzen(request: Request, angebot_id: int,
+def rabatt_setzen(request: Request, angebot_id: int,
                         session: Session = Depends(get_session)):
     """Rabatt (Phase 21): Betrag ODER Prozent + optionale Bezeichnung;
     leerer Wert entfernt den Rabatt. Nur Innendienst/Admin (Middleware)."""
@@ -873,7 +883,7 @@ async def rabatt_setzen(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
         return RedirectResponse("/angebote", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     wert = (form.get("wert") or "").strip()
     typ = form.get("typ", "betrag")
     angebot.rabatt_bezeichnung = (form.get("bezeichnung") or "").strip()
@@ -910,7 +920,7 @@ async def rabatt_setzen(request: Request, angebot_id: int,
 
 
 @router.get("/{angebot_id}/protokoll.pdf")
-async def protokoll_pdf(angebot_id: int, session: Session = Depends(get_session)):
+def protokoll_pdf(angebot_id: int, session: Session = Depends(get_session)):
     """Abfrageprotokoll des Angebots als PDF (Phase 25)."""
     from app import protokoll_pdf as protokoll_modul
     angebot = session.get(Angebot, angebot_id)
@@ -944,7 +954,7 @@ async def protokoll_pdf(angebot_id: int, session: Session = Depends(get_session)
 
 
 @router.get("/{angebot_id}/pdf")
-async def pdf_anzeigen(angebot_id: int, session: Session = Depends(get_session)):
+def pdf_anzeigen(angebot_id: int, session: Session = Depends(get_session)):
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
         return RedirectResponse("/angebote?meldung=Angebot+nicht+gefunden", status_code=303)
@@ -959,7 +969,7 @@ async def pdf_anzeigen(angebot_id: int, session: Session = Depends(get_session))
 
 
 @router.get("/{angebot_id}/lieferschein.pdf")
-async def lieferschein(angebot_id: int, session: Session = Depends(get_session)):
+def lieferschein(angebot_id: int, session: Session = Depends(get_session)):
     """v13 (PLAN_V13 Phase 80): Lieferschein ohne Preise – nur für Tool-
     Angebote im Status „Angenommen“; Dateiname LS-<Angebotsnummer>.pdf."""
     from urllib.parse import quote_plus
@@ -999,7 +1009,7 @@ def _datenblatt_parameter(request: Request, session: Session, angebot):
 
 
 @router.get("/{angebot_id}/bza-datenblatt")
-async def bza_datenblatt_dialog(request: Request, angebot_id: int,
+def bza_datenblatt_dialog(request: Request, angebot_id: int,
                                 session: Session = Depends(get_session)):
     """Dialog + Vorschau: WE übersteuern, Ersteller wählen, bei TAIFUN-WP
     das Gerät aus dem Blatt „BAFA-Anlagen“ (Pflicht)."""
@@ -1032,7 +1042,7 @@ async def bza_datenblatt_dialog(request: Request, angebot_id: int,
 
 
 @router.get("/{angebot_id}/bza-datenblatt.pdf")
-async def bza_datenblatt_pdf(request: Request, angebot_id: int,
+def bza_datenblatt_pdf(request: Request, angebot_id: int,
                              session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
 
@@ -1059,7 +1069,7 @@ async def bza_datenblatt_pdf(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/kfw-gefoerdert")
-async def kfw_gefoerdert_setzen(request: Request, angebot_id: int,
+def kfw_gefoerdert_setzen(request: Request, angebot_id: int,
                                 session: Session = Depends(get_session)):
     """v19 (Phase 96): „KfW-gefördert“ am externen TAIFUN-Eintrag nachträglich
     ändern – steuert die BzA-Aufgabe der Projektierung (bza.ist_gefoerdert)."""
@@ -1067,7 +1077,7 @@ async def kfw_gefoerdert_setzen(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     if angebot is None or not angebot.extern:
         return RedirectResponse("/angebote", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     wert = (form.get("kfw_gefoerdert") or "").strip().lower()
     angebot.kfw_gefoerdert = wert if wert in ("ja", "nein") else ""
     session.commit()
@@ -1078,7 +1088,7 @@ async def kfw_gefoerdert_setzen(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/email")
-async def email_entwurf(request: Request, angebot_id: int,
+def email_entwurf(request: Request, angebot_id: int,
                         session: Session = Depends(get_session)):
     """Versand vorbereiten (Phase 17): Entwurf per Microsoft Graph im Postfach
     des angemeldeten Innendienst-Nutzers; Fallback bleibt der PDF-Download."""
@@ -1123,7 +1133,12 @@ async def email_entwurf(request: Request, angebot_id: int,
     if fern_aktiv(session):
         from app.models import einstellung_holen
         token = fern_token_ausstellen(session, angebot)
-        basis = einstellung_holen(session, "signatur_fern_basis_url", "").rstrip("/")
+        # v27 (PLAN_V17 Phase 129): BASIS_URL aus der .env geht vor (Reverse-Proxy),
+        # sonst wie bisher Einstellung bzw. Adresse der Anfrage
+        from app import config as konfig
+        basis = konfig.BASIS_URL if konfig.BASIS_URL_AUS_ENV else ""
+        if not basis:
+            basis = einstellung_holen(session, "signatur_fern_basis_url", "").rstrip("/")
         if not basis:
             basis = str(request.base_url).rstrip("/")
         signatur_link = f"{basis}/signatur/extern/{token}"
@@ -1188,7 +1203,7 @@ async def email_entwurf(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/profil")
-async def profil_umschalten(request: Request, angebot_id: int,
+def profil_umschalten(request: Request, angebot_id: int,
                             session: Session = Depends(get_session)):
     """v9: Angebotsprofil manuell umschalten. Bei Entwürfen werden die
     Positionsregeln des neuen Profils direkt angewendet; sonst ändern sich
@@ -1202,7 +1217,7 @@ async def profil_umschalten(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
         return RedirectResponse("/angebote", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     profil = session.get(Profil, int(form.get("profil_id") or 0))
     if profil is None:
         return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
@@ -1219,7 +1234,7 @@ async def profil_umschalten(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/vortext")
-async def vortext_speichern(request: Request, angebot_id: int,
+def vortext_speichern(request: Request, angebot_id: int,
                             session: Session = Depends(get_session)):
     """v9: Vortext am Angebot überschreiben (leer = Profil-/Standardtext)."""
     if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
@@ -1228,7 +1243,7 @@ async def vortext_speichern(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
         return RedirectResponse("/angebote", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     angebot.vortext_text = (form.get("vortext_text") or "").strip()
     session.commit()
     return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
@@ -1237,7 +1252,7 @@ async def vortext_speichern(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/kanal")
-async def kanal_aendern(request: Request, angebot_id: int,
+def kanal_aendern(request: Request, angebot_id: int,
                         session: Session = Depends(get_session)):
     """v9: Vertriebskanal des Kunden manuell setzen (Vorrang vor dem Sync);
     mit profil_auto=1 wird das Profil anhand des neuen Kanals neu bestimmt."""
@@ -1250,7 +1265,7 @@ async def kanal_aendern(request: Request, angebot_id: int,
     if angebot is None:
         return RedirectResponse("/angebote", status_code=303)
     kunde = session.get(Kunde, angebot.kunde_id)
-    form = await request.form()
+    form = anfrage.formular(request)
     kanal = (form.get("kanal") or "").strip()[:100]
     if kunde is not None:
         kunde.vertriebskanal = kanal
@@ -1273,7 +1288,7 @@ async def kanal_aendern(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/verfolgung")
-async def verfolgung_setzen(request: Request, angebot_id: int,
+def verfolgung_setzen(request: Request, angebot_id: int,
                             session: Session = Depends(get_session)):
     """Verfolgung (v10, Phase 60): lebt auf VORGANGSEBENE – EINE Hot-Ampel und
     Wiedervorlage je Kundenanfrage; die Notiz geht in den Vorgangs-Chat."""
@@ -1283,7 +1298,7 @@ async def verfolgung_setzen(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
         return RedirectResponse("/angebote", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     try:
         verantwortlicher_id = int(form.get("wv_verantwortlicher") or 0) or None
     except ValueError:
@@ -1299,7 +1314,7 @@ async def verfolgung_setzen(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/foerderung")
-async def foerderung_setzen(request: Request, angebot_id: int,
+def foerderung_setzen(request: Request, angebot_id: int,
                             session: Session = Depends(get_session)):
     """Förderung (v8): baustein-basierte Overrides – Grundförderung, Klima-Bonus,
     Einkommensbonus (je %), förderfähige Höchstkosten (€). Leeres Feld =
@@ -1310,7 +1325,7 @@ async def foerderung_setzen(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
         return RedirectResponse("/angebote", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
 
     def prozent_lesen(name):
         roh = (form.get(name) or "").strip()
@@ -1347,7 +1362,7 @@ async def foerderung_setzen(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/position/{position_id}/text")
-async def position_text(request: Request, angebot_id: int, position_id: int,
+def position_text(request: Request, angebot_id: int, position_id: int,
                         session: Session = Depends(get_session)):
     """Artikeltext je Position editierbar (v6) – nur in diesem Angebot,
     der Artikelstamm bleibt unberührt."""
@@ -1355,7 +1370,7 @@ async def position_text(request: Request, angebot_id: int, position_id: int,
         return umleitung
     position = session.get(AngebotsPosition, position_id)
     if position and position.angebot_id == angebot_id:
-        form = await request.form()
+        form = anfrage.formular(request)
         position.bezeichnung = (form.get("bezeichnung") or "").strip()[:300]
         position.beschreibung = (form.get("beschreibung") or "").strip()
         session.commit()
@@ -1363,7 +1378,7 @@ async def position_text(request: Request, angebot_id: int, position_id: int,
 
 
 @router.post("/{angebot_id}/vertriebler")
-async def vertriebler_aendern(request: Request, angebot_id: int,
+def vertriebler_aendern(request: Request, angebot_id: int,
                               session: Session = Depends(get_session)):
     """Vertriebler des Angebots ändern (v5-Nachtrag): schreibt in die
     verknüpfte Erfassung (eine Quelle je Vorgang); nur bei manuellen
@@ -1376,7 +1391,7 @@ async def vertriebler_aendern(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     if angebot is None:
         return RedirectResponse("/angebote", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     wert = form.get("benutzer_id") or ""
     if not (wert.isdigit() and session.get(Benutzer, int(wert)) is not None):
         return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
@@ -1394,7 +1409,7 @@ async def vertriebler_aendern(request: Request, angebot_id: int,
 
 
 @router.get("/{angebot_id}/mails")
-async def mailverlauf(request: Request, angebot_id: int,
+def mailverlauf(request: Request, angebot_id: int,
                       session: Session = Depends(get_session)):
     """Mail-Verlauf zur Angebots-Konversation (Phase 27, nur lesend)."""
     angebot = session.get(Angebot, angebot_id)
@@ -1412,11 +1427,11 @@ async def mailverlauf(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/status")
-async def status_aendern(request: Request, angebot_id: int,
+def status_aendern(request: Request, angebot_id: int,
                          session: Session = Depends(get_session)):
     if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     angebot = session.get(Angebot, angebot_id)
     neuer_status = form.get("status", "")
     if angebot is not None and neuer_status in ANGEBOT_STATUS:
@@ -1491,7 +1506,7 @@ async def status_aendern(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/taifun-pdf")
-async def taifun_pdf_hochladen(request: Request, angebot_id: int,
+def taifun_pdf_hochladen(request: Request, angebot_id: int,
                                session: Session = Depends(get_session)):
     """v10 (Phase 62): PDF-Upload am externen TAIFUN-Eintrag (ersetzbar, mit
     Zeitstempel) – Übergangslösung, damit Kombi-Mails alle Angebote enthalten;
@@ -1503,12 +1518,12 @@ async def taifun_pdf_hochladen(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     if angebot is None or not angebot.extern:
         return RedirectResponse("/angebote", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     datei = form.get("pdf_datei")
     if datei is None or not getattr(datei, "filename", ""):
         return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
             "Bitte eine PDF-Datei auswählen."), status_code=303)
-    inhalt = await datei.read()
+    inhalt = datei.file.read()
     if not inhalt.startswith(b"%PDF"):
         return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
             "Die Datei ist kein PDF."), status_code=303)
@@ -1526,7 +1541,7 @@ async def taifun_pdf_hochladen(request: Request, angebot_id: int,
 
 
 @router.get("/{angebot_id}/taifun-pdf")
-async def taifun_pdf_anzeigen(angebot_id: int, session: Session = Depends(get_session)):
+def taifun_pdf_anzeigen(angebot_id: int, session: Session = Depends(get_session)):
     """Hinterlegtes TAIFUN-PDF anzeigen."""
     from pathlib import Path as _Path
     angebot = session.get(Angebot, angebot_id)
@@ -1539,14 +1554,14 @@ async def taifun_pdf_anzeigen(angebot_id: int, session: Session = Depends(get_se
 
 
 @router.post("/{angebot_id}/taifun-nummer")
-async def taifun_nummer_setzen(request: Request, angebot_id: int,
+def taifun_nummer_setzen(request: Request, angebot_id: int,
                                session: Session = Depends(get_session)):
     """v7: TAIFUN-Angebotsnummer am externen Eintrag nachtragen."""
     from urllib.parse import quote_plus
     angebot = session.get(Angebot, angebot_id)
     if angebot is None or not angebot.extern:
         return RedirectResponse("/angebote", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     angebot.taifun_nummer = (form.get("taifun_nummer") or "").strip()[:30]
     session.commit()
     return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
@@ -1555,7 +1570,7 @@ async def taifun_nummer_setzen(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/monday-rueckspielung")
-async def monday_erneut(request: Request, angebot_id: int,
+def monday_erneut(request: Request, angebot_id: int,
                         session: Session = Depends(get_session)):
     """„Erneut übertragen“ nach fehlgeschlagener Rückspielung (Phase 32)."""
     from urllib.parse import quote_plus
@@ -1573,7 +1588,7 @@ async def monday_erneut(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/loeschen")
-async def loeschen(request: Request, angebot_id: int,
+def loeschen(request: Request, angebot_id: int,
                    session: Session = Depends(get_session)):
     """Nur Entwürfe löschbar (v5); alles andere wird archiviert."""
     from pathlib import Path
@@ -1622,7 +1637,7 @@ async def loeschen(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/archivieren")
-async def archivieren(request: Request, angebot_id: int,
+def archivieren(request: Request, angebot_id: int,
                       session: Session = Depends(get_session)):
     """Versendete/angenommene/abgelehnte Angebote ins Archiv bzw. zurück (v5)."""
     from urllib.parse import quote_plus
@@ -1643,7 +1658,7 @@ async def archivieren(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/ueberarbeiten")
-async def ueberarbeiten(request: Request, angebot_id: int,
+def ueberarbeiten(request: Request, angebot_id: int,
                         session: Session = Depends(get_session)):
     """v9: neue Version (.2/.3 …) eines versendeten/angenommenen Angebots als
     Entwurf; das Original wird „Überholt“ (zählt nicht mehr in Statistik,
@@ -1672,7 +1687,7 @@ async def ueberarbeiten(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/duplizieren")
-async def duplizieren(angebot_id: int, session: Session = Depends(get_session)):
+def duplizieren(angebot_id: int, session: Session = Depends(get_session)):
     original = session.get(Angebot, angebot_id)
     if original is None:
         return RedirectResponse("/angebote", status_code=303)
@@ -1704,7 +1719,7 @@ async def duplizieren(angebot_id: int, session: Session = Depends(get_session)):
 
 
 @router.post("/{angebot_id}/kopieren")
-async def fuer_anderen_kunden_kopieren(request: Request, angebot_id: int,
+def fuer_anderen_kunden_kopieren(request: Request, angebot_id: int,
                                        session: Session = Depends(get_session)):
     """v11 (Phase 66): Angebot für einen ANDEREN Kunden kopieren – neuer
     Vorgang beim Zielkunden (bzw. dessen Sammel-Vorgang, v10-Regel: ein
@@ -1721,7 +1736,7 @@ async def fuer_anderen_kunden_kopieren(request: Request, angebot_id: int,
         return RedirectResponse(
             f"/angebote/{angebot_id}?meldung=Externer+Eintrag+nicht+kopierbar",
             status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     # Zielkunde: Auswahl aus dem Bestand ("#<id> · Name …") oder Neuanlage
     ziel_id = None
     suche = (form.get("kunde_suche") or "").strip()

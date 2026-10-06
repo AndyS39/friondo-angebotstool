@@ -4,18 +4,21 @@
 # test (an mail_testadresse mit [TEST …]-Präfix), live (nur zulässig bei
 # lead_freigabe_modus = alle – sonst wird wie protokoll verarbeitet).
 # Absender leads@friondo.de (Fallback angebot@ wie bei der Projektierung).
+# v27 (PLAN_V17 Phase 128): Versand-Job am Scheduler-Rahmen registriert, je
+# Eintrag eine kurze Sitzung mit Commit (kein eigener Thread mehr).
 
 import base64
-import threading
 from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from app import config
+
 from app.models import Benutzer, KommunikationLog, Kunde, LeadQuelle, Vorgang, VotTermin
 
 ABSENDER_FALLBACK = "angebot@friondo.de"
-BASIS_URL = "http://192.168.35.4:8000"
+BASIS_URL = config.BASIS_URL   # v27: aus der .env (BASIS_URL), Standard wie bisher
 
 # Starttexte (sachlich, Sie-Form); {schluessel}: (Name, Betreff, Text)
 VORLAGEN_START = {
@@ -479,49 +482,67 @@ def eintrag_verarbeiten(session: Session, eintrag: KommunikationLog) -> str:
     return eintrag.status
 
 
-def versand_job(session: Session | None = None) -> dict:
-    """Jede Minute: fällige Einträge (status=geplant, geplant_am erreicht)."""
-    from app.db import SessionLocal
-    eigen = session is None
-    if eigen:
-        session = SessionLocal()
-    zaehler = {"protokolliert": 0, "gesendet": 0, "fehler": 0}
+BLOCK_GROESSE = 50   # fällige Einträge je Lauf (wie bisher limit 50)
+
+
+def _eintrag_in_sitzung(eintrag_id: int) -> str:
+    """v27 (PLAN_V17 Phase 128): EIN Eintrag in einer eigenen kurzen Sitzung mit
+    Commit (Block = ein Eintrag). Während des Graph-Versands hält die Sitzung
+    keine Verbindung (verbindung_freigeben in _graph_senden, Hotfix-Muster –
+    eintrag_verarbeiten nutzen auch die Routen mit Request-Session). Scheitert
+    der Commit selbst (defekte Sitzung), wird der Eintrag in einer frischen
+    Sitzung auf „fehler“ gesetzt, damit er nicht jede Minute erneut anläuft."""
+    from app.db import kurz
+    fehler_text = ""
     try:
-        for eintrag in (session.query(KommunikationLog)
-                        .filter(KommunikationLog.status == "geplant",
-                                KommunikationLog.geplant_am <= datetime.now())
-                        .limit(50)):
+        with kurz() as s:
+            eintrag = s.get(KommunikationLog, eintrag_id)
+            if eintrag is None or eintrag.status != "geplant":
+                return ""   # inzwischen manuell verarbeitet oder storniert
             try:
-                ergebnis = eintrag_verarbeiten(session, eintrag)
+                return eintrag_verarbeiten(s, eintrag)
             except Exception as problem:
+                fehler_text = str(problem)[:500]
                 eintrag.status = "fehler"
-                eintrag.fehler_text = str(problem)[:500]
-                ergebnis = "fehler"
+                eintrag.fehler_text = fehler_text
+                return "fehler"
+    except Exception as problem:
+        fehler_text = fehler_text or str(problem)[:500]
+    with kurz() as s:
+        eintrag = s.get(KommunikationLog, eintrag_id)
+        if eintrag is not None and eintrag.status == "geplant":
+            eintrag.status = "fehler"
+            eintrag.fehler_text = fehler_text
+    return "fehler"
+
+
+def versand_job() -> dict:
+    """Jede Minute (Scheduler): fällige Einträge (status=geplant, geplant_am
+    erreicht), höchstens BLOCK_GROESSE je Lauf. v27 (PLAN_V17 Phase 128): die
+    IDs werden in einer kurzen Sitzung gelesen, danach bekommt jeder Eintrag
+    eine eigene kurze Sitzung mit Commit – ein langsamer Versand oder ein Fehler
+    hält die Schreibsperre nie für die übrigen Einträge."""
+    from app.db import kurz
+    zaehler = {"protokolliert": 0, "gesendet": 0, "fehler": 0}
+    with kurz() as s:
+        ids = [zeile[0] for zeile in
+               s.query(KommunikationLog.id)
+               .filter(KommunikationLog.status == "geplant",
+                       KommunikationLog.geplant_am <= datetime.now())
+               .order_by(KommunikationLog.id).limit(BLOCK_GROESSE)]
+    for eintrag_id in ids:
+        ergebnis = _eintrag_in_sitzung(eintrag_id)
+        if ergebnis:
             zaehler[ergebnis] = zaehler.get(ergebnis, 0) + 1
-        session.commit()
-        return zaehler
-    finally:
-        if eigen:
-            session.close()
-
-
-_scheduler_laeuft = False
+    return zaehler
 
 
 def scheduler_starten() -> None:
-    global _scheduler_laeuft
-    if _scheduler_laeuft:
-        return
-    _scheduler_laeuft = True
-
-    def schleife():
-        import time
-        time.sleep(150)
-        while True:
-            try:
-                versand_job()
-            except Exception:
-                pass
-            time.sleep(60)
-
-    threading.Thread(target=schleife, daemon=True, name="lead-mail").start()
+    """v27 (PLAN_V17 Phase 128): registriert den Minuten-Lauf nur noch am
+    Scheduler-Rahmen (Startverzögerung 150 s wie bisher); Threads startet
+    main.lifespan über scheduler.starten_alle()."""
+    from app import scheduler
+    scheduler.registrieren(
+        "lead-mail", 60, versand_job,
+        beschreibung="Kunden-Mails der Lead-Warteschlange verarbeiten (Sendesperre je mail_modus)",
+        start_verzoegerung_s=150)

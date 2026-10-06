@@ -153,37 +153,43 @@ def ruecklesen() -> int:
     """Outlook → Tool (15-Minuten-Scheduler): Datum/Dauer-Änderungen der
     gesyncten Termine zurücklesen; Verlaufseintrag je Änderung."""
     from app import graph_versand
-    from app.db import SessionLocal, verbindung_freigeben
+    from app.db import kurz
     from app.models import Gewerk, ProjektTermin
     token = graph_versand._token()
     if token is None:
         return 0
-    session = SessionLocal()
-    geaendert = 0
-    fehler: list[str] = []
-    try:
-        termine = (session.query(ProjektTermin)
-                   .filter(ProjektTermin.outlook_event_id != "",
-                           ProjektTermin.beginn.isnot(None)).all())
-        for termin in termine:
-            adresse, _kategorien, ziel_fehler = _kalender_ziel(session, termin)
+    # v27 (PLAN_V17 Phase 128): Lesephase in einer kurzen Sitzung (Termine mit
+    # Outlook-Ereignis und ihr Kalenderziel), dann je Termin der Graph-Abruf
+    # OHNE Sitzung und – nur bei einer Änderung – eine kurze Sitzung zum
+    # Zurückschreiben mit Commit (Block = ein Termin)
+    with kurz() as s:
+        auftraege = []
+        for termin in (s.query(ProjektTermin)
+                       .filter(ProjektTermin.outlook_event_id != "",
+                               ProjektTermin.beginn.isnot(None))
+                       .order_by(ProjektTermin.id).all()):
+            adresse, _kategorien, ziel_fehler = _kalender_ziel(s, termin)
             if ziel_fehler:
                 continue
-            # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (vor JEDEM
-            # Graph-Abruf; Ziel ist gelesen, der commit speichert die Änderungen
-            # des vorherigen Termins – wie bisher am Ende des Laufs)
-            verbindung_freigeben(session)
-            try:
-                event = graph_versand._graph_aufruf(
-                    "GET", f"/users/{urllib.parse.quote(adresse)}/calendar/"
-                           f"events/{termin.outlook_event_id}"
-                           "?$select=start,end,isCancelled", token)
-            except Exception as problem:
-                fehler.append(f"Termin {termin.id}: {problem}")
-                continue
-            neu_beginn = _zeit_parsen(event.get("start"))
-            neu_ende = _zeit_parsen(event.get("end"))
-            if neu_beginn is None:
+            auftraege.append((termin.id, adresse, termin.outlook_event_id))
+    geaendert = 0
+    fehler: list[str] = []
+    for termin_id, adresse, event_id in auftraege:
+        try:
+            event = graph_versand._graph_aufruf(
+                "GET", f"/users/{urllib.parse.quote(adresse)}/calendar/"
+                       f"events/{event_id}"
+                       "?$select=start,end,isCancelled", token)
+        except Exception as problem:
+            fehler.append(f"Termin {termin_id}: {problem}")
+            continue
+        neu_beginn = _zeit_parsen(event.get("start"))
+        neu_ende = _zeit_parsen(event.get("end"))
+        if neu_beginn is None:
+            continue
+        with kurz() as s:
+            termin = s.get(ProjektTermin, termin_id)
+            if termin is None or termin.beginn is None:
                 continue
             if (neu_beginn == termin.beginn
                     and (neu_ende is None or neu_ende == termin.ende)):
@@ -194,18 +200,15 @@ def ruecklesen() -> int:
                 termin.ende = neu_ende
                 termin.dauer_tage = max(1, (neu_ende.date()
                                             - neu_beginn.date()).days + 1)
-            kern.verlauf(session, termin.projekt_id,
+            kern.verlauf(s, termin.projekt_id,
                          f"Termin in Outlook verschoben von {alt_text} auf "
                          f"{neu_beginn.strftime('%d.%m.%Y %H:%M')} ({termin.typ})",
                          gewerk_id=termin.gewerk_id)
-            gewerk = (session.get(Gewerk, termin.gewerk_id)
+            gewerk = (s.get(Gewerk, termin.gewerk_id)
                       if termin.gewerk_id else None)
             if gewerk is not None and termin.typ in ("feinplanung", "montage"):
-                kern.faelligkeiten_nachberechnen(session, gewerk)
+                kern.faelligkeiten_nachberechnen(s, gewerk)
             geaendert += 1
-        session.commit()
-    finally:
-        session.close()
     status.update(letzter_ruecklauf=datetime.now(), geaendert=geaendert,
                   fehler=fehler)
     return geaendert

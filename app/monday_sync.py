@@ -2,22 +2,28 @@
 # Parametrierung gepflegten Quellen (Board + Gruppentitel „Terminiert“).
 # Nur lesend; Fehler werden gesammelt angezeigt und blockieren das Tool nie.
 # Läuft alle 15 Minuten im Hintergrund plus Button „Jetzt aktualisieren“.
+# v27 (PLAN_V17 Phase 128): der 15-Minuten-Lauf ist am Scheduler-Rahmen
+# registriert (aktiv nur mit MONDAY_API_TOKEN) und arbeitet in kurzen Sitzungen
+# (lesen → Sitzung zu → monday → kurze Sitzung schreiben); geschrieben wird in
+# Blöcken mit Commit je 200 Items. Der manuelle Vollabgleich (Button, Request-
+# Session) meldet sich als laufender Import (Betriebs-Status, /health).
 
+import contextlib
 import json
 import re
-import threading
 import urllib.request
 from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from app import config
-from app.db import SessionLocal, verbindung_freigeben
+from app.db import verbindung_freigeben
 from app.models import (Benutzer, Lead, MondayMapping, MondayPerson,
                         MondayQuelle, MONDAY_FELDER)
 
 API_URL = "https://api.monday.com/v2"
 SYNC_INTERVALL_SEKUNDEN = 15 * 60
+BLOCK_GROESSE = 200          # v27: Commit je 200 Items beim Schreiben
 
 # Vorbelegte, verifizierte Quellen lt. CLAUDE.md v3
 STANDARD_QUELLEN = [
@@ -27,7 +33,13 @@ STANDARD_QUELLEN = [
      "Rene Golaschewski"),   # Sonderregel: Verantwortlicher immer dieser Benutzer
 ]
 
-status = {"letzter_sync": None, "fehler": [], "laeuft": False, "anzahl": 0}
+status = {"letzter_sync": None, "fehler": [], "laeuft": False, "anzahl": 0,
+          "quellen": 0, "quellen_fehler": 0}
+
+
+def monday_aktiv():
+    """aktiv-Bedingung des Scheduler-Laufs: Token in der .env vorhanden."""
+    return True if config.MONDAY_API_TOKEN else "kein monday-Token"
 
 
 def _api(query: str, variablen: dict | None = None) -> dict:
@@ -226,43 +238,106 @@ def kunde_fuer_lead(session: Session, lead: Lead):
     return kunde
 
 
-def sync(session: Session | None = None) -> dict:
-    """Ein Sync-Lauf über alle aktiven Quellen. Fehler je Quelle, nie blockierend."""
-    eigen = session is None
-    if eigen:
-        session = SessionLocal()
+def _gesehen(session: Session) -> dict[tuple[str, str], str]:
+    """(name, plz) -> monday_item_id aller Leads (Dedup über Boards hinweg)."""
+    gesehen: dict[tuple[str, str], str] = {}
+    for z in session.query(Lead.vorname, Lead.nachname, Lead.plz, Lead.monday_item_id):
+        gesehen[(_normal(f"{z[0]} {z[1]}"), (z[2] or "").strip())] = z[3]
+    return gesehen
+
+
+def sync(session: Session | None = None, *, markieren: bool = True) -> dict:
+    """Ein Sync-Lauf über alle aktiven Quellen. Fehler je Quelle, nie blockierend.
+    v27 (PLAN_V17 Phase 128): mit übergebener Session (Button „Jetzt
+    aktualisieren“) wird mit dieser gearbeitet – Freigabe vor jedem monday-Aufruf,
+    Commit je Quelle und je 200 Items – und der Vollabgleich als laufender Import
+    gemeldet (markieren=True, Betriebs-Status/health). Der 15-Minuten-Lauf
+    (session=None, markieren=False) arbeitet in kurzen Sitzungen: lesen →
+    Sitzung zu → monday → kurze Sitzung zum Schreiben in Blöcken."""
+    from app import betrieb
     status["laeuft"] = True
     fehler: list[str] = []
-    anzahl = 0
+    anzahl = quellen_gesamt = quellen_fehler = 0
+    markierung = (betrieb.import_markieren("monday-Sync") if markieren
+                  else contextlib.nullcontext())
     try:
-        quellen_vorbelegen(session)
-        gesehen: dict[tuple[str, str], str] = {}   # (name, plz) -> monday_item_id (Dedup)
-        for lead in session.query(Lead):
-            gesehen[(_normal(f"{lead.vorname} {lead.nachname}"), lead.plz.strip())] = \
-                lead.monday_item_id
-        for quelle in session.query(MondayQuelle).filter(MondayQuelle.aktiv.is_(True)):
-            try:
-                anzahl += _quelle_syncen(session, quelle, gesehen)
-            except Exception as problem:
-                fehler.append(f"{quelle.board_name or quelle.board_id}: {problem}")
-        session.commit()
-        try:
-            # v12 (Phase 73): abgeleitete Lead-Phase der gesyncten Vorgänge –
-            # rein lesend gegenüber monday, Fehler blockieren den Sync nie
-            from app import leadmanagement
-            leadmanagement.nach_sync(session)
-        except Exception:
-            pass
+        with markierung:
+            if session is not None:
+                anzahl, quellen_gesamt, quellen_fehler = _sync_mit_session(session, fehler)
+            else:
+                # netz-ohne-sitzung-ok: in diesem Zweig ist session None – der Lauf
+                # arbeitet ausschließlich mit eigenen kurzen Sitzungen (db.kurz)
+                anzahl, quellen_gesamt, quellen_fehler = _sync_in_bloecken(fehler)   # netz-ohne-sitzung-ok
     finally:
-        if eigen:
-            session.close()
-        status.update(letzter_sync=datetime.now(), fehler=fehler,
-                      laeuft=False, anzahl=anzahl)
+        status.update(letzter_sync=datetime.now(), fehler=fehler, laeuft=False,
+                      anzahl=anzahl, quellen=quellen_gesamt, quellen_fehler=quellen_fehler)
     return dict(status)
+
+
+def _nachlauf(session: Session, fehler: list[str]) -> None:
+    """v12 (Phase 73): abgeleitete Lead-Phase der gesyncten Vorgänge – rein
+    lesend gegenüber monday, Fehler blockieren den Sync nie (v27: werden aber
+    als Hinweis genannt statt verschluckt)."""
+    try:
+        from app import leadmanagement
+        leadmanagement.nach_sync(session)
+    except Exception as problem:
+        fehler.append(f"Nachlauf (Lead-Phasen): {problem}")
+
+
+def _sync_mit_session(session: Session, fehler: list[str]) -> tuple[int, int, int]:
+    """Request-Pfad (Button): Hotfix-Muster mit Freigabe vor jedem monday-Aufruf,
+    Commit je Quelle (Block); eine gescheiterte Quelle wird zurückgerollt."""
+    quellen_vorbelegen(session)
+    gesehen = _gesehen(session)
+    quellen = session.query(MondayQuelle).filter(MondayQuelle.aktiv.is_(True)).all()
+    anzahl = quellen_fehler = 0
+    for quelle in quellen:
+        try:
+            anzahl += _quelle_syncen(session, quelle, gesehen)
+            session.commit()
+        except Exception as problem:
+            session.rollback()
+            quellen_fehler += 1
+            fehler.append(f"{quelle.board_name or quelle.board_id}: {problem}")
+    _nachlauf(session, fehler)
+    return anzahl, len(quellen), quellen_fehler
+
+
+def _sync_in_bloecken(fehler: list[str]) -> tuple[int, int, int]:
+    """Scheduler-Pfad: keine Sitzung während der monday-Abfragen (mehrere
+    Seiten, bis 30 s je Aufruf); Schreiben je Quelle in einer kurzen Sitzung,
+    Commit je 200 Items (in _items_schreiben) und am Ende der Quelle."""
+    from app.db import kurz
+    with kurz() as s:
+        quellen_vorbelegen(s)
+        gesehen = _gesehen(s)
+        quellen = [(q.id, q.board_id, q.gruppen_titel, q.board_name) for q in
+                   s.query(MondayQuelle).filter(MondayQuelle.aktiv.is_(True))]
+    anzahl = quellen_fehler = 0
+    for quelle_id, board_id, gruppen_titel, board_name_alt in quellen:
+        try:
+            with kurz() as s:
+                zuordnung = _mapping(s, board_id)
+            board_name, items = _items_der_gruppe(board_id, gruppen_titel)   # Netz ohne Sitzung
+            with kurz() as s:
+                quelle = s.get(MondayQuelle, quelle_id)
+                if quelle is None:
+                    continue   # inzwischen gelöscht
+                quelle.board_name = quelle.board_name or board_name
+                anzahl += _items_schreiben(s, quelle, zuordnung, board_name, items, gesehen)
+        except Exception as problem:
+            quellen_fehler += 1
+            fehler.append(f"{board_name_alt or board_id}: {problem}")
+    with kurz() as s:
+        _nachlauf(s, fehler)
+    return anzahl, len(quellen), quellen_fehler
 
 
 def _quelle_syncen(session: Session, quelle: MondayQuelle,
                    gesehen: dict) -> int:
+    """Eine Quelle mit übergebener Session (Button, Tests): Mapping lesen,
+    Verbindung freigeben, monday abfragen, Items schreiben."""
     zuordnung = _mapping(session, quelle.board_id)
     board_id, gruppen_titel = quelle.board_id, quelle.gruppen_titel
     # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Mapping und Quelle
@@ -271,6 +346,14 @@ def _quelle_syncen(session: Session, quelle: MondayQuelle,
     verbindung_freigeben(session)
     board_name, items = _items_der_gruppe(board_id, gruppen_titel)
     quelle.board_name = quelle.board_name or board_name
+    return _items_schreiben(session, quelle, zuordnung, board_name, items, gesehen)
+
+
+def _items_schreiben(session: Session, quelle: MondayQuelle, zuordnung: dict,
+                     board_name: str, items: list[dict], gesehen: dict) -> int:
+    """Items einer Quelle als Leads/Kunden/Vorgänge schreiben – v27: Commit je
+    BLOCK_GROESSE Items (Schreibsperre nie lange am Stück); den Abschluss
+    committet der Aufrufer."""
     anzahl = 0
     for item in items:
         spalten = {c["id"]: (c.get("text") or "") for c in item["column_values"]}
@@ -330,28 +413,36 @@ def _quelle_syncen(session: Session, quelle: MondayQuelle,
         except Exception:
             pass   # Sync nie an der Vorgangs-Anlage scheitern lassen
         anzahl += 1
+        if anzahl % BLOCK_GROESSE == 0:
+            session.commit()   # v27 (Phase 128): Block-Commit je 200 Items
     return anzahl
 
 
-# --- Hintergrund-Scheduler (alle 15 Minuten) ------------------------------
+# --- Hintergrund-Scheduler (alle 15 Minuten, v27 am Rahmen registriert) ------
 
-_scheduler_gestartet = False
+def scheduler_lauf() -> dict:
+    """15-Minuten-Lauf: Fehler je Quelle stehen im Rückgabe-dict (fehler =
+    Anzahl, hinweis = erster Fehler); scheitern ALLE Quellen, wird eine
+    Ausnahme hochgeworfen (Lauf = fehler, Datei-Log)."""
+    ergebnis = sync(markieren=False)
+    fehler = list(ergebnis.get("fehler") or [])
+    klein = {"anzahl": ergebnis.get("anzahl", 0), "quellen": ergebnis.get("quellen", 0),
+             "fehler": fehler}
+    if fehler:
+        klein["hinweis"] = fehler[0][:120]
+        quellen, quellen_fehler = klein["quellen"], ergebnis.get("quellen_fehler", 0)
+        if quellen and quellen_fehler >= quellen:
+            raise RuntimeError("Alle monday-Quellen fehlgeschlagen – "
+                               + "; ".join(fehler)[:450])
+    return klein
 
 
 def scheduler_starten() -> None:
-    global _scheduler_gestartet
-    if _scheduler_gestartet:
-        return
-    _scheduler_gestartet = True
-
-    def schleife():
-        import time
-        while True:
-            if config.MONDAY_API_TOKEN:
-                try:
-                    sync()
-                except Exception as problem:   # nie durchschlagen lassen
-                    status["fehler"] = [f"Sync-Lauf fehlgeschlagen: {problem}"]
-            time.sleep(SYNC_INTERVALL_SEKUNDEN)
-
-    threading.Thread(target=schleife, daemon=True).start()
+    """v27 (PLAN_V17 Phase 128): registriert den 15-Minuten-Lauf nur noch am
+    Scheduler-Rahmen (aktiv nur mit MONDAY_API_TOKEN); Threads startet
+    main.lifespan über scheduler.starten_alle()."""
+    from app import scheduler
+    scheduler.registrieren(
+        "monday-sync", SYNC_INTERVALL_SEKUNDEN, scheduler_lauf,
+        beschreibung="monday-Leads mit Vor-Ort-Termin aus den Quellen einlesen (Leads VOT)",
+        aktiv=monday_aktiv)

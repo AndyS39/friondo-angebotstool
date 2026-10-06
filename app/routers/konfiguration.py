@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app import config, logik as logik_modul
 from app.db import get_session
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/parametrierung")
 
@@ -103,19 +104,22 @@ def _golive_stand(request: Request, session: Session):
 
 
 @router.get("")
-async def uebersicht(request: Request, session: Session = Depends(get_session)):
+def uebersicht(request: Request, session: Session = Depends(get_session)):
     """Verteilerseite: Suchfeld + fünf Bereichskarten (Allgemein · Angebotstool ·
     Projektierung · Lead-Management · System & Protokolle). Rendert auch ohne
     Logik-Excel (dateifehler → Hinweis, Karten ohne Logik-Daten)."""
+    from app import import_preisliste
     return render(request, "konfiguration/uebersicht.html", aktiv="/parametrierung",
                   dateifehler=(None if config.LOGIK_EXCEL_PFAD.exists()
                                else str(config.LOGIK_EXCEL_PFAD)),
                   golive_stand=_golive_stand(request, session),
+                  # v27 (Phase 128): Hinweistext für den Knopf „Parametrierung neu einlesen“
+                  import_hinweise=import_preisliste.import_hinweise(session),
                   meldung=request.query_params.get("meldung", ""))
 
 
 @router.get("/angebotstool")
-async def angebotstool_seite(request: Request, session: Session = Depends(get_session)):
+def angebotstool_seite(request: Request, session: Session = Depends(get_session)):
     """Angebotstool-Einstellungen: DB-Ampel, E-Mail-/Kombi-Versand, gewerke-
     übergreifende Artikel, Fern-Signatur, Abgelehnt-Prozess, Lösch-Protokoll –
     die Inline-Abschnitte der alten Übersicht, Formulare unverändert."""
@@ -125,21 +129,24 @@ async def angebotstool_seite(request: Request, session: Session = Depends(get_se
 
 
 @router.get("/logik")
-async def logik_seite(request: Request, session: Session = Depends(get_session)):
+def logik_seite(request: Request, session: Session = Depends(get_session)):
     """Logik & Importe: Quelle/zuletzt eingelesen, Validierungsbericht, „Neu
     einlesen“, Tabellen der Logik-Excel (Fragen, Angebotsaufbau, KfW-/PV-/KL-
     Parameter) und der Klima-Import – 1:1 aus der alten Übersicht."""
+    from app import import_preisliste
     return render(request, "konfiguration/logik.html", aktiv="/parametrierung",
                   **_parametrierung_kontext(session),
+                  # v27 (Phase 128): Hinweis „Dauer etwa <n> s …“ je Import-Button
+                  import_hinweise=import_preisliste.import_hinweise(session),
                   meldung=request.query_params.get("meldung", ""))
 
 
 @router.post("/einstellungen")
-async def einstellungen_speichern(request: Request,
+def einstellungen_speichern(request: Request,
                                   session: Session = Depends(get_session)):
     """DB-Ampel-Schwellen (Phase 24) und weitere pflegbare Werte."""
     from app.models import einstellung_setzen
-    form = await request.form()
+    form = anfrage.formular(request)
     for name in ("db_ampel_rot_unter", "db_ampel_gruen_ueber"):
         wert = (form.get(name) or "").strip().replace(".", "")
         if wert.isdigit():
@@ -186,7 +193,7 @@ async def einstellungen_speichern(request: Request,
 
 
 @router.get("/profile")
-async def profile_seite(request: Request, block_id: int = 0,
+def profile_seite(request: Request, block_id: int = 0,
                         session: Session = Depends(get_session)):
     """v9: Angebotsprofile + Textblock-Verwaltung (Nach-/Vortexte)."""
     from app import angebotsprofile
@@ -205,7 +212,7 @@ async def profile_seite(request: Request, block_id: int = 0,
 
 
 @router.post("/profile/{profil_id}")
-async def profil_speichern(request: Request, profil_id: int,
+def profil_speichern(request: Request, profil_id: int,
                            session: Session = Depends(get_session)):
     """v9: Kanal-Zuordnung, Textblöcke und Versandregeln eines Profils."""
     from urllib.parse import quote_plus
@@ -214,7 +221,7 @@ async def profil_speichern(request: Request, profil_id: int,
     profil = session.get(Profil, profil_id)
     if profil is None:
         return RedirectResponse("/parametrierung/profile", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     profil.kanalwerte = (form.get("kanalwerte") or "").strip()[:200]
     profil.versand_cc = (form.get("versand_cc") or "").strip()[:200]
     profil.empfaenger_leer = form.get("empfaenger_leer") == "on"
@@ -228,13 +235,13 @@ async def profil_speichern(request: Request, profil_id: int,
 
 
 @router.post("/textbloecke")
-async def textblock_speichern(request: Request,
+def textblock_speichern(request: Request,
                               session: Session = Depends(get_session)):
     """v9: Textblock bearbeiten oder neu anlegen."""
     from urllib.parse import quote_plus
 
     from app.models import Textblock
-    form = await request.form()
+    form = anfrage.formular(request)
     if form.get("aktion") == "neu":
         name = (form.get("name") or "").strip()[:100]
         art = form.get("art") if form.get("art") in ("nachtext", "vortext") else "nachtext"
@@ -258,14 +265,14 @@ async def textblock_speichern(request: Request,
 
 
 @router.post("/ablehnungsgruende")
-async def ablehnungsgruende_pflegen(request: Request,
+def ablehnungsgruende_pflegen(request: Request,
                                     session: Session = Depends(get_session)):
     """v8: Auswahlliste „Grund der Ablehnung“ pflegen (hinzufügen bzw.
     deaktivieren/aktivieren – gelöscht wird nicht, Altdaten bleiben lesbar)."""
     from urllib.parse import quote_plus
 
     from app.models import AblehnungsGrund
-    form = await request.form()
+    form = anfrage.formular(request)
     # v26 (Phase 125): zurück auf die Seite, von der das Formular kam – auf der
     # Angebotstool-Seite direkt zum Abschnitt „Abgelehnt-Prozess“
     zurueck = _zurueck_ziel(request)
@@ -289,7 +296,7 @@ async def ablehnungsgruende_pflegen(request: Request,
 # --- E-Mail-Vorlagen (Phase 30) ------------------------------------------
 
 @router.get("/vorlagen")
-async def vorlagen_uebersicht(request: Request, benutzer_id: int = 0,
+def vorlagen_uebersicht(request: Request, benutzer_id: int = 0,
                               angebot_id: int = 0,
                               session: Session = Depends(get_session)):
     """Standard-Vorlage + optionale Vorlage je Außendienstler, mit Platzhalter-
@@ -332,11 +339,11 @@ async def vorlagen_uebersicht(request: Request, benutzer_id: int = 0,
 
 
 @router.post("/vorlagen")
-async def vorlagen_speichern(request: Request, session: Session = Depends(get_session)):
+def vorlagen_speichern(request: Request, session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
 
     from app import mail_vorlagen
-    form = await request.form()
+    form = anfrage.formular(request)
     benutzer_id = form.get("benutzer_id") or ""
     bid = int(benutzer_id) if benutzer_id.isdigit() and int(benutzer_id) > 0 else None
     aktion = form.get("aktion") or "speichern"
@@ -366,7 +373,7 @@ async def vorlagen_speichern(request: Request, session: Session = Depends(get_se
 # --- E-Mail-Signaturen (v6, Phase 42) --------------------------------------
 
 @router.get("/signaturen")
-async def signaturen_uebersicht(request: Request, benutzer_id: int = 0,
+def signaturen_uebersicht(request: Request, benutzer_id: int = 0,
                                 session: Session = Depends(get_session)):
     """Outlook-Signatur je Innendienst-Benutzer hochladen/prüfen."""
     from app import signaturen
@@ -393,7 +400,7 @@ async def signaturen_uebersicht(request: Request, benutzer_id: int = 0,
 
 
 @router.get("/signaturen/{benutzer_id}/bild/{cid}")
-async def signatur_bild(benutzer_id: int, cid: str):
+def signatur_bild(benutzer_id: int, cid: str):
     """Inline-Bild der Signatur für die Vorschau (cid → Datei)."""
     from fastapi.responses import FileResponse, Response
 
@@ -406,12 +413,12 @@ async def signatur_bild(benutzer_id: int, cid: str):
 
 
 @router.post("/signaturen/{benutzer_id}")
-async def signatur_hochladen(request: Request, benutzer_id: int,
+def signatur_hochladen(request: Request, benutzer_id: int,
                              session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
 
     from app import signaturen
-    form = await request.form()
+    form = anfrage.formular(request)
     if form.get("aktion") == "entfernen":
         signaturen.entfernen(benutzer_id)
         return RedirectResponse(f"/parametrierung/signaturen?benutzer_id={benutzer_id}"
@@ -420,14 +427,14 @@ async def signatur_hochladen(request: Request, benutzer_id: int,
     dateien = []
     for feld in form.getlist("dateien"):
         if hasattr(feld, "filename") and feld.filename:
-            dateien.append((feld.filename, await feld.read()))
+            dateien.append((feld.filename, feld.file.read()))
     ok, meldung = signaturen.speichern(benutzer_id, dateien)
     return RedirectResponse(f"/parametrierung/signaturen?benutzer_id={benutzer_id}"
                             f"&meldung={quote_plus(meldung)}", status_code=303)
 
 
 @router.get("/monday")
-async def monday_uebersicht(request: Request, session: Session = Depends(get_session)):
+def monday_uebersicht(request: Request, session: Session = Depends(get_session)):
     """monday-Anbindung (Phase 22): Quellen, Spalten-Mapping, Personen-Zuordnung."""
     from app import monday_sync
     from app.models import (Benutzer, MondayMapping, MondayPerson, MondayQuelle,
@@ -467,10 +474,10 @@ async def monday_uebersicht(request: Request, session: Session = Depends(get_ses
 
 
 @router.post("/monday/quelle")
-async def monday_quelle_speichern(request: Request,
+def monday_quelle_speichern(request: Request,
                                   session: Session = Depends(get_session)):
     from app.models import MondayQuelle
-    form = await request.form()
+    form = anfrage.formular(request)
     quelle_id = form.get("quelle_id") or ""
     if quelle_id:
         quelle = session.get(MondayQuelle, int(quelle_id))
@@ -493,10 +500,10 @@ async def monday_quelle_speichern(request: Request,
 
 
 @router.post("/monday/mapping/{board_id}")
-async def monday_mapping_speichern(request: Request, board_id: str,
+def monday_mapping_speichern(request: Request, board_id: str,
                                    session: Session = Depends(get_session)):
     from app.models import MondayMapping, MONDAY_FELDER
-    form = await request.form()
+    form = anfrage.formular(request)
     for feld in MONDAY_FELDER:
         eintrag = (session.query(MondayMapping)
                    .filter(MondayMapping.board_id == board_id,
@@ -511,11 +518,11 @@ async def monday_mapping_speichern(request: Request, board_id: str,
 
 
 @router.post("/monday/rueckspielung/{board_id}")
-async def monday_rueckspielung_speichern(request: Request, board_id: str,
+def monday_rueckspielung_speichern(request: Request, board_id: str,
                                          session: Session = Depends(get_session)):
     """Rückspiel-Konfiguration je Quell-Board (Phase 32)."""
     from app.models import MondayQuelle
-    form = await request.form()
+    form = anfrage.formular(request)
     quelle = (session.query(MondayQuelle)
               .filter(MondayQuelle.board_id == board_id).first())
     if quelle is None:
@@ -533,13 +540,13 @@ async def monday_rueckspielung_speichern(request: Request, board_id: str,
 
 
 @router.post("/monday/person/{person_id}")
-async def monday_person_zuordnen(request: Request, person_id: int,
+def monday_person_zuordnen(request: Request, person_id: int,
                                  session: Session = Depends(get_session)):
     from app import monday_sync
     from urllib.parse import quote_plus
 
     from app.models import MondayPerson
-    form = await request.form()
+    form = anfrage.formular(request)
     person = session.get(MondayPerson, person_id)
     if person is None:
         return RedirectResponse("/parametrierung/monday", status_code=303)
@@ -556,7 +563,7 @@ async def monday_person_zuordnen(request: Request, person_id: int,
 
 
 @router.get("/projektierung-logik")
-async def projektierung_logik_seite(request: Request,
+def projektierung_logik_seite(request: Request,
                                     session: Session = Depends(get_session)):
     """v11 (Phase 65): Steuerdatei der Projektierung – Pakete-Tabelle,
     Versionsstand, Upload. Änderungen wirken auf NEUE Aktivierungen."""
@@ -570,7 +577,7 @@ async def projektierung_logik_seite(request: Request,
 
 
 @router.post("/projektierung-logik")
-async def projektierung_logik_upload(request: Request,
+def projektierung_logik_upload(request: Request,
                                      session: Session = Depends(get_session)):
     """Upload wie beim Logik-Import: Backup der alten Datei, ersetzen,
     neu einlesen; bei Fehlern wird die alte Datei wiederhergestellt."""
@@ -579,13 +586,13 @@ async def projektierung_logik_upload(request: Request,
     from urllib.parse import quote_plus
 
     from app import projektierung_logik
-    form = await request.form()
+    form = anfrage.formular(request)
     datei = form.get("datei")
     if datei is None or not getattr(datei, "filename", ""):
         return RedirectResponse("/parametrierung/projektierung-logik?meldung="
                                 + quote_plus("Bitte eine .xlsx-Datei wählen."),
                                 status_code=303)
-    inhalt = await datei.read()
+    inhalt = datei.file.read()
     ziel = projektierung_logik.LOGIK_PFAD
     sicherung = None
     if ziel.exists():
@@ -612,13 +619,25 @@ async def projektierung_logik_upload(request: Request,
 
 
 @router.post("/neu-einlesen")
-async def neu_einlesen(request: Request, session: Session = Depends(get_session)):
+def neu_einlesen(request: Request, session: Session = Depends(get_session)):
+    import time
+    from urllib.parse import quote_plus
+
+    from app import import_preisliste
     # v26 (Phase 125): zurück auf die Seite mit dem Button (Übersicht oder
     # Logik & Importe); ohne Referer auf Logik & Importe, wo der Bericht steht
     zurueck = _zurueck_ziel(request, "/parametrierung/logik")
     if not config.LOGIK_EXCEL_PFAD.exists():
         return RedirectResponse(zurueck, status_code=303)
+    # v27 (PLAN_V17 Phase 128): Hinweis vor dem Start muss bestätigt sein
+    # (Häkchen/verstecktes Feld „bestaetigt“); Dauer des Laufs wird gemerkt
+    if not import_preisliste.import_bestaetigt(anfrage.formular(request)):
+        return RedirectResponse(
+            f"{zurueck}?meldung={quote_plus(import_preisliste.HINWEIS_BESTAETIGEN)}",
+            status_code=303)
+    start = time.perf_counter()
     _, bericht = logik_modul.neu_einlesen(session)
+    import_preisliste.import_dauer_merken(session, "logik", start)
     if bericht.ok:
         meldung = "Parametrierung+neu+eingelesen+–+keine+Fehler"
     else:
@@ -653,49 +672,64 @@ def _ist_kl_meldung(text: str) -> bool:
 
 
 @router.get("/artikel/kl-import")
-async def kl_import_vorschau(request: Request, session: Session = Depends(get_session)):
+def kl_import_vorschau(request: Request, session: Session = Depends(get_session)):
     """Vorschau „Artikel → Klima-Positionslisten importieren“ (Ordner
     Artikel-Preislisten/Klima/): wie der PV-Import erst das Diff zeigen,
     gespeichert wird erst mit „Import ausführen“ (POST)."""
+    from app import import_preisliste
     modul = _import_klima()
+    # v27 (Phase 128): Hinweis „Dauer etwa <n> s …“ + Bestätigungs-Häkchen
+    hinweis = import_preisliste.import_hinweis(session, "klima")
+    meldung = request.query_params.get("meldung", "")
     if modul is None:
         return render(request, "konfiguration/kl_import.html", aktiv="/parametrierung",
-                      diff=None, dateifehler=[], modul_fehlt=True, ordner="")
+                      diff=None, dateifehler=[], modul_fehlt=True, ordner="",
+                      hinweis=hinweis, meldung=meldung)
     ordner = modul.kl_ordner()
     if not ordner.exists():
         return render(request, "konfiguration/kl_import.html", aktiv="/parametrierung",
                       diff=None, dateifehler=[str(ordner)], modul_fehlt=False,
-                      ordner=str(ordner))
+                      ordner=str(ordner), hinweis=hinweis, meldung=meldung)
     return render(request, "konfiguration/kl_import.html", aktiv="/parametrierung",
                   diff=modul.berechne_diff(session), dateifehler=[], modul_fehlt=False,
-                  ordner=str(ordner))
+                  ordner=str(ordner), hinweis=hinweis, meldung=meldung)
 
 
 @router.post("/artikel/kl-import")
-async def kl_import_ausfuehren(session: Session = Depends(get_session)):
+def kl_import_ausfuehren(request: Request, session: Session = Depends(get_session)):
     """Button „Artikel → Klima-Positionslisten importieren“: KL001–KL050 anlegen/
     aktualisieren (GUID-Anker Blatt „KL-Artikel“), danach die Logik neu einlesen,
-    damit die KL-Referenzen gegen den Artikelstamm geprüft werden."""
+    damit die KL-Referenzen gegen den Artikelstamm geprüft werden.
+    v27 (PLAN_V17 Phase 128): nur mit bestätigtem Hinweis (Feld „bestaetigt“);
+    die Dauer des Laufs wird als Einstellung import_dauer_klima gemerkt."""
+    import time
+
+    from app import import_preisliste
     modul = _import_klima()
     if modul is None:
         return _kl_zurueck("Klima-Import nicht verfügbar – app/import_klima.py fehlt.")
+    if not import_preisliste.import_bestaetigt(anfrage.formular(request)):
+        return _kl_zurueck(import_preisliste.HINWEIS_BESTAETIGEN)
+    start = time.perf_counter()
     try:
         _diff, meldung = modul.import_ausfuehren(session)
     except OSError as exc:        # Positionsliste nicht lesbar – kein Absturz der Seite
         session.rollback()
         return _kl_zurueck(f"Klima-Import fehlgeschlagen: {exc}")
     logik_modul.neu_einlesen(session)
+    import_preisliste.import_dauer_merken(session, "klima", start)
     return _kl_zurueck(f"Klima-Import abgeschlossen: {meldung}")
 
 
 @router.get("/kl-logik")
-async def kl_logik_seite(request: Request, session: Session = Depends(get_session)):
+def kl_logik_seite(request: Request, session: Session = Depends(get_session)):
     """Lesesicht des Klimakonfigurators: Paketmatrix KL, Montagematrix KL,
     Kombinationen KL, Aktionen KL, KL-Parameter und die KL-Artikel (Blatt +
     Artikelstamm, Filter Sparte KL = pos_nr KL*). Nur Anzeige – Live-Master
     bleibt die Logik-Excel; AD sieht nie EK."""
     if not config.LOGIK_EXCEL_PFAD.exists():
         return RedirectResponse("/parametrierung", status_code=303)
+    from app import import_preisliste
     from app.models import Artikel
     logik, bericht = logik_modul.hole_logik(session)
     kombis = []
@@ -719,6 +753,8 @@ async def kl_logik_seite(request: Request, session: Session = Depends(get_sessio
                                for name in kl_fehlende},
                   ek_sichtbar=benutzer is not None and benutzer.rolle != "aussendienst",
                   kl_import_ok=_import_klima() is not None,
+                  # v27 (Phase 128): Hinweis „Dauer etwa <n> s …“ für die Import-Buttons
+                  import_hinweise=import_preisliste.import_hinweise(session),
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -733,7 +769,7 @@ def _nur_admin(request: Request):
 
 
 @router.get("/teams")
-async def teams_seite(request: Request, session: Session = Depends(get_session)):
+def teams_seite(request: Request, session: Session = Depends(get_session)):
     from app.models import Benutzer, Team, TeamMitglied
     teams = session.query(Team).order_by(Team.name).all()
     mitglieder: dict[int, list[str]] = {}
@@ -751,11 +787,11 @@ async def teams_seite(request: Request, session: Session = Depends(get_session))
 
 
 @router.post("/teams")
-async def team_speichern(request: Request, session: Session = Depends(get_session)):
+def team_speichern(request: Request, session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
 
     from app.models import Team
-    form = await request.form()
+    form = anfrage.formular(request)
     team_id = form.get("team_id") or ""
     name = (form.get("name") or "").strip()
     # v15 (Phase 75): Typen montage | sub (Altwerte bleiben lesbar)
@@ -789,7 +825,7 @@ async def team_speichern(request: Request, session: Session = Depends(get_sessio
 
 
 @router.get("/subunternehmer")
-async def subs_seite(request: Request, session: Session = Depends(get_session)):
+def subs_seite(request: Request, session: Session = Depends(get_session)):
     import json as json_modul
 
     from app import projektierung, projektierung_logik
@@ -809,11 +845,11 @@ async def subs_seite(request: Request, session: Session = Depends(get_session)):
 
 
 @router.post("/subunternehmer")
-async def sub_speichern(request: Request, session: Session = Depends(get_session)):
+def sub_speichern(request: Request, session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
 
     from app.models import Subunternehmer
-    form = await request.form()
+    form = anfrage.formular(request)
     sub_id = form.get("sub_id") or ""
     felder = {name: (form.get(name) or "").strip()
               for name in ("firma", "typ", "ansprechpartner", "email",
@@ -853,7 +889,7 @@ async def sub_speichern(request: Request, session: Session = Depends(get_session
 
 
 @router.get("/projektierung-einstellungen")
-async def projektierung_einstellungen(request: Request,
+def projektierung_einstellungen(request: Request,
                                       session: Session = Depends(get_session)):
     """Demo-Schalter, Standard-Verantwortliche, Absender, Storno-Gründe,
     Ordnervorlage (Anzeige) – nur Admin (Plan Phase 70)."""
@@ -935,7 +971,7 @@ async def projektierung_einstellungen(request: Request,
 
 
 @router.post("/projektierung-einstellungen")
-async def projektierung_einstellungen_speichern(
+def projektierung_einstellungen_speichern(
         request: Request, session: Session = Depends(get_session)):
     import json as json_modul
     from urllib.parse import quote_plus
@@ -943,7 +979,7 @@ async def projektierung_einstellungen_speichern(
     from app import projektierung as kern
     if (umleitung := _nur_admin(request)) is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     # v15 (Phase 76): Galerie-Zusatzordner (Standardordner nicht löschbar)
     kern.parameter_setzen(session, "galerie_zusatzordner",
                           (form.get("galerie_zusatzordner") or "").strip()[:500])
@@ -1044,7 +1080,7 @@ def _stuecklisten_zurueck(meldung: str, anker: str = ""):
 # --- v19 (PLAN_V14 Phase 95): BzA-Ersteller ------------------------------------------
 
 @router.get("/bza-ersteller")
-async def bza_ersteller_seite(request: Request, session: Session = Depends(get_session)):
+def bza_ersteller_seite(request: Request, session: Session = Depends(get_session)):
     from app import bza_datenblatt
     from app.models import einstellung_holen
     return render(request, "konfiguration/bza_ersteller.html", aktiv="/parametrierung",
@@ -1055,11 +1091,11 @@ async def bza_ersteller_seite(request: Request, session: Session = Depends(get_s
 
 
 @router.post("/bza-ersteller")
-async def bza_ersteller_speichern(request: Request, session: Session = Depends(get_session)):
+def bza_ersteller_speichern(request: Request, session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
 
     from app.models import einstellung_setzen
-    form = await request.form()
+    form = anfrage.formular(request)
     wert = (form.get("standard") or "").strip()
     einstellung_setzen(session, "bza_ersteller_standard", wert if wert.isdigit() else "")
     session.commit()
@@ -1070,7 +1106,7 @@ async def bza_ersteller_speichern(request: Request, session: Session = Depends(g
 # --- 30.09.2026: Kunden-Dubletten zusammenführen (Admin) ------------------------------
 
 @router.get("/kunden-dubletten")
-async def kunden_dubletten_seite(request: Request, session: Session = Depends(get_session)):
+def kunden_dubletten_seite(request: Request, session: Session = Depends(get_session)):
     from app import kunden_dubletten
     from app.models import einstellung_holen
     if (umleitung := _nur_admin(request)) is not None:
@@ -1082,14 +1118,14 @@ async def kunden_dubletten_seite(request: Request, session: Session = Depends(ge
 
 
 @router.post("/kunden-dubletten")
-async def kunden_dubletten_zusammenfuehren(request: Request,
+def kunden_dubletten_zusammenfuehren(request: Request,
                                            session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
 
     from app import kunden_dubletten
     if (umleitung := _nur_admin(request)) is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     try:
         haupt_id = int(form.get("haupt_id") or 0)
         dubletten = [int(x) for x in form.getlist("dublette_id") if str(x).isdigit()]
@@ -1121,7 +1157,7 @@ def _golive_zurueck(meldung: str):
 
 
 @router.get("/golive")
-async def golive_seite(request: Request, session: Session = Depends(get_session)):
+def golive_seite(request: Request, session: Session = Depends(get_session)):
     from app import golive
     from app import projektierung as kern
     if (umleitung := _nur_admin(request)) is not None:
@@ -1134,11 +1170,11 @@ async def golive_seite(request: Request, session: Session = Depends(get_session)
 
 
 @router.post("/golive/haekchen")
-async def golive_haekchen(request: Request, session: Session = Depends(get_session)):
+def golive_haekchen(request: Request, session: Session = Depends(get_session)):
     from app import golive
     if (umleitung := _nur_admin(request)) is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     name = form.get("name") or ""
     if name not in ("ugl_testdatei_bestaetigt", "golive_formulare_abgenommen"):
         return _golive_zurueck("Unbekannter Prüfpunkt.")
@@ -1148,7 +1184,7 @@ async def golive_haekchen(request: Request, session: Session = Depends(get_sessi
 
 
 @router.post("/golive/testmail")
-async def golive_testmail(request: Request, session: Session = Depends(get_session)):
+def golive_testmail(request: Request, session: Session = Depends(get_session)):
     from app import golive
     if (umleitung := _nur_admin(request)) is not None:
         return umleitung
@@ -1173,20 +1209,23 @@ def _bestand_zurueck(meldung: str):
 
 
 @router.get("/bestandsimport")
-async def bestandsimport_seite(request: Request, session: Session = Depends(get_session)):
+def bestandsimport_seite(request: Request, session: Session = Depends(get_session)):
     from app.models import Bestandsimport, Benutzer
     if (umleitung := _nur_admin(request)) is not None:
         return umleitung
+    from app import import_preisliste
     importe = (session.query(Bestandsimport)
                .order_by(Bestandsimport.id.desc()).limit(30).all())
     return render(request, "konfiguration/bestandsimport.html", aktiv="/parametrierung",
                   importe=importe, vorschau=None,
                   benutzer_map={b.id: b for b in session.query(Benutzer)},
+                  # v27 (Phase 128): Hinweis „Dauer etwa <n> s …“ vor dem Import
+                  hinweis=import_preisliste.import_hinweis(session, "bestand"),
                   meldung=request.query_params.get("meldung", ""))
 
 
 @router.get("/bestandsimport/vorlage.xlsx")
-async def bestandsimport_vorlage(request: Request):
+def bestandsimport_vorlage(request: Request):
     from fastapi.responses import Response
 
     from app import bestandsimport
@@ -1199,7 +1238,7 @@ async def bestandsimport_vorlage(request: Request):
 
 
 @router.post("/bestandsimport/vorschau")
-async def bestandsimport_vorschau(request: Request, session: Session = Depends(get_session)):
+def bestandsimport_vorschau(request: Request, session: Session = Depends(get_session)):
     """Upload → Prüfung je Zeile; die Datei wird für den Import-Schritt
     zwischengespeichert (data/backups/bestandsimport/<kennung>.xlsx)."""
     from uuid import uuid4
@@ -1208,11 +1247,11 @@ async def bestandsimport_vorschau(request: Request, session: Session = Depends(g
     from app.models import Benutzer
     if (umleitung := _nur_admin(request)) is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     datei = form.get("datei")
     if datei is None or not getattr(datei, "filename", ""):
         return _bestand_zurueck("Bitte eine Excel-Datei (Vorlage) wählen.")
-    inhalt = await datei.read()
+    inhalt = datei.file.read()
     zeilen, fehler = bestandsimport.einlesen(inhalt)
     if fehler:
         return _bestand_zurueck(fehler)
@@ -1221,19 +1260,24 @@ async def bestandsimport_vorschau(request: Request, session: Session = Depends(g
     kennung = uuid4().hex
     (_bestand_ordner() / f"{kennung}.xlsx").write_bytes(inhalt)
     bestandsimport.pruefen(session, zeilen)
+    from app import import_preisliste
     return render(request, "konfiguration/bestandsimport.html", aktiv="/parametrierung",
                   importe=[], vorschau=zeilen, kennung=kennung,
                   dateiname=datei.filename, spalten=bestandsimport.SPALTEN,
                   benutzer_map={b.id: b for b in session.query(Benutzer)},
+                  # v27 (Phase 128): Hinweis + Bestätigungs-Häkchen am Import-Knopf
+                  hinweis=import_preisliste.import_hinweis(session, "bestand"),
                   meldung="")
 
 
 @router.post("/bestandsimport/ausfuehren")
-async def bestandsimport_ausfuehren(request: Request, session: Session = Depends(get_session)):
-    from app import bestandsimport
+def bestandsimport_ausfuehren(request: Request, session: Session = Depends(get_session)):
+    import time
+
+    from app import bestandsimport, import_preisliste
     if (umleitung := _nur_admin(request)) is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     kennung = "".join(z for z in (form.get("kennung") or "") if z.isalnum())[:40]
     pfad = _bestand_ordner() / f"{kennung}.xlsx"
     if not kennung or not pfad.exists():
@@ -1241,6 +1285,12 @@ async def bestandsimport_ausfuehren(request: Request, session: Session = Depends
     if form.get("abbrechen"):
         pfad.unlink(missing_ok=True)
         return _bestand_zurueck("Import abgebrochen – nichts geändert.")
+    # v27 (PLAN_V17 Phase 128): Hinweis vor dem Start muss bestätigt sein; die
+    # zwischengespeicherte Datei bleibt liegen – Vorschau erneut aufrufen
+    if not import_preisliste.import_bestaetigt(form):
+        return _bestand_zurueck(import_preisliste.HINWEIS_BESTAETIGEN
+                                + " – bitte die Datei erneut hochladen und das Häkchen setzen.")
+    start = time.perf_counter()
     zeilen, fehler = bestandsimport.einlesen(pfad.read_bytes())
     if fehler:
         return _bestand_zurueck(fehler)
@@ -1249,13 +1299,14 @@ async def bestandsimport_ausfuehren(request: Request, session: Session = Depends
                                      (form.get("dateiname") or pfad.name)[:200],
                                      benutzer=request.state.benutzer)
     session.commit()
+    import_preisliste.import_dauer_merken(session, "bestand", start)
     return _bestand_zurueck(
         f"Import #{imp.id}: {imp.angelegt} angelegt, {imp.aktualisiert} aktualisiert, "
         f"{imp.uebersprungen} übersprungen (Fehlerzeilen).")
 
 
 @router.post("/bestandsimport/{import_id}/rueckgaengig")
-async def bestandsimport_rueckgaengig(request: Request, import_id: int,
+def bestandsimport_rueckgaengig(request: Request, import_id: int,
                                       session: Session = Depends(get_session)):
     from app import bestandsimport
     from app.models import Bestandsimport
@@ -1273,7 +1324,7 @@ async def bestandsimport_rueckgaengig(request: Request, import_id: int,
 
 
 @router.get("/stuecklisten")
-async def stuecklisten_seite(request: Request, session: Session = Depends(get_session)):
+def stuecklisten_seite(request: Request, session: Session = Depends(get_session)):
     """Stücklisten je Angebotsposition (Artikelstamm) – Excel bleibt Master,
     die Maske schreibt ins Blatt „Stücklisten“ zurück."""
     from app import projektierung as kern
@@ -1301,7 +1352,7 @@ async def stuecklisten_seite(request: Request, session: Session = Depends(get_se
 
 
 @router.get("/stuecklisten/export.csv")
-async def stuecklisten_export(session: Session = Depends(get_session)):
+def stuecklisten_export(session: Session = Depends(get_session)):
     from fastapi.responses import Response
 
     from app import stuecklisten
@@ -1312,26 +1363,26 @@ async def stuecklisten_export(session: Session = Depends(get_session)):
 
 
 @router.post("/stuecklisten/import")
-async def stuecklisten_import(request: Request, session: Session = Depends(get_session)):
+def stuecklisten_import(request: Request, session: Session = Depends(get_session)):
     from app import stuecklisten
-    form = await request.form()
+    form = anfrage.formular(request)
     datei = form.get("datei")
     if datei is None or not getattr(datei, "filename", ""):
         return _stuecklisten_zurueck("Bitte eine CSV-Datei wählen.")
-    meldung = stuecklisten.csv_import(session, await datei.read())
+    meldung = stuecklisten.csv_import(session, datei.file.read())
     session.commit()
     return _stuecklisten_zurueck(meldung)
 
 
 @router.post("/stuecklisten/golive")
-async def stuecklisten_golive(request: Request, session: Session = Depends(get_session)):
+def stuecklisten_golive(request: Request, session: Session = Depends(get_session)):
     """Go-live-Prüfpunkt „Testdatei von Collin bestätigt“ (Häkchen, Admin)."""
     from datetime import datetime as dt
 
     from app import projektierung as kern
     if (umleitung := _nur_admin(request)) is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     kern.parameter_setzen(session, "ugl_testdatei_bestaetigt",
                           f"{dt.now():%d.%m.%Y} · {request.state.benutzer.name}"
                           if form.get("bestaetigt") == "on" else "")
@@ -1340,10 +1391,10 @@ async def stuecklisten_golive(request: Request, session: Session = Depends(get_s
 
 
 @router.post("/stuecklisten/{pos_nr}")
-async def stueckliste_speichern(request: Request, pos_nr: str,
+def stueckliste_speichern(request: Request, pos_nr: str,
                                 session: Session = Depends(get_session)):
     from app import stuecklisten
-    form = await request.form()
+    form = anfrage.formular(request)
     zeilen = []
     for i in range(int(form.get("anzahl") or 0)):
         zeilen.append({feld: form.get(f"{feld}_{i}", "")
@@ -1356,7 +1407,7 @@ async def stueckliste_speichern(request: Request, pos_nr: str,
 # --- v12 (Phase 74): Lead-Management – Steuerdatei ---------------------------------
 
 @router.get("/lead-logik")
-async def lead_logik_seite(request: Request,
+def lead_logik_seite(request: Request,
                            session: Session = Depends(get_session)):
     """Steuerdatei des Lead-Managements: Blätter als Tabellen, Versionsstand,
     Upload. Änderungen wirken auf neue Qualifizierungen; abgeschlossene
@@ -1378,7 +1429,7 @@ async def lead_logik_seite(request: Request,
 
 
 @router.post("/lead-logik")
-async def lead_logik_upload(request: Request,
+def lead_logik_upload(request: Request,
                             session: Session = Depends(get_session)):
     """Upload wie beim Logik-Import: Backup, ersetzen, neu einlesen; bei
     Fehlern wird die alte Datei wiederhergestellt."""
@@ -1391,13 +1442,13 @@ async def lead_logik_upload(request: Request,
     from app import leadmanagement, leadmanagement_logik
     if not leadmanagement.lead_modul_sichtbar(session, request.state.benutzer):
         raise HTTPException(status_code=404)
-    form = await request.form()
+    form = anfrage.formular(request)
     datei = form.get("datei")
     if datei is None or not getattr(datei, "filename", ""):
         return RedirectResponse("/parametrierung/lead-logik?meldung="
                                 + quote_plus("Bitte eine .xlsx-Datei wählen."),
                                 status_code=303)
-    inhalt = await datei.read()
+    inhalt = datei.file.read()
     ziel = leadmanagement_logik.LOGIK_PFAD
     sicherung = None
     if ziel.exists():
@@ -1441,7 +1492,7 @@ def _lead_gate(request: Request, session: Session):
 
 
 @router.get("/lead-quellen")
-async def lead_quellen_seite(request: Request,
+def lead_quellen_seite(request: Request,
                              session: Session = Depends(get_session)):
     from datetime import datetime as dt, timedelta
 
@@ -1483,7 +1534,7 @@ async def lead_quellen_seite(request: Request,
 
 
 @router.post("/lead-quellen")
-async def lead_quelle_speichern(request: Request,
+def lead_quelle_speichern(request: Request,
                                 session: Session = Depends(get_session)):
     import json as json_modul
     import re as re_modul
@@ -1492,7 +1543,7 @@ async def lead_quelle_speichern(request: Request,
 
     from app.models import Kampagne, LeadQuelle
     _lead_gate(request, session)
-    form = await request.form()
+    form = anfrage.formular(request)
     art = form.get("art") or "quelle"
 
     if art == "kampagne":
@@ -1576,7 +1627,7 @@ async def lead_quelle_speichern(request: Request,
 
 
 @router.get("/lead-parser")
-async def lead_parser_seite(request: Request,
+def lead_parser_seite(request: Request,
                             session: Session = Depends(get_session)):
     from app.models import LeadQuelle, ParserRegel
     _lead_gate(request, session)
@@ -1590,7 +1641,7 @@ async def lead_parser_seite(request: Request,
 
 
 @router.post("/lead-parser")
-async def lead_parser_speichern(request: Request,
+def lead_parser_speichern(request: Request,
                                 session: Session = Depends(get_session)):
     import json as json_modul
     from urllib.parse import quote_plus
@@ -1598,7 +1649,7 @@ async def lead_parser_speichern(request: Request,
     from app import lead_parser
     from app.models import LeadQuelle, ParserRegel
     _lead_gate(request, session)
-    form = await request.form()
+    form = anfrage.formular(request)
 
     if form.get("art") == "test":
         betreff = form.get("test_betreff") or ""
@@ -1652,7 +1703,7 @@ async def lead_parser_speichern(request: Request,
 
 
 @router.get("/lead-demo")
-async def lead_demo_seite(request: Request,
+def lead_demo_seite(request: Request,
                           session: Session = Depends(get_session)):
     from app import leadmanagement
     from app.models import Vorgang
@@ -1668,7 +1719,7 @@ async def lead_demo_seite(request: Request,
 
 
 @router.post("/lead-demo")
-async def lead_demo_aktion(request: Request,
+def lead_demo_aktion(request: Request,
                            session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
 
@@ -1676,7 +1727,7 @@ async def lead_demo_aktion(request: Request,
     _lead_gate(request, session)
     if request.state.benutzer.rolle != "admin":
         return RedirectResponse("/parametrierung", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     if form.get("aktion") == "erzeugen":
         ergebnis = leadmanagement.demo_leads_erzeugen(session,
                                                       request.state.benutzer)
@@ -1693,7 +1744,7 @@ async def lead_demo_aktion(request: Request,
 
 
 @router.get("/lead-routing")
-async def lead_routing_seite(request: Request,
+def lead_routing_seite(request: Request,
                              session: Session = Depends(get_session)):
     from datetime import datetime as dt
 
@@ -1715,14 +1766,14 @@ async def lead_routing_seite(request: Request,
 
 
 @router.post("/lead-routing")
-async def lead_routing_speichern(request: Request,
+def lead_routing_speichern(request: Request,
                                  session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
 
     from app import leadmanagement as lead_kern
     from app import routing
     _lead_gate(request, session)
-    form = await request.form()
+    form = anfrage.formular(request)
     if form.get("aktion") == "testen":
         meldung = routing.verbindung_testen(session)
         return RedirectResponse("/parametrierung/lead-routing?meldung="
@@ -1740,7 +1791,7 @@ async def lead_routing_speichern(request: Request,
 
 
 @router.get("/lead-vorlagen")
-async def lead_vorlagen_seite(request: Request,
+def lead_vorlagen_seite(request: Request,
                               session: Session = Depends(get_session)):
     """Vorlagen-Gruppe „Lead-Management“ (Phase 78): sechs Schlüssel, je
     Vorlage Betreff + Text, optional je Sparte (Fallback allgemein)."""
@@ -1760,14 +1811,14 @@ async def lead_vorlagen_seite(request: Request,
 
 
 @router.post("/lead-vorlagen")
-async def lead_vorlagen_speichern(request: Request,
+def lead_vorlagen_speichern(request: Request,
                                   session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
 
     from app import lead_mail
     from app.models import einstellung_setzen
     _lead_gate(request, session)
-    form = await request.form()
+    form = anfrage.formular(request)
     schluessel = form.get("vorlage") or ""
     if schluessel not in lead_mail.VORLAGEN_START:
         return RedirectResponse("/parametrierung/lead-vorlagen", status_code=303)
@@ -1794,7 +1845,7 @@ async def lead_vorlagen_speichern(request: Request,
 
 
 @router.get("/lead-einstellungen")
-async def lead_einstellungen(request: Request,
+def lead_einstellungen(request: Request,
                              session: Session = Depends(get_session)):
     """Lead-Management → Einstellungen (nur Admin, Plan 81)."""
     from app import leadmanagement as lead_kern
@@ -1847,7 +1898,7 @@ async def lead_einstellungen(request: Request,
 
 
 @router.post("/lead-einstellungen")
-async def lead_einstellungen_speichern(request: Request,
+def lead_einstellungen_speichern(request: Request,
                                        session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
 
@@ -1857,7 +1908,7 @@ async def lead_einstellungen_speichern(request: Request,
     benutzer = request.state.benutzer
     if benutzer.rolle != "admin":
         return RedirectResponse("/parametrierung", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
 
     # Demo-Umstellung auf „alle": Dialog erzwingt eine Entscheidung über
     # die vorhandenen Demo-Leads (Plan 73/81)
@@ -1990,7 +2041,7 @@ def _fehlerprotokoll_zurueck(form, meldung: str) -> RedirectResponse:
 
 
 @router.get("/fehlerprotokoll")
-async def fehlerprotokoll_seite(request: Request,
+def fehlerprotokoll_seite(request: Request,
                                 session: Session = Depends(get_session)):
     """Fehlerprotokoll: unbehandelte Ausnahmen mit Fehler-Nr., neueste zuerst
     (max. 200). Filter ?offen=1 (nur offene) und ?pfad= (Teilstring)."""
@@ -2024,14 +2075,14 @@ async def fehlerprotokoll_seite(request: Request,
 
 
 @router.post("/fehlerprotokoll/{eintrag_id}/erledigt")
-async def fehlerprotokoll_erledigt(request: Request, eintrag_id: int,
+def fehlerprotokoll_erledigt(request: Request, eintrag_id: int,
                                    session: Session = Depends(get_session)):
     """Eintrag als erledigt markieren (Admin/Innendienst)."""
     from app.models import Fehlerprotokoll
     sperre = _fehlerprotokoll_gate(request)
     if sperre is not None:
         return sperre
-    form = await request.form()
+    form = anfrage.formular(request)
     eintrag = session.get(Fehlerprotokoll, eintrag_id)
     if eintrag is None:
         return _fehlerprotokoll_zurueck(form, "Eintrag nicht gefunden.")
@@ -2041,14 +2092,14 @@ async def fehlerprotokoll_erledigt(request: Request, eintrag_id: int,
 
 
 @router.post("/fehlerprotokoll/leeren")
-async def fehlerprotokoll_leeren(request: Request,
+def fehlerprotokoll_leeren(request: Request,
                                  session: Session = Depends(get_session)):
     """Alle erledigten Einträge löschen (nur Admin; Datei-Log bleibt)."""
     from app.models import Fehlerprotokoll
     sperre = _fehlerprotokoll_gate(request) or _nur_admin(request)
     if sperre is not None:
         return sperre
-    form = await request.form()
+    form = anfrage.formular(request)
     anzahl = (session.query(Fehlerprotokoll)
               .filter(Fehlerprotokoll.erledigt.is_(True)).delete())
     session.commit()

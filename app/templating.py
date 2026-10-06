@@ -61,7 +61,7 @@ templates.env.filters["de_datum"] = de_datum
 # ausgelieferten Static-Dateien (style.css, lead_v2.css, *.js), nicht nur an
 # style.css; sonst liefern Browser nach einem Update ohne CSS-Änderung alte
 # lead_v2.css/lm_*.js mit derselben ?v=-Nummer aus.
-_STATIC_VERSIONIERT = ("style.css", "lead_v2.css")
+_STATIC_VERSIONIERT = ("style.css", "lead_v2.css", "login_v27.css")   # v27: Login-Styles
 
 
 def _css_version() -> int:

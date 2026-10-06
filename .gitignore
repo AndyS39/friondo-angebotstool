@@ -22,3 +22,6 @@ Artikel-Preislisten/PV/Beispielangebot.pdf
 
 # Dev-Server-Startkonfiguration der Claude-Desktop-App (lokal)
 .claude/
+
+# v27: Restore-Test-Protokolle (serverspezifisch, Phase 129)
+docs/betrieb/

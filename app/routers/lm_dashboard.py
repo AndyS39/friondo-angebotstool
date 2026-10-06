@@ -17,6 +17,7 @@ from app import leadmanagement as kern
 from app.db import get_session
 from app.models import Kunde, Todo, Vorgang
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/lead-management")
 
@@ -101,7 +102,7 @@ def _int(wert) -> int | None:
 # --- Modul-Einstieg (übernimmt GET /lead-management) --------------------------------
 
 @router.get("")
-async def einstieg(request: Request, session: Session = Depends(get_session)):
+def einstieg(request: Request, session: Session = Depends(get_session)):
     """Einstieg: Sichtbare nach lm_startseite (Standard dashboard, Phase 110);
     Handelsvertreter direkt ins Dashboard (F16); alle anderen sehen die
     Platzhalterseite – exakt wie der V1-Router."""
@@ -122,7 +123,7 @@ async def einstieg(request: Request, session: Session = Depends(get_session)):
 # --- Dashboard ----------------------------------------------------------------------
 
 @router.get("/dashboard")
-async def dashboard(request: Request, session: Session = Depends(get_session)):
+def dashboard(request: Request, session: Session = Depends(get_session)):
     """A1: persönliche Startseite – Wiedervorlagen (beide Mechaniken), mir
     zugeteilte Vorgänge, Termine der nächsten Tage, To-Dos, Kacheln."""
     benutzer = request.state.benutzer
@@ -146,14 +147,14 @@ async def dashboard(request: Request, session: Session = Depends(get_session)):
 
 
 @router.post("/dashboard/wiedervorlage/{vorgang_id}")
-async def wiedervorlage_aktion(request: Request, vorgang_id: int,
+def wiedervorlage_aktion(request: Request, vorgang_id: int,
                                session: Session = Depends(get_session)):
     """Schnellaktion: art=lead|angebot, aktion=erledigt|verschieben (+ datum)."""
     benutzer = request.state.benutzer
     if _ad_ohne_hv(session, benutzer):
         raise HTTPException(status_code=404)
     lead_v2.gate(request, session)
-    form = await request.form()
+    form = anfrage.formular(request)
     zurueck = _zurueck(request, form, DASHBOARD)
     vorgang = session.get(Vorgang, vorgang_id)
     if vorgang is None:
@@ -237,26 +238,26 @@ def _todos_seite(request: Request, session: Session, neu: bool = False):
 
 
 @router.get("/todos")
-async def todos(request: Request, session: Session = Depends(get_session)):
+def todos(request: Request, session: Session = Depends(get_session)):
     """A2: meine offenen / von mir vergebenen / erledigten To-Dos, Filter
     vorgang_id und q; Formular „To-Do anlegen“ (jeder an jeden, F7)."""
     return _todos_seite(request, session)
 
 
 @router.get("/todos/neu")
-async def todo_neu(request: Request, session: Session = Depends(get_session)):
+def todo_neu(request: Request, session: Session = Depends(get_session)):
     """Formular geöffnet (z. B. aus Kartei/Akte mit ?vorgang_id=…)."""
     return _todos_seite(request, session, neu=True)
 
 
 @router.post("/todos/neu")
-async def todo_anlegen(request: Request, session: Session = Depends(get_session)):
+def todo_anlegen(request: Request, session: Session = Depends(get_session)):
     """Felder laut Vertrag: vorgang_id (optional), titel (Pflicht), text,
     faellig_am, an_benutzer_id (Pflicht), zurueck (Redirect-Ziel)."""
     benutzer = request.state.benutzer
     if not _zugang_todos(session, benutzer):
         raise HTTPException(status_code=404)
-    form = await request.form()
+    form = anfrage.formular(request)
     zurueck = _zurueck(request, form, TODOS)
     an_id = _int(form.get("an_benutzer_id"))
     if not an_id:
@@ -293,7 +294,7 @@ def _todo_laden(session: Session, benutzer, todo_id: int) -> Todo:
 
 
 @router.post("/todos/{todo_id}/erledigt")
-async def todo_erledigt(request: Request, todo_id: int,
+def todo_erledigt(request: Request, todo_id: int,
                         session: Session = Depends(get_session)):
     """Erledigt-Häkchen – Empfänger, Ersteller oder Admin (auch der
     Außendienst aus „Meine Termine“)."""
@@ -301,7 +302,7 @@ async def todo_erledigt(request: Request, todo_id: int,
     todo = _todo_laden(session, benutzer, todo_id)
     if not lead_todos.darf_erledigen(benutzer, todo):
         raise HTTPException(status_code=404)
-    form = await request.form()
+    form = anfrage.formular(request)
     zurueck = _zurueck(request, form, TODOS)
     geaendert = lead_todos.erledigen(session, todo, benutzer)
     session.commit()
@@ -310,13 +311,13 @@ async def todo_erledigt(request: Request, todo_id: int,
 
 
 @router.post("/todos/{todo_id}/offen")
-async def todo_offen(request: Request, todo_id: int,
+def todo_offen(request: Request, todo_id: int,
                      session: Session = Depends(get_session)):
     benutzer = request.state.benutzer
     todo = _todo_laden(session, benutzer, todo_id)
     if not lead_todos.darf_erledigen(benutzer, todo):
         raise HTTPException(status_code=404)
-    form = await request.form()
+    form = anfrage.formular(request)
     zurueck = _zurueck(request, form, TODOS)
     lead_todos.wieder_oeffnen(session, todo, benutzer)
     session.commit()
@@ -324,14 +325,14 @@ async def todo_offen(request: Request, todo_id: int,
 
 
 @router.post("/todos/{todo_id}/loeschen")
-async def todo_loeschen(request: Request, todo_id: int,
+def todo_loeschen(request: Request, todo_id: int,
                         session: Session = Depends(get_session)):
     """Nur Ersteller oder Admin."""
     benutzer = request.state.benutzer
     todo = _todo_laden(session, benutzer, todo_id)
     if not lead_todos.darf_loeschen(benutzer, todo):
         raise HTTPException(status_code=404)
-    form = await request.form()
+    form = anfrage.formular(request)
     zurueck = _zurueck(request, form, TODOS)
     titel = todo.titel
     lead_todos.loeschen(session, todo, benutzer)
@@ -342,12 +343,12 @@ async def todo_loeschen(request: Request, todo_id: int,
 # --- Meine Termine (Außendienst) + To-Dos ------------------------------------------
 
 @router.get("/meine-termine")
-async def meine_termine(request: Request, session: Session = Depends(get_session)):
+def meine_termine(request: Request, session: Session = Depends(get_session)):
     """Übernimmt die V1-Seite (Gate lead_ad_sicht, Karten heute/Woche) und
     ergänzt den Block „Meine To-Dos“ – der Außendienst sieht seine To-Dos hier
     und in der Vorgangsakte (F7), ohne Zugriff auf das Lead-Modul."""
     from app.routers import leadmanagement as v1
-    antwort = await v1.meine_termine(request, session)
+    antwort = v1.meine_termine(request, session)
     kontext = getattr(antwort, "context", None)
     if not isinstance(kontext, dict):
         return antwort

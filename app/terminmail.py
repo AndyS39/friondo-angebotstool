@@ -90,48 +90,53 @@ def antworten_abgleichen() -> int:
     """Kundenantworten auf Terminmails (Konversation) – setzt
     kunden_antwort_am; die Akte schlägt dann „Kunde hat bestätigt“ vor."""
     from app import benachrichtigungen, graph_versand, mail_sync
-    from app.db import SessionLocal, verbindung_freigeben
+    from app.db import kurz
     from app.models import Benutzer, Projekt, ProjektMail, ProjektTermin
     token = graph_versand._token()
     if token is None:
         return 0
-    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben – das angemeldete
-    # Konto wird wie das Token VOR der Sitzung ermittelt (msal kann es über
-    # das Netz erneuern)
+    # Hotfix 06.10.2026: das angemeldete Konto wird wie das Token VOR der
+    # Sitzung ermittelt (msal kann es über das Netz erneuern)
     konto = (graph_versand.angemeldeter_benutzer() or "").lower()
-    session = SessionLocal()
-    neu_gesamt = 0
-    try:
-        postfach = benachrichtigungen._absender(session)
+    # v27 (PLAN_V17 Phase 128): Lesephase in einer kurzen Sitzung (Postfach,
+    # eigene Adressen, offene Termine), dann je Termin der Graph-Abruf OHNE
+    # Sitzung und eine kurze Sitzung zum Zurückschreiben mit Commit
+    with kurz() as s:
+        postfach = benachrichtigungen._absender(s)
         eigene = {postfach.lower(), konto}
-        for b in session.query(Benutzer).filter(Benutzer.aktiv.is_(True)):
+        for b in s.query(Benutzer).filter(Benutzer.aktiv.is_(True)):
             if b.email:
                 eigene.add(b.email.lower())
-        offene = (session.query(ProjektTermin)
+        offene = [(z[0], z[1]) for z in
+                  s.query(ProjektTermin.id, ProjektTermin.graph_conversation_id)
                   .filter(ProjektTermin.graph_conversation_id.isnot(None),
-                          ProjektTermin.kunde_bestaetigt.is_(False)).all())
-        for termin in offene:
-            # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (vor JEDEM
-            # Graph-Abruf; der commit speichert die Antworten des vorherigen
-            # Termins – wie bisher am Ende des Laufs)
-            verbindung_freigeben(session)
-            try:
-                nachrichten = mail_sync.nachrichten_je_konversation(
-                    token, termin.graph_conversation_id, postfach)
-            except Exception:
+                          ProjektTermin.kunde_bestaetigt.is_(False))
+                  .order_by(ProjektTermin.id).all()]
+    neu_gesamt = 0
+    for termin_id, conversation_id in offene:
+        try:
+            nachrichten = mail_sync.nachrichten_je_konversation(
+                token, conversation_id, postfach)
+        except Exception:
+            continue
+        if not nachrichten:
+            continue
+        with kurz() as s:
+            termin = s.get(ProjektTermin, termin_id)
+            if termin is None:
                 continue
             for nachricht in nachrichten:
                 graph_id = nachricht.get("id") or ""
                 if not graph_id or nachricht.get("isDraft"):
                     continue
-                if session.query(ProjektMail).filter(
+                if s.query(ProjektMail).filter(
                         ProjektMail.graph_id == graph_id).first() is not None:
                     continue
                 absender = ((nachricht.get("from") or {})
                             .get("emailAddress") or {})
                 von_email = absender.get("address") or ""
                 eingehend = bool(von_email) and von_email.lower() not in eigene
-                session.add(ProjektMail(
+                s.add(ProjektMail(
                     projekt_id=termin.projekt_id, graph_id=graph_id,
                     von_name=absender.get("name") or "",
                     von_email=von_email,
@@ -144,15 +149,12 @@ def antworten_abgleichen() -> int:
                 neu_gesamt += 1
                 if eingehend and termin.kunden_antwort_am is None:
                     termin.kunden_antwort_am = datetime.now()
-                    projekt = session.get(Projekt, termin.projekt_id)
+                    projekt = s.get(Projekt, termin.projekt_id)
                     if projekt is not None:
                         kern.benachrichtigen(
-                            session, [projekt.projektleiter_id],
+                            s, [projekt.projektleiter_id],
                             f"Kunde hat auf die Terminmail zu "
                             f"{projekt.nummer} geantwortet",
                             f"/projektierung/projekt/{projekt.id}",
                             art="termin")
-        session.commit()
-    finally:
-        session.close()
     return neu_gesamt

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.db import get_session
 from app.models import Kunde
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/kunden")
 
@@ -42,7 +43,7 @@ def _validieren(daten: dict) -> dict[str, str]:
 
 
 @router.get("")
-async def liste(request: Request, q: str = "", inaktive: bool = False,
+def liste(request: Request, q: str = "", inaktive: bool = False,
                 session: Session = Depends(get_session)):
     abfrage = session.query(Kunde)
     from app import leadmanagement
@@ -68,14 +69,14 @@ async def liste(request: Request, q: str = "", inaktive: bool = False,
 
 
 @router.get("/neu")
-async def neu_formular(request: Request):
+def neu_formular(request: Request):
     return render(request, "kunden/formular.html", aktiv="/kunden",
                   kunde=None, daten={}, fehler={}, anreden=ANREDEN)
 
 
 @router.post("/neu")
-async def neu_speichern(request: Request, session: Session = Depends(get_session)):
-    daten = _formular_lesen(await request.form())
+def neu_speichern(request: Request, session: Session = Depends(get_session)):
+    daten = _formular_lesen(anfrage.formular(request))
     fehler = _validieren(daten)
     if fehler:
         return render(request, "kunden/formular.html", aktiv="/kunden",
@@ -87,7 +88,7 @@ async def neu_speichern(request: Request, session: Session = Depends(get_session
 
 
 @router.get("/{kunde_id}/bearbeiten")
-async def bearbeiten_formular(request: Request, kunde_id: int,
+def bearbeiten_formular(request: Request, kunde_id: int,
                               session: Session = Depends(get_session)):
     kunde = session.get(Kunde, kunde_id)
     if kunde is None:
@@ -97,12 +98,12 @@ async def bearbeiten_formular(request: Request, kunde_id: int,
 
 
 @router.post("/{kunde_id}/bearbeiten")
-async def bearbeiten_speichern(request: Request, kunde_id: int,
+def bearbeiten_speichern(request: Request, kunde_id: int,
                                session: Session = Depends(get_session)):
     kunde = session.get(Kunde, kunde_id)
     if kunde is None:
         return RedirectResponse("/kunden?meldung=Kunde+nicht+gefunden", status_code=303)
-    daten = _formular_lesen(await request.form())
+    daten = _formular_lesen(anfrage.formular(request))
     fehler = _validieren(daten)
     if fehler:
         return render(request, "kunden/formular.html", aktiv="/kunden",
@@ -114,7 +115,7 @@ async def bearbeiten_speichern(request: Request, kunde_id: int,
 
 
 @router.post("/{kunde_id}/aktiv")
-async def aktiv_umschalten(kunde_id: int, aktiv: bool = Form(...),
+def aktiv_umschalten(kunde_id: int, aktiv: bool = Form(...),
                            session: Session = Depends(get_session)):
     kunde = session.get(Kunde, kunde_id)
     if kunde is not None:

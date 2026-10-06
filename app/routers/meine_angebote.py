@@ -18,6 +18,7 @@ from app.db import get_session
 from app.models import (Angebot, Erfassung, Kunde, RabattFreigabe,
                         einstellung_holen)
 from app.templating import render
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/meine-angebote")
 
@@ -142,7 +143,7 @@ def _projektstand(session: Session, angebot: Angebot, benutzer) -> dict | None:
 
 
 @router.post("/{angebot_id}/projekt-kommentar")
-async def projekt_kommentar(request: Request, angebot_id: int,
+def projekt_kommentar(request: Request, angebot_id: int,
                             session: Session = Depends(get_session)):
     """AD-Kommentar zum Projektstand → Projektverlauf + Info an den
     Projektleiter (Plan Phase 70)."""
@@ -152,7 +153,7 @@ async def projekt_kommentar(request: Request, angebot_id: int,
     if (angebot is None or not _gehoert_mir(session, angebot, benutzer.id)):
         return RedirectResponse("/meine-angebote", status_code=303)
     stand = _projektstand(session, angebot, benutzer)
-    form = await request.form()
+    form = anfrage.formular(request)
     text = (form.get("text") or "").strip()
     if stand is None or not text:
         return RedirectResponse(f"/meine-angebote/{angebot_id}", status_code=303)
@@ -172,7 +173,7 @@ async def projekt_kommentar(request: Request, angebot_id: int,
 
 
 @router.get("")
-async def liste(request: Request, q: str = "",
+def liste(request: Request, q: str = "",
                 session: Session = Depends(get_session)):
     benutzer = request.state.benutzer
     angebote = _eigene_angebote(session, benutzer.id)
@@ -193,7 +194,7 @@ async def liste(request: Request, q: str = "",
 
 
 @router.get("/{angebot_id}")
-async def detail(request: Request, angebot_id: int,
+def detail(request: Request, angebot_id: int,
                  session: Session = Depends(get_session)):
     """v10: vollständige Ansicht des eigenen Angebots – alle Positionen,
     Preise, Summen, Status und PDF; OHNE EK/DB-Werte und ohne Editor."""
@@ -254,7 +255,7 @@ async def detail(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/status")
-async def status_setzen(request: Request, angebot_id: int,
+def status_setzen(request: Request, angebot_id: int,
                         session: Session = Depends(get_session)):
     """v11 (Phase 66): AD setzt eigene Angebote auf Angenommen / Abgelehnt /
     zurück auf Versendet („Offen“). Abgelehnt nur mit Pflichtgrund; jeder
@@ -266,7 +267,7 @@ async def status_setzen(request: Request, angebot_id: int,
     if (angebot is None or angebot.extern
             or not _gehoert_mir(session, angebot, benutzer.id)):
         return RedirectResponse("/meine-angebote", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     neuer_status = form.get("status", "")
     if (neuer_status not in ("Versendet", "Angenommen", "Abgelehnt")
             or angebot.status not in ("Versendet", "Angenommen", "Abgelehnt")
@@ -312,7 +313,7 @@ async def status_setzen(request: Request, angebot_id: int,
 
 
 @router.post("/{angebot_id}/rabatt")
-async def rabatt(request: Request, angebot_id: int,
+def rabatt(request: Request, angebot_id: int,
                  session: Session = Depends(get_session)):
     """v10: AD-Gesamtrabatt (Brutto, v4-Mechanik). Zulässig, solange die
     DB-Ampel nicht auf Rot fällt – sonst Freigabe-Anfrage an den Innendienst.
@@ -332,7 +333,7 @@ async def rabatt(request: Request, angebot_id: int,
         return RedirectResponse(f"/meine-angebote/{angebot_id}?meldung=" + quote_plus(
             "Es liegt bereits eine offene Rabatt-Freigabe beim Innendienst."),
             status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     cent, prozent, bezeichnung, fehler = _rabatt_lesen(form)
     if fehler:
         return RedirectResponse(f"/meine-angebote/{angebot_id}?meldung="
@@ -392,7 +393,7 @@ async def rabatt(request: Request, angebot_id: int,
 
 
 @router.get("/{angebot_id}/pdf")
-async def pdf_anzeigen(request: Request, angebot_id: int,
+def pdf_anzeigen(request: Request, angebot_id: int,
                        session: Session = Depends(get_session)):
     """PDF des eigenen Angebots (Kundenansicht – enthält ohnehin keine EKs)."""
     benutzer = request.state.benutzer

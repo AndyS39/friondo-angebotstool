@@ -5,14 +5,16 @@
 # sie für die Kopfzeile aus und verschickt die Mails.
 # Grundsatz: Mail-Fehler werden protokolliert, blockieren das Tool aber nie.
 
+import logging
 import re
-import threading
 from datetime import date, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app import config
+
 # Fester Tool-Link im Firmennetz (Plan Phase 69)
-BASIS_URL = "http://192.168.35.4:8000"
+BASIS_URL = config.BASIS_URL   # v27: aus der .env (BASIS_URL), Standard wie bisher
 ABSENDER_STANDARD = "projektierung@friondo.de"
 ABSENDER_FALLBACK = "angebot@friondo.de"
 
@@ -150,12 +152,17 @@ def mail_senden(session: Session, empfaenger: str, betreff: str, text: str) -> b
 
 
 def sofort_versenden(session: Session, benutzer_ids, text: str, link: str,
-                     art: str = "") -> None:
+                     art: str = "") -> int:
     """Wird von kern.benachrichtigen für jeden Glocken-Eintrag aufgerufen:
-    Benutzer mit Einstellung „sofort“ erhalten die Mail direkt."""
+    Benutzer mit Einstellung „sofort“ erhalten die Mail – seit v27 (PLAN_V17
+    Phase 128) nicht mehr direkt, sondern über die Ausgangs-Warteschlange
+    `mail_ausgang`: der Eintrag entsteht in derselben Transaktion wie die Glocke
+    (kein Netzaufruf, kein Commit mitten in der Anfrage); der Scheduler-Lauf
+    „mail-ausgang“ sendet nach dem Commit. Liefert die Anzahl eingereihter Mails."""
     if art in MAIL_FREIE_ARTEN:
-        return   # F7: To-Dos ohne Mail
-    from app.models import Benutzer
+        return 0   # F7: To-Dos ohne Mail
+    from app.models import Benutzer, MailAusgang
+    eingereiht = 0
     for bid in benutzer_ids:
         benutzer = session.get(Benutzer, bid)
         if (benutzer is None or not benutzer.aktiv
@@ -172,7 +179,76 @@ def sofort_versenden(session: Session, benutzer_ids, text: str, link: str,
         rumpf = (f"{text}\n\nLink: {BASIS_URL}{link}\n\n"
                  "Diese Nachricht wurde automatisch vom Friondo Angebotstool "
                  "erzeugt (Einstellung im Benutzerprofil: sofort).")
-        mail_senden(session, benutzer.email, _betreff(session, text, art), rumpf)
+        session.add(MailAusgang(empfaenger=benutzer.email[:300],
+                                betreff=_betreff(session, text, art)[:300],
+                                text=rumpf, art=(art or "")[:30], status="offen"))
+        eingereiht += 1
+    return eingereiht
+
+
+# --- v27: Ausgangs-Warteschlange (Scheduler „mail-ausgang“, jede Minute) ----------------
+
+MAIL_AUSGANG_VERSUCHE_MAX = 3
+MAIL_AUSGANG_BLOCK = 50
+
+
+def mail_ausgang_lauf() -> dict:
+    """Offene Einträge der Warteschlange senden: lesen (kurze Sitzung) → Sitzung
+    zu → Graph (mit Fallback-Absender wie mail_senden) → kurze Sitzung zum
+    Zurückschreiben je Eintrag. Nach 3 Fehlversuchen bleibt ein Eintrag auf
+    „fehler“ (Protokoll). Ohne Graph-Einrichtung werden offene Einträge als
+    „fehler: Graph nicht eingerichtet“ abgelegt, damit nichts aufläuft."""
+    from app import graph_versand
+    from app.db import kurz
+    from app.models import MailAusgang
+    with kurz() as s:
+        offen = [(m.id, m.empfaenger, m.betreff, m.text, int(m.versuche or 0))
+                 for m in s.query(MailAusgang).filter(MailAusgang.status == "offen")
+                 .order_by(MailAusgang.id).limit(MAIL_AUSGANG_BLOCK)]
+        absender = _absender(s) if offen else ""
+    ergebnis = {"gesendet": 0, "fehler": 0, "offen": max(0, len(offen))}
+    if not offen:
+        return ergebnis
+    konfiguriert = graph_versand.konfiguriert()
+    for eintrag_id, empfaenger, betreff, text, versuche in offen:
+        fehler_text = ""
+        erfolg = False
+        if not konfiguriert:
+            fehler_text = "Graph nicht eingerichtet"
+        else:
+            erfolg, fehler = graph_versand.text_mail_senden(empfaenger, betreff, text, absender)
+            if not erfolg and absender != ABSENDER_FALLBACK:
+                erfolg, fehler = graph_versand.text_mail_senden(
+                    empfaenger, betreff, text, ABSENDER_FALLBACK)
+            if not erfolg:
+                fehler_text = str(fehler or "")[:500]
+        with kurz() as s:
+            m = s.get(MailAusgang, eintrag_id)
+            if m is None:
+                continue
+            m.versuche = versuche + 1
+            if erfolg:
+                m.status, m.gesendet_am, m.fehler_text = "gesendet", datetime.now(), ""
+                ergebnis["gesendet"] += 1
+            else:
+                m.fehler_text = fehler_text
+                endgueltig = (not konfiguriert) or m.versuche >= MAIL_AUSGANG_VERSUCHE_MAX
+                m.status = "fehler" if endgueltig else "offen"
+                if endgueltig:
+                    ergebnis["fehler"] += 1
+                    _protokollieren(s, f"Mail an {empfaenger} fehlgeschlagen "
+                                       f"({m.versuche} Versuche): {fehler_text}")
+    ergebnis["offen"] = len(offen) - ergebnis["gesendet"] - ergebnis["fehler"]
+    return ergebnis
+
+
+def mail_ausgang_zaehler(session: Session) -> dict:
+    """Für Betriebs-Seite und /health: offen und Fehler (letzte 24 h)."""
+    from app.models import MailAusgang
+    grenze = datetime.now() - timedelta(hours=24)
+    return {"offen": session.query(MailAusgang).filter(MailAusgang.status == "offen").count(),
+            "fehler_24h": session.query(MailAusgang).filter(
+                MailAusgang.status == "fehler", MailAusgang.erstellt_am >= grenze).count()}
 
 
 # --- Täglicher Fälligkeits-Lauf (07:00) -------------------------------------------
@@ -288,33 +364,65 @@ def digest_versenden(session: Session | None = None, erzwingen: bool = False) ->
             session.close()
 
 
-# --- Scheduler (Muster wie ablauf_pruefung) ----------------------------------------
+# --- Scheduler (v27: am Rahmen app/scheduler.py registriert) -----------------------
 
-_scheduler_laeuft = False
+_logger = logging.getLogger("angebotstool")
+
+
+def _kurz(ergebnis: dict) -> str:
+    """Ergebnis eines Teilschritts als kurzer Text für die Betriebs-Seite."""
+    if ergebnis.get("uebersprungen"):
+        return "übersprungen"
+    return ", ".join(f"{k}={v}" for k, v in ergebnis.items())[:60]
+
+
+def scheduler_lauf() -> dict:
+    """Alle 5 Minuten: ab 07:00 der Fälligkeits-Lauf, ab 07:15 der Digest – die
+    Datums-Schalter in den Funktionen sorgen dafür, dass beides nur einmal pro
+    Tag läuft (auch nach einem Server-Neustart). v27 (PLAN_V17 Phase 128): beide
+    Teilschritte je für sich abgesichert (ein Fehler blockiert den anderen
+    nicht), Fehler stehen im Rückgabe-dict und im Datei-Log; eine Ausnahme gibt
+    es nur, wenn alle ausgeführten Teilschritte scheiterten."""
+    from app.db import kurz
+    jetzt = datetime.now()
+    ergebnis: dict = {}
+    fehler: list[str] = []
+    schritte = []
+    if jetzt.hour >= 7:
+        schritte.append(("faellig", taeglicher_lauf))
+    if jetzt.hour > 7 or (jetzt.hour == 7 and jetzt.minute >= 15):
+        schritte.append(("digest", digest_versenden))
+    for name, funktion in schritte:
+        try:
+            # je Teilschritt eine kurze Sitzung; während der Graph-Mails hält sie
+            # keine Verbindung (verbindung_freigeben in mail_senden)
+            with kurz() as s:
+                ergebnis[name] = _kurz(funktion(s))
+        except Exception as problem:
+            fehler.append(f"{name}: {type(problem).__name__}: {problem}"[:200])
+            _logger.error("Benachrichtigungen – Teilschritt %s fehlgeschlagen: %s",
+                          name, problem, exc_info=True)
+    if not schritte:
+        ergebnis["hinweis"] = "vor 07:00 nichts zu tun"
+    if fehler:
+        ergebnis["fehler"] = fehler
+        ergebnis["hinweis"] = fehler[0]
+        if len(fehler) == len(schritte):
+            raise RuntimeError("; ".join(fehler)[:500])
+    return ergebnis
 
 
 def scheduler_starten() -> None:
-    """Prüft alle 5 Minuten: ab 07:00 der Fälligkeits-Lauf, ab 07:15 der
-    Digest – die Datums-Schalter sorgen dafür, dass beides nur einmal pro Tag
-    läuft (auch nach einem Server-Neustart). Fehler blockieren das Tool nie."""
-    global _scheduler_laeuft
-    if _scheduler_laeuft:
-        return
-    _scheduler_laeuft = True
-
-    def schleife():
-        import time
-        time.sleep(180)   # dem Serverstart Zeit lassen
-        while True:
-            try:
-                jetzt = datetime.now()
-                if jetzt.hour >= 7:
-                    taeglicher_lauf()
-                if jetzt.hour > 7 or (jetzt.hour == 7 and jetzt.minute >= 15):
-                    digest_versenden()
-            except Exception:
-                pass
-            time.sleep(300)
-
-    threading.Thread(target=schleife, daemon=True,
-                     name="benachrichtigungen").start()
+    """v27 (PLAN_V17 Phase 128): registriert den 5-Minuten-Lauf nur noch am
+    Scheduler-Rahmen (Startverzögerung 180 s wie bisher); Threads startet
+    main.lifespan über scheduler.starten_alle()."""
+    from app import scheduler
+    scheduler.registrieren(
+        "benachrichtigungen", 300, scheduler_lauf,
+        beschreibung="Projektierung: Fälligkeits-Glocken ab 07:00, Tagesdigest-Mails ab 07:15",
+        start_verzoegerung_s=180)
+    # v27 (Phase 128): Sofort-Mails der Glocke aus der Warteschlange senden
+    scheduler.registrieren(
+        "mail-ausgang", 60, mail_ausgang_lauf,
+        beschreibung="Sofort-Mails der Glocke aus der Warteschlange mail_ausgang senden",
+        start_verzoegerung_s=90)

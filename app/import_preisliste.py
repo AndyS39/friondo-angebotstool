@@ -6,8 +6,14 @@
 #   bei "analog Pos. X" wird der Beschreibungstext übernommen und angepasst
 # - Plausiprüfung: |EK × Multi − VK| > 1 € ergibt eine Hinweiszeile im Importbericht
 # - Re-Import: Diff-Vorschau mit Warnliste (Positionsnummer <-> GUID-Abweichungen)
+# - v27 (PLAN_V17 Phase 128): Schreiben in Blöcken (Commit je BLOCK Zeilen), laufender
+#   Import im Betriebs-Status (betrieb.import_markieren) und – hier für alle fünf
+#   Importe gebündelt – Hinweis vor dem Start, Bestätigungsprüfung und Dauer des
+#   letzten Laufs (Einstellung import_dauer_<schluessel>), siehe Abschnitt
+#   „Import-Rahmen v27“ unten.
 
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
@@ -17,6 +23,64 @@ from sqlalchemy.orm import Session
 
 from app import config
 from app.models import Artikel, QUELLE_PREISLISTE, QUELLE_ZUSATZ
+
+# v27 (PLAN_V17 Phase 128): Blockgröße – nach je BLOCK geschriebenen Zeilen wird
+# committet, damit die Schreibsperre nie länger als einen Block am Stück gehalten wird
+BLOCK = 200
+
+
+# --- Import-Rahmen v27 (PLAN_V17 Phase 128) --------------------------------
+# Für alle fünf Importe (Preisliste, PV, Klima, Logik-Excel, Bestandsimport):
+# Hinweis vor dem Start mit Bestätigung (nur die Routen verlangen sie – Aufrufer wie
+# migrate.py rufen die Modulfunktionen direkt) und Dauer des letzten Laufs.
+
+IMPORT_SCHLUESSEL = {"preisliste": "Preisliste", "pv": "PV-Positionslisten",
+                     "klima": "Klima-Positionslisten", "logik": "Logik-Excel",
+                     "bestand": "Bestandsimport", "monday": "monday-Vollabgleich"}
+# Standard-Dauer in Sekunden, solange noch kein Lauf gemessen wurde (Plan Phase 128)
+IMPORT_DAUER_STANDARD = {"preisliste": 20, "pv": 10, "klima": 10, "logik": 15, "bestand": 30,
+                         "monday": 30}   # v27: Button „Jetzt aktualisieren“ (monday-Vollabgleich)
+HINWEIS_BESTAETIGEN = "Bitte den Hinweis bestätigen"
+
+
+def import_dauer(session: Session, schluessel: str) -> int:
+    """Dauer des letzten Laufs in Sekunden (Einstellung import_dauer_<schluessel>);
+    ohne Lauf der Standardwert."""
+    from app.models import einstellung_holen
+    standard = IMPORT_DAUER_STANDARD.get(schluessel, 15)
+    wert = einstellung_holen(session, f"import_dauer_{schluessel}", "")
+    try:
+        return max(1, int(round(float(wert)))) if wert else standard
+    except ValueError:
+        return standard
+
+
+def import_hinweis(session: Session, schluessel: str) -> str:
+    """Wortlaut Plan Phase 128: „Dauer etwa <n> s – während des Imports können
+    Speichern-Aktionen anderer Nutzer kurz warten; empfohlen außerhalb der Kernzeit“."""
+    return (f"Dauer etwa {import_dauer(session, schluessel)} s – während des Imports "
+            "können Speichern-Aktionen anderer Nutzer kurz warten; empfohlen außerhalb "
+            "der Kernzeit")
+
+
+def import_hinweise(session: Session) -> dict[str, str]:
+    """Hinweistexte aller Importe (für Seiten mit mehreren Import-Buttons)."""
+    return {schluessel: import_hinweis(session, schluessel) for schluessel in IMPORT_SCHLUESSEL}
+
+
+def import_bestaetigt(form) -> bool:
+    """Serverseitige Prüfung des Häkchens bzw. versteckten Felds „bestaetigt“."""
+    return str(form.get("bestaetigt") or "").strip().lower() in ("1", "on", "ja", "true")
+
+
+def import_dauer_merken(session: Session, schluessel: str, start: float) -> int:
+    """Nach einem Lauf in der Route: Dauer seit ``start`` (time.perf_counter()) als
+    Einstellung import_dauer_<schluessel> schreiben (committet); liefert die Sekunden."""
+    from app.models import einstellung_setzen
+    sekunden = max(1, int(round(time.perf_counter() - start)))
+    einstellung_setzen(session, f"import_dauer_{schluessel}", str(sekunden))
+    session.commit()
+    return sekunden
 
 
 # --- Textbereinigung ------------------------------------------------------
@@ -397,25 +461,38 @@ def berechne_diff(session: Session, ergebnis: ImportErgebnis) -> Diff:
 
 
 def import_ausfuehren(session: Session) -> tuple[Diff, str]:
-    """Wendet den Import an (Diff wird direkt aus den Dateien neu berechnet)."""
-    ergebnis = lese_dateien()
-    diff = berechne_diff(session, ergebnis)
+    """Wendet den Import an (Diff wird direkt aus den Dateien neu berechnet).
 
-    nach_guid = {a.guid: a for a in session.query(Artikel).filter(
-        Artikel.guid.isnot(None), Artikel.quelle.in_([QUELLE_PREISLISTE, QUELLE_ZUSATZ]))}
-    zusatz_nach_pos = {a.pos_nr: a for a in
-                       session.query(Artikel).filter(Artikel.quelle == QUELLE_ZUSATZ)}
-    for daten in ergebnis.artikel:
-        vorhanden = _bestand_finden(daten, nach_guid, zusatz_nach_pos)
-        if vorhanden is None:
-            session.add(Artikel(**daten, aktiv=True))
-        else:
-            for feld in FELDER_VERGLEICH:
-                setattr(vorhanden, feld, daten[feld])
-            vorhanden.aktiv = True
-    for artikel in diff.entfallen:
-        artikel.aktiv = False
-    session.commit()
+    v27 (PLAN_V17 Phase 128): Schreiben in Blöcken mit Commit je BLOCK Zeilen.
+    Anker je Zeile ist die GUID (Preisliste) bzw. die Positionsnummer (Zusatzartikel),
+    jede Zeile ist ein Upsert; Verwaiste werden erst nach allen Zeilen deaktiviert.
+    Abbruch nach Block n: die Blöcke 1…n sind gespeichert, der nächste Lauf findet
+    sie über den Anker wieder (keine Doppelanlage) und holt den Rest nach – nichts
+    wurde zwischenzeitlich deaktiviert."""
+    from app import betrieb
+    with betrieb.import_markieren("Preisliste"):
+        ergebnis = lese_dateien()
+        diff = berechne_diff(session, ergebnis)
+
+        nach_guid = {a.guid: a for a in session.query(Artikel).filter(
+            Artikel.guid.isnot(None), Artikel.quelle.in_([QUELLE_PREISLISTE, QUELLE_ZUSATZ]))}
+        zusatz_nach_pos = {a.pos_nr: a for a in
+                           session.query(Artikel).filter(Artikel.quelle == QUELLE_ZUSATZ)}
+        zaehler = 0
+        for daten in ergebnis.artikel:
+            vorhanden = _bestand_finden(daten, nach_guid, zusatz_nach_pos)
+            if vorhanden is None:
+                session.add(Artikel(**daten, aktiv=True))
+            else:
+                for feld in FELDER_VERGLEICH:
+                    setattr(vorhanden, feld, daten[feld])
+                vorhanden.aktiv = True
+            zaehler += 1
+            if zaehler % BLOCK == 0:
+                session.commit()      # Block abschließen – Schreibsperre freigeben
+        for artikel in diff.entfallen:
+            artikel.aktiv = False
+        session.commit()
 
     meldung = (f"{len(diff.neu)} neu, {len(diff.geaendert)} geändert, "
                f"{diff.unveraendert} unverändert, {len(diff.entfallen)} deaktiviert")

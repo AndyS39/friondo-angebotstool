@@ -22,6 +22,7 @@ from app.models import (Angebot, Aufgabe, AufgabenpaketInstanz, Benutzer,
                         GEWERK_PHASEN, GEWERK_PHASEN_AKTIV, GEWERK_PHASEN_NAMEN,
                         AUFGABE_STATUS_NAMEN)
 from app.templating import render, templates
+from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/projektierung")
 
@@ -261,7 +262,7 @@ def _filter_werte(session: Session) -> dict:
 
 
 @router.get("")
-async def kanban(request: Request, sparte: str = "", projektleiter_id: int = 0,
+def kanban(request: Request, sparte: str = "", projektleiter_id: int = 0,
                  team_id: int = 0, kanal: str = "", plz: str = "", q: str = "",
                  storniert: int = 0, terminstatus: str = "", vorlauf: str = "",
                  session: Session = Depends(get_session)):
@@ -348,7 +349,7 @@ async def kanban(request: Request, sparte: str = "", projektleiter_id: int = 0,
 
 
 @router.post("/gewerk/{gewerk_id}/feinplanung-erfasst")
-async def feinplanung_erfasst(request: Request, gewerk_id: int,
+def feinplanung_erfasst(request: Request, gewerk_id: int,
                               session: Session = Depends(get_session)):
     """v15 (Phase 74): Häkchen „Feinplanung erfasst“ am Gewerk – Wächter
     Feinplanung VOT → Planung, bis die Feinplanungs-Erfassung (Phase 80)
@@ -356,7 +357,7 @@ async def feinplanung_erfasst(request: Request, gewerk_id: int,
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     neu_wert = form.get("erfasst") == "1"
     if neu_wert != bool(gewerk.feinplanung_erfasst):
         gewerk.feinplanung_erfasst = neu_wert
@@ -372,14 +373,14 @@ async def feinplanung_erfasst(request: Request, gewerk_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/phase-drop")
-async def phase_drop(request: Request, gewerk_id: int,
+def phase_drop(request: Request, gewerk_id: int,
                      session: Session = Depends(get_session)):
     """Drag & Drop vom Board: wie Phasenwechsel, mit optionaler Begründung
     (der Wächter-Hinweis erscheint als Meldung über dem Board)."""
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     ziel = form.get("phase") or ""
     # V4 (Phase 90.1): die beiden Auftragseingangs-Spalten sind EINE Phase
     if ziel.startswith("auftragseingang_"):
@@ -397,7 +398,7 @@ async def phase_drop(request: Request, gewerk_id: int,
 
 
 @router.get("/liste")
-async def liste(request: Request, sparte: str = "", projektleiter_id: int = 0,
+def liste(request: Request, sparte: str = "", projektleiter_id: int = 0,
                 team_id: int = 0, kanal: str = "", plz: str = "", q: str = "",
                 storniert: int = 0, sortierung: str = "chrono",
                 export: str = "", terminstatus: str = "", vorlauf: str = "",
@@ -483,7 +484,7 @@ async def liste(request: Request, sparte: str = "", projektleiter_id: int = 0,
 
 
 @router.get("/termine")
-async def termine(request: Request, ansicht: str = "woche", start: str = "",
+def termine(request: Request, ansicht: str = "woche", start: str = "",
                   team_id: int = 0, person_id: int = 0, typ: str = "",
                   session: Session = Depends(get_session)):
     """Terminübersicht (Phase 68): Wochen-/Monatsansicht, Filter Team/Person/Typ."""
@@ -540,7 +541,7 @@ async def termine(request: Request, ansicht: str = "woche", start: str = "",
 
 
 @router.get("/meine-aufgaben")
-async def meine_aufgaben(request: Request, ueberfaellig: int = 0,
+def meine_aufgaben(request: Request, ueberfaellig: int = 0,
                          session: Session = Depends(get_session)):
     """„Meine Aufgaben" (Phase 68): Überfällig · Heute · Diese Woche ·
     Später · Neu zugewiesen (7 Tage)."""
@@ -581,12 +582,12 @@ async def meine_aufgaben(request: Request, ueberfaellig: int = 0,
 
 
 @router.post("/termine")
-async def termin_aus_uebersicht(request: Request,
+def termin_aus_uebersicht(request: Request,
                                 session: Session = Depends(get_session)):
     """Termin-Dialog aus der Übersicht: Gewerk wählen, dann wie in der Akte."""
     if (umleitung := _gate(request, session, schreiben=True)) is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     try:
         gewerk_id = int(form.get("gewerk_id") or 0)
     except ValueError:
@@ -595,13 +596,13 @@ async def termin_aus_uebersicht(request: Request,
         return RedirectResponse("/projektierung/termine?meldung="
                                 + quote_plus("Bitte ein Gewerk wählen."),
                                 status_code=303)
-    return await termin_anlegen(request, gewerk_id, session)
+    return termin_anlegen(request, gewerk_id, session)
 
 
 # --- Phase 66: Angebot → Projekt ------------------------------------------------
 
 @router.get("/angebot/{angebot_id}/projekt")
-async def projekt_dialog(request: Request, angebot_id: int,
+def projekt_dialog(request: Request, angebot_id: int,
                          session: Session = Depends(get_session)):
     """Dialog „Angebot → Projekt": Kopf mit Kunde + Ausführungsadresse
     (editierbar), Vorschlag „zu offenem Projekt des Vorgangs hinzufügen",
@@ -651,7 +652,7 @@ async def projekt_dialog(request: Request, angebot_id: int,
 
 
 @router.post("/angebot/{angebot_id}/projekt")
-async def projekt_anlegen(request: Request, angebot_id: int,
+def projekt_anlegen(request: Request, angebot_id: int,
                           session: Session = Depends(get_session)):
     if (umleitung := _gate(request, session, schreiben=True)) is not None:
         return umleitung
@@ -659,7 +660,7 @@ async def projekt_anlegen(request: Request, angebot_id: int,
     if angebot is None or angebot.status != "Angenommen" or angebot.projekt_gewerk_id:
         return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
     benutzer = request.state.benutzer
-    form = await request.form()
+    form = anfrage.formular(request)
     sparten = [s for s in ("WP", "PV", "KL", "WB")
                if form.get(f"sparte_{s}") == "on"]
     if not sparten:
@@ -743,7 +744,7 @@ async def projekt_anlegen(request: Request, angebot_id: int,
 
 
 @router.get("/projekt/{projekt_id}")
-async def akte(request: Request, projekt_id: int,
+def akte(request: Request, projekt_id: int,
                session: Session = Depends(get_session)):
     """Projektakte (Phase 66 Basis, Phase 67 Vollausbau)."""
     if (umleitung := _gate(request, session)) is not None:
@@ -957,14 +958,14 @@ def _gewerk_laden(request: Request, session: Session, gewerk_id: int):
 
 
 @router.post("/projekt/{projekt_id}/projektleiter")
-async def projektleiter_aendern(request: Request, projekt_id: int,
+def projektleiter_aendern(request: Request, projekt_id: int,
                                 session: Session = Depends(get_session)):
     if (umleitung := _gate(request, session, schreiben=True)) is not None:
         return umleitung
     projekt = session.get(Projekt, projekt_id)
     if projekt is None:
         return RedirectResponse("/projektierung", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     try:
         neu = int(form.get("projektleiter_id") or 0) or None
     except ValueError:
@@ -986,12 +987,12 @@ async def projektleiter_aendern(request: Request, projekt_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/zuweisung")
-async def zuweisung(request: Request, gewerk_id: int,
+def zuweisung(request: Request, gewerk_id: int,
                     session: Session = Depends(get_session)):
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     geaendert = []
     for feld, name in (("feinplaner_id", "Feinplaner"),
                        ("elektroplaner_id", "Elektroplaner")):
@@ -1021,13 +1022,13 @@ async def zuweisung(request: Request, gewerk_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/heizlast")
-async def heizlast(request: Request, gewerk_id: int,
+def heizlast(request: Request, gewerk_id: int,
                    session: Session = Depends(get_session)):
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
     from app.konfigurator import zahl_parsen
-    form = await request.form()
+    form = anfrage.formular(request)
     kw = zahl_parsen((form.get("heizlast_kw") or "").strip())
     if kw:
         gewerk.heizlast_kw = float(kw)
@@ -1045,7 +1046,7 @@ async def heizlast(request: Request, gewerk_id: int,
 
 
 @router.post("/aufgabe/{aufgabe_id}/status")
-async def aufgabe_status(request: Request, aufgabe_id: int,
+def aufgabe_status(request: Request, aufgabe_id: int,
                          session: Session = Depends(get_session)):
     """Checkbox „erledigt" oder Status-Dropdown; „Wartet" startet die
     Warte-Frist aus der Vorlage; Verantwortlicher änderbar (benachrichtigt)."""
@@ -1055,7 +1056,7 @@ async def aufgabe_status(request: Request, aufgabe_id: int,
     if aufgabe is None:
         return RedirectResponse("/projektierung", status_code=303)
     benutzer = request.state.benutzer
-    form = await request.form()
+    form = anfrage.formular(request)
     from datetime import timedelta
     if "verantwortlich_id" in form:
         try:
@@ -1101,7 +1102,7 @@ async def aufgabe_status(request: Request, aufgabe_id: int,
 
 
 @router.post("/aufgabe/{aufgabe_id}/erledigt-umschalten")
-async def aufgabe_umschalten(request: Request, aufgabe_id: int,
+def aufgabe_umschalten(request: Request, aufgabe_id: int,
                              session: Session = Depends(get_session)):
     """Checkbox in der Akte: erledigt ↔ offen (ein Klick, kein Formular-Mix)."""
     if (umleitung := _gate(request, session, schreiben=True)) is not None:
@@ -1129,12 +1130,12 @@ async def aufgabe_umschalten(request: Request, aufgabe_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/aufgabe")
-async def aufgabe_neu(request: Request, gewerk_id: int,
+def aufgabe_neu(request: Request, gewerk_id: int,
                       session: Session = Depends(get_session)):
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     titel = (form.get("titel") or "").strip()[:300]
     if titel:
         benutzer = request.state.benutzer
@@ -1150,12 +1151,12 @@ async def aufgabe_neu(request: Request, gewerk_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/paket")
-async def paket_aktivieren(request: Request, gewerk_id: int,
+def paket_aktivieren(request: Request, gewerk_id: int,
                            session: Session = Depends(get_session)):
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     logik = projektierung_logik.hole_logik(session)
     paket = logik.pakete.get(form.get("paket_key") or "")
     meldung = "Unbekanntes Paket."
@@ -1176,14 +1177,14 @@ async def paket_aktivieren(request: Request, gewerk_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/termin")
-async def termin_anlegen(request: Request, gewerk_id: int,
+def termin_anlegen(request: Request, gewerk_id: int,
                          session: Session = Depends(get_session)):
     """Termin am Gewerk; Feinplanungs-/Montagetermine berechnen die
     FP+N/M-N-Fälligkeiten des Gewerks nach (Phase 68)."""
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     def _zeit(name):
         roh = (form.get(name) or "").strip()
         for muster in ("%Y-%m-%dT%H:%M", "%Y-%m-%d"):
@@ -1246,7 +1247,7 @@ async def termin_anlegen(request: Request, gewerk_id: int,
 
 
 @router.post("/termin/{termin_id}/outlook")
-async def termin_outlook_senden(request: Request, termin_id: int,
+def termin_outlook_senden(request: Request, termin_id: int,
                                 session: Session = Depends(get_session)):
     """v15 (Phase 81): „Erneut senden“ am Termin mit Sync-Warnsymbol."""
     from app import outlook_kalender
@@ -1261,7 +1262,7 @@ async def termin_outlook_senden(request: Request, termin_id: int,
 
 
 @router.post("/termin/{termin_id}/kundenmail")
-async def termin_kundenmail(request: Request, termin_id: int,
+def termin_kundenmail(request: Request, termin_id: int,
                             session: Session = Depends(get_session)):
     """v15 (Phase 81): Terminbestätigung an den Kunden (Vorlage in der
     Parametrierung); die Antwort setzt später den Bestätigungs-Vorschlag."""
@@ -1280,12 +1281,12 @@ async def termin_kundenmail(request: Request, termin_id: int,
 
 
 @router.post("/termin/{termin_id}/kunde-bestaetigt")
-async def termin_kunde_bestaetigt(request: Request, termin_id: int,
+def termin_kunde_bestaetigt(request: Request, termin_id: int,
                                   session: Session = Depends(get_session)):
     termin = session.get(ProjektTermin, termin_id)
     if termin is None:
         return RedirectResponse("/projektierung", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     termin.kunde_bestaetigt = True
     termin.bestaetigt_am = datetime.now()
     termin.bestaetigt_quelle = ("mail" if form.get("quelle") == "mail"
@@ -1314,14 +1315,14 @@ def _restarbeiten_je_gewerk(session: Session, gewerke) -> dict[int, list]:
 
 
 @router.post("/aufgabe/{aufgabe_id}/auswahl")
-async def aufgabe_auswahl(request: Request, aufgabe_id: int,
+def aufgabe_auswahl(request: Request, aufgabe_id: int,
                           session: Session = Depends(get_session)):
     """v15 (Phase 78): Radio-Auswahl an einer Aufgabe (Option mit * im Blatt
     = erledigt, ohne * = entfaellt/beantwortet)."""
     aufgabe = session.get(Aufgabe, aufgabe_id)
     if aufgabe is None:
         return RedirectResponse("/projektierung", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     meldung = ""
     if kern.aufgabe_auswahl_setzen(session, aufgabe,
                                    form.get("auswahl") or "",
@@ -1336,7 +1337,7 @@ async def aufgabe_auswahl(request: Request, aufgabe_id: int,
 
 
 @router.post("/aufgabe/{aufgabe_id}/in-arbeit")
-async def aufgabe_in_arbeit(request: Request, aufgabe_id: int,
+def aufgabe_in_arbeit(request: Request, aufgabe_id: int,
                             session: Session = Depends(get_session)):
     """v15 (Phase 78): Link-Aufgaben setzen sich beim Klick auf "in Arbeit"
     (Aufruf per fetch aus der Akte, keine Navigation)."""
@@ -1348,7 +1349,7 @@ async def aufgabe_in_arbeit(request: Request, aufgabe_id: int,
 
 
 @router.get("/gewerk/{gewerk_id}/feinplanung")
-async def feinplanung_erfassung(request: Request, gewerk_id: int,
+def feinplanung_erfassung(request: Request, gewerk_id: int,
                                 session: Session = Depends(get_session)):
     """v15 (Phase 80): mobile Feinplanungs-Erfassung (Blatt Fragen FP-WP),
     vorbelegt aus der Vertriebs-Erfassung („vom Vertrieb“-Markierung)."""
@@ -1383,12 +1384,12 @@ async def feinplanung_erfassung(request: Request, gewerk_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/feinplanung")
-async def feinplanung_speichern(request: Request, gewerk_id: int,
+def feinplanung_speichern(request: Request, gewerk_id: int,
                                 session: Session = Depends(get_session)):
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     logik = projektierung_logik.hole_logik(session)
     seiten = logik.fp_seiten()
     try:
@@ -1417,7 +1418,7 @@ async def feinplanung_speichern(request: Request, gewerk_id: int,
 
 
 @router.get("/gewerk/{gewerk_id}/bza")
-async def bza_datenblatt(request: Request, gewerk_id: int,
+def bza_datenblatt(request: Request, gewerk_id: int,
                          session: Session = Depends(get_session)):
     """v15 (Phase 80): BzA-Datenblatt mit Kopier-Buttons; fehlende Felder
     werden ausgewiesen. v19 (PLAN_V14 Phase 96): Abschnitte kommen aus dem
@@ -1472,19 +1473,19 @@ async def bza_datenblatt(request: Request, gewerk_id: int,
 # --- V4 (Phase 92): BzA erfassen, Kundenmail, KfW-Daten ----------------------
 
 @router.post("/gewerk/{gewerk_id}/bza-erfassen")
-async def bza_erfassen(request: Request, gewerk_id: int,
+def bza_erfassen(request: Request, gewerk_id: int,
                        session: Session = Depends(get_session)):
     from app import bza as bza_modul
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     try:
         datum = datetime.strptime((form.get("datum") or "").strip(), "%Y-%m-%d")
     except ValueError:
         datum = datetime.now()
     datei = form.get("datei")
-    inhalt = await datei.read() if getattr(datei, "filename", "") else b""
+    inhalt = datei.file.read() if getattr(datei, "filename", "") else b""
     ok, meldung = bza_modul.erfassen(session, gewerk, form.get("bza_id") or "",
                                      datum, getattr(datei, "filename", "") or "",
                                      inhalt, benutzer=request.state.benutzer)
@@ -1505,7 +1506,7 @@ async def bza_erfassen(request: Request, gewerk_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/bza-ohne-mail")
-async def bza_ohne_mail(request: Request, gewerk_id: int,
+def bza_ohne_mail(request: Request, gewerk_id: int,
                         session: Session = Depends(get_session)):
     """30.09.2026: BzA-Aufgabe ohne Kundenmail abschließen."""
     from app import bza as bza_modul
@@ -1520,7 +1521,7 @@ async def bza_ohne_mail(request: Request, gewerk_id: int,
 
 
 @router.get("/gewerk/{gewerk_id}/bza-mail")
-async def bza_mail_vorschau(request: Request, gewerk_id: int,
+def bza_mail_vorschau(request: Request, gewerk_id: int,
                             session: Session = Depends(get_session)):
     """Vorschau der Kundenmail „BzA“ mit Bearbeiten vor dem Senden."""
     from app import bza as bza_modul
@@ -1537,13 +1538,13 @@ async def bza_mail_vorschau(request: Request, gewerk_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/bza-mail")
-async def bza_mail_senden(request: Request, gewerk_id: int,
+def bza_mail_senden(request: Request, gewerk_id: int,
                           session: Session = Depends(get_session)):
     from app import bza as bza_modul
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     ok, meldung = bza_modul.mail_senden(session, gewerk,
                                         (form.get("betreff") or "").strip()[:300],
                                         (form.get("text") or "").strip()[:8000],
@@ -1558,13 +1559,13 @@ async def bza_mail_senden(request: Request, gewerk_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/kfw")
-async def kfw_daten_setzen(request: Request, gewerk_id: int,
+def kfw_daten_setzen(request: Request, gewerk_id: int,
                            session: Session = Depends(get_session)):
     from app import bza as bza_modul
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     try:
         zusage = datetime.strptime((form.get("kfw_zusage_am") or "").strip(), "%Y-%m-%d")
     except ValueError:
@@ -1582,7 +1583,7 @@ async def kfw_daten_setzen(request: Request, gewerk_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/heizreport/{aktion}")
-async def heizreport_aktion(request: Request, gewerk_id: int, aktion: str,
+def heizreport_aktion(request: Request, gewerk_id: int, aktion: str,
                             session: Session = Depends(get_session)):
     """V4 (Phase 93.1): Heizreport-API – Projekt anlegen / Ergebnis abrufen
     (schreibt kW + Datum + Quelle „Heizreport API“, Aufgabe erledigt).
@@ -1597,7 +1598,7 @@ async def heizreport_aktion(request: Request, gewerk_id: int, aktion: str,
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     benutzer = request.state.benutzer
     status_code = 200
     if aktion == "anlegen":
@@ -1636,7 +1637,7 @@ async def heizreport_aktion(request: Request, gewerk_id: int, aktion: str,
 
 
 @router.get("/gewerk/{gewerk_id}/ugl")
-async def ugl_seite(request: Request, gewerk_id: int,
+def ugl_seite(request: Request, gewerk_id: int,
                     session: Session = Depends(get_session)):
     """UGL-Bestell-Dialog (v15 Phase 80, V4 Phase 93.2): Vorschau Position →
     Artikelnummer × Menge, rote Liste ohne Zuordnung, Lieferdatum /
@@ -1667,7 +1668,7 @@ async def ugl_seite(request: Request, gewerk_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/ugl")
-async def ugl_erzeugen(request: Request, gewerk_id: int,
+def ugl_erzeugen(request: Request, gewerk_id: int,
                        session: Session = Depends(get_session)):
     """UGL-Datei erzeugen: Bestellung protokollieren (nr 1, 2 … → „-2“),
     Ablage in der Galerie „Montagedokumente“ + direkter Download; die
@@ -1681,7 +1682,7 @@ async def ugl_erzeugen(request: Request, gewerk_id: int,
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     lieferdatum = None
     try:
         if form.get("lieferdatum"):
@@ -1733,7 +1734,7 @@ async def ugl_erzeugen(request: Request, gewerk_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/ugl/{bestellung_id}/hochgeladen")
-async def ugl_hochgeladen(request: Request, gewerk_id: int, bestellung_id: int,
+def ugl_hochgeladen(request: Request, gewerk_id: int, bestellung_id: int,
                           session: Session = Depends(get_session)):
     """Häkchen „bei Collin hochgeladen“ mit Datum → Aufgabe erledigt."""
     from app.models import UglBestellung
@@ -1743,7 +1744,7 @@ async def ugl_hochgeladen(request: Request, gewerk_id: int, bestellung_id: int,
     bestellung = session.get(UglBestellung, bestellung_id)
     if bestellung is None or bestellung.gewerk_id != gewerk.id:
         return RedirectResponse(f"/projektierung/gewerk/{gewerk.id}/ugl", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     try:
         datum = datetime.strptime(form.get("datum") or "", "%Y-%m-%d")
     except ValueError:
@@ -1767,7 +1768,7 @@ async def ugl_hochgeladen(request: Request, gewerk_id: int, bestellung_id: int,
 
 
 @router.get("/aufgabe/{aufgabe_id}/sub-mail")
-async def sub_mail_dialog(request: Request, aufgabe_id: int,
+def sub_mail_dialog(request: Request, aufgabe_id: int,
                           session: Session = Depends(get_session)):
     """v15 (Phase 79): Sub-Beauftragung per Mail – Vorlage vorbefüllt,
     Foto-Anhänge abwählbar, Steckbrief-PDF optional."""
@@ -1808,7 +1809,7 @@ async def sub_mail_dialog(request: Request, aufgabe_id: int,
 
 
 @router.post("/aufgabe/{aufgabe_id}/sub-mail")
-async def sub_mail_senden(request: Request, aufgabe_id: int,
+def sub_mail_senden(request: Request, aufgabe_id: int,
                           session: Session = Depends(get_session)):
     from app import sub_mail as sub_mail_modul
     aufgabe = session.get(Aufgabe, aufgabe_id)
@@ -1817,7 +1818,7 @@ async def sub_mail_senden(request: Request, aufgabe_id: int,
     gewerk, umleitung = _gewerk_laden(request, session, aufgabe.gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     try:
         sub = session.get(Subunternehmer, int(form.get("sub_id") or 0))
     except ValueError:
@@ -1847,7 +1848,7 @@ async def sub_mail_senden(request: Request, aufgabe_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/v1-entfernen")
-async def v1_entfernen(request: Request, gewerk_id: int,
+def v1_entfernen(request: Request, gewerk_id: int,
                        session: Session = Depends(get_session)):
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
@@ -1861,7 +1862,7 @@ async def v1_entfernen(request: Request, gewerk_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/restarbeit")
-async def restarbeit_anlegen(request: Request, gewerk_id: int,
+def restarbeit_anlegen(request: Request, gewerk_id: int,
                              session: Session = Depends(get_session)):
     """v15 (Phase 78): Restarbeit/Reklamation am Gewerk – Text, optionales
     Foto (landet in der Galerie unter Inbetrieb-/Abnahme), Verantwortlicher."""
@@ -1869,7 +1870,7 @@ async def restarbeit_anlegen(request: Request, gewerk_id: int,
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     text = (form.get("text") or "").strip()[:500]
     if not text:
         return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}",
@@ -1888,7 +1889,7 @@ async def restarbeit_anlegen(request: Request, gewerk_id: int,
         angebot = (session.get(Angebot, gewerk.angebot_id)
                    if gewerk.angebot_id else None)
         if angebot is not None and angebot.vorgang_id:
-            inhalt = await datei.read()
+            inhalt = datei.file   # v27 (Phase 128): wird in galerie.speichern gestreamt
             galerie_datei = galerie_modul.speichern(
                 session, angebot.vorgang_id, "Inbetrieb-/Abnahme",
                 datei.filename, inhalt, benutzer=request.state.benutzer,
@@ -1906,7 +1907,7 @@ async def restarbeit_anlegen(request: Request, gewerk_id: int,
 
 
 @router.post("/restarbeit/{restarbeit_id}/status")
-async def restarbeit_status(request: Request, restarbeit_id: int,
+def restarbeit_status(request: Request, restarbeit_id: int,
                             session: Session = Depends(get_session)):
     from app.models import Restarbeit
     eintrag = session.get(Restarbeit, restarbeit_id)
@@ -1927,14 +1928,14 @@ async def restarbeit_status(request: Request, restarbeit_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/zaehlerwechsel")
-async def zaehlerwechsel_setzen(request: Request, gewerk_id: int,
+def zaehlerwechsel_setzen(request: Request, gewerk_id: int,
                                 session: Session = Depends(get_session)):
     """v15 (Phase 78, Fit for Future): Zählerwechseltermin am Gewerk –
     erscheint als Marker im Team-Kalender."""
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     roh = (form.get("datum") or "").strip()
     if roh:
         try:
@@ -1949,7 +1950,7 @@ async def zaehlerwechsel_setzen(request: Request, gewerk_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/steckbrief")
-async def steckbrief_speichern(request: Request, gewerk_id: int,
+def steckbrief_speichern(request: Request, gewerk_id: int,
                                session: Session = Depends(get_session)):
     """v15 (Phase 77): Steckbrief-Feld per Klick editieren – manuell
     geänderte Felder werden bei „Neu ableiten“ nicht überschrieben."""
@@ -1957,7 +1958,7 @@ async def steckbrief_speichern(request: Request, gewerk_id: int,
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     feld = (form.get("feld") or "").strip()[:60]
     wert = (form.get("wert") or "").strip()[:500]
     gueltig = {f for f, _ in kern.steckbrief_felder(gewerk.sparte)}
@@ -1993,7 +1994,7 @@ def _auftragsdaten_gewerke(session: Session, gewerk: Gewerk) -> list[Gewerk]:
 
 
 @router.get("/gewerk/{gewerk_id}/auftragsdaten")
-async def auftragsdaten_seite(request: Request, gewerk_id: int,
+def auftragsdaten_seite(request: Request, gewerk_id: int,
                               session: Session = Depends(get_session)):
     from app.models import SteckbriefWert
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
@@ -2028,7 +2029,7 @@ async def auftragsdaten_seite(request: Request, gewerk_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/auftragsdaten")
-async def auftragsdaten_speichern(request: Request, gewerk_id: int,
+def auftragsdaten_speichern(request: Request, gewerk_id: int,
                                   session: Session = Depends(get_session)):
     from app import config, galerie
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
@@ -2040,7 +2041,7 @@ async def auftragsdaten_speichern(request: Request, gewerk_id: int,
                                 status_code=303)
     benutzer = request.state.benutzer
     projekt = session.get(Projekt, gewerk.projekt_id)
-    form = await request.form()
+    form = anfrage.formular(request)
     basis = f"/projektierung/gewerk/{gewerk.id}/auftragsdaten"
     # Pflicht-Upload des Angebots-PDFs, falls am TAIFUN-Eintrag noch keins liegt
     datei = form.get("pdf_datei")
@@ -2048,7 +2049,7 @@ async def auftragsdaten_speichern(request: Request, gewerk_id: int,
         if datei is None or not getattr(datei, "filename", ""):
             return RedirectResponse(basis + "?meldung=" + quote_plus(
                 "Bitte das TAIFUN-Angebot als PDF hochladen (Pflicht)."), status_code=303)
-        inhalt = await datei.read()
+        inhalt = datei.file.read()
         if not inhalt.startswith(b"%PDF"):
             return RedirectResponse(basis + "?meldung=" + quote_plus(
                 "Die Datei ist kein PDF."), status_code=303)
@@ -2086,7 +2087,7 @@ async def auftragsdaten_speichern(request: Request, gewerk_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/steckbrief-ableiten")
-async def steckbrief_neu_ableiten(request: Request, gewerk_id: int,
+def steckbrief_neu_ableiten(request: Request, gewerk_id: int,
                                   session: Session = Depends(get_session)):
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
@@ -2101,14 +2102,14 @@ async def steckbrief_neu_ableiten(request: Request, gewerk_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/team-termin")
-async def team_termin(request: Request, gewerk_id: int,
+def team_termin(request: Request, gewerk_id: int,
                       session: Session = Depends(get_session)):
     """v15 (Phase 75): Zuweisungsdialog „Team + Termin“ – Team ans Gewerk
     (WP-/Elektro-/Sub-Zuweisung) plus Montagetermin; Konflikt = Warnung."""
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
 
     def _datum(name):
         roh = (form.get(name) or "").strip()
@@ -2152,7 +2153,7 @@ async def team_termin(request: Request, gewerk_id: int,
 
 
 @router.get("/kalender")
-async def kalender(request: Request, ansicht: str = "woche", start: str = "",
+def kalender(request: Request, ansicht: str = "woche", start: str = "",
                    team_id: int = 0, sparte: str = "", terminstatus: str = "",
                    session: Session = Depends(get_session)):
     """v15 (Phase 75): Kalender – Zeilen = Teams, Spalten = Tage, Projekte
@@ -2250,14 +2251,14 @@ async def kalender(request: Request, ansicht: str = "woche", start: str = "",
 
 
 @router.post("/termin/{termin_id}/kalender-drop")
-async def kalender_drop(request: Request, termin_id: int,
+def kalender_drop(request: Request, termin_id: int,
                         session: Session = Depends(get_session)):
     """v15 (Phase 75): Balken per Drag verschoben (Datum/Team) oder Ende
     gezogen – protokolliert, Fälligkeiten nachberechnet."""
     if (umleitung := _gate(request, session)) is not None:
         return umleitung
     termin = session.get(ProjektTermin, termin_id)
-    form = await request.form()
+    form = anfrage.formular(request)
     zurueck_url = form.get("zurueck") or "/projektierung/kalender"
     if termin is None or termin.beginn is None:
         return RedirectResponse(zurueck_url, status_code=303)
@@ -2288,14 +2289,14 @@ async def kalender_drop(request: Request, termin_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/phase")
-async def phase_aendern(request: Request, gewerk_id: int,
+def phase_aendern(request: Request, gewerk_id: int,
                         session: Session = Depends(get_session)):
     """Phasenwechsel mit Wächtern (Konzept 3.1): unerfüllte Bedingungen nur
     mit Begründung überschreibbar; rückwärts immer mit Begründung."""
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     ziel = form.get("phase") or ""
     begruendung = (form.get("begruendung") or "").strip()
     ok, meldung = kern.phase_wechseln(session, gewerk, ziel, begruendung,
@@ -2309,14 +2310,14 @@ async def phase_aendern(request: Request, gewerk_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/freigabe")
-async def freigabe(request: Request, gewerk_id: int,
+def freigabe(request: Request, gewerk_id: int,
                    session: Session = Depends(get_session)):
     """Rechnung freigeben (Phase 67): Restarbeiten-Pflichtfrage → Phase
     Abgeschlossen, Benachrichtigung Buchhaltung, ggf. Restarbeiten-Aufgabe."""
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    form = await request.form()
+    form = anfrage.formular(request)
     ok, meldung = kern.rechnung_freigeben(
         session, gewerk, form.get("restarbeiten") or "",
         form.get("restarbeiten_text") or "", benutzer=request.state.benutzer)
@@ -2329,7 +2330,7 @@ async def freigabe(request: Request, gewerk_id: int,
 
 
 @router.post("/projekt/{projekt_id}/kommentar")
-async def kommentar(request: Request, projekt_id: int,
+def kommentar(request: Request, projekt_id: int,
                     session: Session = Depends(get_session)):
     """Kommentar mit @Erwähnung (auch aufgabenbezogen über aufgabe_id)."""
     if (umleitung := _gate(request, session)) is not None:
@@ -2337,7 +2338,7 @@ async def kommentar(request: Request, projekt_id: int,
     projekt = session.get(Projekt, projekt_id)
     if projekt is None:
         return RedirectResponse("/projektierung", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     text = (form.get("text") or "").strip()
     if not text:
         return RedirectResponse(f"/projektierung/projekt/{projekt_id}",
@@ -2369,7 +2370,7 @@ async def kommentar(request: Request, projekt_id: int,
 
 
 @router.post("/projekt/{projekt_id}/dokument")
-async def dokument_hochladen(request: Request, projekt_id: int,
+def dokument_hochladen(request: Request, projekt_id: int,
                              session: Session = Depends(get_session)):
     """Upload in die Ordnerstruktur (auch Kamera/mobil); max. 20 MB."""
     if (umleitung := _gate(request, session)) is not None:
@@ -2377,13 +2378,13 @@ async def dokument_hochladen(request: Request, projekt_id: int,
     projekt = session.get(Projekt, projekt_id)
     if projekt is None:
         return RedirectResponse("/projektierung", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     datei = form.get("datei")
     ziel_meldung = f"/projektierung/projekt/{projekt_id}?meldung="
     if datei is None or not getattr(datei, "filename", ""):
         return RedirectResponse(ziel_meldung + quote_plus(
             "Bitte eine Datei wählen."), status_code=303)
-    inhalt = await datei.read()
+    inhalt = datei.file.read()
     if len(inhalt) > 20 * 1024 * 1024:
         return RedirectResponse(ziel_meldung + quote_plus(
             "Datei größer als 20 MB – bitte verkleinern (z. B. Foto-Auflösung)."),
@@ -2421,7 +2422,7 @@ async def dokument_hochladen(request: Request, projekt_id: int,
 
 
 @router.get("/dokument/{dokument_id}")
-async def dokument_anzeigen(request: Request, dokument_id: int,
+def dokument_anzeigen(request: Request, dokument_id: int,
                             session: Session = Depends(get_session)):
     if (umleitung := _gate(request, session)) is not None:
         return umleitung
@@ -2438,7 +2439,7 @@ async def dokument_anzeigen(request: Request, dokument_id: int,
 
 
 @router.post("/dokument/{dokument_id}/loeschen")
-async def dokument_loeschen(request: Request, dokument_id: int,
+def dokument_loeschen(request: Request, dokument_id: int,
                             session: Session = Depends(get_session)):
     """Löschen nur Projektierung/Admin, mit Protokoll im Verlauf."""
     if (umleitung := _gate(request, session)) is not None:
@@ -2461,14 +2462,14 @@ async def dokument_loeschen(request: Request, dokument_id: int,
 
 
 @router.post("/projekt/{projekt_id}/sub")
-async def sub_zuordnen(request: Request, projekt_id: int,
+def sub_zuordnen(request: Request, projekt_id: int,
                        session: Session = Depends(get_session)):
     if (umleitung := _gate(request, session, schreiben=True)) is not None:
         return umleitung
     projekt = session.get(Projekt, projekt_id)
     if projekt is None:
         return RedirectResponse("/projektierung", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     def _id(name):
         try:
             return int(form.get(name) or 0) or None
@@ -2500,14 +2501,14 @@ async def sub_zuordnen(request: Request, projekt_id: int,
 
 
 @router.post("/sub/{eintrag_id}/status")
-async def sub_status(request: Request, eintrag_id: int,
+def sub_status(request: Request, eintrag_id: int,
                      session: Session = Depends(get_session)):
     if (umleitung := _gate(request, session, schreiben=True)) is not None:
         return umleitung
     eintrag = session.get(ProjektSub, eintrag_id)
     if eintrag is None:
         return RedirectResponse("/projektierung", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     status = form.get("status") or ""
     if status in ("angefragt", "beauftragt", "bestaetigt", "erledigt"):
         eintrag.status = status
@@ -2517,7 +2518,7 @@ async def sub_status(request: Request, eintrag_id: int,
 
 
 @router.post("/gewerk/{gewerk_id}/storno")
-async def gewerk_storno(request: Request, gewerk_id: int,
+def gewerk_storno(request: Request, gewerk_id: int,
                         session: Session = Depends(get_session)):
     """Storno (Phase 66): Pflichtdialog Grund + Text; setzt das Angebot auf
     „Abgelehnt" (bestehende Ablehnungslogik inkl. monday-Rückspielung)."""
@@ -2526,7 +2527,7 @@ async def gewerk_storno(request: Request, gewerk_id: int,
     gewerk = session.get(Gewerk, gewerk_id)
     if gewerk is None:
         return RedirectResponse("/projektierung", status_code=303)
-    form = await request.form()
+    form = anfrage.formular(request)
     ok, meldung = kern.gewerk_stornieren(
         session, gewerk, (form.get("grund") or "").strip(),
         form.get("text") or "", benutzer=request.state.benutzer)
