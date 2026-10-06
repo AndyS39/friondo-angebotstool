@@ -25,8 +25,9 @@
     <div class="pj-fp-frage" {% if f.sichtbar_wenn %}data-sichtbar="{{ f.sichtbar_wenn }}"
          {{ 'hidden' if not f.sichtbar(antworten) }}{% endif %}>
         <label for="fp-{{ f.key }}">{{ f.frage }}{{ ' *' if f.pflicht }}
+            {# v26 (Phase 124, A-6): Herkunft der Vorbelegung – „vom Vertrieb“ oder „aus Heizreport“ #}
             {% if f.key in vorbelegt %}<span class="pj-fp-vertrieb"
-                title="Vorbelegt aus der Vertriebs-Erfassung – bitte bestätigen oder ändern">vom Vertrieb</span>{% endif %}
+                title="{{ 'Vorbelegt aus der Heizreport-Heizlast – bitte bestätigen oder ändern' if vorbelegt[f.key] == 'aus Heizreport' else 'Vorbelegt aus der Vertriebs-Erfassung – bitte bestätigen oder ändern' }}">{{ vorbelegt[f.key] or 'vom Vertrieb' }}</span>{% endif %}
         </label>
         {% set wert = antworten.get(f.key, '') %}
         {% if f.typ == 'ja_nein' %}

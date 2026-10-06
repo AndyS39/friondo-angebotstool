@@ -100,6 +100,9 @@ def _aufgabe_kontext(session: Session, aufgabe: Aufgabe) -> dict:
         # V4 (Phase 93.1): Heizreport-API konfiguriert → Buttons statt Link/Upload
         "heizreport_konfiguriert": __import__(
             "app.heizreport_api", fromlist=["x"]).konfiguriert(session),
+        # v26 (PLAN_PROJ_V5 Phase 123/124): Modus v2 – Schlüssel, Zeitpunkte, Hinweis
+        "heizreport": __import__("app.heizreport_api", fromlist=["x"])
+        .aufgaben_kontext(session, gewerk),
     }
 
 
@@ -877,6 +880,10 @@ async def akte(request: Request, projekt_id: int,
                   phasen_aktiv=GEWERK_PHASEN_AKTIV,
                   heizreport_konfiguriert=__import__(
                       "app.heizreport_api", fromlist=["x"]).konfiguriert(session),
+                  # v26 (Phase 123/124): Heizreport-Kontext je Gewerk (Modus, Schlüssel,
+                  # Zeitpunkte, Abgleich-Hinweis) für Aufgabenzeile und Heizlast-Block
+                  heizreport_je_gewerk={g.id: __import__("app.heizreport_api", fromlist=["x"])
+                                        .aufgaben_kontext(session, g) for g in gewerke},
                   # V4 (Phase 92): BzA-Buttons nur bei gefördertem Auftrag
                   bza_gefoerdert={g.id: __import__("app.bza", fromlist=["x"])
                                   .ist_gefoerdert(session, g) for g in gewerke},
@@ -1578,27 +1585,52 @@ async def kfw_daten_setzen(request: Request, gewerk_id: int,
 async def heizreport_aktion(request: Request, gewerk_id: int, aktion: str,
                             session: Session = Depends(get_session)):
     """V4 (Phase 93.1): Heizreport-API – Projekt anlegen / Ergebnis abrufen
-    (schreibt kW + Datum + Quelle „Heizreport API“, Aufgabe erledigt)."""
+    (schreibt kW + Datum + Quelle „Heizreport API“, Aufgabe erledigt).
+    v26 (PLAN_PROJ_V5 Phasen 123/124, Modus v2): zusätzlich pdf (Heizreport-PDF
+    in die Galerie; zweiter Abruf nur mit bestaetigt=1, sonst 409 mit
+    Rückfrage), schluessel (von Hand, geprüft über GET /reports/{key}) und
+    loesen (Verknüpfung lösen mit Pflichtbegründung). Ein zweites Anlegen bei
+    bestehender Verknüpfung → 409."""
+    from fastapi.responses import JSONResponse
+
     from app import heizreport_api
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
+    form = await request.form()
+    benutzer = request.state.benutzer
+    status_code = 200
     if aktion == "anlegen":
-        ok, meldung = heizreport_api.projekt_anlegen(session, gewerk,
-                                                     request.state.benutzer)
+        if gewerk.heizreport_projekt_key and heizreport_api.modus(session) == "v2":
+            status_code = 409
+        ok, meldung = heizreport_api.projekt_anlegen(session, gewerk, benutzer)
     elif aktion == "ergebnis":
-        ok, meldung, _kw = heizreport_api.ergebnis_holen(session, gewerk,
-                                                         request.state.benutzer)
+        ok, meldung, _kw = heizreport_api.ergebnis_holen(session, gewerk, benutzer)
+    elif aktion == "pdf":
+        ok, meldung, zustand = heizreport_api.pdf_ablegen(
+            session, gewerk, benutzer, bestaetigt=(form.get("bestaetigt") or "") == "1")
+        if zustand == "rueckfrage":
+            status_code = 409
+    elif aktion == "schluessel":
+        ok, meldung = heizreport_api.schluessel_eintragen(
+            session, gewerk, form.get("schluessel") or "", benutzer)
+    elif aktion == "loesen":
+        ok, meldung = heizreport_api.verknuepfung_loesen(
+            session, gewerk, form.get("begruendung") or "", benutzer)
     else:
         return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}",
                                 status_code=303)
     session.commit()
-    form = await request.form()
     aufgabe_id = form.get("aufgabe_id") or ""
-    if _json_gewuenscht(request) and aufgabe_id.isdigit():
-        aufgabe = session.get(Aufgabe, int(aufgabe_id))
-        if aufgabe is not None:
-            return _aufgabe_json(request, session, aufgabe, meldung)
+    if _json_gewuenscht(request):
+        if status_code == 409:
+            return JSONResponse({"ok": False, "meldung": meldung,
+                                 "rueckfrage": aktion == "pdf"}, status_code=409)
+        if aufgabe_id.isdigit():
+            aufgabe = session.get(Aufgabe, int(aufgabe_id))
+            if aufgabe is not None:
+                return _aufgabe_json(request, session, aufgabe, meldung)
+        return _meldung_json(meldung, ok=ok)
     return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}?meldung="
                             + quote_plus(meldung), status_code=303)
 

@@ -1162,7 +1162,14 @@ class PrueferF(Basis):
         self.assertIn("Raum 2 Schlafzimmer", r.text)
 
     def test_parametrierung_und_artikel_oberflaeche(self):
+        # v26 (PLAN_PROJ_V5 Phase 125): die Übersicht ist eine Verteilerseite –
+        # Klima-Import und KL-Parameter liegen auf /parametrierung/logik, die
+        # DB-Ampel je Sparte auf /parametrierung/angebotstool
         r = self.client.get("/parametrierung")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('href="/parametrierung/logik"', r.text)
+        self.assertIn('href="/parametrierung/kl-logik"', r.text)
+        r = self.client.get("/parametrierung/logik")
         self.assertEqual(r.status_code, 200)
         self.assertIn("Artikel → Klima-Positionslisten importieren", r.text)
         self.assertIn("/parametrierung/kl-logik", r.text)
@@ -1170,6 +1177,8 @@ class PrueferF(Basis):
             self.assertIn(name, r.text)
         self.assertIn("€ netto", r.text)                          # Einheit-Spalte
         self.assertNotIn("Fehlende KL-Parameter", r.text)
+        r = self.client.get("/parametrierung/angebotstool")
+        self.assertEqual(r.status_code, 200)
         self.assertIn('name="db_ampel_rot_unter_KL"', r.text)
         # Artikelliste: Klima-Import neben dem PV-Import, Filter Sparte KL (pos_nr KL*)
         r = self.client.get("/artikel")

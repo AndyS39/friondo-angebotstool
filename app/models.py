@@ -607,6 +607,9 @@ class Gewerk(Base):
     # V4 (Phase 93.1): Heizreport-API – Projekt-Key + Herkunft der Heizlast
     heizreport_projekt_key: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
     heizlast_quelle: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
+    # v26 (PLAN_PROJ_V5 Phase 122): Zeitpunkte der Projektanlage und PDF-Ablage
+    heizreport_angelegt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    heizreport_pdf_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     auftragswert_original: Mapped[int] = mapped_column(Integer, default=0)  # Cent brutto
     auftragswert_aktuell: Mapped[int] = mapped_column(Integer, default=0)
     feinplaner_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

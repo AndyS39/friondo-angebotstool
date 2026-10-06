@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block titel %}Angebotstool-Einstellungen – Friondo Angebotstool{% endblock %}
+
+{# v26 (PLAN_PROJ_V5 Phase 125): die Inline-Abschnitte der alten Parametrierungs-
+   Übersicht (v25) – Formulare, action, Feldnamen und Hidden-Felder unverändert;
+   POST /parametrierung/einstellungen und /parametrierung/ablehnungsgruende kehren
+   per Referer hierher zurück. #}
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Angebotstool-Einstellungen</h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung/logik">Logik &amp; Importe</a>
+        <a class="knopf zweitrangig" href="/parametrierung">← Parametrierung</a>
+    </div>
+</div>
+
+<nav class="pe-nav" aria-label="Abschnitte">
+    <a href="#db-ampel">DB-Ampel</a>
+    <a href="#versand">E-Mail-Versand</a>
+    <a href="#kombi">Kombi-Versand</a>
+    <a href="#gewerke">Gewerkeübergreifend</a>
+    <a href="#fern">Fern-Signatur</a>
+    <a href="#ablehnung">Abgelehnt-Prozess</a>
+    <a href="#loeschprotokoll">Lösch-Protokoll</a>
+</nav>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<section class="pe-abschnitt" id="db-ampel">
+<h2>Deckungsbeitrags-Ampel (Angebotsliste)</h2>
+<form method="post" action="/parametrierung/einstellungen" class="suchleiste">
+    <label class="kontrollfeld">rot unter (€)
+        <input type="text" name="db_ampel_rot_unter" value="{{ db_rot }}" size="8"></label>
+    <label class="kontrollfeld">grün über (€)
+        <input type="text" name="db_ampel_gruen_ueber" value="{{ db_gruen }}" size="8"></label>
+    <button class="knopf" type="submit">Speichern</button>
+    <span class="dezent">dazwischen = orange</span>
+</form>
+{# v13-PV (Phase 78): eigene Schwellen je Sparte – leer = allgemeine Werte oben #}
+<form method="post" action="/parametrierung/einstellungen" class="suchleiste">
+    <input type="hidden" name="db_sparten_formular" value="1">
+    <strong>je Sparte:</strong>
+    {% for sp, werte in db_sparten.items() %}
+    <span class="kontrollfeld">{{ sp }}
+        <input type="text" name="db_ampel_rot_unter_{{ sp }}" value="{{ werte[0] }}" size="6"
+               placeholder="{{ db_rot }}" title="{{ sp }}: rot unter (€)">
+        <input type="text" name="db_ampel_gruen_ueber_{{ sp }}" value="{{ werte[1] }}" size="6"
+               placeholder="{{ db_gruen }}" title="{{ sp }}: grün über (€)"></span>
+    {% endfor %}
+    <button class="knopf" type="submit">Speichern</button>
+    <span class="dezent">leer = allgemeine Schwellen (Start: PV und KL wie WP)</span>
+</form>
+</section>
+
+<section class="pe-abschnitt" id="versand">
+<h2>E-Mail-Versand</h2>
+<form method="post" action="/parametrierung/einstellungen" class="suchleiste">
+    <input type="hidden" name="mail_formular" value="1">
+    <label class="kontrollfeld">Absender („Senden als“)
+        <input type="email" name="mail_absender" value="{{ mail_absender }}" size="24"></label>
+    <label class="kontrollfeld">Abgleich-Postfach
+        <input type="email" name="mail_postfach" value="{{ mail_postfach }}" size="24"></label>
+    <label class="kontrollfeld">BCC
+        <input type="text" name="mail_bcc" value="{{ mail_bcc }}" size="24" placeholder="info@friondo.de"></label>
+    <button class="knopf" type="submit">Speichern</button>
+</form>
+<p class="dezent">Der Entwurf wird mit dem Absender angelegt (M365-Admin muss „Senden als“
+für alle Innendienst-Mitarbeiter vergeben, siehe <code>docs/graph-einrichtung.md</code>).
+CC = E-Mail des Außendienstlers des Vorgangs (automatisch). Der 15-Minuten-Abgleich
+prüft im Abgleich-Postfach, ob die Mail tatsächlich gesendet wurde
+(Status „Versand vorbereitet“ → „Versendet“) und sammelt Kundenantworten. Mehrere
+BCC-Adressen mit Komma trennen; leer = kein BCC.
+{% if sync_status and sync_status.letzter_lauf %}
+    Letzter Abgleich: {{ sync_status.letzter_lauf.strftime('%d.%m.%Y %H:%M') }}
+    ({{ sync_status.versendet }} als versendet erkannt, {{ sync_status.neu }} neue Mails).
+{% endif %}</p>
+{% if versand_protokoll %}
+<details id="versand-protokoll">
+    <summary>Versand-Erkennung: Protokoll der letzten Prüfläufe ({{ versand_protokoll | length }})</summary>
+    <table class="tabelle">
+        <thead><tr><th>Zeit</th><th>Angebot</th><th>Nachrichten</th><th>Ergebnis</th></tr></thead>
+        <tbody>
+        {% for e in versand_protokoll | reverse %}
+            <tr><td>{{ e.zeit }}</td><td>{{ e.angebot }}</td>
+                <td class="rechts">{{ e.nachrichten }}</td><td>{{ e.ergebnis }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <p class="dezent">Nur Angebote im Status „Versand vorbereitet“ werden geprüft.
+        Greift die Erkennung nicht, steht hier warum – als Fallback gibt es am
+        Angebot den Button „Als versendet markieren“.</p>
+</details>
+{% else %}
+<p class="dezent">Versand-Erkennung: noch kein Prüflauf protokolliert.</p>
+{% endif %}
+</section>
+
+<section class="pe-abschnitt" id="kombi">
+<h2>Kombi-Versand (v10)</h2>
+<form method="post" action="/parametrierung/einstellungen" class="formular">
+    <input type="hidden" name="kombi_formular" value="1">
+    <label>Betreff der Kombi-Mail<br>
+        <input type="text" name="kombi_vorlage_betreff" value="{{ kombi_betreff }}" size="70"></label><br>
+    <label>Text der Kombi-Mail<br>
+        <textarea name="kombi_vorlage_text" rows="9" style="width:100%">{{ kombi_text }}</textarea></label>
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Speichern</button>
+        <span class="dezent">Platzhalter: {angebotsliste} (je Angebot Sparte, Nummer,
+            Endbetrag; bei WP zusätzlich Eigenanteil – keine Gesamtsumme),
+            {angebotsnummern}, {briefanrede}, {vertriebler}, {absender}</span>
+    </div>
+</form>
+</section>
+
+<section class="pe-abschnitt" id="gewerke">
+<h2>Gewerkeübergreifende Artikel</h2>
+<form method="post" action="/parametrierung/einstellungen" class="suchleiste">
+    <input type="hidden" name="gewerke_formular" value="1">
+    <label class="kontrollfeld">Gewerkeübergreifende Artikel
+        <input type="text" name="gewerke_artikel" value="{{ gewerke_artikel }}" size="40"></label>
+    <button class="knopf" type="submit">Speichern</button>
+    <span class="dezent">Kommaliste (Pos.-Nrn.); löst bei Mehr-Sparten-Vorgängen
+        einen fachlichen Hinweis in der Akte aus, wenn voll berechnet.</span>
+</form>
+</section>
+
+<section class="pe-abschnitt" id="fern">
+<h2>Fern-Signatur (Kunde signiert selbst)</h2>
+<form method="post" action="/parametrierung/einstellungen" class="suchleiste">
+    <input type="hidden" name="fern_formular" value="1">
+    <label class="kontrollfeld">
+        <input type="checkbox" name="signatur_fern_aktiv" value="1"
+               {{ 'checked' if fern_aktiv == '1' }}> aktiv
+    </label>
+    <label class="kontrollfeld">Link gültig (Tage)
+        <input type="text" name="signatur_fern_gueltig_tage" value="{{ fern_tage }}" size="4"></label>
+    <label class="kontrollfeld">Öffentliche Basis-Adresse
+        <input type="text" name="signatur_fern_basis_url" value="{{ fern_basis }}"
+               size="34" placeholder="https://signatur.friondo.de"></label>
+    <button class="knopf" type="submit">Speichern</button>
+</form>
+<p class="dezent">Standard AUS – erst aktivieren, wenn die IT die öffentliche
+HTTPS-Adresse für die Signatur-Route bereitgestellt hat
+(<code>docs/fern-signatur-it.md</code>). Bei aktivem Schalter enthält die
+Angebots-Mail einen Einmal-Link zum Online-Unterschreiben; nach der Signatur
+wird der Status auf „Angenommen" gesetzt und der Innendienst per E-Mail informiert.</p>
+</section>
+
+<section class="pe-abschnitt" id="ablehnung">
+<h2>Abgelehnt-Prozess (v8)</h2>
+<div class="konfigurator-spalten">
+    <div class="konfigurator-haupt">
+        <form method="post" action="/parametrierung/einstellungen" class="suchleiste">
+            <input type="hidden" name="ablehnung_formular" value="1">
+            <label class="kontrollfeld">Automatisch ablehnen nach
+                <input type="text" name="ablehnung_auto_tage" value="{{ ablehnung_tage }}" size="4"> Tagen</label>
+            <span class="dezent">Versendete Angebote ohne Annahme/Ablehnung; eine
+            Wiedervorlage in der Zukunft schützt vor dem Prüflauf.</span>
+            <button class="knopf klein" type="submit">Speichern</button>
+        </form>
+        <p><strong>Gründe der Ablehnung</strong> <span class="dezent">(Auswahlliste im Pflichtdialog)</span></p>
+        <table class="tabelle" style="max-width:520px">
+            <tbody>
+            {% for g in ablehnungsgruende %}
+                <tr>
+                    <td class="{{ 'dezent' if not g.aktiv }}">{{ g.name }}{{ ' (deaktiviert)' if not g.aktiv }}</td>
+                    <td class="aktionen">
+                        <form method="post" action="/parametrierung/ablehnungsgruende">
+                            <input type="hidden" name="aktion" value="umschalten">
+                            <input type="hidden" name="id" value="{{ g.id }}">
+                            <button class="knopf klein zweitrangig" type="submit">
+                                {{ 'Aktivieren' if not g.aktiv else 'Deaktivieren' }}</button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <form method="post" action="/parametrierung/ablehnungsgruende" class="suchleiste">
+            <input type="hidden" name="aktion" value="hinzufuegen">
+            <input type="text" name="name" maxlength="100" placeholder="Neuer Grund …">
+            <button class="knopf klein" type="submit">Hinzufügen</button>
+        </form>
+    </div>
+    <div class="konfigurator-protokoll">
+        <p><strong>Prüflauf-Protokoll</strong> <span class="dezent">(letzte Läufe)</span></p>
+        {% if ablehnung_protokoll %}<pre class="hinweis">{{ ablehnung_protokoll }}</pre>
+        {% else %}<p class="dezent">Noch kein Lauf protokolliert.</p>{% endif %}
+    </div>
+</div>
+</section>
+
+<section class="pe-abschnitt" id="loeschprotokoll">
+<h2>Lösch-Protokoll Angebote</h2>
+{% if loeschungen %}
+<table class="tabelle">
+    <thead><tr><th>Gelöscht am</th><th>Nummer</th><th>Kunde</th><th>Status</th><th class="rechts">Endbetrag</th><th>durch</th></tr></thead>
+    <tbody>
+    {% for l in loeschungen %}
+        <tr>
+            <td>{{ l.geloescht_am.strftime('%d.%m.%Y %H:%M') }}</td>
+            <td>{{ l.nummer }}</td>
+            <td>{{ l.kunde_name }}</td>
+            <td>{{ l.status_vorher }}</td>
+            <td class="rechts">{{ l.endbetrag_cent | euro }}</td>
+            <td>{{ l.benutzer_name }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="dezent">Noch keine Löschung protokolliert.</p>
+{% endif %}
+</section>
+
+<script>
+(function () {
+    // Sprung aus der Übersicht auf #versand: zugeklapptes Protokoll öffnen
+    function anker() {
+        if (location.hash === '#versand') {
+            var d = document.getElementById('versand-protokoll');
+            if (d) { d.open = true; }
+        }
+    }
+    anker();
+    window.addEventListener('hashchange', anker);
+})();
+</script>
+{% endblock %}

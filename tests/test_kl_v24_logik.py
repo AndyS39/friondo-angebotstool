@@ -469,14 +469,25 @@ class Parametrierung(Basis):
         cls.client.post("/login", data={"benutzer_id": "1", "pin": "1234"})
 
     def test_uebersicht(self):
+        # v26 (PLAN_PROJ_V5 Phase 125): Übersicht = Verteilerseite; Logik-Tabellen
+        # und Klima-Import auf /parametrierung/logik, DB-Ampel je Sparte auf
+        # /parametrierung/angebotstool
         r = self.client.get("/parametrierung")
+        self.assertEqual(r.status_code, 200)
+        for text in ('href="/parametrierung/logik"', 'href="/parametrierung/kl-logik"',
+                     'href="/parametrierung/angebotstool"'):
+            self.assertIn(text, r.text, text)
+        r = self.client.get("/parametrierung/logik")
         self.assertEqual(r.status_code, 200)
         for text in ("KL-Parameter", "Klima-Positionslisten importieren",
                      'action="/parametrierung/artikel/kl-import"', "Klasse 24 bis",
-                     'name="db_ampel_rot_unter_KL"', 'name="db_ampel_gruen_ueber_KL"',
                      "/parametrierung/kl-logik", "KL-Aktionen"):
             self.assertIn(text, r.text, text)
         self.assertNotIn("Fehlende KL-Parameter", r.text)
+        r = self.client.get("/parametrierung/angebotstool")
+        self.assertEqual(r.status_code, 200)
+        for text in ('name="db_ampel_rot_unter_KL"', 'name="db_ampel_gruen_ueber_KL"'):
+            self.assertIn(text, r.text, text)
 
     def test_kl_logik_lesesicht(self):
         r = self.client.get("/parametrierung/kl-logik")
@@ -494,7 +505,8 @@ class Parametrierung(Basis):
         self.assertIn("Import ausführen", r.text)
         r = self.client.post("/parametrierung/artikel/kl-import", follow_redirects=False)
         self.assertEqual(r.status_code, 303)
-        self.assertIn("/parametrierung?meldung=", r.headers["location"])
+        # v26 (Phase 125): KL-Import kehrt nach Logik & Importe zurück
+        self.assertIn("/parametrierung/logik?meldung=", r.headers["location"])
         self.assertIn("Klima-Import+abgeschlossen", r.headers["location"])
         self.assertIn("0+neu", r.headers["location"])          # Re-Import ohne Doppel
         aktiv = (self.s.query(Artikel).filter(Artikel.quelle == QUELLE_KL,

@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block titel %}Logik &amp; Importe – Friondo Angebotstool{% endblock %}
+
+{# v26 (PLAN_PROJ_V5 Phase 125): Logik-Teil der alten Parametrierungs-Übersicht
+   (v25) – Quelle, Validierungsbericht, „Neu einlesen“, Tabellen der Logik-Excel
+   und der Klimakonfigurator-Import, 1:1 übernommen. #}
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>Logik &amp; Importe</h1>
+    <div class="aktionen">
+        <form method="post" action="/parametrierung/neu-einlesen">
+            <button class="knopf" type="submit">Parametrierung neu einlesen</button>
+        </form>
+        <a class="knopf zweitrangig" href="/parametrierung/kl-logik">Klima-Logik (KL)</a>
+        <a class="knopf zweitrangig" href="/parametrierung/angebotstool">Angebotstool-Einstellungen</a>
+        <a class="knopf zweitrangig" href="/parametrierung">← Parametrierung</a>
+    </div>
+</div>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% if dateifehler %}
+    <p class="meldung fehler">Die Logik-Excel wurde nicht gefunden: <code>{{ dateifehler }}</code></p>
+{% else %}
+
+<nav class="pe-nav" aria-label="Abschnitte">
+    <a href="#bericht">Validierung</a>
+    <a href="#eingelesen">Eingelesene Logik</a>
+    <a href="#fragen">Fragen</a>
+    <a href="#angebotsaufbau">Angebotsaufbau</a>
+    <a href="#kfw">KfW-Parameter</a>
+    {% if logik.pv_parameter %}<a href="#pv">PV-Parameter</a>{% endif %}
+    <a href="#klima">Klimakonfigurator</a>
+</nav>
+
+<section class="pe-abschnitt" id="bericht">
+<p class="dezent">
+    Quelle: <code>konfigurator_logik.xlsx</code> ·
+    zuletzt eingelesen: {{ logik.geladen_am.strftime('%d.%m.%Y %H:%M:%S') }}
+</p>
+
+{% if bericht.ok %}
+    <p class="meldung">Validierung erfolgreich – keine Fehler gefunden.</p>
+{% else %}
+    <div class="warnblock fehlerblock">
+        <strong>Fehler ({{ bericht.fehler | length }}) – bitte Logik-Excel korrigieren und neu einlesen</strong>
+        <ul>{% for f in bericht.fehler %}<li>{{ f }}</li>{% endfor %}</ul>
+    </div>
+{% endif %}
+
+{% if bericht.warnungen %}
+    <div class="warnblock">
+        <strong>Hinweise ({{ bericht.warnungen | length }})</strong>
+        <ul>{% for w in bericht.warnungen %}<li>{{ w }}</li>{% endfor %}</ul>
+    </div>
+{% endif %}
+</section>
+
+<section class="pe-abschnitt" id="eingelesen">
+<h2>Eingelesene Logik</h2>
+<table class="tabelle zusammenfassung">
+    <tr><th>Fragen</th><td>{{ logik.fragen | length }}</td></tr>
+    <tr><th>Aktionen</th><td>{{ logik.aktionen | length }}</td></tr>
+    <tr><th>Paketmatrix-Zeilen</th><td>{{ logik.pakete | length }}</td></tr>
+    <tr><th>Angebots-Blöcke</th><td>{{ logik.bloecke | length }}</td></tr>
+    <tr><th>KfW-Parameter</th><td>{{ logik.kfw | length }}</td></tr>
+    <tr><th>PV-Parameter</th><td>{{ logik.pv_parameter | length }}</td></tr>
+    {# v24: Klimakonfigurator (Blätter „Aktionen KL“ … „KL-Artikel“) #}
+    <tr><th>KL-Aktionen</th><td>{{ logik.kl_aktionen | length }}
+        {% if not logik.kl_aktionen %}<span class="dezent">(Blatt „Aktionen KL“ fehlt – Klima läuft als reiner Erfassungsbogen)</span>{% endif %}</td></tr>
+    <tr><th>KL-Paketmatrix / Montagematrix / Kombinationen</th>
+        <td>{{ logik.kl_paket | length }} / {{ logik.kl_montage | length }} / {{ logik.kl_kombis | length }} Außengeräte
+            · <a href="/parametrierung/kl-logik">Lesesicht</a></td></tr>
+    <tr><th>KL-Parameter</th><td>{{ logik.kl_parameter | length }}</td></tr>
+</table>
+</section>
+
+<section class="pe-abschnitt" id="fragen">
+<h2>Fragen</h2>
+<table class="tabelle">
+    <thead><tr><th>ID</th><th>Frage</th><th>Typ</th><th>Antwortmöglichkeiten</th><th>Anzeigen wenn</th></tr></thead>
+    <tbody>
+    {% for f in logik.fragen.values() | sort(attribute='reihenfolge') %}
+        <tr>
+            <td>{{ f.id }}</td>
+            <td>{{ f.text }}</td>
+            <td class="dezent">{{ f.typ }}</td>
+            <td class="dezent">{{ f.antworten | join(' | ') | truncate(60) }}</td>
+            <td class="dezent">{{ f.bedingung.roh if f.bedingung else '?' }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</section>
+
+<section class="pe-abschnitt" id="angebotsaufbau">
+<h2>Angebotsaufbau</h2>
+<table class="tabelle">
+    <thead><tr><th>Block</th><th>Überschrift</th><th>Wann</th></tr></thead>
+    <tbody>
+    {% for b in logik.bloecke %}
+        <tr>
+            <td>{{ b.nr }}</td>
+            <td>{{ b.ueberschrift | truncate(90) }}</td>
+            <td class="dezent">{{ b.wann.roh if b.wann else '?' }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</section>
+
+<section class="pe-abschnitt" id="kfw">
+<h2>KfW-Parameter</h2>
+<table class="tabelle">
+    <thead><tr><th>Parameter</th><th>Wert</th><th>Bemerkung</th></tr></thead>
+    <tbody>
+    {% for name, (wert, bemerkung) in logik.kfw.items() %}
+        <tr>
+            <td>{{ name }}</td>
+            <td>{{ wert | truncate(90) }}</td>
+            <td class="dezent">{{ bemerkung | truncate(70) }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</section>
+
+{% if logik.pv_parameter %}
+<section class="pe-abschnitt" id="pv">
+<h2>PV-Parameter</h2>
+<p class="dezent">Blatt „PV-Parameter“ der Logik-Excel: Auslegung (v16) und
+    Wirtschaftlichkeit (v22). Prozentwerte als Zahl mit Einheit „%“ (z. B. 3),
+    Tausender ohne Punkt; Änderungen wirken nach „Parametrierung neu einlesen“.</p>
+{% if pv_fehlende %}
+<div class="warnblock">
+    <strong>Fehlende Wirtschaftlichkeits-Parameter</strong> – bis zur Ergänzung im
+    Blatt gilt der Standardwert:
+    <ul>
+    {% for name in pv_fehlende %}
+        <li>{{ name }} – Standard {{ pv_standard[name] }}</li>
+    {% endfor %}
+    </ul>
+</div>
+{% endif %}
+<table class="tabelle">
+    <thead><tr><th>Parameter</th><th>Wert</th><th>Einheit</th><th>Bemerkung</th></tr></thead>
+    <tbody>
+    {% for name, (wert, bemerkung) in logik.pv_parameter.items() %}
+        <tr>
+            <td>{{ name }}</td>
+            <td>{{ wert | truncate(60) }}</td>
+            <td class="dezent">{{ logik.pv_parameter_einheit.get(name, '') }}</td>
+            <td class="dezent">{{ bemerkung | truncate(70) }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</section>
+{% endif %}
+
+{# v24 (PLAN_V16 Phase 113/115): Klimakonfigurator – Import-Button, KL-Parameter #}
+<section class="pe-abschnitt" id="klima">
+<h2>Klimakonfigurator (v24)</h2>
+<div class="aktionen">
+    <form method="post" action="/parametrierung/artikel/kl-import">
+        <button class="knopf" type="submit" {{ 'disabled' if not kl_import_ok }}
+                title="Liest Artikel-Preislisten/Klima/ (Ersatzangebot KL · Musterangebot KL) → KL001–KL050">
+            Artikel → Klima-Positionslisten importieren</button>
+    </form>
+    <a class="knopf zweitrangig" href="/parametrierung/artikel/kl-import">Import-Vorschau</a>
+    <a class="knopf zweitrangig" href="/parametrierung/kl-logik">Paketmatrix / Montagematrix / Kombinationen KL</a>
+    <a class="knopf zweitrangig" href="/artikel?q=KL0">Artikel Sparte KL</a>
+</div>
+{% if not kl_import_ok %}
+<p class="meldung fehler">Klima-Import nicht verfügbar – <code>app/import_klima.py</code> fehlt.</p>
+{% endif %}
+{% if logik.kl_aktionen %}
+<p class="dezent">Blatt „KL-Parameter“ der Logik-Excel: Rechenwerte der Klima-Auslegung
+    (Kühllast = Raumfläche × Höhenfaktor × W/m² ÷ 1000, Klassengrenzen 9/12/18/24,
+    Leitung je Innengerät, §14a-Außengeräte). Dezimalzahlen mit Komma oder Punkt;
+    Änderungen wirken nach „Parametrierung neu einlesen“. Der Wert „Rollgerüst VK“ ist nur
+    der Startwert für den Import von KL050 – danach gilt der Artikelpreis (Artikel → KL050).</p>
+{% if kl_fehlende %}
+<div class="warnblock">
+    <strong>Fehlende KL-Parameter</strong> – bis zur Ergänzung im Blatt gilt der Standardwert:
+    <ul>
+    {% for name in kl_fehlende %}
+        <li>{{ name }} – Standard {{ kl_standard[name] }}</li>
+    {% endfor %}
+    </ul>
+</div>
+{% endif %}
+<h3>KL-Parameter</h3>
+<table class="tabelle">
+    <thead><tr><th>Parameter</th><th>Wert</th><th>Einheit</th><th>Bemerkung</th></tr></thead>
+    <tbody>
+    {% for name, (wert, bemerkung) in logik.kl_parameter.items() %}
+        <tr>
+            <td>{{ name }}</td>
+            {# Excel-Zahlen (1.1 / 2.6) deutsch anzeigen; Texte unverändert #}
+            <td>{{ wert.replace('.', ',') if wert.replace('.', '', 1).isdigit() else wert | truncate(60) }}</td>
+            <td class="dezent">{{ logik.kl_parameter_einheit.get(name, '') }}</td>
+            <td class="dezent">{{ bemerkung | truncate(70) }}</td>
+        </tr>
+    {% endfor %}
+    {% for name in kl_fehlende %}
+        <tr class="inaktiv">
+            <td>{{ name }}</td>
+            <td class="dezent">fehlt – Standard {{ kl_standard[name] }}</td>
+            <td></td>
+            <td class="dezent">Zeile im Blatt „KL-Parameter“ ergänzen</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="hinweis">Blatt „Aktionen KL“ fehlt in der Logik-Excel – die Klima-Erfassung läuft
+    als reiner Erfassungsbogen (TAIFUN-Schiene). Für den Klimakonfigurator die Blätter
+    „Aktionen KL“, „Angebotsaufbau KL“, „Paketmatrix KL“, „Kombinationen KL“,
+    „Montagematrix KL“, „KL-Parameter“ und „KL-Artikel“ anlegen (PLAN_V16 Phase 113).</p>
+{% endif %}
+</section>
+
+{% endif %}
+{% endblock %}

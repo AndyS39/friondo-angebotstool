@@ -550,7 +550,12 @@ class _Antwort:
 
 
 class Phase93Heizreport(Basis):
-    PARAMETER = {"heizreport_api_url": "https://heizreport.test/api/",
+    # v26 (PLAN_PROJ_V5 Phase 122): der generische v17-Client bleibt als Modus
+    # „generisch“ erhalten – Standard ist seit v26 der Modus „v2“ (fester
+    # Endpunkt, Bearer-Token); die Verbindungstest-Route ist nach
+    # /parametrierung/heizreport/test umgezogen.
+    PARAMETER = {"heizreport_modus": "generisch",
+                 "heizreport_api_url": "https://heizreport.test/api/",
                  "heizreport_auth_art": "body", "heizreport_auth_header": "apiKey",
                  "heizreport_api_key": "geheim-123",
                  "heizreport_mapping_zurueck": json.dumps(
@@ -558,7 +563,8 @@ class Phase93Heizreport(Basis):
 
     def setUp(self):
         from app import heizreport_api
-        self.alt = {n: kern.parameter_holen(self.s, n, "") for n in heizreport_api.PARAMETER}
+        self.alt = {n: kern.parameter_holen(self.s, n, "")
+                    for n in heizreport_api.PARAMETER + ("heizreport_modus",)}
 
     def tearDown(self):
         for name, wert in self.alt.items():
@@ -623,8 +629,9 @@ class Phase93Heizreport(Basis):
         fehler = urllib.error.HTTPError("https://heizreport.test/api/", 400, "Bad", {}, None)
         fehler.read = lambda: "kein JSON Object empfangen".encode()
         with mock.patch("urllib.request.urlopen", side_effect=fehler):
-            r = self.client.post("/parametrierung/projektierung-einstellungen/heizreport-test",
-                                 data={"heizreport_api_url": "https://heizreport.test/api/",
+            r = self.client.post("/parametrierung/heizreport/test",
+                                 data={"heizreport_modus": "generisch",
+                                       "heizreport_api_url": "https://heizreport.test/api/",
                                        "heizreport_auth_art": "body"})
         self.assertIn("HTTP 400", r.text)
         self.assertIn("kein JSON Object", r.text)

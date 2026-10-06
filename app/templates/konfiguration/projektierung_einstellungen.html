@@ -2,209 +2,226 @@
 
 {% block titel %}Projektierung-Einstellungen – Friondo Angebotstool{% endblock %}
 
+{# v26 (PLAN_PROJ_V5 Phase 125): gegliedert – sticky Abschnitts-Navigation (Anker),
+   eine Karte je Abschnitt, EIN sticky „Speichern“ unten (Aktionsleiste des
+   Angebots-Editors v14). Gleiche Route, gleiches Formular, Feldnamen und
+   POST-Verarbeitung unverändert. Der Heizreport-Block (Phase 93) und das Feld
+   url_heizreport sind nach /parametrierung/heizreport umgezogen (Phase 122). #}
 {% block inhalt %}
 <div class="seitenkopf">
     <h1>Projektierung-Einstellungen</h1>
     <div class="aktionen">
-        <a class="knopf zweitrangig" href="/parametrierung">Zur Parametrierung</a>
+        <a class="knopf zweitrangig" href="/parametrierung/golive">Go-live-Checkliste</a>
+        <a class="knopf zweitrangig" href="/parametrierung/heizreport">Heizreport</a>
+        <a class="knopf zweitrangig" href="/parametrierung">← Parametrierung</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-<form method="post" action="/parametrierung/projektierung-einstellungen"
-      class="formular" style="max-width:800px">
-    <h2>Freigabe (Demo-Schalter)</h2>
-    <label>Modul sichtbar für
-        <select name="freigabe_modus">
-            <option value="admin" {{ 'selected' if freigabe_modus == 'admin' }}>Nur Admin (Demo · Coming soon)</option>
-            <option value="pilot" {{ 'selected' if freigabe_modus == 'pilot' }}>Pilot: Admin + ausgewählte Benutzer</option>
-            <option value="alle" {{ 'selected' if freigabe_modus == 'alle' }}>Alle berechtigten Rollen</option>
-        </select>
-    </label>
-    {# V3 (Phase 86): Pilotliste – wirkt nur im Modus „Pilot“ #}
-    <input type="hidden" name="pilot_dabei" value="1">
-    <fieldset style="border:1px solid var(--rand, #ddd);border-radius:8px;padding:8px 12px">
-        <legend>Pilot-Benutzer (nur im Modus „Pilot“)</legend>
+<nav class="pe-nav" id="pe-nav" aria-label="Abschnitte">
+    <a href="#freigabe">Freigabe &amp; Pilot</a>
+    <a href="#vorlauf">Vorlauf-Ampel</a>
+    <a href="#verantwortliche">Standard-Verantwortliche</a>
+    <a href="#mails">Benachrichtigungs-Mails</a>
+    <a href="#storno">Storno-Gründe</a>
+    <a href="#galerie">Galerie</a>
+    <a href="#portale">Portal-URLs</a>
+    <a href="#ugl">UGL/Collin</a>
+    <a href="#kalender">Outlook-Kalender</a>
+    <a href="#terminmail">Terminbestätigung</a>
+    <a href="#bza-mail">Kundenmail BzA</a>
+    <a href="#ordnervorlage" class="dezent">Ordnervorlage</a>
+    <a href="#mailprotokoll" class="dezent">Mail-Protokoll</a>
+</nav>
+
+{% macro benutzer_wahl(name, wert, titel) %}
+<label>{{ titel }}
+    <select name="{{ name }}">
+        <option value="">– kein Standard –</option>
         {% for b in benutzer_liste %}
-        <label class="kontrollfeld" style="display:inline-block;min-width:220px">
-            <input type="checkbox" name="pilot_benutzer" value="{{ b.id }}"
-                   {{ 'checked' if b.id in pilot_ids }}> {{ b.name }}
-            <span class="dezent">({{ b.rolle }})</span></label>
+            <option value="{{ b.id }}" {{ 'selected' if wert == b.id | string }}>{{ b.name }}</option>
         {% endfor %}
-        <p class="dezent">Benutzer mit Hauptrolle Projektierung oder Montage sehen das
-            Modul immer. Status des Go-live: <a href="/parametrierung/golive">Go-live-Checkliste</a>.</p>
-    </fieldset>
-    <p class="dezent">Bei „Nur Admin“ sind alle Projektierungs- und
-        Montage-Seiten, der Button „Angebot → Projekt“, der Projektstand-Block
-        am Angebot und die Glocken-Ereignisse der Projektierung ausschließlich
-        für Admins sichtbar (server-seitig geprüft). Das Portal-Badge
-        „Demo · Coming soon“ wird bei „Pilot“ zu „Pilot“ und verschwindet bei „Alle“.
-        Kundenmails (BzA) gehen nur im Demo-Modus an die Test-Adresse; im Pilot
-        werden sie echt versendet (Stufe 1 = echte Aufträge).</p>
+    </select>
+</label>
+{% endmacro %}
 
-    <h2>Vorlauf-Ampel (Board, Liste, Akte)</h2>
-    <label>grün ab mehr als … Wochen bis Montagebeginn
-        <input type="text" name="vorlauf_gruen_ab_wochen" value="{{ vorlauf_gruen }}" size="4"></label>
-    <label>gelb ab … Wochen (darunter rot; unterminiert = rot)
-        <input type="text" name="vorlauf_gelb_ab_wochen" value="{{ vorlauf_gelb }}" size="4"></label>
+<form method="post" action="/parametrierung/projektierung-einstellungen" class="pe-formular">
 
-    <h2>Standard-Verantwortliche</h2>
-    {% macro benutzer_wahl(name, wert, titel) %}
-    <label>{{ titel }}
-        <select name="{{ name }}">
-            <option value="">– kein Standard –</option>
+    <section class="karte formular pe-abschnitt" id="freigabe">
+        <h2>Freigabe &amp; Pilot <small class="dezent">(Demo-Schalter)</small></h2>
+        <label>Modul sichtbar für
+            <select name="freigabe_modus">
+                <option value="admin" {{ 'selected' if freigabe_modus == 'admin' }}>Nur Admin (Demo · Coming soon)</option>
+                <option value="pilot" {{ 'selected' if freigabe_modus == 'pilot' }}>Pilot: Admin + ausgewählte Benutzer</option>
+                <option value="alle" {{ 'selected' if freigabe_modus == 'alle' }}>Alle berechtigten Rollen</option>
+            </select>
+        </label>
+        {# V3 (Phase 86): Pilotliste – wirkt nur im Modus „Pilot“ #}
+        <input type="hidden" name="pilot_dabei" value="1">
+        <fieldset class="pe-fieldset">
+            <legend>Pilot-Benutzer (nur im Modus „Pilot“)</legend>
             {% for b in benutzer_liste %}
-                <option value="{{ b.id }}" {{ 'selected' if wert == b.id | string }}>{{ b.name }}</option>
+            <label class="kontrollfeld pe-pilot">
+                <input type="checkbox" name="pilot_benutzer" value="{{ b.id }}"
+                       {{ 'checked' if b.id in pilot_ids }}> {{ b.name }}
+                <span class="dezent">({{ b.rolle }})</span></label>
             {% endfor %}
-        </select>
-    </label>
-    {% endmacro %}
-    {{ benutzer_wahl('standard_pl', standard_pl, 'Projektleiter') }}
-    {{ benutzer_wahl('standard_fp', standard_fp, 'Feinplaner') }}
-    {{ benutzer_wahl('standard_ep', standard_ep, 'Elektroplaner') }}
-    {{ benutzer_wahl('buchhaltung', buchhaltung, 'Buchhaltung (Freigabe-Info)') }}
+            <p class="dezent">Benutzer mit Hauptrolle Projektierung oder Montage sehen das
+                Modul immer. Status des Go-live: <a href="/parametrierung/golive">Go-live-Checkliste</a>.</p>
+        </fieldset>
+        <p class="dezent">Bei „Nur Admin“ sind alle Projektierungs- und
+            Montage-Seiten, der Button „Angebot → Projekt“, der Projektstand-Block
+            am Angebot und die Glocken-Ereignisse der Projektierung ausschließlich
+            für Admins sichtbar (server-seitig geprüft). Das Portal-Badge
+            „Demo · Coming soon“ wird bei „Pilot“ zu „Pilot“ und verschwindet bei „Alle“.
+            Kundenmails (BzA) gehen nur im Demo-Modus an die Test-Adresse; im Pilot
+            werden sie echt versendet (Stufe 1 = echte Aufträge).</p>
+    </section>
 
-    <h2>Benachrichtigungs-Mails</h2>
-    <label>Absender-Postfach
-        <input type="email" name="absender" value="{{ absender }}">
-    </label>
-    <p class="dezent">Shared-Postfach mit „Senden als“-Berechtigung
-        (M365-Admin); bei Fehlern wird automatisch über angebot@friondo.de
-        versendet (siehe Protokoll unten).</p>
+    <section class="karte formular pe-abschnitt" id="vorlauf">
+        <h2>Vorlauf-Ampel <small class="dezent">(Board, Liste, Akte)</small></h2>
+        <label>grün ab mehr als … Wochen bis Montagebeginn
+            <input type="text" name="vorlauf_gruen_ab_wochen" value="{{ vorlauf_gruen }}" size="4"></label>
+        <label>gelb ab … Wochen (darunter rot; unterminiert = rot)
+            <input type="text" name="vorlauf_gelb_ab_wochen" value="{{ vorlauf_gelb }}" size="4"></label>
+    </section>
 
-    <h2>Storno-Gründe</h2>
-    <label>Ein Grund je Zeile
-        <textarea name="gruende" rows="6">{{ gruende }}</textarea>
-    </label>
+    <section class="karte formular pe-abschnitt" id="verantwortliche">
+        <h2>Standard-Verantwortliche</h2>
+        {{ benutzer_wahl('standard_pl', standard_pl, 'Projektleiter') }}
+        {{ benutzer_wahl('standard_fp', standard_fp, 'Feinplaner') }}
+        {{ benutzer_wahl('standard_ep', standard_ep, 'Elektroplaner') }}
+        {{ benutzer_wahl('buchhaltung', buchhaltung, 'Buchhaltung (Freigabe-Info)') }}
+    </section>
 
-    <label>Galerie: Zusatzordner (| getrennt; Standardordner sind fest)<br>
-        <input type="text" name="galerie_zusatzordner" size="60"
-               value="{{ galerie_zusatzordner }}"
-               placeholder="z. B. Statik | Genehmigungen"></label><br>
-    <label class="kontrollfeld">
-        <input type="checkbox" name="galerie_original"
-               {{ 'checked' if galerie_original == 'an' }}>
-        Original-Bilder zusätzlich behalten (Uploads werden auf 2000 px verkleinert)</label><br>
-    <button class="knopf" type="submit">Speichern</button>
-    <h3 style="margin-top:16px">Portal-URLs (Link-Aufgaben, Phase 78)</h3>
-    <label>BzA-Portal (KfW)</label>
-    <input type="text" name="url_bza_portal" value="{{ url_bza_portal }}"
-           placeholder="https://…">
-    <label>KfW-Zuschussportal (Link in der BzA-Mail, {link_kfw})</label>
-    <input type="text" name="url_kfw_zuschussportal" value="{{ url_kfw_zuschussportal }}"
-           placeholder="https://…">
-    <label>SpotmyEnergy-Portal (iMSys / SpotDynamic)</label>
-    <input type="text" name="url_spotmyenergy" value="{{ url_spotmyenergy }}"
-           placeholder="https://…">
-    <label>Heizreport</label>
-    <input type="text" name="url_heizreport" value="{{ url_heizreport }}"
-           placeholder="https://…">
-    <label>GC Online Plus</label>
-    <input type="text" name="url_gc_online" value="{{ url_gc_online }}"
-           placeholder="https://…">
-    <h3 style="margin-top:16px">UGL-Bestellung Collin (Phase 80)</h3>
-    <label>Collin-Kundennummer (UGL KOP, Stellen 4–13)</label>
-    <input type="text" name="collin_kundennummer" value="{{ collin_kundennummer }}">
-    <label>Lieferantennummer von Collin in unserem System (KOP 14–23, optional)</label>
-    <input type="text" name="collin_lieferantennummer" value="{{ collin_lieferantennummer }}" maxlength="10">
-    <label>Standard-Lieferant neuer Stücklisten-Zeilen</label>
-    <input type="text" name="stueckliste_standard_lieferant" value="{{ standard_lieferant }}">
-    <p class="dezent" style="font-size:12px">Stücklisten-Pflege und Go-live-Prüfpunkte:
-        <a href="/parametrierung/stuecklisten">Parametrierung → Stücklisten</a>.</p>
-    <label>Lieferadresse</label>
-    <select name="ugl_lieferadresse">
-        <option value="ausfuehrung" {{ 'selected' if ugl_lieferadresse != 'lager' }}>Ausführungsadresse des Projekts</option>
-        <option value="lager" {{ 'selected' if ugl_lieferadresse == 'lager' }}>Lager (Adresse unten)</option>
-    </select>
-    <label>Lager-Adresse (eine Angabe je Zeile)</label>
-    <textarea name="lager_adresse" rows="3">{{ lager_adresse }}</textarea>
-    <p class="dezent" style="font-size:12px">IDS-Connect ist vorbereitet und
-        wird aktiviert, sobald die Anbindung mit Collin steht.</p>
-    <label>Fachunternehmer (BzA-Datenblatt)</label>
-    <input type="text" name="bza_fachunternehmer" value="{{ bza_fachunternehmer }}">
-    <h3 style="margin-top:16px">Outlook-Kalender (Phase 81)</h3>
-    <label>Sync-Modus</label>
-    <select name="outlook_kalender_modus">
-        <option value="postfach" {{ 'selected' if outlook_kalender_modus != 'kategorien' }}>Team-Postfächer (Outlook-Adresse je Team)</option>
-        <option value="kategorien" {{ 'selected' if outlook_kalender_modus == 'kategorien' }}>Gemeinsamer Kalender mit Kategorie je Team</option>
-    </select>
-    <label>Gemeinsamer Kalender (nur Modus Kategorien)</label>
-    <input type="text" name="outlook_kalender_adresse" value="{{ outlook_kalender_adresse }}"
-           placeholder="montage@friondo.de">
-    <label>Basis-URL des Tools (Link in Kalendereinträgen)</label>
-    <input type="text" name="basis_url" value="{{ basis_url }}"
-           placeholder="https://tool.friondo.de">
-    <p class="dezent" style="font-size:12px">Einrichtung beider Wege:
-        docs/graph-einrichtung.md (Calendars.ReadWrite.Shared).</p>
-    <h3 style="margin-top:16px">Terminbestätigung an Kunden (Phase 81)</h3>
-    <label>Betreff</label>
-    <input type="text" name="terminmail_betreff" value="{{ terminmail_betreff }}">
-    <label>Text (Platzhalter: {kunde} {termin} {team} {sparte} {projektnummer}
-        {ansprechpartner_friondo} {vorbereitung})</label>
-    <textarea name="terminmail_text" rows="8">{{ terminmail_text }}</textarea>
-    <label>Vorbereitungs-Hinweis ({vorbereitung})</label>
-    <input type="text" name="terminmail_vorbereitung" value="{{ terminmail_vorbereitung }}">
-    <h3 style="margin-top:16px">Kundenmail „BzA“ (Phase 92)</h3>
-    {# 30.09.2026: Versand per Häkchen abschaltbar #}
-    <input type="hidden" name="bza_mail_dabei" value="1">
-    <label class="kontrollfeld"><input type="checkbox" name="bza_mail_aktiv"
-        {{ 'checked' if bza_mail_aktiv }}> BzA-Kundenmail versenden
-        <span class="dezent">(aus = kein Mail-Knopf; „BzA erfassen“ schließt die Aufgabe ohne Mail ab)</span></label>
-    <label>Betreff</label>
-    <input type="text" name="bza_mail_betreff" value="{{ bza_mail_betreff }}">
-    <label>Text (Platzhalter: {briefanrede} {kunde} {projektnummer} {bza_id}
-        {link_kfw} {foerderbetrag} {ansprechpartner_friondo}; Zeilen mit
-        {foerderbetrag} entfallen, wenn kein Betrag bekannt ist)</label>
-    <textarea name="bza_mail_text" rows="12">{{ bza_mail_text }}</textarea>
-    <label>Test-Adresse der Projektierung (Demo-Modus: Kundenmails gehen NUR hierhin)</label>
-    <input type="text" name="projekt_testadresse" value="{{ projekt_testadresse }}"
-           placeholder="test@friondo.de">
-    <h3 style="margin-top:16px" id="heizreport">Heizreport-API (Phase 93)
-        <small class="dezent">{{ 'konfiguriert' if heizreport.konfiguriert else 'nicht konfiguriert – Link + Upload' }}</small></h3>
-    <p class="dezent" style="font-size:12px">Generischer REST-Client – Werte aus
-        der Business-Account-Doku eintragen (docs/heizreport-api.md). Ohne
-        Basis-URL + Schlüssel bleibt es an der Heizlast-Aufgabe beim Link + Upload.</p>
-    {% if heizreport_test %}<p class="meldung">Verbindungstest: {{ heizreport_test }}</p>{% endif %}
-    <label>Basis-URL</label>
-    <input type="text" name="heizreport_api_url" value="{{ heizreport.heizreport_api_url }}"
-           placeholder="https://heizreport.de/api/">
-    <label>Auth-Art</label>
-    <select name="heizreport_auth_art">
-        {% for wert, text in [('header', 'API-Key im Header'), ('bearer', 'Bearer-Token'),
-                              ('basic', 'Basic (Benutzer + Passwort)'), ('body', 'API-Key im JSON-Body')] %}
-        <option value="{{ wert }}" {{ 'selected' if heizreport.heizreport_auth_art == wert }}>{{ text }}</option>
-        {% endfor %}
-    </select>
-    <label>Header-Name (bei Header) bzw. JSON-Feld (bei Body)</label>
-    <input type="text" name="heizreport_auth_header" value="{{ heizreport.heizreport_auth_header }}"
-           placeholder="X-API-Key / apiKey">
-    <label>API-Schlüssel / Token / Passwort {{ '(gesetzt – leer lassen = unverändert)' if heizreport.heizreport_api_key }}</label>
-    <input type="password" name="heizreport_api_key" value="" autocomplete="new-password">
-    {% if heizreport.heizreport_api_key %}<label class="kontrollfeld"><input type="checkbox" name="heizreport_key_leeren"> Schlüssel entfernen</label>{% endif %}
-    <label>Benutzername (nur Basic)</label>
-    <input type="text" name="heizreport_benutzer" value="{{ heizreport.heizreport_benutzer }}">
-    {% for art, titel in [('anlegen', 'Projekt anlegen'), ('status', 'Projekt-Status'), ('ergebnis', 'Ergebnis abrufen')] %}
-    <label>Endpunkt „{{ titel }}“ (Pfad relativ zur Basis-URL, {projekt_key} erlaubt) · Methode</label>
-    <div style="display:flex;gap:6px">
-        <input type="text" name="heizreport_pfad_{{ art }}" value="{{ heizreport['heizreport_pfad_' ~ art] }}" style="flex:1">
-        <select name="heizreport_methode_{{ art }}">
-            {% for m in ['', 'POST', 'GET', 'PUT'] %}
-            <option value="{{ m }}" {{ 'selected' if heizreport['heizreport_methode_' ~ art] == m }}>{{ m or 'Standard' }}</option>
-            {% endfor %}
-        </select>
+    <section class="karte formular pe-abschnitt" id="mails">
+        <h2>Benachrichtigungs-Mails</h2>
+        <label>Absender-Postfach
+            <input type="email" name="absender" value="{{ absender }}">
+        </label>
+        <p class="dezent">Shared-Postfach mit „Senden als“-Berechtigung
+            (M365-Admin); bei Fehlern wird automatisch über angebot@friondo.de
+            versendet (siehe <a href="#mailprotokoll">Mail-Protokoll</a>).</p>
+    </section>
+
+    <section class="karte formular pe-abschnitt" id="storno">
+        <h2>Storno-Gründe</h2>
+        <label>Ein Grund je Zeile
+            <textarea name="gruende" rows="6">{{ gruende }}</textarea>
+        </label>
+    </section>
+
+    <section class="karte formular pe-abschnitt" id="galerie">
+        <h2>Galerie</h2>
+        <label>Zusatzordner (| getrennt; Standardordner sind fest)
+            <input type="text" name="galerie_zusatzordner" size="60"
+                   value="{{ galerie_zusatzordner }}"
+                   placeholder="z. B. Statik | Genehmigungen"></label>
+        <label class="kontrollfeld">
+            <input type="checkbox" name="galerie_original"
+                   {{ 'checked' if galerie_original == 'an' }}>
+            Original-Bilder zusätzlich behalten (Uploads werden auf 2000 px verkleinert)</label>
+    </section>
+
+    <section class="karte formular pe-abschnitt" id="portale">
+        <h2>Portal-URLs <small class="dezent">(Link-Aufgaben, Phase 78)</small></h2>
+        <label>BzA-Portal (KfW)
+            <input type="text" name="url_bza_portal" value="{{ url_bza_portal }}"
+                   placeholder="https://…"></label>
+        <label>KfW-Zuschussportal (Link in der BzA-Mail, {link_kfw})
+            <input type="text" name="url_kfw_zuschussportal" value="{{ url_kfw_zuschussportal }}"
+                   placeholder="https://…"></label>
+        <label>SpotmyEnergy-Portal (iMSys / SpotDynamic)
+            <input type="text" name="url_spotmyenergy" value="{{ url_spotmyenergy }}"
+                   placeholder="https://…"></label>
+        <label>GC Online Plus
+            <input type="text" name="url_gc_online" value="{{ url_gc_online }}"
+                   placeholder="https://…"></label>
+        {# v26 (Phase 122/125): Portal-Link Heizreport auf der Heizreport-Seite #}
+        <p class="dezent">Heizreport (Zugang, Kennzahlen, Portal-Link):
+            <a href="/parametrierung/heizreport">Parametrierung → Heizreport</a></p>
+    </section>
+
+    <section class="karte formular pe-abschnitt" id="ugl">
+        <h2>UGL-Bestellung Collin <small class="dezent">(Phase 80)</small></h2>
+        <label>Collin-Kundennummer (UGL KOP, Stellen 4–13)
+            <input type="text" name="collin_kundennummer" value="{{ collin_kundennummer }}"></label>
+        <label>Lieferantennummer von Collin in unserem System (KOP 14–23, optional)
+            <input type="text" name="collin_lieferantennummer" value="{{ collin_lieferantennummer }}" maxlength="10"></label>
+        <label>Standard-Lieferant neuer Stücklisten-Zeilen
+            <input type="text" name="stueckliste_standard_lieferant" value="{{ standard_lieferant }}"></label>
+        <p class="dezent">Stücklisten-Pflege und Go-live-Prüfpunkte:
+            <a href="/parametrierung/stuecklisten">Parametrierung → Stücklisten</a>.</p>
+        <label>Lieferadresse
+            <select name="ugl_lieferadresse">
+                <option value="ausfuehrung" {{ 'selected' if ugl_lieferadresse != 'lager' }}>Ausführungsadresse des Projekts</option>
+                <option value="lager" {{ 'selected' if ugl_lieferadresse == 'lager' }}>Lager (Adresse unten)</option>
+            </select></label>
+        <label>Lager-Adresse (eine Angabe je Zeile)
+            <textarea name="lager_adresse" rows="3">{{ lager_adresse }}</textarea></label>
+        <p class="dezent">IDS-Connect ist vorbereitet und
+            wird aktiviert, sobald die Anbindung mit Collin steht.</p>
+        <label>Fachunternehmer (BzA-Datenblatt)
+            <input type="text" name="bza_fachunternehmer" value="{{ bza_fachunternehmer }}"></label>
+    </section>
+
+    <section class="karte formular pe-abschnitt" id="kalender">
+        <h2>Outlook-Kalender <small class="dezent">(Phase 81)</small></h2>
+        <label>Sync-Modus
+            <select name="outlook_kalender_modus">
+                <option value="postfach" {{ 'selected' if outlook_kalender_modus != 'kategorien' }}>Team-Postfächer (Outlook-Adresse je Team)</option>
+                <option value="kategorien" {{ 'selected' if outlook_kalender_modus == 'kategorien' }}>Gemeinsamer Kalender mit Kategorie je Team</option>
+            </select></label>
+        <label>Gemeinsamer Kalender (nur Modus Kategorien)
+            <input type="text" name="outlook_kalender_adresse" value="{{ outlook_kalender_adresse }}"
+                   placeholder="montage@friondo.de"></label>
+        <label>Basis-URL des Tools (Link in Kalendereinträgen)
+            <input type="text" name="basis_url" value="{{ basis_url }}"
+                   placeholder="https://tool.friondo.de"></label>
+        <p class="dezent">Einrichtung beider Wege:
+            docs/graph-einrichtung.md (Calendars.ReadWrite.Shared).</p>
+    </section>
+
+    <section class="karte formular pe-abschnitt" id="terminmail">
+        <h2>Terminbestätigung an Kunden <small class="dezent">(Phase 81)</small></h2>
+        <label>Betreff
+            <input type="text" name="terminmail_betreff" value="{{ terminmail_betreff }}"></label>
+        <label>Text (Platzhalter: {kunde} {termin} {team} {sparte} {projektnummer}
+            {ansprechpartner_friondo} {vorbereitung})
+            <textarea name="terminmail_text" rows="8">{{ terminmail_text }}</textarea></label>
+        <label>Vorbereitungs-Hinweis ({vorbereitung})
+            <input type="text" name="terminmail_vorbereitung" value="{{ terminmail_vorbereitung }}"></label>
+    </section>
+
+    <section class="karte formular pe-abschnitt" id="bza-mail">
+        <h2>Kundenmail „BzA“ <small class="dezent">(Phase 92)</small></h2>
+        {# 30.09.2026: Versand per Häkchen abschaltbar #}
+        <input type="hidden" name="bza_mail_dabei" value="1">
+        <label class="kontrollfeld"><input type="checkbox" name="bza_mail_aktiv"
+            {{ 'checked' if bza_mail_aktiv }}> BzA-Kundenmail versenden
+            <span class="dezent">(aus = kein Mail-Knopf; „BzA erfassen“ schließt die Aufgabe ohne Mail ab)</span></label>
+        <label>Betreff
+            <input type="text" name="bza_mail_betreff" value="{{ bza_mail_betreff }}"></label>
+        <label>Text (Platzhalter: {briefanrede} {kunde} {projektnummer} {bza_id}
+            {link_kfw} {foerderbetrag} {ansprechpartner_friondo}; Zeilen mit
+            {foerderbetrag} entfallen, wenn kein Betrag bekannt ist)
+            <textarea name="bza_mail_text" rows="12">{{ bza_mail_text }}</textarea></label>
+        <label>Test-Adresse der Projektierung (Demo-Modus: Kundenmails gehen NUR hierhin)
+            <input type="text" name="projekt_testadresse" value="{{ projekt_testadresse }}"
+                   placeholder="test@friondo.de"></label>
+        {# v26 (Phase 122/125): Heizreport-API-Block (Phase 93) ist umgezogen #}
+        <p class="dezent">Heizreport (Zugang, Kennzahlen, Portal-Link):
+            <a href="/parametrierung/heizreport">Parametrierung → Heizreport</a></p>
+    </section>
+
+    <div class="aktionsleiste-unten pe-leiste">
+        <span class="dezent">Alle Abschnitte werden gemeinsam gespeichert.</span>
+        <button class="knopf" type="submit">Speichern</button>
     </div>
-    {% endfor %}
-    <label>Feld-Mapping hin (JSON: Zielfeld → Quelle kunde./projekt./gewerk./steckbrief./fp./erfassung./fest:/aktion:)</label>
-    <textarea name="heizreport_mapping_hin" rows="10" class="pj-mono">{{ heizreport.heizreport_mapping_hin }}</textarea>
-    <label>Feld-Mapping zurück (JSON: projekt_key / heizlast_kw / status → Pfad in der Antwort)</label>
-    <textarea name="heizreport_mapping_zurueck" rows="5" class="pj-mono">{{ heizreport.heizreport_mapping_zurueck }}</textarea>
-    <button class="knopf" type="submit" style="margin-top:8px">Speichern</button>
-    <button class="knopf zweitrangig" type="submit" style="margin-top:8px"
-            formaction="/parametrierung/projektierung-einstellungen/heizreport-test"
-            {{ 'disabled' if not heizreport.heizreport_api_url }}>Verbindung testen</button>
 </form>
 
-<h2>Ordnervorlage (Anzeige)</h2>
+<section class="karte pe-abschnitt" id="ordnervorlage">
+<h2>Ordnervorlage <small class="dezent">(Anzeige)</small></h2>
 <table class="tabelle" style="max-width:600px">
     <thead><tr><th>Ordner</th><th>Ebene</th></tr></thead>
     <tbody>
@@ -216,9 +233,33 @@
 </table>
 <p class="dezent">Änderung der Vorlage über die Projektierung-Logik
     (Blatt „Ordnerstruktur“) – wirkt auf neue Projekte.</p>
+</section>
 
+<section class="karte pe-abschnitt" id="mailprotokoll">
+<h2>Mail-Protokoll <small class="dezent">(letzte 20)</small></h2>
 {% if mail_protokoll %}
-<h2>Mail-Protokoll (letzte 20)</h2>
 <pre class="dezent" style="white-space:pre-wrap">{{ mail_protokoll }}</pre>
+{% else %}
+<p class="dezent">Noch keine Benachrichtigungs-Mail protokolliert.</p>
 {% endif %}
+</section>
+
+<script>
+(function () {
+    // Aktiven Abschnitt in der sticky Navigation markieren (ohne externe Bibliothek)
+    var nav = document.getElementById('pe-nav');
+    if (!nav || !('IntersectionObserver' in window)) { return; }
+    var links = Array.prototype.slice.call(nav.querySelectorAll('a[href^="#"]'));
+    var ziele = links.map(function (a) { return document.getElementById(a.getAttribute('href').slice(1)); })
+                     .filter(Boolean);
+    function markieren(id) {
+        links.forEach(function (a) { a.classList.toggle('aktiv', a.getAttribute('href') === '#' + id); });
+    }
+    var beobachter = new IntersectionObserver(function (eintraege) {
+        eintraege.forEach(function (e) { if (e.isIntersecting) { markieren(e.target.id); } });
+    }, { rootMargin: '-72px 0px -70% 0px', threshold: 0 });
+    ziele.forEach(function (z) { beobachter.observe(z); });
+    links.forEach(function (a) { a.addEventListener('click', function () { markieren(a.getAttribute('href').slice(1)); }); });
+})();
+</script>
 {% endblock %}

@@ -12,59 +12,125 @@ from app.templating import render
 router = APIRouter(prefix="/parametrierung")
 
 
-@router.get("")
-async def uebersicht(request: Request, session: Session = Depends(get_session)):
-    if not config.LOGIK_EXCEL_PFAD.exists():
-        return render(request, "konfiguration/uebersicht.html", aktiv="/parametrierung",
-                      logik=None, bericht=None, dateifehler=str(config.LOGIK_EXCEL_PFAD),
-                      meldung="")
+# --- v26 (PLAN_PROJ_V5 Phase 125): Parametrierung neu gegliedert ---------------------
+# Die Übersicht ist eine reine Verteilerseite (fünf Bereichskarten); die
+# Inline-Abschnitte der alten Übersicht liegen auf /parametrierung/angebotstool
+# (Einstellungen) und /parametrierung/logik (Logik-Excel, Importe). Der Kontext
+# der alten Route wird nur umverteilt – eine Hilfsfunktion, drei Routen.
+
+def _zurueck_ziel(request: Request, fallback: str = "/parametrierung") -> str:
+    """Pfad der Seite, von der ein Parametrierungs-Formular kam (Referer) –
+    nur Pfade unter /parametrierung, ohne Query/Fragment; sonst der Fallback."""
+    import re
+    from urllib.parse import urlsplit
+    pfad = urlsplit(request.headers.get("referer", "") or "").path
+    if re.fullmatch(r"/parametrierung(/[A-Za-z0-9_\-]+)*/?", pfad or ""):
+        return pfad.rstrip("/") or "/parametrierung"
+    return fallback
+
+
+def _parametrierung_kontext(session: Session) -> dict:
+    """Kontext der früheren Übersicht (v25) – Logik-Excel, Validierung, PV-/KL-
+    Parameter und die pflegbaren Einstellungen. Fehlt die Logik-Excel, fehlen
+    nur die Logik-Werte (`dateifehler`); die Einstellungen bleiben erreichbar."""
     from app import mail_sync, wirtschaftlichkeit
     from app.models import AblehnungsGrund, AngebotsLoeschung, einstellung_holen
-    logik, bericht = logik_modul.hole_logik(session)
-    # v22 (Phase 102): fehlende Wirtschaftlichkeits-Parameter mit Standardwert
-    _pv_param, pv_fehlende = wirtschaftlichkeit.parameter_lesen(logik.pv_parameter)
-    pv_neue = {zeile[0] for zeile in wirtschaftlichkeit.NEUE_PARAMETER_ZEILEN}
-    pv_fehlende = [name for name in pv_fehlende if name in pv_neue]
-    # v24 (PLAN_V16 Phase 113/115): fehlende KL-Parameter mit Standardwert
-    kl_fehlende = logik_modul.kl_parameter_fehlende(logik) if logik.kl_aktionen else []
+    if config.LOGIK_EXCEL_PFAD.exists():
+        logik, bericht = logik_modul.hole_logik(session)
+        # v22 (Phase 102): fehlende Wirtschaftlichkeits-Parameter mit Standardwert
+        _pv_param, pv_fehlende = wirtschaftlichkeit.parameter_lesen(logik.pv_parameter)
+        pv_neue = {zeile[0] for zeile in wirtschaftlichkeit.NEUE_PARAMETER_ZEILEN}
+        pv_fehlende = [name for name in pv_fehlende if name in pv_neue]
+        # v24 (PLAN_V16 Phase 113/115): fehlende KL-Parameter mit Standardwert
+        kl_fehlende = logik_modul.kl_parameter_fehlende(logik) if logik.kl_aktionen else []
+        logik_werte = dict(
+            logik=logik, bericht=bericht, dateifehler=None,
+            pv_fehlende=pv_fehlende,
+            pv_standard={name: wirtschaftlichkeit.standardwert_text(name)
+                         for name in pv_fehlende},
+            kl_fehlende=kl_fehlende,
+            kl_standard={name: logik_modul.kl_standardwert_text(name)
+                         for name in kl_fehlende})
+    else:
+        logik_werte = dict(logik=None, bericht=None, dateifehler=str(config.LOGIK_EXCEL_PFAD),
+                           pv_fehlende=[], pv_standard={}, kl_fehlende=[], kl_standard={})
+    return dict(
+        **logik_werte,
+        kl_import_ok=_import_klima() is not None,
+        ablehnungsgruende=(session.query(AblehnungsGrund)
+                           .order_by(AblehnungsGrund.sort, AblehnungsGrund.id).all()),
+        ablehnung_tage=einstellung_holen(session, "ablehnung_auto_tage", "90"),
+        ablehnung_protokoll=einstellung_holen(session, "ablehnung_auto_protokoll", ""),
+        db_rot=einstellung_holen(session, "db_ampel_rot_unter", "9000"),
+        db_gruen=einstellung_holen(session, "db_ampel_gruen_ueber", "10000"),
+        # v13-PV (Phase 78): eigene Schwellen je Sparte (leer = allgemein)
+        db_sparten={sp: (einstellung_holen(session, f"db_ampel_rot_unter_{sp}", ""),
+                         einstellung_holen(session, f"db_ampel_gruen_ueber_{sp}", ""))
+                    for sp in ("WP", "PV", "KL", "WB")},
+        fern_aktiv=einstellung_holen(session, "signatur_fern_aktiv", "0"),
+        fern_tage=einstellung_holen(session, "signatur_fern_gueltig_tage", "14"),
+        fern_basis=einstellung_holen(session, "signatur_fern_basis_url", ""),
+        mail_absender=einstellung_holen(session, "mail_absender", "angebot@friondo.de"),
+        mail_postfach=einstellung_holen(session, "mail_postfach", "angebot@friondo.de"),
+        mail_bcc=einstellung_holen(session, "mail_bcc", ""),
+        gewerke_artikel=einstellung_holen(
+            session, "gewerke_artikel",
+            __import__("app.kombi_versand", fromlist=["x"]).GEWERKE_ARTIKEL_START),
+        kombi_betreff=einstellung_holen(session, "kombi_vorlage_betreff", "")
+        or __import__("app.mail_vorlagen", fromlist=["x"]).KOMBI_BETREFF,
+        kombi_text=einstellung_holen(session, "kombi_vorlage_text", "")
+        or __import__("app.mail_vorlagen", fromlist=["x"]).KOMBI_TEXT,
+        sync_status=mail_sync.status,
+        versand_protokoll=__import__("json").loads(
+            einstellung_holen(session, "versand_erkennung_protokoll", "[]")),
+        loeschungen=(session.query(AngebotsLoeschung)
+                     .order_by(AngebotsLoeschung.geloescht_am.desc())
+                     .limit(50).all()))
+
+
+def _golive_stand(request: Request, session: Session):
+    """Badge „<n>/11 grün“ am Eintrag Go-live-Checkliste (nur Admin) –
+    (grün, gesamt) oder None; ein Fehler der Prüfung blockiert die Übersicht nie."""
+    benutzer = request.state.benutzer
+    if benutzer is None or benutzer.rolle != "admin":
+        return None
+    try:
+        from app import golive
+        punkte = golive.pruefen(session)
+    except Exception:
+        return None
+    return sum(1 for p in punkte if p.ok), len(punkte)
+
+
+@router.get("")
+async def uebersicht(request: Request, session: Session = Depends(get_session)):
+    """Verteilerseite: Suchfeld + fünf Bereichskarten (Allgemein · Angebotstool ·
+    Projektierung · Lead-Management · System & Protokolle). Rendert auch ohne
+    Logik-Excel (dateifehler → Hinweis, Karten ohne Logik-Daten)."""
     return render(request, "konfiguration/uebersicht.html", aktiv="/parametrierung",
-                  logik=logik, bericht=bericht, dateifehler=None,
-                  pv_fehlende=pv_fehlende,
-                  pv_standard={name: wirtschaftlichkeit.standardwert_text(name)
-                               for name in pv_fehlende},
-                  kl_fehlende=kl_fehlende,
-                  kl_standard={name: logik_modul.kl_standardwert_text(name)
-                               for name in kl_fehlende},
-                  kl_import_ok=_import_klima() is not None,
-                  ablehnungsgruende=(session.query(AblehnungsGrund)
-                                     .order_by(AblehnungsGrund.sort, AblehnungsGrund.id).all()),
-                  ablehnung_tage=einstellung_holen(session, "ablehnung_auto_tage", "90"),
-                  ablehnung_protokoll=einstellung_holen(session, "ablehnung_auto_protokoll", ""),
-                  db_rot=einstellung_holen(session, "db_ampel_rot_unter", "9000"),
-                  db_gruen=einstellung_holen(session, "db_ampel_gruen_ueber", "10000"),
-                  # v13-PV (Phase 78): eigene Schwellen je Sparte (leer = allgemein)
-                  db_sparten={sp: (einstellung_holen(session, f"db_ampel_rot_unter_{sp}", ""),
-                                   einstellung_holen(session, f"db_ampel_gruen_ueber_{sp}", ""))
-                              for sp in ("WP", "PV", "KL", "WB")},
-                  fern_aktiv=einstellung_holen(session, "signatur_fern_aktiv", "0"),
-                  fern_tage=einstellung_holen(session, "signatur_fern_gueltig_tage", "14"),
-                  fern_basis=einstellung_holen(session, "signatur_fern_basis_url", ""),
-                  mail_absender=einstellung_holen(session, "mail_absender", "angebot@friondo.de"),
-                  mail_postfach=einstellung_holen(session, "mail_postfach", "angebot@friondo.de"),
-                  mail_bcc=einstellung_holen(session, "mail_bcc", ""),
-                  gewerke_artikel=einstellung_holen(
-                      session, "gewerke_artikel",
-                      __import__("app.kombi_versand", fromlist=["x"]).GEWERKE_ARTIKEL_START),
-                  kombi_betreff=einstellung_holen(session, "kombi_vorlage_betreff", "")
-                  or __import__("app.mail_vorlagen", fromlist=["x"]).KOMBI_BETREFF,
-                  kombi_text=einstellung_holen(session, "kombi_vorlage_text", "")
-                  or __import__("app.mail_vorlagen", fromlist=["x"]).KOMBI_TEXT,
-                  sync_status=mail_sync.status,
-                  versand_protokoll=__import__("json").loads(
-                      einstellung_holen(session, "versand_erkennung_protokoll", "[]")),
-                  loeschungen=(session.query(AngebotsLoeschung)
-                               .order_by(AngebotsLoeschung.geloescht_am.desc())
-                               .limit(50).all()),
+                  dateifehler=(None if config.LOGIK_EXCEL_PFAD.exists()
+                               else str(config.LOGIK_EXCEL_PFAD)),
+                  golive_stand=_golive_stand(request, session),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.get("/angebotstool")
+async def angebotstool_seite(request: Request, session: Session = Depends(get_session)):
+    """Angebotstool-Einstellungen: DB-Ampel, E-Mail-/Kombi-Versand, gewerke-
+    übergreifende Artikel, Fern-Signatur, Abgelehnt-Prozess, Lösch-Protokoll –
+    die Inline-Abschnitte der alten Übersicht, Formulare unverändert."""
+    return render(request, "konfiguration/angebotstool.html", aktiv="/parametrierung",
+                  **_parametrierung_kontext(session),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.get("/logik")
+async def logik_seite(request: Request, session: Session = Depends(get_session)):
+    """Logik & Importe: Quelle/zuletzt eingelesen, Validierungsbericht, „Neu
+    einlesen“, Tabellen der Logik-Excel (Fragen, Angebotsaufbau, KfW-/PV-/KL-
+    Parameter) und der Klima-Import – 1:1 aus der alten Übersicht."""
+    return render(request, "konfiguration/logik.html", aktiv="/parametrierung",
+                  **_parametrierung_kontext(session),
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -113,7 +179,9 @@ async def einstellungen_speichern(request: Request,
         if tage.isdigit() and int(tage) > 0:
             einstellung_setzen(session, "ablehnung_auto_tage", tage)
     session.commit()
-    return RedirectResponse("/parametrierung?meldung=Einstellungen+gespeichert",
+    # v26 (Phase 125): zurück auf die Seite, von der das Formular kam
+    # (Angebotstool-Einstellungen), Fallback Übersicht
+    return RedirectResponse(_zurueck_ziel(request) + "?meldung=Einstellungen+gespeichert",
                             status_code=303)
 
 
@@ -198,20 +266,24 @@ async def ablehnungsgruende_pflegen(request: Request,
 
     from app.models import AblehnungsGrund
     form = await request.form()
+    # v26 (Phase 125): zurück auf die Seite, von der das Formular kam – auf der
+    # Angebotstool-Seite direkt zum Abschnitt „Abgelehnt-Prozess“
+    zurueck = _zurueck_ziel(request)
+    anker = "#ablehnung" if zurueck != "/parametrierung" else ""
     if form.get("aktion") == "hinzufuegen":
         name = (form.get("name") or "").strip()[:100]
         if name and session.query(AblehnungsGrund).filter_by(name=name).count() == 0:
             session.add(AblehnungsGrund(
                 name=name, sort=session.query(AblehnungsGrund).count()))
             session.commit()
-            return RedirectResponse("/parametrierung?meldung=" + quote_plus(
-                f"Ablehnungsgrund „{name}“ hinzugefügt"), status_code=303)
+            return RedirectResponse(zurueck + "?meldung=" + quote_plus(
+                f"Ablehnungsgrund „{name}“ hinzugefügt") + anker, status_code=303)
     elif form.get("aktion") == "umschalten":
         grund = session.get(AblehnungsGrund, int(form.get("id") or 0))
         if grund is not None:
             grund.aktiv = not grund.aktiv
             session.commit()
-    return RedirectResponse("/parametrierung", status_code=303)
+    return RedirectResponse(zurueck + anker, status_code=303)
 
 
 # --- E-Mail-Vorlagen (Phase 30) ------------------------------------------
@@ -534,15 +606,18 @@ async def projektierung_logik_upload(request: Request,
 
 
 @router.post("/neu-einlesen")
-async def neu_einlesen(session: Session = Depends(get_session)):
+async def neu_einlesen(request: Request, session: Session = Depends(get_session)):
+    # v26 (Phase 125): zurück auf die Seite mit dem Button (Übersicht oder
+    # Logik & Importe); ohne Referer auf Logik & Importe, wo der Bericht steht
+    zurueck = _zurueck_ziel(request, "/parametrierung/logik")
     if not config.LOGIK_EXCEL_PFAD.exists():
-        return RedirectResponse("/parametrierung", status_code=303)
+        return RedirectResponse(zurueck, status_code=303)
     _, bericht = logik_modul.neu_einlesen(session)
     if bericht.ok:
         meldung = "Parametrierung+neu+eingelesen+–+keine+Fehler"
     else:
         meldung = f"Parametrierung+neu+eingelesen+–+{len(bericht.fehler)}+Fehler+gefunden"
-    return RedirectResponse(f"/parametrierung?meldung={meldung}", status_code=303)
+    return RedirectResponse(f"{zurueck}?meldung={meldung}", status_code=303)
 
 
 # --- v24 (PLAN_V16 Phase 113/115): Klimakonfigurator -------------------------------
@@ -557,7 +632,9 @@ def _import_klima():
     return import_klima
 
 
-def _kl_zurueck(meldung: str, ziel: str = "/parametrierung") -> RedirectResponse:
+def _kl_zurueck(meldung: str, ziel: str = "/parametrierung/logik") -> RedirectResponse:
+    """v26: Klima-Import kehrt nach Logik & Importe zurück (dort stehen die
+    Import-Buttons und KL-Parameter der früheren Übersicht)."""
     from urllib.parse import quote_plus
     return RedirectResponse(f"{ziel}?meldung={quote_plus(meldung)}", status_code=303)
 
@@ -765,58 +842,8 @@ async def sub_speichern(request: Request, session: Session = Depends(get_session
                             status_code=303)
 
 
-def _heizreport_werte(session) -> dict:
-    """Heizreport-Parameter für das Formular (Mappings mit Startwerten)."""
-    from app import heizreport_api
-    werte = {name: heizreport_api.p(session, name) for name in heizreport_api.PARAMETER}
-    werte["heizreport_mapping_hin"] = (werte["heizreport_mapping_hin"]
-                                       or heizreport_api.MAPPING_HIN_START)
-    werte["heizreport_mapping_zurueck"] = (werte["heizreport_mapping_zurueck"]
-                                           or heizreport_api.MAPPING_ZURUECK_START)
-    werte["heizreport_auth_art"] = werte["heizreport_auth_art"] or "header"
-    werte["konfiguriert"] = heizreport_api.konfiguriert(session)
-    return werte
-
-
-def _heizreport_speichern(session, form) -> None:
-    import json as json_modul
-
-    from app import heizreport_api
-    from app import projektierung as kern
-    if "heizreport_api_url" not in form:
-        return
-    for name in heizreport_api.PARAMETER:
-        wert = (form.get(name) or "").strip()
-        if name == "heizreport_auth_art" and wert not in ("header", "bearer", "basic", "body"):
-            continue
-        if name.startswith("heizreport_methode_") and wert not in ("", "GET", "POST", "PUT"):
-            continue
-        if name.startswith("heizreport_mapping_") and wert:
-            try:
-                json_modul.loads(wert)
-            except ValueError:
-                continue                     # ungültiges JSON: alten Wert behalten
-        # Schlüssel nur überschreiben, wenn etwas eingetragen wurde
-        if name == "heizreport_api_key" and not wert and not form.get("heizreport_key_leeren"):
-            continue
-        kern.parameter_setzen(session, name, wert[:5000])
-
-
-@router.post("/projektierung-einstellungen/heizreport-test")
-async def heizreport_verbindung_testen(request: Request,
-                                       session: Session = Depends(get_session)):
-    """V4 (Phase 93.1): GET auf die Basis-URL mit Auth – Antwort-Code anzeigen."""
-    from urllib.parse import quote_plus
-
-    from app import heizreport_api
-    if (umleitung := _nur_admin(request)) is not None:
-        return umleitung
-    # Formularwerte der Heizreport-Felder vorher übernehmen (Test = Stand der Maske)
-    _heizreport_speichern(session, await request.form())
-    session.commit()
-    _ok, text = heizreport_api.verbindung_testen(session)
-    return RedirectResponse("/parametrierung/projektierung-einstellungen?heizreport_test="
-                            + quote_plus(text) + "#heizreport", status_code=303)
+# v26 (PLAN_PROJ_V5 Phase 122): die Heizreport-Helfer der Phase 93 sind nach
+# app/routers/konfiguration_heizreport.py umgezogen (Parametrierung → Heizreport).
 
 
 @router.get("/projektierung-einstellungen")
@@ -864,9 +891,6 @@ async def projektierung_einstellungen(request: Request,
                       session, "collin_lieferantennummer", ""),
                   standard_lieferant=kern.parameter_holen(
                       session, "stueckliste_standard_lieferant", "Collin"),
-                  # V4 (Phase 93.1): Heizreport-API (generischer REST-Client)
-                  heizreport=_heizreport_werte(session),
-                  heizreport_test=request.query_params.get("heizreport_test", ""),
                   ugl_lieferadresse=kern.parameter_holen(
                       session, "ugl_lieferadresse", "ausfuehrung"),
                   lager_adresse=kern.parameter_holen(session, "lager_adresse", ""),
@@ -920,11 +944,15 @@ async def projektierung_einstellungen_speichern(
     kern.parameter_setzen(session, "galerie_original_behalten",
                           "an" if form.get("galerie_original") == "on" else "aus")
     # v15 (Phase 78): Portal-URLs (BzA, SpotmyEnergy, Heizreport)
+    # v26 (Phase 125): nur Schlüssel setzen, die das Formular mitschickt –
+    # url_heizreport wird auf /parametrierung/heizreport gepflegt und würde
+    # sonst beim Speichern dieser Seite geleert
     for schluessel in ("url_bza_portal", "url_spotmyenergy", "url_heizreport",
                        "url_gc_online", "collin_kundennummer",
                        "url_kfw_zuschussportal", "projekt_testadresse"):
-        kern.parameter_setzen(session, schluessel,
-                              (form.get(schluessel) or "").strip()[:300])
+        if schluessel in form:
+            kern.parameter_setzen(session, schluessel,
+                                  (form.get(schluessel) or "").strip()[:300])
     if form.get("ugl_lieferadresse") in ("ausfuehrung", "lager"):
         kern.parameter_setzen(session, "ugl_lieferadresse",
                               form.get("ugl_lieferadresse"))
@@ -934,8 +962,7 @@ async def projektierung_einstellungen_speichern(
     if (form.get("stueckliste_standard_lieferant") or "").strip():
         kern.parameter_setzen(session, "stueckliste_standard_lieferant",
                               form.get("stueckliste_standard_lieferant").strip()[:60])
-    # V4 (Phase 93.1): Heizreport-API
-    _heizreport_speichern(session, form)
+    # v26: Heizreport-Parameter werden unter /parametrierung/heizreport gepflegt
     kern.parameter_setzen(session, "lager_adresse",
                           (form.get("lager_adresse") or "").strip()[:500])
     if (form.get("bza_fachunternehmer") or "").strip():

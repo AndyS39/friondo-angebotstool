@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Heizreport REST API v2</title>
+    <link rel="stylesheet" href="assets/swagger-ui/swagger-ui.css">
+    <style>
+        :root {
+            --bg: #eef4fb;
+            --panel: #ffffff;
+            --panel-strong: #e3eefb;
+            --text: #172334;
+            --muted: #53657d;
+            --line: #c8d8ec;
+            --accent: #2c6fb7;
+            --accent-dark: #184f8b;
+            --ok: #1f6b4f;
+            --code: #162130;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "HK Grotesk Pro", "Segoe UI", sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(44, 111, 183, 0.16), transparent 28%),
+                radial-gradient(circle at top right, rgba(24, 79, 139, 0.12), transparent 22%),
+                linear-gradient(180deg, #f7fbff 0%, var(--bg) 100%);
+            line-height: 1.5;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 9px;
+            border-bottom: 1px solid var(--line);
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .page {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 40px 20px 64px;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, rgba(255,255,255,0.96), rgba(227,238,251,0.96));
+            border: 1px solid rgba(24, 79, 139, 0.12);
+            border-radius: 28px;
+            padding: 32px;
+            box-shadow: 0 24px 60px rgba(23, 35, 52, 0.08);
+        }
+
+        .eyebrow {
+            display: inline-block;
+            margin-bottom: 14px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            background: rgba(44, 111, 183, 0.10);
+            color: var(--accent-dark);
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        h1, h2, h3 {
+            margin: 0 0 12px;
+            line-height: 1.1;
+        }
+
+        h1 {
+            font-size: clamp(2.2rem, 5vw, 4rem);
+            letter-spacing: -0.03em;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            margin-top: 42px;
+        }
+
+        h3 {
+            font-size: 1.05rem;
+            margin-top: 24px;
+        }
+
+        p {
+            margin: 0 0 12px;
+            color: var(--muted);
+        }
+
+        .hero p {
+            max-width: 760px;
+            font-size: 1.05rem;
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .chip {
+            padding: 10px 14px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: var(--panel);
+            font-size: 0.95rem;
+            color: var(--text);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 18px;
+            margin-top: 28px;
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            padding: 22px;
+            box-shadow: 0 12px 28px rgba(23, 35, 52, 0.05);
+        }
+
+        .endpoint {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .method {
+            min-width: 62px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 0.82rem;
+            border-radius: 999px;
+            padding: 6px 10px;
+            color: white;
+            background: var(--accent);
+        }
+
+        .path {
+            font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+            font-size: 0.95rem;
+            color: var(--code);
+            word-break: break-word;
+        }
+
+        .meta {
+            margin-top: 8px;
+            font-size: 0.92rem;
+            color: var(--muted);
+        }
+
+        pre {
+            margin: 14px 0 0;
+            padding: 16px;
+            overflow-x: auto;
+            border-radius: 18px;
+            border: 1px solid rgba(22, 33, 48, 0.08);
+            background: #162130;
+            color: #eef5ff;
+            font-size: 0.88rem;
+            line-height: 1.55;
+        }
+
+        code {
+            font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+        }
+
+        ul {
+            margin: 14px 0 0;
+            padding-left: 18px;
+            color: var(--muted);
+        }
+
+        li + li {
+            margin-top: 8px;
+        }
+
+        .two-col {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 18px;
+            margin-top: 18px;
+        }
+
+        .callout {
+            padding: 18px;
+            border-radius: 20px;
+            background: linear-gradient(180deg, rgba(31,107,79,0.08), rgba(31,107,79,0.03));
+            border: 1px solid rgba(31,107,79,0.18);
+        }
+
+        .callout strong {
+            color: var(--ok);
+        }
+
+        .footer {
+            margin-top: 42px;
+            padding-top: 18px;
+            border-top: 1px solid var(--line);
+            font-size: 0.92rem;
+            color: var(--muted);
+        }
+
+        @media (max-width: 900px) {
+            .two-col {
+                grid-template-columns: 1fr;
+            }
+
+            .hero {
+                padding: 24px;
+            }
+        }
+        .doc-links { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+        .doc-links a { padding: 9px 14px; border: 1px solid var(--line); border-radius: 8px; background: white; color: var(--accent-dark); font-weight: 600; }
+        #api-reference { scroll-margin-top: 20px; overflow-wrap: anywhere; }
+        #swagger-ui { margin-top: 24px; }
+        #swagger-ui .wrapper { padding: 0; }
+        #swagger-ui .auth-wrapper, #swagger-ui .authorization__btn { display: none; }
+        #swagger-ui .info { margin: 20px 0; }
+        #swagger-ui pre { background: #f5f5f5; color: #172334; }
+        #swagger-ui table { table-layout: auto; }
+        #swagger-ui .opblock-summary-path { word-break: break-word; }
+        @media (max-width: 600px) {
+            #swagger-ui .opblock-summary { flex-wrap: wrap; }
+            #swagger-ui .opblock-summary-description { flex-basis: 100%; margin: 8px; }
+        }
+        .topbar { position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.97); border-bottom: 1px solid var(--line); }
+        .top-menu { max-width: 1180px; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+        .menu-brand { color: var(--text); font-weight: 750; text-decoration: none; white-space: nowrap; }
+        .menu-items { display: flex; flex-wrap: wrap; gap: 6px; }
+        .menu-items a { padding: 10px 14px; border-radius: 8px; color: var(--muted); text-decoration: none; font-weight: 600; }
+        .menu-items a:hover { background: var(--panel-strong); color: var(--accent-dark); }
+        .menu-items a[aria-current="page"] { background: var(--accent-dark); color: white; }
+        a:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+        .doc-view { scroll-margin-top: 110px; }
+        .doc-view[hidden] { display: none; }
+        .doc-view > .hero { margin-bottom: 24px; }
+        @media (max-width: 740px) {
+            .top-menu { flex-direction: column; align-items: flex-start; gap: 10px; padding: 12px 16px; }
+            .menu-items { width: 100%; gap: 4px; }
+            .menu-items a { padding: 8px 10px; font-size: 14px; }
+            .page { padding-top: 24px; }
+        }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <nav class="top-menu" aria-label="Hauptnavigation der API-Anleitung">
+            <a class="menu-brand" href="#einleitung">Heizreport API v2</a>
+            <div class="menu-items">
+                <a href="#einleitung" data-doc-view="einleitung">Einleitung</a>
+                <a href="#uebersicht" data-doc-view="uebersicht">Einfache Übersicht</a>
+                <a href="#api-reference" data-doc-view="api-reference">Swagger-Referenz</a>
+                <a href="#downloads" data-doc-view="downloads">Downloads</a>
+            </div>
+        </nav>
+    </header>
+    <main class="page">
+        <div class="doc-view" id="einleitung" aria-labelledby="intro-title">
+        <section class="hero">
+            <span class="eyebrow">Heizreport API v2</span>
+            <h1 id="intro-title" tabindex="-1">Heizreport API kennenlernen</h1>
+            <p>
+                Diese Seite beschreibt die neue REST API unter <code>/api/v2</code>.
+                Die Authentifizierung erfolgt über einen Bearer-Token im HTTP-Header.
+                Pro Kunde sind maximal 2 Requests in jedem gleitenden Zeitraum von einer Sekunde erlaubt.
+            </p>
+            <div class="chips">
+                <span class="chip">Base URL: <code>https://heizreport.net/api/v2</code></span>
+                <span class="chip">Auth: <code>Authorization: Bearer TOKEN</code></span>
+                <span class="chip">Format: JSON</span>
+                <span class="chip">Rate Limit: 2 Requests / Sekunde / Kunde</span>
+            </div>
+            <div class="doc-links">
+                <a href="#uebersicht">Zur einfachen Übersicht</a>
+                <a href="#api-reference">Zur Swagger-Referenz</a>
+            </div>
+        </section>
+        <section class="card">
+            <h2>Was Sie mit der API machen können</h2>
+            <p>Verbinden Sie Ihre eigene Software mit Heizreport: eigene Projekte anlegen,
+                Projektdaten vorbelegen und ändern, Räume lesen und erfassen, Berechnungsergebnisse abrufen sowie
+                PDFs erzeugen und vorhandene Bilder auflisten.</p>
+            <p>Für geschützte Aufrufe benötigen Sie Ihren API-Token aus dem Pro-Bereich.
+                Projektanlage, Berechnungen und PDFs setzen die jeweils passenden Lizenzrechte voraus.
+                U-Werte schreiben, Heizkörper erfassen und Bilder hochladen sind noch nicht öffentlich verfügbar.</p>
+        </section>
+        <section class="card">
+            <h2>So starten Sie</h2>
+            <ol>
+                <li>Lesen Sie die <a href="#uebersicht">einfache Übersicht</a> mit Schnellstart und Beispielen.</li>
+                <li>Prüfen Sie Felder und Antworten in der <a href="#api-reference">Swagger-Referenz</a>.</li>
+                <li>Laden Sie unter <a href="#downloads">Downloads</a> die Postman-Collection oder
+                    die Anleitungen für Ihre Entwicklungswerkzeuge herunter.</li>
+            </ol>
+            <p>Die produktive API erreichen Sie ausschließlich unter
+                <code>https://heizreport.net/api/v2</code>. Zum Ausprobieren ein eigenes Testprojekt
+                verwenden und zwischen einzelnen Tests mindestens eine Sekunde warten.</p>
+        </section>
+        </div>
+
+        <div class="doc-view" id="uebersicht" aria-labelledby="overview-title">
+            <section class="hero">
+                <span class="eyebrow">Schnellstart und Beispiele</span>
+                <h1 id="overview-title" tabindex="-1">Einfache Übersicht</h1>
+                <p>Die bisherige ausführliche Anleitung mit Zugriffsregeln, Endpunkten,
+                    Projektfeldern und Beispielen.</p>
+            </section>
+  <section class="card">
+    <h2>Zugriffsschutz</h2>
+    <p>Ein Token pro Kunde mit allen freigegebenen API-Rechten für eigene Projekte.
+      Fest maximal <strong>2 Zugriffe in jedem gleitenden Zeitraum von einer Sekunde</strong>,
+      gemeinsam über alle geschützten Endpunkte. Das Limit gilt auch nach Tokenwechsel
+      und kann nicht individuell erhöht werden.</p>
+    <p>Bei Überschreitung: HTTP <code>429</code> und <code>Retry-After: 1</code>.
+      Bitte eine Sekunde warten und den Aufruf anschließend erneut versuchen.
+      Fachlich abgelehnte authentifizierte Aufrufe zählen ebenfalls.</p>
+    <p>Neue Tokens werden nur bei Erstellung oder Erneuerung angezeigt. Bestehende Tokens
+      bleiben gültig; gespeicherte Tokens können nicht erneut angezeigt werden.</p>
+    <p>JSON-Bodies: maximal 64 KiB und <code>Content-Type: application/json</code>.
+      Unbekannte Felder, falsche Typen und ungültige Werte liefern <code>422</code>.
+      <code>projectData</code> und <code>projektData</code> dürfen nicht gemeinsam übermittelt werden.
+      Fremde oder nicht vorhandene Projekte liefern <code>404</code>.</p>
+    <p>Projektanlage benötigt eine aktive Jahres- oder Bildungslizenz. Berechnungen und PDFs
+      prüfen die Projekt- und Lizenzrechte wie in Pro. Die Datenerfassung bleibt auch bei
+      abgelaufener Lizenz für entsperrte Kunden verfügbar.</p>
+  </section>
+
+        <section class="two-col">
+            <article class="card">
+                <h2>Schnellstart</h2>
+                <p>Jeder geschützte Request braucht den Bearer-Token im Header.</p>
+<pre><code>curl -X GET "https://heizreport.net/api/v2/health" \
+  -H "Accept: application/json"
+
+curl -X GET "https://heizreport.net/api/v2/reports" \
+  -H "Authorization: Bearer DEIN_API_TOKEN" \
+  -H "Accept: application/json"</code></pre>
+            </article>
+
+            <aside class="card">
+                <h2>Wichtige Regeln</h2>
+                <ul>
+                    <li>Tokens immer nur im Header senden, nie im JSON-Body.</li>
+                    <li>Requests mit Body immer als <code>application/json</code> schicken.</li>
+                    <li>Projekt-Keys bestehen aus 9 Buchstaben. Neue Schlüssel werden mit Kleinbuchstaben erzeugt; bitte exakt aus der Antwort übernehmen.</li>
+                    <li>Fehler kommen als JSON mit passendem HTTP-Status zurück.</li>
+                </ul>
+            </aside>
+        </section>
+
+        <section>
+            <h2>Verfügbare Funktionen</h2>
+            <div class="grid">
+                <article class="card">
+                    <div class="endpoint">
+                        <span class="method">GET</span>
+                        <span class="path">/health</span>
+                    </div>
+                    <p>Einfacher Healthcheck für Monitoring und schnelle Verbindungsprüfungen.</p>
+                    <div class="meta">Keine Authentifizierung notwendig.</div>
+<pre><code>{
+  "status": "ok",
+  "timestamp": "2026-04-23T07:00:00+00:00"
+}</code></pre>
+                </article>
+
+                <article class="card">
+                    <div class="endpoint">
+                        <span class="method">POST</span>
+                        <span class="path">/reports</span>
+                    </div>
+                    <p>Legt ein neues API-Projekt an und gibt den Projekt-Key sowie Basisdaten zurück.</p>
+                    <div class="meta">Auth erforderlich.</div>
+<pre><code>curl -X POST "https://heizreport.net/api/v2/reports" \
+  -H "Authorization: Bearer DEIN_API_TOKEN" \
+  -H "Accept: application/json"</code></pre>
+                </article>
+
+                <article class="card">
+                    <div class="endpoint">
+                        <span class="method">POST</span>
+                        <span class="path">/reports/with-data</span>
+                    </div>
+                    <p>Legt ein neues Projekt an und schreibt direkt erlaubte Projektdaten hinein.</p>
+                    <div class="meta">Auth erforderlich.</div>
+<pre><code>{
+  "projektData": {
+    "projektName": "Max Mustermann",
+    "projektPostleitzahl": "10115",
+    "telefon": "+49 30 123456"
+  }
+}</code></pre>
+                </article>
+
+                <article class="card">
+                    <div class="endpoint">
+                        <span class="method">PATCH</span>
+                        <span class="path">/reports/{projektKey}</span>
+                    </div>
+                    <p>Aktualisiert bestehende Projektdaten für ein eigenes Projekt.</p>
+                    <div class="meta">Auth erforderlich. Nur freigegebene Felder werden verarbeitet.</div>
+<pre><code>{
+  "projektData": {
+    "projektName": "Neuer Name",
+    "projektPostleitzahl": "50667"
+  }
+}</code></pre>
+                </article>
+
+                <article class="card">
+                    <div class="endpoint">
+                        <span class="method">PUT</span>
+                        <span class="path">/reports/{projektKey}/password</span>
+                    </div>
+                    <p>Ändert das Projektpasswort. Das Passwort muss zwischen 12 und 256 Zeichen lang sein.</p>
+                    <div class="meta">Auth erforderlich.</div>
+<pre><code>{
+  "newPassword": "einSehrLangesPasswort123"
+}</code></pre>
+                </article>
+
+                <article class="card">
+                    <div class="endpoint">
+                        <span class="method">GET</span>
+                        <span class="path">/reports/{projektKey}/pdf?type=heizreport</span>
+                    </div>
+                    <p>Erzeugt einen PDF-Link. <code>type</code> kann <code>heizreport</code> oder <code>check</code> sein.</p>
+                    <div class="meta">Auth erforderlich.</div>
+<pre><code>curl -X GET "https://heizreport.net/api/v2/reports/abcdefghi/pdf?type=check" \
+  -H "Authorization: Bearer DEIN_API_TOKEN"</code></pre>
+                </article>
+
+                <article class="card">
+                    <div class="endpoint">
+                        <span class="method">GET</span>
+                        <span class="path">/reports/{projektKey}/pictures</span>
+                    </div>
+                    <p>Gibt alle verknüpften Bilder mit Typ und Raumbezeichnung zurück.</p>
+                    <div class="meta">Auth erforderlich.</div>
+                </article>
+
+                <article class="card">
+                    <div class="endpoint">
+                        <span class="method">GET</span>
+                        <span class="path">/reports/{projektKey}/results</span>
+                    </div>
+                    <p>Liefert die Ergebnisdaten. Optional können <code>vorlaufT</code> und <code>spreizung</code> übergeben werden.</p>
+                    <div class="meta">Auth erforderlich.</div>
+<pre><code>GET /api/v2/reports/abcdefghi/results?vorlaufT=55&amp;spreizung=10</code></pre>
+                </article>
+
+                <article class="card">
+                    <div class="endpoint">
+                        <span class="method">GET</span>
+                        <span class="path">/reports</span>
+                    </div>
+                    <p>Listet alle eigenen Projekte, Leads, API-Projekte und Archiv-Einträge des Tokens auf.</p>
+                    <div class="meta">Auth erforderlich.</div>
+                </article>
+            </div>
+        </section>
+
+  <section class="card">
+    <h2>Projektdetails und Räume ab v2.4.0</h2>
+    <p>Die API kann jetzt Projektdetails und Raumbasisdaten lesen sowie Räume anlegen und ändern.
+      Alle Aufrufe benötigen den Kundentoken und zählen zum gemeinsamen Limit von zwei Zugriffen
+      pro Sekunde. Die Datenerfassung bleibt für entsperrte Kunden auch bei abgelaufener Jahreslizenz möglich.</p>
+    <table>
+      <thead><tr><th>Methode</th><th>Endpunkt</th><th>Funktion</th></tr></thead>
+      <tbody>
+        <tr><td>GET</td><td><code>/reports/{projectKey}</code></td><td>Freigegebene Projektdaten und Kopfwerte lesen</td></tr>
+        <tr><td>GET</td><td><code>/reports/{projectKey}/rooms</code></td><td>Räume des eigenen Projekts auflisten</td></tr>
+        <tr><td>GET</td><td><code>/reports/{projectKey}/rooms/{roomId}</code></td><td>Einzelnen Raum lesen</td></tr>
+        <tr><td>POST</td><td><code>/reports/{projectKey}/rooms</code></td><td>Raum anlegen; HTTP 201</td></tr>
+        <tr><td>PATCH</td><td><code>/reports/{projectKey}/rooms/{roomId}</code></td><td>Nur übermittelte Raumbasisdaten ändern</td></tr>
+      </tbody>
+    </table>
+    <h3>Raum anlegen</h3>
+    <p>POST mit <code>Content-Type: application/json</code>. Der Raumname ist Pflicht.
+      Den neuen Schlüssel aus <code>room.id</code> übernehmen und für spätere Aufrufe verwenden.</p>
+<pre><code>{
+  "roomData": {
+    "raumBezeichnung": "Wohnzimmer",
+    "raumEtage": 1,
+    "raumFlaeche": 25.5,
+    "raumHoehe": 2.5,
+    "raumTemperatur": 20,
+    "raumNotiz": "Erfasst über die Kunden-API"
+  }
+}</code></pre>
+    <h3>Erlaubte Raumfelder</h3>
+    <table>
+      <thead><tr><th>Feld</th><th>Regel</th><th>Standard bei Anlage</th></tr></thead>
+      <tbody>
+        <tr><td><code>raumBezeichnung</code></td><td>Text, 1–120 Zeichen nach Trimmen; nicht leer</td><td>Pflichtangabe</td></tr>
+        <tr><td><code>raumEtage</code></td><td>Geschosskennzahl 0–7: Keller, Erdgeschoss, 1.–5. Obergeschoss, Dachgeschoss</td><td>1 (Erdgeschoss)</td></tr>
+        <tr><td><code>raumFlaeche</code></td><td>Größer 0 bis 100.000 m²; leer/null zum Löschen</td><td>Leer</td></tr>
+        <tr><td><code>raumHoehe</code></td><td>Größer 0 bis 100 m; leer/null zum Löschen</td><td>2,5 m</td></tr>
+        <tr><td><code>raumTemperatur</code></td><td>Temperatur in °C: 7 oder ganzzahlig 16–26</td><td>20 °C</td></tr>
+        <tr><td><code>raumNotiz</code></td><td>Text, maximal 255 Zeichen; leer zum Löschen</td><td>Leer</td></tr>
+      </tbody>
+    </table>
+    <h3>Geschoss-ID und Bezeichnungen</h3>
+    <p><code>raumEtage</code> wird als ID gesendet und in Antworten als Zeichenkette ausgegeben. Standard bei Anlage ist <code>1</code> (Erdgeschoss).</p>
+    <table>
+      <thead><tr><th>raumEtage</th><th>raumEtageBezeichnung</th><th>raumEtageKuerzel</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>Keller</td><td>KG</td></tr>
+        <tr><td>1</td><td>Erdgeschoss</td><td>EG</td></tr>
+        <tr><td>2</td><td>1. Obergeschoss</td><td>1. OG</td></tr>
+        <tr><td>3</td><td>2. Obergeschoss</td><td>2. OG</td></tr>
+        <tr><td>4</td><td>3. Obergeschoss</td><td>3. OG</td></tr>
+        <tr><td>5</td><td>4. Obergeschoss</td><td>4. OG</td></tr>
+        <tr><td>6</td><td>5. Obergeschoss</td><td>5. OG</td></tr>
+        <tr><td>7</td><td>Dachgeschoss</td><td>DG</td></tr>
+      </tbody>
+    </table>
+    <p>Jeder Raum enthält in <code>roomData</code> zusätzlich <code>raumEtageBezeichnung</code> und <code>raumEtageKuerzel</code>: bei Einzelabruf, in Raumlisten und nach Anlage oder Änderung. Diese beiden Felder werden aus der ID abgeleitet und dürfen nicht als Eingaben gesendet werden. Bei fehlender oder unbekannter gespeicherter ID sind beide leer.</p>
+    <p>Beispiel-Ausschnitt aus <code>roomData</code>:</p>
+<pre><code>{"raumEtage":"1","raumEtageBezeichnung":"Erdgeschoss","raumEtageKuerzel":"EG"}</code></pre>
+    <p><code>raumTemperatur</code> wird in °C gesendet und als JSON-Zahl zurückgegeben. Für 20 °C bitte <code>20</code> senden. Erlaubt sind 7 und die ganzen Temperaturen 16–26; andere Werte liefern <code>422</code>. Die Umrechnung in interne Datenbank-IDs übernimmt die API. Bei fehlender oder unbekannter gespeicherter ID enthält die Antwort <code>null</code>.</p>
+    <p>Zahlen können als JSON-Zahl oder numerische Zeichenkette gesendet werden. Fläche/Höhe
+      unterstützen auch Dezimalkomma; maximal 32 Zeichen. Geschoss und Temperatur sind ganzzahlig.
+      Unbekannte Felder, boolesche Zahlenwerte, Arrays und Objekte als Feldwerte liefern <code>422</code>.</p>
+    <h3>Raum ändern und Antworten lesen</h3>
+    <p>PATCH verwendet ebenfalls die Hülle <code>roomData</code>. Nicht übermittelte Felder bleiben erhalten:</p>
+<pre><code>{"roomData":{"raumNotiz":"Neue Notiz","raumTemperatur":22}}</code></pre>
+    <p>Einzelantworten enthalten <code>room</code>, die Liste enthält <code>rooms[]</code>.
+      Jeder Eintrag hat <code>id</code>, <code>projectKey</code> und <code>roomData</code>.
+      Feldwerte in <code>roomData</code> werden als Zeichenketten zurückgegeben; <code>raumTemperatur</code> ist eine JSON-Zahl in °C (oder <code>null</code> bei unbekanntem gespeichertem Wert).
+      <code>raumBaujahr</code> ist zusätzlich lesbar und wird bei Anlage aus dem Projekt übernommen;
+      spätere Projektänderungen führen es nicht automatisch nach.</p>
+    <p>Eine Raum-ID muss zum angegebenen eigenen Projekt gehören. Ein Raum eines anderen Projekts
+      liefert <code>404</code>, auch wenn beide Projekte demselben Kunden gehören.
+      Raum-ID, Projektzuordnung, Baujahr, U-Werte und Heizflächen können hier nicht geschrieben werden.</p>
+    <p>Raum-Anlage und Projektaktivität werden gemeinsam gespeichert. Bei Anlage wird der Projektstatus
+      auf „in Bearbeitung“ (2) gesetzt; abgeschlossene/archivierte Projekte (4/5) behalten ihren Status.
+      PATCH aktualisiert die Aktivität und behält den Projektstatus bei.</p>
+    <p>Raumbasisdaten allein reichen noch nicht für eine vollständige Heizlastberechnung.
+      Bauteile und U-Werte werden nicht automatisch ergänzt. Nach einem Verbindungsabbruch
+      vor Wiederholung einer Anlage zuerst die Raumliste prüfen, damit kein doppelter Raum entsteht.</p>
+  </section>
+
+  <section class="card">
+    <h2>Ergebnisdaten und Fußbodenheizung</h2>
+    <p>Der Ergebnisendpunkt nutzt die aktuelle Berechnungsstruktur. Fußbodenheizkreise stehen unter
+      <code>results.floorHeatingBalance.groups[].rooms[]</code>.</p>
+    <p>Bestehende Kundenintegrationen können weiterhin unverändert
+      <code>projekt.abgleichFBH[].raeume[].durchfluss</code> verwenden. Beide Strukturen werden aus
+      denselben Berechnungswerten erzeugt; <code>durchfluss</code> entspricht dem Einstellwert in
+      <code>l/min</code>.</p>
+    <pre><code>GET /api/v2/reports/abcdefghi/results
+Authorization: Bearer DEIN_API_TOKEN
+Accept: application/json</code></pre>
+    <h3>Antwortbeispiel</h3>
+    <pre><code>{
+  "status": 200,
+  "action": "getResults",
+  "project": {
+    "key": "abcdefghi"
+  },
+  "results": {
+    "available": true,
+    "status": "calculated",
+    "source": "api-v2-core",
+    "summary": {},
+    "roomHeatLoads": [],
+    "radiators": [],
+    "hydraulicBalance": {},
+    "floorHeatingBalance": {
+      "groups": [
+        {
+          "spread": 10,
+          "flowRateSum": 73,
+          "flowRateUnit": "l/h",
+          "rooms": [
+            {
+              "surfaceId": "123-floorHeatingRaw-0",
+              "roomName": "Wohnzimmer",
+              "floorLabel": "Erdgeschoss",
+              "heatingLoad": 850,
+              "spread": 10,
+              "flowRate": 73,
+              "flowLpm": 1.22,
+              "setting": {
+                "value": 1.22,
+                "unit": "l/min"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "heatpump": {},
+    "exchange": {}
+  },
+  "projekt": {
+    "abgleichFBH": [
+      {
+        "raeume": [
+          {
+            "raumBezeichnung": "Wohnzimmer",
+            "heizlast": 850,
+            "durchfluss": 1.22
+          }
+        ],
+        "spreizung": 10,
+        "summeVolumenstrom": 73
+      }
+    ]
+  }
+}</code></pre>
+    <table>
+      <thead><tr><th>Feld</th><th>Bedeutung</th><th>Einheit</th></tr></thead>
+      <tbody>
+        <tr><td><code>spread</code></td><td>Temperaturspreizung des FBH-Kreises</td><td>K</td></tr>
+        <tr><td><code>heatingLoad</code></td><td>Anteilige Heizlast der Heizfläche</td><td>W</td></tr>
+        <tr><td><code>flowRate</code></td><td>Volumenstrom des einzelnen Kreises</td><td>l/h</td></tr>
+        <tr><td><code>flowLpm</code></td><td>Volumenstrom für die Anzeige am Verteiler</td><td>l/min</td></tr>
+        <tr><td><code>setting.value</code></td><td>Einzustellender Wert am Heizkreisverteiler</td><td>siehe <code>setting.unit</code></td></tr>
+        <tr><td><code>flowRateSum</code></td><td>Summe der Gruppe bei gleicher Spreizung</td><td>l/h</td></tr>
+        <tr><td><code>projekt.abgleichFBH[].raeume[].durchfluss</code></td><td>Kompatibler bisheriger Einstellwert</td><td>l/min</td></tr>
+      </tbody>
+    </table>
+    <h3>Kompatibilitätsstruktur</h3>
+    <p>Die Namen und Verschachtelung von <code>projekt.abgleichFBH</code> bleiben gegenüber der
+      bisherigen API unverändert:</p>
+    <pre><code>projekt.abgleichFBH[]
+├── spreizung
+├── summeVolumenstrom
+└── raeume[]
+    ├── raumBezeichnung
+    ├── heizlast
+    └── durchfluss</code></pre>
+  </section>
+
+  <section class="card">
+    <h2>Optionale Systemtemperatur</h2>
+    <p>Vorlauftemperatur und Spreizung können gemeinsam vorgegeben werden. Die Werte beeinflussen
+      Heizkörper- und Hydraulikberechnung; die FBH-Gruppen werden weiterhin für 10, 7 und 5 K ausgegeben.</p>
+    <pre><code>GET /api/v2/reports/abcdefghi/results?flowTemperature=55&amp;spread=10</code></pre>
+    <p>Die bisherigen Parameternamen <code>vorlaufT</code> und <code>spreizung</code> werden ebenfalls unterstützt.</p>
+  </section>
+
+        <section>
+            <h2>Erlaubte Projektfelder</h2>
+            <article class="card">
+                <p>Diese Felder können aktuell über <code>projektData</code> gesetzt oder aktualisiert werden.
+                    Alternativ wird <code>projectData</code> unterstützt; beide Namen dürfen nicht gemeinsam angegeben werden:</p>
+<pre><code>projektName
+projektPostleitzahl
+projektArtHeizung
+projektAlterHeizung
+projektBewohner
+projektJahresverbrauch
+projektBaujahr
+projektTrinkwasser
+projektWaermeerzeugerSolarStatus
+projektWaermeerzeugerSolarArt
+projektKollektorflaecheSolar
+projektWaermeerzeugerHolzStatus
+projektJahresverbrauchHolz
+projektWaermeerzeugerHolzArt
+email
+anrede
+vorname
+name
+strasse
+hausnummer
+plz
+ort
+telefon
+bemerkungen</code></pre>
+            </article>
+        </section>
+
+  <section class="card">
+    <h2>Webhook bei der ersten PDF-Erstellung</h2>
+    <p>Ist im Pro-Bereich unter <strong>Integrationen → API</strong> eine Webhook-Adresse hinterlegt,
+      sendet Heizreport genau einmal pro Projekt einen JSON-POST. Auslöser ist die erste
+      <strong>erfolgreiche</strong> PDF-Erstellung – sowohl über den PDF-Endpunkt der API als auch über
+      die zentrale Dokumenterstellung im Kundenportal. Fehlgeschlagene PDF-Erstellungen lösen keinen
+      Webhook aus.</p>
+    <p>Als erfolgreiche Zustellung gilt jede Antwort mit HTTP-Status <code>2xx</code>. Die PDF bleibt
+      auch dann verfügbar, wenn das Webhook-Ziel nicht erreichbar ist oder einen Fehlerstatus liefert.
+      Das Ziel muss öffentlich erreichbar sein; Weiterleitungen und private beziehungsweise reservierte
+      IP-Adressen werden nicht zugelassen.</p>
+    <pre><code>POST https://example.org/heizreport-webhook
+Content-Type: application/json
+X-Heizreport-Event: pdf.generated
+X-Heizreport-Delivery: 28f67e0a29cc4f98a89e9cff1bd9acaf
+
+{
+  "event": "webhookheizreport",
+  "eventType": "pdf.generated",
+  "eventId": "28f67e0a29cc4f98a89e9cff1bd9acaf",
+  "authenticate": "DEIN_WEBHOOK_AUTH_WERT",
+  "projektKey": "abcdefghi",
+  "projectKey": "abcdefghi",
+  "generatedAt": "2026-09-02T12:00:00+00:00",
+  "document": {
+    "id": 12345,
+    "type": "heizreport",
+    "name": "heizreport_komplett.pdf",
+    "size": 482193,
+    "url": "https://heizreport.net/files.php?...",
+    "viewerUrl": "https://heizreport.net/files.php?...",
+    "temporary": false
+  }
+}</code></pre>
+    <p><code>event</code> behält mit <code>webhookheizreport</code> beziehungsweise
+      <code>webhookcheck</code> das bisher vorgesehene Format bei; <code>eventType</code> bezeichnet
+      das neue stabile Ereignis. <code>eventId</code> ist die eindeutige Zustell-ID.
+      <code>authenticate</code> enthält unverändert den in den API-Einstellungen hinterlegten Wert.
+      Bei temporären Download-Dokumenten ist
+      <code>document.id</code> gleich <code>0</code> und <code>document.temporary</code> gleich
+      <code>true</code>.</p>
+  </section>
+
+        <section>
+            <h2>Typische Antworten</h2>
+            <div class="grid">
+                <article class="card">
+                    <h3>Erfolgreich</h3>
+<pre><code>{
+  "status": 200,
+  "action": "createReport",
+  "projektHeader": {
+    "key": "abcdefghi",
+    "link": "https://heizreport.net/report/p=abcdefghi",
+    "id": 12345,
+    "status": 1
+  },
+  "projektData": {
+    "projektName": "Max Mustermann"
+  }
+}</code></pre>
+                </article>
+
+                <article class="card">
+                    <h3>Fehler</h3>
+<pre><code>{
+  "status": 401,
+  "error": "Bearer-Token fehlt oder ist ungültig",
+  "details": {
+    "type": "authentication"
+  }
+}</code></pre>
+                </article>
+            </div>
+        </section>
+
+        </div>
+
+        <section class="card doc-view" id="api-reference" aria-labelledby="api-reference-title">
+            <h1 id="api-reference-title" tabindex="-1">Swagger-Referenz</h1>
+            <p>Hier stehen die derzeit verfügbaren öffentlichen v2-Endpunkte mit Eingabefeldern,
+                Beispielen und Antwortmodellen. Die ausführliche Anleitung finden Sie unter „Einfache Übersicht“.
+                Geplante Bauteil-, Heizkörper- und Upload-Funktionen werden erst mit ihrer Veröffentlichung ergänzt.</p>
+            <p>Diese Referenz führt keine API-Aufrufe aus und benötigt keinen Token.
+                Für manuelle Tests bitte die <a href="postman_collection.json" download>Postman-Collection</a>
+                mit einem eigenen Testprojekt verwenden. Auch der GET-Aufruf für PDFs erzeugt ein Dokument.</p>
+            <p>Für andere KI-Assistenten stehen die <a href="OPENAI.md" download>OpenAI-Anleitung</a> und
+                die <a href="CLAUDE.md" download>Claude-Anleitung</a> bereit. Beide erläutern die aktuelle API
+                einschließlich Zugriffsschutz und noch nicht verfügbarer Funktionen.
+                Die <a href="openapi.json" download>OpenAPI-Datei</a> beschreibt die Schnittstelle maschinenlesbar;
+                sie kann in passende Entwicklungswerkzeuge importiert werden.</p>
+            <p id="swagger-status" role="status">Interaktive Referenz wird geladen …</p>
+            <noscript><p>Für Swagger UI bitte JavaScript aktivieren oder die OpenAPI-Datei herunterladen.</p></noscript>
+            <div id="swagger-ui"></div>
+        </section>
+        <section class="card doc-view" id="downloads" aria-labelledby="downloads-title">
+            <span class="eyebrow">Dateien für Ihre Integration</span>
+            <h1 id="downloads-title" tabindex="-1">Downloads</h1>
+            <p>Alle Dateien beschreiben die aktuell verfügbaren Funktionen der öffentlichen API v2.
+                Die Beispiele enthalten keine Zugangsdaten.</p>
+            <div class="grid">
+                <article class="card">
+                    <h2>Postman-Collection</h2>
+                    <p>Vorbereitete Anfragen, Beispieldaten und manuelle Sicherheitstests.
+                        Nach dem Import den eigenen Token und ein Testprojekt konfigurieren.</p>
+                    <div class="doc-links"><a href="postman_collection.json" download>Postman herunterladen</a></div>
+                </article>
+                <article class="card">
+                    <h2>OpenAPI-Beschreibung</h2>
+                    <p>Maschinenlesbare Beschreibung der Endpunkte, Eingabefelder und Antworten
+                        im Format OpenAPI 3.1. Als Grundlage für kompatible Entwicklungswerkzeuge.</p>
+                    <div class="doc-links"><a href="openapi.json" download>OpenAPI herunterladen</a></div>
+                </article>
+                <article class="card">
+                    <h2>Anleitung für OpenAI</h2>
+                    <p>Integrationsanleitung für KI-Assistenten mit Arbeitsabläufen, Feldregeln,
+                        Zugriffsschutz und Fehlerbehandlung.</p>
+                    <div class="doc-links"><a href="OPENAI.md" download>OpenAI-Anleitung herunterladen</a></div>
+                </article>
+                <article class="card">
+                    <h2>Anleitung für Claude</h2>
+                    <p>Eigenständige Integrationsanleitung für Claude mit denselben aktuellen
+                        API-Regeln und Beispielen.</p>
+                    <div class="doc-links"><a href="CLAUDE.md" download>Claude-Anleitung herunterladen</a></div>
+                </article>
+            </div>
+        </section>
+        <footer class="footer">
+            Heizreport API v2 · Produktive Basisadresse: <code>https://heizreport.net/api/v2</code>
+        </footer>
+    </main>
+    <script src="assets/swagger-ui/swagger-ui-bundle.js" defer></script>
+    <script src="assets/openapi-data.js" defer></script>
+    <script src="assets/docs-swagger.js" defer></script>
+    <script src="assets/docs-navigation.js" defer></script>
+</body>
+</html>

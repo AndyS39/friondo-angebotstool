@@ -119,6 +119,8 @@ _NACHTRAEGLICHE_SPALTEN = {
         "kfw_zusage_am": "DATETIME",
         "heizreport_projekt_key": "VARCHAR(60)",               # V4 Phase 93.1
         "heizlast_quelle": "VARCHAR(60)",                      # V4 Phase 93.1
+        "heizreport_angelegt_am": "DATETIME",                  # v26 Phase 122
+        "heizreport_pdf_am": "DATETIME",                       # v26 Phase 122
         "fp_antworten_json": "TEXT NOT NULL DEFAULT '{}'",     # v15 Phase 80
         "fp_vorbelegt_json": "TEXT NOT NULL DEFAULT '{}'",     # v15 Phase 80
         "fp_seite_index": "INTEGER NOT NULL DEFAULT 0",        # v15 Phase 80

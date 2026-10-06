@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v25)
+# Friondo Angebotstool – Projektkontext (v26)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -16,7 +16,13 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   Angebote**; alle weiteren Punkte im Dropdown „Menü" oben rechts; darunter
   Statistik-Kacheln: Offene Leads · Offene Erfassungen · Versendete Angebote.
 - Menüpunkt „Konfiguration" heißt jetzt **„Parametrierung"** (Logik-/Preislisten-
-  Import, monday-Mapping, Nummernkreis, Förderparameter-Ansicht).
+  Import, monday-Mapping, Nummernkreis, Förderparameter-Ansicht). Die Parametrierung
+  (`/parametrierung`) ist seit v26 eine durchsuchbare Verteilerseite mit fünf
+  Bereichskarten (Allgemein, Angebotstool, Projektierung, Lead-Management, System &
+  Protokolle); Admin-Einträge (Benutzer, Projektierung-Einstellungen, Heizreport,
+  Bestandsimport, Go-live, Kunden-Dubletten, Lead-Einstellungen, Lead-Demo) und die
+  Lead-Karte erscheinen nur mit der jeweiligen Berechtigung, die Einstellungen der
+  alten Übersicht liegen unter „Angebotstool-Einstellungen“ und „Logik & Importe“.
 
 ## Zentrale Dateien
 - `konfigurator_logik_v5.xlsx` – Steuerdatei (ersetzt v4): zusätzlich Frage A13
@@ -57,6 +63,7 @@ Nummern vergeben.
 | v23 | PLAN_LEAD_V2.md | 104–112 |
 | v24 | PLAN_V16.md | 113–117 |
 | v25 | PLAN_LEAD_V3.md | 118–121 |
+| v26 | PLAN_PROJ_V5.md | 122–126 |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
@@ -648,7 +655,9 @@ Team-Feedback belegt – Plan-Text „Neu in v13“ entspricht diesem Abschnitt.
 - **Heizreport:** generischer, in der Parametrierung konfigurierbarer
   REST-Client mit Verbindungstest; Buttons an der Heizlast-Aufgabe bei
   konfigurierter API; `docs/heizreport-api.md` mit Anfragetext (API-Doku
-  nicht öffentlich). **UGL:** Formatabgleich (docs/ugl-format.md,
+  nicht öffentlich). *Seit v26 API v2:* öffentliche Kunden-API
+  `https://heizreport.net/api/v2` mit Bearer-Token ist Standardmodus, der
+  generische Client bleibt als Modus „generisch“ (siehe „Neu in v26“). **UGL:** Formatabgleich (docs/ugl-format.md,
   Testdatei), Stücklisten-Pflege in der Parametrierung, Bestell-Dialog mit
   Vorschau/Lieferdatum/Lieferadresse, Nachbestellungen, Go-live-Prüfpunkte.
 
@@ -1387,3 +1396,174 @@ Abschnitt V3; Team-Hinweise: docs/nach-dem-update-v25.md.)
   Cockpit-Eintrag, API-Text unverändert). **Offen**: manuelle Sichtprüfung in
   Edge bei 1366 px (Drag & Drop, Mehrfach-Dropdown), Freischaltung
   `lead_freigabe_modus = alle` (eigener Plan).
+
+## Neu in v26 – Heizreport-Anbindung & Pilot-Nebensachen (abgestimmt 05.10.2026)
+
+(Plan: PLAN_PROJ_V5.md, Phasen 122–126; Heizreport-Doku `docs/heizreport/`
+(openapi.json 2.4.0, docs.html, postman_collection.json, heizreport-CLAUDE.md) und
+`docs/heizreport-api.md`; Entscheidungen/Annahmen A-1 … A-6 in
+docs/projektierung-entscheidungen.md Abschnitt PLAN_PROJ_V5; Team-Hinweise und
+Echtlauf-Checkliste in docs/nach-dem-update-v26.md. Umsetzung: Heizreport zentral,
+Montageteam-Dropdown und Parametrierungs-Gliederung durch zwei parallele Agenten.
+Projektierung weiter im eingestellten `freigabe_modus`.)
+
+- **Heizreport-Client v2 (Phase 122, `app/heizreport_api.py`):** Parameter
+  `heizreport_modus` = `v2` (Standard) | `generisch` (v17-Client bleibt erhalten).
+  Modus v2: Basis-URL `https://heizreport.net/api/v2`, `Authorization: Bearer
+  <Token>` (Parameter `heizreport_api_key`), JSON, Timeout 20 s, `konfiguriert()` =
+  Token gesetzt; Endpunkte `GET /`, `/health`, `/reports`, `POST /reports/with-data`,
+  `GET/PATCH /reports/{key}`, `GET /reports/{key}/results`,
+  `GET /reports/{key}/pdf?type=heizreport`; nie `/api/v1`, Schlüssel nur aus
+  `projektHeader.key`. Prozessweite Warteschlange (`_warten`: Lock + Zeitstempel,
+  mindestens 600 ms Abstand), HTTP 429 → `Retry-After` (mindestens 1 s) abwarten
+  und genau einmal wiederholen. Fehlerblock `{status, error, details{type, field}}`
+  → Nutzer-Meldung „Heizreport: <error> (Feld <field>)“; 401/403/404/5xx/Timeout mit
+  festen Texten (`fehler_meldung`). Jeder fehlgeschlagene Aufruf →
+  Fehlerprotokoll (`fehlerprotokoll.eintragen_text`, Fehlertyp „Heizreport“) ohne
+  Authorization-Header und ohne Tokenwert (per Test abgesichert). HTTP-Nahtstelle
+  `_roh_anfrage` (auch PDF-Download), Uhr `_uhr`/`_schlafen` – in Tests gemockt.
+  Verbindungstest: `GET /health` (ohne Token) → `GET /` → `GET /reports` →
+  „Verbindung OK · API-Version <v> · <n> eigene Projekte (Gruppen: projekte a, leads
+  b, api c, archiv d)“ bzw. „Heizreport erreichbar, aber Token abgelehnt (HTTP 401)“.
+- **Parametrierung → Heizreport** (`/parametrierung/heizreport`, Admin, Router
+  `app/routers/konfiguration_heizreport.py`, Template `konfiguration/heizreport.html`):
+  Zugang (Modus, Token maskiert „gesetzt – leer lassen = unverändert“ + „Token
+  entfernen“, Verbindung testen über `POST /parametrierung/heizreport/test`),
+  Kennzahlen (Phase 123, JSON-Parameter `heizreport_kennzahlen` mit Vorlage,
+  Validierung und Vorschau „welche Felder würden gesendet“), Ablage
+  (`heizreport_pdf_ordner`, Vorbelegung „Montagedokumente“), Portal-Link
+  (`url_heizreport`, aus den Projektierung-Einstellungen umgezogen), Ergebnis-Pfad
+  (`heizreport_pfad_heizlast`), aufklappbar „Generischer Client (v17)“. Änderungen
+  landen im Parameter `heizreport_protokoll` (letzte 30, Token nur als
+  gesetzt/entfernt). Der alte Block „Heizreport-API (Phase 93)“ in den
+  Projektierung-Einstellungen ist entfallen (Hinweis-Link). migrate.py: Parameter
+  `heizreport_modus`, `heizreport_kennzahlen`, `heizreport_pdf_ordner`,
+  `heizreport_pfad_heizlast`; Gewerk-Spalten `heizreport_angelegt_am`,
+  `heizreport_pdf_am` (`db._NACHTRAEGLICHE_SPALTEN`).
+- **Projekt anlegen und vorbelegen (Phase 123):** `heizreport_api.projektdaten_v2`
+  liefert `{"projectData": {…}}` (nur skalare Werte, leere weggelassen):
+  `projektName` = „<Nachname>, <Vorname> – <PR-Nummer>“, `projektPostleitzahl`
+  (Pflicht – fehlt sie: „Ausführungsort ohne PLZ“), `projektBaujahr` (O02),
+  Kundenfelder `anrede/vorname/name/telefon/email`, Ausführungsort
+  `strasse/hausnummer/plz/ort` (Hausnummer = letzter Ziffernblock + Zusatz [A-2]),
+  `bemerkungen` wörtlich „Friondo <PR> · Angebot <AN> · verkauft: <Steckbrief
+  leistungsklasse> · Energieträger alt: <A01>, Baujahr Heizung <A02>, Verbrauch <A03>
+  kWh · Warmwasser über WP: <N02> · Solarthermie: <A10> · Heizlast lt. Erfassung:
+  <A15> kW“ (Teile ohne Wert entfallen). Die Kennzahlen `projektArtHeizung`,
+  `projektAlterHeizung`, `projektTrinkwasser`, `projektWaermeerzeugerSolarArt` und
+  `projektJahresverbrauch` werden **nur** über `heizreport_kennzahlen` gesendet
+  (`null` = unbekannt; Verbrauch nur bei bestätigter Einheit kWh, keine Umrechnung
+  [A-3]); `projektWaermeerzeugerSolarStatus = true` bei A10 „Ja…“. Ermittlung der
+  Kennzahlen nur manuell mit `scripts/heizreport_kennzahlen.py` (PATCH je Wert am
+  Testprojekt, 600 ms Abstand, Enter je Wert, JSON-Vorlage am Ende; Ablauf
+  docs/heizreport-api.md Abschnitt 3). Aufgabe „Heizlastberechnung liegt vor“ (Paket
+  feinplanung_vot, `api`/`heizreport`) im Modus v2 mit Token: „Heizreport-Projekt
+  anlegen“ (nur ohne Schlüssel; `POST /reports/with-data`, Erfolg = HTTP 201,
+  Schlüssel → `heizreport_projekt_key`, `heizreport_angelegt_am`, Verlauf
+  „Heizreport-Projekt <key> angelegt (vorbelegt: <Felder>)“; nicht idempotent:
+  Timeout → `GET /reports` und Suche nach `projektName`, Treffer → „nach Timeout
+  gefunden“, sonst „Anlage unklar – im Heizreport-Portal prüfen, dann Schlüssel von
+  Hand eintragen“), aufklappbar „Schlüssel von Hand eintragen“ (9 Buchstaben, Prüfung
+  `GET /reports/{key}`, 404 = abgelehnt), danach „Heizreport öffnen ↗“
+  (`url_heizreport`, Schlüssel daneben zum Kopieren [A-4]), „Heizlast abrufen“,
+  „Heizreport-PDF ablegen“ und „Verknüpfung lösen“ (Pflichtbegründung; leert
+  Schlüssel und `heizreport_angelegt_am`, Heizlast-Felder bleiben, Verlauf
+  „Heizreport-Verknüpfung gelöst: <Begründung>“). Zweiter Klick auf Anlegen bei
+  bestehender Verknüpfung → 409. Routen: `POST /projektierung/gewerk/{id}/heizreport/
+  {anlegen|ergebnis|pdf|schluessel|loesen}` (fetch/JSON wie die übrigen Aufgaben-
+  Aktionen; 409 mit `rueckfrage` bei der PDF-Sicherheitsabfrage). Ohne Token wie
+  bisher Link + Upload.
+- **Heizlast zurückholen, Abgleich, PDF (Phase 124):** „Heizlast abrufen“ =
+  `GET /reports/{key}/results` ohne Zusatzparameter; 422 `calculation_unavailable`
+  → „Heizreport-Projekt noch nicht berechenbar – Räume und Heizflächen im
+  Heizreport-Portal erfassen, dann erneut abrufen“ (Gewerk unverändert). Erfolg:
+  Gesamtheizlast in W über den Punktpfad `heizreport_pfad_heizlast` (Vorbelegung
+  `results.summary.heatLoad` – **am Referenzprojekt zu bestätigen**, Schlüssel lag
+  nicht vor), ersatzweise bekannte Kandidaten, dann Summe der Raumheizlasten
+  (`results.roomHeatLoads`, zuletzt FBH-Räume) [A-5]; kW kaufmännisch auf eine
+  Nachkommastelle → `heizlast_kw`, `heizlast_datum`, `heizlast_quelle = "Heizreport
+  API"`, Aufgabe erledigt, Verlauf „Heizlast aus Heizreport übernommen: <x,y> kW“.
+  Abgleich mit der verkauften Leistungsklasse über die Paketmatrix-Heizlastspalte
+  (`klasse_fuer_heizlast`, dieselbe Zuordnung wie `konfigurator.leistungsklasse`):
+  Abweichung → Verlaufseintrag `art = hinweis` am Gewerk, angezeigt an der Aufgabe
+  und im Heizlast-Block der Akte, Text wörtlich „Heizlast <x,y> kW laut Heizreport →
+  Leistungsklasse <K>; verkauft: <Steckbrief> – Auslegung prüfen (Nachtrag oder
+  Freigabe)“; keine automatische Änderung an Angebot/Steckbrief/Stückliste; gleiche
+  Klasse → Verlauf „Heizlast passt zur verkauften Klasse“. FP-L01/FP-L02 werden mit
+  kW und „Heizreport“ vorbelegt, solange unbeantwortet (Badge „aus Heizreport“ in
+  `feinplanung.html`) [A-6]. „Heizreport-PDF ablegen“: `GET /reports/{key}/pdf?type=
+  heizreport` erzeugt bei Heizreport ein Dokument – erster Klick direkt, bei
+  gesetztem `heizreport_pdf_am` Sicherheitsabfrage „Bei Heizreport wird ein weiteres
+  Dokument erzeugt – trotzdem erneut abrufen?“ (ohne `bestaetigt=1` → 409);
+  signierter Link (`file.url`/`linkToDocument`, nur Host heizreport.net) sofort ohne
+  Token geladen, nicht gespeichert, Datei `Heizreport-<PR>-<Sparte>-<JJJJMMTT>.pdf`
+  (zweites Dokument `…-2.pdf`) im Galerie-Ordner `heizreport_pdf_ordner`,
+  `heizreport_pdf_am = jetzt`, Verlauf „Heizreport-PDF abgelegt“, Aufgabe erledigt.
+  Nicht angebunden (Stufe 2): Räume per API, Webhook `pdf.generated` (öffentliche
+  HTTPS-Adresse), Bilder, Wärmepumpen-Check (`type=check`), Projektpasswort.
+- **Benutzer → Montageteam als Dropdown (Phase 125, A-1):** Auf der Benutzerseite
+  (`templates/benutzer/liste.html`) steht in der Hauptzeile und im Formular „Neuer
+  Benutzer“ statt der Chip-Reihe ein `<select name="team_ids">` mit „– kein Team –“
+  und allen aktiven Teams (Typ montage zuerst, dann sub, je alphabetisch; die Route
+  liefert `order_by(typ, name)`, das Template sichert montage-zuerst ab). Sichtbar nur
+  bei Rolle Montage – Live-Umschaltung über `benTeamsUmschalten`; Nicht-Montage-
+  Benutzer ohne Zuordnung haben kein Dropdown im HTML, beim Umschalten klont das JS
+  eines aus `<template id="ben-team-vorlage">`. Hat ein Benutzer mehrere Teams,
+  erscheint je Team ein Dropdown untereinander; „+ weiteres Team“ (`benTeamHinzu`)
+  ergänzt eines, „×“ (`benTeamWeg`) entfernt eines (beim letzten Dropdown
+  ausgeblendet – dort „– kein Team –“ wählen). Gespeichert wird unverändert über
+  `POST /benutzer/neu` bzw. `/benutzer/{id}/aendern` (`teams_dabei=1`, `team_ids`
+  mehrfach; leere Werte ignoriert, Dubletten per `set()` dedupliziert – Route
+  unverändert). Die Zusatzrollen-Häkchen in der Detailzeile sind schlichte
+  `kontrollfeld`-Labels; `ben-chip`/`chips` kommen im Benutzer-HTML nicht mehr vor
+  (die zugehörigen CSS-Regeln in style.css sind verwaist). Teams-Seite (Spalte
+  Mitglieder) und Go-live-Prüfpunkt „Montageteams mit Mitgliedern“ unverändert.
+  Test: `tests/test_benutzer_teams_v26.py` (8 Tests).
+- **Parametrierung neu gegliedert (Phase 125):** `/parametrierung` ist jetzt eine
+  Verteilerseite mit Suchfeld (clientseitig, Titel + Kurztext) und fünf
+  Bereichskarten – Allgemein · Angebotstool · Projektierung · Lead-Management ·
+  System & Protokolle. Alle bisherigen Adressen bleiben; jeder Link der alten
+  Button-Reihe kommt genau einmal vor, Admin- und Lead-Bedingungen wie zuvor, der
+  Go-live-Eintrag trägt ein Badge „n/11 grün“. Die Inline-Abschnitte der alten
+  Übersicht liegen auf zwei neuen Seiten: `/parametrierung/angebotstool`
+  („Angebotstool-Einstellungen“: DB-Ampel inkl. je Sparte, E-Mail-Versand mit
+  Versand-Erkennung (#versand), Kombi-Versand, gewerkeübergreifende Artikel,
+  Fern-Signatur, Abgelehnt-Prozess mit Gründen und Prüflauf-Protokoll (#ablehnung),
+  Lösch-Protokoll (#loeschprotokoll)) und `/parametrierung/logik` („Logik & Importe“:
+  Quelle/zuletzt eingelesen, Validierungsbericht, Neu einlesen, Tabellen Eingelesene
+  Logik/Fragen/Angebotsaufbau/KfW/PV/Klimakonfigurator mit KL-Import). Im Router
+  liefert `_parametrierung_kontext(session)` den bisherigen Kontext, drei Routen
+  verteilen ihn auf die drei Templates – keine neue Logik. `POST
+  /parametrierung/einstellungen`, `/ablehnungsgruende`, `/neu-einlesen` und der
+  KL-Import kehren per Referer auf die aufrufende Seite zurück (`_zurueck_ziel`: nur
+  Pfade unter /parametrierung, ohne Query; Fallback Übersicht, bei Neu-einlesen und
+  KL-Import /parametrierung/logik), `?meldung=` wie bisher. Projektierung-
+  Einstellungen: gleiche Route, gleiche Feldnamen und POST-Verarbeitung, aber in
+  Karten gegliedert mit sticky Abschnitts-Navigation (Freigabe & Pilot · Vorlauf-
+  Ampel · Standard-Verantwortliche · Benachrichtigungs-Mails · Storno-Gründe ·
+  Galerie · Portal-URLs · UGL/Collin · Outlook-Kalender · Terminbestätigung ·
+  Kundenmail BzA, dazu Ordnervorlage und Mail-Protokoll #mailprotokoll) und einem
+  sticky „Speichern“ (Aktionsleiste des Editors v14); der Heizreport-Block (Phase 93)
+  und das Feld `url_heizreport` sind nach `/parametrierung/heizreport` umgezogen
+  (Hinweis-Links an den alten Stellen), Portal-URL-Parameter werden nur gesetzt,
+  wenn das Feld im Formular liegt. CSS: Block „v26 … Parametrierung“ am Ende von
+  style.css (`.param-*`, `.pe-*`). Test: `tests/test_parametrierung_v26.py` (13 Tests).
+- **Tests / Abnahme (Phase 126):** `tests/test_heizreport_v26.py` (19 Tests:
+  Warteschlange 600 ms mit gemockter Uhr, 429 genau einmal wiederholt,
+  Verbindungstest wörtlich, Fehlerprotokoll ohne Token, Parametrierungs-Seite,
+  Body `projectData` wörtlich, Kennzahlen, Anlage 201/Timeout-Suche/409, Schlüssel
+  von Hand, Verknüpfung lösen, Heizlast mit Abgleich-Hinweis, Raumsumme, 422,
+  PDF-Ablage mit Rückfrage und `…-2.pdf`), `test_parametrierung_v26.py` (13),
+  `test_benutzer_teams_v26.py` (8); angepasst: `test_projektierung_v4.py::
+  Phase93Heizreport` (Modus generisch, neue Testroute), `test_kl_v24.py` und
+  `test_kl_v24_logik.py` (Inhalte der alten Übersicht liegen auf den neuen Seiten;
+  KL-Import kehrt nach Logik & Importe zurück). HTTP in allen Tests gemockt
+  (`heizreport_api._roh_anfrage`), kein Netzzugriff. Gesamtlauf, Abnahmeskript,
+  migrate.py zweimal gegen die Server-DB-Kopie und Voll-Crawl (admin, innendienst,
+  aussendienst, montage): siehe Gesamtübersicht der Übergabe.
+- **Offen / Rückfragen:** Referenzprojekt-Schlüssel und Token (nur bei Andreas;
+  Ergebnis-Pfad und Kennzahlen am Referenz-/Testprojekt bestätigen, Checkliste in
+  docs/nach-dem-update-v26.md), Kontrollwerte des Plans zur Leistungsklasse
+  (9,2 kW → „10 kW“) widersprechen der Paketmatrix-Heizlastspalte (8,0–9,9 kW → 7 kW)
+  – Tests folgen der Steuerdatei, „Umkreisprüfung“ bei Heizreport, Stufe 2 (Räume,
+  Webhook, Bilder, Wärmepumpen-Check).

@@ -207,6 +207,9 @@
                     {% if g.heizlast_quelle %}<small class="dezent">· Quelle {{ g.heizlast_quelle }}</small>{% endif %}
                 {% else %}–{% endif %}
                 {% if g.heizlast_link %}· <a href="{{ g.heizlast_link }}" target="_blank">Heizreport-PDF</a>{% endif %}
+                {# v26 (Phase 123/124): Heizreport-Projekt + Abgleich-Hinweis (Aktionen an der Aufgabe) #}
+                {% if g.heizreport_projekt_key %}<br><small class="dezent">Heizreport-Projekt <span class="pj-mono">{{ g.heizreport_projekt_key }}</span>{{ ' · PDF abgelegt ' ~ g.heizreport_pdf_am.strftime('%d.%m.%Y') if g.heizreport_pdf_am }}</small>{% endif %}
+                {% if heizreport_je_gewerk is defined and heizreport_je_gewerk.get(g.id) and heizreport_je_gewerk[g.id].hinweis %}<div class="pj-note crit">{{ heizreport_je_gewerk[g.id].hinweis }}</div>{% endif %}
                 <details><summary class="dezent" style="cursor:pointer">bearbeiten / Upload</summary>
                     <form method="post" action="/projektierung/gewerk/{{ g.id }}/heizlast" class="pj-btnrow" data-pj-ajax>
                         <input type="text" name="heizlast_kw" size="5" placeholder="kW"
@@ -306,6 +309,8 @@
                 <span class="cnt" data-paket-cnt="{{ instanz_id }}">{{ 'alle erledigt' if erledigt_anzahl == gruppe | length else erledigt_anzahl ~ ' / ' ~ gruppe | length }}</span>
             </summary>
             {% for a in gruppe %}
+            {# v26 (Phase 123): Heizreport-Kontext je Gewerk für die Heizlast-Aufgabe #}
+            {% set heizreport = heizreport_je_gewerk.get(g.id) if heizreport_je_gewerk is defined else none %}
             {% include "projektierung/_aufgabe.html" %}
             {% endfor %}
         </details>

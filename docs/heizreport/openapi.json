@@ -1,0 +1,4404 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Heizreport öffentliche Kunden-API v2",
+    "version": "2.4.0",
+    "description": "Ein Bearer-Token pro Kunde mit allen freigegebenen Rechten auf eigene Projekte. Fest maximal 2 geschützte Zugriffe in jedem gleitenden Zeitraum von 1 Sekunde, gemeinsam über alle Endpunkte. Bei 429 mindestens Retry-After: 1 warten. Authentifizierte fachliche Fehler zählen ebenfalls. /, /health und OPTIONS sind öffentlich.\n\nJSON-Bodies maximal 64 KiB. Nur dokumentierte Felder verwenden. projectData empfohlen, projektData bleibt kompatibel.\n\nRaumbasisdaten lesen, anlegen und ändern ist ab 2.4.0 verfügbar. U-Werte schreiben, Heizkörper erfassen und Bilder hochladen sind noch nicht öffentlich implementiert. Die interne v1 gehört nicht zu dieser Schnittstelle.\n\nDiese Referenz führt keine API-Aufrufe aus. Zum manuellen Testen die Postman-Collection mit eigenem Token und Testprojekt verwenden."
+  },
+  "servers": [
+    {
+      "url": "https://heizreport.net/api/v2",
+      "description": "Produktive öffentliche API"
+    }
+  ],
+  "tags": [
+    {
+      "name": "System"
+    },
+    {
+      "name": "Projekte"
+    },
+    {
+      "name": "Räume"
+    },
+    {
+      "name": "Berechnungen"
+    },
+    {
+      "name": "Dokumente und Bilder"
+    },
+    {
+      "name": "Webhook"
+    }
+  ],
+  "security": [
+    {
+      "customerBearer": []
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "apiInfo",
+        "summary": "API-Version abrufen",
+        "tags": [
+          "System"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "API-Information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "version"
+                  ]
+                },
+                "example": {
+                  "name": "Heizreport Customer API",
+                  "version": "2.4.0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "summary": "Erreichbarkeit prüfen",
+        "tags": [
+          "System"
+        ],
+        "security": [],
+        "description": "Öffentlich. Prüft die Erreichbarkeit des API-Codes, keine vollständige Datenbank- oder Lizenzprüfung.",
+        "responses": {
+          "200": {
+            "description": "API erreichbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "api": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "api",
+                    "version",
+                    "timestamp"
+                  ]
+                },
+                "example": {
+                  "status": "ok",
+                  "api": "heizreport-customer-v2",
+                  "version": "2.4.0",
+                  "timestamp": "2026-10-01T12:00:00Z"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports": {
+      "get": {
+        "operationId": "listReports",
+        "summary": "Eigene Projekte auflisten",
+        "tags": [
+          "Projekte"
+        ],
+        "description": "Listet eigene Hauptprojekte gruppiert in projekte, leads, api und archiv. Auch bei abgelaufener Lizenz für entsperrte Kunden verfügbar.",
+        "responses": {
+          "200": {
+            "description": "Erfolgreich",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer-Token fehlt oder ist ungültig",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 401,
+                  "error": "Bearer-Token fehlt oder ist ungültig",
+                  "details": {
+                    "type": "authentication"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 429,
+                  "error": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+                  "details": {
+                    "type": "rate_limit",
+                    "limit": 2,
+                    "windowSeconds": 1,
+                    "retryAfter": 1
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Mindestens diese Anzahl Sekunden warten.",
+                "schema": {
+                  "type": "integer",
+                  "enum": [
+                    1
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Interner Serverfehler",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 500,
+                  "error": "Interner Serverfehler",
+                  "details": {
+                    "type": "server_error"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "API vorübergehend nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 503,
+                  "error": "API vorübergehend nicht verfügbar",
+                  "details": {
+                    "type": "service_unavailable"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createReport",
+        "summary": "Leeres Projekt anlegen",
+        "tags": [
+          "Projekte"
+        ],
+        "description": "Benötigt aktive Jahres- oder Bildungslizenz. HTTP 201 mit historischem JSON-status 200. Nicht blind nach Netzwerkfehlern wiederholen: kein Idempotency-Key, sonst doppelte Projekte möglich.",
+        "responses": {
+          "400": {
+            "description": "Fehlerhaftes JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 400,
+                  "error": "Fehlerhaftes JSON",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer-Token fehlt oder ist ungültig",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 401,
+                  "error": "Bearer-Token fehlt oder ist ungültig",
+                  "details": {
+                    "type": "authentication"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Erforderliche Projekt- oder Lizenzberechtigung fehlt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 403,
+                  "error": "Erforderliche Projekt- oder Lizenzberechtigung fehlt",
+                  "details": {
+                    "type": "authorization"
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request-Body größer als 64 KiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 413,
+                  "error": "Request-Body größer als 64 KiB",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type muss application/json sein",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 415,
+                  "error": "Content-Type muss application/json sein",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 422,
+                  "error": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 429,
+                  "error": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+                  "details": {
+                    "type": "rate_limit",
+                    "limit": 2,
+                    "windowSeconds": 1,
+                    "retryAfter": 1
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Mindestens diese Anzahl Sekunden warten.",
+                "schema": {
+                  "type": "integer",
+                  "enum": [
+                    1
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Interner Serverfehler",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 500,
+                  "error": "Interner Serverfehler",
+                  "details": {
+                    "type": "server_error"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "API vorübergehend nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 503,
+                  "error": "API vorübergehend nicht verfügbar",
+                  "details": {
+                    "type": "service_unavailable"
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Projekt angelegt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedReport"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "example": {}
+            }
+          }
+        }
+      },
+      "options": {
+        "operationId": "preflightReports",
+        "summary": "OPTIONS-Antwort prüfen",
+        "tags": [
+          "System"
+        ],
+        "security": [],
+        "description": "OPTIONS wird für beliebige API-Pfade mit 204 beantwortet. Dies allein erteilt keine browserübergreifende CORS-Freigabe.",
+        "responses": {
+          "204": {
+            "description": "Kein Inhalt"
+          }
+        }
+      }
+    },
+    "/reports/with-data": {
+      "post": {
+        "operationId": "createReportWithData",
+        "summary": "Projekt mit Daten anlegen",
+        "tags": [
+          "Projekte"
+        ],
+        "description": "Aktive Jahres- oder Bildungslizenz erforderlich. Vorbelegung wird vor der Anlage validiert; Anlage und Befüllung erfolgen gemeinsam. Kein Idempotency-Key.",
+        "responses": {
+          "400": {
+            "description": "Fehlerhaftes JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 400,
+                  "error": "Fehlerhaftes JSON",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer-Token fehlt oder ist ungültig",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 401,
+                  "error": "Bearer-Token fehlt oder ist ungültig",
+                  "details": {
+                    "type": "authentication"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Erforderliche Projekt- oder Lizenzberechtigung fehlt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 403,
+                  "error": "Erforderliche Projekt- oder Lizenzberechtigung fehlt",
+                  "details": {
+                    "type": "authorization"
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request-Body größer als 64 KiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 413,
+                  "error": "Request-Body größer als 64 KiB",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type muss application/json sein",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 415,
+                  "error": "Content-Type muss application/json sein",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 422,
+                  "error": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 429,
+                  "error": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+                  "details": {
+                    "type": "rate_limit",
+                    "limit": 2,
+                    "windowSeconds": 1,
+                    "retryAfter": 1
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Mindestens diese Anzahl Sekunden warten.",
+                "schema": {
+                  "type": "integer",
+                  "enum": [
+                    1
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Interner Serverfehler",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 500,
+                  "error": "Interner Serverfehler",
+                  "details": {
+                    "type": "server_error"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "API vorübergehend nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 503,
+                  "error": "API vorübergehend nicht verfügbar",
+                  "details": {
+                    "type": "service_unavailable"
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Projekt angelegt und vorbelegt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedReport"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "JSON-Objekt, maximal 65536 Bytes.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectDataEnvelope"
+              },
+              "example": {
+                "projectData": {
+                  "projektName": "API-Testprojekt",
+                  "projektPostleitzahl": "10115",
+                  "projektBewohner": 4,
+                  "projektBaujahr": 1995,
+                  "email": "api-test@example.com"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports/{projectKey}": {
+      "patch": {
+        "operationId": "updateReport",
+        "summary": "Projektdaten ändern",
+        "tags": [
+          "Projekte"
+        ],
+        "description": "Ändert ausschließlich die angegebenen freigegebenen Felder des eigenen Projekts. Fremde und nicht vorhandene Schlüssel liefern gleichermaßen 404.",
+        "responses": {
+          "200": {
+            "description": "Erfolgreich",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdatedReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Fehlerhaftes JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 400,
+                  "error": "Fehlerhaftes JSON",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer-Token fehlt oder ist ungültig",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 401,
+                  "error": "Bearer-Token fehlt oder ist ungültig",
+                  "details": {
+                    "type": "authentication"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 404,
+                  "error": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+                  "details": {
+                    "type": "not_found"
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request-Body größer als 64 KiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 413,
+                  "error": "Request-Body größer als 64 KiB",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type muss application/json sein",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 415,
+                  "error": "Content-Type muss application/json sein",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 422,
+                  "error": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 429,
+                  "error": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+                  "details": {
+                    "type": "rate_limit",
+                    "limit": 2,
+                    "windowSeconds": 1,
+                    "retryAfter": 1
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Mindestens diese Anzahl Sekunden warten.",
+                "schema": {
+                  "type": "integer",
+                  "enum": [
+                    1
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Interner Serverfehler",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 500,
+                  "error": "Interner Serverfehler",
+                  "details": {
+                    "type": "server_error"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "API vorübergehend nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 503,
+                  "error": "API vorübergehend nicht verfügbar",
+                  "details": {
+                    "type": "service_unavailable"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProjectKey"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "JSON-Objekt, maximal 65536 Bytes.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectDataEnvelope"
+              },
+              "example": {
+                "projectData": {
+                  "projektName": "API-Testprojekt",
+                  "projektPostleitzahl": "10115",
+                  "projektBewohner": 4,
+                  "projektBaujahr": 1995,
+                  "email": "api-test@example.com"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "getReport",
+        "summary": "Projektdetails lesen",
+        "tags": [
+          "Projekte"
+        ],
+        "description": "Liest freigegebene Projektdaten und Kopfwerte des eigenen Projekts. Keine internen Einstellungen, Passwörter oder Besitzerdaten. Auch bei abgelaufener Jahreslizenz für entsperrte Kunden verfügbar.",
+        "parameters": [
+          {
+            "name": "projectKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProjectKey"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Projektdetails lesen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer-Token fehlt oder ist ungültig",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 401,
+                  "error": "Bearer-Token fehlt oder ist ungültig",
+                  "details": {
+                    "type": "authentication"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 404,
+                  "error": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+                  "details": {
+                    "type": "not_found"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 422,
+                  "error": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 429,
+                  "error": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+                  "details": {
+                    "type": "rate_limit",
+                    "limit": 2,
+                    "windowSeconds": 1,
+                    "retryAfter": 1
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Mindestens diese Anzahl Sekunden warten.",
+                "schema": {
+                  "type": "integer",
+                  "enum": [
+                    1
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Interner Serverfehler",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 500,
+                  "error": "Interner Serverfehler",
+                  "details": {
+                    "type": "server_error"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "API vorübergehend nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 503,
+                  "error": "API vorübergehend nicht verfügbar",
+                  "details": {
+                    "type": "service_unavailable"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports/{projectKey}/password": {
+      "put": {
+        "operationId": "changeProjectPassword",
+        "summary": "Projektpasswort ändern",
+        "tags": [
+          "Projekte"
+        ],
+        "description": "Ändert das Passwort zum Report-Portal, nicht den API-Token. 12–256 Zeichen. Für Tests nur ein eigenes Testprojekt verwenden.",
+        "responses": {
+          "200": {
+            "description": "Erfolgreich",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Fehlerhaftes JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 400,
+                  "error": "Fehlerhaftes JSON",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer-Token fehlt oder ist ungültig",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 401,
+                  "error": "Bearer-Token fehlt oder ist ungültig",
+                  "details": {
+                    "type": "authentication"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 404,
+                  "error": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+                  "details": {
+                    "type": "not_found"
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request-Body größer als 64 KiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 413,
+                  "error": "Request-Body größer als 64 KiB",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type muss application/json sein",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 415,
+                  "error": "Content-Type muss application/json sein",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 422,
+                  "error": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 429,
+                  "error": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+                  "details": {
+                    "type": "rate_limit",
+                    "limit": 2,
+                    "windowSeconds": 1,
+                    "retryAfter": 1
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Mindestens diese Anzahl Sekunden warten.",
+                "schema": {
+                  "type": "integer",
+                  "enum": [
+                    1
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Interner Serverfehler",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 500,
+                  "error": "Interner Serverfehler",
+                  "details": {
+                    "type": "server_error"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "API vorübergehend nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 503,
+                  "error": "API vorübergehend nicht verfügbar",
+                  "details": {
+                    "type": "service_unavailable"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProjectKey"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "newPassword": {
+                    "type": "string",
+                    "minLength": 12,
+                    "maxLength": 256,
+                    "writeOnly": true
+                  }
+                },
+                "required": [
+                  "newPassword"
+                ],
+                "additionalProperties": false
+              },
+              "example": {
+                "newPassword": "NUR-EIN-BEISPIEL-123"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports/{projectKey}/pdf": {
+      "get": {
+        "operationId": "generatePdf",
+        "summary": "PDF erzeugen und Link abrufen",
+        "tags": [
+          "Dokumente und Bilder"
+        ],
+        "description": "Dieser GET-Aufruf erzeugt und speichert ein Dokument; er ist kein reiner Lesezugriff. Antwort ist JSON, keine PDF-Datei. linkToDocument und file.url enthalten vollständige URLs mit https://heizreport.net/ und können unverändert abgerufen werden. Lizenz-, Projekt- und Umkreisprüfungen wie in Pro; check benötigt zusätzlich das Wärmepumpen-Funktionsrecht. Erzeugung kann den ersten PDF-Webhook auslösen.",
+        "responses": {
+          "200": {
+            "description": "Erfolgreich",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PdfResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer-Token fehlt oder ist ungültig",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 401,
+                  "error": "Bearer-Token fehlt oder ist ungültig",
+                  "details": {
+                    "type": "authentication"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Erforderliche Projekt- oder Lizenzberechtigung fehlt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 403,
+                  "error": "Erforderliche Projekt- oder Lizenzberechtigung fehlt",
+                  "details": {
+                    "type": "authorization"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 404,
+                  "error": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+                  "details": {
+                    "type": "not_found"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 422,
+                  "error": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 429,
+                  "error": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+                  "details": {
+                    "type": "rate_limit",
+                    "limit": 2,
+                    "windowSeconds": 1,
+                    "retryAfter": 1
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Mindestens diese Anzahl Sekunden warten.",
+                "schema": {
+                  "type": "integer",
+                  "enum": [
+                    1
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Interner Serverfehler",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 500,
+                  "error": "Interner Serverfehler",
+                  "details": {
+                    "type": "server_error"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "API vorübergehend nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 503,
+                  "error": "API vorübergehend nicht verfügbar",
+                  "details": {
+                    "type": "service_unavailable"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProjectKey"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "heizreport",
+                "check"
+              ],
+              "default": "heizreport"
+            }
+          }
+        ]
+      }
+    },
+    "/reports/{projectKey}/pictures": {
+      "get": {
+        "operationId": "listPictures",
+        "summary": "Vorhandene Bilder auflisten",
+        "tags": [
+          "Dokumente und Bilder"
+        ],
+        "description": "Listet vorhandene Bilder mit signierten URLs. Kein Upload-Endpunkt. Relative URLs gegen den API-Server-Ursprung, z. B. https://heizreport.net, auflösen. Bei abgelaufenen Links die Liste neu abrufen.",
+        "responses": {
+          "200": {
+            "description": "Erfolgreich",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PicturesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer-Token fehlt oder ist ungültig",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 401,
+                  "error": "Bearer-Token fehlt oder ist ungültig",
+                  "details": {
+                    "type": "authentication"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 404,
+                  "error": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+                  "details": {
+                    "type": "not_found"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 429,
+                  "error": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+                  "details": {
+                    "type": "rate_limit",
+                    "limit": 2,
+                    "windowSeconds": 1,
+                    "retryAfter": 1
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Mindestens diese Anzahl Sekunden warten.",
+                "schema": {
+                  "type": "integer",
+                  "enum": [
+                    1
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Interner Serverfehler",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 500,
+                  "error": "Interner Serverfehler",
+                  "details": {
+                    "type": "server_error"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "API vorübergehend nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 503,
+                  "error": "API vorübergehend nicht verfügbar",
+                  "details": {
+                    "type": "service_unavailable"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProjectKey"
+            }
+          }
+        ]
+      }
+    },
+    "/reports/{projectKey}/results": {
+      "get": {
+        "operationId": "calculateResults",
+        "summary": "Berechnungsergebnisse abrufen",
+        "tags": [
+          "Berechnungen"
+        ],
+        "description": "Berechnet Ergebnisse aus vorhandenen Projektdaten. Gleiche Projekt-, Lizenz- und Umkreisprüfungen wie in Pro. Unvollständige Berechnungsdaten: 422 mit details.type=calculation_unavailable. Standardmäßig vorhandene Vorgaben nutzen. Parameter paarweise verwenden; aktuelle Namen haben Vorrang vor den jeweiligen alten Aliasnamen. Keine Räume/Heizkörper über diesen Endpunkt anlegen.",
+        "responses": {
+          "200": {
+            "description": "Erfolgreich",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer-Token fehlt oder ist ungültig",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 401,
+                  "error": "Bearer-Token fehlt oder ist ungültig",
+                  "details": {
+                    "type": "authentication"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Erforderliche Projekt- oder Lizenzberechtigung fehlt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 403,
+                  "error": "Erforderliche Projekt- oder Lizenzberechtigung fehlt",
+                  "details": {
+                    "type": "authorization"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 404,
+                  "error": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+                  "details": {
+                    "type": "not_found"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "missingData": {
+                    "value": {
+                      "status": 422,
+                      "error": "Ergebnisse sind noch nicht verfügbar",
+                      "details": {
+                        "type": "calculation_unavailable",
+                        "calculationStatus": "unavailable"
+                      }
+                    }
+                  },
+                  "validation": {
+                    "value": {
+                      "status": 422,
+                      "error": "Ungültige Systemtemperatur",
+                      "details": {
+                        "type": "validation"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 429,
+                  "error": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+                  "details": {
+                    "type": "rate_limit",
+                    "limit": 2,
+                    "windowSeconds": 1,
+                    "retryAfter": 1
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Mindestens diese Anzahl Sekunden warten.",
+                "schema": {
+                  "type": "integer",
+                  "enum": [
+                    1
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Interner Serverfehler",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 500,
+                  "error": "Interner Serverfehler",
+                  "details": {
+                    "type": "server_error"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "API vorübergehend nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 503,
+                  "error": "API vorübergehend nicht verfügbar",
+                  "details": {
+                    "type": "service_unavailable"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProjectKey"
+            }
+          },
+          {
+            "name": "flowTemperature",
+            "in": "query",
+            "description": "Vorlauftemperatur in °C. Mit spread gemeinsam angeben. Nur für diese Berechnung, kein dauerhaftes Speichern.",
+            "schema": {
+              "type": "number",
+              "minimum": 25,
+              "maximum": 95
+            }
+          },
+          {
+            "name": "spread",
+            "in": "query",
+            "description": "Spreizung in K, größer 0 und kleiner als flowTemperature. Gemeinsam mit flowTemperature angeben.",
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          {
+            "name": "vorlaufT",
+            "in": "query",
+            "description": "Bisheriger Alias für flowTemperature. Neue Integrationen verwenden flowTemperature.",
+            "schema": {
+              "type": "number",
+              "minimum": 25,
+              "maximum": 95
+            }
+          },
+          {
+            "name": "spreizung",
+            "in": "query",
+            "description": "Bisheriger Alias für spread. Neue Integrationen verwenden spread.",
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        ]
+      }
+    },
+    "/reports/{projectKey}/rooms": {
+      "get": {
+        "operationId": "listRooms",
+        "summary": "Räume auflisten",
+        "tags": [
+          "Räume"
+        ],
+        "description": "Nur für eigene Projekte. Raum-ID wird zusätzlich an Projekt und Kunde gebunden. Datenerfassung und Lesen bleiben bei abgelaufener Jahreslizenz für entsperrte Kunden möglich. Das feste kundenweite Limit von zwei Zugriffen pro Sekunde gilt unverändert.",
+        "parameters": [
+          {
+            "name": "projectKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProjectKey"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Räume auflisten",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer-Token fehlt oder ist ungültig",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 401,
+                  "error": "Bearer-Token fehlt oder ist ungültig",
+                  "details": {
+                    "type": "authentication"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 404,
+                  "error": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+                  "details": {
+                    "type": "not_found"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 422,
+                  "error": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 429,
+                  "error": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+                  "details": {
+                    "type": "rate_limit",
+                    "limit": 2,
+                    "windowSeconds": 1,
+                    "retryAfter": 1
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Mindestens diese Anzahl Sekunden warten.",
+                "schema": {
+                  "type": "integer",
+                  "enum": [
+                    1
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Interner Serverfehler",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 500,
+                  "error": "Interner Serverfehler",
+                  "details": {
+                    "type": "server_error"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "API vorübergehend nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 503,
+                  "error": "API vorübergehend nicht verfügbar",
+                  "details": {
+                    "type": "service_unavailable"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createRoom",
+        "summary": "Raum anlegen",
+        "tags": [
+          "Räume"
+        ],
+        "description": "Nur für eigene Projekte. Raum-ID wird zusätzlich an Projekt und Kunde gebunden. Datenerfassung und Lesen bleiben bei abgelaufener Jahreslizenz für entsperrte Kunden möglich. Das feste kundenweite Limit von zwei Zugriffen pro Sekunde gilt unverändert. Bei Anlage ist raumBezeichnung erforderlich; ohne Angabe gelten Geschoss 1, Temperaturkennzahl 5 und Höhe 2.5 m. Fläche bleibt leer. Baujahr wird aus dem Projekt übernommen. Anlage und Aktivitäts-/Statusänderung erfolgen gemeinsam in einer Transaktion. Projektstatus wird auf 2 gesetzt, abgeschlossene/archivierte Status 4/5 bleiben erhalten. Kein Idempotency-Key: nach Timeout zuerst Raumliste prüfen. Nur Raumbasisdaten; dadurch allein ist noch keine vollständige Heizlastberechnung möglich.",
+        "parameters": [
+          {
+            "name": "projectKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProjectKey"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Raum anlegen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer-Token fehlt oder ist ungültig",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 401,
+                  "error": "Bearer-Token fehlt oder ist ungültig",
+                  "details": {
+                    "type": "authentication"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 404,
+                  "error": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+                  "details": {
+                    "type": "not_found"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 422,
+                  "error": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 429,
+                  "error": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+                  "details": {
+                    "type": "rate_limit",
+                    "limit": 2,
+                    "windowSeconds": 1,
+                    "retryAfter": 1
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Mindestens diese Anzahl Sekunden warten.",
+                "schema": {
+                  "type": "integer",
+                  "enum": [
+                    1
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Interner Serverfehler",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 500,
+                  "error": "Interner Serverfehler",
+                  "details": {
+                    "type": "server_error"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "API vorübergehend nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 503,
+                  "error": "API vorübergehend nicht verfügbar",
+                  "details": {
+                    "type": "service_unavailable"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Fehlerhaftes JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 400,
+                  "error": "Fehlerhaftes JSON",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request-Body größer als 64 KiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 413,
+                  "error": "Request-Body größer als 64 KiB",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type muss application/json sein",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 415,
+                  "error": "Content-Type muss application/json sein",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Genau ein roomData-Objekt; JSON maximal 64 KiB.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomCreateEnvelope"
+              },
+              "example": {
+                "roomData": {
+                  "raumBezeichnung": "Wohnzimmer",
+                  "raumEtage": 1,
+                  "raumFlaeche": 25.5,
+                  "raumHoehe": 2.5,
+                  "raumTemperatur": 20,
+                  "raumNotiz": "Erfasst über die API"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports/{projectKey}/rooms/{roomId}": {
+      "get": {
+        "operationId": "getRoom",
+        "summary": "Einzelnen Raum lesen",
+        "tags": [
+          "Räume"
+        ],
+        "description": "Nur für eigene Projekte. Raum-ID wird zusätzlich an Projekt und Kunde gebunden. Datenerfassung und Lesen bleiben bei abgelaufener Jahreslizenz für entsperrte Kunden möglich. Das feste kundenweite Limit von zwei Zugriffen pro Sekunde gilt unverändert.",
+        "parameters": [
+          {
+            "name": "projectKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProjectKey"
+            }
+          },
+          {
+            "name": "roomId",
+            "in": "path",
+            "required": true,
+            "description": "ID aus room.id übernehmen. Muss zum angegebenen eigenen Projekt gehören.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483647
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Einzelnen Raum lesen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer-Token fehlt oder ist ungültig",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 401,
+                  "error": "Bearer-Token fehlt oder ist ungültig",
+                  "details": {
+                    "type": "authentication"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 404,
+                  "error": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+                  "details": {
+                    "type": "not_found"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 422,
+                  "error": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 429,
+                  "error": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+                  "details": {
+                    "type": "rate_limit",
+                    "limit": 2,
+                    "windowSeconds": 1,
+                    "retryAfter": 1
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Mindestens diese Anzahl Sekunden warten.",
+                "schema": {
+                  "type": "integer",
+                  "enum": [
+                    1
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Interner Serverfehler",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 500,
+                  "error": "Interner Serverfehler",
+                  "details": {
+                    "type": "server_error"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "API vorübergehend nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 503,
+                  "error": "API vorübergehend nicht verfügbar",
+                  "details": {
+                    "type": "service_unavailable"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateRoom",
+        "summary": "Raumbasisdaten ändern",
+        "tags": [
+          "Räume"
+        ],
+        "description": "Nur für eigene Projekte. Raum-ID wird zusätzlich an Projekt und Kunde gebunden. Datenerfassung und Lesen bleiben bei abgelaufener Jahreslizenz für entsperrte Kunden möglich. Das feste kundenweite Limit von zwei Zugriffen pro Sekunde gilt unverändert. Nur die übermittelten Felder ändern. Weitere Raumdaten, Heizflächen und individuelle U-Werte bleiben erhalten. Keine Löschfunktion. Die Projektaktivität wird aktualisiert.",
+        "parameters": [
+          {
+            "name": "projectKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProjectKey"
+            }
+          },
+          {
+            "name": "roomId",
+            "in": "path",
+            "required": true,
+            "description": "ID aus room.id übernehmen. Muss zum angegebenen eigenen Projekt gehören.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483647
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Raumbasisdaten ändern",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bearer-Token fehlt oder ist ungültig",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 401,
+                  "error": "Bearer-Token fehlt oder ist ungültig",
+                  "details": {
+                    "type": "authentication"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 404,
+                  "error": "Projekt nicht gefunden (auch bei fremdem Besitzer)",
+                  "details": {
+                    "type": "not_found"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 422,
+                  "error": "Ungültige Eingabe oder Berechnung noch nicht verfügbar",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 429,
+                  "error": "Maximal zwei Zugriffe pro Sekunde und Kunde",
+                  "details": {
+                    "type": "rate_limit",
+                    "limit": 2,
+                    "windowSeconds": 1,
+                    "retryAfter": 1
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Mindestens diese Anzahl Sekunden warten.",
+                "schema": {
+                  "type": "integer",
+                  "enum": [
+                    1
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Interner Serverfehler",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 500,
+                  "error": "Interner Serverfehler",
+                  "details": {
+                    "type": "server_error"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "API vorübergehend nicht verfügbar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 503,
+                  "error": "API vorübergehend nicht verfügbar",
+                  "details": {
+                    "type": "service_unavailable"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Fehlerhaftes JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 400,
+                  "error": "Fehlerhaftes JSON",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request-Body größer als 64 KiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 413,
+                  "error": "Request-Body größer als 64 KiB",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type muss application/json sein",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "status": 415,
+                  "error": "Content-Type muss application/json sein",
+                  "details": {
+                    "type": "validation"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "Genau ein roomData-Objekt; JSON maximal 64 KiB.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoomDataEnvelope"
+              },
+              "example": {
+                "roomData": {
+                  "raumBezeichnung": "Wohnzimmer",
+                  "raumEtage": 1,
+                  "raumFlaeche": 25.5,
+                  "raumHoehe": 2.5,
+                  "raumTemperatur": 20,
+                  "raumNotiz": "Erfasst über die API"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "customerBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Vorhandenen API-Token aus Pro verwenden. Keine Scopes; ein Token pro Kunde. Nie im Query oder Body senden."
+      }
+    },
+    "schemas": {
+      "ProjectData": {
+        "type": "object",
+        "properties": {
+          "projektName": {
+            "description": "Projektname. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 190
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projektPostleitzahl": {
+            "type": "string",
+            "description": "Objektstandort. Muss in den Heizreport-Klimadaten existieren; darf nicht geleert werden.",
+            "pattern": "^[0-9]{4,5}$",
+            "example": "10115"
+          },
+          "projektArtHeizung": {
+            "description": "Kennzahl der Heizungsart; Zahl oder numerische Zeichenkette. Leer/null löscht den optionalen Wert.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5,
+                  6
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  ""
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projektAlterHeizung": {
+            "description": "Kennzahl der Altersklasse der Heizung; Zahl oder numerische Zeichenkette. Leer/null löscht den optionalen Wert.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  1,
+                  2,
+                  3
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "1",
+                  "2",
+                  "3",
+                  ""
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projektBewohner": {
+            "description": "Anzahl der Bewohner. Bereich 0–10000; ganzzahlig. Numerische Zeichenketten (auch Dezimalkomma) werden akzeptiert und geprüft. Leer/null löscht den Wert.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              },
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projektJahresverbrauch": {
+            "description": "Jahresverbrauch passend zur gewählten Heizungsart. Bereich 0–1000000000. Numerische Zeichenketten (auch Dezimalkomma) werden akzeptiert und geprüft. Leer/null löscht den Wert.",
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000000000
+              },
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projektBaujahr": {
+            "description": "Baujahr. Bereich 1000–2100; ganzzahlig. Numerische Zeichenketten (auch Dezimalkomma) werden akzeptiert und geprüft. Leer/null löscht den Wert.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1000,
+                "maximum": 2100
+              },
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projektTrinkwasser": {
+            "description": "Kennzahl der Trinkwasserbereitung; Zahl oder numerische Zeichenkette. Leer/null löscht den optionalen Wert.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  1,
+                  2,
+                  3
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "1",
+                  "2",
+                  "3",
+                  ""
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projektWaermeerzeugerSolarStatus": {
+            "description": "Solarer Wärmeerzeuger vorhanden. true/on/1 wird intern on; false/off/0/leer/null wird intern leer.",
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "on",
+                  "off",
+                  "0",
+                  "1",
+                  ""
+                ]
+              },
+              {
+                "type": "integer",
+                "enum": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projektWaermeerzeugerSolarArt": {
+            "description": "Kennzahl der Solarart; Zahl oder numerische Zeichenkette. Leer/null löscht den optionalen Wert.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  1,
+                  2
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "1",
+                  "2",
+                  ""
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projektKollektorflaecheSolar": {
+            "description": "Kollektorfläche in m². Bereich 0–1000000. Numerische Zeichenketten (auch Dezimalkomma) werden akzeptiert und geprüft. Leer/null löscht den Wert.",
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000000
+              },
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projektWaermeerzeugerHolzStatus": {
+            "description": "Holz-Wärmeerzeuger vorhanden. true/on/1 wird intern on; false/off/0/leer/null wird intern leer.",
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "on",
+                  "off",
+                  "0",
+                  "1",
+                  ""
+                ]
+              },
+              {
+                "type": "integer",
+                "enum": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projektJahresverbrauchHolz": {
+            "description": "Holzverbrauch passend zur gewählten Holzart. Bereich 0–1000000. Numerische Zeichenketten (auch Dezimalkomma) werden akzeptiert und geprüft. Leer/null löscht den Wert.",
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000000
+              },
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projektWaermeerzeugerHolzArt": {
+            "description": "Kennzahl der Holzart; Zahl oder numerische Zeichenkette. Leer/null löscht den optionalen Wert.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  1500,
+                  1550,
+                  1800,
+                  2000,
+                  2200,
+                  2201
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "1500",
+                  "1550",
+                  "1800",
+                  "2000",
+                  "2200",
+                  "2201",
+                  ""
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "email": {
+            "description": "E-Mail-Adresse des Kontakts; leer zum Löschen. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 190
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "anrede": {
+            "description": "Anrede des Kontakts. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "vorname": {
+            "description": "Vorname des Kontakts. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "description": "Nachname des Kontakts. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "strasse": {
+            "description": "Straße des Kontakts. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hausnummer": {
+            "description": "Hausnummer des Kontakts. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plz": {
+            "description": "Postleitzahl des Kontakts; 4–5 Ziffern oder leer/null zum Löschen. Als Zeichenkette senden, damit führende Nullen erhalten bleiben.",
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^([0-9]{4,5})?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ort": {
+            "description": "Ort des Kontakts. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "telefon": {
+            "description": "Telefonnummer des Kontakts. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bemerkungen": {
+            "description": "Bemerkungen zum Projekt. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10000
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "minProperties": 1,
+        "description": "Freigegebene Schreibfelder. Nur übermittelte Felder werden geändert; unbekannte Felder liefern 422. Optionale Werte können mit leer/null gelöscht werden. Zusätzliche fachliche Regeln stehen in den Feldbeschreibungen."
+      },
+      "ProjectDataResponse": {
+        "type": "object",
+        "properties": {
+          "projektName": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Projektname. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen."
+          },
+          "projektPostleitzahl": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Objektstandort. Muss in den Heizreport-Klimadaten existieren; darf nicht geleert werden."
+          },
+          "projektArtHeizung": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Kennzahl der Heizungsart; Zahl oder numerische Zeichenkette. Leer/null löscht den optionalen Wert."
+          },
+          "projektAlterHeizung": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Kennzahl der Altersklasse der Heizung; Zahl oder numerische Zeichenkette. Leer/null löscht den optionalen Wert."
+          },
+          "projektBewohner": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Anzahl der Bewohner. Bereich 0–10000; ganzzahlig. Numerische Zeichenketten (auch Dezimalkomma) werden akzeptiert und geprüft. Leer/null löscht den Wert."
+          },
+          "projektJahresverbrauch": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Jahresverbrauch passend zur gewählten Heizungsart. Bereich 0–1000000000. Numerische Zeichenketten (auch Dezimalkomma) werden akzeptiert und geprüft. Leer/null löscht den Wert."
+          },
+          "projektBaujahr": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Baujahr. Bereich 1000–2100; ganzzahlig. Numerische Zeichenketten (auch Dezimalkomma) werden akzeptiert und geprüft. Leer/null löscht den Wert."
+          },
+          "projektTrinkwasser": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Kennzahl der Trinkwasserbereitung; Zahl oder numerische Zeichenkette. Leer/null löscht den optionalen Wert."
+          },
+          "projektWaermeerzeugerSolarStatus": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Solarer Wärmeerzeuger vorhanden. true/on/1 wird intern on; false/off/0/leer/null wird intern leer."
+          },
+          "projektWaermeerzeugerSolarArt": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Kennzahl der Solarart; Zahl oder numerische Zeichenkette. Leer/null löscht den optionalen Wert."
+          },
+          "projektKollektorflaecheSolar": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Kollektorfläche in m². Bereich 0–1000000. Numerische Zeichenketten (auch Dezimalkomma) werden akzeptiert und geprüft. Leer/null löscht den Wert."
+          },
+          "projektWaermeerzeugerHolzStatus": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Holz-Wärmeerzeuger vorhanden. true/on/1 wird intern on; false/off/0/leer/null wird intern leer."
+          },
+          "projektJahresverbrauchHolz": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Holzverbrauch passend zur gewählten Holzart. Bereich 0–1000000. Numerische Zeichenketten (auch Dezimalkomma) werden akzeptiert und geprüft. Leer/null löscht den Wert."
+          },
+          "projektWaermeerzeugerHolzArt": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Kennzahl der Holzart; Zahl oder numerische Zeichenkette. Leer/null löscht den optionalen Wert."
+          },
+          "email": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "E-Mail-Adresse des Kontakts; leer zum Löschen. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen."
+          },
+          "anrede": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Anrede des Kontakts. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen."
+          },
+          "vorname": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Vorname des Kontakts. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen."
+          },
+          "name": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Nachname des Kontakts. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen."
+          },
+          "strasse": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Straße des Kontakts. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen."
+          },
+          "hausnummer": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Hausnummer des Kontakts. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen."
+          },
+          "plz": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Postleitzahl des Kontakts; 4–5 Ziffern oder leer/null zum Löschen. Als Zeichenkette senden, damit führende Nullen erhalten bleiben."
+          },
+          "ort": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Ort des Kontakts. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen."
+          },
+          "telefon": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Telefonnummer des Kontakts. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen."
+          },
+          "bemerkungen": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Bemerkungen zum Projekt. Zeichenketten empfohlen; einfache Zahlen und null werden zu Text normalisiert. Kein NUL-Zeichen."
+          }
+        },
+        "description": "Aus der Datenbank gelesene Projektfelder; nicht jedes Feld muss vorhanden sein. Meist als Zeichenkette geliefert."
+      },
+      "ProjectDataEnvelope": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "projectData": {
+                "$ref": "#/components/schemas/ProjectData"
+              }
+            },
+            "required": [
+              "projectData"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "projektData": {
+                "$ref": "#/components/schemas/ProjectData"
+              }
+            },
+            "required": [
+              "projektData"
+            ],
+            "additionalProperties": false
+          }
+        ],
+        "description": "projectData ist der empfohlene Name, projektData der weiterhin unterstützte bisherige Name. Beide dürfen nie gemeinsam vorkommen."
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "description": "HTTP-Statuscode"
+          },
+          "error": {
+            "type": "string",
+            "description": "Fehlermeldung"
+          },
+          "details": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "description": "Fehlerkategorie"
+              },
+              "field": {
+                "type": "string",
+                "description": "Betroffenes Feld, falls vorhanden"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "windowSeconds": {
+                "type": "integer"
+              },
+              "retryAfter": {
+                "type": "integer"
+              },
+              "calculationStatus": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "status",
+          "error",
+          "details"
+        ]
+      },
+      "ProjectKey": {
+        "type": "string",
+        "description": "Neun Buchstaben. Neue Schlüssel werden mit Kleinbuchstaben erzeugt; die Route akzeptiert auch Großbuchstaben. Schlüssel exakt aus der Antwort übernehmen.",
+        "pattern": "^[A-Za-z]{9}$",
+        "example": "abcdefghi"
+      },
+      "ProjectHeader": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/ProjectKey"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "link": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key"
+        ]
+      },
+      "CreatedReport": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "enum": [
+              200
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "createReport",
+              "createReportWithData"
+            ]
+          },
+          "projektHeader": {
+            "$ref": "#/components/schemas/ProjectHeader"
+          },
+          "projektData": {
+            "$ref": "#/components/schemas/ProjectDataResponse"
+          }
+        },
+        "required": [
+          "status",
+          "action",
+          "projektHeader",
+          "projektData"
+        ],
+        "description": "HTTP-Status ist 201, das historische JSON-Feld status bleibt 200. Den Schlüssel aus projektHeader.key übernehmen."
+      },
+      "UpdatedReport": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "enum": [
+              200
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "editReportData"
+            ]
+          },
+          "projektHeader": {
+            "$ref": "#/components/schemas/ProjectHeader"
+          },
+          "projektData": {
+            "$ref": "#/components/schemas/ProjectDataResponse"
+          }
+        },
+        "required": [
+          "status",
+          "action",
+          "projektHeader",
+          "projektData"
+        ]
+      },
+      "PasswordResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "enum": [
+              200
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "changePassword"
+            ]
+          },
+          "projektHeader": {
+            "$ref": "#/components/schemas/ProjectHeader"
+          }
+        },
+        "required": [
+          "status",
+          "action",
+          "projektHeader"
+        ]
+      },
+      "ReportListEntry": {
+        "type": "object",
+        "properties": {
+          "projektKey": {
+            "$ref": "#/components/schemas/ProjectKey"
+          },
+          "projektTime": {
+            "type": "integer",
+            "description": "Erstellungszeit als Unix-Zeit in Sekunden"
+          },
+          "projektEmail": {
+            "type": "string"
+          },
+          "projektName": {
+            "type": "string"
+          },
+          "projektStatus": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "projektKey",
+          "projektTime",
+          "projektEmail",
+          "projektName",
+          "projektStatus"
+        ]
+      },
+      "ReportList": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "enum": [
+              200
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "getReports"
+            ]
+          },
+          "projekte": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportListEntry"
+            }
+          },
+          "leads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportListEntry"
+            }
+          },
+          "api": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportListEntry"
+            }
+          },
+          "archiv": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportListEntry"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "action",
+          "projekte",
+          "leads",
+          "api",
+          "archiv"
+        ],
+        "description": "Nur eigene Hauptprojekte; nach Erstellungszeit absteigend. Archivstatus 5, Typ 1 Projekte, Typ 2 Leads, sonst API. Keine Paginierung."
+      },
+      "PicturesResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "enum": [
+              200
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "getPictures"
+            ]
+          },
+          "pictures": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "url": {
+                  "type": "string",
+                  "description": "Signierter, zeitlich begrenzter Link; kann relativ zum API-Server-Ursprung sein. Unverändert verwenden und nicht veröffentlichen."
+                },
+                "type": {
+                  "type": "string",
+                  "description": "Bildtyp"
+                },
+                "roomName": {
+                  "type": "string",
+                  "description": "Raumbezeichnung; kann leer sein"
+                }
+              },
+              "required": [
+                "id",
+                "url",
+                "type",
+                "roomName"
+              ]
+            }
+          }
+        },
+        "required": [
+          "status",
+          "action",
+          "pictures"
+        ]
+      },
+      "DocumentFile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "description": "Bytes"
+          },
+          "sizeLabel": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "integer",
+            "description": "Unix-Zeit in Sekunden"
+          },
+          "createdLabel": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "type": {
+            "type": "integer",
+            "description": "Interne Dokumenttyp-Kennzahl"
+          },
+          "protected": {
+            "type": "boolean"
+          },
+          "protectedLabel": {
+            "type": "string"
+          },
+          "signatures": {
+            "type": "object",
+            "properties": {
+              "company": {
+                "type": "string"
+              },
+              "customer": {
+                "type": "string"
+              },
+              "stamp": {
+                "type": "string"
+              }
+            }
+          },
+          "url": {
+            "type": "string",
+            "description": "Signierter Downloadlink, absolut oder relativ zum API-Server-Ursprung"
+          },
+          "viewerUrl": {
+            "type": "string",
+            "description": "Signierter Viewer-Link, ggf. leer"
+          },
+          "previewUrl": {
+            "type": "string"
+          },
+          "projectKey": {
+            "$ref": "#/components/schemas/ProjectKey"
+          },
+          "temporary": {
+            "type": "boolean"
+          }
+        },
+        "description": "Dateimetadaten; verfügbare Felder unterscheiden sich zwischen gespeicherten und temporären Dokumenten. Links unverändert nutzen, nicht als dauerhafte URLs behandeln."
+      },
+      "PdfResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "enum": [
+              200
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "getPdf"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "heizreport",
+              "check"
+            ]
+          },
+          "projektKey": {
+            "$ref": "#/components/schemas/ProjectKey"
+          },
+          "linkToDocument": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "file": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentFile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "action",
+          "type",
+          "projektKey",
+          "linkToDocument",
+          "file"
+        ]
+      },
+      "FloorHeatingRoom": {
+        "type": "object",
+        "properties": {
+          "surfaceId": {
+            "type": "string"
+          },
+          "roomName": {
+            "type": "string"
+          },
+          "floorLabel": {
+            "type": "string"
+          },
+          "heatingLoad": {
+            "type": "number",
+            "description": "W"
+          },
+          "spread": {
+            "type": "integer",
+            "description": "K"
+          },
+          "flowRate": {
+            "type": "number",
+            "description": "l/h"
+          },
+          "flowLpm": {
+            "type": "number",
+            "description": "l/min"
+          },
+          "setting": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "number",
+                "description": "Einstellwert des Heizkreises in l/min"
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "l/min"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "unit"
+            ]
+          }
+        },
+        "required": [
+          "surfaceId",
+          "roomName",
+          "floorLabel",
+          "heatingLoad",
+          "spread",
+          "flowRate",
+          "flowLpm",
+          "setting"
+        ]
+      },
+      "FloorHeatingBalance": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "spread": {
+                  "type": "integer",
+                  "description": "K"
+                },
+                "flowRateSum": {
+                  "type": "number",
+                  "description": "l/h"
+                },
+                "flowRateUnit": {
+                  "type": "string",
+                  "enum": [
+                    "l/h"
+                  ]
+                },
+                "rooms": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FloorHeatingRoom"
+                  }
+                }
+              },
+              "required": [
+                "spread",
+                "flowRateSum",
+                "flowRateUnit",
+                "rooms"
+              ]
+            }
+          }
+        },
+        "required": [
+          "groups"
+        ]
+      },
+      "ResultsResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "enum": [
+              200
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "getResults"
+            ]
+          },
+          "project": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "$ref": "#/components/schemas/ProjectKey"
+              }
+            },
+            "required": [
+              "key"
+            ]
+          },
+          "results": {
+            "type": "object",
+            "properties": {
+              "available": {
+                "type": "boolean"
+              },
+              "status": {
+                "description": "Berechnungsstatus. Die Detailstruktur stammt aus dem Rechenkern und hängt von den vorhandenen Projektdaten ab; zusätzliche Detailfelder sind möglich."
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "api-v2-core"
+                ]
+              },
+              "calculatedAt": {
+                "description": "Berechnungszeitpunkt. Die Detailstruktur stammt aus dem Rechenkern und hängt von den vorhandenen Projektdaten ab; zusätzliche Detailfelder sind möglich."
+              },
+              "warnings": {
+                "description": "Berechnungshinweise. Die Detailstruktur stammt aus dem Rechenkern und hängt von den vorhandenen Projektdaten ab; zusätzliche Detailfelder sind möglich."
+              },
+              "header": {
+                "description": "Kopfdaten. Die Detailstruktur stammt aus dem Rechenkern und hängt von den vorhandenen Projektdaten ab; zusätzliche Detailfelder sind möglich."
+              },
+              "summary": {
+                "description": "Zusammenfassung. Die Detailstruktur stammt aus dem Rechenkern und hängt von den vorhandenen Projektdaten ab; zusätzliche Detailfelder sind möglich."
+              },
+              "vdz": {
+                "description": "VDZ-Daten. Die Detailstruktur stammt aus dem Rechenkern und hängt von den vorhandenen Projektdaten ab; zusätzliche Detailfelder sind möglich."
+              },
+              "roomHeatLoads": {
+                "description": "Raumheizlasten. Die Detailstruktur stammt aus dem Rechenkern und hängt von den vorhandenen Projektdaten ab; zusätzliche Detailfelder sind möglich."
+              },
+              "heatingSurfaceTemperatureColumns": {
+                "description": "Temperaturspalten der Heizflächen. Die Detailstruktur stammt aus dem Rechenkern und hängt von den vorhandenen Projektdaten ab; zusätzliche Detailfelder sind möglich."
+              },
+              "radiators": {
+                "description": "Heizkörper-Ergebnisse. Die Detailstruktur stammt aus dem Rechenkern und hängt von den vorhandenen Projektdaten ab; zusätzliche Detailfelder sind möglich."
+              },
+              "hydraulicBalance": {
+                "description": "Hydraulischer Abgleich. Die Detailstruktur stammt aus dem Rechenkern und hängt von den vorhandenen Projektdaten ab; zusätzliche Detailfelder sind möglich."
+              },
+              "heatpump": {
+                "description": "Wärmepumpen-Ergebnisse. Die Detailstruktur stammt aus dem Rechenkern und hängt von den vorhandenen Projektdaten ab; zusätzliche Detailfelder sind möglich."
+              },
+              "exchange": {
+                "description": "Austausch-Empfehlungen. Die Detailstruktur stammt aus dem Rechenkern und hängt von den vorhandenen Projektdaten ab; zusätzliche Detailfelder sind möglich."
+              },
+              "floorHeatingBalance": {
+                "$ref": "#/components/schemas/FloorHeatingBalance"
+              }
+            }
+          },
+          "projekt": {
+            "type": "object",
+            "properties": {
+              "abgleichFBH": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "spreizung": {
+                      "type": "integer",
+                      "description": "K"
+                    },
+                    "summeVolumenstrom": {
+                      "type": "number",
+                      "description": "l/h"
+                    },
+                    "raeume": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "raumBezeichnung": {
+                            "type": "string"
+                          },
+                          "heizlast": {
+                            "type": "number",
+                            "description": "W"
+                          },
+                          "durchfluss": {
+                            "type": "number",
+                            "description": "l/min, bisheriger Einstellwert"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "status",
+          "action",
+          "project",
+          "results",
+          "projekt"
+        ],
+        "description": "Bei nicht verfügbaren Berechnungen stattdessen HTTP 422. Für Ergebnisse außerhalb der explizit beschriebenen FBH-Struktur keine unbekannten Felder oder Einheiten erfinden."
+      },
+      "Webhook": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "webhookheizreport",
+              "webhookcheck"
+            ]
+          },
+          "eventType": {
+            "type": "string",
+            "enum": [
+              "pdf.generated"
+            ]
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "authenticate": {
+            "type": "string",
+            "description": "Separater in Pro eingestellter Webhook-Authentifizierungswert; kein API-Token"
+          },
+          "projektKey": {
+            "$ref": "#/components/schemas/ProjectKey"
+          },
+          "projectKey": {
+            "$ref": "#/components/schemas/ProjectKey"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "document": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "heizreport",
+                  "heatpump-check"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "size": {
+                "type": "integer"
+              },
+              "url": {
+                "type": "string"
+              },
+              "viewerUrl": {
+                "type": "string"
+              },
+              "temporary": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "required": [
+          "event",
+          "eventType",
+          "eventId",
+          "authenticate",
+          "projektKey",
+          "projectKey",
+          "generatedAt",
+          "document"
+        ]
+      },
+      "ReportDetail": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "enum": [
+              200
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "getReport"
+            ]
+          },
+          "projektHeader": {
+            "$ref": "#/components/schemas/ProjectHeader"
+          },
+          "projektData": {
+            "$ref": "#/components/schemas/ProjectDataResponse"
+          }
+        },
+        "required": [
+          "status",
+          "action",
+          "projektHeader",
+          "projektData"
+        ]
+      },
+      "RoomData": {
+        "type": "object",
+        "properties": {
+          "raumBezeichnung": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "Raumname; nach Trimmen nicht leer. Bei Anlage erforderlich. Kein NUL-Zeichen.",
+            "example": "Wohnzimmer"
+          },
+          "raumEtage": {
+            "description": "Geschoss-ID für Ein- und Ausgabe: 0 = Keller (KG), 1 = Erdgeschoss (EG), 2 = 1. Obergeschoss (1. OG), 3 = 2. Obergeschoss (2. OG), 4 = 3. Obergeschoss (3. OG), 5 = 4. Obergeschoss (4. OG), 6 = 5. Obergeschoss (5. OG), 7 = Dachgeschoss (DG). Standard bei Anlage: 1. Antworten enthalten die ID als Zeichenkette sowie raumEtageBezeichnung und raumEtageKuerzel.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 7
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "0",
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  "7"
+                ]
+              }
+            ],
+            "example": 1
+          },
+          "raumFlaeche": {
+            "description": "Raumfläche in m², größer 0 bis 100000. Numerische Zeichenketten auch mit Dezimalkomma; maximal 32 Zeichen. Leer/null löscht den Wert. Bei Anlage ohne Angabe leer.",
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 100000
+              },
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "example": 25.5
+          },
+          "raumHoehe": {
+            "description": "Raumhöhe in m, größer 0 bis 100. Numerische Zeichenketten auch mit Dezimalkomma; maximal 32 Zeichen. Leer/null löscht den Wert. Standard bei Anlage 2.5.",
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 100
+              },
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "example": 2.5
+          },
+          "raumTemperatur": {
+            "description": "Raumtemperatur in °C: erlaubt sind 7 sowie 16 bis 26 in ganzen Grad. Standard bei Anlage: 20 °C. Die API rechnet intern in die Datenbank-ID um; keine Temperatur-ID senden.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  7,
+                  16,
+                  17,
+                  18,
+                  19,
+                  20,
+                  21,
+                  22,
+                  23,
+                  24,
+                  25,
+                  26
+                ]
+              },
+              {
+                "type": "string",
+                "maxLength": 32
+              }
+            ],
+            "example": 20
+          },
+          "raumNotiz": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "Raumnotiz; leer löscht sie. Kein NUL-Zeichen. Standard bei Anlage leer.",
+            "example": "Erfasst über die Kunden-API"
+          }
+        },
+        "additionalProperties": false,
+        "minProperties": 1,
+        "description": "Nur freigegebene Raumbasisdaten. PATCH ändert ausschließlich gesendete Felder. Keine Raum-/Projekt-ID, Baujahr, U-Werte, Heizflächen oder internen Datenfelder schreiben."
+      },
+      "RoomCreateData": {
+        "type": "object",
+        "properties": {
+          "raumBezeichnung": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "Raumname; nach Trimmen nicht leer. Bei Anlage erforderlich. Kein NUL-Zeichen.",
+            "example": "Wohnzimmer"
+          },
+          "raumEtage": {
+            "description": "Geschoss-ID für Ein- und Ausgabe: 0 = Keller (KG), 1 = Erdgeschoss (EG), 2 = 1. Obergeschoss (1. OG), 3 = 2. Obergeschoss (2. OG), 4 = 3. Obergeschoss (3. OG), 5 = 4. Obergeschoss (4. OG), 6 = 5. Obergeschoss (5. OG), 7 = Dachgeschoss (DG). Standard bei Anlage: 1. Antworten enthalten die ID als Zeichenkette sowie raumEtageBezeichnung und raumEtageKuerzel.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 7
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "0",
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6",
+                  "7"
+                ]
+              }
+            ],
+            "example": 1
+          },
+          "raumFlaeche": {
+            "description": "Raumfläche in m², größer 0 bis 100000. Numerische Zeichenketten auch mit Dezimalkomma; maximal 32 Zeichen. Leer/null löscht den Wert. Bei Anlage ohne Angabe leer.",
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 100000
+              },
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "example": 25.5
+          },
+          "raumHoehe": {
+            "description": "Raumhöhe in m, größer 0 bis 100. Numerische Zeichenketten auch mit Dezimalkomma; maximal 32 Zeichen. Leer/null löscht den Wert. Standard bei Anlage 2.5.",
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 100
+              },
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "example": 2.5
+          },
+          "raumTemperatur": {
+            "description": "Raumtemperatur in °C: erlaubt sind 7 sowie 16 bis 26 in ganzen Grad. Standard bei Anlage: 20 °C. Die API rechnet intern in die Datenbank-ID um; keine Temperatur-ID senden.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  7,
+                  16,
+                  17,
+                  18,
+                  19,
+                  20,
+                  21,
+                  22,
+                  23,
+                  24,
+                  25,
+                  26
+                ]
+              },
+              {
+                "type": "string",
+                "maxLength": 32
+              }
+            ],
+            "example": 20
+          },
+          "raumNotiz": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "Raumnotiz; leer löscht sie. Kein NUL-Zeichen. Standard bei Anlage leer.",
+            "example": "Erfasst über die Kunden-API"
+          }
+        },
+        "additionalProperties": false,
+        "minProperties": 1,
+        "description": "Nur freigegebene Raumbasisdaten. PATCH ändert ausschließlich gesendete Felder. Keine Raum-/Projekt-ID, Baujahr, U-Werte, Heizflächen oder internen Datenfelder schreiben.",
+        "required": [
+          "raumBezeichnung"
+        ]
+      },
+      "RoomDataEnvelope": {
+        "type": "object",
+        "properties": {
+          "roomData": {
+            "$ref": "#/components/schemas/RoomData"
+          }
+        },
+        "required": [
+          "roomData"
+        ],
+        "additionalProperties": false
+      },
+      "RoomCreateEnvelope": {
+        "type": "object",
+        "properties": {
+          "roomData": {
+            "$ref": "#/components/schemas/RoomCreateData"
+          }
+        },
+        "required": [
+          "roomData"
+        ],
+        "additionalProperties": false
+      },
+      "Room": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "projectKey": {
+            "$ref": "#/components/schemas/ProjectKey"
+          },
+          "roomData": {
+            "type": "object",
+            "properties": {
+              "raumBezeichnung": {
+                "type": "string",
+                "description": "Raumname; nach Trimmen nicht leer. Bei Anlage erforderlich. Kein NUL-Zeichen."
+              },
+              "raumEtage": {
+                "type": "string",
+                "description": "Geschoss-ID für Ein- und Ausgabe: 0 = Keller (KG), 1 = Erdgeschoss (EG), 2 = 1. Obergeschoss (1. OG), 3 = 2. Obergeschoss (2. OG), 4 = 3. Obergeschoss (3. OG), 5 = 4. Obergeschoss (4. OG), 6 = 5. Obergeschoss (5. OG), 7 = Dachgeschoss (DG). Standard bei Anlage: 1. Antworten enthalten die ID als Zeichenkette sowie raumEtageBezeichnung und raumEtageKuerzel."
+              },
+              "raumFlaeche": {
+                "type": "string",
+                "description": "Raumfläche in m², größer 0 bis 100000. Numerische Zeichenketten auch mit Dezimalkomma; maximal 32 Zeichen. Leer/null löscht den Wert. Bei Anlage ohne Angabe leer."
+              },
+              "raumHoehe": {
+                "type": "string",
+                "description": "Raumhöhe in m, größer 0 bis 100. Numerische Zeichenketten auch mit Dezimalkomma; maximal 32 Zeichen. Leer/null löscht den Wert. Standard bei Anlage 2.5."
+              },
+              "raumTemperatur": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "enum": [
+                  7,
+                  16,
+                  17,
+                  18,
+                  19,
+                  20,
+                  21,
+                  22,
+                  23,
+                  24,
+                  25,
+                  26,
+                  null
+                ],
+                "description": "Raumtemperatur in °C: erlaubt sind 7 sowie 16 bis 26 in ganzen Grad. Standard bei Anlage: 20 °C. Die API rechnet intern in die Datenbank-ID um; keine Temperatur-ID senden. Antworten enthalten eine JSON-Zahl; bei fehlender oder unbekannter gespeicherter ID null.",
+                "example": 20
+              },
+              "raumNotiz": {
+                "type": "string",
+                "description": "Raumnotiz; leer löscht sie. Kein NUL-Zeichen. Standard bei Anlage leer."
+              },
+              "raumBaujahr": {
+                "type": "string",
+                "readOnly": true,
+                "description": "Bei Raum-Anlage aus projektBaujahr übernommen. In dieser API-Ausbaustufe nur lesbar; keine automatische Nachführung bei späterer Projektänderung."
+              },
+              "raumEtageBezeichnung": {
+                "type": "string",
+                "readOnly": true,
+                "description": "Bezeichnung zur raumEtage-ID. Nur Ausgabe; nicht in roomData zum Anlegen oder Ändern senden. Bei fehlender oder unbekannter ID leer.",
+                "example": "Erdgeschoss"
+              },
+              "raumEtageKuerzel": {
+                "type": "string",
+                "readOnly": true,
+                "description": "Kürzel zur raumEtage-ID: KG, EG, 1. OG bis 5. OG, DG. Nur Ausgabe; nicht in roomData zum Anlegen oder Ändern senden. Bei fehlender oder unbekannter ID leer.",
+                "example": "EG"
+              }
+            },
+            "required": [
+              "raumBezeichnung",
+              "raumEtage",
+              "raumFlaeche",
+              "raumHoehe",
+              "raumTemperatur",
+              "raumNotiz",
+              "raumBaujahr",
+              "raumEtageBezeichnung",
+              "raumEtageKuerzel"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "projectKey",
+          "roomData"
+        ]
+      },
+      "RoomListResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "enum": [
+              200
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "getRooms"
+            ]
+          },
+          "projektHeader": {
+            "$ref": "#/components/schemas/ProjectHeader"
+          },
+          "rooms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Room"
+            }
+          }
+        },
+        "required": [
+          "status",
+          "action",
+          "projektHeader",
+          "rooms"
+        ]
+      },
+      "RoomResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "enum": [
+              200,
+              201
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "getRoom",
+              "createRoom",
+              "updateRoom"
+            ]
+          },
+          "projektHeader": {
+            "$ref": "#/components/schemas/ProjectHeader"
+          },
+          "room": {
+            "$ref": "#/components/schemas/Room"
+          }
+        },
+        "required": [
+          "status",
+          "action",
+          "projektHeader",
+          "room"
+        ]
+      }
+    }
+  },
+  "webhooks": {
+    "firstPdfGenerated": {
+      "post": {
+        "operationId": "firstPdfGenerated",
+        "tags": [
+          "Webhook"
+        ],
+        "summary": "Erste erfolgreiche PDF-Erstellung",
+        "description": "Ausgehender Aufruf an die in Pro konfigurierte Webhook-Adresse, kein öffentlicher API-Endpunkt. Ein reserviertes Ereignis pro Projekt, keine garantierte Zustellung und derzeit keine automatische Wiederholung. PDF-Erstellung bleibt bei Zustellfehlern erfolgreich. Öffentliche Zieladresse erforderlich, keine Redirects/private IPs. Receiver soll authenticate mit dem separaten Webhook-Wert prüfen und eventId zur Deduplizierung verwenden.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-Heizreport-Event",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pdf.generated"
+              ]
+            }
+          },
+          {
+            "name": "X-Heizreport-Delivery",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Webhook"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Empfang bestätigt"
+          }
+        }
+      }
+    }
+  }
+}

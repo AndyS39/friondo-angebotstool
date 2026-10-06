@@ -22,6 +22,7 @@ from app.routers import (angebote, anmeldung, artikel, benutzer, erfassung, vorg
                          meine_angebote, montage,
                          erfassungsliste, konfiguration, konfigurator, kunden,
                          leads, signatur, statistik, versand)
+from app.routers import konfiguration_heizreport   # v26: Parametrierung → Heizreport
 from app.templating import render
 
 APP_ORDNER = Path(__file__).resolve().parent
@@ -136,6 +137,7 @@ app.include_router(signatur.router)
 app.include_router(kunden.router)
 app.include_router(artikel.router)
 app.include_router(konfiguration.router)
+app.include_router(konfiguration_heizreport.router)   # v26 (PLAN_PROJ_V5 Phase 122)
 app.include_router(konfigurator.router)
 app.include_router(angebote.router)
 app.include_router(statistik.router)

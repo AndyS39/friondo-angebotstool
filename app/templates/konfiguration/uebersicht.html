@@ -2,390 +2,157 @@
 
 {% block titel %}Parametrierung – Friondo Angebotstool{% endblock %}
 
+{# v26 (PLAN_PROJ_V5 Phase 125): Verteilerseite – Suchfeld + fünf Bereichskarten.
+   Die Inline-Abschnitte der alten Übersicht liegen auf /parametrierung/angebotstool
+   und /parametrierung/logik. Jeder Link der alten Button-Reihe kommt genau einmal
+   vor; Admin-/Lead-Bedingungen wie bisher. #}
 {% block inhalt %}
+{% set ist_admin = request.state.benutzer and request.state.benutzer.rolle == 'admin' %}
+{% set lead_ok = request.state.lead_modul_ok | default(false) %}
+
+{% macro eintrag(titel, kurz, href, badge='', badge_klasse='') -%}
+<li class="param-eintrag">
+    <a href="{{ href }}">
+        <span class="titel">{{ titel }}{% if badge %} <span class="abzeichen {{ badge_klasse }}">{{ badge }}</span>{% endif %}</span>
+        <span class="kurz">{{ kurz }}</span>
+    </a>
+</li>
+{%- endmacro %}
+
 <div class="seitenkopf">
     <h1>Parametrierung</h1>
     <div class="aktionen">
-        <a class="knopf zweitrangig" href="/parametrierung/monday">monday-Anbindung</a>
-        <a class="knopf zweitrangig" href="/parametrierung/vorlagen">E-Mail-Vorlagen</a>
-        <a class="knopf zweitrangig" href="/parametrierung/signaturen">Signaturen</a>
-        <a class="knopf zweitrangig" href="/parametrierung/profile">Angebotsprofile</a>
-        <a class="knopf zweitrangig" href="/parametrierung/bza-ersteller">BzA-Ersteller</a>
-        <a class="knopf zweitrangig" href="/parametrierung/projektierung-logik">Projektierung-Logik</a>
-        <a class="knopf zweitrangig" href="/parametrierung/stuecklisten">Stücklisten</a>
-        <a class="knopf zweitrangig" href="/parametrierung/kl-logik">Klima-Logik (KL)</a>
-        <a class="knopf zweitrangig" href="/parametrierung/teams">Teams</a>
-        <a class="knopf zweitrangig" href="/parametrierung/subunternehmer">Subunternehmer</a>
-        <a class="knopf zweitrangig" href="/parametrierung/fehlerprotokoll">Fehlerprotokoll</a>
-        {% if request.state.benutzer and request.state.benutzer.rolle == 'admin' %}
-            <a class="knopf zweitrangig" href="/parametrierung/projektierung-einstellungen">Projektierung-Einstellungen</a>
-            <a class="knopf zweitrangig" href="/parametrierung/bestandsimport">Bestandsimport</a>
-            <a class="knopf zweitrangig" href="/parametrierung/golive">Go-live-Checkliste</a>
-            <a class="knopf zweitrangig" href="/parametrierung/kunden-dubletten">Kunden-Dubletten</a>
-        {% endif %}
-        {% if request.state.lead_modul_ok | default(false) %}
-            <a class="knopf zweitrangig" href="/parametrierung/lead-quellen">Lead-Quellen &amp; Kampagnen</a>
-            <a class="knopf zweitrangig" href="/parametrierung/lead-parser">Lead-Parser</a>
-            <a class="knopf zweitrangig" href="/parametrierung/lead-routing">Lead-Routing</a>
-            <a class="knopf zweitrangig" href="/parametrierung/lead-vorlagen">Lead-Vorlagen</a>
-            <a class="knopf zweitrangig" href="/parametrierung/lead-logik">Lead-Steuerdatei</a>
-            {% if request.state.benutzer.rolle == 'admin' %}
-                <a class="knopf zweitrangig" href="/parametrierung/lead-einstellungen">Lead-Einstellungen</a>
-                <a class="knopf zweitrangig" href="/parametrierung/lead-demo">Lead-Demo-Daten</a>
-            {% endif %}
-        {% endif %}
-        <form method="post" action="/parametrierung/neu-einlesen">
-            <button class="knopf" type="submit">Parametrierung neu einlesen</button>
-        </form>
+        <input type="search" id="param-suche" class="param-suche"
+               placeholder="Einstellung suchen … (Titel oder Stichwort)"
+               autocomplete="off" aria-label="Parametrierung durchsuchen">
     </div>
 </div>
 
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
-
 {% if dateifehler %}
-    <p class="meldung fehler">Die Logik-Excel wurde nicht gefunden: <code>{{ dateifehler }}</code></p>
-{% else %}
-
-<p class="dezent">
-    Quelle: <code>konfigurator_logik.xlsx</code> ·
-    zuletzt eingelesen: {{ logik.geladen_am.strftime('%d.%m.%Y %H:%M:%S') }}
-</p>
-
-{% if bericht.ok %}
-    <p class="meldung">Validierung erfolgreich – keine Fehler gefunden.</p>
-{% else %}
-    <div class="warnblock fehlerblock">
-        <strong>Fehler ({{ bericht.fehler | length }}) – bitte Logik-Excel korrigieren und neu einlesen</strong>
-        <ul>{% for f in bericht.fehler %}<li>{{ f }}</li>{% endfor %}</ul>
-    </div>
+    <p class="meldung fehler">Die Logik-Excel wurde nicht gefunden: <code>{{ dateifehler }}</code>
+        – Einzelheiten unter <a href="/parametrierung/logik">Logik &amp; Importe</a>.</p>
 {% endif %}
 
-{% if bericht.warnungen %}
-    <div class="warnblock">
-        <strong>Hinweise ({{ bericht.warnungen | length }})</strong>
-        <ul>{% for w in bericht.warnungen %}<li>{{ w }}</li>{% endfor %}</ul>
-    </div>
-{% endif %}
+<div class="param-raster" id="param-raster">
 
-<h2>Deckungsbeitrags-Ampel (Angebotsliste)</h2>
-<form method="post" action="/parametrierung/einstellungen" class="suchleiste">
-    <label class="kontrollfeld">rot unter (€)
-        <input type="text" name="db_ampel_rot_unter" value="{{ db_rot }}" size="8"></label>
-    <label class="kontrollfeld">grün über (€)
-        <input type="text" name="db_ampel_gruen_ueber" value="{{ db_gruen }}" size="8"></label>
-    <button class="knopf" type="submit">Speichern</button>
-    <span class="dezent">dazwischen = orange</span>
-</form>
-{# v13-PV (Phase 78): eigene Schwellen je Sparte – leer = allgemeine Werte oben #}
-<form method="post" action="/parametrierung/einstellungen" class="suchleiste">
-    <input type="hidden" name="db_sparten_formular" value="1">
-    <strong>je Sparte:</strong>
-    {% for sp, werte in db_sparten.items() %}
-    <span class="kontrollfeld">{{ sp }}
-        <input type="text" name="db_ampel_rot_unter_{{ sp }}" value="{{ werte[0] }}" size="6"
-               placeholder="{{ db_rot }}" title="{{ sp }}: rot unter (€)">
-        <input type="text" name="db_ampel_gruen_ueber_{{ sp }}" value="{{ werte[1] }}" size="6"
-               placeholder="{{ db_gruen }}" title="{{ sp }}: grün über (€)"></span>
-    {% endfor %}
-    <button class="knopf" type="submit">Speichern</button>
-    <span class="dezent">leer = allgemeine Schwellen (Start: PV und KL wie WP)</span>
-</form>
-
-<h2>E-Mail-Versand</h2>
-<form method="post" action="/parametrierung/einstellungen" class="suchleiste">
-    <input type="hidden" name="mail_formular" value="1">
-    <label class="kontrollfeld">Absender („Senden als“)
-        <input type="email" name="mail_absender" value="{{ mail_absender }}" size="24"></label>
-    <label class="kontrollfeld">Abgleich-Postfach
-        <input type="email" name="mail_postfach" value="{{ mail_postfach }}" size="24"></label>
-    <label class="kontrollfeld">BCC
-        <input type="text" name="mail_bcc" value="{{ mail_bcc }}" size="24" placeholder="info@friondo.de"></label>
-    <button class="knopf" type="submit">Speichern</button>
-</form>
-<p class="dezent">Der Entwurf wird mit dem Absender angelegt (M365-Admin muss „Senden als“
-für alle Innendienst-Mitarbeiter vergeben, siehe <code>docs/graph-einrichtung.md</code>).
-CC = E-Mail des Außendienstlers des Vorgangs (automatisch). Der 15-Minuten-Abgleich
-prüft im Abgleich-Postfach, ob die Mail tatsächlich gesendet wurde
-(Status „Versand vorbereitet“ → „Versendet“) und sammelt Kundenantworten. Mehrere
-BCC-Adressen mit Komma trennen; leer = kein BCC.
-{% if sync_status and sync_status.letzter_lauf %}
-    Letzter Abgleich: {{ sync_status.letzter_lauf.strftime('%d.%m.%Y %H:%M') }}
-    ({{ sync_status.versendet }} als versendet erkannt, {{ sync_status.neu }} neue Mails).
-{% endif %}</p>
-{% if versand_protokoll %}
-<details>
-    <summary>Versand-Erkennung: Protokoll der letzten Prüfläufe ({{ versand_protokoll | length }})</summary>
-    <table class="tabelle">
-        <thead><tr><th>Zeit</th><th>Angebot</th><th>Nachrichten</th><th>Ergebnis</th></tr></thead>
-        <tbody>
-        {% for e in versand_protokoll | reverse %}
-            <tr><td>{{ e.zeit }}</td><td>{{ e.angebot }}</td>
-                <td class="rechts">{{ e.nachrichten }}</td><td>{{ e.ergebnis }}</td></tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    <p class="dezent">Nur Angebote im Status „Versand vorbereitet“ werden geprüft.
-        Greift die Erkennung nicht, steht hier warum – als Fallback gibt es am
-        Angebot den Button „Als versendet markieren“.</p>
-</details>
-{% endif %}
-
-<h2>Kombi-Versand (v10)</h2>
-<form method="post" action="/parametrierung/einstellungen" class="formular">
-    <input type="hidden" name="kombi_formular" value="1">
-    <label>Betreff der Kombi-Mail<br>
-        <input type="text" name="kombi_vorlage_betreff" value="{{ kombi_betreff }}" size="70"></label><br>
-    <label>Text der Kombi-Mail<br>
-        <textarea name="kombi_vorlage_text" rows="9" style="width:100%">{{ kombi_text }}</textarea></label>
-    <div class="formaktionen">
-        <button class="knopf" type="submit">Speichern</button>
-        <span class="dezent">Platzhalter: {angebotsliste} (je Angebot Sparte, Nummer,
-            Endbetrag; bei WP zusätzlich Eigenanteil – keine Gesamtsumme),
-            {angebotsnummern}, {briefanrede}, {vertriebler}, {absender}</span>
-    </div>
-</form>
-<form method="post" action="/parametrierung/einstellungen" class="suchleiste">
-    <input type="hidden" name="gewerke_formular" value="1">
-    <label class="kontrollfeld">Gewerkeübergreifende Artikel
-        <input type="text" name="gewerke_artikel" value="{{ gewerke_artikel }}" size="40"></label>
-    <button class="knopf" type="submit">Speichern</button>
-    <span class="dezent">Kommaliste (Pos.-Nrn.); löst bei Mehr-Sparten-Vorgängen
-        einen fachlichen Hinweis in der Akte aus, wenn voll berechnet.</span>
-</form>
-
-<h2>Fern-Signatur (Kunde signiert selbst)</h2>
-<form method="post" action="/parametrierung/einstellungen" class="suchleiste">
-    <input type="hidden" name="fern_formular" value="1">
-    <label class="kontrollfeld">
-        <input type="checkbox" name="signatur_fern_aktiv" value="1"
-               {{ 'checked' if fern_aktiv == '1' }}> aktiv
-    </label>
-    <label class="kontrollfeld">Link gültig (Tage)
-        <input type="text" name="signatur_fern_gueltig_tage" value="{{ fern_tage }}" size="4"></label>
-    <label class="kontrollfeld">Öffentliche Basis-Adresse
-        <input type="text" name="signatur_fern_basis_url" value="{{ fern_basis }}"
-               size="34" placeholder="https://signatur.friondo.de"></label>
-    <button class="knopf" type="submit">Speichern</button>
-</form>
-<p class="dezent">Standard AUS – erst aktivieren, wenn die IT die öffentliche
-HTTPS-Adresse für die Signatur-Route bereitgestellt hat
-(<code>docs/fern-signatur-it.md</code>). Bei aktivem Schalter enthält die
-Angebots-Mail einen Einmal-Link zum Online-Unterschreiben; nach der Signatur
-wird der Status auf „Angenommen" gesetzt und der Innendienst per E-Mail informiert.</p>
-
-<h2>Abgelehnt-Prozess (v8)</h2>
-<div class="konfigurator-spalten">
-    <div class="konfigurator-haupt">
-        <form method="post" action="/parametrierung/einstellungen" class="suchleiste">
-            <input type="hidden" name="ablehnung_formular" value="1">
-            <label class="kontrollfeld">Automatisch ablehnen nach
-                <input type="text" name="ablehnung_auto_tage" value="{{ ablehnung_tage }}" size="4"> Tagen</label>
-            <span class="dezent">Versendete Angebote ohne Annahme/Ablehnung; eine
-            Wiedervorlage in der Zukunft schützt vor dem Prüflauf.</span>
-            <button class="knopf klein" type="submit">Speichern</button>
-        </form>
-        <p><strong>Gründe der Ablehnung</strong> <span class="dezent">(Auswahlliste im Pflichtdialog)</span></p>
-        <table class="tabelle" style="max-width:520px">
-            <tbody>
-            {% for g in ablehnungsgruende %}
-                <tr>
-                    <td class="{{ 'dezent' if not g.aktiv }}">{{ g.name }}{{ ' (deaktiviert)' if not g.aktiv }}</td>
-                    <td class="aktionen">
-                        <form method="post" action="/parametrierung/ablehnungsgruende">
-                            <input type="hidden" name="aktion" value="umschalten">
-                            <input type="hidden" name="id" value="{{ g.id }}">
-                            <button class="knopf klein zweitrangig" type="submit">
-                                {{ 'Aktivieren' if not g.aktiv else 'Deaktivieren' }}</button>
-                        </form>
-                    </td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        <form method="post" action="/parametrierung/ablehnungsgruende" class="suchleiste">
-            <input type="hidden" name="aktion" value="hinzufuegen">
-            <input type="text" name="name" maxlength="100" placeholder="Neuer Grund …">
-            <button class="knopf klein" type="submit">Hinzufügen</button>
-        </form>
-    </div>
-    <div class="konfigurator-protokoll">
-        <p><strong>Prüflauf-Protokoll</strong> <span class="dezent">(letzte Läufe)</span></p>
-        {% if ablehnung_protokoll %}<pre class="hinweis">{{ ablehnung_protokoll }}</pre>
-        {% else %}<p class="dezent">Noch kein Lauf protokolliert.</p>{% endif %}
-    </div>
-</div>
-
-{% if loeschungen %}
-<h2>Lösch-Protokoll Angebote</h2>
-<table class="tabelle">
-    <thead><tr><th>Gelöscht am</th><th>Nummer</th><th>Kunde</th><th>Status</th><th class="rechts">Endbetrag</th><th>durch</th></tr></thead>
-    <tbody>
-    {% for l in loeschungen %}
-        <tr>
-            <td>{{ l.geloescht_am.strftime('%d.%m.%Y %H:%M') }}</td>
-            <td>{{ l.nummer }}</td>
-            <td>{{ l.kunde_name }}</td>
-            <td>{{ l.status_vorher }}</td>
-            <td class="rechts">{{ l.endbetrag_cent | euro }}</td>
-            <td>{{ l.benutzer_name }}</td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-{% endif %}
-
-<h2>Eingelesene Logik</h2>
-<table class="tabelle zusammenfassung">
-    <tr><th>Fragen</th><td>{{ logik.fragen | length }}</td></tr>
-    <tr><th>Aktionen</th><td>{{ logik.aktionen | length }}</td></tr>
-    <tr><th>Paketmatrix-Zeilen</th><td>{{ logik.pakete | length }}</td></tr>
-    <tr><th>Angebots-Blöcke</th><td>{{ logik.bloecke | length }}</td></tr>
-    <tr><th>KfW-Parameter</th><td>{{ logik.kfw | length }}</td></tr>
-    <tr><th>PV-Parameter</th><td>{{ logik.pv_parameter | length }}</td></tr>
-    {# v24: Klimakonfigurator (Blätter „Aktionen KL“ … „KL-Artikel“) #}
-    <tr><th>KL-Aktionen</th><td>{{ logik.kl_aktionen | length }}
-        {% if not logik.kl_aktionen %}<span class="dezent">(Blatt „Aktionen KL“ fehlt – Klima läuft als reiner Erfassungsbogen)</span>{% endif %}</td></tr>
-    <tr><th>KL-Paketmatrix / Montagematrix / Kombinationen</th>
-        <td>{{ logik.kl_paket | length }} / {{ logik.kl_montage | length }} / {{ logik.kl_kombis | length }} Außengeräte
-            · <a href="/parametrierung/kl-logik">Lesesicht</a></td></tr>
-    <tr><th>KL-Parameter</th><td>{{ logik.kl_parameter | length }}</td></tr>
-</table>
-
-<h2>Fragen</h2>
-<table class="tabelle">
-    <thead><tr><th>ID</th><th>Frage</th><th>Typ</th><th>Antwortmöglichkeiten</th><th>Anzeigen wenn</th></tr></thead>
-    <tbody>
-    {% for f in logik.fragen.values() | sort(attribute='reihenfolge') %}
-        <tr>
-            <td>{{ f.id }}</td>
-            <td>{{ f.text }}</td>
-            <td class="dezent">{{ f.typ }}</td>
-            <td class="dezent">{{ f.antworten | join(' | ') | truncate(60) }}</td>
-            <td class="dezent">{{ f.bedingung.roh if f.bedingung else '?' }}</td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-
-<h2>Angebotsaufbau</h2>
-<table class="tabelle">
-    <thead><tr><th>Block</th><th>Überschrift</th><th>Wann</th></tr></thead>
-    <tbody>
-    {% for b in logik.bloecke %}
-        <tr>
-            <td>{{ b.nr }}</td>
-            <td>{{ b.ueberschrift | truncate(90) }}</td>
-            <td class="dezent">{{ b.wann.roh if b.wann else '?' }}</td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-
-<h2>KfW-Parameter</h2>
-<table class="tabelle">
-    <thead><tr><th>Parameter</th><th>Wert</th><th>Bemerkung</th></tr></thead>
-    <tbody>
-    {% for name, (wert, bemerkung) in logik.kfw.items() %}
-        <tr>
-            <td>{{ name }}</td>
-            <td>{{ wert | truncate(90) }}</td>
-            <td class="dezent">{{ bemerkung | truncate(70) }}</td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-
-{% if logik.pv_parameter %}
-<h2>PV-Parameter</h2>
-<p class="dezent">Blatt „PV-Parameter“ der Logik-Excel: Auslegung (v16) und
-    Wirtschaftlichkeit (v22). Prozentwerte als Zahl mit Einheit „%“ (z. B. 3),
-    Tausender ohne Punkt; Änderungen wirken nach „Parametrierung neu einlesen“.</p>
-{% if pv_fehlende %}
-<div class="warnblock">
-    <strong>Fehlende Wirtschaftlichkeits-Parameter</strong> – bis zur Ergänzung im
-    Blatt gilt der Standardwert:
-    <ul>
-    {% for name in pv_fehlende %}
-        <li>{{ name }} – Standard {{ pv_standard[name] }}</li>
-    {% endfor %}
+<section class="karte param-karte" id="bereich-allgemein">
+    <h2>Allgemein</h2>
+    <ul class="param-liste">
+        {% if ist_admin %}
+        {{ eintrag('Benutzer', 'Konten, Rollen, PINs, Montageteam-Zuordnung', '/benutzer') }}
+        {% endif %}
+        {{ eintrag('E-Mail-Vorlagen', 'Betreff und Text der Angebots-Mails je Außendienstler', '/parametrierung/vorlagen') }}
+        {{ eintrag('Signaturen', 'Outlook-Signaturen des Innendiensts (HTML, Bilder)', '/parametrierung/signaturen') }}
+        {{ eintrag('monday-Anbindung', 'Boards, Spalten-Zuordnung, Rückspielung, Personen', '/parametrierung/monday') }}
     </ul>
-</div>
-{% endif %}
-<table class="tabelle">
-    <thead><tr><th>Parameter</th><th>Wert</th><th>Einheit</th><th>Bemerkung</th></tr></thead>
-    <tbody>
-    {% for name, (wert, bemerkung) in logik.pv_parameter.items() %}
-        <tr>
-            <td>{{ name }}</td>
-            <td>{{ wert | truncate(60) }}</td>
-            <td class="dezent">{{ logik.pv_parameter_einheit.get(name, '') }}</td>
-            <td class="dezent">{{ bemerkung | truncate(70) }}</td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-{% endif %}
+</section>
 
-{# v24 (PLAN_V16 Phase 113/115): Klimakonfigurator – Import-Button, KL-Parameter #}
-<h2>Klimakonfigurator (v24)</h2>
-<div class="aktionen">
-    <form method="post" action="/parametrierung/artikel/kl-import">
-        <button class="knopf" type="submit" {{ 'disabled' if not kl_import_ok }}
-                title="Liest Artikel-Preislisten/Klima/ (Ersatzangebot KL · Musterangebot KL) → KL001–KL050">
-            Artikel → Klima-Positionslisten importieren</button>
-    </form>
-    <a class="knopf zweitrangig" href="/parametrierung/artikel/kl-import">Import-Vorschau</a>
-    <a class="knopf zweitrangig" href="/parametrierung/kl-logik">Paketmatrix / Montagematrix / Kombinationen KL</a>
-    <a class="knopf zweitrangig" href="/artikel?q=KL0">Artikel Sparte KL</a>
-</div>
-{% if not kl_import_ok %}
-<p class="meldung fehler">Klima-Import nicht verfügbar – <code>app/import_klima.py</code> fehlt.</p>
-{% endif %}
-{% if logik.kl_aktionen %}
-<p class="dezent">Blatt „KL-Parameter“ der Logik-Excel: Rechenwerte der Klima-Auslegung
-    (Kühllast = Raumfläche × Höhenfaktor × W/m² ÷ 1000, Klassengrenzen 9/12/18/24,
-    Leitung je Innengerät, §14a-Außengeräte). Dezimalzahlen mit Komma oder Punkt;
-    Änderungen wirken nach „Parametrierung neu einlesen“. Der Wert „Rollgerüst VK“ ist nur
-    der Startwert für den Import von KL050 – danach gilt der Artikelpreis (Artikel → KL050).</p>
-{% if kl_fehlende %}
-<div class="warnblock">
-    <strong>Fehlende KL-Parameter</strong> – bis zur Ergänzung im Blatt gilt der Standardwert:
-    <ul>
-    {% for name in kl_fehlende %}
-        <li>{{ name }} – Standard {{ kl_standard[name] }}</li>
-    {% endfor %}
+<section class="karte param-karte" id="bereich-angebotstool">
+    <h2>Angebotstool</h2>
+    <ul class="param-liste">
+        {{ eintrag('Angebotstool-Einstellungen', 'DB-Ampel, E-Mail- und Kombi-Versand, Fern-Signatur, Abgelehnt-Prozess', '/parametrierung/angebotstool') }}
+        {{ eintrag('Angebotsprofile', 'Kanal-Zuordnung, Textblöcke (Vor-/Nachtexte), Versandregeln', '/parametrierung/profile') }}
+        {{ eintrag('BzA-Ersteller', 'Abschnitt 6 des BzA-Datenblatts (Energieeffizienz-Experte)', '/parametrierung/bza-ersteller') }}
+        {{ eintrag('Logik & Importe', 'Logik-Excel: Validierungsbericht, Fragen, Angebotsaufbau, KfW-/PV-/KL-Parameter, Klima-Import', '/parametrierung/logik') }}
+        {{ eintrag('Klima-Logik (KL)', 'Lesesicht Paketmatrix, Montagematrix, Kombinationen, KL-Artikel', '/parametrierung/kl-logik') }}
+        {{ eintrag('Klima-Import (Vorschau)', 'Artikel → Klima-Positionslisten KL001–KL050, Diff vor dem Import', '/parametrierung/artikel/kl-import') }}
+        {{ eintrag('Artikel', 'Artikelstamm, Preislisten-Importe (PV, Klima)', '/artikel') }}
     </ul>
-</div>
-{% endif %}
-<h3>KL-Parameter</h3>
-<table class="tabelle">
-    <thead><tr><th>Parameter</th><th>Wert</th><th>Einheit</th><th>Bemerkung</th></tr></thead>
-    <tbody>
-    {% for name, (wert, bemerkung) in logik.kl_parameter.items() %}
-        <tr>
-            <td>{{ name }}</td>
-            {# Excel-Zahlen (1.1 / 2.6) deutsch anzeigen; Texte unverändert #}
-            <td>{{ wert.replace('.', ',') if wert.replace('.', '', 1).isdigit() else wert | truncate(60) }}</td>
-            <td class="dezent">{{ logik.kl_parameter_einheit.get(name, '') }}</td>
-            <td class="dezent">{{ bemerkung | truncate(70) }}</td>
-        </tr>
-    {% endfor %}
-    {% for name in kl_fehlende %}
-        <tr class="inaktiv">
-            <td>{{ name }}</td>
-            <td class="dezent">fehlt – Standard {{ kl_standard[name] }}</td>
-            <td></td>
-            <td class="dezent">Zeile im Blatt „KL-Parameter“ ergänzen</td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-{% else %}
-<p class="hinweis">Blatt „Aktionen KL“ fehlt in der Logik-Excel – die Klima-Erfassung läuft
-    als reiner Erfassungsbogen (TAIFUN-Schiene). Für den Klimakonfigurator die Blätter
-    „Aktionen KL“, „Angebotsaufbau KL“, „Paketmatrix KL“, „Kombinationen KL“,
-    „Montagematrix KL“, „KL-Parameter“ und „KL-Artikel“ anlegen (PLAN_V16 Phase 113).</p>
+</section>
+
+<section class="karte param-karte" id="bereich-projektierung">
+    <h2>Projektierung</h2>
+    <ul class="param-liste">
+        {% if ist_admin %}
+        {{ eintrag('Projektierung-Einstellungen', 'Freigabe & Pilot, Vorlauf-Ampel, Verantwortliche, Mails, Portal-URLs, UGL, Kalender, BzA-Mail', '/parametrierung/projektierung-einstellungen') }}
+        {{ eintrag('Heizreport', 'API-Zugang, Kennzahlen, PDF-Ablage', '/parametrierung/heizreport') }}
+        {% endif %}
+        {{ eintrag('Projektierung-Logik', 'Logik-Excel der Projektierung: Aufgaben, Ordnerstruktur, Formulare, Sub-Typen', '/parametrierung/projektierung-logik') }}
+        {{ eintrag('Teams', 'Montageteams, Mitglieder, Outlook-Adressen', '/parametrierung/teams') }}
+        {{ eintrag('Subunternehmer', 'Sub-Firmen je Typ, Standard-Sub, E-Mail-Versand', '/parametrierung/subunternehmer') }}
+        {{ eintrag('Stücklisten', 'Positionen den Lieferanten-Artikeln zuordnen (UGL Collin), CSV-Export', '/parametrierung/stuecklisten') }}
+        {% if ist_admin %}
+        {{ eintrag('Bestandsimport', 'Laufende Projekte per Excel-Vorlage übernehmen', '/parametrierung/bestandsimport') }}
+        {{ eintrag('Go-live-Checkliste', 'Live-Prüfung der Go-live-Punkte der Projektierung', '/parametrierung/golive',
+                   (golive_stand[0] ~ '/' ~ golive_stand[1] ~ ' grün') if golive_stand else '',
+                   'status-angenommen' if golive_stand and golive_stand[0] == golive_stand[1] else 'status-versand-vorbereitet') }}
+        {% endif %}
+    </ul>
+</section>
+
+{% if lead_ok %}
+<section class="karte param-karte" id="bereich-lead">
+    <h2>Lead-Management</h2>
+    <ul class="param-liste">
+        {% if ist_admin %}
+        {{ eintrag('Lead-Einstellungen', 'Freigabe, Scoring, SLA, Routing-Anbieter, Kalender, Mail-Modus', '/parametrierung/lead-einstellungen') }}
+        {% endif %}
+        {{ eintrag('Lead-Quellen & Kampagnen', 'Herkunft, Kosten je Lead, API-Keys, Kampagnen', '/parametrierung/lead-quellen') }}
+        {{ eintrag('Lead-Parser', 'Parser-Regeln je Quelle (Betreff, Felder)', '/parametrierung/lead-parser') }}
+        {{ eintrag('Lead-Routing', 'Routing & Geocoding (Anbieter, Gebiete)', '/parametrierung/lead-routing') }}
+        {{ eintrag('Lead-Vorlagen', 'E-Mail-Vorlagen der Gruppe Lead-Management', '/parametrierung/lead-vorlagen') }}
+        {{ eintrag('Lead-Steuerdatei', 'Steuerdatei (Excel) des Lead-Moduls hochladen', '/parametrierung/lead-logik') }}
+        {% if ist_admin %}
+        {{ eintrag('Lead-Demo-Daten', 'Demo-Leads anlegen und wieder entfernen', '/parametrierung/lead-demo') }}
+        {% endif %}
+    </ul>
+</section>
 {% endif %}
 
-{% endif %}
+<section class="karte param-karte" id="bereich-system">
+    <h2>System &amp; Protokolle</h2>
+    <ul class="param-liste">
+        {{ eintrag('Fehlerprotokoll', 'Unbehandelte Ausnahmen mit Fehler-Nr., erledigen, leeren', '/parametrierung/fehlerprotokoll') }}
+        {% if ist_admin %}
+        {{ eintrag('Kunden-Dubletten', 'Doppelte Kunden (Name + PLZ) zusammenführen', '/parametrierung/kunden-dubletten') }}
+        {% endif %}
+        {{ eintrag('Lösch-Protokoll Angebote', 'Gelöschte Angebote – wann, wer, Status, Betrag', '/parametrierung/angebotstool#loeschprotokoll') }}
+        {{ eintrag('Versand-Erkennung', 'Protokoll der letzten Prüfläufe des Mail-Abgleichs', '/parametrierung/angebotstool#versand') }}
+        {{ eintrag('Prüflauf Ablehnung', 'Protokoll des täglichen Abgelehnt-Prüflaufs', '/parametrierung/angebotstool#ablehnung') }}
+        {% if ist_admin %}
+        {{ eintrag('Mail-Protokoll Projektierung', 'Letzte 20 Benachrichtigungs-Mails der Projektierung', '/parametrierung/projektierung-einstellungen#mailprotokoll') }}
+        {% endif %}
+        <li class="param-eintrag param-aktion">
+            <form method="post" action="/parametrierung/neu-einlesen">
+                <button class="knopf zweitrangig klein" type="submit">Parametrierung neu einlesen</button>
+                <span class="kurz">Logik-Excel neu laden und prüfen – Bericht unter Logik &amp; Importe</span>
+            </form>
+        </li>
+    </ul>
+</section>
+
+</div>
+<p class="dezent param-leer" id="param-leer" hidden>Kein Eintrag passt zur Suche.</p>
+
+<script>
+(function () {
+    // Clientseitiger Filter: alle Suchwörter müssen in Titel oder Kurztext vorkommen
+    var feld = document.getElementById('param-suche');
+    var raster = document.getElementById('param-raster');
+    var leer = document.getElementById('param-leer');
+    if (!feld || !raster) { return; }
+    var eintraege = Array.prototype.slice.call(raster.querySelectorAll('.param-eintrag'));
+    var karten = Array.prototype.slice.call(raster.querySelectorAll('.param-karte'));
+    function filtern() {
+        var woerter = feld.value.toLowerCase().split(/\s+/).filter(Boolean);
+        var treffer = 0;
+        eintraege.forEach(function (e) {
+            var text = (e.textContent || '').toLowerCase();
+            var zeigen = woerter.every(function (w) { return text.indexOf(w) !== -1; });
+            e.hidden = !zeigen;
+            if (zeigen) { treffer++; }
+        });
+        karten.forEach(function (k) {
+            k.hidden = !k.querySelector('.param-eintrag:not([hidden])');
+        });
+        if (leer) { leer.hidden = treffer > 0; }
+    }
+    feld.addEventListener('input', filtern);
+    feld.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Escape') { feld.value = ''; filtern(); }
+    });
+    if (feld.value) { filtern(); }
+})();
+</script>
 {% endblock %}

@@ -1,0 +1,1289 @@
+{
+  "info": {
+    "_postman_id": "793ebf4c-e8ec-413c-bb97-87fe92e9b065",
+    "name": "Heizreport REST API v2",
+    "description": "API v2.4.0 – alle derzeit implementierten öffentlichen Endpunkte.\n\nManuell testen: Token in {{token}}, eigenes Testprojekt in {{projektKey}}. Neue Projektanlage speichert den zurückgegebenen Schlüssel automatisch als projektKey. Deshalb ausschließlich Testprojekte verwenden.\n\nFestes Limit: 2 geschützte Anfragen pro Sekunde und Kunde, über alle Endpunkte gemeinsam. Bei HTTP 429 mindestens 1 Sekunde warten. Für einzelne Funktionstests mindestens 1 Sekunde zwischen Anfragen lassen. Interne v1 ist nicht enthalten.\n\nProjektanlage braucht eine aktive Jahreslizenz. Ergebnisse/PDF benötigen passende Lizenz und Projektdaten. PDF-Aufrufe erzeugen Dokumente und liefern JSON mit Downloadinformationen. Bilder liefert vorhandene Bilder. Raumbasisdaten können gelesen, angelegt und geändert werden. U-Werte, Heizkörper und Bildupload sind noch nicht öffentlich implementiert.\n\nOrdner Sicherheit enthält absichtlich ungültige Anfragen mit erwarteten Fehlern. Fremdprojekt-Test benötigt einen echten Schlüssel eines anderen Kunden. Passwortänderung benötigt newPassword (12–256 Zeichen) und ändert das Projektpasswort. Keine Tests werden beim Import ausgeführt.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Liste Reports",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports",
+            "description": "Alle dem Token-Kunden gehörenden Projekte."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Projektdetails lesen",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Report anlegen",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports",
+            "description": "Erzeugt ein neues leeres Testprojekt. Speichert seinen Schlüssel in projektKey.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });",
+                  "if (pm.response.code === 201) { const data = pm.response.json(); if (data.projektHeader && data.projektHeader.key) pm.collectionVariables.set(\"projektKey\", data.projektHeader.key); }"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Report mit Daten anlegen",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/with-data",
+            "description": "Alle 24 freigegebenen Projektfelder. Erzeugt ein neues Testprojekt und übernimmt dessen Schlüssel.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectData\": {\n    \"projektName\": \"API-Testprojekt\",\n    \"projektPostleitzahl\": \"10115\",\n    \"projektArtHeizung\": 1,\n    \"projektAlterHeizung\": 1,\n    \"projektBewohner\": 4,\n    \"projektJahresverbrauch\": 18000,\n    \"projektBaujahr\": 1995,\n    \"projektTrinkwasser\": 1,\n    \"projektWaermeerzeugerSolarStatus\": \"off\",\n    \"projektWaermeerzeugerSolarArt\": 1,\n    \"projektKollektorflaecheSolar\": 0,\n    \"projektWaermeerzeugerHolzStatus\": \"off\",\n    \"projektJahresverbrauchHolz\": 0,\n    \"projektWaermeerzeugerHolzArt\": 1500,\n    \"email\": \"api-test@example.com\",\n    \"anrede\": \"Herr\",\n    \"vorname\": \"Max\",\n    \"name\": \"Mustermann\",\n    \"strasse\": \"Musterstraße\",\n    \"hausnummer\": \"1\",\n    \"plz\": \"10115\",\n    \"ort\": \"Berlin\",\n    \"telefon\": \"\",\n    \"bemerkungen\": \"Manueller API-Test mit fiktiven Kontaktdaten.\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });",
+                  "if (pm.response.code === 201) { const data = pm.response.json(); if (data.projektHeader && data.projektHeader.key) pm.collectionVariables.set(\"projektKey\", data.projektHeader.key); }"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Reportdaten aktualisieren",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}",
+            "description": "Ändert nur die angegebenen Felder des eigenen Testprojekts.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectData\": {\n    \"projektName\": \"API-Testprojekt aktualisiert\",\n    \"projektBewohner\": 3\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Projektpasswort ändern",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}/password",
+            "description": "Vorher newPassword setzen: 12–256 Zeichen. Ändert das Passwort des Testprojekts.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newPassword\": \"{{newPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "PDF abrufen - Heizreport",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}/pdf?type=heizreport",
+            "description": "Erzeugt Heizreport-PDF. JSON enthält Downloadinformationen; aktive Berechtigung und vollständige Daten erforderlich."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "PDF abrufen - Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}/pdf?type=check",
+            "description": "Erzeugt Check-PDF. JSON enthält Downloadinformationen."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Bilder abrufen",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}/pictures",
+            "description": "Listet bereits vorhandene Bilder des eigenen Projekts. Kein Upload."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Ergebnisdaten abrufen",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}/results",
+            "description": "Berechnung mit vorhandenen Projektdaten; bei unvollständigen Daten können Ergebnisse fehlen."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Ergebnisdaten abrufen mit Vorgaben",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}/results?flowTemperature=55&spread=10",
+            "description": "Berechnung mit Vorlauftemperatur 55 °C und Spreizung 10 K."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Ergebnisdaten abrufen - bisherige Parameternamen",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}/results?vorlaufT=55&spreizung=10",
+            "description": "Kompatibilitätstest für bisherige Parameternamen."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Report mit Daten - bisheriger Feldname",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/with-data",
+            "description": "Kompatibilitätstest für projektData. Erzeugt ein weiteres Testprojekt.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projektData\": {\n    \"projektName\": \"API-Kompatibilitätstest\",\n    \"projektPostleitzahl\": \"10115\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });",
+                  "if (pm.response.code === 201) { const data = pm.response.json(); if (data.projektHeader && data.projektHeader.key) pm.collectionVariables.set(\"projektKey\", data.projektHeader.key); }"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Räume",
+      "item": [
+        {
+          "name": "Räume auflisten",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}/rooms",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Raum anlegen",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}/rooms",
+            "description": "Legt einen Raum im eigenen Testprojekt an. Temperatur 5 bedeutet 20 °C. Speichert room.id automatisch in roomId.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomData\": {\n    \"raumBezeichnung\": \"Wohnzimmer\",\n    \"raumEtage\": 1,\n    \"raumFlaeche\": 25.5,\n    \"raumHoehe\": 2.5,\n    \"raumTemperatur\": 20,\n    \"raumNotiz\": \"API-Test\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });",
+                  "if (pm.response.code === 201) { const data = pm.response.json(); if (data.room && data.room.id) pm.collectionVariables.set(\"roomId\", String(data.room.id)); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Einzelnen Raum lesen",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}/rooms/{{roomId}}",
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Raum bearbeiten",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}/rooms/{{roomId}}",
+            "description": "raumTemperatur wird in °C gesendet; 22 entspricht 22 °C. Nur Testprojekt verwenden.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomData\": {\n    \"raumBezeichnung\": \"Wohnzimmer aktualisiert\",\n    \"raumTemperatur\": 22\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Healthcheck",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/health",
+        "description": "Öffentlich: erwartete Version 2.4.0.",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "API-Version",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/",
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "OPTIONS",
+      "request": {
+        "method": "OPTIONS",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/reports",
+        "description": "",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "Sicherheit – manuelle Tests",
+      "item": [
+        {
+          "name": "Ungültiger Token → 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports",
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{invalidToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401\", function () { pm.response.to.have.status(401); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Ohne Token → 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports",
+            "description": "",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401\", function () { pm.response.to.have.status(401); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Fremdprojekt → 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{foreignProjectKey}}/pictures",
+            "description": "foreignProjectKey muss der neunbuchstabige Schlüssel eines echten Projekts eines anderen Kunden sein. Leer oder erfunden beweist keine Kundentrennung."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Unbekanntes Projektfeld → 422",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}",
+            "description": "Soll keine Daten ändern.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectData\": {\n    \"projektOwner\": 123\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Ungültige Projektdaten → 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/with-data",
+            "description": "Soll kein Projekt anlegen.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectData\": {\n    \"projektName\": \"Darf nicht angelegt werden\",\n    \"projektPostleitzahl\": \"ungueltig\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Projektfelder als Liste → 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/with-data",
+            "description": "Projektfelder müssen ein JSON-Objekt sein; keine Projektanlage.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectData\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Zu kurzes Passwort → 422",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}/password",
+            "description": "Soll das Projektpasswort nicht ändern.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newPassword\": \"kurz\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Ungültiges JSON → 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/with-data",
+            "description": "Keine Projektanlage.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"projectData\":",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", function () { pm.response.to.have.status(400); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Falscher Content-Type → 415",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/with-data",
+            "description": "Keine Projektanlage.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectData\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 415\", function () { pm.response.to.have.status(415); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Ratenlimit - manuell 3-mal schnell senden",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports",
+            "description": "Diese Anfrage innerhalb einer Sekunde dreimal senden: höchstens zwei Erfolge, dann HTTP 429 und Retry-After: 1. Danach mindestens 1 Sekunde warten. Alle Kundenzugriffe zählen gemeinsam."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Erfolg oder Ratenlimit\", function () { pm.expect([200, 429]).to.include(pm.response.code); });",
+                  "if (pm.response.code === 429) { pm.test(\"Retry-After: 1\", function () { pm.expect(pm.response.headers.get(\"Retry-After\")).to.eql(\"1\"); }); }"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Raum aus anderem Projekt → 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}/rooms/{{foreignRoomId}}",
+            "description": "foreignRoomId muss zu einem anderen Projekt gehören. Auch ein anderes Projekt desselben Kunden ist erlaubt als Negativtest."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Fremden Raum ändern → 404",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}/rooms/{{foreignRoomId}}",
+            "description": "foreignRoomId muss nachweislich zu einem anderen Projekt gehören.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomData\": {\n    \"raumNotiz\": \"Darf nicht gespeichert werden\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", function () { pm.response.to.have.status(404); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Interne Raumfelder → 422",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}/rooms/{{roomId}}",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomData\": {\n    \"projektId\": 123\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ungültige Raumtemperatur → 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}/rooms",
+            "description": "20 ist keine gültige Kennzahl. Für 20 °C Kennzahl 5 verwenden; soll keinen Raum anlegen.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomData\": {\n    \"raumBezeichnung\": \"Darf nicht angelegt werden\",\n    \"raumTemperatur\": 15\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leerer Raumname → 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{projektKey}}/rooms",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomData\": {\n    \"raumBezeichnung\": \"\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "pm.test(\"JSON-Antwort\", function () { pm.response.json(); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://heizreport.net/api/v2"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "projektKey",
+      "value": ""
+    },
+    {
+      "key": "newPassword",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "foreignProjectKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "invalidToken",
+      "value": "ungueltiger-test-token",
+      "type": "string"
+    },
+    {
+      "key": "roomId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "foreignRoomId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  }
+}

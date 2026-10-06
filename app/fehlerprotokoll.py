@@ -200,6 +200,34 @@ def _in_tabelle_schreiben(nr: str, daten: dict, exc: BaseException, tb_text: str
     return False
 
 
+def eintragen_text(quelle: str, meldung: str, detail: str = "", pfad: str = "") -> str:
+    """v26 (PLAN_PROJ_V5 Phase 122): Eintrag ohne Ausnahme und ohne Request –
+    für fehlgeschlagene Aufrufe externer Dienste (Heizreport). Der Aufrufer
+    maskiert Geheimnisse selbst; Felder mit „token“ im Namen werden hier
+    ohnehin nicht geführt. Wirft niemals selbst."""
+    try:
+        nr = fehler_nr_erzeugen()
+    except Exception:
+        nr = "F-unbekannt"
+    daten = dict(benutzer_id=None, benutzer_name="", rolle="", methode="EXTERN",
+                 pfad=(pfad or "")[:300], query="", formdaten="", angebot_id=None)
+    meldung = (meldung or "")[:500]
+    detail = (detail or "")[:TRACEBACK_MAX]
+    try:
+        logging_einrichten()
+        logger.error("Fehler-Nr. %s | %s | %s\n%s", nr, quelle, meldung, detail or "-")
+    except Exception:
+        pass
+    try:
+        # Trägerausnahme mit dem Quellennamen als Klassenname → Spalte fehlertyp
+        typ_name = re.sub(r"\W+", "_", quelle or "Extern").strip("_") or "Extern"
+        traeger = type(typ_name, (Exception,), {})(meldung)
+        _in_tabelle_schreiben(nr, daten, traeger, detail)
+    except Exception:
+        pass
+    return nr
+
+
 def eintragen(request, exc: BaseException) -> str:
     """Ausnahme protokollieren und die Fehler-Nr. liefern. Reihenfolge:
     Fehler-Nr. erzeugen → Datei-Log (mit Traceback) → Tabelleneintrag.

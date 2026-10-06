@@ -3,11 +3,52 @@
 
 {% block titel %}Benutzer – Friondo Angebotstool{% endblock %}
 
+{# v26 (PLAN_PROJ_V5 Phase 125, A-1): Montageteam als Dropdown statt Chip-Reihe.
+   Regelfall ein Team je Montage-Benutzer; hat ein Benutzer mehrere Teams,
+   steht je Team ein Dropdown untereinander. „+ weiteres Team“ hängt per JS
+   ein weiteres Dropdown (Klon der Vorlage #ben-team-vorlage) ein, „×“ nimmt
+   eines weg. Gespeichert wird unverändert über team_ids + teams_dabei; leere
+   Dropdowns ignoriert die Route, doppelte Teams dedupliziert sie (set()). #}
+{# Reihenfolge der Dropdown-Einträge: Typ montage zuerst, dann sub (bzw. alles
+   andere), innerhalb des Typs alphabetisch – die Route liefert bereits
+   order_by(typ, name); hier nur abgesichert, falls Alt-Typen auftauchen.
+   Auf Template-Ebene gesetzt, damit das Makro die Liste sieht. #}
+{% set teams_sortiert = (teams|selectattr('typ', 'equalto', 'montage')|list)
+                        + (teams|rejectattr('typ', 'equalto', 'montage')|list) %}
+{% macro team_wahl(form_id, gewaehlt) -%}
+<div class="ben-team-wahl">
+    <select {% if form_id %}form="{{ form_id }}" {% endif %}name="team_ids">
+        <option value="">– kein Team –</option>
+        {% for t in teams_sortiert %}
+        <option value="{{ t.id }}" {{ 'selected' if t.id == gewaehlt }}>{{ t.name }}</option>
+        {% endfor %}
+    </select>
+    <button type="button" class="ben-team-weg" title="Dieses Team entfernen"
+            onclick="benTeamWeg(this)">×</button>
+</div>
+{%- endmacro %}
+
 {% block inhalt %}
 {# 27.09.2026 (Andreas): Seite entrümpelt – kompakte Hauptzeile (Name,
    Rolle, E-Mail, Team, Aktiv), alles Seltene in einer aufklappbaren
    Detailzeile. Teams erscheinen nur bei der Rolle Montage; Zusatzrollen
    sind ein Sonderfall und wandern erklärt in die Details. #}
+<style>
+/* v26 (Phase 125): Team-Dropdowns – Kleinst-Styles mit den Tokens aus style.css */
+.ben-team-wahl { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
+.ben-team-wahl select { max-width: 240px; font-size: var(--t-s); }
+.formular .ben-team-wahl select { width: auto; min-width: 220px; }
+.ben-team-weg { border: 1px solid var(--grau-linie); background: #fff;
+    color: var(--friondo-dunkel); border-radius: var(--r-s); cursor: pointer;
+    line-height: 1; padding: 3px 7px; font-size: var(--t-s); }
+.ben-team-weg:hover { border-color: var(--status-rot); color: var(--status-rot); }
+/* Bei nur einem Dropdown gibt es nichts zu entfernen – „– kein Team –“ wählen */
+.ben-team-wahl:only-of-type .ben-team-weg { display: none; }
+.ben-team-plus { font-size: var(--t-xs); text-decoration: none; }
+.ben-team-plus:hover { text-decoration: underline; }
+.formular .ben-teams { margin-bottom: 0.9rem; }
+.formular .ben-teams > .dezent { display: block; margin-bottom: 4px; }
+</style>
 <div class="seitenkopf">
     <h1>Benutzer</h1>
 </div>
@@ -22,6 +63,9 @@
     <tbody>
     {% for b in benutzer %}
         {% set b_teams = team_je_benutzer.get(b.id, ()) %}
+        {# zugeordnete (aktive) Teams in Dropdown-Reihenfolge #}
+        {% set zugeordnet = teams_sortiert|selectattr('id', 'in', b_teams)|list %}
+        {% set zeigt_teams = b.rolle == 'montage' or zugeordnet %}
         <tr class="{{ 'inaktiv' if not b.aktiv }}" id="zeile-{{ b.id }}">
             <td><input form="f{{ b.id }}" type="text" name="name" value="{{ b.name }}" size="16"></td>
             <td>
@@ -36,18 +80,21 @@
                        placeholder="{{ 'Pflicht (CC)' if b.rolle == 'aussendienst' else 'optional' }}"></td>
             <td>
                 <input form="f{{ b.id }}" type="hidden" name="teams_dabei" value="1">
-                <div class="ben-teams" id="teams-{{ b.id }}"
-                     {% if b.rolle != 'montage' and not b_teams %}hidden{% endif %}>
-                    <div class="chips">
-                        {% for t in teams %}
-                        <label class="ben-chip"><input form="f{{ b.id }}" type="checkbox"
-                               name="team_ids" value="{{ t.id }}"
-                               {{ 'checked' if t.id in b_teams }}>{{ t.name }}</label>
+                {# Ohne Rolle Montage (und ohne Alt-Zuordnung) steht hier kein
+                   Dropdown im HTML – beim Umschalten auf Montage hängt das JS
+                   eines aus der Vorlage ein. #}
+                <div class="ben-teams" id="teams-{{ b.id }}" data-form="f{{ b.id }}"
+                     {% if not zeigt_teams %}hidden{% endif %}>
+                    {% if zeigt_teams %}
+                        {% for t in (zugeordnet or [none]) %}
+                            {{ team_wahl('f' ~ b.id, t.id if t else none) }}
                         {% endfor %}
-                    </div>
+                    {% endif %}
+                    <a href="#" class="ben-team-plus dezent"
+                       onclick="benTeamHinzu(this.parentNode); return false;">+ weiteres Team</a>
                 </div>
                 <span class="dezent" id="keinteam-{{ b.id }}"
-                      {% if b.rolle == 'montage' or b_teams %}hidden{% endif %}>–</span>
+                      {% if zeigt_teams %}hidden{% endif %}>–</span>
             </td>
             <td><input form="f{{ b.id }}" type="checkbox" name="aktiv" {{ 'checked' if b.aktiv }}></td>
             <td class="aktionen">
@@ -96,8 +143,9 @@
                     <span class="dezent" style="align-self:center"
                           title="Nur für Sonderfälle: schaltet ein Modul ZUSÄTZLICH zur Hauptrolle frei, z. B. ein Innendienstler, der auch das Montage-Backend sehen soll. Normalerweise leer lassen – die Rolle regelt alles.">
                         Zusätzliche Module (Sonderfall):</span>
+                    {# v26: Zusatzrollen als schlichte Kontrollfelder (ohne Chip-Optik) #}
                     {% for r in zusatzrollen %}
-                        <label class="kontrollfeld ben-chip">
+                        <label class="kontrollfeld">
                             <input form="f{{ b.id }}" type="checkbox" name="zusatz_{{ r }}"
                                    {{ 'checked' if b.hat_rolle(r) and b.rolle != r }}> {{ rollen_namen.get(r, r) }}</label>
                     {% endfor %}
@@ -132,12 +180,10 @@
         </label>
     </div>
     <div class="ben-teams" id="teams-neu" hidden>
-        <span class="dezent">Montageteam(s):</span>
-        <div class="chips">
-            {% for t in teams %}
-            <label class="ben-chip"><input type="checkbox" name="team_ids" value="{{ t.id }}">{{ t.name }}</label>
-            {% endfor %}
-        </div>
+        <span class="dezent">Montageteam:</span>
+        {{ team_wahl('', none) }}
+        <a href="#" class="ben-team-plus dezent"
+           onclick="benTeamHinzu(this.parentNode); return false;">+ weiteres Team</a>
     </div>
     <button class="knopf" type="submit">Anlegen</button>
 </form>
@@ -148,7 +194,9 @@
         <li><b>Innendienst</b> – Angebote, Erfassungen, Kunden, Versand (Büro-Vollzugriff).</li>
         <li><b>Außendienst</b> – mobile Erfassung, eigene Leads/Termine; keine Preise. E-Mail ist Pflicht (CC im Versand).</li>
         <li><b>Projektierung</b> – Projektierungs-Board und -Akten; Angebote/Kunden nur lesend.</li>
-        <li><b>Montage</b> – ausschließlich das mobile Montage-Backend der eigenen Teams (Team hier zuordnen!).</li>
+        <li><b>Montage</b> – ausschließlich das mobile Montage-Backend der eigenen Teams.<br>
+            Team hier zuordnen – die Teams selbst werden unter
+            <a href="/parametrierung/teams">Parametrierung → Teams</a> angelegt.</li>
         <li><b>Lead-Management</b> – Anrufliste, Pipeline, Terminvergabe.</li>
         <li><b>Admin</b> – alles inkl. Parametrierung und Benutzer.</li>
     </ul>
@@ -157,16 +205,44 @@
         deaktiviert (Historie bleibt lesbar).</p>
 </details>
 
+{# Vorlage für „+ weiteres Team“ und für das Umschalten auf Montage (inert,
+   wird nicht mitgesendet) #}
+<template id="ben-team-vorlage">{{ team_wahl('', none) }}</template>
+
 <script>
 function benDetails(id) {
     var zeile = document.getElementById('details-' + id);
     zeile.hidden = !zeile.hidden;
 }
+function benTeamHinzu(block) {
+    /* v26: weiteres Team-Dropdown aus der Vorlage vor den Link hängen; in der
+       Tabelle gehört das Dropdown über das form-Attribut zum Zeilen-Formular */
+    var vorlage = document.getElementById('ben-team-vorlage');
+    var wahl = vorlage.content.firstElementChild.cloneNode(true);
+    var formId = block.getAttribute('data-form');
+    if (formId) wahl.querySelector('select').setAttribute('form', formId);
+    block.insertBefore(wahl, block.querySelector('.ben-team-plus'));
+    return wahl;
+}
+function benTeamWeg(knopf) {
+    /* „×“: Dropdown entfernen – das letzte bleibt stehen und wird geleert */
+    var wahl = knopf.closest('.ben-team-wahl');
+    var block = wahl.parentNode;
+    if (block.querySelectorAll('.ben-team-wahl').length > 1) {
+        wahl.remove();
+    } else {
+        wahl.querySelector('select').value = '';
+    }
+}
 function benTeamsUmschalten(id, rolle) {
-    /* Teams nur bei der Rolle Montage anbieten */
+    /* Teams nur bei der Rolle Montage anbieten; beim ersten Umschalten auf
+       Montage steht noch kein Dropdown in der Zeile – dann eines einhängen */
     var teams = document.getElementById('teams-' + id);
     var kein = document.getElementById('keinteam-' + id);
-    if (teams) teams.hidden = rolle !== 'montage';
+    if (teams) {
+        teams.hidden = rolle !== 'montage';
+        if (rolle === 'montage' && !teams.querySelector('.ben-team-wahl')) benTeamHinzu(teams);
+    }
     if (kein) kein.hidden = rolle === 'montage';
 }
 </script>

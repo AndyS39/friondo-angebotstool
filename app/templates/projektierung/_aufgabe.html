@@ -204,8 +204,61 @@
             <a class="pj-btn" href="/projektierung/gewerk/{{ g.id }}/ugl">📦 Material bestellen (UGL)</a>
             {% endif %}
         </div>
+        {% elif a.aktion_typ == 'api' and a.aktion_wert == 'heizreport' and heizreport_konfiguriert and heizreport is defined and heizreport.v2 %}
+        {# v26 (PLAN_PROJ_V5 Phase 123/124): Heizreport-API v2 – Projekt anlegen (nur ohne
+           Schlüssel), Heizreport öffnen, Heizlast abrufen, PDF ablegen, Schlüssel von Hand,
+           Verknüpfung lösen (Pflichtbegründung) #}
+        <div class="pj-akt pj-heizreport" id="heizreport-{{ a.id }}">
+            {% if not g.heizreport_projekt_key %}
+            <form method="post" action="/projektierung/gewerk/{{ g.id }}/heizreport/anlegen" data-pj-ajax style="display:inline">
+                <input type="hidden" name="aufgabe_id" value="{{ a.id }}">
+                <button class="pj-btn primary" type="submit"
+                        title="POST /reports/with-data – legt das Projekt vorbelegt im Heizreport an (nur per Klick)">Heizreport-Projekt anlegen</button>
+            </form>
+            <details style="display:inline-block">
+                <summary class="dezent" style="cursor:pointer">Schlüssel von Hand eintragen</summary>
+                <form method="post" action="/projektierung/gewerk/{{ g.id }}/heizreport/schluessel" data-pj-ajax class="pj-btnrow">
+                    <input type="hidden" name="aufgabe_id" value="{{ a.id }}">
+                    <input type="text" name="schluessel" size="11" maxlength="9" pattern="[A-Za-z]{9}"
+                           placeholder="9 Buchstaben" title="Projekt-Schlüssel aus dem Heizreport-Portal (9 Buchstaben); wird über GET /reports/{key} geprüft">
+                    <button class="pj-btn" type="submit">Schlüssel eintragen</button>
+                </form>
+            </details>
+            {% else %}
+            {% if heizreport.portal_url %}
+            <a class="pj-btn" href="{{ heizreport.portal_url }}" target="_blank" rel="noopener"
+               onclick="pjAufgabeLink({{ a.id }})">Heizreport öffnen ↗</a>
+            {% endif %}
+            <span class="pj-mono" title="Projekt-Schlüssel zum Kopieren (ein Deep-Link ins Projekt ist nicht dokumentiert)">{{ g.heizreport_projekt_key }}</span>
+            <form method="post" action="/projektierung/gewerk/{{ g.id }}/heizreport/ergebnis" data-pj-ajax style="display:inline">
+                <input type="hidden" name="aufgabe_id" value="{{ a.id }}">
+                <button class="pj-btn primary" type="submit"
+                        title="GET /reports/{key}/results – Gesamtheizlast übernehmen und mit der verkauften Leistungsklasse abgleichen">Heizlast abrufen</button>
+            </form>
+            <form method="post" action="/projektierung/gewerk/{{ g.id }}/heizreport/pdf" data-pj-ajax style="display:inline"
+                  {% if g.heizreport_pdf_am %}onsubmit="if (!confirm('Bei Heizreport wird ein weiteres Dokument erzeugt – trotzdem erneut abrufen?')) { return false; } this.bestaetigt.value = '1';"{% endif %}>
+                <input type="hidden" name="aufgabe_id" value="{{ a.id }}">
+                <input type="hidden" name="bestaetigt" value="">
+                <button class="pj-btn" type="submit"
+                        title="GET /reports/{key}/pdf?type=heizreport – erzeugt bei Heizreport ein Dokument und legt es in der Galerie ab">Heizreport-PDF ablegen</button>
+            </form>
+            <details style="display:inline-block">
+                <summary class="dezent" style="cursor:pointer">Verknüpfung lösen</summary>
+                <form method="post" action="/projektierung/gewerk/{{ g.id }}/heizreport/loesen" data-pj-ajax class="pj-btnrow">
+                    <input type="hidden" name="aufgabe_id" value="{{ a.id }}">
+                    <input type="text" name="begruendung" size="24" required placeholder="Begründung (Pflicht)">
+                    <button class="pj-btn" type="submit">Lösen</button>
+                </form>
+            </details>
+            {% endif %}
+            <small class="pj-akt-hinweis">
+                {%- if g.heizreport_projekt_key %}Heizreport-Projekt {{ g.heizreport_projekt_key }}{{ ' · angelegt ' ~ heizreport.angelegt_am.strftime('%d.%m.%Y') if heizreport.angelegt_am }}{{ ' · PDF ' ~ heizreport.pdf_am.strftime('%d.%m.%Y') if heizreport.pdf_am }}{% else %}Noch kein Heizreport-Projekt{% endif -%}
+                {%- if g.heizlast_kw %} · {{ ('%g' | format(g.heizlast_kw)) | replace('.', ',') }} kW ({{ g.heizlast_quelle or 'manuell' }}){% endif -%}
+            </small>
+            {% if heizreport.hinweis %}<div class="pj-note crit" style="flex-basis:100%">{{ heizreport.hinweis }}</div>{% endif %}
+        </div>
         {% elif a.aktion_typ == 'api' and a.aktion_wert == 'heizreport' and heizreport_konfiguriert %}
-        {# V4 (Phase 93.1): konfigurierte Heizreport-API #}
+        {# V4 (Phase 93.1): konfigurierte Heizreport-API (Modus generisch, v17) #}
         <div class="pj-akt">
             <form method="post" action="/projektierung/gewerk/{{ g.id }}/heizreport/anlegen" data-pj-ajax style="display:inline">
                 <input type="hidden" name="aufgabe_id" value="{{ a.id }}">
@@ -230,7 +283,7 @@
             <a class="pj-btn" href="/vorgaenge/{{ projekt.vorgang_id }}#galerie">🖼 Ablage</a>
             {% endif %}
             {% if a.aktion_wert == 'heizreport' %}
-            <small class="pj-akt-hinweis">API nicht konfiguriert – Link + Upload (Projektierung-Einstellungen)</small>
+            <small class="pj-akt-hinweis">API nicht konfiguriert – Link + Upload (Token unter Parametrierung → Heizreport)</small>
             {% endif %}
         </div>
         {% endif %}

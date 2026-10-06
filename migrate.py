@@ -723,6 +723,19 @@ def _daten() -> list[str]:
             if projektierung.parameter_holen(session, name, "") == "":
                 projektierung.parameter_setzen(session, name, wert)
                 meldungen.append(f"Projektierung V4: Parameter {name} = {wert}")
+        # v26 (PLAN_PROJ_V5 Phase 122): Heizreport-API v2 – Parameter vorbelegen
+        # (Zeile fehlt → anlegen; heizreport_kennzahlen bewusst leer = nichts
+        # wird gesendet; Spalten heizreport_angelegt_am/_pdf_am über _schema)
+        from app import heizreport_api
+        from app.models import ProjektierungParameter
+        vorhanden = {z.name for z in session.query(ProjektierungParameter)}
+        for name, wert in (("heizreport_modus", "v2"),
+                           ("heizreport_kennzahlen", ""),
+                           ("heizreport_pdf_ordner", heizreport_api.PDF_ORDNER_STANDARD),
+                           ("heizreport_pfad_heizlast", heizreport_api.PFAD_HEIZLAST_STANDARD)):
+            if name not in vorhanden:
+                projektierung.parameter_setzen(session, name, wert)
+                meldungen.append(f"Projektierung V5: Parameter {name} = {wert or '(leer)'}")
         session.commit()
     finally:
         session.close()

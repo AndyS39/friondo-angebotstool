@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block titel %}Heizreport – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+{# v26 (PLAN_PROJ_V5 Phase 122/123): Parametrierung → Heizreport. Abschnitte Zugang ·
+   Kennzahlen · Ablage · Portal-Link · Ergebnis-Pfad · Generischer Client (v17). #}
+<div class="seitenkopf">
+    <h1>Projektierung → Heizreport</h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung">Zur Parametrierung</a>
+        <a class="knopf zweitrangig" href="/parametrierung/projektierung-einstellungen">Projektierung-Einstellungen</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+{% if test %}<p class="meldung {{ 'fehler' if not test.startswith('Verbindung OK') }}" id="zugang">Verbindungstest: {{ test }}</p>{% endif %}
+
+<form method="post" action="/parametrierung/heizreport" class="formular" style="max-width:860px">
+    <h2>Zugang <small class="dezent">{{ 'konfiguriert' if konfiguriert else 'nicht konfiguriert – an der Heizlast-Aufgabe bleibt es bei Link + Upload' }}</small></h2>
+    <label>Modus
+        <select name="heizreport_modus">
+            <option value="v2" {{ 'selected' if modus == 'v2' }}>Kunden-API v2 (Standard) – {{ basis_url }}</option>
+            <option value="generisch" {{ 'selected' if modus == 'generisch' }}>Generischer Client (v17) – Felder unten</option>
+        </select>
+    </label>
+    <label>Token {{ '(gesetzt – leer lassen = unverändert)' if token_gesetzt else '(noch nicht hinterlegt)' }}</label>
+    <input type="password" name="heizreport_api_key" value="" autocomplete="new-password"
+           placeholder="{{ '••••••••' if token_gesetzt else 'Bearer-Token aus dem Pro-Bereich' }}">
+    {% if token_gesetzt %}<label class="kontrollfeld"><input type="checkbox" name="heizreport_token_entfernen"> Token entfernen</label>{% endif %}
+    <p class="dezent">Token aus dem Pro-Bereich des Heizreport-Kontos; hat alle Rechte auf alle
+        Heizreport-Projekte. Er wird nur serverseitig gespeichert und erscheint nie in Logs,
+        Fehlerprotokoll, Verlauf oder Exporten. Ratenlimit: zwei Zugriffe je Sekunde – das Tool
+        hält 600 ms Abstand und wiederholt bei HTTP 429 genau einmal.</p>
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Speichern</button>
+        <button class="knopf zweitrangig" type="submit"
+                formaction="/parametrierung/heizreport/test"
+                title="v2: GET /health ohne Token, GET / (Version), GET /reports mit Token">Verbindung testen</button>
+    </div>
+
+    <h2 id="kennzahlen">Kennzahlen (Phase 123)</h2>
+    <p class="dezent">Heizungsart 1–6, Altersklasse 1–3, Trinkwasser 1–3 und Solarart 1–2 sind
+        bei Heizreport nicht öffentlich dokumentiert und werden nicht geraten. Solange ein Wert
+        <code>null</code> ist, wird das Feld nicht gesendet – der Klartext steht dann in
+        <code>bemerkungen</code>. Ermittlung: <code>scripts/heizreport_kennzahlen.py</code>
+        (nur manuell, an einem Testprojekt; Ablauf in docs/heizreport-api.md Abschnitt 3).
+        <code>verbrauch_einheit</code> = kWh | l | m3: nur bei kWh wird A03 unverändert gesendet,
+        bei l/m3 wird nicht umgerechnet, sondern weggelassen.</p>
+    <label>Zuordnung (JSON)
+        <textarea name="heizreport_kennzahlen" rows="12" class="pj-mono"
+                  placeholder="{{ kennzahlen_vorlage }}">{{ kennzahlen_text }}</textarea>
+    </label>
+    <details><summary class="dezent" style="cursor:pointer">Vorlage anzeigen</summary>
+        <pre class="pj-mono" style="font-size:12px">{{ kennzahlen_vorlage }}</pre></details>
+    <table class="tabelle" style="max-width:860px">
+        <thead><tr><th>API-Feld</th><th>Regel</th><th>Derzeit</th></tr></thead>
+        <tbody>
+        {% for z in kennzahlen_vorschau %}
+            <tr><td><code>{{ z.feld }}</code></td><td class="dezent">{{ z.erklaerung }}</td>
+                <td class="{{ '' if z.gesendet else 'dezent' }}">{{ z.text }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2 id="ablage">Ablage</h2>
+    <label>Galerie-Ordner für das Heizreport-PDF
+        <select name="heizreport_pdf_ordner">
+            {% for o in ordner_liste %}
+            <option value="{{ o }}" {{ 'selected' if o == pdf_ordner }}>{{ o }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <p class="dezent">Vorbelegung „Montagedokumente“ (Ordner des bisherigen manuellen
+        Heizlast-Uploads der Aufgabe); Dateiname
+        <code>Heizreport-&lt;PR-Nummer&gt;-&lt;Sparte&gt;-&lt;JJJJMMTT&gt;.pdf</code>.</p>
+
+    <h2 id="portal">Portal-Link</h2>
+    <label>Heizreport-Portal (Button „Heizreport öffnen ↗“ an der Aufgabe)
+        <input type="text" name="url_heizreport" value="{{ url_heizreport }}" placeholder="https://…"></label>
+    <p class="dezent">Ein Deep-Link ins einzelne Projekt ist nicht dokumentiert – neben dem
+        Button steht der Projekt-Schlüssel zum Kopieren.</p>
+
+    <h2 id="ergebnis">Ergebnis-Pfad</h2>
+    <label>Punktpfad zur Gesamtheizlast (W) in der Antwort von <code>GET /reports/{key}/results</code>
+        <input type="text" name="heizreport_pfad_heizlast" value="{{ pfad_heizlast }}"
+               placeholder="{{ pfad_standard }}"></label>
+    <p class="dezent">Vorbelegung <code>{{ pfad_standard }}</code> – am Referenzprojekt zu
+        bestätigen. Löst der Pfad nicht auf, nimmt das Tool die Summe der Raumheizlasten
+        (<code>results.roomHeatLoads</code>, sonst Fußbodenheizungs-Räume).</p>
+
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Speichern</button>
+    </div>
+
+    <details id="generisch" {{ 'open' if modus == 'generisch' }}>
+        <summary style="cursor:pointer"><strong>Generischer Client (v17)</strong>
+            <span class="dezent">– nur im Modus „generisch“ relevant</span></summary>
+        <label>Basis-URL</label>
+        <input type="text" name="heizreport_api_url" value="{{ generisch.heizreport_api_url }}"
+               placeholder="https://…/api/">
+        <label>Auth-Art</label>
+        <select name="heizreport_auth_art">
+            {% for wert, text in [('header', 'API-Key im Header'), ('bearer', 'Bearer-Token'),
+                                  ('basic', 'Basic (Benutzer + Passwort)'), ('body', 'API-Key im JSON-Body')] %}
+            <option value="{{ wert }}" {{ 'selected' if generisch.heizreport_auth_art == wert }}>{{ text }}</option>
+            {% endfor %}
+        </select>
+        <label>Header-Name (bei Header) bzw. JSON-Feld (bei Body)</label>
+        <input type="text" name="heizreport_auth_header" value="{{ generisch.heizreport_auth_header }}"
+               placeholder="X-API-Key / apiKey">
+        <label>Benutzername (nur Basic)</label>
+        <input type="text" name="heizreport_benutzer" value="{{ generisch.heizreport_benutzer }}">
+        {% for art, titel in [('anlegen', 'Projekt anlegen'), ('status', 'Projekt-Status'), ('ergebnis', 'Ergebnis abrufen')] %}
+        <label>Endpunkt „{{ titel }}“ (Pfad relativ zur Basis-URL, {projekt_key} erlaubt) · Methode</label>
+        <div style="display:flex;gap:6px">
+            <input type="text" name="heizreport_pfad_{{ art }}" value="{{ generisch['heizreport_pfad_' ~ art] }}" style="flex:1">
+            <select name="heizreport_methode_{{ art }}">
+                {% for m in ['', 'POST', 'GET', 'PUT'] %}
+                <option value="{{ m }}" {{ 'selected' if generisch['heizreport_methode_' ~ art] == m }}>{{ m or 'Standard' }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endfor %}
+        <label>Feld-Mapping hin (JSON: Zielfeld → Quelle kunde./projekt./gewerk./steckbrief./fp./erfassung./fest:/aktion:)</label>
+        <textarea name="heizreport_mapping_hin" rows="8" class="pj-mono">{{ generisch.heizreport_mapping_hin }}</textarea>
+        <label>Feld-Mapping zurück (JSON: projekt_key / heizlast_kw / status → Pfad in der Antwort)</label>
+        <textarea name="heizreport_mapping_zurueck" rows="4" class="pj-mono">{{ generisch.heizreport_mapping_zurueck }}</textarea>
+        <div class="formaktionen">
+            <button class="knopf" type="submit">Speichern</button>
+        </div>
+    </details>
+</form>
+
+{% if protokoll %}
+<h2>Änderungsprotokoll (letzte 30)</h2>
+<pre class="dezent" style="white-space:pre-wrap">{{ protokoll }}</pre>
+{% endif %}
+<p class="dezent">Ablauf an der Aufgabe „Heizlastberechnung liegt vor“ und Grenzen (Räume,
+    Webhook = Stufe 2): docs/heizreport-api.md.</p>
+{% endblock %}

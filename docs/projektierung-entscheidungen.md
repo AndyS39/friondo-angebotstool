@@ -774,3 +774,74 @@ Gebaut NACH V4; Abgleich im Plan-Vorspann (PLAN_PROJ_V3_GOLIVE.md).
   UND keine `BEISPIEL-`Artikelnummern. Die alte Route
   `/parametrierung/stuecklisten/golive` bleibt als Kompatibilität bestehen,
   die Stücklisten-Seite verlinkt auf die Checkliste.
+
+
+## PLAN_PROJ_V5 (06.10.2026) – Umsetzung durch Claude Code (v26)
+
+Heizreport über die öffentliche Kunden-API v2, Montageteam-Dropdown,
+Parametrierung neu gegliedert (Phasen 122–126). Projektierung bleibt im
+eingestellten `freigabe_modus`.
+
+### Annahmen A-1 … A-6 und ihre Auflösung
+
+| Nr. | Annahme (PLAN_PROJ_V5) | Umsetzung |
+|---|---|---|
+| A-1 | Ein Team je Montage-Benutzer (Mehrfach bleibt möglich) | Dropdown `team_ids` mit „– kein Team –“; bei mehreren Teams je Team ein Dropdown untereinander, „+ weiteres Team“ / „×“; Speichern über die bestehende Route (leere Werte ignoriert, Dubletten dedupliziert). Nicht-Montage-Benutzer mit alter Zuordnung sehen ihre Dropdowns weiter (Aufräumen durch den Admin). |
+| A-2 | Trennung Straße/Hausnummer | `heizreport_api.strasse_trennen`: letzter Block aus Ziffer + optionalem Buchstaben/Zusatz (`12`, `12a`, `12-14`) = Hausnummer, Rest = Straße; nicht trennbar → alles in `strasse`. |
+| A-3 | Keine Verbrauchsumrechnung ohne bestätigte Einheit | `projektJahresverbrauch` nur bei `verbrauch_einheit[A01] = "kWh"`; bei `l`/`m3` wird A03 weggelassen, der Klartext steht in `bemerkungen`. |
+| A-4 | Kein Deep-Link ins Heizreport-Projekt | Button „Heizreport öffnen ↗“ auf `url_heizreport`, daneben der Schlüssel zum Kopieren. |
+| A-5 | Gesamtheizlast = Gebäudewert, ersatzweise Summe der Räume | Punktpfad `heizreport_pfad_heizlast` (Vorbelegung `results.summary.heatLoad` – **nicht am Referenzprojekt geprüft**, Schlüssel lag nicht vor), dann bekannte Kandidaten, dann Summe aus `results.roomHeatLoads`, zuletzt FBH-Räume; nichts gefunden → Meldung mit den Ergebnisschlüsseln, Gewerk unverändert. |
+| A-6 | FP-L01/FP-L02 aus Heizreport vorbelegen | Nach „Heizlast abrufen“ werden leere FP-L01 (kW, eine Nachkommastelle) und FP-L02 („Heizreport“) vorbelegt, Badge „aus Heizreport“ (bisher nur „vom Vertrieb“); beantwortete Felder bleiben. |
+
+### Entscheidungen beim Bau
+
+- **Modus-Schalter** `heizreport_modus` (v2 | generisch): der v17-Client bleibt
+  vollständig erhalten (Modus generisch, aufklappbar); `konfiguriert()` = Token
+  gesetzt (v2) bzw. Basis-URL + Schlüssel (generisch). Alter Test
+  `test_projektierung_v4.py::Phase93Heizreport` setzt deshalb den Modus
+  „generisch“ und nutzt die neue Testroute `/parametrierung/heizreport/test`.
+- **HTTP-Nahtstelle** `heizreport_api._roh_anfrage` (eine Funktion für alle
+  v2-Aufrufe und den PDF-Download) – Tests mocken sie; die Uhr der Warteschlange
+  (`_uhr`, `_schlafen`) ist ebenfalls austauschbar.
+- **Fehlerprotokoll ohne Request:** neue Funktion `fehlerprotokoll.eintragen_text`
+  (Quelle als Fehlertyp, Meldung, Detail, Pfad) – Tokenwert wird vor dem Eintrag
+  maskiert, der Authorization-Header nie geloggt.
+- **Abgleich-Hinweis** als Verlaufseintrag `art = hinweis` am Gewerk (angezeigt an
+  der Aufgabe und im Heizlast-Block der Akte); keine neue Spalte, kein Eingriff in
+  Angebot/Steckbrief/Stückliste. Der letzte Hinweis bleibt sichtbar, bis ein
+  neuer Abruf „passt“ ergibt (dann wird kein neuer Hinweis geschrieben, der alte
+  bleibt im Verlauf lesbar – Anzeige zeigt den jeweils letzten `hinweis`-Eintrag).
+- **Leistungsklasse aus der Paketmatrix-Heizlastspalte** (`klasse_fuer_heizlast`,
+  dieselbe Zuordnung wie `konfigurator.leistungsklasse`): 8,0–9,9 kW → 7 kW,
+  10,0–12,9 kW → 10 kW usw. Die Kontrollwerte des Plans (9 200 W → „10 kW“,
+  6 500 W bei 7 kW → „passt“) widersprechen dieser Spalte – die Tests verwenden
+  die Werte der Steuerdatei (11 200 W → 10 kW ≠ 7 kW → Hinweis; 9 200 W → 7 kW
+  → passt); siehe Rückfrage. Eine separate „Unterdimensionierungs-Matrix“ gibt
+  es im Code nicht (CLAUDE.md v8: sie ist die Heizlast-Spalte).
+- **PDF-Dateiname** `Heizreport-<PR>-<Sparte>-<JJJJMMTT>.pdf`, zweites Dokument
+  am selben Tag `…-2.pdf` (Zähler über die Galerie-Einträge des Ordners); Link
+  nur `https://heizreport.net/…` (oder relativ), fremde Hosts werden abgelehnt;
+  Download ohne Authorization-Header, Link nicht gespeichert.
+- **Verknüpfung lösen** leert Schlüssel und `heizreport_angelegt_am`, nicht
+  `heizreport_pdf_am` (die Sicherheitsabfrage bleibt – konservativ).
+- **Parametrierung → Heizreport** in eigener Router-Datei
+  (`app/routers/konfiguration_heizreport.py`); Änderungsprotokoll im Parameter
+  `heizreport_protokoll` (letzte 30 Zeilen, Token nur als „gesetzt/entfernt“).
+  Die Kennzahlen-Eingabe wird validiert (JSON-Objekt, Codes Zahl/null, Einheiten
+  kWh/l/m3); Ungültiges wird nicht gespeichert.
+- **migrate.py** legt die Parameter `heizreport_modus = v2`,
+  `heizreport_kennzahlen` (leer), `heizreport_pdf_ordner = Montagedokumente`,
+  `heizreport_pfad_heizlast` an; die Spalten `heizreport_angelegt_am`,
+  `heizreport_pdf_am` kommen über `db._NACHTRAEGLICHE_SPALTEN`.
+- **Montageteam-Dropdown:** Route `benutzer.py` unverändert (Dedup/Leerwerte
+  waren schon abgedeckt); „×“ beim einzigen Dropdown ausgeblendet; Zusatzrollen-
+  Häkchen ohne `ben-chip` (Plan-Test „Chips kommen nicht mehr vor“).
+
+### Offen nach v26
+
+- Ergebnis-Pfad und Kennzahlen am Referenzprojekt/Testprojekt bestätigen
+  (Schlüssel, Token und Lizenz bei Andreas).
+- Bedeutung der „Umkreisprüfung“ bei Berechnungen/PDF (Heizreport) erfragen.
+- Stufe 2: Räume per API, Webhook, Bilder, Wärmepumpen-Check.
+- Verwaiste CSS-Regeln `.ben-chip`/`.chips` in style.css (nur noch
+  `docs/projektierung-prototyp.html` zeigt die Chips).
