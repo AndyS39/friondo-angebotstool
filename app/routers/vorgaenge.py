@@ -319,6 +319,10 @@ async def kombi_versand(request: Request, vorgang_id: int,
         return RedirectResponse(ziel + quote_plus(
             "Microsoft Graph ist noch nicht eingerichtet "
             "(docs/graph-einrichtung.md)."), status_code=303)
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Vorgang und
+    # Angebote sind geladen; msal kann das Token über das Netz erneuern)
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     if graph_versand.angemeldeter_benutzer() is None:
         return RedirectResponse("/versand?meldung=" + quote_plus(
             "Bitte zuerst mit Microsoft anmelden, dann den Kombi-Versand "
@@ -365,6 +369,10 @@ async def kombi_versand(request: Request, vorgang_id: int,
         cc += [a.strip() for a in profil.versand_cc.split(",")
                if a.strip() and a.strip() not in cc]
     empfaenger_leer = bool(profil is not None and profil.empfaenger_leer)
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (PDFs, Broschüren,
+    # Texte, CC/BCC und Absender sind gelesen; Entwurf und Anhänge laufen über
+    # mehrere Graph-Aufrufe)
+    verbindung_freigeben(session)
     erfolg, meldung, weblink, conversation_id = graph_versand.entwurf_erstellen(
         kunde, angebote[0], pdfs[0], betreff, text,
         weitere_anhaenge=pdfs[1:] + broschueren,

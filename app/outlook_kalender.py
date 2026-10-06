@@ -81,8 +81,13 @@ def _event_daten(session, termin, kategorien: list[str]) -> dict:
 def event_senden(session, termin) -> tuple[bool, str]:
     """Anlegen oder Aktualisieren – wirft nie; Fehlertext landet am Termin."""
     from app import graph_versand
+    from app.db import verbindung_freigeben
     if termin.typ not in RELEVANTE_TYPEN or termin.beginn is None:
         return True, ""
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (msal kann das Token
+    # über das Netz erneuern; der commit speichert den bereits angelegten bzw.
+    # geänderten Termin – wie bisher beim commit des Aufrufers)
+    verbindung_freigeben(session)
     token = graph_versand._token()
     if token is None:
         termin.outlook_fehler = "Nicht bei Microsoft angemeldet"
@@ -93,6 +98,9 @@ def event_senden(session, termin) -> tuple[bool, str]:
         return False, fehler
     basis = f"/users/{urllib.parse.quote(adresse)}/calendar/events"
     daten = _event_daten(session, termin, kategorien)
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Ziel und
+    # Ereignisdaten sind gelesen)
+    verbindung_freigeben(session)
     try:
         if termin.outlook_event_id:
             graph_versand._graph_aufruf(
@@ -109,14 +117,20 @@ def event_senden(session, termin) -> tuple[bool, str]:
 
 def event_loeschen(session, termin) -> bool:
     from app import graph_versand
+    from app.db import verbindung_freigeben
     if not termin.outlook_event_id:
         return True
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (msal kann das Token
+    # über das Netz erneuern)
+    verbindung_freigeben(session)
     token = graph_versand._token()
     if token is None:
         return False
     adresse, _kategorien, fehler = _kalender_ziel(session, termin)
     if fehler:
         return False
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Ziel ist gelesen)
+    verbindung_freigeben(session)
     try:
         graph_versand._graph_aufruf(
             "DELETE", f"/users/{urllib.parse.quote(adresse)}/calendar/events/"
@@ -139,7 +153,7 @@ def ruecklesen() -> int:
     """Outlook → Tool (15-Minuten-Scheduler): Datum/Dauer-Änderungen der
     gesyncten Termine zurücklesen; Verlaufseintrag je Änderung."""
     from app import graph_versand
-    from app.db import SessionLocal
+    from app.db import SessionLocal, verbindung_freigeben
     from app.models import Gewerk, ProjektTermin
     token = graph_versand._token()
     if token is None:
@@ -155,6 +169,10 @@ def ruecklesen() -> int:
             adresse, _kategorien, ziel_fehler = _kalender_ziel(session, termin)
             if ziel_fehler:
                 continue
+            # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (vor JEDEM
+            # Graph-Abruf; Ziel ist gelesen, der commit speichert die Änderungen
+            # des vorherigen Termins – wie bisher am Ende des Laufs)
+            verbindung_freigeben(session)
             try:
                 event = graph_versand._graph_aufruf(
                     "GET", f"/users/{urllib.parse.quote(adresse)}/calendar/"

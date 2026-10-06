@@ -90,7 +90,13 @@ def unbehandelte_ausnahme(request: Request, exc: Exception):
     try:
         nr = fehlerprotokoll.eintragen(request, exc)
         gesperrt = fehlerprotokoll.ist_datenbank_gesperrt(exc)
-        if gesperrt:
+        if fehlerprotokoll.ist_pool_timeout(exc):
+            # Hotfix 06.10.2026: Verbindungspool erschöpft – klare Meldung
+            # nach 10 s statt 30 s Hängen; Eintrag nur in data/fehler.log
+            gesperrt = True
+            meldung = ("Datenbank-Verbindungen ausgelastet – bitte in einer Minute "
+                       f"erneut versuchen (Fehler-Nr. {nr})")
+        elif gesperrt:
             meldung = ("Datenbank kurz belegt – Änderung nicht gespeichert, "
                        f"bitte erneut versuchen (Fehler-Nr. {nr})")
         else:

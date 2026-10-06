@@ -129,11 +129,19 @@ def mail_senden(session: Session, empfaenger: str, betreff: str, text: str) -> b
     bei fehlender „Senden als“-Berechtigung Fallback auf angebot@friondo.de.
     Fehler landen im Protokoll, es wird nie eine Ausnahme geworfen."""
     from app import graph_versand
+    from app.db import verbindung_freigeben
     absender = _absender(session)
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Absender ist gelesen;
+    # der commit speichert die bereits angelegten Glocken-Einträge – wie bisher
+    # beim commit des Aufrufers; msal kann das Token über das Netz erneuern)
+    verbindung_freigeben(session)
     erfolg, fehler = graph_versand.text_mail_senden(empfaenger, betreff, text, absender)
     if not erfolg and absender != ABSENDER_FALLBACK:
         _protokollieren(session, f"Absender {absender} fehlgeschlagen ({fehler}) – "
                                  f"Fallback {ABSENDER_FALLBACK}")
+        # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Protokollzeile
+        # ist geschrieben; zweiter Versand über das Fallback-Postfach)
+        verbindung_freigeben(session)
         erfolg, fehler = graph_versand.text_mail_senden(
             empfaenger, betreff, text, ABSENDER_FALLBACK)
     if not erfolg:

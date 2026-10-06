@@ -7,10 +7,51 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app import config
 
+# Hotfix 06.10.2026 (Verbindungspool): auf dem Server trat
+# „QueuePool limit of size 5 overflow 10 reached, connection timed out,
+# timeout 30.00“ auf – Verbindungen wurden während Netz-I/O gehalten und die
+# RollenMiddleware hielt je Anfrage eine zweite. Größerer Pool, kurzer Timeout
+# (Anfragen scheitern nach 10 s mit klarer Meldung statt 30 s zu hängen) und die
+# Regel „keine offene Sitzung während Netz-I/O“ (verbindung_freigeben unten).
+POOL_SIZE = 20
+MAX_OVERFLOW = 40
+POOL_TIMEOUT = 10
+
 engine = create_engine(
     config.DB_URL,
     connect_args={"check_same_thread": False},  # FastAPI: Zugriff aus mehreren Threads
+    pool_size=POOL_SIZE, max_overflow=MAX_OVERFLOW, pool_timeout=POOL_TIMEOUT,
 )
+
+
+def pool_status() -> str:
+    """Belegung des Verbindungspools, z. B. „Pool size: 20  Connections in
+    pool: 3 Current Overflow: -17 Current Checked out connections: 2“ – für
+    Fehlerprotokoll und Parametrierung → Fehlerprotokoll."""
+    try:
+        return engine.pool.status()
+    except Exception as fehler:   # Pool ohne status() (z. B. StaticPool)
+        return f"Pool-Status nicht verfügbar ({type(fehler).__name__})"
+
+
+def verbindung_freigeben(session) -> None:
+    """Hotfix 06.10.2026 – Regel „keine offene Sitzung während Netz-I/O“:
+    unmittelbar VOR einem Netzaufruf (Graph/msal, Routing, Geocoding,
+    Heizreport, monday) aufrufen, nachdem alle benötigten Daten gelesen sind.
+    Der commit beendet die laufende Transaktion und gibt die Pool-Verbindung
+    frei; die Session bleibt nutzbar (expire_on_commit=False → geladene Objekte
+    behalten ihre Werte), die nächste Abfrage holt sich wieder eine
+    Verbindung. Bereits vorgenommene Änderungen werden dabei gespeichert –
+    deshalb erst nach dem Lesen, nie mitten in einer halb fertigen Änderung
+    aufrufen. Hintergrundläufe mit eigener Session schließen sie stattdessen
+    (session.close()) und öffnen fürs Zurückschreiben eine neue."""
+    if session is None:
+        return
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
 
 
 @event.listens_for(engine, "connect")

@@ -444,10 +444,16 @@ async def monday_uebersicht(request: Request, session: Session = Depends(get_ses
         mappings[quelle.board_id] = {
             m.feld: m.spalten_id for m in session.query(MondayMapping)
             .filter(MondayMapping.board_id == quelle.board_id)}
-        if config.MONDAY_API_TOKEN:
+    if config.MONDAY_API_TOKEN and quellen:
+        # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben – die
+        # Board-Abfragen (Spalten/Gruppen je Quelle) dauern je bis zu 30 s
+        from app.db import verbindung_freigeben
+        verbindung_freigeben(session)
+        board_ids = [q.board_id for q in quellen]
+        for board_id in board_ids:
             try:
-                spalten[quelle.board_id] = monday_sync.spalten_laden(quelle.board_id)
-                gruppen[quelle.board_id] = monday_sync.gruppen_laden(quelle.board_id)
+                spalten[board_id] = monday_sync.spalten_laden(board_id)
+                gruppen[board_id] = monday_sync.gruppen_laden(board_id)
             except Exception as problem:
                 spalten_fehler = str(problem)
     return render(request, "konfiguration/monday.html", aktiv="/parametrierung",
@@ -2002,8 +2008,13 @@ async def fehlerprotokoll_seite(request: Request,
         abfrage = abfrage.filter(Fehlerprotokoll.pfad.contains(pfad))
     eintraege = (abfrage.order_by(Fehlerprotokoll.zeit.desc(), Fehlerprotokoll.id.desc())
                  .limit(200).all())
+    from app import db as db_modul
     return render(request, "konfiguration/fehlerprotokoll.html",
                   aktiv="/parametrierung", eintraege=eintraege, offen=offen, pfad=pfad,
+                  # Hotfix 06.10.2026: Pool-Belegung oben auf der Seite
+                  pool_status=db_modul.pool_status(),
+                  pool_groesse=f"{db_modul.POOL_SIZE} + {db_modul.MAX_OVERFLOW} Überlauf, "
+                               f"Timeout {db_modul.POOL_TIMEOUT} s",
                   offen_anzahl=(session.query(Fehlerprotokoll)
                                 .filter(Fehlerprotokoll.erledigt.is_(False)).count()),
                   gesamt_anzahl=session.query(Fehlerprotokoll).count(),

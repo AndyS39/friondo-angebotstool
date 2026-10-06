@@ -108,6 +108,13 @@ def uebertragen(session, angebot: Angebot) -> bool:
     try:
         getan: list[str] = []
         werte = spaltenwerte_bauen(quelle, angebot, session)
+        wert_text = (_betrag(angebot, quelle.rueck_wert_basis, session)
+                     if werte and quelle.rueck_wert_spalte else "")
+        # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Lead, Quelle,
+        # Spaltenwerte und Betrag sind gelesen; zwischen den beiden monday-
+        # Aufrufen gibt es keinen DB-Zugriff)
+        from app.db import verbindung_freigeben
+        verbindung_freigeben(session)
         if werte:
             monday_sync._api(
                 "mutation($board: ID!, $item: ID!, $werte: JSON!) {"
@@ -118,7 +125,7 @@ def uebertragen(session, angebot: Angebot) -> bool:
             if quelle.rueck_modus == "status":
                 getan.append(f"Status „{quelle.rueck_status_wert}“")
             if quelle.rueck_wert_spalte:
-                getan.append(f"Deal-Wert {_betrag(angebot, quelle.rueck_wert_basis, session)} "
+                getan.append(f"Deal-Wert {wert_text} "
                              f"({quelle.rueck_wert_basis}, Vorgangssumme)")
         if quelle.rueck_modus == "gruppe" and quelle.rueck_gruppe_id:
             monday_sync._api(
@@ -160,6 +167,9 @@ def wert_aktualisieren(session, angebot: Angebot, anlass: str = "",
         if quelle is None or quelle.rueck_modus == "aus" or not quelle.rueck_wert_spalte:
             return
         betrag = _betrag(angebot, quelle.rueck_wert_basis, session)
+        # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben
+        from app.db import verbindung_freigeben
+        verbindung_freigeben(session)
         monday_sync._api(
             "mutation($board: ID!, $item: ID!, $werte: JSON!) {"
             " change_multiple_column_values(board_id: $board, item_id: $item,"

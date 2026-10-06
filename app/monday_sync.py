@@ -12,7 +12,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app import config
-from app.db import SessionLocal
+from app.db import SessionLocal, verbindung_freigeben
 from app.models import (Benutzer, Lead, MondayMapping, MondayPerson,
                         MondayQuelle, MONDAY_FELDER)
 
@@ -264,7 +264,12 @@ def sync(session: Session | None = None) -> dict:
 def _quelle_syncen(session: Session, quelle: MondayQuelle,
                    gesehen: dict) -> int:
     zuordnung = _mapping(session, quelle.board_id)
-    board_name, items = _items_der_gruppe(quelle.board_id, quelle.gruppen_titel)
+    board_id, gruppen_titel = quelle.board_id, quelle.gruppen_titel
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Mapping und Quelle
+    # sind gelesen; der commit speichert die Leads der vorherigen Quelle – wie
+    # bisher am Ende des Laufs; die Board-Abfrage läuft über mehrere Seiten)
+    verbindung_freigeben(session)
+    board_name, items = _items_der_gruppe(board_id, gruppen_titel)
     quelle.board_name = quelle.board_name or board_name
     anzahl = 0
     for item in items:

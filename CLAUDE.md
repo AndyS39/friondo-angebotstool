@@ -1567,3 +1567,88 @@ Projektierung weiter im eingestellten `freigabe_modus`.)
   (9,2 kW → „10 kW“) widersprechen der Paketmatrix-Heizlastspalte (8,0–9,9 kW → 7 kW)
   – Tests folgen der Steuerdatei, „Umkreisprüfung“ bei Heizreport, Stufe 2 (Räume,
   Webhook, Bilder, Wärmepumpen-Check).
+
+## Hotfix 06.10.2026 (Verbindungspool)
+
+**Störung:** Auf dem Server trat `sqlalchemy.exc.TimeoutError: QueuePool limit of
+size 5 overflow 10 reached, connection timed out, timeout 30.00` auf. Ursache (aus
+dem Code, die Server-Logs lagen im Projektordner nicht vor): SQLite läuft über einen
+QueuePool mit 5 + 10 Verbindungen; die `RollenMiddleware` hielt je Anfrage eine
+eigene Sitzung (und damit eine Verbindung) über die gesamte Dauer bis nach
+`call_next`, und Endpunkte wie die Terminvorschläge der Kundenkartei (v25, je
+Kartei-Aufruf) hielten ihre Request-Sitzung während Netz-I/O (Routing-Matrix,
+Geocoding, Outlook-Frei/Belegt, Heizreport, Graph-Mails – bis zu 60 s Timeout).
+Bei mehreren gleichzeitigen Nutzern waren damit 15 Verbindungen belegt, weitere
+Anfragen warteten 30 s und scheiterten.
+
+**Regel „keine offene Sitzung während Netz-I/O“:** Vor jedem Netzaufruf (urllib,
+Graph/msal, ORS/Google/Nominatim, monday, Heizreport) alle benötigten Daten lesen,
+dann `app.db.verbindung_freigeben(session)` (= `commit`, beendet die Transaktion und
+gibt die Pool-Verbindung frei; die Session bleibt nutzbar, Objekte behalten ihre
+Werte – `expire_on_commit=False`), dann der Netzaufruf, danach wieder normale
+DB-Arbeit (die nächste Abfrage holt eine Verbindung). Hintergrundläufe mit eigener
+`SessionLocal()` lesen, schließen, rufen das Netz ohne Session und öffnen zum
+Zurückschreiben eine neue kurze Session. Die Freigabe committet – nie mitten in
+einer halb fertigen Änderung aufrufen. Beim Code-Review: jeder neue Netzaufruf ohne
+Freigabe davor ist ein Fehler.
+
+**Maßnahmen:**
+- `app/db.py`: `create_engine(pool_size=20, max_overflow=40, pool_timeout=10)` –
+  Anfragen scheitern nach 10 s mit klarer Meldung statt 30 s zu hängen;
+  `pool_status()` und `verbindung_freigeben(session)`.
+- `app/auth.py` RollenMiddleware: Sitzung nach den Rollen-, Glocken- und
+  Modulabfragen und VOR `call_next` geschlossen (`finally` bleibt als Sicherung);
+  `request.state.benutzer` ist ein abgelöstes Objekt mit allen Spalten (Benutzer hat
+  keine Relationships, Routen laden ihn bei Bedarf über `session.get`).
+- Freigabe vor Netz-I/O eingebaut in `routing.matrix_fuellen`,
+  `geocoding.geokodieren` (auch im 5-Minuten-Hintergrundlauf je Adresse),
+  `kalender.frei_belegt/termin_schreiben/termin_aendern/termin_loeschen` (Rumpf
+  vorher gelesen), `heizreport_api._anfrage_v2/_anfrage` und PDF-Download sowie in
+  den Mail-/Sync-Modulen (siehe unten). Die automatischen Terminvorschläge der
+  Kundenkartei rechnen damit ohne gehaltene Verbindung (Routing-Matrix und
+  Outlook-Abfragen laufen nach der Freigabe) und nutzen weiter ihren
+  10-Minuten-Cache (`lead_termin.vorschlaege_cache`).
+- Hintergrundläufe und Mail-/Graph-Aufrufe (monday_sync, mail_sync, lead_parser,
+  lead_mail, benachrichtigungen, outlook_kalender, terminmail, sub_mail, bza, golive,
+  monday_rueckspielung, die monday-Übersicht der Parametrierung sowie die
+  Versand-Routen in routers/angebote.py und routers/vorgaenge.py) lesen alle
+  benötigten Daten aus der Session, rufen unmittelbar vor jedem Netzaufruf (Graph
+  inkl. msal-Token, monday-GraphQL) `verbindung_freigeben(session)` auf und
+  schreiben erst danach zurück; in Schleifen (je Angebot, Termin, Sub-Eintrag,
+  Quelle, Mail) steht die Freigabe vor JEDEM Aufruf. Token und angemeldetes Konto
+  der Hintergrundläufe (mail_sync.sync, terminmail/sub_mail.antworten_abgleichen,
+  outlook_kalender.ruecklesen) werden vor `SessionLocal()` ermittelt. Folge:
+  `benachrichtigungen.mail_senden` – und damit `kern.benachrichtigen` mit
+  Sofort-Mail – committet die bis dahin anstehenden Änderungen des Aufrufers;
+  `kern.benachrichtigen` committet deshalb selbst VOR dem Mail-Schritt, damit ein
+  Commit-Fehler den Aufrufer wie bisher abbricht statt still zu verschwinden.
+  Hintergrundschleifen committen je Durchlauf (best effort je Eintrag).
+- **Nebenbefund des Lasttests:** parallele Anfragen fügten dasselbe Routing-Paar
+  bzw. dieselbe Geocode-Adresse gleichzeitig in den Cache ein („UNIQUE constraint
+  failed“ in `routing_cache`/`geocode_cache`, bisher ein 500er für den zweiten
+  Nutzer). `routing._cache_schreiben` und `geocoding.geokodieren` schreiben jetzt
+  per SQLite-Upsert (`INSERT … ON CONFLICT DO UPDATE`) und laden die Zeile danach
+  mit `populate_existing()` frisch.
+- `app/fehlerprotokoll.py`: `ist_pool_timeout()`; bei erschöpftem Pool nur
+  Datei-Log `data/fehler.log` („Pool erschöpft – nur Datei-Log“, kein
+  Tabellen-INSERT, der selbst auf den Pool warten würde); `engine.pool.status()`
+  steht in jedem Eintrag (Datei-Log und Spalte `traceback`, auch bei
+  `eintragen_text`); `app/main.py` meldet „Datenbank-Verbindungen ausgelastet –
+  bitte in einer Minute erneut versuchen (Fehler-Nr.)“; Parametrierung →
+  Fehlerprotokoll zeigt den Pool-Status oben.
+- **Backup (Übergangslösung bis PLAN_V17):** `scripts\backup-nacht.bat` sichert die
+  Datenbank über `db.taegliches_backup()` (SQLite-Backup-API, eine Datei je Tag,
+  30 Tage) und spiegelt `data\backups`, `data\angebote`, `data\projekte` per robocopy
+  nach `BACKUP_ZIEL` aus der `.env` (Vorlage in `.env.example`, Standard
+  `D:\Backup\Angebotstool`; Log `data\backup-nacht.log`). Geplante Aufgabe
+  „Friondo Backup“ täglich 02:30 auf dem Server – Anleitung in
+  docs/nach-dem-update-v26.md.
+- Tests: `tests/test_pool_hotfix.py` – 40 parallele Anfragen (Kundenkartei +
+  Terminvorschläge, ORS-Matrix gemockt mit 3 s) ohne TimeoutError, Welle 2 belegt
+  während des Netzaufrufs keine Verbindung, `verbindung_freigeben` gibt die
+  Verbindung frei, Middleware-Sitzung vor dem Endpunkt geschlossen, Pool-Timeout nur
+  im Datei-Log, Pool-Status in Einträgen und auf der Seite;
+  `tests/test_pool_hotfix_mail.py` misst für die Mail-/Sync-/Outlook-Pfade
+  (benachrichtigungen, golive, lead_mail, lead_parser, monday_sync, outlook_kalender,
+  mail_sync, terminmail, sub_mail) `pool.checkedout() == 0` im Moment des gemockten
+  Netzaufrufs (drei Schleifen ohne passende Dev-DB-Daten werden übersprungen).

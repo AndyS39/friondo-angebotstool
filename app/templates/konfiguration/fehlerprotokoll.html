@@ -22,6 +22,10 @@
 
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
+{# Hotfix 06.10.2026: Verbindungspool-Status (QueuePool) – steht auch in jedem Eintrag #}
+<p class="hinweis" id="pool-status"><strong>Verbindungspool:</strong> <code>{{ pool_status }}</code>
+    <span class="dezent">(Pool {{ pool_groesse }}; „Pool erschöpft“-Einträge stehen nur im Datei-Log)</span></p>
+
 <p class="dezent">
     Jede unbehandelte Ausnahme (Internal Server Error) erhält eine Fehler-Nr., die der
     Benutzer auf der Fehlerseite sieht. Primärquelle mit vollständigem Traceback ist das

@@ -47,8 +47,14 @@ def frei_belegt(session: Session, ad, von: datetime,
     if not aktiv(session):
         return None
     postfach = _postfach(session, ad)
+    if not postfach:
+        return None
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Token-Erneuerung
+    # über msal und calendarView dauern bis zu 60 s)
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     token = _token()
-    if not postfach or token is None:
+    if token is None:
         return None
     from app import graph_versand
     try:
@@ -115,14 +121,20 @@ def termin_schreiben(session: Session, termin, vorgang, kunde, ad) -> bool:
     if not aktiv(session):
         return False
     postfach = _postfach(session, ad)
+    if not postfach:
+        return False
+    rumpf = _ereignis_rumpf(session, termin, vorgang, kunde)
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Rumpf ist gelesen;
+    # der commit speichert den bereits angelegten Termin – wie bisher am Ende)
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     token = _token()
-    if not postfach or token is None:
+    if token is None:
         return False
     from app import graph_versand
     try:
         antwort = graph_versand._graph_aufruf(
-            "POST", f"/users/{postfach}/events", token,
-            _ereignis_rumpf(session, termin, vorgang, kunde))
+            "POST", f"/users/{postfach}/events", token, rumpf)
         termin.outlook_event_id = f"{postfach}|{antwort.get('id', '')}"
         return True
     except Exception:
@@ -132,15 +144,18 @@ def termin_schreiben(session: Session, termin, vorgang, kunde, ad) -> bool:
 def termin_aendern(session: Session, termin, vorgang, kunde, ad) -> bool:
     if not aktiv(session) or not termin.outlook_event_id:
         return termin_schreiben(session, termin, vorgang, kunde, ad)
+    rumpf = _ereignis_rumpf(session, termin, vorgang, kunde)
+    postfach, _, ereignis_id = termin.outlook_event_id.partition("|")
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     token = _token()
     if token is None:
         return False
     from app import graph_versand
-    postfach, _, ereignis_id = termin.outlook_event_id.partition("|")
     try:
         graph_versand._graph_aufruf(
-            "PATCH", f"/users/{postfach}/events/{ereignis_id}", token,
-            _ereignis_rumpf(session, termin, vorgang, kunde))
+            "PATCH", f"/users/{postfach}/events/{ereignis_id}", token, rumpf)
         return True
     except Exception:
         return False
@@ -149,11 +164,14 @@ def termin_aendern(session: Session, termin, vorgang, kunde, ad) -> bool:
 def termin_loeschen(session: Session, termin) -> bool:
     if not aktiv(session) or not termin.outlook_event_id:
         return False
+    postfach, _, ereignis_id = termin.outlook_event_id.partition("|")
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     token = _token()
     if token is None:
         return False
     from app import graph_versand
-    postfach, _, ereignis_id = termin.outlook_event_id.partition("|")
     try:
         graph_versand._graph_aufruf(
             "DELETE", f"/users/{postfach}/events/{ereignis_id}", token)

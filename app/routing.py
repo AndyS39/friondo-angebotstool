@@ -51,17 +51,21 @@ def _cache_lesen(session: Session, von: tuple, nach: tuple):
 
 def _cache_schreiben(session: Session, von: tuple, nach: tuple,
                      minuten: float, km: float, anbieter: str) -> None:
-    zeile = (session.query(RoutingCache)
-             .filter(RoutingCache.von_key == _key(*von),
-                     RoutingCache.nach_key == _key(*nach)).first())
-    if zeile is None:
-        zeile = RoutingCache(von_key=_key(*von), nach_key=_key(*nach))
-        session.add(zeile)
-    zeile.minuten = round(minuten, 1)
-    zeile.km = round(km, 1)
-    zeile.anbieter = anbieter
-    zeile.gueltig_bis = datetime.now() + timedelta(days=CACHE_TAGE)
-    session.flush()
+    """Hotfix 06.10.2026: Upsert statt Lesen+Einfügen – parallele Anfragen
+    (z. B. mehrere Kundenkarteien mit Terminvorschlägen) fügten dasselbe Paar
+    gleichzeitig ein und liefen in „UNIQUE constraint failed“; ON CONFLICT
+    aktualisiert die Zeile des anderen. Danach die Zeile frisch laden, damit
+    ein ggf. schon geladenes (abgelaufenes) Objekt die neuen Werte trägt."""
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+    werte = {"minuten": round(minuten, 1), "km": round(km, 1), "anbieter": anbieter,
+             "gueltig_bis": datetime.now() + timedelta(days=CACHE_TAGE)}
+    anweisung = sqlite_insert(RoutingCache).values(
+        von_key=_key(*von), nach_key=_key(*nach), **werte)
+    session.execute(anweisung.on_conflict_do_update(
+        index_elements=["von_key", "nach_key"], set_=werte))
+    (session.query(RoutingCache)
+     .filter(RoutingCache.von_key == _key(*von), RoutingCache.nach_key == _key(*nach))
+     .populate_existing().first())
 
 
 def _ors_matrix(quellen: list[tuple], ziele: list[tuple],
@@ -118,17 +122,24 @@ def matrix_fuellen(session: Session, quellen: list[tuple],
     if not fehlend:
         return
     anbieter = kern.parameter_holen(session, "routing_anbieter", "luftlinie")
+    ors_key = kern.parameter_holen(session, "ors_api_key")
+    google_key = kern.parameter_holen(session, "google_api_key")
+    if anbieter == "ors" and ors_key:
+        geocoding._zaehler(session, "ors_matrix")
+    elif anbieter == "google" and google_key:
+        geocoding._zaehler(session, "google_matrix")
+    else:
+        return   # Luftlinie: kein Netzaufruf, fahrzeit() schätzt je Paar
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Parameter und
+    # Cache sind gelesen; der Zähler ist mit dem commit gespeichert)
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     ergebnis = None
     try:
-        if anbieter == "ors" and kern.parameter_holen(session, "ors_api_key"):
-            geocoding._zaehler(session, "ors_matrix")
-            ergebnis = _ors_matrix(quellen, ziele,
-                                   kern.parameter_holen(session, "ors_api_key"))
-        elif anbieter == "google" and kern.parameter_holen(session,
-                                                           "google_api_key"):
-            geocoding._zaehler(session, "google_matrix")
-            ergebnis = _google_matrix(
-                quellen, ziele, kern.parameter_holen(session, "google_api_key"))
+        if anbieter == "ors":
+            ergebnis = _ors_matrix(quellen, ziele, ors_key)
+        else:
+            ergebnis = _google_matrix(quellen, ziele, google_key)
     except Exception:
         ergebnis = None
     if ergebnis is None or ergebnis[0] is None:

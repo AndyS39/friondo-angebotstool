@@ -265,6 +265,8 @@ async def fern_signieren(request: Request, token: str,
                  .filter(Erfassung.angebot_id == angebot.id).first())
     if erfassung is not None:
         erfassung.status = "Erledigt"
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben – dieser commit gibt
+    # die Verbindung frei; bis zur Info-Mail folgt kein weiterer DB-Zugriff
     session.commit()
 
     # Info-Mail an den Innendienst-Postfachinhaber (best effort)

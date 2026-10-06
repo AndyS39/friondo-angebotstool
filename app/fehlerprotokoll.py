@@ -81,6 +81,30 @@ def ist_datenbank_gesperrt(exc: BaseException) -> bool:
         return False
 
 
+def ist_pool_timeout(exc: BaseException) -> bool:
+    """Hotfix 06.10.2026: True bei sqlalchemy TimeoutError „QueuePool limit …
+    reached“ (Verbindungspool erschöpft). Für solche Einträge gibt es keinen
+    Tabellen-INSERT – der würde selbst auf eine Pool-Verbindung warten; der
+    Eintrag landet nur in data/fehler.log."""
+    try:
+        from sqlalchemy.exc import TimeoutError as PoolTimeout
+        if isinstance(exc, PoolTimeout):
+            return True
+    except Exception:
+        pass
+    text = str(exc)
+    return "QueuePool" in text and "reached" in text
+
+
+def pool_status_text() -> str:
+    """Pool-Belegung für Log und Tabelle (wirft nie)."""
+    try:
+        from app import db
+        return db.pool_status()
+    except Exception:
+        return "Pool-Status nicht verfügbar"
+
+
 def angebot_id_aus_pfad(pfad: str):
     """Angebots-ID aus „/angebote/<id>/…“ (sonst None)."""
     treffer = _ANGEBOT_PFAD.match(pfad or "")
@@ -212,10 +236,12 @@ def eintragen_text(quelle: str, meldung: str, detail: str = "", pfad: str = "") 
     daten = dict(benutzer_id=None, benutzer_name="", rolle="", methode="EXTERN",
                  pfad=(pfad or "")[:300], query="", formdaten="", angebot_id=None)
     meldung = (meldung or "")[:500]
-    detail = (detail or "")[:TRACEBACK_MAX]
+    pool = pool_status_text()
+    detail = (f"Verbindungspool: {pool}\n" + (detail or ""))[:TRACEBACK_MAX]
     try:
         logging_einrichten()
-        logger.error("Fehler-Nr. %s | %s | %s\n%s", nr, quelle, meldung, detail or "-")
+        logger.error("Fehler-Nr. %s | %s | %s | Pool: %s\n%s", nr, quelle, meldung, pool,
+                     detail or "-")
     except Exception:
         pass
     try:
@@ -237,19 +263,26 @@ def eintragen(request, exc: BaseException) -> str:
     except Exception:
         nr = "F-unbekannt"
     daten = _anfrage_daten(request)
-    tb_text = _traceback_text(exc)
+    # Hotfix 06.10.2026: Pool-Belegung in jeden Eintrag; bei erschöpftem Pool
+    # NUR das Datei-Log (ein Tabellen-INSERT würde selbst auf den Pool warten)
+    pool = pool_status_text()
+    pool_timeout = ist_pool_timeout(exc)
+    tb_text = f"Verbindungspool: {pool}\n" + _traceback_text(exc)
     try:
         logging_einrichten()
         logger.error(
             "Fehler-Nr. %s | %s %s%s | Benutzer %s (%s, ID %s) | Angebot %s | %s: %s\n"
-            "Formdaten: %s\n%s",
+            "Pool: %s%s\nFormdaten: %s\n%s",
             nr, daten["methode"], daten["pfad"],
             ("?" + daten["query"]) if daten["query"] else "",
             daten["benutzer_name"] or "-", daten["rolle"] or "-", daten["benutzer_id"],
             daten["angebot_id"], type(exc).__name__, str(exc)[:500],
+            pool, " (Pool erschöpft – nur Datei-Log)" if pool_timeout else "",
             daten["formdaten"] or "-", tb_text)
     except Exception:
         pass
+    if pool_timeout:
+        return nr
     try:
         _in_tabelle_schreiben(nr, daten, exc, tb_text)
     except Exception:

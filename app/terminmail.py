@@ -61,9 +61,13 @@ def senden(session, termin, benutzer=None) -> tuple[bool, str]:
     text = kern.sub_mail_text(
         kern.parameter_holen(session, "terminmail_text", TEXT_STANDARD),
         daten)
+    absender = benachrichtigungen._absender(session)
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Empfänger, Texte
+    # und Absender sind gelesen; der Versand läuft über mehrere Graph-Aufrufe)
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     ok, fehler, conversation_id = graph_versand.mail_mit_anhaengen_senden(
-        kunde.email, betreff, text,
-        absender=benachrichtigungen._absender(session))
+        kunde.email, betreff, text, absender=absender)
     if not ok:
         return False, fehler
     termin.graph_conversation_id = conversation_id or None
@@ -71,7 +75,7 @@ def senden(session, termin, benutzer=None) -> tuple[bool, str]:
         projekt_id=termin.projekt_id, graph_id=f"termin-{termin.id}-"
         f"{datetime.now():%Y%m%d%H%M%S}",
         von_name=benutzer.name if benutzer else "Angebotstool",
-        von_email=benachrichtigungen._absender(session),
+        von_email=absender,
         empfangen_am=datetime.now(), betreff=betreff,
         vorschau=text[:500], eingehend=False))
     kern.verlauf(session, termin.projekt_id,
@@ -86,17 +90,20 @@ def antworten_abgleichen() -> int:
     """Kundenantworten auf Terminmails (Konversation) – setzt
     kunden_antwort_am; die Akte schlägt dann „Kunde hat bestätigt“ vor."""
     from app import benachrichtigungen, graph_versand, mail_sync
-    from app.db import SessionLocal
+    from app.db import SessionLocal, verbindung_freigeben
     from app.models import Benutzer, Projekt, ProjektMail, ProjektTermin
     token = graph_versand._token()
     if token is None:
         return 0
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben – das angemeldete
+    # Konto wird wie das Token VOR der Sitzung ermittelt (msal kann es über
+    # das Netz erneuern)
+    konto = (graph_versand.angemeldeter_benutzer() or "").lower()
     session = SessionLocal()
     neu_gesamt = 0
     try:
         postfach = benachrichtigungen._absender(session)
-        eigene = {postfach.lower(),
-                  (graph_versand.angemeldeter_benutzer() or "").lower()}
+        eigene = {postfach.lower(), konto}
         for b in session.query(Benutzer).filter(Benutzer.aktiv.is_(True)):
             if b.email:
                 eigene.add(b.email.lower())
@@ -104,6 +111,10 @@ def antworten_abgleichen() -> int:
                   .filter(ProjektTermin.graph_conversation_id.isnot(None),
                           ProjektTermin.kunde_bestaetigt.is_(False)).all())
         for termin in offene:
+            # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (vor JEDEM
+            # Graph-Abruf; der commit speichert die Antworten des vorherigen
+            # Termins – wie bisher am Ende des Laufs)
+            verbindung_freigeben(session)
             try:
                 nachrichten = mail_sync.nachrichten_je_konversation(
                     token, termin.graph_conversation_id, postfach)

@@ -140,6 +140,10 @@ def testmail_senden(session: Session, benutzer) -> tuple[bool, str]:
     if not ziel:
         return False, "Ihr Benutzer hat keine E-Mail-Adresse (Benutzerverwaltung)."
     absender = benachrichtigungen._absender(session)
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Absender ist gelesen;
+    # msal kann das Token über das Netz erneuern)
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     # bewusst OHNE Fallback auf angebot@ – geprüft wird das Absender-Postfach
     ok, fehler = graph_versand.text_mail_senden(
         ziel, "Testmail Projektierung – Go-live-Checkliste",

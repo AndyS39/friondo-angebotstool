@@ -14,7 +14,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime
 
-from app.db import SessionLocal
+from app.db import SessionLocal, verbindung_freigeben
 from app.models import Angebot, AngebotsMail, einstellung_holen
 
 SYNC_INTERVALL_SEKUNDEN = 15 * 60
@@ -182,6 +182,10 @@ def sync() -> int:
                     .all())
         for angebot in angebote:
             try:
+                # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (vor JEDEM
+                # Graph-Abruf; der commit speichert die Mails des vorherigen
+                # Angebots – wie bisher am Ende des Laufs)
+                verbindung_freigeben(session)
                 if angebot.graph_conversation_id:
                     nachrichten = nachrichten_je_konversation(
                         token, angebot.graph_conversation_id, postfach)

@@ -95,35 +95,45 @@ def geokodieren(session: Session, adresse: str) -> tuple[float | None, float | N
     if cache is not None and cache.status in ("ok", "manuell"):
         return cache.lat, cache.lon, "ok"
     anbieter = kern.parameter_holen(session, "routing_anbieter", "luftlinie")
+    ors_key = kern.parameter_holen(session, "ors_api_key")
+    google_key = kern.parameter_holen(session, "google_api_key")
     ergebnis = None
-    benutzt = "nominatim"
+    if anbieter == "ors" and ors_key:
+        benutzt = "ors"
+    elif anbieter == "google" and google_key:
+        benutzt = "google"
+    else:
+        benutzt = "nominatim"
+    _zaehler(session, f"{benutzt}_geocode" if benutzt != "nominatim" else "nominatim")
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Cache-Zeile,
+    # Anbieter und Schlüssel sind gelesen; der Zähler ist mit dem commit
+    # gespeichert) – der Geocoder braucht bis zu TIMEOUT Sekunden
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     try:
-        if anbieter == "ors" and kern.parameter_holen(session, "ors_api_key"):
-            benutzt = "ors"
-            _zaehler(session, "ors_geocode")
-            ergebnis = _ors(adresse, kern.parameter_holen(session, "ors_api_key"))
-        elif anbieter == "google" and kern.parameter_holen(session, "google_api_key"):
-            benutzt = "google"
-            _zaehler(session, "google_geocode")
-            ergebnis = _google(adresse,
-                               kern.parameter_holen(session, "google_api_key"))
+        if benutzt == "ors":
+            ergebnis = _ors(adresse, ors_key)
+        elif benutzt == "google":
+            ergebnis = _google(adresse, google_key)
         else:
-            _zaehler(session, "nominatim")
             ergebnis = _nominatim(adresse)
     except Exception:
         ergebnis = None
-    if cache is None:
-        cache = GeocodeCache(adresse_norm=norm)
-        session.add(cache)
-    cache.anbieter = benutzt
-    cache.stand = datetime.now()
+    # Hotfix 06.10.2026: Upsert statt Lesen+Einfügen – parallele Anfragen für
+    # dieselbe Adresse liefen sonst in „UNIQUE constraint failed“ (adresse_norm)
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+    werte = {"anbieter": benutzt, "stand": datetime.now()}
     if ergebnis is not None:
-        cache.lat, cache.lon = ergebnis
-        cache.status = "ok"
-        session.flush()
+        werte.update(lat=ergebnis[0], lon=ergebnis[1], status="ok")
+    else:
+        werte.update(status="fehler")
+    anweisung = sqlite_insert(GeocodeCache).values(adresse_norm=norm, **werte)
+    session.execute(anweisung.on_conflict_do_update(
+        index_elements=["adresse_norm"], set_=werte))
+    cache = (session.query(GeocodeCache)
+             .filter(GeocodeCache.adresse_norm == norm).populate_existing().first())
+    if cache is not None and cache.status in ("ok", "manuell"):
         return cache.lat, cache.lon, "ok"
-    cache.status = "fehler"
-    session.flush()
     return None, None, "fehler"
 
 

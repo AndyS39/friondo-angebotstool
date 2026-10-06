@@ -125,6 +125,11 @@ def senden(session, aufgabe, gewerk, sub, betreff: str, text: str,
         leiter = session.get(Benutzer, projekt.projektleiter_id)
         if leiter is not None and leiter.email:
             cc.append(leiter.email)
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Anhänge, Absender
+    # und CC sind gelesen; der Versand mit Fotos läuft über mehrere Graph-
+    # Aufrufe und kann lange dauern)
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     ok, fehler, conversation_id = graph_versand.mail_mit_anhaengen_senden(
         sub.email, betreff, text, anhaenge, cc=cc, absender=absender)
     if not ok:
@@ -168,20 +173,23 @@ def antworten_abgleichen() -> int:
     eingehende Mails landen im Projekt-Mail-Verlauf; die erste Antwort setzt
     antwort_am (die Akte schlägt dann „bestätigt“ vor)."""
     from app import graph_versand, mail_sync
-    from app.db import SessionLocal
+    from app.db import SessionLocal, verbindung_freigeben
     from app.models import Benutzer, ProjektMail, ProjektSub
 
     token = graph_versand._token()
     if token is None:
         return 0
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben – das angemeldete
+    # Konto wird wie das Token VOR der Sitzung ermittelt (msal kann es über
+    # das Netz erneuern)
+    konto = (graph_versand.angemeldeter_benutzer() or "").lower()
     session = SessionLocal()
     neu_gesamt = 0
     try:
         from app import benachrichtigungen
         from app import projektierung as kern
         postfach = benachrichtigungen._absender(session)
-        eigene = {postfach.lower(),
-                  (graph_versand.angemeldeter_benutzer() or "").lower()}
+        eigene = {postfach.lower(), konto}
         for b in session.query(Benutzer).filter(Benutzer.aktiv.is_(True)):
             if b.email:
                 eigene.add(b.email.lower())
@@ -190,6 +198,10 @@ def antworten_abgleichen() -> int:
                           ProjektSub.status.in_(["angefragt", "beauftragt"]))
                   .all())
         for eintrag in offene:
+            # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (vor JEDEM
+            # Graph-Abruf; der commit speichert die Antworten des vorherigen
+            # Eintrags – wie bisher am Ende des Laufs)
+            verbindung_freigeben(session)
             try:
                 nachrichten = mail_sync.nachrichten_je_konversation(
                     token, eintrag.graph_conversation_id, postfach)

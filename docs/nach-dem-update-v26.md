@@ -85,3 +85,47 @@ Lead-Management, monday-Sync und PDF-Erzeugung der Angebote sind unverändert.
   Wärmepumpen-Check (Angebotsstrang).
 - Siehe Gesamtübersicht zur Übergabe und `docs/projektierung-entscheidungen.md`
   Abschnitt PLAN_PROJ_V5 (Annahmen A-1 … A-6).
+
+## Hotfix 06.10.2026 – Datenbank-Verbindungspool
+
+- **Was war:** Auf dem Server meldete das Tool „QueuePool limit of size 5 overflow 10
+  reached, connection timed out, timeout 30.00“ – bei mehreren gleichzeitigen Nutzern
+  waren alle Datenbank-Verbindungen belegt, Seiten hingen 30 Sekunden und scheiterten.
+  Ursache: jede Anfrage hielt zwei Verbindungen (Rollen-Prüfung + Seite), und Seiten mit
+  Netzaufrufen (Terminvorschläge mit Routing/Outlook, Heizreport, Mails) hielten ihre
+  Verbindung während des Wartens auf den fremden Dienst.
+- **Was jetzt gilt:** größerer Pool (20 + 40) mit kurzem Timeout (10 s – die Meldung
+  lautet dann „Datenbank-Verbindungen ausgelastet – bitte in einer Minute erneut
+  versuchen (Fehler-Nr. …)“), die Rollen-Prüfung gibt ihre Verbindung vor der Seite frei,
+  und vor jedem Netzaufruf wird die Verbindung freigegeben (Regel „keine offene Sitzung
+  während Netz-I/O“ in CLAUDE.md). Parametrierung → Fehlerprotokoll zeigt oben die
+  aktuelle Pool-Belegung; Einträge zu einem erschöpften Pool stehen nur im Datei-Log
+  `data\fehler.log`.
+- **Nebenbefund:** Zwei Nutzer, die gleichzeitig Terminvorschläge für Leads mit
+  derselben Strecke öffneten, bekamen bisher einen 500er (doppelter Cache-Eintrag) –
+  behoben.
+- Nach dem Pull: Dienst „Friondo Angebotstool“ neu starten (Pool-Parameter greifen erst
+  beim Start).
+
+## Backup-Aufgabe „Friondo Backup“ (Übergangslösung bis PLAN_V17)
+
+`scripts\backup-nacht.bat` sichert die Datenbank über die bestehende Funktion
+`db.taegliches_backup()` nach `data\backups` (eine Datei je Tag, 30 Tage) und spiegelt
+danach `data\backups`, `data\angebote` und `data\projekte` per robocopy nach
+`BACKUP_ZIEL` aus der `.env` (Zeile `BACKUP_ZIEL=<Ordner>`, Vorlage in `.env.example`,
+Standard `D:\Backup\Angebotstool`; Log `data\backup-nacht.log`).
+
+Einrichtung auf dem Server (Eingabeaufforderung als Administrator; Projektordner
+anpassen, falls das Tool nicht unter `C:\Users\a.scheelen\Tools\Angebotstool` liegt):
+
+```bat
+schtasks /Create /F /TN "Friondo Backup" /SC DAILY /ST 02:30 /RU SYSTEM /RL HIGHEST /TR "\"C:\Users\a.scheelen\Tools\Angebotstool\scripts\backup-nacht.bat\""
+schtasks /Run /TN "Friondo Backup"
+```
+
+Danach prüfen: `data\backup-nacht.log` endet mit „Backup fertig“, im Zielordner liegen
+`backups\angebotstool-<Datum>.db`, `angebote\…` und `projekte\…`. Läuft die Aufgabe
+unter SYSTEM, muss dieses Konto auf einen UNC-Zielordner schreiben dürfen (sonst ein
+Dienstkonto mit Freigabe-Recht über `/RU DOMAIN\konto /RP *`). Die Aufgabe ersetzt
+keine Wiederherstellungsübung – einmal testweise eine Sicherung zurückspielen (Kopie
+nach `data\angebotstool.db` bei gestopptem Dienst, siehe `rollback.bat`).

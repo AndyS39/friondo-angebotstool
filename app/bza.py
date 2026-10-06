@@ -201,10 +201,14 @@ def mail_senden(session, gewerk, betreff: str, text: str,
         if leiter is not None and leiter.email:
             cc.append(leiter.email)
     absender = benachrichtigungen._absender(session)
+    anhang = (f"BzA_{projekt.nummer if projekt else ''}.pdf", Path(pfad).read_bytes(),
+              "application/pdf")
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Empfänger, PDF,
+    # Absender und CC sind gelesen; der Versand läuft über mehrere Graph-Aufrufe)
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     ok, fehler, _konversation = graph_versand.mail_mit_anhaengen_senden(
-        empfaenger, betreff, text,
-        [(f"BzA_{projekt.nummer if projekt else ''}.pdf", Path(pfad).read_bytes(),
-          "application/pdf")], cc=cc, absender=absender)
+        empfaenger, betreff, text, [anhang], cc=cc, absender=absender)
     if not ok:
         return False, fehler
     gewerk.bza_gesendet_am = datetime.now()

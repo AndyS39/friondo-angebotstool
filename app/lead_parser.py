@@ -246,11 +246,16 @@ def postfach_abrufen(session: Session) -> dict:
     from app import leadmanagement as kern
     if kern.parameter_holen(session, "parser_modus", "aus") != "an":
         return {"uebersprungen": True}
+    postfach = kern.parameter_holen(session, "absender_postfach",
+                                    "leads@friondo.de")
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Parameter sind
+    # gelesen; msal kann das Token über das Netz erneuern, der Postfach-Abruf
+    # dauert bis zu 60 s)
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     token = graph_versand._token()
     if token is None:
         return {"fehler": "Nicht bei Microsoft angemeldet"}
-    postfach = kern.parameter_holen(session, "absender_postfach",
-                                    "leads@friondo.de")
     ergebnis = {"leads": 0, "unklar": 0}
     try:
         antwort = graph_versand._graph_aufruf(
@@ -268,6 +273,9 @@ def postfach_abrufen(session: Session) -> dict:
                 ergebnis["leads"] += 1
             elif status == "unklar":
                 ergebnis["unklar"] += 1
+            # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (vor JEDEM
+            # PATCH; mail_verarbeiten hat committet bzw. nur gelesen)
+            verbindung_freigeben(session)
             try:   # als gelesen markieren, damit sie nicht erneut kommt
                 graph_versand._graph_aufruf(
                     "PATCH", f"/users/{postfach}/messages/{graph_id}", token,

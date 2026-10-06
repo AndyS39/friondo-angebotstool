@@ -366,6 +366,12 @@ def _graph_senden(session: Session, an: str, betreff: str, body_html: str,
                   anhang_pfad: str | None) -> tuple[bool, str]:
     """HTML-Mail (+ ICS) über Graph; Absender leads@, Fallback angebot@."""
     from app import graph_versand
+    absender = _absender(session)
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Absender ist gelesen;
+    # der commit speichert den gerenderten Eintrag – wie bisher am Ende des
+    # Versand-Jobs; msal kann das Token über das Netz erneuern)
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     token = graph_versand._token()
     if token is None:
         return False, "Nicht bei Microsoft angemeldet"
@@ -392,7 +398,6 @@ def _graph_senden(session: Session, an: str, betreff: str, body_html: str,
         graph_versand._graph_aufruf("POST", "/me/sendMail", token,
                                     {"message": nachricht,
                                      "saveToSentItems": False})
-    absender = _absender(session)
     try:
         _senden(absender)
         return True, ""

@@ -256,6 +256,10 @@ def _anfrage_v2(session, methode: str, pfad: str, daten: dict | None = None,
     if daten is not None:
         koerper = json.dumps(daten, ensure_ascii=False).encode("utf-8")
         kopf["Content-Type"] = "application/json"
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Token und Body
+    # sind gelesen; Warteschlange + Timeout 20 s dürfen keine Pool-Verbindung halten)
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     status = 0
     antwort = ""
     for versuch in (1, 2):
@@ -360,6 +364,9 @@ def _anfrage(session, url: str, methode: str = "GET",
         kopf["Content-Type"] = "application/json"
     anfrage = urllib.request.Request(url, data=koerper, headers=kopf,
                                      method=methode.upper())
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     try:
         with urllib.request.urlopen(anfrage, timeout=TIMEOUT) as antwort:
             status, text = antwort.status, antwort.read().decode("utf-8", "replace")
@@ -1105,7 +1112,10 @@ def pdf_ablegen(session, gewerk, benutzer=None, bestaetigt: bool = False) -> tup
     url = _pdf_url_pruefen(datei.get("url") or antwort.get("linkToDocument") or "")
     if not url:
         return False, "Heizreport: Antwort ohne gültigen PDF-Link (file.url / linkToDocument).", "fehler"
-    # Download OHNE Authorization-Header (signierter, zeitlich begrenzter Link)
+    # Download OHNE Authorization-Header (signierter, zeitlich begrenzter Link);
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     dl_status, inhalt, _kopf = _roh_anfrage("GET", url, {"Accept": "application/pdf,*/*"},
                                             None, DOWNLOAD_TIMEOUT)
     if dl_status != 200 or not inhalt:

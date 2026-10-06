@@ -178,6 +178,15 @@ class RollenMiddleware(BaseHTTPMiddleware):
                         projektierung.modul_sichtbar(session, benutzer))
                 except Exception:
                     pass
+            # Hotfix 06.10.2026 (Verbindungspool): die Middleware-Sitzung wird
+            # NACH den Rollen-, Glocken- und Modulabfragen und VOR call_next
+            # geschlossen – sonst hält jede laufende Anfrage eine zweite
+            # Pool-Verbindung für ihre gesamte Dauer (auch während Netz-I/O
+            # im Endpunkt). request.state.benutzer bleibt als abgelöstes Objekt
+            # mit allen geladenen Spalten nutzbar (expire_on_commit=False;
+            # Benutzer hat keine Relationships); das finally bleibt als
+            # Sicherung für die Umleitungen oben.
+            session.close()
             if pfad.startswith(OFFENE_PFADE):
                 return await call_next(request)
             if benutzer is None:

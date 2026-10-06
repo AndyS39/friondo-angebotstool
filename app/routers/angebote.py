@@ -1103,6 +1103,10 @@ async def email_entwurf(request: Request, angebot_id: int,
                 "Microsoft Graph ist noch nicht eingerichtet "
                 "(docs/graph-einrichtung.md). Übergangslösung: PDF anzeigen "
                 "und manuell versenden."), status_code=303)
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Angebot und Kunde
+    # sind geladen; msal kann das Token über das Netz erneuern)
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     if graph_versand.angemeldeter_benutzer() is None:
         return RedirectResponse(
             "/versand?meldung=" + quote_plus(
@@ -1156,6 +1160,10 @@ async def email_entwurf(request: Request, angebot_id: int,
     if empfaenger_leer:
         cc_hinweis += (" PFLICHT: Empfänger ist leer (SWD-Profil) – bitte den "
                        "SWD-Kontakt vor dem Senden in Outlook eintragen!")
+    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (PDF, Anhänge, Texte,
+    # CC/BCC und Absender sind gelesen; Entwurf und Anhänge laufen über mehrere
+    # Graph-Aufrufe)
+    verbindung_freigeben(session)
     erfolg, meldung, weblink, conversation_id = graph_versand.entwurf_erstellen(
         kunde, angebot, pdf_pfad, betreff, text,
         weitere_anhaenge=[Path(a.pfad) for a in anhaenge if a.vorhanden],
