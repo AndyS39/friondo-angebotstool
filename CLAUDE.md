@@ -1641,8 +1641,19 @@ Freigabe davor ist ein Fehler.
   30 Tage) und spiegelt `data\backups`, `data\angebote`, `data\projekte` per robocopy
   nach `BACKUP_ZIEL` aus der `.env` (Vorlage in `.env.example`, Standard
   `D:\Backup\Angebotstool`; Log `data\backup-nacht.log`). Geplante Aufgabe
-  „Friondo Backup“ täglich 02:30 auf dem Server – Anleitung in
+  „Friondo Backup“ täglich 02:30 auf dem Server (Pfad dort
+  `C:\Users\kdadmin\Desktop\Angebotstool`; Variante A lokales Laufwerk als SYSTEM,
+  Variante B Netzfreigabe unter Benutzerkonto mit `/RU … /RP *`) – Anleitung in
   docs/nach-dem-update-v26.md.
+- **Antworten Andreas (06.10.2026):** Server-Logs und DB-Sicherung kommen nach dem
+  Update nach `diagnose\fehler-server-2026-10-06.log` bzw.
+  `diagnose\server-2026-10-06\angebotstool.db` (gitignored); erstes Auftreten,
+  laufende Version und betroffene Routen folgen als Nachtrag in diesem Abschnitt.
+  Der frühere Commit vor Sofort-Mails bleibt im Hotfix; die saubere Lösung
+  (Ausgangs-Warteschlange `mail_ausgang`, Versand nach dem Commit durch einen
+  Scheduler-Lauf) ist PLAN_V17 Phase 128. Betrieb: auf dem Server läuft das Tool als
+  Konsolenfenster aus `start.bat` (keine Aufgabe, kein Dienst) – nach `update.bat`
+  Fenster schließen und `start.bat` neu starten, erst dann gelten die Pool-Parameter.
 - Tests: `tests/test_pool_hotfix.py` – 40 parallele Anfragen (Kundenkartei +
   Terminvorschläge, ORS-Matrix gemockt mit 3 s) ohne TimeoutError, Welle 2 belegt
   während des Netzaufrufs keine Verbindung, `verbindung_freigeben` gibt die

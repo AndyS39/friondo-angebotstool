@@ -104,8 +104,13 @@ Lead-Management, monday-Sync und PDF-Erzeugung der Angebote sind unverändert.
 - **Nebenbefund:** Zwei Nutzer, die gleichzeitig Terminvorschläge für Leads mit
   derselben Strecke öffneten, bekamen bisher einen 500er (doppelter Cache-Eintrag) –
   behoben.
-- Nach dem Pull: Dienst „Friondo Angebotstool“ neu starten (Pool-Parameter greifen erst
-  beim Start).
+- Nach dem Pull neu starten – die Pool-Parameter greifen erst beim Start: auf dem Server
+  läuft das Tool als Konsolenfenster aus `start.bat` (keine Aufgabe, kein Dienst). Also
+  `update.bat` ausführen, das Konsolenfenster schließen und `start.bat` neu starten.
+- Diagnose-Nachtrag: die Server-Logs (`data\fehler.log` → `diagnose\fehler-server-2026-10-06.log`,
+  DB-Sicherung aus `data\backups\update_<Zeit>` → `diagnose\server-2026-10-06\angebotstool.db`,
+  beides gitignored) werden nach dem Update ausgewertet; erstes Auftreten, laufende Version
+  und betroffene Routen kommen als Nachtrag in CLAUDE.md, Abschnitt Hotfix.
 
 ## Backup-Aufgabe „Friondo Backup“ (Übergangslösung bis PLAN_V17)
 
@@ -115,17 +120,30 @@ danach `data\backups`, `data\angebote` und `data\projekte` per robocopy nach
 `BACKUP_ZIEL` aus der `.env` (Zeile `BACKUP_ZIEL=<Ordner>`, Vorlage in `.env.example`,
 Standard `D:\Backup\Angebotstool`; Log `data\backup-nacht.log`).
 
-Einrichtung auf dem Server (Eingabeaufforderung als Administrator; Projektordner
-anpassen, falls das Tool nicht unter `C:\Users\a.scheelen\Tools\Angebotstool` liegt):
+Einrichtung auf dem Server (Eingabeaufforderung als Administrator; das Tool liegt dort
+unter `C:\Users\kdadmin\Desktop\Angebotstool`). Zuerst `BACKUP_ZIEL=` in der `.env` des
+Servers eintragen, dann die Aufgabe anlegen – je nach Zielordner:
+
+**Variante A – lokales Laufwerk, Aufgabe als SYSTEM** (`BACKUP_ZIEL=D:\Backup\Angebotstool`):
 
 ```bat
-schtasks /Create /F /TN "Friondo Backup" /SC DAILY /ST 02:30 /RU SYSTEM /RL HIGHEST /TR "\"C:\Users\a.scheelen\Tools\Angebotstool\scripts\backup-nacht.bat\""
+schtasks /Create /F /TN "Friondo Backup" /SC DAILY /ST 02:30 /RU SYSTEM /RL HIGHEST /TR "\"C:\Users\kdadmin\Desktop\Angebotstool\scripts\backup-nacht.bat\""
+schtasks /Run /TN "Friondo Backup"
+```
+
+**Variante B – Netzfreigabe, Aufgabe unter dem eigenen Benutzerkonto**
+(`BACKUP_ZIEL=\\<Server>\<Freigabe>\Angebotstool`; SYSTEM hat auf die Freigabe keine
+Rechte, das Konto braucht Schreibrecht auf der Freigabe; `/RP *` fragt das Kennwort
+einmalig ab, „Unabhängig von der Benutzeranmeldung ausführen“ wird damit gesetzt):
+
+```bat
+schtasks /Create /F /TN "Friondo Backup" /SC DAILY /ST 02:30 /RU <Domäne\Konto> /RP * /RL HIGHEST /TR "\"C:\Users\kdadmin\Desktop\Angebotstool\scripts\backup-nacht.bat\""
 schtasks /Run /TN "Friondo Backup"
 ```
 
 Danach prüfen: `data\backup-nacht.log` endet mit „Backup fertig“, im Zielordner liegen
-`backups\angebotstool-<Datum>.db`, `angebote\…` und `projekte\…`. Läuft die Aufgabe
-unter SYSTEM, muss dieses Konto auf einen UNC-Zielordner schreiben dürfen (sonst ein
-Dienstkonto mit Freigabe-Recht über `/RU DOMAIN\konto /RP *`). Die Aufgabe ersetzt
-keine Wiederherstellungsübung – einmal testweise eine Sicherung zurückspielen (Kopie
-nach `data\angebotstool.db` bei gestopptem Dienst, siehe `rollback.bat`).
+`backups\angebotstool-<Datum>.db`, `angebote\…` und `projekte\…`. Zum Testen von Hand
+geht auch `scripts\backup-nacht.bat <Zielordner>` (der Parameter überschreibt
+`BACKUP_ZIEL`). Die Aufgabe ersetzt keine Wiederherstellungsübung – einmal testweise
+eine Sicherung zurückspielen (Kopie nach `data\angebotstool.db` bei geschlossenem
+Konsolenfenster, siehe `rollback.bat`).
