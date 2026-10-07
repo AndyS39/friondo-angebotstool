@@ -1687,6 +1687,18 @@ Freigabe davor ist ein Fehler.
   Scheduler-Lauf) ist PLAN_V17 Phase 128. Betrieb: auf dem Server läuft das Tool als
   Konsolenfenster aus `start.bat` (keine Aufgabe, kein Dienst) – nach `update.bat`
   Fenster schließen und `start.bat` neu starten, erst dann gelten die Pool-Parameter.
+- **Diagnose-Nachtrag 07.10.2026:** Die Server-Logs (`diagnose\fehler-server-2026-10-06.log`,
+  DB-Kopie) wurden nicht nachgeliefert (Entscheidung Andreas: offen lassen, kein weiterer
+  Aufwand). Die Ursache gilt als bestätigt: aus dem Code (RollenMiddleware hielt je Anfrage
+  eine zweite Verbindung bis nach `call_next`; Terminvorschläge/Routing/Outlook/Graph
+  hielten die Request-Sitzung während Netz-I/O) und durch `tests/test_pool_hotfix.py`
+  (40 parallele Anfragen reproduzierten die Belegung von 37 Verbindungen – mehr als die
+  früheren 5 + 10). Erstes Auftreten und betroffene Routen auf dem Server bleiben ohne
+  Logdatei unbekannt. Seit v27 sind Pool-Belegung und Antwortzeiten je Route dauerhaft
+  messbar (`data\log\zugriff.log`, Parametrierung → Betrieb, `/health`), die Invariante
+  Pool ≥ Threads + Scheduler + 5 wird beim Start geprüft; eine Wiederholung der Störung
+  würde im Zugriffsprotokoll (Pool-Checkouts je Anfrage) und als Warnung in `/health`
+  sichtbar. Thema abgeschlossen.
 - Tests: `tests/test_pool_hotfix.py` – 40 parallele Anfragen (Kundenkartei +
   Terminvorschläge, ORS-Matrix gemockt mit 3 s) ohne TimeoutError, Welle 2 belegt
   während des Netzaufrufs keine Verbindung, `verbindung_freigeben` gibt die
