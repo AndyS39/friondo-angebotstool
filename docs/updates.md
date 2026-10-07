@@ -3,7 +3,7 @@
 Ablauf ab v5: Änderungen werden am Entwicklungs-PC committet und nach GitHub
 gepusht; auf dem Server holt `update.bat` den neuen Stand, migriert die
 Datenbank und startet das Tool neu. `rollback.bat` nimmt ein Update zurück.
-**Seit v27:** Updates nur im **Wartungsfenster** (Standard Dienstag 18:30–19:30
+**Seit v27:** Updates nur im **Wartungsfenster** (Standard Dienstag 22:30–23:30
 [ANNAHME]) mit vorher gesetztem Wartungsbanner; das Tool läuft als Dienst bzw.
 Aufgabe (`update.bat`/`rollback.bat` erkennen den Weg), nach jedem Update läuft
 der **Smoke-Test** `scripts\smoke.bat`, und `rollback.bat --nur-code` nimmt nur

@@ -88,7 +88,7 @@ LEADMANAGEMENT_SCHREIBEN = ("/lead-management", "/api/leads",
 # --- v27 Login-Härtung: Konstanten und Texte (Plan-Wortlaut) --------------------
 PBKDF2_RUNDEN = 200_000
 PBKDF2_KENNUNG = "pbkdf2_sha256"
-PIN_MINDESTLAENGE_NEU = 6          # [ANNAHME] Phase 130, Parameter pin_mindestlaenge
+PIN_MINDESTLAENGE_NEU = 4          # Antwort Andreas 07.10.2026: mindestens 4 (Parameter pin_mindestlaenge)
 PIN_MINDESTLAENGE_ALT = 4          # bestehende PINs bleiben gültig
 PIN_SPERRLISTE_STANDARD = ("123456,111111,000000,654321,112233,121212,123123,"
                            "222222,333333,444444,555555,666666,777777,888888,"

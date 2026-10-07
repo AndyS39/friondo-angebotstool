@@ -262,10 +262,17 @@ class EigeneSitzung(Basis):
             return funktion()
 
     def test_mail_sync_sync(self):
+        # v27-Nachtrag: der Abgleich betrachtet nur „Versand vorbereitet“/„Versendet“
+        # der letzten mail_sync.ABGLEICH_TAGE Tage
+        from datetime import datetime, timedelta
+        from sqlalchemy import and_, or_
+        grenze = datetime.now() - timedelta(days=mail_sync.ABGLEICH_TAGE)
         anzahl = (self.s.query(Angebot)
-                  .filter(Angebot.status.in_(["Versand vorbereitet", "Versendet",
-                                              "Angenommen", "Abgelehnt"]),
-                          Angebot.archiviert.is_(False)).count())
+                  .filter(Angebot.status.in_(["Versand vorbereitet", "Versendet"]),
+                          Angebot.archiviert.is_(False),
+                          or_(Angebot.versendet_am >= grenze,
+                              and_(Angebot.versendet_am.is_(None),
+                                   Angebot.angelegt_am >= grenze))).count())
         konto, abrufe = [], []
         neu = self.lauf(mail_sync.sync, self.mocks(konto, abrufe) + [
             mock.patch.object(mail_sync, "_protokoll_sichern"),   # kein Schreiben

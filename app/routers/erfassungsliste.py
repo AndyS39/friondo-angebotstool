@@ -334,7 +334,7 @@ def erneut_pruefen(request: Request, erfassung_id: int,
         from app import pv_auslegung
         pv_auslegung.wp_ableitung_aktualisieren(session, erfassung, antworten, slogik)
         erfassung.antworten_json = json.dumps(antworten, ensure_ascii=False)
-    offen = engine.naechste_frage(slogik, antworten)
+    offen = engine.naechste_pflichtfrage(slogik, antworten)   # v27-Nachtrag: optionale Fragen blockieren nicht
     if offen is not None:
         seite = slogik.seiten.index(offen.seite) if offen.seite in slogik.seiten else 0
         _kette_protokollieren(erfassung, request.state.benutzer,
@@ -462,7 +462,7 @@ def angebot_erzeugen(erfassung_id: int, session: Session = Depends(get_session))
     # nach einer Logik-Aktualisierung neue Fragen gelten (Klasse 15: N07/N08)
     # oder Antworten nachträglich in eine andere Klasse korrigiert wurden.
     # Ohne diesen Check entstand ein Angebot OHNE Außen-/Inneneinheit.
-    offen = engine.naechste_frage(logik, antworten)
+    offen = engine.naechste_pflichtfrage(logik, antworten)   # v27-Nachtrag: optionale Fragen blockieren nicht
     if offen is not None:
         from urllib.parse import quote_plus
         return RedirectResponse("/erfassungen?meldung=" + quote_plus(

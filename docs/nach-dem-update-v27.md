@@ -7,14 +7,15 @@ der Server läuft als Dienst mit Wächter, es gibt `GET /health`, eine Betriebs-
 ein Wartungsbanner, eine gehärtete Anmeldung (PIN-Regeln, Sperre, Ablauf) und ein
 Lasttest-Skript. Fachlich (Angebote, Leads, Projektierung, PDFs) ändert sich nichts.
 
-**Rollout nur im Wartungsfenster** (Dienstag 18:30–19:30 [ANNAHME]) nach der Reihenfolge
+**Rollout nur im Wartungsfenster** (Dienstag 22:30–23:30) nach der Reihenfolge
 in `docs/betrieb.md` → „Update im Wartungsfenster“; nach `update.bat` läuft
 `scripts\smoke.bat`.
 
 ## Für das Team (alle Rollen)
 
 - **Einmal neu anmelden:** Die Sitzungs-Cookies der alten Fassung gelten nicht mehr.
-- **Neue PIN-Regeln:** Neue PINs haben mindestens 6 Ziffern und dürfen keine Zahlenfolgen
+- **Neue PIN-Regeln:** Neue PINs haben mindestens 4 Ziffern (Einstellung, Entscheidung Andreas
+  07.10.2026) und dürfen keine Zahlenfolgen
   (123456, 654321), keine Wiederholungen (111111) und keine Jahreszahlen (1985…, 2024…)
   enthalten. Bestehende PINs bleiben gültig – niemand muss sich nach dem Update neu
   einrichten.
@@ -143,6 +144,32 @@ oder erneut importiert werden.
    stellt den v26-Code wieder her und behält die Datenbank (keine Datenverluste; alte und
    zwischenzeitlich geänderte PINs funktionieren, Cookies der v27-Fassung werden abgewiesen
    → einmal neu anmelden). Standard `rollback.bat` = Code + Datenbank aus der Sicherung.
+
+## Nachtrag 07.10.2026 – Antworten von Andreas
+
+- **Wartungsfenster: Dienstag 22:30–23:30** (statt 18:30–19:30) – Vorschlag auf der Betriebs-Seite,
+  Runbook, update.bat.
+- **PIN:** Mindestlänge 4 (Einstellung `pin_mindestlaenge`); jeder Benutzer wählt seine PIN selbst
+  über Menü → „PIN ändern“. **Admin-Zugang zu allen Konten:** in der Benutzerverwaltung „Als
+  Benutzer anmelden“ (ohne PIN, 2 Stunden, steht im Login-Protokoll als `admin_zugang:<Admin>`;
+  nicht bei offenem Pflicht-PIN-Wechsel) – zusätzlich zu PIN-Reset und „Sperre aufheben“.
+- **NSSM ist erlaubt:** `nssm.exe` von nssm.cc herunterladen und nach `scripts\` legen, dann
+  `scripts\dienst-installieren.bat` – es legt den Dienst `FriondoAngebotstool` an.
+- **Backup-Ziel (Entscheidung):** `BACKUP_ZIEL=D:\Backup\Angebotstool` (lokales zweites Laufwerk;
+  gibt es kein D:, vorerst `C:\Backup\Angebotstool` – schützt gegen Datenfehler, nicht gegen
+  Plattenverlust) – ein Netzlaufwerk folgt mit dem Dienstkonto der IT. Die Hotfix-Aufgabe
+  „Friondo Backup“ entfernt das Installationsskript. Die Health-Aufgabe auf fr-wts-02 bleibt
+  optional (Befehl im Kopf von `scripts\health-pruefen.ps1`); Wächter und Admin-Glocke reichen.
+- **Bestands-Erfassungen:** später eingeführte optionale Fragen (O09 Rechnungs-Name, O13
+  abweichende Lieferanschrift, A20 Nennleistung der Altanlage) blockieren „Angebot erzeugen“ und
+  die Prüfseite nicht mehr; der Bogen führt weiter durch alle Fragen.
+- **Mail-Abgleich** alle 15 Minuten nur noch für Angebote in „Versand vorbereitet“/„Versendet“
+  der letzten 90 Tage (vorher alle nicht archivierten Angebote in vier Status).
+- **Geokodierung:** nach 10 Fehlversuchen keine automatischen Versuche mehr; „Adresse prüfen“
+  mit manuellem Pin setzt den Zähler zurück. **Prüflauf Ablehnung** läuft täglich 06:30.
+- Lasttest-Zielwerte unverändert; „Versand vorbereiten“ bleibt außerhalb der Zielwerte (sieben
+  Graph-Aufrufe, real etwa 3 s). Benutzer-Import: Start-PIN-Liste nur als Druckansicht, inaktive
+  Benutzer werden nicht automatisch reaktiviert.
 
 ## Lasttest-Ergebnis (06.10.2026)
 

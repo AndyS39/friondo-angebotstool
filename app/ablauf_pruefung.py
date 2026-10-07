@@ -91,4 +91,5 @@ def scheduler_starten() -> None:
     scheduler.registrieren(
         "ablauf-pruefung", 24 * 60 * 60, scheduler_lauf,
         beschreibung="90-Tage-Prüflauf: versendete Angebote ohne Reaktion auf Abgelehnt setzen",
-        start_verzoegerung_s=120)
+        start_verzoegerung_s=120,
+        taeglich_um="06:30")   # Entscheidung 07.10.2026: feste Uhrzeit statt „24 h nach Start“

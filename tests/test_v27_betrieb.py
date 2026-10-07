@@ -165,9 +165,9 @@ class Wartung(unittest.TestCase):
     def test_naechstes_standardfenster_dienstag(self):
         von, bis = betrieb.naechstes_wartungsfenster(datetime(2026, 10, 7, 12, 0))   # Mittwoch
         self.assertEqual((von.weekday(), von.hour, von.minute, bis.hour, bis.minute),
-                         (1, 18, 30, 19, 30))
+                         (1, 22, 30, 23, 30))   # Fenster laut Andreas 07.10.2026
         self.assertEqual(von.date(), datetime(2026, 10, 13).date())
-        von, bis = betrieb.naechstes_wartungsfenster(datetime(2026, 10, 6, 12, 0))   # Dienstag vor 18:30
+        von, bis = betrieb.naechstes_wartungsfenster(datetime(2026, 10, 6, 12, 0))   # Dienstag vor 22:30
         self.assertEqual(von.date(), datetime(2026, 10, 6).date())
 
 

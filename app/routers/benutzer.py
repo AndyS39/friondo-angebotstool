@@ -274,6 +274,30 @@ def sperre_aufheben(request: Request, benutzer_id: int,
     return _meldung(ziel, f"Sperre für {benutzer.name} aufgehoben – Anmeldung wieder möglich.")
 
 
+@router.post("/{benutzer_id}/anmelden-als")
+def anmelden_als(request: Request, benutzer_id: int,
+                 session: Session = Depends(get_session)):
+    """v27-Nachtrag (Antwort Andreas 07.10.2026: „Admin soll immer Zugang zu allen
+    Accounts haben“): der Admin meldet sich ohne PIN als beliebiger aktiver Benutzer
+    an (Sicht des Benutzers, Hilfe am Telefon). Dauer 2 h [ANNAHME]; der Vorgang
+    steht im Login-Protokoll (Grund admin_zugang:<Admin>). Zurück zum eigenen Konto
+    über Abmelden + Anmelden."""
+    from app.routers.anmeldung import startseite
+    admin = request.state.benutzer
+    benutzer = session.get(Benutzer, benutzer_id)
+    if benutzer is None or not benutzer.aktiv:
+        return _meldung("/benutzer", "Benutzer nicht gefunden oder inaktiv.")
+    if benutzer.pin_wechsel_noetig:
+        return _meldung("/benutzer", f"{benutzer.name}: Pflicht-PIN-Wechsel offen – der Benutzer "
+                        "meldet sich zuerst selbst mit der Start-PIN an.")
+    auth._protokollieren(session, benutzer, auth.client_ip(request), True,
+                         f"admin_zugang:{admin.name}"[:100])
+    session.commit()
+    antwort = RedirectResponse(startseite(session, benutzer), status_code=303)
+    auth.cookie_setzen(antwort, benutzer, 2 * 3600)
+    return antwort
+
+
 @router.post("/{benutzer_id}/sitzungen-beenden")
 def sitzungen_beenden(request: Request, benutzer_id: int,
                       session: Session = Depends(get_session)):

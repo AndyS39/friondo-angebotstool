@@ -20,7 +20,7 @@ jeden gibt es einen Zwischenstand, der heute ohne IT funktioniert.
 | 5 | **Monitoring** | `GET http://192.168.35.4:8000/health` alle **60 s**; Alarm bei HTTP ≠ 200 oder `status ≠ ok` länger als **5 Minuten**; Empfänger Andreas + IT. JSON-Felder siehe `docs/betrieb.md` („/health-Felder“); `warn` = Hinweis, `fehler`/503 = Störung | Wächter-Aufgabe auf dem Server (Neustart bei Ausfall), `scripts\health-pruefen.ps1` auf fr-wts-02 (Benachrichtigung an Andreas), Admin-Glocke im Tool |
 | 6 | **Serverausbau** | nur, wenn der Lasttest (PLAN_V17 Phase 131) es verlangt: Empfehlung 4 vCPU / 8 GB RAM / SSD; `data\` auf lokaler Platte; Uhrzeit per NTP | aktueller Server, Messwerte in `docs/betrieb.md` |
 | 7 | **Virenscanner-Ausnahme** | zentral verwalteter Scanner: Echtzeitscan-Ausnahme für `C:\Users\kdadmin\Desktop\Angebotstool\data\` (Datei-Sperren sind eine bekannte Ursache für „database is locked“) | lokal eingetragen bzw. offen |
-| 8 | **Windows-Updates des Servers** | nur im Wartungsfenster (**Dienstag 18:30–19:30** [ANNAHME]), Neustart danach prüfen: Dienst/Aufgabe startet automatisch, Kontrolle `/health` | Andreas setzt vorher das Wartungsbanner im Tool |
+| 8 | **Windows-Updates des Servers** | nur im Wartungsfenster (**Dienstag 22:30–23:30** [ANNAHME]), Neustart danach prüfen: Dienst/Aufgabe startet automatisch, Kontrolle `/health` | Andreas setzt vorher das Wartungsbanner im Tool |
 | 9 | **Option: Anmeldung über Microsoft 365 (Entra ID)** statt PIN | eigener Plan, wenn gewünscht (App-Registrierung, Gruppen → Rollen) | PIN-Login mit Härtung (Mindestlänge, Fehlversuchssperre, Sitzungsablauf) |
 
 Was die IT **nicht** anfassen muss: Updates des Tools (`update.bat` im

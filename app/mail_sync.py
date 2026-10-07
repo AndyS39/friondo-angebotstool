@@ -17,13 +17,17 @@ import json
 import logging
 import urllib.parse
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
+
+from sqlalchemy import and_, or_
 
 from app.models import Angebot, AngebotsMail, einstellung_holen
 
 _logger = logging.getLogger("angebotstool")
 
 SYNC_INTERVALL_SEKUNDEN = 15 * 60
+# v27-Nachtrag: Abgleich nur für Angebote in „Versand vorbereitet“/„Versendet“ der letzten 90 Tage
+ABGLEICH_TAGE = 90
 GRAPH = "https://graph.microsoft.com/v1.0"
 FELDER = "id,conversationId,subject,from,receivedDateTime,sentDateTime,bodyPreview,isDraft"
 
@@ -185,11 +189,16 @@ def sync() -> int:
         for b in s.query(Benutzer).filter(Benutzer.aktiv.is_(True)):
             if b.email:
                 eigene.add(b.email.lower())
+        grenze = datetime.now() - timedelta(days=ABGLEICH_TAGE)
         angebote = [(z[0], z[1], z[2]) for z in
                     s.query(Angebot.id, Angebot.nummer, Angebot.graph_conversation_id)
-                    .filter(Angebot.status.in_(["Versand vorbereitet", "Versendet",
-                                                "Angenommen", "Abgelehnt"]),
-                            Angebot.archiviert.is_(False))
+                    .filter(Angebot.status.in_(["Versand vorbereitet", "Versendet"]),
+                            Angebot.archiviert.is_(False),
+                            # v27-Nachtrag (07.10.2026): nur Angebote der letzten
+                            # ABGLEICH_TAGE – die Laufdauer wuchs sonst mit dem Bestand
+                            or_(Angebot.versendet_am >= grenze,
+                                and_(Angebot.versendet_am.is_(None),
+                                     Angebot.angelegt_am >= grenze)))
                     .order_by(Angebot.id).all()]
     for angebot_id, nummer, conversation_id in angebote:
         try:

@@ -128,7 +128,7 @@ Nummern vergeben.
   - **Importe nur außerhalb der Kernzeit**, in Blöcken mit Commit je 200 Zeilen,
     mit Hinweis und Bestätigung in der Parametrierung; laufende Importe stehen im
     Betriebs-Status (`betrieb.import_markieren`).
-  - **Rollout nur im Wartungsfenster** (Dienstag 18:30–19:30 [ANNAHME]) mit
+  - **Rollout nur im Wartungsfenster** (Dienstag 22:30–23:30) mit
     Wartungsbanner vorher, `update.bat` und `scripts\smoke.bat` danach; Hotfixes
     außerhalb nur mit Freigabe von Andreas. Datenbankänderungen bleiben additiv
     (Rückweg `rollback.bat --nur-code`).
@@ -1861,7 +1861,7 @@ weiter, Rückweg `rollback.bat --nur-code`. Rollout nur im Wartungsfenster.)
   `pbkdf2_sha256$Runden$Salz$Hash`); Login: v2 gesetzt → PBKDF2, sonst SHA-256
   (`pin_hash`), stille Umstellung beim nächsten Erfolg; `pin_setzen` schreibt BEIDE
   Spalten (Rollback-Sicherheit). PIN-Regeln für neue PINs (`pin_regel_pruefen`):
-  nur Ziffern, Mindestlänge 6 [ANNAHME, Parameter `pin_mindestlaenge` 4–12],
+  nur Ziffern, Mindestlänge 4 (Andreas 07.10.2026; Parameter `pin_mindestlaenge` 4–12),
   Sperrliste (`pin_sperrliste`, Standard 123456/111111/…), keine Wiederholung, keine
   Zahlenfolge, kein Jahreszahl-Muster 19xx/20xx. Fehlversuchssperre: 5 Fehlversuche in
   15 Minuten (seit dem letzten erfolgreichen Login) → 15 Minuten Sperre
@@ -1912,7 +1912,7 @@ weiter, Rückweg `rollback.bat --nur-code`. Rollout nur im Wartungsfenster.)
   `wartung_bis`, `wartung_text`; Banner-Wortlaut „Wartung heute von <von> bis <bis>
   Uhr – bitte Arbeit bis dahin speichern. Das Tool ist in dieser Zeit kurz nicht
   erreichbar.“ für alle Rollen und auf /login, `betrieb.wartungshinweis`, 60-s-Cache
-  in der Middleware), Standardfenster Dienstag 18:30–19:30 [ANNAHME]
+  in der Middleware), Standardfenster Dienstag 22:30–23:30
   (`betrieb.naechstes_wartungsfenster`). Rollback-Probe auf der DB-Kopie
   (`diagnose/v27_patches/rollback_probe.py`, Worktree `diagnose/wt_v26` = da9df30):
   v26 gegen v27-DB – Login mit alter und unter v27 geänderter PIN, Angebotsliste, PDF,
@@ -1932,3 +1932,16 @@ weiter, Rückweg `rollback.bat --nur-code`. Rollout nur im Wartungsfenster.)
   `tests/test_v27_importe.py` (Agent D). `tests/test_pool_hotfix.py` prüft die
   Pool-Werte jetzt gegen `db.POOL_SIZE/MAX_OVERFLOW/POOL_TIMEOUT` (Zeitgrenze 30 s je
   Welle, CPU-Last durch parallele Läufe).
+- **Nachtrag 07.10.2026 (Antworten Andreas auf die Rückfragen der Gesamtübersicht):**
+  Wartungsfenster **Dienstag 22:30–23:30**; PIN-Mindestlänge 4; Admin-Zugang zu jedem Konto
+  über `POST /benutzer/{id}/anmelden-als` (Cookie 2 h [ANNAHME], Login-Protokoll Grund
+  `admin_zugang:<Admin>`, nicht bei offenem Pflichtwechsel); NSSM erlaubt (nssm.exe nach
+  `scripts\`); `BACKUP_ZIEL` vorerst `D:\Backup\Angebotstool` (Fallback C:), Netzlaufwerk mit
+  Dienstkonto nachgelagert; **Bestands-Erfassungen:** `konfigurator.naechste_pflichtfrage`
+  (überspringt `OPTIONALE_FRAGEN` O09/O13/A20 und Fragen mit „optional“/„leer lassen“ im
+  Text) in `/erfassung/{id}/pruefen`, `…/absenden` und den Erfassungslisten-Sichten – der Bogen
+  selbst nutzt weiter `naechste_frage`; **mail_sync** nur „Versand vorbereitet“/„Versendet“
+  der letzten `ABGLEICH_TAGE` = 90 Tage; Geocoding-Backoff gibt nach `BACKOFF_MAX_VERSUCHE`
+  = 10 Fehlversuchen auf (manueller Pin setzt zurück); `ablauf-pruefung` täglich 06:30;
+  Lasttest-Zielwerte unverändert, „Versand vorbereiten“ ohne Zielwert; Benutzer-Import ohne
+  CSV-Download der Start-PINs, inaktive Benutzer nicht automatisch reaktiviert.

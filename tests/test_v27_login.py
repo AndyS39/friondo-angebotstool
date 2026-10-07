@@ -353,7 +353,7 @@ class LoginHaertung(Basis):
 class Benutzerverwaltung(Basis):
     def test_anlegen_und_aendern_mit_pin_regeln(self):
         name = f"{PRAEFIX}Neu"
-        daten = {"name": name, "rolle": "innendienst", "email": "", "pin": "1234",
+        daten = {"name": name, "rolle": "innendienst", "email": "", "pin": "123",   # zu kurz (Mindestlänge 4 seit 07.10.2026)
                  "pin_wechsel": "on"}
         r = self.admin.post("/benutzer/neu", data=daten, follow_redirects=False)
         self.assertEqual(r.status_code, 303)

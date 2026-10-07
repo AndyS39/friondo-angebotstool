@@ -601,7 +601,7 @@ def pruefen(request: Request, erfassung_id: int,
     if logik is None:
         return RedirectResponse(f"/erfassung/{erfassung.id}/freitext", status_code=303)
     antworten = _antworten(erfassung)
-    offen = engine.naechste_frage(logik, antworten)
+    offen = engine.naechste_pflichtfrage(logik, antworten)   # v27-Nachtrag: optionale Fragen blockieren nicht
     prot = engine.protokoll(logik, antworten)
     gruende = engine.ampel_gruende(logik, antworten)
     kunde = session.get(Kunde, erfassung.kunde_id)
@@ -642,7 +642,7 @@ def absenden(request: Request, erfassung_id: int,
     if logik is None:
         return RedirectResponse(f"/erfassung/{erfassung.id}/freitext", status_code=303)
     antworten = _antworten(erfassung)
-    if engine.naechste_frage(logik, antworten) is not None:
+    if engine.naechste_pflichtfrage(logik, antworten) is not None:   # v27-Nachtrag
         return RedirectResponse(f"/erfassung/{erfassung.id}/pruefen", status_code=303)
     # v13-PV (Phase 79) / v24-KL (Phase 114): Katalog-Erfassungen mit
     # Konfigurator-Logik laufen wie WP über die Ampel (grün → „Angebot erzeugen“)

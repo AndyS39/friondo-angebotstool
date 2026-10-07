@@ -16,7 +16,7 @@ set "NEUSTART=%~dp0scripts\dienst-neustart.bat"
 if /i "%~1"=="--hilfe" goto :hilfe
 echo == Friondo Angebotstool: Update ==
 echo.
-echo HINWEIS: Updates nur im Wartungsfenster ^(Standard Dienstag 18:30-19:30^) und mit gesetztem
+echo HINWEIS: Updates nur im Wartungsfenster ^(Standard Dienstag 22:30-23:30^) und mit gesetztem
 echo Wartungsbanner ^(Parametrierung -^> Betrieb -^> Wartungshinweis, mindestens 30 Minuten vorher^).
 echo Beim Stoppen werden angemeldete Nutzer kurz getrennt. Nur Hinweis - keine Blockade.
 echo Abbruch: Strg+C - weiter: beliebige Taste ^(automatisch nach 10 s^).

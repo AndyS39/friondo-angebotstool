@@ -214,6 +214,14 @@
                         <button class="knopf klein zweitrangig" type="submit"
                                 title="Alle Cookies dieses Benutzers ungültig machen (z. B. Gerät verloren)">Alle Sitzungen beenden</button>
                     </form>
+                    {% if request.state.benutzer and b.id != request.state.benutzer.id and b.aktiv %}
+                    {# v27-Nachtrag: Admin-Zugang zu jedem Konto (Antwort Andreas 07.10.2026) #}
+                    <form method="post" action="/benutzer/{{ b.id }}/anmelden-als"
+                          onsubmit="return confirm('Als {{ b.name }} anmelden? Du siehst das Tool dann aus Sicht dieses Benutzers (2 Stunden, steht im Login-Protokoll). Zurück über Abmelden.');">
+                        <button class="knopf klein zweitrangig" type="submit"
+                                title="Ohne PIN als dieser Benutzer anmelden (Hilfe am Telefon, Prüfung der Sicht)">Als Benutzer anmelden</button>
+                    </form>
+                    {% endif %}
                     <form method="post" action="/benutzer/{{ b.id }}/loeschen"
                           onsubmit="return confirm('{{ b.name }} wirklich {{ 'löschen' if loeschbar[b.id] else 'deaktivieren' }}?');">
                         <button class="knopf klein zweitrangig" type="submit"

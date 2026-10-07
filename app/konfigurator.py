@@ -199,6 +199,28 @@ def naechste_frage(logik: Logik, antworten: dict) -> Optional[Frage]:
     return None
 
 
+# v27-Nachtrag (Antwort Andreas 07.10.2026, Lasttest-Befund): später eingeführte
+# optionale Fragen (O09 Rechnungs-Name, O13 abweichende Lieferanschrift – v20;
+# A20 Nennleistung der bestehenden Heizung – v19) fehlen in Bestands-Erfassungen
+# und sind keine Pflicht. Der Bogen führt weiter durch alle sichtbaren Fragen
+# (naechste_frage); „Angebot erzeugen“ und die Prüfseite verlangen nur noch
+# Pflichtfragen (naechste_pflichtfrage).
+OPTIONALE_FRAGEN = {"O09", "O13", "A20"}
+
+
+def ist_optional(frage: Frage) -> bool:
+    text = f"{frage.text} {frage.hinweis}".lower()
+    return frage.id in OPTIONALE_FRAGEN or "optional" in text or "leer lassen" in text
+
+
+def naechste_pflichtfrage(logik: Logik, antworten: dict) -> Optional[Frage]:
+    """Wie naechste_frage, überspringt aber optionale Fragen."""
+    for frage in sichtbare_fragen(logik, antworten):
+        if frage.id not in antworten and not ist_optional(frage):
+            return frage
+    return None
+
+
 # --- Aktions-Matching -----------------------------------------------------
 
 def _teil_index(frage: Frage, aktions_antwort: str, wert, antworten: dict,

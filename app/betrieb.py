@@ -29,10 +29,10 @@ BACKUP_AUFBEWAHRUNG_ZIEL_TAGE = 90
 BACKUP_WARN_STUNDEN = 26
 POOL_WARN_PROZENT = 70
 ADMIN_GLOCKE_ABSTAND_S = 3600
-WARTUNG_STANDARD = "Dienstag 18:30–19:30"   # [ANNAHME] Phase 132
+WARTUNG_STANDARD = "Dienstag 22:30–23:30"   # Antwort Andreas 07.10.2026
 WARTUNG_STANDARD_WOCHENTAG = 1               # 0 = Montag
-WARTUNG_STANDARD_VON = "18:30"
-WARTUNG_STANDARD_BIS = "19:30"
+WARTUNG_STANDARD_VON = "22:30"
+WARTUNG_STANDARD_BIS = "23:30"
 
 _wartung_cache = {"stand": 0.0, "wert": None}
 _wartung_sperre = threading.Lock()
@@ -227,7 +227,7 @@ def wartung_loeschen(session) -> None:
 
 
 def naechstes_wartungsfenster(jetzt: datetime | None = None) -> tuple[datetime, datetime]:
-    """Standardfenster Dienstag 18:30–19:30 [ANNAHME]: nächster Dienstag
+    """Standardfenster Dienstag 22:30–23:30 (Andreas 07.10.2026): nächster Dienstag
     (heute, falls das Fenster noch nicht vorbei ist)."""
     jetzt = jetzt or datetime.now()
     tage = (WARTUNG_STANDARD_WOCHENTAG - jetzt.weekday()) % 7

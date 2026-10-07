@@ -33,6 +33,9 @@ _nominatim_zuletzt = [0.0]
 
 # v27 (Phase 128): Pausen nach dem 1., 2. und ab dem 3. Fehlversuch
 BACKOFF_PAUSEN = (timedelta(hours=1), timedelta(hours=6), timedelta(hours=24))
+# Entscheidung 07.10.2026: nach 10 Fehlversuchen keine automatischen Versuche mehr
+# (Nominatim-Kontingent); „Adresse prüfen“ mit manuellem Pin setzt den Zähler zurück
+BACKOFF_MAX_VERSUCHE = 10
 LAUF_LIMIT = 25            # Adressen je Bereich und Lauf (wie bisher)
 TERMIN_HORIZONT_TAGE = 60
 OFFENE_PHASEN = ("neu", "in_kontaktierung", "qualifiziert", "terminiert")
@@ -59,6 +62,8 @@ def erneut_faellig(cache: GeocodeCache | None, jetzt: datetime | None = None) ->
     versuche = int(cache.versuche or 0)
     if versuche <= 0 or cache.stand is None:
         return True
+    if versuche >= BACKOFF_MAX_VERSUCHE:
+        return False   # aufgegeben – nur noch „Adresse prüfen“ (manueller Pin)
     return (jetzt or datetime.now()) >= cache.stand + backoff_pause(versuche)
 
 
