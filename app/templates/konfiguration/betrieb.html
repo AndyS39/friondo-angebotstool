@@ -50,6 +50,14 @@
     <div class="karte betrieb-kachel"><span class="kachel-titel">Mail-Ausgang (Sofort-Mails)</span>
         <span class="kachel-wert">{{ health.mail_ausgang.offen if health.mail_ausgang.offen is not none else '?' }} offen</span>
         <span class="dezent">{{ health.mail_ausgang.fehler_24h or 0 }} Fehler in 24 h · Versand durch Lauf „mail-ausgang“ (jede Minute)</span></div>
+    {# v29 (PLAN_LEAD_V4 Phase 142): Lead-Mail-Warteschlange, Status fehler (kein Absender-Fallback) #}
+    <div class="karte betrieb-kachel{{ ' betrieb-kachel-warn' if lead_mail_fehler }}" id="kachel-lead-mail-fehler"><span class="kachel-titel">Lead-Mails mit Fehler</span>
+        <span class="kachel-wert">{{ lead_mail_fehler }}</span>
+        <span class="dezent">Absender termin@ ohne Fallback · <a href="/lead-management/kommunikation?status=fehler">Warteschlange</a> · Lauf „lead-mail“ sendet nach „Erneut senden“</span></div>
+    {# v27-Nachtrag 2: Anhang-Dateien des Blatts „Anhänge“ im Ordner anlagen/ #}
+    <div class="karte betrieb-kachel{{ ' betrieb-kachel-warn' if anhaenge_fehlend }}" id="kachel-anhaenge"><span class="kachel-titel">Anhang-Dateien (anlagen/)</span>
+        <span class="kachel-wert">{{ 'vollständig' if not anhaenge_fehlend else (anhaenge_fehlend | length ~ ' fehlt') }}</span>
+        <span class="dezent">{% if anhaenge_fehlend %}fehlt: {{ anhaenge_fehlend | join(', ') }}{% else %}alle im Blatt „Anhänge“ genannten Dateien liegen bereit{% endif %}</span></div>
 </div>
 
 <section class="karte" id="wartung">

@@ -1,0 +1,28 @@
+{# v29 (PLAN_LEAD_V4 Phase 142): roter Hinweisbalken in der Kundenkartei –
+   `mail_hinweis` kommt aus lead_mail.kartei_hinweis(session, vorgang):
+   {art: 'fehler' | 'ungueltig', titel, text, erneut_url, warteschlange_url, eintrag_id}
+   Eingebunden von kartei.html (Agent L1, Kontext-Schlüssel mail_hinweis);
+   Inhalt/Logik pflegt Agent L2. „Erneut senden“ stellt nur den Warteschlangen-
+   Eintrag auf geplant (POST /lead-management/mail/{id}/erneut, Redirect zurück);
+   gesendet wird durch den Lauf lead-mail. Styles: lead_v29.css. #}
+{% from "_symbole.html" import symbol %}
+{% if mail_hinweis %}
+<div class="lm-mail-hinweis lm-mail-hinweis-{{ mail_hinweis.art }}" role="alert" id="lm-mail-hinweis"
+     data-art="{{ mail_hinweis.art }}"{% if mail_hinweis.eintrag_id %} data-eintrag="{{ mail_hinweis.eintrag_id }}"{% endif %}>
+    <span class="lm-mail-hinweis-symbol" aria-hidden="true">{{ symbol('warnung') }}</span>
+    <div class="lm-mail-hinweis-text">
+        <strong>{{ mail_hinweis.titel }}</strong>
+        <span>{{ mail_hinweis.text }}</span>
+    </div>
+    <div class="lm-mail-hinweis-aktionen">
+        {% if mail_hinweis.erneut_url %}
+        <form method="post" action="{{ mail_hinweis.erneut_url }}" class="lm-inline">
+            <button class="knopf klein" type="submit" title="Eintrag erneut in die Warteschlange stellen – der Lauf lead-mail sendet in etwa einer Minute">Erneut senden</button>
+        </form>
+        {% endif %}
+        {% if mail_hinweis.warteschlange_url %}
+        <a class="knopf klein zweitrangig" href="{{ mail_hinweis.warteschlange_url }}">Warteschlange</a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}

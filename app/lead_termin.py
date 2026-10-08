@@ -8,9 +8,17 @@
 # Terminbestätigung erneut (A-9). Baut auf den Bausteinen des V1-Kerns
 # (kern.ad_profil, kern._arbeitszeiten_von_bis, kalender.frei_belegt,
 # routing.fahrzeit) auf, ohne kern.termin_vorschlaege zu verändern.
+# v29 (PLAN_LEAD_V4 Phase 143): genau `vorschlaege_anzahl` Vorschläge (Standard 3),
+# der erste als „Ideal“ mit Begründung in Klartext; Kalenderansicht der in Frage
+# kommenden Vertriebler als JSON (kalender_json: Mo–Sa, 15-Minuten-Raster,
+# Arbeitszeiten der AD-Profile, Tool-Termine, Outlook-Belegt nur bei
+# kalender_sync = an und nie für Handelsvertreter, Cache 10 Minuten je Lead und
+# Woche); Sperrzeiten der Handelsvertreter (VotTermin typ „sperrzeit“, nur
+# Tool-Kalender, Zwischenlösung bis [OFFEN 3]); „Weitere Kalender“ je Nutzer
+# (benutzer_einstellungen Key assistent_kalender).
 
 import json
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -48,15 +56,65 @@ ADRESSE_HINWEIS = ("Adresse fehlt – Straße, PLZ und Ort in der Kundenkartei e
 # Adresse auf; Buchungen/Absagen leeren den Cache komplett (Kalender ändert sich).
 VORSCHLAEGE_CACHE_SEKUNDEN = 600
 vorschlaege_cache: dict = {}
+# v29 (Phase 143): Kalenderansicht – Cache 10 Minuten je Lead, Sicht, Woche und
+# gewählten „Weiteren Kalendern“: {vorgang_id: {schluessel: (berechnet_um, antwort)}}
+kalender_cache: dict = {}
+VORSCHLAEGE_ANZAHL_STANDARD = 3
+SPERRZEIT_TYP = "sperrzeit"
+SPERRZEIT_VORGANG_ID = 0          # Sperrzeiten hängen an keinem Vorgang (vorgang_id ist NOT NULL)
+KALENDER_RASTER_MIN = 15
+KALENDER_TAGE = 6                 # Mo–Sa
+EINSTELLUNG_WEITERE = "assistent_kalender"
+TERMIN_TYP_NAMEN_V4 = dict(TERMIN_TYP_NAMEN, sperrzeit="Sperrzeit")
 
 
 def vorschlaege_cache_leeren(vorgang_id: int | None = None) -> None:
-    """Cache der Terminvorschläge leeren – für einen Lead (Adressänderung in
-    der Kartei) oder komplett (vorgang_id=None, z. B. nach einer Buchung)."""
+    """Cache der Terminvorschläge (und der Kalenderansicht) leeren – für einen
+    Lead (Adressänderung in der Kartei) oder komplett (vorgang_id=None, z. B.
+    nach einer Buchung oder Sperrzeit)."""
     if vorgang_id is None:
         vorschlaege_cache.clear()
+        kalender_cache.clear()
     else:
         vorschlaege_cache.pop(int(vorgang_id), None)
+        kalender_cache.pop(int(vorgang_id), None)
+
+
+def vorschlaege_anzahl(session: Session) -> int:
+    """v29: Parameter vorschlaege_anzahl (Lead-Einstellungen, Standard 3, 1–5)."""
+    try:
+        wert = int(str(kern.parameter_holen(session, "vorschlaege_anzahl",
+                                            str(VORSCHLAEGE_ANZAHL_STANDARD))).strip() or 3)
+    except ValueError:
+        wert = VORSCHLAEGE_ANZAHL_STANDARD
+    return max(1, min(5, wert))
+
+
+def ideal_begruendung(v: dict, uebrige: list | None = None) -> str:
+    """v29: Klartext, warum Vorschlag 1 „ideal“ ist – aus den Bewertungsteilen
+    (Umweg, Wunschzeit, Tour-Tag, Kompetenz, Kapazität) und dem Abstand zur
+    Bewertung von Vorschlag 2."""
+    teile = []
+    umweg = v.get("umweg")
+    if umweg is not None:
+        teile.append("kein Umweg" if int(umweg) <= 0 else f"geringster Umweg ({int(umweg)} Min)")
+    if v.get("wunsch"):
+        teile.append("in der Wunschzeit des Kunden")
+    if v.get("tour_tag"):
+        teile.append("Tour-Tag in der Nähe")
+    if v.get("leerer_tag") is False and v.get("tages_termine"):
+        teile.append("Tag bereits mit Terminen belegt (kurze Wege)")
+    for g in v.get("gruende") or []:
+        if str(g).startswith("Kompetenz") and g.endswith("✓"):
+            teile.append("Kompetenz passt")
+            break
+    if uebrige:
+        naechster = uebrige[0]
+        abstand = round(float(naechster.get("bewertung", 0)) - float(v.get("bewertung", 0)))
+        if abstand > 0:
+            teile.append(f"{abstand} Punkte besser bewertet als Vorschlag 2")
+    return "Ideal: " + (", ".join(teile) if teile else "beste Gesamtbewertung aus Umweg, "
+                                                     "Wunschzeit, Kompetenz und Kapazität")
 
 
 def parameter(session: Session, name: str, standard: str | None = None) -> str:
@@ -296,12 +354,16 @@ def _slot_frei(session: Session, lead_ort, start_ort, beginn: datetime,
 
 
 def vorschlaege(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None,
-                anzahl: int = 5, benutzer=None) -> dict:
+                anzahl: int | None = None, benutzer=None) -> dict:
     """Top-N-Slots (Dauer aus Profil/90, Raster 30, Horizont 14 Werktage).
-    Kapazität zählt nur Vor-Ort-Termine, Kollision alle Terminarten; Puffer
-    = max(puffer_min, Fahrzeit); Begründung je Vorschlag in Klartext."""
+    Kapazität zählt nur Vor-Ort-Termine, Kollision alle Terminarten (auch
+    Sperrzeiten der HV); Puffer = max(puffer_min, Fahrzeit); Begründung je
+    Vorschlag in Klartext. v29: anzahl None = Parameter vorschlaege_anzahl
+    (Standard 3); der erste Vorschlag trägt ideal=True + ideal_grund."""
     from app import kalender as kalender_modul
     from app import routing
+    if anzahl is None:
+        anzahl = vorschlaege_anzahl(session)
     jetzt = datetime.now()
     horizont = _int(parameter(session, "vorschlag_horizont_tage", "14"), 14)
     raster = max(5, _int(parameter(session, "vorschlag_raster_min", "30"), 30))
@@ -334,6 +396,12 @@ def vorschlaege(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None
         alle = [lead_ort] + [p for p in punkte if p != lead_ort][:49]
         routing.matrix_fuellen(session, alle, alle)
     fenster = kern._wunschzeit_fenster(session, vorgang)
+    # Lasttest 08.10.2026 (v29): Routing-Cache-Zeilen (Matrix und Luftlinien-
+    # Schätzungen aus fahrzeit()) sind geschrieben – Schreibsperre freigeben, bevor
+    # die Vorschläge sekundenlang gerechnet werden (sonst „database is locked“ bei
+    # parallelen Schreibern; Befund Lauf 1/2 der Rollout-Vorbereitung)
+    from app.db import verbindung_freigeben as _freigeben
+    _freigeben(session)
     score_an = lead_v2.score_aktiv(session)   # v25: Klassen-Bonus nur bei Score an
     alle = []
     for k in vorfilter["kandidaten"]:
@@ -351,8 +419,11 @@ def vorschlaege(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None
                     session, _ort(t, start_ort), lead_ort)["minuten"]
                 fahrzeiten[("weg", t.id)] = routing.fahrzeit(
                     session, lead_ort, _ort(t, start_ort))["minuten"]
-        belegt_extern = kalender_modul.frei_belegt(
-            session, ad, jetzt, tage[-1] + timedelta(days=1)) if tage else None
+        # v29 (Phase 143, [OFFEN 3]): Handelsvertreter haben kein Friondo-Postfach –
+        # kein Outlook-Abruf, nur Tool-Termine und Sperrzeiten
+        belegt_extern = (kalender_modul.frei_belegt(
+            session, ad, jetzt, tage[-1] + timedelta(days=1))
+            if tage and not k.get("handelsvertreter") else None)
         for tag in tage:
             zeiten = kern._arbeitszeiten_von_bis(profil, tag)
             if zeiten is None:
@@ -426,6 +497,9 @@ def vorschlaege(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None
                     "tages_termine": tages_termine, "puffer": puffer,
                     "begruendung": " · ".join(teile), "gruende": teile,
                 })
+    # Lasttest 08.10.2026: Luftlinien-Schätzungen aus fahrzeit() (Cache-Misses in der
+    # Schleife) ebenfalls sofort festschreiben – keine Schreibsperre über die Auswahl
+    _freigeben(session)
     alle.sort(key=lambda v: (v["bewertung"], v["beginn"]))
     gewaehlt, je_tag = [], {}
     for v in alle:
@@ -433,10 +507,15 @@ def vorschlaege(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None
         if je_tag.get(schluessel, 0) >= 2:
             continue
         je_tag[schluessel] = je_tag.get(schluessel, 0) + 1
+        v["ideal"] = False
+        v["ideal_grund"] = ""
         gewaehlt.append(v)
         if len(gewaehlt) >= anzahl:
             break
-    return {"vorschlaege": gewaehlt, "hinweise": hinweise,
+    if gewaehlt:
+        gewaehlt[0]["ideal"] = True
+        gewaehlt[0]["ideal_grund"] = ideal_begruendung(gewaehlt[0], gewaehlt[1:])
+    return {"vorschlaege": gewaehlt, "hinweise": hinweise, "anzahl": anzahl,
             "kandidaten": [k["ad"] for k in vorfilter["kandidaten"]],
             "kandidaten_info": vorfilter["kandidaten"],
             "ausgeschlossen": vorfilter["ausgeschlossen"],
@@ -465,15 +544,18 @@ def _beginn_text(beginn: datetime) -> str:
 
 
 def vorschlaege_json(session: Session, vorgang: Vorgang, benutzer=None,
-                     anzahl: int = 5, jetzt: datetime | None = None) -> dict:
+                     anzahl: int | None = None, jetzt: datetime | None = None) -> dict:
     """Antwort für GET /lead-management/lead/{id}/termin/vorschlaege.json
     (Vertrag Agent C/D): {status: ok|adresse_fehlt|hv_lead|keine, hinweis,
     vorschlaege: [{ad_id, ad_name, beginn (ISO), beginn_text, begruendung,
-    umweg_min}]} – Top 5, Cache 10 Minuten je Lead (Sicht Innendienst bzw. je
+    umweg_min, ideal, ideal_grund}]} – v29: genau `vorschlaege_anzahl` (Standard
+    3, Feld anzahl), Cache 10 Minuten je Lead (Sicht Innendienst bzw. je
     Handelsvertreter getrennt), Zusatzfelder aus_cache/berechnet_um/buchbar/
     pflicht_offen. Reihenfolge der Zustände: HV-Lead (Innendienst) → Adresse
     fehlt → Vorschläge (ok) oder keine."""
     jetzt = jetzt or datetime.now()
+    if anzahl is None:
+        anzahl = vorschlaege_anzahl(session)
     kunde = session.get(Kunde, vorgang.kunde_id)
     hv_ich = lead_v2.ist_handelsvertreter(session, benutzer) if benutzer is not None else False
     sicht = f"hv{benutzer.id}" if hv_ich else "id"
@@ -484,7 +566,7 @@ def vorschlaege_json(session: Session, vorgang: Vorgang, benutzer=None,
         return antwort
     buchbar = not (kern.demo_aktiv(session) and not vorgang.demo)
     pflicht_offen = lead_v2.pflichtfelder_offen(session, kunde, vorgang) if kunde else []
-    antwort = {"status": "ok", "hinweis": "", "vorschlaege": [],
+    antwort = {"status": "ok", "hinweis": "", "vorschlaege": [], "anzahl": anzahl,
                "buchbar": buchbar, "pflicht_offen": pflicht_offen,
                "berechnet_um": jetzt.strftime("%H:%M"), "aus_cache": False}
     hv = hv_des_vorgangs(session, vorgang)
@@ -501,8 +583,10 @@ def vorschlaege_json(session: Session, vorgang: Vorgang, benutzer=None,
             liste = [{
                 "ad_id": v["ad"].id, "ad_name": v["ad"].name,
                 "beginn": v["beginn"].strftime("%Y-%m-%dT%H:%M"),
+                "ende": v["ende"].strftime("%Y-%m-%dT%H:%M"),
                 "beginn_text": _beginn_text(v["beginn"]),
                 "begruendung": v["begruendung"], "umweg_min": int(v["umweg"]),
+                "ideal": bool(v.get("ideal")), "ideal_grund": v.get("ideal_grund", ""),
             } for v in ergebnis["vorschlaege"][:anzahl]]
             antwort["vorschlaege"] = liste
             antwort["kandidaten"] = [{"ad_id": a.id, "ad_name": a.name}
@@ -581,7 +665,7 @@ def konflikte(session: Session, ad_id: int, beginn: datetime,
     texte = []
     for t in voll:
         texte.append(f"Überschneidung mit Termin {t.beginn:%H:%M}–{_ende(t, dauer):%H:%M} "
-                     f"({TERMIN_TYP_NAMEN.get(t.typ or 'vot', t.typ)})")
+                     f"({TERMIN_TYP_NAMEN_V4.get(t.typ or 'vot', t.typ)})")
     for t, noetig in puffer_konflikte:
         texte.append(f"Puffer zu Termin {t.beginn:%H:%M} unterschritten "
                      f"(nötig {noetig} Min = max(Mindestpuffer, Fahrzeit))")
@@ -750,10 +834,11 @@ def vorab_anlegen(session: Session, vorgang: Vorgang, typ: str, person_id: int,
                        else " – Kunde wählt den Zeitpunkt über den Buchungslink"),
                     benutzer=benutzer)
     if beginn is not None:
+        # v29 (Phase 141): Glocken-Art „terminaenderung“ – standardmäßig abgeschaltet
         kern.benachrichtigen(session, [person.id],
                              f"{name} {beginn:%d.%m. %H:%M}: {kunde.anzeige_name}"
                              f"{', ' + kunde.ort if kunde.ort else ''}",
-                             f"/lead-management/lead/{vorgang.id}")
+                             f"/lead-management/lead/{vorgang.id}", art="terminaenderung")
     session.flush()
     vorschlaege_cache_leeren()   # v25: Vorab-Gespräche zählen in der Kollision
     return termin, " ".join(hinweise) or f"{name} eingetragen."
@@ -797,7 +882,7 @@ def absagen(session: Session, termin: VotTermin, grund: str, text: str = "",
             session, set(leitung_ids(session)) | {vorgang.leadmanager_id},
             f"Termin abgesagt ({termin.beginn:%d.%m. %H:%M}): {kunde.anzeige_name} – "
             "Ersatzkunde für den freien Slot vorschlagen",
-            f"/lead-management/termin/{termin.id}/ersatz")
+            f"/lead-management/termin/{termin.id}/ersatz", art="terminaenderung")   # v29
     else:
         termin.status = "abgesagt"
         termin.grund_text = (grund + (f" – {text}" if text else ""))[:500]
@@ -811,7 +896,7 @@ def absagen(session: Session, termin: VotTermin, grund: str, text: str = "",
             kern.benachrichtigen(session, [vorgang.leadmanager_id],
                                  f"{TERMIN_TYP_NAMEN.get(typ, typ)} abgesagt: "
                                  f"{kunde.anzeige_name}",
-                                 f"/lead-management/lead/{vorgang.id}")
+                                 f"/lead-management/lead/{vorgang.id}", art="terminaenderung")   # v29
     session.flush()
     vorschlaege_cache_leeren()   # v25: Slot frei – Vorschläge neu rechnen
     return True, "Termin abgesagt."
@@ -831,7 +916,7 @@ def slot_frei_melden(session: Session, termin: VotTermin, benutzer=None) -> None
         session, empfaenger,
         f"Slot frei durch Umbuchung ({termin.beginn:%d.%m. %H:%M}): {kunde.anzeige_name} – "
         "Ersatzkunde für den freien Slot vorschlagen",
-        f"/lead-management/termin/{termin.id}/ersatz")
+        f"/lead-management/termin/{termin.id}/ersatz", art="terminaenderung")   # v29
 
 
 def radius_stufen(session: Session) -> list[float]:
@@ -978,3 +1063,288 @@ def hv_nur_eigene(session: Session, benutzer) -> int | None:
     if benutzer is not None and lead_v2.ist_handelsvertreter(session, benutzer):
         return benutzer.id
     return None
+
+
+# --- v29 (PLAN_LEAD_V4 Phase 143): Sperrzeiten der Handelsvertreter [OFFEN 3] -----------
+
+def sperrzeiten_liste(session: Session, benutzer_id: int, ab: datetime | None = None,
+                      bis: datetime | None = None) -> list:
+    """Sperrzeiten (VotTermin typ sperrzeit) eines Vertrieblers, chronologisch."""
+    abfrage = (session.query(VotTermin)
+               .filter(VotTermin.ad_id == benutzer_id, VotTermin.typ == SPERRZEIT_TYP,
+                       VotTermin.status == "geplant"))
+    if ab is not None:
+        abfrage = abfrage.filter(VotTermin.ende >= ab)
+    if bis is not None:
+        abfrage = abfrage.filter(VotTermin.beginn < bis)
+    return abfrage.order_by(VotTermin.beginn).all()
+
+
+def sperrzeit_anlegen(session: Session, benutzer, datum, von: str, bis: str,
+                      bemerkung: str = "") -> tuple[VotTermin | None, str]:
+    """Sperrzeit im Tool-Kalender des Handelsvertreters (Zwischenlösung bis
+    [OFFEN 3]): Datum, von/bis (HH:MM, 15-Minuten-Raster), Bemerkung. Zählt im
+    Assistenten als belegter Slot (Kollision), nicht in der Tageskapazität;
+    kein Outlook, keine Kundenmail, kein Vorgang (vorgang_id 0)."""
+    if benutzer is None:
+        return None, "Kein Benutzer."
+    if isinstance(datum, str):
+        try:
+            datum = datetime.strptime(datum.strip()[:10], "%Y-%m-%d").date()
+        except ValueError:
+            return None, "Datum nicht lesbar."
+    if isinstance(datum, datetime):
+        datum = datum.date()
+
+    def _zeit(text: str) -> int | None:
+        text = (text or "").strip()[:5]
+        try:
+            h, m = text.split(":")
+            minuten = int(h) * 60 + int(m)
+        except (ValueError, AttributeError):
+            return None
+        if not 0 <= minuten <= 24 * 60:
+            return None
+        return int(round(minuten / KALENDER_RASTER_MIN) * KALENDER_RASTER_MIN)
+    von_min, bis_min = _zeit(von), _zeit(bis)
+    if von_min is None or bis_min is None:
+        return None, "Uhrzeit von/bis im Format HH:MM angeben."
+    if bis_min <= von_min:
+        return None, "Die Sperrzeit muss nach dem Beginn enden."
+    basis = datetime(datum.year, datum.month, datum.day)
+    beginn, ende = basis + timedelta(minutes=von_min), basis + timedelta(minutes=bis_min)
+    if ende < datetime.now():
+        return None, "Die Sperrzeit liegt in der Vergangenheit."
+    for alt in sperrzeiten_liste(session, benutzer.id, ab=basis, bis=basis + timedelta(days=1)):
+        if alt.beginn < ende and beginn < alt.ende:
+            return None, (f"Überschneidung mit der Sperrzeit "
+                          f"{alt.beginn:%H:%M}–{alt.ende:%H:%M}.")
+    termin = VotTermin(vorgang_id=SPERRZEIT_VORGANG_ID, ad_id=benutzer.id, beginn=beginn,
+                       ende=ende, adresse="", status="geplant", quelle="manuell",
+                       typ=SPERRZEIT_TYP, medium="", demo=False,
+                       grund_text=(bemerkung or "").strip()[:500],
+                       erstellt_von=benutzer.id)
+    session.add(termin)
+    session.flush()
+    vorschlaege_cache_leeren()      # Slots geändert – Vorschläge/Kalender neu rechnen
+    return termin, f"Sperrzeit {beginn:%d.%m.%Y %H:%M}–{ende:%H:%M} eingetragen."
+
+
+def sperrzeit_loeschen(session: Session, termin_id: int, benutzer) -> tuple[bool, str]:
+    """Nur die eigene Sperrzeit (bzw. Admin/Innendienst) – sofort entfernt."""
+    termin = session.get(VotTermin, termin_id)
+    if termin is None or termin.typ != SPERRZEIT_TYP:
+        return False, "Sperrzeit nicht gefunden."
+    if benutzer is None or (termin.ad_id != benutzer.id
+                            and benutzer.rolle not in ("admin", "innendienst")):
+        return False, "Nur die eigene Sperrzeit kann entfernt werden."
+    session.delete(termin)
+    session.flush()
+    vorschlaege_cache_leeren()
+    return True, "Sperrzeit entfernt."
+
+
+# --- v29 (Phase 143): „Weitere Kalender“ je Nutzer ---------------------------------------
+
+def weitere_kalender_holen(session: Session, benutzer) -> list[int]:
+    """Gemerkte Auswahl des Nutzers (benutzer_einstellungen Key assistent_kalender)."""
+    if benutzer is None:
+        return []
+    werte = lead_v2.einstellung_holen(session, benutzer.id, EINSTELLUNG_WEITERE, []) or []
+    return [int(w) for w in werte if str(w).isdigit()] if isinstance(werte, list) else []
+
+
+def weitere_kalender_setzen(session: Session, benutzer, ids) -> list[int]:
+    """Auswahl speichern (nur aktive Vertriebler aus ad_basis); liefert die Liste."""
+    erlaubt = {b.id for b in ad_basis(session)}
+    sauber = []
+    for wert in ids or []:
+        try:
+            nr = int(wert)
+        except (TypeError, ValueError):
+            continue
+        if nr in erlaubt and nr not in sauber:
+            sauber.append(nr)
+    lead_v2.einstellung_setzen(session, benutzer.id, EINSTELLUNG_WEITERE, sauber)
+    return sauber
+
+
+def weitere_kalender_wahl(session: Session, kandidaten_ids, benutzer) -> list[dict]:
+    """Alle aktiven Vertriebler (AD und HV), die nicht zum Kandidatenkreis
+    gehören – Aufklappmenü „Weitere Kalender“; Handelsvertreter sehen nur den
+    eigenen Kalender (leere Auswahl)."""
+    if hv_nur_eigene(session, benutzer):
+        return []
+    profile = {p.benutzer_id: p for p in session.query(AdProfil)}
+    gewaehlt = set(weitere_kalender_holen(session, benutzer))
+    wahl = []
+    for b in ad_basis(session, profile):
+        if b.id in set(kandidaten_ids or []):
+            continue
+        profil = profile.get(b.id)
+        wahl.append({"id": b.id, "name": b.name,
+                     "hv": bool(profil is not None and profil.terminiert_selbst),
+                     "gewaehlt": b.id in gewaehlt})
+    return wahl
+
+
+def ausschluss_grund(vorfilter: dict, ad_id: int) -> str:
+    """Grund, warum ein AD nicht im Kandidatenkreis ist (Kompetenz/Kanal/HV …)."""
+    for a in vorfilter.get("ausgeschlossen", []):
+        if a["ad"].id == ad_id:
+            return a["grund"]
+    return "nicht in der Vorauswahl"
+
+
+# --- v29 (Phase 143): Kalenderansicht des Assistenten (kalender.json) --------------------
+
+def _woche_start(wert, standard: datetime) -> datetime:
+    """Montag 00:00 der Woche von `wert` (YYYY-MM-DD / date / datetime), sonst Standard."""
+    tag = None
+    if isinstance(wert, datetime):
+        tag = wert
+    elif isinstance(wert, date):
+        tag = datetime(wert.year, wert.month, wert.day)
+    elif isinstance(wert, str) and wert.strip():
+        try:
+            tag = datetime.strptime(wert.strip()[:10], "%Y-%m-%d")
+        except ValueError:
+            tag = None
+    if tag is None:
+        tag = standard
+    tag = tag.replace(hour=0, minute=0, second=0, microsecond=0)
+    return tag - timedelta(days=tag.weekday())
+
+
+def _iso(zeit: datetime | None) -> str:
+    return zeit.strftime("%Y-%m-%dT%H:%M") if zeit else ""
+
+
+def kalender_json(session: Session, vorgang: Vorgang, benutzer=None, woche=None,
+                  neu: bool = False, jetzt: datetime | None = None) -> dict:
+    """Antwort für GET /lead-management/lead/{id}/termin/kalender.json?woche=…
+    (v29, Phase 143): Wochenansicht Mo–Sa im 15-Minuten-Raster mit einer Spalte
+    je Kandidat des Assistenten (plus „Weitere Kalender“ des Nutzers, grau
+    „außerhalb der Vorauswahl“): Arbeitszeiten je Tag (AD-Profil), Tool-Termine
+    aller Arten (inkl. Sperrzeiten, vorgemerkt), Outlook-Belegt nur bei
+    kalender_sync = an und nie für Handelsvertreter, die Vorschläge als
+    markierte Slots (Vorschlag 1 = Ideal). Standardwoche = Woche des ersten
+    Vorschlags. Sitzungsdisziplin v27: alle Daten lesen → Sitzung freigeben →
+    Outlook-Abruf → Antwort (kein Zurückschreiben). Cache 10 Minuten je Lead,
+    Sicht, Woche und Auswahl; neu=True erzwingt."""
+    from app import kalender as kalender_modul
+    from app.db import verbindung_freigeben
+    jetzt = jetzt or datetime.now()
+    hv_id = hv_nur_eigene(session, benutzer)
+    sicht = f"hv{hv_id}" if hv_id else "id"
+    weitere = [] if hv_id else weitere_kalender_holen(session, benutzer)
+    # Vorschläge (gecacht, derselbe Kandidatenkreis) – bestimmen die Standardwoche
+    vorschlaege_antwort = vorschlaege_json(session, vorgang, benutzer=benutzer, jetzt=jetzt)
+    liste = vorschlaege_antwort.get("vorschlaege") or []
+    standard = datetime.strptime(liste[0]["beginn"], "%Y-%m-%dT%H:%M") if liste else jetzt
+    start = _woche_start(woche, standard)
+    schluessel = (sicht, start.strftime("%Y-%m-%d"), tuple(weitere))
+    if neu:
+        kalender_cache.get(vorgang.id, {}).pop(schluessel, None)
+    eintrag = kalender_cache.get(vorgang.id, {}).get(schluessel)
+    if eintrag is not None and (jetzt - eintrag[0]).total_seconds() < VORSCHLAEGE_CACHE_SEKUNDEN:
+        antwort = dict(eintrag[1])
+        antwort["aus_cache"] = True
+        return antwort
+    tage = [start + timedelta(days=i) for i in range(KALENDER_TAGE)]
+    ende_woche = tage[-1] + timedelta(days=1)
+    vorfilter = kandidaten(session, vorgang, benutzer=benutzer)
+    kandidaten_ids = [k["ad"].id for k in vorfilter["kandidaten"]]
+    spalten_ids = list(kandidaten_ids)
+    for nr in weitere:
+        if nr not in spalten_ids:
+            spalten_ids.append(nr)
+    profile = {p.benutzer_id: p for p in session.query(AdProfil)}
+    personen = {b.id: b for b in session.query(Benutzer).filter(Benutzer.id.in_(spalten_ids or [0]))}
+    termine_je_ad = _termine_je_ad(session, spalten_ids, tage[0], ende_woche) if spalten_ids else {}
+    vorgang_ids = {x.vorgang_id for ts in termine_je_ad.values() for x in ts if x.vorgang_id}
+    vorgaenge = ({v.id: v for v in session.query(Vorgang).filter(Vorgang.id.in_(vorgang_ids))}
+                 if vorgang_ids else {})
+    kunden = ({k.id: k for k in session.query(Kunde)
+               .filter(Kunde.id.in_({v.kunde_id for v in vorgaenge.values()} or {0}))}
+              if vorgaenge else {})
+    sync_an = kalender_modul.aktiv(session)
+    spalten = []
+    raster_von, raster_bis = 24 * 60, 0
+    for ad_id in spalten_ids:
+        person = personen.get(ad_id)
+        if person is None:
+            continue
+        profil = kern.ad_profil(session, ad_id)
+        echt = profile.get(ad_id)
+        ist_hv = bool(echt is not None and echt.terminiert_selbst)
+        arbeitszeiten = {}
+        for tag in tage:
+            zeiten = kern._arbeitszeiten_von_bis(profil, tag)
+            arbeitszeiten[tag.strftime("%Y-%m-%d")] = list(zeiten) if zeiten else None
+            if zeiten:
+                raster_von, raster_bis = min(raster_von, zeiten[0]), max(raster_bis, zeiten[1])
+        eintraege = []
+        for x in termine_je_ad.get(ad_id, []):
+            if x.beginn is None:
+                continue
+            dauer = timedelta(minutes=profil.termin_dauer_min or 90)
+            v = vorgaenge.get(x.vorgang_id)
+            k = kunden.get(v.kunde_id) if v else None
+            typ = x.typ or "vot"
+            if typ == SPERRZEIT_TYP:
+                text = "Sperrzeit" + (f": {x.grund_text}" if x.grund_text else "")
+            else:
+                text = (k.anzeige_name if k else "Termin") + (f", {k.ort}" if k and k.ort else "")
+            eintraege.append({"id": x.id, "beginn": _iso(x.beginn), "ende": _iso(_ende(x, dauer)),
+                              "typ": typ, "typ_name": TERMIN_TYP_NAMEN_V4.get(typ, typ),
+                              "status": x.status, "text": text,
+                              "vorgang_id": x.vorgang_id if typ != SPERRZEIT_TYP else None,
+                              "eigener": bool(x.vorgang_id == vorgang.id)})
+        spalten.append({"ad_id": ad_id, "name": person.name,
+                        "kandidat": ad_id in kandidaten_ids, "hv": ist_hv,
+                        "grund": "" if ad_id in kandidaten_ids else ausschluss_grund(vorfilter, ad_id),
+                        "arbeitszeiten": arbeitszeiten, "termine": eintraege, "belegt": [],
+                        "outlook": bool(sync_an and not ist_hv)})
+    if raster_von >= raster_bis:
+        raster_von, raster_bis = 8 * 60, 18 * 60
+    raster_von = max(0, (raster_von // 60) * 60)
+    raster_bis = min(24 * 60, -(-raster_bis // 60) * 60)
+    hinweise = []
+    if any(sp["hv"] for sp in spalten):
+        hinweise.append("Handelsvertreter: nur Tool-Termine und Sperrzeiten (kein Outlook).")
+    # v27-Sitzungsdisziplin: alles gelesen – Verbindung freigeben, dann Outlook (Netz)
+    verbindung_freigeben(session)
+    if sync_an:
+        for sp in spalten:
+            if not sp["outlook"]:
+                continue
+            belegt = kalender_modul.frei_belegt(session, personen[sp["ad_id"]], tage[0], ende_woche)
+            if belegt is None:
+                sp["outlook"] = False
+                continue
+            sp["belegt"] = [{"beginn": _iso(b_von), "ende": _iso(b_ende)} for b_von, b_ende in belegt
+                            if b_von < ende_woche and b_ende > tage[0]]
+    antwort = {
+        "vorgang_id": vorgang.id, "woche": start.strftime("%Y-%m-%d"),
+        "woche_text": f"{tage[0]:%d.%m.} – {tage[-1]:%d.%m.%Y}",
+        "vorherige": (start - timedelta(days=7)).strftime("%Y-%m-%d"),
+        "naechste": (start + timedelta(days=7)).strftime("%Y-%m-%d"),
+        "tage": [{"datum": tag.strftime("%Y-%m-%d"), "label": _wochentag_kurz(tag)} for tag in tage],
+        "raster": {"von": raster_von, "bis": raster_bis, "schritt": KALENDER_RASTER_MIN},
+        "spalten": spalten, "kandidaten": kandidaten_ids, "weitere": weitere,
+        "vorschlaege": [{"nr": i + 1, "ad_id": v["ad_id"], "beginn": v["beginn"],
+                         "ende": v.get("ende", ""), "ideal": bool(v.get("ideal"))}
+                        for i, v in enumerate(liste)],
+        "status": vorschlaege_antwort.get("status", "ok"),
+        "buchbar": vorschlaege_antwort.get("buchbar", True),
+        "hinweise": hinweise, "sync": sync_an, "hv": bool(hv_id),
+        "berechnet_um": jetzt.strftime("%H:%M"), "aus_cache": False,
+    }
+    kalender_cache.setdefault(vorgang.id, {})[schluessel] = (jetzt, dict(antwort))
+    return antwort
+
+
+def _wochentag_kurz(tag: datetime) -> str:
+    from app.templating import de_datum
+    return de_datum(tag, "%a %d.%m.")

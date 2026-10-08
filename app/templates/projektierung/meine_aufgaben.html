@@ -2,6 +2,8 @@
 
 {% block titel %}Meine Aufgaben – Projektierung{% endblock %}
 
+{% block mainklasse %}breit pj-voll{% endblock %}
+
 {% block inhalt %}
 {% set ich = request.state.benutzer %}
 <div class="seitenkopf">
@@ -44,6 +46,21 @@
                             {% endfor %}
                         </select>
                     </form>
+                    {# v28 (PLAN_PROJ_V6 Phase 133): „entfällt“ mit Grund auch hier #}
+                    {% if a.status == 'entfaellt' %}
+                    <form method="post" action="/projektierung/aufgabe/{{ a.id }}/wieder-aufnehmen?zurueck=/projektierung/meine-aufgaben" class="detail" data-pj-ajax>
+                        <button class="pj-btn" type="submit">wieder aufnehmen</button>
+                    </form>
+                    {% else %}
+                    <details class="pj-entf">
+                        <summary class="pj-btn" title="Aufgabe mit Grund auf „entfällt“ setzen">entfällt …</summary>
+                        <form method="post" action="/projektierung/aufgabe/{{ a.id }}/entfaellt?zurueck=/projektierung/meine-aufgaben" class="detail" data-pj-ajax
+                              onsubmit="this.closest('.pj-task').classList.add('entfaellt')">
+                            <input type="text" name="grund" size="26" maxlength="300" required placeholder="Grund (Pflicht)">
+                            <button class="pj-btn" type="submit">entfällt</button>
+                        </form>
+                    </details>
+                    {% endif %}
                 </details>
             </div>
             {% if a.status == 'wartet' %}

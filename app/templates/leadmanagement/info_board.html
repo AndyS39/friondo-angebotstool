@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_symbole.html" import symbol %}
-{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "leadmanagement/_nav.html" import lm_nav with context %}
 {% from "leadmanagement/info_tabelle.html" import info_tabelle %}
 
 {% block titel %}Infoabend – Lead-Management{% endblock %}
@@ -110,8 +110,17 @@
         <select name="teilgenommen">
             <option value="ja">Ja</option><option value="nein">Nein</option><option value="leer">leer</option>
         </select></label>
+    {#- v29 (PLAN_LEAD_V4 Phase 140): „An Handelsvertreter verschieben“ – Ziel-Schaltflächen #}
+    <span class="lm-sammel-hv" id="li-sammel-hv" hidden>
+        {% for g in hv_gruppen_wahl | default([]) %}
+        <button class="knopf klein" type="submit" name="ziel" value="{{ g.key }}" data-ziel="{{ g.key }}"
+                title="Markierte Leads an {{ g.name }} verschieben{{ ' – ' ~ g.zusatz if g.zusatz }}; Ausschlussliste wird je Lead geprüft">{{ symbol('nutzer') }} {{ g.name }}{% if g.zusatz %} ({{ g.zusatz }}){% endif %}</button>
+        {% else %}
+        <span class="dezent">Keine Ziele hinterlegt – Lead-Einstellungen → HV-Gruppen.</span>
+        {% endfor %}
+    </span>
     <input type="hidden" name="grund"><input type="hidden" name="grund_text"><input type="hidden" name="bis">
-    <button class="knopf klein" type="submit">Ausführen</button>
+    <button class="knopf klein" type="submit" id="li-sammel-ausfuehren">Ausführen</button>
     <button class="knopf klein zweitrangig" type="button" id="li-sammel-leeren">Auswahl aufheben</button>
     <span class="dezent">Jede Sammelaktion schreibt je Lead eine Aktivität; Pflichtgründe werden einmal abgefragt.</span>
 </form>

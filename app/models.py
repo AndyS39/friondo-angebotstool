@@ -199,6 +199,11 @@ class Benutzer(Base):
     pin_wechsel_noetig: Mapped[bool] = mapped_column(Boolean, default=False)
     sitzungszaehler: Mapped[int] = mapped_column(Integer, default=0)   # „Alle Sitzungen beenden“
     letzter_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # v29 (PLAN_LEAD_V4 Phase 141/142): Vorname („Hallo, <Vorname>“), Infotext und
+    # Bild des Vertrieblers für den Block {vertriebler_block} der Terminbestätigung
+    vorname: Mapped[str] = mapped_column(String(100), default="")
+    infotext: Mapped[str] = mapped_column(Text, default="")
+    bild_datei: Mapped[str] = mapped_column(String(300), default="")   # relativ zu DATA_ORDNER
 
     @property
     def rollen_liste(self) -> list[str]:
@@ -464,6 +469,15 @@ class Vorgang(Base):
     vorab_angebot: Mapped[bool] = mapped_column(Boolean, default=False)
     veranstaltung_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     teilgenommen: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    # v29 (PLAN_LEAD_V4 Phase 142): unzustellbare E-Mail (Bounce) und nicht
+    # gesendete Lead-Mail (kein Absender-Fallback) – nur additiv
+    email_status: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)   # ungueltig | None
+    email_status_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    email_status_grund: Mapped[str] = mapped_column(String(300), default="")
+    mail_fehler: Mapped[bool] = mapped_column(Boolean, default=False)
+    mail_fehler_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    mail_fehler_vorlage: Mapped[str] = mapped_column(String(50), default="")
+    mail_fehler_text: Mapped[str] = mapped_column(String(500), default="")
 
 
 class VorgangsNotiz(Base):
@@ -667,6 +681,8 @@ class Aufgabe(Base):
     auswahl: Mapped[str] = mapped_column(String(100), default="")  # gewaehlte Option
     # V4 (Phase 91.2): Laufzeit-Bedingung "<paket>.<nr>=<wert>" (sonst leer)
     sichtbar_wenn: Mapped[str] = mapped_column(String(100), default="")
+    # v28 (PLAN_PROJ_V6 Phase 133): Zustand „entfällt“ mit Grund
+    entfaellt_grund: Mapped[str] = mapped_column(String(300), default="")
     erledigt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     erledigt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
@@ -724,6 +740,8 @@ class ProjektTermin(Base):
                                                                   nullable=True)
     bestaetigt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     bestaetigt_quelle: Mapped[str] = mapped_column(String(20), default="")  # manuell | mail
+    # v28 (PLAN_PROJ_V6 Phase 135): Zweck eines Montagetermins wp | elektro | sub | leer
+    zweck: Mapped[str] = mapped_column(String(10), default="")
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
@@ -1468,7 +1486,9 @@ VOT_STATUS_NAMEN = {"geplant": "Geplant", "bestaetigt": "Bestätigt",
 # Codes – Bezeichnungen aus dem Blatt Objektarten), To-Do-Status
 TERMIN_TYPEN = ["vot", "telefon", "online"]
 TERMIN_TYP_NAMEN = {"vot": "Vor-Ort-Termin", "telefon": "Telefongespräch",
-                    "online": "Online-Termin (Teams)"}
+                    "online": "Online-Termin (Teams)",
+                    # v29 (PLAN_LEAD_V4 Phase 143): HV-Sperrzeit ohne Vorgang (vorgang_id 0)
+                    "sperrzeit": "Sperrzeit"}
 TERMIN_MEDIEN = {"vot": "vor_ort", "telefon": "telefon", "online": "teams"}
 OBJEKTART_CODES = ["EFH", "RH", "REH", "MFH"]
 TODO_STATUS = ["offen", "erledigt"]
@@ -1579,7 +1599,8 @@ class VotTermin(Base):
     quelle: Mapped[str] = mapped_column(String(10), default="manuell")  # assistent|manuell|monday
     grund_text: Mapped[str] = mapped_column(String(500), default="")
     demo: Mapped[bool] = mapped_column(Boolean, default=False)
-    # v23 (Phase 104): Terminart vot|telefon|online (A-2), Medium
+    # v23 (Phase 104): Terminart vot|telefon|online (A-2); v29 (Phase 143): sperrzeit
+    # (Handelsvertreter-Sperrzeit ohne Vorgang, vorgang_id 0, nur Tool-Kalender); Medium
     # vor_ort|telefon|teams, ICS-UID/SEQUENCE für Umbuchung/Absage (E4)
     typ: Mapped[str] = mapped_column(String(10), default="vot")
     medium: Mapped[str] = mapped_column(String(10), default="vor_ort")
@@ -1639,6 +1660,11 @@ class KommunikationLog(Base):
     status: Mapped[str] = mapped_column(String(15), default="geplant")
     fehler_text: Mapped[str] = mapped_column(String(500), default="")
     modus: Mapped[str] = mapped_column(String(10), default="protokoll")
+    # v29 (PLAN_LEAD_V4 Phase 142): Absender des Eintrags (absender_lead_mails, kein
+    # Fallback) und Versuchszähler des Versand-Jobs (nach VERSUCHE_MAX → status fehler);
+    # neue Statuswerte: fehler, wartet_adresse (Bounce) – nur additiv
+    absender: Mapped[str] = mapped_column(String(200), default="")
+    versuche: Mapped[int] = mapped_column(Integer, default=0)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
@@ -1848,3 +1874,17 @@ class MailAusgang(Base):
     fehler_text: Mapped[str] = mapped_column(String(500), default="")
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     gesendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class TerminBesetzung(Base):
+    """v28 (PLAN_PROJ_V6 Phase 135): Besetzung je Termin – das Team ist nur die
+    Vorlage, die Mannschaft (Monteure) wird am Termin gesetzt. Nur additiv."""
+    __tablename__ = "termin_besetzung"
+    __table_args__ = (UniqueConstraint("termin_id", "benutzer_id",
+                                       name="uq_termin_besetzung"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    termin_id: Mapped[int] = mapped_column(Integer, index=True)
+    benutzer_id: Mapped[int] = mapped_column(Integer, index=True)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

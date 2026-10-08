@@ -506,7 +506,7 @@ class Aktionen(Basis):
         try:
             from app import lead_boards
             keys = [a["key"] for a in lead_boards.sammelaktionen_fuer("info")]
-            self.assertEqual(keys, ["status", "naechste", "teilgenommen"])
+            self.assertEqual(keys, ["status", "naechste", "teilgenommen", "hv_verschieben"])   # v29
         except ImportError:
             pass
         # ohne Auswahl / unbekannte Aktion

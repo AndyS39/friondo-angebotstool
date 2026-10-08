@@ -1080,6 +1080,11 @@ def kfw_gefoerdert_setzen(request: Request, angebot_id: int,
     form = anfrage.formular(request)
     wert = (form.get("kfw_gefoerdert") or "").strip().lower()
     angebot.kfw_gefoerdert = wert if wert in ("ja", "nein") else ""
+    # v28 (PLAN_PROJ_V6 Phase 133): Schritte mit foerderung:ja|nein (BzA/BnD) nachziehen
+    from app import projektierung as kern
+    _projekt, gewerk = kern.projekt_zu_angebot(session, angebot)
+    if gewerk is not None:
+        kern.foerderung_schritte_nachziehen(session, gewerk, benutzer=request.state.benutzer)
     session.commit()
     return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
         "KfW-gefördert: " + {"ja": "Ja", "nein": "Nein"}.get(angebot.kfw_gefoerdert,
@@ -1124,6 +1129,11 @@ def email_entwurf(request: Request, angebot_id: int,
                 "vorbereiten."), status_code=303)
 
     pdf_pfad = pdf_export.pdf_fuer_angebot(session, angebot)
+    # Anhänge (Phase 15/67, v27-Nachtrag 2): volle Logik für ALLE Sparten – das
+    # Blatt „Anhänge“ gilt sparten- und profilübergreifend („immer“ vor Sparte/
+    # Profil geprüft, KL nimmt denselben Pfad wie WP/PV); fehlende Dateien
+    # erscheinen als „fehlt“ in der Versand-Meldung (anhaenge.fuer_angebot sucht
+    # tolerant nach Dateinamen im Ordner anlagen/)
     logik, _ = logik_modul.hole_logik(session)
     anhaenge = anhaenge_modul.fuer_angebot(
         logik, angebot, anhaenge_modul.profilname_fuer(session, angebot))
@@ -1143,7 +1153,9 @@ def email_entwurf(request: Request, angebot_id: int,
             basis = str(request.base_url).rstrip("/")
         signatur_link = f"{basis}/signatur/extern/{token}"
         session.commit()
-    # Vorlage (Phase 30): AD des Vorgangs, sonst Standard; Platzhalter füllen
+    # Vorlage (Phase 30, v27-Nachtrag 2): AD des Vorgangs → Sparten-Vorlage des
+    # Angebots (WP/PV/KL/WB) → Standard; Platzhalter füllen. Die Quelle
+    # („Sparten-Vorlage KL“ …) steht in der Erfolgsmeldung.
     from app import mail_vorlagen
     from app.models import einstellung_holen
     betreff, text, vorlage_quelle = mail_vorlagen.mail_fuer_angebot(
@@ -1356,6 +1368,11 @@ def foerderung_setzen(request: Request, angebot_id: int,
     angebot.foerder_hoechstkosten_cent = hoechst
     angebot.foerderung_manuell_cent = None   # Alt-Override (v6) entfällt
     angebot.foerderung_ausblenden = form.get("ausblenden") == "on"
+    # v28 (PLAN_PROJ_V6 Phase 133): Förderung geändert → Schritte mit foerderung:ja|nein nachziehen
+    from app import projektierung as kern
+    _projekt, gewerk = kern.projekt_zu_angebot(session, angebot)
+    if gewerk is not None:
+        kern.foerderung_schritte_nachziehen(session, gewerk, benutzer=request.state.benutzer)
     session.commit()
     return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
         "Förderung aktualisiert"), status_code=303)

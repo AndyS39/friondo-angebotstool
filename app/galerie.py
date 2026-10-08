@@ -64,6 +64,21 @@ def ist_bild(dateiname: str) -> bool:
     return Path(dateiname).suffix.lower() in BILD_ENDUNGEN
 
 
+# v28 (PLAN_PROJ_V6 Phase 136): Dateitypen, die die Datei-Route
+# /vorgaenge/galerie/datei/{id} `inline` ausliefert (Lightbox, „PDF ansehen“);
+# alles andere bleibt ein Download (attachment). ?download=1 erzwingt attachment.
+INLINE_ENDUNGEN = BILD_ENDUNGEN | {".pdf"}
+
+
+def inline_anzeige(dateiname: str) -> bool:
+    return Path(dateiname or "").suffix.lower() in INLINE_ENDUNGEN
+
+
+def datei_url(datei_id: int, herunterladen: bool = False) -> str:
+    """Adresse der Datei-Route; mit `herunterladen` = Download-Knopf der Lightbox."""
+    return f"/vorgaenge/galerie/datei/{datei_id}" + ("?download=1" if herunterladen else "")
+
+
 def _verkleinern(pfad: Path) -> None:
     """Bilder auf max. 2000 px Kante verkleinern (Original optional behalten
     über Parameter galerie_original_behalten = an)."""

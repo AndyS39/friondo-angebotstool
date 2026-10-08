@@ -1,0 +1,80 @@
+/* v29 (PLAN_LEAD_V4 Phase 142): Vorlagen-Editor (Baum links), Terminbestätigung je
+   Vertriebler, Hinweisbalken „Mail nicht gesendet“/„E-Mail falsch“, Benutzerbild.
+   Pflege: Agent L2 (L1 pflegt lead_v2.css). Nur CSS-Tokens des Design-Systems v14. */
+
+/* --- Hinweisbalken Kundenkartei (_mail_hinweis.html) ------------------------------ */
+.lm-mail-hinweis { display: flex; flex-wrap: wrap; gap: var(--a-3); align-items: center;
+  border: 1px solid var(--status-rot); border-left-width: 6px; background: var(--status-rot-bg);
+  color: var(--status-rot); padding: var(--a-3) var(--a-4, 1rem); border-radius: var(--r-m, 10px);
+  margin: 0 0 var(--a-4, 1rem); }
+.lm-mail-hinweis-symbol { display: inline-flex; font-size: 1.3rem; }
+.lm-mail-hinweis-text { flex: 1 1 320px; display: flex; flex-direction: column; gap: 2px; }
+.lm-mail-hinweis-text strong { font-size: var(--t-m, 1rem); }
+.lm-mail-hinweis-text span { color: var(--text, #1b2a5e); font-size: var(--t-s); }
+.lm-mail-hinweis-aktionen { display: flex; gap: var(--a-2); align-items: center; }
+.lm-mail-hinweis .lm-inline { display: inline; margin: 0; }
+.lm-rot { color: var(--status-rot); }
+
+/* --- Vorlagen-Editor (vorlagen.html, _vorlagen_baum.html) ------------------------- */
+.lmv-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: var(--a-4, 1rem);
+  align-items: start; }
+.lmv-baum { padding: var(--a-3); position: sticky; top: calc(var(--lm-kopf-fest, 0px) + var(--a-3)); }
+.lmv-baum ul { list-style: none; margin: 0 0 var(--a-2); padding: 0; }
+.lmv-baum h3, .lmv-baum summary { font-size: var(--t-s); text-transform: uppercase; letter-spacing: .04em;
+  color: var(--g-500); margin: var(--a-3) 0 var(--a-2); display: flex; align-items: center; gap: 6px;
+  cursor: pointer; }
+.lmv-baum h3 { cursor: default; }
+.lmv-baum summary::-webkit-details-marker { display: none; }
+.lmv-baum details > summary::before { content: "▸"; font-size: .8em; }
+.lmv-baum details[open] > summary::before { content: "▾"; }
+.lmv-zaehler { margin-left: auto; font-weight: normal; text-transform: none; letter-spacing: 0; }
+.lmv-eintrag a { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: var(--r-s);
+  text-decoration: none; color: var(--text, #1b2a5e); font-size: var(--t-s); }
+.lmv-eintrag a:hover { background: var(--friondo-blau-hell); }
+.lmv-eintrag.aktiv a { background: var(--friondo-blau); color: #fff; }
+.lmv-eintrag.lmv-vertriebler a { padding-left: 22px; }
+.lmv-eintrag .lmv-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lmv-eintrag .lmv-badge { font-size: var(--t-xs); padding: 0 5px; }
+.lmv-eintrag.aktiv .lmv-badge { background: #fff; color: var(--friondo-blau); }
+.lmv-eintrag.lmv-ausgeblendet { display: none; }
+.lmv-leer { padding: 4px 8px; font-size: var(--t-s); }
+.lmv-suche { margin: 0 0 var(--a-2); }
+.lmv-suchfeld { display: flex; align-items: center; gap: 6px; border: 1px solid var(--grau-linie);
+  border-radius: var(--r-s); padding: 4px 8px; background: #fff; }
+.lmv-suchfeld input { border: 0; outline: 0; width: 100%; font-size: var(--t-s); background: transparent; }
+.lmv-fuss { font-size: var(--t-xs); margin: var(--a-2) 0 0; }
+
+.lmv-editor { display: flex; flex-direction: column; gap: var(--a-3); min-width: 0; }
+.lmv-kopf h2 { margin: 0 0 var(--a-2); display: flex; align-items: center; gap: var(--a-2); flex-wrap: wrap; }
+.lmv-vertriebler-kasten { display: flex; gap: var(--a-3); align-items: flex-start; padding: var(--a-3);
+  background: var(--g-50); border: 1px solid var(--grau-linie); border-radius: var(--r-s);
+  font-size: var(--t-s); margin-bottom: var(--a-2); }
+.lmv-bild { width: 72px; height: 72px; object-fit: cover; border-radius: var(--r-s); flex: 0 0 72px;
+  border: 1px solid var(--grau-linie); background: #fff; }
+.lmv-bild-leer { display: flex; align-items: center; justify-content: center; color: var(--g-500);
+  font-size: 1.6rem; }
+.lmv-variante { margin: 0; }
+.lmv-werkzeuge { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 var(--a-2); }
+.lmv-werkzeuge .knopf.klein { padding: 2px 8px; font-size: var(--t-xs); }
+.lmv-platzhalter { display: inline-flex; align-items: center; gap: 4px; font-size: var(--t-xs); }
+.lmv-platzhalter select { font-size: var(--t-xs); }
+.lm-vorlage textarea { font-family: Consolas, "Courier New", monospace; font-size: var(--t-s); }
+.lmv-hinweis { font-size: var(--t-xs); }
+.lmv-hinweis code { font-size: var(--t-xs); }
+.lmv-aktionen { align-items: center; flex-wrap: wrap; }
+.lmv-vorschau h2 { margin-top: 0; }
+.lmv-vorschau-betreff { margin: 0 0 var(--a-2); }
+.lmv-mail { border: 1px solid var(--grau-linie); border-radius: var(--r-s); padding: var(--a-3) var(--a-4, 1rem);
+  background: #fff; max-height: 560px; overflow: auto; }
+.lmv-mail img { max-width: 100%; height: auto; }
+.lmv-mail table.lm-vertriebler td { vertical-align: top; }
+
+@media (max-width: 1100px) {
+  .lmv-layout { grid-template-columns: 1fr; }
+  .lmv-baum { position: static; }
+}
+
+/* --- Benutzerverwaltung: Bild/Infotext im AD-Profil ------------------------------- */
+.ben-bild-vorschau { width: 96px; height: 96px; object-fit: cover; border-radius: var(--r-s);
+  border: 1px solid var(--grau-linie); background: #fff; }
+.ben-bild-zeile { display: flex; gap: var(--a-3); align-items: flex-start; flex-wrap: wrap; }

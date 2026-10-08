@@ -57,7 +57,8 @@ Testpostfach, monday-Leads nicht buchbar.
   Ergebnis-Buttons (3/6/7 im ⋯-Menü).
 - **Ein Klick je Anruf**: Erreicht → Qualifizierungsbogen · Nicht erreicht/
   Besetzt/Mailbox → Kaskade (+2 h · +1 Tag 18:00 · +3 Tage · +7 Tage, danach
-  „Nicht erreicht“ +30 Tage mit Nurture-Mail) · Rückruf gewünscht (Datum
+  „Nicht erreicht“ mit der Vorlage „Disqualifiziert“ – *v29: keine Nurture-Mail
+  +30 Tage mehr, Spalte `nach_letztem` im Blatt Kaskade*) · Rückruf gewünscht (Datum
   Pflicht) · Falsche Nummer (Kennzeichen) · Kein Interesse (Grund Pflicht →
   Unqualifiziert). Zurückstellen mit Datum+Grund; der 07:00-Lauf holt
   fällige zurück auf „Neu“.
@@ -94,15 +95,20 @@ Testpostfach, monday-Leads nicht buchbar.
 
 ## 5. Kommunikation (Sendesperre)
 
-Sechs Vorlagen (Parametrierung → Lead-Vorlagen, optional je Sparte):
-Eingangsbestätigung, Nicht erreicht, Terminbestätigung (mit
-Vorbereitungs-Checkliste + ICS), Erinnerung, Terminänderung, Nurture (nur
-mit Werbe-Einwilligung). Warteschlange je Minute nach `mail_modus`:
-**protokoll** = rendern ohne Senden (Demo-Standard, Vorschau in der Akte) ·
+Vorlagen (Editor `/lead-management/vorlagen` mit Baum links – *v29*; Parametrierung
+→ Lead-Vorlagen, optional je Sparte): Eingangsbestätigung, Nicht erreicht,
+Disqualifiziert, Terminbestätigung (mit Vorbereitungs-Checkliste + ICS; *v29: je
+Vertriebler eine eigene Vorlage mit Bild/Infotext und Sparten-Baustein
+`{sparten_hinweise}`*), Erinnerung, Terminänderung, Absage, Online-Termin-Einladung.
+*Nurture ist seit v29 entfallen (Vorlage ausgeblendet).* Warteschlange je Minute nach
+`mail_modus`: **protokoll** = rendern ohne Senden (Demo-Standard, Vorschau in der Akte) ·
 **test** = an die Testadresse mit „[TEST an …]“ · **live** = an den Kunden
-(nur bei Freigabe „alle“ zulässig). Absender leads@friondo.de (Fallback
-angebot@); Reiter „Kommunikation“ in der Akte mit „Jetzt senden“ und
-„Mail mit Vorlage“.
+(nur bei Freigabe „alle“ zulässig). *Absender seit v29: `absender_lead_mails` =
+termin@friondo.de ohne Fallback (vorher leads@ mit Fallback angebot@ – überholt);
+leads@ ist nur noch Eingangspostfach. Scheitert der Versand, bleibt die Mail mit
+Status „fehler“ stehen und der Lead steht oben im Hauptboard („Mail nicht gesendet“);
+Unzustellbarkeitsberichte setzen „E-Mail falsch“ (Lauf `lead-mail-abruf`).* Reiter
+„Kommunikation“ in der Akte mit „Jetzt senden“ und „Mail mit Vorlage“.
 
 ## 6. Board, Karte, Cockpit, Statistik
 

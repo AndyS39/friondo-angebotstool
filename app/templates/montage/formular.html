@@ -3,6 +3,10 @@
 {% block titel %}{{ titel }} · {{ projekt.nummer }}{% endblock %}
 
 {% block inhalt %}
+{# v28 (PLAN_PROJ_V6 Phase 138): Typ wiederhol (Zeilen mit × und „+ weitere
+   <Einzelfeld>“, Felder <key>[]), Option gross (Textarea 6 Zeilen), pflicht_wenn
+   (Hinweis am Feld, live nach der Antwort des Bezugsfelds), Foto-Felder mehrfach
+   (Sammelbox: aufnehmen oder wählen, Vorschau, Upload beim Seiten-Speichern). #}
 <div class="pj-mob">
     <div class="pj-btnrow" style="margin-top:0">
         <a class="pj-btn" href="/montage/einsatz/{{ termin.id }}">← Auftrag</a>
@@ -17,12 +21,14 @@
     {% endif %}
 
     <form method="post" action="/montage/einsatz/{{ termin.id }}/formular/{{ name }}"
-          enctype="multipart/form-data" class="pj-fp">
+          enctype="multipart/form-data" class="pj-fp" id="pj-formular">
         <input type="hidden" name="seite" value="{{ seite }}">
         {% for f in felder %}
         {% set wert = antworten.get(f.feld_key, '') %}
-        <div class="pj-fp-frage">
-            <label>{{ f.bezeichnung }}{{ ' *' if f.pflicht }}</label>
+        {% set bedingung = f.pflicht_wenn %}
+        <div class="pj-fp-frage" data-feld="{{ f.feld_key }}"
+             {% if bedingung %}data-pflicht-wenn="{{ bedingung[0] }}" data-pflicht-op="{{ bedingung[1] }}" data-pflicht-wert="{{ bedingung[2] }}"{% endif %}>
+            <label>{{ f.bezeichnung }}{{ ' *' if f.pflicht }}{% if bedingung %}<span class="pflicht-wenn" data-text="{{ f.pflicht_wenn_text(felder_namen) }}">({{ f.pflicht_wenn_text(felder_namen) }})</span>{% endif %}</label>
             {% if f.typ == 'ja_nein' %}
             <div class="pj-fp-radios">
                 {% for option in ['Ja', 'Nein'] %}
@@ -41,13 +47,36 @@
             <input type="date" name="{{ f.feld_key }}" value="{{ wert }}">
             {% elif f.typ == 'zahl' %}
             <input type="text" inputmode="decimal" name="{{ f.feld_key }}" value="{{ wert }}">
+            {% elif f.typ == 'wiederhol' %}
+            {% set werte = wiederhol_werte(wert) %}
+            <div class="pj-wiederhol" data-einzel="{{ f.einzelfeld }}" data-name="{{ f.feld_key }}[]">
+                <div class="zeilen">
+                    {% for w in werte %}
+                    <div class="zeile"><span class="nr">{{ loop.index }}.</span>
+                        <input type="text" name="{{ f.feld_key }}[]" value="{{ w }}" placeholder="{{ f.einzelfeld }}">
+                        <button type="button" title="Zeile entfernen" onclick="pjWiederholWeg(this)">✕</button></div>
+                    {% endfor %}
+                </div>
+                <button class="pj-btn" type="button" onclick="pjWiederholPlus(this)">+ weitere {{ f.einzelfeld }}</button>
+            </div>
             {% elif f.typ == 'foto' %}
-            {% if wert.startswith('galerie:') %}
-            <div class="dezent" style="font-size:12px">✓ {{ wert.split(':', 2)[2] }}
-                (<a href="/vorgaenge/galerie/datei/{{ wert.split(':')[1] }}" target="_blank">ansehen</a>)
-                – neues Foto ersetzt den Verweis</div>
-            {% endif %}
-            <input type="file" name="{{ f.feld_key }}" accept="image/*" capture="environment">
+            {% set fotos = foto_werte(wert) %}
+            <div class="pj-fp-fotos" data-name="{{ f.feld_key }}">
+                {% if fotos %}
+                <div class="vorhanden">✓ {{ fotos | length }} Foto{{ 's' if fotos | length != 1 }} in der Galerie:
+                    {% for datei_id, dateiname in fotos %}{% if datei_id %}<a href="/vorgaenge/galerie/datei/{{ datei_id }}" target="_blank">{{ dateiname }}</a>{% else %}{{ dateiname }}{% endif %}{{ ', ' if not loop.last }}{% endfor %}
+                    – neue Fotos werden ergänzt</div>
+                {% endif %}
+                <div class="auswahl"></div>
+                <div class="knoepfe">
+                    <label class="pj-btn primary">📷 Foto aufnehmen
+                        <input type="file" accept="image/*" capture="environment" onchange="pjFotoAdd(this)"></label>
+                    <label class="pj-btn">🖼 Fotos wählen
+                        <input type="file" accept="image/*" multiple onchange="pjFotoAdd(this)"></label>
+                    <span class="zahl" hidden></span>
+                </div>
+                <input type="file" name="{{ f.feld_key }}" accept="image/*" multiple hidden class="sammel">
+            </div>
             {% elif f.typ == 'unterschrift' %}
             <canvas class="pj-signatur" data-ziel="sig-{{ f.feld_key }}"
                     width="560" height="160"></canvas>
@@ -58,6 +87,8 @@
                         onclick="pjSigLeeren(this)">Neu unterschreiben</button>
                 {% if wert %}<span class="dezent" style="font-size:12px">✓ Unterschrift gespeichert</span>{% endif %}
             </div>
+            {% elif f.gross %}
+            <textarea name="{{ f.feld_key }}" rows="6" class="gross" maxlength="2000">{{ wert }}</textarea>
             {% else %}
             <input type="text" name="{{ f.feld_key }}" value="{{ wert }}">
             {% endif %}
@@ -71,7 +102,7 @@
             {% if seite + 1 < seiten | length %}
             <button class="pj-btn primary" type="submit" name="aktion" value="weiter">Speichern + Weiter ›</button>
             {% else %}
-            <button class="pj-btn" type="submit" name="aktion" value="weiter">Zwischenspeichern</button>
+            <button class="pj-btn" type="submit" name="aktion" value="bleiben">Zwischenspeichern</button>
             <button class="pj-btn primary" type="submit" name="aktion" value="abschliessen">Abschließen ✓</button>
             {% endif %}
         </div>
@@ -125,5 +156,85 @@ function pjSigLeeren(knopf) {
     feld.getContext('2d').clearRect(0, 0, feld.width, feld.height);
     document.getElementById(feld.dataset.ziel).value = '';
 }
+/* v28 (Phase 138): Wiederholfeld – Zeilen ohne Neuladen */
+function pjWiederholNummerieren(box) {
+    Array.prototype.forEach.call(box.querySelectorAll('.zeile .nr'), function (nr, i) { nr.textContent = (i + 1) + '.'; });
+}
+function pjWiederholPlus(knopf) {
+    var box = knopf.closest('.pj-wiederhol');
+    var zeile = document.createElement('div');
+    zeile.className = 'zeile';
+    var nr = document.createElement('span'); nr.className = 'nr';
+    var eingabe = document.createElement('input');
+    eingabe.type = 'text'; eingabe.name = box.dataset.name; eingabe.placeholder = box.dataset.einzel;
+    var weg = document.createElement('button');
+    weg.type = 'button'; weg.title = 'Zeile entfernen'; weg.textContent = '✕';
+    weg.onclick = function () { pjWiederholWeg(weg); };
+    zeile.appendChild(nr); zeile.appendChild(eingabe); zeile.appendChild(weg);
+    box.querySelector('.zeilen').appendChild(zeile);
+    pjWiederholNummerieren(box);
+    eingabe.focus();
+}
+function pjWiederholWeg(knopf) {
+    var box = knopf.closest('.pj-wiederhol');
+    knopf.closest('.zeile').remove();
+    pjWiederholNummerieren(box);
+}
+/* v28 (Phase 138): Foto-Sammelbox je Feld – Dateien sammeln, Vorschau,
+   ein Upload beim Seiten-Speichern (verstecktes Mehrfach-Feld) */
+function pjFotoSync(box) {
+    var ziel = box.querySelector('input.sammel');
+    var dt = new DataTransfer();
+    (box._dateien || []).forEach(function (d) { dt.items.add(d); });
+    ziel.files = dt.files;
+    var zahl = box.querySelector('.zahl');
+    zahl.hidden = !(box._dateien && box._dateien.length);
+    zahl.textContent = (box._dateien || []).length + ' neue(s) Foto(s) – wird beim Speichern hochgeladen';
+}
+function pjFotoAdd(input) {
+    var box = input.closest('.pj-fp-fotos');
+    box._dateien = box._dateien || [];
+    Array.prototype.forEach.call(input.files, function (datei) {
+        box._dateien.push(datei);
+        var k = document.createElement('div'); k.className = 'foto';
+        var bild = document.createElement('img');
+        if (datei.type.indexOf('image') === 0) { bild.src = URL.createObjectURL(datei); }
+        var name = document.createElement('div'); name.className = 'name'; name.textContent = datei.name;
+        var weg = document.createElement('button'); weg.type = 'button'; weg.textContent = '✕'; weg.title = 'Foto entfernen';
+        weg.onclick = function () {
+            box._dateien.splice(box._dateien.indexOf(datei), 1);
+            k.remove(); pjFotoSync(box);
+        };
+        k.appendChild(bild); k.appendChild(name); k.appendChild(weg);
+        box.querySelector('.auswahl').appendChild(k);
+    });
+    input.value = '';
+    pjFotoSync(box);
+}
+/* v28 (Phase 138): pflicht_wenn – Hinweis live nach der Antwort des Bezugsfelds */
+(function () {
+    var form = document.getElementById('pj-formular');
+    if (!form) { return; }
+    function wertVon(name) {
+        var radio = form.querySelector('input[type=radio][name="' + name + '"]:checked');
+        if (radio) { return radio.value; }
+        var feld = form.querySelector('[name="' + name + '"]');
+        return feld ? (feld.value || '') : '';
+    }
+    function pruefen() {
+        Array.prototype.forEach.call(form.querySelectorAll('.pj-fp-frage[data-pflicht-wenn]'), function (frage) {
+            var ist = wertVon(frage.dataset.pflichtWenn).trim().toLowerCase();
+            var soll = (frage.dataset.pflichtWert || '').trim().toLowerCase();
+            var pflicht = frage.dataset.pflichtOp === '=' ? ist === soll : ist !== soll;
+            var hinweis = frage.querySelector('.pflicht-wenn');
+            if (hinweis) {
+                hinweis.textContent = pflicht ? '– jetzt Pflicht *' : '(' + hinweis.dataset.text + ')';
+                hinweis.style.fontWeight = pflicht ? '600' : '400';
+            }
+        });
+    }
+    form.addEventListener('change', pruefen);
+    pruefen();
+})();
 </script>
 {% endblock %}

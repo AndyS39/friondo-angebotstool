@@ -19,17 +19,36 @@ TITEL_MAX = 300
 
 # --- Glocke -------------------------------------------------------------------------
 
+# v29 (PLAN_LEAD_V4 Phase 141) „Glocke nur To-Dos“: die beiden Lead-Glocken-
+# Arten dieses Moduls – todo_zugewiesen (jemand anderes weist mir ein To-Do zu,
+# auch die Fälligkeits-Glocke eines mir zugewiesenen To-Dos [ANNAHME]) und
+# todo_aktualisiert (jemand anderes erledigt, öffnet oder löscht ein von mir
+# erstelltes To-Do). Eigene Änderungen lösen nichts aus. Beide laufen über
+# lead_glocken.glocke_erlaubt (Parameter glocke_lead_arten); der Eintrag selbst
+# behält art=todo (Demo-Filter, Glocken-Link, bestehende Tests).
+ART_ZUGEWIESEN = "todo_zugewiesen"
+ART_AKTUALISIERT = "todo_aktualisiert"
+
+
 def _glocke(session: Session, benutzer_id: int | None, text: str, link: str,
-            von=None) -> None:
+            von=None, art: str = ART_ZUGEWIESEN) -> bool:
     """Glocken-Eintrag art=todo ohne Mail (F7). Der Demo-Filter in
     app/benachrichtigungen.py greift nur für PROJEKT_ARTEN/LEAD_ARTEN, To-Dos
-    kommen also auch bei Benutzern ohne Modul-Sichtbarkeit durch."""
+    kommen also auch bei Benutzern ohne Modul-Sichtbarkeit durch.
+    v29: nur, wenn die Lead-Glocken-Art `art` erlaubt ist (lead_glocken);
+    nie an den Handelnden selbst. Rückgabe True = Glocke angelegt."""
+    from app import lead_glocken
     if not benutzer_id:
-        return
+        return False
+    if von is not None and getattr(von, "id", None) == benutzer_id:
+        return False
+    if not lead_glocken.glocke_erlaubt(session, art):
+        return False
     session.add(Benachrichtigung(benutzer_id=benutzer_id, text=(text or "")[:500],
                                  link=(link or "")[:300], art=ART,
                                  erstellt_von=von.id if von is not None else None))
     session.flush()
+    return True
 
 
 def link_fuer(session: Session, benutzer_id: int, todo: Todo | None = None) -> str:
@@ -143,7 +162,7 @@ def anlegen(session: Session, von, an_benutzer_id: int, titel: str,
     if von is None or von.id != empfaenger.id:
         _glocke(session, empfaenger.id,
                 f"To-Do von {wer}: {titel}" + (f" – {kunde}" if kunde else ""),
-                link_fuer(session, empfaenger.id, todo), von=von)
+                link_fuer(session, empfaenger.id, todo), von=von, art=ART_ZUGEWIESEN)
     return todo
 
 
@@ -162,8 +181,21 @@ def erledigen(session: Session, todo: Todo, benutzer=None) -> bool:
         kunde = _kunde_text(session, todo.vorgang_id)
         _glocke(session, todo.von_benutzer_id,
                 f"To-Do erledigt von {wer}: {todo.titel}" + (f" – {kunde}" if kunde else ""),
-                link_fuer(session, todo.von_benutzer_id, todo), von=benutzer)
+                link_fuer(session, todo.von_benutzer_id, todo), von=benutzer,
+                art=ART_AKTUALISIERT)
     return True
+
+
+def _ersteller_melden(session: Session, todo: Todo, benutzer, text: str) -> None:
+    """v29: jemand anderes ändert ein von mir erstelltes To-Do → Glocke
+    todo_aktualisiert an den Ersteller (nie an den Handelnden)."""
+    if (todo.von_benutzer_id and benutzer is not None
+            and todo.von_benutzer_id != benutzer.id):
+        kunde = _kunde_text(session, todo.vorgang_id)
+        _glocke(session, todo.von_benutzer_id,
+                text + (f" – {kunde}" if kunde else ""),
+                link_fuer(session, todo.von_benutzer_id, todo), von=benutzer,
+                art=ART_AKTUALISIERT)
 
 
 def wieder_oeffnen(session: Session, todo: Todo, benutzer=None) -> bool:
@@ -173,11 +205,15 @@ def wieder_oeffnen(session: Session, todo: Todo, benutzer=None) -> bool:
     todo.erledigt_am = None
     session.flush()
     _aktivitaet(session, todo, f"To-Do wieder geöffnet: {todo.titel}", benutzer=benutzer)
+    wer = benutzer.name if benutzer is not None else "System"
+    _ersteller_melden(session, todo, benutzer, f"To-Do wieder geöffnet von {wer}: {todo.titel}")
     return True
 
 
 def loeschen(session: Session, todo: Todo, benutzer=None) -> None:
     _aktivitaet(session, todo, f"To-Do gelöscht: {todo.titel}", benutzer=benutzer)
+    wer = benutzer.name if benutzer is not None else "System"
+    _ersteller_melden(session, todo, benutzer, f"To-Do gelöscht von {wer}: {todo.titel}")
     session.delete(todo)
     session.flush()
 
@@ -265,7 +301,9 @@ def faellige_glocken(session: Session, jetzt: datetime | None = None,
     dedupliziert über einen bestehenden Glocken-Eintrag mit demselben Link
     (kann aus dem 5-Minuten-Lead-Scheduler aufgerufen werden). v27 (PLAN_V17
     Phase 128): block > 0 → Commit je `block` Glocken (Scheduler-Lauf); die
-    Liste wird vorab geladen, damit der Commit den Cursor nicht trifft."""
+    Liste wird vorab geladen, damit der Commit den Cursor nicht trifft.
+    v29 (Phase 141): der Fälligkeits-Scheduler meldet nur noch To-Do-
+    Fälligkeiten (Art todo_zugewiesen, abschaltbar über glocke_lead_arten)."""
     jetzt = jetzt or datetime.now()
     anzahl = 0
     for t in (session.query(Todo)
@@ -281,8 +319,11 @@ def faellige_glocken(session: Session, jetzt: datetime | None = None,
         if schon:
             continue
         kunde = _kunde_text(session, t.vorgang_id)
-        _glocke(session, t.an_benutzer_id,
-                f"To-Do fällig: {t.titel}" + (f" – {kunde}" if kunde else ""), link)
+        # v29: Fälligkeits-Glocke nur an den Empfänger, Art todo_zugewiesen [ANNAHME]
+        if not _glocke(session, t.an_benutzer_id,
+                       f"To-Do fällig: {t.titel}" + (f" – {kunde}" if kunde else ""), link,
+                       art=ART_ZUGEWIESEN):
+            continue
         anzahl += 1
         if block and anzahl % block == 0:
             session.commit()   # v27: Block-Commit im Scheduler-Lauf

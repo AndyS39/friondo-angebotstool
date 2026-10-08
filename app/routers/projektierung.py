@@ -107,6 +107,16 @@ def _aufgabe_kontext(session: Session, aufgabe: Aufgabe) -> dict:
     }
 
 
+def _paket_zaehler_text(gruppe) -> str:
+    """Zähler im Paket-Kopf: „alle erledigt“ (erledigt + entfällt = alle),
+    sonst „3 / 5“ und v28 (Phase 133) „· 1 entfällt“."""
+    erledigt = sum(1 for a in gruppe if a.status == "erledigt")
+    entfaellt = sum(1 for a in gruppe if a.status == "entfaellt")
+    if gruppe and erledigt + entfaellt == len(gruppe):
+        return "alle erledigt" + (f" · {entfaellt} entfällt" if entfaellt else "")
+    return f"{erledigt} / {len(gruppe)}" + (f" · {entfaellt} entfällt" if entfaellt else "")
+
+
 def _aufgabe_zeile_html(session: Session, aufgabe: Aufgabe) -> str:
     kontext = _aufgabe_kontext(session, aufgabe)
     kontext["a"] = aufgabe
@@ -133,10 +143,8 @@ def _aufgabe_json(request: Request, session: Session, aufgabe: Aufgabe,
         gruppe = (session.query(Aufgabe)
                   .filter(Aufgabe.paket_instanz_id == aufgabe.paket_instanz_id)
                   .order_by(Aufgabe.reihenfolge, Aufgabe.id).all())
-        erledigt = sum(1 for a in gruppe if a.status == "erledigt")
         pakete.append({"instanz_id": aufgabe.paket_instanz_id,
-                       "text": ("alle erledigt" if erledigt == len(gruppe)
-                                else f"{erledigt} / {len(gruppe)}")})
+                       "text": _paket_zaehler_text(gruppe)})
         weitere = [{"aufgabe_id": a.id, "zeile_html": _aufgabe_zeile_html(session, a)}
                    for a in gruppe if a.id != aufgabe.id]
     daten = {"ok": True, "aufgabe_id": aufgabe.id,
@@ -151,9 +159,176 @@ def _aufgabe_json(request: Request, session: Session, aufgabe: Aufgabe,
     return JSONResponse(daten)
 
 
-def _meldung_json(meldung: str, ok: bool = True, **zusatz):
+def _meldung_json(meldung: str, ok: bool = True, status_code: int = 200, **zusatz):
     from fastapi.responses import JSONResponse
-    return JSONResponse({"ok": ok, "meldung": meldung, **zusatz})
+    return JSONResponse({"ok": ok, "meldung": meldung, **zusatz},
+                        status_code=status_code)
+
+
+# --- v28 (PLAN_PROJ_V6 Phase 135): gemeinsamer Termin-Dialog -------------------
+
+def _termin_dialog_kontext(session: Session) -> dict:
+    """Listen für das Makro termin_dialog (Teams, Personen, Monteure, Subs,
+    Team-Mitglieder als Vorlage der Besetzung, Standarddauer)."""
+    teams = (session.query(Team).filter(Team.aktiv.is_(True))
+             .order_by(Team.typ.desc(), Team.id).all())
+    from app.models import TeamMitglied
+    mitglieder: dict[int, list[int]] = {}
+    for m in session.query(TeamMitglied).order_by(TeamMitglied.id):
+        mitglieder.setdefault(m.team_id, []).append(m.benutzer_id)
+    return {
+        "teams": teams,
+        "montage_teams": [t for t in teams if t.typ != "sub"],
+        "sub_teams": [t for t in teams if t.typ == "sub"],
+        "personen": kern.personen_benutzer(session),
+        "monteure": kern.montage_benutzer(session),
+        "subs": (session.query(Subunternehmer).filter(Subunternehmer.aktiv.is_(True))
+                 .order_by(Subunternehmer.firma).all()),
+        "team_mitglieder": mitglieder,
+        "dauer_standard": kern.montage_dauer_standard(session),
+        "arten": [(k, kern.TERMIN_ARTEN[k][2]) for k in kern.TERMIN_ARTEN_REIHENFOLGE],
+    }
+
+
+def _termin_antwort(request: Request, gewerk: Gewerk, form, ok: bool, meldung: str,
+                    konflikte: list[str], termin_id: int | None = None):
+    """JSON bei Accept application/json ({ok, meldung, konflikte}), sonst
+    Redirect (zurueck-Feld unter /projektierung, sonst Akte) mit Meldung."""
+    text = meldung
+    if ok and konflikte:
+        text += " ⚠ Konflikt: " + "; ".join(konflikte[:4])
+    if _json_gewuenscht(request):
+        return _meldung_json(meldung, ok=ok, konflikte=konflikte,
+                             termin_id=termin_id, status_code=200 if ok else 400)
+    zurueck = (form.get("zurueck") or "") if form is not None else ""
+    if zurueck.startswith("/projektierung") and "//" not in zurueck:
+        trenner = "&" if "?" in zurueck else "?"
+        return RedirectResponse(zurueck + trenner + "meldung=" + quote_plus(text),
+                                status_code=303)
+    return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}"
+                            "?meldung=" + quote_plus(text) + "#termine",
+                            status_code=303)
+
+
+def _termin_daten_aus_form(form) -> dict:
+    """Dialogfelder → daten für kern.termin_speichern. Nimmt auch die alten
+    Formulare an: `typ` statt `art`, `zweck` (Team + Termin) und `beginn` als
+    datetime-local (Datum + Uhrzeit)."""
+    daten: dict = {}
+    art = (form.get("art") or "").strip().lower()
+    if not art:
+        typ = (form.get("typ") or "").strip().lower()
+        zweck = (form.get("zweck") or "").strip().lower()
+        if typ == "montage" or (not typ and zweck):
+            art = {"elektro": "elektro", "sub": "sub"}.get(zweck, "montage")
+        elif typ in kern.TERMIN_ARTEN:
+            art = typ
+        else:
+            art = "sonstige"
+    daten["art"] = art
+    for feld in ("team_id", "sub_id", "person_id", "notiz", "dauer_tage"):
+        daten[feld] = form.get(feld)
+    beginn_roh = (form.get("beginn") or "").strip()
+    uhrzeit = (form.get("uhrzeit") or "").strip()
+    if "T" in beginn_roh:
+        beginn_roh, _, zeit = beginn_roh.partition("T")
+        uhrzeit = uhrzeit or zeit[:5]
+    ende_roh = (form.get("ende") or "").strip().split("T")[0]
+    for name, roh in (("beginn", beginn_roh), ("ende", ende_roh)):
+        try:
+            daten[name] = datetime.strptime(roh, "%Y-%m-%d").date() if roh else None
+        except ValueError:
+            daten[name] = None
+    daten["uhrzeit"] = uhrzeit if uhrzeit and uhrzeit != "00:00" else ""
+    daten["kunde_bestaetigt"] = form.get("kunde_bestaetigt") in ("on", "1", "ja")
+    hat_liste = hasattr(form, "getlist")
+    daten["besetzung"] = form.getlist("besetzung") if hat_liste else []
+    daten["besetzung_gesetzt"] = (form.get("besetzung_gesetzt") == "1"
+                                  or bool(daten["besetzung"]))
+    return daten
+
+
+@router.get("/gewerk/{gewerk_id}/waechter")
+def waechter_json(request: Request, gewerk_id: int, ziel: str = "",
+                  session: Session = Depends(get_session)):
+    """v28 (PLAN_PROJ_V6 Phase 133): offene Punkte für den Dialog „Phase
+    ändern“ (Akte + Board): {modus, rueckwaerts, offen: [{text, aufgabe_id,
+    pflicht}], begruendung_pflicht, hinweis, sperre}."""
+    from fastapi.responses import JSONResponse
+    if (umleitung := _gate(request, session)) is not None:
+        return umleitung
+    gewerk = session.get(Gewerk, gewerk_id)
+    if gewerk is None:
+        return JSONResponse({"ok": False, "meldung": "Gewerk nicht gefunden."},
+                            status_code=404)
+    if ziel.startswith("auftragseingang_"):
+        ziel = "auftragseingang"
+    if ziel not in GEWERK_PHASEN:
+        return JSONResponse({"ok": False, "meldung": "Unbekannte Zielphase."},
+                            status_code=400)
+    daten = kern.waechter_details(session, gewerk, ziel)
+    daten["ok"] = True
+    daten["gewerk_id"] = gewerk.id
+    daten["sparte"] = gewerk.sparte
+    return JSONResponse(daten)
+
+
+@router.post("/aufgabe/{aufgabe_id}/entfaellt")
+def aufgabe_entfaellt(request: Request, aufgabe_id: int,
+                      session: Session = Depends(get_session)):
+    """v28 (PLAN_PROJ_V6 Phase 133): „entfällt“ mit Pflicht-Grund (max. 300
+    Zeichen). Ohne Grund → 400 „Bitte einen Grund angeben.“ (JSON) bzw.
+    Redirect mit Meldung."""
+    if (umleitung := _gate(request, session, schreiben=True)) is not None:
+        return umleitung
+    aufgabe = session.get(Aufgabe, aufgabe_id)
+    if aufgabe is None:
+        return RedirectResponse("/projektierung", status_code=303)
+    form = anfrage.formular(request)
+    ok, meldung = kern.aufgabe_entfaellt(session, aufgabe, form.get("grund") or "",
+                                         benutzer=request.state.benutzer)
+    if not ok:
+        session.rollback()
+        if _json_gewuenscht(request):
+            return _meldung_json(meldung, ok=False, status_code=400)
+        return RedirectResponse(f"/projektierung/projekt/{aufgabe.projekt_id}?meldung="
+                                + quote_plus(meldung) + f"#aufgabe-{aufgabe.id}",
+                                status_code=303)
+    session.commit()
+    if _json_gewuenscht(request):
+        return _aufgabe_json(request, session, aufgabe, meldung)
+    zurueck = form.get("zurueck") or request.query_params.get("zurueck") or ""
+    if zurueck.startswith("/projektierung/meine-aufgaben"):
+        return RedirectResponse(zurueck, status_code=303)
+    return RedirectResponse(f"/projektierung/projekt/{aufgabe.projekt_id}"
+                            f"#aufgabe-{aufgabe.id}", status_code=303)
+
+
+@router.post("/aufgabe/{aufgabe_id}/wieder-aufnehmen")
+def aufgabe_wieder_aufnehmen(request: Request, aufgabe_id: int,
+                             session: Session = Depends(get_session)):
+    """v28 (PLAN_PROJ_V6 Phase 133): zurück auf „offen“, Grund geleert."""
+    if (umleitung := _gate(request, session, schreiben=True)) is not None:
+        return umleitung
+    aufgabe = session.get(Aufgabe, aufgabe_id)
+    if aufgabe is None:
+        return RedirectResponse("/projektierung", status_code=303)
+    form = anfrage.formular(request)
+    ok, meldung = kern.aufgabe_wieder_aufnehmen(session, aufgabe,
+                                                benutzer=request.state.benutzer)
+    if ok:
+        session.commit()
+    else:
+        session.rollback()
+    if _json_gewuenscht(request):
+        if not ok:
+            return _meldung_json(meldung, ok=False, status_code=400)
+        return _aufgabe_json(request, session, aufgabe, meldung)
+    zurueck = form.get("zurueck") or request.query_params.get("zurueck") or ""
+    if zurueck.startswith("/projektierung/meine-aufgaben"):
+        return RedirectResponse(zurueck, status_code=303)
+    return RedirectResponse(f"/projektierung/projekt/{aufgabe.projekt_id}"
+                            f"#aufgabe-{aufgabe.id}", status_code=303)
 
 
 # --- Phase 68: Kanban · Liste · Termine · Meine Aufgaben -------------------------
@@ -330,12 +505,15 @@ def kanban(request: Request, sparte: str = "", projektleiter_id: int = 0,
     spalten_namen = dict(GEWERK_PHASEN_NAMEN)
     spalten_namen["auftragseingang_unterminiert"] = "Auftragseingang · unterminiert"
     spalten_namen["auftragseingang_terminiert"] = "Auftragseingang · terminiert"
-    from datetime import timedelta as _td
     return render(request, "projektierung/kanban.html", aktiv="/projektierung",
                   spalten=spalten, phasen_namen=spalten_namen,
                   vorlauf=vorlauf,
                   vorlauf_phasen=kern.VORLAUF_PHASEN,
                   karte_je_gewerk=karte_je_gewerk,
+                  # v28 (PLAN_PROJ_V6 Phase 134/135): Wächter-Modus für den
+                  # Drop-Dialog, gemeinsamer Termin-Dialog (Drop auf „terminiert“)
+                  waechter_modus=kern.waechter_modus(session),
+                  td=_termin_dialog_kontext(session),
                   # v11b (Phase 73, nur Anzeige): Kachelzeile über dem Board
                   kacheln=kern.startseiten_kacheln(session),
                   sparte=sparte, projektleiter_id=projektleiter_id,
@@ -392,7 +570,15 @@ def phase_drop(request: Request, gewerk_id: int,
         session.commit()
     else:
         session.rollback()
-        meldung += " – Override mit Begründung in der Projektakte."
+    # v28 (PLAN_PROJ_V6 Phase 134): Dialog „Phase ändern“ am Board sendet per
+    # fetch – JSON {ok, meldung}, die Karte wandert ohne Neuladen
+    if _json_gewuenscht(request):
+        projekt = session.get(Projekt, gewerk.projekt_id)
+        return _meldung_json(meldung, ok=ok, phase=gewerk.phase,
+                             projekt_status=(projekt.status_cache if projekt else ""),
+                             status_code=200 if ok else 400)
+    if not ok:
+        meldung += " – Begründung im Dialog „Phase ändern“ (Board oder Projektakte)."
     return RedirectResponse("/projektierung?meldung=" + quote_plus(meldung),
                             status_code=303)
 
@@ -525,9 +711,16 @@ def termine(request: Request, ansicht: str = "woche", start: str = "",
         projekte[g.projekt_id].kunde_id) if g.projekt_id in projekte else None)
         for g in gewerke.values()
         if g.phase not in ("abgeschlossen", "storniert")]
+    # v28 (PLAN_PROJ_V6 Phase 135): Besetzung als Tooltip, gemeinsamer Dialog
+    benutzer_alle = {b.id: b for b in session.query(Benutzer)}
+    besetzung = {tid: kern.besetzung_namen(session, tid, kurz=False,
+                                           benutzer_map=benutzer_alle)
+                 for tid in kern.besetzung_map(session, [t.id for t in termine_liste])}
     return render(request, "projektierung/termine.html", aktiv="/projektierung",
                   tage=sorted(tage.items()), von=von, bis=bis, ansicht=ansicht,
                   team_id=team_id, person_id=person_id, typ=typ,
+                  besetzung=besetzung, td=_termin_dialog_kontext(session),
+                  termin_art=kern.termin_art_name,
                   projekte=projekte, gewerke=gewerke, kunden=kunden, subs=subs,
                   alle_gewerke=sorted(alle_gewerke,
                                       key=lambda e: e[1].nummer if e[1] else ""),
@@ -866,8 +1059,26 @@ def akte(request: Request, projekt_id: int,
     for e in verlauf_eintraege:
         if e.aufgabe_id and e.art == "kommentar":
             kommentar_zaehler[e.aufgabe_id] = kommentar_zaehler.get(e.aufgabe_id, 0) + 1
+    # v28 (PLAN_PROJ_V6 Phase 136, Vertrag mit P2): Notizen-Chat des Vorgangs
+    # oben im Reiter Verlauf (None bei Projekten ohne Vorgang → alter Weg)
+    from app import notizen
+    notizen_ctx = notizen.kontext_projekt(session, projekt, benutzer)
+    # v28 (Phase 135): Besetzung je Termin (Kurzform + voll als Tooltip)
+    besetzung_ids = kern.besetzung_map(session, [t.id for t in termine])
+    besetzung = {tid: kern.besetzung_namen(session, tid, kurz=True,
+                                           benutzer_map=benutzer_map)
+                 for tid in besetzung_ids}
+    besetzung_voll = {tid: kern.besetzung_namen(session, tid, kurz=False,
+                                                benutzer_map=benutzer_map)
+                      for tid in besetzung_ids}
     return render(request, "projektierung/akte.html", aktiv="/projektierung",
                   dokumente=dokumente, dokument_ordner=dokument_ordner,
+                  notizen_ctx=notizen_ctx,
+                  td=_termin_dialog_kontext(session),
+                  besetzung=besetzung, besetzung_voll=besetzung_voll,
+                  besetzung_ids=besetzung_ids, subs_map=subs_map,
+                  termin_art=kern.termin_art, termin_art_name=kern.termin_art_name,
+                  waechter_modus=kern.waechter_modus(session),
                   # v15 (Phase 78): Aktionstypen, V1-Pakete, Restarbeiten
                   paket_offen=paket_offen,
                   v1_vorhanden={g.id: any(
@@ -1086,9 +1297,22 @@ def aufgabe_status(request: Request, aufgabe_id: int,
         if neuer_status == "erledigt":
             aufgabe.erledigt_am = datetime.now()
             aufgabe.erledigt_von = benutzer.id if benutzer else None
+        elif neuer_status == "entfaellt":
+            # v28 (PLAN_PROJ_V6 Phase 133): Grund aus dem Formular (Dropdown
+            # ohne Grund → „ohne Grund (Status-Auswahl)“), Zeitpunkt wie erledigt
+            aufgabe.erledigt_am = datetime.now()
+            aufgabe.erledigt_von = benutzer.id if benutzer else None
+            aufgabe.entfaellt_grund = (" ".join((form.get("grund") or "").split())[:300]
+                                       or "ohne Grund (Status-Auswahl)")
+            kern.verlauf(session, aufgabe.projekt_id,
+                         f"Aufgabe „{aufgabe.titel}“ entfällt – {aufgabe.entfaellt_grund}",
+                         benutzer=benutzer, gewerk_id=aufgabe.gewerk_id,
+                         aufgabe_id=aufgabe.id)
         else:
             aufgabe.erledigt_am = None
             aufgabe.erledigt_von = None
+        if neuer_status != "entfaellt":
+            aufgabe.entfaellt_grund = ""
         if neuer_status == "wartet" and aufgabe.wartet_frist_tage:
             aufgabe.wartet_frist_am = (datetime.now()
                                        + timedelta(days=aufgabe.wartet_frist_tage))
@@ -1119,6 +1343,7 @@ def aufgabe_umschalten(request: Request, aufgabe_id: int,
         aufgabe.status = "erledigt"
         aufgabe.erledigt_am = datetime.now()
         aufgabe.erledigt_von = benutzer.id if benutzer else None
+        aufgabe.entfaellt_grund = ""   # v28: Häkchen hebt „entfällt“ auf
     session.commit()
     if _json_gewuenscht(request):
         return _aufgabe_json(request, session, aufgabe)
@@ -1179,71 +1404,120 @@ def paket_aktivieren(request: Request, gewerk_id: int,
 @router.post("/gewerk/{gewerk_id}/termin")
 def termin_anlegen(request: Request, gewerk_id: int,
                          session: Session = Depends(get_session)):
-    """Termin am Gewerk; Feinplanungs-/Montagetermine berechnen die
-    FP+N/M-N-Fälligkeiten des Gewerks nach (Phase 68)."""
+    """v28 (PLAN_PROJ_V6 Phase 135): die EINZIGE Anlage-Route für alle
+    Terminarten (Dialog `termin_dialog`): art, team_id, sub_id, person_id,
+    beginn, uhrzeit, ende, besetzung (mehrfach), kunde_bestaetigt, notiz.
+    Montage/Elektro-Montage setzen das Zuweisungsfeld am Gewerk, erledigen
+    „<Team> zuweisen“, berechnen Fälligkeiten nach, Outlook best effort,
+    Konflikte als Warnung. Alte Felder (typ, zweck, beginn als datetime-local)
+    werden weiter verstanden. Antwort: JSON {ok, meldung, konflikte} bei
+    Accept application/json, sonst Redirect."""
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
     form = anfrage.formular(request)
-    def _zeit(name):
-        roh = (form.get(name) or "").strip()
-        for muster in ("%Y-%m-%dT%H:%M", "%Y-%m-%d"):
-            try:
-                # V4 (Phase 90.4): Uhrzeiten serverseitig auf 15 Minuten runden
-                wert = datetime.strptime(roh, muster)
-                return kern.viertelstunde(wert) if "T" in roh else wert
-            except ValueError:
-                continue
-        return None
-    beginn = _zeit("beginn")
-    if beginn is None:
-        return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}"
-                                "?meldung=" + quote_plus("Bitte einen Beginn angeben."),
-                                status_code=303)
-    typ = (form.get("typ") or "sonstige").lower()
-    if typ not in ("feinplanung", "montage", "abnahme", "sub", "sonstige"):
-        typ = "sonstige"
-    def _id(name):
-        try:
-            return int(form.get(name) or 0) or None
-        except ValueError:
-            return None
-    # v15 (Phase 75): Montagetermine brauchen ein Team
-    if typ == "montage" and not _id("team_id"):
-        return RedirectResponse(
-            f"/projektierung/projekt/{gewerk.projekt_id}?meldung="
-            + quote_plus("Montagetermine brauchen ein Team (Phase 75) – "
-                         "bitte Team wählen."), status_code=303)
-    ende = _zeit("ende")
-    bestaetigt = form.get("kunde_bestaetigt") == "on"
-    termin = ProjektTermin(
-        gewerk_id=gewerk.id, projekt_id=gewerk.projekt_id, typ=typ,
-        beginn=beginn, ende=ende, team_id=_id("team_id"),
-        person_id=_id("person_id"), sub_id=_id("sub_id"),
-        kunde_bestaetigt=bestaetigt,
-        bestaetigt_am=datetime.now() if bestaetigt else None,
-        bestaetigt_quelle="manuell" if bestaetigt else "",
-        dauer_tage=(max(1, (ende.date() - beginn.date()).days + 1)
-                    if ende else 1),
-        notiz=(form.get("notiz") or "").strip()[:500],
-        erstellt_von=request.state.benutzer.id if request.state.benutzer else None)
-    session.add(termin)
-    session.flush()
-    # v15 (Phase 81): Outlook-Sync (best effort, blockiert nie)
+    daten = _termin_daten_aus_form(form)
+    ok, meldung, konflikte = kern.termin_speichern(session, gewerk, daten,
+                                                   benutzer=request.state.benutzer)
+    if not ok:
+        session.rollback()
+        return _termin_antwort(request, gewerk, form, False, meldung, [])
+    session.commit()
+    # v15 (Phase 81): neuen Termin nach Outlook spiegeln (best effort, nie
+    # blockierend; event_senden gibt die Sitzung vor dem Netzaufruf frei)
+    termin = session.get(ProjektTermin, daten.get("termin_id") or 0)
+    if termin is not None:
+        from app import outlook_kalender
+        outlook_kalender.event_senden(session, termin)
+        session.commit()
+    return _termin_antwort(request, gewerk, form, True, meldung, konflikte,
+                           termin_id=termin.id if termin is not None else None)
+
+
+@router.post("/termin/{termin_id}/bearbeiten")
+def termin_bearbeiten(request: Request, termin_id: int,
+                      session: Session = Depends(get_session)):
+    """v28 (PLAN_PROJ_V6 Phase 135): gleiche Felder wie beim Anlegen (Art
+    gesperrt); Teamwechsel setzt das Zuweisungsfeld um („Montageteam
+    gewechselt: alt → neu“), Besetzung folgt der Vorlage oder bleibt; Outlook-
+    Ereignis wird aktualisiert (best effort)."""
+    termin = session.get(ProjektTermin, termin_id)
+    if termin is None or not termin.gewerk_id:
+        if _json_gewuenscht(request):
+            return _meldung_json("Termin nicht gefunden.", ok=False, status_code=404)
+        return RedirectResponse("/projektierung", status_code=303)
+    gewerk, umleitung = _gewerk_laden(request, session, termin.gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    form = anfrage.formular(request)
+    daten = _termin_daten_aus_form(form)
+    ok, meldung, konflikte = kern.termin_speichern(session, gewerk, daten,
+                                                   benutzer=request.state.benutzer,
+                                                   termin=termin)
+    if not ok:
+        session.rollback()
+        return _termin_antwort(request, gewerk, form, False, meldung, [])
+    session.commit()
     from app import outlook_kalender
     outlook_kalender.event_senden(session, termin)
-    nachberechnet = 0
-    if typ in ("feinplanung", "montage"):
-        nachberechnet = kern.faelligkeiten_nachberechnen(session, gewerk)
-    kern.verlauf(session, gewerk.projekt_id,
-                 f"Termin {typ} am {beginn.strftime('%d.%m.%Y %H:%M')} "
-                 f"({gewerk.sparte}) angelegt"
-                 + (f" – {nachberechnet} Fälligkeiten nachberechnet"
-                    if nachberechnet else ""),
-                 benutzer=request.state.benutzer, gewerk_id=gewerk.id)
     session.commit()
-    return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}",
-                            status_code=303)
+    return _termin_antwort(request, gewerk, form, True, meldung, konflikte,
+                           termin_id=termin.id)
+
+
+@router.post("/termin/{termin_id}/loeschen")
+def termin_loeschen(request: Request, termin_id: int,
+                    session: Session = Depends(get_session)):
+    """v28 (PLAN_PROJ_V6 Phase 135): Termin mit Pflicht-Grund löschen –
+    Outlook-Storno best effort (event_loeschen), Besetzung mit; war es der
+    maßgebliche Montagetermin, wird „Montageteam zuweisen“ wieder offen."""
+    termin = session.get(ProjektTermin, termin_id)
+    if termin is None or not termin.gewerk_id:
+        if _json_gewuenscht(request):
+            return _meldung_json("Termin nicht gefunden.", ok=False, status_code=404)
+        return RedirectResponse("/projektierung", status_code=303)
+    gewerk, umleitung = _gewerk_laden(request, session, termin.gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    form = anfrage.formular(request)
+    grund = " ".join((form.get("grund") or "").split())[:300]
+    if not grund:
+        return _termin_antwort(request, gewerk, form, False,
+                               "Bitte einen Grund angeben.", [])
+    storno_hinweis = ""
+    if termin.outlook_event_id:
+        from app import outlook_kalender
+        if not outlook_kalender.event_loeschen(session, termin):
+            storno_hinweis = " (Outlook-Storno fehlgeschlagen – bitte im Kalender prüfen)"
+    ok, meldung = kern.termin_loeschen(session, termin, grund + storno_hinweis,
+                                       benutzer=request.state.benutzer)
+    if not ok:
+        session.rollback()
+        return _termin_antwort(request, gewerk, form, False, meldung, [])
+    session.commit()
+    return _termin_antwort(request, gewerk, form, True, meldung + storno_hinweis, [])
+
+
+@router.get("/gewerk/{gewerk_id}/terminvorschlaege.json")
+def terminvorschlaege_json(request: Request, gewerk_id: int, team_id: int = 0,
+                           dauer_tage: int = 0,
+                           session: Session = Depends(get_session)):
+    """v28 (PLAN_PROJ_V6 Phase 135): Terminvorschläge Stufe 1 (Tool-Daten) für
+    den Termin-Dialog – {vorschlaege: [{team_id, team_name, beginn, ende,
+    beginn_text, ende_text, umweg_min, umweg_text, begruendung, besetzung}],
+    hinweis, dauer_tage, fruehester}."""
+    from fastapi.responses import JSONResponse
+    if (umleitung := _gate(request, session)) is not None:
+        return umleitung
+    gewerk = session.get(Gewerk, gewerk_id)
+    if gewerk is None:
+        return JSONResponse({"ok": False, "meldung": "Gewerk nicht gefunden."},
+                            status_code=404)
+    daten = kern.terminvorschlaege(session, gewerk, team_id=team_id or None,
+                                   dauer_tage=dauer_tage or None)
+    session.commit()   # Geocoding-/Routing-Cache (falls gefüllt) sichern
+    daten["ok"] = True
+    return JSONResponse(daten)
 
 
 @router.post("/termin/{termin_id}/outlook")
@@ -1646,13 +1920,17 @@ def ugl_seite(request: Request, gewerk_id: int,
     gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
     if umleitung is not None:
         return umleitung
-    zeilen, fehlend = ugl_modul.material_fuer_gewerk(session, gewerk)
+    # v28 (PLAN_PROJ_V6 Phase 139): Lager-/Leistungs-/Fremd-Zeilen getrennt
+    zeilen, fehlend, uebrige = ugl_modul.material_fuer_gewerk(session, gewerk,
+                                                              mit_uebrigen=True)
     vorschlag = ugl_modul.lieferdatum_vorschlag(session, gewerk)
     bestellungen = ugl_modul.bestellungen(session, gewerk)
     return render(request, "projektierung/ugl.html",
                   aktiv="/projektierung",
                   gewerk=gewerk, projekt=session.get(Projekt, gewerk.projekt_id),
-                  zeilen=zeilen, fehlend=fehlend,
+                  zeilen=zeilen, fehlend=fehlend, uebrige=uebrige,
+                  standard_lieferant=__import__("app.stuecklisten", fromlist=["x"])
+                  .standard_lieferant(session),
                   lieferdatum=vorschlag or (datetime.now() + timedelta(days=7)),
                   lieferdatum_aus_termin=vorschlag is not None,
                   kundennummer=kern.parameter_holen(session,
@@ -2104,52 +2382,11 @@ def steckbrief_neu_ableiten(request: Request, gewerk_id: int,
 @router.post("/gewerk/{gewerk_id}/team-termin")
 def team_termin(request: Request, gewerk_id: int,
                       session: Session = Depends(get_session)):
-    """v15 (Phase 75): Zuweisungsdialog „Team + Termin“ – Team ans Gewerk
-    (WP-/Elektro-/Sub-Zuweisung) plus Montagetermin; Konflikt = Warnung."""
-    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
-    if umleitung is not None:
-        return umleitung
-    form = anfrage.formular(request)
-
-    def _datum(name):
-        roh = (form.get(name) or "").strip()
-        try:
-            return datetime.strptime(roh, "%Y-%m-%d")
-        except ValueError:
-            return None
-    try:
-        team_id = int(form.get("team_id") or 0)
-    except ValueError:
-        team_id = 0
-    ok, meldung, konflikte = kern.team_termin_zuweisen(
-        session, gewerk, (form.get("zweck") or "wp").lower(), team_id,
-        _datum("beginn"), _datum("ende"),
-        form.get("kunde_bestaetigt") == "on",
-        benutzer=request.state.benutzer)
-    if ok:
-        session.commit()
-        if konflikte:
-            meldung += (" ⚠ Konflikt: Team am selben Tag auch bei "
-                        + "; ".join(konflikte[:3]))
-        # v15 (Phase 81): neuen Montagetermin nach Outlook spiegeln
-        from app import outlook_kalender
-        neuer_termin = (session.query(ProjektTermin)
-                        .filter(ProjektTermin.gewerk_id == gewerk.id,
-                                ProjektTermin.typ == "montage")
-                        .order_by(ProjektTermin.id.desc()).first())
-        if neuer_termin is not None:
-            outlook_kalender.event_senden(session, neuer_termin)
-            session.commit()
-    else:
-        session.rollback()
-    # V4 (Phase 90.1): Drop auf „Auftragseingang · terminiert“ kommt vom Board
-    zurueck = form.get("zurueck") or ""
-    if zurueck.startswith("/projektierung") and "//" not in zurueck:
-        trenner = "&" if "?" in zurueck else "?"
-        return RedirectResponse(zurueck + trenner + "meldung=" + quote_plus(meldung),
-                                status_code=303)
-    return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}"
-                            "?meldung=" + quote_plus(meldung), status_code=303)
+    """v15 (Phase 75): Zuweisungsdialog „Team + Termin“ – seit v28
+    (PLAN_PROJ_V6 Phase 135) ein Alias auf die gemeinsame Anlage-Route
+    (`zweck` wp|elektro|sub → Art Montage/Elektro-Montage/Sub-Einsatz); alte
+    Formulare und Tests laufen weiter."""
+    return termin_anlegen(request, gewerk_id, session)
 
 
 @router.get("/kalender")
@@ -2233,9 +2470,16 @@ def kalender(request: Request, ansicht: str = "woche", start: str = "",
     chrono = sorted(
         [z for z in zeilen if z["gewerk"].phase not in ("abgeschlossen", "storniert")],
         key=kern.sortierschluessel_chrono)
+    # v28 (PLAN_PROJ_V6 Phase 135): Besetzung als Tooltip am Balken
+    benutzer_alle = {b.id: b for b in session.query(Benutzer)}
+    balken_ids = [b["termin"].id for liste in balken.values() for b in liste]
+    besetzung = {tid: kern.besetzung_namen(session, tid, kurz=False,
+                                           benutzer_map=benutzer_alle)
+                 for tid in kern.besetzung_map(session, balken_ids)}
 
     return render(request, "projektierung/kalender.html",
                   aktiv="/projektierung", ansicht=ansicht,
+                  besetzung=besetzung,
                   von=von, bis=bis, tage=tage, heute=heute,
                   zurueck=zurueck, vor=vor,
                   montage_teams=montage_teams, sub_teams=sub_teams,
@@ -2350,9 +2594,28 @@ def kommentar(request: Request, projekt_id: int,
             return None
     benutzer = request.state.benutzer
     erwaehnte = kern.erwaehnungen_finden(session, text)
-    kern.verlauf(session, projekt.id, text[:4000], benutzer=benutzer,
-                 gewerk_id=_id("gewerk_id"), aufgabe_id=_id("aufgabe_id"),
-                 art="kommentar", erwaehnte=erwaehnte)
+    # v28 (PLAN_PROJ_V6 Phase 136, Vertrag mit P2): Kommentare der Akte gehen in
+    # den Notizen-Chat des Vorgangs (VorgangsNotiz, herkunft projektierung);
+    # aufgabenbezogene Kommentare (aufgabe_id) bleiben im Projektverlauf (Zähler
+    # an der Aufgabe). Projekte ohne Vorgang: alter Weg mit Hinweis.
+    from app import notizen
+    eintrag = None
+    hinweis = ""
+    if _id("aufgabe_id"):
+        ok = False
+    else:
+        ok, hinweis = notizen.kommentar_speichern(session, projekt, benutzer, text)
+    if ok:
+        from app.models import VorgangsNotiz
+        eintrag = (session.query(VorgangsNotiz)
+                   .filter_by(vorgang_id=projekt.vorgang_id)
+                   .order_by(VorgangsNotiz.id.desc()).first())
+        meldung = "Notiz gespeichert."
+    else:
+        kern.verlauf(session, projekt.id, text[:4000], benutzer=benutzer,
+                     gewerk_id=_id("gewerk_id"), aufgabe_id=_id("aufgabe_id"),
+                     art="kommentar", erwaehnte=erwaehnte)
+        meldung = "Kommentar gespeichert." + (f" ({hinweis})" if hinweis and not _id("aufgabe_id") else "")
     if erwaehnte:
         kern.benachrichtigen(
             session, erwaehnte,
@@ -2364,7 +2627,14 @@ def kommentar(request: Request, projekt_id: int,
         aufgabe = session.get(Aufgabe, _id("aufgabe_id")) if _id("aufgabe_id") else None
         if aufgabe is not None:
             return _aufgabe_json(request, session, aufgabe, "Kommentar gespeichert.")
-        return _meldung_json("Kommentar gespeichert.")
+        if eintrag is not None:
+            kennzeichen, klasse = notizen.kennzeichen(eintrag.herkunft)
+            return _meldung_json(meldung, eintrag={
+                "id": eintrag.id, "benutzer_name": eintrag.benutzer_name,
+                "zeit": eintrag.zeit.strftime("%d.%m.%y %H:%M") if eintrag.zeit else "",
+                "text": eintrag.text, "kennzeichen": kennzeichen or "Projektierung",
+                "kennzeichen_klasse": klasse or "nc-projektierung"})
+        return _meldung_json(meldung)
     return RedirectResponse(f"/projektierung/projekt/{projekt_id}#verlauf",
                             status_code=303)
 

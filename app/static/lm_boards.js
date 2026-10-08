@@ -28,7 +28,14 @@
       data-lm-spalten-board="info|handelsvertreter": dann laufen hier NUR die
       Spaltenwerkzeuge (Teil 3) und die Sticky-Geometrie; Spaltenköpfe mit
       draggable="false" (Kundenname, im Infoabend auch Status) sind kein
-      Ablageziel – ihre Position ist serverseitig fest. */
+      Ablageziel – ihre Position ist serverseitig fest.
+   4. v29 (PLAN_LEAD_V4 Phasen 140/141): Sammelaktion „An Handelsvertreter
+      verschieben“ (zwei Ziel-Schaltflächen statt „Ausführen“, Rückfrage mit
+      Anzahl); Spaltenbreite je Nutzer: Ziehgriff .lm-th-griff am rechten Rand
+      jedes Spaltenkopfs – Ziehen ändert die Breite live über <colgroup> (alle
+      Tabellen des Boards, table-layout fixed), Loslassen speichert per fetch
+      {breite: {key, px}} (60–600 px), Doppelklick = Standardbreite ({px: null},
+      Seite lädt neu). Nur für den angemeldeten Nutzer, je Board. */
 (function () {
     'use strict';
     if (window.__lmBoardsGeladen) { return; }
@@ -308,13 +315,26 @@
     if (sammelform) {
         const aktionSel = document.getElementById('lm-sammel-aktion');
         const statusWrap = sammelform.querySelector('.lm-sammel-status');
+        // v29 (Phase 140): „An Handelsvertreter verschieben“ – Ziel-Schaltflächen statt „Ausführen“
+        const hvWrap = document.getElementById('lm-sammel-hv');
+        const ausfuehren = document.getElementById('lm-sammel-ausfuehren');
         function aktionUmschalten() {
+            const hv = aktionSel.value === 'hv_verschieben';
             if (statusWrap) { statusWrap.hidden = aktionSel.value !== 'status'; }
+            if (hvWrap) { hvWrap.hidden = !hv; }
+            if (ausfuehren) { ausfuehren.hidden = hv; }
         }
         if (aktionSel) { aktionSel.addEventListener('change', aktionUmschalten); aktionUmschalten(); }
         sammelform.addEventListener('submit', function (e) {
             if (auswahl().length === 0) { e.preventDefault(); melden('Keine Leads markiert.', true); return; }
             if (sammelform.dataset.bereit === '1') { sammelform.dataset.bereit = ''; return; }
+            if (aktionSel && aktionSel.value === 'hv_verschieben') {
+                const knopf = e.submitter;
+                if (!knopf || !knopf.dataset.ziel) { e.preventDefault(); melden('Bitte ein Ziel wählen (René oder Simon).', true); return; }
+                if (!window.confirm(auswahl().length + ' Lead(s) an ' + knopf.textContent.trim()
+                    + ' verschieben? Leads mit Ausschlusskanal/-quelle werden übersprungen.')) { e.preventDefault(); }
+                return;
+            }
             if (aktionSel && aktionSel.value === 'status') {
                 const ziel = document.getElementById('lm-sammel-status').value;
                 const info = statusInfo[ziel] || {};
@@ -581,6 +601,96 @@
         zielMarkierungLoeschen();
         gezogenKey = null;
     });
+
+    // ---- v29 (Phase 141): Spaltenbreite je Nutzer – Ziehgriff im Spaltenkopf
+    const BREITE_MIN = 60, BREITE_MAX = 600;
+    function colFuer(tabelle, key) {
+        return tabelle.querySelector('colgroup col[data-key="' + key + '"]');
+    }
+    function layoutFixieren(tabelle) {
+        // Breiten aller Spalten einmal messen und festschreiben (table-layout fixed),
+        // damit eine gezogene Breite auch unter den Inhalt schrumpfen kann
+        if (tabelle.classList.contains('lm-fest')) { return; }
+        const cols = Array.from(tabelle.querySelectorAll('colgroup col'));
+        const koepfe = Array.from(tabelle.querySelectorAll('thead th'));
+        if (!cols.length || cols.length !== koepfe.length) { return; }
+        let summe = 0;
+        koepfe.forEach(function (th, i) {
+            const b = Math.max(24, Math.round(th.getBoundingClientRect().width));
+            cols[i].style.width = b + 'px';
+            summe += b;
+        });
+        tabelle.style.width = summe + 'px';
+        tabelle.classList.add('lm-fest');
+    }
+    function breiteSetzen(key, px) {
+        alleTabellen().forEach(function (tabelle) {
+            const col = colFuer(tabelle, key);
+            if (!col) { return; }
+            layoutFixieren(tabelle);
+            const alt = parseFloat(col.style.width) || col.getBoundingClientRect().width || 0;
+            col.style.width = px + 'px';
+            const breiteTabelle = parseFloat(tabelle.style.width) || tabelle.getBoundingClientRect().width;
+            tabelle.style.width = Math.round(breiteTabelle - alt + px) + 'px';
+        });
+    }
+    // gespeicherte Breiten: Layout beim Laden fixieren
+    alleTabellen().forEach(function (tabelle) {
+        if (tabelle.dataset.lmBreiten === '1') { layoutFixieren(tabelle); }
+    });
+    let zieht = null;
+    document.addEventListener('pointerdown', function (e) {
+        const griff = e.target.closest('.lm-th-griff');
+        if (!griff || e.button !== 0) { return; }
+        e.preventDefault(); e.stopPropagation();
+        const th = griff.closest('th');
+        const key = griff.dataset.key;
+        const tabelle = griff.closest('table');
+        if (!th || !key || !tabelle) { return; }
+        layoutFixieren(tabelle);
+        const col = colFuer(tabelle, key);
+        const start = col ? (parseFloat(col.style.width) || th.getBoundingClientRect().width) : th.getBoundingClientRect().width;
+        zieht = { key: key, x: e.clientX, start: start, px: Math.round(start), griff: griff, bewegt: false };
+        griff.classList.add('lm-zieht');
+        document.body.classList.add('lm-spalte-zieht');
+        try { griff.setPointerCapture(e.pointerId); } catch (x) { /* egal */ }
+    });
+    document.addEventListener('pointermove', function (e) {
+        if (!zieht) { return; }
+        const px = Math.max(BREITE_MIN, Math.min(BREITE_MAX, Math.round(zieht.start + (e.clientX - zieht.x))));
+        if (px === zieht.px) { return; }
+        zieht.px = px; zieht.bewegt = true;
+        breiteSetzen(zieht.key, px);
+    });
+    function ziehenBeenden() {
+        if (!zieht) { return; }
+        const z = zieht;
+        zieht = null;
+        z.griff.classList.remove('lm-zieht');
+        document.body.classList.remove('lm-spalte-zieht');
+        if (!z.bewegt) { return; }
+        spaltenSenden({ breite: { key: z.key, px: z.px } }).then(function (j) {
+            if (j) { melden(j.meldung, false); }
+        });
+    }
+    document.addEventListener('pointerup', ziehenBeenden);
+    document.addEventListener('pointercancel', ziehenBeenden);
+    // Klick auf den Griff sortiert nicht; Doppelklick = Standardbreite
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('.lm-th-griff')) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
+    document.addEventListener('dblclick', function (e) {
+        const griff = e.target.closest('.lm-th-griff');
+        if (!griff) { return; }
+        e.preventDefault(); e.stopPropagation();
+        spaltenSenden({ breite: { key: griff.dataset.key, px: null } }).then(function (j) {
+            if (j) { window.location.reload(); }
+        });
+    });
+    // Griff ist kein Startpunkt für das Verschieben per Drag & Drop
+    document.addEventListener('dragstart', function (e) {
+        if (e.target.closest && e.target.closest('.lm-th-griff')) { e.preventDefault(); }
+    }, true);
 
     // ---- Spaltenwähler „Spalten“ (Häkchen = sichtbar) + „Zurücksetzen“
     const spaltenliste = document.getElementById('lm-spaltenliste');

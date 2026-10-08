@@ -44,8 +44,10 @@ Projektierung-Einstellungen → „Alle berechtigten Rollen“.
   Auftrag (Positionen; EK/DB nur mit Berechtigung), Phase ändern / Storno /
   Rechnungsfreigabe.
 - **Wächter** je Phasenwechsel (z. B. offene Pflichtaufgaben, fehlender
-  Montagetermin): kein hartes Sperren – mit Begründung geht es weiter
-  (Override wird protokolliert).
+  Montagetermin): seit v28 Modus `waechter_modus` – **warnen** (Standard: der
+  Dialog „Phase ändern“ zeigt die offenen Punkte zum Abhaken oder „entfällt“ mit
+  Grund, Begründung optional) oder **sperren** (Wechsel nur mit Begründung);
+  rückwärts immer mit Begründung, offene Punkte stehen im Verlauf.
 - **Rechnungsfreigabe** fragt nach Restarbeiten (Pflichtfrage); mit
   Restarbeiten entsteht eine Aufgabe (+14 Tage), die Buchhaltung wird
   benachrichtigt, das Gewerk wird „Abgeschlossen“.
@@ -71,8 +73,11 @@ Projektierung-Einstellungen → „Alle berechtigten Rollen“.
   „Kalk.“ ist gesetzt); Parametrierung nur Projektierung-Logik, Teams,
   Subunternehmer.
 - **Montage** (Hauptrolle): nur der mobile Bereich **/montage** – „Meine
-  Einsätze“ (Termine der eigenen Teams), Steckbrief ohne Preise, Foto-Upload,
-  „Montage gestartet“ / „Montage fertig“ (mit Pflicht-Kurzbericht).
+  Einsätze“ (seit v28: Termine mit eigener Besetzung, Teamansicht umschaltbar;
+  Termine ohne Besetzung sehen die Team-Mitglieder), Steckbrief ohne Preise
+  (seit v28 vollständig, leere Felder „–“), Foto-Upload, „Montage starten“ /
+  „Montage beenden“ (seit v28 Kurzbericht optional; endet automatisch mit dem
+  unterschriebenen Abnahmeprotokoll).
 - **Außendienst**: am eigenen Angebot der Block „Projektstand“ (Phase, Ampel,
   nächster Termin, Projektleiter mit Telefon) + Kommentar an die Projektierung.
 - **Zusatzrollen**: In der Benutzerverwaltung lassen sich projektierung/
@@ -104,8 +109,9 @@ Ordner der Ebene „gewerk“ liegen je Sparte unter `<Sparte>/<Ordner>`.
   gelb unbestätigt / rot unterminiert), Filter in Board und Liste,
   Sichten **Board | Kalender | Chronologisch**.
 - **Teams & Kalender**: Stammdaten unter Parametrierung → Teams
-  (Leiter, Farbe, Outlook-Adresse). Zuweisung über „👥 Team + Termin"
-  am Gewerk; der Kalender zeigt Balken je Team über die Projektdauer,
+  (Leiter, Farbe, Outlook-Adresse). Zuweisung über den Termin-Dialog („+ Termin“
+  bzw. Block „Termine“ am Gewerk – seit v28 ein Dialog für alle Terminarten mit
+  Besetzung je Termin; früher „👥 Team + Termin“); der Kalender zeigt Balken je Team über die Projektdauer,
   Drag verschiebt (Zeile = Teamwechsel), ▐ zieht das Ende,
   Konfliktwarnung bei Doppelbelegung. **Outlook-Sync** in beide
   Richtungen (Einrichtung: docs/graph-einrichtung.md; Warnsymbol am
@@ -144,18 +150,22 @@ Ordner der Ebene „gewerk“ liegen je Sparte unter `<Sparte>/<Ordner>`.
 - **Kunden-Terminbestätigung**: „✉ Termin an Kunden" am Montagetermin
   (Vorlage in der Parametrierung); die Antwort erzeugt den Ein-Klick-
   Vorschlag „Kunde hat geantwortet – bestätigen".
-- **Montage-Backend /montage**: Team-Auswahl → Liste/Wochenkalender;
-  Auftragsdetail mit Steckbrief, Galerie (ansehen + aufnehmen),
-  Montage-Aufgaben, „Montage gestartet/fertig", Restarbeit melden und
-  den drei Formularen (Montagebericht, Inbetriebnahme-, Abnahme-
-  protokoll; Felder im Blatt „Formulare", Unterschrift auf dem Gerät,
-  PDF in der Galerie „Inbetrieb-/Abnahme"). Keine Preise.
+- **Montage-Backend /montage**: „Meine Einsätze“ (Besetzung je Termin, v28)
+  bzw. Teamansicht → Liste/Wochenkalender (Besetzung als Initialen);
+  Auftragsseite in der Reihenfolge Kopf · Steckbrief (vollständig) · Teams &
+  Termine · Notizen der Projektierung (nur lesen) · Montage starten/beenden ·
+  Formulare · Restarbeiten · Galerie (Lightbox). Die drei Formulare
+  (Montagebericht, Inbetriebnahme-, Abnahmeprotokoll; Felder im Blatt
+  „Formulare" – v28: Typ `wiederhol`, Option `gross`, `pflicht_wenn:`, mehrere
+  Fotos je Feld; Unterschrift auf dem Gerät, PDF in der Galerie
+  „Inbetrieb-/Abnahme"); der Block „Montage-Aufgaben“ entfällt seit v28. Keine Preise.
 
 ## Neu in V4 (29.09.2026) – Kurzüberblick
 
 - **Board:** Auftragseingang in zwei Spalten – *unterminiert* und
   *terminiert* (chronologisch nach Montagebeginn). Karte von „unterminiert“
-  auf „terminiert“ ziehen öffnet direkt „Team + Termin“. Alle Spalten sind
+  auf „terminiert“ ziehen öffnet direkt den Termin-Dialog (v28; früher „Team +
+  Termin“), Ziehen in eine andere Phase den Dialog „Phase ändern“. Alle Spalten sind
   chronologisch sortiert, Unterminierte stehen unten. Die frühere Phase
   „Abnahme & Freigabe“ ist geteilt: **Abnahme** (Montagebericht,
   IBN-Protokoll, Abnahmeprotokoll, Restarbeiten, Abweichungen/Nachtrag) und
@@ -172,7 +182,7 @@ Ordner der Ebene „gewerk“ liegen je Sparte unter `<Sparte>/<Ordner>`.
   Steckbrief-Felder usw. speichern ohne Seitensprung; nach anderen Aktionen
   steht die Seite wieder an derselben Stelle.
 - **Pakete:** „Montageteam zuweisen“ ist Schritt 2 im Auftragseingang (erledigt
-  sich mit „Team + Termin“), „Auftragsunterlagen prüfen“ Schritt 1 in
+  sich mit dem Termin-Dialog, Art „Montage (WP)“), „Auftragsunterlagen prüfen“ Schritt 1 in
   Planung WP. Fit for Future: HEMS / iMSys / SpotDynamic mit Ja/Nein,
   vorgewählt aus dem Steckbrief – „Übernehmen“ bestätigt. Neue
   Feinplanungs-Fragen iMSys, HEMS, Restöl; Steckbrief-Felder Restöl,

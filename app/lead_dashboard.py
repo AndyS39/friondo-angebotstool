@@ -14,8 +14,17 @@
 # Leads der Gruppe Neu mit Versuch ≥ 1, ohne Wiedervorlage, ohne Termin,
 # letzter Anruf älter als Parameter ohne_schritt_tage) ersetzt die automatische
 # Wiedervorlage; Phasen-Labels aus dem Blatt Status („Kontaktiert“).
+# v29 (PLAN_LEAD_V4 Phase 141): Überschrift „Hallo, <Vorname>“ (Benutzer.vorname,
+# sonst Name), nur noch Fällig heute · Kommende Wiedervorlagen (alle künftigen,
+# nach Datum gruppiert, ohne 7-Tage-Grenze) · Offene To-Dos; entfernt: „Ohne
+# nächsten Schritt“, Angebots-Wiedervorlagen, Kasten „Termine 7 Tage“ (die Liste
+# „Meine Termine“ bleibt [ANNAHME]); Karte „Routenplaner“ (Google-Maps-Link, Start
+# = Parameter routen_start), Kachel „Mails mit Fehler“ (Vertrag L2), Sperrzeiten
+# der Handelsvertreter (Phase 143). Die Startseiten-Kachel des Angebotstools
+# (portal_zaehler) bleibt unverändert.
 
 from datetime import datetime, timedelta
+from urllib.parse import quote_plus
 
 from sqlalchemy.orm import Session
 
@@ -33,6 +42,10 @@ AMPEL_NAMEN = {"heiss": "heiß", "warm": "warm", "kalt": "kalt"}
 # Gruppe Neu des Hauptboards (Blatt Status): Phasen ohne aktiven Vor-Ort-Termin
 GRUPPE_NEU = ("neu", "in_kontaktierung", "qualifiziert")
 OHNE_SCHRITT_STANDARD = 2
+# v29 (Phase 141): Routenplaner – Start aus Parameter routen_start, Ziel bleibt leer
+ROUTEN_START_STANDARD = "Arnold-Overbeck-Straße 63-65, 47139 Duisburg"
+ROUTEN_LINK = "https://www.google.com/maps/dir/?api=1&origin={start}&travelmode=driving"
+KOMMENDE_SICHTBAR = 10          # „mehr anzeigen“ ab so vielen kommenden Wiedervorlagen
 
 
 def _tag(zeit: datetime) -> datetime:
@@ -76,6 +89,37 @@ def phase_label(phase: str) -> str:
 
 def ist_hv(session: Session, benutzer) -> bool:
     return lead_v2.ist_handelsvertreter(session, benutzer)
+
+
+def anrede_name(benutzer) -> str:
+    """v29: Vorname aus der Benutzerverwaltung (Benutzer.vorname), sonst der
+    Anzeigename – für „Hallo, <Vorname>“."""
+    if benutzer is None:
+        return ""
+    vorname = (getattr(benutzer, "vorname", "") or "").strip()
+    return vorname or (benutzer.name or "").strip()
+
+
+def routen_start(session: Session) -> str:
+    """Startadresse des Routenplaners (Parameter routen_start, Standard Friondo Duisburg)."""
+    wert = (kern.parameter_holen(session, "routen_start", "") or "").strip()
+    return wert or ROUTEN_START_STANDARD
+
+
+def routen_link(start: str) -> str:
+    """Google-Maps-Link exakt wie im Plan: origin = Startadresse (Leerzeichen als +,
+    Komma bleibt), Ziel leer – der Nutzer trägt es in Maps ein."""
+    return ROUTEN_LINK.format(start=quote_plus(start, safe=","))
+
+
+def mails_mit_fehler(session: Session) -> int:
+    """v29 (Phase 142, Vertrag L2): Lead-Mails mit Status fehler – Kachel nur bei > 0."""
+    from app.models import KommunikationLog
+    try:
+        return int(session.query(KommunikationLog)
+                   .filter(KommunikationLog.status == "fehler").count())
+    except Exception:
+        return 0
 
 
 def ist_buero(benutzer) -> bool:
@@ -134,23 +178,31 @@ def _zeile(vorgang, kunde, datum, art, grund, jetzt, **extra) -> dict:
 
 
 def lead_wiedervorlagen(session: Session, benutzer, jetzt: datetime,
-                        horizont: int, hv: bool) -> list[dict]:
+                        horizont: int | None, hv: bool) -> list[dict]:
     """Lead-Wiedervorlagen: naechste_aktion_am (v25: nur noch manuell gesetzt
     – Wiedervorlage-Button, Rückruf gewünscht, falsche Nummer; die Kaskade
     setzt keine Wiedervorlage mehr) und zurueckgestellt_bis – fällig oder
-    innerhalb des Horizonts, nach Datum sortiert."""
-    ende = _tag(jetzt) + timedelta(days=horizont + 1)
+    innerhalb des Horizonts, nach Datum sortiert. v29: horizont None = alle
+    künftigen Wiedervorlagen (Dashboard „Kommende Wiedervorlagen“)."""
     abfrage = (session.query(Vorgang)
                .filter(Vorgang.lead_phase.isnot(None),
                        ~Vorgang.lead_phase.in_(ABGESCHLOSSEN)))
     abfrage = _meine_leads(abfrage, benutzer, hv)
-    abfrage = abfrage.filter(
-        ((Vorgang.lead_phase == "zurueckgestellt")
-         & Vorgang.zurueckgestellt_bis.isnot(None)
-         & (Vorgang.zurueckgestellt_bis < ende))
-        | ((Vorgang.lead_phase != "zurueckgestellt")
-           & Vorgang.naechste_aktion_am.isnot(None)
-           & (Vorgang.naechste_aktion_am < ende)))
+    if horizont is None:
+        abfrage = abfrage.filter(
+            ((Vorgang.lead_phase == "zurueckgestellt")
+             & Vorgang.zurueckgestellt_bis.isnot(None))
+            | ((Vorgang.lead_phase != "zurueckgestellt")
+               & Vorgang.naechste_aktion_am.isnot(None)))
+    else:
+        ende = _tag(jetzt) + timedelta(days=horizont + 1)
+        abfrage = abfrage.filter(
+            ((Vorgang.lead_phase == "zurueckgestellt")
+             & Vorgang.zurueckgestellt_bis.isnot(None)
+             & (Vorgang.zurueckgestellt_bis < ende))
+            | ((Vorgang.lead_phase != "zurueckgestellt")
+               & Vorgang.naechste_aktion_am.isnot(None)
+               & (Vorgang.naechste_aktion_am < ende)))
     vorgaenge = abfrage.all()
     kunden = _kunden(session, vorgaenge)
     anrufe = _letzte_anrufe(session, {v.id for v in vorgaenge})
@@ -168,8 +220,8 @@ def lead_wiedervorlagen(session: Session, benutzer, jetzt: datetime,
             letzter = anrufe.get(v.id)
             n = v.versuch_nr or 0
             if v.lead_phase == "nicht_erreicht":
-                grund = "Nurture nach Kaskade – erneut versuchen"
-                quelle = "nurture"
+                grund = "Nicht erreicht – Kaskade ausgeschöpft"   # v29: ohne Nurture
+                quelle = "nicht_erreicht"
             elif letzter is not None and letzter.ergebnis == "rueckruf_gewuenscht":
                 grund = "Rückruf gewünscht"
                 quelle = "rueckruf"
@@ -311,13 +363,14 @@ def zugeteilte(session: Session, benutzer, hv: bool) -> dict:
 
 def termine(session: Session, benutzer, jetzt: datetime, horizont: int,
             hv: bool, alle: bool = False) -> list[dict]:
-    """Termine (vot_termine, alle Terminarten) ab heute bis Horizont: HV =
-    eigene ad_id; Büro = Termine der eigenen Leads (leadmanager_id), mit
-    Umschalter alle."""
+    """Termine (vot_termine, alle Terminarten außer Sperrzeiten) ab heute bis
+    Horizont: HV = eigene ad_id; Büro = Termine der eigenen Leads
+    (leadmanager_id), mit Umschalter alle."""
     start = _tag(jetzt)
     ende = start + timedelta(days=horizont + 1)
     abfrage = (session.query(VotTermin)
                .filter(VotTermin.status.in_(TERMIN_STATUS_OFFEN),
+                       VotTermin.typ != "sperrzeit",      # v29 (Phase 143)
                        VotTermin.beginn.isnot(None),
                        VotTermin.beginn >= start, VotTermin.beginn < ende))
     if hv:
@@ -345,49 +398,75 @@ def termine(session: Session, benutzer, jetzt: datetime, horizont: int,
     return zeilen
 
 
-def kacheln(lead_wv: list, angebot_wv: list, todos_zahlen: dict, termine_liste: list,
-            ohne_schritt: list | None = None) -> dict:
-    alle_wv = lead_wv + angebot_wv
+def kacheln(lead_wv: list, todos_zahlen: dict, termine_liste: list,
+            mails_fehler: int = 0) -> dict:
+    """v29: nur noch Fällig heute · Kommende Wiedervorlagen · Offene To-Dos
+    (plus Zähler für die Terminliste und die Kachel „Mails mit Fehler“)."""
     return {
-        "faellig": sum(1 for z in alle_wv if z["faellig"]),
-        "ueberfaellig": sum(1 for z in alle_wv if z["ueberfaellig"]),
-        "kommend": sum(1 for z in alle_wv if z["kommend"]),
+        "faellig": sum(1 for z in lead_wv if z["faellig"]),
+        "ueberfaellig": sum(1 for z in lead_wv if z["ueberfaellig"]),
+        "kommend": sum(1 for z in lead_wv if z["kommend"]),
         "todos": todos_zahlen.get("offen", 0),
         "todos_faellig": todos_zahlen.get("faellig", 0),
         "termine": len(termine_liste),
         "termine_heute": sum(1 for z in termine_liste if z["heute"]),
-        "ohne_schritt": len(ohne_schritt or []),   # v25 (Phase 120)
+        "mails_fehler": mails_fehler,
     }
+
+
+def kommende_gruppieren(zeilen: list) -> list[dict]:
+    """Kommende Wiedervorlagen chronologisch nach Datum gruppiert:
+    [{datum, zeilen}] – für lange Listen zeigt das Template nach
+    KOMMENDE_SICHTBAR Zeilen „mehr anzeigen“."""
+    gruppen: list[dict] = []
+    for z in sorted(zeilen, key=lambda z: z["datum"]):
+        tag = z["datum"].date()
+        if gruppen and gruppen[-1]["datum"] == tag:
+            gruppen[-1]["zeilen"].append(z)
+        else:
+            gruppen.append({"datum": tag, "zeilen": [z]})
+    return gruppen
+
+
+def sperrzeiten(session: Session, benutzer, jetzt: datetime) -> list:
+    """v29 (Phase 143): künftige Sperrzeiten des Handelsvertreters (VotTermin
+    typ sperrzeit, nur Tool-Kalender) – Anlegen/Löschen in „Meine Termine“."""
+    from app import lead_termin
+    return lead_termin.sperrzeiten_liste(session, benutzer.id, ab=_tag(jetzt))
 
 
 def daten(session: Session, benutzer, termine_alle: bool = False,
           jetzt: datetime | None = None) -> dict:
-    """Alles für dashboard.html."""
+    """Alles für dashboard.html (v29: „Hallo, <Vorname>“, Fällig heute, Kommende
+    Wiedervorlagen ohne Grenze, Offene To-Dos, Routenplaner, Meine Termine,
+    HV-Sperrzeiten, Kachel „Mails mit Fehler“)."""
     jetzt = jetzt or datetime.now()
     hv = ist_hv(session, benutzer)
     horizont = horizont_tage(session)
-    lead_wv = lead_wiedervorlagen(session, benutzer, jetzt, horizont, hv)
-    angebot_wv = angebots_wiedervorlagen(session, benutzer, jetzt, horizont, hv)
+    lead_wv = lead_wiedervorlagen(session, benutzer, jetzt, None, hv)
     todos_offen = lead_todos.offene(session, benutzer.id)
     todos_zahlen = {"offen": len(todos_offen),
                     "faellig": sum(1 for t in todos_offen
                                    if t.faellig_am and t.faellig_am <= jetzt)}
     termine_liste = termine(session, benutzer, jetzt, horizont, hv, alle=termine_alle)
-    schritt_tage = ohne_schritt_tage(session)
-    ohne_schritt = ohne_naechsten_schritt(session, benutzer, jetzt, hv, tage=schritt_tage)
+    fehler = 0 if hv else mails_mit_fehler(session)
+    start = routen_start(session)
+    kommend = [z for z in lead_wv if z["kommend"]]
     return {
         "jetzt": jetzt, "heute": jetzt.date(), "horizont": horizont, "hv": hv,
-        "lead_wv": lead_wv, "angebot_wv": angebot_wv,
+        "anrede": anrede_name(benutzer),
+        "lead_wv": lead_wv,
         "lead_wv_faellig": [z for z in lead_wv if z["faellig"]],
-        "lead_wv_kommend": [z for z in lead_wv if z["kommend"]],
-        "angebot_wv_faellig": [z for z in angebot_wv if z["faellig"]],
-        "angebot_wv_kommend": [z for z in angebot_wv if z["kommend"]],
+        "lead_wv_kommend": kommend,
+        "kommende_gruppen": kommende_gruppieren(kommend),
+        "kommende_sichtbar": KOMMENDE_SICHTBAR,
         "zugeteilt": zugeteilte(session, benutzer, hv),
         "termine": termine_liste, "termine_alle": termine_alle,
+        "sperrzeiten": sperrzeiten(session, benutzer, jetzt) if hv else [],
         "todos": lead_todos.zeilen(session, todos_offen, jetzt),
-        # v25 (Phase 120): Liste „Ohne nächsten Schritt“ + Parameter
-        "ohne_schritt": ohne_schritt, "ohne_schritt_tage": schritt_tage,
-        "kacheln": kacheln(lead_wv, angebot_wv, todos_zahlen, termine_liste, ohne_schritt),
+        "kacheln": kacheln(lead_wv, todos_zahlen, termine_liste, fehler),
+        "mails_fehler": fehler,
+        "routen_start": start, "routen_link": routen_link(start),
         "mit_demo": kern.demo_aktiv(session),
         "empfaenger": lead_todos.empfaenger_liste(session),
     }

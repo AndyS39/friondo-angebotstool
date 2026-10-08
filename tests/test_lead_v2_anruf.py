@@ -188,14 +188,13 @@ class Ergebnis(Basis):
         self.assertEqual(zeit, kern.kaskade_zeitpunkt(self.s, stufe2.wiedervorlage_nach,
                                                       datetime.now()).replace(second=0, microsecond=0))
         self.assertTrue(d["zeitpunkt_text"])
-        # vorletzter → letzte Stufe (disqualifiziert + Nurture +30)
+        # vorletzter → letzte Stufe (disqualifiziert; v29: ohne Nurture +30, kein Zeitpunkt)
         v4 = self.lead(5, versuche=kern.versuche_max(self.s) - 1)
         d = self.client.get(f"/lead-management/anruf/{v4.id}/vorschlag").json()
         self.assertTrue(d["letzte"])
         self.assertEqual(d["aktion"], "mail_disqualifiziert")
         self.assertIn("Disqualifiziert", d["aktion_text"])
-        self.assertGreater(datetime.strptime(d["zeitpunkt"], "%Y-%m-%dT%H:%M"),
-                           datetime.now() + timedelta(days=29))
+        self.assertIsNone(d["zeitpunkt"])
         # gesperrt
         v5 = self.lead(6, versuche=kern.versuche_max(self.s))
         d = self.client.get(f"/lead-management/anruf/{v5.id}/vorschlag").json()
@@ -235,7 +234,8 @@ class Ergebnis(Basis):
         mails = [m.vorlage_key for m in self.s.query(KommunikationLog).filter_by(vorgang_id=v.id)
                  if m.vorlage_key != "eingangsbestaetigung"]
         self.assertEqual(mails, ["nicht_erreicht"])
-        # Letzte Stufe: Phase Nicht erreicht, Nurture +30 Tage, keine Wiedervorlage
+        # Letzte Stufe: Phase Nicht erreicht, keine Wiedervorlage; v29 (PLAN_LEAD_V4
+        # Phase 142): Nurture entfällt – nur noch disqualifiziert, kein Eintrag +30 Tage
         v2 = self.lead(8, versuche=kern.versuche_max(self.s) - 1, email="v2a8@test.local")
         wunsch2 = (datetime.now() + timedelta(days=45)).replace(hour=9, minute=0, second=0, microsecond=0)
         r = self.client.post(f"/lead-management/anruf/{v2.id}",
@@ -247,10 +247,10 @@ class Ergebnis(Basis):
         v2 = self.s.get(Vorgang, v2.id)
         self.assertEqual(v2.lead_phase, "nicht_erreicht")
         self.assertIsNone(v2.naechste_aktion_am)
-        nurture = (self.s.query(KommunikationLog)
-                   .filter_by(vorgang_id=v2.id, vorlage_key="nurture").one())
-        self.assertGreater(nurture.geplant_am, datetime.now() + timedelta(days=29))
-        self.assertLess(nurture.geplant_am, datetime.now() + timedelta(days=31))
+        self.assertEqual(self.s.query(KommunikationLog)
+                         .filter_by(vorgang_id=v2.id, vorlage_key="nurture").count(), 0)
+        self.assertEqual(self.s.query(KommunikationLog)
+                         .filter_by(vorgang_id=v2.id, vorlage_key="disqualifiziert").count(), 1)
         self.assertTrue(lead_anrufliste.versuche_gesperrt(self.s, v2))
 
     def test_kein_interesse_pflichtgrund(self):
@@ -441,6 +441,19 @@ class Glocke(Basis):
                         Benachrichtigung.text.like("%fällig%")).count())
 
     def test_faelligkeit_einmalig(self):
+        # v29 (PLAN_LEAD_V4 Phase 141 „Glocke nur To-Dos“): die Wiedervorlage-Glocke ist
+        # standardmäßig gesperrt (art wiedervorlage) – für diesen Dedup-Test wird die
+        # Art über glocke_lead_arten wieder eingeschaltet und danach zurückgesetzt
+        arten_vorher = kern.parameter_holen(self.s, "glocke_lead_arten", "")
+        kern.parameter_setzen(self.s, "glocke_lead_arten",
+                              "todo_zugewiesen,todo_aktualisiert,wiedervorlage")
+        self.s.commit()
+
+        def zuruecksetzen():
+            self.s.rollback()
+            kern.parameter_setzen(self.s, "glocke_lead_arten", arten_vorher)
+            self.s.commit()
+        self.addCleanup(zuruecksetzen)
         faellig = datetime.now() - timedelta(hours=1)
         v = self.lead(15, versuche=2, leadmanager_id=1, naechste_aktion_am=faellig)
         spaeter = self.lead(16, versuche=1, leadmanager_id=1,
@@ -531,10 +544,12 @@ class Doppelversand(Basis):
             return sorted((m.vorlage_key, m.status) for m in
                           self.s.query(KommunikationLog).filter_by(vorgang_id=vorgang_id)
                           if m.vorlage_key != "eingangsbestaetigung")
-        # Erreicht: nicht_erreicht + nurture offen → beide storniert, Hinweis im fehler_text
+        # Erreicht: nicht_erreicht + disqualifiziert offen → beide storniert, Hinweis im
+        # fehler_text (v29: nurture entfällt – mail_planen liefert dafür None)
         v = self.lead(24, versuche=2, email="v2a24@test.local")
         kern.mail_planen(self.s, v, "nicht_erreicht")
-        kern.mail_planen(self.s, v, "nurture", geplant_am=datetime.now() + timedelta(days=30))
+        self.assertIsNone(kern.mail_planen(self.s, v, "nurture", geplant_am=datetime.now() + timedelta(days=30)))
+        kern.mail_planen(self.s, v, "disqualifiziert")
         # v23 Phase 112: zweiter Eintrag direkt (mail_planen dedupliziert offene Einträge)
         fertig = KommunikationLog(vorgang_id=v.id, kanal="mail", vorlage_key="nicht_erreicht",
                                   an="v2a24@test.local", status="protokolliert", modus="protokoll")
@@ -544,8 +559,8 @@ class Doppelversand(Basis):
                              follow_redirects=False)
         self.assertEqual(r.status_code, 303)
         self.s.expire_all()
-        self.assertEqual(offen(v.id), [("nicht_erreicht", "protokolliert"),
-                                       ("nicht_erreicht", "storniert"), ("nurture", "storniert")])
+        self.assertEqual(offen(v.id), [("disqualifiziert", "storniert"), ("nicht_erreicht", "protokolliert"),
+                                       ("nicht_erreicht", "storniert")])
         storno = next(m for m in self.s.query(KommunikationLog).filter_by(vorgang_id=v.id, status="storniert"))
         self.assertIn("Kunde erreicht", storno.fehler_text)
         # Kein Interesse und Rückruf gewünscht stornieren ebenfalls, Meldung nennt die Anzahl
@@ -572,7 +587,8 @@ class Doppelversand(Basis):
         self.assertEqual(offen(v3.id), [("nicht_erreicht", "storniert")])
         # Direktaufruf: nur die Kaskaden-Vorlagen, nichts mit Termin-Bezug
         self.assertEqual(lead_anrufliste.offene_mails_stornieren(self.s, v3.id), 0)
-        self.assertEqual(lead_anrufliste.VORGANGS_MAILS, ("nicht_erreicht", "disqualifiziert", "nurture"))
+        # v29: ohne nurture (Vorlage entfällt)
+        self.assertEqual(lead_anrufliste.VORGANGS_MAILS, ("nicht_erreicht", "disqualifiziert"))
 
     def test_rueckruf_ohne_datum_bleibt_folgenlos(self):
         """Pflichtfeld fehlt → 303 mit Meldung, Zähler/Phase unverändert (Rollback)."""
@@ -666,16 +682,17 @@ class HandelsvertreterGate(Basis):
         self.assertEqual(self.anrufe(eigen.id)[-1].benutzer_id, hv.id)
         self.assertEqual(c2.get(f"/lead-management/anruf/{fremd.id}/vorschlag").status_code, 404)
         self.assertEqual(c2.get(f"/lead-management/anruf/{eigen.id}/vorschlag").status_code, 200)
-        # Meine Anrufe: nur eigene Aktivitäten, Suche nur eigene Leads
-        meine = c2.get("/lead-management/anruf/meine?zeitraum=heute")
+        # v29 (PLAN_LEAD_V4 Phase 140, HV-Sicht – Agent L1): Anrufliste inkl. „Meine
+        # Anrufe“ und Rufnummernsuche sind für Handelsvertreter per URL 404
+        # (vorher: nur eigene Aktivitäten/Leads). Innendienst sieht beides weiter.
+        self.assertEqual(c2.get("/lead-management/anruf/meine?zeitraum=heute").status_code, 404)
+        self.assertEqual(c2.get("/lead-management/anruf/suche",
+                                params={"q": f"0203 88{22:04d}"}).status_code, 404)
+        meine = self.client.get("/lead-management/anruf/meine?zeitraum=heute&alle=1")
         self.assertEqual(meine.status_code, 200)
         self.assertIn(f"{NACHNAME}-22", meine.text.split("<tbody>", 1)[1])
-        self.assertNotIn("Alle Anrufe (Team)", meine.text.split("<main", 1)[1])
-        r = c2.get("/lead-management/anruf/suche", params={"q": f"0203 88{23:04d}"})
-        self.assertEqual(r.status_code, 200)
-        self.assertNotIn(f"{NACHNAME}-23", r.text.split("<main", 1)[1])
-        r = c2.get("/lead-management/anruf/suche", params={"q": f"0203 88{22:04d}"},
-                   follow_redirects=False)
+        r = self.client.get("/lead-management/anruf/suche", params={"q": f"0203 88{22:04d}"},
+                            follow_redirects=False)
         self.assertEqual(r.headers.get("location"), f"/lead-management/lead/{eigen.id}")
 
 

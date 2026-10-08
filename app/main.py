@@ -24,6 +24,7 @@ from app.routers import (angebote, anmeldung, artikel, benutzer, erfassung, vorg
                          leads, signatur, statistik, versand)
 from app.routers import konfiguration_heizreport   # v26: Parametrierung → Heizreport
 from app.routers import betrieb as betrieb_router   # v27: /health + Parametrierung → Betrieb
+from app.routers import lm_mail, lm_vorlagen   # v29 (PLAN_LEAD_V4 Phase 142): Vorlagen-Editor, Lead-Mails
 from app.templating import render
 
 APP_ORDNER = Path(__file__).resolve().parent
@@ -74,6 +75,9 @@ async def lifespan(app: FastAPI):
     # v12 (Phase 78): Mail-Warteschlange (jede Minute, Sendesperre je Modus)
     from app import lead_mail
     lead_mail.scheduler_starten()
+    # v29 (PLAN_LEAD_V4 Phase 142): Antworten/Bounces aus termin@ alle 2 Minuten
+    from app import lead_mail_abruf
+    lead_mail_abruf.scheduler_starten()
     # v27 (Phase 129): Backup 02:30, SQLite-Pflege 02:40, Betriebs-Wache, Login-Protokoll
     betrieb.scheduler_registrieren()
     ok, text = db_modul.pool_invariante(scheduler.anzahl())
@@ -156,6 +160,10 @@ app.include_router(vorgaenge.router)
 app.include_router(projektierung_router.router)
 app.include_router(glocke.router)
 app.include_router(montage.router)
+# v29 (PLAN_LEAD_V4 Phase 142): Vorlagen-Editor und Lead-Mail-Routen VOR den V2-
+# und V1-Routern, damit /lead-management/vorlagen den neuen Editor trifft
+app.include_router(lm_vorlagen.router)
+app.include_router(lm_mail.router)
 # v23 (Lead-Management V2): V2-Router zuerst – gleiche Pfade haben Vorrang
 for _v2 in (lm_dashboard, lm_boards, lm_kartei, lm_anruf, lm_termin, lm_hv, lm_info):
     app.include_router(_v2.router)

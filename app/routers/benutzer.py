@@ -10,6 +10,7 @@
 
 import re
 from datetime import datetime, timedelta
+from pathlib import Path
 from urllib.parse import quote_plus
 
 from fastapi import APIRouter, Depends, Request
@@ -192,6 +193,12 @@ def aendern(request: Request, benutzer_id: int,
     benutzer.rollen = ",".join([rolle] + [r for r in zusatz if r != rolle])
     benutzer.kalkulation_sichtbar = form.get("kalkulation_sichtbar") == "on"
     benutzer.telefon = (form.get("telefon") or "").strip()
+    # v29 (PLAN_LEAD_V4 Phase 141/142): Vorname („Hallo, <Vorname>“) und Infotext
+    # der Terminbestätigung – nur ändern, wenn das Formular die Felder mitschickt
+    if form.get("vorname") is not None:
+        benutzer.vorname = (form.get("vorname") or "").strip()[:100]
+    if form.get("infotext") is not None:
+        benutzer.infotext = (form.get("infotext") or "").strip()
     # v12 (Phase 73): Leadmanager-Einstellungen (Round-Robin-Zuweisung)
     benutzer.lm_aktiv = form.get("lm_aktiv") == "on"
     benutzer.lm_arbeitszeit = (form.get("lm_arbeitszeit") or "").strip() or None
@@ -479,11 +486,15 @@ def ad_profil_seite(request: Request, benutzer_id: int,
         gebiet = []
     # v23 (Phase 108, F3/F4/A-1): Produktkompetenz, Handelsvertreter-Kennzeichen,
     # Kanal-Regel, Buchungslink, Startwerte aus den Parametern
-    from app import lead_termin, lead_v2
+    from app import lead_mail, lead_termin, lead_v2
     from app import leadmanagement as kern
     from app.models import INTERESSEN
     return render(request, "benutzer/ad_profil.html", aktiv="/benutzer",
                   person=person, profil=profil, zeiten=zeiten,
+                  # v29 (Phase 142): Bild/Infotext der Terminbestätigung
+                  bild_vorhanden=lead_mail.bild_pfad(person) is not None,
+                  vorlage_vorhanden=lead_mail.vorlage_vorhanden(session, lead_mail.vertriebler_key(person.id)),
+                  bild_max_mb=lead_mail.BILD_MAX_BYTES // (1024 * 1024),
                   gebiet=", ".join(str(p) for p in gebiet),
                   wochentage=[("mo", "Montag"), ("di", "Dienstag"),
                               ("mi", "Mittwoch"), ("do", "Donnerstag"),
@@ -558,6 +569,34 @@ def ad_profil_speichern(request: Request, benutzer_id: int,
     profil.terminiert_selbst = form.get("terminiert_selbst") == "on"
     if "buchungslink" in form:
         person.buchungslink = (form.get("buchungslink") or "").strip()[:500] or None
+    # v29 (PLAN_LEAD_V4 Phase 142): Vorname, Infotext und Bild (JPG/PNG, max 2 MB,
+    # data/benutzerbilder/<id>.<ext>) für den Block {vertriebler_block} der
+    # Terminbestätigung; neue Vertriebler erhalten automatisch die Standard-Kopie
+    from app import lead_mail
+    if form.get("vorname") is not None:
+        person.vorname = (form.get("vorname") or "").strip()[:100]
+    if form.get("infotext") is not None:
+        person.infotext = (form.get("infotext") or "").strip()
+    bild_meldung = ""
+    if form.get("bild_entfernen") == "on":
+        lead_mail.benutzerbild_entfernen(person)
+        bild_meldung = " Bild entfernt."
+    bild = form.get("bild")
+    if bild is not None and getattr(bild, "filename", ""):
+        endung = Path(bild.filename).suffix.lower()
+        daten = bild.file.read()
+        if endung not in lead_mail.BILD_ENDUNGEN:
+            return RedirectResponse(f"/benutzer/{benutzer_id}/ad-profil?meldung="
+                                    + quote_plus("Bild nicht gespeichert: nur JPG oder PNG."),
+                                    status_code=303)
+        if len(daten) > lead_mail.BILD_MAX_BYTES:
+            return RedirectResponse(f"/benutzer/{benutzer_id}/ad-profil?meldung="
+                                    + quote_plus("Bild nicht gespeichert: größer als 2 MB."),
+                                    status_code=303)
+        lead_mail.benutzerbild_speichern(person, daten, endung)
+        bild_meldung = " Bild gespeichert."
+    if lead_mail.vertriebler_vorlage_sicherstellen(session, person):
+        bild_meldung += " Terminbestätigung als Standard-Kopie angelegt."
     # Kanal-Regel: der AD steht genau in den angehakten Kanälen (leer = keine)
     lead_termin.kanal_regel_ad_setzen(
         session, person.id, [str(k) for k in form.getlist("kanal_fest")])
@@ -572,5 +611,5 @@ def ad_profil_speichern(request: Request, benutzer_id: int,
             pass
     session.commit()
     return RedirectResponse(f"/benutzer/{benutzer_id}/ad-profil?meldung="
-                            + quote_plus("Profil gespeichert."),
+                            + quote_plus("Profil gespeichert." + bild_meldung),
                             status_code=303)

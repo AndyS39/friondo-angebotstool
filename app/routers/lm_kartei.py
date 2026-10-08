@@ -107,6 +107,21 @@ def kartei(request: Request, vorgang_id: int,
         session.rollback()
         vorgang = _vorgang(session, vorgang_id)
     kontext = lead_kartei.kartei_kontext(session, vorgang, benutzer, readonly)
+    # v29 (PLAN_LEAD_V4 Phase 142, Vertrag L2): roter Hinweisbalken „Mail nicht
+    # gesendet“ / „E-Mail falsch“ – Inhalt liefert lead_mail.kartei_hinweis (L2)
+    try:
+        from app import lead_mail
+        mail_hinweis = getattr(lead_mail, "kartei_hinweis", None)
+        kontext["mail_hinweis"] = mail_hinweis(session, vorgang) if mail_hinweis else None
+    except Exception:
+        kontext["mail_hinweis"] = None
+    # v28 (PLAN_PROJ_V6 Phase 136): gemeinsamer Notizen-Chat des Vorgangs (Makro
+    # notizen_chat) – Block „Notizen“ in voller Breite unter den Blöcken, Kennzeichen „Lead“;
+    # Schreibroute bleibt POST /vorgaenge/{id}/notiz
+    from app import notizen
+    kontext["notizen_ctx"] = notizen.kontext(
+        session, vorgang.id, benutzer, vorgang=vorgang, herkunft="lead",
+        zurueck=f"/lead-management/lead/{vorgang.id}#notizen")
     tab = request.query_params.get("tab", TAB_STANDARD)
     if tab not in TABS:
         tab = TAB_STANDARD
@@ -171,6 +186,13 @@ def feld(request: Request, vorgang_id: int,
         return JSONResponse({"ok": False, "feld": feld_name, "wert": "",
                              "meldung": "Feld unbekannt.", **_pflicht_antwort(session, vorgang, kunde)},
                             status_code=400)
+    # v29 (PLAN_LEAD_V4 Phase 140): in der Handelsvertreter-Sicht ist das Feld
+    # Innendienst/Leadmanager nur Anzeige
+    if feld_name == "leadmanager_id" and lead_v2.hv_sicht(session, benutzer):
+        return JSONResponse({"ok": False, "feld": feld_name,
+                             "wert": str(vorgang.leadmanager_id or ""),
+                             "meldung": "Innendienst wird vom Innendienst zugewiesen (nur Anzeige).",
+                             **_pflicht_antwort(session, vorgang, kunde)}, status_code=400)
     erzwingen = (str(daten.get("erzwingen") or "") in ("1", "true", "on")
                  and benutzer.rolle in ("admin", "innendienst"))
     ergebnis = lead_kartei.feld_speichern(session, vorgang, kunde, feld_name,

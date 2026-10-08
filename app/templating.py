@@ -49,9 +49,17 @@ def de_datum(wert, format="%d.%m.%Y"):
     return text.replace(en_lang, lang).replace(en_kurz, kurz)
 
 
+def de_datum_zeit(wert):
+    """v29 (PLAN_LEAD_V4 Phase 141): Eingangsdatum „TT.MM.JJJJ, HH:MM Uhr“."""
+    if wert is None:
+        return ""
+    return wert.strftime("%d.%m.%Y, %H:%M Uhr")
+
+
 templates.env.filters["euro"] = euro
 templates.env.filters["menge"] = menge_format
 templates.env.filters["de_datum"] = de_datum
+templates.env.filters["de_datum_zeit"] = de_datum_zeit
 
 # Cache-Busting: Browser laden style.css nach jeder Änderung neu (Phase 18
 # Nachfix). v14: pro Request frisch statt einmal beim Start – ein laufender
@@ -61,7 +69,8 @@ templates.env.filters["de_datum"] = de_datum
 # ausgelieferten Static-Dateien (style.css, lead_v2.css, *.js), nicht nur an
 # style.css; sonst liefern Browser nach einem Update ohne CSS-Änderung alte
 # lead_v2.css/lm_*.js mit derselben ?v=-Nummer aus.
-_STATIC_VERSIONIERT = ("style.css", "lead_v2.css", "login_v27.css")   # v27: Login-Styles
+_STATIC_VERSIONIERT = ("style.css", "lead_v2.css", "login_v27.css",   # v27: Login-Styles
+                       "projektierung_v28.css", "akte_v28.css", "lead_v29.css")   # v28/v29
 
 
 def _css_version() -> int:

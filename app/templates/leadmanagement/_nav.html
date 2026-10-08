@@ -15,15 +15,25 @@
    handelsvertreter sowie für „Mehr …“: anrufliste | board | kalender |
    vorlagen | uebersicht | statistik | kanal_report | posteingang | import |
    neu | lead-einstellungen. Alte Keys: tabelle → hauptboard,
-   info-veranstaltung → info; unbekannte Keys markieren „Mehr …“. #}
+   info-veranstaltung → info; unbekannte Keys markieren „Mehr …“.
+   v29 (PLAN_LEAD_V4 Phasen 140/141): Handelsvertreter-Sicht (Import des Makros
+   „with context“: request.state.lead_hv_ok ohne lead_modul_ok aus der
+   RollenMiddleware) zeigt nur Mein Dashboard · Karte · To-Dos · Handelsvertreter
+   – kein „Mehr …“; gesperrte Seiten liefern server-seitig 404 (lead_v2.gate).
+   „Mehr …“ öffnet als Flyout (.lm-leiste-menue[data-flyout], position: fixed neben der Leiste,
+   z-index unter dem Wartungsbanner, unter 900 px nach oben; Verhalten in
+   app/static/lm_nav.js: Escape, Klick außerhalb, erneuter Klick). #}
 {% from "_symbole.html" import symbol %}
 
 {% macro lm_nav(aktiv) %}
 {%- set deals = lm_board_label('terminiert') if lm_board_label is defined else 'Deals' -%}
 {%- set hauptname = lm_board_label('hauptboard') if lm_board_label is defined else 'Hauptboard' -%}
+{%- set hv_sicht = ((request.state.lead_hv_ok | default(false)) and not (request.state.lead_modul_ok | default(false))) if request is defined else false -%}
+{%- set hv_keys = ['dashboard', 'karte', 'todos', 'handelsvertreter'] -%}
+{%- if hv_sicht and aktiv not in hv_keys -%}{%- set aktiv = 'handelsvertreter' -%}{%- endif -%}
 {%- set haupt = aktiv in ('hauptboard', 'tabelle') -%}
 {%- set eintraege = [
-    ('dashboard', '/lead-management/dashboard', 'dashboard', 'Mein Dashboard', 'Mein Dashboard – Meine Arbeit: Wiedervorlagen, Termine, To-Dos', aktiv == 'dashboard'),
+    ('dashboard', '/lead-management/dashboard', 'dashboard', 'Mein Dashboard', 'Mein Dashboard – Fällig heute, kommende Wiedervorlagen, To-Dos, Routenplaner', aktiv == 'dashboard'),
     ('hauptboard', '/lead-management/hauptboard', 'board', hauptname, hauptname ~ ' – Leads ohne Vor-Ort-Termin (Tabelle · Kanban)', haupt),
     ('terminiert', '/lead-management/terminiert', 'deals', deals, deals ~ ' – Leads mit Vor-Ort-Termin, Angebot nachverfolgen', aktiv == 'terminiert'),
     ('kontaktiert', '/lead-management/kontaktiert', 'telefon-eingehend', 'Kontaktiert', 'Kontaktiert – alle Kontaktversuche, Rufnummernsuche', aktiv == 'kontaktiert'),
@@ -48,25 +58,28 @@
 {%- set haupt_keys = ['dashboard', 'hauptboard', 'tabelle', 'terminiert', 'kontaktiert', 'karte', 'info', 'info-veranstaltung', 'todos', 'handelsvertreter'] -%}
 {%- set mehr_aktiv = aktiv not in haupt_keys -%}
 {%- set demo = lm_demo_badge() if lm_demo_badge is defined else {'aktiv': false, 'text': ''} -%}
-<nav class="lm-leiste" aria-label="Lead-Management">
-    {%- for key, pfad, icon, name, tooltip, ist_aktiv in eintraege %}
+<nav class="lm-leiste{{ ' lm-leiste-hv' if hv_sicht }}" aria-label="Lead-Management" data-hv-sicht="{{ '1' if hv_sicht else '' }}">
+    {%- for key, pfad, icon, name, tooltip, ist_aktiv in eintraege if (not hv_sicht) or key in hv_keys %}
     <a href="{{ pfad }}" class="lm-leiste-eintrag {{ 'aktiv' if ist_aktiv }}" title="{{ tooltip }}"
        aria-label="{{ name }}" {% if ist_aktiv %}aria-current="page"{% endif %} data-key="{{ key }}">
         {{ symbol(icon) }}<span class="lm-leiste-text">{{ name }}</span></a>
     {%- endfor %}
-    <details class="lm-leiste-mehr {{ 'aktiv' if mehr_aktiv }}">
+    {%- if not hv_sicht %}
+    <details class="lm-leiste-mehr {{ 'aktiv' if mehr_aktiv }}" id="lm-mehr">
         <summary class="lm-leiste-eintrag {{ 'aktiv' if mehr_aktiv }}" title="Mehr … – Anrufliste, Kanban, Kalender, E-Mail-Vorlagen, Übersicht, Statistik Leads, Kanal-Report, Posteingang unklar, Import, Schnellanlage, Lead-Einstellungen"
-                 aria-label="Mehr" data-key="mehr">{{ symbol('mehr') }}<span class="lm-leiste-text">Mehr …</span></summary>
-        <div class="lm-leiste-menue">
+                 aria-label="Mehr" data-key="mehr" aria-haspopup="menu">{{ symbol('mehr') }}<span class="lm-leiste-text">Mehr …</span></summary>
+        <div class="lm-leiste-menue" role="menu" aria-label="Mehr" data-flyout="1">
             {%- for pfad, icon, name, key in mehr %}
-            <a href="{{ pfad }}" class="{{ 'aktiv' if aktiv == key }}" data-key="{{ key }}" {% if aktiv == key %}aria-current="page"{% endif %}>{{ symbol(icon) }} {{ name }}</a>
+            <a href="{{ pfad }}" class="{{ 'aktiv' if aktiv == key }}" data-key="{{ key }}" {% if aktiv == key %}aria-current="page"{% endif %} role="menuitem">{{ symbol(icon) }} {{ name }}</a>
             {%- endfor %}
         </div>
     </details>
+    {%- endif %}
     {%- if demo.aktiv %}
     <span class="demo-badge lm-leiste-demo" title="{{ demo.text }} – Lead-Management im Demo-Modus (lead_freigabe_modus = admin)">Demo</span>
     {%- endif %}
 </nav>
+<script src="/static/lm_nav.js?v={{ css_version }}" defer></script>
 <script src="/static/lm_boards.js?v={{ css_version }}" defer></script>
 {% endmacro %}
 

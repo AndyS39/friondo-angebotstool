@@ -323,7 +323,7 @@ class Bezeichnungen(Basis):
         self.assertEqual(r.status_code, 200, r.text)
         self.assertIn("Board „Deals“", r.json().get("verschoben", ""))
         # Sammelaktions-Redirect nennt nur den Pfad (Key bleibt terminiert)
-        self.assertEqual(lead_boards.sammelaktionen_fuer("terminiert"), [])
+        self.assertEqual([x["key"] for x in lead_boards.sammelaktionen_fuer("terminiert")], ["hv_verschieben"])   # v29
 
     def test_infoabend_statt_info_veranstaltung(self):
         lead_info.veranstaltungen_anlegen(self.s)
@@ -375,7 +375,7 @@ class Spalten(Basis):
         sp = lead_boards.spalten_fuer(self.s, self.zweiter, "hauptboard")
         self.assertEqual([x["key"] for x in sp], STANDARD_KEYS)
         self.assertEqual(sp[0], {"key": "lead", "titel": "Kundenname", "standard": "Kundenname",
-                                 "name": "", "sichtbar": True})
+                                 "name": "", "sichtbar": True, "breite": None})   # v29: breite je Spalte
         for key in ("anrede", "vorname", "nachname"):
             self.assertFalse(next(x for x in sp if x["key"] == key)["sichtbar"], key)
         self.assertNotIn("score", [x["key"] for x in sp])
@@ -427,10 +427,10 @@ class Spalten(Basis):
         self.assertNotIn('<th class="sp-telefon"', kopf)
         # auch [{key, sichtbar}] und kaputte Einträge werden gelesen
         n = lead_boards._konfig_normieren([{"key": "ort", "sichtbar": False}, ["x"], None, {"sichtbar": True}])
-        self.assertEqual(n, {"spalten": [{"key": "ort", "sichtbar": False, "name": ""}], "sort": None})
+        self.assertEqual(n, {"spalten": [{"key": "ort", "sichtbar": False, "name": "", "breite": None}], "sort": None})
         n = lead_boards._konfig_normieren({"spalten": [{"key": "ort", "name": " Stadt "}],
                                             "sort": {"key": "ort", "richtung": "ab"}})
-        self.assertEqual(n["spalten"], [{"key": "ort", "sichtbar": True, "name": "Stadt"}])
+        self.assertEqual(n["spalten"], [{"key": "ort", "sichtbar": True, "name": "Stadt", "breite": None}])
         self.assertEqual(n["sort"], {"key": "ort", "richtung": "ab"})
         self.assertEqual(lead_boards._konfig_normieren("unsinn"), {"spalten": [], "sort": None})
 
@@ -662,10 +662,12 @@ class Spalten(Basis):
         self.assertEqual(info[0]["titel"], "Kundenname")
         self.assertEqual(info[-1]["key"], "veranstaltung")
         self.assertNotIn("score", [x["key"] for x in info])
-        # Handelsvertreter: Boards-Seiten 200, eigene Spaltenkonfiguration getrennt
+        # Handelsvertreter: eigene Spaltenkonfiguration getrennt (v29: Hauptboard für die
+        # HV-Sicht gesperrt – die HV-Ansicht nutzt den Board-Key handelsvertreter)
         c_hv = TestClient(app)
         c_hv.post("/login", data={"benutzer_id": str(self.hv.id), "pin": "1234"})
-        self.assertEqual(c_hv.get("/lead-management/hauptboard").status_code, 200)
+        self.assertEqual(c_hv.get("/lead-management/hauptboard").status_code, 404)
+        self.assertEqual(c_hv.get("/lead-management/handelsvertreter").status_code, 200)
         r = self.json_post("/lead-management/boards/spalten", {"board": "hauptboard", "umbenennen": {"key": "ort", "name": "Stadt"}}, c_hv)
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(next(x for x in self.spalten_json(self.client)["spalten"] if x["key"] == "ort")["titel"], "Ort")

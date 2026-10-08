@@ -264,14 +264,27 @@
         const aktionSel = document.getElementById('li-sammel-aktion');
         const statusWrap = sammelform.querySelector('.li-sammel-status');
         const teilWrap = sammelform.querySelector('.li-sammel-teil');
+        // v29 (PLAN_LEAD_V4 Phase 140): „An Handelsvertreter verschieben“ – Ziel-Schaltflächen
+        const hvWrap = document.getElementById('li-sammel-hv');
+        const ausfuehren = document.getElementById('li-sammel-ausfuehren');
         function aktionUmschalten() {
+            const hv = aktionSel.value === 'hv_verschieben';
             if (statusWrap) { statusWrap.hidden = aktionSel.value !== 'status'; }
             if (teilWrap) { teilWrap.hidden = aktionSel.value !== 'teilgenommen'; }
+            if (hvWrap) { hvWrap.hidden = !hv; }
+            if (ausfuehren) { ausfuehren.hidden = hv; }
         }
         if (aktionSel) { aktionSel.addEventListener('change', aktionUmschalten); aktionUmschalten(); }
         sammelform.addEventListener('submit', function (e) {
             if (auswahl().length === 0) { e.preventDefault(); melden('Keine Leads markiert.', true); return; }
             if (sammelform.dataset.bereit === '1') { sammelform.dataset.bereit = ''; return; }
+            if (aktionSel && aktionSel.value === 'hv_verschieben') {
+                const knopf = e.submitter;
+                if (!knopf || !knopf.dataset.ziel) { e.preventDefault(); melden('Bitte ein Ziel wählen (René oder Simon).', true); return; }
+                if (!window.confirm(auswahl().length + ' Lead(s) an ' + knopf.textContent.trim()
+                    + ' verschieben? Leads mit Ausschlusskanal/-quelle werden übersprungen.')) { e.preventDefault(); }
+                return;
+            }
             if (aktionSel && aktionSel.value === 'status') {
                 const ziel = document.getElementById('li-sammel-status').value;
                 const info = statusInfo[ziel] || {};

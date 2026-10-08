@@ -1,0 +1,45 @@
+{# v29 (PLAN_LEAD_V4 Phase 142): Vorlagenbaum der linken Spalte des Editors –
+   Kategorien Eingang · Kontakt · Terminbestätigung (ausklappbar: Standard + je
+   Vertriebler) · Termin · Sonstige aus lead_mail.vorlagen_katalog; aktive
+   Vorlage markiert, Suche über Vorlagennamen (JS in vorlagen.html, Fallback
+   GET ?q=). Nurture ist ausgeblendet (Datensatz bleibt). #}
+{% from "_symbole.html" import symbol %}
+<nav class="lmv-baum karte" aria-label="E-Mail-Vorlagen">
+    <form method="get" action="/lead-management/vorlagen" class="lmv-suche">
+        <input type="hidden" name="vorlage" value="{{ schluessel }}">
+        <label class="lmv-suchfeld">{{ symbol('suche') }}
+            <input type="search" name="q" id="lmv-suche" value="{{ suche }}" placeholder="Vorlage suchen …"
+                   autocomplete="off" aria-label="Vorlage suchen"></label>
+        <noscript><button class="knopf klein zweitrangig" type="submit">Suchen</button></noscript>
+    </form>
+    {% for kat in katalog %}
+    {% set offen = kat.key == 'terminbestaetigung' and (terminvorlage or suche) %}
+    {% if kat.aufklappbar %}
+    <details class="lmv-kategorie" data-kategorie="{{ kat.key }}" {{ 'open' if offen or kat.eintraege|length <= 3 }}>
+        <summary>{{ symbol('kalender') }} {{ kat.name }}
+            <span class="lmv-zaehler dezent">{{ kat.eintraege|length }}</span></summary>
+        <ul>
+    {% else %}
+    <div class="lmv-kategorie" data-kategorie="{{ kat.key }}">
+        <h3>{{ symbol('brief') }} {{ kat.name }}</h3>
+        <ul>
+    {% endif %}
+        {% for e in kat.eintraege %}
+            {% set treffer = (not suche) or (suche|lower in e.name|lower) %}
+            <li class="lmv-eintrag {{ 'aktiv' if e.key == schluessel }} {{ 'lmv-vertriebler' if e.benutzer_id }} {{ 'lmv-ausgeblendet' if not treffer }}"
+                data-name="{{ e.name|lower }}">
+                <a href="/lead-management/vorlagen?vorlage={{ e.key }}" {% if e.key == schluessel %}aria-current="page"{% endif %}>
+                    <span class="lmv-name">{{ e.name }}</span>
+                    {% if e.benutzer_id and not e.vorhanden %}<span class="abzeichen lmv-badge" title="Noch keine eigene Vorlage – der Versand nutzt die Standard-Terminbestätigung">Standard</span>{% endif %}
+                    {% if e.hv %}<span class="abzeichen lmv-badge" title="Handelsvertreter – Versandweg laut hv_versandweg">HV</span>{% endif %}
+                    {% if e.quelle == 'zulieferung' %}<span class="abzeichen lmv-badge" title="Aus der Zulieferung docs/vorlagen eingespielt">Z</span>{% endif %}
+                </a>
+            </li>
+        {% else %}
+            <li class="dezent lmv-leer">keine Vorlagen</li>
+        {% endfor %}
+        </ul>
+    {% if kat.aufklappbar %}</details>{% else %}</div>{% endif %}
+    {% endfor %}
+    <p class="dezent lmv-fuss">Nurture ist seit v29 entfallen (Vorlage ausgeblendet). Vorlagen pflegen Admin und Innendienst.</p>
+</nav>

@@ -216,25 +216,15 @@ def mail_verarbeiten(session: Session, graph_id: str, absender: str,
             if angebot is not None and angebot.vorgang_id:
                 vorgang = session.get(Vorgang, angebot.vorgang_id)
     if vorgang is not None:
-        kern.aktivitaet(session, vorgang.id, "mail_ein",
-                        f"Antwort von {absender}: {betreff} – "
-                        f"{(body or '')[:200]}")
-        # Prozess-Fix 27.09.2026: eine Kundenantwort weckt den Lead –
-        # zurückgestellte/nicht erreichte kommen zurück in die Arbeitsliste,
-        # nächste Aktion = sofort (vorher blieb die Antwort folgenlos)
-        from datetime import datetime as _dt
-        vorgang.naechste_aktion_am = _dt.now()
-        if vorgang.lead_phase in ("zurueckgestellt", "nicht_erreicht"):
-            vorgang.lead_phase = "in_kontaktierung"
-            vorgang.zurueckgestellt_bis = None
-        if vorgang.leadmanager_id:
-            kern.benachrichtigen(session, [vorgang.leadmanager_id],
-                                 f"Antwort-Mail von {absender}: {betreff}",
-                                 f"/lead-management/lead/{vorgang.id}")
-        session.add(LeadPosteingang(graph_id=graph_id, absender=absender,
-                                    betreff=betreff, body=(body or "")[:8000],
-                                    empfangen_am=empfangen_am,
-                                    status="angelegt", vorgang_id=vorgang.id))
+        # v29 (PLAN_LEAD_V4 Phase 142): Kundenantworten laufen seit dem Absender-
+        # wechsel auf termin@ auf (lead_mail_abruf); hier bleibt nur der Weg über
+        # leads@ (Betreff „Rückruf V<Nr>“ / AN-C-Nummer). Beide nutzen dieselbe
+        # Verbuchung (Aktivität, Wiedervorlage „jetzt“, Glocke art kundenantwort –
+        # Phase 141 standardmäßig gesperrt); der frühere Phasenwechsel „Kunden-
+        # antwort weckt den Lead“ ist mit Nurture entfallen [ANNAHME].
+        from app import lead_mail
+        lead_mail.kundenantwort_verbuchen(session, vorgang, absender, betreff, body,
+                                          graph_id=graph_id, empfangen_am=empfangen_am)
         session.commit()
         return "antwort"
     session.add(LeadPosteingang(graph_id=graph_id, absender=absender,
@@ -246,7 +236,10 @@ def mail_verarbeiten(session: Session, graph_id: str, absender: str,
 
 def postfach_abrufen(session: Session) -> dict:
     """Ungelesene Mails aus dem Postfach absender_postfach (Graph) – nur bei
-    parser_modus = an; best effort, nie blockierend."""
+    parser_modus = an; best effort, nie blockierend. v29: absender_postfach ist
+    nur noch das Eingangspostfach des Parsers (leads@); Absender der Kundenmails
+    ist absender_lead_mails (termin@, lead_mail) – Antworten/Bounces darauf holt
+    der Lauf lead-mail-abruf (app/lead_mail_abruf.py)."""
     from app import graph_versand
     from app import leadmanagement as kern
     if kern.parameter_holen(session, "parser_modus", "aus") != "an":

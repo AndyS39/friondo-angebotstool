@@ -1,0 +1,133 @@
+/* v28 (PLAN_PROJ_V6 Phasen 136–138): Notizen-Chat (Makro notizen_chat), Galerie-
+   Lightbox, Montage-Backend-Reihenfolge, Formular-Wiederholfeld.
+   Pflege: Agent P2. Nur CSS-Tokens des Design-Systems v14 (style.css :root). */
+
+/* --- Notizen-Chat (Phase 136) – ergänzt die v14-Chat-Optik aus style.css ---- */
+
+.nc-chat { max-height: 70vh; overflow-y: auto; padding: var(--a-1) var(--a-1) var(--a-1) 0;
+    scroll-behavior: smooth; }
+.nc-chat .notiz-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.nc-chat .nc-leer { align-self: stretch; margin: var(--a-2) 0; }
+.nc-herkunft { font-size: 0.66rem; letter-spacing: 0.04em; text-transform: uppercase;
+    vertical-align: middle; margin-left: var(--a-1); }
+.nc-herkunft.nc-projektierung { background: var(--status-blau-bg); color: var(--status-blau); }
+.nc-herkunft.nc-vertrieb { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.nc-herkunft.nc-lead { background: var(--status-violett-bg); color: var(--status-violett); }
+.nc-herkunft.nc-montage { background: var(--status-orange-bg); color: var(--status-orange); }
+.nc-herkunft.nc-sonstige { background: var(--status-grau-bg); color: var(--status-grau); }
+.nc-aeltere { align-self: stretch; max-width: none; display: flex; flex-direction: column;
+    gap: var(--a-2); }
+.nc-aeltere > summary { cursor: pointer; font-size: var(--t-xs); color: var(--g-500);
+    padding: var(--a-1) 0; list-style: none; }
+.nc-aeltere > summary::-webkit-details-marker { display: none; }
+.nc-aeltere > summary::before { content: '▸ '; }
+.nc-aeltere[open] > summary::before { content: '▾ '; }
+.nc-eingabe { flex-wrap: wrap; }
+.nc-eingabe textarea { min-height: calc(4 * 1.45em + 16px); max-height: calc(12 * 1.45em + 16px);
+    line-height: 1.45; resize: vertical; font: inherit; }
+.nc-eingabe .nc-fehler { flex-basis: 100%; color: var(--status-rot); font-size: var(--t-s); }
+.nc-hinweis { font-size: var(--t-s); }
+
+/* Projektakte / Montage (pj-Rahmen): Chat etwas kompakter */
+.pj-mob .nc-chat { max-height: 50vh; font-size: 13px; margin-bottom: 4px; }
+.pj-mob .nc-chat .notiz { max-width: 100%; padding: 6px 10px; }
+.pj-mob .nc-chat .notiz-kopf { font-size: 11px; }
+.pj-mob .nc-hinweis { font-size: 12px; margin: 2px 0 0; }
+
+/* --- Galerie-Lightbox (Phase 136) ------------------------------------------ */
+
+dialog.pj-lightbox { width: 100vw; height: 100vh; max-width: none; max-height: none;
+    margin: 0; padding: 0; border: none; border-radius: 0; background: transparent;
+    color: #fff; overflow: hidden; }
+dialog.pj-lightbox::backdrop { background: rgba(10, 15, 20, 0.92); }
+.pj-lb-rahmen { position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: stretch; justify-content: space-between; }
+.pj-lb-kopf { display: flex; align-items: center; gap: var(--a-3); padding: var(--a-3) var(--a-4);
+    font-size: var(--t-s); line-height: 1.3; background: rgba(0, 0, 0, 0.35); }
+.pj-lb-kopf .titel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; }
+.pj-lb-kopf .titel b { font-weight: 600; }
+.pj-lb-bild { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center;
+    position: relative; touch-action: pan-y; }
+.pj-lb-bild img { max-width: 95vw; max-height: 85vh; width: auto; height: auto;
+    object-fit: contain; border-radius: var(--r-s); box-shadow: var(--schatten-2);
+    background: #fff; user-select: none; -webkit-user-drag: none; }
+.pj-lb-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 56px; height: 72px;
+    border: none; border-radius: var(--r-m); background: rgba(255, 255, 255, 0.14); color: #fff;
+    font-size: 30px; line-height: 1; cursor: pointer; }
+.pj-lb-nav:hover { background: rgba(255, 255, 255, 0.3); }
+.pj-lb-nav[disabled] { opacity: 0.25; cursor: default; }
+.pj-lb-nav.zurueck { left: var(--a-3); }
+.pj-lb-nav.vor { right: var(--a-3); }
+.pj-lb-fuss { display: flex; gap: var(--a-2); justify-content: center; flex-wrap: wrap;
+    padding: var(--a-3) var(--a-4) var(--a-4); background: rgba(0, 0, 0, 0.35); }
+.pj-lb-fuss .knopf, .pj-lb-fuss a.knopf { background: rgba(255, 255, 255, 0.16); color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.35); text-decoration: none; }
+.pj-lb-fuss .knopf:hover { background: rgba(255, 255, 255, 0.3); }
+@media (max-width: 640px) {
+    .pj-lb-kopf { font-size: var(--t-xs); padding: var(--a-2) var(--a-3); }
+    .pj-lb-kopf .titel { white-space: normal; }
+    .pj-lb-nav { width: 40px; height: 56px; font-size: 24px; }
+    .pj-lb-bild img { max-height: 70vh; }
+}
+
+/* --- Montage-Backend (Phase 137) ------------------------------------------- */
+
+/* Steckbrief mobil einspaltig (Beschriftung über dem Wert), lange Werte brechen um */
+.pj-mob .pj-steck-raster { grid-template-columns: auto 1fr; gap: 3px 10px; }
+.pj-mob .pj-steck-raster .k { white-space: normal; }
+.pj-mob .pj-steck-raster .w { min-width: 0; overflow-wrap: anywhere; }
+.pj-mob .pj-steck-raster .w.leer { color: var(--g-500); }
+@media (max-width: 480px) {
+    .pj-mob .pj-steck-raster { grid-template-columns: 1fr; gap: 0; }
+    .pj-mob .pj-steck-raster .k { margin-top: 6px; font-size: 11px; }
+    .pj-mob .pj-steck-raster .w { padding-bottom: 4px; border-bottom: 1px solid var(--g-100); }
+}
+/* Besetzung: Namen als Chips, im Wochenkalender als Initialen */
+.pj-besetzung { display: inline-flex; flex-wrap: wrap; gap: 4px; vertical-align: middle; }
+.pj-ini { display: inline-block; min-width: 22px; padding: 0 5px; border-radius: 999px;
+    background: var(--friondo-blau-hell); color: var(--friondo-blau-dunkel); font-size: 10px;
+    font-weight: 700; line-height: 18px; text-align: center; letter-spacing: 0.02em; }
+.pj-ini.ich { background: var(--friondo-blau); color: #fff; }
+.pj-mob-tag .e .pj-besetzung { margin-left: 4px; }
+.pj-mob .pj-sektion { font-size: 13px; margin: 12px 0 4px; }
+.pj-mob .pj-sektion small { font-weight: 400; color: var(--g-500); }
+.pj-mob .pj-status-block { border: 1px solid var(--g-200); border-radius: var(--r-m);
+    padding: 8px 10px; background: var(--g-50); }
+.pj-mob .pj-status-block .hinweis { font-size: 12px; color: var(--g-500); margin: 4px 0 0; }
+.pj-mob .pj-termin-zeile { font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--g-100); }
+.pj-mob .pj-termin-zeile:last-child { border-bottom: none; }
+.pj-mob .pj-termin-zeile .art { font-weight: 600; }
+.pj-mob .pj-termin-zeile small { display: block; color: var(--g-500); font-size: 11px; }
+.pj-mob .pj-meine-umschalter { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.pj-mob .pj-meine-umschalter .pj-btn { font-size: 12px; padding: 4px 9px; }
+.pj-mob .pj-technik { background: var(--status-orange-bg); color: var(--status-orange);
+    border-radius: var(--r-s); padding: 6px 8px; font-size: 13px; margin-bottom: 6px; }
+
+/* --- Formulare (Phase 138): Wiederholfeld, große Textfelder, Foto-Sammelbox -- */
+
+.pj-fp-frage textarea { width: 100%; min-height: calc(6 * 1.4em + 16px); padding: 8px 10px;
+    font: inherit; line-height: 1.4; border: 1px solid var(--g-300); border-radius: var(--r-s);
+    resize: vertical; }
+.pj-fp-frage > label .pflicht-wenn { color: var(--status-orange); font-weight: 400;
+    font-size: 11px; margin-left: 4px; }
+.pj-wiederhol .zeile { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+.pj-wiederhol .zeile input[type=text] { flex: 1; min-width: 0; }
+.pj-wiederhol .zeile .nr { min-width: 1.6em; font-size: 12px; color: var(--g-500); }
+.pj-wiederhol .zeile button { border: 1px solid var(--g-300); background: #fff; color: var(--status-rot);
+    border-radius: var(--r-s); width: 32px; height: 32px; cursor: pointer; font-size: 16px; }
+.pj-fp-fotos .vorhanden { font-size: 12px; color: var(--g-500); margin-bottom: 4px; }
+.pj-fp-fotos .vorhanden a { color: inherit; }
+.pj-fp-fotos .auswahl { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.pj-fp-fotos .auswahl .foto { position: relative; width: 84px; }
+.pj-fp-fotos .auswahl img { width: 84px; height: 64px; object-fit: cover; border-radius: var(--r-s);
+    border: 1px solid var(--g-200); display: block; background: var(--g-100); }
+.pj-fp-fotos .auswahl .name { font-size: 10px; color: var(--g-500); overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+.pj-fp-fotos .auswahl button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px;
+    border-radius: 50%; border: 1px solid var(--g-300); background: #fff; color: var(--status-rot);
+    cursor: pointer; font-size: 12px; line-height: 1; }
+.pj-fp-fotos .knoepfe { display: flex; gap: 6px; flex-wrap: wrap; }
+.pj-fp-fotos .knoepfe input[type=file] { display: none; }
+.pj-fp-fotos .zahl { font-size: 12px; color: var(--g-500); align-self: center; }
+.pj-fp-radios label.inaktiv { opacity: 0.6; }

@@ -152,11 +152,11 @@ class Dashboard(Basis):
         z_zurueck = next(z for z in daten["lead_wv"] if z["vorgang"].id == v_zurueck.id)
         self.assertTrue(z_zurueck["kommend"])
         self.assertIn("Bauphase später", z_zurueck["grund"])
-        ids_angebot = {z["vorgang"].id for z in daten["angebot_wv"]}
-        self.assertIn(v_angebot.id, ids_angebot)
-        self.assertNotIn(v_rueckruf.id, ids_angebot)
-        self.assertTrue(next(z for z in daten["angebot_wv"]
-                             if z["vorgang"].id == v_angebot.id)["faellig"])
+        # v29 (PLAN_LEAD_V4 Phase 141): Angebots-Wiedervorlagen sind nicht mehr Teil des
+        # Dashboards (Startseiten-Kachel/Angebotsverfolgung unverändert, portal_zaehler)
+        self.assertNotIn("angebot_wv", daten)
+        self.assertIn(v_angebot.id, {z["vorgang"].id for z in lead_dashboard.angebots_wiedervorlagen(
+            self.s, self.admin, jetzt, 7, False)})
         # zugeteilt nach Phase – v25 (Phase 118/120): in_kontaktierung + qualifiziert
         # bilden EINE Gruppe „Kontaktiert“ (Label aus dem Blatt Status), daher
         # Suche über die Phasenliste der Gruppe statt über den Gruppenschlüssel
@@ -172,7 +172,7 @@ class Dashboard(Basis):
                               if z["termin"].vorgang_id == v_termin.id)["typ"], "Telefongespräch")
         # Kacheln
         k = daten["kacheln"]
-        self.assertGreaterEqual(k["faellig"], 2)       # Rückruf + Angebots-WV
+        self.assertGreaterEqual(k["faellig"], 1)       # Rückruf (v29: ohne Angebots-WV)
         self.assertGreaterEqual(k["ueberfaellig"], 1)
         self.assertGreaterEqual(k["kommend"], 1)
         self.assertGreaterEqual(k["todos"], 1)
@@ -182,14 +182,21 @@ class Dashboard(Basis):
 
         seite = self.client.get("/lead-management/dashboard")
         self.assertEqual(seite.status_code, 200)
-        for text in ("Meine Arbeit", "Lead-Wiedervorlagen", "Angebots-Wiedervorlagen",
-                     "Mir zugeteilte Vorgänge", "Meine To-Dos", "Termine · nächste",
-                     "Fällig heute", "Offene To-Dos", "inkl. Demo", "Telefongespräch",
+        # v29 (Phase 141): „Hallo, <Vorname>“, Fällig heute · Kommende Wiedervorlagen ·
+        # Offene To-Dos, Routenplaner, Meine Termine; keine Angebots-Wiedervorlagen mehr
+        for text in ("Hallo, ", "Fällig heute", "Kommende Wiedervorlagen",
+                     "Mir zugeteilte Vorgänge", "Offene To-Dos", "Meine Termine · nächste",
+                     "Routenplaner", "inkl. Demo", "Telefongespräch",
                      "Rückruf gewünscht", "Bauphase später", f"{PRAEFIX} Unterlagen prüfen",
                      'href="/lead-management/uebersicht"', "Mehr …"):
             self.assertIn(text, seite.text, text)
+        for weg in ("Angebots-Wiedervorlagen", "Ohne nächsten Schritt", "Termine 7 Tage"):
+            self.assertNotIn(weg, inhalt(seite.text), weg)
         self.assertIn(self.kunde(v_rueckruf).anzeige_name, seite.text)
-        self.assertIn(self.kunde(v_angebot).anzeige_name, seite.text)
+        # Angebots-Wiedervorlage steht nicht mehr bei den Wiedervorlagen (nur noch unter
+        # „Mir zugeteilte Vorgänge“ als zugeteilter Lead)
+        wv_bereich = inhalt(seite.text).split('id="faellig"', 1)[1].split('id="todos"', 1)[0]
+        self.assertNotIn(self.kunde(v_angebot).anzeige_name, wv_bereich)
         self.assertNotIn(self.kunde(v_fremd).anzeige_name, inhalt(seite.text))
         # Umschalter Team → Übersicht zeigt zurück
         ueber = self.client.get("/lead-management/uebersicht")
@@ -288,7 +295,10 @@ class Dashboard(Basis):
         daten = lead_dashboard.daten(self.s, self.hv)
         self.assertTrue(daten["hv"])
         self.assertEqual({z["vorgang"].id for z in daten["lead_wv"]}, {eigen.id})
-        self.assertEqual({z["vorgang"].id for z in daten["angebot_wv"]}, {eigen_angebot.id})
+        # v29: Angebots-Wiedervorlagen nicht mehr im Dashboard (Funktion bleibt für die Portal-Kachel)
+        self.assertNotIn("angebot_wv", daten)
+        self.assertEqual({z["vorgang"].id for z in lead_dashboard.angebots_wiedervorlagen(
+            self.s, self.hv, jetzt, 7, True)}, {eigen_angebot.id})
         self.assertEqual({z["termin"].vorgang_id for z in daten["termine"]}, {eigen.id})
         zugeteilt = {z["vorgang"].id for g in daten["zugeteilt"]["gruppen"] for z in g["zeilen"]}
         self.assertEqual(zugeteilt, {eigen.id, eigen_angebot.id})

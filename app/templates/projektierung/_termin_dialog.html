@@ -1,0 +1,121 @@
+{# v28 (PLAN_PROJ_V6 Phase 135): EIN Termin-Dialog für alle Terminarten – Akte
+   („+ Termin“ je Gewerk, „bearbeiten“ je Termin, Aufgaben mit aktion_typ kalender),
+   Board (Drop auf „terminiert“, Karte) und Terminübersicht. Kontext `td` aus
+   routers/projektierung._termin_dialog_kontext (teams, montage_teams, sub_teams,
+   personen, monteure, subs, team_mitglieder, dauer_standard, arten).
+   Ohne `gewerk` ist das Formular „generisch“: die Seite setzt action/Sparte per JS
+   (pjTerminDialog). Verhalten (Art-Umschaltung, Besetzungs-Chips, Ende-Vorbelegung,
+   Terminvorschläge, Senden per fetch) steht in static/projektierung.js. #}
+{% macro termin_dialog(td, dialog_id, gewerk=none, termin=none, art='', zurueck='',
+                       sparte='', besetzung=[], titel='') -%}
+{%- set art = art or 'montage' -%}
+{%- set sparte = sparte or (gewerk.sparte if gewerk else '') -%}
+<dialog class="pj-dlg pj-termin-dlg" id="{{ dialog_id }}"
+        data-gewerk="{{ gewerk.id if gewerk else '' }}" data-sparte="{{ sparte }}">
+    <form method="post" class="pj-termin-form" data-pj-termin data-dauer="{{ td.dauer_standard }}"
+          data-besetzung-manuell="{{ '1' if termin else '0' }}"
+          action="{{ ('/projektierung/termin/' ~ termin.id ~ '/bearbeiten') if termin
+                     else (('/projektierung/gewerk/' ~ gewerk.id ~ '/termin') if gewerk else '') }}">
+        <h3 data-titel>{% if titel %}{{ titel }}{% elif termin %}Termin bearbeiten · {{ termin.beginn.strftime('%d.%m.%Y') if termin.beginn }}{% else %}Termin anlegen · <span data-sparte-text>{{ sparte }}</span>{% endif %}</h3>
+        {% if zurueck %}<input type="hidden" name="zurueck" value="{{ zurueck }}">{% endif %}
+        <input type="hidden" name="besetzung_gesetzt" value="1">
+        <label>Art (Pflicht)
+            <select name="art" data-art {{ 'disabled' if termin }}>
+                {% for key, name in td.arten %}
+                <option value="{{ key }}" {{ 'selected' if key == art }}>{{ name }}</option>
+                {% endfor %}
+            </select></label>
+        {% if termin %}<input type="hidden" name="art" value="{{ art }}">{% endif %}
+        <div data-feld="team">
+            <label>Team <span data-team-pflicht>(Pflicht)</span>
+                <select name="team_id" data-team>
+                    <option value="">– bitte wählen –</option>
+                    {% for te in td.montage_teams %}
+                    <option value="{{ te.id }}" data-typ="montage"
+                            data-mitglieder="{{ td.team_mitglieder.get(te.id, []) | join(',') }}"
+                            {{ 'selected' if termin and termin.team_id == te.id }}>{{ te.name }}</option>
+                    {% endfor %}
+                    {% for te in td.sub_teams %}
+                    <option value="{{ te.id }}" data-typ="sub"
+                            data-mitglieder="{{ td.team_mitglieder.get(te.id, []) | join(',') }}"
+                            {{ 'selected' if termin and termin.team_id == te.id }}>{{ te.name }} (Sub)</option>
+                    {% endfor %}
+                </select></label>
+        </div>
+        <div data-feld="sub">
+            <label>Subunternehmer (Stammdaten) – alternativ zum Subteam
+                <select name="sub_id">
+                    <option value="">– keiner –</option>
+                    {% for su in td.subs %}
+                    <option value="{{ su.id }}" {{ 'selected' if termin and termin.sub_id == su.id }}>{{ su.firma }} ({{ su.typ }})</option>
+                    {% endfor %}
+                </select></label>
+        </div>
+        <div data-feld="person">
+            <label>Person <span data-person-pflicht>(Pflicht)</span>
+                <select name="person_id">
+                    <option value="">– bitte wählen –</option>
+                    {% for b in td.personen %}
+                    <option value="{{ b.id }}" {{ 'selected' if termin and termin.person_id == b.id }}>{{ b.name }}</option>
+                    {% endfor %}
+                </select></label>
+        </div>
+        <div class="pj-termin-zeit">
+            <label>Beginn (Pflicht)
+                <input type="date" name="beginn" required data-beginn
+                       value="{{ termin.beginn.strftime('%Y-%m-%d') if termin and termin.beginn }}"></label>
+            <label>Uhrzeit <small>(leer = ganztägig)</small>
+                <input type="time" name="uhrzeit" step="900" data-leer-lassen
+                       value="{{ termin.beginn.strftime('%H:%M') if termin and termin.beginn and not termin.ganztaegig and termin.beginn.strftime('%H:%M') != '00:00' }}"></label>
+            <label>Ende <small data-ende-hinweis>(leer = Beginn + {{ td.dauer_standard - 1 }} Arbeitstage)</small>
+                <input type="date" name="ende" data-ende
+                       value="{{ termin.ende.strftime('%Y-%m-%d') if termin and termin.ende }}"></label>
+        </div>
+        <div data-feld="besetzung" class="pj-besetzung">
+            <label>Besetzung <small>Mannschaft für diesen Einsatz – das Team ist nur die Vorlage</small></label>
+            <div class="pj-chips" data-chips></div>
+            <div data-besetzung-felder>
+                {% for bid in besetzung %}<input type="hidden" name="besetzung" value="{{ bid }}">{% endfor %}
+            </div>
+            <select data-monteur-wahl title="Monteur zur Besetzung hinzufügen">
+                <option value="">+ Monteur hinzufügen</option>
+                {% for b in td.monteure %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
+            </select>
+            {% if not td.monteure %}<small class="dezent">Keine aktiven Benutzer mit Rolle Montage – Besetzung über die Benutzerverwaltung anlegen.</small>{% endif %}
+        </div>
+        <label class="kontrollfeld" style="margin-top:8px"><input type="checkbox" name="kunde_bestaetigt"
+               {{ 'checked' if termin and termin.kunde_bestaetigt }}> Kunde bestätigt</label>
+        <label>Notiz <input type="text" name="notiz" maxlength="500" value="{{ termin.notiz if termin else '' }}"></label>
+        <div data-feld="vorschlaege" class="pj-vorschlaege">
+            <button type="button" class="pj-btn" data-vorschlaege
+                    title="Stufe 1: freie Fenster je Montage-Team aus den Tool-Terminen, Fahrzeit über den Routing-Anbieter">Terminvorschläge</button>
+            <div data-vorschlaege-liste></div>
+        </div>
+        <div class="pj-note crit pj-termin-meldung" data-meldung hidden></div>
+        <div class="pj-btnrow">
+            <button class="pj-btn primary" type="submit">{{ 'Speichern' if termin else 'Anlegen' }}</button>
+            <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+        <div class="pj-note">Konflikte (Team oder Person am selben Tag woanders) werden
+            nach dem Speichern als Warnung angezeigt – kein Verbot.</div>
+    </form>
+</dialog>
+{%- endmacro %}
+
+{# Löschen mit Pflicht-Grund (Block „Termine“ der Akte) #}
+{% macro termin_loeschen_dialog(termin, dialog_id, art_name='') -%}
+<dialog class="pj-dlg" id="{{ dialog_id }}">
+    <form method="post" action="/projektierung/termin/{{ termin.id }}/loeschen" data-pj-termin>
+        <h3>Termin löschen · {{ art_name }} {{ termin.beginn.strftime('%d.%m.%Y') if termin.beginn }}</h3>
+        <label>Grund (Pflicht)
+            <input type="text" name="grund" required maxlength="300" placeholder="z. B. Kunde hat abgesagt"></label>
+        <p class="dezent" style="font-size:12px">Besetzung wird mit gelöscht, Outlook-Termin storniert (best effort).
+            War es der maßgebliche Montagetermin, steht das Gewerk wieder unter „unterminiert“.</p>
+        <div class="pj-note crit pj-termin-meldung" data-meldung hidden></div>
+        <div class="pj-btnrow">
+            <button class="pj-btn danger" type="submit">Löschen</button>
+            <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+{%- endmacro %}

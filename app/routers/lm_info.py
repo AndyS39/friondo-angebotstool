@@ -170,6 +170,8 @@ def info_board(request: Request, session: Session = Depends(get_session)):
                   sortierung=ctx["sortierung"], konfig_board=lead_info.KONFIG_BOARD,
                   spalten=lead_info.spalten_fuer(session, benutzer.id, ctx["tabelle_makro"]),
                   sammelaktionen=lead_info.sammelaktionen() if ctx["sammel"] else [],
+                  # v29 (PLAN_LEAD_V4 Phase 140): Ziele „An Handelsvertreter verschieben“
+                  hv_gruppen_wahl=lead_v2.hv_gruppen_wahl(session) if ctx["sammel"] else [],
                   tabelle_makro=ctx["tabelle_makro"], dialoge_makro=ctx["dialoge_makro"],
                   zurueck_pfad=zurueck, phasen_namen=LEAD_PHASEN_NAMEN, parameter=p,
                   wochentag_name=["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag",

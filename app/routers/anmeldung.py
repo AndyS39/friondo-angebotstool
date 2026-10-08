@@ -40,10 +40,15 @@ def startseite(session: Session, benutzer) -> str:
 
 
 def _login_kontext(session: Session) -> dict:
-    """Hinweistext unter dem Häkchen: Sitzungsdauern aus den Parametern."""
+    """Hinweistext unter dem Häkchen: Sitzungsdauern aus den Parametern.
+    v27-Nachtrag 2: mobile_rollen (auth.MOBILE_ROLLEN) – das Template markiert
+    Außendienst/Montage in der Benutzerwahl (data-mobil), damit das Häkchen
+    „angemeldet bleiben“ nur für diese Rollen eingeblendet wird; die
+    Sitzungsdauer entscheidet weiterhin auth.sitzungsdauer_s."""
     mobil = auth.sitzungsdauer_s(session, SimpleNamespace(rolle="aussendienst"), True)
     buero = auth.sitzungsdauer_s(session, SimpleNamespace(rolle="innendienst"), True)
-    return {"tage_mobil": max(1, mobil // 86400), "stunden_buero": max(1, buero // 3600)}
+    return {"tage_mobil": max(1, mobil // 86400), "stunden_buero": max(1, buero // 3600),
+            "mobile_rollen": tuple(auth.MOBILE_ROLLEN)}
 
 
 def _aktive_benutzer(session: Session) -> list[Benutzer]:

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_symbole.html" import symbol %}
-{% from "leadmanagement/_nav.html" import lm_nav, lm_umschalter %}
+{% from "leadmanagement/_nav.html" import lm_nav, lm_umschalter with context %}
 
 {% block titel %}Kanban {{ board_info.titel if board_info else '' }} – Lead-Management{% endblock %}
 

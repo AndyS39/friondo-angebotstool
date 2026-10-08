@@ -2,7 +2,7 @@
 {% from "_galerie.html" import galerie, galerie_fuss %}
 {% from "_steckbrief.html" import steckbrief %}
 {% import "_sparten.html" as sparten_ui %}
-{% from "_komponenten.html" import status_badge, statuskette, wiedervorlage_chip, leer_zustand %}
+{% from "_komponenten.html" import status_badge, statuskette, wiedervorlage_chip, leer_zustand, notizen_chat %}
 {% from "_symbole.html" import symbol %}
 
 {% block titel %}Vorgang {{ kunde.anzeige_name if kunde else vorgang.id }} – Friondo Angebotstool{% endblock %}
@@ -300,23 +300,11 @@ function pjGalTab(knopf, sparte) {
 {% endif %}
 
 <h2 id="notizen">Notizen</h2>
-<div class="notizen-chat">
-    {% for n in notizen %}
-        <div class="notiz {{ 'eigene' if n.benutzer_id == benutzer.id }}">
-            <span class="notiz-kopf"><strong>{{ n.benutzer_name }}</strong>
-                <span class="dezent">{{ n.zeit.strftime('%d.%m.%y %H:%M') }} Uhr</span>
-                {% if n.herkunft %}<span class="abzeichen" title="{{ n.herkunft }}">{{ n.herkunft | truncate(40) }}</span>{% endif %}
-            </span>
-            <div class="notiz-text">{{ n.text }}</div>
-        </div>
-    {% else %}
-        {{ leer_zustand('Noch keine Notizen – die erste Notiz startet den Verlauf.') }}
-    {% endfor %}
-</div>
-<form method="post" action="/vorgaenge/{{ vorgang.id }}/notiz" class="notiz-eingabe chat-eingabe">
-    <textarea name="text" rows="2" placeholder="Notiz schreiben … (Einträge sind unveränderlich)" required></textarea>
-    <button class="knopf" type="submit">Senden</button>
-</form>
+{# v28 (PLAN_PROJ_V6 Phase 136): gemeinsamer Notizen-Chat (Makro) – dieselbe Spur
+   wie Projektakte (Reiter Verlauf), Kundenkartei und Montage-Backend (nur lesen);
+   Kennzeichen Projektierung/Vertrieb/Lead/Montage aus der Herkunft, Senden per
+   fetch ohne Neuladen, Strg + Enter #}
+{{ notizen_chat(notizen_ctx) }}
 
 </div>
 </div>

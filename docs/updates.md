@@ -9,6 +9,19 @@ Aufgabe (`update.bat`/`rollback.bat` erkennen den Weg), nach jedem Update läuft
 der **Smoke-Test** `scripts\smoke.bat`, und `rollback.bat --nur-code` nimmt nur
 den Code zurück (Datenbank bleibt). Das vollständige Runbook mit Reihenfolge,
 Störungen und Ansprechpartnern steht in `docs/betrieb.md`.
+**v28 + v29 (08.10.2026):** ein gemeinsames Update für den v27-Nachtrag 2 (Klima-Versand,
+E-Mail-Vorlagen je Sparte, Anmeldeseite), Projektierung V6 (v28, Phasen 133–139) und
+Lead-Management V4 (v29, Phasen 140–144) – EIN Commit. `migrate.py` legt nur additive
+Spalten/Tabellen an (`termin_besetzung`, `aufgaben.entfaellt_grund`, `projekt_termine.zweck`,
+`vorgaenge.email_status*`/`mail_fehler*`, `benutzer.vorname/infotext/bild_datei`,
+`kommunikation_log.absender/versuche`) und führt die Datenmigrationen der Module aus
+(Sparten-Vorlagen, Termin-Zweck/Besetzung, Notizen-Kopie, Lead-Parameter, Lead-Mails);
+zweiter Lauf ohne Änderungen. Die Live-Excel-Dateien (`projektierung_logik_v1.xlsx` Blätter
+Aufgabenpakete/Formulare/Stücklisten/Lesehilfe, `leadmanagement_logik_v1.xlsx` Blätter
+Kaskade/Terminhinweise, `konfigurator_logik_v5.xlsx` Blatt Anhänge) und
+`anlagen/Bosch Climate 3200i.pdf` kommen mit dem Pull. Nach dem Update:
+`docs/nach-dem-update-v28.md` und `docs/nach-dem-update-v29.md`; neuer Scheduler-Lauf
+`lead-mail-abruf` (14 Läufe, `/health`).
 
 ## 1. Einmalige Einrichtung (GitHub, privates Repository)
 

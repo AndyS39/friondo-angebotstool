@@ -750,6 +750,24 @@ def _daten() -> list[str]:
                 projektierung.parameter_setzen(session, name, wert)
                 meldungen.append(f"Projektierung V5: Parameter {name} = {wert or '(leer)'}")
         session.commit()
+        # v27-Nachtrag 2 / v28 / v29: Datenmigrationen der Module – jede Funktion ist
+        # idempotent und liefert eine Liste von Meldungen (fehlt eine Funktion noch,
+        # wird sie übersprungen – Durchlauf 07./08.10.2026)
+        import importlib
+        for modulname, funktion in (("app.mail_vorlagen", "migration_sparten"),
+                                    ("app.projektierung", "migration_v28"),
+                                    ("app.notizen", "migration_v28_notizen"),
+                                    ("app.lead_v2", "migration_v29_oberflaeche"),
+                                    ("app.lead_mail", "migration_v29_mails")):
+            try:
+                modul = importlib.import_module(modulname)
+            except ImportError:
+                continue
+            lauf = getattr(modul, funktion, None)
+            if lauf is None:
+                continue
+            meldungen.extend(lauf(session) or [])
+            session.commit()
     finally:
         session.close()
     return meldungen

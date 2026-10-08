@@ -114,18 +114,25 @@ def end_satz(*texte: str) -> str:
 
 # --- Material aus Auftrag × Stückliste -----------------------------------------------
 
-def material_fuer_gewerk(session, gewerk) -> tuple[list[dict], list[str]]:
+def material_fuer_gewerk(session, gewerk, mit_uebrigen: bool = False):
     """(Materialzeilen, Positionen ohne Zuordnung) aus Auftrag × Stückliste.
     Z-Positionen (Arbeitspakete) und EP/bauseits/alternativ zählen nicht.
-    Jede Materialzeile nennt ihre Herkunftspositionen (Vorschau, POT-Text)."""
-    from app import projektierung_logik
+    Jede Materialzeile nennt ihre Herkunftspositionen (Vorschau, POT-Text).
+    v28 (PLAN_PROJ_V6 Phase 139): nur Zeilen des Standard-Lieferanten
+    (`stueckliste_standard_lieferant`, Art „bestellen“) kommen in die UGL;
+    Lager-/Leistungs-/Fremd-Zeilen liefert `mit_uebrigen=True` als dritte
+    Liste (Block „nicht bestellt“ der Vorschau). Positionen, die nur solche
+    Zeilen haben, gelten als zugeordnet (nicht „fehlend“)."""
+    from app import projektierung_logik, stuecklisten
     from app.models import Angebot
     logik = projektierung_logik.hole_logik(session)
+    standard = stuecklisten.standard_lieferant(session)
     angebot = session.get(Angebot, gewerk.angebot_id) if gewerk.angebot_id else None
     zeilen: dict[str, dict] = {}
+    uebrige: dict[str, dict] = {}
     fehlend: list[str] = []
     if angebot is None or angebot.extern:
-        return [], []
+        return ([], [], []) if mit_uebrigen else ([], [])
     for position in angebot.positionen:
         nr = (position.pos_nr or "").strip()
         if not nr or nr.upper().startswith("Z"):
@@ -137,14 +144,19 @@ def material_fuer_gewerk(session, gewerk) -> tuple[list[dict], list[str]]:
             fehlend.append(f"{nr} · {position.bezeichnung}")
             continue
         for teil in stueckliste:
+            art = stuecklisten.art_fuer_lieferant(teil.lieferant, standard)
             menge = (position.menge or 1) * teil.menge_je_einheit
-            eintrag = zeilen.setdefault(teil.lieferant_artnr, {
+            ziel = zeilen if art == "bestellen" else uebrige
+            eintrag = ziel.setdefault(teil.lieferant_artnr, {
                 "artnr": teil.lieferant_artnr, "bezeichnung": teil.bezeichnung,
-                "lieferant": teil.lieferant, "menge": 0.0,
+                "lieferant": teil.lieferant, "art": art,
+                "art_name": stuecklisten.ART_NAMEN.get(art, art), "menge": 0.0,
                 "einheit": teil.mengeneinheit or "ST", "positionen": []})
             eintrag["menge"] += menge
             if nr not in eintrag["positionen"]:
                 eintrag["positionen"].append(nr)
+    if mit_uebrigen:
+        return list(zeilen.values()), fehlend, list(uebrige.values())
     return list(zeilen.values()), fehlend
 
 

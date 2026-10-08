@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_symbole.html" import symbol %}
-{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "leadmanagement/_nav.html" import lm_nav with context %}
 {% from "_komponenten.html" import quelle_badge, kanal_badge, versuche_punkte, wiedervorlage_chip %}
 {% from "leadmanagement/hv_zuweisung.html" import hv_zuweisung %}
 
@@ -19,7 +19,7 @@
    _tabelle.html bzw. hv_zelle für Zeilen ohne Hauptboard-Treffer); die Spalte
    „Vertreter“ bleibt fest hinten, der Filter steht sticky unter der Kopfzeile. #}
 {% block inhalt %}
-{% if phase105 %}{% from "leadmanagement/_tabelle.html" import zelle, spalten_kopf %}{% endif %}
+{% if phase105 %}{% from "leadmanagement/_tabelle.html" import zelle, spalten_kopf, spalten_colgroup, breiten_gesetzt %}{% endif %}
 {% set konfig = phase105 and spalten %}
 {# Rückfall-Zellen (Zeile ohne Hauptboard-Treffer) je Spalten-Key #}
 {% macro hv_zelle(key, z, jetzt) -%}
@@ -78,11 +78,18 @@
 
 <div class="lm-filterblock" id="lm-filterblock">
 <form method="get" action="/lead-management/handelsvertreter" class="lm-schnellfilter hv-filter" id="hv-filter">
-    <a class="f {{ 'aktiv' if not filter_werte.offen }}" href="/lead-management/handelsvertreter{{ '?vertreter=' ~ filter_werte.vertreter if filter_werte.vertreter }}">Alle <b>{{ anzahl_gesamt }}</b></a>
-    <a class="f {{ 'aktiv' if filter_werte.offen }}" href="/lead-management/handelsvertreter?offen=1{{ '&vertreter=' ~ filter_werte.vertreter if filter_werte.vertreter }}">Nur offene</a>
+    <a class="f {{ 'aktiv' if not filter_werte.offen }}" href="/lead-management/handelsvertreter{{ '?vertreter=' ~ filter_werte.vertreter if filter_werte.vertreter }}{{ ('&' if filter_werte.vertreter else '?') ~ 'gruppe=' ~ filter_werte.gruppe if filter_werte.gruppe }}">Alle <b>{{ anzahl_gesamt }}</b></a>
+    <a class="f {{ 'aktiv' if filter_werte.offen }}" href="/lead-management/handelsvertreter?offen=1{{ '&vertreter=' ~ filter_werte.vertreter if filter_werte.vertreter }}{{ '&gruppe=' ~ filter_werte.gruppe if filter_werte.gruppe }}">Nur offene</a>
     {% if filter_werte.offen %}<input type="hidden" name="offen" value="1">{% endif %}
     <span class="trenner"></span>
     {% if gesamt %}
+    {#- v29 (PLAN_LEAD_V4 Phase 140): Filter „Gruppe“ – René | Simon-Team | alle (Parameter hv_gruppe_rene/_simon) #}
+    <select name="gruppe" onchange="this.form.submit()" title="Gruppe (HV-Gruppen aus den Lead-Einstellungen)">
+        <option value="">Gruppe: alle</option>
+        {% for g in gruppen_wahl %}
+            <option value="{{ g.key }}" {{ 'selected' if filter_werte.gruppe == g.key }}>{{ g.name }}{{ ' + Team' if g.key == 'simon' and (hv_gruppen.simon | length) > 1 }}</option>
+        {% endfor %}
+    </select>
     <select name="vertreter" onchange="this.form.submit()" title="Vertreter">
         <option value="">Vertreter: alle</option>
         {% for hv_id, paar in kreis.items() %}
@@ -133,7 +140,8 @@
         <span class="erkl">{{ g.offen }} offen{% if not g.gekennzeichnet and not ist_hv %} · ohne Kennzeichen am AD-Profil{% endif %}{% if g.erkl %} · {{ g.erkl }}{% endif %}</span>
     </summary>
     <div class="hv-tabelle-wrap">
-    <table class="hv-tabelle{{ ' lm-tabelle' if konfig }}">
+    <table class="hv-tabelle{{ ' lm-tabelle' if konfig }}"{% if konfig %} data-lm-breiten="{{ breiten_gesetzt(spalten) }}"{% endif %}>
+        {% if konfig %}{{ spalten_colgroup(spalten, ctx, hinten=1) }}{% endif %}
         <thead><tr>
             {% if konfig %}
             {{ spalten_kopf(spalten, ctx) }}<th class="sp-hv">Vertreter</th>

@@ -1,6 +1,8 @@
 # Lead-Steuerdatei (v12, Phase 74): liest leadmanagement_logik_v1.xlsx
 # (Blätter Qualifizierung, Scoring, Klassen, Kaskade, Gruende, Wunschzeiten;
-# v23 zusätzlich Objektarten und Status – beide optional, fehlen = Warnung).
+# v23 zusätzlich Objektarten und Status – beide optional, fehlen = Warnung;
+# v29 (PLAN_LEAD_V4 Phase 142): Blatt Terminhinweise (optional) und Spalte
+# nach_letztem im Blatt Kaskade).
 # Muster wie app/projektierung_logik.py: Datei-basiert, mtime-Cache,
 # Fehler/Warnungen statt Abbruch. Änderungen wirken auf NEUE Qualifizierungen.
 
@@ -45,6 +47,20 @@ class KaskadenStufe:
     wiedervorlage_nach: str       # +2h, +1d 18:00, +3d, +7d
     aktion: str                   # keine | mail_nicht_erreicht
     letzter: bool
+    # v29 (PLAN_LEAD_V4 Phase 142): Spalte E `nach_letztem` – Aktion nach dem
+    # letzten Versuch (ersetzt die frühere feste Nurture-Mail +30 Tage);
+    # Standard mail_disqualifiziert, nur in der Zeile letzter = J gepflegt
+    nach_letztem: str = ""
+
+
+@dataclass
+class Terminhinweis:
+    """v29 (PLAN_LEAD_V4 Phase 142): Blatt „Terminhinweise“ – ein Punkt der
+    Liste „bitte bereithalten“ je Sparte für den Baustein {sparten_hinweise}
+    der Terminbestätigung; „(Punkte folgen)“ ist der Platzhalter [OFFEN 1]."""
+    sparte: str
+    reihenfolge: int
+    punkt: str
 
 
 @dataclass
@@ -96,6 +112,7 @@ class LeadLogik:
     wunschzeiten: list[Wunschzeit] = field(default_factory=list)
     objektarten: list[Objektart] = field(default_factory=list)     # v23
     status_zeilen: list[StatusZeile] = field(default_factory=list)  # v23
+    terminhinweise: list[Terminhinweis] = field(default_factory=list)   # v29
     fehler: list[str] = field(default_factory=list)
     warnungen: list[str] = field(default_factory=list)
     stand: str = ""
@@ -124,6 +141,38 @@ class LeadLogik:
 
     def letzte_stufe(self) -> int:
         return max((s.versuch_nr for s in self.kaskade), default=0)
+
+    NACH_LETZTEM_STANDARD = "mail_disqualifiziert"
+
+    def nach_letztem(self) -> str:
+        """v29 (Phase 142): Aktion nach dem letzten Versuch aus Spalte
+        `nach_letztem` (Zeile letzter = J, sonst die erste gepflegte Zeile);
+        ohne Eintrag mail_disqualifiziert. `mail_nurture` wird nicht mehr
+        ausgeführt (Nurture entfällt) und auf den Standard abgebildet."""
+        wert = ""
+        for s in self.kaskade:
+            if s.letzter and s.nach_letztem:
+                wert = s.nach_letztem
+                break
+        if not wert:
+            wert = next((s.nach_letztem for s in self.kaskade if s.nach_letztem), "")
+        wert = (wert or "").strip()
+        if not wert or wert == "mail_nurture":
+            return self.NACH_LETZTEM_STANDARD
+        return wert
+
+    # --- v29 (Phase 142): Sparten-Baustein ---
+    def hinweise_der_sparte(self, sparte: str) -> list[str]:
+        """Punkte der Sparte in Reihenfolge, Dubletten entfernt."""
+        gesehen: set[str] = set()
+        punkte = []
+        for h in sorted((h for h in self.terminhinweise if h.sparte == (sparte or "").upper()),
+                        key=lambda h: h.reihenfolge):
+            schluessel = h.punkt.strip().lower()
+            if schluessel and schluessel not in gesehen:
+                gesehen.add(schluessel)
+                punkte.append(h.punkt.strip())
+        return punkte
 
     def gruende_der_phase(self, phase: str) -> list[Grund]:
         return [g for g in self.gruende if g.phase == phase]
@@ -266,8 +315,14 @@ def einlesen(pfad: Path | None = None) -> LeadLogik:
             continue
         logik.kaskade.append(KaskadenStufe(
             versuch_nr=nr, wiedervorlage_nach=str(z[1] or "").strip(),
-            aktion=str(z[2] or "keine").strip(), letzter=_ja(z[3])))
+            aktion=str(z[2] or "keine").strip(), letzter=_ja(z[3]),
+            # v29: Spalte E nach_letztem (optional – ältere Dateien ohne Spalte)
+            nach_letztem=str(z[4] or "").strip() if len(z) > 4 else ""))
     logik.kaskade.sort(key=lambda s: s.versuch_nr)
+    if any(s.aktion == "mail_nurture" or s.nach_letztem == "mail_nurture"
+           for s in logik.kaskade):
+        logik.warnungen.append("Kaskade: Aktion mail_nurture ist seit v29 ohne Wirkung "
+                               "(Nurture entfällt) – bitte mail_disqualifiziert eintragen")
 
     for z in zeilen("Gruende"):
         logik.gruende.append(Grund(
@@ -301,6 +356,30 @@ def einlesen(pfad: Path | None = None) -> LeadLogik:
                 board_label=str(z[6] or "").strip() if len(z) > 6 else ""))
     else:
         logik.warnungen.append("Blatt „Status“ fehlt – Boards nutzen Standardzuordnung")
+
+    # v29 (PLAN_LEAD_V4 Phase 142): optionales Blatt Terminhinweise (sparte,
+    # reihenfolge, punkt) für den Baustein {sparten_hinweise}
+    if "Terminhinweise" in wb.sheetnames:
+        for z in zeilen("Terminhinweise"):
+            sparte = str(z[0] or "").strip().upper()
+            punkt = str(z[2] or "").strip() if len(z) > 2 else ""
+            if not sparte or not punkt:
+                continue
+            if sparte not in SPARTEN:
+                logik.warnungen.append(f"Terminhinweise: unbekannte Sparte „{sparte}“ – Zeile übersprungen")
+                continue
+            try:
+                reihe = int(z[1] or 0)
+            except (TypeError, ValueError):
+                reihe = 0
+            logik.terminhinweise.append(Terminhinweis(sparte=sparte, reihenfolge=reihe, punkt=punkt))
+        fehlend = [s for s in SPARTEN if not any(h.sparte == s for h in logik.terminhinweise)]
+        if fehlend:
+            logik.warnungen.append("Terminhinweise: keine Punkte für " + ", ".join(fehlend)
+                                   + " – Sparten-Baustein bleibt dort leer")
+    else:
+        logik.warnungen.append("Blatt „Terminhinweise“ fehlt – Sparten-Baustein der "
+                               "Terminbestätigung ohne Punkte")
 
     for z in zeilen("Wunschzeiten"):
         logik.wunschzeiten.append(Wunschzeit(
@@ -346,6 +425,36 @@ def bedingung_trifft(bedingung: str, wert) -> bool:
         return {"<": zahl < grenze, "<=": zahl <= grenze,
                 ">": zahl > grenze, ">=": zahl >= grenze}[treffer.group(1)]
     return False
+
+
+def terminhinweise_blatt_anlegen(pfad: Path | None = None) -> bool:
+    """v29 (PLAN_LEAD_V4 Phase 142, Arbeitsanweisung Live-Excel): Blatt
+    „Terminhinweise“ (sparte, reihenfolge, punkt) mit der Platzhalterzeile
+    „(Punkte folgen)“ je Sparte anlegen, falls es fehlt [OFFEN 1]. Sicherheits-
+    netz für migrate.py – im Projektordner liegt das Blatt bereits (Sicherung
+    diagnose/leadmanagement_logik_v1.vor_v29.xlsx). True = angelegt."""
+    pfad = Path(pfad or LOGIK_PFAD)
+    if not pfad.exists():
+        return False
+    try:
+        from openpyxl import load_workbook
+        from openpyxl.styles import Font
+        wb = load_workbook(pfad)
+        if "Terminhinweise" in wb.sheetnames:
+            wb.close()
+            return False
+        ws = wb.create_sheet("Terminhinweise")
+        ws.append(["sparte", "reihenfolge", "punkt"])
+        for zelle in ws[1]:
+            zelle.font = Font(bold=True)
+        for sparte in SPARTEN:
+            ws.append([sparte, 1, "(Punkte folgen)"])
+        wb.save(pfad)
+        wb.close()
+    except Exception:
+        return False
+    _cache.update(logik=None, mtime=None)
+    return True
 
 
 _cache: dict = {"logik": None, "mtime": None}

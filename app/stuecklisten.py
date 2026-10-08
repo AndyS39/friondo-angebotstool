@@ -20,12 +20,43 @@ KOPF = ["position", "lieferant_artnr", "menge_je_einheit", "bezeichnung",
         "lieferant", "mengeneinheit"]
 GO_LIVE_QUOTE = 0.9
 
+# v28 (PLAN_PROJ_V6 Phase 139): Konvention Spalte „lieferant“ – Standard-
+# Lieferant (Parameter stueckliste_standard_lieferant, „Collin“) = bestellen ·
+# Lager/LAGER = Lagerware · „–“/„-“/KEIN-MATERIAL = Leistung ohne Material ·
+# anderer Name = Fremdlieferant. Nur „bestellen“ landet in der UGL.
+ART_NAMEN = {"bestellen": "bestellen", "lager": "Lager", "leistung": "Leistung",
+             "fremd": "Fremd"}
+LAGER_WERTE = ("lager",)
+LEISTUNG_WERTE = ("–", "-", "—", "kein-material", "kein material", "keinmaterial")
+
+
+def standard_lieferant(session) -> str:
+    from app import projektierung
+    return (projektierung.parameter_holen(session, "stueckliste_standard_lieferant",
+                                          "Collin") or "Collin").strip()
+
+
+def art_fuer_lieferant(lieferant: str, standard: str = "Collin") -> str:
+    """bestellen | lager | leistung | fremd nach der Konvention (Groß/Klein egal)."""
+    wert = (lieferant or "").strip()
+    klein = wert.lower()
+    if not wert or klein == (standard or "Collin").strip().lower():
+        return "bestellen"
+    if klein in LAGER_WERTE:
+        return "lager"
+    if klein in LEISTUNG_WERTE:
+        return "leistung"
+    return "fremd"
+
 
 def positionen(session, nur_ohne: bool = False, suche: str = "") -> list[dict]:
     """Angebotspositionen aus dem Artikelstamm (aktiv, mit Positionsnummer,
-    ohne Z-Arbeitspakete) samt Stücklisten-Zeilen."""
+    ohne Z-Arbeitspakete) samt Stücklisten-Zeilen. v28: je Position
+    `arten` = [(zeile, art)] nach der Lieferanten-Konvention; „ohne Zuordnung“
+    = keine Zeile (auch Lager/Leistung zählen als zugeordnet)."""
     from app.models import Artikel
     logik = projektierung_logik.hole_logik(session)
+    standard = standard_lieferant(session)
     ergebnis: dict[str, dict] = {}
     for artikel in (session.query(Artikel)
                     .filter(Artikel.aktiv.is_(True), Artikel.pos_nr != "")
@@ -40,6 +71,9 @@ def positionen(session, nur_ohne: bool = False, suche: str = "") -> list[dict]:
     for nr, zeilen in logik.stuecklisten.items():
         ergebnis.setdefault(nr, {"pos_nr": nr, "titel": "(nicht im Artikelstamm)",
                                  "kategorie": "", "einheit": "", "zeilen": zeilen})
+    for p in ergebnis.values():
+        p["arten"] = [(z, art_fuer_lieferant(z.lieferant, standard)) for z in p["zeilen"]]
+        p["bestellbar"] = any(a == "bestellen" for _, a in p["arten"])
     liste = sorted(ergebnis.values(), key=lambda p: p["pos_nr"])
     if nur_ohne:
         liste = [p for p in liste if not p["zeilen"]]
@@ -52,9 +86,23 @@ def positionen(session, nur_ohne: bool = False, suche: str = "") -> list[dict]:
     return liste
 
 
+def _zaehlt_fuer_quote(p: dict) -> bool:
+    """v28 (Phase 139) [ANNAHME]: Go-live-Quote nur über WP-Positionen und
+    spartenübergreifende – PV…/KL…-Positionen bleiben außen vor, solange sie
+    keine Stücklisten-Zeile (Lieferant) haben."""
+    if p["titel"] == "(nicht im Artikelstamm)":
+        return False
+    nr = (p["pos_nr"] or "").upper()
+    if nr.startswith(("PV", "KL")) and not p["zeilen"]:
+        return False
+    return True
+
+
 def fortschritt(session) -> tuple[int, int]:
-    """(zugeordnet, gesamt) über die Positionen des Artikelstamms."""
-    alle = [p for p in positionen(session) if p["titel"] != "(nicht im Artikelstamm)"]
+    """(zugeordnet, gesamt) – eine Position zählt als zugeordnet, sobald sie
+    mindestens eine Zeile hat (auch Lager/Leistung); Nenner laut
+    _zaehlt_fuer_quote (v28)."""
+    alle = [p for p in positionen(session) if _zaehlt_fuer_quote(p)]
     return sum(1 for p in alle if p["zeilen"]), len(alle)
 
 

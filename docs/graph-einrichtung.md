@@ -131,8 +131,9 @@ rausgehen:
 Aufgaben für den M365-Admin (Terminassistent, Mail-Parser, Kundenmails):
 
 1. **Postfach `leads@friondo.de`** anlegen (Shared-Postfach) – Eingang der
-   Formular-Mails (Parser) und Absender der Kundenmails; „Senden als" für
-   die Tool-Konten wie bei angebot@/projektierung@.
+   Formular-Mails (Parser). *Seit v29 (Lead-Management V4) wird leads@ nur
+   noch gelesen – Absender aller Kundenmails ist termin@friondo.de, siehe
+   den Abschnitt „Lead-Management V4 (v29)“ unten.*
 2. **Testpostfach** (z. B. `lead-test@friondo.de`) anlegen: Im Demo-Modus
    schreibt der Terminassistent Kalender-Ereignisse AUSSCHLIESSLICH in
    dieses Postfach (Parametrierung → Lead-Einstellungen →
@@ -147,6 +148,66 @@ Aufgaben für den M365-Admin (Terminassistent, Mail-Parser, Kundenmails):
 4. Ohne Kalender-Recht arbeitet der Assistent nur mit Tool-Terminen
    (Frei/Belegt aus Outlook entfällt) – das Tool blockiert nie; ein Hinweis
    erscheint in der Parametrierung.
+
+## Lead-Management V4 (v29): Postfach termin@friondo.de – Absender aller Lead-Mails
+
+Entscheidung 07.10.2026 (Claudia Castro): **Alle automatisierten Kundenmails des
+Lead-Moduls** (Eingangsbestätigung, Nicht erreicht, Disqualifiziert,
+Terminbestätigung – auch „erneut senden“ –, Terminerinnerung, Terminänderung,
+Terminabsage, Online-Termin-Einladung und alle künftigen Vorlagen) gehen mit dem
+Absender **termin@friondo.de** raus (Parameter `absender_lead_mails`,
+Parametrierung → Lead-Einstellungen → „Lead-Management V4“). **Es gibt bewusst
+keinen Fallback** auf ein anderes Postfach: fehlt das Senderecht oder schlägt
+der Versand fehl, bleibt die Mail nach drei Versuchen mit Status `fehler` in
+der Warteschlange, der Lead steht oben im Hauptboard mit dem roten Vermerk
+„Mail nicht gesendet“ und die Kundenkartei zeigt „Erneut senden“.
+**leads@friondo.de bleibt ausschließlich Eingangspostfach** (Parser, Formulare,
+Portale, Lead-Partner) und wird nicht mehr als Absender genutzt.
+
+Aufgaben für den M365-Admin (vor der Freischaltung `lead_freigabe_modus = alle`;
+im Demo-Modus betrifft das nur das Testpostfach):
+
+1. **Shared-Postfach `termin@friondo.de`** anlegen (Exchange Admin Center →
+   Empfänger → Postfächer → Freigegebenes Postfach hinzufügen; keine Lizenz
+   nötig).
+2. **„Senden als“** für die Konten vergeben, unter deren Graph-Anmeldung das
+   Tool läuft (dieselben Konten wie beim Angebotsversand): Shared-Postfach →
+   Delegierung → „Senden als“ → Benutzer hinzufügen. Das Tool sendet über
+   `/me/sendMail` mit `from = termin@friondo.de` (Berechtigung
+   `Mail.Send.Shared`, bereits in der App-Registrierung).
+3. **Lesezugriff („Lesen und Verwalten / Vollzugriff“)** für dieselben Konten:
+   Der Lauf `lead-mail-abruf` (alle 2 Minuten, Betriebs-Seite/`/health`) liest
+   ungelesene Nachrichten im Posteingang von termin@ (Graph
+   `/users/termin@friondo.de/mailFolders/inbox/messages`, Berechtigung
+   `Mail.ReadWrite.Shared`), ordnet **Kundenantworten** dem Vorgang zu (Timeline
+   „Antwort von …“, Wiedervorlage „jetzt“) und erkennt
+   **Unzustellbarkeitsberichte** (Absender postmaster/MAILER-DAEMON, Betreff
+   „Unzustellbar“/„Undeliverable“/„Delivery Status Notification“): der Lead
+   erhält `email_status = ungueltig` („E-Mail falsch“, oben im Hauptboard),
+   weitere Mails an die Adresse warten bis zur Adressänderung. Verarbeitete
+   Nachrichten werden als gelesen markiert; nicht zuordenbare landen in
+   „Posteingang unklar“. Die Rechte greifen nach bis zu 60 Minuten; danach im
+   Tool einmal Versand → Abmelden → Mit Microsoft anmelden.
+4. **Prüfpunkt im Tool:** Parametrierung → Lead-Einstellungen → „Prüfpunkte V4“
+   → „Testmail aus dem Lead-Absender senden“ (Admin). Die Testmail geht als
+   termin@ an die Testadresse (`mail_testadresse`; im Demo-Modus ausschließlich
+   dorthin); Ergebnis steht in der Meldung und im Einstellungs-Protokoll
+   („fehlgeschlagen … (kein Fallback)“ = Senderecht fehlt). Ohne eingerichtetes
+   Graph (`GRAPH_CLIENT_ID`) melden Testmail und Lauf „Graph nicht eingerichtet“.
+5. **Handelsvertreter** (ohne Friondo-Postfach) sind von termin@ nicht
+   betroffen: für ihre Leads sendet das Tool bis zur Entscheidung
+   [OFFEN 2] keine Terminbestätigung (`hv_versandweg = offen`), sondern legt
+   dem HV ein To-Do mit Vorschau (Text + ICS) an.
+
+Übersicht der Postfächer nach v29:
+
+| Postfach | Zweck | Graph-Zugriff des Tools |
+|---|---|---|
+| angebot@friondo.de | Angebots-Mails (Entwurf in Outlook, Abgleich) | Senden als + Vollzugriff (Phase 31) |
+| projektierung@friondo.de | Benachrichtigungen der Projektierung | Senden als (v11) |
+| leads@friondo.de | **nur Eingang**: Lead-Parser (Lauf `lead-parser`) | Lesen und Verwalten (nur lesen + `isRead`) |
+| termin@friondo.de | **Absender aller Lead-Mails**, Antworten + Bounces (Lauf `lead-mail-abruf`) | Senden als + Lesen und Verwalten |
+| lead-test@ (Testpostfach) | Demo-Modus: Kalender-Ereignisse, Testmails | wie bisher |
 
 
 ## Outlook-Kalender-Sync der Montageteams (v15, Phase 81)

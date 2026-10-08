@@ -13,7 +13,13 @@
    Drop (draggable) – Verhalten in lm_boards.js; Phasen-Labels kommen als
    z.status_label / ctx.status_wahl aus dem Blatt Status (beide Kontakt-Phasen
    „Kontaktiert“, Einträge mit doppelt=True erscheinen nur als aktueller
-   Wert); Zelle score nur, wenn die Spalte im Katalog ist (score_aktiv). #}
+   Wert); Zelle score nur, wenn die Spalte im Katalog ist (score_aktiv).
+   v29 (PLAN_LEAD_V4 Phasen 141/142): Spaltenbreite je Nutzer – Makro
+   spalten_colgroup (<colgroup> mit gespeicherten Breiten, sp.breite), Ziehgriff
+   .lm-th-griff im Spaltenkopf (lm_boards.js: Ziehen = Breite live, Loslassen =
+   speichern, Doppelklick = Standard); Zeilen mit z.rang0 (Mail nicht gesendet /
+   E-Mail falsch, Vertrag L2) tragen tr.lm-rang0, die Notiz-Zelle vorn die roten
+   Labels aus z.mail_labels. #}
 {% from "_symbole.html" import symbol %}
 {% from "_sparten.html" import chip %}
 {% from "_komponenten.html" import wiedervorlage_chip, status_badge %}
@@ -94,7 +100,8 @@
 {%- elif key == 'eingang' -%}
 <td class="sp-eingang" data-wert="{{ z.eingang.strftime('%Y-%m-%d %H:%M') if z.eingang else '' }}">{% if z.eingang %}<span title="{{ z.eingang.strftime('%d.%m.%Y %H:%M') }}{{ ' · ' ~ z.quelle.name if z.quelle }}">{{ z.eingang | de_datum('%d.%m.%Y') }}</span>{% else %}–{% endif %}</td>
 {%- elif key == 'notiz' -%}
-<td class="sp-notiz">{% if ctx.nur_lesen %}{{ k.notizen or '' }}{% else %}<input type="text" class="lm-inline lm-notiz" data-feld="notiz" data-vorgang="{{ v.id }}"
+<td class="sp-notiz">{%- if z.mail_labels %}<span class="lm-mail-labels">{% for l in z.mail_labels %}<span class="lm-mail-label" title="{{ z.email_status_grund if l == 'E-Mail falsch' else z.mail_fehler_text }}">{{ l }}</span>{% endfor %}</span>{% endif -%}
+    {% if ctx.nur_lesen %}{{ k.notizen or '' }}{% else %}<input type="text" class="lm-inline lm-notiz" data-feld="notiz" data-vorgang="{{ v.id }}"
        value="{{ k.notizen or '' }}" placeholder="Notiz …" title="{{ k.notizen or 'Notiz (speichert beim Verlassen des Feldes)' }}" aria-label="Notiz">{% endif %}</td>
 {%- elif key == 'ad' -%}
 <td class="sp-ad"><span class="lm-person">{{ avatar(z.ad, 'Außendienst') }}
@@ -147,7 +154,7 @@
 
 {% macro lead_zeile(z, spalten, ctx) -%}
 {%- set k = z.kunde -%}
-<tr data-vorgang="{{ z.vorgang.id }}" data-gruppe="{{ z.gruppe }}" data-phase="{{ z.vorgang.lead_phase }}"
+<tr data-vorgang="{{ z.vorgang.id }}" data-gruppe="{{ z.gruppe }}" data-phase="{{ z.vorgang.lead_phase }}"{% if z.rang0 %} class="lm-rang0" title="{{ z.mail_labels | join(' · ') }}"{% endif %}
     data-suche="{{ ((k.vorname or '') ~ ' ' ~ (k.nachname or '') ~ ' ' ~ (k.firma or '') ~ ' ' ~ (k.ort or '') ~ ' ' ~ (k.plz or '') ~ ' ' ~ (k.telefon or '') ~ ' ' ~ (k.email or '')) | lower }}">
     {%- if ctx.sammel %}<td class="sp-wahl"><input type="checkbox" class="lm-wahl" name="ids" value="{{ z.vorgang.id }}" form="lm-sammelform" aria-label="Lead markieren"></td>{% endif %}
     {%- for sp in spalten if sp.sichtbar %}{{ zelle(sp.key, z, ctx) }}{% endfor %}
@@ -168,12 +175,27 @@
     draggable="{{ 'false' if sp.key in fest else 'true' }}"
     title="{{ sp.titel }} – Klick sortiert (auf/ab, wird gemerkt){{ '' if sp.key in fest else ' · Ziehen verschiebt die Spalte' }}"><span class="lm-th-text">{{ sp.titel }}</span>
     <button type="button" class="lm-th-stift" data-key="{{ sp.key }}" title="Spalte umbenennen (leer = Standard „{{ sp.standard or sp.titel }}“)" aria-label="Spalte {{ sp.titel }} umbenennen">{{ symbol('stift') }}</button>
+    <button type="button" class="lm-th-griff" data-key="{{ sp.key }}" draggable="false" title="Spaltenbreite ziehen (wird gemerkt) · Doppelklick = Standardbreite" aria-label="Breite der Spalte {{ sp.titel }} ändern"></button>
 </th>
 {%- endfor -%}
 {%- endmacro %}
 
+{# v29 (Phase 141): <colgroup> mit den gespeicherten Breiten je Nutzer – Spalten
+   ohne Breite bleiben automatisch; vorn/hinten = zusätzliche feste Spalten der
+   aufrufenden Tabelle (Markier-Kästchen, Vertreter, Ergebnis …). Die Tabelle
+   trägt data-lm-breiten="1", sobald eine Breite gesetzt ist (lm_boards.js
+   fixiert dann das Layout). #}
+{% macro spalten_colgroup(spalten, ctx, vorn=0, hinten=0) -%}
+<colgroup>{% for _ in range(vorn) %}<col class="lm-col-fest">{% endfor %}
+{%- for sp in spalten if sp.sichtbar %}<col data-key="{{ sp.key }}"{% if sp.breite %} style="width:{{ sp.breite }}px" class="lm-col-breite"{% endif %}>{% endfor %}
+{%- for _ in range(hinten) %}<col class="lm-col-fest">{% endfor %}</colgroup>
+{%- endmacro %}
+
+{% macro breiten_gesetzt(spalten) -%}{{ '1' if (spalten | selectattr('sichtbar') | selectattr('breite') | list) else '' }}{%- endmacro %}
+
 {% macro lead_tabelle(zeilen, spalten, ctx, gruppe='') -%}
-<table class="tabelle lm-tabelle" data-gruppe="{{ gruppe }}">
+<table class="tabelle lm-tabelle" data-gruppe="{{ gruppe }}" data-lm-breiten="{{ breiten_gesetzt(spalten) }}">
+    {{ spalten_colgroup(spalten, ctx, vorn=(1 if ctx.sammel else 0)) }}
     <thead>
         <tr>
             {%- if ctx.sammel %}<th class="sp-wahl"><input type="checkbox" class="lm-wahl-alle" title="alle sichtbaren markieren" aria-label="alle sichtbaren markieren"></th>{% endif %}

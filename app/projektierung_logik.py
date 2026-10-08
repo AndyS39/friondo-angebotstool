@@ -129,26 +129,112 @@ class StuecklistenZeile:
     mengeneinheit: str = "ST"       # V4 (Phase 93.2): Spalte F, UGL-Einheit
 
 
+# v28 (PLAN_PROJ_V6 Phase 138): Typ `wiederhol` (JSON-Liste, Oberfläche mit
+# „+ weitere <Einzelfeld>“), Optionsformen `gross` (text → Textarea 6 Zeilen) und
+# `pflicht_wenn:<feld>≠<wert>` / `pflicht_wenn:<feld>=<wert>` (text/zahl/auswahl/
+# ja_nein/datum). „Logik prüfen“ meldet unbekannte Typen und Optionsformen als
+# Fehler (Datei wird beim Upload abgelehnt).
 FORMULAR_FELD_TYPEN = ("text", "zahl", "ja_nein", "auswahl", "foto",
-                       "unterschrift", "datum")
+                       "unterschrift", "datum", "wiederhol")
 FORMULAR_NAMEN = {"montagebericht": "Montagebericht",
                   "inbetriebnahme": "Inbetriebnahmeprotokoll",
                   "abnahme": "Abnahmeprotokoll"}
+# Optionsformen je Typ: welche Schlüsselwörter in der Spalte `optionen` erlaubt sind
+FORMULAR_OPTION_GROSS = "gross"
+FORMULAR_OPTION_PFLICHT_WENN = "pflicht_wenn:"
+FORMULAR_PFLICHT_WENN_TYPEN = ("text", "zahl", "auswahl", "ja_nein", "datum")
+
+
+def _ist_optionsform(teil: str) -> bool:
+    t = (teil or "").strip().lower()
+    return t == FORMULAR_OPTION_GROSS or t.startswith(FORMULAR_OPTION_PFLICHT_WENN)
+
+
+def pflicht_wenn_parsen(text: str) -> tuple[str, str, str] | None:
+    """„pflicht_wenn:ib_f11≠Ja“ → ("ib_f11", "≠", "Ja"); auch „!=“ und „=“.
+    None, wenn der Text keine gültige Bedingung ist."""
+    t = (text or "").strip()
+    if not t.lower().startswith(FORMULAR_OPTION_PFLICHT_WENN):
+        return None
+    rest = t[len(FORMULAR_OPTION_PFLICHT_WENN):].strip()
+    for zeichen, op in (("≠", "≠"), ("!=", "≠"), ("<>", "≠"), ("=", "=")):
+        if zeichen in rest:
+            feld, _, wert = rest.partition(zeichen)
+            feld, wert = feld.strip(), wert.strip()
+            if feld:
+                return feld, op, wert
+            return None
+    return None
 
 
 @dataclass
 class FormularFeld:
-    """v15 (Phase 82): Zeile des Blatts "Formulare" (Montage-Backend)."""
+    """v15 (Phase 82): Zeile des Blatts "Formulare" (Montage-Backend).
+    v28: `optionen` trägt je nach Typ die Auswahlliste (auswahl), den
+    Galerie-Zielordner (foto), die Bezeichnung des Einzelfelds (wiederhol) oder
+    Optionsformen (`gross`, `pflicht_wenn:…`), die `optionen_liste()` ausfiltert."""
     formular: str
     seite: str
     feld_key: str
     bezeichnung: str
     typ: str
     pflicht: bool
-    optionen: str      # auswahl: |-Liste · foto: Galerie-Zielordner
+    optionen: str      # auswahl: |-Liste · foto: Galerie-Zielordner · wiederhol: Einzelfeld
+
+    def _teile(self) -> list[str]:
+        return [o.strip() for o in (self.optionen or "").split("|") if o.strip()]
 
     def optionen_liste(self) -> list[str]:
-        return [o.strip() for o in (self.optionen or "").split("|") if o.strip()]
+        """Auswahlwerte ohne Optionsformen (gross, pflicht_wenn:…)."""
+        if self.typ in ("foto", "wiederhol"):
+            return self._teile()
+        return [o for o in self._teile() if not _ist_optionsform(o)]
+
+    @property
+    def gross(self) -> bool:
+        """Option `gross` (text): Textarea mit 6 Zeilen statt Eingabezeile."""
+        return self.typ == "text" and any(
+            o.lower() == FORMULAR_OPTION_GROSS for o in self._teile())
+
+    @property
+    def pflicht_wenn(self) -> tuple[str, str, str] | None:
+        """(feld, "≠"|"=", wert) aus `pflicht_wenn:<feld>≠<wert>`, sonst None."""
+        if self.typ in ("foto", "wiederhol", "unterschrift"):
+            return None
+        for o in self._teile():
+            bedingung = pflicht_wenn_parsen(o)
+            if bedingung is not None:
+                return bedingung
+        return None
+
+    def pflicht_wenn_text(self, felder_namen: dict | None = None) -> str:
+        """Lesbare Bedingung für Hinweise: „Pflicht, wenn <Feld> ≠ Ja“."""
+        bedingung = self.pflicht_wenn
+        if bedingung is None:
+            return ""
+        feld, op, wert = bedingung
+        name = (felder_namen or {}).get(feld, feld)
+        return f"Pflicht, wenn {name} {op} {wert or '(leer)'}"
+
+    @property
+    def einzelfeld(self) -> str:
+        """wiederhol: Bezeichnung des Einzelfelds (Spalte optionen), z. B. „Seriennummer“."""
+        return (self.optionen or "").strip() or "Eintrag"
+
+    def pflicht_erfuellt(self, antworten: dict) -> bool:
+        """Ist das Feld in diesem Antwortstand Pflicht? (Spalte pflicht ODER die
+        Bedingung pflicht_wenn trifft zu – bei leerem Bezugsfeld zählt „≠“ als
+        erfüllt, damit niemand die Pflicht durch Nichtbeantworten umgeht.)"""
+        if self.pflicht:
+            return True
+        bedingung = self.pflicht_wenn
+        if bedingung is None:
+            return False
+        feld, op, wert = bedingung
+        ist = str(antworten.get(feld) or "").strip()
+        if op == "=":
+            return ist.lower() == (wert or "").lower()
+        return ist.lower() != (wert or "").lower()
 
 
 @dataclass
@@ -240,6 +326,75 @@ def _text(wert) -> str:
     return str(wert).strip() if wert is not None else ""
 
 
+SICHTBAR_WENN_FORMEN = ("sparte:WP|PV|KL|WB", "steckbrief:<feld>=<wert>",
+                        "foerderung:ja|nein", "<paket_key>.<nr>=<wert>")
+
+
+def sichtbar_wenn_pruefen(bedingung: str) -> str:
+    """v28 (PLAN_PROJ_V6 Phase 133), Blatt Aufgabenpakete Spalte sichtbar_wenn:
+    leer = Problemtext „“ (ok). Bekannte Formen: sparte:A|B, steckbrief:
+    <feld>=<wert>, foerderung:ja|nein, <paket>.<nr>=<wert>. Unbekannte Formen
+    liefern einen Hinweistext (der Schritt bleibt dann immer sichtbar)."""
+    import re
+    b = (bedingung or "").strip()
+    if not b:
+        return ""
+    klein = b.lower()
+    if klein.startswith("sparte:"):
+        werte = {s.strip().upper() for s in b[7:].split("|") if s.strip()}
+        if werte and werte <= set(SPARTEN):
+            return ""
+        return "unbekannte Sparte (erlaubt: " + "|".join(SPARTEN) + ")"
+    if klein.startswith("steckbrief:"):
+        feld, trenner, wert = b[len("steckbrief:"):].partition("=")
+        if trenner and feld.strip() and wert.strip():
+            return ""
+        return "Form steckbrief:<feld>=<wert> erwartet"
+    if klein.startswith("foerderung:"):
+        if klein[len("foerderung:"):].strip() in ("ja", "nein"):
+            return ""
+        return "nur foerderung:ja oder foerderung:nein"
+    if re.fullmatch(r"[\w-]+\.\d+\s*=\s*.+", b):
+        return ""
+    return "unbekannte Form (bekannt: " + ", ".join(SICHTBAR_WENN_FORMEN) + ")"
+
+
+def _formularfeld_pruefen(logik: "ProjektierungsLogik", feld: FormularFeld) -> None:
+    """v28 (Phase 138), „Logik prüfen“ für das Blatt Formulare: Optionsformen je
+    Typ – text: gross / pflicht_wenn:; zahl, ja_nein, datum: pflicht_wenn:;
+    auswahl: |-Liste (+ pflicht_wenn:); foto: Zielordner; wiederhol: Bezeichnung
+    des Einzelfelds; unterschrift: nichts. Unbekanntes ist ein Fehler."""
+    wo = f"Formular {feld.formular}/{feld.feld_key}"
+    teile = feld._teile()
+    if feld.typ in ("foto",):
+        return
+    if feld.typ == "wiederhol":
+        if not teile:
+            logik.warnungen.append(f"{wo}: wiederhol ohne Bezeichnung des Einzelfelds "
+                                   "(Spalte optionen) – wird „Eintrag“.")
+        return
+    for teil in teile:
+        t = teil.lower()
+        if t == FORMULAR_OPTION_GROSS:
+            if feld.typ != "text":
+                logik.fehler.append(f"{wo}: Option „gross“ gilt nur für Typ text.")
+            continue
+        if t.startswith(FORMULAR_OPTION_PFLICHT_WENN):
+            if feld.typ not in FORMULAR_PFLICHT_WENN_TYPEN:
+                logik.fehler.append(f"{wo}: „pflicht_wenn:“ gilt nur für "
+                                    f"{', '.join(FORMULAR_PFLICHT_WENN_TYPEN)}.")
+            elif pflicht_wenn_parsen(teil) is None:
+                logik.fehler.append(f"{wo}: Optionsform „{teil}“ nicht lesbar – "
+                                    "erwartet pflicht_wenn:<feld>≠<wert> oder =<wert>.")
+            continue
+        if feld.typ == "auswahl":
+            continue          # normale Auswahloption
+        logik.fehler.append(f"{wo}: unbekannte Optionsform „{teil}“ für Typ {feld.typ} "
+                            "(erlaubt: gross, pflicht_wenn:…).")
+    if feld.typ == "auswahl" and len(feld.optionen_liste()) < 2:
+        logik.warnungen.append(f"{wo}: auswahl mit weniger als zwei Optionen.")
+
+
 def einlesen(pfad: Path | None = None) -> ProjektierungsLogik:
     pfad = Path(pfad or LOGIK_PFAD)
     logik = ProjektierungsLogik()
@@ -314,6 +469,15 @@ def einlesen(pfad: Path | None = None) -> ProjektierungsLogik:
                     logik.warnungen.append(
                         f"Paket {key} Schritt {nr}: frist_tage "
                         f"„{zeile[13]}“ nicht lesbar.")
+            # v28 (PLAN_PROJ_V6 Phase 133): „Logik prüfen“ kennt die Formen
+            # sparte:, steckbrief:<feld>=<wert>, foerderung:ja|nein und
+            # <paket>.<nr>=<wert> – alles andere bleibt sichtbar (Hinweis)
+            sichtbar_wenn = _text(zeile[15])
+            problem = sichtbar_wenn_pruefen(sichtbar_wenn)
+            if problem:
+                logik.warnungen.append(
+                    f"Paket {key} Schritt {nr}: sichtbar_wenn „{sichtbar_wenn}“ – "
+                    f"{problem}; der Schritt bleibt immer sichtbar.")
             paket.schritte.append(PaketSchritt(
                 nr=nr, titel=_text(zeile[4]), beschreibung=_text(zeile[5]),
                 rolle=rolle if rolle in ROLLEN else "projektierer",
@@ -321,7 +485,7 @@ def einlesen(pfad: Path | None = None) -> ProjektierungsLogik:
                 faellig_regel=faellig_regel,
                 wartet_frist_tage=wartet,
                 aktion_typ=aktion_typ, aktion_wert=_text(zeile[11]),
-                optionen=optionen, sichtbar_wenn=_text(zeile[15])))
+                optionen=optionen, sichtbar_wenn=sichtbar_wenn))
         for paket in logik.pakete.values():
             paket.schritte.sort(key=lambda s: s.nr)
 
@@ -422,6 +586,8 @@ def einlesen(pfad: Path | None = None) -> ProjektierungsLogik:
                                   mengeneinheit=(einheit or "ST").upper()[:3]))
 
     # --- Formulare (v15, Phase 82: Montage-Backend) ---
+    # v28 (PLAN_PROJ_V6 Phase 138): Typ wiederhol, Optionsformen gross /
+    # pflicht_wenn:, unbekannte Typen und Optionsformen sind Fehler
     if "Formulare" in wb.sheetnames:
         for zeile in wb["Formulare"].iter_rows(min_row=2, values_only=True):
             werte = [_text(z) for z in (tuple(zeile) + ("",) * 7)[:7]]
@@ -430,15 +596,26 @@ def einlesen(pfad: Path | None = None) -> ProjektierungsLogik:
                 continue
             typ = (typ or "text").lower()
             if typ not in FORMULAR_FELD_TYPEN:
-                logik.warnungen.append(
-                    f"Formular {formular}/{feld_key}: unbekannter Typ "
-                    f"„{typ}“ – wird zu text.")
+                logik.fehler.append(
+                    f"Formular {formular}/{feld_key}: unbekannter Typ „{typ}“ "
+                    f"(erlaubt: {', '.join(FORMULAR_FELD_TYPEN)}).")
                 typ = "text"
-            logik.formulare.setdefault(formular, []).append(FormularFeld(
+            feld = FormularFeld(
                 formular=formular, seite=seite or "Allgemein",
                 feld_key=feld_key, bezeichnung=bezeichnung or feld_key,
                 typ=typ, pflicht=pflicht.upper() in ("J", "JA", "X", "1"),
-                optionen=optionen))
+                optionen=optionen)
+            _formularfeld_pruefen(logik, feld)
+            logik.formulare.setdefault(formular, []).append(feld)
+        # Bezugsfelder der pflicht_wenn-Bedingungen müssen im selben Formular liegen
+        for formular, felder in logik.formulare.items():
+            schluessel = {f.feld_key for f in felder}
+            for feld in felder:
+                bedingung = feld.pflicht_wenn
+                if bedingung is not None and bedingung[0] not in schluessel:
+                    logik.fehler.append(
+                        f"Formular {formular}/{feld.feld_key}: pflicht_wenn verweist "
+                        f"auf unbekanntes Feld „{bedingung[0]}“.")
 
     # --- Sub-Mailvorlagen (v15, Phase 79) ---
     if "Sub-Mailvorlagen" in wb.sheetnames:

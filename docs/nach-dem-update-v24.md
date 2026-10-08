@@ -214,9 +214,10 @@ ohne Gerüst/Bühne · Stromversorgung prüfen · mehr als 12 Räume.
       WP-Texten abgeleitet, **Innendienst liest gegen** (Vortext, Zahlungs-
       optionen ohne Monatsraten-Beispiel, Hinweis zur Kältetechnik,
       Ausführungszeitraum statt aufschiebender Bedingung). – **Innendienst**
-- [ ] **A15** Bosch-Climate-Broschüre für `anlagen/` (Anhangsregel „wenn
+- [x] **A15** Bosch-Climate-Broschüre für `anlagen/` (Anhangsregel „wenn
       Sparte = KL" – Zeile im Blatt „Anhänge" auf den Dateinamen setzen). –
-      **Andreas**
+      **Andreas** – *erledigt 06./08.10.2026: `Bosch Climate 3200i.pdf` liegt in
+      `anlagen/`, Zeile im Blatt gesetzt (v27-Nachtrag 2).*
 - [ ] **EK für KL050 (Rollgerüst)** in der Parametrierung → Artikel ergänzen. –
       **Innendienst**
 

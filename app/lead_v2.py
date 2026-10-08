@@ -333,12 +333,116 @@ def zugriff_erlaubt(session: Session, benutzer, vorgang: Vorgang | None = None) 
     return False
 
 
+# --- v29 (PLAN_LEAD_V4 Phase 140): Handelsvertreter-Sicht und 404-Gate ----------------
+
+# Seiten, die ein Handelsvertreter (Kennzeichen terminiert_selbst, ohne
+# Innendienst-/Leadmanagement-/Admin-Rolle) weder im Menü noch per URL erreicht:
+# Hauptboard, Deals, Kontaktiert, Infoabend und das komplette „Mehr …“
+# (Anrufliste, Kanban, Kalender, E-Mail-Vorlagen, Übersicht, Statistik,
+# Kanal-Report, Posteingang unklar, Import, Schnellanlage). Erreichbar bleiben
+# Mein Dashboard · Karte · To-Dos · Handelsvertreter sowie die eigene Kartei,
+# der Terminassistent eigener Leads, Anruf-/Inline-/Spalten-Routen (POST/JSON).
+# Vergleich exakt bzw. als Präfix mit nachfolgendem „/“ oder „?“.
+HV_GESPERRTE_PFADE = (
+    "/lead-management/hauptboard", "/lead-management/boards/haupt",
+    "/lead-management/terminiert", "/lead-management/kontaktiert",
+    "/lead-management/info-veranstaltung", "/lead-management/anrufliste",
+    "/lead-management/anruf/meine", "/lead-management/anruf/suche",
+    "/lead-management/board", "/lead-management/kalender",
+    "/lead-management/vorlagen", "/lead-management/uebersicht",
+    "/lead-management/cockpit", "/lead-management/statistik",
+    "/lead-management/posteingang", "/lead-management/import",
+    "/lead-management/neu", "/lead-management/adressen",
+    "/lead-management/kommunikation",
+)
+HV_STARTSEITE = "/lead-management/handelsvertreter"
+HV_GATE_HINWEIS = ("Diese Seite gehört nicht zur Handelsvertreter-Sicht – "
+                   "Sie sehen hier Ihre eigenen Leads.")
+
+
+def hv_sicht(session: Session, benutzer) -> bool:
+    """v29 (Phase 140): Handelsvertreter-Sicht = Kennzeichen terminiert_selbst
+    UND keine Modul-Sichtbarkeit (Innendienst/Leadmanagement/Admin sehen die
+    volle Oberfläche, auch wenn sie ein AD-Profil mit Kennzeichen hätten)."""
+    from app import leadmanagement as kern
+    return (ist_handelsvertreter(session, benutzer)
+            and not kern.lead_modul_sichtbar(session, benutzer))
+
+
+def hv_pfad_gesperrt(pfad: str) -> bool:
+    """Ist dieser Pfad für die Handelsvertreter-Sicht gesperrt (404)?"""
+    pfad = (pfad or "").rstrip("/") or "/"
+    for basis in HV_GESPERRTE_PFADE:
+        if pfad == basis or pfad.startswith(basis + "/"):
+            return True
+    return False
+
+
 def gate(request, session: Session, vorgang: Vorgang | None = None) -> None:
     """404 statt 403 (Demo-Modus: Modul unsichtbar) – Ersatz fuer _gate der
-    V1-Router, zusaetzlich mit Handelsvertreter-Freigabe."""
+    V1-Router, zusaetzlich mit Handelsvertreter-Freigabe.
+    v29 (PLAN_LEAD_V4 Phase 140): für die Handelsvertreter-Sicht liefern die
+    gesperrten Seiten (HV_GESPERRTE_PFADE) server-seitig 404 – das Gate sitzt
+    in der Route, also HINTER Login und PIN-Pflichtwechsel der v27-Middleware.
+    Kommt der Aufruf per Link aus dem Tool (Referer derselben Instanz: Glocke,
+    Kartei, Mail-Link aus einer Tool-Seite), führt er auf die HV-Ansicht mit
+    Hinweis statt auf eine 404-Seite [ANNAHME]."""
     from fastapi import HTTPException
-    if not zugriff_erlaubt(session, request.state.benutzer, vorgang):
+    from urllib.parse import quote_plus
+    benutzer = request.state.benutzer
+    if not zugriff_erlaubt(session, benutzer, vorgang):
         raise HTTPException(status_code=404)
+    if hv_pfad_gesperrt(request.url.path) and hv_sicht(session, benutzer):
+        referer = request.headers.get("referer", "") or ""
+        basis = str(request.base_url)
+        if referer.startswith(basis):
+            raise HTTPException(status_code=303, headers={
+                "Location": f"{HV_STARTSEITE}?meldung={quote_plus(HV_GATE_HINWEIS)}"})
+        raise HTTPException(status_code=404)
+
+
+def hv_gruppen(session: Session) -> dict:
+    """v29 (Phase 140): die zwei Ziele der Sammelaktion „An Handelsvertreter
+    verschieben“ aus den Parametern hv_gruppe_rene / hv_gruppe_simon
+    (Komma-Listen von Benutzer-IDs, Lead-Einstellungen; keine Namen im Code).
+    Liefert {"rene": [ids], "simon": [ids]} – der erste Eintrag ist das Ziel."""
+    from app import leadmanagement as kern
+    gruppen = {}
+    for key in ("rene", "simon"):
+        roh = kern.parameter_holen(session, f"hv_gruppe_{key}", "") or ""
+        gruppen[key] = [int(t) for t in roh.replace(";", ",").split(",") if t.strip().isdigit()]
+    return gruppen
+
+
+def hv_gruppe_ziel(session: Session, key: str):
+    """Zielbenutzer (erster aktiver Eintrag) einer HV-Gruppe oder None."""
+    for benutzer_id in hv_gruppen(session).get(key, []):
+        person = session.get(Benutzer, benutzer_id)
+        if person is not None and person.aktiv:
+            return person
+    return None
+
+
+def hv_gruppen_wahl(session: Session) -> list[dict]:
+    """Schaltflächen des Sammelaktions-Dialogs: [{key, name, zusatz, benutzer_id}]
+    – nur Gruppen mit gültigem Ziel."""
+    wahl = []
+    for key, zusatz in (("rene", ""), ("simon", "verteilt an sein Team")):
+        ziel = hv_gruppe_ziel(session, key)
+        if ziel is not None:
+            wahl.append({"key": key, "name": ziel.name, "zusatz": zusatz, "benutzer_id": ziel.id})
+    return wahl
+
+
+def hv_gruppe_von(session: Session, benutzer_id: int | None) -> str:
+    """Gruppe eines Vertreters („rene“ | „simon“ | „“) für den Filter „Gruppe“
+    der Handelsvertreter-Ansicht."""
+    if not benutzer_id:
+        return ""
+    for key, ids in hv_gruppen(session).items():
+        if benutzer_id in ids:
+            return key
+    return ""
 
 
 def ad_zuweisen(session: Session, vorgang: Vorgang, ad_id: int | None,
@@ -369,10 +473,12 @@ def ad_zuweisen(session: Session, vorgang: Vorgang, ad_id: int | None,
     kern.aktivitaet(session, vorgang.id, "status", f"Zugewiesen an {neu.name}{wer}",
                     benutzer=benutzer)
     kunde = session.get(Kunde, vorgang.kunde_id)
+    # v29 (PLAN_LEAD_V4 Phase 141): Glocken-Art „zuweisung“ – standardmäßig
+    # abgeschaltet (glocke_lead_arten), die Aktivität bleibt in der Timeline
     kern.benachrichtigen(session, [neu.id],
                          f"Lead zugewiesen: {kunde.anzeige_name if kunde else '?'}"
                          f"{', ' + kunde.ort if kunde and kunde.ort else ''}",
-                         f"/lead-management/lead/{vorgang.id}")
+                         f"/lead-management/lead/{vorgang.id}", art="zuweisung")
     session.flush()
     return f"Zugewiesen an {neu.name}."
 
@@ -396,7 +502,7 @@ def leadmanager_zuweisen(session: Session, vorgang: Vorgang, benutzer_id: int | 
     kunde = session.get(Kunde, vorgang.kunde_id)
     kern.benachrichtigen(session, [neu.id],
                          f"Lead übernommen: {kunde.anzeige_name if kunde else '?'}",
-                         f"/lead-management/lead/{vorgang.id}")
+                         f"/lead-management/lead/{vorgang.id}", art="zuweisung")   # v29: Glocken-Art
     session.flush()
     return f"Leadmanager: {neu.name}."
 
@@ -408,3 +514,75 @@ def score_aktiv(session: Session) -> bool:
     Berechnung, keine Anzeige von Score/Klasse, kein Qualifizierungsbogen."""
     from app import leadmanagement as kern
     return kern.parameter_holen(session, "score_aktiv", "aus").strip().lower() in ("an", "ja", "1", "true")
+
+
+# --- v29 (PLAN_LEAD_V4 Phasen 140/141/143): Datenmigration Oberfläche -----------------
+
+ROUTEN_START_STANDARD = "Arnold-Overbeck-Straße 63-65, 47139 Duisburg"
+VORSCHLAEGE_ANZAHL_STANDARD = "3"
+# Namensabgleich für die Startwerte der HV-Gruppen (nur Migration – im Betrieb
+# kommen die Ziele ausschließlich aus den Parametern hv_gruppe_rene/_simon)
+HV_GRUPPE_RENE_NAMEN = ("golaschewski",)
+HV_GRUPPE_SIMON_LEITER = ("grady",)                       # O'Grady / O Grady
+HV_GRUPPE_SIMON_TEAM = ("di blasi", "lind", "kinkel", "leinenbach")
+
+
+def _parameter_leer(session: Session, name: str) -> bool:
+    from app.models import LeadParameter
+    zeile = session.query(LeadParameter).filter(LeadParameter.name == name).first()
+    return zeile is None or not (zeile.wert or "").strip()
+
+
+def _hv_nach_namen(session: Session, muster: tuple) -> list:
+    """Aktive Handelsvertreter (Kennzeichen terminiert_selbst), deren Name eines
+    der Muster enthält – Reihenfolge wie die Muster."""
+    treffer = []
+    hv = handelsvertreter_liste(session)
+    for m in muster:
+        for b in hv:
+            if m in _normal(b.name) and b not in treffer:
+                treffer.append(b)
+    return treffer
+
+
+def migration_v29_oberflaeche(session: Session) -> list:
+    """migrate.py (v29): Startwerte per Namensabgleich für die HV-Gruppen der
+    Sammelaktion (hv_gruppe_rene: René Golaschewski; hv_gruppe_simon: Simon
+    O'Grady zuerst, danach sein Team), Standardwerte routen_start (Friondo
+    Duisburg), vorschlaege_anzahl = 3 und glocke_lead_arten (nur wenn leer:
+    die beiden To-Do-Arten). Idempotent: nur leere Parameter werden gesetzt,
+    der zweite Lauf meldet nichts. Committet nicht selbst."""
+    from app import leadmanagement as kern
+    from app import lead_glocken
+    meldungen = []
+    if _parameter_leer(session, "hv_gruppe_rene"):
+        rene = _hv_nach_namen(session, HV_GRUPPE_RENE_NAMEN)
+        if rene:
+            kern.parameter_setzen(session, "hv_gruppe_rene", ",".join(str(b.id) for b in rene[:1]))
+            meldungen.append(f"hv_gruppe_rene = {rene[0].name} (Namensabgleich)")
+        else:
+            meldungen.append("hv_gruppe_rene: kein Handelsvertreter „Golaschewski“ gefunden – "
+                             "in den Lead-Einstellungen setzen")
+    if _parameter_leer(session, "hv_gruppe_simon"):
+        leiter = _hv_nach_namen(session, HV_GRUPPE_SIMON_LEITER)
+        if leiter:
+            team = [b for b in _hv_nach_namen(session, HV_GRUPPE_SIMON_TEAM) if b not in leiter]
+            ids = [b.id for b in leiter[:1] + team]
+            kern.parameter_setzen(session, "hv_gruppe_simon", ",".join(str(i) for i in ids))
+            meldungen.append(f"hv_gruppe_simon = {leiter[0].name}"
+                             + (f" + {len(team)} Team" if team else "") + " (Namensabgleich)")
+        else:
+            meldungen.append("hv_gruppe_simon: kein Handelsvertreter „O'Grady“ gefunden – "
+                             "in den Lead-Einstellungen setzen")
+    if _parameter_leer(session, "routen_start"):
+        kern.parameter_setzen(session, "routen_start", ROUTEN_START_STANDARD)
+        meldungen.append(f"routen_start = {ROUTEN_START_STANDARD}")
+    if _parameter_leer(session, "vorschlaege_anzahl"):
+        kern.parameter_setzen(session, "vorschlaege_anzahl", VORSCHLAEGE_ANZAHL_STANDARD)
+        meldungen.append("vorschlaege_anzahl = 3 (statt 5)")
+    if _parameter_leer(session, lead_glocken.PARAMETER):
+        kern.parameter_setzen(session, lead_glocken.PARAMETER, ",".join(lead_glocken.STANDARD_ARTEN))
+        meldungen.append("glocke_lead_arten = " + ",".join(lead_glocken.STANDARD_ARTEN)
+                         + " (Glocke nur To-Dos)")
+    session.flush()
+    return meldungen

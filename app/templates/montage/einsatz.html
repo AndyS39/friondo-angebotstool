@@ -1,22 +1,34 @@
 {% extends "base.html" %}
 {% from "_galerie.html" import galerie as galerie_makro, galerie_fuss %}
+{% from "_komponenten.html" import notizen_chat %}
 
 {% block titel %}Einsatz {{ projekt.nummer }} – Montage{% endblock %}
 
 {% block inhalt %}
+{# v28 (PLAN_PROJ_V6 Phase 137): Auftragsseite in neuer Reihenfolge –
+   1 Kopf · 2 Steckbrief (vollständig) · Gerät & Positionen (eingeklappt) ·
+   3 Teams & Termine · 4 Notizen der Projektierung (read-only) ·
+   5 Montage starten/beenden · 6 Formulare · 7 Restarbeiten · 8 Galerie.
+   Der Block „Offene Montage-Aufgaben“ entfällt. #}
+{% macro besetzung_chips(liste) %}
+{% if liste %}<span class="pj-besetzung">{% for p in liste %}<span class="pj-ini {{ 'ich' if p.ich }}" title="{{ p.name }}">{{ p.kurz }}</span>{% endfor %}</span>{% endif %}
+{% endmacro %}
 <div class="pj-mob">
     <div class="pj-btnrow" style="margin-top:0">
         <a class="pj-btn" href="/montage">← Einsätze</a>
     </div>
-    <div class="pj-eyebrow">Steckbrief</div>
+    <div class="pj-eyebrow">Auftrag · {{ projekt.nummer }}</div>
     <h2>{{ kunde.anzeige_name }}
         {% if gewerk %}<span class="pj-sp {{ gewerk.sparte }}">{{ gewerk.sparte }}</span>{% endif %}</h2>
     {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
+    {# 1 · Kopf #}
     <div class="pj-kv">
         <span>Termin</span>
-        <div><b>{{ termin.beginn | de_datum('%a %d.%m.%Y %H:%M') }} Uhr</b>
-            {% if termin.ende %} – {{ termin.ende.strftime('%H:%M') }} Uhr{% endif %}
+        <div><b>{{ dieser_termin.zeit }}</b> · {{ dieser_termin.art }}
+            {% if dieser_termin.team %}<br>{% if dieser_termin.team_farbe %}<i class="pj-teamfarbe" style="background:{{ dieser_termin.team_farbe }}"></i>{% endif %}{{ dieser_termin.team }}{% endif %}
+            {% if dieser_termin.person %}<br>{{ dieser_termin.person }}{% endif %}
+            {% if dieser_termin.besetzung %}<br>{{ besetzung_chips(dieser_termin.besetzung) }}{% endif %}
             {% if termin.notiz %}<br><small style="color:var(--pj-muted)">{{ termin.notiz }}</small>{% endif %}</div>
         <span>Adresse</span>
         <div>{{ adresse or 'Keine Ausführungsadresse hinterlegt' }}
@@ -28,6 +40,7 @@
         {% if projektleiter %}
         <span>Friondo</span>
         <div>{{ projektleiter.name }}
+            {% if projektleiter.telefon %} · <a href="tel:{{ projektleiter.telefon }}">{{ projektleiter.telefon }}</a>{% endif %}
             {% if projektleiter.email %} · <a href="mailto:{{ projektleiter.email }}">{{ projektleiter.email }}</a>{% endif %}</div>
         {% endif %}
         {% if gewerk %}
@@ -39,41 +52,17 @@
         <div><span class="pj-mono">{{ ('%.1f' | format(gewerk.heizlast_kw)) | replace('.', ',') }} kW</span>
             {% if gewerk.heizlast_datum %} · {{ gewerk.heizlast_datum.strftime('%d.%m.%Y') }}{% endif %}</div>
         {% endif %}
-        {% if projekt.notiz_kopf %}
-        <span>Technik</span>
-        <div>{{ projekt.notiz_kopf }}</div>
-        {% endif %}
     </div>
 
-    {% if steckbrief_felder %}
-    {# v15 (Phase 82): Projektsteckbrief (read-only, Phase 77) #}
+    {# 2 · Steckbrief – alle Felder der Sparte, leere als „–“ #}
+    {% if steckbrief %}
     <details class="pj-paket" open>
-        <summary>Steckbrief</summary>
+        <summary>Steckbrief <span class="cnt">{{ steckbrief | rejectattr('leer') | list | length }}/{{ steckbrief | length }}</span></summary>
         <div class="pj-steck-raster" style="padding:4px 2px">
-            {% for feld, name in steckbrief_felder %}
-            {% set w = steckbrief.get(feld) %}
-            {% if w and w.wert %}
-            <span class="k">{{ name }}</span><span class="w">{{ w.wert }}</span>
-            {% endif %}
+            {% for z in steckbrief %}
+            <span class="k">{{ z.name }}{% if z.manuell %} <i title="manuell geändert">✎</i>{% elif z.auftragsdaten %} <i title="aus den TAIFUN-Auftragsdaten">A</i>{% endif %}</span><span class="w {{ 'leer' if z.leer }}">{{ z.wert }}</span>
             {% endfor %}
         </div>
-    </details>
-    {% endif %}
-
-    {% if team_termine %}
-    <details class="pj-paket">
-        <summary>Teams &amp; Termine <span class="cnt">{{ team_termine | length }}</span></summary>
-        {% for t in team_termine %}
-        <div class="pj-task"><div class="t">{{ t.beginn.strftime('%d.%m.') }}{{ ' – ' ~ t.ende.strftime('%d.%m.') if t.ende and t.ende.date() != t.beginn.date() }}
-            · {{ t.typ | capitalize }}
-            {{ '· ' ~ teams_map[t.team_id].name if t.team_id in teams_map }}
-            {{ '· Kunde bestätigt ✔' if t.kunde_bestaetigt }}</div></div>
-        {% endfor %}
-        {% for zeile in subs %}
-        <div class="pj-task"><div class="t">Sub: {{ zeile.sub.firma if zeile.sub }}
-            · {{ zeile.eintrag.leistung }} · {{ zeile.eintrag.status | capitalize }}
-            {{ '· ' ~ zeile.eintrag.termin.strftime('%d.%m.%Y') if zeile.eintrag.termin }}</div></div>
-        {% endfor %}
     </details>
     {% endif %}
 
@@ -89,38 +78,78 @@
     </details>
     {% endif %}
 
-    <details class="pj-paket" {{ 'open' if aufgaben }}>
-        <summary>Offene Montage-Aufgaben <span class="cnt">{{ aufgaben | length }}</span></summary>
-        {% for a in aufgaben %}
-        <div class="pj-task">
-            <form method="post" action="/montage/aufgabe/{{ a.id }}/erledigt" style="display:inline" data-pj-ajax>
-                <input type="hidden" name="termin_id" value="{{ termin.id }}">
-                <input type="checkbox" onchange="this.closest('.pj-task').classList.toggle('done', this.checked); pjSenden(this.form)" title="Erledigt">
-            </form>
-            <div class="t">{{ a.titel }}{{ ' *' if a.pflicht }}</div>
-            {% if a.faellig_am %}<span class="due">{{ a.faellig_am.strftime('%d.%m.') }}</span>{% endif %}
+    {# 3 · Teams & Termine #}
+    <details class="pj-paket" {{ 'open' if termin_zeilen | length > 1 or subs }}>
+        <summary>Teams &amp; Termine <span class="cnt">{{ termin_zeilen | length + subs | length }}</span></summary>
+        {% for z in termin_zeilen %}
+        <div class="pj-termin-zeile {{ 'aktuell' if z.termin.id == termin.id }}">
+            <span class="art">{{ z.art }}</span> · {{ z.zeit }}
+            {% if z.kunde_bestaetigt %} · <span title="Kunde hat den Termin bestätigt">Kunde bestätigt ✔</span>{% endif %}
+            <small>{% if z.team %}{% if z.team_farbe %}<i class="pj-teamfarbe" style="background:{{ z.team_farbe }}"></i>{% endif %}{{ z.team }}{% endif %}{% if z.person %}{{ ' · ' if z.team }}{{ z.person }}{% endif %}
+                {% if z.besetzung %}· {{ besetzung_chips(z.besetzung) }}{% elif z.team %}· <span class="dezent">Besetzung: ganzes Team</span>{% endif %}</small>
         </div>
         {% else %}
-        <div class="pj-task"><div class="t" style="color:var(--pj-muted)">Keine offenen Montage-Aufgaben.</div></div>
+        <div class="pj-termin-zeile dezent">Keine Termine am Gewerk.</div>
+        {% endfor %}
+        {% for zeile in subs %}
+        <div class="pj-termin-zeile"><span class="art">Sub: {{ zeile.sub.firma if zeile.sub }}</span>
+            · {{ zeile.eintrag.leistung }} · {{ zeile.eintrag.status | capitalize }}
+            {{ '· ' ~ zeile.eintrag.termin.strftime('%d.%m.%Y') if zeile.eintrag.termin }}</div>
         {% endfor %}
     </details>
 
-    <h3 id="foto" style="font-size:13px;margin:12px 0 4px">📁 Galerie {{ galerie_sparte }}</h3>
-    {% if vorgang_id %}
-    {# 27.09.2026 (Andreas): zentrale Galerie-Komponente mit Foto-Sammelbox
-       (mehrere Fotos aufnehmen, Ordner je Foto zuweisen, EIN Upload) –
-       Montage darf ansehen + hochladen, nie verschieben/löschen #}
-    {{ galerie_makro(vorgang_id, galerie_daten, galerie_ordner, false,
-                     '/montage/einsatz/' ~ termin.id, sparte=galerie_sparte,
-                     darf_verschieben=false) }}
-    {{ galerie_fuss() }}
+    {# 4 · Notizen der Projektierung (read-only; Monteur schreibt im Montagebericht) #}
+    <h3 class="pj-sektion">💬 Notizen der Projektierung
+        {% if notizen_ctx %}<small>· {{ notizen_ctx.anzahl }} Einträge</small>{% endif %}</h3>
+    {% if projekt.notiz_kopf %}
+    <div class="pj-technik"><b>Bemerkung für die Technik:</b> {{ projekt.notiz_kopf }}</div>
+    {% endif %}
+    {% if notizen_ctx %}
+    {{ notizen_chat(notizen_ctx) }}
     {% else %}
-    <p class="dezent" style="font-size:12px">Kein Vorgang am Auftrag – Galerie
-        nicht verfügbar.</p>
+    <p class="dezent" style="font-size:12px">Kein Vorgang am Auftrag – keine Notizen.
+        {{ notizen_hinweis }}</p>
     {% endif %}
 
-    <h3 style="font-size:13px;margin:12px 0 4px">📋 Formulare</h3>
-    <div class="pj-btnrow">
+    {# 5 · Montage starten / beenden #}
+    {% if gewerk %}
+    <h3 id="status" class="pj-sektion">Montage-Status <small>· {{ phasen_namen[gewerk.phase] }}</small></h3>
+    <div class="pj-status-block">
+    {% if gewerk.phase in phasen_vor_montage %}
+    <form method="post" action="/montage/einsatz/{{ termin.id }}/phase">
+        <input type="hidden" name="aktion" value="gestartet">
+        {# V4 (Phase 90.4): Uhrzeit im 15-Minuten-Takt, vorbelegt auf das nächste Viertel #}
+        <div class="pj-btnrow" style="margin-top:0">
+            <label style="font-size:13px;color:var(--pj-muted)">Uhrzeit
+                <input type="time" name="uhrzeit" step="900" class="pj-viertel"></label>
+            <button class="pj-btn primary" type="submit">Montage starten</button>
+        </div>
+        <p class="hinweis">Setzt das Gewerk auf „Montage“ – offene Punkte der Projektierung werden im Verlauf vermerkt.</p>
+    </form>
+    {% elif gewerk.phase == 'montage' %}
+    <form method="post" action="/montage/einsatz/{{ termin.id }}/phase">
+        <input type="hidden" name="aktion" value="fertig">
+        <label style="display:block;font-size:13px;color:var(--pj-muted);margin:0 0 2px">
+            Kurzbericht (optional)</label>
+        <textarea name="bericht" rows="2"
+                  style="width:100%;border:1px solid var(--pj-line);border-radius:8px;padding:8px;font-family:inherit"
+                  placeholder="Besonderheiten? (Bemerkungen gehören in den Montagebericht)"></textarea>
+        <div class="pj-btnrow">
+            <label style="font-size:13px;color:var(--pj-muted)">Uhrzeit
+                <input type="time" name="uhrzeit" step="900" class="pj-viertel"></label>
+            <button class="pj-btn primary" type="submit">Montage beenden</button>
+        </div>
+        <p class="hinweis">Wird automatisch beendet, sobald das Abnahmeprotokoll unterschrieben ist.</p>
+    </form>
+    {% else %}
+    <p class="dezent" style="font-size:12px;margin:0">Status: {{ phasen_namen[gewerk.phase] }}{% if gewerk.montage_fertig_am %} · Montage beendet {{ gewerk.montage_fertig_am.strftime('%d.%m.%Y %H:%M') }}{% endif %}</p>
+    {% endif %}
+    </div>
+    {% endif %}
+
+    {# 6 · Formulare #}
+    <h3 class="pj-sektion">📋 Formulare</h3>
+    <div class="pj-btnrow" style="margin-top:0">
         {% for f in formulare %}
         <a class="pj-btn {{ 'primary' if not (f.eintrag and f.eintrag.status == 'abgeschlossen') }}"
            href="/montage/einsatz/{{ termin.id }}/formular/{{ f.name }}">
@@ -128,7 +157,8 @@
         {% endfor %}
     </div>
 
-    <h3 style="font-size:13px;margin:12px 0 4px">🔧 Restarbeiten</h3>
+    {# 7 · Restarbeiten #}
+    <h3 class="pj-sektion">🔧 Restarbeiten <small>· {{ restarbeiten | selectattr('status', 'equalto', 'offen') | list | length }} offen</small></h3>
     {% for r in restarbeiten %}
     <div class="pj-task {{ 'done' if r.status == 'erledigt' }}">
         <div class="t">{{ r.text }}
@@ -142,33 +172,19 @@
         <button class="pj-btn" type="submit">Melden</button>
     </form>
 
-    {% if gewerk %}
-    <h3 id="status" style="font-size:13px;margin:12px 0 4px">Montage-Status</h3>
-    {% if gewerk.phase in ('auftragseingang', 'feinplanung_vot', 'planung', 'montagevorbereitung') %}
-    <form method="post" action="/montage/einsatz/{{ termin.id }}/phase">
-        <input type="hidden" name="aktion" value="gestartet">
-        {# V4 (Phase 90.4): Uhrzeit im 15-Minuten-Takt, vorbelegt auf das nächste Viertel #}
-        <label style="font-size:13px;color:var(--pj-muted)">Uhrzeit
-            <input type="time" name="uhrzeit" step="900" class="pj-viertel"></label>
-        <button class="pj-btn primary" type="submit">Montage gestartet</button>
-    </form>
-    {% elif gewerk.phase == 'montage' %}
-    <form method="post" action="/montage/einsatz/{{ termin.id }}/phase">
-        <input type="hidden" name="aktion" value="fertig">
-        <label style="display:block;font-size:13px;color:var(--pj-muted);margin:4px 0 2px">
-            Kurzbericht (Pflicht)</label>
-        <textarea name="bericht" rows="3" required
-                  style="width:100%;border:1px solid var(--pj-line);border-radius:8px;padding:8px;font-family:inherit"
-                  placeholder="Was wurde gemacht? Besonderheiten?"></textarea>
-        <div class="pj-btnrow">
-            <label style="font-size:13px;color:var(--pj-muted)">Uhrzeit
-                <input type="time" name="uhrzeit" step="900" class="pj-viertel"></label>
-            <button class="pj-btn primary" type="submit">Montage fertig</button>
-        </div>
-    </form>
+    {# 8 · Galerie ganz unten (Sammelbox, Lightbox aus Phase 136) #}
+    <h3 id="foto" class="pj-sektion">📁 Galerie {{ galerie_sparte }}</h3>
+    {% if vorgang_id %}
+    {# 27.09.2026 (Andreas): zentrale Galerie-Komponente mit Foto-Sammelbox
+       (mehrere Fotos aufnehmen, Ordner je Foto zuweisen, EIN Upload) –
+       Montage darf ansehen + hochladen, nie verschieben/löschen #}
+    {{ galerie_makro(vorgang_id, galerie_daten, galerie_ordner, false,
+                     '/montage/einsatz/' ~ termin.id, sparte=galerie_sparte,
+                     darf_verschieben=false) }}
+    {{ galerie_fuss() }}
     {% else %}
-    <p class="dezent" style="font-size:12px">Status: {{ phasen_namen[gewerk.phase] }}</p>
-    {% endif %}
+    <p class="dezent" style="font-size:12px">Kein Vorgang am Auftrag – Galerie
+        nicht verfügbar.</p>
     {% endif %}
 
     <div class="pj-note">Keine Preise, keine anderen Projekte – Fragen an

@@ -19,6 +19,25 @@ from fastapi.testclient import TestClient
 
 from app import lead_mail, lead_termin, lead_v2
 from app import leadmanagement as kern
+
+
+# v29 (PLAN_LEAD_V4 Phase 141): Lead-Glocken sind standardmäßig nur für To-Dos
+# (Parameter glocke_lead_arten) – Tests, die eine Glocke einer anderen Art prüfen,
+# schalten die Art für den Testabschnitt ein (zeigt zugleich die Wiedereinschaltbarkeit).
+from contextlib import contextmanager
+
+
+@contextmanager
+def glocken_arten(s, *arten):
+    from app import lead_glocken
+    alt = kern.parameter_holen(s, lead_glocken.PARAMETER, "")
+    kern.parameter_setzen(s, lead_glocken.PARAMETER, ",".join(lead_glocken.STANDARD_ARTEN + tuple(arten)))
+    s.commit()
+    try:
+        yield
+    finally:
+        kern.parameter_setzen(s, lead_glocken.PARAMETER, alt)
+        s.commit()
 from app.db import SessionLocal, init_db
 from app.main import app
 from app.models import (AdProfil, Benachrichtigung, Benutzer, KommunikationLog, Kunde,
@@ -460,9 +479,10 @@ class AbsageUndErsatz(Basis):
         self.lead(47, ort=_versatz(4), phase="in_kontaktierung")   # nie erreicht → raus
         glocken_vorher = self.s.query(Benachrichtigung).filter(
             Benachrichtigung.link == f"/lead-management/termin/{termin.id}/ersatz").count()
-        r = self.client.post(f"/lead-management/termin/{termin.id}/absagen",
-                             data={"grund": "", "grund_text": "Kunde hat kurzfristig abgesagt"},
-                             follow_redirects=False)
+        with glocken_arten(self.s, "terminaenderung"):   # v29: Glocke nur mit eingeschalteter Art
+            r = self.client.post(f"/lead-management/termin/{termin.id}/absagen",
+                                 data={"grund": "", "grund_text": "Kunde hat kurzfristig abgesagt"},
+                                 follow_redirects=False)
         self.assertEqual(r.status_code, 303, r.text)
         self.assertIn(f"/lead-management/termin/{termin.id}/ersatz", r.headers["location"])
         self.s.expire_all()

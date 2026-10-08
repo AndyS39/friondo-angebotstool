@@ -1,7 +1,13 @@
 {# v15 (Phase 76) · 27.09.2026 (Andreas): Galerie-Komponente je SPARTE mit
    Foto-Sammelbox: erst mehrere Fotos aufnehmen/auswählen, je Foto den
    Zielordner zuweisen, dann EIN Upload. Kontext siehe Makro-Parameter;
-   galerie_fuss() einmal pro Seite einbinden (Lightbox + JS). #}
+   galerie_fuss() einmal pro Seite einbinden (Lightbox + JS).
+   v28 (PLAN_PROJ_V6 Phase 136): Lightbox mit Vor/Zurück je Ordner (Pfeiltasten,
+   Wischen), Kopfzeile „<Ordner> · n von m · Datum · Bemerkung“, Knöpfe
+   Herunterladen (?download=1, download-Attribut) / Schließen, Esc und Klick
+   außerhalb schließen. Die Bild-Links tragen die Daten als data-lb-* Attribute;
+   die Datei-Route liefert Bilder jetzt inline (kein Sofort-Download mehr, auch
+   wenn pjLightbox fehlt oder per Strg-Klick umgangen wird). #}
 {% macro galerie(galerie_vorgang_id, galerie_daten, galerie_ordner,
                  galerie_darf_loeschen, galerie_zurueck, sparte='WP',
                  darf_verschieben=True) %}
@@ -47,11 +53,17 @@
         <div class="pj-gal-inhalt">
             {% set bilder = eintrag.eintraege | selectattr('bild') | list %}
             {% if bilder %}
-            <div class="pj-gal-raster">
+            <div class="pj-gal-raster" data-lb-gruppe="{{ galerie_vorgang_id }}/{{ sparte }}/{{ ordner }}">
                 {% for d in bilder %}
                 <figure>
                     <a href="/vorgaenge/galerie/datei/{{ d.id }}" target="_blank"
-                       onclick="return pjLightbox(event, '/vorgaenge/galerie/datei/{{ d.id }}', {{ (d.dateiname ~ (' – ' ~ d.bemerkung if d.bemerkung else '')) | tojson }})">
+                       class="pj-lb-link"
+                       data-lb-gruppe="{{ galerie_vorgang_id }}/{{ sparte }}/{{ ordner }}"
+                       data-lb-id="{{ d.id }}" data-lb-ordner="{{ ordner }}"
+                       data-lb-name="{{ d.dateiname }}"
+                       data-lb-datum="{{ d.hochgeladen_am.strftime('%d.%m.%Y %H:%M') if d.hochgeladen_am }}"
+                       data-lb-bemerkung="{{ d.bemerkung or '' }}"
+                       onclick="return pjLightbox(event, this)">
                         <img src="/vorgaenge/galerie/datei/{{ d.id }}" alt="{{ d.dateiname }}" loading="lazy">
                     </a>
                     <figcaption title="{{ d.bemerkung }}">{{ d.hochgeladen_am.strftime('%d.%m.') }}
@@ -80,6 +92,7 @@
                 {% for d in doks %}
                 <div class="f"><a href="/vorgaenge/galerie/datei/{{ d.id }}" target="_blank">{{ d.dateiname }}</a>
                     <small>{{ d.hochgeladen_am.strftime('%d.%m.%y') }}{{ ' · ' ~ d.bemerkung if d.bemerkung }}</small>
+                    <a href="/vorgaenge/galerie/datei/{{ d.id }}?download=1" download title="Herunterladen">⬇</a>
                     {% if galerie_darf_loeschen %}
                     <form method="post" action="/vorgaenge/galerie/datei/{{ d.id }}/loeschen" style="display:inline"
                           onsubmit="return confirm('Datei {{ d.dateiname }} löschen?');">
@@ -110,19 +123,111 @@
 {% endmacro %}
 
 {% macro galerie_fuss() %}
-<dialog class="pj-dlg pj-lightbox" id="pj-lightbox" onclick="this.close()">
-    <img src="" alt=""><div class="bu"></div>
+{# v28 (Phase 136): Lightbox – einmal je Seite; Daten kommen aus den
+   data-lb-* Attributen der Bild-Links (Gruppe = Vorgang/Sparte/Ordner) #}
+<dialog class="pj-dlg pj-lightbox" id="pj-lightbox" aria-label="Bildansicht">
+    <div class="pj-lb-rahmen">
+        <div class="pj-lb-kopf">
+            <span class="titel"><b class="ordner"></b><span class="zaehler"></span><span class="datum"></span><span class="bemerkung"></span></span>
+            <button type="button" class="knopf klein pj-lb-schliessen" onclick="pjLightboxZu()" title="Schließen (Esc)">✕</button>
+        </div>
+        <div class="pj-lb-bild">
+            <button type="button" class="pj-lb-nav zurueck" onclick="pjLightboxSchritt(-1)" title="Vorheriges Bild (←)">◀</button>
+            <img src="" alt="">
+            <button type="button" class="pj-lb-nav vor" onclick="pjLightboxSchritt(1)" title="Nächstes Bild (→)">▶</button>
+        </div>
+        <div class="pj-lb-fuss">
+            <a class="knopf pj-lb-download" href="#" download>⬇ Herunterladen</a>
+            <button type="button" class="knopf" onclick="pjLightboxZu()">Schließen</button>
+        </div>
+    </div>
 </dialog>
 <script>
-function pjLightbox(ev, url, text) {
-    if (ev.ctrlKey || ev.metaKey) return true;
+/* v28 (PLAN_PROJ_V6 Phase 136): Lightbox mit Vor/Zurück innerhalb des Ordners,
+   Pfeiltasten, Wischen auf dem Handy, Kopfzeile, Download nur über den Knopf
+   (?download=1 → attachment), Esc/Klick außerhalb/✕ schließen. */
+var pjLb = { liste: [], pos: 0 };
+function pjLightboxDaten(link) {
+    var d = link.dataset;
+    return { id: d.lbId, url: '/vorgaenge/galerie/datei/' + d.lbId,
+             download: '/vorgaenge/galerie/datei/' + d.lbId + '?download=1',
+             ordner: d.lbOrdner || '', name: d.lbName || '', datum: d.lbDatum || '',
+             bemerkung: d.lbBemerkung || '' };
+}
+function pjLightbox(ev, link, text) {
+    if (ev.ctrlKey || ev.metaKey || ev.shiftKey) return true;
     ev.preventDefault();
     var box = document.getElementById('pj-lightbox');
-    box.querySelector('img').src = url;
-    box.querySelector('.bu').textContent = text;
-    box.showModal();
+    if (!box) return true;
+    if (typeof link === 'string') {   /* alte Signatur pjLightbox(ev, url, text) */
+        pjLb.liste = [{ url: link, download: link + (link.indexOf('?') < 0 ? '?download=1' : '&download=1'),
+                        ordner: '', name: text || '', datum: '', bemerkung: '' }];
+        pjLb.pos = 0;
+    } else {
+        var gruppe = link.dataset.lbGruppe || '';
+        var links = gruppe ? Array.prototype.slice.call(
+            document.querySelectorAll('a.pj-lb-link[data-lb-gruppe="' + gruppe.replace(/"/g, '\\"') + '"]')) : [link];
+        pjLb.liste = links.map(pjLightboxDaten);
+        pjLb.pos = Math.max(0, links.indexOf(link));
+    }
+    pjLightboxZeigen();
+    if (!box.open) { box.showModal(); }
     return false;
 }
+function pjLightboxZeigen() {
+    var box = document.getElementById('pj-lightbox');
+    var e = pjLb.liste[pjLb.pos];
+    if (!box || !e) return;
+    var bild = box.querySelector('.pj-lb-bild img');
+    bild.src = e.url; bild.alt = e.name;
+    box.querySelector('.ordner').textContent = e.ordner || e.name;
+    box.querySelector('.zaehler').textContent = ' · ' + (pjLb.pos + 1) + ' von ' + pjLb.liste.length;
+    box.querySelector('.datum').textContent = e.datum ? ' · ' + e.datum : '';
+    box.querySelector('.bemerkung').textContent = e.bemerkung ? ' · ' + e.bemerkung : (e.ordner && e.name ? ' · ' + e.name : '');
+    var dl = box.querySelector('.pj-lb-download');
+    dl.href = e.download; dl.setAttribute('download', e.name || '');
+    box.querySelector('.pj-lb-nav.zurueck').disabled = pjLb.pos <= 0;
+    box.querySelector('.pj-lb-nav.vor').disabled = pjLb.pos >= pjLb.liste.length - 1;
+}
+function pjLightboxSchritt(richtung) {
+    var neu = pjLb.pos + richtung;
+    if (neu < 0 || neu >= pjLb.liste.length) return;
+    pjLb.pos = neu;
+    pjLightboxZeigen();
+}
+function pjLightboxZu() {
+    var box = document.getElementById('pj-lightbox');
+    if (box && box.open) { box.close(); }
+}
+(function () {
+    var box = document.getElementById('pj-lightbox');
+    if (!box || box.dataset.init) return;
+    box.dataset.init = '1';
+    /* Klick außerhalb (auf den Rahmen/Backdrop) schließt, Klick auf Bild/Knöpfe nicht */
+    box.addEventListener('click', function (ev) {
+        var t = ev.target;
+        if (t === box || t.classList.contains('pj-lb-rahmen') || t.classList.contains('pj-lb-bild')) {
+            pjLightboxZu();
+        }
+    });
+    box.addEventListener('keydown', function (ev) {
+        if (ev.key === 'ArrowLeft') { ev.preventDefault(); pjLightboxSchritt(-1); }
+        else if (ev.key === 'ArrowRight') { ev.preventDefault(); pjLightboxSchritt(1); }
+    });
+    box.addEventListener('close', function () { box.querySelector('.pj-lb-bild img').src = ''; });
+    /* Wischen auf dem Handy */
+    var startX = null, startY = null;
+    box.addEventListener('touchstart', function (ev) {
+        if (ev.touches.length !== 1) return;
+        startX = ev.touches[0].clientX; startY = ev.touches[0].clientY;
+    }, { passive: true });
+    box.addEventListener('touchend', function (ev) {
+        if (startX === null) return;
+        var dx = ev.changedTouches[0].clientX - startX, dy = ev.changedTouches[0].clientY - startY;
+        startX = startY = null;
+        if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) { pjLightboxSchritt(dx < 0 ? 1 : -1); }
+    }, { passive: true });
+})();
 function pjGalDrop(ev, form) {
     ev.preventDefault();
     form.classList.remove('drop');

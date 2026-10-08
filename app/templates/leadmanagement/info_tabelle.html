@@ -154,7 +154,10 @@
 {%- endmacro %}
 
 {% macro info_tabelle(zeilen, spalten, ctx, gruppe='') -%}
-<table class="tabelle lm-tabelle li-tabelle" data-gruppe="{{ gruppe }}">
+{#- v29 (Phase 141): Spaltenbreiten je Nutzer über <colgroup> (Makro aus _tabelle.html) #}
+{%- from "leadmanagement/_tabelle.html" import spalten_colgroup, breiten_gesetzt -%}
+<table class="tabelle lm-tabelle li-tabelle" data-gruppe="{{ gruppe }}" data-lm-breiten="{{ breiten_gesetzt(spalten) }}">
+    {{ spalten_colgroup(spalten, ctx, vorn=(1 if ctx.sammel else 0)) }}
     <thead>
         <tr>
             {%- if ctx.sammel %}<th class="sp-wahl"><input type="checkbox" class="li-wahl-alle" title="alle sichtbaren markieren" aria-label="alle sichtbaren markieren"></th>{% endif %}

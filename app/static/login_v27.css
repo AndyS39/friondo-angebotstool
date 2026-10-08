@@ -4,6 +4,116 @@
    Login-Protokoll. Nur Tokens aus style.css; wird in den Templates der
    Anmeldung und Benutzerverwaltung eingebunden (nicht in base.html). */
 
+/* --- v27-Nachtrag 2: Anmeldeseite zweispaltig (Muster SingleKey ID) ------------
+   Links Logo/Formular, rechts das Energiehaus-Foto bildschirmhoch (object-fit:
+   cover). Farben nur über die Tokens aus style.css (--friondo-blau,
+   --friondo-dunkel, Grautöne), keine externen Schriften. Unter 900 px eine Spalte
+   mit Kopfbild (max. 180 px), unter 500 px ohne Foto. */
+main.login-main {
+    max-width: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+.login-buehne {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: minmax(360px, 44%) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    width: 100%;
+    background: #fff;
+}
+.login-spalte {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2.5rem 1.5rem;
+}
+.login-karte.login-box {
+    width: 100%;
+    max-width: 420px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+}
+.login-logo {
+    display: block;
+    height: 48px;
+    width: auto;
+    margin: 0 0 1.4rem;
+}
+.login-box h1 {
+    color: var(--friondo-dunkel);
+    font-size: var(--t-xl);
+    line-height: 1.2;
+    margin: 0 0 0.2rem;
+}
+.login-untertitel {
+    color: var(--g-500);
+    font-size: var(--t-m);
+    margin: 0 0 1.4rem;
+}
+.login-box label { color: var(--g-700); font-weight: 600; font-size: var(--t-s); }
+.login-box label.login-bleiben { font-weight: 400; }
+.login-box input[type="password"],
+.login-box select {
+    border: 1px solid var(--g-300);
+    border-radius: var(--r-s);
+    background: #fff;
+    color: var(--text);
+}
+.login-box input:focus,
+.login-box select:focus {
+    outline: 2px solid var(--friondo-blau);
+    outline-offset: 1px;
+    border-color: var(--friondo-blau);
+}
+.login-box .login-knopf {
+    display: block;
+    width: 100%;
+    margin-top: 1.1rem;
+    background: var(--friondo-blau);
+    color: #fff;
+    border: none;
+    border-radius: var(--r-s);
+    font-size: var(--t-l);
+    padding: 0.8rem 1rem;
+}
+.login-box .login-knopf:hover { background: var(--friondo-blau-dunkel); }
+.login-box .login-fehler { margin: 1rem 0 0; }
+.login-bleiben-block[hidden] { display: none; }
+.login-foto {
+    position: relative;
+    overflow: hidden;
+    min-height: 100%;
+    background: var(--friondo-dunkel);
+}
+.login-foto img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+}
+@media (max-width: 900px) {
+    .login-buehne {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+    }
+    .login-foto { order: -1; height: 180px; min-height: 0; max-height: 180px; }
+    .login-spalte { align-items: flex-start; padding: 1.8rem 1.25rem 2.2rem; }
+}
+@media (max-width: 500px) {
+    .login-foto { display: none; }
+    .login-buehne { grid-template-rows: minmax(0, 1fr); }
+    .login-spalte { padding: 1.4rem 1rem 2rem; }
+    .login-logo { height: 40px; }
+}
+
 /* --- Login: Häkchen „angemeldet bleiben“ unter der PIN ------------------------- */
 .login-karte .login-bleiben {
     display: flex;

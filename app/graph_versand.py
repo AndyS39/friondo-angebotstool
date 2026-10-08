@@ -150,6 +150,48 @@ def _graph_aufruf(methode: str, pfad: str, token: str, daten: dict | None = None
     return json.loads(inhalt) if inhalt else {}
 
 
+# --- v29 (PLAN_LEAD_V4 Phase 142): Postfach-Abruf für den Lauf lead-mail-abruf ---
+# Nur additiv: Antworten und Unzustellbarkeitsberichte aus dem Lead-Absender-
+# Postfach (termin@friondo.de, Shared Mailbox mit Lesezugriff – docs/graph-
+# einrichtung.md). Alle drei Funktionen laufen ohne Datenbanksitzung (der
+# Aufrufer liest vorher mit db.kurz() und schreibt danach in einer neuen).
+
+def postfach_ungelesen(token: str, postfach: str, top: int = 50) -> list[dict]:
+    """Ungelesene Nachrichten des Posteingangs (Shared Mailbox `postfach`,
+    leer = eigenes Postfach) mit Betreff, Absender, Empfängern, Body."""
+    import urllib.parse
+    basis = f"/users/{urllib.parse.quote(postfach)}" if postfach else "/me"
+    antwort = _graph_aufruf(
+        "GET", f"{basis}/mailFolders/inbox/messages?$top={int(top)}"
+               "&$filter=isRead eq false"
+               "&$select=id,subject,from,toRecipients,receivedDateTime,body,bodyPreview,"
+               "conversationId,internetMessageId", token)
+    return antwort.get("value", [])
+
+
+def nachricht_kopfzeilen(token: str, postfach: str, nachricht_id: str) -> dict:
+    """Internet-Kopfzeilen einer Nachricht ({name (klein): wert}), z. B.
+    in-reply-to, references, x-ms-exchange-message-is-ndr."""
+    import urllib.parse
+    basis = f"/users/{urllib.parse.quote(postfach)}" if postfach else "/me"
+    antwort = _graph_aufruf("GET", f"{basis}/messages/{urllib.parse.quote(nachricht_id)}"
+                                   "?$select=internetMessageHeaders", token)
+    return {str(k.get("name", "")).lower(): str(k.get("value", ""))
+            for k in antwort.get("internetMessageHeaders", []) or []}
+
+
+def nachricht_gelesen_markieren(token: str, postfach: str, nachricht_id: str) -> bool:
+    """isRead = true (damit die Nachricht beim nächsten Lauf nicht erneut kommt)."""
+    import urllib.parse
+    basis = f"/users/{urllib.parse.quote(postfach)}" if postfach else "/me"
+    try:
+        _graph_aufruf("PATCH", f"{basis}/messages/{urllib.parse.quote(nachricht_id)}",
+                      token, {"isRead": True})
+        return True
+    except Exception:
+        return False
+
+
 def info_mail_senden(betreff: str, text: str) -> bool:
     """Sendet eine kurze Info-Mail an das eigene Postfach (Fern-Signatur,
     Phase 28). Best effort: ohne Anmeldung/Berechtigung einfach False."""

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "leadmanagement/_nav.html" import lm_nav with context %}
 {% from "_symbole.html" import symbol %}
 
 {% block titel %}Terminassistent – {{ kunde.anzeige_name }}{% endblock %}
@@ -96,15 +96,18 @@
     </div>
 </section>
 
-<h2>Top {{ vorschlaege | length }} Vorschläge
+{# v29 (PLAN_LEAD_V4 Phase 143): genau `anzahl` Vorschläge (Parameter vorschlaege_anzahl,
+   Standard 3) – Vorschlag 1 als „Ideal“ (Rahmen Friondo-Blau, Badge, Begründung) #}
+<h2>Top {{ anzahl | default(vorschlaege | length) }} Vorschläge <span class="dezent">({{ vorschlaege | length }} gefunden)</span>
     <span class="dezent">Dauer 90 Min · Raster 30 Min · Puffer = max(Mindestpuffer, Fahrzeit)</span></h2>
 <div class="lmt-vorschlaege">
 <div class="vorschlag-karten lmt-karten">
 {% for v in vorschlaege %}
-    <div class="vorschlag-karte lmt-vorschlag {{ 'aktiv' if loop.first }}"
+    <div class="vorschlag-karte lmt-vorschlag {{ 'aktiv' if loop.first }}{{ ' lmt-ideal' if v.ideal }}"
          data-ad="{{ v.ad.id }}" data-datum="{{ v.beginn.strftime('%Y-%m-%d') }}"
-         data-nr="{{ loop.index }}">
-        <h3>{{ loop.index }}. {{ v.beginn | de_datum('%a %d.%m.%Y · %H:%M') }} Uhr</h3>
+         data-nr="{{ loop.index }}" {% if v.ideal %}data-ideal="1"{% endif %}>
+        <h3>{{ loop.index }}. {{ v.beginn | de_datum('%a %d.%m.%Y · %H:%M') }} Uhr{% if v.ideal %}<span class="lmt-ideal-badge" title="{{ v.ideal_grund }}">Ideal</span>{% endif %}</h3>
+        {% if v.ideal %}<p class="lmt-ideal-grund">{{ v.ideal_grund }}</p>{% endif %}
         <p><strong>{{ v.ad.name }}</strong>
             {% if v.wunsch %}<span class="abzeichen">Wunschzeit ✓</span>{% endif %}
             {% if v.tour_tag %}<span class="abzeichen">Tour-Tag</span>{% endif %}
@@ -162,7 +165,7 @@
         <label class="schmal">Uhrzeit <input type="time" name="uhrzeit" required
                                            step="{{ raster_manuell * 60 }}" value="{{ uhrzeit }}"></label>
         <label>Außendienstler
-            <select name="ad_id">
+            <select name="ad_id" id="lmt-ad-wahl">
                 {% for ad in kandidaten %}
                     <option value="{{ ad.id }}" {{ 'selected' if (form_ad | string == ad.id | string) or (not form_ad and kalender_ad == ad.id) }}>{{ ad.name }}</option>
                 {% endfor %}
@@ -174,9 +177,16 @@
                     {% endfor %}
                 </optgroup>
                 {% endif %}
+                {#- v29 (Phase 143): gewählte „Weitere Kalender“ – Buchung außerhalb der Vorauswahl mit Warnhinweis #}
+                <optgroup label="Weitere Kalender (außerhalb der Vorauswahl)" id="lmt-weitere-optgroup" {{ '' if weitere_aktiv else 'hidden' }}>
+                    {% for w in weitere_aktiv | default([]) %}
+                    <option value="{{ w.id }}" data-ausserhalb="1" {{ 'selected' if form_ad | string == w.id | string }}>{{ w.name }}{{ ' (HV)' if w.hv }}</option>
+                    {% endfor %}
+                </optgroup>
             </select>
         </label>
     </div>
+    <div class="lmt-ausserhalb-warnung" id="lmt-ausserhalb" hidden>{{ symbol('warnung') }} Dieser Kalender liegt außerhalb der Vorauswahl (Kompetenz/Kanal/Handelsvertreter) – Buchung nur mit Bestätigung „Konflikte geprüft – trotzdem buchen“.</div>
     <div id="lmt-konflikte" class="lmt-konflikte" hidden></div>
     <div class="formzeile">
         <label class="kontrollfeld {{ '' if warnungen else 'lmt-versteckt' }}" id="lmt-bestaetigen">
@@ -187,28 +197,45 @@
     </div>
 </form>
 
-{% if kalender_ad %}
-<h3>Woche · {{ benutzer_map[kalender_ad].name if benutzer_map.get(kalender_ad) else '?' }}
-    <span class="dezent">(Tool-Termine aller Arten, Outlook belegt; gestrichelt = vorgemerkt)</span></h3>
-<table class="tabelle kalender-tabelle" style="max-width:1100px">
-    <thead><tr>{% for tag in woche.tage %}<th>{{ tag | de_datum('%a %d.%m.') }}</th>{% endfor %}</tr></thead>
-    <tbody><tr>
-    {% for tag in woche.tage %}
-        <td style="vertical-align:top">
-            {% for t in woche.je_ad[kalender_ad].termine.get(tag.date(), []) %}
-                <div class="kalender-eintrag typ-{{ t.typ or 'vot' }} {{ 'vorgemerkt' if t.status == 'vorgemerkt' }}"
-                     title="{{ typ_namen.get(t.typ or 'vot', t.typ) }} · {{ status_namen.get(t.status, t.status) }}">
-                    {{ t.beginn.strftime('%H:%M') }}
-                    {{ t.adresse.split(',')[-1] if t.adresse else '' }}</div>
-            {% endfor %}
-            {% for b in woche.je_ad[kalender_ad].belegt.get(tag.date(), []) %}
-                <div class="kalender-eintrag belegt">{{ b[0].strftime('%H:%M') }}–{{ b[1].strftime('%H:%M') }} Outlook</div>
-            {% endfor %}
-        </td>
-    {% endfor %}
-    </tr></tbody>
-</table>
-{% endif %}
+{# v29 (PLAN_LEAD_V4 Phase 143): Kalenderansicht der in Frage kommenden Vertriebler –
+   Wochenansicht Mo–Sa im 15-Minuten-Raster (Arbeitszeiten der AD-Profile), Tool-
+   Termine und Outlook-Belegt (nur kalender_sync = an, nie für HV), Sperrzeiten der
+   HV, die Vorschläge als markierte Slots (1 = Ideal); Klick auf einen freien Slot
+   füllt das Formular „Manuell setzen“ (Konfliktprüfung). Daten nachgelagert per
+   fetch GET …/termin/kalender.json?woche=… (Cache 10 Min, ?neu=1); Aufklappmenü
+   „Weitere Kalender“ (je Nutzer gemerkt, POST …/termin/kalender/auswahl). #}
+<section class="lmt-kalender" id="lmt-kalender" data-url="{{ kalender_url }}" data-auswahl-url="{{ auswahl_url }}"
+         data-vorgang="{{ vorgang.id }}" data-hv="{{ '1' if hv_id else '' }}" data-buchbar="{{ '1' if buchbar else '' }}">
+    <div class="lmt-kalender-kopf">
+        <h2>Kalender der Kandidaten <span class="dezent">Mo–Sa · 15-Minuten-Raster · Arbeitszeiten der AD-Profile · Klick auf einen freien Slot = manuell buchen</span></h2>
+        <div class="lmt-kalender-nav" role="group" aria-label="Woche">
+            <button type="button" class="knopf klein zweitrangig" data-woche="vor" title="Vorherige Woche">‹</button>
+            <b data-rolle="woche">…</b>
+            <button type="button" class="knopf klein zweitrangig" data-woche="nach" title="Nächste Woche">›</button>
+            <button type="button" class="knopf klein ghost" data-woche="start" title="Woche des ersten Vorschlags">Woche des Vorschlags</button>
+            <button type="button" class="knopf klein ghost" data-kalender-neu title="Kalender neu laden (Cache verwerfen)">{{ symbol('aktualisieren') }} Neu laden</button>
+        </div>
+        {% if not hv_id %}
+        <details class="lmt-weitere lm-mehrfach{{ ' aktiv' if weitere_aktiv }}" id="lmt-weitere">
+            <summary class="knopf klein zweitrangig" title="Zusätzliche Kalender einblenden (außerhalb der Vorauswahl, je Nutzer gemerkt)">Weitere Kalender{% if weitere_aktiv %} ({{ weitere_aktiv | length }}){% endif %}</summary>
+            <div class="lmt-weitere-liste">
+                {% for w in weitere_wahl %}
+                <label><input type="checkbox" name="weitere" value="{{ w.id }}" data-name="{{ w.name }}{{ ' (HV)' if w.hv }}" {{ 'checked' if w.gewaehlt }}> {{ w.name }}{% if w.hv %} <span class="abzeichen">HV</span>{% endif %}</label>
+                {% else %}
+                <span class="dezent">Alle aktiven Vertriebler sind bereits Kandidaten.</span>
+                {% endfor %}
+            </div>
+        </details>
+        {% endif %}
+    </div>
+    <p class="lmt-kalender-hinweis dezent" data-rolle="hinweis">Kalender wird geladen …</p>
+    <div class="lmt-kalender-wrap"><table class="lmt-kalender-tabelle" data-rolle="tabelle" aria-label="Wochenkalender"></table></div>
+    <div class="lmt-kalender-legende">
+        <span><i class="frei"></i>frei (Arbeitszeit)</span><span><i class="aus"></i>außerhalb der Arbeitszeit</span>
+        <span><i class="termin"></i>Tool-Termin</span><span><i class="belegt"></i>Outlook belegt</span>
+        <span><i class="sperr"></i>Sperrzeit (HV)</span><span><i class="vorschlag"></i>Vorschlag</span><span><i class="ideal"></i>Vorschlag 1 „Ideal“</span>
+    </div>
+</section>
 
 {% if termine %}
 <h2>Termine dieses Leads</h2>

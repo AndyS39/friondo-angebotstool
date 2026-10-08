@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_symbole.html" import symbol %}
-{% from "leadmanagement/_nav.html" import lm_nav, lm_umschalter %}
+{% from "leadmanagement/_nav.html" import lm_nav, lm_umschalter with context %}
 {% from "leadmanagement/_tabelle.html" import lead_tabelle %}
 
 {% block titel %}{{ board_info.titel }} – Lead-Management{% endblock %}
@@ -18,7 +18,10 @@
    Tabellen-Containers (.lm-tabellen; Sticky-Tabellenkopf bleibt), Spalten je
    Nutzer: Häkchen = ein-/ausblenden, Spaltenkopf ziehen = Reihenfolge,
    Stift = umbenennen, Klick = sortieren (gemerkt), „Zurücksetzen“ = Standard.
-   Verhalten: app/static/lm_boards.js (über lm_nav eingebunden). #}
+   Verhalten: app/static/lm_boards.js (über lm_nav eingebunden).
+   v29 (PLAN_LEAD_V4 Phasen 140/141): Sammelaktion „An Handelsvertreter verschieben“
+   (zwei Ziel-Schaltflächen, hv_gruppen_wahl), Spaltenbreite je Nutzer (Ziehgriff
+   im Spaltenkopf, <colgroup> im Makro lead_tabelle). #}
 {% block inhalt %}
 {{ lm_nav(board) }}
 <div class="seitenkopf lm-boardkopf" data-lm-board="{{ board }}">
@@ -102,8 +105,18 @@
         <select name="status" id="lm-sammel-status">
             {% for s in ctx.status_wahl if s.setzbar and not s.doppelt %}<option value="{{ s.key }}" data-grund="{{ s.grund }}">{{ s.label }}</option>{% endfor %}
         </select></label>
+    {#- v29 (PLAN_LEAD_V4 Phase 140): „An Handelsvertreter verschieben“ – zwei Schaltflächen,
+        Ziele aus hv_gruppe_rene/hv_gruppe_simon (Namen aus der Benutzerverwaltung) #}
+    <span class="lm-sammel-hv" id="lm-sammel-hv" hidden>
+        {% for g in hv_gruppen_wahl %}
+        <button class="knopf klein" type="submit" name="ziel" value="{{ g.key }}" data-ziel="{{ g.key }}"
+                title="Markierte Leads an {{ g.name }} verschieben{{ ' – ' ~ g.zusatz if g.zusatz }}; Ausschlussliste (Kanal/Quelle nur Innendienst) wird je Lead geprüft">{{ symbol('nutzer') }} {{ g.name }}{% if g.zusatz %} ({{ g.zusatz }}){% endif %}</button>
+        {% else %}
+        <span class="dezent">Keine Ziele hinterlegt – Lead-Einstellungen → HV-Gruppen.</span>
+        {% endfor %}
+    </span>
     <input type="hidden" name="grund"><input type="hidden" name="grund_text"><input type="hidden" name="bis">
-    <button class="knopf klein" type="submit">Ausführen</button>
+    <button class="knopf klein" type="submit" id="lm-sammel-ausfuehren">Ausführen</button>
     <button class="knopf klein zweitrangig" type="button" id="lm-sammel-leeren">Auswahl aufheben</button>
     <span class="dezent">Jede Sammelaktion schreibt je Lead eine Aktivität; Pflichtgründe werden einmal abgefragt.</span>
 </form>

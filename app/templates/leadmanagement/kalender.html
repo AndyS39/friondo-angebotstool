@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "leadmanagement/_nav.html" import lm_nav with context %}
 {% from "_symbole.html" import symbol %}
 
 {% block titel %}Terminkalender – Lead-Management{% endblock %}
@@ -59,6 +59,14 @@
                     {% set v = vorgaenge.get(t.vorgang_id) %}
                     {% set kunde = kunden_map.get(v.kunde_id) if v else none %}
                     {% set typ = t.typ or 'vot' %}
+                    {% if typ == 'sperrzeit' %}
+                    {#- v29 (PLAN_LEAD_V4 Phase 143): Sperrzeit eines Handelsvertreters – kein Vorgang,
+                        kein Umbuchen/Absagen hier (Pflege in „Meine Termine“ der HV-Sicht) #}
+                    <div class="kalender-eintrag typ-sperrzeit" title="Sperrzeit (Handelsvertreter){{ ' · ' ~ t.grund_text if t.grund_text }}">
+                        {{ t.beginn.strftime('%H:%M') }}–{{ t.ende.strftime('%H:%M') if t.ende }} Sperrzeit
+                        {% if t.grund_text %}<span class="lmt-typ">{{ t.grund_text }}</span>{% endif %}
+                    </div>
+                    {% else %}
                     <div class="kalender-eintrag typ-{{ typ }} {{ 'vorgemerkt' if t.status == 'vorgemerkt' }}"
                          draggable="{{ 'false' if t.quelle == 'monday' else 'true' }}"
                          data-termin="{{ t.id }}" data-ad="{{ ad_id }}"
@@ -80,6 +88,7 @@
                                 onclick="absageOeffnen(this)">×</button>
                         {% endif %}
                     </div>
+                    {% endif %}
                 {% endfor %}
                 {% for b in woche.je_ad[ad_id].belegt.get(tag.date(), []) %}
                     <div class="kalender-eintrag belegt">{{ b[0].strftime('%H:%M') }}–{{ b[1].strftime('%H:%M') }}</div>

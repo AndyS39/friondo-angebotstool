@@ -25,7 +25,9 @@ in `docs/betrieb.md` → „Update im Wartungsfenster“; nach `update.bat` läu
   Menü → „PIN ändern“ (`/pin-wechsel`) ändern (aktuelle PIN + neue PIN zweimal).
 - **„Auf diesem Gerät angemeldet bleiben“:** Das Häkchen auf der Anmeldeseite hält
   Außendienst und Montage 30 Tage angemeldet (Handy/Tablet). Büro-Rollen bleiben – auch
-  mit Häkchen – 12 Stunden angemeldet. Nur auf eigenen Geräten setzen.
+  mit Häkchen – 12 Stunden angemeldet. Nur auf eigenen Geräten setzen. *Seit dem
+  Nachtrag 2 (Update v28/v29) ist die Anmeldeseite zweispaltig mit Foto, und Büro-Rollen
+  sehen das Häkchen nicht mehr.*
 - **Sperre nach Fehlversuchen:** Nach 5 falschen PINs innerhalb von 15 Minuten ist der
   Benutzer 15 Minuten gesperrt („Zu viele Fehlversuche – bitte in 15 Minuten erneut
   versuchen oder den Admin um eine neue PIN bitten.“). Der Admin kann die Sperre sofort

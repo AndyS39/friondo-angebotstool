@@ -26,8 +26,9 @@
              data-assistent="{{ kartei_url }}/termin" data-text-laden="{{ vorschlaege_texte.laden }}"
              data-text-adresse="{{ vorschlaege_texte.adresse_fehlt }}"
              data-text-fehler="{{ vorschlaege_texte.nicht_verfuegbar }}" aria-live="polite">
+            {#- v29 (Phase 143): genau vorschlaege_anzahl (Standard 3) – der erste als „Ideal“ #}
             <div class="lk-vorschlaege-kopf"><strong>Terminvorschläge</strong>
-                <span class="dezent">Top 5 des Assistenten für den vorgefilterten Vertrieblerkreis</span></div>
+                <span class="dezent" data-rolle="untertitel">Top {{ vorschlaege_anzahl | default(3) }} des Assistenten für den vorgefilterten Vertrieblerkreis – der erste ist „Ideal“</span></div>
             <p class="lk-vorschlaege-hinweis {{ 'lm-warn' if vorschlaege.status == 'adresse_fehlt' else ('lm-blau' if vorschlaege.status == 'hv_lead' else 'dezent') }}"
                data-rolle="hinweis" data-status="{{ vorschlaege.status }}">{{ symbol('warnung' if vorschlaege.status == 'adresse_fehlt' else ('nutzer' if vorschlaege.status == 'hv_lead' else 'uhr')) }} {{ vorschlaege.hinweis }}</p>
             <ol class="lk-vorschlaege-liste" data-rolle="liste" hidden></ol>
@@ -128,7 +129,13 @@
         {% if anhaenge_bilder %}
         <div class="lk-galerie">
             {% for d in anhaenge_bilder[:12] %}
-                <a href="/vorgaenge/galerie/datei/{{ d.id }}" target="_blank" rel="noopener" title="{{ d.sparte }} · {{ d.ordner }} · {{ d.dateiname }}">
+                {# v28 (Phase 136): Lightbox statt Sofort-Download – Daten als data-lb-* wie in _galerie.html #}
+                <a href="/vorgaenge/galerie/datei/{{ d.id }}" class="pj-lb-link"
+                   data-lb-gruppe="{{ vorgang.id }}/{{ d.sparte }}/{{ d.ordner }}" data-lb-id="{{ d.id }}"
+                   data-lb-ordner="{{ d.ordner }}" data-lb-name="{{ d.dateiname }}"
+                   data-lb-datum="{{ d.hochgeladen_am.strftime('%d.%m.%Y %H:%M') if d.hochgeladen_am else '' }}"
+                   data-lb-bemerkung="{{ d.bemerkung or '' }}"
+                   onclick="return pjLightbox(event, this)" title="{{ d.sparte }} · {{ d.ordner }} · {{ d.dateiname }}">
                     <img src="/vorgaenge/galerie/datei/{{ d.id }}" alt="{{ d.dateiname }}" loading="lazy"></a>
             {% endfor %}
         </div>

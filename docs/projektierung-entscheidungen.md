@@ -845,3 +845,230 @@ eingestellten `freigabe_modus`.
 - Stufe 2: Räume per API, Webhook, Bilder, Wärmepumpen-Check.
 - Verwaiste CSS-Regeln `.ben-chip`/`.chips` in style.css (nur noch
   `docs/projektierung-prototyp.html` zeigt die Chips).
+
+## PLAN_PROJ_V6 (08.10.2026) – Umsetzung durch Claude Code (v28), Teil P1: Phasen 133, 134, 135, 139
+
+Pilot-Feedback 1: Wächter „warnen“, Aufgabe „entfällt“ mit Grund, Bedingungen
+`foerderung:`/`steckbrief:` als Laufzeitbedingung, Board in voller Breite mit
+Spalten-Scroll und Drop-Dialog, EIN Termin-Dialog mit Besetzung je Termin,
+Terminvorschläge Stufe 1, Stücklisten-Konvention. Phasen 136–138 (Notizen-Chat,
+Lightbox, Montage-Backend, Formulare) stehen im Abschnitt von Agent P2.
+Umgesetzt und getestet gegen die DB-Kopie `diagnose/v28_patches/db_P1.db`
+(`migrate.py` zweimal: zweiter Lauf „keine Änderungen nötig“).
+
+### Annahmen und ihre Auflösung (Phasen 133/134/135/139)
+
+| Nr. | Annahme | Umsetzung |
+|---|---|---|
+| P1-1 | Board-Spalten `flex: 1 1 0; min-width: 240px` (Plan) | So in `projektierung_v28.css`; Messwerte je Breite in `diagnose/v28_patches/p1_kontrollwerte.json` (bei 1 920 px mindestens sieben Spalten, bei 2 560 px alle neun). |
+| P1-2 | `main.breit` volle Breite nur auf Projektierungs-Seiten | Der Plan verlangt `main.breit { max-width: none }` UND „Angebotstool- und Lead-Seiten bleiben wie bisher“ – beide nutzen `main.breit` (Portal, Hauptboard, Kundenkartei …). Gelöst über die Zusatzklasse `pj-voll` (`main.breit.pj-voll` in `projektierung_v28.css`, nur in den Projektierungs-Templates); `style.css` bleibt unverändert. Soll die volle Breite doch überall gelten: eine Zeile in `style.css` (`main.breit { max-width: none; padding: 2rem 16px; }`). |
+| P1-3 | Vorschläge beginnen montags; Startadresse Firmensitz (Plan) | `kern.naechster_montag`, Parameter `montage_startadresse` (Standard Arnold-Overbeck-Str. 63-65, 47139 Duisburg); Fahrzeiten nur mit Routing-Anbieter (`routing_anbieter` ors/google mit Schlüssel), sonst Umweg „–“ und Hinweis. |
+| P1-4 | Personen-Liste im Termin-Dialog = Projektierung + Innendienst + Admin | `kern.PERSON_ROLLEN`; Außendienst nicht enthalten (Rückfrage, siehe unten). |
+| P1-5 | Go-live-Quote nur WP + spartenübergreifend | `stuecklisten._zaehlt_fuer_quote`: PV…/KL…-Positionen ohne Stücklisten-Zeile zählen nicht im Nenner; mit Zeile zählen sie wie alle anderen. |
+| P1-6 | Bestehende Aufgaben tragen die Bedingung nicht | `migration_v28` trägt `sichtbar_wenn` (steckbrief:/foerderung:/`<paket>.<nr>=`) aus der Logik an bestehenden Aufgaben nach, ändert aber keinen Status – „entfällt“ setzt erst der nächste Nachzieh-Lauf (`abhaengige_pruefen` bei Auswahl-Klick, Auftragsdaten, Förder-Hook). Aktionstyp/Optionen bestehender Aufgaben bleiben unverändert (Regel „Änderungen wirken auf neue Aktivierungen“). |
+| P1-7 | Von Hand gesetztes „entfällt“ hat Vorrang | `abhaengige_pruefen` öffnet nur Aufgaben wieder, deren Grund leer ist oder mit „Bedingung nicht erfüllt“ beginnt. |
+| P1-8 | Aufgabenbezogene Kommentare bleiben im Projektverlauf | Das Kommentarfeld des Reiters Verlauf schreibt in den Notizen-Chat des Vorgangs (Vertrag mit P2); Kommentare mit `aufgabe_id` (💬-Zähler an der Aufgabe) bleiben `ProjektVerlauf` mit `art = kommentar`. |
+| P1-9 | Besetzung bei Alt-Formularen | Kommt kein Feld `besetzung_gesetzt`, wird die Besetzung aus den Team-Mitgliedern vorbelegt (Bestandsimport, `team-termin`-Alias). |
+
+### Phase 133 – Wächter „warnen“, „entfällt“, Bedingungen
+
+- `kern.waechter_modus(session)` liest `waechter_modus` (warnen | sperren, Standard
+  warnen; Parametrierung → Projektierung-Einstellungen → „Board & Wächter“, Änderung
+  im Einstellungs-Protokoll). `phase_wechseln` behält Signatur und Rückgabe:
+  warnen = Wechsel immer möglich, Verlauf „… – mit offenen Punkten: <Liste>“ bzw.
+  „… – Begründung: <Text>“; sperren = bisheriger Override-Text. Rückwärts in beiden
+  Modi nur mit Begründung; „abgeschlossen“ in beiden Modi nur über „Rechnung
+  freigeben“ (vorher war ein Override mit Begründung möglich – bewusst geschlossen).
+- Wächter-Logik in `waechter_bloecke` (Text + Aufgaben je Block); `waechter_pruefen`
+  bleibt die Textliste, `waechter_details` liefert das JSON der Route
+  `GET /projektierung/gewerk/{id}/waechter?ziel=` (`modus`, `rueckwaerts`, `offen`
+  [{text, aufgabe_id, pflicht, gruppe}], `begruendung_pflicht`, `hinweis`, `sperre`).
+  Die Prüfung bleibt kumulativ (alle Stufen bis zur Zielphase, wie seit v15).
+- „entfällt“: `kern.aufgabe_entfaellt` / `aufgabe_wieder_aufnehmen`, Routen
+  `POST /projektierung/aufgabe/{id}/entfaellt` (Grund Pflicht, 400 „Bitte einen
+  Grund angeben.“) und `…/wieder-aufnehmen`; Status-Dropdown „Entfällt“ nimmt ein
+  Feld `grund` an (sonst „ohne Grund (Status-Auswahl)“); Auswahl-Optionen ohne `*`
+  tragen die Option als Grund; der BzA-Knopf „entfällt (nicht gefördert)“ schreibt
+  „nicht gefördert“ bzw. „Förderstatus unbekannt (TAIFUN)“. Paket-Zähler zählt
+  „entfällt“ wie erledigt und nennt es („alle erledigt · 1 entfällt“).
+- Bedingungen: `_schritt_sichtbar` kennt `foerderung:ja|nein` (`bza.ist_gefoerdert`,
+  None = sichtbar); `_laufzeit_bedingung` speichert jetzt auch `steckbrief:` und
+  `foerderung:` an der Aufgabe; `abhaengige_pruefen(session, gewerk, benutzer=None)`
+  liefert `{entfaellt, offen}` und setzt den Grund „Bedingung nicht erfüllt
+  (<Bedingung>)“ mit Verlaufseintrag; `bedingungen_nachziehen` (= Hook
+  `foerderung_schritte_nachziehen`, Rückgabe `{neu, entfaellt, offen}`) legt fehlende,
+  jetzt erfüllte Schritte an und trägt Bedingungen am Altbestand nach;
+  `steckbrief_schritte_nachziehen` ruft es und liefert weiter die Anzahl neuer
+  Schritte. „Logik prüfen“ (`projektierung_logik.sichtbar_wenn_pruefen`) meldet
+  unbekannte `sichtbar_wenn`-Formen als Hinweis (Schritt bleibt sichtbar).
+- Hook-Aufrufe: `routers/projektierung.auftragsdaten_speichern` (über
+  `kern.auftragsdaten_speichern`); der Angebots-Editor (`routers/angebote.py`,
+  `kfw_gefoerdert` bei TAIFUN-Einträgen, Förderblock) ist eine fremde Datei –
+  Vorschlag im Ergebnisbericht P1.
+
+### Phase 134 – Board
+
+- Volle Breite über `main.breit.pj-voll` (siehe P1-2); `.pj-board` mit
+  `--pj-board-h` (JS: Viewport − Position − Hinweistext, min. 480 px),
+  `.pj-col` scrollt senkrecht, Kopf sticky; Dummy-Scrollbalken `#pj-hscroll`
+  über dem Board synchron in beide Richtungen; Shift + Mausrad als Fallback;
+  WebKit-Scrollbalken 12 px, `scrollbar-gutter: stable`.
+- Drag & Drop öffnet `dlg-phase-board` (einmal je Seite, Inhalt per
+  `…/waechter?ziel=`), Senden per fetch an `POST …/phase-drop` (JSON `{ok,
+  meldung, phase, projekt_status}`); bei ok wandert die Karte in die Zielspalte
+  (bei Mehr-Gewerk-Karten in die Spalte des neuen Projektstatus), Spaltenzähler
+  und Kacheln werden angepasst, der Gewerk-Chip zeigt die neue Phase. Karten mit
+  mehreren offenen Gewerken fragen weiter „Welches Gewerk verschieben?“. Drop
+  unterminiert → terminiert öffnet den gemeinsamen Termin-Dialog (Art Montage),
+  der umgekehrte Weg zeigt den Hinweis „Termin in der Projektakte löschen (Block
+  Termine)“ als Meldung. Neu: Knopf „📅 Termin“ an unterminierten Karten.
+- Kontrollwerte ohne Playwright: `diagnose/v28_patches/p1_screenshots.py` (Chrome
+  headless/DevTools, 30 Demo-Karten in Planung, Drop planung → montagevorbereitung
+  mit 3 offenen Punkten), Ergebnisse in `diagnose/v28_patches/p1_kontrollwerte.json`,
+  Bilder in `docs/design-v28/` (board-nachher-1920.png, board-nachher-1366.png,
+  akte-termine-nachher.png, phase-dialog.png). Ein „board-vorher.png“ aus dem
+  alten Code ist ohne Git-Zugriff im Agentenlauf nicht herstellbar – Vorschlag im
+  Bericht (Orchestrator: Worktree auf HEAD, Skript mit `--vorher`).
+
+### Phase 135 – Termine
+
+- Makro `termin_dialog(td, dialog_id, gewerk, termin, art, zurueck, sparte,
+  besetzung, titel)` in `templates/projektierung/_termin_dialog.html` (+
+  `termin_loeschen_dialog`); Kontext `td` aus
+  `routers/projektierung._termin_dialog_kontext`. Arten (`kern.TERMIN_ARTEN`):
+  montage → montage/wp, elektro → montage/elektro, sub → sub/sub, feinplanung,
+  abnahme, sonstige; Art beim Bearbeiten gesperrt. Verhalten (Art-Umschaltung,
+  Team → Besetzungs-Chips, Ende = Beginn + (Standarddauer − 1) Arbeitstage,
+  Terminvorschläge, Senden per fetch, bei Erfolg Neuladen mit Meldung) in
+  `static/projektierung.js`.
+- `kern.termin_speichern(session, gewerk, daten, benutzer, termin=None)` ist die
+  einzige Anlage-/Bearbeiten-Funktion; `team_termin_zuweisen` (Bestandsimport,
+  Alias `team-termin`) ruft sie. Routen `POST …/gewerk/{id}/termin` (alle Felder,
+  versteht auch `typ`/`zweck`/datetime-local), `POST …/termin/{id}/bearbeiten`,
+  `POST …/termin/{id}/loeschen` (Pflichtgrund, Outlook-Storno best effort über
+  `outlook_kalender.event_loeschen`, Besetzung mit; maßgeblicher Montagetermin →
+  „Montageteam zuweisen“ wieder offen; Elektro-Termin → „Elektro-Montageteam
+  zuweisen“). JSON `{ok, meldung, konflikte, termin_id}` bei Accept
+  application/json (400 bei Fehlern), sonst Redirect (`zurueck` oder Akte
+  `#termine`). Outlook-Sync macht die Route nach dem Commit (`event_senden` gibt
+  die Sitzung vor dem Netzaufruf frei).
+- Besetzung: `besetzung_ids`, `besetzung_map`, `besetzung_namen(kurz=True → „A.
+  Müller, B. Schmidt +2“)`, `besetzung_setzen` (ersetzt, Verlauf), Vorlage =
+  `team_mitglieder_ids`; `montage_benutzer` (Rolle Montage) für die
+  Mehrfachauswahl, `personen_benutzer` für „Person“. Kalender-Drag
+  (`termin_verschieben`): Teamwechsel belegt neu, wenn die Besetzung leer war
+  oder der alten Vorlage entsprach, sonst Verlauf „Besetzung beibehalten (von
+  Hand gesetzt)“; das Zuweisungsfeld am Gewerk folgt dem Team.
+- `terminstatus_map` wertet nur `typ = montage` mit `zweck in ("wp", "")` aus;
+  `person_konflikte` warnt je Person („<Name> ist am 12.11. bereits bei PR-…“),
+  Team-Konflikte wie bisher – kein Verbot.
+- Terminvorschläge Stufe 1 `kern.terminvorschlaege(session, gewerk, team_id,
+  dauer_tage, heute)` → Route `GET …/gewerk/{id}/terminvorschlaege.json`:
+  frühester Beginn = max(heute + `vorschlag_vorlauf_wochen`, Lieferdatum der
+  letzten UGL-Bestellung + 1 Arbeitstag) → nächster Montag; je aktivem
+  Montage-Team bis zu 5 freie Fenster (26 Wochen), Umweg aus `routing.fahrzeit`
+  (vorheriger/nächster Einsatz des Teams, ersatzweise Startadresse; Geocoding
+  über `geocoding.geokodieren` – beide geben die Sitzung vor dem Netzaufruf frei,
+  zusätzlich `verbindung_freigeben` vor dem Block); Sortierung Beginn, Umweg.
+  `vorschlag_outlook` ist nur angelegt.
+- `migration_v28(session)`: `zweck` für Montagetermine ohne Zweck (wp/elektro/
+  sub nach Zuweisungsfeld, sonst wp), Besetzung aus Team-Mitgliedern für Termine
+  ohne Besetzung, Bedingungen am Altbestand (P1-6). Zweiter Lauf: keine Meldung.
+- Akte: Block „Termine“ je Gewerk (Tabelle Art · Datum/Uhrzeit · Team/Person ·
+  Besetzung · Kunde · Outlook · Aktionen) ersetzt die Zeilen Montage/weitere
+  Termine; Zählerwechsel bleibt darunter; Terminübersicht und Kalender zeigen die
+  Besetzung als Tooltip; Terminübersicht legt über Gewerk-Wahl + Dialog an.
+
+### Phase 139 – Stücklisten
+
+- `docs/stuecklisten_v26.csv` eingespielt am 08.10.2026 über
+  `diagnose/v28_patches/p1_stuecklisten_import.py` (`stuecklisten.csv_import`,
+  Backup der Excel in `data/backups`): 121 Zeilen, 80 Positionen, Logik-
+  Validierung ohne Fehler (Ergebnis im Bericht P1). Die CSV bleibt liegen.
+- Konvention Lieferant (`stuecklisten.art_fuer_lieferant`, Standard aus
+  `stueckliste_standard_lieferant` = Collin): Collin = bestellen · Lager/LAGER =
+  Lagerware · „–“/„-“/KEIN-MATERIAL = Leistung ohne Material · anderer Name =
+  Fremdlieferant. `ugl.material_fuer_gewerk(…, mit_uebrigen=True)` liefert die
+  übrigen Zeilen für den Block „nicht bestellt (Lager / Leistung /
+  Fremdlieferant)“ der Bestell-Vorschau; nur „bestellen“ kommt in die UGL;
+  Positionen mit ausschließlich Lager-/Leistungs-Zeilen gelten als zugeordnet.
+  Stücklisten-Seite: Spalte „Art“, Konventionstext, Fortschritt nach P1-5.
+  Die Anleitung des privaten `docs/Stuecklisten-Entwurf.xlsx` wurde nicht
+  angefasst – die Konvention steht hier und auf der Seite.
+
+### Offen / Rückfragen P1
+
+- Soll die volle Breite (`main.breit`) auch für Portal/Lead-Seiten gelten (P1-2)?
+- Außendienst als „Person“ an Feinplanungsterminen (P1-4)?
+- `board-vorher.png` (alter Stand) vom Orchestrator aus HEAD erzeugen.
+- Hook `foerderung_schritte_nachziehen` im Angebots-Editor (fremde Datei).
+- Besetzung je Sub-Einsatz mit Subunternehmer (ohne Subteam) bleibt leer – reicht
+  der Subunternehmer als „Mannschaft“?
+
+## PLAN_PROJ_V6 (08.10.2026) – Umsetzung durch Claude Code (v28), Teil P2: Phasen 136, 137, 138
+
+### Phase 136 – Notizen, Lightbox
+- Der Vorgangs-Notizen-Chat ist die einzige Notizspur Lead → Montage; Projektakten-
+  Kommentare schreiben hinein (`herkunft = projektierung`), Systemeinträge bleiben im
+  Projektverlauf. Projekte ohne Vorgang (Altbestand) behalten den alten Weg. Migration:
+  Kopie der alten Kommentare mit `herkunft = "projektierung (migriert)"`, Dubletten-
+  schlüssel vorgang_id + zeit + text, Original bleibt.
+- Kennzeichen aus `herkunft`: projektierung → Projektierung, montage → Montage,
+  lead/anruf → Lead, vertrieb/erfassung/angebot/kombi-versand → Vertrieb, freie Texte
+  (z. B. „Galerie“) als grauer Badge, leer = kein Badge. Neue Einträge: Rolle bestimmt
+  die Herkunft (Projektierung/Leadmanagement/Montage), sonst Vertrieb; Seiten können sie
+  über `herkunft=` festlegen (Kundenkartei → lead).
+- Rechte: ID/Admin überall, AD eigene Vorgänge (wie Akte), Projektierung bei Vorgängen
+  mit Projekt, Leadmanagement bei sichtbarem Lead-Modul, Montage nur lesen. Keine
+  Bearbeitung/Löschung.
+- Aufgabenbezogene Kommentare (💬 an einer Aufgabe, Zähler je Aufgabe) bleiben im
+  Projektverlauf [ANNAHME P1-8/P2 – Rückfrage]; das Verlaufs-Kommentarfeld geht in den
+  Notizen-Chat.
+- Sofort-Download: Ursache war `Content-Disposition: attachment` der Datei-Route; Bilder
+  und PDFs kommen inline, Download nur über `?download=1`. Lightbox gruppiert je
+  Vorgang/Sparte/Ordner.
+
+### Phase 137 – Montage-Backend
+- Steckbrief: alle Felder aus `steckbrief_felder(sparte)` inkl. Auftragsdaten-Felder,
+  leere „–“; Ableitung wird nur nachgeholt, wenn ein Gewerk gar keine Werte hat. Ursache
+  des Befunds vom 06.10.: Template blendete leere Felder aus, `steckbrief_daten` liefert
+  nur gespeicherte Werte (Bestandsimport ohne Ableitung), CSS-Raster mit `nowrap`.
+- Besetzung entscheidet die Sichtbarkeit; Fallback für Termine ohne Besetzung = Team-
+  Mitglied/Person. Admin und Projektierung sehen alles (Team-Umschalter) [ANNAHME].
+- Kurzbericht beim Beenden optional [ANNAHME]; Abnahmeprotokoll beendet die Montage
+  automatisch (Verlauf „Montage beendet mit Abnahme“). Block „Offene Montage-Aufgaben“
+  entfällt; im Blatt gibt es keine Aufgaben mit rolle = montage, alte V1-Instanzen
+  werden weiter über den Formular-Abschluss erledigt.
+- „Gerät & Positionen (ohne Preise)“ eingeklappt zwischen Steckbrief und Teams &
+  Termine [ANNAHME]; Heizlast bleibt im Kopf.
+
+### Phase 138 – Formulare
+- Typen: datum · text (Option gross = Textarea 6 Zeilen) · ja_nein · auswahl · zahl ·
+  foto (Ordner, mehrere Dateien, Wert galerie:<id>:<name>|…, neue Fotos werden ergänzt
+  [ANNAHME]) · unterschrift · wiederhol (optionen = Einzelfeld, JSON-Liste); Optionsform
+  pflicht_wenn:<feld>≠<wert> bzw. =<wert> (text/zahl/auswahl/ja_nein/datum; leeres
+  Bezugsfeld zählt bei ≠ als Pflicht). „Logik prüfen“: unbekannte Typen/Optionsformen,
+  gross außerhalb text, unbekannte Bezugsfelder = Fehler (Upload abgelehnt). Lesehilfe:
+  Blatt „Lesehilfe“ der Live-Excel (v28, vom Orchestrator angelegt).
+- `ib_kaeltemittel` bleibt als freiwillige Angabe [ANNAHME des Plans – Rückfrage].
+- Ordner der Montagebericht-Fotos: Zählerschrank → Elektro, Außengerät → Außengerät,
+  Innengerät/Heizungsraum und Neue Anlage → Neue Anlage [ANNAHME des Plans].
+- Seitenname „Abweichungen & Bemerkungen“ [ANNAHME des Plans].
+- Restarbeiten aus Frage 10 ohne Frist/Foto, „keine“/„keine.“/„-“/„–“/„—“ → nichts,
+  Dubletten (wörtlich gleiche offene Restarbeit) übersprungen – gilt jetzt auch für die
+  Mängelliste des Abnahmeprotokolls.
+- PDF: Zeilen des Wiederholfelds „<Einzelfeld> n: <Wert>“ („Seriennummer 1: …“)
+  [ANNAHME]; zwei Unterschriften nebeneinander, Beschriftung = Bezeichnung ohne
+  „Unterschrift “-Präfix.
+- Bestehende Entwürfe mit alten Schlüsseln werden ignoriert (Renderer/PDF kennen nur die
+  Blattfelder); abgeschlossene PDFs bleiben.
+
+### Offen / Rückfragen P2
+1. `ib_kaeltemittel` als freiwillige Angabe belassen?
+2. Ordner der Montagebericht-Fotos (Elektro / Neue Anlage) oder eigene Ordner?
+3. Seitenname „Abweichungen & Bemerkungen“ bestätigen.
+4. Aufgabenbezogene Kommentare im Projektverlauf belassen oder in den Vorgangs-Chat?
+5. Kurzbericht beim Beenden ganz entfallen lassen?
+6. Projektierung lesend im Montage-Backend (Team-Umschalter) gewollt?
+7. PDF-Zeilenpräfix des Wiederholfelds („Seriennummer n“ vs. „Systemkomponente n“).
+8. Alte Formular-Entwürfe beim Update leeren? (heute ignoriert)

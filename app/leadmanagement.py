@@ -85,6 +85,9 @@ PARAMETER_START = {
     # --- v25: Lead-Management V3 (PLAN_LEAD_V3, Phasen 118–121) ---
     "score_aktiv": "aus",               # Phase 120: Score/Qualifizierung zentral abgeschaltet
     "ohne_schritt_tage": "2",           # Phase 120: Dashboard „Ohne nächsten Schritt“ (Tage seit letztem Versuch)
+    # --- v29: Lead-Management V4 (PLAN_LEAD_V4 Phase 142) ---
+    "absender_lead_mails": "termin@friondo.de",   # Absender ALLER Lead-Mails, kein Fallback
+    "hv_versandweg": "offen",           # OFFEN 2: offen | smtp | entwurf | leads_im_namen
 }
 
 
@@ -223,10 +226,22 @@ def aktivitaet(session: Session, vorgang_id: int, typ: str, text: str,
     return eintrag
 
 
-def benachrichtigen(session: Session, benutzer_ids, text: str, link: str) -> None:
-    """Glocken-Einträge mit art='lead' (Demo-Filter in app/benachrichtigungen)."""
+def benachrichtigen(session: Session, benutzer_ids, text: str, link: str,
+                    art: str = "") -> bool:
+    """Glocken-Einträge mit art='lead' (Demo-Filter in app/benachrichtigungen).
+    v29 (PLAN_LEAD_V4 Phase 141) „Glocke nur To-Dos“: angelegt wird nur, wenn die
+    Lead-Glocken-Art im Parameter glocke_lead_arten steht (app/lead_glocken.py;
+    Standard: nur die To-Do-Arten, die lead_todos selbst anlegt). `art` nennt die
+    Art des Aufrufers: lead_eingang, sla, wiedervorlage, zuweisung, kanalwechsel,
+    kundenantwort, terminaenderung, digest, quelle_auto; ohne Angabe „sonstige“
+    (nie erlaubt). Die Ereignisse bleiben als Aktivität in der Timeline.
+    Rückgabe True, wenn Glocken angelegt wurden."""
+    from app import lead_glocken
+    if not lead_glocken.glocke_erlaubt(session, art or "sonstige"):
+        return False
     from app import projektierung as kern
     kern.benachrichtigen(session, benutzer_ids, text, link, art="lead")
+    return True
 
 
 def leadmanager_benutzer(session: Session) -> list[Benutzer]:
@@ -525,9 +540,10 @@ def quelle_kampagne_aufloesen(session: Session, quelle_key: str = "",
                                 auto_angelegt=True)
             session.add(quelle)
             session.flush()
+            # v29 (Phase 141): Glocken-Art quelle_auto – standardmäßig gesperrt
             benachrichtigen(session, _admins(session),
                             f"Neue Quelle aus Eingang: {key} – bitte Typ/Kanal/Kosten prüfen",
-                            "/parametrierung/lead-quellen")
+                            "/parametrierung/lead-quellen", art="quelle_auto")
     if quelle is None:
         quelle = standard_quelle
     if quelle is None:
@@ -550,7 +566,7 @@ def quelle_kampagne_aufloesen(session: Session, quelle_key: str = "",
         session.flush()
         benachrichtigen(session, _admins(session),
                         f"Neue Kampagne aus Eingang: {kampagne.name} ({quelle.name})",
-                        "/parametrierung/lead-quellen")
+                        "/parametrierung/lead-quellen", art="quelle_auto")
     return quelle, (kampagne.id if kampagne is not None else None)
 
 
@@ -761,10 +777,12 @@ def lead_anlegen(session: Session, daten: dict, quelle: LeadQuelle | None,
                  else [b.id for b in session.query(Benutzer)
                        .filter(Benutzer.aktiv.is_(True))
                        if b.rolle == "admin" or b.hat_rolle("leadmanagement")])
+        # v29 (Phase 141): Glocken-Art lead_eingang – standardmäßig gesperrt,
+        # das Ereignis bleibt als Aktivität „Lead angelegt“ in der Timeline
         benachrichtigen(session, ziele,
                         f"Neuer Lead: {kunde.anzeige_name}, {kunde.ort or '?'} – "
                         f"{', '.join(sparten) or '–'} – {quelle_name}",
-                        f"/lead-management/lead/{vorgang.id}")
+                        f"/lead-management/lead/{vorgang.id}", art="lead_eingang")
     lead_phase_berechnen(session, vorgang)
     session.flush()
     return vorgang, status
@@ -1007,25 +1025,93 @@ def kaskade_zeitpunkt(session: Session, regel: str,
     return _arbeitsfenster_schieben(session, ziel)
 
 
+def _hv_versand_offen(session: Session, vorgang: Vorgang, termin, vorlage_key: str,
+                      hv) -> None:
+    """v29 (Phase 142, OFFEN 2) Zwischenlösung hv_versandweg = offen: keine
+    Kundenmail; Aktivität „<Vorlage> nicht gesendet: Versandweg für
+    Handelsvertreter offen“ und To-Do an den HV „… selbst senden“ mit Link auf
+    die Vorschau der fertigen Mail (Text + ICS). [ANNAHME: To-Do für
+    Bestätigung/Änderung/Absage, die Erinnerung −24 h nur als Aktivität.]"""
+    from app import lead_mail, lead_todos
+    name = lead_mail.vorlage_name(session, vorlage_key)
+    aktivitaet(session, vorgang.id, "mail_aus",
+               f"{name} nicht gesendet: Versandweg für Handelsvertreter offen "
+               f"(hv_versandweg = {lead_mail.hv_versandweg(session)})", ergebnis="hv_offen")
+    if vorlage_key == "terminerinnerung" or termin is None or not getattr(termin, "id", None):
+        return
+    vorschau = f"/lead-management/lead/{vorgang.id}/termin/{termin.id}/vorschau"
+    titel = {"terminbestaetigung": "Terminbestätigung selbst senden",
+             "terminaenderung": "Terminänderung selbst senden",
+             "terminabsage": "Terminabsage selbst senden"}.get(vorlage_key, f"{name} selbst senden")
+    try:
+        lead_todos.anlegen(session, None, hv.id, titel,
+                           text=f"Vorschau der fertigen Mail mit ICS: {vorschau}",
+                           faellig_am=datetime.now(), vorgang_id=vorgang.id)
+    except ValueError:
+        pass
+
+
 def mail_planen(session: Session, vorgang: Vorgang, vorlage_key: str,
                 termin=None, geplant_am: datetime | None = None):
     """Eintrag in die Kommunikations-Warteschlange (Phase 78 verarbeitet ihn);
-    ohne Kunden-E-Mail passiert nichts."""
+    ohne Kunden-E-Mail passiert nichts. Einzige Stelle, an der Lead-Mails
+    entstehen. v29 (Phase 142): Absender absender_lead_mails am Eintrag;
+    Terminbestätigung → Vorlage des zugewiesenen Vertrieblers (sonst Standard
+    mit Hinweis-Aktivität); Termin-Mails für Handelsvertreter-Leads folgen dem
+    Schalter hv_versandweg (offen = keine Mail, Aktivität + To-Do; die drei
+    übrigen Wege sind Erweiterungspunkte in lead_mail und verhalten sich bis
+    zur Umsetzung wie offen); unzustellbare Adresse → Status wartet_adresse.
+    Rückgabe None bei „keine Mail“."""
+    from app import lead_mail
     from app.models import KommunikationLog
     kunde = session.get(Kunde, vorgang.kunde_id)
     if kunde is None or not kunde.email:
         return None
+    if vorlage_key in lead_mail.VORLAGEN_AUSGEBLENDET:
+        return None   # v29: Nurture entfällt
+    # v29: Handelsvertreter-Lead (termin.ad_id bzw. vorgang.ad_id = HV) – OFFEN 2
+    if vorlage_key in lead_mail.HV_TERMIN_VORLAGEN:
+        from app import lead_v2
+        hv_id = (termin.ad_id if termin is not None and termin.ad_id else vorgang.ad_id)
+        hv = session.get(Benutzer, hv_id) if hv_id else None
+        if hv is not None and lead_v2.ist_handelsvertreter(session, hv):
+            weg = lead_mail.hv_versandweg(session)
+            if weg != "offen":
+                funktion = lead_mail.HV_VERSAND_FUNKTIONEN.get(weg)
+                eintrag, hinweis = funktion(session, vorgang, termin, vorlage_key) if funktion else (None, "")
+                if eintrag is not None:
+                    return eintrag
+                if hinweis:
+                    aktivitaet(session, vorgang.id, "system", hinweis)
+            _hv_versand_offen(session, vorgang, termin, vorlage_key, hv)
+            return None
     # v23 Phase 107 (C4-d): Doppelversand-Schutz – kein zweiter OFFENER Eintrag
     # gleicher Vorlage je Vorgang (ohne Termin-Bezug); Termin-Mails bleiben wie bisher
     if termin is None:
         from app import lead_anrufliste
         if lead_anrufliste.mail_bereits_geplant(session, vorgang.id, vorlage_key):
             return None
+    # v29: Versandregel Terminbestätigung – fehlt die eigene Vorlage des
+    # Vertrieblers, geht der Standard raus (Hinweis in der Aktivität; der Lauf
+    # lead-mail wählt die Vorlage beim Rendern über dieselbe Regel)
+    if vorlage_key == lead_mail.TERMIN_VORLAGE and termin is not None and termin.ad_id:
+        key, eigene = lead_mail.terminbestaetigung_key(session, termin.ad_id)
+        if not eigene:
+            ad = session.get(Benutzer, termin.ad_id)
+            aktivitaet(session, vorgang.id, "mail_aus",
+                       f"Terminbestätigung: keine eigene Vorlage für "
+                       f"{ad.name if ad else termin.ad_id} hinterlegt – Standard-Vorlage verwendet")
+    status = "geplant"
+    if vorgang.email_status == "ungueltig":
+        status = lead_mail.STATUS_WARTET_ADRESSE   # v29: Bounce – bis zur Adressänderung
     eintrag = KommunikationLog(
         vorgang_id=vorgang.id, termin_id=termin.id if termin else None,
         kanal="mail", vorlage_key=vorlage_key, an=kunde.email,
-        geplant_am=geplant_am or datetime.now(), status="geplant",
+        geplant_am=geplant_am or datetime.now(), status=status,
         modus=parameter_holen(session, "mail_modus", "protokoll"))
+    eintrag.absender = lead_mail.absender(session)
+    if status == lead_mail.STATUS_WARTET_ADRESSE:
+        eintrag.fehler_text = "wartet auf neue E-Mail-Adresse (unzustellbar)"
     session.add(eintrag)
     session.flush()
     return eintrag
@@ -1061,26 +1147,32 @@ def versuche_max(session: Session) -> int:
 
 def versuche_gesperrt(session: Session, vorgang: Vorgang) -> bool:
     """v23 (C1): nach dem letzten Versuch sind Nicht erreicht/Besetzt/Mailbox
-    gesperrt – der Lead steht auf „Nicht erreicht“ (Nurture +30)."""
+    gesperrt – der Lead steht auf „Nicht erreicht“ (v29: ohne Nurture)."""
     return ((vorgang.versuch_nr or 0) >= versuche_max(session)
             and vorgang.lead_phase == "nicht_erreicht")
 
 
-def _kaskaden_mail(session: Session, vorgang: Vorgang, aktion: str) -> None:
+def _kaskaden_mail(session: Session, vorgang: Vorgang, aktion: str) -> bool:
     """Aktion einer Kaskadenstufe: keine | mail_nicht_erreicht |
-    mail_disqualifiziert (v23) | mail_<vorlage_key> allgemein."""
+    mail_disqualifiziert (v23) | mail_<vorlage_key> allgemein. v29: mail_nurture
+    ist ohne Wirkung (Nurture entfällt). True = Mail geplant."""
+    from app import lead_mail
     aktion = (aktion or "keine").strip()
-    if aktion.startswith("mail_"):
-        mail_planen(session, vorgang, aktion[5:])
+    if aktion.startswith("mail_") and aktion[5:] not in lead_mail.VORLAGEN_AUSGEBLENDET:
+        return mail_planen(session, vorgang, aktion[5:]) is not None
+    return False
 
 
 def kaskade_anwenden(session: Session, vorgang: Vorgang, benutzer=None) -> str:
     """Nach Nicht erreicht / Besetzt / Mailbox: Mail-Aktion aus dem Blatt
-    Kaskade je Versuchsnummer; nach dem letzten Versuch Phase „Nicht erreicht“
-    (Nurture-Mail +30 Tage). v25 (PLAN_LEAD_V3 Phase 120): die Kaskade setzt
-    KEINE Wiedervorlage mehr (Spalte wiedervorlage_nach bleibt unbenutzt) –
-    Wiedervorlagen setzt der Nutzer über den Wiedervorlage-Button. Liefert
-    einen Meldungstext."""
+    Kaskade je Versuchsnummer; nach dem letzten Versuch Phase „Nicht erreicht“.
+    v25 (PLAN_LEAD_V3 Phase 120): die Kaskade setzt KEINE Wiedervorlage mehr
+    (Spalte wiedervorlage_nach bleibt unbenutzt) – Wiedervorlagen setzt der
+    Nutzer über den Wiedervorlage-Button. v29 (PLAN_LEAD_V4 Phase 142): Nurture
+    entfällt – nach dem letzten Versuch gilt ausschließlich die Aktion der
+    Spalte `nach_letztem` (Standard mail_disqualifiziert); ist sie mit der
+    Stufen-Aktion identisch, geht die Mail nur einmal raus. Liefert einen
+    Meldungstext."""
     from app import leadmanagement_logik
     logik = leadmanagement_logik.hole_logik()
     stufe = logik.stufe(vorgang.versuch_nr)
@@ -1092,19 +1184,21 @@ def kaskade_anwenden(session: Session, vorgang: Vorgang, benutzer=None) -> str:
         if str(stufe.aktion or "keine").startswith("mail_"):
             return f"Versuch {vorgang.versuch_nr} protokolliert – Mail geplant."
         return f"Versuch {vorgang.versuch_nr} protokolliert."
-    # letzter Versuch (oder Versuch über der Kaskade): Mail laut Blatt,
-    # ohne Eintrag die Vorlage disqualifiziert (C4)
-    _kaskaden_mail(session, vorgang,
-                   stufe.aktion if stufe is not None else "mail_disqualifiziert")
+    # letzter Versuch (oder Versuch über der Kaskade): Mail laut Blatt, danach
+    # die Aktion nach_letztem (ohne Eintrag disqualifiziert, C4) – keine Nurture
+    nach_letztem = logik.nach_letztem()
+    if stufe is not None:
+        _kaskaden_mail(session, vorgang, stufe.aktion)
+        if nach_letztem != (stufe.aktion or "").strip():
+            _kaskaden_mail(session, vorgang, nach_letztem)
+    else:
+        _kaskaden_mail(session, vorgang, nach_letztem)
     vorgang.lead_phase = "nicht_erreicht"
-    # v25: keine automatische Wiedervorlage mehr; die Nurture-Mail bleibt in
-    # 30 Tagen geplant (Prozess-Fix 27.09.2026: nicht sofort nach der
-    # „Nicht erreicht“-Mail)
+    # v25: keine automatische Wiedervorlage mehr
     vorgang.naechste_aktion_am = None
-    mail_planen(session, vorgang, "nurture",
-                geplant_am=datetime.now() + timedelta(days=30))
     aktivitaet(session, vorgang.id, "status",
-               "Kaskade ausgeschöpft – Phase Nicht erreicht (Nurture-Mail in 30 Tagen)",
+               "Kaskade ausgeschöpft – Phase Nicht erreicht "
+               f"(Aktion {nach_letztem.replace('mail_', 'Vorlage ') if nach_letztem.startswith('mail_') else nach_letztem})",
                benutzer=benutzer)
     return "Kaskade ausgeschöpft – Lead steht auf „Nicht erreicht“."
 
@@ -1308,9 +1402,10 @@ def taeglicher_lauf_leads(session: Session | None = None,
                        f"(war zurückgestellt: {vorgang.zurueckgestellt_grund or '-'})")
             if vorgang.leadmanager_id:
                 kunde = session.get(Kunde, vorgang.kunde_id)
+                # v29 (Phase 141): Glocken-Art wiedervorlage (standardmäßig gesperrt)
                 benachrichtigen(session, [vorgang.leadmanager_id],
                                 f"Wiedervorlage fällig: {kunde.anzeige_name if kunde else '?'}",
-                                f"/lead-management/lead/{vorgang.id}")
+                                f"/lead-management/lead/{vorgang.id}", art="wiedervorlage")
             anzahl += 1
             if anzahl % BLOCK_GROESSE == 0:
                 session.commit()
@@ -1329,11 +1424,12 @@ def taeglicher_lauf_leads(session: Session | None = None,
             for v in rote:
                 if v.leadmanager_id:
                     je_lm[v.leadmanager_id] = je_lm.get(v.leadmanager_id, 0) + 1
+            # v29 (Phase 141): Tagesdigest-Glocken art digest (standardmäßig gesperrt)
             for lm_id, zahl in je_lm.items():
                 benachrichtigen(session, [lm_id],
                                 f"{zahl} Lead{'s' if zahl != 1 else ''} ueber "
                                 "dem SLA (rot) - bitte heute anrufen",
-                                "/lead-management/anrufliste")
+                                "/lead-management/anrufliste", art="digest")
             if freie:
                 leiter = [b.id for b in session.query(Benutzer)
                           .filter(Benutzer.aktiv.is_(True),
@@ -1342,7 +1438,7 @@ def taeglicher_lauf_leads(session: Session | None = None,
                 benachrichtigen(session, leiter,
                                 f"{len(freie)} Lead{'s' if len(freie) != 1 else ''} "
                                 "ohne Leadmanager in der Anrufliste",
-                                "/lead-management/anrufliste")
+                                "/lead-management/anrufliste", art="digest")
         except Exception:
             pass   # Digest darf den Tageslauf nie blockieren
         # v23 Phase 111 (I2): Veranstaltungen rollierend nachlegen, vergangene archivieren
@@ -1843,10 +1939,12 @@ def termin_buchen(session: Session, vorgang: Vorgang, ad_id: int,
     vorgang.lead_phase = "terminiert"
     vorgang.terminiert_am = datetime.now()
     vorgang.naechste_aktion_am = None
+    # v29 (Phase 141): Glocken-Art terminaenderung [ANNAHME: neuer Termin beim AD
+    # zählt als Termin-Ereignis] – standardmäßig gesperrt, Aktivität bleibt
     benachrichtigen(session, [ad_id],
                     f"Neuer VOT-Termin {beginn.strftime('%d.%m. %H:%M')}: "
                     f"{kunde.anzeige_name}, {kunde.ort or '?'}",
-                    f"/lead-management/lead/{vorgang.id}")
+                    f"/lead-management/lead/{vorgang.id}", art="terminaenderung")
     session.flush()
     return termin, "Termin gebucht."
 
@@ -1905,7 +2003,7 @@ def termin_no_show(session: Session, termin: VotTermin, grund: str,
                             f"Termin {VOT_STATUS_NAMEN_LOKAL.get(status, status)}: "
                             f"{kunde.anzeige_name if kunde else '?'} – "
                             f"{termin.grund_text}",
-                            f"/lead-management/lead/{vorgang.id}")
+                            f"/lead-management/lead/{vorgang.id}", art="terminaenderung")
     session.flush()
 
 

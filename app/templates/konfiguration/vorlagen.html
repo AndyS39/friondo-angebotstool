@@ -10,14 +10,27 @@
 
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
+{# v27-Nachtrag 2: Reihenfolge beim Versand AD-Vorlage → Sparten-Vorlage → Standard #}
 <p class="dezent">Beim „Versand vorbereiten“ nimmt das Tool die Vorlage des Außendienstlers
-des Vorgangs (über die Erfassung); hat er keine eigene, gilt die Standard-Vorlage.
+des Vorgangs (über die Erfassung); hat er keine eigene, gilt die <strong>Vorlage der Sparte</strong>
+des Angebots (WP / PV / KL / WB); gibt es auch die nicht, die Standard-Vorlage.
+Der Kombi-Versand behält seine eigene Vorlage (Angebotstool-Einstellungen).
 Pflege durch Admin und Innendienst.</p>
 
+{# Reiter: Standard + je Sparte (v27-Nachtrag 2) #}
+<div class="tab-leiste vorlagen-reiter">
+    <a class="tab {{ 'aktiv' if not sparte and not benutzer_id }}" href="/parametrierung/vorlagen">Standard</a>
+    {% for sp in sparten %}
+        <a class="tab {{ 'aktiv' if sparte == sp }}" href="/parametrierung/vorlagen?sparte={{ sp }}"
+           title="{{ sparten_namen[sp] }}">{{ sp }} – {{ sparten_namen[sp] }}{{ ' ✓' if sparten_status[sp] }}</a>
+    {% endfor %}
+</div>
+
 <form method="get" action="/parametrierung/vorlagen" class="suchleiste">
-    <label class="kontrollfeld">Vorlage für
-        <select name="benutzer_id" onchange="this.form.submit()">
-            <option value="0" {{ 'selected' if not benutzer_id }}>Standard (alle)</option>
+    {% if sparte %}<input type="hidden" name="sparte" value="{{ sparte }}">{% endif %}
+    <label class="kontrollfeld">Vorlage für Außendienstler
+        <select name="benutzer_id" onchange="this.form.sparte && this.form.sparte.remove(); this.form.submit()">
+            <option value="0" {{ 'selected' if not benutzer_id }}>– Standard / Sparte –</option>
             {% for b in aussendienst %}
                 <option value="{{ b.id }}" {{ 'selected' if benutzer_id == b.id }}>
                     {{ b.name }}{{ ' ✓ eigene' if hat_vorlage[b.id] else ' (Standard)' }}</option>
@@ -28,7 +41,7 @@ Pflege durch Admin und Innendienst.</p>
     <label class="kontrollfeld">Vorschau mit Angebot
         <select name="angebot_id" onchange="this.form.submit()">
             {% for a in angebote %}
-                <option value="{{ a.id }}" {{ 'selected' if a.id == vorschau_angebot.id }}>{{ a.nummer }}</option>
+                <option value="{{ a.id }}" {{ 'selected' if a.id == vorschau_angebot.id }}>{{ a.nummer }} ({{ a.konfigurator_typ or 'WP' }})</option>
             {% endfor %}
         </select>
     </label>
@@ -38,8 +51,12 @@ Pflege durch Admin und Innendienst.</p>
 <div class="konfigurator-spalten">
     <form method="post" action="/parametrierung/vorlagen" class="formular konfigurator-haupt">
         <input type="hidden" name="benutzer_id" value="{{ benutzer_id }}">
-        <p><strong>{{ 'Vorlage für ' ~ ausgewaehlt.name if ausgewaehlt else 'Standard-Vorlage' }}</strong>
-        {% if ausgewaehlt and not eigene %}
+        <input type="hidden" name="sparte" value="{{ sparte }}">
+        <p><strong>
+            {% if sparte %}Sparten-Vorlage {{ sparte }} ({{ sparten_namen[sparte] }})
+            {% elif ausgewaehlt %}Vorlage für {{ ausgewaehlt.name }}
+            {% else %}Standard-Vorlage{% endif %}</strong>
+        {% if (ausgewaehlt or sparte) and not eigene %}
             <span class="dezent">– noch keine eigene; unten steht der Standard als Ausgangspunkt</span>
         {% endif %}</p>
         <div class="formzeile">
@@ -68,6 +85,10 @@ Pflege durch Admin und Innendienst.</p>
             <button class="knopf zweitrangig" type="submit" name="aktion" value="entfernen"
                     onclick="return confirm('Eigene Vorlage von {{ ausgewaehlt.name }} entfernen? Danach gilt der Standard.');">
                 Eigene Vorlage entfernen</button>
+            {% elif sparte and eigene %}
+            <button class="knopf zweitrangig" type="submit" name="aktion" value="entfernen"
+                    onclick="return confirm('Sparten-Vorlage {{ sparte }} entfernen? Danach gilt für {{ sparten_namen[sparte] }}-Angebote die Standard-Vorlage.');">
+                Sparten-Vorlage entfernen</button>
             {% endif %}
         </div>
     </form>
@@ -90,7 +111,7 @@ Pflege durch Admin und Innendienst.</p>
 </div>
 
 {% if vorschau %}
-<h2>Vorschau <span class="dezent">– Angebot {{ vorschau_angebot.nummer }}, als HTML-Mail</span></h2>
+<h2>Vorschau <span class="dezent">– Angebot {{ vorschau_angebot.nummer }} ({{ vorschau_angebot.konfigurator_typ or 'WP' }}), als HTML-Mail</span></h2>
 <div class="hinweis">
     <p><strong>Betreff:</strong> {{ vorschau.betreff }}</p>
     <div class="mail-vorschau">{{ vorschau.text_html | safe }}</div>

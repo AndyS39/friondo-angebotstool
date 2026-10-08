@@ -295,28 +295,53 @@ def ablehnungsgruende_pflegen(request: Request,
 
 # --- E-Mail-Vorlagen (Phase 30) ------------------------------------------
 
+def _vorlagen_sparte(wert: str) -> str:
+    """v27-Nachtrag 2: Reiter-Parameter „sparte“ (WP/PV/KL/WB), sonst leer."""
+    from app import mail_vorlagen
+    wert = (wert or "").strip().upper()
+    return wert if wert in mail_vorlagen.SPARTEN else ""
+
+
 @router.get("/vorlagen")
 def vorlagen_uebersicht(request: Request, benutzer_id: int = 0,
-                              angebot_id: int = 0,
+                              angebot_id: int = 0, sparte: str = "",
                               session: Session = Depends(get_session)):
     """Standard-Vorlage + optionale Vorlage je Außendienstler, mit Platzhalter-
-    liste und Vorschau anhand eines echten Angebots."""
+    liste und Vorschau anhand eines echten Angebots.
+    v27-Nachtrag 2: Reiter je Sparte (?sparte=WP|PV|KL|WB) – die Sparten-Vorlage
+    greift beim Versand nach der AD-Vorlage und vor dem Standard."""
     from app import mail_vorlagen
     from app.models import Angebot, Benutzer, Kunde
+    sparte = _vorlagen_sparte(sparte)
+    if sparte:
+        benutzer_id = 0           # Reiter Sparte und AD-Auswahl schließen sich aus
     aussendienst = (session.query(Benutzer)
                     .filter(Benutzer.rolle == "aussendienst", Benutzer.aktiv.is_(True))
                     .order_by(Benutzer.name).all())
     ausgewaehlt = session.get(Benutzer, benutzer_id) if benutzer_id else None
-    betreff, text, quelle = mail_vorlagen.vorlage_laden(session, benutzer_id or None)
-    # Hat der AD eine eigene Vorlage? (sonst zeigen wir den Standard als Vorschlag)
-    eigene = bool(benutzer_id) and quelle != "Standard-Vorlage"
+    if sparte:
+        betreff, text, quelle = mail_vorlagen.vorlage_laden(session, None, sparte)
+        # Hat die Sparte eine eigene Vorlage? (sonst Standard als Ausgangspunkt)
+        eigene = quelle != "Standard-Vorlage"
+    else:
+        betreff, text, quelle = mail_vorlagen.vorlage_laden(session, benutzer_id or None)
+        # Hat der AD eine eigene Vorlage? (sonst zeigen wir den Standard als Vorschlag)
+        eigene = bool(benutzer_id) and quelle != "Standard-Vorlage"
     # Vorlagen-Status je AD für die Übersicht
     hat_vorlage = {b.id: mail_vorlagen.vorlage_laden(session, b.id)[2] != "Standard-Vorlage"
                    for b in aussendienst}
-    # Vorschau: gewähltes oder neuestes Angebot
+    # Vorschau: gewähltes Angebot, im Sparten-Reiter das neueste Angebot der
+    # Sparte, sonst das neueste Angebot
     angebote = (session.query(Angebot).filter(Angebot.archiviert.is_(False))
                 .order_by(Angebot.nummer.desc()).limit(30).all())
-    vorschau_angebot = session.get(Angebot, angebot_id) if angebot_id else (angebote[0] if angebote else None)
+    if angebot_id:
+        vorschau_angebot = session.get(Angebot, angebot_id)
+    else:
+        vorschau_angebot = angebote[0] if angebote else None
+        if sparte:
+            vorschau_angebot = next((a for a in angebote
+                                     if (a.konfigurator_typ or "WP").upper() == sparte),
+                                    vorschau_angebot)
     vorschau = None
     if vorschau_angebot is not None:
         kunde = session.get(Kunde, vorschau_angebot.kunde_id)
@@ -331,6 +356,9 @@ def vorlagen_uebersicht(request: Request, benutzer_id: int = 0,
                   benutzer_id=benutzer_id, betreff=betreff, text=text,
                   text_html=mail_vorlagen.als_html(text),
                   eigene=eigene, hat_vorlage=hat_vorlage,
+                  sparte=sparte, sparten=mail_vorlagen.SPARTEN,
+                  sparten_namen=mail_vorlagen.SPARTEN_NAMEN,
+                  sparten_status=mail_vorlagen.sparten_status(session),
                   platzhalter=mail_vorlagen.PLATZHALTER,
                   unbekannt=mail_vorlagen.unbekannte_platzhalter(betreff + text),
                   angebote=angebote, vorschau_angebot=vorschau_angebot,
@@ -346,7 +374,19 @@ def vorlagen_speichern(request: Request, session: Session = Depends(get_session)
     form = anfrage.formular(request)
     benutzer_id = form.get("benutzer_id") or ""
     bid = int(benutzer_id) if benutzer_id.isdigit() and int(benutzer_id) > 0 else None
+    # v27-Nachtrag 2: Sparten-Vorlage (Reiter) – Ziel nach dem Speichern bleibt der Reiter
+    sparte = _vorlagen_sparte(form.get("sparte") or "")
+    if sparte:
+        bid = None
+    zurueck = (f"/parametrierung/vorlagen?sparte={sparte}" if sparte
+               else f"/parametrierung/vorlagen?benutzer_id={bid or 0}")
     aktion = form.get("aktion") or "speichern"
+    if aktion == "entfernen" and sparte:
+        # Sparten-Vorlage löschen → Standard greift wieder
+        mail_vorlagen.sparten_vorlage_speichern(session, sparte, "", "")
+        session.commit()
+        return RedirectResponse(zurueck + "&meldung=" + quote_plus(
+            f"Sparten-Vorlage {sparte} entfernt – Standard gilt"), status_code=303)
     if aktion == "entfernen" and bid:
         # eigene AD-Vorlage löschen → Standard greift wieder
         mail_vorlagen.vorlage_speichern(session, bid, "", "")
@@ -357,17 +397,16 @@ def vorlagen_speichern(request: Request, session: Session = Depends(get_session)
     betreff = (form.get("betreff") or "").strip()
     text = (form.get("text") or "").strip()
     if not betreff or not text:
-        return RedirectResponse(f"/parametrierung/vorlagen?benutzer_id={bid or 0}&meldung="
+        return RedirectResponse(zurueck + "&meldung="
                                 + quote_plus("Betreff und Text dürfen nicht leer sein"),
                                 status_code=303)
-    mail_vorlagen.vorlage_speichern(session, bid, betreff, text)
+    mail_vorlagen.vorlage_speichern(session, bid, betreff, text, sparte=sparte)
     session.commit()
     unbekannt = mail_vorlagen.unbekannte_platzhalter(betreff + text)
-    meldung = "Vorlage gespeichert"
+    meldung = f"Sparten-Vorlage {sparte} gespeichert" if sparte else "Vorlage gespeichert"
     if unbekannt:
         meldung += " – unbekannte Platzhalter bleiben im Text stehen: " + ", ".join(unbekannt)
-    return RedirectResponse(f"/parametrierung/vorlagen?benutzer_id={bid or 0}&meldung="
-                            + quote_plus(meldung), status_code=303)
+    return RedirectResponse(zurueck + "&meldung=" + quote_plus(meldung), status_code=303)
 
 
 # --- E-Mail-Signaturen (v6, Phase 42) --------------------------------------
@@ -888,6 +927,17 @@ def sub_speichern(request: Request, session: Session = Depends(get_session)):
 # app/routers/konfiguration_heizreport.py umgezogen (Parametrierung → Heizreport).
 
 
+def _proj_protokoll(session, kern, zeile: str, benutzer) -> None:
+    """v28: Verlauf der Projektierungs-Parametrierung (letzte 20 Zeilen im
+    Parameter einstellungs_protokoll) – wie das Protokoll der Lead-Einstellungen."""
+    from datetime import datetime as _dt
+    alt = kern.parameter_holen(session, "einstellungs_protokoll", "")
+    wer = getattr(benutzer, "name", "") or "System"
+    zeilen = [f"{_dt.now():%d.%m.%Y %H:%M} {wer}: {zeile}"]
+    zeilen += [z for z in alt.splitlines() if z.strip()]
+    kern.parameter_setzen(session, "einstellungs_protokoll", "\n".join(zeilen[:20]))
+
+
 @router.get("/projektierung-einstellungen")
 def projektierung_einstellungen(request: Request,
                                       session: Session = Depends(get_session)):
@@ -967,6 +1017,18 @@ def projektierung_einstellungen(request: Request,
                   gruende="\n".join(kern.storno_gruende(session)),
                   vorlage=kern.ordnervorlage(session),
                   mail_protokoll=kern.parameter_holen(session, "mail_protokoll"),
+                  # v28 (PLAN_PROJ_V6 Phase 133/135): Wächter-Modus, Terminvorschläge
+                  waechter_modus=kern.parameter_holen(session, "waechter_modus", "warnen"),
+                  montage_dauer_tage_standard=kern.parameter_holen(
+                      session, "montage_dauer_tage_standard", "5"),
+                  vorschlag_vorlauf_wochen=kern.parameter_holen(
+                      session, "vorschlag_vorlauf_wochen", "4"),
+                  montage_startadresse=kern.parameter_holen(
+                      session, "montage_startadresse",
+                      "Arnold-Overbeck-Str. 63-65, 47139 Duisburg"),
+                  vorschlag_outlook=kern.parameter_holen(session, "vorschlag_outlook", "aus"),
+                  einstellungs_protokoll=kern.parameter_holen(
+                      session, "einstellungs_protokoll", ""),
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -1034,6 +1096,23 @@ def projektierung_einstellungen_speichern(
     if (form.get("terminmail_text") or "").strip():
         kern.parameter_setzen(session, "terminmail_text",
                               form.get("terminmail_text").strip()[:5000])
+    # v28 (PLAN_PROJ_V6 Phase 133/135): Wächter-Modus (protokolliert) + Terminvorschläge
+    if form.get("waechter_modus") in ("warnen", "sperren"):
+        alt = kern.parameter_holen(session, "waechter_modus", "warnen")
+        if alt != form.get("waechter_modus"):
+            _proj_protokoll(session, kern, f"waechter_modus {alt} → {form.get('waechter_modus')}",
+                            request.state.benutzer)
+        kern.parameter_setzen(session, "waechter_modus", form.get("waechter_modus"))
+    if form.get("vorschlag_outlook") in ("an", "aus"):
+        kern.parameter_setzen(session, "vorschlag_outlook", form.get("vorschlag_outlook"))
+    for schluessel, laenge in (("montage_dauer_tage_standard", 3),
+                               ("vorschlag_vorlauf_wochen", 4)):
+        wert = (form.get(schluessel) or "").strip().replace(",", ".")
+        if wert and wert.replace(".", "", 1).isdigit():
+            kern.parameter_setzen(session, schluessel, wert[:laenge])
+    if "montage_startadresse" in form:
+        kern.parameter_setzen(session, "montage_startadresse",
+                              (form.get("montage_startadresse") or "").strip()[:300])
     if form.get("freigabe_modus") in ("admin", "pilot", "alle"):
         kern.parameter_setzen(session, "freigabe_modus", form.get("freigabe_modus"))
     # V3 (Phase 86): Pilotliste (nur wenn das Formular sie mitschickt)
@@ -1875,11 +1954,21 @@ def lead_einstellungen(request: Request,
                   "kanal_ad_regel", "vorab_dauer_min", "ersatz_min_treffer",
                   "termin_konflikt_modus", "vorschlag_raster_manuell_min",
                   # v25 (Lead-Management V3, Phase 120)
-                  "score_aktiv", "ohne_schritt_tage"]
+                  "score_aktiv", "ohne_schritt_tage",
+                  # v29 (PLAN_LEAD_V4 Phasen 140–143)
+                  "absender_lead_mails", "hv_gruppe_rene", "hv_gruppe_simon",
+                  "hv_versandweg", "glocke_lead_arten", "routen_start",
+                  "vorschlaege_anzahl"]
     werte = {name: lead_kern.parameter_holen(session, name)
              for name in schluessel}
     from app import lead_v2
     handelsvertreter = lead_v2.handelsvertreter_liste(session)
+    # v29 (Phase 141/142): Glocken-Arten, offene Lead-Mails mit Fehler
+    from app import lead_glocken
+    from app.models import KommunikationLog
+    glocke_arten = lead_glocken.erlaubte_arten(session)
+    mail_fehler_anzahl = (session.query(KommunikationLog)
+                          .filter(KommunikationLog.status == "fehler").count())
     vorschau = None
     if request.query_params.get("loeschvorschau") == "1":
         vorschau = lead_kern.loeschlauf(session, trocken=True)
@@ -1893,6 +1982,9 @@ def lead_einstellungen(request: Request,
                   loesch_protokoll=lead_kern.parameter_holen(
                       session, "loeschlauf_protokoll"),
                   loeschvorschau=vorschau,
+                  glocke_arten=glocke_arten, glocke_alle=lead_glocken.ALLE_ARTEN,
+                  glocke_namen=lead_glocken.ARTEN_NAMEN,
+                  mail_fehler_anzahl=mail_fehler_anzahl,
                   umstellung=request.query_params.get("umstellung", ""),
                   meldung=request.query_params.get("meldung", ""))
 
@@ -1963,7 +2055,33 @@ def lead_einstellungen_speichern(request: Request,
                 "rueckruf_telefon", "kanal_farben", "pflichtfelder",
                 "hv_ausschluss", "hv_standard_benutzer",
                 "ersatz_radius_stufen", "info_uhrzeit", "info_ort",
-                "kanal_ad_regel"]
+                "kanal_ad_regel",
+                # v29 (PLAN_LEAD_V4): Absender termin@, Routenplaner-Start
+                "absender_lead_mails", "routen_start"]
+    # v29 (Phase 140–142): HV-Gruppen (Mehrfachauswahl → Komma-Liste), Versandweg HV,
+    # Glocken-Arten (Häkchen → Komma-Liste); Änderungen protokolliert
+    for name in ("hv_gruppe_rene", "hv_gruppe_simon"):
+        if form.get(name + "_dabei"):
+            ids = ",".join(str(int(w)) for w in form.getlist(name) if str(w).isdigit())
+            lead_kern.parameter_setzen(session, name, ids)
+    if form.get("hv_versandweg") in ("offen", "smtp", "entwurf", "leads_im_namen"):
+        alt = lead_kern.parameter_holen(session, "hv_versandweg", "offen")
+        if alt != form.get("hv_versandweg"):
+            lead_kern.einstellungs_protokoll(
+                session, f"hv_versandweg {alt} → {form.get('hv_versandweg')}", benutzer)
+        lead_kern.parameter_setzen(session, "hv_versandweg", form.get("hv_versandweg"))
+    if form.get("glocke_dabei"):
+        from app import lead_glocken
+        arten = ",".join(a for a in lead_glocken.ALLE_ARTEN if a in form.getlist("glocke_lead_arten"))
+        alt = lead_kern.parameter_holen(session, "glocke_lead_arten", "")
+        if alt != arten:
+            lead_kern.einstellungs_protokoll(session, f"glocke_lead_arten → {arten or '(keine)'}", benutzer)
+        lead_kern.parameter_setzen(session, "glocke_lead_arten", arten)
+    absender_neu = (form.get("absender_lead_mails") or "").strip()
+    if "absender_lead_mails" in form:
+        alt = lead_kern.parameter_holen(session, "absender_lead_mails", "")
+        if alt != absender_neu:
+            lead_kern.einstellungs_protokoll(session, f"absender_lead_mails {alt or '(leer)'} → {absender_neu or '(leer)'}", benutzer)
     if form.get("termin_konflikt_modus") in ("warnen", "sperren"):
         lead_kern.parameter_setzen(session, "termin_konflikt_modus",
                                    form.get("termin_konflikt_modus"))

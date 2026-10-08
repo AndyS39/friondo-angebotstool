@@ -388,11 +388,13 @@ def kanalwechsel_pruefen(session: Session, vorgang: Vorgang, benutzer=None) -> s
     kunde = session.get(Kunde, vorgang.kunde_id)
     hv = session.get(Benutzer, vorgang.ad_id)
     ziele = [vorgang.leadmanager_id] if vorgang.leadmanager_id else _leitung_ids(session)
+    # v29 (PLAN_LEAD_V4 Phase 141): Glocken-Art „kanalwechsel“ – standardmäßig
+    # abgeschaltet (glocke_lead_arten); die Aktivität bleibt in der Timeline
     kern.benachrichtigen(session, ziele,
                          f"Ausschlusskanal bei Handelsvertreter-Lead: "
                          f"{kunde.anzeige_name if kunde else '?'} – zugewiesen an "
                          f"{hv.name if hv else '?'}, bitte prüfen",
-                         f"/lead-management/lead/{vorgang.id}")
+                         f"/lead-management/lead/{vorgang.id}", art="kanalwechsel")
     session.flush()
     return hinweis
 
@@ -425,11 +427,14 @@ def filter_aus_query(q, gesamt: bool) -> dict:
     def _int(name):
         wert = (q.get(name) or "").strip()
         return int(wert) if wert.isdigit() else None
+    # v29 (PLAN_LEAD_V4 Phase 140): Filter „Gruppe“ (rene | simon | leer = alle)
+    gruppe = (q.get("gruppe") or "").strip().lower() if gesamt else ""
     return {"vertreter": _int("vertreter") if gesamt else None,
             "status": (q.get("status") or "").strip(),
             "kanal": (q.get("kanal") or "").strip(),
             "q": (q.get("q") or "").strip(),
-            "offen": (q.get("offen") or "") == "1"}
+            "offen": (q.get("offen") or "") == "1",
+            "gruppe": gruppe if gruppe in ("rene", "simon") else ""}
 
 
 def _kanal_farben(session: Session) -> dict:
@@ -523,11 +528,16 @@ def zeilen_bauen(session: Session, vorgaenge: list, kreis: dict | None = None) -
     return zeilen
 
 
-def zeilen_filtern(zeilen: list, f: dict) -> list:
+def zeilen_filtern(zeilen: list, f: dict, gruppen: dict | None = None) -> list:
+    """Filter Vertreter/Status/Kanal/Suche/offen; v29: „gruppe“ (rene | simon)
+    über die Benutzer-IDs der Parameter hv_gruppe_rene/_simon (`gruppen`)."""
     treffer = []
     suche = (f.get("q") or "").lower()
+    gruppe_ids = set((gruppen or {}).get(f.get("gruppe") or "", [])) if f.get("gruppe") else None
     for z in zeilen:
         if f.get("vertreter") and z["hv_id"] != f["vertreter"]:
+            continue
+        if gruppe_ids is not None and z["hv_id"] not in gruppe_ids:
             continue
         # v25: ein Status-Filter kann mehrere Phasen tragen (Label „Kontaktiert“
         # = in_kontaktierung,qualifiziert – siehe status_optionen in ansicht)
@@ -661,7 +671,8 @@ def ansicht(session: Session, benutzer, f: dict, mit_phase105: bool = True) -> d
         index = zeilen_phase105(session, benutzer)
         phase105 = index is not None
         zeilen = zeilen_zusammenfuehren(zeilen, index)
-    gefiltert = zeilen_filtern(zeilen, f)
+    hv_gruppen = lead_v2.hv_gruppen(session)      # v29: Filter „Gruppe“
+    gefiltert = zeilen_filtern(zeilen, f, hv_gruppen)
     from app import leadmanagement_logik
     logik = leadmanagement_logik.hole_logik()
     # v25 (Phase 118/120): Phasen mit demselben Label (in_kontaktierung +
@@ -697,6 +708,8 @@ def ansicht(session: Session, benutzer, f: dict, mit_phase105: bool = True) -> d
              "standard": lead_v2.hv_standard_benutzer(session),
              "filter_werte": f, "jetzt": jetzt, "phase105": phase105,
              "spalten": spalten, "sortierung": sortierung, "konfig_board": KONFIG_BOARD,
+             # v29 (Phase 140): Filter „Gruppe“ – Optionen mit Namen des Zielbenutzers
+             "hv_gruppen": hv_gruppen, "gruppen_wahl": lead_v2.hv_gruppen_wahl(session),
              # v25: kein Score/Klasse in der HV-Ansicht, Board-Namen aus dem Blatt Status,
              # Label der offenen Phasen für die Kacheltexte
              "score_aktiv": lead_v2.score_aktiv(session),
@@ -718,7 +731,7 @@ def ansicht(session: Session, benutzer, f: dict, mit_phase105: bool = True) -> d
         daten["standard_offen"] = len(kandidaten)
         if kandidaten and not f.get("vertreter"):
             k_zeilen = zeilen_filtern(
-                zeilen_zusammenfuehren(zeilen_bauen(session, kandidaten, kreis), index), f)
+                zeilen_zusammenfuehren(zeilen_bauen(session, kandidaten, kreis), index), f, hv_gruppen)
             daten["gruppen"].append({
                 "key": "standard", "name": "Ohne Vertreter (monday-Bestand)",
                 "benutzer": None, "gekennzeichnet": True, "zeilen": k_zeilen,
@@ -778,9 +791,11 @@ def dashboard_daten(session: Session, benutzer) -> dict:
     kommend = sorted([v for v in eigene if _wv(v) and jetzt < _wv(v) <= horizont
                       and (v.lead_phase or "neu") in OFFENE_PHASEN], key=_wv)
     offen = [v for v in eigene if (v.lead_phase or "neu") in OFFENE_PHASEN]
+    # v29 (Phase 143): Sperrzeiten (typ sperrzeit, ohne Vorgang) sind keine Kundentermine
     termine = (session.query(VotTermin)
                .filter(VotTermin.ad_id == benutzer.id,
                        VotTermin.status.in_(("geplant", "bestaetigt")),
+                       VotTermin.typ != "sperrzeit",
                        VotTermin.beginn >= jetzt - timedelta(hours=2),
                        VotTermin.beginn <= horizont)
                .order_by(VotTermin.beginn).all())

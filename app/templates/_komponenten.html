@@ -134,3 +134,140 @@
 {%- endif -%}
 {%- endmacro %}
 
+{# v28 (PLAN_PROJ_V6 Phase 136): gemeinsamer Notizen-Chat – Vorgangsakte,
+   Projektakte (Reiter Verlauf), Kundenkartei (Lead), Montage-Backend (nur lesen).
+   ctx = app.notizen.kontext(...): vorgang_id, post_url, eintraege[{id, benutzer_name,
+   zeit, text, herkunft, kennzeichen, kennzeichen_klasse, eigen}], schreiben_erlaubt,
+   hinweis, mein_name, anzahl, limit (0 = alle direkt sichtbar, sonst: die letzten
+   `limit` Einträge direkt, ältere eingeklappt unter „alle anzeigen“).
+   Chat-Optik aus der Vorgangsakte v14 (eigene Einträge rechts, Kennzeichen-Badge
+   je Spur), Senden per fetch (JSON bei Accept: application/json – Route
+   POST /vorgaenge/{id}/notiz bzw. ctx.post_url, Fallback Neuladen), Strg + Enter
+   sendet, Textarea wächst 4 → 12 Zeilen. CSS: app/static/akte_v28.css (nc-*).
+   Pflege: Agent P2. #}
+{% macro notizen_chat(ctx) -%}
+{%- set versteckt = (ctx.eintraege | length) - ctx.limit if ctx.limit else 0 -%}
+<div class="notizen-chat nc-chat" id="nc-{{ ctx.vorgang_id }}" data-vorgang="{{ ctx.vorgang_id }}">
+    {%- if versteckt > 0 %}
+    <details class="nc-aeltere">
+        <summary>alle anzeigen · {{ versteckt }} ältere Einträge</summary>
+        {%- for n in ctx.eintraege[:versteckt] %}
+        {{ _nc_eintrag(n) }}
+        {%- endfor %}
+    </details>
+    {%- endif %}
+    {%- for n in (ctx.eintraege[versteckt:] if versteckt > 0 else ctx.eintraege) %}
+    {{ _nc_eintrag(n) }}
+    {%- else %}
+    <p class="dezent nc-leer">Noch keine Notizen – die erste Notiz startet den Verlauf.</p>
+    {%- endfor %}
+</div>
+{% if ctx.schreiben_erlaubt %}
+<form method="post" action="{{ ctx.post_url }}" class="notiz-eingabe chat-eingabe nc-eingabe"
+      data-vorgang="{{ ctx.vorgang_id }}" data-name="{{ ctx.mein_name }}">
+    {% if ctx.herkunft %}<input type="hidden" name="herkunft" value="{{ ctx.herkunft }}">{% endif %}
+    {% if ctx.zurueck %}<input type="hidden" name="zurueck" value="{{ ctx.zurueck }}">{% endif %}
+    <textarea name="text" rows="4" maxlength="2000" required
+              placeholder="Notiz schreiben … (Strg + Enter sendet; Einträge sind unveränderlich)"></textarea>
+    <button class="knopf" type="submit">Senden</button>
+    <span class="nc-fehler" hidden></span>
+</form>
+{% elif ctx.hinweis %}
+<p class="dezent nc-hinweis">{{ ctx.hinweis }}</p>
+{% endif %}
+<script>
+(function () {
+    function anfang() {
+        var chat = document.getElementById('nc-{{ ctx.vorgang_id }}');
+        if (chat) { chat.scrollTop = chat.scrollHeight; }
+    }
+    if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', anfang); } else { anfang(); }
+    if (window.__ncInit) { return; }
+    window.__ncInit = true;
+    function wachsen(ta) {
+        ta.style.height = 'auto';
+        var zeile = parseFloat(getComputedStyle(ta).lineHeight) || 20;
+        var min = zeile * 4 + 16, max = zeile * 12 + 16;
+        var soll = Math.min(Math.max(ta.scrollHeight + 2, min), max);
+        ta.style.height = soll + 'px';
+        ta.style.overflowY = ta.scrollHeight + 2 > max ? 'auto' : 'hidden';
+    }
+    function eintragHtml(e) {
+        var div = document.createElement('div');
+        div.className = 'notiz eigene';
+        div.setAttribute('data-notiz', e.id || '');
+        var kopf = document.createElement('span'); kopf.className = 'notiz-kopf';
+        var wer = document.createElement('strong'); wer.textContent = e.benutzer_name || '';
+        var wann = document.createElement('span'); wann.className = 'dezent'; wann.textContent = ' ' + (e.zeit || '') + ' Uhr';
+        kopf.appendChild(wer); kopf.appendChild(wann);
+        if (e.kennzeichen) {
+            var k = document.createElement('span');
+            k.className = 'abzeichen nc-herkunft ' + (e.kennzeichen_klasse || '');
+            k.textContent = e.kennzeichen; kopf.appendChild(k);
+        }
+        var text = document.createElement('div'); text.className = 'notiz-text'; text.textContent = e.text || '';
+        div.appendChild(kopf); div.appendChild(text);
+        return div;
+    }
+    function fehlerZeigen(form, text) {
+        var f = form.querySelector('.nc-fehler');
+        if (!f) { return; }
+        f.textContent = text || ''; f.hidden = !text;
+    }
+    document.addEventListener('input', function (ev) {
+        if (ev.target && ev.target.matches('.nc-eingabe textarea')) { wachsen(ev.target); }
+    });
+    document.addEventListener('keydown', function (ev) {
+        if (ev.target && ev.target.matches('.nc-eingabe textarea') && ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
+            ev.preventDefault();
+            var f = ev.target.closest('form');
+            if (f.requestSubmit) { f.requestSubmit(); } else { f.submit(); }
+        }
+    });
+    document.addEventListener('submit', function (ev) {
+        var form = ev.target;
+        if (!form.classList || !form.classList.contains('nc-eingabe')) { return; }
+        if (!window.fetch || !window.FormData) { return; }
+        ev.preventDefault();
+        var ta = form.querySelector('textarea');
+        var text = (ta.value || '').trim();
+        if (!text) { return; }
+        var knopf = form.querySelector('button'); knopf.disabled = true;
+        fehlerZeigen(form, '');
+        var daten = new FormData(form);
+        fetch(form.action, { method: 'POST', body: daten, credentials: 'same-origin',
+                             headers: { 'Accept': 'application/json' } })
+            .then(function (r) {
+                return r.json().then(function (antwort) { return { status: r.status, antwort: antwort }; },
+                                     function () { return { status: r.status, antwort: null }; });
+            })
+            .then(function (erg) {
+                var antwort = erg.antwort;
+                if (!antwort) { window.location.reload(); return; }
+                if (!antwort.ok) {
+                    fehlerZeigen(form, antwort.meldung || 'Notiz konnte nicht gespeichert werden.');
+                    knopf.disabled = false;
+                    return;
+                }
+                var chat = document.getElementById('nc-' + form.getAttribute('data-vorgang'));
+                var leer = chat && chat.querySelector('.nc-leer'); if (leer) { leer.remove(); }
+                if (chat) { chat.appendChild(eintragHtml(antwort.eintrag || {})); chat.scrollTop = chat.scrollHeight; }
+                ta.value = ''; wachsen(ta); knopf.disabled = false;
+            })
+            .catch(function () { knopf.disabled = false; window.location.reload(); });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.nc-eingabe textarea'), wachsen);
+})();
+</script>
+{%- endmacro %}
+
+{# Ein Eintrag des Notizen-Chats (intern, für notizen_chat) #}
+{% macro _nc_eintrag(n) -%}
+<div class="notiz{{ ' eigene' if n.eigen }}" data-notiz="{{ n.id }}">
+    <span class="notiz-kopf"><strong>{{ n.benutzer_name }}</strong>
+        <span class="dezent">{{ n.zeit.strftime('%d.%m.%y %H:%M') if n.zeit else '' }} Uhr</span>
+        {% if n.kennzeichen %}<span class="abzeichen nc-herkunft {{ n.kennzeichen_klasse }}" title="{{ n.herkunft }}">{{ n.kennzeichen }}</span>{% endif %}
+    </span>
+    <div class="notiz-text">{{ n.text }}</div>
+</div>
+{%- endmacro %}

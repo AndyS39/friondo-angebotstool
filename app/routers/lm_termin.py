@@ -12,6 +12,11 @@
 # keine Kandidaten (manuelle Buchung bleibt möglich), kein Score/Klasse.
 # Alle Routen laufen über lead_v2.gate (Handelsvertreter: nur eigene Leads,
 # nur eigener Kalender).
+# v29 (PLAN_LEAD_V4 Phase 143): drei Vorschläge (vorschlaege_anzahl), Vorschlag 1
+# „Ideal“; Kalenderansicht nachgelagert per fetch GET /lead/{id}/termin/kalender.json
+# (?woche=YYYY-MM-DD, ?neu=1); „Weitere Kalender“ POST /lead/{id}/termin/kalender/
+# auswahl (JSON {ids}); manuelle Buchung auf einen Kalender außerhalb der
+# Vorauswahl mit Warnhinweis (bestaetigt=1); Sperrzeiten der HV als belegte Slots.
 
 from datetime import datetime, timedelta
 from urllib.parse import quote_plus, urlencode
@@ -129,11 +134,13 @@ def _termine_des_vorgangs(session: Session, vorgang_id: int) -> list[VotTermin]:
 @router.get("/lead/{vorgang_id}/termin/vorschlaege.json")
 def termin_vorschlaege_json(request: Request, vorgang_id: int,
                                   session: Session = Depends(get_session)):
-    """Top 5 des Assistenten als JSON (asynchron nach dem Seitenaufbau der
-    Kartei): {status: ok|adresse_fehlt|hv_lead|keine, hinweis, vorschlaege:
-    [{ad_id, ad_name, beginn, beginn_text, begruendung, umweg_min}]}; Cache
-    10 Minuten je Lead (lead_termin.vorschlaege_cache), ?neu=1 erzwingt die
-    Neuberechnung. Buchen: POST /lead/{id}/termin (ad_id, beginn, quelle=assistent)."""
+    """Vorschläge des Assistenten als JSON (asynchron nach dem Seitenaufbau der
+    Kartei): {status: ok|adresse_fehlt|hv_lead|keine, hinweis, anzahl, vorschlaege:
+    [{ad_id, ad_name, beginn, beginn_text, begruendung, umweg_min, ideal,
+    ideal_grund}]} – v29: genau vorschlaege_anzahl (Standard 3), der erste
+    „Ideal“; Cache 10 Minuten je Lead (lead_termin.vorschlaege_cache), ?neu=1
+    erzwingt die Neuberechnung. Buchen: POST /lead/{id}/termin (ad_id, beginn,
+    quelle=assistent)."""
     vorgang = _vorgang_oder_404(request, session, vorgang_id)
     if request.query_params.get("neu") == "1":
         lead_termin.vorschlaege_cache_leeren(vorgang.id)
@@ -146,6 +153,50 @@ def termin_vorschlaege_json(request: Request, vorgang_id: int,
     antwort["buchen_url"] = f"/lead-management/lead/{vorgang.id}/termin"
     antwort["assistent_url"] = f"/lead-management/lead/{vorgang.id}/termin"
     return JSONResponse(antwort)
+
+
+# --- v29 (Phase 143): Kalenderansicht + „Weitere Kalender“ ----------------------------
+
+@router.get("/lead/{vorgang_id}/termin/kalender.json")
+def termin_kalender_json(request: Request, vorgang_id: int,
+                         session: Session = Depends(get_session)):
+    """Wochenansicht des Assistenten (Mo–Sa, 15-Minuten-Raster, Spalte je
+    Kandidat + gewählte weitere Kalender): ?woche=YYYY-MM-DD (Standard = Woche
+    des ersten Vorschlags), ?neu=1 erzwingt die Neuberechnung. Outlook-Belegt
+    nur bei kalender_sync = an und nie für Handelsvertreter – ohne offene
+    Sitzung (lead_termin.kalender_json gibt die Verbindung vor dem Abruf frei)."""
+    vorgang = _vorgang_oder_404(request, session, vorgang_id)
+    q = request.query_params
+    antwort = lead_termin.kalender_json(session, vorgang, benutzer=request.state.benutzer,
+                                        woche=q.get("woche", ""), neu=q.get("neu") == "1")
+    session.commit()   # Routing-/Geocode-Cache der Vorschläge behalten
+    antwort["buchen_url"] = f"/lead-management/lead/{vorgang.id}/termin"
+    return JSONResponse(antwort)
+
+
+@router.post("/lead/{vorgang_id}/termin/kalender/auswahl")
+def termin_kalender_auswahl(request: Request, vorgang_id: int,
+                            session: Session = Depends(get_session)):
+    """„Weitere Kalender“: JSON {ids: [benutzer_id, …]} → je Nutzer gemerkt
+    (benutzer_einstellungen Key assistent_kalender); Antwort {ok, ids}."""
+    vorgang = _vorgang_oder_404(request, session, vorgang_id)
+    benutzer = request.state.benutzer
+    if lead_termin.hv_nur_eigene(session, benutzer):
+        return JSONResponse({"ok": False, "ids": [],
+                             "meldung": "Handelsvertreter sehen nur den eigenen Kalender."},
+                            status_code=403)
+    try:
+        daten = anfrage.json_lesen(request)
+    except Exception:
+        form = anfrage.formular(request)
+        daten = {"ids": form.getlist("ids")}
+    ids = daten.get("ids") if isinstance(daten, dict) else None
+    if not isinstance(ids, list):
+        ids = []
+    gespeichert = lead_termin.weitere_kalender_setzen(session, benutzer, ids)
+    session.commit()
+    lead_termin.kalender_cache.pop(vorgang.id, None)
+    return JSONResponse({"ok": True, "ids": gespeichert})
 
 
 # --- Assistent (B6/E1/E2) -----------------------------------------------------------
@@ -170,7 +221,10 @@ def termin_assistent(request: Request, vorgang_id: int,
     kalender_ad = (nur_ad_id if nur_ad_id else (kandidaten[0].id if kandidaten else None))
     if kalender_ad and kalender_ad not in [k.id for k in kandidaten] and not hv_id:
         kalender_ad = kandidaten[0].id if kandidaten else kalender_ad
-    woche = lead_termin.kalender_woche(session, [kalender_ad] if kalender_ad else [])
+    # v29 (Phase 143): die Wochenansicht lädt nachgelagert per fetch (kalender.json);
+    # „Weitere Kalender“ = aktive Vertriebler außerhalb des Kandidatenkreises
+    weitere_wahl = lead_termin.weitere_kalender_wahl(session, [k.id for k in kandidaten], benutzer)
+    weitere_aktiv = [w for w in weitere_wahl if w["gewaehlt"]]
     buchbar = not (kern.demo_aktiv(session) and not vorgang.demo)
     pflicht_offen = lead_v2.pflichtfelder_offen(session, kunde, vorgang) if kunde else []
     umbuchen_id = q.get("umbuchen", "")
@@ -206,7 +260,11 @@ def termin_assistent(request: Request, vorgang_id: int,
                   hv_manuell=ergebnis["hv_manuell"] if not hv_id else [],
                   phase_label=(phase_zeile.label if phase_zeile else (vorgang.lead_phase or "")),
                   sparten=ergebnis["sparten"], kanal=ergebnis["kanal"],
-                  kalender_ad=kalender_ad, woche=woche,
+                  kalender_ad=kalender_ad,
+                  anzahl=ergebnis.get("anzahl", len(ergebnis["vorschlaege"])),
+                  weitere_wahl=weitere_wahl, weitere_aktiv=weitere_aktiv,
+                  kalender_url=f"/lead-management/lead/{vorgang.id}/termin/kalender.json",
+                  auswahl_url=f"/lead-management/lead/{vorgang.id}/termin/kalender/auswahl",
                   wunschzeiten=kern.wunschzeiten_liste(vorgang), buchbar=buchbar,
                   pflicht_offen=pflicht_offen, umbuchen=umbuchen,
                   umbuchen_id=umbuchen_id if umbuchen else "",
@@ -293,6 +351,15 @@ def _manuell(request: Request, session: Session, vorgang: Vorgang, form):
     # v25 [ANNAHME]: manuelle Buchung durch den Innendienst auf einen
     # Handelsvertreter bleibt möglich – nur die Vorschläge schließen HV aus
     erlaubt |= {a.id for a in vorfilter["hv_manuell"]}
+    # v29 (Phase 143): Kalender „außerhalb der Vorauswahl“ (Weitere Kalender des
+    # Nutzers) sind buchbar – mit Warnhinweis (Kompetenz/Kanal/HV) und Bestätigung
+    ausserhalb_warnung = ""
+    if ad_id not in {k["ad"].id for k in vorfilter["kandidaten"]} \
+            and not lead_termin.hv_nur_eigene(session, benutzer) \
+            and ad_id in lead_termin.weitere_kalender_holen(session, benutzer):
+        ausserhalb_warnung = ("Außerhalb der Vorauswahl: "
+                              + lead_termin.ausschluss_grund(vorfilter, ad_id))
+        erlaubt.add(ad_id)
     if ad_id not in erlaubt:
         grund = next((a["grund"] for a in vorfilter["ausgeschlossen"] if a["ad"].id == ad_id),
                      "nicht in der Vorauswahl")
@@ -301,6 +368,9 @@ def _manuell(request: Request, session: Session, vorgang: Vorgang, form):
     lead_ort = (vorgang.lat, vorgang.lon) if vorgang.lat is not None else None
     k = lead_termin.konflikte(session, ad_id, beginn, lead_ort=lead_ort,
                               ignorieren_id=int(umbuchen) if umbuchen.isdigit() else None)
+    if ausserhalb_warnung:
+        k["texte"] = [ausserhalb_warnung] + list(k["texte"])
+        k["warnen"] = True
     modus = lead_termin.parameter(session, "termin_konflikt_modus", "warnen")
     if k["sperren"] or (modus == "sperren" and k["puffer"]):
         return RedirectResponse(_assistent_url(
@@ -499,6 +569,9 @@ def termin_verschieben(request: Request, termin_id: int,
     if hv_id and ad_id != hv_id:
         return RedirectResponse(_mit_meldung(ziel, "Handelsvertreter buchen nur den eigenen Kalender."),
                                 status_code=303)
+    if (termin.typ or "vot") == lead_termin.SPERRZEIT_TYP:
+        return RedirectResponse(_mit_meldung(ziel, "Sperrzeiten werden in „Meine Termine“ gepflegt."),
+                                status_code=303)
     if (termin.typ or "vot") != "vot":
         # Vorab-Gespräch: Zeit direkt ändern (kein Kundentermin mit ICS); ein
         # vorgemerkter Online-Termin (Kunde wählt über den Buchungslink) wird
@@ -521,7 +594,7 @@ def termin_verschieben(request: Request, termin_id: int,
         if person is not None and kunde is not None:
             kern.benachrichtigen(session, [person.id],
                                  f"{name} {beginn:%d.%m. %H:%M}: {kunde.anzeige_name}",
-                                 f"/lead-management/lead/{vorgang.id}")
+                                 f"/lead-management/lead/{vorgang.id}", art="terminaenderung")   # v29
         session.commit()
         return RedirectResponse(_mit_meldung(
             ziel, f"{name} {'eingetragen' if war_vorgemerkt else 'verschoben'}."), status_code=303)
@@ -581,7 +654,7 @@ def terminkalender(request: Request, session: Session = Depends(get_session)):
                   ad_ids=ad_ids, nur_ad=nur_ad, versatz=versatz,
                   vorgaenge=vorgaenge, kunden_map=kunden_map,
                   benutzer_map={b.id: b for b in session.query(Benutzer)},
-                  typ_namen=TERMIN_TYP_NAMEN, status_namen=VOT_STATUS_NAMEN_V2,
+                  typ_namen=lead_termin.TERMIN_TYP_NAMEN_V4, status_namen=VOT_STATUS_NAMEN_V2,
                   absage_gruende=_absage_gruende(session), hv_id=hv_id,
                   demo_badge=kern.demo_aktiv(session),
                   meldung=request.query_params.get("meldung", ""))

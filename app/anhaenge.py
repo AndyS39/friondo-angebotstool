@@ -1,10 +1,17 @@
 # Anhänge-Bibliothek (Phase 15): wertet das Blatt "Anhänge" der Logik-Excel
 # gegen ein Angebot aus. Regeln: 'immer' | 'wenn <Frage> = <Antwort>' |
-# 'wenn Pos. <Nr> im Angebot'. Fehlende Dateien führen zu Warnungen, nie zu
-# Abstürzen.
+# 'wenn Pos. <Nr> im Angebot' | 'wenn Sparte = <Kürzel>'. Fehlende Dateien
+# führen zu Warnungen, nie zu Abstürzen.
+# v27-Nachtrag 2: Die Prüfreihenfolge ist je Zeile „Nicht bei Profil“ → Regel
+# („immer“ gilt unabhängig von Sparte und Profil); Einzel- und Kombi-Versand
+# nutzen denselben Pfad (fuer_angebot). Der einzige stille Ausfall war eine
+# nicht gefundene Datei (nur Hinweis in der Versand-Meldung) – deshalb jetzt
+# tolerante Dateisuche (_datei_suchen) und fehlende_dateien() für Prüfpunkte.
 
 import json
+import unicodedata
 from dataclasses import dataclass
+from pathlib import Path
 
 from app import config
 from app.logik import Logik, _alias_aufloesen
@@ -17,6 +24,41 @@ class AngebotsAnhang:
     pfad: str
     vorhanden: bool
     regel: str
+
+
+def _normiert(name: str) -> str:
+    """Vergleichsschlüssel eines Dateinamens: Unicode-NFC, Kleinschreibung,
+    einfache Leerzeichen (Blatt „Anhänge“ ↔ Ordner anlagen/)."""
+    return " ".join(unicodedata.normalize("NFC", name or "").casefold().split())
+
+
+def _datei_suchen(datei: str) -> Path:
+    """v27-Nachtrag 2: Pfad der Anhang-Datei im Ordner config.ANLAGEN_ORDNER.
+    Zuerst der exakte Name; sonst tolerante Suche über die Ordnereinträge
+    (Groß-/Kleinschreibung, Unicode-Normalform NFC/NFD bei Umlauten, doppelte
+    Leerzeichen) – ein anders geschriebener Dateiname auf dem Server ließ den
+    Anhang bisher still ausfallen. Gibt es keinen Treffer, kommt der exakte
+    Pfad zurück (exists() = False → Hinweis „fehlt“)."""
+    ordner = Path(config.ANLAGEN_ORDNER)
+    pfad = ordner / datei
+    if pfad.exists():
+        return pfad
+    schluessel = _normiert(datei)
+    try:
+        for kandidat in sorted(ordner.iterdir()):
+            if kandidat.is_file() and _normiert(kandidat.name) == schluessel:
+                return kandidat
+    except OSError:
+        pass
+    return pfad
+
+
+def fehlende_dateien(logik) -> list[str]:
+    """v27-Nachtrag 2: Dateinamen des Blatts „Anhänge“, die im Ordner anlagen/
+    fehlen (Platzhalterzeilen „(…)“ liest logik.py gar nicht ein). Für
+    Prüfpunkte (Go-live/Betrieb): leer = alle Anhänge liegen bereit."""
+    return [a.datei for a in getattr(logik, "anhaenge", [])
+            if not _datei_suchen(a.datei).exists()]
 
 
 def profilname_fuer(session, angebot: Angebot) -> str:
@@ -69,7 +111,8 @@ def fuer_angebot(logik: Logik, angebot: Angebot,
             passt = (angebot.konfigurator_typ or "WP").upper() == anhang.antwort.upper()
         if not passt:
             continue
-        pfad = config.ANLAGEN_ORDNER / anhang.datei
+        # v27-Nachtrag 2: tolerante Dateisuche statt starrem Pfad
+        pfad = _datei_suchen(anhang.datei)
         ergebnis.append(AngebotsAnhang(anhang.datei, str(pfad), pfad.exists(),
                                        anhang.regel_roh))
     return ergebnis

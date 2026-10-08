@@ -1,0 +1,131 @@
+/* v28 (PLAN_PROJ_V6 Phasen 133–135, 139): Board (volle Breite, Spalten-Scroll,
+   Dummy-Scrollbalken, Drag-&-Drop-Dialog), Termin-Dialog, Block Termine, Aufgabe
+   „entfällt“, Stücklisten-Art. Pflege: Agent P1. Nur CSS-Tokens des Design-Systems
+   v14 (style.css :root, --pj-*), keine externen Schriften/CDNs. Wird nach style.css
+   geladen – gleiche Spezifität gewinnt hier. */
+
+/* --- Phase 134: volle Breite nur auf Projektierungs-Seiten (main.breit.pj-voll) --
+   [ANNAHME] main.breit (1720 px) bleibt für Portal/Lead-Seiten unverändert. */
+main.breit.pj-voll { max-width: none; padding-left: 16px; padding-right: 16px; }
+
+/* --- Phase 134: Board – Spalten flexibel, senkrecht je Spalte, Köpfe sticky --- */
+.pj-hscroll {
+    overflow-x: auto; overflow-y: hidden; height: 14px; margin: 6px 0 2px;
+    scrollbar-gutter: stable;
+}
+.pj-hscroll > div { height: 1px; }
+.pj-board {
+    display: flex; gap: 10px; align-items: stretch;
+    overflow-x: auto; overflow-y: hidden;
+    scroll-snap-type: none; padding-bottom: 4px;
+    scrollbar-gutter: stable;
+    height: var(--pj-board-h, auto); min-height: 480px;
+}
+.pj-board::-webkit-scrollbar, .pj-hscroll::-webkit-scrollbar { height: 12px; }
+.pj-board::-webkit-scrollbar-track, .pj-hscroll::-webkit-scrollbar-track {
+    background: var(--pj-surface2); border-radius: 6px; }
+.pj-board::-webkit-scrollbar-thumb, .pj-hscroll::-webkit-scrollbar-thumb {
+    background: var(--pj-line); border-radius: 6px; border: 2px solid var(--pj-surface2); }
+.pj-board::-webkit-scrollbar-thumb:hover, .pj-hscroll::-webkit-scrollbar-thumb:hover {
+    background: var(--pj-muted); }
+.pj-col {
+    flex: 1 1 0; min-width: 240px;      /* [ANNAHME] Plan: flex 1 1 0, min 240 px */
+    display: flex; flex-direction: column;
+    overflow-y: auto; overflow-x: hidden; min-height: 200px;
+    scroll-snap-align: none;
+}
+.pj-col > h3, .pj-col > details > summary.pj-colkopf {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--pj-surface2); margin: 0 0 8px; padding: 2px 0 6px;
+}
+.pj-col > details { display: flex; flex-direction: column; min-height: 0; }
+.pj-col.pj-drop-ziel { outline: 2px dashed var(--pj-accent); outline-offset: -4px; }
+.pj-card.pj-wandert { opacity: 0.5; }
+
+/* --- Phase 133/134: Dialog „Phase ändern“ (Akte + Board) --- */
+.pj-waechter-liste { margin: 8px 0; max-height: 40vh; overflow-y: auto; }
+.pj-waechter-liste .pj-wz {
+    display: flex; gap: 8px; align-items: center; padding: 5px 0;
+    border-top: 1px solid var(--pj-line); font-size: 13px;
+}
+.pj-waechter-liste .pj-wz:first-child { border-top: 0; }
+.pj-waechter-liste .pj-wz input[type=checkbox] { accent-color: var(--pj-accent); margin: 0; }
+.pj-waechter-liste .pj-wz .txt { flex: 1; min-width: 0; }
+.pj-waechter-liste .pj-wz.done .txt { text-decoration: line-through; color: var(--pj-muted); }
+.pj-waechter-liste .pj-wz.entf .txt { color: var(--pj-muted); font-style: italic; }
+.pj-waechter-liste .pj-wz small { color: var(--pj-muted); display: block; font-size: 11px; }
+.pj-waechter-liste .pj-wz .pj-entf-feld { display: flex; gap: 4px; align-items: center; }
+.pj-waechter-liste .pj-wz .pj-entf-feld input { width: 150px; font-size: 12px; padding: 3px 6px; }
+.pj-waechter-ok { color: var(--pj-ok); font-size: 13px; padding: 6px 0; }
+.pj-waechter-zaehler { font-weight: 600; font-size: 13px; margin: 6px 0 2px; }
+dialog.pj-dlg.pj-phase-dlg { max-width: 560px; }
+dialog.pj-dlg .pj-termin-meldung { margin-top: 8px; }
+
+/* --- Phase 133: Aufgabe „entfällt“ --- */
+.pj-task.entfaellt > .t > details > summary { color: var(--pj-muted); }
+.pj-task.entfaellt > .t > details > summary .pj-entf-badge,
+.pj-task .pj-entf-badge { background: var(--pj-surface2); color: var(--pj-muted);
+    border-color: var(--pj-line); margin-left: 4px; font-style: italic; }
+.pj-task .pj-entf { display: inline-block; margin-top: 4px; }
+.pj-task .pj-entf > summary { list-style: none; display: inline-block; }
+.pj-task .pj-entf > summary::-webkit-details-marker { display: none; }
+.pj-task .pj-entf[open] > summary { background: var(--pj-surface2); }
+.pj-task .pj-entf .detail { margin-top: 4px; }
+
+/* --- Phase 135: Block „Termine“ in der Akte --- */
+.pj-termine { margin: 10px 0 4px; border: 1px solid var(--pj-line); border-radius: 8px;
+    padding: 8px 10px; background: var(--pj-surface); }
+.pj-termine-kopf { display: flex; justify-content: space-between; align-items: center;
+    gap: 8px; font-size: 13px; }
+.pj-termine-tab { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+.pj-termine-tab th { text-align: left; font-weight: 600; color: var(--pj-muted);
+    padding: 2px 6px 4px 0; border-bottom: 1px solid var(--pj-line); white-space: nowrap; }
+.pj-termine-tab td { padding: 5px 6px 5px 0; border-bottom: 1px solid var(--pj-line);
+    vertical-align: top; }
+.pj-termine-tab tr:last-child td { border-bottom: 0; }
+.pj-termine-tab tr.vergangen td { color: var(--pj-muted); }
+.pj-termine-tab .pj-termin-aktionen { white-space: nowrap; text-align: right; }
+.pj-termine-tab .pj-btn { padding: 2px 7px; font-size: 11px; }
+.pj-badge.pj-art-montage { background: var(--pj-wp); color: #fff; border-color: var(--pj-wp); }
+.pj-badge.pj-art-elektro { background: var(--pj-pv); color: #fff; border-color: var(--pj-pv); }
+.pj-badge.pj-art-sub { background: var(--pj-muted); color: #fff; border-color: var(--pj-muted); }
+.pj-badge.pj-art-feinplanung { background: var(--pj-info); color: #fff; border-color: var(--pj-info); }
+.pj-badge.pj-art-abnahme { background: var(--pj-wb); color: #fff; border-color: var(--pj-wb); }
+.pj-badge.pj-art-sonstige { background: var(--pj-surface2); }
+
+/* --- Phase 135: Termin-Dialog --- */
+dialog.pj-dlg.pj-termin-dlg { max-width: 520px; }
+.pj-termin-zeit { display: grid; grid-template-columns: 1.2fr 0.8fr 1.2fr; gap: 0 8px; }
+.pj-termin-zeit label small, .pj-besetzung label small, .pj-termin-dlg label small {
+    color: var(--pj-muted); font-size: 11px; }
+dialog.pj-dlg input[type=time] { width: 100%; padding: 8px; border: 1px solid var(--pj-line);
+    border-radius: 8px; background: var(--pj-surface2); color: var(--pj-text);
+    font-family: inherit; }
+.pj-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; min-height: 26px; }
+.pj-chip-b { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px;
+    border-radius: 99px; background: var(--pj-accent-soft); color: var(--pj-accent);
+    font-size: 12px; font-weight: 600; }
+.pj-chip-b button { border: 0; background: none; color: inherit; cursor: pointer;
+    font-size: 14px; line-height: 1; padding: 0; }
+.pj-chips .pj-chips-leer { color: var(--pj-muted); font-size: 12px; }
+.pj-vorschlaege { margin-top: 10px; }
+.pj-vorschlaege-liste { margin-top: 6px; max-height: 32vh; overflow-y: auto; }
+.pj-vorschlag { display: flex; gap: 8px; align-items: center; width: 100%; text-align: left;
+    border: 1px solid var(--pj-line); border-radius: 8px; padding: 6px 8px; margin-top: 4px;
+    background: var(--pj-surface); cursor: pointer; font: inherit; font-size: 12px;
+    color: var(--pj-text); }
+.pj-vorschlag:hover { border-color: var(--pj-accent); background: var(--pj-accent-soft); }
+.pj-vorschlag b { white-space: nowrap; }
+.pj-vorschlag .um { margin-left: auto; white-space: nowrap; color: var(--pj-muted); }
+.pj-vorschlaege .pj-note { margin: 6px 0 0; }
+
+/* --- Phase 139: Stücklisten-Art --- */
+.pj-badge.pj-art-bestellen { background: var(--pj-ok); color: #fff; border-color: var(--pj-ok); }
+.pj-badge.pj-art-lager { background: var(--pj-info); color: #fff; border-color: var(--pj-info); }
+.pj-badge.pj-art-leistung { background: var(--pj-surface2); color: var(--pj-muted); }
+.pj-badge.pj-art-fremd { background: var(--pj-warn); color: #fff; border-color: var(--pj-warn); }
+
+@media (max-width: 720px) {
+    .pj-termin-zeit { grid-template-columns: 1fr; }
+    .pj-board { min-height: 360px; }
+}

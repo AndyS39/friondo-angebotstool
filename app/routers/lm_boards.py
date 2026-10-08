@@ -103,6 +103,8 @@ def _board_seite(request: Request, session: Session, board: str):
                   spalten=lead_boards.spalten_fuer(session, benutzer, board),
                   sortierung=f["sort"], score_aktiv=ctx["score_aktiv"],
                   sammelaktionen=lead_boards.sammelaktionen_fuer(board), ctx=ctx,
+                  # v29 (Phase 140): Ziele der Sammelaktion „An Handelsvertreter verschieben“
+                  hv_gruppen_wahl=lead_v2.hv_gruppen_wahl(session) if ctx["sammel"] else [],
                   phasen_namen=lead_boards.phasen_labels(), jetzt=daten["jetzt"],
                   meldung=request.query_params.get("meldung", ""),
                   fehler=request.query_params.get("fehler", "") == "1", **_badge(session))
@@ -332,9 +334,14 @@ def spalten_speichern(request: Request, session: Session = Depends(get_session))
     liste = daten.get("spalten", lead_boards._BEHALTEN)
     sort = daten.get("sort", lead_boards._BEHALTEN) if "sort" in daten else lead_boards._BEHALTEN
     umbenennen = daten.get("umbenennen")
+    # v29 (Phase 141): Spaltenbreite je Nutzer – {breite: {key, px}} (px leer/null = Standard)
+    breite = daten.get("breite")
+    if breite is not None and not (isinstance(breite, dict) and breite.get("key")):
+        return JSONResponse({"ok": False, "meldung": "Breite braucht einen Spalten-Key."},
+                            status_code=400)
     if zuruecksetzen:
         liste = []
-        sort, umbenennen = lead_boards._BEHALTEN, None
+        sort, umbenennen, breite = lead_boards._BEHALTEN, None, None
     if liste is not lead_boards._BEHALTEN and not isinstance(liste, list):
         return JSONResponse({"ok": False, "meldung": "Spaltenliste fehlt oder ist ungültig."},
                             status_code=400)
@@ -345,15 +352,18 @@ def spalten_speichern(request: Request, session: Session = Depends(get_session))
         return JSONResponse({"ok": False, "meldung": "Umbenennen braucht einen Spalten-Key."},
                             status_code=400)
     if (liste is lead_boards._BEHALTEN and sort is lead_boards._BEHALTEN
-            and umbenennen is None and not zuruecksetzen):
+            and umbenennen is None and breite is None and not zuruecksetzen):
         return JSONResponse({"ok": False, "meldung": "Spaltenliste fehlt oder ist ungültig."},
                             status_code=400)
     spalten = lead_boards.spalten_speichern(
         session, benutzer, board, liste=liste, sort=sort,
         umbenennen=(umbenennen["key"], umbenennen.get("name", "")) if umbenennen else None,
-        zuruecksetzen=zuruecksetzen)
+        zuruecksetzen=zuruecksetzen,
+        breite=(breite["key"], breite.get("px")) if breite else None)
     session.commit()
     meldung = ("Spalten zurückgesetzt." if zuruecksetzen
+               else ("Spaltenbreite gespeichert." if breite.get("px") else "Standardbreite.")
+               if breite and liste is lead_boards._BEHALTEN
                else "Spalte umbenannt." if umbenennen and liste is lead_boards._BEHALTEN
                else "Sortierung gemerkt." if sort is not lead_boards._BEHALTEN and liste is lead_boards._BEHALTEN
                else "Spalten gespeichert.")
@@ -381,72 +391,6 @@ def kontaktiert(request: Request, session: Session = Depends(get_session)):
                   meldung=q.get("meldung", ""), **_badge(session))
 
 
-# --- E-Mail-Vorlagen im Modul (H8) -----------------------------------------------------------
-
-def _vorlagen_pflege_erlaubt(benutzer) -> bool:
-    """Rechte wie heute: Admin/Innendienst pflegen; Hauptrolle leadmanagement
-    (und alle anderen) nur lesen."""
-    return benutzer is not None and benutzer.rolle in ("admin", "innendienst")
-
-
-def _vorlagen_gate(request: Request, session: Session) -> None:
-    lead_v2.gate(request, session)
-    # Handelsvertreter haben keinen Zugriff auf die Vorlagenpflege
-    if lead_v2.ist_handelsvertreter(session, request.state.benutzer):
-        raise HTTPException(status_code=404)
-
-
-@router.get("/vorlagen")
-def vorlagen(request: Request, session: Session = Depends(get_session)):
-    """Bestehender Lead-Vorlagen-Editor (Parametrierung) im Modul: gleiche
-    Schlüssel/Ablage (lead_vorlage_<key>[_<Sparte>]_betreff/_text)."""
-    from app import lead_mail, leadmanagement_logik
-    _vorlagen_gate(request, session)
-    schluessel = request.query_params.get("vorlage", "eingangsbestaetigung")
-    if schluessel not in lead_mail.VORLAGEN_START:
-        schluessel = "eingangsbestaetigung"
-    sparte = request.query_params.get("sparte", "")
-    if sparte not in leadmanagement_logik.SPARTEN:
-        sparte = ""
-    betreff, text = lead_mail.vorlage_laden(session, schluessel, sparte)
-    return render(request, "leadmanagement/vorlagen.html", aktiv="/lead-management",
-                  vorlagen=lead_mail.VORLAGEN_START, schluessel=schluessel, sparte=sparte,
-                  sparten=leadmanagement_logik.SPARTEN, betreff=betreff, text=text,
-                  platzhalter=lead_mail.PLATZHALTER_NEU,
-                  pflege=_vorlagen_pflege_erlaubt(request.state.benutzer),
-                  meldung=request.query_params.get("meldung", ""),
-                  fehler=request.query_params.get("fehler", "") == "1", **_badge(session))
-
-
-@router.post("/vorlagen")
-def vorlagen_speichern(request: Request, session: Session = Depends(get_session)):
-    from app import lead_mail, leadmanagement_logik
-    from app.models import einstellung_setzen
-    _vorlagen_gate(request, session)
-    form = anfrage.formular(request)
-    schluessel = form.get("vorlage") or ""
-    if schluessel not in lead_mail.VORLAGEN_START:
-        return RedirectResponse("/lead-management/vorlagen", status_code=303)
-    zurueck = f"/lead-management/vorlagen?vorlage={schluessel}"
-    if not _vorlagen_pflege_erlaubt(request.state.benutzer):
-        return RedirectResponse(zurueck + "&fehler=1&meldung="
-                                + quote_plus("Vorlagen pflegen dürfen Admin und Innendienst – "
-                                             "für Sie ist die Ansicht nur lesend."),
-                                status_code=303)
-    sparte = form.get("sparte") if form.get("sparte") in leadmanagement_logik.SPARTEN else ""
-    zusatz = f"_{sparte}" if sparte else ""
-    betreff = (form.get("betreff") or "").strip()
-    text = (form.get("text") or "").strip()
-    if form.get("aktion") == "entfernen" and sparte:
-        einstellung_setzen(session, f"lead_vorlage_{schluessel}{zusatz}_betreff", "")
-        einstellung_setzen(session, f"lead_vorlage_{schluessel}{zusatz}_text", "")
-        session.commit()
-        return RedirectResponse(zurueck + "&meldung=Sparten-Vorlage+entfernt", status_code=303)
-    if not betreff or not text:
-        return RedirectResponse(zurueck + (f"&sparte={sparte}" if sparte else "")
-                                + "&fehler=1&meldung=Betreff+und+Text+sind+Pflicht", status_code=303)
-    einstellung_setzen(session, f"lead_vorlage_{schluessel}{zusatz}_betreff", betreff)
-    einstellung_setzen(session, f"lead_vorlage_{schluessel}{zusatz}_text", text)
-    session.commit()
-    return RedirectResponse(zurueck + (f"&sparte={sparte}" if sparte else "")
-                            + "&meldung=Gespeichert", status_code=303)
+# --- E-Mail-Vorlagen im Modul --------------------------------------------------------------
+# v29 (PLAN_LEAD_V4 Phase 142): Der Vorlagen-Editor (Baum links, Terminbestätigung je
+# Vertriebler) lebt in app/routers/lm_vorlagen.py; der v23-Editor (H8) ist entfernt.

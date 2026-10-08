@@ -69,7 +69,7 @@ AKTION_TEXTE = {
     "keine": "",
     "mail_nicht_erreicht": "E-Mail „Nicht erreicht“ geht an den Kunden.",
     "mail_disqualifiziert": "Letzter Versuch: E-Mail „Disqualifiziert“ geht raus, "
-                            "Lead steht auf „Nicht erreicht“, Nurture-Mail in 30 Tagen.",
+                            "Lead steht auf „Nicht erreicht“.",   # v29: ohne Nurture-Mail
 }
 # v25 (Phase 120): Hinweis in der Kaskaden-Auskunft – kein Vorschlag mehr angewendet
 VORSCHLAG_HINWEIS = ("Seit v25 setzt die Kaskade keine Wiedervorlage mehr – Wiedervorlagen "

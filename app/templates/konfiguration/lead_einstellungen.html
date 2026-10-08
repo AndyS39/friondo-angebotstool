@@ -53,7 +53,8 @@
         </label>
         <label>Testadresse <input type="email" name="mail_testadresse"
                value="{{ werte.mail_testadresse }}"></label>
-        <label>Absender-Postfach <input type="email" name="absender_postfach"
+        {# v29: leads@ ist nur noch Eingangspostfach des Parsers – Absender aller Lead-Mails ist absender_lead_mails (unten) #}
+        <label>Parser-Eingangspostfach (leads@, nur lesen) <input type="email" name="absender_postfach"
                value="{{ werte.absender_postfach }}"></label>
     </div>
     <div class="formzeile">
@@ -211,13 +212,62 @@
                 <option value="aus" {{ 'selected' if werte.score_aktiv != 'an' }}>aus (Standard seit V3)</option>
                 <option value="an" {{ 'selected' if werte.score_aktiv == 'an' }}>an (wie V2: Score, Klassen, Bogen)</option>
             </select></label>
-        <label class="schmal">„Ohne nächsten Schritt“ ab (Tage)
-            <input type="number" name="ohne_schritt_tage" min="0" max="365" value="{{ werte.ohne_schritt_tage or 2 }}"></label>
+        {# v29 (PLAN_LEAD_V4 Phase 141): „Ohne nächsten Schritt“ entfällt – Parameter
+           ohne_schritt_tage bleibt ohne Wirkung und ist ausgeblendet #}
     </div>
     <p class="dezent">Bei „aus“: keine Score-Berechnung bei Eingang/Qualifizierung, keine Anzeige von Score/Klasse,
         kein Qualifizierungsbogen (Route zeigt „Qualifizierung ist abgeschaltet“), Pipeline-Wert nur nach Phasen-Quote;
-        die Steuerdatei-Blätter Qualifizierung/Scoring/Klassen bleiben liegen. Das Dashboard listet Leads der Gruppe Neu
-        mit Versuch, aber ohne Wiedervorlage und ohne Termin, wenn der letzte Anruf länger als die angegebenen Tage zurückliegt.</p>
+        die Steuerdatei-Blätter Qualifizierung/Scoring/Klassen bleiben liegen.</p>
+
+    {# v29 (PLAN_LEAD_V4 Phasen 140–143): Absender termin@, HV-Gruppen, Versandweg HV,
+       Glocken-Arten, Routenplaner, Vorschlagsanzahl #}
+    <h2>Lead-Management V4 – Absender, Handelsvertreter-Gruppen, Glocke, Assistent</h2>
+    <div class="formzeile">
+        <label>Absender aller Lead-Mails (kein Fallback)
+            <input type="email" name="absender_lead_mails" value="{{ werte.absender_lead_mails or 'termin@friondo.de' }}"></label>
+        <label>Versandweg Terminbestätigung für HV-Leads
+            <select name="hv_versandweg">
+                {% for w, t in [('offen', 'offen – keine Kundenmail, To-Do an den HV (Standard)'), ('smtp', 'smtp (noch nicht umgesetzt)'),
+                                ('entwurf', 'entwurf (.eml, noch nicht umgesetzt)'), ('leads_im_namen', 'termin@ im Namen des HV (noch nicht umgesetzt)')] %}
+                <option value="{{ w }}" {{ 'selected' if (werte.hv_versandweg or 'offen') == w }}>{{ t }}</option>
+                {% endfor %}
+            </select></label>
+        <label class="schmal">Terminvorschläge (Anzahl)
+            <input type="number" name="vorschlaege_anzahl" min="1" max="5" value="{{ werte.vorschlaege_anzahl or 3 }}"></label>
+    </div>
+    <p class="dezent">leads@friondo.de bleibt ausschließlich Eingangspostfach. Schlägt der Versand über den
+        Absender fehl, bleibt die Mail mit Status „fehler“ in der Warteschlange und der Lead steht oben im
+        Hauptboard („Mail nicht gesendet“).
+        {% if mail_fehler_anzahl %}<strong class="lm-rot">Aktuell {{ mail_fehler_anzahl }} Lead-Mail(s) mit Fehler</strong> –
+        <a href="/lead-management/kommunikation?status=fehler">Warteschlange öffnen</a>.{% else %}Aktuell keine Lead-Mail mit Fehler.{% endif %}</p>
+    <div class="formzeile">
+        <input type="hidden" name="hv_gruppe_rene_dabei" value="1">
+        <input type="hidden" name="hv_gruppe_simon_dabei" value="1">
+        {% set rene_ids = (werte.hv_gruppe_rene or '').split(',') %}
+        {% set simon_ids = (werte.hv_gruppe_simon or '').split(',') %}
+        <label>HV-Gruppe „René“ (Sammelaktion-Ziel 1)
+            <select name="hv_gruppe_rene" multiple size="5">
+                {% for hv in handelsvertreter %}<option value="{{ hv.id }}" {{ 'selected' if hv.id|string in rene_ids }}>{{ hv.name }}</option>{% endfor %}
+            </select></label>
+        <label>HV-Gruppe „Simon“ (Sammelaktion-Ziel 2, verteilt an sein Team)
+            <select name="hv_gruppe_simon" multiple size="5">
+                {% for hv in handelsvertreter %}<option value="{{ hv.id }}" {{ 'selected' if hv.id|string in simon_ids }}>{{ hv.name }}</option>{% endfor %}
+            </select></label>
+        <label>Routenplaner-Start (Dashboard)
+            <input type="text" name="routen_start" value="{{ werte.routen_start or 'Arnold-Overbeck-Straße 63-65, 47139 Duisburg' }}"></label>
+    </div>
+    <p class="dezent">Der erste Benutzer der Gruppe ist jeweils das Ziel der Sammelaktion „An Handelsvertreter
+        verschieben“; Startwerte setzt die Migration per Namensabgleich (René Golaschewski / Simon O'Grady).</p>
+    <input type="hidden" name="glocke_dabei" value="1">
+    <fieldset class="pe-fieldset">
+        <legend>Lead-Glocken (Standard: nur To-Dos)</legend>
+        {% for art in glocke_alle %}
+        <label class="kontrollfeld"><input type="checkbox" name="glocke_lead_arten" value="{{ art }}"
+               {{ 'checked' if art in glocke_arten }}> {{ glocke_namen[art] }}</label>
+        {% endfor %}
+        <p class="dezent">Abgeschaltete Arten bleiben als Aktivität in der Timeline sichtbar. Betriebs-,
+            Projektierungs- und Angebotstool-Glocken sind nicht betroffen.</p>
+    </fieldset>
 
     <h2>Lead-Management V2 – Infoabend</h2>
     <div class="formzeile">
@@ -237,6 +287,21 @@
         hinterlegt; fällt der Regeltermin auf einen Feiertag, rückt er eine Woche nach hinten.</p>
     <button class="knopf" type="submit">Speichern</button>
 </form>
+
+{# v29 (PLAN_LEAD_V4 Phase 142): Prüfpunkte – Testmail aus dem Lead-Absender (Request ohne
+   offene Sitzung, Demo-Modus nur Testpostfach) und das wiederholbare Einspielen der
+   Terminbestätigungen aus docs/vorlagen/terminbestaetigung/ (Routen: Lead-Router) #}
+<section class="karte" id="lead-v4-pruefpunkte" style="max-width:860px">
+    <h2>Prüfpunkte V4</h2>
+    <div class="aktionen">
+        <form method="post" action="/lead-management/testmail" class="lm-inline">
+            <button class="knopf zweitrangig" type="submit">Testmail aus dem Lead-Absender senden</button></form>
+        <form method="post" action="/lead-management/vorlagen/einspielen" class="lm-inline">
+            <button class="knopf zweitrangig" type="submit">Terminbestätigungen aus docs/vorlagen einspielen</button></form>
+        <a class="knopf zweitrangig" href="/lead-management/vorlagen">Vorlagen-Editor</a>
+    </div>
+    <p class="dezent">Ergebnis beider Prüfpunkte erscheint als Meldung bzw. im Protokoll unten.</p>
+</section>
 
 {% if loeschvorschau %}
 <div class="warnblock">

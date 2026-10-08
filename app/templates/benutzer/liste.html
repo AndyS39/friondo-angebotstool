@@ -159,7 +159,7 @@
                         title="PIN, Telefon, Benachrichtigungen, Sonderrechte, Sitzungen">Details ▾</button>
                 {% if b.rolle == 'aussendienst' %}
                     <a class="knopf klein zweitrangig" href="/benutzer/{{ b.id }}/ad-profil"
-                       title="Startadresse, Arbeitszeiten, Gebiet (Terminassistent)">AD-Profil</a>
+                       title="Startadresse, Arbeitszeiten, Gebiet (Terminassistent); v29: Bild und Infotext der Terminbestätigung">AD-Profil</a>
                 {% endif %}
             </td>
         </tr>
@@ -177,6 +177,11 @@
                     <label>Telefon
                         <input form="f{{ b.id }}" type="tel" name="telefon"
                                value="{{ b.telefon }}" size="14" placeholder="optional"></label>
+                    {# v29 (PLAN_LEAD_V4 Phase 141/142): Vorname für „Hallo, <Vorname>“ und die
+                       Terminbestätigung; Bild/Infotext der Vertriebler im AD-Profil #}
+                    <label title="Anrede im Lead-Dashboard („Hallo, Vorname“) und Platzhalter {vertriebler_vorname}">Vorname
+                        <input form="f{{ b.id }}" type="text" name="vorname"
+                               value="{{ b.vorname or '' }}" size="12" placeholder="optional"></label>
                     {# v23 (Phase 108, F12): Buchungslink für Online-Termine (Teams) #}
                     <label title="Outlook-Buchungslink (Book with me) für Online-Termine (Teams), Vorlage online_termin_einladung">Buchungslink
                         <input form="f{{ b.id }}" type="url" name="buchungslink"

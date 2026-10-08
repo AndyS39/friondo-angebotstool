@@ -898,7 +898,8 @@ class I_NichtErreicht(Basis):
         self.assertEqual((v.versuch_nr, v.lead_phase), (maximal, "nicht_erreicht"))
         self.assertIsNone(v.naechste_aktion_am)
         offen = {k for k, status in self.mails(v.id) if status == "geplant"}
-        self.assertTrue({"disqualifiziert", "nurture"} <= offen)
+        self.assertTrue({"disqualifiziert"} <= offen)
+        self.assertNotIn("nurture", offen)          # v29 (Phase 142): Nurture entfällt
         self.assertTrue(lead_anrufliste.versuche_gesperrt(self.s, v))
         # Sperre nach dem letzten Versuch: kein weiterer Zähler, keine Aktivität
         r = self.client.post(f"/lead-management/anruf/{v.id}", data={"ergebnis": "nicht_erreicht"},
@@ -961,7 +962,7 @@ class J_ScoreAus(Basis):
         # Lead-Einstellungen führen den Schalter (Standard aus) und ohne_schritt_tage
         einstellungen = self.client.get("/parametrierung/lead-einstellungen").text
         self.assertIn('name="score_aktiv"', einstellungen)
-        self.assertIn('name="ohne_schritt_tage"', einstellungen)
+        self.assertNotIn('name="ohne_schritt_tage"', einstellungen)   # v29 (Phase 141): ausgeblendet
 
 
 # --- (k) To-Dos-Seite ------------------------------------------------------------------------

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
+
+{% block titel %}{{ vorlage_name }} – Vorschau {{ kunde.anzeige_name if kunde else vorgang.id }}{% endblock %}
+
+{# v29 (PLAN_LEAD_V4 Phase 142, OFFEN 2 Zwischenlösung hv_versandweg = offen):
+   fertige Terminbestätigung (Betreff, Text zum Kopieren, HTML-Ansicht) mit
+   ICS-/Text-Download für Handelsvertreter, die die Mail aus dem eigenen Konto
+   senden. Route GET /lead-management/lead/{id}/termin/{tid}/vorschau (lm_mail.py);
+   kein Netzaufruf, kein Warteschlangen-Eintrag. #}
+{% block inhalt %}
+<div class="seitenkopf">
+    <h1>{{ vorlage_name }} – Vorschau {% if demo_badge %}<span class="demo-badge">Demo</span>{% endif %}</h1>
+    <span class="dezent">{{ kunde.anzeige_name if kunde else '' }} · Termin {{ termin.beginn.strftime('%d.%m.%Y %H:%M') if termin.beginn else 'ohne Uhrzeit' }}{% if ad %} · {{ ad.name }}{% endif %}</span>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}">Zur Kundenkartei</a>
+        <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}/termin/{{ termin.id }}/vorschau?vorlage={{ vorlage }}&txt=1">{{ symbol('kopie') }} Text herunterladen</a>
+        {% if daten.ics_pfad %}<a class="knopf klein" href="/lead-management/lead/{{ vorgang.id }}/termin/{{ termin.id }}/vorschau?vorlage={{ vorlage }}&ics=1">{{ symbol('kalender') }} ICS herunterladen</a>{% endif %}
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+<div class="warnblock">
+    <strong>Versandweg für Handelsvertreter offen</strong> (<code>hv_versandweg = {{ hv_versandweg }}</code>): Das Tool sendet
+    diese Mail nicht selbst. Text kopieren bzw. herunterladen, aus dem eigenen Mailkonto an
+    <a href="mailto:{{ kunde.email if kunde else '' }}">{{ kunde.email if kunde else '–' }}</a> senden und die ICS-Datei anhängen.
+    Andere Termin-Mails: <a href="?vorlage=terminbestaetigung">Bestätigung</a> · <a href="?vorlage=terminaenderung">Änderung</a> · <a href="?vorlage=terminabsage">Absage</a>.
+</div>
+
+<section class="karte" style="max-width:860px">
+    <h2>Betreff</h2>
+    <p><strong>{{ daten.betreff }}</strong></p>
+    <h2>Text (zum Kopieren)</h2>
+    <textarea readonly rows="16" style="width:100%" id="lmv-vorschau-text">{{ daten.text }}</textarea>
+    <p><button class="knopf klein zweitrangig" type="button"
+               onclick="var t=document.getElementById('lmv-vorschau-text'); t.select(); try { navigator.clipboard.writeText(t.value); } catch (e) { document.execCommand('copy'); }">Text in die Zwischenablage</button></p>
+</section>
+<section class="karte" style="max-width:860px">
+    <h2>HTML-Ansicht</h2>
+    <div class="mail-vorschau lmv-mail">{{ daten.html | safe }}</div>
+    <p class="dezent">Absender im Tool wäre {{ absender }}; Vorlage {{ daten.vorlage_key }}.</p>
+</section>
+{% endblock %}

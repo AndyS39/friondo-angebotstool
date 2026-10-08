@@ -15,6 +15,14 @@
 <p class="dezent">Master bleibt die Projektierungs-Logik (Blatt „Stücklisten“,
     Stand {{ stand }}) – Speichern hier schreibt dorthin zurück (Backup vorher).
     Menge = Stück je Einheit der Angebotsposition; Einheit = UGL-Mengeneinheit (ST, M, PAK …).</p>
+{# v28 (PLAN_PROJ_V6 Phase 139): Konvention Spalte Lieferant #}
+<p class="dezent" style="max-width:860px"><strong>Konvention Lieferant (v28):</strong>
+    <code>{{ standard_lieferant }}</code> = bestellen (kommt in die UGL) ·
+    <code>Lager</code> = Lagerware (nicht bestellt) ·
+    <code>–</code> oder <code>KEIN-MATERIAL</code> = Leistung ohne Material ·
+    anderer Name = Fremdlieferant (separat bestellen). Eine Position gilt als zugeordnet,
+    sobald sie mindestens eine Zeile hat – auch Lager oder Leistung. Die Go-live-Quote zählt
+    nur WP- und spartenübergreifende Positionen (PV…/KL… ohne Zeile bleiben außen vor).</p>
 
 {# V3 (Phase 86): Go-live-Prüfpunkte sind in die Go-live-Checkliste umgezogen #}
 <p class="dezent" style="max-width:720px">Zuordnung: <strong>{{ zugeordnet }} von {{ gesamt }}</strong>
@@ -45,7 +53,7 @@
     <form method="post" action="/parametrierung/stuecklisten/{{ p.pos_nr | urlencode }}">
         <input type="hidden" name="anzahl" value="{{ anzahl }}">
         <table class="tabelle" style="margin:4px 0">
-            <thead><tr><th>Lieferant</th><th>Lieferanten-Artnr.</th><th>Bezeichnung</th><th>Menge je Einheit</th><th>Einheit</th></tr></thead>
+            <thead><tr><th title="{{ standard_lieferant }} = bestellen · Lager · – (Leistung) · Fremdname">Lieferant</th><th>Lieferanten-Artnr.</th><th>Bezeichnung</th><th>Menge je Einheit</th><th>Einheit</th></tr></thead>
             <tbody>
             {% for i in range(anzahl) %}
             {% set z = zeilen[i] if i < zeilen | length else none %}
@@ -66,12 +74,14 @@
 {% endif %}
 
 <table class="tabelle">
-    <thead><tr><th style="width:70px">Pos.</th><th>Angebotsposition</th><th>Stückliste</th></tr></thead>
+    <thead><tr><th style="width:70px">Pos.</th><th>Angebotsposition</th><th style="width:90px">Art</th><th>Stückliste</th></tr></thead>
     <tbody>
     {% for p in positionen %}
     <tr id="pos-{{ p.pos_nr }}">
         <td class="pj-mono">{{ p.pos_nr }}</td>
         <td>{{ p.titel[:120] }}<br><small class="dezent">{{ (p.kategorie or '')[:90] }}{{ ' · ' ~ p.einheit if p.einheit }}</small></td>
+        {# v28 (Phase 139): Art je Zeile aus dem Lieferanten (bestellen / Lager / Leistung / Fremd) #}
+        <td>{% if p.arten %}{% for z, art in p.arten %}<span class="pj-badge pj-art-{{ art }}" title="Lieferant: {{ z.lieferant }}">{{ {'bestellen': 'bestellen', 'lager': 'Lager', 'leistung': 'Leistung', 'fremd': 'Fremd'}[art] }}</span>{{ '<br>' | safe if not loop.last }}{% endfor %}{% else %}<span class="dezent">–</span>{% endif %}</td>
         <td>
             {% if p.zeilen %}
             <div>{% for z in p.zeilen %}<span class="pj-mono">{{ z.lieferant_artnr }}</span> × {{ ('%g' | format(z.menge_je_einheit)) | replace('.', ',') }} {{ z.mengeneinheit }} · {{ z.bezeichnung }} <small class="dezent">({{ z.lieferant }})</small><br>{% endfor %}</div>
@@ -80,7 +90,7 @@
         </td>
     </tr>
     {% else %}
-    <tr><td colspan="3" class="dezent">Keine Positionen gefunden.</td></tr>
+    <tr><td colspan="4" class="dezent">Keine Positionen gefunden.</td></tr>
     {% endfor %}
     </tbody>
 </table>

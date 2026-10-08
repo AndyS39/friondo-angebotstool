@@ -939,3 +939,190 @@ main.lk-v3 .lk-mitte { padding: var(--a-4); margin-bottom: var(--a-4); }
 .lm-todo-filter .lm-umschalter + .lm-umschalter { margin-left: var(--a-2); }
 .lm-umschalter .n.rot { background: var(--status-rot-bg); color: var(--status-rot); }
 .lm-umschalter a.aktiv .n.rot { background: rgba(255,255,255,0.25); color: #fff; }
+
+/* Phase 140/141/143 – Lead-Management V4 (v29, PLAN_LEAD_V4): Handelsvertreter-
+   Sicht (vier Einträge), „Mehr …“ als Flyout (position: fixed neben der Leiste,
+   kein Scrollen in der Menüspalte, z-index 45 unter dem Wartungsbanner 50, unter
+   900 px nach oben), Spaltenbreite je Nutzer (Ziehgriff im Spaltenkopf, Breiten
+   über <colgroup>, table-layout fixed sobald eine Breite gesetzt ist), Rang 0 und
+   rote Labels „E-Mail falsch“ / „Mail nicht gesendet“ (Vertrag L2), Dashboard
+   „Hallo, <Vorname>“ (linke Spalte ca. 40 % ab 1200 px, Routenplaner rechts),
+   Terminassistent: Vorschlag „Ideal“ (Rahmen Friondo-Blau, Badge), Kalenderansicht
+   (Wochenraster Mo–Sa, 15 Minuten, Spalte je Kandidat, Vorschlags-Slots, Outlook-
+   Belegt, Sperrzeiten, „außerhalb der Vorauswahl“ grau), Aufklappmenü „Weitere
+   Kalender“, Sperrzeiten-Formular „Meine Termine“ (HV). Nur Tokens aus style.css. */
+.lm-leiste { overflow: visible; }
+.lm-leiste-hv { justify-content: flex-start; }
+.lm-leiste-mehr[open] .lm-leiste-menue { position: fixed; left: calc(var(--lm-leiste-breite) + 8px); right: auto;
+    top: var(--lm-flyout-top, var(--lm-kopf, 50px)); bottom: auto; min-width: 240px; width: max-content; max-width: 380px;
+    max-height: calc(100vh - 16px); overflow-y: auto; z-index: 45; }
+.lm-leiste-mehr .lm-leiste-menue a .symbol-svg { width: 1.05rem; height: 1.05rem; flex: none; color: var(--g-500); }
+.lm-leiste-mehr .lm-leiste-menue a:focus-visible { outline: 2px solid var(--friondo-blau); outline-offset: -2px; }
+.lm-leiste-mehr[open] > summary { background: var(--friondo-blau-hell); color: var(--friondo-blau-dunkel); }
+.lm-leiste-mehr[open].aktiv > summary { background: var(--friondo-dunkel); color: #fff; }
+@media (max-width: 900px) {
+    .lm-leiste { overflow: visible; }
+    .lm-leiste-mehr[open] .lm-leiste-menue, .lm-leiste-mehr.lm-flyout-oben[open] .lm-leiste-menue {
+        position: fixed; left: 8px; right: 8px; top: auto; bottom: 66px; width: auto; max-width: none;
+        max-height: calc(100vh - 90px); }
+}
+
+/* Spaltenbreite je Nutzer (Phase 141) */
+.lm-tabelle thead th { position: relative; }
+.lm-th-griff { position: absolute; top: 0; right: -4px; width: 9px; height: 100%; cursor: col-resize;
+    border: 0; background: transparent; padding: 0; z-index: 6; touch-action: none; }
+.lm-th-griff::after { content: ""; position: absolute; top: 20%; bottom: 20%; left: 3px; width: 2px;
+    background: var(--g-200); opacity: 0; transition: opacity 0.1s; }
+.lm-tabelle thead th:hover .lm-th-griff::after, .lm-th-griff:focus-visible::after,
+.lm-th-griff.lm-zieht::after { opacity: 1; background: var(--friondo-blau); }
+.lm-tabelle.lm-fest { table-layout: fixed; }
+.lm-tabelle.lm-fest th, .lm-tabelle.lm-fest td { overflow: hidden; text-overflow: ellipsis; }
+.lm-tabelle.lm-fest td.sp-lead, .lm-tabelle.lm-fest td.sp-notiz, .lm-tabelle.lm-fest td.sp-angebot { min-width: 0; }
+body.lm-spalte-zieht, body.lm-spalte-zieht * { cursor: col-resize !important; user-select: none !important; }
+
+/* Rang 0: Mail nicht gesendet / E-Mail falsch (Phase 142, Vertrag L2) */
+.lm-tabelle tr.lm-rang0 td:first-child, .lm-tabelle tr.lm-rang0 td.sp-lead { box-shadow: inset 3px 0 0 var(--status-rot); }
+.lm-mail-label { display: inline-block; font-size: var(--t-xs); font-weight: 700; padding: 1px 7px; margin-right: 4px;
+    border-radius: 999px; background: var(--status-rot); color: #fff; white-space: nowrap; vertical-align: middle; }
+.sp-notiz .lm-mail-labels { display: inline-flex; gap: 2px; flex-wrap: wrap; margin-right: 4px; vertical-align: middle; }
+.lk-feld-email-ungueltig input { border-color: var(--status-rot) !important; box-shadow: 0 0 0 1px var(--status-rot-bg); }
+.lk-feld-email-ungueltig > span { color: var(--status-rot); }
+
+/* Sammelaktion „An Handelsvertreter verschieben“ (Phase 140) */
+.lm-sammel-hv { display: inline-flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.lm-sammel-hv[hidden] { display: none; }
+.lm-sammel-hv .knopf { display: inline-flex; align-items: center; gap: 4px; }
+.lm-sammel-hv .dezent { font-size: var(--t-xs); }
+
+/* Dashboard „Hallo, <Vorname>“ (Phase 141) */
+.lm-dash-grid-v4 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (min-width: 1200px) { .lm-dash-grid-v4 { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); } }
+.lm-dash-kompakt .lm-karte { padding: 10px 14px; }
+.lm-dash-kompakt .lm-karte h2 { font-size: var(--t-m); margin-bottom: 6px; }
+.lm-dash-kompakt .lm-wv-tabelle td { padding: 4px 6px; font-size: var(--t-s); }
+.lm-dash-kompakt .lm-wv-gruppe > summary { padding: 4px 6px; }
+.lm-dash-kompakt .lm-todo { padding: 5px 4px; }
+.lm-dash-kacheln-v4 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.lm-dash-kacheln-v4 .kachel.stat { padding: 10px 12px; }
+.lm-dash-kacheln-v4 .stat-zahl { font-size: 1.7rem; }
+.lm-kommende-tag { background: var(--g-50); color: var(--g-700); font-size: var(--t-xs); text-transform: uppercase;
+    letter-spacing: 0.04em; padding: 4px 8px !important; }
+.lm-kommende-mehr { margin: 6px 0 0; }
+.lm-kommende-mehr > summary { cursor: pointer; color: var(--friondo-blau); list-style: none; font-size: var(--t-s); }
+.lm-kommende-mehr > summary::-webkit-details-marker { display: none; }
+.lm-kommende-mehr:not([open]) > summary::before { content: "▸ "; }
+.lm-kommende-mehr[open] > summary::before { content: "▾ "; }
+.lm-routenplaner { background: linear-gradient(135deg, var(--friondo-blau-hell), #fff); }
+.lm-routenplaner .lm-routen-start { font-size: var(--t-s); color: var(--g-700); margin: 4px 0 10px; display: flex; gap: 6px; align-items: center; }
+.lm-routenplaner .lm-routen-start .symbol-svg { color: var(--friondo-blau); }
+.lm-routenplaner .knopf { display: inline-flex; align-items: center; gap: 6px; }
+.lm-routenplaner .lm-routen-hinweis { font-size: var(--t-xs); margin-top: 8px; }
+.lm-sperrzeiten { margin-top: 10px; border-top: 1px dashed var(--g-200); padding-top: 8px; }
+.lm-sperrzeiten h3 { margin: 0 0 6px; font-size: var(--t-s); display: flex; gap: 6px; align-items: center; }
+.lm-sperrzeit-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; margin: 6px 0 0; }
+.lm-sperrzeit-form label { display: flex; flex-direction: column; gap: 2px; font-size: var(--t-xs); color: var(--g-700); }
+.lm-sperrzeit-form input { font: inherit; font-size: var(--t-s); padding: 3px 6px; border: 1px solid var(--g-300); border-radius: var(--r-s); }
+.lm-sperrzeit-form input[name=bemerkung] { min-width: 160px; }
+.lm-sperrzeit-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: var(--t-s); }
+.lm-sperrzeit-liste li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.lm-sperrzeit-liste form { margin: 0; }
+.lm-mails-fehler-kachel { border-color: #e5b5af; background: #fdf3f2; }
+.lm-mails-fehler-kachel .stat-zahl { color: var(--status-rot); }
+
+/* Terminassistent: Vorschlag „Ideal“ (Phase 143) */
+.lmt-vorschlag.lmt-ideal { border: 2px solid var(--friondo-blau); box-shadow: 0 0 0 3px var(--friondo-blau-hell); position: relative; }
+.lmt-vorschlag.lmt-ideal.aktiv { box-shadow: 0 0 0 3px var(--friondo-blau-hell); }
+.lmt-ideal-badge { display: inline-block; background: var(--friondo-blau); color: #fff; font-size: var(--t-xs); font-weight: 700;
+    letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 9px; border-radius: 999px; vertical-align: middle; margin-left: 6px; }
+.lmt-ideal-grund { margin: 4px 0 6px; font-size: var(--t-s); color: var(--friondo-blau-dunkel); background: var(--friondo-blau-hell);
+    border-radius: 6px; padding: 0.35rem 0.5rem; line-height: 1.4; }
+.lk-vorschlag.lk-ideal { border: 2px solid var(--friondo-blau); box-shadow: 0 0 0 2px var(--friondo-blau-hell); }
+.lk-vorschlag .lmt-ideal-badge { margin-left: 4px; }
+.lk-vorschlag-ideal-grund { font-size: var(--t-xs); color: var(--friondo-blau-dunkel); }
+
+/* Terminassistent: Kalenderansicht (Phase 143) */
+.lmt-kalender { margin-top: var(--a-4); }
+.lmt-kalender-kopf { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 8px; }
+.lmt-kalender-kopf h2 { margin: 0; }
+.lmt-kalender-nav { display: inline-flex; gap: 4px; align-items: center; }
+.lmt-kalender-nav .knopf { padding: 2px 10px; }
+.lmt-kalender-nav b { min-width: 150px; text-align: center; display: inline-block; }
+.lmt-kalender-wrap { overflow: auto; max-height: 70vh; border: 1px solid var(--g-200); border-radius: var(--r-m); background: #fff; }
+.lmt-kalender-tabelle { border-collapse: separate; border-spacing: 0; font-size: var(--t-xs); min-width: 100%; }
+.lmt-kalender-tabelle th { position: sticky; top: 0; z-index: 3; background: var(--g-50); color: var(--friondo-dunkel);
+    padding: 4px 6px; border-bottom: 1px solid var(--g-200); border-right: 1px solid var(--g-100); text-align: center;
+    white-space: nowrap; font-weight: 600; }
+.lmt-kalender-tabelle th.lmt-k-tag { border-right: 2px solid var(--g-300); }
+.lmt-kalender-tabelle th.lmt-k-ad { font-weight: 500; font-size: 0.68rem; top: 25px; }
+.lmt-kalender-tabelle th.lmt-k-ad.lmt-k-ausserhalb { color: var(--g-500); background: #f1f3f6; font-style: italic; }
+.lmt-kalender-tabelle th.lmt-k-ad.lmt-k-ausserhalb small { display: block; font-style: normal; font-size: 0.6rem; }
+.lmt-kalender-tabelle th.lmt-k-zeit, .lmt-kalender-tabelle td.lmt-k-zeit { position: sticky; left: 0; z-index: 4; background: var(--g-50);
+    text-align: right; padding: 0 6px; color: var(--g-500); font-variant-numeric: tabular-nums; width: 46px; min-width: 46px; }
+.lmt-kalender-tabelle th.lmt-k-zeit { z-index: 5; }
+.lmt-kalender-tabelle td { height: 11px; padding: 0; border-right: 1px solid var(--g-100); border-bottom: 1px solid #f1f3f6;
+    min-width: 54px; background: #fff; }
+.lmt-kalender-tabelle td.lmt-k-stunde { border-bottom-color: var(--g-200); }
+.lmt-kalender-tabelle td.lmt-k-tagende { border-right: 2px solid var(--g-300); }
+.lmt-kalender-tabelle td.lmt-k-frei { cursor: pointer; }
+.lmt-kalender-tabelle td.lmt-k-frei:hover { background: var(--friondo-blau-hell); }
+.lmt-kalender-tabelle td.lmt-k-aus { background: #f1f3f6; cursor: default; }
+.lmt-kalender-tabelle td.lmt-k-vergangen { background: repeating-linear-gradient(135deg, #f6f7f9 0 4px, #eef0f3 4px 8px); cursor: default; }
+.lmt-kalender-tabelle td.lmt-k-termin { background: var(--status-blau-bg); border-bottom-color: var(--status-blau-bg); cursor: default; }
+.lmt-kalender-tabelle td.lmt-k-termin.lmt-k-typ-telefon { background: var(--status-gruen-bg); }
+.lmt-kalender-tabelle td.lmt-k-termin.lmt-k-typ-online { background: var(--status-violett-bg); }
+.lmt-kalender-tabelle td.lmt-k-termin.lmt-k-vorgemerkt { background: repeating-linear-gradient(135deg, var(--status-blau-bg) 0 4px, #fff 4px 8px); }
+.lmt-kalender-tabelle td.lmt-k-termin.lmt-k-eigener { outline: 2px solid var(--status-blau); outline-offset: -2px; }
+.lmt-kalender-tabelle td.lmt-k-sperrzeit { background: repeating-linear-gradient(135deg, var(--g-200) 0 4px, var(--g-100) 4px 8px); cursor: default; }
+.lmt-kalender-tabelle td.lmt-k-belegt { background: repeating-linear-gradient(45deg, var(--status-orange-bg) 0 4px, #fff 4px 8px); cursor: default; }
+.lmt-kalender-tabelle td.lmt-k-vorschlag { background: var(--friondo-blau-hell); box-shadow: inset 0 0 0 2px var(--friondo-blau); cursor: pointer; }
+.lmt-kalender-tabelle td.lmt-k-vorschlag.lmt-k-ideal { background: var(--friondo-blau); }
+.lmt-kalender-tabelle td.lmt-k-start { position: relative; }
+.lmt-k-text { position: absolute; left: 2px; right: 2px; top: 1px; font-size: 0.62rem; line-height: 1.1; color: var(--friondo-dunkel);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; z-index: 2; }
+.lmt-k-vorschlag.lmt-k-ideal .lmt-k-text { color: #fff; font-weight: 700; }
+.lmt-k-nr { display: inline-block; min-width: 14px; height: 14px; line-height: 14px; border-radius: 50%; background: var(--friondo-blau);
+    color: #fff; font-size: 0.6rem; font-weight: 700; text-align: center; margin-right: 2px; }
+.lmt-k-vorschlag.lmt-k-ideal .lmt-k-nr { background: #fff; color: var(--friondo-blau); }
+.lmt-kalender-legende { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: var(--t-xs); color: var(--g-700); align-items: center; }
+.lmt-kalender-legende i { display: inline-block; width: 14px; height: 10px; border: 1px solid var(--g-200); vertical-align: middle; margin-right: 4px; }
+.lmt-kalender-legende i.frei { background: #fff; }
+.lmt-kalender-legende i.termin { background: var(--status-blau-bg); }
+.lmt-kalender-legende i.belegt { background: repeating-linear-gradient(45deg, var(--status-orange-bg) 0 3px, #fff 3px 6px); }
+.lmt-kalender-legende i.sperr { background: repeating-linear-gradient(135deg, var(--g-200) 0 3px, var(--g-100) 3px 6px); }
+.lmt-kalender-legende i.vorschlag { background: var(--friondo-blau-hell); box-shadow: inset 0 0 0 2px var(--friondo-blau); }
+.lmt-kalender-legende i.ideal { background: var(--friondo-blau); }
+.lmt-kalender-legende i.aus { background: #f1f3f6; }
+.lmt-kalender-hinweis { font-size: var(--t-xs); margin: 4px 0 0; }
+.lmt-weitere { position: relative; display: inline-block; }
+.lmt-weitere > summary { list-style: none; cursor: pointer; }
+.lmt-weitere > summary::-webkit-details-marker { display: none; }
+.lmt-weitere[open] > .lmt-weitere-liste { position: absolute; left: 0; top: calc(100% + 4px); z-index: 20; min-width: 260px; max-height: 50vh;
+    overflow: auto; background: #fff; border: 1px solid var(--g-200); border-radius: var(--r-s); box-shadow: var(--schatten-2); padding: 6px; }
+.lmt-weitere-liste label { display: flex; align-items: center; gap: 8px; font-size: var(--t-s); padding: 4px 6px; border-radius: var(--r-s); cursor: pointer; white-space: nowrap; }
+.lmt-weitere-liste label:hover { background: var(--friondo-blau-hell); }
+.lmt-weitere-liste .dezent { padding: 4px 6px; }
+.lmt-ausserhalb-warnung { background: var(--status-orange-bg); color: var(--status-orange); border-radius: var(--r-s); padding: 0.4rem 0.7rem; font-size: var(--t-s); margin: 0.3rem 0; }
+.lmt-ausserhalb-warnung[hidden] { display: none; }
+@media (max-width: 900px) {
+    .lmt-kalender-wrap { max-height: 60vh; }
+    .lm-dash-grid-v4 { grid-template-columns: 1fr; }
+}
+
+/* Karte für Handelsvertreter (Phase 140): weniger Filter, Hinweis */
+.lm-karte-hv-hinweis { margin-left: auto; }
+/* v29 (Phase 142, Vertrag L2): Status-Badges der Lead-Mail-Warteschlange */
+.abzeichen.lm-mailstatus-fehler { background: var(--status-rot-bg); color: var(--status-rot); }
+.abzeichen.lm-mailstatus-wartet_adresse { background: var(--status-orange-bg); color: var(--status-orange); }
+.abzeichen.lm-mailstatus-geplant { background: var(--status-blau-bg); color: var(--status-blau); }
+.abzeichen.lm-mailstatus-gesendet { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.lm-warteschlange td { vertical-align: top; }
+.kalender-eintrag.typ-sperrzeit { border-left-color: var(--g-500); background: repeating-linear-gradient(135deg, var(--g-100) 0 4px, #fff 4px 8px); color: var(--g-700); }
+/* v29 Dashboard kompakt: Grund/Phase unter dem Kundennamen, Aktion rechts ohne Umbruch */
+.lm-dash-kompakt .lm-wv-tabelle td.lm-wv-kunde { white-space: normal; }
+.lm-dash-kompakt .lm-wv-tabelle .lm-wv-grund { margin-top: 2px; font-size: var(--t-xs); }
+.lm-dash-kompakt .lm-wv-tabelle td.lm-wv-aktion { vertical-align: top; }
+/* v29 Nachbesserung: .lm-aktion (style.css) setzt display:flex – als Tabellenzelle der
+   Wiedervorlage-Listen fiel die Aktionszelle damit aus dem Tabellenraster und überdeckte
+   den Kundennamen (seit v23); die Zelle bleibt jetzt table-cell, das Menü darin flex */
+.lm-wv-tabelle td.lm-wv-aktion { display: table-cell; }
+.lm-wv-tabelle td.lm-wv-aktion > details { display: inline-block; }

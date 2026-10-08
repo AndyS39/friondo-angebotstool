@@ -314,8 +314,9 @@ class ScoreAus(Basis):
         self.assertEqual(r.status_code, 200)
         self.assertIn('name="score_aktiv"', r.text)
         self.assertIn('<option value="aus" selected', r.text)
-        self.assertIn('name="ohne_schritt_tage"', r.text)
-        self.assertIn("Ohne nächsten Schritt", r.text)
+        # v29 (Phase 141): „Ohne nächsten Schritt“ entfällt – ohne_schritt_tage ist in der
+        # Parametrierung ausgeblendet und bleibt ohne Wirkung (Wert bleibt gespeichert)
+        self.assertNotIn('name="ohne_schritt_tage"', r.text)
         protokoll_vorher = kern.parameter_holen(self.s, "einstellungs_protokoll", "")
         try:
             r = self.client.post("/parametrierung/lead-einstellungen",
@@ -324,21 +325,17 @@ class ScoreAus(Basis):
             self.assertEqual(r.status_code, 303)
             self.s.expire_all()
             self.assertEqual(kern.parameter_holen(self.s, "score_aktiv"), "an")
-            self.assertEqual(kern.parameter_holen(self.s, "ohne_schritt_tage"), "4")
             self.assertTrue(lead_v2.score_aktiv(self.s))
-            self.assertEqual(lead_dashboard.ohne_schritt_tage(self.s), 4)
             self.assertIn("score_aktiv aus → an",
                           kern.parameter_holen(self.s, "einstellungs_protokoll", ""))
             seite = self.client.get("/parametrierung/lead-einstellungen").text
             self.assertIn('<option value="an" selected', seite)
-            self.assertIn('name="ohne_schritt_tage" min="0" max="365" value="4"', seite)
             # ungültige Werte werden nicht übernommen
             self.client.post("/parametrierung/lead-einstellungen",
                              data={"score_aktiv": "vielleicht", "ohne_schritt_tage": "-3"},
                              follow_redirects=False)
             self.s.expire_all()
             self.assertEqual(kern.parameter_holen(self.s, "score_aktiv"), "an")
-            self.assertEqual(kern.parameter_holen(self.s, "ohne_schritt_tage"), "4")
         finally:
             r = self.client.post("/parametrierung/lead-einstellungen",
                                  data={"score_aktiv": "aus", "ohne_schritt_tage": "2"},
@@ -646,20 +643,20 @@ class DashboardOhneSchritt(Basis):
         # Parameter: 0 Tage → auch der frische Anruf steht in der Liste
         liste0 = lead_dashboard.ohne_naechsten_schritt(self.s, self.admin, jetzt, hv=False, tage=0)
         self.assertIn(frisch.id, [z["vorgang"].id for z in liste0])
-        # Parameter aus den Lead-Einstellungen wirkt in daten()/Kachel
+        # v29 (PLAN_LEAD_V4 Phase 141): die Liste „Ohne nächsten Schritt“ ist aus dem
+        # Dashboard entfernt (Funktion bleibt ohne Oberfläche, Parameter ohne Wirkung)
         kern.parameter_setzen(self.s, "ohne_schritt_tage", "0")
         self.s.commit()
         try:
-            daten = lead_dashboard.daten(self.s, self.admin)
-            self.assertEqual(daten["ohne_schritt_tage"], 0)
-            self.assertIn(frisch.id, [z["vorgang"].id for z in daten["ohne_schritt"]])
-            self.assertEqual(daten["kacheln"]["ohne_schritt"], len(daten["ohne_schritt"]))
+            self.assertEqual(lead_dashboard.ohne_schritt_tage(self.s), 0)
+            self.assertIn(frisch.id, [z["vorgang"].id for z in
+                                      lead_dashboard.ohne_naechsten_schritt(self.s, self.admin, jetzt, hv=False)])
         finally:
             kern.parameter_setzen(self.s, "ohne_schritt_tage", "2")
             self.s.commit()
         daten = lead_dashboard.daten(self.s, self.admin)
-        self.assertEqual(daten["ohne_schritt_tage"], 2)
-        self.assertNotIn(frisch.id, [z["vorgang"].id for z in daten["ohne_schritt"]])
+        self.assertNotIn("ohne_schritt", daten)
+        self.assertNotIn("ohne_schritt", daten["kacheln"])
         # Wiedervorlagen-Liste enthält nur die manuell gesetzte (wv), nicht a
         wv_ids = {z["vorgang"].id for z in daten["lead_wv"]}
         self.assertIn(wv.id, wv_ids)
@@ -670,21 +667,18 @@ class DashboardOhneSchritt(Basis):
         liste_hv = lead_dashboard.ohne_naechsten_schritt(self.s, self.hv, jetzt, hv=True)
         self.assertEqual([z["vorgang"].id for z in liste_hv
                           if z["vorgang"].id in {h.id, a.id, q.id}], [h.id])
-        # Seite: Kachel + Liste, Wiedervorlage-Formular, keine Kaskaden-Wiedervorlage
+        # Seite (v29): keine Liste „Ohne nächsten Schritt“ mehr, Wiedervorlage wv unter „Kommende“,
+        # keine Kaskaden-Wiedervorlage
         r = self.client.get("/lead-management/dashboard")
         self.assertEqual(r.status_code, 200)
         seite = inhalt(r.text)
-        self.assertIn("Ohne nächsten Schritt", seite)
-        self.assertIn('href="#ohne-schritt"', seite)
-        start = seite.index('id="ohne-schritt"')
-        karte = seite[start:seite.index("Angebots-Wiedervorlagen", start)]
-        self.assertIn(self.kunde(a).anzeige_name, karte)
-        self.assertIn(self.kunde(q).anzeige_name, karte)
-        self.assertNotIn(self.kunde(wv).anzeige_name, karte)
-        self.assertNotIn(self.kunde(frisch).anzeige_name, karte)
-        self.assertIn(f'action="/lead-management/dashboard/wiedervorlage/{a.id}"', karte)
-        self.assertIn(f'href="/lead-management/lead/{a.id}/termin"', karte)
-        self.assertIn("mehr als 2 Tagen", karte)
+        self.assertNotIn("Ohne nächsten Schritt", seite)
+        self.assertNotIn('id="ohne-schritt"', seite)
+        self.assertNotIn("Angebots-Wiedervorlagen", seite)
+        kommende = seite.split('id="kommende"', 1)[1].split('id="todos"', 1)[0]
+        self.assertIn(self.kunde(wv).anzeige_name, kommende)
+        self.assertNotIn(self.kunde(a).anzeige_name, kommende)
+        self.assertIn(f'action="/lead-management/dashboard/wiedervorlage/{wv.id}"', kommende)
         self.assertNotIn("Kaskade", seite)
 
     def test_kaskade_setzt_keine_wiedervorlage_mehr(self):

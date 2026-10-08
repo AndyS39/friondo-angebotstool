@@ -42,11 +42,30 @@ def _token():
     return graph_versand._token()
 
 
+import logging
+
+_logger = logging.getLogger("angebotstool.kalender")
+
+
+def _ist_handelsvertreter(session: Session, ad) -> bool:
+    """v29 (PLAN_LEAD_V4 Phase 143, [OFFEN 3]): Handelsvertreter haben kein Friondo-
+    Postfach – kein Outlook-Lesen/-Schreiben, Protokollzeile statt Fehler."""
+    from app import lead_v2
+    try:
+        return ad is not None and lead_v2.ist_handelsvertreter(session, ad)
+    except Exception:   # noqa: BLE001 – Kalender-Sync darf nie an der HV-Prüfung scheitern
+        return False
+
+
 def frei_belegt(session: Session, ad, von: datetime,
                 bis: datetime) -> list[tuple[datetime, datetime]] | None:
     """Belegte Zeiten aus calendarView; None = Kalender nicht verfügbar
     (aus, kein Postfach, kein Recht) → Assistent nutzt nur Tool-Termine."""
     if not aktiv(session):
+        return None
+    if _ist_handelsvertreter(session, ad):
+        _logger.info("kalender_sync: Handelsvertreter %s übersprungen (kein Friondo-Postfach)",
+                     getattr(ad, "name", "?"))
         return None
     postfach = _postfach(session, ad)
     if not postfach:
@@ -122,6 +141,10 @@ def termin_schreiben(session: Session, termin, vorgang, kunde, ad) -> bool:
     """Outlook-Ereignis anlegen (best effort; speichert outlook_event_id)."""
     if not aktiv(session):
         return False
+    if _ist_handelsvertreter(session, ad):
+        _logger.info("kalender_sync: Handelsvertreter %s übersprungen (kein Friondo-Postfach)",
+                     getattr(ad, "name", "?"))
+        return False
     postfach = _postfach(session, ad)
     if not postfach:
         return False
@@ -144,6 +167,10 @@ def termin_schreiben(session: Session, termin, vorgang, kunde, ad) -> bool:
 
 
 def termin_aendern(session: Session, termin, vorgang, kunde, ad) -> bool:
+    if _ist_handelsvertreter(session, ad):
+        _logger.info("kalender_sync: Handelsvertreter %s übersprungen (kein Friondo-Postfach)",
+                     getattr(ad, "name", "?"))
+        return False
     if not aktiv(session) or not termin.outlook_event_id:
         return termin_schreiben(session, termin, vorgang, kunde, ad)
     rumpf = _ereignis_rumpf(session, termin, vorgang, kunde)

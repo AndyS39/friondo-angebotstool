@@ -4,6 +4,8 @@
 # (Modul-Einstieg „“ und /meine-termine werden hier übernommen).
 # Gate: lead_v2.gate (404 im Demo-Modus, Handelsvertreter-Freigabe); Außendienst
 # ohne HV-Kennzeichen → Weiterleitung auf „Meine Termine“ (F6).
+# v29 (PLAN_LEAD_V4 Phasen 141/143): Dashboard „Hallo, <Vorname>“ mit Routenplaner,
+# Sperrzeiten der Handelsvertreter (POST /dashboard/sperrzeit, …/{id}/loeschen).
 
 from datetime import datetime
 from urllib.parse import parse_qsl, quote_plus, urlencode, urlsplit, urlunsplit
@@ -132,6 +134,7 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
     lead_v2.gate(request, session)
     termine_alle = request.query_params.get("termine") == "alle"
     daten = lead_dashboard.daten(session, benutzer, termine_alle=termine_alle)
+    daten["hv_sicht"] = lead_v2.hv_sicht(session, benutzer)   # v29 (Phase 140)
     # v25: Board-Namen immer aus dem Blatt Status (Hauptboard / Deals), kein Score
     from app import leadmanagement_logik
     logik = leadmanagement_logik.hole_logik()
@@ -164,6 +167,45 @@ def wiedervorlage_aktion(request: Request, vorgang_id: int,
     meldung = lead_dashboard.wiedervorlage_aktion(
         session, vorgang, benutzer, art, aktion, form.get("datum") or "")
     session.commit()
+    return _redirect(zurueck, meldung)
+
+
+# --- v29 (Phase 143): Sperrzeiten der Handelsvertreter in „Meine Termine“ --------------
+
+@router.post("/dashboard/sperrzeit")
+def sperrzeit_anlegen(request: Request, session: Session = Depends(get_session)):
+    """Formular: datum, von, bis, bemerkung – nur Handelsvertreter (eigener
+    Tool-Kalender, Zwischenlösung bis [OFFEN 3])."""
+    from app import lead_termin
+    benutzer = request.state.benutzer
+    lead_v2.gate(request, session)
+    if not lead_v2.ist_handelsvertreter(session, benutzer):
+        raise HTTPException(status_code=404)
+    form = anfrage.formular(request)
+    zurueck = _zurueck(request, form, DASHBOARD + "#termine")
+    termin, meldung = lead_termin.sperrzeit_anlegen(
+        session, benutzer, form.get("datum") or "", form.get("von") or "",
+        form.get("bis") or "", form.get("bemerkung") or "")
+    if termin is None:
+        session.rollback()
+        return _redirect(zurueck, "Sperrzeit: " + meldung)
+    session.commit()
+    return _redirect(zurueck, meldung)
+
+
+@router.post("/dashboard/sperrzeit/{termin_id}/loeschen")
+def sperrzeit_loeschen(request: Request, termin_id: int,
+                       session: Session = Depends(get_session)):
+    from app import lead_termin
+    benutzer = request.state.benutzer
+    lead_v2.gate(request, session)
+    form = anfrage.formular(request)
+    zurueck = _zurueck(request, form, DASHBOARD + "#termine")
+    ok, meldung = lead_termin.sperrzeit_loeschen(session, termin_id, benutzer)
+    if ok:
+        session.commit()
+    else:
+        session.rollback()
     return _redirect(zurueck, meldung)
 
 

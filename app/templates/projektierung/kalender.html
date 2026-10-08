@@ -3,7 +3,7 @@
 
 {% block titel %}Projektierung – Kalender{% endblock %}
 
-{% block mainklasse %}breit{% endblock %}
+{% block mainklasse %}breit pj-voll{% endblock %}
 
 {% block inhalt %}
 <div class="seitenkopf">
@@ -116,7 +116,7 @@
            href="/projektierung/projekt/{{ b.zeile.projekt.id }}"
            draggable="true"
            ondragstart="pjKalStart(event, {{ b.termin.id }}, 'verschieben')"
-           title="{{ b.zeile.projekt.nummer }} · {{ b.zeile.kunde.anzeige_name if b.zeile.kunde }} · {{ b.zeile.gewerk.sparte }}{{ ' · unbestätigt' if not b.termin.kunde_bestaetigt }} – ziehen zum Verschieben, ▐ zieht das Ende">
+           title="{{ b.zeile.projekt.nummer }} · {{ b.zeile.kunde.anzeige_name if b.zeile.kunde }} · {{ b.zeile.gewerk.sparte }}{{ ' · Elektro' if b.termin.zweck == 'elektro' }}{{ ' · unbestätigt' if not b.termin.kunde_bestaetigt }}{{ ' · Besetzung: ' ~ besetzung[b.termin.id] if besetzung.get(b.termin.id) }} – ziehen zum Verschieben, ▐ zieht das Ende">
             {{ '…' if b.links_offen }}{{ b.zeile.projekt.nummer }} · {{ b.zeile.kunde.anzeige_name | truncate(14, true) if b.zeile.kunde }} · {{ b.zeile.gewerk.sparte }}
             <span class="ende-griff" draggable="true"
                   ondragstart="event.stopPropagation(); pjKalStart(event, {{ b.termin.id }}, 'ende')">▐</span>
@@ -130,7 +130,7 @@
     <span><b style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#5a6478"></b> Balken = Montagetermin (Farbe = Team, Schraffur = Kunde unbestätigt)</span>
     <span><b style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#2d6bd6"></b> Feinplanung</span>
     <span><b style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#7a3fbf"></b> Abnahme</span>
-    <span>Ziehen verschiebt den Termin (protokolliert), ▐ verlängert das Ende.</span>
+    <span>Ziehen verschiebt den Termin (protokolliert), ▐ verlängert das Ende. Teamwechsel per Drag belegt die Besetzung aus dem neuen Team neu, sofern sie nicht von Hand gesetzt war (v28).</span>
 </div>
 
 <form method="post" id="pj-kal-form" hidden>

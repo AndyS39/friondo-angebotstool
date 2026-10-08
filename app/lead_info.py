@@ -897,10 +897,22 @@ def _sammel_status(session: Session, vorgaenge: list, params: dict, benutzer) ->
     return ok, fehler
 
 
+def _sammel_hv(session: Session, vorgaenge: list, params: dict, benutzer) -> tuple:
+    """v29 (PLAN_LEAD_V4 Phase 140): „An Handelsvertreter verschieben“ – derselbe
+    Handler wie auf Hauptboard/Deals (lead_boards._sammel_hv_verschieben:
+    Ziele hv_gruppe_rene/_simon, Ausschluss F14, Aktivität je Lead, keine Glocke)."""
+    lb = _lead_boards()
+    if lb is None:
+        return 0, ["Verschieben an Handelsvertreter ist ohne das Board-Modul (Phase 105) nicht verfügbar"]
+    return lb._sammel_hv_verschieben(session, vorgaenge, params, benutzer)
+
+
 SAMMELAKTIONEN_INFO = [
     ("status", "Status ändern", _sammel_status),
     ("naechste", "In die nächste Veranstaltung verschieben", _sammel_naechste),
     ("teilgenommen", "Teilgenommen setzen", _sammel_teilgenommen),
+    # v29 (Phase 140): Sammelaktion „An Handelsvertreter verschieben“ auch im Infoabend
+    ("hv_verschieben", "An Handelsvertreter verschieben", _sammel_hv),
 ]
 
 
@@ -943,8 +955,11 @@ def sammelaktion_ausfuehren(session: Session, benutzer, aktion: str, ids, params
                  if lead_v2.zugriff_erlaubt(session, benutzer, v)]
     if not vorgaenge:
         return False, "Keine zugänglichen Leads markiert."
-    ok, fehler = eintrag[2](session, vorgaenge, params, benutzer)
+    ergebnis = eintrag[2](session, vorgaenge, params, benutzer)
     session.flush()
+    ok, fehler = ergebnis[0], ergebnis[1]
+    if len(ergebnis) >= 3 and ergebnis[2]:      # v29: eigene Meldung des Handlers
+        return ok > 0, f"{eintrag[1]}: {ergebnis[2]}"
     meldung = f"{eintrag[1]}: {ok} von {len(vorgaenge)} Leads geändert."
     if fehler:
         meldung += f" {len(fehler)} übersprungen: " + "; ".join(fehler[:5])

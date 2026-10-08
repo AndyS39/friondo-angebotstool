@@ -204,6 +204,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "outlook_event_id": "VARCHAR(200) NOT NULL DEFAULT ''", # v15 Phase 75
         "bestaetigt_am": "DATETIME",                            # v15 Phase 75
         "bestaetigt_quelle": "VARCHAR(20) NOT NULL DEFAULT ''", # v15 Phase 75
+        "zweck": "VARCHAR(10) NOT NULL DEFAULT ''",            # v28 Phase 135
     },
     "projekt_subs": {
         "graph_conversation_id": "VARCHAR(200)",               # v15 Phase 79
@@ -219,6 +220,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "optionen": "VARCHAR(300) NOT NULL DEFAULT ''",        # v15 Phase 78
         "auswahl": "VARCHAR(100) NOT NULL DEFAULT ''",         # v15 Phase 78
         "sichtbar_wenn": "VARCHAR(100) NOT NULL DEFAULT ''",   # V4 Phase 91.2
+        "entfaellt_grund": "VARCHAR(300) NOT NULL DEFAULT ''",   # v28 Phase 133
     },
     "aufgabenpaket_instanzen": {
         "version": "VARCHAR(5) NOT NULL DEFAULT 'v2'",         # v15 Phase 78
@@ -361,6 +363,10 @@ _NACHTRAEGLICHE_SPALTEN = {
         "pin_wechsel_noetig": "BOOLEAN NOT NULL DEFAULT 0",
         "sitzungszaehler": "INTEGER NOT NULL DEFAULT 0",
         "letzter_login": "DATETIME",
+        # v29 (PLAN_LEAD_V4): Vorname, Infotext, Bild des Vertrieblers
+        "vorname": "VARCHAR(100) NOT NULL DEFAULT ''",
+        "infotext": "TEXT NOT NULL DEFAULT ''",
+        "bild_datei": "VARCHAR(300) NOT NULL DEFAULT ''",
         "buchungslink": "VARCHAR(500)",                         # v23 Phase 104
         "nebenstelle": "VARCHAR(20)",                           # v23 Phase 104
         "email": "VARCHAR(200) NOT NULL DEFAULT ''",
@@ -409,6 +415,14 @@ _NACHTRAEGLICHE_SPALTEN = {
         "vorab_angebot": "BOOLEAN NOT NULL DEFAULT 0",          # v23 Phase 104
         "veranstaltung_id": "INTEGER",                          # v23 Phase 104
         "teilgenommen": "BOOLEAN",                              # v23 Phase 104
+        # v29 (PLAN_LEAD_V4 Phase 142): Bounce / Mail nicht gesendet
+        "email_status": "VARCHAR(10)",
+        "email_status_am": "DATETIME",
+        "email_status_grund": "VARCHAR(300) NOT NULL DEFAULT ''",
+        "mail_fehler": "BOOLEAN NOT NULL DEFAULT 0",
+        "mail_fehler_am": "DATETIME",
+        "mail_fehler_vorlage": "VARCHAR(50) NOT NULL DEFAULT ''",
+        "mail_fehler_text": "VARCHAR(500) NOT NULL DEFAULT ''",
     },
     "kunden": {
         "objektart": "VARCHAR(10)",                             # v23 Phase 104
@@ -448,6 +462,11 @@ _NACHTRAEGLICHE_SPALTEN = {
         "freitext": "TEXT NOT NULL DEFAULT ''",
         "sparte": "VARCHAR(4) NOT NULL DEFAULT 'WP'",
         "lead_id": "INTEGER",
+    },
+    # v29 (PLAN_LEAD_V4 Phase 142): Absender und Versuchszähler der Lead-Mail-Warteschlange
+    "kommunikation_log": {
+        "absender": "VARCHAR(200) NOT NULL DEFAULT ''",
+        "versuche": "INTEGER NOT NULL DEFAULT 0",
     },
     # v27 (Phase 128): Geocoding-Backoff für Adressen mit Status „fehler“
     "geocode_cache": {"versuche": "INTEGER NOT NULL DEFAULT 0"},

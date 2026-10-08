@@ -5,7 +5,7 @@
 # data/projekte/<PR>/, Verlauf (append-only) und Benachrichtigungen.
 
 import json
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session
 from app import config
 from app.models import (Angebot, Aufgabe, AufgabenpaketInstanz, Benachrichtigung,
                         Benutzer, Gewerk, Kunde, Projekt, ProjektDokument,
-                        ProjektTermin, ProjektVerlauf, Team, Vorgang)
+                        ProjektTermin, ProjektVerlauf, Team, TeamMitglied,
+                        TerminBesetzung, Vorgang)
 
 PROJEKT_PREFIX = "PR-"
 PROJEKTE_ORDNER = config.DATA_ORDNER / "projekte"
@@ -98,6 +99,16 @@ def freigabe_modus(session: Session) -> str:
     V3 (Phase 86): pilot = Admin + ausgewählte Benutzer (Pilotliste)."""
     wert = parameter_holen(session, "freigabe_modus", "admin").strip().lower()
     return wert if wert in ("admin", "pilot", "alle") else "admin"
+
+
+def waechter_modus(session: Session) -> str:
+    """v28 (PLAN_PROJ_V6 Phase 133): Wächter-Modus beim Phasenwechsel –
+    „warnen“ (Standard: Wechsel immer möglich, offene Pflichtaufgaben werden
+    gezeigt und im Verlauf vermerkt) oder „sperren“ (bisheriges Verhalten:
+    Override nur mit Begründung). Parameter aus der Parametrierung
+    (Abschnitt „Board & Wächter“)."""
+    wert = parameter_holen(session, "waechter_modus", "warnen").strip().lower()
+    return wert if wert in ("warnen", "sperren") else "warnen"
 
 
 def pilot_benutzer_ids(session: Session) -> set[int]:
@@ -303,6 +314,9 @@ def _schritt_sichtbar(session: Session, gewerk: Gewerk, bedingung: str) -> bool:
     """sichtbar_wenn "steckbrief:<feld>=<wert>": Schritt nur anlegen, wenn das
     Steckbrief-Feld den Wert hat (Vergleich ohne Gross/Klein).
     V4 (Phase 91.1): "sparte:PV|KL|WB" – Schritt nur für diese Sparten.
+    v28 (PLAN_PROJ_V6 Phase 133): "foerderung:ja|nein" wertet
+    bza.ist_gefoerdert(gewerk) aus; „unbekannt“ (None, z. B. TAIFUN ohne
+    Antwort) blockiert nie – der Schritt bleibt sichtbar.
     Bedingungen der Form "<paket>.<nr>=<wert>" hängen an einer anderen
     Aufgabe und werden erst zur Laufzeit ausgewertet (abhaengige_pruefen)."""
     bedingung = (bedingung or "").strip()
@@ -311,6 +325,15 @@ def _schritt_sichtbar(session: Session, gewerk: Gewerk, bedingung: str) -> bool:
     if bedingung.lower().startswith("sparte:"):
         erlaubt = {s.strip().upper() for s in bedingung[7:].split("|")}
         return (gewerk.sparte or "").upper() in erlaubt
+    if bedingung.lower().startswith("foerderung:"):
+        soll = bedingung[len("foerderung:"):].strip().lower()
+        if soll not in ("ja", "nein"):
+            return True   # unbekannte Form – Warnung kommt aus „Logik prüfen“
+        from app import bza as bza_modul
+        ist = bza_modul.ist_gefoerdert(session, gewerk)
+        if ist is None:
+            return True
+        return bool(ist) == (soll == "ja")
     if bedingung.lower().startswith("steckbrief:") and "=" in bedingung:
         feld, _, soll = bedingung[len("steckbrief:"):].partition("=")
         from app.models import SteckbriefWert
@@ -340,15 +363,62 @@ def aufgabe_auswahl_setzen(session: Session, aufgabe: Aufgabe, auswahl: str,
         aufgabe.status = "offen"
         aufgabe.erledigt_am = None
         aufgabe.erledigt_von = None
+        aufgabe.entfaellt_grund = ""
     elif gueltige[auswahl]:
         aufgabe.status = "erledigt"
         aufgabe.erledigt_am = datetime.now()
         aufgabe.erledigt_von = benutzer.id if benutzer else None
+        aufgabe.entfaellt_grund = ""
     else:
         aufgabe.status = "entfaellt"
         aufgabe.erledigt_am = None
+        # v28 (PLAN_PROJ_V6 Phase 133): die gewählte Option ist der Grund
+        aufgabe.entfaellt_grund = auswahl[:300]
     session.flush()
     return True
+
+
+# --- v28 (PLAN_PROJ_V6 Phase 133): Zustand „entfällt“ mit Grund -----------------
+
+ENTFAELLT_BEDINGUNG_PRAEFIX = "Bedingung nicht erfüllt"
+
+
+def aufgabe_entfaellt(session: Session, aufgabe: Aufgabe, grund: str,
+                      benutzer=None) -> tuple[bool, str]:
+    """Aufgabe mit Pflicht-Grund (max. 300 Zeichen) auf „entfällt“ setzen –
+    zählt für Wächter, Ampel und Kacheln nicht mehr als offen. Verlauf
+    „Aufgabe „<Titel>“ entfällt – <Grund>“."""
+    grund = " ".join((grund or "").split())[:300]
+    if not grund:
+        return False, "Bitte einen Grund angeben."
+    if aufgabe.status == "entfaellt" and aufgabe.entfaellt_grund == grund:
+        return True, "Aufgabe entfällt bereits."
+    aufgabe.status = "entfaellt"
+    aufgabe.entfaellt_grund = grund
+    aufgabe.erledigt_am = datetime.now()
+    aufgabe.erledigt_von = benutzer.id if benutzer else None
+    aufgabe.wartet_frist_am = None
+    verlauf(session, aufgabe.projekt_id,
+            f"Aufgabe „{aufgabe.titel}“ entfällt – {grund}",
+            benutzer=benutzer, gewerk_id=aufgabe.gewerk_id, aufgabe_id=aufgabe.id)
+    session.flush()
+    return True, f"Aufgabe „{aufgabe.titel}“ entfällt."
+
+
+def aufgabe_wieder_aufnehmen(session: Session, aufgabe: Aufgabe,
+                             benutzer=None) -> tuple[bool, str]:
+    """Gegenstück: zurück auf „offen“, Grund geleert, Verlaufseintrag."""
+    if aufgabe.status != "entfaellt":
+        return False, "Die Aufgabe ist nicht auf „entfällt“."
+    aufgabe.status = "offen"
+    aufgabe.entfaellt_grund = ""
+    aufgabe.erledigt_am = None
+    aufgabe.erledigt_von = None
+    verlauf(session, aufgabe.projekt_id,
+            f"Aufgabe „{aufgabe.titel}“ wieder aufgenommen",
+            benutzer=benutzer, gewerk_id=aufgabe.gewerk_id, aufgabe_id=aufgabe.id)
+    session.flush()
+    return True, f"Aufgabe „{aufgabe.titel}“ wieder offen."
 
 
 def auswahl_folgen(session: Session, aufgabe: Aufgabe, benutzer=None) -> str:
@@ -499,9 +569,38 @@ def _aufgabe_aus_schritt(session: Session, gewerk: Gewerk, projekt, instanz,
 
 def steckbrief_schritte_nachziehen(session: Session, gewerk: Gewerk,
                                    benutzer=None) -> int:
-    """V3 (Phase 84): Schritte mit Bedingung „steckbrief:<feld>=<wert>“, die
-    bei der Paket-Aktivierung fehlten (TAIFUN: Steckbrief kommt erst mit den
-    Auftragsdaten), nachträglich anlegen. Bestehende Aufgaben bleiben."""
+    """V3 (Phase 84): Schritte mit Bedingung „steckbrief:<feld>=<wert>“ (v28:
+    auch „foerderung:ja|nein“), die bei der Paket-Aktivierung fehlten (TAIFUN:
+    Steckbrief kommt erst mit den Auftragsdaten), nachträglich anlegen.
+    Bestehende Aufgaben bleiben; nicht mehr erfüllte Bedingungen setzen die
+    Aufgabe auf „entfällt“ (abhaengige_pruefen). Liefert die Anzahl neu
+    angelegter Schritte."""
+    return bedingungen_nachziehen(session, gewerk, benutzer=benutzer)["neu"]
+
+
+def foerderung_schritte_nachziehen(session: Session, gewerk: Gewerk,
+                                   benutzer=None) -> dict:
+    """v28 (PLAN_PROJ_V6 Phase 133): Hook nach einer Änderung von
+    `kfw_gefoerdert` (Angebot/Auftragsdaten) bzw. des Förderblocks – zieht die
+    Schritte mit `foerderung:ja|nein` (und alle anderen Bedingungen) nach."""
+    return bedingungen_nachziehen(session, gewerk, benutzer=benutzer)
+
+
+def _statische_bedingung(bedingung: str) -> bool:
+    """Bedingungen, die beim Anlegen geprüft werden und sich später ändern
+    können (Steckbrief, Förderung) – nicht sparte:, nicht <paket>.<nr>=."""
+    b = (bedingung or "").strip().lower()
+    return b.startswith("steckbrief:") or b.startswith("foerderung:")
+
+
+def bedingungen_nachziehen(session: Session, gewerk: Gewerk,
+                           benutzer=None) -> dict:
+    """v28 (PLAN_PROJ_V6 Phase 133): Schritte mit Steckbrief-/Förder-Bedingung
+    nachziehen – fehlende, jetzt erfüllte Schritte anlegen (wie V3), die
+    Bedingung an bestehenden Aufgaben aus der Logik nachtragen (Altbestand vor
+    v28 trägt sie nicht) und über abhaengige_pruefen nicht (mehr) erfüllte
+    Schritte auf „entfällt“ mit Grund „Bedingung nicht erfüllt (<Bedingung>)“
+    setzen bzw. wieder öffnen. Liefert {neu, entfaellt, offen}."""
     from app import projektierung_logik
     logik = projektierung_logik.hole_logik(session)
     projekt = session.get(Projekt, gewerk.projekt_id)
@@ -516,13 +615,19 @@ def steckbrief_schritte_nachziehen(session: Session, gewerk: Gewerk,
         paket = logik.pakete.get(instanz.paket_key)
         if paket is None:
             continue
-        vorhandene = {a.reihenfolge for a in session.query(Aufgabe)
+        vorhandene = {a.reihenfolge: a for a in session.query(Aufgabe)
                       .filter(Aufgabe.paket_instanz_id == instanz.id)}
         for schritt in paket.schritte:
             bedingung = (getattr(schritt, "sichtbar_wenn", "") or "").strip()
-            if not bedingung.lower().startswith("steckbrief:"):
+            if not bedingung:
                 continue
-            if schritt.nr in vorhandene:
+            aufgabe = vorhandene.get(schritt.nr)
+            if aufgabe is not None:
+                # Altbestand: Bedingung an der Aufgabe nachtragen (Laufzeit)
+                if not (aufgabe.sichtbar_wenn or "") and _laufzeit_bedingung(bedingung):
+                    aufgabe.sichtbar_wenn = _laufzeit_bedingung(bedingung)
+                continue
+            if not _statische_bedingung(bedingung):
                 continue
             if not _schritt_sichtbar(session, gewerk, bedingung):
                 continue
@@ -531,7 +636,8 @@ def steckbrief_schritte_nachziehen(session: Session, gewerk: Gewerk,
             angelegt += 1
     if angelegt:
         session.flush()
-    return angelegt
+    geaendert = abhaengige_pruefen(session, gewerk, benutzer=benutzer)
+    return {"neu": angelegt, **geaendert}
 
 
 # --- V3 (Phase 84): Auftragsdaten für TAIFUN-Aufträge ---------------------------
@@ -611,47 +717,81 @@ def auftragsdaten_aus_pdf(pdf) -> dict:
 
 
 def _laufzeit_bedingung(bedingung: str) -> str:
-    """Nur Bedingungen "<paket_key>.<nr>=<wert>" werden an der Aufgabe
-    gespeichert (steckbrief:/sparte: wirken beim Anlegen)."""
+    """Bedingungen, die an der Aufgabe gespeichert und zur Laufzeit erneut
+    ausgewertet werden: "<paket_key>.<nr>=<wert>" (V4) sowie seit v28
+    "steckbrief:<feld>=<wert>" und "foerderung:ja|nein" (Phase 133 – damit
+    abhaengige_pruefen nicht mehr erfüllte Schritte auf „entfällt“ setzt).
+    sparte: wirkt nur beim Anlegen."""
     import re
     bedingung = (bedingung or "").strip()
     if re.fullmatch(r"[\w-]+\.\d+\s*=\s*.+", bedingung):
-        return bedingung
+        return bedingung[:100]
+    if _statische_bedingung(bedingung):
+        return bedingung[:100]
     return ""
 
 
-def abhaengige_pruefen(session: Session, gewerk: Gewerk) -> int:
+def abhaengige_pruefen(session: Session, gewerk: Gewerk, benutzer=None) -> dict:
     """V4 (Phase 91.2): Aufgaben mit Laufzeit-Bedingung "<paket>.<nr>=<wert>"
     (z. B. HEMS-Inbetriebnahme nur bei fit_for_future.1 = Ja): trifft die
     Auswahl der Bezugsaufgabe nicht zu, steht die Aufgabe auf „entfällt“;
-    trifft sie (wieder) zu, geht sie auf „offen“ zurück."""
+    trifft sie (wieder) zu, geht sie auf „offen“ zurück.
+    v28 (PLAN_PROJ_V6 Phase 133): zusätzlich "steckbrief:<feld>=<wert>" und
+    "foerderung:ja|nein" (bza.ist_gefoerdert; unbekannt = sichtbar). Nicht
+    erfüllt → „entfällt“ mit Grund „Bedingung nicht erfüllt (<Bedingung>)“ und
+    Verlaufseintrag; wieder erfüllt → „offen“ (nur, wenn der Grund der
+    automatische war – von Hand gesetztes „entfällt“ bleibt). Rückgabe
+    {entfaellt, offen} (Anzahl der Änderungen)."""
     import re
-    geaendert = 0
+    ergebnis = {"entfaellt": 0, "offen": 0}
     aufgaben = (session.query(Aufgabe)
                 .filter(Aufgabe.gewerk_id == gewerk.id).all())
     instanzen = {i.id: i for i in session.query(AufgabenpaketInstanz)
                  .filter(AufgabenpaketInstanz.gewerk_id == gewerk.id)}
     for aufgabe in aufgaben:
-        m = re.fullmatch(r"([\w-]+)\.(\d+)\s*=\s*(.+)", aufgabe.sichtbar_wenn or "")
-        if not m:
+        bedingung = (aufgabe.sichtbar_wenn or "").strip()
+        if not bedingung:
             continue
-        paket_key, nr, soll = m.group(1), int(m.group(2)), m.group(3).strip().lower()
-        bezug = next((a for a in aufgaben
-                      if a.reihenfolge == nr and a.paket_instanz_id in instanzen
-                      and instanzen[a.paket_instanz_id].paket_key == paket_key
-                      and instanzen[a.paket_instanz_id].deaktiviert_am is None), None)
-        if bezug is None:
+        instanz = instanzen.get(aufgabe.paket_instanz_id or 0)
+        if instanz is not None and instanz.deaktiviert_am is not None:
             continue
-        erfuellt = (bezug.auswahl or "").strip().lower() == soll
-        if not erfuellt and aufgabe.status != "entfaellt" and (bezug.auswahl or ""):
+        m = re.fullmatch(r"([\w-]+)\.(\d+)\s*=\s*(.+)", bedingung)
+        if m:
+            paket_key, nr, soll = m.group(1), int(m.group(2)), m.group(3).strip().lower()
+            bezug = next((a for a in aufgaben
+                          if a.reihenfolge == nr and a.paket_instanz_id in instanzen
+                          and instanzen[a.paket_instanz_id].paket_key == paket_key
+                          and instanzen[a.paket_instanz_id].deaktiviert_am is None), None)
+            if bezug is None:
+                continue
+            erfuellt = (bezug.auswahl or "").strip().lower() == soll
+            # ohne Antwort an der Bezugsaufgabe bleibt alles wie es ist
+            entscheidbar = bool(bezug.auswahl or "")
+        elif _statische_bedingung(bedingung):
+            erfuellt = _schritt_sichtbar(session, gewerk, bedingung)
+            entscheidbar = True
+        else:
+            continue
+        automatisch = (not (aufgabe.entfaellt_grund or "")
+                       or aufgabe.entfaellt_grund.startswith(ENTFAELLT_BEDINGUNG_PRAEFIX))
+        if entscheidbar and not erfuellt and aufgabe.status not in ("entfaellt", "erledigt"):
             aufgabe.status = "entfaellt"
-            geaendert += 1
-        elif erfuellt and aufgabe.status == "entfaellt":
+            aufgabe.entfaellt_grund = f"{ENTFAELLT_BEDINGUNG_PRAEFIX} ({bedingung})"[:300]
+            aufgabe.erledigt_am = datetime.now()
+            aufgabe.erledigt_von = benutzer.id if benutzer else None
+            verlauf(session, aufgabe.projekt_id,
+                    f"Aufgabe „{aufgabe.titel}“ entfällt – {aufgabe.entfaellt_grund}",
+                    benutzer=benutzer, gewerk_id=gewerk.id, aufgabe_id=aufgabe.id)
+            ergebnis["entfaellt"] += 1
+        elif erfuellt and aufgabe.status == "entfaellt" and automatisch:
             aufgabe.status = "offen"
-            geaendert += 1
-    if geaendert:
+            aufgabe.entfaellt_grund = ""
+            aufgabe.erledigt_am = None
+            aufgabe.erledigt_von = None
+            ergebnis["offen"] += 1
+    if ergebnis["entfaellt"] or ergebnis["offen"]:
         session.flush()
-    return geaendert
+    return ergebnis
 
 
 def faelligkeiten_nachberechnen(session: Session, gewerk: Gewerk) -> int:
@@ -1427,63 +1567,468 @@ ZUWEISUNGS_FELDER = {"wp": ("wp_team_id", "Montageteam"),
                      "sub": ("sub_team_id", "Subteam")}
 
 
-def team_termin_zuweisen(session: Session, gewerk: Gewerk, zweck: str,
-                         team_id: int, beginn: datetime, ende,
-                         kunde_bestaetigt: bool, benutzer=None
-                         ) -> tuple[bool, str, list[str]]:
-    """v15 (Phase 75): Zuweisungsdialog „Team + Termin“ – setzt das
-    Zuweisungsfeld am Gewerk und legt einen (ganztägigen) Montagetermin an.
-    Liefert (ok, meldung, konflikte). Ende leer = Beginn + 4 Arbeitstage."""
-    if zweck not in ZUWEISUNGS_FELDER:
-        return False, "Unbekannter Zuweisungszweck.", []
-    feld, name = ZUWEISUNGS_FELDER[zweck]
-    team = session.get(Team, team_id) if team_id else None
-    if team is None:
-        return False, f"{name}: bitte ein Team wählen.", []
-    if beginn is None:
-        return False, "Bitte einen Beginn wählen.", []
-    if ende is None:
-        ende = arbeitstage_addieren(beginn, 4)
-    konflikte = team_konflikte(session, team.id, beginn, ende)
-    setattr(gewerk, feld, team.id)
-    termin = ProjektTermin(
-        projekt_id=gewerk.projekt_id, gewerk_id=gewerk.id, typ="montage",
-        beginn=beginn, ende=ende, team_id=team.id, ganztaegig=True,
-        dauer_tage=max(1, (ende.date() - beginn.date()).days + 1),
-        kunde_bestaetigt=bool(kunde_bestaetigt),
-        bestaetigt_am=datetime.now() if kunde_bestaetigt else None,
-        bestaetigt_quelle="manuell" if kunde_bestaetigt else "",
-        erstellt_von=benutzer.id if benutzer else None)
-    session.add(termin)
+# --- v28 (PLAN_PROJ_V6 Phase 135): ein Termin-Dialog, Besetzung je Termin -------
+
+# Art im Dialog → (typ, zweck, Anzeigename, Zuweisungszweck am Gewerk)
+TERMIN_ARTEN = {
+    "montage": ("montage", "wp", "Montage (WP)", "wp"),
+    "elektro": ("montage", "elektro", "Elektro-Montage", "elektro"),
+    "sub": ("sub", "sub", "Sub-Einsatz", "sub"),
+    "feinplanung": ("feinplanung", "", "Feinplanung VOT", ""),
+    "abnahme": ("abnahme", "", "Abnahme", ""),
+    "sonstige": ("sonstige", "", "Sonstiges", ""),
+}
+TERMIN_ARTEN_REIHENFOLGE = ("montage", "elektro", "sub", "feinplanung", "abnahme",
+                            "sonstige")
+# Rollen, die als „Person“ an Feinplanung/Abnahme/Sonstiges stehen können
+# [ANNAHME Plan: Projektierung + Innendienst + Admin]
+PERSON_ROLLEN = ("projektierung", "innendienst", "admin")
+
+
+def termin_art(termin: ProjektTermin) -> str:
+    """Art-Schlüssel eines Termins aus typ/zweck (Altbestand: montage ohne
+    zweck = wp; sub-Termine = Sub-Einsatz)."""
+    if termin.typ == "montage":
+        return "elektro" if (termin.zweck or "") == "elektro" else "montage"
+    if termin.typ == "sub":
+        return "sub"
+    return termin.typ if termin.typ in TERMIN_ARTEN else "sonstige"
+
+
+def termin_art_name(termin: ProjektTermin) -> str:
+    return TERMIN_ARTEN[termin_art(termin)][2]
+
+
+def termin_zeitraum_text(termin: ProjektTermin) -> str:
+    """„13.10.2026–15.10.2026“ bzw. „13.10.2026 09:00“ für Verlauf/Meldungen."""
+    if termin.beginn is None:
+        return "–"
+    text = termin.beginn.strftime("%d.%m.%Y")
+    if not termin.ganztaegig or termin.beginn.time() != datetime.min.time():
+        text += termin.beginn.strftime(" %H:%M")
+    if termin.ende and termin.ende.date() != termin.beginn.date():
+        text += "–" + termin.ende.strftime("%d.%m.%Y")
+    return text
+
+
+def team_mitglieder_ids(session: Session, team_id: int | None) -> list[int]:
+    """Benutzer-IDs der Team-Mitglieder (Stammdaten = Vorlage der Besetzung)."""
+    if not team_id:
+        return []
+    return [m.benutzer_id for m in (session.query(TeamMitglied)
+                                    .filter(TeamMitglied.team_id == team_id)
+                                    .order_by(TeamMitglied.id))]
+
+
+def montage_benutzer(session: Session) -> list[Benutzer]:
+    """Alle aktiven Benutzer mit Rolle Montage (Haupt- oder Zusatzrolle) –
+    Mehrfachauswahl „Besetzung“ im Termin-Dialog."""
+    return sorted([b for b in session.query(Benutzer).filter(Benutzer.aktiv.is_(True))
+                   if b.hat_rolle("montage")], key=lambda b: b.name.lower())
+
+
+def personen_benutzer(session: Session) -> list[Benutzer]:
+    """Benutzer, die als „Person“ an einem Termin stehen können."""
+    return sorted([b for b in session.query(Benutzer).filter(Benutzer.aktiv.is_(True))
+                   if any(b.hat_rolle(r) for r in PERSON_ROLLEN)],
+                  key=lambda b: b.name.lower())
+
+
+def besetzung_ids(session: Session, termin_id: int) -> list[int]:
+    """Benutzer-IDs der Besetzung eines Termins (Reihenfolge = Anlage)."""
+    return [b.benutzer_id for b in (session.query(TerminBesetzung)
+                                    .filter(TerminBesetzung.termin_id == termin_id)
+                                    .order_by(TerminBesetzung.id))]
+
+
+def besetzung_map(session: Session, termin_ids: list[int]) -> dict[int, list[int]]:
+    """Besetzung mehrerer Termine in einer Abfrage (Akte, Kalender, Montage)."""
+    ergebnis: dict[int, list[int]] = {tid: [] for tid in termin_ids}
+    if not termin_ids:
+        return ergebnis
+    for b in (session.query(TerminBesetzung)
+              .filter(TerminBesetzung.termin_id.in_(termin_ids))
+              .order_by(TerminBesetzung.id)):
+        ergebnis.setdefault(b.termin_id, []).append(b.benutzer_id)
+    return ergebnis
+
+
+def _name_kurz(name: str) -> str:
+    """„Rene Golaschewski“ → „R. Golaschewski“; „D. Jobelius“ bleibt."""
+    teile = (name or "").split()
+    if len(teile) >= 2 and len(teile[0].rstrip(".")) > 1:
+        return f"{teile[0][0]}. {' '.join(teile[1:])}"
+    return name or ""
+
+
+def besetzung_namen(session: Session, termin_id: int, kurz: bool = True,
+                    benutzer_map: dict | None = None) -> str:
+    """Namen der Besetzung: kurz = „A. Müller, B. Schmidt +2“, sonst alle
+    vollen Namen kommagetrennt (Montagebericht, Tooltip)."""
+    ids = besetzung_ids(session, termin_id)
+    if not ids:
+        return ""
+    if benutzer_map is None:
+        benutzer_map = {b.id: b for b in session.query(Benutzer)
+                        .filter(Benutzer.id.in_(ids))}
+    namen = [benutzer_map[i].name for i in ids if i in benutzer_map]
+    if not kurz:
+        return ", ".join(namen)
+    kurze = [_name_kurz(n) for n in namen]
+    if len(kurze) > 2:
+        return ", ".join(kurze[:2]) + f" +{len(kurze) - 2}"
+    return ", ".join(kurze)
+
+
+def besetzung_setzen(session: Session, termin: ProjektTermin, benutzer_ids,
+                     benutzer=None) -> None:
+    """Ersetzt die Besetzung eines Termins (nur aktive Montage-Benutzer,
+    Dubletten entfallen) und protokolliert die Änderung im Verlauf."""
+    alt = besetzung_ids(session, termin.id)
+    neu: list[int] = []
+    for wert in benutzer_ids or []:
+        try:
+            bid = int(wert)
+        except (TypeError, ValueError):
+            continue
+        if bid and bid not in neu:
+            neu.append(bid)
+    if set(neu) == set(alt):
+        return
+    (session.query(TerminBesetzung)
+     .filter(TerminBesetzung.termin_id == termin.id).delete())
+    for bid in neu:
+        session.add(TerminBesetzung(termin_id=termin.id, benutzer_id=bid,
+                                    erstellt_von=benutzer.id if benutzer else None))
     session.flush()
-    faelligkeiten_nachberechnen(session, gewerk)
-    # V4 (Phase 91.1): Aufgabe „<Team> zuweisen“ (kalender/montage) erledigen
+    namen = besetzung_namen(session, termin.id, kurz=False) or "–"
+    verlauf(session, termin.projekt_id,
+            f"Besetzung Termin {termin_art_name(termin)} "
+            f"{termin_zeitraum_text(termin)}: {namen}",
+            benutzer=benutzer, gewerk_id=termin.gewerk_id)
+
+
+def person_konflikte(session: Session, benutzer_ids, beginn: datetime, ende,
+                     ausser_termin_id: int = 0) -> list[str]:
+    """Warnung je Person (kein Verbot): „<Name> ist am 12.11. bereits bei
+    PR-26… (Kunde)“ – andere Termine, in denen die Person eingeteilt ist."""
+    ids = [int(b) for b in (benutzer_ids or []) if str(b).strip().lstrip("-").isdigit()]
+    if not ids or beginn is None:
+        return []
+    ende = ende or beginn
+    treffer: list[str] = []
+    namen = {b.id: b.name for b in session.query(Benutzer).filter(Benutzer.id.in_(ids))}
+    zeilen = (session.query(TerminBesetzung, ProjektTermin)
+              .join(ProjektTermin, ProjektTermin.id == TerminBesetzung.termin_id)
+              .filter(TerminBesetzung.benutzer_id.in_(ids),
+                      ProjektTermin.beginn.isnot(None),
+                      ProjektTermin.id != ausser_termin_id)
+              .order_by(ProjektTermin.beginn).all())
+    for besetzung, t in zeilen:
+        t_ende = t.ende or t.beginn
+        if not (t.beginn.date() <= ende.date() and beginn.date() <= t_ende.date()):
+            continue
+        projekt = session.get(Projekt, t.projekt_id)
+        kunde = session.get(Kunde, projekt.kunde_id) if projekt else None
+        treffer.append(f"{namen.get(besetzung.benutzer_id, '?')} ist am "
+                       f"{max(t.beginn.date(), beginn.date()).strftime('%d.%m.')} bereits bei "
+                       f"{projekt.nummer if projekt else '?'}"
+                       + (f" ({kunde.anzeige_name})" if kunde else ""))
+    return treffer
+
+
+def montage_dauer_standard(session: Session) -> int:
+    """Parameter montage_dauer_tage_standard (Arbeitstage, Standard 5)."""
+    try:
+        return max(1, int(str(parameter_holen(session, "montage_dauer_tage_standard",
+                                              "5")).strip() or 5))
+    except ValueError:
+        return 5
+
+
+def _zuweisungs_aufgabe_setzen(session: Session, gewerk: Gewerk, name: str,
+                               status: str, benutzer=None) -> int:
+    """Aufgabe „<Team> zuweisen“ (kalender/montage) erledigen bzw. wieder
+    öffnen (V4 Phase 91.1 / v28 Phase 135 Löschen)."""
+    geaendert = 0
     for aufgabe in (session.query(Aufgabe)
                     .filter(Aufgabe.gewerk_id == gewerk.id,
                             Aufgabe.aktion_typ == "kalender",
                             Aufgabe.aktion_wert == "montage",
-                            Aufgabe.titel == f"{name} zuweisen",
-                            Aufgabe.status.in_(["offen", "in_arbeit", "wartet"]))):
-        aufgabe.status = "erledigt"
-        aufgabe.erledigt_am = datetime.now()
-        aufgabe.erledigt_von = benutzer.id if benutzer else None
-    verlauf(session, gewerk.projekt_id,
-            f"{name} zugewiesen: {team.name} · Montagetermin "
-            f"{beginn.strftime('%d.%m.%Y')}–{ende.strftime('%d.%m.%Y')}"
-            + (" · Kunde bestätigt" if kunde_bestaetigt else ""),
-            benutzer=benutzer, gewerk_id=gewerk.id)
-    meldung = f"{name} {team.name} zugewiesen, Termin angelegt."
+                            Aufgabe.titel == f"{name} zuweisen")):
+        if status == "erledigt" and aufgabe.status in ("offen", "in_arbeit", "wartet"):
+            aufgabe.status = "erledigt"
+            aufgabe.erledigt_am = datetime.now()
+            aufgabe.erledigt_von = benutzer.id if benutzer else None
+            geaendert += 1
+        elif status == "offen" and aufgabe.status == "erledigt":
+            aufgabe.status = "offen"
+            aufgabe.erledigt_am = None
+            aufgabe.erledigt_von = None
+            geaendert += 1
+    return geaendert
+
+
+def termin_speichern(session: Session, gewerk: Gewerk, daten: dict,
+                     benutzer=None, termin: ProjektTermin | None = None
+                     ) -> tuple[bool, str, list[str]]:
+    """v28 (PLAN_PROJ_V6 Phase 135): EINE Anlage-/Bearbeiten-Funktion für alle
+    Terminarten des Dialogs. `daten`: art (montage|elektro|sub|feinplanung|
+    abnahme|sonstige), team_id, sub_id, person_id, beginn (date), uhrzeit
+    (HH:MM oder leer = ganztägig), ende (date|None), besetzung (Liste IDs),
+    besetzung_gesetzt (bool – False = Vorbelegung aus dem Team), kunde_bestaetigt,
+    notiz, dauer_tage (optional). Beim Bearbeiten (termin gesetzt) bleibt die Art
+    gesperrt; Teamwechsel setzt das Zuweisungsfeld am Gewerk um („Montageteam
+    gewechselt: alt → neu“). Montage/Elektro-Montage: Team Pflicht, Aufgabe
+    „<Team> zuweisen“ erledigt, Fälligkeiten nachberechnet. Liefert
+    (ok, meldung, konflikte) – Konflikte (Team und je Person) sind Warnungen."""
+    bearbeiten = termin is not None
+    art = (daten.get("art") or "").strip().lower()
+    if bearbeiten:
+        art = termin_art(termin)
+    if art not in TERMIN_ARTEN:
+        return False, "Bitte eine Terminart wählen.", []
+    typ, zweck, art_name, zuweisung = TERMIN_ARTEN[art]
+
+    def _id(name):
+        try:
+            return int(daten.get(name) or 0) or None
+        except (TypeError, ValueError):
+            return None
+    team_id, sub_id, person_id = _id("team_id"), _id("sub_id"), _id("person_id")
+    team = session.get(Team, team_id) if team_id else None
+    if art in ("montage", "elektro"):
+        if team is None:
+            return False, "Montagetermine brauchen ein Team – bitte Team wählen.", []
+        sub_id = None
+    elif art == "sub":
+        if team is None and not sub_id:
+            return False, "Sub-Einsatz: bitte Subteam oder Subunternehmer wählen.", []
+    elif art in ("feinplanung", "abnahme"):
+        if not person_id:
+            return False, f"{art_name}: bitte eine Person wählen.", []
+        team = None
+    beginn_datum = daten.get("beginn")
+    if isinstance(beginn_datum, datetime):
+        beginn_datum = beginn_datum.date()
+    if beginn_datum is None:
+        return False, "Bitte einen Beginn angeben.", []
+    uhrzeit = (daten.get("uhrzeit") or "").strip()
+    ganztaegig = not uhrzeit
+    if uhrzeit:
+        try:
+            stunde, _, minute = uhrzeit.partition(":")
+            beginn = viertelstunde(datetime.combine(
+                beginn_datum, datetime.min.time()).replace(
+                hour=int(stunde), minute=int(minute or 0)))
+        except ValueError:
+            return False, "Uhrzeit nicht lesbar (HH:MM).", []
+    else:
+        beginn = datetime.combine(beginn_datum, datetime.min.time())
+    ende_datum = daten.get("ende")
+    if isinstance(ende_datum, datetime):
+        ende_datum = ende_datum.date()
+    if ende_datum is None:
+        if art in ("montage", "elektro"):
+            dauer = daten.get("dauer_tage") or montage_dauer_standard(session)
+            try:
+                dauer = max(1, int(dauer))
+            except (TypeError, ValueError):
+                dauer = montage_dauer_standard(session)
+            ende_datum = arbeitstage_addieren(beginn, dauer - 1).date()
+        else:
+            ende_datum = beginn_datum
+    if ende_datum < beginn_datum:
+        ende_datum = beginn_datum
+    if ganztaegig:
+        ende = datetime.combine(ende_datum, datetime.min.time())
+    elif ende_datum == beginn_datum:
+        ende = None          # Termin mit Uhrzeit an einem Tag: kein Ende (wie bisher)
+    else:
+        ende = datetime.combine(ende_datum, beginn.time())
+    kunde_bestaetigt = bool(daten.get("kunde_bestaetigt"))
+    notiz = (daten.get("notiz") or "").strip()[:500]
+    # Konflikte (Warnung): Team und je Person
+    konflikte: list[str] = []
+    if team is not None and typ == "montage":
+        konflikte += team_konflikte(session, team.id, beginn, ende or beginn,
+                                    ausser_termin_id=termin.id if bearbeiten else 0)
+    alt_team_id = termin.team_id if bearbeiten else None
+    if bearbeiten:
+        alt_text = termin_zeitraum_text(termin)
+        termin.beginn, termin.ende = beginn, ende
+        termin.team_id = team.id if team is not None else None
+        termin.sub_id, termin.person_id = sub_id, person_id
+        termin.ganztaegig = ganztaegig
+        termin.notiz = notiz
+        if kunde_bestaetigt and not termin.kunde_bestaetigt:
+            termin.kunde_bestaetigt = True
+            termin.bestaetigt_am = datetime.now()
+            termin.bestaetigt_quelle = "manuell"
+        elif not kunde_bestaetigt and termin.kunde_bestaetigt:
+            termin.kunde_bestaetigt = False
+            termin.bestaetigt_am = None
+            termin.bestaetigt_quelle = ""
+        if not termin.zweck and zweck:
+            termin.zweck = zweck
+    else:
+        termin = ProjektTermin(
+            projekt_id=gewerk.projekt_id, gewerk_id=gewerk.id, typ=typ, zweck=zweck,
+            beginn=beginn, ende=ende, team_id=team.id if team is not None else None,
+            sub_id=sub_id, person_id=person_id, ganztaegig=ganztaegig,
+            kunde_bestaetigt=kunde_bestaetigt,
+            bestaetigt_am=datetime.now() if kunde_bestaetigt else None,
+            bestaetigt_quelle="manuell" if kunde_bestaetigt else "",
+            notiz=notiz, erstellt_von=benutzer.id if benutzer else None)
+        session.add(termin)
+        session.flush()
+    termin.dauer_tage = max(1, ((termin.ende or termin.beginn).date()
+                                - termin.beginn.date()).days + 1)
+    # Zuweisungsfeld am Gewerk + Aufgabe „<Team> zuweisen“
+    if zuweisung and team is not None:
+        feld, name = ZUWEISUNGS_FELDER[zuweisung]
+        alt = getattr(gewerk, feld)
+        setattr(gewerk, feld, team.id)
+        if bearbeiten and alt_team_id and alt_team_id != team.id:
+            alt_team = session.get(Team, alt_team_id)
+            verlauf(session, gewerk.projekt_id,
+                    f"{name} gewechselt: {alt_team.name if alt_team else alt_team_id} "
+                    f"→ {team.name}", benutzer=benutzer, gewerk_id=gewerk.id)
+        if typ == "montage":
+            _zuweisungs_aufgabe_setzen(session, gewerk, name, "erledigt", benutzer)
+    # Besetzung: explizit gesetzt → übernehmen; sonst Vorlage aus dem Team
+    # (neu) bzw. bei Teamwechsel neu belegen, wenn sie der alten Vorlage entsprach
+    if team is not None and typ in ("montage", "sub"):
+        if daten.get("besetzung_gesetzt"):
+            besetzung_setzen(session, termin, daten.get("besetzung") or [], benutzer)
+        elif not bearbeiten:
+            besetzung_setzen(session, termin, team_mitglieder_ids(session, team.id),
+                             benutzer)
+        elif alt_team_id != team.id:
+            bisher = set(besetzung_ids(session, termin.id))
+            if not bisher or bisher == set(team_mitglieder_ids(session, alt_team_id)):
+                besetzung_setzen(session, termin, team_mitglieder_ids(session, team.id),
+                                 benutzer)
+            else:
+                verlauf(session, gewerk.projekt_id,
+                        "Besetzung beibehalten (von Hand gesetzt)",
+                        benutzer=benutzer, gewerk_id=gewerk.id)
+    elif bearbeiten and team is None:
+        besetzung_setzen(session, termin, [], benutzer)
+    konflikte += person_konflikte(session, besetzung_ids(session, termin.id),
+                                  beginn, ende or beginn,
+                                  ausser_termin_id=termin.id)
+    nachberechnet = 0
+    if typ in ("feinplanung", "montage"):
+        nachberechnet = faelligkeiten_nachberechnen(session, gewerk)
+    wer = ""
+    if team is not None:
+        wer = f" · {team.name}"
+    elif sub_id:
+        from app.models import Subunternehmer
+        sub = session.get(Subunternehmer, sub_id)
+        wer = f" · {sub.firma}" if sub else ""
+    elif person_id:
+        person = session.get(Benutzer, person_id)
+        wer = f" · {person.name}" if person else ""
+    if bearbeiten:
+        verlauf(session, gewerk.projekt_id,
+                f"Termin {art_name} bearbeitet: {alt_text} → "
+                f"{termin_zeitraum_text(termin)}{wer}"
+                + (" · Kunde bestätigt" if termin.kunde_bestaetigt else "")
+                + (f" – {nachberechnet} Fälligkeiten nachberechnet" if nachberechnet else ""),
+                benutzer=benutzer, gewerk_id=gewerk.id)
+        meldung = f"Termin {art_name} {termin_zeitraum_text(termin)} gespeichert."
+    else:
+        verlauf(session, gewerk.projekt_id,
+                f"Termin {art_name} {termin_zeitraum_text(termin)} angelegt ({gewerk.sparte})"
+                + wer + (" · Kunde bestätigt" if kunde_bestaetigt else "")
+                + (f" · Besetzung: {besetzung_namen(session, termin.id, kurz=False)}"
+                   if typ in ("montage", "sub") and besetzung_ids(session, termin.id) else "")
+                + (f" – {nachberechnet} Fälligkeiten nachberechnet" if nachberechnet else ""),
+                benutzer=benutzer, gewerk_id=gewerk.id)
+        if zuweisung and team is not None:
+            meldung = f"{ZUWEISUNGS_FELDER[zuweisung][1]} {team.name} zugewiesen, Termin angelegt."
+        else:
+            meldung = f"Termin {art_name} {termin_zeitraum_text(termin)} angelegt."
+    session.flush()
+    daten["termin_id"] = termin.id      # für den Aufrufer (Outlook, JSON)
     return True, meldung, konflikte
+
+
+def termin_loeschen(session: Session, termin: ProjektTermin, grund: str,
+                    benutzer=None) -> tuple[bool, str]:
+    """v28 (PLAN_PROJ_V6 Phase 135): Termin mit Pflicht-Grund löschen –
+    Besetzung mit, Verlauf „Termin <Art> <Datum> gelöscht – <Grund>“; war es
+    der maßgebliche Montagetermin (Terminstatus), wird die Aufgabe
+    „Montageteam zuweisen“ wieder offen und das Gewerk steht im Board unter
+    „unterminiert“. Outlook-Storno macht die Route vorher (best effort)."""
+    grund = " ".join((grund or "").split())[:300]
+    if not grund:
+        return False, "Bitte einen Grund angeben."
+    gewerk = session.get(Gewerk, termin.gewerk_id) if termin.gewerk_id else None
+    art = termin_art(termin)
+    typ = termin.typ
+    text = f"Termin {termin_art_name(termin)} {termin_zeitraum_text(termin)} gelöscht – {grund}"
+    massgeblich = False
+    if gewerk is not None and typ == "montage":
+        ts = terminstatus(session, gewerk)
+        massgeblich = ts.get("termin") is not None and ts["termin"].id == termin.id
+    (session.query(TerminBesetzung)
+     .filter(TerminBesetzung.termin_id == termin.id).delete())
+    projekt_id, gewerk_id = termin.projekt_id, termin.gewerk_id
+    session.delete(termin)
+    session.flush()
+    if gewerk is not None and typ == "montage":
+        zuweisung = "elektro" if art == "elektro" else "wp"
+        name = ZUWEISUNGS_FELDER[zuweisung][1]
+        weitere = (session.query(ProjektTermin)
+                   .filter(ProjektTermin.gewerk_id == gewerk.id,
+                           ProjektTermin.typ == "montage",
+                           ProjektTermin.zweck.in_(["elektro"] if art == "elektro"
+                                                   else ["wp", ""])).count())
+        if (massgeblich or art == "elektro") and not weitere:
+            if _zuweisungs_aufgabe_setzen(session, gewerk, name, "offen", benutzer):
+                text += f" · Aufgabe „{name} zuweisen“ wieder offen"
+        faelligkeiten_nachberechnen(session, gewerk)
+    verlauf(session, projekt_id, text, benutzer=benutzer, gewerk_id=gewerk_id)
+    return True, "Termin gelöscht."
+
+
+def team_termin_zuweisen(session: Session, gewerk: Gewerk, zweck: str,
+                         team_id: int, beginn: datetime, ende,
+                         kunde_bestaetigt: bool, benutzer=None
+                         ) -> tuple[bool, str, list[str]]:
+    """v15 (Phase 75): Zuweisungsdialog „Team + Termin“ – seit v28 ein dünner
+    Aufruf von termin_speichern (Besetzung = Team-Mitglieder, zweck gesetzt).
+    Bleibt für Bestandsimport und Alt-Formulare erhalten. Ende leer = Beginn +
+    (Standarddauer − 1) Arbeitstage."""
+    if zweck not in ZUWEISUNGS_FELDER:
+        return False, "Unbekannter Zuweisungszweck.", []
+    feld, name = ZUWEISUNGS_FELDER[zweck]
+    if not team_id or session.get(Team, team_id) is None:
+        return False, f"{name}: bitte ein Team wählen.", []
+    if beginn is None:
+        return False, "Bitte einen Beginn wählen.", []
+    art = {"wp": "montage", "elektro": "elektro", "sub": "sub"}[zweck]
+    return termin_speichern(session, gewerk, {
+        "art": art, "team_id": team_id, "beginn": beginn,
+        "ende": ende, "kunde_bestaetigt": kunde_bestaetigt}, benutzer=benutzer)
 
 
 def termin_verschieben(session: Session, termin: ProjektTermin,
                        neues_datum, neues_team_id: int = 0,
                        art: str = "verschieben", benutzer=None) -> str:
     """Kalender-Drag (v15): Balken verschieben (Beginn-Delta auf Beginn+Ende,
-    optional Teamwechsel) oder Ende ziehen. Protokolliert im Verlauf."""
+    optional Teamwechsel) oder Ende ziehen. Protokolliert im Verlauf.
+    v28 (PLAN_PROJ_V6 Phase 135): bei Teamwechsel wird die Besetzung aus dem
+    neuen Team neu vorbelegt, falls sie der Mitgliederliste des alten Teams
+    entsprach (oder leer war); sonst bleibt sie – Verlauf „Besetzung
+    beibehalten (von Hand gesetzt)“. Das Zuweisungsfeld am Gewerk folgt."""
     alt_text = termin.beginn.strftime("%d.%m.%Y")
     if termin.ende and termin.ende.date() != termin.beginn.date():
         alt_text += "–" + termin.ende.strftime("%d.%m.%Y")
+    gewerk = session.get(Gewerk, termin.gewerk_id) if termin.gewerk_id else None
     if art == "ende":
         neues_ende = datetime.combine(neues_datum, (termin.ende or termin.beginn).time())
         if neues_ende.date() < termin.beginn.date():
@@ -1497,10 +2042,24 @@ def termin_verschieben(session: Session, termin: ProjektTermin,
         if neues_team_id and neues_team_id != (termin.team_id or 0):
             neues_team = session.get(Team, neues_team_id)
             if neues_team is not None:
+                alt_team_id = termin.team_id
                 termin.team_id = neues_team.id
+                bisher = set(besetzung_ids(session, termin.id))
+                if not bisher or bisher == set(team_mitglieder_ids(session, alt_team_id)):
+                    besetzung_setzen(session, termin,
+                                     team_mitglieder_ids(session, neues_team.id),
+                                     benutzer)
+                else:
+                    verlauf(session, termin.projekt_id,
+                            "Besetzung beibehalten (von Hand gesetzt)",
+                            benutzer=benutzer, gewerk_id=termin.gewerk_id)
+                if gewerk is not None and termin.typ == "montage":
+                    zuweisung = "elektro" if (termin.zweck or "") == "elektro" else "wp"
+                    if termin.zweck == "sub":
+                        zuweisung = "sub"
+                    setattr(gewerk, ZUWEISUNGS_FELDER[zuweisung][0], neues_team.id)
     termin.dauer_tage = max(1, ((termin.ende or termin.beginn).date()
                                 - termin.beginn.date()).days + 1)
-    gewerk = session.get(Gewerk, termin.gewerk_id) if termin.gewerk_id else None
     if gewerk is not None:
         faelligkeiten_nachberechnen(session, gewerk)
     neu_text = termin.beginn.strftime("%d.%m.%Y")
@@ -1511,6 +2070,193 @@ def termin_verschieben(session: Session, termin: ProjektTermin,
             f"{alt_text} → {neu_text}", benutzer=benutzer,
             gewerk_id=termin.gewerk_id)
     return neu_text
+
+
+# --- v28 (PLAN_PROJ_V6 Phase 135): Terminvorschläge Stufe 1 (Tool-Daten) ---------
+
+VORSCHLAG_WOCHEN = 26
+
+
+def naechster_montag(datum) -> date:
+    """Erster Montag ≥ datum [ANNAHME Plan: Vorschläge beginnen montags]."""
+    if isinstance(datum, datetime):
+        datum = datum.date()
+    return datum + timedelta(days=(7 - datum.weekday()) % 7)
+
+
+def _adresse_text(strasse: str, plz: str, ort: str) -> str:
+    return ", ".join(t for t in [(strasse or "").strip(),
+                                 f"{plz or ''} {ort or ''}".strip()] if t)
+
+
+def routing_konfiguriert(session: Session) -> bool:
+    """Routing-Anbieter des Lead-Moduls (ors/google mit Schlüssel); Luftlinie
+    gilt als „kein Anbieter“ – dann Umweg „–“ (Hinweis im Dialog)."""
+    from app import leadmanagement
+    anbieter = (leadmanagement.parameter_holen(session, "routing_anbieter", "luftlinie")
+                or "luftlinie").strip().lower()
+    if anbieter == "ors":
+        return bool(leadmanagement.parameter_holen(session, "ors_api_key", ""))
+    if anbieter == "google":
+        return bool(leadmanagement.parameter_holen(session, "google_api_key", ""))
+    return False
+
+
+def terminvorschlaege(session: Session, gewerk: Gewerk, team_id: int | None = None,
+                      dauer_tage: int | None = None, heute=None) -> dict:
+    """Stufe 1 aus Tool-Daten: je aktivem Montage-Team (oder nur team_id) die
+    ersten freien Fenster (max. 5) ohne Überschneidung mit dessen Terminen im
+    Tool, Suche bis 26 Wochen voraus, Beginn montags. Frühester Beginn =
+    max(heute + vorschlag_vorlauf_wochen, Lieferdatum der letzten UGL-Bestellung
+    + 1 Arbeitstag). Bewertung Umweg = Fahrzeit vom letzten Einsatz des Teams
+    vor dem Fenster zur Ausführungsadresse und weiter zum ersten Einsatz danach
+    (ersatzweise Startadresse `montage_startadresse`), über app/routing.py –
+    ohne Routing-Anbieter Umweg „–“. Netzaufrufe (Geocoding, Matrix) laufen
+    nur nach `verbindung_freigeben` (die Routing-/Geocoding-Funktionen geben
+    die Sitzung selbst frei). Stufe 2 (`vorschlag_outlook`) wird nur angelegt,
+    nicht ausgewertet. Liefert {vorschlaege: [...], hinweis, dauer_tage,
+    fruehester, routing}."""
+    from app.models import UglBestellung
+    heute = heute or datetime.now()
+    heute_datum = heute.date() if isinstance(heute, datetime) else heute
+    dauer = dauer_tage or montage_dauer_standard(session)
+    try:
+        dauer = max(1, int(dauer))
+    except (TypeError, ValueError):
+        dauer = montage_dauer_standard(session)
+    try:
+        vorlauf = float(str(parameter_holen(session, "vorschlag_vorlauf_wochen", "4")
+                            ).replace(",", ".") or 4)
+    except ValueError:
+        vorlauf = 4.0
+    fruehester = heute_datum + timedelta(days=int(round(vorlauf * 7)))
+    letzte = (session.query(UglBestellung)
+              .filter(UglBestellung.gewerk_id == gewerk.id,
+                      UglBestellung.lieferdatum.isnot(None))
+              .order_by(UglBestellung.lieferdatum.desc()).first())
+    if letzte is not None and letzte.lieferdatum is not None:
+        nach_lieferung = arbeitstage_addieren(letzte.lieferdatum, 1).date()
+        fruehester = max(fruehester, nach_lieferung)
+    start = naechster_montag(fruehester)
+    teams = (session.query(Team)
+             .filter(Team.aktiv.is_(True), Team.typ == "montage")
+             .order_by(Team.id).all())
+    if team_id:
+        teams = [t for t in teams if t.id == team_id]
+    projekt = session.get(Projekt, gewerk.projekt_id)
+    ziel_adresse = _adresse_text(projekt.ausfuehrung_strasse, projekt.ausfuehrung_plz,
+                                 projekt.ausfuehrung_ort) if projekt else ""
+    start_adresse = parameter_holen(session, "montage_startadresse",
+                                    "Arnold-Overbeck-Str. 63-65, 47139 Duisburg")
+    routing_an = routing_konfiguriert(session)
+    # Termine aller Teams (Tool) einmal lesen – Fenster, Vor-/Nach-Einsätze
+    termine_je_team: dict[int, list] = {t.id: [] for t in teams}
+    adressen: dict[int, str] = {}
+    for t in (session.query(ProjektTermin)
+              .filter(ProjektTermin.typ == "montage",
+                      ProjektTermin.beginn.isnot(None),
+                      ProjektTermin.team_id.in_([te.id for te in teams] or [0]))
+              .order_by(ProjektTermin.beginn)):
+        termine_je_team.setdefault(t.team_id, []).append(t)
+        if routing_an and t.projekt_id not in adressen:
+            p = session.get(Projekt, t.projekt_id)
+            adressen[t.projekt_id] = _adresse_text(
+                p.ausfuehrung_strasse, p.ausfuehrung_plz, p.ausfuehrung_ort) if p else ""
+    fenster: list[dict] = []
+    ende_suche = start + timedelta(weeks=VORSCHLAG_WOCHEN)
+    for team in teams:
+        gefunden = 0
+        montag = start
+        while montag < ende_suche and gefunden < 5:
+            beginn = datetime.combine(montag, datetime.min.time())
+            ende = arbeitstage_addieren(beginn, dauer - 1)
+            belegt = [t for t in termine_je_team.get(team.id, [])
+                      if t.beginn.date() <= ende.date()
+                      and beginn.date() <= (t.ende or t.beginn).date()]
+            if not belegt:
+                vorher = max((t for t in termine_je_team.get(team.id, [])
+                              if (t.ende or t.beginn).date() < beginn.date()),
+                             key=lambda t: (t.ende or t.beginn), default=None)
+                nachher = min((t for t in termine_je_team.get(team.id, [])
+                               if t.beginn.date() > ende.date()),
+                              key=lambda t: t.beginn, default=None)
+                fenster.append({"team": team, "beginn": beginn, "ende": ende,
+                                "vorher": vorher, "nachher": nachher})
+                gefunden += 1
+            montag += timedelta(days=7)
+    # Fahrzeiten (nur mit Routing-Anbieter): Adressen lesen ist erledigt →
+    # Sitzung freigeben, dann Geocoding/Matrix (beide geben selbst frei)
+    punkte: dict[str, tuple] = {}
+    hinweis = ""
+    if routing_an and fenster and ziel_adresse:
+        from app import geocoding, routing
+        from app.db import verbindung_freigeben
+        noetig = {ziel_adresse, start_adresse} | {
+            adressen.get(f[k].projekt_id, "") for f in fenster for k in ("vorher", "nachher")
+            if f[k] is not None}
+        verbindung_freigeben(session)
+        for adresse in sorted(a for a in noetig if a):
+            lat, lon, status = geocoding.geokodieren(session, adresse)
+            if lat is not None:
+                punkte[adresse] = (lat, lon)
+        orte = list(dict.fromkeys(punkte.values()))
+        if len(orte) >= 2:
+            routing.matrix_fuellen(session, orte, orte)
+        if ziel_adresse not in punkte:
+            hinweis = "Fahrzeiten: Ausführungsadresse konnte nicht geokodiert werden."
+    elif not routing_an:
+        hinweis = "Fahrzeiten: kein Routing-Anbieter konfiguriert"
+    vorschlaege: list[dict] = []
+    for f in fenster:
+        team = f["team"]
+        umweg = None
+        geschaetzt = False
+        begruendung = "erstes freies Fenster des Teams"
+        if f["vorher"] is not None or f["nachher"] is not None:
+            teile = []
+            if f["vorher"] is not None:
+                p = session.get(Projekt, f["vorher"].projekt_id)
+                teile.append(f"nach {p.nummer if p else '?'} "
+                             f"({(f['vorher'].ende or f['vorher'].beginn).strftime('%d.%m.')})")
+            if f["nachher"] is not None:
+                p = session.get(Projekt, f["nachher"].projekt_id)
+                teile.append(f"vor {p.nummer if p else '?'} "
+                             f"({f['nachher'].beginn.strftime('%d.%m.')})")
+            begruendung = "frei " + ", ".join(teile)
+        if routing_an and ziel_adresse in punkte:
+            from app import routing
+            ziel = punkte[ziel_adresse]
+            von = punkte.get(adressen.get(f["vorher"].projekt_id, "")) if f["vorher"] else None
+            nach = punkte.get(adressen.get(f["nachher"].projekt_id, "")) if f["nachher"] else None
+            von = von or punkte.get(start_adresse)
+            nach = nach or punkte.get(start_adresse)
+            if von is not None and nach is not None:
+                hin = routing.fahrzeit(session, von, ziel)
+                weg = routing.fahrzeit(session, ziel, nach)
+                direkt = routing.fahrzeit(session, von, nach)
+                umweg = int(round(max(0.0, hin["minuten"] + weg["minuten"]
+                                      - direkt["minuten"])))
+                geschaetzt = bool(hin["geschaetzt"] or weg["geschaetzt"]
+                                  or direkt["geschaetzt"])
+        vorschlaege.append({
+            "team_id": team.id, "team_name": team.name,
+            "beginn": f["beginn"].date().isoformat(), "ende": f["ende"].date().isoformat(),
+            "beginn_text": _wochentag_kurz(f["beginn"]) + f["beginn"].strftime(" %d.%m."),
+            "ende_text": _wochentag_kurz(f["ende"]) + f["ende"].strftime(" %d.%m."),
+            "umweg_min": umweg,
+            "umweg_text": ("–" if umweg is None
+                           else f"{umweg} min" + (" (geschätzt)" if geschaetzt else "")),
+            "begruendung": begruendung,
+            "besetzung": team_mitglieder_ids(session, team.id),
+        })
+    vorschlaege.sort(key=lambda v: (v["beginn"], v["umweg_min"] if v["umweg_min"]
+                                    is not None else 10 ** 6, v["team_name"]))
+    return {"vorschlaege": vorschlaege, "hinweis": hinweis, "dauer_tage": dauer,
+            "fruehester": start.isoformat(), "routing": routing_an}
+
+
+def _wochentag_kurz(wert: datetime) -> str:
+    return ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"][wert.weekday()]
 
 
 def startseiten_kacheln(session: Session) -> dict:
@@ -1627,30 +2373,45 @@ def sortierschluessel_chrono(zeile: dict) -> tuple:
 
 # --- Phasenwechsel + Freigabe (Phase 67) --------------------------------------------
 
-def _pflicht_offen_in_paketen(session: Session, gewerk: Gewerk,
-                              paket_namen: tuple[str, ...]) -> tuple[int, int, bool]:
-    """(offen, gesamt, paket_vorhanden) der Pflichtaufgaben in aktiven
-    Paket-Instanzen, deren Name einem der übergebenen entspricht (v15)."""
+def _pflicht_aufgaben_in_paketen(session: Session, gewerk: Gewerk,
+                                 paket_namen: tuple[str, ...]
+                                 ) -> tuple[list[Aufgabe], int, bool]:
+    """(offene Pflichtaufgaben, gesamt, paket_vorhanden) in aktiven
+    Paket-Instanzen, deren Name einem der übergebenen entspricht (v15;
+    v28: liefert die Aufgaben selbst, damit der Dialog sie abhaken kann)."""
     instanzen = [i for i in (session.query(AufgabenpaketInstanz)
                              .filter(AufgabenpaketInstanz.gewerk_id == gewerk.id,
                                      AufgabenpaketInstanz.deaktiviert_am.is_(None)))
                  if (i.paket_name or "").strip().lower()
                  in {n.lower() for n in paket_namen}]
     if not instanzen:
-        return 0, 0, False
+        return [], 0, False
     ids = {i.id for i in instanzen}
-    aufgaben = [a for a in session.query(Aufgabe)
-                .filter(Aufgabe.gewerk_id == gewerk.id,
-                        Aufgabe.pflicht.is_(True),
-                        Aufgabe.status != "entfaellt")
+    aufgaben = [a for a in (session.query(Aufgabe)
+                            .filter(Aufgabe.gewerk_id == gewerk.id,
+                                    Aufgabe.pflicht.is_(True),
+                                    Aufgabe.status != "entfaellt")
+                            .order_by(Aufgabe.paket_instanz_id, Aufgabe.reihenfolge,
+                                      Aufgabe.id))
                 if a.paket_instanz_id in ids]
-    offen = sum(1 for a in aufgaben if a.status != "erledigt")
+    offen = [a for a in aufgaben if a.status != "erledigt"]
     return offen, len(aufgaben), True
 
 
-def waechter_pruefen(session: Session, gewerk: Gewerk, ziel: str) -> list[str]:
-    """Unerfüllte Bedingungen für den Wechsel NACH RECHTS (v15, Phase 74);
-    leer = Wechsel frei. Rückwärts liefert [] (Begründung regelt die Route).
+def _pflicht_offen_in_paketen(session: Session, gewerk: Gewerk,
+                              paket_namen: tuple[str, ...]) -> tuple[int, int, bool]:
+    """(offen, gesamt, paket_vorhanden) – Zählvariante (v15)."""
+    offen, gesamt, da = _pflicht_aufgaben_in_paketen(session, gewerk, paket_namen)
+    return len(offen), gesamt, da
+
+
+def waechter_bloecke(session: Session, gewerk: Gewerk, ziel: str) -> list[dict]:
+    """v28 (PLAN_PROJ_V6 Phase 133): unerfüllte Bedingungen für den Wechsel
+    NACH RECHTS als Blöcke {text, aufgaben: [Aufgabe, …], aufgabe: Aufgabe|None}
+    – `text` ist die bisherige Wächter-Zeile (Verlauf/Meldung), `aufgaben`
+    die offenen Pflichtaufgaben dahinter (Dialog „Phase ändern“: Häkchen
+    „erledigt“ / Knopf „entfällt“ je Aufgabe). Leer = Wechsel frei;
+    rückwärts liefert [] (Begründung regelt phase_wechseln).
     Solange die V2-Pakete (Phase 78) nicht existieren, greift je Stufe der
     dokumentierte Fallback (docs/projektierung-entscheidungen.md)."""
     reihen = {p: i for i, p in enumerate(
@@ -1660,40 +2421,47 @@ def waechter_pruefen(session: Session, gewerk: Gewerk, ziel: str) -> list[str]:
     reihen["abnahme_freigabe"] = reihen["abnahme"]   # Altwert vor Migration
     if ziel not in reihen or reihen.get(gewerk.phase, 0) >= reihen[ziel]:
         return []
-    offen: list[str] = []
+    bloecke: list[dict] = []
+
+    def _block(text: str, aufgaben=None, aufgabe=None) -> None:
+        bloecke.append({"text": text, "aufgaben": list(aufgaben or []),
+                        "aufgabe": aufgabe})
+
+    def _paket_block(namen: tuple[str, ...], titel: str) -> None:
+        offen, gesamt, da = _pflicht_aufgaben_in_paketen(session, gewerk, namen)
+        if da and offen:
+            _block(f"{titel}: {len(offen)} von {gesamt} Pflichtaufgaben offen", offen)
+
     # Auftragseingang → Feinplanung VOT: Pflichtaufgaben Paket "Auftragseingang"
     if reihen[ziel] >= reihen["feinplanung_vot"]:
-        anz_offen, gesamt, da = _pflicht_offen_in_paketen(
-            session, gewerk, ("Auftragseingang",))
-        if da and anz_offen:
-            offen.append(f"Paket Auftragseingang: {anz_offen} von {gesamt} "
-                         "Pflichtaufgaben offen")
+        _paket_block(("Auftragseingang",), "Paket Auftragseingang")
     # Feinplanung VOT → Planung: Feinplanung erfasst (Häkchen bis Phase 80)
     # + Pflichtaufgaben des V2-Pakets "Feinplanung VOT" (Phase 78)
     if reihen[ziel] >= reihen["planung"]:
         if not gewerk.feinplanung_erfasst:
-            offen.append("Feinplanung nicht erfasst (Häkchen „Feinplanung "
-                         "erfasst“ in der Akte)")
-        anz_offen, gesamt, da = _pflicht_offen_in_paketen(
-            session, gewerk, ("Feinplanung VOT",))
-        if da and anz_offen:
-            offen.append(f"Paket Feinplanung VOT: {anz_offen} von {gesamt} "
-                         "Pflichtaufgaben offen")
+            _block("Feinplanung nicht erfasst (Häkchen „Feinplanung "
+                   "erfasst“ in der Akte)")
+        _paket_block(("Feinplanung VOT",), "Paket Feinplanung VOT")
     # Planung → Montagevorbereitung: Pflicht der Planungs-Pakete; ohne diese
     # Pakete (V1-Bestand) zählen alle Pflichtaufgaben (bisheriges Verhalten)
     if reihen[ziel] >= reihen["montagevorbereitung"]:
-        anz_offen, gesamt, da = _pflicht_offen_in_paketen(
+        offen, gesamt, da = _pflicht_aufgaben_in_paketen(
             session, gewerk, ("Planung WP", "Planung Elektro",
                               "Friondo Fit for Future", "Fit for Future"))
         if da:
-            if anz_offen:
-                offen.append(f"Planungs-Pakete: {anz_offen} von {gesamt} "
-                             "Pflichtaufgaben offen")
+            if offen:
+                _block(f"Planungs-Pakete: {len(offen)} von {gesamt} "
+                       "Pflichtaufgaben offen", offen)
         else:
-            ampel = planungs_ampel(session, gewerk)
-            if ampel["erledigt"] < ampel["gesamt"]:
-                offen.append(f"{ampel['gesamt'] - ampel['erledigt']} Pflichtaufgaben "
-                             f"offen ({ampel['erledigt']} von {ampel['gesamt']} erledigt)")
+            alle = [a for a in (session.query(Aufgabe)
+                                .filter(Aufgabe.gewerk_id == gewerk.id,
+                                        Aufgabe.pflicht.is_(True),
+                                        Aufgabe.status != "entfaellt")
+                                .order_by(Aufgabe.reihenfolge, Aufgabe.id))]
+            offen = [a for a in alle if a.status != "erledigt"]
+            if offen:
+                _block(f"{len(offen)} Pflichtaufgaben offen "
+                       f"({len(alle) - len(offen)} von {len(alle)} erledigt)", offen)
     # Montagevorbereitung → Montage: Freigabe-Aufgabe erledigt UND Termin
     if reihen[ziel] >= reihen["montage"]:
         freigabe = (session.query(Aufgabe)
@@ -1701,30 +2469,81 @@ def waechter_pruefen(session: Session, gewerk: Gewerk, ziel: str) -> list[str]:
                             Aufgabe.titel == "Projekt zur Montage freigegeben",
                             Aufgabe.status != "entfaellt").first())
         if freigabe is not None and freigabe.status != "erledigt":
-            offen.append("Aufgabe „Projekt zur Montage freigegeben“ offen")
+            _block("Aufgabe „Projekt zur Montage freigegeben“ offen",
+                   aufgabe=freigabe)
         termin = (session.query(ProjektTermin)
                   .filter(ProjektTermin.gewerk_id == gewerk.id,
                           ProjektTermin.typ == "montage",
                           ProjektTermin.beginn.isnot(None)).first())
         if termin is None:
-            offen.append("Kein Montagetermin angelegt")
+            _block("Kein Montagetermin angelegt")
         elif not (termin.team_id or termin.person_id):
-            offen.append("Montagetermin ohne Team/Person")
+            _block("Montagetermin ohne Team/Person")
     # Montage → Abnahme: Häkchen "Montage fertig"
     if reihen[ziel] >= reihen["abnahme"] and gewerk.montage_fertig_am is None:
-        offen.append("Montage nicht fertig gemeldet (Montage-Backend oder "
-                     "Projektierer)")
+        _block("Montage nicht fertig gemeldet (Montage-Backend oder "
+               "Projektierer)")
     # V4 (Phase 90.2): Abnahme → Freigabe: Pflichtaufgaben des Pakets Abnahme
     if reihen[ziel] >= reihen["freigabe"]:
-        anz_offen, gesamt, da = _pflicht_offen_in_paketen(
-            session, gewerk, ("Abnahme",))
-        if da and anz_offen:
-            offen.append(f"Paket Abnahme: {anz_offen} von {gesamt} "
-                         "Pflichtaufgaben offen")
+        _paket_block(("Abnahme",), "Paket Abnahme")
     # Abgeschlossen nur über die Rechnungsfreigabe
     if ziel == "abgeschlossen" and gewerk.freigabe_am is None:
-        offen.append("Rechnung nicht freigegeben – bitte „Rechnung freigeben“ nutzen")
-    return offen
+        _block("Rechnung nicht freigegeben – bitte „Rechnung freigeben“ nutzen")
+    return bloecke
+
+
+def waechter_pruefen(session: Session, gewerk: Gewerk, ziel: str) -> list[str]:
+    """Unerfüllte Bedingungen für den Wechsel NACH RECHTS (v15, Phase 74) als
+    Textliste; leer = Wechsel frei. Rückwärts liefert []."""
+    return [b["text"] for b in waechter_bloecke(session, gewerk, ziel)]
+
+
+def waechter_details(session: Session, gewerk: Gewerk, ziel: str) -> dict:
+    """v28 (PLAN_PROJ_V6 Phase 133): JSON für die Dialoge „Phase ändern“
+    (Akte und Board): {modus, rueckwaerts, offen: [{text, aufgabe_id|null,
+    pflicht}], begruendung_pflicht, hinweis, sperre}. Jede offene
+    Pflichtaufgabe erscheint einzeln (abhakbar), Bedingungen ohne Aufgabe
+    (Termin, Montage fertig, Rechnung) als Textzeile."""
+    from app.models import GEWERK_PHASEN, GEWERK_PHASEN_NAMEN
+    modus = waechter_modus(session)
+    reihen = {p: i for i, p in enumerate(GEWERK_PHASEN)}
+    rueckwaerts = (ziel in reihen and gewerk.phase in reihen
+                   and reihen[ziel] < reihen[gewerk.phase])
+    offen: list[dict] = []
+    for block in waechter_bloecke(session, gewerk, ziel):
+        if block["aufgaben"]:
+            for a in block["aufgaben"]:
+                offen.append({"text": a.titel, "aufgabe_id": a.id,
+                              "pflicht": bool(a.pflicht), "gruppe": block["text"]})
+        elif block["aufgabe"] is not None:
+            a = block["aufgabe"]
+            offen.append({"text": a.titel, "aufgabe_id": a.id,
+                          "pflicht": bool(a.pflicht), "gruppe": block["text"]})
+        else:
+            offen.append({"text": block["text"], "aufgabe_id": None,
+                          "pflicht": True, "gruppe": ""})
+    sperre = ""
+    if ziel == "abgeschlossen" and gewerk.freigabe_am is None:
+        sperre = "„Abgeschlossen“ ist nur über „Rechnung freigeben“ erreichbar."
+    elif gewerk.phase == "storniert":
+        sperre = "Storniertes Gewerk – Phasenwechsel nicht möglich."
+    begruendung_pflicht = bool(rueckwaerts or (modus == "sperren" and offen))
+    if rueckwaerts:
+        hinweis = "Rückwärts-Wechsel nur mit Begründung (wird im Verlauf protokolliert)."
+    elif modus == "warnen":
+        hinweis = ("Offene Punkte blockieren nicht – sie werden im Verlauf vermerkt."
+                   if offen else "Wächter erfüllt – keine offenen Punkte.")
+    else:
+        hinweis = ("Modus „sperren“: Wechsel mit offenen Punkten nur mit Begründung "
+                   "(Override, protokolliert)." if offen
+                   else "Wächter erfüllt – keine offenen Punkte.")
+    return {"modus": modus, "rueckwaerts": rueckwaerts, "offen": offen,
+            "begruendung_pflicht": begruendung_pflicht, "hinweis": hinweis,
+            "sperre": sperre, "ziel": ziel,
+            "ziel_name": GEWERK_PHASEN_NAMEN.get(ziel, ziel),
+            "phase": gewerk.phase,
+            "phase_name": GEWERK_PHASEN_NAMEN.get(gewerk.phase, gewerk.phase),
+            "anzahl": len(offen)}
 
 
 def terminstatus_map(session: Session, gewerk_ids: list[int]) -> dict[int, dict]:
@@ -1732,7 +2551,8 @@ def terminstatus_map(session: Session, gewerk_ids: list[int]) -> dict[int, dict]
     terminiert = Montagetermin mit Team UND Kunde bestätigt · unbestaetigt =
     Montagetermin vorhanden (ohne Bestätigung oder ohne Team) · unterminiert =
     kein Montagetermin. Maßgeblich ist der früheste zukünftige Montagetermin,
-    sonst der letzte."""
+    sonst der letzte. v28 (PLAN_PROJ_V6 Phase 135): nur Montagetermine mit
+    zweck „wp“ oder leer – Elektro-/Sub-Termine bestimmen den Status nicht."""
     ergebnis: dict[int, dict] = {
         gid: {"status": "unterminiert", "termin": None} for gid in gewerk_ids}
     if not gewerk_ids:
@@ -1741,6 +2561,7 @@ def terminstatus_map(session: Session, gewerk_ids: list[int]) -> dict[int, dict]
     beste: dict[int, ProjektTermin] = {}
     for t in (session.query(ProjektTermin)
               .filter(ProjektTermin.typ == "montage",
+                      ProjektTermin.zweck.in_(["wp", ""]),
                       ProjektTermin.beginn.isnot(None),
                       ProjektTermin.gewerk_id.in_(gewerk_ids))
               .order_by(ProjektTermin.beginn)):
@@ -1767,8 +2588,15 @@ def terminstatus(session: Session, gewerk: Gewerk) -> dict:
 
 def phase_wechseln(session: Session, gewerk: Gewerk, ziel: str,
                    begruendung: str, benutzer=None) -> tuple[bool, str]:
-    """Phasenwechsel mit Wächtern; Override und Rückwärts nur mit Begründung
-    (immer protokolliert). Stornierte Gewerke sind gesperrt."""
+    """Phasenwechsel mit Wächtern. v28 (PLAN_PROJ_V6 Phase 133): Modus
+    `waechter_modus` – „warnen“ (Standard): offene Punkte blockieren nicht,
+    sie stehen im Verlauf („… – mit offenen Punkten: <Liste>“, mit Begründung
+    „… – Begründung: <Text>“); „sperren“: Override nur mit Begründung wie
+    bisher. Rückwärts in beiden Modi nur mit Begründung; „abgeschlossen“ in
+    beiden Modi nur über „Rechnung freigeben“; `montage_fertig_am` wird beim
+    Wechsel nach Abnahme/Freigabe gesetzt. Stornierte Gewerke sind gesperrt.
+    Signatur und Rückgabe (ok, meldung) bleiben (Aufrufer: Akte, Board,
+    Montage-Backend)."""
     from app.models import GEWERK_PHASEN, GEWERK_PHASEN_NAMEN
     if gewerk.phase == "storniert":
         return False, "Storniertes Gewerk – Phasenwechsel nicht möglich."
@@ -1780,10 +2608,14 @@ def phase_wechseln(session: Session, gewerk: Gewerk, ziel: str,
     rueckwaerts = reihen[ziel] < reihen[gewerk.phase]
     offen = waechter_pruefen(session, gewerk, ziel)
     begruendung = (begruendung or "").strip()[:500]
-    if (offen or rueckwaerts) and not begruendung:
-        if rueckwaerts:
-            return False, ("Rückwärts-Wechsel nur mit Begründung "
-                           "(Feld „Begründung“ ausfüllen).")
+    modus = waechter_modus(session)
+    if rueckwaerts and not begruendung:
+        return False, ("Rückwärts-Wechsel nur mit Begründung "
+                       "(Feld „Begründung“ ausfüllen).")
+    if ziel == "abgeschlossen" and gewerk.freigabe_am is None:
+        return False, ("„Abgeschlossen“ ist nur über „Rechnung freigeben“ "
+                       "erreichbar (in beiden Wächter-Modi).")
+    if offen and modus == "sperren" and not begruendung:
         return False, ("Wächter: " + " · ".join(offen)
                        + " – Override nur mit Begründung.")
     alt = gewerk.phase
@@ -1796,8 +2628,13 @@ def phase_wechseln(session: Session, gewerk: Gewerk, ziel: str,
         projektstatus_berechnen(session, projekt)
     text = (f"Phase des Gewerks {gewerk.sparte} geändert: "
             f"{GEWERK_PHASEN_NAMEN[alt]} → {GEWERK_PHASEN_NAMEN[ziel]}")
-    if offen and begruendung:
+    if offen and modus == "sperren":
+        # Verhalten wie bisher: Override mit Begründung
         text += f" – trotz offener Punkte: {begruendung} ({' · '.join(offen)})"
+    elif offen:
+        text += f" – mit offenen Punkten: {' · '.join(offen)}"
+        if begruendung:
+            text += f" – Begründung: {begruendung}"
     elif begruendung:
         text += f" – Begründung: {begruendung}"
     verlauf(session, gewerk.projekt_id, text, benutzer=benutzer,
@@ -1810,7 +2647,11 @@ def phase_wechseln(session: Session, gewerk: Gewerk, ziel: str,
              gewerk.elektroplaner_id],
             f"{projekt.nummer} {gewerk.sparte}: {GEWERK_PHASEN_NAMEN[ziel]}",
             f"/projektierung/projekt/{projekt.id}", art="phase")
-    return True, f"Gewerk {gewerk.sparte}: {GEWERK_PHASEN_NAMEN[ziel]}."
+    meldung = f"Gewerk {gewerk.sparte}: {GEWERK_PHASEN_NAMEN[ziel]}."
+    if offen and modus == "warnen":
+        meldung += (f" {len(offen)} offene{'r' if len(offen) == 1 else ''} "
+                    f"Punkt{'' if len(offen) == 1 else 'e'} im Verlauf vermerkt.")
+    return True, meldung
 
 
 def rechnung_freigeben(session: Session, gewerk: Gewerk, restarbeiten: str,
@@ -2001,3 +2842,89 @@ def altbestand_migrieren(session: Session) -> list[str]:
         return [f"Projektierung (v11): {projekte_neu} Projekte und {gewerke_neu} "
                 "Gewerke aus dem Altbestand angelegt (Status Angenommen)"]
     return []
+
+
+# --- v28 (PLAN_PROJ_V6 Phasen 133/135): Datenmigration ------------------------------
+
+def migration_v28(session: Session) -> list[str]:
+    """Von migrate.py aufgerufen (idempotent, committet nicht selbst):
+    1. `projekt_termine.zweck` für Montagetermine ohne Zweck: wp / elektro /
+       sub je nachdem, mit welchem Zuweisungsfeld des Gewerks (`wp_team_id` /
+       `elektro_team_id` / `sub_team_id`) `team_id` übereinstimmt, sonst wp.
+    2. Besetzung je Termin: für Termine mit Team ohne Besetzung die Mitglieder
+       aus `team_mitglieder` eintragen.
+    3. Bedingungen (`sichtbar_wenn`) an bestehenden Aufgaben aus der Logik
+       nachtragen (Altbestand vor v28 trägt nur `<paket>.<nr>=`); die Statuswerte
+       bleiben unverändert – „entfällt“ setzt erst der nächste Nachzieh-Lauf
+       (abhaengige_pruefen) [ANNAHME]. Zweiter Lauf: keine Meldungen."""
+    meldungen: list[str] = []
+    # 1. zweck
+    gewerke = {g.id: g for g in session.query(Gewerk)}
+    zweck_neu = 0
+    for t in (session.query(ProjektTermin)
+              .filter(ProjektTermin.typ == "montage",
+                      ProjektTermin.zweck == "")):
+        g = gewerke.get(t.gewerk_id)
+        zweck = "wp"
+        if g is not None and t.team_id:
+            if t.team_id == g.elektro_team_id and t.team_id != g.wp_team_id:
+                zweck = "elektro"
+            elif t.team_id == g.sub_team_id and t.team_id not in (g.wp_team_id,
+                                                                  g.elektro_team_id):
+                zweck = "sub"
+        t.zweck = zweck
+        zweck_neu += 1
+    if zweck_neu:
+        session.flush()
+        meldungen.append(f"Projektierung V6: {zweck_neu} Montagetermine mit Zweck "
+                         "(wp/elektro/sub) belegt")
+    # 2. Besetzung aus Team-Mitgliedern
+    mit_besetzung = {z[0] for z in session.query(TerminBesetzung.termin_id).distinct()}
+    mitglieder: dict[int, list[int]] = {}
+    for m in session.query(TeamMitglied).order_by(TeamMitglied.id):
+        mitglieder.setdefault(m.team_id, []).append(m.benutzer_id)
+    besetzt = 0
+    for t in (session.query(ProjektTermin)
+              .filter(ProjektTermin.team_id.isnot(None)).order_by(ProjektTermin.id)):
+        if t.id in mit_besetzung:
+            continue
+        ids = mitglieder.get(t.team_id, [])
+        if not ids:
+            continue
+        for bid in dict.fromkeys(ids):
+            session.add(TerminBesetzung(termin_id=t.id, benutzer_id=bid))
+        besetzt += 1
+    if besetzt:
+        session.flush()
+        meldungen.append(f"Projektierung V6: Besetzung für {besetzt} Termine aus den "
+                         "Team-Mitgliedern übernommen")
+    # 3. Bedingungen an bestehenden Aufgaben nachtragen
+    try:
+        from app import projektierung_logik
+        logik = projektierung_logik.hole_logik(session)
+    except Exception:
+        logik = None
+    if logik is not None and not logik.fehler:
+        instanzen = {i.id: i for i in session.query(AufgabenpaketInstanz)
+                     .filter(AufgabenpaketInstanz.deaktiviert_am.is_(None),
+                             AufgabenpaketInstanz.version != "v1")}
+        nachgetragen = 0
+        for a in (session.query(Aufgabe)
+                  .filter(Aufgabe.sichtbar_wenn == "",
+                          Aufgabe.paket_instanz_id.isnot(None))):
+            instanz = instanzen.get(a.paket_instanz_id)
+            paket = logik.pakete.get(instanz.paket_key) if instanz is not None else None
+            if paket is None:
+                continue
+            schritt = next((s for s in paket.schritte if s.nr == a.reihenfolge), None)
+            if schritt is None:
+                continue
+            bedingung = _laufzeit_bedingung(getattr(schritt, "sichtbar_wenn", ""))
+            if bedingung:
+                a.sichtbar_wenn = bedingung
+                nachgetragen += 1
+        if nachgetragen:
+            session.flush()
+            meldungen.append(f"Projektierung V6: Bedingung (sichtbar_wenn) an "
+                             f"{nachgetragen} bestehenden Aufgaben aus der Logik nachgetragen")
+    return meldungen

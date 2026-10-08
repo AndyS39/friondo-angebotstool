@@ -242,7 +242,8 @@ def kontaktstatus(session: Session, vorgang: Vorgang, anrufe: list[LeadAktivitae
                           "faellig" if vorgang.naechste_aktion_am <= jetzt else ""))
         letzte_stufe = max((s.versuch_nr for s in logik.kaskade if s.letzter), default=0)
         if letzte_stufe and n + 1 >= letzte_stufe and vorgang.lead_phase != "nicht_erreicht":
-            teile.append(("letzter Versuch der Kaskade – danach „Nicht erreicht“ + Nurture-Mail",
+            # v29 (Phase 142): Nurture entfällt – die letzte Stufe endet mit disqualifiziert
+            teile.append(("letzter Versuch der Kaskade – danach „Nicht erreicht“ (Mail Disqualifiziert)",
                           "faellig"))
     if vorgang.eingang_art == "monday":
         teile.append(("Terminierung in monday – hier nur Verfolgung", "dezent"))
@@ -537,16 +538,15 @@ def anruf_vorschlag(session: Session, vorgang: Vorgang,
     maximal = kern.versuche_max(session)
     gesperrt = versuche_gesperrt(session, vorgang)
     letzte = stufe is None or stufe.letzter or naechste_nr >= maximal
-    aktion = (stufe.aktion if stufe is not None else "mail_disqualifiziert") or "keine"
-    if gesperrt:
+    aktion = (stufe.aktion if stufe is not None else logik.nach_letztem()) or "keine"
+    if gesperrt or letzte:
+        # v29 (Phase 142): nach dem letzten Versuch keine Wiedervorlage mehr
+        # (die frühere Nurture-Mail +30 Tage entfällt)
         zeitpunkt = None
-    elif letzte:
-        # kaskade_anwenden: Phase Nicht erreicht, Wiedervorlage +30 Tage (Nurture)
-        zeitpunkt = jetzt + timedelta(days=30)
     else:
         zeitpunkt = kern.kaskade_zeitpunkt(session, stufe.wiedervorlage_nach, jetzt)
     return {"zeitpunkt": zeitpunkt, "stufe": naechste_nr, "stufen": logik.letzte_stufe(),
-            "regel": stufe.wiedervorlage_nach if stufe is not None else "+30d",
+            "regel": stufe.wiedervorlage_nach if stufe is not None else "",
             "aktion": aktion, "letzte": letzte, "gesperrt": gesperrt,
             "versuche_max": maximal}
 
@@ -648,25 +648,27 @@ def versuche_fuer_punkte(session: Session, anrufe: list, benutzer_namen: dict | 
 #   Stufe 3              keine
 #   Stufe 4              mail_nicht_erreicht   → Vorlage nicht_erreicht, sofort geplant
 #   Stufe 5 (letzter)    mail_disqualifiziert → Vorlage disqualifiziert sofort, Phase
-#                        Nicht erreicht, Vorlage nurture in 30 Tagen (Versand nur mit
-#                        einwilligung_werbung); naechste_aktion_am wird geleert
+#                        Nicht erreicht; naechste_aktion_am wird geleert. v29
+#                        (PLAN_LEAD_V4 Phase 142): Nurture entfällt – Spalte
+#                        nach_letztem (Standard mail_disqualifiziert) ist die
+#                        einzige Aktion nach dem letzten Versuch, keine Mail +30 Tage
 # Kein Interesse (Unqualifiziert) löst KEINE Kundenmail aus (Bestand); Mailbox/Besetzt
 # zählen wie Nicht erreicht. Ab versuche_max sind die drei Ergebnisse gesperrt – die
-# Kaskade kann nicht erneut ausgeschöpft werden (vorher: jeder weitere Versuch plante
-# erneut Nurture). Terminstatus-Kopplung (Review 27.09.) greift in
-# lead_mail.eintrag_verarbeiten nur für terminbestaetigung/terminerinnerung mit
-# termin_id; vorgangsbezogene Mails (nicht_erreicht, disqualifiziert, nurture) schützt
+# Kaskade kann nicht erneut ausgeschöpft werden. Terminstatus-Kopplung (Review 27.09.)
+# greift in lead_mail.eintrag_verarbeiten nur für terminbestaetigung/terminerinnerung
+# mit termin_id; vorgangsbezogene Mails (nicht_erreicht, disqualifiziert) schützt
 # dieser Abschnitt: kein zweiter OFFENER Eintrag gleicher Vorlage je Vorgang.
 # Alle Mails laufen über kern.mail_planen → Warteschlange → Sendesperre im Demo.
 
 def mail_bereits_geplant(session: Session, vorgang_id: int, vorlage_key: str) -> bool:
-    """Gibt es für den Vorgang schon einen OFFENEN Eintrag (status geplant,
-    ohne Termin-Bezug) derselben Vorlage? Vor kern.mail_planen prüfen."""
+    """Gibt es für den Vorgang schon einen OFFENEN Eintrag (status geplant oder
+    v29 wartet_adresse, ohne Termin-Bezug) derselben Vorlage? Vor
+    kern.mail_planen prüfen."""
     from app.models import KommunikationLog
     return (session.query(KommunikationLog)
             .filter(KommunikationLog.vorgang_id == vorgang_id,
                     KommunikationLog.vorlage_key == vorlage_key,
-                    KommunikationLog.status == "geplant",
+                    KommunikationLog.status.in_(("geplant", "wartet_adresse")),
                     KommunikationLog.termin_id.is_(None))
             .count()) > 0
 
@@ -704,25 +706,13 @@ def doppelversand_bereinigen(session: Session, vorgang_id: int) -> int:
     return anzahl
 
 
-def nurture_verschieben(session: Session, vorgang: Vorgang, zeitpunkt: datetime) -> int:
-    """Nurture-Mail (geplant, ohne Termin) auf einen Zeitpunkt legen. v25: von
-    POST /anruf/{id} nicht mehr aufgerufen (kein wiedervorlage_am mehr) –
-    bleibt für manuelle Wiedervorlagen (Kartei) nutzbar."""
-    from app.models import KommunikationLog
-    anzahl = 0
-    for eintrag in (session.query(KommunikationLog)
-                    .filter(KommunikationLog.vorgang_id == vorgang.id,
-                            KommunikationLog.vorlage_key == "nurture",
-                            KommunikationLog.status == "geplant",
-                            KommunikationLog.termin_id.is_(None))):
-        eintrag.geplant_am = zeitpunkt
-        anzahl += 1
-    return anzahl
-
+# v29 (PLAN_LEAD_V4 Phase 142): nurture_verschieben() ist entfallen (Nurture-Mail
+# +30 Tage gibt es nicht mehr; der Aufrufer POST /anruf/{id} nutzte sie seit v25 nicht).
 
 # Vorgangsbezogene Kundenmails der Kaskade (ohne Termin-Bezug): ihr Anlass
 # entfällt, sobald der Kunde erreicht ist, zurückrufen will oder absagt.
-VORGANGS_MAILS = ("nicht_erreicht", "disqualifiziert", "nurture")
+# v29: ohne nurture (Vorlage ausgeblendet; Altbestand storniert die Migration).
+VORGANGS_MAILS = ("nicht_erreicht", "disqualifiziert")
 
 
 def offene_mails_stornieren(session: Session, vorgang_id: int,
@@ -732,8 +722,7 @@ def offene_mails_stornieren(session: Session, vorgang_id: int,
     Terminstatus-Kopplung vom 27.09.): offene Einträge (status geplant, ohne
     Termin) der Kaskaden-Vorlagen stornieren, wenn der Kunde erreicht wurde,
     einen Rückruf wünscht oder kein Interesse hat – sonst ginge „Wir haben Sie
-    leider nicht erreicht“ bzw. die Nurture-Mail nach dem Gespräch raus.
-    Liefert die Anzahl der Stornos."""
+    leider nicht erreicht“ nach dem Gespräch raus. Liefert die Anzahl der Stornos."""
     from app.models import KommunikationLog
     anzahl = 0
     for eintrag in (session.query(KommunikationLog)
@@ -816,7 +805,10 @@ def faellige_wiedervorlagen_melden(session: Session, jetzt: datetime | None = No
             empfaenger = leitung
             text += " – ohne Leadmanager"
         if empfaenger:
-            kern.benachrichtigen(session, empfaenger, text, f"/lead-management/lead/{v.id}")
+            # v29 (Phase 141): Glocken-Art wiedervorlage (standardmäßig gesperrt) –
+            # die Dedup-Aktivität unten bleibt, damit die Fälligkeit nur einmal zählt
+            kern.benachrichtigen(session, empfaenger, text, f"/lead-management/lead/{v.id}",
+                                 art="wiedervorlage")
         kern.aktivitaet(session, v.id, "system",
                         f"{WV_GEMELDET_TEXT} ({v.naechste_aktion_am.strftime('%d.%m.%Y %H:%M')})"
                         + (f" an {len(empfaenger)} Empfänger" if empfaenger else " – kein Empfänger"),

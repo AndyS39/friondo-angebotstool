@@ -24,7 +24,7 @@ from unittest import mock
 
 from app import (ablauf_pruefung, benachrichtigungen, betrieb, config, db,
                  geocoding, graph_versand, lead_anrufliste, lead_mail,
-                 lead_parser, lead_todos, leadmanagement, mail_sync,
+                 lead_mail_abruf, lead_parser, lead_todos, leadmanagement, mail_sync,
                  monday_sync, scheduler)
 from app.db import init_db
 from app.models import (Angebot, GeocodeCache, KommunikationLog, Kunde, Lead,
@@ -32,16 +32,20 @@ from app.models import (Angebot, GeocodeCache, KommunikationLog, Kunde, Lead,
                         Vorgang, VotTermin)
 
 PRAEFIX = "V27A"
+# v29 (PLAN_LEAD_V4 Phase 142): zehnter Modul-Lauf lead-mail-abruf (Antworten und
+# Bounces aus termin@, 120 s) – mit den vier v27-Läufen aus betrieb sind es 14
 ACHT = {"monday-sync", "mail-sync", "ablauf-pruefung", "benachrichtigungen",
         "lead-parser", "leadmanagement", "geocoding", "lead-mail",
-        "mail-ausgang"}   # v27: Ausgangs-Warteschlange (benachrichtigungen.scheduler_starten)
+        "mail-ausgang",   # v27: Ausgangs-Warteschlange (benachrichtigungen.scheduler_starten)
+        "lead-mail-abruf"}   # v29: Lauf lead-mail-abruf (lead_mail_abruf.scheduler_starten)
 MODULE = (monday_sync, mail_sync, ablauf_pruefung, benachrichtigungen,
-          lead_parser, leadmanagement, geocoding, lead_mail)
+          lead_parser, leadmanagement, geocoding, lead_mail, lead_mail_abruf)
 ERWARTET = {   # Name: (Intervall s, Startverzögerung s)
     "monday-sync": (900, 0), "mail-sync": (900, 0), "ablauf-pruefung": (86400, 120),
     "benachrichtigungen": (300, 180), "lead-parser": (120, 240),
     "leadmanagement": (300, 200), "geocoding": (300, 300), "lead-mail": (60, 150),
     "mail-ausgang": (60, 90),
+    "lead-mail-abruf": (120, 270),   # v29
 }
 
 

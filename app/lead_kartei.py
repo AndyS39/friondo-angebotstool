@@ -344,10 +344,12 @@ def terminierung_ausfuehren(session: Session, vorgang: Vorgang, benutzer=None) -
                     + ("geschrieben" if kalender_ok else "nicht geschrieben (Sync aus)")
                     + ", Phase Terminiert.", benutzer=benutzer)
     if termin.ad_id:
+        # v29 (PLAN_LEAD_V4 Phase 141): Glocken-Art „terminaenderung“ – standardmäßig
+        # abgeschaltet (glocke_lead_arten); die Aktivität bleibt in der Timeline
         kern.benachrichtigen(session, [termin.ad_id],
                              f"VOT-Termin terminiert {termin.beginn.strftime('%d.%m. %H:%M') if termin.beginn else ''}: "
                              f"{kunde.anzeige_name if kunde else '?'}, {kunde.ort if kunde and kunde.ort else '?'}",
-                             f"/lead-management/lead/{vorgang.id}")
+                             f"/lead-management/lead/{vorgang.id}", art="terminaenderung")
     session.flush()
     return True, ("Terminiert: Terminbestätigung geplant, Kalender "
                   + ("geschrieben" if kalender_ok else "übersprungen (Sync aus)")
@@ -749,6 +751,11 @@ def feld_speichern(session: Session, vorgang: Vorgang, kunde: Kunde, feld: str, 
     label = FELD_LABELS.get(feld)
     if label is None:
         return {"ok": False, "wert": "", "meldung": "Feld unbekannt.", "geaendert": False}
+    if feld == "leadmanager_id" and lead_v2.hv_sicht(session, benutzer):
+        # v29 (Phase 140): Handelsvertreter sehen das Feld Innendienst nur als Anzeige
+        return {"ok": False, "wert": str(vorgang.leadmanager_id or ""),
+                "meldung": "Innendienst wird vom Innendienst zugewiesen (nur Anzeige).",
+                "geaendert": False}
     if kunde is None and feld not in ("leadmanager_id", "ad_id"):
         return {"ok": False, "wert": "", "meldung": "Kunde fehlt.", "geaendert": False}
 
@@ -865,6 +872,13 @@ def feld_speichern(session: Session, vorgang: Vorgang, kunde: Kunde, feld: str, 
         except Exception:
             pass
     session.flush()
+    if feld == "email":
+        # v29 (PLAN_LEAD_V4 Phase 142, Vertrag L2): neue Adresse → email_status („E-Mail
+        # falsch“) zurücksetzen und wartende Warteschlangen-Einträge (wartet_adresse) freigeben
+        from app import lead_mail
+        freigegeben = lead_mail.adresse_geaendert(session, vorgang)
+        if freigegeben:
+            meldung = (meldung or "Gespeichert.") + f" {freigegeben} wartende Mail(s) freigegeben."
     return ok(neu_vgl, meldung or "Gespeichert.")
 
 
@@ -943,6 +957,16 @@ def vorschlaege_cache_leeren(vorgang_id: int) -> None:
 
 
 # --- Kontext für das Template --------------------------------------------------------
+
+def _vorschlaege_anzahl(session: Session) -> int:
+    """v29 (PLAN_LEAD_V4 Phase 143): Anzahl der Vorschläge im Block Termine
+    (Parameter vorschlaege_anzahl, Standard 3) – dieselbe Zahl wie im Assistenten."""
+    try:
+        from app import lead_termin
+        return lead_termin.vorschlaege_anzahl(session)
+    except Exception:
+        return 3
+
 
 def _ad_auswahl(session: Session, vorgang: Vorgang, kunde: Kunde) -> list:
     """Außendienst-Dropdown: alle aktiven AD; Handelsvertreter-Einträge mit
@@ -1034,6 +1058,7 @@ def kartei_kontext(session: Session, vorgang: Vorgang, benutzer, readonly: bool 
         "telefon_href": lead_anrufliste.tel_href(kunde.telefon) if kunde and kunde.telefon else "",
         "vorschlaege": vorschlaege_zustand(session, vorgang, kunde, benutzer),
         "vorschlaege_texte": VORSCHLAEGE_TEXTE,
+        "vorschlaege_anzahl": _vorschlaege_anzahl(session),   # v29 (Phase 143): 3 statt 5
         "feld_url": f"/lead-management/lead/{vorgang.id}/feld",
         "vorschlaege_url": f"/lead-management/lead/{vorgang.id}/termin/vorschlaege.json",
         "buchen_url": f"/lead-management/lead/{vorgang.id}/termin",

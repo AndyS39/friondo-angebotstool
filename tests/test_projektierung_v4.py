@@ -517,18 +517,35 @@ class Phase92Bza(Basis):
     def test_ungefoerdert_entfaellt(self):
         from app import bza as bza_modul
         from app.routers.projektierung import _aufgabe_zeile_html
+        # v28 (PLAN_PROJ_V6 Phase 133): das Blatt Aufgabenpakete trägt am BzA-Schritt
+        # „sichtbar_wenn = foerderung:ja“ – ein ungefördertes Tool-Angebot bekommt
+        # die Aufgabe gar nicht mehr. Der Knopf „entfällt (nicht gefördert)“ gilt für
+        # TAIFUN-Aufträge mit unbekanntem Förderstatus (Schritt bleibt sichtbar) und
+        # schreibt jetzt einen Grund (Route …/entfaellt).
         g = self.gewerk_neu()               # Angebot ohne KfW-Daten
         self.assertIs(bza_modul.ist_gefoerdert(self.s, g), False)
-        zeile = _aufgabe_zeile_html(self.s, self.bza_aufgabe(g))
+        self.assertEqual([a for a in self.aufgaben(g, "auftragseingang")
+                          if a.aktion_typ == "bza"], [])
+        taifun = self.gewerk_neu()
+        angebot = self.s.get(Angebot, taifun.angebot_id)
+        angebot.extern, angebot.kfw_gefoerdert = True, ""
+        self.s.flush()
+        self.assertIsNone(bza_modul.ist_gefoerdert(self.s, taifun))
+        # nachgezogen: BzA (Auftragseingang 4) + BnD (Freigabe 2), beide foerderung:ja
+        self.assertEqual(kern.steckbrief_schritte_nachziehen(self.s, taifun), 2)
+        zeile = _aufgabe_zeile_html(self.s, self.bza_aufgabe(taifun))
         self.assertIn("entfällt (nicht gefördert)", zeile)
-        self.assertNotIn("dlg-bza-", zeile)
+        self.assertIn("Förderstatus unbekannt (TAIFUN)", zeile)
+        self.assertIn("/entfaellt", zeile)
         # Portal-URL fehlt → Hinweis-Button zu den Einstellungen (gefördert)
         g2 = self.gefoerdert()
         kern.parameter_setzen(self.s, "url_bza_portal", "")
         self.s.commit()
         zeile = _aufgabe_zeile_html(self.s, self.bza_aufgabe(g2))
         self.assertIn("/parametrierung/projektierung-einstellungen", zeile)
-        self.assertNotIn('name="status" value="entfaellt"', zeile)   # kein Entfällt-Knopf
+        # kein Entfällt-Knopf (der Text steht nur in der Beschreibung der Aufgabe)
+        self.assertNotIn('value="nicht gefördert"', zeile)
+        self.assertNotIn("Förderstatus unbekannt", zeile)
 
 
 # --- Phase 93 ---------------------------------------------------------------
@@ -694,9 +711,14 @@ class Phase93Ugl(Basis):
             saetze = text.split("\r\n")
             self.assertEqual(saetze[0][105:113], "20261012")
             self.assertIn("Kran vor Ort", text)
-            # 047 × 2: Dämpfer-Set 2 je Einheit → 4
-            daempfer = [z for z in saetze if z.startswith("POA") and "BEISPIEL-108001" in z][0]
-            self.assertEqual(daempfer[38:49], "00000004000")
+            # 047 × 2 → erste Stücklisten-Zeile der Position mit doppelter Menge
+            # (v28 Phase 139: Blatt aus docs/stuecklisten_v26.csv – statt der
+            # BEISPIEL-Zeile die echte Zuordnung der Position 047)
+            teil = projektierung_logik.hole_logik(self.s).stuecklisten["047"][0]
+            zeile = [z for z in saetze if z.startswith("POA")
+                     and z[23:38].strip() == teil.lieferant_artnr][0]
+            self.assertEqual(zeile[38:49],
+                             f"{int(round(2 * teil.menge_je_einheit * 1000)):011d}")
             r = self.client.post(f"/projektierung/gewerk/{g.id}/ugl", data={})
             self.assertIn(f'filename="{projekt.nummer}-2.ugl"', r.headers["content-disposition"])
             self.assertIn("Nachbestellung", r.content.decode(ugl.ZEICHENSATZ))

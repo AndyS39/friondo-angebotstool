@@ -44,9 +44,14 @@
             <label class="{{ feldklasse('telefon') }} lk-mit-link" data-feld-wrap="telefon"><span>Telefon{{ stern('telefon') }}
                     {% if kunde.telefon %}<a href="{{ telefon_href }}" class="lk-feld-link" title="Anrufen (Click-to-Call, Stoppuhr startet)" data-anruf-link>{{ symbol('telefon') }} anrufen</a>{% endif %}</span>
                 <input type="tel" name="telefon" data-feld="telefon" value="{{ kunde.telefon or '' }}" maxlength="50" placeholder="0203 …"><small class="lk-feld-status" aria-live="polite"></small></label>
-            <label class="{{ feldklasse('email') }} lk-mit-link" data-feld-wrap="email"><span>E-Mail{{ stern('email') }}
+            {#- v29 (Phase 142, Vertrag L2): E-Mail rot umrandet + Tooltip bei vorgang.email_status = ungueltig #}
+            {% set email_ungueltig = (vorgang.email_status or '') == 'ungueltig' %}
+            <label class="{{ feldklasse('email') }} lk-mit-link{{ ' lk-feld-email-ungueltig' if email_ungueltig }}" data-feld-wrap="email"
+                   {% if email_ungueltig %}title="E-Mail falsch: {{ vorgang.email_status_grund or 'Unzustellbarkeitsbericht' }}"{% endif %}><span>E-Mail{{ stern('email') }}
+                    {% if email_ungueltig %}<span class="lm-mail-label" title="{{ vorgang.email_status_grund or 'Unzustellbarkeitsbericht' }}">E-Mail falsch</span>{% endif %}
                     {% if kunde.email %}<a href="mailto:{{ kunde.email }}" class="lk-feld-link" title="E-Mail im Mailprogramm">{{ symbol('brief') }} schreiben</a>{% endif %}</span>
-                <input type="email" name="email" data-feld="email" value="{{ kunde.email or '' }}" maxlength="200"><small class="lk-feld-status" aria-live="polite"></small></label>
+                <input type="email" name="email" data-feld="email" value="{{ kunde.email or '' }}" maxlength="200"
+                       {% if email_ungueltig %}title="E-Mail falsch: {{ vorgang.email_status_grund or 'Unzustellbarkeitsbericht' }} – Adresse korrigieren, danach läuft die Warteschlange weiter"{% endif %}><small class="lk-feld-status" aria-live="polite"></small></label>
             <label class="{{ feldklasse('strasse') }}" data-feld-wrap="strasse"><span>Straße{{ stern('strasse') }}</span>
                 <input type="text" name="strasse" data-feld="strasse" value="{{ kunde.strasse or '' }}" maxlength="200"><small class="lk-feld-status" aria-live="polite"></small></label>
             <div class="lk-feld-reihe">
@@ -95,8 +100,9 @@
                 <span>Innendienst</span>
                 <div class="lk-zuweisung">
                     <span class="lk-avatar klein" data-avatar="leadmanager_id" title="{{ id_person.name if id_person else 'nicht zugewiesen' }}">{{ initialen_fn(id_person.name) if id_person else '–' }}</span>
-                    {% if readonly %}
-                        <span>{{ id_person.name if id_person else '–' }}</span>
+                    {#- v29 (Phase 140): Handelsvertreter sehen Innendienst/Leadmanager nur als Anzeige #}
+                    {% if readonly or ist_hv %}
+                        <span title="{{ 'Wird vom Innendienst zugewiesen' if ist_hv else '' }}">{{ id_person.name if id_person else '–' }}</span>
                     {% else %}
                         <select name="leadmanager_id" data-feld="leadmanager_id" aria-label="Innendienst zuweisen">
                             <option value="">– nicht zugewiesen –</option>
@@ -133,8 +139,9 @@
                 {% endif %}
             </div>
 
+            {#- v29 (Phase 141): Eingangsdatum im Format „TT.MM.JJJJ, HH:MM Uhr“ (Filter de_datum_zeit) #}
             <div class="lk-feld lk-anzeige"><span>Eingangsdatum</span>
-                <div class="lk-wert">{{ vorgang.eingang_am.strftime('%d.%m.%Y %H:%M') if vorgang.eingang_am else '–' }}
+                <div class="lk-wert" data-eingang>{{ vorgang.eingang_am | de_datum_zeit if vorgang.eingang_am else '–' }}
                     <small class="dezent">({{ vorgang.eingang_art or '–' }})</small></div></div>
             <div class="lk-feld lk-anzeige"><span>Wunschzeiten <small class="dezent">(für den Terminassistenten)</small></span>
                 <div class="lk-wert">{{ wunschzeiten | join(', ') if wunschzeiten else '–' }}</div></div>

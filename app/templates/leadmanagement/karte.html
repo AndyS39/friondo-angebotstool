@@ -1,21 +1,27 @@
 {% extends "base.html" %}
-{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "leadmanagement/_nav.html" import lm_nav with context %}
 
 {% block titel %}Karte – Lead-Management{% endblock %}
 
 {% block mainklasse %}breit{% endblock %}
 
+{# v12: Karte (Leaflet lokal, OSM-Kacheln). v29 (PLAN_LEAD_V4 Phase 140):
+   Handelsvertreter sehen ausschließlich Pins ihrer eigenen Leads und Termine
+   (server-seitig in /karte/daten), die Filter Leadmanager/Vertriebler sind
+   ausgeblendet, Phase und Sparte bleiben; Kartenmittelpunkt = Schwerpunkt der
+   eigenen Leads, sonst Startadresse des HV-Profils (mittelpunkt). #}
 {% block inhalt %}
 {{ lm_nav('karte') }}
 <link rel="stylesheet" href="/static/leaflet/leaflet.css">
 <div class="seitenkopf">
     <h1>Karte</h1>
+    {% if ist_hv %}<span class="dezent">Handelsvertreter-Sicht: nur eigene Leads und Termine</span>{% endif %}
     <div class="aktionen">
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-<form id="kartefilter" class="suchleiste">
+<form id="kartefilter" class="suchleiste" data-hv="{{ '1' if ist_hv else '' }}">
     <label class="kontrollfeld">Phase
         <select name="phase">
             <option value="">offene (neu … terminiert)</option>
@@ -27,28 +33,35 @@
     <label class="kontrollfeld">Sparte
         <select name="sparte">
             <option value="">alle</option>
-            {% for s in ('WP', 'PV', 'KL', 'WB') %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+            {% for s in ('WP', 'PV', 'KL', 'WB', 'GW') %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
         </select>
     </label>
+    {% if not ist_hv %}
     <label class="kontrollfeld">AD (Termine)
         <select name="ad_id">
             <option value="">alle</option>
             {% for ad in alle_ad %}<option value="{{ ad.id }}">{{ ad.name }}</option>{% endfor %}
         </select>
     </label>
+    {% endif %}
     <label class="kontrollfeld">Termine (Tage)
         <input type="number" name="tage" value="60" style="width:4rem"></label>
     <button class="knopf klein" type="submit">Aktualisieren</button>
     <span class="dezent">Pins: Leads (Farbe je Phase, Größe je Klasse) ·
-        Termine · AD-Start. Kacheln © OpenStreetMap.</span>
+        Termine · {{ 'eigener Start' if ist_hv else 'AD-Start' }}. Kacheln © OpenStreetMap.</span>
 </form>
 
 <div id="karte" style="height:70vh; border:1px solid var(--grau-linie);
-     border-radius:8px"></div>
+     border-radius:8px" data-lat="{{ mittelpunkt.lat if mittelpunkt else '' }}" data-lon="{{ mittelpunkt.lon if mittelpunkt else '' }}"
+     data-zoom="{{ mittelpunkt.zoom if mittelpunkt else '' }}"></div>
 
 <script src="/static/leaflet/leaflet.js"></script>
 <script>
-const karte = L.map('karte').setView([51.4344, 6.7623], 10);   // Duisburg
+const kartenDiv = document.getElementById('karte');
+const startLat = parseFloat(kartenDiv.dataset.lat) || 51.4344;   // Duisburg
+const startLon = parseFloat(kartenDiv.dataset.lon) || 6.7623;
+const startZoom = parseInt(kartenDiv.dataset.zoom, 10) || 10;
+const karte = L.map('karte').setView([startLat, startLon], startZoom);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende'

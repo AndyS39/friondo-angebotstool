@@ -13,10 +13,12 @@
     <div class="t">
         <details>
             <summary>{{ a.titel }}{{ ' *' if a.pflicht }}
+                {# v28 (PLAN_PROJ_V6 Phase 133): Badge „entfällt · <Grund>“ (voller Grund als Tooltip) #}
+                {% if a.status == 'entfaellt' %}<span class="pj-badge pj-entf-badge" title="entfällt{{ ' – ' ~ a.entfaellt_grund if a.entfaellt_grund }}">entfällt{{ ' · ' ~ (a.entfaellt_grund | truncate(40, true)) if a.entfaellt_grund }}</span>{% endif %}
                 <small>{{ benutzer_map[a.verantwortlich_id].name if a.verantwortlich_id in benutzer_map else a.rolle }}
                     {%- if a.status == 'erledigt' and a.erledigt_am %} · erledigt {{ a.erledigt_am.strftime('%d.%m.') }}
                     {%- elif a.status == 'wartet' %} · wartet{{ ' · Frist ' ~ a.wartet_frist_am.strftime('%d.%m.') if a.wartet_frist_am }}
-                    {%- elif a.status == 'entfaellt' %} · entfällt{% endif %}
+                    {%- elif a.status == 'entfaellt' and a.erledigt_am %} · seit {{ a.erledigt_am.strftime('%d.%m.') }}{% endif %}
                     {%- if kommentar_zaehler.get(a.id) %} · 💬 {{ kommentar_zaehler[a.id] }}{% endif %}</small>
             </summary>
             {% if a.beschreibung %}<small>{{ a.beschreibung }}</small>{% endif %}
@@ -39,6 +41,20 @@
                 <input type="hidden" name="gewerk_id" value="{{ g.id }}">
                 <input type="text" name="text" size="22" placeholder="Kommentar zur Aufgabe …">
             </form>
+            {# v28 (PLAN_PROJ_V6 Phase 133): „entfällt“ mit Inline-Grundfeld / „wieder aufnehmen“ #}
+            {% if a.status == 'entfaellt' %}
+            <form method="post" action="/projektierung/aufgabe/{{ a.id }}/wieder-aufnehmen" class="detail" data-pj-ajax>
+                <button class="pj-btn" type="submit" title="Zurück auf „offen“, Grund wird geleert">wieder aufnehmen</button>
+            </form>
+            {% elif a.status != 'erledigt' %}
+            <details class="pj-entf">
+                <summary class="pj-btn" title="Aufgabe mit Grund auf „entfällt“ setzen – zählt dann nicht mehr als offen">entfällt …</summary>
+                <form method="post" action="/projektierung/aufgabe/{{ a.id }}/entfaellt" class="detail" data-pj-ajax>
+                    <input type="text" name="grund" size="26" maxlength="300" required placeholder="Grund (Pflicht)">
+                    <button class="pj-btn" type="submit">entfällt</button>
+                </form>
+            </details>
+            {% endif %}
         </details>
         {# v15 (Phase 78): Aktion je Aufgabentyp #}
         {% if a.aktion_typ == 'auswahl' and a.optionen %}
@@ -133,8 +149,9 @@
             {% endif %}
             {% endif %}
             {% if gefoerdert is not sameas true and a.status != 'entfaellt' %}
-            <form method="post" action="/projektierung/aufgabe/{{ a.id }}/status" data-pj-ajax style="display:inline">
-                <input type="hidden" name="status" value="entfaellt">
+            <form method="post" action="/projektierung/aufgabe/{{ a.id }}/entfaellt" data-pj-ajax style="display:inline">
+                {# v28 (Phase 133): „entfällt“ trägt jetzt einen Grund #}
+                <input type="hidden" name="grund" value="{{ 'Förderstatus unbekannt (TAIFUN)' if gefoerdert is none else 'nicht gefördert' }}">
                 <button class="pj-btn" type="submit"
                         title="{{ 'TAIFUN-Auftrag: Förderstatus unbekannt' if gefoerdert is none else 'Auftrag ohne Förderung' }}">entfällt (nicht gefördert)</button>
             </form>
@@ -165,14 +182,12 @@
         </dialog>
         {% endif %}
         {% elif a.aktion_typ == 'kalender' %}
+        {# v28 (PLAN_PROJ_V6 Phase 135): ein Termin-Dialog, Art aus der Aufgabe vorbelegt #}
+        {% set termin_art_vor = ('elektro' if a.titel.startswith('Elektro') else 'montage') if a.aktion_wert == 'montage'
+                                else (a.aktion_wert if a.aktion_wert in ('feinplanung', 'abnahme', 'sub') else 'sonstige') %}
         <div class="pj-akt">
-            {% if a.aktion_wert == 'montage' %}
             <button class="pj-btn" type="button"
-                    onclick="document.getElementById('dlg-team-{{ g.id }}').showModal()">👥 Team + Termin</button>
-            {% else %}
-            <button class="pj-btn" type="button"
-                    onclick="pjDialog('dlg-termin-{{ g.id }}', '{{ a.aktion_wert or 'sonstige' }}')">📅 Termin</button>
-            {% endif %}
+                    onclick="pjTerminDialog('dlg-termin-{{ g.id }}', '{{ termin_art_vor }}')">{{ '👥 Team + Termin' if a.aktion_wert == 'montage' else '📅 Termin' }}</button>
         </div>
         {% elif a.aktion_typ == 'galerie' %}
         <div class="pj-akt">

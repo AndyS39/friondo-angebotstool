@@ -21,6 +21,8 @@
 <nav class="pe-nav" id="pe-nav" aria-label="Abschnitte">
     <a href="#freigabe">Freigabe &amp; Pilot</a>
     <a href="#vorlauf">Vorlauf-Ampel</a>
+    <a href="#waechter">Board &amp; Wächter</a>
+    <a href="#terminvorschlaege">Terminvorschläge</a>
     <a href="#verantwortliche">Standard-Verantwortliche</a>
     <a href="#mails">Benachrichtigungs-Mails</a>
     <a href="#storno">Storno-Gründe</a>
@@ -84,6 +86,37 @@
             <input type="text" name="vorlauf_gruen_ab_wochen" value="{{ vorlauf_gruen }}" size="4"></label>
         <label>gelb ab … Wochen (darunter rot; unterminiert = rot)
             <input type="text" name="vorlauf_gelb_ab_wochen" value="{{ vorlauf_gelb }}" size="4"></label>
+    </section>
+
+    {# v28 (PLAN_PROJ_V6 Phase 133): Wächter-Modus #}
+    <section class="karte formular pe-abschnitt" id="waechter">
+        <h2>Board &amp; Wächter <small class="dezent">(v28)</small></h2>
+        <label>Wächter-Modus beim Phasenwechsel
+            <select name="waechter_modus">
+                <option value="warnen" {{ 'selected' if waechter_modus != 'sperren' }}>warnen (Standard)</option>
+                <option value="sperren" {{ 'selected' if waechter_modus == 'sperren' }}>sperren</option>
+            </select></label>
+        <p class="dezent">warnen: Phasenwechsel immer möglich, offene Pflichtaufgaben werden
+            angezeigt · sperren: Wechsel nur mit Begründung. Rückwärts-Wechsel brauchen in
+            beiden Modi eine Begründung; Aufgaben können mit Grund auf „entfällt“ gesetzt werden.</p>
+    </section>
+
+    {# v28 (PLAN_PROJ_V6 Phase 135): Terminvorschläge Stufe 1 #}
+    <section class="karte formular pe-abschnitt" id="terminvorschlaege">
+        <h2>Terminvorschläge <small class="dezent">(Stufe 1 – Tool-Daten, v28)</small></h2>
+        <label>Montagedauer Standard (Arbeitstage)
+            <input type="text" name="montage_dauer_tage_standard" value="{{ montage_dauer_tage_standard }}" size="4"></label>
+        <label>Vorlauf (Wochen ab heute, frühester Beginn)
+            <input type="text" name="vorschlag_vorlauf_wochen" value="{{ vorschlag_vorlauf_wochen }}" size="4"></label>
+        <label>Startadresse für Fahrzeiten (ersatzweise, wenn kein Vor-/Nach-Einsatz)
+            <input type="text" name="montage_startadresse" value="{{ montage_startadresse }}" size="60"></label>
+        <label>Stufe 2: Outlook-Frei/Belegt berücksichtigen
+            <select name="vorschlag_outlook">
+                <option value="aus" {{ 'selected' if vorschlag_outlook != 'an' }}>aus (Standard)</option>
+                <option value="an" {{ 'selected' if vorschlag_outlook == 'an' }}>an (wird erst nach Einrichtung des Kalender-Syncs ausgewertet)</option>
+            </select></label>
+        <p class="dezent">Vorschläge beginnen montags, je aktivem Montage-Team die ersten freien
+            Fenster ohne Überschneidung; Fahrzeiten über den Routing-Anbieter des Lead-Moduls.</p>
     </section>
 
     <section class="karte formular pe-abschnitt" id="verantwortliche">
@@ -241,6 +274,16 @@
 <pre class="dezent" style="white-space:pre-wrap">{{ mail_protokoll }}</pre>
 {% else %}
 <p class="dezent">Noch keine Benachrichtigungs-Mail protokolliert.</p>
+{% endif %}
+</section>
+
+{# v28: Verlauf der Parameter-Änderungen (Wächter-Modus u. a.) #}
+<section class="karte pe-abschnitt" id="parameterprotokoll">
+<h2>Protokoll <small class="dezent">(Parameter-Änderungen, letzte 20)</small></h2>
+{% if einstellungs_protokoll %}
+<pre class="dezent" style="white-space:pre-wrap">{{ einstellungs_protokoll }}</pre>
+{% else %}
+<p class="dezent">Noch keine protokollierte Änderung.</p>
 {% endif %}
 </section>
 

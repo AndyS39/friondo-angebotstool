@@ -13,6 +13,12 @@
 # die v23-Liste [[key, sichtbar]] wird weiter gelesen), Standard ohne Anrede/
 # Vorname/Nachname mit fester Spalte „Kundenname“, Spalte Score nur bei
 # lead_v2.score_aktiv.
+# v29 (PLAN_LEAD_V4 Phasen 140–142): Spaltenbreite je Nutzer (Eintrag `breite`
+# in boards_spalten, 60–600 px, Standard = leer; Ziehgriff im Spaltenkopf,
+# lm_boards.js), Rang 0 für Leads mit Mail-Fehler / ungültiger E-Mail (Vertrag
+# mit Agent L2: vorgang.mail_fehler, vorgang.email_status – Zeile ganz oben,
+# rote Labels in der Notiz-Spalte), Sammelaktion „An Handelsvertreter
+# verschieben“ (Ziele aus hv_gruppe_rene/hv_gruppe_simon, Ausschluss F14).
 
 import hashlib
 import json
@@ -104,6 +110,12 @@ EINSTELLUNG_KEY = "boards_spalten"
 # Infoabend, Handelsvertreter – Infoabend/HV nutzen den Hauptboard-Katalog)
 KONFIG_BOARDS = ("hauptboard", "terminiert", "info", "handelsvertreter")
 SORT_RICHTUNGEN = ("auf", "ab")
+# v29 (Phase 141): Spaltenbreite je Nutzer in Pixeln (leer = Standardbreite)
+BREITE_MIN = 60
+BREITE_MAX = 600
+# v29 (Phase 142, Vertrag L2): rote Labels der Notiz-Spalte, Reihenfolge fest
+MAIL_LABEL_UNGUELTIG = "E-Mail falsch"
+MAIL_LABEL_FEHLER = "Mail nicht gesendet"
 
 # Abgeleitete Phasen sind nicht manuell setzbar (Termin/Erfassung/Angebot)
 PHASEN_ABGELEITET = ("terminiert", "erfasst", "angebot", "gewonnen")
@@ -161,10 +173,22 @@ def _benutzer_id(benutzer) -> int:
     return int(getattr(benutzer, "id", benutzer) or 0)
 
 
+def breite_normieren(wert) -> int | None:
+    """v29: Spaltenbreite in Pixeln (60–600) oder None (= Standard)."""
+    if wert in (None, "", 0, "0"):
+        return None
+    try:
+        px = int(float(str(wert).strip()))
+    except (TypeError, ValueError):
+        return None
+    return max(BREITE_MIN, min(BREITE_MAX, px))
+
+
 def _konfig_normieren(konfig) -> dict:
     """Gespeicherte Board-Konfiguration in die v25-Struktur bringen:
-    {"spalten": [{key, sichtbar, name}], "sort": {key, richtung} | None}.
-    Liest die v23-Liste [[key, sichtbar]] bzw. [{key, sichtbar}] weiter."""
+    {"spalten": [{key, sichtbar, name, breite}], "sort": {key, richtung} | None}.
+    Liest die v23-Liste [[key, sichtbar]] bzw. [{key, sichtbar}] weiter;
+    v29: `breite` (px) je Spalte, v25-Einträge ohne Breite = Standard (None)."""
     spalten, sort = [], None
     roh = None
     if isinstance(konfig, dict):
@@ -176,9 +200,11 @@ def _konfig_normieren(konfig) -> dict:
     elif isinstance(konfig, (list, tuple)):
         roh = konfig
     for eintrag in roh or []:
+        breite = None
         try:
             if isinstance(eintrag, dict):
                 key, sichtbar, name = eintrag.get("key"), eintrag.get("sichtbar", True), eintrag.get("name", "")
+                breite = breite_normieren(eintrag.get("breite"))
             else:
                 key, sichtbar = eintrag[0], eintrag[1]
                 name = eintrag[2] if len(eintrag) > 2 else ""
@@ -187,7 +213,7 @@ def _konfig_normieren(konfig) -> dict:
         if not key:
             continue
         spalten.append({"key": str(key), "sichtbar": bool(sichtbar),
-                        "name": str(name or "").strip()[:60]})
+                        "name": str(name or "").strip()[:60], "breite": breite})
     return {"spalten": spalten, "sort": sort}
 
 
@@ -203,7 +229,8 @@ def spalten_fuer(session: Session, benutzer, board: str) -> list[dict]:
     (A-14, v25); unbekannte Keys fallen weg, neue Spalten hängen sich hinten
     an, ‚lead' (Kundenname) bleibt vorn. Je Eintrag: key, titel (Anzeige =
     eigener Name oder Standard), standard (Standardtitel), name (eigener
-    Name oder ''), sichtbar. `benutzer` = Benutzer oder Benutzer-ID."""
+    Name oder ''), sichtbar, breite (px oder None = Standard, v29).
+    `benutzer` = Benutzer oder Benutzer-ID."""
     basis = spalten_basis(board, score=lead_v2.score_aktiv(session))
     titel = {k: t for k, t, _ in basis}
     konfig = spalten_konfig(session, benutzer, board)
@@ -213,10 +240,12 @@ def spalten_fuer(session: Session, benutzer, board: str) -> list[dict]:
         if key in titel and key not in gesehen:
             gesehen.add(key)
             ergebnis.append({"key": key, "titel": sp["name"] or titel[key], "standard": titel[key],
-                             "name": sp["name"], "sichtbar": sp["sichtbar"] or key in SPALTEN_FEST})
+                             "name": sp["name"], "sichtbar": sp["sichtbar"] or key in SPALTEN_FEST,
+                             "breite": sp.get("breite")})
     for key, t, s in basis:
         if key not in gesehen:
-            ergebnis.append({"key": key, "titel": t, "standard": t, "name": "", "sichtbar": s})
+            ergebnis.append({"key": key, "titel": t, "standard": t, "name": "", "sichtbar": s,
+                             "breite": None})
     ergebnis.sort(key=lambda sp: 0 if sp["key"] in SPALTEN_FEST else 1)
     return ergebnis
 
@@ -236,18 +265,21 @@ _BEHALTEN = object()
 
 
 def spalten_speichern(session: Session, benutzer, board: str, liste=_BEHALTEN,
-                      sort=_BEHALTEN, umbenennen=None, zuruecksetzen: bool = False) -> list[dict]:
+                      sort=_BEHALTEN, umbenennen=None, zuruecksetzen: bool = False,
+                      breite=None) -> list[dict]:
     """Konfiguration des Nutzers schreiben (nur dieser Nutzer, je Board):
     liste = [{key, sichtbar, name?}] oder [[key, sichtbar]] in gewünschter
     Reihenfolge (weggelassen = Reihenfolge/Sichtbarkeit bleiben),
     sort = {key, richtung} | None (weggelassen = bleibt), umbenennen =
-    (key, name) mit leer = Standard, zuruecksetzen = alles auf Standard."""
+    (key, name) mit leer = Standard, zuruecksetzen = alles auf Standard,
+    v29: breite = (key, px | None) – None = Standardbreite (Doppelklick)."""
     benutzer_id = _benutzer_id(benutzer)
     gueltig = {k for k, _, _ in spalten_basis(board, score=True)}
     alt = spalten_konfig(session, benutzer_id, board)
     namen = {sp["key"]: sp["name"] for sp in alt["spalten"] if sp["name"]}
+    breiten = {sp["key"]: sp.get("breite") for sp in alt["spalten"] if sp.get("breite")}
     if zuruecksetzen:
-        neu_spalten, neu_sort, namen = [], None, {}
+        neu_spalten, neu_sort, namen, breiten = [], None, {}, {}
     else:
         neu_sort = alt["sort"]
         if liste is _BEHALTEN:
@@ -258,7 +290,8 @@ def spalten_speichern(session: Session, benutzer, board: str, liste=_BEHALTEN,
                 if sp["key"] in gueltig and sp["key"] not in [n["key"] for n in neu_spalten]:
                     neu_spalten.append({"key": sp["key"],
                                         "sichtbar": sp["sichtbar"] or sp["key"] in SPALTEN_FEST,
-                                        "name": sp["name"] or namen.get(sp["key"], "")})
+                                        "name": sp["name"] or namen.get(sp["key"], ""),
+                                        "breite": sp.get("breite") or breiten.get(sp["key"])})
         if sort is not _BEHALTEN:
             if isinstance(sort, dict) and sort.get("key") in gueltig:
                 neu_sort = {"key": str(sort["key"]),
@@ -277,12 +310,29 @@ def spalten_speichern(session: Session, benutzer, board: str, liste=_BEHALTEN,
                 for sp in neu_spalten:
                     if sp["key"] == key:
                         sp["name"] = name
+        if breite:
+            # v29 (Phase 141): Breite einer Spalte setzen (px) oder auf Standard (None)
+            key, px = breite
+            px = breite_normieren(px)
+            if key in gueltig:
+                if key not in [n["key"] for n in neu_spalten]:
+                    for k, _, s in spalten_basis(board, score=True):
+                        if k not in [n["key"] for n in neu_spalten]:
+                            neu_spalten.append({"key": k, "sichtbar": s, "name": namen.get(k, ""),
+                                                "breite": breiten.get(k)})
+                for sp in neu_spalten:
+                    if sp["key"] == key:
+                        sp["breite"] = px
     alle = lead_v2.einstellung_holen(session, benutzer_id, EINSTELLUNG_KEY, {}) or {}
     if not isinstance(alle, dict):
         alle = {}
-    alle[board] = {"spalten": [{"key": sp["key"], "sichtbar": bool(sp["sichtbar"]),
-                                "name": sp.get("name", "")} for sp in neu_spalten],
-                   "sort": neu_sort}
+    gespeichert = []
+    for sp in neu_spalten:
+        eintrag = {"key": sp["key"], "sichtbar": bool(sp["sichtbar"]), "name": sp.get("name", "")}
+        if sp.get("breite"):
+            eintrag["breite"] = int(sp["breite"])
+        gespeichert.append(eintrag)
+    alle[board] = {"spalten": gespeichert, "sort": neu_sort}
     lead_v2.einstellung_setzen(session, benutzer_id, EINSTELLUNG_KEY, alle)
     return spalten_fuer(session, benutzer_id, board)
 
@@ -357,21 +407,36 @@ def _sortier_wert(z: dict, key: str):
 
 def zeilen_sortieren(zeilen: list, sort: dict | None, jetzt=None) -> list:
     """Zeilen einer Gruppe nach der gemerkten Spalte sortieren (auf/ab, leere
-    Werte immer ans Ende); ohne Sortierung Eingang neueste zuerst."""
+    Werte immer ans Ende); ohne Sortierung Eingang neueste zuerst.
+    v29 (Phase 142, Vertrag L2): Zeilen mit Rang 0 (Mail nicht gesendet /
+    E-Mail falsch) stehen immer ganz oben – vor jeder Sortierung."""
     jetzt = jetzt or datetime.now()
     if not sort or not sort.get("key"):
         zeilen.sort(key=lambda z: z["eingang"] or jetzt, reverse=True)
-        return zeilen
-    key, ab = sort["key"], sort.get("richtung") == "ab"
-    mit = [(z, _sortier_wert(z, key)) for z in zeilen]
-    voll = [p for p in mit if p[1] is not None]
-    leer = [p[0] for p in mit if p[1] is None]
-    try:
-        voll.sort(key=lambda p: p[1], reverse=ab)
-    except TypeError:
-        voll.sort(key=lambda p: str(p[1]), reverse=ab)
-    zeilen[:] = [p[0] for p in voll] + leer
+    else:
+        key, ab = sort["key"], sort.get("richtung") == "ab"
+        mit = [(z, _sortier_wert(z, key)) for z in zeilen]
+        voll = [p for p in mit if p[1] is not None]
+        leer = [p[0] for p in mit if p[1] is None]
+        try:
+            voll.sort(key=lambda p: p[1], reverse=ab)
+        except TypeError:
+            voll.sort(key=lambda p: str(p[1]), reverse=ab)
+        zeilen[:] = [p[0] for p in voll] + leer
+    zeilen.sort(key=lambda z: 0 if z.get("rang0") else 1)   # stabil: Rang 0 zuerst
     return zeilen
+
+
+def mail_labels(vorgang) -> list[str]:
+    """v29 (Phase 142, Vertrag L2): rote Labels vorn in der Notiz-Spalte –
+    „E-Mail falsch“ (vorgang.email_status = ungueltig) zuerst, dann
+    „Mail nicht gesendet“ (vorgang.mail_fehler)."""
+    labels = []
+    if (getattr(vorgang, "email_status", None) or "") == "ungueltig":
+        labels.append(MAIL_LABEL_UNGUELTIG)
+    if getattr(vorgang, "mail_fehler", False):
+        labels.append(MAIL_LABEL_FEHLER)
+    return labels
 
 
 # --- Farben, Avatare -----------------------------------------------------------------
@@ -641,6 +706,12 @@ def board_zeilen(session: Session, benutzer, board: str, f: dict | None = None) 
             "sparten_status": {s: ("erfasst" if any(e.sparte == s for e in erfassungen.get(v.id, []))
                                    else "offen") for s in sparten},
             "offene_angebote": [a for a in angebote.get(v.id, []) if a.status in ANGEBOT_OFFEN],
+            # v29 (Phase 142, Vertrag L2): Mail-Fehler / ungültige E-Mail → Rang 0 + Labels
+            "mail_labels": mail_labels(v),
+            "rang0": bool(mail_labels(v)),
+            "mail_fehler_text": (getattr(v, "mail_fehler_text", "") or "") if getattr(v, "mail_fehler", False) else "",
+            "email_status_grund": (getattr(v, "email_status_grund", "") or "")
+            if (getattr(v, "email_status", None) or "") == "ungueltig" else "",
         }
         if not _suche_passt(zeile, suche):
             continue
@@ -952,12 +1023,62 @@ def _sammel_status(session: Session, vorgaenge: list, params: dict, benutzer) ->
     return ok, fehler
 
 
+def _ausschluss_kurz(meldung: str) -> str:
+    """„Nicht möglich: Kanal „Enni“ wird nur vom Innendienst terminiert.“ →
+    „Kanal Enni“; Quelle analog; sonst der Text ohne Präfix."""
+    text = (meldung or "").strip()
+    if text.startswith("Nicht möglich:"):
+        text = text[len("Nicht möglich:"):].strip()
+    m = re.match(r'^(Kanal|Quelle)\s+[„"]([^“"]+)[“"]', text)
+    if m:
+        return f"{m.group(1)} {m.group(2)}"
+    return text.rstrip(".")
+
+
+def _sammel_hv_verschieben(session: Session, vorgaenge: list, params: dict, benutzer) -> tuple:
+    """v29 (PLAN_LEAD_V4 Phase 140): „An Handelsvertreter verschieben“ – Ziel
+    „rene“ oder „simon“ (Parameter hv_gruppe_rene/_simon, erster Eintrag =
+    Zielbenutzer). Je Lead lead_handelsvertreter.zuweisen (Sonderregel monday,
+    Ausschlussliste F14 greift: übersprungen und im Ergebnis genannt, Aktivität
+    „Zugewiesen an Y (vorher X)“ je Lead, keine Glocke). Liefert (ok, fehler,
+    meldung) mit Meldung „3 verschoben, 1 übersprungen: Kanal Enni“."""
+    from app import lead_handelsvertreter
+    ziel_key = str(params.get("ziel") or "").strip().lower()
+    ziel = lead_v2.hv_gruppe_ziel(session, ziel_key) if ziel_key in ("rene", "simon") else None
+    if ziel is None:
+        return 0, ["Ziel-Handelsvertreter nicht gesetzt (Lead-Einstellungen → HV-Gruppen)"], \
+            "Nicht möglich: Ziel-Handelsvertreter nicht gesetzt (Lead-Einstellungen → HV-Gruppen)."
+    ok, fehler, gruende = 0, [], []
+    for v in vorgaenge:
+        if v.ad_id == ziel.id:
+            ok += 1          # liegt schon beim Ziel – zählt als verschoben, keine Aktivität nötig
+            continue
+        meldung = lead_handelsvertreter.zuweisen(session, v, ziel.id, benutzer=benutzer,
+                                                 erzwingen=False)
+        if meldung.startswith("Zugewiesen an"):
+            ok += 1
+        else:
+            kunde = session.get(Kunde, v.kunde_id)
+            fehler.append(f"{kunde.anzeige_name if kunde else v.id}: {meldung}")
+            kurz = _ausschluss_kurz(meldung)
+            if kurz and kurz not in gruende:
+                gruende.append(kurz)
+    text = f"{ok} verschoben"
+    if fehler:
+        text += f", {len(fehler)} übersprungen: " + ", ".join(gruende[:5])
+    text += f" (Ziel {ziel.name})."
+    return ok, fehler, text
+
+
 # Registry: board → [(key, Titel, Handler(session, vorgaenge, params, benutzer)
-# → (anzahl_ok, fehlerliste))]. Weitere Aktionen (Phase 111: Infoabend)
+# → (anzahl_ok, fehlerliste[, meldung]))]. Weitere Aktionen (Phase 111: Infoabend)
 # registrieren sich über sammelaktion_registrieren().
+# v29 (Phase 140): „An Handelsvertreter verschieben“ auf Hauptboard und Deals;
+# der Infoabend registriert denselben Handler (lead_info.sammelaktionen_registrieren).
+SAMMELAKTION_HV = ("hv_verschieben", "An Handelsvertreter verschieben", _sammel_hv_verschieben)
 SAMMELAKTIONEN: dict[str, list] = {
-    "hauptboard": [("status", "Status ändern", _sammel_status)],
-    "terminiert": [],
+    "hauptboard": [("status", "Status ändern", _sammel_status), SAMMELAKTION_HV],
+    "terminiert": [SAMMELAKTION_HV],
 }
 
 
@@ -993,8 +1114,13 @@ def sammelaktion_ausfuehren(session: Session, benutzer, board: str, aktion: str,
                  if lead_v2.zugriff_erlaubt(session, benutzer, v)]
     if not vorgaenge:
         return False, "Keine zugänglichen Leads markiert."
-    ok, fehler = eintrag[2](session, vorgaenge, params, benutzer)
+    ergebnis = eintrag[2](session, vorgaenge, params, benutzer)
     session.flush()
+    # v29: Handler dürfen eine eigene Meldung liefern (ok, fehler, meldung)
+    if len(ergebnis) >= 3 and ergebnis[2]:
+        ok, fehler = ergebnis[0], ergebnis[1]
+        return ok > 0, f"{eintrag[1]}: {ergebnis[2]}"
+    ok, fehler = ergebnis[0], ergebnis[1]
     meldung = f"{eintrag[1]}: {ok} von {len(vorgaenge)} Leads geändert."
     if fehler:
         meldung += f" {len(fehler)} übersprungen: " + "; ".join(fehler[:5])

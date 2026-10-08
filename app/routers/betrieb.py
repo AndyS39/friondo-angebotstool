@@ -81,6 +81,29 @@ def _uptime_text(sekunden: int) -> str:
     return " ".join(teile)
 
 
+def _lead_mail_fehler(session: Session) -> int:
+    """v29 (PLAN_LEAD_V4 Phase 142): Lead-Mails mit Status „fehler“ (kein Absender-
+    Fallback) – Kachel auf der Betriebs-Seite, bewusst kein /health-warn [ANNAHME]."""
+    from app.models import KommunikationLog
+    try:
+        return (session.query(KommunikationLog)
+                .filter(KommunikationLog.status == "fehler").count())
+    except Exception:   # noqa: BLE001 – Betriebs-Seite muss immer rendern
+        return 0
+
+
+def _anhaenge_fehlend(session: Session) -> list[str]:
+    """v27-Nachtrag 2: Dateien des Blatts „Anhänge“, die in anlagen/ fehlen – der
+    Klima-Fall (Unternehmenspräsentation fehlte im Versand) wäre so sofort sichtbar."""
+    try:
+        from app import anhaenge
+        from app import logik as logik_modul
+        logik, _ = logik_modul.hole_logik(session)
+        return anhaenge.fehlende_dateien(logik)
+    except Exception:   # noqa: BLE001 – Betriebs-Seite muss immer rendern
+        return []
+
+
 @router.get("/parametrierung/betrieb")
 def betrieb_seite(request: Request, session: Session = Depends(get_session)):
     if (umleitung := _nur_admin(request)) is not None:
@@ -103,6 +126,8 @@ def betrieb_seite(request: Request, session: Session = Depends(get_session)):
                   wartung=wartung, wartung_standard=betrieb.WARTUNG_STANDARD,
                   von_vorschlag=von_vorschlag.strftime("%Y-%m-%dT%H:%M"),
                   bis_vorschlag=bis_vorschlag.strftime("%Y-%m-%dT%H:%M"),
+                  lead_mail_fehler=_lead_mail_fehler(session),
+                  anhaenge_fehlend=_anhaenge_fehlend(session),
                   fehler_log=str(config.DATA_ORDNER / "fehler.log"),
                   zugriff_log=zugriffe["log_pfad"],
                   meldung=request.query_params.get("meldung", ""))

@@ -484,8 +484,8 @@ def anruf_ergebnis(request: Request, vorgang_id: int,
     Versuch +1, Stoppuhr-Dauer falls gelaufen; KEINE Wiedervorlage
     (naechste_aktion_am bleibt unverändert, ein mitgesendetes Feld
     wiedervorlage_am wird ignoriert). kaskade_anwenden plant nur noch die
-    Mails je Versuchsnummer (2/4 nicht_erreicht, letzte disqualifiziert +
-    Nurture) und setzt beim letzten Versuch die Phase Nicht erreicht.
+    Mails je Versuchsnummer (2/4 nicht_erreicht, letzte disqualifiziert –
+    v29: ohne Nurture) und setzt beim letzten Versuch die Phase Nicht erreicht.
     „Erreicht“ führt bei score_aktiv = aus in die Kundenkartei (Reiter
     Termin) statt in den Qualifizierungsbogen."""
     from datetime import datetime as dt
@@ -545,7 +545,7 @@ def anruf_ergebnis(request: Request, vorgang_id: int,
         vorgang.erreicht_am = vorgang.erreicht_am or jetzt
         vorgang.naechste_aktion_am = None
         # C4-d: Kontakt hergestellt – offene Kaskaden-Mails (nicht_erreicht,
-        # disqualifiziert, nurture) stornieren, bevor sie den Kunden erreichen
+        # disqualifiziert; v29 ohne nurture) stornieren, bevor sie den Kunden erreichen
         lead_anrufliste.offene_mails_stornieren(session, vorgang.id, grund="Kunde erreicht")
         session.commit()
         if lead_v2.score_aktiv(session):
@@ -575,7 +575,7 @@ def anruf_ergebnis(request: Request, vorgang_id: int,
             meldung += " – Mail geplant"
         if vorgang.lead_phase == "nicht_erreicht":
             meldung += (" – Kaskade ausgeschöpft, Lead steht auf „Nicht erreicht“"
-                        " (Nurture-Mail in 30 Tagen)")
+                        " (Vorlage Disqualifiziert)")
         meldung += "."
     elif ergebnis == "falsche_nummer":
         # Prozess-Fix 27.09.2026: mit Wiedervorlage morgen, sonst rutschte
@@ -596,7 +596,7 @@ def anruf_ergebnis(request: Request, vorgang_id: int,
         meldung = f"Kein Interesse – unqualifiziert ({grund})."
     if ergebnis in ("rueckruf_gewuenscht", "kein_interesse"):
         # C4-d: Anlass der Kaskaden-Mails entfallen (Kontakt hergestellt bzw.
-        # Absage) – offene nicht_erreicht/disqualifiziert/nurture stornieren
+        # Absage) – offene nicht_erreicht/disqualifiziert stornieren (v29 ohne nurture)
         storniert = lead_anrufliste.offene_mails_stornieren(
             session, vorgang.id,
             grund="Rückruf gewünscht" if ergebnis == "rueckruf_gewuenscht" else "Kein Interesse")
@@ -1171,6 +1171,45 @@ def kommunikation(request: Request, vorgang_id: int,
                   meldung=request.query_params.get("meldung", ""))
 
 
+@router.get("/kommunikation")
+def kommunikation_warteschlange(request: Request, session: Session = Depends(get_session)):
+    """v29 (PLAN_LEAD_V4 Phase 142, Vertrag L2): Warteschlangen-Seite aller Lead-Mails
+    – Filter ?status=fehler|wartet_adresse|geplant|gesendet (leer = alle offenen:
+    geplant, fehler, wartet_adresse), Spalten Absender/Versuche, Badges, bei
+    `fehler` der Knopf „Erneut senden“ → POST /lead-management/mail/{id}/erneut
+    (Route baut L2: setzt auf geplant mit sofortiger Fälligkeit, Redirect zurück);
+    gesendet wird nur durch den Lauf lead-mail."""
+    from app.models import KommunikationLog
+    _gate(request, session)
+    status = (request.query_params.get("status") or "").strip().lower()
+    if status not in ("fehler", "wartet_adresse", "geplant", "gesendet", ""):
+        status = ""
+    abfrage = session.query(KommunikationLog)
+    if status:
+        abfrage = abfrage.filter(KommunikationLog.status == status)
+    else:
+        abfrage = abfrage.filter(KommunikationLog.status.in_(("geplant", "fehler", "wartet_adresse")))
+    eintraege = abfrage.order_by(KommunikationLog.geplant_am.desc()).limit(300).all()
+    vorgang_ids = {e.vorgang_id for e in eintraege}
+    vorgaenge = ({v.id: v for v in session.query(Vorgang).filter(Vorgang.id.in_(vorgang_ids))}
+                 if vorgang_ids else {})
+    kunden = ({k.id: k for k in session.query(Kunde)
+               .filter(Kunde.id.in_({v.kunde_id for v in vorgaenge.values()} or {0}))}
+              if vorgaenge else {})
+    zaehler = {}
+    for st, in session.query(KommunikationLog.status):
+        zaehler[st] = zaehler.get(st, 0) + 1
+    zeilen = [{"eintrag": e, "vorgang": vorgaenge.get(e.vorgang_id),
+               "kunde": kunden.get(vorgaenge[e.vorgang_id].kunde_id) if e.vorgang_id in vorgaenge else None}
+              for e in eintraege]
+    return render(request, "leadmanagement/kommunikation.html",
+                  aktiv="/lead-management", vorgang=None, kunde=None, eintraege=[],
+                  liste=zeilen, status=status, zaehler=zaehler,
+                  mail_modus=kern.parameter_holen(session, "mail_modus", "protokoll"),
+                  absender=kern.parameter_holen(session, "absender_lead_mails", "termin@friondo.de"),
+                  vorlagen={}, meldung=request.query_params.get("meldung", ""))
+
+
 @router.post("/kommunikation/{eintrag_id}/senden")
 def kommunikation_senden(request: Request, eintrag_id: int,
                                session: Session = Depends(get_session)):
@@ -1187,9 +1226,14 @@ def kommunikation_senden(request: Request, eintrag_id: int,
     eintrag.fehler_text = ""
     ergebnis = lead_mail.eintrag_verarbeiten(session, eintrag)
     session.commit()
+    # v29 (PLAN_LEAD_V4 Phase 142): Rückgabewerte des Versand-Jobs ohne Fallback
     texte = {"protokolliert": "Protokolliert (Sendesperre – nicht gesendet).",
              "gesendet": "Gesendet.",
-             "fehler": f"Fehler: {eintrag.fehler_text}"}
+             "fehler": f"Fehler: {eintrag.fehler_text}",
+             "wiederholung": (f"Versand fehlgeschlagen ({eintrag.fehler_text}) – der Lauf "
+                              "lead-mail wiederholt in etwa einer Minute."),
+             "wartet_adresse": "E-Mail-Adresse unzustellbar – wartet auf Adressänderung.",
+             "storniert": f"Storniert: {eintrag.fehler_text}"}
     return RedirectResponse(
         f"/lead-management/lead/{eintrag.vorgang_id}/kommunikation?meldung="
         + quote_plus(texte.get(ergebnis, ergebnis)), status_code=303)
@@ -1302,18 +1346,42 @@ def leadmanager_setzen(request: Request, vorgang_id: int,
             kern.benachrichtigen(session, [neu],
                                  "Lead übernommen: "
                                  f"{session.get(Kunde, vorgang.kunde_id).anzeige_name}",
-                                 f"/lead-management/lead/{vorgang.id}")
+                                 f"/lead-management/lead/{vorgang.id}", art="zuweisung")   # v29
         session.commit()
     return RedirectResponse(f"/vorgaenge/{vorgang_id}", status_code=303)
 
 
 # --- Karte (Leaflet lokal, OSM-Kacheln) ----------------------------------------------
 
+def _karte_mittelpunkt(session: Session, benutzer, hv: bool) -> dict | None:
+    """v29 (Phase 140): Kartenmittelpunkt der HV-Sicht = Schwerpunkt der eigenen
+    Leads mit Koordinaten, sonst Startadresse des HV-Profils; Innendienst/Admin
+    unverändert (Duisburg im Template)."""
+    if not hv:
+        return None
+    from app.models import AdProfil
+    punkte = [(v.lat, v.lon) for v in session.query(Vorgang)
+              .filter(Vorgang.ad_id == benutzer.id, Vorgang.lat.isnot(None))]
+    if punkte:
+        return {"lat": sum(p[0] for p in punkte) / len(punkte),
+                "lon": sum(p[1] for p in punkte) / len(punkte), "zoom": 10}
+    profil = (session.query(AdProfil).filter(AdProfil.benutzer_id == benutzer.id).first())
+    if profil is not None and profil.start_lat is not None:
+        return {"lat": profil.start_lat, "lon": profil.start_lon, "zoom": 10}
+    return None
+
+
 @router.get("/karte")
 def karte(request: Request, session: Session = Depends(get_session)):
-    _gate(request, session)
+    """Karte (Leaflet). v29 (PLAN_LEAD_V4 Phase 140): auch für Handelsvertreter –
+    sie sehen ausschließlich Pins ihrer zugewiesenen Leads und ihre Termine,
+    Filter Leadmanager/Vertriebler ausgeblendet, Mittelpunkt = eigene Leads."""
+    lead_v2.gate(request, session)
+    benutzer = request.state.benutzer
+    hv = lead_v2.hv_sicht(session, benutzer)
     return render(request, "leadmanagement/karte.html",
-                  aktiv="/lead-management",
+                  aktiv="/lead-management", ist_hv=hv,
+                  mittelpunkt=_karte_mittelpunkt(session, benutzer, hv),
                   phasen_namen=LEAD_PHASEN_NAMEN,
                   alle_ad=[b for b in session.query(Benutzer)
                            .filter(Benutzer.aktiv.is_(True),
@@ -1325,24 +1393,33 @@ def karte(request: Request, session: Session = Depends(get_session)):
 @router.get("/karte/daten")
 def karte_daten(request: Request, session: Session = Depends(get_session)):
     """JSON für die Karte: offene Leads (Farbe je Phase, Größe je Klasse),
-    Termine (Symbol je AD), AD-Startadressen. Filter Phase/Sparte/AD/Zeitraum."""
+    Termine (Symbol je AD), AD-Startadressen. Filter Phase/Sparte/AD/Zeitraum.
+    v29 (Phase 140): Handelsvertreter-Sicht = nur eigene Leads (vorgaenge.ad_id),
+    eigene Termine und die eigene Startadresse."""
     from datetime import datetime as dt
 
     from fastapi.responses import JSONResponse
 
     from app.models import AdProfil
-    _gate(request, session)
+    lead_v2.gate(request, session)
+    benutzer = request.state.benutzer
+    hv = lead_v2.hv_sicht(session, benutzer)
     phase = request.query_params.get("phase", "")
     sparte = request.query_params.get("sparte", "")
     ad_filter = request.query_params.get("ad_id", "")
+    if hv:
+        ad_filter = str(benutzer.id)
     tage = request.query_params.get("tage", "60")
     tage = int(tage) if tage.isdigit() else 60
     pins = []
     offene_phasen = ("neu", "in_kontaktierung", "qualifiziert", "terminiert")
     kunden = {k.id: k for k in session.query(Kunde)}
-    for v in (session.query(Vorgang)
-              .filter(Vorgang.lat.isnot(None),
-                      Vorgang.lead_phase.in_((phase,) if phase else offene_phasen))):
+    abfrage = (session.query(Vorgang)
+               .filter(Vorgang.lat.isnot(None),
+                       Vorgang.lead_phase.in_((phase,) if phase else offene_phasen)))
+    if hv:
+        abfrage = abfrage.filter(Vorgang.ad_id == benutzer.id)
+    for v in abfrage:
         kunde = kunden.get(v.kunde_id)
         if kunde is None:
             continue
@@ -1366,6 +1443,8 @@ def karte_daten(request: Request, session: Session = Depends(get_session)):
                      "ad": ad.name if ad else "?",
                      "vorgang_id": t.vorgang_id})
     for profil in session.query(AdProfil).filter(AdProfil.start_lat.isnot(None)):
+        if hv and profil.benutzer_id != benutzer.id:
+            continue
         ad = benutzer_map.get(profil.benutzer_id)
         pins.append({"art": "start", "lat": profil.start_lat,
                      "lon": profil.start_lon,
@@ -1377,11 +1456,15 @@ def karte_daten(request: Request, session: Session = Depends(get_session)):
 def karte_termine_tag(request: Request,
                             session: Session = Depends(get_session)):
     """Mini-Karten-Komponente (Assistent): Termine eines AD-Tages als
-    nummerierte Pins + Kandidat als Stern, Linie in Reihenfolge."""
+    nummerierte Pins + Kandidat als Stern, Linie in Reihenfolge.
+    v29: auch für Handelsvertreter (eigener Assistent) – nur der eigene Tag."""
     from datetime import datetime as dt
 
     from fastapi.responses import JSONResponse
-    _gate(request, session)
+    lead_v2.gate(request, session)
+    if lead_v2.hv_sicht(session, request.state.benutzer):
+        if request.query_params.get("ad_id", "") != str(request.state.benutzer.id):
+            return JSONResponse({"pins": []})
     ad_id = request.query_params.get("ad_id", "")
     datum = request.query_params.get("datum", "")
     kandidat_lat = request.query_params.get("lat", "")
@@ -1597,7 +1680,7 @@ def ad_verschieben(request: Request, termin_id: int,
                              f"{kunde.anzeige_name if kunde else '?'} → "
                              f"{beginn.strftime('%d.%m. %H:%M')}"
                              + (f" ({grund})" if grund else ""),
-                             f"/lead-management/lead/{vorgang.id}")
+                             f"/lead-management/lead/{vorgang.id}", art="terminaenderung")   # v29
     session.commit()
     return RedirectResponse(f"/vorgaenge/{termin.vorgang_id}?meldung="
                             + quote_plus("Termin verschoben – der Kunde wird "

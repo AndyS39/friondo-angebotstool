@@ -659,3 +659,148 @@ Alle zwölf Rückfragen der Übergabe wurden wie vorgeschlagen entschieden:
 | R10 | Kanban markiert das gezeigte Board | ja belassen | keine Änderung |
 | R11 | V1-Cockpit unter „Mehr …“ | nein | keine Änderung |
 | R12 | API-Fehlertext „Keine Info-Veranstaltung am …“ | Eingang/API unverändert | nur Doku |
+
+## V4 (PLAN_LEAD_V4, 08.10.2026) – Umsetzung durch Claude Code (v29), Teil L2: Phase 142
+
+### V4.1 Entscheidungen beim Bau (Mails, Vorlagen, Absender, Bounce)
+- **Vertriebler** = jeder aktive Benutzer der Rolle Außendienst mit AD-Profil (angestellt
+  oder HV) bekommt eine Terminbestätigung `terminbestaetigung_<benutzer_id>`;
+  `aktiv_terminierung` wird nicht verlangt (manuell gebuchte AD hätten sonst keine Vorlage).
+- **Warteschlangen-Key bleibt `terminbestaetigung`**; die Vertreter-Variante wird beim
+  Rendern (Lauf `lead-mail`) über `terminbestaetigung_key(termin.ad_id)` gewählt, Storno-,
+  Dedup- und Terminstatus-Prüfungen bleiben unverändert; fehlt die eigene Vorlage,
+  Aktivität „Standard-Vorlage verwendet“.
+- **Speicherung** weiter in `einstellungen` als `lead_vorlage_<key>[_<sparte>]_betreff/_text`,
+  zusätzlich `_quelle` (editor | zulieferung | standard_kopie) und `_hash`/`_bildhash`;
+  Sparten-Varianten nur für die Basis-Vorlagen (der Sparten-Baustein deckt das ab).
+- **Rahmen / individueller Block**: Block = Platzhalter `{vertriebler_block}` (Inhalt aus der
+  Benutzerverwaltung) oder ein mit `<!-- vertriebler_block --> … <!-- /vertriebler_block -->`
+  markierter Bereich; eine Zulieferungsdatei ohne Marker gilt komplett als Rahmen.
+- **Zulieferungs-Zuordnung** über den normalisierten Dateinamen gegen Benutzername,
+  Namensteile, Vorname und E-Mail-Teil; mehrdeutige Treffer werden übersprungen und gemeldet.
+  Migration der Standard-Terminbestätigung: unveränderter v12-Text → v29-Rahmen, angepasster
+  Text → fehlende Platzhalter angehängt (Marker `migration_v29_terminbestaetigung`).
+- **„Kundenantwort weckt den Lead“ entfällt** mit Nurture: Antworten auf termin@/leads@
+  erzeugen Aktivität `mail_ein`, Wiedervorlage „jetzt“ und die (gesperrte) Glocke
+  `kundenantwort` – kein Phasenwechsel mehr [ANNAHME, Rückfrage R-L2-1].
+- **Bounce-/Antwort-Zuordnung ohne Konversations-ID** (`/me/sendMail` liefert keine):
+  Original-Empfänger aus Kopfzeile/Text (Testmodus: echte Adresse aus „[TEST an …]“) →
+  jüngster gesendeter Eintrag an diese Adresse (Betreff bevorzugt) → Vorgang, sonst Kunde
+  mit der Adresse → jüngster Vorgang. Für v30: Spalte `graph_conversation_id` + Versand über
+  Entwurf/`send` für exakte Zuordnung.
+- **Demo-Modus im Lauf `lead-mail-abruf`**: nur Nachrichten zu Demo-Leads werden verarbeitet
+  und als gelesen markiert; außerhalb des Demo-Modus landen nicht zuordenbare Nachrichten
+  in „Posteingang unklar“.
+- **Bounce**: der gesendete Eintrag behält `gesendet` (Hinweis im `fehler_text`), nur offene
+  Einträge werden `wartet_adresse`; freigegebene Einträge behalten ihre Fälligkeit; kein
+  Phasenrückfall bei Deals-Leads. Kartei-Hinweis: „E-Mail falsch“ hat Vorrang vor „Mail nicht
+  gesendet“ („Erneut senden“ dann gesperrt).
+- **Wiederholversuche**: `VERSUCHE_MAX = 3`, Pause 60 s × Versuch (Status bleibt `geplant`),
+  danach `fehler` + Vorgangsfelder; Konfigurationsfehler laufen denselben Weg; „Vorgang
+  fehlt“ → sofort fehler ohne Vorgangsfelder. Keine Admin-Glocke bei `fehler` (Innendienst
+  sieht den Lead im Hauptboard; Betriebs-Kachel zählt).
+- **HV-Versandweg offen**: To-Do „… selbst senden“ für Bestätigung/Änderung/Absage (fällig
+  sofort, Vorschau-Link), Erinnerung −24 h nur als Aktivität; die Werte smtp/entwurf/
+  leads_im_namen verhalten sich bis zur Umsetzung wie offen (Hinweis-Aktivität).
+- **Glocken-Arten** in den L2-Dateien: `lead_eingang`, `quelle_auto`, `wiedervorlage`,
+  `digest`, `kundenantwort`, `terminaenderung` – alle standardmäßig gesperrt (Phase 141).
+
+### V4.2 Nicht gebaute HV-Versandwege ([OFFEN 2]) – Erweiterungspunkte `lead_mail.hv_versand_*`
+Parameter `hv_versandweg` (Lead-Einstellungen), heute `offen`; `kern.mail_planen` ruft bei
+HV-Leads die Funktion des gewählten Wegs `(session, vorgang, termin, vorlage_key) ->
+(eintrag | None, hinweis)`; liefert sie keinen Eintrag, greift „offen“ (Aktivität + To-Do).
+- **`smtp` – SMTP-Zugang je Handelsvertreter:** je HV im AD-Profil Host/Port/Benutzer/
+  App-Passwort (private Konten: App-Passwort, 2FA Pflicht), Speicherung verschlüsselt
+  (Schlüssel in der `.env`), Versand aus dem Lauf `lead-mail` über `smtplib` (STARTTLS,
+  Timeout 30 s, Sitzungsdisziplin wie Graph), Absender = HV-Adresse, ICS/Inline-Bild als
+  MIME-Teile, Antworten beim HV. Voraussetzungen: Zustimmung der HV, Prüfroute „SMTP-Test“,
+  Fehlerweg wie termin@.
+- **`entwurf` – fertige Mail als .eml:** `.eml` (HTML, ICS, Inline-Bild) zum Download in der
+  Vorschau-Seite; der HV sendet aus seinem Mailprogramm. Kein Zugang nötig, kein
+  Sendenachweis im Tool (Status „Entwurf bereitgestellt“, To-Do wie heute).
+- **`leads_im_namen` – Versand über termin@ im Namen des HV:** wie bei angestellten AD über
+  `absender_lead_mails`, Anzeigename „<HV-Name> (Friondo)“ und `Reply-To` = HV-Adresse;
+  Antworten beim HV, Bounces weiter an termin@. Voraussetzung: `replyTo` im Graph-`sendMail`
+  (vorhanden), DSGVO/Außenwirkung klären.
+
+### V4.3 Kalender der Handelsvertreter ([OFFEN 3], Phase 143)
+(1) **nur Tool-Termine + Sperrzeiten** – gebaut als Zwischenlösung (Eintragstyp `sperrzeit`
+an `vot_termine`, Anlegen in „Meine Termine“); (2) **ICS-Abo des privaten Kalenders** – der
+HV hinterlegt eine ICS-Freigabe-URL, das Tool liest sie alle 15 Minuten nur als Belegt-Blöcke
+(kein Schreiben, keine Titel), Cache 10 Minuten; Voraussetzung Freigabe-URL je HV,
+Datenschutz (nur Zeiten); (3) **HV ohne Assistent** – HV-Leads werden im Assistenten nicht
+vorgeschlagen, der HV terminiert manuell; kein Kalenderzugriff, keine Konfliktprüfung.
+
+### V4.4 Angepasste Alt-Tests (L2, Begründung)
+- `tests/test_v27_scheduler.py`: 14 Läufe (`lead-mail-abruf` 120 s / 270 s).
+- `tests/test_pool_hotfix_mail.py`: `…_ohne_fallback` – kein Fallback auf angebot@ (Phase 142).
+- `tests/test_lead_v2_anruf.py`: letzte Stufe ohne +30 Tage, `disqualifiziert` genau einmal,
+  kein `nurture`; Wiedervorlage-Glocke im Test über `glocke_lead_arten` eingeschaltet;
+  HV-Gate: `/anruf/meine`, `/anruf/suche` → 404 für HV (Phase 140), Inhalte über Admin.
+- `tests/test_lead_v3_anruf.py`: `KASKADEN_MAILS` ohne nurture.
+
+### V4.5 Offene Rückfragen L2 (R-L2-1 … R-L2-7)
+1. Kundenantworten nach Wegfall von Nurture: Lead wieder in `in_kontaktierung` holen oder nur
+   Aktivität + Wiedervorlage „jetzt“ (so gebaut)?
+2. Terminhinweise je Sparte nachreichen [OFFEN 1]; Baustein bei reinem Platzhalter entfallen lassen?
+3. Zulieferung: Dateinamen-Konvention, Betreff im `<title>`/`<!-- betreff -->`, Bildformat.
+4. Wiederholversuche 3 × im Minutenabstand oder länger; Admin-Glocke bei `fehler`?
+5. Testmodus & Bounces: Bounces im Testmodus dem Demo-Lead zuordnen oder ignorieren?
+6. `absender_postfach` (leads@) ist nur noch Parser-Eingang – Feld umbenannt
+   („Parser-Eingangspostfach“), Parameter-Name bleibt.
+7. Antwortadresse: `Reply-To` (z. B. Leadmanager) setzen?
+
+## V4 (PLAN_LEAD_V4, 08.10.2026) – Teil L1: Phasen 140, 141, 143 (Oberfläche, HV-Sicht, Assistent)
+
+### V4.6 [ANNAHME]-Stellen L1 (A1–A15, umgesetzt wie geschrieben)
+- **A1** Direktlinks auf gesperrte Seiten: nur mit Referer derselben Instanz (Glocke, Kartei,
+  Tool-Seite) → 303 auf `/lead-management/handelsvertreter?meldung=…`; ohne Referer
+  (Lesezeichen, Mail-Link) 404.
+- **A2** Fälligkeits-Glocke eines To-Dos (`faellige_glocken`) läuft unter der Art
+  `todo_zugewiesen` und bleibt.
+- **A3** `todo_aktualisiert` auch bei Wieder-Öffnen und Löschen eines fremden To-Dos.
+- **A4** „Mir zugeteilte Vorgänge“ bleibt eingeklappt unten auf dem Dashboard.
+- **A5** „Meine Termine“ bleibt (Plan-ANNAHME), Horizont `dashboard_horizont_tage` (7).
+- **A6** Sperrzeit = `VotTermin` typ `sperrzeit`, `vorgang_id 0`, status geplant; zählt in
+  der Kollision wie ein Termin (inkl. Mindestpuffer 30 Min), nicht in der Tageskapazität;
+  Löschen durch HV, Admin oder Innendienst; 15-Minuten-Raster.
+- **A7** Für HV-Kandidaten wird im Assistenten kein Outlook mehr abgefragt.
+- **A8** „Kommende Wiedervorlagen“: nach 10 Zeilen „n weitere anzeigen“.
+- **A9** Buchung außerhalb der Vorauswahl: Warnhinweis für jeden gewählten weiteren Kalender
+  (auch HV); der v25-Weg „HV manuell ohne Warnung“ bleibt ohne Auswahl.
+- **A10** Meldung der Sammelaktion: „An Handelsvertreter verschieben: 3 verschoben, 1
+  übersprungen: Kanal Enni (Ziel …)“ – Leads, die schon beim Ziel liegen, zählen als verschoben.
+- **A11** HV-Gruppe „Simon“ = Simon + Team (IDs), Ziel = erster Eintrag; Filter „Gruppe“ zeigt
+  die Leads aller Mitglieder; Migration füllt per Namensabgleich (Di Blasi, Lind, Kinkel,
+  Leinenbach – nur, wenn die Benutzer existieren).
+- **A12** Kachel „Mails mit Fehler“ nur für Innendienst/Admin.
+- **A13** Ideal-Begründung in Klartext (Umweg, Wunschzeit, Tour-Tag, Kompetenz, Punkte-Abstand).
+- **A14** Rang 0 (Mail nicht gesendet / E-Mail falsch) in beiden Boards je Gruppe ganz oben;
+  im Deals-Board dasselbe rote Label + roter Zeilenrand.
+- **A15** Kalender-Raster: Zeitachse = min/max der Arbeitszeiten aller Spalten, Standard
+  08–18 Uhr; vergangene Slots schraffiert, Klick nur auf freie/Vorschlags-Slots.
+
+### V4.7 Angepasste Alt-Tests (L1, Begründung)
+- `test_lead_v2_boards`: Registry mit `hv_verschieben`; Vorlage `nurture` entfällt; HV 404 auf
+  Hauptboard/Deals/Kontaktiert.
+- `test_lead_v2_dashboard`: Dashboard ohne Angebots-WV/„Ohne nächsten Schritt“/„Termine 7
+  Tage“, Texte „Hallo, …“, „Fällig heute“, „Kommende Wiedervorlagen“, „Routenplaner“.
+- `test_lead_v2_fundament`: letzte Kaskadenstufe nur `disqualifiziert` (kein Nurture).
+- `test_lead_v2_handelsvertreter`, `test_lead_v2_kartei`, `test_lead_v2_termin`,
+  `test_lead_v3_kartei`: Glocken-Arten standardmäßig aus – Tests schalten die Art mit dem
+  Helfer `glocken_arten(s, …)` ein bzw. prüfen zuerst „keine Glocke“.
+- `test_lead_v2_info`: Registry Infoabend mit `hv_verschieben`.
+- `test_lead_v3`, `test_lead_v3_phase120`: ohne Nurture; `ohne_schritt_tage` ausgeblendet.
+- `test_lead_v3_boards`: Spalteneinträge mit `breite`, Deals mit `hv_verschieben`, HV-Hauptboard 404.
+
+### V4.8 Offene Rückfragen L1 (R1–R5)
+1. „Mir zugeteilte Vorgänge“ auf dem Dashboard behalten (eingeklappt) oder entfallen?
+2. Sperrzeiten mit Mindestpuffer (30 Min) wie Termine oder exakt von–bis?
+3. Fälligkeits-Glocke der To-Dos beibehalten (A2) oder nur die zwei Arten?
+4. Direktlink-Verhalten (A1): immer 404 oder immer Umleitung mit Hinweis?
+5. Darf der Innendienst Sperrzeiten eines HV anlegen (heute nur löschen)?
+
+### V4.9 Nebenbefund
+`.lm-aktion` (style.css) setzte `display: flex` auch auf Tabellenzellen – in den
+Wiedervorlage-Listen des Dashboards fiel die Aktionszelle seit v23 aus dem Raster; in
+`lead_v2.css` als `table-cell` nachgebessert.

@@ -18,7 +18,36 @@
     max(Mindestpuffer, berechnete Fahrzeit).</p>
 
 <form method="post" action="/benutzer/{{ person.id }}/ad-profil"
-      class="formular" style="max-width:760px">
+      class="formular" style="max-width:760px" enctype="multipart/form-data">
+    {# v29 (PLAN_LEAD_V4 Phase 142): Vorname, Infotext und Bild für den Block
+       {vertriebler_block} der Terminbestätigung je Vertriebler; Telefon/E-Mail
+       bleiben in der Benutzerliste. Styles: lead_v29.css. #}
+    <h2>Terminbestätigung (v29)</h2>
+    <p class="dezent">Die Terminbestätigung dieses Vertrieblers
+        {% if vorlage_vorhanden %}<a href="/lead-management/vorlagen?vorlage=terminbestaetigung_{{ person.id }}">im Vorlagen-Editor öffnen</a>{% else %}wird beim Speichern als Kopie der Standard-Vorlage angelegt{% endif %};
+        Bild (JPG/PNG, max. {{ bild_max_mb }} MB) geht als Inline-Bild mit, Name, Telefon
+        ({{ person.telefon or 'fehlt' }}), E-Mail ({{ person.email or 'fehlt' }}) und Infotext füllen den persönlichen Block.</p>
+    <div class="ben-bild-zeile">
+        {% if bild_vorhanden %}
+        <img class="ben-bild-vorschau" src="/lead-management/benutzer/{{ person.id }}/bild?v={{ css_version }}" alt="Bild {{ person.name }}">
+        {% else %}
+        <span class="dezent">Noch kein Bild.</span>
+        {% endif %}
+        <div>
+            <label>Bild hochladen <input type="file" name="bild" accept=".jpg,.jpeg,.png,image/jpeg,image/png"></label>
+            {% if bild_vorhanden %}
+            <label class="kontrollfeld"><input type="checkbox" name="bild_entfernen"> Bild entfernen</label>
+            {% endif %}
+        </div>
+    </div>
+    <div class="formzeile">
+        <label class="schmal">Vorname („Hallo, …“)
+            <input type="text" name="vorname" value="{{ person.vorname or '' }}" maxlength="100"></label>
+    </div>
+    <label>Infotext (persönlicher Absatz in der Terminbestätigung)
+        <textarea name="infotext" rows="4" placeholder="z. B. Seit 2015 berate ich Familien in Duisburg und Umgebung zu Wärmepumpe und Photovoltaik …">{{ person.infotext or '' }}</textarea></label>
+
+    <h2>Terminassistent</h2>
     <label>Startadresse (Wohnort oder Büro)
         <input type="text" name="start_adresse"
                value="{{ profil.start_adresse if profil else '' }}"

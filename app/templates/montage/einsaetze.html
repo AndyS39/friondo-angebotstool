@@ -8,29 +8,37 @@
     <div class="pj-eyebrow">Montage{{ ' · ' ~ ich.name if ich }}</div>
     {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-    {% if not team %}
-    <h2>Team wählen</h2>
-    {% for te in teams %}
-    <a class="pj-einsatz" style="display:block;text-decoration:none"
-       href="/montage?team_id={{ te.id }}">
-        <b><i class="pj-teamfarbe" style="background:{{ te.farbe or '#5a6478' }}"></i>
-        {{ te.name }}</b>{{ ' (Sub)' if te.typ == 'sub' }}
-    </a>
+    {# v28 (PLAN_PROJ_V6 Phase 137): Standardansicht „Meine Einsätze“ (eigene
+       Besetzung + Fallback), Team-Umschalter für mehrere Teams / Leitung #}
+    {% if meine %}
+    <h2>Meine Einsätze</h2>
     {% else %}
-    <p class="dezent">Du bist keinem Team zugeordnet – bitte beim
-        Projektleiter melden (Parametrierung → Teams).</p>
-    {% endfor %}
-    {% else %}
-
     <h2><i class="pj-teamfarbe" style="background:{{ team.farbe or '#5a6478' }}"></i>
-        {{ team.name }}</h2>
-    <div class="pj-btnrow" style="margin-top:2px">
-        {% if teams | length > 1 %}<a class="pj-btn" href="/montage">Team wechseln</a>{% endif %}
-        <a class="pj-btn {{ 'primary' if ansicht == 'liste' }}"
-           href="/montage?team_id={{ team.id }}">Liste</a>
-        <a class="pj-btn {{ 'primary' if ansicht == 'kalender' }}"
-           href="/montage?team_id={{ team.id }}&ansicht=kalender">Wochenkalender</a>
+        Team {{ team.name }}{{ ' (Sub)' if team.typ == 'sub' }}</h2>
+    {% endif %}
+    {% if teams | length > 1 or leitung or not meine %}
+    <div class="pj-meine-umschalter">
+        <a class="pj-btn {{ 'primary' if meine }}" href="/montage">Meine Einsätze</a>
+        {% for te in teams %}
+        <a class="pj-btn {{ 'primary' if team and team.id == te.id }}" href="/montage?team_id={{ te.id }}"
+           title="Alle Termine des Teams"><i class="pj-teamfarbe" style="background:{{ te.farbe or '#5a6478' }}"></i>{{ te.name }}</a>
+        {% endfor %}
     </div>
+    {% endif %}
+    <div class="pj-btnrow" style="margin-top:4px">
+        {% set basis = '/montage?team_id=' ~ team.id if team else '/montage?team_id=0' %}
+        <a class="pj-btn {{ 'primary' if ansicht == 'liste' }}" href="{{ basis }}">Liste</a>
+        <a class="pj-btn {{ 'primary' if ansicht == 'kalender' }}" href="{{ basis }}&ansicht=kalender">Wochenkalender</a>
+    </div>
+    {% if meine and not eigene_teams and not leitung %}
+    <p class="dezent">Du bist keinem Team zugeordnet – bitte beim
+        Projektleiter melden (Parametrierung → Teams). Einsätze, in denen du
+        eingeteilt bist, erscheinen hier trotzdem.</p>
+    {% endif %}
+
+    {% macro besetzung_chips(liste, nur_initialen=false) %}
+    {% if liste %}<span class="pj-besetzung">{% for p in liste %}<span class="pj-ini {{ 'ich' if p.ich }}" title="{{ p.name }}">{{ p.initialen if nur_initialen else p.kurz }}</span>{% endfor %}</span>{% endif %}
+    {% endmacro %}
 
     {% macro einsatz_karten(liste) %}
     {% for t in liste %}
@@ -46,12 +54,14 @@
                 {% endif %}</div>
             <b>{{ kunde.anzeige_name if kunde else '?' }} · {{ projekt.ausfuehrung_ort if projekt else '?' }}</b><br>
             {% if gewerk %}<span class="pj-sp {{ gewerk.sparte }}">{{ gewerk.sparte }}</span>{% endif %}
-            {{ t.typ | capitalize if t.typ != 'montage' }}
+            {{ termin_art(t) }}
+            {% if t.team_id in teams_map %}<small class="dezent">· {{ teams_map[t.team_id].name }}</small>{% endif %}
+            {{ besetzung_chips(besetzung_namen.get(t.id, [])) }}
             {% set geraet = [] %}
             {% if steck.get('hersteller') %}{% set _ = geraet.append(steck['hersteller'].wert) %}{% endif %}
             {% if steck.get('leistungsklasse') %}{% set _ = geraet.append(steck['leistungsklasse'].wert) %}{% endif %}
-            {% if geraet %}<small class="dezent"> {{ geraet | join(' · ') }}</small>{% endif %}
-            {% if steck.get('besonderheiten') %}<br><small style="color:#8a6116">⚠ {{ steck['besonderheiten'].wert }}</small>{% endif %}
+            {% if geraet %}<br><small class="dezent">{{ geraet | join(' · ') }}</small>{% endif %}
+            {% if steck.get('besonderheiten') and steck['besonderheiten'].wert %}<br><small style="color:#8a6116">⚠ {{ steck['besonderheiten'].wert }}</small>{% endif %}
             <div class="pj-btnrow">
                 <a class="pj-btn primary" href="/montage/einsatz/{{ t.id }}">Auftrag öffnen</a>
             </div>
@@ -61,8 +71,8 @@
 
     {% if ansicht == 'kalender' %}
     <div class="pj-btnrow" style="margin-top:8px">
-        <a class="pj-btn" href="/montage?team_id={{ team.id }}&ansicht=kalender&start={{ zurueck }}">‹ Vorwoche</a>
-        <a class="pj-btn" href="/montage?team_id={{ team.id }}&ansicht=kalender&start={{ vor }}">Folgewoche ›</a>
+        <a class="pj-btn" href="{{ basis }}&ansicht=kalender&start={{ zurueck }}">‹ Vorwoche</a>
+        <a class="pj-btn" href="{{ basis }}&ansicht=kalender&start={{ vor }}">Folgewoche ›</a>
     </div>
     {% for tag in tage %}
     <div class="pj-mob-tag {{ 'heute' if tag == heute }} {{ 'we' if tag.weekday() >= 5 }}">
@@ -71,7 +81,9 @@
             {% set projekt = projekte.get(t.projekt_id) %}
             {% set kunde = kunden.get(projekt.kunde_id) if projekt else none %}
             <a class="e {{ 'unbest' if not t.kunde_bestaetigt }}" href="/montage/einsatz/{{ t.id }}">
-                {{ kunde.anzeige_name if kunde else '?' }} · {{ projekt.ausfuehrung_ort if projekt else '' }}</a>
+                {{ kunde.anzeige_name if kunde else '?' }} · {{ projekt.ausfuehrung_ort if projekt else '' }}
+                {# v28: Besetzung als Initialen #}
+                {{ besetzung_chips(besetzung_namen.get(t.id, []), nur_initialen=true) }}</a>
         {% else %}
         <span class="dezent" style="font-size:11px">–</span>
         {% endfor %}
@@ -94,6 +106,5 @@
     {% endif %}
 
     <div class="pj-note">Keine Preise, keine anderen Projekte.</div>
-    {% endif %}
 </div>
 {% endblock %}

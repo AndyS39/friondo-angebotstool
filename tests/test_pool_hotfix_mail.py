@@ -107,7 +107,11 @@ class SitzungUebergeben(Basis):
         self.assertFalse(ok)
         self.assertEqual(messungen, [0])
 
-    def test_lead_mail_graph_senden_mit_fallback(self):
+    def test_lead_mail_graph_senden_ohne_fallback(self):
+        """v29 (PLAN_LEAD_V4 Phase 142): Lead-Mails gehen nur über absender_lead_mails
+        (termin@) raus – KEIN Fallback auf angebot@ mehr (vorher: zweiter Versuch
+        mit ABSENDER_FALLBACK). Gemessen bleibt: Token und Versand ohne gehaltene
+        Verbindung; ein Fehler liefert (False, Grund) nach genau einem Versuch."""
         messungen = []
 
         def token():
@@ -117,23 +121,23 @@ class SitzungUebergeben(Basis):
         def graph(methode, pfad, tok, daten=None):
             von = daten["message"]["from"]["emailAddress"]["address"]
             messungen.append((von, belegt()))
-            if len(messungen) == 2:         # erster Versand scheitert → Fallback angebot@
-                raise RuntimeError("Senden als verweigert (Test)")
-            return {}
+            raise RuntimeError("Senden als verweigert (Test)")
 
         def absender(session):
             self.lesen(session)
-            return "leads@test.local"
+            return "termin@test.local"
 
         self.belegen()
         with mock.patch.object(graph_versand, "_token", side_effect=token), \
                 mock.patch.object(graph_versand, "_graph_aufruf", side_effect=graph), \
                 mock.patch.object(lead_mail, "_absender", side_effect=absender):
             ok, fehler = lead_mail._graph_senden(self.s, "x@test.local", "B", "<p>T</p>", None)
-        self.assertTrue(ok, fehler)
-        self.assertEqual([m[0] for m in messungen],
-                         ["token", "leads@test.local", lead_mail.ABSENDER_FALLBACK])
-        self.assertEqual([m[1] for m in messungen], [0, 0, 0], messungen)
+        self.assertFalse(ok)
+        self.assertIn("Senden als verweigert", fehler)
+        self.assertIn("termin@test.local", fehler)
+        self.assertEqual([m[0] for m in messungen], ["token", "termin@test.local"])
+        self.assertNotIn(lead_mail.ABSENDER_FALLBACK, [m[0] for m in messungen])
+        self.assertEqual([m[1] for m in messungen], [0, 0], messungen)
 
     def test_lead_parser_postfach_abrufen_get_und_patch(self):
         messungen = []

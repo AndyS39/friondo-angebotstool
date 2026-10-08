@@ -330,11 +330,14 @@ class Blaetter(unittest.TestCase):
 
     def test_anhaenge_und_lesehilfe(self):
         kopf, zeilen = _zeilen(self.wb, "Anhänge")
-        zeile = next((z for z in zeilen
-                      if _text(z[0]).startswith("(Bosch Climate Broschüre")), None)
+        # v27-Nachtrag 2 (08.10.2026): die v24-Platzhalterzeile „(Bosch Climate Broschüre –
+        # Zulieferung)“ trägt jetzt den Dateinamen der gelieferten Broschüre
+        zeile = next((z for z in zeilen if _text(z[0]) == "Bosch Climate 3200i.pdf"), None)
         self.assertIsNotNone(zeile)
         self.assertEqual(_text(zeile[1]), "wenn Sparte = KL")
-        self.assertIn("v24: Datei nach Lieferung in anlagen/ legen", _text(zeile[2]))
+        self.assertIn("Bosch Climate 3200i", _text(zeile[2]))
+        self.assertIn("(v27)", _text(zeile[2]))
+        self.assertFalse([z for z in zeilen if _text(z[0]).startswith("(Bosch Climate Broschüre")])
         self.assertTrue(re.match(r"wenn\s+Sparte\s*=\s*(\w+)$", _text(zeile[1])))
         logik, bericht = logik_modul.logik_einlesen()
         self.assertFalse([w for w in bericht.warnungen if "Bosch Climate" in w])

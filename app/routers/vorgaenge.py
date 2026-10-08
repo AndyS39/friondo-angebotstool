@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
+from app import notizen as notizen_modul   # v28 (Phase 136): gemeinsamer Notizen-Chat
 from app import vorgaenge as vorgaenge_modul
 from app.db import get_session
 from app.models import (Angebot, AngebotsMail, Benutzer, Erfassung, Kunde,
@@ -156,6 +157,10 @@ def akte(request: Request, vorgang_id: int,
     notizen = (session.query(VorgangsNotiz)
                .filter(VorgangsNotiz.vorgang_id == vorgang.id)
                .order_by(VorgangsNotiz.zeit, VorgangsNotiz.id).all())
+    # v28 (PLAN_PROJ_V6 Phase 136): Kontext für das gemeinsame Makro notizen_chat
+    # (Chat-Optik, Kennzeichen je Spur, Senden per fetch) – Rechte wie bisher
+    # (ID/Admin überall, AD bei eigenen Vorgängen) über notizen.schreiben_erlaubt
+    notizen_ctx = notizen_modul.kontext(session, vorgang.id, benutzer, vorgang=vorgang)
     # Gelesen-Stand fortschreiben (Phase 60: „Neue Notizen“-Punkt)
     marker = (session.query(VorgangNotizGelesen)
               .filter(VorgangNotizGelesen.vorgang_id == vorgang.id,
@@ -269,8 +274,8 @@ def akte(request: Request, vorgang_id: int,
                   lead_phasen_namen=__import__("app.models", fromlist=["x"]).LEAD_PHASEN_NAMEN,
                   vorgang=vorgang, kunde=kunde, lead=lead, kanal=kanal,
                   profil=profil, erfassungen=erfassungen, angebote=angebote,
-                  mails=mails, notizen=notizen, benutzer=benutzer,
-                  benutzer_map=benutzer_map,
+                  mails=mails, notizen=notizen, notizen_ctx=notizen_ctx,
+                  benutzer=benutzer, benutzer_map=benutzer_map,
                   chips=_chips_fuer_vorgang(session, vorgang, erfassungen),
                   vertriebler=[benutzer_map[i] for i in sorted(vertriebler_ids)
                                if i in benutzer_map],
@@ -461,29 +466,61 @@ def verfolgung(request: Request, vorgang_id: int,
         "Verfolgung aktualisiert."), status_code=303)
 
 
+def _json_gewuenscht(request: Request) -> bool:
+    return "application/json" in (request.headers.get("accept") or "")
+
+
 @router.post("/{vorgang_id}/notiz")
 def notiz(request: Request, vorgang_id: int,
                 session: Session = Depends(get_session)):
     """Notizen-Chat: append-only – jeder Eintrag mit Autor + Zeitstempel,
-    kein Bearbeiten/Löschen. AD nur an eigenen Vorgängen."""
+    kein Bearbeiten/Löschen.
+    v28 (PLAN_PROJ_V6 Phase 136): gemeinsame Schreibroute für Vorgangsakte,
+    Projektakte-Makro und Kundenkartei. Rechte über notizen.schreiben_erlaubt
+    (ID/Admin überall, AD bei eigenen Vorgängen, Projektierung/Leadmanagement
+    mit Zugriff, Hauptrolle Montage nur lesen – die Middleware leitet sie
+    ohnehin nach /montage um). Bei `Accept: application/json` antwortet die
+    Route mit {"ok": true, "eintrag": {...}} (Format laut Makro) bzw. 403/400
+    mit {"ok": false, "meldung"}; sonst Redirect in die Akte (#notizen).
+    Optionales Feld `herkunft` (projektierung | vertrieb | lead | montage) setzt
+    das Kennzeichen, sonst folgt es der Hauptrolle des Schreibers."""
+    from fastapi.responses import JSONResponse
     benutzer = request.state.benutzer
     vorgang = session.get(Vorgang, vorgang_id)
+    json_antwort = _json_gewuenscht(request)
     if vorgang is None:
+        if json_antwort:
+            return JSONResponse({"ok": False, "meldung": "Vorgang nicht gefunden."},
+                                status_code=404)
         return RedirectResponse("/vorgaenge", status_code=303)
-    if not _eigener(session, vorgang, benutzer):
+    if not notizen_modul.schreiben_erlaubt(session, vorgang, benutzer):
+        if json_antwort:
+            return JSONResponse({"ok": False, "meldung": "Keine Berechtigung – Notizen "
+                                 "sind für diese Rolle nur lesbar."}, status_code=403)
         return RedirectResponse("/vorgaenge", status_code=303)
     form = anfrage.formular(request)
     text = (form.get("text") or "").strip()
-    if text:
-        vorgaenge_modul.notiz_anlegen(session, vorgang.id, benutzer, text[:2000])
-        # der eigene Eintrag gilt sofort als gelesen
-        marker = (session.query(VorgangNotizGelesen)
-                  .filter(VorgangNotizGelesen.vorgang_id == vorgang.id,
-                          VorgangNotizGelesen.benutzer_id == benutzer.id).first())
-        if marker is not None:
-            marker.gelesen_bis = datetime.now()
-        session.commit()
-    return RedirectResponse(f"/vorgaenge/{vorgang_id}#notizen", status_code=303)
+    if not text:
+        if json_antwort:
+            return JSONResponse({"ok": False, "meldung": "Bitte einen Text eingeben."},
+                                status_code=400)
+        return RedirectResponse(f"/vorgaenge/{vorgang_id}#notizen", status_code=303)
+    eintrag = notizen_modul.notiz_anlegen(
+        session, vorgang.id, benutzer, text,
+        herkunft=notizen_modul.herkunft_fuer(benutzer, form.get("herkunft") or ""))
+    # der eigene Eintrag gilt sofort als gelesen
+    marker = (session.query(VorgangNotizGelesen)
+              .filter(VorgangNotizGelesen.vorgang_id == vorgang.id,
+                      VorgangNotizGelesen.benutzer_id == benutzer.id).first())
+    if marker is not None:
+        marker.gelesen_bis = datetime.now()
+    session.commit()
+    if json_antwort:
+        return JSONResponse({"ok": True, "eintrag": notizen_modul.eintrag_json(eintrag)})
+    ziel = form.get("zurueck") or f"/vorgaenge/{vorgang_id}#notizen"
+    if not ziel.startswith("/") or ziel.startswith("//"):
+        ziel = f"/vorgaenge/{vorgang_id}#notizen"
+    return RedirectResponse(ziel, status_code=303)
 
 
 # --- Galerie am Vorgang (v15, Phase 76) -------------------------------------
@@ -548,7 +585,17 @@ def galerie_datei(request: Request, datei_id: int,
     pfad = config_modul.DATA_ORDNER / datei.pfad
     if not pfad.exists():
         return RedirectResponse(f"/vorgaenge/{datei.vorgang_id}", status_code=303)
-    return FileResponse(str(pfad), filename=datei.dateiname)
+    # v28 (PLAN_PROJ_V6 Phase 136): Befund „Sofort-Download“ – FileResponse mit
+    # filename= liefert Content-Disposition: attachment; jeder Klick, der nicht
+    # von der Lightbox abgefangen wurde (Seiten ohne galerie_fuss(), Strg-Klick,
+    # Handy-Browser mit target=_blank), lud die Datei herunter. Bilder (und PDFs
+    # [ANNAHME: „PDF ansehen“ im Formular) kommen jetzt `inline`; der Download
+    # läuft nur noch über den Knopf „Herunterladen“ (?download=1 → attachment).
+    herunterladen = (request.query_params.get("download") or "") in ("1", "ja", "true")
+    disposition = ("attachment" if herunterladen
+                   or not galerie_modul.inline_anzeige(datei.dateiname) else "inline")
+    return FileResponse(str(pfad), filename=datei.dateiname,
+                        content_disposition_type=disposition)
 
 
 @router.post("/galerie/datei/{datei_id}/verschieben")

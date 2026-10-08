@@ -1,9 +1,12 @@
 {% extends "base.html" %}
 {% from "_projektierung.html" import pj_gw_zeile, pj_terminstatus, pj_vorlauf %}
+{# v28 (PLAN_PROJ_V6 Phase 134/135): gemeinsamer Termin-Dialog (Drop auf „terminiert“) #}
+{% from "projektierung/_termin_dialog.html" import termin_dialog %}
 
 {% block titel %}Projektierung – Friondo{% endblock %}
 
-{% block mainklasse %}breit{% endblock %}
+{# v28 (Phase 134): volle Breite auf Projektierungs-Seiten (main.breit.pj-voll) #}
+{% block mainklasse %}breit pj-voll{% endblock %}
 
 {% block inhalt %}
 <div class="seitenkopf">
@@ -26,7 +29,7 @@
 <div class="pj-tiles">
     {% for phase in ('auftragseingang', 'feinplanung_vot', 'planung',
                      'montagevorbereitung', 'montage', 'abnahme', 'freigabe') %}
-    <div class="pj-tile">
+    <div class="pj-tile" data-phase="{{ phase }}">
         <div class="n">{{ kacheln[phase].anzahl }}</div>
         <div class="l">{{ phasen_namen[phase] }}</div>
         <div class="s">{{ kacheln[phase].untertitel or '–' }}</div>
@@ -105,25 +108,30 @@
        title="Angenommenes Angebot in der Angebotsliste wählen">+ Angebot → Projekt</a>
 </form>
 
-<div class="pj-board">
+{# v28 (Phase 134): Dummy-Scrollbalken ÜBER dem Board (synchron, projektierung.js) #}
+<div class="pj-hscroll" id="pj-hscroll" title="Waagerecht scrollen (auch Shift + Mausrad)"><div></div></div>
+
+<div class="pj-board" id="pj-board">
     {% for phase, karten in spalten.items() %}
     <div class="pj-col {{ 'pj-col-ae' if phase.startswith('auftragseingang') }}" data-phase="{{ phase }}"
-         ondragover="event.preventDefault()" ondrop="kartenDrop(event, '{{ phase }}')">
+         ondragover="event.preventDefault(); this.classList.add('pj-drop-ziel')"
+         ondragleave="this.classList.remove('pj-drop-ziel')"
+         ondrop="this.classList.remove('pj-drop-ziel'); kartenDrop(event, '{{ phase }}')">
         {% if phase == 'abgeschlossen' %}
         <details>
             <summary class="pj-colkopf">{{ phasen_namen[phase] }}
-                <span>{{ karten | length }} · letzte 30 Tage</span></summary>
+                <span data-zaehler>{{ karten | length }} · letzte 30 Tage</span></summary>
         {% else %}
-        <h3>{{ phasen_namen.get(phase, phase) }} <span>{{ karten | length }}</span></h3>
+        <h3>{{ phasen_namen.get(phase, phase) }} <span data-zaehler>{{ karten | length }}</span></h3>
         {% endif %}
         {% for karte in karten %}
         {% set offene_gewerke = karte.zeilen | rejectattr('gewerk.phase', 'in', ['abgeschlossen', 'storniert']) | list %}
         {% set gesamt_ueberfaellig = karte.zeilen | sum(attribute='ueberfaellig') %}
+        {# v15: Terminstatus des Gewerks, das die Spalte bestimmt (V4: Route) #}
+        {% set bestimmend = karte.bestimmend %}
         <a class="pj-card" href="/projektierung/projekt/{{ karte.projekt.id }}"
-           draggable="true" tabindex="0"
+           draggable="true" tabindex="0" data-projekt="{{ karte.projekt.id }}"
            ondragstart="kartenStart(event, {{ (offene_gewerke or karte.zeilen) | map(attribute='gewerk.id') | list | tojson }}, {{ (offene_gewerke or karte.zeilen) | map(attribute='gewerk.sparte') | list | tojson }})">
-            {# v15: Terminstatus des Gewerks, das die Spalte bestimmt (V4: Route) #}
-            {% set bestimmend = karte.bestimmend %}
             <div class="hd">
                 <span class="pr pj-mono">{{ karte.projekt.nummer }}</span>
                 {% if gesamt_ueberfaellig %}
@@ -144,19 +152,27 @@
                 {% if karte.projekt.kanal %}· <span class="pj-badge kanal">{{ karte.projekt.kanal }}</span>{% endif %}
             </div>
             {% for z in karte.zeilen %}
+            <div class="pj-gw-wrap" data-gewerk="{{ z.gewerk.id }}">
                 {{ pj_gw_zeile(z.gewerk.sparte, phasen_namen.get(z.gewerk.phase, z.gewerk.phase),
                                z.ampel.farbe,
                                storniert=(z.gewerk.phase == 'storniert'),
                                ts=(none if z.gewerk.phase in ('abgeschlossen', 'storniert')
                                    else z.terminstatus)) }}
+            </div>
             {% endfor %}
             <div class="ft">
                 <span class="pj-mono">{{ karte.zeilen | rejectattr('gewerk.phase', 'equalto', 'storniert') | sum(attribute='gewerk.auftragswert_aktuell') | euro }}</span>
                 <span style="color:var(--pj-muted)">{{ karte.zeilen | length ~ ' Gewerke' if karte.zeilen | length > 1 }}</span>
+                {# v28 (Phase 135): Aktion an der Karte – Termin anlegen (ohne Akte) #}
+                {% if bestimmend.gewerk.phase not in ('abgeschlossen', 'storniert') and bestimmend.terminstatus.status == 'unterminiert' %}
+                <button class="pj-btn" type="button" style="padding:1px 6px;font-size:11px"
+                        title="Montagetermin + Team anlegen (Dialog)"
+                        onclick="event.preventDefault(); event.stopPropagation(); terminDialogBoard({{ bestimmend.gewerk.id }}, '{{ bestimmend.gewerk.sparte }}')">📅 Termin</button>
+                {% endif %}
             </div>
         </a>
         {% else %}
-        <div style="color:var(--pj-muted);font-size:12px;padding:6px">–</div>
+        <div class="pj-col-leer" style="color:var(--pj-muted);font-size:12px;padding:6px">–</div>
         {% endfor %}
         {% if phase == 'abgeschlossen' %}</details>{% endif %}
     </div>
@@ -165,37 +181,14 @@
 
 <div class="pj-note">Karte = Projekt. Die Spalte richtet sich nach dem Gewerk,
     das am weitesten zurückliegt; die Chips zeigen jedes Gewerk einzeln.
-    Spalten chronologisch nach Montagebeginn, Unterminierte unten. Ziehen von
-    „unterminiert“ nach „terminiert“ öffnet „Team + Termin“ (kein Phasenwechsel).
+    Spalten chronologisch nach Montagebeginn, Unterminierte unten; jede Spalte scrollt für sich,
+    Shift + Mausrad scrollt waagerecht. Ziehen in eine andere Phase öffnet den Dialog
+    „Phase ändern“ (offene Pflichtaufgaben werden gezeigt, blockieren im Modus „warnen“ nicht).
+    Ziehen von „unterminiert“ nach „terminiert“ öffnet den Termin-Dialog (kein Phasenwechsel).
     Punkt vor dem Termin = Vorlauf (grün &gt; 8 Wochen · gelb 4–8 · rot &lt; 4 / unterminiert).</div>
 
-{# V4 (Phase 90.1): Drop auf „Auftragseingang · terminiert“ = Team + Termin #}
-<dialog id="teamdialog" class="pj-dlg">
-    <form method="post" id="teamform" class="box">
-        <h3>Team + Termin</h3>
-        <input type="hidden" name="zurueck" value="/projektierung">
-        <label>Zuweisung
-            <select name="zweck">
-                <option value="wp">Montageteam (WP)</option>
-                <option value="elektro">Elektro-Montageteam</option>
-                <option value="sub">Subteam</option>
-            </select></label>
-        <label>Team
-            <select name="team_id" required>
-                <option value="">– bitte wählen –</option>
-                {% for te in teams %}
-                    <option value="{{ te.id }}">{{ te.name }}{{ ' (Sub)' if te.typ == 'sub' }}</option>
-                {% endfor %}
-            </select></label>
-        <label>Beginn <input type="date" name="beginn" required></label>
-        <label>Ende <input type="date" name="ende" title="leer = Beginn + 4 Arbeitstage (1 Woche)"></label>
-        <label class="kontrollfeld"><input type="checkbox" name="kunde_bestaetigt"> Kunde bestätigt</label>
-        <div class="pj-btnrow">
-            <button class="pj-btn primary" type="submit">Zuweisen + Termin anlegen</button>
-            <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
-        </div>
-    </form>
-</dialog>
+{# v28 (Phase 135): gemeinsamer Termin-Dialog – Drop auf „terminiert“ und Aktion an der Karte #}
+{{ termin_dialog(td, 'dlg-termin-board', zurueck='/projektierung', titel='Termin anlegen') }}
 
 {# Drop-Dialog: bei mehreren offenen Gewerken „Welches Gewerk verschieben?" #}
 <dialog id="gewerkdialog" class="pj-dlg">
@@ -205,41 +198,70 @@
         <button class="pj-btn" onclick="document.getElementById('gewerkdialog').close()">Abbrechen</button>
     </div>
 </dialog>
-<form method="post" id="dropform" hidden>
-    <input type="hidden" name="phase" id="dropphase">
-</form>
+
+{# v28 (Phase 134): Dialog „Phase ändern“ am Board (einmal je Seite) – offene Punkte
+   per GET …/waechter?ziel=, Häkchen/entfällt je Aufgabe, Begründung laut JSON,
+   Senden per fetch an POST …/phase-drop; bei ok wandert die Karte ohne Neuladen #}
+<dialog class="pj-dlg pj-phase-dlg" id="dlg-phase-board" data-gewerk="">
+    <h3>Phase ändern</h3>
+    <form method="post" action="" data-pj-phase data-pj-phase-fetch>
+        <input type="hidden" name="phase" value="" data-ziel>
+        <div class="pj-note" data-hinweis>{% if waechter_modus == 'warnen' %}Offene Punkte blockieren nicht – sie werden im Verlauf vermerkt.{% else %}Modus „sperren“: Wechsel mit offenen Punkten nur mit Begründung (Override, protokolliert).{% endif %}</div>
+        <div class="pj-waechter-liste" data-offen></div>
+        <label><span data-begruendung-label>Begründung</span>
+            <input type="text" name="begruendung" data-begruendung placeholder="optional"></label>
+        <div class="pj-note crit pj-termin-meldung" data-meldung hidden></div>
+        <div class="pj-btnrow">
+            <button class="pj-btn primary" type="submit" data-senden>Verschieben</button>
+            <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
 
 <script>
+const PHASEN_NAMEN = {{ phasen_namen | tojson }};
 let dragGewerke = [];
 let dragSparten = [];
 let dragSpalte = '';
+let dragKarte = null;
+let dropSpalte = null;
 function kartenStart(ereignis, gewerke, sparten) {
     dragGewerke = gewerke;
     dragSparten = sparten;
+    dragKarte = ereignis.target.closest('.pj-card');
     const spalte = ereignis.target.closest('.pj-col');
     dragSpalte = spalte ? spalte.dataset.phase : '';
     ereignis.dataTransfer.effectAllowed = 'move';
 }
-function teamDialog(gewerkId) {
-    const form = document.getElementById('teamform');
-    form.action = '/projektierung/gewerk/' + gewerkId + '/team-termin';
-    document.getElementById('teamdialog').showModal();
+function terminDialogBoard(gewerkId, sparte) {
+    // v28 (Phase 135): gemeinsamer Dialog, Art Montage (WP) vorbelegt
+    window.pjTerminDialogOeffnen('dlg-termin-board', {gewerk: gewerkId, sparte: sparte,
+                                                      art: 'montage', zurueck: '/projektierung'});
+}
+function phaseDialogBoard(gewerkId, sparte, zielPhase) {
+    const ziel = zielPhase.indexOf('auftragseingang_') === 0 ? 'auftragseingang' : zielPhase;
+    window.pjPhaseDialogOeffnen('dlg-phase-board', {
+        gewerk: gewerkId, ziel: ziel,
+        action: '/projektierung/gewerk/' + gewerkId + '/phase-drop',
+        titel: 'Phase ändern · ' + sparte + ' → ' + (PHASEN_NAMEN[ziel] || ziel)
+    });
 }
 function kartenDrop(ereignis, phase) {
     ereignis.preventDefault();
-    if (!dragGewerke.length || phase === 'abgeschlossen') { return; }
+    if (!dragGewerke.length || phase === 'abgeschlossen' || phase === 'storniert') { return; }
+    dropSpalte = ereignis.currentTarget;
     // V4 (Phase 90.1): innerhalb des Auftragseingangs kein Phasenwechsel
     if (dragSpalte === 'auftragseingang_unterminiert' && phase === 'auftragseingang_terminiert') {
-        teamDialog(dragGewerke[0]);
+        terminDialogBoard(dragGewerke[0], dragSparten[0]);
         return;
     }
     if (dragSpalte === 'auftragseingang_terminiert' && phase === 'auftragseingang_unterminiert') {
-        alert('Zurück nach „unterminiert“ geht nicht per Drag – den Montagetermin bitte in der Projektakte löschen.');
+        window.pjMeldung('Termin in der Projektakte löschen (Block Termine)');
         return;
     }
     if (dragSpalte === phase) { return; }
     if (dragGewerke.length === 1) {
-        dropSenden(dragGewerke[0], phase);
+        phaseDialogBoard(dragGewerke[0], dragSparten[0], phase);
         return;
     }
     const dialog = document.getElementById('gewerkdialog');
@@ -249,16 +271,43 @@ function kartenDrop(ereignis, phase) {
         const knopf = document.createElement('button');
         knopf.className = 'pj-btn primary';
         knopf.textContent = dragSparten[i];
-        knopf.onclick = () => { dialog.close(); dropSenden(id, phase); };
+        knopf.onclick = () => { dialog.close(); phaseDialogBoard(id, dragSparten[i], phase); };
         kasten.appendChild(knopf);
     });
     dialog.showModal();
 }
-function dropSenden(gewerkId, phase) {
-    const formular = document.getElementById('dropform');
-    formular.action = '/projektierung/gewerk/' + gewerkId + '/phase-drop';
-    document.getElementById('dropphase').value = phase;
-    formular.submit();
+function spalteZaehlen(spalte) {
+    if (!spalte) { return; }
+    const n = spalte.querySelectorAll('.pj-card').length;
+    const z = spalte.querySelector('[data-zaehler]');
+    if (z) { z.textContent = spalte.dataset.phase === 'abgeschlossen' ? n + ' · letzte 30 Tage' : String(n); }
+    const leer = spalte.querySelector('.pj-col-leer');
+    if (leer) { leer.hidden = n > 0; }
 }
+function kachelAendern(phase, delta) {
+    const p = phase.indexOf('auftragseingang_') === 0 ? 'auftragseingang' : phase;
+    const n = document.querySelector('.pj-tile[data-phase="' + p + '"] .n');
+    if (n) { n.textContent = String(Math.max(0, (parseInt(n.textContent, 10) || 0) + delta)); }
+}
+// v28 (Phase 134): nach erfolgreichem Phasenwechsel wandert die Karte ohne Neuladen
+window.pjBoardKarteVerschieben = function (gewerkId, ziel, antwort) {
+    const karte = dragKarte;
+    if (!karte) { location.reload(); return; }
+    const quelle = karte.closest('.pj-col');
+    let zielSpalte = dropSpalte;
+    const status = antwort && antwort.projekt_status;
+    if (status && status !== ziel && status.indexOf('auftragseingang') !== 0) {
+        zielSpalte = document.querySelector('.pj-col[data-phase="' + status + '"]') || zielSpalte;
+    }
+    if (!zielSpalte) { location.reload(); return; }
+    const chip = karte.querySelector('.pj-gw-wrap[data-gewerk="' + gewerkId + '"] .ph');
+    if (chip) { chip.textContent = PHASEN_NAMEN[antwort.phase || ziel] || ziel; }
+    (zielSpalte.querySelector('details') || zielSpalte).appendChild(karte);
+    karte.classList.add('pj-wandert');
+    setTimeout(() => karte.classList.remove('pj-wandert'), 600);
+    spalteZaehlen(quelle); spalteZaehlen(zielSpalte);
+    kachelAendern(dragSpalte, -1); kachelAendern(antwort.phase || ziel, 1);
+    dragKarte = null;
+};
 </script>
 {% endblock %}

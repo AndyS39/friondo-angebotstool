@@ -27,7 +27,7 @@ from app.models import (Benachrichtigung, Benutzer, KommunikationLog, Kunde, Lea
                         LeadQuelle, Vorgang)
 
 NACHNAME = "LeadV3A-Test"
-KASKADEN_MAILS = ("nicht_erreicht", "disqualifiziert", "nurture")
+KASKADEN_MAILS = ("nicht_erreicht", "disqualifiziert")   # v29: ohne nurture (entfällt)
 
 
 def aufraeumen(s):
@@ -307,7 +307,8 @@ class NichtErreichtOhneDialog(Basis):
             for n in range(5, maximal):
                 self.client.post(f"/lead-management/anruf/{v.id}", data={"ergebnis": "nicht_erreicht"},
                                  follow_redirects=False)
-        # letzter Versuch: Phase Nicht erreicht, disqualifiziert + Nurture +30, WV geleert
+        # letzter Versuch: Phase Nicht erreicht, disqualifiziert, WV geleert; v29
+        # (PLAN_LEAD_V4 Phase 142): keine Nurture-Mail +30 Tage mehr
         r = self.client.post(f"/lead-management/anruf/{v.id}", data={"ergebnis": "nicht_erreicht"},
                              follow_redirects=False)
         m = self.meldung(r)
@@ -319,9 +320,8 @@ class NichtErreichtOhneDialog(Basis):
         self.assertEqual(v.lead_phase, "nicht_erreicht")
         self.assertIsNone(v.naechste_aktion_am)
         offen = {k for k, status in self.mails(v.id) if status == "geplant"}
-        self.assertTrue({"disqualifiziert", "nurture"} <= offen)
-        nurture = self.s.query(KommunikationLog).filter_by(vorgang_id=v.id, vorlage_key="nurture").one()
-        self.assertGreater(nurture.geplant_am, datetime.now() + timedelta(days=29))
+        self.assertIn("disqualifiziert", offen)
+        self.assertNotIn("nurture", {k for k, _ in self.mails(v.id)})
         self.assertTrue(lead_anrufliste.versuche_gesperrt(self.s, v))
         # Sperre: kein weiterer Zähler, keine Aktivität
         for ergebnis in ("nicht_erreicht", "mailbox", "besetzt"):

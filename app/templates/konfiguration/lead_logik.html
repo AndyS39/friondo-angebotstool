@@ -110,18 +110,37 @@
     Quellen-Bonus aus der Quelle.</p>
 
 <h2>Kaskade</h2>
-<table class="tabelle" style="max-width:600px">
-    <thead><tr><th>Versuch</th><th>Wiedervorlage nach</th><th>Aktion</th><th>Letzter</th></tr></thead>
+<table class="tabelle" style="max-width:700px">
+    <thead><tr><th>Versuch</th><th>Wiedervorlage nach</th><th>Aktion</th><th>Letzter</th><th>nach_letztem (v29)</th></tr></thead>
     <tbody>
     {% for s in logik.kaskade %}
         <tr><td>{{ s.versuch_nr }}</td><td>{{ s.wiedervorlage_nach }}</td>
-            <td>{{ s.aktion }}</td><td>{{ 'J' if s.letzter }}</td></tr>
+            <td>{{ s.aktion }}</td><td>{{ 'J' if s.letzter }}</td><td>{{ s.nach_letztem or '' }}</td></tr>
     {% endfor %}
     </tbody>
 </table>
-<p class="dezent">Nach dem letzten Versuch: Phase „Nicht erreicht“, Nurture-Mail in 30 Tagen.
+<p class="dezent">Nach dem letzten Versuch: Phase „Nicht erreicht“ und die Aktion der Spalte
+    <code>nach_letztem</code> (Standard <code>mail_disqualifiziert</code>; seit v29 keine Nurture-Mail mehr).
     Seit V3 wird die Spalte „Wiedervorlage nach“ nicht mehr ausgewertet – „Nicht erreicht“/„Mailbox“
     setzen keine automatische Wiedervorlage; die Mail-Aktionen bleiben an die Versuchsnummer gekoppelt.</p>
+
+{# v29 (PLAN_LEAD_V4 Phase 142): Blatt „Terminhinweise“ – Punkte je Sparte für den Baustein {sparten_hinweise} #}
+<h2>Terminhinweise <small class="dezent">(Baustein {sparten_hinweise} der Terminbestätigung, v29)</small></h2>
+{% if logik.terminhinweise %}
+<table class="tabelle" style="max-width:800px">
+    <thead><tr><th>Sparte</th><th>Reihenfolge</th><th>Punkt</th></tr></thead>
+    <tbody>
+    {% for h in logik.terminhinweise %}
+        <tr><td>{{ h.sparte }}</td><td>{{ h.reihenfolge }}</td><td>{{ h.punkt }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% set platzhalter = [] %}
+{% for s in ('WP', 'PV', 'KL', 'WB', 'GW') %}{% if logik.hinweise_der_sparte(s) == ['(Punkte folgen)'] %}{% set _ = platzhalter.append(s) %}{% endif %}{% endfor %}
+<p class="dezent">{{ logik.terminhinweise | length }} Punkte.{% if platzhalter %} Noch Platzhalter „(Punkte folgen)“ bei: {{ platzhalter | join(', ') }} – Punkte im Blatt nachtragen und die Steuerdatei neu einlesen.{% endif %}</p>
+{% else %}
+<p class="dezent">Blatt „Terminhinweise“ fehlt in der Steuerdatei – der Baustein bleibt leer.</p>
+{% endif %}
 
 <h2>Gründe</h2>
 <table class="tabelle" style="max-width:700px">

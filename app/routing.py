@@ -158,6 +158,11 @@ def matrix_fuellen(session: Session, quellen: list[tuple],
                 continue
             _cache_schreiben(session, q, z, sekunden / 60,
                              (meter or 0) / 1000, anbieter)
+    # Lasttest 08.10.2026 (v29): die Cache-Zeilen sofort festschreiben – sonst hält
+    # die Anfrage (Terminvorschläge rechnen danach noch Sekunden) die SQLite-
+    # Schreibsperre bis zu ihrem Ende und andere Schreiber laufen in „database
+    # is locked“ (busy_timeout 5 s). Der Cache ist eigenständige Nutzdaten.
+    verbindung_freigeben(session)
 
 
 def fahrzeit(session: Session, von: tuple | None,

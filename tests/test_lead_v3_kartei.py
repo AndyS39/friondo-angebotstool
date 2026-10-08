@@ -21,6 +21,25 @@ from fastapi.testclient import TestClient
 
 from app import auth, lead_kartei, lead_v2
 from app import leadmanagement as kern
+
+
+# v29 (PLAN_LEAD_V4 Phase 141): Lead-Glocken sind standardmäßig nur für To-Dos
+# (Parameter glocke_lead_arten) – Tests, die eine Glocke einer anderen Art prüfen,
+# schalten die Art für den Testabschnitt ein (zeigt zugleich die Wiedereinschaltbarkeit).
+from contextlib import contextmanager
+
+
+@contextmanager
+def glocken_arten(s, *arten):
+    from app import lead_glocken
+    alt = kern.parameter_holen(s, lead_glocken.PARAMETER, "")
+    kern.parameter_setzen(s, lead_glocken.PARAMETER, ",".join(lead_glocken.STANDARD_ARTEN + tuple(arten)))
+    s.commit()
+    try:
+        yield
+    finally:
+        kern.parameter_setzen(s, lead_glocken.PARAMETER, alt)
+        s.commit()
 from app.db import SessionLocal, init_db
 from app.main import app
 from app.models import (AdProfil, Benachrichtigung, Benutzer, KommunikationLog,
@@ -539,7 +558,8 @@ class Autospeichern(Basis):
         d = self.feld(v, "leadmanager_id", "1").json()
         self.assertFalse(d["geaendert"])
         vorher = self.s.query(Benachrichtigung).filter_by(benutzer_id=self.ad.id).count()
-        d = self.feld(v, "ad_id", str(self.ad.id)).json()
+        with glocken_arten(self.s, "zuweisung"):         # v29: Glocke nur mit eingeschalteter Art
+            d = self.feld(v, "ad_id", str(self.ad.id)).json()
         self.assertTrue(d["ok"])
         self.assertEqual(d["meldung"], f"Zugewiesen an {self.ad.name}.")
         self.s.expire_all()

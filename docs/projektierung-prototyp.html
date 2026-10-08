@@ -90,6 +90,28 @@ h1,h2,h3{margin:0;text-wrap:balance}
 .task .due.over{background:var(--crit);color:#fff}.task .due.wait{background:var(--info);color:#fff}
 .term{display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:13px}
 .term .d{font-weight:600;min-width:64px}
+/* v28 (Phase 135): Block Termine · (Phase 133/134): Dialog Phase ändern mit offenen Punkten */
+.termine{margin:10px 0 4px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface)}
+.termine-kopf{display:flex;justify-content:space-between;align-items:center;font-size:13px}
+.termine-tab{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+.termine-tab th{text-align:left;font-weight:600;color:var(--muted);padding:2px 6px 4px 0;border-bottom:1px solid var(--line)}
+.termine-tab td{padding:5px 6px 5px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.termine-tab tr:last-child td{border-bottom:0}
+.termine-tab .akt{white-space:nowrap;text-align:right}
+.termine-tab .btn{padding:2px 7px;font-size:11px}
+.badge.art-wp{background:var(--wp);color:#fff;border-color:var(--wp)}
+.badge.art-el{background:var(--pv);color:#fff;border-color:var(--pv)}
+.badge.art-fp{background:var(--info);color:#fff;border-color:var(--info)}
+.wz-liste{margin:8px 0;max-height:40vh;overflow-y:auto}
+.wz-zaehler{font-weight:600;font-size:13px;margin:6px 0 2px}
+.wz{display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid var(--line);font-size:13px}
+.wz:first-of-type{border-top:0}
+.wz .txt{flex:1;min-width:0}
+.wz small{display:block;color:var(--muted);font-size:11px}
+.wz.done .txt{text-decoration:line-through;color:var(--muted)}
+.wz.entf .txt{color:var(--muted);font-style:italic}
+.wz .entf-feld{display:flex;gap:4px;align-items:center}
+.wz .entf-feld input{width:150px;font-size:12px;padding:3px 6px}
 .tabs{display:flex;gap:4px;margin-top:14px;border-bottom:1px solid var(--line);overflow-x:auto}
 .tab{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;color:var(--muted)}
 .tab.on{border-bottom-color:var(--accent);color:var(--accent);font-weight:600}
@@ -438,7 +460,7 @@ tr.ben-details > td { background: #f7f9fb; border-top: none; }
     <span class="chip" onclick="dlg('d-neu')">+ Angebot → Projekt</span>
   </div>
   <div class="board" id="board"></div>
-  <div class="note">Karte = Projekt. Die Spalte richtet sich nach dem Gewerk, das am weitesten zurückliegt; die Chips zeigen jedes Gewerk einzeln. Tippe auf eine Karte für die Akte.</div>
+  <div class="note">Karte = Projekt. Die Spalte richtet sich nach dem Gewerk, das am weitesten zurückliegt; die Chips zeigen jedes Gewerk einzeln. Tippe auf eine Karte für die Akte. v28: Board in voller Breite, jede Spalte scrollt für sich (Kopf bleibt stehen), Dummy-Scrollbalken über dem Board, Shift + Mausrad waagerecht; Ziehen in eine andere Phase öffnet den Dialog „Phase ändern“ (offene Pflichtaufgaben werden gezeigt, blockieren im Modus „warnen“ nicht) – <a href="#" onclick="dlg('d-phase');return false">Dialog ansehen</a>.</div>
 </section>
 
 <!-- ===== AKTE ===== -->
@@ -475,8 +497,21 @@ tr.ben-details > td { background: #f7f9fb; border-top: none; }
         <span>Feinplaner</span><div>Kai R. · Termin war 04.09.</div>
         <span>Elektroplaner</span><div>Deniz A.</div>
         <span>Heizlast</span><div><span class="mono">6,4 kW</span> · 04.09. · <a href="#" onclick="toast('Heizreport-PDF (Demo)');return false">Heizreport-PDF</a></div>
-        <span>Montage</span><div><b>Mo 13.10. – Mi 15.10.</b> · SHK-Team 1 + Elektro-Team 2 · Kunde bestätigt ✔</div>
+        <span>Teams</span><div>WP: <b>Montageteam 1</b> · Elektro: <b>Montageteam 2</b> <small style="color:var(--muted)">(Vorlage – Mannschaft je Termin unter Besetzung)</small></div>
       </div>
+      <!-- v28 (PLAN_PROJ_V6 Phase 135): Block „Termine“ je Gewerk – ersetzt die Zeilen Feinplanung/Montage/weitere Termine -->
+      <div class="termine">
+        <div class="termine-kopf"><b>Termine</b><button class="btn" onclick="toast('Termin-Dialog: Art · Team/Person · Beginn/Uhrzeit/Ende · Besetzung (Chips) · Kunde bestätigt · Notiz · Terminvorschläge (Demo)')">+ Termin</button></div>
+        <table class="termine-tab">
+          <thead><tr><th>Art</th><th>Datum / Uhrzeit</th><th>Team / Person</th><th>Besetzung</th><th>Kunde</th><th>Outlook</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><span class="badge art-fp">Feinplanung VOT</span></td><td><b>Do 04.09.</b> 09:00</td><td>Kai R.</td><td>–</td><td><span style="color:var(--muted)">–</span></td><td title="In Outlook eingetragen">📅✓</td><td class="akt"><button class="btn">bearbeiten</button> <button class="btn danger">löschen</button></td></tr>
+            <tr><td><span class="badge art-wp">Montage (WP)</span></td><td><b>Mo 13.10.</b> – <b>Mi 15.10.</b></td><td>Montageteam 1</td><td title="Ahmet Müller, Ben Schmidt, Cem Yilmaz">A. Müller, B. Schmidt +1</td><td>bestätigt ✔</td><td title="In Outlook eingetragen">📅✓</td><td class="akt"><button class="btn">bearbeiten</button> <button class="btn danger">löschen</button></td></tr>
+            <tr><td><span class="badge art-el">Elektro-Montage</span></td><td><b>Mi 15.10.</b></td><td>Montageteam 2</td><td title="Deniz Aydin">D. Aydin</td><td><button class="btn">✉ Termin an Kunden</button> <button class="btn">✓ bestätigt</button></td><td><button class="btn" title="Outlook-Sync fehlgeschlagen">⚠ erneut senden</button></td><td class="akt"><button class="btn">bearbeiten</button> <button class="btn danger">löschen</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="kv" style="margin-top:4px"><span>Zählerwechsel</span><div>06.10. <small style="color:var(--muted)">(iMSys, Marker im Kalender)</small></div></div>
       <details class="paket" open><summary>Elektroplanung WP <span class="cnt">4 / 5</span></summary>
         <div class="task done"><input type="checkbox" checked><div class="t">Zählerschrank/Unterverteilung bewertet<small>Deniz A. · erledigt 08.09.</small></div></div>
         <div class="task done"><input type="checkbox" checked><div class="t">Leitungsweg und Querschnitt festgelegt<small>Deniz A.</small></div></div>
@@ -653,12 +688,23 @@ tr.ben-details > td { background: #f7f9fb; border-top: none; }
   <label>Bemerkung für die Technik</label><input type="text" placeholder="z. B. Wallbox in Garage, Leitung über Außenwand">
   <div class="btnrow"><button class="btn primary" onclick="closeD('d-neu');toast('Gewerk WB an PR-260046 angehängt – Pakete Wallbox + Auftragseingang aktiv')">Projekt anlegen</button><button class="btn" onclick="closeD('d-neu')">Abbrechen</button></div>
 </div></div>
-<div class="dialog" id="d-phase" onclick="if(event.target===this)this.classList.remove('on')"><div class="box">
-  <h3>Phase ändern · WP</h3>
-  <div style="font-size:13px">Montage geplant → <b>In Ausführung</b></div>
-  <div class="note" style="background:var(--crit);color:#fff">Wächter: 3 Pflichtaufgaben offen (Zustimmung Netzbetreiber, Zählerwechsel-Termin, Fundament fertig)</div>
-  <label>Begründung für Override (Pflicht)</label><input type="text" placeholder="z. B. Netzbetreiber telefonisch zugesagt">
-  <div class="btnrow"><button class="btn primary" onclick="closeD('d-phase');toast('Phase geändert – Override im Verlauf protokolliert')">Trotzdem ändern</button><button class="btn" onclick="closeD('d-phase')">Abbrechen</button></div>
+<!-- v28 (PLAN_PROJ_V6 Phase 133/134): Dialog „Phase ändern“ (Akte und Board-Drop) – Wächter-Modus
+     „warnen“: offene Pflichtaufgaben werden gezeigt, lassen sich direkt abhaken oder mit Grund auf
+     „entfällt“ setzen, Begründung optional (Pflicht nur rückwärts / Modus „sperren“) -->
+<div class="dialog" id="d-phase" onclick="if(event.target===this)this.classList.remove('on')"><div class="box" style="max-width:560px">
+  <h3>Phase ändern · WP → Montagevorbereitung</h3>
+  <div style="font-size:13px">Zielphase <select style="width:auto;display:inline-block"><option>Planung</option><option selected>Montagevorbereitung</option><option>Montage</option></select></div>
+  <div class="note">Offene Punkte blockieren nicht – sie werden im Verlauf vermerkt.</div>
+  <div class="wz-liste">
+    <div class="wz-zaehler">3 offene Punkte (Planung → Montagevorbereitung)</div>
+    <div class="wz"><input type="checkbox" onchange="this.closest('.wz').classList.toggle('done',this.checked)"><span class="txt">Zustimmung Netzbetreiber liegt vor<small>Planungs-Pakete: 3 von 14 Pflichtaufgaben offen</small></span><button class="btn" onclick="this.nextElementSibling.hidden=!this.nextElementSibling.hidden">entfällt</button><span class="entf-feld" hidden><input type="text" placeholder="Grund (Pflicht)"><button class="btn" onclick="const z=this.closest('.wz');z.classList.add('entf');z.querySelector('.txt').insertAdjacentHTML('beforeend','<small>entfällt – '+(this.previousElementSibling.value||'Grund')+'</small>');this.parentNode.hidden=true;toast('Aufgabe entfällt – Grund im Verlauf')">OK</button></span></div>
+    <div class="wz"><input type="checkbox" onchange="this.closest('.wz').classList.toggle('done',this.checked)"><span class="txt">Zählerwechsel-Termin abgestimmt<small>Planungs-Pakete: 3 von 14 Pflichtaufgaben offen</small></span><button class="btn">entfällt</button></div>
+    <div class="wz"><input type="checkbox" onchange="this.closest('.wz').classList.toggle('done',this.checked)"><span class="txt">Fundament fertig, Foto abgelegt<small>Planungs-Pakete: 3 von 14 Pflichtaufgaben offen</small></span><button class="btn">entfällt</button></div>
+    <div class="wz"><span class="txt">• Kein Montagetermin angelegt</span></div>
+  </div>
+  <label>Begründung (optional)</label><input type="text" placeholder="optional">
+  <div class="btnrow"><button class="btn primary" onclick="closeD('d-phase');toast('Phase geändert – offene Punkte im Verlauf vermerkt')">Verschieben</button><button class="btn" onclick="closeD('d-phase')">Abbrechen</button></div>
+  <div class="note" style="font-size:11px">Modus „sperren“ (Parametrierung): Begründung Pflicht, Override wie bisher protokolliert. Rückwärts-Wechsel brauchen in beiden Modi eine Begründung.</div>
 </div></div>
 <div class="dialog" id="d-storno" onclick="if(event.target===this)this.classList.remove('on')"><div class="box">
   <h3>Gewerk stornieren · WP</h3>

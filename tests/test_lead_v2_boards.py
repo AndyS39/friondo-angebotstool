@@ -377,8 +377,9 @@ class Sammelaktionen(Basis):
     def test_status_aendern_schreibt_aktivitaet_je_lead(self):
         a = self.lead(301)
         b = self.lead(302)
-        self.assertEqual([x["key"] for x in lead_boards.sammelaktionen_fuer("hauptboard")], ["status"])
-        self.assertEqual(lead_boards.sammelaktionen_fuer("terminiert"), [])
+        # v29 (Phase 140): zusätzlich „An Handelsvertreter verschieben“ auf Hauptboard und Deals
+        self.assertEqual([x["key"] for x in lead_boards.sammelaktionen_fuer("hauptboard")], ["status", "hv_verschieben"])
+        self.assertEqual([x["key"] for x in lead_boards.sammelaktionen_fuer("terminiert")], ["hv_verschieben"])
         r = self.client.post("/lead-management/boards/sammelaktion",
                              data={"ids": [str(a.id), str(b.id)], "aktion": "status",
                                    "board": "hauptboard", "status": "qualifiziert"},
@@ -411,9 +412,12 @@ class Sammelaktionen(Basis):
         lead_boards.sammelaktion_registrieren("terminiert", "test_lv2b", "Test",
                                               lambda s, vs, p, b: (len(vs), []))
         try:
-            self.assertEqual(lead_boards.sammelaktionen_fuer("terminiert")[0]["key"], "test_lv2b")
+            # v29: Deals trägt bereits „An Handelsvertreter verschieben“ – die Testaktion hängt sich an
+            self.assertEqual([x["key"] for x in lead_boards.sammelaktionen_fuer("terminiert")],
+                             ["hv_verschieben", "test_lv2b"])
         finally:
-            lead_boards.SAMMELAKTIONEN["terminiert"] = []
+            lead_boards.SAMMELAKTIONEN["terminiert"] = [e for e in lead_boards.SAMMELAKTIONEN["terminiert"]
+                                                       if e[0] != "test_lv2b"]
 
 
 class Spalten(Basis):
@@ -492,29 +496,32 @@ class Vorlagen(Basis):
         self.assertIn('name="vorlage" value="disqualifiziert"', seite)
         self.assertIn("{rueckruf_telefon}", seite)
         self.assertIn('action="/lead-management/vorlagen"', seite)
-        alt_b = einstellung_holen(self.s, "lead_vorlage_nurture_KL_betreff", "")
-        alt_t = einstellung_holen(self.s, "lead_vorlage_nurture_KL_text", "")
+        # v29 (Phase 142): die Vorlage nurture entfällt – Sparten-Vorlage am Beispiel disqualifiziert
+        alt_b = einstellung_holen(self.s, "lead_vorlage_disqualifiziert_KL_betreff", "")
+        alt_t = einstellung_holen(self.s, "lead_vorlage_disqualifiziert_KL_text", "")
         try:
             r = self.client.post("/lead-management/vorlagen",
-                                 data={"vorlage": "nurture", "sparte": "KL", "betreff": "LV2B Betreff",
+                                 data={"vorlage": "disqualifiziert", "sparte": "KL", "betreff": "LV2B Betreff",
                                        "text": "LV2B Text"}, follow_redirects=False)
             self.assertEqual(r.status_code, 303)
             self.assertIn("Gespeichert", r.headers["location"])
             self.s.expire_all()
-            self.assertEqual(einstellung_holen(self.s, "lead_vorlage_nurture_KL_betreff", ""), "LV2B Betreff")
-            self.assertIn("LV2B Text", self.client.get("/lead-management/vorlagen?vorlage=nurture&sparte=KL").text)
+            self.assertEqual(einstellung_holen(self.s, "lead_vorlage_disqualifiziert_KL_betreff", ""), "LV2B Betreff")
+            self.assertIn("LV2B Text", self.client.get("/lead-management/vorlagen?vorlage=disqualifiziert&sparte=KL").text)
             r = self.client.post("/lead-management/vorlagen",
-                                 data={"vorlage": "nurture", "sparte": "KL", "aktion": "entfernen"},
+                                 data={"vorlage": "disqualifiziert", "sparte": "KL", "aktion": "entfernen"},
                                  follow_redirects=False)
             self.assertIn("entfernt", r.headers["location"])
         finally:
-            einstellung_setzen(self.s, "lead_vorlage_nurture_KL_betreff", alt_b)
-            einstellung_setzen(self.s, "lead_vorlage_nurture_KL_text", alt_t)
+            einstellung_setzen(self.s, "lead_vorlage_disqualifiziert_KL_betreff", alt_b)
+            einstellung_setzen(self.s, "lead_vorlage_disqualifiziert_KL_text", alt_t)
             self.s.commit()
+        # v29 (Phase 142): der Vorlagen-Editor lebt in app/routers/lm_vorlagen.py
+        # (Baum links, Terminbestätigung je Vertriebler); Rechte unverändert
         from types import SimpleNamespace
-        from app.routers import lm_boards as router
-        self.assertTrue(router._vorlagen_pflege_erlaubt(SimpleNamespace(rolle="innendienst")))
-        self.assertFalse(router._vorlagen_pflege_erlaubt(SimpleNamespace(rolle="leadmanagement")))
+        from app.routers import lm_vorlagen as router
+        self.assertTrue(router._pflege_erlaubt(SimpleNamespace(rolle="innendienst")))
+        self.assertFalse(router._pflege_erlaubt(SimpleNamespace(rolle="leadmanagement")))
 
 
 class Gate(Basis):
@@ -530,17 +537,20 @@ class Gate(Basis):
             self.assertEqual(c_innen.get(pfad).status_code, 404, pfad)
         r = c_innen.post(f"/lead-management/boards/zeile/{eigen.id}", json={"feld": "notiz", "wert": "x"})
         self.assertEqual(r.status_code, 404)
-        # Handelsvertreter: nur eigene Vorgänge, keine Sammelaktionen, keine Vorlagen
+        # Handelsvertreter: nur eigene Vorgänge, keine Sammelaktionen, keine Vorlagen.
+        # v29 (PLAN_LEAD_V4 Phase 140): Hauptboard/Deals/Kontaktiert sind für die
+        # HV-Sicht gesperrt (404) – eigene Leads stehen in der Handelsvertreter-Ansicht
         c_hv = TestClient(app)
         c_hv.post("/login", data={"benutzer_id": str(self.hv.id), "pin": "1234"})
-        r = c_hv.get("/lead-management/hauptboard")
+        r = c_hv.get("/lead-management/handelsvertreter")
         self.assertEqual(r.status_code, 200)
         self.assertIn(f"/lead-management/lead/{eigen.id}", r.text)
         self.assertNotIn(f"/lead-management/lead/{fremd.id}", r.text)
         self.assertNotIn('id="lm-sammelform"', r.text)
         self.assertEqual(c_hv.get("/lead-management/vorlagen").status_code, 404)
-        self.assertEqual(c_hv.get("/lead-management/terminiert").status_code, 200)
-        self.assertEqual(c_hv.get("/lead-management/kontaktiert").status_code, 200)
+        self.assertEqual(c_hv.get("/lead-management/hauptboard").status_code, 404)
+        self.assertEqual(c_hv.get("/lead-management/terminiert").status_code, 404)
+        self.assertEqual(c_hv.get("/lead-management/kontaktiert").status_code, 404)
         # eigener Lead bearbeitbar, fremder nicht
         r = c_hv.post(f"/lead-management/boards/zeile/{eigen.id}", json={"feld": "notiz", "wert": "HV-Notiz"})
         self.assertEqual(r.status_code, 200, r.text)
@@ -551,11 +561,12 @@ class Gate(Basis):
                       headers={"Accept": "application/json"})
         self.assertEqual(r.status_code, 422)
         self.assertIn("Außendienst", r.json()["meldung"])
-        # Kontaktiert: HV sieht nur Treffer eigener Leads
-        self.assertIn("Kein Lead mit dieser Nummer",
-                      c_hv.get("/lead-management/kontaktiert?telefon=0203+770602").text)
-        self.assertIn(f"/lead-management/lead/{eigen.id}",
-                      c_hv.get("/lead-management/kontaktiert?telefon=0203+770601").text)
+        # Kontaktiert: v29 für die HV-Sicht gesperrt (404); die Rufnummernsuche selbst
+        # liefert dem HV weiterhin nur Treffer eigener Leads
+        self.assertEqual(c_hv.get("/lead-management/kontaktiert?telefon=0203+770602").status_code, 404)
+        self.assertEqual(lead_boards.telefon_treffer(self.s, "0203 770602", self.hv), [])
+        self.assertEqual([t["vorgang"].id for t in lead_boards.telefon_treffer(self.s, "0203 770601", self.hv)],
+                         [eigen.id])
 
 
 class Pruefung(Basis):

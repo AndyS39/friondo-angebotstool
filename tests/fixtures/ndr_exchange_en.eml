@@ -1,0 +1,25 @@
+From: postmaster@friondo.invalid
+To: termin@friondo.invalid
+Subject: Undeliverable: Ihr Vor-Ort-Termin am {termin_datum} um {termin_uhrzeit} Uhr
+Date: Thu, 08 Oct 2026 09:20:44 +0200
+Message-ID: <ndr-en-0002@friondo.invalid>
+In-Reply-To: <lead-mail-{eintrag_id}@friondo.invalid>
+X-MS-Exchange-Message-Is-Ndr:
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+MIME-Version: 1.0
+
+<html><body>
+<p><b>Delivery has failed to these recipients or groups:</b></p>
+<p><a href="mailto:{kundenadresse}">{kundenadresse}</a><br>
+The email address you entered couldn't be found. Please check the recipient's email address and try to resend the message. If the problem continues, please contact your helpdesk.</p>
+<p><b>Diagnostic information for administrators:</b></p>
+<p>Generating server: DU2PR01MB1234.eurprd01.prod.exchangelabs.invalid<br>
+{kundenadresse}<br>
+Remote Server returned '550 5.4.1 Recipient address rejected: Access denied. AS(201806281)'</p>
+<p>Original message headers:</p>
+<pre>From: termin@friondo.invalid
+To: {kundenadresse}
+Subject: Ihr Vor-Ort-Termin am {termin_datum} um {termin_uhrzeit} Uhr
+Message-ID: &lt;lead-mail-{eintrag_id}@friondo.invalid&gt;</pre>
+</body></html>

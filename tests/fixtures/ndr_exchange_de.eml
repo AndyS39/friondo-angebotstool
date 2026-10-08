@@ -1,0 +1,31 @@
+From: "Microsoft Outlook" <MicrosoftExchange329e71ec88ae4615bbc36ab6ce41109e@friondo.invalid>
+To: termin@friondo.invalid
+Subject: Unzustellbar: [TEST an {kundenadresse}] Ihre Anfrage bei Friondo - wir melden uns in Kuerze
+Date: Thu, 08 Oct 2026 09:15:02 +0200
+Message-ID: <ndr-de-0001@friondo.invalid>
+In-Reply-To: <lead-mail-{eintrag_id}@friondo.invalid>
+X-MS-Exchange-Message-Is-Ndr:
+X-MS-Exchange-Original-Recipient: {kundenadresse}
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+MIME-Version: 1.0
+
+Die Zustellung an diese Empfaenger oder Gruppen ist fehlgeschlagen:
+
+{kundenadresse}
+Die E-Mail-Adresse, die Sie eingegeben haben, wurde nicht gefunden. Ueberpruefen Sie die Adresse des Empfaengers auf Tippfehler, und versuchen Sie, die Nachricht erneut zu senden. Sollte das Problem weiterhin auftreten, wenden Sie sich an den Helpdesk.
+
+Diagnoseinformationen fuer Administratoren:
+
+Generierender Server: DU2PR01MB1234.eurprd01.prod.exchangelabs.invalid
+
+{kundenadresse}
+Remote Server returned '550 5.1.10 RESOLVER.ADR.RecipientNotFound; Recipient not found by SMTP address lookup'
+
+Ursprungsheader:
+
+Received: from DU2PR01MB1234.eurprd01.prod.exchangelabs.invalid by DU2PR01MB5678.eurprd01.prod.exchangelabs.invalid
+From: termin@friondo.invalid
+To: {kundenadresse}
+Subject: [TEST an {kundenadresse}] Ihre Anfrage bei Friondo - wir melden uns in Kuerze
+Message-ID: <lead-mail-{eintrag_id}@friondo.invalid>

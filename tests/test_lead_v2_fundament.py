@@ -193,12 +193,13 @@ class Kaskade(Basis):
         self.assertTrue(kern.versuche_gesperrt(self.s, v))
         mails = sorted(m.vorlage_key for m in self.s.query(KommunikationLog)
                        .filter_by(vorgang_id=v.id) if m.vorlage_key != "eingangsbestaetigung")
-        self.assertEqual(mails, ["disqualifiziert", "nurture"])
-        nurture = (self.s.query(KommunikationLog)
-                   .filter_by(vorgang_id=v.id, vorlage_key="nurture").one())
-        self.assertGreater(nurture.geplant_am, datetime.now() + timedelta(days=29))
+        # v29 (PLAN_LEAD_V4 Phase 142): Nurture entfällt – die letzte Stufe plant nur noch
+        # „disqualifiziert“ (keine +30-Tage-Mail mehr)
+        self.assertEqual(mails, ["disqualifiziert"])
+        disq = (self.s.query(KommunikationLog)
+                .filter_by(vorgang_id=v.id, vorlage_key="disqualifiziert").one())
         # Sendesperre: Demo → Modus protokoll
-        self.assertEqual(nurture.modus, "protokoll")
+        self.assertEqual(disq.modus, "protokoll")
 
     def test_versuche_max_parameter_greift(self):
         kern.parameter_setzen(self.s, "versuche_max", "3")

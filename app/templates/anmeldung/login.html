@@ -2,38 +2,80 @@
 
 {% block titel %}Anmeldung – Friondo Angebotstool{% endblock %}
 
+{# v27-Nachtrag 2 (PLAN_V17, Nachtrag 06.10.2026): Anmeldeseite zweispaltig nach
+   dem Muster SingleKey ID – links Logo, „Anmeldung“, Benutzerwahl, PIN, Häkchen
+   (nur Außendienst/Montage), Knopf, darunter die Fehlermeldungen aus auth
+   (Sperre, falsche PIN, IP-Sperre); rechts das Energiehaus-Foto bildschirmhoch.
+   Unter 900 px eine Spalte mit Kopfbild (max. 180 px), unter 500 px ohne Foto.
+   Kopfzeile, Wartungsbanner und Fußzeile kommen weiter aus base.html; die
+   Login-Logik (anmeldung.py / auth.py) und die Feldnamen sind unverändert. #}
+{% block mainklasse %}login-main{% endblock %}
+
 {% block inhalt %}
 {# v27 (PLAN_V17 Phase 130): eigene Styles der Login-Härtung (nicht style.css) #}
 <link rel="stylesheet" href="/static/login_v27.css?v={{ css_version }}">
-<div class="login-karte">
-    <h1>Anmeldung</h1>
-    {% if fehler %}<p class="meldung fehler">{{ fehler }}</p>{% endif %}
-    {% if benutzer %}
-    <form method="post" action="/login">
-        <label>Benutzer
-            <select name="benutzer_id">
-                {% for b in benutzer %}
-                    <option value="{{ b.id }}">{{ b.name }} ({{ b.rolle }})</option>
-                {% endfor %}
-            </select>
-        </label>
-        <label>PIN
-            <input type="password" name="pin" inputmode="numeric" autocomplete="off" autofocus>
-        </label>
-        {# v27 (Phase 130): 30 Tage Sitzung für Außendienst/Montage – Büro-Rollen
-           bleiben bei 12 h, auch mit Häkchen (auth.sitzungsdauer_s entscheidet) #}
-        <label class="kontrollfeld login-bleiben">
-            <input type="checkbox" name="angemeldet_bleiben" value="on"
-                   {{ 'checked' if angemeldet_bleiben }}>
-            Auf diesem Gerät angemeldet bleiben
-        </label>
-        <span class="dezent login-hinweis">Gilt für Außendienst und Montage ({{ tage_mobil }} Tage);
-            Büro-Rollen bleiben {{ stunden_buero }} Stunden angemeldet.</span>
-        <button class="knopf gross" type="submit">Anmelden</button>
-    </form>
-    {% else %}
-    <p class="hinweis">Keine Benutzer vorhanden – beim ersten Start wird automatisch
-    „Admin“ (PIN 1234) angelegt. Bitte App neu starten.</p>
-    {% endif %}
+<div class="login-buehne">
+    <section class="login-spalte">
+        <div class="login-karte login-box">
+            <img class="login-logo" src="/static/logo.png" alt="Friondo" width="159" height="64">
+            <h1>Anmeldung</h1>
+            <p class="login-untertitel">Friondo Angebotstool</p>
+            {% if benutzer %}
+            <form method="post" action="/login" id="login-formular">
+                <label>Benutzer
+                    <select name="benutzer_id" id="login-benutzer">
+                        {% for b in benutzer %}
+                            <option value="{{ b.id }}"{% if b.rolle in mobile_rollen %} data-mobil="1"{% endif %}>{{ b.name }} ({{ b.rolle }})</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>PIN
+                    <input type="password" name="pin" inputmode="numeric" autocomplete="off" autofocus>
+                </label>
+                {# v27 (Phase 130): 30 Tage Sitzung für Außendienst/Montage – Büro-Rollen
+                   bleiben bei 12 h, auch mit Häkchen (auth.sitzungsdauer_s entscheidet).
+                   Nachtrag 2: der Block wird per Skript nur für Außendienst/Montage gezeigt. #}
+                <div class="login-bleiben-block" id="login-bleiben-block">
+                    <label class="kontrollfeld login-bleiben">
+                        <input type="checkbox" name="angemeldet_bleiben" value="on"
+                               {{ 'checked' if angemeldet_bleiben }}>
+                        Auf diesem Gerät angemeldet bleiben
+                    </label>
+                    <span class="dezent login-hinweis">Gilt für Außendienst und Montage ({{ tage_mobil }} Tage);
+                        Büro-Rollen bleiben {{ stunden_buero }} Stunden angemeldet.</span>
+                </div>
+                <button class="knopf gross login-knopf" type="submit">Anmelden</button>
+                {% if fehler %}<p class="meldung fehler login-fehler" role="alert">{{ fehler }}</p>{% endif %}
+            </form>
+            {% else %}
+            <p class="hinweis">Keine Benutzer vorhanden – beim ersten Start wird automatisch
+            „Admin“ (PIN 1234) angelegt. Bitte App neu starten.</p>
+            {% endif %}
+        </div>
+    </section>
+    <aside class="login-foto" aria-hidden="true">
+        <img src="/static/anmeldung-energiehaus.jpg" alt="">
+    </aside>
 </div>
+<script>
+// v27-Nachtrag 2: Häkchen „angemeldet bleiben“ nur für Außendienst/Montage zeigen
+// (Option data-mobil aus auth.MOBILE_ROLLEN). Serverseitig entscheidet weiterhin
+// auth.sitzungsdauer_s – ohne JavaScript bleibt der Block einfach sichtbar.
+(function () {
+    var auswahl = document.getElementById('login-benutzer');
+    var block = document.getElementById('login-bleiben-block');
+    if (!auswahl || !block) { return; }
+    function anpassen() {
+        var option = auswahl.options[auswahl.selectedIndex];
+        var mobil = !!(option && option.getAttribute('data-mobil'));
+        block.hidden = !mobil;
+        if (!mobil) {
+            var haken = block.querySelector('input[type=checkbox]');
+            if (haken) { haken.checked = false; }
+        }
+    }
+    auswahl.addEventListener('change', anpassen);
+    anpassen();
+})();
+</script>
 {% endblock %}

@@ -2,10 +2,13 @@
 {% from "_galerie.html" import galerie as galerie_komponente, galerie_fuss %}
 {% from "_steckbrief.html" import steckbrief %}
 {% from "_projektierung.html" import pj_dot %}
+{# v28 (PLAN_PROJ_V6 Phase 135/136): gemeinsamer Termin-Dialog, Notizen-Chat #}
+{% from "projektierung/_termin_dialog.html" import termin_dialog, termin_loeschen_dialog %}
+{% from "_komponenten.html" import notizen_chat %}
 
 {% block titel %}{{ projekt.nummer }} – Projektakte{% endblock %}
 
-{% block mainklasse %}breit{% endblock %}
+{% block mainklasse %}breit pj-voll{% endblock %}
 
 {% set SPARTEN_NAMEN = {'WP': 'Wärmepumpe', 'PV': 'Photovoltaik',
                         'KL': 'Klima', 'WB': 'Wallbox'} %}
@@ -60,10 +63,11 @@
     </div>
     {% if projekt.notiz_kopf %}<div class="pj-note">📌 {{ projekt.notiz_kopf }}</div>{% endif %}
     <div class="pj-btnrow">
-        <button class="pj-btn" type="button" onclick="pjTabOeffnen('verlauf'); document.getElementById('kommentarfeld').focus()">💬 Kommentar</button>
+        <button class="pj-btn" type="button" onclick="pjTabOeffnen('verlauf'); var f = document.querySelector('#verlauf textarea'); if (f) f.focus();">💬 Kommentar</button>
         <button class="pj-btn" type="button" onclick="pjTabOeffnen('dokumente')">⬆ Dokument</button>
-        {% if gewerke %}
-        <button class="pj-btn" type="button" onclick="pjDialog('dlg-termin-{{ gewerke[0].id }}')">📅 Termin</button>
+        {% set erstes_offen = (gewerke | rejectattr('phase', 'equalto', 'storniert') | list | first) or (gewerke | first) %}
+        {% if erstes_offen %}
+        <button class="pj-btn" type="button" onclick="pjTerminDialog('dlg-termin-{{ erstes_offen.id }}')">📅 Termin</button>
         {% endif %}
     </div>
 </div>
@@ -229,38 +233,6 @@
             </div>
             {% endif %}
 
-            <span>Montage</span>
-            <div>{% if montage_termine %}
-                {% set m = montage_termine | sort(attribute='beginn') | last %}
-                <b>{{ m.beginn | de_datum('%a %d.%m.') }}{{ ' – ' ~ (m.ende | de_datum('%a %d.%m.')) if m.ende and m.ende.date() != m.beginn.date() }}</b>
-                {% if m.team_id and m.team_id in teams_map %} · {{ teams_map[m.team_id].name }}{% endif %}
-                {% if m.kunde_bestaetigt %} · Kunde bestätigt ✔{% endif %}
-                {% if m.notiz %} <small style="color:var(--pj-muted)">{{ m.notiz }}</small>{% endif %}
-                {# v15 (Phase 81): Outlook-Sync + Kunden-Terminbestätigung #}
-                {% if m.outlook_fehler %}
-                <form method="post" action="/projektierung/termin/{{ m.id }}/outlook" style="display:inline">
-                    <button class="pj-btn" type="submit" title="{{ m.outlook_fehler }}">⚠ Outlook erneut senden</button>
-                </form>
-                {% elif m.outlook_event_id %} · <span title="In Outlook eingetragen">📅✓</span>
-                {% endif %}
-                {% if not m.kunde_bestaetigt %}
-                <form method="post" action="/projektierung/termin/{{ m.id }}/kundenmail" style="display:inline">
-                    <button class="pj-btn" type="submit"
-                            title="Terminbestätigung per Mail (Vorlage: Parametrierung)">✉ Termin an Kunden</button>
-                </form>
-                {% if m.kunden_antwort_am %}
-                <form method="post" action="/projektierung/termin/{{ m.id }}/kunde-bestaetigt" style="display:inline">
-                    <input type="hidden" name="quelle" value="mail">
-                    <button class="pj-btn primary" type="submit"
-                            title="Antwort vom {{ m.kunden_antwort_am.strftime('%d.%m.%Y') }} – siehe Reiter Mails">✉ Kunde hat geantwortet – bestätigen</button>
-                </form>
-                {% else %}
-                <form method="post" action="/projektierung/termin/{{ m.id }}/kunde-bestaetigt" style="display:inline">
-                    <button class="pj-btn" type="submit" title="Manuelles Häkchen (z. B. telefonisch bestätigt)">✓ bestätigt</button>
-                </form>
-                {% endif %}
-                {% endif %}
-            {% else %}– noch nicht terminiert{% endif %}</div>
         </div>
 
         {% if g.wp_team_id or g.elektro_team_id or g.sub_team_id %}
@@ -270,9 +242,78 @@
                 {% if g.wp_team_id and g.wp_team_id in teams_map %}WP: <b>{{ teams_map[g.wp_team_id].name }}</b>{% endif %}
                 {% if g.elektro_team_id and g.elektro_team_id in teams_map %} · Elektro: <b>{{ teams_map[g.elektro_team_id].name }}</b>{% endif %}
                 {% if g.sub_team_id and g.sub_team_id in teams_map %} · Sub: <b>{{ teams_map[g.sub_team_id].name }}</b>{% endif %}
+                <small class="dezent">(Vorlage – die Mannschaft steht je Termin unter Besetzung)</small>
             </div>
         </div>
         {% endif %}
+
+        {# v28 (PLAN_PROJ_V6 Phase 135): Block „Termine“ je Gewerk – ersetzt die
+           Zeilen Feinplanung/Montage/weitere Termine: Art · Datum/Uhrzeit ·
+           Team/Person · Besetzung · Kunde · Outlook · Aktionen #}
+        <div class="pj-termine" id="termine-{{ g.id }}">
+            <div class="pj-termine-kopf">
+                <b>Termine</b>
+                {% if g.phase != 'storniert' %}
+                <button class="pj-btn" type="button" onclick="pjTerminDialog('dlg-termin-{{ g.id }}')">+ Termin</button>
+                {% endif %}
+            </div>
+            {% if gewerk_termine %}
+            <table class="pj-termine-tab">
+                <thead><tr><th>Art</th><th>Datum / Uhrzeit</th><th>Team / Person</th><th>Besetzung</th>
+                    <th>Kunde</th><th>Outlook</th><th></th></tr></thead>
+                <tbody>
+                {% for t in gewerk_termine | sort(attribute='beginn') %}
+                {% set t_art = termin_art(t) %}
+                <tr class="pj-termin-zeile {{ 'vergangen' if t.beginn and t.beginn < heute }}" id="termin-{{ t.id }}">
+                    <td><span class="pj-badge pj-art-{{ t_art }}">{{ termin_art_name(t) }}</span></td>
+                    <td><b>{{ t.beginn | de_datum('%a %d.%m.') if t.beginn }}</b>
+                        {%- if t.beginn and not t.ganztaegig and t.beginn.strftime('%H:%M') != '00:00' %} {{ t.beginn.strftime('%H:%M') }}{% endif -%}
+                        {%- if t.ende and t.ende.date() != t.beginn.date() %} – <b>{{ t.ende | de_datum('%a %d.%m.') }}</b>{% endif %}
+                        {% if t.notiz %}<br><small class="dezent">{{ t.notiz }}</small>{% endif %}</td>
+                    <td>{% if t.team_id and t.team_id in teams_map %}{{ teams_map[t.team_id].name }}
+                        {%- elif t.person_id and t.person_id in benutzer_map %}{{ benutzer_map[t.person_id].name }}
+                        {%- elif t.sub_id and subs_map is defined and t.sub_id in subs_map %}{{ subs_map[t.sub_id].firma }}
+                        {%- else %}<span class="dezent">–</span>{% endif %}</td>
+                    <td title="{{ besetzung_voll.get(t.id, '') }}">{{ besetzung.get(t.id) or ('–' if t.team_id else '') }}</td>
+                    <td>{% if t.kunde_bestaetigt %}<span title="Kunde bestätigt{{ ' (' ~ t.bestaetigt_quelle ~ ')' if t.bestaetigt_quelle }}">bestätigt ✔</span>
+                        {% elif t.typ == 'montage' %}
+                        <form method="post" action="/projektierung/termin/{{ t.id }}/kundenmail" style="display:inline">
+                            <button class="pj-btn" type="submit" title="Terminbestätigung per Mail (Vorlage: Parametrierung)">✉ Termin an Kunden</button>
+                        </form>
+                        {% if t.kunden_antwort_am %}
+                        <form method="post" action="/projektierung/termin/{{ t.id }}/kunde-bestaetigt" style="display:inline">
+                            <input type="hidden" name="quelle" value="mail">
+                            <button class="pj-btn primary" type="submit"
+                                    title="Antwort vom {{ t.kunden_antwort_am.strftime('%d.%m.%Y') }} – siehe Reiter Mails">✉ Kunde hat geantwortet – bestätigen</button>
+                        </form>
+                        {% else %}
+                        <form method="post" action="/projektierung/termin/{{ t.id }}/kunde-bestaetigt" style="display:inline">
+                            <button class="pj-btn" type="submit" title="Manuelles Häkchen (z. B. telefonisch bestätigt)">✓ bestätigt</button>
+                        </form>
+                        {% endif %}
+                        {% else %}<span class="dezent">–</span>{% endif %}</td>
+                    <td>{% if t.outlook_fehler %}
+                        <form method="post" action="/projektierung/termin/{{ t.id }}/outlook" style="display:inline">
+                            <button class="pj-btn" type="submit" title="{{ t.outlook_fehler }}">⚠ erneut senden</button>
+                        </form>
+                        {% elif t.outlook_event_id %}<span title="In Outlook eingetragen">📅✓</span>
+                        {% else %}<span class="dezent">–</span>{% endif %}</td>
+                    <td class="pj-termin-aktionen">
+                        {% if g.phase != 'storniert' %}
+                        <button class="pj-btn" type="button" title="Termin bearbeiten (Art bleibt)"
+                                onclick="pjTerminDialog('dlg-termin-edit-{{ t.id }}')">bearbeiten</button>
+                        <button class="pj-btn danger" type="button" title="Termin löschen (Pflichtgrund)"
+                                onclick="pjDialog('dlg-termin-del-{{ t.id }}')">löschen</button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="dezent" style="font-size:13px">Noch keine Termine – noch nicht terminiert.</div>
+            {% endif %}
+        </div>
 
         {% if g.sparte == 'WP' %}
         {# v15 (Phase 78, Fit for Future): Zählerwechseltermin (Kalender-Marker) #}
@@ -290,23 +331,17 @@
         </div>
         {% endif %}
 
-        {# weitere Termine (Abnahme/Sub/Sonstige) #}
-        {% set weitere = gewerk_termine | rejectattr('typ', 'in', ['feinplanung', 'montage']) | list %}
-        {% for t in weitere %}
-        <div class="pj-term"><span class="d">{{ t.beginn.strftime('%d.%m.') if t.beginn }}</span>
-            <div>{{ t.typ | capitalize }}{{ ' · ' ~ t.notiz if t.notiz }}
-                {{ '· Kunde bestätigt ✔' if t.kunde_bestaetigt }}</div></div>
-        {% endfor %}
-
         {# Aufgaben als Pakete (Prototyp .paket/.task) #}
         {% for instanz_id, gruppe in aufgaben_gruppen.get(g.id, []) %}
         {% set erledigt_anzahl = gruppe | selectattr('status', 'equalto', 'erledigt') | list | length %}
+        {% set entfaellt_anzahl = gruppe | selectattr('status', 'equalto', 'entfaellt') | list | length %}
         {% set ist_v1 = instanz_id in instanzen and instanzen[instanz_id].version == 'v1' %}
         {# v15 (Phase 78): aufgeklappt ist das Paket der aktuellen Phase #}
         <details class="pj-paket" {{ 'open' if paket_offen.get((g.id, instanz_id)) }}>
             <summary>{{ instanzen[instanz_id].paket_name if instanz_id in instanzen else 'Einzelaufgaben' }}
                 {% if ist_v1 %}<span class="pj-v1" title="Aufgaben aus den alten V1-Paketen – über „V1-Aufgaben entfernen“ löschbar">V1</span>{% endif %}
-                <span class="cnt" data-paket-cnt="{{ instanz_id }}">{{ 'alle erledigt' if erledigt_anzahl == gruppe | length else erledigt_anzahl ~ ' / ' ~ gruppe | length }}</span>
+                {# v28 (Phase 133): „entfällt“ zählt wie erledigt, wird aber genannt #}
+                <span class="cnt" data-paket-cnt="{{ instanz_id }}">{{ 'alle erledigt' if erledigt_anzahl + entfaellt_anzahl == gruppe | length else erledigt_anzahl ~ ' / ' ~ gruppe | length }}{{ ' · ' ~ entfaellt_anzahl ~ ' entfällt' if entfaellt_anzahl }}</span>
             </summary>
             {% for a in gruppe %}
             {# v26 (Phase 123): Heizreport-Kontext je Gewerk für die Heizlast-Aufgabe #}
@@ -362,15 +397,17 @@
             {% endif %}
             <button class="pj-btn" type="button" onclick="pjDialog('dlg-aufgabe-{{ g.id }}')">+ Aufgabe</button>
             <button class="pj-btn" type="button" onclick="pjDialog('dlg-paket-{{ g.id }}')">+ Paket</button>
+            {# v28 (Phase 135): ein Dialog für alle Terminarten (Art vorbelegt) #}
             {% if not fp_termine %}
             <button class="pj-btn" type="button"
-                    onclick="pjDialog('dlg-termin-{{ g.id }}', 'feinplanung')">📅 Feinplanungstermin</button>
-            <button class="pj-btn" type="button"
-                    onclick="document.getElementById('dlg-team-{{ g.id }}').showModal()">👥 Team + Termin</button>
-            {% else %}
-            <button class="pj-btn" type="button" onclick="pjDialog('dlg-termin-{{ g.id }}')">📅 Termin</button>
+                    onclick="pjTerminDialog('dlg-termin-{{ g.id }}', 'feinplanung')">📅 Feinplanungstermin</button>
             {% endif %}
-            <button class="pj-btn primary" type="button" onclick="pjDialog('dlg-phase-{{ g.id }}')">Phase ändern</button>
+            {% if not montage_termine %}
+            <button class="pj-btn" type="button"
+                    onclick="pjTerminDialog('dlg-termin-{{ g.id }}', 'montage')">👥 Montagetermin + Team</button>
+            {% endif %}
+            <button class="pj-btn" type="button" onclick="pjTerminDialog('dlg-termin-{{ g.id }}')">📅 Termin</button>
+            <button class="pj-btn primary" type="button" onclick="pjPhaseDialog('dlg-phase-{{ g.id }}')">Phase ändern</button>
             <button class="pj-btn danger" type="button" onclick="pjDialog('dlg-storno-{{ g.id }}')">Stornieren</button>
             {% if g.phase in ('freigabe', 'abnahme_freigabe') %}
             <button class="pj-btn primary" type="button" onclick="pjDialog('dlg-freigabe-{{ g.id }}')">Rechnung freigeben</button>
@@ -404,77 +441,36 @@
                 </div>
             </form>
         </dialog>
-        <dialog class="pj-dlg" id="dlg-team-{{ g.id }}">
-        {# v15 (Phase 75): Zuweisung mit Terminwahl; Ende = Beginn + 4 Arbeitstage #}
-        <form method="post" action="/projektierung/gewerk/{{ g.id }}/team-termin" class="box">
-            <h3>Team + Termin · {{ g.sparte }}</h3>
-            <label>Zuweisung
-                <select name="zweck">
-                    <option value="wp">Montageteam (WP)</option>
-                    <option value="elektro">Elektro-Montageteam</option>
-                    <option value="sub">Subteam</option>
-                </select></label>
-            <label>Team
-                <select name="team_id" required>
-                    <option value="">– bitte wählen –</option>
-                    {% for te in teams %}
-                        <option value="{{ te.id }}">{{ te.name }}{{ ' (Sub)' if te.typ == 'sub' }}</option>
-                    {% endfor %}
-                </select></label>
-            <label>Beginn <input type="date" name="beginn" required
-                   onchange="pjEndeVorbelegen(this)"></label>
-            <label>Ende <input type="date" name="ende"
-                   title="leer = Beginn + 4 Arbeitstage (1 Woche)"></label>
-            <label class="kontrollfeld"><input type="checkbox" name="kunde_bestaetigt"> Kunde bestätigt</label>
-            <div class="pj-btnrow">
-                <button class="pj-btn primary" type="submit">Zuweisen + Termin anlegen</button>
-                <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
-            </div>
-            <div class="pj-note">Konflikte (Team am selben Tag woanders) werden
-                nach dem Speichern als Warnung angezeigt – kein Verbot.</div>
-        </form>
-    </dialog>
-    <dialog class="pj-dlg" id="dlg-termin-{{ g.id }}">
-            <h3>Termin anlegen · {{ g.sparte }}</h3>
-            <form method="post" action="/projektierung/gewerk/{{ g.id }}/termin">
-                <label>Typ</label>
-                <select name="typ">
-                    {% for t in ('feinplanung', 'montage', 'abnahme', 'sub', 'sonstige') %}
-                        <option value="{{ t }}">{{ t | capitalize }}</option>
-                    {% endfor %}
-                </select>
-                <label>Beginn</label>
-                <input type="datetime-local" name="beginn" required step="900">
-                <label>Ende (optional)</label>
-                <input type="datetime-local" name="ende" step="900">
-                <label>Notiz</label>
-                <input type="text" name="notiz" placeholder="Notiz">
-                <div class="opt" style="margin-top:8px">
-                    <input type="checkbox" name="kunde_bestaetigt" id="kb-{{ g.id }}">
-                    <label for="kb-{{ g.id }}" style="margin:0">Kunde hat bestätigt</label>
-                </div>
-                <div class="pj-btnrow">
-                    <button class="pj-btn primary" type="submit">Anlegen</button>
-                    <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
-                </div>
-            </form>
-        </dialog>
-        <dialog class="pj-dlg" id="dlg-phase-{{ g.id }}">
+        {# v28 (PLAN_PROJ_V6 Phase 135): EIN Termin-Dialog (anlegen) + je Termin
+           bearbeiten/löschen – Makro _termin_dialog.html #}
+        {{ termin_dialog(td, 'dlg-termin-' ~ g.id, gewerk=g,
+                         zurueck='/projektierung/projekt/' ~ projekt.id) }}
+        {% for t in gewerk_termine %}
+        {{ termin_dialog(td, 'dlg-termin-edit-' ~ t.id, gewerk=g, termin=t, art=termin_art(t),
+                         besetzung=besetzung_ids.get(t.id, []),
+                         zurueck='/projektierung/projekt/' ~ projekt.id) }}
+        {{ termin_loeschen_dialog(t, 'dlg-termin-del-' ~ t.id, art_name=termin_art_name(t)) }}
+        {% endfor %}
+        {# v28 (PLAN_PROJ_V6 Phase 133): Dialog „Phase ändern“ lädt die offenen
+           Punkte per GET …/waechter?ziel= (Häkchen „erledigt“, Knopf „entfällt“);
+           Begründung Pflicht nur bei rückwärts oder Modus „sperren“ #}
+        <dialog class="pj-dlg pj-phase-dlg" id="dlg-phase-{{ g.id }}" data-gewerk="{{ g.id }}">
             <h3>Phase ändern · {{ g.sparte }}</h3>
-            <form method="post" action="/projektierung/gewerk/{{ g.id }}/phase">
+            <form method="post" action="/projektierung/gewerk/{{ g.id }}/phase" data-pj-phase>
                 <label>Zielphase (aktuell: {{ phasen_namen.get(g.phase, g.phase) }})</label>
-                <select name="phase">
+                <select name="phase" data-ziel>
                     {% for p in phasen if p != 'storniert' %}
                         <option value="{{ p }}" {{ 'selected' if p == g.phase }}>{{ phasen_namen[p] }}</option>
                     {% endfor %}
                 </select>
-                <div class="pj-note crit">Wächter werden beim Übernehmen geprüft
-                    (Pflichtaufgaben, Montagetermin) – Override und Rückwärts nur
-                    mit Begründung, protokolliert im Verlauf.</div>
-                <label>Begründung (bei Override/rückwärts Pflicht)</label>
-                <input type="text" name="begruendung" placeholder="z. B. Netzbetreiber telefonisch zugesagt">
+                <div class="pj-note" data-hinweis>{% if waechter_modus == 'warnen' %}Offene Punkte blockieren nicht – sie werden im Verlauf vermerkt.{% else %}Modus „sperren“: Wechsel mit offenen Punkten nur mit Begründung (Override, protokolliert).{% endif %}</div>
+                <div class="pj-waechter-liste" data-offen></div>
+                <label><span data-begruendung-label>Begründung</span>
+                    <input type="text" name="begruendung" data-begruendung placeholder="optional"
+                           title="Pflicht bei Rückwärts-Wechsel oder im Modus „sperren“"></label>
+                <div class="pj-note crit pj-termin-meldung" data-meldung hidden></div>
                 <div class="pj-btnrow">
-                    <button class="pj-btn primary" type="submit">Übernehmen</button>
+                    <button class="pj-btn primary" type="submit" data-senden>Übernehmen</button>
                     <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
                 </div>
             </form>
@@ -580,6 +576,17 @@
 </div>
 
 <div class="pj-pane" id="verlauf">
+    {# v28 (PLAN_PROJ_V6 Phase 136, Vertrag mit P2): oben der Notizen-Chat des
+       Vorgangs (einzige Notizspur Lead → Montage), darunter der Systemverlauf
+       eingeklappt; ohne Vorgang (Altbestand) bleibt das alte Kommentarfeld #}
+    {% if notizen_ctx %}
+    <h3 style="margin:0 0 6px;font-size:14px">Notizen (Vorgang)</h3>
+    {{ notizen_chat(notizen_ctx) }}
+    <details style="margin-top:10px" {{ 'open' if not notizen_ctx.eintraege }}>
+        <summary class="dezent" style="cursor:pointer">Systemverlauf ({{ verlauf | length }})</summary>
+    {% else %}
+    <p class="dezent">Kein Vorgang – Kommentar nur im Projektverlauf</p>
+    {% endif %}
     <div class="pj-log" id="pj-verlauf">
         {% for e in verlauf %}
         <div>
@@ -594,6 +601,9 @@
         <div style="color:var(--pj-muted);border-bottom:0">Noch keine Einträge.</div>
         {% endfor %}
     </div>
+    {% if notizen_ctx %}
+    </details>
+    {% else %}
     <form method="post" action="/projektierung/projekt/{{ projekt.id }}/kommentar">
         <textarea name="text" rows="2" id="kommentarfeld" required
                   placeholder="Kommentar … @Name erwähnen"></textarea>
@@ -601,16 +611,6 @@
             <button class="pj-btn primary" type="submit">Senden</button>
         </div>
     </form>
-    {% if vorgang_notizen | default(false) %}
-    <details style="margin-top:8px">
-        <summary class="dezent" style="cursor:pointer">Notizen-Chat des Vorgangs (Vertriebsphase, read-only)</summary>
-        <div class="pj-log">
-            {% for n in vorgang_notizen %}
-            <div><span class="who">{{ n.benutzer_name }}</span><time>{{ n.zeit.strftime('%d.%m.%y %H:%M') }}</time>
-                <br>{{ n.text }}</div>
-            {% endfor %}
-        </div>
-    </details>
     {% endif %}
 </div>
 
@@ -727,19 +727,6 @@ function pjAufgabeLink(aufgabeId) {
     return true;
 }
 
-function pjEndeVorbelegen(beginnFeld) {
-    // v15 (Phase 75): Ende = Beginn + 4 Arbeitstage (Mo–Fr)
-    var form = beginnFeld.closest('form');
-    var endeFeld = form.querySelector('input[name=ende]');
-    if (!beginnFeld.value || (endeFeld.value && endeFeld.dataset.manuell)) return;
-    var d = new Date(beginnFeld.value + 'T12:00:00');
-    var rest = 4;
-    while (rest > 0) {
-        d.setDate(d.getDate() + 1);
-        if (d.getDay() !== 0 && d.getDay() !== 6) rest -= 1;
-    }
-    endeFeld.value = d.toISOString().slice(0, 10);
-}
 function pjDialog(id, terminTyp) {
     const dlg = document.getElementById(id);
     if (!dlg) return;
@@ -749,6 +736,15 @@ function pjDialog(id, terminTyp) {
     }
     dlg.showModal();
 }
+// v28 (Phase 135/133): Termin- und Phasen-Dialoge – Logik in projektierung.js
+function pjTerminDialog(id, art) {
+    if (window.pjTerminDialogOeffnen) { window.pjTerminDialogOeffnen(id, {art: art}); }
+    else { pjDialog(id); }
+}
+function pjPhaseDialog(id) {
+    if (window.pjPhaseDialogOeffnen) { window.pjPhaseDialogOeffnen(id); }
+    else { pjDialog(id); }
+}
 // @Erwähnungen im Verlauf blau hervorheben (Prototyp .log .m)
 document.querySelectorAll('#pj-verlauf .text').forEach(el => {
     el.innerHTML = el.innerHTML.replace(/@([\wäöüÄÖÜß.-]+)/g,
@@ -757,7 +753,8 @@ document.querySelectorAll('#pj-verlauf .text').forEach(el => {
 
 // @Erwähnung (Phase 69): „@“ im Kommentarfeld öffnet die Benutzerliste,
 // Klick (oder Enter auf dem ersten Treffer) fügt @Name ein.
-const feld = document.getElementById('kommentarfeld');
+// v28: gilt auch für die Textarea des Notizen-Chats (Reiter Verlauf)
+const feld = document.getElementById('kommentarfeld') || document.querySelector('#verlauf .nc-eingabe textarea');
 if (feld) {
     const namen = [{% for b in benutzer_map.values() if b.aktiv %}{{ b.name | tojson }},{% endfor %}];
     const kasten = document.createElement('div');

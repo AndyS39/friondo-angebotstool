@@ -407,6 +407,60 @@ etwas Besseres liefern kann, steht der Zwischenstand ausdrücklich dabei.
       Nachricht; **kein push vor Freigabe**; Rollout erst im Wartungsfenster
       nach Smoke-Test-Probe auf der DB-Kopie.
 
+## Nachtrag 06.10.2026 – Klima-Versand und Anmeldeseite
+
+(Quelle: PROTOKOLL-2026-10-06-Projektierung.md, Abschnitt 3 „Feedback
+Angebotstool"; gehört zu v27, keine neuen Phasennummern. Die beiden
+Versand-Punkte sind kleine Korrekturen und werden **zu Beginn des
+Durchlaufs vor Phase 128** erledigt, die Anmeldeseite in Phase 130.)
+
+(**Stand 07.10.2026, 23:10:** Dieser Abschnitt lag Claude Code beim v27-Durchlauf
+nicht vor – die drei Punkte sind in v27 (2bbd924/2544005) **nicht** umgesetzt und
+werden als erster Schritt des Durchlaufs v28/v29 nachgeholt (ein gemeinsamer
+Commit für Nachtrag + v28 + v29 am Ende des Durchlaufs, Entscheidung Andreas); die
+Anmeldeseite baut auf dem v27-Login auf (Häkchen „angemeldet bleiben“, Sperr-
+Meldungen, `login_v27.css`) – Login-Logik unverändert. CLAUDE.md: Absatz
+„Nachtrag 2“ im Abschnitt „Neu in v27“, keine neue Versionsnummer.)
+
+- [x] **Anhänge Klima** (Blatt „Anhänge", Arbeitsanweisung an der
+      Live-Excel): die Platzhalterzeile „(Bosch Climate Broschüre –
+      Zulieferung)" auf den Dateinamen **`Bosch Climate 3200i.pdf`** setzen
+      (Datei liegt seit 06.10.2026 in `anlagen\`), Regel „wenn Sparte = KL",
+      Bemerkung „Gerätebroschüre Bosch Climate 3200i (v27)". Zusätzlich die
+      Ursache finden, warum beim Versand eines KL-Angebots die
+      Unternehmenspräsentation fehlte, obwohl ihre Regel „immer" lautet
+      (Vermutung: Anhangsauswahl prüft Sparte/Profil vor der „immer"-Regel
+      oder der KL-Versand nimmt einen anderen Pfad) – beheben. Test: Versand
+      eines KL-Angebots (Profil Standard) hängt Unternehmenspräsentation,
+      Ratenkauf-Broschüre und Bosch Climate 3200i an; Enni/SWD ohne
+      Ratenkauf; WP-/PV-Versand unverändert.
+- [x] **E-Mail-Vorlage je Sparte** (Parametrierung → E-Mail-Vorlagen): die
+      Standard-Vorlage für Betreff + Text gibt es künftig **je Sparte WP / PV
+      / KL / WB** (Reiter oder Auswahl „Sparte"), Platzhalter wie bisher;
+      Auswahl beim Versand: Vorlage je Außendienstler (wie v5) → Sparten-
+      Vorlage des Angebots → Standard (Fallback). Migration legt die
+      Sparten-Vorlagen aus der heutigen Standard-Vorlage an und ersetzt dabei
+      für KL im Betreff und Text „Wärmepumpenangebot" → „Klimaanlagenangebot"
+      und „Wärmepumpe" → „Klimaanlage", für PV „Wärmepumpenangebot" →
+      „PV-Angebot" und „Wärmepumpe" → „PV-Anlage"; Platzhalter `{eigenanteil}`
+      und `{foerderung}` werden bei PV/KL leer bzw. die zugehörigen Sätze
+      entfernt (Satzliste in der Gesamtübersicht, Innendienst liest gegen).
+      Kombi-Versand behält seine eigene Vorlage. Test: KL-Angebot → Entwurf
+      mit Betreff „Klimaanlagenangebot …", ohne „Eigenanteil"; WP unverändert.
+- [x] **Anmeldeseite neu** (in Phase 130, da der Login dort ohnehin
+      angefasst wird): zweispaltiges Layout nach dem Muster SingleKey ID –
+      links Friondo-Logo, Überschrift „Anmeldung", Benutzerwahl, PIN-Feld,
+      Häkchen „Auf diesem Gerät angemeldet bleiben" (nur Außendienst/
+      Montage), Knopf „Anmelden", darunter Fehlermeldungen (Sperre); rechts
+      das Energiehaus-Foto bildschirmhoch (`Layout - Logo\anmeldung-
+      energiehaus-2000.jpg` nach `app/static/anmeldung-energiehaus.jpg`
+      kopieren, 0,4 MB, `object-fit: cover`). Farben nur über die Tokens des
+      Design-Systems v14 (`--friondo-blau`, `--friondo-dunkel`), keine
+      externen Schriften/CDNs. Unter 900 px eine Spalte: Foto als schmales
+      Kopfbild (max. 180 px) über dem Formular, auf dem Handy ohne Foto bei
+      weniger als 500 px Breite. Login-Logik unverändert (Phase 130).
+      Screenshot vorher/nachher nach `docs/design-v27/`.
+
 ## Zulieferungen IT (nachgelagert – blockieren keine Phase)
 
 Diese Punkte verbessern den Betrieb, sobald die IT erreichbar ist; bis

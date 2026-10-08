@@ -1,16 +1,26 @@
 {% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
 
-{% block titel %}Kommunikation – {{ kunde.anzeige_name }}{% endblock %}
+{% block titel %}{% if vorgang %}Kommunikation – {{ kunde.anzeige_name }}{% else %}Lead-Mails – Warteschlange{% endif %}{% endblock %}
 
 {% block mainklasse %}breit{% endblock %}
 
+{# v12 (Phase 78): Kommunikation je Lead (Warteschlange, Vorschau, Senden nach
+   Mail-Modus). v29 (PLAN_LEAD_V4 Phase 142, Vertrag L2): ohne Vorgang ist die Seite
+   die Warteschlange ALLER Lead-Mails (GET /lead-management/kommunikation?status=
+   fehler|wartet_adresse|geplant|gesendet): Spalten Absender und Versuche, Status-
+   Badges fehler (rot) / wartet_adresse (gelb), bei fehler der Knopf „Erneut senden“
+   → POST /lead-management/mail/{id}/erneut (setzt auf geplant mit sofortiger
+   Fälligkeit; gesendet wird nur durch den Lauf lead-mail). #}
 {% block inhalt %}
+{% if vorgang %}
 <div class="seitenkopf">
     <h1>Kommunikation · {{ kunde.anzeige_name }}</h1>
     <div class="aktionen">
         <span class="abzeichen" title="Sendesperre: protokoll rendert nur, test sendet an die Testadresse, live nur bei Freigabe alle">
             Mail-Modus: {{ mail_modus }}</span>
         <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}">Lead-Akte</a>
+        <a class="knopf klein zweitrangig" href="/lead-management/kommunikation">Warteschlange (alle)</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
@@ -37,22 +47,79 @@
 {% for e in eintraege %}
 <details class="karte" style="margin-bottom:0.6rem">
     <summary>
-        <strong>{{ e.vorlage_key }}</strong> · {{ e.status }}
+        <strong>{{ e.vorlage_key }}</strong> · <span class="abzeichen lm-mailstatus-{{ e.status }}">{{ e.status }}</span>
         {% if e.status == 'fehler' %}<span class="abzeichen ep">{{ e.fehler_text }}</span>{% endif %}
         · geplant {{ e.geplant_am.strftime('%d.%m.%y %H:%M') }}
         {% if e.gesendet_am %} · gesendet {{ e.gesendet_am.strftime('%d.%m.%y %H:%M') }}{% endif %}
-        · an {{ e.an }} · Modus {{ e.modus }}
+        · an {{ e.an }}{% if e.absender %} · von {{ e.absender }}{% endif %} · Modus {{ e.modus }}{% if e.versuche %} · {{ e.versuche }} Versuch{{ 'e' if e.versuche != 1 }}{% endif %}
         {% if e.anhang_pfad %} · 📎 ICS{% endif %}
     </summary>
     <p><strong>{{ e.betreff }}</strong></p>
     <div class="mail-vorschau">{{ e.body_html | safe }}</div>
-    <form method="post" action="/lead-management/kommunikation/{{ e.id }}/senden">
-        <button class="knopf klein" type="submit">
-            {{ 'Erneut senden' if e.status in ('fehler', 'gesendet') else 'Jetzt senden' }}
+    {% if e.status == 'fehler' %}
+    <form method="post" action="/lead-management/mail/{{ e.id }}/erneut" style="display:inline">
+        <input type="hidden" name="zurueck" value="/lead-management/lead/{{ vorgang.id }}/kommunikation">
+        <button class="knopf klein" type="submit" title="Eintrag auf geplant setzen – der Lauf lead-mail sendet in etwa einer Minute">{{ symbol('aktualisieren') }} Erneut senden</button>
+    </form>
+    {% endif %}
+    <form method="post" action="/lead-management/kommunikation/{{ e.id }}/senden" style="display:inline">
+        <button class="knopf klein zweitrangig" type="submit">
+            {{ 'Erneut verarbeiten' if e.status in ('fehler', 'gesendet') else 'Jetzt senden' }}
             (nach Mail-Modus)</button>
     </form>
 </details>
 {% else %}
 <p class="dezent">Noch keine Einträge.</p>
 {% endfor %}
+
+{% else %}
+{#- v29: Warteschlangen-Seite aller Lead-Mails (Vertrag L2) #}
+<div class="seitenkopf">
+    <h1>Lead-Mails · Warteschlange</h1>
+    <span class="dezent">Absender {{ absender }} · Mail-Modus {{ mail_modus }} · gesendet wird nur durch den Lauf lead-mail</span>
+    <div class="aktionen">
+        <a class="knopf klein zweitrangig" href="/lead-management/dashboard">← Dashboard</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+<nav class="lm-umschalter" aria-label="Status" style="margin-bottom:12px">
+    <a class="{{ 'aktiv' if not status }}" href="/lead-management/kommunikation">Offen <span class="n">{{ (zaehler.get('geplant', 0) + zaehler.get('fehler', 0) + zaehler.get('wartet_adresse', 0)) }}</span></a>
+    <a class="{{ 'aktiv' if status == 'fehler' }}" href="/lead-management/kommunikation?status=fehler">Fehler <span class="n {{ 'rot' if zaehler.get('fehler') }}">{{ zaehler.get('fehler', 0) }}</span></a>
+    <a class="{{ 'aktiv' if status == 'wartet_adresse' }}" href="/lead-management/kommunikation?status=wartet_adresse">Wartet auf Adresse <span class="n">{{ zaehler.get('wartet_adresse', 0) }}</span></a>
+    <a class="{{ 'aktiv' if status == 'geplant' }}" href="/lead-management/kommunikation?status=geplant">Geplant <span class="n">{{ zaehler.get('geplant', 0) }}</span></a>
+    <a class="{{ 'aktiv' if status == 'gesendet' }}" href="/lead-management/kommunikation?status=gesendet">Gesendet <span class="n">{{ zaehler.get('gesendet', 0) }}</span></a>
+</nav>
+<div class="tabelle-wrap">
+<table class="tabelle lm-warteschlange">
+    <thead><tr><th>Status</th><th>Vorlage</th><th>Lead</th><th>An</th><th>Absender</th><th>Geplant</th><th>Versuche</th><th>Fehler</th><th>Aktion</th></tr></thead>
+    <tbody>
+    {% for z in liste %}
+    {% set e = z.eintrag %}
+    <tr data-eintrag="{{ e.id }}">
+        <td><span class="abzeichen lm-mailstatus-{{ e.status }}" title="{{ e.status }}">{{ {'fehler': 'Fehler', 'wartet_adresse': 'wartet auf Adresse', 'geplant': 'geplant', 'gesendet': 'gesendet', 'protokolliert': 'protokolliert', 'storniert': 'storniert'}.get(e.status, e.status) }}</span></td>
+        <td>{{ e.vorlage_key }}</td>
+        <td>{% if z.vorgang %}<a href="/lead-management/lead/{{ z.vorgang.id }}">{{ z.kunde.anzeige_name if z.kunde else ('Vorgang ' ~ z.vorgang.id) }}</a>{% else %}–{% endif %}</td>
+        <td>{{ e.an or '–' }}</td>
+        <td>{{ e.absender or '–' }}</td>
+        <td class="nowrap">{{ e.geplant_am.strftime('%d.%m.%y %H:%M') if e.geplant_am }}{% if e.gesendet_am %}<br><small class="dezent">gesendet {{ e.gesendet_am.strftime('%d.%m.%y %H:%M') }}</small>{% endif %}</td>
+        <td class="zahl">{{ e.versuche or 0 }}</td>
+        <td class="dezent" style="max-width:320px;white-space:normal">{{ e.fehler_text or '' }}</td>
+        <td class="nowrap">
+            {% if e.status == 'fehler' %}
+            <form method="post" action="/lead-management/mail/{{ e.id }}/erneut" style="display:inline">
+                <input type="hidden" name="zurueck" value="/lead-management/kommunikation?status={{ status }}">
+                <button class="knopf klein" type="submit" title="Eintrag auf geplant setzen – der Lauf lead-mail sendet in etwa einer Minute">{{ symbol('aktualisieren') }} Erneut senden</button>
+            </form>
+            {% endif %}
+            {% if z.vorgang %}<a class="knopf klein zweitrangig" href="/lead-management/lead/{{ z.vorgang.id }}/kommunikation">Verlauf</a>{% endif %}
+        </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="9" class="dezent">Keine Einträge{% if status %} mit Status „{{ status }}“{% endif %}.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+<p class="dezent" style="margin-top:8px">Status <b>fehler</b> = Versand über den Absender fehlgeschlagen (kein Fallback) – der Lead steht oben im Hauptboard mit „Mail nicht gesendet“; <b>wartet auf Adresse</b> = E-Mail-Adresse unzustellbar („E-Mail falsch“), nach Adressänderung läuft die Mail weiter.</p>
+{% endif %}
 {% endblock %}

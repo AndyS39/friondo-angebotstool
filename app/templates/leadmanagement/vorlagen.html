@@ -1,67 +1,206 @@
 {% extends "base.html" %}
 {% from "_symbole.html" import symbol %}
-{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "leadmanagement/_nav.html" import lm_nav with context %}
 
 {% block titel %}E-Mail-Vorlagen – Lead-Management{% endblock %}
 
 {% block mainklasse %}breit{% endblock %}
 
-{# v23 (PLAN_LEAD_V2 Phase 105, H8): der bestehende Lead-Vorlagen-Editor der
-   Parametrierung (/parametrierung/lead-vorlagen, gleiche Schlüssel und Ablage
-   lead_vorlage_<key>[_<Sparte>]_betreff/_text) direkt im Modul. Rechte wie
-   heute: Admin/Innendienst pflegen, Hauptrolle Leadmanagement liest. #}
+{# v29 (PLAN_LEAD_V4 Phase 142): Vorlagen-Editor mit Baum links (_vorlagen_baum.html)
+   und Editor rechts: Betreff, HTML-Text mit Formatierungsleiste, Platzhalterliste,
+   Vorschau mit Demo-Lead (serverseitig gerendert, „Vorschau aktualisieren“ per fetch
+   POST /lead-management/vorlagen/vorschau). Terminbestätigung je Vertriebler
+   (terminbestaetigung_<benutzer_id>) mit Vertriebler-Kasten (Bild, Telefon, E-Mail,
+   Infotext aus der Benutzerverwaltung) und dem Häkchen „Rahmen für alle
+   Terminbestätigungen übernehmen“ (Sicherheitsabfrage mit Anzahl). Ablage weiter in
+   lead_vorlage_<key>[_<sparte>]_betreff/_text. Rechte: Admin/Innendienst pflegen,
+   Hauptrolle Leadmanagement liest. Styles: lead_v29.css (Block Phase 142). #}
 {% block inhalt %}
 {{ lm_nav('vorlagen') }}
 <div class="seitenkopf">
     <h1>E-Mail-Vorlagen {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
-    <span class="dezent">Gruppe Lead-Management{% if not pflege %} · nur lesend{% endif %}</span>
+    <span class="dezent">Gruppe Lead-Management · Absender aller Lead-Mails ist der Parameter <code>absender_lead_mails</code> (termin@){% if not pflege %} · nur lesend{% endif %}</span>
     <div class="aktionen">
         {% if pflege %}
-        <a class="knopf klein zweitrangig" href="/parametrierung/lead-vorlagen?vorlage={{ schluessel }}" title="derselbe Editor in der Parametrierung">{{ symbol('oeffnen') }} In der Parametrierung</a>
+        <a class="knopf klein zweitrangig" href="/parametrierung/lead-einstellungen#lead-v4-pruefpunkte" title="Testmail, Zulieferung einspielen">Lead-Einstellungen</a>
         <a class="knopf klein zweitrangig" href="/parametrierung/vorlagen">Angebots-Vorlagen</a>
         {% endif %}
     </div>
 </div>
 {% if meldung %}<p class="meldung {{ 'fehler' if fehler }}">{{ meldung }}</p>{% endif %}
 
-<nav class="reiter lm-reiter">
-    {% for key, (name, _, _) in vorlagen.items() %}
-        <a class="{{ 'aktiv' if key == schluessel }}" href="/lead-management/vorlagen?vorlage={{ key }}">{{ symbol('brief') }} {{ name }}</a>
-    {% endfor %}
-</nav>
+<div class="lmv-layout">
+    {% include "leadmanagement/_vorlagen_baum.html" %}
 
-<form method="get" action="/lead-management/vorlagen" class="suchleiste">
-    <input type="hidden" name="vorlage" value="{{ schluessel }}">
-    <label class="kontrollfeld">Variante
-        <select name="sparte" onchange="this.form.submit()">
-            <option value="">allgemein (Fallback)</option>
-            {% for s in sparten %}
-                <option value="{{ s }}" {{ 'selected' if sparte == s }}>je Sparte: {{ s }}</option>
-            {% endfor %}
-        </select>
-    </label>
-    <noscript><button class="knopf klein zweitrangig" type="submit">Anzeigen</button></noscript>
-</form>
+    <section class="lmv-editor">
+        <div class="karte lmv-kopf">
+            <h2>{{ name }}
+                {% if quelle == 'zulieferung' %}<span class="abzeichen" title="aus docs/vorlagen/terminbestaetigung eingespielt – im Editor geändert wird sie beim nächsten Einspielen nicht überschrieben">Zulieferung</span>
+                {% elif quelle == 'standard_kopie' %}<span class="abzeichen" title="Kopie der Standard-Terminbestätigung">Standard-Kopie</span>
+                {% elif quelle == 'editor' %}<span class="abzeichen" title="im Editor gepflegt">Editor</span>{% endif %}
+                {% if vertriebler and not eigene %}<span class="abzeichen ep" title="Noch keine eigene Vorlage gespeichert – der Versand nutzt den Standard">Fallback Standard</span>{% endif %}
+            </h2>
+            {% if vertriebler %}
+            <div class="lmv-vertriebler-kasten">
+                {% if bild_vorhanden %}
+                <img src="/lead-management/benutzer/{{ vertriebler.id }}/bild" alt="{{ vertriebler.name }}" class="lmv-bild">
+                {% else %}
+                <div class="lmv-bild lmv-bild-leer" title="Kein Bild hinterlegt">{{ symbol('nutzer') }}</div>
+                {% endif %}
+                <div>
+                    <strong>{{ vertriebler.name }}</strong>{% if hv %} <span class="abzeichen">Handelsvertreter</span>{% endif %}<br>
+                    <span class="dezent">{{ vertriebler.telefon or 'kein Telefon' }} · {{ vertriebler.email or 'keine E-Mail' }}</span><br>
+                    <span class="dezent">Infotext: {{ (vertriebler.infotext or 'noch keiner')[:160] }}{% if vertriebler.infotext and vertriebler.infotext|length > 160 %}…{% endif %}</span><br>
+                    <a class="dezent" href="/benutzer/{{ vertriebler.id }}/ad-profil">Bild, Infotext, Telefon und E-Mail im AD-Profil pflegen</a>
+                    {% if hv %}<br><span class="dezent lm-rot">Handelsvertreter-Leads: Versandweg <code>hv_versandweg</code> = offen – keine Kundenmail, To-Do mit Vorschau an den HV.</span>{% endif %}
+                </div>
+            </div>
+            {% endif %}
+            {% if sparten %}
+            <form method="get" action="/lead-management/vorlagen" class="lmv-variante">
+                <input type="hidden" name="vorlage" value="{{ schluessel }}">
+                <label class="kontrollfeld">Variante
+                    <select name="sparte" onchange="this.form.submit()">
+                        <option value="">allgemein (Fallback)</option>
+                        {% for s in sparten %}
+                            <option value="{{ s }}" {{ 'selected' if sparte == s }}>je Sparte: {{ s }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <noscript><button class="knopf klein zweitrangig" type="submit">Anzeigen</button></noscript>
+            </form>
+            {% endif %}
+        </div>
 
-<form method="post" action="/lead-management/vorlagen" class="formular lm-vorlage">
-    <input type="hidden" name="vorlage" value="{{ schluessel }}">
-    <input type="hidden" name="sparte" value="{{ sparte }}">
-    <label>Betreff <input type="text" name="betreff" value="{{ betreff }}" {{ 'readonly' if not pflege }}></label>
-    <label>Text <textarea name="text" rows="14" {{ 'readonly' if not pflege }}>{{ text }}</textarea></label>
-    {% if pflege %}
-    <div class="formzeile">
-        <button class="knopf" type="submit">Speichern</button>
-        {% if sparte %}
-            <button class="knopf zweitrangig" type="submit" name="aktion"
-                    value="entfernen">Sparten-Variante entfernen (allgemein gilt)</button>
-        {% endif %}
-    </div>
-    {% else %}
-    <p class="lm-hinweis">Vorlagen pflegen Admin und Innendienst (Rechte wie bisher). Diese Ansicht ist für Sie nur lesend.</p>
-    {% endif %}
-</form>
-<p class="dezent">Platzhalter zusätzlich zu den bestehenden: {{ platzhalter | join(' · ') }} · {rueckruf_telefon} · {buchungslink} · {kollege}.
-    Terminbestätigung/-änderung erhalten automatisch den ICS-Kalendereintrag. Nurture geht nur an Leads mit
-    Werbe-Einwilligung. Versand nach Mail-Modus (Lead-Einstellungen): protokoll = rendern ohne Senden
-    (Demo-Sendesperre), test = an die Testadresse mit [TEST]-Präfix, live = an den Kunden (nur bei Freigabe „alle“).</p>
+        <form method="post" action="/lead-management/vorlagen" class="formular lm-vorlage karte" id="lmv-form">
+            <input type="hidden" name="vorlage" value="{{ schluessel }}">
+            <input type="hidden" name="sparte" value="{{ sparte }}">
+            <input type="hidden" name="bestaetigt" id="lmv-bestaetigt" value="">
+            <label>Betreff <input type="text" name="betreff" id="lmv-betreff" value="{{ betreff }}" {{ 'readonly' if not pflege }}></label>
+            {% if pflege %}
+            <div class="lmv-werkzeuge" aria-label="Formatierung">
+                {% for titel, anfang, ende in formate %}
+                <button type="button" class="knopf klein zweitrangig" data-anfang="{{ anfang }}" data-ende="{{ ende }}"
+                        onclick="lmvFormat(this)">{{ titel }}</button>
+                {% endfor %}
+                <label class="lmv-platzhalter">Platzhalter
+                    <select onchange="lmvEinfuegen(this.value); this.selectedIndex = 0;">
+                        <option value="">einfügen …</option>
+                        {% for p in platzhalter %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+                    </select></label>
+                <span class="dezent">{{ 'HTML-Vorlage' if html_vorlage else 'Textvorlage (Absätze durch Leerzeile; HTML-Tags erlaubt)' }}</span>
+            </div>
+            {% endif %}
+            <label>Text <textarea name="text" id="lmv-text" rows="18" {{ 'readonly' if not pflege }}>{{ text }}</textarea></label>
+            {% if terminvorlage %}
+            <p class="dezent lmv-hinweis">Rahmen = alles außer dem individuellen Block. Der Block ist entweder der Platzhalter
+                <code>{vertriebler_block}</code> (Bild, Name, Telefon, E-Mail, Infotext aus der Benutzerverwaltung) oder ein
+                Bereich zwischen <code>{{ block_start }}</code> und <code>{{ block_ende }}</code> (eigener Text, z. B. aus der Zulieferung).
+                <code>{sparten_hinweise}</code> fügt je Interesse die Punkteliste aus dem Blatt „Terminhinweise“ ein
+                {% if hinweise_fehlen %}– <span class="lm-rot">Platzhalter „(Punkte folgen)“ für {{ hinweise_fehlen|join(', ') }} (OFFEN 1)</span>{% endif %}.</p>
+            {% endif %}
+            {% if pflege %}
+            <div class="formzeile lmv-aktionen">
+                <button class="knopf" type="submit" name="aktion" value="speichern">Speichern</button>
+                {% if terminvorlage and not sparte %}
+                <label class="kontrollfeld" title="Betreff und Rahmen dieser Vorlage in alle {{ ziel_anzahl }} anderen Terminbestätigungen schreiben – individuelle Blöcke bleiben">
+                    <input type="checkbox" name="rahmen_alle" id="lmv-rahmen-alle" data-anzahl="{{ ziel_anzahl }}">
+                    Rahmen für alle Terminbestätigungen übernehmen ({{ ziel_anzahl }})</label>
+                {% endif %}
+                {% if vertriebler %}
+                <button class="knopf zweitrangig" type="submit" name="aktion" value="standard_kopie"
+                        onclick="return confirm('Diese Vorlage durch eine frische Kopie der Standard-Terminbestätigung ersetzen?');">Standard-Kopie neu anlegen</button>
+                {% endif %}
+                {% if sparte %}
+                    <button class="knopf zweitrangig" type="submit" name="aktion"
+                            value="entfernen">Sparten-Variante entfernen (allgemein gilt)</button>
+                {% endif %}
+                <button class="knopf zweitrangig" type="button" onclick="lmvVorschau()">Vorschau aktualisieren</button>
+            </div>
+            {% else %}
+            <p class="lm-hinweis">Vorlagen pflegen Admin und Innendienst (Rechte wie bisher). Diese Ansicht ist für Sie nur lesend.</p>
+            {% endif %}
+        </form>
+
+        <section class="karte lmv-vorschau" id="lmv-vorschau" aria-live="polite">
+            <h2>Vorschau <span class="dezent">mit Demo-Lead{% if vorschau.kunde %} „{{ vorschau.kunde }}“{% endif %}</span></h2>
+            <p class="lmv-vorschau-betreff"><strong>Betreff:</strong> <span id="lmv-vorschau-betreff">{{ vorschau.betreff }}</span></p>
+            <div class="mail-vorschau lmv-mail" id="lmv-vorschau-html">{{ vorschau.html | safe }}</div>
+            <p class="dezent">Terminbestätigung/-änderung erhalten automatisch den ICS-Kalendereintrag, das Vertriebler-Bild geht als
+                Inline-Anhang (CID) mit. Versand nach Mail-Modus (Lead-Einstellungen): protokoll = rendern ohne Senden
+                (Demo-Sendesperre), test = an die Testadresse mit [TEST]-Präfix, live = an den Kunden (nur bei Freigabe „alle“) –
+                ohne Senderecht bleibt die Mail mit Status „fehler“ in der Warteschlange (kein Fallback).</p>
+        </section>
+    </section>
+</div>
+
+<script>
+(function () {
+    var suche = document.getElementById('lmv-suche');
+    if (suche) {
+        suche.addEventListener('input', function () {
+            var q = suche.value.trim().toLowerCase();
+            document.querySelectorAll('.lmv-eintrag').forEach(function (li) {
+                var treffer = !q || (li.getAttribute('data-name') || '').indexOf(q) >= 0;
+                li.classList.toggle('lmv-ausgeblendet', !treffer);
+            });
+            document.querySelectorAll('details.lmv-kategorie').forEach(function (d) {
+                if (q && d.querySelector('.lmv-eintrag:not(.lmv-ausgeblendet)')) d.open = true;
+            });
+        });
+    }
+    var form = document.getElementById('lmv-form');
+    var rahmen = document.getElementById('lmv-rahmen-alle');
+    if (form && rahmen) {
+        form.addEventListener('submit', function (ev) {
+            var knopf = ev.submitter;
+            if (knopf && knopf.value && knopf.value !== 'speichern') return;
+            if (!rahmen.checked) return;
+            var n = rahmen.getAttribute('data-anzahl') || '?';
+            if (confirm('Rahmen (Betreff und alles außer dem individuellen Block) für ' + n +
+                        ' weitere Terminbestätigung(en) übernehmen? Individuelle Blöcke bleiben erhalten.')) {
+                document.getElementById('lmv-bestaetigt').value = '1';
+            } else {
+                rahmen.checked = false;
+            }
+        });
+    }
+})();
+function lmvFormat(knopf) {
+    var feld = document.getElementById('lmv-text');
+    if (!feld || feld.readOnly) return;
+    var a = knopf.getAttribute('data-anfang') || '', e = knopf.getAttribute('data-ende') || '';
+    var start = feld.selectionStart, ende = feld.selectionEnd;
+    var text = feld.value;
+    var mitte = text.substring(start, ende);
+    feld.value = text.substring(0, start) + a + mitte + e + text.substring(ende);
+    feld.focus();
+    feld.selectionStart = start + a.length;
+    feld.selectionEnd = start + a.length + mitte.length;
+}
+function lmvEinfuegen(wert) {
+    if (!wert) return;
+    var feld = document.getElementById('lmv-text');
+    if (!feld || feld.readOnly) return;
+    var start = feld.selectionStart, ende = feld.selectionEnd, text = feld.value;
+    feld.value = text.substring(0, start) + wert + text.substring(ende);
+    feld.focus();
+    feld.selectionStart = feld.selectionEnd = start + wert.length;
+}
+function lmvVorschau() {
+    var form = document.getElementById('lmv-form');
+    var daten = {vorlage: form.vorlage.value, sparte: form.sparte.value,
+                 betreff: document.getElementById('lmv-betreff').value,
+                 text: document.getElementById('lmv-text').value};
+    fetch('/lead-management/vorlagen/vorschau', {
+        method: 'POST', credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: JSON.stringify(daten)
+    }).then(function (r) { return r.json(); }).then(function (d) {
+        if (!d || !d.ok) return;
+        document.getElementById('lmv-vorschau-betreff').textContent = d.betreff || '';
+        document.getElementById('lmv-vorschau-html').innerHTML = d.html || '';
+    }).catch(function () {});
+}
+</script>
 {% endblock %}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "leadmanagement/_nav.html" import lm_nav %}
+{% from "leadmanagement/_nav.html" import lm_nav with context %}
 {% from "_symbole.html" import symbol %}
 {% from "_komponenten.html" import versuche_punkte, kanal_badge %}
 {% import "_sparten.html" as sparten_ui %}
@@ -21,6 +21,9 @@
 {% block inhalt %}
 {{ lm_nav(nav_key | default('hauptboard')) }}
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+{#- v29 (PLAN_LEAD_V4 Phase 142, Vertrag L2): roter Hinweisbalken „Mail nicht gesendet“ /
+    „E-Mail falsch“ – Inhalt aus lead_mail.kartei_hinweis (mail_hinweis im Kontext) #}
+{% include "leadmanagement/_mail_hinweis.html" %}
 
 <header class="karte lk-kopf lk-kopf-v3" data-vorgang="{{ vorgang.id }}">
     <div class="lk-kopf-haupt">
@@ -59,6 +62,8 @@
         </ol>
 
         <div class="lk-kopf-fakten">
+            {#- v29 (Phase 141): Eingangsdatum „TT.MM.JJJJ, HH:MM Uhr“ auch im Kopf #}
+            <span title="Eingangsdatum{{ ' · ' ~ vorgang.eingang_art if vorgang.eingang_art }}" data-eingang>{{ symbol('uhr') }} Eingang {{ vorgang.eingang_am | de_datum_zeit if vorgang.eingang_am else '–' }}</span>
             <span>SLA:
                 {% if lead_kontext.sla.farbe == 'erfuellt' %}
                     <span class="sla-chip sla-erfuellt" title="Zeit bis zum Erstkontakt (innerhalb der LM-Arbeitszeit)">erfüllt · {{ lead_kontext.sla.text }}</span>
@@ -164,6 +169,16 @@
 <div class="lk-bloecke" id="lk-bloecke" aria-label="Termine, Angebote, Erfassungen, Projekt, Anhänge, To-Dos">
     {% include "leadmanagement/kartei_bloecke.html" %}
 </div>
+
+{# v28 (PLAN_PROJ_V6 Phase 136): gemeinsamer Notizen-Chat des Vorgangs – dieselben
+   Einträge wie in Vorgangsakte und Projektakte, Kennzeichen „Lead“, volle Breite #}
+{% from "_komponenten.html" import notizen_chat %}
+{% from "_galerie.html" import galerie_fuss %}
+<section class="karte lk-notizen" id="notizen" aria-label="Notizen" style="grid-column: 1 / -1">
+    <h2>Notizen <span class="dezent">(Vorgang – Lead bis Montage)</span></h2>
+    {% if notizen_ctx %}{{ notizen_chat(notizen_ctx) }}{% endif %}
+</section>
+{{ galerie_fuss() }}
 
 {% include "leadmanagement/kartei_dialoge.html" %}
 {# Stoppuhr-Vertrag Phase 107 (fehlt die Datei noch, bleibt die Seite lauffähig) #}

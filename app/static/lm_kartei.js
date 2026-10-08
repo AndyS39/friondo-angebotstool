@@ -342,7 +342,8 @@
     }
     function vorschlagZeile(v, buchen, buchbar) {
         var li = document.createElement('li');
-        li.className = 'lk-vorschlag';
+        // v29 (PLAN_LEAD_V4 Phase 143): Vorschlag 1 „Ideal“ – Rahmen Friondo-Blau, Badge, Begründung
+        li.className = 'lk-vorschlag' + (v.ideal ? ' lk-ideal' : '');
         var kopf = document.createElement('div');
         kopf.className = 'lk-vorschlag-kopf';
         var zeit = document.createElement('strong');
@@ -351,6 +352,13 @@
         wer.className = 'lk-vorschlag-ad';
         wer.textContent = v.ad_name ? ' · ' + v.ad_name : '';
         kopf.appendChild(zeit); kopf.appendChild(wer);
+        if (v.ideal) {
+            var badge = document.createElement('span');
+            badge.className = 'lmt-ideal-badge';
+            badge.textContent = 'Ideal';
+            badge.title = v.ideal_grund || 'Bester Vorschlag';
+            kopf.appendChild(badge);
+        }
         if (v.umweg_min !== undefined && v.umweg_min !== null && v.umweg_min !== '') {
             var umweg = document.createElement('span');
             umweg.className = 'dezent';
@@ -358,6 +366,12 @@
             kopf.appendChild(umweg);
         }
         li.appendChild(kopf);
+        if (v.ideal && v.ideal_grund) {
+            var ideal = document.createElement('div');
+            ideal.className = 'lk-vorschlag-ideal-grund';
+            ideal.textContent = v.ideal_grund;
+            li.appendChild(ideal);
+        }
         if (v.begruendung) {
             var grund = document.createElement('div');
             grund.className = 'lk-vorschlag-grund dezent';
@@ -403,7 +417,9 @@
         var ol = $('[data-rolle="liste"]', vorschlaege);
         var hinweis = $('[data-rolle="hinweis"]', vorschlaege);
         ol.textContent = '';
-        liste.slice(0, 5).forEach(function (v) {
+        // v29: genau `anzahl` Vorschläge (Parameter vorschlaege_anzahl, Standard 3)
+        var anzahl = parseInt(d.anzahl, 10) || 3;
+        liste.slice(0, anzahl).forEach(function (v) {
             ol.appendChild(vorschlagZeile(v, vorschlaege.dataset.buchen, vorschlaege.dataset.buchbar === '1'));
         });
         ol.hidden = false;
