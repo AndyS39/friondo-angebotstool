@@ -25,7 +25,10 @@ router = APIRouter(prefix="/lead-management")
 
 
 def _gate(request: Request, session: Session) -> None:
-    """404 statt 403 – im Demo-Modus soll das Modul unsichtbar sein."""
+    """404 statt 403 – im Demo-Modus soll das Modul unsichtbar sein.
+    Nachtrag 08.10.2026 (Antwort Andreas): gesperrte Seite in der Handelsvertreter-
+    Sicht → 303 auf die HV-Ansicht mit Hinweis (lead_v2.hv_umleitung), statt 404."""
+    lead_v2.hv_umleitung(request, session)
     if not kern.lead_modul_sichtbar(session, request.state.benutzer):
         raise HTTPException(status_code=404)
 

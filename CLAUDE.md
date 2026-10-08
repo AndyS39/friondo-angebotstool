@@ -2014,7 +2014,12 @@ weiter, Rückweg `rollback.bat --nur-code`. Rollout nur im Wartungsfenster.)
   Vorlagen einmalig aus der Standard-Vorlage an: KL „Wärmepumpen(-)angebot“ →
   „Klimaanlagen(-)angebot“, „Wärmepumpe“ → „Klimaanlage“; PV → „PV-Angebot“ / „PV-Anlage“;
   bei PV/KL werden Sätze mit `{eigenanteil}`/`{foerderung}` entfernt (Meldung je Satz) und
-  die Platzhalter liefern dort leer; WP und WB Kopie [ANNAHME WB – Wortlaut offen].
+  die Platzhalter liefern dort leer; WB = Kopie des WP-Textes (Wortlaut von Andreas am
+  08.10.2026 bestätigt); **WP bekommt keine Kopie** – WP nutzt die Standard-Vorlage
+  (Antwort Andreas 08.10.2026, eine im ersten Lauf angelegte unveränderte WP-Kopie entfernt
+  die Migration wieder, Marker `migration_nachtrag2_sparten_wp`; Versand-Meldung „Standard-
+  Vorlage“). Streudatei `anlagen/unternehmenspraesentation.pdf` (1 KB, ohne Inhalt) in der
+  Arbeitskopie gelöscht – auf dem Server ebenfalls entfernen.
   **Anmeldeseite** (`anmeldung/login.html`, `login_v27.css`, `static/anmeldung-energiehaus.jpg`):
   zweispaltig nach Muster SingleKey ID – links Logo, „Anmeldung“, Benutzer, PIN, Häkchen
   „Auf diesem Gerät angemeldet bleiben“ (nur bei Außendienst/Montage eingeblendet,
@@ -2065,15 +2070,18 @@ Entscheidungen: `docs/projektierung-entscheidungen.md` Abschnitt „PLAN_PROJ_V6
   (`projektierung_logik.sichtbar_wenn_pruefen`).
 - **Board (Phase 134):** volle Breite nur auf Projektierungs-Seiten (`main.breit.pj-voll`,
   `app/static/projektierung_v28.css` – Portal/Lead-Seiten behalten `breit` wie bisher
-  [ANNAHME P1-2, Rückfrage]), Spalten `flex: 1 1 0; min-width 240 px` mit eigenem senkrechten
-  Scroll und sticky Kopf, Board-Höhe per JS (min. 480 px), Dummy-Scrollbalken `#pj-hscroll`
+  [ANNAHME P1-2] – *überholt seit Nachtrag 08.10.2026: volle Breite für alle `main.breit`-Seiten
+  über `style.css`, Sonderregel `.pj-voll` entfallen*), Spalten `flex: 1 1 0; min-width 240 px`
+  mit eigenem senkrechten Scroll und sticky Kopf, Board-Höhe per JS (min. 480 px – *seit
+  Nachtrag 08.10.2026 nur ab 900 px Viewport-Höhe, sonst 320 px*), Dummy-Scrollbalken `#pj-hscroll`
   über dem Board (synchron), Shift + Mausrad; Drag & Drop öffnet `dlg-phase-board` (offene
   Punkte per JSON, `POST …/phase-drop` antwortet JSON `{ok, meldung, phase, projekt_status}`,
   Karte wandert ohne Neuladen, Zähler/Kacheln aktualisiert); Drop unterminiert → terminiert
   öffnet den Termin-Dialog, umgekehrt Hinweis „Termin in der Projektakte löschen (Block
   Termine)“. Kontrollwerte ohne Playwright: `diagnose/v28_patches/p1_screenshots.py` (Chrome
   headless, DevTools) – 1 920 px: 7 Spalten, kein Seiten-Scroll; 2 560 px: 9 Spalten;
-  1 366 × 768: Mindesthöhe 480 px greift (Rückfrage). Bilder `docs/design-v28/`.
+  1 366 × 768: Mindesthöhe 480 px greift (*seit Nachtrag 08.10.2026 ohne Seiten-Scroll*).
+  Bilder `docs/design-v28/`.
 - **Termine (Phase 135):** EIN Dialog (`templates/projektierung/_termin_dialog.html`, Makro
   `termin_dialog`, JS in `projektierung.js`) für Montage (WP) · Elektro-Montage · Sub-Einsatz ·
   Feinplanung VOT · Abnahme · Sonstiges (`projekt_termine.zweck` wp/elektro/sub);
@@ -2087,7 +2095,7 @@ Entscheidungen: `docs/projektierung-entscheidungen.md` Abschnitt „PLAN_PROJ_V6
   beibehalten (von Hand gesetzt)“; `terminstatus_map` nur `zweck in (wp, leer)`; Konflikte je
   Person (`person_konflikte`, Warnung, kein Verbot). Block „Termine“ in der Akte (Art · Datum ·
   Team/Person · Besetzung · Kunde · Outlook · Aktionen), Zählerwechsel darunter; Personen-Liste
-  Projektierung + Innendienst + Admin [ANNAHME]. **Terminvorschläge Stufe 1**
+  Projektierung + Innendienst + Admin (bestätigt 08.10.2026, kein Außendienst). **Terminvorschläge Stufe 1**
   (`kern.terminvorschlaege`, `GET …/terminvorschlaege.json`): Vorlauf `vorschlag_vorlauf_wochen`,
   Dauer `montage_dauer_tage_standard`, UGL-Lieferdatum + 1 AT, montags [ANNAHME], je
   Montage-Team 5 freie Fenster (26 Wochen), Umweg über `app/routing.py` (Startadresse
@@ -2107,7 +2115,7 @@ Entscheidungen: `docs/projektierung-entscheidungen.md` Abschnitt „PLAN_PROJ_V6
   bei sichtbarem Lead-Modul, Hauptrolle Montage nur lesen; Einträge unveränderlich. Eingebunden
   in Vorgangsakte, Projektakte (Reiter Verlauf, Systemverlauf eingeklappt; Kommentare über
   `notizen.kommentar_speichern`, `herkunft = projektierung`; ohne Vorgang bleibt der
-  Projektverlauf; aufgabenbezogene Kommentare bleiben im Projektverlauf [ANNAHME]), Kundenkartei
+  Projektverlauf; aufgabenbezogene Kommentare bleiben im Projektverlauf – bestätigt 08.10.2026), Kundenkartei
   (Block „Notizen“, `herkunft = lead`) und Montage-Backend (nur lesen). Migration
   `notizen.migration_v28_notizen` kopiert alte `ProjektVerlauf art=kommentar` in den Chat
   (`herkunft = "projektierung (migriert)"`, Dublettenschlüssel vorgang_id + zeit + text,
@@ -2120,7 +2128,7 @@ Entscheidungen: `docs/projektierung-entscheidungen.md` Abschnitt „PLAN_PROJ_V6
   attachment`) – Ursache des Sofort-Downloads war das `filename=`-Attachment der Route.
 - **Montage-Backend `/montage` (Phase 137, `app/routers/montage.py`):** Besetzung je Termin
   entscheidet (`termin_besetzung`; Termine ohne Besetzung: Team-Mitglied oder `person_id`;
-  Admin/Projektierung alles [ANNAHME]). Standardansicht „Meine Einsätze“ (Heute/Diese
+  Admin/Projektierung alles – bestätigt 08.10.2026). Standardansicht „Meine Einsätze“ (Heute/Diese
   Woche/Danach), Team-Umschalter für mehrere Teams und Admin/Projektierung („Team <Name>“ =
   alle Termine des Teams), Wochenkalender mit Besetzungs-Initialen. Auftragsseite: Kopf ·
   Steckbrief vollständig (`steckbrief_zeilen`: alle Felder aus `kern.steckbrief_felder`, leere
@@ -2128,7 +2136,8 @@ Entscheidungen: `docs/projektierung-entscheidungen.md` Abschnitt „PLAN_PROJ_V6
   Bestandsimport ohne Ableitung, CSS-Raster) · Gerät & Positionen (eingeklappt) · Teams &
   Termine (Art aus `typ`/`zweck`, Besetzung) · Notizen der Projektierung (read-only, letzte fünf
   + „alle anzeigen“, Hinweis „Bemerkungen bitte im Montagebericht eintragen.“) · Montage
-  starten/beenden (Kurzbericht optional [ANNAHME], Hinweis auf automatisches Ende) · Formulare ·
+  starten/beenden (*seit Nachtrag 08.10.2026 ohne Kurzbericht – Bemerkungen im Montagebericht*,
+  Hinweis auf automatisches Ende) · Formulare ·
   Restarbeiten · Galerie. Block „Offene Montage-Aufgaben“ entfällt (Route `POST /montage/
   aufgabe/{id}/erledigt` bleibt erreichbar; im Blatt gibt es keine `rolle = montage`). Das
   unterschriebene Abnahmeprotokoll beendet die Montage automatisch
@@ -2137,7 +2146,8 @@ Entscheidungen: `docs/projektierung-entscheidungen.md` Abschnitt „PLAN_PROJ_V6
 - **Formulare (Phase 138, `app/montage_formulare.py`, `projektierung_logik.py`):** Blatt
   „Formulare“ auf v28-Stand (Montagebericht 19 Felder ohne Arbeitsbeginn/-ende, Nachbestellung,
   Regie; `mb_bemerkung` „Bemerkungen des Monteurs“ als Textarea; Fotos Zählerschrank/
-  Außengerät/Innengerät/Neue Anlage; Inbetriebnahmeprotokoll 5 Seiten / 31 Felder mit den elf
+  Außengerät/Innengerät/Neue Anlage; Inbetriebnahmeprotokoll 5 Seiten / 30 Felder (Nachtrag
+  08.10.2026: `ib_kaeltemittel` entfällt, Antwort Andreas) mit den elf
   Fragen von Andreas; Abnahme unverändert). Feldtypen datum · text (Option `gross`) · ja_nein ·
   auswahl · zahl · foto (Ordner, mehrere Dateien, Wert `galerie:<id>:<name>|…`) · unterschrift ·
   `wiederhol` (Spalte optionen = Einzelfeld, Formularfelder `<key>[]`, JSON-Liste, „+ weitere
@@ -2162,6 +2172,30 @@ Entscheidungen: `docs/projektierung-entscheidungen.md` Abschnitt „PLAN_PROJ_V6
   Inbetriebnahme Prüfungen, Lightbox, Notizen-Chat). Doku: `docs/nach-dem-update-v28.md`,
   `docs/projektierung-entscheidungen.md` (Teile P1/P2), `docs/projektierung-prototyp.html`
   (Block Termine, Dialog Phase ändern).
+- **Nachtrag 08.10.2026 (Antworten Andreas auf die Rückfragen des Durchlaufs, Projektierung):**
+  (1) `main.breit` ohne Breitenbegrenzung (`style.css`: `max-width: none`, 16 px Innenabstand) für
+  ALLE breiten Seiten – Portal, Lead-Management, Vorgangsakte, Projektierung; die Sonderregel
+  `main.breit.pj-voll` ist entfallen (Klasse bleibt Marker); die Kundenkartei ist ebenfalls
+  unbegrenzt (`lead_v2.css` `main.lk-seite` ohne `max-width`). (2) Board-Höhe
+  (`projektierung.js` `hoeheSetzen`, `projektierung_v28.css`): Mindesthöhe 480 px nur bei
+  Viewport-Höhe ≥ 900 px, darunter 320 px; Messung mit übergroßem Board (Board füllt den
+  Viewport auch bei wenigen Karten); unter 960 px Höhe oder in schmalen Fenstern wird die
+  Board-Seite verdichtet (Hinweis einzeilig mit Hover, Kachel-Untertitel aus, Fußabstand 8 px)
+  → kein Seiten-Scroll bei 1 366 × 768; Kontrollwerte `diagnose/v28_patches/pb_kontrolle.py`.
+  (3) „Montage beenden“ ohne Kurzbericht (`templates/montage/einsatz.html`; Bemerkungen im
+  Montagebericht `mb_bemerkung`); `POST /montage/einsatz/{id}/phase` nimmt das Feld `bericht`
+  nur noch aus Altgründen an (Verlauf nur, wenn nicht leer). (4) `ib_kaeltemittel` entfällt –
+  Inbetriebnahmeprotokoll 5 Seiten / 30 Felder (Zeile aus dem Blatt „Formulare“ entfernt).
+  (5) `montage_formulare.migration_v28_entwuerfe` (migrate.py) leert Entwürfe mit Schlüsseln,
+  die das Blatt nicht mehr kennt (`antworten_json = "{}"`, `seite_index = 0`; Meldung
+  „Formulare (v28): n alte Entwürfe geleert (…)“, idempotent). (6) Bestätigt ohne Codeänderung:
+  Personen-Liste der Termin-Dialoge Projektierung + Innendienst + Admin (kein Außendienst),
+  Sub-Einsatz ohne Subteam mit leerer Besetzung, Foto-Ordner Elektro/Außengerät/Neue Anlage,
+  Seite „Abweichungen & Bemerkungen“, aufgabenbezogene Kommentare im Projektverlauf,
+  Projektierung liest das Montage-Backend, PDF-Präfix „Seriennummer n“. Tests:
+  `MigrationEntwuerfe` in `tests/test_proj_v6_formulare.py` (30 Felder), angepasst
+  `tests/test_proj_v6_montage.py`; Entscheidungstabelle in
+  `docs/projektierung-entscheidungen.md`.
 
 ## Neu in v29 – Lead-Management V4 Feedback-Runde 2 (abgestimmt 07.10.2026)
 
@@ -2183,7 +2217,7 @@ versuche`); v27-Code läuft auf der v29-Datenbank weiter. Entscheidungen:
   bleibt als `todo_zugewiesen` [ANNAHME]). Nicht betroffen: Projektierungs-Glocken,
   Angebotstool-Glocken, v27-Betriebsglocken (art `system`). Aktivitäten bleiben.
 - **Parametrierung → Lead-Einstellungen** Abschnitt „Lead-Management V4“: `absender_lead_mails`
-  (termin@friondo.de), `hv_versandweg` (offen | smtp | entwurf | leads_im_namen),
+  (termin@friondo.de), `hv_versandweg` (entwurf – Standard seit Nachtrag 08.10.2026 | offen | smtp | leads_im_namen),
   `vorschlaege_anzahl` (3), `hv_gruppe_rene`/`hv_gruppe_simon` (Benutzer-IDs, Startwerte per
   Namensabgleich in `lead_v2.migration_v29_oberflaeche`), `routen_start`, Glocken-Häkchen,
   Zähler „Lead-Mails mit Fehler“ mit Link zur Warteschlange, Prüfpunkte „Testmail aus dem
@@ -2197,7 +2231,8 @@ versuche`); v27-Code läuft auf der v29-Datenbank weiter. Entscheidungen:
   To-Dos · Handelsvertreter; Hauptboard, Deals, Kontaktiert, Infoabend und alle
   „Mehr …“-Einstiege liefern per URL 404 (`lead_v2.HV_GESPERRTE_PFADE`, `lead_v2.gate` –
   hinter Login/PIN-Wechsel der v27-Middleware; Links aus dem Tool mit Referer → 303 auf die
-  HV-Ansicht mit Hinweis [ANNAHME A1]). Karte (`routers/leadmanagement.karte/karte_daten`)
+  HV-Ansicht mit Hinweis [ANNAHME A1] – *überholt seit Nachtrag 08.10.2026: immer 303, nie 404*).
+  Karte (`routers/leadmanagement.karte/karte_daten`)
   zeigt HV nur eigene Leads/Termine/Startadresse, Mittelpunkt = eigene Leads; Kartei:
   Innendienst/Leadmanager nur Anzeige. Sammelaktion **„An Handelsvertreter verschieben“**
   (`lead_boards.SAMMELAKTION_HV`, auch Deals/Infoabend) mit zwei Ziel-Schaltflächen aus
@@ -2215,7 +2250,8 @@ versuche`); v27-Code läuft auf der v29-Datenbank weiter. Entscheidungen:
   To-Dos, rechts „Routenplaner“ (Google-Maps-Link, Start = Parameter `routen_start`, Ziel
   leer) und „Meine Termine“ (HV: mit Sperrzeiten); entfernt „Ohne nächsten Schritt“,
   „Angebots-Wiedervorlagen“, „Termine 7 Tage“; „Mir zugeteilte Vorgänge“ eingeklappt
-  [ANNAHME]; Kachel „Mails mit Fehler“ nur bei > 0. **Eingangsdatum** in der Kartei
+  [ANNAHME] (*seit Nachtrag 08.10.2026 entfernt*); Kachel „Mails mit Fehler“ nur bei > 0.
+  **Eingangsdatum** in der Kartei
   „TT.MM.JJJJ, HH:MM Uhr“ (Filter `de_datum_zeit`, Kopf + Kundeninfo). **Boards**: Rang 0
   ganz oben für Leads mit `mail_fehler` oder `email_status = ungueltig`, rote Labels „Mail
   nicht gesendet“/„E-Mail falsch“ in der Notiz-Spalte, Kartei mit Hinweisbalken
@@ -2265,7 +2301,8 @@ versuche`); v27-Code läuft auf der v29-Datenbank weiter. Entscheidungen:
   (`VORLAGEN_AUSGEBLENDET`, Datensatz bleibt), offene Einträge storniert, Kaskade endet mit
   der Aktion der neuen Spalte `nach_letztem` (Standard `mail_disqualifiziert`,
   `logik.nach_letztem()`); Kundenantworten erzeugen Aktivität + Wiedervorlage „jetzt“,
-  keinen Phasenwechsel mehr [ANNAHME].
+  keinen Phasenwechsel mehr [ANNAHME] (*überholt seit Nachtrag 08.10.2026: nicht erreichte/
+  zurückgestellte Leads kommen zurück nach `in_kontaktierung`*).
 - **Absender termin@ ohne Fallback, Status fehler, Bounce (Phase 142, `app/lead_mail.py`,
   `app/lead_mail_abruf.py`, `app/routers/lm_mail.py`):** Absender ALLER Lead-Mails ist der
   Parameter `absender_lead_mails` (Standard termin@friondo.de, `lead_mail.absender`) – kein
@@ -2289,7 +2326,8 @@ versuche`); v27-Code läuft auf der v29-Datenbank weiter. Entscheidungen:
   Autospeichern der Kartei frei), markiert sie als gelesen, Unklares → „Posteingang unklar“;
   im Demo-Modus nur Demo-Leads. Blöcke zu 50, `db.kurz()`-Muster. `migration_v29_mails`:
   Parameter, Absender offener Einträge, v29-Rahmen der Standard-Terminbestätigung,
-  Standard-Kopien/Zulieferung, Nurture-Stornos. HV-Leads: `hv_versandweg = offen` → keine
+  Standard-Kopien/Zulieferung, Nurture-Stornos. HV-Leads (*seit Nachtrag 08.10.2026 Standard
+  `entwurf` – fertige .eml aus der Vorschau, siehe Nachtrag unten*): `hv_versandweg = offen` → keine
   Kundenmail, Aktivität + To-Do mit Vorschau (`GET /lead-management/lead/{id}/termin/{tid}/
   vorschau`, Text + ICS); smtp/entwurf/leads_im_namen sind Erweiterungspunkte
   (`lead_mail.hv_versand_*`). Doku: `docs/graph-einrichtung.md` „Lead-Management V4 (v29)“.
@@ -2324,3 +2362,39 @@ versuche`); v27-Code läuft auf der v29-Datenbank weiter. Entscheidungen:
   `config.VERSION = "v29"`. Angepasste Alt-Tests durch den Orchestrator:
   `tests/test_kl_v24_import.py` (Anhänge-Zeile = `Bosch Climate 3200i.pdf`, Nachtrag 2) und
   `tests/test_lead_v2_boards.py` (Rechte-Helfer des neuen Editors `lm_vorlagen._pflege_erlaubt`).
+- **Nachtrag 08.10.2026 (Antworten Andreas auf die Rückfragen des Durchlaufs, Lead-Management):**
+  HV-Sicht: gesperrte Seiten (`lead_v2.HV_GESPERRTE_PFADE`) leiten **immer** mit 303 auf
+  `/lead-management/handelsvertreter?meldung=…` um (`lead_v2.hv_umleitung`, von `gate` und vom
+  V1-Demo-Gate `routers/leadmanagement._gate` aufgerufen; auch JSON-Routen, kein Referer-Fall,
+  kein 404 mehr). Dashboard ohne „Mir zugeteilte Vorgänge“ (`lead_dashboard.zugeteilte` bleibt
+  als Funktion). **Sperrzeiten** zählen in `lead_termin._slot_frei`/`konflikte` exakt von–bis
+  (kein Mindestpuffer, kein Nachbartermin für Umweg/Tour-Tag); Admin/Innendienst tragen sie für
+  einen HV ein (`POST /dashboard/sperrzeit` mit `benutzer_id`, `lead_termin.sperrzeit_anlegen(…,
+  ziel)`, `sperrzeit_fremd_erlaubt`, Block „Sperrzeiten der Handelsvertreter“ in
+  `hv_uebersicht.html`, Listen zeigen „eingetragen von …“, Glocke art `terminaenderung`).
+  **Kundenantwort** (termin@ und leads@, `lead_mail.kundenantwort_verbuchen`) holt
+  `nicht_erreicht`/`zurueckgestellt` zurück nach `in_kontaktierung` (Zurückstellung aufgehoben,
+  Aktivität „Kunde hat geantwortet – zurück in die Kontaktierung“, Wiedervorlage „jetzt“) –
+  danach manuell, keine Nurture-Logik. **Status `fehler`** legt zusätzlich eine Betriebsglocke
+  (art `system`) an alle aktiven Admins an (`lead_mail._admins_glocke`, einmal je Eintrag,
+  dieselbe Sitzung). Graph-Mails tragen **`replyTo`** = Leadmanager (`Benutzer.email`) +
+  Absender termin@ (`lead_mail.antwort_adressen`, `_graph_senden(…, vorgang=)`).
+  **HV-Versandweg `entwurf` ist gebaut und Standard** (`PARAMETER_START`, `migration_v29_mails`
+  stellt `offen` einmalig um, Marker `migration_v29_hv_entwurf`; `offen` bleibt wählbar,
+  smtp/leads_im_namen weiter Erweiterungspunkte): `lead_mail.eml_erstellen` liefert die fertige
+  Termin-Mail als RFC-822-Datei (HTML + Text, Inline-Bilder als CID, ICS mit METHOD, From =
+  E-Mail des HV aus der Benutzerverwaltung, `X-Unsent: 1`), Download
+  `GET /lead-management/lead/{id}/termin/{tid}/vorschau?eml=1` (message/rfc822,
+  `Terminbestaetigung_<Kunde>.eml`, Knopf + Anleitung in `_vorlagen_termin_vorschau.html`);
+  beim Terminieren eines HV-Leads keine Warteschlangen-Mail, sondern Aktivität „… als Entwurf
+  (.eml) bereitgestellt – Versand aus dem eigenen Postfach des HV“ und To-Do „… aus dem eigenen
+  Postfach senden“ mit Vorschau-Link (Vertrag der `hv_versand_*`-Funktionen: `(eintrag,
+  hinweis, erledigt)`); Erinnerung −24 h bleibt Aktivität mit Vorschau-Link. Bestätigt ohne
+  Codeänderung: Fälligkeits-Glocke der To-Dos, Terminhinweise-Platzhalter, Dateinamen-Konvention
+  der Zulieferung, Bounces im Testmodus; OFFEN 3 (HV-Kalender) bleibt bei der Zwischenlösung.
+  Tests: `tests/test_lead_v4.py` (14), `tests/test_lead_v4_mail.py` (20, g3 echt); angepasst
+  `test_lead_v2_boards/v3_boards/v2_anruf/v2_dashboard/v2_handelsvertreter` (303 statt 404).
+  Entscheidungstabelle in `docs/leadmanagement-entscheidungen.md` (Antworten 08.10.2026).
+  Gesamtsuite nach dem Nachtrag (v28 + v29 + Nachtrag 2): **903 bestanden, 4 übersprungen**;
+  `migrate.py` zweimal auf der Dev-DB (neu: `hv_versandweg offen → entwurf`, WP-Kopie entfernt,
+  alte Formular-Entwürfe geleert).

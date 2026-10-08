@@ -127,19 +127,19 @@
         <p class="hinweis">Setzt das Gewerk auf „Montage“ – offene Punkte der Projektierung werden im Verlauf vermerkt.</p>
     </form>
     {% elif gewerk.phase == 'montage' %}
+    {# Nachtrag 08.10.2026 (Antwort Andreas): kein Kurzbericht mehr beim Beenden –
+       Bemerkungen stehen im Montagebericht (mb_bemerkung); die Route nimmt ein
+       Feld „bericht“ nur noch aus Altgründen entgegen. #}
     <form method="post" action="/montage/einsatz/{{ termin.id }}/phase">
         <input type="hidden" name="aktion" value="fertig">
-        <label style="display:block;font-size:13px;color:var(--pj-muted);margin:0 0 2px">
-            Kurzbericht (optional)</label>
-        <textarea name="bericht" rows="2"
-                  style="width:100%;border:1px solid var(--pj-line);border-radius:8px;padding:8px;font-family:inherit"
-                  placeholder="Besonderheiten? (Bemerkungen gehören in den Montagebericht)"></textarea>
-        <div class="pj-btnrow">
+        <div class="pj-btnrow" style="margin-top:0">
             <label style="font-size:13px;color:var(--pj-muted)">Uhrzeit
                 <input type="time" name="uhrzeit" step="900" class="pj-viertel"></label>
             <button class="pj-btn primary" type="submit">Montage beenden</button>
         </div>
-        <p class="hinweis">Wird automatisch beendet, sobald das Abnahmeprotokoll unterschrieben ist.</p>
+        <p class="hinweis">Setzt das Gewerk auf „Abnahme“. Bemerkungen zur Montage bitte im
+            Montagebericht eintragen – die Montage endet auch automatisch, sobald das
+            Abnahmeprotokoll unterschrieben ist.</p>
     </form>
     {% else %}
     <p class="dezent" style="font-size:12px;margin:0">Status: {{ phasen_namen[gewerk.phase] }}{% if gewerk.montage_fertig_am %} · Montage beendet {{ gewerk.montage_fertig_am.strftime('%d.%m.%Y %H:%M') }}{% endif %}</p>

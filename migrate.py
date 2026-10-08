@@ -758,7 +758,10 @@ def _daten() -> list[str]:
                                     ("app.projektierung", "migration_v28"),
                                     ("app.notizen", "migration_v28_notizen"),
                                     ("app.lead_v2", "migration_v29_oberflaeche"),
-                                    ("app.lead_mail", "migration_v29_mails")):
+                                    ("app.lead_mail", "migration_v29_mails"),
+                                    # Nachtrag 08.10.2026 (Antworten Andreas): alte Formular-
+                                    # Entwürfe leeren
+                                    ("app.montage_formulare", "migration_v28_entwuerfe")):
             try:
                 modul = importlib.import_module(modulname)
             except ImportError:

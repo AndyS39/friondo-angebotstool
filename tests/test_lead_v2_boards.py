@@ -539,7 +539,9 @@ class Gate(Basis):
         self.assertEqual(r.status_code, 404)
         # Handelsvertreter: nur eigene Vorgänge, keine Sammelaktionen, keine Vorlagen.
         # v29 (PLAN_LEAD_V4 Phase 140): Hauptboard/Deals/Kontaktiert sind für die
-        # HV-Sicht gesperrt (404) – eigene Leads stehen in der Handelsvertreter-Ansicht
+        # HV-Sicht gesperrt – eigene Leads stehen in der Handelsvertreter-Ansicht;
+        # Nachtrag 08.10.2026 (Antwort Andreas): gesperrte Seiten leiten IMMER mit 303
+        # auf die HV-Ansicht um (vorher 404 ohne Referer)
         c_hv = TestClient(app)
         c_hv.post("/login", data={"benutzer_id": str(self.hv.id), "pin": "1234"})
         r = c_hv.get("/lead-management/handelsvertreter")
@@ -547,10 +549,11 @@ class Gate(Basis):
         self.assertIn(f"/lead-management/lead/{eigen.id}", r.text)
         self.assertNotIn(f"/lead-management/lead/{fremd.id}", r.text)
         self.assertNotIn('id="lm-sammelform"', r.text)
-        self.assertEqual(c_hv.get("/lead-management/vorlagen").status_code, 404)
-        self.assertEqual(c_hv.get("/lead-management/hauptboard").status_code, 404)
-        self.assertEqual(c_hv.get("/lead-management/terminiert").status_code, 404)
-        self.assertEqual(c_hv.get("/lead-management/kontaktiert").status_code, 404)
+        for pfad in ("/lead-management/vorlagen", "/lead-management/hauptboard",
+                     "/lead-management/terminiert", "/lead-management/kontaktiert"):
+            r = c_hv.get(pfad, follow_redirects=False)
+            self.assertEqual(r.status_code, 303, pfad)
+            self.assertTrue(r.headers["location"].startswith("/lead-management/handelsvertreter?meldung="), pfad)
         # eigener Lead bearbeitbar, fremder nicht
         r = c_hv.post(f"/lead-management/boards/zeile/{eigen.id}", json={"feld": "notiz", "wert": "HV-Notiz"})
         self.assertEqual(r.status_code, 200, r.text)
@@ -561,9 +564,10 @@ class Gate(Basis):
                       headers={"Accept": "application/json"})
         self.assertEqual(r.status_code, 422)
         self.assertIn("Außendienst", r.json()["meldung"])
-        # Kontaktiert: v29 für die HV-Sicht gesperrt (404); die Rufnummernsuche selbst
-        # liefert dem HV weiterhin nur Treffer eigener Leads
-        self.assertEqual(c_hv.get("/lead-management/kontaktiert?telefon=0203+770602").status_code, 404)
+        # Kontaktiert: v29 für die HV-Sicht gesperrt (303, Nachtrag 08.10.2026); die
+        # Rufnummernsuche selbst liefert dem HV weiterhin nur Treffer eigener Leads
+        self.assertEqual(c_hv.get("/lead-management/kontaktiert?telefon=0203+770602",
+                                  follow_redirects=False).status_code, 303)
         self.assertEqual(lead_boards.telefon_treffer(self.s, "0203 770602", self.hv), [])
         self.assertEqual([t["vorgang"].id for t in lead_boards.telefon_treffer(self.s, "0203 770601", self.hv)],
                          [eigen.id])

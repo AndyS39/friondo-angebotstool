@@ -227,9 +227,11 @@
             <input type="email" name="absender_lead_mails" value="{{ werte.absender_lead_mails or 'termin@friondo.de' }}"></label>
         <label>Versandweg Terminbestätigung für HV-Leads
             <select name="hv_versandweg">
-                {% for w, t in [('offen', 'offen – keine Kundenmail, To-Do an den HV (Standard)'), ('smtp', 'smtp (noch nicht umgesetzt)'),
-                                ('entwurf', 'entwurf (.eml, noch nicht umgesetzt)'), ('leads_im_namen', 'termin@ im Namen des HV (noch nicht umgesetzt)')] %}
-                <option value="{{ w }}" {{ 'selected' if (werte.hv_versandweg or 'offen') == w }}>{{ t }}</option>
+                {# Nachtrag 08.10.2026 (Andreas): HV senden aus dem eigenen Postfach → Standard „entwurf“ (.eml aus der Vorschau) #}
+                {% for w, t in [('entwurf', 'entwurf – fertige Mail als .eml, HV sendet aus dem eigenen Postfach (Standard)'),
+                                ('offen', 'offen – keine Kundenmail, nur To-Do mit Vorschau'),
+                                ('smtp', 'smtp (noch nicht umgesetzt)'), ('leads_im_namen', 'termin@ im Namen des HV (noch nicht umgesetzt)')] %}
+                <option value="{{ w }}" {{ 'selected' if (werte.hv_versandweg or 'entwurf') == w }}>{{ t }}</option>
                 {% endfor %}
             </select></label>
         <label class="schmal">Terminvorschläge (Anzahl)

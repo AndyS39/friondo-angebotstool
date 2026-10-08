@@ -4,9 +4,11 @@
    v14 (style.css :root, --pj-*), keine externen Schriften/CDNs. Wird nach style.css
    geladen – gleiche Spezifität gewinnt hier. */
 
-/* --- Phase 134: volle Breite nur auf Projektierungs-Seiten (main.breit.pj-voll) --
-   [ANNAHME] main.breit (1720 px) bleibt für Portal/Lead-Seiten unverändert. */
-main.breit.pj-voll { max-width: none; padding-left: 16px; padding-right: 16px; }
+/* --- Phase 134: volle Breite der Projektierungs-Seiten --------------------------
+   Nachtrag 08.10.2026 (Antwort Andreas): die volle Breite gilt für ALLE breit-Seiten
+   (auch Portal und Lead-Management) – Regel main.breit in style.css (max-width none,
+   16 px Innenabstand). Die frühere Sonderregel main.breit.pj-voll ist entfallen; die
+   Klasse pj-voll bleibt als Marker in den Projektierungs-Templates (Tests). */
 
 /* --- Phase 134: Board – Spalten flexibel, senkrecht je Spalte, Köpfe sticky --- */
 .pj-hscroll {
@@ -19,7 +21,28 @@ main.breit.pj-voll { max-width: none; padding-left: 16px; padding-right: 16px; }
     overflow-x: auto; overflow-y: hidden;
     scroll-snap-type: none; padding-bottom: 4px;
     scrollbar-gutter: stable;
-    height: var(--pj-board-h, auto); min-height: 480px;
+    /* Nachtrag 08.10.2026 (Antwort Andreas, „entscheide du“): Mindesthöhe 480 px nur
+       bei Viewport-Höhe ≥ 900 px, darunter 320 px – Ziel: bei 1366 × 768 kein
+       Seiten-Scroll (gleiche Schwelle wie hoeheSetzen in projektierung.js) */
+    height: var(--pj-board-h, auto); min-height: 320px;
+}
+@media (min-height: 900px) { .pj-board { min-height: 480px; } }
+/* Nachtrag 08.10.2026: niedrige Viewports (< 960 px hoch – 1366 × 768 ebenso wie
+   Full-HD mit Browser- und Taskleiste, dort bleiben ≈ 910–950 px) und schmale Fenster
+   (≤ 1500 px breit, bis 1023 px hoch – dort brechen Kacheln, Filter-Chips und Hinweis
+   um): damit das Board mit seiner Mindesthöhe (320 px unter 900 px, sonst 480 px)
+   ohne Seiten-Scroll passt, wird die Seite verdichtet – Hinweis unter dem Board
+   einzeilig (voller Text bei Hover), Kachel-Untertitel ausgeblendet, Kachel- und
+   Fußabstand der Board-Seite verkleinert (main:has(#pj-board) – Chrome/Edge; ohne
+   :has() bleibt lediglich der Fußabstand wie bisher). Kontrollwerte:
+   diagnose/v28_patches/pb_kontrolle.py → pb_kontrollwerte.json. */
+@media (max-height: 959px), (max-width: 1500px) and (max-height: 1023px) {
+    .pj-board ~ .pj-note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        padding: 4px 10px; margin: 4px 0 0; }
+    .pj-board ~ .pj-note:hover { white-space: normal; }
+    .pj-tiles { margin: 8px 0 10px; }
+    .pj-tiles .pj-tile .s { display: none; }
+    main.breit:has(#pj-board) { padding-bottom: 8px; }
 }
 .pj-board::-webkit-scrollbar, .pj-hscroll::-webkit-scrollbar { height: 12px; }
 .pj-board::-webkit-scrollbar-track, .pj-hscroll::-webkit-scrollbar-track {

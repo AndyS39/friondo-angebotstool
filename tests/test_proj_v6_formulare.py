@@ -1,8 +1,10 @@
 # v28 (PLAN_PROJ_V6 Phase 138, Agent P2): Formulare – Blatt „Formulare“ auf dem
 # v28-Stand (Montagebericht 19 Felder ohne mb_beginn/mb_regie, Inbetriebnahme
-# 5 Seiten / 31 Felder, Abnahme 9), Lader (wiederhol, gross, pflicht_wenn, „Logik
+# 5 Seiten / 30 Felder, Abnahme 9), Lader (wiederhol, gross, pflicht_wenn, „Logik
 # prüfen“), Renderer/Speichern (Fotos mehrfach, Wiederholfeld), offene_pflicht,
 # Restarbeiten aus Frage 10, PDF (multi_cell, Frage 7, Tabellen, Unterschriften).
+# Nachtrag 08.10.2026 (Antwort Andreas, Agent PB): `ib_kaeltemittel` ist aus dem
+# Blatt entfernt (31 → 30 Felder); `migration_v28_entwuerfe` leert alte Entwürfe.
 import io
 import json
 import shutil
@@ -40,19 +42,20 @@ class Blatt(unittest.TestCase):
         self.assertEqual(self.logik.fehler, [])
         self.assertFalse([w for w in self.logik.warnungen if "Formular" in w], self.logik.warnungen)
 
-    def test_inbetriebnahme_5_seiten_31_felder(self):
+    def test_inbetriebnahme_5_seiten_30_felder(self):
+        # Nachtrag 08.10.2026 (Antwort Andreas): ib_kaeltemittel entfällt → 30 Felder
         seiten = self.logik.formular_seiten("inbetriebnahme")
         self.assertEqual(len(seiten), 5)
         self.assertEqual([s for s, _ in seiten],
                          ["Gerät", "Prüfungen", "Betriebswerte im stabilen Betrieb",
                           "Einstellungen", "Unterschriften"])
-        self.assertEqual(len(self.logik.formulare["inbetriebnahme"]), 31)
+        self.assertEqual(len(self.logik.formulare["inbetriebnahme"]), 30)
         keys = [f.feld_key for f in self.logik.formulare["inbetriebnahme"]]
         for alt in ("ib_dichtheit", "ib_spuelung", "ib_rcd", "ib_hems", "ib_einweisung",
-                    "ib_bemerkung", "ib_unterschrift_monteur"):
+                    "ib_bemerkung", "ib_unterschrift_monteur", "ib_kaeltemittel"):
             self.assertNotIn(alt, keys)
         self.assertEqual(keys[:5], ["ib_sn_aussen", "ib_sn_innen", "ib_sn_puffer",
-                                    "ib_sn_komponenten", "ib_kaeltemittel"])
+                                    "ib_sn_komponenten", "ib_f01"])
         self.assertEqual(feld(self.logik, "inbetriebnahme", "ib_sn_komponenten").typ, "wiederhol")
         self.assertEqual(feld(self.logik, "inbetriebnahme", "ib_sn_komponenten").einzelfeld, "Seriennummer")
         self.assertTrue(feld(self.logik, "inbetriebnahme", "ib_f10").gross)
@@ -67,7 +70,6 @@ class Blatt(unittest.TestCase):
                     "ib_f10", "ib_f11", "ib_unterschrift_techniker", "ib_unterschrift_betreiber"):
             self.assertIn(key, pflicht)
         self.assertNotIn("ib_f11_text", pflicht)
-        self.assertNotIn("ib_kaeltemittel", pflicht)
 
     def test_montagebericht_felder(self):
         keys = [f.feld_key for f in self.logik.formulare["montagebericht"]]
@@ -119,7 +121,7 @@ class Blatt(unittest.TestCase):
         self.assertIn("tx_5: Option „gross“ gilt nur für Typ text", fehler)
         self.assertNotIn("tx_6", fehler)
         self.assertTrue(any("tx_6" in w and "Einzelfeld" in w for w in logik.warnungen))
-        self.assertEqual(len(logik.formulare["inbetriebnahme"]), 37)
+        self.assertEqual(len(logik.formulare["inbetriebnahme"]), 36)   # 30 + 6 Testzeilen
 
 
 class Wertformen(unittest.TestCase):
@@ -295,6 +297,63 @@ class Formulare(Basis):
         self.assertEqual(montage_formulare._wert_anzeige(
             feld(self.logik, "montagebericht", "mb_foto_anlage"), "galerie:9:alt.jpg"),
             "Foto in Galerie: alt.jpg")
+
+
+class MigrationEntwuerfe(Basis):
+    """Nachtrag 08.10.2026 (Antwort Andreas): `migration_v28_entwuerfe` leert
+    Entwürfe mit Schlüsseln, die das aktuelle Blatt nicht mehr kennt."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.adminb = cls.s.get(Benutzer, 1)
+
+    def test_alte_entwuerfe_werden_geleert(self):
+        g = self.gewerk_neu()
+        # 1) Entwurf mit altem Schlüssel (v15-Inbetriebnahme) → geleert, Seite 0
+        alt = montage_formulare.formular_holen(self.s, g, "inbetriebnahme", self.adminb)
+        alt.antworten_json = json.dumps({"ib_sn_aussen": "AG-1", "ib_dichtheit": "Ja"})
+        alt.seite_index = 2
+        # 2) Entwurf nur mit gültigen Schlüsseln → unverändert
+        gut = montage_formulare.formular_holen(self.s, g, "montagebericht", self.adminb)
+        gut.antworten_json = json.dumps({"mb_datum": "2026-10-08", "mb_bemerkung": "V28PB ok"})
+        gut.seite_index = 1
+        # 3) abgeschlossenes Formular mit altem Schlüssel → unverändert
+        fertig = montage_formulare.formular_holen(self.s, g, "abnahme", self.adminb)
+        fertig.antworten_json = json.dumps({"ab_vollstaendig": "Ja", "ab_alt_feld": "x"})
+        fertig.status = "abgeschlossen"
+        fertig.seite_index = 2
+        # 4) Entwurf mit altem Schlüssel an einem zweiten Gewerk (Zähler je Formular)
+        g2 = self.gewerk_neu()
+        alt2 = montage_formulare.formular_holen(self.s, g2, "montagebericht", self.adminb)
+        alt2.antworten_json = json.dumps({"mb_beginn": "07:30", "mb_datum": "2026-10-08"})
+        alt2.seite_index = 1
+        self.s.commit()
+
+        meldungen = montage_formulare.migration_v28_entwuerfe(self.s)
+        self.s.commit()
+        self.assertEqual(meldungen, ["Formulare (v28): 2 alte Entwürfe geleert "
+                                     "(inbetriebnahme: 1, montagebericht: 1)"])
+        self.s.expire_all()
+        self.assertEqual(montage_formulare.antworten(alt), {})
+        self.assertEqual(alt.seite_index, 0)
+        self.assertEqual(alt.status, "entwurf")
+        self.assertEqual(montage_formulare.antworten(alt2), {})
+        self.assertEqual(alt2.seite_index, 0)
+        self.assertEqual(montage_formulare.antworten(gut),
+                         {"mb_datum": "2026-10-08", "mb_bemerkung": "V28PB ok"})
+        self.assertEqual(gut.seite_index, 1)
+        self.assertEqual(montage_formulare.antworten(fertig),
+                         {"ab_vollstaendig": "Ja", "ab_alt_feld": "x"})
+        self.assertEqual(fertig.seite_index, 2)
+        self.assertEqual(fertig.status, "abgeschlossen")
+        # zweiter Lauf: nichts mehr zu tun
+        self.assertEqual(montage_formulare.migration_v28_entwuerfe(self.s), [])
+        # leerer Entwurf („{}“) bleibt still
+        leer = montage_formulare.formular_holen(self.s, g2, "abnahme", self.adminb)
+        self.s.commit()
+        self.assertEqual(montage_formulare.antworten(leer), {})
+        self.assertEqual(montage_formulare.migration_v28_entwuerfe(self.s), [])
 
 
 if __name__ == "__main__":

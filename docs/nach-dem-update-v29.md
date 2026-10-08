@@ -70,6 +70,32 @@ läuft `migrate.py` (zweimal fehlerfrei) und `scripts\smoke.bat`.
   auf die fertige Mail (Text zum Kopieren + ICS-Download) und sendet aus seinem eigenen
   Konto.
 
+### Nachtrag 08.10.2026 (Antworten Andreas)
+- Handelsvertreter, die einen Link auf eine Seite außerhalb ihrer Sicht öffnen (Lesezeichen,
+  Mail, Tool), landen jetzt immer auf „Meine Leads“ mit dem Hinweis „Diese Seite gibt es in der
+  Handelsvertreter-Sicht nicht“ – keine Fehlerseite mehr.
+- Mein Dashboard: der Block „Mir zugeteilte Vorgänge“ ist weg; die Leads stehen im Hauptboard
+  bzw. in der Handelsvertreter-Ansicht.
+- Sperrzeiten der Handelsvertreter gelten exakt von–bis: ein Terminvorschlag darf direkt vor
+  oder nach einer Sperrzeit liegen (kein 30-Minuten-Puffer wie bei Kundenterminen). Innendienst
+  und Admin können Sperrzeiten für einen Handelsvertreter eintragen und löschen:
+  Handelsvertreter-Ansicht → unten „Sperrzeiten der Handelsvertreter“ (Vertreter wählen, Datum,
+  von, bis, Bemerkung); der HV sieht in „Meine Termine“, wer die Sperrzeit eingetragen hat.
+- Antwortet ein Kunde auf eine Lead-Mail (termin@ oder leads@), kommt ein nicht erreichter oder
+  zurückgestellter Lead automatisch zurück in die Kontaktierung (Timeline „Kunde hat geantwortet
+  – zurück in die Kontaktierung“, Wiedervorlage „jetzt“) – danach arbeitet der Innendienst wie
+  gewohnt manuell weiter.
+- Antworten der Kunden auf Lead-Mails gehen jetzt an den zuständigen Leadmanager UND an
+  termin@friondo.de (Reply-To) – der Leadmanager sieht die Antwort im eigenen Postfach, das Tool
+  verbucht sie weiter über termin@.
+- **Handelsvertreter-Leads:** Terminbestätigungen (auch Änderung/Absage) werden nicht vom Tool
+  gesendet, sondern als fertige E-Mail-Datei bereitgestellt. Der HV bekommt ein To-Do
+  „Terminbestätigung aus dem eigenen Postfach senden“ → Vorschau öffnen → „.eml herunterladen“
+  → Datei öffnen (Outlook zeigt sie als Entwurf mit Senden-Knopf; andere Programme: „Als neu
+  bearbeiten“) → prüfen → senden. Bild, Text und Kalenderanhang (ICS) sind enthalten; Absender
+  ist die E-Mail-Adresse des HV aus der Benutzerverwaltung.
+- Alle Lead-Seiten (auch die Kundenkartei) nutzen die volle Monitorbreite.
+
 ## Admin / Server-To-dos
 
 - **M365 (vor der Freischaltung `lead_freigabe_modus = alle`, im Demo-Modus nur
@@ -104,3 +130,9 @@ läuft `migrate.py` (zweimal fehlerfrei) und `scripts\smoke.bat`.
   `benutzer.vorname/infotext/bild_datei` (alle additiv); Kachel „Lead-Mails mit Fehler“ auf
   der Betriebs-Seite – bei > 0 den Lead im Hauptboard prüfen. Pool-Invariante mit 14 Läufen:
   64 + 14 + 5 = 83 ≤ 90 (`.env` unverändert).
+- **Nachtrag 08.10.2026:** `hv_versandweg` steht nach `migrate.py` auf `entwurf` (vorher `offen`;
+  `offen` bleibt wählbar und verhält sich wie bisher). Für alle Handelsvertreter die **E-Mail-Adresse
+  in der Benutzerverwaltung** pflegen – sie ist der Absender der .eml (fehlt sie, bleibt der Absender
+  in der Datei leer und die Vorschau zeigt einen Hinweis). Admins erhalten bei jeder Lead-Mail mit
+  Status „fehler“ (nach drei Versuchen) eine Betriebsglocke mit Link auf die Warteschlange
+  (`/lead-management/kommunikation?status=fehler`) – zusätzlich zur Kachel auf der Betriebs-Seite.

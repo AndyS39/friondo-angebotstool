@@ -8,7 +8,10 @@
 #  POST /lead-management/vorlagen/einspielen        Terminbestätigungen aus
 #       docs/vorlagen/terminbestaetigung/ einspielen (wiederholbar, Admin).
 #  GET  /lead-management/lead/{id}/termin/{tid}/vorschau   fertige Terminbestätigung
-#       (Text + HTML + ICS-Download) – Zwischenlösung hv_versandweg = offen.
+#       (Text + HTML + ICS-Download) – hv_versandweg = offen; Nachtrag 08.10.2026
+#       (Antwort Andreas): ?eml=1 liefert die Mail als .eml (message/rfc822,
+#       Absender = E-Mail des HV, ICS + Inline-Bilder enthalten) für den Versandweg
+#       `entwurf` (Standard) – Download, in Outlook/Mail öffnen, prüfen, senden.
 #  GET  /lead-management/benutzer/{id}/bild         Benutzerbild (Vorschau/Editor).
 # Alle Routen `def`; Gate wie das Modul (lead_v2.gate, HV an eigenen Leads).
 
@@ -147,8 +150,11 @@ def termin_vorschau(request: Request, vorgang_id: int, termin_id: int,
     """Fertige Terminbestätigung (Betreff, Text zum Kopieren, HTML-Ansicht) und
     ICS-Download (?ics=1) bzw. Text-Download (?txt=1) – für Handelsvertreter,
     die ihre Terminbestätigung selbst senden (hv_versandweg = offen). Keine
-    Warteschlange, kein Netzaufruf. ?vorlage=terminabsage|terminaenderung
-    rendert die anderen Termin-Mails."""
+    Warteschlange, kein Netzaufruf. ?vorlage=terminabsage|terminaenderung|
+    terminerinnerung rendert die anderen Termin-Mails.
+    Nachtrag 08.10.2026 (Antwort Andreas): ?eml=1 liefert die fertige Mail als
+    RFC-822-Datei (message/rfc822, Terminbestaetigung_<Kunde>.eml) – Versandweg
+    `entwurf`: Absender = E-Mail des HV, HTML + Text, ICS, Inline-Bilder."""
     vorgang = session.get(Vorgang, vorgang_id)
     if vorgang is None:
         raise HTTPException(status_code=404)
@@ -159,6 +165,12 @@ def termin_vorschau(request: Request, vorgang_id: int, termin_id: int,
     vorlage = request.query_params.get("vorlage", lead_mail.TERMIN_VORLAGE)
     if vorlage not in lead_mail.HV_TERMIN_VORLAGEN:
         vorlage = lead_mail.TERMIN_VORLAGE
+    if request.query_params.get("eml") == "1":
+        eml = lead_mail.eml_erstellen(session, vorgang, termin, vorlage)
+        session.commit()   # ics_uid kann gesetzt worden sein
+        return Response(eml["bytes"], media_type="message/rfc822",
+                        headers={"Content-Disposition": f'attachment; filename="{eml["dateiname"]}"',
+                                 "X-Friondo-Absender": eml["absender"] or "-"})
     daten = lead_mail.termin_vorschau(session, vorgang, termin, vorlage)
     session.commit()   # ics_uid kann gesetzt worden sein
     kunde = session.get(Kunde, vorgang.kunde_id)
@@ -173,11 +185,15 @@ def termin_vorschau(request: Request, vorgang_id: int, termin_id: int,
                         headers={"Content-Disposition":
                                  f'attachment; filename="{vorlage}_{termin.id}.txt"'})
     ad = session.get(Benutzer, termin.ad_id) if termin.ad_id else None
+    hv = lead_mail.hv_benutzer(session, vorgang, termin)
     return render(request, "leadmanagement/_vorlagen_termin_vorschau.html",
                   aktiv="/lead-management", vorgang=vorgang, termin=termin, kunde=kunde,
                   ad=ad, daten=daten, vorlage=vorlage,
                   vorlage_name=lead_mail.vorlage_name(session, vorlage),
                   absender=lead_mail.absender(session), hv_versandweg=lead_mail.hv_versandweg(session),
+                  # Nachtrag 08.10.2026: Versandweg entwurf – Absender des HV und .eml-Download
+                  hv=hv, absender_hv=(hv.email or "").strip() if hv is not None else "",
+                  eml_dateiname=lead_mail.eml_dateiname(vorlage, kunde),
                   demo_badge=kern.demo_aktiv(session),
                   meldung=request.query_params.get("meldung", ""))
 

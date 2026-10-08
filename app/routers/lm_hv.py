@@ -68,8 +68,15 @@ def uebersicht(request: Request, session: Session = Depends(get_session)):
     # hängen sich meldung=…-Parameter bei jeder Aktion aneinander)
     params = [(k, v) for k, v in request.query_params.multi_items() if k != "meldung"]
     zurueck = BASIS + (f"?{urlencode(params)}" if params else "")
+    # Nachtrag 08.10.2026 (Antwort Andreas): Innendienst/Admin tragen Sperrzeiten
+    # für Handelsvertreter ein – Formular + Liste der kommenden Sperrzeiten je HV
+    from app import lead_termin
+    sperrzeit_fremd = bool(gesamt and lead_termin.sperrzeit_fremd_erlaubt(benutzer))
+    sperrzeiten = (lead_termin.sperrzeiten_uebersicht(session, daten.get("hv_liste") or [])
+                   if sperrzeit_fremd else {"je_hv": [], "namen": {}, "anzahl": 0})
     return render(request, "leadmanagement/hv_uebersicht.html",
                   zurueck=zurueck, benutzer=benutzer, ist_hv=not gesamt,
+                  sperrzeit_fremd=sperrzeit_fremd, sperrzeiten=sperrzeiten,
                   **daten, **_kontext(request, session))
 
 

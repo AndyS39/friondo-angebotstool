@@ -16,6 +16,10 @@
 # Woche); Sperrzeiten der Handelsvertreter (VotTermin typ „sperrzeit“, nur
 # Tool-Kalender, Zwischenlösung bis [OFFEN 3]); „Weitere Kalender“ je Nutzer
 # (benutzer_einstellungen Key assistent_kalender).
+# Nachtrag 08.10.2026 (Antwort Andreas): Sperrzeiten zählen in der Kollision exakt
+# von–bis (kein Mindest-/Fahrzeitpuffer, _slot_frei/konflikte); Admin/Innendienst
+# dürfen Sperrzeiten eines Handelsvertreters eintragen (sperrzeit_anlegen(…, ziel),
+# sperrzeit_fremd_erlaubt, sperrzeiten_uebersicht für die HV-Übersicht).
 
 import json
 from datetime import date, datetime, timedelta
@@ -340,6 +344,10 @@ def _slot_frei(session: Session, lead_ort, start_ort, beginn: datetime,
         t_ende = _ende(t, dauer)
         if t.beginn < ende and beginn < t_ende:
             return False, "Überschneidung"
+        # Nachtrag 08.10.2026 (Antwort Andreas): Sperrzeiten der Handelsvertreter
+        # zählen exakt von–bis – kein Mindest-/Fahrzeitpuffer davor oder danach
+        if (t.typ or "vot") == SPERRZEIT_TYP:
+            continue
         if t_ende <= beginn:
             fahr = fahrzeiten.get(("hin", t.id), 0.0) if lead_ort else 0.0
             noetig = max(puffer, fahr)
@@ -429,14 +437,18 @@ def vorschlaege(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None
             if zeiten is None:
                 continue
             tages_termine = [t for t in termine if t.beginn.date() == tag.date()]
-            vot_tag = [t for t in tages_termine if (t.typ or "vot") == "vot"]
+            # Nachtrag 08.10.2026: Sperrzeiten sind keine Kundentermine – sie zählen
+            # nur in der Kollision (exakt von–bis, _slot_frei), nicht als Nachbar
+            # für Umweg/Tour-Tag und machen einen Tag nicht „belegt“
+            kunden_termine = [t for t in tages_termine if (t.typ or "vot") != SPERRZEIT_TYP]
+            vot_tag = [t for t in kunden_termine if (t.typ or "vot") == "vot"]
             if len(vot_tag) >= max_tag:
                 continue
-            leerer_tag = not tages_termine
+            leerer_tag = not kunden_termine
             tour_tag = (lead_ort is not None and any(
                 t.lat is not None
                 and routing.luftlinie_km(lead_ort, (t.lat, t.lon)) <= 10
-                for t in tages_termine))
+                for t in kunden_termine))
             minute = zeiten[0]
             dauer_min = int(dauer.total_seconds() // 60)
             while minute + dauer_min <= zeiten[1]:
@@ -452,9 +464,9 @@ def vorschlaege(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None
                 if belegt_extern and any(beginn < b_ende and b_von < ende
                                          for b_von, b_ende in belegt_extern):
                     continue
-                vorher = max((t for t in tages_termine if _ende(t, dauer) <= beginn),
+                vorher = max((t for t in kunden_termine if _ende(t, dauer) <= beginn),
                              key=lambda t: t.beginn, default=None)
-                nachher = min((t for t in tages_termine if t.beginn >= ende),
+                nachher = min((t for t in kunden_termine if t.beginn >= ende),
                               key=lambda t: t.beginn, default=None)
                 geschaetzt = False
                 umweg = 0.0
@@ -640,6 +652,10 @@ def konflikte(session: Session, ad_id: int, beginn: datetime,
         t_ende = _ende(t, dauer)
         if t.beginn < ende and beginn < t_ende:
             voll.append(t)
+            continue
+        # Nachtrag 08.10.2026 (Antwort Andreas): Sperrzeit exakt von–bis – kein
+        # Puffer davor/danach, Buchung direkt an der Grenze ist erlaubt
+        if (t.typ or "vot") == SPERRZEIT_TYP:
             continue
         if lead_ort is not None and t.lat is not None:
             fahr = routing.fahrzeit(session, (t.lat, t.lon), lead_ort)["minuten"]
@@ -1080,14 +1096,52 @@ def sperrzeiten_liste(session: Session, benutzer_id: int, ab: datetime | None = 
     return abfrage.order_by(VotTermin.beginn).all()
 
 
+def sperrzeiten_uebersicht(session: Session, vertreter: list, ab: datetime | None = None) -> dict:
+    """Nachtrag 08.10.2026 (Antwort Andreas): kommende Sperrzeiten je
+    Handelsvertreter für die HV-Übersicht des Innendienstes –
+    {"je_hv": [{"hv": Benutzer, "sperrzeiten": [VotTermin]}] (nur Vertreter mit
+    Einträgen), "namen": {benutzer_id: Name der Ersteller}, "anzahl": n}."""
+    ab = ab or datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    je_hv, ersteller = [], set()
+    for hv in vertreter:
+        liste = sperrzeiten_liste(session, hv.id, ab=ab)
+        if not liste:
+            continue
+        je_hv.append({"hv": hv, "sperrzeiten": liste})
+        ersteller.update(sz.erstellt_von for sz in liste
+                         if sz.erstellt_von and sz.erstellt_von != sz.ad_id)
+    namen = ({b.id: b.name for b in session.query(Benutzer).filter(Benutzer.id.in_(ersteller))}
+             if ersteller else {})
+    return {"je_hv": je_hv, "namen": namen,
+            "anzahl": sum(len(e["sperrzeiten"]) for e in je_hv)}
+
+
+def sperrzeit_fremd_erlaubt(benutzer) -> bool:
+    """Nachtrag 08.10.2026 (Antwort Andreas): Admin und Innendienst dürfen
+    Sperrzeiten eines Handelsvertreters eintragen (löschen durften sie schon)."""
+    return benutzer is not None and getattr(benutzer, "rolle", "") in ("admin", "innendienst")
+
+
 def sperrzeit_anlegen(session: Session, benutzer, datum, von: str, bis: str,
-                      bemerkung: str = "") -> tuple[VotTermin | None, str]:
+                      bemerkung: str = "", ziel=None) -> tuple[VotTermin | None, str]:
     """Sperrzeit im Tool-Kalender des Handelsvertreters (Zwischenlösung bis
     [OFFEN 3]): Datum, von/bis (HH:MM, 15-Minuten-Raster), Bemerkung. Zählt im
-    Assistenten als belegter Slot (Kollision), nicht in der Tageskapazität;
-    kein Outlook, keine Kundenmail, kein Vorgang (vorgang_id 0)."""
+    Assistenten als belegter Slot (Kollision exakt von–bis, Nachtrag
+    08.10.2026 – kein Puffer), nicht in der Tageskapazität; kein Outlook, keine
+    Kundenmail, kein Vorgang (vorgang_id 0).
+    Nachtrag 08.10.2026 (Antwort Andreas): `ziel` = Handelsvertreter, für den die
+    Sperrzeit gilt (Standard: der Handelnde selbst). Admin/Innendienst dürfen für
+    einen HV eintragen: erstellt_von = Innendienst (Liste zeigt „eingetragen von
+    …“), Glocke art terminaenderung an den HV (standardmäßig gesperrt)."""
     if benutzer is None:
         return None, "Kein Benutzer."
+    ziel = ziel if ziel is not None else benutzer
+    fremd = ziel.id != benutzer.id
+    if fremd:
+        if not sperrzeit_fremd_erlaubt(benutzer):
+            return None, "Nur die eigene Sperrzeit kann eingetragen werden."
+        if not lead_v2.ist_handelsvertreter(session, ziel):
+            return None, f"{ziel.name} ist kein Handelsvertreter (Kennzeichen „terminiert selbst“ fehlt)."
     if isinstance(datum, str):
         try:
             datum = datetime.strptime(datum.strip()[:10], "%Y-%m-%d").date()
@@ -1115,11 +1169,11 @@ def sperrzeit_anlegen(session: Session, benutzer, datum, von: str, bis: str,
     beginn, ende = basis + timedelta(minutes=von_min), basis + timedelta(minutes=bis_min)
     if ende < datetime.now():
         return None, "Die Sperrzeit liegt in der Vergangenheit."
-    for alt in sperrzeiten_liste(session, benutzer.id, ab=basis, bis=basis + timedelta(days=1)):
+    for alt in sperrzeiten_liste(session, ziel.id, ab=basis, bis=basis + timedelta(days=1)):
         if alt.beginn < ende and beginn < alt.ende:
             return None, (f"Überschneidung mit der Sperrzeit "
                           f"{alt.beginn:%H:%M}–{alt.ende:%H:%M}.")
-    termin = VotTermin(vorgang_id=SPERRZEIT_VORGANG_ID, ad_id=benutzer.id, beginn=beginn,
+    termin = VotTermin(vorgang_id=SPERRZEIT_VORGANG_ID, ad_id=ziel.id, beginn=beginn,
                        ende=ende, adresse="", status="geplant", quelle="manuell",
                        typ=SPERRZEIT_TYP, medium="", demo=False,
                        grund_text=(bemerkung or "").strip()[:500],
@@ -1127,7 +1181,16 @@ def sperrzeit_anlegen(session: Session, benutzer, datum, von: str, bis: str,
     session.add(termin)
     session.flush()
     vorschlaege_cache_leeren()      # Slots geändert – Vorschläge/Kalender neu rechnen
-    return termin, f"Sperrzeit {beginn:%d.%m.%Y %H:%M}–{ende:%H:%M} eingetragen."
+    zeitraum = f"{beginn:%d.%m.%Y %H:%M}–{ende:%H:%M}"
+    if fremd:
+        # Verlauf für den Handelsvertreter: Glocke (Art terminaenderung, Standard
+        # gesperrt) – die Liste in „Meine Termine“ zeigt „eingetragen von …“
+        kern.benachrichtigen(session, [ziel.id],
+                             f"Sperrzeit von {benutzer.name} eingetragen: {zeitraum}"
+                             + (f" ({termin.grund_text})" if termin.grund_text else ""),
+                             "/lead-management/dashboard#sperrzeiten", art="terminaenderung")
+        return termin, f"Sperrzeit {zeitraum} für {ziel.name} eingetragen (von {benutzer.name})."
+    return termin, f"Sperrzeit {zeitraum} eingetragen."
 
 
 def sperrzeit_loeschen(session: Session, termin_id: int, benutzer) -> tuple[bool, str]:
@@ -1136,7 +1199,7 @@ def sperrzeit_loeschen(session: Session, termin_id: int, benutzer) -> tuple[bool
     if termin is None or termin.typ != SPERRZEIT_TYP:
         return False, "Sperrzeit nicht gefunden."
     if benutzer is None or (termin.ad_id != benutzer.id
-                            and benutzer.rolle not in ("admin", "innendienst")):
+                            and not sperrzeit_fremd_erlaubt(benutzer)):
         return False, "Nur die eigene Sperrzeit kann entfernt werden."
     session.delete(termin)
     session.flush()

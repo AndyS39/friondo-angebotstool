@@ -356,7 +356,10 @@ HV_GESPERRTE_PFADE = (
     "/lead-management/kommunikation",
 )
 HV_STARTSEITE = "/lead-management/handelsvertreter"
-HV_GATE_HINWEIS = ("Diese Seite gehört nicht zur Handelsvertreter-Sicht – "
+# Nachtrag 08.10.2026 (Antwort Andreas): Direktlinks auf gesperrte Seiten werden
+# IMMER (auch ohne Referer, auch JSON-Routen) mit 303 auf die HV-Ansicht umgeleitet –
+# kein 404 mehr; der Hinweis steht als Meldung auf der Seite
+HV_GATE_HINWEIS = ("Diese Seite gibt es in der Handelsvertreter-Sicht nicht – "
                    "Sie sehen hier Ihre eigenen Leads.")
 
 
@@ -370,7 +373,8 @@ def hv_sicht(session: Session, benutzer) -> bool:
 
 
 def hv_pfad_gesperrt(pfad: str) -> bool:
-    """Ist dieser Pfad für die Handelsvertreter-Sicht gesperrt (404)?"""
+    """Ist dieser Pfad für die Handelsvertreter-Sicht gesperrt (303 auf die
+    HV-Ansicht, Nachtrag 08.10.2026)?"""
     pfad = (pfad or "").rstrip("/") or "/"
     for basis in HV_GESPERRTE_PFADE:
         if pfad == basis or pfad.startswith(basis + "/"):
@@ -381,24 +385,34 @@ def hv_pfad_gesperrt(pfad: str) -> bool:
 def gate(request, session: Session, vorgang: Vorgang | None = None) -> None:
     """404 statt 403 (Demo-Modus: Modul unsichtbar) – Ersatz fuer _gate der
     V1-Router, zusaetzlich mit Handelsvertreter-Freigabe.
-    v29 (PLAN_LEAD_V4 Phase 140): für die Handelsvertreter-Sicht liefern die
-    gesperrten Seiten (HV_GESPERRTE_PFADE) server-seitig 404 – das Gate sitzt
+    v29 (PLAN_LEAD_V4 Phase 140): für die Handelsvertreter-Sicht sind die
+    gesperrten Seiten (HV_GESPERRTE_PFADE) server-seitig zu – das Gate sitzt
     in der Route, also HINTER Login und PIN-Pflichtwechsel der v27-Middleware.
-    Kommt der Aufruf per Link aus dem Tool (Referer derselben Instanz: Glocke,
-    Kartei, Mail-Link aus einer Tool-Seite), führt er auf die HV-Ansicht mit
-    Hinweis statt auf eine 404-Seite [ANNAHME]."""
+    Nachtrag 08.10.2026 (Antwort Andreas): jeder Aufruf einer gesperrten Seite
+    (Lesezeichen, Mail-Link, Link aus dem Tool, auch JSON-Routen) führt mit 303
+    auf die HV-Ansicht mit dem Hinweis HV_GATE_HINWEIS – unabhängig vom Referer,
+    nie mehr 404 (vorher: 404 ohne Referer derselben Instanz)."""
+    from fastapi import HTTPException
+    hv_umleitung(request, session)
+    if not zugriff_erlaubt(session, request.state.benutzer, vorgang):
+        raise HTTPException(status_code=404)
+
+
+def hv_umleitung(request, session: Session) -> None:
+    """Nachtrag 08.10.2026 (Antwort Andreas): gesperrte Seite (HV_GESPERRTE_PFADE)
+    in der Handelsvertreter-Sicht → 303 auf die HV-Ansicht mit Hinweis – immer,
+    auch ohne Referer (Lesezeichen, Mail-Link) und für JSON-Routen; sonst keine
+    Wirkung. Von gate() aufgerufen. Gates, die nicht über lead_v2.gate laufen
+    (V1-Router routers/leadmanagement._gate – Anrufliste, Kanban, Kalender,
+    Übersicht, Statistik, Posteingang, Import, Schnellanlage, Warteschlange),
+    rufen diese Funktion als erste Zeile auf, sonst bleibt dort das 404 des
+    Demo-Gates (Vorschlag im Bericht LC, Datei nicht in der Liste von LC)."""
     from fastapi import HTTPException
     from urllib.parse import quote_plus
-    benutzer = request.state.benutzer
-    if not zugriff_erlaubt(session, benutzer, vorgang):
-        raise HTTPException(status_code=404)
+    benutzer = getattr(request.state, "benutzer", None)
     if hv_pfad_gesperrt(request.url.path) and hv_sicht(session, benutzer):
-        referer = request.headers.get("referer", "") or ""
-        basis = str(request.base_url)
-        if referer.startswith(basis):
-            raise HTTPException(status_code=303, headers={
-                "Location": f"{HV_STARTSEITE}?meldung={quote_plus(HV_GATE_HINWEIS)}"})
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=303, headers={
+            "Location": f"{HV_STARTSEITE}?meldung={quote_plus(HV_GATE_HINWEIS)}"})
 
 
 def hv_gruppen(session: Session) -> dict:

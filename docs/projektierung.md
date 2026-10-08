@@ -76,8 +76,8 @@ Projektierung-Einstellungen → „Alle berechtigten Rollen“.
   Einsätze“ (seit v28: Termine mit eigener Besetzung, Teamansicht umschaltbar;
   Termine ohne Besetzung sehen die Team-Mitglieder), Steckbrief ohne Preise
   (seit v28 vollständig, leere Felder „–“), Foto-Upload, „Montage starten“ /
-  „Montage beenden“ (seit v28 Kurzbericht optional; endet automatisch mit dem
-  unterschriebenen Abnahmeprotokoll).
+  „Montage beenden“ (seit v28 ohne Kurzbericht – Bemerkungen gehören in den
+  Montagebericht; endet automatisch mit dem unterschriebenen Abnahmeprotokoll).
 - **Außendienst**: am eigenen Angebot der Block „Projektstand“ (Phase, Ampel,
   nächster Termin, Projektleiter mit Telefon) + Kommentar an die Projektierung.
 - **Zusatzrollen**: In der Benutzerverwaltung lassen sich projektierung/
@@ -153,8 +153,8 @@ Ordner der Ebene „gewerk“ liegen je Sparte unter `<Sparte>/<Ordner>`.
 - **Montage-Backend /montage**: „Meine Einsätze“ (Besetzung je Termin, v28)
   bzw. Teamansicht → Liste/Wochenkalender (Besetzung als Initialen);
   Auftragsseite in der Reihenfolge Kopf · Steckbrief (vollständig) · Teams &
-  Termine · Notizen der Projektierung (nur lesen) · Montage starten/beenden ·
-  Formulare · Restarbeiten · Galerie (Lightbox). Die drei Formulare
+  Termine · Notizen der Projektierung (nur lesen) · Montage starten/beenden (ohne
+  Kurzbericht) · Formulare · Restarbeiten · Galerie (Lightbox). Die drei Formulare
   (Montagebericht, Inbetriebnahme-, Abnahmeprotokoll; Felder im Blatt
   „Formulare" – v28: Typ `wiederhol`, Option `gross`, `pflicht_wenn:`, mehrere
   Fotos je Feld; Unterschrift auf dem Gerät, PDF in der Galerie

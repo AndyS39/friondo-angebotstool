@@ -878,8 +878,13 @@ span.chip { cursor: default; }
 /* v9-Portal (finale Fassung): drei große Karten, jede Karte ist als
    Ganzes EIN Klickziel (a-Element) zur jeweiligen Tool-Seite; die Kacheln
    darin sind reine Anzeige. Das Portal nutzt die volle Monitorbreite
-   (main.breit), damit die Karten nebeneinander Platz haben. */
-main.breit { max-width: 1720px; }
+   (main.breit), damit die Karten nebeneinander Platz haben.
+   Nachtrag 08.10.2026 (Antwort Andreas): main.breit ohne Breitenbegrenzung
+   (vorher 1720 px) mit 16 px Innenabstand links/rechts – gilt für ALLE
+   breit-Seiten (Portal, Lead-Management, Vorgangsakte, Projektierung); die
+   Sonderregel main.breit.pj-voll (projektierung_v28.css) ist damit entfallen,
+   die Klasse pj-voll bleibt als Marker in den Projektierungs-Templates. */
+main.breit { max-width: none; padding-left: 16px; padding-right: 16px; }
 .portal-karten { display: grid; grid-template-columns: 1fr 1fr 1fr;
     gap: 1.5rem; align-items: stretch; }
 .portal-karte { display: block; border: 1px solid #d4d9e4; border-radius: 10px;

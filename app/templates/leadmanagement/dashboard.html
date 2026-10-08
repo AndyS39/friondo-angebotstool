@@ -19,8 +19,10 @@
    Termine“ [ANNAHME bleibt] – für Handelsvertreter mit den Sperrzeiten (Phase 143).
    Entfernt: „Ohne nächsten Schritt“, „Angebots-Wiedervorlagen“, Kasten „Termine 7
    Tage“; Kacheln nur noch Fällig heute · Kommende · Offene To-Dos (+ „Mails mit
-   Fehler“, nur wenn > 0, Vertrag L2). „Mir zugeteilte Vorgänge“ bleibt eingeklappt
-   unten [ANNAHME]. #}
+   Fehler“, nur wenn > 0, Vertrag L2).
+   Nachtrag 08.10.2026 (Antwort Andreas): „Mir zugeteilte Vorgänge“ entfällt ganz
+   (die Leads stehen in Hauptboard/HV-Ansicht); lead_dashboard.zugeteilte bleibt
+   als Funktion, wird im Dashboard-Kontext nicht mehr geladen. #}
 {% block inhalt %}
 {{ lm_nav('dashboard') }}
 {% set hv_nur = hv_sicht | default(hv) %}
@@ -226,12 +228,14 @@
             {#- v29 (Phase 143, [OFFEN 3]): Sperrzeiten des Handelsvertreters – nur Tool-Kalender,
                 zählen im Assistenten als belegter Slot #}
             <div class="lm-sperrzeiten" id="sperrzeiten">
-                <h3>{{ symbol('verbot') }} Meine Sperrzeiten <span class="dezent">(blockieren Terminvorschläge · nur im Tool-Kalender)</span></h3>
+                <h3>{{ symbol('verbot') }} Meine Sperrzeiten <span class="dezent">(blockieren Terminvorschläge exakt von–bis · nur im Tool-Kalender)</span></h3>
                 {% if sperrzeiten %}
                 <ul class="lm-sperrzeit-liste">
                     {% for sz in sperrzeiten %}
                     <li><strong>{{ sz.beginn | de_datum('%a %d.%m.%Y') }}</strong> {{ sz.beginn.strftime('%H:%M') }}–{{ sz.ende.strftime('%H:%M') }}
                         {% if sz.grund_text %}<span class="dezent">· {{ sz.grund_text }}</span>{% endif %}
+                        {#- Nachtrag 08.10.2026: vom Innendienst/Admin eingetragene Sperrzeit #}
+                        {% if sz.erstellt_von and sz.erstellt_von != sz.ad_id %}<span class="dezent">· eingetragen von {{ (sperrzeit_namen | default({})).get(sz.erstellt_von, '?') }}</span>{% endif %}
                         <form method="post" action="/lead-management/dashboard/sperrzeit/{{ sz.id }}/loeschen" onsubmit="return confirm('Sperrzeit entfernen?')">
                             <input type="hidden" name="zurueck" value="/lead-management/dashboard#sperrzeiten">
                             <button class="knopf klein ghost" type="submit" title="Sperrzeit entfernen">{{ symbol('loeschen') }}</button>
@@ -252,26 +256,4 @@
         </div>
     </div>
 </div>
-
-<details class="lm-karte" id="zugeteilt">
-    <summary class="lm-gruppe-kopf">Mir zugeteilte Vorgänge <span class="n">{{ zugeteilt.aktiv }}</span><span class="erkl">{{ 'Außendienst/Handelsvertreter = ich' if hv else 'Leadmanager = ich' }} · {{ zugeteilt.aktiv }} aktiv · {{ zugeteilt.gesamt }} gesamt{% if zugeteilt.demo %} · {{ zugeteilt.demo }} Demo{% endif %}</span></summary>
-    {% if zugeteilt.gruppen %}
-    <div class="lm-phasen">
-        {% for g in zugeteilt.gruppen %}
-        <details class="lm-phase lm-phase-{{ g.phase }}" {{ 'open' if g.offen }}>
-            <summary><span class="lm-phase-name">{{ g.name }}</span><span class="n">{{ g.n }}</span></summary>
-            <ul>
-                {% for z in g.zeilen %}
-                <li><a href="/lead-management/lead/{{ z.vorgang.id }}">{{ z.kunde.anzeige_name if z.kunde else '?' }}</a>
-                    <span class="dezent">{{ z.kunde.ort if z.kunde and z.kunde.ort else '' }}{% if z.vorgang.eingang_am %} · {{ z.vorgang.eingang_am.strftime('%d.%m.') }}{% endif %}</span>
-                    {% if z.vorgang.demo %}<span class="abzeichen">Demo</span>{% endif %}</li>
-                {% endfor %}
-            </ul>
-        </details>
-        {% endfor %}
-    </div>
-    {% else %}
-    <p class="dezent">Noch keine Vorgänge zugeteilt.{% if not hv %} Freie Leads stehen in der <a href="/lead-management/anrufliste">Anrufliste</a>.{% endif %}</p>
-    {% endif %}
-</details>
 {% endblock %}

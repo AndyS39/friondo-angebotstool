@@ -5,8 +5,15 @@
 #       Zähler, „Erneut senden“ → geplant, Lauf lead-mail (scheduler.ausfuehren)
 #       räumt nach Freigabe auf; Testmail-Route mit geschlossener Sitzung
 #  (g2) HV-Lead terminieren → keine Mail, Aktivität „Versandweg … offen“, To-Do
-#       mit Vorschau (Route liefert Text + ICS); AD-Lead → Mail wie gewohnt
-#  (g3) HV-Sperrzeit (nur, wenn Agent L1 den Eintragstyp gebaut hat – sonst skip)
+#       mit Vorschau (Route liefert Text + ICS); AD-Lead → Mail wie gewohnt;
+#       Nachtrag 08.10.2026 (Antwort Andreas): Weg `entwurf` (Standard) – To-Do
+#       „… aus dem eigenen Postfach senden“, ?eml=1 liefert message/rfc822 mit
+#       Betreff, HV-Absender, Kundenadresse, ICS-Teil, Inline-Bild; Migration offen → entwurf
+#  (g3) HV-Sperrzeit zählt exakt von–bis (Nachtrag 08.10.2026): Buchung direkt an der
+#       Grenze ohne Puffer-Konflikt, Überlappung gesperrt
+#  Nachtrag 08.10.2026 zusätzlich in (g1): Admin-Glocke (art system) bei Status fehler,
+#       replyTo = Leadmanager + termin@; in (l): Kundenantwort holt nicht erreichte/
+#       zurückgestellte Leads zurück nach in_kontaktierung
 #  (i)  Vorlagenbaum links, Terminbestätigung je Vertriebler, Versand wählt die
 #       Vorlage des zugewiesenen Vertrieblers, Fallback Standard, „Rahmen für alle
 #       übernehmen“ lässt individuelle Blöcke unverändert, Zulieferung einspielen
@@ -72,6 +79,10 @@ def aufraeumen(s):
         s.delete(k)
     s.query(LeadPosteingang).filter(LeadPosteingang.graph_id.like(f"{PRAEFIX}%")).delete(
         synchronize_session=False)
+    # Nachtrag 08.10.2026: Admin-Glocken „Lead-Mail nicht gesendet: … an <Testkunde>“
+    s.query(Benachrichtigung).filter(Benachrichtigung.art == "system",
+                                     Benachrichtigung.text.like(f"Lead-Mail nicht gesendet:%{PRAEFIX}%")).delete(
+        synchronize_session=False)
     for b in s.query(Benutzer).filter(Benutzer.name.like(f"{PRAEFIX}%")):
         s.query(AdProfil).filter_by(benutzer_id=b.id).delete()
         s.query(VotTermin).filter_by(ad_id=b.id).delete()
@@ -116,6 +127,12 @@ class Basis(unittest.TestCase):
         cls.hv = cls.benutzer_anlegen("HV Paolo", telefon="0170 222", email="paolo@test.invalid",
                                       vorname="Paolo", hv=True)
         cls.neu_ad = cls.benutzer_anlegen("Neu Ohne Vorlage", telefon="", email="neu@test.invalid")
+        # Nachtrag 08.10.2026: Leadmanagerin (Innendienst, E-Mail gesetzt) für Reply-To;
+        # lm_aktiv bleibt False (kein Eingriff in den Round-Robin der Zuweisung)
+        cls.lm = Benutzer(name=f"{PRAEFIX} Leadmanagerin", rolle="innendienst", pin_hash=auth.pin_hash("482913"),
+                          email="leadmanagerin@test.invalid", aktiv=True, lm_aktiv=False)
+        cls.s.add(cls.lm)
+        cls.s.flush()
         lead_mail.BENUTZERBILDER_ORDNER.mkdir(parents=True, exist_ok=True)
         lead_mail.benutzerbild_speichern(cls.horst, PNG, ".png")
         cls.s.commit()
@@ -613,6 +630,18 @@ class AbsenderUndFehler(Basis):
             self.assertEqual(v.mail_fehler_vorlage, "eingangsbestaetigung")
             self.assertIsNotNone(v.mail_fehler_am)
             self.assertTrue(any(a.startswith("Mail nicht gesendet: Eingangsbestätigung") for a in self.aktivitaeten(v.id)))
+            # Nachtrag 08.10.2026 (Antwort Andreas): Betriebsglocke (art system) an alle aktiven
+            # Admins – genau einmal je Eintrag, obwohl VERSUCHE_MAX Läufe scheiterten
+            kunde = self.s.get(Kunde, v.kunde_id)
+            glocken = (self.s.query(Benachrichtigung)
+                       .filter(Benachrichtigung.benutzer_id == self.admin.id,
+                               Benachrichtigung.art == "system",
+                               Benachrichtigung.text.like(f"Lead-Mail nicht gesendet: Eingangsbestätigung an {kunde.anzeige_name}%"))
+                       .all())
+            self.assertEqual(len(glocken), 1, [g.text for g in glocken])
+            self.assertIn("ErrorSendAsDenied", glocken[0].text)
+            self.assertEqual(glocken[0].link, "/lead-management/kommunikation?status=fehler")
+            self.assertIn(glocken[0].text, [e.text for e in benachrichtigungen.letzte(self.s, self.admin, 50)])
             hinweis = lead_mail.kartei_hinweis(self.s, v)
             self.assertEqual(hinweis["art"], "fehler")
             self.assertEqual(hinweis["titel"], "Mail nicht gesendet")
@@ -648,7 +677,10 @@ class AbsenderUndFehler(Basis):
             r = self.client.post(f"/lead-management/mail/{eb.id}/erneut", headers={"Accept": "application/json"})
             self.assertEqual(r.status_code, 200)
             self.assertTrue(r.json()["ok"])
-            # Freigabe: Lauf lead-mail sendet erfolgreich → gesendet, Kennzeichen zurück
+            # Freigabe: Lauf lead-mail sendet erfolgreich → gesendet, Kennzeichen zurück;
+            # Nachtrag 08.10.2026: replyTo = Leadmanager (Benutzer.email) + Absender termin@
+            v.leadmanager_id = self.lm.id
+            self.s.commit()
             gesendet = []
             with mock.patch.object(graph_versand, "_token", return_value="tok"), \
                     mock.patch.object(graph_versand, "_graph_aufruf",
@@ -660,6 +692,20 @@ class AbsenderUndFehler(Basis):
             self.assertEqual(nachricht["from"]["emailAddress"]["address"], "termin@friondo.de")
             self.assertEqual(nachricht["toRecipients"][0]["emailAddress"]["address"], "lead-test@test.invalid")
             self.assertTrue(nachricht["subject"].startswith("[TEST an v29l2-30@test.invalid]"))
+            self.assertEqual([r_["emailAddress"]["address"] for r_ in nachricht["replyTo"]],
+                             ["leadmanagerin@test.invalid", "termin@friondo.de"])
+            # ohne Leadmanager bzw. ohne E-Mail: nur der Absender
+            self.assertEqual(lead_mail.antwort_adressen(self.s, None, "termin@friondo.de"), ["termin@friondo.de"])
+            v.leadmanager_id = self.neu_ad.id
+            self.neu_ad.email = ""
+            self.s.flush()
+            self.assertEqual(lead_mail.antwort_adressen(self.s, v, "termin@friondo.de"), ["termin@friondo.de"])
+            self.neu_ad.email = "neu@test.invalid"
+            self.s.flush()
+            # Glocke bleibt genau eine (kein zweiter Eintrag durch den erfolgreichen Lauf)
+            self.assertEqual(self.s.query(Benachrichtigung).filter(
+                Benachrichtigung.benutzer_id == self.admin.id, Benachrichtigung.art == "system",
+                Benachrichtigung.text.like(f"Lead-Mail nicht gesendet:%{kunde.anzeige_name}%")).count(), 1)
             self.s.expire_all()
             eb = self.s.get(KommunikationLog, eb.id)
             v = self.s.get(Vorgang, v.id)
@@ -800,13 +846,170 @@ class Handelsvertreter(Basis):
         self.assertEqual([k for k, _ in self.mails(v3.id)], ["eingangsbestaetigung"])
         self.assertEqual(self.s.query(Todo).filter_by(vorgang_id=v3.id).count(), 1)
 
-    def test_g3_hv_sperrzeit(self):
-        """(g3) HV-Sperrzeit blockiert einen Vorschlags-Slot – Eintragstyp
-        `sperrzeit` an vot_termine baut Agent L1 (Phase 143)."""
-        if not any(hasattr(lead_termin, n) for n in ("sperrzeit_anlegen", "sperrzeiten", "STATUS_SPERRZEIT")) \
-                and "sperrzeit" not in Path(lead_termin.__file__).read_text(encoding="utf-8"):
-            self.skipTest("Sperrzeit (L1, Phase 143) noch nicht vorhanden – Test (g3) übersprungen")
-        self.skipTest("Sperrzeit vorhanden – Vorschlags-Test liegt in tests/test_lead_v4.py (L1, Teil m)")
+    def test_hv_versandweg_entwurf_eml(self):
+        """Nachtrag 08.10.2026 (Antwort Andreas), Weg `entwurf` (Standard): HV-Lead
+        terminieren → kein Warteschlangen-Eintrag, Aktivität „… als Entwurf (.eml)
+        bereitgestellt“, To-Do „… aus dem eigenen Postfach senden“ mit Vorschau-Link;
+        ?eml=1 liefert message/rfc822 mit Betreff, HV-Absender, Kundenadresse, Text +
+        HTML, ICS-Teil und Inline-Bild; ohne HV-E-Mail bleibt From leer (Hinweis)."""
+        self.assertEqual(kern.PARAMETER_START["hv_versandweg"], "entwurf")
+        self.assertEqual(lead_mail.HV_VERSANDWEG_STANDARD, "entwurf")
+        kern.parameter_setzen(self.s, "hv_versandweg", "entwurf")
+        key = lead_mail.vertriebler_key(self.hv.id)
+        lead_mail.vorlage_speichern(self.s, key, "Ihr Termin am {termin_datum} bei {vertriebler}",
+                                    "Hallo {briefanrede},\n\nENTWURF-TEST {adresse}\n\n{vertriebler_block}\n\nGruß",
+                                    quelle="editor")
+        lead_mail.benutzerbild_speichern(self.hv, PNG, ".png")
+        self.s.commit()
+        try:
+            v = self.lead(45, email="v29l2-45@test.invalid", ad_id=self.hv.id)
+            t = self.termin(v, self.hv.id)
+            self.assertIsNone(kern.mail_planen(self.s, v, "terminbestaetigung", termin=t))
+            self.assertIsNone(kern.mail_planen(self.s, v, "terminerinnerung", termin=t,
+                                               geplant_am=t.beginn - timedelta(hours=24)))
+            self.s.commit()
+            self.assertEqual([k for k, _ in self.mails(v.id)], ["eingangsbestaetigung"])   # keine Warteschlange
+            akt = self.aktivitaeten(v.id)
+            self.assertTrue(any(a.startswith("Terminbestätigung als Entwurf (.eml) bereitgestellt – Versand aus dem "
+                                             "eigenen Postfach des HV") for a in akt), akt)
+            self.assertTrue(any(a.startswith("Terminerinnerung als Entwurf (.eml) bereitgestellt") for a in akt))
+            self.assertFalse(any("Versandweg für Handelsvertreter offen" in a for a in akt))
+            self.assertFalse(any("noch nicht umgesetzt" in a for a in akt))
+            todos = self.s.query(Todo).filter_by(vorgang_id=v.id, an_benutzer_id=self.hv.id).all()
+            self.assertEqual([x.titel for x in todos], ["Terminbestätigung aus dem eigenen Postfach senden"])
+            vorschau = f"/lead-management/lead/{v.id}/termin/{t.id}/vorschau"
+            self.assertIn(vorschau + "?vorlage=terminbestaetigung", todos[0].text)
+            self.assertIsNotNone(todos[0].faellig_am)
+            # Vorschau-Seite: Knopf „.eml herunterladen“, Anleitung, Absender des HV
+            r = self.client.get(vorschau)
+            self.assertEqual(r.status_code, 200)
+            self.assertIn('id="lmv-eml-knopf"', r.text)
+            self.assertIn(".eml herunterladen", r.text)
+            self.assertIn("Datei öffnen", r.text)
+            self.assertIn("paolo@test.invalid", r.text)
+            self.assertNotIn("Versandweg für Handelsvertreter offen", r.text)
+            # .eml (message/rfc822)
+            r = self.client.get(vorschau + "?eml=1")
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual(r.headers["content-type"].split(";")[0], "message/rfc822")
+            self.assertEqual(r.headers["content-disposition"],
+                             'attachment; filename="Terminbestaetigung_V29L2-Test-45_V45.eml"')
+            msg = email.message_from_bytes(r.content, policy=email.policy.default)
+            self.assertEqual(msg["X-Unsent"], "1")
+            self.assertIn("paolo@test.invalid", msg["From"])
+            self.assertIn("v29l2-45@test.invalid", msg["To"])
+            betreff, _, _ = lead_mail.vorlage_rendern(self.s, "terminbestaetigung", v, t)
+            self.assertEqual(msg["Subject"], betreff)
+            self.assertTrue(msg["Subject"].startswith(f"Ihr Termin am {t.beginn.strftime('%d.%m.%Y')} bei"))
+            typen = [p.get_content_type() for p in msg.walk()]
+            for typ in ("multipart/mixed", "multipart/alternative", "multipart/related",
+                        "text/plain", "text/html", "image/png", "text/calendar"):
+                self.assertIn(typ, typen, typen)
+            html = next(p for p in msg.walk() if p.get_content_type() == "text/html").get_content()
+            self.assertIn("ENTWURF-TEST", html)
+            self.assertIn(f"cid:{lead_mail.CID_PRAEFIX}{self.hv.id}", html)
+            bild = next(p for p in msg.walk() if p.get_content_type() == "image/png")
+            self.assertEqual(bild["Content-ID"], f"<{lead_mail.CID_PRAEFIX}{self.hv.id}>")
+            self.assertIn("ENTWURF-TEST", next(p for p in msg.walk() if p.get_content_type() == "text/plain").get_content())
+            ics = next(p for p in msg.walk() if p.get_content_type() == "text/calendar")
+            self.assertIn("BEGIN:VCALENDAR", ics.get_content())
+            self.assertEqual(ics.get_param("method"), "REQUEST")
+            self.assertTrue(ics.get_filename().endswith(".ics"))
+            # Absage: Storno-ICS (METHOD:CANCEL), Dateiname nach Vorlage
+            r = self.client.get(vorschau + "?vorlage=terminabsage&eml=1")
+            self.assertIn('filename="Terminabsage_', r.headers["content-disposition"])
+            msg2 = email.message_from_bytes(r.content, policy=email.policy.default)
+            ics2 = next(p for p in msg2.walk() if p.get_content_type() == "text/calendar")
+            self.assertEqual(ics2.get_param("method"), "CANCEL")
+            # HV ohne E-Mail: From leer, Hinweis in der Vorschau; der HV selbst darf laden
+            self.hv.email = ""
+            self.s.commit()
+            r = self.client.get(vorschau)
+            self.assertIn("keine E-Mail-Adresse", r.text)
+            hv_client = TestClient(app)
+            hv_client.cookies.set(auth.COOKIE_NAME, auth.cookie_wert(self.hv.id))
+            r = hv_client.get(vorschau + "?eml=1")
+            self.assertEqual(r.status_code, 200)
+            msg3 = email.message_from_bytes(r.content, policy=email.policy.default)
+            self.assertIsNone(msg3["From"])
+            self.assertIn("v29l2-45@test.invalid", msg3["To"])
+            eml = lead_mail.eml_erstellen(self.s, v, t)
+            self.assertTrue(any("Keine E-Mail-Adresse" in h for h in eml["hinweise"]))
+            self.hv.email = "paolo@test.invalid"
+            self.s.commit()
+            # HV über termin_buchen: Bestätigung + Erinnerung als Entwurf, To-Do, keine Mail
+            v2 = self.lead(46, email="v29l2-46@test.invalid", ad_id=self.hv.id)
+            termin2, _ = kern.termin_buchen(self.s, v2, self.hv.id,
+                                            datetime.now().replace(hour=15, minute=0, second=0, microsecond=0) + timedelta(days=5),
+                                            benutzer=self.admin)
+            self.s.commit()
+            self.assertIsNotNone(termin2)
+            self.assertEqual([k for k, _ in self.mails(v2.id)], ["eingangsbestaetigung"])
+            self.assertEqual(self.s.query(Todo).filter_by(vorgang_id=v2.id).count(), 1)
+        finally:
+            self.s.rollback()
+            self.hv.email = "paolo@test.invalid"
+            kern.parameter_setzen(self.s, "hv_versandweg", "offen")
+            self.s.commit()
+
+    def test_migration_hv_versandweg_offen_zu_entwurf_einmalig(self):
+        """Nachtrag 08.10.2026: migration_v29_mails stellt offen → entwurf genau einmal um
+        (Marker migration_v29_hv_entwurf); eine spätere Wahl „offen“ bleibt erhalten."""
+        kern.parameter_setzen(self.s, "hv_versandweg", "offen")
+        self.s.query(Einstellung).filter_by(name="migration_v29_hv_entwurf").delete(synchronize_session=False)
+        self.s.commit()
+        try:
+            meldungen = lead_mail.migration_v29_mails(self.s)
+            self.s.commit()
+            self.assertTrue(any("offen → entwurf" in m for m in meldungen), meldungen)
+            self.assertEqual(lead_mail.hv_versandweg(self.s), "entwurf")
+            self.assertEqual(einstellung_holen(self.s, "migration_v29_hv_entwurf", ""), "erledigt")
+            kern.parameter_setzen(self.s, "hv_versandweg", "offen")
+            self.s.commit()
+            self.assertEqual(lead_mail.migration_v29_mails(self.s), [])
+            self.assertEqual(lead_mail.hv_versandweg(self.s), "offen")
+        finally:
+            self.s.rollback()
+            kern.parameter_setzen(self.s, "hv_versandweg", "offen")
+            self.s.commit()
+
+    def test_g3_hv_sperrzeit_exakt(self):
+        """(g3) Nachtrag 08.10.2026 (Antwort Andreas): eine Sperrzeit des HV zählt in
+        der Kollision exakt von–bis – direkt an der Grenze kein Puffer-Konflikt
+        (manuelle Buchung und Vorschlags-Slot), Überlappung gesperrt; ein
+        Kundentermin an derselben Stelle verletzt weiterhin den Mindestpuffer."""
+        tag = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=3)
+        while tag.weekday() >= 5:
+            tag += timedelta(days=1)
+        sperr, meldung = lead_termin.sperrzeit_anlegen(self.s, self.hv, tag.date(), "11:30", "13:00", "Mittag")
+        self.assertIsNotNone(sperr, meldung)
+        self.s.commit()
+        self.assertEqual((sperr.typ, sperr.vorgang_id, sperr.ad_id), ("sperrzeit", 0, self.hv.id))
+        dauer = timedelta(minutes=90)
+        beginn = tag + timedelta(hours=10)                     # 10:00–11:30 endet genau am Sperrzeit-Beginn
+        frei, grund = lead_termin._slot_frei(self.s, None, None, beginn, beginn + dauer, [sperr], 30, dauer, {})
+        self.assertEqual((frei, grund), (True, ""))
+        frei, grund = lead_termin._slot_frei(self.s, None, None, tag + timedelta(hours=13), tag + timedelta(hours=14, minutes=30),
+                                             [sperr], 30, dauer, {})
+        self.assertEqual((frei, grund), (True, ""))            # direkt nach der Sperrzeit
+        frei, grund = lead_termin._slot_frei(self.s, None, None, tag + timedelta(hours=12), tag + timedelta(hours=13, minutes=30),
+                                             [sperr], 30, dauer, {})
+        self.assertEqual((frei, grund), (False, "Überschneidung"))
+        k = lead_termin.konflikte(self.s, self.hv.id, beginn, beginn + dauer)
+        self.assertEqual((k["voll"], k["puffer"], k["sperren"]), ([], [], False))
+        k = lead_termin.konflikte(self.s, self.hv.id, tag + timedelta(hours=12, minutes=30))
+        self.assertEqual([x.id for x in k["voll"]], [sperr.id])
+        self.assertTrue(k["sperren"])
+        self.assertTrue(any("Sperrzeit" in t for t in k["texte"]))
+        # Vergleich: Kundentermin an derselben Stelle → Mindestpuffer 30 Min verletzt
+        vot = VotTermin(vorgang_id=self.lead(47, email="v29l2-47@test.invalid").id, ad_id=self.hv.id,
+                        beginn=tag + timedelta(hours=11, minutes=30), ende=tag + timedelta(hours=13),
+                        status="geplant", typ="vot", demo=True)
+        frei, grund = lead_termin._slot_frei(self.s, None, None, beginn, beginn + dauer, [vot], 30, dauer, {})
+        self.assertFalse(frei)
+        self.assertTrue(grund.startswith("Puffer"))
+        self.s.delete(sperr)
+        self.s.commit()
 
 
 # --- (l) Bounce und Kundenantwort über lead-mail-abruf --------------------------------------
@@ -941,7 +1144,11 @@ class Bounce(Basis):
         v = self.s.get(Vorgang, v.id)
         self.assertTrue(any(a.startswith(f"Antwort von {adresse}") for a in self.aktivitaeten(v.id)))
         self.assertIsNotNone(v.naechste_aktion_am)
-        self.assertEqual(v.lead_phase, "nicht_erreicht")     # kein Wecken mehr [ANNAHME]
+        # Nachtrag 08.10.2026 (Antwort Andreas): der Kunde meldet sich → zurück in die
+        # Kontaktierung (wie vor v29), danach arbeitet der Innendienst manuell weiter
+        self.assertEqual(v.lead_phase, "in_kontaktierung")
+        self.assertTrue(any(a.startswith("Kunde hat geantwortet – zurück in die Kontaktierung")
+                            for a in self.aktivitaeten(v.id)))
         self.assertFalse(self.s.query(Benachrichtigung).filter(
             Benachrichtigung.link == f"/lead-management/lead/{v.id}",
             Benachrichtigung.text.like("Antwort-Mail%")).count())   # Glocke kundenantwort gesperrt
@@ -953,11 +1160,26 @@ class Bounce(Basis):
         with db.kurz() as s:
             self.assertEqual(lead_mail_abruf.nachricht_verarbeiten(s, dict(unklar), demo=False, eigene=set()), "unklar")
             s.query(LeadPosteingang).filter_by(graph_id=unklar["id"]).delete()
-        # lead_parser (leads@) nutzt dieselbe Verbuchung – mit Betreff „Rückruf V<Nr>“
+        # lead_parser (leads@) nutzt dieselbe Verbuchung – mit Betreff „Rückruf V<Nr>“;
+        # ein zurückgestellter Lead kommt ebenfalls zurück (Zurückstellung aufgehoben)
+        v.lead_phase = "zurueckgestellt"
+        v.zurueckgestellt_bis = datetime.now() + timedelta(days=10)
+        v.zurueckgestellt_grund = "Bauphase später"
+        self.s.commit()
         self.assertEqual(lead_parser.mail_verarbeiten(self.s, f"{PRAEFIX}-parser-{v.id}", adresse,
                                                       f"Rückruf V{v.id}", "Gern morgen"), "antwort")
         self.s.expire_all()
-        self.assertEqual(self.s.get(Vorgang, v.id).lead_phase, "nicht_erreicht")
+        v = self.s.get(Vorgang, v.id)
+        self.assertEqual(v.lead_phase, "in_kontaktierung")
+        self.assertIsNone(v.zurueckgestellt_bis)
+        self.assertEqual(sum(1 for a in self.aktivitaeten(v.id)
+                             if a.startswith("Kunde hat geantwortet – zurück in die Kontaktierung")), 2)
+        # ein gewonnener Lead bleibt unberührt (nur Aktivität)
+        v.lead_phase = "gewonnen"
+        self.s.commit()
+        lead_mail.kundenantwort_verbuchen(self.s, v, adresse, "Danke", "Alles klar")
+        self.s.commit()
+        self.assertEqual(self.s.get(Vorgang, v.id).lead_phase, "gewonnen")
 
 
 # --- (n) Scheduler: 14 Läufe, Pool-Invariante ---------------------------------------------

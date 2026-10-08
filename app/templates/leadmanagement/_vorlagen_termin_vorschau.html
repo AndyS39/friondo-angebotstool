@@ -7,24 +7,44 @@
    fertige Terminbestätigung (Betreff, Text zum Kopieren, HTML-Ansicht) mit
    ICS-/Text-Download für Handelsvertreter, die die Mail aus dem eigenen Konto
    senden. Route GET /lead-management/lead/{id}/termin/{tid}/vorschau (lm_mail.py);
-   kein Netzaufruf, kein Warteschlangen-Eintrag. #}
+   kein Netzaufruf, kein Warteschlangen-Eintrag.
+   Nachtrag 08.10.2026 (Antwort Andreas): Versandweg entwurf (Standard) – Knopf
+   „.eml herunterladen“ (?eml=1, message/rfc822: Absender = E-Mail des HV, HTML +
+   Text, ICS und Inline-Bilder enthalten) mit kurzer Anleitung; Hinweis, wenn die
+   E-Mail-Adresse des HV in der Benutzerverwaltung fehlt. #}
 {% block inhalt %}
+{% set basis = '/lead-management/lead/' ~ vorgang.id ~ '/termin/' ~ termin.id ~ '/vorschau?vorlage=' ~ vorlage %}
 <div class="seitenkopf">
     <h1>{{ vorlage_name }} – Vorschau {% if demo_badge %}<span class="demo-badge">Demo</span>{% endif %}</h1>
     <span class="dezent">{{ kunde.anzeige_name if kunde else '' }} · Termin {{ termin.beginn.strftime('%d.%m.%Y %H:%M') if termin.beginn else 'ohne Uhrzeit' }}{% if ad %} · {{ ad.name }}{% endif %}</span>
     <div class="aktionen">
         <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}">Zur Kundenkartei</a>
-        <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}/termin/{{ termin.id }}/vorschau?vorlage={{ vorlage }}&txt=1">{{ symbol('kopie') }} Text herunterladen</a>
-        {% if daten.ics_pfad %}<a class="knopf klein" href="/lead-management/lead/{{ vorgang.id }}/termin/{{ termin.id }}/vorschau?vorlage={{ vorlage }}&ics=1">{{ symbol('kalender') }} ICS herunterladen</a>{% endif %}
+        <a class="knopf klein zweitrangig" href="{{ basis }}&txt=1">{{ symbol('kopie') }} Text herunterladen</a>
+        {% if daten.ics_pfad %}<a class="knopf klein {{ 'zweitrangig' if hv_versandweg == 'entwurf' }}" href="{{ basis }}&ics=1">{{ symbol('kalender') }} ICS herunterladen</a>{% endif %}
+        {% if hv_versandweg == 'entwurf' %}<a class="knopf klein" id="lmv-eml-knopf" href="{{ basis }}&eml=1" download="{{ eml_dateiname }}">{{ symbol('brief') }} .eml herunterladen</a>{% endif %}
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+{% if hv_versandweg == 'entwurf' %}
+<div class="warnblock lmv-entwurf" id="lmv-entwurf">
+    <strong>Versand aus dem eigenen Postfach des Handelsvertreters</strong> (<code>hv_versandweg = entwurf</code>): Das Tool sendet
+    diese Mail nicht selbst – es stellt sie fertig als Datei bereit.
+    <ol class="lmv-anleitung">
+        <li><a href="{{ basis }}&eml=1" download="{{ eml_dateiname }}">.eml herunterladen</a> ({{ eml_dateiname }}; Betreff, Text, Bild und ICS-Anhang sind enthalten)</li>
+        <li>Datei öffnen → in Outlook/Mail prüfen (Outlook öffnet sie als Entwurf; andere Programme: „Als neu bearbeiten“)</li>
+        <li>senden – Empfänger <a href="mailto:{{ kunde.email if kunde else '' }}">{{ kunde.email if kunde else '–' }}</a></li>
+    </ol>
+    Absender: {% if absender_hv %}<strong>{{ absender_hv }}</strong>{% if hv %} ({{ hv.name }}){% endif %}{% else %}<strong class="lm-rot">keine E-Mail-Adresse{% if hv %} für {{ hv.name }}{% endif %} in der Benutzerverwaltung</strong> – der Absender der Datei bleibt leer, bitte im Mailprogramm ergänzen (Admin: Benutzerverwaltung → E-Mail){% endif %}.
+    Andere Termin-Mails: <a href="?vorlage=terminbestaetigung">Bestätigung</a> · <a href="?vorlage=terminerinnerung">Erinnerung</a> · <a href="?vorlage=terminaenderung">Änderung</a> · <a href="?vorlage=terminabsage">Absage</a>.
+</div>
+{% else %}
 <div class="warnblock">
     <strong>Versandweg für Handelsvertreter offen</strong> (<code>hv_versandweg = {{ hv_versandweg }}</code>): Das Tool sendet
     diese Mail nicht selbst. Text kopieren bzw. herunterladen, aus dem eigenen Mailkonto an
     <a href="mailto:{{ kunde.email if kunde else '' }}">{{ kunde.email if kunde else '–' }}</a> senden und die ICS-Datei anhängen.
-    Andere Termin-Mails: <a href="?vorlage=terminbestaetigung">Bestätigung</a> · <a href="?vorlage=terminaenderung">Änderung</a> · <a href="?vorlage=terminabsage">Absage</a>.
+    Andere Termin-Mails: <a href="?vorlage=terminbestaetigung">Bestätigung</a> · <a href="?vorlage=terminerinnerung">Erinnerung</a> · <a href="?vorlage=terminaenderung">Änderung</a> · <a href="?vorlage=terminabsage">Absage</a>.
 </div>
+{% endif %}
 
 <section class="karte" style="max-width:860px">
     <h2>Betreff</h2>

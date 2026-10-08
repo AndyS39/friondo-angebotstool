@@ -663,10 +663,13 @@ class Spalten(Basis):
         self.assertEqual(info[-1]["key"], "veranstaltung")
         self.assertNotIn("score", [x["key"] for x in info])
         # Handelsvertreter: eigene Spaltenkonfiguration getrennt (v29: Hauptboard für die
-        # HV-Sicht gesperrt – die HV-Ansicht nutzt den Board-Key handelsvertreter)
+        # HV-Sicht gesperrt – die HV-Ansicht nutzt den Board-Key handelsvertreter;
+        # Nachtrag 08.10.2026: 303 auf die HV-Ansicht statt 404)
         c_hv = TestClient(app)
         c_hv.post("/login", data={"benutzer_id": str(self.hv.id), "pin": "1234"})
-        self.assertEqual(c_hv.get("/lead-management/hauptboard").status_code, 404)
+        r = c_hv.get("/lead-management/hauptboard", follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        self.assertTrue(r.headers["location"].startswith("/lead-management/handelsvertreter?meldung="))
         self.assertEqual(c_hv.get("/lead-management/handelsvertreter").status_code, 200)
         r = self.json_post("/lead-management/boards/spalten", {"board": "hauptboard", "umbenennen": {"key": "ort", "name": "Stadt"}}, c_hv)
         self.assertEqual(r.status_code, 200, r.text)

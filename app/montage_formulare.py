@@ -12,6 +12,11 @@
 # multi_cell, Frage 7 als vier Zeilen, Betriebswerte/Einstellungen als Tabelle,
 # zwei Unterschriften nebeneinander. Phase 137: das Abnahmeprotokoll beendet die
 # Montage automatisch (Phase montage → abnahme, montage_fertig_am).
+# Nachtrag 08.10.2026 (Antwort Andreas): `migration_v28_entwuerfe(session)` leert
+# beim Update Entwürfe mit Feldschlüsseln, die es im aktuellen Blatt „Formulare“
+# nicht mehr gibt (z. B. ib_dichtheit, mb_beginn); `ib_kaeltemittel` ist aus dem
+# Blatt entfernt (Inbetriebnahmeprotokoll 5 Seiten / 30 Felder) – im Code war der
+# Schlüssel nie hart verdrahtet.
 
 import base64
 import io
@@ -516,3 +521,42 @@ def abschliessen(session, logik, eintrag, gewerk,
                  benutzer=benutzer, gewerk_id=gewerk.id)
     session.flush()
     return True, "Formular abgeschlossen – PDF liegt in der Galerie." + meldung_zusatz
+
+
+# --- Datenmigration v28 (Nachtrag 08.10.2026) ----------------------------------------
+
+def migration_v28_entwuerfe(session) -> list[str]:
+    """Nachtrag 08.10.2026 (Antwort Andreas): Entwürfe der alten Formulare leeren.
+    Ein `MontageFormular` mit `status == "entwurf"`, dessen `antworten_json`
+    mindestens einen Schlüssel enthält, der im aktuellen Blatt „Formulare“ nicht
+    mehr zu den Feldern des jeweiligen Formulars gehört (z. B. `ib_dichtheit`,
+    `mb_beginn`), wird auf `antworten_json = "{}"` und `seite_index = 0` gesetzt.
+    Abgeschlossene Formulare, Entwürfe nur mit gültigen Schlüsseln und Formulare,
+    die das Blatt nicht kennt, bleiben unverändert. Idempotent (zweiter Lauf ohne
+    Meldung), committet nicht selbst – migrate.py ruft die Funktion auf."""
+    from app import projektierung_logik
+    from app.models import MontageFormular
+    logik = projektierung_logik.hole_logik()
+    if logik.fehler or not logik.formulare:
+        return []          # Blatt nicht lesbar → lieber nichts leeren
+    gueltig = {name: {f.feld_key for f in felder}
+               for name, felder in logik.formulare.items()}
+    zaehler: dict[str, int] = {}
+    for eintrag in (session.query(MontageFormular)
+                    .filter(MontageFormular.status == "entwurf")
+                    .order_by(MontageFormular.id)):
+        felder = gueltig.get(eintrag.formular)
+        if felder is None:
+            continue
+        daten = antworten(eintrag)
+        if not daten or all(key in felder for key in daten):
+            continue
+        eintrag.antworten_json = "{}"
+        eintrag.seite_index = 0
+        zaehler[eintrag.formular] = zaehler.get(eintrag.formular, 0) + 1
+    if not zaehler:
+        return []
+    session.flush()
+    gesamt = sum(zaehler.values())
+    details = ", ".join(f"{name}: {anzahl}" for name, anzahl in sorted(zaehler.items()))
+    return [f"Formulare (v28): {gesamt} alte Entwürfe geleert ({details})"]

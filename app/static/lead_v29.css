@@ -78,3 +78,7 @@
 .ben-bild-vorschau { width: 96px; height: 96px; object-fit: cover; border-radius: var(--r-s);
   border: 1px solid var(--grau-linie); background: #fff; }
 .ben-bild-zeile { display: flex; gap: var(--a-3); align-items: flex-start; flex-wrap: wrap; }
+
+/* --- Nachtrag 08.10.2026: HV-Vorschau, Versandweg entwurf (.eml) ------------------- */
+.lmv-entwurf .lmv-anleitung { margin: var(--a-2) 0; padding-left: 1.4em; }
+.lmv-entwurf .lmv-anleitung li { margin: 2px 0; }

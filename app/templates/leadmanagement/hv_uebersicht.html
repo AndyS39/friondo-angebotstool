@@ -188,6 +188,47 @@
 {% else %}
 <div class="lm-karte"><p class="dezent">Keine Handelsvertreter gekennzeichnet (AD-Profil → „terminiert selbst“).</p></div>
 {% endfor %}
+{% if sperrzeit_fremd %}
+{#- Nachtrag 08.10.2026 (Antwort Andreas): Innendienst/Admin tragen Sperrzeiten für
+    Handelsvertreter ein (Zwischenlösung [OFFEN 3], POST /dashboard/sperrzeit mit
+    benutzer_id); darunter die kommenden Sperrzeiten je Vertreter mit „löschen“.
+    Sperrzeiten zählen im Assistenten exakt von–bis (kein Puffer). #}
+<details class="lm-karte lm-sperrzeiten lm-sperrzeiten-innendienst" id="sperrzeiten" {{ 'open' if sperrzeiten.anzahl or meldung.startswith('Sperrzeit') }}>
+    <summary class="lm-gruppe-kopf">{{ symbol('verbot') }} Sperrzeiten der Handelsvertreter <span class="n">{{ sperrzeiten.anzahl }}</span><span class="erkl">blockieren Terminvorschläge exakt von–bis · nur im Tool-Kalender</span></summary>
+    <form method="post" action="/lead-management/dashboard/sperrzeit" class="lm-sperrzeit-form" id="lm-sperrzeit-form-hv">
+        <input type="hidden" name="zurueck" value="/lead-management/handelsvertreter#sperrzeiten">
+        <label>Handelsvertreter <select name="benutzer_id" required>
+            <option value="">bitte wählen</option>
+            {% for hv in hv_liste %}<option value="{{ hv.id }}">{{ hv.name }}</option>{% endfor %}
+        </select></label>
+        <label>Datum <input type="date" name="datum" required value="{{ jetzt.strftime('%Y-%m-%d') }}"></label>
+        <label>von <input type="time" name="von" step="900" required value="08:00"></label>
+        <label>bis <input type="time" name="bis" step="900" required value="12:00"></label>
+        <label>Bemerkung <input type="text" name="bemerkung" maxlength="200" placeholder="z. B. Urlaub, privater Termin"></label>
+        <button class="knopf klein" type="submit">{{ symbol('plus') }} Sperrzeit für Handelsvertreter eintragen</button>
+    </form>
+    {% if sperrzeiten.je_hv %}
+    <div class="lm-sperrzeiten-je-hv">
+        {% for e in sperrzeiten.je_hv %}
+        <div class="lm-sperrzeit-hv" data-hv="{{ e.hv.id }}">
+            <strong>{{ e.hv.name }}</strong>
+            <ul class="lm-sperrzeit-liste">
+                {% for sz in e.sperrzeiten %}
+                <li data-sperrzeit="{{ sz.id }}"><strong>{{ sz.beginn | de_datum('%a %d.%m.%Y') }}</strong> {{ sz.beginn.strftime('%H:%M') }}–{{ sz.ende.strftime('%H:%M') }}
+                    {% if sz.grund_text %}<span class="dezent">· {{ sz.grund_text }}</span>{% endif %}
+                    {% if sz.erstellt_von and sz.erstellt_von != sz.ad_id %}<span class="dezent">· eingetragen von {{ sperrzeiten.namen.get(sz.erstellt_von, '?') }}</span>{% endif %}
+                    <form method="post" action="/lead-management/dashboard/sperrzeit/{{ sz.id }}/loeschen" onsubmit="return confirm('Sperrzeit entfernen?')">
+                        <input type="hidden" name="zurueck" value="/lead-management/handelsvertreter#sperrzeiten">
+                        <button class="knopf klein ghost" type="submit" title="Sperrzeit entfernen">{{ symbol('loeschen') }}</button>
+                    </form></li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}<p class="dezent lm-wv-leer">Keine kommenden Sperrzeiten eingetragen.</p>{% endif %}
+</details>
+{% endif %}
 {% if konfig %}
 {# Spaltenwerkzeuge (lm_boards.js, Teil 3): Konfiguration + gemerkte Sortierung des Nutzers #}
 <script type="application/json" id="lm-daten">{{ {'board': konfig_board, 'sort': sortierung, 'spalten': spalten} | tojson }}</script>

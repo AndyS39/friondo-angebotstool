@@ -14,6 +14,11 @@
 # Block „Offene Montage-Aufgaben“ entfällt (Route /aufgabe/{id}/erledigt bleibt
 # für den Übergang erreichbar, wird nicht mehr verlinkt), Kurzbericht beim
 # Beenden optional [ANNAHME: Bemerkungen stehen im Montagebericht mb_bemerkung].
+# Nachtrag 08.10.2026 (Antwort Andreas): der Kurzbericht beim „Montage beenden“
+# entfällt ganz (kein Feld mehr auf der Auftragsseite) – Bemerkungen stehen im
+# Montagebericht (mb_bemerkung). Die Route nimmt ein mitgeschicktes Feld
+# „bericht“ nur noch aus Altgründen entgegen (ältere Oberflächen/Tests) und
+# schreibt es ausschließlich dann in den Verlauf, wenn es nicht leer ist.
 
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -649,8 +654,10 @@ def montage_phase(request: Request, termin_id: int,
     """„Montage starten“ (Phasen auftragseingang … montagevorbereitung →
     montage, Begründung „Montage gestartet (mobil, <Zeit>)“ – im Modus warnen
     ohne Rückfrage, offene Punkte landen im Verlauf) und „Montage beenden“
-    (Phase montage → abnahme, setzt montage_fertig_am; Kurzbericht optional
-    → Verlauf). Aktionen: gestartet · fertig (Alias beenden)."""
+    (Phase montage → abnahme, setzt montage_fertig_am). Aktionen: gestartet ·
+    fertig (Alias beenden). Nachtrag 08.10.2026 (Antwort Andreas): kein
+    Kurzbericht mehr – ein dennoch mitgeschicktes Feld „bericht“ (Altbestand)
+    landet nur im Verlauf, wenn es nicht leer ist."""
     if (umleitung := _gate(request, session)) is not None:
         return umleitung
     benutzer = request.state.benutzer
@@ -664,6 +671,8 @@ def montage_phase(request: Request, termin_id: int,
                                 status_code=303)
     form = anfrage.formular(request)
     aktion = form.get("aktion") or ""
+    # Nachtrag 08.10.2026 (Antwort Andreas): Feld „bericht“ nur noch aus Altgründen
+    # (kein Eingabefeld mehr auf der Auftragsseite) – Verlauf nur, wenn nicht leer
     bericht = (form.get("bericht") or "").strip()[:1000]
     ziel_meldung = f"/montage/einsatz/{termin_id}?meldung="
     # V4 (Phase 90.4): Uhrzeit im 15-Minuten-Takt (serverseitig gerundet)

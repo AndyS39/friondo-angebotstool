@@ -6,6 +6,9 @@
 # ohne HV-Kennzeichen → Weiterleitung auf „Meine Termine“ (F6).
 # v29 (PLAN_LEAD_V4 Phasen 141/143): Dashboard „Hallo, <Vorname>“ mit Routenplaner,
 # Sperrzeiten der Handelsvertreter (POST /dashboard/sperrzeit, …/{id}/loeschen).
+# Nachtrag 08.10.2026 (Antwort Andreas): POST /dashboard/sperrzeit nimmt für
+# Admin/Innendienst zusätzlich benutzer_id (Ziel-HV) entgegen; Dashboard ohne
+# „Mir zugeteilte Vorgänge“.
 
 from datetime import datetime
 from urllib.parse import parse_qsl, quote_plus, urlencode, urlsplit, urlunsplit
@@ -126,8 +129,9 @@ def einstieg(request: Request, session: Session = Depends(get_session)):
 
 @router.get("/dashboard")
 def dashboard(request: Request, session: Session = Depends(get_session)):
-    """A1: persönliche Startseite – Wiedervorlagen (beide Mechaniken), mir
-    zugeteilte Vorgänge, Termine der nächsten Tage, To-Dos, Kacheln."""
+    """A1: persönliche Startseite – v29: Fällig heute, Kommende Wiedervorlagen,
+    Offene To-Dos, Routenplaner, Meine Termine (Nachtrag 08.10.2026: ohne
+    „Mir zugeteilte Vorgänge“)."""
     benutzer = request.state.benutzer
     if _ad_ohne_hv(session, benutzer):
         return RedirectResponse("/lead-management/meine-termine", status_code=303)
@@ -174,18 +178,29 @@ def wiedervorlage_aktion(request: Request, vorgang_id: int,
 
 @router.post("/dashboard/sperrzeit")
 def sperrzeit_anlegen(request: Request, session: Session = Depends(get_session)):
-    """Formular: datum, von, bis, bemerkung – nur Handelsvertreter (eigener
-    Tool-Kalender, Zwischenlösung bis [OFFEN 3])."""
+    """Formular: datum, von, bis, bemerkung – Handelsvertreter für den eigenen
+    Tool-Kalender (Zwischenlösung bis [OFFEN 3]).
+    Nachtrag 08.10.2026 (Antwort Andreas): Admin/Innendienst tragen mit
+    benutzer_id (Ziel-Handelsvertreter) eine Sperrzeit für einen HV ein
+    (Formular in der HV-Übersicht); ein Handelsvertreter selbst nur eigene
+    (benutzer_id wird ignoriert); alle anderen Rollen 404."""
     from app import lead_termin
+    from app.models import Benutzer
     benutzer = request.state.benutzer
     lead_v2.gate(request, session)
-    if not lead_v2.ist_handelsvertreter(session, benutzer):
+    ist_hv = lead_v2.ist_handelsvertreter(session, benutzer)
+    if not ist_hv and not lead_termin.sperrzeit_fremd_erlaubt(benutzer):
         raise HTTPException(status_code=404)
     form = anfrage.formular(request)
     zurueck = _zurueck(request, form, DASHBOARD + "#termine")
+    ziel = benutzer
+    if not ist_hv:
+        ziel = session.get(Benutzer, _int(form.get("benutzer_id")) or 0)
+        if ziel is None or not ziel.aktiv:
+            return _redirect(zurueck, "Sperrzeit: bitte einen Handelsvertreter wählen.")
     termin, meldung = lead_termin.sperrzeit_anlegen(
         session, benutzer, form.get("datum") or "", form.get("von") or "",
-        form.get("bis") or "", form.get("bemerkung") or "")
+        form.get("bis") or "", form.get("bemerkung") or "", ziel=ziel)
     if termin is None:
         session.rollback()
         return _redirect(zurueck, "Sperrzeit: " + meldung)

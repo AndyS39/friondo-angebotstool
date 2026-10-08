@@ -229,9 +229,13 @@ class Ansicht(Basis):
     def test_fremde_kartei_und_gesperrte_bereiche_404(self):
         fremd = self.lead(12, ad_id=self.hv_b.id)
         self.assertEqual(self.client_a.get(f"/lead-management/lead/{fremd.id}").status_code, 404)
+        # Nachtrag 08.10.2026 (Antwort Andreas): gesperrte Seiten leiten für die HV-Sicht
+        # mit 303 auf die HV-Ansicht um (V1-Gate über lead_v2.hv_umleitung)
         for pfad in ("/lead-management/neu", "/lead-management/import",
                      "/lead-management/posteingang", "/lead-management/uebersicht"):
-            self.assertEqual(self.client_a.get(pfad).status_code, 404, pfad)
+            r = self.client_a.get(pfad, follow_redirects=False)
+            self.assertEqual(r.status_code, 303, pfad)
+            self.assertTrue(r.headers["location"].startswith("/lead-management/handelsvertreter?meldung="), pfad)
         r = self.client_a.post(f"{BASIS}/{fremd.id}/zuweisen", data={"ad_id": str(self.hv_a.id)})
         self.assertEqual(r.status_code, 404)
         self.assertEqual(self.frisch(fremd).ad_id, self.hv_b.id)

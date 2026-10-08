@@ -159,8 +159,11 @@ class Dashboard(Basis):
             self.s, self.admin, jetzt, 7, False)})
         # zugeteilt nach Phase – v25 (Phase 118/120): in_kontaktierung + qualifiziert
         # bilden EINE Gruppe „Kontaktiert“ (Label aus dem Blatt Status), daher
-        # Suche über die Phasenliste der Gruppe statt über den Gruppenschlüssel
-        gruppen = daten["zugeteilt"]["gruppen"]
+        # Suche über die Phasenliste der Gruppe statt über den Gruppenschlüssel.
+        # Nachtrag 08.10.2026 (Antwort Andreas): „Mir zugeteilte Vorgänge“ ist nicht mehr
+        # Teil des Dashboards – die Funktion zugeteilte() bleibt und wird direkt geprüft
+        self.assertNotIn("zugeteilt", daten)
+        gruppen = lead_dashboard.zugeteilte(self.s, self.admin, False)["gruppen"]
         kontakt = next(g for g in gruppen if "qualifiziert" in g["phasen"])
         self.assertEqual(kontakt["name"], "Kontaktiert")
         self.assertIn(v_termin.id, [z["vorgang"].id for z in kontakt["zeilen"]])
@@ -185,18 +188,21 @@ class Dashboard(Basis):
         # v29 (Phase 141): „Hallo, <Vorname>“, Fällig heute · Kommende Wiedervorlagen ·
         # Offene To-Dos, Routenplaner, Meine Termine; keine Angebots-Wiedervorlagen mehr
         for text in ("Hallo, ", "Fällig heute", "Kommende Wiedervorlagen",
-                     "Mir zugeteilte Vorgänge", "Offene To-Dos", "Meine Termine · nächste",
+                     "Offene To-Dos", "Meine Termine · nächste",
                      "Routenplaner", "inkl. Demo", "Telefongespräch",
                      "Rückruf gewünscht", "Bauphase später", f"{PRAEFIX} Unterlagen prüfen",
                      'href="/lead-management/uebersicht"', "Mehr …"):
             self.assertIn(text, seite.text, text)
-        for weg in ("Angebots-Wiedervorlagen", "Ohne nächsten Schritt", "Termine 7 Tage"):
+        # Nachtrag 08.10.2026 (Antwort Andreas): „Mir zugeteilte Vorgänge“ entfällt
+        for weg in ("Angebots-Wiedervorlagen", "Ohne nächsten Schritt", "Termine 7 Tage",
+                    "Mir zugeteilte Vorgänge"):
             self.assertNotIn(weg, inhalt(seite.text), weg)
         self.assertIn(self.kunde(v_rueckruf).anzeige_name, seite.text)
-        # Angebots-Wiedervorlage steht nicht mehr bei den Wiedervorlagen (nur noch unter
-        # „Mir zugeteilte Vorgänge“ als zugeteilter Lead)
+        # Angebots-Wiedervorlage steht nicht mehr bei den Wiedervorlagen (und seit dem
+        # Nachtrag 08.10.2026 auch nicht mehr unter „Mir zugeteilte Vorgänge“)
         wv_bereich = inhalt(seite.text).split('id="faellig"', 1)[1].split('id="todos"', 1)[0]
         self.assertNotIn(self.kunde(v_angebot).anzeige_name, wv_bereich)
+        self.assertNotIn(self.kunde(v_angebot).anzeige_name, inhalt(seite.text))
         self.assertNotIn(self.kunde(v_fremd).anzeige_name, inhalt(seite.text))
         # Umschalter Team → Übersicht zeigt zurück
         ueber = self.client.get("/lead-management/uebersicht")
@@ -300,7 +306,10 @@ class Dashboard(Basis):
         self.assertEqual({z["vorgang"].id for z in lead_dashboard.angebots_wiedervorlagen(
             self.s, self.hv, jetzt, 7, True)}, {eigen_angebot.id})
         self.assertEqual({z["termin"].vorgang_id for z in daten["termine"]}, {eigen.id})
-        zugeteilt = {z["vorgang"].id for g in daten["zugeteilt"]["gruppen"] for z in g["zeilen"]}
+        # Nachtrag 08.10.2026: zugeteilte() bleibt als Funktion (HV = ad_id), nicht im Dashboard
+        self.assertNotIn("zugeteilt", daten)
+        zugeteilt = {z["vorgang"].id for g in lead_dashboard.zugeteilte(self.s, self.hv, True)["gruppen"]
+                     for z in g["zeilen"]}
         self.assertEqual(zugeteilt, {eigen.id, eigen_angebot.id})
         c = self.anmelden(self.hv)
         r = c.get("/lead-management", follow_redirects=False)

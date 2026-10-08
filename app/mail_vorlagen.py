@@ -52,6 +52,7 @@ SPARTEN = ("WP", "PV", "KL", "WB")
 SPARTEN_NAMEN = {"WP": "Wärmepumpe", "PV": "Photovoltaik", "KL": "Klimaanlage",
                  "WB": "Wallbox"}
 MIGRATION_MARKER = "migration_nachtrag2_sparten"
+MIGRATION_MARKER_WP = "migration_nachtrag2_sparten_wp"   # Nachtrag 08.10.2026: WP-Kopie entfernt
 # Platzhalter ohne Wert bei PV/KL (kein KfW-Block): die Migration entfernt die
 # Sätze, in denen sie stehen, und leert übrige Vorkommen
 NUR_WP_PLATZHALTER = ("{eigenanteil}", "{foerderung}")
@@ -409,19 +410,31 @@ def migration_sparten(session) -> list[str]:
     """v27-Nachtrag 2 (migrate.py): Sparten-Vorlagen WP/PV/KL/WB einmalig aus
     der heutigen Standard-Vorlage anlegen – nur Sparten ohne eigene Vorlage;
     Marker `migration_nachtrag2_sparten = erledigt`. Idempotent, committet nicht."""
-    if einstellung_holen(session, MIGRATION_MARKER, "") == "erledigt":
-        return []
     meldungen = []
-    betreff, text = standard_vorlage_laden(session)
-    for sparte in SPARTEN:
-        if sparten_vorlage_laden(session, sparte) is not None:
-            meldungen.append(f"E-Mail-Vorlage {sparte}: eigene Vorlage vorhanden – unverändert")
-            continue
-        neu_betreff, neu_text, entfernte = sparten_vorlage_ableiten(betreff, text, sparte)
-        sparten_vorlage_speichern(session, sparte, neu_betreff, neu_text)
-        meldungen.append(f"E-Mail-Vorlage {sparte} ({SPARTEN_NAMEN[sparte]}) aus der "
-                         f"Standard-Vorlage angelegt – Betreff „{neu_betreff}“")
-        for satz in entfernte:
-            meldungen.append(f"E-Mail-Vorlage {sparte}: Satz entfernt: „{satz}“")
-    einstellung_setzen(session, MIGRATION_MARKER, "erledigt")
+    if einstellung_holen(session, MIGRATION_MARKER, "") != "erledigt":
+        betreff, text = standard_vorlage_laden(session)
+        for sparte in SPARTEN:
+            if sparte == "WP":
+                # Nachtrag 08.10.2026 (Antwort Andreas): WP bleibt die Standard-Vorlage –
+                # keine Kopie, damit es nur EINE Stelle zum Pflegen gibt
+                continue
+            if sparten_vorlage_laden(session, sparte) is not None:
+                meldungen.append(f"E-Mail-Vorlage {sparte}: eigene Vorlage vorhanden – unverändert")
+                continue
+            neu_betreff, neu_text, entfernte = sparten_vorlage_ableiten(betreff, text, sparte)
+            sparten_vorlage_speichern(session, sparte, neu_betreff, neu_text)
+            meldungen.append(f"E-Mail-Vorlage {sparte} ({SPARTEN_NAMEN[sparte]}) aus der "
+                             f"Standard-Vorlage angelegt – Betreff „{neu_betreff}“")
+            for satz in entfernte:
+                meldungen.append(f"E-Mail-Vorlage {sparte}: Satz entfernt: „{satz}“")
+        einstellung_setzen(session, MIGRATION_MARKER, "erledigt")
+    # Nachtrag 08.10.2026: eine vom ersten Lauf angelegte, unveränderte WP-Kopie wieder
+    # entfernen (WP nutzt die Standard-Vorlage); eine von Hand geänderte WP-Vorlage bleibt
+    if einstellung_holen(session, MIGRATION_MARKER_WP, "") != "erledigt":
+        wp = sparten_vorlage_laden(session, "WP")
+        if wp is not None and wp == standard_vorlage_laden(session):
+            sparten_vorlage_speichern(session, "WP", "", "")
+            meldungen.append("E-Mail-Vorlage WP: unveränderte Kopie der Standard-Vorlage entfernt "
+                             "– WP nutzt die Standard-Vorlage (Antwort Andreas 08.10.2026)")
+        einstellung_setzen(session, MIGRATION_MARKER_WP, "erledigt")
     return meldungen

@@ -31,10 +31,11 @@ der v27-Code läuft auf der neuen Datenbank weiter, Rückweg `rollback.bat --nur
   Vorlage der Sparte des Angebots → Standard. Die Sparten-Vorlagen wurden beim Update
   automatisch aus der Standard-Vorlage erzeugt (KL: „Klimaanlagen-Angebot“/„Klimaanlage“,
   PV: „PV-Angebot“/„PV-Anlage“; Sätze mit Eigenanteil/Förderung sind bei PV/KL entfernt).
-  **Bitte alle vier Reiter einmal gegenlesen** – besonders WB (vorerst Kopie des WP-Textes,
-  Wortlaut offen) und die beim Update entfernten Sätze (Liste vom Admin). Die Versand-
-  Meldung nennt die verwendete Vorlage („Sparten-Vorlage KL“). Der Kombi-Versand behält
-  seine eigene Vorlage.
+  **Bitte die Reiter PV, KL und WB einmal gegenlesen** (WB = Kopie des WP-Textes, von
+  Andreas bestätigt) sowie die beim Update entfernten Sätze (Liste vom Admin). WP braucht
+  keine eigene Vorlage: Wärmepumpen-Angebote nutzen weiter die Standard-Vorlage (Reiter
+  „Standard“), die Versand-Meldung nennt die verwendete Vorlage („Standard-Vorlage“ bzw.
+  „Sparten-Vorlage KL“). Der Kombi-Versand behält seine eigene Vorlage.
 
 **Admin / Server-To-dos**
 1. Beim Update die Ausgabe von `migrate.py` sichern: Zeilen „E-Mail-Vorlage … angelegt“ und
@@ -42,7 +43,8 @@ der v27-Code läuft auf der neuen Datenbank weiter, Rückweg `rollback.bat --nur
 2. Nach dem Pull auf dem Server prüfen: `dir anlagen` muss `Friondo Unternehmenspräsentation.pdf`,
    `Broschüre Ratenkauf.pdf` und `Bosch Climate 3200i.pdf` zeigen (`anlagen\` ist versioniert;
    die Klima-Broschüre kommt mit dem Pull). Die Streudatei `anlagen\unternehmenspraesentation.pdf`
-   (1 KB, ohne Inhalt) kann weg. Danach Dienst neu starten (lädt die Logik-Excel mit der
+   (1 KB, ohne Inhalt) wurde in der Arbeitskopie gelöscht – auf dem Server ebenfalls löschen
+   (Entscheidung Andreas 08.10.2026). Danach Dienst neu starten (lädt die Logik-Excel mit der
    neuen Anhänge-Zeile) bzw. Parametrierung → Logik & Importe → „Neu einlesen“.
 3. Ein KL-Angebot probeweise „Versand vorbereiten“ und im Outlook-Entwurf die drei Anhänge
    zählen; Meldung auf den Zusatz „fehlende Anhang-Dateien“ prüfen. Kachel „Anhang-Dateien
@@ -106,7 +108,8 @@ der v27-Code läuft auf der neuen Datenbank weiter, Rückweg `rollback.bat --nur
 - Die Auftragsseite ist neu sortiert: Kopf · Steckbrief (jetzt vollständig, leere Felder
   „–“) · Teams & Termine · Notizen der Projektierung · Montage starten/beenden ·
   Formulare · Restarbeiten · Galerie. Die „Offenen Montage-Aufgaben“ gibt es nicht mehr.
-- „Montage beenden“ braucht keinen Kurzbericht mehr; die Montage endet automatisch,
+- „Montage beenden“ hat kein Kurzbericht-Feld mehr – Bemerkungen zur Montage gehören in den
+  Montagebericht („Bemerkungen des Monteurs“). Die Montage endet weiterhin automatisch,
   sobald das Abnahmeprotokoll unterschrieben ist.
 
 ## Formulare (Rolle Montage, Phase 138)
@@ -115,13 +118,23 @@ der v27-Code läuft auf der neuen Datenbank weiter, Rückweg `rollback.bat --nur
   Upload beim Speichern). Inbetriebnahmeprotokoll komplett neu (Seriennummern +
   „+ weitere Seriennummer“, elf Prüffragen, Betriebswerte, Einstellungen, zwei
   Unterschriften); Frage 10 wird als Restarbeiten-Liste übernommen („keine“ erlaubt),
-  bei Frage 11 ≠ „Ja“ ist die Begründung Pflicht. **Angefangene Entwürfe der alten
-  Formulare sind leer** – bitte neu ausfüllen.
+  bei Frage 11 ≠ „Ja“ ist die Begründung Pflicht. Das Inbetriebnahmeprotokoll fragt kein
+  Kältemittel mehr ab (30 Felder). **Angefangene Entwürfe der alten Formulare werden beim
+  Update geleert** (sie enthielten Felder, die es nicht mehr gibt) – bitte neu ausfüllen;
+  abgeschlossene Formulare und ihre PDFs bleiben unverändert.
+
+## Bildschirmbreite (alle Bereiche)
+- Portal, Lead-Management, Vorgangsakte, Kundenkartei und Projektierung nutzen jetzt die volle
+  Monitorbreite (16 px Rand); auf großen Bildschirmen stehen Tabellen und Boards breiter.
+- Das Projektierungs-Board passt auf Laptops (1366 × 768) und auf Full-HD mit Browserleisten
+  ohne Seiten-Scroll: der Hinweistext unter dem Board ist dort einzeilig (Maus darüber zeigt
+  alles), die Kacheln verzichten auf die Untertitel.
 
 ## Admin / Server (v28)
 - Nach `update.bat`: `migrate.py` meldet die v28-Migrationen (Spalten/Tabelle, Termine:
   `zweck`-Backfill und Besetzung aus den Team-Mitgliedern, Notizen: „n Projektakten-
-  Kommentar(e) kopiert“); zweiter Lauf ohne Meldung.
+  Kommentar(e) kopiert“, „Formulare (v28): n alte Entwürfe geleert (…)“); zweiter Lauf
+  ohne Meldung.
 - Parametrierung → Projektierung-Einstellungen: Abschnitt „Board & Wächter“ (`waechter_modus`
   = warnen) und „Terminvorschläge“ (Montagedauer 5 AT, Vorlauf 4 Wochen, Startadresse
   Firmensitz, Outlook-Stufe aus) einmal prüfen.

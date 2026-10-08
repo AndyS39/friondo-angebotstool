@@ -804,3 +804,23 @@ vorgeschlagen, der HV terminiert manuell; kein Kalenderzugriff, keine Konfliktpr
 `.lm-aktion` (style.css) setzte `display: flex` auch auf Tabellenzellen – in den
 Wiedervorlage-Listen des Dashboards fiel die Aktionszelle seit v23 aus dem Raster; in
 `lead_v2.css` als `table-cell` nachgebessert.
+
+### Antworten Andreas 08.10.2026 auf die Rückfragen des Durchlaufs (Lead-Management)
+
+| Rückfrage | Antwort | Umsetzung |
+|---|---|---|
+| R1 „Mir zugeteilte Vorgänge“ auf dem Dashboard behalten? | Nein | Block entfernt |
+| R2 Sperrzeiten mit Puffer oder exakt? | Exakt | Sperrzeit zählt genau von–bis (kein 30-Min-Puffer) |
+| R3 Fälligkeits-Glocke der To-Dos behalten? | Ja | bleibt (`todo_zugewiesen`) |
+| R4 Direktlinks für HV: immer 404 oder immer Umleitung? | Immer umleiten | `lead_v2.gate` leitet HV auf gesperrten Pfaden immer mit 303 auf die HV-Ansicht um |
+| R5 Darf der Innendienst HV-Sperrzeiten anlegen? | Ja | Formular in der Innendienst-HV-Ansicht, Route nimmt `benutzer_id` |
+| R-L2-1 Kundenantwort nach Nurture-Wegfall | nur wenn der Kunde sich meldet, danach Innendienst manuell | Kundenantwort setzt „Nicht erreicht“/zurückgestellte Leads zurück nach `in_kontaktierung` (Aktivität, Wiedervorlage jetzt) |
+| R-L2-2 Terminhinweise je Sparte | ok (nachreichen) | Platzhalter „(Punkte folgen)“ bleibt |
+| R-L2-3 Dateinamen-Konvention der Zulieferung | ja | bleibt |
+| R-L2-4 Admin-Glocke bei Mail-Fehler? | ja | Betriebsglocke (art `system`) an alle Admins, einmal je Eintrag beim Übergang auf `fehler` |
+| R-L2-5 Bounces im Testmodus zuordnen? | ja | bleibt |
+| R-L2-6 `absender_postfach` nur Parser | ok | Feld heißt „Parser-Eingangspostfach (leads@)“ |
+| R-L2-7 Reply-To setzen? | ja | `replyTo` = zuständiger Leadmanager + Absender termin@ (Antworten erreichen beide, der Lauf `lead-mail-abruf` sieht sie weiter) |
+| OFFEN 2 HV-Versandweg | HV senden aus dem persönlichen Postfach | Versandweg `entwurf` gebaut und Standard: fertige Terminbestätigung als `.eml` (Vorlage des HV, ICS, Bild) aus der Vorschau herunterladen und aus dem eigenen Postfach senden; To-Do an den HV; `offen` bleibt wählbar, `smtp`/`leads_im_namen` Erweiterungspunkte |
+| OFFEN 3 HV-Kalender | (keine Antwort) | bleibt bei der Zwischenlösung Tool-Termine + Sperrzeiten |
+| M365 termin@ | (IT) | „Senden als“ + Lesezugriff vor der Freischaltung – unverändert offen |

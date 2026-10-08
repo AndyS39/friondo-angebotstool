@@ -2,8 +2,12 @@
 # Besetzungs-Sicht (Besetzung je Termin, Fallback Team/Person), „Meine
 # Einsätze“ + Team-Umschalter, Wochenkalender mit Initialen, Steckbrief
 # vollständig (leere Felder „–“), neue Reihenfolge der Auftragsseite, Notizen
-# read-only, Montage starten/beenden (Kurzbericht optional), automatisches
-# Montage-Ende mit dem Abnahmeprotokoll, Vorbelegung „Mitarbeiter (Team)“.
+# read-only, Montage starten/beenden, automatisches Montage-Ende mit dem
+# Abnahmeprotokoll, Vorbelegung „Mitarbeiter (Team)“.
+# Nachtrag 08.10.2026 (Antwort Andreas, Agent PB): der Kurzbericht beim Beenden
+# entfällt ganz (kein Feld auf der Auftragsseite; ein mitgeschicktes Feld
+# „bericht“ wird nur noch aus Altgründen angenommen und landet im Verlauf, wenn
+# es nicht leer ist).
 import json
 import unittest
 import warnings
@@ -212,7 +216,14 @@ class Auftragsseite(Basis):
         self.assertEqual(g.phase, "montage")
         texte = self.verlauf_texte(g)
         self.assertTrue(any("Montage gestartet (mobil, " in x and "07:45" in x for x in texte), texte)
-        # Beenden ohne Kurzbericht (optional) → Abnahme, montage_fertig_am gesetzt
+        # Nachtrag 08.10.2026: die Auftragsseite hat kein Kurzbericht-Feld mehr,
+        # der Hinweis verweist auf den Montagebericht
+        r = c.get(f"/montage/einsatz/{t.id}")
+        self.assertIn("Montage beenden", r.text)
+        self.assertNotIn('name="bericht"', r.text)
+        self.assertNotIn("Kurzbericht", r.text)
+        self.assertIn("Bemerkungen zur Montage bitte im", r.text)
+        # Beenden (ohne Bericht) → Abnahme, montage_fertig_am gesetzt
         r = c.post(f"/montage/einsatz/{t.id}/phase", data={"aktion": "fertig", "uhrzeit": "15:52"},
                    follow_redirects=False)
         self.assertEqual(r.status_code, 303)
@@ -229,7 +240,9 @@ class Auftragsseite(Basis):
         self.assertNotIn("Montage beenden", r.text)
         self.assertNotIn("Montage starten", r.text)
         self.assertIn("Montage beendet", r.text)
-        # Kurzbericht optional, landet im Verlauf, Alias „beenden“
+        # Altbestand: ein mitgeschicktes Feld „bericht“ (ältere Oberfläche, Alt-Test
+        # test_projektierung_v4) landet weiterhin im Verlauf, wenn es nicht leer ist;
+        # Alias „beenden“
         g2 = self.gewerk_neu(phase="montage")
         t2 = self.termin_neu(g2, self.team, tage=4, besetzung=[self.a])
         r = c.post(f"/montage/einsatz/{t2.id}/phase",

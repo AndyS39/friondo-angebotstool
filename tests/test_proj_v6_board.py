@@ -1,8 +1,12 @@
-# v28 (PLAN_PROJ_V6 Phase 134): Board – volle Breite (main.breit.pj-voll),
+# v28 (PLAN_PROJ_V6 Phase 134): Board – volle Breite (Marker-Klasse pj-voll),
 # Dummy-Scrollbalken, Dialog „Phase ändern“ am Board, POST …/phase-drop mit JSON,
 # GET …/waechter?ziel= (begruendung_pflicht je Modus). Browser-Kontrollwerte
 # (Board-Höhe, scrollLeft synchron, Karte wandert) prüft das Chrome-headless-Skript
 # diagnose/v28_patches/p1_screenshots.py (Playwright ist nicht installiert).
+# Nachtrag 08.10.2026 (Antwort Andreas): volle Breite für ALLE main.breit-Seiten
+# (style.css), Board-Mindesthöhe 480 px nur ab 900 px Viewport-Höhe, sonst 320 px –
+# Kontrollwerte (kein Seiten-Scroll 1366×768, kein waagerechter Scroll Portal/Lead)
+# misst diagnose/v28_patches/pb_kontrolle.py.
 import unittest
 import warnings
 
@@ -38,7 +42,8 @@ class Board(_Basis):
         self.assertIn('data-phase="auftragseingang"', r.text)        # Kacheln mit Phase
         self.assertIn(f'data-gewerk="{g.id}"', r.text)              # Chip je Gewerk
         self.assertNotIn('id="teamdialog"', r.text)                  # alter Dialog weg
-        # Angebotstool-/Lead-Seiten bleiben bei main.breit (ohne pj-voll)
+        # Angebotstool-/Lead-Seiten tragen main.breit ohne den Marker pj-voll
+        # (seit dem Nachtrag 08.10.2026 ebenfalls volle Breite über style.css)
         r = self.client.get("/")
         self.assertEqual(r.status_code, 200)
         self.assertNotIn("pj-voll", r.text)

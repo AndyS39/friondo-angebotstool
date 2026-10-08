@@ -22,6 +22,9 @@
 # = Parameter routen_start), Kachel „Mails mit Fehler“ (Vertrag L2), Sperrzeiten
 # der Handelsvertreter (Phase 143). Die Startseiten-Kachel des Angebotstools
 # (portal_zaehler) bleibt unverändert.
+# Nachtrag 08.10.2026 (Antwort Andreas): Block „Mir zugeteilte Vorgänge“ entfernt
+# (zugeteilte() bleibt als Funktion); Sperrzeiten zeigen „eingetragen von …“, wenn
+# Innendienst/Admin sie für den Handelsvertreter angelegt haben (sperrzeit_namen).
 
 from datetime import datetime, timedelta
 from urllib.parse import quote_plus
@@ -330,7 +333,9 @@ def zugeteilte(session: Session, benutzer, hv: bool) -> dict:
     """Mir zugeteilte Vorgänge (HV: ad_id, sonst leadmanager_id), nach
     Lead-Phase gruppiert mit Zählern; abgeschlossene Phasen eingeklappt.
     v25: Phasen mit demselben Label (in_kontaktierung + qualifiziert →
-    „Kontaktiert“) bilden eine Gruppe."""
+    „Kontaktiert“) bilden eine Gruppe.
+    Nachtrag 08.10.2026 (Antwort Andreas): nicht mehr Teil des Dashboards
+    (Block entfernt); die Funktion bleibt für Auswertungen/Tests erhalten."""
     abfrage = session.query(Vorgang).filter(Vorgang.lead_phase.isnot(None))
     abfrage = _meine_leads(abfrage, benutzer, hv, mit_freien=False)
     vorgaenge = abfrage.order_by(Vorgang.eingang_am.desc().nullslast(), Vorgang.id.desc()).all()
@@ -435,6 +440,16 @@ def sperrzeiten(session: Session, benutzer, jetzt: datetime) -> list:
     return lead_termin.sperrzeiten_liste(session, benutzer.id, ab=_tag(jetzt))
 
 
+def sperrzeit_namen(session: Session, liste: list) -> dict:
+    """Nachtrag 08.10.2026: {benutzer_id: Name} der Ersteller fremd eingetragener
+    Sperrzeiten (erstellt_von ≠ ad_id) – für „eingetragen von …“ in der Liste."""
+    ids = {sz.erstellt_von for sz in liste
+           if sz.erstellt_von and sz.erstellt_von != sz.ad_id}
+    if not ids:
+        return {}
+    return {b.id: b.name for b in session.query(Benutzer).filter(Benutzer.id.in_(ids))}
+
+
 def daten(session: Session, benutzer, termine_alle: bool = False,
           jetzt: datetime | None = None) -> dict:
     """Alles für dashboard.html (v29: „Hallo, <Vorname>“, Fällig heute, Kommende
@@ -452,6 +467,7 @@ def daten(session: Session, benutzer, termine_alle: bool = False,
     fehler = 0 if hv else mails_mit_fehler(session)
     start = routen_start(session)
     kommend = [z for z in lead_wv if z["kommend"]]
+    sperr = sperrzeiten(session, benutzer, jetzt) if hv else []
     return {
         "jetzt": jetzt, "heute": jetzt.date(), "horizont": horizont, "hv": hv,
         "anrede": anrede_name(benutzer),
@@ -460,9 +476,11 @@ def daten(session: Session, benutzer, termine_alle: bool = False,
         "lead_wv_kommend": kommend,
         "kommende_gruppen": kommende_gruppieren(kommend),
         "kommende_sichtbar": KOMMENDE_SICHTBAR,
-        "zugeteilt": zugeteilte(session, benutzer, hv),
+        # Nachtrag 08.10.2026 (Antwort Andreas): „Mir zugeteilte Vorgänge“ entfällt –
+        # zugeteilte() bleibt als Funktion, wird hier nicht mehr geladen
         "termine": termine_liste, "termine_alle": termine_alle,
-        "sperrzeiten": sperrzeiten(session, benutzer, jetzt) if hv else [],
+        "sperrzeiten": sperr,
+        "sperrzeit_namen": sperrzeit_namen(session, sperr),
         "todos": lead_todos.zeilen(session, todos_offen, jetzt),
         "kacheln": kacheln(lead_wv, todos_zahlen, termine_liste, fehler),
         "mails_fehler": fehler,

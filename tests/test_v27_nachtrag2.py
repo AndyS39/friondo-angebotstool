@@ -250,12 +250,26 @@ class SpartenVorlagen(unittest.TestCase):
                          "Ihr Klimaanlagen-Angebot {angebotsnummer} der Friondo GmbH")
         self.assertEqual(mail_vorlagen.sparten_vorlage_laden(self.s, "PV")[0],
                          "Ihr PV-Angebot {angebotsnummer} der Friondo GmbH")
-        self.assertEqual(mail_vorlagen.sparten_vorlage_laden(self.s, "WP"),
-                         (mail_vorlagen.STANDARD_BETREFF, mail_vorlagen.STANDARD_TEXT))
+        # Nachtrag 08.10.2026 (Antwort Andreas): WP bekommt keine Kopie – WP = Standard-Vorlage
+        self.assertIsNone(mail_vorlagen.sparten_vorlage_laden(self.s, "WP"))
         self.assertEqual(mail_vorlagen.sparten_status(self.s),
-                         {"WP": True, "PV": True, "KL": True, "WB": True})
+                         {"WP": False, "PV": True, "KL": True, "WB": True})
+        self.assertEqual(einstellung_holen(self.s, mail_vorlagen.MIGRATION_MARKER_WP, ""), "erledigt")
         # zweiter Lauf: keine Meldungen, nichts geändert
         self.assertEqual(mail_vorlagen.migration_sparten(self.s), [])
+        # eine vom ersten Durchlauf (vor dem Nachtrag) angelegte, unveränderte WP-Kopie wird
+        # einmalig entfernt; eine von Hand geänderte WP-Vorlage bleibt
+        mail_vorlagen.sparten_vorlage_speichern(self.s, "WP", mail_vorlagen.STANDARD_BETREFF,
+                                                mail_vorlagen.STANDARD_TEXT)
+        einstellung_setzen(self.s, mail_vorlagen.MIGRATION_MARKER_WP, "")
+        meldungen = mail_vorlagen.migration_sparten(self.s)
+        self.assertTrue(any("WP: unveränderte Kopie" in m for m in meldungen), meldungen)
+        self.assertIsNone(mail_vorlagen.sparten_vorlage_laden(self.s, "WP"))
+        mail_vorlagen.sparten_vorlage_speichern(self.s, "WP", "WP eigen", "WP eigener Text")
+        einstellung_setzen(self.s, mail_vorlagen.MIGRATION_MARKER_WP, "")
+        self.assertEqual(mail_vorlagen.migration_sparten(self.s), [])
+        self.assertEqual(mail_vorlagen.sparten_vorlage_laden(self.s, "WP"), ("WP eigen", "WP eigener Text"))
+        mail_vorlagen.sparten_vorlage_speichern(self.s, "WP", "", "")
         # Migration folgt der GEÄNDERTEN Standard-Vorlage (frische DB)
         s2 = sessionmaker(bind=create_engine("sqlite:///:memory:"))()
         Base.metadata.create_all(s2.get_bind())
@@ -266,9 +280,8 @@ class SpartenVorlagen(unittest.TestCase):
         self.assertEqual(mail_vorlagen.sparten_vorlage_laden(s2, "KL"),
                          ("Klimaanlagenangebot {angebotsnummer}", "Hallo, Ihre Klimaanlage. Danke."))
         self.assertIn("E-Mail-Vorlage KL: Satz entfernt: „Eigenanteil: {eigenanteil}.“", meldungen)
-        self.assertEqual(mail_vorlagen.sparten_vorlage_laden(s2, "WP"),
-                         ("Wärmepumpenangebot {angebotsnummer}",
-                          "Hallo, Ihre Wärmepumpe. Eigenanteil: {eigenanteil}. Danke."))
+        # Nachtrag 08.10.2026: WP ohne Kopie – der Standard gilt
+        self.assertIsNone(mail_vorlagen.sparten_vorlage_laden(s2, "WP"))
 
     def test_reihenfolge_ad_sparte_standard(self):
         # ohne Sparten-Vorlage: Standard (wie v5)
@@ -287,7 +300,7 @@ class SpartenVorlagen(unittest.TestCase):
         self.assertNotIn("{", text)
         # WP unverändert (Inhalt = Standard-Vorlage)
         betreff, text, quelle = mail_vorlagen.mail_fuer_angebot(self.s, self.wp, self.kunde, "Ida")
-        self.assertEqual(quelle, "Sparten-Vorlage WP")
+        self.assertEqual(quelle, "Standard-Vorlage")   # Nachtrag 08.10.2026: WP = Standard, keine Kopie
         self.assertEqual(betreff, "Ihr Wärmepumpen-Angebot AN-C-260102 der Friondo GmbH")
         werte = mail_vorlagen.werte_fuer_angebot(self.s, self.wp, self.kunde, "Ida")
         self.assertEqual(text, mail_vorlagen.einsetzen_html(

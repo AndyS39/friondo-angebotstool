@@ -1035,7 +1035,8 @@ Umgesetzt und getestet gegen die DB-Kopie `diagnose/v28_patches/db_P1.db`
   nur gespeicherte Werte (Bestandsimport ohne Ableitung), CSS-Raster mit `nowrap`.
 - Besetzung entscheidet die Sichtbarkeit; Fallback für Termine ohne Besetzung = Team-
   Mitglied/Person. Admin und Projektierung sehen alles (Team-Umschalter) [ANNAHME].
-- Kurzbericht beim Beenden optional [ANNAHME]; Abnahmeprotokoll beendet die Montage
+- Kurzbericht beim Beenden optional [ANNAHME] → *Nachtrag 08.10.2026: entfällt ganz
+  (Bemerkungen im Montagebericht)*; Abnahmeprotokoll beendet die Montage
   automatisch (Verlauf „Montage beendet mit Abnahme“). Block „Offene Montage-Aufgaben“
   entfällt; im Blatt gibt es keine Aufgaben mit rolle = montage, alte V1-Instanzen
   werden weiter über den Formular-Abschluss erledigt.
@@ -1050,7 +1051,9 @@ Umgesetzt und getestet gegen die DB-Kopie `diagnose/v28_patches/db_P1.db`
   Bezugsfeld zählt bei ≠ als Pflicht). „Logik prüfen“: unbekannte Typen/Optionsformen,
   gross außerhalb text, unbekannte Bezugsfelder = Fehler (Upload abgelehnt). Lesehilfe:
   Blatt „Lesehilfe“ der Live-Excel (v28, vom Orchestrator angelegt).
-- `ib_kaeltemittel` bleibt als freiwillige Angabe [ANNAHME des Plans – Rückfrage].
+- `ib_kaeltemittel` bleibt als freiwillige Angabe [ANNAHME des Plans – Rückfrage] →
+  **Antwort Andreas 08.10.2026: Nein** – Zeile aus dem Blatt „Formulare“ entfernt
+  (Inbetriebnahmeprotokoll 30 Felder).
 - Ordner der Montagebericht-Fotos: Zählerschrank → Elektro, Außengerät → Außengerät,
   Innengerät/Heizungsraum und Neue Anlage → Neue Anlage [ANNAHME des Plans].
 - Seitenname „Abweichungen & Bemerkungen“ [ANNAHME des Plans].
@@ -1072,3 +1075,21 @@ Umgesetzt und getestet gegen die DB-Kopie `diagnose/v28_patches/db_P1.db`
 6. Projektierung lesend im Montage-Backend (Team-Umschalter) gewollt?
 7. PDF-Zeilenpräfix des Wiederholfelds („Seriennummer n“ vs. „Systemkomponente n“).
 8. Alte Formular-Entwürfe beim Update leeren? (heute ignoriert)
+
+### Antworten Andreas 08.10.2026 auf die Rückfragen des Durchlaufs (Projektierung)
+
+| Rückfrage | Antwort | Umsetzung |
+|---|---|---|
+| P1-1 Volle Breite auch für Portal- und Lead-Seiten? | Ja | `main.breit` in `style.css` auf `max-width: none` (16 px Innenabstand) für alle breiten Seiten; Sonderregel `.pj-voll` entfällt |
+| P1-2 1 366 × 768: Board-Mindesthöhe vs. „kein Seiten-Scroll“ | Entscheidung Claude | Mindesthöhe 480 px nur ab 900 px Viewport-Höhe, darunter 320 px – bei 1 366 × 768 kein Seiten-Scroll |
+| P1-3 Außendienst als „Person“ an Feinplanungsterminen? | Nein, nur Innendienst | Personen-Liste bleibt Projektierung + Innendienst + Admin (kein Außendienst) |
+| P1-4 Sub-Einsatz mit Subunternehmer ohne Subteam | Entscheidung Claude | bleibt: Subunternehmer reicht, Besetzung darf leer bleiben, Monteure bleiben wählbar |
+| P2-1 `ib_kaeltemittel` behalten? | Nein | Zeile aus dem Blatt „Formulare“ entfernt (30 Felder), Tests angepasst |
+| P2-2 Foto-Ordner der neuen Montagebericht-Felder | Entscheidung Claude | bleibt: Zählerschrank → Elektro, Außengerät → Außengerät, Innengerät/Heizungsraum → Neue Anlage |
+| P2-3 Seitenname „Abweichungen & Bemerkungen“ | Entscheidung Claude | bleibt |
+| P2-4 Aufgabenbezogene Kommentare im Projektverlauf belassen? | Ja | bleibt (Verlaufs-Kommentarfeld → Notizen-Chat, 💬 an der Aufgabe → Projektverlauf) |
+| P2-5 Kurzbericht beim „Montage beenden“ ganz entfallen? | Entscheidung Claude | entfällt – Feld aus der Auftragsseite entfernt (Bemerkungen stehen im Montagebericht); ein mitgeschicktes Feld wird nur noch in den Verlauf übernommen |
+| P2-6 Projektierung lesend im Montage-Backend? | Entscheidung Claude | bleibt (Projektleiter sieht, was der Monteur sieht) |
+| P2-7 PDF-Präfix „Seriennummer n“ | ok | bleibt |
+| P2-8 Alte Formular-Entwürfe beim Update leeren? | Ja | `montage_formulare.migration_v28_entwuerfe` (migrate.py): Entwürfe mit alten Schlüsseln werden geleert |
+

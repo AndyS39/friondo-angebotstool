@@ -683,11 +683,15 @@ class HandelsvertreterGate(Basis):
         self.assertEqual(c2.get(f"/lead-management/anruf/{fremd.id}/vorschlag").status_code, 404)
         self.assertEqual(c2.get(f"/lead-management/anruf/{eigen.id}/vorschlag").status_code, 200)
         # v29 (PLAN_LEAD_V4 Phase 140, HV-Sicht – Agent L1): Anrufliste inkl. „Meine
-        # Anrufe“ und Rufnummernsuche sind für Handelsvertreter per URL 404
-        # (vorher: nur eigene Aktivitäten/Leads). Innendienst sieht beides weiter.
-        self.assertEqual(c2.get("/lead-management/anruf/meine?zeitraum=heute").status_code, 404)
-        self.assertEqual(c2.get("/lead-management/anruf/suche",
-                                params={"q": f"0203 88{22:04d}"}).status_code, 404)
+        # Anrufe“ und Rufnummernsuche sind für Handelsvertreter per URL gesperrt
+        # (vorher: nur eigene Aktivitäten/Leads). Nachtrag 08.10.2026 (Antwort Andreas):
+        # gesperrte Seiten leiten immer mit 303 auf die HV-Ansicht um (statt 404).
+        # Innendienst sieht beides weiter.
+        for pfad, params in (("/lead-management/anruf/meine", {"zeitraum": "heute"}),
+                             ("/lead-management/anruf/suche", {"q": f"0203 88{22:04d}"})):
+            r = c2.get(pfad, params=params, follow_redirects=False)
+            self.assertEqual(r.status_code, 303, pfad)
+            self.assertTrue(r.headers["location"].startswith("/lead-management/handelsvertreter?meldung="), pfad)
         meine = self.client.get("/lead-management/anruf/meine?zeitraum=heute&alle=1")
         self.assertEqual(meine.status_code, 200)
         self.assertIn(f"{NACHNAME}-22", meine.text.split("<tbody>", 1)[1])

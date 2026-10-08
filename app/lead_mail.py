@@ -23,6 +23,17 @@
 #    Adresse `wartet_adresse`; adresse_geaendert() gibt sie wieder frei.
 #  - Zulieferung docs/vorlagen/terminbestaetigung/<name>.html|.jpg wiederholbar
 #    einspielbar (zulieferung_einspielen), Migration migration_v29_mails.
+# Nachtrag 08.10.2026 (Antwort Andreas):
+#  - Kundenantwort holt einen nicht erreichten/zurückgestellten Lead zurück nach
+#    in_kontaktierung (kundenantwort_verbuchen, wie vor v29) – danach Innendienst manuell.
+#  - Status `fehler` legt zusätzlich eine Betriebsglocke (art system) an alle aktiven
+#    Admins an – einmal je Eintrag, in derselben Sitzung (_admins_glocke).
+#  - Graph-Nachrichten tragen replyTo = Leadmanager (Benutzer.email) + Absender termin@
+#    (antwort_adressen, _graph_senden(…, vorgang=)).
+#  - HV-Versandweg `entwurf` ist gebaut und Standard: fertige Terminbestätigung als
+#    .eml (eml_erstellen – HTML + Text, ICS, Inline-Bilder als CID; From = E-Mail des
+#    HV), To-Do „… aus dem eigenen Postfach senden“ mit Vorschau-Link; Migration
+#    offen → entwurf einmalig (Marker migration_v29_hv_entwurf).
 
 import base64
 import hashlib
@@ -37,7 +48,7 @@ from sqlalchemy.orm import Session, mapped_column
 from app import config
 
 from app.models import (AdProfil, Benutzer, KommunikationLog, Kunde, LeadQuelle,
-                        Vorgang, VotTermin)
+                        Vorgang, VotTermin, LEAD_PHASEN_NAMEN)
 
 # v29: Absender ohne Fallback – ABSENDER_FALLBACK bleibt nur für den
 # Protokoll-Hinweis („kein Fallback auf angebot@“) und Alt-Tests erhalten
@@ -58,6 +69,14 @@ TERMIN_VORLAGE = "terminbestaetigung"
 HV_TERMIN_VORLAGEN = ("terminbestaetigung", "terminerinnerung", "terminaenderung",
                       "terminabsage")
 HV_VERSANDWEGE = ("offen", "smtp", "entwurf", "leads_im_namen")
+# Nachtrag 08.10.2026 (Antwort Andreas): Standard = entwurf (.eml aus dem eigenen
+# Postfach des Handelsvertreters); `offen` bleibt wählbar (bisheriges Verhalten)
+HV_VERSANDWEG_STANDARD = "entwurf"
+EML_VORLAGEN_NAMEN = {"terminbestaetigung": "Terminbestaetigung", "terminerinnerung": "Terminerinnerung",
+                      "terminaenderung": "Terminaenderung", "terminabsage": "Terminabsage"}
+EML_TODO_TITEL = {"terminbestaetigung": "Terminbestätigung aus dem eigenen Postfach senden",
+                  "terminaenderung": "Terminänderung aus dem eigenen Postfach senden",
+                  "terminabsage": "Terminabsage aus dem eigenen Postfach senden"}
 # Vorlagenbaum des Editors (Phase 142): Kategorie-Key, Anzeigename, Vorlagen-Keys
 KATEGORIEN = [
     ("eingang", "Eingang", ["eingangsbestaetigung"]),
@@ -846,14 +865,35 @@ def ics_methode(inhalt: bytes | str) -> str:
 
 # --- Versand über Graph (ohne Fallback) ---------------------------------------------------
 
+def antwort_adressen(session: Session, vorgang: Vorgang | None, absender_adresse: str) -> list[str]:
+    """Nachtrag 08.10.2026 (Antwort Andreas): Reply-To der Lead-Mails = E-Mail des
+    zuständigen Leadmanagers (vorgang.leadmanager_id → Benutzer.email, nur wenn
+    gesetzt) UND der Absender termin@ – Antworten erreichen den Leadmanager, der
+    Lauf lead-mail-abruf sieht sie weiterhin in termin@. Wird VOR der Freigabe der
+    Verbindung gelesen (Sitzungsdisziplin v27)."""
+    adressen: list[str] = []
+    if vorgang is not None and getattr(vorgang, "leadmanager_id", None):
+        leadmanager = session.get(Benutzer, vorgang.leadmanager_id)
+        email = (getattr(leadmanager, "email", "") or "").strip() if leadmanager is not None else ""
+        if email and "@" in email and email.lower() != (absender_adresse or "").lower():
+            adressen.append(email)
+    if absender_adresse:
+        adressen.append(absender_adresse)
+    return adressen
+
+
 def _graph_senden(session: Session, an: str, betreff: str, body_html: str,
                   anhang_pfad: str | None,
-                  inline_bilder: list[tuple[str, Path, str]] | None = None) -> tuple[bool, str]:
+                  inline_bilder: list[tuple[str, Path, str]] | None = None,
+                  vorgang: Vorgang | None = None) -> tuple[bool, str]:
     """HTML-Mail (+ ICS, + Inline-Bilder) über Graph als absender_lead_mails
     („Senden als“). v29: KEIN Fallback auf ein anderes Postfach – scheitert der
-    Versand, kommt (False, Grund) zurück und der Aufrufer wiederholt/markiert."""
+    Versand, kommt (False, Grund) zurück und der Aufrufer wiederholt/markiert.
+    Nachtrag 08.10.2026: mit `vorgang` trägt die Nachricht replyTo = Leadmanager +
+    Absender (antwort_adressen); ohne Vorgang nur den Absender."""
     from app import graph_versand
     absender_adresse = _absender(session)
+    reply_to = antwort_adressen(session, vorgang, absender_adresse)
     # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Absender ist gelesen;
     # der commit speichert den gerenderten Eintrag – wie bisher am Ende des
     # Versand-Jobs; msal kann das Token über das Netz erneuern)
@@ -888,6 +928,8 @@ def _graph_senden(session: Session, an: str, betreff: str, body_html: str,
         "body": {"contentType": "html", "content": body_html},
         "toRecipients": [{"emailAddress": {"address": an}}],
         "from": {"emailAddress": {"address": absender_adresse}},
+        # Nachtrag 08.10.2026: Antworten an Leadmanager UND termin@
+        "replyTo": [{"emailAddress": {"address": adresse}} for adresse in reply_to],
     }
     if anhaenge:
         nachricht["attachments"] = anhaenge
@@ -938,6 +980,29 @@ def _mail_fehler_setzen(session: Session, vorgang: Vorgang, eintrag: Kommunikati
     kern.aktivitaet(session, vorgang.id, "mail_aus",
                     f"Mail nicht gesendet: {vorlage_name(session, eintrag.vorlage_key)}, "
                     f"{grund}"[:4000], ergebnis="fehler")
+    _admins_glocke(session, vorgang, eintrag, grund)
+
+
+def _admins_glocke(session: Session, vorgang: Vorgang, eintrag: KommunikationLog,
+                   grund: str) -> bool:
+    """Nachtrag 08.10.2026 (Antwort Andreas): Betriebsglocke (art system) an alle
+    aktiven Admins, wenn ein Lead-Mail-Eintrag auf `fehler` geht – genau einmal je
+    Eintrag (nur beim Übergang, nicht je Wiederholversuch), in DERSELBEN Sitzung
+    über projektierung.benachrichtigen (betrieb.admins_benachrichtigen öffnet eine
+    zweite Sitzung → Schreibsperre). Link: Warteschlange mit Filter fehler."""
+    from app import projektierung as kern_projekt
+    admin_ids = [b.id for b in session.query(Benutzer)
+                 .filter(Benutzer.rolle == "admin", Benutzer.aktiv.is_(True))
+                 .order_by(Benutzer.id)]
+    if not admin_ids:
+        return False
+    kunde = session.get(Kunde, vorgang.kunde_id) if vorgang.kunde_id else None
+    wer = kunde.anzeige_name if kunde is not None else (eintrag.an or "?")
+    text = (f"Lead-Mail nicht gesendet: {vorlage_name(session, eintrag.vorlage_key)} "
+            f"an {wer} – {grund}")
+    kern_projekt.benachrichtigen(session, admin_ids, text[:500],
+                                 "/lead-management/kommunikation?status=fehler", art="system")
+    return True
 
 
 def _mail_fehler_zuruecksetzen(session: Session, vorgang: Vorgang) -> bool:
@@ -1028,7 +1093,7 @@ def eintrag_verarbeiten(session: Session, eintrag: KommunikationLog) -> str:
         erfolg, fehler = _graph_senden(
             session, testadresse,
             f"[TEST an {eintrag.an}] {eintrag.betreff}"[:300],
-            eintrag.body_html, eintrag.anhang_pfad, inline)
+            eintrag.body_html, eintrag.anhang_pfad, inline, vorgang=vorgang)
         if not erfolg:
             return _versand_fehlgeschlagen(session, vorgang, eintrag, fehler)
         eintrag.status = "gesendet"
@@ -1036,7 +1101,8 @@ def eintrag_verarbeiten(session: Session, eintrag: KommunikationLog) -> str:
     else:   # live
         inline = inline_bilder_aus_html(session, eintrag.body_html)
         erfolg, fehler = _graph_senden(session, eintrag.an, eintrag.betreff,
-                                       eintrag.body_html, eintrag.anhang_pfad, inline)
+                                       eintrag.body_html, eintrag.anhang_pfad, inline,
+                                       vorgang=vorgang)
         if not erfolg:
             return _versand_fehlgeschlagen(session, vorgang, eintrag, fehler)
         eintrag.status = "gesendet"
@@ -1188,14 +1254,26 @@ def kundenantwort_verbuchen(session: Session, vorgang: Vorgang, absender_adresse
     """Kundenantwort auf eine Lead-Mail (termin@ über lead_mail_abruf, leads@
     über lead_parser): Aktivität mail_ein, Glocke art kundenantwort (standard-
     mäßig gesperrt), Wiedervorlage „jetzt“ bei offenen Leads, damit die
-    Antwort unter „Fällig heute“ auftaucht – KEIN Phasenwechsel mehr („Kunden-
-    antwort weckt den Lead“ ist mit Nurture entfallen) [ANNAHME]."""
+    Antwort unter „Fällig heute“ auftaucht.
+    Nachtrag 08.10.2026 (Antwort Andreas): meldet sich der Kunde, kommt ein
+    nicht erreichter oder zurückgestellter Lead zurück in die Kontaktierung
+    (in_kontaktierung, Zurückstellung aufgehoben, Aktivität „Kunde hat
+    geantwortet – zurück in die Kontaktierung“) – so wie vor v29 „Kundenantwort
+    weckt den Lead“ (lead_parser, Stand 1e317e7); den weiteren Weg geht der
+    Innendienst manuell, keine Nurture-Logik."""
     from app import leadmanagement as kern
     from app.models import LeadPosteingang
     kern.aktivitaet(session, vorgang.id, "mail_ein",
                     f"Antwort von {absender_adresse}: {betreff} – {(body or '')[:200]}")
     if kern.vorgang_offen(vorgang):
         vorgang.naechste_aktion_am = datetime.now()
+        alt = vorgang.lead_phase or ""
+        if alt in ("nicht_erreicht", "zurueckgestellt"):
+            vorgang.lead_phase = "in_kontaktierung"
+            vorgang.zurueckgestellt_bis = None
+            kern.aktivitaet(session, vorgang.id, "status",
+                            "Kunde hat geantwortet – zurück in die Kontaktierung "
+                            f"(vorher {LEAD_PHASEN_NAMEN.get(alt, alt)})")
     if vorgang.leadmanager_id:
         kern.benachrichtigen(session, [vorgang.leadmanager_id],
                              f"Antwort-Mail von {absender_adresse}: {betreff}",
@@ -1209,30 +1287,157 @@ def kundenantwort_verbuchen(session: Session, vorgang: Vorgang, absender_adresse
     session.flush()
 
 
-# --- Handelsvertreter-Versandwege (OFFEN 2) – Erweiterungspunkte ----------------------------
+# --- Handelsvertreter-Versandwege (OFFEN 2) ---------------------------------------------------
+# Vertrag (Nachtrag 08.10.2026): jede Funktion liefert (eintrag | None, hinweis, erledigt).
+# eintrag → Warteschlangen-Eintrag wie bei angestellten AD; erledigt=True → der Weg hat
+# alles selbst erledigt (Aktivität/To-Do), kein Rückfall auf „offen“; sonst schreibt
+# kern.mail_planen den Hinweis als Aktivität und behandelt den Lead wie „offen“.
 
 def hv_versandweg(session: Session) -> str:
-    wert = (_parameter(session, "hv_versandweg", "offen") or "offen").strip()
-    return wert if wert in HV_VERSANDWEGE else "offen"
+    wert = (_parameter(session, "hv_versandweg", HV_VERSANDWEG_STANDARD)
+            or HV_VERSANDWEG_STANDARD).strip()
+    return wert if wert in HV_VERSANDWEGE else HV_VERSANDWEG_STANDARD
+
+
+def hv_benutzer(session: Session, vorgang: Vorgang, termin=None):
+    """Handelsvertreter eines Termin-/Vorgangs (termin.ad_id, sonst vorgang.ad_id)
+    oder None, wenn der Zuständige kein Handelsvertreter ist."""
+    from app import lead_v2
+    hv_id = (termin.ad_id if termin is not None and getattr(termin, "ad_id", None)
+             else getattr(vorgang, "ad_id", None))
+    hv = session.get(Benutzer, hv_id) if hv_id else None
+    return hv if hv is not None and lead_v2.ist_handelsvertreter(session, hv) else None
+
+
+def hv_absender(session: Session, vorgang: Vorgang, termin=None) -> str:
+    """E-Mail des Handelsvertreters aus der Benutzerverwaltung (Absender der
+    .eml) – leer, wenn nicht gepflegt."""
+    hv = hv_benutzer(session, vorgang, termin)
+    return (hv.email or "").strip() if hv is not None else ""
 
 
 def hv_versand_smtp(session: Session, vorgang: Vorgang, termin, vorlage_key: str):
     """Versandweg `smtp` (Erweiterungspunkt, noch ohne Inhalt): SMTP-Zugang je HV
     im Profil (App-Passwort, verschlüsselt gespeichert) – siehe
-    docs/leadmanagement-entscheidungen.md V4. Liefert (None, Hinweis)."""
-    return None, "Versandweg smtp noch nicht umgesetzt – wie „offen“ behandelt"
+    docs/leadmanagement-entscheidungen.md V4. Liefert (None, Hinweis, False)."""
+    return None, "Versandweg smtp noch nicht umgesetzt – wie „offen“ behandelt", False
+
+
+def _dateiname_sauber(text: str, standard: str = "Kunde") -> str:
+    text = (text or "").strip()
+    for a, b in (("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("Ä", "Ae"), ("Ö", "Oe"), ("Ü", "Ue"),
+                 ("ß", "ss"), ("é", "e"), ("è", "e")):
+        text = text.replace(a, b)
+    text = re.sub(r"[^A-Za-z0-9_-]+", "_", text).strip("_")
+    return text[:60] or standard
+
+
+def eml_dateiname(vorlage_key: str, kunde) -> str:
+    """Terminbestaetigung_<Kunde>.eml (Vorlage + Kundenname, ASCII-sicher)."""
+    return (f"{EML_VORLAGEN_NAMEN.get(vorlage_key, 'Mail')}_"
+            f"{_dateiname_sauber(kunde.anzeige_name if kunde is not None else '')}.eml")
+
+
+def eml_erstellen(session: Session, vorgang: Vorgang, termin: VotTermin,
+                  vorlage_key: str = TERMIN_VORLAGE) -> dict:
+    """Nachtrag 08.10.2026 (Antwort Andreas), Versandweg `entwurf`: die fertige
+    Termin-Mail als RFC-822-Datei (.eml) – multipart/mixed(multipart/alternative
+    (Text, multipart/related(HTML + Inline-Bilder als CID)), ICS-Anhang). Absender =
+    E-Mail des Handelsvertreters aus der Benutzerverwaltung (fehlt sie: From leer,
+    Hinweis), Empfänger = Kunde, Betreff aus der Vorlage des HV (vorlage_rendern),
+    Kopf X-Unsent: 1 (Outlook öffnet die Datei als Entwurf mit Senden-Knopf).
+    Kein Netzaufruf, kein Warteschlangen-Eintrag. Liefert {bytes, dateiname, betreff,
+    absender, an, hinweise, vorlage_key, ics_pfad}."""
+    import email.policy
+    from email.message import EmailMessage
+    from email.utils import formataddr, formatdate, make_msgid
+    kunde = session.get(Kunde, vorgang.kunde_id) if vorgang.kunde_id else None
+    hv = hv_benutzer(session, vorgang, termin)
+    betreff, body_html, key = vorlage_rendern(session, vorlage_key, vorgang, termin)
+    text = html_zu_text(body_html)
+    hinweise = []
+    absender_hv = (hv.email or "").strip() if hv is not None else ""
+    if not absender_hv:
+        hinweise.append("Keine E-Mail-Adresse für "
+                        f"{hv.name if hv is not None else 'den Handelsvertreter'} in der "
+                        "Benutzerverwaltung – der Absender bleibt leer, bitte im Mailprogramm ergänzen.")
+    an = (kunde.email or "").strip() if kunde is not None else ""
+    if not an:
+        hinweise.append("Kunde ohne E-Mail-Adresse – Empfänger bitte im Mailprogramm ergänzen.")
+    msg = EmailMessage(policy=email.policy.SMTP)
+    msg["Subject"] = betreff
+    if absender_hv:
+        msg["From"] = formataddr((hv.name, absender_hv))
+    if an:
+        msg["To"] = formataddr((kunde.anzeige_name, an))
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain="friondo.de")
+    msg["X-Unsent"] = "1"
+    msg["X-Friondo-Vorgang"] = str(vorgang.id)
+    msg.set_content(text)
+    msg.add_alternative(body_html, subtype="html")
+    bilder = inline_bilder_aus_html(session, body_html)
+    if bilder:
+        html_teil = msg.get_payload()[-1]
+        for cid, pfad, mime in bilder:
+            haupt, _, unter = mime.partition("/")
+            try:
+                daten = Path(pfad).read_bytes()
+            except OSError:
+                continue
+            html_teil.add_related(daten, maintype=haupt or "image", subtype=unter or "jpeg",
+                                  cid=f"<{cid}>", filename=Path(pfad).name)
+    ics_pfad = None
+    if termin is not None and termin.beginn is not None and kunde is not None:
+        ics_pfad = ics_erstellen(session, termin, vorgang,
+                                 methode="CANCEL" if vorlage_key == "terminabsage" else "REQUEST")
+    if ics_pfad and Path(ics_pfad).exists():
+        ics_bytes = Path(ics_pfad).read_bytes()
+        msg.add_attachment(ics_bytes, maintype="text", subtype="calendar",
+                           filename=Path(ics_pfad).name,
+                           params={"method": ics_methode(ics_bytes)})
+    return {"bytes": msg.as_bytes(), "dateiname": eml_dateiname(vorlage_key, kunde),
+            "betreff": betreff, "absender": absender_hv, "an": an, "hinweise": hinweise,
+            "vorlage_key": key, "ics_pfad": ics_pfad}
 
 
 def hv_versand_entwurf(session: Session, vorgang: Vorgang, termin, vorlage_key: str):
-    """Versandweg `entwurf` (Erweiterungspunkt, noch ohne Inhalt): fertige Mail
-    als .eml-Download, der HV sendet aus seinem Konto. Liefert (None, Hinweis)."""
-    return None, "Versandweg entwurf noch nicht umgesetzt – wie „offen“ behandelt"
+    """Versandweg `entwurf` (Nachtrag 08.10.2026, Standard): keine Warteschlangen-
+    Mail – Aktivität „<Vorlage> als Entwurf (.eml) bereitgestellt – Versand aus dem
+    eigenen Postfach des HV“ und To-Do an den Handelsvertreter „… aus dem eigenen
+    Postfach senden“ (fällig sofort) mit Link auf die Vorschau (?vorlage=…, dort
+    „.eml herunterladen“). Die Erinnerung −24 h bleibt wie bei „offen“ nur
+    Aktivität [ANNAHME]. Liefert (None, "", True) – vollständig behandelt."""
+    from app import lead_todos
+    from app import leadmanagement as kern
+    hv = hv_benutzer(session, vorgang, termin)
+    name = vorlage_name(session, vorlage_key)
+    absender_hv = (hv.email or "").strip() if hv is not None else ""
+    termin_id = getattr(termin, "id", None) if termin is not None else None
+    vorschau = (f"/lead-management/lead/{vorgang.id}/termin/{termin_id}/vorschau?vorlage={vorlage_key}"
+                if termin_id else "")
+    text = (f"{name} als Entwurf (.eml) bereitgestellt – Versand aus dem eigenen Postfach des HV"
+            + (f" ({hv.name})" if hv is not None else "")
+            + ("" if absender_hv else " – Hinweis: keine E-Mail-Adresse des HV in der Benutzerverwaltung")
+            + (f"; Vorschau: {vorschau}" if vorschau else ""))
+    kern.aktivitaet(session, vorgang.id, "mail_aus", text[:4000], ergebnis="hv_entwurf")
+    if hv is None or not termin_id or vorlage_key == "terminerinnerung":
+        return None, "", True
+    titel = EML_TODO_TITEL.get(vorlage_key, f"{name} aus dem eigenen Postfach senden")
+    try:
+        lead_todos.anlegen(session, None, hv.id, titel,
+                           text=("Vorschau öffnen, „.eml herunterladen“, Datei im eigenen "
+                                 f"Mailprogramm öffnen, prüfen und senden: {vorschau}"),
+                           faellig_am=datetime.now(), vorgang_id=vorgang.id)
+    except ValueError:
+        pass
+    return None, "", True
 
 
 def hv_versand_leads_im_namen(session: Session, vorgang: Vorgang, termin, vorlage_key: str):
     """Versandweg `leads_im_namen` (Erweiterungspunkt, noch ohne Inhalt): Versand
-    über termin@ im Namen des HV mit Reply-To = HV. Liefert (None, Hinweis)."""
-    return None, "Versandweg leads_im_namen noch nicht umgesetzt – wie „offen“ behandelt"
+    über termin@ im Namen des HV mit Reply-To = HV. Liefert (None, Hinweis, False)."""
+    return None, "Versandweg leads_im_namen noch nicht umgesetzt – wie „offen“ behandelt", False
 
 
 HV_VERSAND_FUNKTIONEN = {"smtp": hv_versand_smtp, "entwurf": hv_versand_entwurf,
@@ -1465,10 +1670,20 @@ def migration_v29_mails(session: Session) -> list[str]:
     from app.models import LeadParameter, einstellung_holen, einstellung_setzen
     meldungen: list[str] = []
     vorhanden = {p.name for p in session.query(LeadParameter.name)}
-    for name, wert in ((PARAMETER_ABSENDER, ABSENDER_STANDARD), ("hv_versandweg", "offen")):
+    for name, wert in ((PARAMETER_ABSENDER, ABSENDER_STANDARD),
+                       ("hv_versandweg", HV_VERSANDWEG_STANDARD)):
         if name not in vorhanden:
             kern.parameter_setzen(session, name, wert)
             meldungen.append(f"Lead V4: Parameter {name} = {wert}")
+    # Nachtrag 08.10.2026 (Antwort Andreas): HV-Versandweg einmalig offen → entwurf
+    # (Terminbestätigung als .eml aus dem eigenen Postfach); `offen` bleibt danach
+    # in der Parametrierung wählbar – Marker, damit die Wahl nicht erneut überschrieben wird
+    if einstellung_holen(session, "migration_v29_hv_entwurf", "") != "erledigt":
+        if hv_versandweg(session) == "offen":
+            kern.parameter_setzen(session, "hv_versandweg", "entwurf")
+            meldungen.append("Lead V4: hv_versandweg offen → entwurf (Terminbestätigung als "
+                             ".eml aus dem eigenen Postfach des Handelsvertreters)")
+        einstellung_setzen(session, "migration_v29_hv_entwurf", "erledigt")
     neu = absender(session)
     offene = (session.query(KommunikationLog)
               .filter(KommunikationLog.status.in_(("geplant", STATUS_WARTET_ADRESSE)))

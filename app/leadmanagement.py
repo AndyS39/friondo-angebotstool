@@ -87,7 +87,9 @@ PARAMETER_START = {
     "ohne_schritt_tage": "2",           # Phase 120: Dashboard „Ohne nächsten Schritt“ (Tage seit letztem Versuch)
     # --- v29: Lead-Management V4 (PLAN_LEAD_V4 Phase 142) ---
     "absender_lead_mails": "termin@friondo.de",   # Absender ALLER Lead-Mails, kein Fallback
-    "hv_versandweg": "offen",           # OFFEN 2: offen | smtp | entwurf | leads_im_namen
+    # OFFEN 2: offen | smtp | entwurf | leads_im_namen – Nachtrag 08.10.2026 (Antwort
+    # Andreas): Standard entwurf (.eml aus dem eigenen Postfach des HV), offen bleibt wählbar
+    "hv_versandweg": "entwurf",
 }
 
 
@@ -1058,9 +1060,11 @@ def mail_planen(session: Session, vorgang: Vorgang, vorlage_key: str,
     entstehen. v29 (Phase 142): Absender absender_lead_mails am Eintrag;
     Terminbestätigung → Vorlage des zugewiesenen Vertrieblers (sonst Standard
     mit Hinweis-Aktivität); Termin-Mails für Handelsvertreter-Leads folgen dem
-    Schalter hv_versandweg (offen = keine Mail, Aktivität + To-Do; die drei
-    übrigen Wege sind Erweiterungspunkte in lead_mail und verhalten sich bis
-    zur Umsetzung wie offen); unzustellbare Adresse → Status wartet_adresse.
+    Schalter hv_versandweg (offen = keine Mail, Aktivität + To-Do mit Vorschau;
+    Nachtrag 08.10.2026: entwurf = Standard, lead_mail.hv_versand_entwurf stellt
+    die fertige Mail als .eml bereit – Aktivität + To-Do, keine Warteschlange;
+    smtp/leads_im_namen sind Erweiterungspunkte und verhalten sich bis zur
+    Umsetzung wie offen); unzustellbare Adresse → Status wartet_adresse.
     Rückgabe None bei „keine Mail“."""
     from app import lead_mail
     from app.models import KommunikationLog
@@ -1078,8 +1082,12 @@ def mail_planen(session: Session, vorgang: Vorgang, vorlage_key: str,
             weg = lead_mail.hv_versandweg(session)
             if weg != "offen":
                 funktion = lead_mail.HV_VERSAND_FUNKTIONEN.get(weg)
-                eintrag, hinweis = funktion(session, vorgang, termin, vorlage_key) if funktion else (None, "")
-                if eintrag is not None:
+                # Vertrag (Nachtrag 08.10.2026): (eintrag, hinweis, erledigt) – erledigt=True
+                # heißt: der Weg hat Aktivität/To-Do selbst geschrieben (entwurf), kein
+                # Rückfall auf „offen“
+                eintrag, hinweis, erledigt = (funktion(session, vorgang, termin, vorlage_key)
+                                              if funktion else (None, "", False))
+                if eintrag is not None or erledigt:
                     return eintrag
                 if hinweis:
                     aktivitaet(session, vorgang.id, "system", hinweis)

@@ -1,8 +1,9 @@
 # Tests PLAN_LEAD_V4 (v29, Phase 144 – Agent L1): Teile (a)–(h) und (m).
 # (a) HV-Login (Cookie v2, PIN-Wechsel erledigt): Icon-Leiste nur vier Einträge,
-#     404 auf Hauptboard/Deals/Kontaktiert/Infoabend/Anrufliste/Vorlagen, Gate
-#     HINTER der v27-Middleware (PIN-Pflichtwechsel zuerst), Direktlink aus dem
-#     Tool → HV-Ansicht mit Hinweis; (b) Karte für HV nur eigene Pins;
+#     gesperrte Seiten (Hauptboard/Deals/Kontaktiert/Infoabend/Anrufliste/Vorlagen …)
+#     leiten IMMER mit 303 auf die HV-Ansicht mit Hinweis um (Nachtrag 08.10.2026,
+#     Antwort Andreas – vorher 404 ohne Referer), Gate HINTER der v27-Middleware
+#     (PIN-Pflichtwechsel zuerst); (b) Karte für HV nur eigene Pins;
 # (c) Sammelaktion „An Handelsvertreter verschieben“ an René und an Simon,
 #     Ausschluss-Lead (Kanal Enni) übersprungen und gemeldet, keine Glocke;
 # (d) Flyout-Markup vorhanden, kein overflow-x in der Nav-Spalte;
@@ -52,6 +53,14 @@ HV_GESPERRT = ["/lead-management/hauptboard", "/lead-management/terminiert",
                "/lead-management/statistik/kanal", "/lead-management/posteingang",
                "/lead-management/import", "/lead-management/neu",
                "/lead-management/boards/haupt", "/lead-management/kommunikation"]
+# Seiten des V1-Routers (routers/leadmanagement.py, eigenes Demo-Gate _gate): sie
+# leiten erst um, wenn _gate als erste Zeile lead_v2.hv_umleitung(request, session)
+# aufruft (Vorschlag LC 4.1); bis dahin antwortet dort das Demo-Gate mit 404
+HV_GESPERRT_V1 = ["/lead-management/anrufliste", "/lead-management/board",
+                  "/lead-management/kalender", "/lead-management/uebersicht",
+                  "/lead-management/statistik", "/lead-management/statistik/kanal",
+                  "/lead-management/posteingang", "/lead-management/import",
+                  "/lead-management/neu", "/lead-management/kommunikation"]
 
 
 def mit_wiederholung(funktion, versuche=12, pause=0.5):
@@ -257,15 +266,32 @@ class A_HandelsvertreterSicht(Basis):
         # Login-Ziel bleibt die HV-Ansicht (Modul-Einstieg → Dashboard, v23)
         r = self.client_paolo.get("/lead-management", follow_redirects=False)
         self.assertEqual((r.status_code, r.headers["location"]), (303, "/lead-management/dashboard"))
-        # gesperrte Seiten: server-seitig 404 (ohne Referer)
+        # gesperrte Seiten: Nachtrag 08.10.2026 (Antwort Andreas) – IMMER 303 auf die
+        # HV-Ansicht mit Hinweis, auch ohne Referer (Lesezeichen/Mail-Link) und für
+        # JSON-Routen; vorher 404 ohne Referer
+        ziel = "/lead-management/handelsvertreter?meldung="
+        v1_umgeleitet = "hv_umleitung" in (PROJEKT / "app" / "routers" / "leadmanagement.py").read_text(encoding="utf-8")
         for pfad in HV_GESPERRT:
-            self.assertEqual(self.client_paolo.get(pfad, follow_redirects=False).status_code, 404, pfad)
-        # Direktlink aus dem Tool (Referer derselben Instanz) → HV-Ansicht mit Hinweis
+            r = self.client_paolo.get(pfad, follow_redirects=False)
+            if r.status_code == 404 and pfad in HV_GESPERRT_V1 and not v1_umgeleitet:
+                continue   # V1-Demo-Gate ohne hv_umleitung (siehe HV_GESPERRT_V1)
+            self.assertEqual(r.status_code, 303, pfad)
+            self.assertTrue(r.headers["location"].startswith(ziel), (pfad, r.headers["location"]))
+            self.assertIn("Diese Seite gibt es in der Handelsvertreter-Sicht nicht",
+                          unquote_plus(r.headers["location"]), pfad)
+        r = self.client_paolo.get("/lead-management/boards/haupt", follow_redirects=False,
+                                  headers={"Accept": "application/json"})
+        self.assertEqual(r.status_code, 303)
+        # Direktlink aus dem Tool (Referer derselben Instanz) → dasselbe Ziel
         r = self.client_paolo.get("/lead-management/hauptboard", follow_redirects=False,
                                   headers={"referer": "http://testserver/lead-management/dashboard"})
         self.assertEqual(r.status_code, 303)
-        self.assertTrue(r.headers["location"].startswith("/lead-management/handelsvertreter?meldung="))
+        self.assertTrue(r.headers["location"].startswith(ziel))
         self.assertIn("Handelsvertreter-Sicht", unquote_plus(r.headers["location"]))
+        # die Zielseite zeigt den Hinweis als Meldung
+        seite = self.client_paolo.get(r.headers["location"])
+        self.assertEqual(seite.status_code, 200)
+        self.assertIn("Diese Seite gibt es in der Handelsvertreter-Sicht nicht", seite.text)
         # erlaubt: Karte, To-Dos, Handelsvertreter, eigene Kartei + Assistent; fremde Kartei 404
         for pfad in ("/lead-management/karte", "/lead-management/todos",
                      "/lead-management/handelsvertreter", f"/lead-management/lead/{eigen.id}",
@@ -292,7 +318,7 @@ class A_HandelsvertreterSicht(Basis):
                           "todos", "handelsvertreter", "mehr"])
 
     def test_gate_hinter_der_middleware(self):
-        """v27: erst Login/PIN-Pflichtwechsel, dann das 404-Gate."""
+        """v27: erst Login/PIN-Pflichtwechsel, dann das HV-Gate (303 auf die HV-Ansicht)."""
         anonym = TestClient(app)
         r = anonym.get("/lead-management/hauptboard", follow_redirects=False)
         self.assertEqual((r.status_code, r.headers["location"]), (303, "/login"))
@@ -305,7 +331,10 @@ class A_HandelsvertreterSicht(Basis):
         finally:
             self.paolo.pin_wechsel_noetig = False
             self.s.commit()
-        self.assertEqual(self.client_paolo.get("/lead-management/hauptboard").status_code, 404)
+        # Nachtrag 08.10.2026: nach dem PIN-Wechsel greift das Gate – 303 auf die HV-Ansicht
+        r = self.client_paolo.get("/lead-management/hauptboard", follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        self.assertTrue(r.headers["location"].startswith("/lead-management/handelsvertreter?meldung="))
         self.assertTrue(lead_v2.hv_sicht(self.s, self.paolo))
         self.assertFalse(lead_v2.hv_sicht(self.s, self.admin))
         self.assertTrue(lead_v2.hv_pfad_gesperrt("/lead-management/statistik/kanal"))
@@ -518,6 +547,10 @@ class F_Dashboard(Basis):
         link = re.search(r'id="lm-routen-link" href="([^"]+)"', seite).group(1).replace("&amp;", "&")
         self.assertEqual(link, "https://www.google.com/maps/dir/?api=1&origin=Arnold-Overbeck-Stra%C3%9Fe+63-65,+47139+Duisburg&travelmode=driving")
         self.assertIn('target="_blank"', seite)
+        # Nachtrag 08.10.2026 (Antwort Andreas): „Mir zugeteilte Vorgänge“ ist vom
+        # Dashboard entfernt (Block und Kontext); lead_dashboard.zugeteilte bleibt als Funktion
+        self.assertNotIn("Mir zugeteilte Vorgänge", seite)
+        self.assertNotIn('id="zugeteilt"', seite)
         # Daten: Vorname sonst Name, Kacheln nur die drei Zahlen (+ Mails mit Fehler)
         daten = lead_dashboard.daten(self.s, self.claudia)
         self.assertEqual(daten["anrede"], "Claudia")
@@ -526,6 +559,8 @@ class F_Dashboard(Basis):
         self.assertEqual(set(daten["kacheln"]) >= {"faellig", "kommend", "todos", "mails_fehler"}, True)
         self.assertNotIn("ohne_schritt", daten["kacheln"])
         self.assertNotIn("angebot_wv", daten)
+        self.assertNotIn("zugeteilt", daten)
+        self.assertGreaterEqual(lead_dashboard.zugeteilte(self.s, self.claudia, False)["gesamt"], 2)
         # Gruppierung nach Datum, „mehr anzeigen“ ab 10 Zeilen
         gruppen = lead_dashboard.kommende_gruppieren(daten["lead_wv_kommend"])
         self.assertEqual([g["datum"] for g in gruppen], sorted({g["datum"] for g in gruppen}))
@@ -814,15 +849,105 @@ class M_Terminassistent(Basis):
         self.assertEqual(self.cookie_client(self.rene).post(f"/lead-management/dashboard/sperrzeit/{sperr[0].id}/loeschen",
                                                             follow_redirects=False).status_code, 303)
         self.assertEqual(self.s.query(VotTermin).filter_by(id=sperr[0].id).count(), 0)   # Admin darf löschen
-        # Innendienst darf keine Sperrzeit anlegen
-        self.assertEqual(self.client.post("/lead-management/dashboard/sperrzeit",
-                                          data={"datum": "2030-01-01", "von": "08:00", "bis": "09:00"},
-                                          follow_redirects=False).status_code, 404)
+        # Nachtrag 08.10.2026 (Antwort Andreas): Admin/Innendienst dürfen Sperrzeiten eines
+        # HV anlegen – benutzer_id = Ziel-HV (ohne Ziel: Meldung), erstellt_von = Innendienst
+        r = self.client.post("/lead-management/dashboard/sperrzeit",
+                             data={"datum": "2030-01-01", "von": "08:00", "bis": "09:00"},
+                             follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        self.assertIn("Handelsvertreter wählen", unquote_plus(r.headers["location"]))
+        r = self.client.post("/lead-management/dashboard/sperrzeit",
+                             data={"datum": "2030-01-01", "von": "08:00", "bis": "09:00", "bemerkung": "Urlaub",
+                                   "benutzer_id": str(self.paolo.id),
+                                   "zurueck": "/lead-management/handelsvertreter#sperrzeiten"},
+                             follow_redirects=False)
+        self.assertEqual(r.status_code, 303, r.text)
+        self.assertTrue(r.headers["location"].startswith("/lead-management/handelsvertreter"))
+        self.assertIn(f"für {self.paolo.name} eingetragen (von {self.admin.name})", unquote_plus(r.headers["location"]))
+        self.s.expire_all()   # SQLite vergibt die gelöschte ID neu – Identity-Map nicht wiederverwenden
+        fremd = self.s.query(VotTermin).filter_by(ad_id=self.paolo.id, typ="sperrzeit", grund_text="Urlaub").one()
+        self.assertEqual((fremd.erstellt_von, fremd.vorgang_id), (self.admin.id, 0))
+        # HV-Übersicht des Innendienstes: Formular + Liste je Vertreter mit „eingetragen von“
+        hv_seite = self.client.get("/lead-management/handelsvertreter").text
+        self.assertIn('id="lm-sperrzeit-form-hv"', hv_seite)
+        self.assertIn(f'<option value="{self.paolo.id}">{self.paolo.name}</option>', hv_seite)
+        self.assertIn(f'data-sperrzeit="{fremd.id}"', hv_seite)
+        self.assertIn(f"eingetragen von {self.admin.name}", hv_seite)
+        self.assertIn("Urlaub", hv_seite)
+        # … und im Dashboard des HV
+        hv = inhalt(self.client_paolo.get("/lead-management/dashboard").text)
+        self.assertIn(f"eingetragen von {self.admin.name}", hv)
+        # Ziel muss ein Handelsvertreter sein; angestellter AD darf gar nicht; ein HV legt
+        # nur eigene an (benutzer_id wird ignoriert); die HV-Übersicht zeigt dem HV kein Formular
+        r = self.client.post("/lead-management/dashboard/sperrzeit",
+                             data={"datum": "2030-01-02", "von": "08:00", "bis": "09:00", "benutzer_id": str(self.horst.id)},
+                             follow_redirects=False)
+        self.assertIn("kein Handelsvertreter", unquote_plus(r.headers["location"]))
+        self.assertEqual(self.cookie_client(self.horst).post("/lead-management/dashboard/sperrzeit",
+                                                             data={"datum": "2030-01-02", "von": "08:00", "bis": "09:00",
+                                                                   "benutzer_id": str(self.paolo.id)},
+                                                             follow_redirects=False).status_code, 404)
+        self.client_paolo.post("/lead-management/dashboard/sperrzeit",
+                               data={"datum": "2030-01-03", "von": "08:00", "bis": "09:00", "bemerkung": "eigene",
+                                     "benutzer_id": str(self.rene.id)}, follow_redirects=False)
+        self.s.expire_all()
+        eigene = self.s.query(VotTermin).filter_by(typ="sperrzeit", grund_text="eigene").one()
+        self.assertEqual((eigene.ad_id, eigene.erstellt_von), (self.paolo.id, self.paolo.id))
+        self.assertNotIn('id="lm-sperrzeit-form-hv"', self.client_paolo.get("/lead-management/handelsvertreter").text)
+        # Löschen aus der HV-Übersicht (gleiche Route, zurueck = Übersicht)
+        r = self.client.post(f"/lead-management/dashboard/sperrzeit/{fremd.id}/loeschen",
+                             data={"zurueck": "/lead-management/handelsvertreter#sperrzeiten"}, follow_redirects=False)
+        self.assertTrue(r.headers["location"].startswith("/lead-management/handelsvertreter"))
+        self.assertEqual(self.s.query(VotTermin).filter_by(id=fremd.id).count(), 0)
         # Terminkalender des Innendienstes (Sperrzeit ohne Vorgang) rendert
         self.client_paolo.post("/lead-management/dashboard/sperrzeit",
                                data={"datum": erster.strftime("%Y-%m-%d"), "von": "13:00", "bis": "14:00"},
                                follow_redirects=False)
         self.assertEqual(self.client.get(f"/lead-management/kalender?ad_id={self.paolo.id}").status_code, 200)
+
+    def test_sperrzeit_exakt_ohne_puffer(self):
+        """Nachtrag 08.10.2026 (Antwort Andreas): eine Sperrzeit zählt exakt von–bis –
+        ein Vorschlag direkt an der Sperrzeit-Grenze bleibt erlaubt, eine Überlappung
+        nicht; die manuelle Konfliktprüfung meldet an der Grenze keinen Puffer."""
+        v = self.lead(83, ad_id=self.paolo.id)
+        j = self.client_paolo.get(f"/lead-management/lead/{v.id}/termin/vorschlaege.json?neu=1").json()
+        self.assertEqual(j["status"], "ok", j)
+        erster = j["vorschlaege"][0]
+        beginn = datetime.strptime(erster["beginn"], "%Y-%m-%dT%H:%M")
+        ende = datetime.strptime(erster["ende"], "%Y-%m-%dT%H:%M")
+        # Sperrzeit beginnt genau am Ende von Vorschlag 1 (vom Innendienst eingetragen)
+        r = self.client.post("/lead-management/dashboard/sperrzeit",
+                             data={"datum": ende.strftime("%Y-%m-%d"), "von": ende.strftime("%H:%M"),
+                                   "bis": (ende + timedelta(hours=1)).strftime("%H:%M"),
+                                   "bemerkung": "Grenze", "benutzer_id": str(self.paolo.id)},
+                             follow_redirects=False)
+        self.assertIn("eingetragen", unquote_plus(r.headers["location"]))
+        j2 = self.client_paolo.get(f"/lead-management/lead/{v.id}/termin/vorschlaege.json?neu=1").json()
+        self.assertIn(erster["beginn"], [x["beginn"] for x in j2["vorschlaege"]], j2)
+        k = lead_termin.konflikte(self.s, self.paolo.id, beginn, ende)
+        self.assertEqual((k["voll"], k["puffer"]), ([], []))
+        self.assertFalse(k["sperren"])
+        # dieselbe Sperrzeit 15 Minuten früher → Überschneidung: Vorschlag entfällt, Buchung gesperrt
+        self.s.expire_all()
+        sperr = self.s.query(VotTermin).filter_by(ad_id=self.paolo.id, typ="sperrzeit", grund_text="Grenze").one()
+        sperr.beginn = ende - timedelta(minutes=15)
+        self.s.commit()
+        lead_termin.vorschlaege_cache_leeren()
+        j3 = self.client_paolo.get(f"/lead-management/lead/{v.id}/termin/vorschlaege.json?neu=1").json()
+        self.assertNotIn(erster["beginn"], [x["beginn"] for x in j3["vorschlaege"]])
+        k = lead_termin.konflikte(self.s, self.paolo.id, beginn, ende)
+        self.assertEqual([t.id for t in k["voll"]], [sperr.id])
+        self.assertTrue(k["sperren"])
+        self.assertTrue(any("Sperrzeit" in t for t in k["texte"]))
+        # Vergleich: ein Kundentermin direkt an der Grenze verletzt weiter den Mindestpuffer
+        self.s.delete(sperr)
+        self.s.add(VotTermin(vorgang_id=v.id, ad_id=self.paolo.id, beginn=ende, ende=ende + timedelta(minutes=90),
+                             status="geplant", typ="vot", demo=True))
+        self.s.commit()
+        k = lead_termin.konflikte(self.s, self.paolo.id, beginn, ende)
+        self.assertEqual(k["voll"], [])
+        self.assertEqual(len(k["puffer"]), 1)
+        lead_termin.vorschlaege_cache_leeren()
 
 
 # --- Vertrag L2: Warteschlangen-Seite --------------------------------------------------------
@@ -846,7 +971,14 @@ class W_Warteschlange(Basis):
         # Dashboard-Kachel „Mails mit Fehler“ nur bei > 0
         self.assertIn("Mails mit Fehler", inhalt(self.client.get("/lead-management/dashboard").text))
         self.assertGreaterEqual(lead_dashboard.mails_mit_fehler(self.s), 1)
-        self.assertEqual(self.client_paolo.get("/lead-management/kommunikation").status_code, 404)
+        # Nachtrag 08.10.2026: HV-Sicht → 303 auf die HV-Ansicht, sobald das V1-Demo-Gate
+        # lead_v2.hv_umleitung aufruft (Vorschlag LC 4.1); bis dahin 404 (siehe HV_GESPERRT_V1)
+        r = self.client_paolo.get("/lead-management/kommunikation", follow_redirects=False)
+        if "hv_umleitung" in (PROJEKT / "app" / "routers" / "leadmanagement.py").read_text(encoding="utf-8"):
+            self.assertEqual(r.status_code, 303)
+            self.assertTrue(r.headers["location"].startswith("/lead-management/handelsvertreter?meldung="))
+        else:
+            self.assertEqual(r.status_code, 404)
 
 
 if __name__ == "__main__":

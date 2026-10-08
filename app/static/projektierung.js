@@ -237,11 +237,18 @@
         function hoeheSetzen() {
             // Alles außer dem Board (Kopf, Kacheln, Filter, Hinweis, Fußabstand) =
             // Seitenhöhe − aktuelle Board-Höhe; das Board füllt den Rest des
-            // Viewports (Mindesthöhe 480 px laut Plan – bei 768 px hohen Bildschirmen
-            // bleibt dann ein kurzer Seiten-Scroll)
+            // Viewports. Nachtrag 08.10.2026 (Antwort Andreas, „entscheide du“):
+            // Mindesthöhe 480 px (Plan) nur bei Viewport-Höhe ≥ 900 px, darunter
+            // 320 px – damit bleibt bei 1366 × 768 kein Seiten-Scroll (gleiche
+            // Schwelle wie die Media-Query in projektierung_v28.css). Gemessen wird
+            // mit übergroßem Board: bei kurzem Inhalt (wenige Karten) ist scrollHeight
+            // sonst auf die Viewport-Höhe geklemmt (body min-height 100vh) und der
+            // Rest zu groß – das Board bliebe dann auf der Mindesthöhe stehen.
+            board.style.setProperty('--pj-board-h', (window.innerHeight * 2) + 'px');
             const rest = document.documentElement.scrollHeight - board.offsetHeight;
             const frei = window.innerHeight - rest - 2;
-            const hoehe = Math.max(480, Math.floor(frei));
+            const minimum = window.innerHeight >= 900 ? 480 : 320;
+            const hoehe = Math.max(minimum, Math.floor(frei));
             board.style.setProperty('--pj-board-h', hoehe + 'px');
             if (hscroll) {
                 hscroll.firstElementChild.style.width = board.scrollWidth + 'px';
