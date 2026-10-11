@@ -63,7 +63,15 @@ Technische und kaufmännische Angaben sind freibleibend. Sie werden erst durch e
 Die in diesem Vertrag vorgesehenen Verpflichtungen und (Liefer-)Leistungen setzen eine eingehende technische Feinplanung voraus, um sicherzustellen, dass das Vorhaben zu den vereinbarten Bedingungen umgesetzt werden kann. Sollte die technische Feinplanung ergeben, dass die Umsetzung des Vorhabens technisch nicht möglich ist oder nur mit erheblichem Mehraufwand erfolgen kann, ist jede Vertragspartei – abweichend der AGB von Friondo – berechtigt, von dem Vertrag zurückzutreten. Ein entsprechender Rücktritt ist innerhalb von sechs (6) Wochen ab Kenntnisnahme in Textform gegenüber der jeweils anderen Vertragspartei zu erklären.
 
 ### Zahlung
-Eine Anzahlung von 50% des Angebotsbetrags ist spätestens 14 Tage vor Arbeitsbeginn zu zahlen. Die Restzahlung wird mit der Schlussrechnungsstellung fällig. Die Rechnung erhalten Sie im Anschluss zur Installation."""
+{zahlungsbedingungen}"""
+# v30 (PLAN_V18 Phase 150): der bisherige feste Zahlungsabsatz („Eine Anzahlung
+# von 50% des Angebotsbetrags ist spätestens 14 Tage vor Arbeitsbeginn …“) ist
+# Eintrag 1 der Tabelle zahlungsbedingungen (app.zahlungsbedingungen.STANDARD_ABSATZ);
+# der Platzhalter {zahlungsbedingungen} wird beim PDF-Rendern durch den Text der
+# am Angebot gewählten Zahlungsbedingung ersetzt (pdf_export._nachtext_rendern).
+# Die Überschrift „Zahlung“ bleibt im Textblock. Alle Seed-Konstanten (WP/PV/KL)
+# bauen auf _RECHT_UND_ZAHLUNG auf und tragen den Platzhalter damit ebenfalls.
+PLATZHALTER_ZAHLUNG = "{zahlungsbedingungen}"
 
 _KFW_HINWEIS = """### Hinweis zur KfW-Förderung
 Der Wechsel zu einer klimafreundlichen Heizlösung kann unter bestimmten Voraussetzungen durch Förderprogramme der Bundesregierung unterstützt werden. Im Rahmen des Programms „Heizungsförderung für Privatpersonen – Wohngebäude“ (Programmnummer 458) erfolgt die Förderung über die Kreditanstalt für Wiederaufbau (KfW).

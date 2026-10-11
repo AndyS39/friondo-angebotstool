@@ -2805,6 +2805,209 @@ def gewerk_stornieren(session: Session, gewerk: Gewerk, grund: str, text: str,
     return True, f"Gewerk {gewerk.sparte} storniert."
 
 
+# --- v30 (PLAN_V18 Phase 151): Projekt löschen (nur Admin), Demo-Kennzeichen --------
+
+# Unterordner, in den der Dokumentenordner eines gelöschten Projekts verschoben
+# wird: data/projekte/_geloescht/<PR>_<JJJJMMTT-HHMM>/ (verschieben statt löschen
+# [ANNAHME]; Galerie-Dateien liegen am Vorgang und bleiben unberührt)
+GELOESCHT_ORDNER = "_geloescht"
+LOESCH_HINWEIS = ("Das Löschen ist endgültig – das Angebot bleibt erhalten und kann "
+                  "erneut in ein Projekt überführt werden.")
+# Phasen, in denen ein Gewerk mit abgeschlossenem Montagebericht nicht mehr
+# gelöscht werden darf (Phase Montage oder später – [ANNAHME, Rückfrage])
+LOESCH_SPERR_PHASEN = ("montage", "abnahme", "freigabe", "abnahme_freigabe",
+                       "abgeschlossen")
+# Kennzeichen der Demo-Projekte aus scripts/demo_projekte.py (Kunden „Demo Planung“ /
+# „Demo Montage“ mit E-Mail <vorname>@demo.example); dazu Vorgang.demo (Lead-Demo, v12)
+DEMO_EMAIL_DOMAIN = "@demo.example"
+
+
+def ist_demo_projekt(projekt, kunde, vorgang) -> bool:
+    """Demo-Projekt (Phase 151): Vorgang `demo = 1` (Lead-Demo) oder das
+    Namensmuster von scripts/demo_projekte.py – Nachname „Demo …“ bzw. E-Mail-
+    Domain demo.example [ANNAHME: Namensmuster statt eigener Spalte]. Projekte aus
+    dem Bestandsimport (`angebote.bestand = 1`) sind davon nicht betroffen."""
+    if vorgang is not None and bool(getattr(vorgang, "demo", False)):
+        return True
+    if kunde is None:
+        return False
+    nachname = (getattr(kunde, "nachname", "") or "").strip().lower()
+    email = (getattr(kunde, "email", "") or "").strip().lower()
+    if nachname == "demo" or nachname.startswith(("demo ", "demo-")):
+        return True
+    return email.endswith(DEMO_EMAIL_DOMAIN)
+
+
+def loeschen_gesperrt(session: Session, projekt: Projekt) -> str:
+    """Grund, warum das Projekt NICHT gelöscht werden darf – sonst leer.
+    Gesperrt ist ein Projekt, sobald ein Gewerk in Phase Montage oder später
+    steht UND ein abgeschlossenes Montage-Formular (Montagebericht,
+    Inbetriebnahme- oder Abnahmeprotokoll) hat [ANNAHME – Rückfrage im Bericht];
+    stattdessen Storno des Gewerks."""
+    from app.models import GEWERK_PHASEN_NAMEN, MontageFormular
+    from app import projektierung_logik
+    for g in (session.query(Gewerk).filter(Gewerk.projekt_id == projekt.id)
+              .order_by(Gewerk.id)):
+        if g.phase not in LOESCH_SPERR_PHASEN:
+            continue
+        bericht = (session.query(MontageFormular)
+                   .filter(MontageFormular.gewerk_id == g.id,
+                           MontageFormular.status == "abgeschlossen")
+                   .order_by(MontageFormular.id).first())
+        if bericht is None:
+            continue
+        name = projektierung_logik.FORMULAR_NAMEN.get(bericht.formular, bericht.formular)
+        return (f"Gewerk {g.sparte} steht in Phase "
+                f"„{GEWERK_PHASEN_NAMEN.get(g.phase, g.phase)}“ und hat einen "
+                f"abgeschlossenen Montagebericht ({name}) – das Projekt kann nicht "
+                "gelöscht werden. Bitte stattdessen das Gewerk stornieren "
+                "(Knopf „Stornieren“ in der Projektakte).")
+    return ""
+
+
+def _geloescht_ziel(nummer: str, zeit: datetime) -> Path:
+    """Zielordner data/projekte/_geloescht/<PR>_<JJJJMMTT-HHMM>/ (bei Kollision
+    in derselben Minute mit Zähler -2, -3 …)."""
+    basis = PROJEKTE_ORDNER / GELOESCHT_ORDNER
+    ziel = basis / f"{nummer}_{zeit:%Y%m%d-%H%M}"
+    nr = 2
+    while ziel.exists():
+        ziel = basis / f"{nummer}_{zeit:%Y%m%d-%H%M}-{nr}"
+        nr += 1
+    return ziel
+
+
+def projekt_loeschen(session: Session, projekt: Projekt, grund: str,
+                     benutzer=None) -> tuple[bool, str]:
+    """v30 (PLAN_V18 Phase 151): Projekt endgültig löschen (nur Admin, Pflichtgrund).
+    Räumt alle Projektdaten ab – Gewerke, Aufgaben/Paketinstanzen, Termine mit
+    Besetzung (Outlook-Ereignisse werden vorher storniert, best effort), Verlauf,
+    Kommentare, Dokumente, Sub-Zuordnungen, Projekt-Mails, Montage-Formulare,
+    Restarbeiten, UGL-Bestellungen, Steckbrief, Benachrichtigungen der Akte;
+    BzA-/Heizreport-Felder hängen am Gewerk (das Heizreport-Projekt bleibt im
+    Portal, nur die Verknüpfung geht). Angebote: `projekt_gewerk_id = NULL`, Status
+    unverändert (Knopf „Angebot → Projekt“ wieder sichtbar). Dokumentenordner wird
+    nach data/projekte/_geloescht/<PR>_<Zeit>/ VERSCHOBEN. Eintrag im
+    Lösch-Protokoll (AngebotsLoeschung, art „projekt“) und Notiz im Vorgangs-Chat
+    „Projekt <PR> gelöscht: <Grund>“. Sitzungsdisziplin v27: Termine mit
+    Outlook-Ereignis lesen → Verbindung freigeben → stornieren → danach die
+    Abräum-Transaktion; der Aufrufer committet (bzw. rollt bei False zurück).
+    Rückgabe (ok, meldung)."""
+    import shutil
+
+    from sqlalchemy import or_
+
+    from app import notizen
+    from app.models import (GEWERK_PHASEN_NAMEN, AngebotsLoeschung, MontageFormular,
+                            ProjektMail, ProjektSub, Restarbeit, SteckbriefWert,
+                            UglBestellung)
+    grund = " ".join((grund or "").split())[:500]
+    if not grund:
+        return False, "Bitte einen Grund angeben."
+    sperre = loeschen_gesperrt(session, projekt)
+    if sperre:
+        return False, sperre
+    nummer = projekt.nummer
+    projekt_id = projekt.id
+    vorgang_id = projekt.vorgang_id
+    quelle_ordner = projekt_ordner(projekt)
+    kunde = session.get(Kunde, projekt.kunde_id)
+    kunde_name = kunde.anzeige_name if kunde else ""
+    phase_text = GEWERK_PHASEN_NAMEN.get(projekt.status_cache, projekt.status_cache)
+    gewerke = (session.query(Gewerk).filter(Gewerk.projekt_id == projekt_id)
+               .order_by(Gewerk.id).all())
+    gewerk_ids = [g.id for g in gewerke]
+    endbetrag = sum(g.auftragswert_aktuell or 0 for g in gewerke
+                    if g.phase != "storniert")
+    termine = (session.query(ProjektTermin)
+               .filter(ProjektTermin.projekt_id == projekt_id).all())
+    termin_ids = [t.id for t in termine]
+    # 1. Outlook-Storno OHNE offene Sitzung (v27): alles Nötige ist gelesen,
+    #    Verbindung freigeben, dann je Termin stornieren (event_loeschen gibt vor
+    #    jedem Graph-Aufruf selbst erneut frei); Fehler blockieren nie
+    mit_outlook = [t for t in termine if t.outlook_event_id]
+    storno_fehler = 0
+    if mit_outlook:
+        from app import outlook_kalender
+        from app.db import verbindung_freigeben
+        verbindung_freigeben(session)
+        for termin in mit_outlook:
+            try:
+                if not outlook_kalender.event_loeschen(session, termin):
+                    storno_fehler += 1
+            except Exception:
+                storno_fehler += 1
+    # 2. Abräumen (abhängige Zeilen zuerst). Termine als ORM-Delete – event_loeschen
+    #    hat sie gerade geändert (outlook_event_id leer), ein Mengen-Delete ließe den
+    #    Flush ins Leere laufen (StaleDataError); Mengen-Deletes mit „fetch“, damit
+    #    bereits geladene Objekte aus der Sitzung verschwinden
+    if termin_ids:
+        (session.query(TerminBesetzung)
+         .filter(TerminBesetzung.termin_id.in_(termin_ids))
+         .delete(synchronize_session="fetch"))
+    for termin in termine:
+        session.delete(termin)
+    if gewerk_ids:
+        for modell in (AufgabenpaketInstanz, SteckbriefWert, MontageFormular,
+                       Restarbeit, UglBestellung):
+            (session.query(modell).filter(modell.gewerk_id.in_(gewerk_ids))
+             .delete(synchronize_session="fetch"))
+    for modell in (Aufgabe, ProjektVerlauf, ProjektDokument, ProjektSub, ProjektMail):
+        (session.query(modell).filter(modell.projekt_id == projekt_id)
+         .delete(synchronize_session="fetch"))
+    # Benachrichtigungen (Glocke) der Projektakte – Links „/projektierung/projekt/<id>“
+    link = f"/projektierung/projekt/{projekt_id}"
+    (session.query(Benachrichtigung)
+     .filter(or_(Benachrichtigung.link == link,
+                 Benachrichtigung.link.like(link + "#%"),
+                 Benachrichtigung.link.like(link + "?%"),
+                 Benachrichtigung.link.like(link + "/%")))
+     .delete(synchronize_session="fetch"))
+    # Angebote lösen: Verknüpfung weg, Status bleibt (z. B. „Angenommen“)
+    angebote_geloest = 0
+    if gewerk_ids:
+        for angebot in (session.query(Angebot)
+                        .filter(Angebot.projekt_gewerk_id.in_(gewerk_ids))):
+            angebot.projekt_gewerk_id = None
+            angebote_geloest += 1
+    for g in gewerke:
+        session.delete(g)
+    session.delete(projekt)
+    session.flush()
+    # 3. Dokumentenordner verschieben (nicht löschen) [ANNAHME]; scheitert das
+    #    Verschieben, bleibt alles stehen (Aufrufer rollt zurück)
+    jetzt = datetime.now()
+    ziel_ordner = None
+    if quelle_ordner.exists():
+        ziel_ordner = _geloescht_ziel(nummer, jetzt)
+        try:
+            ziel_ordner.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(quelle_ordner), str(ziel_ordner))
+        except OSError as problem:
+            return False, (f"Projektordner {quelle_ordner.name} konnte nicht nach "
+                           f"{GELOESCHT_ORDNER} verschoben werden ({problem}) – "
+                           "nichts gelöscht.")
+    # 4. Lösch-Protokoll (Parametrierung, v6-Tabelle) + Notiz im Vorgangs-Chat
+    session.add(AngebotsLoeschung(
+        art="projekt", nummer=nummer[:20], kunde_name=kunde_name[:300],
+        status_vorher=phase_text[:20], endbetrag_cent=int(endbetrag), grund=grund,
+        benutzer_name=(getattr(benutzer, "name", "") or "?")[:100], geloescht_am=jetzt))
+    if vorgang_id and session.get(Vorgang, vorgang_id) is not None:
+        notizen.notiz_anlegen(session, vorgang_id, benutzer,
+                              f"Projekt {nummer} gelöscht: {grund}",
+                              herkunft="projektierung")
+    session.flush()
+    meldung = (f"Projekt {nummer} gelöscht ({len(gewerke)} Gewerk(e), "
+               f"{len(termine)} Termin(e)); {angebote_geloest} Angebot(e) wieder ohne "
+               "Projekt – Status unverändert.")
+    if ziel_ordner is not None:
+        meldung += f" Ordner verschoben nach {GELOESCHT_ORDNER}/{ziel_ordner.name}."
+    if storno_fehler:
+        meldung += (f" Outlook-Storno für {storno_fehler} Termin(e) fehlgeschlagen – "
+                    "bitte im Kalender prüfen.")
+    return True, meldung
+
+
 # --- Migration Altbestand (Phase 66) ----------------------------------------------
 
 def altbestand_migrieren(session: Session) -> list[str]:

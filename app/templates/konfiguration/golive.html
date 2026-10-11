@@ -24,8 +24,8 @@
     {% for p in punkte %}
     <tr>
         <td style="width:2.5em;text-align:center">
-            <span class="status-badge {{ 'erfolg' if p.ok else 'fehler' }}"
-                  style="background:{{ '#e6f4ea' if p.ok else '#fdecea' }};color:{{ '#1e7b34' if p.ok else '#b3261e' }};padding:2px 8px;border-radius:10px;font-weight:600">{{ '✓' if p.ok else '✗' }}</span></td>
+            {# v30 (PLAN_V18 Phase 145): Status-Pille über die Badge-Klassen statt Inline-Hex #}
+            <span class="abzeichen status-badge {{ 'erfolg status-angenommen' if p.ok else 'fehler status-abgelehnt' }}">{{ '✓' if p.ok else '✗' }}</span></td>
         <td>{{ p.titel }}</td>
         <td class="dezent">{{ p.detail }}</td>
         <td class="aktionen">

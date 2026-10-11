@@ -167,13 +167,17 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
                 nachtext_text: str | None = None,
                 ersetzt_hinweis: str = "",
                 beispielrechnung: dict | None = None,
-                wirtschaftlichkeit: dict | None = None) -> Path:
+                wirtschaftlichkeit: dict | None = None,
+                zahlungsbedingung: str | None = None) -> Path:
     """signatur (Phase 23): {"png_pfad", "name", "zeit"} – wird auf der
     Unterschriften-Seite eingebettet; ziel überschreibt den Ablageort.
     v9: Vor- und Nachtext kommen als Textblöcke (Profil/Parametrierung);
     None = Standard-Blöcke aus app.angebotsprofile.
     v22: wirtschaftlichkeit = Daten aus wirtschaftlichkeit_fuer() für die drei
-    PV-Seiten (beispielrechnung = alter Parametername, Alias)."""
+    PV-Seiten (beispielrechnung = alter Parametername, Alias).
+    v30 (PLAN_V18 Phase 150): zahlungsbedingung = Text der am Angebot gewählten
+    Zahlungsbedingung für den Platzhalter {zahlungsbedingungen} im Nachtext
+    (None = Standardabsatz, damit der Platzhalter nie wörtlich im PDF steht)."""
     from app import angebotsprofile
     if wirtschaftlichkeit is None:
         wirtschaftlichkeit = beispielrechnung
@@ -196,7 +200,7 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
     _summen_und_kfw(pdf, angebot, kfw_ergebnis)
     _nachtext_rendern(pdf, nachtext_text if nachtext_text is not None
                       else angebotsprofile.STANDARD_NACHTEXT, signatur,
-                      wirtschaftlichkeit)
+                      wirtschaftlichkeit, zahlungsbedingung=zahlungsbedingung)
     if mit_vollmacht:
         # Nachtext D nur bei iMSys (P02) und/oder SpotDynamic (P03) – Phase 15
         _nachtext_d(pdf, kunde, angebot)
@@ -527,16 +531,24 @@ def _absatz(pdf: AngebotsPdf, text: str, fett=False, groesse=9):
 
 def _nachtext_rendern(pdf: AngebotsPdf, text: str,
                       signatur: dict | None = None,
-                      wirtschaftlichkeit: dict | None = None) -> None:
+                      wirtschaftlichkeit: dict | None = None,
+                      zahlungsbedingung: str | None = None) -> None:
     """v9: Nachtext-Blocktext rendern. Konventionen: "# " Seitenüberschrift ·
     "## " fette Zwischenzeile (10 pt) · "### " fette Absatz-Überschrift ·
     "---" allein = Seitenumbruch · "~ " kleine kursive Fußnote ·
     "[UNTERSCHRIFT]" = Ort/Datum-Unterschriftenblock (inkl. elektronischer
     Signatur) · "[WIRTSCHAFTLICHKEIT]" (v22, Alias "[BEISPIELRECHNUNG]") =
     die drei gestalteten Wirtschaftlichkeitsseiten des PV-Angebots (eigene
-    Seiten; ohne Auslegungsdaten entfällt der Block). Aufeinanderfolgende
-    Zeilen bilden EINEN Absatz."""
-    from app import wirtschaftlichkeit_pdf
+    Seiten; ohne Auslegungsdaten entfällt der Block) · "{zahlungsbedingungen}"
+    (v30, PLAN_V18 Phase 150) = Text der am Angebot gewählten Zahlungsbedingung
+    (zahlungsbedingung; None = Standardabsatz). Aufeinanderfolgende Zeilen
+    bilden EINEN Absatz."""
+    from app import wirtschaftlichkeit_pdf, zahlungsbedingungen
+    # v30: Platzhalter wie die übrigen ersetzen – ein mehrzeiliger Text wird im
+    # Absatz-Puffer zu EINEM Absatz, wie der bisherige feste Text
+    text = zahlungsbedingungen.text_einsetzen(
+        text, zahlungsbedingungen.STANDARD_ABSATZ if zahlungsbedingung is None
+        else zahlungsbedingung)
     for seite in text.split("\n---\n"):
         # v22: Seite nur mit dem Platzhalter → das Modul legt seine drei
         # Seiten selbst an (kein generisches add_page, sonst Leerseite);
@@ -864,7 +876,7 @@ def signiertes_pdf_erzeugen(session, angebot: Angebot, png_bytes: bytes,
         png_pfad = datei.name
     try:
         ziel = config.SIGNIERT_ORDNER / f"{angebot.nummer}-signiert.pdf"
-        from app import angebotsprofile
+        from app import angebotsprofile, zahlungsbedingungen
         return erzeuge_pdf(angebot, kunde, ergebnis,
                            mit_vollmacht=_mit_vollmacht(session, angebot),
                            signatur={"png_pfad": png_pfad, "name": name, "zeit": zeit},
@@ -872,7 +884,9 @@ def signiertes_pdf_erzeugen(session, angebot: Angebot, png_bytes: bytes,
                            vortext_text=angebotsprofile.vortext_fuer_angebot(session, angebot),
                            nachtext_text=angebotsprofile.nachtext_fuer_angebot(session, angebot),
                            ersetzt_hinweis=_ersetzt_hinweis(session, angebot),
-                           wirtschaftlichkeit=wirtschaftlichkeit_fuer(session, angebot))
+                           wirtschaftlichkeit=wirtschaftlichkeit_fuer(session, angebot),
+                           # v30 (Phase 150): gewählte Zahlungsbedingung in den Nachtext
+                           zahlungsbedingung=zahlungsbedingungen.fuer_angebot(session, angebot)[1])
     finally:
         Path(png_pfad).unlink(missing_ok=True)
 
@@ -899,10 +913,13 @@ def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
     kunde = session.get(Kunde, angebot.kunde_id)
     # v13-PV / v24-KL: bei PV und Klima nie ein Förderblock
     ergebnis = _kfw_ergebnis_fuer(session, angebot)
-    from app import angebotsprofile
+    from app import angebotsprofile, zahlungsbedingungen
     return erzeuge_pdf(angebot, kunde, ergebnis,
                        mit_vollmacht=_mit_vollmacht(session, angebot),
                        vortext_text=angebotsprofile.vortext_fuer_angebot(session, angebot),
                        nachtext_text=angebotsprofile.nachtext_fuer_angebot(session, angebot),
                        ersetzt_hinweis=_ersetzt_hinweis(session, angebot),
-                       wirtschaftlichkeit=wirtschaftlichkeit_fuer(session, angebot))
+                       wirtschaftlichkeit=wirtschaftlichkeit_fuer(session, angebot),
+                       # v30 (PLAN_V18 Phase 150): Text der gewählten Zahlungsbedingung
+                       # für den Platzhalter {zahlungsbedingungen} im Nachtext
+                       zahlungsbedingung=zahlungsbedingungen.fuer_angebot(session, angebot)[1])

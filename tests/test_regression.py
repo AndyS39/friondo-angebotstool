@@ -26,8 +26,9 @@ KONTROLL_SZENARIO = {
     "A10": "Nein", "A11": "Nein", "A12": "", "A13": 4,
     # v8: Heizlast unbekannt, keine Stemmarbeiten -> Ergebnis unverändert
     "A14": "Nein", "A16": "Nein",
-    # v19 (PLAN_V14 Phase 95): Nennleistung Altanlage (nur BzA-Datenblatt)
-    "A20": 18,
+    # v19 (PLAN_V14 Phase 95) hatte hier A20 (Nennleistung Altanlage, nur
+    # BzA-Datenblatt) – v30 (PLAN_V18 Phase 148): A20 ist aus der Live-Excel
+    # gestrichen, die Antwort entfällt (Summen unverändert)
     # Neue Anlage (7-kW-AWM-Paket, 50-l-Puffer, Garagendach ohne Bitumen)
     # v11: N09 Kran-Frage (statt EP-Automatik), N10 Fassadenleitung bei
     # Dachaufstellung (0 m -> keine Position, Ergebnis unveraendert)

@@ -5,6 +5,8 @@
 {# v28 (PLAN_PROJ_V6 Phase 135/136): gemeinsamer Termin-Dialog, Notizen-Chat #}
 {% from "projektierung/_termin_dialog.html" import termin_dialog, termin_loeschen_dialog %}
 {% from "_komponenten.html" import notizen_chat %}
+{# v30 (PLAN_V18 Phase 151): Sicherheitsdialog „Projekt löschen“ (nur Admin) #}
+{% from "projektierung/_loeschen_dialog.html" import projekt_loeschen_dialog %}
 
 {% block titel %}{{ projekt.nummer }} – Projektakte{% endblock %}
 
@@ -26,7 +28,9 @@
 <div class="pj-akte-head">
     <div class="pj-eyebrow">Projektakte</div>
     <h2><span class="pj-mono">{{ projekt.nummer }}</span>
-        · {{ kunde.anzeige_name if kunde else '?' }}{{ ', ' ~ projekt.ausfuehrung_ort if projekt.ausfuehrung_ort }}</h2>
+        · {{ kunde.anzeige_name if kunde else '?' }}{{ ', ' ~ projekt.ausfuehrung_ort if projekt.ausfuehrung_ort }}
+        {% if ist_demo %}{# v30 (Phase 151): Demo-Projekt (scripts/demo_projekte.py) #}
+        <span class="demo-badge" title="Demo-Projekt – der Admin löscht es vor dem Go-live über „Projekt löschen“">Demo</span>{% endif %}</h2>
     <div class="row">
         <div><span>Ausführung</span><br>
             {{ ((projekt.ausfuehrung_strasse ~ ', ' if projekt.ausfuehrung_strasse)
@@ -69,8 +73,15 @@
         {% if erstes_offen %}
         <button class="pj-btn" type="button" onclick="pjTerminDialog('dlg-termin-{{ erstes_offen.id }}')">📅 Termin</button>
         {% endif %}
+        {% if ist_admin %}
+        {# v30 (PLAN_V18 Phase 151): „Projekt löschen“ – nur Admin, rot, ganz rechts #}
+        <button class="pj-btn danger rechts" type="button"
+                title="{{ loeschen_sperre or 'Projekt endgültig löschen (Pflichtgrund, Projektnummer zur Bestätigung)' }}"
+                onclick="pjDialog('dlg-projekt-loeschen')">🗑 Projekt löschen</button>
+        {% endif %}
     </div>
 </div>
+{% if ist_admin %}{{ projekt_loeschen_dialog(projekt, loeschen_sperre, loesch_hinweis) }}{% endif %}
 
 {# ===== Gewerk-Spalten (Prototyp .gewerke/.gcol) ===== #}
 {# v15 (Phase 77): Steckbrief ganz oben – über Gewerk-Spalten und Aufgaben #}

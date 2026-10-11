@@ -20,7 +20,24 @@
     'Erledigt': 'status-erledigt',
     'Erledigt (extern)': 'status-erledigt',
 }.get(status, '') -%}
-<span class="abzeichen {{ klasse }}">{{ status }}</span>
+{#- v30 (PLAN_V18 Phase 146): gefüllte Pille mit Status-Punkt (Design v2); Klassennamen
+    unverändert, der Pfeil „▾“ kommt per CSS nur in Auswahl-Kontexten (.mit-pfeil, summary) -#}
+<span class="abzeichen {{ klasse }}"><i class="abzeichen-punkt" aria-hidden="true"></i>{{ status }}</span>
+{%- endmacro %}
+
+{# v30 (PLAN_V18 Phase 146): Avatar mit Initialen – zwei Buchstaben aus dem Namen
+   (erster Buchstabe des ersten und des letzten Wortes), Farbe deterministisch aus der
+   Benutzer-ID über die Token-Palette --avatar-1 … --avatar-8 (style.css). Genutzt in
+   Boards (Lead-Management/Projektierung) und der Benutzerverwaltung; ohne Namen „?“. #}
+{% macro avatar(name, id, klasse='') -%}
+{%- set teile = (name or '').strip().split() -%}
+{%- if teile -%}
+{%- set initialen = (teile[0][:1] ~ (teile[-1][:1] if teile | length > 1 else teile[0][1:2])) | upper -%}
+{%- else -%}
+{%- set initialen = '?' -%}
+{%- endif -%}
+{%- set nr = ((id or 0) | int) % 8 + 1 -%}
+<span class="avatar avatar-{{ nr }}{{ ' ' ~ klasse if klasse }}" title="{{ name or '' }}" aria-label="{{ name or '' }}">{{ initialen }}</span>
 {%- endmacro %}
 
 {# Status-Schrittleiste (Mini-Pipeline) eines Angebots:

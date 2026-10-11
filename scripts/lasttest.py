@@ -123,7 +123,7 @@ WP_ANTWORTEN = {
     "A01": "Öl", "A02": 2001, "A03": 15000, "A04": "KG", "A05": 8,
     "A07": "Ja", "A08": "Kunststoff", "A09": "bis 5.000 L",
     "A10": "Nein", "A11": "Nein", "A12": "", "A13": 4,
-    "A14": "Nein", "A16": "Nein", "A20": 18,
+    "A14": "Nein", "A16": "Nein",   # v30: A20 gestrichen (PLAN_V18 Phase 148)
     "N01": "Luft/Wasser", "N02": "Ja", "N03": "bis 200 l",
     "N04": "Garagendach", "N05": "Nein", "N06": "50 l",
     "N09": "Nein", "N10": 0, "N11": "Nein",

@@ -76,7 +76,8 @@
         <th>Montage</th><th>Aktion</th><th>Prüfung</th></tr></thead>
     <tbody>
     {% for z in vorschau %}
-    <tr style="{{ 'background:#fdecea' if not z.ok }}">
+    {# v30 (PLAN_V18 Phase 145): Zeilenfarbe über Klasse statt Inline-Hex #}
+    <tr class="{{ 'import-fehler' if not z.ok }}">
         <td>{{ z.nr }}</td>
         <td>{{ z.werte.get('nachname') or '' }}{{ ', ' ~ z.werte.get('vorname') if z.werte.get('vorname') }}
             · {{ z.werte.get('plz') or '' }}
@@ -87,7 +88,7 @@
         <td>{{ z.werte.get('phase') or '' }}</td>
         <td>{{ z.montage_von.strftime('%d.%m.%Y') if z.montage_von }}{{ '–' ~ z.montage_bis.strftime('%d.%m.%Y') if z.montage_bis }}</td>
         <td>{{ z.aktion if z.ok else '–' }}</td>
-        <td>{% for f in z.fehler %}<div style="color:#b3261e">✗ {{ f }}</div>{% endfor %}
+        <td>{% for f in z.fehler %}<div class="fehler-text">✗ {{ f }}</div>{% endfor %}
             {% for h in z.hinweise %}<div class="dezent">ℹ {{ h }}</div>{% endfor %}
             {% if z.ok and not z.hinweise %}✓{% endif %}</td>
     </tr>

@@ -356,6 +356,10 @@ def version_erzeugen(session: Session, original: Angebot) -> Angebot:
         graph_conversation_id=original.graph_conversation_id,
         vorgaenger_id=original.id,
         vorgang_id=original.vorgang_id,
+        # v30 (PLAN_V18 Phase 150): Zahlungsbedingung wandert in die neue Version
+        # (deckt auch den AD-Rabatt-Pfad in routers/meine_angebote.py ab)
+        zahlungsbedingung_key=original.zahlungsbedingung_key or "",
+        zahlungsbedingung_text=original.zahlungsbedingung_text or "",
     )
     for p in original.positionen:
         version.positionen.append(AngebotsPosition(

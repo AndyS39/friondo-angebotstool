@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% from "_symbole.html" import symbol %}
+{# v30 (PLAN_V18 Phase 146): Avatar mit Initialen vor dem Namen (Makro aus _komponenten.html) #}
+{% from "_komponenten.html" import avatar %}
 
 {% block titel %}Benutzer – Friondo Angebotstool{% endblock %}
 
@@ -45,8 +47,8 @@
 .ben-team-wahl { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
 .ben-team-wahl select { max-width: 240px; font-size: var(--t-s); }
 .formular .ben-team-wahl select { width: auto; min-width: 220px; }
-.ben-team-weg { border: 1px solid var(--grau-linie); background: #fff;
-    color: var(--friondo-dunkel); border-radius: var(--r-s); cursor: pointer;
+.ben-team-weg { border: 1px solid var(--linie-stark); background: var(--flaeche-karte);
+    color: var(--text); border-radius: var(--r-s); cursor: pointer;
     line-height: 1; padding: 3px 7px; font-size: var(--t-s); }
 .ben-team-weg:hover { border-color: var(--status-rot); color: var(--status-rot); }
 /* Bei nur einem Dropdown gibt es nichts zu entfernen – „– kein Team –“ wählen */
@@ -106,7 +108,7 @@
         {% set zeigt_teams = b.rolle == 'montage' or zugeordnet %}
         {% set gesperrt = b.gesperrt_bis and b.gesperrt_bis > jetzt %}
         <tr class="{{ 'inaktiv' if not b.aktiv }}" id="zeile-{{ b.id }}">
-            <td><input form="f{{ b.id }}" type="text" name="name" value="{{ b.name }}" size="16"></td>
+            <td><span class="avatar-mit-name">{{ avatar(b.name, b.id) }}<input form="f{{ b.id }}" type="text" name="name" value="{{ b.name }}" size="16"></span></td>
             <td>
                 <select form="f{{ b.id }}" name="rolle"
                         onchange="benTeamsUmschalten({{ b.id }}, this.value)">

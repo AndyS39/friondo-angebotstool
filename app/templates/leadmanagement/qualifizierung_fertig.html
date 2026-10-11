@@ -26,7 +26,7 @@
     <a class="knopf zweitrangig" href="/lead-management/anrufliste">Später weiter</a>
 </div>
 
-<dialog id="dlg-zurueck">
+<dialog id="dlg-zurueck" class="lm-dialog">
     <form method="post" class="formular"
           action="/lead-management/lead/{{ vorgang.id }}/zurueckstellen">
         <h3>Zurückstellen</h3>
@@ -44,7 +44,7 @@
         </div>
     </form>
 </dialog>
-<dialog id="dlg-unq">
+<dialog id="dlg-unq" class="lm-dialog">
     <form method="post" class="formular"
           action="/lead-management/lead/{{ vorgang.id }}/unqualifiziert">
         <h3>Unqualifiziert</h3>

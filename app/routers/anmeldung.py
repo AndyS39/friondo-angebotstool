@@ -89,6 +89,12 @@ def login(request: Request, session: Session = Depends(get_session)):
     antwort = RedirectResponse(ziel, status_code=303)
     auth.cookie_setzen(antwort, benutzer,
                        auth.sitzungsdauer_s(session, benutzer, angemeldet_bleiben))
+    # v30 (PLAN_V18 Phase 145): gespeicherte Darstellung des Benutzers als Cookie
+    # mitgeben – an einem anderen Browser stimmt der Modus so ab der ersten Seite
+    # (nie gewählt = „Gerät“, ein fremdes Cookie derselben Maschine wird ersetzt)
+    from app import darstellung
+    darstellung.cookie_setzen(antwort, darstellung.lesen(session, benutzer.id)
+                              or darstellung.STANDARD)
     return antwort
 
 

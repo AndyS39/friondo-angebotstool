@@ -46,7 +46,7 @@
 
 {% if editor %}
 {% set p = editor %}
-<div id="editor" style="border:2px solid var(--akzent, #1565c0);border-radius:8px;padding:10px;margin:12px 0">
+<div id="editor" style="border:2px solid var(--akzent);border-radius:8px;padding:10px;margin:12px 0">
     <h3 style="margin-top:0">Stückliste Pos. {{ p.pos_nr }} <small class="dezent">{{ p.titel[:120] }}{{ ' · ' ~ p.einheit if p.einheit }}</small></h3>
     {% set zeilen = p.zeilen | list %}
     {% set anzahl = zeilen | length + 3 %}
@@ -85,7 +85,7 @@
         <td>
             {% if p.zeilen %}
             <div>{% for z in p.zeilen %}<span class="pj-mono">{{ z.lieferant_artnr }}</span> × {{ ('%g' | format(z.menge_je_einheit)) | replace('.', ',') }} {{ z.mengeneinheit }} · {{ z.bezeichnung }} <small class="dezent">({{ z.lieferant }})</small><br>{% endfor %}</div>
-            {% else %}<span style="color:#c62828">ohne Zuordnung</span>{% endif %}
+            {% else %}<span class="fehler-text">ohne Zuordnung</span>{% endif %}
             <a class="dezent" href="/parametrierung/stuecklisten?pos={{ p.pos_nr | urlencode }}{{ '&suche=' ~ suche | urlencode if suche }}{{ '&ohne=1' if ohne }}#editor">bearbeiten</a>
         </td>
     </tr>

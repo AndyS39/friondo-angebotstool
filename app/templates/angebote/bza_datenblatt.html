@@ -2,12 +2,15 @@
 
 {% block titel %}BzA-Datenblatt {{ blatt.nummer }} – Friondo Angebotstool{% endblock %}
 
-{# v19 (PLAN_V14 Phase 96): Dialog vor dem PDF – WE übersteuern, Ersteller,
-   bei TAIFUN-Angeboten Gerät als Pflichtauswahl aus dem Blatt „BAFA-Anlagen“.
+{# v19 (PLAN_V14 Phase 96): Dialog vor dem PDF – WE übersteuern, bei
+   TAIFUN-Angeboten Gerät als Pflichtauswahl aus dem Blatt „BAFA-Anlagen“.
    PLAN_V15 Phase 103 (30.09.2026): jedes Feld der Vorschau ist ein Eingabefeld
    „f_<schluessel>“ und übersteuert das PDF – statuslos (nur GET-Parameter,
-   nichts wird gespeichert). Aus we/ersteller/geraet abgeleitete Felder sind
-   nicht vorbelegt (Platzhalter), damit die Auswahl oben nicht übersteuert wird. #}
+   nichts wird gespeichert). Aus we/geraet abgeleitete Felder sind nicht
+   vorbelegt (Platzhalter), damit die Auswahl oben nicht übersteuert wird.
+   v30 (PLAN_V18 Phase 148): keine Ersteller-Auswahl mehr (Abschnitt 6 entfällt);
+   die Nennwärmeleistung ist ein Zahlenfeld mit „kW“-Suffix – vorbelegt mit dem
+   Wert der BAFA-Anlage, beim Gerätewechsel zieht das Skript den Wert nach. #}
 {% block inhalt %}
 <div class="seitenkopf">
     <h1>BzA-Datenblatt <small class="dezent">{{ blatt.nummer }} · {{ blatt.kunde.anzeige_name if blatt.kunde else '?' }}</small></h1>
@@ -24,19 +27,15 @@
     <div class="formzeile">
         <label>Anzahl der zu fördernden Wohneinheiten
             <input type="number" name="we" min="1" max="999" value="{{ we_vorbelegt or '' }}"></label>
-        <label>Ersteller (Ansprechpartner)
-            <select name="ersteller">
-                {% for b in ersteller %}
-                <option value="{{ b.id }}" {{ 'selected' if standard and b.id == standard.id }}>{{ b.name }}{{ ' · ' ~ b.email if b.email }}</option>
-                {% endfor %}
-            </select></label>
     </div>
     {# 30.09.2026: Auswahl auch bei Tool-Angeboten (manuelle Angebote ohne Paket) #}
     <label>{{ 'Gerät (Pflicht bei TAIFUN-Angeboten)' if angebot.extern else 'Gerät (nur wählen, wenn es nicht automatisch erkannt wird)' }}
-        <select name="geraet" {{ 'required' if angebot.extern }}>
-            <option value="">{{ '– aus der BAFA-Liste wählen –' if angebot.extern else '– automatisch aus den Angebotspositionen –' }}</option>
+        <select name="geraet" id="bza-geraet" {{ 'required' if angebot.extern }}
+                onchange="bzaKwNachziehen(this)">
+            <option value="" data-kw="{{ blatt.nennwaermeleistung_vorbelegung if not angebot.extern else '' }}">{{ '– aus der BAFA-Liste wählen –' if angebot.extern else '– automatisch aus den Angebotspositionen –' }}</option>
             {% for a in anlagen %}
-            <option value="{{ a.schluessel }}" {{ 'selected' if a.schluessel == blatt.geraet_schluessel }}>{{ a.bezeichnung }} · {{ '%.2f' | format(a.kw) if a.kw }} kW · BAFA {{ a.nummer }}{{ ' (Vorrat)' if a.schluessel.startswith('vorrat') }}</option>
+            <option value="{{ a.schluessel }}" data-kw="{{ '%.2f' | format(a.kw) if a.kw else '' }}"
+                    {{ 'selected' if a.schluessel == blatt.geraet_schluessel }}>{{ a.bezeichnung }} · {{ '%.2f' | format(a.kw) if a.kw }} kW · BAFA {{ a.nummer }}{{ ' (Vorrat)' if a.schluessel.startswith('vorrat') }}</option>
             {% endfor %}
         </select></label>
     {# „Vorschau aktualisieren“ steht zuerst, damit Enter im Textfeld die Vorschau
@@ -65,6 +64,16 @@
                     <option value="Ja" {{ 'selected' if f.wert == 'Ja' }}>Ja</option>
                     <option value="Nein" {{ 'selected' if f.wert == 'Nein' }}>Nein</option>
                 </select>
+                {% elif f.schluessel == nennwaerme_schluessel %}
+                {# v30: nur die Zahl – „kW“ hängt das Tool an (Komma oder Punkt;
+                   ungültig → „Nennwärmeleistung: bitte nur die Zahl eingeben“) #}
+                <span class="feld-mit-suffix">
+                    <input type="number" step="0.01" min="0" inputmode="decimal"
+                           name="f_{{ f.schluessel }}" id="bza-nennwaerme"
+                           value="{{ nennwaerme_eingabe }}" placeholder="z. B. 9,5"
+                           title="Nennwärmeleistung in kW – nur die Zahl eingeben">
+                    <span class="feld-suffix dezent" aria-hidden="true">kW</span>
+                </span>
                 {% elif f.schluessel in abgeleitet %}
                 <input type="text" name="f_{{ f.schluessel }}" maxlength="200" style="width:100%"
                        value="{{ uebersteuert.get(f.schluessel, '') }}" placeholder="{{ f.wert }}">
@@ -83,4 +92,14 @@
         <a class="knopf ghost" href="/angebote/{{ angebot.id }}/bza-datenblatt">Zurücksetzen</a>
     </div>
 </form>
+<script>
+// v30 (PLAN_V18 Phase 148): Gerätewechsel → Nennwärmeleistung (kW der BAFA-Anlage,
+// ohne Einheit) nachziehen, damit kein alter Wert die neue Auswahl übersteuert
+function bzaKwNachziehen(auswahl) {
+    var feld = document.getElementById('bza-nennwaerme');
+    if (!feld) { return; }
+    var kw = auswahl.options[auswahl.selectedIndex].dataset.kw || '';
+    feld.value = kw;
+}
+</script>
 {% endblock %}

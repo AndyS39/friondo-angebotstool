@@ -53,11 +53,12 @@
                 <li class="lk-schritt {{ 'aktiv' if s.aktiv }} {{ 'fertig' if s.fertig }}"
                     data-phasen="{{ s.phasen | join(',') }}"
                     {% if s.aktiv %}aria-current="step"{% endif %}
-                    {% if s.aktiv and s.farbe %}style="background:{{ s.farbe }};border-color:{{ s.farbe }}"{% endif %}>{{ s.label }}</li>
+                    {#- v30 (PLAN_V18 Phase 145): Statusfarbe nur als --f, Fläche/Schrift in lead_v2.css #}
+                    {% if s.aktiv and s.farbe %}style="--f:{{ s.farbe }}"{% endif %}>{{ s.label }}</li>
             {% endfor %}
             {% if seitenzustand %}
                 <li class="lk-schritt seitenzustand aktiv" aria-current="step"
-                    {% if seitenzustand.farbe %}style="background:{{ seitenzustand.farbe }};border-color:{{ seitenzustand.farbe }}"{% endif %}>{{ seitenzustand.label }}</li>
+                    {% if seitenzustand.farbe %}style="--f:{{ seitenzustand.farbe }}"{% endif %}>{{ seitenzustand.label }}</li>
             {% endif %}
         </ol>
 

@@ -1,9 +1,13 @@
 {% extends "base.html" %}
 {% from "_projektierung.html" import pj_dot, pj_terminstatus, pj_vorlauf %}
+{# v30 (PLAN_V18 Phase 151): Mehrfachauswahl „Ausgewählte löschen“ (nur Admin) #}
+{% from "projektierung/_loeschen_dialog.html" import sammel_loeschen_dialog %}
 
 {% block titel %}Projektierung – Liste{% endblock %}
 
 {% block mainklasse %}breit pj-voll{% endblock %}
+
+{% set FILTER_QUERY = 'sparte=' ~ sparte ~ '&projektleiter_id=' ~ projektleiter_id ~ '&team_id=' ~ team_id ~ '&kanal=' ~ kanal ~ '&plz=' ~ plz ~ '&q=' ~ q ~ '&storniert=' ~ (1 if storniert else 0) ~ '&sortierung=' ~ sortierung ~ '&terminstatus=' ~ terminstatus ~ '&vorlauf=' ~ vorlauf ~ '&demo=' ~ (1 if demo else 0) %}
 
 {% block inhalt %}
 <div class="seitenkopf">
@@ -14,7 +18,13 @@
     <div class="aktionen">
         <a class="pj-btn" href="/projektierung">Board</a>
         <a class="pj-btn" href="/projektierung/termine">Termine</a>
-        <a class="pj-btn primary" href="/projektierung/liste?export=csv&sparte={{ sparte }}&projektleiter_id={{ projektleiter_id }}&team_id={{ team_id }}&kanal={{ kanal }}&plz={{ plz }}&q={{ q }}&storniert={{ 1 if storniert else 0 }}&sortierung={{ sortierung }}&terminstatus={{ terminstatus }}&vorlauf={{ vorlauf }}">CSV-Export</a>
+        <a class="pj-btn primary" href="/projektierung/liste?export=csv&{{ FILTER_QUERY }}">CSV-Export</a>
+        {% if ist_admin %}
+        {# v30 (Phase 151): Sammelaktion – öffnet den Sicherheitsdialog mit der Auswahl #}
+        <button class="pj-btn danger" type="button" id="pj-sammel-knopf"
+                title="Ausgewählte Projekte endgültig löschen (nur Admin)"
+                onclick="pjSammelLoeschen()">🗑 Ausgewählte löschen</button>
+        {% endif %}
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
@@ -71,20 +81,38 @@
         <input type="checkbox" name="storniert" value="1"
                {{ 'checked' if storniert }} onchange="this.form.submit()">
         Storniert</label>
+    {# v30 (PLAN_V18 Phase 151): Filter „Demo“ – Projekte aus scripts/demo_projekte.py #}
+    <label class="pj-chip {{ 'on' if demo }}" title="Nur Demo-Projekte (Demo-Kunden / Lead-Demo)">
+        <input type="checkbox" name="demo" value="1"
+               {{ 'checked' if demo }} onchange="this.form.submit()">
+        Demo</label>
     <button class="pj-chip" type="submit">Filtern</button>
 </form>
 
 {% if zeilen %}
-<table class="tabelle">
-    <thead><tr><th>PR-Nr.</th><th>Kunde</th><th>Ort</th><th>Sparte</th><th>Phase</th>
-        <th>Planung</th><th><a href="?sortierung=vorlauf&sparte={{ sparte }}&vorlauf={{ vorlauf }}" title="sortieren">Vorlauf</a></th><th>Projektleiter</th><th>Terminstatus</th><th>Nächster Termin</th>
+{% if ist_admin %}
+{# v30 (Phase 151): Sammelformular der Mehrfachauswahl – die Felder des Dialogs
+   (Grund, Bestätigung) hängen über das form-Attribut daran #}
+<form method="post" action="/projektierung/liste/loeschen" id="pj-sammel-form"
+      onsubmit="return pjSammelPruefen()"></form>
+{% endif %}
+<table class="tabelle" id="pj-liste">
+    <thead><tr>{% if ist_admin %}<th title="Auswahl für „Ausgewählte löschen“"><input type="checkbox" id="pj-alle" onchange="pjAlleWaehlen(this.checked)" title="Alle auswählen"></th>{% endif %}
+        <th>PR-Nr.</th><th>Kunde</th><th>Ort</th><th>Sparte</th><th>Phase</th>
+        <th>Planung</th><th><a href="?sortierung=vorlauf&sparte={{ sparte }}&vorlauf={{ vorlauf }}&demo={{ 1 if demo else 0 }}" title="sortieren">Vorlauf</a></th><th>Projektleiter</th><th>Terminstatus</th><th>Nächster Termin</th>
         <th class="rechts">Auftragswert</th><th>Überfällig</th><th>Kanal</th><th>Angebot</th></tr></thead>
     <tbody>
     {% for z in zeilen %}
         {% set angebot = angebote.get(z.gewerk.angebot_id) %}
         <tr class="{{ 'dezent' if z.gewerk.phase == 'storniert' }}">
+            {% if ist_admin %}
+            <td><input type="checkbox" class="pj-auswahl" name="projekt_id" form="pj-sammel-form"
+                       value="{{ z.projekt.id }}" data-nummer="{{ z.projekt.nummer }}"
+                       title="{{ z.projekt.nummer }} auswählen"></td>
+            {% endif %}
             <td><a href="/projektierung/projekt/{{ z.projekt.id }}" class="pj-mono">{{ z.projekt.nummer }}</a></td>
-            <td>{{ z.kunde.anzeige_name if z.kunde else '?' }}</td>
+            <td>{{ z.kunde.anzeige_name if z.kunde else '?' }}
+                {% if z.demo %}{# v30 (Phase 151): Badge Demo-Projekt #}<span class="demo-badge" title="Demo-Projekt (Demo-Kunde oder Lead-Demo) – vor dem Go-live über die Mehrfachauswahl löschen">Demo</span>{% endif %}</td>
             <td>{{ z.projekt.ausfuehrung_ort }}</td>
             <td><span class="pj-sp {{ z.gewerk.sparte }}">{{ z.gewerk.sparte }}</span></td>
             <td>{{ phasen_namen.get(z.gewerk.phase, z.gewerk.phase) }}</td>
@@ -107,5 +135,35 @@
 </table>
 {% else %}
 <p class="hinweis">Keine Gewerke im Filter.</p>
+{% endif %}
+
+{% if ist_admin %}
+{{ sammel_loeschen_dialog('pj-sammel-form', loesch_hinweis, loesch_bestaetigung,
+                          zurueck='/projektierung/liste?' ~ FILTER_QUERY) }}
+<script>
+// v30 (PLAN_V18 Phase 151): Mehrfachauswahl – Nummern der markierten Projekte
+// (ein Projekt mit mehreren Gewerken zählt einmal) in den Dialog schreiben
+function pjSammelAuswahl() {
+    var nummern = [], ids = [];
+    document.querySelectorAll('.pj-auswahl:checked').forEach(function (k) {
+        if (ids.indexOf(k.value) === -1) { ids.push(k.value); nummern.push(k.dataset.nummer); }
+    });
+    return nummern;
+}
+function pjSammelLoeschen() {
+    var dlg = document.getElementById('dlg-sammel-loeschen');
+    var nummern = pjSammelAuswahl();
+    if (!nummern.length) { alert('Bitte zuerst Projekte in der Liste auswählen (Häkchen links).'); return; }
+    dlg.querySelector('[data-anzahl]').textContent = nummern.length;
+    dlg.querySelector('[data-nummern]').textContent = nummern.join(', ');
+    dlg.showModal();
+}
+function pjSammelPruefen() {
+    return pjSammelAuswahl().length > 0;
+}
+function pjAlleWaehlen(an) {
+    document.querySelectorAll('.pj-auswahl').forEach(function (k) { k.checked = an; });
+}
+</script>
 {% endif %}
 {% endblock %}

@@ -22,6 +22,21 @@ Kaskade/Terminhinweise, `konfigurator_logik_v5.xlsx` Blatt Anhänge) und
 `anlagen/Bosch Climate 3200i.pdf` kommen mit dem Pull. Nach dem Update:
 `docs/nach-dem-update-v28.md` und `docs/nach-dem-update-v29.md`; neuer Scheduler-Lauf
 `lead-mail-abruf` (14 Läufe, `/health`).
+**v30 (PLAN_V18, Phasen 145–152):** Design v2 mit Hell/Dunkel (Umschalter im Menü,
+Standard „Gerät entscheidet“), Zurück-Knopf auf Detailseiten, BzA-Datenblatt ohne A20 und
+ohne Abschnitt „Ersteller“ (neue Puffer-Zeile), Lieferschein mit Langtexten und abhängigen
+Positionen, Zahlungsbedingungen je Angebot, „Projekt löschen“ (Admin) für den Go-live der
+Projektierung. `migrate.py` legt nur additive Dinge an (Tabelle `zahlungsbedingungen` mit
+drei Einträgen, Spalten `angebote.zahlungsbedingung_key/_text`,
+`angebots_loeschungen.art/grund`, Parameter `bza_kosten_puffer_prozent` und
+`lieferschein_folgepositionen`) und ersetzt in den Nachtext-Blöcken den festen
+Zahlungsabsatz durch den Platzhalter `{zahlungsbedingungen}` – Blöcke, in denen der Absatz
+nicht wörtlich stand, meldet der Lauf (Platzhalter dort von Hand nachtragen). Die
+Live-Excel `konfigurator_logik_v5.xlsx` kommt ohne die Frage A20 mit dem Pull. Keine neuen
+Scheduler-Läufe. Vorher am Entwicklungs-PC: Voll-Crawl **je einmal hell und dunkel**
+(`scripts\voll_crawl.py … --darstellung hell` bzw. `dunkel`). Nach dem Update:
+`docs/nach-dem-update-v30.md` (Team: Darstellung wählen, Zurück-Knopf, Zahlungsbedingung im
+Editor; Admin: Demo-Projekte löschen, Go-live-Schalter `freigabe_modus = alle`).
 
 ## 1. Einmalige Einrichtung (GitHub, privates Repository)
 
@@ -146,6 +161,14 @@ davor meldet die Kontrolle „HTTP 404“ (normal). Nach dem Rollback
   Server wurde am Code manuell geändert. Änderungen verwerfen mit
   `git reset --hard origin/master` (Daten in `data\` sind davon nicht
   betroffen), dann `update.bat` erneut.
+- **`git pull` bricht ab mit „Your local changes to the following files would be
+  overwritten by merge“** (erlebt beim Update 08.10.2026 mit
+  `projektierung_logik_v1.xlsx`) → das Tool hat eine versionierte Live-Excel auf dem
+  Server verändert (Parametrierungs-Editoren schreiben in die Datei). Vorgehen: Tool ist
+  bereits gestoppt; die genannte Datei nach `data\backups\excel-vor-<Version>\` kopieren,
+  dann `git checkout -- <datei>` und `update.bat` erneut starten (Schritt 3 läuft dann
+  durch; die Sicherung bleibt für den Vergleich). Vor jedem Update lohnt ein kurzes
+  `git status` im Projektordner.
 - **Anmeldung schlägt fehl** → Token abgelaufen: im Windows-Anmeldeinformationsmanager
   den Eintrag `git:https://github.com` löschen, `update.bat` erneut starten und
   neu anmelden.

@@ -707,6 +707,7 @@ def _daten() -> list[str]:
             session.commit()
         # v19 (PLAN_V14 Phase 95): Ersteller-Parameter des BzA-Datenblatts
         # (leer = angemeldeter Benutzer). Neue Erfassungsfragen A20/N11 stecken
+        # (A20 seit v30 wieder gestrichen, PLAN_V18 Phase 148)
         # im JSON der Erfassung, die BAFA-Stammdaten im Logik-Blatt – beides
         # braucht keine Schemaänderung; kfw_gefoerdert (Bestand = unbekannt)
         # ergänzt _NACHTRAEGLICHE_SPALTEN.
@@ -761,7 +762,12 @@ def _daten() -> list[str]:
                                     ("app.lead_mail", "migration_v29_mails"),
                                     # Nachtrag 08.10.2026 (Antworten Andreas): alte Formular-
                                     # Entwürfe leeren
-                                    ("app.montage_formulare", "migration_v28_entwuerfe")):
+                                    ("app.montage_formulare", "migration_v28_entwuerfe"),
+                                    # v30 (PLAN_V18 Phase 148–150): Zahlungsbedingungen
+                                    # (drei Einträge, Platzhalter in den Nachtexten),
+                                    # Parameter bza_kosten_puffer_prozent /
+                                    # lieferschein_folgepositionen
+                                    ("app.zahlungsbedingungen", "migration_v30_zahlung")):
             try:
                 modul = importlib.import_module(modulname)
             except ImportError:

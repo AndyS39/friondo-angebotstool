@@ -143,9 +143,28 @@ ist innerhalb von sechs (6) Wochen ab Kenntnisnahme in Textform gegenüber der j
 anderen Vertragspartei zu erklären.
 
 **Zahlung**
-Eine Anzahlung von 50% des Angebotsbetrags ist spätestens 14 Tage vor Arbeitsbeginn zu
-zahlen. Die Restzahlung wird mit der Schlussrechnungsstellung fällig. Die Rechnung
-erhalten Sie im Anschluss zur Installation.
+`{zahlungsbedingungen}` *(seit v30, PLAN_V18 Phase 150: Platzhalter im Textblock – das
+PDF druckt hier den Text der am Angebot gewählten Zahlungsbedingung; die Überschrift
+„Zahlung“ bleibt im Textblock. Die Texte pflegt der Innendienst unter Parametrierung →
+Zahlungsbedingungen (`app/zahlungsbedingungen.py`, Tabelle `zahlungsbedingungen`); ohne
+Auswahl gilt der Standard-Eintrag. Startwerte:)*
+
+1. **Standard** (bisheriger fester Absatz, wörtlich):
+   Eine Anzahlung von 50% des Angebotsbetrags ist spätestens 14 Tage vor Arbeitsbeginn zu
+   zahlen. Die Restzahlung wird mit der Schlussrechnungsstellung fällig. Die Rechnung
+   erhalten Sie im Anschluss zur Installation.
+2. **50 % am Montagetag** [ANNAHME, Innendienst liest gegen]:
+   Eine Anzahlung von 50% des Angebotsbetrags ist am Tag der Montage zu zahlen. Die
+   Restzahlung wird mit der Schlussrechnungsstellung fällig. Die Rechnung erhalten Sie im
+   Anschluss zur Installation.
+3. **80 % Anzahlung, 2 % Skonto** [ANNAHME, Innendienst liest gegen]:
+   Eine Anzahlung von 80% des Angebotsbetrags ist spätestens 14 Tage vor Arbeitsbeginn zu
+   zahlen. Bei Zahlung der Anzahlung innerhalb von 7 Tagen nach Auftragserteilung gewähren
+   wir 2% Skonto auf den Anzahlungsbetrag. Die Restzahlung wird mit der
+   Schlussrechnungsstellung fällig. Die Rechnung erhalten Sie im Anschluss zur Installation.
+
+Abweichend (Freitext) am Angebot: der eingegebene Text erscheint wörtlich. Skonto wirkt nur
+im Text – keine Änderung an Summen, KfW-Rechnung oder Deckungsbeitrag.
 
 **Hinweis zur KfW-Förderung**
 Der Wechsel zu einer klimafreundlichen Heizlösung kann unter bestimmten
@@ -353,8 +372,10 @@ Duisburg" + „Unsere Leistungen / Installationsvoraussetzungen".
 ### 9.3 Nachtext B KL – „Installationsvoraussetzungen"
 
 Haftungsbegrenzung, Rücktrittsrecht im Zusammenhang mit Technischer Feinplanung
-und Zahlung wörtlich wie Abschnitt 6; **ohne** „Hinweis zur KfW-Förderung",
-stattdessen nach „Zahlung" ([ANNAHME], Innendienst liest gegen):
+und Zahlung wörtlich wie Abschnitt 6 (seit v30 ebenfalls mit dem Platzhalter
+`{zahlungsbedingungen}` – die am Angebot gewählte Zahlungsbedingung gilt auch für
+Klima-Angebote); **ohne** „Hinweis zur KfW-Förderung", stattdessen nach „Zahlung"
+([ANNAHME], Innendienst liest gegen):
 
 **Hinweis zur Kältetechnik**
 Die angebotenen Geräte arbeiten mit dem Kältemittel R32. Montage, Evakuierung,
@@ -406,7 +427,12 @@ ggf. „− Rabatt" / „= Endbetrag"; **kein** KfW-Block, keine Wirtschaftlichk
   und Ratenkauf greifen über „immer" (Ratenkauf nicht bei Enni/SWD).
 - **Lieferschein:** wie WP/PV ohne Preise; EP-Zeile (Gateway) und die
   Auslegungszeile entfallen; die Gruppen-Überschrift „Klimaanlage Bosch" steht
-  seit v24 auch im Lieferschein.
+  seit v24 auch im Lieferschein. Seit v30 (PLAN_V18 Phase 149) erscheint jede
+  Position mit Bezeichnung (fett) und der **vollständigen** Beschreibung (alle
+  Zeilen wie im Angebots-PDF, 7,5 pt, Seitenumbruch innerhalb langer Texte
+  erlaubt); EP-Folgepositionen nach Parameter `lieferschein_folgepositionen`
+  (Standard `014: 015, 016, 017` – bei WP: steht „Friondo fit for future“ auf EP,
+  Alternativ oder bauseits, fehlen auch HEMS, iMSys und SpotDynamic).
 - **Protokoll-PDF:** Seite „Auslegung" mit den Zeilen aus
   `kl_auslegung.protokoll_zeilen` (je Raum Fläche · Höhe · Wärmelast · Kühllast ·
   Klasse · Außengerät; je Außengerät Gerät und Kombination; Montage) – Einträge

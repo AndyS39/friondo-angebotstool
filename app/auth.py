@@ -50,7 +50,8 @@ AUSSENDIENST_PFADE = ("/erfassung", "/leads", "/signatur", "/statistik",
                       # v12 (Phase 81): AD-Sicht des Lead-Moduls (Meine
                       # Termine, No-Show/Verschieben) – Routen prüfen selbst
                       "/lead-management",
-                      "/login", "/logout", "/static", PIN_WECHSEL_PFAD)
+                      "/login", "/logout", "/static", PIN_WECHSEL_PFAD,
+                      "/einstellungen")   # v30 (Phase 145): Darstellung je Benutzer
 ADMIN_PFADE = ("/benutzer",)
 BUERO_ROLLEN = ("admin", "innendienst")
 # v11 (Phase 70): Hauptrolle projektierung – Projektierung voll, Angebote/
@@ -61,11 +62,13 @@ PROJEKTIERUNG_PFADE = ("/projektierung", "/montage", "/benachrichtigungen",
                        "/parametrierung/projektierung-logik",
                        "/parametrierung/teams", "/parametrierung/subunternehmer",
                        "/parametrierung/stuecklisten",       # V4 Phase 93.2
-                       "/login", "/logout", "/static", PIN_WECHSEL_PFAD)
+                       "/login", "/logout", "/static", PIN_WECHSEL_PFAD,
+                       "/einstellungen")   # v30 (Phase 145): Darstellung je Benutzer
 PROJEKTIERUNG_SCHREIBEN = ("/projektierung", "/montage", "/benachrichtigungen",
-                           "/parametrierung", "/login", "/logout", PIN_WECHSEL_PFAD)
+                           "/parametrierung", "/login", "/logout", PIN_WECHSEL_PFAD,
+                           "/einstellungen")   # v30 (Phase 145)
 MONTAGE_PFADE = ("/montage", "/benachrichtigungen", "/login", "/logout", "/static",
-                 PIN_WECHSEL_PFAD)
+                 PIN_WECHSEL_PFAD, "/einstellungen")   # v30 (Phase 145): Darstellung
 # v15 (Phase 82): Montage erreicht die Vorgangs-Galerie (ansehen + Upload –
 # die Datei-/Upload-Routen prüfen selbst über galerie.darf_hochladen, dass
 # der Vorgang zu einem eigenen Team-Einsatz gehört); löschen/verschieben
@@ -80,10 +83,12 @@ LEADMANAGEMENT_PFADE = ("/lead-management", "/api/leads", "/benachrichtigungen",
                         "/kunden", "/vorgaenge", "/erfassungen", "/angebote",
                         "/parametrierung/lead-quellen",
                         "/parametrierung/lead-logik",
-                        "/login", "/logout", "/static", PIN_WECHSEL_PFAD)
+                        "/login", "/logout", "/static", PIN_WECHSEL_PFAD,
+                        "/einstellungen")   # v30 (Phase 145): Darstellung je Benutzer
 LEADMANAGEMENT_SCHREIBEN = ("/lead-management", "/api/leads",
                             "/benachrichtigungen", "/kunden", "/vorgaenge",
-                            "/parametrierung", "/login", "/logout", PIN_WECHSEL_PFAD)
+                            "/parametrierung", "/login", "/logout", PIN_WECHSEL_PFAD,
+                            "/einstellungen")   # v30 (Phase 145)
 
 # --- v27 Login-Härtung: Konstanten und Texte (Plan-Wortlaut) --------------------
 PBKDF2_RUNDEN = 200_000
@@ -471,7 +476,24 @@ class RollenMiddleware(BaseHTTPMiddleware):
             request.state.lead_hv_ok = False
             request.state.wartung = None
             request.state.lm_demo_badge = None
+            # v30 (PLAN_V18 Phase 145): Darstellung (geraet | hell | dunkel) – vor der
+            # Anmeldung zählt nur das Cookie (Login-Seite); angemeldet gilt die
+            # gespeicherte Wahl des Benutzers, das Cookie zieht dispatch nach
+            # (anderer Browser, fremdes Cookie derselben Maschine)
+            from app import darstellung
+            request.state.darstellung = darstellung.aus_cookie(request)
+            request.state.darstellung_cookie = None
             if benutzer is not None and not pfad.startswith("/static"):
+                try:
+                    # gespeicherte Wahl gewinnt; nie gewählt → Cookie (Crawl/Tests „per
+                    # Cookie“, Vorschlag D1), ohne Cookie „Gerät“
+                    gewaehlt = (darstellung.lesen(session, benutzer.id)
+                                or darstellung.aus_cookie(request))
+                    request.state.darstellung = gewaehlt
+                    if request.cookies.get(darstellung.COOKIE, "") != gewaehlt:
+                        request.state.darstellung_cookie = gewaehlt
+                except Exception:
+                    pass
                 # v27 (Befund B7): Demo-Badge der Lead-Icon-Leiste hier lesen statt
                 # im Jinja-Global mit eigener Sitzung (zweite Verbindung je Lead-Seite)
                 try:
@@ -556,6 +578,14 @@ class RollenMiddleware(BaseHTTPMiddleware):
             anfrage.KONTEXT.set({"lm_demo_badge": getattr(request.state, "lm_demo_badge", None)})
             antwort = await self._weiterleiten(request, benutzer, pfad, call_next)
             status = antwort.status_code
+            # v30 (Phase 145): Cookie „darstellung“ an die gespeicherte Wahl angleichen
+            cookie_wert = getattr(request.state, "darstellung_cookie", None)
+            if cookie_wert:
+                try:
+                    from app import darstellung
+                    darstellung.cookie_setzen(antwort, cookie_wert)
+                except Exception:
+                    pass
             return antwort
         finally:
             if not pfad.startswith(("/static", "/health")):

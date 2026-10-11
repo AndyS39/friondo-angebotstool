@@ -26,7 +26,8 @@
     <div class="pj-kv">
         <span>Termin</span>
         <div><b>{{ dieser_termin.zeit }}</b> · {{ dieser_termin.art }}
-            {% if dieser_termin.team %}<br>{% if dieser_termin.team_farbe %}<i class="pj-teamfarbe" style="background:{{ dieser_termin.team_farbe }}"></i>{% endif %}{{ dieser_termin.team }}{% endif %}
+            {#- v30 (PLAN_V18 Phase 145): Teamfarbe als --f (projektierung_v28.css .pj-teamfarbe) #}
+            {% if dieser_termin.team %}<br>{% if dieser_termin.team_farbe %}<i class="pj-teamfarbe" style="--f:{{ dieser_termin.team_farbe }}"></i>{% endif %}{{ dieser_termin.team }}{% endif %}
             {% if dieser_termin.person %}<br>{{ dieser_termin.person }}{% endif %}
             {% if dieser_termin.besetzung %}<br>{{ besetzung_chips(dieser_termin.besetzung) }}{% endif %}
             {% if termin.notiz %}<br><small style="color:var(--pj-muted)">{{ termin.notiz }}</small>{% endif %}</div>
@@ -85,7 +86,7 @@
         <div class="pj-termin-zeile {{ 'aktuell' if z.termin.id == termin.id }}">
             <span class="art">{{ z.art }}</span> · {{ z.zeit }}
             {% if z.kunde_bestaetigt %} · <span title="Kunde hat den Termin bestätigt">Kunde bestätigt ✔</span>{% endif %}
-            <small>{% if z.team %}{% if z.team_farbe %}<i class="pj-teamfarbe" style="background:{{ z.team_farbe }}"></i>{% endif %}{{ z.team }}{% endif %}{% if z.person %}{{ ' · ' if z.team }}{{ z.person }}{% endif %}
+            <small>{% if z.team %}{% if z.team_farbe %}<i class="pj-teamfarbe" style="--f:{{ z.team_farbe }}"></i>{% endif %}{{ z.team }}{% endif %}{% if z.person %}{{ ' · ' if z.team }}{{ z.person }}{% endif %}
                 {% if z.besetzung %}· {{ besetzung_chips(z.besetzung) }}{% elif z.team %}· <span class="dezent">Besetzung: ganzes Team</span>{% endif %}</small>
         </div>
         {% else %}

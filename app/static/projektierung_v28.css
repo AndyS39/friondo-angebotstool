@@ -2,7 +2,9 @@
    Dummy-Scrollbalken, Drag-&-Drop-Dialog), Termin-Dialog, Block Termine, Aufgabe
    „entfällt“, Stücklisten-Art. Pflege: Agent P1. Nur CSS-Tokens des Design-Systems
    v14 (style.css :root, --pj-*), keine externen Schriften/CDNs. Wird nach style.css
-   geladen – gleiche Spezifität gewinnt hier. */
+   geladen – gleiche Spezifität gewinnt hier.
+   v30 (PLAN_V18 Phase 145): Art-Badges mit Kartenfarbe als Schrift (Hell weiß, Dunkel dunkel)
+   auf den aufgehellten pj-Tokens; Designblock v30 am Ende der Datei. */
 
 /* --- Phase 134: volle Breite der Projektierungs-Seiten --------------------------
    Nachtrag 08.10.2026 (Antwort Andreas): die volle Breite gilt für ALLE breit-Seiten
@@ -109,11 +111,11 @@ dialog.pj-dlg .pj-termin-meldung { margin-top: 8px; }
 .pj-termine-tab tr.vergangen td { color: var(--pj-muted); }
 .pj-termine-tab .pj-termin-aktionen { white-space: nowrap; text-align: right; }
 .pj-termine-tab .pj-btn { padding: 2px 7px; font-size: 11px; }
-.pj-badge.pj-art-montage { background: var(--pj-wp); color: #fff; border-color: var(--pj-wp); }
-.pj-badge.pj-art-elektro { background: var(--pj-pv); color: #fff; border-color: var(--pj-pv); }
-.pj-badge.pj-art-sub { background: var(--pj-muted); color: #fff; border-color: var(--pj-muted); }
-.pj-badge.pj-art-feinplanung { background: var(--pj-info); color: #fff; border-color: var(--pj-info); }
-.pj-badge.pj-art-abnahme { background: var(--pj-wb); color: #fff; border-color: var(--pj-wb); }
+.pj-badge.pj-art-montage { background: var(--pj-wp); color: var(--flaeche-karte); border-color: var(--pj-wp); }
+.pj-badge.pj-art-elektro { background: var(--pj-pv); color: var(--flaeche-karte); border-color: var(--pj-pv); }
+.pj-badge.pj-art-sub { background: var(--pj-muted); color: var(--flaeche-karte); border-color: var(--pj-muted); }
+.pj-badge.pj-art-feinplanung { background: var(--pj-info); color: var(--flaeche-karte); border-color: var(--pj-info); }
+.pj-badge.pj-art-abnahme { background: var(--pj-wb); color: var(--flaeche-karte); border-color: var(--pj-wb); }
 .pj-badge.pj-art-sonstige { background: var(--pj-surface2); }
 
 /* --- Phase 135: Termin-Dialog --- */
@@ -143,12 +145,204 @@ dialog.pj-dlg input[type=time] { width: 100%; padding: 8px; border: 1px solid va
 .pj-vorschlaege .pj-note { margin: 6px 0 0; }
 
 /* --- Phase 139: Stücklisten-Art --- */
-.pj-badge.pj-art-bestellen { background: var(--pj-ok); color: #fff; border-color: var(--pj-ok); }
-.pj-badge.pj-art-lager { background: var(--pj-info); color: #fff; border-color: var(--pj-info); }
+.pj-badge.pj-art-bestellen { background: var(--pj-ok); color: var(--flaeche-karte); border-color: var(--pj-ok); }
+.pj-badge.pj-art-lager { background: var(--pj-info); color: var(--flaeche-karte); border-color: var(--pj-info); }
 .pj-badge.pj-art-leistung { background: var(--pj-surface2); color: var(--pj-muted); }
-.pj-badge.pj-art-fremd { background: var(--pj-warn); color: #fff; border-color: var(--pj-warn); }
+.pj-badge.pj-art-fremd { background: var(--pj-warn); color: var(--flaeche-karte); border-color: var(--pj-warn); }
 
 @media (max-width: 720px) {
     .pj-termin-zeit { grid-template-columns: 1fr; }
     .pj-board { min-height: 360px; }
+}
+
+
+/* ==================================================================== */
+/* v30 (PLAN_V18 Phase 146): Design v2 „Nachtglas“ – Projektierung und    */
+/* Montage: Board (Kacheln mit Farbakzent, Chip-Filter, Spalten, Karten,  */
+/* Vorlauf-Ampel, Termin-Badge), Kalender, Terminübersicht, Meine         */
+/* Aufgaben, Projektakte (Kopf, Gewerk-Spalten, Pakete, Aufgaben, Reiter), */
+/* Dialoge (<dialog>, Termin-Dialog), Galerie-Sammelbox, Steckbrief, BzA-, */
+/* Feinplanungs-, UGL- und Mail-Seiten, Montage-Backend (Einsätze,        */
+/* Auftragsdetail, Formulare, Wochenkalender – auch bei 390 px). Überschreibt */
+/* die pj-Regeln aus style.css mit den semantischen Tokens; nur Tokens,  */
+/* feste Werte nur mit Kommentar „fest:“.                                 */
+/* ==================================================================== */
+
+/* --- Kopf, Kacheln, Chips, Knöpfe --- */
+.pj-eyebrow { color: var(--text-dezent); }
+.pj-tile { background: var(--flaeche-karte); border: 1px solid var(--linie); border-top: 3px solid var(--akzent); border-radius: var(--r-l);
+    box-shadow: var(--schatten-1); color: var(--text); }
+.pj-tile .n { font-size: var(--t-xl); color: var(--text-titel); letter-spacing: -0.02em; }
+.pj-tile .l, .pj-tile .s { color: var(--text-dezent); }
+.pj-tile.crit { border-color: var(--linie); border-top-color: var(--status-rot); }
+.pj-tile.crit .n { color: var(--status-rot); }
+a.pj-tile:hover { border-color: var(--akzent); }
+.pj-chip { background: var(--flaeche-karte); border-color: var(--linie-stark); color: var(--text); border-radius: 8px; }
+.pj-chip:hover { border-color: var(--akzent); }
+.pj-chip.on { background: var(--akzent-flaeche); border-color: var(--akzent); color: var(--akzent); }
+.pj-chip:focus-visible, .pj-card:focus-visible, .pj-btn:focus-visible { outline: 2px solid var(--fokus); }
+.pj-btn { background: var(--flaeche-karte); border-color: var(--linie-stark); color: var(--text); border-radius: 8px; }
+.pj-btn:hover { border-color: var(--akzent); background: var(--flaeche-hover); }
+.pj-btn.primary { background: var(--akzent); color: var(--akzent-text); border-color: var(--akzent); box-shadow: 0 0 16px var(--akzent-glanz); }
+.pj-btn.primary:hover { background: var(--akzent-hover); border-color: var(--akzent-hover); }
+.pj-btn.danger { color: var(--status-rot); border-color: var(--status-rot); background: var(--flaeche-karte); }
+.pj-btn.danger:hover { background: var(--status-rot-bg); }
+.pj-note { background: var(--akzent-flaeche); color: var(--akzent-hover); }
+.pj-note.crit { background: var(--status-rot-bg); color: var(--status-rot); border: 1px solid color-mix(in srgb, var(--status-rot) 40%, transparent); }
+.pj-badge { border-color: var(--linie-stark); color: var(--text-dezent); }
+.pj-badge.crit { background: var(--status-rot); color: var(--status-rot-bg); border-color: var(--status-rot); }
+.pj-badge.kanal { background: var(--akzent-flaeche); color: var(--akzent-hover); }
+.pj-sp { color: var(--flaeche-karte); }   /* Sparten-Kürzel: Kartenfarbe als Schrift auf der Sparten-Fläche (Hell dunkel, Dunkel hell) */
+.pj-ts.g { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.pj-ts.y { background: var(--status-orange-bg); color: var(--status-orange); }
+.pj-ts.r { background: var(--status-rot-bg); color: var(--status-rot); }
+.pj-dbadge, .pj-v1 { background: var(--status-orange-bg); color: var(--status-orange); }
+.pj-mono { font-family: inherit; font-variant-numeric: tabular-nums; }   /* Zahlen tabellarisch statt Monospace (PLAN_V18 Phase 145) */
+
+/* --- Board: Spalten, Karten, Gewerk-Zeilen --- */
+.pj-col { background: var(--flaeche-abgesetzt); border: 1px solid var(--linie); border-radius: var(--r-l); }
+.pj-col > h3, .pj-col > details > summary.pj-colkopf, .pj-col summary.pj-colkopf { background: var(--flaeche-abgesetzt); color: var(--text-titel);
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.pj-col > h3 span, .pj-col summary.pj-colkopf span { color: var(--text-dezent); text-transform: none; letter-spacing: 0; font-size: 0.78rem; }
+.pj-col.pj-drop-ziel { outline-color: var(--akzent); }
+.pj-col-ae + .pj-col-ae { border-left-color: var(--linie-stark); }
+.pj-card { background: var(--flaeche-karte); border-color: var(--linie); color: var(--text); box-shadow: var(--schatten-1); border-radius: var(--r-m); }
+.pj-card:hover { border-color: var(--akzent); }
+.pj-card .hd { flex-wrap: wrap; row-gap: 3px; }
+.pj-card .pr { white-space: nowrap; }
+.pj-card .pr, .pj-card .meta { color: var(--text-dezent); }
+.pj-card .name { color: var(--text-titel); }
+.pj-gw { background: var(--flaeche-abgesetzt); color: var(--text); }
+.pj-gw .dt, .pj-gw.storniert { color: var(--text-dezent); }
+.pj-col-leer { color: var(--text-dezent); }
+.pj-board::-webkit-scrollbar-track, .pj-hscroll::-webkit-scrollbar-track { background: var(--flaeche-abgesetzt); }
+.pj-board::-webkit-scrollbar-thumb, .pj-hscroll::-webkit-scrollbar-thumb { background: var(--linie-stark); border-color: var(--flaeche-abgesetzt); }
+.pj-board::-webkit-scrollbar-thumb:hover, .pj-hscroll::-webkit-scrollbar-thumb:hover { background: var(--text-dezent); }
+
+/* --- Projektakte: Kopf, Gewerk-Spalten, Pakete, Aufgaben, Reiter, Verlauf (Markup gehört P – nur CSS) --- */
+.pj-akte-head, .pj-gcol, .pj-pane, .pj-grp .pj-task, .pj-termine, .pj-steck, .pj-gal-ordner, .pj-mailfotos .foto, .pj-kal {
+    background: var(--flaeche-karte); border-color: var(--linie); color: var(--text); }
+.pj-akte-head { border-radius: var(--r-l); box-shadow: var(--schatten-1); }
+.pj-akte-head h2, .pj-gcol > h3, .pj-bza-gruppe, .pj-steplbl b { color: var(--text-titel); }
+.pj-akte-head .row > div > span:first-child, .pj-kv > span, .pj-steplbl, .pj-plinks, .pj-akt-hinweis, .pj-akt label, .pj-tree .f,
+.pj-log .sys, .pj-log time, .pj-task .t small, .pj-paket > summary .cnt, .pj-termine-tab th, .pj-termine-tab tr.vergangen td,
+.pj-steck-raster .k, .pj-bza-raster .k, .pj-gal-raster figcaption, .pj-kal-tag, .pj-kal-legende, .pj-mob-tag .k, .pj-ampel-lbl { color: var(--text-dezent); }
+.pj-gcol { border-radius: var(--r-l); border-top-width: 4px; }
+.pj-gcol.WP { border-top-color: var(--pj-wp); }
+.pj-gcol.PV { border-top-color: var(--pj-pv); }
+.pj-gcol.KL { border-top-color: var(--pj-kl); }
+.pj-gcol.WB { border-top-color: var(--pj-wb); }
+.pj-stepper i { background: var(--flaeche-abgesetzt); }
+.pj-stepper i.done, .pj-stepper i.cur { background: var(--akzent); }
+.pj-bar { background: var(--flaeche-abgesetzt); }
+.pj-paket { border-color: var(--linie); }
+.pj-paket > summary { background: var(--flaeche-abgesetzt); color: var(--text); }
+.pj-task { border-top-color: var(--linie); color: var(--text); }
+.pj-task .due { background: var(--flaeche-abgesetzt); color: var(--text); }
+.pj-task .due.over { background: var(--status-rot); color: var(--status-rot-bg); }
+.pj-task .due.wait { background: var(--status-blau-bg); color: var(--status-blau); }
+.pj-task.done > .t, .pj-task.done > form > details > summary, .pj-task.done .t > summary, .pj-task.entfaellt .t summary { color: var(--text-dezent); }
+.pj-task .pj-entf-badge { background: var(--flaeche-abgesetzt); color: var(--text-dezent); border-color: var(--linie); }
+.pj-task .pj-entf[open] > summary { background: var(--flaeche-abgesetzt); }
+.pj-grp > h3 { color: var(--text-titel); }
+.pj-grp > h3.over { color: var(--status-rot); }
+.pj-term { border-top-color: var(--linie); }
+.pj-tabs { border-bottom-color: var(--linie); }
+.pj-tab { color: var(--text-dezent); }
+.pj-tab.on { color: var(--akzent); border-bottom-color: var(--akzent); }
+.pj-log > div { border-bottom-color: var(--linie); }
+.pj-log .m { color: var(--akzent-hover); }
+.pj-pane textarea, .pj-fp-frage input[type=text], .pj-fp-frage textarea, .pj-mailform textarea, .pj-bza-raster .w, .pj-steck-raster .w input:hover,
+.pj-steck-raster .w input:focus { background: var(--flaeche-karte); color: var(--text); border-color: var(--linie-stark); }
+.pj-steck-raster .w input { color: var(--text); }
+.pj-steck-raster .w input:focus { border-color: var(--akzent); }
+.pj-steck-raster .k i { color: var(--status-orange); }
+.pj-bza-raster .w.fehlt { color: var(--status-rot); border-color: var(--status-rot); background: var(--status-rot-bg); }
+.pj-rest summary { color: var(--status-orange); }
+.pj-pk > div { background: var(--flaeche-abgesetzt); color: var(--text-dezent); }
+.pj-pk > div b { color: var(--text-titel); }
+.pj-pk > div.crit { border-color: var(--status-rot); }
+.pj-pk > div.crit b, .pj-pk > div small { color: var(--status-rot); }
+.pj-termine-tab th, .pj-termine-tab td { border-bottom-color: var(--linie); }
+.pj-badge.pj-art-sonstige, .pj-badge.pj-art-leistung { background: var(--flaeche-abgesetzt); color: var(--text); border-color: var(--linie); }
+.pj-waechter-liste .pj-wz { border-top-color: var(--linie); }
+.pj-waechter-liste .pj-wz input[type=checkbox], .pj-task input[type=checkbox], .pj-chip input[type=checkbox] { accent-color: var(--akzent); }
+.pj-waechter-ok { color: var(--status-gruen); }
+.pj-live-meldung { background: var(--text-titel); color: var(--flaeche-karte); box-shadow: var(--schatten-2); }
+
+/* --- Dialoge (<dialog class="pj-dlg">, Termin-Dialog, Phase ändern, BzA) --- */
+dialog.pj-dlg { background: var(--flaeche-karte); color: var(--text); border: 1px solid var(--linie-stark); box-shadow: var(--schatten-2); border-radius: var(--r-l); }
+dialog.pj-dlg::backdrop { background: rgba(7, 13, 26, 0.55); }   /* fest: Abdunklung hinter Dialogen (::backdrop erbt in älteren Browsern keine Tokens) */
+dialog.pj-dlg h3 { color: var(--text-titel); }
+dialog.pj-dlg label { color: var(--text-dezent); }
+dialog.pj-dlg select, dialog.pj-dlg input[type=text], dialog.pj-dlg input[type=date], dialog.pj-dlg input[type=datetime-local],
+dialog.pj-dlg input[type=time] { background: var(--flaeche-abgesetzt); color: var(--text); border-color: var(--linie-stark); }
+dialog.pj-dlg select:focus, dialog.pj-dlg input:focus { outline: 2px solid var(--akzent-glanz); border-color: var(--akzent); }
+dialog.pj-dlg .opt { border-color: var(--linie); }
+dialog.pj-dlg .opt.sel { border-color: var(--akzent); background: var(--akzent-flaeche); }
+.pj-chip-b { background: var(--akzent-flaeche); color: var(--akzent-hover); }
+.pj-vorschlag { background: var(--flaeche-karte); border-color: var(--linie); color: var(--text); }
+.pj-vorschlag:hover { border-color: var(--akzent); background: var(--akzent-flaeche); }
+.pj-vorschlag .um, .pj-chips .pj-chips-leer { color: var(--text-dezent); }
+
+/* --- Kalender (Teams × Tage), Marker-Legende, Terminübersicht --- */
+.pj-kal { border-radius: var(--r-l); }
+.pj-kal-zeile { border-bottom-color: var(--linie); }
+.pj-kal-team { background: var(--flaeche-karte); color: var(--text); }
+.pj-kal-team i { background: var(--f, var(--pj-muted)); }
+.pj-kal-kopf, .pj-kal-tag.we, .pj-kal-zelle.we { background: var(--flaeche-abgesetzt); }
+.pj-kal-tag, .pj-kal-zelle { border-left-color: var(--linie); }
+.pj-kal-tag.heute { color: var(--akzent); }
+.pj-kal-zelle.drop { outline-color: var(--akzent); }
+.pj-kal-balken { background-color: var(--f, var(--pj-muted)); color: var(--text-invers); }
+.pj-kal-marker b.fp { background: var(--pj-info); }
+.pj-kal-marker b.ab, .pj-kal-marker b.zw { background: var(--pj-wb); }
+.pj-kal-lg { display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--pj-muted); vertical-align: -1px; margin-right: 4px; }
+.pj-kal-lg.fp { width: 8px; height: 8px; border-radius: 50%; background: var(--pj-info); }
+.pj-kal-lg.ab { width: 8px; height: 8px; border-radius: 50%; background: var(--pj-wb); }
+.pj-teamfarbe { background: var(--f, var(--pj-muted)); }
+.pj-term .d { color: var(--text-titel); }
+
+/* --- Galerie (Ordner, Raster, Sammelbox, Upload), Steckbrief, Feinplanung, Mail-Fotos --- */
+.pj-gal-ordner { border-radius: var(--r-l); }
+.pj-gal-leer, .pj-gal-ordner summary .n { background: var(--flaeche-abgesetzt); color: var(--text); }
+.pj-gal-inhalt { border-top-color: var(--linie); }
+.pj-gal-raster img, .pj-mob-galerie img { border-color: var(--linie); }
+.pj-gal-raster figcaption button { color: var(--status-rot); }
+.pj-gal-raster figcaption select { color: var(--text); }
+.pj-gal-upload { border-color: var(--linie-stark); color: var(--text); }
+.pj-gal-upload.drop { border-color: var(--akzent); background: var(--akzent-flaeche); }
+.pj-gal-sammel { border-color: var(--akzent); background: var(--akzent-flaeche); color: var(--text); }
+.pj-gal-sammel .liste .foto { background: var(--flaeche-karte); border-color: var(--linie); }
+.pj-gal-sammel .liste img { background: var(--flaeche-abgesetzt); }
+.pj-gal-sammel .liste button { background: var(--flaeche-karte); color: var(--text); box-shadow: var(--schatten-1); }
+.pj-lightbox .bu { color: var(--text-dezent); }
+.pj-steck { border-radius: var(--r-l); }
+.pj-fp-radios label { background: var(--flaeche-karte); border-color: var(--linie-stark); color: var(--text); }
+.pj-fp-radios label:has(input:checked) { border-color: var(--akzent); background: var(--akzent-flaeche); }
+.pj-fp-vertrieb { background: var(--status-orange-bg); color: var(--status-orange); }
+.pj-fp-frage > label { color: var(--text); }
+.pj-mailfotos .foto span { color: var(--text-dezent); }
+
+/* --- Montage-Backend: Karte, Einsätze, Wochenkalender, Status-Block, Unterschrift --- */
+.pj-mob { background: var(--flaeche-karte); border-color: var(--linie); color: var(--text); box-shadow: var(--schatten-2); border-radius: var(--r-xl); }
+.pj-mob h2 { color: var(--text-titel); }
+.pj-einsatz { border-color: var(--linie); background: var(--flaeche-karte); }
+.pj-einsatz .d { color: var(--akzent-hover); }
+.pj-einsatz b { color: var(--text-titel); }
+.pj-mob-tag { background: var(--flaeche-karte); border-color: var(--linie); }
+.pj-mob-tag.heute { border-color: var(--akzent); }
+.pj-mob-tag.we { background: var(--flaeche-abgesetzt); }
+.pj-mob-tag .e { background: var(--akzent-flaeche); color: var(--text); }
+.pj-mob-tag .e.unbest { background: repeating-linear-gradient(45deg, var(--status-orange-bg), var(--status-orange-bg) 6px, var(--flaeche-karte) 6px, var(--flaeche-karte) 12px); }
+.pj-warn-text { color: var(--status-orange); }
+.pj-signatur { background: #fff; border-color: var(--akzent); }   /* fest: Unterschrift-Canvas bleibt weiß – die Tinte landet als Bild im PDF */
+.pj-mob .pj-status-block { background: var(--flaeche-abgesetzt); border-color: var(--linie); }
+.pj-mob .pj-termin-zeile { border-bottom-color: var(--linie); }
+.pj-mob .pj-sektion small, .pj-mob .pj-termin-zeile small, .pj-mob .pj-steck-raster .w.leer { color: var(--text-dezent); }
+.pj-mob .pj-kv a, .pj-task .t a { color: var(--link); }
+@media (max-width: 480px) {
+    .pj-mob { padding: 12px; border-radius: var(--r-l); }
+    .pj-mob .pj-btnrow .pj-btn { flex: 1 1 auto; text-align: center; }
+    .pj-mob .pj-steck-raster .w { border-bottom-color: var(--linie); }
 }

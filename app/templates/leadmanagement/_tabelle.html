@@ -32,10 +32,22 @@
 {%- endif -%}
 {%- endmacro %}
 
-{% macro status_label(z) -%}
+{# v30 (PLAN_V18 Phase 146): Status-Pille nach Vorlage – getönte Fläche in der Statusfarbe;
+   der Pfeil „▾“ kommt als CSS-Pseudoelement der Pille (lead_v2.css: .lm-status-pille.mit-pfeil),
+   wenn das Auswahlfeld (unsichtbar über der Pille) den Status ändern darf – das Label-Markup
+   `<span class="lm-status" …>Label</span>` bleibt unverändert (Tests v23/v25);
+   status_label(z) rendert wie bisher Pille + Zusätze. #}
+{% macro status_pille(z) -%}
 <span class="lm-status" style="--f:{{ z.status_farbe }}" title="Lead-Phase {{ z.status_label }}">{{ z.status_label }}</span>
+{%- endmacro %}
+
+{% macro status_zusatz(z) -%}
 {%- if z.telefongespraech %} <span class="lm-status lm-status-zusatz" title="Vorab-Gespräch ({{ 'Teams' if z.vorab.medium == 'teams' else 'Telefon' }}){{ ' am ' ~ (z.vorab.beginn | de_datum('%a %d.%m.%Y %H:%M')) if z.vorab.beginn }}">Telefongespräch</span>{% endif -%}
 {%- if z.vor_termin %} <span class="abzeichen" title="Verloren, bevor ein Vor-Ort-Termin bestand">vor Termin</span>{% endif -%}
+{%- endmacro %}
+
+{% macro status_label(z) -%}
+{{ status_pille(z) }}{{ status_zusatz(z) }}
 {%- endmacro %}
 
 {% macro punkte(z, ctx) -%}
@@ -62,7 +74,7 @@
 {%- elif key == 'nachname' -%}<td>{{ k.nachname or k.firma or '–' }}</td>
 {%- elif key == 'status' -%}
 <td class="sp-status">
-    <span class="lm-status-wahl">{{ status_label(z) }}
+    <span class="lm-status-wahl"><span class="lm-status-pille{{ ' mit-pfeil' if not ctx.nur_lesen }}">{{ status_pille(z) }}
     {%- if not ctx.nur_lesen %}
     <select class="lm-inline lm-mini" data-feld="status" data-vorgang="{{ v.id }}" data-aktuell="{{ v.lead_phase }}"
             title="Status ändern (Pflichtgründe im Dialog)" aria-label="Status ändern">
@@ -72,7 +84,7 @@
                 {{ 'disabled' if not s.setzbar and s.key != v.lead_phase }}>{{ s.label }}{{ '' if s.setzbar else ' (abgeleitet)' }}</option>
         {%- endfor %}
     </select>
-    {%- endif %}</span>
+    {%- endif %}</span>{{ status_zusatz(z) }}</span>
 </td>
 {%- elif key == 'score' -%}
 <td class="sp-score" data-wert="{{ v.score_punkte if v.score_punkte is not none else '' }}">{% if v.score_klasse %}<span class="abzeichen" title="Score-Klasse {{ v.score_klasse }}{{ ' · ' ~ v.score_punkte ~ ' Punkte' if v.score_punkte is not none }}">{{ v.score_klasse }}</span>{% if v.score_punkte is not none %} <small class="dezent">{{ v.score_punkte }}</small>{% endif %}{% else %}<span class="dezent">–</span>{% endif %}</td>
@@ -104,8 +116,9 @@
     {% if ctx.nur_lesen %}{{ k.notizen or '' }}{% else %}<input type="text" class="lm-inline lm-notiz" data-feld="notiz" data-vorgang="{{ v.id }}"
        value="{{ k.notizen or '' }}" placeholder="Notiz …" title="{{ k.notizen or 'Notiz (speichert beim Verlassen des Feldes)' }}" aria-label="Notiz">{% endif %}</td>
 {%- elif key == 'ad' -%}
-<td class="sp-ad"><span class="lm-person">{{ avatar(z.ad, 'Außendienst') }}
-    {%- if not ctx.nur_lesen %}
+{#- v30 (Phase 146): Avatar mit Pfeil, das Auswahlfeld liegt unsichtbar über Avatar + Pfeil (.lm-person-pille) #}
+<td class="sp-ad"><span class="lm-person"><span class="lm-person-pille">{{ avatar(z.ad, 'Außendienst') }}
+    {%- if not ctx.nur_lesen %}<span class="lm-avatar-pfeil" aria-hidden="true">▾</span>
     <select class="lm-inline lm-mini" data-feld="ad_id" data-vorgang="{{ v.id }}" title="Außendienst / Handelsvertreter zuweisen" aria-label="Außendienst zuweisen">
         <option value="" {{ 'selected' if not v.ad_id }}>– niemand –</option>
         {%- for b in ctx.ad_wahl %}
@@ -113,17 +126,17 @@
                 {%- if b.hv and z.hv_grund and v.ad_id != b.id %} disabled title="{{ z.hv_grund }}"{% endif %}>{{ b.name }}{{ ' (HV)' if b.hv }}</option>
         {%- endfor %}
     </select>
-    {%- endif %}
+    {%- endif %}</span>
     {%- if z.hv_grund %} <span class="lm-hv-hinweis" title="{{ z.hv_grund }} Handelsvertreter sind deshalb deaktiviert.">{{ symbol('warnung') }}</span>{% endif %}</span></td>
 {%- elif key == 'innendienst' -%}
-<td class="sp-id"><span class="lm-person">{{ avatar(z.leadmanager, 'Innendienst') }}
-    {%- if not ctx.nur_lesen and not ctx.hv %}
+<td class="sp-id"><span class="lm-person"><span class="lm-person-pille">{{ avatar(z.leadmanager, 'Innendienst') }}
+    {%- if not ctx.nur_lesen and not ctx.hv %}<span class="lm-avatar-pfeil" aria-hidden="true">▾</span>
     <select class="lm-inline lm-mini" data-feld="leadmanager_id" data-vorgang="{{ v.id }}" title="Innendienst (Leadmanager) zuweisen" aria-label="Innendienst zuweisen">
         <option value="" {{ 'selected' if not v.leadmanager_id }}>– niemand –</option>
         {%- for b in ctx.lm_wahl %}<option value="{{ b.id }}" {{ 'selected' if v.leadmanager_id == b.id }}>{{ b.name }}</option>{% endfor %}
         {%- if z.leadmanager and z.leadmanager.id not in (ctx.lm_wahl | map(attribute='id') | list) %}<option value="{{ z.leadmanager.id }}" selected>{{ z.leadmanager.name }}</option>{% endif %}
     </select>
-    {%- endif %}</span></td>
+    {%- endif %}</span></span></td>
 {%- elif key == 'ort' -%}<td class="sp-ort">{{ k.plz or '' }} {{ k.ort or '' }}{% if not (k.plz or k.ort) %}–{% endif %}</td>
 {%- elif key == 'strasse' -%}<td class="sp-strasse">{{ k.strasse or '–' }}</td>
 {%- elif key == 'telefon' -%}<td class="sp-telefon">{% if k.telefon %}<a href="tel:{{ k.telefon | replace(' ', '') }}" title="Anrufen (Click-to-Call)">{{ symbol('telefon') }} {{ k.telefon }}</a>{% else %}<span class="dezent">–</span>{% endif %}</td>

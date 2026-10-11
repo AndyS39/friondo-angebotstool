@@ -1,15 +1,15 @@
 /* Lead-Management V2 (v23, PLAN_LEAD_V2 Phasen 104–112).
    Ergänzt style.css (Design-System v14, Tokens aus :root). Jede Phase hängt
    ihren Block unten an (nur anhängen, nie überschreiben). */
-:root { --q-veranstaltung: #8e44ad; }
+/* v30: --q-veranstaltung steht seit der Integration in den drei Token-Blöcken von style.css */
 .q-veranstaltung { --f: var(--q-veranstaltung); }
-.abzeichen.interesse-gw { background: #fff1e0; color: #a35a00; margin-left: 0.2rem; }
-.chip-gw { --chip-farbe: #c47a1a; }   /* Gewerbe – Ocker */
+.abzeichen.interesse-gw { background: var(--status-orange-bg); color: var(--status-orange); margin-left: 0.2rem; }
+.chip-gw { --chip-farbe: var(--pj-pv); }   /* Gewerbe – Ocker (Token der Sparte PV) */
 
 /* Phase 109 – Handelsvertreter (G1–G5, F13–F16): Gruppen je Vertreter,
    kompakte Tabelle mit fixiertem Kopf, Status-Label aus dem Blatt Status
    (Farbe inline), Zuweisungs-Dropdown mit Sperren/Hinweisen, HV-Dashboard. */
-.hv-gruppe { background: #fff; border: 1px solid var(--g-200); border-radius: var(--r-m);
+.hv-gruppe { background: var(--flaeche-karte); border: 1px solid var(--linie); border-radius: var(--r-m);
     margin-bottom: var(--a-3); box-shadow: var(--schatten-1); overflow: hidden; }
 .hv-gruppe > summary { list-style: none; border-radius: var(--r-m) var(--r-m) 0 0; }
 .hv-gruppe > summary::-webkit-details-marker { display: none; }
@@ -17,7 +17,7 @@
 .hv-gruppe[open] > summary::before { content: "\25BE"; }
 .hv-gruppe:not([open]) > summary { border-radius: var(--r-m); }
 .hv-avatar { display: inline-flex; width: 26px; height: 26px; border-radius: 50%;
-    background: var(--friondo-dunkel); color: #fff; font-size: 11px; font-weight: 700;
+    background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); font-size: 11px; font-weight: 700;
     align-items: center; justify-content: center; letter-spacing: 0.02em; }
 .hv-tabelle-wrap { overflow-x: auto; max-height: 70vh; }
 .hv-tabelle { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--t-s); }
@@ -26,7 +26,7 @@
     letter-spacing: 0.03em; text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--g-200); }
 .hv-tabelle td { padding: 6px 10px; border-bottom: 1px solid var(--g-100); vertical-align: middle;
     white-space: nowrap; }
-.hv-tabelle tbody tr:nth-child(even) td { background: #fbfcfd; }
+.hv-tabelle tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--flaeche-abgesetzt) 45%, var(--flaeche-karte)); }
 .hv-tabelle tbody tr:hover td { background: var(--friondo-blau-hell); }
 .hv-tabelle tr:last-child td { border-bottom: none; }
 .hv-tabelle td.hv-kunde { white-space: normal; min-width: 180px; }
@@ -39,20 +39,20 @@
     font-size: var(--t-xs); font-weight: 600; white-space: nowrap; }
 .hv-zuweisung { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0; }
 .hv-zuweisung select { font: inherit; font-size: var(--t-xs); padding: 3px 6px; max-width: 190px;
-    border: 1px solid var(--g-300); border-radius: var(--r-s); background: #fff; }
+    border: 1px solid var(--g-300); border-radius: var(--r-s); background: var(--flaeche-karte); color: var(--text); }
 .hv-zuweisung select:disabled { background: var(--g-100); color: var(--g-500); }
 .hv-zuweisung .knopf.klein { padding: 2px 8px; font-size: var(--t-xs); }
 .hv-sperre { color: var(--g-500); font-size: var(--t-xs); display: inline-flex; gap: 3px; align-items: center; }
 .hv-warnung { color: var(--status-rot); font-size: var(--t-xs); font-weight: 600;
     display: inline-flex; gap: 3px; align-items: center; }
-.hv-hinweis { background: var(--status-orange-bg); border: 1px solid #ecd9ae; border-radius: var(--r-m);
-    padding: 8px 12px; font-size: var(--t-s); color: #7a5c14; margin-bottom: var(--a-3);
+.hv-hinweis { background: var(--status-orange-bg); border: 1px solid color-mix(in srgb, var(--status-orange) 35%, transparent); border-radius: var(--r-m);
+    padding: 8px 12px; font-size: var(--t-s); color: var(--status-orange); margin-bottom: var(--a-3);
     display: flex; gap: 8px; align-items: flex-start; }
 .hv-inline { display: inline; margin: 0; }
 .hv-inline select { font: inherit; font-size: var(--t-s); padding: 4px 8px; border: 1px solid var(--g-300);
-    border-radius: var(--r-s); background: #fff; }
+    border-radius: var(--r-s); background: var(--flaeche-karte); color: var(--text); }
 .hv-filter select, .hv-filter input[type="search"] { font: inherit; font-size: var(--t-s);
-    padding: 4px 8px; border: 1px solid var(--g-300); border-radius: var(--r-s); background: #fff; }
+    padding: 4px 8px; border: 1px solid var(--g-300); border-radius: var(--r-s); background: var(--flaeche-karte); color: var(--text); }
 .hv-kacheln { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px;
     margin-bottom: var(--a-3); }
 .hv-kacheln a.kachel { text-decoration: none; color: inherit; }
@@ -84,7 +84,7 @@
 .lm-dots i.e-falsche_nummer, .lm-leg.e-falsche_nummer, .lm-ergebnis.e-falsche_nummer i { background: var(--status-rot); }
 .lm-dots i.e-kein_interesse, .lm-leg.e-kein_interesse, .lm-ergebnis.e-kein_interesse i { background: var(--g-700); }
 .lm-dots.je-ergebnis i[title] { cursor: help; }
-.lm-dots.rot.je-ergebnis i.v, .lm-dots.warn.je-ergebnis i.v { box-shadow: 0 0 0 1px #fff, 0 0 0 2px currentColor; }
+.lm-dots.rot.je-ergebnis i.v, .lm-dots.warn.je-ergebnis i.v { box-shadow: 0 0 0 1px var(--flaeche-karte), 0 0 0 2px currentColor; }
 .lm-dots.warn.je-ergebnis { color: var(--status-orange); }
 .lm-dots.rot.je-ergebnis { color: var(--status-rot); }
 .lm-leg { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; margin: 0 1px 0 4px; }
@@ -97,7 +97,7 @@
 .lm-tel svg { width: 13px; height: 13px; }
 .lm-stoppuhr { font-variant-numeric: tabular-nums; font-size: var(--t-xs); color: var(--g-500);
     border: 1px solid var(--g-200); border-radius: 999px; padding: 0 7px; line-height: 18px; }
-.lm-stoppuhr.laeuft { color: #fff; background: var(--status-gruen); border-color: var(--status-gruen); }
+.lm-stoppuhr.laeuft { color: var(--status-gruen-bg); background: var(--status-gruen); border-color: var(--status-gruen); }
 .lm-rufnummer { display: inline-flex; gap: 4px; align-items: center; margin: 0; }
 .lm-rufnummer input[type="search"] { font: inherit; font-size: var(--t-s); padding: 4px 8px; border: 1px solid var(--g-300);
     border-radius: var(--r-m); min-width: 170px; }
@@ -117,13 +117,13 @@
 .lm-hinweis { margin-top: var(--a-3); }
 
 /* Phase 110 – Dashboard „Meine Arbeit“ und To-Dos (A1/A2/F7/F16) */
-.lm-umschalter { display: inline-flex; border: 1px solid var(--g-300); border-radius: 999px; overflow: hidden; background: #fff; }
+.lm-umschalter { display: inline-flex; border: 1px solid var(--linie-stark); border-radius: 999px; overflow: hidden; background: var(--flaeche-karte); }
 .lm-umschalter a { padding: 5px 14px; font-size: 13px; font-weight: 600; color: var(--g-700); text-decoration: none; }
 .lm-umschalter a + a { border-left: 1px solid var(--g-200); }
 .lm-umschalter a:hover { background: var(--friondo-blau-hell); }
-.lm-umschalter a.aktiv { background: var(--dunkelblau, #1b2a5e); color: #fff; }
+.lm-umschalter a.aktiv { background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); }
 .lm-umschalter .n { display: inline-block; min-width: 18px; padding: 0 6px; margin-left: 4px; border-radius: 999px; font-size: var(--t-xs); background: var(--g-100); color: var(--g-700); text-align: center; }
-.lm-umschalter a.aktiv .n { background: rgba(255,255,255,0.25); color: #fff; }
+.lm-umschalter a.aktiv .n { background: color-mix(in srgb, var(--lm-aktiv-fg) 22%, transparent); color: var(--lm-aktiv-fg); }
 .lm-umschalter.klein a { padding: 2px 10px; font-size: var(--t-xs); }
 .lm-h1-sub { font-size: var(--t-s, 0.9rem); font-weight: 400; }
 .lm-dash-kopf .aktionen { display: flex; align-items: center; gap: var(--a-2, 0.5rem); flex-wrap: wrap; }
@@ -153,9 +153,9 @@
 .lm-todo { display: flex; align-items: flex-start; gap: 10px; padding: 8px 6px; border-bottom: 1px solid var(--g-100); }
 .lm-todo:last-child { border-bottom: none; }
 .lm-todo-haken { margin: 0; }
-.lm-haken { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--g-300); background: #fff; color: transparent; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.lm-haken { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--linie-stark); background: var(--flaeche-karte); color: transparent; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
 .lm-haken:hover { border-color: var(--status-gruen); color: var(--status-gruen); }
-.lm-haken.an { background: var(--status-gruen); border-color: var(--status-gruen); color: #fff; }
+.lm-haken.an { background: var(--status-gruen); border-color: var(--status-gruen); color: var(--status-gruen-bg); }
 .lm-haken:disabled { cursor: default; opacity: 0.5; }
 .lm-todo.faellig .lm-haken { border-color: var(--status-rot); }
 .lm-todo.heute .lm-haken { border-color: var(--status-orange); }
@@ -185,12 +185,12 @@
 .lm-phase { border: 1px solid var(--g-200); border-radius: var(--r-m); padding: 6px 10px; background: var(--g-50); }
 .lm-phase > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; font-weight: 600; }
 .lm-phase > summary::-webkit-details-marker { display: none; }
-.lm-phase .n { margin-left: auto; background: var(--dunkelblau, #1b2a5e); color: #fff; border-radius: 999px; padding: 0 8px; font-size: var(--t-xs); }
+.lm-phase .n { margin-left: auto; background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); border-radius: 999px; padding: 0 8px; font-size: var(--t-xs); }
 .lm-phase ul { list-style: none; margin: 6px 0 0; padding: 0; max-height: 260px; overflow: auto; }
 .lm-phase li { padding: 3px 0; font-size: var(--t-s, 0.9rem); }
-.lm-phase-gewonnen .n { background: var(--status-gruen); }
-.lm-phase-verloren .n, .lm-phase-unqualifiziert .n, .lm-phase-nicht_erreicht .n { background: var(--status-rot); }
-.lm-phase-zurueckgestellt .n { background: var(--status-orange); }
+.lm-phase-gewonnen .n { background: var(--status-gruen); color: var(--status-gruen-bg); }
+.lm-phase-verloren .n, .lm-phase-unqualifiziert .n, .lm-phase-nicht_erreicht .n { background: var(--status-rot); color: var(--status-rot-bg); }
+.lm-phase-zurueckgestellt .n { background: var(--status-orange); color: var(--status-orange-bg); }
 @media (max-width: 1000px) { .lm-dash-grid { grid-template-columns: 1fr; } }
 
 /* Phase 108 – Terminassistent, Kalender-Terminarten, AD-Profil, Ersatzkunde */
@@ -206,7 +206,7 @@
 .lmt-vorschlaege { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; }
 .lmt-karten { flex: 1 1 640px; }
 .lmt-vorschlag { border-radius: var(--r-m); transition: border-color 0.15s, box-shadow 0.15s; }
-.lmt-vorschlag.aktiv { border-color: var(--friondo-blau); box-shadow: 0 0 0 2px var(--friondo-blau-hell); }
+.lmt-vorschlag.aktiv { border-color: var(--akzent); box-shadow: 0 0 0 2px var(--akzent-glanz); }
 .lmt-begruendung { font-size: var(--t-xs); color: var(--g-700); background: var(--g-50);
     border-radius: 6px; padding: 0.35rem 0.5rem; margin: 0; line-height: 1.45; }
 .lmt-karte-wrap { flex: 1 1 320px; max-width: 520px; }
@@ -230,7 +230,7 @@
 .kalender-eintrag.typ-vot { border-left-color: var(--status-blau); }
 .kalender-eintrag.typ-telefon { border-left-color: var(--status-gruen); background: var(--status-gruen-bg); }
 .kalender-eintrag.typ-online { border-left-color: var(--status-violett); background: var(--status-violett-bg); }
-.kalender-eintrag.vorgemerkt { border-style: dashed; border-left-style: dashed; background: #fff; color: var(--g-700); }
+.kalender-eintrag.vorgemerkt { border-style: dashed; border-left-style: dashed; background: var(--flaeche-karte); color: var(--text-dezent); }
 .kalender-eintrag .lmt-typ { font-size: var(--t-xs); color: var(--g-500); margin-left: 0.25rem; }
 .kalender-eintrag { position: relative; }
 .lmt-absage-knopf { position: absolute; top: 2px; right: 4px; border: 0; background: transparent;
@@ -259,18 +259,18 @@
 :root { --lm-leiste-breite: 60px; --lm-kopf: 50px; }
 .lm-leiste { position: fixed; left: 0; top: var(--lm-kopf, 50px); bottom: 0; width: var(--lm-leiste-breite);
     display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0;
-    background: #fff; border-right: 1px solid var(--g-200); box-shadow: var(--schatten-1); z-index: 40; }
+    background: var(--flaeche-karte); border-right: 1px solid var(--linie); box-shadow: var(--schatten-1); z-index: 40; }
 .lm-leiste-eintrag { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
     width: 48px; height: 48px; border-radius: var(--r-m); color: var(--g-500); text-decoration: none;
     font-size: 0.56rem; line-height: 1; cursor: pointer; border: 1px solid transparent; list-style: none; }
 .lm-leiste-eintrag .symbol-svg { width: 1.35rem; height: 1.35rem; }
 .lm-leiste-eintrag:hover { background: var(--friondo-blau-hell); color: var(--friondo-blau-dunkel); }
-.lm-leiste-eintrag.aktiv { background: var(--friondo-dunkel); color: #fff; }
+.lm-leiste-eintrag.aktiv { background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); }
 .lm-leiste-text { max-width: 46px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lm-leiste-mehr { position: relative; }
 .lm-leiste-mehr > summary::-webkit-details-marker { display: none; }
 .lm-leiste-mehr[open] .lm-leiste-menue { position: absolute; left: calc(100% + 8px); top: 0; min-width: 220px;
-    background: #fff; border: 1px solid var(--g-200); border-radius: var(--r-m); box-shadow: var(--schatten-2);
+    background: var(--flaeche-karte); border: 1px solid var(--linie); border-radius: var(--r-m); box-shadow: var(--schatten-2);
     padding: var(--a-1) 0; display: flex; flex-direction: column; z-index: 60; }
 .lm-leiste-menue a { display: flex; align-items: center; gap: 8px; padding: 0.55rem 1rem; color: var(--friondo-dunkel);
     text-decoration: none; font-size: var(--t-m); }
@@ -280,19 +280,19 @@
 main:has(.lm-leiste) { padding-left: calc(var(--lm-leiste-breite) + var(--a-5)); }
 body.einbett .lm-leiste { display: none; }
 body.einbett main:has(.lm-leiste) { padding-left: 14px; }
-.lm-umschalter { display: inline-flex; border: 1px solid var(--g-200); border-radius: 999px; overflow: hidden; background: #fff; }
+.lm-umschalter { display: inline-flex; border: 1px solid var(--linie); border-radius: 999px; overflow: hidden; background: var(--flaeche-karte); }
 .lm-umschalter a { display: inline-flex; align-items: center; gap: 5px; padding: 0.3rem 0.8rem; font-size: var(--t-s);
     color: var(--g-700); text-decoration: none; border-right: 1px solid var(--g-200); }
 .lm-umschalter a:last-child { border-right: none; }
 .lm-umschalter a:hover { background: var(--friondo-blau-hell); }
-.lm-umschalter a.aktiv { background: var(--friondo-dunkel); color: #fff; font-weight: 600; }
+.lm-umschalter a.aktiv { background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); font-weight: 600; }
 .lm-boardkopf { flex-wrap: wrap; row-gap: 6px; }
 .lm-boardkopf h1 { margin: 0.4rem 0; }
 .lm-suchleiste input[type="search"] { flex: 1 1 240px; min-width: 180px; border-radius: var(--r-s); border: 1px solid var(--g-200);
     padding: 0.4rem 0.7rem; font: inherit; background: var(--g-50); }
-.lm-suchleiste input[type="search"]:focus { background: #fff; outline: 2px solid var(--friondo-blau-hell); }
+.lm-suchleiste input[type="search"]:focus { background: var(--flaeche-karte); outline: 2px solid var(--akzent-glanz); }
 .lm-gruppen { display: flex; flex-direction: column; gap: var(--a-3); }
-details.lm-gruppe { background: #fff; border: 1px solid var(--g-200); border-radius: var(--r-m); box-shadow: var(--schatten-1); }
+details.lm-gruppe { background: var(--flaeche-karte); border: 1px solid var(--linie); border-radius: var(--r-m); box-shadow: var(--schatten-1); }
 details.lm-gruppe > summary { border-radius: var(--r-m); border-top: none; position: static; }
 details.lm-gruppe[open] > summary { border-radius: var(--r-m) var(--r-m) 0 0; }
 details.lm-gruppe .lm-leer { padding: 10px 14px; }
@@ -312,23 +312,23 @@ details.lm-gruppe .tabelle { box-shadow: none; border-radius: 0 0 var(--r-m) var
 .lm-lead-name:hover { color: var(--friondo-blau); text-decoration: underline; }
 .lm-zaehler { display: inline-block; font-size: var(--t-xs); font-weight: 700; padding: 0 6px; border-radius: 999px;
     background: var(--friondo-blau-hell); color: var(--friondo-blau-dunkel); text-decoration: none; margin-left: 3px; }
-.lm-status { --f: #9aa4b2; display: inline-block; font-size: var(--t-xs); font-weight: 600; padding: 2px 9px;
-    border-radius: 999px; background: var(--f); color: #fff; white-space: nowrap; vertical-align: middle;
-    text-shadow: 0 0 2px rgba(0, 0, 0, 0.25); }
+.lm-status { --f: var(--status-grau); display: inline-block; font-size: var(--t-xs); font-weight: 600; padding: 2px 9px;
+    border-radius: 999px; background: var(--f); color: var(--text-invers); white-space: nowrap; vertical-align: middle;
+    text-shadow: none; }
 .lm-status-zusatz { background: var(--friondo-blau-hell); color: var(--friondo-blau-dunkel); text-shadow: none; }
 .lm-status-wahl { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .lm-mini { font: inherit; font-size: var(--t-xs); padding: 1px 2px; border: 1px solid transparent; border-radius: var(--r-s);
     background: transparent; color: var(--g-500); max-width: 26px; cursor: pointer; }
-.lm-mini:hover, .lm-mini:focus { border-color: var(--g-300); background: #fff; color: var(--text); max-width: none; }
+.lm-mini:hover, .lm-mini:focus { border-color: var(--linie-stark); background: var(--flaeche-karte); color: var(--text); max-width: none; }
 .lm-mini-datum { font: inherit; font-size: var(--t-xs); padding: 1px 4px; border: 1px solid var(--g-200); border-radius: var(--r-s);
-    background: #fff; color: var(--g-700); width: 118px; }
+    background: var(--flaeche-karte); color: var(--text); width: 118px; }
 .lm-notiz { width: 100%; min-width: 200px; font: inherit; font-size: var(--t-s); padding: 3px 6px; border: 1px solid transparent;
     border-radius: var(--r-s); background: transparent; }
-.lm-notiz:hover { border-color: var(--g-200); background: #fff; }
-.lm-notiz:focus { border-color: var(--friondo-blau); background: #fff; outline: none; }
+.lm-notiz:hover { border-color: var(--linie); background: var(--flaeche-karte); }
+.lm-notiz:focus { border-color: var(--akzent); background: var(--flaeche-karte); outline: none; }
 .lm-person { display: inline-flex; align-items: center; gap: 4px; }
 .lm-avatar { --f: var(--friondo-blau); display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
-    border-radius: 50%; background: var(--f); color: #fff; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em;
+    border-radius: 50%; background: var(--f); color: var(--text-invers); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em;
     flex: 0 0 26px; }
 .lm-avatar.leer { background: var(--g-100); color: var(--g-500); border: 1px dashed var(--g-300); }
 .lm-avatar.leer .symbol-svg { width: 0.9rem; height: 0.9rem; }
@@ -346,13 +346,13 @@ details.lm-gruppe .tabelle { box-shadow: none; border-radius: 0 0 var(--r-m) var
     border-radius: var(--r-m); position: sticky; top: 0; z-index: 6; }
 .lm-sammel[hidden] { display: none; }
 .lm-dialog { border: 1px solid var(--g-200); border-radius: var(--r-m); box-shadow: var(--schatten-2); padding: 0; max-width: 520px; width: 92vw; }
-.lm-dialog::backdrop { background: rgba(27, 42, 94, 0.35); }
+.lm-dialog::backdrop { background: rgba(7, 13, 26, 0.55); }   /* fest: Abdunklung hinter Dialogen (::backdrop erbt in älteren Browsern keine Tokens) */
 .lm-dialog .formular { border: none; box-shadow: none; margin: 0; }
 .lm-dialog label[hidden] { display: none; }
 .lm-spaltenliste { list-style: none; margin: 0 0 var(--a-3); padding: 0; display: flex; flex-direction: column; gap: 3px;
     max-height: 56vh; overflow: auto; }
 .lm-spaltenliste li { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border: 1px solid var(--g-200);
-    border-radius: var(--r-s); background: #fff; cursor: grab; }
+    border-radius: var(--r-s); background: var(--flaeche-karte); cursor: grab; }
 .lm-spaltenliste li.fest { cursor: default; background: var(--g-50); color: var(--g-500); }
 .lm-spaltenliste li.zieht { opacity: 0.5; border-style: dashed; }
 .lm-spaltenliste .griff { color: var(--g-300); letter-spacing: -2px; }
@@ -410,7 +410,7 @@ main.lk-seite { max-width: none; }
 .lk-fehlliste ul { margin: var(--a-1) 0 0; padding-left: 1.2rem; }
 .lk-terminierung[disabled] { opacity: 0.55; cursor: not-allowed; }
 .abzeichen.lk-vorab { background: var(--status-blau-bg); color: var(--status-blau); }
-.lk-stepper .schritt.aktiv { color: #fff; }
+.lk-stepper .schritt.aktiv { color: var(--text-invers); }
 
 /* Drei Spalten */
 .lk-spalten { display: grid; grid-template-columns: minmax(300px, 3fr) minmax(0, 6fr) minmax(260px, 3fr);
@@ -424,10 +424,10 @@ main.lk-seite { max-width: none; }
 
 /* Links: Person, Aktions-Icons, Anruf */
 .lk-person { display: flex; gap: var(--a-3); align-items: flex-start; }
-.lk-avatar { width: 56px; height: 56px; border-radius: 50%; background: var(--friondo-blau);
-    color: #fff; display: inline-flex; align-items: center; justify-content: center;
+.lk-avatar { width: 56px; height: 56px; border-radius: 50%; background: var(--akzent);
+    color: var(--akzent-text); display: inline-flex; align-items: center; justify-content: center;
     font-weight: 700; font-size: var(--t-l); flex: 0 0 auto; letter-spacing: 0.02em; }
-.lk-avatar.klein { width: 30px; height: 30px; font-size: var(--t-xs); background: var(--friondo-dunkel); }
+.lk-avatar.klein { width: 30px; height: 30px; font-size: var(--t-xs); background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); }
 .lk-person-text { min-width: 0; }
 .lk-name { margin: 0 0 var(--a-1); font-size: var(--t-l); overflow-wrap: anywhere; }
 .lk-kontakt { display: flex; flex-direction: column; gap: 0.15rem; font-size: var(--t-s); }
@@ -437,7 +437,7 @@ main.lk-seite { max-width: none; }
 .lk-aktionen { display: flex; flex-wrap: wrap; gap: var(--a-2); margin: var(--a-3) 0; padding-bottom: var(--a-3);
     border-bottom: 1px solid var(--g-200); }
 .lk-aktion { display: inline-flex; flex-direction: column; align-items: center; gap: 0.2rem; min-width: 64px;
-    padding: 0.45rem 0.5rem; border: 1px solid var(--g-200); border-radius: var(--r-m); background: #fff;
+    padding: 0.45rem 0.5rem; border: 1px solid var(--linie); border-radius: var(--r-m); background: var(--flaeche-karte);
     color: var(--friondo-dunkel); font: inherit; font-size: var(--t-xs); text-decoration: none; cursor: pointer; }
 .lk-aktion .symbol-svg { width: 1.3em; height: 1.3em; }
 .lk-aktion:hover { background: var(--friondo-blau-hell); border-color: var(--friondo-blau); }
@@ -457,8 +457,8 @@ main.lk-seite { max-width: none; }
 .lk-feld { display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: var(--a-2); font-size: var(--t-s); }
 .lk-feld > span, .lk-feld > summary { color: var(--g-500); font-size: var(--t-xs); }
 .lk-feld input, .lk-feld select, .lk-feld textarea { width: 100%; padding: 0.4rem 0.6rem; border: 1px solid var(--g-300);
-    border-radius: var(--r-s); font: inherit; background: #fff; }
-.lk-feld input:focus, .lk-feld select:focus { outline: 2px solid var(--friondo-blau-hell); border-color: var(--friondo-blau); }
+    border-radius: var(--r-s); font: inherit; background: var(--flaeche-karte); color: var(--text); }
+.lk-feld input:focus, .lk-feld select:focus { outline: 2px solid var(--akzent-glanz); border-color: var(--akzent); }
 .lk-feld.schmal { flex: 0 0 110px; }
 .lk-feld-reihe { display: flex; gap: var(--a-2); }
 .lk-feld-reihe > * { flex: 1 1 auto; min-width: 0; }
@@ -476,7 +476,7 @@ main.lk-seite { max-width: none; }
 .lk-einwilligung > div { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
 .lk-einwilligung input[type="date"] { width: auto; }
 .lk-hinweis { margin: -0.2rem 0 var(--a-2); font-size: var(--t-xs); }
-.lk-speichern { position: sticky; bottom: 0; background: #fff; padding: var(--a-2) 0; display: flex; gap: var(--a-2);
+.lk-speichern { position: sticky; bottom: 0; background: var(--flaeche-karte); padding: var(--a-2) 0; display: flex; gap: var(--a-2);
     align-items: center; border-top: 1px solid var(--g-200); }
 .lk-speichern.aktiv { border-top-color: var(--friondo-blau); }
 .lk-speichern .knopf { display: inline-flex; align-items: center; gap: 0.3rem; }
@@ -494,28 +494,28 @@ main.lk-seite { max-width: none; }
     cursor: pointer; font: inherit; }
 .lk-tab .symbol-svg { width: 1.25em; height: 1.25em; }
 .lk-tab:hover { background: var(--friondo-blau-hell); color: var(--friondo-dunkel); }
-.lk-tab[aria-selected="true"] { background: var(--friondo-dunkel); color: #fff; border-color: var(--friondo-dunkel); }
+.lk-tab[aria-selected="true"] { background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); border-color: var(--lm-aktiv-bg); }
 .lk-tab:focus-visible { outline: 2px solid var(--friondo-blau); outline-offset: 2px; }
 .lk-tab-zahl { font-size: var(--t-xs); font-weight: 600; background: var(--g-100); color: var(--g-700);
     border-radius: 999px; padding: 0 0.4rem; min-width: 1.3rem; text-align: center; }
-.lk-tab[aria-selected="true"] .lk-tab-zahl { background: rgba(255, 255, 255, 0.22); color: #fff; }
+.lk-tab[aria-selected="true"] .lk-tab-zahl { background: color-mix(in srgb, var(--lm-aktiv-fg) 22%, transparent); color: var(--lm-aktiv-fg); }
 .lk-panel-titel { margin: 0 0 var(--a-3); font-size: var(--t-l); display: flex; gap: var(--a-2); align-items: baseline; flex-wrap: wrap; }
 .lk-panel-titel .dezent { font-weight: 400; font-size: var(--t-s); }
 .lk-werkzeuge { display: flex; flex-wrap: wrap; gap: var(--a-2); align-items: center; margin-bottom: var(--a-3); }
 .lk-werkzeuge .knopf { display: inline-flex; align-items: center; gap: 0.3rem; }
 .lk-suche { display: inline-flex; align-items: center; gap: 0.3rem; flex: 1 1 220px; border: 1px solid var(--g-300);
-    border-radius: 999px; padding: 0.3rem 0.7rem; background: #fff; color: var(--g-500); }
+    border-radius: 999px; padding: 0.3rem 0.7rem; background: var(--flaeche-karte); color: var(--text-dezent); }
 .lk-suche input { border: 0; outline: 0; flex: 1; font: inherit; min-width: 0; background: transparent; }
 .lk-filter { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .lk-chip { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.6rem; border-radius: 999px;
-    border: 1px solid var(--g-200); background: #fff; font: inherit; font-size: var(--t-xs); color: var(--g-700); cursor: pointer; }
+    border: 1px solid var(--linie); background: var(--flaeche-karte); font: inherit; font-size: var(--t-xs); color: var(--text); cursor: pointer; }
 .lk-chip input { margin: 0; }
-.lk-chip.aktiv { background: var(--friondo-dunkel); color: #fff; border-color: var(--friondo-dunkel); }
+.lk-chip.aktiv { background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); border-color: var(--lm-aktiv-bg); }
 .lk-chipgruppe { padding-right: var(--a-2); border-right: 1px solid var(--g-200); }
 
 /* Mitte: Karten (Timeline, E-Mails) */
 .lk-timeline, .lk-mails { display: flex; flex-direction: column; gap: var(--a-2); position: relative; }
-.lk-karte { border: 1px solid var(--g-200); border-radius: var(--r-m); background: #fff; }
+.lk-karte { border: 1px solid var(--linie); border-radius: var(--r-m); background: var(--flaeche-karte); }
 .lk-karte[open] { border-color: var(--friondo-blau); }
 .lk-karte summary { list-style: none; display: grid; grid-template-columns: auto 1fr; gap: 0.1rem 0.6rem;
     padding: 0.5rem 0.75rem; cursor: pointer; align-items: center; }
@@ -558,7 +558,7 @@ main.lk-seite { max-width: none; }
 .lk-inline-form summary { list-style: none; cursor: pointer; display: inline-block; }
 .lk-inline-form summary::-webkit-details-marker { display: none; }
 .lk-inline-form[open] > form { position: absolute; z-index: 5; right: 0; top: 100%; margin-top: 0.3rem; min-width: 280px;
-    background: #fff; border: 1px solid var(--g-200); border-radius: var(--r-m); box-shadow: var(--schatten-2);
+    background: var(--flaeche-karte); border: 1px solid var(--linie); border-radius: var(--r-m); box-shadow: var(--schatten-2);
     padding: var(--a-3); display: flex; flex-direction: column; gap: var(--a-2); }
 .abzeichen.lk-tstatus-vorgemerkt { background: var(--status-orange-bg); color: var(--status-orange); }
 .abzeichen.lk-tstatus-geplant, .abzeichen.lk-tstatus-bestaetigt { background: var(--status-gruen-bg); color: var(--status-gruen); }
@@ -586,17 +586,17 @@ main.lk-seite { max-width: none; }
 .lk-todo { align-items: flex-start; flex-wrap: nowrap; }
 .lk-todo.erledigt { opacity: 0.6; }
 .lk-todo.erledigt strong { text-decoration: line-through; }
-.lk-todo-haken { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--g-300); background: #fff;
+.lk-todo-haken { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--linie-stark); background: var(--flaeche-karte);
     display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: transparent; flex: 0 0 auto; }
 .lk-todo-haken:hover { color: var(--status-gruen); border-color: var(--status-gruen); }
-.lk-todo-haken.fertig { color: #fff; background: var(--status-gruen); border-color: var(--status-gruen); cursor: default; }
+.lk-todo-haken.fertig { color: var(--status-gruen-bg); background: var(--status-gruen); border-color: var(--status-gruen); cursor: default; }
 .lk-todo-neu { gap: 0.4rem; margin-top: var(--a-2); padding-top: var(--a-2); border-top: 1px dashed var(--g-200); }
 .lk-todo-neu input, .lk-todo-neu select { width: 100%; padding: 0.35rem 0.5rem; border: 1px solid var(--g-300); border-radius: var(--r-s); font: inherit; }
 .lk-todo-neu .knopf { align-self: flex-start; display: inline-flex; align-items: center; gap: 0.3rem; }
 
 /* Dialoge */
 .lk-dialog { border: 0; border-radius: var(--r-l); box-shadow: var(--schatten-2); padding: var(--a-5); max-width: 560px; width: calc(100% - 2rem); }
-.lk-dialog::backdrop { background: rgba(27, 42, 94, 0.35); }
+.lk-dialog::backdrop { background: rgba(7, 13, 26, 0.55); }   /* fest: Abdunklung hinter Dialogen (::backdrop erbt in älteren Browsern keine Tokens) */
 .lk-dialog h3 { margin-top: 0; display: flex; gap: var(--a-2); align-items: center; }
 .lk-dialog-mehr { margin-top: var(--a-3); border-top: 1px solid var(--g-200); padding-top: var(--a-2); }
 .lk-dialog-mehr summary { cursor: pointer; color: var(--g-500); font-size: var(--t-s); }
@@ -616,8 +616,13 @@ details.lm-gruppe { width: max-content; min-width: 100%; max-width: none; }
    Phasen-Zähler über das Token --friondo-dunkel statt des nicht vorhandenen --dunkelblau */
 .lm-umschalter a { border-right: none; }
 .lm-umschalter a + a { border-left: 1px solid var(--g-200); }
-.lm-umschalter a.aktiv { background: var(--friondo-dunkel); color: #fff; }
-.lm-phase .n { background: var(--friondo-dunkel); }
+.lm-umschalter a.aktiv { background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); }
+.lm-phase .n { background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); }
+/* v30: die Status-Farben der Phasen-Zähler (gewonnen/verloren/zurückgestellt) standen vor dieser
+   Nachtrags-Regel und wurden von ihr überdeckt – hier erneut, damit sie wieder greifen */
+.lm-phase-gewonnen .n { background: var(--status-gruen); color: var(--status-gruen-bg); }
+.lm-phase-verloren .n, .lm-phase-unqualifiziert .n, .lm-phase-nicht_erreicht .n { background: var(--status-rot); color: var(--status-rot-bg); }
+.lm-phase-zurueckgestellt .n { background: var(--status-orange); color: var(--status-orange-bg); }
 
 /* Phase 109 – Nachtrag: Zellen des Hauptboard-Makros (_tabelle.html, Phase 105)
    in der HV-Tabelle – dort gilt .lm-tabelle nicht, Umbruch/Mindestbreite nachziehen */
@@ -647,23 +652,23 @@ tr.li-hat-hinweis td.sp-lead { box-shadow: inset 3px 0 0 var(--status-rot); }
 .li-ergebnis { white-space: nowrap; }
 .li-anruf-form { display: inline-flex; gap: 4px; flex-wrap: wrap; margin: 0; align-items: center; }
 .li-anruf-form .knopf { display: inline-flex; align-items: center; }
-.li-anruf-form .knopf.lm-ok { background: var(--status-gruen); border-color: var(--status-gruen); color: #fff; }
+.li-anruf-form .knopf.lm-ok { background: var(--status-gruen); border-color: var(--status-gruen); color: var(--status-gruen-bg); }
 .li-anruf-form button[disabled] { opacity: .45; cursor: not-allowed; text-decoration: line-through; }
 .li-ergebnis .lm-stoppuhr { margin-left: 6px; }
 .li-teil-zelle { white-space: nowrap; }
-.li-teil { display: inline-flex; gap: 0; margin: 0; border: 1px solid var(--g-200); border-radius: 999px; overflow: hidden; vertical-align: middle; background: #fff; }
+.li-teil { display: inline-flex; gap: 0; margin: 0; border: 1px solid var(--linie); border-radius: 999px; overflow: hidden; vertical-align: middle; background: var(--flaeche-karte); }
 .li-teil-knopf { font: inherit; font-size: var(--t-xs); font-weight: 600; padding: 2px 10px; border: none; background: transparent;
     color: var(--g-500); cursor: pointer; border-right: 1px solid var(--g-200); }
 .li-teil-knopf:last-child { border-right: none; }
 .li-teil-knopf:hover { background: var(--g-50); color: var(--text); }
-.li-teil-knopf.ja.aktiv { background: var(--status-gruen); color: #fff; }
-.li-teil-knopf.nein.aktiv { background: var(--status-rot); color: #fff; }
+.li-teil-knopf.ja.aktiv { background: var(--status-gruen); color: var(--status-gruen-bg); }
+.li-teil-knopf.nein.aktiv { background: var(--status-rot); color: var(--status-rot-bg); }
 .li-teil-knopf.leer { color: var(--g-300); padding: 2px 7px; }
 .li-teil.pflicht { border-color: var(--status-rot); box-shadow: 0 0 0 2px var(--status-rot-bg); }
 .li-teil-zelle small { display: block; margin-top: 2px; }
 .li-veranst-form { margin: 0; display: inline-flex; gap: 4px; align-items: center; }
 .li-veranst-wahl { font: inherit; font-size: var(--t-xs); padding: 2px 4px; border: 1px solid var(--g-200); border-radius: var(--r-s);
-    background: #fff; color: var(--g-700); max-width: 190px; }
+    background: var(--flaeche-karte); color: var(--text); max-width: 190px; }
 .li-veranst-wahl:focus { border-color: var(--friondo-blau); outline: none; }
 .lm-sammel .li-sammel-teil[hidden], .lm-sammel .li-sammel-status[hidden] { display: none; }
 /* Termine-Pflege */
@@ -694,7 +699,7 @@ tr.li-hat-hinweis td.sp-lead { box-shadow: inset 3px 0 0 var(--status-rot); }
 .lmt-termine details.lmt-inline-form > summary { list-style: none; cursor: pointer; display: inline-flex; }
 .lmt-termine details.lmt-inline-form > summary::-webkit-details-marker { display: none; }
 .lmt-termine details.lmt-inline-form[open] > .formular { position: absolute; z-index: 30; right: 0; min-width: 260px;
-    margin-top: 4px; padding: 0.6rem 0.8rem; background: #fff; border: 1px solid var(--g-200);
+    margin-top: 4px; padding: 0.6rem 0.8rem; background: var(--flaeche-karte); border: 1px solid var(--linie);
     border-radius: var(--r-m); box-shadow: var(--schatten-2); }
 
 /* Phase 105 – Nachtrag (Prüfung): Sortier-Spaltenköpfe (A3), Rückfall-Klasse für
@@ -728,7 +733,7 @@ body.lm-mit-leiste main { padding-left: calc(var(--lm-leiste-breite) + var(--a-5
 .lm-leiste-eintrag .lm-leiste-text { font-size: 0.55rem; }
 .lm-leiste-mehr .lm-leiste-eintrag .symbol-svg { width: 1.25rem; height: 1.25rem; }
 .lm-filterblock { position: sticky; top: var(--lm-kopf-fest, 0px); z-index: 30;
-    background: var(--grau-hell, #f3f5f8); margin: 0 0 var(--a-3); padding-top: 2px; }
+    background: var(--flaeche); margin: 0 0 var(--a-3); padding-top: 2px; }
 .lm-filterblock .lm-suchleiste { margin: 0 0 var(--a-2); }
 .lm-filterblock .lm-sammel { position: static; margin: 0 0 var(--a-2); }
 .lm-tabellen { overflow: auto; max-height: var(--lm-tabellen-hoehe, calc(100vh - 230px)); min-height: 240px;
@@ -750,14 +755,14 @@ details.lm-gruppe .tabelle { overflow: visible; }
 .lm-tabelle th.lm-sp-platzhalter, .lm-tabelle td.lm-sp-platzhalter { background: var(--friondo-blau-hell) !important;
     outline: 1px dashed var(--friondo-blau); outline-offset: -1px; }
 .lm-th-eingabe { font: inherit; font-size: var(--t-xs); text-transform: none; letter-spacing: 0; padding: 2px 6px;
-    border: 1px solid var(--friondo-blau); border-radius: var(--r-s); width: 150px; background: #fff; }
+    border: 1px solid var(--akzent); border-radius: var(--r-s); width: 150px; background: var(--flaeche-karte); color: var(--text); }
 .lm-tabelle thead th[data-name]:not([data-name=""]) .lm-th-text { text-decoration: underline dotted var(--g-300); text-underline-offset: 3px; }
 .lm-spaltenwahl { position: relative; margin: 0; }
 .lm-spaltenwahl > summary { list-style: none; display: inline-flex; align-items: center; gap: 4px; }
 .lm-spaltenwahl > summary::-webkit-details-marker { display: none; }
 .lm-spaltenwahl[open] > summary { border-color: var(--friondo-blau); }
 .lm-spaltenwahl[open] > .lm-spaltenmenue { position: absolute; right: 0; top: calc(100% + 6px); z-index: 80;
-    min-width: 280px; max-height: 60vh; overflow: auto; background: #fff; border: 1px solid var(--g-200);
+    min-width: 280px; max-height: 60vh; overflow: auto; background: var(--flaeche-karte); border: 1px solid var(--linie);
     border-radius: var(--r-m); box-shadow: var(--schatten-2); padding: var(--a-2) var(--a-3); white-space: normal; }
 .lm-spaltenliste-neu { list-style: none; margin: 0 0 var(--a-2); padding: 0; display: flex; flex-direction: column; gap: 1px; }
 .lm-spaltenliste-neu li label { display: flex; align-items: center; gap: 8px; padding: 3px 4px; border-radius: var(--r-s);
@@ -790,16 +795,16 @@ details.lm-gruppe .tabelle { overflow: visible; }
     font-size: var(--t-xs); color: var(--g-700); background: var(--g-50); border-bottom: 1px solid var(--g-200); }
 .lm-sortierung b { color: var(--friondo-dunkel); margin-right: 4px; }
 .lm-sortierung span[title] { cursor: help; }
-.lm-kanal.mit-farbe { --f: var(--status-violett); background: var(--f); color: #fff; }
+.lm-kanal.mit-farbe { --f: var(--status-violett); background: var(--f); color: var(--text-invers); }
 .lm-mehrfach { position: relative; display: inline-block; }
 .lm-mehrfach > summary { list-style: none; cursor: pointer; font: inherit; font-size: var(--t-s); color: var(--g-700);
-    padding: 4px 10px; border: 1px solid var(--g-300); border-radius: 999px; background: #fff;
+    padding: 4px 10px; border: 1px solid var(--linie-stark); border-radius: 999px; background: var(--flaeche-karte);
     display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
 .lm-mehrfach > summary::-webkit-details-marker { display: none; }
 .lm-mehrfach > summary::after { content: "▾"; font-size: 0.75em; color: var(--g-500); }
 .lm-mehrfach.aktiv > summary { border-color: var(--friondo-dunkel); color: var(--friondo-dunkel); font-weight: 600; }
 .lm-mehrfach[open] > .lm-mehrfach-liste { position: absolute; left: 0; top: 100%; z-index: 6; margin-top: 4px; min-width: 230px;
-    background: #fff; border: 1px solid var(--g-200); border-radius: var(--r-s); box-shadow: var(--schatten-2);
+    background: var(--flaeche-karte); border: 1px solid var(--linie); border-radius: var(--r-s); box-shadow: var(--schatten-2);
     padding: 6px; display: flex; flex-direction: column; gap: 2px; }
 .lm-mehrfach-liste label { display: flex; align-items: center; gap: 8px; font-size: var(--t-s); padding: 4px 6px;
     border-radius: var(--r-s); cursor: pointer; white-space: nowrap; }
@@ -840,12 +845,14 @@ main.lk-v3 .lk-kopf-v3 { align-items: flex-start; }
     background: var(--g-50); color: var(--g-700); font-size: var(--t-s); line-height: 1.3; white-space: nowrap; }
 .lk-schritt + .lk-schritt::before { content: ""; position: absolute; left: -0.3rem; top: 50%; width: 0.3rem; height: 1px; background: var(--g-300); }
 .lk-schritt.fertig { background: var(--friondo-blau-hell); border-color: var(--friondo-blau-hell); color: var(--friondo-blau-dunkel); }
-.lk-schritt.aktiv { background: var(--friondo-blau); border-color: var(--friondo-blau); color: #fff; font-weight: 600; }
-.lk-schritt.seitenzustand.aktiv { background: var(--status-rot); border-color: var(--status-rot); }
+.lk-schritt.aktiv { background: var(--akzent); border-color: var(--akzent); color: var(--akzent-text); font-weight: 600; }
+.lk-schritt.seitenzustand.aktiv { background: var(--status-rot); border-color: var(--status-rot); color: var(--status-rot-bg); }
+/* v30: Statusfarbe aus dem Blatt Status kommt als --f (style="--f:…") – gesättigte Fläche, helle Schrift */
+.lk-schritt.aktiv[style*="--f"] { background: var(--f); border-color: var(--f); color: var(--text-invers); }
 .lk-kopf-v3 .lk-kopf-aktionen { flex: 0 1 auto; max-width: 460px; align-items: center; justify-content: flex-end; gap: var(--a-2) var(--a-3); }
 .lk-kopf-v3 .lk-kopf-aktionen > form .knopf { display: inline-flex; align-items: center; gap: 0.35rem; }
 .lk-schnell { display: inline-flex; gap: 0.4rem; align-items: center; }
-.lk-rund { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--g-200); background: #fff; color: var(--friondo-dunkel);
+.lk-rund { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--linie); background: var(--flaeche-karte); color: var(--text-titel);
     display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font: inherit; text-decoration: none; padding: 0;
     transition: background 0.12s, border-color 0.12s, transform 0.12s; }
 .lk-rund .symbol-svg { width: 1.25em; height: 1.25em; }
@@ -871,11 +878,11 @@ main.lk-v3 .lk-kopf-v3 { align-items: flex-start; }
 .lk-feld-status.fehler { color: var(--status-rot); font-weight: 600; }
 .lk-feld-status.laeuft { color: var(--g-500); }
 .lk-feld-fehlerhaft input, .lk-feld-fehlerhaft select { border-color: var(--status-rot) !important; box-shadow: 0 0 0 1px var(--status-rot-bg); }
-.lk-speichert input, .lk-speichert select { background-image: linear-gradient(90deg, var(--friondo-blau-hell), #fff); }
+.lk-speichert input, .lk-speichert select { background-image: linear-gradient(90deg, var(--akzent-flaeche), var(--flaeche-karte)); }
 .lk-feld-info { display: block; font-size: var(--t-xs); margin-top: 0.1rem; }
 .lk-info-raster .lk-mfh { grid-column: 1 / -1; display: grid; grid-template-columns: 140px 1fr; gap: var(--a-3); align-items: start; }
 .lk-info-raster .lk-mfh[hidden] { display: none; }
-.lk-info-raster .lk-checkboxen > div { padding: 0.45rem 0.6rem; border: 1px solid var(--g-300); border-radius: var(--r-s); background: #fff; }
+.lk-info-raster .lk-checkboxen > div { padding: 0.45rem 0.6rem; border: 1px solid var(--g-300); border-radius: var(--r-s); background: var(--flaeche-karte); color: var(--text); }
 .lk-zuweisung-feld .lk-zuweisung select { width: auto; flex: 1; }
 .lk-anzeige .lk-wert { font-size: var(--t-s); padding: 0.4rem 0; color: var(--text); }
 .lk-anfrage-feld summary { cursor: pointer; }
@@ -908,7 +915,7 @@ main.lk-v3 .lk-mitte { padding: var(--a-4); margin-bottom: var(--a-4); }
 .lk-vorschlaege-hinweis.lm-blau { color: var(--status-blau); font-weight: 600; }
 .lk-vorschlaege-liste { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: var(--a-2); }
 @media (min-width: 1200px) { .lk-vorschlaege-liste { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); } }
-.lk-vorschlag { background: #fff; border: 1px solid var(--g-200); border-radius: var(--r-m); padding: var(--a-2) var(--a-3);
+.lk-vorschlag { background: var(--flaeche-karte); border: 1px solid var(--linie); border-radius: var(--r-m); padding: var(--a-2) var(--a-3);
     display: flex; flex-direction: column; gap: 0.3rem; }
 .lk-vorschlag-kopf { font-size: var(--t-s); }
 .lk-vorschlag-grund { font-size: var(--t-xs); }
@@ -940,7 +947,7 @@ main.lk-v3 .lk-mitte { padding: var(--a-4); margin-bottom: var(--a-4); }
 .lm-filterblock .lm-spaltenwahl { margin-left: auto; }
 .lm-todo-filter .lm-umschalter + .lm-umschalter { margin-left: var(--a-2); }
 .lm-umschalter .n.rot { background: var(--status-rot-bg); color: var(--status-rot); }
-.lm-umschalter a.aktiv .n.rot { background: rgba(255,255,255,0.25); color: #fff; }
+.lm-umschalter a.aktiv .n.rot { background: color-mix(in srgb, var(--lm-aktiv-fg) 22%, transparent); color: var(--lm-aktiv-fg); }
 
 /* Phase 140/141/143 – Lead-Management V4 (v29, PLAN_LEAD_V4): Handelsvertreter-
    Sicht (vier Einträge), „Mehr …“ als Flyout (position: fixed neben der Leiste,
@@ -961,7 +968,7 @@ main.lk-v3 .lk-mitte { padding: var(--a-4); margin-bottom: var(--a-4); }
 .lm-leiste-mehr .lm-leiste-menue a .symbol-svg { width: 1.05rem; height: 1.05rem; flex: none; color: var(--g-500); }
 .lm-leiste-mehr .lm-leiste-menue a:focus-visible { outline: 2px solid var(--friondo-blau); outline-offset: -2px; }
 .lm-leiste-mehr[open] > summary { background: var(--friondo-blau-hell); color: var(--friondo-blau-dunkel); }
-.lm-leiste-mehr[open].aktiv > summary { background: var(--friondo-dunkel); color: #fff; }
+.lm-leiste-mehr[open].aktiv > summary { background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); }
 @media (max-width: 900px) {
     .lm-leiste { overflow: visible; }
     .lm-leiste-mehr[open] .lm-leiste-menue, .lm-leiste-mehr.lm-flyout-oben[open] .lm-leiste-menue {
@@ -985,7 +992,7 @@ body.lm-spalte-zieht, body.lm-spalte-zieht * { cursor: col-resize !important; us
 /* Rang 0: Mail nicht gesendet / E-Mail falsch (Phase 142, Vertrag L2) */
 .lm-tabelle tr.lm-rang0 td:first-child, .lm-tabelle tr.lm-rang0 td.sp-lead { box-shadow: inset 3px 0 0 var(--status-rot); }
 .lm-mail-label { display: inline-block; font-size: var(--t-xs); font-weight: 700; padding: 1px 7px; margin-right: 4px;
-    border-radius: 999px; background: var(--status-rot); color: #fff; white-space: nowrap; vertical-align: middle; }
+    border-radius: 999px; background: var(--status-rot); color: var(--status-rot-bg); white-space: nowrap; vertical-align: middle; }
 .sp-notiz .lm-mail-labels { display: inline-flex; gap: 2px; flex-wrap: wrap; margin-right: 4px; vertical-align: middle; }
 .lk-feld-email-ungueltig input { border-color: var(--status-rot) !important; box-shadow: 0 0 0 1px var(--status-rot-bg); }
 .lk-feld-email-ungueltig > span { color: var(--status-rot); }
@@ -1014,7 +1021,7 @@ body.lm-spalte-zieht, body.lm-spalte-zieht * { cursor: col-resize !important; us
 .lm-kommende-mehr > summary::-webkit-details-marker { display: none; }
 .lm-kommende-mehr:not([open]) > summary::before { content: "▸ "; }
 .lm-kommende-mehr[open] > summary::before { content: "▾ "; }
-.lm-routenplaner { background: linear-gradient(135deg, var(--friondo-blau-hell), #fff); }
+.lm-routenplaner { background: linear-gradient(135deg, var(--akzent-flaeche), var(--flaeche-karte)); }
 .lm-routenplaner .lm-routen-start { font-size: var(--t-s); color: var(--g-700); margin: 4px 0 10px; display: flex; gap: 6px; align-items: center; }
 .lm-routenplaner .lm-routen-start .symbol-svg { color: var(--friondo-blau); }
 .lm-routenplaner .knopf { display: inline-flex; align-items: center; gap: 6px; }
@@ -1028,17 +1035,17 @@ body.lm-spalte-zieht, body.lm-spalte-zieht * { cursor: col-resize !important; us
 .lm-sperrzeit-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: var(--t-s); }
 .lm-sperrzeit-liste li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .lm-sperrzeit-liste form { margin: 0; }
-.lm-mails-fehler-kachel { border-color: #e5b5af; background: #fdf3f2; }
+.lm-mails-fehler-kachel { border-color: var(--status-rot); background: var(--status-rot-bg); }
 .lm-mails-fehler-kachel .stat-zahl { color: var(--status-rot); }
 
 /* Terminassistent: Vorschlag „Ideal“ (Phase 143) */
-.lmt-vorschlag.lmt-ideal { border: 2px solid var(--friondo-blau); box-shadow: 0 0 0 3px var(--friondo-blau-hell); position: relative; }
-.lmt-vorschlag.lmt-ideal.aktiv { box-shadow: 0 0 0 3px var(--friondo-blau-hell); }
-.lmt-ideal-badge { display: inline-block; background: var(--friondo-blau); color: #fff; font-size: var(--t-xs); font-weight: 700;
+.lmt-vorschlag.lmt-ideal { border: 2px solid var(--akzent); box-shadow: 0 0 0 3px var(--akzent-glanz); position: relative; }
+.lmt-vorschlag.lmt-ideal.aktiv { box-shadow: 0 0 0 3px var(--akzent-glanz); }
+.lmt-ideal-badge { display: inline-block; background: var(--akzent); color: var(--akzent-text); font-size: var(--t-xs); font-weight: 700;
     letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 9px; border-radius: 999px; vertical-align: middle; margin-left: 6px; }
 .lmt-ideal-grund { margin: 4px 0 6px; font-size: var(--t-s); color: var(--friondo-blau-dunkel); background: var(--friondo-blau-hell);
     border-radius: 6px; padding: 0.35rem 0.5rem; line-height: 1.4; }
-.lk-vorschlag.lk-ideal { border: 2px solid var(--friondo-blau); box-shadow: 0 0 0 2px var(--friondo-blau-hell); }
+.lk-vorschlag.lk-ideal { border: 2px solid var(--akzent); box-shadow: 0 0 0 2px var(--akzent-glanz); }
 .lk-vorschlag .lmt-ideal-badge { margin-left: 4px; }
 .lk-vorschlag-ideal-grund { font-size: var(--t-xs); color: var(--friondo-blau-dunkel); }
 
@@ -1049,57 +1056,57 @@ body.lm-spalte-zieht, body.lm-spalte-zieht * { cursor: col-resize !important; us
 .lmt-kalender-nav { display: inline-flex; gap: 4px; align-items: center; }
 .lmt-kalender-nav .knopf { padding: 2px 10px; }
 .lmt-kalender-nav b { min-width: 150px; text-align: center; display: inline-block; }
-.lmt-kalender-wrap { overflow: auto; max-height: 70vh; border: 1px solid var(--g-200); border-radius: var(--r-m); background: #fff; }
+.lmt-kalender-wrap { overflow: auto; max-height: 70vh; border: 1px solid var(--linie); border-radius: var(--r-m); background: var(--flaeche-karte); }
 .lmt-kalender-tabelle { border-collapse: separate; border-spacing: 0; font-size: var(--t-xs); min-width: 100%; }
 .lmt-kalender-tabelle th { position: sticky; top: 0; z-index: 3; background: var(--g-50); color: var(--friondo-dunkel);
     padding: 4px 6px; border-bottom: 1px solid var(--g-200); border-right: 1px solid var(--g-100); text-align: center;
     white-space: nowrap; font-weight: 600; }
 .lmt-kalender-tabelle th.lmt-k-tag { border-right: 2px solid var(--g-300); }
 .lmt-kalender-tabelle th.lmt-k-ad { font-weight: 500; font-size: 0.68rem; top: 25px; }
-.lmt-kalender-tabelle th.lmt-k-ad.lmt-k-ausserhalb { color: var(--g-500); background: #f1f3f6; font-style: italic; }
+.lmt-kalender-tabelle th.lmt-k-ad.lmt-k-ausserhalb { color: var(--text-dezent); background: var(--flaeche-abgesetzt); font-style: italic; }
 .lmt-kalender-tabelle th.lmt-k-ad.lmt-k-ausserhalb small { display: block; font-style: normal; font-size: 0.6rem; }
 .lmt-kalender-tabelle th.lmt-k-zeit, .lmt-kalender-tabelle td.lmt-k-zeit { position: sticky; left: 0; z-index: 4; background: var(--g-50);
     text-align: right; padding: 0 6px; color: var(--g-500); font-variant-numeric: tabular-nums; width: 46px; min-width: 46px; }
 .lmt-kalender-tabelle th.lmt-k-zeit { z-index: 5; }
-.lmt-kalender-tabelle td { height: 11px; padding: 0; border-right: 1px solid var(--g-100); border-bottom: 1px solid #f1f3f6;
-    min-width: 54px; background: #fff; }
+.lmt-kalender-tabelle td { height: 11px; padding: 0; border-right: 1px solid var(--flaeche-abgesetzt); border-bottom: 1px solid color-mix(in srgb, var(--linie) 55%, transparent);
+    min-width: 54px; background: var(--flaeche-karte); }
 .lmt-kalender-tabelle td.lmt-k-stunde { border-bottom-color: var(--g-200); }
 .lmt-kalender-tabelle td.lmt-k-tagende { border-right: 2px solid var(--g-300); }
 .lmt-kalender-tabelle td.lmt-k-frei { cursor: pointer; }
 .lmt-kalender-tabelle td.lmt-k-frei:hover { background: var(--friondo-blau-hell); }
-.lmt-kalender-tabelle td.lmt-k-aus { background: #f1f3f6; cursor: default; }
-.lmt-kalender-tabelle td.lmt-k-vergangen { background: repeating-linear-gradient(135deg, #f6f7f9 0 4px, #eef0f3 4px 8px); cursor: default; }
+.lmt-kalender-tabelle td.lmt-k-aus { background: var(--flaeche-abgesetzt); cursor: default; }
+.lmt-kalender-tabelle td.lmt-k-vergangen { background: repeating-linear-gradient(135deg, var(--flaeche) 0 4px, var(--flaeche-abgesetzt) 4px 8px); cursor: default; }
 .lmt-kalender-tabelle td.lmt-k-termin { background: var(--status-blau-bg); border-bottom-color: var(--status-blau-bg); cursor: default; }
 .lmt-kalender-tabelle td.lmt-k-termin.lmt-k-typ-telefon { background: var(--status-gruen-bg); }
 .lmt-kalender-tabelle td.lmt-k-termin.lmt-k-typ-online { background: var(--status-violett-bg); }
-.lmt-kalender-tabelle td.lmt-k-termin.lmt-k-vorgemerkt { background: repeating-linear-gradient(135deg, var(--status-blau-bg) 0 4px, #fff 4px 8px); }
+.lmt-kalender-tabelle td.lmt-k-termin.lmt-k-vorgemerkt { background: repeating-linear-gradient(135deg, var(--status-blau-bg) 0 4px, var(--flaeche-karte) 4px 8px); }
 .lmt-kalender-tabelle td.lmt-k-termin.lmt-k-eigener { outline: 2px solid var(--status-blau); outline-offset: -2px; }
 .lmt-kalender-tabelle td.lmt-k-sperrzeit { background: repeating-linear-gradient(135deg, var(--g-200) 0 4px, var(--g-100) 4px 8px); cursor: default; }
-.lmt-kalender-tabelle td.lmt-k-belegt { background: repeating-linear-gradient(45deg, var(--status-orange-bg) 0 4px, #fff 4px 8px); cursor: default; }
+.lmt-kalender-tabelle td.lmt-k-belegt { background: repeating-linear-gradient(45deg, var(--status-orange-bg) 0 4px, var(--flaeche-karte) 4px 8px); cursor: default; }
 .lmt-kalender-tabelle td.lmt-k-vorschlag { background: var(--friondo-blau-hell); box-shadow: inset 0 0 0 2px var(--friondo-blau); cursor: pointer; }
-.lmt-kalender-tabelle td.lmt-k-vorschlag.lmt-k-ideal { background: var(--friondo-blau); }
+.lmt-kalender-tabelle td.lmt-k-vorschlag.lmt-k-ideal { background: var(--akzent); }
 .lmt-kalender-tabelle td.lmt-k-start { position: relative; }
 .lmt-k-text { position: absolute; left: 2px; right: 2px; top: 1px; font-size: 0.62rem; line-height: 1.1; color: var(--friondo-dunkel);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; z-index: 2; }
-.lmt-k-vorschlag.lmt-k-ideal .lmt-k-text { color: #fff; font-weight: 700; }
-.lmt-k-nr { display: inline-block; min-width: 14px; height: 14px; line-height: 14px; border-radius: 50%; background: var(--friondo-blau);
-    color: #fff; font-size: 0.6rem; font-weight: 700; text-align: center; margin-right: 2px; }
-.lmt-k-vorschlag.lmt-k-ideal .lmt-k-nr { background: #fff; color: var(--friondo-blau); }
+.lmt-k-vorschlag.lmt-k-ideal .lmt-k-text { color: var(--akzent-text); font-weight: 700; }
+.lmt-k-nr { display: inline-block; min-width: 14px; height: 14px; line-height: 14px; border-radius: 50%; background: var(--akzent);
+    color: var(--akzent-text); font-size: 0.6rem; font-weight: 700; text-align: center; margin-right: 2px; }
+.lmt-k-vorschlag.lmt-k-ideal .lmt-k-nr { background: var(--akzent-text); color: var(--akzent); }
 .lmt-kalender-legende { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: var(--t-xs); color: var(--g-700); align-items: center; }
 .lmt-kalender-legende i { display: inline-block; width: 14px; height: 10px; border: 1px solid var(--g-200); vertical-align: middle; margin-right: 4px; }
-.lmt-kalender-legende i.frei { background: #fff; }
+.lmt-kalender-legende i.frei { background: var(--flaeche-karte); }
 .lmt-kalender-legende i.termin { background: var(--status-blau-bg); }
-.lmt-kalender-legende i.belegt { background: repeating-linear-gradient(45deg, var(--status-orange-bg) 0 3px, #fff 3px 6px); }
+.lmt-kalender-legende i.belegt { background: repeating-linear-gradient(45deg, var(--status-orange-bg) 0 3px, var(--flaeche-karte) 3px 6px); }
 .lmt-kalender-legende i.sperr { background: repeating-linear-gradient(135deg, var(--g-200) 0 3px, var(--g-100) 3px 6px); }
 .lmt-kalender-legende i.vorschlag { background: var(--friondo-blau-hell); box-shadow: inset 0 0 0 2px var(--friondo-blau); }
-.lmt-kalender-legende i.ideal { background: var(--friondo-blau); }
-.lmt-kalender-legende i.aus { background: #f1f3f6; }
+.lmt-kalender-legende i.ideal { background: var(--akzent); }
+.lmt-kalender-legende i.aus { background: var(--flaeche-abgesetzt); }
 .lmt-kalender-hinweis { font-size: var(--t-xs); margin: 4px 0 0; }
 .lmt-weitere { position: relative; display: inline-block; }
 .lmt-weitere > summary { list-style: none; cursor: pointer; }
 .lmt-weitere > summary::-webkit-details-marker { display: none; }
 .lmt-weitere[open] > .lmt-weitere-liste { position: absolute; left: 0; top: calc(100% + 4px); z-index: 20; min-width: 260px; max-height: 50vh;
-    overflow: auto; background: #fff; border: 1px solid var(--g-200); border-radius: var(--r-s); box-shadow: var(--schatten-2); padding: 6px; }
+    overflow: auto; background: var(--flaeche-karte); border: 1px solid var(--linie); border-radius: var(--r-s); box-shadow: var(--schatten-2); padding: 6px; }
 .lmt-weitere-liste label { display: flex; align-items: center; gap: 8px; font-size: var(--t-s); padding: 4px 6px; border-radius: var(--r-s); cursor: pointer; white-space: nowrap; }
 .lmt-weitere-liste label:hover { background: var(--friondo-blau-hell); }
 .lmt-weitere-liste .dezent { padding: 4px 6px; }
@@ -1118,7 +1125,7 @@ body.lm-spalte-zieht, body.lm-spalte-zieht * { cursor: col-resize !important; us
 .abzeichen.lm-mailstatus-geplant { background: var(--status-blau-bg); color: var(--status-blau); }
 .abzeichen.lm-mailstatus-gesendet { background: var(--status-gruen-bg); color: var(--status-gruen); }
 .lm-warteschlange td { vertical-align: top; }
-.kalender-eintrag.typ-sperrzeit { border-left-color: var(--g-500); background: repeating-linear-gradient(135deg, var(--g-100) 0 4px, #fff 4px 8px); color: var(--g-700); }
+.kalender-eintrag.typ-sperrzeit { border-left-color: var(--text-dezent); background: repeating-linear-gradient(135deg, var(--flaeche-abgesetzt) 0 4px, var(--flaeche-karte) 4px 8px); color: var(--text); }
 /* v29 Dashboard kompakt: Grund/Phase unter dem Kundennamen, Aktion rechts ohne Umbruch */
 .lm-dash-kompakt .lm-wv-tabelle td.lm-wv-kunde { white-space: normal; }
 .lm-dash-kompakt .lm-wv-tabelle .lm-wv-grund { margin-top: 2px; font-size: var(--t-xs); }
@@ -1132,7 +1139,352 @@ body.lm-spalte-zieht, body.lm-spalte-zieht * { cursor: col-resize !important; us
    HV-Übersicht (Innendienst/Admin) – Auswahl des Vertreters im Formular, Liste je HV */
 .lm-sperrzeiten-innendienst { margin-top: var(--a-4, 1rem); border-top: 0; }
 .lm-sperrzeiten-innendienst > summary { cursor: pointer; }
-.lm-sperrzeit-form select { font: inherit; font-size: var(--t-s); padding: 3px 6px; border: 1px solid var(--g-300); border-radius: var(--r-s); background: #fff; }
+.lm-sperrzeit-form select { font: inherit; font-size: var(--t-s); padding: 3px 6px; border: 1px solid var(--g-300); border-radius: var(--r-s); background: var(--flaeche-karte); color: var(--text); }
 .lm-sperrzeiten-je-hv { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--a-3); margin-top: var(--a-3); }
 .lm-sperrzeit-hv { border: 1px solid var(--g-200); border-radius: var(--r-s); padding: 6px 10px; }
 .lm-sperrzeit-hv > strong { display: block; margin-bottom: 4px; font-size: var(--t-s); }
+
+
+/* ==================================================================== */
+/* v30 (PLAN_V18 Phase 146): Design v2 „Nachtglas“ – Lead-Management.    */
+/* Modul-Tokens als Alias auf die semantischen Tokens aus style.css (der */
+/* Dunkelblock und der Geräte-Block tragen dieselben Werte), danach die   */
+/* Optik nach docs/design-v30/vorlage/hauptboard-dunkel.png: Icon-Leiste, */
+/* Tabellen (Kopf in Kapitälchen mit Buchstabenabstand, feine Linien,    */
+/* Hover-Fläche, Zahlen tabellarisch), Status-Pille mit Pfeil „Neu ▾“    */
+/* (Auswahlfeld liegt unsichtbar über der Pille), Kanal-Chip (gespeicherte */
+/* Farbe über --f: Fläche getönt, Text je Modus über color-mix), Versuchs- */
+/* Punkte, Avatare AD/ID mit Pfeil, rote Überfällig-Markierung, Karten,   */
+/* Dialoge, Kanban, Kalender, Terminassistent, Kartei, Vorlagen-Editor,  */
+/* Leaflet-Karte (Kacheln bleiben hell, Rahmen/Popups folgen den Tokens). */
+/* Nur Tokens; feste Werte nur mit Kommentar „fest:“.                     */
+/* ==================================================================== */
+:root {
+    --lm-aktiv-bg: var(--flaeche-erhoeht);    /* aktive Leisten-/Reiter-/Umschalter-Fläche (Hell: CI-Dunkelblau) */
+    --lm-aktiv-fg: var(--text-invers);
+    --lm-chip-text-mix: black 34%;            /* Chip-/Pillen-Text aus der Kanal-/Statusfarbe (Hell: abgedunkelt) */
+    --lm-punkt-leer: color-mix(in srgb, var(--text-dezent) 28%, transparent);   /* leere Versuchs-Punkte */
+}
+:root[data-theme="dunkel"] {
+    --lm-aktiv-bg: var(--flaeche-hover);
+    --lm-aktiv-fg: var(--akzent);
+    --lm-chip-text-mix: white 35%;            /* Dunkel: Text über der getönten Fläche aufgehellt */
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="hell"]) {
+        --lm-aktiv-bg: var(--flaeche-hover);
+        --lm-aktiv-fg: var(--akzent);
+        --lm-chip-text-mix: white 35%;
+    }
+}
+
+/* --- Icon-Leiste (Vorlage: Rail mit abgerundeten Kacheln, aktive Kachel als helle Fläche) --- */
+.lm-leiste { overflow: visible; background: var(--flaeche-karte); border-right: 1px solid var(--linie); box-shadow: none; }
+.lm-leiste-eintrag { color: var(--text-dezent); border-radius: 12px; transition: background 0.12s, color 0.12s; }
+.lm-leiste-eintrag:hover { background: var(--flaeche-hover); color: var(--text); }
+.lm-leiste-eintrag.aktiv, .lm-leiste-mehr[open].aktiv > summary { background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg);
+    box-shadow: inset 0 0 0 1px var(--linie-stark); }
+.lm-leiste-eintrag:focus-visible { outline: 2px solid var(--fokus); outline-offset: -2px; }
+.lm-leiste-mehr[open] > .lm-leiste-menue { background: var(--flaeche-karte); border-color: var(--linie-stark); box-shadow: var(--schatten-2); border-radius: var(--r-l); }
+.lm-leiste-menue a { color: var(--text); }
+.lm-leiste-menue a:hover { background: var(--flaeche-hover); }
+.lm-leiste-menue a.aktiv { color: var(--akzent); }
+.lm-leiste-mehr[open] > summary { background: var(--flaeche-hover); color: var(--text); }
+@media (max-width: 900px) {
+    .lm-leiste { border-right: none; border-top: 1px solid var(--linie); }
+}
+
+/* --- Seitenkopf, Umschalter, Filter-Chips, Filterblock, Suchfeld --- */
+.lm-boardkopf h1, .lm-dash-kopf h1 { color: var(--text-titel); }
+.lm-umschalter { background: var(--flaeche-karte); border-color: var(--linie-stark); }
+.lm-umschalter a { color: var(--text-dezent); }
+.lm-umschalter a + a { border-left-color: var(--linie); }
+.lm-umschalter a:hover { background: var(--flaeche-hover); color: var(--text); }
+.lm-umschalter a.aktiv { background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); }
+.lm-umschalter .n { background: var(--flaeche-abgesetzt); color: var(--text); }
+.lm-umschalter .n.rot { background: var(--status-rot-bg); color: var(--status-rot); }
+.lm-umschalter a.aktiv .n { background: color-mix(in srgb, var(--lm-aktiv-fg) 22%, transparent); color: var(--lm-aktiv-fg); }
+.lm-schnellfilter .f { background: var(--flaeche-karte); border-color: var(--linie-stark); color: var(--text); }
+.lm-schnellfilter .f:hover { border-color: var(--akzent); }
+.lm-schnellfilter .f.aktiv { background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); border-color: var(--lm-aktiv-bg); }
+.lm-schnellfilter .trenner { background: var(--linie); }
+.lm-schnellfilter select, .lm-schnellfilter input { background: var(--flaeche-karte); color: var(--text); border-color: var(--linie-stark); }
+.lm-filterblock { background: var(--flaeche); }
+.lm-suchleiste input[type="search"] { background: var(--flaeche-karte); color: var(--text); border-color: var(--linie-stark); }
+.lm-suchleiste input[type="search"]:focus { outline: 2px solid var(--akzent-glanz); border-color: var(--akzent); }
+.lm-mehrfach > summary { background: var(--flaeche-karte); color: var(--text); border-color: var(--linie-stark); }
+.lm-mehrfach > summary::after { color: var(--text-dezent); }
+.lm-mehrfach.aktiv > summary { border-color: var(--akzent); color: var(--text); }
+.lm-mehrfach-liste label:hover, .lm-spaltenliste-neu li label:hover, .lmt-weitere-liste label:hover { background: var(--flaeche-hover); }
+.lm-spaltenliste-neu li label { color: var(--text); }
+.lm-spalten-fuss { border-top-color: var(--linie); }
+.lm-sammel { background: var(--akzent-flaeche); border-color: var(--akzent); color: var(--text); }
+.lm-rufnummer input[type="search"], .lm-dauer-form input { background: var(--flaeche-karte); color: var(--text); border-color: var(--linie-stark); }
+.lm-hinweis { background: var(--status-orange-bg); border: 1px solid color-mix(in srgb, var(--status-orange) 35%, transparent); color: var(--status-orange); }
+.demo-badge { background: var(--status-orange-bg); color: var(--status-orange); border-color: color-mix(in srgb, var(--status-orange) 45%, transparent); }
+.kachel.kachel-warn, .lm-mails-fehler-kachel { border-color: var(--status-rot); background: var(--status-rot-bg); }
+.kachel.kachel-warn .stat-zahl { color: var(--status-rot); }
+
+/* --- Gruppen + Board-Tabellen (Hauptboard, Deals, Infoabend, Handelsvertreter) --- */
+details.lm-gruppe, .hv-gruppe { background: var(--flaeche-karte); border: 1px solid var(--linie); border-radius: var(--r-l); box-shadow: var(--schatten-1); }
+details.lm-gruppe > summary, details.lm-gruppe[open] > summary, .hv-gruppe > summary { border-radius: var(--r-l) var(--r-l) 0 0; }
+details.lm-gruppe:not([open]) > summary, .hv-gruppe:not([open]) > summary { border-radius: var(--r-l); }
+details.lm-gruppe .tabelle { border-radius: 0 0 var(--r-l) var(--r-l); }
+.lm-gruppe-kopf { background: var(--flaeche-abgesetzt); border-color: var(--linie); color: var(--text-titel); }
+.lm-gruppe-kopf .n { background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); }
+.lm-gruppe-kopf .n.rot { background: var(--status-rot); color: var(--status-rot-bg); }
+.lm-gruppe-kopf .erkl { color: var(--text-dezent); }
+.lm-sortierung { background: var(--flaeche-abgesetzt); border-bottom-color: var(--linie); color: var(--text-dezent); }
+.lm-sortierung b { color: var(--text-titel); }
+.lm-tabelle th, .hv-tabelle th { background: var(--flaeche-karte); color: var(--text-dezent); font-size: 0.68rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.08em; padding: 9px 10px 8px; border-bottom: 1px solid var(--linie); }
+.lm-tabelle td, .hv-tabelle td { font-size: 0.8rem; padding: 7px 10px; border-bottom: 1px solid var(--linie); color: var(--text); background: transparent; }
+.lm-tabelle tbody tr:nth-child(even) td, .hv-tabelle tbody tr:nth-child(even) td { background: transparent; }
+.lm-tabelle tbody tr:hover td, .hv-tabelle tbody tr:hover td { background: var(--flaeche-hover); }
+.lm-tabelle tr.markiert td { background: var(--akzent-flaeche) !important; }
+.lm-tabelle tr:last-child td, .hv-tabelle tr:last-child td { border-bottom: none; }
+.lm-tabelle .dezent, .hv-tabelle .dezent { color: var(--text-dezent); }
+.lm-tabelle td.sp-eingang, .lm-tabelle td.sp-telefon, .lm-tabelle td.sp-letzter, .lm-tabelle td.sp-termin, .lm-tabelle td.sp-wv,
+.lm-tabelle td.sp-ort, .hv-tabelle td { font-variant-numeric: tabular-nums; }
+.lm-tabelle td.sp-telefon a, .hv-tabelle a[href^="tel:"], .lm-zeile .tel a { color: var(--text); font-weight: 600; text-decoration: none; }
+.lm-tabelle td.sp-email a { color: var(--text-dezent); text-decoration: none; }
+.lm-tabelle td.sp-email a:hover, .lm-tabelle td.sp-telefon a:hover, .lm-zeile .tel a:hover { color: var(--link); text-decoration: underline; }
+.lm-tabelle td.sp-ort { font-weight: 600; }
+.lm-tabelle td.sp-strasse { color: var(--text-dezent); }
+.lm-lead-name { color: var(--text-titel); }
+.lm-lead-name:hover { color: var(--link); }
+/* Kundenname in der ersten Zeile, Kennzeichen (Demo · monday · Vorab-Angebot) darunter wie in der Vorlage */
+.lm-tabelle td.sp-lead .lm-lead-name { display: block; line-height: 1.3; }
+.lm-tabelle td.sp-lead .abzeichen, .lm-tabelle td.sp-lead .lm-zaehler { margin-left: 0; margin-top: 2px; vertical-align: middle; }
+.lm-tabelle td.sp-lead .abzeichen:not(.li-terminiert):not(.lk-vorab) { font-size: 0.66rem; padding: 0 6px; background: var(--flaeche-abgesetzt);
+    color: var(--text-dezent); border: 1px solid var(--linie); border-radius: var(--r-s); }
+.lm-zaehler { background: var(--akzent-flaeche); color: var(--akzent-hover); }
+.lm-tabelle thead th[data-sort]:hover { color: var(--text); }
+.lm-tabelle thead th[aria-sort]::after { color: var(--akzent); }
+.lm-th-stift { color: var(--linie-stark); }
+.lm-th-stift:hover, .lm-th-stift:focus-visible { color: var(--akzent); }
+.lm-th-griff::after { background: var(--linie-stark); }
+.lm-tabelle thead th:hover .lm-th-griff::after, .lm-th-griff:focus-visible::after, .lm-th-griff.lm-zieht::after { background: var(--akzent); }
+.lm-tabelle thead th.lm-th-ziel-vor { box-shadow: inset 3px 0 0 var(--akzent); }
+.lm-tabelle thead th.lm-th-ziel-nach { box-shadow: inset -3px 0 0 var(--akzent); }
+.lm-tabelle th.lm-sp-platzhalter, .lm-tabelle td.lm-sp-platzhalter { background: var(--akzent-flaeche) !important; outline-color: var(--akzent); }
+.lm-tabelle thead th[data-name]:not([data-name=""]) .lm-th-text { text-decoration-color: var(--linie-stark); }
+.lm-mini-datum { background: var(--flaeche-karte); color: var(--text); border-color: var(--linie); font-variant-numeric: tabular-nums; }
+.lm-notiz { color: var(--text); }
+.lm-notiz::placeholder { color: var(--text-dezent); }
+.lm-mini-aktionen .knopf { font-size: 0.72rem; }
+.lm-leer { color: var(--text-dezent); }
+/* Rang 0 (Mail nicht gesendet / E-Mail falsch): roter Balken links, Labels als Pille */
+.lm-mail-label { background: var(--status-rot); color: var(--status-rot-bg); }
+/* Sparten-Chips in dunklen Tabellen: keine weiße Fläche */
+.lm-tabelle .chip:not(.chip-erfasst):not(.chip-ausgeblendet), .hv-tabelle .chip:not(.chip-erfasst), .lm-zeile .chip:not(.chip-erfasst),
+.lk-badges .chip:not(.chip-erfasst), .kanban-karte .chip:not(.chip-erfasst), .lk-zeile .chip:not(.chip-erfasst), .lk-angebot .chip:not(.chip-erfasst),
+.lm-tabelle .chip-offen, .lm-zeile .chip-offen { background: var(--flaeche-karte); }
+
+/* --- Status-Pille mit Pfeil, Kanal-Chip, Avatare mit Pfeil, Versuchs-Punkte, Überfällig --- */
+.lm-status, .hv-status, .lm-kanal.mit-farbe {
+    background: color-mix(in srgb, var(--f) 18%, transparent);
+    color: color-mix(in srgb, var(--f), var(--lm-chip-text-mix));
+    border: 1px solid color-mix(in srgb, var(--f) 32%, transparent);
+    text-shadow: none; font-weight: 600; font-size: var(--t-xs); padding: 2px 9px; line-height: 1.5; border-radius: 999px;
+    white-space: nowrap; vertical-align: middle; }
+.lm-status-zusatz { --f: var(--status-blau); }
+.lm-status-pille, .lm-person-pille { position: relative; display: inline-flex; align-items: center; gap: 2px; vertical-align: middle; }
+.lm-status-pille > .lm-mini, .lm-person-pille > .lm-mini { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none;
+    opacity: 0; cursor: pointer; margin: 0; padding: 0; border: 0; font-size: 1rem; }
+.lm-status-pille:hover > .lm-status { border-color: color-mix(in srgb, var(--f) 60%, transparent); background: color-mix(in srgb, var(--f) 26%, transparent); }
+.lm-person-pille:hover > .lm-avatar { box-shadow: 0 0 0 2px var(--akzent-glanz); }
+.lm-status-pille:focus-within > .lm-status, .lm-person-pille:focus-within > .lm-avatar { outline: 2px solid var(--fokus); outline-offset: 1px; }
+/* Pfeil „▾“ der Status-Pille als Pseudoelement (kein Markup im Label – Tests v23/v25 prüfen
+   `>Label</span>`); Alternativtext leer, damit Screenreader ihn nicht vorlesen */
+.lm-status-pille.mit-pfeil > .lm-status::after { content: "\25BE" / ""; font-size: 0.72em; margin-left: 5px; opacity: 0.85; }
+.lm-avatar-pfeil { font-size: 0.6rem; color: var(--text-dezent); line-height: 1; }
+.lm-avatar { color: var(--text-invers); box-shadow: 0 0 0 2px var(--flaeche-karte); }
+.lm-avatar.leer { background: var(--flaeche-abgesetzt); color: var(--text-dezent); border: 1px dashed var(--linie-stark); box-shadow: none; }
+.hv-avatar { background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); }
+.lm-dots i { background: var(--lm-punkt-leer); }
+.lm-dots i.v, .lm-dots.je-ergebnis i.v, .lm-dots i.e-nicht_erreicht, .lm-leg.e-nicht_erreicht, .lm-ergebnis.e-nicht_erreicht i, .lm-dots-e i.grau { background: var(--text-dezent); }
+.lm-dots.warn i.v, .lm-dots.warn.je-ergebnis i.v { background: var(--status-orange); }
+.lm-dots.rot i.v, .lm-dots.rot.je-ergebnis i.v { background: var(--status-rot); }
+.lm-dots.je-ergebnis i.e-erreicht { background: var(--status-gruen); }
+.lm-dots.je-ergebnis i.e-besetzt { background: var(--status-orange); }
+.lm-dots.je-ergebnis i.e-mailbox { background: var(--status-blau); }
+.lm-dots.je-ergebnis i.e-rueckruf_gewuenscht { background: var(--akzent); }
+.lm-dots.je-ergebnis i.e-falsche_nummer { background: var(--status-rot); }
+.lm-dots.je-ergebnis i.e-kein_interesse { background: var(--text); }
+.lm-dots.rot.je-ergebnis i.v, .lm-dots.warn.je-ergebnis i.v { box-shadow: 0 0 0 1px var(--flaeche-karte), 0 0 0 2px currentColor; }
+.lm-versuche { flex-direction: row; align-items: center; gap: 6px; }
+.lm-versuche small { color: var(--text-dezent); }
+.lm-versuche small.neu { color: var(--status-blau); }
+.lm-versuche small.lm-warn { color: var(--status-orange); }
+.lm-versuche small.lm-rot { color: var(--status-rot); }
+.lm-tabelle .wv-chip, .hv-tabelle .wv-chip { font-variant-numeric: tabular-nums; }
+.lm-tabelle .wv-chip.faellig, .hv-tabelle .wv-chip.faellig, .lm-wv-tabelle .wv-chip.faellig { background: transparent; border: 0; padding: 0;
+    color: var(--status-rot); font-weight: 700; }
+.lm-tabelle .wv-chip.geplant, .hv-tabelle .wv-chip.geplant { background: transparent; border: 0; padding: 0; color: var(--text); }
+.lm-flag { color: var(--status-orange); }
+.lm-flag-sperre { color: var(--status-rot); }
+.lm-quelle { background: var(--flaeche-abgesetzt); color: var(--text); border: 1px solid var(--linie); }
+
+/* --- Karten, Dialoge, Menüs, Hinweise --- */
+.lm-karte, .lm-arbeitsliste, .lk-karte, .lk-vorschlag, .lm-sperrzeit-hv, .lmt-vorschlag, .vorschlag-karte, .einsatz-karte {
+    background: var(--flaeche-karte); border-color: var(--linie); color: var(--text); }
+.lm-karte { border-radius: var(--r-l); box-shadow: var(--schatten-1); }
+.lm-karte h2, .lk-panel-titel, .lmt-kopf h2, .lmt-slot h2 { color: var(--text-titel); }
+.lm-karte h2 .sub, .lm-delta, .lm-wv-grund, .lm-todo-details, .lm-todo-meta { color: var(--text-dezent); }
+.lm-dialog, .lk-dialog { background: var(--flaeche-karte); color: var(--text); border: 1px solid var(--linie-stark); border-radius: var(--r-l); box-shadow: var(--schatten-2); }
+.lm-dialog h3, .lk-dialog h3 { color: var(--text-titel); }
+.lm-dialog .formular, .lk-dialog .formular { background: transparent; color: var(--text); }
+.lm-aktion details[open] .lm-menue, .lm-wv-menue, .lk-inline-form[open] > form, .lmt-termine details.lmt-inline-form[open] > .formular,
+.lm-mehrfach[open] > .lm-mehrfach-liste, .lm-spaltenwahl[open] > .lm-spaltenmenue, .lmt-weitere[open] > .lmt-weitere-liste {
+    background: var(--flaeche-karte); border-color: var(--linie-stark); color: var(--text); }
+.lm-wv-menue label, .lm-sperrzeit-form label { color: var(--text-dezent); }
+.lm-wv-menue input, .lm-sperrzeit-form input, .lm-sperrzeit-form select, .lm-todo-form input, .lm-todo-form select, .lm-todo-form textarea,
+.lk-anruf-notiz, .lk-notiz-eingabe textarea, .lk-todo-neu input, .lk-todo-neu select, .lk-zuweisung select, .li-notiz-form textarea,
+.li-inline-form input, .li-veranst-wahl { background: var(--flaeche-karte); color: var(--text); border-color: var(--linie-stark); }
+.lm-legende-liste { color: var(--text-dezent); border-top-color: var(--linie); }
+.lm-legende-liste b { color: var(--text); }
+.lm-arbeitsliste { border-radius: var(--r-l); box-shadow: var(--schatten-1); }
+.lm-zeile { border-bottom-color: var(--linie); }
+.lm-zeile:hover, .lm-zeile.aktiv { background: var(--flaeche-hover); }
+.lm-zeile .z1 a.panel-link, .lm-zeile .klasse { color: var(--text-titel); }
+.lm-zeile .z1 .ort, .lm-zeile .klasse small { color: var(--text-dezent); }
+.lm-zeile .z2 { color: var(--text); }
+.knopf.lm-ok, .anruf-buttons .anruf-ok { background: var(--status-gruen); border-color: var(--status-gruen); color: var(--status-gruen-bg); }
+.knopf.lm-ok:hover, .anruf-buttons .anruf-ok:hover { background: color-mix(in srgb, var(--status-gruen) 88%, var(--text)); }
+#lead-panel { background: var(--flaeche-karte); border-color: var(--linie-stark); }
+#lead-panel .panel-kopf { border-bottom-color: var(--linie); }
+.lm-kommende-tag { background: var(--flaeche-abgesetzt); color: var(--text-dezent); }
+.lm-kommende-mehr > summary, .li-anlegen summary { color: var(--link); }
+.lm-wv-tabelle td { border-bottom-color: var(--linie); }
+.lm-todo { border-bottom-color: var(--linie); }
+.lm-todo-titel a { color: var(--text-titel); }
+.lm-todo.erledigt .lm-todo-titel strong { color: var(--text-dezent); }
+.lm-phase { background: var(--flaeche-abgesetzt); border-color: var(--linie); }
+.lm-termine tr.heute td { background: var(--akzent-flaeche); }
+.lm-sperrzeiten, .lm-zustaendig, .lk-zustaendig { border-top-color: var(--linie); }
+.lm-mehr > summary { color: var(--text); }
+
+/* --- Kanban (Lead-Pipeline) und Terminkalender --- */
+.kanban[class*="lm-kanban-"] .kanban-spalte { background: var(--flaeche-abgesetzt); border: 1px solid var(--linie); border-radius: var(--r-l); }
+.kanban[class*="lm-kanban-"] .kanban-spalte h3, .kanban[class*="lm-kanban-"] .kanban-spalte h2 { color: var(--text-titel); font-size: 0.72rem;
+    text-transform: uppercase; letter-spacing: 0.06em; margin: 4px 0 10px; }
+.kanban[class*="lm-kanban-"] .kanban-spalte h3 .dezent { text-transform: none; letter-spacing: 0; }
+.kanban-karte.lead-karte { background: var(--flaeche-karte); border-color: var(--linie); color: var(--text); box-shadow: var(--schatten-1); }
+.kanban-karte.lead-karte:hover { border-color: var(--akzent); }
+.kanban-karte.lead-karte a { color: var(--text-titel); }
+.kanban-karte.lead-karte .dezent { color: var(--text-dezent); }
+.kalender-tabelle td, .kalender-tabelle th { background: var(--flaeche-karte); }
+.kalender-eintrag { background: var(--flaeche-karte); border-color: var(--linie); border-left-color: var(--akzent); color: var(--text); }
+.kalender-eintrag a { color: var(--text-titel); }
+.kalender-eintrag.belegt { background: var(--flaeche-abgesetzt); color: var(--text-dezent); border-left-color: var(--linie-stark); }
+.kalender-eintrag.sparte-wp { border-left-color: var(--pj-wp); }
+.kalender-eintrag.sparte-pv { border-left-color: var(--pj-pv); }
+.kalender-eintrag.sparte-kl { border-left-color: var(--pj-kl); }
+.kalender-eintrag.sparte-wb { border-left-color: var(--pj-wb); }
+.kalender-eintrag.typ-vot { border-left-color: var(--status-blau); }
+.kalender-eintrag .lmt-typ { color: var(--text-dezent); }
+.lmt-absage-knopf { color: var(--text-dezent); }
+
+/* --- Terminassistent + Kalenderansicht --- */
+.lmt-vorschlag { border: 1px solid var(--linie); box-shadow: var(--schatten-1); }
+.lmt-vorschlag h3 { color: var(--text-titel); }
+.lmt-begruendung, .lk-vorschlaege, .lk-anruf, .lk-mfh, .lk-anfrage, .lk-terminierung, .lk-karte-inhalt .lk-mail-body, .lmv-vertriebler-kasten {
+    background: var(--flaeche-abgesetzt); color: var(--text); }
+.lmt-ideal-grund { background: var(--akzent-flaeche); color: var(--akzent-hover); }
+.lk-vorschlag-ideal-grund { color: var(--akzent-hover); }
+.lmt-konflikte.frei { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.lmt-kalender-tabelle th { background: var(--flaeche-abgesetzt); color: var(--text-titel); border-bottom-color: var(--linie); border-right-color: var(--linie); }
+.lmt-kalender-tabelle th.lmt-k-tag, .lmt-kalender-tabelle td.lmt-k-tagende { border-right-color: var(--linie-stark); }
+.lmt-kalender-tabelle th.lmt-k-zeit, .lmt-kalender-tabelle td.lmt-k-zeit { background: var(--flaeche-abgesetzt); color: var(--text-dezent); }
+.lmt-kalender-tabelle td.lmt-k-stunde { border-bottom-color: var(--linie); }
+.lmt-kalender-tabelle td.lmt-k-frei:hover { background: var(--akzent-flaeche); }
+.lmt-kalender-tabelle td.lmt-k-vorschlag { background: var(--akzent-flaeche); box-shadow: inset 0 0 0 2px var(--akzent); }
+.lmt-k-text { color: var(--text-titel); }
+.lmt-kalender-legende { color: var(--text-dezent); }
+.lmt-kalender-legende i { border-color: var(--linie-stark); }
+.lmt-kalender-legende i.vorschlag { background: var(--akzent-flaeche); box-shadow: inset 0 0 0 2px var(--akzent); }
+.lmt-kalender-legende i.sperr { background: repeating-linear-gradient(135deg, var(--linie) 0 3px, var(--flaeche-abgesetzt) 3px 6px); }
+.lmt-kalender-tabelle td.lmt-k-sperrzeit { background: repeating-linear-gradient(135deg, var(--linie) 0 4px, var(--flaeche-abgesetzt) 4px 8px); }
+.lmt-ausserhalb-warnung, .lmt-konflikte.warnung { background: var(--status-orange-bg); color: var(--status-orange); }
+.lmt-manuell input, .lmt-manuell select { background: var(--flaeche-karte); color: var(--text); border-color: var(--linie-stark); }
+
+/* --- Kundenkartei --- */
+.lk-kopf-fakten { color: var(--text); }
+.lk-kopf-fakten .dezent, .lk-kopf-ort, .lk-fehlliste { color: var(--text-dezent); }
+.lk-kontakt a, .hv-tabelle td.hv-kunde a, .hv-liste li a, .lm-sortierung a { color: var(--text-titel); }
+.lk-schritt { background: var(--flaeche-abgesetzt); border-color: var(--linie); color: var(--text); }
+.lk-schritt + .lk-schritt::before { background: var(--linie-stark); }
+.lk-schritt.fertig { background: var(--akzent-flaeche); border-color: var(--akzent-flaeche); color: var(--akzent-hover); }
+.lk-aktion { color: var(--text-titel); }
+.lk-aktion:hover, .lk-rund:hover { background: var(--flaeche-hover); border-color: var(--akzent); }
+.lk-rund:focus-visible, .lk-tab:focus-visible { outline-color: var(--fokus); }
+.lk-abschnitt, .lk-feld > span, .lk-feld > summary, .lk-feld-status, .lk-karte-meta, .lk-dialog-mehr summary { color: var(--text-dezent); }
+.lk-feld-status.ok { color: var(--status-gruen); }
+.lk-feld-status.fehler { color: var(--status-rot); }
+.lk-feld-link { color: var(--link); }
+.lk-tab { color: var(--text-dezent); }
+.lk-tab:hover { background: var(--flaeche-hover); color: var(--text); }
+.lk-tab-zahl { background: var(--flaeche-abgesetzt); color: var(--text); }
+.lk-reiter, .lk-aktionen, .lk-speichern, .lk-zeile, .lk-todo-neu { border-color: var(--linie); }
+.lk-speichern.aktiv { border-top-color: var(--akzent); }
+.lk-karte[open] { border-color: var(--akzent); }
+.lk-karte-icon { background: var(--flaeche-abgesetzt); color: var(--text); }
+.lk-karte-titel { color: var(--text-titel); }
+.lk-karte-inhalt .lk-mail-body { background: #fff; color: #1f2937; }   /* fest: E-Mail-Verlauf zeigt die Mail wie beim Empfänger (helle Mail mit Inline-Farben) */
+.mail-vorschau { background: #fff; color: #1f2937; border-color: var(--linie-stark); }   /* fest: Mail-Vorschau wie beim Empfänger (helle Mail mit Inline-Farben) */
+.lk-pflicht-zaehler.ok { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.lk-pflicht-zaehler.offen { background: var(--status-rot-bg); color: var(--status-rot); }
+.lk-suche { color: var(--text-dezent); }
+.lk-suche input { color: var(--text); }
+.lk-chip { color: var(--text); }
+.lk-chipgruppe { border-right-color: var(--linie); }
+.lk-bereich > summary { color: var(--text-titel); }
+.lk-bereich > summary::after { color: var(--text-dezent); }
+.lk-zahl { background: var(--akzent-flaeche); color: var(--akzent-hover); }
+.lk-galerie img { border-color: var(--linie); }
+.lk-info-raster .lk-mfh, .lk-anfrage { border: 1px solid var(--linie); }
+.lk-stoppuhr { color: var(--akzent-hover); }
+.lk-kopf-aktionen .knopf[disabled], .lk-terminierung[disabled], .lk-terminierung[disabled]:hover { background: var(--flaeche-abgesetzt); color: var(--text-dezent); border-color: var(--linie); }
+.lk-termine .lk-termin-aktiv td { background: var(--akzent-flaeche); }
+.lk-wert { color: var(--text); }
+
+/* --- Vorlagen-Editor, Kommunikation, Handelsvertreter, Infoabend --- */
+.lmv-baum h3, .lmv-baum summary, .lmv-fuss, .lmv-hinweis { color: var(--text-dezent); }
+.lmv-eintrag a { color: var(--text); }
+.lmv-eintrag a:hover { background: var(--flaeche-hover); }
+.lmv-suchfeld { background: var(--flaeche-karte); border-color: var(--linie-stark); }
+.lmv-suchfeld input { color: var(--text); }
+.lmv-vertriebler-kasten, .lmv-bild { border-color: var(--linie); }
+.lm-vorlage input[readonly], .lm-vorlage textarea[readonly] { background: var(--flaeche-abgesetzt); color: var(--text-dezent); }
+.lm-vorlage textarea, .lm-vorlage input[type="text"] { background: var(--flaeche-karte); color: var(--text); border-color: var(--linie-stark); }
+.hv-tabelle td.hv-kunde a:hover { color: var(--link); }
+.hv-zuweisung select:disabled { background: var(--flaeche-abgesetzt); color: var(--text-dezent); }
+.hv-sperre, .hv-liste li.hv-leer { color: var(--text-dezent); }
+.hv-liste li { border-bottom-color: var(--linie); }
+.li-teil-knopf { color: var(--text-dezent); border-right-color: var(--linie); }
+.li-teil-knopf:hover { background: var(--flaeche-hover); color: var(--text); }
+.li-teil-knopf.leer { color: var(--linie-stark); }
+.li-notiz { border-bottom-color: var(--linie); }
+.li-gruppe.li-vergangen > summary .li-titel { color: var(--text-dezent); }
+.li-gruppe-kopf .symbol-svg { color: var(--akzent); }
+.li-termine-tabelle tr.li-archiv td { color: var(--text-dezent); background: var(--flaeche-abgesetzt); }
+.li-dl dt { color: var(--text-dezent); }
+.lm-warteschlange td { color: var(--text); }
+.lm-kontaktiert td.lm-notiz-text { color: var(--text); }
+
+/* --- Leaflet-Karte (/lead-management/karte, Mini-Karte des Terminassistenten) [ANNAHME]:
+       die OSM-Kacheln bleiben hell (kein Filter), Kartenrahmen, Zoom-Knöpfe, Popups
+       und Attribution folgen den Tokens. Höhere Spezifität, weil leaflet.css nach den
+       Modul-Styles geladen wird. --- */
+.lm-karte-leaflet { height: 70vh; border: 1px solid var(--linie-stark); border-radius: var(--r-m); background: var(--flaeche-abgesetzt); }
+#lmt-karte { border-color: var(--linie-stark); background: var(--flaeche-abgesetzt); }
+main .leaflet-container { font-family: var(--schrift); background: var(--flaeche-abgesetzt); }
+main .leaflet-container a { color: var(--link); }
+main .leaflet-popup-content-wrapper, main .leaflet-popup-tip { background: var(--flaeche-karte); color: var(--text); box-shadow: var(--schatten-2); }
+main .leaflet-popup-content-wrapper { border-radius: var(--r-m); }
+main .leaflet-container a.leaflet-popup-close-button { color: var(--text-dezent); }
+main .leaflet-container .leaflet-bar { border: 1px solid var(--linie-stark); box-shadow: var(--schatten-1); }
+main .leaflet-container .leaflet-bar a { background: var(--flaeche-karte); color: var(--text); border-bottom-color: var(--linie); }
+main .leaflet-container .leaflet-bar a:hover { background: var(--flaeche-hover); }
+main .leaflet-container .leaflet-control-attribution { background: color-mix(in srgb, var(--flaeche-karte) 82%, transparent); color: var(--text-dezent); }

@@ -109,6 +109,9 @@ def argumente() -> argparse.Namespace:
                         help="zusätzlich je Route eine nicht vorhandene ID aufrufen")
     parser.add_argument("--max-kombis", type=int, default=5000,
                         help="Obergrenze je Route bei mehreren Pfadparametern")
+    # v30 (PLAN_V18 Phase 152): Crawl je Darstellung (Cookie „darstellung“ → <html data-theme>)
+    parser.add_argument("--darstellung", default="", choices=("", "hell", "dunkel", "geraet"),
+                        help="Darstellung über das Cookie darstellung (leer = ohne Cookie)")
     return parser.parse_args()
 
 
@@ -431,7 +434,10 @@ def main() -> int:
             client = TestClient(app, raise_server_exceptions=False,
                                 follow_redirects=False)
             client.cookies.set(auth.COOKIE_NAME, auth.cookie_wert(kennung))
-            print(f"Rolle {rolle} – Benutzer {kennung} ({name}) – {len(pfade)} Pfade")
+            if args.darstellung:   # v30: Hell/Dunkel per Cookie
+                client.cookies.set("darstellung", args.darstellung)
+            print(f"Rolle {rolle} – Benutzer {kennung} ({name}) – {len(pfade)} Pfade"
+                  + (f" – Darstellung {args.darstellung}" if args.darstellung else ""))
             for muster, pfad in pfade:
                 vorher = len(ABSTUERZE)
                 t1 = time.perf_counter()

@@ -1,5 +1,11 @@
+{#- v30 (PLAN_V18 Phase 145): Darstellung geraet | hell | dunkel – von der Middleware
+    aus Cookie/Benutzereinstellung gesetzt; bei „hell“/„dunkel“ steht sie VOR dem Rendern
+    als data-theme am <html>-Tag (kein Aufblitzen), bei „Gerät“ entscheidet die Media-Query -#}
+{%- set darstellung = request.state.darstellung if (request.state is defined and request.state.darstellung is defined) else 'geraet' -%}
+{%- set darstellung = darstellung if darstellung in ('hell', 'dunkel') else 'geraet' -%}
+{%- from "_symbole.html" import symbol -%}
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de"{% if darstellung != 'geraet' %} data-theme="{{ darstellung }}"{% endif %}>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,8 +17,15 @@
     <link rel="stylesheet" href="/static/projektierung_v28.css?v={{ css_version }}">
     <link rel="stylesheet" href="/static/akte_v28.css?v={{ css_version }}">
     <link rel="stylesheet" href="/static/lead_v29.css?v={{ css_version }}">
-    {# v14 (Phase 73): PWA-Darstellung - Startansicht, Icon, Farbe #}
-    <meta name="theme-color" content="#1b2a5e">
+    {# v14 (Phase 73): PWA-Darstellung - Startansicht, Icon, Farbe.
+       v30 (Phase 145): Farbe folgt dem Modus (Werte aus app/darstellung.py); bei „Gerät“
+       zwei Einträge mit Media-Query, navigation.js zieht sie beim Umschalten nach #}
+    {% if darstellung == 'geraet' %}
+    <meta name="theme-color" content="{{ theme_color.hell }}" media="(prefers-color-scheme: light)" data-theme-color data-hell="{{ theme_color.hell }}" data-dunkel="{{ theme_color.dunkel }}">
+    <meta name="theme-color" content="{{ theme_color.dunkel }}" media="(prefers-color-scheme: dark)" data-theme-color-dunkel>
+    {% else %}
+    <meta name="theme-color" content="{{ theme_color[darstellung] }}" data-theme-color data-hell="{{ theme_color.hell }}" data-dunkel="{{ theme_color.dunkel }}">
+    {% endif %}
     <link rel="manifest" href="/static/manifest.webmanifest">
     <link rel="icon" href="/static/logo.png">
     <link rel="apple-touch-icon" href="/static/logo.png">
@@ -112,6 +125,21 @@
                             <a href="/lead-management/dashboard">Mein Dashboard</a>
                         {% endif %}
                     {% endif %}
+                    {# v30 (PLAN_V18 Phase 145): Darstellung je Benutzer – drei Radio-Chips
+                       Gerät · Hell · Dunkel; Wechsel sofort per JS (navigation.js), Speichern
+                       über POST /einstellungen/darstellung, ohne JavaScript als Formular #}
+                    <form class="darstellung-wahl" method="post" action="/einstellungen/darstellung" aria-label="Darstellung wählen">
+                        <span class="darstellung-titel">Darstellung</span>
+                        <span class="darstellung-chips">
+                            {% for wert, name, icon in darstellung_werte %}
+                            <label class="darstellung-chip{{ ' aktiv' if darstellung == wert else '' }}" title="Darstellung: {{ name }}">
+                                <input type="radio" name="darstellung" value="{{ wert }}" data-darstellung{{ ' checked' if darstellung == wert else '' }}>
+                                {{ symbol(icon) }}<span>{{ name }}</span>
+                            </label>
+                            {% endfor %}
+                        </span>
+                        <noscript><button class="knopf klein zweitrangig" type="submit">Übernehmen</button></noscript>
+                    </form>
                     {# v27 (PLAN_V17 Phase 130): eigene PIN ändern – für jede Rolle #}
                     <a href="/pin-wechsel">PIN ändern</a>
                     <a href="/logout">{{ benutzer_angemeldet.name }} abmelden ⏻</a>
@@ -125,7 +153,29 @@
 {% if wartung %}
 <div class="wartung-banner" role="status" id="wartung-banner">⚠ {{ wartung.banner }}</div>
 {% endif %}
+{# v30 (PLAN_V18 Phase 147): „← Zurück“ = eine Ansicht zurück (Verlauf je Tab in
+   navigation.js, sonst Standard-Rücksprungseite der Route). Nicht auf Portal,
+   Modul-Startseiten, Login/PIN-Wechsel, Erfassungsbogen und eingebetteten Seiten
+   (einbett=1). Eine Seite kann den Knopf mit {% set zurueck_aus = true %} abschalten
+   oder ihn mit zurueck_knopf(standard) selbst im Seitenkopf platzieren. #}
+{% macro zurueck_knopf(standard='/') -%}
+<a class="zurueck-knopf" href="{{ standard }}" data-zurueck-standard="{{ standard }}" title="Zur vorherigen Ansicht">{{ symbol('pfeil-links') }}<span>Zurück</span></a>
+{%- endmacro %}
+{% set zurueck_pfad = request.url.path %}
+{% if zurueck_pfad.startswith('/angebote/') %}{% set zurueck_standard = '/angebote' %}
+{% elif zurueck_pfad.startswith('/erfassungen/') %}{% set zurueck_standard = '/erfassungen' %}
+{% elif zurueck_pfad.startswith('/vorgaenge/') %}{% set zurueck_standard = '/lead-management/hauptboard' if (benutzer_angemeldet and benutzer_angemeldet.rolle == 'leadmanagement') else '/leads' %}
+{% elif zurueck_pfad.startswith('/projektierung/') %}{% set zurueck_standard = '/projektierung' %}
+{% elif zurueck_pfad.startswith('/montage/') %}{% set zurueck_standard = '/montage' %}
+{% elif zurueck_pfad.startswith('/parametrierung/') %}{% set zurueck_standard = '/parametrierung' %}
+{% elif zurueck_pfad.startswith('/lead-management/') %}{% set zurueck_standard = '/lead-management/dashboard' %}
+{% else %}{% set zurueck_standard = '/' %}{% endif %}
+{% set zurueck_zeigen = benutzer_angemeldet and not (zurueck_aus | default(false))
+   and request.query_params.get('einbett') != '1'
+   and zurueck_pfad not in ('/', '/angebotstool', '/erfassung', '/lead-management', '/lead-management/dashboard', '/projektierung', '/montage', '/login', '/pin-wechsel')
+   and not zurueck_pfad.startswith('/erfassung/') %}
 <main class="{% block mainklasse %}{% endblock %}">
+    {% if zurueck_zeigen %}<div class="zurueck-leiste">{{ zurueck_knopf(zurueck_standard) }}</div>{% endif %}
     {% block inhalt %}{% endblock %}
 </main>
 <footer class="fusszeile">
@@ -133,5 +183,7 @@
 </footer>
 {# V4 (PLAN_PROJ_V4 Phase 90.4/90.5): 15-Minuten-Takt, fetch-Aktionen, Scroll-Erhalt #}
 <script src="/static/projektierung.js?v={{ css_version }}"></script>
+{# v30 (PLAN_V18 Phase 145/147): Darstellung umschalten + Zurück-Verlauf je Tab #}
+<script src="/static/navigation.js?v={{ css_version }}"></script>
 </body>
 </html>

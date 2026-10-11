@@ -37,6 +37,7 @@
                 </select>
             </td>
             <td><input form="t{{ t.id }}" type="color" name="farbe"
+                       {# fest: Formularwert der Teamfarbe (gespeicherter Hex-Wert, kein Stil) #}
                        value="{{ t.farbe or '#2d6bd6' }}" title="Kalenderfarbe"></td>
             <td><input form="t{{ t.id }}" type="text" name="outlook_adresse" size="18"
                        value="{{ t.outlook_adresse }}" placeholder="team1@… (Phase 81)"></td>
@@ -64,6 +65,7 @@
             <option value="sub">Sub</option>
         </select>
     </label>
+    {# fest: Vorgabewert des Farbfelds (Formularwert, kein Stil) #}
     <label>Farbe <input type="color" name="farbe" value="#2d6bd6"></label>
     <button class="knopf" type="submit">Anlegen</button>
 </form>

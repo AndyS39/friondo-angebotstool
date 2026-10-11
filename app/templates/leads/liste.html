@@ -89,7 +89,7 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
     <tbody>
     {% for lead in leads %}
         <tr>
-            <td>{% if lead.vot_datum %}<span {% if lead.vot_datum < heute %}style="color:#b3382c;font-weight:600" title="Termin liegt in der Vergangenheit – Erfassung fehlt"{% endif %}>{{ lead.vot_datum.strftime('%d.%m.%Y %H:%M') }}</span>{% endif %}</td>
+            <td>{% if lead.vot_datum %}<span {% if lead.vot_datum < heute %}class="ueberfaellig-rot" title="Termin liegt in der Vergangenheit – Erfassung fehlt"{% endif %}>{{ lead.vot_datum.strftime('%d.%m.%Y %H:%M') }}</span>{% endif %}</td>
             <td><a href="/vorgaenge/zu-lead/{{ lead.id }}" title="Vorgangsakte öffnen">{{ lead.anzeige_name }}</a>
                 <span class="sparten-chips">
                 {% for sparte, status in chips.get(lead.id, []) %}

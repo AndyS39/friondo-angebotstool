@@ -200,12 +200,15 @@ def naechste_frage(logik: Logik, antworten: dict) -> Optional[Frage]:
 
 
 # v27-Nachtrag (Antwort Andreas 07.10.2026, Lasttest-Befund): später eingeführte
-# optionale Fragen (O09 Rechnungs-Name, O13 abweichende Lieferanschrift – v20;
-# A20 Nennleistung der bestehenden Heizung – v19) fehlen in Bestands-Erfassungen
-# und sind keine Pflicht. Der Bogen führt weiter durch alle sichtbaren Fragen
-# (naechste_frage); „Angebot erzeugen“ und die Prüfseite verlangen nur noch
-# Pflichtfragen (naechste_pflichtfrage).
-OPTIONALE_FRAGEN = {"O09", "O13", "A20"}
+# optionale Fragen (O09 Rechnungs-Name, O13 abweichende Lieferanschrift – v20)
+# fehlen in Bestands-Erfassungen und sind keine Pflicht. Der Bogen führt weiter
+# durch alle sichtbaren Fragen (naechste_frage); „Angebot erzeugen“ und die
+# Prüfseite verlangen nur noch Pflichtfragen (naechste_pflichtfrage).
+# v30 (PLAN_V18 Phase 148): A20 „Nennleistung der bestehenden Heizung“ ist aus
+# der Live-Excel gestrichen – die Frage existiert nicht mehr; alte Antworten im
+# JSON einer Erfassung bleiben unangetastet (keine Datenänderung) und werden vom
+# Protokoll wie jede unbekannte Antwort schlicht übergangen.
+OPTIONALE_FRAGEN = {"O09", "O13"}
 
 
 def ist_optional(frage: Frage) -> bool:

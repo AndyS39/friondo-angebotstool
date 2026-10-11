@@ -5,12 +5,14 @@
 {% block titel %}Fehler – Friondo Angebotstool{% endblock %}
 
 {% block inhalt %}
+{# v30 (PLAN_V18 Phase 146): Fehlerseite im Karten-Stil (Klassen fehler-seite/fehler-nr/fehler-aktionen, style.css) #}
+<div class="fehler-seite">
 <div class="seitenkopf">
     <h1>Es ist ein Fehler aufgetreten</h1>
 </div>
 
 <div class="warnblock fehlerblock">
-    <strong>Fehler-Nr. {{ fehler_nr }}</strong>
+    <strong class="fehler-nr">Fehler-Nr. {{ fehler_nr }}</strong>
     {% if gesperrt %}
         <p>Die Datenbank war kurz belegt – die Änderung wurde <strong>nicht gespeichert</strong>.
            Bitte die Aktion in einem Moment erneut versuchen.</p>
@@ -21,7 +23,7 @@
        Bitte die Fehler-Nr. bei einer Rückfrage mit angeben.</p>
 </div>
 
-<p>
+<p class="fehler-aktionen">
     {% if zurueck %}
         <a class="knopf zweitrangig" href="{{ zurueck }}">Zurück</a>
     {% endif %}
@@ -31,4 +33,5 @@
         <a class="knopf zweitrangig" href="/parametrierung/fehlerprotokoll">Fehlerprotokoll</a>
     {% endif %}
 </p>
+</div>
 {% endblock %}

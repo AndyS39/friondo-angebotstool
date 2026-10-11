@@ -277,7 +277,7 @@
                     {% endif %}
                     <button class="knopf klein zweitrangig" type="button"
                             onclick="document.getElementById('dlg-absage-{{ t.id }}').showModal()">Absagen</button>
-                    <dialog id="dlg-absage-{{ t.id }}">
+                    <dialog id="dlg-absage-{{ t.id }}" class="lm-dialog">
                         <form method="post" class="formular"
                               action="/lead-management/termin/{{ t.id }}/absagen">
                             <h3>Termin absagen</h3>

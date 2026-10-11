@@ -13,7 +13,8 @@
     {% if meine %}
     <h2>Meine Einsätze</h2>
     {% else %}
-    <h2><i class="pj-teamfarbe" style="background:{{ team.farbe or '#5a6478' }}"></i>
+    {#- v30 (PLAN_V18 Phase 145): Teamfarbe als --f, Rückfall = Token --pj-muted (projektierung_v28.css) #}
+    <h2><i class="pj-teamfarbe"{% if team.farbe %} style="--f:{{ team.farbe }}"{% endif %}></i>
         Team {{ team.name }}{{ ' (Sub)' if team.typ == 'sub' }}</h2>
     {% endif %}
     {% if teams | length > 1 or leitung or not meine %}
@@ -21,7 +22,7 @@
         <a class="pj-btn {{ 'primary' if meine }}" href="/montage">Meine Einsätze</a>
         {% for te in teams %}
         <a class="pj-btn {{ 'primary' if team and team.id == te.id }}" href="/montage?team_id={{ te.id }}"
-           title="Alle Termine des Teams"><i class="pj-teamfarbe" style="background:{{ te.farbe or '#5a6478' }}"></i>{{ te.name }}</a>
+           title="Alle Termine des Teams"><i class="pj-teamfarbe"{% if te.farbe %} style="--f:{{ te.farbe }}"{% endif %}></i>{{ te.name }}</a>
         {% endfor %}
     </div>
     {% endif %}
@@ -61,7 +62,7 @@
             {% if steck.get('hersteller') %}{% set _ = geraet.append(steck['hersteller'].wert) %}{% endif %}
             {% if steck.get('leistungsklasse') %}{% set _ = geraet.append(steck['leistungsklasse'].wert) %}{% endif %}
             {% if geraet %}<br><small class="dezent">{{ geraet | join(' · ') }}</small>{% endif %}
-            {% if steck.get('besonderheiten') and steck['besonderheiten'].wert %}<br><small style="color:#8a6116">⚠ {{ steck['besonderheiten'].wert }}</small>{% endif %}
+            {% if steck.get('besonderheiten') and steck['besonderheiten'].wert %}<br><small class="pj-warn-text">⚠ {{ steck['besonderheiten'].wert }}</small>{% endif %}
             <div class="pj-btnrow">
                 <a class="pj-btn primary" href="/montage/einsatz/{{ t.id }}">Auftrag öffnen</a>
             </div>

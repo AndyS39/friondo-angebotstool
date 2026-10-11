@@ -90,7 +90,8 @@
     {% if te or balken.get(none) or marker_ohne_team %}
     <div class="pj-kal-zeile" data-team="{{ te.id if te else 0 }}">
         <div class="pj-kal-team">
-            <i style="background: {{ te.farbe or '#5a6478' if te else '#5a6478' }}"></i>
+            {#- v30 (PLAN_V18 Phase 145): Teamfarbe als --f, Rückfall = Token --pj-muted (projektierung_v28.css) #}
+            <i{% if te and te.farbe %} style="--f: {{ te.farbe }}"{% endif %}></i>
             {{ te.name if te else 'ohne Team' }}{{ ' (Sub)' if te and te.typ == 'sub' }}
         </div>
         {% for tag in tage %}
@@ -111,8 +112,7 @@
         {% endfor %}
         {% for b in balken.get(team_key, []) %}
         <a class="pj-kal-balken {{ 'unbest' if not b.termin.kunde_bestaetigt }}"
-           style="grid-column: {{ b.start + 1 }} / {{ b.ende + 1 }};
-                  background-color: {{ te.farbe or '#5a6478' if te else '#5a6478' }}"
+           style="grid-column: {{ b.start + 1 }} / {{ b.ende + 1 }};{% if te and te.farbe %} --f: {{ te.farbe }};{% endif %}"
            href="/projektierung/projekt/{{ b.zeile.projekt.id }}"
            draggable="true"
            ondragstart="pjKalStart(event, {{ b.termin.id }}, 'verschieben')"
@@ -127,9 +127,10 @@
     {% endfor %}
 </div>
 <div class="pj-kal-legende">
-    <span><b style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#5a6478"></b> Balken = Montagetermin (Farbe = Team, Schraffur = Kunde unbestätigt)</span>
-    <span><b style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#2d6bd6"></b> Feinplanung</span>
-    <span><b style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#7a3fbf"></b> Abnahme</span>
+    {#- v30 (PLAN_V18 Phase 145): Legenden-Symbole über Klassen mit Tokens (projektierung_v28.css) #}
+    <span><b class="pj-kal-lg"></b> Balken = Montagetermin (Farbe = Team, Schraffur = Kunde unbestätigt)</span>
+    <span><b class="pj-kal-lg fp"></b> Feinplanung</span>
+    <span><b class="pj-kal-lg ab"></b> Abnahme</span>
     <span>Ziehen verschiebt den Termin (protokolliert), ▐ verlängert das Ende. Teamwechsel per Drag belegt die Besetzung aus dem neuen Team neu, sofern sie nicht von Hand gesetzt war (v28).</span>
 </div>
 

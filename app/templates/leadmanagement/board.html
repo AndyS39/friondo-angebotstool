@@ -140,7 +140,8 @@
     {% endif %}
 </div>
 
-<dialog id="dlg-board-zurueck">
+{# v30 (PLAN_V18 Phase 146): Dialoge im Modul-Stil (lm-dialog, Hell/Dunkel über Tokens) #}
+<dialog id="dlg-board-zurueck" class="lm-dialog">
     <form method="post" class="formular">
         <h3>Zurückstellen</h3>
         <label>Bis (Pflicht) <input type="date" name="bis" required></label>
@@ -157,7 +158,7 @@
         </div>
     </form>
 </dialog>
-<dialog id="dlg-board-unq">
+<dialog id="dlg-board-unq" class="lm-dialog">
     <form method="post" class="formular">
         <h3>Unqualifiziert (Grund Pflicht)</h3>
         <label>Grund
@@ -173,7 +174,7 @@
         </div>
     </form>
 </dialog>
-<dialog id="dlg-board-reakt">
+<dialog id="dlg-board-reakt" class="lm-dialog">
     <form method="post" class="formular">
         <h3>Reaktivieren</h3>
         <label>Begründung (Pflicht) <input type="text" name="begruendung" required></label>

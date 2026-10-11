@@ -272,6 +272,8 @@ def rabatt_entscheiden(request: Request, freigabe_id: int,
         ziel = rabatt_anwenden(session, angebot, freigabe.rabatt_cent,
                                freigabe.rabatt_prozent, freigabe.rabatt_bezeichnung)
         if ziel.id != angebot.id:
+            # v30 (Phase 150): neue Version übernimmt die Zahlungsbedingung
+            _zahlungsbedingung_uebernehmen(ziel, angebot)
             from app import monday_rueckspielung
             monday_rueckspielung.wert_aktualisieren(session, ziel,
                                                     "neue Version (Rabatt-Freigabe)")
@@ -477,8 +479,20 @@ def editor(request: Request, angebot_id: int,
         anschrift_liefer_text=(anschriften_modul.einzeilig(_li)
                                if anschriften_modul.lieferzeile(angebot, kunde)
                                else "wie Ausführungsort"))
+    # v30 (PLAN_V18 Phase 150): Zahlungsbedingung – Dropdown der aktiven Einträge,
+    # Vorschau des Namens; Phase 149: Hinweis „folgt auf dem Lieferschein Pos. …“
+    from app import lieferschein_pdf, zahlungsbedingungen
+    zb_eintraege, zb_gewaehlt = zahlungsbedingungen.auswahl_fuer_editor(session, angebot)
+    zb_name = zahlungsbedingungen.fuer_angebot(session, angebot)[0]
+    folge_hinweise = lieferschein_pdf.folge_hinweise(
+        angebot, lieferschein_pdf.folgepositionen_lesen(session))
     return render(request, "angebote/editor.html", aktiv="/angebote",
                   **anschrift_kontext,
+                  zahlungsbedingungen=zb_eintraege, zahlungsbedingung_key=zb_gewaehlt,
+                  zahlungsbedingung_name=zb_name,
+                  zahlungsbedingung_freitext=zahlungsbedingungen.FREITEXT,
+                  folge_hinweise=folge_hinweise,
+                  folge_hinweis_text=lieferschein_pdf.FOLGE_HINWEIS,
                   ablehnungsgruende=ablehnungsgruende,
                   profil=profil, profile=profile, profil_hinweise=profil_hinweise,
                   fachhinweise=fachhinweise, versionen=versionen,
@@ -980,7 +994,11 @@ def lieferschein(angebot_id: int, session: Session = Depends(get_session)):
         return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
             "Lieferschein nur für angenommene Tool-Angebote."), status_code=303)
     from app import lieferschein_pdf
-    pfad = lieferschein_pdf.erzeuge_lieferschein(angebot, session.get(Kunde, angebot.kunde_id))
+    # v30 (PLAN_V18 Phase 149): EP-Folgepositionen aus dem Parameter
+    # lieferschein_folgepositionen (Angebotstool-Einstellungen)
+    pfad = lieferschein_pdf.erzeuge_lieferschein(
+        angebot, session.get(Kunde, angebot.kunde_id),
+        folgepositionen=lieferschein_pdf.folgepositionen_lesen(session))
     return FileResponse(pfad, media_type="application/pdf",
                         content_disposition_type="inline",
                         filename=f"LS-{angebot.nummer}.pdf")
@@ -989,30 +1007,27 @@ def lieferschein(angebot_id: int, session: Session = Depends(get_session)):
 # --- v19 (PLAN_V14 Phase 96): BzA-Datenblatt am Angebot -------------------------
 
 def _datenblatt_parameter(request: Request, session: Session, angebot):
+    """v30 (PLAN_V18 Phase 148): ohne Ersteller-Auswahl (Abschnitt 6 entfällt);
+    ein altes „ersteller“-Query-Feld wird ignoriert."""
     from app import bza_datenblatt
-    from app.models import Benutzer
     q = request.query_params
     try:
         we = int(q.get("we") or 0) or None
     except ValueError:
         we = None
-    ersteller = None
-    if (q.get("ersteller") or "").isdigit():
-        ersteller = session.get(Benutzer, int(q.get("ersteller")))
-    if ersteller is None:
-        ersteller = bza_datenblatt.ersteller_standard(session, request.state.benutzer)
     # PLAN_V15 Phase 103: Übersteuerungen „f_<schluessel>“ aus dem Dialog –
     # statuslos, nur für dieses PDF; leer = automatischer Wert
     uebersteuert = {k[2:]: v.strip()[:bza_datenblatt.UEBERSTEUERUNG_MAX]
                     for k, v in q.multi_items() if k.startswith("f_") and v.strip()}
-    return we, ersteller, (q.get("geraet") or "").strip()[:40], uebersteuert
+    return we, (q.get("geraet") or "").strip()[:40], uebersteuert
 
 
 @router.get("/{angebot_id}/bza-datenblatt")
 def bza_datenblatt_dialog(request: Request, angebot_id: int,
                                 session: Session = Depends(get_session)):
-    """Dialog + Vorschau: WE übersteuern, Ersteller wählen, bei TAIFUN-WP
-    das Gerät aus dem Blatt „BAFA-Anlagen“ (Pflicht)."""
+    """Dialog + Vorschau: WE übersteuern, bei TAIFUN-WP das Gerät aus dem
+    Blatt „BAFA-Anlagen“ (Pflicht). v30: Nennwärmeleistung als Zahlenfeld
+    (Meldung bei ungültiger Eingabe), kein Ersteller mehr."""
     from urllib.parse import quote_plus
 
     from app import bza_datenblatt
@@ -1022,23 +1037,29 @@ def bza_datenblatt_dialog(request: Request, angebot_id: int,
     if not bza_datenblatt.ist_wp(angebot):
         return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
             "BzA-Datenblatt gibt es nur für Wärmepumpen-Angebote."), status_code=303)
-    we, ersteller, geraet, uebersteuert = _datenblatt_parameter(request, session, angebot)
+    we, geraet, uebersteuert = _datenblatt_parameter(request, session, angebot)
     blatt = bza_datenblatt.erstellen(session, angebot, we_foerdern=we,
-                                     ersteller=ersteller, geraet_schluessel=geraet,
+                                     geraet_schluessel=geraet,
                                      uebersteuert=uebersteuert)
     # WE-Feld zeigt den automatischen/gewählten Wert – nicht eine f_-Übersteuerung
     we_vorbelegt = str(we) if we else next(
         (f.wert for titel, felder in blatt.abschnitte for f in felder
          if f.schluessel == "we_foerdern" and not f.fehlt
          and f.hinweis != bza_datenblatt.HINWEIS_MANUELL), "")
+    meldungen = [m for m in [request.query_params.get("meldung", "")] if m]
+    meldungen += [m for m in blatt.eingabefehler if m not in meldungen]
+    # v30: Zahlenfeld zeigt die Eingabe (auch eine ungültige) bzw. die Vorbelegung
+    nennwaerme_eingabe = (uebersteuert.get(bza_datenblatt.SCHLUESSEL_NENNWAERME)
+                          or blatt.nennwaermeleistung_vorbelegung)
     return render(request, "angebote/bza_datenblatt.html", aktiv="/angebote",
                   angebot=angebot, blatt=blatt, we_vorbelegt=we_vorbelegt,
-                  ersteller=bza_datenblatt.ersteller_kandidaten(session),
-                  standard=ersteller, anlagen=bza_datenblatt.bafa_liste(session),
+                  anlagen=bza_datenblatt.bafa_liste(session),
                   uebersteuert=uebersteuert,
                   ja_nein=bza_datenblatt.JA_NEIN_SCHLUESSEL,
                   abgeleitet=bza_datenblatt.DIALOG_ABGELEITET,
-                  meldung=request.query_params.get("meldung", ""))
+                  nennwaerme_schluessel=bza_datenblatt.SCHLUESSEL_NENNWAERME,
+                  nennwaerme_eingabe=nennwaerme_eingabe,
+                  meldung=" · ".join(meldungen))
 
 
 @router.get("/{angebot_id}/bza-datenblatt.pdf")
@@ -1052,14 +1073,16 @@ def bza_datenblatt_pdf(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     if angebot is None or not bza_datenblatt.ist_wp(angebot):
         return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
-    we, ersteller, geraet, uebersteuert = _datenblatt_parameter(request, session, angebot)
+    we, geraet, uebersteuert = _datenblatt_parameter(request, session, angebot)
     blatt = bza_datenblatt.erstellen(session, angebot, we_foerdern=we,
-                                     ersteller=ersteller, geraet_schluessel=geraet,
+                                     geraet_schluessel=geraet,
                                      uebersteuert=uebersteuert)
-    if blatt.geraet_auswahl_noetig:
-        # Phase 103: eingetippte Werte (we/ersteller/f_…) über die Umleitung erhalten
-        ziel = f"/angebote/{angebot_id}/bza-datenblatt?meldung=" + quote_plus(
-            "TAIFUN-Angebot: bitte das Gerät aus der BAFA-Liste wählen (Pflicht).")
+    if blatt.geraet_auswahl_noetig or blatt.eingabefehler:
+        # Phase 103: eingetippte Werte (we/f_…) über die Umleitung erhalten;
+        # v30: ungültige Nennwärmeleistung → zurück in den Dialog mit Meldung
+        meldung = (" · ".join(blatt.eingabefehler) if blatt.eingabefehler else
+                   "TAIFUN-Angebot: bitte das Gerät aus der BAFA-Liste wählen (Pflicht).")
+        ziel = f"/angebote/{angebot_id}/bza-datenblatt?meldung=" + quote_plus(meldung)
         if request.url.query:
             ziel += "&" + request.url.query
         return RedirectResponse(ziel, status_code=303)
@@ -1691,47 +1714,88 @@ def ueberarbeiten(request: Request, angebot_id: int,
         return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
             "Überarbeiten geht nur bei versendeten/angenommenen Tool-Angeboten."),
             status_code=303)
-    version = angebot_aufbau.version_erzeugen(session, original)
+    # v30 (PLAN_V18 Phase 149): mit der v22-Wiederholung _speichern – Fehler
+    # F-20261002-073115-9c9e: die Route starb ohne Wiederholung an „database is
+    # locked“ (Schreibsperre eines Hintergrundlaufs, reproduziert auf der DB-Kopie)
+    ergebnis: dict = {}
+
+    def aktion():
+        original_neu = session.get(Angebot, angebot_id)
+        version = angebot_aufbau.version_erzeugen(session, original_neu)
+        # v30 (Phase 150): Zahlungsbedingung wandert in die neue Version
+        _zahlungsbedingung_uebernehmen(version, original_neu)
+        ergebnis["version"] = version
+        ergebnis["original_nummer"] = original_neu.nummer
+
+    _speichern(session, aktion)
+    version = ergebnis["version"]
     neue_nummer = version.nummer
-    session.commit()
     # v10 (Phase 62): monday-Deal-Wert folgt der Vorgangssumme (Original
     # zählt als „Überholt" nicht mehr mit)
     from app import monday_rueckspielung
     monday_rueckspielung.wert_aktualisieren(session, version, "neue Version")
     return RedirectResponse(f"/angebote/{version.id}?meldung=" + quote_plus(
-        f"Version {neue_nummer} als Entwurf erstellt – {original.nummer} ist "
+        f"Version {neue_nummer} als Entwurf erstellt – {ergebnis['original_nummer']} ist "
         "jetzt „Überholt“."), status_code=303)
+
+
+def _zahlungsbedingung_uebernehmen(ziel: Angebot, quelle: Angebot) -> None:
+    """v30 (PLAN_V18 Phase 150): Überarbeiten, Duplizieren und Kopieren nehmen
+    Schlüssel und Freitext der Zahlungsbedingung mit."""
+    from app import zahlungsbedingungen
+    zahlungsbedingungen.uebernehmen(ziel, quelle)
+
+
+def _positionen_kopieren(ziel: Angebot, quelle: Angebot) -> None:
+    """Positions-Snapshots 1:1 mit allen Kennzeichen (Bugfix 30.09.2026: vorher
+    gingen beim Duplizieren bauseits, Positionsrabatt, Sonderpreis, manuell
+    geänderter Preis und Alternativ verloren – der Endbetrag stieg)."""
+    for p in quelle.positionen:
+        ziel.positionen.append(AngebotsPosition(
+            sort=p.sort, block_nr=p.block_nr, gruppe=p.gruppe, pos_nr=p.pos_nr,
+            bezeichnung=p.bezeichnung, beschreibung=p.beschreibung, menge=p.menge,
+            einheit=p.einheit, e_preis_cent=p.e_preis_cent, ep_flag=p.ep_flag,
+            ek_cent=p.ek_cent, guid=p.guid,
+            anzeige_nr=p.anzeige_nr, original_preis_cent=p.original_preis_cent,
+            rabatt_prozent=p.rabatt_prozent, rabatt_cent=p.rabatt_cent,
+            bauseits=p.bauseits, sonderpreis=p.sonderpreis,
+            alternativ=p.alternativ, alternativ_zu=p.alternativ_zu))
 
 
 @router.post("/{angebot_id}/duplizieren")
 def duplizieren(angebot_id: int, session: Session = Depends(get_session)):
+    """Duplikat beim selben Kunden (neue Nummer, Entwurf). v30 (PLAN_V18 Phase
+    149): die Schreibschritte laufen über _speichern (Rollback + eine
+    Wiederholung bei „database is locked“) – Ursache des Fehlers
+    F-20261002-073115-9c9e nach „Überarbeiten → Version .2 → Duplizieren“:
+    angebot_anlegen() committet das neue Angebot ohne Wiederholung und starb,
+    während ein Hintergrundlauf die SQLite-Schreibsperre hielt (Beleg:
+    Reproduktion mit gehaltener Sperre, tests/test_v30_duplizieren.py)."""
     original = session.get(Angebot, angebot_id)
     if original is None:
         return RedirectResponse("/angebote", status_code=303)
     if original.extern:   # v7: externe TAIFUN-Einträge werden nicht dupliziert
         return RedirectResponse(f"/angebote/{angebot_id}?meldung=Externer+Eintrag+nicht+duplizierbar",
                                 status_code=303)
-    kopie = angebot_aufbau.angebot_anlegen(
-        session, original.kunde_id, sparte=original.konfigurator_typ or "WP")
-    kopie.protokoll_json = original.protokoll_json
-    kopie.kfw_json = original.kfw_json
-    kopie.ust_satz = original.ust_satz   # v13-PV
-    kopie.pv_json = original.pv_json
-    kopie.wirtschaftlichkeit_ausblenden = original.wirtschaftlichkeit_ausblenden   # v22
-    for p in original.positionen:
-        kopie.positionen.append(AngebotsPosition(
-            sort=p.sort, block_nr=p.block_nr, gruppe=p.gruppe, pos_nr=p.pos_nr,
-            bezeichnung=p.bezeichnung, beschreibung=p.beschreibung, menge=p.menge,
-            einheit=p.einheit, e_preis_cent=p.e_preis_cent, ep_flag=p.ep_flag,
-            ek_cent=p.ek_cent, guid=p.guid,
-            # Bugfix 30.09.2026: Kennzeichen wie bei „Kopieren“ mitnehmen –
-            # vorher gingen bauseits, Positionsrabatt, Sonderpreis, manuell
-            # geänderter Preis und Alternativ verloren (Endbetrag stieg)
-            anzeige_nr=p.anzeige_nr, original_preis_cent=p.original_preis_cent,
-            rabatt_prozent=p.rabatt_prozent, rabatt_cent=p.rabatt_cent,
-            bauseits=p.bauseits, sonderpreis=p.sonderpreis,
-            alternativ=p.alternativ, alternativ_zu=p.alternativ_zu))
-    session.commit()
+    ergebnis: dict = {}
+
+    def aktion():
+        # nach einem Rollback ist das Original abgelaufen → frisch laden
+        quelle = session.get(Angebot, angebot_id)
+        kopie = angebot_aufbau.angebot_anlegen(
+            session, quelle.kunde_id, sparte=quelle.konfigurator_typ or "WP")
+        kopie.protokoll_json = quelle.protokoll_json
+        kopie.kfw_json = quelle.kfw_json
+        kopie.ust_satz = quelle.ust_satz   # v13-PV
+        kopie.pv_json = quelle.pv_json
+        kopie.kl_json = quelle.kl_json     # v24 (fehlte beim Duplizieren)
+        kopie.wirtschaftlichkeit_ausblenden = quelle.wirtschaftlichkeit_ausblenden   # v22
+        _zahlungsbedingung_uebernehmen(kopie, quelle)   # v30 (Phase 150)
+        _positionen_kopieren(kopie, quelle)
+        ergebnis["kopie"] = kopie
+
+    _speichern(session, aktion)
+    kopie = ergebnis["kopie"]
     return RedirectResponse(f"/angebote/{kopie.id}?meldung=Angebot+dupliziert", status_code=303)
 
 
@@ -1762,6 +1826,7 @@ def fuer_anderen_kunden_kopieren(request: Request, angebot_id: int,
         ziel_id = int(m.group(1))
         if session.get(Kunde, ziel_id) is None:
             ziel_id = None
+    neu_kunde = None
     if ziel_id is None:
         nachname = (form.get("neu_nachname") or "").strip()
         firma = (form.get("neu_firma") or "").strip()
@@ -1769,65 +1834,126 @@ def fuer_anderen_kunden_kopieren(request: Request, angebot_id: int,
             return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
                 "Kopieren: bitte einen Kunden aus der Liste wählen oder "
                 "Nachname/Firma für die Neuanlage angeben."), status_code=303)
-        ziel = Kunde(anrede=(form.get("neu_anrede") or "").strip(),
-                     firma=firma,
-                     vorname=(form.get("neu_vorname") or "").strip(),
-                     nachname=nachname,
-                     strasse=(form.get("neu_strasse") or "").strip(),
-                     plz=(form.get("neu_plz") or "").strip(),
-                     ort=(form.get("neu_ort") or "").strip(),
-                     email=(form.get("neu_email") or "").strip(),
-                     telefon=(form.get("neu_telefon") or "").strip())
-        session.add(ziel)
-        session.flush()
-        ziel_id = ziel.id
-    if ziel_id == original.kunde_id:
+        neu_kunde = dict(anrede=(form.get("neu_anrede") or "").strip(),
+                         firma=firma,
+                         vorname=(form.get("neu_vorname") or "").strip(),
+                         nachname=nachname,
+                         strasse=(form.get("neu_strasse") or "").strip(),
+                         plz=(form.get("neu_plz") or "").strip(),
+                         ort=(form.get("neu_ort") or "").strip(),
+                         email=(form.get("neu_email") or "").strip(),
+                         telefon=(form.get("neu_telefon") or "").strip())
+    elif ziel_id == original.kunde_id:
         return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
             "Kopieren: bitte einen ANDEREN Kunden wählen – für denselben "
             "Kunden gibt es „Duplizieren“."), status_code=303)
 
-    kopie = angebot_aufbau.angebot_anlegen(
-        session, ziel_id, sparte=original.konfigurator_typ or "WP")
-    kopie.protokoll_json = original.protokoll_json
-    kopie.kfw_json = original.kfw_json
-    kopie.vermerke_json = original.vermerke_json
-    kopie.konfigurator_typ = original.konfigurator_typ
-    kopie.ust_satz = original.ust_satz   # v13-PV
-    kopie.pv_json = original.pv_json
-    kopie.profil_id = original.profil_id
-    kopie.vortext_text = original.vortext_text
-    kopie.rabatt_cent = original.rabatt_cent
-    kopie.rabatt_prozent = original.rabatt_prozent
-    kopie.rabatt_bezeichnung = original.rabatt_bezeichnung
-    kopie.foerderung_manuell_cent = original.foerderung_manuell_cent
-    kopie.foerderung_ausblenden = original.foerderung_ausblenden
-    kopie.wirtschaftlichkeit_ausblenden = original.wirtschaftlichkeit_ausblenden   # v22
-    kopie.foerder_grund_prozent = original.foerder_grund_prozent
-    kopie.foerder_klima_prozent = original.foerder_klima_prozent
-    kopie.foerder_einkommen_prozent = original.foerder_einkommen_prozent
-    kopie.foerder_hoechstkosten_cent = original.foerder_hoechstkosten_cent
-    kopie.kopie_von = original.nummer
-    # bewusst NICHT kopiert: rechnung_*/liefer_anschrift (gehören zum alten
-    # Kunden), Vertriebler, Versand-/monday-Zustand
-    kopie.positionen.clear()   # Profil-Positionsregeln liefen bereits im Original
-    for p in original.positionen:
-        kopie.positionen.append(AngebotsPosition(
-            sort=p.sort, block_nr=p.block_nr, gruppe=p.gruppe, pos_nr=p.pos_nr,
-            bezeichnung=p.bezeichnung, beschreibung=p.beschreibung, menge=p.menge,
-            einheit=p.einheit, e_preis_cent=p.e_preis_cent, ep_flag=p.ep_flag,
-            ek_cent=p.ek_cent, guid=p.guid, anzeige_nr=p.anzeige_nr,
-            original_preis_cent=p.original_preis_cent,
-            rabatt_prozent=p.rabatt_prozent, rabatt_cent=p.rabatt_cent,
-            bauseits=p.bauseits, sonderpreis=p.sonderpreis,
-            alternativ=p.alternativ, alternativ_zu=p.alternativ_zu))
-    from app import vorgaenge as vorgaenge_modul
-    vorgang = vorgaenge_modul.vorgang_fuer_angebot(session, kopie)
+    # v30 (PLAN_V18 Phase 149): Neuanlage des Kunden, Kopie, Vorgang und Notiz in
+    # EINER Transaktion über _speichern (Wiederholung bei „database is locked“)
     benutzer = request.state.benutzer
-    vorgaenge_modul.notiz_anlegen(
-        session, vorgang.id, benutzer,
-        f"Angebot {kopie.nummer} als Kopie von {original.nummer} angelegt – "
-        "Förderdaten prüfen (kopiert).", herkunft="Kopie")
-    session.commit()
+    ergebnis: dict = {}
+
+    def aktion():
+        quelle = session.get(Angebot, angebot_id)
+        if neu_kunde is not None:
+            ziel = Kunde(**neu_kunde)
+            session.add(ziel)
+            session.flush()
+            kunde_id = ziel.id
+        else:
+            kunde_id = ziel_id
+        kopie = angebot_aufbau.angebot_anlegen(
+            session, kunde_id, sparte=quelle.konfigurator_typ or "WP")
+        kopie.protokoll_json = quelle.protokoll_json
+        kopie.kfw_json = quelle.kfw_json
+        kopie.vermerke_json = quelle.vermerke_json
+        kopie.konfigurator_typ = quelle.konfigurator_typ
+        kopie.ust_satz = quelle.ust_satz   # v13-PV
+        kopie.pv_json = quelle.pv_json
+        kopie.kl_json = quelle.kl_json     # v24
+        kopie.profil_id = quelle.profil_id
+        kopie.vortext_text = quelle.vortext_text
+        kopie.rabatt_cent = quelle.rabatt_cent
+        kopie.rabatt_prozent = quelle.rabatt_prozent
+        kopie.rabatt_bezeichnung = quelle.rabatt_bezeichnung
+        kopie.foerderung_manuell_cent = quelle.foerderung_manuell_cent
+        kopie.foerderung_ausblenden = quelle.foerderung_ausblenden
+        kopie.wirtschaftlichkeit_ausblenden = quelle.wirtschaftlichkeit_ausblenden   # v22
+        kopie.foerder_grund_prozent = quelle.foerder_grund_prozent
+        kopie.foerder_klima_prozent = quelle.foerder_klima_prozent
+        kopie.foerder_einkommen_prozent = quelle.foerder_einkommen_prozent
+        kopie.foerder_hoechstkosten_cent = quelle.foerder_hoechstkosten_cent
+        kopie.kopie_von = quelle.nummer
+        _zahlungsbedingung_uebernehmen(kopie, quelle)   # v30 (Phase 150)
+        # bewusst NICHT kopiert: rechnung_*/liefer_anschrift (gehören zum alten
+        # Kunden), Vertriebler, Versand-/monday-Zustand
+        kopie.positionen.clear()   # Profil-Positionsregeln liefen bereits im Original
+        _positionen_kopieren(kopie, quelle)
+        from app import vorgaenge as vorgaenge_modul
+        vorgang = vorgaenge_modul.vorgang_fuer_angebot(session, kopie)
+        vorgaenge_modul.notiz_anlegen(
+            session, vorgang.id, benutzer,
+            f"Angebot {kopie.nummer} als Kopie von {quelle.nummer} angelegt – "
+            "Förderdaten prüfen (kopiert).", herkunft="Kopie")
+        ergebnis["kopie"] = kopie
+        ergebnis["original_nummer"] = quelle.nummer
+
+    _speichern(session, aktion)
+    kopie = ergebnis["kopie"]
     return RedirectResponse(f"/angebote/{kopie.id}?meldung=" + quote_plus(
-        f"Kopie von {original.nummer} angelegt – Förderdaten prüfen."),
+        f"Kopie von {ergebnis['original_nummer']} angelegt – Förderdaten prüfen."),
         status_code=303)
+
+
+# --- v30 (PLAN_V18 Phase 150): Zahlungsbedingung je Angebot ----------------------
+
+@router.post("/{angebot_id}/zahlungsbedingung")
+def zahlungsbedingung_setzen(request: Request, angebot_id: int,
+                             session: Session = Depends(get_session)):
+    """Auswahl im Editor (Kopfkarte): Schlüssel eines aktiven Eintrags der
+    Tabelle zahlungsbedingungen (Standard-Eintrag → leer gespeichert = Standard)
+    oder „freitext“ mit Textfeld. Nur im Entwurf, nur Innendienst/Admin (der
+    Außendienst erreicht den Editor nicht). Überarbeiten/Duplizieren/Kopieren
+    übernehmen beide Felder; das PDF druckt den gewählten Text im Nachtext."""
+    from urllib.parse import quote_plus
+
+    from app import zahlungsbedingungen
+    if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
+        return umleitung
+    benutzer = request.state.benutzer
+    if benutzer is None or benutzer.rolle not in ("admin", "innendienst"):
+        return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
+    angebot = session.get(Angebot, angebot_id)
+    if angebot is None or angebot.extern:
+        return RedirectResponse("/angebote", status_code=303)
+    if angebot.status != "Entwurf":
+        return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+            "Die Zahlungsbedingung ist nur im Entwurf änderbar – bei versendeten "
+            "Angeboten über „Überarbeiten“ (neue Version)."), status_code=303)
+    form = anfrage.formular(request)
+    key = (form.get("key") or "").strip()[:50]
+    text = (form.get("text") or "").strip()[:zahlungsbedingungen.TEXT_MAX]
+    if key == zahlungsbedingungen.FREITEXT:
+        if not text:
+            return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+                "Zahlungsbedingung: bitte den abweichenden Text eingeben."), status_code=303)
+        angebot.zahlungsbedingung_key = zahlungsbedingungen.FREITEXT
+        angebot.zahlungsbedingung_text = text
+        name = zahlungsbedingungen.FREITEXT_NAME
+    else:
+        eintrag = zahlungsbedingungen.nach_schluessel(session, key) if key else None
+        if key and (eintrag is None or not eintrag.aktiv):
+            return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+                "Zahlungsbedingung: unbekannter oder deaktivierter Eintrag."), status_code=303)
+        standard = zahlungsbedingungen.standard(session)
+        # Standard-Eintrag → leer speichern (leer = Standard, folgt später einem
+        # geänderten Standard); jeder andere Eintrag mit seinem Schlüssel
+        if eintrag is None or (standard is not None and eintrag.id == standard.id):
+            angebot.zahlungsbedingung_key = ""
+        else:
+            angebot.zahlungsbedingung_key = eintrag.schluessel
+        angebot.zahlungsbedingung_text = ""
+        name = zahlungsbedingungen.fuer_angebot(session, angebot)[0]
+    session.commit()
+    return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
+        f"Zahlungsbedingung: {name}"), status_code=303)

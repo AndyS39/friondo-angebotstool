@@ -3,7 +3,24 @@
 {% block mainklasse %}breit{% endblock %}
 
 {% block inhalt %}
-<h1>Willkommen bei Friondo</h1>
+{# v30 (PLAN_V18 Phase 146): Begrüßungszeile „Guten Morgen/Tag/Abend, <Vorname>“ mit
+   Wochentag, Datum und KW als reine Kopfzeile über den drei Bereichen [ANNAHME].
+   Vorname = benutzer.vorname (v29), sonst erster Teil des Namens; Morgen < 11 Uhr,
+   Tag < 18 Uhr, sonst Abend (jetzt aus der Route /). Aufbau und Inhalte darunter
+   bleiben wie bisher. #}
+{% set b = request.state.benutzer if request.state is defined else none %}
+{% set vorname = (b.vorname if (b and b.vorname) else ((b.name or '').split(' ')[0] if b else '')) | trim %}
+{% set stunde = jetzt.hour if jetzt is defined and jetzt else 12 %}
+{% set gruss = 'Guten Morgen' if stunde < 11 else ('Guten Tag' if stunde < 18 else 'Guten Abend') %}
+<div class="portal-kopf">
+    <div>
+        <h1 class="portal-begruessung">{{ gruss }}{% if vorname %}, {{ vorname }}{% endif %}</h1>
+        {% if jetzt is defined and jetzt %}
+        <p class="portal-datum">{{ ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'][jetzt.weekday()] }}
+            · {{ jetzt.strftime('%d.%m.%Y') }} · KW {{ jetzt.isocalendar()[1] }}</p>
+        {% endif %}
+    </div>
+</div>
 
 {# v9-Portal (finale Fassung): drei große Karten, jede Karte ist EIN
    Klickziel zur jeweiligen Tool-Seite. Die Kacheln darin sind reine

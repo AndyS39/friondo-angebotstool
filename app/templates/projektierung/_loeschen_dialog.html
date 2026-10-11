@@ -1,0 +1,65 @@
+{# v30 (PLAN_V18 Phase 151): Sicherheitsdialoge „Projekt löschen“ (nur Admin).
+   Gebaut mit den vorhandenen Klassen der Projektierung (dialog.pj-dlg, pj-btn
+   danger, pj-note crit) – Design macht D2. Zwei Makros:
+   - projekt_loeschen_dialog(projekt, sperre, hinweis): Akte – Pflichtgrund,
+     Eingabe der Projektnummer, Hinweistext; bei Sperre (Gewerk in Montage mit
+     Bericht) nur der Storno-Hinweis ohne Löschknopf.
+   - sammel_loeschen_dialog(form_id, hinweis, bestaetigung, zurueck): Liste –
+     Anzahl + Nummern der Auswahl (JS füllt sie), Pflichtgrund, Bestätigung durch
+     Eingabe von „LÖSCHEN“ [ANNAHME]; die Felder gehören über das form-Attribut
+     zum Sammelformular der Tabelle. #}
+
+{% macro projekt_loeschen_dialog(projekt, sperre, hinweis) -%}
+<dialog class="pj-dlg" id="dlg-projekt-loeschen">
+    <h3>Projekt löschen · <span class="pj-mono">{{ projekt.nummer }}</span></h3>
+    {% if sperre %}
+    <div class="pj-note crit">{{ sperre }}</div>
+    <div class="pj-btnrow">
+        <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Schließen</button>
+    </div>
+    {% else %}
+    <form method="post" action="/projektierung/projekt/{{ projekt.id }}/loeschen">
+        <div class="pj-note crit">{{ hinweis }}</div>
+        <p class="dezent" style="font-size:12px;margin:6px 0 0">Gelöscht werden Gewerke, Aufgaben,
+            Termine (Outlook-Einträge werden storniert), Verlauf, Kommentare, Steckbrief und
+            Dokumente der Akte; der Projektordner wandert nach <span class="pj-mono">_geloescht</span>.
+            Galerie-Fotos bleiben am Vorgang. Die Löschung wird im Lösch-Protokoll
+            (Parametrierung) und als Notiz im Vorgang festgehalten.</p>
+        <label>Grund (Pflicht)
+            <input type="text" name="grund" required maxlength="500"
+                   placeholder="z. B. Testprojekt aus der Pilotphase"></label>
+        <label>Zur Bestätigung die Projektnummer eingeben: <b class="pj-mono">{{ projekt.nummer }}</b>
+            <input type="text" name="nummer" required autocomplete="off"
+                   placeholder="{{ projekt.nummer }}"></label>
+        <div class="pj-btnrow">
+            <button class="pj-btn danger" type="submit">Projekt endgültig löschen</button>
+            <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+    {% endif %}
+</dialog>
+{%- endmacro %}
+
+{% macro sammel_loeschen_dialog(form_id, hinweis, bestaetigung, zurueck='') -%}
+<dialog class="pj-dlg" id="dlg-sammel-loeschen">
+    <h3>Ausgewählte Projekte löschen</h3>
+    <div class="pj-note crit">{{ hinweis }}</div>
+    <p style="margin:8px 0 0"><b><span data-anzahl>0</span> Projekt(e)</b> ausgewählt:
+        <span class="pj-mono" data-nummern>–</span></p>
+    <p class="dezent" style="font-size:12px;margin:6px 0 0">Je Projekt werden Gewerke, Aufgaben, Termine
+        (Outlook-Einträge storniert), Verlauf, Kommentare, Steckbrief und Dokumente gelöscht, der
+        Projektordner wandert nach <span class="pj-mono">_geloescht</span>; Angebote bleiben erhalten.
+        Gewerke in Montage mit Montagebericht werden übersprungen (Storno statt Löschen).</p>
+    <label>Grund (Pflicht)
+        <input type="text" name="grund" form="{{ form_id }}" required maxlength="500"
+               placeholder="z. B. Demo-Projekte vor dem Go-live entfernen"></label>
+    <label>Zur Bestätigung <b>{{ bestaetigung }}</b> eingeben
+        <input type="text" name="bestaetigung" form="{{ form_id }}" required autocomplete="off"
+               placeholder="{{ bestaetigung }}"></label>
+    {% if zurueck %}<input type="hidden" name="zurueck" form="{{ form_id }}" value="{{ zurueck }}">{% endif %}
+    <div class="pj-btnrow">
+        <button class="pj-btn danger" type="submit" form="{{ form_id }}">Ausgewählte endgültig löschen</button>
+        <button class="pj-btn" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+    </div>
+</dialog>
+{%- endmacro %}

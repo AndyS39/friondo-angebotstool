@@ -6,11 +6,19 @@
 #     Abschnitte + „Stand BzA / KfW“ (v17)
 # Fehlende Pflichtangaben werden rot als „— fehlt: bitte beim Kunden
 # erfragen“ ausgewiesen, das Datenblatt entsteht trotzdem.
+# v30 (PLAN_V18 Phase 148, Entscheidung Andreas 11.10.2026): Abschnitt 2 ohne
+# „Nennleistung“ (Frage A20 ist gestrichen), die Nennwärmeleistung wird im Dialog
+# nur als Zahl eingegeben („kW“ hängt das Tool an), Abschnitt 4 bekommt die Zeile
+# „Geplante förderfähige Kosten inkl. 10 % Puffer“ (Parameter
+# bza_kosten_puffer_prozent, 0 = Zeile entfällt), Abschnitt 6 „Ersteller“ entfällt
+# (Parameter bza_ersteller_standard und der Firmenblock bleiben im Code/DB –
+# [ANNAHME] kein Löschen, damit der v29-Code weiterläuft).
 
 import json
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy.orm import Session
 
@@ -19,7 +27,8 @@ from app.models import Angebot, Benutzer, Erfassung, Kunde, einstellung_holen
 FEHLT = "— fehlt: bitte beim Kunden erfragen"
 FEHLT_ERSTELLER = "— fehlt: in der Benutzerverwaltung pflegen"
 VERMERK = "Internes Arbeitsblatt zur Portaleingabe – keine KfW-Unterlage"
-# Firmenblock (fest laut PLAN_V14; HWK-Betriebsnummer der Handwerkskammer)
+# Firmenblock (fest laut PLAN_V14; HWK-Betriebsnummer der Handwerkskammer) –
+# seit v30 nicht mehr im Datenblatt, bleibt für den v29-Code erhalten
 FIRMA = {"name": "Friondo GmbH", "strasse": "Arnold-Overbeck-Str. 63-65",
          "plz_ort": "47139 Duisburg", "hwk": "1862718"}
 # Portal-Wortlaut „Art des Wärmeerzeugers“ (Annahme, siehe nach-dem-update-v19)
@@ -33,12 +42,18 @@ KLIMA_KATEGORIE_GAS = "Austausch mindestens 20 Jahre alte Gasheizung"
 HINWEIS_MANUELL = "manuell im Dialog geändert"
 JA_NEIN_SCHLUESSEL = {"contracting", "klimabonus"}   # nur „Ja“/„Nein“ zulässig
 UEBERSTEUERUNG_MAX = 200
-# Felder, die aus den Dialog-Auswahlen we/ersteller/geraet abgeleitet werden –
-# im Dialog nicht vorbelegt (Platzhalter), sonst würde ein alter Vorbelegungs-
-# wert die geänderte Auswahl übersteuern
-DIALOG_ABGELEITET = {"we_foerdern", "ansprechpartner", "email", "telefon",
-                     "anlagennummer", "hersteller", "geraetebezeichnung",
-                     "nennwaermeleistung"}
+# Felder, die aus den Dialog-Auswahlen we/geraet abgeleitet werden – im Dialog
+# nicht vorbelegt (Platzhalter), sonst würde ein alter Vorbelegungswert die
+# geänderte Auswahl übersteuern. v30: die Nennwärmeleistung ist ein vorbelegtes
+# Zahlenfeld (der Dialog zieht den Wert beim Gerätewechsel per Skript nach).
+DIALOG_ABGELEITET = {"we_foerdern", "anlagennummer", "hersteller", "geraetebezeichnung"}
+# v30 (Phase 148): Nennwärmeleistung als Zahl, Puffer-Zeile
+SCHLUESSEL_NENNWAERME = "nennwaermeleistung"
+NENNWAERME_FEHLER = "Nennwärmeleistung: bitte nur die Zahl eingeben"
+PUFFER_PARAMETER = "bza_kosten_puffer_prozent"
+PUFFER_STANDARD = 10.0
+PUFFER_HINWEIS = ("Puffer für einen möglichen KfW-Ergänzungskredit – ändert den "
+                  "Auftragswert nicht")
 
 
 @dataclass
@@ -58,11 +73,21 @@ class Datenblatt:
     abschnitte: list[tuple[str, list[Feld]]] = field(default_factory=list)
     geraet_schluessel: str = ""
     geraet_auswahl_noetig: bool = False
+    # v30: Vorbelegung des Zahlenfelds (kW der BAFA-Anlage ohne Einheit),
+    # Prozentsatz der Puffer-Zeile und Eingabefehler aus dem Dialog
+    nennwaermeleistung_kw: float | None = None
+    puffer_prozent: float = PUFFER_STANDARD
+    eingabefehler: list[str] = field(default_factory=list)
 
     @property
     def fehlend(self) -> list[str]:
         return [f"{titel}: {f.name}" for titel, felder in self.abschnitte
                 for f in felder if f.fehlt]
+
+    @property
+    def nennwaermeleistung_vorbelegung(self) -> str:
+        """Wert für das Zahlenfeld (type="number" – Punkt als Dezimaltrenner)."""
+        return "" if self.nennwaermeleistung_kw is None else f"{self.nennwaermeleistung_kw:.2f}"
 
 
 # --- Hilfen ----------------------------------------------------------------------
@@ -110,6 +135,15 @@ def _euro(cent: int) -> str:
     return _zahl_text(cent / 100, 2) + " €"
 
 
+def _euro_parsen(text) -> int | None:
+    """„30.000,00 €“ / „30000“ → Cent (für übersteuerte Kosten); None = ungültig."""
+    roh = re.sub(r"(?i)\s*(€|eur)\s*$", "", str(text or "").strip())
+    wert = _zahl(roh)
+    if wert is None or wert < 0:
+        return None
+    return int((Decimal(str(wert)) * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
 def _feld(name: str, wert, pflicht: bool = True, hinweis: str = "",
           leer: str = FEHLT, schluessel: str = "") -> Feld:
     text = "" if wert is None else str(wert).strip()
@@ -133,6 +167,48 @@ def uebersteuerungen_bereinigen(uebersteuert: dict[str, str] | None) -> dict[str
     return ergebnis
 
 
+# --- v30 (Phase 148): Nennwärmeleistung als Zahl, Puffer -----------------------------
+
+def nennwaermeleistung_parsen(text) -> float | None:
+    """Eingabe des Dialogs: Zahl mit Komma oder Punkt, ein angehängtes „kW“
+    wird bereinigt („9,5 kW“ → 9.5); ungültig (z. B. „neun“) → None."""
+    roh = re.sub(r"(?i)\s*kw\s*$", "", str(text or "").strip()).strip()
+    if not roh:
+        return None
+    wert = _zahl(roh)
+    if wert is None or wert <= 0:
+        return None
+    return wert
+
+
+def nennwaermeleistung_text(kw: float) -> str:
+    """Ausgabe im PDF: „9,50 kW“."""
+    return f"{_zahl_text(kw, 2)} kW"
+
+
+def kosten_puffer_prozent(session: Session) -> float:
+    """Parameter bza_kosten_puffer_prozent (Standard 10; 0 = Puffer-Zeile entfällt)."""
+    wert = _zahl(einstellung_holen(session, PUFFER_PARAMETER, str(int(PUFFER_STANDARD))))
+    if wert is None or wert < 0:
+        return PUFFER_STANDARD
+    return float(wert)
+
+
+def prozent_text(prozent: float) -> str:
+    """10 → „10“, 12.5 → „12,5“ (für den Zeilentext „inkl. 10 % Puffer“)."""
+    return _zahl_text(prozent, 0 if float(prozent).is_integer() else 1)
+
+
+def puffer_zeilenname(prozent: float) -> str:
+    return f"Geplante förderfähige Kosten inkl. {prozent_text(prozent)} % Puffer"
+
+
+def puffer_cent(kosten_cent: int, prozent: float) -> int:
+    """Kosten × (1 + Prozent/100), kaufmännisch auf volle Euro gerundet."""
+    betrag = (Decimal(kosten_cent) / 100) * (1 + Decimal(str(prozent)) / 100)
+    return int(betrag.quantize(Decimal("1"), rounding=ROUND_HALF_UP)) * 100
+
+
 def bafa_liste(session: Session):
     from app import logik as logik_modul
     logik, _ = logik_modul.hole_logik(session)
@@ -145,7 +221,8 @@ def _voll_berechnete_positionen(angebot: Angebot) -> set[str]:
 
 
 def ersteller_kandidaten(session: Session) -> list[Benutzer]:
-    """ID-Benutzer (Innendienst + Admin) für den Ersteller-Block."""
+    """ID-Benutzer (Innendienst + Admin) – seit v30 ohne Verwendung im Datenblatt
+    (Abschnitt 6 entfällt); bleibt für die Gewerk-Route und den v29-Code."""
     return (session.query(Benutzer)
             .filter(Benutzer.aktiv.is_(True),
                     Benutzer.rolle.in_(["innendienst", "admin"]))
@@ -153,6 +230,7 @@ def ersteller_kandidaten(session: Session) -> list[Benutzer]:
 
 
 def ersteller_standard(session: Session, angemeldet) -> Benutzer | None:
+    """Parameter bza_ersteller_standard (seit v30 ohne Wirkung im Datenblatt)."""
     wert = einstellung_holen(session, "bza_ersteller_standard", "")
     if wert.isdigit():
         benutzer = session.get(Benutzer, int(wert))
@@ -168,7 +246,9 @@ def erstellen(session: Session, angebot: Angebot, gewerk=None,
               geraet_schluessel: str = "",
               uebersteuert: dict[str, str] | None = None) -> Datenblatt:
     """Alle Abschnitte in KfW-Muster-Reihenfolge. `uebersteuert` (Phase 103):
-    {schluessel: wert} aus dem Dialog – greift zuletzt, nur für dieses Blatt."""
+    {schluessel: wert} aus dem Dialog – greift zuletzt, nur für dieses Blatt.
+    `ersteller` wird seit v30 nicht mehr verwendet (Abschnitt 6 entfällt) und
+    bleibt nur als Parameter für bestehende Aufrufer (Gewerk-Route)."""
     from app import kfw
     from app import konfigurator as engine
     from app import logik as logik_modul
@@ -188,6 +268,7 @@ def erstellen(session: Session, angebot: Angebot, gewerk=None,
     blatt = Datenblatt(angebot=angebot, kunde=kunde,
                        nummer=(angebot.taifun_nummer or angebot.nummer)
                        if angebot.extern else angebot.nummer)
+    blatt.puffer_prozent = kosten_puffer_prozent(session)
 
     # 1. Investitionsobjekt (= Ausführungsort; am Gewerk: Projektadresse)
     if gewerk is not None:
@@ -223,10 +304,9 @@ def erstellen(session: Session, angebot: Angebot, gewerk=None,
               schluessel="wohnflaeche"),
     ]))
 
-    # 2. Wärmeversorgung vor Sanierung
+    # 2. Wärmeversorgung vor Sanierung (v30: ohne „Nennleistung“ – A20 gestrichen)
     traeger = str(antworten.get("A01") or "")
     jahr = _zahl(antworten.get("A02"))
-    nenn = _zahl(antworten.get("A20"))
     verbrauch_roh = antworten.get("A03")
     verbrauch = _zahl(verbrauch_roh)
     if angebot.extern:
@@ -243,8 +323,6 @@ def erstellen(session: Session, angebot: Angebot, gewerk=None,
     blatt.abschnitte.append(("2. Wärmeversorgung vor Sanierung", [
         _feld("Art des Wärmeerzeugers", WAERMEERZEUGER.get(traeger, traeger),
               schluessel="waermeerzeuger"),
-        _feld("Nennleistung", f"{_zahl_text(nenn, 1 if nenn % 1 else 0)} kW"
-              if nenn else "", schluessel="nennleistung_alt"),
         (_feld("Inbetriebnahme", f"01.01.{int(jahr)}", hinweis="Jahr aus Erfassung",
                schluessel="inbetriebnahme")
          if jahr else Feld("Inbetriebnahme", "Jahr fehlt – bitte nachfragen", fehlt=True,
@@ -280,6 +358,7 @@ def erstellen(session: Session, angebot: Angebot, gewerk=None,
                else "55 °C" if heizflaechen else "")
     contracting = str(antworten.get("N11") or "")
     pruefhinweis = anlage.hinweis if anlage and anlage.hinweis else ""
+    blatt.nennwaermeleistung_kw = float(anlage.kw) if anlage and anlage.kw else None
     blatt.abschnitte.append(("3. Geplante Wärmeversorgung", [
         Feld("Maßnahme", "Wärmepumpe", schluessel="massnahme"),
         Feld("Contracting", contracting or "Nein",
@@ -291,8 +370,9 @@ def erstellen(session: Session, angebot: Angebot, gewerk=None,
         _feld("Gerätebezeichnung", anlage.bezeichnung if anlage else "",
               schluessel="geraetebezeichnung"),
         Feld("Pumpentyp", "Luft / Wasser", schluessel="pumpentyp"),
-        _feld("Nennwärmeleistung", f"{_zahl_text(anlage.kw, 2)} kW"
-              if anlage and anlage.kw else "", schluessel="nennwaermeleistung"),
+        _feld("Nennwärmeleistung",
+              nennwaermeleistung_text(blatt.nennwaermeleistung_kw)
+              if blatt.nennwaermeleistung_kw else "", schluessel=SCHLUESSEL_NENNWAERME),
         _feld("Vorlauftemperatur", vorlauf,
               hinweis=f"Heizflächen: {heizflaechen}" if heizflaechen else "",
               schluessel="vorlauf"),
@@ -306,6 +386,15 @@ def erstellen(session: Session, angebot: Angebot, gewerk=None,
     kosten = [_feld("Geplante förderfähige Kosten", _euro(endbetrag) if endbetrag else "",
                     hinweis="Endbetrag brutto nach Rabatt – wie im KfW-Muster ungedeckelt",
                     schluessel="kosten")]
+    if blatt.puffer_prozent > 0:
+        # v30 (Phase 148): Puffer für einen möglichen KfW-Ergänzungskredit –
+        # Kosten × (1 + Prozent), kaufmännisch auf volle Euro; nur nachrichtlich
+        # (KfW-Rechnung, Förderblock und Höchstkostengrenze rechnen mit den
+        # echten Kosten weiter)
+        kosten.append(_feld(puffer_zeilenname(blatt.puffer_prozent),
+                            _euro(puffer_cent(endbetrag, blatt.puffer_prozent))
+                            if endbetrag else "", pflicht=False,
+                            hinweis=PUFFER_HINWEIS, schluessel="kosten_puffer"))
     ergebnis = None
     logik, bericht = logik_modul.hole_logik(session)
     eingaben = kfw.eingaben_aus_antworten(kfw_daten, endbetrag) if endbetrag else None
@@ -357,31 +446,38 @@ def erstellen(session: Session, angebot: Angebot, gewerk=None,
              hinweis="Nachweis: Einkommensteuerbescheide" if stufe else "",
              schluessel="einkommensbonus"),
     ]))
-
-    # 6. Ersteller
-    person = ersteller
-    blatt.abschnitte.append(("6. Ersteller", [
-        Feld("Unternehmen", FIRMA["name"], schluessel="unternehmen"),
-        Feld("Anschrift", f"{FIRMA['strasse']}, {FIRMA['plz_ort']}", schluessel="anschrift"),
-        Feld("Handwerkskammer-Betriebsnummer", FIRMA["hwk"], schluessel="hwk"),
-        _feld("Ansprechpartner", person.name if person else "", leer=FEHLT_ERSTELLER,
-              schluessel="ansprechpartner"),
-        _feld("E-Mail", (person.email if person else "") or "", leer=FEHLT_ERSTELLER,
-              schluessel="email"),
-        _feld("Telefon", (person.telefon if person else "") or "", leer=FEHLT_ERSTELLER,
-              schluessel="telefon"),
-    ]))
+    # (v30: kein Abschnitt 6 „Ersteller“ mehr – Entscheidung Andreas 11.10.2026)
 
     # Phase 103: Übersteuerungen aus dem Dialog greifen zuletzt (auch über
-    # we/ersteller/geraet). Leer = automatischer Wert, gleicher Wert = keine
-    # Änderung; ein gesetzter Wert hebt „fehlt“ auf.
+    # we/geraet). Leer = automatischer Wert, gleicher Wert = keine Änderung;
+    # ein gesetzter Wert hebt „fehlt“ auf.
     manuell = uebersteuerungen_bereinigen(uebersteuert)
+    # v30: Nennwärmeleistung nur als Zahl – „kW“ wird bereinigt, Komma oder Punkt
+    # erlaubt, Ausgabe „9,50 kW“; ungültig → Meldung, automatischer Wert bleibt
+    if SCHLUESSEL_NENNWAERME in manuell:
+        kw = nennwaermeleistung_parsen(manuell[SCHLUESSEL_NENNWAERME])
+        if kw is None:
+            blatt.eingabefehler.append(NENNWAERME_FEHLER)
+            manuell.pop(SCHLUESSEL_NENNWAERME)
+        else:
+            manuell[SCHLUESSEL_NENNWAERME] = nennwaermeleistung_text(kw)
     if manuell:
         for _, felder in blatt.abschnitte:
             for f in felder:
                 neu = manuell.get(f.schluessel, "")
                 if neu and neu != f.wert:
                     f.wert, f.fehlt, f.hinweis = neu, False, HINWEIS_MANUELL
+        # v30: bei manuell übersteuerten Kosten wird der Puffer aus dem
+        # übersteuerten Wert gerechnet (sofern der Puffer nicht selbst übersteuert ist)
+        if "kosten" in manuell and "kosten_puffer" not in manuell and blatt.puffer_prozent > 0:
+            cent = _euro_parsen(manuell["kosten"])
+            if cent is not None:
+                for _, felder in blatt.abschnitte:
+                    for f in felder:
+                        if f.schluessel == "kosten_puffer":
+                            f.wert = _euro(puffer_cent(cent, blatt.puffer_prozent))
+                            f.fehlt = False
+                            f.hinweis = PUFFER_HINWEIS + " (aus den übersteuerten Kosten)"
     return blatt
 
 

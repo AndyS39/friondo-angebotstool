@@ -118,6 +118,38 @@
     {% endif %}
 </p>
 
+{# v30 (PLAN_V18 Phase 150): Zahlungsbedingung je Angebot – Dropdown der aktiven
+   Einträge + „Abweichend (Freitext)“; nur im Entwurf änderbar (ID/Admin), die
+   Vorschau zeigt den Namen; das PDF druckt den Text im Nachtext „Zahlung“. #}
+<p class="dezent zahlungsbedingung-zeile" style="margin:0.3rem 0 0">
+    Zahlungsbedingung: <strong>{{ zahlungsbedingung_name }}</strong>
+    {% if not nur_lesen and angebot.status == 'Entwurf' and not angebot.extern %}
+    <form method="post" action="/angebote/{{ angebot.id }}/zahlungsbedingung"
+          class="zahlungsbedingung-form" id="zbform" style="display:inline">
+        <select name="key" id="zb-key" title="Zahlungsbedingung dieses Angebots (Nachtext „Zahlung“)"
+                onchange="zbFreitextUmschalten(this.value === {{ zahlungsbedingung_freitext | tojson }}); if (this.value !== {{ zahlungsbedingung_freitext | tojson }}) { this.form.submit(); }">
+            {% for z in zahlungsbedingungen %}
+                <option value="{{ z.schluessel }}" {{ 'selected' if zahlungsbedingung_key == z.schluessel }}>{{ z.name }}{{ ' (Standard)' if z.standard }}{{ ' (deaktiviert)' if not z.aktiv }}</option>
+            {% endfor %}
+            <option value="{{ zahlungsbedingung_freitext }}" {{ 'selected' if zahlungsbedingung_key == zahlungsbedingung_freitext }}>Abweichend (Freitext)</option>
+        </select>
+        <span id="zb-freitext" {{ '' if zahlungsbedingung_key == zahlungsbedingung_freitext else 'hidden' }}>
+            <textarea name="text" rows="3" style="width:100%; margin-top:0.3rem"
+                      placeholder="Abweichende Zahlungsbedingung – erscheint wörtlich im Nachtext unter „Zahlung“">{{ angebot.zahlungsbedingung_text }}</textarea>
+            <button class="knopf klein" type="submit">Zahlungsbedingung speichern</button>
+        </span>
+    </form>
+    {% elif angebot.status != 'Entwurf' and not angebot.extern %}
+    <span class="dezent">(nur im Entwurf änderbar)</span>
+    {% endif %}
+</p>
+<script>
+function zbFreitextUmschalten(an) {
+    var feld = document.getElementById('zb-freitext');
+    if (feld) { feld.hidden = !an; }
+}
+</script>
+
 {% if (angebot.konfigurator_typ or 'WP') == 'PV' %}
 {# v22 (PLAN_V15 Phase 102): die drei Wirtschaftlichkeitsseiten im PV-PDF
    je Angebot abschaltbar (Überarbeiten/Duplizieren/Kopieren übernehmen es) #}
@@ -438,6 +470,10 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
                             <a href="#" class="dezent text-bearbeiten" onclick="textBearbeiten({{ p.id }}); return false;" title="Text nur in diesem Angebot ändern – der Artikelstamm bleibt unberührt">✎ Text</a>
                         {% endif %}
                         {% if p.bauseits %}<br><span class="abzeichen ep">bauseits</span>{% endif %}
+                        {# v30 (PLAN_V18 Phase 149) [ANNAHME]: nur Anzeige – entfällt die
+                           Hauptposition auf dem Lieferschein (EP/Alternativ/bauseits),
+                           entfällt auch diese Folgeposition; keine automatische EP-Änderung #}
+                        {% if p.id in folge_hinweise %}<br><span class="dezent folge-hinweis" title="Parameter „Lieferschein: abhängige Positionen“ (Angebotstool-Einstellungen)">↳ {{ folge_hinweis_text.replace('{haupt}', folge_hinweise[p.id]) }}</span>{% endif %}
                     </div>
                     {% if not nur_lesen %}
                     <form method="post" action="/angebote/{{ angebot.id }}/position/{{ p.id }}/text"

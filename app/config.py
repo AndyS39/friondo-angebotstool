@@ -32,7 +32,7 @@ def _schalter(env_name: str) -> bool:
 
 
 # v27 (PLAN_V17): Versionskennung für /health und die Betriebs-Seite
-VERSION = "v29"   # 08.10.2026: v27-Nachtrag 2 + v28 (Projektierung V6) + v29 (Lead-Management V4)
+VERSION = "v30"   # 11.10.2026: Design v2 Hell/Dunkel, Zurück-Navigation, BzA/Lieferschein/Zahlungsbedingungen, Projektierung Go-live (PLAN_V18)
 
 
 # --- Pfade ---------------------------------------------------------------

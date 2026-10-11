@@ -1,6 +1,7 @@
 /* v28 (PLAN_PROJ_V6 Phasen 136–138): Notizen-Chat (Makro notizen_chat), Galerie-
    Lightbox, Montage-Backend-Reihenfolge, Formular-Wiederholfeld.
-   Pflege: Agent P2. Nur CSS-Tokens des Design-Systems v14 (style.css :root). */
+   Pflege: Agent P2. Nur CSS-Tokens des Design-Systems v14 (style.css :root).
+   v30 (PLAN_V18 Phase 145): feste Farbwerte auf die semantischen Tokens (Hell/Dunkel) umgestellt. */
 
 /* --- Notizen-Chat (Phase 136) – ergänzt die v14-Chat-Optik aus style.css ---- */
 
@@ -38,7 +39,7 @@
 
 dialog.pj-lightbox { width: 100vw; height: 100vh; max-width: none; max-height: none;
     margin: 0; padding: 0; border: none; border-radius: 0; background: transparent;
-    color: #fff; overflow: hidden; }
+    color: var(--text-invers); overflow: hidden; }
 dialog.pj-lightbox::backdrop { background: rgba(10, 15, 20, 0.92); }
 .pj-lb-rahmen { position: absolute; inset: 0; display: flex; flex-direction: column;
     align-items: stretch; justify-content: space-between; }
@@ -51,9 +52,9 @@ dialog.pj-lightbox::backdrop { background: rgba(10, 15, 20, 0.92); }
     position: relative; touch-action: pan-y; }
 .pj-lb-bild img { max-width: 95vw; max-height: 85vh; width: auto; height: auto;
     object-fit: contain; border-radius: var(--r-s); box-shadow: var(--schatten-2);
-    background: #fff; user-select: none; -webkit-user-drag: none; }
+    background: var(--flaeche-karte); user-select: none; -webkit-user-drag: none; }
 .pj-lb-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 56px; height: 72px;
-    border: none; border-radius: var(--r-m); background: rgba(255, 255, 255, 0.14); color: #fff;
+    border: none; border-radius: var(--r-m); background: rgba(255, 255, 255, 0.14); color: var(--text-invers);
     font-size: 30px; line-height: 1; cursor: pointer; }
 .pj-lb-nav:hover { background: rgba(255, 255, 255, 0.3); }
 .pj-lb-nav[disabled] { opacity: 0.25; cursor: default; }
@@ -61,7 +62,7 @@ dialog.pj-lightbox::backdrop { background: rgba(10, 15, 20, 0.92); }
 .pj-lb-nav.vor { right: var(--a-3); }
 .pj-lb-fuss { display: flex; gap: var(--a-2); justify-content: center; flex-wrap: wrap;
     padding: var(--a-3) var(--a-4) var(--a-4); background: rgba(0, 0, 0, 0.35); }
-.pj-lb-fuss .knopf, .pj-lb-fuss a.knopf { background: rgba(255, 255, 255, 0.16); color: #fff;
+.pj-lb-fuss .knopf, .pj-lb-fuss a.knopf { background: rgba(255, 255, 255, 0.16); color: var(--text-invers);
     border: 1px solid rgba(255, 255, 255, 0.35); text-decoration: none; }
 .pj-lb-fuss .knopf:hover { background: rgba(255, 255, 255, 0.3); }
 @media (max-width: 640px) {
@@ -88,7 +89,7 @@ dialog.pj-lightbox::backdrop { background: rgba(10, 15, 20, 0.92); }
 .pj-ini { display: inline-block; min-width: 22px; padding: 0 5px; border-radius: 999px;
     background: var(--friondo-blau-hell); color: var(--friondo-blau-dunkel); font-size: 10px;
     font-weight: 700; line-height: 18px; text-align: center; letter-spacing: 0.02em; }
-.pj-ini.ich { background: var(--friondo-blau); color: #fff; }
+.pj-ini.ich { background: var(--akzent); color: var(--akzent-text); }
 .pj-mob-tag .e .pj-besetzung { margin-left: 4px; }
 .pj-mob .pj-sektion { font-size: 13px; margin: 12px 0 4px; }
 .pj-mob .pj-sektion small { font-weight: 400; color: var(--g-500); }
@@ -114,7 +115,7 @@ dialog.pj-lightbox::backdrop { background: rgba(10, 15, 20, 0.92); }
 .pj-wiederhol .zeile { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
 .pj-wiederhol .zeile input[type=text] { flex: 1; min-width: 0; }
 .pj-wiederhol .zeile .nr { min-width: 1.6em; font-size: 12px; color: var(--g-500); }
-.pj-wiederhol .zeile button { border: 1px solid var(--g-300); background: #fff; color: var(--status-rot);
+.pj-wiederhol .zeile button { border: 1px solid var(--linie-stark); background: var(--flaeche-karte); color: var(--status-rot);
     border-radius: var(--r-s); width: 32px; height: 32px; cursor: pointer; font-size: 16px; }
 .pj-fp-fotos .vorhanden { font-size: 12px; color: var(--g-500); margin-bottom: 4px; }
 .pj-fp-fotos .vorhanden a { color: inherit; }
@@ -125,9 +126,29 @@ dialog.pj-lightbox::backdrop { background: rgba(10, 15, 20, 0.92); }
 .pj-fp-fotos .auswahl .name { font-size: 10px; color: var(--g-500); overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap; }
 .pj-fp-fotos .auswahl button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px;
-    border-radius: 50%; border: 1px solid var(--g-300); background: #fff; color: var(--status-rot);
+    border-radius: 50%; border: 1px solid var(--linie-stark); background: var(--flaeche-karte); color: var(--status-rot);
     cursor: pointer; font-size: 12px; line-height: 1; }
 .pj-fp-fotos .knoepfe { display: flex; gap: 6px; flex-wrap: wrap; }
 .pj-fp-fotos .knoepfe input[type=file] { display: none; }
 .pj-fp-fotos .zahl { font-size: 12px; color: var(--g-500); align-self: center; }
 .pj-fp-radios label.inaktiv { opacity: 0.6; }
+
+
+/* ==================================================================== */
+/* v30 (PLAN_V18 Phase 146): Design v2 – Notizen-Chat, Lightbox, Montage-  */
+/* Formulare mit den semantischen Tokens (Hell/Dunkel). Nur Tokens.         */
+/* ==================================================================== */
+.nc-chat .notiz { background: var(--flaeche-abgesetzt); border-color: var(--linie); color: var(--text); }
+.nc-chat .notiz.eigene { background: var(--akzent-flaeche); border-color: color-mix(in srgb, var(--akzent) 30%, transparent); }
+.nc-chat .notiz-kopf, .nc-aeltere > summary, .nc-hinweis { color: var(--text-dezent); }
+.nc-eingabe textarea { background: var(--flaeche-karte); color: var(--text); border-color: var(--linie-stark); }
+.nc-eingabe textarea:focus { outline: 2px solid var(--akzent-glanz); border-color: var(--akzent); }
+.nc-herkunft.nc-sonstige { background: var(--status-grau-bg); color: var(--status-grau); }
+dialog.pj-lightbox::backdrop { background: rgba(7, 13, 26, 0.92); }   /* fest: Lightbox dunkelt die Seite in beiden Modi ab */
+.pj-lb-kopf, .pj-lb-fuss { background: rgba(7, 13, 26, 0.45); }   /* fest: Leisten der Lightbox auf dem dunklen Hintergrund */
+.pj-lb-nav, .pj-lb-fuss .knopf, .pj-lb-fuss a.knopf { color: var(--text-invers); }
+.pj-fp-frage textarea, .pj-wiederhol .zeile input[type=text] { background: var(--flaeche-karte); color: var(--text); border-color: var(--linie-stark); }
+.pj-fp-fotos .auswahl img { border-color: var(--linie); background: var(--flaeche-abgesetzt); }
+.pj-fp-fotos .vorhanden, .pj-fp-fotos .zahl, .pj-fp-fotos .auswahl .name, .pj-wiederhol .zeile .nr { color: var(--text-dezent); }
+.pj-fp-frage > label .pflicht-wenn { color: var(--status-orange); }
+.pj-mob .pj-technik { background: var(--status-orange-bg); color: var(--status-orange); }

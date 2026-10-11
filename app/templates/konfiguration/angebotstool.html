@@ -20,6 +20,7 @@
     <a href="#versand">E-Mail-Versand</a>
     <a href="#kombi">Kombi-Versand</a>
     <a href="#gewerke">Gewerkeübergreifend</a>
+    <a href="#lieferschein">Lieferschein</a>
     <a href="#fern">Fern-Signatur</a>
     <a href="#ablehnung">Abgelehnt-Prozess</a>
     <a href="#loeschprotokoll">Lösch-Protokoll</a>
@@ -125,6 +126,28 @@ BCC-Adressen mit Komma trennen; leer = kein BCC.
 </form>
 </section>
 
+{# v30 (PLAN_V18 Phase 149): EP-Folgepositionen des Lieferscheins #}
+<section class="pe-abschnitt" id="lieferschein">
+<h2>Lieferschein: abhängige Positionen</h2>
+<form method="post" action="/parametrierung/einstellungen" class="formular" style="max-width:640px">
+    <input type="hidden" name="lieferschein_formular" value="1">
+    <label>Hauptposition: Folgepositionen <span class="dezent">(eine Zeile je Hauptposition, Artikelnummern)</span><br>
+        <textarea name="lieferschein_folgepositionen" rows="4" style="width:100%; font-family:monospace"
+                  placeholder="{{ lieferschein_folgepositionen_standard }}">{{ lieferschein_folgepositionen }}</textarea></label>
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Speichern</button>
+        <span class="dezent">Standard: <code>{{ lieferschein_folgepositionen_standard }}</code> ·
+            leer = keine Abhängigkeit</span>
+    </div>
+</form>
+<p class="dezent">Steht die Hauptposition im Angebot, aber nicht auf dem Lieferschein (EP,
+    Alternativ oder bauseits), entfallen dort auch die aufgeführten Folgepositionen – selbst
+    wenn sie selbst nicht auf EP stehen (z. B. „Friondo fit for future“ 014 auf EP → auch HEMS 015,
+    iMSys 016 und SpotDynamic 017 fehlen). Fehlt die Hauptposition im Angebot ganz, bleiben die
+    Folgepositionen unberührt. Der Editor zeigt an den Folgepositionen den Hinweis
+    „folgt auf dem Lieferschein Pos. 014“ (nur Anzeige, keine automatische EP-Änderung).</p>
+</section>
+
 <section class="pe-abschnitt" id="fern">
 <h2>Fern-Signatur (Kunde signiert selbst)</h2>
 <form method="post" action="/parametrierung/einstellungen" class="suchleiste">
@@ -192,18 +215,22 @@ wird der Status auf „Angenommen" gesetzt und der Innendienst per E-Mail inform
 </section>
 
 <section class="pe-abschnitt" id="loeschprotokoll">
-<h2>Lösch-Protokoll Angebote</h2>
+<h2>Lösch-Protokoll Angebote &amp; Projekte</h2>
 {% if loeschungen %}
 <table class="tabelle">
-    <thead><tr><th>Gelöscht am</th><th>Nummer</th><th>Kunde</th><th>Status</th><th class="rechts">Endbetrag</th><th>durch</th></tr></thead>
+    <thead><tr><th>Gelöscht am</th><th>Art</th><th>Nummer</th><th>Kunde</th><th>Status / Phase</th>
+        <th class="rechts">Endbetrag / Auftragswert</th><th>Grund</th><th>durch</th></tr></thead>
     <tbody>
     {% for l in loeschungen %}
         <tr>
             <td>{{ l.geloescht_am.strftime('%d.%m.%Y %H:%M') }}</td>
+            {# v30 (PLAN_V18 Phase 151): Art angebot | projekt, Pflichtgrund beim Projekt #}
+            <td>{{ 'Projekt' if l.art == 'projekt' else 'Angebot' }}</td>
             <td>{{ l.nummer }}</td>
             <td>{{ l.kunde_name }}</td>
             <td>{{ l.status_vorher }}</td>
             <td class="rechts">{{ l.endbetrag_cent | euro }}</td>
+            <td>{{ l.grund or '–' }}</td>
             <td>{{ l.benutzer_name }}</td>
         </tr>
     {% endfor %}

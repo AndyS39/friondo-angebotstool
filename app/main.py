@@ -25,6 +25,7 @@ from app.routers import (angebote, anmeldung, artikel, benutzer, erfassung, vorg
 from app.routers import konfiguration_heizreport   # v26: Parametrierung → Heizreport
 from app.routers import betrieb as betrieb_router   # v27: /health + Parametrierung → Betrieb
 from app.routers import lm_mail, lm_vorlagen   # v29 (PLAN_LEAD_V4 Phase 142): Vorlagen-Editor, Lead-Mails
+from app.routers import einstellungen as einstellungen_router   # v30 (PLAN_V18 Phase 145): Darstellung
 from app.templating import render
 
 APP_ORDNER = Path(__file__).resolve().parent
@@ -155,6 +156,7 @@ app.add_middleware(RollenMiddleware)
 app.mount("/static", StaticFiles(directory=APP_ORDNER / "static"), name="static")
 
 app.include_router(anmeldung.router)
+app.include_router(einstellungen_router.router)   # v30 (PLAN_V18 Phase 145): Hell/Dunkel je Benutzer
 app.include_router(betrieb_router.router)   # v27 (PLAN_V17 Phase 129)
 app.include_router(vorgaenge.router)
 app.include_router(projektierung_router.router)
@@ -261,10 +263,13 @@ def startseite(request: Request):
             lead_kacheln = leadmanagement.startseiten_kacheln_leads(sitzung)
     finally:
         sitzung.close()
+    # v30 (PLAN_V18 Phase 146, [ANNAHME]): Begrüßungszeile „Guten Morgen/Tag/Abend,
+    # <Vorname>“ mit Datum und KW – braucht nur die Uhrzeit
+    from datetime import datetime
     return render(request, "index.html", aktiv=None,
                   projekt_kacheln=projekt_kacheln, demo_badge=demo_badge,
                   lead_kacheln=lead_kacheln, lead_demo_badge=lead_demo_badge,
-                  lead_badge_text=lead_badge_text,
+                  lead_badge_text=lead_badge_text, jetzt=datetime.now(),
                   **_start_kontext())
 
 

@@ -268,7 +268,13 @@ _NACHTRAEGLICHE_SPALTEN = {
         "rabatt_cent": "INTEGER",
         "bauseits": "BOOLEAN NOT NULL DEFAULT 0",
     },
+    "angebots_loeschungen": {
+        "art": "VARCHAR(20) NOT NULL DEFAULT 'angebot'",          # v30 Phase 151
+        "grund": "VARCHAR(500) NOT NULL DEFAULT ''",              # v30 Phase 151
+    },
     "angebote": {
+        "zahlungsbedingung_key": "VARCHAR(50) NOT NULL DEFAULT ''",   # v30 Phase 150
+        "zahlungsbedingung_text": "TEXT NOT NULL DEFAULT ''",          # v30 Phase 150
         "ust_satz": "FLOAT NOT NULL DEFAULT 19",                 # v13-PV Phase 75
         "pv_json": "TEXT NOT NULL DEFAULT ''",                   # v13-PV Phase 76/78
         "kl_json": "TEXT NOT NULL DEFAULT ''",                   # v24 Phase 114 (Klima)

@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote_plus
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -58,6 +58,19 @@ def _json_gewuenscht(request: Request) -> bool:
 
 LINK_PARAMETER = ("url_bza_portal", "url_spotmyenergy", "url_heizreport",
                   "url_kfw_zuschussportal")
+
+# v30 (PLAN_V18 Phase 151): Bestätigungswort der Mehrfachauswahl „Ausgewählte
+# löschen“ (Projektliste) – bei mehreren Projekten statt der Projektnummer [ANNAHME]
+LOESCHEN_BESTAETIGUNG = "LÖSCHEN"
+
+
+def _nur_admin(request: Request):
+    """v30 (Phase 151): „Projekt löschen“ nur für Admins – sonst 403."""
+    benutzer = request.state.benutzer
+    if benutzer is None or benutzer.rolle != "admin":
+        raise HTTPException(status_code=403,
+                            detail="Nur Administratoren dürfen Projekte löschen.")
+    return benutzer
 
 
 def _naechste_phase(phase: str) -> str:
@@ -337,11 +350,17 @@ def _gewerk_zeilen(session: Session, benutzer, sparte: str = "",
                    projektleiter_id: int = 0, team_id: int = 0,
                    kanal: str = "", plz: str = "", q: str = "",
                    storniert: bool = False,
-                   terminstatus: str = "", vorlauf: str = "") -> list[dict]:
+                   terminstatus: str = "", vorlauf: str = "",
+                   nur_demo: bool = False) -> list[dict]:
     """Gefilterte Gewerk-Zeilen (Basis für Kanban, Liste, Kacheln): je Gewerk
-    Projekt, Kunde, Ampel, nächster Termin, offene/überfällige Aufgaben."""
+    Projekt, Kunde, Ampel, nächster Termin, offene/überfällige Aufgaben.
+    v30 (PLAN_V18 Phase 151): jede Zeile trägt `demo` (Demo-Projekt laut
+    kern.ist_demo_projekt), `nur_demo` filtert darauf."""
     projekte = {p.id: p for p in session.query(Projekt)}
     kunden = {k.id: k for k in session.query(Kunde)}
+    # v30 (Phase 151): Vorgänge mit Demo-Kennzeichen (Lead-Demo) – nur die IDs
+    demo_vorgaenge = {v_id for (v_id,) in session.query(Vorgang.id)
+                      .filter(Vorgang.demo.is_(True))}
     jetzt = datetime.now()
     termine_je_gewerk: dict[int, datetime] = {}
     teams_je_gewerk: dict[int, set[int]] = {}
@@ -389,6 +408,11 @@ def _gewerk_zeilen(session: Session, benutzer, sparte: str = "",
                     or (kunde is not None
                         and suchwort in kunde.anzeige_name.lower())):
                 continue
+        # v30 (PLAN_V18 Phase 151): Demo-Kennzeichen je Projekt (+ Filter „Demo“)
+        demo = (projekt.vorgang_id in demo_vorgaenge
+                or kern.ist_demo_projekt(projekt, kunde, None))
+        if nur_demo and not demo:
+            continue
         pflicht = pflicht_je_gewerk.get(g.id, [])
         erledigt = sum(1 for a in pflicht if a.status == "erledigt")
         ueberfaellig = ueberfaellig_je_gewerk.get(g.id, 0)
@@ -403,6 +427,7 @@ def _gewerk_zeilen(session: Session, benutzer, sparte: str = "",
             "naechster_termin": termine_je_gewerk.get(g.id),
             "offen": offene_je_gewerk.get(g.id, 0),
             "ueberfaellig": ueberfaellig,
+            "demo": demo,
         })
     # v15 (Phase 74): Terminstatus je Gewerk berechnen + optional filtern
     ts_map = kern.terminstatus_map(session, [z["gewerk"].id for z in zeilen])
@@ -588,14 +613,18 @@ def liste(request: Request, sparte: str = "", projektleiter_id: int = 0,
                 team_id: int = 0, kanal: str = "", plz: str = "", q: str = "",
                 storniert: int = 0, sortierung: str = "chrono",
                 export: str = "", terminstatus: str = "", vorlauf: str = "",
+                demo: int = 0,
                 session: Session = Depends(get_session)):
-    """Gewerke als Tabelle (Phase 68) mit Summenzeile und CSV-Export."""
+    """Gewerke als Tabelle (Phase 68) mit Summenzeile und CSV-Export.
+    v30 (PLAN_V18 Phase 151): Filter „Demo“ (`demo=1`), Badge je Demo-Projekt,
+    Mehrfachauswahl „Ausgewählte löschen“ nur für Admins."""
     if (umleitung := _gate(request, session)) is not None:
         return umleitung
     zeilen = _gewerk_zeilen(session, request.state.benutzer, sparte=sparte,
                             terminstatus=terminstatus, vorlauf=vorlauf,
                             projektleiter_id=projektleiter_id, team_id=team_id,
-                            kanal=kanal, plz=plz, q=q, storniert=bool(storniert))
+                            kanal=kanal, plz=plz, q=q, storniert=bool(storniert),
+                            nur_demo=bool(demo))
     if sortierung == "vorlauf":
         # V4 (Phase 90.3): Vorlauf aufsteigend (knapp zuerst), ohne Ampel unten
         zeilen.sort(key=lambda z: (z["vorlauf"]["farbe"] is None,
@@ -656,6 +685,7 @@ def liste(request: Request, sparte: str = "", projektleiter_id: int = 0,
                         media_type="text/csv",
                         headers={"Content-Disposition":
                                  'attachment; filename="projektierung.csv"'})
+    benutzer = request.state.benutzer
     return render(request, "projektierung/liste.html", aktiv="/projektierung",
                   zeilen=zeilen, angebote=angebote, summe=summe,
                   phasen_namen=GEWERK_PHASEN_NAMEN, sortierung=sortierung,
@@ -664,7 +694,12 @@ def liste(request: Request, sparte: str = "", projektleiter_id: int = 0,
                   sparte=sparte, projektleiter_id=projektleiter_id,
                   team_id=team_id, kanal=kanal, plz=plz, q=q,
                   storniert=bool(storniert), heute=datetime.now(),
-                  benutzer=request.state.benutzer,
+                  benutzer=benutzer,
+                  # v30 (PLAN_V18 Phase 151): Demo-Filter, Mehrfachauswahl (Admin)
+                  demo=bool(demo),
+                  ist_admin=(benutzer is not None and benutzer.rolle == "admin"),
+                  loesch_hinweis=kern.LOESCH_HINWEIS,
+                  loesch_bestaetigung=LOESCHEN_BESTAETIGUNG,
                   **_filter_werte(session),
                   meldung=request.query_params.get("meldung", ""))
 
@@ -1071,7 +1106,16 @@ def akte(request: Request, projekt_id: int,
     besetzung_voll = {tid: kern.besetzung_namen(session, tid, kurz=False,
                                                 benutzer_map=benutzer_map)
                       for tid in besetzung_ids}
+    # v30 (PLAN_V18 Phase 151): „Projekt löschen“ nur für Admins – Sperrgrund
+    # (Gewerk in Montage mit Bericht) und Demo-Badge für den Kopfblock
+    ist_admin = benutzer is not None and benutzer.rolle == "admin"
+    vorgang_obj = session.get(Vorgang, projekt.vorgang_id) if projekt.vorgang_id else None
     return render(request, "projektierung/akte.html", aktiv="/projektierung",
+                  ist_admin=ist_admin,
+                  loeschen_sperre=(kern.loeschen_gesperrt(session, projekt)
+                                   if ist_admin else ""),
+                  loesch_hinweis=kern.LOESCH_HINWEIS,
+                  ist_demo=kern.ist_demo_projekt(projekt, kunde, vorgang_obj),
                   dokumente=dokumente, dokument_ordner=dokument_ordner,
                   notizen_ctx=notizen_ctx,
                   td=_termin_dialog_kontext(session),
@@ -1711,9 +1755,8 @@ def bza_datenblatt(request: Request, gewerk_id: int,
     if angebot is not None:
         # TAIFUN: Gerät aus dem Steckbrief ist kein BAFA-Schlüssel – das PDF am
         # Angebot fragt es ab; hier bleibt es als „fehlt“ sichtbar
-        blatt = bza_datenblatt.erstellen(
-            session, angebot, gewerk=gewerk,
-            ersteller=bza_datenblatt.ersteller_standard(session, request.state.benutzer))
+        # v30 (PLAN_V18 Phase 148): ohne Ersteller – Abschnitt 6 entfällt im Generator
+        blatt = bza_datenblatt.erstellen(session, angebot, gewerk=gewerk)
         felder = bza_datenblatt.fuer_gewerk_seite(blatt)
         fehlend = blatt.fehlend
         geraet = blatt.geraet_schluessel if angebot.extern else ""
@@ -2807,3 +2850,97 @@ def gewerk_storno(request: Request, gewerk_id: int,
         session.rollback()
     return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}"
                             f"?meldung=" + quote_plus(meldung), status_code=303)
+
+
+# --- v30 (PLAN_V18 Phase 151): Projekt löschen (nur Admin) -------------------------
+
+def _loeschen_antwort(request: Request, ok: bool, meldung: str, ziel: str):
+    """JSON {ok, meldung, weiter} bei Accept application/json, sonst Redirect
+    auf `ziel` (Akte bei Fehlern, Liste nach dem Löschen) mit Meldung."""
+    if _json_gewuenscht(request):
+        return _meldung_json(meldung, ok=ok, weiter=ziel,
+                             status_code=200 if ok else 400)
+    trenner = "&" if "?" in ziel else "?"
+    return RedirectResponse(ziel + trenner + "meldung=" + quote_plus(meldung),
+                            status_code=303)
+
+
+@router.post("/projekt/{projekt_id}/loeschen")
+def projekt_loeschen(request: Request, projekt_id: int,
+                     session: Session = Depends(get_session)):
+    """Projektakte → „Projekt löschen“ (nur Admin): Pflichtgrund + Eingabe der
+    Projektnummer als Bestätigung; Ausführung kern.projekt_loeschen (Abräumen,
+    Outlook-Storno ohne offene Sitzung, Ordner nach _geloescht, Lösch-Protokoll,
+    Vorgangsnotiz). Danach zur Projektliste – die Akte gibt es nicht mehr."""
+    benutzer = _nur_admin(request)
+    projekt = session.get(Projekt, projekt_id)
+    if projekt is None:
+        return _loeschen_antwort(request, False, "Projekt nicht gefunden.",
+                                 "/projektierung/liste")
+    form = anfrage.formular(request)
+    zurueck = f"/projektierung/projekt/{projekt.id}"
+    grund = " ".join((form.get("grund") or "").split())
+    nummer = (form.get("nummer") or "").strip()
+    if not grund:
+        return _loeschen_antwort(request, False, "Bitte einen Grund angeben.", zurueck)
+    if nummer.upper() != (projekt.nummer or "").upper():
+        return _loeschen_antwort(
+            request, False,
+            f"Projektnummer stimmt nicht – zur Bestätigung bitte {projekt.nummer} "
+            "eingeben.", zurueck)
+    ok, meldung = kern.projekt_loeschen(session, projekt, grund, benutzer)
+    if not ok:
+        session.rollback()
+        return _loeschen_antwort(request, False, meldung, zurueck)
+    session.commit()
+    return _loeschen_antwort(request, True, meldung, "/projektierung/liste")
+
+
+@router.post("/liste/loeschen")
+def liste_loeschen(request: Request, session: Session = Depends(get_session)):
+    """Projektliste → Mehrfachauswahl „Ausgewählte löschen“ (nur Admin):
+    Pflichtgrund, Bestätigung durch Eingabe von „LÖSCHEN“ [ANNAHME]; je Projekt
+    eine eigene Transaktion (gesperrte Projekte – Gewerk in Montage mit
+    Bericht – werden übersprungen und gemeldet)."""
+    benutzer = _nur_admin(request)
+    form = anfrage.formular(request)
+    zurueck = (form.get("zurueck") or "").strip()
+    if not (zurueck.startswith("/projektierung/liste") and "//" not in zurueck):
+        zurueck = "/projektierung/liste"
+    roh_ids = form.getlist("projekt_id") if hasattr(form, "getlist") else []
+    ids: list[int] = []
+    for roh in roh_ids:
+        for teil in str(roh).replace(";", ",").split(","):
+            if teil.strip().isdigit() and int(teil) not in ids:
+                ids.append(int(teil))
+    grund = " ".join((form.get("grund") or "").split())
+    bestaetigung = (form.get("bestaetigung") or "").strip().upper()
+    if not ids:
+        return _loeschen_antwort(request, False, "Kein Projekt ausgewählt.", zurueck)
+    if not grund:
+        return _loeschen_antwort(request, False, "Bitte einen Grund angeben.", zurueck)
+    if bestaetigung != LOESCHEN_BESTAETIGUNG:
+        return _loeschen_antwort(
+            request, False,
+            f"Bestätigung fehlt – bitte „{LOESCHEN_BESTAETIGUNG}“ eingeben.", zurueck)
+    geloescht: list[str] = []
+    uebersprungen: list[str] = []
+    for pid in ids:
+        projekt = session.get(Projekt, pid)
+        if projekt is None:
+            uebersprungen.append(f"#{pid}: nicht gefunden")
+            continue
+        nummer = projekt.nummer
+        ok, meldung = kern.projekt_loeschen(session, projekt, grund, benutzer)
+        if ok:
+            session.commit()
+            geloescht.append(nummer)
+        else:
+            session.rollback()
+            uebersprungen.append(f"{nummer}: {meldung}")
+    teile = []
+    if geloescht:
+        teile.append(f"{len(geloescht)} Projekt(e) gelöscht: {', '.join(geloescht)}")
+    if uebersprungen:
+        teile.append("Nicht gelöscht – " + " · ".join(uebersprungen))
+    return _loeschen_antwort(request, bool(geloescht), " ".join(teile), zurueck)

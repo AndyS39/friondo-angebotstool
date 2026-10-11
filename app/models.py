@@ -1126,6 +1126,11 @@ class Angebot(Base):
     extern_pdf_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # v11 (Projektierung, Phase 64): Verknüpfung zum Gewerk nach „Angebot → Projekt"
     projekt_gewerk_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    # v30 (PLAN_V18 Phase 150): Zahlungsbedingung je Angebot – Schlüssel aus der
+    # Tabelle zahlungsbedingungen (leer = Standard-Eintrag) oder Freitext
+    # (zahlungsbedingung_key = "freitext"); additive Spalten (db._NACHTRAEGLICHE_SPALTEN)
+    zahlungsbedingung_key: Mapped[str] = mapped_column(String(50), default="")
+    zahlungsbedingung_text: Mapped[str] = mapped_column(Text, default="")
     # Bedingte Angebotsvermerke (v9, Blatt "Vermerke"): beim Anlegen
     # ausgewertete Texte für das PDF (Ende Positionsteil vor Summenblock)
     vermerke_json: Mapped[str] = mapped_column(Text, default="[]")
@@ -1407,6 +1412,10 @@ class AngebotsLoeschung(Base):
     endbetrag_cent: Mapped[int] = mapped_column(Integer, default=0)
     benutzer_name: Mapped[str] = mapped_column(String(100), default="")
     geloescht_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    # v30 (PLAN_V18 Phase 151): Art „angebot“ | „projekt“ (Projekt löschen, nur
+    # Admin) und Pflichtgrund – additive Spalten (db._NACHTRAEGLICHE_SPALTEN)
+    art: Mapped[str] = mapped_column(String(20), default="angebot")
+    grund: Mapped[str] = mapped_column(String(500), default="")
 
 
 class Fehlerprotokoll(Base):
@@ -1888,3 +1897,24 @@ class TerminBesetzung(Base):
     benutzer_id: Mapped[int] = mapped_column(Integer, index=True)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+
+class Zahlungsbedingung(Base):
+    """v30 (PLAN_V18 Phase 150): wählbare Zahlungsbedingungen je Angebot –
+    Pflege in der Parametrierung (Angebotstool-Einstellungen), genau ein
+    Standard, deaktivieren statt löschen. Der Text ersetzt im Nachtext den
+    Platzhalter {zahlungsbedingungen}; Skonto wirkt nur im Text (keine
+    Änderung an Summen, KfW oder DB). Drei Einträge kommen per Migration
+    (app.zahlungsbedingungen.migration_v30_zahlung)."""
+    __tablename__ = "zahlungsbedingungen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    schluessel: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    text: Mapped[str] = mapped_column(Text, default="")
+    sortierung: Mapped[int] = mapped_column(Integer, default=0)
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
+    standard: Mapped[bool] = mapped_column(Boolean, default=False)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)

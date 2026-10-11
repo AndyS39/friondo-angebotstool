@@ -537,10 +537,13 @@ class Anmeldeseite(unittest.TestCase):
         block = css[css.index("v27-Nachtrag 2"):css.index("Häkchen „angemeldet bleiben“ unter der PIN")]
         for erwartet in ("main.login-main", ".login-buehne", "grid-template-columns",
                          "object-fit: cover", "@media (max-width: 900px)", "@media (max-width: 500px)",
-                         "max-height: 180px", "var(--friondo-blau)", "var(--friondo-dunkel)"):
+                         # v30 (PLAN_V18 Phase 145): Hex/Alt-Tokens → semantische Tokens
+                         # (--akzent statt --friondo-blau, --text-titel statt --friondo-dunkel)
+                         "max-height: 180px", "var(--akzent)", "var(--text-titel)"):
             self.assertIn(erwartet, block, erwartet)
-        # Farben nur über Tokens (plus Weiß), keine externen Schriften/CDNs
-        self.assertEqual(set(re.findall(r"#[0-9a-fA-F]{3,6}\b", block)), {"#fff"})
+        # Farben nur über Tokens, keine externen Schriften/CDNs
+        # (v30, PLAN_V18 Phase 145: auch das Weiß der Bühne ist jetzt --flaeche-karte – kein Hex mehr)
+        self.assertEqual(set(re.findall(r"#[0-9a-fA-F]{3,6}\b", block)), set())
         self.assertNotIn("@import", css)
         self.assertNotIn("http", block)
         self.assertNotIn("@font-face", css)

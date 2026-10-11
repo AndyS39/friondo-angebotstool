@@ -18,7 +18,8 @@ from app.models import (Angebot, AngebotsPosition, Erfassung, Kunde, Vorgang,
                         angebot_status_setzen)
 
 TEST_EMAIL = "bza-v19@test.local"
-ANTWORTEN = {"O01": "EFH", "O05": 160, "A01": "Öl", "A02": 1985, "A20": 22,
+# v30 (PLAN_V18 Phase 148): ohne A20 – die Frage ist aus der Live-Excel gestrichen
+ANTWORTEN = {"O01": "EFH", "O05": 160, "A01": "Öl", "A02": 1985,
              "A03": 24000, "H02": "Fußbodenheizung", "N11": "Nein",
              "K02": "Öl-, Kohle-, Gasetagen- oder Nachtspeicherheizung, funktionstüchtig",
              "K03": 28000, "K04": "Nein"}
@@ -91,17 +92,23 @@ class Phase95Stammdaten(Basis):
         from app import konfigurator as engine
         logik, _ = logik_einlesen()
         self.assertIn("Inbetriebnahmejahr", logik.fragen["A02"].text)
-        self.assertEqual(logik.fragen["A20"].seite, "Alte Anlage")
+        # v30 (PLAN_V18 Phase 148): A20 „Nennleistung der bestehenden Heizung“ ist
+        # gestrichen (vorher: Seite „Alte Anlage“) – tests/test_v30_bza.py
+        self.assertNotIn("A20", logik.fragen)
         self.assertEqual(logik.fragen["N11"].antworten, ["Ja", "Nein"])
         self.assertEqual(engine.vorbelegung(logik.fragen["N11"], {}), "Nein")
         # Heizflächen = bestehende Frage H02 (keine Doppelfrage)
         self.assertIn("Fußbodenheizung", logik.fragen["H02"].antworten)
 
     def test_ersteller_parametrierung(self):
+        # v30 (PLAN_V18 Phase 148): die Seite heißt „BzA-Datenblatt“ und führt den
+        # Puffer-Prozentsatz; Firmenblock und Ersteller-Person werden nicht mehr
+        # angezeigt (Abschnitt 6 entfällt) – Details in tests/test_v30_bza.py
         seite = self.client.get("/parametrierung/bza-ersteller")
         self.assertEqual(seite.status_code, 200)
-        self.assertIn("1862718", seite.text)
-        self.assertIn("Arnold-Overbeck-Str. 63-65", seite.text)
+        self.assertIn("BzA-Datenblatt", seite.text)
+        self.assertIn('name="puffer_prozent"', seite.text)
+        self.assertNotIn("1862718", seite.text)
 
 
 class Phase96Datenblatt(Basis):
@@ -117,7 +124,8 @@ class Phase96Datenblatt(Basis):
         self.assertEqual(w["Straße"].wert, "Musterweg")
         self.assertEqual(w["Hausnummer"].wert, "12a")
         self.assertEqual(w["Inbetriebnahme"].wert, "01.01.1985")
-        self.assertEqual(w["Nennleistung"].wert, "22 kW")
+        # v30 (Phase 148): keine Zeile „Nennleistung“ mehr (A20 gestrichen)
+        self.assertNotIn("Nennleistung", w)
         self.assertEqual(w["Art des Wärmeerzeugers"].wert, "Ölheizung")
         self.assertEqual(w["Im Zuge der Sanierung ausgebaut"].wert, "Ja")
         self.assertEqual(w["Kategorie Klimageschwindigkeitsbonus"].wert,
@@ -138,7 +146,10 @@ class Phase96Datenblatt(Basis):
                          bza_datenblatt._euro(erg.foerderfaehig_cent))
         self.assertEqual(w["nachrichtlich: voraussichtlicher Zuschuss lt. Angebot"].wert,
                          bza_datenblatt._euro(erg.zuschuss_cent))
-        self.assertEqual(w["Handwerkskammer-Betriebsnummer"].wert, "1862718")
+        # v30 (Phase 148): Abschnitt 6 „Ersteller“ (Firmenblock, HWK-Nummer) entfällt;
+        # neu ist die Puffer-Zeile in Abschnitt 4 (Kontrollwerte in test_v30_bza.py)
+        self.assertNotIn("Handwerkskammer-Betriebsnummer", w)
+        self.assertIn("Geplante förderfähige Kosten inkl. 10 % Puffer", w)
 
     def test_klasse15_hk_fbh_und_fehlendes_jahr(self):
         antworten = {**ANTWORTEN, "H02": "Heizkörper und Fußbodenheizung"}
@@ -260,11 +271,13 @@ class Phase103Uebersteuern(Basis):
 
     def test_uebersteuerung_greift(self):
         a = self.tool_angebot([("048", "WP 10 kW AWM")])
+        # v30 (Phase 148): „nennleistung_alt“ gibt es nicht mehr – stattdessen
+        # den Wärmeerzeuger übersteuern
         blatt = bza_datenblatt.erstellen(
-            self.s, a, uebersteuert={"contracting": "Ja", "nennleistung_alt": "24 kW",
+            self.s, a, uebersteuert={"contracting": "Ja", "waermeerzeuger": "Gasheizung",
                                      "inbetriebnahme": "01.01.1990"})
         w = self.werte(blatt)
-        for name, wert in (("Contracting", "Ja"), ("Nennleistung", "24 kW"),
+        for name, wert in (("Contracting", "Ja"), ("Art des Wärmeerzeugers", "Gasheizung"),
                            ("Inbetriebnahme", "01.01.1990")):
             self.assertEqual(w[name].wert, wert)
             self.assertFalse(w[name].fehlt)
@@ -272,14 +285,16 @@ class Phase103Uebersteuern(Basis):
         # nicht übersteuerte Felder bleiben automatisch
         self.assertEqual(w["Straße"].wert, "Musterweg")
         self.assertEqual(w["Anlagennummer (BAFA-Liste)"].wert, "16019892")
-        self.assertEqual(w["Art des Wärmeerzeugers"].hinweis, "")
+        self.assertEqual(w["Vorlauftemperatur"].hinweis, "Heizflächen: Fußbodenheizung")
         # jedes Feld trägt einen eindeutigen Schlüssel (Formularname f_<schluessel>)
         schluessel = [f.schluessel for _, felder in blatt.abschnitte for f in felder]
         self.assertTrue(all(schluessel))
         self.assertEqual(len(schluessel), len(set(schluessel)))
+        # v30: „ansprechpartner“ (Abschnitt 6) entfällt, „kosten_puffer“ ist neu
         for erwartet in ("strasse", "we_foerdern", "contracting", "anlagennummer",
-                         "kosten", "zuschuss", "klimabonus", "ansprechpartner"):
+                         "kosten", "kosten_puffer", "zuschuss", "klimabonus"):
             self.assertIn(erwartet, schluessel)
+        self.assertNotIn("ansprechpartner", schluessel)
         # Übersteuerung gewinnt auch über we/ersteller/geraet
         w2 = self.werte(bza_datenblatt.erstellen(
             self.s, a, we_foerdern=2, uebersteuert={"we_foerdern": "3", "hersteller": "Testfirma"}))

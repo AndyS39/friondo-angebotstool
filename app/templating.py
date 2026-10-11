@@ -86,6 +86,13 @@ def _css_version() -> int:
 
 templates.env.globals["css_version"] = _css_version()   # Fallback
 
+# v30 (PLAN_V18 Phase 145): Farben der Browser-/PWA-Leiste je Modus (<meta
+# name="theme-color"> in base.html) – kein Hex-Wert im Template
+from app import darstellung as _darstellung   # noqa: E402
+templates.env.globals["theme_color"] = _darstellung.THEME_COLOR
+templates.env.globals["darstellung_werte"] = (
+    ("geraet", "Gerät", "geraet"), ("hell", "Hell", "sonne"), ("dunkel", "Dunkel", "mond"))
+
 # Phase 94: Titel der Montage-Formulare für Formular-Aktionen in der Projektakte
 from app.projektierung_logik import FORMULAR_NAMEN as _FORMULAR_NAMEN  # noqa: E402
 templates.env.globals["formular_namen"] = _FORMULAR_NAMEN

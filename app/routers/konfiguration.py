@@ -34,7 +34,7 @@ def _parametrierung_kontext(session: Session) -> dict:
     """Kontext der früheren Übersicht (v25) – Logik-Excel, Validierung, PV-/KL-
     Parameter und die pflegbaren Einstellungen. Fehlt die Logik-Excel, fehlen
     nur die Logik-Werte (`dateifehler`); die Einstellungen bleiben erreichbar."""
-    from app import mail_sync, wirtschaftlichkeit
+    from app import lieferschein_pdf, mail_sync, wirtschaftlichkeit
     from app.models import AblehnungsGrund, AngebotsLoeschung, einstellung_holen
     if config.LOGIK_EXCEL_PFAD.exists():
         logik, bericht = logik_modul.hole_logik(session)
@@ -77,6 +77,10 @@ def _parametrierung_kontext(session: Session) -> dict:
         gewerke_artikel=einstellung_holen(
             session, "gewerke_artikel",
             __import__("app.kombi_versand", fromlist=["x"]).GEWERKE_ARTIKEL_START),
+        # v30 (PLAN_V18 Phase 149): EP-Folgepositionen des Lieferscheins (Rohtext;
+        # leer = bewusst keine Abhängigkeit, fehlende Zeile = Standard)
+        lieferschein_folgepositionen=lieferschein_pdf.folgepositionen_text(session),
+        lieferschein_folgepositionen_standard=lieferschein_pdf.FOLGEPOSITIONEN_STANDARD,
         kombi_betreff=einstellung_holen(session, "kombi_vorlage_betreff", "")
         or __import__("app.mail_vorlagen", fromlist=["x"]).KOMBI_BETREFF,
         kombi_text=einstellung_holen(session, "kombi_vorlage_text", "")
@@ -175,6 +179,17 @@ def einstellungen_speichern(request: Request,
     if "gewerke_formular" in form:
         einstellung_setzen(session, "gewerke_artikel",
                            (form.get("gewerke_artikel") or "").strip())
+    # v30 (PLAN_V18 Phase 149): Lieferschein – abhängige Positionen (eine Zeile je
+    # Hauptposition „014: 015, 016, 017“; leer = keine Abhängigkeit)
+    if "lieferschein_formular" in form:
+        from app import lieferschein_pdf
+        roh = (form.get("lieferschein_folgepositionen") or "").strip()[:2000]
+        regeln = lieferschein_pdf.folgepositionen_parsen(roh)
+        # normiert zurückschreiben (eine Zeile je Hauptposition), damit der
+        # gespeicherte Wert dem entspricht, was der Lieferschein auswertet
+        einstellung_setzen(session, lieferschein_pdf.FOLGEPOSITIONEN_PARAMETER,
+                           "\n".join(f"{haupt}: {', '.join(folgen)}"
+                                     for haupt, folgen in regeln.items()))
     if "kombi_formular" in form:
         einstellung_setzen(session, "kombi_vorlage_betreff",
                            (form.get("kombi_vorlage_betreff") or "").strip())
@@ -1156,16 +1171,16 @@ def _stuecklisten_zurueck(meldung: str, anker: str = ""):
                             status_code=303)
 
 
-# --- v19 (PLAN_V14 Phase 95): BzA-Ersteller ------------------------------------------
+# --- v19 (PLAN_V14 Phase 95): BzA-Ersteller → v30 (PLAN_V18 Phase 148): Seite
+# „BzA-Datenblatt“ mit dem Parameter bza_kosten_puffer_prozent; Route und Datei
+# bleiben, Firmenblock/Ersteller-Person werden nicht mehr angezeigt [ANNAHME] ---
 
 @router.get("/bza-ersteller")
 def bza_ersteller_seite(request: Request, session: Session = Depends(get_session)):
     from app import bza_datenblatt
-    from app.models import einstellung_holen
     return render(request, "konfiguration/bza_ersteller.html", aktiv="/parametrierung",
-                  firma=bza_datenblatt.FIRMA,
-                  kandidaten=bza_datenblatt.ersteller_kandidaten(session),
-                  standard=einstellung_holen(session, "bza_ersteller_standard", ""),
+                  puffer_prozent=bza_datenblatt.prozent_text(
+                      bza_datenblatt.kosten_puffer_prozent(session)).replace(",", "."),
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -1173,13 +1188,86 @@ def bza_ersteller_seite(request: Request, session: Session = Depends(get_session
 def bza_ersteller_speichern(request: Request, session: Session = Depends(get_session)):
     from urllib.parse import quote_plus
 
+    from app import bza_datenblatt
+    from app.konfigurator import zahl_parsen
     from app.models import einstellung_setzen
     form = anfrage.formular(request)
-    wert = (form.get("standard") or "").strip()
-    einstellung_setzen(session, "bza_ersteller_standard", wert if wert.isdigit() else "")
+    if "puffer_prozent" in form:
+        wert = zahl_parsen((form.get("puffer_prozent") or "").strip())
+        if wert is None or not (0 <= wert <= 100):
+            return RedirectResponse("/parametrierung/bza-ersteller?meldung=" + quote_plus(
+                "Puffer: bitte einen Prozentsatz zwischen 0 und 100 eingeben (0 = Zeile "
+                "entfällt)."), status_code=303)
+        einstellung_setzen(session, bza_datenblatt.PUFFER_PARAMETER,
+                           bza_datenblatt.prozent_text(float(wert)).replace(",", "."))
+    # Altes Formular (v19): Ersteller-Standard bleibt pflegbar, wird aber nicht angezeigt
+    if "standard" in form:
+        wert = (form.get("standard") or "").strip()
+        einstellung_setzen(session, "bza_ersteller_standard", wert if wert.isdigit() else "")
     session.commit()
     return RedirectResponse("/parametrierung/bza-ersteller?meldung="
-                            + quote_plus("BzA-Ersteller gespeichert."), status_code=303)
+                            + quote_plus("BzA-Datenblatt gespeichert."), status_code=303)
+
+
+# --- v30 (PLAN_V18 Phase 150): Zahlungsbedingungen ----------------------------------
+
+@router.get("/zahlungsbedingungen")
+def zahlungsbedingungen_seite(request: Request, id: int = 0,
+                              session: Session = Depends(get_session)):
+    """Liste aller Einträge, Editor für Name/Text (?id=), neue Einträge; Hinweis
+    auf Nachtext-Blöcke ohne den Platzhalter {zahlungsbedingungen}."""
+    from app import zahlungsbedingungen
+    from app.models import Zahlungsbedingung
+    eintrag = session.get(Zahlungsbedingung, id) if id else None
+    return render(request, "konfiguration/zahlungsbedingungen.html", aktiv="/parametrierung",
+                  eintraege=zahlungsbedingungen.alle(session), eintrag=eintrag,
+                  platzhalter=zahlungsbedingungen.PLATZHALTER,
+                  ohne_platzhalter=zahlungsbedingungen.bloecke_ohne_platzhalter(session),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/zahlungsbedingungen")
+def zahlungsbedingungen_speichern(request: Request,
+                                  session: Session = Depends(get_session)):
+    """aktion = neu | speichern | umschalten (deaktivieren statt löschen) |
+    standard (genau ein Standard, der Standard bleibt immer aktiv)."""
+    from urllib.parse import quote_plus
+
+    from app import zahlungsbedingungen
+    from app.models import Zahlungsbedingung
+    form = anfrage.formular(request)
+    aktion = form.get("aktion", "")
+    eintrag = session.get(Zahlungsbedingung, int(form.get("id") or 0)) \
+        if (form.get("id") or "").isdigit() else None
+    ziel = "/parametrierung/zahlungsbedingungen"
+    try:
+        if aktion == "neu":
+            eintrag = zahlungsbedingungen.anlegen(session, form.get("name") or "",
+                                                  form.get("text") or "")
+            meldung = f"Zahlungsbedingung „{eintrag.name}“ angelegt"
+            ziel += f"?id={eintrag.id}"
+        elif eintrag is None:
+            return RedirectResponse(ziel, status_code=303)
+        elif aktion == "speichern":
+            zahlungsbedingungen.speichern(session, eintrag, form.get("name") or "",
+                                          form.get("text") or "")
+            meldung = f"Zahlungsbedingung „{eintrag.name}“ gespeichert"
+            ziel += f"?id={eintrag.id}"
+        elif aktion == "umschalten":
+            zahlungsbedingungen.aktiv_setzen(session, eintrag, not eintrag.aktiv)
+            meldung = (f"Zahlungsbedingung „{eintrag.name}“ "
+                       f"{'aktiviert' if eintrag.aktiv else 'deaktiviert'}")
+        elif aktion == "standard":
+            zahlungsbedingungen.standard_setzen(session, eintrag)
+            meldung = f"„{eintrag.name}“ ist jetzt der Standard"
+        else:
+            return RedirectResponse(ziel, status_code=303)
+    except ValueError as fehler:
+        session.rollback()
+        return RedirectResponse(ziel + "?meldung=" + quote_plus(str(fehler)), status_code=303)
+    session.commit()
+    trenner = "&" if "?" in ziel else "?"
+    return RedirectResponse(ziel + trenner + "meldung=" + quote_plus(meldung), status_code=303)
 
 
 # --- 30.09.2026: Kunden-Dubletten zusammenführen (Admin) ------------------------------

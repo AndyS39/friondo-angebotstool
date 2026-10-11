@@ -34,8 +34,10 @@
 (function () {
     const feld = document.getElementById('feld');
     const ctx = feld.getContext('2d');
+    // fest: Unterschrift-Canvas immer Weiß (wird als PNG ins PDF eingebettet)
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, feld.width, feld.height);
+    // fest: Strichfarbe der Unterschrift (Dunkelblau im PDF, unabhängig vom Modus)
     ctx.strokeStyle = '#1b2a5e';
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
@@ -70,6 +72,7 @@
     feld.addEventListener('touchend', ende);
 
     document.getElementById('loeschen').addEventListener('click', function () {
+        // fest: Canvas-Grund bleibt Weiß (PDF-Einbettung)
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, feld.width, feld.height);
         leer = true;

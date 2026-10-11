@@ -53,7 +53,9 @@
     <ul class="param-liste">
         {{ eintrag('Angebotstool-Einstellungen', 'DB-Ampel, E-Mail- und Kombi-Versand, Fern-Signatur, Abgelehnt-Prozess', '/parametrierung/angebotstool') }}
         {{ eintrag('Angebotsprofile', 'Kanal-Zuordnung, Textblöcke (Vor-/Nachtexte), Versandregeln', '/parametrierung/profile') }}
-        {{ eintrag('BzA-Ersteller', 'Abschnitt 6 des BzA-Datenblatts (Energieeffizienz-Experte)', '/parametrierung/bza-ersteller') }}
+        {# v30 (PLAN_V18 Phase 148/150): Seite heißt „BzA-Datenblatt“ (Puffer-Prozentsatz), neue Karte Zahlungsbedingungen #}
+        {{ eintrag('BzA-Datenblatt', 'Puffer-Prozentsatz der Zeile „Geplante förderfähige Kosten inkl. … % Puffer“ (Abschnitt 4)', '/parametrierung/bza-ersteller') }}
+        {{ eintrag('Zahlungsbedingungen', 'Texte je Angebot wählbar (Nachtext „Zahlung“, Platzhalter {zahlungsbedingungen}), Standard, deaktivieren statt löschen', '/parametrierung/zahlungsbedingungen') }}
         {{ eintrag('Logik & Importe', 'Logik-Excel: Validierungsbericht, Fragen, Angebotsaufbau, KfW-/PV-/KL-Parameter, Klima-Import', '/parametrierung/logik') }}
         {{ eintrag('Klima-Logik (KL)', 'Lesesicht Paketmatrix, Montagematrix, Kombinationen, KL-Artikel', '/parametrierung/kl-logik') }}
         {{ eintrag('Klima-Import (Vorschau)', 'Artikel → Klima-Positionslisten KL001–KL050, Diff vor dem Import', '/parametrierung/artikel/kl-import') }}
@@ -112,7 +114,8 @@
         {% if ist_admin %}
         {{ eintrag('Kunden-Dubletten', 'Doppelte Kunden (Name + PLZ) zusammenführen', '/parametrierung/kunden-dubletten') }}
         {% endif %}
-        {{ eintrag('Lösch-Protokoll Angebote', 'Gelöschte Angebote – wann, wer, Status, Betrag', '/parametrierung/angebotstool#loeschprotokoll') }}
+        {# v30 (PLAN_V18 Phase 151): auch gelöschte Projekte (Art, Grund) #}
+        {{ eintrag('Lösch-Protokoll Angebote & Projekte', 'Gelöschte Angebote und Projekte – wann, wer, Art, Grund, Status, Betrag', '/parametrierung/angebotstool#loeschprotokoll') }}
         {{ eintrag('Versand-Erkennung', 'Protokoll der letzten Prüfläufe des Mail-Abgleichs', '/parametrierung/angebotstool#versand') }}
         {{ eintrag('Prüflauf Ablehnung', 'Protokoll des täglichen Abgelehnt-Prüflaufs', '/parametrierung/angebotstool#ablehnung') }}
         {% if ist_admin %}

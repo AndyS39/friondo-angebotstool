@@ -117,7 +117,7 @@
 /* v15 (Phase 82): Unterschrift per Finger/Maus (Muster: Vor-Ort-Signatur) */
 document.querySelectorAll('canvas.pj-signatur').forEach(function (feld) {
     var stift = feld.getContext('2d');
-    stift.lineWidth = 2.2; stift.lineCap = 'round'; stift.strokeStyle = '#1b2a5e';
+    stift.lineWidth = 2.2; stift.lineCap = 'round'; stift.strokeStyle = '#1b2a5e';   // fest: Unterschrift-Tinte auf dem weißen Canvas – landet als Bild im PDF
     var ziel = document.getElementById(feld.dataset.ziel);
     if (ziel.value.startsWith('data:image')) {
         var bild = new Image();

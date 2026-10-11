@@ -51,8 +51,9 @@
         Termine · {{ 'eigener Start' if ist_hv else 'AD-Start' }}. Kacheln © OpenStreetMap.</span>
 </form>
 
-<div id="karte" style="height:70vh; border:1px solid var(--grau-linie);
-     border-radius:8px" data-lat="{{ mittelpunkt.lat if mittelpunkt else '' }}" data-lon="{{ mittelpunkt.lon if mittelpunkt else '' }}"
+{# v30 (PLAN_V18 Phase 145) [ANNAHME]: Kartenrahmen über die Klasse lm-karte-leaflet (Tokens,
+   lead_v2.css); die OSM-Kacheln bleiben hell, Popups/Zoom-Knöpfe folgen den Tokens #}
+<div id="karte" class="lm-karte-leaflet" data-lat="{{ mittelpunkt.lat if mittelpunkt else '' }}" data-lon="{{ mittelpunkt.lon if mittelpunkt else '' }}"
      data-zoom="{{ mittelpunkt.zoom if mittelpunkt else '' }}"></div>
 
 <script src="/static/leaflet/leaflet.js"></script>
@@ -66,10 +67,8 @@ L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende'
 }).addTo(karte);
-const phasenFarben = {neu: '#c0392b', in_kontaktierung: '#d4a017',
-                      qualifiziert: '#2471a3', terminiert: '#27ae60',
-                      erfasst: '#17a589', angebot: '#8e44ad',
-                      gewonnen: '#1e8449', verloren: '#7f8c8d'};
+// fest: Pin-Farben je Phase liegen auf den hellen OSM-Kacheln – in beiden Modi gleich, keine Tokens
+const phasenFarben = {neu: '#c0392b', in_kontaktierung: '#d4a017', qualifiziert: '#2471a3', terminiert: '#27ae60', erfasst: '#17a589', angebot: '#8e44ad', gewonnen: '#1e8449', verloren: '#7f8c8d'};   // fest: Leaflet-Pins (helle Kacheln)
 let ebene = L.layerGroup().addTo(karte);
 
 async function laden() {
@@ -82,7 +81,7 @@ async function laden() {
         if (p.art === 'lead') {
             const radius = {A: 12, B: 9, C: 7}[p.klasse] || 7;
             L.circleMarker([p.lat, p.lon], {
-                radius, color: phasenFarben[p.phase] || '#555',
+                radius, color: phasenFarben[p.phase] || '#555',   // fest: Rückfallfarbe des Pins (helle Kacheln)
                 fillOpacity: 0.75,
             }).bindPopup(`<strong>${p.name}</strong><br>${p.ort} · ${p.phase}` +
                 `<br><a href="/lead-management/lead/${p.vorgang_id}">Akte</a> · ` +
@@ -94,8 +93,7 @@ async function laden() {
                 `<a href="/lead-management/lead/${p.vorgang_id}">Akte</a>`)
               .addTo(ebene);
         } else if (p.art === 'start') {
-            L.circleMarker([p.lat, p.lon], {radius: 6, color: '#000',
-                fillColor: '#fff', fillOpacity: 1})
+            L.circleMarker([p.lat, p.lon], {radius: 6, color: '#000', fillColor: '#fff', fillOpacity: 1})   // fest: Startpunkt-Pin auf hellen Kacheln
               .bindPopup(`Start ${p.ad}`).addTo(ebene);
         }
     }

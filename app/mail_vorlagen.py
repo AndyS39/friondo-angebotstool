@@ -43,6 +43,9 @@ PLATZHALTER = [
     ("{gueltig_bis}", "Angebotsdatum + 30 Tage"),
     ("{vertriebler}", "Name des Außendienstlers des Vorgangs"),
     ("{absender}", "Name des angemeldeten Innendienst-Mitarbeiters"),
+    # v30 (PLAN_V18 Phase 150) [ANNAHME]: Name des am Angebot gewählten Eintrags
+    ("{zahlungsbedingung}", "Name der am Angebot gewählten Zahlungsbedingung, "
+                            "z. B. „80 % Anzahlung, 2 % Skonto“ (Standard: „Standard“)"),
 ]
 
 _MUSTER = re.compile(r"\{[a-z_]+\}")
@@ -194,7 +197,11 @@ def werte_fuer_angebot(session, angebot: Angebot, kunde: Kunde | None,
     # v27-Nachtrag 2: PV/KL haben keinen KfW-Block – {eigenanteil}/{foerderung}
     # bleiben dort leer statt „–“ [ANNAHME], WP unverändert
     ohne_kfw = (angebot.konfigurator_typ or "WP").upper() in ("PV", "KL")
+    # v30 (PLAN_V18 Phase 150): {zahlungsbedingung} = Name des gewählten Eintrags
+    from app import zahlungsbedingungen
+    zahlungsbedingung_name = zahlungsbedingungen.fuer_angebot(session, angebot)[0]
     return {
+        "zahlungsbedingung": zahlungsbedingung_name,
         "briefanrede": briefanrede(kunde),
         "anrede": briefanrede(kunde),
         "vorname": (kunde.vorname if kunde else "") or "",

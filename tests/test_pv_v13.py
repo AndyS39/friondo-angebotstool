@@ -538,7 +538,13 @@ class Phase80Lieferschein(Basis):
         self.assertEqual(r.status_code, 200)
         text = self.pdf_text(r)
         self.assertIn("L I E F E R S C H E I N", text)
-        self.assertNotIn("€", text)
+        # v30 (PLAN_V18 Phase 149): der Lieferschein druckt die VOLLSTÄNDIGEN
+        # Artikeltexte – der Langtext von Pos. 014 enthält „Paket Basic 39,90 €/a“,
+        # daher statt „kein €“ gezielt: keine Preisspalten, keine Summen
+        for verboten in ("E-Preis", "G-Preis", "Netto-Summe", "Gesamt-Betrag",
+                         "30.245,43", "35.992,06"):
+            self.assertNotIn(verboten, text, verboten)
+        self.assertIn("Paket Basic 39,90 €/a", text)
 
 
 # --- Phase 99 (v22, PLAN_V15): PA04 nur Protokoll --------------------------

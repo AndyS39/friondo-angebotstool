@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v27)
+# Friondo Angebotstool – Projektkontext (v30)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -74,6 +74,7 @@ Nummern vergeben.
 | v27-Nachtrag 2 | PLAN_V17.md, Abschnitt „Nachtrag 06.10.2026“ (im Durchlauf v28/v29) | – |
 | v28 | PLAN_PROJ_V6.md | 133–139 |
 | v29 | PLAN_LEAD_V4.md | 140–144 |
+| v30 | PLAN_V18.md | 145–152 |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
@@ -533,7 +534,8 @@ Lead-Management belegt.)
   externen CDNs/Webfonts – alles lokal.
 - Überarbeitet: Portal, Angebotstool-Startseite (Icon-Kacheln,
   dringliche Zahlen rot), alle Listen (Filterleiste als Karte mit
-  Chip-Selects, Sticky-Tabellenkopf, Zebra + Hover, EIN
+  Chip-Selects, Sticky-Tabellenkopf, Zebra + Hover (*Zebra überholt – seit v30
+  feine Zeilenlinie + Hover, siehe v30*), EIN
   Status-Badge-Schema, kompakte Icon-Aktionen, dunkle Summenzeile),
   Vorgangsakte (Kundenkopfkarte mit Hot-Ampel + Wiedervorlage-Chip,
   zweispaltig, Angebots-Karten mit Status-Schrittleiste,
@@ -548,7 +550,10 @@ Lead-Management belegt.)
   Listen) – jetzt table-cell.
 - Angebots-PDF unverändert. Künftige Module bauen auf den Tokens auf;
   Screenshots vorher/nachher unter docs/design-v12/, Screenshot-Helfer
-  scripts/design_screenshots.py (Playwright + lokales Chrome).
+  scripts/design_screenshots.py (Playwright + lokales Chrome) (*überholt –
+  siehe v30: Design v2 mit semantischen Tokens je Modus Hell/Dunkel statt
+  fester Farbwerte, Screenshot-Helfer ohne Playwright über Chrome headless +
+  DevTools, Screenshots unter docs/design-v30/*).
 
 ## Neu in v15 – Projektierung V2 (abgestimmt 26.09.2026)
 
@@ -767,18 +772,21 @@ v14“ entspricht diesem Abschnitt.)
 - **BzA-Datenblatt** (KfW „Bestätigung zum Antrag“, Programm 458): EIN
   Generator `app/bza_datenblatt.py` in exakter Portal-Struktur (1
   Investitionsobjekt · 2 Wärmeversorgung vor Sanierung · 3 Geplante
-  Wärmeversorgung · 4 Geplante Kosten · 5 Boni · 6 Ersteller). Button
+  Wärmeversorgung · 4 Geplante Kosten · 5 Boni · 6 Ersteller – *Abschnitt 6
+  „Ersteller“ überholt, entfällt seit v30*). Button
   „BzA-Datenblatt (PDF)“ an jedem WP-Angebot (Editor-Kopf, Vorgangsakte,
   jeder Status) **und an TAIFUN-WP-Einträgen** (Gerät dann Pflichtauswahl aus
   dem Blatt „BAFA-Anlagen“); Dialog `/angebote/<id>/bza-datenblatt` (WE
-  übersteuerbar, Ersteller wählbar), PDF `BzA-Datenblatt-<Nr>.pdf` mit Vermerk
+  übersteuerbar, Ersteller wählbar – *überholt, seit v30 ohne Ersteller*),
+  PDF `BzA-Datenblatt-<Nr>.pdf` mit Vermerk
   „Internes Arbeitsblatt … keine KfW-Unterlage“. Fehlende Angaben rot
   („— fehlt: bitte beim Kunden erfragen“). Die Projektierungs-Seite
   `/projektierung/gewerk/<id>/bza` (v15/v17) nutzt denselben Generator
   (+ Kundendaten, Stand BzA/KfW, Link zum PDF).
 - **Erfassung WP:** A02 heißt „Inbetriebnahmejahr (Baujahr) der bestehenden
   Heizung“ (steuert K02 wie bisher, Boni-Kategorie im Datenblatt); neu A20
-  „Nennleistung der bestehenden Heizung in kW“ (Pflicht) und N11
+  „Nennleistung der bestehenden Heizung in kW“ (Pflicht) (*überholt – A20 ist
+  seit v30 aus Bogen und Datenblatt entfernt, siehe v30*) und N11
   „Contracting-Modell?“ (Vorbelegung Nein). Heizflächen = bestehende Frage
   H02 (nur Fußbodenheizung → 35 °C, sonst 55 °C).
 - **Blatt „BAFA-Anlagen“** (konfigurator_logik_v5.xlsx, `logik.bafa_anlagen`,
@@ -789,7 +797,9 @@ v14“ entspricht diesem Abschnitt.)
   (bestätigt 30.09.2026) – 16019200/16019199 gelten für beide Farben.
 - **Parametrierung „BzA-Ersteller“:** Firmenblock fest (Friondo GmbH,
   Arnold-Overbeck-Str. 63-65, 47139 Duisburg, HWK-Nr. 1862718), Standard-
-  Ersteller `bza_ersteller_standard` (leer = angemeldeter Benutzer).
+  Ersteller `bza_ersteller_standard` (leer = angemeldeter Benutzer) (*überholt –
+  die Seite heißt seit v30 „BzA-Datenblatt“ und führt den Puffer-Prozentsatz;
+  Ersteller und Firmenblock werden nicht mehr angezeigt, siehe v30*).
 - **KfW-gefördert am TAIFUN-Eintrag** (`angebote.kfw_gefoerdert`, Bestand =
   unbekannt): Abfrage im Dialog „Extern erledigt“ (WP), nachträglich am
   Eintrag änderbar; `bza.ist_gefoerdert` bietet nur noch bei „unbekannt“
@@ -968,7 +978,8 @@ v14“ entspricht diesem Abschnitt.)
   nach dem ersten Schreibzugriff die SQLite-Schreibsperre während der
   Netz-I/O; ein Editor-POST wartet busy_timeout (5 s) und stirbt. Abgefangen
   durch `_speichern` in `routers/angebote.py` (Rollback + eine Wiederholung
-  nach 0,7 s für entfernen/sortierung/aendern/menge/neu-nummerieren;
+  nach 0,7 s für entfernen/sortierung/aendern/menge/neu-nummerieren – *seit v30
+  auch duplizieren/ueberarbeiten/kopieren, siehe v30*;
   Sortierung mit robustem Parser und Rückmeldung bei geänderten
   Positionen), das Fehlerprotokoll (Meldung „Datenbank kurz belegt …“) und
   Timeouts für Graph-Aufrufe (`graph_versand`, `mail_sync`); Test mit echter
@@ -1938,7 +1949,8 @@ weiter, Rückweg `rollback.bat --nur-code`. Rollout nur im Wartungsfenster.)
   Abfragen, 840 → 420 ms (Einzelaufruf). Nicht geändert (Befunde für einen eigenen
   Plan): PDF-Erzeugung CPU-gebunden (fpdf2, 4 gleichzeitige Renderings ≈ 3× Einzelzeit),
   „Versand vorbereiten“ = 7 sequenzielle Graph-Aufrufe, Deals-Board rendert alle Zeilen
-  ohne Blättern, Bestands-Erfassungen ohne spätere optionale Fragen (O13/O09/A20) gelten
+  ohne Blättern, Bestands-Erfassungen ohne spätere optionale Fragen (O13/O09/A20 – *A20
+  überholt, seit v30 gestrichen*) gelten
   für „Angebot erzeugen“ als unvollständig (Rückfrage).
 - **Lasttest (Phase 131, Agent E):** `scripts/lasttest_server.py` (uvicorn 8001 gegen
   `diagnose/test_v27/data`, Lifespan mit allen Läufen, externe Dienste mit 2 s
@@ -1986,7 +1998,8 @@ weiter, Rückweg `rollback.bat --nur-code`. Rollout nur im Wartungsfenster.)
   `admin_zugang:<Admin>`, nicht bei offenem Pflichtwechsel); NSSM erlaubt (nssm.exe nach
   `scripts\`); `BACKUP_ZIEL` vorerst `D:\Backup\Angebotstool` (Fallback C:), Netzlaufwerk mit
   Dienstkonto nachgelagert; **Bestands-Erfassungen:** `konfigurator.naechste_pflichtfrage`
-  (überspringt `OPTIONALE_FRAGEN` O09/O13/A20 und Fragen mit „optional“/„leer lassen“ im
+  (überspringt `OPTIONALE_FRAGEN` O09/O13/A20 – *seit v30 nur O09/O13, A20 gestrichen* –
+  und Fragen mit „optional“/„leer lassen“ im
   Text) in `/erfassung/{id}/pruefen`, `…/absenden` und den Erfassungslisten-Sichten – der Bogen
   selbst nutzt weiter `naechste_frage`; **mail_sync** nur „Versand vorbereitet“/„Versendet“
   der letzten `ABGLEICH_TAGE` = 90 Tage; Geocoding-Backoff gibt nach `BACKOFF_MAX_VERSUCHE`
@@ -2025,7 +2038,9 @@ weiter, Rückweg `rollback.bat --nur-code`. Rollout nur im Wartungsfenster.)
   „Auf diesem Gerät angemeldet bleiben“ (nur bei Außendienst/Montage eingeblendet,
   `data-mobil` aus `auth.MOBILE_ROLLEN`), Knopf, darunter die Fehlermeldungen aus `auth`;
   rechts das Energiehaus-Foto bildschirmhoch (`object-fit: cover`); unter 900 px eine Spalte
-  mit Kopfbild (180 px), unter 500 px ohne Foto; nur Tokens, keine externen Schriften;
+  mit Kopfbild (180 px), unter 500 px ohne Foto; nur Tokens (*seit v30 die semantischen
+  Tokens `--akzent`/`--text-titel`/`--flaeche-karte`, beide Modi – siehe v30*), keine
+  externen Schriften;
   Login-Logik, Feldnamen, Wartungsbanner unverändert. Screenshots
   `docs/design-v27/anmeldung-vorher.png` / `-nachher*.png`. Tests `tests/test_v27_nachtrag2.py` (16).
 
@@ -2259,7 +2274,8 @@ versuche`); v27-Code läuft auf der v29-Datenbank weiter. Entscheidungen:
   herkunft="lead")`); Warteschlangen-Seite `/lead-management/kommunikation?status=…` mit
   Absender, Versuchen und „Erneut senden“.
 - **Terminassistent (Phase 143, `lead_termin`):** genau `vorschlaege_anzahl` (Standard 3)
-  Vorschläge, der erste „Ideal“ (`ideal`, `ideal_grund`; Rahmen Friondo-Blau, Badge, auch im
+  Vorschläge, der erste „Ideal“ (`ideal`, `ideal_grund`; Rahmen Friondo-Blau – *seit v30
+  Akzentfarbe je Modus* –, Badge, auch im
   Block Termine der Kartei), gebündelter Routing-Aufruf unverändert; Kalenderansicht per
   `GET /lead/{id}/termin/kalender.json?woche=&neu=1` (`lead_termin.kalender_json`: Mo–Sa,
   15-Minuten-Raster, Spalte je Kandidat, Tool-Termine, Outlook-Belegt nur bei `kalender_sync
@@ -2398,3 +2414,223 @@ versuche`); v27-Code läuft auf der v29-Datenbank weiter. Entscheidungen:
   Gesamtsuite nach dem Nachtrag (v28 + v29 + Nachtrag 2): **903 bestanden, 4 übersprungen**;
   `migrate.py` zweimal auf der Dev-DB (neu: `hv_versandweg offen → entwurf`, WP-Kopie entfernt,
   alte Formular-Entwürfe geleert).
+
+## Neu in v30 – Design v2, Zurück-Navigation, BzA/Lieferschein/Zahlungsbedingungen, Projektierung Go-live (abgestimmt 11.10.2026)
+
+(Plan: PLAN_V18.md, Phasen 145–152; ein gemeinsamer Commit am 11.10.2026, Rollout im
+Wartungsfenster nach `docs/nach-dem-update-v30.md`. Vorlage für das Design: HTML-Prototyp
+`docs/design-v30/vorlage/friondo-nachtglas-design.html` plus Screenshots `portal-dunkel.png`
+und `hauptboard-dunkel.png` – nur die Optik übernommen; Aufbau, Inhalte, Routen,
+Formularnamen und Rollenregeln aller Seiten sind unverändert; „Jetzt dran“, Suche oben,
+Icon-Leiste für alle Module, „441 Hinweise“ wurden nicht nachgebaut. Umsetzung in vier
+parallelen Agenten D1/D2/B/P mit eigenen DB-Kopien, Briefings und Berichte unter
+`diagnose/v30/`.)
+
+- **Design v2 – Tokens, Hell/Dunkel, Umschalter (Phase 145):** drei Token-Blöcke am Anfang
+  von `app/static/style.css` – Hell (`:root`, heutige Friondo-CI; für 4,5 : 1 leicht
+  nachgedunkelt: `--akzent #3376b6`, `--status-orange #9e5305`, `--status-grau #566376`,
+  Sparten-Farben hell ebenso), Dunkel (`:root[data-theme="dunkel"]`, Vorlage „Nachtglas“:
+  Fläche #070d1a, Karten #0e1626, Linien #1e2a40, Text #eef3fb/#9fb0c8, Akzent Cyan
+  #67e8f9 mit dunklem Text #06202a, helle Statusfarben auf abgedunkelten Flächen, Kontur
+  statt Schatten) und „Gerät entscheidet“ (`@media (prefers-color-scheme: dark)
+  { :root:not([data-theme="hell"]) }` mit denselben Werten – Wächter prüft die Gleichheit).
+  Semantische Tokens: `--flaeche`, `--flaeche-karte`, `--flaeche-erhoeht` (Kopfzeile),
+  `--flaeche-hover`, `--flaeche-abgesetzt`, `--linie(-stark)`, `--text`, `--text-dezent`,
+  `--text-titel`, `--text-invers`, `--text-auf-farbe`, `--link`, `--akzent(-hover/-text/
+  -flaeche/-glanz)`, `--fokus`, `--status-*`(+`-bg`), `--sparte-wp/pv/kl/wb`, `--avatar-1…8`
+  + `--avatar-text`, `--q-*` (inkl. `--q-veranstaltung`), `--pj-*`, `--schatten-1/2`,
+  `--r-xl`, `--t-xxl`; die v14-Tokens (`--friondo-*`, `--g-*`, `--grau-*`) bleiben als Alias
+  (`--friondo-dunkel` nur noch für Text – dunkle Flächen = `--flaeche-erhoeht` +
+  `--text-invers`). Alle 363 Hex-/19 rgba-Werte in `style.css`, 95 in `lead_v2.css`, je 6–8
+  in `login_v27.css`, `lead_v29.css`, `akte_v28.css`, `projektierung_v28.css` und die
+  Inline-Farben der Templates sind auf Tokens umgestellt; feste Werte nur mit Kommentar
+  `fest:` (Logo-Kachel, Dialog-/Lightbox-`::backdrop`, Druckansicht, Unterschrift-Canvas,
+  Teamfarben-Text, helle Mail-Vorschauen, Leaflet-Pins, Farbfeld-Formularwerte). Schrift
+  bleibt Systemschrift (Manrope der Vorlage liegt nur als woff2-Blob ohne Lizenzdatei im
+  Bundle), Zahlen mit `tabular-nums` statt Monospace [ANNAHME]. Dokumentation
+  `docs/design-system.md` Abschnitt „Design v2“ (Hex je Modus, Umschalter, Regeln für neue
+  Seiten, Bausteine; alte Tabelle „bis v29“); Hinweis-Kommentar oben in
+  `docs/projektierung-prototyp.html` und `docs/leadmanagement-prototyp.html`.
+  **Umschalter** Menü ☰ → „Darstellung: Gerät · Hell · Dunkel“ (Radio-Chips, Icons
+  `geraet`/`sonne`/`mond` in `_symbole.html`): `app/darstellung.py` (Werte `geraet | hell |
+  dunkel`, Key `darstellung` in `benutzer_einstellungen`, Cookie `darstellung` 1 Jahr
+  samesite=lax, `THEME_COLOR` hell #1b2a5e / dunkel #070d1a), `POST /einstellungen/darstellung`
+  (`app/routers/einstellungen.py`, JSON oder Formular, alle Rollen – `/einstellungen` steht in
+  allen Rollen-Pfadtabellen von `auth.py`), Middleware `auth._laden` → `request.state.darstellung`
+  (gespeicherte Wahl gewinnt, nie gewählt → Cookie, sonst „Gerät“) → `<html data-theme>` in
+  `base.html` VOR dem Rendern (kein Aufblitzen); `dispatch` zieht das Cookie nach, Login
+  setzt es aus der Einstellung; `navigation.js` schaltet sofort um; `<meta name="theme-color">`
+  je Modus (Jinja-Global `theme_color`, bei „Gerät“ zwei Einträge mit Media-Query). PDFs
+  (fpdf2) unverändert: Kontroll-PDF byteidentisch bis auf Erstellzeit/ID, AST-Test ohne
+  Token-/Template-Import in den PDF-Modulen.
+- **Design v2 – Bausteine, Portal, Angebotstool, Anmeldeseite (Phase 146, D1):** Block
+  „Design v2“ am Ende von `style.css`: Karten mit 1-px-Kontur/Radius `--r-l` (Schatten nur
+  hell), Kennzahl-Kacheln `.kachel.stat` mit großer Zahl und Farbbalken links, Status-Pillen
+  mit Punkt (Makro `status_badge`, Markup erweitert, Signatur unverändert; Pfeil „▾“ nur in
+  Auswahl-Kontexten `.abzeichen.mit-pfeil`/`summary > .abzeichen`/`.statusform .abzeichen`),
+  getönte Sparten-/Kanal-Chips (`color-mix`), Avatare mit Initialen (neues Makro
+  `avatar(name, id, klasse='')` in `_komponenten.html`, Farbe aus `--avatar-1…8`), Tabellen
+  mit Kapitälchen-Kopf/feiner Linie/Hover **ohne Zebra**, Chip-Selects, Knöpfe (Primär =
+  `--akzent` + `--akzent-text`), Eingabefeld-Grundlinie, Menüs/Glocke/Wartungsbanner/
+  Leer-Zustände/Fehlerseite (`fehler.html` mit `.fehler-seite`), `.darstellung-*`,
+  `.zurueck-*`, Fokusring. Portal (`index.html`): Begrüßung „Guten Morgen/Tag/Abend,
+  <Vorname>“ (Vorname aus `benutzer.vorname`, sonst erster Namensteil; Morgen < 11, Tag < 18)
+  mit Wochentag · Datum · KW als reine Kopfzeile, Bereiche wie bisher [ANNAHME].
+  Benutzerverwaltung mit Avataren; Anmeldeseite (`login_v27.css`) beide Modi; mobile
+  Erfassung bei 390 px geprüft. Kontrast-Test: 27 Textpaare ≥ 4,5 : 1 und 21 dezente Paare
+  ≥ 3 : 1 je Modus. Nebenbefund behoben: `.textform { display: grid }` übersteuerte das
+  `hidden`-Attribut – die Inline-Textformulare aller Positionen standen im Editor offen
+  (jetzt `.textform[hidden], .text-anzeige[hidden] { display: none }`).
+- **Design v2 – Lead-Management, Projektierung, Montage (Phase 146, D2):** Modul-Tokens am
+  Ende von `lead_v2.css` (`--lm-aktiv-bg/-fg`, `--lm-chip-text-mix`, `--lm-punkt-leer`, in
+  allen drei Blöcken). Board-Tabellen (`leadmanagement/_tabelle.html`) nach
+  `hauptboard-dunkel.png`: Spaltenköpfe Versalien mit Buchstabenabstand, feine Linien,
+  Hover, Zahlen tabellarisch; **Status-Pille „Neu ▾“** (`status_pille`/`status_zusatz`,
+  `.lm-status-pille.mit-pfeil` – Pfeil als `::after`, das `select.lm-mini` liegt unsichtbar
+  über der Pille, `lm_boards.js` unverändert), Kanal-Chip und HV-Status als getönte Pille
+  (Fläche `color-mix(in srgb, var(--f) 18%, transparent)`, Text hell `black 34%` / dunkel
+  `white 35%`), Avatare AD/ID mit Pfeil (`.lm-person-pille`), Versuchs-Punkte, rote
+  Überfällig-Markierung, Kennzeichen unter dem Kundennamen; Spaltenbreiten-Resizer (v29)
+  unverändert. Statuskette der Kartei und Teamfarben (Kalender, Montage) nur noch als
+  `--f`; Leaflet: Kacheln hell, Rahmen/Popups/Zoom über Tokens [ANNAHME]; Mail-Vorschauen
+  bleiben hell (`fest:`). Projektierung: Kacheln mit Farbakzent oben, Chips, `pj-btn.primary`
+  = Akzent, Spalten/Karten/Dialoge (nackte Lead-Dialoge tragen `lm-dialog`)/Kalender/
+  Galerie/Steckbrief über Tokens, `.pj-mono` tabular-nums; Montage-Backend bei 390 px in
+  beiden Modi. Nebenbefund behoben: Status-Farben der Phasen-Zähler (`.lm-phase .n`) waren
+  seit v23 von einer Nachtrags-Regel überdeckt.
+- **Zurück-Navigation (Phase 147):** Makro `zurueck_knopf(standard)` in `base.html`, Leiste
+  `.zurueck-leiste` am Anfang von `<main>` auf allen Seiten außer `/`, `/angebotstool`,
+  `/erfassung` (Außendienst-Start), `/lead-management(/dashboard)`, `/projektierung`,
+  `/montage`, `/login`, `/pin-wechsel`, Erfassungsbogen (`/erfassung/…`) und eingebetteten
+  Seiten (`einbett=1`); Seiten können `{% set zurueck_aus = true %}` setzen.
+  `app/static/navigation.js`: Verlauf je Tab in `sessionStorage` (`friondo_verlauf`,
+  30 Einträge, Pfad mit Query ohne `#`; gleicher Pfad wie der oberste Eintrag wird nicht
+  angehängt – Reload/Redirect nach POST), Klick nimmt den obersten ANDEREN Eintrag, kürzt
+  den Verlauf und navigiert (eine Ansicht zurück, keine Schleifen); leerer Verlauf →
+  `data-zurueck-standard` (Angebot → `/angebote`, Erfassung → `/erfassungen`, Vorgangsakte →
+  `/leads` bzw. Hauptboard für Leadmanagement, Projektakte → `/projektierung`, Einsatz →
+  `/montage`, Parametrierung → `/parametrierung`, Lead-Seiten → Dashboard, sonst `/`).
+  Editor-Sonderfall: kein `beforeunload`-Schutz vorhanden → keiner (Plan-Wortlaut). Test
+  `tests/test_v30_navigation.py` (TestClient + Headless-Chrome über DevTools gegen uvicorn
+  im Thread, lifespan aus).
+- **BzA-Datenblatt (Phase 148, `app/bza_datenblatt.py`):** Frage A20 ist aus der Live-Excel
+  (Blatt „Fragen“, Sicherung `diagnose/konfigurator_logik_v5.vor_v30.xlsx`) und aus
+  `konfigurator.OPTIONALE_FRAGEN` gestrichen (alte Antworten bleiben im Erfassungs-JSON,
+  `protokoll()` übergeht sie; gespeicherte Angebots-Protokolle zeigen die Zeile weiter);
+  Abschnitt 2 ohne „Nennleistung“. Die Nennwärmeleistung ist im Dialog ein Zahlenfeld mit
+  „kW“-Suffix (`.feld-mit-suffix`/`.feld-suffix`; Vorbelegung = kW der BAFA-Anlage, folgt
+  der Geräteauswahl per `data-kw`, Komma/Punkt, „kW“ wird bereinigt, Ausgabe „9,50 kW“;
+  ungültig → „Nennwärmeleistung: bitte nur die Zahl eingeben“, PDF-Route leitet mit Meldung
+  in den Dialog zurück). Abschnitt 4 hat die Zeile „Geplante förderfähige Kosten inkl. 10 %
+  Puffer“ (Schlüssel `kosten_puffer`, Kosten × (1 + Prozent), kaufmännisch auf volle Euro,
+  Hinweis „Puffer für einen möglichen KfW-Ergänzungskredit – ändert den Auftragswert nicht“;
+  Parameter `bza_kosten_puffer_prozent`, Standard 10, 0 = Zeile entfällt, Zeilentext folgt
+  dem Satz; bei übersteuerten Kosten aus dem übersteuerten Wert); KfW-Rechnung, Förderblock
+  und Höchstkostengrenze unverändert. Abschnitt 6 „Ersteller“ entfällt in Generator, PDF,
+  Dialog und Gewerk-Seite (`routers/projektierung.py` ruft `erstellen` ohne Ersteller);
+  `bza_ersteller_standard`, `FIRMA`, `ersteller_kandidaten/-standard` bleiben ohne Wirkung
+  [ANNAHME]. Parametrierungs-Seite `/parametrierung/bza-ersteller` heißt „BzA-Datenblatt“
+  und führt nur den Prozentsatz (Verteilerseite angepasst). Tests `tests/test_v30_bza.py`;
+  `tests/test_bza_v19.py` und `tests/test_regression.py` nachgezogen (A20/Ersteller/Puffer).
+- **Lieferschein (Phase 149, `app/lieferschein_pdf.py`):** jede Position mit Bezeichnung
+  (fett) und VOLLSTÄNDIGER Beschreibung (7,5 pt, alle Zeilen wie im Angebots-PDF;
+  Seitenumbruch innerhalb langer Texte, `header()` wiederholt den Tabellenkopf; `_kurztext`
+  ist Alias von `_positionstext` und kürzt nicht mehr, `MAX_BESCHREIBUNG_*` entfallen).
+  EP-Folgepositionen: Parameter `lieferschein_folgepositionen` (Standard `014: 015, 016,
+  017`, Angebotstool-Einstellungen → „Lieferschein: abhängige Positionen“, eine Zeile je
+  Hauptposition; leer = keine Abhängigkeit) – `lieferschein_positionen(angebot,
+  folgepositionen)`: steht die Hauptposition im Angebot auf EP/Alternativ/bauseits,
+  entfallen auch die Folgepositionen; fehlt sie ganz, bleiben sie. Der Editor zeigt an
+  Folgepositionen „↳ folgt auf dem Lieferschein Pos. 014“ (`.folge-hinweis`, nur Anzeige)
+  [ANNAHME]. Tests `tests/test_v30_lieferschein.py`; `tests/test_pv_v13.py::
+  test_lieferschein_wp` prüft statt „kein €“ gezielt die Preisspalten (der Langtext von 014
+  enthält „39,90 €/a“).
+- **Fehler F-20261002-073115-9c9e (Phase 149):** der Eintrag liegt in keiner lokalen
+  DB-Kopie (die Server-Kopie vom 03.10. hat die Tabelle `fehlerprotokoll` noch nicht, die
+  migrierte Kopie 0 Zeilen; `data\fehler.log` des Servers lag nicht vor). Reproduktion
+  „Überarbeiten → Version .2 → Duplizieren“ auf der DB-Kopie am unveränderten v29-Code:
+  ohne Sperre fehlerfrei (alle Kennzeichen kopiert, Nummernkreis überspringt „.2“ – Ursache
+  (b) ausgeschlossen); mit gehaltener SQLite-Schreibsperre (6,5 s und 13 s) starb
+  `duplizieren` ohne die v22-Wiederholung an `sqlite3.OperationalError: database is locked`
+  beim `INSERT INTO angebote` (`angebot_aufbau.angebot_anlegen` → `session.commit()`) →
+  Fehlerseite „Datenbank kurz belegt“ mit Fehler-Nr. = **Ursache (a)**; der Zeitpunkt
+  02.10. 07:31:15 passt zum Viertelstunden-Lauf 07:30 (monday-/mail-sync des v22-Codes
+  hielt die Sitzung während der Netz-I/O – seit Hotfix 06.10./v27 kurz). Fix:
+  `duplizieren`, `ueberarbeiten` und `kopieren` laufen über `_speichern` (Rollback + eine
+  Wiederholung nach 0,7 s; Helfer `_positionen_kopieren`, `kl_json` wird mitkopiert).
+  Regressionstest `tests/test_v30_duplizieren.py` (Sperre 6,5 s → Wiederholung greift,
+  13 s → Meldung statt 500 + genau ein Protokolleintrag). Der Original-Eintrag auf dem Server
+  (Parametrierung → Fehlerprotokoll bzw. `data\fehler.log`) ist einmal gegenzulesen.
+- **Zahlungsbedingungen (Phase 150, `app/zahlungsbedingungen.py`, Tabelle
+  `zahlungsbedingungen`, Spalten `angebote.zahlungsbedingung_key/_text`):** drei Einträge
+  per `migration_v30_zahlung` (Standard = bisheriger Absatz, „50 % am Montagetag“, „80 %
+  Anzahlung, 2 % Skonto“ – Texte 2/3 [ANNAHME], Innendienst liest gegen); die Nachtexte aller
+  Profile WP/PV/KL tragen unter „### Zahlung“ den Platzhalter `{zahlungsbedingungen}`
+  (`angebotsprofile._RECHT_UND_ZAHLUNG`; die Migration ersetzt den Standardabsatz
+  leerzeichen-tolerant in jedem Nachtext-Block, meldet Blöcke ohne wörtlichen Absatz beim
+  Erstlauf und legt die Parameter `bza_kosten_puffer_prozent`/`lieferschein_folgepositionen`
+  an; Entwicklungs-DB: alle 12 Blöcke umgestellt, keine offenen). Rendering in
+  `pdf_export._nachtext_rendern(zahlungsbedingung=…)` (`fuer_angebot(session, angebot)` →
+  (Name, Text); leerer Schlüssel = Standard, `freitext` = Freitext; der Platzhalter
+  erscheint nie wörtlich). Editor-Kopfkarte: „Zahlungsbedingung: <Name>“, im Entwurf
+  Dropdown + „Abweichend (Freitext)“, `POST /angebote/<id>/zahlungsbedingung` (ID/Admin, nur
+  Entwurf). Überarbeiten/Duplizieren/Kopieren, `angebot_aufbau.version_erzeugen` (damit
+  auch die Rabatt-Version des Außendienst-Pfads) übernehmen beide Felder. Parametrierung →
+  Zahlungsbedingungen (`konfiguration/zahlungsbedingungen.html`: Textfeld wie Textblöcke,
+  neue Einträge, deaktivieren statt löschen – deaktivierte Einträge bleiben an bestehenden
+  Angeboten gültig –, genau ein Standard, Warnblock für Nachtext-Blöcke ohne Platzhalter).
+  E-Mail-Vorlagen: `{zahlungsbedingung}` = Name [ANNAHME]. Summen, KfW und DB unverändert
+  (Kontrollangebot 30.245,43 €). Tests `tests/test_v30_zahlung.py`; `ANGEBOTSTEXTE.md`
+  Abschnitte 6/9.3/9.6.
+- **Projekt löschen (nur Admin, Phase 151):** Projektakte (Kopfblock, roter Knopf
+  `pj-btn danger rechts`) und Projektliste (Checkbox je Zeile, „Ausgewählte löschen“) mit
+  Sicherheitsdialog (`templates/projektierung/_loeschen_dialog.html`): Pflichtgrund, Eingabe
+  der Projektnummer (Mehrfachauswahl: Anzahl + Nummern, Bestätigung „LÖSCHEN“ [ANNAHME]) und
+  Hinweis „Das Löschen ist endgültig – das Angebot bleibt erhalten und kann erneut in ein
+  Projekt überführt werden.“ `projektierung.projekt_loeschen(session, projekt, grund,
+  benutzer) -> (ok, meldung)` räumt Projekt, Gewerke, Aufgaben/Paketinstanzen, Termine mit
+  Besetzung (Outlook-Ereignisse vorher storniert – `verbindung_freigeben`, dann
+  `outlook_kalender.event_loeschen`, best effort), Verlauf/Kommentare, Dokumente, Subs,
+  Projekt-Mails, Montage-Formulare, Restarbeiten, UGL-Bestellungen, Steckbrief und die
+  Glocken-Einträge der Akte ab; BzA-/Heizreport-Felder gehen mit dem Gewerk (Heizreport-
+  Projekt bleibt im Portal). Angebote: `projekt_gewerk_id = NULL`, Status unverändert
+  („Angebot → Projekt“ wieder sichtbar, Vorgangsakte ohne Projekt); Galerie-Dateien bleiben
+  am Vorgang. Dokumentenordner wird nach `data/projekte/_geloescht/<PR>_<JJJJMMTT-HHMM>/`
+  verschoben (nicht gelöscht [ANNAHME]). Lösch-Protokoll (`AngebotsLoeschung`, neue
+  additive Spalten `art` „angebot“|„projekt“ und `grund`; Anzeige unter Parametrierung →
+  Angebotstool-Einstellungen → „Lösch-Protokoll Angebote & Projekte“ mit Spalten Art/Grund)
+  und Notiz im Vorgangs-Chat „Projekt <PR> gelöscht: <Grund>“ (`herkunft = projektierung`).
+  Nicht löschbar (`loeschen_gesperrt`): Gewerk in Phase Montage oder später mit
+  abgeschlossenem Montage-Formular → Hinweis auf Storno [ANNAHME]. Routen `POST
+  /projektierung/projekt/{id}/loeschen` und `POST /projektierung/liste/loeschen` (403 für
+  Nicht-Admins, JSON bei Accept application/json). Projektnummern werden nie
+  wiederverwendet. **Demo-Projekte:** `projektierung.ist_demo_projekt(projekt, kunde,
+  vorgang)` – `vorgaenge.demo = 1` oder Kunde „Demo …“ / `@demo.example` (Muster von
+  `scripts/demo_projekte.py`); Projektliste mit Filter „Demo“ (`?demo=1`) und Badge
+  (`.demo-badge`, auch im Kopf der Akte); Bestandsimport-Projekte (`angebote.bestand = 1`)
+  sind nicht betroffen. Go-live: nach dem Rollout Demo-Projekte löschen, Checkliste prüfen,
+  dann Parametrierung → Projektierung-Einstellungen → `freigabe_modus = alle` (Portal-Badge
+  weg, Montage-Login in `/montage`, Rolle Projektierung sieht das Modul); Lead-Management
+  bleibt `lead_freigabe_modus = admin`. Stand der Go-live-Checkliste auf der Server-Kopie
+  vom 03.10.2026: 1/11 (nur Montageteams), alle offenen Punkte sind Stammdaten-/
+  Betriebspunkte. Tests `tests/test_v30_projekt_loeschen.py` (9).
+- **Tests, Rollout-Vorbereitung, Doku (Phase 152):** neue Tests `tests/test_v30_design.py`
+  (26: Token-Wächter CSS + Templates mit `fest:`-Begründungen, Dunkel = Media-Block,
+  data-theme aus Cookie/Einstellung inkl. Cookie-Nachzug, Kontrast, Makros, Portal-Begrüßung,
+  Seiten in beiden Modi, PDF unverändert), `test_v30_navigation.py` (9), `test_v30_bza.py`,
+  `test_v30_lieferschein.py`, `test_v30_duplizieren.py`, `test_v30_zahlung.py` (zusammen 33),
+  `test_v30_projekt_loeschen.py` (9); angepasste Alt-Tests: `test_v27_nachtrag2.py::
+  Anmeldeseite::test_foto_und_styles` (semantische Tokens statt `--friondo-*`/Hex),
+  `test_bza_v19.py`, `test_regression.py`, `test_pv_v13.py` (siehe oben).
+  `scripts/design_screenshots.py` neu ohne Playwright (Chrome headless + DevTools über
+  `websockets`; `vorher|nachher --modus hell|dunkel [--server URL --port --cdp --db --data
+  --seiten --ziel]`, elf Seiten inkl. Montage-Einsatz und mobile Erfassung bei 390 px, EK/DB
+  per eingefügtem Style ausgeblendet); Screenshots `docs/design-v30/<seite>-vorher-hell.png`
+  (v29-Code aus einem Worktree) und `-nachher-hell|dunkel.png`. `scripts/voll_crawl.py
+  --darstellung hell|dunkel` (Cookie). Rollout-Vorbereitung `diagnose/v30/abschluss_tests.sh`
+  (Server-Kopie, `migrate.py` zweimal, Testbenutzer je Rolle, Gesamtsuite, Abnahme, Crawl
+  sechs Rollen je hell/dunkel, Smoke). Kein neuer Lasttest: keine neuen Netz- oder
+  Hintergrundläufe (eine indexierte Leseabfrage je Anfrage in der Middleware, Outlook-Storno
+  nur beim seltenen Projekt-Löschen nach Sitzungsfreigabe). Doku: `docs/design-system.md`
+  („Design v2“), `docs/nach-dem-update-v30.md`, `docs/updates.md`, `docs/betrieb.md`
+  (Middleware-Zeile, Outlook-Storno), `config.VERSION = "v30"`.
