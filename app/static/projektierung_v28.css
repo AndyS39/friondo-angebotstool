@@ -67,6 +67,20 @@
 .pj-col.pj-drop-ziel { outline: 2px dashed var(--pj-accent); outline-offset: -4px; }
 .pj-card.pj-wandert { opacity: 0.5; }
 
+/* --- v30-Nachtrag 2 (12.10.2026, Wunsch Andreas): Vollansicht des Boards – Kopfzeile,
+   Seitenkopf, Kennzahlen, Hinweis und Fußzeile ausgeblendet, die Filter bleiben, das
+   Board füllt den Bildschirm (Höhe rechnet hoeheSetzen in projektierung.js neu);
+   Knopf „Vollansicht beenden“ fest oben rechts, Escape beendet ebenfalls --- */
+body.pj-vollansicht .kopfleiste, body.pj-vollansicht .fusszeile, body.pj-vollansicht .wartung-banner,
+body.pj-vollansicht .zurueck-leiste, body.pj-vollansicht .seitenkopf, body.pj-vollansicht .pj-tiles,
+body.pj-vollansicht .pj-board ~ .pj-note, body.pj-vollansicht main > .meldung { display: none; }
+body.pj-vollansicht main.breit.pj-voll { padding: 6px 12px 2px; }
+body.pj-vollansicht .pj-filters { margin: 0 0 4px; padding-right: 200px; }
+body.pj-vollansicht .pj-board { min-height: 0; }
+.pj-nur-vollansicht { display: none; }
+body.pj-vollansicht .pj-nur-vollansicht { display: inline-flex; position: fixed; top: 8px; right: 14px;
+    z-index: 60; box-shadow: var(--schatten-2); }
+
 /* --- Phase 133/134: Dialog „Phase ändern“ (Akte + Board) --- */
 .pj-waechter-liste { margin: 8px 0; max-height: 40vh; overflow-y: auto; }
 .pj-waechter-liste .pj-wz {

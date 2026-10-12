@@ -2675,4 +2675,13 @@ parallelen Agenten D1/D2/B/P mit eigenen DB-Kopien, Briefings und Berichte unter
   Zahlungsbedingungs-Auswahl (v30). Lösung: `| tojson | forceescape` in allen sechs Stellen
   (Regel: `tojson` in doppelt gequoteten Attributen nur mit `forceescape`, sonst einfach
   gequotet); Test `tests/test_v30_nachtrag.py` prüft on*-Attribute auf ausgeglichene Klammern und
-  die `&quot;`-Kodierung. Commit „v30-Nachtrag 12.10.2026“.
+  die `&quot;`-Kodierung. Commit „v30-Nachtrag 12.10.2026“ (3cd0299, gepusht).
+  **(25) Vollansicht des Kanban-Boards** (Wunsch Andreas 12.10.2026, Commit „v30-Nachtrag 2“):
+  Knopf „⛶ Vollansicht“ im Seitenkopf des Boards (`projektierung/kanban.html`, `pjVollansicht()`)
+  setzt `body.pj-vollansicht` (CSS in `projektierung_v28.css`: Kopfzeile, Seitenkopf, Kennzahlen,
+  Hinweis, Fußzeile, Zurück-Leiste ausgeblendet, Filter bleiben, `hoeheSetzen` rechnet die
+  Board-Höhe neu) und fordert Browser-Vollbild an (`requestFullscreen`, ohne Geste bleibt die
+  CSS-Vollansicht); Knopf „⤡ Vollansicht beenden“ fest oben rechts (`.pj-nur-vollansicht`),
+  Escape beendet beides (`fullscreenchange`/`keydown`, nicht bei offenem Dialog); Wahl in
+  `sessionStorage` (`pj_vollansicht`), damit sie ein Neuladen im Tab überlebt. Test in
+  `tests/test_v30_nachtrag.py`.

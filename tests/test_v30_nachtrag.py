@@ -112,6 +112,19 @@ class Entscheidungen(unittest.TestCase):
         self.assertEqual(antwort.status_code, 200)
         self.assertIn("Zahlungsbedingung:", antwort.text)
 
+    def test_board_vollansicht(self):
+        """v30-Nachtrag 2 (12.10.2026, Wunsch Andreas): Knopf, Beenden-Knopf, Skript und CSS."""
+        from pathlib import Path
+        antwort = _admin_client().get("/projektierung")
+        self.assertEqual(antwort.status_code, 200)
+        self.assertIn('id="pj-vollansicht"', antwort.text)
+        self.assertIn('id="pj-vollansicht-aus"', antwort.text)
+        self.assertIn("function pjVollansicht(", antwort.text)
+        self.assertIn("requestFullscreen", antwort.text)
+        css = (Path(__file__).resolve().parents[1] / "app" / "static" / "projektierung_v28.css").read_text(encoding="utf-8")
+        self.assertIn("body.pj-vollansicht .kopfleiste", css)
+        self.assertIn("body.pj-vollansicht .pj-nur-vollansicht", css)
+
     def test_demo_badge_auf_board_karte(self):
         s = SessionLocal()
         try:

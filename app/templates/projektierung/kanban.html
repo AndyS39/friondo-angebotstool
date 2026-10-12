@@ -21,6 +21,9 @@
         <a class="pj-chip" href="/projektierung/kalender?ansicht=chrono">Chronologisch</a>
         <a class="pj-btn" href="/projektierung/liste">Liste</a>
         <a class="pj-btn" href="/projektierung/meine-aufgaben">Meine Aufgaben</a>
+        {# v30-Nachtrag 2 (12.10.2026, Wunsch Andreas): Board bildschirmfüllend #}
+        <button type="button" class="pj-btn" id="pj-vollansicht" onclick="pjVollansicht()" aria-pressed="false"
+                title="Board bildschirmfüllend – Escape oder erneuter Klick beendet die Vollansicht">⛶ Vollansicht</button>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
@@ -109,6 +112,9 @@
 </form>
 
 {# v28 (Phase 134): Dummy-Scrollbalken ÜBER dem Board (synchron, projektierung.js) #}
+{# v30-Nachtrag 2: Knopf zum Beenden, nur in der Vollansicht sichtbar (fest oben rechts) #}
+<button type="button" class="pj-btn pj-nur-vollansicht" id="pj-vollansicht-aus" onclick="pjVollansicht()"
+        title="Escape beendet die Vollansicht ebenfalls">⤡ Vollansicht beenden</button>
 <div class="pj-hscroll" id="pj-hscroll" title="Waagerecht scrollen (auch Shift + Mausrad)"><div></div></div>
 
 <div class="pj-board" id="pj-board">
@@ -227,6 +233,45 @@ const PHASEN_NAMEN = {{ phasen_namen | tojson }};
 let dragGewerke = [];
 let dragSparten = [];
 let dragSpalte = '';
+// v30-Nachtrag 2 (12.10.2026, Wunsch Andreas): Vollansicht – Kopfzeile, Seitenkopf,
+// Kennzahlen, Hinweis und Fußzeile weg, das Board füllt den Bildschirm (Höhe rechnet
+// hoeheSetzen in projektierung.js neu); zusätzlich Browser-Vollbild. Escape oder der
+// Knopf beendet beides; die Wahl überlebt ein Neuladen im selben Tab (sessionStorage).
+const VOLLANSICHT_KEY = 'pj_vollansicht';
+function pjVollansichtSetzen(an) {
+    document.body.classList.toggle('pj-vollansicht', an);
+    try {
+        if (an) { sessionStorage.setItem(VOLLANSICHT_KEY, '1'); } else { sessionStorage.removeItem(VOLLANSICHT_KEY); }
+    } catch (e) { /* sessionStorage gesperrt – Vollansicht gilt nur für diese Seite */ }
+    const knopf = document.getElementById('pj-vollansicht');
+    if (knopf) {
+        knopf.textContent = an ? '⤡ Vollansicht beenden' : '⛶ Vollansicht';
+        knopf.setAttribute('aria-pressed', an ? 'true' : 'false');
+    }
+    if (window.pjBoardHoehe) { window.pjBoardHoehe(); setTimeout(window.pjBoardHoehe, 150); }
+}
+function pjVollansicht() {
+    const an = !document.body.classList.contains('pj-vollansicht');
+    pjVollansichtSetzen(an);
+    if (an) {
+        if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(function () { /* ohne Vollbild bleibt die Vollansicht */ });
+        }
+    } else if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(function () {});
+    }
+}
+document.addEventListener('fullscreenchange', function () {
+    if (!document.fullscreenElement && document.body.classList.contains('pj-vollansicht')) { pjVollansichtSetzen(false); }
+});
+document.addEventListener('keydown', function (ereignis) {
+    if (ereignis.key === 'Escape' && !document.fullscreenElement
+            && document.body.classList.contains('pj-vollansicht') && !document.querySelector('dialog[open]')) {
+        pjVollansichtSetzen(false);
+    }
+});
+try { if (sessionStorage.getItem(VOLLANSICHT_KEY) === '1') { pjVollansichtSetzen(true); } } catch (e) { /* s. o. */ }
+
 let dragKarte = null;
 let dropSpalte = null;
 function kartenStart(ereignis, gewerke, sparten) {

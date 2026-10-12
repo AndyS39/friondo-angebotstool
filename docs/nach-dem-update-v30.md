@@ -48,6 +48,11 @@ Rollout nur im Wartungsfenster (Dienstag 22:30–23:30) nach `docs/betrieb.md`; 
   bisher keinen Phasen-Dialog (Fehler im Seitencode seit v17, am 12.10.2026 behoben). Ebenso
   repariert: Abbrechen im Ablehnungsdialog des Editors, „Kanal ändern“, die Kopierknöpfe der
   BzA-Gewerkseite und die Zahlungsbedingungs-Auswahl im Editor.
+- **Board-Vollansicht:** Der Knopf „⛶ Vollansicht“ rechts oben im Board blendet Kopfzeile,
+  Kennzahlen, Hinweis und Fußzeile aus, das Board füllt den ganzen Bildschirm (die Filter
+  bleiben), und der Browser wechselt in den Vollbildmodus. Beenden mit Escape, dem Knopf
+  „Vollansicht beenden“ oben rechts oder erneut über „Vollansicht“. Die Wahl bleibt beim
+  Neuladen im selben Browser-Tab erhalten.
 
 ## Für den Innendienst (Angebotstool)
 
