@@ -53,6 +53,9 @@ Rollout nur im Wartungsfenster (Dienstag 22:30–23:30) nach `docs/betrieb.md`; 
   bleiben), und der Browser wechselt in den Vollbildmodus. Beenden mit Escape, dem Knopf
   „Vollansicht beenden“ oben rechts oder erneut über „Vollansicht“. Die Wahl bleibt beim
   Neuladen im selben Browser-Tab erhalten.
+- **Termin-Dialog:** Bei den Arten „Montage (WP)“ und „Elektro“ stehen jetzt alle Teams zur
+  Wahl, auch die Sub-Teams (mit Zusatz „(Sub)“); bisher waren dort nur die Montageteams
+  sichtbar. Der „Sub-Einsatz“ bietet weiterhin nur Sub-Teams bzw. Subunternehmer an.
 
 ## Für den Innendienst (Angebotstool)
 

@@ -340,6 +340,22 @@ class TerminDialogRouten(Basis):
 
 
 class BesetzungRegeln(Basis):
+    def test_montagetermin_mit_subteam(self):
+        """v30-Nachtrag 3 (12.10.2026, Befund Andreas): ein Montagetermin (WP) darf einem
+        Sub-Team zugewiesen werden – der Dialog bietet sie jetzt an, der Server akzeptiert
+        sie und setzt das Zuweisungsfeld wp_team_id."""
+        g = self.gewerk_neu()
+        sub_team = Team(name=f"{PRAEFIX}Sub Montage", typ="sub")
+        self.s.add(sub_team)
+        self.s.commit()
+        r = self.post_json(f"/projektierung/gewerk/{g.id}/termin",
+                           {"art": "montage", "team_id": str(sub_team.id), "beginn": "2027-05-03"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.s.expire_all()
+        t = [x for x in self.termine(g) if x.typ == "montage"][0]
+        self.assertEqual((t.zweck, t.team_id), ("wp", sub_team.id))
+        self.assertEqual(self.s.get(Gewerk, g.id).wp_team_id, sub_team.id)
+
     def test_kalender_drag_teamwechsel(self):
         g = self.gewerk_neu()
         kern.team_termin_zuweisen(self.s, g, "wp", self.team1.id, datetime(2027, 4, 5), None, False)

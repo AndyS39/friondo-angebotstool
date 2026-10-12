@@ -470,7 +470,10 @@
     }, true);
 
     // ---------- 3. Termin-Dialog ----------
-    const ARTEN_TEAM = {montage: 'montage', elektro: 'montage', sub: 'sub'};
+    // v30-Nachtrag 3 (12.10.2026, Befund Andreas): Montage/Elektro zeigen ALLE Teams
+    // (Montage- und Sub-Teams – Sub-Teams montieren ebenfalls Wärmepumpen), nur der
+    // Sub-Einsatz bleibt auf Sub-Teams beschränkt; leer = kein Filter
+    const ARTEN_TEAM = {montage: '', elektro: '', sub: 'sub'};
 
     function arbeitstagePlus(datum, tage) {
         const d = new Date(datum + 'T12:00:00');
@@ -548,7 +551,7 @@
             const block = form.querySelector('[data-feld="' + k + '"]');
             if (block) { block.hidden = !zeigen[k]; }
         });
-        // Team-Liste: Montage-Teams für Montage/Elektro, Sub-Teams für Sub-Einsatz
+        // Team-Liste: Montage/Elektro alle Teams (Montage- und Sub-Teams), Sub-Einsatz nur Sub-Teams
         const team = form.querySelector('[data-team]');
         if (team) {
             const typ = ARTEN_TEAM[art] || '';

@@ -125,6 +125,17 @@ class Entscheidungen(unittest.TestCase):
         self.assertIn("body.pj-vollansicht .kopfleiste", css)
         self.assertIn("body.pj-vollansicht .pj-nur-vollansicht", css)
 
+    def test_termin_dialog_sub_teams_bei_montage(self):
+        """v30-Nachtrag 3 (12.10.2026, Befund Andreas): Montage-/Elektro-Termine bieten
+        auch die Sub-Teams an (nur der Sub-Einsatz bleibt auf Sub-Teams beschränkt)."""
+        from pathlib import Path
+        js = (Path(__file__).resolve().parents[1] / "app" / "static" / "projektierung.js").read_text(encoding="utf-8")
+        self.assertIn("ARTEN_TEAM = {montage: '', elektro: '', sub: 'sub'}", js)
+        antwort = _admin_client().get("/projektierung")
+        self.assertEqual(antwort.status_code, 200)
+        self.assertIn('data-typ="sub"', antwort.text)
+        self.assertIn('data-typ="montage"', antwort.text)
+
     def test_demo_badge_auf_board_karte(self):
         s = SessionLocal()
         try:

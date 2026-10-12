@@ -2685,3 +2685,11 @@ parallelen Agenten D1/D2/B/P mit eigenen DB-Kopien, Briefings und Berichte unter
   Escape beendet beides (`fullscreenchange`/`keydown`, nicht bei offenem Dialog); Wahl in
   `sessionStorage` (`pj_vollansicht`), damit sie ein Neuladen im Tab überlebt. Test in
   `tests/test_v30_nachtrag.py`.
+  **(26) Sub-Teams im Termin-Dialog** (Befund Andreas 12.10.2026, Commit „v30-Nachtrag 3“): die
+  Arten Montage (WP) und Elektro zeigten in `static/projektierung.js` (`ARTEN_TEAM`) nur Teams
+  vom Typ `montage`; Sub-Teams waren nur beim Sub-Einsatz wählbar. Jetzt `{montage: '',
+  elektro: '', sub: 'sub'}` (leer = kein Filter): Montage/Elektro bieten Montage- und Sub-Teams
+  (Zusatz „(Sub)“), der Sub-Einsatz bleibt auf Sub-Teams beschränkt. Serverseitig war ein
+  Sub-Team für Montagetermine schon immer erlaubt (`termin_speichern` verlangt nur ein Team;
+  Zuweisung `wp_team_id`/`elektro_team_id` folgt dem Team), der Team-Kalender zeigt alle
+  aktiven Teams. Tests in `tests/test_v30_nachtrag.py` und `tests/test_proj_v6_termine.py`.
