@@ -131,7 +131,7 @@
         {% set bestimmend = karte.bestimmend %}
         <a class="pj-card" href="/projektierung/projekt/{{ karte.projekt.id }}"
            draggable="true" tabindex="0" data-projekt="{{ karte.projekt.id }}"
-           ondragstart="kartenStart(event, {{ (offene_gewerke or karte.zeilen) | map(attribute='gewerk.id') | list | tojson }}, {{ (offene_gewerke or karte.zeilen) | map(attribute='gewerk.sparte') | list | tojson }})">
+           ondragstart="kartenStart(event, {{ (offene_gewerke or karte.zeilen) | map(attribute='gewerk.id') | list | tojson | forceescape }}, {{ (offene_gewerke or karte.zeilen) | map(attribute='gewerk.sparte') | list | tojson | forceescape }})">
             <div class="hd">
                 <span class="pr pj-mono">{{ karte.projekt.nummer }}</span>
                 {% if gesamt_ueberfaellig %}
@@ -140,6 +140,10 @@
                 {# V3 (Phase 85): Gewerke aus dem Bestandsimport #}
                 {% if karte.zeilen | selectattr('gewerk.bestand_import_id') | list %}
                     <span class="pj-badge" title="Daten aus dem Bestandsimport – keine Erfassung vorhanden">Bestand</span>
+                {% endif %}
+                {# v30-Nachtrag 12.10.2026 (Entscheidung 23): Demo-Kennzeichen auch auf der Board-Karte #}
+                {% if bestimmend.demo %}
+                    <span class="demo-badge" title="Demo-Projekt (Demo-Kunde oder Lead-Demo) – vor dem Go-live in der Liste über die Mehrfachauswahl löschen">Demo</span>
                 {% endif %}
                 {# V4 (Phase 90.3): Vorlauf-Punkt vor dem Termin-Badge #}
                 {% if bestimmend.gewerk.phase in vorlauf_phasen %}{{ pj_vorlauf(bestimmend.vorlauf) }}{% endif %}

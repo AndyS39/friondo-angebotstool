@@ -127,7 +127,7 @@
     <form method="post" action="/angebote/{{ angebot.id }}/zahlungsbedingung"
           class="zahlungsbedingung-form" id="zbform" style="display:inline">
         <select name="key" id="zb-key" title="Zahlungsbedingung dieses Angebots (Nachtext „Zahlung“)"
-                onchange="zbFreitextUmschalten(this.value === {{ zahlungsbedingung_freitext | tojson }}); if (this.value !== {{ zahlungsbedingung_freitext | tojson }}) { this.form.submit(); }">
+                onchange="zbFreitextUmschalten(this.value === {{ zahlungsbedingung_freitext | tojson | forceescape }}); if (this.value !== {{ zahlungsbedingung_freitext | tojson | forceescape }}) { this.form.submit(); }">
             {% for z in zahlungsbedingungen %}
                 <option value="{{ z.schluessel }}" {{ 'selected' if zahlungsbedingung_key == z.schluessel }}>{{ z.name }}{{ ' (Standard)' if z.standard }}{{ ' (deaktiviert)' if not z.aktiv }}</option>
             {% endfor %}
@@ -217,7 +217,7 @@ function zbFreitextUmschalten(an) {
     <div class="formaktionen">
         <button class="knopf" type="submit">Als abgelehnt speichern</button>
         <button class="knopf zweitrangig" type="button"
-                onclick="this.closest('form').hidden = true; document.querySelector('.statusform select').value = {{ angebot.status | tojson }};">Abbrechen</button>
+                onclick="this.closest('form').hidden = true; document.querySelector('.statusform select').value = {{ angebot.status | tojson | forceescape }};">Abbrechen</button>
     </div>
 </form>
 
@@ -312,7 +312,7 @@ function zbFreitextUmschalten(an) {
             <input type="text" name="kanal_anzeige" size="10" value="{{ kunde.vertriebskanal }}" disabled></label>
         {% if not nur_lesen %}
         <button class="knopf klein zweitrangig" type="button"
-                onclick="var k = prompt('Vertriebskanal des Kunden (leer = Sync-Automatik):', {{ kunde.vertriebskanal | tojson }}); if (k === null) return; var auto = confirm('Profil anhand des neuen Kanals automatisch umstellen?'); var f = document.getElementById('kanalform'); f.kanal.value = k; f.profil_auto.value = auto ? '1' : '0'; f.submit();">
+                onclick="var k = prompt('Vertriebskanal des Kunden (leer = Sync-Automatik):', {{ kunde.vertriebskanal | tojson | forceescape }}); if (k === null) return; var auto = confirm('Profil anhand des neuen Kanals automatisch umstellen?'); var f = document.getElementById('kanalform'); f.kanal.value = k; f.profil_auto.value = auto ? '1' : '0'; f.submit();">
             Kanal ändern</button>
         {% endif %}
     </form>

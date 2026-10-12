@@ -240,8 +240,14 @@ def detail(request: Request, angebot_id: int,
     ablehnungsgruende = (session.query(AblehnungsGrund)
                          .filter(AblehnungsGrund.aktiv.is_(True))
                          .order_by(AblehnungsGrund.sort, AblehnungsGrund.id).all())
+    # v30-Nachtrag 12.10.2026 (Entscheidung 9): Name der Zahlungsbedingung lesend anzeigen
+    try:
+        from app import zahlungsbedingungen
+        zahlungsbedingung_name = zahlungsbedingungen.fuer_angebot(session, angebot)[0]
+    except Exception:   # noqa: BLE001 – Anzeige darf die Seite nie blockieren
+        zahlungsbedingung_name = ""
     return render(request, "angebote/meine_detail.html", aktiv=None, mobil=True,
-                  projektstand=projektstand,
+                  projektstand=projektstand, zahlungsbedingung_name=zahlungsbedingung_name,
                   benutzer=benutzer, angebot=angebot, kunde=kunde,
                   gruppen=gruppen, summen=angebot.summen(),
                   kfw_ergebnis=kfw_ergebnis,

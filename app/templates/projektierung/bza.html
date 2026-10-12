@@ -32,7 +32,7 @@
     <span class="w {{ 'fehlt' if not wert }}">{{ wert or '– fehlt –' }}</span>
     <span class="c">{% if wert %}
         <button class="pj-btn pj-copy" type="button"
-                onclick="pjKopieren(this, {{ wert | tojson }})">⧉</button>
+                onclick="pjKopieren(this, {{ wert | tojson | forceescape }})">⧉</button>
     {% endif %}</span>
     {% endfor %}
 </div>

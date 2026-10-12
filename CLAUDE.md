@@ -2634,3 +2634,45 @@ parallelen Agenten D1/D2/B/P mit eigenen DB-Kopien, Briefings und Berichte unter
   nur beim seltenen Projekt-Löschen nach Sitzungsfreigabe). Doku: `docs/design-system.md`
   („Design v2“), `docs/nach-dem-update-v30.md`, `docs/updates.md`, `docs/betrieb.md`
   (Middleware-Zeile, Outlook-Storno), `config.VERSION = "v30"`.
+- **Nachtrag 12.10.2026 – Entscheidungen zu den Rückfragen des Durchlaufs** (Andreas: „im
+  Sinne des Projekts entscheiden“, Nummern wie in `diagnose/v30/gesamtuebersicht.md`):
+  (1) Pfeil „▾“ nur an Pillen mit Auswahlmenü; (2) **Kennzahlen der Angebotstool-Karte in
+  Blau** wie in der Vorlage (`.stat-zahl.blau` in `index.html` und `_angebotstool_kacheln.html`,
+  Dringendes bleibt rot); (3) weiße Logo-Kachel bleibt, bis eine Logo-Variante für dunkle
+  Flächen vorliegt; (4) Telefon/E-Mail bleiben getrennte Spalten (Spaltenkonfiguration je
+  Benutzer, keine Migration); (5) Lead-Pins fest auf hellen Kacheln; (6) Systemschrift bleibt
+  (kein Font-Download); (7) „Gerät entscheidet“ mit emuliertem dunklem Farbschema im Browser
+  geprüft – kein Aufblitzen, `data-theme` bleibt leer, Media-Block greift beim ersten
+  Rendern; (8) Texte 2/3 bleiben bis zur Durchsicht des Innendiensts; (9) **Außendienst sieht
+  die Zahlungsbedingung** (Name, lesend) auf `/meine-angebote/<id>`
+  (`routers/meine_angebote.detail`, `meine_detail.html`); (10) deaktivierte Einträge bleiben an
+  bestehenden Angeboten gültig; (11) Textfeld statt HTML-Editor; (12) Gewerk-Seite verlinkt auf
+  den Dialog am Angebot; (13) halbe Prozentpunkte erlaubt; (14) Sperre nur bei
+  abgeschlossenem Montage-Formular ab Phase Montage (sonst wäre das Demo-Projekt in Montage nicht
+  löschbar); (15) „LÖSCHEN“ bleibt; (16) Lösch-Protokoll mit Art/Grund bleibt; (17)
+  `_geloescht` wird von Hand aufgeräumt (kein neuer Lauf); (18) Demo-Kennzeichen über
+  Namensmuster/`vorgaenge.demo` reicht; (19) Go-live-Pflichtpunkte und begründete Ausnahmen in
+  `docs/nach-dem-update-v30.md` Punkt 7 festgelegt; (20) Server-Kopie/`fehler.log` weiter
+  erbeten (Gegenlesen des Fehlers); (21) **Routing-Cache und Aufruf-Zähler best effort:**
+  `routing._cache_schreiben` fängt `OperationalError … locked` beim Upsert ab (Warnung im Log,
+  Eintrag übersprungen, Anfrage rechnet weiter); `geocoding._zaehler` beendet vorher die laufende
+  Lesetransaktion und zählt in einer eigenen kurzen Transaktion, bei Sperre wird die Zählung
+  übersprungen. Hintergrund: SQLite WAL liefert bei einem Schreibzugriff nach Lesezugriffen
+  derselben Transaktion sofort „database is locked“ (BUSY_SNAPSHOT), sobald ein anderer
+  Schreiber zwischenzeitlich festgeschrieben hat – der `busy_timeout` greift dort nicht; die
+  Flanke in `test_pool_hotfix::test_40_…` (20 gleichzeitige Terminvorschläge) kam daher. Eine
+  allgemeine Lösung (`BEGIN IMMEDIATE` für schreibende Anfragen) bleibt ein eigener Punkt;
+  (22) `angebot_anlegen` mit
+  `commit=False` innerhalb von `_speichern` bleibt ein eigener Plan; (23) **Demo-Badge auch auf
+  den Board-Karten** (`projektierung/kanban.html`). **(24) Befund Andreas (Vorschau 12.10.2026):
+  Drag & Drop im Kanban-Board tat nichts.** Ursache: Jinja `tojson` lässt doppelte
+  Anführungszeichen stehen – in DOPPELT gequoteten on*-Attributen endete das Attribut am ersten
+  Anführungszeichen der Sparten-Liste (`ondragstart="kartenStart(event, [1, 3], ["` → Browser
+  „Uncaught SyntaxError: Unexpected end of input“, `kartenStart` lief nie, `kartenDrop` brach
+  mangels `dragGewerke` ab) – seit v17 (V4 Phase 90.1, Sparten-Liste). Dasselbe Muster brach den
+  Kanal-Prompt und den Abbrechen-Knopf des Ablehnungsdialogs im Editor (v8/v11), den
+  Abbrechen-Knopf am TAIFUN-Eintrag, die Kopierknöpfe der Gewerk-BzA-Seite (v15) und die neue
+  Zahlungsbedingungs-Auswahl (v30). Lösung: `| tojson | forceescape` in allen sechs Stellen
+  (Regel: `tojson` in doppelt gequoteten Attributen nur mit `forceescape`, sonst einfach
+  gequotet); Test `tests/test_v30_nachtrag.py` prüft on*-Attribute auf ausgeglichene Klammern und
+  die `&quot;`-Kodierung. Commit „v30-Nachtrag 12.10.2026“.

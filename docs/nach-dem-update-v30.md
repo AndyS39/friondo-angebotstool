@@ -44,6 +44,10 @@ Rollout nur im Wartungsfenster (Dienstag 22:30–23:30) nach `docs/betrieb.md`; 
   so sieht der Kunde die Mail.
 - Montage-Backend: beide Modi am Handy; die Unterschrift wird weiter auf weißer Fläche
   geleistet (sie landet so im PDF).
+- **Board: Karten ziehen funktioniert wieder.** Das Ziehen einer Karte in eine andere Spalte öffnete
+  bisher keinen Phasen-Dialog (Fehler im Seitencode seit v17, am 12.10.2026 behoben). Ebenso
+  repariert: Abbrechen im Ablehnungsdialog des Editors, „Kanal ändern“, die Kopierknöpfe der
+  BzA-Gewerkseite und die Zahlungsbedingungs-Auswahl im Editor.
 
 ## Für den Innendienst (Angebotstool)
 
@@ -81,7 +85,9 @@ Rollout nur im Wartungsfenster (Dienstag 22:30–23:30) nach `docs/betrieb.md`; 
   statt löschen – deaktivierte Einträge bleiben an bestehenden Angeboten gültig, sind aber
   nicht mehr wählbar –, genau ein Standard). **Bitte die Texte 2 und 3 gegenlesen** – sie sind
   Vorschläge aus dem Plan. In E-Mail-Vorlagen steht mit `{zahlungsbedingung}` der Name des
-  gewählten Eintrags zur Verfügung (Parametrierung → E-Mail-Vorlagen, Platzhalterliste).
+  gewählten Eintrags zur Verfügung (Parametrierung → E-Mail-Vorlagen, Platzhalterliste). Der
+  Außendienst sieht den Namen der gewählten Zahlungsbedingung lesend auf seiner Angebotsseite
+  („Meine Angebote“).
 - **Fehler „Überarbeiten → Duplizieren“** (Fehler-Nr. F-20261002-073115-9c9e): behoben.
   Ursache war eine kurz gehaltene Datenbank-Schreibsperre eines Hintergrundlaufs, die die
   Routen Duplizieren/Überarbeiten/Kopieren bisher ohne die übliche Wiederholung traf; jetzt
@@ -137,6 +143,14 @@ Rollout nur im Wartungsfenster (Dienstag 22:30–23:30) nach `docs/betrieb.md`; 
    (aktiv, mit E-Mail), fünf Portal-URLs, Collin-Kundennummer, Stücklisten-Quote (seit der
    v28-CSV neu prüfen), Collin-Testdatei (Häkchen), Formulare abgenommen (Häkchen),
    Bestandsimport.
+   **Pflicht vor dem Umlegen des Schalters** (Entscheidung 12.10.2026): Benutzer je Rolle
+   Projektierung/Montage, Montageteams, Standard-Subunternehmer je Typ, Portal-URLs,
+   Collin-Kundennummer, Montage-Formulare mit einem Monteur abgenommen, Demo-Projekte gelöscht,
+   Bestandsimport der laufenden Aufträge. **Begründete Ausnahmen** (Zulieferungen, dürfen nach
+   dem Go-live nachgeholt werden): Testmail über projektierung@ (M365-Absender), Outlook-
+   Test-Termin (bis dahin Kalender-Modus „aus“ – Termine stehen nur im Tool), Collin-Testdatei
+   (UGL-Bestellung bis dahin manuell), Stücklisten-Quote (Zahl nach dem Update neu lesen; unter
+   90 % nur, wenn die fehlenden Positionen bekannt sind).
 8. **Go-live-Schalter:** Parametrierung → Projektierung-Einstellungen → Abschnitt „Freigabe
    & Pilot“ → **`freigabe_modus = alle`** → Speichern. Wirkung sofort: das Badge „Demo · Coming
    soon“ auf dem Portal verschwindet, Innendienst/Außendienst/Projektierung sehen das Modul

@@ -12,18 +12,18 @@
 <h2>Auf einen Blick</h2>
 <div class="kacheln statistik">
     <a class="kachel stat" href="/leads">
-        <span class="stat-zahl">{{ offene_leads }}</span>
+        <span class="stat-zahl blau">{{ offene_leads }}</span>
         <span>Offene Leads</span>
         <span class="dezent">VOT ohne Angebot</span>
     </a>
     <a class="kachel stat" href="/erfassungen?status=offen">
-        <span class="stat-zahl">{{ offene_erfassungen }}</span>
+        <span class="stat-zahl blau">{{ offene_erfassungen }}</span>
         <span>Offene Erfassungen</span>
         <span class="dezent">Neu / In Bearbeitung</span>
     </a>
     {% if individuell_offen %}
     <a class="kachel stat" href="/erfassungen?status=individuell-offen">
-        <span class="stat-zahl">{{ individuell_offen }}</span>
+        <span class="stat-zahl blau">{{ individuell_offen }}</span>
         <span>Individuell offen</span>
         <span class="dezent">zu prüfen / in TAIFUN zu schreiben</span>
     </a>
@@ -43,7 +43,7 @@
     </a>
     {% endif %}
     <a class="kachel stat" href="/angebote?status=Versendet">
-        <span class="stat-zahl">{{ versendete }}</span>
+        <span class="stat-zahl blau">{{ versendete }}</span>
         <span>Versendete Angebote</span>
         <span class="dezent">warten auf Antwort</span>
     </a>

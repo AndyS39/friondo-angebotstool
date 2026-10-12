@@ -15,6 +15,7 @@
 # beim Anbieter angefragt – beides regelt jetzt der Backoff.
 
 import json
+import logging
 import re
 import threading
 import time
@@ -68,14 +69,33 @@ def erneut_faellig(cache: GeocodeCache | None, jetzt: datetime | None = None) ->
 
 
 def _zaehler(session: Session, dienst: str) -> None:
-    """Tageszähler der externen Aufrufe (Anzeige in der Parametrierung)."""
+    """Tageszähler der externen Aufrufe (Anzeige in der Parametrierung).
+    v30-Nachtrag 12.10.2026 (Entscheidung 21): der Zähler ist Statistik und läuft
+    in einer eigenen kurzen Transaktion – die laufende Lesetransaktion wird vorher
+    beendet (SQLite WAL: ein Schreibzugriff nach Lesezugriffen derselben
+    Transaktion scheitert sofort mit „database is locked“, sobald ein anderer
+    Schreiber zwischenzeitlich festgeschrieben hat; der busy_timeout greift dort
+    nicht). Scheitert der Zähler trotzdem, wird er übersprungen statt die Anfrage
+    (Terminvorschläge, Geocoding) mit 500 abzubrechen."""
+    from sqlalchemy.exc import OperationalError
+
     from app import leadmanagement as kern
+    from app.db import verbindung_freigeben
     schluessel = f"aufrufe_{dienst}_{datetime.now().date().isoformat()}"
+    verbindung_freigeben(session)
     try:
-        stand = int(kern.parameter_holen(session, schluessel, "0"))
-    except ValueError:
-        stand = 0
-    kern.parameter_setzen(session, schluessel, str(stand + 1))
+        try:
+            stand = int(kern.parameter_holen(session, schluessel, "0"))
+        except ValueError:
+            stand = 0
+        kern.parameter_setzen(session, schluessel, str(stand + 1))
+        session.commit()
+    except OperationalError as fehler:
+        if "locked" not in str(fehler).lower():
+            raise
+        session.rollback()
+        logging.getLogger("angebotstool").warning(
+            "Aufruf-Zähler %s: Datenbank belegt – Zählung übersprungen", dienst)
 
 
 def _abrufen(url: str, kopf: dict | None = None) -> dict | list:

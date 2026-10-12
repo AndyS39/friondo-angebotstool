@@ -96,31 +96,31 @@
         <h2 class="portal-titel">Angebotstool</h2>
         <div class="kacheln bereich-kacheln">
             <div class="kachel stat">
-                <span class="stat-zahl">{{ offene_leads }}</span>
+                <span class="stat-zahl blau">{{ offene_leads }}</span>
                 <span>Offene Leads</span>
                 <span class="dezent">VOT ohne Angebot</span>
             </div>
             <div class="kachel stat">
-                <span class="stat-zahl">{{ offene_erfassungen }}</span>
+                <span class="stat-zahl blau">{{ offene_erfassungen }}</span>
                 <span>Offene Erfassungen</span>
                 <span class="dezent">Neu / In Bearbeitung</span>
             </div>
             <div class="kachel stat">
-                <span class="stat-zahl">{{ individuell_offen }}</span>
+                <span class="stat-zahl blau">{{ individuell_offen }}</span>
                 <span>Individuell offen</span>
                 <span class="dezent">zu prüfen / in TAIFUN zu schreiben</span>
             </div>
             <div class="kachel stat">
-                <span class="stat-zahl {{ 'dringend' if faellige }}">{{ faellige }}</span>
+                <span class="stat-zahl {{ 'dringend' if faellige else 'blau' }}">{{ faellige }}</span>
                 <span>Fällige Wiedervorlagen</span>
             </div>
             <div class="kachel stat">
-                <span class="stat-zahl">{{ versendete }}</span>
+                <span class="stat-zahl blau">{{ versendete }}</span>
                 <span>Versendete Angebote</span>
                 <span class="dezent">warten auf Antwort</span>
             </div>
             <div class="kachel stat">
-                <span class="stat-zahl {{ 'dringend' if rabatt_freigaben }}">{{ rabatt_freigaben }}</span>
+                <span class="stat-zahl {{ 'dringend' if rabatt_freigaben else 'blau' }}">{{ rabatt_freigaben }}</span>
                 <span>Rabatt-Freigaben offen</span>
                 <span class="dezent">Anfragen vom Außendienst</span>
             </div>

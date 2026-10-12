@@ -13,6 +13,8 @@
         {{ angebot.datum.strftime('%d.%m.%Y') if angebot.datum }} ·
         <span class="abzeichen">{{ angebot.status }}</span>
         {% if angebot.vorgaenger_id %}<span class="abzeichen" title="Neue Version eines früheren Angebots">Version</span>{% endif %}
+        {# v30-Nachtrag 12.10.2026 (Entscheidung 9): gewählte Zahlungsbedingung nur lesend #}
+        {% if zahlungsbedingung_name %}· Zahlungsbedingung: <strong>{{ zahlungsbedingung_name }}</strong>{% endif %}
     </p>
     <p>
         <a class="knopf klein" href="/meine-angebote/{{ angebot.id }}/pdf" target="_blank">Angebots-PDF</a>

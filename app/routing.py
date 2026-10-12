@@ -4,10 +4,12 @@
 # Alle Aufrufe Timeout 8 s, Fehler nie blockierend (Fallback Luftlinie).
 
 import json
+import logging
 import math
 import urllib.request
 from datetime import datetime, timedelta
 
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.models import RoutingCache
@@ -61,8 +63,21 @@ def _cache_schreiben(session: Session, von: tuple, nach: tuple,
              "gueltig_bis": datetime.now() + timedelta(days=CACHE_TAGE)}
     anweisung = sqlite_insert(RoutingCache).values(
         von_key=_key(*von), nach_key=_key(*nach), **werte)
-    session.execute(anweisung.on_conflict_do_update(
-        index_elements=["von_key", "nach_key"], set_=werte))
+    try:
+        session.execute(anweisung.on_conflict_do_update(
+            index_elements=["von_key", "nach_key"], set_=werte))
+    except OperationalError as fehler:
+        # v30-Nachtrag 12.10.2026 (Entscheidung 21): der Cache ist best effort –
+        # viele gleichzeitige Anfragen (Terminvorschläge mehrerer Karteien) schreiben
+        # dieselben Paare; hält ein anderer Schreiber die SQLite-Sperre länger als
+        # busy_timeout, bleibt der Eintrag aus (die Anfrage rechnet mit dem Wert im
+        # Speicher weiter) statt mit 500 „database is locked“ abzubrechen.
+        if "locked" not in str(fehler).lower():
+            raise
+        logging.getLogger("angebotstool").warning(
+            "Routing-Cache: Datenbank belegt – Eintrag %s → %s übersprungen",
+            _key(*von), _key(*nach))
+        return
     (session.query(RoutingCache)
      .filter(RoutingCache.von_key == _key(*von), RoutingCache.nach_key == _key(*nach))
      .populate_existing().first())
