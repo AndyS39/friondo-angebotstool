@@ -45,7 +45,9 @@ OFFENE_PFADE = ("/login", "/logout", "/static", "/signatur/extern",
                 "/health")
 # v27 (Phase 130): Pflicht-PIN-Wechsel – für jede Rolle erreichbar
 PIN_WECHSEL_PFAD = "/pin-wechsel"
-AUSSENDIENST_PFADE = ("/erfassung", "/leads", "/signatur", "/statistik",
+# v32 (PLAN_V19 Phase 164): /suche – die Route prüft die Rolle selbst (Montage und
+# Projektierung erhalten 403, Außendienst nur eigene Kunden)
+AUSSENDIENST_PFADE = ("/suche", "/erfassung", "/leads", "/signatur", "/statistik",
                       "/meine-angebote", "/vorgaenge", "/benachrichtigungen",
                       # v12 (Phase 81): AD-Sicht des Lead-Moduls (Meine
                       # Termine, No-Show/Verschieben) – Routen prüfen selbst
@@ -53,11 +55,14 @@ AUSSENDIENST_PFADE = ("/erfassung", "/leads", "/signatur", "/statistik",
                       "/login", "/logout", "/static", PIN_WECHSEL_PFAD,
                       "/einstellungen")   # v30 (Phase 145): Darstellung je Benutzer
 ADMIN_PFADE = ("/benutzer",)
+# v31 (PLAN_LEAD_V5 Phase 158): Abwesenheiten (Krankheit/Urlaub) pflegt auch der
+# Innendienst – nur diese beiden Routen der Benutzerverwaltung
+_INNENDIENST_BENUTZER_AUSNAHME = re.compile(r"^/benutzer/(\d+/abwesenheit|abwesenheit/\d+/beenden)$")
 BUERO_ROLLEN = ("admin", "innendienst")
 # v11 (Phase 70): Hauptrolle projektierung – Projektierung voll, Angebote/
 # Erfassungen/Kunden nur lesend, Parametrierung nur die drei Projektierungs-
 # Stammseiten. Hauptrolle montage – ausschließlich der mobile /montage-Bereich.
-PROJEKTIERUNG_PFADE = ("/projektierung", "/montage", "/benachrichtigungen",
+PROJEKTIERUNG_PFADE = ("/suche", "/projektierung", "/montage", "/benachrichtigungen",
                        "/kunden", "/erfassungen", "/angebote",
                        "/parametrierung/projektierung-logik",
                        "/parametrierung/teams", "/parametrierung/subunternehmer",
@@ -67,7 +72,7 @@ PROJEKTIERUNG_PFADE = ("/projektierung", "/montage", "/benachrichtigungen",
 PROJEKTIERUNG_SCHREIBEN = ("/projektierung", "/montage", "/benachrichtigungen",
                            "/parametrierung", "/login", "/logout", PIN_WECHSEL_PFAD,
                            "/einstellungen")   # v30 (Phase 145)
-MONTAGE_PFADE = ("/montage", "/benachrichtigungen", "/login", "/logout", "/static",
+MONTAGE_PFADE = ("/suche", "/montage", "/benachrichtigungen", "/login", "/logout", "/static",
                  PIN_WECHSEL_PFAD, "/einstellungen")   # v30 (Phase 145): Darstellung
 # v15 (Phase 82): Montage erreicht die Vorgangs-Galerie (ansehen + Upload –
 # die Datei-/Upload-Routen prüfen selbst über galerie.darf_hochladen, dass
@@ -79,7 +84,7 @@ _ANGEBOTE_LESEPFAD = re.compile(r"^/angebote(/\d+/(pdf|lieferschein\.pdf))?$")
 # v12 (Phase 81): Hauptrolle leadmanagement – Lead-Modul voll, Kunden
 # lesend/schreibend, Vorgangsakte, Angebote nur Liste+PDF, Erfassungen lesend;
 # Parametrierung nur Quellen & Kampagnen + Steuerdatei (Plan 81)
-LEADMANAGEMENT_PFADE = ("/lead-management", "/api/leads", "/benachrichtigungen",
+LEADMANAGEMENT_PFADE = ("/suche", "/lead-management", "/api/leads", "/benachrichtigungen",
                         "/kunden", "/vorgaenge", "/erfassungen", "/angebote",
                         "/parametrierung/lead-quellen",
                         "/parametrierung/lead-logik",
@@ -635,7 +640,12 @@ class RollenMiddleware(BaseHTTPMiddleware):
             if pfad.startswith("/angebote") and not _ANGEBOTE_LESEPFAD.match(pfad):
                 return RedirectResponse("/angebote", status_code=303)
         elif benutzer.rolle not in BUERO_ROLLEN and not pfad.startswith(AUSSENDIENST_PFADE):
+            # v32 (PLAN_V19 Phase 161) [ANNAHME]: Außendienst mit nur einer Rolle landet bei „/“
+            # auf „Mein Tag“ (/leads), sonst wie bisher auf der mobilen Erfassung
+            if pfad == "/" and benutzer.rolle == "aussendienst" and benutzer.rollen_liste == ["aussendienst"]:
+                return RedirectResponse("/leads", status_code=303)
             return RedirectResponse("/erfassung", status_code=303)
-        if benutzer.rolle == "innendienst" and pfad.startswith(ADMIN_PFADE):
+        if (benutzer.rolle == "innendienst" and pfad.startswith(ADMIN_PFADE)
+                and not _INNENDIENST_BENUTZER_AUSNAHME.match(pfad)):
             return RedirectResponse("/", status_code=303)
         return await call_next(request)

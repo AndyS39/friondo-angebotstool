@@ -181,15 +181,16 @@ class Dashboard(Basis):
         self.assertGreaterEqual(k["todos"], 1)
         self.assertGreaterEqual(k["todos_faellig"], 1)
         self.assertGreaterEqual(k["termine"], 1)
-        self.assertTrue(daten["mit_demo"])
+        self.assertFalse(daten["mit_demo"])      # v31 (PLAN_LEAD_V5 Phase 159): Demo-Modus beendet
 
         seite = self.client.get("/lead-management/dashboard")
         self.assertEqual(seite.status_code, 200)
         # v29 (Phase 141): „Hallo, <Vorname>“, Fällig heute · Kommende Wiedervorlagen ·
         # Offene To-Dos, Routenplaner, Meine Termine; keine Angebots-Wiedervorlagen mehr
+        # v31 (PLAN_LEAD_V5 Phase 159): Demo-Modus beendet – kein Zusatz „inkl. Demo“ mehr
         for text in ("Hallo, ", "Fällig heute", "Kommende Wiedervorlagen",
                      "Offene To-Dos", "Meine Termine · nächste",
-                     "Routenplaner", "inkl. Demo", "Telefongespräch",
+                     "Routenplaner", "Telefongespräch",
                      "Rückruf gewünscht", "Bauphase später", f"{PRAEFIX} Unterlagen prüfen",
                      'href="/lead-management/uebersicht"', "Mehr …"):
             self.assertIn(text, seite.text, text)
@@ -330,15 +331,12 @@ class Dashboard(Basis):
         r = c_ad.get("/lead-management/dashboard", follow_redirects=False)
         self.assertEqual((r.status_code, r.headers["location"]),
                          (303, "/lead-management/meine-termine"))
-        # Innendienst im Demo-Modus: 404 (Modul unsichtbar)
+        # v31 (PLAN_LEAD_V5 Phase 159): Demo-Modus beendet – der Innendienst sieht das Modul
+        # (vorher 404 im Demo-Modus); Portal-Zähler liefert Werte
         c_id = self.anmelden(self.innen)
-        self.assertEqual(c_id.get("/lead-management/dashboard").status_code, 404)
-        self.assertEqual(c_id.get("/lead-management/todos").status_code, 404)
-        self.assertEqual(c_id.post("/lead-management/todos/neu",
-                                   data={"titel": f"{PRAEFIX} x", "an_benutzer_id": "1"}).status_code, 404)
-        self.assertEqual(c_id.post("/lead-management/dashboard/wiedervorlage/1",
-                                   data={"art": "lead", "aktion": "erledigt"}).status_code, 404)
-        self.assertIsNone(lead_dashboard.portal_zaehler(self.innen))
+        self.assertEqual(c_id.get("/lead-management/dashboard").status_code, 200)
+        self.assertEqual(c_id.get("/lead-management/todos").status_code, 200)
+        self.assertIsNotNone(lead_dashboard.portal_zaehler(self.innen))
 
     def test_portal_karte_zaehler(self):
         jetzt = datetime.now()
@@ -547,8 +545,8 @@ class ToDos(Basis):
         finally:
             kern.parameter_setzen(self.s, "lead_freigabe_modus", "admin")
             self.s.commit()
-        # im Demo-Modus bleibt Meine Termine für den AD unsichtbar (404)
-        self.assertEqual(self.anmelden(self.aussen).get("/lead-management/meine-termine").status_code, 404)
+        # v31 (PLAN_LEAD_V5 Phase 159): Demo-Modus beendet – Meine Termine bleibt für den AD erreichbar
+        self.assertEqual(self.anmelden(self.aussen).get("/lead-management/meine-termine").status_code, 200)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v30)
+# Friondo Angebotstool – Projektkontext (v32)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -75,6 +75,8 @@ Nummern vergeben.
 | v28 | PLAN_PROJ_V6.md | 133–139 |
 | v29 | PLAN_LEAD_V4.md | 140–144 |
 | v30 | PLAN_V18.md | 145–152 |
+| v31 | PLAN_LEAD_V5.md | 153–160 |
+| v32 | PLAN_V19.md | 161–165 |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
@@ -291,7 +293,7 @@ Nummern vergeben.
   Angebotsansicht der eigenen Angebote (weiterhin ohne EK/DB);
   AD kann den Gesamtrabatt selbst setzen, solange die DB-Ampel
   nicht rot wird – darunter Freigabe-Anfrage an den Innendienst.
-  Wiedervorlagen haben einen Verantwortlichen: vom AD gesetzte
+  Wiedervorlagen haben einen Verantwortlichen: vom AD gesetzte *(ergänzt – siehe v32: „Mein Tag“ aus `vot_termine`, automatische Wiedervorlage, monday-Nachführung, Glocke nachfassen)*
   erscheinen in dessen Sicht, nicht in der ID-Kachel.
 
 ## Leads VOT (monday-Lesesync)
@@ -423,11 +425,11 @@ Graph-Versand über Innendienst, Terminal-Server-Betrieb.
 - **Lead-Management V1 (Demo):** Lead = Vorgang (v10) mit Lead-Phase
   (Neu · In Kontaktierung · Qualifiziert · Terminiert · danach abgeleitet
   Erfasst/Angebot/Gewonnen/Verloren; Seitenzustände Zurückgestellt · Nicht
-  erreicht · Unqualifiziert), Quelle/Kampagne/UTM, Eingang, SLA, Score (A/B/C),
+  erreicht · Unqualifiziert – seit v31 Label „Disqualifiziert“), Quelle/Kampagne/UTM, Eingang, SLA, Score (A/B/C),
   Leadmanager, Wunschzeiten, Koordinaten, Einwilligungen. Gesyncte monday-Leads
   erhalten die Phase abgeleitet (Badge „monday"); **monday-Sync und -Rückspielung
   unverändert**.
-- **Demo-Modus:** Parameter `lead_freigabe_modus` (admin / alle, Standard admin):
+- **Demo-Modus** *(überholt – seit v31 beendet: `leadmanagement.DEMO_BEENDET`, `lead_freigabe_modus` wirkungslos = alle; Testphase über `terminierung_aktiv`/`mail_versand_aktiv`, `mail_modus` keine Steuerung mehr)*: Parameter `lead_freigabe_modus` (admin / alle, Standard admin):
   bei admin sind alle Routen unter `/lead-management` (`app/routers/leadmanagement.py`),
   Menüpunkte, Reiter, Kacheln nur für Admins (server-seitig, 404 für andere);
   `/leads` bleibt die Liste „Leads VOT", `POST /api/leads` ist nicht
@@ -508,7 +510,7 @@ Zeitpunkt bereits durch Projektierung und Lead-Management belegt.)
   „Elektroarbeiten – im PV-Angebot enthalten" (0,00 €) kommt beim
   Einfügen automatisch als Alternativ-Position mit Verknüpfung
   „PV-Angebot".
-- Rollen: AD setzt eigene Angebote auf Angenommen/Abgelehnt/Offen
+- Rollen: AD setzt eigene Angebote auf Angenommen/Abgelehnt/Offen *(ergänzt – siehe v32: Verfolgungsstufe je Vorgang, Dialog „Nächster Schritt“, fünf Gründe mit Pflicht-Freitext)*
   (Grund-Pflicht, Notiz-Protokoll im Vorgangs-Chat, monday/Statistik wie
   beim ID). Externe Einträge vollständig ablehnbar (bestand schon, per
   Test abgesichert).
@@ -609,7 +611,7 @@ Lead-Management belegt.)
   vor mail_modus=live.
 - Arbeitsvorrat: freie + qualifizierte Leads in der Anrufliste, Kunden-
   antwort weckt den Lead, Tagesdigest, Cockpit „Termin-Rückmeldung offen",
-  Pfad „Verloren vor Termin", Überfällig-Banner in Leads VOT.
+  Pfad „Verloren vor Termin", Überfällig-Banner in Leads VOT. *(ergänzt – siehe v32: „Mein Tag“ aus `vot_termine`, automatische Wiedervorlage, monday-Nachführung, Glocke nachfassen)*
 - Design: LM-Unternavigation, lesbare SLA-Chips (Min/Std/AT), de_datum-
   Filter (deutsche Wochentage), Icons statt Emojis, Cockpit-Kacheln,
   einbett=1 für das Anrufliste-Panel, Hauptmenü + Parametrierungs-Reiter.
@@ -1022,7 +1024,7 @@ v14“ entspricht diesem Abschnitt.)
 (Plan: PLAN_LEAD_V2.md Teil 1, Phasen 104–112; Teil 2 = Auftragstext mit
 Anforderungsdiktat A–I, Statusliste 5a, Festlegungen F1–F16. Entscheidung
 Andreas: kein Lastenheft, direkt codieren; offene Punkte als Annahmen A-1…A-15
-im Plan. Alles weiter im **Demo-Modus** `lead_freigabe_modus = admin`; V3 schaltet
+im Plan. Alles weiter im **Demo-Modus** `lead_freigabe_modus = admin` *(bis v30; seit v31 freigeschaltet)*; V3 schaltet
 frei. Umsetzung als paralleler Workflow: ein Agent je Fachphase 105–111 plus
 Prüf-Agent, Hook-Änderungen an geteilten Dateien zentral eingespielt.)
 
@@ -1036,7 +1038,7 @@ Prüf-Agent, Hook-Änderungen an geteilten Dateien zentral eingespielt.)
   nebenstelle` (CTI-Vorbereitung). Tabellen `todos`, `info_veranstaltungen`,
   `benutzer_einstellungen`. Sparte **GW (Gewerbe)** als fünfter Code (Freitext-
   Erfassung wie WB). Steuerdatei (*v29: Spalte `nach_letztem` im Blatt Kaskade, keine
-  Nurture-Mail +30 Tage, neues Blatt Terminhinweise*): Kaskade 5 Stufen (+2h · +1d 18:00 Mail ·
+  Nurture-Mail +30 Tage, neues Blatt Terminhinweise*): Kaskade 5 Stufen (+2h · +1d 18:00 Mail · *(überholt – siehe v31)*
   +3d · +7d Mail · +14d `mail_disqualifiziert` letzter), Gründe `verloren`
   (Zu teuer · Kein Interesse mehr · Bleibt bei Öl/Gas · Woanders unterschrieben ·
   Sonstiges) und „Nachbearbeitung, noch nicht bereit für VOT“, Blätter
@@ -1073,7 +1075,7 @@ Prüf-Agent, Hook-Änderungen an geteilten Dateien zentral eingespielt.)
   „Telefongespräch“), Terminiert = mit VOT bzw. terminiert/erfasst/angebot/
   gewonnen/verloren (Angebotserstellung mit „Erfassung starten“/„Angebot öffnen“,
   Angebotsversand, Gewonnen, Verloren „vor Termin“); Verloren setzt offene
-  Angebote auf Abgelehnt (`lead_boards.angebote_ablehnen`, Hook in
+  Angebote auf Abgelehnt (`lead_boards.angebote_ablehnen`, Hook in *(ergänzt – siehe v32: Verfolgungsstufe je Vorgang, Dialog „Nächster Schritt“, fünf Gründe mit Pflicht-Freitext)*
   `kern.lead_verloren`). Kanban zeigt nur das aktive Board. Reiter Kontaktiert
   (alle Versuche, Rufnummernsuche E.164 inkl. monday-Leads), `/vorlagen` =
   Vorlagen-Editor im Modul.
@@ -1086,7 +1088,7 @@ Prüf-Agent, Hook-Änderungen an geteilten Dateien zentral eingespielt.)
   Terminbestätigung + Erinnerung, Kalender, Phase terminiert. „Erfassung ohne
   Termin“ = Vorab-Angebot (A-3), „Nachbearbeitung“ (F11/A-4), Wiedervorlage-
   Dialog, Anruf-Dialoge der Anrufliste. Lead-Kopf der Vorgangsakte reduziert +
-  Link „Zur Kundenkartei“; Objektart belegt O01/O03/PO01 des Bogens vor.
+  Link „Zur Kundenkartei“; Objektart belegt O01/O03/PO01 des Bogens vor. *(überholt – siehe v31)*
 - **Anruf-Workflow (Phase 107, `app/lead_anrufliste.py`, `lm_anruf.py`):**
   `POST /anruf/{id}` mit `dauer_sek`, `wiedervorlage_am`, `zurueck`; Sperre ab
   `versuche_max`; Dialog „Nicht erreicht“ mit Kaskaden-Vorschlag (`GET /anruf/
@@ -1258,7 +1260,7 @@ Texte/PDF, Integration/Kontrollfälle, adversarialer Prüfer).)
 Umsetzung parallel durch sechs Agenten A–F (Navigation/Boards, Anrufliste/Nicht
 erreicht, Kundenkartei/Autospeichern, Score aus/Terminassistent/Dashboard,
 Integration/Tests, adversarialer Prüfer); Vorab- und Nacharbeiten an geteilten
-Dateien zentral. Alles weiter im **Demo-Modus** `lead_freigabe_modus = admin`.
+Dateien zentral. Alles weiter im **Demo-Modus** `lead_freigabe_modus = admin` *(bis v30; seit v31 freigeschaltet)*.
 Entscheidungen und [ANNAHME]-Auflösung: docs/leadmanagement-entscheidungen.md
 Abschnitt V3; Team-Hinweise: docs/nach-dem-update-v25.md.)
 
@@ -2216,7 +2218,7 @@ Entscheidungen: `docs/projektierung-entscheidungen.md` Abschnitt „PLAN_PROJ_V6
 
 (Plan: PLAN_LEAD_V4.md, Phasen 140–144; umgesetzt am 08.10.2026 im gemeinsamen Durchlauf
 mit dem v27-Nachtrag 2 und v28 – EIN Commit. Alles weiter im Demo-Modus
-`lead_freigabe_modus = admin`. Alle Datenbankänderungen additiv (`vorgaenge.email_status*`,
+`lead_freigabe_modus = admin` *(bis v30; seit v31 freigeschaltet)*. Alle Datenbankänderungen additiv (`vorgaenge.email_status*`,
 `mail_fehler*`, `benutzer.vorname/infotext/bild_datei`, `kommunikation_log.absender/
 versuche`); v27-Code läuft auf der v29-Datenbank weiter. Entscheidungen:
 `docs/leadmanagement-entscheidungen.md` Abschnitt V4 (Teile L2/L1).)
@@ -2331,7 +2333,7 @@ versuche`); v27-Code läuft auf der v29-Datenbank weiter. Entscheidungen:
   Betriebs-Seite. „Erneut senden“ (`POST /lead-management/mail/{id}/erneut`,
   `lead_mail.erneut_senden`) setzt nur `geplant` sofort fällig/Versuche 0 – gesendet wird
   durch den Lauf; Erfolg setzt `mail_fehler` zurück. Prüfpunkt `POST /lead-management/testmail`
-  (Admin, Sitzung vorher frei, Demo nur Testpostfach – einzige Request-Ausnahme). Neuer Lauf
+  (Admin, Sitzung vorher frei, Demo nur Testpostfach – einzige Request-Ausnahme). Neuer Lauf *(überholt – siehe v31)*
   **`lead-mail-abruf`** (120 s, Startverzögerung 270 s, aktiv nur mit Graph): liest ungelesene
   Nachrichten in termin@ (`graph_versand.postfach_ungelesen`), ordnet Antworten
   (`lead_mail.kundenantwort_verbuchen`) und Unzustellbarkeitsberichte
@@ -2611,7 +2613,7 @@ parallelen Agenten D1/D2/B/P mit eigenen DB-Kopien, Briefings und Berichte unter
   sind nicht betroffen. Go-live: nach dem Rollout Demo-Projekte löschen, Checkliste prüfen,
   dann Parametrierung → Projektierung-Einstellungen → `freigabe_modus = alle` (Portal-Badge
   weg, Montage-Login in `/montage`, Rolle Projektierung sieht das Modul); Lead-Management
-  bleibt `lead_freigabe_modus = admin`. Stand der Go-live-Checkliste auf der Server-Kopie
+  bleibt `lead_freigabe_modus = admin` *(überholt – seit v31 alle)*. Stand der Go-live-Checkliste auf der Server-Kopie
   vom 03.10.2026: 1/11 (nur Montageteams), alle offenen Punkte sind Stammdaten-/
   Betriebspunkte. Tests `tests/test_v30_projekt_loeschen.py` (9).
 - **Tests, Rollout-Vorbereitung, Doku (Phase 152):** neue Tests `tests/test_v30_design.py`
@@ -2693,3 +2695,356 @@ parallelen Agenten D1/D2/B/P mit eigenen DB-Kopien, Briefings und Berichte unter
   Sub-Team für Montagetermine schon immer erlaubt (`termin_speichern` verlangt nur ein Team;
   Zuweisung `wp_team_id`/`elektro_team_id` folgt dem Team), der Team-Kalender zeigt alle
   aktiven Teams. Tests in `tests/test_v30_nachtrag.py` und `tests/test_proj_v6_termine.py`.
+
+## Neu in v31 – Lead-Management V5 Feedback-Runde 3: Objekte am Vorgang, Großkunde, Kartei V5, Archiv/Duplizieren, Vorlagen in Langform, MS/WA/DMS, Testphase (abgestimmt 13.10.2026)
+
+(Plan: PLAN_LEAD_V5.md, Phasen 153–160; umgesetzt am 13.10.2026 im gemeinsamen Durchlauf mit
+v32 (PLAN_V19, Phasen 161–165) – EIN Commit, kein Push vor Freigabe. Entscheidung Andreas
+13.10.2026: die Vorbedingung „v30 auf dem Server“ entfällt, gebaut auf dem committeten
+v30-Stand `1f0b764`. Arbeitsweise: Fundament durch den Orchestrator, dann vier Agenten
+K (Kartei), T (Termine/Mails), B (Boards/Dashboard/Einstellungen), AT (Angebotstool/
+Projektierung/Benutzer) auf eigenen DB-Kopien, Berichte unter `diagnose/v31/` (lokal). Alle
+Datenbankänderungen additiv – v30-Code läuft auf der v32-Datenbank weiter (Rückweg-Probe in
+der Rollout-Vorbereitung v32). Entscheidungen, [ANNAHME]-Auflösung, angepasste Alt-Tests und
+Rückfragen: `docs/leadmanagement-entscheidungen.md` Abschnitt V5; Team-Hinweise:
+`docs/nach-dem-update-v31.md`.)
+
+- **Fundament (Orchestrator):** neue Tabellen `vorgang_objekte` (Modell `VorgangObjekt`:
+  `vorgang_id`, `bezeichnung` „Objekt 1“, Adresse, `objektart`, `parteien`, `interessen` (JSON),
+  Koordinaten, `reihenfolge` (1 = Hauptobjekt), `aktiv`, `rechnung_abweichend` + `rechnung_*`) und
+  `benutzer_abwesenheiten` (`BenutzerAbwesenheit`: `art` krankheit|urlaub, `von`, `bis`, `bemerkung`);
+  neue Spalten `vorgaenge.archiviert_am/archiviert_von/kopie_von_id/wiedervorlage_art/
+  verfolgung_status`, `kunden.grosskunde`, `benutzer.leadmanager`, `objekt_id` an `vot_termine`,
+  `erfassungen`, `angebote`, `projekt_gewerke`, `ablehnungsgruende.freitext_pflicht` (alle in
+  `db._NACHTRAEGLICHE_SPALTEN`). Migrationen (Hooks in `migrate.py`, idempotent):
+  `objekte.migration_v31_objekte` (je Vorgang ein Hauptobjekt aus der Kundenadresse, `objekt_id`
+  an Terminen/Erfassungen/Angeboten/Gewerken, Waisen-Bereinigung, **Trigger
+  `trg_v31_vorgang_objekte`** – löscht die Objekte eines gelöschten Vorgangs, auch bei Bulk-/
+  SQL-Löschungen; Befund: SQLite vergibt IDs neu, verwaiste Objekte „erbten“ sonst an neue
+  Vorgänge), `lead_v5.migration_v31_lead` (Leadmanager-Häkchen für die sechs Startnamen, Parameter
+  `terminierung_aktiv`/`mail_versand_aktiv` = aus, `sparten_langnamen`, `grosskunde_farbe`,
+  `hv_gruppe_simon_mitglieder`, Samstag aus den AD-Arbeitszeiten, `lead_freigabe_modus = alle`,
+  `pflichtfelder` + `ad_id`), `lead_mail.migration_v31_mails` (T). Neue Module: `app/werktage.py`
+  (NRW-Feiertage/Osterformel aus `lead_info` herausgezogen, `ist_werktag`, `plus_werktage`,
+  `naechster_werktag`), `app/sparten.py` (`SPARTEN` = WP/PV/KL/WB/GW/MS/WA/DMS, Langnamen,
+  `sparten_text`, `sparten_interesse`, `ist_freitext_sparte`; `models.INTERESSEN` erweitert),
+  `app/objekte.py` (`hauptobjekt`, `hauptobjekt_sync` Kundenfelder ↔ Hauptobjekt,
+  `objekt_anlegen`, `objekte_fuer`, `vorgang_interessen`, `objekte_loeschen`,
+  **`ausfuehrungsort(session, objekt_id=|angebot=|erfassung=|gewerk=|termin=|vorgang=|kunde=)`** –
+  Master-Regel: beim Hauptobjekt zählt immer die Kundenadresse, bei Objekt 2 ff. die Objektadresse),
+  `app/abwesenheiten.py` (`anlegen`, `beenden`, `aktive`, `ist_abwesend`, `hinweis_text`),
+  `app/lead_v5.py` (`runden_5min`, Schalter `terminierung_aktiv`/`mail_versand_aktiv`,
+  `TESTPHASE_HINWEIS`, `MAILSPERRE_HINWEIS`). Steuerdatei `leadmanagement_logik_v1.xlsx`
+  (Sicherung `diagnose/leadmanagement_logik_v1.vor_v31.xlsx`): Blatt Kaskade Versuch 2/4
+  `aktion = keine`, Blatt Status Label „Disqualifiziert“ (Key `unqualifiziert` bleibt), Blatt
+  Wunschzeiten neue Spalte `aktiv` (samstag = nein), Blatt Terminhinweise Zeilen MS/WA/DMS „(Punkte
+  folgen)“; `leadmanagement_logik.SPARTEN` um MS/WA/DMS, `Wunschzeit.aktiv`. `auth.py`: der
+  Innendienst darf die Abwesenheits-Routen der Benutzerverwaltung (`_INNENDIENST_BENUTZER_AUSNAHME`);
+  `monday_sync.kunde_fuer_lead` zieht das Hauptobjekt nach. Tests `tests/test_lead_v5.py` (11:
+  Werktage, Sparten, Rundung, Schalter, Abwesenheiten, Migrationen zweimal ohne Änderung).
+- **Kundenkartei V5 (Phasen 153/155/157/158, Agent K; `app/lead_kartei.py`, `app/routers/lm_kartei.py`,
+  Templates `leadmanagement/kartei*.html`, neu `kartei_objekte.html`, `kartei_mail_dialog.html`,
+  `app/static/lm_kartei.js`):** Reihenfolge Kopf (Name, Badges inkl. **Großkunde** `lm-grosskunde`,
+  Archiv-Banner mit „Wiederherstellen“ und Kopie-Verweise, Statuskette mit **Statuswechsel** per
+  Klick/Dropdown „Status ändern …“ → `POST /lead/{id}/status`, dieselben Regeln/Gründe wie
+  `lead_boards.status_setzen`; abgeleitete Phasen nicht wählbar, Verloren nur mit Grund) →
+  **Notizen-Chat (zwei Drittel) neben To-Dos (ein Drittel, Makro `todo_spalte`)** → Kundeninfo-Block
+  mit **Block „Objekte“** (Ein-Objekt-Vorgang: bekannte Adressfelder + „Weiteres Objekt hinzufügen“;
+  ab zwei Objekten Karten je Objekt mit Autospeichern `POST /lead/{id}/objekt/{oid}`, Termin-Status
+  aus `lead_termin.objekt_termine`, Erfassungs-/Angebots-Chips, Pfeile – Hauptobjekt bleibt
+  Position 1 –, Deaktivieren statt Löschen; Routen `POST …/objekt`, `…/deaktivieren`,
+  `…/aktivieren`, `…/reihenfolge`; Hauptobjekt ↔ Kundenfelder über `objekte.hauptobjekt_sync`;
+  Interessen-Badges = `objekte.vorgang_interessen`) → Reiter **Anruf · E-Mail · Timeline**
+  (`?tab=termin` springt zum Block Termine; Timeline aus `vorgang_verlauf.eintraege` mit
+  Herkunfts-Badge Lead · Angebot · Projekt) → Block **Termine** (Werkzeuge, Termin je Objekt, drei
+  Vorschläge, Kalenderansicht `#lmt-kalender` über `lm_termin.js`, Historie mit Aktionen) →
+  Angebote · Erfassungen · Projekt (`vorgang_verlauf.projekt_block`) · Anhänge. **Pflichtfeld
+  Außendienst** (`ad_id`, rot + „Bitte Außendienst zuweisen“, HV-Lead gilt als erfüllt;
+  `lead_kartei.pflicht_offen_namen` ergänzt Pflichtfelder weiterer Objekte „Objekt 2: Straße“),
+  **MFH-Frage** „Rechnungsadresse identisch mit der Objektadresse?“ (Ja/Nein, Feld
+  `rechnung_abweichend`; Rechnungsadresse zählt nur bei Nein; Hauptobjekt → `kunden.rechnung_*`,
+  sonst `vorgang_objekte.rechnung_*`), Interessen inkl. **MS/WA/DMS**, Innendienst-Dropdown nur
+  Leadmanager (`lead_dropdowns`, „(nicht mehr wählbar)“), Großkunde-Häkchen mit Aktivität „als
+  Großkunde gekennzeichnet“. **E-Mail-Dialog** (Schnellaktion E-Mail / „Mail mit Vorlage“,
+  `kartei_mail_dialog.html`) auf T's Routen `GET /lead/{id}/mail/vorschau.json?vorlage=&objekt_id=&
+  termin_id=` (Vorlagen aus `lead_mail.vorlagen_katalog`, Platzhalter aus Lead/Objekt/Termin/
+  Vertriebler, fehlende Pflichtdaten → Senden gesperrt, ICS bei Terminvorlagen) und
+  `POST /lead/{id}/mail/senden` → `lead_mail.in_warteschlange` (Lauf `lead-mail` sendet;
+  Testphase: gesperrt), Aktivität + E-Mail-Verlauf. Terminierung: der Kopf-Knopf postet
+  `bestaetigung` (eine | je_objekt | auto, Radios bei > 1 vorgemerktem Objekttermin) an T's
+  `POST /lead/{id}/terminierung`; `lead_kartei.terminierung_pruefung` = vorgemerkte Objekttermine +
+  Pflichtfelder, „Vormerken“ im Block Termine per fetch an `…/termin/vormerken` (Objektauswahl bei
+  mehreren Objekten). Wiedervorlage-Dialog `step=300` + `lead_v5.runden_5min`. Testphase:
+  „Terminierung“, „Vormerken“, „Termin manuell“, Umbuchen/Absagen ausgegraut mit Tooltip
+  `lead_v5.TESTPHASE_HINWEIS`. Die Kartei-V5-Regeln liegen in `lead_v2.css` (Block „Kartei V5“).
+  Tests `tests/test_lead_v5_kartei.py` (18).
+- **Termine je Objekt (Phase 153, Agent T; `app/lead_termin.py`, `routers/lm_termin.py`):**
+  Terminassistent, Kalenderansicht und manuelle Buchung nehmen `?objekt_id=` (bei mehreren Objekten
+  Auswahl „Objekt wählen“ mit Terminstand); Vorschläge, Kandidatenfilter und Fahrzeiten rechnen mit
+  der Objektadresse (`objekte.ausfuehrungsort`, Geocoding je Objekt in `_geokodieren_bei_bedarf`);
+  `vot_termine.objekt_id`/`adresse` sind immer gesetzt. Vormerken je Objekt (`POST /lead/{id}/termin/
+  vormerken`, `lead_termin.vormerken`), „Terminierung“ bucht alle vorgemerkten Objekttermine in einem
+  Schritt (`lead_termin.terminierung_ausfuehren`, Route `POST /lead/{id}/terminierung` + Alias
+  `…/termin/terminierung`, `_speichern`-Muster; Objekte ohne Termin bleiben offen – „1 von 3
+  Objekten ohne Termin“); Phase Terminiert ab dem ersten Objekttermin, Absage/Umbuchung/Ersatzkunde
+  je Objekttermin; `lead_termin.objekt_termine(session, vorgang)` für den Kartei-Block; Buchung über
+  `lead_termin.vot_buchen` (Objektfelder) statt `kern.termin_buchen`. `lead_termin.adresse_fehlt`
+  prüft beim Hauptobjekt die Kundenadresse (Master-Regel).
+- **Terminbestätigung bei mehreren Objekten (`app/lead_mail.py`):** Vorlage
+  `terminbestaetigung_objekte` (Rahmen + `{vertriebler_block}`, `{objektliste}`, `{termin_datum}` =
+  Tag/Zeitraum) mit ICS je Objekttermin (eigene UID, `anhang_pfad` „;“-getrennt,
+  `lead_mail.anhang_pfade`); Wahl „eine Bestätigung“ | „je Objekt“ (`bestaetigung_vorbelegung`:
+  gleicher Tag → eine), „je Objekt“ nutzt die Vertriebler-Vorlage mit `{objektadresse}`;
+  „Bestätigung erneut“ fragt bei mehreren Objekten (`termin_ids`, `zusammen`).
+- **Sparten ausgeschrieben (Phase 156):** `{sparten}` = `sparten.sparten_text` („Wärmepumpe und
+  Photovoltaik“), `{sparten_interesse}` („Interesse an einer Wärmepumpe“), `{sparten_hinweise}` mit
+  Langform als Zwischenüberschrift, ICS-Titel in Langform; `migration_v31_mails` ersetzt Kürzel
+  WP/PV/KL/WB/GW als eigenständige Wörter in gespeicherten Vorlagen/Betreffs (`kuerzel_ersetzen`,
+  Meldungen „v31: Vorlage <key>: WP → Wärmepumpe (n×)“), legt `terminbestaetigung_objekte` und
+  `falsche_telefonnummer` an und storniert offene `nicht_erreicht`-Mails. Vorlage `nicht_erreicht`
+  ist ausgeblendet (`VORLAGEN_AUSGEBLENDET`, Datensatz bleibt), der Lauf `lead-mail` storniert
+  Altbestand; Kaskade Versuch 2/4 = keine (`lead_uebersicht.kaskade_text`: „nach Versuch n
+  „Disqualifiziert“ (Mail, …)“).
+- **Montag bis Freitag, Krankheit (Phase 158, T):** Vorschläge, `kalender.json` (5 Spalten) und
+  `/kalender` ohne Samstag, Wunschzeit „samstag“ (`Wunschzeit.aktiv = False`) ignoriert, manuelle
+  Buchung am Samstag nur mit Warnhinweis; Vertriebler mit `abwesenheiten.ist_abwesend` werden mit
+  Begründung „krank“ ausgeschlossen (tagesgenau), Umbuchung ohne den Kranken per `?ohne_ad_id=`.
+  `lead_mail.falsche_nummer_mail(session, vorgang, benutzer)` sendet die Vorlage
+  `falsche_telefonnummer` (Platzhalter `{absender}`, `{vorname}`, `{nachname}`) nur bei vorhandener
+  E-Mail.
+- **Testphase (Phase 159, T/B):** `terminierung_aktiv = aus` → Vormerken/Buchen/manuell/Umbuchen/
+  Absagen/Terminierung/Vorab-Gespräche liefern `lead_v5.TESTPHASE_HINWEIS` (403 JSON
+  `{"ok": false, "meldung": …}` bzw. Redirect), Knöpfe ausgegraut mit Tooltip, Vorschläge als
+  Aktivität „Vorschläge berechnet: …“ (max. alle 10 Min je Lead, eigene kurze Transaktion
+  `lead_termin.vorschlaege_protokollieren`); Kontext `lead_termin.testphase_kontext(session)`.
+  `mail_versand_aktiv = aus` → Warteschlangen-Einträge enden gerendert als `gesperrt` (kein Graph,
+  kein Testpostfach, keine fehler-Glocke), `mail_modus` ist keine Steuerung mehr, gesperrte
+  Einträge werden nicht nachgesendet („Erneut senden“ = bewusster Klick), `lead_mail.
+  gesperrte_anzahl`. Verträge für die Kartei: `lead_mail.vorlage_rendern(…) -> (betreff, html,
+  fehlende)`, `lead_mail.in_warteschlange(…)` (fester Text, `kanal = mail_fest`). **Demo-Ende:**
+  `leadmanagement.DEMO_BEENDET = True` – `freigabe_modus()` immer „alle“, `demo_aktiv()` False,
+  Sichtbarkeit rollenbasiert, Portal-Karte ohne „Coming soon“; einmalige Abfrage „Demo-Leads löschen
+  oder behalten“ in den Lead-Einstellungen (`demo_leads_loeschen` mit Lösch-Protokoll
+  `AngebotsLoeschung art=lead`, Marker `demo_ende_v31`); Abschnitt „Freischaltung“ mit
+  `terminierung_aktiv`/`mail_versand_aktiv`, Prüfpunkten (`lead_v2.freischaltung_pruefpunkte`) und
+  Zähler „Mails gesperrt“; Kommunikation: Status `gesperrt`, Meldung „Testphase: nicht gesendet
+  (gesperrt).“, `mail_mit_vorlage` über `lead_mail.in_warteschlange`.
+- **Großkunde (Phase 153, B):** `kunden.grosskunde` – Badge `.lm-grosskunde` (Farbe Parameter
+  `grosskunde_farbe`, `lead_boards.grosskunde_farbe`) am Kundennamen in Boards, Anrufliste, Kanban,
+  Karte, HV-Ansicht; Spalte „Großkunde“ (Standard aus, sortierbar), Filter-Chip in Hauptboard/Deals/
+  Anrufliste.
+- **Archiv als Lead-Sicht (Phase 154, B/AT):** `app/lead_archiv.py` – `vorgaenge.archiviert_am/_von`;
+  `filter_aktiv(abfrage)` in JEDER Lead-Liste/Kennzahl (Vertrag); Sammelaktionen Archivieren
+  (Übersprung bei aktivem Termin/offener Erfassung/offenem Angebot), Wiederherstellen (Archiv-Sicht
+  `?archiviert=1` und Vorgangsakte `POST /vorgaenge/{id}/archiv-wiederherstellen`), Duplizieren
+  (`vorgaenge.kopie_von_id`, Objekte 1:1, keine Historie); Angebotstool/Projektierung zeigen
+  archivierte Vorgänge unverändert (Banner in der Vorgangsakte).
+- **Dashboard (Phase 154/158, B):** Kachel-Reihenfolge je Nutzer (`dashboard_kacheln`,
+  `lead_dashboard.KACHELN`, `lm_dashboard.js`, Stift-Symbol, Drag & Drop, „Zurücksetzen“); „Fällig
+  heute“ Erledigt als absolut positionierte Leiste mit Rückgängig (JSON `POST /dashboard/
+  wiedervorlage/{id}`; Ursache des alten Fehlers: unpositioniertes `<details>`-Menü in der 1 %-Zelle);
+  Krankheitshinweise `lead_dashboard.kranke_termine` mit Umbuchen/Absagen; eigener
+  Abwesenheitseintrag (Karte „Abwesenheit“, auch auf „Meine Termine“ des angestellten AD).
+- **Boards (Phase 154, B):** fixierte Zweit-Scrollleiste `.lm-scrollleiste` (sticky bottom,
+  synchron, Shift + Rad, mittlere Maustaste) in `lm_boards.js`; Deals-Board gruppiert Erfassungen/
+  Angebote/Termine je Objekt (`vorgang_verlauf.objekt_gruppen`, nur bei mehreren Objekten).
+- **Zuständigen-Dropdowns (Phase 156, B):** NUR über `app/lead_dropdowns.py` – Leadmanager =
+  `benutzer.leadmanager` (nach Vorname, Altwert „(nicht mehr wählbar)“), Außendienst = angestellte AD
+  ohne `terminiert_selbst`; HV-Lead → nur seine Gruppe (`hv_gruppe_rene`, `hv_gruppe_simon` +
+  `hv_gruppe_simon_mitglieder`). Round-Robin verlangt weiterhin `lm_aktiv` UND Häkchen.
+- **Sparten MS/WA/DMS (Phase 157, B/AT):** Codes aus `app/sparten.py` überall (Jinja-Globals
+  `lm_sparten`, `lm_sparten_lang`), Boards/Anrufliste/Kanban/Karte/Trichter/Kanal-Report/
+  Schnellanlage/Import/`POST /api/leads`/Kompetenz; Label „Disqualifiziert“; Pflichtfeld `ad_id`
+  prüft `vorgang.ad_id` (HV erfüllt, `lead_v2.pflichtfelder_offen`). Angebotstool/Projektierung:
+  Freitext-Erfassungsstart wie WB/GW, Badges/Chips (Status-Token-Paare), Statistik, Filterlisten,
+  Galerie-Ordner, DB-Ampel (WP-Rückfall), Projektierung (`projektierung_logik.SPARTEN`, Dialog,
+  Steckbrief „Auftrag / Leistung“, nur ALLE-Pakete), E-Mail-Vorlage = Standard.
+- **Anruf (Phase 158, B):** Rückruf/Wiedervorlage im 5-Minuten-Raster (`lead_v5.runden_5min`);
+  Endziffern-Suche `lead_anrufliste.rufnummer_suchen` (≥ 3 Ziffern, „endet mit“ zuerst, archivierte
+  Leads markiert); „Falsche Nummer“ plant `falsche_telefonnummer` über
+  `lead_mail.falsche_nummer_mail`.
+- **Ausführungsort = Objekt (Phase 153, Einfügung AT-Chat, Agent AT):** Angebotstool, Projektierung
+  und Mails lesen den Ausführungsort nur noch über `objekte.ausfuehrungsort` – im Angebotstool über
+  `anschriften.ausfuehrungsort_fuer(session, angebot=|erfassung=|gewerk=|objekt_id=)` (Feldsatz
+  name/strasse/plz/ort + objekt_id/bezeichnung/mehrere_objekte/haupt/einzeilig; Hauptobjekt =
+  Kundenadresse, daher Ein-Objekt-Vorgänge byteidentisch – Kontroll-PDF
+  `diagnose/v31/pdf_kontrolle_AT.pdf`), in der Projektierung über
+  `projektierung.projekt_ausfuehrungsort(session, projekt, gewerk)` (Projektadresse, bei der Anlage
+  aus dem Objekt übernommen, sonst Objekt des Gewerks). Umgestellt: `pdf_export`
+  (`erzeuge_pdf(ausfuehrungsort=)`, Zeile „Ausführungsort“, Lieferanschrift-Vergleich,
+  Verbrauchsstelle der Vollmacht, Kopf der Wirtschaftlichkeitsseiten), `lieferschein_pdf`,
+  `bza_datenblatt` Abschnitt 1, `heizreport_api.projektdaten_v2`, `steckbrief_pdf`, Sub-Mail-
+  Platzhalter, `ugl.lieferadresse_zeilen`, `outlook_kalender._event_daten`, Montage-Auftragsseite,
+  `projektierung.terminvorschlaege`, `projekt_anlegen`/`gewerk_anlegen` (`gewerke.objekt_id`),
+  Dialog „Angebot → Projekt“ (Vorbelegung), `geocoding.lead_adresse(objekt_id=)`. Regeln in
+  `anschriften.py`: Empfänger = Kunde (Kundenadresse), „Ausführungsort: …“ sobald die
+  Rechnungsadresse vom Objekt abweicht, Lieferanschrift fällt auf das Objekt zurück; die
+  Rechnungsadresse eines MFH-Objekts ≠ Hauptobjekt liegt am Objekt (`objekt_rechnung`).
+- **Erfassung übergibt das Objekt (AT):** `/leads/{id}/erfassen?objekt_id=` → `/erfassung/sparten?
+  objekt_id=` (Objektwahl bei mehreren Objekten ohne Übergabe); `erfassungen.objekt_id` (ohne
+  Übergabe Hauptobjekt), Objektart/Parteien aus dem Objekt → O01/O03/PO01/KO01; Angebot erbt
+  `objekt_id` (`angebot_aufbau.angebot_anlegen(erfassung=)`, `version_erzeugen`, Duplizieren;
+  Kopieren für anderen Kunden ohne Objekt).
+- **Vorgangsakte (AT):** Erfassungen/Angebote je Objekt gruppiert (Überschrift „Objekt 2: Adresse“,
+  nur bei mehreren Objekten; `vorgang_verlauf.objekt_gruppen`), Archiv-Banner „Im Lead-Management
+  archiviert am … von …“ mit `POST /vorgaenge/{id}/archiv-wiederherstellen`
+  (`lead_archiv.wiederherstellen`, `_speichern`-Muster, ID/LM/Admin); Notizen-Chat mit Filter „nur
+  Notizen“ / „alles“ (`notizen.kontext(..., verlauf=True)` → `verlauf_alle`), Lead-Aktivitäten und
+  Projekt-Verlauf nur als Anzeige – keine zweite Notizspur.
+- **`app/vorgang_verlauf.py` (Phase 158, AT):** `eintraege(session, vorgang_id, quellen=("lead",
+  "angebot", "projekt"), limit=None)` (zeit, quelle, art, titel, text, autor, link …; Quellen
+  VorgangsNotiz über Herkunft, LeadAktivitaet mit Timeline-Titeln, KommunikationLog, ProjektVerlauf
+  ohne migrierte Kommentar-Dubletten), `projekt_block(session, vorgang_id)` (Phase je Gewerk,
+  nächster Montagetermin, offene Aufgaben), `objekt_gruppen(session, vorgang)`.
+- **Benutzerverwaltung (156/158, AT):** Häkchen „Leadmanager“ (`benutzer.leadmanager`, Badge „LM“,
+  Marker `leadmanager_dabei`), Abschnitt „Abwesenheiten“ je Benutzer (`abwesenheiten.anlegen/
+  beenden/je_benutzer`, Routen `POST /benutzer/{id}/abwesenheit`, `POST /benutzer/abwesenheit/{id}/
+  beenden`, Admin und Innendienst), AD-Profil nur Mo–Fr (`routers.benutzer.WOCHENTAGE`).
+- **Objekt-Geocoding (AT):** Lauf `geocoding` kodiert zusätzlich aktive Objekte 2 ff. ohne `lat`
+  (`_offene_objekte`, v27-Muster, Backoff, Zähler `objekte`); das Hauptobjekt übernimmt die
+  Koordinaten des Vorgangs. Tests `tests/test_lead_v5_at.py` (26).
+- **Tests (Phase 160):** neu `tests/test_lead_v5.py` (11), `test_lead_v5_kartei.py` (18),
+  `test_lead_v5_termine.py` (15), `test_lead_v5_boards.py` (22), `test_lead_v5_at.py` (26);
+  Alt-Tests mit Plan-Begründung angepasst (Demo-Ende, Testphase-Schalter `terminierung_aktiv = an`
+  in Terminierungs-Tests, Kaskade 2/4 ohne Mail, Label „Disqualifiziert“, Reiter/Blöcke der Kartei,
+  Endziffern ab 3, Sammelaktionen, Kandidaten-Label mit „Krankheit“, Kartei-CSS in `lead_v2.css` –
+  Liste in `docs/leadmanagement-entscheidungen.md` V5.3). Rollout-Vorbereitung, Screenshots
+  (`docs/design-v31/`) und Lasttest: einmal für v31 + v32, siehe „Neu in v32“.
+
+## Neu in v32 – Vertriebler-Ansicht Mein Tag, automatische Wiedervorlage, Nächster Schritt, Bestellung angekündigt, allgemeine Suche (abgestimmt 13.10.2026)
+
+(Plan: PLAN_V19.md, Phasen 161–165; umgesetzt am 13.10.2026 im gemeinsamen Durchlauf mit v31
+(PLAN_LEAD_V5) – EIN Commit, kein Push vor Freigabe. Welle 2 mit zwei Agenten M (Mein Tag,
+Wiedervorlage) und N (Nächster Schritt, Verfolgung) auf eigenen DB-Kopien; Suche, Lastmodell,
+Rollout-Vorbereitung, Doku durch den Orchestrator; Berichte `diagnose/v31/M_ergebnis.md`,
+`N_ergebnis.md` (lokal). Alle Datenbankänderungen additiv (`vorgaenge.verfolgung_status`,
+`wiedervorlage_art`, `ablehnungsgruende.freitext_pflicht`, Indizes `ix_v32_kunden_*`, Parameter
+`nachfass_werktage`/`nachfass_werktage_mfh`, Gründe-Migration); v30-Code läuft auf der
+v32-Datenbank (Rückweg-Probe). Entscheidungen und Rückfragen: Gesamtübersicht des Durchlaufs
+(`diagnose/v31/gesamtuebersicht.md`, lokal) und `docs/nach-dem-update-v32.md`. **Kalender:**
+der Plan nennt „Fr 10.10.2026“ – der 10.10.2026 ist ein Samstag; Tests und Kontrollwerte
+rechnen mit echten Wochentagen (Fr 09.10. + 3 Werktage = Mi 14.10., Bestellung Di 13.10. + 7 =
+Do 22.10.; Rückfrage).)
+
+- **Vertriebler-Ansicht „Mein Tag“ (Phase 161, Agent M, `app/mein_tag.py`, `routers/leads.py`,
+  `templates/leads/mein_tag.html`, `static/mein_tag.css/.js`):** `GET /leads` ist für den Außendienst
+  eine Kartenliste in einer Spalte (< 600 px Vollbreite, sonst max. 720 px) mit den Blöcken **Fällig
+  heute · Termine heute · Heiße Kunden · Weitere Termine**; Innendienst/Admin sehen dieselbe Seite mit
+  Vertriebler-Filter und Umschalter **„Karten | Tabelle“** (Standard Karten, Wahl je Nutzer
+  `benutzer_einstellungen.leads_darstellung`; Tabelle = bisheriges `leads/liste.html`) [ANNAHME
+  AT-Chat]. Datenquelle **nur `vot_termine`** (Status geplant/bestaetigt/unbestaetigt – der Plan nannte
+  „terminiert/unbestätigt“; erfolgt nur bei offener Sparte – v8-Chips), ohne verknüpftes Angebot am
+  Vorgang; AD nur eigene (`vot_termine.ad_id`, Rückfall `vorgaenge.ad_id`/`leads.benutzer_id`).
+  Termin-Karte: „Mo, 13.10.“ + „14:00 Uhr“, Kundenname, Objektadresse (`objekte.ausfuehrungsort(
+  termin=…)`, bei mehreren Objekten mit Bezeichnung) als Google-Maps-Link, `tel:`-Link, Sparten-/
+  Status-Chips, Herkunft „monday“/„Tool“ [ANNAHME], „Erfassung starten“ (mit `objekt_id`), „Akte“;
+  überfällige Termine ohne Erfassung zuoberst in „Termine heute“ mit rotem Label „überfällig“ (der
+  Überfällig-Banner v15 bleibt nur in der Tabelle). Filterkarte (Termin von/bis, Status, Vertriebler),
+  Leerzustände `leer_zustand`, Safe-Area/`viewport-fit=cover` (`base.html`), Knöpfe ≥ 44 px, keine
+  Zurück-Leiste für den AD; Außendienst mit nur einer Rolle startet bei „/“ auf `/leads` [ANNAHME]
+  (`main.py`, `auth.py`), Menüpunkt und Kachel heißen für ihn „Mein Tag“. „Meine Termine“
+  (Lead-Modul) verlinkt „Zur Tagesansicht“.
+- **monday-Termine nachführen (`monday_sync.vot_termine_nachfuehren`, Nachlauf beider Sync-Pfade;
+  `leadmanagement.monday_termine_ableiten` delegiert darauf):** geändertes VOT-Datum aktualisiert den
+  vorhandenen monday-Eintrag (nicht duplizieren, `objekt_id` = Hauptobjekt), gelöschtes Datum setzt
+  offene Einträge auf `abgesagt` (`grund_text` „monday: VOT-Datum entfernt“), ein wieder gesetztes
+  Datum reaktiviert denselben Eintrag; erfolgt/No-Show/manuell abgesagt bei unverändertem Datum bleibt.
+  `scripts/vot_abgleich.py --data <Kopie> [--anlegen] [--bericht]` meldet Leads mit VOT-Datum ohne
+  Termin-Zeile und Abweichungen (Datum, Vertriebler, Objekt, offene Termine ohne Datum) und repariert
+  mit `--anlegen` (nur Kopien, nie `data\`).
+- **Automatische Wiedervorlage nach Angebotsversand (Phase 162, `app/nachfassen.py`):** Hook
+  `nachfassen.nach_versand(session, angebot, benutzer, versandtag)` an Versand-Erkennung (`mail_sync`,
+  Einzel- und Kombi-Versand – einmal je Mail), Statuswechsel „Versendet“/„Versendet (extern)“ und „Als
+  versendet markieren“ (`routers/angebote`), externer Eintrag „Extern erledigt“
+  (`routers/erfassungsliste`, Datum des Eintrags [ANNAHME]): setzt `vorgaenge.wiedervorlage_am` =
+  Versandtag + `nachfass_werktage` (3) bzw. `nachfass_werktage_mfh` (5) bei `kunden.objektart = MFH`
+  (Angebotstool-Einstellungen → Nachfassen; Werktage Mo–Fr ohne NRW-Feiertage, `app/werktage.py`),
+  `wiedervorlage_benutzer_id` = AD des Vorgangs (Rückfall AD der Erfassung, Lead-Vertriebler,
+  versendender Benutzer [ANNAHME]), `wiedervorlage_art = angebot_nachfassen`, Chat-Eintrag „Wiedervorlage
+  automatisch gesetzt: Angebot nachfassen am TT.MM.JJJJ“ (Autor System); eine vorhandene Wiedervorlage
+  wird nur überschrieben, wenn sie leer ist oder früher liegt [ANNAHME]; Verfolgungsstufe „versendet“
+  über `verfolgung.nach_angebotsstatus`. Vertrag `nachfassen.wiedervorlage_setzen(session, vorgang,
+  datum, benutzer_id, art)` (Datum ohne Uhrzeit) für „Nochmal anrufen“/„Bestellung“ (N).
+- **Block „Fällig heute“** (`nachfassen.faellig_heute`): eigene Wiedervorlagen mit Datum ≤ heute,
+  überfällige zuerst („seit TT.MM.“), Anruf-Karte mit Telefon-Link, Angebots-Kurzinfo („WP-Angebot vom
+  09.10.2026, Endbetrag 32.450,00 €“ – Kundenpreis, nie EK/DB), Hot-Ampel, Verfolgungs-Chip, Dialog
+  „Nächster Schritt“ (N), „Letzte Aktivitäten“ (drei Einträge aus Mail-Verlauf/Versand, Notizen-Chat,
+  Signaturprotokoll), Notizfeld → `POST /leads/notiz/{vorgang_id}` (ein Eintrag im Notizen-Chat). Die
+  ID-Kachel „fällig“ zählt AD-Wiedervorlagen weiterhin nicht. **Glocke:** art `nachfassen` im täglichen
+  Lauf `benachrichtigungen` (07:00) – je AD „Fällig heute: n Anrufe zum Nachfassen – Mein Tag“, Link
+  `/leads#faellig`, keine Mail (`MAIL_FREIE_ARTEN` = todo, nachfassen, verfolgung), nicht Teil von
+  `glocke_lead_arten`. Tests `tests/test_v32_mein_tag.py` (13), `test_v32_wiedervorlage.py` (14),
+  `test_v32_werktage.py` (5; Kontrollwerte nach echtem Kalender – 10.10.2026 ist ein Samstag).
+
+- **Dialog „Nächster Schritt“, Bestellung angekündigt, Verfolgungs-Chip, Ablehnungsgründe
+  (Phase 163, Agent N, `app/verfolgung.py`):** Verfolgungsstufe je Vorgang
+  `vorgaenge.verfolgung_status` (`versendet | nachgefasst | bestellung_angekuendigt | angenommen |
+  abgelehnt`, `STATUS_TEXTE`, Makro `verfolgung_chip(status, klein, vorgang_id)` in
+  `_komponenten.html`, Klassen `.vf-<status>` in `static/verfolgung.css`, zentral in `base.html`
+  eingebunden); Migration `migration_v32_verfolgung` (Marker `migration_v32_ablehnungsgruende`):
+  die fünf Gründe „Zu teuer · Kein Interesse mehr · Bleibt bei Öl/Gas · Woanders unterschrieben ·
+  Sonstiges (Pflicht-Freitext, Spalte `ablehnungsgruende.freitext_pflicht`)“ = Lead-Gründe
+  `verloren` (zwei Pflegeorte, gleiche Texte, Schreibweise der Excel [ANNAHME]), andere Gründe
+  deaktiviert [ANNAHME], „90 Tage Ablauf“ bleibt; Stufe aus dem Angebotsstatus gefüllt
+  (`ableiten`: Angenommen > offene Versendete > Abgelehnte). Route `POST /vorgaenge/{id}/
+  naechster-schritt` (`def`, `_speichern`-Muster, JSON bei Accept, sonst Redirect `zurueck`; AD
+  nur eigener Vorgang 403): `abgelehnt` + `grund_id` (+ `freitext` bei Pflicht, sonst 400) →
+  `kern.lead_verloren` (Lead-Phase Verloren, Angebote über `lead_boards.angebote_ablehnen`,
+  monday), ohne Lead-Phase nur Versendete (v8-Weg); Wiedervorlage leer, Ampel kalt, Stufe
+  `abgelehnt`, System-Notiz „Kunde hat abgelehnt: <Grund>“; `bestellung` →
+  `bestellung_angekuendigt`, Ampel heiß, Wiedervorlage heute + 7 Werktage [ANNAHME]
+  (`wiedervorlage_art = bestellung_angekuendigt`), Glocke art `verfolgung` an den Innendienst
+  ohne Mail; `nochmal` + `wann` 3wt|datum → Wiedervorlage ohne Uhrzeit (`nochmal_anrufen`), Stufe
+  `nachgefasst`, Notiz „Nochmal anrufen am TT.MM.JJJJ“; das Notizfeld wird als Chat-Eintrag VOR
+  der System-Notiz gespeichert; `schritt=rueckgaengig` + Token (10 s Link, Schnappschuss 10 min)
+  [ANNAHME]. Partial `vorgaenge/_naechster_schritt.html` (+ `static/verfolgung.js`, Events
+  `ns:gespeichert`/`ns:rueckgaengig`, Notiz über `data-ns-notiz`) in der Vorgangsakte
+  (Verfolgungs-Block, ID und AD) und in „Mein Tag“ (M). Chip in Akte-Kopfkarte, „Meine Angebote“
+  (Liste + Detail) und Angebotsliste (Spalte „Verfolgung“, Filter `?verfolgung=<stufe>` über
+  `verfolgung.filter_anwenden`); `heisse_vorgaenge(session, benutzer_id)` (Heiße Kunden),
+  ID-Kachel „Bestellung angekündigt“ (`bestellung_angekuendigt_anzahl`, Klick = Angebotsliste mit
+  Filter). „Angenommen“ setzen Signaturweg (`routers/signatur.py`) und AD-Statuswechsel über
+  `nach_angebotsstatus`, „abgelehnt“ ID-Dialog/Route; Parametrierung → Angebotstool-Einstellungen:
+  Gründe mit Nr./↑↓/Häkchen „Freitext Pflicht“, Abschnitt „Nachfassen nach Angebotsversand“
+  (`nachfass_werktage` 3 / `nachfass_werktage_mfh` 5, Lead-Parameter). Tests
+  `tests/test_v32_naechster_schritt.py` (18); `tests/abnahme.py` v8-Block nutzt den ersten
+  aktiven Grund.
+- **Allgemeine Kundensuche (Phase 164, Orchestrator, `app/suche.py`, `app/routers/suche.py`):**
+  Suchfeld in der Kopfzeile von `base.html` zwischen Logo und Glocke/Menü (Platzhalter „Kunde
+  suchen …“, Admin/Innendienst/Lead-Management/Außendienst; nicht auf Login/PIN-Wechsel, im
+  Erfassungsbogen `/erfassung/{id}/…` und eingebettet `einbett=1`; unter 600 px Lupe, die das Feld
+  in voller Breite ausklappt). `GET /suche.json?q=` (ab 2 Zeichen, höchstens 8 Treffer): Kunden
+  nach Vorname, Nachname, „Vorname Nachname“, Firma und Ort (Wortanfänge, Groß-/Kleinschreibung
+  und Umlaute egal; SQL-Vorfilter = Bereichsvergleich auf den Anfangsbuchstaben – nutzt die
+  Indizes `ix_v32_kunden_nachname`/`ix_v32_kunden_ort` aus `db._INDIZES` – plus LIKE, exakte
+  Prüfung in Python) sowie Telefon-Endziffern ab 4 Ziffern [ANNAHME] (Normalisierung
+  `leadmanagement.telefon_normalisieren`, „endet mit“ vor „enthält“); Außendienst nur Kunden mit
+  eigenem Vorgang (`vorgaenge.ad_id`), Montage und Projektierung 403 [ANNAHME: Plan nennt nur
+  Montage]. Treffer: Name, PLZ/Ort, Sparten-Badges, Verfolgungs-Chip des jüngsten Vorgangs
+  (`verfolgung.status_text`), Link = Vorgangsakte des jüngsten offenen Vorgangs, sonst
+  Kundenakte (`/kunden/{id}/bearbeiten`; Außendienst: jüngster eigener Vorgang [ANNAHME]);
+  keine EK/DB-Felder. Bedienung (`static/suche.js`, ES5, DOM-Aufbau ohne innerHTML): Debounce
+  200 ms, Pfeiltasten + Enter öffnen den markierten Treffer, Escape schließt, Enter ohne Auswahl
+  → Trefferseite `GET /suche?q=` (`templates/suche.html`, Tabelle, bis 200 Treffer, Zurück-Leiste
+  aus `base.html`). `/suche` steht in allen Rollen-Pfadlisten (`auth.py`), damit die Route selbst
+  entscheidet. Styles `static/suche.css` (nur Tokens: Kopfzeile `--text-invers`, Liste
+  `--flaeche-karte`). `scripts/index_pruefung.py` prüft `/suche?q=Mü`, `/suche.json?q=…`;
+  Lasttest-Gruppe „Kundensuche“ (Zielwert 300 ms) im AD-Szenario. Messung: Entwicklungs-Kopie
+  (143 Kunden) Median 17 ms; Server-Kopie siehe Gesamtübersicht. Tests `tests/test_v32_suche.py`
+  (12: Mül/Peter M/Krefeld/4711, AD nur eigene Kunden, Montage/Projektierung 403, keine EK/DB,
+  Antwortzeit, Suchfeld je Seite, Trefferseite).
+- **Lastmodell (Phase 165, `scripts/lasttest.py`):** 35 aktive von 50 Nutzern = 15 Außendienst
+  (Mein Tag `/leads`, Kundensuche `/suche.json`, Erfassung), 12 Lead-/Innendienst-Nutzer im
+  Lead-Szenario (Hauptboard, Kartei, Terminvorschläge; ohne Hauptrolle leadmanagement übernehmen
+  Innendienst-Personen – Modul seit v31 für alle Rollen frei), 5 Innendienst, 3 Projektierung/
+  Montage; Messgruppe „Kundensuche“ ≤ 300 ms; Kundennamen-Pool `kunden_namen`.
+- **Tests, Rollout, Doku (Phase 165):** neue Tests `tests/test_v32_mein_tag.py`,
+  `test_v32_wiedervorlage.py`, `test_v32_werktage.py`, `test_v32_naechster_schritt.py`,
+  `test_v32_suche.py`; Alt-Tests mit Begründung angepasst (siehe Gesamtübersicht). Rollout-
+  Vorbereitung einmal für v31 + v32 (`diagnose/v31/abschluss_tests.sh`: Server-Kopie, `migrate.py`
+  ×2, Testbenutzer + HV, `scripts/vot_abgleich.py`, Rückweg-Probe v30-Code gegen die
+  v32-Datenbank, Gesamtsuite, `tests/abnahme.py`, Voll-Crawl sechs Rollen + HV je hell/dunkel,
+  Smoke, Suche-Messung, Lasttest `normal`); Screenshots `docs/design-v31/`, `docs/design-v32/`
+  (hell/dunkel, Handy 390 × 844 und Desktop, anonymisierte Kopie); `config.VERSION = "v32"`;
+  `docs/nach-dem-update-v31.md`, `docs/nach-dem-update-v32.md`, `docs/updates.md`,
+  `docs/betrieb.md` („Ergänzungen v31 + v32“), `docs/design-system.md`.

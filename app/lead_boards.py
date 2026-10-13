@@ -19,6 +19,17 @@
 # mit Agent L2: vorgang.mail_fehler, vorgang.email_status – Zeile ganz oben,
 # rote Labels in der Notiz-Spalte), Sammelaktion „An Handelsvertreter
 # verschieben“ (Ziele aus hv_gruppe_rene/hv_gruppe_simon, Ausschluss F14).
+# v31 (PLAN_LEAD_V5 Phasen 153/154/156/157/158): Spalte/Badge/Filter/Sortierung
+# „Großkunde“ (kunden.grosskunde, Farbe aus Parameter grosskunde_farbe, CSS-Klasse
+# .lm-grosskunde), Archiv als Lead-Sicht (app/lead_archiv.py: Sammelaktionen
+# „Archivieren“/„Wiederherstellen“, Filter-Chip „Archiv“, archivierte Leads raus aus
+# board_zeilen/kontaktiert), Sammelaktion „Duplizieren“ (vorgang_duplizieren: neuer
+# Vorgang am selben Kunden, Phase Neu, kopierte Objekte/Interessen/Kanal/Zuständige,
+# kopie_von_id beidseitig verlinkt, keine Duplikatprüfung), Dropdowns aus
+# app/lead_dropdowns.py (Leadmanager-Häkchen, AD ohne HV bzw. HV-Gruppe je Zeile),
+# Sparten MS/WA/DMS (app/sparten.py), Label „Disqualifiziert“ in Texten,
+# Rufnummernsuche mit Endziffern (lead_anrufliste.rufnummer_suchen), Rückruf-/
+# Wiedervorlage-Zeiten auf 5 Minuten gerundet (lead_v5.runden_5min).
 
 import hashlib
 import json
@@ -27,11 +38,12 @@ from datetime import date, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from app import lead_v2
+from app import lead_archiv, lead_dropdowns, lead_v2, lead_v5
 from app import leadmanagement as kern
 from app import leadmanagement_logik
+from app import sparten as sparten_modul
 from app.models import (Angebot, AngebotsNotiz, Benutzer, Erfassung, Kunde, Lead,
-                        LeadAktivitaet, LeadQuelle, Vorgang, VotTermin,
+                        LeadAktivitaet, LeadQuelle, Vorgang, VorgangObjekt, VotTermin,
                         ANRUF_ERGEBNIS_NAMEN, LEAD_PHASEN, LEAD_PHASEN_NAMEN,
                         angebot_status_setzen)
 
@@ -93,6 +105,9 @@ SPALTEN = [
     ("lead", "Kundenname", True), ("anrede", "Anrede", False), ("vorname", "Vorname", False),
     ("nachname", "Nachname", False), ("status", "Status", True),
     ("kanal", "Vertriebskanal", True), ("interessen", "Interessen", True),
+    # v31 (PLAN_LEAD_V5 Phase 153): Spalte „Großkunde“ – Standard ausgeblendet, das Badge
+    # steht zusätzlich am Kundennamen (Zelle lead); Filter-Chip und Sortierung möglich
+    ("grosskunde", "Großkunde", False),
     ("versuche", "Kontaktversuche", True), ("letzter_kontakt", "Letzter Kontakt", True),
     ("eingang", "Eingangsdatum", True), ("notiz", "Notiz", True),
     ("ad", "Außendienst", True), ("innendienst", "Innendienst", True),
@@ -381,6 +396,8 @@ def _sortier_wert(z: dict, key: str):
         return (z.get("kanal") or "").lower() or None
     if key == "interessen":
         return ",".join(z.get("sparten") or []) or None
+    if key == "grosskunde":
+        return 1 if z.get("grosskunde") else 0     # v31 (Phase 153): Großkunden zuerst bei „ab“
     if key == "angebot":
         angebote = z.get("angebote") or []
         return angebote[0].nummer if angebote else None
@@ -461,6 +478,14 @@ def kanal_farbe(farben: dict, kanal: str) -> str:
     if not kanal:
         return ""
     return farben.get(kanal.lower()) or KANAL_PALETTE[_hash_index(kanal, len(KANAL_PALETTE))]
+
+
+def grosskunde_farbe(session: Session) -> str:
+    """v31 (PLAN_LEAD_V5 Phase 153): Badge-Farbe „Großkunde“ aus dem Parameter
+    grosskunde_farbe (Hex, kanal_farben-Mechanik); leer = Paar --status-violett aus
+    der CSS-Klasse .lm-grosskunde (lead_v2.css)."""
+    wert = (kern.parameter_holen(session, "grosskunde_farbe", "") or "").strip()
+    return wert if re.fullmatch(r"#[0-9a-fA-F]{6}", wert) else ""
 
 
 def status_label(logik, phase: str) -> tuple[str, str]:
@@ -552,6 +577,9 @@ def filter_aus_query(q) -> dict:
         "gruppe": q.get("gruppe", "") or "",
         "archiv": q.get("archiv", "") == "1",
         "meine": q.get("meine", "") == "1",
+        # v31 (Phase 153/154): Filter-Chips „Großkunde“ und „Archiv“ (archivierte Leads)
+        "grosskunde": q.get("grosskunde", "") == "1",
+        "archiviert": q.get("archiviert", "") == "1",
         "sort": None,        # v25: gemerkte Sortierung des Nutzers (lm_boards setzt sie)
     }
 
@@ -583,6 +611,14 @@ def board_zeilen(session: Session, benutzer, board: str, f: dict | None = None) 
     jetzt = datetime.now()
     hv = lead_v2.ist_handelsvertreter(session, benutzer)
     abfrage = session.query(Vorgang).filter(Vorgang.lead_phase.isnot(None))
+    # v31 (PLAN_LEAD_V5 Phase 154): Archiv ist eine Lead-Sicht – Standard nur nicht
+    # archivierte Leads; archiviert=True zeigt NUR das Archiv (Filter-Chip „Archiv“),
+    # archiviert="alle" beide (Nachladen einer Zeile nach Archivieren/Wiederherstellen)
+    archiv_sicht = f.get("archiviert")
+    if archiv_sicht is True or archiv_sicht == "1":
+        abfrage = abfrage.filter(Vorgang.archiviert_am.isnot(None))
+    elif archiv_sicht != "alle":
+        abfrage = lead_archiv.filter_aktiv(abfrage)
     if hv:
         abfrage = abfrage.filter(Vorgang.ad_id == benutzer.id)
     elif f.get("meine") and benutzer is not None:
@@ -630,10 +666,31 @@ def board_zeilen(session: Session, benutzer, board: str, f: dict | None = None) 
         for e in (session.query(Erfassung).filter(Erfassung.vorgang_id.in_(ids),
                                                   Erfassung.archiviert.is_(False))):
             erfassungen.setdefault(e.vorgang_id, []).append(e)
+    # v31 (PLAN_LEAD_V5 Phase 153, Vertrag AT 4.8): Deals-Board gruppiert Erfassungen,
+    # Angebote und Termine je Objekt – nur für Vorgänge mit mehr als einem aktiven Objekt
+    # (eine Zählabfrage, dann vorgang_verlauf.objekt_gruppen je betroffenem Vorgang)
+    objekt_gruppen: dict[int, list] = {}
+    if board == "terminiert":
+        from sqlalchemy import func
+
+        from app import vorgang_verlauf
+        from app.models import VorgangObjekt
+        for vid, anzahl in (session.query(VorgangObjekt.vorgang_id, func.count(VorgangObjekt.id))
+                            .filter(VorgangObjekt.vorgang_id.in_(ids), VorgangObjekt.aktiv.is_(True))
+                            .group_by(VorgangObjekt.vorgang_id)):
+            if anzahl > 1:
+                objekt_gruppen[vid] = vorgang_verlauf.objekt_gruppen(session, vid)
     farben = kanal_farben(session)
     maximum = kern.versuche_max(session)
     grenze = jetzt - timedelta(days=ARCHIV_TAGE)
     suche = f.get("q", "")
+    # v31 (Phase 154): Kopie-Verweise beidseitig (kopie_von_id) – „Kopie von V123“ am
+    # neuen Vorgang, „Kopie: V124“ am Ursprung
+    kopien: dict[int, list] = {}
+    for (kid, von) in session.query(Vorgang.id, Vorgang.kopie_von_id).filter(
+            Vorgang.kopie_von_id.in_(ids)):
+        kopien.setdefault(von, []).append(kid)
+    hv_alle = {b.id for b in lead_v2.handelsvertreter_liste(session)}
     # v25: Status-Filter trifft alle Phasen mit demselben Label („Kontaktiert“
     # = in_kontaktierung + qualifiziert)
     status_filter = phasen_mit_label(logik, f.get("status") or "")
@@ -657,9 +714,11 @@ def board_zeilen(session: Session, benutzer, board: str, f: dict | None = None) 
             continue
         if f.get("kanal") and (kunde.vertriebskanal or "").lower() != f["kanal"].lower():
             continue
-        sparten = [s.strip() for s in (kunde.interesse or "").split(",") if s.strip()]
+        sparten = sparten_modul.codes(kunde.interesse)   # v31 (Phase 157): inkl. MS/WA/DMS
         if f.get("sparte") and f["sparte"] not in sparten:
             continue
+        if f.get("grosskunde") and not getattr(kunde, "grosskunde", False):
+            continue   # v31 (Phase 153): Filter-Chip „Großkunde“
         if v.lead_phase in ("gewonnen", "verloren") and not f.get("archiv"):
             stand = letzte_akt.get(v.id) or v.eingang_am or v.angelegt_am
             if stand is not None and stand < grenze:
@@ -706,12 +765,23 @@ def board_zeilen(session: Session, benutzer, board: str, f: dict | None = None) 
             "sparten_status": {s: ("erfasst" if any(e.sparte == s for e in erfassungen.get(v.id, []))
                                    else "offen") for s in sparten},
             "offene_angebote": [a for a in angebote.get(v.id, []) if a.status in ANGEBOT_OFFEN],
+            "objekt_gruppen": objekt_gruppen.get(v.id, []),   # v31 (Phase 153): leer = ein Objekt
             # v29 (Phase 142, Vertrag L2): Mail-Fehler / ungültige E-Mail → Rang 0 + Labels
             "mail_labels": mail_labels(v),
             "rang0": bool(mail_labels(v)),
             "mail_fehler_text": (getattr(v, "mail_fehler_text", "") or "") if getattr(v, "mail_fehler", False) else "",
             "email_status_grund": (getattr(v, "email_status_grund", "") or "")
             if (getattr(v, "email_status", None) or "") == "ungueltig" else "",
+            # v31 (Phase 153/154/156): Großkunde, Archiv-Sicht, Kopie-Verweise, HV-Lead
+            "grosskunde": bool(getattr(kunde, "grosskunde", False)),
+            "archiviert": lead_archiv.ist_archiviert(v),
+            "archiv_text": (f"Archiviert am {v.archiviert_am.strftime('%d.%m.%Y %H:%M')}"
+                            + (f" von {benutzer_map[v.archiviert_von].name}"
+                               if v.archiviert_von in benutzer_map else "")
+                            ) if lead_archiv.ist_archiviert(v) else "",
+            "kopie_von": v.kopie_von_id,
+            "kopien": kopien.get(v.id, []),
+            "hv_lead": bool(v.ad_id and v.ad_id in hv_alle),
         }
         if not _suche_passt(zeile, suche):
             continue
@@ -731,7 +801,8 @@ def zeile_fuer(session: Session, benutzer, vorgang: Vorgang) -> dict | None:
     """Eine einzelne Zeile (nach Inline-Änderung) – sucht den Vorgang in
     beiden Boards; None, wenn er in keiner Gruppe mehr sichtbar ist."""
     for board in BOARDS:
-        daten = board_zeilen(session, benutzer, board, {"archiv": True, "ids": [vorgang.id]})
+        daten = board_zeilen(session, benutzer, board,
+                             {"archiv": True, "archiviert": "alle", "ids": [vorgang.id]})
         for g in daten["gruppen"]:
             for z in g["zeilen"]:
                 if z["vorgang"].id == vorgang.id:
@@ -740,15 +811,21 @@ def zeile_fuer(session: Session, benutzer, vorgang: Vorgang) -> dict | None:
 
 
 def auswahl_listen(session: Session) -> dict:
-    """Dropdown-Inhalte: Außendienst (inkl. Handelsvertreter, markiert),
-    Innendienst (Leadmanager), Status (manuell setzbar), Kanäle."""
+    """Dropdown-Inhalte: Außendienst, Innendienst (Leadmanager), Status (manuell
+    setzbar), Kanäle. v31 (PLAN_LEAD_V5 Phase 156, app/lead_dropdowns.py): ad_wahl =
+    angestellte AD ohne Handelsvertreter; liegt ein Lead bei einem HV, zeigt die Zeile
+    stattdessen dessen Gruppe (ad_gruppen[hv_id], Template: ctx.ad_gruppen.get(v.ad_id)
+    or ctx.ad_wahl); lm_wahl = nur Benutzer mit Häkchen „Leadmanager“ (nach Vorname)."""
     hv_ids = {b.id for b in lead_v2.handelsvertreter_liste(session)}
-    ad = [b for b in session.query(Benutzer)
-          .filter(Benutzer.aktiv.is_(True), Benutzer.rolle == "aussendienst")
-          .order_by(Benutzer.name)]
-    for b in session.query(Benutzer).filter(Benutzer.id.in_(hv_ids or {0})):
-        if b not in ad:
-            ad.append(b)
+    ad_gruppen: dict[int, list] = {}
+    for hv_id in hv_ids:
+        gruppe = lead_dropdowns.hv_gruppe_fuer(session, hv_id)
+        ids = lead_dropdowns.hv_gruppe_mitglieder(session, gruppe) if gruppe else [hv_id]
+        if hv_id not in ids:
+            ids = [hv_id] + ids
+        namen = {b.id: b for b in session.query(Benutzer).filter(Benutzer.id.in_(ids))}
+        ad_gruppen[hv_id] = [{"id": i, "name": namen[i].name, "hv": True}
+                             for i in ids if i in namen and (namen[i].aktiv or i == hv_id)]
     logik = leadmanagement_logik.hole_logik()
     status = []
     gesehene_labels: dict[str, str] = {}
@@ -766,10 +843,13 @@ def auswahl_listen(session: Session) -> dict:
                                    if p != phase and status_label(logik, p)[0] == label]})
         gesehene_labels.setdefault(label, phase)
     return {
-        "ad_wahl": [{"id": b.id, "name": b.name, "hv": b.id in hv_ids} for b in ad],
-        "lm_wahl": [{"id": b.id, "name": b.name} for b in kern.leadmanager_benutzer(session)],
+        "ad_wahl": lead_dropdowns.ad_auswahl_dicts(session),
+        "ad_gruppen": ad_gruppen,
+        "lm_wahl": [{"id": i, "name": n} for i, n, w in lead_dropdowns.leadmanager_auswahl(session) if w],
         "status_wahl": status,
         "kanaele": kern.kanal_werte(session),
+        "sparten": list(sparten_modul.SPARTEN),           # v31 (Phase 157): Filter-Chips
+        "grosskunde_farbe": grosskunde_farbe(session),     # v31 (Phase 153): Badge-Farbe
         "gruende": {phase: [{"grund": g.grund, "freitext": g.freitext_pflicht}
                             for g in logik.gruende_der_phase(phase)]
                     for phase in ("zurueckgestellt", "unqualifiziert", "verloren")},
@@ -853,7 +933,7 @@ def status_setzen(session: Session, vorgang: Vorgang, ziel: str, benutzer=None,
                   grund: str = "", grund_text: str = "", bis=None,
                   quelle: str = "") -> tuple[bool, str]:
     """Manueller Statuswechsel (Tabelle/Sammelaktion) mit den Pflichten der
-    Bestandsdialoge: Zurückgestellt Datum+Grund, Unqualifiziert Grund,
+    Bestandsdialoge: Zurückgestellt Datum+Grund, Disqualifiziert (Key unqualifiziert) Grund,
     Verloren Grund (Blatt Gruende, Phase verloren) + Angebote Abgelehnt.
     Abgeleitete Phasen sind nicht setzbar. Schreibt je Lead eine Aktivität."""
     logik = leadmanagement_logik.hole_logik()
@@ -902,11 +982,12 @@ def status_setzen(session: Session, vorgang: Vorgang, ziel: str, benutzer=None,
         vorgang.unqualifiziert_text = grund_text
         vorgang.naechste_aktion_am = None
         vorgang.zurueckgestellt_bis = None
+        # v31 (PLAN_LEAD_V5 Phase 157): Label „Disqualifiziert“ (interner Key bleibt)
         kern.aktivitaet(session, vorgang.id, "status",
-                        f"{praefix}Unqualifiziert: {grund}"
+                        f"{praefix}Disqualifiziert: {grund}"
                         + (f" – {grund_text}" if grund_text else ""), benutzer=benutzer)
         session.flush()
-        return True, f"Unqualifiziert ({grund})."
+        return True, f"Disqualifiziert ({grund})."
     if ziel == "verloren":
         fehler = _grund_pruefen(logik, "verloren", grund, grund_text)
         if fehler:
@@ -989,6 +1070,7 @@ def zeile_aendern(session: Session, vorgang: Vorgang, feld: str, wert, benutzer=
             return False, "Datum nicht lesbar."
         if datum.hour == 0 and datum.minute == 0 and "T" not in roh and " " not in roh:
             datum = datum.replace(hour=9)
+        datum = lead_v5.runden_5min(datum)   # v31 (Phase 158): Wiedervorlage im 5-Minuten-Raster
         if vorgang.lead_phase == "zurueckgestellt":
             vorgang.zurueckgestellt_bis = datum
         else:
@@ -1070,16 +1152,111 @@ def _sammel_hv_verschieben(session: Session, vorgaenge: list, params: dict, benu
     return ok, fehler, text
 
 
+# --- v31 (PLAN_LEAD_V5 Phase 154): Archivieren, Wiederherstellen, Duplizieren -------------
+
+def _sammel_archivieren(session: Session, vorgaenge: list, params: dict, benutzer) -> tuple:
+    """„Archivieren“ (Lead-Sicht, app/lead_archiv.py): Leads mit aktivem Termin, offener
+    Erfassung oder offenem Angebot werden übersprungen und gemeldet
+    („2 archiviert, 1 übersprungen: aktiver Termin“); Aktivität je Lead."""
+    archiviert, uebersprungen = lead_archiv.archivieren(session, list(vorgaenge), benutzer)
+    fehler = [f"{vid}: {grund}" for vid, grund in uebersprungen]
+    return len(archiviert), fehler, lead_archiv.meldung(archiviert, uebersprungen) + "."
+
+
+def _sammel_wiederherstellen(session: Session, vorgaenge: list, params: dict, benutzer) -> tuple:
+    """„Wiederherstellen“ aus der Archiv-Sicht (Filter-Chip „Archiv“)."""
+    ok, gruende = 0, []
+    for v in vorgaenge:
+        erfolg, grund = lead_archiv.wiederherstellen(session, v, benutzer)
+        if erfolg:
+            ok += 1
+        else:
+            gruende.append(grund)
+    text = f"{ok} wiederhergestellt"
+    if gruende:
+        text += f", {len(gruende)} übersprungen: " + ", ".join(dict.fromkeys(gruende))
+    return ok, [g for g in gruende], text + "."
+
+
+def vorgang_duplizieren(session: Session, vorgang: Vorgang, benutzer=None) -> Vorgang:
+    """Sammelaktion „Duplizieren“ [ANNAHME: zweiter Vorgang für denselben Kunden, z. B.
+    neue Anfrage nach Abschluss – nicht für Mehrobjekt-Fälle]: neuer Vorgang am selben
+    Kunden mit Phase Neu, kopierten Objekten (vorgang_objekte), Interessen/Kanal (am
+    Kunden), Zuständigen (Leadmanager, Außendienst), Anfragetext/Notiz, Quelle/Kampagne/
+    UTM, Wunschzeiten, Koordinaten; OHNE Aktivitäten, Termine, Erfassungen, Angebote,
+    Wiedervorlagen. kopie_von_id verweist auf den Ursprung, Aktivität in beiden; die
+    Duplikatprüfung greift nicht (bewusste Kopie)."""
+    jetzt = datetime.now()
+    neu = Vorgang(
+        kunde_id=vorgang.kunde_id, lead_phase="neu", eingang_am=jetzt,
+        eingang_art=vorgang.eingang_art if vorgang.eingang_art and vorgang.eingang_art != "monday" else "manuell",
+        quelle_id=vorgang.quelle_id, kampagne_id=vorgang.kampagne_id,
+        utm_source=vorgang.utm_source, utm_medium=vorgang.utm_medium,
+        utm_campaign=vorgang.utm_campaign, utm_content=vorgang.utm_content,
+        anfrage_text=vorgang.anfrage_text, wunschzeiten=vorgang.wunschzeiten,
+        leadmanager_id=vorgang.leadmanager_id, ad_id=vorgang.ad_id,
+        lat=vorgang.lat, lon=vorgang.lon, geocode_status=vorgang.geocode_status,
+        einwilligung_werbung=vorgang.einwilligung_werbung,
+        einwilligung_werbung_am=vorgang.einwilligung_werbung_am,
+        einwilligung_quelle=vorgang.einwilligung_quelle,
+        demo=bool(vorgang.demo), kopie_von_id=vorgang.id, versuch_nr=0)
+    session.add(neu)
+    session.flush()
+    # Objekte kopieren (Phase 153): gleiche Reihenfolge, Hauptobjekt bleibt Nr. 1
+    objekte = (session.query(VorgangObjekt).filter(VorgangObjekt.vorgang_id == vorgang.id)
+               .order_by(VorgangObjekt.reihenfolge, VorgangObjekt.id).all())
+    if objekte:
+        for o in objekte:
+            session.add(VorgangObjekt(
+                vorgang_id=neu.id, bezeichnung=o.bezeichnung, strasse=o.strasse, plz=o.plz,
+                ort=o.ort, objektart=o.objektart, parteien=o.parteien, interessen=o.interessen,
+                lat=o.lat, lon=o.lon, geocode_status=o.geocode_status,
+                reihenfolge=o.reihenfolge, aktiv=o.aktiv,
+                rechnung_abweichend=o.rechnung_abweichend, rechnung_name=o.rechnung_name,
+                rechnung_strasse=o.rechnung_strasse, rechnung_plz=o.rechnung_plz,
+                rechnung_ort=o.rechnung_ort))
+    else:
+        from app import objekte as objekte_modul
+        objekte_modul.hauptobjekt(session, neu.id, anlegen=True)
+    session.flush()
+    kern.aktivitaet(session, neu.id, "system",
+                    f"Kopie von Vorgang #{vorgang.id} (Sammelaktion Duplizieren)", benutzer=benutzer)
+    kern.aktivitaet(session, vorgang.id, "system",
+                    f"Dupliziert als Vorgang #{neu.id} (Sammelaktion Duplizieren)", benutzer=benutzer)
+    session.flush()
+    return neu
+
+
+def _sammel_duplizieren(session: Session, vorgaenge: list, params: dict, benutzer) -> tuple:
+    """„Duplizieren“: je markiertem Lead ein neuer Vorgang; Ergebnis mit Links (extra.kopien)."""
+    kopien = []
+    for v in vorgaenge:
+        neu = vorgang_duplizieren(session, v, benutzer)
+        kopien.append({"id": neu.id, "von": v.id})
+    text = f"{len(kopien)} Kopie(n) angelegt – neue Vorgänge: " + ", ".join(f"#{k['id']}" for k in kopien) + "."
+    return len(kopien), [], text, {"kopien": kopien}
+
+
 # Registry: board → [(key, Titel, Handler(session, vorgaenge, params, benutzer)
-# → (anzahl_ok, fehlerliste[, meldung]))]. Weitere Aktionen (Phase 111: Infoabend)
+# → (anzahl_ok, fehlerliste[, meldung[, extra]]))]. Weitere Aktionen (Phase 111: Infoabend)
 # registrieren sich über sammelaktion_registrieren().
 # v29 (Phase 140): „An Handelsvertreter verschieben“ auf Hauptboard und Deals;
 # der Infoabend registriert denselben Handler (lead_info.sammelaktionen_registrieren).
+# v31 (Phase 154): „Archivieren“, „Duplizieren“ (Hauptboard, Deals, Infoabend – der
+# Infoabend registriert die Handler über lead_info) und „Wiederherstellen“ (nur in der
+# Archiv-Sicht angeboten, sammelaktionen_fuer(board, archiv=True)).
 SAMMELAKTION_HV = ("hv_verschieben", "An Handelsvertreter verschieben", _sammel_hv_verschieben)
+SAMMELAKTION_ARCHIV = ("archivieren", "Archivieren", _sammel_archivieren)
+SAMMELAKTION_DUPLIZIEREN = ("duplizieren", "Duplizieren", _sammel_duplizieren)
+SAMMELAKTION_WIEDERHERSTELLEN = ("wiederherstellen", "Wiederherstellen", _sammel_wiederherstellen)
 SAMMELAKTIONEN: dict[str, list] = {
-    "hauptboard": [("status", "Status ändern", _sammel_status), SAMMELAKTION_HV],
-    "terminiert": [SAMMELAKTION_HV],
+    "hauptboard": [("status", "Status ändern", _sammel_status), SAMMELAKTION_HV,
+                   SAMMELAKTION_ARCHIV, SAMMELAKTION_DUPLIZIEREN, SAMMELAKTION_WIEDERHERSTELLEN],
+    "terminiert": [SAMMELAKTION_HV, SAMMELAKTION_ARCHIV, SAMMELAKTION_DUPLIZIEREN,
+                   SAMMELAKTION_WIEDERHERSTELLEN],
 }
+# Sammelaktionen, die nur in der Archiv-Sicht angeboten werden
+NUR_ARCHIV = ("wiederherstellen",)
 
 
 def sammelaktion_registrieren(board: str, key: str, titel: str, handler) -> None:
@@ -1088,20 +1265,24 @@ def sammelaktion_registrieren(board: str, key: str, titel: str, handler) -> None
     liste.append((key, titel, handler))
 
 
-def sammelaktionen_fuer(board: str) -> list[dict]:
-    return [{"key": k, "titel": t} for k, t, _ in SAMMELAKTIONEN.get(board, [])]
+def sammelaktionen_fuer(board: str, archiv: bool = False) -> list[dict]:
+    """Angebotene Sammelaktionen: in der Archiv-Sicht nur „Wiederherstellen“, sonst alle
+    übrigen."""
+    return [{"key": k, "titel": t} for k, t, _ in SAMMELAKTIONEN.get(board, [])
+            if (k in NUR_ARCHIV) == bool(archiv)]
 
 
-def sammelaktion_ausfuehren(session: Session, benutzer, board: str, aktion: str,
-                            ids: list, params: dict | None = None) -> tuple[bool, str]:
+def sammelaktion_ausfuehren_voll(session: Session, benutzer, board: str, aktion: str,
+                                 ids: list, params: dict | None = None) -> tuple[bool, str, dict]:
     """Führt eine registrierte Aktion je Lead aus (Handler schreibt je Lead
-    eine Aktivität); Meldung mit Zählern. Handelsvertreter/AD: nicht erlaubt."""
+    eine Aktivität); (ok, meldung, extra) – extra z. B. {"kopien": [...]} beim
+    Duplizieren (Links in der Ergebnis-Meldung). Handelsvertreter/AD: nicht erlaubt."""
     params = params or {}
     if benutzer is None or benutzer.rolle == "aussendienst":
-        return False, "Sammelaktionen sind für den Außendienst nicht freigegeben."
+        return False, "Sammelaktionen sind für den Außendienst nicht freigegeben.", {}
     eintrag = next((e for e in SAMMELAKTIONEN.get(board, []) if e[0] == aktion), None)
     if eintrag is None:
-        return False, f"Sammelaktion „{aktion}“ gibt es auf diesem Board nicht."
+        return False, f"Sammelaktion „{aktion}“ gibt es auf diesem Board nicht.", {}
     sauber = []
     for wert in ids or []:
         try:
@@ -1109,67 +1290,62 @@ def sammelaktion_ausfuehren(session: Session, benutzer, board: str, aktion: str,
         except (TypeError, ValueError):
             continue
     if not sauber:
-        return False, "Keine Leads markiert."
+        return False, "Keine Leads markiert.", {}
     vorgaenge = [v for v in session.query(Vorgang).filter(Vorgang.id.in_(sauber))
                  if lead_v2.zugriff_erlaubt(session, benutzer, v)]
     if not vorgaenge:
-        return False, "Keine zugänglichen Leads markiert."
+        return False, "Keine zugänglichen Leads markiert.", {}
     ergebnis = eintrag[2](session, vorgaenge, params, benutzer)
     session.flush()
+    extra = ergebnis[3] if len(ergebnis) >= 4 and isinstance(ergebnis[3], dict) else {}
     # v29: Handler dürfen eine eigene Meldung liefern (ok, fehler, meldung)
     if len(ergebnis) >= 3 and ergebnis[2]:
         ok, fehler = ergebnis[0], ergebnis[1]
-        return ok > 0, f"{eintrag[1]}: {ergebnis[2]}"
+        return ok > 0, f"{eintrag[1]}: {ergebnis[2]}", extra
     ok, fehler = ergebnis[0], ergebnis[1]
     meldung = f"{eintrag[1]}: {ok} von {len(vorgaenge)} Leads geändert."
     if fehler:
         meldung += f" {len(fehler)} übersprungen: " + "; ".join(fehler[:5])
         if len(fehler) > 5:
             meldung += " …"
-    return ok > 0, meldung
+    return ok > 0, meldung, extra
+
+
+def sammelaktion_ausfuehren(session: Session, benutzer, board: str, aktion: str,
+                            ids: list, params: dict | None = None) -> tuple[bool, str]:
+    """Vertrag v23/v29 (Infoabend, Tests): (ok, meldung) – Rest wie sammelaktion_ausfuehren_voll."""
+    ok, meldung, _extra = sammelaktion_ausfuehren_voll(session, benutzer, board, aktion, ids, params)
+    return ok, meldung
 
 
 # --- Reiter Kontaktiert (H7) + Rufnummernsuche (D3) ---------------------------------------
 
 def telefon_treffer(session: Session, nummer: str, benutzer=None) -> list[dict]:
-    """Alle Kunden/Vorgänge und monday-Leads mit dieser Nummer, Schreibweise
-    egal (E.164 wie in der Duplikatprüfung). Treffer verlinken auf die Kartei."""
-    gesucht = kern.telefon_normalisieren(nummer)
-    if not gesucht or len(re.sub(r"\D", "", gesucht)) < 5:
-        return []
+    """Alle Kunden/Vorgänge und monday-Leads zu dieser Nummer. v31 (PLAN_LEAD_V5
+    Phase 158, Endziffern-Suche): ab 3 Ziffern – Treffer, deren normalisierte Nummer
+    (E.164) mit der Folge ENDET, stehen zuerst, danach „enthält“; Schreibweise egal
+    (lead_anrufliste.rufnummer_suchen). Treffer verlinken auf die Kartei; archivierte
+    Leads sind markiert (archiviert=True)."""
+    from app import lead_anrufliste
     hv = lead_v2.ist_handelsvertreter(session, benutzer)
+    ergebnis = lead_anrufliste.rufnummer_suchen(
+        session, nummer, nur_ad_id=benutzer.id if hv and benutzer is not None else None)
+    if ergebnis["zu_kurz"]:
+        return []
     treffer = []
-    kunden = [k for k in session.query(Kunde).filter(Kunde.telefon != "")
-              if kern.telefon_normalisieren(k.telefon) == gesucht]
-    for kunde in kunden:
-        vorgaenge = (session.query(Vorgang).filter(Vorgang.kunde_id == kunde.id)
-                     .order_by(Vorgang.angelegt_am.desc()).all())
-        if hv:
-            vorgaenge = [v for v in vorgaenge if v.ad_id == benutzer.id]
-            if not vorgaenge:
-                continue
-        v = vorgaenge[0] if vorgaenge else None
+    for t in ergebnis["treffer"]:
+        kunde, v = t["kunde"], t["vorgang"]
+        if hv and v is None:
+            continue
         treffer.append({
-            "art": "kunde", "kunde": kunde, "vorgang": v, "lead": None,
+            "art": t["herkunft"], "kunde": kunde, "vorgang": v, "lead": t.get("lead"),
             "name": kunde.anzeige_name, "ort": kunde.ort or "", "telefon": kunde.telefon,
             "phase": v.lead_phase if v else None,
             "link": f"/lead-management/lead/{v.id}" if v else f"/kunden/{kunde.id}",
-            "anzahl_vorgaenge": len(vorgaenge),
+            "anzahl_vorgaenge": len(t["vorgaenge"]),
+            "endet_mit": t.get("endet_mit", False),
+            "archiviert": bool(v is not None and lead_archiv.ist_archiviert(v)),
         })
-    kunden_ids = {k.id for k in kunden}
-    if not hv:
-        for lead in [lt for lt in session.query(Lead).filter(Lead.telefon != "")
-                     if kern.telefon_normalisieren(lt.telefon) == gesucht]:
-            if lead.kunde_id in kunden_ids:
-                continue
-            v = session.query(Vorgang).filter(Vorgang.lead_id == lead.id).first()
-            treffer.append({
-                "art": "monday", "kunde": None, "vorgang": v, "lead": lead,
-                "name": lead.anzeige_name, "ort": lead.ort or "", "telefon": lead.telefon,
-                "phase": v.lead_phase if v else None,
-                "link": f"/lead-management/lead/{v.id}" if v else "/leads",
-                "anzahl_vorgaenge": 1 if v else 0,
-            })
     return treffer
 
 
@@ -1181,8 +1357,8 @@ def kontaktiert_daten(session: Session, benutzer, q: str = "", telefon: str = ""
     q = (q or "").strip()
     telefon = (telefon or "").strip()
     hv = lead_v2.ist_handelsvertreter(session, benutzer)
-    # Nummer im Suchfeld erkennt sich selbst
-    if not telefon and q and len(re.sub(r"\D", "", q)) >= 5 and not re.search(r"[A-Za-zÄÖÜäöü]", q):
+    # Nummer im Suchfeld erkennt sich selbst – v31 (Phase 158): ab 3 Ziffern (Endziffern)
+    if not telefon and q and len(re.sub(r"\D", "", q)) >= 3 and not re.search(r"[A-Za-zÄÖÜäöü]", q):
         telefon = q
     treffer = telefon_treffer(session, telefon, benutzer) if telefon else []
     abfrage = (session.query(LeadAktivitaet).filter(LeadAktivitaet.typ == "anruf")
@@ -1193,6 +1369,10 @@ def kontaktiert_daten(session: Session, benutzer, q: str = "", telefon: str = ""
     if telefon:
         vorgang_ids = {t["vorgang"].id for t in treffer if t["vorgang"] is not None}
         abfrage = abfrage.filter(LeadAktivitaet.vorgang_id.in_(vorgang_ids or {0}))
+    # v31 (Phase 154): Kontaktversuche archivierter Leads nicht in der Liste
+    archivierte = {v.id for v in session.query(Vorgang.id).filter(Vorgang.archiviert_am.isnot(None))}
+    if archivierte:
+        abfrage = abfrage.filter(~LeadAktivitaet.vorgang_id.in_(archivierte))
     aktivitaeten = abfrage.limit(3000).all()
     vorgaenge = {v.id: v for v in session.query(Vorgang)
                  .filter(Vorgang.id.in_({a.vorgang_id for a in aktivitaeten} or {0}))}

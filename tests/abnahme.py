@@ -470,6 +470,15 @@ def main():
              .order_by(Erfassung.id).all())
     pruefe("v8", "Je Sparte eine eigene Erfassung (PV + KL)",
            [e.sparte for e in v8erf] == ["PV", "KL"])
+    # v32 (PLAN_V19 Phase 161): /leads ist „Mein Tag“ (Admin: Karten) und liest nur
+    # vot_termine – den VOT-Termin des Leads wie der monday-Sync-Nachlauf anlegen; die
+    # Karte zeigt die Status-Chips je Sparte wie bisher die Tabellenzeile
+    from app import monday_sync as _monday_sync
+    from app.models import Vorgang as _V8Vorgang, VotTermin as _V8Termin
+    s.commit()
+    v8vorgang = s.query(_V8Vorgang).filter(_V8Vorgang.lead_id == v8lead.id).first()
+    _monday_sync.vot_termine_nachfuehren(s, nur_vorgang_ids=[v8vorgang.id])
+    s.commit()
     chips_html = client.get("/leads").text
     # v9 (Phase 57): Chips farbcodiert, Zustand „offen“ = umrandet (Tooltip)
     pruefe("v8", "Lead-Chips: PV offen · KL offen",
@@ -482,18 +491,23 @@ def main():
            any(p["pos_nr"] == "047" for p in v8pos)
            and engine.ampel_gruende(logik, dict(v8kg, A03=35000)) == [])
     # Ablehnung: ohne Grund abgewiesen, mit Grund + Notiz
+    # v32 (PLAN_V19 Phase 163): „Preis zu hoch“ ist seit der Gründe-Migration deaktiviert –
+    # der Dialog nimmt nur aktive Gründe; erster aktiver Grund der Liste („Zu teuer“)
+    v8grund = (s.query(AblehnungsGrund).filter(AblehnungsGrund.aktiv.is_(True),
+                                               AblehnungsGrund.freitext_pflicht.is_(False))
+               .order_by(AblehnungsGrund.sort, AblehnungsGrund.id).first().name)
     v8ang = angebot_aufbau.angebot_anlegen(s, kunde_t.id)
     v8ang.status = "Versendet"; s.commit()
     client.post(f"/angebote/{v8ang.id}/status", data={"status": "Abgelehnt"})
     s.expire_all()
     ohne_grund = s.get(Angebot, v8ang.id).status == "Versendet"
     client.post(f"/angebote/{v8ang.id}/status",
-                data={"status": "Abgelehnt", "ablehnungsgrund": "Preis zu hoch"})
+                data={"status": "Abgelehnt", "ablehnungsgrund": v8grund})
     s.expire_all()
     pruefe("v8", "Abgelehnt nur mit Pflicht-Grund (+ Verfolgungs-Notiz)",
-           ohne_grund and s.get(Angebot, v8ang.id).ablehnungsgrund == "Preis zu hoch"
+           ohne_grund and s.get(Angebot, v8ang.id).ablehnungsgrund == v8grund
            and s.query(AN8).filter(AN8.angebot_id == v8ang.id,
-                                   AN8.text.like("%Preis zu hoch%")).count() == 1)
+                                   AN8.text.like(f"%{v8grund}%")).count() == 1)
     # 90-Tage-Prüflauf im Trockenmodus
     v8alt = angebot_aufbau.angebot_anlegen(s, kunde_t.id)
     v8alt.status = "Versendet"
@@ -517,6 +531,7 @@ def main():
         s.delete(s.get(Erfassung, e.id))
     s.query(AN8).filter(AN8.angebot_id == v8ang.id).delete()
     s.delete(s.get(Angebot, v8ang.id)); s.delete(s.get(Angebot, v8alt.id))
+    s.query(_V8Termin).filter(_V8Termin.vorgang_id == v8vorgang.id).delete()   # v32: VOT-Termin
     s.delete(s.get(Lead, v8lead.id))
     s.commit()
 
@@ -627,8 +642,10 @@ def main():
                for pfad in ("/leads", "/erfassungen", "/angebote")))
     start_v9 = client.get("/").text
     pruefe("v9 Darstellung", "Startseite: 3 Bereiche + Coming soon + Angebotstool-Link",
+           # v31 (PLAN_LEAD_V5 Phase 159): die Lead-Karte trägt kein „Coming soon“ mehr;
+           # die Projektierungs-Karte je nach freigabe_modus – deshalb nur Bereiche + Link
            "Lead-Management" in start_v9 and "Projektierung" in start_v9
-           and start_v9.count("Coming soon") >= 2 and 'href="/angebotstool"' in start_v9)
+           and 'href="/angebotstool"' in start_v9)
     # Freitext-Edit mit Protokoll und Hinweis
     v9frei = Erfassung(kunde_id=kunde_t.id, benutzer_id=1, status="In Bearbeitung",
                        sparte="WP", typ="freitext", freitext="Abnahme-Text",
@@ -681,7 +698,8 @@ def main():
     # v14 (PLAN_V12): Chat-Kopf ist jetzt Autor fett + Zeit dezent (ohne Doppelpunkt)
     pruefe("v10 Akte", "Notiz mit Autor + Zeitstempel im Chat-Format",
            "Abnahme-Notiz v10" in akte and 'class="notiz-kopf"' in akte
-           and "Uhr</span>" in akte
+           and "Uhr</span>" in akte,
+           detail=f"text={'Abnahme-Notiz v10' in akte} kopf={'notiz-kopf' in akte} uhr={'Uhr</span>' in akte}"
            and v10notiz is not None and v10notiz.benutzer_name == s.get(Benutzer, 1).name)
     pruefe("v10 Akte", "Notizen unveränderlich (kein Bearbeiten/Löschen-Endpunkt)",
            client.post(f"/vorgaenge/{v10vorgang.id}/notiz/{v10notiz.id}/loeschen")

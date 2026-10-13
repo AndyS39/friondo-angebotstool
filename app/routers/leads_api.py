@@ -36,11 +36,16 @@ router = APIRouter(prefix="/api/leads")
 
 _aufrufe: dict[str, deque] = {}
 RATE_LIMIT = 60   # Aufrufe je Minute je Schlüssel
-SPARTEN_API = ("WP", "PV", "KL", "WB", "GW")
+# v31 (PLAN_LEAD_V5 Phase 157): Sparten inkl. MS/WA/DMS aus app/sparten.py – Sparten
+# kommen als Code oder als Text („Mieterstrom“, „Wasser“, „Denkmalschutz“)
+from app import sparten as sparten_modul
+SPARTEN_API = tuple(sparten_modul.SPARTEN)
 # Aliase der Agenturen (Formular-Standard): Klartext → Code
 SPARTEN_ALIAS = {"WAERMEPUMPE": "WP", "WÄRMEPUMPE": "WP", "PHOTOVOLTAIK": "PV", "SOLAR": "PV",
                  "KLIMA": "KL", "KLIMAANLAGE": "KL", "WALLBOX": "WB", "GEWERBE": "GW",
-                 "GEWERBLICH": "GW"}
+                 "GEWERBLICH": "GW",
+                 "MIETERSTROM": "MS", "WASSER": "WA", "WASSERAUFBEREITUNG": "WA",
+                 "DENKMALSCHUTZ": "DMS", "DENKMAL": "DMS"}
 
 
 def _rate_ok(schluessel: str) -> bool:
@@ -141,7 +146,7 @@ def lead_anlegen(request: Request, session: Session = Depends(get_session)):
     if not (daten.get("telefon") or "").strip() and not (daten.get("email") or "").strip():
         fehlend.append("telefon oder email")
     if not sparten:
-        fehlend.append("sparten (WP/PV/KL/WB/GW)")
+        fehlend.append("sparten (" + "/".join(SPARTEN_API) + ")")
     if fehlend:
         return JSONResponse({"fehler": "Pflichtfelder fehlen",
                              "felder": fehlend}, status_code=422)

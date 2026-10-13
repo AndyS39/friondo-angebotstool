@@ -48,7 +48,8 @@ def offene_leads(session: Session, jetzt: datetime | None = None) -> list[Vorgan
     ergebnis = []
     for v in (session.query(Vorgang)
               .filter(Vorgang.lead_phase.in_(("neu", "in_kontaktierung", "nicht_erreicht",
-                                              "qualifiziert", "zurueckgestellt")))):
+                                              "qualifiziert", "zurueckgestellt")),
+                      Vorgang.archiviert_am.is_(None))):   # v31 (Phase 154): kein Archiv
         if v.lead_phase == "qualifiziert" and v.id in mit_termin:
             continue
         if v.lead_phase == "zurueckgestellt" and (
@@ -323,7 +324,8 @@ def kaskade_text(session: Session) -> str:
             teile = []
             if mails:
                 teile.append("Mail nach Versuch " + ", ".join(mails))
-            teile.append(f"nach Versuch {letzte} „Nicht erreicht“ (keine automatische Wiedervorlage)")
+            # v31 (PLAN_LEAD_V5 Phase 156/157): nach dem letzten Versuch „Disqualifiziert“ (Mail)
+            teile.append(f"nach Versuch {letzte} „Disqualifiziert“ (Mail, keine automatische Wiedervorlage)")
             return "Kaskade: " + " · ".join(teile)
     except Exception:
         pass

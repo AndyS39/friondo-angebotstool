@@ -8,6 +8,14 @@
 <div class="seitenkopf">
     <h1>Leads VOT</h1>
     {% if benutzer.rolle != 'aussendienst' %}
+        {# v32 (PLAN_V19 Phase 161): Umschalter „Karten | Tabelle“ – die Tabelle ist seit v32
+           die zweite Darstellung für Innendienst/Admin (Standard Karten = Mein Tag,
+           Wahl je Nutzer in benutzer_einstellungen); Styles in mein_tag.css #}
+        <link rel="stylesheet" href="/static/mein_tag.css?v={{ css_version }}">
+        <nav class="mt-umschalter" aria-label="Darstellung">
+            <a href="/leads?darstellung=karten">Karten</a>
+            <a class="aktiv" href="/leads?darstellung=tabelle" aria-current="page">Tabelle</a>
+        </nav>
         {# v27 (PLAN_V17 Phase 128): Hinweis + Bestätigung vor dem monday-Vollabgleich #}
         <form method="post" action="/leads/sync"
               onsubmit="return confirm('monday-Vollabgleich: {{ monday_hinweis }}. Jetzt starten?');">

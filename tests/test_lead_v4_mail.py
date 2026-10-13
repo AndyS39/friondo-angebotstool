@@ -60,16 +60,20 @@ PNG = bytes.fromhex(
     "9c636000020000050001e9fa4c0d0000000049454e44ae426082")
 PARAMETER = ("lead_freigabe_modus", "mail_modus", "mail_testadresse", "absender_lead_mails",
              "hv_versandweg", "kalender_sync", "routing_anbieter", "score_aktiv",
-             "glocke_lead_arten", "parser_modus", "versuche_max")
+             "glocke_lead_arten", "parser_modus", "versuche_max",
+             # v31 (PLAN_LEAD_V5 Phase 159): Schalter der Testphase
+             "terminierung_aktiv", "mail_versand_aktiv")
 
 
 def aufraeumen(s):
+    from app.models import VorgangObjekt
     s.rollback()
     for k in s.query(Kunde).filter(Kunde.nachname.like(f"{NACHNAME}%")):
         for v in s.query(Vorgang).filter_by(kunde_id=k.id):
             s.query(LeadAktivitaet).filter_by(vorgang_id=v.id).delete()
             s.query(KommunikationLog).filter_by(vorgang_id=v.id).delete()
             s.query(VotTermin).filter_by(vorgang_id=v.id).delete()
+            s.query(VorgangObjekt).filter_by(vorgang_id=v.id).delete()   # v31: Objekte je Vorgang
             s.query(Todo).filter_by(vorgang_id=v.id).delete()
             s.query(LeadPosteingang).filter_by(vorgang_id=v.id).delete()
             s.query(Benachrichtigung).filter(
@@ -118,7 +122,10 @@ class Basis(unittest.TestCase):
                            ("hv_versandweg", "offen"), ("kalender_sync", "aus"),
                            ("routing_anbieter", "luftlinie"), ("score_aktiv", "aus"),
                            ("glocke_lead_arten", "todo_zugewiesen,todo_aktualisiert"),
-                           ("parser_modus", "aus"), ("versuche_max", "5")):
+                           ("parser_modus", "aus"), ("versuche_max", "5"),
+                           # v31 (Phase 159): Buchungsweg offen; die Mailsperre bleibt an und wird
+                           # nur in den Sendetests gelöst (mail_modus ist keine Steuerung mehr)
+                           ("terminierung_aktiv", "an"), ("mail_versand_aktiv", "aus")):
             kern.parameter_setzen(cls.s, name, wert)
         cls.s.commit()
         # Vertriebler: angestellter AD „Horst“ mit Bild/Infotext, Handelsvertreter „Paolo“
@@ -574,7 +581,10 @@ class AbsenderUndFehler(Basis):
     def test_alle_vorlagen_termin_ohne_fallback_fehler_und_erneut(self):
         v = self.lead(30, email="v29l2-30@test.invalid")
         t = self.termin(v, self.horst.id)
-        for key in ("nicht_erreicht", "disqualifiziert"):
+        # v31 (PLAN_LEAD_V5 Phase 156): nicht_erreicht entfällt (mail_planen liefert None),
+        # neu falsche_telefonnummer (Phase 158)
+        self.assertIsNone(kern.mail_planen(self.s, v, "nicht_erreicht"))
+        for key in ("disqualifiziert", "falsche_telefonnummer"):
             kern.mail_planen(self.s, v, key)
         for key in ("terminbestaetigung", "terminerinnerung", "terminaenderung", "terminabsage",
                     "online_termin_einladung"):
@@ -582,7 +592,7 @@ class AbsenderUndFehler(Basis):
         self.s.commit()
         eintraege = self.s.query(KommunikationLog).filter_by(vorgang_id=v.id).all()
         self.assertEqual({e.vorlage_key for e in eintraege},
-                         {"eingangsbestaetigung", "nicht_erreicht", "disqualifiziert", "terminbestaetigung",
+                         {"eingangsbestaetigung", "falsche_telefonnummer", "disqualifiziert", "terminbestaetigung",
                           "terminerinnerung", "terminaenderung", "terminabsage", "online_termin_einladung"})
         self.assertTrue(all(e.absender == "termin@friondo.de" for e in eintraege))
         for e in eintraege:
@@ -598,6 +608,7 @@ class AbsenderUndFehler(Basis):
                 e.geplant_am = datetime.now() + timedelta(days=30)
         kern.parameter_setzen(self.s, "mail_modus", "test")
         kern.parameter_setzen(self.s, "mail_testadresse", "lead-test@test.invalid")
+        kern.parameter_setzen(self.s, "mail_versand_aktiv", "an")   # v31: Sendeweg freischalten
         self.s.commit()
         aufrufe = []
 
@@ -690,8 +701,10 @@ class AbsenderUndFehler(Basis):
             self.assertEqual(len(gesendet), 1)
             nachricht = gesendet[0]["message"]
             self.assertEqual(nachricht["from"]["emailAddress"]["address"], "termin@friondo.de")
-            self.assertEqual(nachricht["toRecipients"][0]["emailAddress"]["address"], "lead-test@test.invalid")
-            self.assertTrue(nachricht["subject"].startswith("[TEST an v29l2-30@test.invalid]"))
+            # v31 (Phase 159): mail_modus ist keine Steuerung mehr – bei mail_versand_aktiv = an
+            # geht die Mail an den Kunden (kein [TEST an …]-Umweg über das Testpostfach)
+            self.assertEqual(nachricht["toRecipients"][0]["emailAddress"]["address"], "v29l2-30@test.invalid")
+            self.assertFalse(nachricht["subject"].startswith("[TEST an"))
             self.assertEqual([r_["emailAddress"]["address"] for r_ in nachricht["replyTo"]],
                              ["leadmanagerin@test.invalid", "termin@friondo.de"])
             # ohne Leadmanager bzw. ohne E-Mail: nur der Absender
@@ -716,6 +729,7 @@ class AbsenderUndFehler(Basis):
         finally:
             kern.parameter_setzen(self.s, "mail_modus", "protokoll")
             kern.parameter_setzen(self.s, "mail_testadresse", "")
+            kern.parameter_setzen(self.s, "mail_versand_aktiv", "aus")
             self.s.commit()
 
     def test_inline_bild_als_cid_anhang_beim_versand(self):
@@ -724,6 +738,7 @@ class AbsenderUndFehler(Basis):
         e = kern.mail_planen(self.s, v, "terminbestaetigung", termin=t)
         kern.parameter_setzen(self.s, "mail_modus", "test")
         kern.parameter_setzen(self.s, "mail_testadresse", "lead-test@test.invalid")
+        kern.parameter_setzen(self.s, "mail_versand_aktiv", "an")   # v31: Sendeweg freischalten
         self.s.commit()
         gesendet = []
         try:
@@ -741,6 +756,7 @@ class AbsenderUndFehler(Basis):
             self.s.rollback()
             kern.parameter_setzen(self.s, "mail_modus", "protokoll")
             kern.parameter_setzen(self.s, "mail_testadresse", "")
+            kern.parameter_setzen(self.s, "mail_versand_aktiv", "aus")
             self.s.commit()
 
     def test_testmail_route_mit_geschlossener_sitzung(self):
@@ -761,8 +777,9 @@ class AbsenderUndFehler(Basis):
                                      follow_redirects=False)
             self.assertEqual(r.status_code, 303)
             self.assertIn("gesendet", meldung_aus(r))
-            # Demo-Modus: nur Testpostfach, Absender termin@, Sitzung während des Netzaufrufs frei
-            self.assertEqual(aufrufe, [("termin@friondo.de", "lead-test@test.invalid", 0)])
+            # v31 (Phase 159): Demo-Ende – die angegebene Adresse gilt (bis v30 im Demo-Modus
+            # nur das Testpostfach); Absender termin@, Sitzung während des Netzaufrufs frei
+            self.assertEqual(aufrufe, [("termin@friondo.de", "fremd@test.invalid", 0)])
             self.assertIn("Testmail aus termin@friondo.de", kern.parameter_holen(self.s, "einstellungs_protokoll", ""))
             # Fehler ohne Fallback
             with mock.patch.object(graph_versand, "konfiguriert", return_value=True), \
@@ -770,12 +787,20 @@ class AbsenderUndFehler(Basis):
                     mock.patch.object(graph_versand, "_graph_aufruf", side_effect=RuntimeError("SendAsDenied")):
                 r = self.client.post("/lead-management/testmail", follow_redirects=False)
             self.assertIn("kein Fallback", meldung_aus(r))
-            # Demo ohne Testadresse → Hinweis, kein Versand
+            # ohne Testadresse, ohne Formularadresse und ohne eigene E-Mail → Hinweis, kein
+            # Versand (v31: der Demo-Hinweis „nur Testpostfach“ ist entfallen)
             kern.parameter_setzen(self.s, "mail_testadresse", "")
+            admin_email = self.admin.email
+            self.admin.email = ""
             self.s.commit()
-            with mock.patch.object(graph_versand, "_graph_aufruf", side_effect=AssertionError("kein Versand")):
-                r = self.client.post("/lead-management/testmail", follow_redirects=False)
-            self.assertIn("Testpostfach", meldung_aus(r))
+            try:
+                with mock.patch.object(graph_versand, "konfiguriert", return_value=True), \
+                        mock.patch.object(graph_versand, "_graph_aufruf", side_effect=AssertionError("kein Versand")):
+                    r = self.client.post("/lead-management/testmail", follow_redirects=False)
+                self.assertIn("Keine Empfängeradresse", meldung_aus(r))
+            finally:
+                self.admin.email = admin_email
+                self.s.commit()
         finally:
             kern.parameter_setzen(self.s, "mail_testadresse", "")
             self.s.commit()
@@ -1050,8 +1075,9 @@ class Bounce(Basis):
         lead_mail.rendern(self.s, eb)
         eb.status = "gesendet"
         eb.gesendet_am = datetime.now()
-        # Kaskaden-Mail 2 bereits geplant (Zukunft) → muss angehalten werden
-        zweite = kern.mail_planen(self.s, v, "nicht_erreicht", geplant_am=datetime.now() + timedelta(days=1))
+        # weitere Mail (Zukunft) bereits geplant → muss angehalten werden (v31: nicht_erreicht
+        # entfällt – hier die Vorlage „Falsche Telefonnummer“ der Phase 158)
+        zweite = kern.mail_planen(self.s, v, "falsche_telefonnummer", geplant_am=datetime.now() + timedelta(days=1))
         self.s.commit()
         n = ndr_aus_fixture("ndr_exchange_de.eml", f"{PRAEFIX}-ndr-de-{v.id}", kundenadresse=adresse, eintrag_id=eb.id)
         self.assertTrue(lead_mail_abruf.ist_ndr(n["from"]["emailAddress"]["address"], n["subject"]))
@@ -1153,12 +1179,14 @@ class Bounce(Basis):
             Benachrichtigung.link == f"/lead-management/lead/{v.id}",
             Benachrichtigung.text.like("Antwort-Mail%")).count())   # Glocke kundenantwort gesperrt
         self.assertEqual(self.s.query(LeadPosteingang).filter_by(graph_id=antwort["id"]).one().vorgang_id, v.id)
-        # Demo-Modus: nicht zuordenbare Fremdmail bleibt ungelesen liegen (uebersprungen),
-        # außerhalb des Demo-Modus landet sie in „Posteingang unklar“
-        self.assertEqual(ergebnis["ergebnis"].count("unklar=1"), 0)
-        self.assertNotIn(unklar["id"], gelesen)
+        # v31 (Phase 159): Demo-Ende – eine nicht zuordenbare Fremdmail landet in „Posteingang
+        # unklar“ und wird als gelesen markiert (bis v30 im Demo-Modus übersprungen)
+        self.assertEqual(ergebnis["ergebnis"].count("unklar=1"), 1)
+        self.assertIn(unklar["id"], gelesen)
         with db.kurz() as s:
-            self.assertEqual(lead_mail_abruf.nachricht_verarbeiten(s, dict(unklar), demo=False, eigene=set()), "unklar")
+            eintrag = s.query(LeadPosteingang).filter_by(graph_id=unklar["id"]).one()
+            self.assertEqual(eintrag.status, "offen")
+            self.assertEqual(lead_mail_abruf.nachricht_verarbeiten(s, dict(unklar), demo=False, eigene=set()), "bekannt")
             s.query(LeadPosteingang).filter_by(graph_id=unklar["id"]).delete()
         # lead_parser (leads@) nutzt dieselbe Verbuchung – mit Betreff „Rückruf V<Nr>“;
         # ein zurückgestellter Lead kommt ebenfalls zurück (Zurückstellung aufgehoben)

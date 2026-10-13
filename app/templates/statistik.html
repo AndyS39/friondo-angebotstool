@@ -169,7 +169,7 @@ in der monday-Anbindung gemappt ist.</p>
            placeholder="Kanal (exakt)">
     <select name="grund_sparte">
         <option value="">Alle Sparten</option>
-        {% for s in ('WP', 'PV', 'KL', 'WB') %}
+        {% for s in ('WP', 'PV', 'KL', 'WB', 'GW', 'MS', 'WA', 'DMS') %}
             <option value="{{ s }}" {{ 'selected' if grund_sparte == s }}>{{ s }}</option>
         {% endfor %}
     </select>
@@ -223,7 +223,7 @@ in der monday-Anbindung gemappt ist.</p>
            placeholder="Kanal (exakt)">
     <select name="ae_sparte">
         <option value="">Alle Sparten</option>
-        {% for s in ('WP', 'PV', 'KL', 'WB') %}
+        {% for s in ('WP', 'PV', 'KL', 'WB', 'GW', 'MS', 'WA', 'DMS') %}
             <option value="{{ s }}" {{ 'selected' if ae_sparte == s }}>{{ s }}</option>
         {% endfor %}
     </select>

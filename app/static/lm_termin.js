@@ -3,8 +3,28 @@
 // des manuellen Formulars (GET /lead-management/termin/konflikt) und
 // 15-Minuten-Rundung der Uhrzeit. Vanilla JS, kein Framework.
 // v29 (PLAN_LEAD_V4 Phase 143): zweiter Block unten – Kalenderansicht per fetch.
+// v31 (PLAN_LEAD_V5 Phase 153/158/159): Konfliktprüfung mit objekt_id (Fahrzeit vom
+// gewählten Objekt), Samstag-Hinweis aus der Antwort, Dialog „Bestätigung erneut“
+// (Häkchen „eine Mail“ nur bei ≥ 2 gewählten Objektterminen), Testphase: deaktivierte
+// Knöpfe/Links (lmt-gesperrt) zeigen den Tooltip statt zu navigieren.
 (function () {
     'use strict';
+    // v31: gesperrte Umbuchen-Links (Testphase) nicht navigieren – Tooltip reicht
+    document.querySelectorAll('a.lmt-gesperrt[aria-disabled="true"]').forEach(function (a) {
+        a.addEventListener('click', function (e) { e.preventDefault(); });
+    });
+    // v31: Dialog „Bestätigung erneut“ – „eine Mail“ nur sinnvoll bei ≥ 2 Terminen
+    document.querySelectorAll('form.lmt-erneut-form').forEach(function (f) {
+        const zusammen = f.querySelector('input[name=zusammen]');
+        const pruefen = function () {
+            const n = f.querySelectorAll('input[name=termin_ids]:checked').length;
+            if (zusammen) { zusammen.disabled = n < 2; if (n < 2) { zusammen.checked = false; } }
+            const senden = f.querySelector('button[type=submit]');
+            if (senden) { senden.disabled = n === 0; }
+        };
+        f.addEventListener('change', pruefen);
+        pruefen();
+    });
 
     // --- Mini-Karte -----------------------------------------------------------------
     const kartenDiv = document.getElementById('lmt-karte');
@@ -104,6 +124,7 @@
             ad_id: ad.value, beginn: datum.value + 'T' + uhrzeit.value,
             vorgang_id: form.dataset.vorgang || ''
         });
+        if (form.dataset.objekt) { params.set('objekt_id', form.dataset.objekt); }   // v31: Fahrzeit vom Objekt
         const meinLauf = {};
         laufend = meinLauf;
         let daten;

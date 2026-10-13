@@ -1,0 +1,173 @@
+{% from "_symbole.html" import symbol %}
+{# v31 (PLAN_LEAD_V5 Phase 153/157) – Block „Objekte“ im Kundeninfo-Bereich.
+   Ein-Objekt-Vorgänge sehen nur den Link „Weiteres Objekt hinzufügen“ (die bekannten
+   Adressfelder stehen im Stammdaten-Formular); ab zwei Objekten Karten je Objekt:
+   Bezeichnung, Adresse, Objektart, Parteien (MFH), Interessen inkl. MS/WA/DMS,
+   MFH-Frage Rechnungsadresse (Hauptobjekt → kunden.rechnung_*, sonst vorgang_objekte.
+   rechnung_*), Termin-Status (lead_termin.objekt_termine – Vertrag T), Erfassungs-/
+   Angebots-Chips, Pfeile (Hauptobjekt bleibt an erster Stelle), Deaktivieren (gesperrt,
+   wenn Termin/Erfassung/Angebot hängt). Autospeichern je Feld wie die Kundenfelder
+   (lm_kartei.js → POST /lead/{id}/objekt/{objekt_id}, JSON {feld, wert}); Objekt 1 =
+   Hauptobjekt = Kundenadresse (objekte.hauptobjekt_sync). Pflichtfelder rot
+   (pflicht.objekte je Objekt-ID). Kontext: objekte (lead_kartei.objekte_kontext). #}
+{% macro objekt_karte(o) %}
+{% set oid = o.id %}
+{% set offen_o = o.pflicht_keys %}
+<article class="lk-objekt{{ ' haupt' if o.haupt }}" data-objekt="{{ oid }}" id="objekt-{{ oid }}">
+    <form class="lk-autospeichern lk-objekt-form" data-feld-url="{{ o.feld_url }}" data-readonly="{{ '1' if readonly else '' }}"
+          data-objekt="{{ oid }}" autocomplete="off" onsubmit="return false">
+        <fieldset {{ 'disabled' if readonly }}>
+            <div class="lk-objekt-kopf">
+                <span class="abzeichen" title="{{ 'Hauptobjekt = Kundenadresse (synchron mit den Kundenfeldern)' if o.haupt else 'Weiteres Objekt' }}">Objekt {{ o.nummer }}{{ ' · Hauptobjekt' if o.haupt }}</span>
+                <label class="lk-feld lk-inline-feld" data-feld-wrap="bezeichnung"><span class="sr-only">Bezeichnung</span>
+                    <input type="text" name="bezeichnung" data-feld="bezeichnung" value="{{ o.objekt.bezeichnung }}" maxlength="100" aria-label="Bezeichnung" placeholder="Bezeichnung">
+                    <small class="lk-feld-status" aria-live="polite"></small></label>
+            </div>
+            <div class="lk-objekt-raster">
+                <label class="lk-feld lk-pflicht{{ ' lk-pflicht-offen' if 'strasse' in offen_o }}" data-feld-wrap="strasse"><span>Straße<abbr title="Pflichtfeld">*</abbr></span>
+                    <input type="text" name="strasse" data-feld="strasse" value="{{ o.objekt.strasse }}" maxlength="200"><small class="lk-feld-status" aria-live="polite"></small></label>
+                <div class="lk-feld-reihe">
+                    <label class="lk-feld lk-pflicht schmal{{ ' lk-pflicht-offen' if 'plz' in offen_o }}" data-feld-wrap="plz"><span>PLZ<abbr title="Pflichtfeld">*</abbr></span>
+                        <input type="text" name="plz" data-feld="plz" value="{{ o.objekt.plz }}" maxlength="10" inputmode="numeric" pattern="[0-9]{5}"><small class="lk-feld-status" aria-live="polite"></small></label>
+                    <label class="lk-feld lk-pflicht{{ ' lk-pflicht-offen' if 'ort' in offen_o }}" data-feld-wrap="ort"><span>Ort<abbr title="Pflichtfeld">*</abbr></span>
+                        <input type="text" name="ort" data-feld="ort" value="{{ o.objekt.ort }}" maxlength="100"><small class="lk-feld-status" aria-live="polite"></small></label>
+                </div>
+                <label class="lk-feld{{ ' lk-pflicht' if 'objektart' in pflicht.pflicht }}{{ ' lk-pflicht-offen' if 'objektart' in offen_o }}" data-feld-wrap="objektart"><span>Objektart{% if 'objektart' in pflicht.pflicht %}<abbr title="Pflichtfeld">*</abbr>{% endif %}</span>
+                    <select name="objektart" data-feld="objektart" data-objektart-wahl>
+                        <option value="" {{ 'selected' if not o.objekt.objektart }}>–</option>
+                        {% for code, bez, parteien_pflicht in objektarten %}
+                            <option value="{{ code }}" data-parteien="{{ '1' if parteien_pflicht else '0' }}" {{ 'selected' if o.objekt.objektart == code }}>{{ bez }}</option>
+                        {% endfor %}
+                    </select><small class="lk-feld-status" aria-live="polite"></small></label>
+                <div class="lk-feld lk-checkboxen{{ ' lk-pflicht' if 'interesse' in pflicht.pflicht }}{{ ' lk-pflicht-offen' if 'interesse' in offen_o }}" role="group" aria-label="Interessen" data-feld-wrap="interesse" data-feld-gruppe="interesse">
+                    <span>Interessen{% if 'interesse' in pflicht.pflicht %}<abbr title="Pflichtfeld">*</abbr>{% endif %}</span>
+                    <div>
+                        {% for code, name in interessen_wahl %}
+                            <label class="lk-check" title="{{ sparten_langnamen.get(code, name) }}"><input type="checkbox" name="interesse" value="{{ code }}" data-feld-teil="interesse" {{ 'checked' if code in o.interessen }}> {{ code }}</label>
+                        {% endfor %}
+                    </div><small class="lk-feld-status" aria-live="polite"></small>
+                </div>
+                <div class="lk-mfh" data-mfh {{ '' if o.objekt.objektart == 'MFH' else 'hidden' }}>
+                    <label class="lk-feld lk-pflicht schmal{{ ' lk-pflicht-offen' if 'parteien' in offen_o }}" data-feld-wrap="parteien"><span>Anzahl Parteien<abbr title="Pflichtfeld">*</abbr></span>
+                        <input type="number" name="parteien" data-feld="parteien" min="1" max="999" value="{{ o.objekt.parteien or '' }}"><small class="lk-feld-status" aria-live="polite"></small></label>
+                    <div class="lk-feld lk-rechnung-frage" data-feld-wrap="rechnung_abweichend"><span>Rechnungsadresse identisch mit der Objektadresse?</span>
+                        <div class="lk-radio-zeile" data-rechnung-frage>
+                            <label class="lk-check"><input type="radio" name="rechnung_identisch_{{ oid }}" value="" data-feld="rechnung_abweichend" {{ 'checked' if not o.rechnung_abweichend }}> Ja</label>
+                            <label class="lk-check"><input type="radio" name="rechnung_identisch_{{ oid }}" value="1" data-feld="rechnung_abweichend" {{ 'checked' if o.rechnung_abweichend }}> Nein</label>
+                        </div><small class="lk-feld-status" aria-live="polite"></small></div>
+                    <div class="lk-feld lk-rechnung lk-pflicht{{ ' lk-pflicht-offen' if 'rechnungsadresse' in offen_o }}" role="group" aria-label="Rechnungsadresse" data-feld-wrap="rechnungsadresse" data-rechnung-felder {{ '' if o.rechnung_abweichend else 'hidden' }}>
+                        <span>Rechnungsadresse<abbr title="Pflichtfeld">*</abbr>{% if o.haupt %} <small class="dezent">(Kunden-Standard)</small>{% endif %}</span>
+                        <input type="text" name="rechnung_name" data-feld="rechnung_name" value="{{ o.rechnung.name }}" placeholder="Name / Firma" maxlength="200" aria-label="Rechnung Name">
+                        <input type="text" name="rechnung_strasse" data-feld="rechnung_strasse" value="{{ o.rechnung.strasse }}" placeholder="Straße" maxlength="200" aria-label="Rechnung Straße">
+                        <div class="lk-feld-reihe">
+                            <input type="text" name="rechnung_plz" data-feld="rechnung_plz" value="{{ o.rechnung.plz }}" placeholder="PLZ" maxlength="10" class="schmal" aria-label="Rechnung PLZ">
+                            <input type="text" name="rechnung_ort" data-feld="rechnung_ort" value="{{ o.rechnung.ort }}" placeholder="Ort" maxlength="100" aria-label="Rechnung Ort">
+                        </div><small class="lk-feld-status" aria-live="polite"></small>
+                    </div>
+                </div>
+            </div>
+        </fieldset>
+    </form>
+    <div class="lk-objekt-status" data-rolle="objekt-status">
+        {% if o.termin %}
+            <span class="abzeichen lk-tstatus-{{ o.termin.status }}">{{ termin_status_namen.get(o.termin.status, o.termin.status) }}</span>
+            <span>{{ symbol('kalender') }} {{ o.termin.beginn | de_datum('%a %d.%m.%Y %H:%M') if o.termin.beginn else 'ohne Uhrzeit' }}{% if o.termin_ad %} · {{ o.termin_ad.name }}{% endif %}</span>
+        {% else %}
+            <span class="dezent">{{ symbol('kalender') }} kein Termin</span>
+            {% if not readonly %}<a class="knopf klein zweitrangig" href="{{ kartei_url }}/termin?objekt_id={{ oid }}" title="Terminassistent für dieses Objekt (Fahrzeit je Objektadresse)">Termin vorschlagen</a>{% endif %}
+        {% endif %}
+        {% for e in o.erfassungen %}
+            <a class="abzeichen" href="/erfassungen/{{ e.id }}" title="Erfassung · {{ e.status }}">{{ symbol('stift') }} {{ e.sparte or 'WP' }} · {{ e.status }}</a>
+        {% endfor %}
+        {% for a in o.angebote %}
+            <a class="abzeichen" href="{{ '/angebote/' ~ a.id if benutzer.rolle in ('admin', 'innendienst') else '/meine-angebote/' ~ a.id }}" title="Angebot · {{ a.status }}">{{ symbol('euro') }} {{ a.nummer }} · {{ a.status }}</a>
+        {% endfor %}
+    </div>
+    {% if not readonly %}
+    <div class="lk-objekt-fuss">
+        {% if o.haupt %}
+            <span class="dezent" title="Hauptobjekt = Kundenadresse, bleibt an erster Stelle">{{ symbol('ort') }} Kundenadresse</span>
+        {% else %}
+            <form method="post" action="{{ o.feld_url }}/reihenfolge" class="lk-inline"><input type="hidden" name="richtung" value="hoch">
+                <button class="knopf klein zweitrangig" type="submit" title="Nach oben" aria-label="Objekt nach oben" {{ 'disabled' if not o.kann_hoch }}>&#9650;</button></form>
+            <form method="post" action="{{ o.feld_url }}/reihenfolge" class="lk-inline"><input type="hidden" name="richtung" value="runter">
+                <button class="knopf klein zweitrangig" type="submit" title="Nach unten" aria-label="Objekt nach unten" {{ 'disabled' if not o.kann_runter }}>&#9660;</button></form>
+            <form method="post" action="{{ o.feld_url }}/deaktivieren" class="lk-inline"
+                  onsubmit="return confirm('Objekt deaktivieren? Es wird nicht gelöscht und bleibt in der Historie.')">
+                <button class="knopf klein zweitrangig" type="submit" {{ 'disabled' if o.deaktivieren_grund }}
+                        title="{{ ('Nicht möglich – daran hängt: ' ~ o.deaktivieren_grund) if o.deaktivieren_grund else 'Objekt deaktivieren (nicht löschen)' }}">Deaktivieren</button>
+            </form>
+        {% endif %}
+    </div>
+    {% endif %}
+</article>
+{% endmacro %}
+
+<div class="lk-objekte" id="lk-objekte" data-bereich="objekte" data-objekt-url="{{ objekt_url }}" data-anzahl="{{ objekte.anzahl }}">
+    {% if objekte.mehrere %}
+    <div class="lk-objekte-kopf">
+        <h3 class="lk-abschnitt">Objekte <span class="lk-zahl">{{ objekte.anzahl }}</span>
+            <span class="dezent lk-info-hinweis">je Objekt eigener Vor-Ort-Termin, eigene Erfassung, eigenes Angebot</span></h3>
+        {% if objekte.ohne_termin %}<span class="dezent" data-rolle="objekte-ohne-termin">{{ objekte.ohne_termin }} von {{ objekte.anzahl }} Objekten ohne Termin</span>{% endif %}
+    </div>
+    <div class="lk-objekt-karten">
+        {% for o in objekte.liste %}{{ objekt_karte(o) }}{% endfor %}
+    </div>
+    {% endif %}
+    {% if objekte.inaktive %}
+    <p class="dezent lk-objekte-inaktiv">Deaktiviert:
+        {% for o in objekte.inaktive %}
+            <span>{{ o.bezeichnung }} ({{ o.strasse }}, {{ o.plz }} {{ o.ort }})</span>
+            {% if not readonly %}<form method="post" action="{{ objekt_url }}/{{ o.id }}/aktivieren" class="lk-inline"><button class="knopf klein zweitrangig" type="submit">wieder aktivieren</button></form>{% endif %}{{ ' · ' if not loop.last }}
+        {% endfor %}</p>
+    {% endif %}
+    {% if not readonly %}
+    <details class="lk-objekt-neu" id="lk-objekt-neu">
+        <summary>{{ symbol('plus') }} Weiteres Objekt hinzufügen</summary>
+        <form method="post" action="{{ objekt_url }}" class="lk-objekt formular lk-objekt-form-neu" id="lk-objekt-form-neu" autocomplete="off">
+            <div class="lk-objekt-kopf">
+                <span class="abzeichen">Objekt {{ objekte.anzahl + 1 }}</span>
+                <label class="lk-feld lk-inline-feld"><span class="sr-only">Bezeichnung</span>
+                    <input type="text" name="bezeichnung" maxlength="100" placeholder="Bezeichnung (Standard: Objekt {{ objekte.anzahl + 1 }})" aria-label="Bezeichnung"></label>
+            </div>
+            <div class="lk-objekt-raster">
+                <label class="lk-feld lk-pflicht"><span>Straße<abbr title="Pflichtfeld">*</abbr></span><input type="text" name="strasse" maxlength="200" required></label>
+                <div class="lk-feld-reihe">
+                    <label class="lk-feld lk-pflicht schmal"><span>PLZ<abbr title="Pflichtfeld">*</abbr></span><input type="text" name="plz" maxlength="10" inputmode="numeric" pattern="[0-9]{5}" required></label>
+                    <label class="lk-feld lk-pflicht"><span>Ort<abbr title="Pflichtfeld">*</abbr></span><input type="text" name="ort" maxlength="100" required></label>
+                </div>
+                <label class="lk-feld{{ ' lk-pflicht' if 'objektart' in pflicht.pflicht }}"><span>Objektart{% if 'objektart' in pflicht.pflicht %}<abbr title="Pflichtfeld">*</abbr>{% endif %}</span>
+                    <select name="objektart" data-objektart-wahl>
+                        <option value="">–</option>
+                        {% for code, bez, parteien_pflicht in objektarten %}<option value="{{ code }}" data-parteien="{{ '1' if parteien_pflicht else '0' }}">{{ bez }}</option>{% endfor %}
+                    </select></label>
+                <div class="lk-feld lk-checkboxen{{ ' lk-pflicht' if 'interesse' in pflicht.pflicht }}" role="group" aria-label="Interessen">
+                    <span>Interessen{% if 'interesse' in pflicht.pflicht %}<abbr title="Pflichtfeld">*</abbr>{% endif %}</span>
+                    <div>{% for code, name in interessen_wahl %}<label class="lk-check" title="{{ sparten_langnamen.get(code, name) }}"><input type="checkbox" name="interesse" value="{{ code }}"> {{ code }}</label>{% endfor %}</div>
+                </div>
+                <div class="lk-mfh" data-mfh hidden>
+                    <label class="lk-feld lk-pflicht schmal"><span>Anzahl Parteien<abbr title="Pflichtfeld">*</abbr></span><input type="number" name="parteien" min="1" max="999"></label>
+                    <div class="lk-feld lk-rechnung-frage"><span>Rechnungsadresse identisch mit der Objektadresse?</span>
+                        <div class="lk-radio-zeile" data-rechnung-frage>
+                            <label class="lk-check"><input type="radio" name="rechnung_identisch" value="ja" checked> Ja</label>
+                            <label class="lk-check"><input type="radio" name="rechnung_identisch" value="nein"> Nein</label>
+                        </div></div>
+                    <div class="lk-feld lk-rechnung" role="group" aria-label="Rechnungsadresse" data-rechnung-felder hidden>
+                        <span>Rechnungsadresse</span>
+                        <input type="text" name="rechnung_name" placeholder="Name / Firma" maxlength="200" aria-label="Rechnung Name">
+                        <input type="text" name="rechnung_strasse" placeholder="Straße" maxlength="200" aria-label="Rechnung Straße">
+                        <div class="lk-feld-reihe">
+                            <input type="text" name="rechnung_plz" placeholder="PLZ" maxlength="10" class="schmal" aria-label="Rechnung PLZ">
+                            <input type="text" name="rechnung_ort" placeholder="Ort" maxlength="100" aria-label="Rechnung Ort">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="formzeile">
+                <button class="knopf klein" type="submit">{{ symbol('plus') }} Objekt anlegen</button>
+                <span class="dezent">Das neue Objekt bekommt eigenen Termin, Erfassung und Angebot; Objekt 1 bleibt die Kundenadresse.</span>
+            </div>
+        </form>
+    </details>
+    {% endif %}
+</div>

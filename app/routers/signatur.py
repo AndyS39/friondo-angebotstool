@@ -104,6 +104,9 @@ def signieren(request: Request, angebot_id: int,
     projektierung_modul.version_nachziehen(session, angebot)
     from app import leadmanagement
     leadmanagement.phase_neu_berechnen(session, angebot.vorgang_id)  # v12
+    # v32 (PLAN_V19 Phase 163): Verfolgungsstufe des Vorgangs → angenommen
+    from app import verfolgung as verfolgung_modul
+    verfolgung_modul.nach_angebotsstatus(session, angebot, benutzer)
     erfassung = (session.query(Erfassung)
                  .filter(Erfassung.angebot_id == angebot.id).first())
     if erfassung is not None:
@@ -259,6 +262,9 @@ def fern_signieren(request: Request, token: str,
     projektierung_modul.version_nachziehen(session, angebot)
     from app import leadmanagement
     leadmanagement.phase_neu_berechnen(session, angebot.vorgang_id)  # v12
+    # v32 (PLAN_V19 Phase 163): Verfolgungsstufe des Vorgangs → angenommen (Fern-Signatur ohne Benutzer)
+    from app import verfolgung as verfolgung_modul
+    verfolgung_modul.nach_angebotsstatus(session, angebot)
     # Einmal-Token: nach der Signatur sofort entwerten
     angebot.signatur_token = None
     angebot.signatur_token_gueltig_bis = None

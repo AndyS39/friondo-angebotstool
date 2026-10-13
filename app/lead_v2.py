@@ -133,8 +133,12 @@ def kompetenz_passt(profil, sparten: list, objektart: str | None = None) -> tupl
     # Kombi WP+PV(+KL) deckt PV und KL im Kombi-Lead ab, auch wenn sie einzeln
     # nicht hinterlegt sind (F3: Horst darf WP+PV(+KL), aber kein PV allein)
     gedeckt = {"WP", "PV", "KL"} if (kombi_lead and kombi) else set()
+    # v31 (PLAN_LEAD_V5 Phase 157): MS/WA/DMS sind Freitext-Sparten wie WB – keine
+    # Pflicht-Kompetenz; der Admin kann sie trotzdem im AD-Profil (kompetenz_sparten)
+    # hinterlegen [ANNAHME: frei, bis die Profile gepflegt sind]
     fehlend = [s for s in sparten
-               if s not in koennen and s not in ("WB", "GW") and s not in gedeckt]
+               if s not in koennen and s not in ("WB", "GW", "MS", "WA", "DMS")
+               and s not in gedeckt]
     if fehlend:
         return False, "Sparte(n) " + ", ".join(fehlend) + " nicht in der Kompetenz"
     if "GW" in sparten and not getattr(profil, "kompetenz_gewerbe", False):
@@ -202,6 +206,13 @@ def pflichtfelder_offen(session: Session, kunde: Kunde, vorgang: Vorgang | None 
         if feld == "vertriebskanal":
             if not (kunde.vertriebskanal or "").strip():
                 offen.append("Vertriebskanal")
+            continue
+        if feld == "ad_id":
+            # v31 (Phase 158, Vertrag T 4.8): der Außendienst steht am Vorgang (vorgang.ad_id),
+            # nicht am Kunden – vorher getattr(kunde, "ad_id") → immer offen; ein zugewiesener
+            # Handelsvertreter (HV-Lead) gilt als erfüllt, ohne Vorgang keine Aussage
+            if vorgang is not None and not vorgang.ad_id:
+                offen.append("Außendienst")
             continue
         wert = getattr(kunde, feld, None)
         if wert is None or str(wert).strip() == "":
@@ -528,6 +539,81 @@ def score_aktiv(session: Session) -> bool:
     Berechnung, keine Anzeige von Score/Klasse, kein Qualifizierungsbogen."""
     from app import leadmanagement as kern
     return kern.parameter_holen(session, "score_aktiv", "aus").strip().lower() in ("an", "ja", "1", "true")
+
+
+# --- v31 (PLAN_LEAD_V5 Phase 159): Freischaltung – Prüfpunkte der Lead-Einstellungen ----
+
+def freischaltung_pruefpunkte(session: Session) -> list[dict]:
+    """Prüfpunkte vor dem Einschalten von terminierung_aktiv / mail_versand_aktiv
+    (Lead-Einstellungen → „Freischaltung“): Senderecht termin@ (Graph eingerichtet),
+    kalender_sync, Routing-Dienst, Leadmanager-Häkchen, HV-Gruppen, AD-Profile mit
+    Arbeitszeiten Mo–Fr (ohne Samstag). Je Punkt {name, ok, text}."""
+    from app import leadmanagement as kern
+    punkte = []
+    try:
+        from app import graph_versand
+        graph = bool(graph_versand.konfiguriert())
+    except Exception:
+        graph = False
+    absender = kern.parameter_holen(session, "absender_lead_mails", "termin@friondo.de")
+    punkte.append({"name": f"Senderecht {absender}", "ok": graph,
+                   "text": ("Microsoft Graph eingerichtet – Prüfpunkt „Testmail aus dem Lead-Absender“ nutzen"
+                            if graph else "Graph nicht eingerichtet (docs/graph-einrichtung.md) – ohne Senderecht bleibt jede Lead-Mail gesperrt")})
+    kalender = kern.parameter_holen(session, "kalender_sync", "aus").strip().lower() == "an"
+    punkte.append({"name": "Kalender-Sync (kalender_sync)", "ok": kalender,
+                   "text": "an – Outlook-Frei/Belegt und Termineinträge für angestellte AD"
+                   if kalender else "aus – der Assistent rechnet nur mit Tool-Terminen"})
+    anbieter = kern.parameter_holen(session, "routing_anbieter", "luftlinie").strip().lower()
+    schluessel = (kern.parameter_holen(session, "ors_api_key", "") if anbieter == "ors"
+                  else kern.parameter_holen(session, "google_api_key", "") if anbieter == "google" else "")
+    routing_ok = anbieter in ("ors", "google") and bool((schluessel or "").strip())
+    punkte.append({"name": "Routing-Dienst (Fahrzeiten)", "ok": routing_ok,
+                   "text": f"{anbieter} mit Schlüssel" if routing_ok
+                   else f"{anbieter} – ohne Schlüssel rechnet der Assistent mit Luftlinie"})
+    leadmanager = [b for b in session.query(Benutzer).filter(Benutzer.aktiv.is_(True))
+                   if getattr(b, "leadmanager", False)]
+    punkte.append({"name": "Leadmanager-Häkchen (Benutzerverwaltung)", "ok": bool(leadmanager),
+                   "text": (", ".join(sorted(b.name for b in leadmanager)) if leadmanager
+                            else "kein Benutzer mit Häkchen „Leadmanager“ – Innendienst-Dropdowns bleiben leer")})
+    gruppen = hv_gruppen(session)
+    hv_ok = bool(gruppen.get("rene")) and bool(gruppen.get("simon"))
+    punkte.append({"name": "HV-Gruppen (hv_gruppe_rene / hv_gruppe_simon)", "ok": hv_ok,
+                   "text": (f"René: {len(gruppen.get('rene', []))} · Simon-Gruppe: {len(gruppen.get('simon', []))} Benutzer"
+                            + ("" if kern.parameter_holen(session, "hv_gruppe_simon_mitglieder", "").strip()
+                               else " · Mitglieder = alle HV außer René [ANNAHME]"))
+                   if hv_ok else "mindestens eine Gruppe ohne Ziel – Lead-Einstellungen → HV-Gruppen"})
+    fehlend = []
+    for profil in session.query(AdProfil).filter(AdProfil.aktiv_terminierung.is_(True)):
+        if profil.terminiert_selbst:
+            continue
+        try:
+            zeiten = json.loads(profil.arbeitszeiten or "{}")
+        except ValueError:
+            zeiten = {}
+        tage = [t for t in ("mo", "di", "mi", "do", "fr") if zeiten.get(t)]
+        samstag = any(str(k).lower() in ("sa", "samstag", "5", "6") for k in zeiten)
+        if len(tage) < 5 or samstag:
+            person = session.get(Benutzer, profil.benutzer_id)
+            fehlend.append((person.name if person else str(profil.benutzer_id))
+                           + (" (Samstag gesetzt)" if samstag else f" ({len(tage)}/5 Tage)"))
+    punkte.append({"name": "AD-Profile mit Arbeitszeiten Mo–Fr", "ok": not fehlend,
+                   "text": "alle angestellten AD mit Arbeitszeiten Montag bis Freitag"
+                   if not fehlend else "unvollständig: " + ", ".join(fehlend)})
+    return punkte
+
+
+def mails_gesperrt_anzahl(session: Session) -> int:
+    """Zähler „Mails gesperrt: n“ – lead_mail.gesperrte_anzahl (Agent T), Rückfall: Zählung
+    KommunikationLog.status == „gesperrt“."""
+    try:
+        from app import lead_mail
+        funktion = getattr(lead_mail, "gesperrte_anzahl", None)
+        if callable(funktion):
+            return int(funktion(session) or 0)
+    except Exception:
+        pass
+    from app.models import KommunikationLog
+    return int(session.query(KommunikationLog).filter(KommunikationLog.status == "gesperrt").count())
 
 
 # --- v29 (PLAN_LEAD_V4 Phasen 140/141/143): Datenmigration Oberfläche -----------------

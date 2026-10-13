@@ -10,6 +10,15 @@
     <p class="dezent">Je Sparte entsteht eine eigene Erfassung mit eigenem Protokoll.
     {% if lead %}Die Interessen des Leads sind vorausgewählt.{% endif %}</p>
 
+    {# v31 (PLAN_LEAD_V5 Phase 153): übergebenes Objekt des Vorgangs – der
+       Ausführungsort der Erfassung ist die Objektadresse #}
+    {% if objekt %}
+    <p class="hinweis">Objekt: <strong>{{ objekt.bezeichnung or 'Objekt' }}</strong>
+        {% set adresse = objekt_text(objekt, False) if objekt_text is defined else '' %}
+        {% if adresse %}· {{ adresse }}{% endif %}
+        {% if objekt.objektart %}· {{ objekt.objektart }}{% if objekt.parteien %} ({{ objekt.parteien }} Parteien){% endif %}{% endif %}</p>
+    {% endif %}
+
     {% if entwuerfe %}
     <div class="hinweis">
         <strong>Offene Entwürfe zu diesem Lead:</strong>
@@ -23,13 +32,29 @@
     <form method="post" action="/erfassung/sparten-start" class="mobil-formular">
         <input type="hidden" name="kunde_id" value="{{ kunde.id }}">
         {% if lead %}<input type="hidden" name="lead_id" value="{{ lead.id }}">{% endif %}
+        {% if objekt %}
+        <input type="hidden" name="objekt_id" value="{{ objekt.id }}">
+        {% elif objekte %}
+        {# v31: Vorgang mit mehreren Objekten, keines übergeben → Objekt wählen #}
+        <h2 style="margin-top:0.6rem">Welches Objekt?</h2>
+        <div class="wahl-gruppe">
+        {% for o in objekte %}
+            <label class="wahl">
+                <input type="radio" name="objekt_id" value="{{ o.id }}" {{ 'checked' if loop.first }}>
+                <span>{{ o.bezeichnung or ('Objekt ' ~ loop.index) }}
+                    {% set adresse = objekt_text(o, False) if objekt_text is defined else '' %}
+                    {% if adresse %}<span class="dezent">– {{ adresse }}</span>{% endif %}</span>
+            </label>
+        {% endfor %}
+        </div>
+        {% endif %}
         <div class="wahl-gruppe">
         {% for s in sparten %}
             <label class="wahl {{ 'wahl-erledigt' if s in erfasst }}">
                 <input type="checkbox" name="sparte_{{ s }}"
                        {{ 'checked' if s in vorausgewaehlt }} {{ 'disabled' if s in erfasst }}>
                 <span>{{ s }} – {{ sparten_namen[s] }}{{ ' ✓ bereits erfasst' if s in erfasst }}
-                    {% if s == 'WB' %}<span class="dezent">(immer Freitext)</span>{% endif %}</span>
+                    {% if freitext_sparten is defined and s in freitext_sparten %}<span class="dezent">(immer Freitext)</span>{% elif s == 'WB' %}<span class="dezent">(immer Freitext)</span>{% endif %}</span>
             </label>
         {% endfor %}
         </div>

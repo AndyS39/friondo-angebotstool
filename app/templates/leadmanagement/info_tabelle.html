@@ -19,6 +19,8 @@
     {%- if v.demo %} <span class="abzeichen">Demo</span>{% endif %}
     {%- if z.monday %} <span class="abzeichen" title="gesyncter monday-Lead">monday</span>{% endif %}
     {%- if v.vorab_angebot %} <span class="abzeichen" title="Vorab-Angebot ohne Vor-Ort-Termin (F10)">Vorab-Angebot</span>{% endif %}
+    {#- v31 (Phase 153): Badge „Großkunde“ im Infoabend #}
+    {%- if z.grosskunde %} <span class="lm-grosskunde"{% if ctx.grosskunde_farbe %} style="--f:{{ ctx.grosskunde_farbe }}"{% endif %} title="Großkunde">Großkunde</span>{% endif %}
     {%- if z.terminiert %} <a class="abzeichen li-terminiert" href="/lead-management/terminiert" title="Vor-Ort-Termin vereinbart – der Lead steht zusätzlich im Board Deals">→ Deals</a>{% endif %}
     {%- if z.zurueck %} <span class="lm-flag" title="Wiedervorlage fällig – zurück aus „Pausiert“">⚑ zurück</span>{% endif %}
     {%- if z.hinweis %}

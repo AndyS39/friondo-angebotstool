@@ -18,6 +18,7 @@ from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from app import auth
+from app import sparten as sparten_modul   # v31: gemeinsame Sparten-Liste (Kompetenz)
 from app.db import get_session
 from app.models import (Benutzer, Erfassung, Lead, MondayPerson, MondayQuelle,
                         einstellung_holen, einstellung_setzen)
@@ -58,6 +59,9 @@ GRUND_TEXTE = {"ok": "OK", "pin_falsch": "PIN falsch", "gesperrt": "gesperrt",
                "ip_limit": "IP-Grenze erreicht", "inaktiv": "Benutzer inaktiv",
                "unbekannt": "Benutzer unbekannt"}
 LOGIN_PROTOKOLL_MAX = 500
+# v31 (PLAN_LEAD_V5 Phase 158): Arbeitszeiten des AD-Profils nur Montag bis Freitag
+WOCHENTAGE = (("mo", "Montag"), ("di", "Dienstag"), ("mi", "Mittwoch"),
+              ("do", "Donnerstag"), ("fr", "Freitag"))
 
 
 def verknuepfungen(session: Session, benutzer_id: int) -> dict[str, int]:
@@ -119,11 +123,18 @@ def liste(request: Request, session: Session = Depends(get_session)):
     team_je_benutzer: dict[int, set[int]] = {}
     for m in session.query(TeamMitglied):
         team_je_benutzer.setdefault(m.benutzer_id, set()).add(m.team_id)
+    # v31 (PLAN_LEAD_V5 Phase 158): Abwesenheiten (Krankheit/Urlaub) je Benutzer
+    from app import abwesenheiten
+    abwesenheit_je_benutzer = abwesenheiten.je_benutzer(session, [b.id for b in benutzer])
+    namen = {b.id: b.name for b in session.query(Benutzer.id, Benutzer.name)}
     return render(request, "benutzer/liste.html", aktiv="/benutzer",
                   benutzer=benutzer, rollen=ROLLEN, loeschbar=loeschbar,
                   zusatzrollen=ZUSATZROLLEN, teams=teams,
                   rollen_namen=ROLLEN_NAMEN,
                   team_je_benutzer=team_je_benutzer,
+                  abwesenheit_je_benutzer=abwesenheit_je_benutzer,
+                  abwesenheit_arten=abwesenheiten.ARTEN, benutzer_namen=namen,
+                  heute=datetime.now().date(),
                   rolle_filter=rolle_filter, aktiv_filter=aktiv_filter,
                   jetzt=datetime.now(), einstellungen=einstellungen_lesen(session),
                   pin_mindestlaenge=auth.pin_mindestlaenge(session),
@@ -150,7 +161,9 @@ def anlegen(request: Request, session: Session = Depends(get_session)):
         return _meldung("/benutzer", fehler)
     # Häkchen „PIN-Wechsel beim nächsten Login verlangen“ (beim Anlegen vorbelegt an)
     neuer = Benutzer(name=name, rolle=rolle, email=email,
-                     pin_wechsel_noetig=form.get("pin_wechsel") == "on")
+                     pin_wechsel_noetig=form.get("pin_wechsel") == "on",
+                     # v31 (PLAN_LEAD_V5 Phase 156): Häkchen „Leadmanager“
+                     leadmanager=form.get("leadmanager") == "on")
     auth.pin_setzen(neuer, pin)          # schreibt pin_hash_v2 UND pin_hash
     session.add(neuer)
     session.flush()
@@ -202,6 +215,11 @@ def aendern(request: Request, benutzer_id: int,
     # v12 (Phase 73): Leadmanager-Einstellungen (Round-Robin-Zuweisung)
     benutzer.lm_aktiv = form.get("lm_aktiv") == "on"
     benutzer.lm_arbeitszeit = (form.get("lm_arbeitszeit") or "").strip() or None
+    # v31 (PLAN_LEAD_V5 Phase 156): Häkchen „Leadmanager“ (benutzer.leadmanager) – nur
+    # ändern, wenn das Formular das Feld mitschickt (leadmanager_dabei), damit Formulare
+    # ohne den Block das Kennzeichen nicht löschen
+    if form.get("leadmanager_dabei") == "1":
+        benutzer.leadmanager = form.get("leadmanager") == "on"
     from app.models import Team, TeamMitglied
     # 27.09.2026: Teams nur aendern, wenn das Formular sie mitschickt
     # (teams_dabei) - sonst wuerde ein Formular ohne Team-Block alle
@@ -263,6 +281,48 @@ def loeschen(request: Request, benutzer_id: int,
     session.commit()
     return RedirectResponse("/benutzer?meldung=" + quote_plus(f"{name} gelöscht"),
                             status_code=303)
+
+
+# --- v31 (PLAN_LEAD_V5 Phase 158): Abwesenheiten (Krankheit/Urlaub) -----------------------
+
+@router.post("/{benutzer_id}/abwesenheit")
+def abwesenheit_anlegen(request: Request, benutzer_id: int,
+                        session: Session = Depends(get_session)):
+    """Abwesenheitseintrag (Art Krankheit | Urlaub, von/bis, Bemerkung) für einen
+    Benutzer – Wirkung: Terminassistent schlägt den Vertriebler im Zeitraum nicht
+    vor, seine Termine stehen in „Fällig heute“ mit Hinweis „Krankheit: <Name>“
+    (app/abwesenheiten.py). Die Benutzerverwaltung ist Admin-Pfad; der Innendienst
+    pflegt den eigenen Eintrag über „Mein Dashboard“ (Lead-Modul)."""
+    from app import abwesenheiten
+    benutzer = session.get(Benutzer, benutzer_id)
+    if benutzer is None:
+        return RedirectResponse("/benutzer", status_code=303)
+    form = anfrage.formular(request)
+    ok, meldung, _eintrag = abwesenheiten.anlegen(
+        session, benutzer.id, form.get("art") or "krankheit", form.get("von"),
+        form.get("bis"), form.get("bemerkung") or "", angelegt_von=request.state.benutzer.id)
+    if not ok:
+        return _meldung("/benutzer", f"{benutzer.name}: {meldung}")
+    session.commit()
+    return RedirectResponse("/benutzer?meldung=" + quote_plus(f"{benutzer.name}: {meldung}")
+                            + f"#zeile-{benutzer.id}", status_code=303)
+
+
+@router.post("/abwesenheit/{eintrag_id}/beenden")
+def abwesenheit_beenden(request: Request, eintrag_id: int,
+                        session: Session = Depends(get_session)):
+    """Eintrag beenden (bis = heute bzw. übergebenes Datum) – entfernt die Hinweise."""
+    from app import abwesenheiten
+    from app.models import BenutzerAbwesenheit
+    eintrag = session.get(BenutzerAbwesenheit, eintrag_id)
+    if eintrag is None:
+        return _meldung("/benutzer", "Abwesenheit nicht gefunden.")
+    form = anfrage.formular(request)
+    benutzer_id = eintrag.benutzer_id
+    abwesenheiten.beenden(session, eintrag.id, form.get("bis") or None)
+    session.commit()
+    return RedirectResponse("/benutzer?meldung=" + quote_plus("Abwesenheit beendet.")
+                            + f"#zeile-{benutzer_id}", status_code=303)
 
 
 # --- v27 (Phase 130): Sperre aufheben, Sitzungen beenden, Einstellungen ------------------
@@ -488,7 +548,6 @@ def ad_profil_seite(request: Request, benutzer_id: int,
     # Kanal-Regel, Buchungslink, Startwerte aus den Parametern
     from app import lead_mail, lead_termin, lead_v2
     from app import leadmanagement as kern
-    from app.models import INTERESSEN
     return render(request, "benutzer/ad_profil.html", aktiv="/benutzer",
                   person=person, profil=profil, zeiten=zeiten,
                   # v29 (Phase 142): Bild/Infotext der Terminbestätigung
@@ -496,10 +555,11 @@ def ad_profil_seite(request: Request, benutzer_id: int,
                   vorlage_vorhanden=lead_mail.vorlage_vorhanden(session, lead_mail.vertriebler_key(person.id)),
                   bild_max_mb=lead_mail.BILD_MAX_BYTES // (1024 * 1024),
                   gebiet=", ".join(str(p) for p in gebiet),
-                  wochentage=[("mo", "Montag"), ("di", "Dienstag"),
-                              ("mi", "Mittwoch"), ("do", "Donnerstag"),
-                              ("fr", "Freitag"), ("sa", "Samstag")],
-                  sparten=INTERESSEN,
+                  # v31 (PLAN_LEAD_V5 Phase 158): Terminassistent nur Montag bis Freitag –
+                  # kein Samstags-Eingabefeld mehr (Migration leert Samstag)
+                  wochentage=list(WOCHENTAGE),
+                  # v31 (Phase 157): Kompetenz um MS/WA/DMS erweiterbar (gemeinsame Liste)
+                  sparten=[(c, sparten_modul.langname(c)) for c in sparten_modul.SPARTEN],
                   kompetenz=lead_v2.kompetenz_sparten(profil) if profil else [],
                   startwerte=lead_v2.kompetenz_startwerte(person.name),
                   puffer_param=lead_termin._int(kern.parameter_holen(session, "puffer_min", "30"), 30),
@@ -526,7 +586,9 @@ def ad_profil_speichern(request: Request, benutzer_id: int,
                           erstellt_von=request.state.benutzer.id)
         session.add(profil)
     zeiten = {}
-    for tag in ("mo", "di", "mi", "do", "fr", "sa"):
+    # v31 (PLAN_LEAD_V5 Phase 158): Arbeitszeiten nur Montag bis Freitag – ein
+    # mitgeschickter Samstag wird verworfen
+    for tag, _name in WOCHENTAGE:
         von = (form.get(f"{tag}_von") or "").strip()
         bis = (form.get(f"{tag}_bis") or "").strip()
         if von and bis:
@@ -545,7 +607,6 @@ def ad_profil_speichern(request: Request, benutzer_id: int,
     # v23 (Phase 108, F4/A-13): Startwerte aus den Parametern puffer_min (30)
     # und max_termine_tag_start (3)
     from app import lead_termin, leadmanagement as kern
-    from app.models import INTERESSE_CODES
     puffer_start = lead_termin._int(kern.parameter_holen(session, "puffer_min", "30"), 30)
     max_start = lead_termin._int(kern.parameter_holen(session, "max_termine_tag_start", "3"), 3)
     profil.termin_dauer_min = _zahl("termin_dauer_min", 90)
@@ -557,8 +618,8 @@ def ad_profil_speichern(request: Request, benutzer_id: int,
     profil.aktiv_terminierung = form.get("aktiv_terminierung") == "on"
     # v23 (Phase 108, F3/A-1): Produktkompetenz (Sparten WP/PV/KL/WB/GW, Kombi
     # WP+PV(+KL), Objektkompetenz MFH, Gewerbe), Handelsvertreter, Kanal-Regel,
-    # Buchungslink (Book with me) am Benutzer
-    kompetenz = [code for code in INTERESSE_CODES if form.get(f"kompetenz_{code}") == "on"]
+    # Buchungslink (Book with me) am Benutzer; v31 (Phase 157): auch MS/WA/DMS
+    kompetenz = [code for code in sparten_modul.SPARTEN if form.get(f"kompetenz_{code}") == "on"]
     profil.kompetenz_sparten = json_modul.dumps(kompetenz)
     profil.kompetenz_kombi = form.get("kompetenz_kombi") == "on"
     profil.kompetenz_mfh = form.get("kompetenz_mfh") == "on"

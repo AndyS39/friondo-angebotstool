@@ -97,7 +97,9 @@ class Basis(unittest.TestCase):
                  "ort": "Krefeld", "telefon": f"02151 55{nr:04d}", "sparten": ["WP"],
                  "email": f"v2i{nr}@test.local"}
         vorgang, _ = kern.lead_anlegen(self.s, daten, quelle, "api", entscheidung="neu")
-        vorgang.demo = True
+        # v31 (PLAN_LEAD_V5 Phase 159): Demo-Modus beendet – Testleads sind echte Leads (demo = 0);
+        # Demo-Leads bleiben in bestand_abgleich/Statistik/Kacheln dauerhaft ausgeblendet
+        vorgang.demo = False
         if veranstaltung is not None:
             vorgang.veranstaltung_id = veranstaltung.id
         for k, v in extra.items():
@@ -193,13 +195,15 @@ class Board(Basis):
         self.assertNotIn(f'data-vorgang="{v.id}"', r.text)
 
     def test_gate_404_innendienst_im_demo(self):
+        """v31 (PLAN_LEAD_V5 Phase 159): Demo-Modus beendet – der Innendienst sieht und nutzt den
+        Infoabend (vorher 404 im Demo-Modus); fremde Vorgänge bleiben 404."""
         innen, c = self.benutzer("LeadV2I Innen", "innendienst")
         v = self.lead(5, self.veranstaltung("05.11.2026"))
-        self.assertEqual(c.get(BOARD).status_code, 404)
-        self.assertEqual(c.get(BOARD + "/termine").status_code, 404)
-        self.assertEqual(c.post(f"{BOARD}/{v.id}/teilgenommen", data={"wert": "ja"}).status_code, 404)
-        self.assertEqual(c.post(f"{BOARD}/sammelaktion", data={"aktion": "naechste", "ids": [str(v.id)]}).status_code, 404)
-        self.assertIsNone(self.frisch(v).teilgenommen)
+        self.assertEqual(c.get(BOARD).status_code, 200)
+        self.assertEqual(c.get(BOARD + "/termine").status_code, 200)
+        r = c.post(f"{BOARD}/{v.id}/teilgenommen", data={"wert": "ja"}, follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        self.assertTrue(self.frisch(v).teilgenommen)
         # Admin: unbekannter Vorgang → 404
         self.assertEqual(self.client.post(f"{BOARD}/99999999/teilgenommen", data={"wert": "ja"}).status_code, 404)
 
@@ -293,7 +297,7 @@ class ApiEingang(Basis):
         self.assertEqual(antwort["status"], "neu")
         texte = [a.text for a in self.aktivitaeten(v, "status")]
         self.assertTrue(any(t.startswith("Veranstaltung: ") and "Vorlauf" in t for t in texte), texte)
-        self.assertTrue(v.demo)     # Demo-Modus: API-Leads bleiben Demo-Leads
+        self.assertFalse(v.demo)    # v31 (Phase 159): Demo-Modus beendet – API-Leads sind echte Leads
         # Standardregel direkt: Eingang 30.09.2026 + 3 Tage Vorlauf → 05.11.2026
         v2 = self.lead(10)
         self.assertIsNone(v2.veranstaltung_id)
@@ -331,7 +335,7 @@ class ApiEingang(Basis):
         d.pop("sparten")
         r = self.api(d)
         self.assertEqual(r.status_code, 422)
-        self.assertIn("sparten (WP/PV/KL/WB/GW)", r.json()["felder"])
+        self.assertIn("sparten (WP/PV/KL/WB/GW/MS/WA/DMS)", r.json()["felder"])   # v31 (Phase 157)
         self.quelle.standard_sparten = json.dumps(["WP", "GW"])
         self.s.commit()
         try:
@@ -404,16 +408,16 @@ class ApiEingang(Basis):
         self.assertEqual(r.json()["hinweis_bestand"]["vorgang_id"], bestand.id)
 
     def test_demo_vorgaenge_ignoriert_bei_modus_alle(self):
-        bestand = self.lead(40, quelle_key="lv2i-web")      # demo = True
+        """v31 (PLAN_LEAD_V5 Phase 159): Demo-Modus beendet – Demo-Leads (demo = 1) bleiben im
+        Abgleich dauerhaft ausgeblendet, echte Leads werden gefunden."""
+        bestand = self.lead(40, quelle_key="lv2i-web")
         kunde = self.s.get(Kunde, bestand.kunde_id)
         self.assertIsNotNone(lead_info.bestand_abgleich(self.s, telefon=kunde.telefon, nachname=kunde.nachname))
-        kern.parameter_setzen(self.s, "lead_freigabe_modus", "alle")
+        bestand.demo = True
         self.s.commit()
-        try:
-            self.assertIsNone(lead_info.bestand_abgleich(self.s, telefon=kunde.telefon, nachname=kunde.nachname))
-        finally:
-            kern.parameter_setzen(self.s, "lead_freigabe_modus", "admin")
-            self.s.commit()
+        self.assertIsNone(lead_info.bestand_abgleich(self.s, telefon=kunde.telefon, nachname=kunde.nachname))
+        bestand.demo = False
+        self.s.commit()
 
     def test_duplikat_409_fuer_andere_quellen_unveraendert(self):
         d = self.daten(50)
@@ -506,7 +510,8 @@ class Aktionen(Basis):
         try:
             from app import lead_boards
             keys = [a["key"] for a in lead_boards.sammelaktionen_fuer("info")]
-            self.assertEqual(keys, ["status", "naechste", "teilgenommen", "hv_verschieben"])   # v29
+            self.assertEqual(keys, ["status", "naechste", "teilgenommen", "hv_verschieben",
+                                    "archivieren", "duplizieren"])   # v29; v31 (Phase 154): Archivieren/Duplizieren
         except ImportError:
             pass
         # ohne Auswahl / unbekannte Aktion

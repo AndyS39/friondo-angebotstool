@@ -86,6 +86,26 @@
 {%- endif -%}
 {%- endmacro %}
 
+{# v32 (PLAN_V19 Phase 163): Verfolgungs-Chip je Vorgang – fünf Stufen
+   Versendet (blau) → Nachgefasst (grau) → Bestellung angekündigt (orange) →
+   Angenommen (grün) | Abgelehnt (rot); Farben aus den Status-Tokens v30 über die
+   Klassen .vf-<status> in app/static/verfolgung.css (Seite bindet die Datei ein).
+   Texte wie app.verfolgung.STATUS_TEXTE; unbekannter/leerer Status rendert nichts.
+   `vorgang_id` setzt data-verfolgung-chip, damit verfolgung.js den Chip nach dem
+   Dialog „Nächster Schritt“ ohne Neuladen aktualisiert. Genutzt in Vorgangsakte
+   (Kopfkarte neben der Hot-Ampel), „Meine Angebote“, Angebotsliste, Mein Tag (M). #}
+{% macro verfolgung_chip(status, klein=False, vorgang_id=None) -%}
+{%- set s = (status or '') | trim -%}
+{%- set texte = {'versendet': 'Versendet', 'nachgefasst': 'Nachgefasst',
+                 'bestellung_angekuendigt': 'Bestellung angekündigt',
+                 'angenommen': 'Angenommen', 'abgelehnt': 'Abgelehnt'} -%}
+{%- if s in texte -%}
+<span class="verfolgung-chip vf-{{ s }}{{ ' klein' if klein }}"{% if vorgang_id %} data-verfolgung-chip="{{ vorgang_id }}"{% endif %} title="Verfolgung: {{ texte[s] }}"><i class="abzeichen-punkt" aria-hidden="true"></i>{{ texte[s] }}</span>
+{%- elif vorgang_id -%}
+<span class="verfolgung-chip" data-verfolgung-chip="{{ vorgang_id }}" hidden></span>
+{%- endif -%}
+{%- endmacro %}
+
 {# Leerzustand mit optionaler Aktion #}
 {% macro leer_zustand(text, aktion_url='', aktion_text='') -%}
 <div class="leer-zustand">

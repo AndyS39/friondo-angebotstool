@@ -47,6 +47,8 @@ def steckbrief_pdf_bytes(session, gewerk) -> bytes:
     projekt = session.get(Projekt, gewerk.projekt_id)
     kunde = session.get(Kunde, projekt.kunde_id) if projekt else None
     werte = kern.steckbrief_daten(session, [gewerk.id])[gewerk.id]
+    # v31 (PLAN_LEAD_V5 Phase 153): Ausführungsort über projekt_ausfuehrungsort
+    ort = kern.projekt_ausfuehrungsort(session, projekt, gewerk) if projekt else None
 
     pdf = _SteckbriefPdf()
     pdf.add_page()
@@ -54,11 +56,7 @@ def steckbrief_pdf_bytes(session, gewerk) -> bytes:
     kopf = [
         ("Projekt", projekt.nummer if projekt else "–"),
         ("Kunde", kunde.anzeige_name if kunde else "–"),
-        ("Ausführungsadresse",
-         " ".join(t for t in [projekt.ausfuehrung_strasse,
-                              f"{projekt.ausfuehrung_plz} "
-                              f"{projekt.ausfuehrung_ort}".strip()]
-                  if t) if projekt else "–"),
+        ("Ausführungsadresse", ort["zeile"] if ort else "–"),
         ("Telefon Kunde", (kunde.telefon if kunde else "") or "–"),
         ("Gewerk", gewerk.sparte),
     ]

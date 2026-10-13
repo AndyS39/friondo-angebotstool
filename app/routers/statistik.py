@@ -289,9 +289,11 @@ def seite(request: Request, zeitraum: str = "monat", von: str = "",
                        key=lambda kv: benutzer_map[kv[0]].name
                        if kv[0] in benutzer_map else "")
     kanal_zeilen = sorted(daten["je_kanal"].items())
-    reihenfolge = {"WP": 0, "PV": 1, "KL": 2, "WB": 3, "GW": 4}
+    # v31 (PLAN_LEAD_V5 Phase 157): Reihenfolge der gemeinsamen Sparten-Liste (inkl. MS/WA/DMS)
+    from app import sparten as sparten_modul
+    reihenfolge = {code: i for i, code in enumerate(sparten_modul.SPARTEN)}
     sparten_zeilen = sorted(daten["je_sparte"].items(),
-                            key=lambda kv: reihenfolge.get(kv[0], 9))
+                            key=lambda kv: reihenfolge.get(kv[0], 99))
     return render(request, "statistik.html", aktiv="/statistik",
                   mobil=benutzer.rolle == "aussendienst",
                   gesamt=daten["gesamt"], ad_zeilen=ad_zeilen,

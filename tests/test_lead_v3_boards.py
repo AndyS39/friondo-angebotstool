@@ -230,8 +230,8 @@ class Navigation(Basis):
                       self.client.get("/lead-management/kontaktiert").text)
         self.assertIn('aria-current="page" data-key="todos"',
                       self.client.get("/lead-management/todos").text)
-        # Demo-Badge und JS-Einbindung bleiben
-        self.assertIn("lm-leiste-demo", nav)
+        # JS-Einbindung bleibt; v31 (PLAN_LEAD_V5 Phase 159): Demo-Modus beendet, kein Demo-Badge
+        self.assertNotIn("lm-leiste-demo", nav)
         self.assertIn("/static/lm_boards.js", seite)
 
     def test_alle_einstiege_erreichbar(self):
@@ -323,7 +323,8 @@ class Bezeichnungen(Basis):
         self.assertEqual(r.status_code, 200, r.text)
         self.assertIn("Board „Deals“", r.json().get("verschoben", ""))
         # Sammelaktions-Redirect nennt nur den Pfad (Key bleibt terminiert)
-        self.assertEqual([x["key"] for x in lead_boards.sammelaktionen_fuer("terminiert")], ["hv_verschieben"])   # v29
+        self.assertEqual([x["key"] for x in lead_boards.sammelaktionen_fuer("terminiert")],
+                         ["hv_verschieben", "archivieren", "duplizieren"])   # v29; v31 (Phase 154): Archivieren/Duplizieren
 
     def test_infoabend_statt_info_veranstaltung(self):
         lead_info.veranstaltungen_anlegen(self.s)

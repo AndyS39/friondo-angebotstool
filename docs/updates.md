@@ -188,6 +188,21 @@ davor meldet die Kontrolle „HTTP 404“ (normal). Nach dem Rollback
   erreichbar: `data\fehler.log` und `data\log\dienst-err.log` lesen, Pfad
   `data\angebotstool.db` und Rechte des Dienstkontos prüfen.
 
+## 4a. Besonderheiten beim Update auf v31 + v32 (ein Commit, 13.10.2026)
+
+- `migrate.py` meldet beim ersten Lauf u. a.: Hauptobjekte je Vorgang (`vorgang_objekte`), Trigger
+  `trg_v31_vorgang_objekte`, Leadmanager-Häkchen (nicht gefundene Startnamen als Meldung),
+  `lead_freigabe_modus = alle`, Vorlagen `terminbestaetigung_objekte`/`falsche_telefonnummer`, ggf.
+  „v31: Vorlage …: WP → Wärmepumpe“ (Kürzel ersetzt), „Ablehnungsgründe (v32)“ (angelegt/deaktiviert),
+  „Verfolgungsstatus (v32)“, Indizes `ix_v32_kunden_*`. Der zweite Lauf meldet „keine Änderungen nötig“.
+- Danach `scripts\smoke.bat` wie immer; zusätzlich einmal `venv\Scripts\python scripts\vot_abgleich.py
+  --data <DB-Kopie unter diagnose\> --bericht diagnose\vot_abgleich.txt` (Bericht lesen; Reparatur
+  `--anlegen` nur gegen die Kopie, der Sync hält die Termine ab jetzt selbst nach).
+- Admin-To-dos aus `docs/nach-dem-update-v31.md`/`-v32.md`: Demo-Ende-Abfrage in den Lead-Einstellungen,
+  Leadmanager-Häkchen und HV-Gruppen prüfen, Ablehnungsgründe-Liste prüfen, Freischaltung
+  (`terminierung_aktiv`/`mail_versand_aktiv`) erst nach grünen Prüfpunkten.
+- Rückweg: `rollback.bat --nur-code` (v30-Code läuft auf der v32-Datenbank – nur additive Änderungen).
+
 ## 5. Versionsstand prüfen
 
 Auf PC und Server zeigt `git log --oneline -1` den aktuellen Commit; auf dem

@@ -17,12 +17,17 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from app import lead_dashboard, lead_todos, lead_v2
+from app import abwesenheiten, lead_dashboard, lead_todos, lead_v2, lead_v5
 from app import leadmanagement as kern
 from app.db import get_session
 from app.models import Kunde, Todo, Vorgang
 from app.templating import render
 from app import anfrage   # v27: Formular/JSON in def-Routen
+from fastapi.responses import JSONResponse
+
+
+def _json_gewuenscht(request: Request) -> bool:
+    return "application/json" in (request.headers.get("accept") or "")
 
 router = APIRouter(prefix="/lead-management")
 
@@ -138,7 +143,15 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
     lead_v2.gate(request, session)
     termine_alle = request.query_params.get("termine") == "alle"
     daten = lead_dashboard.daten(session, benutzer, termine_alle=termine_alle)
+    # v31 (Phase 158): kranke_termine schreibt beim ersten Auftauchen eines Termins die
+    # Aktivität „Termin betroffen durch Krankheit …“ – darf die Seite nie blockieren
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
     daten["hv_sicht"] = lead_v2.hv_sicht(session, benutzer)   # v29 (Phase 140)
+    daten["terminierung_aktiv"] = lead_v5.terminierung_aktiv(session)   # v31 (Phase 159)
+    daten["testphase_hinweis"] = lead_v5.TESTPHASE_HINWEIS
     # v25: Board-Namen immer aus dem Blatt Status (Hauptboard / Deals), kein Score
     from app import leadmanagement_logik
     logik = leadmanagement_logik.hole_logik()
@@ -156,7 +169,10 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
 @router.post("/dashboard/wiedervorlage/{vorgang_id}")
 def wiedervorlage_aktion(request: Request, vorgang_id: int,
                                session: Session = Depends(get_session)):
-    """Schnellaktion: art=lead|angebot, aktion=erledigt|verschieben (+ datum)."""
+    """Schnellaktion: art=lead|angebot, aktion=erledigt|verschieben (+ datum).
+    v31 (PLAN_LEAD_V5 Phase 158): aktion=rueckgaengig (+ datum, quelle) stellt den alten
+    Zeitpunkt wieder her; mit Accept: application/json (lm_dashboard.js) kommt
+    {ok, meldung, rueckgaengig} zurück, die Zeile bleibt durchgestrichen stehen."""
     benutzer = request.state.benutzer
     if _ad_ohne_hv(session, benutzer):
         raise HTTPException(status_code=404)
@@ -165,13 +181,110 @@ def wiedervorlage_aktion(request: Request, vorgang_id: int,
     zurueck = _zurueck(request, form, DASHBOARD)
     vorgang = session.get(Vorgang, vorgang_id)
     if vorgang is None:
+        if _json_gewuenscht(request):
+            return JSONResponse({"ok": False, "meldung": "Vorgang nicht gefunden."}, status_code=404)
         return _redirect(zurueck, "Vorgang nicht gefunden.")
     art = "angebot" if form.get("art") == "angebot" else "lead"
-    aktion = "verschieben" if form.get("aktion") == "verschieben" else "erledigt"
-    meldung = lead_dashboard.wiedervorlage_aktion(
-        session, vorgang, benutzer, art, aktion, form.get("datum") or "")
+    aktion = form.get("aktion") or "erledigt"
+    if aktion == "rueckgaengig":
+        ergebnis = lead_dashboard.wiedervorlage_rueckgaengig(
+            session, vorgang, benutzer, art, form.get("datum") or "", form.get("quelle") or "")
+    else:
+        aktion = "verschieben" if aktion == "verschieben" else "erledigt"
+        ergebnis = lead_dashboard.wiedervorlage_aktion_voll(
+            session, vorgang, benutzer, art, aktion, form.get("datum") or "")
+    if ergebnis.get("ok"):
+        session.commit()
+    else:
+        session.rollback()
+    if _json_gewuenscht(request):
+        return JSONResponse(ergebnis, status_code=200 if ergebnis.get("ok") else 422)
+    return _redirect(zurueck, ergebnis["meldung"])
+
+
+# --- v31 (PLAN_LEAD_V5 Phase 154): Kacheln je Nutzer verschieben -------------------------
+
+@router.post("/dashboard/kacheln")
+def dashboard_kacheln(request: Request, session: Session = Depends(get_session)):
+    """JSON {keys: [..]} speichert die Reihenfolge der Kacheln je Nutzer
+    (benutzer_einstellungen Key dashboard_kacheln); {zuruecksetzen: true} = Standard.
+    Antwort {ok, keys}."""
+    benutzer = request.state.benutzer
+    if _ad_ohne_hv(session, benutzer):
+        raise HTTPException(status_code=404)
+    lead_v2.gate(request, session)
+    try:
+        daten = anfrage.json_lesen(request)
+    except Exception:
+        form = anfrage.formular(request)
+        daten = {"keys": form.getlist("keys"), "zuruecksetzen": form.get("zuruecksetzen")}
+    if not isinstance(daten, dict):
+        return JSONResponse({"ok": False, "meldung": "Ungültige Anfrage."}, status_code=400)
+    if daten.get("zuruecksetzen"):
+        keys = lead_dashboard.kacheln_zuruecksetzen(session, benutzer)
+        meldung = "Kacheln zurückgesetzt."
+    else:
+        liste = daten.get("keys")
+        if not isinstance(liste, list) or not liste:
+            return JSONResponse({"ok": False, "meldung": "Reihenfolge fehlt."}, status_code=400)
+        keys = lead_dashboard.kacheln_speichern(session, benutzer, liste)
+        meldung = "Reihenfolge gespeichert."
     session.commit()
+    return JSONResponse({"ok": True, "keys": keys, "meldung": meldung})
+
+
+# --- v31 (PLAN_LEAD_V5 Phase 158): eigener Abwesenheitseintrag (Krankheit/Urlaub) ------------
+
+@router.post("/dashboard/abwesenheit")
+def abwesenheit_anlegen(request: Request, session: Session = Depends(get_session)):
+    """Formular art, von, bis (optional), bemerkung – eigener Eintrag des angemeldeten
+    Benutzers (Vertriebler auf „Mein Dashboard“, angestellter AD auf „Meine Termine“);
+    Pflege für andere in der Benutzerverwaltung (Agent AT)."""
+    benutzer = request.state.benutzer
+    # v31 (Phase 158): der angestellte Außendienst (ohne Modul-Sicht) pflegt seinen eigenen
+    # Eintrag auf „Meine Termine“ (AD-Sicht); alle anderen über das Modul-Gate
+    if _ad_ohne_hv(session, benutzer):
+        if not kern.lead_ad_sicht(session, benutzer):
+            raise HTTPException(status_code=404)
+        standard_zurueck = "/lead-management/meine-termine#abwesenheit"
+    else:
+        lead_v2.gate(request, session)
+        standard_zurueck = DASHBOARD + "#abwesenheit"
+    form = anfrage.formular(request)
+    zurueck = _zurueck(request, form, standard_zurueck)
+    ok, meldung, _eintrag = abwesenheiten.anlegen(
+        session, benutzer.id, form.get("art") or "krankheit", form.get("von") or "",
+        form.get("bis") or "", form.get("bemerkung") or "", angelegt_von=benutzer.id)
+    if ok:
+        session.commit()
+    else:
+        session.rollback()
     return _redirect(zurueck, meldung)
+
+
+@router.post("/dashboard/abwesenheit/{eintrag_id}/beenden")
+def abwesenheit_beenden(request: Request, eintrag_id: int,
+                        session: Session = Depends(get_session)):
+    """Ende des eigenen Eintrags setzen (Standard heute) – entfernt die Krankheits-Hinweise."""
+    from app.models import BenutzerAbwesenheit
+    benutzer = request.state.benutzer
+    # v31 (Phase 158): der angestellte Außendienst (ohne Modul-Sicht) pflegt seinen eigenen
+    # Eintrag auf „Meine Termine“ (AD-Sicht); alle anderen über das Modul-Gate
+    if _ad_ohne_hv(session, benutzer):
+        if not kern.lead_ad_sicht(session, benutzer):
+            raise HTTPException(status_code=404)
+        standard_zurueck = "/lead-management/meine-termine#abwesenheit"
+    else:
+        lead_v2.gate(request, session)
+        standard_zurueck = DASHBOARD + "#abwesenheit"
+    form = anfrage.formular(request)
+    zurueck = _zurueck(request, form, standard_zurueck)
+    eintrag = session.get(BenutzerAbwesenheit, eintrag_id)
+    if eintrag is None or (eintrag.benutzer_id != benutzer.id and benutzer.rolle != "admin"):
+        raise HTTPException(status_code=404)
+    abwesenheiten.beenden(session, eintrag_id, form.get("bis") or None)
+    session.commit()
+    return _redirect(zurueck, "Abwesenheit beendet.")
 
 
 # --- v29 (Phase 143): Sperrzeiten der Handelsvertreter in „Meine Termine“ --------------
@@ -412,6 +525,20 @@ def meine_termine(request: Request, session: Session = Depends(get_session)):
     benutzer = request.state.benutzer
     jetzt = datetime.now()
     kontext = {k: v for k, v in kontext.items() if k != "request"}
+    # v31 (Phase 153, Vertrag T 4.7): bei mehreren Objekten je Termin die Objektbezeichnung
+    # (objekte.ausfuehrungsort) – das Template zeigt z.objekt_text vor der Adresse
+    from app import objekte as objekte_modul
+    for zeile in list(kontext.get("heute_liste") or []) + list(kontext.get("woche_liste") or []):
+        try:
+            ort = objekte_modul.ausfuehrungsort(session, termin=zeile.get("termin"),
+                                                vorgang=zeile.get("vorgang"), kunde=zeile.get("kunde"))
+        except Exception:   # noqa: BLE001 – die Terminliste darf daran nie scheitern
+            ort = {}
+        zeile["objekt_text"] = (ort.get("bezeichnung") or "") if ort.get("mehrere_objekte") else ""
     kontext.update(todos=lead_todos.zeilen(session, lead_todos.offene(session, benutzer.id), jetzt),
-                   heute=jetzt.date(), empfaenger=lead_todos.empfaenger_liste(session))
+                   heute=jetzt.date(), empfaenger=lead_todos.empfaenger_liste(session),
+                   # v31 (Phase 158): eigener Krankheits-/Urlaubseintrag auch für den
+                   # angestellten Außendienst (Block im Template von Agent T)
+                   abwesenheiten=lead_dashboard.eigene_abwesenheiten(session, benutzer),
+                   abwesenheit_arten=abwesenheiten.ARTEN)
     return render(request, "leadmanagement/meine_termine.html", **kontext)

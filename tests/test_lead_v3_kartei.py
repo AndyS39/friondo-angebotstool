@@ -43,7 +43,7 @@ def glocken_arten(s, *arten):
 from app.db import SessionLocal, init_db
 from app.main import app
 from app.models import (AdProfil, Benachrichtigung, Benutzer, KommunikationLog,
-                        Kunde, LeadAktivitaet, LeadQuelle, Todo, Vorgang,
+                        Kunde, LeadAktivitaet, LeadQuelle, Todo, Vorgang, VorgangObjekt,
                         VorgangsNotiz, VotTermin)
 
 NACHNAME = "LeadV3K-Test"
@@ -57,6 +57,7 @@ def aufraeumen(s):
             s.query(LeadAktivitaet).filter_by(vorgang_id=v.id).delete()
             s.query(KommunikationLog).filter_by(vorgang_id=v.id).delete()
             s.query(VotTermin).filter_by(vorgang_id=v.id).delete()
+            s.query(VorgangObjekt).filter_by(vorgang_id=v.id).delete()   # v31: Objekte am Vorgang
             s.query(VorgangsNotiz).filter_by(vorgang_id=v.id).delete()
             s.query(Todo).filter_by(vorgang_id=v.id).delete()
             s.query(Benachrichtigung).filter(
@@ -80,6 +81,10 @@ class Basis(unittest.TestCase):
         cls.client.post("/login", data={"benutzer_id": "1", "pin": "1234"})
         cls.modus = kern.parameter_holen(cls.s, "lead_freigabe_modus", "admin")
         kern.parameter_setzen(cls.s, "lead_freigabe_modus", "admin")
+        # v31 (PLAN_LEAD_V5 Phase 159): Testphase sperrt die Terminierung (terminierung_aktiv
+        # = aus) – diese Tests prüfen die B8-Logik selbst, daher für den Lauf an
+        cls.terminierung_vorher = kern.parameter_holen(cls.s, "terminierung_aktiv", "aus")
+        kern.parameter_setzen(cls.s, "terminierung_aktiv", "an")
         cls.s.commit()
         cls.ad = Benutzer(name=f"{BENUTZER_PRAEFIX}AD", rolle="aussendienst",
                           pin_hash=auth.pin_hash("4321"), email="lv3k-ad@test.local")
@@ -98,6 +103,7 @@ class Basis(unittest.TestCase):
     def tearDownClass(cls):
         aufraeumen(cls.s)
         kern.parameter_setzen(cls.s, "lead_freigabe_modus", cls.modus)
+        kern.parameter_setzen(cls.s, "terminierung_aktiv", cls.terminierung_vorher)
         cls.s.commit()
         cls.s.close()
 
@@ -114,6 +120,9 @@ class Basis(unittest.TestCase):
             kunde.strasse = "Sonnenwall 1"
             kunde.vertriebskanal = "Standard"
             kunde.objektart = "EFH"
+            # v31 (Phase 157): Außendienst ist Pflichtfeld – „vollständig“ heißt auch zugewiesen
+            if "ad_id" not in extra:
+                vorgang.ad_id = self.ad.id
         for k, v in extra.items():
             setattr(vorgang, k, v)
         self.s.commit()
@@ -167,11 +176,15 @@ class Layout(Basis):
                   'id="lk-kundeninfo"', 'role="tablist"', 'id="lk-bloecke"']
         positionen = [seite.index(m) for m in marker]
         self.assertEqual(positionen, sorted(positionen), "Statuskette → Terminierung → Kundeninfo → Reiter → Blöcke")
-        # Blöcke in voller Breite in der Reihenfolge Termine · Angebote · Erfassungen · Projekt · Anhänge · To-Dos
-        bloecke = ["termine", "angebote", "erfassungen", "projekt", "anhaenge", "todos"]
+        # v31 (PLAN_LEAD_V5 Phase 155): Blöcke in voller Breite in der Reihenfolge Termine ·
+        # Angebote · Erfassungen · Projekt · Anhänge; der To-Dos-Block steht jetzt neben den
+        # Notizen VOR dem Kundeninfo-Block
+        bloecke = ["termine", "angebote", "erfassungen", "projekt", "anhaenge"]
         pos = [seite.index(f'data-bereich="{b}"') for b in bloecke]
         self.assertEqual(pos, sorted(pos))
         self.assertTrue(all(p > positionen[-1] for p in pos))
+        self.assertLess(seite.index('data-bereich="todos"'), seite.index('id="lk-kundeninfo"'))
+        self.assertLess(seite.index('id="notizen"'), seite.index('id="lk-kundeninfo"'))
         # keine Spalten mehr
         for alt in ('class="karte lk-links"', 'class="lk-rechts"', 'class="lk-spalten"'):
             self.assertNotIn(alt, seite)
@@ -250,25 +263,32 @@ class Layout(Basis):
         self.assertEqual(lead_kartei.phasen_label(Logik({}), "nicht_erreicht"), "Nicht erreicht")
 
     def test_reiter_reihenfolge_und_standard_termin(self):
+        """v31 (PLAN_LEAD_V5 Phase 155): Reiter nur noch Anruf · E-Mail · Timeline, Anruf ist
+        Standard; der Reiter „Termin“ ist im Block Termine aufgegangen – ?tab=termin (Links
+        aus Anrufliste/„Erreicht“) öffnet den Standard-Reiter und springt zum Block Termine."""
         v = self.lead(7)
         seite = self.kartei(v).text
-        ids = ['id="tab-termin"', 'id="tab-anrufe"', 'id="tab-mails"', 'id="tab-timeline"']
+        ids = ['id="tab-anrufe"', 'id="tab-mails"', 'id="tab-timeline"']
         pos = [seite.index(i) for i in ids]
         self.assertEqual(pos, sorted(pos))
+        self.assertNotIn('id="tab-termin"', seite)
         self.assertNotIn('id="tab-qualifizierung"', seite)
         self.assertNotIn('id="tab-vorgang"', seite)
-        self.assertEqual(seite.count('role="tab"'), 4)
-        self.assertIn('data-tab="termin"\n                aria-controls="panel-termin" aria-selected="true"', seite)
-        self.assertIn('id="panel-termin" aria-labelledby="tab-termin" class="lk-panel" >', seite)
+        self.assertEqual(seite.count('role="tab"'), 3)
+        self.assertIn('data-tab="anrufe"\n                aria-controls="panel-anrufe" aria-selected="true"', seite)
+        self.assertIn('id="panel-anrufe" aria-labelledby="tab-anrufe" class="lk-panel" >', seite)
         self.assertIn('id="panel-timeline" aria-labelledby="tab-timeline" class="lk-panel" hidden', seite)
+        self.assertIn('id="termine"', seite)
         # Icons mit Tooltip bleiben
-        self.assertIn('aria-label="E-Mail-Verlauf" title="E-Mail-Verlauf"', seite)
-        # ?tab=anrufe öffnet Anrufnotizen, alte Werte fallen auf Termin zurück
-        self.assertIn('data-tab="anrufe"\n                aria-controls="panel-anrufe" aria-selected="true"',
-                      self.kartei(v, tab="anrufe").text)
-        for alt in ("qualifizierung", "vorgang", "xyz"):
-            self.assertIn('id="panel-termin" aria-labelledby="tab-termin" class="lk-panel" >',
+        self.assertIn('aria-label="E-Mail" title="E-Mail"', seite)
+        # ?tab=timeline öffnet die Timeline, alte Werte fallen auf Anruf zurück; ?tab=termin springt zum Block Termine
+        self.assertIn('data-tab="timeline"\n                aria-controls="panel-timeline" aria-selected="true"',
+                      self.kartei(v, tab="timeline").text)
+        for alt in ("qualifizierung", "vorgang", "xyz", "termin"):
+            self.assertIn('id="panel-anrufe" aria-labelledby="tab-anrufe" class="lk-panel" >',
                           self.kartei(v, tab=alt).text)
+        self.assertIn('data-springe-zu="termine"', self.kartei(v, tab="termin").text)
+        self.assertIn('data-springe-zu=""', seite)
         # Anruf-Buttons: Nicht erreicht/Besetzt/Mailbox ohne Dialog, Rückruf/Kein Interesse mit Dialog
         anruf = seite.split('class="lk-anruf"', 1)[1].split("</section>", 1)[0]
         self.assertIn('name="ergebnis" value="nicht_erreicht"', anruf)
@@ -530,8 +550,12 @@ class Autospeichern(Basis):
         texte = [a.text for a in self.aktivitaeten(v, "aenderung")]
         self.assertIn("Interessen: „WP“ → „WP, PV“", texte)
         self.assertIn("Objektart: „EFH“ → „MFH“", texte)
-        # MFH → Pflichtfelder Parteien/Rechnungsadresse in der Antwort
+        # MFH → Pflichtfeld Rechnungsadresse nur bei „Nein“ auf die Frage „Rechnungsadresse
+        # identisch mit der Objektadresse?“ (v31, PLAN_LEAD_V5 Phase 157; Vorbelegung Ja)
         d = self.feld(v, "rechnung_strasse", "Königstraße 5").json()
+        self.assertNotIn("Rechnungsadresse", d["pflicht_offen"])
+        d = self.feld(v, "rechnung_abweichend", "1").json()
+        self.assertTrue(d["ok"])
         self.assertIn("Rechnungsadresse", d["pflicht_offen"])
         d = self.feld(v, "rechnung_ort", "Duisburg").json()
         self.assertNotIn("Rechnungsadresse", d["pflicht_offen"])
@@ -636,10 +660,11 @@ class Rechte(Basis):
                                           json={"feld": "ort", "wert": "x"}).status_code, 404)
 
     def test_ad_read_only(self):
-        v = self.lead(41, vollstaendig=True)
+        # v31 (Phase 159): kein Demo-Modus mehr – ein angestellter AD ohne Zuweisung/Termin am
+        # Vorgang sieht die Kartei weiterhin nicht (404, Lesesicht nur am eigenen Vorgang)
+        v = self.lead(41, vollstaendig=True, ad_id=None)
         ad_client = TestClient(app)
         ad_client.post("/login", data={"benutzer_id": str(self.ad.id), "pin": "4321"})
-        # Demo-Modus: Modul für angestellte AD unsichtbar → 404 ohne Formular
         self.assertEqual(self.kartei(v, client=ad_client).status_code, 404)
         self.assertEqual(self.feld(v, "ort", "Moers", client=ad_client).status_code, 404)
         # Lesesicht (lead_freigabe_modus = alle, eigener Termin): Formular gesperrt, kein Autospeichern

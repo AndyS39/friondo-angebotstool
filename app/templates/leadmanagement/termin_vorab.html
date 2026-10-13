@@ -15,8 +15,11 @@
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+{# v31 (PLAN_LEAD_V5 Phase 159): Vorab-Gespräche sind in der Testphase gesperrt
+   (Entscheidung 13.10.2026) – Knopf sichtbar, ausgegraut, Tooltip #}
 {% if not buchbar %}
-<p class="warnblock">Im Demo-Modus nur für Demo-Leads.</p>
+<p class="warnblock lmt-testphase">{{ symbol('warnung') }} <strong>{{ testphase_hinweis | default('Testphase: Terminierung noch nicht freigeschaltet') }}.</strong>
+    Telefon-/Online-Termine und die Buchungslink-Mail sind bis zur Freischaltung gesperrt.</p>
 {% endif %}
 <p class="dezent">Ein Vorab-Gespräch ist ein Termin eigener Art (kein Vor-Ort-Termin):
     es erscheint im Tool-Kalender und – bei aktivem Kalenderabgleich – im Outlook
@@ -60,7 +63,8 @@
         <label class="schmal">Uhrzeit <input type="time" name="uhrzeit" step="900" {{ 'required' if typ == 'telefon' }}></label>
         <label class="schmal">Dauer (Min) <input type="number" name="dauer" value="{{ dauer }}" min="5" step="5"></label>
     </div>
-    <button class="knopf" type="submit" {{ 'disabled' if not buchbar }}>
+    <button class="knopf" type="submit" {{ 'disabled' if not buchbar }}
+            {% if not buchbar %}aria-disabled="true" title="{{ testphase_hinweis | default('Testphase') }}"{% endif %}>
         {{ 'Telefongespräch eintragen' if typ == 'telefon' else 'Online-Termin eintragen' }}</button>
 </form>
 {% endblock %}

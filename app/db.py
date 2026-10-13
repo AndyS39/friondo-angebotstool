@@ -226,6 +226,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "version": "VARCHAR(5) NOT NULL DEFAULT 'v2'",         # v15 Phase 78
     },
     "gewerke": {
+        "objekt_id": "INTEGER",                                 # v31 Phase 153
         "auftragsdaten_am": "DATETIME",                        # V3 Phase 84
         "bestand_import_id": "INTEGER",                        # V3 Phase 85
         "bza_id": "VARCHAR(100)",                              # V4 Phase 92
@@ -272,7 +273,11 @@ _NACHTRAEGLICHE_SPALTEN = {
         "art": "VARCHAR(20) NOT NULL DEFAULT 'angebot'",          # v30 Phase 151
         "grund": "VARCHAR(500) NOT NULL DEFAULT ''",              # v30 Phase 151
     },
+    "ablehnungsgruende": {
+        "freitext_pflicht": "BOOLEAN NOT NULL DEFAULT 0",       # v32 Phase 163
+    },
     "angebote": {
+        "objekt_id": "INTEGER",                                 # v31 Phase 153
         "zahlungsbedingung_key": "VARCHAR(50) NOT NULL DEFAULT ''",   # v30 Phase 150
         "zahlungsbedingung_text": "TEXT NOT NULL DEFAULT ''",          # v30 Phase 150
         "ust_satz": "FLOAT NOT NULL DEFAULT 19",                 # v13-PV Phase 75
@@ -338,6 +343,7 @@ _NACHTRAEGLICHE_SPALTEN = {
     "lead_quellen": {"auto_angelegt": "BOOLEAN NOT NULL DEFAULT 0"},
     # v23 (Lead-Management V2, Phase 104)
     "vot_termine": {
+        "objekt_id": "INTEGER",                                 # v31 Phase 153
         "typ": "VARCHAR(10) NOT NULL DEFAULT 'vot'",
         "medium": "VARCHAR(10) NOT NULL DEFAULT 'vor_ort'",
         "ics_uid": "VARCHAR(100)",
@@ -361,6 +367,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "quelle": "VARCHAR(20) NOT NULL DEFAULT ''",
     },
     "benutzer": {
+        "leadmanager": "BOOLEAN NOT NULL DEFAULT 0",            # v31 Phase 156
         # v27 (PLAN_V17 Phase 130): Login-Härtung – nur additiv, v26 liest weiter
         # pin_hash (Rollback-Sicherheit, Phase 132)
         "pin_hash_v2": "VARCHAR(200)",
@@ -385,6 +392,11 @@ _NACHTRAEGLICHE_SPALTEN = {
     },
     # v12 (Lead-Management, Phase 73): Lead-Kopf am Vorgang – alle nullable
     "vorgaenge": {
+        "archiviert_am": "DATETIME",                             # v31 Phase 154
+        "archiviert_von": "INTEGER",                             # v31 Phase 154
+        "kopie_von_id": "INTEGER",                               # v31 Phase 154
+        "wiedervorlage_art": "VARCHAR(30) NOT NULL DEFAULT ''",  # v32 Phase 162
+        "verfolgung_status": "VARCHAR(30) NOT NULL DEFAULT ''",  # v32 Phase 163
         "lead_phase": "VARCHAR(20)",
         "quelle_id": "INTEGER",
         "kampagne_id": "INTEGER",
@@ -431,6 +443,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "mail_fehler_text": "VARCHAR(500) NOT NULL DEFAULT ''",
     },
     "kunden": {
+        "grosskunde": "BOOLEAN NOT NULL DEFAULT 0",             # v31 Phase 153
         "objektart": "VARCHAR(10)",                             # v23 Phase 104
         "parteien": "INTEGER",                                  # v23 Phase 104
         # v20 (Phase 98): Standard-Anschriften
@@ -460,6 +473,7 @@ _NACHTRAEGLICHE_SPALTEN = {
         "angelegt_am": "DATETIME",
     },
     "erfassungen": {
+        "objekt_id": "INTEGER",                                 # v31 Phase 153
         "vorbelegt_json": "TEXT",   # v12 Phase 76: aus Qualifizierung
         "vorgang_id": "INTEGER",            # v10 Vorgangsakte
         "konfigurator_typ": "VARCHAR(10) NOT NULL DEFAULT 'WP'",
@@ -523,6 +537,9 @@ _INDIZES = [
     ("ix_v27_aufgaben_status", "aufgaben", "status"),
     ("ix_v27_aufgaben_verantwortlich_status", "aufgaben", "verantwortlich_id, status"),
     ("ix_v27_login_protokoll_benutzer_zeit", "login_protokoll", "benutzer_id, zeit"),
+    # v32 (PLAN_V19 Phase 164): Kundensuche (Bereichsvergleich auf Nachname/Ort)
+    ("ix_v32_kunden_nachname", "kunden", "nachname"),
+    ("ix_v32_kunden_ort", "kunden", "ort"),
 ]
 
 

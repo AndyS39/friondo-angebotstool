@@ -329,9 +329,8 @@ def einsatz(request: Request, termin_id: int,
     angebot = (session.get(Angebot, gewerk.angebot_id)
                if gewerk is not None and gewerk.angebot_id else None)
     positionen = list(angebot.positionen) if angebot is not None else []
-    adresse = " ".join(x for x in (projekt.ausfuehrung_strasse,
-                                   projekt.ausfuehrung_plz,
-                                   projekt.ausfuehrung_ort) if x)
+    # v31 (PLAN_LEAD_V5 Phase 153): Ausführungsort über projekt_ausfuehrungsort
+    adresse = kern.projekt_ausfuehrungsort(session, projekt, gewerk)["zeile"]
     from app import galerie as galerie_modul
     from app.models import (MontageFormular, ProjektSub, Restarbeit,
                             Subunternehmer)

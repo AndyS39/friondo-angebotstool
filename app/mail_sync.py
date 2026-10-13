@@ -248,6 +248,16 @@ def _nach_versand(session, angebot: Angebot) -> None:
     for erfassung in session.query(Erfassung).filter(Erfassung.angebot_id == angebot.id):
         erfassung.status = "Erledigt"
     session.commit()
+    # v32 (PLAN_V19 Phase 162): Versand-Hook – automatische Wiedervorlage am Vorgang
+    # (Versandtag = erkannter Versand; beim Kombi-Versand trifft das zweite Angebot
+    # dasselbe Datum und ändert nichts). Reine DB-Arbeit vor der monday-Rückspielung.
+    try:
+        from app import nachfassen
+        nachfassen.nach_versand(session, angebot)
+        session.commit()
+    except Exception as problem:   # noqa: BLE001 – die Wiedervorlage blockiert den Abgleich nie
+        session.rollback()
+        status.setdefault("fehler", []).append(f"Wiedervorlage {angebot.nummer}: {problem}")
     try:
         from app import monday_rueckspielung
         monday_rueckspielung.bei_versand(session, angebot)

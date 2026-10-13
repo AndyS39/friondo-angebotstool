@@ -34,7 +34,10 @@ STANDARD_FELDER = {
 _SPARTEN_ALIAS = {"wp": "WP", "wärmepumpe": "WP", "waermepumpe": "WP",
                   "pv": "PV", "photovoltaik": "PV", "kl": "KL", "klima": "KL",
                   "wb": "WB", "wallbox": "WB",
-                  "gw": "GW", "gewerbe": "GW"}
+                  "gw": "GW", "gewerbe": "GW",
+                  # v31 (PLAN_LEAD_V5 Phase 157): Mieterstrom, Wasser, Denkmalschutz
+                  "ms": "MS", "mieterstrom": "MS", "wa": "WA", "wasser": "WA",
+                  "dms": "DMS", "denkmalschutz": "DMS", "denkmal": "DMS"}
 
 
 def standardregel_anlegen(session: Session) -> bool:
@@ -110,7 +113,7 @@ def _sparten_liste(wert) -> list[str]:
     for eintrag in roh:
         schluessel = eintrag.strip().lower()
         sparte = _SPARTEN_ALIAS.get(schluessel, eintrag.strip().upper()
-                                    if eintrag.strip().upper() in ("WP", "PV", "KL", "WB", "GW")
+                                    if eintrag.strip().upper() in ("WP", "PV", "KL", "WB", "GW", "MS", "WA", "DMS")
                                     else "")
         if sparte and sparte not in sparten:
             sparten.append(sparte)

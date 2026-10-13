@@ -1,0 +1,104 @@
+{# v32 (PLAN_V19 Phase 163): Dialog „Nächster Schritt“ nach dem Anruf – drei Knöpfe
+   nebeneinander „Abgelehnt“ (rot) · „Bestellung kommt“ (grün) · „Nochmal anrufen“ (blau).
+   Abgelehnt klappt die Grund-Chips auf (Pflicht-Freitext bei freitext_pflicht), Nochmal
+   anrufen den Chip „In 3 Werktagen (Mi 14.10.)“ (vorgewählt) + Datumsfeld (nur Datum),
+   Bestellung kommt speichert sofort; Bestätigungszeile mit Rückgängig-Link (10 s).
+   Include-Variablen (aus app.verfolgung.dialog_kontext(session, vorgang, zurueck)):
+     vorgang, gruende (aktive Angebotstool-Gründe), naechster_3wt {datum, text, iso},
+     ziel (Rücksprung-URL ohne JavaScript), heute_iso (optional);
+     mit_notiz (optional, Standard true) – eigenes Feld „Notiz zum Gespräch“; die
+     Anruf-Karte (Mein Tag, M) setzt mit_notiz=false und kennzeichnet ihr Notizfeld mit
+     data-ns-notiz="<vorgang.id>" – verfolgung.js übernimmt den Text beim Speichern.
+   Route POST /vorgaenge/{id}/naechster-schritt (JSON bei Accept: application/json).
+   Nach dem Speichern: CustomEvent „ns:gespeichert“ / „ns:rueckgaengig“ am Dialog-Element
+   (detail = JSON-Antwort) – Mein Tag blendet die Karte damit aus bzw. verschiebt sie.
+   Kein tojson in on*-Attributen (v30): alle Daten in data-Attributen, Logik in
+   /static/verfolgung.js. Styles: /static/verfolgung.css (nur Tokens). #}
+{% set ns_mit_notiz = mit_notiz if mit_notiz is defined else true %}
+{% set ns_ziel = ziel if ziel is defined and ziel else '/vorgaenge/' ~ vorgang.id %}
+{% set ns_3wt = naechster_3wt if naechster_3wt is defined else none %}
+<link rel="stylesheet" href="/static/verfolgung.css?v={{ css_version }}">
+<div class="ns-dialog" id="ns-{{ vorgang.id }}" data-vorgang="{{ vorgang.id }}"
+     data-url="/vorgaenge/{{ vorgang.id }}/naechster-schritt"
+     data-rueckgaengig-s="10" data-status="{{ vorgang.verfolgung_status or '' }}">
+    <div class="ns-knoepfe" role="group" aria-label="Nächster Schritt">
+        <button type="button" class="knopf ns-knopf ns-rot" data-ns-schritt="abgelehnt"
+                aria-controls="ns-form-abgelehnt-{{ vorgang.id }}" aria-expanded="false">Abgelehnt</button>
+        <form method="post" action="/vorgaenge/{{ vorgang.id }}/naechster-schritt" class="ns-form ns-form-bestellung">
+            <input type="hidden" name="schritt" value="bestellung">
+            <input type="hidden" name="zurueck" value="{{ ns_ziel }}">
+            <input type="hidden" name="notiz" value="" class="ns-notiz-spiegel">
+            <button type="submit" class="knopf ns-knopf ns-gruen" data-ns-schritt="bestellung"
+                    title="Kunde hat die Bestellung angekündigt – Status „Bestellung angekündigt“, Ampel heiß, Wiedervorlage in 7 Werktagen, Glocke an den Innendienst">Bestellung kommt</button>
+        </form>
+        <button type="button" class="knopf ns-knopf ns-blau" data-ns-schritt="nochmal"
+                aria-controls="ns-form-nochmal-{{ vorgang.id }}" aria-expanded="false">Nochmal anrufen</button>
+    </div>
+
+    <form method="post" action="/vorgaenge/{{ vorgang.id }}/naechster-schritt"
+          class="ns-form ns-form-abgelehnt ns-aufklapp" id="ns-form-abgelehnt-{{ vorgang.id }}" hidden>
+        <input type="hidden" name="schritt" value="abgelehnt">
+        <input type="hidden" name="zurueck" value="{{ ns_ziel }}">
+        <input type="hidden" name="notiz" value="" class="ns-notiz-spiegel">
+        <p class="ns-titel">Grund der Ablehnung <span class="dezent">(ein Klick)</span></p>
+        <div class="ns-chips">
+            {% for g in gruende %}
+            <label class="ns-chip">
+                <input type="radio" name="grund_id" value="{{ g.id }}" required
+                       data-freitext-pflicht="{{ '1' if g.freitext_pflicht else '0' }}">
+                <span>{{ g.name }}</span>
+            </label>
+            {% else %}
+            <span class="dezent">Keine aktiven Ablehnungsgründe – bitte in der Parametrierung pflegen.</span>
+            {% endfor %}
+        </div>
+        <label class="ns-freitext" hidden>
+            <span>Freitext <strong class="ns-pflicht">(Pflicht bei diesem Grund)</strong></span>
+            <input type="text" name="freitext" maxlength="500" placeholder="Was hat der Kunde gesagt?">
+        </label>
+        <div class="ns-aktionen">
+            <button type="submit" class="knopf gefaehrlich">Abgelehnt speichern</button>
+            <button type="button" class="knopf zweitrangig ns-abbrechen">Abbrechen</button>
+            <span class="dezent ns-hinweis">Alle versendeten Angebote des Vorgangs werden mit diesem Grund abgelehnt.</span>
+        </div>
+    </form>
+
+    <form method="post" action="/vorgaenge/{{ vorgang.id }}/naechster-schritt"
+          class="ns-form ns-form-nochmal ns-aufklapp" id="ns-form-nochmal-{{ vorgang.id }}" hidden>
+        <input type="hidden" name="schritt" value="nochmal">
+        <input type="hidden" name="zurueck" value="{{ ns_ziel }}">
+        <input type="hidden" name="notiz" value="" class="ns-notiz-spiegel">
+        <p class="ns-titel">Wann nochmal anrufen?</p>
+        <div class="ns-chips">
+            <label class="ns-chip">
+                <input type="radio" name="wann" value="3wt" checked>
+                <span>In 3 Werktagen{% if ns_3wt %} ({{ ns_3wt.text if ns_3wt.text is defined else ns_3wt }}){% endif %}</span>
+            </label>
+            <label class="ns-chip ns-chip-datum">
+                <input type="radio" name="wann" value="datum">
+                <span>Datum</span>
+                <input type="date" name="datum" class="ns-datum" aria-label="Datum (ohne Uhrzeit)"
+                       {% if heute_iso is defined and heute_iso %}min="{{ heute_iso }}"{% endif %}>
+            </label>
+        </div>
+        <div class="ns-aktionen">
+            <button type="submit" class="knopf">Wiedervorlage speichern</button>
+            <button type="button" class="knopf zweitrangig ns-abbrechen">Abbrechen</button>
+            <span class="dezent ns-hinweis">Wiedervorlage ohne Uhrzeit, Status „Nachgefasst“.</span>
+        </div>
+    </form>
+
+    {% if ns_mit_notiz %}
+    <label class="ns-notiz">
+        <span class="dezent">Notiz zum Gespräch <span class="dezent">(optional, landet mit dem Schritt im Notizen-Chat)</span></span>
+        <textarea rows="2" maxlength="2000" data-ns-notiz="{{ vorgang.id }}" placeholder="Was hat der Kunde gesagt?"></textarea>
+    </label>
+    {% endif %}
+
+    <p class="ns-bestaetigung" hidden aria-live="polite">
+        <span class="ns-bestaetigung-text"></span>
+        <a href="#" class="ns-rueckgaengig" hidden>Rückgängig</a>
+    </p>
+    <p class="ns-fehler fehlertext" hidden aria-live="assertive"></p>
+</div>
+<script src="/static/verfolgung.js?v={{ css_version }}" defer></script>

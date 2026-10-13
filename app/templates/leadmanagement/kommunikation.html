@@ -17,13 +17,22 @@
 <div class="seitenkopf">
     <h1>Kommunikation · {{ kunde.anzeige_name }}</h1>
     <div class="aktionen">
-        <span class="abzeichen" title="Sendesperre: protokoll rendert nur, test sendet an die Testadresse, live nur bei Freigabe alle">
-            Mail-Modus: {{ mail_modus }}</span>
+        {# v31 (Phase 159): Mailsperre der Testphase – mail_modus ist keine Steuerung mehr (Wert lesbar);
+           das Flag mail_versand_aktiv liefert der Router (B: routers/leadmanagement.kommunikation) #}
+        {% if mail_versand_aktiv is defined %}
+        <span class="abzeichen {{ 'ep' if not mail_versand_aktiv }}" title="{{ 'Mails gehen an den Kunden (termin@)' if mail_versand_aktiv else mailsperre_hinweis | default('Testphase: Mailversand noch nicht freigeschaltet') }}">
+            Mailversand: {{ 'freigeschaltet' if mail_versand_aktiv else 'gesperrt (Testphase)' }}</span>
+        {% else %}
+        <span class="abzeichen" title="mail_modus ist seit v31 keine Steuerung mehr – maßgeblich ist der Schalter mail_versand_aktiv (Lead-Einstellungen → Freischaltung)">Mail-Modus (lesend): {{ mail_modus }}</span>
+        {% endif %}
         <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}">Lead-Akte</a>
         <a class="knopf klein zweitrangig" href="/lead-management/kommunikation">Warteschlange (alle)</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+{% if mail_versand_aktiv is defined and not mail_versand_aktiv %}
+<p class="lm-hinweis">{{ mailsperre_hinweis | default('Testphase: Mailversand noch nicht freigeschaltet') }} – Einträge landen gerendert mit Status „gesperrt“ (Vorschau unten), es wird nichts gesendet, auch nicht ins Testpostfach.</p>
+{% endif %}
 
 <h2>Mail mit Vorlage senden</h2>
 <form method="post" action="/lead-management/lead/{{ vorgang.id }}/mail"
@@ -49,23 +58,24 @@
     <summary>
         <strong>{{ e.vorlage_key }}</strong> · <span class="abzeichen lm-mailstatus-{{ e.status }}">{{ e.status }}</span>
         {% if e.status == 'fehler' %}<span class="abzeichen ep">{{ e.fehler_text }}</span>{% endif %}
+        {% if e.status == 'gesperrt' %}<span class="abzeichen" title="{{ e.fehler_text }}">Testphase – nicht gesendet</span>{% endif %}
         · geplant {{ e.geplant_am.strftime('%d.%m.%y %H:%M') }}
         {% if e.gesendet_am %} · gesendet {{ e.gesendet_am.strftime('%d.%m.%y %H:%M') }}{% endif %}
         · an {{ e.an }}{% if e.absender %} · von {{ e.absender }}{% endif %} · Modus {{ e.modus }}{% if e.versuche %} · {{ e.versuche }} Versuch{{ 'e' if e.versuche != 1 }}{% endif %}
-        {% if e.anhang_pfad %} · 📎 ICS{% endif %}
+        {% if e.anhang_pfad %} · 📎 ICS{% if ';' in e.anhang_pfad %} ×{{ e.anhang_pfad.split(';') | length }}{% endif %}{% endif %}
+        {% if e.kanal == 'mail_fest' %} · <span class="dezent">Text aus der Kartei (fest)</span>{% endif %}
     </summary>
     <p><strong>{{ e.betreff }}</strong></p>
     <div class="mail-vorschau">{{ e.body_html | safe }}</div>
-    {% if e.status == 'fehler' %}
+    {% if e.status in ('fehler', 'gesperrt') %}
     <form method="post" action="/lead-management/mail/{{ e.id }}/erneut" style="display:inline">
         <input type="hidden" name="zurueck" value="/lead-management/lead/{{ vorgang.id }}/kommunikation">
-        <button class="knopf klein" type="submit" title="Eintrag auf geplant setzen – der Lauf lead-mail sendet in etwa einer Minute">{{ symbol('aktualisieren') }} Erneut senden</button>
+        <button class="knopf klein" type="submit" title="Eintrag auf geplant setzen – der Lauf lead-mail sendet in etwa einer Minute (gesperrte Einträge nur nach Freischaltung)">{{ symbol('aktualisieren') }} Erneut senden</button>
     </form>
     {% endif %}
     <form method="post" action="/lead-management/kommunikation/{{ e.id }}/senden" style="display:inline">
-        <button class="knopf klein zweitrangig" type="submit">
-            {{ 'Erneut verarbeiten' if e.status in ('fehler', 'gesendet') else 'Jetzt senden' }}
-            (nach Mail-Modus)</button>
+        <button class="knopf klein zweitrangig" type="submit" title="Sofort verarbeiten – bei Mailsperre endet der Eintrag als „gesperrt“">
+            {{ 'Erneut verarbeiten' if e.status in ('fehler', 'gesendet', 'gesperrt') else 'Jetzt verarbeiten' }}</button>
     </form>
 </details>
 {% else %}
@@ -76,7 +86,9 @@
 {#- v29: Warteschlangen-Seite aller Lead-Mails (Vertrag L2) #}
 <div class="seitenkopf">
     <h1>Lead-Mails · Warteschlange</h1>
-    <span class="dezent">Absender {{ absender }} · Mail-Modus {{ mail_modus }} · gesendet wird nur durch den Lauf lead-mail</span>
+    <span class="dezent">Absender {{ absender }} ·
+        {% if mail_versand_aktiv is defined %}Mailversand {{ 'freigeschaltet' if mail_versand_aktiv else 'gesperrt (Testphase)' }}{% else %}Mail-Modus (lesend) {{ mail_modus }}{% endif %}
+        · gesendet wird nur durch den Lauf lead-mail</span>
     <div class="aktionen">
         <a class="knopf klein zweitrangig" href="/lead-management/dashboard">← Dashboard</a>
     </div>
@@ -87,6 +99,8 @@
     <a class="{{ 'aktiv' if status == 'fehler' }}" href="/lead-management/kommunikation?status=fehler">Fehler <span class="n {{ 'rot' if zaehler.get('fehler') }}">{{ zaehler.get('fehler', 0) }}</span></a>
     <a class="{{ 'aktiv' if status == 'wartet_adresse' }}" href="/lead-management/kommunikation?status=wartet_adresse">Wartet auf Adresse <span class="n">{{ zaehler.get('wartet_adresse', 0) }}</span></a>
     <a class="{{ 'aktiv' if status == 'geplant' }}" href="/lead-management/kommunikation?status=geplant">Geplant <span class="n">{{ zaehler.get('geplant', 0) }}</span></a>
+    {# v31 (Phase 159): Filter „Gesperrt“ – Testphase-Einträge (Router B muss status=gesperrt zulassen) #}
+    <a class="{{ 'aktiv' if status == 'gesperrt' }}" href="/lead-management/kommunikation?status=gesperrt">Gesperrt <span class="n">{{ zaehler.get('gesperrt', 0) }}</span></a>
     <a class="{{ 'aktiv' if status == 'gesendet' }}" href="/lead-management/kommunikation?status=gesendet">Gesendet <span class="n">{{ zaehler.get('gesendet', 0) }}</span></a>
 </nav>
 <div class="tabelle-wrap">
@@ -96,7 +110,7 @@
     {% for z in liste %}
     {% set e = z.eintrag %}
     <tr data-eintrag="{{ e.id }}">
-        <td><span class="abzeichen lm-mailstatus-{{ e.status }}" title="{{ e.status }}">{{ {'fehler': 'Fehler', 'wartet_adresse': 'wartet auf Adresse', 'geplant': 'geplant', 'gesendet': 'gesendet', 'protokolliert': 'protokolliert', 'storniert': 'storniert'}.get(e.status, e.status) }}</span></td>
+        <td><span class="abzeichen lm-mailstatus-{{ e.status }}" title="{{ e.fehler_text if e.status == 'gesperrt' else e.status }}">{{ {'fehler': 'Fehler', 'wartet_adresse': 'wartet auf Adresse', 'geplant': 'geplant', 'gesendet': 'gesendet', 'protokolliert': 'protokolliert', 'storniert': 'storniert', 'gesperrt': 'gesperrt (Testphase)'}.get(e.status, e.status) }}</span></td>
         <td>{{ e.vorlage_key }}</td>
         <td>{% if z.vorgang %}<a href="/lead-management/lead/{{ z.vorgang.id }}">{{ z.kunde.anzeige_name if z.kunde else ('Vorgang ' ~ z.vorgang.id) }}</a>{% else %}–{% endif %}</td>
         <td>{{ e.an or '–' }}</td>
@@ -120,6 +134,6 @@
     </tbody>
 </table>
 </div>
-<p class="dezent" style="margin-top:8px">Status <b>fehler</b> = Versand über den Absender fehlgeschlagen (kein Fallback) – der Lead steht oben im Hauptboard mit „Mail nicht gesendet“; <b>wartet auf Adresse</b> = E-Mail-Adresse unzustellbar („E-Mail falsch“), nach Adressänderung läuft die Mail weiter.</p>
+<p class="dezent" style="margin-top:8px">Status <b>fehler</b> = Versand über den Absender fehlgeschlagen (kein Fallback) – der Lead steht oben im Hauptboard mit „Mail nicht gesendet“; <b>wartet auf Adresse</b> = E-Mail-Adresse unzustellbar („E-Mail falsch“), nach Adressänderung läuft die Mail weiter; <b>gesperrt</b> = Testphase (Schalter <code>mail_versand_aktiv</code> aus) – gerendert, nie gesendet, beim Einschalten nicht nachgesendet („Erneut senden“ als bewusster Klick).</p>
 {% endif %}
 {% endblock %}

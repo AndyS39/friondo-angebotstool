@@ -44,8 +44,10 @@
 <form method="get" action="/lead-management/anrufliste" class="lm-schnellfilter" id="filterform">
     <input type="hidden" name="meine" value="{{ '1' if filter_werte.meine else '0' }}">
     {% for key, name in chips %}
+    {#- v31 (Phase 153): Chip „Großkunde“ (grosskunde=1) #}
     {% set url = {'arbeitsliste': '', 'heute': '&eingang_von=' ~ heute_param ~ '&eingang_bis=' ~ heute_param,
-                  'sla_rot': '&sla=rot', 'drei': '&versuche_min=3', 'rueckruf': '&rueckruf=heute', 'frei': '&frei=1'}[key] %}
+                  'sla_rot': '&sla=rot', 'drei': '&versuche_min=3', 'rueckruf': '&rueckruf=heute', 'frei': '&frei=1',
+                  'grosskunde': '&grosskunde=1'}[key] %}
     <a class="f {{ 'aktiv' if chip == key }}" href="/lead-management/anrufliste?{{ meine_param }}{{ url }}">{{ name }} <b>{{ zaehler[key] }}</b></a>
     {% endfor %}
     <span class="trenner"></span>
@@ -65,7 +67,8 @@
     </details>
     <select name="sparte" onchange="this.form.submit()">
         <option value="">Sparte: alle</option>
-        {% for s in ('WP', 'PV', 'KL', 'WB', 'GW') %}<option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }}>{{ s }}</option>{% endfor %}
+        {#- v31 (Phase 157): Sparten inkl. MS/WA/DMS (Jinja-Global lm_sparten) #}
+        {% for s in lm_sparten %}<option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }}>{{ s }} – {{ lm_sparten_lang.get(s, s) }}</option>{% endfor %}
     </select>
     {% if score_aktiv %}
     <select name="klasse" onchange="this.form.submit()">
@@ -102,8 +105,10 @@
             <div class="z1">
                 <a href="#" class="panel-link" data-ziel="/vorgaenge/{{ z.vorgang.id }}">{{ z.kunde.anzeige_name }}</a>
                 <span class="ort">{{ z.kunde.ort or '?' }} ({{ z.kunde.plz or '–' }})</span>
-                {% for s in z.sparten %}<span class="chip chip-{{ s | lower }}">{{ s }}</span>{% endfor %}
+                {% for s in z.sparten %}<span class="chip chip-{{ s | lower }}" title="{{ lm_sparten_lang.get(s, s) }}">{{ s }}</span>{% endfor %}
                 {{ kanal_badge(z.kanal, z.kanal_farbe) }}
+                {#- v31 (Phase 153): Badge „Großkunde“ #}
+                {% if z.grosskunde %}<span class="lm-grosskunde"{% if grosskunde_farbe %} style="--f:{{ grosskunde_farbe }}"{% endif %} title="Großkunde">Großkunde</span>{% endif %}
                 {% if z.frei %}<span class="lm-flag" title="Noch kein Leadmanager zugeordnet">⚑ frei</span>{% endif %}
                 {% if z.nummer_pruefen %}<span class="lm-flag" title="Letzter Anruf: falsche Nummer">⚑ Nummer prüfen</span>{% endif %}
                 {% if z.gesperrt %}<span class="lm-flag lm-flag-sperre" title="{{ sperre_meldung }} – nur Erreicht, Rückruf, Falsche Nummer, Kein Interesse oder Reaktivieren">⚑ {{ versuche_max }} Versuche</span>{% endif %}

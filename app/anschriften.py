@@ -6,11 +6,25 @@
 # sonst Kundenname + Ausführungsort; Lieferung = Kunden-Standard, sonst
 # Ausführungsort. Im PDF zählt nur, was vom Ausführungsort/Kundennamen
 # ABWEICHT – gleichlautende Werte ändern die Darstellung nicht.
+#
+# v31 (PLAN_LEAD_V5 Phase 153, Einfügung AT-Chat): Der Ausführungsort kommt aus
+# objekte.ausfuehrungsort – das Objekt des Angebots/der Erfassung/des Gewerks
+# (Objekt 2 → Objektadresse), sonst das Hauptobjekt = Kundenadresse. Dafür nehmen
+# alle Vergleichs-/Ausgabefunktionen einen optionalen Feldsatz `ort` (Ergebnis von
+# ausfuehrungsort_fuer / ausfuehrungsort(kunde, session=…)); ohne `ort` gilt wie
+# bisher die Kundenadresse, damit sich für Ein-Objekt-Vorgänge nichts ändert.
+# Regeln: der Empfängerblock (Rechnung) fällt weiterhin auf Kundenname +
+# KUNDENadresse zurück (der Kunde erhält das Angebot zu Hause), die Zeile
+# „Ausführungsort: …“ erscheint, sobald die Rechnungsadresse vom Ausführungsort
+# abweicht (bei Objekt 2 also immer); die Lieferanschrift fällt auf den
+# Ausführungsort (Baustelle = Objekt) zurück; die Rechnungsadresse eines MFH-Objekts,
+# das nicht Hauptobjekt ist, liegt am Objekt (vorgang_objekte.rechnung_*) [ANNAHME].
 
 import re
 
 FELDER = ("name", "zusatz", "strasse", "plz", "ort")
 LAENGEN = {"name": 200, "zusatz": 200, "strasse": 200, "plz": 10, "ort": 100}
+ORT_FELDER = ("strasse", "plz", "ort")
 
 
 def _norm(text: str) -> str:
@@ -28,10 +42,72 @@ def kundenname(kunde) -> str:
     return person
 
 
-def ausfuehrungsort(kunde) -> dict:
+def kundenanschrift(kunde) -> dict:
+    """Kundenname + Kundenadresse (bis v30 identisch mit dem Ausführungsort)."""
     return {"name": kundenname(kunde), "zusatz": "",
             "strasse": kunde.strasse if kunde else "", "plz": kunde.plz if kunde else "",
             "ort": kunde.ort if kunde else ""}
+
+
+def ausfuehrungsort(kunde, session=None, angebot=None, erfassung=None, gewerk=None,
+                    objekt_id=None, vorgang=None) -> dict:
+    """Ausführungsort als Anschrift-Feldsatz (name = Kundenname, zusatz leer,
+    strasse/plz/ort). Ohne `session` wie bisher die Kundenadresse; mit `session`
+    (v31) über objekte.ausfuehrungsort – siehe ausfuehrungsort_fuer."""
+    if session is None:
+        return kundenanschrift(kunde)
+    return ausfuehrungsort_fuer(session, angebot=angebot, erfassung=erfassung, gewerk=gewerk,
+                                objekt_id=objekt_id, vorgang=vorgang, kunde=kunde)
+
+
+def _kunde_ermitteln(session, angebot, erfassung, gewerk, vorgang):
+    from app.models import Kunde, Projekt
+    for quelle in (angebot, erfassung, vorgang):
+        if quelle is not None and getattr(quelle, "kunde_id", None):
+            return session.get(Kunde, quelle.kunde_id)
+    if gewerk is not None and gewerk.projekt_id:
+        projekt = session.get(Projekt, gewerk.projekt_id)
+        if projekt is not None and projekt.kunde_id:
+            return session.get(Kunde, projekt.kunde_id)
+    return None
+
+
+def ausfuehrungsort_fuer(session, angebot=None, erfassung=None, gewerk=None,
+                         objekt_id=None, vorgang=None, kunde=None) -> dict:
+    """v31 (Phase 153): Ausführungsort über objekte.ausfuehrungsort – Objekt des
+    Angebots (auch über dessen Erfassung), der Erfassung, des Gewerks oder eine
+    objekt_id; sonst das Hauptobjekt des Vorgangs, sonst die Kundenadresse.
+    Liefert den Anschrift-Feldsatz plus objekt_id, bezeichnung, mehrere_objekte,
+    haupt (bool) und einzeilig. Hauptobjekt = Kundenadresse: löst die Suche das
+    Hauptobjekt auf, gilt die Kundenadresse (schützt Bestandsangebote, falls ein
+    Kundenabgleich – z. B. monday – das Hauptobjekt noch nicht nachgezogen hat)."""
+    from app import objekte
+    from app.models import VorgangObjekt
+    if kunde is None:
+        kunde = _kunde_ermitteln(session, angebot, erfassung, gewerk, vorgang)
+    ort = objekte.ausfuehrungsort(session, objekt_id=objekt_id, angebot=angebot,
+                                  erfassung=erfassung, gewerk=gewerk, vorgang=vorgang,
+                                  kunde=kunde)
+    werte = {"name": kundenname(kunde), "zusatz": "",
+             "strasse": ort.get("strasse") or "", "plz": ort.get("plz") or "",
+             "ort": ort.get("ort") or "",
+             "objekt_id": ort.get("objekt_id"), "bezeichnung": ort.get("bezeichnung") or "",
+             "mehrere_objekte": bool(ort.get("mehrere_objekte")), "haupt": True}
+    if ort.get("objekt_id"):
+        objekt = session.get(VorgangObjekt, ort["objekt_id"])
+        if objekt is not None:
+            werte["haupt"] = objekt.reihenfolge == 1
+            if werte["haupt"] and kunde is not None and (kunde.strasse or kunde.ort):
+                werte.update(strasse=kunde.strasse or "", plz=kunde.plz or "",
+                             ort=kunde.ort or "")
+    werte["einzeilig"] = adresszeile(werte)
+    return werte
+
+
+def adresszeile(werte: dict) -> str:
+    """„Straße, PLZ Ort“ in der Schreibweise der PDF-Zeile „Ausführungsort: …“."""
+    return (f"{werte.get('strasse') or ''}, {werte.get('plz') or ''} "
+            f"{werte.get('ort') or ''}").strip(", ")
 
 
 def _feldsatz(obj, praefix: str) -> dict:
@@ -42,10 +118,10 @@ def _hat_adresse(werte: dict) -> bool:
     return bool(werte.get("strasse") or werte.get("ort"))
 
 
-def _auffuellen(werte: dict, kunde) -> dict:
-    basis = ausfuehrungsort(kunde)
+def _auffuellen(werte: dict, kunde, basis: dict | None = None) -> dict:
+    basis = basis or kundenanschrift(kunde)
     if not _hat_adresse(werte):
-        for f in ("strasse", "plz", "ort"):
+        for f in ORT_FELDER:
             werte[f] = basis[f]
     werte["name"] = werte["name"] or basis["name"]
     return werte
@@ -60,38 +136,42 @@ def standard_lieferung(kunde) -> dict:
     return _auffuellen(_feldsatz(kunde, "liefer"), kunde)
 
 
-def rechnung(angebot, kunde) -> dict:
+def rechnung(angebot, kunde, ort: dict | None = None) -> dict:
     """Effektive Rechnungsanschrift: Felder des Angebots, sonst Kundenname +
-    Ausführungsort. Bugfix 30.09.2026: KEIN Rückgriff auf den Kunden-Standard
-    zur Anzeigezeit – der Standard wird nur beim Anlegen kopiert
+    Kundenadresse (der Kunde erhält das Angebot zu Hause – auch bei einem
+    Objekt-2-Angebot, v31). Bugfix 30.09.2026: KEIN Rückgriff auf den
+    Kunden-Standard zur Anzeigezeit – der Standard wird nur beim Anlegen kopiert
     (angebot_vorbelegen); sonst änderte ein später gepflegter Standard bereits
     versendete/angenommene Angebote (PDF, Lieferschein)."""
     werte = _feldsatz(angebot, "rechnung")
-    basis = ausfuehrungsort(kunde)
+    basis = kundenanschrift(kunde)
     if not _hat_adresse(werte):
-        for f in ("strasse", "plz", "ort"):
+        for f in ORT_FELDER:
             werte[f] = basis[f]
     werte["name"] = werte["name"] or basis["name"]
     return werte
 
 
-def lieferung(angebot, kunde) -> dict:
-    """Effektive Lieferanschrift (Angebot > Alt-Text v13 > Ausführungsort);
-    wie bei rechnung() kein Rückgriff auf den Kunden-Standard zur Anzeigezeit."""
+def lieferung(angebot, kunde, ort: dict | None = None) -> dict:
+    """Effektive Lieferanschrift (Angebot > Alt-Text v13 > Ausführungsort –
+    v31: das Objekt des Angebots, sonst die Kundenadresse); wie bei rechnung()
+    kein Rückgriff auf den Kunden-Standard zur Anzeigezeit."""
     werte = _feldsatz(angebot, "liefer")
     if not any(werte.values()) and (getattr(angebot, "liefer_anschrift", "") or "").strip():
         werte = alt_text_parsen(angebot.liefer_anschrift)
-    basis = ausfuehrungsort(kunde)
+    basis = ort or kundenanschrift(kunde)
     if not _hat_adresse(werte):
-        for f in ("strasse", "plz", "ort"):
+        for f in ORT_FELDER:
             werte[f] = basis[f]
-    werte["name"] = werte["name"] or basis["name"]
+    werte["name"] = werte["name"] or kundenname(kunde)
     return werte
 
 
-def adresse_abweichend(werte: dict, kunde) -> bool:
-    basis = ausfuehrungsort(kunde)
-    return any(_norm(werte.get(f, "")) != _norm(basis[f]) for f in ("strasse", "plz", "ort"))
+def adresse_abweichend(werte: dict, kunde, ort: dict | None = None) -> bool:
+    """Weicht die Adresse vom Ausführungsort ab (v31: `ort` = Objektadresse,
+    sonst Kundenadresse)?"""
+    basis = ort or kundenanschrift(kunde)
+    return any(_norm(werte.get(f, "")) != _norm(basis.get(f, "")) for f in ORT_FELDER)
 
 
 def name_abweichend(werte: dict, kunde) -> bool:
@@ -107,12 +187,14 @@ def einzeilig(werte: dict) -> str:
     return ", ".join(zeilen(werte))
 
 
-def empfaenger(angebot, kunde) -> tuple[list[str], bool]:
+def empfaenger(angebot, kunde, ort: dict | None = None) -> tuple[list[str], bool]:
     """Empfängerblock des Angebots-PDFs + „Ausführungsort ausweisen?“.
     Rechnungs-Name ersetzt bei Abweichung den Kundennamen; bei abweichender
-    Rechnungsadresse steht der Ausführungsort als eigene Zeile darunter."""
+    Rechnungsadresse steht der Ausführungsort als eigene Zeile darunter
+    (v31: bei einem Objekt-2-Angebot weicht die Kundenadresse vom
+    Ausführungsort ab – der Kunde bleibt Empfänger, das Objekt steht darunter)."""
     werte = rechnung(angebot, kunde)
-    adr_abw = adresse_abweichend(werte, kunde)
+    adr_abw = adresse_abweichend(werte, kunde, ort)
     if not adr_abw and not name_abweichend(werte, kunde):
         # Standardfall wie bisher: Firma, Person, Kundenadresse – ein Zusatz
         # allein ergänzt nur eine Zeile (der Ansprechpartner bleibt stehen)
@@ -123,10 +205,10 @@ def empfaenger(angebot, kunde) -> tuple[list[str], bool]:
     return zeilen(werte), adr_abw
 
 
-def lieferzeile(angebot, kunde) -> str:
+def lieferzeile(angebot, kunde, ort: dict | None = None) -> str:
     """„Lieferanschrift: …“ nur, wenn sie vom Ausführungsort abweicht."""
-    werte = lieferung(angebot, kunde)
-    if not adresse_abweichend(werte, kunde) and not name_abweichend(werte, kunde) \
+    werte = lieferung(angebot, kunde, ort)
+    if not adresse_abweichend(werte, kunde, ort) and not name_abweichend(werte, kunde) \
             and not werte.get("zusatz"):
         return ""
     return einzeilig(werte)
@@ -160,13 +242,32 @@ def alt_text_parsen(text: str) -> dict:
     return {f: werte[f][:LAENGEN[f]] for f in FELDER}
 
 
-def erfassung_vorbelegung(kunde) -> dict:
+def objekt_rechnung(objekt, kunde=None) -> dict | None:
+    """v31 (Phase 157 [ANNAHME]): abweichende Rechnungsadresse eines Objekts, das
+    nicht Hauptobjekt ist (vorgang_objekte.rechnung_*); None, wenn keine gesetzt.
+    Beim Hauptobjekt gilt der Kunden-Standard kunden.rechnung_*."""
+    if objekt is None or getattr(objekt, "reihenfolge", 1) == 1:
+        return None
+    if not getattr(objekt, "rechnung_abweichend", False):
+        return None
+    werte = {"name": (objekt.rechnung_name or "").strip() or kundenname(kunde), "zusatz": "",
+             "strasse": (objekt.rechnung_strasse or "").strip(),
+             "plz": (objekt.rechnung_plz or "").strip(),
+             "ort": (objekt.rechnung_ort or "").strip()}
+    if not _hat_adresse(werte):
+        return None
+    return {f: werte[f][:LAENGEN[f]] for f in FELDER}
+
+
+def erfassung_vorbelegung(kunde, objekt=None) -> dict:
     """Antworten für einen neuen WP-Bogen aus den Kunden-Standards:
-    O06 = Nein + O09–O12 (Rechnung), O13 (Lieferung, einzeilig)."""
+    O06 = Nein + O09–O12 (Rechnung), O13 (Lieferung, einzeilig).
+    v31: bei einem Objekt mit eigener Rechnungsadresse (nicht Hauptobjekt)
+    kommt die Rechnung aus dem Objekt statt vom Kunden-Standard."""
     if kunde is None:
         return {}
     antworten = {}
-    re_ = _feldsatz(kunde, "rechnung")
+    re_ = objekt_rechnung(objekt, kunde) or _feldsatz(kunde, "rechnung")
     if any(re_.values()):
         antworten.update({"O06": "Nein", "O09": re_["name"], "O10": re_["strasse"],
                           "O11": re_["plz"], "O12": re_["ort"]})
@@ -185,17 +286,18 @@ def setzen(obj, praefix: str, werte: dict) -> None:
         setattr(obj, f"{praefix}_{f}", (werte.get(f) or "")[:LAENGEN[f]])
 
 
-def angebot_vorbelegen(angebot, kunde, antworten: dict | None = None) -> None:
+def angebot_vorbelegen(angebot, kunde, antworten: dict | None = None, objekt=None) -> None:
     """Kunden-Standards in ein NEUES Angebot kopieren. Bei Angeboten aus einer
     Erfassung gewinnt die Erfassung: hat der Bogen O06 beantwortet (auch
     „Ja“ = identisch), greift der Rechnungs-Standard nicht; ist O13 im Bogen
     vorhanden (auch leer), greift der Liefer-Standard nicht (Bugfix
     30.09.2026). Bögen ohne diese Fragen (PV/KL) und manuelle Angebote
-    übernehmen die Standards."""
+    übernehmen die Standards. v31: ein Objekt mit eigener Rechnungsadresse
+    (nicht Hauptobjekt) geht dem Kunden-Standard vor."""
     if kunde is None:
         return
     antworten = antworten or {}
-    standard = _feldsatz(kunde, "rechnung")
+    standard = objekt_rechnung(objekt, kunde) or _feldsatz(kunde, "rechnung")
     eigene = _feldsatz(angebot, "rechnung")
     if "O06" not in antworten:
         if not any(eigene.values()) and any(standard.values()):

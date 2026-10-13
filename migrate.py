@@ -372,8 +372,9 @@ def _daten() -> list[str]:
         from app.models import einstellung_holen, einstellung_setzen
         neu = leadmanagement.parameter_vorbelegen(session)
         if neu:
+            modus = leadmanagement.parameter_holen(session, "lead_freigabe_modus", "admin")
             meldungen.append(f"Lead-Parameter vorbelegt ({neu} Startwerte, "
-                             "lead_freigabe_modus=admin)")
+                             f"lead_freigabe_modus={modus})")   # v31: tatsächlicher Wert
         session.commit()
         # Bestehende (gesyncte) Vorgänge: Eingangsdaten + abgeleitete
         # Lead-Phase (Schalter-idempotent; liest monday nur mit)
@@ -767,7 +768,15 @@ def _daten() -> list[str]:
                                     # (drei Einträge, Platzhalter in den Nachtexten),
                                     # Parameter bza_kosten_puffer_prozent /
                                     # lieferschein_folgepositionen
-                                    ("app.zahlungsbedingungen", "migration_v30_zahlung")):
+                                    ("app.zahlungsbedingungen", "migration_v30_zahlung"),
+                                    # v31 (PLAN_LEAD_V5): Objekte je Vorgang, Leadmanager-
+                                    # Häkchen/Parameter/Freischaltung, Vorlagen (Langformen,
+                                    # nicht_erreicht, neue Vorlagen); v32 (PLAN_V19):
+                                    # Ablehnungsgründe, Verfolgungsstatus, Parameter
+                                    ("app.objekte", "migration_v31_objekte"),
+                                    ("app.lead_v5", "migration_v31_lead"),
+                                    ("app.lead_mail", "migration_v31_mails"),
+                                    ("app.verfolgung", "migration_v32_verfolgung")):
             try:
                 modul = importlib.import_module(modulname)
             except ImportError:

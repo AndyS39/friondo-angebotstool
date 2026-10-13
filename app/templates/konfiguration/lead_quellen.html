@@ -60,7 +60,8 @@
             <td><input form="q{{ q.id }}" type="text" name="kosten" size="6"
                        value="{{ ('%.2f' | format(q.kosten_je_lead_cent / 100)) | replace('.', ',') if q.kosten_je_lead_cent is not none }}"></td>
             <td>
-                {% for s in ('WP', 'PV', 'KL', 'WB', 'GW') %}
+                {# v31 (Phase 157, Vertrag AT 4.2): gemeinsame Sparten-Liste inkl. MS/WA/DMS (Router filtert gegen sparten.SPARTEN) #}
+                {% for s in ('WP', 'PV', 'KL', 'WB', 'GW', 'MS', 'WA', 'DMS') %}
                     <label style="white-space:nowrap"><input form="q{{ q.id }}" type="checkbox"
                         name="standard_sparten" value="{{ s }}"
                         {{ 'checked' if s in q.standard_sparten }}>{{ s }}</label>

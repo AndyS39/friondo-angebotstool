@@ -2,30 +2,122 @@
 {% from "_galerie.html" import galerie, galerie_fuss %}
 {% from "_steckbrief.html" import steckbrief %}
 {% import "_sparten.html" as sparten_ui %}
-{% from "_komponenten.html" import status_badge, statuskette, wiedervorlage_chip, leer_zustand, notizen_chat %}
+{% from "_komponenten.html" import status_badge, statuskette, wiedervorlage_chip, leer_zustand, notizen_chat, verfolgung_chip %}
 {% from "_symbole.html" import symbol %}
 
 {% block titel %}Vorgang {{ kunde.anzeige_name if kunde else vorgang.id }} – Friondo Angebotstool{% endblock %}
 
 {% block mainklasse %}breit{% endblock %}
 
+{# v31 (PLAN_LEAD_V5 Phase 153): Angebots- und Erfassungskarten als Makros, damit die
+   Akte sie je Objekt gruppieren kann (Überschrift nur bei mehr als einem Objekt) #}
+{% macro angebot_karte(a) -%}
+    {% set waehlbar, grund = kombi_info[a.id] %}
+    <div class="angebot-karte {{ 'ueberholt-karte' if a.status == 'Überholt' }}">
+        <div class="kartenkopf">
+            {% if kombi_erlaubt %}
+                {% if waehlbar %}
+                    <input type="checkbox" name="angebot_ids" value="{{ a.id }}"
+                           title="Für den Kombi-Versand auswählen">
+                {% else %}
+                    <span class="dezent" title="{{ grund }}">–</span>
+                {% endif %}
+            {% endif %}
+            <strong>
+                {% if a.extern %}<span class="abzeichen status-taifun">TAIFUN</span> {{ a.taifun_nummer or a.nummer }}
+                {% else %}{{ a.nummer }}{% endif %}
+            </strong>
+            {% if '.' in a.nummer and a.stamm_nummer != a.nummer %}<span class="abzeichen" title="Version">v{{ a.nummer.rpartition('.')[2] }}</span>{% endif %}
+            {% if a.extern and a.extern_pdf_pfad %}<span class="abzeichen" title="PDF hinterlegt (Kombi-fähig)">PDF ✓</span>{% endif %}
+            {{ sparten_ui.chip(a.konfigurator_typ or 'WP') }}
+            <span class="dezent">{{ a.datum.strftime('%d.%m.%Y') if a.datum }}</span>
+            <span class="betrag">{{ a.summen().endbetrag | euro }}</span>
+        </div>
+        {{ statuskette(a.status) }}
+        <div class="kartenfuss">
+            {% if projekt_modul_ok %}
+                {% if a.id in projekt_je_angebot %}
+                    <a class="knopf klein zweitrangig" href="/projektierung/projekt/{{ projekt_je_angebot[a.id] }}">→ Projekt</a>
+                {% elif a.status == 'Angenommen' %}
+                    <a class="knopf klein" href="/projektierung/angebot/{{ a.id }}/projekt">Angebot → Projekt</a>
+                {% endif %}
+            {% endif %}
+            {% if a.status == 'Angenommen' and not a.extern and benutzer.rolle != 'aussendienst' %}
+                {# v13 (Phase 80): Lieferschein ohne Preise #}
+                <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}/lieferschein.pdf" target="_blank">{{ symbol('pdf') }} Lieferschein</a>
+            {% endif %}
+            {% if benutzer.rolle in ('admin', 'innendienst') and (a.konfigurator_typ or 'WP') == 'WP' %}
+                {# v19 (Phase 96): BzA-Datenblatt – Tool- und TAIFUN-WP-Angebote #}
+                <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}/bza-datenblatt">{{ symbol('pdf') }} BzA-Datenblatt</a>
+            {% endif %}
+            {% if benutzer.rolle in ('admin', 'innendienst') %}
+                <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">{{ symbol('stift') }} Öffnen</a>
+            {% elif not a.extern %}
+                <a class="knopf klein zweitrangig" href="/meine-angebote/{{ a.id }}">Ansehen</a>
+                <a class="knopf klein zweitrangig" href="/meine-angebote/{{ a.id }}/pdf" target="_blank">{{ symbol('pdf') }} PDF</a>
+            {% endif %}
+        </div>
+    </div>
+{%- endmacro %}
+
+{% macro erfassung_karte(e) -%}
+    <div class="angebot-karte">
+        <div class="kartenkopf">
+            {{ sparten_ui.chip(e.sparte or 'WP') }}
+            <strong>{{ 'Freitext' if e.typ == 'freitext' else 'Katalog' }}</strong>
+            {{ status_badge(e.status) }}
+            <span class="dezent">{{ symbol('nutzer') }} {{ benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '–' }}</span>
+            <span class="dezent" style="margin-left:auto">{{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am else '– noch nicht abgesendet –' }}</span>
+        </div>
+        <div class="kartenfuss">
+            {% if benutzer.rolle in ('admin', 'innendienst') %}
+                <a class="knopf klein zweitrangig" href="/erfassungen/{{ e.id }}">{{ symbol('stift') }} Öffnen</a>
+            {% elif e.status == 'Entwurf' %}
+                <a class="knopf klein zweitrangig" href="/erfassung/{{ e.id }}/weiche">Fortsetzen</a>
+            {% endif %}
+        </div>
+    </div>
+{%- endmacro %}
+
 {% block inhalt %}
+{# v32 (PLAN_V19 Phase 163): Styles des Verfolgungs-Chips und des Dialogs „Nächster Schritt“ #}
+<link rel="stylesheet" href="/static/verfolgung.css?v={{ css_version }}">
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{# v31 (PLAN_LEAD_V5 Phase 154): Archivieren ist eine Lead-Sicht – die Akte zeigt den
+   Vorgang unverändert, nur mit Banner und „Wiederherstellen“ (ID/LM/Admin) #}
+{% if vorgang.archiviert_am %}
+<div class="warnblock archiv-banner">
+    <span>{{ symbol('warnung') }} <strong>Im Lead-Management archiviert am {{ vorgang.archiviert_am.strftime('%d.%m.%Y %H:%M') }}{% if archiviert_von_name %} von {{ archiviert_von_name }}{% endif %}</strong>
+        – in Lead-Boards, Anrufliste, Kanban, Karte und Dashboard ausgeblendet; Angebote,
+        Erfassungen, Statistik und Projektierung bleiben unverändert.</span>
+    {% if archiv_wiederherstellen_erlaubt %}
+    <form method="post" action="/vorgaenge/{{ vorgang.id }}/archiv-wiederherstellen"
+          onsubmit="return confirm('Vorgang im Lead-Management wiederherstellen?');">
+        <button class="knopf klein" type="submit">Wiederherstellen</button>
+    </form>
+    {% endif %}
+</div>
+{% endif %}
 
 {# v14 (PLAN_V12, Phase 71): Kopfkarte – Kundenname gross, Kontakt,
    Kanal/Profil, Sparten, Hot-Ampel + Wiedervorlage prominent;
    Schnellaktionen rechts. Formularnamen unverändert (v10). #}
+{% set mehrere_objekte = objekt_gruppen is defined and objekt_gruppen and objekt_gruppen | length > 1 %}
 <div class="akte-kopfkarte">
     <div>
         <h1 class="kundenname">{{ kunde.anzeige_name if kunde else '?' }}
             {% if vorgang.verfolgung_ampel %}
                 <span title="Verfolgung: {{ vorgang.verfolgung_ampel }}">{{ {'heiss': '🔥', 'warm': '🌤', 'kalt': '❄'}[vorgang.verfolgung_ampel] }}</span>
             {% endif %}
+            {# v32 (PLAN_V19 Phase 163): Verfolgungs-Chip (fünf Stufen) neben der Hot-Ampel #}
+            {{ verfolgung_chip(vorgang.verfolgung_status, vorgang_id=vorgang.id) }}
             {{ wiedervorlage_chip(vorgang.wiedervorlage_am, heute) }}
         </h1>
         <p class="dezent" style="margin:0.15rem 0">
             {% if kunde %}{{ symbol('ort') }}
                 {{ ((kunde.strasse ~ ', ' if kunde.strasse) ~ kunde.plz ~ ' ' ~ kunde.ort) | trim or '–' }}
+                {% if mehrere_objekte %}<span class="abzeichen" title="Vorgang mit mehreren Objekten – Erfassungen und Angebote sind unten je Objekt gruppiert">{{ objekt_gruppen | length }} Objekte</span>{% endif %}
                 {% if kunde.telefon %} · {{ symbol('telefon') }} {{ kunde.telefon }}{% endif %}
                 {% if kunde.email %} · {{ symbol('brief') }} {{ kunde.email }}{% endif %}
             {% endif %}
@@ -80,6 +172,18 @@
             <input type="text" name="notiz" size="24" placeholder="Notiz in den Chat (optional)">
             <button class="knopf klein" type="submit">Speichern</button>
         </form>
+        {% if naechster_schritt_erlaubt is defined and naechster_schritt_erlaubt and gruende is defined %}
+        {# v32 (PLAN_V19 Phase 163): Dialog „Nächster Schritt“ nach dem Anruf – derselbe
+           Dialog wie auf der Anruf-Karte in „Mein Tag“ (Partial, ID und AD); aufgeklappt,
+           solange ein Angebot offen nachverfolgt wird #}
+        <details class="ns-block" id="naechster-schritt"
+                 {{ 'open' if vorgang.verfolgung_status in ('versendet', 'nachgefasst', 'bestellung_angekuendigt') }}>
+            <summary class="dezent"><strong>Nächster Schritt nach dem Anruf</strong>
+                <span class="dezent">– Abgelehnt · Bestellung kommt · Nochmal anrufen</span></summary>
+            {% set mit_notiz = true %}
+            {% include "vorgaenge/_naechster_schritt.html" %}
+        </details>
+        {% endif %}
     </div>
     <div class="akte-schnellaktionen">
         <a class="knopf zweitrangig klein" href="/vorgaenge">Zur Vorgangsliste</a>
@@ -117,60 +221,59 @@
 {% endif %}
 <div class="akte-spalten">
 <div>{# ---------- linke Spalte: Angebote + Erfassungen ---------- #}
+{% set kombi_erlaubt = benutzer.rolle in ('admin', 'innendienst') %}
+
+{% if mehrere_objekte %}
+{# v31 (PLAN_LEAD_V5 Phase 153): Vorgang mit mehreren Objekten – Angebote und
+   Erfassungen je Objekt (Bezeichnung + Adresse), Kombi-Versand über alle Objekte #}
+<h2 id="angebote" style="margin-top:0">Angebote und Erfassungen je Objekt</h2>
+<form method="post" action="/vorgaenge/{{ vorgang.id }}/kombi-versand" id="kombiform"
+      onsubmit="return confirm('Gewählte Angebote in EINER Mail (je ein PDF) als Entwurf vorbereiten?');">
+{% for g in objekt_gruppen %}
+<section class="objekt-gruppe {{ 'objekt-inaktiv' if not g.aktiv }}" id="objekt-{{ g.objekt_id or 0 }}">
+    <h3>{{ symbol('ort') }} {{ g.ueberschrift }}
+        {% if g.haupt %}<span class="abzeichen" title="Hauptobjekt = Kundenadresse">Hauptobjekt</span>{% endif %}
+        {% if not g.aktiv %}<span class="abzeichen status-grau">deaktiviert</span>{% endif %}
+        {% if g.objekt and g.objekt.objektart %}<span class="dezent">· {{ g.objekt.objektart }}{% if g.objekt.parteien %} ({{ g.objekt.parteien }} Parteien){% endif %}</span>{% endif %}
+        <span class="sparten-chips">{% for s in g.interessen %}{{ sparten_ui.chip(s, 'offen') }}{% endfor %}</span>
+    </h3>
+    <h4>Angebote</h4>
+    {% for a in g.angebote %}{{ angebot_karte(a) }}{% else %}
+        <p class="dezent">Noch kein Angebot für dieses Objekt.</p>
+    {% endfor %}
+    <h4>Erfassungen</h4>
+    {% if vorgang.demo %}
+    <p class="hinweis">Demo-Lead – keine Erfassung möglich.</p>
+    {% else %}
+    {% for e in g.erfassungen %}{{ erfassung_karte(e) }}{% else %}
+        <p class="dezent">Noch keine Erfassung für dieses Objekt.</p>
+    {% endfor %}
+    {% if kunde and g.aktiv %}
+    <p><a class="knopf klein zweitrangig"
+          href="/erfassung/sparten?kunde_id={{ kunde.id }}{{ '&lead_id=' ~ lead.id if lead }}&objekt_id={{ g.objekt_id }}">
+        {{ symbol('plus') }} Erfassung für dieses Objekt</a></p>
+    {% endif %}
+    {% endif %}
+</section>
+{% endfor %}
+{% if kombi_erlaubt and angebote %}
+<div class="formaktionen">
+    <button class="knopf" type="submit">{{ symbol('brief') }} Gemeinsam versenden (eine Mail, mehrere PDFs)</button>
+    <span class="dezent">Wählbar: Entwurf/Versand vorbereitet; TAIFUN nur mit hinterlegtem PDF.
+        Der Einzelversand über das Angebot bleibt unverändert.</span>
+    {% if kombi_doppelt %}
+        <span class="abzeichen ep" title="Diese Artikelnummern sind in mehreren Tool-Angeboten voll berechnet – ggf. Alternativ-Kennzeichen setzen">{{ symbol('warnung') }} doppelt: {{ kombi_doppelt | join(', ') }}</span>
+    {% endif %}
+</div>
+{% endif %}
+</form>
+{% else %}
 
 <h2 id="angebote" style="margin-top:0">Angebote</h2>
 {% if angebote %}
-{% set kombi_erlaubt = benutzer.rolle in ('admin', 'innendienst') %}
 <form method="post" action="/vorgaenge/{{ vorgang.id }}/kombi-versand" id="kombiform"
       onsubmit="return confirm('Gewählte Angebote in EINER Mail (je ein PDF) als Entwurf vorbereiten?');">
-{% for a in angebote %}
-    {% set waehlbar, grund = kombi_info[a.id] %}
-    <div class="angebot-karte {{ 'ueberholt-karte' if a.status == 'Überholt' }}">
-        <div class="kartenkopf">
-            {% if kombi_erlaubt %}
-                {% if waehlbar %}
-                    <input type="checkbox" name="angebot_ids" value="{{ a.id }}"
-                           title="Für den Kombi-Versand auswählen">
-                {% else %}
-                    <span class="dezent" title="{{ grund }}">–</span>
-                {% endif %}
-            {% endif %}
-            <strong>
-                {% if a.extern %}<span class="abzeichen status-taifun">TAIFUN</span> {{ a.taifun_nummer or a.nummer }}
-                {% else %}{{ a.nummer }}{% endif %}
-            </strong>
-            {% if '.' in a.nummer and a.stamm_nummer != a.nummer %}<span class="abzeichen" title="Version">v{{ a.nummer.rpartition('.')[2] }}</span>{% endif %}
-            {% if a.extern and a.extern_pdf_pfad %}<span class="abzeichen" title="PDF hinterlegt (Kombi-fähig)">PDF ✓</span>{% endif %}
-            {{ sparten_ui.chip(a.konfigurator_typ or 'WP') }}
-            <span class="dezent">{{ a.datum.strftime('%d.%m.%Y') if a.datum }}</span>
-            <span class="betrag">{{ a.summen().endbetrag | euro }}</span>
-        </div>
-        {{ statuskette(a.status) }}
-        <div class="kartenfuss">
-            {% if projekt_modul_ok %}
-                {% if a.id in projekt_je_angebot %}
-                    <a class="knopf klein zweitrangig" href="/projektierung/projekt/{{ projekt_je_angebot[a.id] }}">→ Projekt</a>
-                {% elif a.status == 'Angenommen' %}
-                    <a class="knopf klein" href="/projektierung/angebot/{{ a.id }}/projekt">Angebot → Projekt</a>
-                {% endif %}
-            {% endif %}
-            {% if a.status == 'Angenommen' and not a.extern and benutzer.rolle != 'aussendienst' %}
-                {# v13 (Phase 80): Lieferschein ohne Preise #}
-                <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}/lieferschein.pdf" target="_blank">{{ symbol('pdf') }} Lieferschein</a>
-            {% endif %}
-            {% if benutzer.rolle in ('admin', 'innendienst') and (a.konfigurator_typ or 'WP') == 'WP' %}
-                {# v19 (Phase 96): BzA-Datenblatt – Tool- und TAIFUN-WP-Angebote #}
-                <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}/bza-datenblatt">{{ symbol('pdf') }} BzA-Datenblatt</a>
-            {% endif %}
-            {% if benutzer.rolle in ('admin', 'innendienst') %}
-                <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">{{ symbol('stift') }} Öffnen</a>
-            {% elif not a.extern %}
-                <a class="knopf klein zweitrangig" href="/meine-angebote/{{ a.id }}">Ansehen</a>
-                <a class="knopf klein zweitrangig" href="/meine-angebote/{{ a.id }}/pdf" target="_blank">{{ symbol('pdf') }} PDF</a>
-            {% endif %}
-        </div>
-    </div>
-{% endfor %}
+{% for a in angebote %}{{ angebot_karte(a) }}{% endfor %}
 {% if kombi_erlaubt %}
 <div class="formaktionen">
     <button class="knopf" type="submit">{{ symbol('brief') }} Gemeinsam versenden (eine Mail, mehrere PDFs)</button>
@@ -185,6 +288,7 @@
 {% else %}
 {{ leer_zustand('Noch kein Angebot – über eine Erfassung starten.') }}
 {% endif %}
+{% endif %}{# /mehrere_objekte #}
 
 {% if projekt_modul_ok and vorgang_projekte %}
 {% from "_projektierung.html" import phase_name %}
@@ -218,29 +322,13 @@
 {% endif %}
 {% endif %}
 
+{% if not mehrere_objekte %}
 <h2>Erfassungen</h2>
 {% if vorgang.demo %}
 <p class="hinweis">Demo-Lead – keine Erfassung möglich.</p>
 {% else %}
 {% if erfassungen %}
-{% for e in erfassungen %}
-    <div class="angebot-karte">
-        <div class="kartenkopf">
-            {{ sparten_ui.chip(e.sparte or 'WP') }}
-            <strong>{{ 'Freitext' if e.typ == 'freitext' else 'Katalog' }}</strong>
-            {{ status_badge(e.status) }}
-            <span class="dezent">{{ symbol('nutzer') }} {{ benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '–' }}</span>
-            <span class="dezent" style="margin-left:auto">{{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am else '– noch nicht abgesendet –' }}</span>
-        </div>
-        <div class="kartenfuss">
-            {% if benutzer.rolle in ('admin', 'innendienst') %}
-                <a class="knopf klein zweitrangig" href="/erfassungen/{{ e.id }}">{{ symbol('stift') }} Öffnen</a>
-            {% elif e.status == 'Entwurf' %}
-                <a class="knopf klein zweitrangig" href="/erfassung/{{ e.id }}/weiche">Fortsetzen</a>
-            {% endif %}
-        </div>
-    </div>
-{% endfor %}
+{% for e in erfassungen %}{{ erfassung_karte(e) }}{% endfor %}
 {% else %}
 {% if kunde %}
 {{ leer_zustand('Noch keine Erfassung zu diesem Vorgang.',
@@ -251,6 +339,7 @@
 {% endif %}
 {% endif %}
 {% endif %}{# /vorgang.demo #}
+{% endif %}{# /not mehrere_objekte #}
 
 <h2 id="galerie">Galerie</h2>
 {# 27.09.2026 (Andreas): eigene Galerie je Sparte (WP / PV / KL / WB) #}
@@ -304,7 +393,51 @@ function pjGalTab(knopf, sparte) {
    wie Projektakte (Reiter Verlauf), Kundenkartei und Montage-Backend (nur lesen);
    Kennzeichen Projektierung/Vertrieb/Lead/Montage aus der Herkunft, Senden per
    fetch ohne Neuladen, Strg + Enter #}
+{# v31 (PLAN_LEAD_V5 Phase 158): Lead-Aktivitäten (Anrufe, Mails, Termine,
+   Statuswechsel) und Projekt-Verlauf als eingeblendete Einträge – Filter
+   „nur Notizen“ (Makro) / „alles“ (gemeinsamer Verlauf aus vorgang_verlauf);
+   keine zweite Notizspur, geschrieben wird nur über den Chat #}
+{% set verlauf_alle = notizen_ctx.verlauf_alle if notizen_ctx.verlauf_alle is defined else [] %}
+{% set verlauf_anzahl = notizen_ctx.verlauf_anzahl if notizen_ctx.verlauf_anzahl is defined else 0 %}
+<div class="nc-filter" id="nc-filter-{{ vorgang.id }}">
+    <button type="button" class="knopf klein zweitrangig aktiv" data-ziel="notizen">nur Notizen ({{ notizen_ctx.anzahl }})</button>
+    <button type="button" class="knopf klein zweitrangig" data-ziel="alles"
+            title="Notizen plus Lead-Aktivitäten (Anrufe, E-Mails, Termine, Status) und Projekt-Verlauf">alles ({{ notizen_ctx.anzahl + verlauf_anzahl }})</button>
+</div>
+<div class="notizen-chat nc-chat nc-verlauf" id="nc-alles-{{ vorgang.id }}" hidden>
+    {% for e in verlauf_alle %}
+    <div class="notiz{{ ' eigene' if e.eigen }} vl-{{ e.quelle }}" data-notiz="{{ e.id }}">
+        <span class="notiz-kopf"><strong>{{ e.autor }}</strong>
+            <span class="dezent">{{ e.zeit.strftime('%d.%m.%y %H:%M') if e.zeit else '' }} Uhr</span>
+            <span class="abzeichen nc-herkunft vl-quelle-{{ e.quelle }}" title="Herkunft: {{ e.quelle_text }}">{{ e.quelle_text }}</span>
+            {% if not e.ist_notiz %}<span class="abzeichen vl-art">{{ e.titel or e.art_text }}</span>{% endif %}
+        </span>
+        <div class="notiz-text">{{ e.text }}</div>
+        {% if e.link and not e.ist_notiz %}<a class="vl-link dezent" href="{{ e.link }}">öffnen →</a>{% endif %}
+    </div>
+    {% else %}
+    <p class="dezent nc-leer">Noch keine Einträge im Verlauf.</p>
+    {% endfor %}
+</div>
 {{ notizen_chat(notizen_ctx) }}
+<script>
+(function () {
+    var filter = document.getElementById('nc-filter-{{ vorgang.id }}');
+    if (!filter) { return; }
+    filter.addEventListener('click', function (ev) {
+        var knopf = ev.target.closest('button[data-ziel]');
+        if (!knopf) { return; }
+        filter.querySelectorAll('button[data-ziel]').forEach(function (b) {
+            b.classList.toggle('aktiv', b === knopf);
+        });
+        var alles = knopf.getAttribute('data-ziel') === 'alles';
+        var chat = document.getElementById('nc-{{ vorgang.id }}');
+        var verlauf = document.getElementById('nc-alles-{{ vorgang.id }}');
+        if (chat) { chat.hidden = alles; }
+        if (verlauf) { verlauf.hidden = !alles; if (alles) { verlauf.scrollTop = verlauf.scrollHeight; } }
+    });
+})();
+</script>
 
 </div>
 </div>

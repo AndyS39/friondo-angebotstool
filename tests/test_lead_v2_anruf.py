@@ -224,16 +224,17 @@ class Ergebnis(Basis):
         akt = self.anrufe(v.id)[-1]
         self.assertIsNone(akt.naechste_aktion_am)
         self.assertIn("im Urlaub", akt.text)
-        # Stufe 2 → Mail nicht_erreicht geplant, weiterhin keine Wiedervorlage
+        # Stufe 2 → v31 (PLAN_LEAD_V5 Phase 156, Live-Excel Blatt Kaskade aktion = keine bei
+        # Versuch 2 und 4): KEINE Mail nicht_erreicht mehr, weiterhin keine Wiedervorlage
         r = self.client.post(f"/lead-management/anruf/{v.id}", data={"ergebnis": "nicht_erreicht"},
                              follow_redirects=False)
-        self.assertEqual(self.meldung(r), "Nicht erreicht protokolliert (Versuch 2) – Mail geplant.")
+        self.assertEqual(self.meldung(r), "Nicht erreicht protokolliert (Versuch 2).")
         self.s.expire_all()
         v = self.s.get(Vorgang, v.id)
         self.assertIsNone(v.naechste_aktion_am)
         mails = [m.vorlage_key for m in self.s.query(KommunikationLog).filter_by(vorgang_id=v.id)
                  if m.vorlage_key != "eingangsbestaetigung"]
-        self.assertEqual(mails, ["nicht_erreicht"])
+        self.assertEqual(mails, [])
         # Letzte Stufe: Phase Nicht erreicht, keine Wiedervorlage; v29 (PLAN_LEAD_V4
         # Phase 142): Nurture entfällt – nur noch disqualifiziert, kein Eintrag +30 Tage
         v2 = self.lead(8, versuche=kern.versuche_max(self.s) - 1, email="v2a8@test.local")
@@ -274,7 +275,7 @@ class Ergebnis(Basis):
         r = self.client.post(f"/lead-management/anruf/{v.id}",
                              data={"ergebnis": "kein_interesse", "grund": normal.grund,
                                    "dauer_sek": "40"}, follow_redirects=False)
-        self.assertIn("unqualifiziert", self.meldung(r))
+        self.assertIn("disqualifiziert", self.meldung(r))   # v31 (PLAN_LEAD_V5 Phase 157): Label „Disqualifiziert“
         self.s.expire_all()
         v = self.s.get(Vorgang, v.id)
         self.assertEqual(v.lead_phase, "unqualifiziert")
@@ -350,8 +351,8 @@ class Rufnummernsuche(Basis):
                                 follow_redirects=False)
             self.assertEqual(r.status_code, 303, eingabe)
             self.assertEqual(r.headers["location"], f"/lead-management/lead/{v.id}", eingabe)
-        # zu kurz, nichts gefunden, Liste erzwingen
-        r = self.client.get("/lead-management/anruf/suche?q=0203+77")
+        # zu kurz (v31 PLAN_LEAD_V5 Phase 158: Endziffern-Suche ab 3 Ziffern), nichts gefunden, Liste erzwingen
+        r = self.client.get("/lead-management/anruf/suche?q=77")
         self.assertIn("mindestens", r.text)
         r = self.client.get("/lead-management/anruf/suche?q=0203+7799999")
         self.assertEqual(r.status_code, 200)
@@ -514,28 +515,30 @@ class Glocke(Basis):
 
 class Doppelversand(Basis):
     def test_schutz(self):
+        # v31 (PLAN_LEAD_V5 Phase 156): die Vorlage nicht_erreicht ist ausgeblendet (mail_planen
+        # liefert None) – der Doppelversand-Schutz wird mit der Vorlage disqualifiziert geprüft
         v = self.lead(19, email="v2a19@test.local")
-        kern.mail_planen(self.s, v, "nicht_erreicht")
-        self.assertTrue(lead_anrufliste.mail_bereits_geplant(self.s, v.id, "nicht_erreicht"))
-        self.assertIsNone(lead_anrufliste.mail_planen_einmalig(self.s, v, "nicht_erreicht"))
+        kern.mail_planen(self.s, v, "disqualifiziert")
+        self.assertTrue(lead_anrufliste.mail_bereits_geplant(self.s, v.id, "disqualifiziert"))
+        self.assertIsNone(lead_anrufliste.mail_planen_einmalig(self.s, v, "disqualifiziert"))
         # v23 Phase 112: kern.mail_planen schützt jetzt selbst (Hook 107) – Doppel am
         # Schutz vorbei anlegen, um doppelversand_bereinigen zu prüfen
-        self.s.add(KommunikationLog(vorgang_id=v.id, kanal="mail", vorlage_key="nicht_erreicht",
+        self.s.add(KommunikationLog(vorgang_id=v.id, kanal="mail", vorlage_key="disqualifiziert",
                                     an="v2a19@test.local", status="geplant", modus="protokoll"))
         self.s.flush()
         self.assertEqual(lead_anrufliste.doppelversand_bereinigen(self.s, v.id), 1)
         self.s.commit()
-        offen = [m for m in self.s.query(KommunikationLog).filter_by(vorgang_id=v.id, vorlage_key="nicht_erreicht")]
+        offen = [m for m in self.s.query(KommunikationLog).filter_by(vorgang_id=v.id, vorlage_key="disqualifiziert")]
         self.assertEqual(sorted(m.status for m in offen), ["geplant", "storniert"])
         self.assertIn("Doppelversand", next(m for m in offen if m.status == "storniert").fehler_text)
-        # Kaskade über die Route: nach Stufe 2 genau EIN offener nicht_erreicht-Eintrag
+        # Kaskade über die Route: v31 (PLAN_LEAD_V5 Phase 156, Live-Excel: Versuch 2 ohne Mail) –
+        # nach Stufe 2 KEIN nicht_erreicht-Eintrag mehr; der Doppelversand-Schutz selbst ist oben geprüft
         v2 = self.lead(20, versuche=1, email="v2a20@test.local")
         self.client.post(f"/lead-management/anruf/{v2.id}", data={"ergebnis": "nicht_erreicht"},
                          follow_redirects=False)
         geplant = [m for m in self.s.query(KommunikationLog)
                    .filter_by(vorgang_id=v2.id, vorlage_key="nicht_erreicht", status="geplant")]
-        self.assertEqual(len(geplant), 1)
-        self.assertEqual(geplant[0].modus, "protokoll")      # Sendesperre im Demo
+        self.assertEqual(len(geplant), 0)
 
     def test_storno_bei_kontakt(self):
         """C4-d (Prüfer): Kontakt hergestellt → offene Kaskaden-Mails werden
@@ -559,8 +562,10 @@ class Doppelversand(Basis):
                              follow_redirects=False)
         self.assertEqual(r.status_code, 303)
         self.s.expire_all()
-        self.assertEqual(offen(v.id), [("disqualifiziert", "storniert"), ("nicht_erreicht", "protokolliert"),
-                                       ("nicht_erreicht", "storniert")])
+        # v31 (PLAN_LEAD_V5 Phase 156, Agent T): kern.mail_planen plant die ausgeblendete Vorlage
+        # nicht_erreicht nicht mehr – nur der direkt angelegte protokollierte Eintrag bleibt;
+        # disqualifiziert wird wie bisher storniert
+        self.assertEqual(offen(v.id), [("disqualifiziert", "storniert"), ("nicht_erreicht", "protokolliert")])
         storno = next(m for m in self.s.query(KommunikationLog).filter_by(vorgang_id=v.id, status="storniert"))
         self.assertIn("Kunde erreicht", storno.fehler_text)
         # Kein Interesse und Rückruf gewünscht stornieren ebenfalls, Meldung nennt die Anzahl
@@ -575,8 +580,10 @@ class Doppelversand(Basis):
         self.assertIn("1 geplante Mail storniert", self.meldung(r))
         self.s.expire_all()
         self.assertEqual(offen(v2.id), [("disqualifiziert", "storniert")])
+        # v31 (Phase 156): die Vorlage nicht_erreicht wird nicht mehr geplant – der Storno-Weg
+        # „Rückruf gewünscht“ wird mit der Vorlage disqualifiziert geprüft
         v3 = self.lead(26, versuche=1, email="v2a26@test.local")
-        kern.mail_planen(self.s, v3, "nicht_erreicht")
+        kern.mail_planen(self.s, v3, "disqualifiziert")
         self.s.commit()
         r = self.client.post(f"/lead-management/anruf/{v3.id}",
                              data={"ergebnis": "rueckruf_gewuenscht",
@@ -584,7 +591,7 @@ class Doppelversand(Basis):
                              follow_redirects=False)
         self.assertIn("storniert", self.meldung(r))
         self.s.expire_all()
-        self.assertEqual(offen(v3.id), [("nicht_erreicht", "storniert")])
+        self.assertEqual(offen(v3.id), [("disqualifiziert", "storniert")])
         # Direktaufruf: nur die Kaskaden-Vorlagen, nichts mit Termin-Bezug
         self.assertEqual(lead_anrufliste.offene_mails_stornieren(self.s, v3.id), 0)
         # v29: ohne nurture (Vorlage entfällt)

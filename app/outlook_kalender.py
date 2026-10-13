@@ -49,10 +49,9 @@ def _event_daten(session, termin, kategorien: list[str]) -> dict:
         gewerk.sparte if gewerk else ""] if t)
     if termin.typ != "montage":
         betreff = f"{termin.typ.capitalize()}: {betreff}"
-    ort = " ".join(t for t in [
-        projekt.ausfuehrung_strasse if projekt else "",
-        f"{projekt.ausfuehrung_plz} {projekt.ausfuehrung_ort}".strip()
-        if projekt else ""] if t)
+    # v31 (PLAN_LEAD_V5 Phase 153): Ausführungsort über projekt_ausfuehrungsort
+    ort = (kern.projekt_ausfuehrungsort(session, projekt, gewerk)["zeile"]
+           if projekt is not None else "")
     # Steckbrief-Kurzfassung + Link ins Tool
     zeilen = []
     if gewerk is not None:

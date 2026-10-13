@@ -218,13 +218,15 @@ class Phase88Uebersicht(Basis):
         portal = self.client.get("/").text
         self.assertIn("Eingänge heute", portal)
         self.assertIn("Jetzt dran", portal)
-        # Innendienst im Demo: 404
+        # v31 (PLAN_LEAD_V5 Phase 159, Agent B): Demo-Ende – lead_freigabe_modus ist fest
+        # „alle“ (leadmanagement.DEMO_BEENDET), das Modul ist rollenbasiert auch für den
+        # Innendienst sichtbar → 200 statt des alten Demo-Gates (404 bis v30)
         from app.models import Benutzer
         innen = self.s.query(Benutzer).filter_by(rolle="innendienst", aktiv=True).first()
         if innen is not None:
             c2 = TestClient(app)
             c2.post("/login", data={"benutzer_id": str(innen.id), "pin": "1234"})
-            self.assertEqual(c2.get("/lead-management/uebersicht").status_code, 404)
+            self.assertEqual(c2.get("/lead-management/uebersicht").status_code, 200)
 
     def test_startseite_nach_rolle(self):
         from types import SimpleNamespace

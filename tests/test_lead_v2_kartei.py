@@ -37,7 +37,7 @@ def glocken_arten(s, *arten):
 from app.db import SessionLocal, init_db
 from app.main import app
 from app.models import (AdProfil, Benachrichtigung, Benutzer, KommunikationLog,
-                        Kunde, LeadAktivitaet, LeadQuelle, Todo, Vorgang,
+                        Kunde, LeadAktivitaet, LeadQuelle, Todo, Vorgang, VorgangObjekt,
                         VorgangsNotiz, VotTermin)
 
 NACHNAME = "LeadV2K-Test"
@@ -50,6 +50,7 @@ def aufraeumen(s):
             s.query(LeadAktivitaet).filter_by(vorgang_id=v.id).delete()
             s.query(KommunikationLog).filter_by(vorgang_id=v.id).delete()
             s.query(VotTermin).filter_by(vorgang_id=v.id).delete()
+            s.query(VorgangObjekt).filter_by(vorgang_id=v.id).delete()   # v31: Objekte am Vorgang
             s.query(VorgangsNotiz).filter_by(vorgang_id=v.id).delete()
             s.query(Todo).filter_by(vorgang_id=v.id).delete()
             s.query(Benachrichtigung).filter(
@@ -73,6 +74,10 @@ class Basis(unittest.TestCase):
         cls.client.post("/login", data={"benutzer_id": "1", "pin": "1234"})
         cls.modus = kern.parameter_holen(cls.s, "lead_freigabe_modus", "admin")
         kern.parameter_setzen(cls.s, "lead_freigabe_modus", "admin")
+        # v31 (PLAN_LEAD_V5 Phase 159): in der Testphase ist die Terminierung gesperrt
+        # (terminierung_aktiv = aus) – diese Tests prüfen die B8-Logik selbst, daher an
+        cls.terminierung_vorher = kern.parameter_holen(cls.s, "terminierung_aktiv", "aus")
+        kern.parameter_setzen(cls.s, "terminierung_aktiv", "an")
         cls.s.commit()
         # Test-Außendienstler: ein angestellter AD, ein Handelsvertreter (A-1)
         cls.ad = Benutzer(name=f"{BENUTZER_PRAEFIX}AD", rolle="aussendienst",
@@ -92,6 +97,7 @@ class Basis(unittest.TestCase):
     def tearDownClass(cls):
         aufraeumen(cls.s)
         kern.parameter_setzen(cls.s, "lead_freigabe_modus", cls.modus)
+        kern.parameter_setzen(cls.s, "terminierung_aktiv", cls.terminierung_vorher)
         cls.s.commit()
         cls.s.close()
 
@@ -108,6 +114,8 @@ class Basis(unittest.TestCase):
             kunde.strasse = "Sonnenwall 1"
             kunde.vertriebskanal = "Standard"
             kunde.objektart = "EFH"
+            # v31 (Phase 157): Außendienst ist Pflichtfeld – „vollständig“ heißt jetzt auch zugewiesen
+            vorgang.ad_id = self.ad.id
         for k, v in extra.items():
             setattr(vorgang, k, v)
         self.s.commit()
@@ -137,11 +145,13 @@ class Rendern(Basis):
         r = self.kartei(v)
         self.assertEqual(r.status_code, 200)
         seite = r.text
+        # v31 (PLAN_LEAD_V5 Phase 155): Reiter nur Anruf · E-Mail · Timeline – der Reiter
+        # „Termin“ ist im Block Termine (id="termine") aufgegangen
         for text in ('class="lk-statuskette"', 'id="lk-kundeninfo"', 'class="karte lk-mitte"',
                      'id="lk-bloecke"',
                      'role="tablist"', 'id="tab-timeline"', 'id="tab-mails"', 'id="tab-anrufe"',
-                     'id="tab-termin"',
-                     'aria-label="E-Mail-Verlauf"', 'class="lm-anruf-form', 'name="dauer_sek"',
+                     'id="termine"',
+                     'aria-label="E-Mail"', 'class="lm-anruf-form', 'name="dauer_sek"',
                      'href="tel:', 'href="mailto:v2k1@test.local"', "lm_kartei.js", "lm_anruf.js",
                      "Pflichtfeld", 'id="lk-stammdaten"', "Innendienst", "To-Dos",
                      "Anhänge", 'action="/lead-management/todos/neu"', "Terminierung",
@@ -155,7 +165,7 @@ class Rendern(Basis):
                      f'name="zurueck" value="/lead-management/lead/{v.id}?tab=anrufe"'):
             self.assertIn(text, seite, text)
         for weg in ('class="karte lk-links"', 'class="lk-rechts"', 'id="tab-qualifizierung"',
-                    'id="tab-vorgang"', f"dialogOeffnen('nichterreicht', {v.id})"):
+                    'id="tab-vorgang"', 'id="tab-termin"', f"dialogOeffnen('nichterreicht', {v.id})"):
             self.assertNotIn(weg, seite, weg)
         # V1-Weiterleitung übernommen: kein Redirect mehr auf die Vorgangsakte
         self.assertEqual(self.client.get(f"/lead-management/lead/{v.id}",
@@ -191,9 +201,15 @@ class Rendern(Basis):
         self.s.commit()
         seite = self.kartei(v).text
         self.assertIn("Anzahl Parteien", seite)
-        self.assertIn("Rechnungsadresse", seite)
-        self.assertIn("2 Pflichtfelder offen", seite)
+        self.assertIn("Rechnungsadresse identisch mit der Objektadresse?", seite)
+        # v31 (PLAN_LEAD_V5 Phase 157): Vorbelegung „Ja“ – die Rechnungsadresse zählt nur bei „Nein“
+        self.assertIn("1 Pflichtfeld offen", seite)
         self.assertIn('id="lk-mfh" class="lk-mfh" ', seite)   # sichtbar (nicht hidden)
+        r = self.client.post(f"/lead-management/lead/{v.id}/feld",
+                             json={"feld": "rechnung_abweichend", "wert": "1"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIn("Rechnungsadresse", r.json()["pflicht_offen"])
+        self.assertIn("2 Pflichtfelder offen", self.kartei(v).text)
 
     def test_lead_kopf_der_akte_verlinkt_kartei(self):
         v = self.lead(5)
@@ -218,7 +234,7 @@ class Rendern(Basis):
 
 class Stammdaten(Basis):
     def test_speichern_inkl_mfh_kanal_einwilligung(self):
-        v = self.lead(10)
+        v = self.lead(10, ad_id=self.ad.id)   # v31 (Phase 157): Außendienst ist Pflichtfeld
         r = self.client.post(f"/lead-management/lead/{v.id}/stammdaten", data={
             "anrede": "Frau", "vorname": "Vera", "nachname": f"{NACHNAME}-10",
             "telefon": "0203 880010", "email": "v2k10@test.local",
@@ -250,8 +266,9 @@ class Stammdaten(Basis):
         self.assertTrue(any(t.startswith("Stammdaten geändert") and "Vertriebskanal" in t
                             and "Objektart" in t for t in texte), texte)
         self.assertTrue(any(t.startswith("Einwilligung Werbung: ja") for t in texte), texte)
-        # alle Pflichtfelder (inkl. MFH-Zusatz) gefüllt
-        self.assertEqual(lead_v2.pflichtfelder_offen(self.s, kunde, v), [])
+        # alle Pflichtfelder (inkl. MFH-Zusatz) gefüllt – v31 (Phase 157): Zählung über
+        # lead_kartei.pflicht_offen_namen (Außendienst-Pflicht, MFH-Frage Rechnungsadresse)
+        self.assertEqual(lead_kartei.pflicht_offen_namen(self.s, kunde, v), [])
         self.assertIn("0 Pflichtfelder offen", self.kartei(v).text)
 
     def test_fehler_rollt_zurueck(self):
@@ -337,9 +354,12 @@ class Zuweisung(Basis):
         self.s.commit()
         seite = self.kartei(v).text
         self.assertIn("Handelsvertreter sind deshalb deaktiviert", seite)
-        # HV-Option ist disabled, der angestellte AD nicht
-        hv_pos = seite.index(f'value="{self.hv.id}"')
-        self.assertIn("disabled", seite[hv_pos:hv_pos + 300])
+        # v31 (PLAN_LEAD_V5 Phase 156): die Außendienst-Auswahl zeigt keine Handelsvertreter
+        # mehr (nur angestellte AD; HV-Gruppe nur, wenn der Lead schon bei einem HV liegt) –
+        # der angestellte AD steht drin, die HV-Option fehlt ganz
+        auswahl = seite.split('data-feld="ad_id"', 1)[1].split("</select>", 1)[0]
+        self.assertIn(f'value="{self.ad.id}"', auswahl)
+        self.assertNotIn(f'value="{self.hv.id}"', auswahl)
         r = self.client.post(f"/lead-management/lead/{v.id}/aussendienst",
                              data={"ad_id": str(self.hv.id)}, follow_redirects=False)
         self.assertIn("Nicht+m", r.headers["location"])
@@ -423,15 +443,39 @@ class Terminierung(Basis):
         seite = self.kartei(v).text
         self.assertIn("Terminiert</button>", seite)
 
-    def test_terminierung_nur_demo_leads(self):
+    def test_terminierung_in_der_testphase_gesperrt(self):
+        """v31 (PLAN_LEAD_V5 Phase 159): die Demo-Sperre („nur Demo-Leads“) ist mit dem Ende
+        des Demo-Modus entfallen; stattdessen sperrt der Schalter terminierung_aktiv = aus
+        die Terminierung für alle Leads (Hinweis „Testphase …“, Route 303 mit Meldung,
+        JSON 403), nichts wird gebucht."""
+        from app import lead_v5
         v = self.lead(33, vollstaendig=True)
         v.demo = False
         self.s.commit()
-        self.termin(v)
-        ok, meldung = lead_kartei.terminierung_ausfuehren(self.s, v)
-        self.s.rollback()
-        self.assertFalse(ok)
-        self.assertIn("Demo-Modus", meldung)
+        t = self.termin(v)
+        kern.parameter_setzen(self.s, "terminierung_aktiv", "aus")
+        self.s.commit()
+        try:
+            ok, meldung = lead_kartei.terminierung_ausfuehren(self.s, v)
+            self.s.rollback()
+            self.assertFalse(ok)
+            self.assertIn(lead_v5.TESTPHASE_HINWEIS, meldung)
+            r = self.client.post(f"/lead-management/lead/{v.id}/terminierung", follow_redirects=False)
+            self.assertEqual(r.status_code, 303)
+            self.assertIn("Testphase", r.headers["location"])
+            r = self.client.post(f"/lead-management/lead/{v.id}/terminierung",
+                                 headers={"Accept": "application/json"})
+            self.assertEqual(r.status_code, 403)
+            self.assertFalse(r.json()["ok"])
+            self.s.expire_all()
+            self.assertEqual(self.s.get(VotTermin, t.id).status, "vorgemerkt")
+            self.assertNotEqual(self.s.get(Vorgang, v.id).lead_phase, "terminiert")
+            seite = self.kartei(v).text
+            self.assertIn('data-testphase="1"', seite)
+            self.assertIn(lead_v5.TESTPHASE_HINWEIS, seite)
+        finally:
+            kern.parameter_setzen(self.s, "terminierung_aktiv", "an")
+            self.s.commit()
 
 
 class Aktionen(Basis):

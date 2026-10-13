@@ -12,16 +12,21 @@ from sqlalchemy.orm import Session
 from app import kl_auslegung                      # v24: Klimakonfigurator
 from app import konfigurator as engine
 from app import logik as logik_modul
+from app import sparten as sparten_modul          # v31: gemeinsame Sparten-Liste
 from app.db import get_session
 from app.logik import FREITEXT_TYPEN, logik_fuer_sparte
-from app.models import INTERESSE_CODES, Erfassung, Kunde
+from app.models import Erfassung, Kunde, Vorgang, VorgangObjekt
 from app.templating import render
 from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter(prefix="/erfassung")
 
-SPARTEN_NAMEN = {"WP": "Wärmepumpe", "PV": "Photovoltaik",
+# v31 (PLAN_LEAD_V5 Phase 157): Sparten-Liste aus app/sparten.py (MS/WA/DMS wie WB/GW
+# immer Freitext); die Kurznamen der bisherigen Sparten bleiben
+SPARTEN_NAMEN = {**sparten_modul.SPARTEN_LANG,
+                 "WP": "Wärmepumpe", "PV": "Photovoltaik",
                  "KL": "Klima", "WB": "Wallbox", "GW": "Gewerbe"}   # v23: GW
+ERFASSUNGS_SPARTEN = sparten_modul.SPARTEN
 
 
 def _benutzer(request: Request):
@@ -170,12 +175,43 @@ def neu(request: Request, session: Session = Depends(get_session)):
     return RedirectResponse(f"/erfassung/sparten?kunde_id={kunde.id}", status_code=303)
 
 
+def _vorgang_lesen(session: Session, kunde: Kunde, lead) -> Vorgang | None:
+    """v31: Vorgang des Leads bzw. der Sammel-Vorgang des Kunden – nur lesen
+    (angelegt wird er erst beim Start über vorgaenge.vorgang_fuer_erfassung)."""
+    if lead is not None:
+        vorgang = session.query(Vorgang).filter(Vorgang.lead_id == lead.id).first()
+        if vorgang is not None:
+            return vorgang
+    return (session.query(Vorgang)
+            .filter(Vorgang.kunde_id == kunde.id, Vorgang.lead_id.is_(None))
+            .order_by(Vorgang.id.desc()).first())
+
+
+def _objekt_laden(session: Session, objekt_id: int, kunde: Kunde) -> VorgangObjekt | None:
+    """v31 (PLAN_LEAD_V5 Phase 153): Objekt nur, wenn es zu einem Vorgang des
+    Kunden gehört (sonst None – dann gilt das Hauptobjekt)."""
+    if not objekt_id:
+        return None
+    objekt = session.get(VorgangObjekt, int(objekt_id))
+    if objekt is None:
+        return None
+    vorgang = session.get(Vorgang, objekt.vorgang_id)
+    if vorgang is None or vorgang.kunde_id != kunde.id:
+        return None
+    return objekt
+
+
 @router.get("/sparten")
 def sparten_auswahl(request: Request, kunde_id: int = 0, lead_id: int = 0,
+                          objekt_id: int = 0,
                           session: Session = Depends(get_session)):
     """v8: Sparten-Auswahl beim Erfassungsstart – Lead-Interessen sind
     vorausgewählt, weitere Sparten zuwählbar; je Sparte entsteht eine
-    eigene Erfassung."""
+    eigene Erfassung. v31 (PLAN_LEAD_V5 Phase 153): `objekt_id` übergibt das
+    Objekt des Vorgangs (Ausführungsort = Objektadresse, Interessen des Objekts
+    vorausgewählt); hat der Vorgang mehrere Objekte und keines ist übergeben,
+    wählt der Außendienst das Objekt auf dieser Seite."""
+    from app import objekte as objekte_modul
     from app.models import Lead
     lead = session.get(Lead, lead_id) if lead_id else None
     if lead is not None and not kunde_id:
@@ -183,19 +219,33 @@ def sparten_auswahl(request: Request, kunde_id: int = 0, lead_id: int = 0,
     kunde = session.get(Kunde, kunde_id) if kunde_id else None
     if kunde is None:
         return RedirectResponse("/erfassung/neu", status_code=303)
-    vorausgewaehlt = set(lead.sparten) if lead else {"WP"}
+    objekt = _objekt_laden(session, objekt_id, kunde)
+    vorgang = (session.get(Vorgang, objekt.vorgang_id) if objekt is not None
+               else _vorgang_lesen(session, kunde, lead))
+    objekte_liste = objekte_modul.objekte_fuer(session, vorgang.id) if vorgang is not None else []
+    if objekt is not None:
+        vorausgewaehlt = set(objekte_modul.interessen_liste(objekt)) or (
+            set(lead.sparten) if lead else {"WP"})
+    else:
+        vorausgewaehlt = set(lead.sparten) if lead else {"WP"}
     erfasst: set[str] = set()
     entwuerfe: list[Erfassung] = []
     if lead is not None:
         for e in (session.query(Erfassung)
                   .filter(Erfassung.lead_id == lead.id)):
+            # v31: Objekt-Erfassungen zählen nur für dasselbe Objekt als „erfasst“
+            if objekt is not None and e.objekt_id and e.objekt_id != objekt.id:
+                continue
             if e.status == "Entwurf":
                 entwuerfe.append(e)
             else:
                 erfasst.add(e.sparte or "WP")
     return render(request, "erfassung/sparten.html", aktiv=None, mobil=True,
                   benutzer=_benutzer(request), kunde=kunde, lead=lead,
-                  sparten=INTERESSE_CODES, sparten_namen=SPARTEN_NAMEN,
+                  sparten=ERFASSUNGS_SPARTEN, sparten_namen=SPARTEN_NAMEN,
+                  freitext_sparten=sparten_modul.FREITEXT_SPARTEN,
+                  objekt=objekt, objekte=objekte_liste if len(objekte_liste) > 1 else [],
+                  objekt_text=objekte_modul.objekt_text,
                   vorausgewaehlt=vorausgewaehlt - erfasst, erfasst=erfasst,
                   entwuerfe=entwuerfe, fehler="")
 
@@ -203,17 +253,25 @@ def sparten_auswahl(request: Request, kunde_id: int = 0, lead_id: int = 0,
 @router.post("/sparten-start")
 def sparten_start(request: Request, session: Session = Depends(get_session)):
     """v8: legt je gewählter Sparte eine eigene Erfassung an und öffnet die
-    erste (WB startet immer direkt im Freitext)."""
+    erste (WB startet immer direkt im Freitext).
+    v31 (PLAN_LEAD_V5 Phase 153): `objekt_id` (Formular) → erfassungen.objekt_id;
+    Objektart/Parteien belegen O01/O03/PO01 aus dem Objekt vor (statt vom Kunden),
+    ohne Objekt gilt das Hauptobjekt des Vorgangs. Phase 157: MS/WA/DMS starten
+    wie WB/GW immer im Freitext (sparten.ist_freitext_sparte)."""
+    from app import objekte as objekte_modul
     from app.models import Lead
     form = anfrage.formular(request)
     kunde = session.get(Kunde, int(form.get("kunde_id") or 0))
     lead = session.get(Lead, int(form.get("lead_id") or 0)) if form.get("lead_id") else None
     if kunde is None:
         return RedirectResponse("/erfassung/neu", status_code=303)
-    gewaehlt = [s for s in INTERESSE_CODES if form.get(f"sparte_{s}") == "on"]
+    objekt_roh = form.get("objekt_id") or "0"
+    objekt = _objekt_laden(session, int(objekt_roh) if str(objekt_roh).isdigit() else 0, kunde)
+    gewaehlt = [s for s in ERFASSUNGS_SPARTEN if form.get(f"sparte_{s}") == "on"]
     if not gewaehlt:
         return RedirectResponse(
-            f"/erfassung/sparten?kunde_id={kunde.id}&lead_id={lead.id if lead else 0}",
+            f"/erfassung/sparten?kunde_id={kunde.id}&lead_id={lead.id if lead else 0}"
+            + (f"&objekt_id={objekt.id}" if objekt is not None else ""),
             status_code=303)
     neu: list[Erfassung] = []
     # v9: Enni-Profil → der WP-Bogen zeigt nur die HEMS-Frage; P02/P03 werden
@@ -225,7 +283,8 @@ def sparten_start(request: Request, session: Session = Depends(get_session)):
     for sparte in gewaehlt:
         erfassung = Erfassung(kunde_id=kunde.id, benutzer_id=_benutzer(request).id,
                               sparte=sparte, konfigurator_typ=sparte,
-                              lead_id=lead.id if lead else None)
+                              lead_id=lead.id if lead else None,
+                              objekt_id=objekt.id if objekt is not None else None)   # v31
         if enni and sparte == "WP":
             erfassung.antworten_json = json.dumps({"P02": "Nein", "P03": "Nein"},
                                                   ensure_ascii=False)
@@ -233,29 +292,40 @@ def sparten_start(request: Request, session: Session = Depends(get_session)):
             # v13-PV: Enni-Profil im PV-Bogen identisch – nur die HEMS-Frage
             erfassung.antworten_json = json.dumps({"PA12": "Nein", "PA13": "Nein"},
                                                   ensure_ascii=False)
-        # v20 (Phase 98): Standard-Anschriften des Kunden vorbelegen (WP-Bogen)
+        # v20 (Phase 98): Standard-Anschriften des Kunden vorbelegen (WP-Bogen);
+        # v31: Rechnungsadresse eines Objekts (nicht Hauptobjekt) geht vor
         if sparte == "WP":
             from app import anschriften
-            vorbelegung_adr = anschriften.erfassung_vorbelegung(kunde)
+            vorbelegung_adr = anschriften.erfassung_vorbelegung(kunde, objekt=objekt)
             if vorbelegung_adr:
                 antworten_adr = json.loads(erfassung.antworten_json or "{}")
                 for key, wert in vorbelegung_adr.items():
                     antworten_adr.setdefault(key, wert)
                 erfassung.antworten_json = json.dumps(antworten_adr, ensure_ascii=False)
                 erfassung.vorbelegt_json = json.dumps(
-                    {k: "aus Kunden-Standard (Vorgangsakte)" for k in vorbelegung_adr},
+                    {k: ("aus Objekt (Rechnungsadresse)"
+                         if anschriften.objekt_rechnung(objekt, kunde) and k.startswith("O")
+                         and k != "O13" else "aus Kunden-Standard (Vorgangsakte)")
+                     for k in vorbelegung_adr},
                     ensure_ascii=False)
         # v23 (Phase 106, B3/A-6): Objektart + Parteien aus der Kundenkartei →
         # O01/O03 (WP) bzw. PO01 (PV) als Bogen-Codes; wie der Kunden-Standard
         # immer aktiv (nicht an lead_freigabe_modus gekoppelt)
+        # v31 (PLAN_LEAD_V5 Phase 153): aus dem Objekt (vorgang_objekte.objektart/
+        # parteien) statt vom Kunden – das Hauptobjekt ist mit dem Kunden synchron
         try:
             from app import lead_kartei
-            vorbelegung_obj = lead_kartei.objektart_vorbelegung_kunde(kunde, sparte)
+            quelle_objektart = objekt if (objekt is not None and objekt.objektart) else kunde
+            vorbelegung_obj = lead_kartei.objektart_vorbelegung_kunde(quelle_objektart, sparte)
+            if objekt is not None and objekt.objektart:
+                for eintrag in vorbelegung_obj.values():
+                    eintrag["info"] = eintrag["info"].replace(
+                        "aus Kundenkartei", f"aus Objekt „{objekt.bezeichnung or 'Objekt'}“")
             # v24 (PLAN_V16 Phase 114): KL-Bogen → KO01 (gleiche Codes wie O01:
             # EFH → EFH, RH → RMH, REH → REH, MFH → MFH); Mapping hier im
             # Router, lead_kartei bleibt unverändert (ohne Parteien/O03)
             if sparte == "KL" and not vorbelegung_obj:
-                basis = lead_kartei.objektart_vorbelegung_kunde(kunde, "WP")
+                basis = lead_kartei.objektart_vorbelegung_kunde(quelle_objektart, "WP")
                 if basis.get("O01"):
                     vorbelegung_obj = {"KO01": dict(basis["O01"])}
         except Exception:
@@ -275,6 +345,11 @@ def sparten_start(request: Request, session: Session = Depends(get_session)):
     from app import vorgaenge as vorgaenge_modul
     for erfassung in neu:               # v10: Vorgangszugehörigkeit (Akte)
         vorgang = vorgaenge_modul.vorgang_fuer_erfassung(session, erfassung)
+        # v31 (PLAN_LEAD_V5 Phase 153): ohne übergebenes Objekt gilt das Hauptobjekt
+        # des Vorgangs (wird bei Bedarf aus der Kundenadresse angelegt)
+        if erfassung.objekt_id is None and vorgang is not None:
+            haupt = objekte_modul.hauptobjekt(session, vorgang.id, anlegen=True, kunde=kunde)
+            erfassung.objekt_id = haupt.id if haupt is not None else None
         # v12 (Phase 76): Vorbelegung aus der Lead-Qualifizierung – erst aktiv
         # bei lead_freigabe_modus = alle (Demo-Modus: nur im Code vorhanden)
         try:
@@ -299,7 +374,8 @@ def sparten_start(request: Request, session: Session = Depends(get_session)):
         lead.erfassung_id = neu[0].id   # Alt-Verknüpfung (erste Erfassung)
     session.commit()
     erste = neu[0]
-    if erste.sparte in ("WB", "GW"):   # Wallbox/Gewerbe (v23): immer Freitext
+    # Wallbox/Gewerbe (v23) und MS/WA/DMS (v31, Phase 157): immer Freitext
+    if sparten_modul.ist_freitext_sparte(erste.sparte):
         return RedirectResponse(f"/erfassung/{erste.id}/freitext", status_code=303)
     return RedirectResponse(f"/erfassung/{erste.id}/weiche", status_code=303)
 

@@ -10,11 +10,22 @@
 <div class="seitenkopf">
     <h1>Kanal-Report (Quelle × Monat)</h1>
     <div class="aktionen">
-        <a class="knopf klein" href="/lead-management/statistik/kanal?export=csv&demo={{ '1' if mit_demo else '0' }}">CSV-Export</a>
+        <a class="knopf klein" href="/lead-management/statistik/kanal?export=csv&demo={{ '1' if mit_demo else '0' }}{{ '&sparte=' ~ sparte if sparte }}">CSV-Export</a>
         <a class="knopf klein zweitrangig" href="/lead-management/statistik">Lead-Statistik</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+{#- v31 (PLAN_LEAD_V5 Phase 157): Sparten-Filter (inkl. MS/WA/DMS) – Leads je Quelle × Monat nur mit dieser Sparte #}
+<form method="get" action="/lead-management/statistik/kanal" class="suchleiste">
+    <input type="hidden" name="demo" value="{{ '1' if mit_demo else '0' }}">
+    <label class="kontrollfeld">Sparte
+        <select name="sparte" onchange="this.form.submit()">
+            <option value="">alle</option>
+            {% for s in lm_sparten %}<option value="{{ s }}" {{ 'selected' if sparte == s }}>{{ s }} – {{ lm_sparten_lang.get(s, s) }}</option>{% endfor %}
+        </select></label>
+    <button class="knopf klein zweitrangig" type="submit">Filtern</button>
+    {% if sparte %}<span class="abzeichen">Sparte {{ sparte }}</span> <a class="knopf klein ghost" href="/lead-management/statistik/kanal">zurücksetzen</a>{% endif %}
+</form>
 {% if ohne_kosten %}
 <p class="hinweis">Ohne hinterlegte Kosten je Lead (Quelle pflegen):
     {{ ohne_kosten | join(', ') }}</p>

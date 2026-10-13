@@ -33,9 +33,12 @@
     <label class="kontrollfeld">Sparte
         <select name="sparte">
             <option value="">alle</option>
-            {% for s in ('WP', 'PV', 'KL', 'WB', 'GW') %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+            {#- v31 (Phase 157): Sparten inkl. MS/WA/DMS (Jinja-Global lm_sparten) #}
+            {% for s in lm_sparten %}<option value="{{ s }}" title="{{ lm_sparten_lang.get(s, s) }}">{{ s }}</option>{% endfor %}
         </select>
     </label>
+    {#- v31 (Phase 153): Filter „Großkunde“ (Pins nur Großkunden) #}
+    <label class="lm-filterchip" title="Nur Großkunden"><input type="checkbox" name="grosskunde" value="1"> Großkunde</label>
     {% if not ist_hv %}
     <label class="kontrollfeld">AD (Termine)
         <select name="ad_id">
@@ -83,7 +86,7 @@ async function laden() {
             L.circleMarker([p.lat, p.lon], {
                 radius, color: phasenFarben[p.phase] || '#555',   // fest: Rückfallfarbe des Pins (helle Kacheln)
                 fillOpacity: 0.75,
-            }).bindPopup(`<strong>${p.name}</strong><br>${p.ort} · ${p.phase}` +
+            }).bindPopup(`<strong>${p.name}</strong>${p.grosskunde ? ' <span class="lm-grosskunde">Großkunde</span>' : ''}<br>${p.ort} · ${p.phase}` +
                 `<br><a href="/lead-management/lead/${p.vorgang_id}">Akte</a> · ` +
                 `<a href="/lead-management/lead/${p.vorgang_id}/termin">Termin vorschlagen</a>`)
               .addTo(ebene);

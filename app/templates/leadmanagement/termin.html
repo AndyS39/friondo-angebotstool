@@ -6,9 +6,17 @@
 
 {% block mainklasse %}breit{% endblock %}
 
+{# v31 (PLAN_LEAD_V5 Phase 153/158/159): Objektauswahl bei mehreren Objekten (Vorschläge,
+   Fahrzeit und Adresse je Objekt), Vormerken je Objekt + Block „Terminierung“ (bucht alle
+   vorgemerkten Objekttermine; Wahl „eine Bestätigung“ | „je Objekt“), Termine je Objekt,
+   Kalender Mo–Fr, Umbuchung ohne den kranken Vertriebler (?ohne_ad_id=), Testphase:
+   Knöpfe sichtbar/ausgegraut mit Tooltip (terminierung_aktiv aus lead_termin.
+   testphase_kontext). Keine Inline-Farben – Tokens/Klassen aus lead_v2.css. #}
 {% block inhalt %}
 {{ lm_nav('kalender') }}
 <link rel="stylesheet" href="/static/leaflet/leaflet.css">
+{% set objekt_param = ('&objekt_id=' ~ objekt.id) if (mehrere_objekte and objekt) else '' %}
+{% set ohne_param = ('&ohne_ad_id=' ~ ohne_ad_id) if ohne_ad_id else '' %}
 <div class="seitenkopf">
     <h1>Terminassistent · {{ kunde.anzeige_name }}, {{ kunde.ort or '?' }}
         {% if demo_badge %}<span class="demo-badge">Demo</span>{% endif %}</h1>
@@ -23,10 +31,11 @@
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 {% for h in hinweise %}<p class="hinweis">{{ h }}
     <a href="/lead-management/adressen">→ Adresse prüfen</a></p>{% endfor %}
-{% if not buchbar %}
-<p class="warnblock">Terminierung im Demo-Modus nur für Demo-Leads –
-    diesen (monday-)Lead bitte in monday terminieren. Die Vorschläge bleiben
-    zur Ansicht.</p>
+{% if not terminierung_aktiv %}
+<p class="warnblock lmt-testphase" data-rolle="testphase">{{ symbol('warnung') }}
+    <strong>{{ testphase_hinweis }}.</strong> Der Assistent rechnet mit echten Daten und zeigt die
+    Vorschläge zur Beurteilung (Aktivität „Vorschläge berechnet“); Vormerken, Buchen, Umbuchen, Absagen,
+    Terminierung und Vorab-Gespräche sind bis zur Freischaltung in den Lead-Einstellungen gesperrt.</p>
 {% endif %}
 {% if pflicht_offen %}
 <p class="lm-hinweis lmt-pflicht">{{ symbol('warnung') }}
@@ -34,6 +43,11 @@
     {{ pflicht_offen | join(', ') }} – ein gewählter Termin wird nur
     <em>vorgemerkt</em> (ohne Mail, Kalender, Phasenwechsel).
     Terminierung in der Kartei abschließen.</p>
+{% endif %}
+{% if ohne_ad %}
+<p class="lm-hinweis lmt-ohne-ad">{{ symbol('warnung') }} Umbuchung <strong>ohne {{ ohne_ad.name }}</strong>
+    (Krankheit/Abwesenheit) – der Vertriebler ist aus den Kandidaten ausgeschlossen.
+    <a href="{{ '/lead-management/lead/' ~ vorgang.id ~ '/termin?' ~ ('umbuchen=' ~ umbuchen_id if umbuchen_id else '') ~ objekt_param }}">ohne Ausschluss</a></p>
 {% endif %}
 {% if ersatz %}
 <p class="hinweis lmt-ersatz">{{ symbol('wiederherstellen') }} Ersatz für den abgesagten Termin
@@ -44,6 +58,7 @@
 {% endif %}
 {% if umbuchen %}
 <p class="hinweis">Umbuchung des Termins {{ umbuchen.beginn | de_datum('%a %d.%m.%Y · %H:%M') if umbuchen.beginn }} Uhr
+    {% if mehrere_objekte and umbuchen.objekt_id %}({{ objekt_text(objekt) }}){% endif %}
     – der Kunde erhält die Terminänderung mit aktualisiertem Kalendereintrag (gleiche UID).</p>
 {% endif %}
 {# v25 (Phase 120): Lead liegt bei einem Handelsvertreter – der Innendienst sieht den
@@ -54,28 +69,51 @@
     ist nur über „Manuell setzen“ wählbar.</span></p>
 {% endif %}
 
+{# v31 (Phase 153): Objektauswahl – bei mehr als einem Objekt gelten Vorschläge, Fahrzeit
+   und Adresse für das gewählte Objekt; die Zeile zeigt den Terminstand je Objekt #}
+{% if mehrere_objekte %}
+<section class="karte lmt-objekte" id="lmt-objekte">
+    <h2>Objekt wählen <span class="dezent">({{ objekte | length }} Objekte – Vorschläge, Fahrzeit und Adresse gelten je Objekt)</span></h2>
+    <nav class="lm-umschalter lmt-objekt-wahl" aria-label="Objekt">
+        {% for z in objekt_zeilen %}
+        <a class="{{ 'aktiv' if objekt and z.objekt.id == objekt.id }}"
+           href="/lead-management/lead/{{ vorgang.id }}/termin?objekt_id={{ z.objekt.id }}{{ ('&umbuchen=' ~ umbuchen_id) if umbuchen_id }}{{ ohne_param }}"
+           title="{{ objekt_text(z.objekt) }}">
+            {{ z.objekt.bezeichnung }}
+            <span class="n">{% if z.termin %}{{ status_namen.get(z.termin.status, z.termin.status) }}{% else %}ohne Termin{% endif %}</span>
+        </a>
+        {% endfor %}
+    </nav>
+    <p class="dezent">
+        {% if objekt %}Aktuell: <strong>{{ objekt_text(objekt) }}</strong>{% endif %}
+        {% if objekte_hinweis %} · {{ objekte_hinweis }}{% endif %}
+    </p>
+</section>
+{% endif %}
+
 <section class="karte lmt-kopf">
     <div class="lmt-kopf-spalte">
         <h2>Lead</h2>
         <p>
             {% for s in sparten %}<span class="abzeichen interesse-{{ s | lower }}">{{ s }}</span> {% endfor %}
             {% if not sparten %}<span class="dezent">keine Sparte</span>{% endif %}
-            {% if kunde.objektart %}<span class="abzeichen">{{ kunde.objektart }}</span>{% endif %}
+            {% if objekt and objekt.objektart %}<span class="abzeichen">{{ objekt.objektart }}</span>
+            {% elif kunde.objektart %}<span class="abzeichen">{{ kunde.objektart }}</span>{% endif %}
             {% if kanal %}<span class="lm-kanal">{{ kanal }}</span>{% endif %}
             {% if phase_label %}<span class="abzeichen" title="Phase laut Blatt Status">{{ phase_label }}</span>{% endif %}
         </p>
-        <p class="dezent">PLZ {{ kunde.plz or '?' }} · Wunschzeiten:
+        <p class="dezent">PLZ {{ (objekt.plz if objekt and objekt.plz else kunde.plz) or '?' }} · Wunschzeiten:
             {{ wunschzeiten | join(', ') if wunschzeiten else 'keine hinterlegt' }}
             {% if score_aktiv and vorgang.score_klasse %} · Klasse {{ vorgang.score_klasse }}{% endif %}</p>
     </div>
     <div class="lmt-kopf-spalte">
-        <h2>Kandidaten <span class="dezent">(Ausschluss: Kanal, Kompetenz, Kapazität, Arbeitszeit, Handelsvertreter · Abwertung: Gebiet, Fahrzeit, Wunschzeit)</span></h2>
+        <h2>Kandidaten <span class="dezent">(Ausschluss: Kanal, Kompetenz, Kapazität, Arbeitszeit, Handelsvertreter, Krankheit · Abwertung: Gebiet, Fahrzeit, Wunschzeit)</span></h2>
         <ul class="lmt-liste">
         {% for k in kandidaten_info %}
             <li><strong>{{ k.ad.name }}</strong>
                 {% if k.handelsvertreter %}<span class="abzeichen">Handelsvertreter</span>{% endif %}
                 <span class="dezent">{{ k.gruende | join(' · ') }}</span>
-                {% if not hv_id %}· <a href="?ad_id={{ k.ad.id }}{{ '&umbuchen=' ~ umbuchen_id if umbuchen_id }}">nur {{ k.ad.name.split(' ')[-1] }}</a>{% endif %}</li>
+                {% if not hv_id %}· <a href="?ad_id={{ k.ad.id }}{{ '&umbuchen=' ~ umbuchen_id if umbuchen_id }}{{ objekt_param }}{{ ohne_param }}">nur {{ k.ad.name.split(' ')[-1] }}</a>{% endif %}</li>
         {% else %}
             <li class="dezent">Kein Außendienstler erfüllt die Voraussetzungen.</li>
         {% endfor %}
@@ -91,15 +129,15 @@
         </details>
         {% endif %}
         {% if not hv_id and kandidaten_info | length > 1 %}
-            <p class="dezent"><a href="?{{ 'umbuchen=' ~ umbuchen_id if umbuchen_id }}">alle Kandidaten</a></p>
+            <p class="dezent"><a href="?{{ 'umbuchen=' ~ umbuchen_id if umbuchen_id }}{{ objekt_param }}{{ ohne_param }}">alle Kandidaten</a></p>
         {% endif %}
     </div>
 </section>
 
 {# v29 (PLAN_LEAD_V4 Phase 143): genau `anzahl` Vorschläge (Parameter vorschlaege_anzahl,
-   Standard 3) – Vorschlag 1 als „Ideal“ (Rahmen Friondo-Blau, Badge, Begründung) #}
-<h2>Top {{ anzahl | default(vorschlaege | length) }} Vorschläge <span class="dezent">({{ vorschlaege | length }} gefunden)</span>
-    <span class="dezent">Dauer 90 Min · Raster 30 Min · Puffer = max(Mindestpuffer, Fahrzeit)</span></h2>
+   Standard 3) – Vorschlag 1 als „Ideal“ (Rahmen Akzent, Badge, Begründung) #}
+<h2>Top {{ anzahl | default(vorschlaege | length) }} Vorschläge <span class="dezent">({{ vorschlaege | length }} gefunden{% if mehrere_objekte and objekt %} · {{ objekt.bezeichnung }}{% endif %})</span>
+    <span class="dezent">Dauer 90 Min · Raster 30 Min · Mo–Fr · Puffer = max(Mindestpuffer, Fahrzeit)</span></h2>
 <div class="lmt-vorschlaege">
 <div class="vorschlag-karten lmt-karten">
 {% for v in vorschlaege %}
@@ -126,8 +164,10 @@
                 <input type="hidden" name="ad_id" value="{{ v.ad.id }}">
                 <input type="hidden" name="umweg" value="{{ v.umweg }}">
                 <input type="hidden" name="umbuchen_id" value="{{ umbuchen_id }}">
-                <button class="knopf" type="submit" {{ 'disabled' if not buchbar }}>
-                    {{ 'Umbuchen' if umbuchen_id else ('Vormerken' if pflicht_offen else 'Buchen') }}</button>
+                <input type="hidden" name="objekt_id" value="{{ objekt.id if objekt else '' }}">
+                <button class="knopf" type="submit" {{ 'disabled' if not buchbar }}
+                        {% if not buchbar %}aria-disabled="true" title="{{ testphase_hinweis }}"{% endif %}>
+                    {{ 'Umbuchen' if umbuchen_id else ('Vormerken' if (pflicht_offen or mehrere_objekte) else 'Buchen') }}</button>
             </form>
             <button class="knopf klein zweitrangig lmt-karte-knopf" type="button"
                     title="Tagestour dieses Vorschlags auf der Karte">{{ symbol('ort') }} Karte</button>
@@ -141,14 +181,53 @@
 {% if vorschlaege %}
 <div class="lmt-karte-wrap">
     <h3 class="dezent" id="lmt-karte-titel">Mini-Karte: Tagestour Vorschlag 1</h3>
-    <div id="lmt-karte" data-lat="{{ vorgang.lat or '' }}" data-lon="{{ vorgang.lon or '' }}"
+    <div id="lmt-karte" data-lat="{{ (objekt.lat if objekt and objekt.lat is not none else vorgang.lat) or '' }}"
+         data-lon="{{ (objekt.lon if objekt and objekt.lon is not none else vorgang.lon) or '' }}"
          data-ad="{{ vorschlaege[0].ad.id }}" data-datum="{{ vorschlaege[0].beginn.strftime('%Y-%m-%d') }}"></div>
     <p class="dezent">★ Kandidat (dieser Lead) · nummerierte Pins = Termine des Tages. Kacheln © OpenStreetMap.</p>
 </div>
 {% endif %}
 </div>
 
-<h2 id="manuell">Manuell setzen <span class="dezent">(15-Minuten-Raster, Konfliktprüfung)</span></h2>
+{# v31 (Phase 153): Terminierung – bucht alle vorgemerkten Objekttermine in einem Schritt;
+   bei mehr als einem vorgemerkten Termin die Wahl der Terminbestätigung (Vorbelegung:
+   gleicher Tag → eine Mail, sonst je Objekt). Route POST …/termin/terminierung (Alias
+   von …/terminierung, Vertrag K/B8). #}
+{% if vorgemerkte %}
+<section class="karte lmt-terminierung" id="lmt-terminierung">
+    <h2>{{ symbol('kalender') }} Terminierung <span class="dezent">{{ vorgemerkte | length }} vorgemerkte{{ 'r' if vorgemerkte | length == 1 }} Termin{{ 'e' if vorgemerkte | length != 1 }}{% if objekte_hinweis %} · {{ objekte_hinweis }}{% endif %}</span></h2>
+    <ul class="lmt-liste">
+        {% for t in vorgemerkte %}
+        <li><strong>{{ t.beginn | de_datum('%a %d.%m.%Y · %H:%M') }} Uhr</strong>
+            · {{ benutzer_map[t.ad_id].name if t.ad_id and benutzer_map.get(t.ad_id) else '?' }}
+            {% if mehrere_objekte %}· {{ t.adresse or '?' }}{% endif %}</li>
+        {% endfor %}
+    </ul>
+    <form method="post" action="/lead-management/lead/{{ vorgang.id }}/termin/terminierung" class="formular lmt-terminierung-form">
+        {% if vorgemerkte | length > 1 %}
+        <fieldset class="lmt-bestaetigung-wahl">
+            <legend>Terminbestätigung an den Kunden</legend>
+            <label class="kontrollfeld"><input type="radio" name="bestaetigung" value="eine" {{ 'checked' if bestaetigung_vorbelegung == 'eine' }}>
+                Eine Bestätigung für alle Objekte <span class="dezent">(eine Mail mit Objektliste, ein Kalendereintrag je Objekt)</span></label>
+            <label class="kontrollfeld"><input type="radio" name="bestaetigung" value="je_objekt" {{ 'checked' if bestaetigung_vorbelegung != 'eine' }}>
+                Je Objekt eine Bestätigung <span class="dezent">(Vertriebler-Vorlage mit Objektadresse)</span></label>
+            <p class="dezent">Vorbelegung: {{ 'alle Termine am selben Tag → eine Mail' if bestaetigung_vorbelegung == 'eine' else 'verschiedene Tage → je Objekt' }}.</p>
+        </fieldset>
+        {% else %}
+        <input type="hidden" name="bestaetigung" value="auto">
+        {% endif %}
+        <div class="formzeile">
+            <button class="knopf" type="submit" {{ 'disabled' if not terminierung_aktiv }}
+                    {% if not terminierung_aktiv %}aria-disabled="true" title="{{ testphase_hinweis }}"{% endif %}
+                    title="{{ testphase_hinweis if not terminierung_aktiv else 'Phase Terminiert · Outlook je Termin · Terminbestätigung mit ICS · Erinnerung' }}">
+                {{ symbol('kalender') }} Terminierung – {{ vorgemerkte | length }} Termin{{ 'e' if vorgemerkte | length != 1 }} buchen</button>
+            <span class="dezent">Objekte ohne vorgemerkten Termin bleiben offen.</span>
+        </div>
+    </form>
+</section>
+{% endif %}
+
+<h2 id="manuell">Manuell setzen <span class="dezent">(15-Minuten-Raster, Konfliktprüfung{% if mehrere_objekte and objekt %}, {{ objekt.bezeichnung }}{% endif %})</span></h2>
 {% if warnungen %}
 <div class="warnblock lmt-warnungen">
     <strong>Konflikte – bitte prüfen:</strong>
@@ -158,8 +237,10 @@
 {% endif %}
 <form method="post" action="/lead-management/lead/{{ vorgang.id }}/termin/manuell"
       class="formular lmt-manuell" id="lmt-manuell"
-      data-vorgang="{{ vorgang.id }}" data-konflikt-url="/lead-management/termin/konflikt">
+      data-vorgang="{{ vorgang.id }}" data-konflikt-url="/lead-management/termin/konflikt"
+      data-objekt="{{ objekt.id if objekt else '' }}" data-samstag="{{ samstag_warnung }}">
     <input type="hidden" name="umbuchen_id" value="{{ umbuchen_id }}">
+    <input type="hidden" name="objekt_id" value="{{ objekt.id if objekt else '' }}">
     <div class="formzeile">
         <label class="schmal">Datum <input type="date" name="datum" required value="{{ datum }}"></label>
         <label class="schmal">Uhrzeit <input type="time" name="uhrzeit" required
@@ -192,22 +273,25 @@
         <label class="kontrollfeld {{ '' if warnungen else 'lmt-versteckt' }}" id="lmt-bestaetigen">
             <input type="checkbox" name="bestaetigt" value="1" {{ 'checked' if warnungen }}>
             Konflikte geprüft – trotzdem buchen</label>
-        <button class="knopf" type="submit" {{ 'disabled' if not buchbar or not (kandidaten or hv_manuell) }}>
-            {{ 'Umbuchen' if umbuchen_id else ('Manuell vormerken' if pflicht_offen else 'Manuell buchen') }}</button>
+        <button class="knopf" type="submit" {{ 'disabled' if not buchbar or not (kandidaten or hv_manuell) }}
+                {% if not buchbar %}aria-disabled="true" title="{{ testphase_hinweis }}"{% endif %}>
+            {{ 'Umbuchen' if umbuchen_id else ('Manuell vormerken' if (pflicht_offen or mehrere_objekte) else 'Manuell buchen') }}</button>
     </div>
+    <p class="dezent">Montag bis Freitag; ein Samstag ist manuell nur mit Warnhinweis buchbar.</p>
 </form>
 
 {# v29 (PLAN_LEAD_V4 Phase 143): Kalenderansicht der in Frage kommenden Vertriebler –
-   Wochenansicht Mo–Sa im 15-Minuten-Raster (Arbeitszeiten der AD-Profile), Tool-
+   Wochenansicht Mo–Fr (v31) im 15-Minuten-Raster (Arbeitszeiten der AD-Profile), Tool-
    Termine und Outlook-Belegt (nur kalender_sync = an, nie für HV), Sperrzeiten der
    HV, die Vorschläge als markierte Slots (1 = Ideal); Klick auf einen freien Slot
    füllt das Formular „Manuell setzen“ (Konfliktprüfung). Daten nachgelagert per
    fetch GET …/termin/kalender.json?woche=… (Cache 10 Min, ?neu=1); Aufklappmenü
    „Weitere Kalender“ (je Nutzer gemerkt, POST …/termin/kalender/auswahl). #}
-<section class="lmt-kalender" id="lmt-kalender" data-url="{{ kalender_url }}" data-auswahl-url="{{ auswahl_url }}"
+{% set kal_objekt = (mehrere_objekte and objekt) %}
+<section class="lmt-kalender" id="lmt-kalender" data-url="{{ kalender_url }}{{ ('?objekt_id=' ~ objekt.id) if kal_objekt else '' }}{{ (('&' if kal_objekt else '?') ~ 'ohne_ad_id=' ~ ohne_ad_id) if ohne_ad_id else '' }}" data-auswahl-url="{{ auswahl_url }}"
          data-vorgang="{{ vorgang.id }}" data-hv="{{ '1' if hv_id else '' }}" data-buchbar="{{ '1' if buchbar else '' }}">
     <div class="lmt-kalender-kopf">
-        <h2>Kalender der Kandidaten <span class="dezent">Mo–Sa · 15-Minuten-Raster · Arbeitszeiten der AD-Profile · Klick auf einen freien Slot = manuell buchen</span></h2>
+        <h2>Kalender der Kandidaten <span class="dezent">Mo–Fr · 15-Minuten-Raster · Arbeitszeiten der AD-Profile · Klick auf einen freien Slot = manuell buchen</span></h2>
         <div class="lmt-kalender-nav" role="group" aria-label="Woche">
             <button type="button" class="knopf klein zweitrangig" data-woche="vor" title="Vorherige Woche">‹</button>
             <b data-rolle="woche">…</b>
@@ -238,13 +322,19 @@
 </section>
 
 {% if termine %}
-<h2>Termine dieses Leads</h2>
-<table class="tabelle lmt-termine" style="max-width:1100px">
-    <thead><tr><th>Art</th><th>Beginn</th><th>Mit</th><th>Status</th><th>ICS</th><th>Aktionen</th></tr></thead>
+{% set objekt_termine_aktiv = termine | selectattr('status', 'in', ['geplant', 'bestaetigt']) | selectattr('typ', 'equalto', 'vot') | list %}
+<h2>Termine dieses Leads{% if mehrere_objekte %} <span class="dezent">je Objekt</span>{% endif %}</h2>
+<table class="tabelle lmt-termine" style="max-width:1200px">
+    <thead><tr><th>Art</th>{% if mehrere_objekte %}<th>Objekt</th>{% endif %}<th>Beginn</th><th>Mit</th><th>Status</th><th>ICS</th><th>Aktionen</th></tr></thead>
     <tbody>
     {% for t in termine %}
         <tr class="{{ 'lmt-inaktiv' if t.status not in ('geplant', 'bestaetigt', 'vorgemerkt') }}">
             <td><span class="abzeichen typ-{{ t.typ or 'vot' }}">{{ typ_namen.get(t.typ or 'vot', t.typ) }}</span></td>
+            {% if mehrere_objekte %}
+            <td>{% set oz = (objekt_zeilen | selectattr('objekt.id', 'equalto', t.objekt_id) | list) %}
+                {{ oz[0].objekt.bezeichnung if oz else ('Objekt 1' if (t.typ or 'vot') == 'vot' else '–') }}
+                {% if t.adresse and (t.typ or 'vot') == 'vot' %}<div class="dezent">{{ t.adresse }}</div>{% endif %}</td>
+            {% endif %}
             <td>{{ t.beginn | de_datum('%a %d.%m.%Y %H:%M') if t.beginn else 'Kunde wählt (Buchungslink)' }}</td>
             <td>{{ benutzer_map[t.ad_id].name if t.ad_id and benutzer_map.get(t.ad_id) else '?' }}</td>
             <td>{{ status_namen.get(t.status, t.status) }}
@@ -254,12 +344,38 @@
             <td class="aktionen">
                 {% if t.status in ('geplant', 'bestaetigt', 'vorgemerkt') and t.quelle != 'monday' %}
                     {% if (t.typ or 'vot') == 'vot' and t.status != 'vorgemerkt' %}
-                    <a class="knopf klein zweitrangig"
-                       href="/lead-management/lead/{{ vorgang.id }}/termin?umbuchen={{ t.id }}">Umbuchen</a>
+                    <a class="knopf klein zweitrangig {{ 'lmt-gesperrt' if not terminierung_aktiv }}"
+                       {% if not terminierung_aktiv %}aria-disabled="true" title="{{ testphase_hinweis }}"{% endif %}
+                       href="/lead-management/lead/{{ vorgang.id }}/termin?umbuchen={{ t.id }}{{ ('&objekt_id=' ~ t.objekt_id) if (mehrere_objekte and t.objekt_id) else '' }}">Umbuchen</a>
+                    {% if mehrere_objekte and objekt_termine_aktiv | length > 1 %}
+                    <button class="knopf klein zweitrangig" type="button"
+                            onclick="document.getElementById('dlg-erneut-{{ t.id }}').showModal()"
+                            title="Terminbestätigung erneut senden – welche Objekttermine?">{{ symbol('brief') }} Bestätigung erneut</button>
+                    <dialog id="dlg-erneut-{{ t.id }}" class="lm-dialog">
+                        <form method="post" class="formular lmt-erneut-form"
+                              action="/lead-management/termin/{{ t.id }}/bestaetigung-erneut">
+                            <h3>Terminbestätigung erneut senden</h3>
+                            <p class="dezent">Welche Objekttermine? Gleiche ICS-UID, SEQUENCE + 1.</p>
+                            {% for ot in objekt_termine_aktiv %}
+                            {% set oz2 = (objekt_zeilen | selectattr('objekt.id', 'equalto', ot.objekt_id) | list) %}
+                            <label class="kontrollfeld"><input type="checkbox" name="termin_ids" value="{{ ot.id }}" {{ 'checked' if ot.id == t.id }}>
+                                {{ oz2[0].objekt.bezeichnung if oz2 else 'Objekt' }} · {{ ot.beginn | de_datum('%a %d.%m.%Y %H:%M') if ot.beginn }} · {{ ot.adresse or '' }}</label>
+                            {% endfor %}
+                            <label class="kontrollfeld"><input type="checkbox" name="zusammen" value="1" {{ 'checked' if bestaetigung_vorbelegung == 'eine' }}>
+                                Eine Mail für alle gewählten Objekte (Objektliste, ICS je Objekt)</label>
+                            <div class="formzeile">
+                                <button class="knopf" type="submit">Senden</button>
+                                <button class="knopf zweitrangig" type="button"
+                                        onclick="this.closest('dialog').close()">Abbrechen</button>
+                            </div>
+                        </form>
+                    </dialog>
+                    {% else %}
                     <form method="post" action="/lead-management/termin/{{ t.id }}/bestaetigung-erneut" style="display:inline">
                         <button class="knopf klein zweitrangig" type="submit"
                                 title="Gleiche UID, SEQUENCE + 1">{{ symbol('brief') }} Bestätigung erneut</button>
                     </form>
+                    {% endif %}
                     {% endif %}
                     {% if (t.typ or 'vot') != 'vot' %}
                     <details class="lmt-inline-form">
@@ -271,11 +387,13 @@
                                 <input type="datetime-local" name="beginn" step="900" required
                                        value="{{ t.beginn.strftime('%Y-%m-%dT%H:%M') if t.beginn }}"></label>
                             <input type="hidden" name="ad_id" value="{{ t.ad_id or '' }}">
-                            <button class="knopf klein" type="submit">Speichern</button>
+                            <button class="knopf klein" type="submit" {{ 'disabled' if not terminierung_aktiv }}
+                                    {% if not terminierung_aktiv %}title="{{ testphase_hinweis }}"{% endif %}>Speichern</button>
                         </form>
                     </details>
                     {% endif %}
-                    <button class="knopf klein zweitrangig" type="button"
+                    <button class="knopf klein zweitrangig" type="button" {{ 'disabled' if not terminierung_aktiv }}
+                            {% if not terminierung_aktiv %}aria-disabled="true" title="{{ testphase_hinweis }}"{% endif %}
                             onclick="document.getElementById('dlg-absage-{{ t.id }}').showModal()">Absagen</button>
                     <dialog id="dlg-absage-{{ t.id }}" class="lm-dialog">
                         <form method="post" class="formular"
@@ -283,6 +401,7 @@
                             <h3>Termin absagen</h3>
                             <p class="dezent">{{ typ_namen.get(t.typ or 'vot', t.typ) }}
                                 {{ t.beginn.strftime('%d.%m.%Y %H:%M') if t.beginn }} ·
+                                {% if mehrere_objekte and t.adresse %}{{ t.adresse }} · {% endif %}
                                 {% if (t.typ or 'vot') == 'vot' and t.status != 'vorgemerkt' %}
                                 Der Kunde erhält die Absage mit Storno-ICS; danach Ersatzkunden-Vorschlag.
                                 {% else %}Ohne Kundenmail (Vorab-Gespräch/vorgemerkt).{% endif %}</p>

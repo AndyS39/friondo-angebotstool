@@ -259,8 +259,16 @@ def _adresse_text(strasse, plz, ort) -> str:
     return ", ".join(x for x in (strasse or "", f"{plz or ''} {ort or ''}".strip()) if x)
 
 
-def lead_adresse(session: Session, vorgang) -> str:
+def lead_adresse(session: Session, vorgang, objekt_id: int | None = None) -> str:
+    """Adresse des Leads für Termin/Karte – v31 (PLAN_LEAD_V5 Phase 153): mit
+    `objekt_id` die Objektadresse (Objekt 2 ff.), sonst wie bisher die Kundenadresse
+    (= Hauptobjekt)."""
     from app.models import Kunde
+    if objekt_id:
+        from app import objekte
+        satz = objekte.ausfuehrungsort(session, objekt_id=objekt_id, vorgang=vorgang)
+        if satz.get("strasse") or satz.get("ort"):
+            return _adresse_text(satz["strasse"], satz["plz"], satz["ort"])
     kunde = session.get(Kunde, vorgang.kunde_id)
     if kunde is None:
         return ""
@@ -329,6 +337,39 @@ def _offene_profile(session: Session) -> list[tuple[int, str]]:
             .order_by(AdProfil.id).all()]
 
 
+def _offene_objekte(session: Session, limit: int) -> list[tuple[int, str]]:
+    """v31 (PLAN_LEAD_V5 Phase 153): (objekt_id, adresse) der weiteren Objekte
+    (Objekt 2 ff., aktiv, mit Adresse) ohne Koordinaten – zuerst nie versuchte,
+    dann solche mit Status „fehler“ nach abgelaufener Backoff-Pause. Das
+    Hauptobjekt übernimmt vorgaenge.lat/lon (hauptobjekt_sync bzw. der Lead-Lauf)."""
+    from app.models import VorgangObjekt
+    basis = (session.query(VorgangObjekt.id, VorgangObjekt.geocode_status,
+                           VorgangObjekt.strasse, VorgangObjekt.plz, VorgangObjekt.ort)
+             .filter(VorgangObjekt.aktiv.is_(True), VorgangObjekt.reihenfolge > 1,
+                     VorgangObjekt.lat.is_(None),
+                     (VorgangObjekt.strasse != "") | (VorgangObjekt.ort != "")))
+    neue = (basis.filter((VorgangObjekt.geocode_status.is_(None))
+                         | (VorgangObjekt.geocode_status == ""))
+            .order_by(VorgangObjekt.id).limit(limit).all())
+    ergebnis = [(z[0], _adresse_text(z[2], z[3], z[4])) for z in neue]
+    rest = limit - len(ergebnis)
+    if rest <= 0:
+        return ergebnis
+    fehlgeschlagen = [(z[0], _adresse_text(z[2], z[3], z[4])) for z in
+                      basis.filter(VorgangObjekt.geocode_status == "fehler")
+                      .order_by(VorgangObjekt.id).all()]
+    if not fehlgeschlagen:
+        return ergebnis
+    zeilen = _cache_zeilen(session, [adresse_normalisieren(a) for _, a in fehlgeschlagen])
+    jetzt = datetime.now()
+    for objekt_id, adresse in fehlgeschlagen:
+        if erneut_faellig(zeilen.get(adresse_normalisieren(adresse)), jetzt):
+            ergebnis.append((objekt_id, adresse))
+            if len(ergebnis) >= limit:
+                break
+    return ergebnis
+
+
 def _einzeln(adresse: str, schreiben) -> str:
     """EINE Adresse nach dem v27-Muster: kurze Sitzung lesen → Sitzung zu →
     Netz → kurze Sitzung: Cache-Zeile und Ziel schreiben → Commit.
@@ -356,8 +397,8 @@ def hintergrund_lauf(limit: int = LAUF_LIMIT) -> dict:
     Sitzung lesen, dann je Adresse lesen → Netz → schreiben → Commit; keine
     Sitzung während Netz-I/O, Schreibsperre je Adresse nur Millisekunden."""
     from app.db import kurz
-    from app.models import AdProfil, Vorgang, VotTermin
-    zaehler = {"ok": 0, "fehler": 0, "backoff": 0, "termine": 0, "profile": 0}
+    from app.models import AdProfil, Vorgang, VorgangObjekt, VotTermin
+    zaehler = {"ok": 0, "fehler": 0, "backoff": 0, "termine": 0, "profile": 0, "objekte": 0}
     with kurz() as s:
         leads = _offene_leads(s, limit)
     for vorgang_id, adresse in leads:
@@ -366,7 +407,25 @@ def hintergrund_lauf(limit: int = LAUF_LIMIT) -> dict:
             if vorgang is not None:
                 vorgang.lat, vorgang.lon = lat, lon
                 vorgang.geocode_status = status
+                # v31 (PLAN_LEAD_V5 Phase 153): das Hauptobjekt (= Kundenadresse)
+                # übernimmt die Koordinaten des Vorgangs
+                from app import objekte
+                haupt = objekte.hauptobjekt(s, vorgang.id)
+                if haupt is not None and haupt.lat is None:
+                    haupt.lat, haupt.lon, haupt.geocode_status = lat, lon, status
         zaehler[_einzeln(adresse, vorgang_schreiben)] += 1
+    # v31 (PLAN_LEAD_V5 Phase 153): weitere Objekte (Objekt 2 ff.) je Adresse nach dem
+    # v27-Muster (lesen → Sitzung zu → Netz → kurze Sitzung schreiben → Commit)
+    with kurz() as s:
+        objekte_offen = _offene_objekte(s, limit)
+    for objekt_id, adresse in objekte_offen:
+        def objekt_schreiben(s, lat, lon, status, _id=objekt_id):
+            objekt = s.get(VorgangObjekt, _id)
+            if objekt is not None:
+                objekt.lat, objekt.lon = lat, lon
+                objekt.geocode_status = status
+        if _einzeln(adresse, objekt_schreiben) == "ok":
+            zaehler["objekte"] += 1
     with kurz() as s:
         termine = _offene_termine(s, limit)
     for termin_id, adresse in termine:
@@ -399,6 +458,6 @@ def scheduler_starten() -> None:
     from app import scheduler
     scheduler.registrieren(
         "geocoding", 300, scheduler_lauf,
-        beschreibung="Adressen offener Leads, Termine (60 Tage) und AD-Startadressen "
-                     "geokodieren – Backoff 1 h/6 h/24 h bei Fehlern",
+        beschreibung="Adressen offener Leads, weiterer Objekte (v31), Termine (60 Tage) "
+                     "und AD-Startadressen geokodieren – Backoff 1 h/6 h/24 h bei Fehlern",
         start_verzoegerung_s=300)

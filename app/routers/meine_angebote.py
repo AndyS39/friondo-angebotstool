@@ -187,8 +187,13 @@ def liste(request: Request, q: str = "",
                     or (a.kunde_id in kunden
                         and (suchwort in kunden[a.kunde_id].anzeige_name.lower()
                              or suchwort in (kunden[a.kunde_id].ort or "").lower()))]
+    # v32 (PLAN_V19 Phase 163): Verfolgungs-Chip des Vorgangs je Angebot
+    from app.models import Vorgang
+    vorgaenge_map = {v.id: v for v in session.query(Vorgang)
+                     .filter(Vorgang.id.in_({a.vorgang_id for a in angebote if a.vorgang_id} or {0}))}
     return render(request, "angebote/meine.html", aktiv=None, mobil=True,
                   benutzer=benutzer, angebote=angebote, kunden=kunden, q=q,
+                  vorgaenge_map=vorgaenge_map,
                   heute=datetime.now(),
                   meldung=request.query_params.get("meldung", ""))
 
@@ -246,8 +251,12 @@ def detail(request: Request, angebot_id: int,
         zahlungsbedingung_name = zahlungsbedingungen.fuer_angebot(session, angebot)[0]
     except Exception:   # noqa: BLE001 – Anzeige darf die Seite nie blockieren
         zahlungsbedingung_name = ""
+    # v32 (PLAN_V19 Phase 163): Verfolgungs-Chip des Vorgangs
+    from app.models import Vorgang
+    vorgang = session.get(Vorgang, angebot.vorgang_id) if angebot.vorgang_id else None
     return render(request, "angebote/meine_detail.html", aktiv=None, mobil=True,
                   projektstand=projektstand, zahlungsbedingung_name=zahlungsbedingung_name,
+                  vorgang=vorgang,
                   benutzer=benutzer, angebot=angebot, kunde=kunde,
                   gruppen=gruppen, summen=angebot.summen(),
                   kfw_ergebnis=kfw_ergebnis,
@@ -282,17 +291,27 @@ def status_setzen(request: Request, angebot_id: int,
     grund = ""
     if neuer_status == "Abgelehnt":
         grund = (form.get("ablehnungsgrund") or "").strip()
-        bekannt = {g.name for g in session.query(AblehnungsGrund)
+        bekannt = {g.name: g for g in session.query(AblehnungsGrund)
                    .filter(AblehnungsGrund.aktiv.is_(True))}
         if grund not in bekannt:
             return RedirectResponse(f"/meine-angebote/{angebot_id}?meldung="
                                     + quote_plus("Bitte den Grund der Ablehnung "
                                                  "angeben."), status_code=303)
+        grund_text = (form.get("ablehnungsgrund_text") or "").strip()[:500]
+        # v32 (PLAN_V19 Phase 163): Pflicht-Freitext bei freitext_pflicht („Sonstiges“)
+        if bekannt[grund].freitext_pflicht and not grund_text:
+            return RedirectResponse(f"/meine-angebote/{angebot_id}?meldung="
+                                    + quote_plus(f"Beim Grund „{grund}“ ist die Ergänzung "
+                                                 "(Freitext) Pflicht."), status_code=303)
         angebot.ablehnungsgrund = grund
-        angebot.ablehnungsgrund_text = (form.get("ablehnungsgrund_text") or "").strip()[:500]
+        angebot.ablehnungsgrund_text = grund_text
     alter_status = angebot.status
     angebot_status_setzen(angebot, neuer_status)
     vorgang = vorgaenge_modul.vorgang_fuer_angebot(session, angebot)
+    # v32 (PLAN_V19 Phase 163): Verfolgungsstufe des Vorgangs nachziehen
+    # (Angenommen → angenommen, Abgelehnt → abgelehnt, zurück auf Versendet → versendet)
+    from app import verfolgung as verfolgung_modul
+    verfolgung_modul.nach_angebotsstatus(session, angebot, benutzer)
     text = (f"Status von {angebot.nummer}: {alter_status} → {neuer_status}"
             + (f" – Grund: {grund}" if grund else "")
             + (f" ({angebot.ablehnungsgrund_text})"

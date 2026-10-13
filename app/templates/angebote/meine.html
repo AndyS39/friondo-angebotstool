@@ -1,10 +1,12 @@
 {% extends "base.html" %}
-{% from "_komponenten.html" import status_badge %}
+{% from "_komponenten.html" import status_badge, verfolgung_chip %}
 {% from "_symbole.html" import symbol %}
 
 {% block titel %}Meine Angebote – Friondo{% endblock %}
 
 {% block inhalt %}
+{# v32 (PLAN_V19 Phase 163): Verfolgungs-Chip des Vorgangs je Angebot #}
+<link rel="stylesheet" href="/static/verfolgung.css?v={{ css_version }}">
 <div class="mobil-inhalt">
     <h1>Meine Angebote</h1>
     <p class="dezent">Ansicht + Gesamtrabatt (mit DB-Ampel-Wächter) – Versand läuft über den Innendienst.</p>
@@ -25,6 +27,8 @@
                 · {{ kunden[a.kunde_id].anzeige_name if a.kunde_id in kunden else '?' }}<br>
                 <span class="dezent">{{ a.datum.strftime('%d.%m.%Y') }} ·
                     {{ status_badge(a.status) }}
+                    {% set v = vorgaenge_map.get(a.vorgang_id) if vorgaenge_map is defined and a.vorgang_id else none %}
+                    {% if v %}{{ verfolgung_chip(v.verfolgung_status, klein=True) }}{% endif %}
                     {% if a.verfolgung_ampel %}{{ {'heiss': '🔥', 'warm': '🌤', 'kalt': '❄'}[a.verfolgung_ampel] }}{% endif %}
                     {% if a.wiedervorlage_am %}
                         <span class="wv-datum {{ 'wv-faellig' if a.wiedervorlage_am <= heute }}">{{ symbol('wiedervorlage') }} {{ a.wiedervorlage_am.strftime('%d.%m.%Y') }}</span>

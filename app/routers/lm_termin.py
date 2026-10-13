@@ -17,16 +17,38 @@
 # (?woche=YYYY-MM-DD, ?neu=1); „Weitere Kalender“ POST /lead/{id}/termin/kalender/
 # auswahl (JSON {ids}); manuelle Buchung auf einen Kalender außerhalb der
 # Vorauswahl mit Warnhinweis (bestaetigt=1); Sperrzeiten der HV als belegte Slots.
+# v31 (PLAN_LEAD_V5 Phase 153/158/159):
+#  - Termine je Objekt: alle Assistenten-Routen nehmen ?objekt_id= (Vorschläge,
+#    Kalender, Buchen, manuell); bei mehr als einem Objekt fragt die Seite das Objekt
+#    ab. Neu POST /lead/{id}/termin/vormerken (objekt_id, ad_id, beginn – JSON oder
+#    Formular) und POST /lead/{id}/terminierung (Vertrag mit K, Alias
+#    /lead/{id}/termin/terminierung; bestaetigung=eine|je_objekt|auto) – bucht alle
+#    vorgemerkten Objekttermine in einem Schritt über das _speichern-Muster (Rollback +
+#    eine Wiederholung bei „database is locked“, Vorbild routers/angebote._speichern).
+#    Hinweis Integration: lm_kartei.py (K) trägt denselben Pfad /lead/{id}/terminierung
+#    und ist in main.py vor diesem Router eingebunden – K ruft dort
+#    lead_termin.terminierung_ausfuehren auf oder entfernt die Route (Bericht T).
+#  - ?ohne_ad_id= (Umbuchung ohne den kranken Vertriebler, B: „Fällig heute“).
+#  - Testphase (terminierung_aktiv = aus): Vormerken, Buchen, manuell, Umbuchen,
+#    Absagen, Terminierung, Vorab-Gespräche → 403 JSON {"ok": false, "meldung":
+#    TESTPHASE_HINWEIS} bei Accept: application/json, sonst Redirect mit Meldung;
+#    Knöpfe sichtbar/ausgegraut (Kontext testphase_kontext).
+#  - Manuelle Buchung an einem Samstag bleibt mit Warnhinweis möglich [ANNAHME].
+#  - Bestätigung erneut: bei mehreren Objekten Auswahl der Termine (termin_ids) und
+#    „zusammen“ (eine Mail mit Objektliste).
 
+import time
 from datetime import datetime, timedelta
 from urllib.parse import quote_plus, urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-from app import lead_termin, lead_v2
+from app import lead_termin, lead_v2, lead_v5
 from app import leadmanagement as kern
+from app import objekte as objekte_modul
 from app.db import get_session
 from app.models import (Benutzer, Kunde, Vorgang, VotTermin, TERMIN_TYP_NAMEN,
                         VOT_STATUS_NAMEN)
@@ -81,6 +103,40 @@ def _mit_meldung(url: str, meldung: str) -> str:
     return f"{url}{trenner}meldung={quote_plus(meldung)}"
 
 
+def _json_gewuenscht(request: Request) -> bool:
+    return "application/json" in (request.headers.get("accept") or "")
+
+
+def _gesperrt_antwort(request: Request, ziel: str, meldung: str | None = None):
+    """v31 (Phase 159): Antwort der Testphase – 403 JSON {"ok": false, "meldung": …}
+    bei Accept: application/json, sonst 303 mit Meldung."""
+    meldung = meldung or lead_v5.TESTPHASE_HINWEIS
+    if _json_gewuenscht(request):
+        return JSONResponse({"ok": False, "meldung": meldung, "testphase": True}, status_code=403)
+    return RedirectResponse(_mit_meldung(ziel, meldung), status_code=303)
+
+
+def _speichern(session: Session, aktion, wiederholungen: int = 1) -> None:
+    """v31 (v27-Regel): Aktion ausführen und committen; bei „database is locked“
+    zurückrollen, kurz warten und einmal wiederholen (Vorbild routers/angebote.
+    _speichern) – für die Terminierung mehrerer Objekttermine in einem Schritt."""
+    from app import betrieb
+    for versuch in range(wiederholungen + 1):
+        start = time.perf_counter()
+        try:
+            aktion()
+            session.commit()
+            betrieb.schreibsperre_messen(int((time.perf_counter() - start) * 1000))
+            return
+        except OperationalError as problem:
+            session.rollback()
+            gesperrt = "locked" in str(problem).lower()
+            betrieb.schreibsperre_messen(int((time.perf_counter() - start) * 1000), locked=gesperrt)
+            if not gesperrt or versuch >= wiederholungen:
+                raise
+            time.sleep(0.7)
+
+
 def _datum_uhrzeit(form) -> datetime | None:
     """beginn (datetime-local) oder datum + uhrzeit → datetime."""
     roh = (form.get("beginn") or "").strip()
@@ -99,17 +155,52 @@ def _datum_uhrzeit(form) -> datetime | None:
         return None
 
 
-def _geokodieren_bei_bedarf(session: Session, vorgang: Vorgang) -> None:
+def _int_oder_none(wert) -> int | None:
+    text = str(wert or "").strip()
+    return int(text) if text.isdigit() else None
+
+
+def _objekt_param(request: Request, form=None) -> int | None:
+    """objekt_id aus Formular oder Query."""
+    if form is not None and str(form.get("objekt_id") or "").strip():
+        return _int_oder_none(form.get("objekt_id"))
+    return _int_oder_none(request.query_params.get("objekt_id", ""))
+
+
+def _objekt_waehlen(session: Session, vorgang: Vorgang, objekt_id: int | None):
+    """(objekt, objekte, mehrere) – bei mehreren Objekten ohne Angabe kein Objekt
+    (die Seite/Route fragt es ab)."""
+    objekte = objekte_modul.objekte_fuer(session, vorgang.id)
+    mehrere = len(objekte) > 1
+    objekt = lead_termin.objekt_holen(session, vorgang, objekt_id, anlegen=True) if (objekt_id or not mehrere) else None
+    if objekt is not None and objekt_id and objekt.id != objekt_id:
+        objekt = None   # fremdes/inaktives Objekt
+    return objekt, objekte, mehrere
+
+
+def _geokodieren_bei_bedarf(session: Session, vorgang: Vorgang, objekt=None) -> None:
     """Adresse bei Bedarf synchron geokodieren (Cache). v27 (Phase 128): nach
     einem Fehlschlag greift der Backoff in geocoding.geokodieren (1 h / 6 h /
     24 h – in der Pause nur eine Cache-Abfrage), deshalb wird „fehler“ nicht
-    mehr dauerhaft übersprungen."""
+    mehr dauerhaft übersprungen. v31 (Phase 153): weitere Objekte werden über ihre
+    eigene Adresse geokodiert (Felder lat/lon/geocode_status am Objekt); das
+    Hauptobjekt teilt die Koordinaten des Vorgangs."""
+    from app import geocoding
+    if objekt is not None and objekt.reihenfolge != 1:
+        if objekt.lat is None and objekt.geocode_status != "manuell":
+            adresse = objekte_modul.objekt_text(objekt, mit_bezeichnung=False)
+            if adresse:
+                lat, lon, status = geocoding.geokodieren(session, adresse)
+                objekt.lat, objekt.lon, objekt.geocode_status = lat, lon, status
+                session.commit()
+        return
     if vorgang.lat is None and vorgang.geocode_status != "manuell":
-        from app import geocoding
         adresse = geocoding.lead_adresse(session, vorgang)
         if adresse:
             lat, lon, status = geocoding.geokodieren(session, adresse)
             vorgang.lat, vorgang.lon, vorgang.geocode_status = lat, lon, status
+            if objekt is not None and objekt.reihenfolge == 1:
+                objekt.lat, objekt.lon, objekt.geocode_status = lat, lon, status
             session.commit()
 
 
@@ -140,18 +231,28 @@ def termin_vorschlaege_json(request: Request, vorgang_id: int,
     ideal_grund}]} – v29: genau vorschlaege_anzahl (Standard 3), der erste
     „Ideal“; Cache 10 Minuten je Lead (lead_termin.vorschlaege_cache), ?neu=1
     erzwingt die Neuberechnung. Buchen: POST /lead/{id}/termin (ad_id, beginn,
-    quelle=assistent)."""
+    quelle=assistent). v31: ?objekt_id= (Vorschläge je Objekt, Felder objekt_id/
+    objekte/mehrere_objekte), ?ohne_ad_id=, buchbar = terminierung_aktiv,
+    testphase_hinweis, vormerken_url."""
     vorgang = _vorgang_oder_404(request, session, vorgang_id)
     if request.query_params.get("neu") == "1":
         lead_termin.vorschlaege_cache_leeren(vorgang.id)
+    objekt_id = _objekt_param(request)
+    ohne_ad_id = _int_oder_none(request.query_params.get("ohne_ad_id", ""))
     kunde = session.get(Kunde, vorgang.kunde_id)
-    if kunde is not None and not lead_termin.adresse_fehlt(kunde):
-        _geokodieren_bei_bedarf(session, vorgang)
-    antwort = lead_termin.vorschlaege_json(session, vorgang, benutzer=request.state.benutzer)
+    objekt = lead_termin.objekt_holen(session, vorgang, objekt_id)
+    if kunde is not None and not lead_termin.adresse_fehlt(kunde, objekt):
+        _geokodieren_bei_bedarf(session, vorgang, objekt)
+    antwort = lead_termin.vorschlaege_json(session, vorgang, benutzer=request.state.benutzer,
+                                           objekt_id=objekt.id if objekt is not None else None,
+                                           ohne_ad_id=ohne_ad_id)
     session.commit()   # Routing-/Geocode-Cache behalten
     antwort["vorgang_id"] = vorgang.id
     antwort["buchen_url"] = f"/lead-management/lead/{vorgang.id}/termin"
+    antwort["vormerken_url"] = f"/lead-management/lead/{vorgang.id}/termin/vormerken"
+    antwort["terminierung_url"] = f"/lead-management/lead/{vorgang.id}/termin/terminierung"
     antwort["assistent_url"] = f"/lead-management/lead/{vorgang.id}/termin"
+    antwort["objekte_hinweis"] = lead_termin.objekte_hinweis(session, vorgang)
     return JSONResponse(antwort)
 
 
@@ -160,15 +261,18 @@ def termin_vorschlaege_json(request: Request, vorgang_id: int,
 @router.get("/lead/{vorgang_id}/termin/kalender.json")
 def termin_kalender_json(request: Request, vorgang_id: int,
                          session: Session = Depends(get_session)):
-    """Wochenansicht des Assistenten (Mo–Sa, 15-Minuten-Raster, Spalte je
+    """Wochenansicht des Assistenten (v31: Mo–Fr, 15-Minuten-Raster, Spalte je
     Kandidat + gewählte weitere Kalender): ?woche=YYYY-MM-DD (Standard = Woche
-    des ersten Vorschlags), ?neu=1 erzwingt die Neuberechnung. Outlook-Belegt
-    nur bei kalender_sync = an und nie für Handelsvertreter – ohne offene
-    Sitzung (lead_termin.kalender_json gibt die Verbindung vor dem Abruf frei)."""
+    des ersten Vorschlags), ?neu=1 erzwingt die Neuberechnung, ?objekt_id=,
+    ?ohne_ad_id=. Outlook-Belegt nur bei kalender_sync = an und nie für
+    Handelsvertreter – ohne offene Sitzung (lead_termin.kalender_json gibt die
+    Verbindung vor dem Abruf frei)."""
     vorgang = _vorgang_oder_404(request, session, vorgang_id)
     q = request.query_params
     antwort = lead_termin.kalender_json(session, vorgang, benutzer=request.state.benutzer,
-                                        woche=q.get("woche", ""), neu=q.get("neu") == "1")
+                                        woche=q.get("woche", ""), neu=q.get("neu") == "1",
+                                        objekt_id=_objekt_param(request),
+                                        ohne_ad_id=_int_oder_none(q.get("ohne_ad_id", "")))
     session.commit()   # Routing-/Geocode-Cache der Vorschläge behalten
     antwort["buchen_url"] = f"/lead-management/lead/{vorgang.id}/termin"
     return JSONResponse(antwort)
@@ -207,15 +311,22 @@ def termin_assistent(request: Request, vorgang_id: int,
     vorgang = _vorgang_oder_404(request, session, vorgang_id)
     benutzer = request.state.benutzer
     kunde = session.get(Kunde, vorgang.kunde_id)
-    _geokodieren_bei_bedarf(session, vorgang)
     q = request.query_params
+    # v31 (Phase 153): Objekt wählen – bei mehreren Objekten zeigt die Seite die Auswahl
+    # (Vorschläge für das gewählte, Standard = Hauptobjekt)
+    objekt_id = _objekt_param(request)
+    objekte = objekte_modul.objekte_fuer(session, vorgang.id)
+    mehrere = len(objekte) > 1
+    objekt = lead_termin.objekt_holen(session, vorgang, objekt_id)
+    _geokodieren_bei_bedarf(session, vorgang, objekt)
     nur_ad = q.get("ad_id", "")
     nur_ad_id = int(nur_ad) if nur_ad.isdigit() else None
+    ohne_ad_id = _int_oder_none(q.get("ohne_ad_id", ""))   # v31 (Phase 158): ohne den Kranken
     hv_id = lead_termin.hv_nur_eigene(session, benutzer)
     if hv_id:
         nur_ad_id = hv_id
     ergebnis = lead_termin.vorschlaege(session, vorgang, nur_ad_id=nur_ad_id,
-                                       benutzer=benutzer)
+                                       benutzer=benutzer, objekt=objekt, ohne_ad_id=ohne_ad_id)
     session.commit()   # Routing-/Geocode-Cache behalten
     kandidaten = ergebnis["kandidaten"]
     kalender_ad = (nur_ad_id if nur_ad_id else (kandidaten[0].id if kandidaten else None))
@@ -225,10 +336,14 @@ def termin_assistent(request: Request, vorgang_id: int,
     # „Weitere Kalender“ = aktive Vertriebler außerhalb des Kandidatenkreises
     weitere_wahl = lead_termin.weitere_kalender_wahl(session, [k.id for k in kandidaten], benutzer)
     weitere_aktiv = [w for w in weitere_wahl if w["gewaehlt"]]
-    buchbar = not (kern.demo_aktiv(session) and not vorgang.demo)
+    testphase = lead_termin.testphase_kontext(session)
+    buchbar = testphase["terminierung_aktiv"]   # v31 (Phase 159): statt Demo-Sperre
     pflicht_offen = lead_v2.pflichtfelder_offen(session, kunde, vorgang) if kunde else []
+    pflicht_offen = [f for f in pflicht_offen if str(f).lower() not in ("ad_id", "außendienst", "aussendienst")]
     umbuchen_id = q.get("umbuchen", "")
     umbuchen = session.get(VotTermin, int(umbuchen_id)) if umbuchen_id.isdigit() else None
+    if umbuchen is not None and umbuchen.objekt_id and objekt_id is None:
+        objekt = lead_termin.objekt_holen(session, vorgang, umbuchen.objekt_id)
     # Vorbelegung des manuellen Formulars (Ersatzkunde-Slot oder Rücksprung)
     slot = q.get("slot", "")
     datum, uhrzeit = q.get("datum", ""), q.get("uhrzeit", "")
@@ -245,9 +360,12 @@ def termin_assistent(request: Request, vorgang_id: int,
     warnungen = [w for w in q.getlist("warnung") if w]
     termine = _termine_des_vorgangs(session, vorgang.id)
     aktive = [t for t in termine if t.status in lead_termin.BELEGT_STATUS]
+    objekt_zeilen = lead_termin.objekt_termine(session, vorgang)
+    vorgemerkte = lead_termin.vorgemerkte_objekttermine(session, vorgang)
     from app import leadmanagement_logik
     logik = leadmanagement_logik.hole_logik()
     phase_zeile = logik.status_zeile(vorgang.lead_phase or "neu")
+    ohne_ad = session.get(Benutzer, ohne_ad_id) if ohne_ad_id else None
     return render(request, "leadmanagement/termin.html",
                   aktiv="/lead-management", vorgang=vorgang, kunde=kunde,
                   vorschlaege=ergebnis["vorschlaege"], hinweise=ergebnis["hinweise"],
@@ -277,16 +395,27 @@ def termin_assistent(request: Request, vorgang_id: int,
                   raster_manuell=lead_termin._int(
                       lead_termin.parameter(session, "vorschlag_raster_manuell_min", "15"), 15),
                   demo_badge=kern.demo_aktiv(session), now=datetime.now(),
-                  meldung=q.get("meldung", ""))
+                  # v31 (Phase 153/158/159)
+                  objekt=objekt, objekte=objekte, mehrere_objekte=mehrere,
+                  objekt_zeilen=objekt_zeilen, vorgemerkte=vorgemerkte,
+                  objekte_hinweis=lead_termin.objekte_hinweis(session, vorgang),
+                  bestaetigung_vorbelegung=lead_termin.bestaetigung_vorbelegung(vorgemerkte),
+                  objekt_text=objekte_modul.objekt_text,
+                  ohne_ad=ohne_ad, ohne_ad_id=ohne_ad_id or "",
+                  samstag_warnung=lead_termin.SAMSTAG_WARNUNG,
+                  meldung=q.get("meldung", ""), **testphase)
 
 
 @router.post("/lead/{vorgang_id}/termin")
 def termin_buchen(request: Request, vorgang_id: int,
                         session: Session = Depends(get_session)):
     """Buchen/Umbuchen aus den Vorschlägen (V1-kompatibel: beginn, ad_id,
-    umweg, umbuchen_id; quelle=manuell läuft über die Konfliktprüfung)."""
+    umweg, umbuchen_id; quelle=manuell läuft über die Konfliktprüfung). v31:
+    objekt_id (Pflicht bei mehreren Objekten), Testphase → 403/Redirect."""
     vorgang = _vorgang_oder_404(request, session, vorgang_id)
     form = anfrage.formular(request)
+    if not lead_v5.terminierung_aktiv(session):
+        return _gesperrt_antwort(request, _assistent_url(vorgang.id))
     if (form.get("quelle") or "") == "manuell":
         return _manuell(request, session, vorgang, form)
     benutzer = request.state.benutzer
@@ -301,23 +430,35 @@ def termin_buchen(request: Request, vorgang_id: int,
                                 status_code=303)
     umbuchen = form.get("umbuchen_id") or ""
     umweg = str(form.get("umweg") or "")
+    objekt_id = _objekt_param(request, form)
+    objekt, objekte, mehrere = _objekt_waehlen(session, vorgang, objekt_id)
+    if mehrere and objekt is None and not umbuchen.isdigit():
+        return RedirectResponse(_assistent_url(vorgang.id, "Bitte das Objekt für den Termin wählen."),
+                                status_code=303)
     termin, meldung, vorgemerkt = lead_termin.termin_anlegen(
         session, vorgang, ad_id, beginn, benutzer=benutzer,
         quelle=form.get("quelle") or "assistent",
         umweg=int(umweg) if umweg.lstrip("-").isdigit() else None,
-        umbuchen_id=int(umbuchen) if umbuchen.isdigit() else None)
+        umbuchen_id=int(umbuchen) if umbuchen.isdigit() else None,
+        objekt_id=objekt.id if objekt is not None else None)
     if termin is None:
         session.rollback()
         return RedirectResponse(_assistent_url(vorgang.id, meldung), status_code=303)
     session.commit()
+    if _json_gewuenscht(request):
+        return JSONResponse({"ok": True, "meldung": meldung, "termin_id": termin.id,
+                             "vorgemerkt": vorgemerkt, "objekt_id": termin.objekt_id})
     return RedirectResponse(_kartei(vorgang.id, meldung), status_code=303)
 
 
 def _manuell(request: Request, session: Session, vorgang: Vorgang, form):
     """B7: Datum + Uhrzeit im 15-Minuten-Raster, AD aus den vorgefilterten
     Kandidaten, Konfliktwarnung (bestaetigt=1 übergeht Warnungen), Sperre bei
-    voller Überlappung desselben AD."""
+    voller Überlappung desselben AD. v31: Objekt (objekt_id), Samstag mit
+    Warnhinweis [ANNAHME], Testphase gesperrt."""
     benutzer = request.state.benutzer
+    if not lead_v5.terminierung_aktiv(session):
+        return _gesperrt_antwort(request, _assistent_url(vorgang.id))
     beginn = _datum_uhrzeit(form)
     ad_id = int(form.get("ad_id") or 0) if str(form.get("ad_id") or "").isdigit() else 0
     umbuchen = str(form.get("umbuchen_id") or "")
@@ -341,12 +482,19 @@ def _manuell(request: Request, session: Session, vorgang: Vorgang, form):
             return RedirectResponse(_kartei(vorgang.id, meldung), status_code=303)
         session.commit()
         return RedirectResponse(_kartei(vorgang.id, meldung), status_code=303)
+    objekt_id = _objekt_param(request, form)
+    objekt, objekte, mehrere = _objekt_waehlen(session, vorgang, objekt_id)
+    if mehrere and objekt is None and not umbuchen.isdigit():
+        return RedirectResponse(_assistent_url(vorgang.id, "Bitte das Objekt für den Termin wählen.",
+                                               datum=beginn.strftime("%Y-%m-%d"),
+                                               uhrzeit=beginn.strftime("%H:%M"), form_ad=ad_id) + "#manuell",
+                                status_code=303)
     raster = lead_termin._int(lead_termin.parameter(session, "vorschlag_raster_manuell_min", "15"), 15)
     beginn = lead_termin.viertelstunde(beginn, raster)
     if beginn < datetime.now():
         return RedirectResponse(_assistent_url(vorgang.id, "Der Termin liegt in der Vergangenheit."),
                                 status_code=303)
-    vorfilter = lead_termin.kandidaten(session, vorgang, benutzer=benutzer)
+    vorfilter = lead_termin.kandidaten(session, vorgang, benutzer=benutzer, objekt=objekt)
     erlaubt = {k["ad"].id for k in vorfilter["kandidaten"]}
     # v25 [ANNAHME]: manuelle Buchung durch den Innendienst auf einen
     # Handelsvertreter bleibt möglich – nur die Vorschläge schließen HV aus
@@ -365,27 +513,34 @@ def _manuell(request: Request, session: Session, vorgang: Vorgang, form):
                      "nicht in der Vorauswahl")
         return RedirectResponse(_assistent_url(vorgang.id, f"Außendienstler nicht wählbar: {grund}."),
                                 status_code=303)
-    lead_ort = (vorgang.lat, vorgang.lon) if vorgang.lat is not None else None
+    lead_ort = lead_termin.objekt_ort(session, vorgang, objekt)
     k = lead_termin.konflikte(session, ad_id, beginn, lead_ort=lead_ort,
                               ignorieren_id=int(umbuchen) if umbuchen.isdigit() else None)
     if ausserhalb_warnung:
         k["texte"] = [ausserhalb_warnung] + list(k["texte"])
+        k["warnen"] = True
+    # v31 (Phase 158): Samstag – der Assistent plant Mo–Fr, manuell nur mit Warnhinweis
+    if beginn.weekday() >= lead_termin.WERKTAGE_MAX:
+        k["texte"] = [lead_termin.SAMSTAG_WARNUNG if beginn.weekday() == 5
+                      else "Sonntag: außerhalb der Arbeitstage"] + list(k["texte"])
         k["warnen"] = True
     modus = lead_termin.parameter(session, "termin_konflikt_modus", "warnen")
     if k["sperren"] or (modus == "sperren" and k["puffer"]):
         return RedirectResponse(_assistent_url(
             vorgang.id, "Nicht möglich – " + "; ".join(k["texte"]),
             datum=beginn.strftime("%Y-%m-%d"), uhrzeit=beginn.strftime("%H:%M"),
-            form_ad=ad_id), status_code=303)
+            form_ad=ad_id, objekt_id=objekt.id if objekt is not None else ""), status_code=303)
     if k["warnen"] and form.get("bestaetigt") != "1":
         url = _assistent_url(vorgang.id, "Bitte Konflikte prüfen und bestätigen.",
                              datum=beginn.strftime("%Y-%m-%d"),
-                             uhrzeit=beginn.strftime("%H:%M"), form_ad=ad_id)
+                             uhrzeit=beginn.strftime("%H:%M"), form_ad=ad_id,
+                             objekt_id=objekt.id if objekt is not None else "")
         url += "".join(f"&warnung={quote_plus(t)}" for t in k["texte"])
         return RedirectResponse(url + "#manuell", status_code=303)
     termin, meldung, vorgemerkt = lead_termin.termin_anlegen(
         session, vorgang, ad_id, beginn, benutzer=benutzer, quelle="manuell",
-        umbuchen_id=int(umbuchen) if umbuchen.isdigit() else None)
+        umbuchen_id=int(umbuchen) if umbuchen.isdigit() else None,
+        objekt_id=objekt.id if objekt is not None else None)
     if termin is None:
         session.rollback()
         return RedirectResponse(_assistent_url(vorgang.id, meldung), status_code=303)
@@ -403,9 +558,126 @@ def termin_manuell(request: Request, vorgang_id: int,
     return _manuell(request, session, vorgang, form)
 
 
+# --- v31 (Phase 153): Vormerken je Objekt, Terminierung aller Objekttermine -------------
+
+@router.post("/lead/{vorgang_id}/termin/vormerken")
+def termin_vormerken(request: Request, vorgang_id: int,
+                     session: Session = Depends(get_session)):
+    """Vertrag mit K: Termin für EIN Objekt vormerken – JSON oder Formular mit
+    objekt_id, ad_id, beginn (YYYY-MM-DDTHH:MM) bzw. vorschlag = „<beginn>|<ad_id>“,
+    umweg. Antwort JSON {ok, meldung, termin_id, objekt_id, offen, gesamt,
+    objekte_hinweis} bei Accept: application/json, sonst Redirect in die Kartei.
+    Testphase → 403 / Meldung."""
+    vorgang = _vorgang_oder_404(request, session, vorgang_id)
+    try:
+        daten = anfrage.json_lesen(request)
+        if not isinstance(daten, dict):
+            daten = {}
+    except Exception:
+        daten = dict(anfrage.formular(request))
+    if not lead_v5.terminierung_aktiv(session):
+        return _gesperrt_antwort(request, _kartei(vorgang.id))
+    vorschlag = str(daten.get("vorschlag") or "")
+    if "|" in vorschlag:
+        beginn_text, ad_text = vorschlag.split("|", 1)
+        daten.setdefault("beginn", beginn_text)
+        daten.setdefault("ad_id", ad_text)
+    beginn = _datum_uhrzeit(daten)
+    ad_id = _int_oder_none(daten.get("ad_id")) or 0
+    umweg = _int_oder_none(str(daten.get("umweg") or "").lstrip("-"))
+    objekt_id = _int_oder_none(daten.get("objekt_id"))
+    benutzer = request.state.benutzer
+    if beginn is None or not ad_id:
+        meldung = "Beginn und Außendienstler sind Pflicht."
+        if _json_gewuenscht(request):
+            return JSONResponse({"ok": False, "meldung": meldung}, status_code=400)
+        return RedirectResponse(_kartei(vorgang.id, meldung), status_code=303)
+    hv_id = lead_termin.hv_nur_eigene(session, benutzer)
+    if hv_id and ad_id != hv_id:
+        meldung = "Handelsvertreter buchen nur den eigenen Kalender."
+        if _json_gewuenscht(request):
+            return JSONResponse({"ok": False, "meldung": meldung}, status_code=403)
+        return RedirectResponse(_kartei(vorgang.id, meldung), status_code=303)
+    objekt, objekte, mehrere = _objekt_waehlen(session, vorgang, objekt_id)
+    if mehrere and objekt is None:
+        meldung = "Bitte das Objekt für den Termin wählen."
+        if _json_gewuenscht(request):
+            return JSONResponse({"ok": False, "meldung": meldung,
+                                 "objekte": [{"id": o.id, "bezeichnung": o.bezeichnung,
+                                              "adresse": objekte_modul.objekt_text(o, False)} for o in objekte]},
+                                status_code=400)
+        return RedirectResponse(_kartei(vorgang.id, meldung), status_code=303)
+    termin, meldung = lead_termin.vormerken(session, vorgang, ad_id, beginn,
+                                            objekt_id=objekt.id if objekt is not None else None,
+                                            benutzer=benutzer, quelle=str(daten.get("quelle") or "assistent"),
+                                            umweg=umweg)
+    if termin is None:
+        session.rollback()
+        if _json_gewuenscht(request):
+            return JSONResponse({"ok": False, "meldung": meldung}, status_code=400)
+        return RedirectResponse(_kartei(vorgang.id, meldung), status_code=303)
+    session.commit()
+    if _json_gewuenscht(request):
+        zeilen = lead_termin.objekt_termine(session, vorgang)
+        return JSONResponse({"ok": True, "meldung": meldung, "termin_id": termin.id,
+                             "objekt_id": termin.objekt_id,
+                             "offen": len([z for z in zeilen if z["termin"] is None]),
+                             "gesamt": len(zeilen),
+                             "objekte_hinweis": lead_termin.objekte_hinweis(session, vorgang),
+                             "bestaetigung_vorbelegung": lead_termin.bestaetigung_vorbelegung(
+                                 lead_termin.vorgemerkte_objekttermine(session, vorgang))})
+    return RedirectResponse(_kartei(vorgang.id, meldung), status_code=303)
+
+
+@router.post("/lead/{vorgang_id}/terminierung")
+@router.post("/lead/{vorgang_id}/termin/terminierung")
+def terminierung(request: Request, vorgang_id: int,
+                 session: Session = Depends(get_session)):
+    """Button „Terminierung“ (B8, Vertrag mit K): bucht alle vorgemerkten Objekt-
+    termine in einem Schritt (lead_termin.terminierung_ausfuehren) – Formular/JSON
+    `bestaetigung` = eine | je_objekt | auto (Vorbelegung: gleicher Tag → eine,
+    sonst je Objekt). _speichern-Muster (v27-Regel: Rollback + eine Wiederholung
+    bei „database is locked“). Antwort: JSON {ok, meldung} bei Accept
+    application/json, sonst Redirect in die Kartei (?tab=termin). Testphase → 403."""
+    vorgang = _vorgang_oder_404(request, session, vorgang_id)
+    try:
+        daten = anfrage.json_lesen(request)
+        if not isinstance(daten, dict):
+            daten = {}
+    except Exception:
+        daten = dict(anfrage.formular(request))
+    ziel = _kartei(vorgang.id) + "?tab=termin"
+    if not lead_v5.terminierung_aktiv(session):
+        return _gesperrt_antwort(request, _kartei(vorgang.id))
+    bestaetigung = str(daten.get("bestaetigung") or "auto").strip().lower()
+    ergebnis: dict = {}
+
+    def _aktion():
+        ok, meldung = lead_termin.terminierung_ausfuehren(session, vorgang, benutzer=request.state.benutzer,
+                                                          bestaetigung=bestaetigung)
+        ergebnis["ok"], ergebnis["meldung"] = ok, meldung
+        if not ok:
+            raise _Abbruch()
+    try:
+        _speichern(session, _aktion)
+    except _Abbruch:
+        session.rollback()
+    ok, meldung = ergebnis.get("ok", False), ergebnis.get("meldung", "Terminierung nicht möglich.")
+    if _json_gewuenscht(request):
+        return JSONResponse({"ok": ok, "meldung": meldung,
+                             "objekte_hinweis": lead_termin.objekte_hinweis(session, vorgang)},
+                            status_code=200 if ok else 422)
+    return RedirectResponse(_mit_meldung(ziel, meldung), status_code=303)
+
+
+class _Abbruch(Exception):
+    """Fachlicher Abbruch der Terminierung (kein Commit, kein Wiederholversuch)."""
+
+
 @router.get("/termin/konflikt")
 def termin_konflikt(request: Request, session: Session = Depends(get_session)):
-    """Live-Konfliktprüfung des manuellen Formulars (fetch aus lm_termin.js)."""
+    """Live-Konfliktprüfung des manuellen Formulars (fetch aus lm_termin.js).
+    v31: ?objekt_id= (Fahrzeit vom Objekt), Samstag-Hinweis."""
     lead_v2.gate(request, session)
     q = request.query_params
     ad_id = q.get("ad_id", "")
@@ -417,13 +689,20 @@ def termin_konflikt(request: Request, session: Session = Depends(get_session)):
     if not ad_id.isdigit():
         return JSONResponse({"texte": [], "sperren": False, "warnen": False})
     vorgang = session.get(Vorgang, int(vorgang_id)) if vorgang_id.isdigit() else None
-    lead_ort = ((vorgang.lat, vorgang.lon)
-                if vorgang is not None and vorgang.lat is not None else None)
+    lead_ort = None
+    if vorgang is not None:
+        objekt = lead_termin.objekt_holen(session, vorgang, _objekt_param(request), anlegen=False)
+        lead_ort = lead_termin.objekt_ort(session, vorgang, objekt)
     raster = lead_termin._int(lead_termin.parameter(session, "vorschlag_raster_manuell_min", "15"), 15)
     beginn = lead_termin.viertelstunde(beginn, raster)
     k = lead_termin.konflikte(session, int(ad_id), beginn, lead_ort=lead_ort)
-    return JSONResponse({"texte": k["texte"], "sperren": k["sperren"],
-                         "warnen": k["warnen"], "beginn": beginn.strftime("%Y-%m-%dT%H:%M")})
+    texte = list(k["texte"])
+    warnen = bool(k["warnen"])
+    if beginn.weekday() >= lead_termin.WERKTAGE_MAX:
+        texte.insert(0, lead_termin.SAMSTAG_WARNUNG if beginn.weekday() == 5 else "Sonntag: außerhalb der Arbeitstage")
+        warnen = True
+    return JSONResponse({"texte": texte, "sperren": k["sperren"],
+                         "warnen": warnen, "beginn": beginn.strftime("%Y-%m-%dT%H:%M")})
 
 
 # --- Vorab-Gespräch (H6/F12) --------------------------------------------------------
@@ -440,15 +719,16 @@ def vorab_formular(request: Request, vorgang_id: int,
     if hv_id:
         vertriebler = [b for b in vertriebler if b.id == hv_id]
     kollegen = lead_termin.vorab_personen(session, "online")
+    testphase = lead_termin.testphase_kontext(session)
     return render(request, "leadmanagement/termin_vorab.html",
                   aktiv="/lead-management", vorgang=vorgang, kunde=kunde, typ=typ,
                   vertriebler=vertriebler, kollegen=kollegen,
                   benutzer=request.state.benutzer,
                   vorgewaehlt=vorgang.ad_id or (hv_id or ""),
                   dauer=lead_termin._int(lead_termin.parameter(session, "vorab_dauer_min", "30"), 30),
-                  buchbar=not (kern.demo_aktiv(session) and not vorgang.demo),
+                  buchbar=testphase["terminierung_aktiv"],
                   typ_namen=TERMIN_TYP_NAMEN, demo_badge=kern.demo_aktiv(session),
-                  meldung=request.query_params.get("meldung", ""))
+                  meldung=request.query_params.get("meldung", ""), **testphase)
 
 
 @router.post("/lead/{vorgang_id}/termin/vorab")
@@ -457,6 +737,8 @@ def vorab_anlegen(request: Request, vorgang_id: int,
     vorgang = _vorgang_oder_404(request, session, vorgang_id)
     form = anfrage.formular(request)
     typ = form.get("typ") or "telefon"
+    if not lead_v5.terminierung_aktiv(session):
+        return _gesperrt_antwort(request, f"/lead-management/lead/{vorgang.id}/termin/vorab?typ={typ}")
     person = str(form.get("person_id") or "")
     beginn = _datum_uhrzeit(form)
     dauer = str(form.get("dauer") or "")
@@ -487,10 +769,12 @@ def termin_absagen(request: Request, termin_id: int,
                          session: Session = Depends(get_session)):
     termin, vorgang = _termin_oder_404(request, session, termin_id)
     form = anfrage.formular(request)
+    ziel_fehler = _zurueck(request, _kartei(vorgang.id))
+    if not lead_v5.terminierung_aktiv(session):
+        return _gesperrt_antwort(request, ziel_fehler)
     grund = (form.get("grund") or "").strip()
     text = (form.get("grund_text") or "").strip()
     passend = next((g for g in _absage_gruende(session) if g.grund == grund), None)
-    ziel_fehler = _zurueck(request, _kartei(vorgang.id))
     if passend is None:
         if not text:
             return RedirectResponse(_mit_meldung(
@@ -505,8 +789,13 @@ def termin_absagen(request: Request, termin_id: int,
                                       benutzer=request.state.benutzer)
     if not ok:
         session.rollback()
+        if _json_gewuenscht(request):
+            return JSONResponse({"ok": False, "meldung": meldung}, status_code=422)
         return RedirectResponse(_mit_meldung(ziel_fehler, meldung), status_code=303)
     session.commit()
+    if _json_gewuenscht(request):
+        return JSONResponse({"ok": True, "meldung": meldung, "termin_id": termin.id,
+                             "ersatz_url": f"/lead-management/termin/{termin.id}/ersatz" if war_vot else ""})
     if war_vot:
         return RedirectResponse(f"/lead-management/termin/{termin.id}/ersatz?meldung="
                                 + quote_plus(meldung + " Der Kunde erhält die Absage mit "
@@ -529,19 +818,32 @@ def termin_ersatz(request: Request, termin_id: int,
                   stufen=daten["stufen"], ort=daten["ort"], alter_tage=daten["alter_tage"],
                   slot=termin.beginn.strftime("%Y-%m-%dT%H:%M") if termin.beginn else "",
                   status_namen=VOT_STATUS_NAMEN_V2, demo_badge=kern.demo_aktiv(session),
-                  meldung=request.query_params.get("meldung", ""))
+                  meldung=request.query_params.get("meldung", ""),
+                  **lead_termin.testphase_kontext(session))
 
 
 @router.post("/termin/{termin_id}/bestaetigung-erneut")
 def termin_bestaetigung_erneut(request: Request, termin_id: int,
                                      session: Session = Depends(get_session)):
+    """A-9; v31 (Phase 153): bei mehreren Objekten `termin_ids` (mehrfach) und
+    `zusammen=1` (eine Mail mit Objektliste und ICS je Objekt), sonst je Termin."""
     termin, vorgang = _termin_oder_404(request, session, termin_id)
-    ok, meldung = lead_termin.bestaetigung_erneut(session, termin,
-                                                  benutzer=request.state.benutzer)
+    form = anfrage.formular(request)
+    ids = [int(x) for x in form.getlist("termin_ids") if str(x).isdigit()] if hasattr(form, "getlist") else []
+    termine = [termin]
+    if ids:
+        termine = [t for t in session.query(VotTermin).filter(VotTermin.id.in_(ids))
+                   if t.vorgang_id == vorgang.id]
+        if termin.id not in ids and termin.vorgang_id == vorgang.id and not termine:
+            termine = [termin]
+    ok, meldung = lead_termin.bestaetigung_erneut(session, termin, benutzer=request.state.benutzer,
+                                                  termine=termine, zusammen=form.get("zusammen") == "1")
     if ok:
         session.commit()
     else:
         session.rollback()
+    if _json_gewuenscht(request):
+        return JSONResponse({"ok": ok, "meldung": meldung}, status_code=200 if ok else 422)
     return RedirectResponse(_mit_meldung(_zurueck(request, _kartei(vorgang.id)), meldung),
                             status_code=303)
 
@@ -551,10 +853,13 @@ def termin_verschieben(request: Request, termin_id: int,
                              session: Session = Depends(get_session)):
     """Umbuchung aus Kalender (Drag & Drop) oder Kartei – wie V1, zusätzlich
     Konfliktsperre, Weitergabe der ICS-UID (SEQUENCE + 1) an den neuen Termin
-    und Ersatzkunden-Dialog für den freigewordenen VOT-Slot (E3)."""
+    und Ersatzkunden-Dialog für den freigewordenen VOT-Slot (E3). v31: das
+    Objekt des Termins bleibt (termin_anlegen übernimmt objekt_id), Testphase gesperrt."""
     termin, vorgang = _termin_oder_404(request, session, termin_id)
     form = anfrage.formular(request)
     ziel = _zurueck(request, "/lead-management/kalender")
+    if not lead_v5.terminierung_aktiv(session):
+        return _gesperrt_antwort(request, ziel)
     if termin.quelle == "monday":
         return RedirectResponse(_mit_meldung(ziel, "monday-Termin – bitte in monday ändern."),
                                 status_code=303)
@@ -598,7 +903,8 @@ def termin_verschieben(request: Request, termin_id: int,
         session.commit()
         return RedirectResponse(_mit_meldung(
             ziel, f"{name} {'eingetragen' if war_vorgemerkt else 'verschoben'}."), status_code=303)
-    lead_ort = (vorgang.lat, vorgang.lon) if vorgang.lat is not None else None
+    objekt = lead_termin.objekt_holen(session, vorgang, termin.objekt_id, anlegen=False)
+    lead_ort = lead_termin.objekt_ort(session, vorgang, objekt)
     k = lead_termin.konflikte(session, ad_id, beginn, lead_ort=lead_ort, ignorieren_id=termin.id)
     if k["sperren"]:
         return RedirectResponse(_mit_meldung(ziel, "Nicht möglich – " + "; ".join(k["texte"])),
@@ -607,7 +913,7 @@ def termin_verschieben(request: Request, termin_id: int,
     war_gebucht = termin.status in lead_termin.AKTIVE_STATUS
     neu, meldung, vorgemerkt = lead_termin.termin_anlegen(
         session, vorgang, ad_id, beginn, benutzer=request.state.benutzer,
-        quelle="manuell", umbuchen_id=termin.id)
+        quelle="manuell", umbuchen_id=termin.id, objekt_id=termin.objekt_id)
     if neu is None:
         session.rollback()
         return RedirectResponse(_mit_meldung(ziel, meldung), status_code=303)
@@ -657,4 +963,5 @@ def terminkalender(request: Request, session: Session = Depends(get_session)):
                   typ_namen=lead_termin.TERMIN_TYP_NAMEN_V4, status_namen=VOT_STATUS_NAMEN_V2,
                   absage_gruende=_absage_gruende(session), hv_id=hv_id,
                   demo_badge=kern.demo_aktiv(session),
-                  meldung=request.query_params.get("meldung", ""))
+                  meldung=request.query_params.get("meldung", ""),
+                  **lead_termin.testphase_kontext(session))

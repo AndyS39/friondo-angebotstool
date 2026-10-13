@@ -659,7 +659,11 @@ def projektdaten_v2(session, gewerk) -> dict:
     name_teile = ", ".join(t for t in (nachname, vorname) if t)
     pr = text(getattr(projekt, "nummer", ""))
     d["projektName"] = (f"{name_teile} – {pr}" if name_teile and pr else name_teile or pr)[:120]
-    plz = text(getattr(projekt, "ausfuehrung_plz", ""))
+    # v31 (PLAN_LEAD_V5 Phase 153): Ausführungsort über projekt_ausfuehrungsort
+    # (Projektadresse, bei der Anlage aus dem Objekt übernommen; sonst Objekt des Gewerks)
+    ort_satz = (kern.projekt_ausfuehrungsort(session, projekt, gewerk) if projekt is not None
+                else {"strasse": "", "plz": "", "ort": ""})
+    plz = text(ort_satz.get("plz", ""))
     if plz:
         d["projektPostleitzahl"] = plz
     baujahr = _jahr(antworten.get("O02"))
@@ -699,14 +703,14 @@ def projektdaten_v2(session, gewerk) -> dict:
         if wert:
             d[api_feld] = wert
     # Ausführungsort (Adresse)
-    strasse, hausnummer = strasse_trennen(getattr(projekt, "ausfuehrung_strasse", ""))
+    strasse, hausnummer = strasse_trennen(ort_satz.get("strasse", ""))
     if strasse:
         d["strasse"] = strasse
     if hausnummer:
         d["hausnummer"] = hausnummer
     if plz:
         d["plz"] = plz
-    ort = text(getattr(projekt, "ausfuehrung_ort", ""))
+    ort = text(ort_satz.get("ort", ""))
     if ort:
         d["ort"] = ort
     # Bemerkungen (wörtlich laut Plan, Teile ohne Wert entfallen)

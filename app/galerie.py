@@ -29,6 +29,12 @@ SPARTEN_ORDNER = {
           + GEMEINSAME_ORDNER,
     "WB": ["Stellplatz", "Zählerschrank", "Leitungsweg"]
           + GEMEINSAME_ORDNER,
+    # v31 (PLAN_LEAD_V5 Phase 157): Freitext-Sparten ohne eigene Fachordner –
+    # Gewerbe, Mieterstrom, Wasser, Denkmalschutz nutzen die gemeinsamen Ordner
+    "GW": ["Zählerschrank", "Bestand"] + GEMEINSAME_ORDNER,
+    "MS": ["Zählerschrank", "Dachfläche"] + GEMEINSAME_ORDNER,
+    "WA": ["Hausanschluss", "Bestand"] + GEMEINSAME_ORDNER,
+    "DMS": ["Fassade", "Bestand"] + GEMEINSAME_ORDNER,
 }
 STANDARD_ORDNER = SPARTEN_ORDNER["WP"]   # Rueckwaerts-Kompatibilitaet
 

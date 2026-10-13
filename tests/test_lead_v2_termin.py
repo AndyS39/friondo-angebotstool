@@ -56,11 +56,15 @@ def _versatz(km_nord: float) -> tuple[float, float]:
 
 
 def aufraeumen(s):
+    from app.models import VorgangObjekt
     for k in s.query(Kunde).filter(Kunde.nachname.like(f"{NACHNAME}%")):
         for v in s.query(Vorgang).filter_by(kunde_id=k.id):
             s.query(LeadAktivitaet).filter_by(vorgang_id=v.id).delete()
             s.query(KommunikationLog).filter_by(vorgang_id=v.id).delete()
             s.query(VotTermin).filter_by(vorgang_id=v.id).delete()
+            # v31 (Phase 153): Objekte je Vorgang mit löschen – SQLite vergibt Vorgangs-IDs
+            # neu, verwaiste Objekte würden sonst an fremde Vorgänge „vererbt“
+            s.query(VorgangObjekt).filter_by(vorgang_id=v.id).delete()
             s.delete(v)
         s.delete(k)
     for b in s.query(Benutzer).filter(Benutzer.name.like(f"{BENUTZER_PRAEFIX}%")):
@@ -90,12 +94,15 @@ class Basis(unittest.TestCase):
         cls.client.post("/login", data={"benutzer_id": "1", "pin": "1234"})
         cls.gesichert = {n: kern.parameter_holen(cls.s, n, "")
                          for n in ("lead_freigabe_modus", "kalender_sync", "mail_modus",
-                                   "kanal_ad_regel", "routing_anbieter")}
+                                   "kanal_ad_regel", "routing_anbieter", "terminierung_aktiv")}
         kern.parameter_setzen(cls.s, "lead_freigabe_modus", "admin")
         kern.parameter_setzen(cls.s, "kalender_sync", "aus")
         kern.parameter_setzen(cls.s, "mail_modus", "protokoll")
         kern.parameter_setzen(cls.s, "kanal_ad_regel", "")
         kern.parameter_setzen(cls.s, "routing_anbieter", "luftlinie")
+        # v31 (PLAN_LEAD_V5 Phase 159): Buchen/Vormerken/Absagen/Vorab sind in der Testphase
+        # gesperrt (Standard terminierung_aktiv = aus) – diese Tests prüfen den Buchungsweg
+        kern.parameter_setzen(cls.s, "terminierung_aktiv", "an")
         cls.s.commit()
         cls.ads = {}
         cls.ads["horst"] = cls.ad("Horst", ["WP", "WB"], kombi=True, gebiet=["47"])
@@ -461,7 +468,9 @@ class AbsageUndErsatz(Basis):
         self.assertIn(f"UID:{uid}", inhalt)
         self.assertIn("SEQUENCE:0", inhalt)
         self.assertIn("METHOD:REQUEST", inhalt)
-        self.assertIn("SUMMARY:Vor-Ort-Termin Friondo – WP", inhalt)
+        # v31 (PLAN_LEAD_V5 Phase 156): Sparten im Kundenkalender ausgeschrieben
+        self.assertIn("SUMMARY:Vor-Ort-Termin Friondo – Wärmepumpe", inhalt)
+        self.assertNotIn("SUMMARY:Vor-Ort-Termin Friondo – WP", inhalt)
         self.assertIn("LOCATION:Teststraße 40\\, 47139 Duisburg", inhalt)
         self.assertIn("Ihr Berater: LeadV2T Horst\\, Telefon 0203 1", inhalt)
         self.assertIn("TRIGGER:-PT24H", inhalt)

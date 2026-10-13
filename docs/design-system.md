@@ -132,6 +132,39 @@ Aliase aus v14 bleiben erhalten und zeigen auf die semantischen Tokens:
   (Kanal), `.lm-quelle` (Quelle), `.abzeichen.interesse-*`: farbige Pille auf
   getönter Fläche (`color-mix(in srgb, Farbe 12–14 %, transparent)`), gefüllt
   (`.chip-erfasst`) mit `--text-auf-farbe`, ausgeblendet grau durchgestrichen.
+- **v31 Lead-Management V5:** Badge **Großkunde** `.abzeichen.lm-grosskunde` (Fläche/Kontur
+  aus `color-mix` der Variable `--f`, Standard `--status-violett`; Farbe aus Parameter
+  `grosskunde_farbe` per `style="--f: …"`); Kartei V5 `.lk-v5` (Raster `.lk-oben` Notizen 2/3
+  neben To-Dos 1/3, Objekt-Karten `.lk-objekt` auf `--flaeche-abgesetzt`, Hauptobjekt mit
+  `--akzent`-Kontur, Statuskette klickbar `.lk-schritt.setzbar`), Archiv-Banner
+  `.lm-archiv-banner` (Klasse `.meldung`), Zweit-Scrollleiste `.lm-scrollleiste` (sticky
+  bottom unter `.lm-tabellen`), Herkunfts-Badge in Timeline/Notizen-Chat
+  `.abzeichen.nc-herkunft` (Lead · Angebot · Projekt), Testphase-Sperre
+  `a.lmt-gesperrt[aria-disabled="true"]` (ausgegraut, Tooltip), Mailstatus
+  `.lm-mailstatus-gesperrt`. Regeln in `lead_v2.css` (nur Tokens).
+- **Kartenliste „Mein Tag“** (v32, `app/static/mein_tag.css`, Präfix `mt-`): `main.mein-tag-seite`
+  (max. 720 px zentriert, < 600 px Vollbreite, Safe-Area-Abstände), `.mt-block` mit `h2` + Zähler
+  `.mt-zahl` (`.rot` bei fälligen), `.mt-karte` (Fläche `--flaeche-karte`, Kontur `--linie`, Radius
+  `--r-l`, `.mt-ueberfaellig` = rote linke Kante), Zeile 1 `.mt-zeile1` (Datum/Uhrzeit
+  `.mt-datum-zeit`/`.mt-uhr`, Labels `.mt-label`/`.mt-label-rot`, Badges rechts `.mt-badges` mit
+  Sparten-Chips und `.mt-herkunft`), `.mt-name`, `.mt-adresse`/`.mt-tel` (44 px Zeilenhöhe),
+  Aktionen `.mt-aktionen` mit Hauptknopf `.knopf.mt-haupt` (unter 600 px volle Breite) und
+  Zweitlink `.mt-akte`; Anruf-Karte mit Hot-Ampel-Punkt `.mt-ampel-heiss|warm|kalt|leer`, Chip
+  `.mt-chip-orange|rot`, `.mt-aktivitaeten` (details), `.mt-notiz`; Umschalter `.mt-umschalter`
+  (Karten | Tabelle); Filter als `details.karte.mt-filter`. Nur Tokens; Leerzustände `leer_zustand`.
+- **Verfolgungs-Chip `.verfolgung-chip.vf-<status>`** (v32, `static/verfolgung.css`): Makro
+  `verfolgung_chip(status, klein=False, vorgang_id=None)` – fünf Stufen versendet (blau) ·
+  nachgefasst (grau) · bestellung_angekuendigt (orange) · angenommen (grün) · abgelehnt (rot)
+  aus den Status-Token-Paaren; `klein` für Listen; `vorgang_id` setzt `data-verfolgung-chip`,
+  damit `verfolgung.js` den Chip nach dem Dialog „Nächster Schritt“ ohne Neuladen aktualisiert.
+  Dialog-Bausteine `.ns-dialog` (Knöpfe `.ns-rot/.ns-gruen/.ns-blau` ≥ 44 px, Chips `.ns-chip`
+  mit `:has(:checked)`, Bestätigungszeile `.ns-bestaetigung`); display-Regeln mit
+  `[hidden]`-Gegenregel.
+- **v32 Kundensuche** (`suche.css`): Suchfeld `.kopf-suche` in der Kopfzeile (Text
+  `--text-invers` auf getönter Fläche), Vorschlagsliste `.kopf-suche-liste` als Karte
+  (`--flaeche-karte`, `--linie`, `--schatten-2`), Treffer `.kopf-suche-treffer` mit
+  Interesse-Badges und Verfolgungs-Chip `.kopf-suche-chip` (`--akzent-flaeche`/`--akzent-text`);
+  unter 600 px Lupe `.kopf-suche-lupe`, Feld klappt in voller Breite aus (`.kopf-suche.offen`).
 - **Avatare** (Makro `avatar(name, id, klasse='')` in `_komponenten.html`):
   zwei Initialen (erstes und letztes Wort), Klasse `avatar-<n>` mit
   `n = id % 8 + 1` → `--avatar-<n>`; Größen `.klein`/`.gross`, Gruppen

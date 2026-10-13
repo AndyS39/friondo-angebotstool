@@ -1,11 +1,11 @@
 # Datenbankmodelle des Angebotstools.
 # Phase 1: Kunden · Phase 2: Artikel. Weitere Modelle folgen in späteren Phasen.
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import (Boolean, DateTime, Float, ForeignKey, Integer, String,
+from sqlalchemy import (Boolean, Date, DateTime, Float, ForeignKey, Integer, String,
                         Text, UniqueConstraint)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -47,6 +47,8 @@ class Kunde(Base):
     liefer_strasse: Mapped[str] = mapped_column(String(200), default="")
     liefer_plz: Mapped[str] = mapped_column(String(10), default="")
     liefer_ort: Mapped[str] = mapped_column(String(100), default="")
+    # v31 (PLAN_LEAD_V5 Phase 153): Kennzeichen Großkunde (Badge, Filter, Spalte – keine Automatik)
+    grosskunde: Mapped[bool] = mapped_column(Boolean, default=False)
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
@@ -78,8 +80,10 @@ class Kunde(Base):
 
 # Interesse (v5): Codes und Anzeigenamen; Reihenfolge = Anzeigereihenfolge
 # v23 (Phase 104): Sparte GW (Gewerbe) – wie WB nur Freitext-Erfassung
+# v31 (PLAN_LEAD_V5 Phase 157): MS/WA/DMS; Langformen zentral in app/sparten.py
 INTERESSEN = [("WP", "Wärmepumpe"), ("PV", "Photovoltaik"), ("KL", "Klima"),
-              ("WB", "Wallbox"), ("GW", "Gewerbe")]
+              ("WB", "Wallbox"), ("GW", "Gewerbe"), ("MS", "Mieterstrom"),
+              ("WA", "Wasser"), ("DMS", "Denkmalschutz")]
 INTERESSE_CODES = [code for code, _ in INTERESSEN]
 
 # Konfigurator-Typ (v5): aktuell nur WP; PV/Klima docken später als eigene
@@ -204,6 +208,9 @@ class Benutzer(Base):
     vorname: Mapped[str] = mapped_column(String(100), default="")
     infotext: Mapped[str] = mapped_column(Text, default="")
     bild_datei: Mapped[str] = mapped_column(String(300), default="")   # relativ zu DATA_ORDNER
+    # v31 (PLAN_LEAD_V5 Phase 156): Häkchen „Leadmanager“ – nur diese Benutzer stehen in den
+    # Innendienst-/Leadmanager-Auswahlen des Lead-Moduls
+    leadmanager: Mapped[bool] = mapped_column(Boolean, default=False)
 
     @property
     def rollen_liste(self) -> list[str]:
@@ -254,6 +261,9 @@ class Erfassung(Base):
     lead_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     # v10: Vorgangszugehörigkeit (Akte); Migration setzt sie rückwirkend
     vorgang_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    # v31 (PLAN_LEAD_V5 Phase 153): Objekt des Vorgangs (vorgang_objekte), dessen Adresse der
+    # Ausführungsort ist – leer = Hauptobjekt (Kundenadresse)
+    objekt_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     abgesendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
@@ -478,6 +488,17 @@ class Vorgang(Base):
     mail_fehler_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     mail_fehler_vorlage: Mapped[str] = mapped_column(String(50), default="")
     mail_fehler_text: Mapped[str] = mapped_column(String(500), default="")
+    # v31 (PLAN_LEAD_V5 Phase 154): Lead-Sicht „archiviert“ (Boards/Listen/Kennzahlen des
+    # Lead-Moduls blenden aus; Angebotstool und Projektierung zeigen den Vorgang weiter)
+    archiviert_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    archiviert_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # v31 (Phase 154): Sammelaktion „Duplizieren“ – Verweis auf den Ursprungsvorgang
+    kopie_von_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # v32 (PLAN_V19 Phase 162/163): automatische Wiedervorlage nach Angebotsversand
+    # (wiedervorlage_art = angebot_nachfassen) und Verfolgungsstatus des Vorgangs
+    # (versendet | nachgefasst | bestellung_angekuendigt | angenommen | abgelehnt)
+    wiedervorlage_art: Mapped[str] = mapped_column(String(30), default="")
+    verfolgung_status: Mapped[str] = mapped_column(String(30), default="")
 
 
 class VorgangsNotiz(Base):
@@ -607,6 +628,8 @@ class Gewerk(Base):
     sub_team_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     angebot_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     angebot_id_original: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # v31 (PLAN_LEAD_V5 Phase 153, AT-Chat): Objekt des Angebots, aus dem das Gewerk entstand
+    objekt_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # v15 (Phase 80): Feinplanungs-Erfassung (Fragen FP-WP)
     fp_antworten_json: Mapped[str] = mapped_column(Text, default="{}")
     fp_vorbelegt_json: Mapped[str] = mapped_column(Text, default="{}")
@@ -1131,6 +1154,8 @@ class Angebot(Base):
     # (zahlungsbedingung_key = "freitext"); additive Spalten (db._NACHTRAEGLICHE_SPALTEN)
     zahlungsbedingung_key: Mapped[str] = mapped_column(String(50), default="")
     zahlungsbedingung_text: Mapped[str] = mapped_column(Text, default="")
+    # v31 (PLAN_LEAD_V5 Phase 153): Objekt des Vorgangs (Ausführungsort über objekte.ausfuehrungsort)
+    objekt_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Bedingte Angebotsvermerke (v9, Blatt "Vermerke"): beim Anlegen
     # ausgewertete Texte für das PDF (Ende Positionsteil vor Summenblock)
     vermerke_json: Mapped[str] = mapped_column(Text, default="[]")
@@ -1398,6 +1423,8 @@ class AblehnungsGrund(Base):
     name: Mapped[str] = mapped_column(String(100), unique=True)
     aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
     sort: Mapped[int] = mapped_column(Integer, default=0)
+    # v32 (PLAN_V19 Phase 163): Pflicht-Freitext (Grund „sonstiges“)
+    freitext_pflicht: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class AngebotsLoeschung(Base):
@@ -1615,6 +1642,8 @@ class VotTermin(Base):
     medium: Mapped[str] = mapped_column(String(10), default="vor_ort")
     ics_uid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     ics_sequence: Mapped[int] = mapped_column(Integer, default=0)
+    # v31 (PLAN_LEAD_V5 Phase 153): Objekt des Termins (Adresse/Fahrzeit je Objekt)
+    objekt_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
@@ -1918,3 +1947,56 @@ class Zahlungsbedingung(Base):
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
                                                   onupdate=datetime.now)
+
+
+class VorgangObjekt(Base):
+    """v31 (PLAN_LEAD_V5 Phase 153): Objekte am Vorgang – ein Vorgang je Kunde trägt ein
+    oder mehrere Objekte (Adresse, Objektart, Parteien bei MFH, Interessen). Das
+    Hauptobjekt (reihenfolge = 1) bleibt synchron zu den Kundenfeldern
+    (objekte.hauptobjekt_sync), damit monday-Sync, Duplikatprüfung, Geocoding, Karte und
+    alle Bestandslisten unverändert funktionieren. Je Objekt: eigener Vor-Ort-Termin
+    (vot_termine.objekt_id), eigene Erfassung (erfassungen.objekt_id), eigenes Angebot
+    (angebote.objekt_id), Gewerk (gewerke.objekt_id). Rechnungsadresse eines
+    MFH-Objekts, das nicht Hauptobjekt ist, liegt am Objekt (Phase 157 [ANNAHME])."""
+    __tablename__ = "vorgang_objekte"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    vorgang_id: Mapped[int] = mapped_column(Integer, index=True)
+    bezeichnung: Mapped[str] = mapped_column(String(100), default="Objekt 1")
+    strasse: Mapped[str] = mapped_column(String(200), default="")
+    plz: Mapped[str] = mapped_column(String(10), default="")
+    ort: Mapped[str] = mapped_column(String(100), default="")
+    objektart: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    parteien: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    interessen: Mapped[str] = mapped_column(Text, default="[]")        # JSON-Liste der Sparten
+    lat: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    lon: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    geocode_status: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    reihenfolge: Mapped[int] = mapped_column(Integer, default=1)
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Phase 157: Rechnungsadresse abweichend vom Objekt (nur bei Objekten, die nicht
+    # Hauptobjekt sind – beim Hauptobjekt gilt kunden.rechnung_*)
+    rechnung_abweichend: Mapped[bool] = mapped_column(Boolean, default=False)
+    rechnung_name: Mapped[str] = mapped_column(String(200), default="")
+    rechnung_strasse: Mapped[str] = mapped_column(String(200), default="")
+    rechnung_plz: Mapped[str] = mapped_column(String(10), default="")
+    rechnung_ort: Mapped[str] = mapped_column(String(100), default="")
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                  onupdate=datetime.now)
+
+
+class BenutzerAbwesenheit(Base):
+    """v31 (PLAN_LEAD_V5 Phase 158): Abwesenheit eines Benutzers – Art „krankheit“
+    (vorbereitet: „urlaub“, gleiche Wirkung [ANNAHME]), von/bis (bis leer = offen).
+    Wirkung in app/abwesenheiten.py (Terminassistent-Ausschluss, Hinweise „Fällig heute“)."""
+    __tablename__ = "benutzer_abwesenheiten"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    benutzer_id: Mapped[int] = mapped_column(Integer, index=True)
+    art: Mapped[str] = mapped_column(String(20), default="krankheit")
+    von: Mapped[date] = mapped_column(Date)
+    bis: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    bemerkung: Mapped[str] = mapped_column(String(300), default="")
+    angelegt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

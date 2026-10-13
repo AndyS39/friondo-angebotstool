@@ -32,13 +32,21 @@
     {% endif %}
 
     <h2>Ausführungsadresse</h2>
+    {# v31 (PLAN_LEAD_V5 Phase 153): Vorbelegung aus dem Objekt des Angebots
+       (Objekt 2 → Objektadresse; Hauptobjekt → Kundenadresse) #}
+    {% set adr = adresse_vorbelegt if adresse_vorbelegt is defined and adresse_vorbelegt
+                 else {'strasse': kunde.strasse if kunde else '', 'plz': kunde.plz if kunde else '',
+                       'ort': kunde.ort if kunde else '', 'bezeichnung': '', 'mehrere_objekte': false} %}
+    {% if adr.mehrere_objekte and adr.bezeichnung %}
+    <p class="dezent">Objekt des Angebots: <strong>{{ adr.bezeichnung }}</strong> (Vorgang mit mehreren Objekten)</p>
+    {% endif %}
     <div class="formzeile">
         <label>Straße <input type="text" name="strasse" size="28"
-               value="{{ kunde.strasse if kunde }}"></label>
+               value="{{ adr.strasse or '' }}"></label>
         <label>PLZ <input type="text" name="plz" size="6"
-               value="{{ kunde.plz if kunde }}"></label>
+               value="{{ adr.plz or '' }}"></label>
         <label>Ort <input type="text" name="ort" size="18"
-               value="{{ kunde.ort if kunde }}"></label>
+               value="{{ adr.ort or '' }}"></label>
     </div>
 
     <h2>Gewerke (Sparten)</h2>

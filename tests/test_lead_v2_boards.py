@@ -151,10 +151,9 @@ class Seiten(Basis):
             self.assertIn("/lead-management/vorlagen", seite, pfad)
             self.assertIn("/lead-management/handelsvertreter", seite, pfad)
             self.assertIn("/static/lm_boards.js", seite, pfad)
-        # Demo-Badge zentral in der Leiste (Parametertext im Tooltip)
+        # v31 (PLAN_LEAD_V5 Phase 159): Demo-Modus beendet – kein Demo-Badge mehr in der Leiste
         seite = self.client.get("/lead-management/hauptboard").text
-        self.assertIn("lm-leiste-demo", seite)
-        self.assertIn(kern.parameter_holen(self.s, "demo_badge_text", ""), seite)
+        self.assertNotIn("lm-leiste-demo", seite)
         # Umschalter Tabelle | Anrufliste | Kanban
         self.assertIn('class="lm-umschalter"', seite)
         self.assertIn("/lead-management/anrufliste", seite)
@@ -377,9 +376,12 @@ class Sammelaktionen(Basis):
     def test_status_aendern_schreibt_aktivitaet_je_lead(self):
         a = self.lead(301)
         b = self.lead(302)
-        # v29 (Phase 140): zusätzlich „An Handelsvertreter verschieben“ auf Hauptboard und Deals
-        self.assertEqual([x["key"] for x in lead_boards.sammelaktionen_fuer("hauptboard")], ["status", "hv_verschieben"])
-        self.assertEqual([x["key"] for x in lead_boards.sammelaktionen_fuer("terminiert")], ["hv_verschieben"])
+        # v29 (Phase 140): zusätzlich „An Handelsvertreter verschieben“ auf Hauptboard und Deals;
+        # v31 (PLAN_LEAD_V5 Phase 154): „Archivieren“ und „Duplizieren“ (Wiederherstellen nur in der Archiv-Sicht)
+        self.assertEqual([x["key"] for x in lead_boards.sammelaktionen_fuer("hauptboard")],
+                         ["status", "hv_verschieben", "archivieren", "duplizieren"])
+        self.assertEqual([x["key"] for x in lead_boards.sammelaktionen_fuer("terminiert")],
+                         ["hv_verschieben", "archivieren", "duplizieren"])
         r = self.client.post("/lead-management/boards/sammelaktion",
                              data={"ids": [str(a.id), str(b.id)], "aktion": "status",
                                    "board": "hauptboard", "status": "qualifiziert"},
@@ -412,9 +414,10 @@ class Sammelaktionen(Basis):
         lead_boards.sammelaktion_registrieren("terminiert", "test_lv2b", "Test",
                                               lambda s, vs, p, b: (len(vs), []))
         try:
-            # v29: Deals trägt bereits „An Handelsvertreter verschieben“ – die Testaktion hängt sich an
+            # v29: Deals trägt bereits „An Handelsvertreter verschieben“ – die Testaktion hängt sich an;
+            # v31 (PLAN_LEAD_V5 Phase 154): dazu „Archivieren“ und „Duplizieren“
             self.assertEqual([x["key"] for x in lead_boards.sammelaktionen_fuer("terminiert")],
-                             ["hv_verschieben", "test_lv2b"])
+                             ["hv_verschieben", "archivieren", "duplizieren", "test_lv2b"])
         finally:
             lead_boards.SAMMELAKTIONEN["terminiert"] = [e for e in lead_boards.SAMMELAKTIONEN["terminiert"]
                                                        if e[0] != "test_lv2b"]
@@ -528,15 +531,16 @@ class Gate(Basis):
     def test_demo_404_und_handelsvertreter_sicht(self):
         eigen = self.lead(601, ad_id=self.hv.id)
         fremd = self.lead(602)
-        # Innendienst im Demo-Modus: 404 auf allen neuen Routen
+        # v31 (PLAN_LEAD_V5 Phase 159): Demo-Modus beendet (lead_freigabe_modus = alle) –
+        # der Innendienst sieht und nutzt das Modul (vorher 404 im Demo-Modus)
         c_innen = TestClient(app)
         c_innen.post("/login", data={"benutzer_id": str(self.innen.id), "pin": "1234"})
         for pfad in ("/lead-management/hauptboard", "/lead-management/terminiert",
                      "/lead-management/kontaktiert", "/lead-management/vorlagen",
                      "/lead-management/board", "/lead-management/boards/spalten"):
-            self.assertEqual(c_innen.get(pfad).status_code, 404, pfad)
+            self.assertEqual(c_innen.get(pfad).status_code, 200, pfad)
         r = c_innen.post(f"/lead-management/boards/zeile/{eigen.id}", json={"feld": "notiz", "wert": "x"})
-        self.assertEqual(r.status_code, 404)
+        self.assertEqual(r.status_code, 200)
         # Handelsvertreter: nur eigene Vorgänge, keine Sammelaktionen, keine Vorlagen.
         # v29 (PLAN_LEAD_V4 Phase 140): Hauptboard/Deals/Kontaktiert sind für die
         # HV-Sicht gesperrt – eigene Leads stehen in der Handelsvertreter-Ansicht;

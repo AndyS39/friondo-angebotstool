@@ -271,14 +271,15 @@ class NichtErreichtOhneDialog(Basis):
         r = self.client.post(f"/lead-management/anruf/{v.id}",
                              data={"ergebnis": "mailbox", "wiedervorlage_am": "2031-01-01T10:00",
                                    "dauer_sek": "12"}, follow_redirects=False)
-        self.assertIn("Mailbox protokolliert (Versuch 2) – Mail geplant.", self.meldung(r))
+        # v31 (PLAN_LEAD_V5 Phase 156, Live-Excel: Versuch 2 ohne Mail)
+        self.assertIn("Mailbox protokolliert (Versuch 2).", self.meldung(r))
         self.assertIn("Dauer 00:12", self.meldung(r))
         self.s.expire_all()
         v = self.s.get(Vorgang, v.id)
         self.assertEqual(v.naechste_aktion_am, wv)
         self.assertEqual(self.anrufe(v.id)[-1].dauer_sek, 12)
         self.assertIsNone(self.anrufe(v.id)[-1].naechste_aktion_am)
-        self.assertEqual(self.mails(v.id), [("nicht_erreicht", "geplant")])
+        self.assertEqual(self.mails(v.id), [])      # v31 (Phase 156): keine Mail bei Versuch 2
         # 3. Versuch: Besetzt – keine Mail, Kontrollwert 3 Punkte orange
         r = self.client.post(f"/lead-management/anruf/{v.id}", data={"ergebnis": "besetzt"},
                              follow_redirects=False)
@@ -287,23 +288,20 @@ class NichtErreichtOhneDialog(Basis):
         v = self.s.get(Vorgang, v.id)
         self.assertEqual(v.versuch_nr, 3)
         self.assertEqual(v.naechste_aktion_am, wv)
-        self.assertEqual(self.mails(v.id), [("nicht_erreicht", "geplant")])
+        self.assertEqual(self.mails(v.id), [])      # v31 (Phase 156): weiterhin keine Mail
         punkte = lead_anrufliste.versuche_fuer_punkte(self.s, self.anrufe(v.id))
         self.assertEqual([p["ergebnis"] for p in punkte], ["nicht_erreicht", "mailbox", "besetzt"])
         zeile = self.seite().split(f'data-vorgang="{v.id}"', 1)[1].split('class="wer"', 1)[0]
         self.assertIn('class="lm-dots warn je-ergebnis"', zeile)
         self.assertIn('<small class="lm-warn">3×</small>', zeile)
-        # Versuch 4: zweite Mail nicht_erreicht (die erste gilt als versendet)
-        for m in self.s.query(KommunikationLog).filter_by(vorgang_id=v.id, vorlage_key="nicht_erreicht"):
-            m.status = "protokolliert"
-        self.s.commit()
+        # Versuch 4: v31 (PLAN_LEAD_V5 Phase 156, Live-Excel Blatt Kaskade aktion = keine bei
+        # Versuch 2 und 4) – keine Mail nicht_erreicht mehr (vorher zweite Mail)
         if maximal > 4:
             r = self.client.post(f"/lead-management/anruf/{v.id}", data={"ergebnis": "nicht_erreicht"},
                                  follow_redirects=False)
-            self.assertIn("(Versuch 4) – Mail geplant.", self.meldung(r))
+            self.assertEqual(self.meldung(r).split(" Dauer")[0], "Nicht erreicht protokolliert (Versuch 4).")
             self.s.expire_all()
-            self.assertEqual(self.mails(v.id), [("nicht_erreicht", "protokolliert"),
-                                                ("nicht_erreicht", "geplant")])
+            self.assertEqual(self.mails(v.id), [])
             for n in range(5, maximal):
                 self.client.post(f"/lead-management/anruf/{v.id}", data={"ergebnis": "nicht_erreicht"},
                                  follow_redirects=False)

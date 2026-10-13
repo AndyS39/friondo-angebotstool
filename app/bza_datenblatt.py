@@ -271,15 +271,18 @@ def erstellen(session: Session, angebot: Angebot, gewerk=None,
     blatt.puffer_prozent = kosten_puffer_prozent(session)
 
     # 1. Investitionsobjekt (= Ausführungsort; am Gewerk: Projektadresse)
+    # v31 (PLAN_LEAD_V5 Phase 153): Ausführungsort über objekte.ausfuehrungsort –
+    # am Gewerk die Projektadresse (bei der Anlage aus dem Objekt übernommen), sonst
+    # das Objekt des Angebots (Hauptobjekt = Kundenadresse)
     if gewerk is not None:
+        from app import projektierung as kern
         from app.models import Projekt
         projekt = session.get(Projekt, gewerk.projekt_id)
-        roh_strasse = projekt.ausfuehrung_strasse if projekt else ""
-        plz = projekt.ausfuehrung_plz if projekt else ""
-        ort = projekt.ausfuehrung_ort if projekt else ""
+        ort_satz = kern.projekt_ausfuehrungsort(session, projekt, gewerk)
     else:
-        roh_strasse = kunde.strasse if kunde else ""
-        plz, ort = (kunde.plz, kunde.ort) if kunde else ("", "")
+        from app import anschriften
+        ort_satz = anschriften.ausfuehrungsort_fuer(session, angebot=angebot, kunde=kunde)
+    roh_strasse, plz, ort = ort_satz["strasse"], ort_satz["plz"], ort_satz["ort"]
     strasse, hausnummer = strasse_hausnummer(roh_strasse)
     objektart = str(kfw_daten.get("O01") or antworten.get("O01") or "")
     we_zahl = _zahl(kfw_daten.get("O03") or antworten.get("O03"))

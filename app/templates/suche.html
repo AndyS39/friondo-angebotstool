@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "_interesse.html" import badges %}
+{# v32 (PLAN_V19 Phase 164): Trefferseite der Kundensuche – gleiche Logik wie
+   die Vorschläge im Kopf (app/suche.py), aber alle Treffer als Tabelle. Keine
+   EK-/DB-Werte. Die Zurück-Leiste kommt aus base.html. #}
+{% block titel %}Suche{% if q %}: {{ q }}{% endif %} – Friondo Angebotstool{% endblock %}
+{% block mainklasse %}suche-seite{% endblock %}
+{% block inhalt %}
+<h1>Kunde suchen</h1>
+{% if gesperrt %}
+    <p class="hinweis">Für diese Rolle gibt es keine Kundensuche.</p>
+{% else %}
+    <form class="suche-formular" action="/suche" method="get" role="search">
+        <input type="search" name="q" value="{{ q }}" placeholder="Kunde suchen …" minlength="2" autofocus autocomplete="off" aria-label="Kunde suchen">
+        <button class="knopf" type="submit">Suchen</button>
+    </form>
+    {% if q and q | length < 2 %}
+        <p class="dezent">Bitte mindestens zwei Zeichen eingeben.</p>
+    {% elif q and not treffer %}
+        <p class="dezent">Keine Treffer für „{{ q }}“.</p>
+    {% elif treffer %}
+        <p class="dezent">{{ treffer | length }} Treffer{% if treffer | length >= max_seite %} (Anzeige auf {{ max_seite }} begrenzt – bitte Suchbegriff eingrenzen){% endif %}</p>
+        <table class="tabelle">
+            <thead>
+                <tr><th>Name</th><th>Ort</th><th>Sparten</th><th>Verfolgung</th><th></th></tr>
+            </thead>
+            <tbody>
+            {% for t in treffer %}
+                <tr>
+                    <td><a href="{{ t.link }}">{{ t.name }}</a></td>
+                    <td>{{ t.plz }} {{ t.ort }}</td>
+                    <td>{{ badges(t.sparten) }}</td>
+                    <td>{% if t.verfolgung_text %}<span class="kopf-suche-chip">{{ t.verfolgung_text }}</span>{% endif %}</td>
+                    <td><a class="knopf klein zweitrangig" href="{{ t.link }}">{{ 'Vorgangsakte' if t.link.startswith('/vorgaenge/') else 'Kundenakte' }}</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+{% endif %}
+{% endblock %}

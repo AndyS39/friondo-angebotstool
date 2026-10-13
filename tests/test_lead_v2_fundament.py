@@ -164,15 +164,17 @@ class Kaskade(Basis):
     # disqualifiziert + Nurture +30 Tage) und Phase Nicht erreicht; vorher
     # prüfte dieser Test Wiedervorlage +7 Tage bzw. +30 Tage.
     def test_stufe_vier_mail_ohne_wiedervorlage(self):
+        # v31 (PLAN_LEAD_V5 Phase 156, Live-Excel Blatt Kaskade aktion = keine bei Versuch 2 und 4):
+        # Stufe 4 plant keine Mail nicht_erreicht mehr
         v = self.lead(1, versuche=4)
         meldung = kern.kaskade_anwenden(self.s, v)
         self.s.commit()
-        self.assertEqual(meldung, "Versuch 4 protokolliert – Mail geplant.")
+        self.assertEqual(meldung, "Versuch 4 protokolliert.")
         self.assertEqual(v.lead_phase, "in_kontaktierung")
         self.assertIsNone(v.naechste_aktion_am)
         mails = [m.vorlage_key for m in self.s.query(KommunikationLog)
                  .filter_by(vorgang_id=v.id) if m.vorlage_key != "eingangsbestaetigung"]
-        self.assertEqual(mails, ["nicht_erreicht"])
+        self.assertEqual(mails, [])
         # Stufe ohne Mail-Aktion: nur protokolliert, eine vorhandene (manuelle)
         # Wiedervorlage bleibt unberührt
         wv = datetime.now() + timedelta(days=2)

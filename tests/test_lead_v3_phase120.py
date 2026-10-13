@@ -78,8 +78,12 @@ def naechster_werktag(tage_voraus: int = 3) -> datetime:
 
 
 class Basis(unittest.TestCase):
+    # v31 (PLAN_LEAD_V5 Phase 159): Buchen/manuelle Buchung sind in der Testphase gesperrt
+    # (terminierung_aktiv = aus) – dieser Alt-Test prüft den Assistenten selbst und schaltet
+    # die Terminierung für seine Laufzeit frei
     PARAMETER = ("lead_freigabe_modus", "score_aktiv", "ohne_schritt_tage",
-                 "kanal_ad_regel", "routing_anbieter", "kalender_sync", "mail_modus")
+                 "kanal_ad_regel", "routing_anbieter", "kalender_sync", "mail_modus",
+                 "terminierung_aktiv")
 
     @classmethod
     def setUpClass(cls):
@@ -96,6 +100,7 @@ class Basis(unittest.TestCase):
         kern.parameter_setzen(cls.s, "routing_anbieter", "luftlinie")
         kern.parameter_setzen(cls.s, "kalender_sync", "aus")
         kern.parameter_setzen(cls.s, "mail_modus", "protokoll")
+        kern.parameter_setzen(cls.s, "terminierung_aktiv", "an")   # v31 Phase 159 (s. o.)
         cls.s.commit()
         cls.admin = cls.s.get(Benutzer, 1)
         cls.innen = cls.benutzer("Innen", rolle="innendienst")
@@ -466,7 +471,8 @@ class Assistent(Basis):
         self.assertNotIn("Klasse C", seite)
         self.assertNotIn("Score C – Termin trotzdem buchen?", seite)
         self.assertIsNone(SCORE_MUSTER.search(seite), SCORE_MUSTER.search(seite))
-        self.assertIn("Handelsvertreter · Abwertung", seite)
+        # v31 (Phase 158): Ausschlussliste nennt zusätzlich „Krankheit“
+        self.assertIn("Handelsvertreter, Krankheit · Abwertung", seite)
 
     def test_manuelle_buchung_auf_hv_bleibt_moeglich(self):
         v = self.lead(14)
@@ -761,7 +767,9 @@ class StatistikTrichter(Basis):
         self.assertIn("Phasen-Quote", seite)
         for text in ("anrufliste?gruppe=", "quelle_typ=", "quelle_id="):
             self.assertNotIn(text, seite, text)
-        self.assertNotIn("Kaskade:", seite.replace("Kaskade: Mail", ""))
+        # v31 (Phase 156): Versuch 2/4 ohne Mail – die Hinweiszeile beginnt jetzt mit
+        # „Kaskade: nach Versuch …“ (Disqualifiziert); weiterhin keine Score-Kaskade
+        self.assertNotIn("Kaskade:", seite.replace("Kaskade: Mail", "").replace("Kaskade: nach Versuch", ""))
         r = self.client.get("/lead-management/statistik/kanal")
         self.assertEqual(r.status_code, 200)
         self.assertIsNone(SCORE_MUSTER.search(inhalt(r.text)))

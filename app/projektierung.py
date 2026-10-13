@@ -884,11 +884,42 @@ def offenes_projekt_fuer_vorgang(session: Session, vorgang_id: int | None) -> Pr
 
 # --- Projekt-/Gewerk-Anlage -------------------------------------------------------
 
+def projekt_ausfuehrungsort(session: Session, projekt: Projekt | None,
+                            gewerk: Gewerk | None = None) -> dict:
+    """v31 (PLAN_LEAD_V5 Phase 153): Ausführungsort eines Projekts – die am Projekt
+    gespeicherte Adresse (bei der Anlage aus dem Objekt des Angebots übernommen, im
+    Dialog änderbar), sonst das Objekt des Gewerks/Angebots über
+    objekte.ausfuehrungsort (Hauptobjekt = Kundenadresse). Alle Leser der
+    Projektierung (Steckbrief, Sub-Mails, UGL, Outlook, Heizreport, Montage-Backend,
+    Terminvorschläge, BzA am Gewerk) nutzen diese Funktion. Schlüssel: strasse, plz,
+    ort, einzeilig („Str, PLZ Ort“), zeile („Str PLZ Ort“), plz_ort, objekt_id."""
+    strasse = plz = ort = ""
+    objekt_id = None
+    if projekt is not None and (projekt.ausfuehrung_strasse or projekt.ausfuehrung_ort):
+        strasse, plz, ort = (projekt.ausfuehrung_strasse or "", projekt.ausfuehrung_plz or "",
+                             projekt.ausfuehrung_ort or "")
+        objekt_id = gewerk.objekt_id if gewerk is not None else None
+    elif projekt is not None:
+        from app import objekte
+        vorgang = session.get(Vorgang, projekt.vorgang_id) if projekt.vorgang_id else None
+        kunde = session.get(Kunde, projekt.kunde_id) if projekt.kunde_id else None
+        satz = objekte.ausfuehrungsort(session, gewerk=gewerk, vorgang=vorgang, kunde=kunde)
+        strasse, plz, ort = satz["strasse"], satz["plz"], satz["ort"]
+        objekt_id = satz.get("objekt_id")
+    plz_ort = f"{plz} {ort}".strip()
+    return {"strasse": strasse, "plz": plz, "ort": ort, "plz_ort": plz_ort,
+            "einzeilig": _adresse_text(strasse, plz, ort),
+            "zeile": " ".join(t for t in (strasse, plz_ort) if t), "objekt_id": objekt_id}
+
+
 def projekt_anlegen(session: Session, angebot: Angebot, benutzer=None,
                     projektleiter_id: int | None = None,
                     notiz_kopf: str = "",
                     adresse: dict | None = None) -> Projekt:
-    """Neues Projekt zum Vorgang des Angebots (Kopf aus Vorgang/Kunde)."""
+    """Neues Projekt zum Vorgang des Angebots (Kopf aus Vorgang/Kunde).
+    v31 (PLAN_LEAD_V5 Phase 153): ohne übergebene Adresse gilt der Ausführungsort des
+    Angebots (Objekt 2 → Objektadresse, Hauptobjekt → Kundenadresse)."""
+    from app import anschriften
     from app import vorgaenge as vorgaenge_modul
     vorgang = vorgaenge_modul.vorgang_fuer_angebot(session, angebot)
     kunde = session.get(Kunde, angebot.kunde_id)
@@ -902,15 +933,13 @@ def projekt_anlegen(session: Session, angebot: Angebot, benutzer=None,
         projektleiter_id = int(standard_pl)
     from app import mail_vorlagen
     vertriebler = mail_vorlagen.vertriebler_fuer_angebot(session, angebot)
+    ort = anschriften.ausfuehrungsort_fuer(session, angebot=angebot, vorgang=vorgang, kunde=kunde)
     projekt = Projekt(
         nummer=naechste_projektnummer(session),
         vorgang_id=vorgang.id, kunde_id=angebot.kunde_id,
-        ausfuehrung_strasse=((adresse or {}).get("strasse")
-                             or (kunde.strasse if kunde else "")),
-        ausfuehrung_plz=((adresse or {}).get("plz")
-                         or (kunde.plz if kunde else "")),
-        ausfuehrung_ort=((adresse or {}).get("ort")
-                         or (kunde.ort if kunde else "")),
+        ausfuehrung_strasse=((adresse or {}).get("strasse") or ort["strasse"]),
+        ausfuehrung_plz=((adresse or {}).get("plz") or ort["plz"]),
+        ausfuehrung_ort=((adresse or {}).get("ort") or ort["ort"]),
         projektleiter_id=projektleiter_id,
         vertriebler_id=vertriebler.id if vertriebler else angebot.vertriebler_id,
         kanal=kanal or "", notiz_kopf=(notiz_kopf or "").strip()[:500],
@@ -953,9 +982,14 @@ def gewerk_anlegen(session: Session, projekt: Projekt, angebot: Angebot,
         return int(wert) if wert.isdigit() else None
 
     endbetrag = angebot.summen()["endbetrag"]
+    # v31 (PLAN_LEAD_V5 Phase 153, AT-Chat): Objekt des Angebots (auch über dessen
+    # Erfassung) am Gewerk festhalten – Projekt aus einem Objekt-2-Angebot trägt dessen Objekt
+    from app import objekte
+    objekt_id = objekte.ausfuehrungsort(session, angebot=angebot).get("objekt_id")
     gewerk = Gewerk(
         projekt_id=projekt.id, sparte=sparte, phase="auftragseingang",
         angebot_id=angebot.id, angebot_id_original=angebot.id,
+        objekt_id=objekt_id,
         auftragswert_original=endbetrag, auftragswert_aktuell=endbetrag,
         feinplaner_id=feinplaner_id or _standard("standard_feinplaner"),
         elektroplaner_id=elektroplaner_id or _standard("standard_elektroplaner"),
@@ -1078,6 +1112,12 @@ STECKBRIEF_FELDER = {
            ("besonderheiten", "Besonderheiten")],
     "KL": [("geraete", "Geräte"), ("besonderheiten", "Besonderheiten")],
     "WB": [("geraet", "Wallbox"), ("besonderheiten", "Besonderheiten")],
+    # v31 (PLAN_LEAD_V5 Phase 157): Freitext-Sparten wie WB – Auftrag als Freitext,
+    # keine Sparten-Pakete (nur ALLE-Pakete) [ANNAHME]
+    "GW": [("auftrag", "Auftrag / Leistung"), ("besonderheiten", "Besonderheiten")],
+    "MS": [("auftrag", "Auftrag / Leistung"), ("besonderheiten", "Besonderheiten")],
+    "WA": [("auftrag", "Auftrag / Leistung"), ("besonderheiten", "Besonderheiten")],
+    "DMS": [("auftrag", "Auftrag / Leistung"), ("besonderheiten", "Besonderheiten")],
 }
 
 
@@ -1298,10 +1338,9 @@ def sub_mail_platzhalter(session: Session, gewerk: Gewerk,
         montagetermin = "noch nicht terminiert"
     projektleiter = (session.get(Benutzer, projekt.projektleiter_id)
                      if projekt and projekt.projektleiter_id else None)
-    adresse = " ".join(t for t in [
-        projekt.ausfuehrung_strasse if projekt else "",
-        f"{projekt.ausfuehrung_plz} {projekt.ausfuehrung_ort}".strip()
-        if projekt else ""] if t).strip()
+    # v31 (PLAN_LEAD_V5 Phase 153): Ausführungsort über projekt_ausfuehrungsort
+    adresse = (projekt_ausfuehrungsort(session, projekt, gewerk)["zeile"]
+               if projekt else "").strip()
     daten = {
         "kunde": kunde.anzeige_name if kunde else "–",
         "ausfuehrungsadresse": adresse or "–",
@@ -2144,8 +2183,9 @@ def terminvorschlaege(session: Session, gewerk: Gewerk, team_id: int | None = No
     if team_id:
         teams = [t for t in teams if t.id == team_id]
     projekt = session.get(Projekt, gewerk.projekt_id)
-    ziel_adresse = _adresse_text(projekt.ausfuehrung_strasse, projekt.ausfuehrung_plz,
-                                 projekt.ausfuehrung_ort) if projekt else ""
+    # v31 (PLAN_LEAD_V5 Phase 153): Ziel-Adresse = Ausführungsort des Projekts (Objekt)
+    ziel_adresse = (projekt_ausfuehrungsort(session, projekt, gewerk)["einzeilig"]
+                    if projekt else "")
     start_adresse = parameter_holen(session, "montage_startadresse",
                                     "Arnold-Overbeck-Str. 63-65, 47139 Duisburg")
     routing_an = routing_konfiguriert(session)
@@ -2160,8 +2200,8 @@ def terminvorschlaege(session: Session, gewerk: Gewerk, team_id: int | None = No
         termine_je_team.setdefault(t.team_id, []).append(t)
         if routing_an and t.projekt_id not in adressen:
             p = session.get(Projekt, t.projekt_id)
-            adressen[t.projekt_id] = _adresse_text(
-                p.ausfuehrung_strasse, p.ausfuehrung_plz, p.ausfuehrung_ort) if p else ""
+            adressen[t.projekt_id] = (projekt_ausfuehrungsort(session, p)["einzeilig"]
+                                      if p else "")
     fenster: list[dict] = []
     ende_suche = start + timedelta(weeks=VORSCHLAG_WOCHEN)
     for team in teams:

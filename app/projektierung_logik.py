@@ -15,7 +15,9 @@ LOGIK_PFAD = Path(getattr(config, "PROJEKTIERUNG_LOGIK_PFAD",
                           Path(config.LOGIK_EXCEL_PFAD).parent
                           / "projektierung_logik_v1.xlsx"))
 
-SPARTEN = ("WP", "PV", "KL", "WB")
+# v31 (PLAN_LEAD_V5 Phase 157): gemeinsame Sparten-Liste mit Angebotstool/Lead-Modul –
+# GW/MS/WA/DMS werden wie WB behandelt (Freitext-Auftrag, nur ALLE-Pakete) [ANNAHME]
+SPARTEN = ("WP", "PV", "KL", "WB", "GW", "MS", "WA", "DMS")
 ROLLEN = ("projektierer", "elektroplaner", "feinplaner", "innendienst",
           "buchhaltung", "montage")
 

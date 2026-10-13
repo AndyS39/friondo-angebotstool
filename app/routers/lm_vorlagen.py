@@ -26,7 +26,7 @@ from app.templating import render
 router = APIRouter(prefix="/lead-management")
 
 TERMIN_KEYS = ("terminbestaetigung", "terminerinnerung", "terminaenderung", "terminabsage",
-               "online_termin_einladung")
+               "online_termin_einladung", lead_mail.OBJEKT_VORLAGE)   # v31: Objekt-Terminbestätigung
 STANDARD_KEY = "eingangsbestaetigung"
 # Formatierungsleiste des Editors: (Knopf, Tag-Anfang, Tag-Ende)
 FORMATE = [("Fett", "<strong>", "</strong>"), ("Kursiv", "<em>", "</em>"),
@@ -62,18 +62,25 @@ def _key_lesen(session: Session, roh: str) -> str:
 
 
 def _ist_terminvorlage(key: str) -> bool:
-    return key in TERMIN_KEYS or lead_mail.ist_vertriebler_key(key)
+    return (key in TERMIN_KEYS or lead_mail.ist_vertriebler_key(key)
+            or lead_mail.objekt_vertriebler_id_aus_key(key) is not None)
+
+
+def _ist_objektvorlage(key: str) -> bool:
+    return key == lead_mail.OBJEKT_VORLAGE or lead_mail.objekt_vertriebler_id_aus_key(key) is not None
 
 
 def _vorschau(session: Session, key: str, sparte: str, betreff: str, text: str) -> dict:
     """Vorschau mit Demo-Lead: {betreff, html, text}; Terminvorlagen bekommen einen
-    transienten Termin beim Vertriebler der Vorlage (sonst dem ersten AD)."""
-    ad_id = lead_mail.vertriebler_id_aus_key(key)
+    transienten Termin beim Vertriebler der Vorlage (sonst dem ersten AD); v31: die
+    Objekt-Terminbestätigung zwei transiente Objekttermine ({objektliste})."""
+    ad_id = lead_mail.vertriebler_id_aus_key(key) or lead_mail.objekt_vertriebler_id_aus_key(key)
     vorgang, termin, kunde = lead_mail.demo_lead_fuer_vorschau(session, ad_id)
+    termine = lead_mail.demo_termine_fuer_vorschau(session, vorgang, termin, kunde) if _ist_objektvorlage(key) else None
     try:
         betreff_v, html, _ = lead_mail.vorlage_rendern(
             session, key, vorgang, termin if _ist_terminvorlage(key) else None, sparte,
-            vorschau=True, text_vorgabe=(betreff, text), kunde=kunde)
+            vorschau=True, text_vorgabe=(betreff, text), kunde=kunde, termine=termine)
     except Exception as problem:   # Vorschau darf den Editor nie blockieren
         return {"betreff": betreff, "html": f"<p class=\"lm-rot\">Vorschau nicht möglich: {problem}</p>",
                 "text": ""}
@@ -101,6 +108,7 @@ def vorlagen(request: Request, session: Session = Depends(get_session)):
     hinweise_fehlen = [s for s in leadmanagement_logik.SPARTEN
                        if not logik.hinweise_der_sparte(s)
                        or logik.hinweise_der_sparte(s) == ["(Punkte folgen)"]]
+    from app import lead_v5
     return render(request, "leadmanagement/vorlagen.html", aktiv="/lead-management",
                   katalog=katalog, schluessel=key, sparte=sparte,
                   sparten=leadmanagement_logik.SPARTEN if not lead_mail.ist_vertriebler_key(key) else (),
@@ -110,12 +118,17 @@ def vorlagen(request: Request, session: Session = Depends(get_session)):
                   vertriebler=vertriebler, hv=hv,
                   bild_vorhanden=lead_mail.bild_pfad(vertriebler) is not None if vertriebler else False,
                   terminvorlage=terminvorlage,
+                  objektvorlage=_ist_objektvorlage(key),   # v31 (Phase 153)
                   ziel_anzahl=lead_mail.ziel_anzahl(session, key) if terminvorlage else 0,
                   platzhalter=lead_mail.PLATZHALTER_NEU + ["{rueckruf_telefon}", "{buchungslink}", "{kollege}"],
                   formate=FORMATE, vorschau=vorschau, hinweise_fehlen=hinweise_fehlen,
                   html_vorlage=lead_mail.ist_html(text),
                   block_start=lead_mail.BLOCK_START, block_ende=lead_mail.BLOCK_ENDE,
                   pflege=_pflege_erlaubt(benutzer), suche=request.query_params.get("q", ""),
+                  # v31 (Phase 159): Mailsperre statt mail_modus als Hinweis im Editor
+                  mail_versand_aktiv=lead_v5.mail_versand_aktiv(session),
+                  mailsperre_hinweis=lead_v5.MAILSPERRE_HINWEIS,
+                  hv_versandweg=lead_mail.hv_versandweg(session),
                   meldung=request.query_params.get("meldung", ""),
                   fehler=request.query_params.get("fehler", "") == "1", **_badge(session))
 

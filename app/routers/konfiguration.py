@@ -55,12 +55,17 @@ def _parametrierung_kontext(session: Session) -> dict:
     else:
         logik_werte = dict(logik=None, bericht=None, dateifehler=str(config.LOGIK_EXCEL_PFAD),
                            pv_fehlende=[], pv_standard={}, kl_fehlende=[], kl_standard={})
+    # v32 (PLAN_V19 Phase 162/163): Werktage der automatischen Wiedervorlage nach Versand
+    # (Lead-Parameter, Startwerte in leadmanagement.PARAMETER_START)
+    from app import leadmanagement
     return dict(
         **logik_werte,
         kl_import_ok=_import_klima() is not None,
         ablehnungsgruende=(session.query(AblehnungsGrund)
                            .order_by(AblehnungsGrund.sort, AblehnungsGrund.id).all()),
         ablehnung_tage=einstellung_holen(session, "ablehnung_auto_tage", "90"),
+        nachfass_werktage=leadmanagement.parameter_holen(session, "nachfass_werktage", "3"),
+        nachfass_werktage_mfh=leadmanagement.parameter_holen(session, "nachfass_werktage_mfh", "5"),
         ablehnung_protokoll=einstellung_holen(session, "ablehnung_auto_protokoll", ""),
         db_rot=einstellung_holen(session, "db_ampel_rot_unter", "9000"),
         db_gruen=einstellung_holen(session, "db_ampel_gruen_ueber", "10000"),
@@ -200,6 +205,15 @@ def einstellungen_speichern(request: Request,
         tage = (form.get("ablehnung_auto_tage") or "").strip()
         if tage.isdigit() and int(tage) > 0:
             einstellung_setzen(session, "ablehnung_auto_tage", tage)
+    # v32 (PLAN_V19 Phase 162/163): Werktage der automatischen Wiedervorlage nach Versand
+    # (nachfass_werktage = 3, nachfass_werktage_mfh = 5; 0–30; Lead-Parameter, gelesen von
+    # app/nachfassen.py über leadmanagement.parameter_holen)
+    if "nachfass_formular" in form:
+        from app import leadmanagement
+        for name in ("nachfass_werktage", "nachfass_werktage_mfh"):
+            wert = (form.get(name) or "").strip()
+            if wert.isdigit() and 0 <= int(wert) <= 30:
+                leadmanagement.parameter_setzen(session, name, str(int(wert)))
     session.commit()
     # v26 (Phase 125): zurück auf die Seite, von der das Formular kam
     # (Angebotstool-Einstellungen), Fallback Übersicht
@@ -283,7 +297,9 @@ def textblock_speichern(request: Request,
 def ablehnungsgruende_pflegen(request: Request,
                                     session: Session = Depends(get_session)):
     """v8: Auswahlliste „Grund der Ablehnung“ pflegen (hinzufügen bzw.
-    deaktivieren/aktivieren – gelöscht wird nicht, Altdaten bleiben lesbar)."""
+    deaktivieren/aktivieren – gelöscht wird nicht, Altdaten bleiben lesbar).
+    v32 (PLAN_V19 Phase 163): Aktionen `freitext` (Pflicht-Freitext umschalten) und
+    `hoch`/`runter` (Reihenfolge, Spalte sort 1 … n); neue Gründe hängen hinten an."""
     from urllib.parse import quote_plus
 
     from app.models import AblehnungsGrund
@@ -292,19 +308,46 @@ def ablehnungsgruende_pflegen(request: Request,
     # Angebotstool-Seite direkt zum Abschnitt „Abgelehnt-Prozess“
     zurueck = _zurueck_ziel(request)
     anker = "#ablehnung" if zurueck != "/parametrierung" else ""
-    if form.get("aktion") == "hinzufuegen":
+    aktion = form.get("aktion") or ""
+
+    def _reihenfolge() -> list:
+        """Alle Gründe in Reihenfolge; sort lückenlos 1 … n nachziehen."""
+        gruende = (session.query(AblehnungsGrund)
+                   .order_by(AblehnungsGrund.sort, AblehnungsGrund.id).all())
+        for nr, g in enumerate(gruende, start=1):
+            g.sort = nr
+        return gruende
+
+    if aktion == "hinzufuegen":
         name = (form.get("name") or "").strip()[:100]
         if name and session.query(AblehnungsGrund).filter_by(name=name).count() == 0:
+            gruende = _reihenfolge()
             session.add(AblehnungsGrund(
-                name=name, sort=session.query(AblehnungsGrund).count()))
+                name=name, sort=len(gruende) + 1,
+                freitext_pflicht=form.get("freitext_pflicht") == "on"))
             session.commit()
             return RedirectResponse(zurueck + "?meldung=" + quote_plus(
                 f"Ablehnungsgrund „{name}“ hinzugefügt") + anker, status_code=303)
-    elif form.get("aktion") == "umschalten":
+    elif aktion == "umschalten":
         grund = session.get(AblehnungsGrund, int(form.get("id") or 0))
         if grund is not None:
             grund.aktiv = not grund.aktiv
             session.commit()
+    elif aktion == "freitext":
+        grund = session.get(AblehnungsGrund, int(form.get("id") or 0))
+        if grund is not None:
+            grund.freitext_pflicht = not bool(grund.freitext_pflicht)
+            session.commit()
+    elif aktion in ("hoch", "runter"):
+        gruende = _reihenfolge()
+        ids = [g.id for g in gruende]
+        nummer = int(form.get("id") or 0)
+        if nummer in ids:
+            i = ids.index(nummer)
+            j = i - 1 if aktion == "hoch" else i + 1
+            if 0 <= j < len(gruende):
+                gruende[i].sort, gruende[j].sort = gruende[j].sort, gruende[i].sort
+        session.commit()
     return RedirectResponse(zurueck + anker, status_code=303)
 
 
@@ -1750,8 +1793,9 @@ def lead_quelle_speichern(request: Request,
     quelle_id = form.get("id") or ""
     schluessel = (form.get("key") or "").strip().lower()
     schluessel = re_modul.sub(r"[^a-z0-9_]", "_", schluessel)[:100]
-    from app.models import INTERESSE_CODES
-    sparten = [s for s in form.getlist("standard_sparten") if s in INTERESSE_CODES]   # v23: inkl. GW
+    # v23: inkl. GW; v31 (PLAN_LEAD_V5 Phase 157): gemeinsame Sparten-Liste inkl. MS/WA/DMS
+    from app import sparten as sparten_modul
+    sparten = [s for s in form.getlist("standard_sparten") if s in sparten_modul.SPARTEN]
     werte = dict(
         name=(form.get("name") or "").strip()[:200],
         typ=(form.get("typ") if form.get("typ") in
@@ -2046,7 +2090,11 @@ def lead_einstellungen(request: Request,
                   # v29 (PLAN_LEAD_V4 Phasen 140–143)
                   "absender_lead_mails", "hv_gruppe_rene", "hv_gruppe_simon",
                   "hv_versandweg", "glocke_lead_arten", "routen_start",
-                  "vorschlaege_anzahl"]
+                  "vorschlaege_anzahl",
+                  # v31 (PLAN_LEAD_V5 Phasen 153/156/157/159)
+                  "terminierung_aktiv", "mail_versand_aktiv", "sparten_langnamen",
+                  "grosskunde_farbe", "hv_gruppe_simon_mitglieder",
+                  "erwartungswert_MS", "erwartungswert_WA", "erwartungswert_DMS"]
     werte = {name: lead_kern.parameter_holen(session, name)
              for name in schluessel}
     from app import lead_v2
@@ -2060,11 +2108,25 @@ def lead_einstellungen(request: Request,
     vorschau = None
     if request.query_params.get("loeschvorschau") == "1":
         vorschau = lead_kern.loeschlauf(session, trocken=True)
+    # v31 (PLAN_LEAD_V5 Phase 159): Freischaltung – Schalter, Prüfpunkte, Zähler „Mails
+    # gesperrt“; Demo-Ende-Abfrage genau einmal (Marker-Einstellung demo_ende_v31)
+    from app import lead_v5, sparten as sparten_modul
+    from app.models import einstellung_holen
+    demo_anzahl = session.query(Vorgang).filter(Vorgang.demo.is_(True)).count()
+    demo_mit_bestand = len(lead_kern.demo_leads_mit_bestand(session)) if demo_anzahl else 0
+    demo_marker = einstellung_holen(session, "demo_ende_v31", "")
+    demo_abfrage = not demo_marker and demo_anzahl > 0
     return render(request, "konfiguration/lead_einstellungen.html",
                   aktiv="/parametrierung", werte=werte,
                   handelsvertreter=handelsvertreter,
-                  demo_anzahl=session.query(Vorgang)
-                  .filter(Vorgang.demo.is_(True)).count(),
+                  demo_anzahl=demo_anzahl,
+                  demo_mit_bestand=demo_mit_bestand, demo_abfrage=demo_abfrage,
+                  demo_marker=demo_marker,
+                  pruefpunkte=lead_v2.freischaltung_pruefpunkte(session),
+                  mails_gesperrt=lead_v2.mails_gesperrt_anzahl(session),
+                  terminierung_aktiv=lead_v5.terminierung_aktiv(session),
+                  mail_versand_aktiv=lead_v5.mail_versand_aktiv(session),
+                  sparten_liste=[(c, sparten_modul.SPARTEN_LANG[c]) for c in sparten_modul.SPARTEN],
                   protokoll=lead_kern.parameter_holen(
                       session, "einstellungs_protokoll"),
                   loesch_protokoll=lead_kern.parameter_holen(
@@ -2075,6 +2137,48 @@ def lead_einstellungen(request: Request,
                   mail_fehler_anzahl=mail_fehler_anzahl,
                   umstellung=request.query_params.get("umstellung", ""),
                   meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/lead-einstellungen/demo-ende")
+def lead_demo_ende(request: Request, session: Session = Depends(get_session)):
+    """v31 (PLAN_LEAD_V5 Phase 159, Einfügung AT-Chat): Admin-Abfrage beim ersten Aufruf der
+    Lead-Einstellungen – „Demo-Leads löschen“ (Vorbelegung; Generator-Leads demo = 1 samt
+    Kunde, Terminen, Aktivitäten, Warteschlange – nur ohne Erfassung/Angebot/Projekt;
+    Protokoll ins Lösch-Protokoll, Grund „Demo-Ende v31“) oder „behalten“ (Kennzeichen
+    bleibt, weiter ausgeblendet). Marker demo_ende_v31, damit die Abfrage nur einmal kommt."""
+    from urllib.parse import quote_plus
+
+    from app import leadmanagement as lead_kern
+    from app.models import einstellung_setzen
+    _lead_gate(request, session)
+    benutzer = request.state.benutzer
+    if benutzer.rolle != "admin":
+        return RedirectResponse("/parametrierung", status_code=303)
+    form = anfrage.formular(request)
+    aktion = (form.get("aktion") or "").strip()
+    if aktion == "loeschen":
+        ergebnis = lead_kern.demo_leads_loeschen(session, nur_ohne_bestand=True, benutzer=benutzer,
+                                                 grund="Demo-Ende v31")
+        einstellung_setzen(session, "demo_ende_v31",
+                           f"geloescht:{ergebnis['vorgaenge']}:{len(ergebnis['uebersprungen'])}")
+        lead_kern.einstellungs_protokoll(
+            session, f"Demo-Ende v31 – {ergebnis['vorgaenge']} Demo-Leads und {ergebnis['kunden']} "
+                     f"Demo-Kunden gelöscht (Lösch-Protokoll), {len(ergebnis['uebersprungen'])} mit "
+                     "Erfassung/Angebot/Projekt behalten", benutzer)
+        meldung = (f"{ergebnis['vorgaenge']} Demo-Leads gelöscht (Lösch-Protokoll)"
+                   + (f", {len(ergebnis['uebersprungen'])} mit Erfassung/Angebot/Projekt behalten."
+                      if ergebnis["uebersprungen"] else "."))
+    elif aktion == "behalten":
+        einstellung_setzen(session, "demo_ende_v31", "behalten")
+        lead_kern.einstellungs_protokoll(
+            session, "Demo-Ende v31 – Demo-Leads behalten (Kennzeichen bleibt, weiter ausgeblendet)",
+            benutzer)
+        meldung = "Demo-Leads behalten – sie bleiben gekennzeichnet und ausgeblendet."
+    else:
+        meldung = "Bitte „löschen“ oder „behalten“ wählen."
+    session.commit()
+    return RedirectResponse("/parametrierung/lead-einstellungen?meldung=" + quote_plus(meldung),
+                            status_code=303)
 
 
 @router.post("/lead-einstellungen")
@@ -2090,36 +2194,42 @@ def lead_einstellungen_speichern(request: Request,
         return RedirectResponse("/parametrierung", status_code=303)
     form = anfrage.formular(request)
 
-    # Demo-Umstellung auf „alle": Dialog erzwingt eine Entscheidung über
-    # die vorhandenen Demo-Leads (Plan 73/81)
-    neuer_modus = form.get("lead_freigabe_modus") or ""
-    if (neuer_modus == "alle"
-            and lead_kern.freigabe_modus(session) == "admin"):
-        demo_anzahl = (session.query(Vorgang)
-                       .filter(Vorgang.demo.is_(True)).count())
-        entscheidung = form.get("demo_entscheidung") or ""
-        if demo_anzahl and entscheidung not in ("loeschen", "behalten"):
-            return RedirectResponse(
-                "/parametrierung/lead-einstellungen?umstellung=1&meldung="
-                + quote_plus(f"{demo_anzahl} Demo-Leads vorhanden – bitte "
-                             "unten entscheiden: löschen oder behalten."),
-                status_code=303)
-        if entscheidung == "loeschen":
-            ergebnis = lead_kern.demo_leads_loeschen(session)
-            lead_kern.einstellungs_protokoll(
-                session, f"Umstellung auf alle – {ergebnis['vorgaenge']} "
-                         "Demo-Leads gelöscht", benutzer)
-        elif entscheidung == "behalten":
-            lead_kern.demo_kennzeichen_entfernen(session, benutzer)
+    # v31 (PLAN_LEAD_V5 Phase 159): Der Demo-Modus ist beendet – lead_freigabe_modus bleibt
+    # dauerhaft „alle“ (Migration), die v12-Umstellungslogik ist entfernt; die Entscheidung
+    # „Demo-Leads löschen oder behalten“ läuft einmalig über /lead-einstellungen/demo-ende.
+    if lead_kern.parameter_holen(session, "lead_freigabe_modus", "alle") != "alle":
         lead_kern.parameter_setzen(session, "lead_freigabe_modus", "alle")
-        lead_kern.einstellungs_protokoll(session,
-                                         "lead_freigabe_modus → alle", benutzer)
-    elif neuer_modus == "admin":
-        if lead_kern.freigabe_modus(session) != "admin":
-            lead_kern.einstellungs_protokoll(session,
-                                             "lead_freigabe_modus → admin",
-                                             benutzer)
-        lead_kern.parameter_setzen(session, "lead_freigabe_modus", "admin")
+    # v31 (Phase 159): Freischaltung – Schalter terminierung_aktiv / mail_versand_aktiv
+    # (an|aus, protokolliert); das Einschalten ist ein Admin-Klick nach den Prüfpunkten
+    for name in ("terminierung_aktiv", "mail_versand_aktiv"):
+        if form.get(name) in ("an", "aus"):
+            alt = lead_kern.parameter_holen(session, name, "aus")
+            if form.get(name) != alt:
+                lead_kern.einstellungs_protokoll(session, f"{name} {alt} → {form.get(name)}", benutzer)
+            lead_kern.parameter_setzen(session, name, form.get(name))
+    # v31 (Phasen 153/156/157): Großkunden-Farbe, Sparten-Langnamen, Simon-Gruppen-Mitglieder
+    if "grosskunde_farbe" in form:
+        farbe = (form.get("grosskunde_farbe") or "").strip()
+        import re as _re
+        lead_kern.parameter_setzen(session, "grosskunde_farbe",
+                                   farbe if _re.fullmatch(r"#[0-9a-fA-F]{6}", farbe) else "")
+    if "sparten_langnamen" in form:
+        roh = (form.get("sparten_langnamen") or "").strip()
+        if roh:
+            import json as _json
+            try:
+                daten = _json.loads(roh)
+                if not isinstance(daten, dict):
+                    raise ValueError
+            except ValueError:
+                return RedirectResponse(
+                    "/parametrierung/lead-einstellungen?meldung="
+                    + quote_plus("Sparten-Langnamen: bitte gültiges JSON {\"WP\": \"Wärmepumpe\", …}."),
+                    status_code=303)
+        lead_kern.parameter_setzen(session, "sparten_langnamen", roh)
+    if form.get("hv_gruppe_simon_mitglieder_dabei"):
+        ids = [t for t in form.getlist("hv_gruppe_simon_mitglieder") if str(t).isdigit()]
+        lead_kern.parameter_setzen(session, "hv_gruppe_simon_mitglieder", ",".join(ids))
 
     # mail_modus: live ist server-seitig nur bei Freigabe „alle" zulässig
     mail_modus = form.get("mail_modus") or ""
@@ -2190,7 +2300,9 @@ def lead_einstellungen_speichern(request: Request,
               "max_termine_tag_start", "dashboard_horizont_tage",
               "vorab_dauer_min", "ersatz_min_treffer", "vorschlag_raster_manuell_min",
               # v25 (Phase 120): Dashboard „Ohne nächsten Schritt“
-              "ohne_schritt_tage"]
+              "ohne_schritt_tage",
+              # v31 (Phase 157): Erwartungswerte der neuen Sparten
+              "erwartungswert_MS", "erwartungswert_WA", "erwartungswert_DMS"]
     # v25 (Phase 120): zentraler Schalter Score/Qualifizierung (an|aus), protokolliert
     if form.get("score_aktiv") in ("an", "aus"):
         alt = lead_kern.parameter_holen(session, "score_aktiv", "aus")

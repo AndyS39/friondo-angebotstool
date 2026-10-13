@@ -5,7 +5,9 @@
 {# V3 (Phase 84): Auftragsdaten für TAIFUN-Aufträge – Felder aus dem Blatt
    „Steckbrief“ (Spalte eingabe), je Gewerk des Angebots ein Abschnitt. #}
 {% block inhalt %}
-{% set SPARTEN_NAMEN = {'WP': 'Wärmepumpe', 'PV': 'Photovoltaik', 'KL': 'Klima', 'WB': 'Wallbox'} %}
+{# v31 (PLAN_LEAD_V5 Phase 157): MS/WA/DMS (und GW) wie in app/sparten.py #}
+{% set SPARTEN_NAMEN = {'WP': 'Wärmepumpe', 'PV': 'Photovoltaik', 'KL': 'Klima', 'WB': 'Wallbox',
+                        'GW': 'Gewerbe', 'MS': 'Mieterstrom', 'WA': 'Wasser', 'DMS': 'Denkmalschutz'} %}
 <h1>Auftragsdaten
     <a class="knopf klein zweitrangig" href="/projektierung/projekt/{{ projekt.id }}">Zur Projektakte</a>
 </h1>

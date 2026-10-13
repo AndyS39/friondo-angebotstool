@@ -26,6 +26,7 @@ from app.routers import konfiguration_heizreport   # v26: Parametrierung → Hei
 from app.routers import betrieb as betrieb_router   # v27: /health + Parametrierung → Betrieb
 from app.routers import lm_mail, lm_vorlagen   # v29 (PLAN_LEAD_V4 Phase 142): Vorlagen-Editor, Lead-Mails
 from app.routers import einstellungen as einstellungen_router   # v30 (PLAN_V18 Phase 145): Darstellung
+from app.routers import suche as suche_router   # v32 (PLAN_V19 Phase 164): Kundensuche
 from app.templating import render
 
 APP_ORDNER = Path(__file__).resolve().parent
@@ -157,6 +158,7 @@ app.mount("/static", StaticFiles(directory=APP_ORDNER / "static"), name="static"
 
 app.include_router(anmeldung.router)
 app.include_router(einstellungen_router.router)   # v30 (PLAN_V18 Phase 145): Hell/Dunkel je Benutzer
+app.include_router(suche_router.router)   # v32 (PLAN_V19 Phase 164): Kundensuche
 app.include_router(betrieb_router.router)   # v27 (PLAN_V17 Phase 129)
 app.include_router(vorgaenge.router)
 app.include_router(projektierung_router.router)
@@ -224,12 +226,18 @@ def _start_kontext() -> dict:
         from app.models import RabattFreigabe
         rabatt_freigaben = (session.query(RabattFreigabe)
                             .filter(RabattFreigabe.status == "offen").count())
+        # v32 (PLAN_V19 Phase 163): ID-Kachel „Bestellung angekündigt“ (Verfolgungsstatus)
+        try:
+            from app import verfolgung
+            bestellungen = verfolgung.bestellung_angekuendigt_anzahl(session)
+        except Exception:   # noqa: BLE001 – die Startseite darf nie an der Kachel scheitern
+            bestellungen = 0
     finally:
         session.close()
     return dict(faellige=faellige, offene_leads=offene_leads,
                 offene_erfassungen=offene_erfassungen,
                 individuell_offen=individuell_offen, versendete=versendete,
-                rabatt_freigaben=rabatt_freigaben)
+                rabatt_freigaben=rabatt_freigaben, bestellungen=bestellungen)
 
 
 @app.get("/")
@@ -241,6 +249,10 @@ def startseite(request: Request):
     from fastapi.responses import RedirectResponse
     benutzer = request.state.benutzer
     if benutzer is not None and benutzer.rolle == "aussendienst":
+        # v32 (PLAN_V19 Phase 161) [ANNAHME]: Außendienst mit NUR dieser Rolle startet auf
+        # „Mein Tag“ (/leads); Mehrfachrollen behalten die mobile Erfassung als Einstieg
+        if benutzer.rollen_liste == ["aussendienst"]:
+            return RedirectResponse("/leads", status_code=303)
         return RedirectResponse("/erfassung", status_code=303)
     # v11 (Phase 68/70): Projektierungs-Karte – Live-Kacheln nur, wenn das
     # Modul für den Benutzer sichtbar ist (Demo-Modus: nur Admin)

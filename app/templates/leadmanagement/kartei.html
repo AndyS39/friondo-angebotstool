@@ -1,22 +1,23 @@
 {% extends "base.html" %}
 {% from "leadmanagement/_nav.html" import lm_nav with context %}
 {% from "_symbole.html" import symbol %}
-{% from "_komponenten.html" import versuche_punkte, kanal_badge %}
+{% from "_komponenten.html" import versuche_punkte, kanal_badge, notizen_chat %}
+{% from "leadmanagement/_todo_formular.html" import todo_spalte %}
 {% import "_sparten.html" as sparten_ui %}
-{# v25 (PLAN_LEAD_V3 Phase 119): Kundenkartei neu aufgeteilt –
-   Kopfbereich (Kundenname, Kanal-/Interessen-Badges, Statuskette der Phasen mit
-   Label aus dem Blatt Status, rechts oben Button „Terminierung“ B8 und die
-   Schnellaktionen Anrufen · E-Mail · Notiz · Wiedervorlage als runde Icon-Buttons),
-   darunter Kundeninformationen als horizontaler Block mit Autospeichern
-   (kartei_info.html), darunter die Reiter Termin · Anrufnotizen · E-Mail-Verlauf ·
-   Timeline (kartei_mitte.html), darunter die Blöcke Termine · Angebote ·
-   Erfassungen · Projekt · Anhänge · To-Dos in voller Breite (kartei_bloecke.html).
-   Unter 900 px steht alles untereinander (lead_v2.css, Block Phase 119).
-   Entfernt aus der Kartei: Score/Klasse, Quelle/Kampagne, Einwilligungen,
-   Reiter Qualifizierung (bei score_aktiv nur noch ein Link). #}
+{# v25 (PLAN_LEAD_V3 Phase 119): Kundenkartei neu aufgeteilt – Kopf mit Statuskette,
+   Kundeninfo-Block mit Autospeichern, Reiter, Blöcke.
+   v31 (PLAN_LEAD_V5 Phase 155): Reihenfolge neu – Kopf (Name, Badges inkl. Großkunde,
+   Statuskette mit Statuswechsel, Button „Terminierung“ oben rechts, Schnellaktionen) →
+   Notizfeld (Notizen-Chat, Eingabe direkt sichtbar, zwei Drittel) neben To-Dos (ein
+   Drittel, offene To-Dos mit Häkchen, Inline-Anlegen) → Kundeninfo-Block (horizontal,
+   mit Objekte-Block aus Phase 153) → Reiter Anruf · E-Mail · Timeline (Reiter „Termin“
+   entfällt) → Block Termine (aktiver Termin je Objekt, Historie, Vorschläge mit
+   Kalenderansicht, Vorab-Gespräch, Umbuchung, Absage, Bestätigung erneut) → Angebote ·
+   Erfassungen · Projekt · Anhänge. Der To-Dos-Block unten entfällt. Unter 900 px alles
+   untereinander. Testphase (Phase 159): Terminierung/Vormerken gesperrt mit Tooltip. #}
 
 {% block titel %}Kundenkartei {{ kunde.anzeige_name if kunde else vorgang.id }} – Friondo Angebotstool{% endblock %}
-{% block mainklasse %}breit lk-seite lk-v3{% endblock %}
+{% block mainklasse %}breit lk-seite lk-v3 lk-v5{% endblock %}
 
 {% block inhalt %}
 {{ lm_nav(nav_key | default('hauptboard')) }}
@@ -24,34 +25,51 @@
 {#- v29 (PLAN_LEAD_V4 Phase 142, Vertrag L2): roter Hinweisbalken „Mail nicht gesendet“ /
     „E-Mail falsch“ – Inhalt aus lead_mail.kartei_hinweis (mail_hinweis im Kontext) #}
 {% include "leadmanagement/_mail_hinweis.html" %}
+{#- v31 (Phase 154): archivierter Lead – Banner mit Wiederherstellen (Sammelaktion, B) #}
+{% if archiv_text %}<div class="lm-archiv-banner meldung">{{ archiv_text }} – Lead-Sicht ohne Boards/Listen.
+  <form method="post" action="/lead-management/boards/sammelaktion" class="lm-inline-form" style="display:inline">
+    <input type="hidden" name="aktion" value="wiederherstellen"><input type="hidden" name="board" value="hauptboard">
+    <input type="hidden" name="ids" value="{{ vorgang.id }}"><button class="knopf klein" type="submit">Wiederherstellen</button></form></div>{% endif %}
 
-<header class="karte lk-kopf lk-kopf-v3" data-vorgang="{{ vorgang.id }}">
+<header class="karte lk-kopf lk-kopf-v3" data-vorgang="{{ vorgang.id }}" data-springe-zu="{{ springe_zu | default('') }}">
     <div class="lk-kopf-haupt">
         <div class="lk-person">
             <div class="lk-avatar" aria-hidden="true">{{ initialen }}</div>
             <div class="lk-person-text">
                 <h1 class="lk-name">{{ kunde.anzeige_name if kunde else 'Kundenkartei ' ~ vorgang.id }}
+                    {#- v31 (Phase 153): Badge „Großkunde“ – Klasse lm-grosskunde (lead_v2.css, B), Fläche aus Parameter grosskunde_farbe #}
+                    {% if grosskunde %}<span class="abzeichen lm-grosskunde" data-rolle="grosskunde-badge" title="Als Großkunde gekennzeichnet"{% if grosskunde_farbe %} style="--f:{{ grosskunde_farbe }}"{% endif %}>Großkunde</span>{% endif %}
                     {% if vorgang.demo %}<span class="demo-badge">Demo</span>{% endif %}
                     {% if vorgang.eingang_art == 'monday' %}<span class="abzeichen">monday</span>{% endif %}
                     {% if vorgang.vorab_angebot %}<span class="abzeichen lk-vorab" title="Angebot ohne Vor-Ort-Termin – keine Terminbestätigung (F10)">Vorab-Angebot</span>{% endif %}
                     {% if lead_kontext.wiederkehrer %}<span class="abzeichen ep">Wiederkehrer</span>{% endif %}
+                    {% if vorgang.archiviert_am %}<span class="abzeichen" title="Im Lead-Management archiviert am {{ vorgang.archiviert_am.strftime('%d.%m.%Y') }}">Archiviert</span>{% endif %}
+                    {%- if kopie_von %}<span class="abzeichen" title="Dupliziert (Sammelaktion)">Kopie von <a href="/lead-management/lead/{{ kopie_von.id }}">V{{ kopie_von.id }}</a></span>{% endif %}
+                    {%- for k in kopien | default([]) %}<span class="abzeichen" title="Duplikat dieses Leads">Kopie: <a href="/lead-management/lead/{{ k.id }}">V{{ k.id }}</a></span>{% endfor %}
                     {% if readonly %}<span class="abzeichen" title="Außendienst-Lesesicht: nur ansehen, Notiz, No-Show/Verschieben am eigenen Termin">Lesesicht</span>{% endif %}
                 </h1>
                 <div class="lk-badges" aria-label="Kanal und Interessen">
                     {{ kanal_badge(lead_kontext.kanal) }}
-                    {% for s in (kunde.interessen if kunde else []) %}{{ sparten_ui.chip(s, 'erfasst') }}{% endfor %}
-                    <span class="dezent lk-kopf-ort">{{ symbol('ort') }} {{ ((kunde.plz ~ ' ' ~ kunde.ort) | trim) if kunde and (kunde.plz or kunde.ort) else 'kein Ort' }}</span>
+                    {#- v31 (Phase 153): Interessen-Badges des Vorgangs = Vereinigung aller Objekt-Interessen #}
+                    {% for s in vorgang_interessen %}{{ sparten_ui.chip(s, 'erfasst', sparten_langnamen.get(s, '')) }}{% endfor %}
+                    <span class="dezent lk-kopf-ort">{{ symbol('ort') }} {{ ((kunde.plz ~ ' ' ~ kunde.ort) | trim) if kunde and (kunde.plz or kunde.ort) else 'kein Ort' }}
+                        {% if objekte.mehrere %}<span class="abzeichen" title="Objekte am Vorgang">{{ objekte.anzahl }} Objekte</span>{% endif %}</span>
                 </div>
             </div>
         </div>
 
         {# Statuskette der Phasen: Labels aus dem Blatt Status (lead_kartei.phasen_kette –
            In Kontaktierung + Qualifiziert = ein Schritt „Kontaktiert“), Farbe des aktiven
-           Schritts aus der Steuerdatei; Seitenzustände als eigener roter Schritt. #}
+           Schritts aus der Steuerdatei; Seitenzustände als eigener roter Schritt.
+           v31 (Phase 157): manuell setzbare Schritte sind klickbar (data-status), daneben das
+           Dropdown „Status ändern“ – dieselben Dialoge/Regeln wie der Inline-Edit der Boards. #}
+        <div class="lk-status-zeile">
         <ol class="lk-statuskette" aria-label="Lead-Phase">
             {% for s in phasen_kette %}
-                <li class="lk-schritt {{ 'aktiv' if s.aktiv }} {{ 'fertig' if s.fertig }}"
+                {% set setzbar = (not readonly) and (s.phasen[0] in status_wahl.setzbar) and not s.aktiv %}
+                <li class="lk-schritt {{ 'aktiv' if s.aktiv }} {{ 'fertig' if s.fertig }}{{ ' setzbar' if setzbar }}"
                     data-phasen="{{ s.phasen | join(',') }}"
+                    {% if setzbar %}data-status="{{ s.phasen[0] }}" role="button" tabindex="0" title="Status „{{ s.label }}“ setzen"{% endif %}
                     {% if s.aktiv %}aria-current="step"{% endif %}
                     {#- v30 (PLAN_V18 Phase 145): Statusfarbe nur als --f, Fläche/Schrift in lead_v2.css #}
                     {% if s.aktiv and s.farbe %}style="--f:{{ s.farbe }}"{% endif %}>{{ s.label }}</li>
@@ -61,6 +79,18 @@
                     {% if seitenzustand.farbe %}style="--f:{{ seitenzustand.farbe }}"{% endif %}>{{ seitenzustand.label }}</li>
             {% endif %}
         </ol>
+        {% if not readonly and status_wahl.eintraege %}
+            <label class="lk-status-wahl" title="Status direkt setzen – Zurückgestellt mit Datum/Grund, Disqualifiziert und Verloren mit Pflichtgrund; abgeleitete Phasen (Terminiert, Erfasst, Angebot, Gewonnen) nicht wählbar">
+                <span class="sr-only">Status ändern</span>
+                <select id="lk-status-wahl" aria-label="Status ändern" data-status-url="{{ status_url }}">
+                    <option value="">Status ändern …</option>
+                    {% for e in status_wahl.eintraege %}
+                        <option value="{{ e.key }}" data-grund="{{ e.grund }}" data-dialog="{{ e.dialog | default('') }}" {{ 'disabled' if e.aktiv }}>{{ e.label }}{{ ' (aktuell)' if e.aktiv }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        {% endif %}
+        </div>
 
         <div class="lk-kopf-fakten">
             {#- v29 (Phase 141): Eingangsdatum „TT.MM.JJJJ, HH:MM Uhr“ auch im Kopf #}
@@ -98,17 +128,34 @@
 
     <div class="lk-kopf-aktionen">
         {% if not readonly %}
+            {#- v31 (Phase 153, Vertrag T): POST …/terminierung (routers/lm_termin.py) bucht alle
+                vorgemerkten Objekttermine; bei mehr als einem die Wahl der Bestätigung (Radios
+                „bestaetigung“, Vorbelegung gleicher Tag → eine, sonst je Objekt) #}
             <form method="post" action="{{ kartei_url }}/terminierung" class="lk-inline" id="lk-terminierung-form">
                 {% if terminierung.erledigt %}
                     <button class="knopf" type="button" disabled title="Bereits terminiert – Termin geplant und bestätigt">{{ symbol('haken') }} Terminiert</button>
+                {% elif not terminierung_aktiv %}
+                    {#- v31 (Phase 159): Testphase – sichtbar, ausgegraut, Tooltip #}
+                    <button class="knopf lk-terminierung" type="button" disabled aria-disabled="true" id="lk-terminierung-knopf"
+                            data-testphase="1" title="{{ testphase_hinweis }}">{{ symbol('kalender') }} Terminierung{% if vorgemerkte | length > 1 %} ({{ vorgemerkte | length }} Termine){% endif %}</button>
                 {% elif terminierung.bereit %}
                     <button class="knopf lk-terminierung" type="submit" id="lk-terminierung-knopf"
                             onclick="return confirm('Terminierung: Phase Terminiert, Outlook-Termin schreiben und Terminbestätigung mit ICS planen?')"
-                            title="Phase Terminiert · Outlook · Terminbestätigung (ICS) · Übergabe Leads VOT">{{ symbol('kalender') }} Terminierung</button>
+                            title="Phase Terminiert · Outlook je Termin · Terminbestätigung (ICS) · Übergabe Leads VOT{{ ' · ' ~ objekte_hinweis if objekte_hinweis }}">{{ symbol('kalender') }} Terminierung{% if vorgemerkte | length > 1 %} ({{ vorgemerkte | length }} Termine){% endif %}</button>
                 {% else %}
                     <button class="knopf lk-terminierung" type="button" disabled aria-disabled="true" id="lk-terminierung-knopf"
                             aria-describedby="lk-fehlliste"
                             title="Gesperrt – es fehlt: {{ terminierung.fehlend | join(', ') }}">{{ symbol('kalender') }} Terminierung</button>
+                {% endif %}
+                {% if vorgemerkte | length > 1 %}
+                <fieldset class="lk-bestaetigung-wahl" data-rolle="bestaetigung-wahl">
+                    <legend class="dezent">Terminbestätigung an den Kunden</legend>
+                    <label class="lk-check"><input type="radio" name="bestaetigung" value="eine" {{ 'checked' if bestaetigung_vorbelegung == 'eine' }}> Eine Bestätigung für alle Objekte</label>
+                    <label class="lk-check"><input type="radio" name="bestaetigung" value="je_objekt" {{ 'checked' if bestaetigung_vorbelegung != 'eine' }}> Je Objekt eine Bestätigung</label>
+                    <small class="dezent">Vorbelegung: {{ 'alle Termine am selben Tag → eine Mail' if bestaetigung_vorbelegung == 'eine' else 'verschiedene Tage → je Objekt' }}{{ ' · ' ~ objekte_hinweis if objekte_hinweis }}</small>
+                </fieldset>
+                {% else %}
+                <input type="hidden" name="bestaetigung" value="auto">
                 {% endif %}
             </form>
         {% endif %}
@@ -119,8 +166,9 @@
                 <span class="lk-rund gesperrt" aria-disabled="true" title="Keine Telefonnummer">{{ symbol('telefon') }}</span>
             {% endif %}
             {% if not readonly %}
-                <button type="button" class="lk-rund" aria-label="E-Mail mit Vorlage senden" title="E-Mail (Vorlage senden)"
-                        onclick="document.getElementById('dlg-mail').showModal()" {{ 'disabled' if not (kunde and kunde.email) }}>{{ symbol('brief') }}</button>
+                {#- v31 (Phase 158): Schnellaktion „E-Mail“ öffnet den Dialog mit Vorlagenwahl und Vorschau (kartei_mail_dialog.html) #}
+                <button type="button" class="lk-rund" aria-label="E-Mail mit Vorlage senden" title="E-Mail (Vorlage wählen, Vorschau, senden über termin@)"
+                        data-mail-dialog {{ 'disabled' if not (kunde and kunde.email) }}>{{ symbol('brief') }}</button>
             {% elif kunde and kunde.email %}
                 <a class="lk-rund" href="mailto:{{ kunde.email }}" aria-label="E-Mail" title="E-Mail">{{ symbol('brief') }}</a>
             {% endif %}
@@ -159,6 +207,20 @@
     </div>
 </header>
 
+{# v31 (Phase 155): Notizfeld (zwei Drittel) neben To-Dos (ein Drittel) – vor dem Kundeninfo-Block;
+   Notizen = gemeinsamer Notizen-Chat des Vorgangs (v28, Makro notizen_chat, Kennzeichen „Lead“),
+   To-Dos = offene To-Dos mit Häkchen und Inline-Anlegen (lead_todos, Vertrag Phase 110) #}
+<div class="lk-oben" id="lk-oben">
+    <section class="karte lk-notizen" id="notizen" aria-label="Notizen">
+        <h2 class="lk-abschnitt">Notizen <span class="dezent">(Vorgang – Lead bis Montage)</span></h2>
+        {% if notizen_ctx %}{{ notizen_chat(notizen_ctx) }}{% endif %}
+    </section>
+    <section class="karte lk-todos" id="lk-todos" aria-label="To-Dos" data-bereich="todos">
+        <h2 class="lk-abschnitt">To-Dos <span class="lk-zahl">{{ zaehler.todos }}</span><span class="dezent"> offen</span></h2>
+        {{ todo_spalte(todo_zeilen, benutzer, todo_empfaenger, vorgang.id, kartei_url, heute, readonly) }}
+    </section>
+</div>
+
 <section class="karte lk-info" id="lk-kundeninfo" aria-label="Kundeninformationen">
     {% include "leadmanagement/kartei_info.html" %}
 </section>
@@ -167,22 +229,21 @@
     {% include "leadmanagement/kartei_mitte.html" %}
 </section>
 
-<div class="lk-bloecke" id="lk-bloecke" aria-label="Termine, Angebote, Erfassungen, Projekt, Anhänge, To-Dos">
+<div class="lk-bloecke" id="lk-bloecke" aria-label="Termine, Angebote, Erfassungen, Projekt, Anhänge">
     {% include "leadmanagement/kartei_bloecke.html" %}
 </div>
 
-{# v28 (PLAN_PROJ_V6 Phase 136): gemeinsamer Notizen-Chat des Vorgangs – dieselben
-   Einträge wie in Vorgangsakte und Projektakte, Kennzeichen „Lead“, volle Breite #}
-{% from "_komponenten.html" import notizen_chat %}
 {% from "_galerie.html" import galerie_fuss %}
-<section class="karte lk-notizen" id="notizen" aria-label="Notizen" style="grid-column: 1 / -1">
-    <h2>Notizen <span class="dezent">(Vorgang – Lead bis Montage)</span></h2>
-    {% if notizen_ctx %}{{ notizen_chat(notizen_ctx) }}{% endif %}
-</section>
 {{ galerie_fuss() }}
 
 {% include "leadmanagement/kartei_dialoge.html" %}
-{# Stoppuhr-Vertrag Phase 107 (fehlt die Datei noch, bleibt die Seite lauffähig) #}
+{# v31 (Phase 157): Daten des Status-Dialogs (Gründe je Phase aus dem Blatt Gründe) #}
+<script type="application/json" id="lk-status-daten">{{ status_wahl | tojson }}</script>
+{# v31 (Phase 155): die Übergangsregeln des neuen Layouts stehen in lead_v2.css
+   (Block „Phase 153/155 – Kartei V5“, von B übernommen aus dem Bericht K 4.1) #}
+{# Stoppuhr-Vertrag Phase 107 (fehlt die Datei noch, bleibt die Seite lauffähig);
+   lm_termin.js (T, v29) rendert die Kalenderansicht im Block Termine (#lmt-kalender) #}
 <script src="/static/lm_anruf.js?v={{ css_version }}" defer></script>
+<script src="/static/lm_termin.js?v={{ css_version }}" defer></script>
 <script src="/static/lm_kartei.js?v={{ css_version }}" defer></script>
 {% endblock %}

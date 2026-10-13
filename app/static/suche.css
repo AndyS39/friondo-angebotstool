@@ -1,0 +1,142 @@
+/* v32 (PLAN_V19 Phase 164): Kundensuche in der Kopfzeile und Trefferseite /suche.
+   Nur semantische Tokens aus style.css – keine festen Farben (Token-Wächter). */
+.kopf-suche {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 0 1 320px;
+    min-width: 0;
+    margin: 0 0.75rem 0 1rem;
+}
+.kopf-suche-lupe {
+    display: none;
+    border: none;
+    background: transparent;
+    color: var(--text-invers);
+    padding: 0.3rem;
+    cursor: pointer;
+    line-height: 0;
+}
+.kopf-suche-lupe svg { width: 1.3rem; height: 1.3rem; }
+.kopf-suche-symbol {
+    position: absolute;
+    left: 0.55rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1rem;
+    height: 1rem;
+    color: var(--text-invers);
+    opacity: 0.75;
+    pointer-events: none;
+    line-height: 0;
+}
+.kopf-suche-symbol svg { width: 1rem; height: 1rem; }
+.kopf-suche input[type="search"] {
+    width: 100%;
+    padding: 0.35rem 0.6rem 0.35rem 2rem;
+    border: 1px solid color-mix(in srgb, var(--text-invers) 35%, transparent);
+    border-radius: var(--r-m);
+    background: color-mix(in srgb, var(--text-invers) 12%, transparent);
+    color: var(--text-invers);
+    font: inherit;
+    font-size: var(--t-m);
+    -webkit-appearance: none;
+    appearance: none;
+}
+.kopf-suche input[type="search"]::placeholder {
+    color: var(--text-invers);
+    opacity: 0.7;
+}
+.kopf-suche input[type="search"]:focus {
+    outline: 2px solid var(--fokus);
+    outline-offset: 1px;
+    background: color-mix(in srgb, var(--text-invers) 18%, transparent);
+}
+.kopf-suche-liste {
+    position: absolute;
+    top: calc(100% + 0.3rem);
+    left: 0;
+    right: 0;
+    min-width: 280px;
+    max-height: 70vh;
+    overflow-y: auto;
+    background: var(--flaeche-karte);
+    color: var(--text);
+    border: 1px solid var(--linie);
+    border-radius: var(--r-m);
+    box-shadow: var(--schatten-2);
+    z-index: 60;
+}
+.kopf-suche-liste[hidden] { display: none; }
+.kopf-suche-treffer,
+.kopf-suche-mehr,
+.kopf-suche-leer {
+    display: block;
+    padding: 0.45rem 0.7rem;
+    text-decoration: none;
+    color: var(--text);
+    border-bottom: 1px solid var(--linie);
+}
+.kopf-suche-treffer:last-child, .kopf-suche-mehr:last-child { border-bottom: none; }
+.kopf-suche-treffer.aktiv, .kopf-suche-treffer:hover, .kopf-suche-mehr:hover {
+    background: var(--flaeche-hover);
+}
+.kopf-suche-name {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    font-weight: 600;
+}
+.kopf-suche-name .abzeichen { font-size: var(--t-xs); }
+.kopf-suche-ort {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: var(--t-s);
+    color: var(--text-dezent);
+}
+.kopf-suche-chip {
+    display: inline-block;
+    padding: 0 0.45rem;
+    border-radius: 999px;
+    font-size: var(--t-xs);
+    background: var(--akzent-flaeche);
+    color: var(--akzent-text);
+}
+.kopf-suche-mehr { font-size: var(--t-s); color: var(--link); text-align: center; }
+.kopf-suche-leer { color: var(--text-dezent); font-size: var(--t-s); }
+
+/* Trefferseite /suche */
+.suche-seite form.suche-formular {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    max-width: 480px;
+    margin-bottom: 1rem;
+}
+.suche-seite form.suche-formular input[type="search"] { flex: 1 1 auto; }
+.suche-seite table .abzeichen { margin-right: 0.25rem; }
+
+@media (max-width: 600px) {
+    .kopf-suche { flex: 0 0 auto; margin: 0 0.25rem; }
+    .kopf-suche-lupe { display: inline-flex; }
+    .kopf-suche-symbol,
+    .kopf-suche input[type="search"],
+    .kopf-suche-liste { display: none; }
+    .kopf-suche.offen {
+        position: absolute;
+        left: 0.5rem;
+        right: 0.5rem;
+        top: 100%;
+        margin: 0.3rem 0 0;
+        padding: 0.4rem;
+        background: var(--flaeche-erhoeht);
+        border-radius: var(--r-m);
+        z-index: 59;
+    }
+    .kopf-suche.offen .kopf-suche-symbol,
+    .kopf-suche.offen input[type="search"] { display: block; }
+    .kopf-suche.offen .kopf-suche-liste:not([hidden]) { display: block; }
+    .kopfleiste { position: relative; }
+}

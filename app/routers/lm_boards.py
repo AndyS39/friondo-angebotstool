@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app import lead_boards, lead_v2
 from app import leadmanagement as kern
+from app import sparten as sparten_modul   # v31 (Phase 157): Sparten-Listen der Filter
 from app.db import SessionLocal, get_session
 from app.models import Benutzer, Vorgang
 from app.templating import render, templates
@@ -56,6 +57,35 @@ templates.env.globals.setdefault("lm_avatar_farbe", lead_boards.avatar_farbe)
 # v25: Board-Anzeigenamen (Hauptboard / Deals) und Kundenname für Makros ohne Kontext
 templates.env.globals.setdefault("lm_board_label", lead_boards.board_label)
 templates.env.globals.setdefault("lm_kundenname", lead_boards.kundenname)
+# v31 (PLAN_LEAD_V5 Phase 157): Sparten-Codes und Langnamen (inkl. MS/WA/DMS) für alle
+# Filter-Selects, Häkchen und Badges der Modul-Templates – keine festen Listen mehr
+templates.env.globals.setdefault("lm_sparten", tuple(sparten_modul.SPARTEN))
+templates.env.globals.setdefault("lm_sparten_lang", dict(sparten_modul.SPARTEN_LANG))
+
+
+def _speichern(session: Session, aktion, wiederholungen: int = 1):
+    """v31 (v27-Regel): schreibende Sammelaktionen über mehrere Zeilen (Archivieren,
+    Duplizieren, Wiederherstellen) – Rollback und eine Wiederholung bei „database is
+    locked“ (Vorbild routers/angebote._speichern). Liefert das Ergebnis von aktion()."""
+    import time
+
+    from sqlalchemy.exc import OperationalError
+
+    from app import betrieb
+    for versuch in range(wiederholungen + 1):
+        start = time.perf_counter()
+        try:
+            ergebnis = aktion()
+            session.commit()
+            betrieb.schreibsperre_messen(int((time.perf_counter() - start) * 1000))
+            return ergebnis
+        except OperationalError as problem:
+            session.rollback()
+            gesperrt = "locked" in str(problem).lower()
+            betrieb.schreibsperre_messen(int((time.perf_counter() - start) * 1000), locked=gesperrt)
+            if not gesperrt or versuch >= wiederholungen:
+                raise
+            time.sleep(0.7)
 
 
 def _json_gewuenscht(request: Request) -> bool:
@@ -96,13 +126,17 @@ def _board_seite(request: Request, session: Session, board: str):
     f["sort"] = lead_boards.sortierung_fuer(session, benutzer, board)     # v25: gemerkt
     daten = lead_boards.board_zeilen(session, benutzer, board, f)
     ctx = _tabellen_kontext(session, benutzer, board)
+    ctx["archiv_sicht"] = bool(f.get("archiviert"))     # v31 (Phase 154): Filter-Chip „Archiv“
+    # v31 (Phase 154): Ergebnis „Duplizieren“ mit Links auf die neuen Vorgänge (?kopien=1,2)
+    kopien = [int(t) for t in (request.query_params.get("kopien") or "").split(",") if t.strip().isdigit()]
     return render(request, "leadmanagement/hauptboard.html" if board == "hauptboard"
                   else "leadmanagement/terminiert.html",
                   aktiv="/lead-management", board=board, board_info=lead_boards.board_info(board),
                   gruppen=daten["gruppen"], anzahl=daten["anzahl"], filter_werte=f,
                   spalten=lead_boards.spalten_fuer(session, benutzer, board),
                   sortierung=f["sort"], score_aktiv=ctx["score_aktiv"],
-                  sammelaktionen=lead_boards.sammelaktionen_fuer(board), ctx=ctx,
+                  sammelaktionen=lead_boards.sammelaktionen_fuer(board, archiv=ctx["archiv_sicht"]),
+                  ctx=ctx, kopien=kopien,
                   # v29 (Phase 140): Ziele der Sammelaktion „An Handelsvertreter verschieben“
                   hv_gruppen_wahl=lead_v2.hv_gruppen_wahl(session) if ctx["sammel"] else [],
                   phasen_namen=lead_boards.phasen_labels(), jetzt=daten["jetzt"],
@@ -178,6 +212,7 @@ def board_kanban(request: Request, session: Session = Depends(get_session)):
         "meine": request.query_params.get("meine", "0") == "1",
         "quelle_id": request.query_params.get("quelle_id", ""),
         "sparte": request.query_params.get("sparte", ""),
+        "grosskunde": request.query_params.get("grosskunde", "") == "1",   # v31 (Phase 153)
         # Score-Klasse nur filterbar, wenn das Scoring aktiv ist (v25)
         "klasse": request.query_params.get("klasse", "") if score_aktiv else "",
         "plz": request.query_params.get("plz", ""),
@@ -207,6 +242,7 @@ def board_kanban(request: Request, session: Session = Depends(get_session)):
     return render(request, "leadmanagement/board.html",
                   aktiv="/lead-management", spalten=spalten, koepfe=koepfe,
                   filter_werte=filter_werte, quellen=quellen, board=board,
+                  grosskunde_farbe=lead_boards.grosskunde_farbe(session),   # v31 (Phase 153)
                   board_info=lead_boards.board_info(board), score_aktiv=score_aktiv,
                   spalten_reihenfolge=KANBAN_SPALTEN[board],
                   seiten_phasen=kern.SEITEN_PHASEN if board == "hauptboard" else (),
@@ -281,16 +317,35 @@ def sammelaktion(request: Request, session: Session = Depends(get_session)):
         params = {k: form.get(k) for k in form.keys() if k not in ("ids", "ids[]")}
     board = (params.get("board") or "hauptboard").strip()
     aktion = (params.get("aktion") or "").strip()
-    ok, meldung = lead_boards.sammelaktion_ausfuehren(session, benutzer, board, aktion, ids, params)
-    if ok:
-        session.commit()
+    # v31 (Phase 154, v27-Regel): Archivieren/Duplizieren/Wiederherstellen fassen mehrere
+    # Zeilen an → _speichern-Muster (Rollback + eine Wiederholung bei „database is locked“)
+    ergebnis = {}
+
+    def _ausfuehren():
+        ok_, meldung_, extra_ = lead_boards.sammelaktion_ausfuehren_voll(
+            session, benutzer, board, aktion, ids, params)
+        ergebnis.update(ok=ok_, meldung=meldung_, extra=extra_)
+        if not ok_:
+            session.rollback()
+        return ok_
+    if aktion in ("archivieren", "duplizieren", "wiederherstellen"):
+        _speichern(session, _ausfuehren)
     else:
-        session.rollback()
+        if _ausfuehren():
+            session.commit()
+    ok, meldung, extra = ergebnis["ok"], ergebnis["meldung"], ergebnis.get("extra") or {}
+    kopien = [k["id"] for k in extra.get("kopien", [])]
     if _json_gewuenscht(request):
-        return JSONResponse({"ok": ok, "meldung": meldung}, status_code=200 if ok else 422)
+        return JSONResponse({"ok": ok, "meldung": meldung, "kopien": kopien},
+                            status_code=200 if ok else 422)
     ziel = f"/lead-management/{board if board in lead_boards.BOARDS else 'hauptboard'}"
+    zusatz = ""
+    if aktion == "wiederherstellen":
+        zusatz = "&archiviert=1"          # in der Archiv-Sicht bleiben
+    if kopien:
+        zusatz += "&kopien=" + ",".join(str(k) for k in kopien)
     return RedirectResponse(f"{ziel}?meldung={quote_plus(meldung)}"
-                            + ("" if ok else "&fehler=1"), status_code=303)
+                            + ("" if ok else "&fehler=1") + zusatz, status_code=303)
 
 
 # --- Spaltenkonfiguration je Nutzer (A-14, v25 erweitert) ------------------------------------

@@ -562,6 +562,13 @@ class LeadMailBloecke(Basis):
     def setUpClass(cls):
         super().setUpClass()
         cls._aufraeumen()
+        # v31 (PLAN_LEAD_V5 Phase 159): in der Testphase (mail_versand_aktiv = aus) enden die
+        # Einträge als „gesperrt“ – diese Klasse prüft den Versandweg selbst und schaltet den
+        # Versand für ihre Laufzeit frei (Graph bleibt gemockt)
+        from app import leadmanagement as _kern
+        with db.kurz() as s:
+            cls._versand_vorher = _kern.parameter_holen(s, "mail_versand_aktiv", "aus")
+            _kern.parameter_setzen(s, "mail_versand_aktiv", "an")
         with db.kurz() as s:
             kunde = Kunde(nachname=f"{PRAEFIX} Mail", vorname="Test", anrede="Herr",
                           email=cls.AN, interesse="WP")
@@ -575,6 +582,9 @@ class LeadMailBloecke(Basis):
     @classmethod
     def tearDownClass(cls):
         cls._aufraeumen()
+        from app import leadmanagement as _kern
+        with db.kurz() as s:
+            _kern.parameter_setzen(s, "mail_versand_aktiv", getattr(cls, "_versand_vorher", "aus"))
         super().tearDownClass()
 
     @classmethod
@@ -602,8 +612,10 @@ class LeadMailBloecke(Basis):
         kaputt = self._eintrag(-1)                   # Vorgang fehlt → fehler
         original = leadmanagement.parameter_holen
 
+        # v31 (Phase 159): `mail_modus = protokoll` steuert nichts mehr – die Entsprechung
+        # „rendern, nicht senden“ ist die Mailsperre (mail_versand_aktiv = aus → Status gesperrt)
         def protokoll(session, name, standard=""):
-            return "protokoll" if name == "mail_modus" else original(session, name, standard)
+            return "aus" if name == "mail_versand_aktiv" else original(session, name, standard)
 
         echtes_rendern = lead_mail.rendern
 
@@ -616,13 +628,13 @@ class LeadMailBloecke(Basis):
                 mock.patch.object(lead_mail, "rendern", side_effect=rendern):
             zaehler = lead_mail.versand_job()
         # (≥: parallel laufende Tests anderer Agenten können eigene Einträge planen)
-        self.assertGreaterEqual(zaehler["protokolliert"], 2, zaehler)
+        self.assertGreaterEqual(zaehler["gesperrt"], 2, zaehler)
         self.assertGreaterEqual(zaehler["fehler"], 2, zaehler)
         with db.kurz() as s:                           # frische Sitzung: alles committet
             stand = {e.id: (e.status, e.fehler_text) for e in
                      s.query(KommunikationLog).filter_by(an=self.AN)}
-        self.assertEqual(stand[ids[0]][0], "protokolliert")
-        self.assertEqual(stand[ids[2]][0], "protokolliert")
+        self.assertEqual(stand[ids[0]][0], "gesperrt")
+        self.assertEqual(stand[ids[2]][0], "gesperrt")
         self.assertEqual(stand[ids[1]], ("fehler", "V27A Render-Fehler"))
         self.assertEqual(stand[kaputt], ("fehler", "Vorgang fehlt"))
         # ein erneuter Lauf fasst die Einträge nicht mehr an

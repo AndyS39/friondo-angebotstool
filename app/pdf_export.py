@@ -168,7 +168,8 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
                 ersetzt_hinweis: str = "",
                 beispielrechnung: dict | None = None,
                 wirtschaftlichkeit: dict | None = None,
-                zahlungsbedingung: str | None = None) -> Path:
+                zahlungsbedingung: str | None = None,
+                ausfuehrungsort: dict | None = None) -> Path:
     """signatur (Phase 23): {"png_pfad", "name", "zeit"} – wird auf der
     Unterschriften-Seite eingebettet; ziel überschreibt den Ablageort.
     v9: Vor- und Nachtext kommen als Textblöcke (Profil/Parametrierung);
@@ -177,8 +178,13 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
     PV-Seiten (beispielrechnung = alter Parametername, Alias).
     v30 (PLAN_V18 Phase 150): zahlungsbedingung = Text der am Angebot gewählten
     Zahlungsbedingung für den Platzhalter {zahlungsbedingungen} im Nachtext
-    (None = Standardabsatz, damit der Platzhalter nie wörtlich im PDF steht)."""
-    from app import angebotsprofile
+    (None = Standardabsatz, damit der Platzhalter nie wörtlich im PDF steht).
+    v31 (PLAN_LEAD_V5 Phase 153): ausfuehrungsort = Feldsatz aus
+    anschriften.ausfuehrungsort_fuer (Objekt des Angebots; None = Kundenadresse wie
+    bisher) – Zeile „Ausführungsort“, Lieferanschrift-Vergleich, Verbrauchsstelle
+    der Vollmacht und Kopf der Wirtschaftlichkeitsseiten."""
+    from app import angebotsprofile, anschriften
+    ort = ausfuehrungsort or anschriften.ausfuehrungsort(kunde)
     if wirtschaftlichkeit is None:
         wirtschaftlichkeit = beispielrechnung
     if wirtschaftlichkeit is not None:
@@ -188,13 +194,13 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
             "kunde": kunde.firma or " ".join(
                 t for t in ((kunde.anrede if (kunde.anrede or "") in ("Familie", "Eheleute")
                              else ""), kunde.vorname, kunde.nachname) if t),
-            "adresse": f"{kunde.strasse}, {kunde.plz} {kunde.ort}".strip(", "),
+            "adresse": anschriften.adresszeile(ort),
         })
     pdf = AngebotsPdf(angebot.nummer)
     _seite1(pdf, angebot, kunde,
             vortext_text if vortext_text is not None
             else angebotsprofile.STANDARD_VORTEXT,
-            ersetzt_hinweis=ersetzt_hinweis)
+            ersetzt_hinweis=ersetzt_hinweis, ausfuehrungsort=ort)
     _positionsteil(pdf, angebot)
     _vermerke_rendern(pdf, angebot)
     _summen_und_kfw(pdf, angebot, kfw_ergebnis)
@@ -203,7 +209,7 @@ def erzeuge_pdf(angebot: Angebot, kunde: Kunde,
                       wirtschaftlichkeit, zahlungsbedingung=zahlungsbedingung)
     if mit_vollmacht:
         # Nachtext D nur bei iMSys (P02) und/oder SpotDynamic (P03) – Phase 15
-        _nachtext_d(pdf, kunde, angebot)
+        _nachtext_d(pdf, kunde, angebot, ausfuehrungsort=ort)
 
     config.ANGEBOTE_PDF_ORDNER.mkdir(parents=True, exist_ok=True)
     if ziel is None:
@@ -230,7 +236,7 @@ def _vermerke_rendern(pdf: "AngebotsPdf", angebot: Angebot) -> None:
 # --- Seite 1: Briefkopf + Vortext ----------------------------------------
 
 def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde, vortext_text: str,
-            ersetzt_hinweis: str = ""):
+            ersetzt_hinweis: str = "", ausfuehrungsort: dict | None = None):
     pdf.add_page()
 
     pdf.set_font("Arial", "", 6.5)
@@ -246,8 +252,11 @@ def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde, vortext_text: str,
     pdf.set_xy(pdf.l_margin, y_start)
     # v20 (Phase 98): Rechnungs-Name/-Zusatz/-Adresse aus app/anschriften.py –
     # die Briefanrede bleibt beim Ansprechpartner (Kunde)
+    # v31 (PLAN_LEAD_V5 Phase 153): Ausführungsort = Objekt des Angebots
+    # (anschriften.ausfuehrungsort_fuer), ohne Übergabe die Kundenadresse wie bisher
     from app import anschriften
-    empfaenger, abweichend = anschriften.empfaenger(angebot, kunde)
+    ort = ausfuehrungsort or anschriften.ausfuehrungsort(kunde)
+    empfaenger, abweichend = anschriften.empfaenger(angebot, kunde, ort)
     pdf.multi_cell(100, 4.8, "\n".join(empfaenger))
     y_empfaenger = pdf.get_y()   # 30.09.2026: lange Anschriften schieben die Überschrift
 
@@ -265,12 +274,12 @@ def _seite1(pdf: AngebotsPdf, angebot: Angebot, kunde: Kunde, vortext_text: str,
     pdf.cell(0, 6, f"A N G E B O T - Nr.: {angebot.nummer}",
              new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     if abweichend:
-        # v8: abweichender Ausführungsort (= Kundenadresse aus monday)
+        # v8: abweichender Ausführungsort (= Kundenadresse aus monday; v31: Objektadresse)
         pdf.set_font("Arial", "", 9)
-        ausfuehrung = f"{kunde.strasse}, {kunde.plz} {kunde.ort}".strip(", ")
+        ausfuehrung = anschriften.adresszeile(ort)
         if ausfuehrung:   # 30.09.2026: keine leere Zeile bei Kunde ohne Adresse
             pdf.multi_cell(0, 5, f"Ausführungsort: {ausfuehrung}")
-    lieferzeile = anschriften.lieferzeile(angebot, kunde)
+    lieferzeile = anschriften.lieferzeile(angebot, kunde, ort)
     if lieferzeile:
         # v11 (Phase 66) / v20: abweichende Lieferanschrift (z. B. Contracting)
         pdf.set_font("Arial", "", 9)
@@ -744,13 +753,16 @@ def _unterschrift_block(pdf: AngebotsPdf, signatur: dict | None = None) -> None:
                              "Angebotstool).")
 
 
-def _nachtext_d(pdf: AngebotsPdf, kunde: Kunde, angebot: Angebot | None = None):
+def _nachtext_d(pdf: AngebotsPdf, kunde: Kunde, angebot: Angebot | None = None,
+                ausfuehrungsort: dict | None = None):
     """Vollmacht-Seite (Nachtext D). Muss komplett – inklusive Ort/Datum und
     beider Unterschriftszeilen – auf EINER Seite bleiben (Referenz AN250096
     Seite 11): kompakte Zeilenhöhen plus Keep-together am Schluss (der
     Unterschriftenblock wird notfalls ohne automatischen Umbruch in die
-    Reserve vor der Fußzeile gezeichnet, nie auf eine eigene Seite)."""
+    Reserve vor der Fußzeile gezeichnet, nie auf eine eigene Seite).
+    v31: die Verbrauchsstelle ist der Ausführungsort (Objekt des Angebots)."""
     from app import anhaenge as anhaenge_modul
+    from app import anschriften
     pdf.add_page()
     _ueberschrift(pdf, "Vollmacht zur Beauftragung der SpotmyEnergy GmbH sowie zur "
                        "Anmeldung und Inbetriebsetzung von Anlagen", groesse=11)
@@ -785,7 +797,7 @@ def _nachtext_d(pdf: AngebotsPdf, kunde: Kunde, angebot: Angebot | None = None):
     pdf.ln(1)
     absatz("Angaben zur Verbrauchsstelle", fett=True)
     name = kunde.firma or " ".join(t for t in (kunde.vorname, kunde.nachname) if t)
-    adresse = f"{kunde.strasse}, {kunde.plz} {kunde.ort}".strip(", ")
+    adresse = anschriften.adresszeile(ausfuehrungsort or anschriften.ausfuehrungsort(kunde))
     pdf.set_font("Arial", "", 8.5)
     for beschriftung, wert in [("Name:", name), ("Adresse:", adresse),
                                ("Geburtsdatum:", ""), ("Telefon:", kunde.telefon),
@@ -876,7 +888,7 @@ def signiertes_pdf_erzeugen(session, angebot: Angebot, png_bytes: bytes,
         png_pfad = datei.name
     try:
         ziel = config.SIGNIERT_ORDNER / f"{angebot.nummer}-signiert.pdf"
-        from app import angebotsprofile, zahlungsbedingungen
+        from app import angebotsprofile, anschriften, zahlungsbedingungen
         return erzeuge_pdf(angebot, kunde, ergebnis,
                            mit_vollmacht=_mit_vollmacht(session, angebot),
                            signatur={"png_pfad": png_pfad, "name": name, "zeit": zeit},
@@ -886,7 +898,10 @@ def signiertes_pdf_erzeugen(session, angebot: Angebot, png_bytes: bytes,
                            ersetzt_hinweis=_ersetzt_hinweis(session, angebot),
                            wirtschaftlichkeit=wirtschaftlichkeit_fuer(session, angebot),
                            # v30 (Phase 150): gewählte Zahlungsbedingung in den Nachtext
-                           zahlungsbedingung=zahlungsbedingungen.fuer_angebot(session, angebot)[1])
+                           zahlungsbedingung=zahlungsbedingungen.fuer_angebot(session, angebot)[1],
+                           # v31 (PLAN_LEAD_V5 Phase 153): Ausführungsort = Objekt des Angebots
+                           ausfuehrungsort=anschriften.ausfuehrungsort_fuer(
+                               session, angebot=angebot, kunde=kunde))
     finally:
         Path(png_pfad).unlink(missing_ok=True)
 
@@ -913,7 +928,7 @@ def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
     kunde = session.get(Kunde, angebot.kunde_id)
     # v13-PV / v24-KL: bei PV und Klima nie ein Förderblock
     ergebnis = _kfw_ergebnis_fuer(session, angebot)
-    from app import angebotsprofile, zahlungsbedingungen
+    from app import angebotsprofile, anschriften, zahlungsbedingungen
     return erzeuge_pdf(angebot, kunde, ergebnis,
                        mit_vollmacht=_mit_vollmacht(session, angebot),
                        vortext_text=angebotsprofile.vortext_fuer_angebot(session, angebot),
@@ -922,4 +937,8 @@ def pdf_fuer_angebot(session, angebot: Angebot) -> Path:
                        wirtschaftlichkeit=wirtschaftlichkeit_fuer(session, angebot),
                        # v30 (PLAN_V18 Phase 150): Text der gewählten Zahlungsbedingung
                        # für den Platzhalter {zahlungsbedingungen} im Nachtext
-                       zahlungsbedingung=zahlungsbedingungen.fuer_angebot(session, angebot)[1])
+                       zahlungsbedingung=zahlungsbedingungen.fuer_angebot(session, angebot)[1],
+                       # v31 (PLAN_LEAD_V5 Phase 153): Ausführungsort = Objekt des Angebots
+                       # (Hauptobjekt = Kundenadresse → Ein-Objekt-Vorgänge unverändert)
+                       ausfuehrungsort=anschriften.ausfuehrungsort_fuer(
+                           session, angebot=angebot, kunde=kunde))

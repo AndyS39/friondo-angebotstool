@@ -12,6 +12,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app import notizen as notizen_modul   # v28 (Phase 136): gemeinsamer Notizen-Chat
+from app import verfolgung as verfolgung_modul   # v32 (Phase 163): Nächster Schritt / Verfolgungsstatus
 from app import vorgaenge as vorgaenge_modul
 from app.db import get_session
 from app.models import (Angebot, AngebotsMail, Benutzer, Erfassung, Kunde,
@@ -59,6 +60,9 @@ def liste(request: Request, q: str = "", verfolgung: str = "",
                      and vorgaenge_modul.wiedervorlage_gehoert(session, v, benutzer)]
     elif verfolgung in ("heiss", "warm", "kalt"):
         vorgaenge = [v for v in vorgaenge if v.verfolgung_ampel == verfolgung]
+    elif verfolgung in verfolgung_modul.STATUS:
+        # v32 (PLAN_V19 Phase 163): Verfolgungsstufe (versendet … abgelehnt)
+        vorgaenge = verfolgung_modul.filter_anwenden(vorgaenge, verfolgung)
     kunden = {k.id: k for k in session.query(Kunde)}
     leads = {l.id: l for l in session.query(Lead)}
     erf_je_vorgang: dict[int, list[Erfassung]] = {}
@@ -160,7 +164,10 @@ def akte(request: Request, vorgang_id: int,
     # v28 (PLAN_PROJ_V6 Phase 136): Kontext für das gemeinsame Makro notizen_chat
     # (Chat-Optik, Kennzeichen je Spur, Senden per fetch) – Rechte wie bisher
     # (ID/Admin überall, AD bei eigenen Vorgängen) über notizen.schreiben_erlaubt
-    notizen_ctx = notizen_modul.kontext(session, vorgang.id, benutzer, vorgang=vorgang)
+    # v31 (PLAN_LEAD_V5 Phase 158): verlauf=True blendet Lead-/Projekt-Aktivitäten
+    # neben dem Chat ein (Filter „nur Notizen“ / „alles“ in akte.html)
+    notizen_ctx = notizen_modul.kontext(session, vorgang.id, benutzer, vorgang=vorgang,
+                                        verlauf=True)
     # Gelesen-Stand fortschreiben (Phase 60: „Neue Notizen“-Punkt)
     marker = (session.query(VorgangNotizGelesen)
               .filter(VorgangNotizGelesen.vorgang_id == vorgang.id,
@@ -194,8 +201,13 @@ def akte(request: Request, vorgang_id: int,
     _datei_sparten = {z[0] for z in session.query(_GalerieDatei.sparte)
                       .filter(_GalerieDatei.vorgang_id == vorgang.id)
                       .distinct()}
-    _interessen = set(kunde.interessen if kunde else [])
-    galerie_sparten = [sp for sp in ("WP", "PV", "KL", "WB")
+    # v31 (PLAN_LEAD_V5 Phase 157): gemeinsame Sparten-Liste (inkl. GW/MS/WA/DMS);
+    # Interessen = Vereinigung der Objekt-Interessen (objekte.vorgang_interessen)
+    from app import objekte as objekte_modul
+    from app import sparten as sparten_modul
+    _interessen = set(objekte_modul.vorgang_interessen(session, vorgang.id)
+                      or (kunde.interessen if kunde else []))
+    galerie_sparten = [sp for sp in sparten_modul.SPARTEN
                        if sp in _interessen or sp in _datei_sparten]
     if not galerie_sparten:
         galerie_sparten = ["WP"]
@@ -258,8 +270,27 @@ def akte(request: Request, vorgang_id: int,
             hinweise.append("Lieferung abweichend")
         anschrift_kontext = {"kunde_rechnung": _re, "kunde_liefer": _li,
                              "kunde_anschrift_hinweis": " · ".join(hinweise)}
+    # v31 (PLAN_LEAD_V5 Phase 153): Erfassungen/Angebote je Objekt gruppieren
+    # (Überschrift nur bei mehr als einem Objekt); Phase 154: Archiv-Banner der
+    # Lead-Sicht mit „Wiederherstellen“ (ID/LM/Admin) – Akte sonst unverändert
+    from app import vorgang_verlauf
+    objekt_gruppen = vorgang_verlauf.objekt_gruppen(session, vorgang)
+    archiviert_von_name = ""
+    if vorgang.archiviert_von and vorgang.archiviert_von in benutzer_map:
+        archiviert_von_name = benutzer_map[vorgang.archiviert_von].name
+    archiv_wiederherstellen_erlaubt = _archiv_recht(benutzer)
+    # v32 (PLAN_V19 Phase 163): Dialog „Nächster Schritt“ im Verfolgungs-Block (ID und AD) –
+    # Variablen des Partials vorgaenge/_naechster_schritt.html (gruende, naechster_3wt, ziel)
+    verfolgung_ctx = verfolgung_modul.dialog_kontext(session, vorgang,
+                                                     zurueck=f"/vorgaenge/{vorgang.id}")
+    naechster_schritt_erlaubt = _naechster_schritt_recht(session, vorgang, benutzer)
     return render(request, "vorgaenge/akte.html", aktiv="/vorgaenge",
+                  gruende=verfolgung_ctx["gruende"], naechster_3wt=verfolgung_ctx["naechster_3wt"],
+                  ziel=verfolgung_ctx["ziel"], heute_iso=verfolgung_ctx["heute_iso"],
+                  naechster_schritt_erlaubt=naechster_schritt_erlaubt,
                   akte_todos=akte_todos, todo_empfaenger=todo_empfaenger,   # v23 (Phase 110)
+                  objekt_gruppen=objekt_gruppen, archiviert_von_name=archiviert_von_name,
+                  archiv_wiederherstellen_erlaubt=archiv_wiederherstellen_erlaubt,
                   **anschrift_kontext,
                   mobil=benutzer.rolle == "aussendienst",
                   galerie_daten=galerie_daten, galerie_ordner=galerie_ordner,
@@ -441,6 +472,77 @@ def anschriften_standard(request: Request, vorgang_id: int,
         "Standard-Anschriften gespeichert."), status_code=303)
 
 
+def _archiv_recht(benutzer) -> bool:
+    """v31 (Phase 154): Wiederherstellen aus der Vorgangsakte – Innendienst,
+    Leadmanagement (Haupt- oder Zusatzrolle) und Admin."""
+    if benutzer is None:
+        return False
+    if benutzer.rolle in ("admin", "innendienst", "leadmanagement"):
+        return True
+    hat = getattr(benutzer, "hat_rolle", None)
+    return bool(hat and hat("leadmanagement"))
+
+
+def archiv_wiederherstellen_ausfuehren(session: Session, vorgang: Vorgang,
+                                       benutzer) -> tuple[bool, str]:
+    """v31 (PLAN_LEAD_V5 Phase 154): Vertrag mit Agent B – lead_archiv.wiederherstellen
+    (Aktivität, Kennzeichen zurücksetzen); solange das Modul fehlt, wird das
+    Kennzeichen hier zurückgesetzt und eine System-Aktivität geschrieben."""
+    try:
+        from app import lead_archiv
+    except ImportError:
+        lead_archiv = None
+    if lead_archiv is not None and hasattr(lead_archiv, "wiederherstellen"):
+        ergebnis = lead_archiv.wiederherstellen(session, vorgang, benutzer)
+        if isinstance(ergebnis, tuple):
+            return bool(ergebnis[0]), str(ergebnis[1] if len(ergebnis) > 1 else "")
+        return (ergebnis is None or bool(ergebnis)), ""
+    from app.models import LeadAktivitaet
+    vorgang.archiviert_am = None
+    vorgang.archiviert_von = None
+    session.add(LeadAktivitaet(
+        vorgang_id=vorgang.id, typ="system",
+        text="Aus dem Lead-Archiv wiederhergestellt (Vorgangsakte)",
+        benutzer_id=getattr(benutzer, "id", None), erstellt_von=getattr(benutzer, "id", None)))
+    session.flush()
+    return True, ""
+
+
+@router.post("/{vorgang_id}/archiv-wiederherstellen")
+def archiv_wiederherstellen(request: Request, vorgang_id: int,
+                            session: Session = Depends(get_session)):
+    """v31 (PLAN_LEAD_V5 Phase 154): Knopf „Wiederherstellen“ im Archiv-Banner der
+    Vorgangsakte (Archivieren ist eine Lead-Sicht – Angebotstool/Projektierung
+    zeigen den Vorgang ohnehin). Läuft über das _speichern-Muster (Rollback + eine
+    Wiederholung bei „database is locked“)."""
+    from app.routers.angebote import _speichern
+    benutzer = request.state.benutzer
+    vorgang = session.get(Vorgang, vorgang_id)
+    if vorgang is None:
+        return RedirectResponse("/vorgaenge", status_code=303)
+    ziel = f"/vorgaenge/{vorgang_id}?meldung="
+    if not _archiv_recht(benutzer):
+        return RedirectResponse(ziel + quote_plus(
+            "Wiederherstellen nur für Innendienst, Leadmanagement und Admin."), status_code=303)
+    if not vorgang.archiviert_am:
+        return RedirectResponse(ziel + quote_plus("Der Vorgang ist nicht archiviert."),
+                                status_code=303)
+    ergebnis: dict = {}
+
+    def aktion():
+        v = session.get(Vorgang, vorgang_id)
+        ok, grund = archiv_wiederherstellen_ausfuehren(session, v, benutzer)
+        ergebnis.update(ok=ok, grund=grund)
+
+    _speichern(session, aktion)
+    if ergebnis.get("ok"):
+        return RedirectResponse(ziel + quote_plus(
+            "Vorgang im Lead-Management wiederhergestellt."), status_code=303)
+    return RedirectResponse(ziel + quote_plus(
+        "Wiederherstellen nicht möglich: " + (ergebnis.get("grund") or "unbekannter Grund")),
+        status_code=303)
+
+
 @router.post("/{vorgang_id}/verfolgung")
 def verfolgung(request: Request, vorgang_id: int,
                      session: Session = Depends(get_session)):
@@ -468,6 +570,84 @@ def verfolgung(request: Request, vorgang_id: int,
 
 def _json_gewuenscht(request: Request) -> bool:
     return "application/json" in (request.headers.get("accept") or "")
+
+
+def _naechster_schritt_recht(session: Session, vorgang: Vorgang, benutzer) -> bool:
+    """v32 (PLAN_V19 Phase 163): Innendienst/Admin überall, Außendienst nur am eigenen
+    Vorgang (vorgaenge.gehoert_benutzer); andere Rollen nicht."""
+    if benutzer is None or vorgang is None:
+        return False
+    if benutzer.rolle in ("admin", "innendienst"):
+        return True
+    if benutzer.rolle == "aussendienst":
+        return vorgaenge_modul.gehoert_benutzer(session, vorgang, benutzer.id)
+    return False
+
+
+def _rueckweg(zurueck: str, vorgang_id: int, meldung: str) -> str:
+    ziel = (zurueck or "").strip()
+    if not ziel.startswith("/") or ziel.startswith("//"):
+        ziel = f"/vorgaenge/{vorgang_id}"
+    return ziel + ("&" if "?" in ziel else "?") + "meldung=" + quote_plus(meldung)
+
+
+@router.post("/{vorgang_id}/naechster-schritt")
+def naechster_schritt(request: Request, vorgang_id: int,
+                      session: Session = Depends(get_session)):
+    """v32 (PLAN_V19 Phase 163): Dialog „Nächster Schritt“ nach dem Anruf. Felder:
+    `schritt` ∈ abgelehnt | bestellung | nochmal (| rueckgaengig + `token`), `grund_id`
+    (+ `freitext` bei Pflicht-Freitext, sonst 400), `wann` ∈ 3wt | datum (+ `datum`
+    TT.MM.JJJJ bzw. JJJJ-MM-TT), `notiz` (Chat-Eintrag vor der System-Aktivität),
+    `zurueck`. JSON bei Accept: application/json ({"ok", "meldung", "status",
+    "wiedervorlage_am", …}), sonst Redirect auf `zurueck` (Standard: Akte). Rechte: AD nur
+    eigener Vorgang → sonst 403, ID/Admin überall. Läuft über das _speichern-Muster
+    (mehrere Zeilen: Angebote, Erfassungen, Notizen, Glocken; Rollback + eine
+    Wiederholung bei „database is locked“)."""
+    from fastapi.responses import JSONResponse
+
+    from app.routers.angebote import _speichern
+    benutzer = request.state.benutzer
+    vorgang = session.get(Vorgang, vorgang_id)
+    json_antwort = _json_gewuenscht(request)
+
+    def antwort(ok: bool, meldung: str, daten: dict | None = None, status_code: int = 200,
+                zurueck: str = ""):
+        if json_antwort:
+            inhalt = {"ok": ok, "meldung": meldung}
+            inhalt.update(daten or {})
+            return JSONResponse(inhalt, status_code=status_code)
+        return RedirectResponse(_rueckweg(zurueck, vorgang_id, meldung), status_code=303)
+
+    if vorgang is None:
+        return antwort(False, "Vorgang nicht gefunden.", status_code=404)
+    if not _naechster_schritt_recht(session, vorgang, benutzer):
+        return antwort(False, "Kein Zugriff – der Vorgang gehört einem anderen Vertriebler.",
+                       status_code=403)
+    form = anfrage.formular(request)
+    schritt = (form.get("schritt") or "").strip()
+    zurueck = form.get("zurueck") or ""
+    ergebnis: dict = {}
+
+    def aktion():
+        v = session.get(Vorgang, vorgang_id)
+        if schritt == "rueckgaengig":
+            ok, meldung, daten = verfolgung_modul.rueckgaengig(
+                session, v, form.get("token") or "", benutzer)
+        else:
+            ok, meldung, daten = verfolgung_modul.naechster_schritt(
+                session, v, schritt, benutzer,
+                grund_id=form.get("grund_id"), freitext=form.get("freitext") or "",
+                wann=form.get("wann") or "", datum=form.get("datum") or "",
+                notiz=form.get("notiz") or "")
+        if not ok:
+            session.rollback()
+        ergebnis.update(ok=ok, meldung=meldung, daten=daten)
+
+    _speichern(session, aktion)
+    if not ergebnis.get("ok"):
+        return antwort(False, ergebnis.get("meldung") or "Nicht gespeichert.",
+                       status_code=400, zurueck=zurueck)
+    return antwort(True, ergebnis["meldung"], ergebnis.get("daten"), zurueck=zurueck)
 
 
 @router.post("/{vorgang_id}/notiz")

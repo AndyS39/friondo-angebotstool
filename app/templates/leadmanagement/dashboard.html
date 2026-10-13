@@ -12,17 +12,34 @@
    Umschalter „Meine Arbeit | Team“ führt zur bestehenden Team-Übersicht (v21).
    v25 (PLAN_LEAD_V3 Phase 120): Wiedervorlagen nur noch manuell gesetzte.
    v29 (PLAN_LEAD_V4 Phase 141): Überschrift „Hallo, <Vorname>“ (Benutzer.vorname,
-   sonst Name); linke Spalte (ca. 40 % ab 1200 px, kompakt): Fällig heute ·
-   Kommende Wiedervorlagen (alle künftigen, nach Datum gruppiert, „mehr anzeigen“)
-   · Offene To-Dos; rechte Spalte: Karte „Routenplaner“ (Google-Maps-Link, Start =
-   Parameter routen_start, Ziel leer, neuer Tab) und darunter die Liste „Meine
-   Termine“ [ANNAHME bleibt] – für Handelsvertreter mit den Sperrzeiten (Phase 143).
-   Entfernt: „Ohne nächsten Schritt“, „Angebots-Wiedervorlagen“, Kasten „Termine 7
-   Tage“; Kacheln nur noch Fällig heute · Kommende · Offene To-Dos (+ „Mails mit
-   Fehler“, nur wenn > 0, Vertrag L2).
-   Nachtrag 08.10.2026 (Antwort Andreas): „Mir zugeteilte Vorgänge“ entfällt ganz
-   (die Leads stehen in Hauptboard/HV-Ansicht); lead_dashboard.zugeteilte bleibt
-   als Funktion, wird im Dashboard-Kontext nicht mehr geladen. #}
+   sonst Name); Fällig heute · Kommende Wiedervorlagen (alle künftigen, nach Datum
+   gruppiert, „mehr anzeigen“) · Offene To-Dos; Karte „Routenplaner“ (Google-Maps-Link,
+   Start = Parameter routen_start, Ziel leer, neuer Tab) und die Liste „Meine Termine“
+   [ANNAHME bleibt] – für Handelsvertreter mit den Sperrzeiten (Phase 143).
+   Nachtrag 08.10.2026 (Antwort Andreas): „Mir zugeteilte Vorgänge“ entfällt ganz.
+   v31 (PLAN_LEAD_V5 Phasen 154/158):
+   - Kacheln verschieben: Stift oben rechts (lokales SVG) → Bearbeitungsmodus (Griff an jeder
+     Karte, Drag & Drop mit Platzhalter, Einrasten ins Raster, keine Größenänderung); Haken
+     speichert die Reihenfolge je Nutzer (POST /lead-management/dashboard/kacheln →
+     benutzer_einstellungen Key dashboard_kacheln), Escape verwirft, „Zurücksetzen“ =
+     Standard; neue Kacheln hängen hinten an (lead_dashboard.kachel_reihenfolge). Daten nur
+     über data-Attribute, Verhalten in app/static/lm_dashboard.js (kein tojson in on*-Attributen).
+     Die Karten liegen in EINEM Raster (.lm-dash-raster, zwei Spalten ab 1200 px, Reihenfolge =
+     Leserichtung Spalte 1 → Spalte 2); Hell/Dunkel identisch über Tokens.
+   - „Fällig heute“: Button „Erledigt“ als überlappendes Element rechts in der Zeile (position
+     absolute in der Aktionszelle), sichtbar vor und nach dem Klick; Erledigt per fetch, danach
+     Zeile durchgestrichen mit „Rückgängig“; Verschieben im 5-Minuten-Raster (step=300).
+     Fehlerursache (Gesamtübersicht): das v23-Markup legte „Erledigt“ in ein <details>-Menü
+     (.lm-wv-menue) OHNE position:absolute – style.css positioniert nur .lm-aktion .lm-menue;
+     das geöffnete Menü floss in der 1 %-breiten Aktionszelle (white-space:nowrap) in den
+     Tabellenfluss, schob den Knopf nach unten bzw. aus der Zelle (zusätzlich machte
+     .lm-aktion {display:flex} die Zelle bis v29 zum Flex-Container), und nach dem Klick
+     verschwand die Zeile durch Neuladen.
+   - Krankheit: Innendienst-Sicht zeigt unter „Fällig heute“ alle Vor-Ort-Termine und
+     Vorab-Gespräche kranker Vertriebler (lead_dashboard.kranke_termine) mit rotem Hinweis
+     „Krankheit: <Name>“ und den Knöpfen „Umbuchen“ (Terminassistent ohne den Kranken,
+     Parameter ohne_ad_id – Route Agent T) und „Absagen“; Kachel „Meine Abwesenheit“ für den
+     eigenen Eintrag (abwesenheiten.anlegen/beenden). #}
 {% block inhalt %}
 {{ lm_nav('dashboard') }}
 {% set hv_nur = hv_sicht | default(hv) %}
@@ -36,6 +53,13 @@
             <a href="/lead-management/uebersicht">Team</a>
         </nav>
         {% endif %}
+        {#- v31 (Phase 154): Stift → Bearbeitungsmodus, Haken speichert, Zurücksetzen, Abbrechen (Escape) #}
+        <span class="lm-dash-werkzeuge" id="lm-dash-werkzeuge" data-url="/lead-management/dashboard/kacheln">
+            <button type="button" class="knopf klein zweitrangig" id="lm-dash-stift" title="Kacheln verschieben (Reihenfolge je Nutzer)" aria-label="Kacheln verschieben">{{ symbol('stift') }} Anordnen</button>
+            <button type="button" class="knopf klein" id="lm-dash-haken" hidden title="Reihenfolge speichern" aria-label="Reihenfolge speichern">{{ symbol('haken') }} Fertig</button>
+            <button type="button" class="knopf klein zweitrangig" id="lm-dash-reset" hidden title="Standardreihenfolge wiederherstellen">{{ symbol('zuruecksetzen') }} Zurücksetzen</button>
+            <button type="button" class="knopf klein ghost" id="lm-dash-abbruch" hidden title="Änderungen verwerfen (Escape)">Abbrechen</button>
+        </span>
         <details class="menue lm-mehr">
             <summary class="knopf klein zweitrangig">Mehr …</summary>
             <div class="menue-liste">
@@ -62,7 +86,8 @@
         </details>
     </div>
 </div>
-{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+<p class="meldung" id="lm-dash-meldung" {{ '' if meldung else 'hidden' }} role="status">{{ meldung }}</p>
+<p class="lm-dash-bearbeiten-hinweis" id="lm-dash-hinweis" hidden>{{ symbol('griff') }} Kacheln mit dem Griff ziehen und in das Raster einrasten lassen – „Fertig“ speichert die Reihenfolge nur für Sie, Escape verwirft.</p>
 
 <div class="lm-kacheln lm-dash-kacheln lm-dash-kacheln-v4">
     <a class="kachel stat" href="#faellig" title="Lead-Wiedervorlagen und Rückrufe mit Datum bis heute">
@@ -74,18 +99,19 @@
     <a class="kachel stat" href="/lead-management/todos">
         <span class="stat-zahl {{ 'warn' if kacheln.todos_faellig }}">{{ kacheln.todos }}</span>Offene To-Dos
         <span class="lm-delta">{% if kacheln.todos_faellig %}davon {{ kacheln.todos_faellig }} fällig{% else %}Arbeitsaufträge an mich{% endif %}</span></a>
-    {% if mails_fehler %}
-    {#- v29 (Phase 142, Vertrag L2): Lead-Mails mit Status fehler – nur sichtbar, wenn > 0 #}
-    <a class="kachel stat lm-mails-fehler-kachel" href="/lead-management/kommunikation?status=fehler" title="Lead-Mails, die nicht gesendet werden konnten (Warteschlange)">
-        <span class="stat-zahl">{{ mails_fehler }}</span>Mails mit Fehler
-        <span class="lm-delta">Warteschlange öffnen</span></a>
+    {% if kranke_termine %}
+    {#- v31 (Phase 158): Zähler der Termine kranker Vertriebler (Innendienst-Sicht) #}
+    <a class="kachel stat kachel-warn" href="#krankheit" title="Vor-Ort-Termine und Vorab-Gespräche kranker Vertriebler – umbuchen oder absagen">
+        <span class="stat-zahl">{{ kranke_termine | length }}</span>Termine bei Krankheit
+        <span class="lm-delta">umbuchen oder absagen</span></a>
     {% endif %}
 </div>
 
 {# Wiedervorlage-Zeilen: Chip, Kunde (Kartei), Grund/Phase, Schnellaktionen
-   Erledigt (= Wiedervorlage löschen) / Verschieben – beides mit Dialog im ⋯-Menü #}
+   Erledigt (= Wiedervorlage löschen, v31: überlappender Knopf rechts, fetch + Rückgängig) /
+   Verschieben (▾-Menü, 5-Minuten-Raster) #}
 {% macro wv_zeile(z, art) %}
-        <tr class="{{ 'ueberfaellig' if z.ueberfaellig }}">
+        <tr class="{{ 'ueberfaellig' if z.ueberfaellig }}" data-vorgang="{{ z.vorgang.id }}" data-art="{{ art }}">
             <td class="lm-wv-datum">{{ wiedervorlage_chip(z.datum, heute) }}{% if z.mit_uhrzeit %}<span class="dezent"> {{ z.datum.strftime('%H:%M') }}</span>{% endif %}</td>
             {#- kompakt (v29): Grund/Phase als zweite Zeile unter dem Kundennamen, damit die
                 schmale Dashboard-Spalte nicht umbricht #}
@@ -96,28 +122,30 @@
                 {% if z.frei and art == 'lead' %}<span class="lm-flag" title="Noch kein Leadmanager zugeordnet">⚑ frei</span>{% endif %}
                 <div class="lm-wv-grund">{{ z.grund }}{% if z.phase %} <span class="dezent">· {{ z.phase }}</span>{% endif %}</div></td>
             <td class="lm-aktion lm-wv-aktion">
-                <details>
-                    <summary class="knopf klein zweitrangig" title="Erledigt oder verschieben">{{ symbol('haken') }} Erledigt ▾</summary>
-                    <div class="lm-menue lm-wv-menue">
-                        <form method="post" action="/lead-management/dashboard/wiedervorlage/{{ z.vorgang.id }}"
-                              onsubmit="return confirm('Wiedervorlage als erledigt löschen? {{ 'Der Lead geht zurück auf Neu.' if z.quelle == 'zurueckgestellt' }}')">
-                            <input type="hidden" name="art" value="{{ art }}">
-                            <input type="hidden" name="aktion" value="erledigt">
-                            <input type="hidden" name="zurueck" value="/lead-management/dashboard">
-                            <button class="knopf klein" type="submit">{{ symbol('haken') }} Erledigt – Wiedervorlage löschen</button>
-                        </form>
-                        <form method="post" action="/lead-management/dashboard/wiedervorlage/{{ z.vorgang.id }}" class="lm-wv-verschieben">
-                            <input type="hidden" name="art" value="{{ art }}">
-                            <input type="hidden" name="aktion" value="verschieben">
-                            <input type="hidden" name="zurueck" value="/lead-management/dashboard">
-                            <label>Verschieben auf
-                                {% if z.mit_uhrzeit %}<input type="datetime-local" name="datum" step="900" required>
-                                {% else %}<input type="date" name="datum" required>{% endif %}</label>
-                            <button class="knopf klein zweitrangig" type="submit">{{ symbol('wiedervorlage') }} Verschieben</button>
-                        </form>
-                        <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ z.vorgang.id }}">{{ symbol('oeffnen') }} Kartei öffnen</a>
-                    </div>
-                </details>
+                <span class="lm-wv-aktion-leiste">
+                    <form method="post" action="/lead-management/dashboard/wiedervorlage/{{ z.vorgang.id }}" class="lm-wv-erledigt-form"
+                          data-bestaetigen="Wiedervorlage als erledigt löschen? {{ 'Der Lead geht zurück auf Neu.' if z.quelle == 'zurueckgestellt' }}">
+                        <input type="hidden" name="art" value="{{ art }}">
+                        <input type="hidden" name="aktion" value="erledigt">
+                        <input type="hidden" name="zurueck" value="/lead-management/dashboard">
+                        <button class="knopf klein lm-wv-erledigt" type="submit" title="Erledigt – Wiedervorlage löschen (Rückgängig möglich)">{{ symbol('haken') }} Erledigt</button>
+                    </form>
+                    <details>
+                        <summary class="knopf klein zweitrangig" title="Verschieben oder Kartei öffnen" aria-label="Weitere Aktionen">▾</summary>
+                        <div class="lm-menue lm-wv-menue">
+                            <form method="post" action="/lead-management/dashboard/wiedervorlage/{{ z.vorgang.id }}" class="lm-wv-verschieben">
+                                <input type="hidden" name="art" value="{{ art }}">
+                                <input type="hidden" name="aktion" value="verschieben">
+                                <input type="hidden" name="zurueck" value="/lead-management/dashboard">
+                                <label>Verschieben auf
+                                    {% if z.mit_uhrzeit %}<input type="datetime-local" name="datum" step="300" required>
+                                    {% else %}<input type="date" name="datum" required>{% endif %}</label>
+                                <button class="knopf klein zweitrangig" type="submit">{{ symbol('wiedervorlage') }} Verschieben</button>
+                            </form>
+                            <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ z.vorgang.id }}">{{ symbol('oeffnen') }} Kartei öffnen</a>
+                        </div>
+                    </details>
+                </span>
             </td>
         </tr>
 {% endmacro %}
@@ -135,13 +163,49 @@
 </details>
 {% endmacro %}
 
-<div class="lm-dash-grid-v4 lm-dash-kompakt" id="wiedervorlagen">
-    <div class="lm-dash-spalte">
-        <div class="lm-karte" id="faellig">
+{# v31 (Phase 158): Termine kranker Vertriebler in der Innendienst-Sicht „Fällig heute“ #}
+{% macro krank_tabelle(zeilen) %}
+<details class="lm-wv-gruppe" open id="krankheit">
+    <summary class="lm-gruppe-kopf">Termine betroffen durch Krankheit <span class="n rot">{{ zeilen | length }}</span><span class="erkl">umbuchen (Assistent ohne den kranken Vertriebler) oder absagen – keine Kundenmail ohne Klick</span></summary>
+    <table class="tabelle lm-krank-tabelle">
+        <tbody>
+        {% for z in zeilen %}
+        <tr data-termin="{{ z.termin.id }}">
+            <td>{{ z.termin.beginn | de_datum('%a %d.%m.') }} <strong>{{ z.termin.beginn.strftime('%H:%M') }}</strong>
+                <span class="abzeichen lm-terminart lm-terminart-{{ z.termin.typ or 'vot' }}">{{ z.typ }}</span></td>
+            <td class="lm-wv-kunde">{% if z.kunde %}<a href="/lead-management/lead/{{ z.vorgang.id }}"><strong>{{ z.kunde.anzeige_name }}</strong></a> <span class="dezent">{{ z.kunde.ort or '' }}</span>{% else %}?{% endif %}
+                <div class="lm-wv-grund"><span class="lm-krank-hinweis">{{ symbol('warnung') }} {{ z.hinweis }}</span>
+                    {% if z.eintrag.bis %}<span class="dezent">· bis {{ z.eintrag.bis.strftime('%d.%m.%Y') }}</span>{% else %}<span class="dezent">· offenes Ende</span>{% endif %}</div></td>
+            <td class="lm-krank-aktionen">
+                <a class="knopf klein{{ '' if terminierung_aktiv else ' zweitrangig' }}" href="{{ z.umbuchen_url }}"
+                   title="{{ 'Terminassistent ohne ' ~ z.ad_name ~ ' (Ersatz-Vertriebler, Ersatzkunde-Logik)' if terminierung_aktiv else testphase_hinweis ~ ' – Vorschläge ansehen' }}">{{ symbol('kalender') }} Umbuchen</a>
+                <form method="post" action="{{ z.absagen_url }}" data-bestaetigen="Termin absagen? Der Kunde erhält die Absage mit Storno-ICS (Vorlage terminabsage)."
+                      {% if not terminierung_aktiv %}data-gesperrt="{{ testphase_hinweis }}"{% endif %}>
+                    <input type="hidden" name="grund" value="Sonstiges">
+                    <input type="hidden" name="grund_text" value="{{ z.hinweis }}">
+                    <input type="hidden" name="zurueck" value="/lead-management/dashboard#krankheit">
+                    <button class="knopf klein zweitrangig" type="submit" {% if not terminierung_aktiv %}disabled title="{{ testphase_hinweis }}"{% else %}title="Termin absagen (Ersatzkunde-Dialog folgt)"{% endif %}>{{ symbol('verbot') }} Absagen</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</details>
+{% endmacro %}
+
+{# v31 (Phase 154): eine Karte je Key – Reihenfolge aus kacheln_reihenfolge (je Nutzer) #}
+{% macro kachel(key) %}
+{% if key == 'faellig' %}
+        <div class="lm-karte" id="faellig" data-kachel="faellig">
+            <button type="button" class="lm-kachel-griff" title="Kachel verschieben" aria-label="Kachel „Fällig heute“ verschieben">{{ symbol('griff') }}</button>
             <h2>Fällig heute <span class="sub">Lead-Wiedervorlagen · Rückrufe · Zurückgestellt-bis · {{ 'eigene Leads' if hv else 'meine + freie Leads' }}</span></h2>
             {{ wv_tabelle(lead_wv_faellig, 'Fällig', 'lead', leer='Keine fällige Wiedervorlage – gut so.') }}
+            {% if kranke_termine %}{{ krank_tabelle(kranke_termine) }}{% endif %}
         </div>
-        <div class="lm-karte" id="kommende">
+{% elif key == 'kommende' %}
+        <div class="lm-karte" id="kommende" data-kachel="kommende">
+            <button type="button" class="lm-kachel-griff" title="Kachel verschieben" aria-label="Kachel „Kommende Wiedervorlagen“ verschieben">{{ symbol('griff') }}</button>
             <h2>Kommende Wiedervorlagen <span class="sub">alle künftigen · nach Datum</span>
                 <span class="n lm-h2-knopf">{{ lead_wv_kommend | length }}</span></h2>
             {% if kommende_gruppen %}
@@ -182,23 +246,27 @@
             {% endif %}
             {% else %}<p class="dezent lm-wv-leer">Keine kommenden Wiedervorlagen.</p>{% endif %}
         </div>
-        <div class="lm-karte" id="todos">
+{% elif key == 'todos' %}
+        <div class="lm-karte" id="todos" data-kachel="todos">
+            <button type="button" class="lm-kachel-griff" title="Kachel verschieben" aria-label="Kachel „Offene To-Dos“ verschieben">{{ symbol('griff') }}</button>
             <h2>Offene To-Dos <span class="sub">fällige zuerst</span>
                 <a class="knopf klein zweitrangig lm-h2-knopf" href="/lead-management/todos">Alle To-Dos →</a></h2>
             {{ todo_liste(todos[:8], benutzer, heute, zurueck='/lead-management/dashboard', leer_text='Keine offenen To-Dos.') }}
             {% if todos | length > 8 %}<p class="dezent lm-wv-leer"><a href="/lead-management/todos">{{ todos | length - 8 }} weitere in der To-Do-Liste</a></p>{% endif %}
             {{ todo_formular(empfaenger, benutzer, zurueck='/lead-management/dashboard') }}
         </div>
-    </div>
-    <div class="lm-dash-spalte">
+{% elif key == 'routenplaner' %}
         {#- v29 (Phase 141): Routenplaner – Start aus Parameter routen_start, Ziel leer, neuer Tab #}
-        <div class="lm-karte lm-routenplaner" id="routenplaner">
+        <div class="lm-karte lm-routenplaner" id="routenplaner" data-kachel="routenplaner">
+            <button type="button" class="lm-kachel-griff" title="Kachel verschieben" aria-label="Kachel „Routenplaner“ verschieben">{{ symbol('griff') }}</button>
             <h2>{{ symbol('karte') }} Routenplaner <span class="sub">Google Maps · Start Friondo, Ziel frei</span></h2>
             <p class="lm-routen-start">{{ symbol('ort') }} Start: <strong>{{ routen_start }}</strong></p>
             <a class="knopf" id="lm-routen-link" href="{{ routen_link }}" target="_blank" rel="noopener noreferrer">{{ symbol('karte') }} Route in Google Maps öffnen</a>
             <p class="dezent lm-routen-hinweis">Das Ziel tragen Sie in Google Maps ein; die Startadresse pflegt der Admin in den Lead-Einstellungen (routen_start).</p>
         </div>
-        <div class="lm-karte" id="termine">
+{% elif key == 'termine' %}
+        <div class="lm-karte" id="termine" data-kachel="termine">
+            <button type="button" class="lm-kachel-griff" title="Kachel verschieben" aria-label="Kachel „Meine Termine“ verschieben">{{ symbol('griff') }}</button>
             <h2>Meine Termine · nächste {{ horizont }} Tage <span class="sub">alle Terminarten</span>
                 {% if not hv %}
                 <nav class="lm-umschalter klein lm-h2-knopf" aria-label="Termine">
@@ -236,7 +304,7 @@
                         {% if sz.grund_text %}<span class="dezent">· {{ sz.grund_text }}</span>{% endif %}
                         {#- Nachtrag 08.10.2026: vom Innendienst/Admin eingetragene Sperrzeit #}
                         {% if sz.erstellt_von and sz.erstellt_von != sz.ad_id %}<span class="dezent">· eingetragen von {{ (sperrzeit_namen | default({})).get(sz.erstellt_von, '?') }}</span>{% endif %}
-                        <form method="post" action="/lead-management/dashboard/sperrzeit/{{ sz.id }}/loeschen" onsubmit="return confirm('Sperrzeit entfernen?')">
+                        <form method="post" action="/lead-management/dashboard/sperrzeit/{{ sz.id }}/loeschen" data-bestaetigen="Sperrzeit entfernen?">
                             <input type="hidden" name="zurueck" value="/lead-management/dashboard#sperrzeiten">
                             <button class="knopf klein ghost" type="submit" title="Sperrzeit entfernen">{{ symbol('loeschen') }}</button>
                         </form></li>
@@ -254,6 +322,49 @@
             </div>
             {% endif %}
         </div>
-    </div>
+{% elif key == 'mails_fehler' and mails_fehler %}
+        {#- v29 (Phase 142, Vertrag L2): Lead-Mails mit Status fehler – nur sichtbar, wenn > 0 #}
+        <div class="lm-karte lm-mails-fehler-kachel" id="mails-fehler" data-kachel="mails_fehler">
+            <button type="button" class="lm-kachel-griff" title="Kachel verschieben" aria-label="Kachel „Mails mit Fehler“ verschieben">{{ symbol('griff') }}</button>
+            <h2>Mails mit Fehler <span class="sub">Lead-Mails, die nicht gesendet werden konnten</span></h2>
+            <p><a class="knopf klein" href="/lead-management/kommunikation?status=fehler">{{ symbol('brief') }} {{ mails_fehler }} in der Warteschlange öffnen</a></p>
+        </div>
+{% elif key == 'abwesenheit' %}
+        {#- v31 (Phase 158): eigener Krankheits-/Urlaubseintrag (Wirkung: Assistent schlägt den
+            Vertriebler nicht vor, seine Termine stehen beim Innendienst unter „Fällig heute“) #}
+        <div class="lm-karte" id="abwesenheit" data-kachel="abwesenheit">
+            <button type="button" class="lm-kachel-griff" title="Kachel verschieben" aria-label="Kachel „Meine Abwesenheit“ verschieben">{{ symbol('griff') }}</button>
+            <h2>Meine Abwesenheit <span class="sub">Krankheit oder Urlaub eintragen – Termine im Zeitraum erscheinen beim Innendienst unter „Fällig heute“</span></h2>
+            {% if abwesenheiten %}
+            <ul class="lm-abwesenheit-liste">
+                {% for a in abwesenheiten if not a.vorbei %}
+                <li class="{{ 'lm-abwesenheit-aktiv' if a.aktiv }}"><strong>{{ a.art }}</strong>
+                    {{ a.eintrag.von.strftime('%d.%m.%Y') }} – {{ a.eintrag.bis.strftime('%d.%m.%Y') if a.eintrag.bis else 'offen' }}
+                    {% if a.eintrag.bemerkung %}<span class="dezent">· {{ a.eintrag.bemerkung }}</span>{% endif %}
+                    {% if a.aktiv %}<span class="lm-krank-hinweis">{{ a.art }}: läuft</span>{% endif %}
+                    <form method="post" action="/lead-management/dashboard/abwesenheit/{{ a.eintrag.id }}/beenden" data-bestaetigen="Abwesenheit heute beenden? Die Hinweise beim Innendienst verschwinden damit.">
+                        <input type="hidden" name="zurueck" value="/lead-management/dashboard#abwesenheit">
+                        <button class="knopf klein ghost" type="submit" title="Heute beenden">{{ symbol('haken') }} beenden</button>
+                    </form></li>
+                {% else %}
+                <li class="dezent">Keine laufende oder kommende Abwesenheit.</li>
+                {% endfor %}
+            </ul>
+            {% else %}<p class="dezent lm-wv-leer">Keine Abwesenheit eingetragen.</p>{% endif %}
+            <form method="post" action="/lead-management/dashboard/abwesenheit" class="lm-abwesenheit-form" id="lm-abwesenheit-form">
+                <input type="hidden" name="zurueck" value="/lead-management/dashboard#abwesenheit">
+                <label>Art <select name="art">{% for key_, name in abwesenheit_arten %}<option value="{{ key_ }}">{{ name }}</option>{% endfor %}</select></label>
+                <label>von <input type="date" name="von" required value="{{ heute.strftime('%Y-%m-%d') }}"></label>
+                <label>bis (leer = offen) <input type="date" name="bis"></label>
+                <label>Bemerkung <input type="text" name="bemerkung" maxlength="300" placeholder="optional"></label>
+                <button class="knopf klein" type="submit">{{ symbol('plus') }} Eintragen</button>
+            </form>
+        </div>
+{% endif %}
+{% endmacro %}
+
+<div class="lm-dash-raster lm-dash-kompakt" id="lm-dash-raster" data-reihenfolge="{{ kacheln_reihenfolge | join(',') }}">
+    {% for key in kacheln_reihenfolge %}{{ kachel(key) }}{% endfor %}
 </div>
+<script src="/static/lm_dashboard.js?v={{ css_version }}" defer></script>
 {% endblock %}

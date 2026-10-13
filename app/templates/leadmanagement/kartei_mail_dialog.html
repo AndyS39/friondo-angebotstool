@@ -1,0 +1,51 @@
+{% from "_symbole.html" import symbol %}
+{# v31 (PLAN_LEAD_V5 Phase 158) – Dialog „E-Mail aus der Kundenkartei mit Vorlage“
+   (Schnellaktion „E-Mail“ im Kopf, Knopf „Mail mit Vorlage“ im Reiter E-Mail).
+   Ablauf (lm_kartei.js, Endpunkte von T in routers/lm_mail.py):
+   Öffnen → GET {{ mail_dialog_url }}?vorlage=&objekt_id=&termin_id= → {ok, vorlage, vorlage_key,
+   betreff, html, text, fehlende[], anhaenge[], termin_id, objekt_id, mail_versand_aktiv,
+   mailsperre_hinweis, vorlagen[{key, name, kategorie}]} → Vorlagenwahl (alle Lead-Vorlagen inkl.
+   Terminbestätigung je Vertriebler und terminbestaetigung_objekte), Objektauswahl bei mehreren
+   Objekten, Terminauswahl bei mehreren aktiven Terminen, Vorschau Betreff/Text mit ausgefüllten
+   Platzhaltern (Lead, Objekt, aktiver Termin, Vertriebler) zum Nachbearbeiten, ICS-Hinweis bei
+   Terminvorlagen, fehlende Pflichtdaten rot (Senden gesperrt) → POST {{ mail_senden_url }}
+   (JSON {vorlage, betreff, text, objekt_id, termin_id} → lead_mail.in_warteschlange: Absender
+   termin@, HV-Versandweg, Testphase: Status gesperrt im Lauf lead-mail) → Aktivität + E-Mail-Verlauf.
+   Ohne JavaScript postet das Formular direkt (Redirect mit Meldung). #}
+<dialog id="dlg-mail" class="lk-dialog lk-dialog-breit" data-dialog-url="{{ mail_dialog_url }}" data-senden-url="{{ mail_senden_url }}">
+    <form method="post" action="{{ mail_senden_url }}" class="formular lk-mail-form" id="lk-mail-form">
+        <h3>{{ symbol('brief') }} E-Mail mit Vorlage</h3>
+        <p class="dezent">An <strong data-rolle="an">{{ kunde.email if kunde else '–' }}</strong> · Absender <span data-rolle="absender">{{ mail_absender }}</span>
+            {% if not mail_versand_aktiv %}· <span class="lm-warn" data-rolle="sperre">{{ mailsperre_hinweis }} – die Mail wird eingereiht und bleibt gesperrt (Vorschau im E-Mail-Verlauf).</span>{% endif %}</p>
+        <div class="lk-mail-zeile">
+            <label>Vorlage
+                <select name="vorlage" data-rolle="vorlage">
+                    {% for v in vorlagen %}<option value="{{ v }}">{{ v }}</option>{% endfor %}
+                </select></label>
+            <label data-rolle="objekt-wahl" {{ '' if objekte.mehrere else 'hidden' }}>Objekt
+                <select name="objekt_id" data-rolle="objekt">
+                    {% for o in objekte.liste %}<option value="{{ o.id }}">{{ o.objekt.bezeichnung }} – {{ o.objekt.strasse }}, {{ o.objekt.plz }} {{ o.objekt.ort }}</option>{% endfor %}
+                </select></label>
+            <label data-rolle="termin-wahl" {{ '' if termine_aktiv | length > 1 else 'hidden' }}>Termin
+                <select name="termin_id" data-rolle="termin">
+                    <option value="">automatisch (Objekt / nächster aktiver Termin)</option>
+                    {% for t in termine_aktiv %}<option value="{{ t.id }}">{{ t.beginn | de_datum('%a %d.%m.%Y %H:%M') if t.beginn else 'ohne Uhrzeit' }} · {{ termin_status_namen.get(t.status, t.status) }}{% if (t.typ or 'vot') != 'vot' %} · {{ termin_typ_namen.get(t.typ, t.typ) }}{% endif %}</option>{% endfor %}
+                </select></label>
+        </div>
+        <div class="lk-mail-vorschau">
+            <label class="breit">Betreff <input type="text" name="betreff" maxlength="300" data-rolle="betreff"></label>
+            <label class="breit">Text <small class="dezent">(Vorschau mit ausgefüllten Platzhaltern – zum Nachbearbeiten)</small>
+                <textarea name="text" rows="10" data-rolle="text"></textarea></label>
+            <input type="hidden" name="text_geaendert" value="" data-rolle="text-geaendert">
+            <p class="dezent" data-rolle="ics" hidden>{{ symbol('kalender') }} Anhang: <span data-rolle="ics-name"></span></p>
+            <ul class="lk-mail-fehlend" data-rolle="fehlende" hidden></ul>
+            <p class="dezent" data-rolle="laden" hidden>Vorschau wird geladen …</p>
+            <p class="lm-rot" data-rolle="fehler" hidden></p>
+        </div>
+        <div class="formzeile">
+            <button class="knopf" type="submit" data-rolle="senden">Senden / einreihen</button>
+            <a class="knopf zweitrangig" href="{{ kartei_url }}/kommunikation">Warteschlange</a>
+            <button class="knopf zweitrangig" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+        </div>
+    </form>
+</dialog>

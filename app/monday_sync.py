@@ -12,7 +12,7 @@ import contextlib
 import json
 import re
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta   # v32: Termin-Ende beim Nachführen
 
 from sqlalchemy.orm import Session
 
@@ -234,6 +234,10 @@ def kunde_fuer_lead(session: Session, lead: Lead):
         if wert:
             setattr(kunde, feld, wert)
     session.flush()
+    # v31 (PLAN_LEAD_V5 Phase 153): Hauptobjekt(e) des Kunden nachziehen (Kundenfelder
+    # sind der Master des Hauptobjekts – Vorschlag Agent AT)
+    from app import objekte
+    objekte.hauptobjekt_sync(session, kunde)
     lead.kunde_id = kunde.id
     return kunde
 
@@ -283,6 +287,117 @@ def _nachlauf(session: Session, fehler: list[str]) -> None:
         leadmanagement.nach_sync(session)
     except Exception as problem:
         fehler.append(f"Nachlauf (Lead-Phasen): {problem}")
+    # v32 (PLAN_V19 Phase 161): VOT-Termine aus leads.vot_datum nachführen – geändertes
+    # Datum aktualisiert den vorhandenen monday-Eintrag, gelöschtes Datum setzt ihn auf
+    # abgesagt (Mein Tag liest ausschließlich vot_termine). Reine DB-Arbeit.
+    try:
+        vot_termine_nachfuehren(session)
+    except Exception as problem:
+        fehler.append(f"Nachlauf (VOT-Termine): {problem}")
+
+
+# --- v32 (PLAN_V19 Phase 161): VOT-Termine nachführen ------------------------------------
+
+OFFENE_TERMIN_STATUS = ("geplant", "bestaetigt", "unbestaetigt", "vorgemerkt")
+ABGESAGT_GRUND_SYNC = "monday: VOT-Datum entfernt"
+
+
+def vot_termine_nachfuehren(session: Session, nur_vorgang_ids=None, anlegen: bool = True) -> dict:
+    """leads.vot_datum ↔ vot_termine (quelle = monday) je Lead-Vorgang:
+    - offener monday-Termin mit abweichendem Datum/AD → DERSELBE Eintrag wird aktualisiert
+      (nicht dupliziert), objekt_id = Hauptobjekt (v31), Adresse = Objektadresse;
+    - VOT-Datum in monday gelöscht → offene monday-Termine „abgesagt“ (grund_text
+      ABGESAGT_GRUND_SYNC), Lead-Phase neu berechnet;
+    - Datum nach einer Sync-Absage wieder gesetzt → derselbe Eintrag wieder „geplant“;
+    - kein offener Termin (erfolgt/no_show/manuell abgesagt) und Datum vorhanden → neuer
+      Eintrag (nur mit anlegen=True; sonst zählt er als „fehlend“ – scripts/vot_abgleich.py).
+    Liefert Zähler {angelegt, aktualisiert, abgesagt, reaktiviert, fehlend}; idempotent."""
+    from app import leadmanagement, objekte
+    from app.models import Vorgang, VotTermin
+    zaehler = {"angelegt": 0, "aktualisiert": 0, "abgesagt": 0, "reaktiviert": 0, "fehlend": 0}
+    abfrage = session.query(Vorgang).filter(Vorgang.lead_id.isnot(None))
+    if nur_vorgang_ids:
+        abfrage = abfrage.filter(Vorgang.id.in_(list(nur_vorgang_ids)))
+    vorgaenge = abfrage.order_by(Vorgang.id).all()
+    leads = {l.id: l for l in session.query(Lead)
+             .filter(Lead.id.in_({v.lead_id for v in vorgaenge} or {0}))}
+    termine_je_vorgang: dict[int, list[VotTermin]] = {}
+    for t in (session.query(VotTermin)
+              .filter(VotTermin.quelle == "monday",
+                      VotTermin.vorgang_id.in_({v.id for v in vorgaenge} or {0}))
+              .order_by(VotTermin.id)):
+        termine_je_vorgang.setdefault(t.vorgang_id, []).append(t)
+    for vorgang in vorgaenge:
+        lead = leads.get(vorgang.lead_id)
+        if lead is None:
+            continue
+        termine = termine_je_vorgang.get(vorgang.id, [])
+        offen = [t for t in termine if t.status in OFFENE_TERMIN_STATUS]
+        if lead.vot_datum is None:
+            for t in offen:
+                t.status = "abgesagt"
+                t.grund_text = ABGESAGT_GRUND_SYNC
+                zaehler["abgesagt"] += 1
+            if offen:
+                _phase_neu(session, vorgang)
+            continue
+        ziel = offen[0] if offen else None
+        neu = reaktiviert = False
+        if ziel is None:
+            # Termin fand statt (erfolgt), No-Show oder manuell abgesagt/verschoben – bei
+            # UNVERÄNDERTEM monday-Datum bleibt es dabei (sonst würde der Sync alle 15 Minuten
+            # einen neuen Termin anlegen); erst ein neues Datum ergibt einen neuen Eintrag
+            if any(t.beginn == lead.vot_datum and t.grund_text != ABGESAGT_GRUND_SYNC
+                   for t in termine):
+                continue
+            vom_sync = [t for t in termine
+                        if t.status == "abgesagt" and t.grund_text == ABGESAGT_GRUND_SYNC]
+            if vom_sync:
+                ziel = vom_sync[-1]
+                ziel.status = "geplant"
+                ziel.grund_text = ""
+                zaehler["reaktiviert"] += 1
+                reaktiviert = True
+            elif anlegen:
+                ziel = VotTermin(vorgang_id=vorgang.id, quelle="monday", status="geplant",
+                                 demo=False, typ="vot", medium="vor_ort")
+                session.add(ziel)
+                session.flush()
+                zaehler["angelegt"] += 1
+                neu = True
+            else:
+                zaehler["fehlend"] += 1
+                continue
+        geaendert = (ziel.beginn != lead.vot_datum or ziel.ad_id != lead.benutzer_id)
+        if geaendert or ziel.objekt_id is None or not ziel.beginn:
+            profil = leadmanagement.ad_profil(session, lead.benutzer_id or 0)
+            dauer = timedelta(minutes=getattr(profil, "termin_dauer_min", 90) or 90)
+            ziel.beginn = lead.vot_datum
+            ziel.ende = lead.vot_datum + dauer
+            ziel.ad_id = lead.benutzer_id
+            # v31: Hauptobjekt aus der Kundenadresse anlegen, falls der Vorgang (z. B. aus
+            # vorgang_fuer_lead) noch keines hat – wie lead_termin.objekt_holen
+            haupt = objekte.hauptobjekt(session, vorgang.id, anlegen=True)
+            if ziel.objekt_id is None and haupt is not None:
+                ziel.objekt_id = haupt.id
+            ort = objekte.ausfuehrungsort(session, objekt_id=ziel.objekt_id, vorgang=vorgang)
+            ziel.adresse = (ort.get("einzeilig") or ", ".join(x for x in (
+                lead.strasse, f"{lead.plz} {lead.ort}".strip()) if x))[:300]
+            if geaendert and not neu and not reaktiviert:
+                zaehler["aktualisiert"] += 1
+        if reaktiviert:
+            _phase_neu(session, vorgang)
+    session.flush()
+    return zaehler
+
+
+def _phase_neu(session: Session, vorgang) -> None:
+    """Lead-Phase nach Absage/Reaktivierung eines monday-Termins nachziehen (best effort)."""
+    try:
+        from app import leadmanagement
+        leadmanagement.lead_phase_berechnen(session, vorgang)
+    except Exception:   # noqa: BLE001 – der Sync scheitert nie an der Phasenableitung
+        pass
 
 
 def _sync_mit_session(session: Session, fehler: list[str]) -> tuple[int, int, int]:

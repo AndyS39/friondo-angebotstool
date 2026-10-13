@@ -1,8 +1,11 @@
 {% extends "base.html" %}
+{% from "_komponenten.html" import verfolgung_chip %}
 
 {% block titel %}{{ angebot.nummer }} – Meine Angebote{% endblock %}
 
 {% block inhalt %}
+{# v32 (PLAN_V19 Phase 163): Verfolgungs-Chip des Vorgangs #}
+<link rel="stylesheet" href="/static/verfolgung.css?v={{ css_version }}">
 <div class="mobil-inhalt">
     <h1>{{ angebot.nummer }}
         <a class="knopf klein zweitrangig" href="/meine-angebote">Zurück</a>
@@ -12,6 +15,7 @@
         {{ kunde.anzeige_name if kunde else '?' }} ·
         {{ angebot.datum.strftime('%d.%m.%Y') if angebot.datum }} ·
         <span class="abzeichen">{{ angebot.status }}</span>
+        {% if vorgang is defined and vorgang %}{{ verfolgung_chip(vorgang.verfolgung_status, klein=True, vorgang_id=vorgang.id) }}{% endif %}
         {% if angebot.vorgaenger_id %}<span class="abzeichen" title="Neue Version eines früheren Angebots">Version</span>{% endif %}
         {# v30-Nachtrag 12.10.2026 (Entscheidung 9): gewählte Zahlungsbedingung nur lesend #}
         {% if zahlungsbedingung_name %}· Zahlungsbedingung: <strong>{{ zahlungsbedingung_name }}</strong>{% endif %}
@@ -34,19 +38,33 @@
             </select>
         </label>
         <span id="ad-ablehnung" {{ 'hidden' if angebot.status != 'Abgelehnt' }}>
+            {# v32 (PLAN_V19 Phase 163): nur aktive Gründe (Router), Pflicht-Freitext bei
+               freitext_pflicht („Sonstiges“) – Markierung per data-Attribut, Prüfung im Router #}
             <label>Grund der Ablehnung (Pflicht)
-                <select name="ablehnungsgrund">
+                <select name="ablehnungsgrund" id="ad-ablehnungsgrund"
+                        onchange="adFreitextPflicht(this)">
                     <option value="">– bitte wählen –</option>
                     {% for g in ablehnungsgruende %}
-                        <option value="{{ g.name }}" {{ 'selected' if angebot.ablehnungsgrund == g.name }}>{{ g.name }}</option>
+                        <option value="{{ g.name }}" data-freitext-pflicht="{{ '1' if g.freitext_pflicht else '0' }}" {{ 'selected' if angebot.ablehnungsgrund == g.name }}>{{ g.name }}</option>
                     {% endfor %}
                 </select>
             </label>
-            <label>Ergänzung (optional)
-                <input type="text" name="ablehnungsgrund_text" maxlength="500"
+            <label>Ergänzung <span id="ad-ablehnung-pflicht" class="dezent">(optional)</span>
+                <input type="text" name="ablehnungsgrund_text" id="ad-ablehnungsgrund-text" maxlength="500"
                        value="{{ angebot.ablehnungsgrund_text }}">
             </label>
         </span>
+        <script>
+        function adFreitextPflicht(auswahl) {
+            var option = auswahl.options[auswahl.selectedIndex];
+            var pflicht = !!(option && option.getAttribute('data-freitext-pflicht') === '1');
+            var feld = document.getElementById('ad-ablehnungsgrund-text');
+            var text = document.getElementById('ad-ablehnung-pflicht');
+            if (feld) { feld.required = pflicht; }
+            if (text) { text.textContent = pflicht ? '(Pflicht bei diesem Grund)' : '(optional)'; }
+        }
+        adFreitextPflicht(document.getElementById('ad-ablehnungsgrund'));
+        </script>
         <button class="knopf klein" type="submit">Übernehmen</button>
     </form>
     {% endif %}

@@ -41,6 +41,13 @@
 <span class="lm-status" style="--f:{{ z.status_farbe }}" title="Lead-Phase {{ z.status_label }}">{{ z.status_label }}</span>
 {%- endmacro %}
 
+{# v31 (PLAN_LEAD_V5 Phase 153): Badge „Großkunde“ – Klasse .lm-grosskunde (lead_v2.css, Paar
+   --status-violett); steht der Parameter grosskunde_farbe, kommt die Farbe als --f (Daten, kein
+   fester Wert im Template). Dasselbe Makro nutzen Infoabend und HV-Ansicht. #}
+{% macro grosskunde_badge(ctx) -%}
+<span class="lm-grosskunde"{% if ctx and ctx.grosskunde_farbe %} style="--f:{{ ctx.grosskunde_farbe }}"{% endif %} title="Großkunde (Kennzeichen am Kunden, Kundenkartei)">Großkunde</span>
+{%- endmacro %}
+
 {% macro status_zusatz(z) -%}
 {%- if z.telefongespraech %} <span class="lm-status lm-status-zusatz" title="Vorab-Gespräch ({{ 'Teams' if z.vorab.medium == 'teams' else 'Telefon' }}){{ ' am ' ~ (z.vorab.beginn | de_datum('%a %d.%m.%Y %H:%M')) if z.vorab.beginn }}">Telefongespräch</span>{% endif -%}
 {%- if z.vor_termin %} <span class="abzeichen" title="Verloren, bevor ein Vor-Ort-Termin bestand">vor Termin</span>{% endif -%}
@@ -68,6 +75,12 @@
     {%- if z.monday %} <span class="abzeichen" title="gesyncter monday-Lead – Terminierung in monday">monday</span>{% endif %}
     {%- if v.vorab_angebot %} <span class="abzeichen" title="Vorab-Angebot ohne Vor-Ort-Termin (F10)">Vorab-Angebot</span>{% endif %}
     {%- if z.zurueck %} <span class="lm-flag" title="Wiedervorlage fällig – zurück aus „Pausiert“, noch kein neuer Versuch">⚑ zurück</span>{% endif %}
+    {#- v31 (PLAN_LEAD_V5 Phase 153): Badge „Großkunde“ am Kundennamen (Farbe aus Parameter grosskunde_farbe, sonst Status-Mechanik) #}
+    {%- if z.grosskunde %} {{ grosskunde_badge(ctx) }}{% endif %}
+    {#- v31 (Phase 154): Archiv-Kennzeichen und Kopie-Verweise (kopie_von_id, beidseitig) #}
+    {%- if z.archiviert %} <span class="lm-archiv-chip" title="{{ z.archiv_text }}">Archiv</span>{% endif %}
+    {%- if z.kopie_von %} <a class="lm-kopie-link" href="/lead-management/lead/{{ z.kopie_von }}" title="Kopie von Vorgang #{{ z.kopie_von }} (Sammelaktion Duplizieren)">Kopie von #{{ z.kopie_von }}</a>{% endif %}
+    {%- for kid in z.kopien or [] %} <a class="lm-kopie-link" href="/lead-management/lead/{{ kid }}" title="Dupliziert als Vorgang #{{ kid }}">Kopie: #{{ kid }}</a>{% endfor %}
 </td>
 {%- elif key == 'anrede' -%}<td>{{ k.anrede or '–' }}</td>
 {%- elif key == 'vorname' -%}<td>{{ k.vorname or '–' }}</td>
@@ -90,6 +103,9 @@
 <td class="sp-score" data-wert="{{ v.score_punkte if v.score_punkte is not none else '' }}">{% if v.score_klasse %}<span class="abzeichen" title="Score-Klasse {{ v.score_klasse }}{{ ' · ' ~ v.score_punkte ~ ' Punkte' if v.score_punkte is not none }}">{{ v.score_klasse }}</span>{% if v.score_punkte is not none %} <small class="dezent">{{ v.score_punkte }}</small>{% endif %}{% else %}<span class="dezent">–</span>{% endif %}</td>
 {%- elif key == 'kanal' -%}
 <td class="sp-kanal">{% if z.kanal %}<span class="lm-status lm-kanal-label" style="--f:{{ z.kanal_farbe }}" title="Vertriebskanal – steuert das Angebotsprofil">{{ z.kanal }}</span>{% else %}<span class="dezent">–</span>{% endif %}</td>
+{%- elif key == 'grosskunde' -%}
+{#- v31 (Phase 153): Spalte „Großkunde“ (Standard ausgeblendet, sortierbar) #}
+<td class="sp-grosskunde" data-wert="{{ '1' if z.grosskunde else '0' }}">{% if z.grosskunde %}{{ grosskunde_badge(ctx) }}{% else %}<span class="dezent">–</span>{% endif %}</td>
 {%- elif key == 'interessen' -%}
 <td class="sp-interessen"><span class="sparten-chips">
     {%- for s in z.sparten %}{{ chip(s, z.sparten_status.get(s, 'offen') if ctx.board == 'terminiert' else 'offen') }}{% else %}<span class="dezent">–</span>{% endfor -%}
@@ -102,7 +118,27 @@
         <a class="knopf klein zweitrangig" href="/angebote/{{ z.angebote[0].id }}" title="letztes Angebot {{ z.angebote[0].nummer }} öffnen">{{ symbol('oeffnen') }} Angebot öffnen{% if z.angebote | length > 1 %} ({{ z.angebote | length }}){% endif %}</a>
         {%- endif %}
     </div>
+    {%- if z.objekt_gruppen %}
+    {#- v31 (Phase 153, Vertrag AT 4.8): mehrere Objekte → Erfassungen/Angebote/Termine je Objekt (vorgang_verlauf.objekt_gruppen) #}
+    {%- for g in z.objekt_gruppen %}
+    {%- set g_erf = g.erfassungen | rejectattr('archiviert') | list %}
+    {%- set g_ang = g.angebote | rejectattr('archiviert') | list %}
+    {%- set g_term = g.termine | selectattr('status', 'in', ['geplant', 'bestaetigt', 'vorgemerkt']) | list %}
+    <div class="lm-objekt-gruppe{{ ' haupt' if g.haupt }}" title="{{ g.ueberschrift }}">
+        <span class="lm-objekt-name">{{ g.bezeichnung }}</span>{% if g.adresse %} <span class="dezent">{{ g.adresse }}</span>{% endif %}
+        {%- if not g.aktiv %} <span class="abzeichen" title="Objekt deaktiviert – es hängen noch Erfassungen, Angebote oder Termine daran">deaktiviert</span>{% endif %}
+        <div class="lm-objekt-zeilen">
+            {%- if g_erf %}<div class="dezent">Erfassung: {{ g_erf | map(attribute='sparte') | join(', ') }}</div>{% endif %}
+            {%- for a in g_ang %}<div class="dezent lm-angebot-zeile"><a href="/angebote/{{ a.id }}" title="Angebot {{ a.nummer }} öffnen">{{ a.nummer }}</a> {{ status_badge(a.status) }}</div>{% endfor %}
+            {%- for t in g_term[:1] %}<div class="dezent">Termin {{ t.beginn | de_datum('%d.%m.%Y %H:%M') if t.beginn else 'ohne Zeit' }}{{ ' (vorgemerkt)' if t.status == 'vorgemerkt' }}</div>{% endfor %}
+            {%- if not g_erf and not g_ang and not g_term %}<div class="dezent">noch keine Erfassung, kein Angebot, kein Termin</div>{% endif %}
+        </div>
+        {%- if g.aktiv %}<a class="knopf klein zweitrangig" href="/erfassung/sparten?kunde_id={{ k.id }}&amp;lead_id={{ v.lead_id or 0 }}&amp;objekt_id={{ g.objekt_id }}" title="Erfassung für dieses Objekt starten (Ausführungsort = Objektadresse)">{{ symbol('stift') }} Erfassung {{ g.bezeichnung }}</a>{% endif %}
+    </div>
+    {%- endfor %}
+    {%- else %}
     {%- for a in z.angebote[:2] %}<div class="dezent lm-angebot-zeile">{{ a.nummer }} {{ status_badge(a.status) }}</div>{% endfor %}
+    {%- endif %}
     {#- H5 Angebotsversand: Hot-Ampel der bestehenden Angebotsverfolgung (vorgaenge.verfolgung_ampel) bleibt das Werkzeug #}
     {%- if v.verfolgung_ampel %}<div class="lm-angebot-zeile"><span class="abzeichen lm-ampel lm-ampel-{{ v.verfolgung_ampel }}" title="Hot-Ampel der Angebotsverfolgung (Vorgangsakte)">{{ {'heiss': 'heiß', 'warm': 'warm', 'kalt': 'kalt'}.get(v.verfolgung_ampel, v.verfolgung_ampel) }}</span></div>{% endif %}
 </td>
@@ -119,22 +155,28 @@
 {#- v30 (Phase 146): Avatar mit Pfeil, das Auswahlfeld liegt unsichtbar über Avatar + Pfeil (.lm-person-pille) #}
 <td class="sp-ad"><span class="lm-person"><span class="lm-person-pille">{{ avatar(z.ad, 'Außendienst') }}
     {%- if not ctx.nur_lesen %}<span class="lm-avatar-pfeil" aria-hidden="true">▾</span>
-    <select class="lm-inline lm-mini" data-feld="ad_id" data-vorgang="{{ v.id }}" title="Außendienst / Handelsvertreter zuweisen" aria-label="Außendienst zuweisen">
-        <option value="" {{ 'selected' if not v.ad_id }}>– niemand –</option>
-        {%- for b in ctx.ad_wahl %}
+    {#- v31 (PLAN_LEAD_V5 Phase 156): angestellte AD ohne Handelsvertreter; liegt der Lead bei einem HV,
+        nur dessen Gruppe (ctx.ad_gruppen[hv_id]: René → René; Simon-Gruppe → Simon + Mitglieder) #}
+    {%- set ad_wahl = (ctx.ad_gruppen or {}).get(v.ad_id) if (ctx.ad_gruppen and v.ad_id in ctx.ad_gruppen) else ctx.ad_wahl %}
+    <select class="lm-inline lm-mini" data-feld="ad_id" data-vorgang="{{ v.id }}" title="{{ 'Handelsvertreter-Gruppe (Wechsel nur über die Sammelaktion)' if z.hv_lead else 'Außendienst zuweisen (angestellte Außendienstler)' }}" aria-label="Außendienst zuweisen">
+        {%- if not z.hv_lead %}<option value="" {{ 'selected' if not v.ad_id }}>– niemand –</option>{% endif %}
+        {%- for b in ad_wahl %}
         <option value="{{ b.id }}" {{ 'selected' if v.ad_id == b.id }}
                 {%- if b.hv and z.hv_grund and v.ad_id != b.id %} disabled title="{{ z.hv_grund }}"{% endif %}>{{ b.name }}{{ ' (HV)' if b.hv }}</option>
         {%- endfor %}
+        {%- if v.ad_id and z.ad and v.ad_id not in (ad_wahl | map(attribute='id') | list) %}<option value="{{ v.ad_id }}" selected>{{ z.ad.name }} (nicht mehr wählbar)</option>{% endif %}
     </select>
     {%- endif %}</span>
     {%- if z.hv_grund %} <span class="lm-hv-hinweis" title="{{ z.hv_grund }} Handelsvertreter sind deshalb deaktiviert.">{{ symbol('warnung') }}</span>{% endif %}</span></td>
 {%- elif key == 'innendienst' -%}
 <td class="sp-id"><span class="lm-person"><span class="lm-person-pille">{{ avatar(z.leadmanager, 'Innendienst') }}
     {%- if not ctx.nur_lesen and not ctx.hv %}<span class="lm-avatar-pfeil" aria-hidden="true">▾</span>
+    {#- v31 (Phase 156): nur Benutzer mit Häkchen „Leadmanager“ (lead_dropdowns); ein zugewiesener
+        Nicht-Leadmanager bleibt am Lead als „(nicht mehr wählbar)“ #}
     <select class="lm-inline lm-mini" data-feld="leadmanager_id" data-vorgang="{{ v.id }}" title="Innendienst (Leadmanager) zuweisen" aria-label="Innendienst zuweisen">
         <option value="" {{ 'selected' if not v.leadmanager_id }}>– niemand –</option>
         {%- for b in ctx.lm_wahl %}<option value="{{ b.id }}" {{ 'selected' if v.leadmanager_id == b.id }}>{{ b.name }}</option>{% endfor %}
-        {%- if z.leadmanager and z.leadmanager.id not in (ctx.lm_wahl | map(attribute='id') | list) %}<option value="{{ z.leadmanager.id }}" selected>{{ z.leadmanager.name }}</option>{% endif %}
+        {%- if z.leadmanager and z.leadmanager.id not in (ctx.lm_wahl | map(attribute='id') | list) %}<option value="{{ z.leadmanager.id }}" selected>{{ z.leadmanager.name }} (nicht mehr wählbar)</option>{% endif %}
     </select>
     {%- endif %}</span></span></td>
 {%- elif key == 'ort' -%}<td class="sp-ort">{{ k.plz or '' }} {{ k.ort or '' }}{% if not (k.plz or k.ort) %}–{% endif %}</td>
@@ -167,8 +209,8 @@
 
 {% macro lead_zeile(z, spalten, ctx) -%}
 {%- set k = z.kunde -%}
-<tr data-vorgang="{{ z.vorgang.id }}" data-gruppe="{{ z.gruppe }}" data-phase="{{ z.vorgang.lead_phase }}"{% if z.rang0 %} class="lm-rang0" title="{{ z.mail_labels | join(' · ') }}"{% endif %}
-    data-suche="{{ ((k.vorname or '') ~ ' ' ~ (k.nachname or '') ~ ' ' ~ (k.firma or '') ~ ' ' ~ (k.ort or '') ~ ' ' ~ (k.plz or '') ~ ' ' ~ (k.telefon or '') ~ ' ' ~ (k.email or '')) | lower }}">
+<tr data-vorgang="{{ z.vorgang.id }}" data-gruppe="{{ z.gruppe }}" data-phase="{{ z.vorgang.lead_phase }}" class="{{ 'lm-rang0' if z.rang0 }}{{ ' lm-archiviert' if z.archiviert }}"{% if z.rang0 %} title="{{ z.mail_labels | join(' · ') }}"{% elif z.archiviert %} title="{{ z.archiv_text }}"{% endif %}
+    data-suche="{{ ((k.vorname or '') ~ ' ' ~ (k.nachname or '') ~ ' ' ~ (k.firma or '') ~ ' ' ~ (k.ort or '') ~ ' ' ~ (k.plz or '') ~ ' ' ~ (k.telefon or '') ~ ' ' ~ (k.email or '') ~ (' großkunde' if z.grosskunde else '')) | lower }}">
     {%- if ctx.sammel %}<td class="sp-wahl"><input type="checkbox" class="lm-wahl" name="ids" value="{{ z.vorgang.id }}" form="lm-sammelform" aria-label="Lead markieren"></td>{% endif %}
     {%- for sp in spalten if sp.sichtbar %}{{ zelle(sp.key, z, ctx) }}{% endfor %}
 </tr>

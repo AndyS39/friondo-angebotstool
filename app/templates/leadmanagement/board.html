@@ -50,11 +50,14 @@
     <label class="kontrollfeld">Sparte
         <select name="sparte">
             <option value="">alle</option>
-            {% for s in ('WP', 'PV', 'KL', 'WB', 'GW') %}
-                <option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }}>{{ s }}</option>
+            {#- v31 (Phase 157): Sparten inkl. MS/WA/DMS (Jinja-Global lm_sparten) #}
+            {% for s in lm_sparten %}
+                <option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }} title="{{ lm_sparten_lang.get(s, s) }}">{{ s }}</option>
             {% endfor %}
         </select>
     </label>
+    {#- v31 (Phase 153): Filter-Chip „Großkunde“ #}
+    <label class="lm-filterchip {{ 'aktiv' if filter_werte.grosskunde }}" title="Nur Großkunden"><input type="checkbox" name="grosskunde" value="1" {{ 'checked' if filter_werte.grosskunde }}> Großkunde</label>
     {% if score_aktiv %}
     <label class="kontrollfeld">Klasse
         <select name="klasse">
@@ -74,7 +77,7 @@
     <input type="search" name="q" value="{{ filter_werte.q }}" placeholder="Suche">
     {% if board != 'terminiert' %}
     <label class="kontrollfeld"><input type="checkbox" name="seiten" value="1"
-           {{ 'checked' if filter_werte.seiten }}> Zurückgestellt/Nicht erreicht/Unqualifiziert</label>
+           {{ 'checked' if filter_werte.seiten }}> Zurückgestellt/Nicht erreicht/Disqualifiziert</label>
     {% endif %}
     <button class="knopf klein" type="submit">Filtern</button>
 </form>
@@ -85,7 +88,9 @@
     <a href="/lead-management/lead/{{ k.vorgang.id }}"><strong>{{ k.kunde.anzeige_name }}</strong></a>
     <span class="dezent">{{ k.kunde.ort or '?' }}</span>
     <span>
-        {% for s in k.sparten %}<span class="chip chip-{{ s | lower }} chip-offen">{{ s }}</span>{% endfor %}
+        {% for s in k.sparten %}<span class="chip chip-{{ s | lower }} chip-offen" title="{{ lm_sparten_lang.get(s, s) }}">{{ s }}</span>{% endfor %}
+        {#- v31 (Phase 153): Badge „Großkunde“ auf der Kanban-Karte #}
+        {% if k.grosskunde %}<span class="lm-grosskunde"{% if grosskunde_farbe %} style="--f:{{ grosskunde_farbe }}"{% endif %} title="Großkunde">Großkunde</span>{% endif %}
         {% if k.quelle %}<span class="abzeichen">{{ k.quelle.name }}</span>{% endif %}
         {% if k.vorgang.demo %}<span class="demo-badge">Demo</span>{% endif %}
         {% if k.monday %}<span class="abzeichen">monday</span>{% endif %}
@@ -160,7 +165,8 @@
 </dialog>
 <dialog id="dlg-board-unq" class="lm-dialog">
     <form method="post" class="formular">
-        <h3>Unqualifiziert (Grund Pflicht)</h3>
+        {#- v31 (Phase 157): Label „Disqualifiziert“ (Route /unqualifiziert und Key bleiben) #}
+        <h3>Disqualifiziert (Grund Pflicht)</h3>
         <label>Grund
             <select name="grund" required>
                 {% for g in unq_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}
@@ -168,7 +174,7 @@
         </label>
         <label>Freitext <input type="text" name="grund_text"></label>
         <div class="formzeile">
-            <button class="knopf" type="submit">Unqualifiziert setzen</button>
+            <button class="knopf" type="submit">Disqualifiziert setzen</button>
             <button class="knopf zweitrangig" type="button"
                     onclick="this.closest('dialog').close()">Abbrechen</button>
         </div>
@@ -188,7 +194,7 @@
 
 <script>
 // Drag & Drop nur, wo es fachlich passt (Plan 79): → Zurückgestellt (Dialog),
-// → Unqualifiziert (Dialog), Seitenzustände → Neu (Reaktivieren);
+// → Disqualifiziert (Dialog, Key unqualifiziert), Seitenzustände → Neu (Reaktivieren);
 // alles andere läuft über Anrufliste/Assistent.
 let boardGezogen = null;
 let boardQuelle = null;

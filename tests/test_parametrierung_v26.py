@@ -43,6 +43,10 @@ ADMIN_EINTRAEGE = [
 LEAD_EINTRAEGE = ["/parametrierung/lead-quellen", "/parametrierung/lead-parser",
                   "/parametrierung/lead-routing", "/parametrierung/lead-vorlagen",
                   "/parametrierung/lead-logik"]
+# v31 (PLAN_LEAD_V5 Phase 159): Demo-Ende – das Lead-Modul ist für den Innendienst dauerhaft
+# sichtbar (wie v30 bei lead_freigabe_modus = alle); nur die Admin-Einträge der Karte bleiben
+# dem Innendienst verborgen
+LEAD_ADMIN_EINTRAEGE = ["/parametrierung/lead-einstellungen", "/parametrierung/lead-demo"]
 NEUE_SEITEN = ["/parametrierung/angebotstool", "/parametrierung/logik"]
 TESTNAME = "v26-Test Innendienst"
 
@@ -132,8 +136,11 @@ class Uebersicht(Basis):
             self.s.commit()
             r = self.innen_client.get("/parametrierung")
             self.assertEqual(r.status_code, 200)
-            self.assertNotIn('id="bereich-lead"', r.text)
-            for pfad in LEAD_EINTRAEGE:
+            # v31 (PLAN_LEAD_V5 Phase 159): Demo-Ende – das Lead-Modul ist für den Innendienst
+            # unabhängig von lead_freigabe_modus sichtbar (DEMO_BEENDET), die Lead-Karte steht
+            # also auch bei „admin“; die Admin-Einträge der Karte bleiben dem Innendienst verborgen
+            self.assertIn('id="bereich-lead"', r.text)
+            for pfad in LEAD_ADMIN_EINTRAEGE:
                 self.assertNotIn(f'href="{pfad}"', r.text, pfad)
             # mit Lead-Modul: Lead-Karte da, Admin-Einträge der Karte weiterhin nicht
             lead_kern.parameter_setzen(self.s, "lead_freigabe_modus", "alle")

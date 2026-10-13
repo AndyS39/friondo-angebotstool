@@ -10,13 +10,19 @@
 # und Kontaktstatus-Satz; derselbe Satz steht im Lead-Kopf der Vorgangsakte
 # (kopf_kontext). Route, Ergebnis-Buttons, Panel und Tasten 1–7 liegen in
 # app/routers/leadmanagement.py.
+# v31 (PLAN_LEAD_V5 Phasen 153/154/157/158): Chip „Großkunde“ (kunden.grosskunde),
+# archivierte Leads (lead_archiv) nicht in der Arbeitsliste und ohne Fälligkeits-Glocke,
+# Sparten inkl. MS/WA/DMS (app/sparten.py), Endziffern-Suche (rufnummer_suchen: ab 3
+# Ziffern, „endet mit“ zuerst, dann „enthält“, auch monday-Leads).
 
 import json
 from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app import lead_archiv
 from app import leadmanagement as kern
+from app import sparten as sparten_modul
 from app.models import (Benutzer, Kampagne, Kunde, LeadAktivitaet, LeadQualifizierung,
                         LeadQuelle, Vorgang, VotTermin, ANRUF_ERGEBNIS_NAMEN,
                         LEAD_PHASEN, LEAD_PHASEN_NAMEN)
@@ -35,7 +41,8 @@ RAENGE = [
 ]
 CHIPS = [("arbeitsliste", "Arbeitsliste"), ("heute", "Heute eingegangen"),
          ("sla_rot", "SLA rot"), ("drei", "≥ 3 Versuche"),
-         ("rueckruf", "Rückruf heute"), ("frei", "Ohne Leadmanager")]
+         ("rueckruf", "Rückruf heute"), ("frei", "Ohne Leadmanager"),
+         ("grosskunde", "Großkunde")]      # v31 (Phase 153): Filter-Chip „Großkunde“
 # Kanal-Wert für Kunden ohne Vertriebskanal (Filter „Vertriebskanal“)
 KANAL_STANDARD = "Standard"
 
@@ -74,6 +81,7 @@ def filter_aus_query(q) -> dict:
         "sla": q.get("sla", ""), "versuche": _int("versuche"),
         "versuche_min": _int("versuche_min"), "rueckruf": q.get("rueckruf", ""),
         "frei": q.get("frei", "") == "1", "gruppe": q.get("gruppe", ""),
+        "grosskunde": q.get("grosskunde", "") == "1",     # v31 (Phase 153)
     }
 
 
@@ -117,6 +125,8 @@ def aktiver_chip(f: dict) -> str:
         return "rueckruf"
     if f.get("frei"):
         return "frei"
+    if f.get("grosskunde"):
+        return "grosskunde"
     return "arbeitsliste"
 
 
@@ -317,6 +327,8 @@ def daten(session: Session, benutzer, f: dict) -> dict:
     phase_filter = f.get("phase") or ""
     phasen = [p.strip() for p in phase_filter.split(",") if p.strip()]
     abfrage = session.query(Vorgang)
+    # v31 (PLAN_LEAD_V5 Phase 154): archivierte Leads (Lead-Sicht) nie in der Arbeitsliste
+    abfrage = lead_archiv.filter_aktiv(abfrage)
     if phasen:
         abfrage = abfrage.filter(Vorgang.lead_phase.in_(phasen))
     else:
@@ -387,7 +399,8 @@ def daten(session: Session, benutzer, f: dict) -> dict:
             "kampagne": kampagnen.get(v.kampagne_id),
             "kanal": kanal,
             "kanal_farbe": kanal_farbe(farben, kanal),
-            "sparten": [s for s in (kunde.interesse or "").split(",") if s.strip()],
+            "sparten": sparten_modul.codes(kunde.interesse),   # v31: inkl. MS/WA/DMS
+            "grosskunde": bool(getattr(kunde, "grosskunde", False)),   # v31 (Phase 153)
             "wiederkehrer": mehrfach.get(v.kunde_id, 0) > 1,
             "monday": v.eingang_art == "monday",
             "frei": v.leadmanager_id is None,
@@ -408,6 +421,7 @@ def daten(session: Session, benutzer, f: dict) -> dict:
         "drei": sum(1 for z in basis if (z["vorgang"].versuch_nr or 0) >= 3),
         "rueckruf": sum(1 for z in basis if z["rueckruf_heute"]),
         "frei": sum(1 for z in basis if z["frei"]),
+        "grosskunde": sum(1 for z in basis if z["grosskunde"]),   # v31 (Phase 153)
     }
 
     von = _datum(f.get("eingang_von", ""))
@@ -430,6 +444,8 @@ def daten(session: Session, benutzer, f: dict) -> dict:
             continue
         if f.get("frei") and not z["frei"]:
             continue
+        if f.get("grosskunde") and not z["grosskunde"]:
+            continue   # v31 (Phase 153): Chip „Großkunde“
         # v25: gruppe= (alte Übersichts-Links) wird toleriert und ignoriert –
         # die Liste ist durchgehend sortiert; quelle_typ/quelle_id/kampagne_id
         # der Übersichts-Links filtern weiter (ohne eigenes Select)
@@ -505,8 +521,11 @@ SPERRE_MELDUNG = "Höchstzahl erreicht – Lead steht auf Nicht erreicht"
 WV_GEMELDET_TEXT = "Wiedervorlage fällig gemeldet"
 # Obergrenze für eine plausible Gesprächsdauer (4 h); größere Werte werden gekappt
 DAUER_MAX_SEK = 4 * 3600
-# Mindestlänge der Ziffernfolge für die Rufnummernsuche (D3/H7)
-SUCHE_MIN_ZIFFERN = 7
+# Mindestlänge der Ziffernfolge für die Rufnummernsuche (D3/H7) – v31 (PLAN_LEAD_V5
+# Phase 158, Endziffern-Suche): 3 Ziffern genügen („4711“ findet +49 203 … 4711);
+# tel:-Links brauchen weiterhin eine vollständige Nummer (NUMMER_MIN_ZIFFERN)
+SUCHE_MIN_ZIFFERN = 3
+NUMMER_MIN_ZIFFERN = 7
 
 
 # --- Sperre / Vorschlag (C1, C2) -----------------------------------------------------
@@ -762,6 +781,7 @@ def faellige_wiedervorlagen_melden(session: Session, jetzt: datetime | None = No
     phasen = tuple(p for p in OFFENE_PHASEN if p != "zurueckgestellt")
     faellig = (session.query(Vorgang)
                .filter(Vorgang.lead_phase.in_(phasen),
+                       Vorgang.archiviert_am.is_(None),    # v31 (Phase 154): kein Archiv
                        Vorgang.naechste_aktion_am.isnot(None),
                        Vorgang.naechste_aktion_am <= jetzt).all())
     if not faellig:
@@ -966,47 +986,80 @@ def tel_href(nummer: str) -> str:
     if not (nummer or "").strip():
         return ""
     z = _ziffern(nummer)
-    if _national_laenge(z) < SUCHE_MIN_ZIFFERN:
+    if _national_laenge(z) < NUMMER_MIN_ZIFFERN:
         return "tel:" + (nummer or "").strip().replace(" ", "")
     return "tel:+" + z
 
 
+def suchziffern(eingabe: str) -> tuple[str, bool]:
+    """v31 (Phase 158): Suchschlüssel der Rufnummernsuche. Eine vollständige Nummer
+    („0203 …“, „+49 …“, „0049 …“) wird wie bisher E.164-normalisiert (voll=True);
+    eine beliebige Ziffernfolge ohne Vorwahl („4711“, „770501“) bleibt roh (voll=False)
+    und wird als Endziffern-/Teilfolge gegen die normalisierten Nummern verglichen."""
+    import re
+    roh = (eingabe or "").strip()
+    ziffern = re.sub(r"\D", "", roh)
+    if not ziffern:
+        return "", False
+    if roh.startswith("+") or ziffern.startswith("00") or ziffern.startswith("0"):
+        return _ziffern(roh), True
+    return ziffern, False
+
+
 def rufnummer_suchen(session: Session, eingabe: str, nur_ad_id: int | None = None) -> dict:
-    """E.164-Suche in kunden.telefon und leads.telefon (monday) mit
-    Ziffernfolge-Vergleich (Mindestlänge 7). Liefert {"ziffern", "treffer":
-    [{kunde, vorgang, vorgaenge, herkunft}], "zu_kurz"}. Je Kunde eine Zeile mit dem
-    jüngsten offenen Vorgang (sonst jüngster überhaupt)."""
+    """Rufnummernsuche in kunden.telefon und leads.telefon (monday). v31 (PLAN_LEAD_V5
+    Phase 158, Endziffern-Suche): beliebige Ziffernfolge ab SUCHE_MIN_ZIFFERN = 3 –
+    gefunden werden alle Leads, deren normalisierte Nummer (E.164-Ziffern) mit der Folge
+    ENDET (zuerst, endet_mit=True) oder sie ENTHÄLT; vollständige Nummern mit Vorwahl
+    vergleichen wie bisher exakt bzw. als Durchwahl-Präfix. Liefert {"ziffern", "treffer":
+    [{kunde, vorgang, vorgaenge, herkunft, endet_mit, archiviert, tel_href}], "zu_kurz"}.
+    Je Kunde eine Zeile mit dem jüngsten offenen Vorgang (sonst jüngster überhaupt);
+    archivierte Leads bleiben auffindbar und sind markiert [ANNAHME]."""
     from app.models import Lead
-    gesucht = _ziffern(eingabe)
-    ergebnis = {"ziffern": gesucht, "treffer": [],
-                "zu_kurz": _national_laenge(gesucht) < SUCHE_MIN_ZIFFERN}
+    gesucht, voll = suchziffern(eingabe)
+    ergebnis = {"ziffern": gesucht, "treffer": [], "voll": voll,
+                "zu_kurz": len(gesucht) < SUCHE_MIN_ZIFFERN}
     if ergebnis["zu_kurz"]:
         return ergebnis
 
-    def passt(nummer: str) -> bool:
+    def passt(nummer: str) -> str:
+        """„endet“ | „enthaelt“ | „“ (kein Treffer)."""
         z = _ziffern(nummer)
-        if _national_laenge(z) < SUCHE_MIN_ZIFFERN:
-            return False
-        if z == gesucht:
-            return True
-        # Durchwahl/Zusatz: die längere Nummer beginnt mit der kürzeren
-        kurz, lang = sorted((z, gesucht), key=len)
-        return len(kurz) >= 9 and lang.startswith(kurz)
+        if not z:
+            return ""
+        if voll:
+            if z == gesucht:
+                return "endet"
+            # Durchwahl/Zusatz: die längere Nummer beginnt mit der kürzeren
+            kurz, lang = sorted((z, gesucht), key=len)
+            return "enthaelt" if (len(kurz) >= 9 and lang.startswith(kurz)) else ""
+        if z.endswith(gesucht):
+            return "endet"
+        return "enthaelt" if gesucht in z else ""
 
     kunden_ids: dict[int, str] = {}
+    treffer_art: dict[int, str] = {}
     for kunde_id, telefon in (session.query(Kunde.id, Kunde.telefon)
                               .filter(Kunde.telefon != "", Kunde.aktiv.is_(True))):
-        if passt(telefon or ""):
+        art = passt(telefon or "")
+        if art:
             kunden_ids[kunde_id] = "kunde"
+            treffer_art[kunde_id] = art
     lead_vorgang: dict[int, int] = {}
+    leads_je_kunde: dict[int, Lead] = {}
     for lead in (session.query(Lead).filter(Lead.telefon != "")):
-        if passt(lead.telefon or ""):
-            if lead.kunde_id:
-                kunden_ids.setdefault(lead.kunde_id, "monday")
-            v = session.query(Vorgang).filter(Vorgang.lead_id == lead.id).first()
-            if v is not None:
-                kunden_ids.setdefault(v.kunde_id, "monday")
-                lead_vorgang[v.kunde_id] = v.id
+        art = passt(lead.telefon or "")
+        if not art:
+            continue
+        v = session.query(Vorgang).filter(Vorgang.lead_id == lead.id).first()
+        kunde_id = v.kunde_id if v is not None else lead.kunde_id
+        if not kunde_id:
+            continue
+        kunden_ids.setdefault(kunde_id, "monday")
+        treffer_art.setdefault(kunde_id, art)
+        leads_je_kunde.setdefault(kunde_id, lead)
+        if v is not None:
+            lead_vorgang[kunde_id] = v.id
     if not kunden_ids:
         return ergebnis
     vorgaenge: dict[int, list] = {}
@@ -1025,5 +1078,13 @@ def rufnummer_suchen(session: Session, eingabe: str, nur_ad_id: int | None = Non
             bevorzugt = session.get(Vorgang, lead_vorgang[kunde.id])
         ergebnis["treffer"].append({"kunde": kunde, "vorgang": bevorzugt, "vorgaenge": liste,
                                     "herkunft": kunden_ids[kunde.id],
+                                    "lead": leads_je_kunde.get(kunde.id),
+                                    "endet_mit": treffer_art.get(kunde.id) == "endet",
+                                    "archiviert": bool(bevorzugt is not None
+                                                       and lead_archiv.ist_archiviert(bevorzugt)),
                                     "tel_href": tel_href(kunde.telefon or "")})
+    # „endet mit“ zuerst, danach „enthält“ – innerhalb der Gruppe alphabetisch
+    ergebnis["treffer"].sort(key=lambda t: (0 if t["endet_mit"] else 1,
+                                            (t["kunde"].nachname or "").lower(),
+                                            (t["kunde"].vorname or "").lower()))
     return ergebnis

@@ -1488,3 +1488,223 @@ main .leaflet-container .leaflet-bar { border: 1px solid var(--linie-stark); box
 main .leaflet-container .leaflet-bar a { background: var(--flaeche-karte); color: var(--text); border-bottom-color: var(--linie); }
 main .leaflet-container .leaflet-bar a:hover { background: var(--flaeche-hover); }
 main .leaflet-container .leaflet-control-attribution { background: color-mix(in srgb, var(--flaeche-karte) 82%, transparent); color: var(--text-dezent); }
+
+
+/* ==================================================================== */
+/* v31 (PLAN_LEAD_V5 Phasen 153/154/157/158/159) – Boards, Dashboard,    */
+/* Anrufliste, Freischaltung (Agent B). Nur Tokens aus style.css und den */
+/* Modul-Tokens oben; Großkunden-Farbe kommt als Daten (--f aus dem       */
+/* Parameter grosskunde_farbe), sonst das Paar --status-violett.          */
+/* ==================================================================== */
+
+/* --- Phase 153: Großkunde – Badge am Kundennamen, Spalte, Kartei-Kopf (K setzt --f) --- */
+.lm-grosskunde { --f: var(--status-violett); display: inline-block; font-size: var(--t-xs); font-weight: 700;
+    padding: 1px 8px; border-radius: 999px; white-space: nowrap; vertical-align: middle; line-height: 1.5;
+    background: color-mix(in srgb, var(--f) 18%, transparent);
+    color: color-mix(in srgb, var(--f), var(--lm-chip-text-mix));
+    border: 1px solid color-mix(in srgb, var(--f) 32%, transparent); }
+.lm-tabelle td.sp-lead .lm-grosskunde { margin-top: 2px; margin-right: 4px; }
+.lm-tabelle td.sp-grosskunde { text-align: center; }
+.kanban-karte .lm-grosskunde, .lm-zeile .lm-grosskunde { margin-left: 2px; }
+.lm-filterchip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px;
+    border: 1px solid var(--linie-stark); background: var(--flaeche-karte); color: var(--text); font-size: var(--t-s);
+    cursor: pointer; white-space: nowrap; }
+.lm-filterchip input { margin: 0; }
+.lm-filterchip:hover { border-color: var(--akzent); }
+.lm-filterchip.aktiv { background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); border-color: var(--lm-aktiv-bg); }
+.lm-filterchip.lm-filterchip-archiv.aktiv { background: var(--status-grau); color: var(--status-grau-bg); border-color: var(--status-grau); }
+
+/* --- Phase 157: Sparten-Chips MS / WA / DMS (Tokens --q-*, keine neuen Hex-Werte) --- */
+.chip-ms { --chip-farbe: var(--q-landingpage); }   /* Mieterstrom */
+.chip-wa { --chip-farbe: var(--q-website); }       /* Wasser */
+.chip-dms { --chip-farbe: var(--q-veranstaltung); } /* Denkmalschutz */
+.abzeichen.interesse-ms { --chip-farbe: var(--q-landingpage); background: color-mix(in srgb, var(--chip-farbe) 14%, transparent); color: var(--chip-farbe); margin-left: 0.2rem; }
+.abzeichen.interesse-wa { --chip-farbe: var(--q-website); background: color-mix(in srgb, var(--chip-farbe) 14%, transparent); color: var(--chip-farbe); margin-left: 0.2rem; }
+.abzeichen.interesse-dms { --chip-farbe: var(--q-veranstaltung); background: color-mix(in srgb, var(--chip-farbe) 14%, transparent); color: var(--chip-farbe); margin-left: 0.2rem; }
+.kalender-eintrag.sparte-ms { border-left-color: var(--q-landingpage); }
+.kalender-eintrag.sparte-wa { border-left-color: var(--q-website); }
+.kalender-eintrag.sparte-dms { border-left-color: var(--q-veranstaltung); }
+
+/* --- Phase 154: Archiv-Sicht (Filter-Chip „Archiv“ grau, Zeilen gedimmt), Kopie-Verweis --- */
+.lm-tabelle tr.lm-archiviert td { color: var(--text-dezent); }
+.lm-tabelle tr.lm-archiviert td.sp-lead .lm-lead-name { color: var(--text-dezent); }
+.lm-archiv-chip { display: inline-block; font-size: 0.66rem; font-weight: 700; padding: 0 6px; border-radius: var(--r-s);
+    background: var(--status-grau-bg); color: var(--status-grau); border: 1px solid color-mix(in srgb, var(--status-grau) 40%, transparent);
+    margin-top: 2px; vertical-align: middle; white-space: nowrap; }
+.lm-kopie-link { display: inline-block; font-size: 0.66rem; padding: 0 6px; border-radius: var(--r-s); margin-top: 2px;
+    background: var(--akzent-flaeche); color: var(--akzent-hover); text-decoration: none; white-space: nowrap; vertical-align: middle; }
+.lm-kopie-link:hover { text-decoration: underline; }
+.lm-archiv-hinweis { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 8px 12px; margin: 0 0 var(--a-3);
+    border: 1px solid var(--linie-stark); border-radius: var(--r-m); background: var(--flaeche-abgesetzt); color: var(--text); font-size: var(--t-s); }
+.lm-meldung-links { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: 8px; vertical-align: middle; }
+.lm-meldung-links a { font-size: var(--t-xs); }
+
+/* --- Phase 154: seitliches Scrollen auf jeder Seitenhöhe – fixierte Zweit-Scrollleiste
+       (sticky bottom im Scroll-Container .lm-tabellen bzw. .hv-tabelle-wrap), Shift + Mausrad
+       und Ziehen mit der mittleren Maustaste in lm_boards.js --- */
+.lm-tabellen.lm-mit-scrollleiste, .hv-tabelle-wrap.lm-mit-scrollleiste { overflow-x: hidden; }
+.lm-scrollleiste { position: sticky; bottom: 0; left: 0; z-index: 8; height: 16px; overflow-x: auto; overflow-y: hidden;
+    background: var(--flaeche-karte); border-top: 1px solid var(--linie); margin-top: 2px; }
+.lm-scrollleiste[hidden] { display: none; }
+.lm-scrollleiste > div { height: 1px; }
+.lm-tabellen.lm-mit-scrollleiste { padding-bottom: 0; }
+body.lm-zieht-mitte, body.lm-zieht-mitte * { cursor: grabbing !important; user-select: none !important; }
+.lm-tabellen:focus-visible, .hv-tabelle-wrap:focus-visible { outline: 2px solid var(--fokus); outline-offset: -2px; }
+
+/* --- Phase 154: Dashboard-Kacheln verschieben – Raster (zwei Spalten ab 1200 px), Bearbeitungsmodus
+       mit Griff, Platzhalter und Einrasten (lm_dashboard.js); Hell/Dunkel identisch über Tokens --- */
+.lm-dash-raster { columns: 1; column-gap: 14px; }
+@media (min-width: 1200px) { .lm-dash-raster { columns: 2; } }
+.lm-dash-raster > .lm-karte { break-inside: avoid; display: inline-block; width: 100%; box-sizing: border-box;
+    margin: 0 0 14px; vertical-align: top; position: relative; }
+.lm-dash-werkzeuge { display: inline-flex; gap: 6px; align-items: center; }
+.lm-dash-werkzeuge .knopf { display: inline-flex; align-items: center; gap: 4px; }
+.lm-dash-werkzeuge [hidden] { display: none; }
+.lm-kachel-griff { display: none; position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: var(--r-s);
+    align-items: center; justify-content: center; color: var(--text-dezent); background: var(--flaeche-abgesetzt);
+    border: 1px solid var(--linie-stark); cursor: grab; }
+.lm-dash-bearbeiten .lm-kachel-griff { display: inline-flex; }
+.lm-dash-bearbeiten .lm-dash-raster > .lm-karte > h2 { padding-right: 40px; }   /* Platz für den Griff */
+.lm-dash-bearbeiten .lm-dash-raster > .lm-karte { outline: 2px dashed var(--akzent); outline-offset: 2px; cursor: grab; }
+.lm-dash-bearbeiten .lm-dash-raster > .lm-karte.lm-kachel-zieht { opacity: 0.45; cursor: grabbing; }
+.lm-dash-bearbeiten .lm-dash-raster > .lm-karte a, .lm-dash-bearbeiten .lm-dash-raster > .lm-karte button,
+.lm-dash-bearbeiten .lm-dash-raster > .lm-karte input, .lm-dash-bearbeiten .lm-dash-raster > .lm-karte select,
+.lm-dash-bearbeiten .lm-dash-raster > .lm-karte summary { pointer-events: none; }
+.lm-kachel-platzhalter { break-inside: avoid; display: inline-block; width: 100%; box-sizing: border-box; margin: 0 0 14px;
+    min-height: 72px; border: 2px dashed var(--akzent); border-radius: var(--r-l); background: var(--akzent-flaeche); }
+.lm-dash-bearbeiten-hinweis { font-size: var(--t-s); color: var(--text-dezent); }
+.lm-dash-bearbeiten-hinweis[hidden] { display: none; }
+
+/* --- Phase 158: „Fällig heute“ – Button Erledigt als überlappendes Element rechts in der Zeile,
+       nach dem Klick Zeile durchgestrichen mit Rückgängig-Link (lm_dashboard.js, fetch) --- */
+.lm-wv-tabelle td.lm-wv-aktion { position: relative; width: 168px; min-width: 168px; padding-right: 6px !important; }
+.lm-wv-aktion-leiste { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: inline-flex; gap: 4px;
+    align-items: center; white-space: nowrap; }
+.lm-wv-aktion-leiste .knopf { display: inline-flex; align-items: center; gap: 4px; }
+.lm-wv-aktion-leiste details { position: relative; display: inline-block; }
+.lm-wv-aktion-leiste details > summary { list-style: none; cursor: pointer; }
+.lm-wv-aktion-leiste details > summary::-webkit-details-marker { display: none; }
+.lm-wv-aktion-leiste details[open] > .lm-wv-menue { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20;
+    min-width: 260px; }
+.lm-wv-tabelle tr.erledigt td { text-decoration: line-through; color: var(--text-dezent); }
+.lm-wv-tabelle tr.erledigt td .wv-chip, .lm-wv-tabelle tr.erledigt td a { color: var(--text-dezent); }
+.lm-wv-tabelle tr.erledigt td.lm-wv-aktion { text-decoration: none; }
+.lm-wv-rueckgaengig { font-size: var(--t-xs); color: var(--link); text-decoration: underline; cursor: pointer;
+    background: none; border: 0; padding: 0; font: inherit; }
+.lm-wv-erledigt-text { font-size: var(--t-xs); color: var(--status-gruen); font-weight: 600; }
+
+/* --- Phase 158: Krankheit – Hinweise „Fällig heute“ (Innendienst) und Eintrag auf „Mein Dashboard“ --- */
+.lm-krank-hinweis { display: inline-flex; align-items: center; gap: 4px; font-size: var(--t-xs); font-weight: 700;
+    color: var(--status-rot); background: var(--status-rot-bg); padding: 1px 8px; border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--status-rot) 40%, transparent); white-space: nowrap; }
+.lm-krank-tabelle td { padding: 6px 8px; vertical-align: middle; }
+.lm-krank-tabelle tr td:first-child { box-shadow: inset 3px 0 var(--status-rot); white-space: nowrap; }
+.lm-krank-aktionen { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.lm-krank-aktionen form { margin: 0; display: inline; }
+.lm-krank-aktionen .knopf { display: inline-flex; align-items: center; gap: 4px; }
+.lm-abwesenheit-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; margin: 6px 0 0; }
+.lm-abwesenheit-form label { display: flex; flex-direction: column; gap: 2px; font-size: var(--t-xs); color: var(--text-dezent); }
+.lm-abwesenheit-form input, .lm-abwesenheit-form select { font: inherit; font-size: var(--t-s); padding: 3px 6px;
+    border: 1px solid var(--linie-stark); border-radius: var(--r-s); background: var(--flaeche-karte); color: var(--text); }
+.lm-abwesenheit-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: var(--t-s); }
+.lm-abwesenheit-liste li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.lm-abwesenheit-liste li form { margin: 0; }
+.lm-abwesenheit-liste li.lm-abwesenheit-aktiv strong { color: var(--status-rot); }
+
+/* --- Phase 159: Freischaltung (Lead-Einstellungen) – Schalter, Prüfpunkte, Demo-Ende-Abfrage --- */
+.lm-freischaltung { border: 1px solid var(--akzent); border-radius: var(--r-m); padding: var(--a-3) var(--a-4, 1rem);
+    background: var(--akzent-flaeche); margin: 0 0 var(--a-3); }
+.lm-freischaltung h2 { margin-top: 0; }
+.lm-freischaltung .formzeile { flex-wrap: wrap; }
+.lm-freischaltung .formzeile label { flex: 1 1 100%; max-width: 100%; }
+.lm-freischaltung select { max-width: 100%; }
+.lm-pruefpunkte { list-style: none; margin: var(--a-2) 0 0; padding: 0; display: grid; gap: 4px; }
+.lm-pruefpunkte li { display: flex; gap: 8px; align-items: flex-start; font-size: var(--t-s); }
+.lm-pruefpunkte li::before { content: "\2713"; font-weight: 700; color: var(--status-gruen); }
+.lm-pruefpunkte li.offen::before { content: "\25CB"; color: var(--status-orange); }
+.lm-pruefpunkte li.offen { color: var(--text); }
+.lm-pruefpunkte li .dezent { color: var(--text-dezent); }
+.lm-demo-ende { border: 1px solid var(--status-orange); background: var(--status-orange-bg); color: var(--text);
+    border-radius: var(--r-m); padding: var(--a-3) var(--a-4, 1rem); margin: 0 0 var(--a-3); }
+.lm-demo-ende h2 { margin-top: 0; color: var(--status-orange); }
+.lm-demo-ende .formzeile { margin-top: var(--a-2); gap: var(--a-2); flex-wrap: wrap; }
+.lm-demo-ende label { display: block; margin: 4px 0; }
+.lm-zaehler-gesperrt { display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: 700; font-size: var(--t-s);
+    background: var(--status-orange-bg); color: var(--status-orange); }
+
+/* --- v31 Phase 153/158/159 (Agent T, Vertrag 4.6: Objekte, Terminierung, Mailsperre) --- */
+.lmt-testphase { margin-bottom: var(--a-3); }
+.lmt-objekte .lm-umschalter { flex-wrap: wrap; }
+.lmt-terminierung .lmt-bestaetigung-wahl { border: 1px solid var(--linie); border-radius: var(--r-m); padding: var(--a-2) var(--a-3); margin: var(--a-2) 0; }
+.lmt-terminierung .lmt-bestaetigung-wahl legend { font-weight: 600; }
+a.lmt-gesperrt[aria-disabled="true"] { opacity: .55; pointer-events: none; }
+.lm-mailstatus-gesperrt { background: var(--status-grau-bg); color: var(--status-grau); }
+.lm-objektliste th, .lm-objektliste td { text-align: left; }
+
+/* --- v31 Phase 153 (B, Vertrag AT 4.8): Deals-Board – Erfassungen/Angebote/Termine je Objekt --- */
+.lm-objekt-gruppe { margin-top: var(--a-2); padding-top: var(--a-1); border-top: 1px dashed var(--linie); font-size: .92em; }
+.lm-objekt-gruppe .lm-objekt-name { font-weight: 600; }
+.lm-objekt-gruppe .lm-objekt-zeilen { margin: 2px 0; }
+
+/* --- Phase 153/155 (v31, K → B-4.1): Kartei V5 – Notizen/To-Dos-Zeile, Statuswahl, Objekt-Karten,
+   Dialoge; 1:1 aus dem <style>-Block von kartei.html (nur Tokens). Die Großkunde-Badge der Kartei
+   (style="--f: <grosskunde_farbe>") nutzt die Regel .lm-grosskunde oben in diesem v31-Block. --- */
+.lk-v5 .lk-oben { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: var(--a-3); margin-bottom: var(--a-4); align-items: start; }
+.lk-v5 .lk-oben > .karte { padding: var(--a-4); margin: 0; min-width: 0; }
+.lk-v5 .lk-notizen .nc-chat { max-height: 320px; overflow: auto; }
+.lk-v5 .lk-todos .lm-todos { margin: 0; padding: 0; list-style: none; }
+.lk-v5 .lk-todo-kurz { gap: 0.4rem; margin-top: var(--a-2); padding-top: var(--a-2); border-top: 1px dashed var(--linie); display: flex; flex-direction: column; }
+.lk-v5 .lk-todo-kurz input, .lk-v5 .lk-todo-kurz select { width: 100%; padding: 0.35rem 0.5rem; border: 1px solid var(--linie-stark); border-radius: var(--r-s); font: inherit; background: var(--flaeche-karte); color: var(--text); }
+.lk-v5 .lk-bestaetigung-wahl { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 0.3rem var(--a-3); align-items: center; border: 1px solid var(--linie); border-radius: var(--r-m); padding: 0.3rem var(--a-3); margin: 0; font-size: var(--t-s); }
+.lk-v5 .lk-bestaetigung-wahl legend { font-size: var(--t-xs); padding: 0 0.3rem; }
+.lk-v5 .lk-objekt-wahl { display: flex; gap: var(--a-2); align-items: center; font-size: var(--t-s); flex-wrap: wrap; }
+.lk-v5 .lk-objekt-wahl select { padding: 0.25rem 0.5rem; border: 1px solid var(--linie-stark); border-radius: var(--r-s); font: inherit; background: var(--flaeche-karte); color: var(--text); }
+.lk-v5 .lk-status-zeile { display: flex; flex-wrap: wrap; gap: var(--a-2) var(--a-3); align-items: center; }
+.lk-v5 .lk-status-wahl select { padding: 0.25rem 0.5rem; border: 1px solid var(--linie-stark); border-radius: 999px; font: inherit; font-size: var(--t-s); background: var(--flaeche-karte); color: var(--text); }
+.lk-v5 .lk-schritt.setzbar { cursor: pointer; }
+.lk-v5 .lk-schritt.setzbar:hover, .lk-v5 .lk-schritt.setzbar:focus-visible { border-color: var(--akzent); color: var(--akzent-text); background: var(--akzent); outline: none; }
+.lk-v5 .lk-info-raster .lk-anzeige .lk-wert { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+.lk-v5 .lk-info-raster .lk-anzeige .lk-wert small { display: block; }
+.lk-v5 .lk-info-raster .lk-feld, .lk-v5 .lk-info-raster .lk-zuweisung-feld { min-width: 0; overflow: hidden; }
+.lk-v5 .lk-feld-ad-offen .lk-zuweisung select { border-color: var(--status-rot); }
+.lk-v5 .lk-ad-hinweis { color: var(--status-rot); font-size: var(--t-xs); }
+.lk-v5 .lk-grosskunde-feld { display: flex; align-items: center; gap: var(--a-2); min-height: 2.2rem; }
+.lk-v5 .lk-radio-zeile { display: flex; gap: var(--a-3); flex-wrap: wrap; font-size: var(--t-s); }
+.lk-v5 .lk-objekte { grid-column: 1 / -1; margin-top: var(--a-3); border-top: 1px solid var(--linie); padding-top: var(--a-3); }
+.lk-v5 .lk-objekte-kopf { display: flex; justify-content: space-between; align-items: baseline; gap: var(--a-3); flex-wrap: wrap; }
+.lk-v5 .lk-objekt-karten { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--a-3); margin-top: var(--a-2); }
+.lk-v5 .lk-objekt { border: 1px solid var(--linie); border-radius: var(--r-m); background: var(--flaeche-abgesetzt); padding: var(--a-3); display: flex; flex-direction: column; gap: var(--a-2); min-width: 0; }
+.lk-v5 .lk-objekt.haupt { border-color: var(--akzent); }
+.lk-v5 .lk-objekt-kopf { display: flex; justify-content: flex-start; align-items: center; gap: var(--a-2); flex-wrap: wrap; }
+.lk-v5 .lk-objekt-kopf .lk-inline-feld { flex: 1 1 160px; margin: 0; min-width: 0; }
+.lk-v5 .lk-objekt-kopf input { font-weight: 600; }
+.lk-v5 .lk-dialog [hidden], .lk-v5 .lk-objekt [hidden] { display: none !important; }
+.lk-v5 .lk-objekt-raster { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--a-2) var(--a-3); }
+.lk-v5 .lk-objekt-raster .lk-feld { margin-bottom: 0; }
+.lk-v5 .lk-objekt-raster .lk-checkboxen, .lk-v5 .lk-objekt-raster .lk-mfh { grid-column: 1 / -1; }
+.lk-v5 .lk-objekt-raster .lk-mfh { display: grid; grid-template-columns: 1fr; gap: var(--a-2); margin: 0; }
+.lk-v5 .lk-objekt-status { display: flex; flex-wrap: wrap; gap: 0.3rem 0.6rem; align-items: center; font-size: var(--t-s); }
+.lk-v5 .lk-objekt-fuss { display: flex; gap: var(--a-2); flex-wrap: wrap; align-items: center; margin-top: auto; }
+.lk-v5 .lk-objekt-neu { margin-top: var(--a-2); }
+.lk-v5 .lk-objekt-neu > summary { cursor: pointer; color: var(--link); font-size: var(--t-s); list-style: none; display: inline-flex; gap: 0.3rem; align-items: center; }
+.lk-v5 .lk-objekt-neu > summary::-webkit-details-marker { display: none; }
+.lk-v5 .lk-objekt-neu .lk-objekt { margin-top: var(--a-2); }
+.lk-v5 .lk-objekt-termine { display: flex; flex-direction: column; gap: 0.4rem; }
+.lk-v5 .lk-objekt-termin { display: flex; flex-wrap: wrap; gap: 0.3rem 0.6rem; align-items: center; padding: 0.4rem 0.6rem; border: 1px solid var(--linie); border-radius: var(--r-s); background: var(--flaeche-karte); font-size: var(--t-s); }
+.lk-v5 .lk-objekt-termin.offen { border-style: dashed; }
+.lk-v5 .lk-termine-hinweis { margin: 0; }
+.lk-v5 .lk-herkunft { margin-left: 0.3rem; }
+.lk-v5 .lk-kalender-kartei { margin-top: var(--a-3); }
+.lk-v5 .lk-kalender-kartei .lmt-kalender-kopf h2 { font-size: var(--t-m); margin: 0; }
+.lk-v5 .lk-projekt-block { display: flex; flex-wrap: wrap; gap: var(--a-2) var(--a-4); font-size: var(--t-s); margin-bottom: var(--a-2); }
+.lk-v5 .lk-mail-vorschau { display: grid; gap: var(--a-2); }
+.lk-v5 .lk-mail-vorschau textarea { width: 100%; min-height: 220px; font: inherit; padding: 0.5rem 0.6rem; border: 1px solid var(--linie-stark); border-radius: var(--r-s); background: var(--flaeche-karte); color: var(--text); }
+.lk-v5 .lk-mail-fehlend { color: var(--status-rot); margin: 0; padding-left: 1.2rem; }
+.lk-v5 .lk-mail-zeile { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--a-2); }
+.lk-v5 .lk-mail-zeile label { display: flex; flex-direction: column; gap: 0.2rem; font-size: var(--t-s); }
+.lk-v5 .lk-mail-zeile select, .lk-v5 .lk-mail-vorschau input[type="text"] { width: 100%; padding: 0.4rem 0.6rem; border: 1px solid var(--linie-stark); border-radius: var(--r-s); font: inherit; background: var(--flaeche-karte); color: var(--text); }
+.lk-v5 .lk-dialog.lk-dialog-breit { max-width: 820px; }
+@media (max-width: 900px) {
+    .lk-v5 .lk-oben { grid-template-columns: 1fr; }
+    .lk-v5 .lk-objekt-raster { grid-template-columns: 1fr; }
+}

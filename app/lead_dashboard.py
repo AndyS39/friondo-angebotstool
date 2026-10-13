@@ -25,13 +25,21 @@
 # Nachtrag 08.10.2026 (Antwort Andreas): Block „Mir zugeteilte Vorgänge“ entfernt
 # (zugeteilte() bleibt als Funktion); Sperrzeiten zeigen „eingetragen von …“, wenn
 # Innendienst/Admin sie für den Handelsvertreter angelegt haben (sperrzeit_namen).
+# v31 (PLAN_LEAD_V5 Phasen 154/158): Kacheln je Nutzer verschiebbar (KACHELN,
+# kachel_reihenfolge/kacheln_speichern – benutzer_einstellungen Key dashboard_kacheln,
+# neue Kacheln hängen hinten an), archivierte Leads (lead_archiv) in keiner Liste,
+# „Fällig heute“ mit Erledigt per fetch + Rückgängig (wiedervorlage_aktion „rueckgaengig“),
+# Rückruf-/Verschiebezeiten im 5-Minuten-Raster (lead_v5.runden_5min), Krankheits-Hinweise
+# (kranke_termine: Vor-Ort-Termine und Vorab-Gespräche kranker Vertriebler in der
+# Innendienst-Sicht mit „Krankheit: <Name>“, Aktivität „Termin betroffen durch Krankheit“),
+# eigener Abwesenheitseintrag auf „Mein Dashboard“ (abwesenheiten.anlegen/beenden).
 
 from datetime import datetime, timedelta
 from urllib.parse import quote_plus
 
 from sqlalchemy.orm import Session
 
-from app import lead_todos, lead_v2
+from app import abwesenheiten, lead_archiv, lead_todos, lead_v2, lead_v5
 from app import leadmanagement as kern
 from app.models import (Benutzer, Kunde, LeadAktivitaet, Vorgang, VotTermin,
                         ANRUF_ERGEBNIS_NAMEN, LEAD_PHASEN, LEAD_PHASEN_NAMEN,
@@ -49,6 +57,18 @@ OHNE_SCHRITT_STANDARD = 2
 ROUTEN_START_STANDARD = "Arnold-Overbeck-Straße 63-65, 47139 Duisburg"
 ROUTEN_LINK = "https://www.google.com/maps/dir/?api=1&origin={start}&travelmode=driving"
 KOMMENDE_SICHTBAR = 10          # „mehr anzeigen“ ab so vielen kommenden Wiedervorlagen
+# v31 (PLAN_LEAD_V5 Phase 154): verschiebbare Kacheln/Blöcke von „Mein Dashboard“ in
+# Standardreihenfolge (Key → Titel). Neue Kacheln späterer Versionen hängen sich hinten
+# an gespeicherte Reihenfolgen an; „mails_fehler“ erscheint nur bei > 0, „abwesenheit“
+# (Phase 158, eigener Krankheits-/Urlaubseintrag) für jeden Nutzer.
+KACHELN = [("faellig", "Fällig heute"), ("routenplaner", "Routenplaner"),
+           ("kommende", "Kommende Wiedervorlagen"), ("termine", "Meine Termine"),
+           ("todos", "Offene To-Dos"), ("mails_fehler", "Mails mit Fehler"),
+           ("abwesenheit", "Meine Abwesenheit")]
+KACHEL_KEYS = [k for k, _ in KACHELN]
+KACHELN_EINSTELLUNG = "dashboard_kacheln"
+# Phase 158: Aktivitätstext (Dedup je Termin) für Termine kranker Vertriebler
+KRANK_AKTIVITAET = "Termin betroffen durch Krankheit"
 
 
 def _tag(zeit: datetime) -> datetime:
@@ -190,7 +210,7 @@ def lead_wiedervorlagen(session: Session, benutzer, jetzt: datetime,
     abfrage = (session.query(Vorgang)
                .filter(Vorgang.lead_phase.isnot(None),
                        ~Vorgang.lead_phase.in_(ABGESCHLOSSEN)))
-    abfrage = _meine_leads(abfrage, benutzer, hv)
+    abfrage = lead_archiv.filter_aktiv(_meine_leads(abfrage, benutzer, hv))   # v31: kein Archiv
     if horizont is None:
         abfrage = abfrage.filter(
             ((Vorgang.lead_phase == "zurueckgestellt")
@@ -256,6 +276,7 @@ def angebots_wiedervorlagen(session: Session, benutzer, jetzt: datetime,
     abfrage = (session.query(Vorgang)
                .filter(Vorgang.wiedervorlage_am.isnot(None),
                        Vorgang.wiedervorlage_am < ende))
+    abfrage = lead_archiv.filter_aktiv(abfrage)   # v31 (Phase 154)
     if hv or not ist_buero(benutzer):
         abfrage = abfrage.filter(Vorgang.wiedervorlage_benutzer_id == benutzer.id)
     else:
@@ -296,7 +317,7 @@ def ohne_naechsten_schritt(session: Session, benutzer, jetzt: datetime,
                        Vorgang.versuch_nr.isnot(None), Vorgang.versuch_nr >= 1,
                        Vorgang.naechste_aktion_am.is_(None),
                        Vorgang.zurueckgestellt_bis.is_(None)))
-    abfrage = _meine_leads(abfrage, benutzer, hv)
+    abfrage = lead_archiv.filter_aktiv(_meine_leads(abfrage, benutzer, hv))
     vorgaenge = abfrage.all()
     if not vorgaenge:
         return []
@@ -337,7 +358,7 @@ def zugeteilte(session: Session, benutzer, hv: bool) -> dict:
     Nachtrag 08.10.2026 (Antwort Andreas): nicht mehr Teil des Dashboards
     (Block entfernt); die Funktion bleibt für Auswertungen/Tests erhalten."""
     abfrage = session.query(Vorgang).filter(Vorgang.lead_phase.isnot(None))
-    abfrage = _meine_leads(abfrage, benutzer, hv, mit_freien=False)
+    abfrage = lead_archiv.filter_aktiv(_meine_leads(abfrage, benutzer, hv, mit_freien=False))
     vorgaenge = abfrage.order_by(Vorgang.eingang_am.desc().nullslast(), Vorgang.id.desc()).all()
     kunden = _kunden(session, vorgaenge)
     je_phase: dict[str, list] = {p: [] for p in LEAD_PHASEN}
@@ -389,7 +410,7 @@ def termine(session: Session, benutzer, jetzt: datetime, horizont: int,
     zeilen = []
     for t in liste:
         v = vorgaenge.get(t.vorgang_id)
-        if v is None:
+        if v is None or lead_archiv.ist_archiviert(v):   # v31 (Phase 154)
             continue
         if not hv and not alle and v.leadmanager_id != benutzer.id:
             continue
@@ -440,6 +461,119 @@ def sperrzeiten(session: Session, benutzer, jetzt: datetime) -> list:
     return lead_termin.sperrzeiten_liste(session, benutzer.id, ab=_tag(jetzt))
 
 
+# --- v31 (PLAN_LEAD_V5 Phase 154): Kacheln je Nutzer verschieben -----------------------
+
+def kachel_reihenfolge(session: Session, benutzer) -> list[str]:
+    """Gespeicherte Reihenfolge des Nutzers (benutzer_einstellungen Key dashboard_kacheln,
+    JSON-Liste der Keys); unbekannte Keys fallen weg, fehlende (neue) Kacheln hängen
+    sich in Standardreihenfolge hinten an. Ohne Einstellung: Standard."""
+    benutzer_id = int(getattr(benutzer, "id", benutzer) or 0)
+    roh = lead_v2.einstellung_holen(session, benutzer_id, KACHELN_EINSTELLUNG, None) if benutzer_id else None
+    keys: list[str] = []
+    if isinstance(roh, list):
+        for k in roh:
+            k = str(k).strip()
+            if k in KACHEL_KEYS and k not in keys:
+                keys.append(k)
+    for k in KACHEL_KEYS:
+        if k not in keys:
+            keys.append(k)
+    return keys
+
+
+def kacheln_speichern(session: Session, benutzer, keys) -> list[str]:
+    """Reihenfolge je Nutzer speichern (Haken im Bearbeitungsmodus); liefert die
+    bereinigte Liste. Leere/ungültige Liste = Standard (Einstellung wird geleert)."""
+    benutzer_id = int(getattr(benutzer, "id", benutzer) or 0)
+    sauber: list[str] = []
+    for k in keys or []:
+        k = str(k).strip()
+        if k in KACHEL_KEYS and k not in sauber:
+            sauber.append(k)
+    lead_v2.einstellung_setzen(session, benutzer_id, KACHELN_EINSTELLUNG, sauber)
+    return kachel_reihenfolge(session, benutzer_id)
+
+
+def kacheln_zuruecksetzen(session: Session, benutzer) -> list[str]:
+    """„Zurücksetzen“ im Bearbeitungsmodus: Standardreihenfolge."""
+    benutzer_id = int(getattr(benutzer, "id", benutzer) or 0)
+    lead_v2.einstellung_setzen(session, benutzer_id, KACHELN_EINSTELLUNG, [])
+    return list(KACHEL_KEYS)
+
+
+# --- v31 (PLAN_LEAD_V5 Phase 158): Krankheit eines Vertrieblers ---------------------------
+
+def kranke_termine(session: Session, jetzt: datetime | None = None,
+                   aktivitaet_schreiben: bool = True) -> list[dict]:
+    """Innendienst-Sicht „Fällig heute“: alle Vor-Ort-Termine und Vorab-Gespräche
+    (geplant/bestätigt/vorgemerkt) von Vertrieblern mit laufender Abwesenheit (Art
+    Krankheit; Urlaub gleiche Wirkung [ANNAHME]) im Zeitraum des Eintrags – ab dem ersten
+    Krankheitstag, bis der Termin umgebucht/abgesagt oder der Eintrag beendet ist. Jede
+    Zeile trägt den roten Hinweis „Krankheit: <Name>“ (abwesenheiten.hinweis_text). Beim
+    ersten Auftauchen eines Termins wird am Vorgang die Aktivität „Termin betroffen durch
+    Krankheit <Name>“ geschrieben (Dedup über den Text, aktivitaet_schreiben=False für
+    reine Auskünfte); kein Mailversand an Kunden ohne Klick."""
+    jetzt = jetzt or datetime.now()
+    heute = jetzt.date()
+    eintraege = abwesenheiten.aktive(session, heute)
+    if not eintraege:
+        return []
+    benutzer_map = {b.id: b for b in session.query(Benutzer)}
+    zeilen = []
+    for e in eintraege:
+        von = max(e.von, heute)
+        start = datetime(von.year, von.month, von.day)
+        abfrage = (session.query(VotTermin)
+                   .filter(VotTermin.ad_id == e.benutzer_id,
+                           VotTermin.status.in_(TERMIN_STATUS_OFFEN),
+                           VotTermin.typ != "sperrzeit",
+                           VotTermin.beginn.isnot(None), VotTermin.beginn >= start))
+        if e.bis is not None:
+            ende = datetime(e.bis.year, e.bis.month, e.bis.day) + timedelta(days=1)
+            abfrage = abfrage.filter(VotTermin.beginn < ende)
+        person = benutzer_map.get(e.benutzer_id)
+        name = person.name if person else f"Benutzer {e.benutzer_id}"
+        for t in abfrage.order_by(VotTermin.beginn):
+            v = session.get(Vorgang, t.vorgang_id) if t.vorgang_id else None
+            if v is None or lead_archiv.ist_archiviert(v):
+                continue
+            kunde = session.get(Kunde, v.kunde_id)
+            hinweis = abwesenheiten.hinweis_text(e, name)
+            zeilen.append({
+                "termin": t, "vorgang": v, "kunde": kunde, "ad": person, "ad_name": name,
+                "eintrag": e, "hinweis": hinweis, "heute": t.beginn.date() == heute,
+                "typ": TERMIN_TYP_NAMEN.get(getattr(t, "typ", "vot") or "vot", "Vor-Ort-Termin"),
+                # Umbuchen = Terminassistent ohne den kranken Vertriebler (Route Agent T,
+                # Parameter ohne_ad_id + umbuchen), Absagen = bestehende Route (T)
+                "umbuchen_url": f"/lead-management/lead/{v.id}/termin?ohne_ad_id={e.benutzer_id}&umbuchen={t.id}",
+                "absagen_url": f"/lead-management/termin/{t.id}/absagen",
+            })
+            if aktivitaet_schreiben:
+                _krank_aktivitaet(session, v, t, name)
+    zeilen.sort(key=lambda z: z["termin"].beginn)
+    return zeilen
+
+
+def _krank_aktivitaet(session: Session, vorgang: Vorgang, termin: VotTermin, name: str) -> None:
+    text = (f"{KRANK_AKTIVITAET} {name} – Termin #{termin.id} am "
+            f"{termin.beginn.strftime('%d.%m.%Y %H:%M')}")
+    vorhanden = (session.query(LeadAktivitaet)
+                 .filter(LeadAktivitaet.vorgang_id == vorgang.id,
+                         LeadAktivitaet.typ == "hinweis",
+                         LeadAktivitaet.text == text).count())
+    if not vorhanden:
+        kern.aktivitaet(session, vorgang.id, "hinweis", text)
+
+
+def eigene_abwesenheiten(session: Session, benutzer) -> list[dict]:
+    """Eigene Einträge (Krankheit/Urlaub) für die Kachel „Meine Abwesenheit“."""
+    heute = datetime.now().date()
+    liste = abwesenheiten.je_benutzer(session, [benutzer.id]).get(benutzer.id, [])
+    return [{"eintrag": e, "art": abwesenheiten.ARTEN_NAMEN.get(e.art, e.art),
+             "aktiv": e.von <= heute and (e.bis is None or e.bis >= heute),
+             "vorbei": e.bis is not None and e.bis < heute} for e in liste]
+
+
 def sperrzeit_namen(session: Session, liste: list) -> dict:
     """Nachtrag 08.10.2026: {benutzer_id: Name} der Ersteller fremd eingetragener
     Sperrzeiten (erstellt_von ≠ ad_id) – für „eingetragen von …“ in der Liste."""
@@ -468,9 +602,17 @@ def daten(session: Session, benutzer, termine_alle: bool = False,
     start = routen_start(session)
     kommend = [z for z in lead_wv if z["kommend"]]
     sperr = sperrzeiten(session, benutzer, jetzt) if hv else []
+    # v31 (Phase 158): Termine kranker Vertriebler nur in der Innendienst-Sicht
+    krank = [] if hv else kranke_termine(session, jetzt)
     return {
         "jetzt": jetzt, "heute": jetzt.date(), "horizont": horizont, "hv": hv,
         "anrede": anrede_name(benutzer),
+        # v31 (Phase 154/158): Kachel-Reihenfolge je Nutzer, Krankheits-Hinweise, Abwesenheit
+        "kacheln_reihenfolge": kachel_reihenfolge(session, benutzer),
+        "kacheln_titel": dict(KACHELN),
+        "kranke_termine": krank,
+        "abwesenheiten": eigene_abwesenheiten(session, benutzer),
+        "abwesenheit_arten": abwesenheiten.ARTEN,
         "lead_wv": lead_wv,
         "lead_wv_faellig": [z for z in lead_wv if z["faellig"]],
         "lead_wv_kommend": kommend,
@@ -509,15 +651,58 @@ def _zugriff_wv(benutzer, vorgang: Vorgang, art: str, hv: bool) -> bool:
 def wiedervorlage_aktion(session: Session, vorgang: Vorgang, benutzer, art: str,
                          aktion: str, datum_text: str = "") -> str:
     """Erledigt = Wiedervorlage löschen (Lead: zurückgestellt → wieder Neu),
-    Verschieben = neues Datum; immer mit Aktivität. Liefert die Meldung."""
+    Verschieben = neues Datum; immer mit Aktivität. Liefert die Meldung.
+    v31 (Phase 158): Verschiebezeiten im 5-Minuten-Raster; wiedervorlage_aktion_voll
+    liefert zusätzlich die Angaben für „Rückgängig“ (Dashboard, fetch)."""
+    return wiedervorlage_aktion_voll(session, vorgang, benutzer, art, aktion, datum_text)["meldung"]
+
+
+def wiedervorlage_rueckgaengig(session: Session, vorgang: Vorgang, benutzer, art: str,
+                              datum_text: str = "", quelle: str = "") -> dict:
+    """v31 (PLAN_LEAD_V5 Phase 158): „Rückgängig“ nach Erledigt – alten Zeitpunkt wieder
+    setzen (zurückgestellt: Phase und Datum). Liefert {ok, meldung}."""
     hv = ist_hv(session, benutzer)
     if not _zugriff_wv(benutzer, vorgang, art, hv):
-        return "Kein Zugriff auf diese Wiedervorlage."
+        return {"ok": False, "meldung": "Kein Zugriff auf diese Wiedervorlage."}
+    alt = lead_todos.faellig_parsen(datum_text)
+    if alt is None:
+        return {"ok": False, "meldung": "Rückgängig: der alte Zeitpunkt fehlt."}
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    name = kunde.anzeige_name if kunde else f"Vorgang {vorgang.id}"
+    if art == "angebot":
+        from app import vorgaenge as vorgaenge_modul
+        vorgaenge_modul.verfolgung_setzen(session, vorgang, benutzer, vorgang.verfolgung_ampel or "",
+                                          alt.strftime("%Y-%m-%d"),
+                                          verantwortlicher_id=vorgang.wiedervorlage_benutzer_id)
+        text = f"Angebots-Wiedervorlage wiederhergestellt ({alt.strftime('%d.%m.%Y')})"
+    elif quelle == "zurueckgestellt":
+        vorgang.lead_phase = "zurueckgestellt"
+        vorgang.zurueckgestellt_bis = _tag(alt)
+        vorgang.naechste_aktion_am = None
+        text = f"Zurückstellung wiederhergestellt bis {alt.strftime('%d.%m.%Y')}"
+    else:
+        vorgang.naechste_aktion_am = alt
+        text = f"Wiedervorlage wiederhergestellt ({alt.strftime('%d.%m.%Y %H:%M')})"
+    kern.aktivitaet(session, vorgang.id, "status", text + " – Dashboard (Rückgängig)", benutzer=benutzer)
+    session.flush()
+    return {"ok": True, "meldung": f"{text}: {name}."}
+
+
+def wiedervorlage_aktion_voll(session: Session, vorgang: Vorgang, benutzer, art: str,
+                              aktion: str, datum_text: str = "") -> dict:
+    """Wie wiedervorlage_aktion, liefert {ok, meldung, rueckgaengig: {art, datum, quelle} | None}
+    – rueckgaengig trägt nach „Erledigt“ den alten Zeitpunkt für den Rückgängig-Link."""
+    hv = ist_hv(session, benutzer)
+    if not _zugriff_wv(benutzer, vorgang, art, hv):
+        return {"ok": False, "meldung": "Kein Zugriff auf diese Wiedervorlage.", "rueckgaengig": None}
     kunde = session.get(Kunde, vorgang.kunde_id)
     name = kunde.anzeige_name if kunde else f"Vorgang {vorgang.id}"
     neu = lead_todos.faellig_parsen(datum_text) if aktion == "verschieben" else None
     if aktion == "verschieben" and neu is None:
-        return "Verschieben: bitte ein Datum angeben."
+        return {"ok": False, "meldung": "Verschieben: bitte ein Datum angeben.", "rueckgaengig": None}
+    if neu is not None:
+        neu = lead_v5.runden_5min(neu)      # v31 (Phase 158): 5-Minuten-Raster
+    rueckgaengig = None
     if art == "angebot":
         from app import vorgaenge as vorgaenge_modul
         alt = vorgang.wiedervorlage_am
@@ -535,8 +720,10 @@ def wiedervorlage_aktion(session: Session, vorgang: Vorgang, benutzer, art: str,
         if vorgang.lead_phase:
             kern.aktivitaet(session, vorgang.id, "system", text + " – Dashboard",
                             benutzer=benutzer)
+        if aktion != "verschieben" and alt:
+            rueckgaengig = {"art": "angebot", "datum": alt.strftime("%Y-%m-%dT%H:%M"), "quelle": "angebot"}
         session.flush()
-        return f"{text}: {name}."
+        return {"ok": True, "meldung": f"{text}: {name}.", "rueckgaengig": rueckgaengig}
     # Lead-Wiedervorlage
     if vorgang.lead_phase == "zurueckgestellt":
         if aktion == "verschieben":
@@ -544,10 +731,14 @@ def wiedervorlage_aktion(session: Session, vorgang: Vorgang, benutzer, art: str,
             text = f"Zurückstellung verschoben bis {neu.strftime('%d.%m.%Y')}"
         else:
             grund = vorgang.zurueckgestellt_grund or "-"
+            alt = vorgang.zurueckgestellt_bis
             vorgang.lead_phase = "neu"
             vorgang.zurueckgestellt_bis = None
             vorgang.naechste_aktion_am = None
             text = f"Wiedervorlage erledigt – Zurückstellung beendet (war: {grund})"
+            if alt:
+                rueckgaengig = {"art": "lead", "datum": alt.strftime("%Y-%m-%dT%H:%M"),
+                                "quelle": "zurueckgestellt"}
     else:
         if aktion == "verschieben":
             vorgang.naechste_aktion_am = neu
@@ -557,9 +748,11 @@ def wiedervorlage_aktion(session: Session, vorgang: Vorgang, benutzer, art: str,
             vorgang.naechste_aktion_am = None
             text = ("Wiedervorlage erledigt (ohne Anruf)"
                     + (f" – war {alt.strftime('%d.%m.%Y %H:%M')}" if alt else ""))
+            if alt:
+                rueckgaengig = {"art": "lead", "datum": alt.strftime("%Y-%m-%dT%H:%M"), "quelle": "lead"}
     kern.aktivitaet(session, vorgang.id, "status", text + " – Dashboard", benutzer=benutzer)
     session.flush()
-    return f"{text}: {name}."
+    return {"ok": True, "meldung": f"{text}: {name}.", "rueckgaengig": rueckgaengig}
 
 
 # --- Portal-Karte (index.html) ------------------------------------------------------

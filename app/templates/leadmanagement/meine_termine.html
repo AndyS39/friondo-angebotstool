@@ -4,6 +4,10 @@
 
 {% block inhalt %}
 <h1>Meine Termine</h1>
+{# v32 (PLAN_V19 Phase 161): derselbe Terminbestand wie „Mein Tag“ (/leads) – nur der Link,
+   keine Logikänderung #}
+<p><a class="knopf klein zweitrangig" href="/leads">Zur Tagesansicht</a>
+    <span class="dezent">„Mein Tag“: Fällig heute · Termine heute · Heiße Kunden · Weitere Termine</span></p>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
 {% macro termin_karten(liste) %}
@@ -13,7 +17,9 @@
     <div class="einsatz-karte" style="cursor:default">
         <strong>{{ z.termin.beginn | de_datum('%a %d.%m. %H:%M') }} Uhr
             · {{ z.kunde.anzeige_name }}</strong>
-        <span>{{ z.termin.adresse or '–' }}
+        {# v31 (Phase 153): die Terminadresse ist die Objektadresse (vot_termine.adresse);
+           z.objekt_text (Bezeichnung, von B/Welle 2 geliefert) steht bei mehreren Objekten davor #}
+        <span>{% if z.objekt_text is defined and z.objekt_text %}{{ z.objekt_text }} · {% endif %}{{ z.termin.adresse or '–' }}
             {% if z.termin.adresse %}
                 · <a href="{{ z.karten_link }}" target="_blank">Navigation ↗</a>
             {% endif %}</span>
@@ -57,5 +63,30 @@
 {% if empfaenger is defined %}
 {{ todo_formular(empfaenger, benutzer, zurueck='/lead-management/meine-termine#todos') }}
 {% endif %}
+{% endif %}
+{# v31 (PLAN_LEAD_V5 Phase 158, Vorschlag B 4.2): eigener Krankheits-/Urlaubseintrag des
+   Außendienstes – Kontext aus lm_dashboard.meine_termine (abwesenheiten, abwesenheit_arten, heute) #}
+{% if abwesenheiten is defined %}
+{% from "_symbole.html" import symbol %}
+<section class="karte lm-abwesenheit" id="abwesenheit"><h2>Abwesenheit (Krankheit/Urlaub)</h2>
+  <ul class="lm-abwesenheit-liste">
+  {% for a in abwesenheiten if not a.vorbei %}
+    <li class="{{ 'lm-abwesenheit-aktiv' if a.aktiv }}"><strong>{{ a.art }}</strong>
+      {{ a.eintrag.von.strftime('%d.%m.%Y') }} – {{ a.eintrag.bis.strftime('%d.%m.%Y') if a.eintrag.bis else 'offen' }}
+      {% if a.eintrag.bemerkung %}<span class="dezent">· {{ a.eintrag.bemerkung }}</span>{% endif %}
+      <form method="post" action="/lead-management/dashboard/abwesenheit/{{ a.eintrag.id }}/beenden">
+        <input type="hidden" name="zurueck" value="/lead-management/meine-termine#abwesenheit">
+        <button class="knopf klein ghost" type="submit" title="Heute beenden">{{ symbol('haken') }} beenden</button>
+      </form></li>
+  {% else %}<li class="dezent">Keine laufende oder kommende Abwesenheit.</li>{% endfor %}
+  </ul>
+  <form method="post" action="/lead-management/dashboard/abwesenheit" class="lm-abwesenheit-form">
+    <input type="hidden" name="zurueck" value="/lead-management/meine-termine#abwesenheit">
+    <label>Art <select name="art">{% for key_, name in abwesenheit_arten %}<option value="{{ key_ }}">{{ name }}</option>{% endfor %}</select></label>
+    <label>von <input type="date" name="von" required value="{{ heute.strftime('%Y-%m-%d') }}"></label>
+    <label>bis (leer = offen) <input type="date" name="bis"></label>
+    <label>Bemerkung <input type="text" name="bemerkung" maxlength="300" placeholder="optional"></label>
+    <button class="knopf klein" type="submit">{{ symbol('plus') }} Eintragen</button>
+  </form></section>
 {% endif %}
 {% endblock %}

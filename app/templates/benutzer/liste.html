@@ -57,6 +57,16 @@
 .ben-team-plus:hover { text-decoration: underline; }
 .formular .ben-teams { margin-bottom: 0.9rem; }
 .formular .ben-teams > .dezent { display: block; margin-bottom: 4px; }
+/* v31 (PLAN_LEAD_V5 Phase 156/158): Leadmanager-Badge, Abwesenheiten – nur Tokens */
+.ben-lm-badge { margin-left: 4px; font-size: var(--t-xs); }
+.ben-abwesenheiten { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--linie); }
+.ben-abw-liste { list-style: none; margin: 4px 0; padding: 0; font-size: var(--t-s); }
+.ben-abw-liste li { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 3px; }
+.ben-abw-liste li.aktiv strong { color: var(--status-rot); }
+.ben-abw-beenden { display: inline; margin: 0; }
+.ben-abw-neu { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+.ben-abw-neu label { display: inline-flex; gap: 4px; align-items: center; font-size: var(--t-s); }
+.ben-abw-neu input, .ben-abw-neu select { font-size: var(--t-s); }
 </style>
 <div class="seitenkopf">
     <h1>Benutzer</h1>
@@ -108,7 +118,14 @@
         {% set zeigt_teams = b.rolle == 'montage' or zugeordnet %}
         {% set gesperrt = b.gesperrt_bis and b.gesperrt_bis > jetzt %}
         <tr class="{{ 'inaktiv' if not b.aktiv }}" id="zeile-{{ b.id }}">
-            <td><span class="avatar-mit-name">{{ avatar(b.name, b.id) }}<input form="f{{ b.id }}" type="text" name="name" value="{{ b.name }}" size="16"></span></td>
+            <td><span class="avatar-mit-name">{{ avatar(b.name, b.id) }}<input form="f{{ b.id }}" type="text" name="name" value="{{ b.name }}" size="16"></span>
+                {# v31 (PLAN_LEAD_V5 Phase 156): Kennzeichen Leadmanager (Innendienst-Auswahl im Lead-Modul) #}
+                {% if b.leadmanager %}<span class="abzeichen status-versendet ben-lm-badge" title="Leadmanager – wählbar als Innendienst im Lead-Management">LM</span>{% endif %}
+                {% set abw_aktiv = (abwesenheit_je_benutzer.get(b.id, []) | selectattr('von', 'le', heute) | rejectattr('bis', 'lt', heute) | list) if abwesenheit_je_benutzer is defined else [] %}
+                {% for e in abw_aktiv if e.bis is none or e.bis >= heute %}
+                    {% if loop.first %}<span class="ben-status gesperrt" title="Abwesend: {{ e.von.strftime('%d.%m.%Y') }} – {{ e.bis.strftime('%d.%m.%Y') if e.bis else 'offen' }}">{{ 'Krank' if e.art == 'krankheit' else 'Urlaub' }}</span>{% endif %}
+                {% endfor %}
+            </td>
             <td>
                 <select form="f{{ b.id }}" name="rolle"
                         onchange="benTeamsUmschalten({{ b.id }}, this.value)">
@@ -203,6 +220,52 @@
                            title="Nimmt an der automatischen Zuweisung neuer Leads teil (Round-Robin)">
                         <input form="f{{ b.id }}" type="checkbox" name="lm_aktiv"
                                {{ 'checked' if b.lm_aktiv }}> Leadmanager (Round-Robin)</label>
+                    {# v31 (PLAN_LEAD_V5 Phase 156): Häkchen „Leadmanager“ – nur diese Benutzer
+                       stehen in den Innendienst-/Leadmanager-Auswahlen des Lead-Moduls #}
+                    <input form="f{{ b.id }}" type="hidden" name="leadmanager_dabei" value="1">
+                    <label class="kontrollfeld"
+                           title="Innendienst-Auswahl des Lead-Moduls (Kartei, Boards, Sammelaktion, Filter) zeigt nur Benutzer mit diesem Häkchen">
+                        <input form="f{{ b.id }}" type="checkbox" name="leadmanager"
+                               {{ 'checked' if b.leadmanager }}> Leadmanager (Innendienst-Auswahl)</label>
+                </div>
+                {# v31 (PLAN_LEAD_V5 Phase 158): Abwesenheiten (Krankheit/Urlaub) – Wirkung:
+                   Terminassistent schlägt den Vertriebler im Zeitraum nicht vor, seine Termine
+                   stehen in „Fällig heute“ mit Hinweis „Krankheit: <Name>“ #}
+                <div class="ben-abwesenheiten" id="abwesenheit-{{ b.id }}">
+                    <span class="dezent">Abwesenheiten (Krankheit/Urlaub):</span>
+                    {% set abw = abwesenheit_je_benutzer.get(b.id, []) if abwesenheit_je_benutzer is defined else [] %}
+                    {% if abw %}
+                    <ul class="ben-abw-liste">
+                        {% for e in abw %}
+                        <li class="{{ 'aktiv' if e.von <= heute and (e.bis is none or e.bis >= heute) }}">
+                            <strong>{{ 'Krankheit' if e.art == 'krankheit' else 'Urlaub' }}</strong>
+                            {{ e.von.strftime('%d.%m.%Y') }} – {{ e.bis.strftime('%d.%m.%Y') if e.bis else 'offen' }}
+                            {% if e.bemerkung %}<span class="dezent">· {{ e.bemerkung }}</span>{% endif %}
+                            {% if e.angelegt_von and benutzer_namen is defined and e.angelegt_von in benutzer_namen %}<span class="dezent">· eingetragen von {{ benutzer_namen[e.angelegt_von] }}</span>{% endif %}
+                            {% if e.bis is none or e.bis >= heute %}
+                            <form method="post" action="/benutzer/abwesenheit/{{ e.id }}/beenden" class="ben-abw-beenden">
+                                <input type="hidden" name="bis" value="{{ heute.strftime('%Y-%m-%d') }}">
+                                <button class="knopf klein zweitrangig" type="submit"
+                                        title="Eintrag heute beenden – die Hinweise „Krankheit: {{ b.name }}“ verschwinden">Beenden</button>
+                            </form>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <span class="dezent">keine</span>
+                    {% endif %}
+                    <form method="post" action="/benutzer/{{ b.id }}/abwesenheit" class="ben-abw-neu">
+                        <select name="art" title="Art der Abwesenheit">
+                            {% for wert, name in abwesenheit_arten %}
+                            <option value="{{ wert }}">{{ name }}</option>
+                            {% endfor %}
+                        </select>
+                        <label>von <input type="date" name="von" required value="{{ heute.strftime('%Y-%m-%d') }}"></label>
+                        <label>bis <input type="date" name="bis" title="leer = offenes Ende"></label>
+                        <input type="text" name="bemerkung" size="18" maxlength="300" placeholder="Bemerkung (optional)">
+                        <button class="knopf klein zweitrangig" type="submit">Eintragen</button>
+                    </form>
                 </div>
                 <div class="ben-detail-raster" style="margin-top:6px">
                     <span class="dezent" style="align-self:center"
@@ -270,6 +333,9 @@
     <div class="formzeile">
         <label class="kontrollfeld" title="Der Benutzer vergibt beim ersten Login eine eigene PIN">
             <input type="checkbox" name="pin_wechsel" checked> PIN-Wechsel beim nächsten Login verlangen</label>
+        {# v31 (PLAN_LEAD_V5 Phase 156): Leadmanager-Häkchen auch beim Anlegen #}
+        <label class="kontrollfeld" title="Innendienst-Auswahl des Lead-Moduls zeigt nur Benutzer mit diesem Häkchen">
+            <input type="checkbox" name="leadmanager"> Leadmanager (Innendienst-Auswahl)</label>
     </div>
     <button class="knopf" type="submit">Anlegen</button>
 </form>

@@ -1,0 +1,128 @@
+/* v32 (PLAN_V19 Phase 161/162): Vertriebler-Ansicht „Mein Tag“ (templates/leads/mein_tag.html).
+   Eine Spalte von Karten, unter 600 px Vollbreite, sonst zentriert mit höchstens 720 px.
+   Nur semantische Tokens aus style.css (Design v2, beide Modi), keine Hex-Werte.
+   Mobil: Safe-Area-Abstände (env(safe-area-inset-*), viewport-fit=cover setzt mein_tag.js),
+   Schaltflächen mindestens 44 px hoch, kein horizontales Scrollen. */
+
+main.mein-tag-seite {
+    max-width: 720px;
+    margin: 0 auto;
+    padding-left: max(var(--a-4), env(safe-area-inset-left));
+    padding-right: max(var(--a-4), env(safe-area-inset-right));
+    padding-bottom: calc(var(--a-6) + env(safe-area-inset-bottom));
+    overflow-x: hidden;
+}
+
+.mt-kopf { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--a-3); flex-wrap: wrap; margin-bottom: var(--a-3); }
+.mt-kopf h1 { margin: 0; }
+.mt-datum { margin: 0.15rem 0 0; }
+
+/* Umschalter Karten | Tabelle (Innendienst/Admin) */
+.mt-umschalter { display: inline-flex; border: 1px solid var(--linie-stark); border-radius: var(--r-m); overflow: hidden; }
+.mt-umschalter a { padding: 0.45rem 0.9rem; min-height: 44px; display: inline-flex; align-items: center; text-decoration: none; color: var(--text); background: var(--flaeche-karte); }
+.mt-umschalter a + a { border-left: 1px solid var(--linie-stark); }
+.mt-umschalter a.aktiv { background: var(--akzent); color: var(--akzent-text); font-weight: 600; }
+.mt-umschalter a:hover:not(.aktiv) { background: var(--akzent-flaeche); }
+
+/* Filter als aufklappbare Karte */
+.mt-filter { margin-bottom: var(--a-4); padding: var(--a-3) var(--a-4); }
+.mt-filter summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; gap: var(--a-2); flex-wrap: wrap; }
+.mt-filter-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--a-3); margin-top: var(--a-3); align-items: end; }
+.mt-filter-form label { display: grid; gap: 0.25rem; font-size: var(--t-s); color: var(--text-dezent); }
+.mt-filter-form input, .mt-filter-form select { min-height: 44px; font-size: var(--t-m); }
+.mt-filter-knoepfe { display: flex; gap: var(--a-2); flex-wrap: wrap; }
+.mt-sync { display: flex; gap: var(--a-3); align-items: center; flex-wrap: wrap; margin-top: var(--a-3); padding-top: var(--a-3); border-top: 1px solid var(--linie); }
+
+/* Blöcke */
+.mt-block { margin-bottom: var(--a-5); }
+.mt-block h2 { display: flex; align-items: center; gap: var(--a-2); font-size: var(--t-l); margin: 0 0 var(--a-3); flex-wrap: wrap; }
+.mt-zahl { display: inline-flex; align-items: center; justify-content: center; min-width: 1.6em; padding: 0 0.45em; height: 1.6em; border-radius: 999px; background: var(--flaeche-abgesetzt); color: var(--text-dezent); font-size: var(--t-s); font-weight: 700; }
+.mt-zahl.rot { background: var(--status-rot-bg); color: var(--status-rot); }
+.mt-block .leer-zustand { margin: 0; }
+
+/* Karten */
+.mt-karte {
+    background: var(--flaeche-karte);
+    border: 1px solid var(--linie);
+    border-radius: var(--r-l);
+    box-shadow: var(--schatten-1);
+    padding: var(--a-4);
+    margin-bottom: var(--a-3);
+    display: grid;
+    gap: var(--a-2);
+    overflow-wrap: anywhere;
+}
+.mt-karte.mt-ueberfaellig { border-color: color-mix(in srgb, var(--status-rot) 45%, var(--linie)); border-left: 4px solid var(--status-rot); }
+.mt-karte.mt-fertig { opacity: 0.55; }
+.mt-zeile1 { display: flex; align-items: center; gap: var(--a-2); flex-wrap: wrap; }
+.mt-datum-zeit { font-size: var(--t-l); color: var(--text-titel); }
+.mt-uhr { font-size: var(--t-xl); }
+.mt-badges { margin-left: auto; display: inline-flex; gap: 0.25rem; flex-wrap: wrap; align-items: center; }
+.mt-name { font-weight: 600; font-size: var(--t-l); color: var(--text-titel); }
+.mt-anruf .mt-name, .mt-heiss .mt-name { font-size: var(--t-l); }
+.mt-ad { font-weight: 400; font-size: var(--t-s); }
+.mt-adresse a, .mt-tel { color: var(--link); text-decoration: none; display: inline-flex; align-items: center; gap: 0.3rem; min-height: 44px; }
+.mt-adresse a:hover, .mt-tel:hover { text-decoration: underline; }
+.mt-objekt { font-weight: 600; }
+.mt-telefon .mt-tel { font-weight: 600; font-size: var(--t-m); }
+.mt-angebot { margin: 0; line-height: 1.45; }
+.mt-angebot svg { vertical-align: -0.15em; margin-right: 0.2rem; }
+.mt-angebot a { color: var(--text); text-decoration: none; font-weight: 600; }
+.mt-angebot a:hover { text-decoration: underline; }
+
+/* Labels, Badges, Ampel, Chips */
+.mt-label { display: inline-flex; align-items: center; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: var(--t-s); font-weight: 600; background: var(--flaeche-abgesetzt); color: var(--text-dezent); }
+.mt-label-rot { background: var(--status-rot-bg); color: var(--status-rot); }
+.mt-herkunft { display: inline-flex; align-items: center; padding: 0.05rem 0.45rem; border-radius: 999px; font-size: var(--t-xs, 0.75rem); background: var(--status-grau-bg); color: var(--status-grau); border: 1px solid color-mix(in srgb, var(--status-grau) 30%, transparent); }
+.mt-ampel { width: 0.9rem; height: 0.9rem; border-radius: 50%; display: inline-block; flex: none; background: var(--status-grau); box-shadow: 0 0 0 2px var(--flaeche-karte), 0 0 0 3px var(--linie); }
+.mt-ampel-heiss { background: var(--status-rot); }
+.mt-ampel-warm { background: var(--status-orange); }
+.mt-ampel-kalt { background: var(--status-blau); }
+.mt-ampel-leer { background: var(--flaeche-abgesetzt); }
+.mt-chip { display: inline-flex; align-items: center; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: var(--t-s); font-weight: 600; margin-left: auto; }
+.mt-chip-orange { background: var(--status-orange-bg); color: var(--status-orange); }
+.mt-chip-rot { background: var(--status-rot-bg); color: var(--status-rot); }
+
+/* Aktionen: Hauptknopf rechts unten, unter 600 px volle Breite; mind. 44 px */
+.mt-aktionen { display: flex; justify-content: flex-end; align-items: center; gap: var(--a-3); margin-top: var(--a-1); flex-wrap: wrap; }
+.mt-aktionen-klein { justify-content: space-between; }
+.mt-karte .knopf { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+.mt-haupt { padding-left: var(--a-5); padding-right: var(--a-5); font-weight: 600; }
+.mt-akte { color: var(--link); font-size: var(--t-s); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
+.mt-akte:hover { text-decoration: underline; }
+.knopf.mt-gruen { background: var(--status-gruen); color: var(--text-auf-farbe); }
+
+/* Dialog „Nächster Schritt“ (Partial von N) und Rückfall */
+.mt-schritt { margin-top: var(--a-1); }
+.mt-schritt .ns-dialog { margin: 0; }
+.mt-schritt-rueckfall { display: flex; gap: var(--a-2); flex-wrap: wrap; }
+.mt-schritt-rueckfall form { flex: 1 1 140px; display: flex; }
+.mt-schritt-rueckfall .knopf { flex: 1; }
+
+/* Letzte Aktivitäten + Notiz */
+.mt-aktivitaeten summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: var(--a-2); font-weight: 600; font-size: var(--t-s); }
+.mt-aktivitaeten ul { margin: 0; padding-left: 1.1rem; font-size: var(--t-s); display: grid; gap: 0.25rem; }
+.mt-akt-zeit { color: var(--text-dezent); font-variant-numeric: tabular-nums; }
+.mt-akt-art { display: inline-block; padding: 0 0.4rem; border-radius: 999px; background: var(--flaeche-abgesetzt); color: var(--text-dezent); font-size: var(--t-xs, 0.75rem); }
+.mt-notiz { display: grid; gap: var(--a-2); margin-top: var(--a-1); }
+.mt-notiz label { display: grid; gap: 0.25rem; font-size: var(--t-s); color: var(--text-dezent); }
+.mt-notiz textarea { width: 100%; box-sizing: border-box; font-size: var(--t-m); min-height: 44px; }
+.mt-notiz-aktionen { display: flex; align-items: center; gap: var(--a-3); flex-wrap: wrap; }
+.mt-notiz-aktionen .mt-akte { margin-left: auto; }
+.mt-notiz-meldung.ok { color: var(--status-gruen); }
+.mt-notiz-meldung.fehler { color: var(--status-rot); }
+.mt-fuss { margin-top: var(--a-4); }
+
+@media (max-width: 600px) {
+    main.mein-tag-seite { max-width: none; padding-left: max(var(--a-3), env(safe-area-inset-left)); padding-right: max(var(--a-3), env(safe-area-inset-right)); }
+    .mt-karte { padding: var(--a-3); border-radius: var(--r-m); }
+    .mt-aktionen { flex-direction: column; align-items: stretch; }
+    .mt-aktionen .mt-haupt { width: 100%; }
+    .mt-aktionen .mt-akte { justify-content: center; }
+    .mt-aktionen-klein { flex-direction: row; align-items: center; }
+    .mt-badges { margin-left: 0; width: 100%; }
+    .mt-filter-form { grid-template-columns: 1fr 1fr; }
+    .mt-filter-knoepfe, .mt-filter-form label:nth-child(n+4) { grid-column: 1 / -1; }
+    .mt-schritt-rueckfall form { flex-basis: 100%; }
+    .mt-kopf { align-items: flex-start; }
+}

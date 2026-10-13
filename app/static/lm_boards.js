@@ -318,11 +318,15 @@
         // v29 (Phase 140): „An Handelsvertreter verschieben“ – Ziel-Schaltflächen statt „Ausführen“
         const hvWrap = document.getElementById('lm-sammel-hv');
         const ausfuehren = document.getElementById('lm-sammel-ausfuehren');
+        // v31 (Phase 154): Hinweistext je Aktion (Archivieren / Duplizieren / Wiederherstellen)
+        const hinweisEl = document.getElementById('lm-sammel-hinweis');
+        const hinweisStandard = hinweisEl ? hinweisEl.textContent : '';
         function aktionUmschalten() {
             const hv = aktionSel.value === 'hv_verschieben';
             if (statusWrap) { statusWrap.hidden = aktionSel.value !== 'status'; }
             if (hvWrap) { hvWrap.hidden = !hv; }
             if (ausfuehren) { ausfuehren.hidden = hv; }
+            if (hinweisEl) { hinweisEl.textContent = hinweisEl.dataset[aktionSel.value] || hinweisStandard; }
         }
         if (aktionSel) { aktionSel.addEventListener('change', aktionUmschalten); aktionUmschalten(); }
         sammelform.addEventListener('submit', function (e) {
@@ -350,10 +354,114 @@
                     return;
                 }
             }
-            if (!window.confirm(auswahl().length + ' Lead(s) – Sammelaktion ausführen?')) { e.preventDefault(); }
+            // v31 (Phase 154): Sicherheitsabfrage mit Anzahl je Aktion
+            const n = auswahl().length;
+            const fragen = {
+                archivieren: n + ' Lead(s) archivieren? Leads mit aktivem Termin, offener Erfassung oder offenem Angebot werden übersprungen und gemeldet. Kein endgültiges Löschen – Wiederherstellen über den Filter „Archiv“.',
+                duplizieren: n + ' Lead(s) duplizieren? Je Lead entsteht ein neuer Vorgang am selben Kunden (Phase Neu, Objekte/Interessen/Kanal/Zuständige kopiert, ohne Historie).',
+                wiederherstellen: n + ' Lead(s) aus dem Archiv wiederherstellen?'
+            };
+            const frage = (aktionSel && fragen[aktionSel.value]) || (n + ' Lead(s) – Sammelaktion ausführen?');
+            if (!window.confirm(frage)) { e.preventDefault(); }
         });
     }
     sammelAktualisieren();
+
+    // ---------- 5. v31 (PLAN_LEAD_V5 Phase 154): seitliches Scrollen auf jeder Seitenhöhe ----------
+    // Jeder horizontal scrollende Tabellen-Container (.lm-tabellen: Hauptboard, Deals,
+    // Infoabend; .hv-tabelle-wrap: Handelsvertreter) bekommt eine fixierte Zweit-Scrollleiste
+    // (position: sticky; bottom: 0 im Container, lead_v2.css .lm-scrollleiste), die mit dem
+    // Container synchron läuft; die native horizontale Leiste des Containers ist dafür
+    // ausgeblendet (overflow-x: hidden). Dazu Shift + Mausrad (und Touchpad-deltaX) und
+    // Ziehen mit gedrückter mittlerer Maustaste. Sticky-Kopf, Sticky-Filter (v25) und
+    // Spaltenbreiten (v29) bleiben unberührt. Zusätzlich wird die Höhe des Hauptboard-
+    // Containers an seine tatsächliche Lage (Seitenkopf, Zurück-Leiste) angepasst, damit
+    // die Leiste beim Laden am unteren Bildschirmrand liegt, ohne die Seite zu scrollen.
+    function scrollleisteEinrichten(container) {
+        if (!container || container.dataset.lmScrollleiste === '1') { return; }
+        container.dataset.lmScrollleiste = '1';
+        const leiste = document.createElement('div');
+        leiste.className = 'lm-scrollleiste';
+        leiste.setAttribute('aria-hidden', 'true');
+        const innen = document.createElement('div');
+        leiste.appendChild(innen);
+        container.appendChild(leiste);
+        container.classList.add('lm-mit-scrollleiste');
+        let sperre = false;
+        function messen() {
+            const breite = container.scrollWidth;
+            innen.style.width = breite + 'px';
+            leiste.hidden = breite <= container.clientWidth + 2;
+            leiste.scrollLeft = container.scrollLeft;
+        }
+        leiste.addEventListener('scroll', function () {
+            if (sperre) { return; }
+            sperre = true; container.scrollLeft = leiste.scrollLeft; sperre = false;
+        });
+        container.addEventListener('scroll', function () {
+            if (sperre) { return; }
+            sperre = true; leiste.scrollLeft = container.scrollLeft; sperre = false;
+        });
+        // Shift + Mausrad bzw. horizontales Touchpad-Scrollen → seitlich
+        container.addEventListener('wheel', function (e) {
+            const seitlich = e.shiftKey ? (e.deltaY || e.deltaX) : e.deltaX;
+            if (!seitlich) { return; }
+            if (container.scrollWidth <= container.clientWidth) { return; }
+            e.preventDefault();
+            container.scrollLeft += seitlich;
+        }, { passive: false });
+        // Ziehen mit der mittleren Maustaste
+        let zieht = null;
+        container.addEventListener('pointerdown', function (e) {
+            if (e.button !== 1 || e.target.closest('input, select, textarea, button, a')) { return; }
+            e.preventDefault();
+            zieht = { x: e.clientX, y: e.clientY, links: container.scrollLeft, oben: container.scrollTop };
+            document.body.classList.add('lm-zieht-mitte');
+        });
+        document.addEventListener('pointermove', function (e) {
+            if (!zieht) { return; }
+            container.scrollLeft = zieht.links - (e.clientX - zieht.x);
+            container.scrollTop = zieht.oben - (e.clientY - zieht.y);
+        });
+        function ziehenEnde() { if (zieht) { zieht = null; document.body.classList.remove('lm-zieht-mitte'); } }
+        document.addEventListener('pointerup', ziehenEnde);
+        document.addEventListener('pointercancel', ziehenEnde);
+        container.addEventListener('auxclick', function (e) { if (e.button === 1) { e.preventDefault(); } });
+        messen();
+        window.addEventListener('resize', messen);
+        window.addEventListener('load', messen);
+        if (window.ResizeObserver) {
+            new ResizeObserver(function () { messen(); }).observe(container);
+            const inhalt = container.firstElementChild;
+            if (inhalt && inhalt !== leiste) { new ResizeObserver(function () { messen(); }).observe(inhalt); }
+        }
+        container.addEventListener('toggle', messen, true);
+        return messen;
+    }
+    document.querySelectorAll('.lm-tabellen, .hv-tabelle-wrap').forEach(function (c) { scrollleisteEinrichten(c); });
+    // Höhe des Hauptboard-Containers an die tatsächliche Lage anpassen (Seitenkopf,
+    // Zurück-Leiste der v30 liegen oberhalb; layoutAktualisieren rechnet nur Kopf + Filter)
+    if (tabellen) {
+        const layoutAlt = layoutAktualisieren;
+        const layoutNeu = function () {
+            layoutAlt();
+            if (window.innerWidth <= 900) { return; }
+            const rect = tabellen.getBoundingClientRect();
+            const kopfFest = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--lm-kopf-fest')) || 0;
+            const filterHoehe = filterblock ? filterblock.offsetHeight : 0;
+            // beim Scrollen nach unten klebt der Filterblock unter der Kopfzeile – dann gilt die alte Rechnung
+            const sichtbarOben = Math.max(rect.top, kopfFest + filterHoehe + 4);
+            const hoehe = Math.max(240, window.innerHeight - sichtbarOben - 16);
+            tabellen.style.setProperty('--lm-tabellen-hoehe', hoehe + 'px');
+        };
+        // alle späteren Aufrufe (Sammelleiste, ResizeObserver) nutzen die neue Rechnung
+        layoutAktualisieren = layoutNeu;
+        layoutNeu();
+        window.addEventListener('resize', layoutNeu);
+        window.addEventListener('load', layoutNeu);
+        let scrollTimer = null;
+        window.addEventListener('scroll', function () { clearTimeout(scrollTimer); scrollTimer = setTimeout(layoutNeu, 80); }, { passive: true });
+    }
 
     // ---- Schnellsuche über die sichtbaren Zeilen (Server-Filter bleibt per Enter)
     const suche = document.getElementById('lm-suche');

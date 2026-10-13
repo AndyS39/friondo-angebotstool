@@ -35,8 +35,14 @@ PROJEKT_ARTEN = set(ART_NAMEN)
 LEAD_ARTEN = {"lead"}
 ART_NAMEN["lead"] = "Lead-Management"
 # v23 (Phase 110, F7): To-Dos nur über die Glocke – nie Sofort-/Digest-Mail
-MAIL_FREIE_ARTEN = {"todo"}
+# v32 (PLAN_V19 Phase 162): Glocke „Fällig heute“ (art nachfassen) ebenso nur Glocke,
+# keine Mail [ANNAHME]; sie ist eine Angebotstool-Glocke (nicht in LEAD_ARTEN – fällt
+# damit nicht unter glocke_lead_arten, v29)
+# v32 (Phase 163, N): ID-Glocke „Bestellung angekündigt“ (art verfolgung) ebenso ohne Mail
+MAIL_FREIE_ARTEN = {"todo", "nachfassen", "verfolgung"}
 ART_NAMEN["todo"] = "To-Do"
+ART_NAMEN["nachfassen"] = "Fällig heute"
+ART_NAMEN["verfolgung"] = "Bestellung angekündigt"
 
 
 # --- Glocke (Kopfzeile) -----------------------------------------------------------
@@ -301,6 +307,14 @@ def taeglicher_lauf(session: Session | None = None, erzwingen: bool = False) -> 
             kern.benachrichtigen(session, [bid], "Projektierung: " + ", ".join(teile),
                                  "/projektierung/meine-aufgaben", art="faellig")
             benachrichtigt += 1
+        # v32 (PLAN_V19 Phase 162): Glocke „Fällig heute“ an den Außendienst (art
+        # nachfassen, Link Mein Tag) im selben täglichen Lauf – kein neuer Lauf, keine Mail
+        try:
+            from app import nachfassen
+            benachrichtigt += nachfassen.glocke_faellig_heute(session, heute)
+        except Exception as problem:   # noqa: BLE001 – der Projektierungs-Teil bleibt davon unberührt
+            _logger.error("Benachrichtigungen – Glocke Fällig heute fehlgeschlagen: %s",
+                          problem, exc_info=True)
         kern.parameter_setzen(session, "faellig_lauf_datum", heute.isoformat())
         session.commit()
         return {"benachrichtigt": benachrichtigt}

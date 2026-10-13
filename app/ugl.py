@@ -183,10 +183,12 @@ def lieferadresse_zeilen(session, projekt, kunde, art: str) -> dict:
         strasse = zeilen[1] if len(zeilen) > 1 else ""
         plz, _, ort = (zeilen[2] if len(zeilen) > 2 else "").partition(" ")
         return {"name": name, "strasse": strasse, "plz": plz, "ort": ort}
+    # v31 (PLAN_LEAD_V5 Phase 153): Ausführungsort über projekt_ausfuehrungsort
+    ort = kern.projekt_ausfuehrungsort(session, projekt) if projekt else None
     return {"name": f"Baustelle {kunde.anzeige_name}" if kunde else "Baustelle",
-            "strasse": projekt.ausfuehrung_strasse if projekt else "",
-            "plz": projekt.ausfuehrung_plz if projekt else "",
-            "ort": projekt.ausfuehrung_ort if projekt else ""}
+            "strasse": ort["strasse"] if ort else "",
+            "plz": ort["plz"] if ort else "",
+            "ort": ort["ort"] if ort else ""}
 
 
 def ugl_erzeugen(session, gewerk, lieferdatum: datetime | None = None,

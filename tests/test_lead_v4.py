@@ -95,12 +95,14 @@ def inhalt(seite: str) -> str:
 
 
 def aufraeumen(s):
+    from app.models import VorgangObjekt
     s.rollback()
     for k in s.query(Kunde).filter(Kunde.nachname.like(f"{NACHNAME}%")):
         for v in s.query(Vorgang).filter_by(kunde_id=k.id):
             s.query(LeadAktivitaet).filter_by(vorgang_id=v.id).delete()
             s.query(KommunikationLog).filter_by(vorgang_id=v.id).delete()
             s.query(VotTermin).filter_by(vorgang_id=v.id).delete()
+            s.query(VorgangObjekt).filter_by(vorgang_id=v.id).delete()   # v31: Objekte je Vorgang
             s.query(Todo).filter_by(vorgang_id=v.id).delete()
             s.query(Benachrichtigung).filter(
                 Benachrichtigung.link == f"/lead-management/lead/{v.id}").delete()
@@ -122,7 +124,8 @@ class Basis(unittest.TestCase):
     PARAMETER = ("lead_freigabe_modus", "score_aktiv", "routing_anbieter", "kalender_sync",
                  "kalender_testpostfach", "mail_modus", "hv_ausschluss", "hv_gruppe_rene",
                  "hv_gruppe_simon", "vorschlaege_anzahl", "routen_start", lead_glocken.PARAMETER,
-                 "hv_standard_benutzer", "kanal_ad_regel")
+                 "hv_standard_benutzer", "kanal_ad_regel",
+                 "terminierung_aktiv")   # v31 (Phase 159): Buchungsweg in diesen Tests offen
 
     @classmethod
     def setUpClass(cls):
@@ -163,6 +166,9 @@ class Basis(unittest.TestCase):
             kern.parameter_setzen(cls.s, "vorschlaege_anzahl", "3")
             kern.parameter_setzen(cls.s, "routen_start", "Arnold-Overbeck-Straße 63-65, 47139 Duisburg")
             kern.parameter_setzen(cls.s, lead_glocken.PARAMETER, ",".join(lead_glocken.STANDARD_ARTEN))
+            # v31 (PLAN_LEAD_V5 Phase 159): manuelle Buchung/Sperrzeiten-Tests brauchen den
+            # freigeschalteten Buchungsweg (Standard der Testphase: aus)
+            kern.parameter_setzen(cls.s, "terminierung_aktiv", "an")
             cls.s.commit()
         mit_wiederholung(_vorbereiten)
         cls.admin = cls.s.get(Benutzer, 1)
@@ -734,7 +740,7 @@ class M_Terminassistent(Basis):
         k = self.client.get(f"/lead-management/lead/{v.id}/termin/kalender.json").json()
         self.assertEqual([sp["ad_id"] for sp in k["spalten"]], kandidaten)
         self.assertTrue(all(sp["kandidat"] for sp in k["spalten"]))
-        self.assertEqual(len(k["tage"]), 6)
+        self.assertEqual(len(k["tage"]), 5)   # v31 (PLAN_LEAD_V5 Phase 158): Mo–Fr statt Mo–Sa
         self.assertEqual(k["raster"]["schritt"], 15)
         erster = datetime.strptime(j["vorschlaege"][0]["beginn"], "%Y-%m-%dT%H:%M")
         montag = (erster - timedelta(days=erster.weekday())).strftime("%Y-%m-%d")
@@ -811,7 +817,11 @@ class M_Terminassistent(Basis):
         self.assertTrue(k["sync"])
         self.assertTrue(belegungen, "Outlook-Abruf wurde nicht aufgerufen")
         self.assertEqual(max(belegungen), 0, belegungen)
-        self.assertTrue(all(sp["outlook"] for sp in k["spalten"]))
+        # v31 (PLAN_LEAD_V5 Phase 159): Demo-Ende – das Testpostfach gilt nicht mehr für alle,
+        # Outlook wird je Vertriebler über dessen Postfach/E-Mail gelesen; Kandidaten der
+        # DB-Kopie ohne E-Mail bleiben ohne Outlook-Spalte
+        self.assertTrue(all(sp["outlook"] for sp in k["spalten"]
+                            if sp["ad_id"] in (self.horst.id, self.rudi.id)))
         self.assertEqual(db.engine.pool.checkedout(), 0)
 
     def test_hv_nur_eigener_kalender_und_sperrzeit(self):

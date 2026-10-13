@@ -202,16 +202,19 @@ function zbFreitextUmschalten(an) {
       class="formular warnblock" hidden>
     <input type="hidden" name="status" value="Abgelehnt">
     <p><strong>Grund der Ablehnung</strong> <span class="dezent">(Pflicht)</span></p>
+    {# v32 (PLAN_V19 Phase 163): nur aktive Gründe (Router), Pflicht-Freitext bei
+       freitext_pflicht („Sonstiges“) – Markierung per data-Attribut; die Prüfung im
+       Router (routers/angebote.status_aendern) baut Agent M ein. #}
     <div class="formzeile">
         <label>Grund
-            <select name="ablehnungsgrund" required>
+            <select name="ablehnungsgrund" required onchange="idFreitextPflicht(this)">
                 <option value="">– bitte wählen –</option>
                 {% for g in ablehnungsgruende %}
-                    <option value="{{ g.name }}">{{ g.name }}</option>
+                    <option value="{{ g.name }}" data-freitext-pflicht="{{ '1' if g.freitext_pflicht else '0' }}">{{ g.name }}</option>
                 {% endfor %}
             </select>
         </label>
-        <label class="breit">Ergänzung (optional)
+        <label class="breit">Ergänzung <span class="dezent id-freitext-pflicht">(optional)</span>
             <input type="text" name="ablehnungsgrund_text" maxlength="500"></label>
     </div>
     <div class="formaktionen">
@@ -220,6 +223,17 @@ function zbFreitextUmschalten(an) {
                 onclick="this.closest('form').hidden = true; document.querySelector('.statusform select').value = {{ angebot.status | tojson | forceescape }};">Abbrechen</button>
     </div>
 </form>
+<script>
+function idFreitextPflicht(auswahl) {
+    var option = auswahl.options[auswahl.selectedIndex];
+    var pflicht = !!(option && option.getAttribute('data-freitext-pflicht') === '1');
+    var form = auswahl.closest('form');
+    var feld = form.querySelector('input[name="ablehnungsgrund_text"]');
+    var text = form.querySelector('.id-freitext-pflicht');
+    if (feld) { feld.required = pflicht; }
+    if (text) { text.textContent = pflicht ? '(Pflicht bei diesem Grund)' : '(optional)'; }
+}
+</script>
 
 {% if angebot.ablehnungsgrund %}
 <p class="dezent">Ablehnungsgrund: <strong>{{ angebot.ablehnungsgrund }}</strong>

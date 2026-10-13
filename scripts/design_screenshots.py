@@ -46,7 +46,11 @@ STYLE_OHNE_EK = (
 )
 # Reihenfolge und Rollen der Seiten (Phase 152): name → (Rolle, Pfad oder Ermittler, mobil)
 SEITEN = ["portal", "angebotsliste", "editor", "vorgangsakte", "hauptboard", "kartei",
-          "projektboard", "projektakte", "montage-einsatz", "erfassung-mobil", "login"]
+          "projektboard", "projektakte", "montage-einsatz", "erfassung-mobil", "login",
+          # v31/v32 (13.10.2026): Lead-Dashboard, Benutzerverwaltung, Lead-Einstellungen,
+          # Leads VOT / Mein Tag (Desktop + Handy), Kundensuche
+          "lead-dashboard", "benutzer", "lead-einstellungen", "leads-vot", "mein-tag-mobil",
+          "suche", "angebotsliste-verfolgung"]
 
 
 def argumente() -> argparse.Namespace:
@@ -142,6 +146,19 @@ def benutzer_je_rolle(session) -> dict:
     rollen = {}
     for b in session.query(Benutzer).filter(Benutzer.aktiv.is_(True)).order_by(Benutzer.id).all():
         rollen.setdefault(b.rolle, b.id)
+    # v32 (13.10.2026): für „Mein Tag“ den Außendienstler mit den meisten offenen
+    # Vor-Ort-Terminen nehmen (sonst zeigt die mobile Aufnahme nur den Leerzustand)
+    try:
+        from sqlalchemy import text as _text
+        zeile = session.execute(_text(
+            "SELECT b.id FROM benutzer b JOIN vorgaenge v ON v.ad_id=b.id "
+            "JOIN vot_termine t ON t.vorgang_id=v.id "
+            "WHERE b.aktiv=1 AND b.rolle='aussendienst' AND t.status IN ('geplant','terminiert','unbestaetigt') "
+            "GROUP BY b.id ORDER BY COUNT(*) DESC LIMIT 1")).fetchone()
+        if zeile:
+            rollen["aussendienst"] = int(zeile[0])
+    except Exception:   # noqa: BLE001 – ältere Kopien ohne die Tabellen
+        pass
     return {"admin": rollen.get("admin", 1), "montage": rollen.get("montage", 2),
             "aussendienst": rollen.get("aussendienst", 3)}
 
@@ -218,6 +235,14 @@ def seitenliste(ziele: dict, cookies: dict, erfassung_id: int) -> list[tuple[str
     if erfassung_id:
         liste.append(("erfassung-mobil", f"/erfassung/{erfassung_id}/seite/0", ad, True))
     liste.append(("login", "/login", None, False))
+    # v31/v32
+    liste.append(("lead-dashboard", "/lead-management/dashboard", admin, False))
+    liste.append(("benutzer", "/benutzer", admin, False))
+    liste.append(("lead-einstellungen", "/parametrierung/lead-einstellungen", admin, False))
+    liste.append(("leads-vot", "/leads", admin, False))
+    liste.append(("mein-tag-mobil", "/leads", ad, True))
+    liste.append(("suche", "/suche?q=M%C3%BC", admin, False))
+    liste.append(("angebotsliste-verfolgung", "/angebote?verfolgung=versendet", admin, False))
     return liste
 
 

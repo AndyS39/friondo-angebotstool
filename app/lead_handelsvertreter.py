@@ -121,12 +121,14 @@ def eigene_vorgaenge(session: Session, benutzer) -> list:
     nachgezogen). Reihenfolge: Eingang absteigend."""
     if benutzer is None:
         return []
+    # v31 (PLAN_LEAD_V5 Phase 154): archivierte Leads (Lead-Sicht) nicht in der HV-Ansicht
     treffer = {v.id: v for v in session.query(Vorgang)
-               .filter(Vorgang.ad_id == benutzer.id)}
+               .filter(Vorgang.ad_id == benutzer.id, Vorgang.archiviert_am.is_(None))}
     lead_ids = [l.id for l in session.query(Lead.id)
                 .filter(Lead.benutzer_id == benutzer.id)]
     if lead_ids:
-        for v in session.query(Vorgang).filter(Vorgang.lead_id.in_(lead_ids)):
+        for v in (session.query(Vorgang).filter(Vorgang.lead_id.in_(lead_ids),
+                                                Vorgang.archiviert_am.is_(None))):
             if v.ad_id in (None, benutzer.id):
                 treffer.setdefault(v.id, v)
     return sorted(treffer.values(),
@@ -450,6 +452,15 @@ def _hex(farbe: str) -> str:
     return f if len(f) == 7 and f.startswith("#") else ""
 
 
+def _grosskunde_farbe(session: Session) -> str:
+    """v31 (Phase 153): Parameter grosskunde_farbe (lead_boards.grosskunde_farbe)."""
+    try:
+        from app import lead_boards
+        return lead_boards.grosskunde_farbe(session)
+    except Exception:
+        return ""
+
+
 def zeilen_bauen(session: Session, vorgaenge: list, kreis: dict | None = None) -> list:
     """Zeilen wie im Hauptboard (A3-Pflichtspalten in Kurzform): Kunde, Status
     (Blatt Status: Label + Farbe), Kanal, Versuche, letzter Kontakt, Eingang,
@@ -506,6 +517,7 @@ def zeilen_bauen(session: Session, vorgaenge: list, kreis: dict | None = None) -
             "status_farbe": _hex(zeile.farbe) if zeile else "",
             "kanal": kanal, "kanal_farbe": _hex(farben.get(kanal.lower(), "")),
             "sparten": [s.strip() for s in (kunde.interesse or "").split(",") if s.strip()],
+            "grosskunde": bool(getattr(kunde, "grosskunde", False)),   # v31 (Phase 153)
             "kontakt": kontakt,
             "kontakt_text": (f"{kontakt.zeitpunkt.strftime('%d.%m. %H:%M')} · "
                              f"{ANRUF_ERGEBNIS_NAMEN.get(kontakt.ergebnis, KONTAKT_TYPEN.get(kontakt.typ, kontakt.typ))}"
@@ -567,11 +579,12 @@ def alle_hv_vorgaenge(session: Session, kreis: dict | None = None) -> list:
     if not kreis:
         return []
     treffer = {v.id: v for v in session.query(Vorgang)
-               .filter(Vorgang.ad_id.in_(list(kreis)))}
+               .filter(Vorgang.ad_id.in_(list(kreis)), Vorgang.archiviert_am.is_(None))}
     lead_ids = [l.id for l in session.query(Lead.id).filter(Lead.benutzer_id.in_(list(kreis)))]
     if lead_ids:
         for v in session.query(Vorgang).filter(Vorgang.lead_id.in_(lead_ids),
-                                               Vorgang.ad_id.is_(None)):
+                                               Vorgang.ad_id.is_(None),
+                                               Vorgang.archiviert_am.is_(None)):   # v31
             treffer.setdefault(v.id, v)
     return sorted(treffer.values(),
                   key=lambda v: v.eingang_am or v.angelegt_am or datetime.min,
@@ -721,7 +734,9 @@ def ansicht(session: Session, benutzer, f: dict, mit_phase105: bool = True) -> d
              "ctx": {"nur_lesen": True, "board": "hauptboard", "jetzt": jetzt,
                      "heute": jetzt.date(), "hv": not gesamt, "sammel": False,
                      "versuche_max": kern.versuche_max(session),
-                     "sortierung": sortierung}}
+                     "sortierung": sortierung,
+                     # v31 (Phase 153): Badge-Farbe „Großkunde“ für die Zellen aus _tabelle.html
+                     "grosskunde_farbe": _grosskunde_farbe(session)}}
     if gesamt:
         daten["gruppen"] = gruppieren(gefiltert, kreis)
         daten["hinweise"] = benutzer_abgleich(session)

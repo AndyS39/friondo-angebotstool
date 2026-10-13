@@ -8,7 +8,7 @@
 <html lang="de"{% if darstellung != 'geraet' %} data-theme="{{ darstellung }}"{% endif %}>
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{% block titel %}Friondo Angebotstool{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}?v={{ css_version }}">
     {# v23 (Lead-Management V2): ergänzende Styles, Blöcke je Phase #}
@@ -17,6 +17,10 @@
     <link rel="stylesheet" href="/static/projektierung_v28.css?v={{ css_version }}">
     <link rel="stylesheet" href="/static/akte_v28.css?v={{ css_version }}">
     <link rel="stylesheet" href="/static/lead_v29.css?v={{ css_version }}">
+    {# v32 (PLAN_V19 Phase 164): Kundensuche in der Kopfzeile #}
+    <link rel="stylesheet" href="/static/suche.css?v={{ css_version }}">
+    {# v32 (PLAN_V19 Phase 163): Verfolgungs-Chip und Dialog „Nächster Schritt“ #}
+    <link rel="stylesheet" href="/static/verfolgung.css?v={{ css_version }}">
     {# v14 (Phase 73): PWA-Darstellung - Startansicht, Icon, Farbe.
        v30 (Phase 145): Farbe folgt dem Modus (Werte aus app/darstellung.py); bei „Gerät“
        zwei Einträge mit Media-Query, navigation.js zieht sie beim Umschalten nach #}
@@ -41,6 +45,22 @@
              width="75" height="30" style="height:30px; width:auto;">
         <span>Angebotstool</span>
     </a>
+    {# v32 (PLAN_V19 Phase 164): Kundensuche – Admin, Innendienst, Lead-Management und
+       Außendienst; nicht auf Login/PIN-Wechsel, im Erfassungsbogen und eingebettet.
+       Vorschläge/Tastatur in suche.js, Trefferseite /suche, Logik in app/suche.py. #}
+    {% set suche_zeigen = benutzer_angemeldet
+       and benutzer_angemeldet.rolle in ('admin', 'innendienst', 'leadmanagement', 'aussendienst')
+       and request.query_params.get('einbett') != '1'
+       and request.url.path not in ('/login', '/pin-wechsel')
+       and not request.url.path.startswith('/erfassung/') %}
+    {% if suche_zeigen %}
+    <form class="kopf-suche" action="/suche" method="get" role="search" autocomplete="off" data-suche-json="/suche.json">
+        <button type="button" class="kopf-suche-lupe" aria-label="Kunde suchen" title="Kunde suchen">{{ symbol('suche') }}</button>
+        <span class="kopf-suche-symbol" aria-hidden="true">{{ symbol('suche') }}</span>
+        <input type="search" name="q" placeholder="Kunde suchen …" aria-label="Kunde suchen" minlength="2" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" value="{{ request.query_params.get('q', '') if request.url.path == '/suche' else '' }}">
+        <div class="kopf-suche-liste" role="listbox" hidden></div>
+    </form>
+    {% endif %}
     <nav>
         {% if benutzer_angemeldet %}
             {# v11 (Phase 69): Glocke – Zähler ungelesen + Dropdown der letzten 20 #}
@@ -112,7 +132,8 @@
                     {% elif benutzer_angemeldet.rolle == 'montage' %}
                         <a href="/montage">Meine Einsätze</a>
                     {% else %}
-                        <a href="/leads">Leads VOT</a>
+                        {# v32 (PLAN_V19 Phase 161): „Leads VOT“ heißt für den Außendienst „Mein Tag“ #}
+                        <a href="/leads">Mein Tag</a>
                         <a href="/erfassung">Erfassung</a>
                         <a href="/meine-angebote">Meine Angebote</a>
                         <a href="/statistik">Meine Statistik</a>
@@ -185,5 +206,7 @@
 <script src="/static/projektierung.js?v={{ css_version }}"></script>
 {# v30 (PLAN_V18 Phase 145/147): Darstellung umschalten + Zurück-Verlauf je Tab #}
 <script src="/static/navigation.js?v={{ css_version }}"></script>
+{# v32 (PLAN_V19 Phase 164): Vorschläge der Kundensuche #}
+<script src="/static/suche.js?v={{ css_version }}"></script>
 </body>
 </html>

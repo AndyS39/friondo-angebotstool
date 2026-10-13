@@ -291,6 +291,10 @@ def extern_erledigt(request: Request, erfassung_id: int,
     erfassung.angebot_id = angebot.id
     from app import vorgaenge as vorgaenge_modul
     vorgaenge_modul.vorgang_fuer_angebot(session, angebot)   # v10: Akte
+    # v32 (PLAN_V19 Phase 162): „Extern erledigt“ zählt als Versand am Datum des Eintrags
+    # [ANNAHME] – automatische Wiedervorlage am Vorgang (reine DB-Arbeit, vor dem Commit)
+    from app import nachfassen
+    nachfassen.nach_versand(session, angebot, benutzer=request.state.benutzer, versandtag=datum)
     erfassung.status = "Erledigt (extern)"   # v8: Archiv erst manuell
     _kette_protokollieren(erfassung, request.state.benutzer,
                           f"Extern erledigt – TAIFUN-Eintrag über {endbetrag / 100:.2f} €"
@@ -493,7 +497,8 @@ def manuelles_angebot(erfassung_id: int, session: Session = Depends(get_session)
     antworten = json.loads(erfassung.antworten_json or "{}")
     angebot = angebot_aufbau.angebot_anlegen(session, erfassung.kunde_id,
                                              antworten=antworten, logik=logik,
-                                             nur_protokoll=True, sparte=sparte)
+                                             nur_protokoll=True, sparte=sparte,
+                                             erfassung=erfassung)   # v31: Objekt mitnehmen
     erfassung.angebot_id = angebot.id
     from app import vorgaenge as vorgaenge_modul
     vorgaenge_modul.vorgang_fuer_angebot(session, angebot)   # v10: Akte

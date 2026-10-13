@@ -27,6 +27,8 @@
 <td class="hv-kunde sp-lead"><a href="/lead-management/lead/{{ z.vorgang.id }}">{{ z.kunde.anzeige_name }}</a>
     {{ quelle_badge(z.quelle, z.quelle_gruppe) }}
     {% if z.vorgang.demo %}<span class="abzeichen">Demo</span>{% endif %}
+    {#- v31 (Phase 153): Badge „Großkunde“ in der HV-Ansicht #}
+    {% if z.grosskunde %}<span class="lm-grosskunde"{% if ctx.grosskunde_farbe %} style="--f:{{ ctx.grosskunde_farbe }}"{% endif %} title="Großkunde">Großkunde</span>{% endif %}
     {% if z.wiedervorlage and z.offen %}{{ wiedervorlage_chip(z.wiedervorlage, jetzt) }}{% endif %}</td>
 {%- elif key == 'status' -%}
 {#- v30 (PLAN_V18 Phase 145): Status-/Kanalfarbe nur noch als --f, Tönung und Textfarbe je Modus in lead_v2.css #}
@@ -166,6 +168,7 @@
             <td class="hv-kunde"><a href="/lead-management/lead/{{ z.vorgang.id }}">{{ z.kunde.anzeige_name }}</a>
                 {{ quelle_badge(z.quelle, z.quelle_gruppe) }}
                 {% if z.vorgang.demo %}<span class="abzeichen">Demo</span>{% endif %}
+                {% if z.grosskunde %}<span class="lm-grosskunde"{% if ctx.grosskunde_farbe %} style="--f:{{ ctx.grosskunde_farbe }}"{% endif %} title="Großkunde">Großkunde</span>{% endif %}
                 {% if z.wiedervorlage and z.offen %}{{ wiedervorlage_chip(z.wiedervorlage, jetzt) }}{% endif %}</td>
             <td><span class="hv-status" {% if z.status_farbe %}style="--f:{{ z.status_farbe }}"{% endif %}>{{ z.status_label }}</span></td>
             <td>{% if z.kanal %}{% if z.kanal_farbe %}<span class="hv-status" style="--f:{{ z.kanal_farbe }}">{{ z.kanal }}</span>{% else %}{{ kanal_badge(z.kanal) or z.kanal }}{% endif %}{% else %}<span class="dezent">–</span>{% endif %}</td>

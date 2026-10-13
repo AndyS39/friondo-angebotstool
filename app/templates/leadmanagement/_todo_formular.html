@@ -77,3 +77,59 @@
 </ul>
 {% else %}<p class="dezent lm-todo-leer">{{ leer_text }}</p>{% endif %}
 {% endmacro %}
+
+{# v31 (PLAN_LEAD_V5 Phase 155): schmale To-Do-Spalte der Kundenkartei (ein Drittel neben
+   dem Notizfeld): offene To-Dos mit Häkchen (POST /lead-management/todos/{id}/erledigt,
+   data-fetch=reload), erledigte eingeklappt, Inline-Anlegen (Vertrag Phase 110:
+   POST /lead-management/todos/neu mit vorgang_id, titel, text, faellig_am, an_benutzer_id,
+   zurueck); zeilen = lead_todos.zeilen(session, lead_todos.fuer_vorgang(...)). #}
+{% macro todo_spalte(zeilen, benutzer, benutzer_liste, vorgang_id, zurueck='', heute=None, readonly=False) %}
+{% set offene = zeilen | selectattr('todo.status', 'equalto', 'offen') | list %}
+{% set erledigte = zeilen | rejectattr('todo.status', 'equalto', 'offen') | list %}
+{% if offene %}
+<ul class="lm-todos lk-todo-liste">
+    {% for z in offene %}{% set t = z.todo %}
+    {% set darf = benutzer and not readonly and (benutzer.rolle == 'admin' or t.an_benutzer_id == benutzer.id or t.von_benutzer_id == benutzer.id) %}
+    <li class="lm-todo lk-todo {{ z.klasse }}" id="todo-{{ t.id }}">
+        <form method="post" action="/lead-management/todos/{{ t.id }}/erledigt" class="lm-todo-haken lk-inline" data-fetch="reload">
+            <input type="hidden" name="zurueck" value="{{ zurueck }}">
+            <button type="submit" class="lk-todo-haken" title="Erledigt" aria-label="To-Do erledigt" {{ 'disabled' if not darf }}>{{ symbol('haken') }}</button>
+        </form>
+        <div class="lm-todo-text">
+            <strong>{{ t.titel }}</strong>
+            <div class="lm-todo-meta dezent">
+                {% if t.faellig_am %}<span class="wv-chip {{ 'faellig' if z.klasse in ('faellig', 'heute') else 'geplant' }}">{{ symbol('uhr') }} {{ t.faellig_am | de_datum('%a %d.%m. %H:%M') }}</span> · {% endif %}für {{ z.an }}{% if z.von != z.an %} · von {{ z.von }}{% endif %}</div>
+            {% if t.text %}<div class="lm-todo-details">{{ t.text | truncate(160) }}</div>{% endif %}
+        </div>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}<p class="dezent lm-todo-leer">Keine offenen To-Dos.</p>{% endif %}
+{% if erledigte %}
+<details class="lk-todo-erledigt">
+    <summary class="dezent">{{ erledigte | length }} erledigt</summary>
+    <ul class="lm-todos lk-todo-liste">
+        {% for z in erledigte %}{% set t = z.todo %}
+        <li class="lm-todo lk-todo erledigt"><span class="lk-todo-haken fertig" aria-hidden="true">{{ symbol('haken') }}</span>
+            <div class="lm-todo-text"><strong>{{ t.titel }}</strong>
+                <div class="lm-todo-meta dezent">erledigt {{ t.erledigt_am.strftime('%d.%m.%Y') if t.erledigt_am }} · für {{ z.an }}</div></div></li>
+        {% endfor %}
+    </ul>
+</details>
+{% endif %}
+{% if not readonly %}
+<form method="post" action="/lead-management/todos/neu" class="lk-todo-kurz formular" data-fetch="reload">
+    <input type="hidden" name="vorgang_id" value="{{ vorgang_id }}">
+    <input type="hidden" name="zurueck" value="{{ zurueck }}">
+    <input type="text" name="titel" placeholder="Neues To-Do …" maxlength="300" required aria-label="Titel">
+    <div class="lk-feld-reihe">
+        <input type="datetime-local" name="faellig_am" step="300" aria-label="Fällig am" title="Fällig am (5-Minuten-Raster)">
+        <select name="an_benutzer_id" aria-label="An">
+            {% for b in benutzer_liste %}<option value="{{ b.id }}" {{ 'selected' if benutzer and b.id == benutzer.id }}>{{ b.name }}</option>{% endfor %}
+        </select>
+    </div>
+    <button class="knopf klein" type="submit">{{ symbol('plus') }} To-Do</button>
+</form>
+{% endif %}
+<div class="lk-bereich-fuss"><a class="dezent" href="/lead-management/todos">Alle To-Dos</a></div>
+{% endmacro %}

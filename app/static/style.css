@@ -1000,6 +1000,11 @@ tr.bauseits td { color: var(--text-dezent); }
 .abzeichen.interesse-pv { --chip-farbe: var(--sparte-pv); background: color-mix(in srgb, var(--chip-farbe) 14%, transparent); color: var(--chip-farbe); margin-left: 0.2rem; }
 .abzeichen.interesse-kl { --chip-farbe: var(--sparte-kl); background: color-mix(in srgb, var(--chip-farbe) 14%, transparent); color: var(--chip-farbe); margin-left: 0.2rem; }
 .abzeichen.interesse-wb { --chip-farbe: var(--sparte-wb); background: color-mix(in srgb, var(--chip-farbe) 14%, transparent); color: var(--chip-farbe); margin-left: 0.2rem; }
+/* v31 (PLAN_LEAD_V5 Phase 157): GW/MS/WA/DMS über die Status-Paare */
+.abzeichen.interesse-gw { --chip-farbe: var(--status-grau); background: color-mix(in srgb, var(--chip-farbe) 14%, transparent); color: var(--chip-farbe); margin-left: 0.2rem; }
+.abzeichen.interesse-ms { --chip-farbe: var(--status-violett); background: color-mix(in srgb, var(--chip-farbe) 14%, transparent); color: var(--chip-farbe); margin-left: 0.2rem; }
+.abzeichen.interesse-wa { --chip-farbe: var(--status-blau); background: color-mix(in srgb, var(--chip-farbe) 14%, transparent); color: var(--chip-farbe); margin-left: 0.2rem; }
+.abzeichen.interesse-dms { --chip-farbe: var(--status-orange); background: color-mix(in srgb, var(--chip-farbe) 14%, transparent); color: var(--chip-farbe); margin-left: 0.2rem; }
 .platzhalter { cursor: pointer; }
 .platzhalter:hover { background: var(--akzent-flaeche); }
 
@@ -1059,6 +1064,11 @@ span.chip { cursor: default; }
 .chip-pv { --chip-farbe: var(--sparte-pv); }   /* Photovoltaik – Goldgelb */
 .chip-kl { --chip-farbe: var(--sparte-kl); }   /* Klima – Blau */
 .chip-wb { --chip-farbe: var(--sparte-wb); }   /* Wallbox – Grün */
+/* v31 (PLAN_LEAD_V5 Phase 157): Freitext-Sparten über die Status-Paare (keine neuen Hex-Werte) */
+.chip-gw { --chip-farbe: var(--status-grau); }      /* Gewerbe */
+.chip-ms { --chip-farbe: var(--status-violett); }   /* Mieterstrom */
+.chip-wa { --chip-farbe: var(--status-blau); }      /* Wasser */
+.chip-dms { --chip-farbe: var(--status-orange); }   /* Denkmalschutz */
 .chip-erfasst { background: var(--chip-farbe); color: var(--text-auf-farbe); cursor: default; }
 .chip-offen { background: var(--flaeche-karte); }
 .chip-ausgeblendet { --chip-farbe: var(--text-dezent); background: var(--flaeche-abgesetzt); color: var(--text-dezent);
@@ -1623,6 +1633,11 @@ select.pj-chip, input.pj-chip {
 .pj-sp.PV { background: var(--pj-pv); }
 .pj-sp.KL { background: var(--pj-kl); }
 .pj-sp.WB { background: var(--pj-wb); }
+/* v31 (PLAN_LEAD_V5 Phase 157): Gewerke der Freitext-Sparten (Status-Paare) */
+.pj-sp.GW { background: var(--status-grau); }
+.pj-sp.MS { background: var(--status-violett); }
+.pj-sp.WA { background: var(--status-blau); }
+.pj-sp.DMS { background: var(--status-orange); }
 
 .pj-dot { width: 9px; height: 9px; border-radius: 99px; flex: 0 0 9px;
           display: inline-block; }

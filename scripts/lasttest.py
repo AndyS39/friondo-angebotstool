@@ -36,6 +36,7 @@
 # erfüllt, 2 = Bedienfehler/Abbruch, 3 = Tool-Fehler im Lastgenerator.
 import argparse
 import collections
+from urllib.parse import quote
 import io
 import json
 import os
@@ -75,8 +76,12 @@ STANDARD_DATA = ARBEITSORDNER / "data"
 SERVER_SKRIPT = PROJEKT / "scripts" / "lasttest_server.py"
 
 # --- Lastmodell Phase 127 [ANNAHME] ----------------------------------------------------
+# v31/v32 (13.10.2026): 35 aktive Nutzer = 15 Außendienst (Mein Tag, Suche, Erfassung),
+# 12 Lead-/Innendienst-Nutzer auf Hauptboard, Kartei und Terminvorschlägen (Szenario
+# leadmanagement – das Lead-Modul ist seit v31 für alle Rollen frei), 5 Innendienst
+# (Erfassungen/Angebote), 3 Projektierung/Montage.
 ROLLEN_GEWICHTE = collections.OrderedDict(
-    [("aussendienst", 15), ("innendienst", 12), ("leadmanagement", 6), ("projektierung", 4)])
+    [("aussendienst", 15), ("leadmanagement", 12), ("innendienst", 5), ("projektierung", 3)])
 ROLLEN_NAMEN = {"aussendienst": "Außendienst mobil", "innendienst": "Innendienst",
                 "leadmanagement": "Lead-Management", "projektierung": "Projektierung",
                 "montage": "Montage", "schreibsturm": "Innendienst (Schreibsturm)"}
@@ -92,16 +97,19 @@ SCHREIBSTURM_POSITIONEN = 10
 # --- Zielwerte Phase 131 [ANNAHME] -----------------------------------------------------
 ZIELWERTE_MS = collections.OrderedDict([
     ("liste_akte", 1500), ("editor_aktion", 1000), ("angebots_pdf", 4000),
-    ("protokoll_pdf", 3000), ("terminvorschlaege", 6000)])
+    ("protokoll_pdf", 3000), ("terminvorschlaege", 6000),
+    ("suche", 300)])   # v32 (PLAN_V19 Phase 164): Kundensuche unter 300 ms
 GRUPPEN_NAMEN = {"liste_akte": "Listen und Akten", "editor_aktion": "Editor-Aktionen",
                  "angebots_pdf": "Angebots-PDF", "protokoll_pdf": "Protokoll-PDF",
-                 "terminvorschlaege": "Terminvorschläge", "sonstige": "übrige Schritte"}
+                 "terminvorschlaege": "Terminvorschläge", "suche": "Kundensuche",
+                 "sonstige": "übrige Schritte"}
 POOL_SPITZE_MAX_PROZENT = 60.0
 FEHLERQUOTE_MAX_PROZENT = 0.1
 GRUPPEN_REGELN = [   # (Methode, Muster auf den normalisierten Pfad, Gruppe)
     ("GET", r"^/angebote/\{id\}/pdf$", "angebots_pdf"),
     ("GET", r"^/erfassungen/\{id\}/protokoll\.pdf$", "protokoll_pdf"),
     ("GET", r"^/lead-management/lead/\{id\}/termin/vorschlaege\.json$", "terminvorschlaege"),
+    ("GET", r"^/suche\.json$", "suche"),   # v32 (Phase 164)
     ("POST", r"^/angebote/\{id\}/(position/\{pid\}/(menge|aendern|entfernen|text)"
              r"|sortierung|gruppe|neu-nummerieren|sperre|sperre-frei)$", "editor_aktion"),
     ("GET", r"^(/|/erfassung|/erfassungen|/erfassungen/\{id\}|/angebote|/angebote/\{id\}"
@@ -289,6 +297,9 @@ def pools_lesen(db_pfad: Path) -> dict:
                                  "WHERE v.lead_phase IN ('neu','in_kontaktierung','qualifiziert',"
                                  "'terminiert') AND v.demo=0 AND k.plz<>'' AND v.lat IS NULL "
                                  "ORDER BY v.id DESC", hinweise)
+        # v32 (Phase 164): Namensanfänge für die Kundensuche des Außendienstes
+        kunden_namen = _sql(v, "SELECT nachname FROM kunden WHERE aktiv=1 AND nachname<>'' "
+                               "ORDER BY id DESC LIMIT 500", hinweise)
         projekte = _sql(v, "SELECT id, vorgang_id FROM projekte ORDER BY id", hinweise)
         termine = _sql(v, "SELECT id, team_id FROM projekt_termine WHERE beginn IS NOT NULL "
                           "ORDER BY id", hinweise)
@@ -304,6 +315,7 @@ def pools_lesen(db_pfad: Path) -> dict:
         "angebote": [(int(z[0]), str(z[1])) for z in angebote],
         "vorgaenge_lm": [int(z[0]) for z in vorgaenge],
         "projekte": [(int(z[0]), int(z[1]) if z[1] is not None else None) for z in projekte],
+        "kunden_namen": [str(z[0]) for z in kunden_namen],
         "termine": [(int(z[0]), int(z[1]) if z[1] is not None else None) for z in termine],
         "hinweise": hinweise,
     }
@@ -337,6 +349,12 @@ def benutzer_je_rolle(pools: dict, fest: str) -> tuple[dict, list[str]]:
                     liste = mit_leads
                 elif liste:
                     hinweise.append("kein Außendienstler mit offenen Leads VOT – Szenario läuft ohne Lead")
+        if not liste and rolle == "leadmanagement":
+            # v31: Lead-Modul für alle Rollen frei – Innendienst-Personen fahren das Lead-Szenario
+            liste = [b for b in alle if b[2] == "innendienst"]
+            if liste:
+                hinweise.append("keine Hauptrolle leadmanagement in der Kopie – Innendienst-Personen "
+                                "fahren das Lead-Szenario (v31: Modul für alle Rollen frei)")
         if not liste:
             liste = admins
             hinweise.append(f"keine aktive Person mit Hauptrolle „{rolle}“ in der Kopie – "
@@ -840,8 +858,15 @@ class Nutzer(threading.Thread):
         """Leads VOT öffnen → Erfassung starten → Bogen (alle Seiten) → Absenden →
         Protokoll-PDF (Route /erfassungen/{id}/protokoll.pdf [ANNAHME: im mobilen
         Bogen gibt es keinen Link, die Route ist für den AD erreichbar])."""
-        self.get("/leads", "GET /leads")
+        self.get("/leads", "GET /leads")   # v32: „Mein Tag“
         self.denken()
+        # v32 (Phase 164): Kundensuche beim Tippen – zwei bis drei Zeichen eines Nachnamens
+        namen = self.lauf.pools.get("kunden_namen") or []
+        if namen:
+            begriff = self.rng.choice(namen)[: self.rng.choice((2, 3))]
+            self.get("/suche.json?q=" + quote(begriff), "GET /suche.json",
+                     headers={"Accept": "application/json"})
+            self.denken(1.0, 3.0)
         if not self.leads:
             self.leads = list(self.lauf.pools["leads_je_ad"].get(self.benutzer_id, []))
             self.rng.shuffle(self.leads)

@@ -1,38 +1,99 @@
 {% from "_symbole.html" import symbol %}
-{% from "_komponenten.html" import status_badge, statuskette %}
+{% from "_komponenten.html" import status_badge, statuskette, leer_zustand %}
 {% import "_sparten.html" as sparten_ui %}
-{# v25 (Phase 119) – Blöcke unter den Reitern, volle Breite, einklappbar, in
-   der Reihenfolge Termine · Angebote · Erfassungen · Projekt · Anhänge · To-Dos.
+{# v25 (Phase 119) – Blöcke unter den Reitern, volle Breite, einklappbar.
+   v31 (PLAN_LEAD_V5 Phase 155): Reihenfolge Termine · Angebote · Erfassungen · Projekt ·
+   Anhänge; der To-Dos-Block ist nach oben gewandert (neben die Notizen). Block Termine =
+   alles aus dem bisherigen Reiter Termin plus Block Termine: Werkzeuge (Terminassistent,
+   manuell, Vorab-Gespräch, Erfassung ohne Termin), aktiver Termin je Objekt (Phase 153,
+   lead_termin.objekt_termine – Vertrag T), drei Vorschläge des Assistenten (v29, Nachladen
+   GET …/termin/vorschlaege.json), Kalenderansicht (v29, lm_termin.js, GET …/termin/
+   kalender.json), Historie mit Aktionen (Bestätigung erneut, Umbuchen, Absagen, No-Show,
+   Erfolgt). Testphase (Phase 159): Vormerken/Buchen gesperrt mit Tooltip.
    Auf-/Zuklappen merkt sich lm_kartei.js je Browser (localStorage, nur Komfort).
-   Block Termine zeigt die Top-Terminvorschläge des Assistenten direkt: nach dem
-   Seitenaufbau holt lm_kartei.js GET /lead-management/lead/{id}/termin/
-   vorschlaege.json (Agent D; Antwort {status: ok|adresse_fehlt|hv_lead|keine,
-   hinweis, vorschlaege: [{ad_id, ad_name, beginn, beginn_text, begruendung,
-   umweg_min}]}); Startzustand serverseitig (lead_kartei.vorschlaege_zustand):
-   adresse_fehlt → „Adresse fehlt – Straße, PLZ und Ort eintragen“ (nach dem
-   Autospeichern der Adresse ohne Neuladen nachgeladen), hv_lead → „Lead liegt
-   bei <Name> (Handelsvertreter), Terminierung durch den Vertreter“, laden →
-   „Vorschläge werden berechnet …“, 404 → „Vorschläge derzeit nicht verfügbar“.
-   „Vormerken“ postet an POST /lead/{id}/termin (ad_id, beginn, quelle=assistent). #}
+   Block Projekt zeigt zusätzlich vorgang_verlauf.projekt_block (Vertrag AT). #}
 
-<details class="karte lk-bereich lk-block" data-bereich="termine" open>
+<details class="karte lk-bereich lk-block" data-bereich="termine" id="termine" open>
     <summary>{{ symbol('kalender') }} Termine <span class="lk-zahl">{{ zaehler.termine }}</span>
-        <span class="dezent lk-block-sub">Terminvorschläge des Assistenten · nächste Termine</span></summary>
-    <div class="lk-bereich-inhalt lk-block-raster">
+        <span class="dezent lk-block-sub">aktiver Termin je Objekt · Vorschläge des Assistenten · Kalender · Historie</span></summary>
+    <div class="lk-bereich-inhalt">
         {% if not readonly %}
+        <div class="lk-terminierung karte">
+            <strong>Terminierung</strong>
+            {% if not terminierung_aktiv %}<p class="lm-hinweis lk-termine-hinweis" data-rolle="testphase">{{ symbol('warnung') }} {{ testphase_hinweis }} – Vorschläge und Kalender sind echt, Vormerken/Buchen/Terminierung sind noch gesperrt.</p>
+            {% elif not buchbar %}<p class="lm-hinweis lk-termine-hinweis">Demo-Modus: Terminbuchung nur für Demo-Leads – echte Leads werden in monday terminiert.</p>{% endif %}
+            <div class="lk-werkzeuge">
+                <a class="knopf klein" href="{{ kartei_url }}/termin" title="Terminassistent: Vorschläge aus AD-Profilen, Kompetenz, Outlook, Fahrzeit{{ ' – fragt bei mehreren Objekten das Objekt ab' if objekte.mehrere }}">{{ symbol('kalender') }} Termin vorschlagen</a>
+                <button type="button" class="knopf klein zweitrangig" onclick="document.getElementById('dlg-termin-manuell').showModal()" title="Vor-Ort-Termin manuell (15-Minuten-Raster)">{{ symbol('stift') }} Termin manuell</button>
+                <a class="knopf klein zweitrangig" href="{{ kartei_url }}/termin/vorab" title="Telefongespräch mit Vertriebler oder Teams-Termin mit Kollegen (kein VOT)">{{ symbol('telefon') }} Vorab-Gespräch</a>
+                {% if not vorgang.demo or not vorgang.vorab_angebot %}
+                <form method="post" action="{{ kartei_url }}/vorab-angebot" class="lk-inline"
+                      onsubmit="return confirm('Erfassung ohne Vor-Ort-Termin starten? Der Vorgang erhält das Kennzeichen Vorab-Angebot (keine Terminbestätigung).')">
+                    <button class="knopf klein zweitrangig" type="submit" title="Vorab-Angebot (F10): Erfassung ohne VOT, keine Terminbestätigung">{{ symbol('plus') }} Erfassung ohne Termin</button>
+                </form>
+                {% endif %}
+            </div>
+            {% if terminierung.fehlend and not terminierung.erledigt %}
+                <p class="dezent" data-rolle="terminierung-hinweis">Terminierung gesperrt – es fehlt: <span data-rolle="fehlend-text">{{ terminierung.fehlend | join(', ') }}</span>. Der Button „Terminierung“ oben rechts wird frei, sobald alles gefüllt ist.</p>
+            {% elif terminierung.termin and terminierung.termin.status == 'vorgemerkt' %}
+                <p class="dezent" data-rolle="terminierung-hinweis">Vorgemerkter Termin wird mit „Terminierung“ (oben rechts) bestätigt (Mail, Kalender, Phase).</p>
+            {% else %}
+                <p class="dezent" data-rolle="terminierung-hinweis" hidden></p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {#- v31 (Phase 153): aktiver Termin je Objekt – bei einem Objekt eine Zeile, bei mehreren
+            je Objekt (Hinweis „1 von 3 Objekten ohne Termin“) #}
+        <div class="lk-objekt-termine" data-rolle="objekt-termine">
+            <strong class="dezent">Termin je Objekt</strong>
+            {% for o in objekte.liste %}
+            <div class="lk-objekt-termin{{ ' offen' if not o.termin }}" data-objekt="{{ o.id }}">
+                <strong>{{ o.objekt.bezeichnung }}</strong>
+                <span class="dezent">{{ o.objekt.strasse }}, {{ o.objekt.plz }} {{ o.objekt.ort }}</span>
+                {% if o.termin %}
+                    <span class="abzeichen lk-tstatus-{{ o.termin.status }}">{{ termin_status_namen.get(o.termin.status, o.termin.status) }}</span>
+                    <span>{{ o.termin.beginn | de_datum('%a %d.%m.%Y %H:%M') if o.termin.beginn else 'ohne Uhrzeit' }}{% if o.termin_ad %} · {{ o.termin_ad.name }}{% endif %}</span>
+                {% else %}
+                    <span class="dezent">kein Termin</span>
+                    {% if not readonly and objekte.mehrere %}<a class="knopf klein zweitrangig" href="{{ kartei_url }}/termin?objekt_id={{ o.id }}">Termin vorschlagen</a>{% endif %}
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="lk-objekt-termin{{ ' offen' if not aktiver_termin }}">
+                <strong>Objekt 1</strong>
+                <span class="dezent">{{ kunde.strasse if kunde and kunde.strasse else 'Adresse im Kundeninfo-Block eintragen' }}{% if kunde and (kunde.plz or kunde.ort) %}, {{ kunde.plz }} {{ kunde.ort }}{% endif %}</span>
+                {% if aktiver_termin %}
+                    <span class="abzeichen lk-tstatus-{{ aktiver_termin.status }}">{{ termin_status_namen.get(aktiver_termin.status, aktiver_termin.status) }}</span>
+                    <span>{{ aktiver_termin.beginn | de_datum('%a %d.%m.%Y %H:%M') if aktiver_termin.beginn else 'ohne Uhrzeit' }}</span>
+                {% else %}<span class="dezent">kein Termin</span>{% endif %}
+            </div>
+            {% endfor %}
+            {% if objekte_hinweis %}<p class="dezent lk-termine-hinweis" data-rolle="ohne-termin">{{ symbol('warnung') }} {{ objekte_hinweis }} – die Terminierung bucht alle vorgemerkten Objekttermine in einem Schritt, Objekte ohne Termin bleiben offen.</p>{% endif %}
+        </div>
+
+        <div class="lk-block-raster">
+        {% if not readonly %}
+        {#- v31 (Phase 153, Vertrag T): vorschlaege.json?objekt_id= je Objekt, Vormerken per
+            POST vormerken_url (JSON {objekt_id, ad_id, beginn}); Testphase-Tooltip aus testphase_hinweis #}
         <div class="lk-vorschlaege" id="lk-vorschlaege" data-url="{{ vorschlaege_url }}"
              data-zustand="{{ vorschlaege.status }}" data-buchen="{{ buchen_url }}"
-             data-buchbar="{{ '1' if buchbar else '' }}" data-hv-name="{{ vorschlaege.hv_name }}"
+             data-vormerken="{{ kartei_url }}/termin/vormerken"
+             data-buchbar="{{ '1' if buchbar else '' }}" data-sperre-text="{{ sperre_text }}" data-hv-name="{{ vorschlaege.hv_name }}"
              data-assistent="{{ kartei_url }}/termin" data-text-laden="{{ vorschlaege_texte.laden }}"
              data-text-adresse="{{ vorschlaege_texte.adresse_fehlt }}"
              data-text-fehler="{{ vorschlaege_texte.nicht_verfuegbar }}" aria-live="polite">
             {#- v29 (Phase 143): genau vorschlaege_anzahl (Standard 3) – der erste als „Ideal“ #}
             <div class="lk-vorschlaege-kopf"><strong>Terminvorschläge</strong>
                 <span class="dezent" data-rolle="untertitel">Top {{ vorschlaege_anzahl | default(3) }} des Assistenten für den vorgefilterten Vertrieblerkreis – der erste ist „Ideal“</span></div>
+            <label class="lk-objekt-wahl" data-rolle="objekt-wahl" {{ '' if objekte.mehrere else 'hidden' }}>Objekt
+                <select data-rolle="objekt" aria-label="Objekt für den Terminvorschlag">
+                    {% for o in objekte.liste %}<option value="{{ o.id }}">{{ o.objekt.bezeichnung }} – {{ o.objekt.strasse }}, {{ o.objekt.plz }} {{ o.objekt.ort }}{{ ' · Termin vorgemerkt' if o.vorgemerkt else (' · ' ~ termin_status_namen.get(o.termin.status, o.termin.status) if o.termin else ' · ohne Termin') }}</option>{% endfor %}
+                </select></label>
             <p class="lk-vorschlaege-hinweis {{ 'lm-warn' if vorschlaege.status == 'adresse_fehlt' else ('lm-blau' if vorschlaege.status == 'hv_lead' else 'dezent') }}"
                data-rolle="hinweis" data-status="{{ vorschlaege.status }}">{{ symbol('warnung' if vorschlaege.status == 'adresse_fehlt' else ('nutzer' if vorschlaege.status == 'hv_lead' else 'uhr')) }} {{ vorschlaege.hinweis }}</p>
             <ol class="lk-vorschlaege-liste" data-rolle="liste" hidden></ol>
-            {% if not buchbar %}<p class="lm-hinweis lk-vorschlaege-demo">Demo-Modus: Vormerken nur für Demo-Leads – echte Leads werden in monday terminiert.</p>{% endif %}
+            {% if not buchbar %}<p class="lm-hinweis lk-vorschlaege-demo">{{ sperre_text }} – Vormerken ist gesperrt.</p>{% endif %}
             <div class="lk-bereich-fuss">
                 <a class="knopf klein zweitrangig" href="{{ kartei_url }}/termin" title="Terminassistent mit allen Vorschlägen, Mini-Karte und manueller Buchung">{{ symbol('kalender') }} Alle Vorschläge / manuell</a>
                 <button type="button" class="knopf klein zweitrangig" data-vorschlaege-neu title="Vorschläge neu berechnen">{{ symbol('aktualisieren') }} Neu laden</button>
@@ -49,10 +110,119 @@
                 </div>
             {% else %}<p class="dezent">Kein Termin.</p>{% endfor %}
             <div class="lk-bereich-fuss">
-                <button type="button" class="knopf klein zweitrangig" data-tab-link="termin">Alle Termine · Aktionen</button>
+                <a class="knopf klein zweitrangig" href="#lk-termin-historie" data-historie-oeffnen>Alle Termine · Aktionen</a>
                 {% if not readonly %}<button type="button" class="knopf klein zweitrangig" onclick="document.getElementById('dlg-termin-manuell').showModal()">{{ symbol('stift') }} Termin manuell</button>{% endif %}
             </div>
         </div>
+        </div>
+
+        {#- v29 (Phase 143) / v31 (Phase 155): Kalenderansicht der Kandidaten im Block Termine – Markup wie
+            termin.html (T), gerendert von lm_termin.js über GET …/termin/kalender.json; Klick auf einen Slot
+            öffnet den Assistenten mit dem Slot (lm_kartei.js) #}
+        {% if not readonly and vorschlaege.status != 'hv_lead' %}
+        <section class="lmt-kalender lk-kalender-kartei" id="lmt-kalender" data-url="{{ kalender_url }}" data-auswahl-url="{{ kartei_url }}/termin/kalender/auswahl"
+                 data-vorgang="{{ vorgang.id }}" data-hv="" data-buchbar="{{ '1' if buchbar else '' }}" data-assistent="{{ kartei_url }}/termin">
+            <div class="lmt-kalender-kopf">
+                <h2>Kalender der Kandidaten <span class="dezent">Mo–Fr · 15-Minuten-Raster · Klick auf einen freien Slot öffnet den Assistenten</span></h2>
+                <div class="lmt-kalender-nav" role="group" aria-label="Woche">
+                    <button type="button" class="knopf klein zweitrangig" data-woche="vor" title="Vorherige Woche">&lsaquo;</button>
+                    <b data-rolle="woche">…</b>
+                    <button type="button" class="knopf klein zweitrangig" data-woche="nach" title="Nächste Woche">&rsaquo;</button>
+                    <button type="button" class="knopf klein ghost" data-woche="start" title="Woche des ersten Vorschlags">Woche des Vorschlags</button>
+                    <button type="button" class="knopf klein ghost" data-kalender-neu title="Kalender neu laden (Cache verwerfen)">{{ symbol('aktualisieren') }} Neu laden</button>
+                </div>
+            </div>
+            <p class="lmt-kalender-hinweis dezent" data-rolle="hinweis">Kalender wird geladen …</p>
+            <div class="lmt-kalender-wrap"><table class="lmt-kalender-tabelle" data-rolle="tabelle" aria-label="Wochenkalender"></table></div>
+            <div class="lmt-kalender-legende">
+                <span><i class="frei"></i>frei (Arbeitszeit)</span><span><i class="aus"></i>außerhalb der Arbeitszeit</span>
+                <span><i class="termin"></i>Tool-Termin</span><span><i class="belegt"></i>Outlook belegt</span>
+                <span><i class="sperr"></i>Sperrzeit (HV)</span><span><i class="vorschlag"></i>Vorschlag</span><span><i class="ideal"></i>Vorschlag 1 „Ideal“</span>
+            </div>
+        </section>
+        {% endif %}
+
+        {#- Historie mit Aktionen (bisheriger Reiter Termin) #}
+        <details class="lk-termin-historie" id="lk-termin-historie" {{ 'open' if termine }}>
+            <summary class="dezent">Historie · Aktionen ({{ termine | length }})</summary>
+            {% if termine %}
+            <table class="tabelle lk-tabelle lk-termine">
+                <thead><tr><th>Beginn</th><th>Art</th><th>Objekt</th><th>Status</th><th>Außendienst</th><th>Herkunft</th><th class="aktionen">Aktionen</th></tr></thead>
+                <tbody>
+                {% for t in termine %}
+                    {% set t_ad = benutzer_map.get(t.ad_id) %}
+                    <tr class="{{ 'lk-termin-aktiv' if t.status in ('vorgemerkt', 'geplant', 'bestaetigt') }}">
+                        <td>{{ t.beginn | de_datum('%a %d.%m.%Y %H:%M') if t.beginn else 'ohne Uhrzeit' }}
+                            {% if t.ende %}<span class="dezent">– {{ t.ende.strftime('%H:%M') }}</span>{% endif %}</td>
+                        <td>{{ termin_typ_namen.get(t.typ or 'vot', t.typ) }} <span class="dezent">· {{ termin_medium_namen.get(t.medium or 'vor_ort', t.medium) }}</span></td>
+                        <td>{% set t_obj = (objekte.liste | selectattr('id', 'equalto', t.objekt_id) | list | first) if t.objekt_id else none %}{{ t_obj.objekt.bezeichnung if t_obj else ('Objekt 1' if objekte.liste else '–') }}</td>
+                        <td><span class="abzeichen lk-tstatus-{{ t.status }}">{{ termin_status_namen.get(t.status, t.status) }}</span>
+                            {% if t.quelle == 'monday' %}<span class="abzeichen">monday</span>{% endif %}
+                            {% if t.grund_text %}<div class="dezent">{{ t.grund_text }}</div>{% endif %}</td>
+                        <td>{{ t_ad.name if t_ad else '–' }}{% if t.umweg_min is not none %} <span class="dezent">· Umweg +{{ t.umweg_min }} Min</span>{% endif %}</td>
+                        <td>{{ t.quelle }}</td>
+                        <td class="aktionen lk-termin-aktionen">
+                            {% if readonly %}
+                                {% if t.ad_id == benutzer.id and t.status in ('geplant', 'bestaetigt') %}
+                                    <details class="lk-inline-form"><summary class="knopf klein zweitrangig">No-Show melden</summary>
+                                        <form method="post" class="formular" action="/lead-management/ad/termin/{{ t.id }}/no-show">
+                                            <label><input type="radio" name="art" value="no_show" checked> No-Show</label>
+                                            <label><input type="radio" name="art" value="absage"> Absage</label>
+                                            <label>Grund <select name="grund" required>{% for g in no_show_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}</select></label>
+                                            <label>Freitext <input type="text" name="grund_text"></label>
+                                            <button class="knopf klein" type="submit">Zurückmelden</button>
+                                        </form></details>
+                                    <details class="lk-inline-form"><summary class="knopf klein zweitrangig">Verschieben (eigene Woche)</summary>
+                                        <form method="post" class="formular" action="/lead-management/ad/termin/{{ t.id }}/verschieben">
+                                            <label>Neuer Beginn <input type="datetime-local" name="beginn" step="900" required></label>
+                                            <label>Grund <input type="text" name="grund" required></label>
+                                            <button class="knopf klein" type="submit">Verschieben</button>
+                                        </form></details>
+                                {% endif %}
+                            {% elif t.status in ('vorgemerkt', 'geplant', 'bestaetigt') %}
+                                {% if t.status != 'vorgemerkt' %}
+                                <form method="post" action="/lead-management/termin/{{ t.id }}/bestaetigung-erneut" class="lk-inline"
+                                      onsubmit="return confirm('Terminbestätigung mit ICS erneut senden (gleiche UID, SEQUENCE+1)?')">
+                                    <button class="knopf klein zweitrangig" type="submit" title="{{ 'Terminbestätigung erneut senden (A-9)' if mail_versand_aktiv else mailsperre_hinweis ~ ' – der Eintrag landet gesperrt in der Warteschlange' }}">{{ symbol('brief') }} Bestätigung erneut</button>
+                                </form>
+                                {% endif %}
+                                <details class="lk-inline-form"><summary class="knopf klein zweitrangig" title="{{ 'Umbuchen auf neuen Beginn' if terminierung_aktiv else testphase_hinweis }}">Verschieben</summary>
+                                    <form method="post" class="formular" action="/lead-management/termin/{{ t.id }}/verschieben">
+                                        {% if not terminierung_aktiv %}<p class="lm-hinweis">{{ testphase_hinweis }}</p>{% endif %}
+                                        <label>Neuer Beginn <input type="datetime-local" name="beginn" step="900" value="{{ t.beginn.strftime('%Y-%m-%dT%H:%M') if t.beginn }}" required></label>
+                                        <label>Außendienst <select name="ad_id">{% for e in ad_wahl %}<option value="{{ e.benutzer.id }}" {{ 'selected' if t.ad_id == e.benutzer.id }} {{ 'disabled' if e.gesperrt and t.ad_id != e.benutzer.id }}>{{ e.benutzer.name }}</option>{% endfor %}</select></label>
+                                        <button class="knopf klein" type="submit" {{ 'disabled' if not terminierung_aktiv }} title="{{ '' if terminierung_aktiv else testphase_hinweis }}">Umbuchen</button>
+                                        <a class="knopf klein zweitrangig" href="{{ kartei_url }}/termin?umbuchen={{ t.id }}">Über Assistent</a>
+                                    </form></details>
+                                <details class="lk-inline-form"><summary class="knopf klein zweitrangig" title="{{ 'Absagen mit Storno-ICS und Ersatzkunde-Vorschlag' if terminierung_aktiv else testphase_hinweis }}">Absagen</summary>
+                                    <form method="post" class="formular" action="/lead-management/termin/{{ t.id }}/absagen">
+                                        {% if not terminierung_aktiv %}<p class="lm-hinweis">{{ testphase_hinweis }}</p>{% endif %}
+                                        <label>Grund <select name="grund" required>{% for g in no_show_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}</select></label>
+                                        <label>Freitext <input type="text" name="grund_text"></label>
+                                        <button class="knopf klein gefaehrlich" type="submit" {{ 'disabled' if not terminierung_aktiv }} title="{{ '' if terminierung_aktiv else testphase_hinweis }}">Absagen (Ersatzkunde-Vorschlag)</button>
+                                    </form></details>
+                                {% if t.status != 'vorgemerkt' %}
+                                <details class="lk-inline-form"><summary class="knopf klein zweitrangig">No-Show</summary>
+                                    <form method="post" class="formular" action="/lead-management/termin/{{ t.id }}/no-show">
+                                        <input type="hidden" name="art" value="no_show">
+                                        <label>Grund <select name="grund" required>{% for g in no_show_gruende %}<option value="{{ g.grund }}">{{ g.grund }}</option>{% endfor %}</select></label>
+                                        <label>Freitext <input type="text" name="grund_text"></label>
+                                        <button class="knopf klein" type="submit">No-Show melden</button>
+                                    </form></details>
+                                <form method="post" action="/lead-management/termin/{{ t.id }}/erfolgt" class="lk-inline">
+                                    <button class="knopf klein" type="submit">{{ symbol('haken') }} Erfolgt</button>
+                                </form>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+                {{ leer_zustand('Noch kein Termin – Vorschlag oben vormerken, Termin vorschlagen, manuell eintragen oder Vorab-Gespräch planen.') }}
+            {% endif %}
+        </details>
     </div>
 </details>
 
@@ -63,6 +233,7 @@
             <div class="lk-zeile lk-angebot">
                 <strong>{% if a.extern %}<span class="abzeichen status-taifun">TAIFUN</span> {{ a.taifun_nummer or a.nummer }}{% else %}{{ a.nummer }}{% endif %}</strong>
                 {{ sparten_ui.chip(a.konfigurator_typ or 'WP') }}
+                {% if objekte.mehrere %}{% set a_obj = (objekte.liste | selectattr('id', 'equalto', a.objekt_id) | list | first) if a.objekt_id else none %}<span class="abzeichen" title="Objekt">{{ a_obj.objekt.bezeichnung if a_obj else 'Objekt 1' }}</span>{% endif %}
                 <span class="dezent">{{ a.datum.strftime('%d.%m.%Y') if a.datum }}</span>
                 {{ status_badge(a.status) }}
                 {% if benutzer.rolle in ('admin', 'innendienst') %}
@@ -86,6 +257,7 @@
             <div class="lk-zeile">
                 {{ sparten_ui.chip(e.sparte or 'WP') }}
                 <strong>{{ 'Freitext' if e.typ == 'freitext' else 'Katalog' }}</strong>
+                {% if objekte.mehrere %}{% set e_obj = (objekte.liste | selectattr('id', 'equalto', e.objekt_id) | list | first) if e.objekt_id else none %}<span class="abzeichen" title="Objekt">{{ e_obj.objekt.bezeichnung if e_obj else 'Objekt 1' }}</span>{% endif %}
                 {{ status_badge(e.status) }}
                 <span class="dezent">{{ benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '–' }}
                     · {{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am else 'nicht abgesendet' }}</span>
@@ -109,6 +281,22 @@
     <div class="lk-bereich-inhalt">
         {% if projekt_modul_ok %}
             {% from "_projektierung.html" import phase_name %}
+            {#- v31 (Phase 158, Vertrag AT): Projektphase, Montagetermin, offene Projekt-To-Dos #}
+            {% if projekt_block %}
+            <div class="lk-projekt-block" data-rolle="projekt-block">
+                <span>Projektphase: <strong>{{ projekt_block.phase_text or projekt_block.status_name or '–' }}</strong></span>
+                <span>Montagetermin: <strong>{{ projekt_block.montagetermin_text or '–' }}</strong></span>
+                <span>Offene Projekt-To-Dos: <strong>{{ projekt_block.todos_offen if projekt_block.todos_offen is defined else (projekt_block.todos | length) }}</strong></span>
+                {% if projekt_block.weitere_projekte %}<span class="dezent">+ {{ projekt_block.weitere_projekte }} weitere Projekte</span>{% endif %}
+            </div>
+            {% if projekt_block.todos %}
+            <ul class="lk-projekt-todos dezent">
+                {% for t in projekt_block.todos[:6] %}
+                <li class="{{ 'lm-rot' if t.ueberfaellig }}">{{ t.titel }}{% if t.verantwortlich %} · {{ t.verantwortlich }}{% endif %}{% if t.faellig_am %} · fällig {{ t.faellig_am.strftime('%d.%m.%Y') }}{% endif %}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            {% endif %}
             {% for eintrag in projekte %}
                 <a class="pj-card" href="/projektierung/projekt/{{ eintrag.projekt.id }}">
                     <div class="hd"><span class="pr pj-mono">{{ eintrag.projekt.nummer }}</span><span class="pj-badge">Projektakte →</span></div>
@@ -150,52 +338,5 @@
         <div class="lk-bereich-fuss">
             <a class="knopf klein zweitrangig" href="/vorgaenge/{{ vorgang.id }}#galerie">Galerie{{ ' · Hochladen' if darf_hochladen }}</a>
         </div>
-    </div>
-</details>
-
-<details class="karte lk-bereich lk-block" data-bereich="todos" open>
-    <summary>{{ symbol('haken') }} To-Dos <span class="lk-zahl">{{ zaehler.todos }}</span><span class="dezent"> offen</span></summary>
-    <div class="lk-bereich-inhalt lk-block-raster">
-        <div>
-        {% for t in todos %}
-            <div class="lk-mini lk-todo {{ 'erledigt' if t.status == 'erledigt' }}">
-                {% if t.status == 'offen' and not readonly %}
-                <form method="post" action="/lead-management/todos/{{ t.id }}/erledigt" class="lk-inline" data-fetch="reload">
-                    <button type="submit" class="lk-todo-haken" title="Erledigt" aria-label="To-Do erledigt">{{ symbol('haken') }}</button>
-                </form>
-                {% else %}<span class="lk-todo-haken fertig" aria-hidden="true">{{ symbol('haken') }}</span>{% endif %}
-                <div>
-                    <strong>{{ t.titel }}</strong>
-                    {% if t.text %}<div class="dezent">{{ t.text | truncate(120) }}</div>{% endif %}
-                    <small class="dezent">
-                        {% if t.faellig_am %}<span class="{{ 'lm-rot' if t.status == 'offen' and t.faellig_am <= heute }}">fällig {{ t.faellig_am.strftime('%d.%m.%Y') }}</span> · {% endif %}
-                        an {{ benutzer_map[t.an_benutzer_id].name if t.an_benutzer_id in benutzer_map else '?' }}
-                        {% if t.von_benutzer_id in benutzer_map %}· von {{ benutzer_map[t.von_benutzer_id].name }}{% endif %}
-                        {% if t.erledigt_am %}· erledigt {{ t.erledigt_am.strftime('%d.%m.') }}{% endif %}
-                    </small>
-                </div>
-            </div>
-        {% else %}<p class="dezent">Keine To-Dos zu diesem Vorgang.</p>{% endfor %}
-            <div class="lk-bereich-fuss"><a class="dezent" href="/lead-management/todos">Alle To-Dos</a></div>
-        </div>
-        {% if not readonly %}
-        {# Vertrag Phase 110: POST /lead-management/todos/neu (vorgang_id, titel,
-           text, faellig_am, an_benutzer_id) #}
-        <form method="post" action="/lead-management/todos/neu" class="lk-todo-neu formular" data-fetch="reload">
-            <input type="hidden" name="vorgang_id" value="{{ vorgang.id }}">
-            <input type="hidden" name="zurueck" value="{{ kartei_url }}">
-            <input type="text" name="titel" placeholder="Neues To-Do …" maxlength="300" required aria-label="Titel">
-            <div class="lk-feld-reihe">
-                <input type="date" name="faellig_am" aria-label="Fällig am" title="Fällig am">
-                <select name="an_benutzer_id" aria-label="An">
-                    {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
-                        <option value="{{ b.id }}" {{ 'selected' if b.id == benutzer.id }}>{{ b.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <input type="text" name="text" placeholder="Details (optional)" maxlength="500" aria-label="Text">
-            <button class="knopf klein" type="submit">{{ symbol('plus') }} To-Do</button>
-        </form>
-        {% endif %}
     </div>
 </details>

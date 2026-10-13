@@ -79,7 +79,7 @@
     </a>
     {% else %}
     <a class="portal-karte" href="/lead-management">
-        <h2 class="portal-titel">Lead-Management <span class="coming-soon">Coming soon</span></h2>
+        <h2 class="portal-titel">Lead-Management</h2>{# v31 (Phase 159): kein „Coming soon“ mehr #}
         <div class="kacheln bereich-kacheln">
             {% for titel in ['Neue Leads', 'Kontaktierte Leads', 'Nachzufassende Leads',
                              'Disqualifizierte Leads', 'Terminierte Leads'] %}
@@ -118,6 +118,12 @@
                 <span class="stat-zahl blau">{{ versendete }}</span>
                 <span>Versendete Angebote</span>
                 <span class="dezent">warten auf Antwort</span>
+            </div>
+            {# v32 (PLAN_V19 Phase 163): ID-Kachel „Bestellung angekündigt“ neben „Versendete Angebote“ #}
+            <div class="kachel stat">
+                <span class="stat-zahl blau">{{ bestellungen | default(0) }}</span>
+                <span>Bestellung angekündigt</span>
+                <span class="dezent">Kunde hat zugesagt</span>
             </div>
             <div class="kachel stat">
                 <span class="stat-zahl {{ 'dringend' if rabatt_freigaben else 'blau' }}">{{ rabatt_freigaben }}</span>

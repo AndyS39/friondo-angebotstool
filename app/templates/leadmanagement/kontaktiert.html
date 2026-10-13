@@ -25,8 +25,9 @@
 
 <form method="get" action="/lead-management/kontaktiert" class="suchleiste lm-suchleiste">
     <input type="search" name="q" value="{{ q }}" placeholder="Suche: Name, Ort, Ergebnis, Benutzer" aria-label="Suche">
+    {#- v31 (PLAN_LEAD_V5 Phase 158): Endziffern-Suche – ab 3 Ziffern, „endet mit“ zuerst #}
     <label class="kontrollfeld">{{ symbol('telefon-eingehend') }} Rufnummer
-        <input type="tel" name="telefon" value="{{ telefon }}" placeholder="z. B. 0203 123456 oder +49 203 …" size="22" aria-label="Rufnummer eingeben"></label>
+        <input type="tel" name="telefon" value="{{ telefon }}" placeholder="Endziffern (ab 3) oder ganze Nummer, z. B. 4711 / 0203 123456" size="26" aria-label="Rufnummer oder Endziffern eingeben" title="Beliebige Ziffernfolge ab 3 Ziffern: findet Nummern, die damit enden (zuerst) oder sie enthalten – auch monday-Leads"></label>
     <button class="knopf klein zweitrangig" type="submit">{{ symbol('suche') }} Suchen</button>
     {% if q or telefon %}<a class="knopf klein ghost" href="/lead-management/kontaktiert">Zurücksetzen</a>{% endif %}
 </form>
@@ -42,6 +43,9 @@
                 <span class="dezent">{{ t.ort }} · {{ t.telefon }}</span>
                 {% if t.phase %}<span class="abzeichen">{{ phasen_namen.get(t.phase, t.phase) }}</span>{% endif %}
                 {% if t.art == 'monday' %}<span class="abzeichen" title="gesyncter monday-Lead">monday</span>{% endif %}
+                {#- v31 (Phase 158/154): „endet mit“ zuerst; archivierte Leads markiert #}
+                {% if t.endet_mit %}<span class="abzeichen" title="Nummer endet mit der gesuchten Ziffernfolge">endet mit</span>{% endif %}
+                {% if t.archiviert %}<span class="lm-archiv-chip" title="Archiviert (Lead-Sicht)">Archiv</span>{% endif %}
                 {% if t.anzahl_vorgaenge > 1 %}<span class="lm-zaehler" title="weitere Vorgänge des Kunden">+{{ t.anzahl_vorgaenge - 1 }}</span>{% endif %}
                 <a class="knopf klein" href="{{ t.link }}">{{ symbol('oeffnen') }} Kartei</a>
             </li>

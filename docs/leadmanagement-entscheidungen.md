@@ -824,3 +824,121 @@ Wiedervorlage-Listen des Dashboards fiel die Aktionszelle seit v23 aus dem Raste
 | OFFEN 2 HV-Versandweg | HV senden aus dem persönlichen Postfach | Versandweg `entwurf` gebaut und Standard: fertige Terminbestätigung als `.eml` (Vorlage des HV, ICS, Bild) aus der Vorschau herunterladen und aus dem eigenen Postfach senden; To-Do an den HV; `offen` bleibt wählbar, `smtp`/`leads_im_namen` Erweiterungspunkte |
 | OFFEN 3 HV-Kalender | (keine Antwort) | bleibt bei der Zwischenlösung Tool-Termine + Sperrzeiten |
 | M365 termin@ | (IT) | „Senden als“ + Lesezugriff vor der Freischaltung – unverändert offen |
+
+## V5 (PLAN_LEAD_V5, 13.10.2026) – Phasen 153–160 (Objekte, Großkunde, Kartei V5, Archiv, Vorlagen, MS/WA/DMS, Testphase)
+
+Umgesetzt im gemeinsamen Durchlauf mit v32 (PLAN_V19) am 13.10.2026; Agenten K (Kartei),
+T (Termine/Mails), B (Boards/Dashboard/Einstellungen), AT (Angebotstool/Projektierung/Benutzer),
+Fundament und Integration durch den Orchestrator. Berichte: `diagnose/v31/*_ergebnis.md` (lokal).
+
+### V5.1 [ANNAHME]-Stellen (umgesetzt wie geschrieben)
+
+| Stelle | Umsetzung |
+|---|---|
+| Phase 155: Notizen zwei Drittel neben To-Dos ein Drittel, unter 900 px untereinander | Kartei V5 (`lk-oben`-Raster) |
+| Einfügung: Rechnungsadresse eines MFH-Objekts ≠ Hauptobjekt am Objekt | `vorgang_objekte.rechnung_*`; Hauptobjekt → `kunden.rechnung_*`, Ja/Nein in `rechnung_abweichend` |
+| Großkunde: nur Kennzeichen/Badge, keine Automatik | Häkchen ID/LM/Admin, Farbe `grosskunde_farbe` |
+| Phase 158: manuelle Buchung am Samstag bleibt mit Warnhinweis möglich | Bestätigung „trotzdem buchen“ (auch Sonntag) |
+| Phase 159: gesperrte Mails werden nach dem Einschalten nicht nachgesendet | Status `gesperrt` bleibt, „Erneut senden“ = bewusster Klick |
+| Phase 156: Simon-Gruppe ohne Mitglieder-Parameter = alle HV außer René | `lead_dropdowns.hv_gruppe_mitglieder` |
+| Phase 154: Zeitraum-Kennzahlen zählen archivierte Leads für die Vergangenheit weiter | `lead_archiv.filter_aktiv` nur in Bestand/Pipeline/Boards/Listen/Kacheln |
+| Phase 157: E-Mail-Vorlage je Sparte = Standard für MS/WA/DMS; Projektierung wie WB (nur ALLE-Pakete); DB-Ampel WP-Rückfall | ohne neue Reiter; `projektierung_logik.SPARTEN` |
+| Phase 158: Abwesenheitsart Urlaub mit gleicher Wirkung | `abwesenheiten.ARTEN` |
+| Demo-Ende: Vorbelegung „löschen“ nur für Demo-Leads ohne Erfassung/Angebot/Projekt | `demo_leads_loeschen(nur_ohne_bestand=True, grund="Demo-Ende v31")`, Lösch-Protokoll |
+
+### V5.2 Eigene Annahmen der Agenten (sinnvoll entschieden, bitte bestätigen)
+
+| Nr. | Annahme | Umsetzung |
+|---|---|---|
+| A-AT-1 | Hauptobjekt = Kundenadresse (Kundenfelder sind der Master) | `anschriften.ausfuehrungsort_fuer`, `objekte.ausfuehrungsort`, `lead_termin.adresse_fehlt` |
+| A-AT-2 | Empfänger bei Objekt-2-Angeboten bleibt der Kunde, darunter „Ausführungsort: <Objektadresse>“; Lieferanschrift = Objekt | `anschriften.py`, `pdf_export` |
+| A-AT-3 | Projektadresse bleibt Master der Projektierung (bei Anlage aus dem Objekt übernommen) | `projektierung.projekt_ausfuehrungsort` |
+| A-AT-4 | GW ebenfalls im Dialog „Angebot → Projekt“ | gemeinsame Sparten-Liste |
+| A-AT-5 | Objektwahl auf der Sparten-Seite, wenn mehrere Objekte und keines übergeben (Vorbelegung Hauptobjekt) | `routers/erfassung.py` |
+| A-AT-6 | Verlauf-Filter: Standard „nur Notizen“, „alles“ = Notizen + Lead-Aktivitäten + Projekt-Verlauf (nur Anzeige) | `notizen.kontext(verlauf=True)`, `vorgaenge/akte.html` |
+| A-AT-7 | Wiederherstellen aus der Akte: Innendienst, Leadmanagement, Admin | `POST /vorgaenge/{id}/archiv-wiederherstellen` |
+| A-T1 | Samstag/Sonntag manuell nur mit Warnhinweis | `lm_termin` manuell |
+| A-T2 | Gesperrte Mails nicht nachgesendet; „Erneut senden“ vor der Freischaltung abgewiesen | `lead_mail` |
+| A-T3 | Bei mehr als einem Objekt wird aus Assistent/manueller Buchung nur vorgemerkt; „Terminierung“ bucht alle | `lead_termin.vormerken`, `terminierung_ausfuehren` |
+| A-T4 | `terminbestaetigung_objekte` ist EINE Vorlage (+ `{vertriebler_block}` des ersten Termins); Vertriebler-Variante wird gelesen, nicht automatisch angelegt | `lead_mail` |
+| A-T5 | `{absender}` = handelnder Benutzer, sonst Leadmanager, sonst „Ihr Friondo-Team“ | `lead_mail` |
+| A-T6 | Aktivität „Vorschläge berechnet“ höchstens alle 10 Minuten je Lead | `lead_termin.vorschlaege_protokollieren` |
+| A-T7 | Bei `mail_versand_aktiv = an` geht die Mail an den Kunden; `mail_modus = test` leitet nicht mehr ins Testpostfach | `lead_mail` (Rückfrage R-T1) |
+| A-T8 | Absage eines Objekttermins: bleiben weitere aktiv, bleibt Phase Terminiert | `lead_termin` |
+| K-R1 | Hauptobjekt bleibt an Position 1; Pfeile ordnen nur Objekt 2 … n | Kartei Objekte-Block |
+| K-R2 | Statuswahl der Kartei bietet „Nicht erreicht“ nicht an (nur Kaskade); „Nachbearbeitung“ enthalten | `POST /lead/{id}/status` |
+| K-R3 | Pflichtfelder weiterer Objekte zählen im Zähler („Objekt 2: Straße“) und sperren „Terminierung“ | `lead_kartei.pflicht_offen_namen` |
+| K-R4 | Großkunde-Häkchen nur Innendienst/Leadmanagement/Admin (HV sehen den Wert) | Kartei |
+| K-R5 | E-Mail-Dialog bei HV-Leads: Termin-Vorlagen über den HV-Versandweg (Entwurf), übrige über termin@ | Kartei-Dialog |
+| K-R7 | Ja/Nein der MFH-Frage am Hauptobjekt in `vorgang_objekte.rechnung_abweichend`; Altbestand: gepflegte Kunden-Rechnungsadresse = „Nein“ | Kartei |
+| K-R8 | Statuswechsel über eigene Route `POST /lead/{id}/status` (`_speichern`) statt Board-Zeile | `lm_kartei.py` |
+| K-R9 | E-Mail-Vorschau als Text; unveränderter Text wird als Original-HTML (CID-Bild) eingereiht, bearbeiteter als einfaches HTML | Kartei-Dialog / `lead_mail.in_warteschlange` |
+| K-R10 | Doppelversand-Schutz: Dialog lehnt eine Vorlage mit offenem Eintrag ab (422 „Keine Mail geplant …“) | `kern.mail_planen` |
+| B-2/3 | HV ohne Gruppe: Dropdown zeigt nur ihn selbst | `lead_dropdowns.ad_auswahl` |
+| B-4 | MS/WA/DMS wie WB/GW kompetenzfrei, bis `kompetenz_sparten` gepflegt ist | `lead_v2.kompetenz_passt` |
+| B-5 | Archivierte Leads in der Rufnummernsuche auffindbar (markiert) | `lead_anrufliste.rufnummer_suchen` |
+| B-6 | Duplizieren = neuer Vorgang ohne Historie, Kopie-Verweis beidseitig | `lead_boards.vorgang_duplizieren` |
+| B-7 | Abwesenheitskarte für alle Dashboard-Nutzer | `lead_dashboard.eigene_abwesenheiten` |
+| B-8 | Statistik-Filter „Leadmanager“ nur Benutzer mit Häkchen; Schnellanlage-Dropdown nur angestellte AD | `lead_dropdowns` |
+| B-9 | Löschlauf anonymisiert zusätzlich Objektadressen (PLZ/Ort bleiben) | `leadmanagement.loeschlauf` |
+| O-1 | Verwaiste Objekte: SQLite-Trigger `trg_v31_vorgang_objekte` statt Aufrufe an jeder Löschstelle (Test-`aufraeumen`-Helfer bleiben unverändert) | `objekte.migration_v31_objekte` |
+| O-2 | Innendienst darf die Abwesenheits-Routen der Benutzerverwaltung | `auth._INNENDIENST_BENUTZER_AUSNAHME` |
+| O-3 | Portal-Karte „Lead-Management“ ohne „Coming soon“ auch für Rollen ohne Modulzugriff | `index.html` |
+
+### V5.3 Angepasste Alt-Tests (Begründung je Test)
+
+- `tests/test_lead_v2_kartei.py` / `test_lead_v3_kartei.py` (K): `terminierung_aktiv = an` in `setUpClass`
+  (Phase 159), Test-AD zugewiesen (Phase 157 Pflichtfeld), `aufraeumen` löscht `vorgang_objekte`;
+  Reiter `id="termine"`/„E-Mail“ statt `tab-termin` (Phase 155); MFH: Vorbelegung „Ja“ → 1 Pflichtfeld,
+  Rechnungsadresse zählt nach „Nein“ (Phase 157); Zählung über `lead_kartei.pflicht_offen_namen`;
+  Außendienst-Auswahl ohne HV (Phase 156); `test_terminierung_nur_demo_leads` →
+  `test_terminierung_in_der_testphase_gesperrt` (Phase 159); Layout-/Reiter-Reihenfolge nach Phase 155;
+  `test_ad_read_only` ohne Demo-Modus. `test_lead_v3.py::F_Kartei` Reiter/Bereiche nach Phase 155.
+- `tests/test_lead_v2_termin.py` (T): `terminierung_aktiv = an` (Phase 159), ICS-SUMMARY „Wärmepumpe“
+  statt „WP“ (Phase 156), `aufraeumen` löscht Objekte. `test_lead_v3.py::test_i_versuche_mails_und_sperre`:
+  Versuch 2/4 ohne Mail, Ende `disqualifiziert` (Phase 156); „Meine Termine“ für AD 200 statt 404
+  (Phase 159). `test_lead_v4.py`: `kalender.json` 5 Tage (Phase 158), Outlook-Spalten nur eigene
+  Test-AD, `terminierung_aktiv = an`. `test_lead_v4_mail.py`: `nicht_erreicht` entfernt
+  (`falsche_telefonnummer` stattdessen), `mail_versand_aktiv = an` in Sendetests, Versand an die
+  Kundenadresse ohne „[TEST an …]“ (Phase 159), Testmail-Route ohne Adresse „Keine Empfängeradresse“,
+  Fremdmail → „Posteingang unklar“ (Demo-Ende).
+- Boards/Dashboard/Anruf (B): Demo-Ende (Phase 159 – kein Demo-Badge, Innendienst sieht Modul, HV-Ansicht/
+  Übersicht 200, API-/Testleads `demo = 0`): `test_lead_v2_boards` (2), `test_lead_v2_dashboard` (4),
+  `test_lead_v2_handelsvertreter` (1), `test_lead_v3_boards` (1), `test_lead_v2_info` (4),
+  `test_lead_v11` (1); Kaskade 2/4 ohne Mail (Phase 156): `test_lead_v2_anruf` (4), `test_lead_v2_fundament`
+  (1), `test_lead_v3_anruf` (4); Label „Disqualifiziert“ (Phase 157): `test_lead_v2_anruf` (1); Endziffern
+  ab 3 Ziffern (Phase 158): `test_lead_v2_anruf` (1); Sammelaktionen Archivieren/Duplizieren (Phase 154):
+  `test_lead_v2_boards` (2), `test_lead_v3_boards` (1), `test_lead_v2_info` (1); API-Feldtext „sparten
+  (WP/PV/KL/WB/GW/MS/WA/DMS)“ (Phase 157): `test_lead_v2_info` (1).
+- Orchestrator: `tests/test_lead_v3_phase120.py` – `terminierung_aktiv = an` für den Testlauf (Phase 159),
+  Kandidaten-Label „Handelsvertreter, Krankheit · Abwertung“ (Phase 158), Hinweiszeile „Kaskade: nach
+  Versuch …“ (Phase 156); `tests/test_lead_v5_boards.py` – Demo-Ende-Marker datenunabhängig;
+  `tests/test_lead_v5_kartei.py` – Kartei-CSS in `lead_v2.css` statt Inline-`<style>`.
+- AT: keine Alt-Tests angepasst (Ein-Objekt-PDF byteidentisch, Kontroll-PDF `diagnose/v31/pdf_kontrolle_AT.pdf`).
+- Gesamtsuite nach Welle 1 (Orchestrator): `tests/test_v27_scheduler.py::LeadMailBloecke` –
+  `mail_versand_aktiv = an` für die Laufzeit der Klasse (Phase 159; Graph bleibt gemockt), die
+  Fehler-Isolation prüft jetzt die Mailsperre (`gesperrt` statt `protokolliert`, weil `mail_modus`
+  nichts mehr steuert); `tests/test_parametrierung_v26.py::test_ohne_lead_modul_keine_lead_karte`
+  – der Innendienst sieht die Lead-Karte der Parametrierung unabhängig von `lead_freigabe_modus`
+  (Demo-Ende), verborgen bleiben nur die Admin-Einträge (Lead-Einstellungen, Lead-Demo-Daten).
+
+### V5.4 Offene Rückfragen (gebündelt, Antworten bitte in diesem Abschnitt nachtragen)
+
+| Nr. | Frage | Stand |
+|---|---|---|
+| R-AT-1 | Demo-Kunde Schliwa (Kontrollwert Phase 160) liegt in der Entwicklungs-DB nicht vor – Kontrollfall mit Testkunde „V31AT Schliwa“ automatisiert; auf der Server-Kopie bitte einmal durchklicken | offen |
+| R-AT-3 | Vorgänge mit mehreren Objekten zeigen im Kopf der Vorgangsakte weiterhin die Kundenadresse (plus Badge „n Objekte“) – gewollt? | so umgesetzt |
+| R-AT-4 | Galerie-Fachordner für MS („Zählerschrank“, „Dachfläche“), WA („Hausanschluss“, „Bestand“), DMS („Fassade“, „Bestand“), GW („Zählerschrank“, „Bestand“) – bestätigen oder benennen | Vorschlag umgesetzt |
+| R-T1 | Soll `mail_modus = test` nach der Freischaltung weiterhin als Sicherheitsnetz ins Testpostfach leiten (heute: nein, laut Plan)? | offen |
+| R-T2 | Betreff der Objekt-Terminbestätigung „Ihre Vor-Ort-Termine bei Friondo (14.10.2026)“ bzw. Zeitraum – Wortlaut freigeben? | offen |
+| R-T3 | Soll „n von m Objekten ohne Termin“ die Terminierung blockieren (heute: nein)? | offen |
+| R-T5 | Vorlagen-Migration fand in der Entwicklungs-DB keine Kürzel; Server-DB: Meldungen des ersten `migrate.py`-Laufs prüfen | Rollout-Protokoll |
+| K-R3 | Objekt-Pflichtfelder sperren „Terminierung“ – gewollt? | so umgesetzt |
+| K-R10 | Doppelversand-Schutz im E-Mail-Dialog (422) – gewollt? | so umgesetzt |
+| B-R1 | Sammelaktion „Vertriebler zuweisen“ (Plan 156) existiert nicht; AD per Inline-Edit/Kartei, HV-Wechsel über „An Handelsvertreter verschieben“ – nachziehen? | offen |
+| B-R2 | Round-Robin verlangt weiterhin `lm_aktiv` UND Leadmanager-Häkchen – richtig? | so umgesetzt |
+| B-R5 | Scrollleiste bei 1920 px nur per DOM-Logik geprüft – Sichtprüfung beim Rollout | offen |
+| O-R1 | Verschobene Diagnose-Ordner unter `C:\Users\Public\Angebotstool-diagnose-alt-a.scheelen` löschen? | offen |
+| O-R2 | Screenshots `docs/design-v30/` auf echte Kundennamen prüfen (v31/v32 wurden von einer anonymisierten Kopie aufgenommen) | offen |
+| O-R3 | Agent AT hat verwaiste Test-PDFs in `data/angebote/` entfernt (Nummern ohne Datensatz) – zur Kenntnis | Hinweis |
+| O-R4 | Der Innendienst sieht in der Parametrierung die Lead-Einträge Quellen & Kampagnen (inkl. API-Keys), Parser, Routing, Vorlagen und Steuerdatei – wie in v30 bei Modus „alle“ (jetzt dauerhaft). Auf Admin/Leadmanagement beschränken? | offen |

@@ -1,0 +1,139 @@
+/* v32 (PLAN_V19 Phase 163): Verfolgungs-Chip (Makro verfolgung_chip in _komponenten.html)
+   und Dialog „Nächster Schritt“ (templates/vorgaenge/_naechster_schritt.html).
+   Nur semantische Tokens aus den drei Token-Blöcken von style.css (Hell/Dunkel/Gerät) –
+   keine festen Farbwerte. Eingebunden je Seite über <link> (base.html ist tabu). */
+
+/* --- Verfolgungs-Chip: fünf Stufen, Farben aus den Status-Tokens v30 -------------- */
+.verfolgung-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 999px;
+    padding: 0.18rem 0.7rem;
+    font-size: var(--t-s);
+    font-weight: 600;
+    line-height: 1.3;
+    vertical-align: middle;
+    white-space: nowrap;
+    background: var(--status-grau-bg);
+    color: var(--status-grau);
+    border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+}
+.verfolgung-chip .abzeichen-punkt { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: currentColor; flex: none; }
+.verfolgung-chip.klein { font-size: var(--t-xs); padding: 0.1rem 0.55rem; }
+.verfolgung-chip.vf-versendet { background: var(--status-blau-bg); color: var(--status-blau); }
+.verfolgung-chip.vf-nachgefasst { background: var(--status-grau-bg); color: var(--status-grau); }
+.verfolgung-chip.vf-bestellung_angekuendigt { background: var(--status-orange-bg); color: var(--status-orange); }
+.verfolgung-chip.vf-angenommen { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.verfolgung-chip.vf-abgelehnt { background: var(--status-rot-bg); color: var(--status-rot); }
+.akte-kopfkarte .kundenname .verfolgung-chip { vertical-align: middle; margin-left: 0.25rem; }
+
+/* --- Dialog „Nächster Schritt“ ---------------------------------------------------- */
+.ns-dialog {
+    display: grid;
+    gap: var(--a-2);
+    margin-top: var(--a-2);
+}
+.ns-knoepfe {
+    display: flex;
+    gap: var(--a-2);
+    flex-wrap: wrap;
+    align-items: stretch;
+}
+.ns-knoepfe .ns-form-bestellung { display: contents; }
+.ns-knopf {
+    min-height: 44px;              /* Mobil: Schaltflächen mindestens 44 px hoch */
+    flex: 1 1 10rem;
+    font-weight: 700;
+    color: var(--text-auf-farbe);
+    box-shadow: none;
+}
+.ns-knopf.ns-rot { background: var(--status-rot); }
+.ns-knopf.ns-gruen { background: var(--status-gruen); }
+.ns-knopf.ns-blau { background: var(--status-blau); }
+.ns-knopf.ns-rot:hover { background: color-mix(in srgb, var(--status-rot), black 12%); color: var(--text-auf-farbe); }
+.ns-knopf.ns-gruen:hover { background: color-mix(in srgb, var(--status-gruen), black 12%); color: var(--text-auf-farbe); }
+.ns-knopf.ns-blau:hover { background: color-mix(in srgb, var(--status-blau), black 12%); color: var(--text-auf-farbe); }
+.ns-knopf[aria-expanded="true"] { outline: 3px solid var(--fokus); outline-offset: 1px; }
+.ns-knopf:disabled { opacity: 0.6; cursor: wait; }
+@media (max-width: 600px) {
+    .ns-knoepfe { flex-direction: column; }
+    .ns-knopf { width: 100%; flex: 0 0 auto; }   /* Vollbreite, Höhe nur 44 px + Text */
+}
+
+.ns-aufklapp {
+    border: 1px solid var(--linie);
+    border-radius: var(--r-l);
+    background: var(--flaeche-abgesetzt);
+    padding: var(--a-3);
+    display: grid;
+    gap: var(--a-2);
+}
+.ns-titel { margin: 0; font-weight: 600; }
+.ns-chips { display: flex; flex-wrap: wrap; gap: var(--a-2); align-items: center; }
+.ns-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: 999px;
+    border: 1px solid var(--linie-stark);
+    background: var(--flaeche-karte);
+    color: var(--text);
+    padding: 0.4rem 0.9rem;
+    min-height: 44px;
+    cursor: pointer;
+    font-size: var(--t-s);
+    font-weight: 600;
+    user-select: none;
+}
+.ns-chip input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+}
+.ns-chip:has(input[type="radio"]:checked) {
+    background: var(--akzent);
+    color: var(--akzent-text);
+    border-color: var(--akzent);
+}
+.ns-chip:has(input[type="radio"]:focus-visible) { outline: 3px solid var(--fokus); outline-offset: 1px; }
+.ns-chip-datum .ns-datum {
+    min-height: 32px;
+    border: 1px solid var(--linie-stark);
+    border-radius: var(--r-m, 8px);
+    background: var(--flaeche-karte);
+    color: var(--text);
+    padding: 0.15rem 0.4rem;
+    font: inherit;
+}
+.ns-freitext { display: grid; gap: 0.3rem; }
+.ns-freitext input { min-height: 44px; }
+.ns-freitext .ns-pflicht { color: var(--status-rot); font-weight: 600; }
+.ns-aktionen { display: flex; flex-wrap: wrap; gap: var(--a-2); align-items: center; }
+.ns-aktionen .knopf { min-height: 44px; }
+.ns-notiz { display: grid; gap: 0.3rem; }
+.ns-notiz textarea { width: 100%; resize: vertical; min-height: 2.6rem; }
+
+.ns-bestaetigung {
+    margin: 0;
+    padding: 0.55rem 0.9rem;
+    border-radius: var(--r-l);
+    background: var(--status-gruen-bg);
+    color: var(--status-gruen);
+    border: 1px solid color-mix(in srgb, var(--status-gruen) 30%, transparent);
+    display: flex;
+    gap: var(--a-3);
+    align-items: center;
+    flex-wrap: wrap;
+}
+.ns-bestaetigung .ns-rueckgaengig { color: inherit; font-weight: 700; text-decoration: underline; }
+.ns-fehler { margin: 0; }
+.ns-dialog.ns-fertig .ns-knoepfe,
+.ns-dialog.ns-fertig .ns-aufklapp,
+.ns-dialog.ns-fertig .ns-notiz { display: none; }
+/* display-Regeln dürfen das hidden-Attribut nicht übersteuern (Nebenbefund v30 .textform) */
+.verfolgung-chip[hidden], .ns-aufklapp[hidden], .ns-freitext[hidden],
+.ns-bestaetigung[hidden], .ns-rueckgaengig[hidden], .ns-fehler[hidden],
+.ns-knoepfe[hidden], .ns-notiz[hidden] { display: none !important; }

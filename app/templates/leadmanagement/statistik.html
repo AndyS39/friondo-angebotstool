@@ -47,8 +47,9 @@
     <label class="kontrollfeld">Sparte
         <select name="sparte">
             <option value="">alle</option>
-            {% for s in ('WP', 'PV', 'KL', 'WB', 'GW') %}
-                <option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }}>{{ s }}</option>
+            {#- v31 (Phase 157): Sparten inkl. MS/WA/DMS (Jinja-Global lm_sparten) #}
+            {% for s in lm_sparten %}
+                <option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }}>{{ s }} – {{ lm_sparten_lang.get(s, s) }}</option>
             {% endfor %}
         </select>
     </label>
@@ -184,7 +185,8 @@
 </div>
 <div>
 {% for phase, verteilung in gruende.items() %}
-<h2>Gründe: {{ {'unqualifiziert': 'Unqualifiziert', 'no_show': 'No-Show',
+{#- v31 (Phase 157): Label „Disqualifiziert“ (Key unqualifiziert bleibt) #}
+<h2>Gründe: {{ {'unqualifiziert': 'Disqualifiziert', 'no_show': 'No-Show',
                 'ablehnung': 'Ablehnung'}[phase] }}</h2>
 <table class="tabelle">
     <tbody>

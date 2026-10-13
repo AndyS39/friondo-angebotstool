@@ -17,30 +17,66 @@
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
+{# v31 (PLAN_LEAD_V5 Phase 159, Einfügung AT-Chat): Demo-Ende – Admin-Abfrage genau einmal
+   (Marker demo_ende_v31): „Demo-Leads löschen“ (Vorbelegung, nur Generator-Leads ohne
+   Erfassung/Angebot/Projekt, Lösch-Protokoll) oder „behalten (Kennzeichen bleibt, weiter
+   ausgeblendet)“ #}
+{% if demo_abfrage %}
+<section class="lm-demo-ende" id="demo-ende" style="max-width:860px">
+    <h2>Demo-Modus beendet – was passiert mit den Demo-Leads?</h2>
+    <p>Das Lead-Management ist für alle Rollen freigeschaltet (<code>lead_freigabe_modus = alle</code>).
+        Im Modul liegen noch <strong>{{ demo_anzahl }}</strong> Demo-Leads des Generators (<code>demo = 1</code>,
+        erfundene Kunden wie „Test Test“){% if demo_mit_bestand %}, davon <strong>{{ demo_mit_bestand }}</strong> mit
+        Erfassung, Angebot oder Projekt – diese bleiben in jedem Fall erhalten{% endif %}.
+        Echte Leads tragen kein Demo-Kennzeichen und sind nicht betroffen.</p>
+    <form method="post" action="/parametrierung/lead-einstellungen/demo-ende">
+        <label><input type="radio" name="aktion" value="loeschen" checked>
+            <strong>Demo-Leads löschen</strong> (Standard) – Vorgänge samt Kunde, Terminen, Aktivitäten und
+            Warteschlange; jede Löschung landet im Lösch-Protokoll (Grund „Demo-Ende v31“).</label>
+        <label><input type="radio" name="aktion" value="behalten">
+            <strong>Behalten</strong> – Kennzeichen bleibt, die Leads bleiben in Leads VOT, Kundenliste,
+            Angebotstool-Statistik und monday-Rückspielung ausgeblendet.</label>
+        <div class="formzeile">
+            <button class="knopf" type="submit" onclick="return confirm('Entscheidung übernehmen? Das Löschen ist endgültig (Lösch-Protokoll).')">Entscheidung übernehmen</button>
+        </div>
+    </form>
+</section>
+{% endif %}
+
 <form method="post" action="/parametrierung/lead-einstellungen"
       class="formular" style="max-width:860px">
-    <h2>Freigabe (Demo-Schalter)</h2>
-    <label>Modul sichtbar für
-        <select name="lead_freigabe_modus">
-            <option value="admin" {{ 'selected' if werte.lead_freigabe_modus == 'admin' }}>Nur Admin (Demo · Coming soon)</option>
-            <option value="alle" {{ 'selected' if werte.lead_freigabe_modus == 'alle' }}>Alle berechtigten Rollen</option>
-        </select>
-    </label>
-    {% if werte.lead_freigabe_modus == 'admin' and (demo_anzahl or umstellung) %}
-    <div class="warnblock">
-        <strong>{{ demo_anzahl }} Demo-Leads vorhanden.</strong> Bei der
-        Umstellung auf „alle“ ist eine Entscheidung Pflicht:
-        <label><input type="radio" name="demo_entscheidung" value="loeschen"
-                      checked> Alle Demo-Leads löschen (Standard)</label>
-        <label><input type="radio" name="demo_entscheidung" value="behalten">
-            Behalten und Demo-Kennzeichen entfernen (werden echte Leads,
-            protokolliert)</label>
-    </div>
-    {% endif %}
-    <p class="dezent">Bei „Nur Admin“: alle /lead-management- und
-        /api/leads-Routen, Menüpunkte, Reiter und Kacheln nur für Admins
-        (404 für andere); Sendesperre mail_modus, Kalender nur ins
-        Testpostfach, monday-Leads nicht buchbar.</p>
+    {# v31 (PLAN_LEAD_V5 Phase 159): Freischaltung – Testphase mit gesperrter Terminierung und
+       gesperrtem Mailversand; das spätere Einschalten ist ein Admin-Klick nach den Prüfpunkten #}
+    <section class="lm-freischaltung" id="freischaltung">
+        <h2>Freischaltung (Testphase)</h2>
+        <p>Das Modul ist für Innendienst, Leadmanagement, Außendienst, Handelsvertreter und Admin freigeschaltet
+            (<code>lead_freigabe_modus = alle</code>, Demo-Modus beendet). In der Testphase rechnet der Terminassistent
+            mit echten Daten und zeigt konkrete Vorschläge – <strong>gebucht und gemailt wird erst nach dem Einschalten
+            der beiden Schalter</strong>. Vorschläge werden zur Auswertung protokolliert.</p>
+        <div class="formzeile">
+            <label>Terminierung
+                <select name="terminierung_aktiv">
+                    <option value="aus" {{ 'selected' if not terminierung_aktiv }}>aus – Vormerken, Buchen, manuelle Buchung, Umbuchen, Absagen, Vorab-Gespräche gesperrt (Tooltip „Testphase“)</option>
+                    <option value="an" {{ 'selected' if terminierung_aktiv }}>an – Terminierung echt (Outlook-Eintrag, Phase Terminiert, Übergabe Leads VOT)</option>
+                </select></label>
+            <label>Mailversand der Lead-Vorlagen
+                <select name="mail_versand_aktiv">
+                    <option value="aus" {{ 'selected' if not mail_versand_aktiv }}>aus – keine Vorlagen-Mail (auch nicht ins Testpostfach), Einträge mit Status „gesperrt“</option>
+                    <option value="an" {{ 'selected' if mail_versand_aktiv }}>an – Warteschlange sendet über {{ werte.absender_lead_mails or 'termin@friondo.de' }}</option>
+                </select></label>
+        </div>
+        <p class="dezent">Gesperrte Einträge bleiben mit Vorschau und Protokoll in der Warteschlange sichtbar; beim späteren Einschalten
+            werden sie <strong>nicht</strong> automatisch nachgesendet, sondern verworfen [ANNAHME]. Nicht betroffen: Angebotsversand
+            (angebot@), Projekt-Mails, Sofort-Benachrichtigungen (mail_ausgang), BzA-Mail; Bounce-Abruf und Parser laufen weiter.
+            <span class="lm-zaehler-gesperrt" title="Warteschlangen-Einträge mit Status gesperrt">Mails gesperrt: {{ mails_gesperrt }}</span>
+            {% if mails_gesperrt %}<a href="/lead-management/kommunikation?status=gesperrt">Warteschlange öffnen</a>{% endif %}</p>
+        <h3>Prüfpunkte vor dem Einschalten</h3>
+        <ul class="lm-pruefpunkte">
+            {% for p in pruefpunkte %}
+            <li class="{{ 'ok' if p.ok else 'offen' }}"><span><strong>{{ p.name }}</strong> <span class="dezent">– {{ p.text }}</span></span></li>
+            {% endfor %}
+        </ul>
+    </section>
 
     <h2>Mail &amp; Parser &amp; Kalender</h2>
     <div class="formzeile">
@@ -105,8 +141,9 @@
 
     <h2>Erwartungswerte (Cent, brutto) + Phasen-Quoten (%)</h2>
     <div class="formzeile">
-        {% for s in ('WP', 'PV', 'KL', 'WB', 'GW') %}
-        <label class="schmal">{{ s }}
+        {#- v31 (Phase 157): inkl. MS/WA/DMS (app/sparten.py) #}
+        {% for s, name in sparten_liste %}
+        <label class="schmal" title="{{ name }}">{{ s }}
             <input type="number" name="erwartungswert_{{ s }}"
                    value="{{ werte['erwartungswert_' ~ s] }}"></label>
         {% endfor %}
@@ -136,7 +173,8 @@
         <a class="knopf klein zweitrangig"
            href="/parametrierung/lead-einstellungen?loeschvorschau=1">Was würde gelöscht?</a>
     </div>
-    <label class="schmal">Demo-Badge-Text <input type="text" name="demo_badge_text"
+    {#- v31 (Phase 159): Demo-Badge-Text ohne Wirkung (Demo-Modus beendet) – Parameter bleibt lesbar #}
+    <label class="schmal" title="Ohne Wirkung seit v31 (Demo-Modus beendet)">Demo-Badge-Text (ohne Wirkung) <input type="text" name="demo_badge_text"
            value="{{ werte.demo_badge_text }}"></label>
     {# v21 (Phase 88): Modul-Einstieg #}
     <label class="schmal">Modul-Einstieg
@@ -261,6 +299,26 @@
     </div>
     <p class="dezent">Der erste Benutzer der Gruppe ist jeweils das Ziel der Sammelaktion „An Handelsvertreter
         verschieben“; Startwerte setzt die Migration per Namensabgleich (René Golaschewski / Simon O'Grady).</p>
+    {# v31 (PLAN_LEAD_V5 Phasen 153/156): Großkunden-Farbe, Simon-Gruppen-Mitglieder (AD-Dropdown bei
+       HV-Leads), Sparten-Langnamen für Kundenmails (Phase 156, {sparten}/{sparten_interesse}) #}
+    <h2>Lead-Management V5 – Großkunde, HV-Gruppe Simon, Sparten-Langnamen</h2>
+    <div class="formzeile">
+        <input type="hidden" name="hv_gruppe_simon_mitglieder_dabei" value="1">
+        {% set simon_mitglieder = (werte.hv_gruppe_simon_mitglieder or '').split(',') %}
+        <label>Mitglieder der Simon-Gruppe (AD-Dropdown bei HV-Leads; leer = alle Handelsvertreter außer René)
+            <select name="hv_gruppe_simon_mitglieder" multiple size="5">
+                {% for hv in handelsvertreter %}<option value="{{ hv.id }}" {{ 'selected' if hv.id|string in simon_mitglieder }}>{{ hv.name }}</option>{% endfor %}
+            </select></label>
+        <label class="schmal">Farbe „Großkunde“ (Hex, leer = Standard)
+            {# fest: Beispielwert im Platzhalter des Eingabefelds (kein Stil) #}
+            <input type="text" name="grosskunde_farbe" value="{{ werte.grosskunde_farbe }}" placeholder="#6b3fa0" pattern="#[0-9a-fA-F]{6}"></label>
+    </div>
+    <label>Sparten-Langnamen für Kundenmails (JSON, leer = Standard Wärmepumpe · Photovoltaik · Klimaanlage · Wallbox · Gewerbe · Mieterstrom · Wasser · Denkmalschutz)
+        {# fest: Beispielwert im Platzhalter des Eingabefelds (kein Stil) #}
+        <input type="text" name="sparten_langnamen" value="{{ werte.sparten_langnamen }}" placeholder='{"WP": "Wärmepumpe", "PV": "Photovoltaik"}'></label>
+    <p class="dezent">Badge „Großkunde“ erscheint in Boards, Kartei, Kanban, HV-Ansicht und Leads VOT; Filter-Chip in
+        Hauptboard, Deals und Anrufliste; Spalte „Großkunde“ im Spaltenkatalog (Standard ausgeblendet). Keine weitere
+        Automatik [ANNAHME]. Interne Badges behalten die Kürzel, Kundenmails nutzen die Langform.</p>
     <input type="hidden" name="glocke_dabei" value="1">
     <fieldset class="pe-fieldset">
         <legend>Lead-Glocken (Standard: nur To-Dos)</legend>

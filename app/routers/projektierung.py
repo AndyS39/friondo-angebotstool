@@ -853,13 +853,14 @@ def projekt_dialog(request: Request, angebot_id: int,
     kunde = session.get(Kunde, angebot.kunde_id)
     offenes = kern.offenes_projekt_fuer_vorgang(session, vorgang.id)
     # Sparten: Tool-Angebot = seine Sparte; TAIFUN = alle Lead-Interessen wählbar
+    # v31 (PLAN_LEAD_V5 Phase 157): gemeinsame Sparten-Liste (MS/WA/DMS wie WB)
+    from app import sparten as sparten_modul
     sparte = angebot.konfigurator_typ or "WP"
     waehlbar = [sparte]
     if angebot.extern and vorgang.lead_id:
         lead = session.get(Lead, vorgang.lead_id)
         if lead is not None and lead.interessen:
-            waehlbar = sorted(set(lead.interessen) | {sparte},
-                              key=["WP", "PV", "KL", "WB"].index)
+            waehlbar = sparten_modul.codes(set(lead.interessen) | {sparte})
     belegt = set()
     if offenes is not None:
         belegt = {g.sparte for g in session.query(Gewerk)
@@ -868,8 +869,14 @@ def projekt_dialog(request: Request, angebot_id: int,
     def standard(name):
         wert = kern.parameter_holen(session, name, "")
         return int(wert) if wert.isdigit() else 0
+    # v31 (PLAN_LEAD_V5 Phase 153): Ausführungsadresse aus dem Objekt des Angebots
+    # vorbelegen (Objekt 2 → Objektadresse, Hauptobjekt → Kundenadresse)
+    from app import anschriften
+    adresse_vorbelegt = anschriften.ausfuehrungsort_fuer(session, angebot=angebot,
+                                                          vorgang=vorgang, kunde=kunde)
     return render(request, "projektierung/dialog.html", aktiv="/projektierung",
                   angebot=angebot, kunde=kunde, vorgang=vorgang,
+                  adresse_vorbelegt=adresse_vorbelegt,
                   offenes=offenes, belegt=belegt,
                   sparten_waehlbar=waehlbar, sparte_vorbelegt=sparte,
                   projektleiter=_benutzer_mit_rolle(session, "projektierung"),
@@ -889,7 +896,10 @@ def projekt_anlegen(request: Request, angebot_id: int,
         return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
     benutzer = request.state.benutzer
     form = anfrage.formular(request)
-    sparten = [s for s in ("WP", "PV", "KL", "WB")
+    # v31 (PLAN_LEAD_V5 Phase 157): gemeinsame Sparten-Liste – MS/WA/DMS (und GW)
+    # werden wie WB angelegt (Freitext-Auftrag, keine Sparten-Pakete) [ANNAHME]
+    from app import sparten as sparten_modul
+    sparten = [s for s in sparten_modul.SPARTEN
                if form.get(f"sparte_{s}") == "on"]
     if not sparten:
         return RedirectResponse(
@@ -1159,18 +1169,19 @@ def akte(request: Request, projekt_id: int,
                   steckbrief_felder=kern.steckbrief_felder,
                   # v15 (Phase 76): Galerie des Vorgangs in der Projektakte
                   # 27.09.2026 (Andreas): Galerie je Gewerk-Sparte
-                  galerie_sparten=[sp for sp in ("WP", "PV", "KL", "WB")
+                  # v31 (PLAN_LEAD_V5 Phase 157): gemeinsame Sparten-Liste (inkl. GW/MS/WA/DMS)
+                  galerie_sparten=[sp for sp in __import__("app.sparten", fromlist=["x"]).SPARTEN
                                    if any(g.sparte == sp for g in gewerke)]
                   or ["WP"],
                   galerie_daten={sp: __import__("app.galerie", fromlist=["x"])
                                  .uebersicht(session, projekt.vorgang_id or 0, sp)
-                                 for sp in ("WP", "PV", "KL", "WB")
+                                 for sp in __import__("app.sparten", fromlist=["x"]).SPARTEN
                                  if any(g.sparte == sp for g in gewerke)}
                   or {"WP": __import__("app.galerie", fromlist=["x"])
                       .uebersicht(session, projekt.vorgang_id or 0, "WP")},
                   galerie_ordner={sp: __import__("app.galerie", fromlist=["x"])
                                   .ordner_liste(session, sp)
-                                  for sp in ("WP", "PV", "KL", "WB")},
+                                  for sp in __import__("app.sparten", fromlist=["x"]).SPARTEN},
                   galerie_darf_loeschen=__import__("app.galerie", fromlist=["x"])
                   .darf_loeschen(request.state.benutzer),
                   projekt_subs=projekt_subs, subs_stamm=subs_stamm,

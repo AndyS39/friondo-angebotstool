@@ -25,7 +25,7 @@
     <input type="text" name="q" value="{{ q }}" placeholder="Suche: Kunde, Vertriebler">
     <select name="sparte" title="Sparte">
         <option value="">Alle Sparten</option>
-        {% for s in ('WP', 'PV', 'KL', 'WB') %}
+        {% for s in ('WP', 'PV', 'KL', 'WB', 'GW', 'MS', 'WA', 'DMS') %}
             <option value="{{ s }}" {{ 'selected' if sparte == s }}>{{ s }}</option>
         {% endfor %}
     </select>

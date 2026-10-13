@@ -12,8 +12,10 @@
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
 <p>Aktuell <strong>{{ anzahl }}</strong> Demo-Leads im Modul.
-    {% if not demo_aktiv %}<span class="abzeichen">Freigabe-Modus „alle“ –
-    der Generator ist nur im Demo-Modus aktiv.</span>{% endif %}</p>
+    {#- v31 (PLAN_LEAD_V5 Phase 159): Demo-Modus beendet – der Generator ist dauerhaft aus #}
+    {% if not demo_aktiv %}<span class="abzeichen">Demo-Modus beendet (v31) –
+    der Generator ist abgeschaltet; die Entscheidung „Demo-Leads löschen oder behalten“ läuft
+    über die <a href="/parametrierung/lead-einstellungen">Lead-Einstellungen</a>.</span>{% endif %}</p>
 <p class="dezent">Demo-Leads (fiktive Namen, Orte im Vertriebsgebiet, Telefon
     0203 000 xx) erscheinen ausschließlich im Lead-Modul – nie in Leads VOT,
     Kunden, Angeboten, Statistik oder monday.</p>

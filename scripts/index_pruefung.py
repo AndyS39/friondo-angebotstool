@@ -27,6 +27,7 @@ STANDARD_SEITEN = [
     "/lead-management/lead/{vorgang_id}", "/projektierung", "/projektierung/liste",
     "/projektierung/termine", "/projektierung/meine-aufgaben", "/benachrichtigungen",
     "/angebote/{angebot_id}", "/statistik", "/montage",
+    "/suche?q=M%C3%BC", "/suche.json?q=M%C3%BC", "/suche.json?q=4711",   # v32 (Phase 164)
 ]
 _SCAN = re.compile(r"\bSCAN (?:TABLE )?(\w+)")
 

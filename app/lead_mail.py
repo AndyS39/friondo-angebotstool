@@ -34,6 +34,28 @@
 #    .eml (eml_erstellen – HTML + Text, ICS, Inline-Bilder als CID; From = E-Mail des
 #    HV), To-Do „… aus dem eigenen Postfach senden“ mit Vorschau-Link; Migration
 #    offen → entwurf einmalig (Marker migration_v29_hv_entwurf).
+# v31 (PLAN_LEAD_V5 Phase 153/156/158/159):
+#  - Sparten in Kundentexten ausgeschrieben: {sparten} → „Wärmepumpe und Photovoltaik“
+#    (sparten.sparten_text, Parameter sparten_langnamen), neu {sparten_interesse}
+#    („Interesse an einer Wärmepumpe“), {sparten_hinweise} mit Langform als
+#    Zwischenüberschrift; ICS-Titel ebenso. Interne Badges behalten die Kürzel.
+#  - Vorlage `nicht_erreicht` entfällt (VORLAGEN_AUSGEBLENDET: Datensatz bleibt, Editor
+#    blendet sie aus, Versand-Job storniert Altbestand); Kaskade Versuch 2/4 = keine.
+#  - Neue Vorlagen `terminbestaetigung_objekte` (Rahmen + {vertriebler_block} +
+#    {objektliste}, ICS je Objekttermin – mehrere ICS in einer Mail, anhang_pfad mit
+#    „;“ getrennt) und `falsche_telefonnummer` (Kontakt, falsche_nummer_mail).
+#  - Platzhalter {objektadresse} (Adresse des Objekts des Termins, Ein-Objekt =
+#    Kundenadresse), {vorname}, {nachname}, {absender}.
+#  - Verträge mit K (Kartei-Dialog): vorlage_rendern(session, key, vorgang, termin=,
+#    objekt=, benutzer=) -> (betreff, html, fehlende_pflichtdaten) und
+#    in_warteschlange(session, vorgang, key, betreff, text, termin=, anhaenge=,
+#    benutzer=) -> KommunikationLog (Text bleibt fest – kanal „mail_fest“).
+#  - Mailsperre (Phase 159): lead_v5.mail_versand_aktiv = aus → jeder Eintrag endet mit
+#    Status `gesperrt` (kein Graph-Aufruf, auch nicht Testpostfach, keine fehler-Glocke);
+#    mail_modus ist keine Steuerung mehr (bei „an“ geht die Mail an den Kunden).
+#    Gesperrte Einträge werden beim späteren Einschalten NICHT nachgesendet [ANNAHME],
+#    „Erneut senden“ bleibt als bewusster Klick möglich. gesperrte_anzahl() für den
+#    Zähler der Lead-Einstellungen (B). Migration migration_v31_mails (migrate.py-Hook).
 
 import base64
 import hashlib
@@ -46,6 +68,7 @@ from sqlalchemy import Integer, String
 from sqlalchemy.orm import Session, mapped_column
 
 from app import config
+from app import sparten as sparten_modul
 
 from app.models import (AdProfil, Benutzer, KommunikationLog, Kunde, LeadQuelle,
                         Vorgang, VotTermin, LEAD_PHASEN_NAMEN)
@@ -62,30 +85,54 @@ VERSUCHE_MAX = 3
 WIEDERHOLUNG_PAUSE_S = 60
 STATUS_FEHLER = "fehler"
 STATUS_WARTET_ADRESSE = "wartet_adresse"
+# v31 (Phase 159): Status der Mailsperre – Eintrag gerendert, aber nie gesendet
+STATUS_GESPERRT = "gesperrt"
+# v31 (Phase 158): Einträge aus dem Kartei-Dialog tragen einen festen (nachbearbeiteten)
+# Text – der Versand-Job rendert sie nicht neu (rendern() lässt Betreff/Text stehen)
+KANAL_FEST = "mail_fest"
 # Vorlagen, deren Datensatz bleibt, die aber nicht mehr angeboten/gesendet werden
-VORLAGEN_AUSGEBLENDET = ("nurture",)
+# (v29 nurture; v31 Phase 156: nicht_erreicht – die Kaskade schickt nach Versuch 2/4
+# keine Mail mehr, nur noch „Disqualifiziert, nicht erreicht“ nach dem letzten Versuch)
+VORLAGEN_AUSGEBLENDET = ("nurture", "nicht_erreicht")
+AUSGEBLENDET_GRUND = {"nurture": "Nurture entfällt (v29)",
+                      "nicht_erreicht": "Vorlage „Nicht erreicht“ entfällt (v31)"}
 TERMIN_VORLAGE = "terminbestaetigung"
+# v31 (Phase 153): Terminbestätigung bei mehreren Objekten (eine Mail mit {objektliste},
+# ICS je Objekttermin) und v31 (Phase 158) Vorlage „Falsche Telefonnummer“
+OBJEKT_VORLAGE = "terminbestaetigung_objekte"
+FALSCHE_NUMMER_VORLAGE = "falsche_telefonnummer"
 # Termin-Mails, die bei Handelsvertreter-Leads dem Schalter hv_versandweg folgen
 HV_TERMIN_VORLAGEN = ("terminbestaetigung", "terminerinnerung", "terminaenderung",
-                      "terminabsage")
+                      "terminabsage", OBJEKT_VORLAGE)
 HV_VERSANDWEGE = ("offen", "smtp", "entwurf", "leads_im_namen")
 # Nachtrag 08.10.2026 (Antwort Andreas): Standard = entwurf (.eml aus dem eigenen
 # Postfach des Handelsvertreters); `offen` bleibt wählbar (bisheriges Verhalten)
 HV_VERSANDWEG_STANDARD = "entwurf"
 EML_VORLAGEN_NAMEN = {"terminbestaetigung": "Terminbestaetigung", "terminerinnerung": "Terminerinnerung",
-                      "terminaenderung": "Terminaenderung", "terminabsage": "Terminabsage"}
+                      "terminaenderung": "Terminaenderung", "terminabsage": "Terminabsage",
+                      OBJEKT_VORLAGE: "Terminbestaetigung"}
 EML_TODO_TITEL = {"terminbestaetigung": "Terminbestätigung aus dem eigenen Postfach senden",
                   "terminaenderung": "Terminänderung aus dem eigenen Postfach senden",
-                  "terminabsage": "Terminabsage aus dem eigenen Postfach senden"}
+                  "terminabsage": "Terminabsage aus dem eigenen Postfach senden",
+                  OBJEKT_VORLAGE: "Terminbestätigung (mehrere Objekte) aus dem eigenen Postfach senden"}
 # Vorlagenbaum des Editors (Phase 142): Kategorie-Key, Anzeigename, Vorlagen-Keys
+# (v31: Kontakt ohne nicht_erreicht, dafür falsche_telefonnummer; Oberkategorie
+# Terminbestätigung mit der Objekt-Vorlage)
 KATEGORIEN = [
     ("eingang", "Eingang", ["eingangsbestaetigung"]),
-    ("kontakt", "Kontakt", ["nicht_erreicht", "disqualifiziert"]),
-    ("terminbestaetigung", "Terminbestätigung", ["terminbestaetigung"]),
+    ("kontakt", "Kontakt", ["disqualifiziert", FALSCHE_NUMMER_VORLAGE]),
+    ("terminbestaetigung", "Terminbestätigung", ["terminbestaetigung", OBJEKT_VORLAGE]),
     ("termin", "Termin", ["terminerinnerung", "terminaenderung", "terminabsage",
                           "online_termin_einladung"]),
     ("sonstige", "Sonstige", []),
 ]
+# v31 (Phase 156): Kürzel, die die Migration in gespeicherten Vorlagentexten/Betreffs
+# als eigenständige Wörter durch die Langform ersetzt (MS/WA/DMS sind neu und stehen
+# in keiner alten Vorlage; „MS“ wäre zudem mehrdeutig)
+MIGRATION_KUERZEL = ("WP", "PV", "KL", "WB", "GW")
+_KUERZEL_MUSTER = re.compile(r"(?<![\w{/+-])(" + "|".join(MIGRATION_KUERZEL) + r")(?![\w}/+-])")
+_KUERZEL_PLUS_MUSTER = re.compile(r"(?<![\w{])((?:" + "|".join(MIGRATION_KUERZEL)
+                                  + r")(?:\s*[+/]\s*(?:" + "|".join(MIGRATION_KUERZEL) + r"))+)(?![\w}])")
 # individueller Block in einer Vertreter-Vorlage: entweder der Platzhalter
 # {vertriebler_block} (Inhalt aus der Benutzerverwaltung) oder ein Bereich
 # zwischen diesen Markern (Zulieferung/Editor)
@@ -169,6 +216,8 @@ VORLAGEN_START = {
         "Sie erhalten anschließend automatisch eine Kalendereinladung mit dem "
         "Teams-Link.\n\n"
         "Mit freundlichen Grüßen\nIhr Friondo-Team"),
+    # v31 (Phase 156): „nicht_erreicht“ bleibt nur als Datensatz (VORLAGEN_AUSGEBLENDET) –
+    # der Starttext wird nicht mehr angelegt und nie mehr gesendet
     "nicht_erreicht": (
         "Nicht erreicht",
         "Wir haben Sie leider nicht erreicht",
@@ -178,6 +227,34 @@ VORLAGEN_START = {
         "Rufen Sie uns gern zurück oder antworten Sie mit Ihrer Wunschzeit "
         "auf diese E-Mail: {link_rueckruf}\n"
         "Ihr Ansprechpartner: {leadmanager} {leadmanager_telefon}\n\n"
+        "Mit freundlichen Grüßen\nIhr Friondo-Team"),
+    # v31 (PLAN_LEAD_V5 Phase 158): Ergebnis „Falsche Nummer“ sendet diese Vorlage an die
+    # E-Mail-Adresse des Leads (Text freigegeben 13.10.2026, Absender termin@)
+    FALSCHE_NUMMER_VORLAGE: (
+        "Falsche Telefonnummer",
+        "Ihre Anfrage bei Friondo: wir erreichen Sie nicht",
+        "{briefanrede},\n\n"
+        "vielen Dank für Ihr {sparten_interesse}. Wir haben versucht, Sie "
+        "telefonisch zu erreichen, leider ist die uns vorliegende Rufnummer "
+        "nicht korrekt oder nicht mehr gültig.\n\n"
+        "Damit wir Ihre Anfrage weiter bearbeiten können, antworten Sie bitte "
+        "einfach auf diese E-Mail mit Ihrer aktuellen Telefonnummer und, wenn "
+        "möglich, einer Uhrzeit, zu der wir Sie gut erreichen. Alternativ "
+        "erreichen Sie uns unter {rueckruf_telefon}.\n\n"
+        "Wir freuen uns darauf, mit Ihnen zu sprechen.\n\n"
+        "Mit freundlichen Grüßen\n{absender}\nFriondo GmbH"),
+    # v31 (PLAN_LEAD_V5 Phase 153): eine Bestätigung für alle Objekte eines Kunden –
+    # Rahmen + {vertriebler_block} wie v29, {objektliste} = je Objekt Bezeichnung,
+    # Adresse, Datum, Uhrzeit, Vertriebler; ICS je Objekttermin im Anhang
+    OBJEKT_VORLAGE: (
+        "Terminbestätigung – mehrere Objekte",
+        "Ihre Vor-Ort-Termine bei Friondo ({termin_datum})",
+        "{briefanrede},\n\n"
+        "wir bestätigen Ihre Vor-Ort-Termine für Ihre Objekte:\n\n"
+        "{objektliste}\n\n"
+        "{sparten_hinweise}\n\n"
+        "Die Termine finden Sie im Anhang für Ihren Kalender – ein Eintrag je Objekt.\n\n"
+        "{vertriebler_block}\n\n"
         "Mit freundlichen Grüßen\nIhr Friondo-Team"),
     # v29 (Phase 142): Rahmen der Terminbestätigung – Terminblock mit {adresse},
     # Sparten-Baustein {sparten_hinweise}, individueller Block {vertriebler_block}
@@ -236,9 +313,15 @@ PLATZHALTER_NEU = ["{sparten}", "{quelle}", "{termin_datum}", "{termin_uhrzeit}"
                    "{link_rueckruf}", "{briefanrede}",
                    # v29 (Phase 142)
                    "{adresse}", "{sparten_hinweise}", "{vertriebler_block}",
-                   "{vertriebler_vorname}", "{vertriebler_email}"]
+                   "{vertriebler_vorname}", "{vertriebler_email}",
+                   # v31 (Phase 153/156/158)
+                   "{sparten_interesse}", "{objektadresse}", "{objektliste}",
+                   "{vorname}", "{nachname}", "{absender}"]
 # Platzhalter, deren Wert fertiges HTML ist (nicht maskieren)
-_HTML_WERTE = ("sparten_hinweise", "vertriebler_block")
+_HTML_WERTE = ("sparten_hinweise", "vertriebler_block", "objektliste")
+# Vorlagen, die einen Termin brauchen (Pflichtdaten im Kartei-Dialog, Phase 158)
+TERMIN_PFLICHT_VORLAGEN = ("terminbestaetigung", "terminerinnerung", "terminaenderung",
+                           "terminabsage", OBJEKT_VORLAGE)
 
 
 # --- Vorlagen-Schlüssel, Katalog, Laden/Speichern -------------------------------------
@@ -256,12 +339,26 @@ def vertriebler_key(benutzer_id: int) -> str:
     return f"{TERMIN_VORLAGE}_{int(benutzer_id)}"
 
 
+def objekt_vertriebler_key(benutzer_id: int) -> str:
+    """v31 (Phase 153): optionale Vertriebler-Variante der Objekt-Terminbestätigung
+    (terminbestaetigung_objekte_<id>) – wird nicht automatisch angelegt [ANNAHME];
+    ohne eigene Variante gilt die Standard-Objektvorlage."""
+    return f"{OBJEKT_VORLAGE}_{int(benutzer_id)}"
+
+
+def objekt_vertriebler_id_aus_key(schluessel: str) -> int | None:
+    treffer = re.fullmatch(rf"{OBJEKT_VORLAGE}_(\d+)", schluessel or "")
+    return int(treffer.group(1)) if treffer else None
+
+
 def schluessel_gueltig(session: Session, schluessel: str) -> bool:
     """Vorlagen-Key des Editors: Katalog (ohne ausgeblendete) oder eine
     Terminbestätigung eines (auch inaktiven) Benutzers."""
     if schluessel in VORLAGEN_START:
         return True
     benutzer_id = vertriebler_id_aus_key(schluessel)
+    if benutzer_id is None:
+        benutzer_id = objekt_vertriebler_id_aus_key(schluessel)
     return benutzer_id is not None and session.get(Benutzer, benutzer_id) is not None
 
 
@@ -286,6 +383,10 @@ def vorlage_name(session: Session, schluessel: str) -> str:
     if benutzer_id is not None:
         person = session.get(Benutzer, benutzer_id)
         return f"Terminbestätigung – {person.name if person else benutzer_id}"
+    benutzer_id = objekt_vertriebler_id_aus_key(schluessel)
+    if benutzer_id is not None:
+        person = session.get(Benutzer, benutzer_id)
+        return f"Terminbestätigung mehrere Objekte – {person.name if person else benutzer_id}"
     return schluessel
 
 
@@ -293,7 +394,8 @@ def vorlage_laden(session: Session, schluessel: str,
                   sparte: str = "") -> tuple[str, str]:
     """(Betreff, Text): je Sparte, sonst allgemein, sonst Startwert. v29: eine
     Vertreter-Vorlage (terminbestaetigung_<id>) fällt auf die Standard-
-    Terminbestätigung zurück, wenn sie leer ist."""
+    Terminbestätigung zurück, wenn sie leer ist; v31: ebenso die Vertreter-
+    Variante der Objekt-Terminbestätigung auf die Objekt-Standardvorlage."""
     from app.models import einstellung_holen
     if sparte:
         betreff = einstellung_holen(
@@ -308,6 +410,8 @@ def vorlage_laden(session: Session, schluessel: str,
         return betreff, text
     if ist_vertriebler_key(schluessel):
         return vorlage_laden(session, TERMIN_VORLAGE, sparte)
+    if objekt_vertriebler_id_aus_key(schluessel) is not None:
+        return vorlage_laden(session, OBJEKT_VORLAGE, sparte)
     _, start_betreff, start_text = VORLAGEN_START.get(
         schluessel, ("", "Friondo", ""))
     return start_betreff, start_text
@@ -346,6 +450,8 @@ def vorlagen_vorbelegen(session: Session) -> int:
     from app.models import einstellung_holen, einstellung_setzen
     neu = 0
     for schluessel, (_, betreff, text) in VORLAGEN_START.items():
+        if schluessel in VORLAGEN_AUSGEBLENDET:
+            continue   # v31: ausgeblendete Vorlagen werden nicht (mehr) angelegt
         if not einstellung_holen(session, f"lead_vorlage_{schluessel}_betreff", ""):
             einstellung_setzen(session, f"lead_vorlage_{schluessel}_betreff", betreff)
             einstellung_setzen(session, f"lead_vorlage_{schluessel}_text", text)
@@ -361,6 +467,18 @@ def terminbestaetigung_key(session: Session, ad_id: int | None) -> tuple[str, bo
         if vorlage_vorhanden(session, key):
             return key, True
     return TERMIN_VORLAGE, False
+
+
+def objekt_vorlage_key(session: Session, termine) -> str:
+    """v31 (Phase 153): Vorlage der Objekt-Terminbestätigung – haben alle Objekttermine
+    denselben Vertriebler und liegt für ihn eine Variante terminbestaetigung_objekte_<id>
+    vor, gilt diese, sonst die Standard-Objektvorlage."""
+    ad_ids = {t.ad_id for t in (termine or []) if getattr(t, "ad_id", None)}
+    if len(ad_ids) == 1:
+        key = objekt_vertriebler_key(next(iter(ad_ids)))
+        if vorlage_vorhanden(session, key):
+            return key
+    return OBJEKT_VORLAGE
 
 
 def vertriebler_vorlage_sicherstellen(session: Session, benutzer) -> bool:
@@ -387,11 +505,15 @@ def vorlagen_katalog(session: Session) -> list[dict]:
     for kat_key, kat_name, keys in KATEGORIEN:
         eintraege = []
         for key in keys:
-            if key not in VORLAGEN_START:
+            if key not in VORLAGEN_START or key in VORLAGEN_AUSGEBLENDET:
                 continue
             zugeordnet.add(key)
-            eintraege.append({"key": key, "name": "Standard" if key == TERMIN_VORLAGE
-                              else VORLAGEN_START[key][0],
+            # v31: in der Oberkategorie Terminbestätigung heißt die Objekt-Vorlage
+            # „Mehrere Objekte“ (neben „Standard“ und den Vertriebler-Vorlagen)
+            name = ("Standard" if key == TERMIN_VORLAGE
+                    else "Mehrere Objekte" if key == OBJEKT_VORLAGE
+                    else VORLAGEN_START[key][0])
+            eintraege.append({"key": key, "name": name,
                               "vorhanden": True, "quelle": vorlage_quelle(session, key),
                               "benutzer_id": None, "hv": False})
         if kat_key == "terminbestaetigung":
@@ -523,16 +645,15 @@ def vertriebler_block_text(benutzer) -> str:
     return "\n".join(zeilen)
 
 
-def sparten_hinweise_punkte(sparten: list[str]) -> list[tuple[str, list[str]]]:
+def sparten_hinweise_punkte(sparten: list[str], langnamen: dict | None = None) -> list[tuple[str, list[str]]]:
     """[(Sparten-Name, Punkte)] aus dem Blatt Terminhinweise – Dubletten über
-    alle Sparten entfernt, Sparten ohne Punkte weggelassen."""
+    alle Sparten entfernt, Sparten ohne Punkte weggelassen. v31 (Phase 156): die
+    Zwischenüberschrift ist die Langform (sparten.langname, Parameter sparten_langnamen)."""
     from app import leadmanagement_logik
-    from app.models import INTERESSEN
-    namen = dict(INTERESSEN)
     logik = leadmanagement_logik.hole_logik()
     gesehen: set[str] = set()
     ergebnis = []
-    for sparte in sparten:
+    for sparte in sparten_modul.codes(sparten):
         punkte = []
         for punkt in logik.hinweise_der_sparte(sparte):
             schluessel = punkt.strip().lower()
@@ -541,12 +662,12 @@ def sparten_hinweise_punkte(sparten: list[str]) -> list[tuple[str, list[str]]]:
             gesehen.add(schluessel)
             punkte.append(punkt)
         if punkte:
-            ergebnis.append((namen.get(sparte, sparte), punkte))
+            ergebnis.append((sparten_modul.langname(sparte, langnamen), punkte))
     return ergebnis
 
 
-def sparten_hinweise_html(sparten: list[str]) -> str:
-    bloecke = sparten_hinweise_punkte(sparten)
+def sparten_hinweise_html(sparten: list[str], langnamen: dict | None = None) -> str:
+    bloecke = sparten_hinweise_punkte(sparten, langnamen)
     if not bloecke:
         return ""
     teile = [f"<p>{_esc(SPARTEN_EINLEITUNG)}</p>"]
@@ -557,8 +678,8 @@ def sparten_hinweise_html(sparten: list[str]) -> str:
     return "".join(teile)
 
 
-def sparten_hinweise_text(sparten: list[str]) -> str:
-    bloecke = sparten_hinweise_punkte(sparten)
+def sparten_hinweise_text(sparten: list[str], langnamen: dict | None = None) -> str:
+    bloecke = sparten_hinweise_punkte(sparten, langnamen)
     if not bloecke:
         return ""
     zeilen = [SPARTEN_EINLEITUNG]
@@ -569,17 +690,117 @@ def sparten_hinweise_text(sparten: list[str]) -> str:
     return "\n".join(zeilen)
 
 
+def langnamen(session: Session) -> dict:
+    """v31 (Phase 156): Langformen der Sparten inkl. Übersteuerung aus dem Parameter
+    sparten_langnamen (Lead-Einstellungen)."""
+    return sparten_modul.langnamen_laden(_parameter(session, "sparten_langnamen", ""))
+
+
+def sparten_codes_fuer(session: Session, vorgang: Vorgang | None, kunde: Kunde | None,
+                       objekt=None, termin: VotTermin | None = None, termine=None) -> list[str]:
+    """Sparten-Kürzel für eine Mail: bei einer Objektliste die Vereinigung der
+    Objekt-Interessen aller Termine, sonst die Interessen des Objekts (Termin oder
+    übergeben), sonst die Kundeninteressen (= Vereinigung aller Objekte, hauptobjekt_sync)."""
+    from app import objekte as objekte_modul
+    from app.models import VorgangObjekt
+    codes: list[str] = []
+    if termine:
+        for t in termine:
+            o = session.get(VorgangObjekt, t.objekt_id) if getattr(t, "objekt_id", None) else None
+            codes.extend(objekte_modul.interessen_liste(o))
+    elif objekt is not None:
+        codes = objekte_modul.interessen_liste(objekt)
+    elif termin is not None and getattr(termin, "objekt_id", None):
+        codes = objekte_modul.interessen_liste(session.get(VorgangObjekt, termin.objekt_id))
+    if not codes and kunde is not None:
+        codes = sparten_modul.codes(kunde.interesse)
+    return sparten_modul.codes(codes)
+
+
+def objektliste_html(session: Session, termine, langnamen_map: dict | None = None,
+                     benutzer_map: dict | None = None) -> str:
+    """v31 (Phase 153): Platzhalter {objektliste} – je Objekttermin eine Zeile mit
+    Bezeichnung, Adresse, Datum, Uhrzeit (Dauer) und Vertriebler als Tabelle (Outlook-
+    tauglich); html_zu_text macht daraus lesbare Zeilen für den Textteil."""
+    from app import objekte as objekte_modul
+    from app.models import VorgangObjekt
+    if not termine:
+        return ""
+    benutzer_map = benutzer_map or {}
+    zeilen = []
+    for t in sorted(termine, key=lambda x: (x.beginn or datetime.max, x.id or 0)):
+        objekt = session.get(VorgangObjekt, t.objekt_id) if getattr(t, "objekt_id", None) else None
+        ort = objekte_modul.ausfuehrungsort(session, termin=t)
+        bezeichnung = (objekt.bezeichnung if objekt is not None and objekt.bezeichnung
+                       else ort.get("bezeichnung") or "Objekt")
+        adresse = (t.adresse or "").strip() or ort.get("einzeilig", "")
+        if objekt is not None:
+            sparten_text = sparten_modul.sparten_text(objekte_modul.interessen_liste(objekt),
+                                                      langnamen=langnamen_map)
+        else:
+            sparten_text = ""
+        ad = benutzer_map.get(t.ad_id) if t.ad_id in benutzer_map else (
+            session.get(Benutzer, t.ad_id) if t.ad_id else None)
+        dauer = int((t.ende - t.beginn).total_seconds() // 60) if t.beginn and t.ende else 90
+        zeit = (f"{t.beginn:%d.%m.%Y}, {t.beginn:%H:%M} Uhr (ca. {dauer} Minuten)"
+                if t.beginn else "Termin folgt")
+        zeilen.append(
+            "<tr>"
+            f"<td style=\"vertical-align:top;padding:4px 10px 4px 0\"><strong>{_esc(bezeichnung)}</strong>"
+            + (f"<br><span>{_esc(sparten_text)}</span>" if sparten_text else "") + "</td>"
+            f"<td style=\"vertical-align:top;padding:4px 10px 4px 0\">{_esc(adresse)}</td>"
+            f"<td style=\"vertical-align:top;padding:4px 10px 4px 0\">{_esc(zeit)}</td>"
+            f"<td style=\"vertical-align:top;padding:4px 0\">{_esc(ad.name if ad else 'Ihr Friondo-Berater')}"
+            + (f" ({_esc(ad.telefon)})" if ad is not None and getattr(ad, 'telefon', '') else "") + "</td>"
+            "</tr>")
+    return ('<table class="lm-objektliste" cellpadding="0" cellspacing="0" border="0" '
+            'style="border-collapse:collapse;margin:8px 0">'
+            '<tr><th style="text-align:left;padding:4px 10px 4px 0">Objekt</th>'
+            '<th style="text-align:left;padding:4px 10px 4px 0">Adresse</th>'
+            '<th style="text-align:left;padding:4px 10px 4px 0">Termin</th>'
+            '<th style="text-align:left;padding:4px 0">Ihr Berater</th></tr>'
+            + "".join(zeilen) + "</table>")
+
+
+def termine_datum_text(termine) -> str:
+    """Datum einer Objektliste: ein Tag → „14.10.2026“, mehrere → „14.10.2026 – 15.10.2026“."""
+    tage = sorted({t.beginn.date() for t in (termine or []) if t.beginn})
+    if not tage:
+        return ""
+    if len(tage) == 1:
+        return tage[0].strftime("%d.%m.%Y")
+    return f"{tage[0]:%d.%m.%Y} – {tage[-1]:%d.%m.%Y}"
+
+
+def objekttermine_aktiv(session: Session, vorgang: Vorgang, status=("geplant", "bestaetigt")) -> list[VotTermin]:
+    """Aktive Vor-Ort-Termine des Vorgangs (ein Termin je Objekt), chronologisch –
+    Grundlage der Objekt-Terminbestätigung und ihrer ICS-Anhänge."""
+    return (session.query(VotTermin)
+            .filter(VotTermin.vorgang_id == vorgang.id, VotTermin.typ == "vot",
+                    VotTermin.status.in_(tuple(status)), VotTermin.beginn.isnot(None))
+            .order_by(VotTermin.beginn, VotTermin.id).all())
+
+
 def werte_fuer(session: Session, vorgang: Vorgang,
                termin: VotTermin | None = None, vorschau: bool = False,
-               kunde: Kunde | None = None) -> dict:
+               kunde: Kunde | None = None, objekt=None, termine=None,
+               benutzer=None) -> dict:
     """Platzhalterwerte. v29: zusätzlich adresse, sparten_hinweise (HTML),
     vertriebler_block (HTML), vertriebler_vorname, vertriebler_email;
-    vorschau=True verweist das Bild auf die Benutzerbild-Route statt cid:."""
+    vorschau=True verweist das Bild auf die Benutzerbild-Route statt cid:.
+    v31 (Phase 153/156/158): {sparten} und {sparten_interesse} in Langform (Objekt-
+    Interessen des Termins/Objekts, sonst Kundeninteressen), {objektadresse} =
+    Adresse des Objekts (Ein-Objekt = Kundenadresse), {objektliste} für die Objekt-
+    Terminbestätigung (termine = alle Objekttermine), {vorname}, {nachname},
+    {absender} = handelnder Benutzer, sonst Leadmanager, sonst „Ihr Friondo-Team“."""
+    from app import objekte as objekte_modul
     if kunde is None:
         kunde = session.get(Kunde, vorgang.kunde_id) if vorgang.kunde_id else None
     quelle = session.get(LeadQuelle, vorgang.quelle_id) if vorgang.quelle_id else None
     leadmanager = (session.get(Benutzer, vorgang.leadmanager_id)
                    if vorgang.leadmanager_id else None)
+    if termine and termin is None:
+        termin = termine[0]
     vertriebler = (session.get(Benutzer, termin.ad_id)
                    if termin is not None and termin.ad_id else None)
     if kunde is None:
@@ -593,20 +814,36 @@ def werte_fuer(session: Session, vorgang: Vorgang,
     from app.leadmanagement import wunschzeiten_liste
     wunschzeiten = ", ".join(wunschzeiten_liste(vorgang))
     absender = _absender(session)
-    sparten = [s.strip() for s in (kunde.interesse or "").split(",") if s.strip()]
-    adresse = (termin.adresse if termin is not None and termin.adresse else "") or ""
+    namen = langnamen(session)
+    codes = sparten_codes_fuer(session, vorgang, kunde, objekt=objekt, termin=termin, termine=termine)
+    # Objektadresse: Objekt des Termins bzw. das übergebene Objekt, sonst Hauptobjekt/Kunde
+    if objekt is not None and termin is None:
+        ort = objekte_modul.ausfuehrungsort(session, objekt_id=objekt.id, vorgang=vorgang, kunde=kunde)
+    else:
+        ort = objekte_modul.ausfuehrungsort(session, termin=termin, vorgang=vorgang, kunde=kunde)
+    objektadresse = ort.get("einzeilig", "")
+    adresse = (termin.adresse if termin is not None and termin.adresse else "") or objektadresse
     if not adresse:
         adresse = ", ".join(t for t in ((kunde.strasse or "").strip(),
                                          f"{(kunde.plz or '').strip()} {(kunde.ort or '').strip()}".strip())
                             if t)
     bild_src = (f"/lead-management/benutzer/{vertriebler.id}/bild"
                 if vorschau and vertriebler is not None else None)
+    if termine:
+        termin_datum = termine_datum_text(termine)
+    else:
+        termin_datum = termin.beginn.strftime("%d.%m.%Y") if termin and termin.beginn else ""
+    absender_name = (benutzer.name if benutzer is not None and getattr(benutzer, "name", "")
+                     else (leadmanager.name if leadmanager else "Ihr Friondo-Team"))
     return {
         "briefanrede": briefanrede,
         "name": kunde.anzeige_name,
-        "sparten": (kunde.interesse or "").replace(",", ", ") or "Ihre Anfrage",
+        "vorname": kunde.vorname or "",
+        "nachname": kunde.nachname or "",
+        "sparten": sparten_modul.sparten_text(codes, langnamen=namen) or "Ihre Anfrage",
+        "sparten_interesse": sparten_modul.sparten_interesse(codes, langnamen=namen),
         "quelle": quelle.name if quelle else "",
-        "termin_datum": termin.beginn.strftime("%d.%m.%Y") if termin and termin.beginn else "",
+        "termin_datum": termin_datum,
         "termin_uhrzeit": termin.beginn.strftime("%H:%M") if termin and termin.beginn else "",
         "termin_dauer": str(int((termin.ende - termin.beginn).total_seconds() // 60))
                         if termin and termin.beginn and termin.ende else "90",
@@ -628,10 +865,14 @@ def werte_fuer(session: Session, vorgang: Vorgang,
                         if vertriebler else "",
         # v29 (Phase 142)
         "adresse": adresse,
-        "sparten_hinweise": sparten_hinweise_html(sparten),
+        "sparten_hinweise": sparten_hinweise_html(codes, namen),
         "vertriebler_block": vertriebler_block_html(vertriebler, bild_src),
         "vertriebler_vorname": (getattr(vertriebler, "vorname", "") or "") if vertriebler else "",
         "vertriebler_email": (vertriebler.email or "") if vertriebler else "",
+        # v31 (Phase 153/158)
+        "objektadresse": objektadresse,
+        "objektliste": objektliste_html(session, termine, namen) if termine else "",
+        "absender": absender_name,
     }
 
 
@@ -743,10 +984,21 @@ def ics_erstellen(session: Session, termin: VotTermin, vorgang: Vorgang,
         if termin in session:
             session.flush()
     sequence = int(getattr(termin, "ics_sequence", 0) or 0)
-    sparten = "+".join(s.strip() for s in (kunde.interesse or "").split(",")
-                       if s.strip()) or "Ihre Anfrage"
+    # v31 (Phase 156): Langform im Kundenkalender („Wärmepumpe und Photovoltaik“ statt
+    # „WP+PV“) – Interessen des Objekts des Termins, sonst des Kunden
+    sparten = (sparten_modul.sparten_text(
+        sparten_codes_fuer(session, vorgang, kunde, termin=termin), langnamen=langnamen(session))
+        or "Ihre Anfrage")
     typ = getattr(termin, "typ", "vot") or "vot"
     titel = f"{ICS_TYP_TITEL.get(typ, 'Vor-Ort-Termin')} Friondo – {sparten}"
+    # v31 (Phase 153): bei mehreren Objekten trägt der Titel die Objektbezeichnung
+    objekt_text = ""
+    if getattr(termin, "objekt_id", None):
+        from app import objekte as objekte_modul
+        ort = objekte_modul.ausfuehrungsort(session, termin=termin, vorgang=vorgang, kunde=kunde)
+        if ort.get("mehrere_objekte") and ort.get("bezeichnung"):
+            objekt_text = ort["bezeichnung"]
+            titel += f" ({objekt_text})"
     if methode == "CANCEL":
         titel = "Abgesagt: " + titel
     berater = session.get(Benutzer, termin.ad_id) if termin.ad_id else None
@@ -756,8 +1008,10 @@ def ics_erstellen(session: Session, termin: VotTermin, vorgang: Vorgang,
                 or _parameter(session, "rueckruf_telefon") or "")
     adresse = termin.adresse or ""
     if typ == "vot" and not adresse:
-        from app import geocoding
-        adresse = geocoding.lead_adresse(session, vorgang)
+        # v31 (Phase 153): Ausführungsort = Objektadresse (Hauptobjekt = Kundenadresse)
+        from app import objekte as objekte_modul
+        adresse = objekte_modul.ausfuehrungsort(session, termin=termin, vorgang=vorgang,
+                                                kunde=kunde).get("einzeilig", "")
     zeilen = []
     if methode == "CANCEL":
         zeilen.append("Dieser Termin wurde abgesagt. Wir melden uns mit einem neuen Vorschlag.")
@@ -805,41 +1059,118 @@ def ics_erstellen(session: Session, termin: VotTermin, vorgang: Vorgang,
     return str(pfad)
 
 
+def verwendeter_vorlagen_key(session: Session, vorlage_key: str, termin: VotTermin | None = None,
+                             termine=None) -> str:
+    """Versandregel Phase 142/v31: terminbestaetigung → Vorlage des zugewiesenen
+    Vertrieblers des Termins (sonst Standard); terminbestaetigung_objekte → Vertriebler-
+    Variante, wenn alle Objekttermine denselben Vertriebler haben und sie existiert."""
+    if vorlage_key == TERMIN_VORLAGE and termin is not None:
+        return terminbestaetigung_key(session, termin.ad_id)[0]
+    if vorlage_key == OBJEKT_VORLAGE:
+        return objekt_vorlage_key(session, termine or ([termin] if termin is not None else []))
+    return vorlage_key
+
+
+def fehlende_pflichtdaten(session: Session, vorlage_key: str, vorgang: Vorgang,
+                          termin: VotTermin | None = None, kunde: Kunde | None = None,
+                          termine=None) -> list[str]:
+    """v31 (Phase 158, Vertrag mit K): was der Vorlage für einen Versand fehlt –
+    E-Mail-Adresse, Termin (Terminvorlagen), Objekttermine (Objektvorlage),
+    Buchungslink des Kollegen (Online-Einladung). Leer = sendbar."""
+    if kunde is None:
+        kunde = session.get(Kunde, vorgang.kunde_id) if vorgang.kunde_id else None
+    fehlt: list[str] = []
+    if kunde is None:
+        return ["Kunde"]
+    if not (kunde.email or "").strip():
+        fehlt.append("E-Mail-Adresse des Kunden")
+    basis = vorlage_key
+    if ist_vertriebler_key(vorlage_key):
+        basis = TERMIN_VORLAGE
+    elif objekt_vertriebler_id_aus_key(vorlage_key) is not None:
+        basis = OBJEKT_VORLAGE
+    if basis == OBJEKT_VORLAGE:
+        if not termine and termin is None:
+            fehlt.append("Objekttermine (kein aktiver Vor-Ort-Termin)")
+    elif basis in TERMIN_PFLICHT_VORLAGEN:
+        if termin is None or termin.beginn is None:
+            fehlt.append("Termin (kein aktiver Vor-Ort-Termin)")
+    elif basis == "online_termin_einladung":
+        person = session.get(Benutzer, termin.ad_id) if termin is not None and termin.ad_id else None
+        if person is None or not (getattr(person, "buchungslink", "") or "").strip():
+            fehlt.append("Buchungslink des Kollegen (Online-Termin)")
+    return fehlt
+
+
 def vorlage_rendern(session: Session, vorlage_key: str, vorgang: Vorgang,
                     termin: VotTermin | None = None, sparte: str = "",
                     vorschau: bool = False, text_vorgabe: tuple[str, str] | None = None,
-                    kunde: Kunde | None = None) -> tuple[str, str, str]:
-    """(Betreff, Mail-HTML, verwendeter Vorlagen-Key). Versandregel Phase 142:
+                    kunde: Kunde | None = None, objekt=None, benutzer=None,
+                    termine=None) -> tuple[str, str, list[str]]:
+    """(Betreff, Mail-HTML, fehlende Pflichtdaten). Versandregel Phase 142:
     terminbestaetigung → Vorlage des zugewiesenen Vertrieblers des Termins,
     sonst Standard. text_vorgabe=(betreff, text) rendert ungespeicherten
-    Editor-Text (Vorschau)."""
-    key = vorlage_key
-    if vorlage_key == TERMIN_VORLAGE and termin is not None:
-        key, _ = terminbestaetigung_key(session, termin.ad_id)
+    Editor-Text (Vorschau). v31 (Vertrag mit K, Phase 158): objekt (Platzhalter aus
+    dem Objekt), benutzer ({absender}), termine (Objektliste); die dritte Rückgabe ist
+    die Liste fehlender Pflichtdaten (leer = sendbar) – den verwendeten Vorlagen-Key
+    liefert verwendeter_vorlagen_key()."""
+    if vorlage_key == OBJEKT_VORLAGE and termine is None:
+        termine = objekttermine_aktiv(session, vorgang) if vorgang.id else ([termin] if termin else [])
+        if termin is not None and termin not in termine and getattr(termin, "beginn", None):
+            termine = sorted(termine + [termin], key=lambda t: (t.beginn or datetime.max))
+    key = verwendeter_vorlagen_key(session, vorlage_key, termin, termine)
     if text_vorgabe is not None:
         betreff, text = text_vorgabe
     else:
         betreff, text = vorlage_laden(session, key, sparte)
-    werte = werte_fuer(session, vorgang, termin, vorschau=vorschau, kunde=kunde)
-    return _einsetzen(betreff, werte)[:300], html_aus_vorlage(text, werte), key
+    werte = werte_fuer(session, vorgang, termin, vorschau=vorschau, kunde=kunde,
+                       objekt=objekt, termine=termine if vorlage_key == OBJEKT_VORLAGE else None,
+                       benutzer=benutzer)
+    fehlt = fehlende_pflichtdaten(session, vorlage_key, vorgang, termin, kunde=kunde,
+                                  termine=termine if vorlage_key == OBJEKT_VORLAGE else None)
+    return _einsetzen(betreff, werte)[:300], html_aus_vorlage(text, werte), fehlt
+
+
+def anhang_pfade(anhang_pfad: str | None) -> list[str]:
+    """v31 (Phase 153): mehrere ICS in einer Mail – anhang_pfad trägt die Pfade mit
+    „;“ getrennt (eine Datei je Objekttermin, eigene UID)."""
+    return [p.strip() for p in (anhang_pfad or "").split(";") if p.strip()]
 
 
 def rendern(session: Session, eintrag: KommunikationLog) -> bool:
-    """Betreff/HTML in den Eintrag rendern; False bei fehlendem Vorgang."""
+    """Betreff/HTML in den Eintrag rendern; False bei fehlendem Vorgang. v31:
+    Einträge mit festem Text (kanal mail_fest, Kartei-Dialog) behalten Betreff/Text;
+    Objekt-Terminbestätigung rendert die Objektliste und hängt je Objekttermin ein ICS
+    an; {absender} = Ersteller des Eintrags."""
     vorgang = session.get(Vorgang, eintrag.vorgang_id)
     if vorgang is None:
         return False
     termin = session.get(VotTermin, eintrag.termin_id) if eintrag.termin_id else None
     kunde = session.get(Kunde, vorgang.kunde_id)
+    if not (getattr(eintrag, "absender", "") or ""):
+        eintrag.absender = _absender(session)
+    if (eintrag.kanal or "") == KANAL_FEST and eintrag.betreff and eintrag.body_html:
+        if (eintrag.vorlage_key in ("terminbestaetigung", "terminaenderung") or ist_vertriebler_key(eintrag.vorlage_key)) \
+                and termin is not None and not eintrag.anhang_pfad:
+            eintrag.anhang_pfad = ics_erstellen(session, termin, vorgang)
+        return True
     sparte = ""
     if kunde is not None and kunde.interesse:
         sparte = kunde.interesse.split(",")[0].strip()
-    betreff, body_html, _ = vorlage_rendern(session, eintrag.vorlage_key, vorgang, termin, sparte)
+    ersteller = session.get(Benutzer, eintrag.erstellt_von) if getattr(eintrag, "erstellt_von", None) else None
+    termine = None
+    if eintrag.vorlage_key == OBJEKT_VORLAGE:
+        termine = objekttermine_aktiv(session, vorgang)
+        if termin is not None and termin not in termine and termin.beginn is not None:
+            termine = sorted(termine + [termin], key=lambda t: (t.beginn or datetime.max))
+    betreff, body_html, _ = vorlage_rendern(session, eintrag.vorlage_key, vorgang, termin, sparte,
+                                            benutzer=ersteller, termine=termine)
     eintrag.betreff = betreff
     eintrag.body_html = body_html
-    if not (getattr(eintrag, "absender", "") or ""):
-        eintrag.absender = _absender(session)
-    if eintrag.vorlage_key in ("terminbestaetigung", "terminaenderung") \
+    if eintrag.vorlage_key == OBJEKT_VORLAGE and termine:
+        pfade = [ics_erstellen(session, t, vorgang) for t in termine]
+        eintrag.anhang_pfad = ";".join(p for p in pfade if p)[:500]
+    elif eintrag.vorlage_key in ("terminbestaetigung", "terminaenderung") \
             and termin is not None:
         eintrag.anhang_pfad = ics_erstellen(session, termin, vorgang)
     return True
@@ -913,11 +1244,14 @@ def _graph_senden(session: Session, an: str, betreff: str, body_html: str,
             })
         except OSError:
             continue
-    if anhang_pfad and Path(anhang_pfad).exists():
-        ics_bytes = Path(anhang_pfad).read_bytes()
+    # v31 (Phase 153): mehrere ICS je Mail (ein Eintrag je Objekttermin, „;“-getrennt)
+    for pfad in anhang_pfade(anhang_pfad):
+        if not Path(pfad).exists():
+            continue
+        ics_bytes = Path(pfad).read_bytes()
         anhaenge.append({
             "@odata.type": "#microsoft.graph.fileAttachment",
-            "name": Path(anhang_pfad).name,
+            "name": Path(pfad).name,
             # v23 (Phase 108, E4): Storno-ICS mit MIME-Methode CANCEL, damit
             # Outlook/Apple den Kundeneintrag entfernen statt ihn zu ergänzen
             "contentType": f"text/calendar; method={ics_methode(ics_bytes)}",
@@ -1040,21 +1374,25 @@ def _versand_fehlgeschlagen(session: Session, vorgang: Vorgang, eintrag: Kommuni
 
 
 def eintrag_verarbeiten(session: Session, eintrag: KommunikationLog) -> str:
-    """Einen fälligen Eintrag nach mail_modus verarbeiten (Plan 78). v29:
-    Absender termin@ ohne Fallback, Wiederholversuche, Status fehler mit
-    Vorgangsfeldern; Nurture-Einträge werden storniert; Erfolg setzt
-    mail_fehler zurück. Liefert protokolliert | gesendet | fehler |
-    wiederholung | storniert."""
+    """Einen fälligen Eintrag verarbeiten (Plan 78). v29: Absender termin@ ohne
+    Fallback, Wiederholversuche, Status fehler mit Vorgangsfeldern; ausgeblendete
+    Vorlagen (Nurture v29, nicht_erreicht v31) werden storniert; Erfolg setzt
+    mail_fehler zurück. v31 (Phase 159): Mailsperre – bei lead_v5.mail_versand_aktiv
+    = aus endet der Eintrag gerendert mit Status `gesperrt` (kein Graph-Aufruf, auch
+    nicht Testpostfach, keine fehler-Glocke); mail_modus ist keine Steuerung mehr
+    (bei „an“ geht die Mail an den Kunden). Liefert gesendet | gesperrt | fehler |
+    wiederholung | storniert | wartet_adresse."""
+    from app import lead_v5
     from app import leadmanagement as kern
     vorgang = session.get(Vorgang, eintrag.vorgang_id)
     if vorgang is None or not rendern(session, eintrag):
         eintrag.status = STATUS_FEHLER
         eintrag.fehler_text = "Vorgang fehlt"
         return STATUS_FEHLER
-    # v29: Nurture entfällt – Altbestand der Warteschlange wird storniert
+    # v29: Nurture entfällt / v31: nicht_erreicht entfällt – Altbestand wird storniert
     if eintrag.vorlage_key in VORLAGEN_AUSGEBLENDET:
         eintrag.status = "storniert"
-        eintrag.fehler_text = "Nurture entfällt (v29)"
+        eintrag.fehler_text = AUSGEBLENDET_GRUND.get(eintrag.vorlage_key, "Vorlage entfällt")
         return "storniert"
     # Prozess-Fix 27.09.2026: Termin-Mails nur fuer aktive, kuenftige
     # Termine - Umbuchung/No-Show stornieren zwar (leadmanagement.
@@ -1075,38 +1413,32 @@ def eintrag_verarbeiten(session: Session, eintrag: KommunikationLog) -> str:
         eintrag.status = STATUS_WARTET_ADRESSE
         eintrag.fehler_text = "wartet auf neue E-Mail-Adresse (unzustellbar)"
         return STATUS_WARTET_ADRESSE
-    modus = kern.parameter_holen(session, "mail_modus", "protokoll")
-    # Sendesperre: live ist nur bei lead_freigabe_modus = alle zulässig
-    if modus == "live" and kern.demo_aktiv(session):
-        modus = "protokoll"
-    eintrag.modus = modus
     eintrag.absender = _absender(session)
-    if modus == "protokoll":
-        eintrag.status = "protokolliert"
+    # v31 (PLAN_LEAD_V5 Phase 159): Mailsperre der Testphase – Eintrag bleibt gerendert
+    # (Vorschau/Protokoll sichtbar) mit Status gesperrt; kein Graph-Aufruf, auch nicht
+    # ins Testpostfach; keine fehler-Glocke; Aktivität für die Timeline
+    if not lead_v5.mail_versand_aktiv(session):
+        eintrag.status = STATUS_GESPERRT
+        eintrag.modus = STATUS_GESPERRT
         eintrag.gesendet_am = None
-    elif modus == "test":
-        testadresse = kern.parameter_holen(session, "mail_testadresse", "")
-        if not testadresse:
-            return _versand_fehlgeschlagen(session, vorgang, eintrag,
-                                           "mail_modus=test ohne mail_testadresse")
-        inline = inline_bilder_aus_html(session, eintrag.body_html)
-        erfolg, fehler = _graph_senden(
-            session, testadresse,
-            f"[TEST an {eintrag.an}] {eintrag.betreff}"[:300],
-            eintrag.body_html, eintrag.anhang_pfad, inline, vorgang=vorgang)
-        if not erfolg:
-            return _versand_fehlgeschlagen(session, vorgang, eintrag, fehler)
-        eintrag.status = "gesendet"
-        eintrag.gesendet_am = datetime.now()
-    else:   # live
-        inline = inline_bilder_aus_html(session, eintrag.body_html)
-        erfolg, fehler = _graph_senden(session, eintrag.an, eintrag.betreff,
-                                       eintrag.body_html, eintrag.anhang_pfad, inline,
-                                       vorgang=vorgang)
-        if not erfolg:
-            return _versand_fehlgeschlagen(session, vorgang, eintrag, fehler)
-        eintrag.status = "gesendet"
-        eintrag.gesendet_am = datetime.now()
+        eintrag.fehler_text = lead_v5.MAILSPERRE_HINWEIS[:500]
+        kern.aktivitaet(session, vorgang.id, "mail_aus",
+                        f"Mail gesperrt ({lead_v5.MAILSPERRE_HINWEIS}): "
+                        f"{vorlage_name(session, eintrag.vorlage_key)} – {eintrag.betreff}"[:4000],
+                        ergebnis=STATUS_GESPERRT)
+        return STATUS_GESPERRT
+    # Mailversand freigeschaltet: Versand an den Kunden über termin@ (mail_modus ist seit
+    # v31 keine Steuerung mehr – der Wert bleibt in den Lead-Einstellungen lesbar)
+    modus = "live"
+    eintrag.modus = modus
+    inline = inline_bilder_aus_html(session, eintrag.body_html)
+    erfolg, fehler = _graph_senden(session, eintrag.an, eintrag.betreff,
+                                   eintrag.body_html, eintrag.anhang_pfad, inline,
+                                   vorgang=vorgang)
+    if not erfolg:
+        return _versand_fehlgeschlagen(session, vorgang, eintrag, fehler)
+    eintrag.status = "gesendet"
+    eintrag.gesendet_am = datetime.now()
     eintrag.fehler_text = ""
     _mail_fehler_zuruecksetzen(session, vorgang)
     kern.aktivitaet(session, vorgang.id, "mail_aus",
@@ -1119,14 +1451,21 @@ def erneut_senden(session: Session, eintrag: KommunikationLog, benutzer=None) ->
     """„Erneut senden“ (Kartei/Warteschlange): Eintrag auf `geplant` mit
     sofortiger Fälligkeit, Versuchszähler 0, Empfänger = aktuelle Kundenadresse;
     gesendet wird durch den Lauf lead-mail (≤ 60 s). Kein Netzaufruf."""
+    from app import lead_v5
     from app import leadmanagement as kern
     vorgang = session.get(Vorgang, eintrag.vorgang_id)
     if vorgang is None:
         return False, "Vorgang fehlt."
     if vorgang.email_status == "ungueltig":
         return False, "E-Mail-Adresse ist unzustellbar – bitte zuerst die Adresse in der Kartei ändern."
+    # v31 (Phase 159): gesperrte Einträge werden beim Einschalten nicht automatisch
+    # nachgesendet [ANNAHME] – „Erneut senden“ ist der bewusste Klick dafür; solange die
+    # Sperre gilt, bleibt der Eintrag gesperrt
+    if not lead_v5.mail_versand_aktiv(session):
+        return False, f"{lead_v5.MAILSPERRE_HINWEIS} – der Eintrag bleibt in der Warteschlange (gesperrt)."
     # geplant ist erlaubt (Doppelklick/erneutes Anstoßen setzt nur Fälligkeit und Zähler)
-    if eintrag.status not in (STATUS_FEHLER, "gesendet", "protokolliert", "storniert", "geplant"):
+    if eintrag.status not in (STATUS_FEHLER, "gesendet", "protokolliert", "storniert", "geplant",
+                              STATUS_GESPERRT):
         return False, f"Eintrag steht auf „{eintrag.status}“ – erneuter Versand nicht möglich."
     kunde = session.get(Kunde, vorgang.kunde_id)
     if kunde is not None and kunde.email:
@@ -1181,6 +1520,84 @@ def kartei_hinweis(session: Session, vorgang: Vorgang) -> dict | None:
                 "warteschlange_url": "/lead-management/kommunikation?status=fehler",
                 "eintrag_id": eintrag.id if eintrag else None}
     return None
+
+
+# --- v31 (PLAN_LEAD_V5 Phase 158/159): Verträge mit K und B ---------------------------------
+
+def gesperrte_anzahl(session: Session) -> int:
+    """Zähler „Mails gesperrt: n“ der Lead-Einstellungen (Freischaltung, B)."""
+    return int(session.query(KommunikationLog)
+               .filter(KommunikationLog.status == STATUS_GESPERRT).count())
+
+
+def in_warteschlange(session: Session, vorgang: Vorgang, key: str, betreff: str, text: str,
+                     termin: VotTermin | None = None, anhaenge=None, benutzer=None):
+    """Vertrag mit K (Kartei-Dialog „E-Mail senden“): nachbearbeiteten Betreff/Text
+    als Warteschlangen-Eintrag ablegen – über kern.mail_planen (Kunden-E-Mail,
+    HV-Versandweg bei Termin-Mails, Doppelversand-Schutz, Bounce-Status), der
+    Text bleibt fest (kanal mail_fest – der Lauf lead-mail rendert ihn nicht neu),
+    ICS-Anhänge (Liste von Pfaden; fehlt sie bei Terminvorlagen, erzeugt rendern()
+    sie), Ersteller = benutzer, Aktivität. Die Mailsperre greift beim Versand-Job
+    (Status gesperrt). Liefert den Eintrag oder None (keine Mail: ohne E-Mail,
+    HV-Entwurf, bereits geplant) – die Meldung dazu steht in der letzten Aktivität."""
+    from app import leadmanagement as kern
+    text = (text or "").strip()
+    betreff = (betreff or "").strip()[:300]
+    eintrag = kern.mail_planen(session, vorgang, key, termin=termin)
+    if eintrag is None:
+        return None
+    eintrag.kanal = KANAL_FEST
+    if betreff:
+        eintrag.betreff = betreff
+    if text:
+        eintrag.body_html = text if ist_html(text) else _als_html(text)
+    if anhaenge:
+        pfade = [str(p) for p in (anhaenge if isinstance(anhaenge, (list, tuple)) else [anhaenge]) if p]
+        eintrag.anhang_pfad = ";".join(pfade)[:500] or None
+    if benutzer is not None:
+        eintrag.erstellt_von = benutzer.id
+    if not eintrag.betreff or not eintrag.body_html:
+        # leerer Dialogtext: Vorlage rendern, damit der Eintrag vollständig ist
+        eintrag.kanal = "mail"
+        rendern(session, eintrag)
+        eintrag.kanal = KANAL_FEST
+    elif eintrag.vorlage_key in TERMIN_PFLICHT_VORLAGEN and termin is not None and not eintrag.anhang_pfad:
+        rendern(session, eintrag)   # ergänzt nur das ICS (fester Text bleibt)
+    kern.aktivitaet(session, vorgang.id, "mail_aus",
+                    f"E-Mail aus der Kartei geplant: {vorlage_name(session, key)} – {eintrag.betreff}"[:4000],
+                    benutzer=benutzer)
+    session.flush()
+    return eintrag
+
+
+def falsche_nummer_mail(session: Session, vorgang: Vorgang, benutzer=None) -> tuple[bool, str]:
+    """Phase 158 (Vertrag mit B): Ergebnis „Falsche Nummer“ sendet zusätzlich die
+    Vorlage falsche_telefonnummer an die E-Mail-Adresse des Leads – nur bei
+    vorhandener Adresse (sonst (False, Hinweis)); Doppelversand-Schutz (kein zweiter
+    offener Eintrag), Absender termin@, Aktivität; {absender} = handelnder Benutzer
+    (erstellt_von). Die Mailsperre (Phase 159) setzt den Eintrag beim Versand-Job auf
+    gesperrt – der Hinweis steht in der Meldung."""
+    from app import lead_anrufliste, lead_v5
+    from app import leadmanagement as kern
+    kunde = session.get(Kunde, vorgang.kunde_id) if vorgang.kunde_id else None
+    if kunde is None or not (kunde.email or "").strip():
+        return False, ("Keine E-Mail-Adresse am Lead – Mail „Falsche Telefonnummer“ "
+                       "nicht möglich (Nummer manuell prüfen).")
+    if lead_anrufliste.mail_bereits_geplant(session, vorgang.id, FALSCHE_NUMMER_VORLAGE):
+        return False, "Mail „Falsche Telefonnummer“ ist bereits geplant (Doppelversand-Schutz)."
+    eintrag = kern.mail_planen(session, vorgang, FALSCHE_NUMMER_VORLAGE)
+    if eintrag is None:
+        return False, "Mail „Falsche Telefonnummer“ nicht geplant."
+    if benutzer is not None:
+        eintrag.erstellt_von = benutzer.id
+    kern.aktivitaet(session, vorgang.id, "mail_aus",
+                    f"Mail „Falsche Telefonnummer“ an {kunde.email} geplant (Vorlage {FALSCHE_NUMMER_VORLAGE})",
+                    benutzer=benutzer)
+    session.flush()
+    meldung = f"Mail „Falsche Telefonnummer“ an {kunde.email} geplant."
+    if not lead_v5.mail_versand_aktiv(session):
+        meldung += f" {lead_v5.MAILSPERRE_HINWEIS} – Eintrag bleibt gesperrt in der Warteschlange."
+    return True, meldung
 
 
 # --- Bounce (Unzustellbar), Adressänderung, Kundenantwort -----------------------------------
@@ -1353,7 +1770,9 @@ def eml_erstellen(session: Session, vorgang: Vorgang, termin: VotTermin,
     from email.utils import formataddr, formatdate, make_msgid
     kunde = session.get(Kunde, vorgang.kunde_id) if vorgang.kunde_id else None
     hv = hv_benutzer(session, vorgang, termin)
-    betreff, body_html, key = vorlage_rendern(session, vorlage_key, vorgang, termin)
+    termine = objekttermine_aktiv(session, vorgang) if vorlage_key == OBJEKT_VORLAGE else None
+    betreff, body_html, _ = vorlage_rendern(session, vorlage_key, vorgang, termin, termine=termine)
+    key = verwendeter_vorlagen_key(session, vorlage_key, termin, termine)
     text = html_zu_text(body_html)
     hinweise = []
     absender_hv = (hv.email or "").strip() if hv is not None else ""
@@ -1388,17 +1807,25 @@ def eml_erstellen(session: Session, vorgang: Vorgang, termin: VotTermin,
             html_teil.add_related(daten, maintype=haupt or "image", subtype=unter or "jpeg",
                                   cid=f"<{cid}>", filename=Path(pfad).name)
     ics_pfad = None
-    if termin is not None and termin.beginn is not None and kunde is not None:
+    ics_pfade: list[str] = []
+    if termine and kunde is not None:
+        # v31 (Phase 153): Objekt-Terminbestätigung – ein ICS je Objekttermin
+        ics_pfade = [p for p in (ics_erstellen(session, t, vorgang) for t in termine) if p]
+        ics_pfad = ics_pfade[0] if ics_pfade else None
+    elif termin is not None and termin.beginn is not None and kunde is not None:
         ics_pfad = ics_erstellen(session, termin, vorgang,
                                  methode="CANCEL" if vorlage_key == "terminabsage" else "REQUEST")
-    if ics_pfad and Path(ics_pfad).exists():
-        ics_bytes = Path(ics_pfad).read_bytes()
+        ics_pfade = [ics_pfad] if ics_pfad else []
+    for pfad in ics_pfade:
+        if not Path(pfad).exists():
+            continue
+        ics_bytes = Path(pfad).read_bytes()
         msg.add_attachment(ics_bytes, maintype="text", subtype="calendar",
-                           filename=Path(ics_pfad).name,
+                           filename=Path(pfad).name,
                            params={"method": ics_methode(ics_bytes)})
     return {"bytes": msg.as_bytes(), "dateiname": eml_dateiname(vorlage_key, kunde),
             "betreff": betreff, "absender": absender_hv, "an": an, "hinweise": hinweise,
-            "vorlage_key": key, "ics_pfad": ics_pfad}
+            "vorlage_key": key, "ics_pfad": ics_pfad, "ics_pfade": ics_pfade}
 
 
 def hv_versand_entwurf(session: Session, vorgang: Vorgang, termin, vorlage_key: str):
@@ -1448,14 +1875,24 @@ def termin_vorschau(session: Session, vorgang: Vorgang, termin: VotTermin,
                     vorlage_key: str = TERMIN_VORLAGE, mit_ics: bool = True) -> dict:
     """Fertige Terminbestätigung ohne Warteschlangen-Eintrag (HV-Vorschau, Route
     GET /lead/{id}/termin/{tid}/vorschau): {betreff, html, text, vorlage_key,
-    ics_pfad}. Kein Netzaufruf."""
-    betreff, body_html, key = vorlage_rendern(session, vorlage_key, vorgang, termin, vorschau=True)
+    ics_pfad, ics_pfade (v31: Objekt-Terminbestätigung mit ICS je Objekttermin),
+    fehlende}. Kein Netzaufruf."""
+    termine = objekttermine_aktiv(session, vorgang) if vorlage_key == OBJEKT_VORLAGE else None
+    betreff, body_html, fehlende = vorlage_rendern(session, vorlage_key, vorgang, termin,
+                                                   vorschau=True, termine=termine)
+    key = verwendeter_vorlagen_key(session, vorlage_key, termin, termine)
     ics_pfad = None
-    if mit_ics and termin is not None and termin.beginn is not None:
+    ics_pfade: list[str] = []
+    if mit_ics and termine:
+        ics_pfade = [p for p in (ics_erstellen(session, t, vorgang) for t in termine) if p]
+        ics_pfad = ics_pfade[0] if ics_pfade else None
+    elif mit_ics and termin is not None and termin.beginn is not None:
         ics_pfad = ics_erstellen(session, termin, vorgang,
                                  methode="CANCEL" if vorlage_key == "terminabsage" else "REQUEST")
+        ics_pfade = [ics_pfad] if ics_pfad else []
     return {"betreff": betreff, "html": body_html, "text": html_zu_text(body_html),
-            "vorlage_key": key, "ics_pfad": ics_pfad}
+            "vorlage_key": key, "ics_pfad": ics_pfad, "ics_pfade": ics_pfade,
+            "fehlende": fehlende}
 
 
 # --- Vorschau mit Demo-Lead (Editor) -------------------------------------------------------
@@ -1484,6 +1921,18 @@ def demo_lead_fuer_vorschau(session: Session, ad_id: int | None = None):
                        adresse=", ".join(t for t in (kunde.strasse, f"{kunde.plz} {kunde.ort}".strip()) if t),
                        status="geplant", typ="vot", ics_uid="friondo-vorschau@friondo.de")
     return vorgang, termin, kunde
+
+
+def demo_termine_fuer_vorschau(session: Session, vorgang, termin: VotTermin, kunde) -> list[VotTermin]:
+    """v31 (Phase 153): Editor-Vorschau der Objekt-Terminbestätigung – zwei transiente
+    Objekttermine (Hauptobjekt = Kundenadresse, zweites Beispielobjekt am selben Tag),
+    nichts wird gespeichert."""
+    zweiter = VotTermin(vorgang_id=termin.vorgang_id, ad_id=termin.ad_id,
+                        beginn=termin.beginn + timedelta(hours=3),
+                        ende=termin.beginn + timedelta(hours=3, minutes=90),
+                        adresse="Beispielweg 2, 47051 Duisburg (Objekt 2)",
+                        status="geplant", typ="vot", ics_uid="friondo-vorschau-2@friondo.de")
+    return [termin, zweiter]
 
 
 # --- Zulieferung docs/vorlagen/terminbestaetigung/ (wiederholbar) ---------------------------
@@ -1738,6 +2187,98 @@ def migration_v29_mails(session: Session) -> list[str]:
     return meldungen
 
 
+# --- Migration v31 (PLAN_LEAD_V5 Phase 153/156/158) ------------------------------------------
+
+def kuerzel_ersetzen(text: str, namen: dict | None = None) -> tuple[str, list[str]]:
+    """Wörtliche Kürzel „WP“, „PV“, „KL“, „WB“, „GW“ als eigenständige Wörter (auch
+    „WP+PV“/„WP/PV“ als Aufzählung) durch die Langform ersetzen. Platzhalter wie
+    {sparten} und Wortteile (z. B. „WPL“, „KLIMA“) bleiben. Liefert (neuer Text,
+    Liste „WP → Wärmepumpe“ je Ersetzung)."""
+    namen = namen or sparten_modul.SPARTEN_LANG
+    ersetzungen: list[str] = []
+    if not text:
+        return text or "", ersetzungen
+
+    def _kombi(m):
+        codes = re.findall("|".join(MIGRATION_KUERZEL), m.group(1))
+        lang = sparten_modul.sparten_text(codes, langnamen=namen)
+        ersetzungen.append(f"{m.group(1)} → {lang}")
+        return lang
+
+    def _einzeln(m):
+        lang = sparten_modul.langname(m.group(1), namen)
+        ersetzungen.append(f"{m.group(1)} → {lang}")
+        return lang
+    neu = _KUERZEL_PLUS_MUSTER.sub(_kombi, text)
+    neu = _KUERZEL_MUSTER.sub(_einzeln, neu)
+    return neu, ersetzungen
+
+
+def migration_v31_mails(session: Session) -> list[str]:
+    """Datenmigration v31 (migrate.py-Hook, idempotent, committet nicht):
+    (a) Vorlagen terminbestaetigung_objekte und falsche_telefonnummer anlegen, falls
+        nicht vorhanden (vorlagen_vorbelegen läuft davor – Meldung einmalig per Marker);
+    (b) in allen gespeicherten Lead-Vorlagentexten und Betreffs die Kürzel WP/PV/KL/WB/GW
+        als eigenständige Wörter durch die Langform ersetzen – je Vorlage eine Meldung
+        mit der Liste der Ersetzungen (Gesamtübersicht);
+    (c) offene Warteschlangen-Einträge nicht_erreicht stornieren (Protokoll: Meldung,
+        Einstellungs-Protokoll, Aktivität je Vorgang);
+    (d) Standardtexte im Code nutzen {sparten}/{sparten_interesse} (Langform) – keine
+        Datenänderung nötig."""
+    from app import leadmanagement as kern
+    from app.models import Einstellung, einstellung_holen, einstellung_setzen
+    meldungen: list[str] = []
+    # (a) neue Vorlagen
+    if einstellung_holen(session, "migration_v31_vorlagen", "") != "erledigt":
+        neu = []
+        for key in (OBJEKT_VORLAGE, FALSCHE_NUMMER_VORLAGE):
+            if not vorlage_vorhanden(session, key):
+                _, betreff, text = VORLAGEN_START[key]
+                vorlage_speichern(session, key, betreff, text, quelle="")
+                neu.append(key)
+        meldungen.append("v31: Vorlagen terminbestaetigung_objekte und falsche_telefonnummer "
+                         + ("angelegt" if neu else "vorhanden (vorbelegt)"))
+        einstellung_setzen(session, "migration_v31_vorlagen", "erledigt")
+    # (b) Kürzel → Langform in gespeicherten Vorlagentexten und Betreffs
+    namen = langnamen(session)
+    ersetzt_gesamt = 0
+    for zeile in (session.query(Einstellung)
+                  .filter(Einstellung.name.like("lead_vorlage_%"))
+                  .order_by(Einstellung.name)):
+        if not (zeile.name.endswith("_text") or zeile.name.endswith("_betreff")):
+            continue
+        neu, ersetzungen = kuerzel_ersetzen(zeile.wert or "", namen)
+        if not ersetzungen:
+            continue
+        zeile.wert = neu
+        ersetzt_gesamt += len(ersetzungen)
+        zaehlung: dict[str, int] = {}
+        for e in ersetzungen:
+            zaehlung[e] = zaehlung.get(e, 0) + 1
+        vorlage = zeile.name[len("lead_vorlage_"):]
+        meldungen.append(f"v31: Vorlage {vorlage}: "
+                         + ", ".join(f"{e} ({n}×)" if n > 1 else e for e, n in zaehlung.items()))
+    if ersetzt_gesamt:
+        meldungen.append(f"v31: {ersetzt_gesamt} Sparten-Kürzel in Vorlagen durch Langformen ersetzt")
+    # (c) offene nicht_erreicht-Einträge stornieren
+    storniert = 0
+    for e in (session.query(KommunikationLog)
+              .filter(KommunikationLog.vorlage_key == "nicht_erreicht",
+                      KommunikationLog.status.in_(("geplant", STATUS_WARTET_ADRESSE)))):
+        e.status = "storniert"
+        e.fehler_text = AUSGEBLENDET_GRUND["nicht_erreicht"]
+        kern.aktivitaet(session, e.vorgang_id, "mail_aus",
+                        "Mail „Nicht erreicht“ storniert – Vorlage entfällt (v31, Kaskade ohne "
+                        "Mail nach Versuch 2/4)", ergebnis="storniert")
+        storniert += 1
+    if storniert:
+        meldungen.append(f"v31: {storniert} offene Mail(s) nicht_erreicht storniert (Vorlage entfällt)")
+        kern.einstellungs_protokoll(session, f"v31: {storniert} offene Mail(s) „Nicht erreicht“ storniert "
+                                             "– Vorlage entfällt, Kaskade ohne Mail nach Versuch 2/4")
+    session.flush()
+    return meldungen
+
+
 # --- Versand-Job (Scheduler) --------------------------------------------------------------
 
 BLOCK_GROESSE = 50   # fällige Einträge je Lauf (wie bisher limit 50)
@@ -1781,7 +2322,7 @@ def versand_job() -> dict:
     eine eigene kurze Sitzung mit Commit – ein langsamer Versand oder ein Fehler
     hält die Schreibsperre nie für die übrigen Einträge."""
     from app.db import kurz
-    zaehler = {"protokolliert": 0, "gesendet": 0, "fehler": 0}
+    zaehler = {"gesendet": 0, "gesperrt": 0, "fehler": 0}
     with kurz() as s:
         ids = [zeile[0] for zeile in
                s.query(KommunikationLog.id)
@@ -1802,5 +2343,6 @@ def scheduler_starten() -> None:
     from app import scheduler
     scheduler.registrieren(
         "lead-mail", 60, versand_job,
-        beschreibung="Kunden-Mails der Lead-Warteschlange verarbeiten (Sendesperre je mail_modus)",
+        beschreibung="Kunden-Mails der Lead-Warteschlange verarbeiten (Mailsperre: "
+                     "mail_versand_aktiv, Absender termin@)",
         start_verzoegerung_s=150)

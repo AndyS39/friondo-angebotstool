@@ -51,9 +51,10 @@
             </select>
         </label>
         <fieldset><legend>Sparten für die Datei *</legend>
-            {% for s in sparten %}
-                <label style="display:inline-block; margin-right:0.8rem">
-                    <input type="checkbox" name="sparten" value="{{ s }}"> {{ s }}</label>
+            {#- v31 (Phase 157): inkl. MS/WA/DMS mit Langnamen (app/sparten.py) #}
+            {% for s, name in sparten_wahl | default([]) %}
+                <label style="display:inline-block; margin-right:0.8rem" title="{{ name }}">
+                    <input type="checkbox" name="sparten" value="{{ s }}"> {{ s }} <small class="dezent">{{ name }}</small></label>
             {% endfor %}
         </fieldset>
         <label><input type="checkbox" name="einwilligung_werbung">

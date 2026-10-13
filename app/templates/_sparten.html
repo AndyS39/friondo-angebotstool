@@ -3,8 +3,10 @@
    (grau, durchgestrichen). chip() für reine Anzeige (Erfassungs-/
    Angebotsliste), in der Lead-Liste sitzen die Chips als Buttons. #}
 
+{# v31 (PLAN_LEAD_V5 Phase 157): MS/WA/DMS wie in app/sparten.py (gemeinsame Liste) #}
 {% set NAMEN = {'WP': 'Wärmepumpe', 'PV': 'Photovoltaik',
-                'KL': 'Klimaanlage', 'WB': 'Wallbox', 'GW': 'Gewerbe'} %}
+                'KL': 'Klimaanlage', 'WB': 'Wallbox', 'GW': 'Gewerbe',
+                'MS': 'Mieterstrom', 'WA': 'Wasser', 'DMS': 'Denkmalschutz'} %}
 {% set ZUSTAND = {'erfasst': 'erfasst', 'offen': 'noch offen',
                   'ausgeblendet': 'ausgeblendet (kein Bedarf)'} %}
 

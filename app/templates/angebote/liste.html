@@ -1,12 +1,22 @@
 {% extends "base.html" %}
 {% import "_interesse.html" as interesse_ui %}
 {% import "_sparten.html" as sparten_ui %}
-{% from "_komponenten.html" import status_badge %}
+{% from "_komponenten.html" import status_badge, verfolgung_chip %}
 {% from "_symbole.html" import symbol %}
 
 {% block titel %}Angebote – Friondo Angebotstool{% endblock %}
 
 {% block inhalt %}
+{# v32 (PLAN_V19 Phase 163): Spalte „Verfolgung“ + Filter nach Verfolgungsstufe. Der
+   Query-Parameter `verfolgung` wird vom Router gesetzt (M: verfolgung.filter_anwenden,
+   Kontext verfolgung_filter/verfolgung_werte) – bis dahin Rückfall auf `verfolgung` und
+   die festen fünf Stufen. #}
+<link rel="stylesheet" href="/static/verfolgung.css?v={{ css_version }}">
+{% set vf_filter = verfolgung_filter if verfolgung_filter is defined and verfolgung_filter else (verfolgung | default('')) %}
+{% set vf_werte = verfolgung_werte if verfolgung_werte is defined and verfolgung_werte else [
+    ('versendet', 'Versendet'), ('nachgefasst', 'Nachgefasst'),
+    ('bestellung_angekuendigt', 'Bestellung angekündigt'), ('angenommen', 'Angenommen'),
+    ('abgelehnt', 'Abgelehnt')] %}
 <div class="seitenkopf">
     <h1>Angebote</h1>
     <a class="knopf" href="/erfassung/neu"
@@ -33,10 +43,16 @@
     </select>
     <select name="verfolgung" title="Verfolgung">
         <option value="">Verfolgung: alle</option>
-        <option value="faellig" {{ 'selected' if verfolgung == 'faellig' }}>Wiedervorlage fällig</option>
-        <option value="heiss" {{ 'selected' if verfolgung == 'heiss' }}>🔥 heiß</option>
-        <option value="warm" {{ 'selected' if verfolgung == 'warm' }}>🌤 warm</option>
-        <option value="kalt" {{ 'selected' if verfolgung == 'kalt' }}>❄ kalt</option>
+        <option value="faellig" {{ 'selected' if vf_filter == 'faellig' }}>Wiedervorlage fällig</option>
+        <option value="heiss" {{ 'selected' if vf_filter == 'heiss' }}>🔥 heiß</option>
+        <option value="warm" {{ 'selected' if vf_filter == 'warm' }}>🌤 warm</option>
+        <option value="kalt" {{ 'selected' if vf_filter == 'kalt' }}>❄ kalt</option>
+        <optgroup label="Verfolgungsstatus (v32)">
+        {% for wert, text in vf_werte %}
+            {% if wert is mapping %}{% set wert, text = wert.key, wert.text %}{% endif %}
+            <option value="{{ wert }}" {{ 'selected' if vf_filter == wert }}>{{ text }}</option>
+        {% endfor %}
+        </optgroup>
     </select>
     <select name="sparte" title="Sparte">
         <option value="">Alle Sparten</option>
@@ -59,7 +75,7 @@
         <option value="vertriebler" {{ 'selected' if sortierung == 'vertriebler' }}>Sortierung: Vertriebler</option>
     </select>
     <button class="knopf" type="submit">Filtern</button>
-    {% if q or status or interesse or vertriebler_id or sortierung != 'nummer' or kanal or verfolgung %}
+    {% if q or status or interesse or vertriebler_id or sortierung != 'nummer' or kanal or vf_filter %}
         <a class="knopf klein zweitrangig" href="/angebote">Zurücksetzen</a>
     {% endif %}
 </form>
@@ -74,6 +90,7 @@
             <th>Vertriebler</th>
             <th>Datum</th>
             <th>Status</th>
+            <th title="Verfolgung des Vorgangs: Stufe, Hot-Ampel, Wiedervorlage">Verfolgung</th>
             <th class="rechts">Brutto</th>
             {% if kalk_sichtbar %}<th class="rechts" title="Deckungsbeitrag (intern)">DB</th>{% endif %}
             <th></th>
@@ -103,7 +120,10 @@
             <td class="dezent">{% set vid = angebot_vertriebler.get(a.id) %}{{ vertriebler[vid].name if vid in vertriebler else '–' }}</td>
             <td>{{ a.datum.strftime('%d.%m.%Y') }}</td>
             {% set v = vorgaenge_map.get(a.vorgang_id) %}
-            <td>{{ status_badge(a.status) }}
+            <td>{{ status_badge(a.status) }}</td>
+            <td class="verfolgung-spalte">
+                {# v32 (PLAN_V19 Phase 163): Verfolgungs-Chip des Vorgangs + Ampel/Wiedervorlage (v10) #}
+                {% if v %}{{ verfolgung_chip(v.verfolgung_status, klein=True) }}{% endif %}
                 {% if v and v.verfolgung_ampel %}<span title="Verfolgung des Vorgangs: {{ v.verfolgung_ampel }}">{{ {'heiss': '🔥', 'warm': '🌤', 'kalt': '❄'}[v.verfolgung_ampel] }}</span>{% endif %}
                 {% if v and v.wiedervorlage_am %}
                     <br><span class="wv-datum {{ 'wv-faellig' if v.wiedervorlage_am <= heute }}"

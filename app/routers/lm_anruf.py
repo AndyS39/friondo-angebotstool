@@ -140,6 +140,8 @@ def rufnummer_suche(request: Request, session: Session = Depends(get_session)):
                                 status_code=303)
     return render(request, "leadmanagement/anruf_suche.html", aktiv="/lead-management",
                   eingabe=eingabe, ziffern=ergebnis["ziffern"], zu_kurz=ergebnis["zu_kurz"],
+                  # v31 (Phase 158): Endziffern-Suche ab 3 Ziffern, „endet mit“ zuerst
+                  voll=bool(ergebnis.get("voll")),
                   treffer=treffer, min_ziffern=lead_anrufliste.SUCHE_MIN_ZIFFERN,
                   demo_badge=kern.demo_aktiv(session),
                   # v25 (Phase 118): Phasen-Label aus dem Blatt Status („Kontaktiert“)

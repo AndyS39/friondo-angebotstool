@@ -19,7 +19,9 @@
 {{ lm_nav('vorlagen') }}
 <div class="seitenkopf">
     <h1>E-Mail-Vorlagen {% if demo_badge %}<span class="demo-badge">{{ badge_text }}</span>{% endif %}</h1>
-    <span class="dezent">Gruppe Lead-Management · Absender aller Lead-Mails ist der Parameter <code>absender_lead_mails</code> (termin@){% if not pflege %} · nur lesend{% endif %}</span>
+    <span class="dezent">Gruppe Lead-Management · Absender aller Lead-Mails ist der Parameter <code>absender_lead_mails</code> (termin@){% if not pflege %} · nur lesend{% endif %}
+        {# v31 (Phase 159): Mailsperre der Testphase statt mail_modus #}
+        {% if mail_versand_aktiv is defined and not mail_versand_aktiv %} · <span class="lm-rot" title="{{ mailsperre_hinweis }}">Mailversand gesperrt (Testphase)</span>{% endif %}</span>
     <div class="aktionen">
         {% if pflege %}
         <a class="knopf klein zweitrangig" href="/parametrierung/lead-einstellungen#lead-v4-pruefpunkte" title="Testmail, Zulieferung einspielen">Lead-Einstellungen</a>
@@ -52,7 +54,7 @@
                     <span class="dezent">{{ vertriebler.telefon or 'kein Telefon' }} · {{ vertriebler.email or 'keine E-Mail' }}</span><br>
                     <span class="dezent">Infotext: {{ (vertriebler.infotext or 'noch keiner')[:160] }}{% if vertriebler.infotext and vertriebler.infotext|length > 160 %}…{% endif %}</span><br>
                     <a class="dezent" href="/benutzer/{{ vertriebler.id }}/ad-profil">Bild, Infotext, Telefon und E-Mail im AD-Profil pflegen</a>
-                    {% if hv %}<br><span class="dezent lm-rot">Handelsvertreter-Leads: Versandweg <code>hv_versandweg</code> = offen – keine Kundenmail, To-Do mit Vorschau an den HV.</span>{% endif %}
+                    {% if hv %}<br><span class="dezent lm-rot">Handelsvertreter-Leads: Versandweg <code>hv_versandweg</code> = {{ hv_versandweg | default('entwurf') }} – keine Kundenmail aus dem Tool, Entwurf (.eml)/To-Do mit Vorschau an den HV.</span>{% endif %}
                 </div>
             </div>
             {% endif %}
@@ -97,7 +99,15 @@
                 <code>{vertriebler_block}</code> (Bild, Name, Telefon, E-Mail, Infotext aus der Benutzerverwaltung) oder ein
                 Bereich zwischen <code>{{ block_start }}</code> und <code>{{ block_ende }}</code> (eigener Text, z. B. aus der Zulieferung).
                 <code>{sparten_hinweise}</code> fügt je Interesse die Punkteliste aus dem Blatt „Terminhinweise“ ein
-                {% if hinweise_fehlen %}– <span class="lm-rot">Platzhalter „(Punkte folgen)“ für {{ hinweise_fehlen|join(', ') }} (OFFEN 1)</span>{% endif %}.</p>
+                {% if hinweise_fehlen %}– <span class="lm-rot">Platzhalter „(Punkte folgen)“ für {{ hinweise_fehlen|join(', ') }} (OFFEN 1)</span>{% endif %}.
+                <code>{objektadresse}</code> = Adresse des Objekts des Termins (bei einem Objekt die Kundenadresse, v31).</p>
+            {% endif %}
+            {% if objektvorlage | default(false) %}
+            {# v31 (Phase 153): Terminbestätigung bei mehreren Objekten #}
+            <p class="dezent lmv-hinweis">Diese Vorlage geht als <strong>eine</strong> Mail an Kunden mit mehreren Objektterminen:
+                <code>{objektliste}</code> = je Objekt Bezeichnung, Adresse, Datum, Uhrzeit und Vertriebler (Tabelle),
+                <code>{termin_datum}</code> = Tag bzw. Zeitraum der Termine, <code>{vertriebler_block}</code> = Vertriebler des
+                ersten Termins; je Objekttermin ein ICS im Anhang (eigene UID). Die Vorschau zeigt zwei Beispiel-Objekte.</p>
             {% endif %}
             {% if pflege %}
             <div class="formzeile lmv-aktionen">
@@ -127,9 +137,12 @@
             <p class="lmv-vorschau-betreff"><strong>Betreff:</strong> <span id="lmv-vorschau-betreff">{{ vorschau.betreff }}</span></p>
             <div class="mail-vorschau lmv-mail" id="lmv-vorschau-html">{{ vorschau.html | safe }}</div>
             <p class="dezent">Terminbestätigung/-änderung erhalten automatisch den ICS-Kalendereintrag, das Vertriebler-Bild geht als
-                Inline-Anhang (CID) mit. Versand nach Mail-Modus (Lead-Einstellungen): protokoll = rendern ohne Senden
-                (Demo-Sendesperre), test = an die Testadresse mit [TEST]-Präfix, live = an den Kunden (nur bei Freigabe „alle“) –
-                ohne Senderecht bleibt die Mail mit Status „fehler“ in der Warteschlange (kein Fallback).</p>
+                Inline-Anhang (CID) mit. Sparten stehen in Kundentexten ausgeschrieben (<code>{sparten}</code> = „Wärmepumpe und
+                Photovoltaik“, <code>{sparten_interesse}</code> = „Interesse an einer Wärmepumpe“, v31).
+                {% if mail_versand_aktiv is defined and not mail_versand_aktiv %}<strong>{{ mailsperre_hinweis }}</strong> – jede Vorlagen-Mail
+                bleibt mit Status „gesperrt“ in der Warteschlange (Vorschau sichtbar, kein Versand, auch nicht ins Testpostfach);
+                Freischaltung in den Lead-Einstellungen → Freischaltung.{% else %}Versand an den Kunden über termin@ (Lauf lead-mail) –
+                ohne Senderecht bleibt die Mail mit Status „fehler“ in der Warteschlange (kein Fallback).{% endif %}</p>
         </section>
     </section>
 </div>

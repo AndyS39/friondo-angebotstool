@@ -96,12 +96,14 @@ def mit_wiederholung(funktion, versuche=12, pause=0.5):
 
 
 def aufraeumen(s):
+    from app.models import VorgangObjekt
     s.rollback()
     for k in s.query(Kunde).filter(Kunde.nachname.like(f"{NACHNAME}%")):
         for v in s.query(Vorgang).filter_by(kunde_id=k.id):
             s.query(LeadAktivitaet).filter_by(vorgang_id=v.id).delete()
             s.query(KommunikationLog).filter_by(vorgang_id=v.id).delete()
             s.query(VotTermin).filter_by(vorgang_id=v.id).delete()
+            s.query(VorgangObjekt).filter_by(vorgang_id=v.id).delete()   # v31: Objekte je Vorgang
             s.query(LeadQualifizierung).filter_by(vorgang_id=v.id).delete()
             s.query(VorgangsNotiz).filter_by(vorgang_id=v.id).delete()
             s.query(Todo).filter_by(vorgang_id=v.id).delete()
@@ -359,12 +361,11 @@ class Routen(Basis):
         # Qualifizierungsroute bleibt erreichbar, zeigt bei score_aktiv aus den Hinweis
         seite = self.client.get(f"/lead-management/lead/{v.id}/qualifizierung/WP").text
         self.assertIn("Qualifizierung ist abgeschaltet", seite)
-        # „Meine Termine“ ist die Seite des Außendienstes (F6): im Demo-Modus 404 (Plan 81),
-        # bei Freigabe „alle“ für den angestellten AD erreichbar
+        # „Meine Termine“ ist die Seite des Außendienstes (F6) – v31 (PLAN_LEAD_V5 Phase 159):
+        # der Demo-Modus ist beendet (Freigabe „alle“), die Seite ist für den angestellten AD
+        # immer erreichbar (bis v30 im Demo-Modus 404, Plan 81)
         ad_client = self.cookie_client(self.horst)
-        self.assertEqual(ad_client.get("/lead-management/meine-termine", follow_redirects=False).status_code, 404)
-        with mock.patch.object(kern, "freigabe_modus", return_value="alle"):
-            r = ad_client.get("/lead-management/meine-termine", follow_redirects=False)
+        r = ad_client.get("/lead-management/meine-termine", follow_redirects=False)
         self.assertEqual(r.status_code, 200, r.status_code)
 
     def test_nav_keys_aller_seiten_konsistent(self):
@@ -695,14 +696,16 @@ class F_Kartei(Basis):
         self.assertIn("Terminierung", eigen)
         self.assertIn(">Kontaktiert<", eigen)                       # Statuskette mit Label aus dem Blatt Status
         self.assertNotIn(">Qualifiziert<", eigen)
-        # Reiter Termin · Anrufnotizen · E-Mail-Verlauf · Timeline, Termin als Standard
+        # v31 (PLAN_LEAD_V5 Phase 155): Reiter Anruf · E-Mail · Timeline, Anruf als Standard –
+        # der Reiter „Termin“ ist im Block Termine aufgegangen
         tabs = re.findall(r'id="tab-([a-z]+)"', eigen)
-        self.assertEqual(tabs, ["termin", "anrufe", "mails", "timeline"])
-        self.assertIn('id="tab-termin" class="lk-tab" data-tab="termin"', eigen)
-        self.assertRegex(eigen, r'id="tab-termin"[^>]*aria-selected="true"')
-        # Blöcke Termine · Angebote · Erfassungen · Projekt · Anhänge · To-Dos
+        self.assertEqual(tabs, ["anrufe", "mails", "timeline"])
+        self.assertIn('id="tab-anrufe" class="lk-tab" data-tab="anrufe"', eigen)
+        self.assertRegex(eigen, r'id="tab-anrufe"[^>]*aria-selected="true"')
+        # Bereiche: To-Dos (neben den Notizen, vor dem Kundeninfo-Block), Objekte (im Kundeninfo-
+        # Block), dann die Blöcke Termine · Angebote · Erfassungen · Projekt · Anhänge
         self.assertEqual(re.findall(r'data-bereich="([a-z]+)"', eigen),
-                         ["termine", "angebote", "erfassungen", "projekt", "anhaenge", "todos"])
+                         ["todos", "objekte", "termine", "angebote", "erfassungen", "projekt", "anhaenge"])
         # Kundeninfo: Anrede/Vorname/Nachname sichtbar, Wunschzeiten bleiben, Eingangsdatum nur Anzeige
         for name in ("anrede", "vorname", "nachname", "telefon", "email", "strasse", "plz", "ort",
                      "vertriebskanal", "objektart"):
@@ -848,14 +851,15 @@ class I_NichtErreicht(Basis):
         self.assertIsNone(akt.naechste_aktion_am)
         self.assertLessEqual(abs((akt.zeitpunkt - vor).total_seconds()), 60)
         self.assertEqual(self.mails(v.id), [])
-        # 2. Versuch: Mail nicht_erreicht geplant; mitgesendetes wiedervorlage_am wird ignoriert
+        # 2. Versuch: v31 (PLAN_LEAD_V5 Phase 156) – KEINE Mail mehr (Blatt Kaskade Versuch 2 =
+        # keine, Vorlage nicht_erreicht entfällt); mitgesendetes wiedervorlage_am wird ignoriert
         r = self.client.post(f"/lead-management/anruf/{v.id}",
                              data={"ergebnis": "nicht_erreicht", "wiedervorlage_am": "2031-01-01T10:00"},
                              follow_redirects=False)
-        self.assertEqual(self.meldung(r), "Nicht erreicht protokolliert (Versuch 2) – Mail geplant.")
+        self.assertEqual(self.meldung(r), "Nicht erreicht protokolliert (Versuch 2).")
         self.s.expire_all()
         self.assertIsNone(self.s.get(Vorgang, v.id).naechste_aktion_am)
-        self.assertEqual(self.mails(v.id), [("nicht_erreicht", "geplant")])
+        self.assertEqual(self.mails(v.id), [])
         # 3. Versuch (Kontrollwert 1): Aktivität mit Zeitstempel, WV leer, 3 Punkte orange, keine Mail
         r = self.client.post(f"/lead-management/anruf/{v.id}", data={"ergebnis": "nicht_erreicht"},
                              follow_redirects=False)
@@ -864,7 +868,7 @@ class I_NichtErreicht(Basis):
         v = self.s.get(Vorgang, v.id)
         self.assertEqual(v.versuch_nr, 3)
         self.assertIsNone(v.naechste_aktion_am)
-        self.assertEqual(self.mails(v.id), [("nicht_erreicht", "geplant")])     # keine neue Mail
+        self.assertEqual(self.mails(v.id), [])     # keine Mail
         akt = self.anrufe(v.id)[-1]
         akt.zeitpunkt = datetime.now().replace(hour=14, minute=5, second=0, microsecond=0)
         self.s.commit()
@@ -880,13 +884,11 @@ class I_NichtErreicht(Basis):
         self.assertNotIn('id="dlg-nichterreicht"', self.kartei(v).text)
         self.assertNotIn('id="dlg-nichterreicht"', self.client.get("/lead-management/anrufliste").text)
         self.assertIn('id="lm-direkt-form"', self.kartei(v).text)
-        # 4. Versuch: zweite Mail (erste gilt als versendet); dann bis zur Sperre
-        for m in self.s.query(KommunikationLog).filter_by(vorgang_id=v.id, vorlage_key="nicht_erreicht"):
-            m.status = "protokolliert"
-        self.s.commit()
+        # 4. Versuch: v31 – ebenfalls keine Mail (Kaskade Versuch 4 = keine); dann bis zur Sperre
         r = self.client.post(f"/lead-management/anruf/{v.id}", data={"ergebnis": "mailbox"},
                              follow_redirects=False)
-        self.assertEqual(self.meldung(r), "Mailbox protokolliert (Versuch 4) – Mail geplant.")
+        self.assertEqual(self.meldung(r), "Mailbox protokolliert (Versuch 4).")
+        self.assertEqual(self.mails(v.id), [])
         for _ in range(5, maximal):
             self.client.post(f"/lead-management/anruf/{v.id}", data={"ergebnis": "nicht_erreicht"},
                              follow_redirects=False)
@@ -900,6 +902,7 @@ class I_NichtErreicht(Basis):
         offen = {k for k, status in self.mails(v.id) if status == "geplant"}
         self.assertTrue({"disqualifiziert"} <= offen)
         self.assertNotIn("nurture", offen)          # v29 (Phase 142): Nurture entfällt
+        self.assertNotIn("nicht_erreicht", offen)   # v31 (Phase 156): nur noch Disqualifiziert
         self.assertTrue(lead_anrufliste.versuche_gesperrt(self.s, v))
         # Sperre nach dem letzten Versuch: kein weiterer Zähler, keine Aktivität
         r = self.client.post(f"/lead-management/anruf/{v.id}", data={"ergebnis": "nicht_erreicht"},

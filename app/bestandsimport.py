@@ -670,6 +670,8 @@ def rueckgaengig(session: Session, imp: Bestandsimport) -> tuple[int, list[str]]
                     VorgangsNotiz.vorgang_id == vorgang.id).delete()
                 session.query(GalerieDatei).filter(
                     GalerieDatei.vorgang_id == vorgang.id).delete()
+                from app import objekte   # v31: Objekte des Vorgangs mitlöschen
+                objekte.objekte_loeschen(session, vorgang.id)
                 session.delete(vorgang)
         session.flush()
         if neu.get("kunde_id"):

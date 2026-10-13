@@ -31,6 +31,7 @@
                 <a href="/lead-management/vorlagen?vorlage={{ e.key }}" {% if e.key == schluessel %}aria-current="page"{% endif %}>
                     <span class="lmv-name">{{ e.name }}</span>
                     {% if e.benutzer_id and not e.vorhanden %}<span class="abzeichen lmv-badge" title="Noch keine eigene Vorlage – der Versand nutzt die Standard-Terminbestätigung">Standard</span>{% endif %}
+                    {% if e.key == 'terminbestaetigung_objekte' %}<span class="abzeichen lmv-badge" title="Eine Bestätigung für alle Objekte eines Kunden – Platzhalter {objektliste}, ICS je Objekttermin (v31)">Objekte</span>{% endif %}
                     {% if e.hv %}<span class="abzeichen lmv-badge" title="Handelsvertreter – Versandweg laut hv_versandweg">HV</span>{% endif %}
                     {% if e.quelle == 'zulieferung' %}<span class="abzeichen lmv-badge" title="Aus der Zulieferung docs/vorlagen eingespielt">Z</span>{% endif %}
                 </a>
@@ -41,5 +42,6 @@
         </ul>
     {% if kat.aufklappbar %}</details>{% else %}</div>{% endif %}
     {% endfor %}
-    <p class="dezent lmv-fuss">Nurture ist seit v29 entfallen (Vorlage ausgeblendet). Vorlagen pflegen Admin und Innendienst.</p>
+    {# v31 (Phase 156): „Nicht erreicht“ entfällt – die Kaskade schickt nach Versuch 2/4 keine Mail mehr #}
+    <p class="dezent lmv-fuss">Nurture (v29) und „Nicht erreicht“ (v31) sind entfallen – Vorlagen ausgeblendet, Datensätze bleiben. Vorlagen pflegen Admin und Innendienst.</p>
 </nav>

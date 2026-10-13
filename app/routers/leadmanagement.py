@@ -6,6 +6,7 @@
 # Platzhalterseite (Verhalten wie bisher), auf allen anderen Routen 404.
 
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 from urllib.parse import quote_plus
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -67,7 +68,10 @@ def uebersicht(request: Request, session: Session = Depends(get_session)):
 
 # --- Phase 75: Schnellanlage, Import, Posteingang unklar ---------------------------
 
-SPARTEN = ("WP", "PV", "KL", "WB", "GW")
+# v31 (PLAN_LEAD_V5 Phase 157): Sparten inkl. MS/WA/DMS aus app/sparten.py
+from app import sparten as sparten_modul
+SPARTEN = tuple(sparten_modul.SPARTEN)
+SPARTEN_WAHL = [(code, sparten_modul.SPARTEN_LANG.get(code, code)) for code in SPARTEN]
 
 
 def _quellen(session: Session) -> list[LeadQuelle]:
@@ -93,12 +97,15 @@ def lead_akte(request: Request, vorgang_id: int,
 def schnellanlage_formular(request: Request,
                                  session: Session = Depends(get_session)):
     _gate(request, session)
+    from app import lead_dropdowns
     return render(request, "leadmanagement/neu.html", aktiv="/lead-management",
-                  hv_liste=lead_v2.handelsvertreter_liste(session),   # v23 (Phase 109, G3)
+                  # v31 (Phase 156): Außendienst-Auswahl ohne Handelsvertreter
+                  # (app/lead_dropdowns.ad_auswahl); HV nur über die Sammelaktion (v29)
+                  ad_liste=lead_dropdowns.ad_auswahl_dicts(session),
                   mobil=True, quellen=_quellen(session),
                   kampagnen=session.query(Kampagne)
                   .filter(Kampagne.aktiv.is_(True)).order_by(Kampagne.name).all(),
-                  wunschzeiten=_wunschzeiten_liste(), sparten=SPARTEN,
+                  wunschzeiten=_wunschzeiten_liste(), sparten=SPARTEN, sparten_wahl=SPARTEN_WAHL,
                   daten={}, duplikat=None,
                   meldung=request.query_params.get("meldung", ""))
 
@@ -141,14 +148,16 @@ def schnellanlage(request: Request, session: Session = Depends(get_session)):
             name=f"{daten['vorname']} {daten['nachname']}",
             plz=daten["plz"], strasse=daten["strasse"])
     if fehler or duplikat is not None:
+        from app import lead_dropdowns
         return render(request, "leadmanagement/neu.html",
                       aktiv="/lead-management", mobil=True,
                       quellen=_quellen(session),
+                      ad_liste=lead_dropdowns.ad_auswahl_dicts(session),
                       kampagnen=session.query(Kampagne)
                       .filter(Kampagne.aktiv.is_(True)).order_by(Kampagne.name).all(),
-                      wunschzeiten=_wunschzeiten_liste(), sparten=SPARTEN,
+                      wunschzeiten=_wunschzeiten_liste(), sparten=SPARTEN, sparten_wahl=SPARTEN_WAHL,
                       daten=dict(daten, quelle_id=form.get("quelle_id"),
-                                 kampagne_id=form.get("kampagne_id")),
+                                 kampagne_id=form.get("kampagne_id"), ad_id=form.get("ad_id")),
                       duplikat=duplikat, phasen_namen=LEAD_PHASEN_NAMEN,
                       meldung=" ".join(fehler))
     vorgang, status = kern.lead_anlegen(session, daten, quelle, "manuell",
@@ -220,7 +229,7 @@ def import_formular(request: Request,
                   aktiv="/lead-management", quellen=_quellen(session),
                   kampagnen=session.query(Kampagne)
                   .filter(Kampagne.aktiv.is_(True)).order_by(Kampagne.name).all(),
-                  sparten=SPARTEN, schritt="upload", zeilen=[], kopf=[],
+                  sparten=SPARTEN, sparten_wahl=SPARTEN_WAHL, schritt="upload", zeilen=[], kopf=[],
                   zuordnung={}, felder=_IMPORT_FELDER, token="", form_daten={},
                   duplikate={}, protokoll=None,
                   meldung=request.query_params.get("meldung", ""))
@@ -242,7 +251,7 @@ def import_verarbeiten(request: Request,
     kontext = dict(aktiv="/lead-management", quellen=_quellen(session),
                    kampagnen=session.query(Kampagne)
                    .filter(Kampagne.aktiv.is_(True)).order_by(Kampagne.name).all(),
-                   sparten=SPARTEN, felder=_IMPORT_FELDER, protokoll=None,
+                   sparten=SPARTEN, sparten_wahl=SPARTEN_WAHL, felder=_IMPORT_FELDER, protokoll=None,
                    duplikate={}, meldung="")
 
     if schritt == "upload":
@@ -461,6 +470,8 @@ def anrufliste_voll(request: Request,
                   demo_badge=kern.demo_aktiv(session),
                   versuche_max=kern.versuche_max(session),
                   sperre_meldung=lead_anrufliste.SPERRE_MELDUNG,
+                  # v31 (Phase 153): Badge-Farbe „Großkunde“ (Parameter grosskunde_farbe)
+                  grosskunde_farbe=__import__("app.lead_boards", fromlist=["grosskunde_farbe"]).grosskunde_farbe(session),
                   # Redirect-Ziel der Ergebnis-Formulare: aktuelle Filter ohne Meldung
                   zurueck_pfad="/lead-management/anrufliste" + (
                       "?" + "&".join(f"{quote_plus(k)}={quote_plus(v)}"
@@ -525,6 +536,10 @@ def anruf_ergebnis(request: Request, vorgang_id: int,
             return RedirectResponse(
                 lead_anrufliste.mit_meldung(zurueck, "Rückruf: Datum/Uhrzeit ist Pflicht."),
                 status_code=303)
+        # v31 (PLAN_LEAD_V5 Phase 158): Rückruf-Uhrzeit nur in 5-Minuten-Schritten
+        # (Dialog step=300, serverseitig lead_v5.runden_5min: 14:07 → 14:05, 14:08 → 14:10)
+        from app import lead_v5
+        naechste = lead_v5.runden_5min(naechste)
         vorgang.naechste_aktion_am = naechste
         meldung = f"Rückruf {naechste.strftime('%d.%m.%Y %H:%M')} gemerkt."
     if ergebnis == "kein_interesse":
@@ -588,15 +603,21 @@ def anruf_ergebnis(request: Request, vorgang_id: int,
         meldung = ("Falsche Nummer – Wiedervorlage "
                    + vorgang.naechste_aktion_am.strftime("%d.%m.%Y %H:%M")
                    + " (Nummer prüfen).")
+        # v31 (PLAN_LEAD_V5 Phase 158): zusätzlich Kundenmail „falsche_telefonnummer“
+        # (Vorlage, Doppelversand-Schutz, Mailsperre – Agent T in app/lead_mail.py;
+        # Vertrag T 4.5: ok, hinweis = lead_mail.falsche_nummer_mail(session, vorgang,
+        # benutzer)). Ohne E-Mail-Adresse nur ein Hinweis, keine Mail.
+        meldung += " " + _falsche_nummer_mail(session, vorgang, benutzer)
     elif ergebnis == "kein_interesse":
         vorgang.lead_phase = "unqualifiziert"
         vorgang.unqualifiziert_grund = grund
         vorgang.unqualifiziert_text = text
         vorgang.naechste_aktion_am = None
+        # v31 (Phase 157): Label „Disqualifiziert“ (Key unqualifiziert bleibt)
         kern.aktivitaet(session, vorgang.id, "status",
-                        f"Unqualifiziert: {grund}"
+                        f"Disqualifiziert: {grund}"
                         + (f" – {text}" if text else ""), benutzer=benutzer)
-        meldung = f"Kein Interesse – unqualifiziert ({grund})."
+        meldung = f"Kein Interesse – disqualifiziert ({grund})."
     if ergebnis in ("rueckruf_gewuenscht", "kein_interesse"):
         # C4-d: Anlass der Kaskaden-Mails entfallen (Kontakt hergestellt bzw.
         # Absage) – offene nicht_erreicht/disqualifiziert stornieren (v29 ohne nurture)
@@ -609,6 +630,19 @@ def anruf_ergebnis(request: Request, vorgang_id: int,
         meldung += f" Dauer {lead_anrufliste.dauer_text(dauer_sek)}."
     session.commit()
     return RedirectResponse(lead_anrufliste.mit_meldung(zurueck, meldung), status_code=303)
+
+
+def _falsche_nummer_mail(session: Session, vorgang: Vorgang, benutzer) -> str:
+    """v31 (PLAN_LEAD_V5 Phase 158, Vertrag T 4.5): Vorlage falsche_telefonnummer über
+    lead_mail.falsche_nummer_mail(session, vorgang, benutzer) -> (ok, hinweis); der
+    Hinweis (geplant / keine Adresse / bereits geplant / Mailsperre) wird an die Meldung
+    gehängt. Die Anruf-Protokollierung darf daran nie scheitern."""
+    from app import lead_mail
+    try:
+        _ok, hinweis = lead_mail.falsche_nummer_mail(session, vorgang, benutzer)
+    except Exception as problem:   # noqa: BLE001 – Protokollierung des Anrufs geht vor
+        return f"Kundenmail „Falsche Telefonnummer“ nicht geplant: {problem}"
+    return hinweis or "Kundenmail „Falsche Telefonnummer“ geplant."
 
 
 def _grund_pruefen(session: Session, phase: str, grund: str,
@@ -680,12 +714,13 @@ def unqualifiziert(request: Request, vorgang_id: int,
     vorgang.unqualifiziert_grund = grund
     vorgang.unqualifiziert_text = text
     vorgang.naechste_aktion_am = None
+    # v31 (Phase 157): Label „Disqualifiziert“ (Route/Key unqualifiziert bleiben)
     kern.aktivitaet(session, vorgang.id, "status",
-                    f"Unqualifiziert: {grund}" + (f" – {text}" if text else ""),
+                    f"Disqualifiziert: {grund}" + (f" – {text}" if text else ""),
                     benutzer=benutzer)
     session.commit()
     return RedirectResponse("/lead-management/anrufliste?meldung="
-                            + quote_plus(f"Unqualifiziert ({grund})."),
+                            + quote_plus(f"Disqualifiziert ({grund})."),
                             status_code=303)
 
 
@@ -1165,11 +1200,15 @@ def kommunikation(request: Request, vorgang_id: int,
         if not eintrag.betreff:
             lead_mail.rendern(session, eintrag)
     session.commit()
+    from app import lead_v5
     return render(request, "leadmanagement/kommunikation.html",
                   aktiv="/lead-management", vorgang=vorgang, kunde=kunde,
                   eintraege=eintraege,
                   mail_modus=kern.parameter_holen(session, "mail_modus",
                                                   "protokoll"),
+                  # v31 (Phase 159, Vertrag T 4.4): Mailsperre-Flags für Badge und Hinweis
+                  mail_versand_aktiv=lead_v5.mail_versand_aktiv(session),
+                  mailsperre_hinweis=lead_v5.MAILSPERRE_HINWEIS,
                   vorlagen=lead_mail.VORLAGEN_START,
                   meldung=request.query_params.get("meldung", ""))
 
@@ -1177,15 +1216,17 @@ def kommunikation(request: Request, vorgang_id: int,
 @router.get("/kommunikation")
 def kommunikation_warteschlange(request: Request, session: Session = Depends(get_session)):
     """v29 (PLAN_LEAD_V4 Phase 142, Vertrag L2): Warteschlangen-Seite aller Lead-Mails
-    – Filter ?status=fehler|wartet_adresse|geplant|gesendet (leer = alle offenen:
+    – Filter ?status=fehler|wartet_adresse|geplant|gesendet|gesperrt (leer = alle offenen:
     geplant, fehler, wartet_adresse), Spalten Absender/Versuche, Badges, bei
     `fehler` der Knopf „Erneut senden“ → POST /lead-management/mail/{id}/erneut
     (Route baut L2: setzt auf geplant mit sofortiger Fälligkeit, Redirect zurück);
     gesendet wird nur durch den Lauf lead-mail."""
+    from app import lead_v5
     from app.models import KommunikationLog
     _gate(request, session)
     status = (request.query_params.get("status") or "").strip().lower()
-    if status not in ("fehler", "wartet_adresse", "geplant", "gesendet", ""):
+    # v31 (Phase 159, Vertrag T 4.4): Filter „gesperrt“ (Testphase-Einträge der Mailsperre)
+    if status not in ("fehler", "wartet_adresse", "geplant", "gesendet", "gesperrt", ""):
         status = ""
     abfrage = session.query(KommunikationLog)
     if status:
@@ -1209,6 +1250,8 @@ def kommunikation_warteschlange(request: Request, session: Session = Depends(get
                   aktiv="/lead-management", vorgang=None, kunde=None, eintraege=[],
                   liste=zeilen, status=status, zaehler=zaehler,
                   mail_modus=kern.parameter_holen(session, "mail_modus", "protokoll"),
+                  mail_versand_aktiv=lead_v5.mail_versand_aktiv(session),
+                  mailsperre_hinweis=lead_v5.MAILSPERRE_HINWEIS,
                   absender=kern.parameter_holen(session, "absender_lead_mails", "termin@friondo.de"),
                   vorlagen={}, meldung=request.query_params.get("meldung", ""))
 
@@ -1229,28 +1272,37 @@ def kommunikation_senden(request: Request, eintrag_id: int,
     eintrag.fehler_text = ""
     ergebnis = lead_mail.eintrag_verarbeiten(session, eintrag)
     session.commit()
-    # v29 (PLAN_LEAD_V4 Phase 142): Rückgabewerte des Versand-Jobs ohne Fallback
+    return RedirectResponse(
+        f"/lead-management/lead/{eintrag.vorgang_id}/kommunikation?meldung="
+        + quote_plus(_mail_ergebnis_text(ergebnis, eintrag)), status_code=303)
+
+
+def _mail_ergebnis_text(ergebnis: str, eintrag) -> str:
+    """Meldung zum Rückgabewert von lead_mail.eintrag_verarbeiten – v29 (PLAN_LEAD_V4
+    Phase 142) ohne Fallback; v31 (Phase 159, Vertrag T 4.4): „gesperrt“ = Mailsperre der
+    Testphase (gerendert, nicht gesendet)."""
     texte = {"protokolliert": "Protokolliert (Sendesperre – nicht gesendet).",
              "gesendet": "Gesendet.",
              "fehler": f"Fehler: {eintrag.fehler_text}",
              "wiederholung": (f"Versand fehlgeschlagen ({eintrag.fehler_text}) – der Lauf "
                               "lead-mail wiederholt in etwa einer Minute."),
              "wartet_adresse": "E-Mail-Adresse unzustellbar – wartet auf Adressänderung.",
-             "storniert": f"Storniert: {eintrag.fehler_text}"}
-    return RedirectResponse(
-        f"/lead-management/lead/{eintrag.vorgang_id}/kommunikation?meldung="
-        + quote_plus(texte.get(ergebnis, ergebnis)), status_code=303)
+             "storniert": f"Storniert: {eintrag.fehler_text}",
+             "gesperrt": "Testphase: nicht gesendet (gesperrt)."}
+    return texte.get(ergebnis, ergebnis)
 
 
 @router.post("/lead/{vorgang_id}/mail")
 def mail_mit_vorlage(request: Request, vorgang_id: int,
                            session: Session = Depends(get_session)):
-    """„Mail mit Vorlage“: Auswahl + Editierfeld; landet als geplanter
-    Eintrag und wird sofort nach mail_modus verarbeitet."""
+    """„Mail mit Vorlage“: Auswahl + Editierfeld; landet als geplanter Eintrag und wird
+    sofort verarbeitet. v31 (Phase 159, Vertrag T 4.4): Eintrag über
+    lead_mail.in_warteschlange (kern.mail_planen: Doppelversand-Schutz, HV-Versandweg,
+    fester Text kanal mail_fest, Ersteller, Aktivität) statt Handaufbau; bei Mailsperre
+    endet er als „gesperrt“ (Meldung „Testphase: nicht gesendet (gesperrt).“)."""
     from urllib.parse import quote_plus
 
     from app import lead_mail
-    from app.models import KommunikationLog
     # v23 (Phase 112): Gate mit Vorgang – Handelsvertreter an eigenen Leads (lead_v2.gate)
     lead_v2.gate(request, session, session.get(Vorgang, vorgang_id))
     form = anfrage.formular(request)
@@ -1268,24 +1320,24 @@ def mail_mit_vorlage(request: Request, vorgang_id: int,
         return RedirectResponse(
             f"/lead-management/lead/{vorgang_id}/kommunikation",
             status_code=303)
-    eintrag = KommunikationLog(
-        vorgang_id=vorgang.id, kanal="mail", vorlage_key=schluessel,
-        an=kunde.email, status="geplant",
-        modus=kern.parameter_holen(session, "mail_modus", "protokoll"),
-        erstellt_von=request.state.benutzer.id)
-    session.add(eintrag)
-    session.flush()
-    lead_mail.rendern(session, eintrag)
-    # Editierfelder überschreiben die gerenderte Vorlage
-    if (form.get("betreff") or "").strip():
-        eintrag.betreff = form.get("betreff").strip()[:300]
-    if (form.get("text") or "").strip():
-        eintrag.body_html = lead_mail._als_html(form.get("text").strip())
+    eintrag = lead_mail.in_warteschlange(
+        session, vorgang, schluessel, form.get("betreff") or "", form.get("text") or "",
+        benutzer=request.state.benutzer)
+    if eintrag is None:
+        # keine Mail: bereits geplant (Doppelversand-Schutz), HV-Entwurf oder ohne
+        # E-Mail-Adresse – der Grund steht in der letzten Aktivität
+        session.commit()
+        return RedirectResponse(
+            f"/lead-management/lead/{vorgang_id}/kommunikation?meldung="
+            + quote_plus(f"Mail {schluessel}: keine Mail geplant (bereits geplant, HV-Entwurf "
+                         "oder ohne E-Mail-Adresse – siehe letzte Aktivität)."),
+            status_code=303)
     ergebnis = lead_mail.eintrag_verarbeiten(session, eintrag)
     session.commit()
     return RedirectResponse(
         f"/lead-management/lead/{vorgang_id}/kommunikation?meldung="
-        + quote_plus(f"Mail {schluessel}: {ergebnis}."), status_code=303)
+        + quote_plus(f"Mail {schluessel}: {_mail_ergebnis_text(ergebnis, eintrag)}"),
+        status_code=303)
 
 
 # --- Phase 79: Board, Karte, Cockpit, Lead-Kopf-Aktionen ----------------------------
@@ -1419,18 +1471,24 @@ def karte_daten(request: Request, session: Session = Depends(get_session)):
     kunden = {k.id: k for k in session.query(Kunde)}
     abfrage = (session.query(Vorgang)
                .filter(Vorgang.lat.isnot(None),
+                       Vorgang.archiviert_am.is_(None),    # v31 (Phase 154): kein Archiv
                        Vorgang.lead_phase.in_((phase,) if phase else offene_phasen)))
     if hv:
         abfrage = abfrage.filter(Vorgang.ad_id == benutzer.id)
+    grosskunde = request.query_params.get("grosskunde", "") == "1"   # v31 (Phase 153)
     for v in abfrage:
         kunde = kunden.get(v.kunde_id)
         if kunde is None:
             continue
-        if sparte and sparte not in (kunde.interesse or ""):
+        # v31 (Phase 157): Code-Vergleich inkl. MS/WA/DMS („MS“ trifft nicht „DMS“)
+        if sparte and sparte.upper() not in kern.interesse_liste_v31(kunde.interesse):
+            continue
+        if grosskunde and not getattr(kunde, "grosskunde", False):
             continue
         pins.append({"art": "lead", "lat": v.lat, "lon": v.lon,
                      "phase": v.lead_phase, "klasse": v.score_klasse or "C",
                      "name": kunde.anzeige_name, "ort": kunde.ort or "",
+                     "grosskunde": bool(getattr(kunde, "grosskunde", False)),
                      "vorgang_id": v.id})
     benutzer_map = {b.id: b for b in session.query(Benutzer)}
     for t in (session.query(VotTermin)
@@ -1546,6 +1604,7 @@ def lead_statistik(request: Request,
                         media_type="text/csv; charset=utf-8",
                         headers={"Content-Disposition":
                                  "attachment; filename=eingaenge-je-woche.csv"})
+    from app import lead_dropdowns
     return render(request, "leadmanagement/statistik.html", wochen=wochen,
                   aktiv="/lead-management", zeitraum=zeitraum,
                   zeitraeume=ZEITRAEUME,
@@ -1554,9 +1613,9 @@ def lead_statistik(request: Request,
                   filter_werte=filter_werte, quellen=_quellen(session),
                   kampagnen=session.query(Kampagne)
                   .order_by(Kampagne.name).all(),
-                  leadmanager=[b for b in session.query(Benutzer)
-                               .filter(Benutzer.aktiv.is_(True))
-                               .order_by(Benutzer.name)],
+                  # v31 (Phase 156): Leadmanager-Filter = Benutzer mit Häkchen „Leadmanager“
+                  leadmanager=[SimpleNamespace(id=i, name=n)
+                               for i, n, _w in lead_dropdowns.leadmanager_auswahl(session)],
                   alle_ad=[b for b in session.query(Benutzer)
                            .filter(Benutzer.aktiv.is_(True),
                                    Benutzer.rolle == "aussendienst")
@@ -1571,7 +1630,8 @@ def lead_kanal_report(request: Request,
     _gate(request, session)
     mit_demo = request.query_params.get(
         "demo", "1" if kern.demo_aktiv(session) else "0") == "1"
-    daten = kern.kanal_report(session, mit_demo=mit_demo)
+    sparte = (request.query_params.get("sparte") or "").strip().upper()   # v31 (Phase 157)
+    daten = kern.kanal_report(session, mit_demo=mit_demo, sparte=sparte)
     if request.query_params.get("export") == "csv":
         import csv
         import io
@@ -1600,7 +1660,7 @@ def lead_kanal_report(request: Request,
                         headers={"Content-Disposition":
                                  "attachment; filename=kanal-report.csv"})
     return render(request, "leadmanagement/kanal_report.html",
-                  aktiv="/lead-management", mit_demo=mit_demo, **daten,
+                  aktiv="/lead-management", mit_demo=mit_demo, sparte=sparte, **daten,
                   meldung=request.query_params.get("meldung", ""))
 
 

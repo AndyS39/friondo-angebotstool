@@ -138,28 +138,42 @@ def eintrag_json(notiz: VorgangsNotiz) -> dict:
 def kontext(session: Session, vorgang_id: int, benutzer, *, limit: int | None = None,
             post_url: str | None = None, hinweis: str = "",
             vorgang: Vorgang | None = None, nur_lesen: bool = False,
-            herkunft: str = "", zurueck: str = "") -> dict:
+            herkunft: str = "", zurueck: str = "", verlauf: bool = False) -> dict:
     """Daten für das Makro notizen_chat. `limit` = das Makro zeigt die letzten n
     Einträge direkt, ältere eingeklappt („alle anzeigen“); `nur_lesen` erzwingt
     die Leseansicht (Montage-Backend) unabhängig von den Rechten; `herkunft`
     (projektierung | vertrieb | lead | montage) setzt das Kennzeichen neuer
     Einträge fest (z. B. Kundenkartei → lead), sonst folgt es der Rolle;
-    `zurueck` = Ziel des Redirects ohne JavaScript (Standard: Vorgangsakte)."""
+    `zurueck` = Ziel des Redirects ohne JavaScript (Standard: Vorgangsakte).
+    v31 (PLAN_LEAD_V5 Phase 158): `verlauf=True` ergänzt `verlauf_alle` (Notizen +
+    Lead-/Projekt-Aktivitäten aus vorgang_verlauf.eintraege, chronologisch, je
+    Eintrag quelle/quelle_text/art/titel/eigen/ist_notiz) und `verlauf_anzahl`
+    (Aktivitäten ohne Notizen) für den Filter „nur Notizen“ / „alles“ der
+    Vorgangsakte – keine zweite Notizspur, nur Anzeige."""
     if vorgang is None:
         vorgang = session.get(Vorgang, vorgang_id)
     notizen = eintraege(session, vorgang_id)
     mein_id = getattr(benutzer, "id", None)
     liste = [eintrag_dict(n, mein_id) for n in notizen]
     erlaubt = (not nur_lesen) and schreiben_erlaubt(session, vorgang, benutzer)
-    return {"vorgang_id": vorgang_id,
-            "post_url": post_url or f"/vorgaenge/{vorgang_id}/notiz",
-            "eintraege": liste, "schreiben_erlaubt": erlaubt,
-            "hinweis": hinweis if not erlaubt else "",
-            "mein_name": getattr(benutzer, "name", ""),
-            "anzahl": len(notizen),
-            "limit": int(limit) if limit and len(notizen) > int(limit) else 0,
-            "herkunft": herkunft if herkunft in HERKUNFT_WERTE else "",
-            "zurueck": zurueck or ""}
+    ctx = {"vorgang_id": vorgang_id,
+           "post_url": post_url or f"/vorgaenge/{vorgang_id}/notiz",
+           "eintraege": liste, "schreiben_erlaubt": erlaubt,
+           "hinweis": hinweis if not erlaubt else "",
+           "mein_name": getattr(benutzer, "name", ""),
+           "anzahl": len(notizen),
+           "limit": int(limit) if limit and len(notizen) > int(limit) else 0,
+           "herkunft": herkunft if herkunft in HERKUNFT_WERTE else "",
+           "zurueck": zurueck or ""}
+    if verlauf:
+        from app import vorgang_verlauf
+        alle = vorgang_verlauf.eintraege(session, vorgang_id)
+        for e in alle:
+            e["eigen"] = mein_id is not None and e.get("autor_id") == mein_id
+            e["ist_notiz"] = e.get("art") == "notiz"
+        ctx["verlauf_alle"] = alle
+        ctx["verlauf_anzahl"] = sum(1 for e in alle if not e["ist_notiz"])
+    return ctx
 
 
 def kontext_projekt(session: Session, projekt, benutzer) -> dict | None:

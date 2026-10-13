@@ -32,7 +32,13 @@
         {% if board == 'hauptboard' and not ctx.hv %}<a class="knopf klein" href="/lead-management/neu">{{ symbol('plus') }} Neuer Lead</a>{% endif %}
     </div>
 </div>
-<p class="meldung {{ 'fehler' if fehler }}" id="lm-meldung" {{ '' if meldung else 'hidden' }} role="status">{{ meldung }}</p>
+<p class="meldung {{ 'fehler' if fehler }}" id="lm-meldung" {{ '' if meldung else 'hidden' }} role="status">{{ meldung }}
+    {#- v31 (Phase 154): Ergebnis „Duplizieren“ mit Links auf die neuen Vorgänge #}
+    {%- if kopien %}<span class="lm-meldung-links">{% for kid in kopien %}<a class="knopf klein zweitrangig" href="/lead-management/lead/{{ kid }}">{{ symbol('oeffnen') }} Kartei #{{ kid }}</a>{% endfor %}</span>{% endif %}</p>
+{% if ctx.archiv_sicht %}
+<div class="lm-archiv-hinweis" role="note">{{ symbol('archiv') }} <strong>Archiv-Sicht:</strong> archivierte Leads (Lead-Sicht – Angebote, Erfassungen und Vorgangsakte bleiben unverändert). Markieren und „Wiederherstellen“ holt sie zurück ins Board.
+    <a class="knopf klein zweitrangig" href="/lead-management/{{ board }}">Zurück zum Board</a></div>
+{% endif %}
 
 <div class="lm-filterblock" id="lm-filterblock">
 <form method="get" action="/lead-management/{{ board }}" class="suchleiste lm-suchleiste" id="lm-filterform">
@@ -51,9 +57,11 @@
     <label class="kontrollfeld">Sparte
         <select name="sparte">
             <option value="">alle</option>
-            {% for s in ('WP', 'PV', 'KL', 'WB', 'GW') %}<option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }}>{{ s }}</option>{% endfor %}
+            {#- v31 (Phase 157): Sparten inkl. MS/WA/DMS aus app/sparten.py (Jinja-Global lm_sparten) #}
+            {% for s in lm_sparten %}<option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }} title="{{ lm_sparten_lang.get(s, s) }}">{{ s }}</option>{% endfor %}
         </select></label>
     {% if not ctx.hv %}
+    {#- v31 (Phase 156): Außendienst-Filter nur angestellte AD (lead_dropdowns); HV-Leads stehen in der HV-Ansicht #}
     <label class="kontrollfeld">Außendienst
         <select name="ad_id">
             <option value="">alle</option>
@@ -66,11 +74,16 @@
         </select></label>
     <label class="kontrollfeld"><input type="checkbox" name="meine" value="1" {{ 'checked' if filter_werte.meine }}> Meine Leads</label>
     {% endif %}
+    {#- v31 (Phase 153/154): Filter-Chips „Großkunde“ und „Archiv“ (archivierte Leads, grau) #}
+    <label class="lm-filterchip {{ 'aktiv' if filter_werte.grosskunde }}" title="Nur Großkunden (Kennzeichen am Kunden)"><input type="checkbox" name="grosskunde" value="1" {{ 'checked' if filter_werte.grosskunde }} onchange="this.form.submit()"> Großkunde</label>
+    {% if not ctx.hv %}
+    <label class="lm-filterchip lm-filterchip-archiv {{ 'aktiv' if filter_werte.archiviert }}" title="Archivierte Leads anzeigen (Sammelaktion „Archivieren“) – mit „Wiederherstellen“ zurück ins Board"><input type="checkbox" name="archiviert" value="1" {{ 'checked' if filter_werte.archiviert }} onchange="this.form.submit()"> {{ symbol('archiv') }} Archiv</label>
+    {% endif %}
     {% if board == 'terminiert' %}
-    <label class="kontrollfeld" title="Gewonnen/Verloren älter als 30 Tage einblenden"><input type="checkbox" name="archiv" value="1" {{ 'checked' if filter_werte.archiv }}> Archiv</label>
+    <label class="kontrollfeld" title="Gewonnen/Verloren älter als 30 Tage einblenden"><input type="checkbox" name="archiv" value="1" {{ 'checked' if filter_werte.archiv }}> Ältere Abschlüsse (&gt; 30 Tage)</label>
     {% endif %}
     <button class="knopf klein zweitrangig" type="submit">{{ symbol('filter') }} Filtern</button>
-    {% if filter_werte.q or filter_werte.status or filter_werte.kanal or filter_werte.sparte or filter_werte.ad_id or filter_werte.leadmanager_id or filter_werte.gruppe or filter_werte.meine %}
+    {% if filter_werte.q or filter_werte.status or filter_werte.kanal or filter_werte.sparte or filter_werte.ad_id or filter_werte.leadmanager_id or filter_werte.gruppe or filter_werte.meine or filter_werte.grosskunde or filter_werte.archiviert %}
     <a class="knopf klein ghost" href="/lead-management/{{ board }}" title="Filter zurücksetzen">Filter zurücksetzen</a>
     {% endif %}
     {#- v25: Spaltenwähler in der Filterleiste – Häkchen = sichtbar, gilt nur für den angemeldeten Nutzer, je Board #}
@@ -118,7 +131,8 @@
     <input type="hidden" name="grund"><input type="hidden" name="grund_text"><input type="hidden" name="bis">
     <button class="knopf klein" type="submit" id="lm-sammel-ausfuehren">Ausführen</button>
     <button class="knopf klein zweitrangig" type="button" id="lm-sammel-leeren">Auswahl aufheben</button>
-    <span class="dezent">Jede Sammelaktion schreibt je Lead eine Aktivität; Pflichtgründe werden einmal abgefragt.</span>
+    {#- v31 (Phase 154): Hinweistexte je Aktion (Sicherheitsabfrage mit Anzahl in lm_boards.js) #}
+    <span class="dezent" id="lm-sammel-hinweis" data-archivieren="Archivieren: Leads mit aktivem Termin, offener Erfassung oder offenem Angebot werden übersprungen und gemeldet; kein endgültiges Löschen." data-duplizieren="Duplizieren: je Lead ein neuer Vorgang am selben Kunden (Phase Neu, Objekte/Interessen/Kanal/Zuständige kopiert) – ohne Duplikatprüfung." data-wiederherstellen="Wiederherstellen: Leads kommen zurück ins Board.">Jede Sammelaktion schreibt je Lead eine Aktivität; Pflichtgründe werden einmal abgefragt.</span>
 </form>
 {% endif %}
 </div>

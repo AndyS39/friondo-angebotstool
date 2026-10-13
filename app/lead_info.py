@@ -16,41 +16,10 @@ from sqlalchemy.orm import Session
 STANDARD_ORT = "Friondo, Königstraße 102-104, 47798 Krefeld"
 
 
-def ostersonntag(jahr: int) -> date:
-    """Gauß/Lichtenberg (gregorianisch)."""
-    k = jahr // 100
-    m = 15 + (3 * k + 3) // 4 - (8 * k + 13) // 25
-    s = 2 - (3 * k + 3) // 4
-    a = jahr % 19
-    d = (19 * a + m) % 30
-    r = (d + a // 11) // 29
-    og = 21 + d - r
-    sz = 7 - (jahr + jahr // 4 + s) % 7
-    oe = 7 - (og - sz) % 7
-    tag = og + oe   # Ostersonntag als März-Datum (kann > 31 sein)
-    return date(jahr, 3, 1) + timedelta(days=tag - 1)
-
-
-def feiertage_nrw(jahr: int) -> dict:
-    """Gesetzliche Feiertage in Nordrhein-Westfalen."""
-    ostern = ostersonntag(jahr)
-    return {
-        date(jahr, 1, 1): "Neujahr",
-        ostern - timedelta(days=2): "Karfreitag",
-        ostern + timedelta(days=1): "Ostermontag",
-        date(jahr, 5, 1): "Tag der Arbeit",
-        ostern + timedelta(days=39): "Christi Himmelfahrt",
-        ostern + timedelta(days=50): "Pfingstmontag",
-        ostern + timedelta(days=60): "Fronleichnam",
-        date(jahr, 10, 3): "Tag der Deutschen Einheit",
-        date(jahr, 11, 1): "Allerheiligen",
-        date(jahr, 12, 25): "1. Weihnachtstag",
-        date(jahr, 12, 26): "2. Weihnachtstag",
-    }
-
-
-def ist_feiertag(tag: date) -> str:
-    return feiertage_nrw(tag.year).get(tag, "")
+# v32 (PLAN_V19 Phase 162): Osterformel und NRW-Feiertage liegen jetzt in
+# app/werktage.py (Werktagsrechner für die automatische Wiedervorlage) – hier nur
+# noch die bisherigen Namen, damit Aufrufer und Tests unverändert bleiben.
+from app.werktage import feiertage_nrw, ist_feiertag, ostersonntag  # noqa: E402,F401
 
 
 def regel_termin(jahr: int, monat: int, wochentag: int = 3, woche: int = 1,
@@ -576,6 +545,8 @@ def board_daten(session: Session, benutzer, f: dict | None = None) -> dict:
                .filter(Vorgang.lead_phase.isnot(None))
                .filter((Vorgang.veranstaltung_id.isnot(None))
                        | (Vorgang.quelle_id.in_(info_quellen or {0}))))
+    # v31 (PLAN_LEAD_V5 Phase 154): archivierte Leads (Lead-Sicht) nicht im Infoabend
+    abfrage = abfrage.filter(Vorgang.archiviert_am.is_(None))
     if hv:
         abfrage = abfrage.filter(Vorgang.ad_id == benutzer.id)
     elif f.get("meine") and benutzer is not None:
@@ -636,7 +607,8 @@ def board_daten(session: Session, benutzer, f: dict | None = None) -> dict:
             continue
         if tg == "offen" and v.teilgenommen is not None:
             continue
-        sparten = [s.strip() for s in (kunde.interesse or "").split(",") if s.strip()]
+        from app import sparten as sparten_modul
+        sparten = sparten_modul.codes(kunde.interesse)   # v31 (Phase 157): inkl. MS/WA/DMS
         if f.get("sparte") and f["sparte"] not in sparten:
             continue
         if not _suche_passt(kunde, suche):
@@ -683,6 +655,9 @@ def board_daten(session: Session, benutzer, f: dict | None = None) -> dict:
             "weitere": max(0, mehrfach.get(v.kunde_id, 1) - 1),
             "monday": v.eingang_art == "monday", "quelle": quellen.get(v.quelle_id),
             "zurueck": zurueck, "angebote": [], "erfassungen": [], "offene_angebote": [],
+            # v31 (Phase 153/154): Großkunde-Badge, Archiv-Kennzeichen, Kopie-Verweis
+            "grosskunde": bool(getattr(kunde, "grosskunde", False)),
+            "archiviert": False, "archiv_text": "", "kopie_von": v.kopie_von_id, "kopien": [],
             # Info-Felder (I3/I5)
             "veranstaltung": veranst, "teilgenommen": v.teilgenommen,
             "vergangen": veranst is not None and veranst.beginn <= jetzt,
@@ -773,9 +748,14 @@ def tabellen_kontext(session: Session, benutzer) -> dict:
                                       for g in logik.gruende_der_phase(phase)]
                               for phase in ("zurueckgestellt", "unqualifiziert", "verloren")}}
     jetzt = datetime.now()
+    # v31 (Phase 153): Badge-Farbe „Großkunde“ (Parameter grosskunde_farbe)
+    try:
+        grosskunde_farbe = lb.grosskunde_farbe(session) if lb is not None else ""
+    except Exception:
+        grosskunde_farbe = ""
     return {
         "board": "info", "jetzt": jetzt, "heute": jetzt.date(), "hv": hv,
-        "nur_lesen": False,
+        "nur_lesen": False, "grosskunde_farbe": grosskunde_farbe,
         "sammel": not hv and benutzer is not None and benutzer.rolle != "aussendienst",
         "erzwingen": benutzer is not None and benutzer.rolle in ("admin", "innendienst"),
         "versuche_max": kern.versuche_max(session),
@@ -907,12 +887,32 @@ def _sammel_hv(session: Session, vorgaenge: list, params: dict, benutzer) -> tup
     return lb._sammel_hv_verschieben(session, vorgaenge, params, benutzer)
 
 
+def _sammel_archivieren(session: Session, vorgaenge: list, params: dict, benutzer) -> tuple:
+    """v31 (PLAN_LEAD_V5 Phase 154): „Archivieren“ auch im Infoabend – Handler des
+    Hauptboards (lead_boards._sammel_archivieren: Sperre Termin/Erfassung/Angebot)."""
+    lb = _lead_boards()
+    if lb is None:
+        return 0, ["Archivieren ist ohne das Board-Modul (Phase 105) nicht verfügbar"]
+    return lb._sammel_archivieren(session, vorgaenge, params, benutzer)
+
+
+def _sammel_duplizieren(session: Session, vorgaenge: list, params: dict, benutzer) -> tuple:
+    """v31 (Phase 154): „Duplizieren“ auch im Infoabend (lead_boards._sammel_duplizieren)."""
+    lb = _lead_boards()
+    if lb is None:
+        return 0, ["Duplizieren ist ohne das Board-Modul (Phase 105) nicht verfügbar"]
+    return lb._sammel_duplizieren(session, vorgaenge, params, benutzer)
+
+
 SAMMELAKTIONEN_INFO = [
     ("status", "Status ändern", _sammel_status),
     ("naechste", "In die nächste Veranstaltung verschieben", _sammel_naechste),
     ("teilgenommen", "Teilgenommen setzen", _sammel_teilgenommen),
     # v29 (Phase 140): Sammelaktion „An Handelsvertreter verschieben“ auch im Infoabend
     ("hv_verschieben", "An Handelsvertreter verschieben", _sammel_hv),
+    # v31 (Phase 154): Archivieren und Duplizieren (Hauptboard, Deals, Infoabend)
+    ("archivieren", "Archivieren", _sammel_archivieren),
+    ("duplizieren", "Duplizieren", _sammel_duplizieren),
 ]
 
 

@@ -243,10 +243,10 @@ class Ansicht(Basis):
         self.assertEqual(self.client_a.post(f"{BASIS}/{fremd.id}/standard").status_code, 404)
         # Angestellter AD ohne Kennzeichen: Ansicht 404
         self.assertEqual(self.hv_client(self.ad).get(BASIS).status_code, 404)
-        # Innendienst im Demo-Modus: 404
+        # v31 (PLAN_LEAD_V5 Phase 159): Demo-Modus beendet – Innendienst sieht die HV-Ansicht (vorher 404)
         innen = self.s.query(Benutzer).filter_by(rolle="innendienst", aktiv=True).first()
         if innen is not None:
-            self.assertEqual(self.hv_client(innen).get(BASIS).status_code, 404)
+            self.assertEqual(self.hv_client(innen).get(BASIS).status_code, 200)
 
     def test_admin_gesamtsicht_gruppen_filter_hinweise(self):
         a = self.lead(13, ad_id=self.hv_a.id)

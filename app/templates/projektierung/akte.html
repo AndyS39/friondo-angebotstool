@@ -12,8 +12,10 @@
 
 {% block mainklasse %}breit pj-voll{% endblock %}
 
+{# v31 (PLAN_LEAD_V5 Phase 157): MS/WA/DMS (und GW) wie in app/sparten.py #}
 {% set SPARTEN_NAMEN = {'WP': 'Wärmepumpe', 'PV': 'Photovoltaik',
-                        'KL': 'Klima', 'WB': 'Wallbox'} %}
+                        'KL': 'Klima', 'WB': 'Wallbox', 'GW': 'Gewerbe',
+                        'MS': 'Mieterstrom', 'WA': 'Wasser', 'DMS': 'Denkmalschutz'} %}
 
 {% block inhalt %}
 <div class="pj-btnrow" style="margin-top:0">

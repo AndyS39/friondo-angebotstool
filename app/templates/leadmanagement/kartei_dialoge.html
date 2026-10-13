@@ -6,7 +6,11 @@
    wird ohne Dialog gepostet) liefert das Makro anruf_dialoge aus Phase 107
    (Vertrag: POST /lead-management/anruf/{id} mit zurueck = Kartei). Ändert
    Agent B die Makro-Signatur, bleibt der Aufruf unten positionsgleich;
-   lm_kartei.js bringt einen Fallback für dialogOeffnen mit. #}
+   lm_kartei.js bringt einen Fallback für dialogOeffnen mit.
+   v31 (PLAN_LEAD_V5): E-Mail-Dialog mit Vorlagenwahl/Vorschau/ICS (kartei_mail_dialog.html,
+   Phase 158), Wiedervorlage in 5-Minuten-Schritten (step=300, Phase 158), Status-Dialog
+   mit Pflichtgrund/Datum (Phase 157, dieselben Felder wie der Boards-Dialog), Termin
+   manuell in der Testphase gesperrt (Phase 159). #}
 
 <dialog id="dlg-notiz" class="lk-dialog">
     <form method="post" action="{{ notiz_url }}" class="formular">
@@ -21,30 +25,15 @@
 </dialog>
 
 {% if not readonly %}
-<dialog id="dlg-mail" class="lk-dialog">
-    <form method="post" action="{{ kartei_url }}/mail" class="formular">
-        <h3>{{ symbol('brief') }} E-Mail mit Vorlage</h3>
-        <p class="dezent">An {{ kunde.email if kunde else '–' }} · Versand nach mail_modus (Demo: Sendesperre, nur Protokoll/Testpostfach).</p>
-        <label>Vorlage
-            <select name="vorlage_key">
-                {% for v in vorlagen %}<option value="{{ v }}">{{ v }}</option>{% endfor %}
-            </select></label>
-        <label class="breit">Betreff (leer = aus Vorlage) <input type="text" name="betreff" maxlength="300"></label>
-        <label class="breit">Text (leer = aus Vorlage) <textarea name="text" rows="6"></textarea></label>
-        <div class="formzeile">
-            <button class="knopf" type="submit">Senden / einreihen</button>
-            <a class="knopf zweitrangig" href="{{ kartei_url }}/kommunikation">Vorschau</a>
-            <button class="knopf zweitrangig" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
-        </div>
-    </form>
-</dialog>
+{% include "leadmanagement/kartei_mail_dialog.html" %}
 
 <dialog id="dlg-wiedervorlage" class="lk-dialog">
     <h3>{{ symbol('wiedervorlage') }} Wiedervorlage</h3>
     <form method="post" action="{{ kartei_url }}/wiedervorlage" class="formular">
         <input type="hidden" name="art" value="wiedervorlage">
-        <p class="dezent">Kundenkontakt zu einem Zeitpunkt (Anrufliste/Dashboard zeigen ihn als fällig). Für Arbeitsaufträge unten im Block To-Dos ein To-Do anlegen.</p>
-        <label>Wann <input type="datetime-local" name="wann" value="{{ wv_vorschlag }}" required></label>
+        <p class="dezent">Kundenkontakt zu einem Zeitpunkt (Anrufliste/Dashboard zeigen ihn als fällig). Für Arbeitsaufträge oben in der Spalte To-Dos ein To-Do anlegen.</p>
+        <label>Wann <input type="datetime-local" name="wann" value="{{ wv_vorschlag }}" step="300" required>
+            <small class="dezent">Uhrzeit in 5-Minuten-Schritten</small></label>
         <label class="breit">Notiz <input type="text" name="notiz" maxlength="500" placeholder="optional"></label>
         <div class="formzeile">
             <button class="knopf" type="submit">Wiedervorlage setzen</button>
@@ -84,18 +73,42 @@
     </form>
 </dialog>
 
-{# Anruf-Folgedialoge (Phase 107, C2/C3) – Rücksprung in den Reiter Anrufnotizen #}
+{# v31 (Phase 157): Statuswechsel aus der Kartei – Pflichtgrund (Blatt Gründe) bzw. Datum + Grund;
+   Gründe je Phase kommen aus #lk-status-daten (JSON), Absenden per fetch an POST …/status (lm_kartei.js) #}
+<dialog id="dlg-kartei-status" class="lk-dialog" data-status-url="{{ status_url }}">
+    <form method="dialog" class="formular" id="lk-status-form">
+        <h3 id="lk-status-titel">{{ symbol('haken') }} Status setzen</h3>
+        <p class="dezent" id="lk-status-hinweis"></p>
+        <label id="lk-status-bis-feld">Wiedervorlage bis (Pflicht) <input type="date" name="bis"></label>
+        <label id="lk-status-grund-feld">Grund (Pflicht)
+            <select name="grund"></select></label>
+        <label class="breit">Freitext <input type="text" name="grund_text" maxlength="500" placeholder="Pflicht bei Sonstiges"></label>
+        <p class="lm-rot" id="lk-status-fehler" hidden></p>
+        <div class="formzeile">
+            <button class="knopf" type="submit" value="ok">Übernehmen</button>
+            <button class="knopf zweitrangig" type="button" value="abbrechen">Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+
+{# Anruf-Folgedialoge (Phase 107, C2/C3) – Rücksprung in den Reiter Anruf #}
 {{ anruf_dialoge(unq_gruende, zurueck_gruende, kartei_url ~ '?tab=anrufe') }}
 
 <dialog id="dlg-termin-manuell" class="lk-dialog">
     {# Vertrag Phase 108: POST /lead-management/lead/{id}/termin/manuell #}
     <form method="post" action="{{ kartei_url }}/termin/manuell" class="formular">
         <h3>{{ symbol('kalender') }} Termin manuell eintragen</h3>
-        {% if not buchbar %}<p class="lm-hinweis">Demo-Modus: Buchung nur für Demo-Leads.</p>{% endif %}
+        {% if not buchbar %}<p class="lm-hinweis">{{ sperre_text }}.</p>{% endif %}
         <input type="hidden" name="quelle" value="manuell">
+        {% if objekte.mehrere %}
+        <label>Objekt
+            <select name="objekt_id">
+                {% for o in objekte.liste %}<option value="{{ o.id }}">{{ o.objekt.bezeichnung }} – {{ o.objekt.strasse }}, {{ o.objekt.plz }} {{ o.objekt.ort }}</option>{% endfor %}
+            </select></label>
+        {% endif %}
         <label>Art
             <select name="typ">
-                {% for key, name in termin_typ_namen.items() %}<option value="{{ key }}">{{ name }}</option>{% endfor %}
+                {% for key, name in termin_typ_namen.items() if key != 'sperrzeit' %}<option value="{{ key }}">{{ name }}</option>{% endfor %}
             </select></label>
         <label>Beginn <input type="datetime-local" name="beginn" step="900" required>
             <small class="dezent">15-Minuten-Raster, Dauer 90 Min</small></label>
@@ -109,7 +122,7 @@
             </select></label>
         <p class="dezent">Konfliktwarnung bei Kalenderüberschneidung prüft der Terminassistent (Phase 108) beim Speichern.</p>
         <div class="formzeile">
-            <button class="knopf" type="submit" {{ 'disabled' if not buchbar }}>Termin eintragen</button>
+            <button class="knopf" type="submit" {{ 'disabled' if not buchbar }} title="{{ sperre_text if not buchbar else '' }}">Termin eintragen</button>
             <button class="knopf zweitrangig" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
         </div>
     </form>

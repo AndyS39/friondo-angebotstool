@@ -16,7 +16,7 @@ from app import config
 from app import konfigurator as engine
 from app.logik import (Logik, antwort_teile as logik_antwort_teile,
                        refs_extrahieren as logik_refs_extrahieren)
-from app.models import Angebot, AngebotsPosition, Artikel, Konfiguration, Kunde
+from app.models import Angebot, AngebotsPosition, Artikel, Konfiguration, Kunde, VorgangObjekt
 
 
 def _mengenmaske_ref(zeilen, option: str):
@@ -360,6 +360,8 @@ def version_erzeugen(session: Session, original: Angebot) -> Angebot:
         # (deckt auch den AD-Rabatt-Pfad in routers/meine_angebote.py ab)
         zahlungsbedingung_key=original.zahlungsbedingung_key or "",
         zahlungsbedingung_text=original.zahlungsbedingung_text or "",
+        # v31 (PLAN_LEAD_V5 Phase 153): Objekt des Vorgangs wandert mit
+        objekt_id=original.objekt_id,
     )
     for p in original.positionen:
         version.positionen.append(AngebotsPosition(
@@ -477,6 +479,11 @@ def angebot_anlegen(session: Session, kunde_id: int,
         for feld, wert in _anschriften.alt_text_parsen(rechnung["liefer_anschrift"]).items():
             rechnung[f"liefer_{feld}"] = wert
 
+    # v31 (PLAN_LEAD_V5 Phase 153): das Angebot erhält das Objekt der Erfassung
+    # (Ausführungsort über objekte.ausfuehrungsort; leer = Hauptobjekt/Kundenadresse);
+    # die Rechnungsadresse eines MFH-Objekts (nicht Hauptobjekt) geht dem Kunden-Standard vor
+    objekt_id = getattr(erfassung, "objekt_id", None) if erfassung is not None else None
+    objekt = session.get(VorgangObjekt, objekt_id) if objekt_id else None
     for _versuch in range(5):
         angebot = Angebot(
             nummer=naechste_angebotsnummer(session),
@@ -491,12 +498,13 @@ def angebot_anlegen(session: Session, kunde_id: int,
             kl_json=kl_json,                    # v24
             verfolgung_ampel=verfolgung_ampel,
             wiedervorlage_am=wiedervorlage,
+            objekt_id=objekt_id,                # v31
             **rechnung,
         )
         # v20 (Phase 98): ohne Erfassungs-Anschriften → Kunden-Standards
         from app import anschriften as _anschriften_v20
         _anschriften_v20.angebot_vorbelegen(angebot, session.get(Kunde, kunde_id),
-                                            antworten)
+                                            antworten, objekt=objekt)
         for p in positionen:
             angebot.positionen.append(AngebotsPosition(**p))
         # v9: Angebotsprofil über den Kanal des Kunden + Positionsregeln

@@ -1,11 +1,17 @@
 # Leads VOT (Phase 19 Liste; Phase 22 füllt sie per monday-Lesesync):
 # Leads mit Vor-Ort-Termin und ohne abgesendete Erfassung, chronologisch.
 # Außendienst sieht nur eigene, Innendienst/Admin alle.
+# v32 (PLAN_V19 Phase 161/162): GET /leads ist für den Außendienst die Vertriebler-Ansicht
+# „Mein Tag“ (Kartenliste aus vot_termine, Blöcke Fällig heute · Termine heute · Heiße
+# Kunden · Weitere Termine, templates/leads/mein_tag.html, Daten in app/mein_tag.py und
+# app/nachfassen.py); Innendienst/Admin sehen dieselbe Seite mit Vertriebler-Filter und
+# Umschalter „Karten | Tabelle“ (Standard Karten, Wahl je Nutzer in benutzer_einstellungen
+# [ANNAHME, AT-Chat]) – die Tabelle ist das bisherige templates/leads/liste.html.
 
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -59,9 +65,79 @@ def offene_leads(session: Session, benutzer=None, ausgeblendet: bool = False):
 @router.get("")
 def liste(request: Request, q: str = "", interesse: str = "",
                 vertriebler_id: int = 0, lead_status: str = "", sortierung: str = "termin",
-                ansicht: str = "", kanal: str = "", session: Session = Depends(get_session)):
-    from app import monday_sync
+                ansicht: str = "", kanal: str = "", darstellung: str = "",
+                von: str = "", bis: str = "", status: str = "",
+                session: Session = Depends(get_session)):
+    """v32 (PLAN_V19 Phase 161): Weiche Karten („Mein Tag“) | Tabelle (bisherige Liste).
+    `darstellung=karten|tabelle` speichert die Wahl für Innendienst/Admin je Nutzer;
+    der Außendienst sieht immer die Karten. Filter der Karten: von, bis, status
+    (monday-Statustext), vertriebler_id (ID/Admin)."""
+    from app import mein_tag
     benutzer = request.state.benutzer
+    if darstellung in mein_tag.DARSTELLUNGEN and not mein_tag.ist_aussendienst(benutzer):
+        if mein_tag.darstellung_lesen(session, benutzer) != darstellung:
+            mein_tag.darstellung_setzen(session, benutzer, darstellung)
+            session.commit()
+        wahl = darstellung
+    else:
+        wahl = mein_tag.darstellung_lesen(session, benutzer)
+    if wahl == "tabelle":
+        return _tabelle(request, session, benutzer, q, interesse, vertriebler_id, lead_status,
+                        sortierung, ansicht, kanal)
+    return _mein_tag(request, session, benutzer, von, bis, status, vertriebler_id)
+
+
+def _mein_tag(request: Request, session: Session, benutzer, von: str, bis: str,
+              status: str, vertriebler_id: int):
+    """Kartenliste „Mein Tag“ (Phase 161/162/163): Fällig heute (nachfassen.faellig_heute –
+    eigene Wiedervorlagen; ID/Admin mit Vertriebler-Filter die des gewählten Vertrieblers),
+    Termine heute, Heiße Kunden, Weitere Termine."""
+    from app import mein_tag, monday_sync, nachfassen
+    aussendienst = mein_tag.ist_aussendienst(benutzer)
+    termine = mein_tag.termine(session, benutzer, von=von, bis=bis, status=status,
+                               vertriebler_id=vertriebler_id)
+    faellig_fuer = int(vertriebler_id) if (vertriebler_id and not aussendienst) else benutzer.id
+    faellig = nachfassen.faellig_heute(session, faellig_fuer)
+    heiss = mein_tag.heisse_kunden(session, benutzer, vertriebler_id)
+    ziel = "/leads#faellig"
+    partial_da = mein_tag.partial_vorhanden()
+    schritt_kontext = {k["vorgang"].id: mein_tag.naechster_schritt_kontext(session, k["vorgang"], ziel)
+                       for k in faellig}
+    try:   # Vertrag N: Chip-Text des Verfolgungsstatus (Makro verfolgung_chip, sonst Text)
+        from app import verfolgung
+        status_text = verfolgung.status_text
+    except (ImportError, AttributeError):
+        status_text = (lambda s: s or "")
+    aussendienst_liste = (session.query(Benutzer)
+                          .filter(Benutzer.rolle == "aussendienst", Benutzer.aktiv.is_(True))
+                          .order_by(Benutzer.name).all()) if not aussendienst else []
+    try:
+        from app import lead_boards
+        grosskunde_farbe = lead_boards.grosskunde_farbe(session)
+    except Exception:   # noqa: BLE001
+        grosskunde_farbe = ""
+    return render(request, "leads/mein_tag.html", aktiv="/leads",
+                  mobil=aussendienst, benutzer=benutzer, aussendienst=aussendienst,
+                  termine_heute=termine["heute"], termine_weitere=termine["weitere"],
+                  termine_anzahl=termine["anzahl"], termine_gesamt=termine["gesamt"],
+                  ueberfaellig_anzahl=termine["ueberfaellig"],
+                  status_werte=termine["status_werte"], vertriebler_werte=termine["vertriebler_werte"],
+                  aussendienst_liste=aussendienst_liste,
+                  faellig=faellig, heiss=heiss, schritt_kontext=schritt_kontext,
+                  partial_da=partial_da, ziel=ziel, verfolgung_status_text=status_text,
+                  grosskunde_farbe=grosskunde_farbe,
+                  von=von, bis=bis, status=status, vertriebler_id=vertriebler_id,
+                  filter_aktiv=bool(von or bis or status or vertriebler_id),
+                  heute=datetime.now(), sync_status=monday_sync.status,
+                  monday_hinweis=import_preisliste.import_hinweis(session, "monday"),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+def _tabelle(request: Request, session: Session, benutzer, q: str, interesse: str,
+             vertriebler_id: int, lead_status: str, sortierung: str, ansicht: str, kanal: str):
+    """Bisherige Tabelle „Leads VOT“ (templates/leads/liste.html) – unverändert seit v8/v15,
+    seit v32 als zweite Darstellung für Innendienst/Admin."""
+    from app import monday_sync
     ausgeblendet = ansicht == "ausgeblendet"   # Filter „Ausgeblendet“ (v5-Nachtrag)
     alle = offene_leads(session, benutzer, ausgeblendet=ausgeblendet)
     vertriebler = {b.id: b for b in session.query(Benutzer)}
@@ -125,7 +201,47 @@ def liste(request: Request, q: str = "", interesse: str = "",
                   sync_status=monday_sync.status,
                   # v27 (Phase 128): Hinweistext vor dem monday-Vollabgleich
                   monday_hinweis=import_preisliste.import_hinweis(session, "monday"),
+                  darstellung="tabelle",   # v32: Umschalter Karten | Tabelle
                   meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/notiz/{vorgang_id}")
+def notiz_zum_gespraech(request: Request, vorgang_id: int,
+                        session: Session = Depends(get_session)):
+    """v32 (PLAN_V19 Phase 162): Notizfeld „Notiz zum Gespräch“ der Anruf-Karte – EIN
+    Eintrag im Notizen-Chat des Vorgangs (notizen-Modul, keine zweite Notizspur), Autor =
+    angemeldeter Benutzer, Rechte wie die Akte (notizen.schreiben_erlaubt). JSON bei
+    Accept: application/json, sonst Redirect zurück nach Mein Tag."""
+    from app import notizen
+    from app.models import Vorgang
+    benutzer = request.state.benutzer
+    json_antwort = "application/json" in (request.headers.get("accept") or "")
+    vorgang = session.get(Vorgang, vorgang_id)
+    form = anfrage.formular(request)
+    zurueck = (form.get("zurueck") or "/leads#faellig")
+    if not zurueck.startswith("/") or zurueck.startswith("//"):
+        zurueck = "/leads#faellig"
+    if vorgang is None or not notizen.schreiben_erlaubt(session, vorgang, benutzer):
+        if json_antwort:
+            return JSONResponse({"ok": False, "meldung": "Keine Berechtigung für diesen Vorgang."},
+                                status_code=403)
+        return RedirectResponse(zurueck, status_code=303)
+    text = (form.get("text") or "").strip()
+    if not text:
+        if json_antwort:
+            return JSONResponse({"ok": False, "meldung": "Bitte eine Notiz eingeben."}, status_code=400)
+        return RedirectResponse(zurueck, status_code=303)
+    eintrag = notizen.notiz_anlegen(session, vorgang.id, benutzer, text,
+                                    herkunft=notizen.herkunft_fuer(benutzer, "vertrieb"))
+    session.commit()
+    if json_antwort:
+        return JSONResponse({"ok": True, "eintrag": notizen.eintrag_json(eintrag),
+                             "meldung": "Notiz gespeichert."})
+    from urllib.parse import quote_plus
+    trenner = "&" if "?" in zurueck else "?"
+    pfad, _, anker = zurueck.partition("#")
+    return RedirectResponse(f"{pfad}{trenner}meldung={quote_plus('Notiz gespeichert.')}"
+                            + (f"#{anker}" if anker else ""), status_code=303)
 
 
 @router.post("/sync")
@@ -283,16 +399,26 @@ def zurueckholen(request: Request, lead_id: int,
 
 
 @router.get("/{lead_id}/erfassen")
-def erfassen(request: Request, lead_id: int,
+def erfassen(request: Request, lead_id: int, objekt_id: int = 0,
                    session: Session = Depends(get_session)):
     """Klick auf den Lead: Erfassung mit dem (per Sync angelegten) Kunden
-    starten, Lead ↔ Kunde ↔ Erfassung verknüpfen."""
+    starten, Lead ↔ Kunde ↔ Erfassung verknüpfen.
+    v31 (PLAN_LEAD_V5 Phase 153): `objekt_id` übergibt das Objekt des Vorgangs an
+    die Sparten-Auswahl (Ausführungsort = Objektadresse, Objektart belegt
+    O01/O03/PO01 vor); ohne Angabe gilt das Hauptobjekt."""
     benutzer = request.state.benutzer
     lead = session.get(Lead, lead_id)
     if lead is None:
         return RedirectResponse("/leads", status_code=303)
     if benutzer.rolle == "aussendienst" and lead.benutzer_id != benutzer.id:
-        return RedirectResponse("/leads", status_code=303)
+        # v32 (PLAN_V19 Phase 161): der Vertriebler des Termins (vot_termine.ad_id bzw.
+        # vorgaenge.ad_id) darf die Erfassung starten, auch wenn er vom Lead-Vertriebler
+        # abweicht – Prüfung wie die Vorgangsakte (vorgaenge.gehoert_benutzer)
+        from app import vorgaenge as vorgaenge_modul
+        from app.models import Vorgang
+        vorgang = session.query(Vorgang).filter(Vorgang.lead_id == lead.id).first()
+        if vorgang is None or not vorgaenge_modul.gehoert_benutzer(session, vorgang, benutzer.id):
+            return RedirectResponse("/leads", status_code=303)
 
     # Kunde ist seit Phase 24 schon per Sync angelegt; Abgleich hier als Fallback
     from app.monday_sync import kunde_fuer_lead
@@ -300,4 +426,7 @@ def erfassen(request: Request, lead_id: int,
     session.commit()
     # v8: erst die Sparten-Auswahl (Lead-Interessen vorausgewählt); dort sind
     # auch offene Entwürfe des Leads zum Fortsetzen verlinkt
-    return RedirectResponse(f"/erfassung/sparten?lead_id={lead.id}", status_code=303)
+    ziel = f"/erfassung/sparten?lead_id={lead.id}"
+    if objekt_id:
+        ziel += f"&objekt_id={int(objekt_id)}"
+    return RedirectResponse(ziel, status_code=303)

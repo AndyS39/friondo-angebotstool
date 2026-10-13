@@ -28,10 +28,11 @@
         {% if zu_kurz %}
         <p class="meldung fehler">Bitte mindestens {{ min_ziffern }} Ziffern eingeben – „{{ eingabe }}“ ist zu kurz.</p>
         {% elif not treffer %}
-        <p class="meldung">Keine Rufnummer „{{ eingabe }}“ (+{{ ziffern }}) gefunden – weder bei Kunden noch bei monday-Leads.
+        <p class="meldung">Keine Rufnummer zu „{{ eingabe }}“ ({{ ziffern }}) gefunden – weder bei Kunden noch bei monday-Leads.
             <a class="knopf klein" href="/lead-management/neu?telefon={{ eingabe | urlencode }}">+ Neuen Lead anlegen</a></p>
         {% else %}
-        <p class="dezent">{{ treffer | length }} Treffer für +{{ ziffern }} (Vergleich der Ziffernfolge, Schreibweise egal).</p>
+        {#- v31 (PLAN_LEAD_V5 Phase 158): Endziffern-Suche – „endet mit“ zuerst, dann „enthält“ #}
+        <p class="dezent">{{ treffer | length }} Treffer für „{{ ziffern }}“ ({{ 'vollständige Nummer, Schreibweise egal' if voll else 'Endziffern – Nummern, die damit enden, zuerst; danach „enthält“' }}).</p>
         <table class="tabelle">
             <thead><tr><th>Kunde</th><th>Rufnummer</th><th>Ort</th><th>Vorgang</th><th>Phase</th><th>Herkunft</th><th></th></tr></thead>
             <tbody>
@@ -41,8 +42,8 @@
                     <td class="nowrap"><a href="{{ t.tel_href }}" class="lm-tel">{{ symbol('telefon') }} {{ t.kunde.telefon }}</a></td>
                     <td>{{ t.kunde.plz or '' }} {{ t.kunde.ort or '' }}</td>
                     <td>{% if t.vorgang %}V{{ t.vorgang.id }}{% if t.vorgaenge | length > 1 %} <span class="dezent">(+{{ t.vorgaenge | length - 1 }} weitere)</span>{% endif %}{% else %}<span class="dezent">kein Vorgang</span>{% endif %}</td>
-                    <td>{% if t.vorgang %}{{ phasen_namen.get(t.vorgang.lead_phase, t.vorgang.lead_phase or '–') }}{% if t.vorgang.demo %} <span class="abzeichen">Demo</span>{% endif %}{% else %}–{% endif %}</td>
-                    <td class="dezent">{{ 'monday-Lead' if t.herkunft == 'monday' else 'Kunde' }}</td>
+                    <td>{% if t.vorgang %}{{ phasen_namen.get(t.vorgang.lead_phase, t.vorgang.lead_phase or '–') }}{% if t.vorgang.demo %} <span class="abzeichen">Demo</span>{% endif %}{% if t.archiviert %} <span class="lm-archiv-chip" title="Archiviert (Lead-Sicht)">Archiv</span>{% endif %}{% else %}–{% endif %}</td>
+                    <td class="dezent">{{ 'monday-Lead' if t.herkunft == 'monday' else 'Kunde' }}{% if t.endet_mit and not voll %} · <span class="abzeichen" title="Nummer endet mit der Ziffernfolge">endet mit</span>{% endif %}</td>
                     <td class="aktionen">{% if t.vorgang %}<a class="knopf klein" href="/lead-management/lead/{{ t.vorgang.id }}">Kartei öffnen</a>{% else %}<a class="knopf klein zweitrangig" href="/kunden/{{ t.kunde.id }}/bearbeiten">Kunde</a>{% endif %}</td>
                 </tr>
             {% endfor %}
@@ -50,7 +51,7 @@
         </table>
         {% endif %}
     {% else %}
-    <p class="dezent">Für eingehende Anrufe: Nummer eintippen oder einfügen – „0203 …“, „+49 203 …“, „0049 203 …“ und „+49 (0)203 …“ finden denselben Kunden. Genau ein Treffer öffnet sofort die Kundenkartei. Die automatische Erkennung über eine Telefonanlage folgt später (D1).</p>
+    <p class="dezent">Für eingehende Anrufe: Nummer eintippen oder einfügen – „0203 …“, „+49 203 …“, „0049 203 …“ und „+49 (0)203 …“ finden denselben Kunden; seit v31 genügen die letzten Ziffern (ab {{ min_ziffern }}, z. B. „4711“ findet +49 203 … 4711 – Treffer „endet mit“ zuerst). Genau ein Treffer öffnet sofort die Kundenkartei. Die automatische Erkennung über eine Telefonanlage folgt später (D1).</p>
     {% endif %}
 </div>
 {% endblock %}

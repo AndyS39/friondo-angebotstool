@@ -73,6 +73,15 @@ PARAMETER_START = {
     "info_ort": "Friondo, Königstraße 102-104, 47798 Krefeld",
     "info_vorlauf_tage": "3",            # A-8 [OFFEN 1]
     "info_rollierend_monate": "12",      # I2
+    # --- v31: Lead-Management V5 (PLAN_LEAD_V5, Phasen 153–159) ---
+    "terminierung_aktiv": "aus",         # Phase 159: Buchen/Terminierung gesperrt (Testphase)
+    "mail_versand_aktiv": "aus",         # Phase 159: Lead-Vorlagen-Mails gesperrt (Testphase)
+    "sparten_langnamen": "",             # Phase 156: JSON {"WP": "Wärmepumpe", …}, leer = Standard
+    "grosskunde_farbe": "",              # Phase 153: Badge-Farbe (leer = Status-Mechanik)
+    "hv_gruppe_simon_mitglieder": "",    # Phase 156: Komma-Liste Benutzer-IDs, leer = alle HV außer René
+    "erwartungswert_MS": "2000000", "erwartungswert_WA": "500000", "erwartungswert_DMS": "3000000",
+    # v32 (PLAN_V19 Phase 162): Wiedervorlage nach Angebotsversand in Werktagen (MFH gesondert)
+    "nachfass_werktage": "3", "nachfass_werktage_mfh": "5",
     "puffer_min": "30",                  # F4: Puffer = max(30, Fahrzeit)
     "max_termine_tag_start": "3",        # A-13: Startwert neuer AD-Profile
     # v23 (Phase 108): Terminassistent V2 – von app/lead_termin.py mit Standard gelesen
@@ -155,13 +164,26 @@ def parameter_vorbelegen(session: Session) -> int:
 
 # --- Demo-Schalter -----------------------------------------------------------------
 
+# v31 (PLAN_LEAD_V5 Phase 159): Der Demo-Modus ist beendet – lead_freigabe_modus steht
+# seit der Migration auf „alle“ und ist keine Sperre mehr: freigabe_modus() liefert immer
+# „alle“, demo_aktiv() immer False. Damit sind alle Demo-Sperren (demo = 1 beim Anlegen,
+# Terminierung nur für Demo-Leads, Demo-Filter in Statistik/Kacheln/Rückspielung, Badge
+# „Demo · Coming soon“, Generator) wirkungslos; die Testphase steuern stattdessen die
+# Schalter terminierung_aktiv / mail_versand_aktiv (app/lead_v5.py). Der Parameter bleibt
+# lesbar (parameter_holen), Demo-Leads behalten ihr Kennzeichen bis zur Admin-Entscheidung
+# „löschen oder behalten“ (routers/konfiguration.lead_einstellungen).
+DEMO_BEENDET = True
+
+
 def freigabe_modus(session: Session) -> str:
+    if DEMO_BEENDET:
+        return "alle"
     wert = parameter_holen(session, "lead_freigabe_modus", "admin").strip().lower()
     return wert if wert in ("admin", "alle") else "admin"
 
 
 def demo_aktiv(session: Session) -> bool:
-    return freigabe_modus(session) == "admin"
+    return False if DEMO_BEENDET else freigabe_modus(session) == "admin"
 
 
 def score_aktiv(session: Session) -> bool:
@@ -174,13 +196,14 @@ def score_aktiv(session: Session) -> bool:
 
 
 def lead_modul_sichtbar(session: Session, benutzer) -> bool:
-    """Server-seitige Sichtbarkeit des gesamten Moduls (Phase 73): im
-    Demo-Modus nur Admins; bei 'alle' zusätzlich Innendienst/Leadmanagement."""
+    """Server-seitige Sichtbarkeit des gesamten Moduls (Phase 73): Admin, Innendienst
+    und Leadmanagement. v31 (PLAN_LEAD_V5 Phase 159): ohne Demo-Prüfung – die
+    Freischaltung „alle“ gilt dauerhaft (Rechte-Matrix v12/v23 bleibt)."""
     if benutzer is None:
         return False
     if benutzer.rolle == "admin":
         return True
-    if freigabe_modus(session) != "alle":
+    if not DEMO_BEENDET and freigabe_modus(session) != "alle":
         return False
     return (benutzer.rolle in ("innendienst",)
             or benutzer.hat_rolle("leadmanagement"))
@@ -247,10 +270,13 @@ def benachrichtigen(session: Session, benutzer_ids, text: str, link: str,
 
 
 def leadmanager_benutzer(session: Session) -> list[Benutzer]:
+    """Round-Robin-Kandidaten der automatischen Zuweisung (lm_aktiv). v31 (PLAN_LEAD_V5
+    Phase 156): zusätzlich nur Benutzer mit Häkchen „Leadmanager“ (benutzer.leadmanager)
+    – die Dropdowns des Moduls lesen app/lead_dropdowns.leadmanager_auswahl."""
     return [b for b in session.query(Benutzer)
             .filter(Benutzer.aktiv.is_(True)).order_by(Benutzer.id)
-            if b.lm_aktiv and (b.hat_rolle("leadmanagement")
-                               or b.rolle in ("admin", "innendienst"))]
+            if b.lm_aktiv and getattr(b, "leadmanager", False)
+            and (b.hat_rolle("leadmanagement") or b.rolle in ("admin", "innendienst"))]
 
 
 def naechster_leadmanager(session: Session, aktueller_benutzer=None) -> int | None:
@@ -626,8 +652,15 @@ def _name_normal(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").strip().lower())
 
 
+def interesse_liste_v31(wert) -> list[str]:
+    """v31 (PLAN_LEAD_V5 Phase 157): Sparten-Codes eines Kunden inkl. MS/WA/DMS
+    (app/sparten.py; models.interesse_liste kennt nur die fünf alten Codes)."""
+    from app import sparten as sparten_modul
+    return sparten_modul.codes(wert)
+
+
 def vorgang_offen(vorgang: Vorgang) -> bool:
-    """Konzept 4: offen = nicht Gewonnen/Verloren/Unqualifiziert."""
+    """Konzept 4: offen = nicht Gewonnen/Verloren/Disqualifiziert (Key unqualifiziert)."""
     return (vorgang.lead_phase or "neu") not in ("gewonnen", "verloren",
                                                  "unqualifiziert")
 
@@ -682,7 +715,9 @@ def lead_anlegen(session: Session, daten: dict, quelle: LeadQuelle | None,
     abgeschlossener → neuer Vorgang „Wiederkehrer“; entscheidung='neu'
     erzwingt einen eigenen Vorgang. Liefert (vorgang, status) mit status
     neu | angehaengt | wiederkehrer."""
-    sparten = [s for s in (daten.get("sparten") or []) if s in ("WP", "PV", "KL", "WB", "GW")]
+    # v31 (PLAN_LEAD_V5 Phase 157): Sparten-Liste aus app/sparten.py (inkl. MS/WA/DMS)
+    from app import sparten as sparten_modul
+    sparten = [s for s in (daten.get("sparten") or []) if s in sparten_modul.SPARTEN]
     duplikat = duplikat_pruefen(
         session, telefon=daten.get("telefon", ""), email=daten.get("email", ""),
         name=f"{daten.get('vorname', '')} {daten.get('nachname', '')}",
@@ -786,6 +821,14 @@ def lead_anlegen(session: Session, daten: dict, quelle: LeadQuelle | None,
                         f"{', '.join(sparten) or '–'} – {quelle_name}",
                         f"/lead-management/lead/{vorgang.id}", art="lead_eingang")
     lead_phase_berechnen(session, vorgang)
+    # v31 (PLAN_LEAD_V5 Phase 153, K-4.7): jeder neue Lead trägt sofort ein Hauptobjekt aus der
+    # Kundenadresse (API, Parser, Schnellanlage, Import) – hauptobjekt(anlegen=True) ist
+    # idempotent; bei angehängten Vorgängen (neue Sparte) zieht hauptobjekt_sync die
+    # Kundeninteressen in das einzige Objekt nach
+    from app import objekte as objekte_modul
+    objekte_modul.hauptobjekt(session, vorgang.id, anlegen=True, kunde=kunde)
+    if status == "angehaengt":
+        objekte_modul.hauptobjekt_sync(session, kunde)
     session.flush()
     return vorgang, status
 
@@ -956,18 +999,56 @@ def demo_leads_erzeugen(session: Session, benutzer=None) -> dict:
     return {"angelegt": angelegt}
 
 
-def demo_leads_loeschen(session: Session) -> dict:
+def demo_leads_mit_bestand(session: Session) -> set[int]:
+    """v31 (PLAN_LEAD_V5 Phase 159): Demo-Vorgänge, an denen eine Erfassung, ein Angebot
+    oder ein Projekt hängt – sie werden beim Demo-Ende NICHT gelöscht (nur „behalten“)."""
+    from app.models import Angebot, Erfassung, Projekt
+    demo_ids = {v.id for v in session.query(Vorgang.id).filter(Vorgang.demo.is_(True))}
+    if not demo_ids:
+        return set()
+    belegt = set()
+    for (vid,) in session.query(Erfassung.vorgang_id).filter(Erfassung.vorgang_id.in_(demo_ids)):
+        belegt.add(vid)
+    for (vid,) in session.query(Angebot.vorgang_id).filter(Angebot.vorgang_id.in_(demo_ids)):
+        belegt.add(vid)
+    for (vid,) in session.query(Projekt.vorgang_id).filter(Projekt.vorgang_id.in_(demo_ids)):
+        belegt.add(vid)
+    return belegt
+
+
+def demo_leads_loeschen(session: Session, nur_ohne_bestand: bool = False,
+                        benutzer=None, grund: str = "") -> dict:
     """Alle Demo-Leads restlos entfernen (Vorgänge, Kunden ohne andere
-    Vorgänge, Aktivitäten, Termine, Kommunikation, Qualifizierungen)."""
-    from app.models import KommunikationLog
+    Vorgänge, Aktivitäten, Termine, Kommunikation, Qualifizierungen).
+    v31 (PLAN_LEAD_V5 Phase 159, Einfügung AT-Chat): nur_ohne_bestand=True überspringt
+    Demo-Leads mit Erfassung/Angebot/Projekt; zusätzlich fallen Objekte (v31), Notizen,
+    To-Dos mit Vorgangsbezug und die Warteschlange; jede Löschung landet im
+    Lösch-Protokoll (AngebotsLoeschung art=lead, nummer=<Vorgang-ID>, Grund, Benutzer).
+    Liefert {vorgaenge, kunden, uebersprungen}."""
+    from app import objekte as objekte_modul
+    from app.models import AngebotsLoeschung, KommunikationLog, Todo, VorgangsNotiz
     vorgaenge = session.query(Vorgang).filter(Vorgang.demo.is_(True)).all()
+    belegt = demo_leads_mit_bestand(session) if nur_ohne_bestand else set()
+    uebersprungen = [v for v in vorgaenge if v.id in belegt]
+    vorgaenge = [v for v in vorgaenge if v.id not in belegt]
     kunden_ids = {v.kunde_id for v in vorgaenge}
     anzahl = len(vorgaenge)
     for v in vorgaenge:
+        if grund:
+            kunde = session.get(Kunde, v.kunde_id)
+            session.add(AngebotsLoeschung(
+                art="lead", nummer=str(v.id)[:20], kunde_name=(kunde.anzeige_name if kunde else "")[:300],
+                status_vorher=(v.lead_phase or "")[:20], grund=grund[:500],
+                benutzer_name=(benutzer.name if benutzer is not None else "System")[:100]))
         session.query(LeadAktivitaet).filter_by(vorgang_id=v.id).delete()
         session.query(LeadQualifizierung).filter_by(vorgang_id=v.id).delete()
         session.query(VotTermin).filter_by(vorgang_id=v.id).delete()
         session.query(KommunikationLog).filter_by(vorgang_id=v.id).delete()
+        # v31 (Nacharbeit 6, Vertrag AT): Objekte VOR der Vorgangs-Löschung über objekte.py –
+        # sonst erbt ein neuer Vorgang mit wiederverwendeter ID fremde Objekte
+        objekte_modul.objekte_loeschen(session, v.id)
+        session.query(VorgangsNotiz).filter_by(vorgang_id=v.id).delete()
+        session.query(Todo).filter_by(vorgang_id=v.id).delete()
         session.delete(v)
     session.flush()
     geloeschte_kunden = 0
@@ -978,7 +1059,8 @@ def demo_leads_loeschen(session: Session) -> dict:
                 session.delete(kunde)
                 geloeschte_kunden += 1
     session.commit()
-    return {"vorgaenge": anzahl, "kunden": geloeschte_kunden}
+    return {"vorgaenge": anzahl, "kunden": geloeschte_kunden,
+            "uebersprungen": [v.id for v in uebersprungen]}
 
 
 # --- Phase 76: Anruf-Ergebnisse, Kaskade, Qualifizierung, Score ---------------------
@@ -1286,8 +1368,9 @@ def qualifizierung_abschliessen(session: Session, vorgang: Vorgang, sparte: str,
 
     # gemeinsame Fragen (gleicher Fragetext) in die anderen Interessen-Sparten
     kunde = session.get(Kunde, vorgang.kunde_id)
+    from app import sparten as sparten_modul
     interessen = [s.strip() for s in (kunde.interesse or "").split(",")
-                  if s.strip() in ("WP", "PV", "KL", "WB", "GW")]
+                  if s.strip() in sparten_modul.SPARTEN]   # v31: inkl. MS/WA/DMS
     for frage in logik.fragen_der_sparte(sparte):
         if frage.key not in antworten:
             continue
@@ -1596,7 +1679,12 @@ def loeschlauf(session: Session, erzwingen: bool = False,
     unqualifiziert / nicht_erreicht / verloren, letzte Aktivität älter als
     loeschfrist_monate, kein angenommenes Angebot, kein Projekt. Im Demo-Modus
     zusätzlich nur Demo-Leads. v27 (PLAN_V17 Phase 128): Kandidaten über
-    Mengenabfragen, Anonymisierung in Blöcken mit Commit je BLOCK_GROESSE."""
+    Mengenabfragen, Anonymisierung in Blöcken mit Commit je BLOCK_GROESSE.
+    v31 (PLAN_LEAD_V5 Phase 153, Nacharbeit 6): der Löschlauf löscht keine Vorgänge
+    (objekte_loeschen greift nur bei echten Löschungen, z. B. demo_leads_loeschen) –
+    die Objektadressen des anonymisierten Vorgangs werden wie die Kundenstraße geleert
+    [ANNAHME]."""
+    from app import objekte as objekte_modul
     if not trocken and not erzwingen:
         if parameter_holen(session, "loeschlauf", "aus") != "an":
             return {"uebersprungen": True}
@@ -1622,6 +1710,10 @@ def loeschlauf(session: Session, erzwingen: bool = False,
         for a in (session.query(LeadAktivitaet)
                   .filter(LeadAktivitaet.vorgang_id == vorgang.id)):
             a.text = ""
+        for objekt in objekte_modul.objekte_fuer(session, vorgang.id, nur_aktive=False):
+            objekt.strasse = ""            # PLZ/Ort bleiben wie beim Kunden (Statistik)
+            objekt.rechnung_name = ""
+            objekt.rechnung_strasse = ""
         if kunde is not None and not (
                 session.query(Vorgang)
                 .filter(Vorgang.kunde_id == kunde.id,
@@ -2020,33 +2112,13 @@ VOT_STATUS_NAMEN_LOKAL = {"no_show": "No-Show", "abgesagt": "abgesagt",
 
 
 def monday_termine_ableiten(session: Session) -> int:
-    """Beim Sync-Lauf: VOT-Datum der monday-Leads → vot_termine
-    (quelle=monday, rein lesend; Änderung in monday überschreibt den
-    Tool-Eintrag, solange quelle=monday bleibt)."""
-    anzahl = 0
-    leads = {l.id: l for l in session.query(Lead)
-             if l.vot_datum is not None}
-    for vorgang in (session.query(Vorgang)
-                    .filter(Vorgang.lead_id.in_(set(leads) or {0}))):
-        lead = leads[vorgang.lead_id]
-        profil = ad_profil(session, lead.benutzer_id or 0)
-        dauer = timedelta(minutes=profil.termin_dauer_min or 90)
-        termin = (session.query(VotTermin)
-                  .filter(VotTermin.vorgang_id == vorgang.id,
-                          VotTermin.quelle == "monday").first())
-        if termin is None:
-            termin = VotTermin(vorgang_id=vorgang.id, quelle="monday",
-                               status="geplant", demo=False)
-            session.add(termin)
-        if termin.beginn != lead.vot_datum or termin.ad_id != lead.benutzer_id:
-            termin.beginn = lead.vot_datum
-            termin.ende = lead.vot_datum + dauer
-            termin.ad_id = lead.benutzer_id
-            termin.adresse = ", ".join(x for x in (
-                lead.strasse, f"{lead.plz} {lead.ort}".strip()) if x)
-            anzahl += 1
-    session.flush()
-    return anzahl
+    """v32 (PLAN_V19 Phase 161): delegiert an monday_sync.vot_termine_nachfuehren (ändern ohne
+    Duplikat, gelöschtes Datum → abgesagt, reaktivieren, objekt_id = Hauptobjekt) – eine Logik
+    für den Sync-Nachlauf und scripts/vot_abgleich.py (Vorschlag Agent M 4.5)."""
+    from app import monday_sync
+    z = monday_sync.vot_termine_nachfuehren(session)
+    return int(z.get("angelegt", 0) + z.get("aktualisiert", 0) + z.get("abgesagt", 0)
+               + z.get("reaktiviert", 0))
 
 
 # --- Phase 79: Board, Lead-Akte-Kontext, Startportal-Kacheln, Cockpit ---------------
@@ -2062,10 +2134,11 @@ def erwartungswert(session: Session, kunde: Kunde | None) -> int:
     erwartungswert_<Sparte>; die Phasen-Quote wendet pipeline_wert an."""
     if kunde is None:
         return 0
+    from app import sparten as sparten_modul
     summe = 0
     for sparte in (kunde.interesse or "").split(","):
         sparte = sparte.strip()
-        if sparte in ("WP", "PV", "KL", "WB", "GW"):
+        if sparte in sparten_modul.SPARTEN:    # v31: inkl. MS/WA/DMS (erwartungswert_<Code>)
             try:
                 summe += int(parameter_holen(session,
                                              f"erwartungswert_{sparte}", "0"))
@@ -2078,6 +2151,8 @@ def board_daten(session: Session, benutzer, filter_werte: dict) -> dict:
     """Karten je Spalte (Karte = Vorgang) + Kopfzahlen/-summen (Plan 79)."""
     jetzt = datetime.now()
     abfrage = session.query(Vorgang).filter(Vorgang.lead_phase.isnot(None))
+    # v31 (PLAN_LEAD_V5 Phase 154): archivierte Leads (Lead-Sicht) nicht im Kanban
+    abfrage = abfrage.filter(Vorgang.archiviert_am.is_(None))
     if filter_werte.get("meine") and benutzer is not None:
         abfrage = abfrage.filter(Vorgang.leadmanager_id == benutzer.id)
     if _int_oder_none(filter_werte.get("quelle_id")) is not None:
@@ -2106,8 +2181,12 @@ def board_daten(session: Session, benutzer, filter_werte: dict) -> dict:
         kunde = kunden.get(v.kunde_id)
         if kunde is None or v.lead_phase not in spalten:
             continue
+        # v31 (Phase 157): Sparten-Filter als Code-Vergleich („MS“ trifft nicht „DMS“)
         if filter_werte.get("sparte") and \
-                filter_werte["sparte"] not in (kunde.interesse or ""):
+                filter_werte["sparte"].upper() not in interesse_liste_v31(kunde.interesse):
+            continue
+        # v31 (Phase 153): Filter „Großkunde“
+        if filter_werte.get("grosskunde") and not getattr(kunde, "grosskunde", False):
             continue
         if filter_werte.get("plz") and \
                 not (kunde.plz or "").startswith(filter_werte["plz"]):
@@ -2146,6 +2225,7 @@ def board_daten(session: Session, benutzer, filter_werte: dict) -> dict:
             "sla": sla_status(session, v, jetzt) if v.lead_phase == "neu" else None,
             "wiederkehrer": mehrfach.get(v.kunde_id, 0) > 1,
             "monday": v.eingang_art == "monday",
+            "grosskunde": bool(getattr(kunde, "grosskunde", False)),   # v31 (Phase 153)
             "ueberfaellig": (v.naechste_aktion_am is not None
                              and v.naechste_aktion_am < jetzt),
             "leadmanager": benutzer_alle.get(v.leadmanager_id),
@@ -2309,12 +2389,14 @@ def startseiten_kacheln_leads(session: Session) -> dict:
 def _startseiten_kacheln_v12(session: Session) -> dict:
     from app.models import LeadPosteingang
     jetzt = datetime.now()
+    # v31 (Phase 154): archivierte Leads zählen in keiner Kachel
     neue = (session.query(Vorgang)
-            .filter(Vorgang.lead_phase == "neu").all())
+            .filter(Vorgang.lead_phase == "neu", Vorgang.archiviert_am.is_(None)).all())
     sla_rot = sum(1 for v in neue
                   if sla_status(session, v, jetzt)["farbe"] == "rot")
     faellig = (session.query(Vorgang)
                .filter(Vorgang.lead_phase.in_(("neu", "in_kontaktierung")),
+                       Vorgang.archiviert_am.is_(None),
                        Vorgang.naechste_aktion_am.isnot(None),
                        Vorgang.naechste_aktion_am <= jetzt).count())
     heute_ende = jetzt.replace(hour=23, minute=59, second=59)
@@ -2323,6 +2405,7 @@ def _startseiten_kacheln_v12(session: Session) -> dict:
     # danach immer auf 0
     wiedervorlagen = (session.query(Vorgang)
                       .filter(Vorgang.lead_phase == "zurueckgestellt",
+                              Vorgang.archiviert_am.is_(None),
                               Vorgang.zurueckgestellt_bis.isnot(None),
                               Vorgang.zurueckgestellt_bis <= heute_ende)
                       .count())
@@ -2330,6 +2413,7 @@ def _startseiten_kacheln_v12(session: Session) -> dict:
                        .filter(Vorgang.lead_phase.in_(
                            ("neu", "in_kontaktierung", "nicht_erreicht",
                             "qualifiziert")),
+                           Vorgang.archiviert_am.is_(None),
                            Vorgang.naechste_aktion_am.isnot(None),
                            Vorgang.naechste_aktion_am <= heute_ende).count())
     woche_ende = jetzt + timedelta(days=7 - jetzt.weekday())
@@ -2385,6 +2469,7 @@ def cockpit_daten(session: Session) -> dict:
     for v in (session.query(Vorgang)
               .filter(Vorgang.naechste_aktion_am.isnot(None),
                       Vorgang.naechste_aktion_am < jetzt,
+                      Vorgang.archiviert_am.is_(None),   # v31 (Phase 154)
                       Vorgang.lead_phase.in_(("neu", "in_kontaktierung",
                                               "qualifiziert")))):
         if v.leadmanager_id:
@@ -2402,7 +2487,7 @@ def cockpit_daten(session: Session) -> dict:
             eintrag["no_shows"] += 1
 
     sla_rot = [v for v in session.query(Vorgang)
-               .filter(Vorgang.lead_phase == "neu")
+               .filter(Vorgang.lead_phase == "neu", Vorgang.archiviert_am.is_(None))
                if sla_status(session, v, jetzt)["farbe"] == "rot"]
     # Prozess-Fix 27.09.2026: vergangene Termine ohne Rueckmeldung
     # (geplant/bestaetigt, Terminende vorbei) - vorher ein totes Ende:
@@ -2445,7 +2530,8 @@ def pipeline_wert(session: Session) -> int:
     for v in (session.query(Vorgang)
               .filter(Vorgang.lead_phase.in_(("neu", "in_kontaktierung",
                                               "qualifiziert", "terminiert",
-                                              "erfasst", "angebot")))):
+                                              "erfasst", "angebot")),
+                      Vorgang.archiviert_am.is_(None))):   # v31 (Phase 154): Archiv zählt nicht
         try:
             quote = int(parameter_holen(session, f"quote_{v.lead_phase}", "0"))
         except ValueError:
@@ -2485,8 +2571,8 @@ def statistik_leads(session: Session, von: datetime, bis: datetime,
                 (kunde.vertriebskanal or "").lower():
             continue
         if filter_werte.get("sparte") and \
-                filter_werte["sparte"] not in (kunde.interesse or ""):
-            continue
+                filter_werte["sparte"].upper() not in interesse_liste_v31(kunde.interesse):
+            continue   # v31 (Phase 157): Code-Vergleich („MS“ trifft nicht „DMS“)
         if _int_oder_none(filter_werte.get("leadmanager_id")) is not None and \
                 v.leadmanager_id != _int_oder_none(filter_werte["leadmanager_id"]):
             continue
@@ -2709,9 +2795,11 @@ def statistik_leads(session: Session, von: datetime, bis: datetime,
 
 
 def kanal_report(session: Session, monate: int = 12,
-                 mit_demo: bool = False) -> dict:
+                 mit_demo: bool = False, sparte: str = "") -> dict:
     """Kanal-Report (Plan 80): je Quelle × Monat Leads, Termine, Aufträge,
-    Auftragswert, Kosten, Kosten je Termin/Auftrag, Umsatz je € Lead-Kosten."""
+    Auftragswert, Kosten, Kosten je Termin/Auftrag, Umsatz je € Lead-Kosten.
+    v31 (PLAN_LEAD_V5 Phase 157): optionaler Sparten-Filter (Code, inkl. MS/WA/DMS);
+    archivierte Leads zählen als Zeitraum-Kennzahl weiter [ANNAHME]."""
     jetzt = datetime.now()
     start_monat = (jetzt.year, jetzt.month)
     monats_liste = []
@@ -2728,6 +2816,12 @@ def kanal_report(session: Session, monate: int = 12,
     if not mit_demo:
         abfrage = ohne_demo(abfrage)
     vorgaenge = abfrage.all()
+    sparte = (sparte or "").strip().upper()
+    if sparte:
+        kunden_sparte = {k.id for k in session.query(Kunde)
+                         .filter(Kunde.id.in_({v.kunde_id for v in vorgaenge} or {0}))
+                         if sparte in interesse_liste_v31(k.interesse)}
+        vorgaenge = [v for v in vorgaenge if v.kunde_id in kunden_sparte]
     ids = {v.id for v in vorgaenge} or {0}
     angebote = (session.query(Angebot)
                 .filter(Angebot.vorgang_id.in_(ids)).all())
@@ -2792,7 +2886,7 @@ def lead_ad_sicht(session: Session, benutzer) -> bool:
     """Außendienst-Sicht auf die Lead-Akte (read-only + No-Show/Verschieben):
     erst bei lead_freigabe_modus = alle wirksam (Plan 81)."""
     return (benutzer is not None and benutzer.rolle == "aussendienst"
-            and freigabe_modus(session) == "alle")
+            and freigabe_modus(session) == "alle")   # v31: freigabe_modus() ist immer „alle“
 
 
 def einstellungs_protokoll(session: Session, text: str, benutzer=None) -> None:

@@ -110,6 +110,10 @@ def bearbeiten_speichern(request: Request, kunde_id: int,
                       kunde=kunde, daten=daten, fehler=fehler, anreden=ANREDEN)
     for feld, wert in daten.items():
         setattr(kunde, feld, wert)
+    # v31 (PLAN_LEAD_V5 Phase 153): Hauptobjekt(e) der Vorgänge dieses Kunden mitführen
+    # (Hauptobjekt = Kundenadresse; Interessen/Objektart bleiben synchron)
+    from app import objekte
+    objekte.hauptobjekt_sync(session, kunde)
     session.commit()
     return RedirectResponse("/kunden?meldung=Kunde+gespeichert", status_code=303)
 

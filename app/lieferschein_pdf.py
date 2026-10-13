@@ -186,7 +186,12 @@ _kurztext = _positionstext
 
 
 def erzeuge_lieferschein(angebot: Angebot, kunde: Kunde, ziel: Path | None = None,
-                         folgepositionen: dict[str, list[str]] | None = None) -> Path:
+                         folgepositionen: dict[str, list[str]] | None = None,
+                         ausfuehrungsort: dict | None = None) -> Path:
+    """v31 (PLAN_LEAD_V5 Phase 153): ausfuehrungsort = Feldsatz aus
+    anschriften.ausfuehrungsort_fuer (Objekt des Angebots); None = Kundenadresse."""
+    from app import anschriften
+    ort = ausfuehrungsort or anschriften.ausfuehrungsort(kunde)
     pdf = LieferscheinPdf(angebot.nummer)
     pdf.add_page()
     pdf.set_font("Arial", "", 6.5)
@@ -198,9 +203,9 @@ def erzeuge_lieferschein(angebot: Angebot, kunde: Kunde, ziel: Path | None = Non
     y_start = pdf.get_y() + 3
     pdf.set_font("Arial", "", 10)
     pdf.set_xy(pdf.l_margin, y_start)
-    # v20 (Phase 98): Lieferschein adressiert an die Lieferanschrift
-    from app import anschriften
-    empfaenger = anschriften.zeilen(anschriften.lieferung(angebot, kunde))
+    # v20 (Phase 98): Lieferschein adressiert an die Lieferanschrift (v31: Rückfall
+    # auf den Ausführungsort = Objekt des Angebots)
+    empfaenger = anschriften.zeilen(anschriften.lieferung(angebot, kunde, ort))
     pdf.multi_cell(100, 4.8, "\n".join(empfaenger))
     y_empfaenger = pdf.get_y()
     from datetime import date
@@ -219,12 +224,12 @@ def erzeuge_lieferschein(angebot: Angebot, kunde: Kunde, ziel: Path | None = Non
     pdf.cell(0, 6, f"L I E F E R S C H E I N  zu Angebot {angebot.nummer}",
              new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("Arial", "", 9)
-    ausfuehrung = f"{kunde.strasse}, {kunde.plz} {kunde.ort}".strip(", ")
+    ausfuehrung = anschriften.adresszeile(ort)
     if ausfuehrung:
         pdf.multi_cell(0, 5, f"Ausführungsort: {ausfuehrung}")
-    if anschriften.lieferzeile(angebot, kunde):
+    if anschriften.lieferzeile(angebot, kunde, ort):
         pdf.multi_cell(0, 5, "Lieferanschrift: "
-                       + anschriften.einzeilig(anschriften.lieferung(angebot, kunde)))
+                       + anschriften.einzeilig(anschriften.lieferung(angebot, kunde, ort)))
     pdf.ln(4)
 
     pdf.tabellenkopf()

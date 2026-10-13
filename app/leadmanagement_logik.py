@@ -17,7 +17,9 @@ LOGIK_PFAD = Path(getattr(config, "LEADMANAGEMENT_LOGIK_PFAD",
                           Path(config.LOGIK_EXCEL_PFAD).parent
                           / "leadmanagement_logik_v1.xlsx"))
 
-SPARTEN = ("WP", "PV", "KL", "WB", "GW")   # v23: GW = Gewerbe (A-10)
+# v31 (PLAN_LEAD_V5 Phase 157): MS = Mieterstrom, WA = Wasser, DMS = Denkmalschutz
+# (Freitext-Weg wie WB/GW, keine monday-Spalte) – Langnamen in app/sparten.py
+SPARTEN = ("WP", "PV", "KL", "WB", "GW", "MS", "WA", "DMS")   # v23: GW = Gewerbe (A-10)
 
 
 @dataclass
@@ -77,6 +79,7 @@ class Wunschzeit:
     von: str
     bis: str
     wochentage: str               # mo-fr | sa
+    aktiv: bool = True            # v31 (Phase 158): Spalte aktiv (ja/nein) – „samstag“ = nein
 
 
 @dataclass
@@ -382,10 +385,14 @@ def einlesen(pfad: Path | None = None) -> LeadLogik:
                                "Terminbestätigung ohne Punkte")
 
     for z in zeilen("Wunschzeiten"):
+        # v31 (Phase 158): optionale Spalte aktiv – „nein“ = Wunschzeit wird beim Abgleich
+        # ignoriert (Arbeitsanweisung: samstag = nein, Terminassistent nur Mo–Fr)
+        aktiv_wert = str(z[5] or "ja").strip().lower() if len(z) > 5 else "ja"
         logik.wunschzeiten.append(Wunschzeit(
             key=str(z[0] or "").strip(), bezeichnung=str(z[1] or "").strip(),
             von=str(z[2] or "").strip(), bis=str(z[3] or "").strip(),
-            wochentage=str(z[4] or "").strip()))
+            wochentage=str(z[4] or "").strip(),
+            aktiv=aktiv_wert not in ("nein", "n", "0", "false", "aus")))
 
     # Warnung: erfassungs_frage-Keys gegen den bestehenden Erfassungsbogen
     gueltig = _erfassungs_keys()

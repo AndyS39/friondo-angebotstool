@@ -33,8 +33,9 @@
         <input type="hidden" name="dauer_sek">
         {% if zurueck %}<input type="hidden" name="zurueck" value="{{ zurueck }}">{% endif %}
         <h3>Rückruf gewünscht</h3>
-        <label>Datum/Uhrzeit (Pflicht)
-            <input type="datetime-local" name="rueckruf_am" required></label>
+        {#- v31 (PLAN_LEAD_V5 Phase 158): Uhrzeit nur in 5-Minuten-Schritten (step=300; serverseitig lead_v5.runden_5min) #}
+        <label>Datum/Uhrzeit (Pflicht, 5-Minuten-Schritte)
+            <input type="datetime-local" name="rueckruf_am" step="300" required></label>
         <label>Notiz <input type="text" name="notiz" maxlength="300"></label>
         <div class="formzeile">
             <button class="knopf" type="submit">Speichern</button>
@@ -58,7 +59,8 @@
         <label>Freitext <input type="text" name="grund_text" maxlength="500"
                placeholder="Pflicht bei Sonstiges"></label>
         <div class="formzeile">
-            <button class="knopf" type="submit">Unqualifiziert setzen</button>
+            {#- v31 (Phase 157): Label „Disqualifiziert“ (interner Key unqualifiziert bleibt) #}
+            <button class="knopf" type="submit">Disqualifiziert setzen</button>
             <button class="knopf zweitrangig" type="button"
                     onclick="this.closest('dialog').close()">Abbrechen</button>
         </div>

@@ -82,6 +82,47 @@ def _kunden_map(session: Session, angebote) -> dict[int, Kunde]:
     return {k.id: k for k in session.query(Kunde).filter(Kunde.id.in_(ids))}
 
 
+def _verfolgung_nachziehen(session: Session, angebot: Angebot, benutzer=None) -> None:
+    """v32 (PLAN_V19 Phase 163, Vertrag N): Verfolgungsstufe des Vorgangs aus den
+    Angebotsstatus ableiten (verfolgung.nach_angebotsstatus). Rückfall, solange das Modul
+    fehlt: Angenommen → angenommen; Abgelehnt → abgelehnt nur, wenn kein weiteres Angebot
+    des Vorgangs offen (Versand vorbereitet/Versendet/Angenommen) ist."""
+    if angebot is None or not angebot.vorgang_id:
+        return
+    try:
+        from app import verfolgung
+        verfolgung.nach_angebotsstatus(session, angebot, benutzer)
+        return
+    except (ImportError, AttributeError):
+        pass
+    from app.models import Vorgang
+    vorgang = session.get(Vorgang, angebot.vorgang_id)
+    if vorgang is None:
+        return
+    if angebot.status == "Angenommen":
+        vorgang.verfolgung_status = "angenommen"
+    elif angebot.status == "Abgelehnt":
+        offen = (session.query(Angebot.id)
+                 .filter(Angebot.vorgang_id == vorgang.id, Angebot.id != angebot.id,
+                         Angebot.archiviert.is_(False),
+                         Angebot.status.in_(("Versand vorbereitet", "Versendet",
+                                             "Versendet (extern)", "Angenommen"))).first())
+        if offen is None:
+            vorgang.verfolgung_status = "abgelehnt"
+
+
+def _verfolgung_werte() -> list[tuple[str, str]]:
+    """v32 (Phase 163): Werte des Filters „Verfolgung“ der Angebotsliste – aus
+    verfolgung.STATUS/status_text (N), Rückfall mit den fünf Stufen des Plans."""
+    try:
+        from app import verfolgung
+        return [(s, verfolgung.status_text(s) or s) for s in verfolgung.STATUS]
+    except (ImportError, AttributeError):
+        return [("versendet", "Versendet"), ("nachgefasst", "Nachgefasst"),
+                ("bestellung_angekuendigt", "Bestellung angekündigt"),
+                ("angenommen", "Angenommen"), ("abgelehnt", "Abgelehnt")]
+
+
 @router.get("")
 def liste(request: Request, q: str = "", status: str = "", interesse: str = "",
                 vertriebler_id: int = 0, sortierung: str = "nummer", kanal: str = "",
@@ -132,7 +173,22 @@ def liste(request: Request, q: str = "", status: str = "", interesse: str = "",
     vorgaenge_map = {v.id: v for v in session.query(Vorgang)}
     def vorgang_von(a):
         return vorgaenge_map.get(a.vorgang_id)
-    if verfolgung == "faellig":   # fällige Vorgangs-Wiedervorlagen
+    # v32 (PLAN_V19 Phase 163, Vertrag N): Filter „Verfolgungsstatus“ (?verfolgung=
+    # versendet|nachgefasst|bestellung_angekuendigt|angenommen|abgelehnt) über
+    # verfolgung.filter_anwenden (Liste von Angeboten + vorgaenge_map); Rückfall ohne
+    # Modul: Vergleich mit vorgaenge.verfolgung_status
+    verfolgung_werte = _verfolgung_werte()
+    verfolgung_filter = verfolgung if verfolgung in dict(verfolgung_werte) else ""
+    if verfolgung_filter:
+        try:
+            from app import verfolgung as verfolgung_modul
+            angebote = list(verfolgung_modul.filter_anwenden(angebote, verfolgung_filter,
+                                                             vorgaenge_map=vorgaenge_map))
+        except (ImportError, AttributeError):
+            angebote = [a for a in angebote
+                        if (v := vorgang_von(a)) is not None
+                        and (v.verfolgung_status or "") == verfolgung_filter]
+    elif verfolgung == "faellig":   # fällige Vorgangs-Wiedervorlagen
         from datetime import datetime as dt
         angebote = [a for a in angebote
                     if (v := vorgang_von(a)) is not None
@@ -171,10 +227,15 @@ def liste(request: Request, q: str = "", status: str = "", interesse: str = "",
         sortierung = "nummer"
     # DB-Farbampel (Phase 24): Schwellen in Euro, in der Parametrierung pflegbar
     # v13-PV (Phase 78): Schwellen je Sparte (leer = allgemeine Schwellen)
+    from app import sparten as sparten_modul
     from app.models import DB_AMPEL_SPARTEN, db_schwellen
     rot_unter, gruen_ueber = db_schwellen(session)
     db_schwellen_cent = {sp: tuple(w * 100 for w in db_schwellen(session, sp))
                          for sp in DB_AMPEL_SPARTEN}
+    # v31 (PLAN_LEAD_V5 Phase 157): Sparten ohne eigene Schwellen (GW, MS, WA, DMS)
+    # fallen auf die WP-Schwellen zurück
+    for sp in sparten_modul.SPARTEN:
+        db_schwellen_cent.setdefault(sp, db_schwellen_cent.get("WP", (rot_unter * 100, gruen_ueber * 100)))
     # Mail-Verlauf (Phase 27): eingehende Antworten je Angebot zählen
     from sqlalchemy import func
 
@@ -194,6 +255,8 @@ def liste(request: Request, q: str = "", status: str = "", interesse: str = "",
                   angebote=angebote, kunden=kunden, q=q, status=status,
                   interesse=interesse, vertriebler_id=vertriebler_id, sortierung=sortierung,
                   kanal=kanal, verfolgung=verfolgung, sparte=sparte,
+                  # v32 (Phase 163): Filter-Markup von N (templates/angebote/liste.html)
+                  verfolgung_filter=verfolgung_filter, verfolgung_werte=verfolgung_werte,
                   vorgaenge_map=vorgaenge_map,
                   projekt_je_angebot=projekt_je_angebot,
                   projekt_modul_ok=projekt_modul_ok,
@@ -993,12 +1056,15 @@ def lieferschein(angebot_id: int, session: Session = Depends(get_session)):
     if angebot.extern or angebot.status != "Angenommen":
         return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
             "Lieferschein nur für angenommene Tool-Angebote."), status_code=303)
-    from app import lieferschein_pdf
+    from app import anschriften, lieferschein_pdf
     # v30 (PLAN_V18 Phase 149): EP-Folgepositionen aus dem Parameter
     # lieferschein_folgepositionen (Angebotstool-Einstellungen)
+    kunde = session.get(Kunde, angebot.kunde_id)
     pfad = lieferschein_pdf.erzeuge_lieferschein(
-        angebot, session.get(Kunde, angebot.kunde_id),
-        folgepositionen=lieferschein_pdf.folgepositionen_lesen(session))
+        angebot, kunde,
+        folgepositionen=lieferschein_pdf.folgepositionen_lesen(session),
+        # v31 (PLAN_LEAD_V5 Phase 153): Ausführungsort = Objekt des Angebots
+        ausfuehrungsort=anschriften.ausfuehrungsort_fuer(session, angebot=angebot, kunde=kunde))
     return FileResponse(pfad, media_type="application/pdf",
                         content_disposition_type="inline",
                         filename=f"LS-{angebot.nummer}.pdf")
@@ -1484,14 +1550,24 @@ def status_aendern(request: Request, angebot_id: int,
 
             from app.models import AblehnungsGrund, AngebotsNotiz
             grund = (form.get("ablehnungsgrund") or "").strip()
-            bekannt = {g.name for g in session.query(AblehnungsGrund)
+            bekannt = {g.name: g for g in session.query(AblehnungsGrund)
                        .filter(AblehnungsGrund.aktiv.is_(True))}
             if grund not in bekannt:
                 return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
                     "Bitte den Grund der Ablehnung angeben (Dialog beim Status „Abgelehnt“)."),
                     status_code=303)
+            grund_text = (form.get("ablehnungsgrund_text") or "").strip()[:500]
+            # v32 (PLAN_V19 Phase 163, Vorschlag N 4.1): Pflicht-Freitext bei Gründen mit
+            # freitext_pflicht („Sonstiges“) serverseitig prüfen – 400 bei JSON, sonst Meldung
+            if getattr(bekannt[grund], "freitext_pflicht", False) and not grund_text:
+                meldung = f"Beim Grund „{grund}“ ist die Ergänzung (Freitext) Pflicht."
+                if "application/json" in (request.headers.get("accept") or ""):
+                    from fastapi.responses import JSONResponse
+                    return JSONResponse({"ok": False, "meldung": meldung}, status_code=400)
+                return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(meldung),
+                                        status_code=303)
             angebot.ablehnungsgrund = grund
-            angebot.ablehnungsgrund_text = (form.get("ablehnungsgrund_text") or "").strip()[:500]
+            angebot.ablehnungsgrund_text = grund_text
             benutzer = request.state.benutzer
             session.add(AngebotsNotiz(
                 angebot_id=angebot.id,
@@ -1511,6 +1587,17 @@ def status_aendern(request: Request, angebot_id: int,
                 benutzer_name=benutzer.name if benutzer else "?",
                 text="Manuell als versendet markiert (automatische "
                      "Versand-Erkennung griff nicht)."))
+        # v32 (PLAN_V19 Phase 162): Versand-Hook – automatische Wiedervorlage am Vorgang
+        # (auch „Als versendet markieren“ und ein externer Eintrag zurück auf
+        # „Versendet (extern)“); reine DB-Arbeit vor dem Commit
+        if (neuer_status in ("Versendet", "Versendet (extern)")
+                and alter_status not in ("Versendet", "Versendet (extern)")):
+            from app import nachfassen
+            nachfassen.nach_versand(session, angebot, benutzer=request.state.benutzer)
+        # v32 (PLAN_V19 Phase 163, Vertrag N 4.1): Verfolgungsstufe des Vorgangs nach JEDEM
+        # Statuswechsel nachziehen (Angenommen → angenommen, Abgelehnt → abgelehnt, zurück auf
+        # Versendet → versendet; Regel verfolgung.ableiten – idempotent)
+        _verfolgung_nachziehen(session, angebot, request.state.benutzer)
         # v7: „Individuell“ archiviert NICHT mehr automatisch – individuelle
         # Fälle laufen über die Erfassungs-Statuskette (TAIFUN-Warteschlange)
         # verknüpfte Erfassung automatisch pflegen (Phase 14); eine als
@@ -1790,6 +1877,7 @@ def duplizieren(angebot_id: int, session: Session = Depends(get_session)):
         kopie.pv_json = quelle.pv_json
         kopie.kl_json = quelle.kl_json     # v24 (fehlte beim Duplizieren)
         kopie.wirtschaftlichkeit_ausblenden = quelle.wirtschaftlichkeit_ausblenden   # v22
+        kopie.objekt_id = quelle.objekt_id   # v31 (PLAN_LEAD_V5 Phase 153): gleiches Objekt
         _zahlungsbedingung_uebernehmen(kopie, quelle)   # v30 (Phase 150)
         _positionen_kopieren(kopie, quelle)
         ergebnis["kopie"] = kopie

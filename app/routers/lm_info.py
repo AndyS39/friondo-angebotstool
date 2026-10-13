@@ -163,10 +163,12 @@ def info_board(request: Request, session: Session = Depends(get_session)):
     f["sort"] = ctx["sortierung"]          # v25: gemerkte Sortierung je Nutzer (Board „info“)
     daten = lead_info.board_daten(session, benutzer, f)
     p = lead_info.parameter(session)
-    from app.models import INTERESSEN
+    # v31 (Phase 157): Sparten inkl. MS/WA/DMS (app/sparten.py) statt models.INTERESSEN
+    from app import sparten as sparten_modul
+    interessen = [(c, sparten_modul.SPARTEN_LANG.get(c, c)) for c in sparten_modul.SPARTEN]
     return render(request, "leadmanagement/info_board.html", aktiv="/lead-management",
                   gruppen=daten["gruppen"], anzahl=daten["anzahl"], jetzt=daten["jetzt"],
-                  archiv=daten["archiv"], filter_werte=f, ctx=ctx, sparten_liste=INTERESSEN,
+                  archiv=daten["archiv"], filter_werte=f, ctx=ctx, sparten_liste=interessen,
                   sortierung=ctx["sortierung"], konfig_board=lead_info.KONFIG_BOARD,
                   spalten=lead_info.spalten_fuer(session, benutzer.id, ctx["tabelle_makro"]),
                   sammelaktionen=lead_info.sammelaktionen() if ctx["sammel"] else [],
@@ -196,11 +198,22 @@ def info_sammelaktion(request: Request, session: Session = Depends(get_session))
     params = {k: v for k, v in daten.items() if k not in ("ids", "ids[]")}
     aktion = str(params.get("aktion") or "").strip()
     zurueck = _pfad_sicher(params.get("zurueck"))
-    ok, meldung = lead_info.sammelaktion_ausfuehren(session, benutzer, aktion, ids, params)
-    if ok:
+    # v31 (Phase 154, v27-Regel): Archivieren/Duplizieren fassen mehrere Zeilen an –
+    # Rollback + eine Wiederholung bei „database is locked“ (lm_boards._speichern)
+    ergebnis = {}
+
+    def _ausfuehren():
+        ok_, meldung_ = lead_info.sammelaktion_ausfuehren(session, benutzer, aktion, ids, params)
+        ergebnis.update(ok=ok_, meldung=meldung_)
+        if not ok_:
+            session.rollback()
+        return ok_
+    if aktion in ("archivieren", "duplizieren"):
+        from app.routers import lm_boards
+        lm_boards._speichern(session, _ausfuehren)
+    elif _ausfuehren():
         session.commit()
-    else:
-        session.rollback()
+    ok, meldung = ergebnis["ok"], ergebnis["meldung"]
     if _json_gewuenscht(request):
         return JSONResponse({"ok": ok, "meldung": meldung}, status_code=200 if ok else 422)
     return RedirectResponse(_mit_meldung(zurueck, meldung, fehler=not ok), status_code=303)

@@ -22,6 +22,7 @@
     <a href="#gewerke">Gewerkeübergreifend</a>
     <a href="#lieferschein">Lieferschein</a>
     <a href="#fern">Fern-Signatur</a>
+    <a href="#nachfassen">Nachfassen</a>
     <a href="#ablehnung">Abgelehnt-Prozess</a>
     <a href="#loeschprotokoll">Lösch-Protokoll</a>
 </nav>
@@ -170,6 +171,25 @@ Angebots-Mail einen Einmal-Link zum Online-Unterschreiben; nach der Signatur
 wird der Status auf „Angenommen" gesetzt und der Innendienst per E-Mail informiert.</p>
 </section>
 
+{# v32 (PLAN_V19 Phase 162): Werktage der automatischen Wiedervorlage nach Angebotsversand
+   (Lead-Parameter nachfass_werktage / nachfass_werktage_mfh, gelesen von app/nachfassen.py) #}
+<section class="pe-abschnitt" id="nachfassen">
+<h2>Nachfassen nach Angebotsversand (v32)</h2>
+<form method="post" action="/parametrierung/einstellungen" class="suchleiste">
+    <input type="hidden" name="nachfass_formular" value="1">
+    <label class="kontrollfeld">Wiedervorlage nach Versand
+        <input type="number" name="nachfass_werktage" value="{{ nachfass_werktage }}" min="0" max="30" size="4"> Werktage</label>
+    <label class="kontrollfeld">bei Mehrfamilienhaus (MFH)
+        <input type="number" name="nachfass_werktage_mfh" value="{{ nachfass_werktage_mfh }}" min="0" max="30" size="4"> Werktage</label>
+    <button class="knopf klein" type="submit">Speichern</button>
+</form>
+<p class="dezent">Nach jedem Versand (Einzel, Kombi, „Als versendet markieren“, externer
+    TAIFUN-Eintrag) setzt das Tool am Vorgang eine Wiedervorlage „Angebot nachfassen“ für den
+    Außendienstler: Versandtag + Werktage (Montag bis Freitag ohne NRW-Feiertage), bei
+    Objektart MFH am Kunden der zweite Wert. Eine spätere manuelle Wiedervorlage bleibt
+    stehen. Standard 3 bzw. 5 Werktage.</p>
+</section>
+
 <section class="pe-abschnitt" id="ablehnung">
 <h2>Abgelehnt-Prozess (v8)</h2>
 <div class="konfigurator-spalten">
@@ -182,14 +202,44 @@ wird der Status auf „Angenommen" gesetzt und der Innendienst per E-Mail inform
             Wiedervorlage in der Zukunft schützt vor dem Prüflauf.</span>
             <button class="knopf klein" type="submit">Speichern</button>
         </form>
-        <p><strong>Gründe der Ablehnung</strong> <span class="dezent">(Auswahlliste im Pflichtdialog)</span></p>
-        <table class="tabelle" style="max-width:520px">
+        <p><strong>Gründe der Ablehnung</strong> <span class="dezent">(Auswahlliste im Pflichtdialog
+            und im Dialog „Nächster Schritt“ – nur aktive Gründe, Reihenfolge wie hier)</span></p>
+        {# v32 (PLAN_V19 Phase 163): Reihenfolge sichtbar (Nr., ↑/↓), Häkchen Pflicht-Freitext #}
+        <table class="tabelle gruende-tabelle" style="max-width:640px">
+            <thead>
+                <tr><th>Nr.</th><th>Grund</th><th title="Beim Ablehnen ist der Freitext Pflicht">Freitext Pflicht</th><th></th></tr>
+            </thead>
             <tbody>
             {% for g in ablehnungsgruende %}
-                <tr>
+                <tr class="{{ 'grund-inaktiv' if not g.aktiv }}">
+                    <td class="dezent">{{ loop.index }}</td>
                     <td class="{{ 'dezent' if not g.aktiv }}">{{ g.name }}{{ ' (deaktiviert)' if not g.aktiv }}</td>
+                    <td>
+                        <form method="post" action="/parametrierung/ablehnungsgruende" class="inline-form">
+                            <input type="hidden" name="aktion" value="freitext">
+                            <input type="hidden" name="id" value="{{ g.id }}">
+                            <label class="kontrollfeld" title="Pflicht-Freitext umschalten">
+                                <input type="checkbox" name="freitext_pflicht" {{ 'checked' if g.freitext_pflicht }}
+                                       onchange="this.form.submit()"> {{ 'Pflicht' if g.freitext_pflicht else 'optional' }}
+                            </label>
+                        </form>
+                    </td>
                     <td class="aktionen">
-                        <form method="post" action="/parametrierung/ablehnungsgruende">
+                        {% if not loop.first %}
+                        <form method="post" action="/parametrierung/ablehnungsgruende" style="display:inline">
+                            <input type="hidden" name="aktion" value="hoch">
+                            <input type="hidden" name="id" value="{{ g.id }}">
+                            <button class="knopf klein zweitrangig" type="submit" title="Nach oben">↑</button>
+                        </form>
+                        {% endif %}
+                        {% if not loop.last %}
+                        <form method="post" action="/parametrierung/ablehnungsgruende" style="display:inline">
+                            <input type="hidden" name="aktion" value="runter">
+                            <input type="hidden" name="id" value="{{ g.id }}">
+                            <button class="knopf klein zweitrangig" type="submit" title="Nach unten">↓</button>
+                        </form>
+                        {% endif %}
+                        <form method="post" action="/parametrierung/ablehnungsgruende" style="display:inline">
                             <input type="hidden" name="aktion" value="umschalten">
                             <input type="hidden" name="id" value="{{ g.id }}">
                             <button class="knopf klein zweitrangig" type="submit">
@@ -203,8 +253,13 @@ wird der Status auf „Angenommen" gesetzt und der Innendienst per E-Mail inform
         <form method="post" action="/parametrierung/ablehnungsgruende" class="suchleiste">
             <input type="hidden" name="aktion" value="hinzufuegen">
             <input type="text" name="name" maxlength="100" placeholder="Neuer Grund …">
+            <label class="kontrollfeld"><input type="checkbox" name="freitext_pflicht"> Freitext Pflicht</label>
             <button class="knopf klein" type="submit">Hinzufügen</button>
         </form>
+        <p class="dezent">Die fünf Gründe „Zu teuer“, „Kein Interesse mehr“, „Bleibt bei Öl/Gas“,
+            „Woanders unterschrieben“ und „Sonstiges“ (Pflicht-Freitext) sind seit v32 dieselben wie die
+            Lead-Gründe „verloren“ (Blatt Gruende der Lead-Logik) – zwei Pflegeorte, bitte gleich halten.
+            Deaktivierte Gründe bleiben in der Statistik-Historie erhalten.</p>
     </div>
     <div class="konfigurator-protokoll">
         <p><strong>Prüflauf-Protokoll</strong> <span class="dezent">(letzte Läufe)</span></p>

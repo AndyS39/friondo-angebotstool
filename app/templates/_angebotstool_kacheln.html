@@ -4,7 +4,7 @@
    klein; fällige Zahlen rot über die Klasse "dringend". #}
 {% from "_symbole.html" import symbol %}
 <div class="kacheln start-shortcuts">
-    <a class="kachel" href="/leads"><span class="kachel-icon">{{ symbol('telefon') }}</span>Leads VOT</a>
+    <a class="kachel" href="/leads"><span class="kachel-icon">{{ symbol('telefon') }}</span>{{ 'Mein Tag' if request.state.benutzer and request.state.benutzer.rolle == 'aussendienst' else 'Leads VOT' }}</a>
     <a class="kachel" href="/erfassungen"><span class="kachel-icon">{{ symbol('stift') }}</span>Erfassungen</a>
     <a class="kachel" href="/angebote"><span class="kachel-icon">{{ symbol('pdf') }}</span>Angebote</a>
 </div>
@@ -46,5 +46,12 @@
         <span class="stat-zahl blau">{{ versendete }}</span>
         <span>Versendete Angebote</span>
         <span class="dezent">warten auf Antwort</span>
+    </a>
+    {# v32 (PLAN_V19 Phase 163): Vorgänge mit Verfolgungsstatus „Bestellung angekündigt“ –
+       Klick = Angebotsliste mit Filter Verfolgungsstatus #}
+    <a class="kachel stat" href="/angebote?verfolgung=bestellung_angekuendigt">
+        <span class="stat-zahl blau">{{ bestellungen | default(0) }}</span>
+        <span>Bestellung angekündigt</span>
+        <span class="dezent">Kunde hat zugesagt – Bestellung kommt</span>
     </a>
 </div>
