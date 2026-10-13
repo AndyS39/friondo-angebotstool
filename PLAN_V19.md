@@ -391,7 +391,7 @@ oben**. Daraus für Friondo (wird in den Phasen unten umgesetzt):
       aufgeklapptem Dialog, Heiße Kunden, Suche mit Vorschlägen, Vorgangsakte
       mit Verfolgungs-Chip, Angebotsliste mit Filter), nur Demo-Daten, keine
       EK/DB im Bild.
-- [ ] **Rollout-Vorbereitung** nach Grundregel – **einmal für v31 + v32 am Ende
+- [x] **Rollout-Vorbereitung** nach Grundregel – **einmal für v31 + v32 am Ende
       des Durchlaufs**: Server-DB-Kopie nach diagnose\,
       migrate.py zweimal (zweiter Lauf ohne Änderungen; neue Spalten
       `vorgaenge.verfolgung_status`, `vorgaenge.wiedervorlage_art`,
@@ -415,7 +415,7 @@ oben**. Daraus für Friondo (wird in den Phasen unten umgesetzt):
       Innendienst: Kachel „Bestellung angekündigt“, Gründe-Liste prüfen,
       Filter Verfolgungsstatus; Admin: `vot_abgleich.py`-Bericht lesen);
       `docs/updates.md` ergänzen; `config.VERSION = "v32"`.
-- [ ] Gesamtübersicht am Ende: erledigte Phasen, Testergebnisse (Gesamtzahl),
+- [x] Gesamtübersicht am Ende: erledigte Phasen, Testergebnisse (Gesamtzahl),
       angepasste Alt-Tests mit Begründung, Bericht des VOT-Abgleichs,
       Messwert der Suche, Liste aller [ANNAHME]-Stellen, Rückfragen gebündelt.
       **Ein gemeinsamer Commit für v31 + v32** am Ende des Durchlaufs:

@@ -670,7 +670,7 @@ Entscheidungen, ändern sie aber nicht (eine Ausnahme ist markiert: Demo-Leads).
       Testpostfach. Bestehende Lead-Tests anpassen
       (Reiter Termin, nicht_erreicht, Dropdown-Inhalte), jede Anpassung
       begründen. Gesamtlauf grün, `tests/test_v27_sitzungen.py` grün.
-- [ ] Rollout-Vorbereitung nach Grundregel – **einmal für v31 + v32 am Ende
+- [x] Rollout-Vorbereitung nach Grundregel – **einmal für v31 + v32 am Ende
       des Durchlaufs** (siehe Einfügung): Server-DB-Kopie nach
       diagnose\, migrate.py zweimal fehlerfrei (nur additive Migrationen:
       `vorgang_objekte`, `objekt_id`-Spalten, `kunden.grosskunde`,
@@ -701,7 +701,7 @@ Entscheidungen, ändern sie aber nicht (eine Ausnahme ist markiert: Demo-Leads).
       Häkchen prüfen, HV-Gruppen-Mitglieder prüfen, Sparten-Langnamen,
       Vorlage `terminbestaetigung_objekte` je Vertriebler gegenlesen);
       `docs/updates.md`; `config.VERSION = "v31"`.
-- [ ] Gesamtübersicht am Ende: erledigte Phasen, Testergebnisse,
+- [x] Gesamtübersicht am Ende: erledigte Phasen, Testergebnisse,
       angepasste Alt-Tests mit Begründung, Liste der Vorlagen-Ersetzungen
       (Kürzel → Langform), Liste aller [ANNAHME]-Stellen, gebündelte
       Rückfragen. **Ein gemeinsamer Commit für v31 + v32** am Ende des
