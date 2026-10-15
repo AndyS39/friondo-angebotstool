@@ -155,7 +155,9 @@ fünf- bis zehnmal schneller. Nicht lesbare Formate (z. B. HEIC ohne Browser-Unt
 - Handelsvertreter-Dashboard: Block „Simons Gruppe – noch nicht verteilt“ listet die Leads, für die noch ein
   Mitglied gewählt werden muss.
 - Verschiebt ein Mitarbeiter einen Vor-Ort-Termin in Outlook, übernimmt das Tool die Zeit und schickt dem
-  Leadmanager eine Glocke – die Terminänderung an den Kunden geht bewusst von Hand.
+  Leadmanager eine Glocke – die Terminänderung an den Kunden geht bewusst von Hand. Diese Glocke (wie die
+  Glocke „in Outlook gelöscht“) erscheint nur, wenn in den Lead-Einstellungen die Glocken-Art
+  „Terminänderung“ angehakt ist (Admin-Punkt 10).
 - Nachfass-Mail: die Vorlagen enden mit Grußformel und {absender}; die hochgeladene Signatur daher ohne eigene
   Grußformel anlegen (sonst doppelt).
 
@@ -221,3 +223,7 @@ Nachfass-Mail: Graph als Anwendung (Phase 166) mit allen Außendienst-Postfäche
    ausführen – alle Projekt-/Service-Termine und (bei `kalender_sync = an`) offenen Vor-Ort-Termine der
    nächsten 8 Wochen bekommen persönliche Outlook-Kopien über den Lauf outlook-sync. Angebotsprofil SWD:
    die Kanalwerte „SWD, Stadtwerke Düsseldorf“ setzt `migrate.py` selbst, wenn sie fehlen.
+10. **Glocken-Art „Terminänderung“ einschalten (Nachtrag 15.10.2026):** Parametrierung → Lead-Einstellungen →
+    Glocken → Häkchen „Terminänderung“. Ohne das Häkchen (Standard seit v29: nur To-Do-Glocken) bekommt der
+    Leadmanager keine Glocke, wenn ein Vor-Ort-Termin in Outlook verschoben oder gelöscht wurde – die
+    Aktivität in der Timeline des Leads gibt es trotzdem.
