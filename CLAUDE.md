@@ -3760,8 +3760,13 @@ synthetischen Fixture gleichen Aufbaus plus Stichproben gegen die echte Datei. E
   (`scripts/lasttest.py`). Rollout-Vorbereitung `diagnose/v34/abschluss_tests.sh` (Server-Kopie, `migrate.py`
   zweimal, Wallbox-Fixtures + Demo-Angebot in der Kopie, Testbenutzer, Rückweg-Probe v33-Code (Worktree
   2ab17a6) auf der v34-DB, Gesamtsuite, Abnahme, Voll-Crawl sechs Basisrollen + drei Varianten hell/dunkel,
-  Smoke, Lasttest normal + schreibsturm); Ergebnisse: siehe Gesamtübersicht `diagnose/v34/gesamtuebersicht.md`
-  und `docs/lasttest-v27.md` 4.9. Screenshots `docs/design-v34/` (Login mobil, Galerie-Sammelbox mobil,
+  Smoke, Lasttest normal + schreibsturm). **Ergebnis (15.10.2026):** `migrate.py` zweimal (2. Lauf ohne
+  Änderungen), Rückweg-Probe 24/24, Gesamtsuite **1535 bestanden, 4 übersprungen** (2 lastabhängige Tests einzeln
+  grün), Abnahme 93/93, Voll-Crawl 8 Läufe 0 Abstürze, Smoke 8/8; Lasttest `normal` (50 Nutzer, 20 min, 6.358
+  Anfragen) 0 × 5xx, 0 locked, Pool-Spitze 44 %, TAIFUN-PDF lesen p95 269 ms, Galerie-Mehrfachupload p95 971 ms,
+  **wie in v33 nicht erfüllt** p95 Listen/Akten 1.850 ms (Ziel 1.500) und Terminvorschläge 13,2 s (Ziel 6 s) –
+  keine v34-Route in den Spitzen, Empfehlung v33 P6 bleibt; `schreibsturm` 190/190 Positionen korrekt, 0 locked.
+  Details: Gesamtübersicht `diagnose/v34/gesamtuebersicht.md`, `docs/lasttest-v27.md` 4.9. Screenshots `docs/design-v34/` (Login mobil, Galerie-Sammelbox mobil,
   Wallbox-Editor und -Erfassung, Vorgangsakte mit Kasten „Gemeinsam versenden“, hell/dunkel). Doku: dieser
   Abschnitt, Zuordnungstabelle, Titelzeile, Zentrale Dateien, Fachliche Regeln (USt-Rundung, Auslegungs-
   Position, Alternativ-Darstellung, Elektro ins PV), überholt-Marker in v8/v10/v11/v13/v22/v24/v27-Nachtrag 2

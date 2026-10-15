@@ -548,7 +548,7 @@ Steuerdatei vor der Änderung nach `diagnose/konfigurator_logik_v5.vor_v34.xlsx`
 
 ## Phase 182 – Tests, Rollout-Vorbereitung, Doku, CLAUDE.md v34
 
-- [ ] **Tests gesamt:** neue Dateien `test_wb_v34_import.py`,
+- [x] **Tests gesamt:** neue Dateien `test_wb_v34_import.py`,
       `test_wb_v34_logik.py`, `test_wb_v34.py`, `test_v34_alternativ.py`,
       `test_v34_elektro_pv.py`, `test_v34_kombi.py`, `test_v34_auslegung.py`,
       `test_v34_mail_vorlage.py`, `test_v34_taifun_pdf.py`,
@@ -557,7 +557,7 @@ Steuerdatei vor der Änderung nach `diagnose/konfigurator_logik_v5.vor_v34.xlsx`
       WB-Weiche) mit Begründung; `pytest tests -q` komplett grün,
       Wächter-AST v27 und Token-Wächter v30 grün; Außendienst-Sichtprüfung
       (kein EK/DB in WB-Angebot, Alternativ-Badge, Elektro-Knopf unsichtbar).
-- [ ] **Rollout-Vorbereitung** nach Grundregel: Server-DB-Kopie nach
+- [x] **Rollout-Vorbereitung** nach Grundregel: Server-DB-Kopie nach
       diagnose\, migrate.py zweimal (zweiter Lauf ohne Änderungen; additiv:
       `angebote.wb_json`, `angebote.auslegung_text`, Positions-Spalten
       `uebernommen_von_angebot_id/_position_id`, WB-Artikel-Import, Seeds
@@ -568,7 +568,7 @@ Steuerdatei vor der Änderung nach `diagnose/konfigurator_logik_v5.vor_v34.xlsx`
       Mehrfachupload und PDF-Lesen im Modell), Screenshots (Alternativ-
       Kasten im PDF, Kombi-Kasten, Galerie-Upload-Liste mobil, Login mobil)
       nach `docs/design-v34/`, nur Demo-Daten.
-- [ ] **Doku:** CLAUDE.md Abschnitt „Neu in v34 – Wallbox-Konfigurator,
+- [x] **Doku:** CLAUDE.md Abschnitt „Neu in v34 – Wallbox-Konfigurator,
       Angebotstool-Feedback 15.10., Mobil (abgestimmt 15.10.2026)“ nach „Neu
       in v33“, Zuordnungstabelle `| v34 | PLAN_V21.md | 178–182 |`,
       Titelzeile „(v34)“; in „Neu in v8“ (WB vorerst immer Freitext), „v10“
@@ -583,7 +583,7 @@ Steuerdatei vor der Änderung nach `diagnose/konfigurator_logik_v5.vor_v34.xlsx`
       Mennekes-Datenblatt ablegen, Login-Probe mit Handy, USt-Rundung);
       `docs/betrieb.md` (pypdf, Galerie-Mehrfachupload); `docs/updates.md`;
       `config.VERSION = "v34"`.
-- [ ] **Gesamtübersicht am Ende:** erledigte Phasen, Testergebnisse
+- [x] **Gesamtübersicht am Ende:** erledigte Phasen, Testergebnisse
       (Gesamtzahl), angepasste Alt-Tests mit Begründung, Preiskonflikt
       WB003, Ursache Klima-Mailvorlage, Ursache „Angemeldet bleiben“,
       Liste der entfernten Auslegungszeilen (Anzahl Entwürfe), [ANNAHME]-
