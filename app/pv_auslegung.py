@@ -259,9 +259,14 @@ def _wr_waehlen(a: Auslegung, p: dict, kombis) -> None:
     a.speicher_stufe, a.kombi_nr = moeglich[0]
 
 
+# v34 (PLAN_V21 Phase 180): Kennung der bis v33 erzeugten 0,00-€-Auslegungs-Position
+# (Bestand/Migration angebot_aufbau.migration_v34_auslegung) – wird nicht mehr angelegt
+AUSLEGUNGSZEILE = "Auslegung der PV-Anlage"
+
+
 def auslegungs_text(a: Auslegung) -> str:
-    """Textzeile im Angebot + Protokoll: Module, kWp, Strings, WR/Speicher,
-    Belegungsart mit Herleitung."""
+    """Text für angebote.auslegung_text (Editor „Auslegung (intern)“, v34) und das
+    Protokoll: Module, kWp, Strings, WR/Speicher, Belegungsart mit Herleitung."""
     if not a.module:
         return ""
     teile = [f"{a.module} Module à {_de(a.kwp / a.module * 1000)} Wp = "
@@ -492,16 +497,10 @@ def positionen_zusammenstellen(logik: Logik, antworten: dict, session,
         }
         gesehen[(block_nr, gw.ref)] = eintrag
         positionen.append(eintrag)
-    # Auslegungszeile (0,00 €) am Ende von Block 1
-    text = auslegungs_text(a)
-    if text and positionen:
-        erster = positionen[0]["block_nr"]
-        letzte = max(i for i, x in enumerate(positionen) if x["block_nr"] == erster)
-        positionen.insert(letzte + 1, {
-            "block_nr": erster, "gruppe": positionen[letzte]["gruppe"],
-            "pos_nr": "", "bezeichnung": "Auslegung der PV-Anlage",
-            "beschreibung": text, "menge": 1.0, "einheit": "psl.",
-            "e_preis_cent": 0, "ep_flag": False, "ek_cent": 0, "guid": ""})
+    # v34 (PLAN_V21 Phase 180): keine 0,00-€-Auslegungszeile „Auslegung der PV-Anlage“
+    # mehr am Ende von Block 1 (v16–v33) – auslegungs_text(a) wandert beim Anlegen in
+    # angebote.auslegung_text (angebot_aufbau.auslegungs_text_fuer) und bleibt im
+    # Protokoll (protokoll_zeilen); AUSLEGUNGSZEILE bleibt als Kennung für Bestand/Migration.
     for sort, x in enumerate(positionen, 1):
         x["sort"] = sort
     return positionen

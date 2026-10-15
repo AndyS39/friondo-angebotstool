@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{# v34 (PLAN_V21 Phase 181): Diktat-Knopf am Freitext-Feld (static/diktat.js) #}
+{% from "_diktat.html" import diktat_knopf %}
 
 {% block titel %}Freitext-Erfassung{% endblock %}
 
@@ -20,7 +22,8 @@
             <p class="frage-hinweis">Alles Wichtige für den Innendienst: Anlage, Ort der
             Aufstellung, Besonderheiten, Maße, gewünschte Leistungen …</p>
             {% if fehler %}<p class="feldfehler">{{ fehler }}</p>{% endif %}
-            <textarea name="freitext" rows="12" required>{{ erfassung.freitext }}</textarea>
+            <textarea name="freitext" id="freitext-feld" rows="12" required>{{ erfassung.freitext }}</textarea>
+            {{ diktat_knopf('freitext-feld') }}
         </div>
         <div class="mobil-aktionen">
             {% if hat_antworten %}

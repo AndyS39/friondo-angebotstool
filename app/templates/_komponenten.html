@@ -1,6 +1,8 @@
 {# v14 (PLAN_V12, Phase 69): gemeinsame UI-Bausteine des Design-Systems.
    Dokumentation: docs/design-system.md #}
 {% from "_symbole.html" import symbol %}
+{# v34 (PLAN_V21 Phase 181): Diktat-Knopf am Notizen-Chat (static/diktat.js) #}
+{% from "_diktat.html" import diktat_knopf %}
 
 {# EIN Farbschema für alle Status – überall identisch (Angebote + Erfassungen) #}
 {% macro status_badge(status) -%}
@@ -209,9 +211,10 @@
       data-vorgang="{{ ctx.vorgang_id }}" data-name="{{ ctx.mein_name }}">
     {% if ctx.herkunft %}<input type="hidden" name="herkunft" value="{{ ctx.herkunft }}">{% endif %}
     {% if ctx.zurueck %}<input type="hidden" name="zurueck" value="{{ ctx.zurueck }}">{% endif %}
-    <textarea name="text" rows="4" maxlength="2000" required
+    <textarea name="text" id="nc-text-{{ ctx.vorgang_id }}" rows="4" maxlength="2000" required
               placeholder="Notiz schreiben … (Strg + Enter sendet; Einträge sind unveränderlich)"></textarea>
     <button class="knopf" type="submit">Senden</button>
+    {{ diktat_knopf('nc-text-' ~ ctx.vorgang_id) }}
     <span class="nc-fehler" hidden></span>
 </form>
 {% elif ctx.hinweis %}

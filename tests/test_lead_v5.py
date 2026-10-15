@@ -65,10 +65,21 @@ class SpartenTests(unittest.TestCase):
             self.assertTrue(sparten.sparten_interesse(code).startswith("Interesse an"), code)
 
     def test_freitext_sparten(self):
+        # v34 (PLAN_V21 Phase 179, Agent W): WB ist keine reine Freitext-Sparte mehr, sobald
+        # die Logik „Aktionen WB“ trägt (Wallbox-Konfigurator) – ohne geladene Logik bleibt WB
+        # Freitext; GW/MS/WA/DMS immer Freitext
+        from datetime import datetime
+        from app.logik import Logik
+        from app import logik as logik_modul
+        ohne_logik = Logik({}, [], [], [], {}, datetime.now())
         for code in ("WB", "GW", "MS", "WA", "DMS"):
-            self.assertTrue(sparten.ist_freitext_sparte(code), code)
+            self.assertTrue(sparten.ist_freitext_sparte(code, ohne_logik), code)
         for code in ("WP", "PV", "KL"):
-            self.assertFalse(sparten.ist_freitext_sparte(code), code)
+            self.assertFalse(sparten.ist_freitext_sparte(code, ohne_logik), code)
+        voll, _bericht = logik_modul.logik_einlesen()
+        self.assertEqual(sparten.ist_freitext_sparte("WB", voll), not bool(voll.wb_aktionen))
+        for code in ("GW", "MS", "WA", "DMS"):
+            self.assertTrue(sparten.ist_freitext_sparte(code, voll), code)
 
 
 class LeadV5Tests(unittest.TestCase):

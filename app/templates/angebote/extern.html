@@ -117,22 +117,18 @@ Statuspflege (Angenommen/Abgelehnt), Verfolgung und Notizen laufen hier weiter.<
 </form>
 {% endif %}
 
-{# v10 (Phase 62): TAIFUN-PDF für den Kombi-Versand hinterlegen #}
-<form method="post" action="/angebote/{{ angebot.id }}/taifun-pdf" class="suchleiste"
-      enctype="multipart/form-data">
-    <strong>Angebots-PDF:</strong>
-    {% if angebot.extern_pdf_pfad %}
-        <a class="knopf klein zweitrangig" href="/angebote/{{ angebot.id }}/taifun-pdf"
-           target="_blank">PDF ansehen</a>
-        <span class="dezent">hinterlegt am {{ angebot.extern_pdf_am.strftime('%d.%m.%Y %H:%M') if angebot.extern_pdf_am }}</span>
-    {% else %}
-        <span class="abzeichen ep" title="Ohne PDF ist der Eintrag im Kombi-Versand nicht wählbar">kein PDF</span>
-    {% endif %}
-    <input type="file" name="pdf_datei" accept="application/pdf">
-    <button class="knopf klein" type="submit">{{ 'Ersetzen' if angebot.extern_pdf_pfad else 'Hochladen' }}</button>
-</form>
+{# v10 (Phase 62): TAIFUN-PDF für den Kombi-Versand hinterlegen.
+   v34 (PLAN_V21 Phase 180, Agent V): Drop-Zone statt Datei-Knopf – erneutes Ablegen ersetzt
+   das PDF (Sicherheitsabfrage) und bietet „Nummer/Datum/Endbetrag aus dem neuen PDF
+   übernehmen“ (Häkchen je Feld); Makro in _taifun_pdf.html, Verhalten taifun_pdf.js #}
+<link rel="stylesheet" href="/static/vorgang_v34.css?v={{ css_version }}">
+<script src="/static/taifun_pdf.js?v={{ css_version }}" defer></script>
+{% from "_taifun_pdf.html" import taifun_pdf_eintrag %}
+<h2 style="margin-bottom:0.25rem">Angebots-PDF</h2>
+{{ taifun_pdf_eintrag(angebot, zurueck='/angebote/' ~ angebot.id) }}
 <p class="dezent">Übergangslösung – Ziel ist die Erstellung im Tool. Mit
-hinterlegtem PDF kann der Eintrag im Kombi-Versand der Vorgangsakte mitgesendet werden.</p>
+hinterlegtem PDF kann der Eintrag im Kombi-Versand der Vorgangsakte mitgesendet werden;
+Nummer, Datum und Endbetrag lassen sich beim Ablegen aus dem PDF übernehmen.</p>
 
 <div class="verfolgung-block">
     <form method="post" action="/angebote/{{ angebot.id }}/verfolgung" class="suchleiste">

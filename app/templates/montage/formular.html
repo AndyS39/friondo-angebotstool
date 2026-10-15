@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{# v34 (PLAN_V21 Phase 181): Diktat-Knopf an den großen Textfeldern (static/diktat.js) #}
+{% from "_diktat.html" import diktat_knopf %}
 
 {% block titel %}{{ titel }} · {{ projekt.nummer if projekt else 'Service-Einsatz' }}{% endblock %}
 
@@ -92,7 +94,8 @@
                 {% if wert %}<span class="dezent" style="font-size:12px">✓ Unterschrift gespeichert</span>{% endif %}
             </div>
             {% elif f.gross %}
-            <textarea name="{{ f.feld_key }}" rows="6" class="gross" maxlength="2000">{{ wert }}</textarea>
+            <textarea name="{{ f.feld_key }}" id="feld-{{ f.feld_key }}" rows="6" class="gross" maxlength="2000">{{ wert }}</textarea>
+            {{ diktat_knopf('feld-' ~ f.feld_key, 'pj-btn') }}
             {% else %}
             <input type="text" name="{{ f.feld_key }}" value="{{ wert }}">
             {% endif %}

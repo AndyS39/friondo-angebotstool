@@ -589,6 +589,26 @@ def editor(request: Request, angebot_id: int,
                    .filter(Angebot.vorgang_id == vorgang.id,
                            Angebot.id != angebot.id,
                            Angebot.status != "Überholt")]
+    # v34 (PLAN_V21 Phase 180, Agent E): Alternativ-Badge mit Link/Gültigkeit je Position,
+    # Knopf „Elektroarbeiten ins PV-Angebot“ (nur WP/KL/WB-Entwurf mit PV-Angebot im Vorgang),
+    # „zurückholen“, Hinweis „Geschwister-Angebot nicht mehr gültig“, Herkunft übernommener
+    # Kopien im PV-Angebot, Hinweis „Auslegung (intern)“ nur Innendienst/Admin
+    from app import elektro_pv
+    alternativ_info = elektro_pv.alternativ_info(session, angebot)
+    elektro_pv_ziel = elektro_pv.knopf_sichtbar(session, angebot)
+    elektro_rueckholbar, elektro_rueckhol_grund = elektro_pv.rueckholbar(session, angebot)
+    alternativ_ungueltig = [p for p in angebot.positionen
+                            if p.alternativ and not alternativ_info[p.id]["gueltig"]]
+    herkunft_ids = {p.uebernommen_von_angebot_id for p in angebot.positionen
+                    if p.uebernommen_von_angebot_id}
+    herkunft_map = {a.id: a for a in session.query(Angebot).filter(Angebot.id.in_(herkunft_ids))} \
+        if herkunft_ids else {}
+    uebernommen_von = {p.id: herkunft_map[p.uebernommen_von_angebot_id]
+                       for p in angebot.positionen
+                       if p.uebernommen_von_angebot_id in herkunft_map}
+    auslegung_sichtbar = (benutzer is not None
+                          and benutzer.basisrolle in ("admin", "innendienst")
+                          and bool((angebot.auslegung_text or "").strip()))
 
     # Vertriebler des Vorgangs (v5-Nachtrag): anzeigen + änderbar
     from app import mail_vorlagen
@@ -648,6 +668,11 @@ def editor(request: Request, angebot_id: int,
                   profil=profil, profile=profile, profil_hinweise=profil_hinweise,
                   fachhinweise=fachhinweise, versionen=versionen,
                   vorgang=vorgang, geschwister=geschwister,
+                  alternativ_info=alternativ_info, elektro_pv_ziel=elektro_pv_ziel,   # v34
+                  elektro_rueckholbar=elektro_rueckholbar,
+                  elektro_rueckhol_grund=elektro_rueckhol_grund,
+                  alternativ_ungueltig=alternativ_ungueltig, uebernommen_von=uebernommen_von,
+                  auslegung_sichtbar=auslegung_sichtbar,
                   projekt_obj=projekt_obj, projekt_modul_ok=projekt_modul_ok,
                   vortext_standard=angebotsprofile.vortext_fuer_angebot(session, angebot),
                   angebot=angebot, kunde=kunde, gruppen=gruppen,
@@ -1336,9 +1361,10 @@ def email_entwurf(request: Request, angebot_id: int,
             basis = str(request.base_url).rstrip("/")
         signatur_link = f"{basis}/signatur/extern/{token}"
         session.commit()
-    # Vorlage (Phase 30, v27-Nachtrag 2): AD des Vorgangs → Sparten-Vorlage des
-    # Angebots (WP/PV/KL/WB) → Standard; Platzhalter füllen. Die Quelle
-    # („Sparten-Vorlage KL“ …) steht in der Erfolgsmeldung.
+    # Vorlage (Phase 30, v27-Nachtrag 2, v34 Phase 180): WP = AD des Vorgangs → Sparten-
+    # Vorlage → Standard; PV/KL/WB = Sparten-Vorlage → AD → Standard (mail_vorlagen.
+    # vorlage_laden); Platzhalter füllen. Die Quelle („Sparten-Vorlage KL“ …) steht in
+    # der Erfolgsmeldung.
     from app import mail_vorlagen
     from app.models import einstellung_holen
     betreff, text, vorlage_quelle = mail_vorlagen.mail_fuer_angebot(
@@ -1731,38 +1757,67 @@ def taifun_pdf_hochladen(request: Request, angebot_id: int,
                                session: Session = Depends(get_session)):
     """v10 (Phase 62): PDF-Upload am externen TAIFUN-Eintrag (ersetzbar, mit
     Zeitstempel) – Übergangslösung, damit Kombi-Mails alle Angebote enthalten;
-    Ziel bleibt die Erstellung im Tool."""
-    from datetime import datetime as dt
+    Ziel bleibt die Erstellung im Tool.
+    v34 (PLAN_V21 Phase 180, Agent V): Drop-Zone statt Datei-Knopf (Akte, Angebotsliste,
+    TAIFUN-Seite – taifun_pdf.js): ein vorhandenes PDF wird nur mit Sicherheitsabfrage
+    ersetzt (Feld `bestaetigt=1`, sonst Meldung/409), Häkchen `uebernehmen_nummer` /
+    `uebernehmen_datum` / `uebernehmen_endbetrag` übernehmen die serverseitig aus dem NEUEN
+    PDF gelesenen Werte (app/taifun_pdf.py), Kopie in die Galerie „Allgemein“ (wie v18),
+    Antwort als JSON bei Accept application/json, sonst Redirect auf `zurueck` (nur
+    Tool-Pfade) bzw. den Eintrag. Upload-Regel: das Formular wird VOR dem ersten
+    Datenbankzugriff gelesen (keine Schreibsperre während der Übertragung)."""
     from urllib.parse import quote_plus
 
-    from app import config
+    from fastapi.responses import JSONResponse
+
+    from app import taifun_pdf
+    form = anfrage.formular(request)
+    json_gewuenscht = "application/json" in (request.headers.get("accept") or "")
+    zurueck = (form.get("zurueck") or "").strip()
+    if not (zurueck.startswith("/") and not zurueck.startswith("//")):
+        zurueck = f"/angebote/{angebot_id}"
+    zurueck, _, anker = zurueck.partition("#")   # Anker (z. B. #angebot-12) hinter die Meldung
+    trenner = "&" if "?" in zurueck else "?"
+
+    def antwort(meldung: str, status_code: int = 303, ok: bool = True):
+        if json_gewuenscht:
+            return JSONResponse({"ok": ok, "meldung": meldung},
+                                status_code=200 if ok else status_code)
+        return RedirectResponse(zurueck + trenner + "meldung=" + quote_plus(meldung)
+                                + (f"#{anker}" if anker else ""), status_code=303)
+
+    datei = form.get("pdf_datei")
+    if datei is None or not getattr(datei, "filename", ""):
+        return antwort("Bitte eine PDF-Datei auswählen.", 400, ok=False)
+    inhalt = datei.file.read()
+    fehler = taifun_pdf.groesse_pruefen(len(inhalt))
+    if fehler:
+        return antwort(fehler, 413, ok=False)
+    if not taifun_pdf.ist_pdf(inhalt):
+        return antwort(taifun_pdf.MELDUNG_KEIN_PDF, 415, ok=False)
+    # Entscheidung Orchestrator (15.10.2026, v33-Upload-Regel): die pypdf-Textextraktion eines bis zu
+    # 20 MB großen PDFs läuft VOR dem ersten Datenbankzugriff – die Schreibsitzung (BEGIN IMMEDIATE)
+    # hält die SQLite-Schreibsperre damit nie während des Parsens; die Schreibtransaktion bekommt
+    # die fertigen Felder (`felder=`) und schreibt nur noch Datei, Galerie-Kopie und Spalten
+    felder = taifun_pdf.felder_erkennen(taifun_pdf.text_lesen(inhalt))
     angebot = session.get(Angebot, angebot_id)
     if angebot is None or not angebot.extern:
         return RedirectResponse("/angebote", status_code=303)
-    # v33 (PLAN_V20 Phase 172, Befund 15.10.2026): der Request-Body (Upload) ist Netz-I/O – die
-    # Schreibsitzung darf die SQLite-Schreibsperre nicht während der Übertragung halten
-    from app.db import verbindung_freigeben
-    verbindung_freigeben(session)
-    form = anfrage.formular(request)
-    datei = form.get("pdf_datei")
-    if datei is None or not getattr(datei, "filename", ""):
-        return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
-            "Bitte eine PDF-Datei auswählen."), status_code=303)
-    inhalt = datei.file.read()
-    if not inhalt.startswith(b"%PDF"):
-        return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
-            "Die Datei ist kein PDF."), status_code=303)
-    ordner = config.ANGEBOTE_PDF_ORDNER / "extern"
-    ordner.mkdir(parents=True, exist_ok=True)
-    ziel = ordner / f"{angebot.nummer}.pdf"
-    ziel.write_bytes(inhalt)
-    ersetzt = bool(angebot.extern_pdf_pfad)
-    angebot.extern_pdf_pfad = str(ziel)
-    angebot.extern_pdf_am = dt.now()
-    session.commit()
-    return RedirectResponse(f"/angebote/{angebot_id}?meldung=" + quote_plus(
-        ("PDF ersetzt" if ersetzt else "PDF hinterlegt")
-        + " – der Eintrag ist jetzt im Kombi-Versand wählbar."), status_code=303)
+    bestaetigt = "1" in [str(w) for w in form.getlist("bestaetigt")]
+    if angebot.extern_pdf_pfad and not bestaetigt:
+        return antwort("Am Eintrag liegt bereits ein PDF – das Ersetzen bitte bestätigen "
+                       "(Sicherheitsabfrage).", 409, ok=False)
+    uebernehmen = {feld for feld in taifun_pdf.UEBERNEHMBAR
+                   if str(form.get(f"uebernehmen_{feld}") or "") in ("1", "on", "true")}
+    ergebnis: dict = {}
+    benutzer = request.state.benutzer
+
+    def aktion():
+        ergebnis.update(taifun_pdf.eintrag_pdf_speichern(session, angebot, inhalt, benutzer,
+                                                        uebernehmen, felder=felder))
+
+    _speichern(session, aktion)
+    return antwort(taifun_pdf.meldung_fuer(ergebnis))
 
 
 @router.get("/{angebot_id}/taifun-pdf")
@@ -1936,8 +1991,14 @@ def _zahlungsbedingung_uebernehmen(ziel: Angebot, quelle: Angebot) -> None:
 def _positionen_kopieren(ziel: Angebot, quelle: Angebot) -> None:
     """Positions-Snapshots 1:1 mit allen Kennzeichen (Bugfix 30.09.2026: vorher
     gingen beim Duplizieren bauseits, Positionsrabatt, Sonderpreis, manuell
-    geänderter Preis und Alternativ verloren – der Endbetrag stieg)."""
+    geänderter Preis und Alternativ verloren – der Endbetrag stieg).
+    v34 (PLAN_V21 Phase 180): die 0,00-€-Auslegungszeile eines Alt-Angebots wird nicht
+    mitkopiert – ihr Text landet in ziel.auslegung_text (falls leer)."""
     for p in quelle.positionen:
+        if angebot_aufbau.ist_auslegungs_position(p):
+            if not (ziel.auslegung_text or "").strip():
+                ziel.auslegung_text = (p.beschreibung or "").strip()
+            continue
         ziel.positionen.append(AngebotsPosition(
             sort=p.sort, block_nr=p.block_nr, gruppe=p.gruppe, pos_nr=p.pos_nr,
             bezeichnung=p.bezeichnung, beschreibung=p.beschreibung, menge=p.menge,
@@ -1980,6 +2041,8 @@ def duplizieren(angebot_id: int, session: Session = Depends(get_session)):
         kopie.ust_satz = quelle.ust_satz   # v13-PV
         kopie.pv_json = quelle.pv_json
         kopie.kl_json = quelle.kl_json     # v24 (fehlte beim Duplizieren)
+        kopie.wb_json = quelle.wb_json     # v34 (PLAN_V21 Phase 179)
+        kopie.auslegung_text = quelle.auslegung_text   # v34 (PLAN_V21 Phase 180)
         kopie.wirtschaftlichkeit_ausblenden = quelle.wirtschaftlichkeit_ausblenden   # v22
         kopie.objekt_id = quelle.objekt_id   # v31 (PLAN_LEAD_V5 Phase 153): gleiches Objekt
         _zahlungsbedingung_uebernehmen(kopie, quelle)   # v30 (Phase 150)
@@ -2064,6 +2127,8 @@ def fuer_anderen_kunden_kopieren(request: Request, angebot_id: int,
         kopie.ust_satz = quelle.ust_satz   # v13-PV
         kopie.pv_json = quelle.pv_json
         kopie.kl_json = quelle.kl_json     # v24
+        kopie.wb_json = quelle.wb_json     # v34 (PLAN_V21 Phase 179)
+        kopie.auslegung_text = quelle.auslegung_text   # v34 (PLAN_V21 Phase 180)
         kopie.profil_id = quelle.profil_id
         kopie.vortext_text = quelle.vortext_text
         kopie.rabatt_cent = quelle.rabatt_cent

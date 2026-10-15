@@ -32,7 +32,7 @@ def _schalter(env_name: str) -> bool:
 
 
 # v27 (PLAN_V17): Versionskennung für /health und die Betriebs-Seite
-VERSION = "v33"   # 14.10.2026: Outlook je Mitarbeiter, Graph als Anwendung, zentraler Kalender, Rollen-Varianten, Service, Auto-Phase, Rabatt 0 %, Mein Tag mobil, Tabellen-Layout, Nachfassen (PLAN_V20, Phasen 166-177)
+VERSION = "v34"   # 15.10.2026: Wallbox-Konfigurator, Alternativ/Elektro ins PV, Kombi-Versand, Auslegungszeile, Mail je Sparte, TAIFUN-PDF, Mobil (PLAN_V21, Phasen 178-182); vorher v33 14.10.2026: Outlook je Mitarbeiter, Graph als Anwendung, zentraler Kalender, Rollen-Varianten, Service, Auto-Phase, Rabatt 0 %, Mein Tag mobil, Tabellen-Layout, Nachfassen (PLAN_V20, Phasen 166-177)
 
 
 # --- Pfade ---------------------------------------------------------------
@@ -47,6 +47,9 @@ PV_PREISLISTEN_ORDNER = _pfad("PV_PREISLISTEN_ORDNER",
 # v24 (PLAN_V16 Phase 113): TAIFUN-Positionslisten der Klima-Strecke
 KL_PREISLISTEN_ORDNER = _pfad("KL_PREISLISTEN_ORDNER",
                               PROJEKT_ORDNER / "Artikel-Preislisten" / "Klima")
+# v34 (PLAN_V21 Phase 178, Nachtrag 15.10.2026): Wallbox-Positionsliste (WB Angebot Excel 1.xlsx)
+WB_PREISLISTEN_ORDNER = _pfad("WB_PREISLISTEN_ORDNER",
+                              PROJEKT_ORDNER / "Artikel-Preislisten" / "Wallbox")
 # Seit Phase 35 ist die v5-Logik führend (A13 Anschlussleitung Pos. 103, SLS/ÜSS/APZ entfallen)
 LOGIK_EXCEL_PFAD = _pfad("LOGIK_EXCEL_PFAD", PROJEKT_ORDNER / "konfigurator_logik_v5.xlsx")
 LOGIK_EXCEL_V2_PFAD = LOGIK_EXCEL_PFAD  # Alias (Phase-11-Import nutzt diesen Namen)

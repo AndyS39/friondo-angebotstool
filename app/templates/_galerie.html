@@ -7,39 +7,94 @@
    Herunterladen (?download=1, download-Attribut) / Schließen, Esc und Klick
    außerhalb schließen. Die Bild-Links tragen die Daten als data-lb-* Attribute;
    die Datei-Route liefert Bilder jetzt inline (kein Sofort-Download mehr, auch
-   wenn pjLightbox fehlt oder per Strg-Klick umgangen wird). #}
+   wenn pjLightbox fehlt oder per Strg-Klick umgangen wird).
+   v34 (PLAN_V21 Phase 181): Sammelbox als eigenes Makro `sammelbox` (Kamera-Serie,
+   Mehrfachauswahl, Ordner + Bemerkung je Datei, „Für alle übernehmen“, EIN Request mit
+   Fortschrittsbalken und Teilerfolg je Datei – static/galerie_v34.js/.css, eingebunden über
+   galerie_einbindung()); Modus „formular“ für die mobile Erfassung (Dateien landen je
+   Ordner in galerie_<i> des Seitenformulars). Das Foto-für-Foto-JS des v33-Nachtrags
+   (pjSammel*) ist durch den Sammel-Request ersetzt. #}
+{% macro galerie_einbindung() -%}
+{# v34 (PLAN_V21 Phase 181): Skript + Styles der Sammelbox – einmal je Seite
+   (galerie_fuss() ruft es mit; Seiten ohne Lightbox rufen es selbst) #}
+<link rel="stylesheet" href="/static/galerie_v34.css?v={{ css_version | default('') }}">
+<script src="/static/galerie_v34.js?v={{ css_version | default('') }}"></script>
+{%- endmacro %}
+
+{% macro sammelbox(galerie_vorgang_id, galerie_ordner, galerie_zurueck, sparte='WP',
+                   modus='upload', feld_praefix='galerie_') %}
+{# v34 (PLAN_V21 Phase 181): Foto-Sammelbox – Kamera-Serie („Fotos aufnehmen“ → „Weiteres
+   Foto“), Mehrfachauswahl, je Datei Vorschaubild + Ordner-Dropdown (Vorbelegung =
+   Standard-Ordner) + Bemerkung, „Für alle übernehmen“; Modus upload = EIN Request an
+   /vorgaenge/<id>/galerie/upload mit Fortschrittsbalken und Teilerfolg je Datei
+   (static/galerie_v34.js), Modus formular = versteckte Felder <feld_praefix><i> /
+   <feld_praefix>ordner_<i> des umgebenden Formulars (mobile Erfassung, Route
+   erfassung.seite_speichern unverändert). Bilder werden auf dem Gerät verkleinert
+   (bild_verkleinern.js). #}
+<div class="pj-gal-sammel gal34" data-vorgang="{{ galerie_vorgang_id or '' }}"
+     data-sparte="{{ sparte }}" data-zurueck="{{ galerie_zurueck }}" data-modus="{{ modus }}"
+     {% if modus == 'upload' %}data-upload-url="/vorgaenge/{{ galerie_vorgang_id }}/galerie/upload"{% endif %}>
+    <div class="kopf">
+        <label class="pj-btn primary gal34-kamera">📷 <span class="gal34-kamera-text"
+                data-start="Fotos aufnehmen" data-weiter="Weiteres Foto">Fotos aufnehmen</span>
+            <input type="file" accept="image/*" capture="environment" hidden data-gal34="kamera"></label>
+        <label class="pj-btn">🖼 Dateien wählen
+            <input type="file" accept="image/*,application/pdf" multiple hidden data-gal34="dateien"></label>
+        <label class="dezent">Standard-Ordner
+            <select class="haupt-ordner">
+                {% for o in galerie_ordner %}<option value="{{ o }}">{{ o }}</option>{% endfor %}
+            </select></label>
+    </div>
+    <template class="gal34-vorlage">
+        <div class="gal34-zeile">
+            <img src="" alt="" class="gal34-bild">
+            <span class="gal34-doku" hidden>📄</span>
+            <div class="gal34-felder">
+                <span class="gal34-name"></span>
+                <select aria-label="Ordner">
+                    {% for o in galerie_ordner %}<option value="{{ o }}">{{ o }}</option>{% endfor %}
+                </select>
+                <input type="text" class="gal34-bemerkung" placeholder="Bemerkung (optional)" maxlength="300">
+                <span class="gal34-groesse dezent"></span>
+            </div>
+            <button type="button" class="gal34-weg" title="Aus der Liste entfernen">✕</button>
+        </div>
+    </template>
+    <div class="gal34-liste" hidden></div>
+    <div class="fuss" hidden>
+        <label class="dezent gal34-nur-upload">Bemerkung für alle
+            <input type="text" class="bemerkung" placeholder="optional" maxlength="300" size="16"></label>
+        <button class="pj-btn gal34-alle" type="button"
+                title="Standard-Ordner (und Bemerkung) für alle Dateien der Liste setzen">Für alle übernehmen</button>
+        <progress class="gal34-fortschritt" value="0" max="100" hidden></progress>
+        <span class="gal34-status dezent" hidden></span>
+        {% if modus == 'upload' %}
+        <button class="pj-btn primary gal34-hochladen" type="button">⬆ <span class="zahl">0</span> Fotos hochladen</button>
+        <button class="pj-btn gal34-abbrechen" type="button" hidden>Abbrechen</button>
+        {% else %}
+        <span class="dezent"><span class="zahl">0</span> Foto(s) – werden mit „Weiter“ gespeichert</span>
+        {% endif %}
+        <button class="pj-btn gal34-leeren" type="button">Leeren</button>
+    </div>
+    {% if modus == 'formular' %}
+    {% for o in galerie_ordner %}
+    <input type="file" name="{{ feld_praefix }}{{ loop.index0 }}" multiple hidden class="gal34-ziel" data-ordner="{{ o }}">
+    <input type="hidden" name="{{ feld_praefix }}ordner_{{ loop.index0 }}" value="{{ o }}">
+    {% endfor %}
+    {% endif %}
+    <p class="dezent hinweis">Nacheinander fotografieren oder mehrere Dateien wählen – jedes
+        Foto landet erst in dieser Liste (Ordner und Bemerkung je Foto), hochgeladen wird
+        einmal am Ende{% if modus == 'formular' %} mit „Weiter“{% endif %}.</p>
+</div>
+{% endmacro %}
+
 {% macro galerie(galerie_vorgang_id, galerie_daten, galerie_ordner,
                  galerie_darf_loeschen, galerie_zurueck, sparte='WP',
                  darf_verschieben=True) %}
 <div class="pj-galerie" id="galerie-{{ sparte }}">
-    {# Foto-Sammelbox (27.09.2026): Kamera-Serie oder Mehrfachauswahl,
-       Ordner je Foto, ein Upload für alles #}
-    <div class="pj-gal-sammel" data-vorgang="{{ galerie_vorgang_id }}"
-         data-sparte="{{ sparte }}" data-zurueck="{{ galerie_zurueck }}">
-        <div class="kopf">
-            <label class="pj-btn primary">📷 Foto aufnehmen
-                <input type="file" accept="image/*" capture="environment"
-                       hidden onchange="pjSammelAdd(this)"></label>
-            <label class="pj-btn">🖼 Fotos wählen
-                <input type="file" accept="image/*,application/pdf" multiple
-                       hidden onchange="pjSammelAdd(this)"></label>
-            <label class="dezent">Standard-Ordner
-                <select class="haupt-ordner">
-                    {% for o in galerie_ordner %}<option value="{{ o }}">{{ o }}</option>{% endfor %}
-                </select></label>
-        </div>
-        <div class="liste"></div>
-        <div class="fuss" hidden>
-            <input type="text" class="bemerkung" placeholder="Bemerkung (optional)" size="18">
-            <button class="pj-btn primary" type="button"
-                    onclick="pjSammelHochladen(this)">⬆ <span class="zahl">0</span> Fotos hochladen</button>
-            <button class="pj-btn" type="button" onclick="pjSammelLeeren(this)">Leeren</button>
-        </div>
-        <p class="dezent hinweis">Nacheinander fotografieren – jedes Foto landet
-            erst in dieser Liste (Ordner je Foto wählbar), hochgeladen wird
-            einmal am Ende.</p>
-    </div>
-
+    {# Foto-Sammelbox (27.09.2026; v34 PLAN_V21 Phase 181): Kamera-Serie oder
+       Mehrfachauswahl, Ordner + Bemerkung je Foto, EIN Upload für alles #}
+    {{ sammelbox(galerie_vorgang_id, galerie_ordner, galerie_zurueck, sparte) }}
     {% for ordner in galerie_ordner %}
     {% set eintrag = galerie_daten.get(ordner, {'eintraege': [], 'vorschau': None}) %}
     <details class="pj-gal-ordner" {{ 'open' if eintrag.eintraege and loop.first }}>
@@ -123,6 +178,7 @@
 {% endmacro %}
 
 {% macro galerie_fuss() %}
+{{ galerie_einbindung() }}
 {# v28 (Phase 136): Lightbox – einmal je Seite; Daten kommen aus den
    data-lb-* Attributen der Bild-Links (Gruppe = Vorgang/Sparte/Ordner) #}
 <dialog class="pj-dlg pj-lightbox" id="pj-lightbox" aria-label="Bildansicht">
@@ -236,103 +292,7 @@ function pjGalDrop(ev, form) {
     /* v33-Nachtrag: requestSubmit löst das submit-Ereignis aus – bild_verkleinern.js verkleinert vorher */
     if (typeof form.requestSubmit === 'function') { form.requestSubmit(); } else { form.submit(); }
 }
-/* Foto-Sammelbox (27.09.2026): mehrere Fotos sammeln, Ordner je Foto,
-   ein Upload am Ende */
-function pjSammelBox(el) { return el.closest('.pj-gal-sammel'); }
-function pjSammelAdd(input) {
-    var box = pjSammelBox(input);
-    box._dateien = box._dateien || [];
-    var haupt = box.querySelector('.haupt-ordner');
-    Array.from(input.files).forEach(function (datei) {
-        var eintrag = {datei: datei};
-        box._dateien.push(eintrag);
-        /* v33-Nachtrag 15.10.2026: Foto auf dem Gerät verkleinern (max. 2000 px, JPEG) – die
-           verkleinerte Datei ersetzt das Original in der Liste; der Upload wartet darauf */
-        if (window.bildVerkleinern) {
-            box._laufend = (box._laufend || 0) + 1;
-            window.bildVerkleinern(datei).then(function (klein) { eintrag.datei = klein; })
-                .catch(function () {})
-                .then(function () { box._laufend -= 1; });
-        }
-        var zeile = document.createElement('div');
-        zeile.className = 'foto';
-        var bild = document.createElement('img');
-        if (datei.type.indexOf('image') === 0) {
-            bild.src = URL.createObjectURL(datei);
-        }
-        zeile.appendChild(bild);
-        var wahl = haupt.cloneNode(true);
-        wahl.className = '';
-        wahl.value = haupt.value;
-        zeile.appendChild(wahl);
-        eintrag.wahl = wahl;
-        var weg = document.createElement('button');
-        weg.type = 'button';
-        weg.textContent = '✕';
-        weg.title = 'Foto aus der Liste entfernen';
-        weg.onclick = function () {
-            box._dateien.splice(box._dateien.indexOf(eintrag), 1);
-            zeile.remove();
-            pjSammelZahl(box);
-        };
-        zeile.appendChild(weg);
-        box.querySelector('.liste').appendChild(zeile);
-    });
-    input.value = '';
-    pjSammelZahl(box);
-}
-function pjSammelZahl(box) {
-    var n = (box._dateien || []).length;
-    box.querySelector('.fuss').hidden = n === 0;
-    box.querySelector('.zahl').textContent = n;
-}
-function pjSammelLeeren(knopf) {
-    var box = pjSammelBox(knopf);
-    box._dateien = [];
-    box.querySelector('.liste').innerHTML = '';
-    pjSammelZahl(box);
-}
-function pjSammelHochladen(knopf) {
-    /* v33-Nachtrag 15.10.2026 (Meldung der Vertriebler): Foto für Foto hochladen – eine Anfrage je
-       Foto (verkleinert), Fortschritt am Knopf „Lade 2 von 5 …“; am Ende zurück mit Meldung */
-    var box = pjSammelBox(knopf);
-    if (!box._dateien || !box._dateien.length) return;
-    if (box._laufend) { setTimeout(function () { pjSammelHochladen(knopf); }, 150); return; }
-    knopf.disabled = true;
-    var text = knopf.textContent;
-    var dateien = box._dateien.slice();
-    var gesamt = dateien.length, nr = 0;
-    function fertig(fehler) {
-        if (fehler) {
-            knopf.disabled = false; knopf.textContent = text;
-            alert('Upload fehlgeschlagen – ' + nr + ' von ' + gesamt + ' Fotos abgelegt. Bitte erneut versuchen.');
-            return;
-        }
-        var ziel = box.dataset.zurueck || window.location.pathname;
-        ziel += (ziel.indexOf('?') >= 0 ? '&' : '?') + 'meldung=' + encodeURIComponent(gesamt + ' Foto(s) abgelegt.') + '#galerie';
-        window.location = ziel;
-    }
-    function naechstes() {
-        if (nr >= gesamt) { fertig(false); return; }
-        var e = dateien[nr];
-        knopf.textContent = 'Lade ' + (nr + 1) + ' von ' + gesamt + ' …';
-        var daten = new FormData();
-        daten.append('ordner', box.querySelector('.haupt-ordner').value);
-        daten.append('sparte', box.dataset.sparte);
-        daten.append('zurueck', box.dataset.zurueck);
-        daten.append('bemerkung', box.querySelector('.bemerkung').value);
-        daten.append('dateien', e.datei, e.datei.name);
-        daten.append('datei_ordner', e.wahl.value);
-        fetch('/vorgaenge/' + box.dataset.vorgang + '/galerie/upload',
-              {method: 'POST', body: daten, credentials: 'same-origin'})
-            .then(function (antwort) {
-                if (!antwort.ok) { throw new Error('HTTP ' + antwort.status); }
-                nr += 1;
-                naechstes();
-            })
-            .catch(function () { fertig(true); });
-    }
-    naechstes();
-}
+/* Foto-Sammelbox: seit v34 (PLAN_V21 Phase 181) in static/galerie_v34.js (Makro sammelbox,
+   EIN Request mit Ordner/Bemerkung je Datei statt Foto für Foto) */
 </script>
 {% endmacro %}

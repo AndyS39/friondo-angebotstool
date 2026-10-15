@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v33)
+# Friondo Angebotstool – Projektkontext (v34)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -30,7 +30,9 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
   SLS/ÜSS/APZ-Fragen komplett entfernt. 14 AMPEL-Gründe (Blatt Aktionen).
 - `Artikel-Preislisten/Angebotserstellung Tool mit EK.xlsx` (WP-Preisliste),
   `Artikel-Preislisten/PV/` (PV-Positionslisten, v16), `Artikel-Preislisten/Klima/`
-  (Ersatzangebot KL · Musterangebot KL – Klima-Positionen, v24), `ANGEBOTSTEXTE.md`,
+  (Ersatzangebot KL · Musterangebot KL – Klima-Positionen, v24), `Artikel-Preislisten/Wallbox/`
+  (Wallbox Artikel Excel · Extraleitung – Wallbox-Positionen mit EK, v34; nur Projektordner/Git, nie
+  Projektwissen; `Beispielangebot.pdf` gitignored), `ANGEBOTSTEXTE.md`,
   `anlagen/`, `Layout - Logo/`.
 - `projektierung_logik_v1.xlsx` (Projektierung, v11+) und
   `leadmanagement_logik_v1.xlsx` (Lead-Management, v12; seit v23 zusätzlich die
@@ -78,6 +80,7 @@ Nummern vergeben.
 | v31 | PLAN_LEAD_V5.md | 153–160 |
 | v32 | PLAN_V19.md | 161–165 |
 | v33 | PLAN_V20.md | 166–177 |
+| v34 | PLAN_V21.md | 178–182 |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
@@ -154,6 +157,23 @@ Nummern vergeben.
 - **Rabatt bei jedem Steuersatz (v33, Phase 172):** der Gesamtrabatt wird vom Gesamtbetrag nach USt abgezogen –
   bei 0 % USt (PV, § 12 Abs. 3 UStG) also vom Nettobetrag; der Deckungsbeitrag sinkt um Rabatt ÷ (1 + USt-Satz).
   Kontrollwerte: 20.000,00 € netto, 0 %, 5 % → 19.000,00 €, DB −1.000,00 €.
+- **USt kaufmännisch gerundet (v34, Phase 180):** `Angebot.summen()` rundet die USt wie TAIFUN
+  (`ROUND_HALF_UP`) statt abzuschneiden – Summenblock, Editor, Liste, Statistik, monday und
+  Mail-Platzhalter folgen; Rabatt-/KfW-Logik unverändert (Kontrollwert WP 30.245,43 € netto → USt
+  5.746,63 € bleibt; KL-Fall A 1.238,55 € wie das TAIFUN-Musterangebot).
+- **Keine Auslegungs-Position im Angebot (v34, Phase 180):** die 0,00-€-Zeilen „Auslegung der
+  Wärmepumpe“ / „Auslegung der Klimaanlage“ / PV-Auslegungszeile entfallen; die Herleitung bleibt im
+  Konfigurationsprotokoll und steht in `angebote.auslegung_text` (Editor-Hinweis „Auslegung (intern)“
+  nur Innendienst/Admin, nie Außendienst); Bestand: Entwürfe per Migration bereinigt.
+- **Alternativ-Darstellung (v34, Phase 180):** Positionen „in anderem Angebot enthalten“ (v10) sind im
+  PDF durch einen farbigen Hinweiskasten vor dem Block und „im PV-Angebot“ (bzw. „im WP-Angebot“ …) in
+  der G-Preis-Spalte klar von Eventualpositionen („EP.“) getrennt; im Editor farbiger Balken + Badge mit
+  Link (Tokens `--alternativ`/`--alternativ-flaeche`).
+- **Elektroarbeiten ins PV-Angebot (v34, Phase 180):** Knopf im Editor eines WP-/KL-/WB-Entwurfs
+  verschiebt die Elektro-Positionen (Block Elektroarbeiten bzw. WB003/WB005/WB006 + gewerkeübergreifende
+  Artikel) in das PV-Angebot desselben Vorgangs (dort voll berechnet zu 0 % USt, eigene Gruppe,
+  `uebernommen_von_*`), im Ursprung als Alternativ-Positionen; „zurückholen“ solange beide Entwurf/Versand
+  vorbereitet sind. Steuerliche Zulässigkeit entscheidet Friondo/Steuerberatung – das Tool setzt nur um.
 
 ## Neu in v6 (abgestimmt 21.08.2026)
 - **Lead-Zuordnung:** Personen-Zuordnung wirkt sofort rückwirkend auf bestehende
@@ -203,7 +223,8 @@ Nummern vergeben.
   verlässt „Leads VOT" erst, wenn alle Interessen erfasst oder
   ausgeblendet sind. Sparten-Auswahl beim Erfassungsstart
   (Lead-Interessen vorausgewählt); je Sparte Weiche Katalog/Freitext,
-  WB vorerst immer Freitext. PV/KL sind reine Erfassungsformulare
+  WB vorerst immer Freitext *(überholt – seit v34 ist WB ein Konfigurator mit Weiche Katalog | Freitext,
+  siehe v34)*. PV/KL sind reine Erfassungsformulare
   (Blätter „Fragen PV" / „Fragen KL", ohne Artikel-Aktionen; PV ist seit v16,
   KL seit v24 ein vollwertiger Konfigurator – siehe dort) und laufen
   über die TAIFUN-Schiene; Sparten-Badge an Erfassung, Warteschlange,
@@ -283,7 +304,9 @@ Nummern vergeben.
   Vorgangsebene – EINE Ampel je Kundenanfrage; Angenommen/
   Abgelehnt bleibt je Angebot. Der 90-Tage-Lauf respektiert die
   Vorgangs-Wiedervorlage für alle Angebote des Vorgangs.
-- Kombi-Versand: Aus der Akte mehrere versandfertige Angebote in
+- Kombi-Versand *(ergänzt v34: Kasten „Gemeinsam versenden“ mit Häkchen an allen versandfähigen
+  Angeboten, Entwürfe werden automatisch vorbereitet – Beschränkung auf „Versand vorbereitet“ entfällt)*:
+  Aus der Akte mehrere versandfertige Angebote in
   EINER Mail versenden (mehrere separate PDFs). Kombi-Vorlage mit
   {angebotsliste} (je Angebot Sparte + Endbetrag, WP zusätzlich
   Eigenanteil) – Einzelbeträge, keine Gesamtsumme. Broschüren
@@ -361,7 +384,8 @@ Nummern vergeben.
   (Standard info@friondo.de).
 - **Vorlagen:** Standard-Vorlage für Betreff + Text plus optionale Vorlage je *(ergänzt v33: zusätzlich die Nachfass-Vorlagen „Nachfassen 1/2“, Versand durch den AD aus dem eigenen Postfach)*
   Außendienstler (greift automatisch nach AD des Vorgangs) – *ergänzt seit v27-Nachtrag 2:
-  zusätzlich Vorlage je Sparte WP/PV/KL/WB, Reihenfolge AD → Sparte → Standard*. Platzhalter: {anrede},
+  zusätzlich Vorlage je Sparte WP/PV/KL/WB, Reihenfolge AD → Sparte → Standard* *(überholt – seit v34 bei
+  PV/KL/WB Sparten-Vorlage → AD-Vorlage → Standard, WP unverändert)*. Platzhalter: {anrede},
   {vorname}, {nachname}, {angebotsnummer}, {endbetrag}, {eigenanteil}, {foerderung},
   {gueltig_bis}, {vertriebler}, {absender}. Pflege durch Admin/Innendienst in der
   Parametrierung, mit Vorschau; bisheriger Festtext wird als Standard migriert.
@@ -507,7 +531,8 @@ Zeitpunkt bereits durch Projektierung und Lead-Management belegt.)
   ohne Paket" behoben (Angebot-erzeugen prüft auf offene Fragen).
 - Konfigurator: Auslegung ohne Verbrauch über Fläche × Gebäudestandard
   (40/60/70 W/m², Fragen A17/A18 nach A03 = „Verbrauch unbekannt") mit
-  ausgewiesener Herleitung im Protokoll; Auslegungszeile in Block 1
+  ausgewiesener Herleitung im Protokoll; Auslegungszeile in Block 1 *(überholt – seit v34 keine
+  Auslegungs-Position, Text intern im Editor)*
   (0,00 €, Wortlaut vorläufig bis TAIFUN-Muster); Fassadenleitung auch bei
   Dachaufstellung (N10); Kran-Frage N09 statt EP-Automatik;
   Tankgrößen-Nachfrage A19 ab 9.000 l; Dachzentrale-KG-Kette mit
@@ -1006,7 +1031,7 @@ v14“ entspricht diesem Abschnitt.)
   die Scroll-Position (Scroll-Restore aus `projektierung.js` gilt auch für
   `/angebote/<id>`, Anker für neue Positionen), Gruppen-Überschriften je
   Angebot editierbar (`POST /angebote/<id>/gruppe`, wirkt auf alle Positionen
-  des Blocks), Auslegungszeile WP mit Einheit „psl.“ (Migration für den
+  des Blocks), Auslegungszeile WP mit Einheit „psl.“ *(überholt – seit v34 entfernt)* (Migration für den
   Bestand), BzA-Datenblatt im Dialog vollständig übersteuerbar inkl.
   Contracting (Vorbelegung Nein; statuslos, nur für das erzeugte PDF).
   Tests: `tests/test_v22_feedback.py`, `tests/test_fehlerprotokoll_v22.py`,
@@ -1178,7 +1203,7 @@ Texte/PDF, Integration/Kontrollfälle, adversarialer Prüfer).)
   „× Innengeräte“/„× Außengeräte“/„je Außengerät“/„je Raum“/„als EP“,
   Zusatzbedingungen ohne ≠), „Angebotsaufbau KL“ (Block 1 Montage/Zuschläge,
   Block 2 Elektro, Block 3 „Klimaanlage Bosch“ – jede KL-Nummer ausdrücklich,
-  Block 3 endet mit der Auslegungszeile), „KL-Parameter“ (17 Zeilen: W/m²
+  Block 3 endet mit der Auslegungszeile – *überholt, seit v34 ohne Auslegungszeile*), „KL-Parameter“ (17 Zeilen: W/m²
   60/90, Höhenfaktoren 1,0/1,1/1,2, Klassengrenzen 2,6/3,5/5,3/7,0 kW,
   Leitung inklusive 5 m, Meterposition KL017, Standardserie, Max. 5 Innen-/3
   Außengeräte, §14a-Außengeräte „CL5000M 105/4 E; CL5000M 125/5 E“,
@@ -1222,7 +1247,8 @@ Texte/PDF, Integration/Kontrollfälle, adversarialer Prüfer).)
   als Fallback im Code. Positionen: Block 3 mit Außengeräten/Sets in
   Außengerät-Reihenfolge, Innengeräten je Klasse gebündelt, KL013 (EP laut
   KO08), KL049 und der Auslegungszeile „Auslegung der Klimaanlage“ (0,00 €,
-  psl.) als letzter Zeile; `auslegungs_text` wörtlich nach Plan;
+  psl.) als letzter Zeile *(überholt – seit v34 keine Auslegungs-Position, Text in
+  `angebote.auslegung_text`)*; `auslegungs_text` wörtlich nach Plan;
   `validierung` liefert die Absende-Meldungen („Außengerät <n> hat keinen
   zugeordneten Raum …“, „Raum <Nr>: Raumfläche fehlt“); `protokoll_zeilen`
   füllt die Seite „Auslegung“ des Protokoll-PDFs. Einbindung:
@@ -2036,7 +2062,8 @@ weiter, Rückweg `rollback.bat --nur-code`. Rollout nur im Wartungsfenster.)
   `fehlende_dateien(logik)`; die Betriebs-Seite zeigt fehlende Anhang-Dateien als Kachel.
   **E-Mail-Vorlage je Sparte** (`app/mail_vorlagen.py`): Parametrierung → E-Mail-Vorlagen hat
   Reiter Standard · WP · PV · KL · WB (`?sparte=`), Ablage `mail_vorlage_sparte_<SPARTE>_betreff/
-  _text`; Reihenfolge beim „Versand vorbereiten“: Vorlage des Außendienstlers → Sparten-Vorlage
+  _text`; Reihenfolge beim „Versand vorbereiten“ *(überholt – seit v34 bei PV/KL/WB Sparte vor
+  AD-Vorlage)*: Vorlage des Außendienstlers → Sparten-Vorlage
   des Angebots (`konfigurator_typ`) → Standard (`vorlage_laden(session, benutzer_id, sparte)`,
   Quelle „Sparten-Vorlage KL“ in der Meldung); Kombi-Versand behält seine Vorlage.
   `migration_sparten` (migrate.py, Marker `migration_nachtrag2_sparten`) legt die vier
@@ -3498,3 +3525,245 @@ additiv – v32-Code läuft auf der v33-Datenbank (Rückweg-Probe im Rollout-Skr
   `test_v33_rabatt::test_monday_deal_wert` (Basis netto = Netto nach Rabatt). Gesamtsuite nach dem Nachtrag
   1352 bestanden, 5 übersprungen; `migrate.py` zweimal auf einer Kopie (2. Lauf ohne Änderungen); Skripte
   per Chrome headless geprüft (`diagnose/v33/orch/js_check.py`).
+
+## Neu in v34 – Wallbox-Konfigurator, Angebotstool-Feedback 15.10., Mobil (abgestimmt 15.10.2026)
+
+(Plan: PLAN_V21.md, Phasen 178–182. **Nummern:** der Plan nannte v35 und Phasen 183–187; die Zuordnungstabelle
+endete bei v33/177, deshalb wurde er als v34/178–182 gebaut (Vorspann des Plans mit Prüfvermerk) –
+PLAN_LEAD_V6 (noch nicht umgesetzt) bekommt v35/183–187 (Hinweisblock in der Plan-Datei). Umgesetzt am
+15.10.2026 in EINEM Durchlauf: Fundament durch den Orchestrator (Spalten `angebote.wb_json`,
+`angebote.auslegung_text`, `angebotspositionen.uebernommen_von_angebot_id/_position_id`, Tokens
+`--alternativ`/`--alternativ-flaeche`, Router-Hüllen, pypdf), dann vier Agenten W (Wallbox, Phasen 178/179),
+E (Alternativ, Elektro ins PV, Auslegungs-Position, USt – Phase 180), V (Kombi-Versand, Mail-Vorlage,
+TAIFUN-PDF – Phase 180), M (Mobil – Phase 181) auf eigenen DB-Kopien; Integration, Lastmodell, Rollout-
+Vorbereitung, Doku durch den Orchestrator; Berichte `diagnose/v34/<X>_ergebnis.md` (lokal). EIN Commit, kein
+Push vor Freigabe. Alle Datenbankänderungen additiv – v33-Code läuft auf der v34-Datenbank (Rückweg-Probe im
+Rollout-Skript). **Rückfragen 1–7 des Plans** wurden mit den Plan-Vorschlägen umgesetzt (Andreas: „bis zu
+meiner Antwort mit den Vorschlägen arbeiten“): R1 WB003 = 1.297,20 € (Konflikt 1.597,20 € im Import-
+Protokoll), R2 Montagekanal immer mit der Mehrlänge, R3 Zahlung v30-Standard, R4 Vollmacht bei WB immer,
+R5 Auslegungszeile per Migration aus allen Entwürfen, R6 PV/KL/WB Sparten-Vorlage → AD-Vorlage → Standard,
+R7 USt kaufmännisch. **Zulieferungen:** die Wallbox-Excel und das Musterangebot kamen erst am Nachmittag des 15.10. (im
+Projekt-Stamm abgelegt, nach `Artikel-Preislisten/Wallbox/` verschoben: `WB Angebot Excel 1.xlsx` versioniert,
+`Beispielangebot.pdf` gitignored) – zusammen mit der geänderten Wallbox-Logik (Nachtrag am Ende von PLAN_V21.md:
+eine Datei, Erdarbeiten, Säule, Durchbrüche); das Mennekes-Datenblatt fehlt weiterhin. Tests laufen mit einer
+synthetischen Fixture gleichen Aufbaus plus Stichproben gegen die echte Datei. Entscheidungen und [ANNAHME]-Listen: `diagnose/v34/gesamtuebersicht.md`.)
+
+- **Wallbox-Konfigurator (Phase 178/179, `app/wb_auslegung.py`, `app/import_wallbox.py`, Agent W – Stand
+  Nachtrag 15.10.2026 mit den Antworten von Andreas: eine Zulieferdatei, Erdarbeiten, Säule, Durchbrüche):**
+  Eine grüne WB-Katalog-Erfassung erzeugt ein Tool-Angebot mit 19 % USt, ohne Förder-/KfW-Block (auch der
+  Förder-Editor entfällt im Editor für KL/WB), ohne Wirtschaftlichkeit, **mit Vollmacht-Seite** (immer –
+  Netzanmeldung § 14a; `anhaenge.vollmacht_erforderlich` + `angebotsprofile.vollmacht_erlaubt` [ANNAHME: auch
+  bei Enni/SWD]); Freitext-Erfassungen laufen weiter über die TAIFUN-Schiene, GW/MS/WA/DMS bleiben Freitext.
+  Bogen (Blatt „Fragen WB“, WB06 unbelegt): WB01 „Welche Wallbox?“ (Mennekes AMTRON 4You 310 → WB001
+  938,50 € / 560 → WB002 1.390,55 €, keine Vorbelegung), WB02 „Wie viel Meter Leitungsverlegung
+  erforderlich?“ (Vorbelegung 10 = `leitung_inklusive_m`, Dezimalkomma; Mehrlänge = WB02 − 10 m,
+  kaufmännisch auf ganze Meter, nie unter 0 → WB005 lfd. Meter NYY-J 49,34 €/m), WB03 „Erdarbeiten
+  erforderlich?“ (Vorbelegung Nein, unabhängig von der Montageart) mit WB04 „Erdarbeiten: wie viele Meter?“
+  (nur bei Ja, Pflicht, ganze Meter → WB006 Erdarbeiten 123,50 €/m; 0/leer = Absende-Meldung „Erdarbeiten:
+  Meter fehlen“), WB05 „Wandmontage oder Säule?“ (Vorbelegung Wandmontage; Säule → WB007 Fundament und
+  Standsäule 1.020,00 € 1 × psl.), WB07 „Wie viele Durchbrüche erforderlich?“ (Vorbelegung 2 =
+  `durchbrueche_inklusive`; darüber WB008 Bohrung/Durchbrüche 169,00 € × (WB07 − 2), ganze Stück), WB08
+  Bemerkung (nur Protokoll); immer WB003 Anschlussvorbereitung (1.297,20 € psl. – bis 10 m Leitung und
+  2 Durchbrüche enthalten) und WB004 Netzanmeldung (0,00 €). Angebotsaufbau: Block 1 „Wallbox“ · 2
+  „Installation und Anschluss“ (WB003 · WB008 · WB005 · WB006 · WB007) · 3 „Netzanmeldung“. Keine
+  AMPEL-Gründe; über 100 m Warnung ohne Sperre; keine Auslegungs-Position – Protokoll-Seite „Auslegung“ und
+  `angebote.auslegung_text`: „Wallbox: AMTRON 4You 560“, „Leitungsverlegung gesamt: 25 m, davon 10 m
+  enthalten, Mehrlänge 15 m“, „Erdarbeiten: 8 m“ bzw. „keine“, „Montage: Säule (Fundament und Standsäule)“
+  bzw. „Wandmontage“, „Durchbrüche: 4 (2 in der Anschlussvorbereitung enthalten, 2 zusätzlich)“.
+  **Steuerdatei `konfigurator_logik_v5.xlsx`** (Sicherung `diagnose/konfigurator_logik_v5.vor_v34.xlsx`):
+  Blätter „Fragen WB“, „WB-Artikel“ (8 Zeilen WB001–WB008 = Positionen 001, 002, 003, 005, 006, 007, 008,
+  004 der Datei; Anker Datei „WB Angebot Excel 1“ + Position + Beschreibungsanfang – die GUIDs der
+  TAIFUN-Exporte sind Angebots-GUIDs, Spalte „GUID (zuletzt gesehen)“; die Blattspalte „Einheit“ überstimmt
+  die Export-Einheit: WB007 psl. statt „m“, Protokollzeile), „Aktionen WB“ (13 Zeilen; Mengenwörter
+  „× Mehrlänge“ nur bei WB02, „× WB04“, „× (WB07 − 2)“ – müssen auf Zahleneingaben zeigen), „Angebotsaufbau
+  WB“, „WB-Parameter“ (`leitung_inklusive_m` 10 m, `meterposition_leitung` WB005, `erdarbeiten_position`
+  WB006, `fundament_position` WB007, `durchbrueche_inklusive` 2, `durchbruch_position` WB008,
+  `wallbox_standard` leer), Anhänge-Zeile `Mennekes AMTRON 4You Datenblatt.pdf` („wenn Sparte = WB“; neue
+  Regelform „wenn Artikel WB001 im Angebot“), Lesehilfe „Wallbox (v34)“. **Lader `app/logik.py`:** Felder
+  `wb_aktionen`, `wb_bloecke`, `wb_parameter`, `wb_parameter_einheit`, `wb_artikel`; `logik_fuer_sparte(logik,
+  "WB")` liefert die WB-Sicht, sobald „Aktionen WB“ existiert UND die WB-Artikel importiert sind
+  (`wb_artikel_fehlen` aus `artikel_pruefen`: ohne Artikel nur ein Hinweis – sonst wäre nach einem Rollout
+  ohne Import die Parametrierung rot und jeder Bogen blockiert; WB bleibt dann reiner Bogen → TAIFUN);
+  „Logik prüfen“ prüft Pflichtfragen mit Typ, Parameter (fehlend = Hinweis mit Standardwert), Schwellen
+  „über N“ gegen die Parameter, Referenzen gegen „WB-Artikel“; `sparten.ist_freitext_sparte("WB", logik)` ist
+  dann False (Sparten-Start zeigt die Weiche Katalog | Freitext). **Import `app/import_wallbox.py`**
+  („Artikel → Wallbox-Positionslisten importieren“, Parametrierung → Logik & Importe mit Hinweis/Bestätigung,
+  Lesesicht `/parametrierung/wb-logik`, Artikelliste Filter „Sparte WB“): liest den TAIFUN-Export
+  `Artikel-Preislisten/Wallbox/WB Angebot Excel 1.xlsx` (`config.WB_PREISLISTEN_ORDNER`; Blatt „Tabelle 1“,
+  Pos. 001–008 → WB001–WB008, Textzeile ohne Position = Vortext „Komplettpaket Wallbox inkl. Montage“),
+  weitere xlsx im Ordner nur als Preisvergleich (Konflikt → Ankerdatei gewinnt, Protokoll), Quelle `wb`
+  (`models.QUELLE_WB`), `_x000D_`/„?“-Platzhalter/„ ,“ bereinigt, **EK nur in `artikel.ek_cent`** (nie im
+  Protokoll – Import nur Innendienst/Admin), Blöcke je 200 mit Commit, Import-Status
+  „Wallbox-Positionslisten“, idempotent, WP-/PV-/KL-Importe fassen WB nicht an. `migration_v34_wallbox`
+  (migrate.py) importiert automatisch, wenn referenzierte WB-Artikel fehlen und die Datei liegt – sonst
+  einmalige Meldung „Wallbox-Preislisten fehlen – Import übersprungen (Artikel-Preislisten/Wallbox/)“ –, und
+  legt die Textblöcke an (`angebotsprofile.seed_wb`: der Absatz „Komplettpaket Wallbox inkl. Montage“ wörtlich
+  aus der Textzeile der Excel, ohne Datei als Entwurf). Einstellung `wb_guid_nachfuehren` (**Standard 0**,
+  Entscheidung Orchestrator: die Logik-Excel ist auf dem Server git-versioniert; 1 = Angebots-GUIDs in die
+  Blattspalte schreiben, nur Entwicklungs-PC). DB-Ampel WB: Startwerte rot < 800 € / grün > 1.200 €
+  (`models.DB_SCHWELLEN_SPARTE` [ANNAHME]; mit den WP-Schwellen wäre jedes WB-Angebot rot). **Texte**
+  (`angebotsprofile.wb_vortext`/`WB_VORTEXT`/`WB_STANDARD_NACHTEXT`, Blöcke „Friondo WB Standard/Enni/SWD/
+  Sparkasse DU“, `ANGEBOTSTEXTE.md` Abschnitt 10): Vortext wörtlich TAIFUN-Muster + Komplettpaket-Absatz,
+  Nachtext B + C mit `{zahlungsbedingungen}` (der v30-Standardtext ist wörtlich die Muster-Klausel
+  „Anzahlung 50 % spätestens 14 Tage vor Arbeitsbeginn“) und „Voraussichtlicher Ausführungszeitraum“ wie KL,
+  kein Nachtext A – alle Entwürfe fürs Gegenlesen; Mail-Vorlage WB ohne KfW-Platzhalter
+  (`mail_vorlagen.ohne_kfw`). Kontrollwerte (`tests/test_wb_v34.py`; Fixture `tests/fixtures/wallbox/
+  WB Angebot Excel 1.xlsx` mit VK wie die Zulieferung und erfundenem EK, Stichproben gegen die echte Datei):
+  A 310 / 10 m / Nein / Wand / 2 Durchbrüche 2.235,70 / 424,78 / 2.660,48 €; B 560 / 25 m / Erdarbeiten 8 m /
+  Säule 5.435,85 / 1.032,81 / 6.468,66 €; B2 = B + 4 Durchbrüche 5.773,85 / 1.097,03 / 6.870,88 €; C 560 / 8 m
+  2.687,75 €; D 310 / 12,4 m 2.334,38 €; Muster AN251131 (001 + 002 + 003 + 005) 3.626,25 € (USt dort 688,99 €
+  = kaufmännisch, R7). Abnahme-PDFs `docs/wallbox/abnahme-A-…/-B-…/-B2-….pdf`, `abnahme-protokoll.pdf`
+  (echte Langtexte, Demo-Kunde). Tests `tests/test_wb_v34_logik.py` (33), `test_wb_v34_import.py` (22),
+  `test_wb_v34.py` (25).
+- **Alternativ-Kennzeichen klar abgegrenzt (Phase 180, Agent E, `app/elektro_pv.py`, `app/pdf_export.py`,
+  `templates/angebote/editor.html`, `static/angebot_v34.css`):** Alternativ-Positionen (v10 „in anderem Angebot
+  enthalten“) sind im PDF und im Editor auf einen Blick von Eventualpositionen unterscheidbar. PDF: vor der
+  ersten Alternativ-Position eines Blocks ein farbig hinterlegter Hinweiskasten „Die folgenden Positionen sind
+  bereits in Ihrem Angebot <Nr> (<Sparte>) enthalten und werden dort berechnet.“ (fpdf2-Primitiven), die Zeile
+  leicht grau, Einzelpreis bleibt, G-Preis-Spalte „im PV-Angebot“ (bzw. „im WP-Angebot“ …; ohne erkennbare
+  Sparte „anderes Angebot“ in kleinerer Schrift, `elektro_pv.pdf_label`), der automatische v10-Vermerk
+  bleibt. Sparte und Nummer kommen aus dem v10-Verknüpfungstext `alternativ_zu` („<Sparte>-Angebot
+  <Nummer>“, `elektro_pv.ziel_parsen`). Editor: Positionszeile mit farbigem linken Balken (Tokens
+  `--alternativ`/`--alternativ-flaeche`), Badge „Alternativ · im PV-Angebot AN-C-…“ mit Link zum
+  Geschwister-Angebot, „EP“-Badge unverändert; verweist die Verknüpfung auf ein gelöschtes/überholtes/
+  abgelehntes Angebot, zeigt der Editor „Geschwister-Angebot nicht mehr gültig“ (neu – den v10-Hinweis gab es
+  im Bestand nicht). Lieferschein weiterhin ohne Alternativ-Positionen. Abnahme-PDFs
+  `docs/wallbox/abnahme-alternativ-<Nr>.pdf` (+ `…-pv-<Nr>.pdf`). Tests `tests/test_v34_alternativ.py`.
+- **Elektroarbeiten ins PV-Angebot (0 % USt) (Phase 180, Agent E, `app/elektro_pv.py`,
+  `app/routers/angebote_elektro.py`):** Knopf im Editor eines WP-/KL-/WB-**Entwurfs** (Innendienst/Admin),
+  sichtbar nur, wenn der Vorgang ein PV-Tool-Angebot im Status Entwurf/Versand vorbereitet hat
+  (`elektro_pv.knopf_sichtbar`; bei mehreren das jüngste). `POST /angebote/<id>/elektro-ins-pv` (eine
+  `_speichern`-Transaktion, JSON bei Accept application/json): Elektro-Positionen = Block „Elektroarbeiten“
+  (WP Block 7, KL Block 2, WB WB003/WB005/WB006) plus alle Positionen der Parametrierungsliste
+  „gewerkeübergreifende Artikel“ (v10 – Standard 014–017, 104, Z22, 152, Z23; damit wandern auch die
+  Fit-for-Future-Positionen mit, Rückfrage), ohne EP/bauseits/bereits Alternativ; im Ursprung werden sie
+  Alternativ mit `alternativ_zu = "PV-Angebot <Nr>"`, im PV-Angebot entstehen voll berechnete Kopien (Artikel,
+  Netto-Einzelpreis inkl. Positionsrabatt, Menge, Langtext, `ek_cent`) in einer eigenen Gruppe
+  „Elektroarbeiten <Sparte> (aus Angebot AN-C-…)“ am Ende, Kennzeichen `uebernommen_von_angebot_id/
+  _position_id`, 0 % USt über den Steuersatz des PV-Angebots; **Dubletten** (gleiche Artikelnummer oder
+  gleiche normalisierte Bezeichnung, z. B. Zählerschrank 104 vs. PV123) werden nicht kopiert, die
+  Ursprungsposition wird trotzdem Alternativ (Meldung „… davon n bereits im PV-Angebot vorhanden – nicht
+  kopiert“) [ANNAHME]; Vermerk „Enthält die Elektroarbeiten aus Angebot AN-C-… (<Sparte>).“ im PV-PDF,
+  System-Notiz im Vorgangs-Chat, Meldung „n Positionen (netto x €) in AN-C-… übernommen – Kundenersparnis
+  <Netto × (USt Ursprung − USt PV)> €“ (Kontrollwert 2.400,00 € → 456,00 €); ohne neue Elektro-Positionen
+  „Nichts zu übernehmen“. „Elektroarbeiten zurückholen“ (`POST …/elektro-zurueckholen`): entfernt nur Kopien
+  mit `uebernommen_von_*` (solange das PV-Angebot Entwurf/Versand vorbereitet ist) und hebt das Kennzeichen im
+  Ursprung auf (Ursprung Entwurf/Versand vorbereitet; versendete/angenommene PV → gesperrt); der Editor des
+  PV-Angebots zeigt an Kopien „↩ übernommen aus Angebot …“; `kombi_versand.doppelte_artikel` schlägt nach der
+  Übernahme nicht mehr an, `gewerke_hinweise` ignoriert Kopien. DB je Angebot folgt den Positionen.
+  Steuerliche Zulässigkeit ist Entscheidung von Friondo/Steuerberatung. Tests `tests/test_v34_elektro_pv.py`.
+- **Auslegungs-Position entfällt (Phase 180, Agent E, `app/angebot_aufbau.py`, `app/kl_auslegung.py`,
+  `app/pv_auslegung.py`):** WP „Auslegung der Wärmepumpe“ (Block 1, v11), KL „Auslegung der Klimaanlage“
+  (Block 3, v24) und die PV-Auslegungszeile (Block 1, v16) werden nicht mehr als 0,00-€-Position angelegt; der
+  Text steht in `angebote.auslegung_text` (`angebot_aufbau.auslegungs_text_fuer` je Sparte, WB über
+  `wb_auslegung`), bleibt im Konfigurationsprotokoll und erscheint im Editor als aufklappbarer grauer Hinweis
+  „Auslegung (intern)“ unter der Kopfkarte (nur Innendienst/Admin; der Außendienst sieht ihn nicht).
+  Versionen/Duplikate/Kopien übernehmen das Feld; trifft `version_erzeugen`/`_positionen_kopieren` eine
+  Alt-Zeile (`angebot_aufbau.ist_auslegungs_position`), entfällt sie und ihr Text wandert ins Feld. Bestand:
+  `migration_v34_auslegung` (migrate.py) entfernt die Zeile aus allen **Entwürfen**, füllt das Feld und
+  nummeriert wie „Neu durchnummerieren“ (R5); versendete/angenommene/überholte Angebote bleiben unverändert
+  (Entwicklungs-DB: 2 PV-Entwürfe). Kontrollwerte unverändert (WP netto 30.245,43 €, KL-Fall A 6.518,66 €,
+  PV). Tests `tests/test_v34_auslegung.py`.
+- **USt-Rundung wie TAIFUN (Phase 180, R7, Agent E, `app/models.py`):** `Angebot.summen()` rundet die USt
+  kaufmännisch (`ROUND_HALF_UP`) statt abzuschneiden – KL-Fall A 6.518,66 € netto → USt 1.238,55 €, Gesamt
+  7.757,21 € (bis v33 1.238,54 / 7.757,20); Fall B (1.044,05 €), WP-Kontrollwert (5.746,63 €) und alle
+  WB-Kontrollfälle unverändert. Editor, Angebotsliste, PDF, Meine Angebote, Statistik, monday-Deal-Wert und
+  Mail-Platzhalter nutzen ausschließlich `summen()`; Rabatt-/KfW-Logik, `rabatt_netto`, `netto_nach_rabatt`
+  unverändert. Tests `tests/test_v34_ust.py`; angepasste Alt-Tests siehe Gesamtübersicht.
+- **Kombi-Versand verständlich (Phase 180, Agent V, `app/kombi_versand.py`, `routers/vorgaenge.py`,
+  `templates/vorgaenge/akte.html`, `static/vorgang_v34.css`):** Die Vorgangsakte zeigt unter den Angeboten den
+  Kasten **„Gemeinsam versenden“** (`id="gemeinsam-versenden"`) mit Häkchen an allen versandfähigen Angeboten –
+  Entwurf, Versand vorbereitet, TAIFUN-Eintrag mit PDF; nicht wählbare (überholt, versendet, angenommen,
+  abgelehnt, TAIFUN ohne PDF „PDF fehlt“) ausgegraut mit Grund (`kombi_versand.waehlbar`, `auswahl`). Erklärsatz
+  „Alle angehakten Angebote gehen als separate PDFs in einer Mail an den Kunden; Entwürfe werden dabei
+  automatisch versandfertig gemacht.“ Knopf „Kombi-Versand vorbereiten (n Angebote)“ (ab zwei) → EINE Mail mit
+  mehreren PDFs wie v10; Entwürfe werden nach dem erfolgreichen Graph-Entwurf automatisch auf „Versand
+  vorbereitet“ gesetzt (`entwuerfe_vorbereiten`, AngebotsNotiz „Versand vorbereitet durch Kombi-Versand“,
+  Vorgangs-Notiz, Meldung); scheitert Graph, bleibt alles Entwurf [ANNAHME]. Vorauswahl über
+  `?kombi=<angebot_id>#gemeinsam-versenden` (Editor-Knopf „Mit weiteren Angeboten dieses Vorgangs versenden“,
+  Agent E). Die Häkchen an den Angebots-Karten sind entfallen; Formular `kombiform`/Feld `angebot_ids`/Route
+  `POST /vorgaenge/<id>/kombi-versand` unverändert; Einzelversand unverändert. Tests `tests/test_v34_kombi.py`.
+- **Mail-Vorlage je Sparte (Phase 180, Agent V, `app/mail_vorlagen.py`):** Ursache des Befunds „Klima-Mailtext
+  wird nicht gezogen“: `vorlage_laden` nahm immer die Vorlage des Außendienstlers (WP-Wortlaut), sobald eine
+  hinterlegt war; die Sparten-Vorlage KL/PV/WB wurde nur ohne AD-Vorlage geprüft (dokumentierte v27-Nachtrag-2-
+  Reihenfolge, fachlich falsch für KL/PV/WB; `konfigurator_typ` war überall gesetzt, TAIFUN-Einträge erben die
+  Sparte der Erfassung). Neue Reihenfolge (R6): **WP** AD-Vorlage → WP-Sparten-Vorlage → Standard (unverändert);
+  **PV/KL/WB** (`SPARTEN_VORLAGE_ZUERST`) Sparten-Vorlage → AD-Vorlage → Standard; Rückfall je Feld auf den
+  Standard bleibt; Versand-Meldung nennt die Quelle („Sparten-Vorlage KL“); Kombi-Versand behält seine
+  Vorlage; Erklärtext in Parametrierung → E-Mail-Vorlagen angepasst. Tests `tests/test_v34_mail_vorlage.py`.
+- **TAIFUN-Angebots-PDF per Drag & Drop (Phase 180, Agent V, `app/taifun_pdf.py`, `app/routers/taifun_pdf.py`,
+  `templates/_taifun_pdf.html`, `static/taifun_pdf.js`):** Textextraktion mit **pypdf** (requirements.txt; nur
+  Text, keine OCR – Scans melden „Kein Text im PDF gefunden“), `felder_erkennen`: TAIFUN-Nummer `AN\d{6}` hinter
+  „ANGEBOT - Nr.:“, Datum „Datum : TT.MM.JJJJ“ der ersten Seite, Endbetrag brutto „Gesamt-Betrag € x.xxx,xx“
+  bzw. „= Endbetrag“ (letzter Treffer), Sparte nur als Vorschlag aus Schlagwörtern. `POST
+  /angebote/extern/pdf-lesen` (JSON, ohne Sitzung, ≤ 20 MB, nur PDF) liest das PDF im Dialog **„Extern
+  erledigt“** VOR dem Speichern (Drop-Zone „TAIFUN-Angebot (PDF) hierher ziehen oder auswählen“, Felder mit
+  `data-tp-feld` vorbelegt und „aus PDF gelesen – bitte prüfen“ markiert, nicht Erkanntes bleibt leer);
+  `extern_erledigt` speichert das PDF am Eintrag (`extern_pdf_pfad`, Kombi-fähig) und als Kopie in der Galerie
+  „Allgemein“. **Am TAIFUN-Eintrag** (TAIFUN-Seite, Vorgangsakte, Angebotsliste) ersetzt die Drop-Zone den
+  Datei-Knopf: erneutes Ablegen ersetzt das PDF nur nach Sicherheitsabfrage (`bestaetigt=1`, sonst 409) und
+  bietet Häkchen „Nummer / Datum / Endbetrag aus dem neuen PDF übernehmen“ (`POST /angebote/<id>/taifun-pdf`:
+  Upload lesen und pypdf-Extraktion VOR dem ersten Datenbankzugriff, dann kurze Schreibtransaktion
+  `taifun_pdf.eintrag_pdf_speichern(…, felder=)`; monday nicht automatisch – Knopf „Erneut übertragen“).
+  Tastatur, `<noscript>`-Fallback, mobil nur Datei-Dialog; Styles nur Tokens. Tests
+  `tests/test_v34_taifun_pdf.py` (synthetisches fpdf2-PDF; das Muster AN261737 fehlte).
+- **„Angemeldet bleiben“ am Handy (Phase 181, Agent M, `app/auth.py`, `routers/anmeldung.py`,
+  `anmeldung/login.html`):** Ursache: seit v27-Nachtrag 2 war das Häkchen nur für Außendienst/Montage sichtbar
+  (`MOBILE_ROLLEN`) und `auth.sitzungsdauer_s` vergab die 30 Tage nur diesen Rollen – Admin/Innendienst
+  bekamen am Handy immer 12 h (Max-Age 43200); verstärkend trug das Cookie nur `Max-Age`, und die
+  Home-Bildschirm-App (PWA `standalone`) hat auf iOS einen eigenen Cookie-Speicher (Nachweis
+  `diagnose/v34/M_patches/nachweis_angemeldet_bleiben.py`; das Login-Protokoll des Servers lag nicht vor).
+  Jetzt: Häkchen „Auf diesem Gerät angemeldet bleiben“ für **alle Rollen auf Mobilgeräten** – Server erkennt
+  das Gerät am User-Agent (`auth.ist_mobilgeraet`) oder am Feld `mobil=1`, das `login.html` bei Breite < 600 px
+  bzw. Touch-Gerät setzt; Dauer `sitzung_tage_mobil` (30 Tage), `sitzungsdauer_s(session, benutzer,
+  angemeldet_bleiben, mobil=)`; Außendienst/Montage wie v27 auf jedem Gerät 30 Tage, Büro-Rollen am PC 12 h.
+  `auth.cookie_setzen` schreibt `Max-Age` **und** `Expires` (UTC), `HttpOnly`, `SameSite=Lax`, `Path=/`,
+  `Secure` nur bei `HTTPS_AKTIV`; verlängert wird nur beim Login (nie je Anfrage; `anmelden-als` 2 h und „Alle
+  Sitzungen beenden“ unverändert). Hinweis unter dem Häkchen „Als App auf dem Home-Bildschirm bitte dort
+  anmelden.“ `auth.cookie_wert(id)` unverändert. Nebenbefund behoben: die Rolle Projektierung durfte die
+  Galerie-Schreibrouten unter `/vorgaenge` nicht aufrufen (`_GALERIE_SCHREIBEN` in `auth.py`). Tests
+  `tests/test_v34_login_mobil.py` (14).
+- **Diktierfunktion (Phase 181, Agent M):** Makro `diktat_knopf(feld_id, klasse)` in `_diktat.html` + Icon
+  `mikrofon` (`_symbole.html`) + `static/diktat.js` (in `base.html`): Knopf „Diktieren“ an den
+  Bemerkungsfeldern der mobilen Erfassung (`Freitext groß`: O08, A12, PO05, PD10, PA14, KO09, WB03), der
+  Freitext-Erfassung, am Notizen-Chat (`_komponenten.html`), an den großen Feldern der Montage-Formulare und am
+  Restarbeiten-Feld des Montage-Backends. Web Speech API `de-DE`, Zwischenergebnisse live am Cursor, Stopp
+  per Knopf oder Sprechpause; ohne `window.isSecureContext` (das Tool läuft über http im VPN) oder ohne
+  `SpeechRecognition` zeigt die Stelle „Diktat: bitte das Mikrofon Ihrer Handy-Tastatur verwenden“.
+  HTTPS-Vorbereitung `docs/https-intern.md` (Optionen interne Subdomain per DNS-Challenge / interne CA mit
+  Geräteprofil / vorerst Tastatur-Diktat; `HTTPS_AKTIV`/`BASIS_URL`/`PROXY_IPS` aus v27) – Entscheidung
+  Andreas/IT offen.
+- **Galerie-Mehrfachupload und Kamera-Serie (Phase 181, Agent M, `_galerie.html`, `app/galerie.py`,
+  `static/galerie_v34.js/.css`):** Makros `sammelbox(…)` (Kamera-Serie „Fotos aufnehmen“ → „Weiteres Foto“ mit
+  `capture="environment"`, „Dateien wählen“ `multiple`, Liste mit Vorschaubild, Dateiname/Größe,
+  Ordner-Dropdown je Datei (Vorbelegung Standard-Ordner; Ordnerliste je Sparte – Objekt-Ordner aus PLAN_LEAD_V6
+  liegen noch nicht vor), Bemerkung je Datei, „Für alle übernehmen“, Fortschrittsbalken, Abbrechen/Leeren,
+  `beforeunload`-Hinweis bei ungesendeten Fotos) und `galerie_einbindung()`; Bilder werden beim Hinzufügen auf
+  dem Gerät verkleinert (`bild_verkleinern.js`, 2.000 px / JPEG 85 %, PDFs unverändert). **EIN Request** `POST
+  /vorgaenge/<id>/galerie/upload` mit `dateien` / `datei_ordner` / `datei_bemerkung` positionsgleich (Aliase
+  `dateien[]`/`ordner[]`/`bemerkung[]`); `galerie.mehrfach_speichern` legt mit Commit je Datei ab und meldet
+  Teilerfolg (`galerie.meldung_fuer`: „2 von 3 Dateien abgelegt (…) – nicht abgelegt: x.jpg (Datei ist
+  leer).“); mit `Accept: application/json` antwortet die Route `{ok, anzahl, abgelegt[], fehler[], meldung,
+  ziel}` (403/404 als JSON), sonst Redirect; Rechte unverändert (`galerie.darf_hochladen`). Der Foto-für-Foto-
+  Upload des v33-Nachtrags ist ersetzt; Einzel-Upload je Ordner, Drag & Drop und „Einsortieren“ bleiben.
+  Mobile Erfassung (Seite Einschätzung): dieselbe Sammelbox im Formular-Modus (Dateien gehen mit „Weiter“
+  mit) [ANNAHME]. Gilt in Vorgangs-/Projektakte, Montage-/Service-Backend und mobiler Erfassung. Tests
+  `tests/test_v34_galerie.py` (15, davon 2 in Chrome headless über DevTools); `tests/test_v33_nachtrag.py::
+  FotoUpload` angepasst.
+- **Tests, Rollout-Vorbereitung, Doku (Phase 182, Orchestrator):** neue Testdateien `test_wb_v34_logik/
+  _import/test_wb_v34` (71), `test_v34_alternativ/_elektro_pv/_auslegung/_ust` (47), `test_v34_kombi/
+  _mail_vorlage/_taifun_pdf` (28), `test_v34_login_mobil/_galerie` (29). Angepasste Alt-Tests (Begründung in
+  der Gesamtübersicht): Auslegungszeile/USt-Rundung (`test_kl_v24.py`, `test_kl_v24_auslegung.py`,
+  `test_pv_v13.py`, `test_v22_feedback.py`, `test_v11.py`), Vorlagen-Reihenfolge (`test_v27_nachtrag2.py`),
+  WB-Sicht/Freitext-Sparten (`test_kl_v24_logik.py`, `test_lead_v5.py`), Import-Schlüssel „wallbox“
+  (`test_v27_importe.py`), Sammel-Request (`test_v33_nachtrag.py`). Lastmodell: Galerie-Upload mit drei Fotos in einem Request, TAIFUN-PDF lesen
+  (`scripts/lasttest.py`). Rollout-Vorbereitung `diagnose/v34/abschluss_tests.sh` (Server-Kopie, `migrate.py`
+  zweimal, Wallbox-Fixtures + Demo-Angebot in der Kopie, Testbenutzer, Rückweg-Probe v33-Code (Worktree
+  2ab17a6) auf der v34-DB, Gesamtsuite, Abnahme, Voll-Crawl sechs Basisrollen + drei Varianten hell/dunkel,
+  Smoke, Lasttest normal + schreibsturm); Ergebnisse: siehe Gesamtübersicht `diagnose/v34/gesamtuebersicht.md`
+  und `docs/lasttest-v27.md` 4.9. Screenshots `docs/design-v34/` (Login mobil, Galerie-Sammelbox mobil,
+  Wallbox-Editor und -Erfassung, Vorgangsakte mit Kasten „Gemeinsam versenden“, hell/dunkel). Doku: dieser
+  Abschnitt, Zuordnungstabelle, Titelzeile, Zentrale Dateien, Fachliche Regeln (USt-Rundung, Auslegungs-
+  Position, Alternativ-Darstellung, Elektro ins PV), überholt-Marker in v8/v10/v11/v13/v22/v24/v27-Nachtrag 2
+  und im E-Mail-Abschnitt; `ANGEBOTSTEXTE.md` Abschnitt 10, `docs/nach-dem-update-v34.md`, `docs/updates.md`
+  (4c), `docs/betrieb.md` („Ergänzungen v34“), `docs/https-intern.md`; `config.VERSION = "v34"`.

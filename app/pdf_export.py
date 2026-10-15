@@ -357,13 +357,71 @@ def _uebertrag_zeile(pdf: AngebotsPdf, summe_cent: int):
              new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
 
+# v34 (PLAN_V21 Phase 180): Hinweiskasten vor der ersten Alternativ-Position eines Blocks –
+# Farben fest im PDF (kein Hell/Dunkel): Rahmen = Akzent des Angebots-PDFs (DUNKELBLAU),
+# Fläche = helle Akzentfläche wie die Wirtschaftlichkeitsseiten (TINT)
+ALTERNATIV_RAHMEN = DUNKELBLAU
+ALTERNATIV_FLAECHE = (234, 242, 250)
+ALTERNATIV_ZEILE = (238, 238, 238)      # leicht graue Hinterlegung der Alternativ-Zeile
+ALTERNATIV_ZEILENHOEHE = 3.8
+
+
+def _alternativ_kasten_hoehe(pdf: AngebotsPdf, text: str) -> float:
+    pdf.set_font("Arial", "", 8)
+    zeilen = pdf.multi_cell(sum(SPALTEN.values()) - 6, ALTERNATIV_ZEILENHOEHE, text,
+                            dry_run=True, output="LINES")
+    return max(len(zeilen), 1) * ALTERNATIV_ZEILENHOEHE + 3
+
+
+def _alternativ_kasten(pdf: AngebotsPdf, text: str) -> None:
+    """Farbig hinterlegter Kasten „Die folgenden Positionen sind bereits in Ihrem Angebot …
+    enthalten und werden dort berechnet.“ über die volle Tabellenbreite."""
+    breite = sum(SPALTEN.values())
+    hoehe = _alternativ_kasten_hoehe(pdf, text)
+    y = pdf.get_y()
+    pdf.set_fill_color(*ALTERNATIV_FLAECHE)
+    pdf.set_draw_color(*ALTERNATIV_RAHMEN)
+    pdf.set_line_width(0.4)
+    pdf.rect(pdf.l_margin, y, breite, hoehe, style="DF")
+    pdf.set_line_width(0.2)
+    pdf.set_font("Arial", "", 8)
+    pdf.set_text_color(*ALTERNATIV_RAHMEN)
+    pdf.set_xy(pdf.l_margin + 3, y + 1.5)
+    pdf.multi_cell(breite - 6, ALTERNATIV_ZEILENHOEHE, text)
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_xy(pdf.l_margin, y + hoehe + 2)
+
+
+def _gpreis_schrift(pdf: AngebotsPdf, label: str) -> float:
+    """Schriftgröße für ein Wort in der G-Preis-Spalte: 8 pt, bei Bedarf in 0,5-pt-Schritten
+    kleiner (mindestens 5,5 pt), damit z. B. „im DMS-Angebot“ in der 20-mm-Spalte bleibt;
+    setzt die Schrift und liefert die Größe."""
+    groesse = 8.0
+    pdf.set_font("Arial", "", groesse)
+    while groesse > 5.5 and pdf.get_string_width(label) > SPALTEN["g_preis"] - 0.8:
+        groesse -= 0.5
+        pdf.set_font("Arial", "", groesse)
+    return groesse
+
+
+def _gpreis_label(pdf: AngebotsPdf, label: str, zeilenhoehe: float) -> None:
+    """„im PV-Angebot“ in der G-Preis-Spalte statt „EP.“/„Altern.“ (v34)."""
+    _gpreis_schrift(pdf, label)
+    pdf.cell(SPALTEN["g_preis"], zeilenhoehe, label, align="R")
+    pdf.set_font("Arial", "", 8)
+
+
 def _positionsteil(pdf: AngebotsPdf, angebot: Angebot):
+    from app import elektro_pv
     pdf.add_page()
     _tabellenkopf(pdf)
     zeilenhoehe = 3.7
     text_breite = SPALTEN["text"]
     uebertrag_cent = 0
     letzte_gruppe = None
+    # v34: je Block (Gruppe + Blocknummer) höchstens ein Hinweiskasten vor der ersten
+    # Alternativ-Position; Sparte/Nummer des Geschwister-Angebots aus alternativ_zu (v10)
+    kasten_gezeigt: set[tuple] = set()
 
     # Nummerierung identisch mit dem Editor (Phase 18/v5): eigene Nummer oder
     # fortlaufend 001, 002, … in Sortierreihenfolge
@@ -375,12 +433,18 @@ def _positionsteil(pdf: AngebotsPdf, angebot: Angebot):
         if position.rabatt_effektiv_cent and not position.bauseits:
             text += (f"\nabzgl. Rabatt {position.rabatt_text}"
                      f" (− {_euro_betrag(position.rabatt_effektiv_cent)} €)")
-        # v10 (Phase 61): automatischer Vermerk unter Alternativ-Positionen
+        # v10 (Phase 61): automatischer Vermerk unter Alternativ-Positionen (bleibt, v34)
+        alt_sparte = alt_nummer = ""
+        kasten_text = ""
         if position.alternativ:
             text += ("\nHinweis: Diese Position ist im parallel vorliegenden "
                      f"{position.alternativ_zu or 'Parallel-Angebot'} enthalten "
                      "und kommt nur zum Tragen, wenn ausschließlich das "
                      "vorliegende Angebot beauftragt wird.")
+            alt_sparte, alt_nummer = elektro_pv.ziel_parsen(position.alternativ_zu)
+            block_schluessel = (position.gruppe or "", position.block_nr or 0)
+            if block_schluessel not in kasten_gezeigt:
+                kasten_text = elektro_pv.hinweis_text(alt_sparte, alt_nummer)
 
         pdf.set_font("Arial", "", 8)
         zeilen = pdf.multi_cell(text_breite, zeilenhoehe, text, dry_run=True, output="LINES")
@@ -391,8 +455,9 @@ def _positionsteil(pdf: AngebotsPdf, angebot: Angebot):
             gruppen_zeilen = pdf.multi_cell(text_breite, 4.2, position.gruppe,
                                             dry_run=True, output="LINES")
             gruppen_hoehe = len(gruppen_zeilen) * 4.2 + 3
+        kasten_hoehe = (_alternativ_kasten_hoehe(pdf, kasten_text) + 2) if kasten_text else 0.0
 
-        if pdf.get_y() + gruppen_hoehe + min(block_hoehe, 40) > pdf.page_break_trigger:
+        if pdf.get_y() + gruppen_hoehe + kasten_hoehe + min(block_hoehe, 40) > pdf.page_break_trigger:
             # Bugfix Leerseite (Phase 26): steht der Cursor näher als die
             # Zeilenhöhe an der Umbruchgrenze, würde cell() in der Übertrag-
             # Zeile selbst eine Seite anlegen und das add_page() darunter
@@ -412,8 +477,17 @@ def _positionsteil(pdf: AngebotsPdf, angebot: Angebot):
             pdf.multi_cell(text_breite, 4.2, position.gruppe)
             pdf.ln(1.5)
             letzte_gruppe = position.gruppe
+        if kasten_text:
+            # v34: Hinweiskasten vor der ersten Alternativ-Position des Blocks
+            _alternativ_kasten(pdf, kasten_text)
+            kasten_gezeigt.add((position.gruppe or "", position.block_nr or 0))
 
         y_start = pdf.get_y()
+        if position.alternativ:
+            # v34: Alternativ-Zeile leicht grau hinterlegt (volle Tabellenbreite)
+            pdf.set_fill_color(*ALTERNATIV_ZEILE)
+            pdf.rect(pdf.l_margin, y_start - 0.6, sum(SPALTEN.values()),
+                     max(len(zeilen), 1) * zeilenhoehe + 1.2, style="F")
         pdf.set_font("Arial", "", 8)
         pdf.set_xy(pdf.l_margin, y_start)
         pdf.cell(SPALTEN["pos"], zeilenhoehe, nummer)
@@ -428,11 +502,12 @@ def _positionsteil(pdf: AngebotsPdf, angebot: Angebot):
         # Preise auf Höhe der letzten Textzeile (wie im Referenz-PDF)
         pdf.set_xy(text_x + text_breite, y_ende - zeilenhoehe)
         if position.alternativ:
-            # v10 (Phase 61): Alternativ-Position – Preis ausgewiesen, zählt
-            # nicht in der Summe; „Altern.“ statt Gesamtpreis
+            # v10 (Phase 61): Alternativ-Position – Preis ausgewiesen, zählt nicht in der
+            # Summe; v34: „im PV-Angebot“ (Sparte des Geschwister-Angebots) statt „Altern.“ –
+            # ohne erkennbare Sparte „anderes Angebot“ in kleinerer Schrift (Entscheidung 15.10.2026)
             pdf.cell(SPALTEN["e_preis"], zeilenhoehe,
                      _euro_betrag(position.e_preis_cent), align="R")
-            pdf.cell(SPALTEN["g_preis"], zeilenhoehe, "Altern.", align="R")
+            _gpreis_label(pdf, elektro_pv.pdf_label(alt_sparte), zeilenhoehe)
         elif position.bauseits:
             # bauseits (v5): Leistung durch den Kunden – keine Preise, zählt nicht
             pdf.cell(SPALTEN["e_preis"], zeilenhoehe, "", align="R")

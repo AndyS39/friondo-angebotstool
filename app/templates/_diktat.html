@@ -1,0 +1,16 @@
+{# v34 (PLAN_V21 Phase 181): Diktat-Knopf für Textfelder (mobile Erfassung, Notizen-Chat,
+   Montage-Formulare). Nutzung:
+   {% from "_diktat.html" import diktat_knopf %} … {{ diktat_knopf('feld-id') }}
+   Das Zielfeld braucht eine id; static/diktat.js (in base.html eingebunden) übernimmt Klick,
+   Spracherkennung (Web Speech API, de-DE, nur sicherer Kontext = HTTPS) und blendet ohne
+   Unterstützung den Hinweis „Diktat: bitte das Mikrofon Ihrer Handy-Tastatur verwenden“ ein.
+   Mikrofon-Icon aus _symbole.html; Knopf-Klasse über `klasse` (Standard: knopf klein zweitrangig,
+   Montage-Backend: pj-btn). Farben nur über Tokens (diktat.js, style.css). #}
+{% from "_symbole.html" import symbol %}
+{% macro diktat_knopf(feld_id, klasse='knopf klein zweitrangig') -%}
+<span class="diktat-block">
+    <button type="button" class="diktat-knopf {{ klasse }}" data-ziel="{{ feld_id }}"
+            aria-pressed="false" title="Diktieren – Spracherkennung des Browsers (nur über HTTPS)">{{ symbol('mikrofon') }}<span class="diktat-text">Diktieren</span></button>
+    <span class="diktat-hinweis dezent" hidden>Diktat: bitte das Mikrofon Ihrer Handy-Tastatur verwenden</span>
+</span>
+{%- endmacro %}

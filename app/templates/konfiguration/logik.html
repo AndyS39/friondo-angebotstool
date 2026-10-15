@@ -36,6 +36,7 @@
     <a href="#kfw">KfW-Parameter</a>
     {% if logik.pv_parameter %}<a href="#pv">PV-Parameter</a>{% endif %}
     <a href="#klima">Klimakonfigurator</a>
+    <a href="#wallbox">Wallbox-Konfigurator</a>
 </nav>
 
 <section class="pe-abschnitt" id="bericht">
@@ -231,6 +232,75 @@
     als reiner Erfassungsbogen (TAIFUN-Schiene). Für den Klimakonfigurator die Blätter
     „Aktionen KL“, „Angebotsaufbau KL“, „Paketmatrix KL“, „Kombinationen KL“,
     „Montagematrix KL“, „KL-Parameter“ und „KL-Artikel“ anlegen (PLAN_V16 Phase 113).</p>
+{% endif %}
+</section>
+
+{# v34 (PLAN_V21 Phase 178): Wallbox-Konfigurator – Import-Knopf, WB-Parameter #}
+<section class="pe-abschnitt" id="wallbox">
+<h2>Wallbox-Konfigurator (v34)</h2>
+<div class="aktionen">
+    <form method="post" action="/parametrierung/artikel/wb-import"
+          onsubmit="return confirm('Wallbox-Positionslisten importieren: {{ wb_hinweis }}. Jetzt starten?');">
+        <input type="hidden" name="bestaetigt" value="1">
+        <button class="knopf" type="submit" {{ 'disabled' if not wb_import_ok or wb_dateien_fehlen }}
+                title="Liest Artikel-Preislisten/Wallbox/WB Angebot Excel 1.xlsx → WB001–WB008. {{ wb_hinweis }}">
+            Artikel → Wallbox-Positionslisten importieren</button>
+    </form>
+    <a class="knopf zweitrangig" href="/parametrierung/artikel/wb-import">Import-Vorschau</a>
+    <a class="knopf zweitrangig" href="/parametrierung/wb-logik">Wallbox-Logik (WB)</a>
+    <a class="knopf zweitrangig" href="/artikel?q=WB0">Artikel Sparte WB</a>
+</div>
+<p class="hinweis" id="import-hinweis-wallbox"><strong>Wallbox-Import:</strong> {{ wb_hinweis }}
+    – der Knopf fragt vor dem Start nach einer Bestätigung. Einstellung <code>wb_guid_nachfuehren</code>
+    (Standard 0 – auf dem Server aus lassen, die Logik-Excel ist git-versioniert; 1 = ein) schreibt die Angebots-GUIDs des Exports in die Spalte „GUID (zuletzt gesehen)“ der
+    Logik-Excel (0 = aus).</p>
+{% if not wb_import_ok %}
+<p class="meldung fehler">Wallbox-Import nicht verfügbar – <code>app/import_wallbox.py</code> fehlt.</p>
+{% elif wb_dateien_fehlen %}
+<p class="hinweis"><strong>Dateien fehlen:</strong> {{ wb_dateien_fehlen | join(', ') }} im Ordner
+    <code>{{ wb_ordner }}</code> – Import erst nach der Zulieferung möglich (PLAN_V21).</p>
+{% endif %}
+{% if logik.wb_aktionen %}
+<p class="dezent">Blatt „WB-Parameter“ der Logik-Excel: Leitung und Durchbrüche in der Anschlussvorbereitung
+    enthalten (leitung_inklusive_m = Vorbelegung WB02, durchbrueche_inklusive = Vorbelegung WB07),
+    Positionen für Mehrlänge, Erdarbeiten, Fundament/Standsäule und Durchbrüche, Vorbelegung der
+    Wallbox (wallbox_standard, leer = keine). Änderungen wirken nach „Parametrierung neu einlesen“.</p>
+{% if wb_fehlende %}
+<div class="warnblock">
+    <strong>Fehlende WB-Parameter</strong> – bis zur Ergänzung im Blatt gilt der Standardwert:
+    <ul>
+    {% for name in wb_fehlende %}
+        <li>{{ name }} – Standard {{ wb_standard[name] }}</li>
+    {% endfor %}
+    </ul>
+</div>
+{% endif %}
+<h3>WB-Parameter</h3>
+<table class="tabelle">
+    <thead><tr><th>Parameter</th><th>Wert</th><th>Einheit</th><th>Bemerkung</th></tr></thead>
+    <tbody>
+    {% for name, (wert, bemerkung) in logik.wb_parameter.items() %}
+        <tr>
+            <td>{{ name }}</td>
+            <td>{{ (wert.replace('.', ',') if wert.replace('.', '', 1).isdigit() else wert | truncate(60)) or '(leer)' }}</td>
+            <td class="dezent">{{ logik.wb_parameter_einheit.get(name, '') }}</td>
+            <td class="dezent">{{ bemerkung | truncate(70) }}</td>
+        </tr>
+    {% endfor %}
+    {% for name in wb_fehlende %}
+        <tr class="inaktiv">
+            <td>{{ name }}</td>
+            <td class="dezent">fehlt – Standard {{ wb_standard[name] }}</td>
+            <td></td>
+            <td class="dezent">Zeile im Blatt „WB-Parameter“ ergänzen</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="hinweis">Blatt „Aktionen WB“ fehlt in der Logik-Excel – die Wallbox-Erfassung läuft als
+    Freitext (TAIFUN-Schiene). Für den Wallbox-Konfigurator die Blätter „Fragen WB“, „Aktionen WB“,
+    „Angebotsaufbau WB“, „WB-Parameter“ und „WB-Artikel“ anlegen (PLAN_V21 Phase 178).</p>
 {% endif %}
 </section>
 

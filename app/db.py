@@ -421,6 +421,8 @@ _NACHTRAEGLICHE_SPALTEN = {
         "ek_datum": "VARCHAR(20) NOT NULL DEFAULT ''",
     },
     "angebotspositionen": {
+        "uebernommen_von_angebot_id": "INTEGER",               # v34 Phase 180 (Elektro ins PV)
+        "uebernommen_von_position_id": "INTEGER",              # v34 Phase 180
         "alternativ": "BOOLEAN NOT NULL DEFAULT 0",     # v10 Kombi-Versand
         "alternativ_zu": "VARCHAR(200) NOT NULL DEFAULT ''",
         "sonderpreis": "BOOLEAN NOT NULL DEFAULT 0",
@@ -446,6 +448,8 @@ _NACHTRAEGLICHE_SPALTEN = {
         "ust_satz": "FLOAT NOT NULL DEFAULT 19",                 # v13-PV Phase 75
         "pv_json": "TEXT NOT NULL DEFAULT ''",                   # v13-PV Phase 76/78
         "kl_json": "TEXT NOT NULL DEFAULT ''",                   # v24 Phase 114 (Klima)
+        "wb_json": "TEXT NOT NULL DEFAULT ''",                   # v34 Phase 179 (Wallbox)
+        "auslegung_text": "TEXT NOT NULL DEFAULT ''",            # v34 Phase 180 (Auslegung intern)
         "liefer_anschrift": "VARCHAR(300) NOT NULL DEFAULT ''",   # v11 Phase 66
         "kopie_von": "VARCHAR(30) NOT NULL DEFAULT ''",           # v11 Phase 66
         "projekt_gewerk_id": "INTEGER",     # v11 Projektierung

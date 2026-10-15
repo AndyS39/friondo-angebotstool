@@ -280,18 +280,10 @@ def positionen_zusammenstellen(logik: Logik, antworten: dict,
             if p["block_nr"] == block_nr:
                 p["gruppe"] = ueberschrift
 
-    # v11: Heizlast-/Auslegungszeile am Ende von Block 1 (0,00 €, kein EP) –
-    # Wortlaut vorläufig bis zum TAIFUN-Muster (Zulieferung 4)
-    auslegung = engine.auslegungs_text(logik, antworten)
-    if auslegung and any(p["block_nr"] == 1 for p in positionen):
-        letzte1 = max(i for i, p in enumerate(positionen) if p["block_nr"] == 1)
-        positionen.insert(letzte1 + 1, {
-            "block_nr": 1,
-            "gruppe": positionen[letzte1]["gruppe"],
-            "pos_nr": "", "bezeichnung": "Auslegung der Wärmepumpe",
-            "beschreibung": auslegung, "menge": 1.0, "einheit": "psl.",   # v22: wie PV
-            "e_preis_cent": 0, "ep_flag": False, "ek_cent": 0, "guid": "",
-        })
+    # v34 (PLAN_V21 Phase 180): keine 0,00-€-Auslegungszeile „Auslegung der Wärmepumpe“
+    # mehr am Ende von Block 1 (v11–v33) – der Text (engine.auslegungs_text) wandert
+    # beim Anlegen in angebote.auslegung_text (Editor „Auslegung (intern)“, nur
+    # Innendienst/Admin) und bleibt im Konfigurationsprotokoll; Bestand: migration_v34_auslegung.
 
     # v11: tatsächliche Tankgröße (A19, ab 9.000 L) als Zusatz im Text der
     # Öltank-Entsorgung – greift, falls doch eine Entsorgungsposition vorliegt
@@ -306,6 +298,113 @@ def positionen_zusammenstellen(logik: Logik, antworten: dict,
     for sort, p in enumerate(positionen, 1):
         p["sort"] = sort
     return positionen
+
+
+# --- v34 (PLAN_V21 Phase 180): Auslegungstext statt 0,00-€-Auslegungs-Position -------------
+
+# Bezeichnungen der bisherigen Auslegungs-Positionen (WP v11, PV v16, KL v24) – Kennung für
+# Bestand (Migration), Versionen/Duplikate/Kopien (Zeile wird beim Kopieren weggelassen)
+AUSLEGUNGS_BEZEICHNUNGEN = ("Auslegung der Wärmepumpe", "Auslegung der Klimaanlage",
+                            "Auslegung der PV-Anlage")
+
+
+def ist_auslegungs_position(position) -> bool:
+    """Reine 0,00-€-Textzeile „Auslegung …“ ohne Artikelnummer (Snapshot-dict oder
+    AngebotsPosition): Bezeichnung aus AUSLEGUNGS_BEZEICHNUNGEN oder PV-Beschreibung
+    „Auslegung: …“ (v16)."""
+    if isinstance(position, dict):
+        pos_nr, preis = position.get("pos_nr") or "", position.get("e_preis_cent") or 0
+        bezeichnung = (position.get("bezeichnung") or "").strip()
+        beschreibung = (position.get("beschreibung") or "").lstrip()
+    else:
+        pos_nr, preis = position.pos_nr or "", position.e_preis_cent or 0
+        bezeichnung = (position.bezeichnung or "").strip()
+        beschreibung = (position.beschreibung or "").lstrip()
+    if pos_nr.strip() or preis:
+        return False
+    return bezeichnung in AUSLEGUNGS_BEZEICHNUNGEN or beschreibung.startswith("Auslegung: ")
+
+
+def auslegungs_text_fuer(logik: Logik | None, antworten: dict | None, sparte: str,
+                         session: Session | None = None) -> str:
+    """Auslegungstext je Sparte für angebote.auslegung_text (Editor „Auslegung (intern)“):
+    WP über konfigurator.auslegungs_text, PV über pv_auslegung.auslegungs_text, KL über
+    kl_auslegung.auslegungs_text (Gerätenamen aus dem Artikelstamm, falls Session vorhanden);
+    WB über wb_auslegung.auslegungs_text/auslegen, sofern das Modul (Agent W) sie bietet.
+    Leer, wenn keine Auslegung ermittelbar ist."""
+    if logik is None or antworten is None:
+        return ""
+    sparte = (sparte or "WP").upper()
+    try:
+        if sparte == "PV":
+            if not getattr(logik, "pv_aktionen", None):
+                return ""
+            from app import pv_auslegung
+            return pv_auslegung.auslegungs_text(pv_auslegung.auslegen(logik, antworten)) or ""
+        if sparte == "KL":
+            if not getattr(logik, "kl_aktionen", None):
+                return ""
+            from app import kl_auslegung
+            namen = kl_auslegung.artikel_namen(session) if session is not None else None
+            return kl_auslegung.auslegungs_text(
+                kl_auslegung.auslegen(logik, antworten, namen)) or ""
+        if sparte == "WB":
+            try:
+                from app import wb_auslegung   # v34 Phase 179 (Agent W) – optional
+            except ImportError:
+                return ""
+            auslegen = getattr(wb_auslegung, "auslegen", None)
+            text_fn = getattr(wb_auslegung, "auslegungs_text", None)
+            if auslegen is None or text_fn is None:
+                return ""
+            return text_fn(auslegen(logik, antworten)) or ""
+        if sparte == "WP":
+            return engine.auslegungs_text(logik, antworten) or ""
+    except Exception:   # Auslegungstext ist Zusatzinfo – nie ein Grund, das Angebot nicht anzulegen
+        return ""
+    return ""
+
+
+def migration_v34_auslegung(session: Session) -> list[str]:
+    """Bestand (Entscheidung R5): entfernt die 0,00-€-Auslegungs-Position aus allen Angeboten
+    im Status Entwurf (WP „Auslegung der Wärmepumpe“, KL „Auslegung der Klimaanlage“, PV
+    „Auslegung der PV-Anlage“ / Beschreibung „Auslegung: …“), übernimmt den Text in
+    angebote.auslegung_text (falls leer) und nummeriert die Positionen wie der Editor-Knopf
+    „Neu durchnummerieren“ (sort fortlaufend, eigene Nummern verworfen). Versendete/
+    angenommene/überholte Angebote bleiben unverändert. Idempotent: zweiter Lauf meldet nichts."""
+    meldungen: list[str] = []
+    kandidaten = (session.query(AngebotsPosition)
+                  .join(Angebot, Angebot.id == AngebotsPosition.angebot_id)
+                  .filter(Angebot.status == "Entwurf",
+                          AngebotsPosition.e_preis_cent == 0,
+                          AngebotsPosition.bezeichnung.in_(AUSLEGUNGS_BEZEICHNUNGEN)
+                          | AngebotsPosition.beschreibung.like("Auslegung: %"))
+                  .order_by(AngebotsPosition.angebot_id, AngebotsPosition.sort).all())
+    je_angebot: dict[int, list[AngebotsPosition]] = {}
+    for p in kandidaten:
+        if ist_auslegungs_position(p):
+            je_angebot.setdefault(p.angebot_id, []).append(p)
+    for angebot_id, zeilen in je_angebot.items():
+        angebot = session.get(Angebot, angebot_id)
+        if angebot is None:
+            continue
+        texte = [(z.beschreibung or "").strip() for z in zeilen if (z.beschreibung or "").strip()]
+        if not (angebot.auslegung_text or "").strip() and texte:
+            angebot.auslegung_text = "\n".join(texte)
+        for z in zeilen:
+            session.delete(z)
+        session.flush()
+        rest = (session.query(AngebotsPosition)
+                .filter(AngebotsPosition.angebot_id == angebot_id)
+                .order_by(AngebotsPosition.sort, AngebotsPosition.id).all())
+        for sort, p in enumerate(rest, 1):
+            p.sort = sort
+            p.anzeige_nr = ""
+        meldungen.append(f"{angebot.nummer}: {len(zeilen)} Auslegungs-Position(en) entfernt, "
+                         f"Text nach „Auslegung (intern)“, {len(rest)} Positionen neu nummeriert (v34)")
+    if meldungen:
+        meldungen.append(f"{len(je_angebot)} Entwürfe ohne 0,00-€-Auslegungszeile (v34)")
+    return meldungen
 
 
 def version_erzeugen(session: Session, original: Angebot) -> Angebot:
@@ -333,6 +432,8 @@ def version_erzeugen(session: Session, original: Angebot) -> Angebot:
         konfigurator_typ=original.konfigurator_typ,
         ust_satz=original.ust_satz, pv_json=original.pv_json,
         kl_json=original.kl_json,   # v24
+        wb_json=original.wb_json,   # v34 (PLAN_V21 Phase 179)
+        auslegung_text=original.auslegung_text,   # v34 (PLAN_V21 Phase 180)
         vertriebler_id=original.vertriebler_id,
         profil_id=original.profil_id, vortext_text=original.vortext_text,
         rechnung_name=original.rechnung_name,
@@ -364,6 +465,12 @@ def version_erzeugen(session: Session, original: Angebot) -> Angebot:
         objekt_id=original.objekt_id,
     )
     for p in original.positionen:
+        # v34 (PLAN_V21 Phase 180): die 0,00-€-Auslegungszeile eines versendeten
+        # Angebots entfällt in der neuen Version – ihr Text wandert ins Feld
+        if ist_auslegungs_position(p):
+            if not (version.auslegung_text or "").strip():
+                version.auslegung_text = (p.beschreibung or "").strip()
+            continue
         version.positionen.append(AngebotsPosition(
             sort=p.sort, block_nr=p.block_nr, gruppe=p.gruppe, pos_nr=p.pos_nr,
             bezeichnung=p.bezeichnung, beschreibung=p.beschreibung, menge=p.menge,
@@ -435,13 +542,18 @@ def angebot_anlegen(session: Session, kunde_id: int,
     vermerke_json = "[]"
     pv_json = ""
     kl_json = ""
+    wb_json = ""          # v34 (PLAN_V21 Phase 179)
+    auslegung_text = ""   # v34 (PLAN_V21 Phase 180)
     # v24 (PLAN_V16 Phase 114): Klimakonfigurator – nur mit KL-Aktionen
     # (sonst bleibt KL reiner Bogen / manuelles Angebot)
     kl_konfigurator = sparte == "KL" and bool(getattr(logik, "kl_aktionen", None))
+    # v34 (PLAN_V21 Phase 179): Wallbox-Konfigurator – nur mit WB-Aktionen (WB-Sicht aus
+    # logik_fuer_sparte; ohne importierte WB-Artikel bleibt WB reiner Bogen)
+    wb_konfigurator = sparte == "WB" and bool(getattr(logik, "wb_aktionen", None))
     if antworten is not None and logik is not None:
         protokoll_json = json.dumps(engine.protokoll(logik, antworten), ensure_ascii=False)
-        # v13-PV / v24-KL: kein KfW-/Förderblock (keine KfW-Daten am Angebot)
-        kfw_json = ("{}" if sparte in ("PV", "KL")
+        # v13-PV / v24-KL / v34-WB: kein KfW-/Förderblock (keine KfW-Daten am Angebot)
+        kfw_json = ("{}" if sparte in ("PV", "KL", "WB")
                     else json.dumps(engine.kfw_daten(antworten), ensure_ascii=False))
         # v9: bedingte Angebotsvermerke (Blatt "Vermerke") am Angebot ablegen
         vermerke_json = json.dumps(engine.vermerke_fuer(logik, antworten),
@@ -455,6 +567,10 @@ def angebot_anlegen(session: Session, kunde_id: int,
                 from app import kl_auslegung
                 positionen = kl_auslegung.positionen_zusammenstellen(
                     logik, antworten, session, erfassung=erfassung)
+            elif wb_konfigurator:
+                from app import wb_auslegung
+                positionen = wb_auslegung.positionen_zusammenstellen(
+                    logik, antworten, session, erfassung=erfassung)
             else:
                 positionen = positionen_zusammenstellen(logik, antworten, session)
         if sparte == "PV" and getattr(logik, "pv_aktionen", None):
@@ -467,6 +583,13 @@ def angebot_anlegen(session: Session, kunde_id: int,
                 kl_auslegung.auslegen(logik, antworten,
                                       kl_auslegung.artikel_namen(session)).als_dict(),
                 ensure_ascii=False)
+        if wb_konfigurator:
+            from app import wb_auslegung
+            wb_json = json.dumps(wb_auslegung.auslegen(logik, antworten).als_dict(),
+                                 ensure_ascii=False)
+        # v34 (PLAN_V21 Phase 180): Auslegungstext statt 0,00-€-Position (Editor „Auslegung
+        # (intern)“, nur Innendienst/Admin; Versionen/Duplikate/Kopien übernehmen das Feld)
+        auslegung_text = auslegungs_text_fuer(logik, antworten, sparte, session)
     # v10 (Phase 60): Die Verfolgung lebt auf VORGANGSEBENE – die Felder am
     # Angebot sind stillgelegt (Bestand bleibt lesbar). Die Einschätzung
     # (S01/S02) schreibt ihre Startwerte beim Absenden der Erfassung auf den
@@ -505,6 +628,8 @@ def angebot_anlegen(session: Session, kunde_id: int,
             ust_satz=ust_standard(sparte),      # KL: 19 % (models.ust_standard)
             pv_json=pv_json,
             kl_json=kl_json,                    # v24
+            wb_json=wb_json,                    # v34 (PLAN_V21 Phase 179)
+            auslegung_text=auslegung_text,      # v34 (PLAN_V21 Phase 180)
             verfolgung_ampel=verfolgung_ampel,
             wiedervorlage_am=wiedervorlage,
             objekt_id=objekt_id,                # v31

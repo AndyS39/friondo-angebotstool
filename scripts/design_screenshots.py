@@ -58,7 +58,9 @@ SEITEN = ["portal", "angebotsliste", "editor", "vorgangsakte", "hauptboard", "ka
           "versand", "rollen", "kalender-projektierung", "kalender-vertrieb", "kalender-tag",
           "kalender-monat", "kalender-montage-mobil", "service-backend",
           "montage-backend", "erfassungen", "kunden", "meine-angebote", "parametrierung",
-          "wiedervorlage-mobil"]
+          "wiedervorlage-mobil",
+          # v34 (PLAN_V21 Phase 182): Login mobil, Galerie-Sammelbox mobil, Wallbox-Editor/-Erfassung
+          "login-mobil", "vorgangsakte-mobil", "editor-wb", "erfassung-wb-mobil"]
 
 
 def argumente() -> argparse.Namespace:
@@ -200,6 +202,23 @@ def ziele_ermitteln(basis: str, cookies: dict, cookie_name: str) -> dict:
                                           r'href="/projektierung/projekt/(\d+)"'))
     einsaetze = holen(basis, "/montage", cookies["montage"], cookie_name)
     ziele["termin_id"] = erster_link(einsaetze, r'href="/montage/einsatz/(\d+)"')
+    # v34: Wallbox-Angebot/-Erfassung aus der DB-Kopie (nur lokal; gegen fremde Server leer)
+    ziele["wb_angebot_id"] = ziele["wb_erfassung_id"] = 0
+    try:
+        from app.db import SessionLocal
+        from app.models import Angebot, Erfassung
+        s = SessionLocal()
+        try:
+            a = (s.query(Angebot).filter(Angebot.konfigurator_typ == "WB", Angebot.extern.is_(False))
+                 .order_by(Angebot.id.desc()).first())
+            ziele["wb_angebot_id"] = a.id if a else 0
+            e = (s.query(Erfassung).filter(Erfassung.sparte == "WB", Erfassung.typ == "katalog")
+                 .order_by(Erfassung.id.desc()).first())
+            ziele["wb_erfassung_id"] = e.id if e else 0
+        finally:
+            s.close()
+    except Exception:   # noqa: BLE001
+        pass
     return ziele
 
 
@@ -279,6 +298,14 @@ def seitenliste(ziele: dict, cookies: dict, erfassung_id: int) -> list[tuple[str
     liste.append(("meine-angebote", "/meine-angebote", ad, False))
     liste.append(("parametrierung", "/parametrierung", admin, False))
     liste.append(("wiedervorlage-mobil", "/leads/wiedervorlagen", ad, True))
+    # v34 (PLAN_V21 Phase 182)
+    liste.append(("login-mobil", "/login", None, True))
+    if ziele.get("vorgang_id"):
+        liste.append(("vorgangsakte-mobil", f"/vorgaenge/{ziele['vorgang_id']}", admin, True))
+    if ziele.get("wb_angebot_id"):
+        liste.append(("editor-wb", f"/angebote/{ziele['wb_angebot_id']}", admin, False))
+    if ziele.get("wb_erfassung_id"):
+        liste.append(("erfassung-wb-mobil", f"/erfassung/{ziele['wb_erfassung_id']}/seite/0", admin, True))
     return liste
 
 

@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% from "_galerie.html" import galerie as galerie_makro, galerie_fuss %}
 {% from "_komponenten.html" import notizen_chat %}
+{# v34 (PLAN_V21 Phase 181): Diktat-Knopf am Restarbeiten-Feld (static/diktat.js) #}
+{% from "_diktat.html" import diktat_knopf %}
 
 {% block titel %}Einsatz {{ projekt.nummer }} – Montage{% endblock %}
 
@@ -168,9 +170,10 @@
     {% endfor %}
     <form method="post" action="/montage/einsatz/{{ termin.id }}/restarbeit"
           enctype="multipart/form-data" class="pj-btnrow">
-        <input type="text" name="text" required placeholder="Restarbeit melden …" style="flex:1">
+        <input type="text" name="text" id="restarbeit-text" required placeholder="Restarbeit melden …" style="flex:1">
         <input type="file" name="datei" accept="image/*" capture="environment" style="max-width:130px">
         <button class="pj-btn" type="submit">Melden</button>
+        {{ diktat_knopf('restarbeit-text', 'pj-btn') }}
     </form>
 
     {# 8 · Galerie ganz unten (Sammelbox, Lightbox aus Phase 136) #}

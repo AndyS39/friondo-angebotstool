@@ -36,10 +36,12 @@ BLOCK = 200
 
 IMPORT_SCHLUESSEL = {"preisliste": "Preisliste", "pv": "PV-Positionslisten",
                      "klima": "Klima-Positionslisten", "logik": "Logik-Excel",
-                     "bestand": "Bestandsimport", "monday": "monday-Vollabgleich"}
+                     "bestand": "Bestandsimport", "monday": "monday-Vollabgleich",
+                     "wallbox": "Wallbox-Positionslisten"}   # v34 (PLAN_V21 Phase 178)
 # Standard-Dauer in Sekunden, solange noch kein Lauf gemessen wurde (Plan Phase 128)
 IMPORT_DAUER_STANDARD = {"preisliste": 20, "pv": 10, "klima": 10, "logik": 15, "bestand": 30,
-                         "monday": 30}   # v27: Button „Jetzt aktualisieren“ (monday-Vollabgleich)
+                         "monday": 30,   # v27: Button „Jetzt aktualisieren“ (monday-Vollabgleich)
+                         "wallbox": 10}   # v34: zwei kleine Excel-Dateien
 HINWEIS_BESTAETIGEN = "Bitte den Hinweis bestätigen"
 
 

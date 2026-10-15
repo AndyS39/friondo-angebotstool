@@ -437,3 +437,138 @@ ggf. „− Rabatt" / „= Endbetrag"; **kein** KfW-Block, keine Wirtschaftlichk
   `kl_auslegung.protokoll_zeilen` (je Raum Fläche · Höhe · Wärmelast · Kühllast ·
   Klasse · Außengerät; je Außengerät Gerät und Kombination; Montage) – Einträge
   ohne Frage-ID werden nur mit Beschriftung gerendert.
+
+## 10. Wallbox (v34) – Texte des Wallbox-Konfigurators
+
+Seit v34 (PLAN_V21, Phasen 178/179, Nachtrag + Ergänzung 15.10.2026) erzeugt eine grüne
+WB-Katalog-Erfassung (Mennekes AMTRON 4You 310/560, Leitungsverlegung, Erdarbeiten,
+Wandmontage/Säule, Durchbrüche) ein Tool-Angebot mit 19 % USt. Textblöcke „Friondo WB
+Standard" (Vortext + Nachtext), „Friondo WB Enni", „Friondo WB SWD", „Friondo WB
+Sparkasse DU" (Nachtexte, Start = Kopie des Standards [ANNAHME]) – Seed-Konstanten in
+`app/angebotsprofile.py` (`wb_vortext`, `WB_VORTEXT`, `WB_STANDARD_NACHTEXT`,
+`WB_SEED_BLOECKE`), Migration `seed_wb`, Auswahl `_wb_block` / `ist_wb`, editierbar in der
+Parametrierung → Textblöcke. **Alle WB-Texte sind Entwürfe für das Gegenlesen durch den
+Innendienst.** Kein Nachtext A „Ihre Zahlungsoptionen" (nicht im TAIFUN-Muster AN251131;
+der Cloover-Plan kann ihn später ergänzen), kein KfW-/Förderblock, keine
+Wirtschaftlichkeit, **keine Auslegungs-Position** (Herleitung im Protokoll, Seite
+„Auslegung", und intern im Editor); **Vollmacht (Nachtext D) immer** (Netzanmeldung
+§ 14a EnWG, Rückfrage 4).
+
+### 10.1 Vortext WB (Seite 1) – wörtlich aus dem TAIFUN-Muster
+
+**Ihre individuelle Wallbox zum Festpreis**
+
+Sehr geehrte Damen und Herren, *(dynamisch: `{briefanrede}`)*
+
+vielen Dank für Ihr Vertrauen in die Friondo GmbH. Mit einer modernen Wallbox laden
+Sie Ihr Elektrofahrzeug bequem zu Hause, sparen Zeit und machen sich unabhängiger von
+öffentlichen Ladeinfrastrukturen. So schaffen Sie Komfort, Sicherheit und ein smartes
+Energiemanagement direkt bei Ihnen vor Ort.
+
+Anbei erhalten Sie Ihr maßgeschneidertes Angebot. Darin enthalten sind:
+
+- [Haken] Ihre individuelle Wallbox – perfekt abgestimmt auf Ihre Immobilie & Ihren Bedarf
+- [Haken] Fachgerechte Installation – sauber, sicher und termingerecht
+- [Haken] Transparent & zum Festpreis – klar verständlich, ohne versteckte Kosten
+- [Haken] Unser Rundum-Sorglos-Service – von der Planung bis zur Inbetriebnahme
+
+**Warum Friondo?**
+
+- [Haken] **Fachkompetenz & Qualität** – Als Meisterbetrieb und zertifizierter Fachbetrieb
+  setzen wir auf höchste Standards
+- [Haken] **Alles aus einer Hand** – Von Photovoltaik bis Energiemanagement – perfekt
+  kombinierbar mit Ihrer Wallbox
+- [Haken] **Persönliche Beratung** – Wir begleiten Sie von der ersten Idee bis zur fertigen
+  Lösung
+- [Haken] **Effizienz & Nachhaltigkeit** – Wir helfen Ihnen, Ihr Zuhause energieoptimiert
+  und zukunftssicher zu gestalten
+- [Haken] **Fördermittel-Check & Unterstützung** – Wir prüfen für Sie mögliche Zuschüsse
+  und Förderungen
+
+Wir sind auf moderne Energiesysteme spezialisiert und gehören in der Region zu den
+führenden Anbietern von Photovoltaik, Wärmepumpen, Klimaanlagen,
+Energiemanagement-Systemen und Wallboxen. Lassen Sie uns gemeinsam Ihr Zuhause fit für
+die Zukunft machen!
+
+Ihr Friondo-Team
+
+**Komplettpaket Wallbox inkl. Montage** *(eigener Absatz am Ende des Vortexts [ANNAHME
+Plan]; Wortlaut wörtlich aus der Textzeile ohne Position der Wallbox-Excel `WB Angebot
+Excel 1.xlsx` – `_x000D_`-Umbrüche und „?"-Platzhalter der TAIFUN-Symbole entfernt;
+`seed_wb` liest ihn beim Anlegen des Textblocks aus `Artikel-Preislisten/Wallbox/` und
+hebt einen noch unveränderten Entwurf auf den Excel-Text. Ohne Datei bleibt der Entwurf
+„Die Zukunft der Energie beginnt bei Ihnen zuhause – effizient, nachhaltig und
+zuverlässig." Die Import-Vorschau zeigt die Textzeile unter „Textzeilen ohne Position".)*
+
+### 10.2 Nachtext B WB – „Installationsvoraussetzungen"
+
+Haftungsbegrenzung, Rücktrittsrecht im Zusammenhang mit Technischer Feinplanung und
+Zahlung wörtlich wie Abschnitt 6 (mit dem Platzhalter `{zahlungsbedingungen}`; der
+v30-Standardtext ist wörtlich die Muster-Klausel „Anzahlung 50 % spätestens 14 Tage vor
+Arbeitsbeginn …" – Rückfrage 3 damit erledigt; die Zahlungsbedingung bleibt je Angebot
+wählbar). Danach Bindefrist („Wir halten uns freibleibend 30 Tage …"), AGB,
+Datenschutz. **Ohne** „Hinweis zur KfW-Förderung" (WP), **ohne** „Hinweis zur
+Kältetechnik" (KL), **ohne** Netzbetreiber-Absatz und Heizkörper-Check.
+
+### 10.3 Nachtext C WB – Schlussseite mit Unterschriften
+
+Wie Abschnitt 7 **ohne** den Absatz „Aufschiebende Bedingung" und **ohne** die Zeile
+„Voraussichtliches Datum der Umsetzung … Bewilligungszeitraum"; stattdessen wie KL:
+
+Voraussichtlicher Ausführungszeitraum: ______________
+
+Unterschriftenblock (Ort, Datum / Unterschrift des Auftraggebers, inkl. elektronischer
+Signatur) unverändert.
+
+### 10.4 Nachtext D WB – Vollmacht (immer)
+
+Die Vollmacht-Seite (Abschnitt 8, SpotmyEnergy/§ 14a) erscheint bei Wallbox-Angeboten
+**immer** – unabhängig von iMSys/SpotDynamic-Fragen und unabhängig vom Profil (auch
+Enni/SWD) [ANNAHME, Rückfrage 4], weil die Netzanmeldung nach § 14a EnWG (WB004)
+Teil des Angebots ist. Verankert in `app/anhaenge.py` (`vollmacht_erforderlich`:
+`konfigurator_typ == "WB"` → True) und `app/angebotsprofile.py` (`vollmacht_erlaubt`:
+WB → True); `pdf_export._mit_vollmacht` nutzt beide Funktionen unverändert.
+
+### 10.5 Positionsteil / Summenblock Wallbox
+
+Block 1 „Wallbox" (WB001 oder WB002), Block 2 „Installation und Anschluss" in der
+Reihenfolge WB003 Anschlussvorbereitung (psl., immer; bis 10 m Leitung und 2 Durchbrüche
+enthalten) · WB008 Zusätzliche Bohrung/Durchbrüche × (WB07 − 2) · WB005 lfd. Meter
+NYY-J × Mehrlänge (nur über 10 m) · WB006 Erdarbeiten × Meter (nur bei WB03 = Ja) ·
+WB007 Fundament und Standsäule (1 × psl., nur bei Säule); Block 3 „Netzanmeldung"
+(WB004, 0,00 €); Gruppen-Überschriften editierbar wie seit v22. Keine Auslegungszeile.
+Summenblock:
+
+```
+Netto-Summe            €   x.xxx,xx
+19,00 % USt.           €     xxx,xx
+Gesamt-Betrag          €   x.xxx,xx
+```
+
+ggf. „− Rabatt" / „= Endbetrag"; **kein** KfW-Block, keine Wirtschaftlichkeit.
+Kontrollwerte (Preis WB003 1.297,20 €, kaufmännische USt wie TAIFUN): A 310 / 10 m /
+Erdarbeiten Nein / Wandmontage / 2 Durchbrüche → 2.235,70 / 424,78 / 2.660,48 €; B 560 /
+25 m / Ja 8 m / Säule → 5.435,85 / 1.032,81 / 6.468,66 €; B2 = B + 4 Durchbrüche →
+5.773,85 / 1.097,03 / 6.870,88 €; C 560 / 8 m → 2.687,75 / 510,67 / 3.198,42 €; D 310 /
+12,4 m → Mehrlänge 2 m → 2.334,38 € netto. Musterangebot AN251131 (Positionen 001 + 002 +
+003 + 005): Netto 3.626,25 €, USt 688,99 €, Gesamt 4.315,24 €.
+
+### 10.6 Anhänge, Lieferschein, Protokoll (Wallbox)
+
+- **Anhänge:** Zeile `Mennekes AMTRON 4You Datenblatt.pdf` mit Regel „wenn Sparte = WB"
+  im Blatt „Anhänge" (Datei = Zulieferung; `anhaenge.fehlende_dateien` meldet sie, bis
+  sie in `anlagen/` liegt). Unternehmenspräsentation und Ratenkauf greifen über „immer"
+  (Ratenkauf nicht bei Enni/SWD). Liefert Mennekes getrennte Datenblätter je Modell:
+  Regel „wenn Artikel WB001 im Angebot" / „wenn Artikel WB002 im Angebot" (seit v34
+  erlaubt der Parser Artikel mit Sparten-Präfix).
+- **Lieferschein:** wie WP/PV/KL ohne Preise, Gruppen-Überschriften, vollständige
+  Beschreibung je Position (v30).
+- **Protokoll-PDF:** Seite „Auslegung" mit „Wallbox: AMTRON 4You 560",
+  „Leitungsverlegung gesamt: 25 m, davon 10 m enthalten, Mehrlänge 15 m" (ohne
+  Mehrlänge: „… – bis 10 m enthalten, keine Mehrlänge"), „Erdarbeiten: 8 m" bzw.
+  „Erdarbeiten: keine", „Montage: Säule (Fundament und Standsäule)" bzw. „Montage:
+  Wandmontage", „Durchbrüche: 4 (2 in der Anschlussvorbereitung enthalten, 2
+  zusätzlich)" bzw. „Durchbrüche: 2 (in der Anschlussvorbereitung enthalten)"; ab 100 m
+  Leitungsverlegung zusätzlich „Leitungslänge über 100 m – bitte prüfen" (Warnung, keine
+  Sperre). Derselbe Text steht in `angebote.auslegung_text` (Editor „Auslegung
+  (intern)", nur Innendienst/Admin).

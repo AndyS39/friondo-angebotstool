@@ -1,0 +1,115 @@
+/* v34 (PLAN_V21 Phase 181): Galerie-Sammelbox – Liste mit Vorschaubild, Ordner und Bemerkung je
+   Datei, Fortschrittsbalken, Kamera-Serie. Gehört zu _galerie.html (Makro sammelbox) und
+   galerie_v34.js; wird über das Makro galerie_einbindung() eingebunden (nicht in base.html).
+   Nur Tokens aus style.css (hell/dunkel), keine festen Farbwerte. Die alten Regeln
+   .pj-gal-sammel .liste … aus style.css gelten für die neue Liste (.gal34-liste) nicht. */
+.pj-gal-sammel.gal34 .gal34-liste {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+}
+.pj-gal-sammel.gal34 .gal34-liste[hidden] { display: none; }
+.gal34-zeile {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    background: var(--flaeche-karte);
+    border: 1px solid var(--linie);
+    border-radius: var(--r-m, 10px);
+    padding: 6px 8px;
+    color: var(--text);
+}
+.gal34-zeile img.gal34-bild,
+.gal34-zeile .gal34-doku {
+    width: 64px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 6px;
+    background: var(--flaeche-abgesetzt);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+}
+.gal34-zeile img[hidden], .gal34-zeile .gal34-doku[hidden] { display: none; }
+.gal34-zeile .gal34-felder {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+.gal34-zeile .gal34-name {
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.gal34-zeile .gal34-groesse { font-size: 11px; }
+.gal34-zeile .gal34-groesse.fehler { color: var(--status-rot); font-weight: 600; }
+.gal34-zeile select,
+.gal34-zeile input[type="text"] {
+    width: 100%;
+    font-family: inherit;
+    font-size: 12px;
+    min-height: 32px;
+    border: 1px solid var(--linie-stark);
+    border-radius: var(--r-s, 6px);
+    background: var(--flaeche-karte);
+    color: var(--text);
+    padding: 2px 6px;
+}
+.gal34-zeile .gal34-weg {
+    border: none;
+    background: var(--flaeche-abgesetzt);
+    color: var(--text);
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    font-size: 14px;
+}
+.gal34-zeile .gal34-weg:hover { background: var(--flaeche-hover); }
+.pj-gal-sammel.gal34 .fuss { align-items: center; }
+.pj-gal-sammel.gal34 .fuss label.dezent {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    font-size: 12px;
+}
+.pj-gal-sammel.gal34 .fuss input.bemerkung {
+    font-family: inherit;
+    font-size: 12px;
+    min-height: 32px;
+    border: 1px solid var(--linie-stark);
+    border-radius: var(--r-s, 6px);
+    background: var(--flaeche-karte);
+    color: var(--text);
+    padding: 2px 6px;
+}
+.pj-gal-sammel.gal34 progress.gal34-fortschritt {
+    flex: 1 1 100%;
+    width: 100%;
+    height: 10px;
+    accent-color: var(--akzent);
+}
+.pj-gal-sammel.gal34 progress.gal34-fortschritt[hidden] { display: none; }
+.pj-gal-sammel.gal34 .gal34-status { flex: 1 1 100%; font-size: 12px; }
+.pj-gal-sammel.gal34 .gal34-status.fehler { color: var(--status-rot); font-weight: 600; }
+.pj-gal-sammel.gal34 .gal34-status[hidden] { display: none; }
+.pj-gal-sammel.gal34 .gal34-abbrechen[hidden] { display: none; }
+/* Formular-Modus (mobile Erfassung): keine Bemerkung je Datei, Upload mit „Weiter“ */
+.pj-gal-sammel.gal34[data-modus="formular"] .gal34-bemerkung,
+.pj-gal-sammel.gal34[data-modus="formular"] .gal34-nur-upload { display: none; }
+@media (max-width: 600px) {
+    .gal34-zeile { grid-template-columns: 56px minmax(0, 1fr) auto; }
+    .pj-gal-sammel.gal34 .kopf .pj-btn {
+        flex: 1 1 40%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+    }
+    .pj-gal-sammel.gal34 .fuss .pj-btn { min-height: 44px; }
+}

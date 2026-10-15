@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block titel %}Wallbox-Logik (WB) – Parametrierung – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+{# v34 (PLAN_V21 Phase 178): Lesesicht des Wallbox-Konfigurators – nur Anzeige,
+   Live-Master bleibt die Logik-Excel (Blätter Fragen WB, Aktionen WB, Angebotsaufbau WB,
+   WB-Parameter, WB-Artikel). Der Außendienst sieht nie EK (ek_sichtbar). #}
+<div class="seitenkopf">
+    <h1>Wallbox-Konfigurator – Logik (Lesesicht)</h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/parametrierung">← Parametrierung</a>
+        <a class="knopf zweitrangig" href="/parametrierung/logik">Logik &amp; Importe</a>
+        {# v27 (PLAN_V17 Phase 128): Hinweis vor dem Start – Bestätigung per confirm()
+           plus verstecktes Feld „bestaetigt“ (serverseitig geprüft) #}
+        <form method="post" action="/parametrierung/artikel/wb-import"
+              onsubmit="return confirm('Wallbox-Positionslisten importieren: {{ wb_hinweis }}. Jetzt starten?');">
+            <input type="hidden" name="bestaetigt" value="1">
+            <button class="knopf" type="submit" {{ 'disabled' if not wb_import_ok or wb_dateien_fehlen }}
+                    title="{{ wb_hinweis }}">
+                Artikel → Wallbox-Positionslisten importieren</button>
+        </form>
+        <a class="knopf zweitrangig" href="/parametrierung/artikel/wb-import">Import-Vorschau</a>
+        <a class="knopf zweitrangig" href="/artikel?q=WB0">Artikel Sparte WB</a>
+        <form method="post" action="/parametrierung/neu-einlesen"
+              onsubmit="return confirm('Logik-Excel neu einlesen: {{ import_hinweise.logik }}. Jetzt starten?');">
+            <input type="hidden" name="bestaetigt" value="1">
+            <button class="knopf zweitrangig" type="submit" title="{{ import_hinweise.logik }}">Parametrierung neu einlesen</button>
+        </form>
+    </div>
+</div>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<p class="dezent">
+    Quelle: <code>konfigurator_logik_v5.xlsx</code> ·
+    zuletzt eingelesen: {{ logik.geladen_am.strftime('%d.%m.%Y %H:%M:%S') }} ·
+    Änderungen nur in der Excel, danach „Parametrierung neu einlesen“.
+</p>
+
+{% if wb_dateien_fehlen %}
+<p class="hinweis"><strong>Dateien fehlen:</strong> {{ wb_dateien_fehlen | join(', ') }} im Ordner
+    <code>{{ wb_ordner }}</code> – der Wallbox-Import ist erst möglich, wenn die Zulieferung
+    (TAIFUN-Export <code>WB Angebot Excel 1.xlsx</code>, Pos. 001–008) dort liegt. Bis dahin läuft die WB-Erfassung
+    ohne importierte Artikel über die TAIFUN-Schiene.</p>
+{% endif %}
+
+{% if not logik.wb_aktionen %}
+<p class="hinweis">Blatt „Aktionen WB“ fehlt in der Logik-Excel – die Wallbox-Erfassung läuft als
+    Freitext (TAIFUN-Schiene). Für den Wallbox-Konfigurator die Blätter „Fragen WB“, „Aktionen WB“,
+    „Angebotsaufbau WB“, „WB-Parameter“ und „WB-Artikel“ anlegen (PLAN_V21 Phase 178).</p>
+{% else %}
+
+<h2>Logik prüfen – Wallbox</h2>
+{% if wb_fehler %}
+    <div class="warnblock fehlerblock">
+        <strong>Fehler ({{ wb_fehler | length }}) – bitte Logik-Excel korrigieren und neu einlesen</strong>
+        <ul>{% for f in wb_fehler %}<li>{{ f }}</li>{% endfor %}</ul>
+    </div>
+{% else %}
+    <p class="meldung">Wallbox-Prüfungen ohne Fehler: jede WB-Referenz steht im Blatt „WB-Artikel“,
+        Mengenwort „× Mehrlänge“ nur bei WB02, Pflichtparameter lesbar, WB01/WB02 vorhanden.</p>
+{% endif %}
+{% if wb_warnungen %}
+    <div class="warnblock">
+        <strong>Hinweise ({{ wb_warnungen | length }})</strong>
+        <ul>{% for w in wb_warnungen %}<li>{{ w }}</li>{% endfor %}</ul>
+    </div>
+{% endif %}
+{% if logik.wb_artikel_fehlen %}
+    <p class="hinweis">Die WB-Artikel sind noch nicht im Artikelstamm – die WB-Sicht ist bis zum Import
+        ein reiner Erfassungsbogen (Katalog-Erfassungen landen in der TAIFUN-Warteschlange).</p>
+{% endif %}
+
+<table class="tabelle zusammenfassung">
+    <tr><th>Fragen WB</th><td>{{ wb_fragen | length }}</td></tr>
+    <tr><th>Aktionen WB</th><td>{{ logik.wb_aktionen | length }}</td></tr>
+    <tr><th>Angebotsaufbau WB (Blöcke)</th><td>{{ logik.wb_bloecke | length }}</td></tr>
+    <tr><th>WB-Parameter</th><td>{{ logik.wb_parameter | length }}</td></tr>
+    <tr><th>WB-Artikel (Blatt / Artikelstamm aktiv)</th>
+        <td>{{ logik.wb_artikel_nummern | length }} /
+            {{ bestand.values() | selectattr('aktiv') | list | length }}</td></tr>
+</table>
+
+<h2>Rechenweg</h2>
+<p class="dezent">WB01 Wallbox (310 → WB001, 560 → WB002) · WB02 Leitungsverlegung in Metern (bis
+    <strong>leitung_inklusive_m</strong> in der Anschlussvorbereitung WB003 enthalten; Mehrlänge = WB02 −
+    leitung_inklusive_m, kaufmännisch auf ganze Meter gerundet, nie unter 0 → WB005 × Mehrlänge) ·
+    WB03/WB04 Erdarbeiten Ja/Nein mit Metern (→ WB006 × Meter, ganze Meter; 0/leer = Absende-Meldung
+    „Erdarbeiten: Meter fehlen“; unabhängig von der Montageart) · WB05 Wandmontage oder Säule (Säule →
+    WB007 Fundament und Standsäule, 1 × psl.) · WB07 Anzahl Durchbrüche (<strong>durchbrueche_inklusive</strong>
+    = 2 in der Anschlussvorbereitung enthalten, darüber WB008 × (WB07 − 2), ganze Stück) · WB08 Bemerkung
+    (nur Protokoll). Immer im Angebot: WB003 (psl.) und WB004 Netzanmeldung §14a (0,00 €). Keine
+    AMPEL-Gründe; Leitungslänge über 100 m ist eine Warnung. Keine Auslegungs-Position im Angebot
+    (Herleitung im Protokoll und intern im Editor). Vollmacht-Seite bei Wallbox-Angeboten immer.</p>
+
+<h2>Fragen WB</h2>
+<table class="tabelle">
+    <thead><tr><th>Seite</th><th>ID</th><th>Fragetext</th><th>Typ</th><th>Antwortmöglichkeiten</th><th>Hinweis</th></tr></thead>
+    <tbody>
+    {% for f in wb_fragen.values() %}
+        <tr>
+            <td class="dezent">{{ f.seite }}</td>
+            <td><strong>{{ f.id }}</strong></td>
+            <td>{{ f.text }}</td>
+            <td class="dezent">{{ f.typ }}</td>
+            <td>{{ f.antworten | join(' | ') }}</td>
+            <td class="dezent">{{ f.hinweis | truncate(120) }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>WB-Parameter</h2>
+{% if wb_fehlende %}
+<div class="warnblock">
+    <strong>Fehlende WB-Parameter</strong> – bis zur Ergänzung im Blatt gilt der Standardwert:
+    <ul>{% for name in wb_fehlende %}<li>{{ name }} – Standard {{ wb_standard[name] }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+<table class="tabelle">
+    <thead><tr><th>Parameter</th><th>Wert</th><th>Einheit</th><th>Bemerkung</th></tr></thead>
+    <tbody>
+    {% for name, (wert, bemerkung) in logik.wb_parameter.items() %}
+        <tr><td>{{ name }}</td>
+            <td>{{ (wert.replace('.', ',') if wert.replace('.', '', 1).isdigit() else wert | truncate(60)) or '(leer)' }}</td>
+            <td class="dezent">{{ logik.wb_parameter_einheit.get(name, '') }}</td>
+            <td class="dezent">{{ bemerkung | truncate(120) }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Aktionen WB</h2>
+<table class="tabelle">
+    <thead><tr><th>Frage</th><th>Antwort / Bedingung</th><th>Aktion</th><th>Typ</th><th>Bemerkung</th></tr></thead>
+    <tbody>
+    {% for a in logik.wb_aktionen %}
+        <tr>
+            <td>{{ a.frage }}</td>
+            <td>{{ a.antwort | truncate(70) }}</td>
+            <td>{{ a.aktion_roh | truncate(80) }}</td>
+            <td class="dezent">{{ a.typ }}</td>
+            <td class="dezent">{{ a.bemerkung | truncate(110) }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Angebotsaufbau WB</h2>
+<table class="tabelle">
+    <thead><tr><th>Block</th><th>Überschrift</th><th>Inhalt (Reihenfolge = Sortierung im Block)</th><th>Wann</th></tr></thead>
+    <tbody>
+    {% for b in logik.wb_bloecke %}
+        <tr><td>{{ b.nr }}</td><td>{{ b.ueberschrift }}</td>
+            <td class="dezent">{{ b.inhalt_roh | truncate(200) }}</td>
+            <td class="dezent">{{ b.wann.roh if b.wann else '?' }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>WB-Artikel (Sparte WB)</h2>
+<p class="dezent">Blatt „WB-Artikel“ (Anker Datei „WB Angebot Excel 1“ + Position + Beschreibungsanfang für den
+    Import; GUID = Angebots-GUID des zuletzt eingelesenen Exports; die Spalte Einheit überstimmt die
+    Export-Einheit, z. B. WB007 Fundament/Standsäule 1 × psl.) und Artikelstamm (pos_nr WB*). Preise pflegt der
+    Innendienst unter Artikel. WB003 Anschlussvorbereitung = 1.297,20 € (bestätigt 15.10.2026).</p>
+<table class="tabelle">
+    <thead><tr><th>WB-Nr.</th><th>Datei / Pos.</th><th>Beschreibungsanfang (Blatt)</th><th>Einheit</th>
+        <th>GUID zuletzt gesehen (Blatt / Stamm)</th><th>Artikelstamm</th><th class="rechts">E-Preis netto</th>
+        {% if ek_sichtbar %}<th class="rechts">EK Material</th>{% endif %}<th></th></tr></thead>
+    <tbody>
+    {% for z in logik.wb_artikel_zeilen %}
+        {% set a = bestand.get(z.nr) %}
+        <tr class="{{ 'inaktiv' if a and not a.aktiv }}">
+            <td><strong>{{ z.nr }}</strong></td>
+            <td class="dezent">{{ z.datei }} {{ z.position }}</td>
+            <td>{{ z.anfang | truncate(60) }}</td>
+            <td class="dezent">{{ z.einheit }}</td>
+            <td class="dezent">{{ (z.guid or '–') | truncate(16) }} / {{ (a.guid if a and a.guid else '–') | truncate(16) }}</td>
+            <td>{% if a is none %}<span class="abzeichen">fehlt – importieren</span>
+                {% elif not a.aktiv %}<span class="abzeichen">inaktiv</span>
+                {% else %}{{ a.titel | truncate(50) }}{% endif %}</td>
+            <td class="rechts {{ 'preis-fehlt' if a and not a.e_preis_cent and z.nr != 'WB004' }}">
+                {{ a.e_preis_cent | euro if a else '' }}</td>
+            {% if ek_sichtbar %}
+            <td class="rechts {{ 'preis-fehlt' if a and a.ek_cent is none }}">
+                {% if a %}{{ a.ek_cent | euro if a.ek_cent is not none else 'fehlt' }}{% endif %}</td>
+            {% endif %}
+            <td class="aktionen">{% if a %}<a class="knopf klein zweitrangig" href="/artikel/{{ a.id }}/bearbeiten">Bearbeiten</a>{% endif %}</td>
+        </tr>
+    {% endfor %}
+    {% for nr, a in bestand.items() if nr not in logik.wb_artikel_nummern %}
+        <tr class="{{ 'inaktiv' if not a.aktiv }}">
+            <td><strong>{{ nr }}</strong></td>
+            <td class="dezent">nicht im Blatt „WB-Artikel“</td>
+            <td>{{ a.titel | truncate(60) }}</td>
+            <td class="dezent">{{ a.einheit }}</td>
+            <td class="dezent">– / {{ (a.guid or '–') | truncate(16) }}</td>
+            <td>{{ 'aktiv' if a.aktiv else 'inaktiv' }}</td>
+            <td class="rechts">{{ a.e_preis_cent | euro }}</td>
+            {% if ek_sichtbar %}<td class="rechts">{{ a.ek_cent | euro if a.ek_cent is not none else 'fehlt' }}</td>{% endif %}
+            <td class="aktionen"><a class="knopf klein zweitrangig" href="/artikel/{{ a.id }}/bearbeiten">Bearbeiten</a></td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{% endif %}
+{% endblock %}

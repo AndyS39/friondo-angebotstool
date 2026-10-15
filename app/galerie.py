@@ -209,6 +209,80 @@ def loeschen(session: Session, datei: GalerieDatei) -> None:
     session.delete(datei)
 
 
+# --- v34 (PLAN_V21 Phase 181): mehrere Dateien in EINEM Request, Teilerfolg je Datei -------
+
+def _wert_an(liste, nr: int) -> str:
+    try:
+        return (liste[nr] or "").strip() if nr < len(liste) else ""
+    except (TypeError, AttributeError):
+        return ""
+
+
+def _fehlergrund(fehler: Exception) -> str:
+    text = str(fehler) or fehler.__class__.__name__
+    if "locked" in text.lower():
+        return "Datenbank kurz belegt – bitte erneut versuchen"
+    return text[:120]
+
+
+def mehrfach_speichern(session: Session, vorgang_id: int, dateien, ordner_je_datei=(),
+                       bemerkung_je_datei=(), *, standard_ordner: str = "Allgemein",
+                       standard_bemerkung: str = "", benutzer=None, sparte: str = "WP",
+                       quelle: str = "upload") -> dict:
+    """Mehrere Upload-Dateien (Starlette UploadFile) mit Ordner und Bemerkung je Datei
+    (positionsgleiche Listen `datei_ordner` / `datei_bemerkung`; leer = Standard) ablegen.
+    Commit je Datei (Block = eine Datei): eine leere oder unlesbare Datei bzw. „database is
+    locked“ bei einer späten Datei lässt die bereits abgelegten stehen – Teilerfolg.
+    Rückgabe {"abgelegt": [{nr, id, name, ordner}], "fehler": [{nr, name, grund}],
+    "ordner": [benutzte Ordner]}; Dateifelder ohne Dateinamen (leere Formularfelder)
+    werden übersprungen."""
+    sparte = sparte_pruefen(sparte)
+    erlaubt = ordner_liste(session, sparte)
+    ergebnis: dict = {"abgelegt": [], "fehler": [], "ordner": []}
+    for nr, datei in enumerate(dateien or []):
+        name = getattr(datei, "filename", "") or ""
+        if not name:
+            continue
+        ziel_ordner = _wert_an(ordner_je_datei, nr) or (standard_ordner or "Allgemein")
+        if ziel_ordner not in erlaubt:
+            ziel_ordner = "Allgemein"
+        bemerkung = _wert_an(bemerkung_je_datei, nr) or (standard_bemerkung or "")
+        eintrag = None
+        try:
+            eintrag = speichern(session, vorgang_id, ziel_ordner, name,
+                                getattr(datei, "file", datei), benutzer=benutzer,
+                                bemerkung=bemerkung, quelle=quelle, sparte=sparte)
+            if eintrag is None:
+                raise ValueError("Datei ist leer")
+            session.commit()
+        except Exception as fehler:   # noqa: BLE001 – je Datei gemeldet, nie die ganze Anfrage
+            session.rollback()
+            if eintrag is not None and getattr(eintrag, "pfad", ""):
+                (config.DATA_ORDNER / eintrag.pfad).unlink(missing_ok=True)
+            ergebnis["fehler"].append({"nr": nr, "name": name[:150],
+                                       "grund": _fehlergrund(fehler)})
+            continue
+        ergebnis["abgelegt"].append({"nr": nr, "id": eintrag.id, "name": eintrag.dateiname,
+                                     "ordner": eintrag.ordner})
+        if eintrag.ordner not in ergebnis["ordner"]:
+            ergebnis["ordner"].append(eintrag.ordner)
+    return ergebnis
+
+
+def meldung_fuer(ergebnis: dict, standard_ordner: str = "") -> str:
+    """Meldung für Redirect/JSON: „3 Datei(en) abgelegt (Aufstellort, Zählerschrank).“ bzw.
+    bei Teilerfolg „2 von 3 Dateien abgelegt (…) – nicht abgelegt: x.pdf (Datei ist leer).“"""
+    n_ok = len(ergebnis.get("abgelegt", []))
+    fehler = ergebnis.get("fehler", [])
+    ordner = ", ".join(sorted(ergebnis.get("ordner", []))) or (standard_ordner or "")
+    if not fehler:
+        return f"{n_ok} Datei(en) abgelegt ({ordner})."
+    nicht = "; ".join(f"{f['name']} ({f['grund']})" for f in fehler)
+    if n_ok:
+        return f"{n_ok} von {n_ok + len(fehler)} Dateien abgelegt ({ordner}) – nicht abgelegt: {nicht}."
+    return f"Keine Datei abgelegt – nicht abgelegt: {nicht}."
+
+
 def _montage_zugriff(session: Session, vorgang: Vorgang, benutzer) -> bool:
     """v15 (Phase 82): Montage sieht die Galerie der Vorgänge, deren Gewerke
     einem eigenen Team zugewiesen oder terminiert sind.

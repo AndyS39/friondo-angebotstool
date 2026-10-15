@@ -4,10 +4,15 @@
 # einstellungen: mail_vorlage_standard_betreff/_text bzw.
 # mail_vorlage_<benutzer_id>_betreff/_text.
 # v27-Nachtrag 2: zusätzlich eine Vorlage je Sparte WP / PV / KL / WB
-# (mail_vorlage_sparte_<SPARTE>_betreff/_text). Reihenfolge beim Versand:
+# (mail_vorlage_sparte_<SPARTE>_betreff/_text). Reihenfolge beim Versand (bis v33):
 # Vorlage des Außendienstlers → Sparten-Vorlage des Angebots → Standard-Vorlage.
 # migration_sparten() legt die Sparten-Vorlagen einmalig aus der Standard-
 # Vorlage an (migrate.py); der Kombi-Versand behält seine eigene Vorlage.
+# v34 (PLAN_V21 Phase 180, Agent V – Befund „Klima-Mailtext wird nicht gezogen“):
+# die AD-Vorlagen sind WP-formuliert; stand der Außendienstler des Vorgangs mit eigener
+# Vorlage fest, gewann sie IMMER – die Sparten-Vorlage KL/PV/WB kam nie zum Zug.
+# Neue Reihenfolge (Entscheidung R6): WP unverändert AD-Vorlage → WP-Sparten-Vorlage →
+# Standard; PV / KL / WB: Sparten-Vorlage → AD-Vorlage → Standard (SPARTEN_VORLAGE_ZUERST).
 
 import re
 from datetime import timedelta
@@ -53,6 +58,9 @@ _MUSTER = re.compile(r"\{[a-z_]+\}")
 
 # v27-Nachtrag 2: Sparten-Vorlagen – Reiter in Parametrierung → E-Mail-Vorlagen
 SPARTEN = ("WP", "PV", "KL", "WB")
+# v34 (Phase 180): bei diesen Sparten geht die Sparten-Vorlage der AD-Vorlage vor
+# (AD-Vorlagen sind WP-formuliert); WP bleibt bei AD → Sparte → Standard
+SPARTEN_VORLAGE_ZUERST = ("PV", "KL", "WB")
 SPARTEN_NAMEN = {"WP": "Wärmepumpe", "PV": "Photovoltaik", "KL": "Klimaanlage",
                  "WB": "Wallbox"}
 MIGRATION_MARKER = "migration_nachtrag2_sparten"
@@ -197,7 +205,7 @@ def werte_fuer_angebot(session, angebot: Angebot, kunde: Kunde | None,
     gueltig_bis = (angebot.datum + timedelta(days=30)).strftime("%d.%m.%Y") if angebot.datum else ""
     # v27-Nachtrag 2: PV/KL haben keinen KfW-Block – {eigenanteil}/{foerderung}
     # bleiben dort leer statt „–“ [ANNAHME], WP unverändert
-    ohne_kfw = (angebot.konfigurator_typ or "WP").upper() in ("PV", "KL")
+    ohne_kfw = (angebot.konfigurator_typ or "WP").upper() in ("PV", "KL", "WB")   # v34: Wallbox ohne Förderung
     # v30 (PLAN_V18 Phase 150): {zahlungsbedingung} = Name des gewählten Eintrags
     from app import zahlungsbedingungen
     zahlungsbedingung_name = zahlungsbedingungen.fuer_angebot(session, angebot)[0]
@@ -262,27 +270,53 @@ def sparten_status(session) -> dict[str, bool]:
     return {sp: sparten_vorlage_laden(session, sp) is not None for sp in SPARTEN}
 
 
+def _ad_vorlage(session, benutzer_id: int | None) -> tuple[str, str, str] | None:
+    """Eigene Vorlage des Außendienstlers (Betreff, Text, Quelle) oder None."""
+    if not benutzer_id:
+        return None
+    betreff = einstellung_holen(session, f"mail_vorlage_{benutzer_id}_betreff", "")
+    text = einstellung_holen(session, f"mail_vorlage_{benutzer_id}_text", "")
+    if not (betreff or text):
+        return None
+    benutzer = session.get(Benutzer, benutzer_id)
+    return (betreff or STANDARD_BETREFF, text or STANDARD_TEXT,
+            f"Vorlage {benutzer.name if benutzer else benutzer_id}")
+
+
+def _sparten_vorlage(session, sparte: str,
+                     standard: tuple[str, str]) -> tuple[str, str, str] | None:
+    """Sparten-Vorlage (Betreff, Text, Quelle) mit Rückfall je Feld auf den
+    Standard (wie bei den AD-Vorlagen) oder None, wenn keine hinterlegt ist."""
+    if not sparte:
+        return None
+    eigene = sparten_vorlage_laden(session, sparte)
+    if eigene is None:
+        return None
+    return (eigene[0] or standard[0], eigene[1] or standard[1], f"Sparten-Vorlage {sparte}")
+
+
 def vorlage_laden(session, benutzer_id: int | None,
                   sparte: str = "") -> tuple[str, str, str]:
-    """(betreff, text, quelle) – Vorlage des AD, sonst Sparten-Vorlage der
-    Sparte (v27-Nachtrag 2, nur wenn sparte übergeben), sonst Standard.
+    """(betreff, text, quelle). Reihenfolge seit v34 (PLAN_V21 Phase 180, Entscheidung
+    R6) je Sparte:
+    - WP (und ohne Sparte): Vorlage des AD → Sparten-Vorlage WP → Standard (wie v27-N2);
+    - PV / KL / WB (SPARTEN_VORLAGE_ZUERST): Sparten-Vorlage → Vorlage des AD → Standard –
+      die AD-Vorlagen sind WP-formuliert und hatten bisher die Sparten-Vorlage immer
+      verdrängt (Ursache des Befunds „Klima-Mailtext wird nicht gezogen“).
     Quelle: „Vorlage <AD>“ | „Sparten-Vorlage KL“ | „Standard-Vorlage“."""
-    if benutzer_id:
-        betreff = einstellung_holen(session, f"mail_vorlage_{benutzer_id}_betreff", "")
-        text = einstellung_holen(session, f"mail_vorlage_{benutzer_id}_text", "")
-        if betreff or text:
-            benutzer = session.get(Benutzer, benutzer_id)
-            return (betreff or STANDARD_BETREFF, text or STANDARD_TEXT,
-                    f"Vorlage {benutzer.name if benutzer else benutzer_id}")
-    standard_betreff, standard_text = standard_vorlage_laden(session)
     sparte = (sparte or "").upper()
-    if sparte:
-        eigene = sparten_vorlage_laden(session, sparte)
-        if eigene is not None:
-            # je Feld Rückfall auf den Standard (wie bei den AD-Vorlagen)
-            return (eigene[0] or standard_betreff, eigene[1] or standard_text,
-                    f"Sparten-Vorlage {sparte}")
-    return (standard_betreff, standard_text, "Standard-Vorlage")
+    standard = standard_vorlage_laden(session)
+    if sparte in SPARTEN_VORLAGE_ZUERST:
+        reihenfolge = (lambda: _sparten_vorlage(session, sparte, standard),
+                       lambda: _ad_vorlage(session, benutzer_id))
+    else:
+        reihenfolge = (lambda: _ad_vorlage(session, benutzer_id),
+                       lambda: _sparten_vorlage(session, sparte, standard))
+    for kandidat in reihenfolge:
+        treffer = kandidat()
+        if treffer is not None:
+            return treffer
+    return (standard[0], standard[1], "Standard-Vorlage")
 
 
 def vorlage_speichern(session, benutzer_id: int | None, betreff: str, text: str,
@@ -301,8 +335,9 @@ def mail_fuer_angebot(session, angebot: Angebot, kunde: Kunde | None,
                       absender_name: str = "") -> tuple[str, str, str]:
     """Fertiger Betreff + HTML-Text für den Versand (v6); dritter Wert =
     verwendete Vorlage. Klartext-Vorlagen werden automatisch gewandelt.
-    v27-Nachtrag 2: Reihenfolge AD-Vorlage → Sparten-Vorlage des Angebots
-    (konfigurator_typ WP/PV/KL/WB) → Standard."""
+    Sparte = angebot.konfigurator_typ (auch bei TAIFUN-Einträgen – „Extern erledigt“
+    übernimmt die Sparte der Erfassung); Reihenfolge je Sparte siehe vorlage_laden
+    (v34: PV/KL/WB Sparten-Vorlage zuerst, WP AD-Vorlage zuerst)."""
     vertriebler = vertriebler_fuer_angebot(session, angebot)
     sparte = (angebot.konfigurator_typ or "WP").upper()
     betreff, text, quelle = vorlage_laden(session, vertriebler.id if vertriebler else None,

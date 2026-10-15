@@ -19,7 +19,7 @@ import secrets
 import threading
 import time
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import Request
 from fastapi.responses import RedirectResponse
@@ -85,6 +85,13 @@ MONTAGE_PFADE = ("/suche", "/kalender", "/montage", "/benachrichtigungen", "/log
 # der Vorgang zu einem eigenen Team-Einsatz gehört); löschen/verschieben
 # bleiben gesperrt
 _MONTAGE_GALERIE = re.compile(r"^/vorgaenge/(galerie/datei/\d+|\d+/galerie/upload)$")
+# v34 (PLAN_V21 Phase 181, Befund Agent M): die Rolle Projektierung durfte laut
+# galerie.darf_hochladen/darf_loeschen immer in die Vorgangs-Galerie schreiben, die
+# Schreibpfade liegen aber unter /vorgaenge (nicht in PROJEKTIERUNG_SCHREIBEN) – der
+# Upload aus der Projektakte lief für Projektierer auf einen Redirect. Galerie-Schreibrouten
+# (Upload, Verschieben, Löschen) sind für die Projektierung jetzt ausdrücklich erlaubt.
+_GALERIE_SCHREIBEN = re.compile(
+    r"^/vorgaenge/(\d+/galerie/upload|galerie/datei/\d+/(verschieben|loeschen))$")
 # v13 (Phase 80): Lieferschein (ohne Preise) ist ebenfalls lesend erlaubt
 _ANGEBOTE_LESEPFAD = re.compile(r"^/angebote(/\d+/(pdf|lieferschein\.pdf))?$")
 # v12 (Phase 81): Hauptrolle leadmanagement – Lead-Modul voll, Kunden
@@ -117,6 +124,12 @@ IP_FENSTER_MINUTEN = 15
 SITZUNG_STUNDEN_BUERO = 12         # [ANNAHME] Parameter sitzung_stunden_buero
 SITZUNG_TAGE_MOBIL = 30            # [ANNAHME] Parameter sitzung_tage_mobil
 MOBILE_ROLLEN = ("aussendienst", "montage")
+# v34 (PLAN_V21 Phase 181): „Auf diesem Gerät angemeldet bleiben“ gilt auf Mobilgeräten für ALLE
+# Rollen – Mobilgerät = User-Agent mit Mobile/Android/iPhone/iPad ODER Formularfeld mobil=1
+# (setzt die Anmeldeseite per Skript bei Breite < 600 px bzw. Touch-Gerät). Außendienst/Montage
+# behalten die 30 Tage mit Häkchen auch am PC (v27, unverändert).
+MOBIL_UA_MUSTER = re.compile(r"Mobile|Android|iPhone|iPad|iPod", re.IGNORECASE)
+MOBIL_FORMULARWERTE = ("1", "on", "true", "ja")
 LOGIN_PROTOKOLL_TAGE = 90
 SPERRE_TEXT = ("Zu viele Fehlversuche – bitte in 15 Minuten erneut versuchen "
                "oder den Admin um eine neue PIN bitten.")
@@ -351,10 +364,22 @@ def login_protokoll_aufraeumen(session: Session, tage: int = LOGIN_PROTOKOLL_TAG
 
 # --- Sitzungs-Cookie (v2: Ablauf + Sitzungszähler) ----------------------------------
 
-def sitzungsdauer_s(session, benutzer, angemeldet_bleiben: bool = False) -> int:
-    """Büro-Rollen 12 h; Außendienst/Montage mit Häkchen „Auf diesem Gerät
-    angemeldet bleiben“ 30 Tage (Parameter sitzung_stunden_buero /
-    sitzung_tage_mobil, Parametrierung → Benutzer)."""
+def ist_mobilgeraet(user_agent: str | None, formularwert: str | None = None) -> bool:
+    """v34 (PLAN_V21 Phase 181): Mobilgerät laut User-Agent (Mobile/Android/iPhone/iPad)
+    oder laut Formularfeld `mobil` der Anmeldeseite (Breite < 600 px / Touch-Gerät –
+    fängt auch iPads im „Desktop“-Modus, deren User-Agent wie ein Mac aussieht)."""
+    if (formularwert or "").strip().lower() in MOBIL_FORMULARWERTE:
+        return True
+    return bool(MOBIL_UA_MUSTER.search(user_agent or ""))
+
+
+def sitzungsdauer_s(session, benutzer, angemeldet_bleiben: bool = False,
+                    mobil: bool = False) -> int:
+    """Büro-Rollen am PC 12 h; mit Häkchen „Auf diesem Gerät angemeldet bleiben“
+    30 Tage für Außendienst/Montage (jedes Gerät, v27) und – seit v34 (PLAN_V21
+    Phase 181) – für ALLE Rollen auf einem Mobilgerät (`mobil`, siehe
+    ist_mobilgeraet). Parameter sitzung_stunden_buero / sitzung_tage_mobil
+    (Parametrierung → Benutzer). Verlängert wird nur beim Login, nie je Anfrage."""
     try:
         stunden = int(_einstellung(session, "sitzung_stunden_buero", str(SITZUNG_STUNDEN_BUERO)))
     except ValueError:
@@ -364,7 +389,7 @@ def sitzungsdauer_s(session, benutzer, angemeldet_bleiben: bool = False) -> int:
     except ValueError:
         tage = SITZUNG_TAGE_MOBIL
     rolle = getattr(benutzer, "basisrolle", None) or getattr(benutzer, "rolle", "")   # v33: Basisrolle
-    if angemeldet_bleiben and rolle in MOBILE_ROLLEN:
+    if angemeldet_bleiben and (mobil or rolle in MOBILE_ROLLEN):
         return max(1, tage) * 24 * 3600
     return max(1, stunden) * 3600
 
@@ -396,12 +421,17 @@ def cookie_wert(benutzer_id: int, dauer_s: int | None = None,
 
 
 def cookie_setzen(antwort, benutzer, dauer_s: int) -> None:
-    """Cookie mit Ablauf, httponly, samesite=lax; secure bei HTTPS_AKTIV=1."""
+    """Cookie mit Ablauf, httponly, samesite=lax, Path=/; secure nur bei HTTPS_AKTIV=1.
+    v34 (PLAN_V21 Phase 181): zusätzlich zu Max-Age auch Expires (absoluter Zeitpunkt
+    in UTC) – Browser, die Max-Age ignorieren oder beim Beenden Sitzungs-Cookies
+    verwerfen, behalten das Cookie so bis zum Ablauf."""
+    dauer_s = int(dauer_s)
     antwort.set_cookie(COOKIE_NAME,
                        cookie_wert(benutzer.id, dauer_s,
                                    int(getattr(benutzer, "sitzungszaehler", 0) or 0)),
-                       httponly=True, max_age=int(dauer_s), samesite="lax",
-                       secure=bool(config.HTTPS_AKTIV))
+                       httponly=True, max_age=dauer_s,
+                       expires=datetime.now(timezone.utc) + timedelta(seconds=dauer_s),
+                       path="/", samesite="lax", secure=bool(config.HTTPS_AKTIV))
 
 
 def cookie_pruefen(wert: str) -> tuple[int, int] | None:
@@ -628,7 +658,8 @@ class RollenMiddleware(BaseHTTPMiddleware):
             if pfad != "/" and not pfad.startswith(PROJEKTIERUNG_PFADE):
                 return RedirectResponse("/projektierung", status_code=303)
             if (request.method != "GET"
-                    and not pfad.startswith(PROJEKTIERUNG_SCHREIBEN)):
+                    and not pfad.startswith(PROJEKTIERUNG_SCHREIBEN)
+                    and not _GALERIE_SCHREIBEN.match(pfad)):   # v34: Galerie der Projektakte
                 return RedirectResponse("/projektierung", status_code=303)
             # Angebote nur lesend: Liste + PDF (kein Editor, kein EK/DB)
             if pfad.startswith("/angebote") and not _ANGEBOTE_LESEPFAD.match(pfad):

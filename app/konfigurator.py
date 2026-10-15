@@ -348,6 +348,14 @@ def ist_kl_konfigurator(logik) -> bool:
             and bool(getattr(logik, "kl_aktionen", None)))
 
 
+def ist_wb_konfigurator(logik) -> bool:
+    """v34 (PLAN_V21 Phase 179): WB-Sicht der Logik MIT Aktionen (Blatt „Aktionen WB“
+    vorhanden und WB-Artikel importiert, siehe logik_fuer_sparte) – dann ist die
+    Wallbox ein Konfigurator; sonst bleibt WB reiner Bogen/Freitext."""
+    return (getattr(logik, "sparte", "WP") == "WB"
+            and bool(getattr(logik, "wb_aktionen", None)))
+
+
 # --- Leistungsklasse und Paketauflösung -----------------------------------
 
 def flaechen_faktor(antworten: dict) -> Optional[int]:
@@ -472,6 +480,27 @@ def vorbelegung(frage: Frage, antworten: dict, logik: "Logik | None" = None) -> 
     (Parameter „Standardserie“), KO08 = „als Eventualposition“, KR10#i = „stark …“,
     wenn KR02#i = Dachgeschoss (vom AD änderbar)."""
     basis_id = frage.id.split("#")[0]
+    # v34 (PLAN_V21 Phase 179): Wallbox – WB02 = Parameter leitung_inklusive_m (10 m,
+    # „bis 10 m in der Anschlussvorbereitung enthalten“), WB01 = wallbox_standard
+    # (Standard leer = keine Vorbelegung)
+    if basis_id in ("WB01", "WB02", "WB07"):
+        if logik is None:
+            return {"WB02": "10", "WB07": "2"}.get(basis_id)
+        from app import wb_auslegung
+        p = wb_auslegung.parameter(logik)
+        if basis_id == "WB02":
+            inklusive = p["leitung_inklusive_m"]
+            return (str(int(inklusive)) if float(inklusive).is_integer()
+                    else f"{inklusive:g}".replace(".", ","))
+        if basis_id == "WB07":   # Ergänzung 15.10.2026: Vorbelegung = enthaltene Durchbrüche
+            return str(p["durchbrueche_inklusive"])
+        standard = p["wallbox_standard"]
+        return _alias_aufloesen(standard, frage.antworten) if standard else None
+    # Nachtrag 15.10.2026: WB03 Erdarbeiten = Nein, WB05 = Wandmontage [ANNAHME]
+    if basis_id == "WB03":
+        return "Nein" if "Nein" in frage.antworten else None
+    if basis_id == "WB05":
+        return "Wandmontage" if "Wandmontage" in frage.antworten else None
     if basis_id == "KO06" and frage.antworten:
         standard = ""
         if logik is not None:
@@ -596,6 +625,11 @@ def protokoll(logik: Logik, antworten: dict) -> list[dict]:
     if ist_kl_konfigurator(logik):
         from app import kl_auslegung
         eintraege.extend(kl_auslegung.protokoll_zeilen(logik, antworten))
+    # v34 (PLAN_V21 Phase 179): Seite „Auslegung“ der Wallbox (Wallbox, Leitungslänge
+    # gesamt / enthalten / Mehrlänge, ggf. Warnung über 100 m)
+    if ist_wb_konfigurator(logik):
+        from app import wb_auslegung
+        eintraege.extend(wb_auslegung.protokoll_eintraege(logik, antworten))
     return eintraege
 
 
@@ -610,6 +644,11 @@ def _ist_kl_bogen(antworten: dict) -> bool:
     """v24: Antworten eines KL-Bogens (Zählfrage KO04/KO05 oder Raum-Klone)."""
     return any(str(k) in ("KO04", "KO05", "KO06") or
                (str(k).startswith("KR") and "#" in str(k)) for k in antworten)
+
+
+def _ist_wb_bogen(antworten: dict) -> bool:
+    """v34: Antworten eines WB-Bogens (Wallbox WB01 / Leitungslänge WB02)."""
+    return any(str(k) in ("WB01", "WB02") for k in antworten)
 
 
 def fachliche_hinweise(antworten: dict, logik: "Logik | None" = None) -> list[str]:
@@ -632,6 +671,12 @@ def fachliche_hinweise(antworten: dict, logik: "Logik | None" = None) -> list[st
             except Exception:
                 kl_logik = None
         hinweise.extend(kl_auslegung.fachliche_hinweise(kl_logik, antworten))
+    # v34 (PLAN_V21 Phase 179): Wallbox – Leitungslänge über 100 m (Warnung, keine Sperre)
+    if _ist_wb_bogen(antworten):
+        from app import wb_auslegung
+        for warnung in wb_auslegung.warnungen(antworten):
+            if warnung not in hinweise:
+                hinweise.append(warnung)
     if str(antworten.get(ID_SOLARTHERMIE) or "") == SOLAR_UEBERNAHME:
         if str(antworten.get(ID_WARMWASSER) or "") == "Nein":
             hinweise.append(

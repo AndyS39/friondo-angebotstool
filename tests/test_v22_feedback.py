@@ -201,10 +201,13 @@ class PositionNeu(Basis):
 
 class AuslegungEinheit(Basis):
     def test_neue_angebote_psl(self):
+        # v34 (PLAN_V21 Phase 180): neue Angebote haben KEINE Auslegungszeile mehr – der
+        # Text steht in angebot.auslegung_text; die Einheit „psl.“ (Phase 103) betrifft nur
+        # noch den Altbestand (Migrationsquery unten bleibt als Beleg)
         a = self.wp_angebot()
         zeilen = [p for p in a.positionen if p.bezeichnung == AUSLEGUNG]
-        self.assertEqual(len(zeilen), 1)
-        self.assertEqual(zeilen[0].einheit, "psl.")
+        self.assertEqual(len(zeilen), 0)
+        self.assertTrue(a.auslegung_text.startswith("Auslegung auf Basis des Jahresverbrauchs"))
 
     def test_migrationsquery(self):
         a = angebot_aufbau.angebot_anlegen(self.s, self.kunde.id)

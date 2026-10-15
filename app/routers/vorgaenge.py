@@ -269,11 +269,16 @@ def akte(request: Request, vorgang_id: int,
         "termin_art_name": projektierung_modul.termin_art_name,
     }
     # Kombi-Versand (Phase 61): Wählbarkeit je Angebot + fachliche Hinweise
+    # v34 (PLAN_V21 Phase 180, Agent V): Zeilen des Kastens „Gemeinsam versenden“ mit
+    # Vorauswahl aus dem Editor (?kombi=<angebot_id>, Vertrag mit Agent E)
     from app import kombi_versand as kombi_modul
     kombi_info = {a.id: kombi_modul.waehlbar(a) for a in angebote}
     gewerke_hinweise = kombi_modul.gewerke_hinweise(session, vorgang, angebote)
     kombi_doppelt = kombi_modul.doppelte_artikel(
         [a for a in angebote if kombi_info[a.id][0]])
+    kombi_vorauswahl = request.query_params.get("kombi", "")
+    kombi_auswahl = kombi_modul.auswahl(
+        angebote, int(kombi_vorauswahl) if str(kombi_vorauswahl).isdigit() else None)
     # v12 (Phase 79): Lead-Kopfblock + Reiter, nur bei Modul-Sichtbarkeit
     lead_kontext = None
     lead_readonly = False
@@ -357,7 +362,7 @@ def akte(request: Request, vorgang_id: int,
                                if i in benutzer_map],
                   erfassung_offen=erfassung_offen,
                   kombi_info=kombi_info, gewerke_hinweise=gewerke_hinweise,
-                  kombi_doppelt=kombi_doppelt,
+                  kombi_doppelt=kombi_doppelt, kombi_auswahl=kombi_auswahl,   # v34 (Phase 180)
                   projekt_modul_ok=projekt_modul_ok,
                   vorgang_projekte=vorgang_projekte,
                   projekt_je_angebot=projekt_je_angebot,
@@ -464,17 +469,26 @@ def kombi_versand(request: Request, vorgang_id: int,
         inline_bilder=inline_bilder, empfaenger_leer=empfaenger_leer)
     if erfolg:
         nummern = ", ".join(a.nummer for a in angebote)
+        # v34 (PLAN_V21 Phase 180, Agent V): Entwürfe automatisch auf „Versand vorbereitet“
+        # (derselbe Statusschritt wie beim einzelnen „Versand vorbereiten“ – PDF erzeugt,
+        # Entwurf im Postfach), mit Verlaufsnotiz „durch Kombi-Versand“ je Angebot; erst
+        # NACH dem erfolgreichen Graph-Entwurf, damit bei einem Fehler alles Entwurf bleibt
+        vorbereitet = kombi_modul.entwuerfe_vorbereiten(session, angebote, benutzer)
         for angebot in angebote:
             if conversation_id:
                 angebot.graph_conversation_id = conversation_id
-            if not angebot.extern and angebot.status == "Entwurf":
-                angebot.status = "Versand vorbereitet"
+        vorbereitet_text = ""
+        if vorbereitet:
+            vorbereitet_text = (" Automatisch auf „Versand vorbereitet“ gesetzt: "
+                                + ", ".join(a.nummer for a in vorbereitet) + ".")
         vorgaenge_modul.notiz_anlegen(
             session, vorgang.id, benutzer,
             f"Kombi-Versand vorbereitet: {nummern} in einer Mail "
-            f"({len(pdfs)} Angebots-PDFs, {len(broschueren)} Broschüren).",
+            f"({len(pdfs)} Angebots-PDFs, {len(broschueren)} Broschüren)."
+            + vorbereitet_text,
             herkunft="Kombi-Versand")
         session.commit()
+        meldung += vorbereitet_text
         # Warnung: dieselbe Artikelnummer in mehreren Tool-Angeboten voll berechnet
         doppelt = kombi_modul.doppelte_artikel(angebote)
         if doppelt:
@@ -844,13 +858,30 @@ def notiz(request: Request, vorgang_id: int,
 def galerie_upload(request: Request, vorgang_id: int,
                          session: Session = Depends(get_session)):
     """Upload in einen Galerie-Ordner (mehrere Dateien, mobil per Kamera);
-    Vertrieb in eigenen Vorgängen auch ohne Auftrag."""
+    Vertrieb in eigenen Vorgängen auch ohne Auftrag.
+    v34 (PLAN_V21 Phase 181): EIN Request für mehrere Dateien mit Ordner und
+    Bemerkung je Datei (`dateien` / `datei_ordner` / `datei_bemerkung`
+    positionsgleich; leer = Standard aus `ordner` / `bemerkung`), Teilerfolg je
+    Datei in der Meldung (galerie.mehrfach_speichern, Commit je Datei). Mit
+    `Accept: application/json` (Sammelbox galerie_v34.js) antwortet die Route als
+    JSON {ok, anzahl, abgelegt[], fehler[], meldung, ziel} – ok = keine Fehler –,
+    sonst wie bisher per Redirect mit Meldung. Rechte unverändert
+    (galerie.darf_hochladen: JSON 403/404 statt Redirect)."""
+    from fastapi.responses import JSONResponse
+
     from app import galerie as galerie_modul
+    json_antwort = "application/json" in (request.headers.get("accept") or "")
     benutzer = request.state.benutzer
     vorgang = session.get(Vorgang, vorgang_id)
     if vorgang is None:
+        if json_antwort:
+            return JSONResponse({"ok": False, "meldung": "Vorgang nicht gefunden."},
+                                status_code=404)
         return RedirectResponse("/vorgaenge", status_code=303)
     if not galerie_modul.darf_hochladen(session, vorgang, benutzer):
+        if json_antwort:
+            return JSONResponse({"ok": False, "meldung": "Kein Upload-Recht für diesen Vorgang."},
+                                status_code=403)
         return RedirectResponse(f"/vorgaenge/{vorgang_id}?meldung="
                                 + quote_plus("Kein Upload-Recht für diesen Vorgang."),
                                 status_code=303)
@@ -862,29 +893,28 @@ def galerie_upload(request: Request, vorgang_id: int,
     ordner = form.get("ordner") or "Allgemein"
     sparte = form.get("sparte") or "WP"
     bemerkung = form.get("bemerkung") or ""
-    # 27.09.2026 (Andreas): Foto-Sammelbox schickt je Datei einen eigenen
-    # Zielordner (datei_ordner parallel zur Dateireihenfolge)
-    je_datei_ordner = form.getlist("datei_ordner")
-    anzahl = 0
-    ordner_benutzt: set[str] = set()
-    for nr, datei in enumerate(form.getlist("dateien")):
-        if getattr(datei, "filename", ""):
-            inhalt = datei.file   # v27 (Phase 128): wird in galerie.speichern gestreamt
-            ziel_ordner = (je_datei_ordner[nr]
-                           if nr < len(je_datei_ordner)
-                           and je_datei_ordner[nr] else ordner)
-            if galerie_modul.speichern(session, vorgang_id, ziel_ordner,
-                                       datei.filename, inhalt,
-                                       benutzer=benutzer, bemerkung=bemerkung,
-                                       sparte=sparte):
-                anzahl += 1
-                ordner_benutzt.add(ziel_ordner)
-    session.commit()
+    # 27.09.2026 (Andreas): Foto-Sammelbox schickt je Datei einen eigenen Zielordner
+    # (datei_ordner parallel zur Dateireihenfolge); v34: dazu datei_bemerkung je Datei
+    # (Schreibweisen dateien[] / ordner[] / bemerkung[] des Plans werden ebenfalls gelesen)
+    dateien = form.getlist("dateien") or form.getlist("dateien[]")
+    je_datei_ordner = form.getlist("datei_ordner") or form.getlist("ordner[]")
+    je_datei_bemerkung = form.getlist("datei_bemerkung") or form.getlist("bemerkung[]")
+    ergebnis = galerie_modul.mehrfach_speichern(
+        session, vorgang_id, dateien, je_datei_ordner, je_datei_bemerkung,
+        standard_ordner=ordner, standard_bemerkung=bemerkung, benutzer=benutzer,
+        sparte=sparte)
+    meldung = galerie_modul.meldung_fuer(ergebnis, ordner)
     ziel = form.get("zurueck") or f"/vorgaenge/{vorgang_id}"
+    if not ziel.startswith("/") or ziel.startswith("//"):
+        ziel = f"/vorgaenge/{vorgang_id}"
     trenner = "&" if "?" in ziel else "?"
-    return RedirectResponse(ziel + trenner + "meldung=" + quote_plus(
-        f"{anzahl} Datei(en) abgelegt ({', '.join(sorted(ordner_benutzt)) or ordner}).")
-        + "#galerie", status_code=303)
+    ziel_url = ziel + trenner + "meldung=" + quote_plus(meldung) + "#galerie"
+    if json_antwort:
+        return JSONResponse({"ok": not ergebnis["fehler"],
+                             "anzahl": len(ergebnis["abgelegt"]),
+                             "abgelegt": ergebnis["abgelegt"], "fehler": ergebnis["fehler"],
+                             "meldung": meldung, "ziel": ziel_url})
+    return RedirectResponse(ziel_url, status_code=303)
 
 
 @router.get("/galerie/datei/{datei_id}")

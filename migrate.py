@@ -787,7 +787,11 @@ def _daten() -> list[str]:
                                     ("app.montage_formulare", "migration_v33_termin_id"),
                                     ("app.leadmanagement", "migration_v33_swd_profil"),
                                     ("app.verfolgung", "migration_v33_nachfassen"),
-                                    ("app.lead_boards", "migration_v33_tabellen")):
+                                    ("app.lead_boards", "migration_v33_tabellen"),
+                                    # v34 (PLAN_V21 Phase 180): Auslegungs-Position aus Entwuerfen entfernen
+                                    ("app.angebot_aufbau", "migration_v34_auslegung"),
+                                    # v34 (PLAN_V21 Phase 178/179): WB-Artikel-Import (nur mit Dateien) + Textbloecke WB
+                                    ("app.import_wallbox", "migration_v34_wallbox")):
             try:
                 modul = importlib.import_module(modulname)
             except ImportError:

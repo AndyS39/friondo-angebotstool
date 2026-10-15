@@ -4,7 +4,7 @@
 
 {# v27-Nachtrag 2 (PLAN_V17, Nachtrag 06.10.2026): Anmeldeseite zweispaltig nach
    dem Muster SingleKey ID – links Logo, „Anmeldung“, Benutzerwahl, PIN, Häkchen
-   (nur Außendienst/Montage), Knopf, darunter die Fehlermeldungen aus auth
+   (Außendienst/Montage; seit v34 auf Mobilgeräten für alle Rollen), Knopf, darunter die Fehlermeldungen aus auth
    (Sperre, falsche PIN, IP-Sperre); rechts das Energiehaus-Foto bildschirmhoch.
    Unter 900 px eine Spalte mit Kopfbild (max. 180 px), unter 500 px ohne Foto.
    Kopfzeile, Wartungsbanner und Fußzeile kommen weiter aus base.html; die
@@ -33,16 +33,24 @@
                     <input type="password" name="pin" inputmode="numeric" autocomplete="off" autofocus>
                 </label>
                 {# v27 (Phase 130): 30 Tage Sitzung für Außendienst/Montage – Büro-Rollen
-                   bleiben bei 12 h, auch mit Häkchen (auth.sitzungsdauer_s entscheidet).
-                   Nachtrag 2: der Block wird per Skript nur für Außendienst/Montage gezeigt. #}
-                <div class="login-bleiben-block" id="login-bleiben-block">
+                   bleiben am PC bei 12 h (auth.sitzungsdauer_s entscheidet).
+                   Nachtrag 2: der Block wird per Skript nur für Außendienst/Montage gezeigt.
+                   v34 (PLAN_V21 Phase 181): auf Mobilgeräten für ALLE Rollen – der Server erkennt
+                   das Gerät am User-Agent (mobil_geraet), das Skript ergänzt Breite < 600 px /
+                   Touch-Gerät über das Feld mobil=1 (iPad im Desktop-Modus); Cookie 30 Tage mit
+                   Max-Age und Expires, verlängert nur beim Login. #}
+                <input type="hidden" name="mobil" id="login-mobil" value="{{ '1' if mobil_geraet else '' }}">
+                <div class="login-bleiben-block" id="login-bleiben-block"
+                     data-mobil-geraet="{{ '1' if mobil_geraet else '0' }}">
                     <label class="kontrollfeld login-bleiben">
                         <input type="checkbox" name="angemeldet_bleiben" value="on"
                                {{ 'checked' if angemeldet_bleiben }}>
                         Auf diesem Gerät angemeldet bleiben
                     </label>
-                    <span class="dezent login-hinweis">Gilt für Außendienst und Montage ({{ tage_mobil }} Tage);
-                        Büro-Rollen bleiben {{ stunden_buero }} Stunden angemeldet.</span>
+                    <span class="dezent login-hinweis">Auf Handy und Tablet für alle Rollen
+                        {{ tage_mobil }} Tage (Außendienst und Montage auch am PC);
+                        Büro-Rollen bleiben am PC {{ stunden_buero }} Stunden angemeldet.</span>
+                    <span class="dezent login-hinweis login-hinweis-app">Als App auf dem Home-Bildschirm bitte dort anmelden.</span>
                 </div>
                 <button class="knopf gross login-knopf" type="submit">Anmelden</button>
                 {% if fehler %}<p class="meldung fehler login-fehler" role="alert">{{ fehler }}</p>{% endif %}
@@ -58,23 +66,40 @@
     </aside>
 </div>
 <script>
-// v27-Nachtrag 2: Häkchen „angemeldet bleiben“ nur für Außendienst/Montage zeigen
-// (Option data-mobil aus auth.MOBILE_ROLLEN). Serverseitig entscheidet weiterhin
-// auth.sitzungsdauer_s – ohne JavaScript bleibt der Block einfach sichtbar.
+// v27-Nachtrag 2: Häkchen „angemeldet bleiben“ für Außendienst/Montage zeigen
+// (Option data-mobil aus auth.MOBILE_ROLLEN).
+// v34 (PLAN_V21 Phase 181): zusätzlich für JEDE Rolle auf einem Mobilgerät – laut Server
+// (data-mobil-geraet aus dem User-Agent) oder laut Browser (Breite < 600 px bzw. Touch-Gerät
+// mit grobem Zeiger, z. B. iPad im Desktop-Modus); das Feld mobil=1 meldet das dem Server.
+// Serverseitig entscheidet auth.sitzungsdauer_s – ohne JavaScript bleibt der Block sichtbar.
 (function () {
     var auswahl = document.getElementById('login-benutzer');
     var block = document.getElementById('login-bleiben-block');
+    var mobilFeld = document.getElementById('login-mobil');
     if (!auswahl || !block) { return; }
+    function geraetMobil() {
+        if (block.getAttribute('data-mobil-geraet') === '1') { return true; }
+        try {
+            if (window.innerWidth < 600) { return true; }
+            if (navigator.maxTouchPoints > 1 && window.matchMedia
+                    && window.matchMedia('(pointer: coarse)').matches) { return true; }
+        } catch (e) { /* ältere Browser: nur der Server entscheidet */ }
+        return false;
+    }
     function anpassen() {
         var option = auswahl.options[auswahl.selectedIndex];
-        var mobil = !!(option && option.getAttribute('data-mobil'));
-        block.hidden = !mobil;
-        if (!mobil) {
+        var rolleMobil = !!(option && option.getAttribute('data-mobil'));
+        var mobil = geraetMobil();
+        if (mobilFeld) { mobilFeld.value = mobil ? '1' : ''; }
+        var zeigen = rolleMobil || mobil;
+        block.hidden = !zeigen;
+        if (!zeigen) {
             var haken = block.querySelector('input[type=checkbox]');
             if (haken) { haken.checked = false; }
         }
     }
     auswahl.addEventListener('change', anpassen);
+    window.addEventListener('resize', anpassen);
     anpassen();
 })();
 </script>

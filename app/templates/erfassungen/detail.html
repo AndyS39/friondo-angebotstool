@@ -1,9 +1,13 @@
 {% extends "base.html" %}
 {% import "_interesse.html" as interesse_ui %}
+{% from "_taifun_pdf.html" import taifun_pdf_zone %}
 
 {% block titel %}Erfassung {{ erfassung.id }} – Friondo Angebotstool{% endblock %}
 
 {% block inhalt %}
+{# v34 (PLAN_V21 Phase 180, Agent V): Drop-Zone für das TAIFUN-PDF im Dialog „Extern erledigt“ #}
+<link rel="stylesheet" href="/static/vorgang_v34.css?v={{ css_version }}">
+<script src="/static/taifun_pdf.js?v={{ css_version }}" defer></script>
 <div class="seitenkopf">
     <h1>Erfassung vom {{ erfassung.abgesendet_am.strftime('%d.%m.%Y %H:%M') if erfassung.abgesendet_am }}
         {% if erfassung.archiviert %}<span class="abzeichen">🗄 Archiv</span>{% endif %}</h1>
@@ -90,7 +94,8 @@
     {% endif %}
     {# v13-PV (Phase 79): Katalog-Erfassungen mit der aktuellen Logik neu
        auswerten – z. B. PV-Altfälle der TAIFUN-Warteschlange #}
-    {% if not angebot and erfassung.typ == 'katalog' and (erfassung.sparte or 'WP') in ('WP', 'PV', 'KL')
+    {# v34 (PLAN_V21 Phase 179): auch WB-Katalog-Erfassungen (Wallbox-Konfigurator) #}
+    {% if not angebot and erfassung.typ == 'katalog' and (erfassung.sparte or 'WP') in ('WP', 'PV', 'KL', 'WB')
           and erfassung.status in ('Neu', 'Individuell – zu prüfen', 'In TAIFUN zu schreiben') %}
     <form method="post" action="/erfassungen/{{ erfassung.id }}/erneut-pruefen">
         <button class="knopf zweitrangig" type="submit"
@@ -103,16 +108,21 @@
     </form>
     {% if erfassung.status == 'In TAIFUN zu schreiben' and not angebot %}
     <form method="post" action="/erfassungen/{{ erfassung.id }}/extern-erledigt"
-          id="extern-dialog" class="formular warnblock" hidden
-          style="flex-basis:100%">
+          id="extern-dialog" class="formular warnblock extern-dialog" hidden
+          enctype="multipart/form-data" style="flex-basis:100%">
         <p><strong>Extern erledigt – Angebot wurde in TAIFUN geschrieben</strong></p>
+        {# v34 (Phase 180): TAIFUN-Angebots-PDF ablegen – Nummer, Datum und Endbetrag werden
+           aus dem PDF vorbelegt (taifun_pdf.js → POST /angebote/extern/pdf-lesen), das PDF
+           wird mit dem Eintrag gespeichert und in die Galerie „Allgemein“ gelegt #}
+        {{ taifun_pdf_zone('dialog') }}
+        <p class="tp-sparte" data-taifun-sparte data-sparte="{{ erfassung.sparte or 'WP' }}" hidden></p>
         <div class="formzeile">
             <label>TAIFUN-Angebotsnummer <span class="dezent">(optional, nachtragbar)</span>
-                <input type="text" name="taifun_nummer" maxlength="30" placeholder="z. B. AN250123"></label>
+                <input type="text" name="taifun_nummer" maxlength="30" placeholder="z. B. AN250123" data-tp-feld="nummer"></label>
             <label>Endbetrag brutto (€) *
-                <input type="text" name="endbetrag" inputmode="decimal" required placeholder="z. B. 32.500,00"></label>
+                <input type="text" name="endbetrag" inputmode="decimal" required placeholder="z. B. 32.500,00" data-tp-feld="endbetrag"></label>
             <label>Datum *
-                <input type="date" name="datum" required value="{{ heute }}"></label>
+                <input type="date" name="datum" required value="{{ heute }}" data-tp-feld="datum"></label>
             {% if (erfassung.sparte or 'WP') == 'WP' %}
             {# v19 (PLAN_V14 Phase 96): steuert später die BzA-Aufgabe #}
             <label>KfW-gefördert? *

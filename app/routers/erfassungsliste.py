@@ -292,20 +292,33 @@ def extern_erledigt(request: Request, erfassung_id: int,
     """v7: Dialog „Extern erledigt“ – das Angebot wurde in TAIFUN geschrieben.
     Erzeugt einen externen Angebotseintrag (Badge „TAIFUN“, kein PDF/Editor/
     Versand), stößt die monday-Rückspielung an und schließt die Erfassung als
-    „Erledigt (extern)“ + Archiv ab."""
+    „Erledigt (extern)“ + Archiv ab.
+    v34 (PLAN_V21 Phase 180, Agent V): optionales TAIFUN-Angebots-PDF (`pdf_datei`, Drop-Zone
+    des Dialogs; Nummer/Datum/Endbetrag belegt taifun_pdf.js vorher über POST
+    /angebote/extern/pdf-lesen vor) – das PDF wird am Eintrag gespeichert (v10-Feld
+    extern_pdf_pfad → Kombi-Versand) und als Kopie in die Galerie „Allgemein“ gelegt (wie
+    v18). Upload-Regel (v33 Phase 172): Formular VOR dem ersten Datenbankzugriff lesen."""
     from datetime import datetime
     from urllib.parse import quote_plus
 
-    from app import monday_rueckspielung
+    from app import monday_rueckspielung, taifun_pdf
     from app.models import angebot_status_setzen
     from app.routers.artikel import preis_parsen
+    form = anfrage.formular(request)
+    pdf_inhalt = b""
+    pdf_datei = form.get("pdf_datei")
+    if pdf_datei is not None and getattr(pdf_datei, "filename", ""):
+        pdf_inhalt = pdf_datei.file.read() or b""
+        fehler = taifun_pdf.groesse_pruefen(len(pdf_inhalt))
+        if fehler or not taifun_pdf.ist_pdf(pdf_inhalt):
+            return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
+                fehler or taifun_pdf.MELDUNG_KEIN_PDF), status_code=303)
     erfassung = session.get(Erfassung, erfassung_id)
     if erfassung is None:
         return RedirectResponse("/erfassungen", status_code=303)
     if erfassung.angebot_id:
         return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
             "Mit dieser Erfassung ist bereits ein Angebot verknüpft."), status_code=303)
-    form = anfrage.formular(request)
     endbetrag = preis_parsen((form.get("endbetrag") or "").strip())
     if endbetrag is None or endbetrag <= 0:
         return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
@@ -343,6 +356,14 @@ def extern_erledigt(request: Request, erfassung_id: int,
     erfassung.angebot_id = angebot.id
     from app import vorgaenge as vorgaenge_modul
     vorgaenge_modul.vorgang_fuer_angebot(session, angebot)   # v10: Akte
+    # v34 (Phase 180): TAIFUN-PDF am Eintrag + Galerie „Allgemein“ (Sparte der Erfassung)
+    pdf_hinweis = ""
+    if pdf_inhalt:
+        taifun_pdf.pdf_ablegen(angebot, pdf_inhalt)
+        taifun_pdf.galerie_ablegen(session, angebot, pdf_inhalt, request.state.benutzer,
+                                   sparte=erfassung.sparte or "WP", quelle="extern_erledigt",
+                                   bemerkung="TAIFUN-Angebot (Extern erledigt)")
+        pdf_hinweis = " PDF am Eintrag und in der Galerie „Allgemein“ abgelegt."
     # v32 (PLAN_V19 Phase 162): „Extern erledigt“ zählt als Versand am Datum des Eintrags
     # [ANNAHME] – automatische Wiedervorlage am Vorgang (reine DB-Arbeit, vor dem Commit)
     from app import nachfassen
@@ -351,12 +372,14 @@ def extern_erledigt(request: Request, erfassung_id: int,
     _kette_protokollieren(erfassung, request.state.benutzer,
                           f"Extern erledigt – TAIFUN-Eintrag über {endbetrag / 100:.2f} €"
                           + (f", Nr. {angebot.taifun_nummer}" if angebot.taifun_nummer
-                             else " (Nummer fehlt noch)"))
+                             else " (Nummer fehlt noch)")
+                          + (" – TAIFUN-PDF hinterlegt" if pdf_inhalt else ""))
     session.commit()
     # monday-Rückspielung wie bei Tool-Angeboten (Fehler blockieren nie)
     monday_rueckspielung.bei_versand(session, angebot)
     return RedirectResponse(f"/angebote/{angebot.id}?meldung=" + quote_plus(
-        "Externer Angebotseintrag angelegt – Erfassung ist erledigt (extern) und archiviert."),
+        "Externer Angebotseintrag angelegt – Erfassung ist erledigt (extern) und archiviert."
+        + pdf_hinweis),
         status_code=303)
 
 
@@ -380,9 +403,11 @@ def erneut_pruefen(request: Request, erfassung_id: int,
             status_code=303)
     logik, _ = logik_modul.hole_logik(session)
     slogik = logik_fuer_sparte(logik, erfassung.sparte or "WP")
-    # v24: PV (v16) und KL (v24) sind Konfiguratoren, sobald ihre Aktionen geladen sind
-    if slogik is None or (erfassung.sparte in ("PV", "KL")
-                          and not (slogik.aktionen or getattr(slogik, "kl_aktionen", None))):
+    # v24: PV (v16) und KL (v24) sind Konfiguratoren, sobald ihre Aktionen geladen sind;
+    # v34 (PLAN_V21 Phase 179): WB ebenso (WB-Sicht trägt die Aktionen WB)
+    if slogik is None or (erfassung.sparte in ("PV", "KL", "WB")
+                          and not (slogik.aktionen or getattr(slogik, "kl_aktionen", None)
+                                   or getattr(slogik, "wb_aktionen", None))):
         return RedirectResponse(ziel + quote_plus(
             "Für diese Sparte gibt es keine Konfigurator-Logik."), status_code=303)
     antworten = json.loads(erfassung.antworten_json or "{}")
@@ -502,11 +527,13 @@ def angebot_erzeugen(erfassung_id: int, session: Session = Depends(get_session))
         return RedirectResponse("/parametrierung", status_code=303)
     sparte = (erfassung.sparte or "WP").upper()
     # v13-PV: PV-Katalog-Erfassungen erzeugen echte Tool-Angebote; v24: KL ebenso
-    # (sobald die KL-Logik geladen ist); WB/GW bleiben reine Erfassungen (TAIFUN)
+    # (sobald die KL-Logik geladen ist); v34 (PLAN_V21 Phase 179): WB ebenso (WB-Sicht
+    # mit Aktionen WB und importierten WB-Artikeln); GW bleibt reine Erfassung (TAIFUN)
     slogik = logik_modul.logik_fuer_sparte(logik, sparte)
     konfigurator = sparte == "WP" or (
-        sparte in ("PV", "KL") and slogik is not None
-        and bool(slogik.aktionen or getattr(slogik, "kl_aktionen", None)))
+        sparte in ("PV", "KL", "WB") and slogik is not None
+        and bool(slogik.aktionen or getattr(slogik, "kl_aktionen", None)
+                 or getattr(slogik, "wb_aktionen", None)))
     if not konfigurator:
         from urllib.parse import quote_plus
         return RedirectResponse(f"/erfassungen/{erfassung.id}?meldung=" + quote_plus(

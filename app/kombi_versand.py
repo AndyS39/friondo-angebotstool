@@ -20,20 +20,83 @@ def gewerke_artikel(session: Session) -> list[str]:
     return [t.strip() for t in roh.split(",") if t.strip()]
 
 
+# v34 (PLAN_V21 Phase 180, Agent V): Gründe je Status für den Kasten „Gemeinsam versenden“
+# (Tooltip an ausgegrauten Häkchen); versandfähig sind Entwurf, Versand vorbereitet und
+# TAIFUN-Einträge mit PDF
+GRUND_PDF_FEHLT = ("PDF fehlt – bitte das TAIFUN-Angebots-PDF am Eintrag ablegen "
+                   "(Drop-Zone), dann ist der Eintrag wählbar.")
+_GRUENDE_STATUS = {
+    "Überholt": "Überholt – durch eine neue Version ersetzt.",
+    "Versendet": "Bereits versendet – ist schon beim Kunden.",
+    "Versendet (extern)": "",   # TAIFUN-Eintrag: wählbar, sobald ein PDF hinterlegt ist
+    "Angenommen": "Angenommen – bereits beauftragt, kein erneuter Versand.",
+    "Abgelehnt": "Abgelehnt – kein Versand mehr.",
+    "Individuell": "Individuell (außerhalb des Tools geschrieben) – kein PDF im Tool.",
+}
+
+
 def waehlbar(angebot: Angebot) -> tuple[bool, str]:
-    """Ist das Angebot im Kombi-Versand wählbar? (ok, Begründung)."""
+    """Ist das Angebot im Kombi-Versand wählbar? (ok, Begründung).
+    v34: Tool-Angebote im Status Entwurf oder Versand vorbereitet; TAIFUN-Einträge
+    (Versendet (extern)) nur mit hinterlegtem PDF („PDF fehlt“); überholte/versendete/
+    angenommene/abgelehnte nie (Tooltip mit Grund)."""
     if angebot.status == "Überholt":
-        return False, "Überholt – durch eine neue Version ersetzt."
+        return False, _GRUENDE_STATUS["Überholt"]
     if angebot.extern:
-        if angebot.status not in ("Versendet (extern)", "Angenommen"):
-            return False, f"TAIFUN-Eintrag im Status „{angebot.status}“."
+        if angebot.status != "Versendet (extern)":
+            return False, (_GRUENDE_STATUS.get(angebot.status)
+                           or f"TAIFUN-Eintrag im Status „{angebot.status}“ – nicht wählbar.")
         if not angebot.extern_pdf_pfad or not Path(angebot.extern_pdf_pfad).exists():
-            return False, ("Ohne hinterlegtes PDF nicht wählbar – bitte das "
-                           "TAIFUN-Angebots-PDF am Eintrag hochladen.")
+            return False, GRUND_PDF_FEHLT
         return True, ""
     if angebot.status not in ("Entwurf", "Versand vorbereitet"):
-        return False, f"Status „{angebot.status}“ – nur Entwurf/Versand vorbereitet."
+        return False, (_GRUENDE_STATUS.get(angebot.status)
+                       or f"Status „{angebot.status}“ – nur Entwurf/Versand vorbereitet.")
     return True, ""
+
+
+def auswahl(angebote: list[Angebot], vorauswahl_id: int | None = None) -> list[dict]:
+    """v34 (Phase 180): Zeilen für den Kasten „Gemeinsam versenden“ der Vorgangsakte – je
+    Angebot Wählbarkeit, Grund, Vorauswahl (`?kombi=<angebot_id>` aus dem Editor) und ob
+    es ein Entwurf ist (wird beim Kombi-Versand automatisch versandfertig gemacht)."""
+    zeilen = []
+    for angebot in angebote:
+        ok, grund = waehlbar(angebot)
+        zeilen.append({
+            "id": angebot.id,
+            "angebot": angebot,
+            "nummer": (angebot.taifun_nummer or angebot.nummer) if angebot.extern else angebot.nummer,
+            "sparte": angebot.konfigurator_typ or "WP",
+            "status": angebot.status,
+            "extern": bool(angebot.extern),
+            "waehlbar": ok,
+            "grund": grund,
+            "pdf_fehlt": bool(angebot.extern and grund == GRUND_PDF_FEHLT),
+            "entwurf": bool(not angebot.extern and angebot.status == "Entwurf"),
+            "vorgewaehlt": bool(ok and vorauswahl_id and angebot.id == vorauswahl_id),
+        })
+    return zeilen
+
+
+def entwuerfe_vorbereiten(session: Session, angebote: list[Angebot], benutzer) -> list[Angebot]:
+    """v34 (Phase 180): Entwürfe des Kombi-Versands auf „Versand vorbereitet“ setzen – derselbe
+    Statusschritt wie beim einzelnen „Versand vorbereiten“ (routers/angebote.email_entwurf:
+    PDF erzeugt, Entwurf im Postfach, Status) – mit Verlaufsnotiz „durch Kombi-Versand“ am
+    Angebot. Aufruf NACH dem erfolgreichen Graph-Entwurf (bei Fehler bleibt alles Entwurf).
+    Rückgabe: die umgestellten Angebote. Committet nicht."""
+    from app.models import AngebotsNotiz
+    umgestellt = []
+    for angebot in angebote:
+        if angebot.extern or angebot.status != "Entwurf":
+            continue
+        angebot.status = "Versand vorbereitet"
+        session.add(AngebotsNotiz(
+            angebot_id=angebot.id,
+            benutzer_name=benutzer.name if benutzer else "System",
+            text="Versand vorbereitet durch Kombi-Versand (Entwurf automatisch "
+                 "versandfertig gemacht – eine Mail mit mehreren Angebots-PDFs)."))
+        umgestellt.append(angebot)
+    return umgestellt
 
 
 def _titel_schluessel(position) -> str:
@@ -92,9 +155,12 @@ def gewerke_hinweise(session: Session, vorgang: Vorgang,
     for angebot in aktive:
         if angebot.extern:
             continue
+        # v34 (PLAN_V21 Phase 180): Kopien aus „Elektroarbeiten ins PV-Angebot“ sind bewusst
+        # verlagert (uebernommen_von_angebot_id) – kein Hinweis „verlagern“ mehr dafür
         voll = sorted({p.pos_nr for p in angebot.positionen
                        if (p.pos_nr in liste or _titel_schluessel(p) in listen_titel)
-                       and not (p.ep_flag or p.bauseits or p.alternativ)})
+                       and not (p.ep_flag or p.bauseits or p.alternativ
+                                or getattr(p, "uebernommen_von_angebot_id", None))})
         if voll:
             eigene = angebot.konfigurator_typ or "WP"
             andere = sorted(s for s in sparten if s != eigene)

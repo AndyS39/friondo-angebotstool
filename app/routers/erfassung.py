@@ -10,6 +10,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app import kl_auslegung                      # v24: Klimakonfigurator
+from app import wb_auslegung                      # v34: Wallbox-Konfigurator
 from app import konfigurator as engine
 from app import logik as logik_modul
 from app import sparten as sparten_modul          # v31: gemeinsame Sparten-Liste
@@ -44,22 +45,39 @@ def _sparten_logik(session, erfassung: Erfassung):
 
 
 def _ist_konfigurator(erfassung: Erfassung, logik) -> bool:
-    """v16/v24: Katalog-Erfassung mit Konfigurator-Logik – PV (seit v16) und KL
-    (seit v24), sobald die Sparten-Sicht Aktionen trägt. Dann läuft die
-    Erfassung wie WP über die Ampel (grün → „Angebot erzeugen“); sonst ist sie
+    """v16/v24/v34: Katalog-Erfassung mit Konfigurator-Logik – PV (seit v16), KL
+    (seit v24) und WB (seit v34), sobald die Sparten-Sicht Aktionen trägt. Dann läuft
+    die Erfassung wie WP über die Ampel (grün → „Angebot erzeugen“); sonst ist sie
     reine Erfassung (TAIFUN-Schiene)."""
-    return (erfassung.sparte in ("PV", "KL")
-            and bool(logik.aktionen or getattr(logik, "kl_aktionen", None)))
+    return (erfassung.sparte in ("PV", "KL", "WB")
+            and bool(logik.aktionen or getattr(logik, "kl_aktionen", None)
+                     or getattr(logik, "wb_aktionen", None)))
 
 
 def _kl_validierung(erfassung: Erfassung, logik, antworten: dict) -> list[str]:
     """v24: Prüfungen beim Absenden des KL-Bogens (jedes Außengerät hat einen
-    Raum, Raumfläche je Raum) – nur bei vollständigem Bogen."""
-    if erfassung.sparte != "KL" or not _ist_konfigurator(erfassung, logik):
+    Raum, Raumfläche je Raum) – nur bei vollständigem Bogen.
+    v34: WB-Bogen – „Wallbox auswählen“, „Leitungslänge fehlt oder ist keine Zahl“
+    (wb_auslegung.validierung); die Warnung ab 100 m blockiert nicht (_warnungen)."""
+    if not _ist_konfigurator(erfassung, logik):
+        return []
+    if erfassung.sparte == "WB":
+        if engine.naechste_pflichtfrage(logik, antworten) is not None:
+            return []
+        return wb_auslegung.validierung(antworten, logik)
+    if erfassung.sparte != "KL":
         return []
     if engine.naechste_frage(logik, antworten) is not None:
         return []
     return kl_auslegung.validierung(logik, antworten)
+
+
+def _warnungen(erfassung: Erfassung, logik, antworten: dict) -> list[str]:
+    """v34: nicht blockierende Hinweise auf der Prüfseite (Wallbox: Leitungslänge
+    über 100 m – bitte prüfen)."""
+    if erfassung.sparte == "WB" and _ist_konfigurator(erfassung, logik):
+        return wb_auslegung.warnungen(antworten, logik)
+    return []
 
 
 def _fragen_der_seite(logik, seite: str, antworten: dict | None = None):
@@ -240,10 +258,13 @@ def sparten_auswahl(request: Request, kunde_id: int = 0, lead_id: int = 0,
                 entwuerfe.append(e)
             else:
                 erfasst.add(e.sparte or "WP")
+    # v34 (PLAN_V21 Phase 179): WB ist keine Freitext-Sparte mehr, sobald die Logik
+    # „Aktionen WB“ trägt (sparten.ist_freitext_sparte mit der geladenen Logik)
+    logik_voll, _bericht = logik_modul.hole_logik(session)
     return render(request, "erfassung/sparten.html", aktiv=None, mobil=True,
                   benutzer=_benutzer(request), kunde=kunde, lead=lead,
                   sparten=ERFASSUNGS_SPARTEN, sparten_namen=SPARTEN_NAMEN,
-                  freitext_sparten=sparten_modul.FREITEXT_SPARTEN,
+                  freitext_sparten=sparten_modul.freitext_sparten(logik_voll),
                   objekt=objekt, objekte=objekte_liste if len(objekte_liste) > 1 else [],
                   objekt_text=objekte_modul.objekt_text,
                   vorausgewaehlt=vorausgewaehlt - erfasst, erfasst=erfasst,
@@ -374,8 +395,11 @@ def sparten_start(request: Request, session: Session = Depends(get_session)):
         lead.erfassung_id = neu[0].id   # Alt-Verknüpfung (erste Erfassung)
     session.commit()
     erste = neu[0]
-    # Wallbox/Gewerbe (v23) und MS/WA/DMS (v31, Phase 157): immer Freitext
-    if sparten_modul.ist_freitext_sparte(erste.sparte):
+    # Gewerbe (v23) und MS/WA/DMS (v31, Phase 157): immer Freitext; Wallbox seit v34
+    # (PLAN_V21 Phase 179) über die Weiche Katalog | Freitext, sobald die Logik
+    # „Aktionen WB“ trägt (sonst weiter Freitext)
+    logik_voll, _bericht = logik_modul.hole_logik(session)
+    if sparten_modul.ist_freitext_sparte(erste.sparte, logik_voll):
         return RedirectResponse(f"/erfassung/{erste.id}/freitext", status_code=303)
     return RedirectResponse(f"/erfassung/{erste.id}/weiche", status_code=303)
 
@@ -685,7 +709,8 @@ def pruefen(request: Request, erfassung_id: int,
                   benutzer=_benutzer(request), erfassung=erfassung, kunde=kunde,
                   protokoll=prot, gruende=gruende, offen=offen,
                   seiten=logik.seiten,
-                  validierung=_kl_validierung(erfassung, logik, antworten))   # v24
+                  validierung=_kl_validierung(erfassung, logik, antworten),   # v24/v34
+                  warnungen=_warnungen(erfassung, logik, antworten))          # v34 WB
 
 
 def _verfolgung_startwerte(session, erfassung) -> None:
@@ -727,16 +752,19 @@ def absenden(request: Request, erfassung_id: int,
         from app import pv_auslegung
         pv_auslegung.wp_ableitung_aktualisieren(session, erfassung, antworten, logik)
         erfassung.antworten_json = json.dumps(antworten, ensure_ascii=False)
-    if konfigurator and erfassung.sparte == "KL":
-        # v24: Validierung beim Absenden – zurück auf die Prüfseite mit Meldung
-        meldungen = kl_auslegung.validierung(logik, antworten)
+    if konfigurator and erfassung.sparte in ("KL", "WB"):
+        # v24 (KL) / v34 (WB): Validierung beim Absenden – zurück auf die Prüfseite
+        # mit Meldung („Wallbox auswählen“, „Leitungslänge fehlt oder ist keine Zahl“)
+        meldungen = (kl_auslegung.validierung(logik, antworten) if erfassung.sparte == "KL"
+                     else wb_auslegung.validierung(antworten, logik))
         if meldungen:
             kunde = session.get(Kunde, erfassung.kunde_id)
             return render(request, "erfassung/pruefen.html", aktiv=None, mobil=True,
                           benutzer=_benutzer(request), erfassung=erfassung, kunde=kunde,
                           protokoll=engine.protokoll(logik, antworten),
                           gruende=engine.ampel_gruende(logik, antworten), offen=None,
-                          seiten=logik.seiten, validierung=meldungen)
+                          seiten=logik.seiten, validierung=meldungen,
+                          warnungen=_warnungen(erfassung, logik, antworten))
     if erfassung.sparte not in ("", "WP") and not konfigurator:
         # v8: Sparten ohne Konfigurator-Logik (KL ohne KL-Blätter, PV ohne
         # PV-Logik) sind reine Erfassungen – immer individuell, direkt in die

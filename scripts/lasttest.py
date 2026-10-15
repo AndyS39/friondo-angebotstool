@@ -98,10 +98,12 @@ SCHREIBSTURM_POSITIONEN = 10
 ZIELWERTE_MS = collections.OrderedDict([
     ("liste_akte", 1500), ("editor_aktion", 1000), ("angebots_pdf", 4000),
     ("protokoll_pdf", 3000), ("terminvorschlaege", 6000),
-    ("suche", 300)])   # v32 (PLAN_V19 Phase 164): Kundensuche unter 300 ms
+    ("suche", 300),   # v32 (PLAN_V19 Phase 164): Kundensuche unter 300 ms
+    ("pdf_lesen", 1000)])   # v34 (PLAN_V21 Phase 182): TAIFUN-PDF lesen (pypdf) [ANNAHME 1 s]
 GRUPPEN_NAMEN = {"liste_akte": "Listen und Akten", "editor_aktion": "Editor-Aktionen",
                  "angebots_pdf": "Angebots-PDF", "protokoll_pdf": "Protokoll-PDF",
                  "terminvorschlaege": "Terminvorschläge", "suche": "Kundensuche",
+                 "pdf_lesen": "TAIFUN-PDF lesen", "galerie_mehrfach": "Galerie-Mehrfachupload",
                  "sonstige": "übrige Schritte"}
 POOL_SPITZE_MAX_PROZENT = 60.0
 FEHLERQUOTE_MAX_PROZENT = 0.1
@@ -110,6 +112,8 @@ GRUPPEN_REGELN = [   # (Methode, Muster auf den normalisierten Pfad, Gruppe)
     ("GET", r"^/erfassungen/\{id\}/protokoll\.pdf$", "protokoll_pdf"),
     ("GET", r"^/lead-management/lead/\{id\}/termin/vorschlaege\.json$", "terminvorschlaege"),
     ("GET", r"^/suche\.json$", "suche"),   # v32 (Phase 164)
+    ("POST", r"^/angebote/extern/pdf-lesen$", "pdf_lesen"),   # v34 (Phase 182)
+    ("POST", r"^/vorgaenge/\{id\}/galerie/upload$", "galerie_mehrfach"),   # v34: 3 Dateien je Request
     ("POST", r"^/angebote/\{id\}/(position/\{pid\}/(menge|aendern|entfernen|text)"
              r"|sortierung|gruppe|neu-nummerieren|sperre|sperre-frei)$", "editor_aktion"),
     ("GET", r"^(/|/erfassung|/erfassungen|/erfassungen/\{id\}|/angebote|/angebote/\{id\}"
@@ -594,6 +598,25 @@ def fragebogen_ausfuellen(form: dict, versuch: int = 0, fehlerfelder: set | None
     return daten
 
 
+def testpdf_erzeugen() -> bytes:
+    """v34: kleines PDF im TAIFUN-Layout (Nummer, Datum, Gesamt-Betrag) für POST /angebote/extern/pdf-lesen."""
+    try:
+        from fpdf import FPDF
+    except ImportError:
+        return b"%PDF-1.4\n% lasttest ohne fpdf2\n"
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=11)
+    for zeile in ("Friondo GmbH", "ANGEBOT - Nr.: AN261737", "Datum : 17.09.2026",
+                  "Komplettpaket Wallbox inkl. Montage", "Netto-Betrag EUR 3.626,25",
+                  "19,00 % USt. EUR 688,99", "Gesamt-Betrag EUR 4.315,24"):
+        pdf.cell(0, 8, zeile, new_x="LMARGIN", new_y="NEXT")
+    for i in range(60):   # etwas Text, damit pypdf wirklich arbeitet
+        pdf.cell(0, 6, f"Position {i + 1}: Leistungsbeschreibung Lasttest", new_x="LMARGIN", new_y="NEXT")
+    return bytes(pdf.output())
+
+
 def testfoto_erzeugen(ziel: int = 2_000_000) -> bytes:
     """JPEG mit rund 2 MB (Rauschen, 3000 × 2250 px – die Galerie verkleinert
     auf 2000 px, wie bei einem Handyfoto). Ohne Pillow: Pseudo-Datei."""
@@ -631,10 +654,12 @@ class LaufEnde(Exception):
 class Lauf:
     """Gemeinsamer Zustand aller Nutzer-Threads (Deadline, Proben, Zähler)."""
 
-    def __init__(self, args, pools: dict, foto: bytes):
+    def __init__(self, args, pools: dict, foto: bytes, foto_klein: bytes = b"", pdf: bytes = b""):
         self.args = args
         self.pools = pools
         self.foto = foto
+        self.foto_klein = foto_klein or foto   # v34: Handyfoto nach Verkleinerung (~400 KB)
+        self.pdf = pdf or testpdf_erzeugen()   # v34: TAIFUN-PDF für pdf-lesen
         self.basis_url = f"http://127.0.0.1:{args.port}"
         self.stop = threading.Event()
         self.deadline = None
@@ -967,6 +992,11 @@ class Nutzer(threading.Thread):
         vorbereiten (Graph gemockt) → Vorgangsakte."""
         self.get("/erfassungen", "GET /erfassungen")
         self.denken()
+        # v34 (PLAN_V21 Phase 180): TAIFUN-PDF lesen (Dialog „Extern erledigt“, JSON, ohne Sitzung)
+        self.post("/angebote/extern/pdf-lesen", "POST /angebote/extern/pdf-lesen",
+                  files={"pdf_datei": ("AN261737.pdf", self.lauf.pdf, "application/pdf")},
+                  headers={"Accept": "application/json"})
+        self.denken()
         # bevorzugt eine frisch vom Außendienst abgesendete Erfassung (vollständig
         # für die aktuelle Logik), sonst eine aus dem Pool der Kopie
         with self.lauf.sperre:
@@ -1082,11 +1112,15 @@ class Nutzer(threading.Thread):
         if vorgang_id is None:
             self.lauf.zaehlen("proj_ohne_vorgang")
             return
+        # v34 (PLAN_V21 Phase 181): Mehrfachupload – drei verkleinerte Fotos in zwei Ordnern,
+        # Ordner und Bemerkung je Datei positionsgleich, EIN Request
         r = self.post(f"/vorgaenge/{vorgang_id}/galerie/upload", "POST /vorgaenge/{id}/galerie/upload",
                       data={"ordner": "Allgemein", "sparte": "WP", "bemerkung": "Lasttest",
-                            "zurueck": f"/projektierung/projekt/{projekt_id}"},
-                      files={"dateien": (f"lasttest-{self.nr}-{self.szenarien}.jpg",
-                                         self.lauf.foto, "image/jpeg")})
+                            "zurueck": f"/projektierung/projekt/{projekt_id}",
+                            "datei_ordner": ["Allgemein", "Allgemein", "Zählerschrank"],
+                            "datei_bemerkung": ["Lasttest 1", "Lasttest 2", "Lasttest 3"]},
+                      files=[("dateien", (f"lasttest-{self.nr}-{self.szenarien}-{i}.jpg",
+                                          self.lauf.foto_klein, "image/jpeg")) for i in range(3)])
         self.folgen(r)
 
     def szenario_montage(self) -> None:
@@ -1664,8 +1698,11 @@ def main() -> int:
         print(f"  Hinweis: {h}")
 
     foto = testfoto_erzeugen()
-    print(f"  Testfoto: {len(foto) / 1_000_000:.2f} MB JPEG")
-    lauf = Lauf(args, pools, foto)
+    foto_klein = testfoto_erzeugen(400_000)   # v34: verkleinertes Handyfoto
+    pdf = testpdf_erzeugen()
+    print(f"  Testfoto: {len(foto) / 1_000_000:.2f} MB JPEG, klein {len(foto_klein) / 1000:.0f} KB, "
+          f"Test-PDF {len(pdf) / 1000:.0f} KB")
+    lauf = Lauf(args, pools, foto, foto_klein, pdf)
     proc = None
     exit_code = 0
     start = datetime.now()

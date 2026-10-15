@@ -102,5 +102,26 @@ def sparten_interesse(wert, langnamen: dict | None = None) -> str:
     return "Interesse an " + _aufzaehlung(teile)
 
 
-def ist_freitext_sparte(code: str) -> bool:
-    return (code or "").strip().upper() in FREITEXT_SPARTEN
+def ist_freitext_sparte(code: str, logik=None) -> bool:
+    """Reine Freitext-Sparte (kein Erfassungsbogen)? GW/MS/WA/DMS immer.
+    v34 (PLAN_V21 Phase 179): WB ist keine reine Freitext-Sparte mehr, sobald die
+    Logik das Blatt „Aktionen WB“ trägt (Wallbox-Konfigurator) – dann zeigt der
+    Sparten-Start die Weiche Katalog | Freitext wie bei PV/KL. `logik` = die volle
+    Logik (app.logik.hole_logik); ohne Angabe wird die im Prozess geladene Logik
+    genutzt, ohne geladene Logik gilt WB weiter als Freitext."""
+    code = (code or "").strip().upper()
+    if code != "WB":
+        return code in FREITEXT_SPARTEN
+    if logik is None:
+        try:
+            from app import logik as logik_modul
+            logik = logik_modul._cache.get("logik")
+        except Exception:   # noqa: BLE001 – Logik nicht ladbar: Freitext bleibt der sichere Weg
+            logik = None
+    return not bool(getattr(logik, "wb_aktionen", None))
+
+
+def freitext_sparten(logik=None) -> list[str]:
+    """Alle Sparten, die derzeit nur als Freitext erfasst werden (Anzeige im
+    Sparten-Start)."""
+    return [code for code in SPARTEN if ist_freitext_sparte(code, logik)]

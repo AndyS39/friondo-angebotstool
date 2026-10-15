@@ -27,6 +27,7 @@ from app.routers import betrieb as betrieb_router   # v27: /health + Parametrier
 from app.routers import lm_mail, lm_vorlagen   # v29 (PLAN_LEAD_V4 Phase 142): Vorlagen-Editor, Lead-Mails
 from app.routers import einstellungen as einstellungen_router   # v30 (PLAN_V18 Phase 145): Darstellung
 from app.routers import suche as suche_router   # v32 (PLAN_V19 Phase 164): Kundensuche
+from app.routers import angebote_elektro, taifun_pdf   # v34 (PLAN_V21 Phase 180): Elektro ins PV, TAIFUN-PDF lesen
 from app.templating import render
 
 APP_ORDNER = Path(__file__).resolve().parent
@@ -167,6 +168,8 @@ app.include_router(einstellungen_router.router)   # v30 (PLAN_V18 Phase 145): He
 app.include_router(suche_router.router)   # v32 (PLAN_V19 Phase 164): Kundensuche
 app.include_router(betrieb_router.router)   # v27 (PLAN_V17 Phase 129)
 app.include_router(vorgaenge.router)
+app.include_router(angebote_elektro.router)   # v34 (PLAN_V21 Phase 180)
+app.include_router(taifun_pdf.router)   # v34 (PLAN_V21 Phase 180)
 app.include_router(projektierung_router.router)
 app.include_router(glocke.router)
 app.include_router(montage.router)

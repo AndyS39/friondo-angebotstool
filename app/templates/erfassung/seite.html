@@ -1,4 +1,8 @@
 {% extends "base.html" %}
+{# v34 (PLAN_V21 Phase 181): Diktat-Knopf an Bemerkungsfeldern, Foto-Sammelbox (Kamera-Serie,
+   Ordner je Foto) auf der Seite Einschätzung – Formular-Modus, Route unverändert #}
+{% from "_diktat.html" import diktat_knopf %}
+{% from "_galerie.html" import sammelbox, galerie_einbindung %}
 
 {% block titel %}{{ seiten[nr] }} – Erfassung{% endblock %}
 
@@ -53,7 +57,8 @@
             {% elif frage.typ == 'Freitext' %}
                 <input type="text" name="f_{{ frage.id }}" value="{{ werte.get(frage.id) or '' }}">
             {% elif frage.typ == 'Freitext groß' %}
-                <textarea name="f_{{ frage.id }}" rows="3">{{ werte.get(frage.id) or '' }}</textarea>
+                <textarea name="f_{{ frage.id }}" id="f_{{ frage.id }}" rows="3">{{ werte.get(frage.id) or '' }}</textarea>
+                {{ diktat_knopf('f_' ~ frage.id) }}
             {% elif frage.typ == 'Datum' %}
                 <input type="date" name="f_{{ frage.id }}" value="{{ werte.get(frage.id) or '' }}">
             {% elif frage.typ in ('Zahleneingabe', 'Betragseingabe') %}
@@ -62,7 +67,11 @@
                 {# v24: Raumfläche KR08#i – Dezimalzahl mit Komma (zahl_parsen), Schritt 0,1 #}
                 <input type="text" name="f_{{ frage.id }}" inputmode="decimal"
                        {% if frage.id.startswith('KR08') %}step="0.1" placeholder="z. B. 22,5"
-                       title="Raumfläche in m² – Dezimalzahl mit Komma möglich, z. B. 22,5"{% endif %}
+                       title="Raumfläche in m² – Dezimalzahl mit Komma möglich, z. B. 22,5"
+                       {% elif frage.id in ('WB02', 'WB04') %}step="0.1" placeholder="z. B. 12,5"
+                       title="Meter – Dezimalzahl mit Komma möglich, kaufmännisch auf ganze Meter gerundet (v34 Wallbox)"
+                       {% elif frage.id == 'WB07' %}placeholder="z. B. 2"
+                       title="Anzahl Durchbrüche – 2 sind in der Anschlussvorbereitung enthalten (v34 Wallbox)"{% endif %}
                        value="{{ zwert | menge if zwert not in (None, '') and not ist_alt else '' }}">
                 {# v11: Text-Alternative zur Zahl (A03: „Verbrauch unbekannt") #}
                 {% for alt in frage.antworten %}
@@ -94,23 +103,19 @@
         </div>
         {% endfor %}
 
-        {# v15 (Phase 76): Fotos für die Galerie auf der Einschätzungs-Seite #}
+        {# v15 (Phase 76): Fotos für die Galerie auf der Einschätzungs-Seite.
+           v34 (PLAN_V21 Phase 181): Sammelbox im Formular-Modus – Kamera-Serie („Fotos
+           aufnehmen“ → „Weiteres Foto“) und Mehrfachauswahl mit Ordner je Foto; die Dateien
+           liegen je Ordner in galerie_<i> / galerie_ordner_<i> und gehen mit „Weiter“ mit
+           (Route seite_speichern unverändert, Bilder vorher auf dem Gerät verkleinert) #}
         {% if seiten[nr] == 'Einschätzung' and galerie_ordner is defined %}
         <div class="fragefeld">
             <label class="fragetitel">Fotos für die Galerie</label>
             <p class="frage-hinweis">Landen im Vorgang – sichtbar für Innendienst,
                 Projektierung und Montage.</p>
-            {% for ordner in galerie_ordner %}
-            <div class="formzeile" style="align-items:center">
-                <span style="flex:1">{{ ordner }}</span>
-                {# 27.09.2026: ohne capture - so bietet das Handy Kamera UND
-                   Mehrfachauswahl an (capture erzwang genau 1 Foto) #}
-                <input type="file" name="galerie_{{ loop.index0 }}" accept="image/*"
-                       multiple>
-                <input type="hidden" name="galerie_ordner_{{ loop.index0 }}" value="{{ ordner }}">
-            </div>
-            {% endfor %}
+            {{ sammelbox(none, galerie_ordner, '', erfassung.sparte or 'WP', modus='formular') }}
         </div>
+        {{ galerie_einbindung() }}
         {% endif %}
         <div class="mobil-aktionen sticky-fuss">
             {% if nr > 0 %}

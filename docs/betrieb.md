@@ -589,3 +589,31 @@ Beschreibung der Funktionen in CLAUDE.md „Neu in v33“ (PLAN_V20, Phasen 166�
   `gewerke.phase_auto/phase_auto_pause`, `vorgaenge.nachfass_versuche/letzter_einwand_id`, `montage_formulare.termin_id`;
   Einstellungen `graph_modus`, `graph_letzter_test`, Parameter `phase_auto`, `inaktiv_tage`, `inaktiv_tage_mfh`,
   `kalender_tagesbeginn/-ende`. Hooks in `migrate.py` (`migration_v33_*`), zweiter Lauf ohne Änderungen.
+
+## Ergänzungen v34 (15.10.2026)
+
+- **Keine neuen Hintergrundläufe, keine neuen Netzaufrufe** (16 Läufe wie v33, Pool-Invariante 85 ≤ 90).
+  Neue Datei-I/O in Anfragen (alle lesen den Request-Body VOR dem ersten Datenbankzugriff, Wächter
+  `UploadRoutenOhneSchreibsperre`):
+
+  | Modul / Route | Auslöser | Datei-I/O | Sitzung | Maßnahme |
+  |---|---|---|---|---|
+  | `routers/taifun_pdf.pdf_lesen` – `POST /angebote/extern/pdf-lesen` | Dialog „Extern erledigt“ (Drop-Zone) | PDF ≤ 20 MB im Speicher, pypdf-Textextraktion | keine Sitzung (kein Pool-Checkout) | JSON-Antwort, nur Text, keine OCR |
+  | `routers/erfassungsliste.extern_erledigt` – `POST /erfassungen/{id}/extern-erledigt` | externer TAIFUN-Eintrag mit PDF | PDF nach `data/angebote/extern/`, Galerie-Kopie „Allgemein“ | Formular vor dem ersten DB-Zugriff, Datei nach dem Flush | `_speichern`-Muster |
+  | `routers/angebote.taifun_pdf_hochladen` – `POST /angebote/{id}/taifun-pdf` | PDF am TAIFUN-Eintrag ersetzen | PDF lesen + pypdf VOR der Schreibtransaktion, danach `taifun_pdf.eintrag_pdf_speichern(inhalt=…)` | kurze Schreibtransaktion | Sicherheitsabfrage (`bestaetigt=1`/409) |
+  | `routers/vorgaenge.galerie_upload` – `POST /vorgaenge/{id}/galerie/upload` | Galerie-Mehrfachupload (3–10 Fotos in EINEM Request) | Dateien in 1-MB-Blöcken auf die Platte (`galerie.mehrfach_speichern`), Commit je Datei | Body vor dem ersten DB-Zugriff | Teilerfolg je Datei in der Meldung/JSON |
+  | `import_wallbox.importieren` – Parametrierung → Logik & Importe | Admin/Innendienst, außerhalb der Kernzeit | TAIFUN-Export `Artikel-Preislisten/Wallbox/WB Angebot Excel 1.xlsx` (weitere xlsx nur Preisvergleich) | Blöcke je 200 Zeilen mit Commit, `betrieb.import_markieren("Wallbox-Positionslisten")` | Hinweis + Bestätigung wie v27; `migrate.py` importiert automatisch, wenn WB-Artikel fehlen und die Dateien vorliegen |
+
+- **Lastmodell (`scripts/lasttest.py`):** Projektierung lädt drei verkleinerte Fotos (~400 KB) in einem Request
+  (Gruppe „Galerie-Mehrfachupload“, ohne Zielwert), der Innendienst liest ein TAIFUN-PDF über `pdf-lesen`
+  (Gruppe „TAIFUN-PDF lesen“, Zielwert 1 s [ANNAHME]). Ergebnis des v34-Laufs: `docs/lasttest-v27.md`
+  Abschnitt 4.9.
+- **Migration v34 (additiv, v33-Code läuft auf der v34-Datenbank):** Spalten `angebote.wb_json`,
+  `angebote.auslegung_text`, `angebotspositionen.uebernommen_von_angebot_id/_position_id`; Hooks
+  `migration_v34_auslegung` (Auslegungs-Position aus Entwürfen, Protokollzeile je Angebot),
+  `migration_v34_wallbox` (WB-Artikel-Import aus der versionierten Excel, nur wenn WB-Artikel fehlen), `seed_wb` (Textblöcke WB);
+  zweiter Lauf ohne Änderungen. Neue Abhängigkeit `pypdf` (reines Python) – `update.bat` installiert sie
+  über `requirements.txt`.
+- **Anmeldung mobil:** Cookie mit `Max-Age` und `Expires` (30 Tage mit Häkchen auf Mobilgeräten für alle
+  Rollen, sonst 12 h); keine Verlängerung je Anfrage; `Secure` weiterhin nur bei `HTTPS_AKTIV=1`.
+  HTTPS-Vorbereitung für Browser-Diktat: `docs/https-intern.md`.

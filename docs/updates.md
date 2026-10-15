@@ -232,6 +232,28 @@ davor meldet die Kontrolle „HTTP 404“ (normal). Nach dem Rollback
   (Zeichen außerhalb des Zeichensatzes werden ersetzt) – ein Abbruch NACH den Commits durch eine Meldung mit
   Sonderzeichen ist damit ausgeschlossen (Befund im Durchlauf, Probe mit `PYTHONIOENCODING=cp1252`).
 
+## 4c. Besonderheiten beim Update auf v34 (ein Commit, 15.10.2026)
+
+- Die Wallbox-Preisliste `Artikel-Preislisten\Wallbox\WB Angebot Excel 1.xlsx` (TAIFUN-Export mit EK) kommt
+  mit dem Update aus Git; `migrate.py` importiert sie automatisch (Meldungen „WB-Artikel fehlten (…) –
+  Wallbox-Positionslisten-Import ausgeführt (WB: 8 neu …)“ und „WB-Vortext: Absatz „Komplettpaket Wallbox
+  inkl. Montage“ aus der Wallbox-Excel übernommen“). Spätere Preisänderungen über Parametrierung → Logik &
+  Importe → „Wallbox-Positionslisten importieren“.
+- `migrate.py` meldet beim ersten Lauf u. a.: Spalten `angebote.wb_json`, `angebote.auslegung_text`,
+  `angebotspositionen.uebernommen_von_angebot_id/_position_id`; „Auslegung (v34): n Entwürfe bereinigt“
+  (je Angebot eine Zeile – die 0,00-€-Auslegungs-Position wandert in das interne Feld); Textblöcke
+  „Friondo WB …“ (seed_wb); Wallbox-Import (siehe oben). Der zweite Lauf meldet „keine Änderungen
+  nötig“.
+- Neue Abhängigkeit `pypdf` – `update.bat` führt `pip install -r requirements.txt` aus; danach prüfen:
+  `venv\Scripts\python -c "import pypdf"`.
+- Danach `scripts\smoke.bat` wie immer. Keine neuen Hintergrundläufe (16 wie v33).
+- Mennekes-Datenblatt (`anlagen\Mennekes AMTRON 4You Datenblatt.pdf`) nachreichen; die Betriebs-Seite meldet
+  die fehlende Anhang-Datei. Das Musterangebot AN251131 liegt nur lokal (`Beispielangebot.pdf`, gitignored).
+- Rückweg: `rollback.bat --nur-code` (v33-Code läuft auf der v34-Datenbank – nur additive Änderungen;
+  Rückweg-Probe im Durchlauf: `diagnose/test_v34_final/rueckweg_probe.txt`).
+- Admin-To-dos und Team-Hinweise: `docs/nach-dem-update-v34.md` (Login-Probe mit dem Handy, Liste
+  „gewerkeübergreifende Artikel“, Sparten-Mail-Vorlagen gegenlesen, HTTPS-Entscheidung).
+
 ## 5. Versionsstand prüfen
 
 Auf PC und Server zeigt `git log --oneline -1` den aktuellen Commit; auf dem

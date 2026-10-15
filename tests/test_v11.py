@@ -113,12 +113,14 @@ class TestFlaechenAuslegung(unittest.TestCase):
                          "A10": "Nein"}
             positionen = angebot_aufbau.positionen_zusammenstellen(
                 self.logik, antworten, session)
+            # v34 (PLAN_V21 Phase 180): keine 0,00-€-Auslegungszeile mehr in Block 1 –
+            # die Flächen-Herleitung liefert angebot_aufbau.auslegungs_text_fuer (Feld
+            # angebote.auslegung_text, Editor „Auslegung (intern)“)
             zeilen = [p for p in positionen
                       if p["bezeichnung"] == "Auslegung der Wärmepumpe"]
-            self.assertEqual(len(zeilen), 1)
-            self.assertEqual(zeilen[0]["block_nr"], 1)
-            self.assertEqual(zeilen[0]["e_preis_cent"], 0)
-            self.assertIn("150 m² × 60 W/m²", zeilen[0]["beschreibung"])
+            self.assertEqual(len(zeilen), 0)
+            text = angebot_aufbau.auslegungs_text_fuer(self.logik, antworten, "WP", session)
+            self.assertIn("150 m² × 60 W/m²", text)
         finally:
             session.close()
 

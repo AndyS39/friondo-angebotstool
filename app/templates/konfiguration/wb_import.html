@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block titel %}Wallbox-Positionslisten-Import – Friondo Angebotstool{% endblock %}
+
+{% block inhalt %}
+{# v34 (PLAN_V21 Phase 178): Vorschau „Artikel → Wallbox-Positionslisten importieren“
+   (wie konfiguration/kl_import.html) – gespeichert wird erst mit „Import ausführen“.
+   Das Protokoll nennt Datei, Position, WB-Nr., VK und GUID-Wechsel – nie den EK. #}
+<h1>Wallbox-Positionslisten-Import – Vorschau</h1>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% if modul_fehlt %}
+    <p class="meldung fehler">Wallbox-Import nicht verfügbar – <code>app/import_wallbox.py</code> fehlt.</p>
+    <p><a class="knopf zweitrangig" href="/parametrierung">← Parametrierung</a></p>
+{% elif dateifehler %}
+    <p class="meldung fehler">Wallbox-Preislisten fehlen – Import übersprungen:</p>
+    <ul>{% for d in dateifehler %}<li><code>{{ d }}</code></li>{% endfor %}</ul>
+    <p class="dezent">Erwartet wird <code>WB Angebot Excel 1.xlsx</code> (TAIFUN-Export, Blatt „Tabelle 1“,
+        Pos. 001–008 → WB001–WB008 laut Blatt „WB-Artikel“) im Ordner
+        <code>{{ ordner or 'Artikel-Preislisten/Wallbox/' }}</code> – die Datei enthält EK-Werte und
+        gehört nur in den Projektordner (Zulieferung Andreas, PLAN_V21 Nachtrag 15.10.2026).</p>
+    <p><a class="knopf zweitrangig" href="/parametrierung/wb-logik">← Wallbox-Logik</a>
+       <a class="knopf zweitrangig" href="/parametrierung">← Parametrierung</a></p>
+{% else %}
+
+<p>
+    Quelle: der TAIFUN-Angebotsexport <code>WB Angebot Excel 1.xlsx</code> in <code>{{ ordner }}</code>
+    (Pos. 001–008 → WB001–WB008; weitere xlsx-Dateien im Ordner werden nur auf Preiskonflikte
+    geprüft) – Anker laut Blatt „WB-Artikel“ der Logik-Excel (Datei + Position +
+    Beschreibungsanfang; die GUIDs sind Angebots-GUIDs und werden nur als „zuletzt gesehen“
+    nachgeführt; die Spalte Einheit des Blatts überstimmt die Export-Einheit). <code>_x000D_</code>
+    und „?“-Platzhalter werden bereinigt. Es wird noch nichts gespeichert – erst mit
+    „Import ausführen“.
+</p>
+
+{% if diff.konflikte %}
+<div class="warnblock fehlerblock">
+    <strong>Preiskonflikt ({{ diff.konflikte | length }}) – Rückfrage 1</strong>
+    <ul>{% for k in diff.konflikte %}<li>{{ k }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+{% if diff.warnungen %}
+<div class="warnblock">
+    <strong>Hinweise ({{ diff.warnungen | length }})</strong>
+    <ul>
+        {% for w in diff.warnungen %}<li>{{ w }}</li>{% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<table class="tabelle zusammenfassung">
+    <tr><th>Neu</th><td>{{ diff.neu | length }}</td></tr>
+    <tr><th>Geändert</th><td>{{ diff.geaendert | length }}</td></tr>
+    <tr><th>Unverändert</th><td>{{ diff.unveraendert }}</td></tr>
+    <tr><th>Entfallen (werden deaktiviert)</th><td>{{ diff.entfallen | length }}</td></tr>
+    {% if diff.reaktiviert %}<tr><th>Wieder aktiviert</th><td>{{ diff.reaktiviert | length }}</td></tr>{% endif %}
+</table>
+
+{% if diff.geaendert %}
+<h2>Geänderte Artikel</h2>
+<table class="tabelle">
+    <thead><tr><th>Pos.</th><th>Artikel</th><th>Geänderte Felder</th><th class="rechts">Preis bisher</th><th class="rechts">Preis neu</th></tr></thead>
+    <tbody>
+    {% for vorhanden, neu, felder in diff.geaendert %}
+        <tr>
+            <td>{{ neu.pos_nr }}</td>
+            <td>{{ vorhanden.titel | truncate(60) }}</td>
+            <td>{{ felder | join(', ') }}</td>
+            <td class="rechts">{{ vorhanden.e_preis_cent | euro }}</td>
+            <td class="rechts">{{ neu.e_preis_cent | euro }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% if diff.neu %}
+<h2>Neue Artikel</h2>
+<table class="tabelle">
+    <thead><tr><th>Pos.</th><th>Artikel</th><th>Kategorie</th><th>Einheit</th><th class="rechts">E-Preis</th></tr></thead>
+    <tbody>
+    {% for a in diff.neu %}
+        <tr>
+            <td>{{ a.pos_nr }}</td>
+            <td>{{ (a.bezeichnung or a.beschreibung.splitlines()[0] if a.beschreibung or a.bezeichnung else '') | truncate(70) }}</td>
+            <td class="dezent">{{ a.kategorie | truncate(45) }}</td>
+            <td>{{ a.einheit }}</td>
+            <td class="rechts">{{ a.e_preis_cent | euro }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% if diff.entfallen %}
+<h2>In keiner Wallbox-Positionsliste mehr (werden deaktiviert)</h2>
+<table class="tabelle">
+    <thead><tr><th>Pos.</th><th>Artikel</th></tr></thead>
+    <tbody>
+    {% for a in diff.entfallen %}
+        <tr><td>{{ a.pos_nr }}</td><td>{{ a.titel | truncate(80) }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<h2>Import-Protokoll</h2>
+<details open>
+    <summary>{{ diff.protokoll | length }} Zeilen (Datei · Position · WB-Nr. · VK · GUID)</summary>
+    <ul class="dezent">
+        {% for p in diff.protokoll %}<li>{{ p }}</li>{% endfor %}
+    </ul>
+</details>
+
+{% if diff.textzeilen %}
+<h2>Textzeilen ohne Position (Vortext „Komplettpaket Wallbox inkl. Montage“)</h2>
+<p class="dezent">Diese Zeilen des Exports sind keine Artikel – der Wortlaut gehört in den Vortext
+    „Friondo WB Standard“ (Parametrierung → Angebotsprofile → Textblöcke), Absatz
+    „Komplettpaket Wallbox inkl. Montage“.</p>
+{% for t in diff.textzeilen | unique %}
+<pre class="dezent" style="white-space:pre-wrap">{{ t }}</pre>
+{% endfor %}
+{% endif %}
+
+{# v27 (PLAN_V17 Phase 128): Hinweis vor dem Start mit Bestätigungs-Häkchen –
+   der POST prüft das Feld „bestaetigt“ serverseitig. #}
+<p class="hinweis" id="import-hinweis">{{ hinweis }}</p>
+<form method="post" action="/parametrierung/artikel/wb-import" class="formaktionen">
+    <label><input type="checkbox" name="bestaetigt" value="1" required>
+        Hinweis gelesen – Import jetzt starten</label>
+    <button class="knopf" type="submit">Import ausführen</button>
+    <a class="knopf zweitrangig" href="/parametrierung/wb-logik">Abbrechen</a>
+</form>
+
+{% endif %}
+{% endblock %}

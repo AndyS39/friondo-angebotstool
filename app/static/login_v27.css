@@ -133,6 +133,8 @@ main.login-main {
     flex: 0 0 auto;
 }
 .login-karte .login-hinweis { display: block; margin: 0 0 0.6rem; line-height: 1.4; }
+/* v34 (PLAN_V21 Phase 181): zweiter Hinweis unter dem Häkchen (Home-Bildschirm-App) */
+.login-karte .login-hinweis-app { margin-top: -0.3rem; color: var(--text-dezent); }
 
 /* --- PIN-Wechsel ----------------------------------------------------------------- */
 .pin-wechsel .hinweis { margin: 0.5rem 0 0.8rem; }

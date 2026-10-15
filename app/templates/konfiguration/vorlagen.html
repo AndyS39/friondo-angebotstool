@@ -10,10 +10,13 @@
 
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-{# v27-Nachtrag 2: Reihenfolge beim Versand AD-Vorlage → Sparten-Vorlage → Standard #}
-<p class="dezent">Beim „Versand vorbereiten“ nimmt das Tool die Vorlage des Außendienstlers
-des Vorgangs (über die Erfassung); hat er keine eigene, gilt die <strong>Vorlage der Sparte</strong>
-des Angebots (WP / PV / KL / WB); gibt es auch die nicht, die Standard-Vorlage.
+{# v27-Nachtrag 2: Reihenfolge beim Versand AD-Vorlage → Sparten-Vorlage → Standard;
+   v34 (PLAN_V21 Phase 180): bei PV / KL / WB geht die Sparten-Vorlage vor (die AD-Vorlagen
+   sind WP-formuliert und hatten die Klima-/PV-Vorlage bisher immer verdrängt) #}
+<p class="dezent">Beim „Versand vorbereiten“ gilt für <strong>Wärmepumpen-Angebote</strong>: die Vorlage
+des Außendienstlers des Vorgangs (über die Erfassung); hat er keine eigene, die Standard-Vorlage.
+Für <strong>PV-, Klima- und Wallbox-Angebote</strong> geht seit v34 die <strong>Vorlage der Sparte</strong>
+vor; gibt es keine, die Vorlage des Außendienstlers, sonst die Standard-Vorlage.
 Der Kombi-Versand behält seine eigene Vorlage (Angebotstool-Einstellungen).
 Pflege durch Admin und Innendienst.</p>
 

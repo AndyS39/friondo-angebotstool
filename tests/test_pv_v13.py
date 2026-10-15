@@ -263,8 +263,11 @@ class Phase77Positionen(Basis):
         for immer in ("PV065", "PV167", "PV170", "PV171"):
             self.assertIn(immer, m)
         self.assertTrue([p for p in pos if p["pos_nr"] == "PV065"][0]["ep_flag"])
-        zeile = [p for p in pos if p["bezeichnung"] == "Auslegung der PV-Anlage"]
-        self.assertTrue(zeile and zeile[0]["e_preis_cent"] == 0)
+        # v34 (PLAN_V21 Phase 180): keine 0,00-€-Auslegungszeile mehr – der Text kommt aus
+        # pv_auslegung.auslegungs_text und steht in angebot.auslegung_text
+        self.assertFalse([p for p in pos if p["bezeichnung"] == "Auslegung der PV-Anlage"])
+        self.assertTrue(pv_auslegung.auslegungs_text(pv_auslegung.auslegen(
+            self.logik, pv_basis())).startswith("Auslegung: 30 Module"))
         self.assertNotIn("PV010", m)                               # keine Optimierer
         self.assertNotIn("014", m)
 
@@ -377,7 +380,10 @@ class Phase78PdfWirtschaftlichkeit(Basis):
         self.assertIn("Keine Garantie", text.replace("\n", " "))
         self.assertNotIn("KfW-Förderung", text)
         self.assertNotIn("Eigenanteil", text)
-        self.assertIn("Auslegung: 30 Module", text)
+        # v34 (PLAN_V21 Phase 180): die Auslegungszeile steht nicht mehr im PDF, sondern
+        # intern im Editor („Auslegung (intern)“, angebot.auslegung_text)
+        self.assertNotIn("Auslegung: 30 Module", text)
+        self.assertTrue(angebot.auslegung_text.startswith("Auslegung: 30 Module"))
 
     def test_db_schwellen_je_sparte(self):
         from app.models import db_schwellen, einstellung_setzen

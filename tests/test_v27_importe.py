@@ -552,7 +552,7 @@ class Routen(Basis):
             self.assertEqual(einstellung_holen(s, "import_dauer_bestand", ""), "3")
             self.assertRegex(import_preisliste.import_hinweis(s, "bestand"), HINWEIS_REGEX)
             self.assertEqual(set(import_preisliste.import_hinweise(s)),
-                             {"preisliste", "pv", "klima", "logik", "bestand", "monday"})
+                             {"preisliste", "pv", "klima", "logik", "bestand", "monday", "wallbox"})   # v34 (PLAN_V21 Phase 178): Wallbox-Import
         finally:
             s.close()
 

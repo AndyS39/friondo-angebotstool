@@ -295,6 +295,10 @@ class RechenwegAttrappe(unittest.TestCase):
     def positionen(self, antworten):
         return kl_auslegung.positionen_bauen(self.logik, antworten, self.artikel)
 
+    def artikel_namen(self):
+        # v34 (PLAN_V21 Phase 180): Gerätenamen für auslegungs_text (vormals Auslegungszeile)
+        return kl_auslegung._namen_aus(self.artikel)
+
     # -- Grundlagen ---------------------------------------------------------------
     def test_bogen_vollstaendig(self):
         for antworten in (fall_a(), fall_b(), fall_c(), fall_h()):
@@ -356,8 +360,10 @@ class RechenwegAttrappe(unittest.TestCase):
 
     def test_fall_a_positionen(self):
         pos = self.positionen(fall_a())
+        # v34 (PLAN_V21 Phase 180): keine 0,00-€-Auslegungszeile ("") mehr – der Text kommt
+        # aus kl_auslegung.auslegungs_text und steht in angebot.auslegung_text
         self.assertEqual([p["pos_nr"] for p in pos],
-                         ["KL023", "KL008", "KL038", "KL026", "KL013", "KL049", ""])
+                         ["KL023", "KL008", "KL038", "KL026", "KL013", "KL049"])
         self.assertEqual(mengen(pos), {"KL023": 1, "KL008": 1, "KL038": 1, "KL026": 3,
                                        "KL013": 3, "KL049": 1})
         nach_nr = {p["pos_nr"]: p for p in pos}
@@ -370,15 +376,13 @@ class RechenwegAttrappe(unittest.TestCase):
         self.assertEqual(netto_cent(pos), 651866)                    # 6.518,66 €
         self.assertEqual(int(round(651866 * 19 / 100)), 123855)       # USt 1.238,55 €
         # Blöcke und Gruppe „Klimaanlage Bosch“ (Block 3)
-        self.assertEqual([p["block_nr"] for p in pos], [1, 2, 3, 3, 3, 3, 3])
+        self.assertEqual([p["block_nr"] for p in pos], [1, 2, 3, 3, 3, 3])
         self.assertEqual({p["gruppe"] for p in pos if p["block_nr"] == 3}, {"Klimaanlage Bosch"})
         self.assertEqual({p["gruppe"] for p in pos if p["block_nr"] < 3}, {""})
-        # Auslegungszeile als LETZTE Zeile von Block 3
-        letzte = pos[-1]
-        self.assertEqual((letzte["bezeichnung"], letzte["e_preis_cent"], letzte["menge"],
-                          letzte["einheit"], letzte["ep_flag"], letzte["block_nr"]),
-                         ("Auslegung der Klimaanlage", 0, 1.0, "psl.", False, 3))
-        text = letzte["beschreibung"]
+        # v34: Auslegungstext (vormals letzte Zeile von Block 3) über auslegungs_text
+        self.assertEqual(pos[-1]["pos_nr"], "KL049")
+        text = kl_auslegung.auslegungs_text(kl_auslegung.auslegen(self.logik, fall_a(),
+                                                                  self.artikel_namen()))
         self.assertEqual(text.splitlines()[0], "Auslegung Klimaanlage – Serie Bosch Climate 3200i")
         self.assertIn("Raum 1 „Wohnzimmer“: 25,0 m² × 1,0 × 60 W/m² = 1,50 kW → Innengerät "
                       "2,6 kW (Klasse 9), Außengerät 1", text)
@@ -389,7 +393,7 @@ class RechenwegAttrappe(unittest.TestCase):
                       "5 m je Innengerät enthalten.", text)
         self.assertTrue(text.endswith("Auslegung nach Raumfläche; verbindliche Festlegung in "
                                       "der technischen Feinplanung vor Ort."))
-        self.assertEqual([p["sort"] for p in pos], list(range(1, 8)))
+        self.assertEqual([p["sort"] for p in pos], list(range(1, 7)))   # v34: 6 Positionen
 
     # -- Fall B -------------------------------------------------------------------
     def test_fall_b(self):
@@ -400,9 +404,9 @@ class RechenwegAttrappe(unittest.TestCase):
         self.assertEqual((g.typ, g.artikel, g.kombination), ("single", ["KL035"], ""))
         self.assertEqual((a.montage_ref, a.ampeln), ("KL020", []))
         pos = self.positionen(fall_b())
-        self.assertEqual([p["pos_nr"] for p in pos],
+        self.assertEqual([p["pos_nr"] for p in pos],                  # v34: ohne Auslegungszeile
                          ["KL020", "KL019", "KL016", "KL014", "KL017", "KL050", "KL001",
-                          "KL035", "KL049", ""])
+                          "KL035", "KL049"])
         m = mengen(pos)
         self.assertEqual(m["KL017"], 5)
         self.assertNotIn("KL013", m)
@@ -410,7 +414,9 @@ class RechenwegAttrappe(unittest.TestCase):
         self.assertEqual(netto_cent(pos), 549500)                    # 5.495,00 €
         self.assertEqual(int(round(549500 * 19 / 100)), 104405)
         self.assertIn("Außengerät 1: Bosch CL3200i-Set 35 WE Single-Split, Single-Split, "
-                      "1 Innengerät", pos[-1]["beschreibung"])
+                      "1 Innengerät",
+                      kl_auslegung.auslegungs_text(kl_auslegung.auslegen(
+                          self.logik, fall_b(), self.artikel_namen())))
         # KE02/KE03 unsichtbar (KE01 = Ja)
         sichtbar = {f.id for f in engine.sichtbare_fragen(self.logik, fall_b())}
         self.assertNotIn("KE02", sichtbar)
@@ -713,18 +719,20 @@ class Einbindung(unittest.TestCase):
                          ("KL", 19.0, "{}"))
         su = angebot.summen()
         self.assertEqual(su["netto"], 651866)
-        # Toleranz ± 0,01 € (PLAN_V16 Phase 116): Angebot.summen() schneidet die USt
-        # ab (int), das Musterangebot rundet kaufmännisch (1.238,55 / 7.757,21)
-        self.assertAlmostEqual(su["ust"], 123855, delta=1)
-        self.assertAlmostEqual(su["brutto"], 775721, delta=1)
-        self.assertEqual([p.pos_nr for p in angebot.positionen],
-                         ["KL023", "KL008", "KL038", "KL026", "KL013", "KL049", ""])
+        # v34 (PLAN_V21 Phase 180, R7): Angebot.summen() rundet die USt kaufmännisch wie das
+        # Musterangebot – exakt 1.238,55 / 7.757,21 (bis v33 Toleranz ± 0,01 €)
+        self.assertEqual(su["ust"], 123855)
+        self.assertEqual(su["brutto"], 775721)
+        self.assertEqual([p.pos_nr for p in angebot.positionen],      # v34: ohne Auslegungszeile
+                         ["KL023", "KL008", "KL038", "KL026", "KL013", "KL049"])
         kl = json.loads(angebot.kl_json)
         self.assertEqual(kl["aussengeraete"][0]["kombination"], "9+9+9")
         self.assertEqual(kl["montage_ref"], "KL023")
         self.assertEqual({p.gruppe for p in angebot.positionen if p.block_nr == 3},
                          {"Klimaanlage Bosch"})
-        self.assertEqual(angebot.positionen[-1].bezeichnung, "Auslegung der Klimaanlage")
+        # v34: Auslegungstext im Feld (Editor „Auslegung (intern)“) statt als letzte Position
+        self.assertEqual(angebot.positionen[-1].pos_nr, "KL049")
+        self.assertTrue(angebot.auslegung_text.startswith("Auslegung Klimaanlage – Serie Bosch"))
         # keine WP-Artikel 014–017 (positionsregeln_anwenden, Agent D)
         self.assertFalse({"014", "015", "016", "017"} & {p.pos_nr for p in angebot.positionen})
         # Fall B

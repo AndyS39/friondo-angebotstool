@@ -45,6 +45,8 @@ def _parametrierung_kontext(session: Session) -> dict:
         pv_fehlende = [name for name in pv_fehlende if name in pv_neue]
         # v24 (PLAN_V16 Phase 113/115): fehlende KL-Parameter mit Standardwert
         kl_fehlende = logik_modul.kl_parameter_fehlende(logik) if logik.kl_aktionen else []
+        # v34 (PLAN_V21 Phase 178): fehlende WB-Parameter mit Standardwert
+        wb_fehlende = logik_modul.wb_parameter_fehlende(logik) if logik.wb_aktionen else []
         logik_werte = dict(
             logik=logik, bericht=bericht, dateifehler=None,
             pv_fehlende=pv_fehlende,
@@ -52,16 +54,23 @@ def _parametrierung_kontext(session: Session) -> dict:
                          for name in pv_fehlende},
             kl_fehlende=kl_fehlende,
             kl_standard={name: logik_modul.kl_standardwert_text(name)
-                         for name in kl_fehlende})
+                         for name in kl_fehlende},
+            wb_fehlende=wb_fehlende,
+            wb_standard={name: logik_modul.wb_standardwert_text(name)
+                         for name in wb_fehlende})
     else:
         logik_werte = dict(logik=None, bericht=None, dateifehler=str(config.LOGIK_EXCEL_PFAD),
-                           pv_fehlende=[], pv_standard={}, kl_fehlende=[], kl_standard={})
+                           pv_fehlende=[], pv_standard={}, kl_fehlende=[], kl_standard={},
+                           wb_fehlende=[], wb_standard={})
     # v32 (PLAN_V19 Phase 162/163): Werktage der automatischen Wiedervorlage nach Versand
     # (Lead-Parameter, Startwerte in leadmanagement.PARAMETER_START)
-    from app import leadmanagement
+    from app import import_preisliste, leadmanagement
     return dict(
         **logik_werte,
         kl_import_ok=_import_klima() is not None,
+        # v34 (PLAN_V21 Phase 178): Wallbox-Import – Modul, Dateien, Hinweistext
+        **_wb_kontext(session),
+        wb_hinweis=import_preisliste.import_hinweis(session, "wallbox"),
         ablehnungsgruende=(session.query(AblehnungsGrund)
                            .order_by(AblehnungsGrund.sort, AblehnungsGrund.id).all()),
         ablehnung_tage=einstellung_holen(session, "ablehnung_auto_tage", "90"),
@@ -972,6 +981,138 @@ def kl_logik_seite(request: Request, session: Session = Depends(get_session)):
                   ek_sichtbar=benutzer is not None and benutzer.basisrolle != "aussendienst",
                   kl_import_ok=_import_klima() is not None,
                   # v27 (Phase 128): Hinweis „Dauer etwa <n> s …“ für die Import-Buttons
+                  import_hinweise=import_preisliste.import_hinweise(session),
+                  meldung=request.query_params.get("meldung", ""))
+
+
+# --- v34 (PLAN_V21 Phase 178): Wallbox-Konfigurator ------------------------------------
+
+def _import_wallbox():
+    """Wallbox-Import (app/import_wallbox.py) lazy laden – fehlt das Modul, bleibt die
+    Parametrierung nutzbar und der Knopf meldet es."""
+    try:
+        from app import import_wallbox
+    except ImportError:
+        return None
+    return import_wallbox
+
+
+def _wb_kontext(session: Session) -> dict:
+    """Kontext für Logik & Importe / Lesesicht: Modul vorhanden, Ordner, fehlende Dateien."""
+    modul = _import_wallbox()
+    if modul is None:
+        return dict(wb_import_ok=False, wb_ordner="", wb_dateien_fehlen=[])
+    ordner = modul.wb_ordner()
+    _ok, fehlend = modul.dateien_vorhanden(ordner)
+    return dict(wb_import_ok=True, wb_ordner=str(ordner), wb_dateien_fehlen=fehlend)
+
+
+def _wb_zurueck(meldung: str, ziel: str = "/parametrierung/logik") -> RedirectResponse:
+    from urllib.parse import quote_plus
+    return RedirectResponse(f"{ziel}?meldung={quote_plus(meldung)}", status_code=303)
+
+
+def _ist_wb_meldung(text: str) -> bool:
+    """Prüfmeldungen des Wallbox-Konfigurators (Lesesicht zeigt nur diese)."""
+    import re
+    return bool(re.search(r"\bWB\b|WB\d{3}|Wallbox|Fragen WB|Aktionen WB|Angebotsaufbau WB|"
+                          r"WB-Parameter|WB-Artikel", text))
+
+
+@router.get("/artikel/wb-import")
+def wb_import_vorschau(request: Request, session: Session = Depends(get_session)):
+    """Vorschau „Artikel → Wallbox-Positionslisten importieren“ (Ordner
+    Artikel-Preislisten/Wallbox/): Diff, Import-Protokoll (Datei, Position, WB-Nr., VK,
+    GUID-Wechsel – nie EK) und Preiskonflikte; gespeichert wird erst mit „Import
+    ausführen“ (POST). Fehlen die Dateien, zeigt die Seite den Hinweis statt abzustürzen."""
+    from app import import_preisliste
+    modul = _import_wallbox()
+    hinweis = import_preisliste.import_hinweis(session, "wallbox")
+    meldung = request.query_params.get("meldung", "")
+    if modul is None:
+        return render(request, "konfiguration/wb_import.html", aktiv="/parametrierung",
+                      diff=None, dateifehler=[], modul_fehlt=True, ordner="",
+                      hinweis=hinweis, meldung=meldung)
+    ordner = modul.wb_ordner()
+    _ok, fehlend = modul.dateien_vorhanden(ordner)
+    if fehlend:
+        return render(request, "konfiguration/wb_import.html", aktiv="/parametrierung",
+                      diff=None, dateifehler=[str(ordner / name) for name in fehlend],
+                      modul_fehlt=False, ordner=str(ordner), hinweis=hinweis, meldung=meldung)
+    try:
+        diff = modul.berechne_diff(session)
+    except (OSError, ValueError) as exc:   # Positionsliste nicht lesbar – kein Absturz
+        return render(request, "konfiguration/wb_import.html", aktiv="/parametrierung",
+                      diff=None, dateifehler=[f"{ordner}: {exc}"], modul_fehlt=False,
+                      ordner=str(ordner), hinweis=hinweis, meldung=meldung)
+    return render(request, "konfiguration/wb_import.html", aktiv="/parametrierung",
+                  diff=diff, dateifehler=[], modul_fehlt=False, ordner=str(ordner),
+                  hinweis=hinweis, meldung=meldung)
+
+
+@router.post("/artikel/wb-import")
+def wb_import_ausfuehren(request: Request, session: Session = Depends(get_session)):
+    """Knopf „Artikel → Wallbox-Positionslisten importieren“: WB001–WB008 anlegen/
+    aktualisieren (Anker Blatt „WB-Artikel“: Datei + Position + Beschreibungsanfang),
+    danach die Logik neu einlesen (WB-Referenzen gegen den Artikelstamm, WB-Sicht wird
+    Konfigurator). v27: nur mit bestätigtem Hinweis (Feld „bestaetigt“), Dauer als
+    Einstellung import_dauer_wallbox. Einstellung `wb_guid_nachfuehren` (Standard 0 – Orchestrator 15.10.2026: die Logik-Excel ist git-versioniert)
+    schreibt die aktuellen Angebots-GUIDs in die Spalte „GUID (zuletzt gesehen)“ der
+    Logik-Excel (0 = aus, z. B. auf dem Server mit git-versionierter Excel)."""
+    import time
+
+    from app import import_preisliste
+    from app.models import einstellung_holen
+    modul = _import_wallbox()
+    if modul is None:
+        return _wb_zurueck("Wallbox-Import nicht verfügbar – app/import_wallbox.py fehlt.")
+    if not import_preisliste.import_bestaetigt(anfrage.formular(request)):
+        return _wb_zurueck(import_preisliste.HINWEIS_BESTAETIGEN)
+    _ok, fehlend = modul.dateien_vorhanden()
+    if fehlend:
+        return _wb_zurueck("Wallbox-Preislisten fehlen – Import übersprungen "
+                           f"(Artikel-Preislisten/Wallbox/: {', '.join(fehlend)}).")
+    nachfuehren = einstellung_holen(session, "wb_guid_nachfuehren", "0") == "1"   # v34: Standard aus (Excel ist git-versioniert)
+    start = time.perf_counter()
+    try:
+        diff, meldung = modul.import_ausfuehren(session, guid_nachfuehren=nachfuehren)
+    except (OSError, ValueError) as exc:   # Positionsliste nicht lesbar – kein Absturz der Seite
+        session.rollback()
+        return _wb_zurueck(f"Wallbox-Import fehlgeschlagen: {exc}")
+    logik_modul.neu_einlesen(session)
+    import_preisliste.import_dauer_merken(session, "wallbox", start)
+    zusatz = (" – " + diff.konflikte[0]) if diff.konflikte else ""
+    return _wb_zurueck(f"Wallbox-Import abgeschlossen: {meldung}{zusatz}",
+                       ziel="/parametrierung/wb-logik")
+
+
+@router.get("/wb-logik")
+def wb_logik_seite(request: Request, session: Session = Depends(get_session)):
+    """Lesesicht des Wallbox-Konfigurators: Fragen WB, Aktionen WB, Angebotsaufbau WB,
+    WB-Parameter und die WB-Artikel (Blatt + Artikelstamm, Filter Sparte WB = pos_nr WB*).
+    Nur Anzeige – Live-Master bleibt die Logik-Excel; der Außendienst sieht nie EK."""
+    if not config.LOGIK_EXCEL_PFAD.exists():
+        return RedirectResponse("/parametrierung", status_code=303)
+    from app import import_preisliste
+    from app.models import Artikel
+    logik, bericht = logik_modul.hole_logik(session)
+    bestand: dict[str, Artikel] = {}
+    for artikel in (session.query(Artikel).filter(Artikel.pos_nr.like("WB%"))
+                    .order_by(Artikel.aktiv.desc(), Artikel.pos_nr, Artikel.id)):
+        bestand.setdefault(artikel.pos_nr, artikel)
+    benutzer = request.state.benutzer
+    wb_fehlende = logik_modul.wb_parameter_fehlende(logik) if logik.wb_aktionen else []
+    return render(request, "konfiguration/wb_logik.html", aktiv="/parametrierung",
+                  logik=logik, bericht=bericht, bestand=bestand,
+                  wb_fragen=logik.sparten_fragen.get("WB", {}),
+                  wb_fehler=[f for f in bericht.fehler if _ist_wb_meldung(f)],
+                  wb_warnungen=[w for w in bericht.warnungen if _ist_wb_meldung(w)],
+                  wb_fehlende=wb_fehlende,
+                  wb_standard={name: logik_modul.wb_standardwert_text(name)
+                               for name in wb_fehlende},
+                  ek_sichtbar=benutzer is not None and benutzer.basisrolle != "aussendienst",
+                  **_wb_kontext(session),
+                  wb_hinweis=import_preisliste.import_hinweis(session, "wallbox"),
                   import_hinweise=import_preisliste.import_hinweise(session),
                   meldung=request.query_params.get("meldung", ""))
 

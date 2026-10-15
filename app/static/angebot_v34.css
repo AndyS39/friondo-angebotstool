@@ -1,0 +1,61 @@
+/* v34 (PLAN_V21 Phase 180, Agent E): Angebots-Editor – Alternativ-Kennzeichen „in anderem
+   Angebot enthalten“ klar abgegrenzt (farbiger linker Balken + Badge mit Link zum
+   Geschwister-Angebot; Eventualpositionen behalten ihr Badge „EP“), Knöpfe „Elektroarbeiten
+   ins PV-Angebot (0 % USt)“ / „zurückholen“, Hinweis „Geschwister-Angebot nicht mehr gültig“,
+   aufklappbarer grauer Hinweis „Auslegung (intern)“. Nur semantische Tokens aus den drei
+   Token-Blöcken von style.css (--alternativ, --alternativ-flaeche, Status-Tokens) – keine
+   festen Farbwerte. Eingebunden über <link> in templates/angebote/editor.html. */
+
+/* --- Alternativ-Positionszeile ------------------------------------------------------- */
+.positionen tr.alternativ > td { background: var(--alternativ-flaeche); }
+.positionen tr.alternativ > td:first-child { box-shadow: inset 4px 0 0 var(--alternativ); }
+.positionen tr.alternativ:hover > td { background: color-mix(in srgb, var(--alternativ-flaeche) 70%, var(--flaeche-hover)); }
+.abzeichen.alternativ-badge {
+    background: var(--alternativ-flaeche);
+    color: var(--alternativ);
+    border: 1px solid var(--alternativ);
+    font-weight: 600;
+    white-space: nowrap;
+}
+.abzeichen.alternativ-badge a { color: inherit; text-decoration: underline; }
+.abzeichen.alternativ-badge.ungueltig { border-style: dashed; color: var(--status-rot); border-color: var(--status-rot); background: var(--status-rot-bg); }
+.alternativ-gpreis { color: var(--alternativ); font-weight: 600; white-space: nowrap; }
+.uebernommen-hinweis { color: var(--text-dezent); font-size: var(--t-xs); }
+
+/* --- Elektroarbeiten ins PV-Angebot ---------------------------------------------------- */
+.elektro-block {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--a-2);
+    margin: var(--a-2) 0;
+    padding: var(--a-2) var(--a-3);
+    border: 1px solid var(--alternativ);
+    border-left-width: 4px;
+    border-radius: var(--r-m);
+    background: var(--alternativ-flaeche);
+    color: var(--text);
+}
+.elektro-block form { display: inline; margin: 0; }
+.elektro-block .knopf.elektro-knopf { background: var(--alternativ); color: var(--text-auf-farbe); }
+.elektro-block .knopf.elektro-knopf:hover { background: color-mix(in srgb, var(--alternativ), black 12%); color: var(--text-auf-farbe); }
+.elektro-block .dezent { flex: 1 1 18rem; }
+.alternativ-warnung ul { margin: 0.3rem 0 0 1.2rem; }
+
+/* --- Auslegung (intern) ----------------------------------------------------------------- */
+details.auslegung-intern {
+    margin: var(--a-2) 0;
+    padding: 0.3rem var(--a-3);
+    border: 1px dashed var(--linie);
+    border-radius: var(--r-m);
+    background: var(--flaeche-abgesetzt);
+    color: var(--text-dezent);
+}
+details.auslegung-intern summary { cursor: pointer; font-weight: 600; color: var(--text-dezent); }
+details.auslegung-intern .auslegung-text {
+    margin: 0.4rem 0 0.2rem;
+    white-space: pre-wrap;
+    font-family: inherit;
+    font-size: var(--t-s);
+    color: var(--text-dezent);
+}

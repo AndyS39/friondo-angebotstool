@@ -8,6 +8,10 @@
 # „Angebotsaufbau KL“, „Paketmatrix KL“, „Kombinationen KL“, „Montagematrix KL“,
 # „KL-Parameter“, „KL-Artikel“ (_kl_einlesen/_kl_pruefen, Felder kl_* der Logik,
 # Sicht logik_fuer_sparte(logik, "KL")); Rechenweg in app/kl_auslegung.py.
+# v34 (PLAN_V21 Phase 178): Wallbox-Konfigurator – Blätter „Aktionen WB“,
+# „Angebotsaufbau WB“, „WB-Parameter“, „WB-Artikel“ (Anker Datei + Position +
+# Beschreibungsanfang statt GUID), Mengenwort „× Mehrlänge“ in refs_extrahieren,
+# Sicht logik_fuer_sparte(logik, "WB"); Rechenweg in app/wb_auslegung.py.
 
 import re
 from dataclasses import dataclass, field
@@ -224,6 +228,19 @@ class Logik:
     kl_artikel: dict[str, str] = field(default_factory=dict)      # GUID → KL-Nr. (Pinning)
     kl_artikel_nummern: list[str] = field(default_factory=list)   # alle KL-Nr. des Blatts
     kl_artikel_zeilen: list[dict] = field(default_factory=list)   # Rohzeilen (Lesesicht)
+    # v34 (PLAN_V21 Phase 178): Wallbox-Konfigurator – Blätter „Aktionen WB“,
+    # „Angebotsaufbau WB“, „WB-Parameter“, „WB-Artikel“ (Schnittstelle zu
+    # app/wb_auslegung.py und app/import_wallbox.py)
+    wb_aktionen: list[Aktion] = field(default_factory=list)
+    wb_bloecke: list[AngebotsBlock] = field(default_factory=list)
+    wb_parameter: dict[str, tuple[str, str]] = field(default_factory=dict)
+    wb_parameter_einheit: dict[str, str] = field(default_factory=dict)
+    wb_artikel: dict[str, dict] = field(default_factory=dict)     # WB-Nr. → Ankerzeile (Datei, Position, Anfang, GUID …)
+    wb_artikel_nummern: list[str] = field(default_factory=list)   # alle WB-Nr. des Blatts
+    wb_artikel_zeilen: list[dict] = field(default_factory=list)   # Rohzeilen (Lesesicht)
+    # gesetzt von artikel_pruefen: noch kein WB-Artikel im Artikelstamm (Import nicht
+    # gelaufen) – die WB-Sicht bleibt dann ein reiner Erfassungsbogen (TAIFUN-Schiene)
+    wb_artikel_fehlen: bool = False
 
     @property
     def seiten(self) -> list[str]:
@@ -292,6 +309,19 @@ def refs_extrahieren(text: str) -> list[ArtikelRef]:
         menge = re.sub(r"\s+(als EP|je)\b.*$", "", menge).strip() or "1"
         ep_nach = bool(re.match(r"[^+·]*\bals EP\b", rest))
         gefunden.append((m.start(), ArtikelRef(f"KL{m.group(1)}", menge,
+                                               bool(m.group(2)) or ep_nach)))
+
+    # v34 (PLAN_V21 Phase 178): Wallbox-Artikel „WB005“, optional „(EP)“; Menge als
+    # Zahl („×1“) oder Mengenwort „× Mehrlänge“ (= WB02 − leitung_inklusive_m, ganze
+    # Meter), „× WB04“ (Zahl der Frage), „× (WB07 − 2)“ (Zahl der Frage minus Abzug) –
+    # aufgelöst in app/wb_auslegung.py; bleibt hier als Text in menge
+    for m in re.finditer(r"\bWB(\d{3})\b(\s*\(EP\))?", text):
+        rest = text[m.end():]
+        m_menge = re.match(menge_muster, rest)
+        menge = m_menge.group(1).strip() if m_menge else "1"
+        menge = re.sub(r"\s+(als EP|je)\b.*$", "", menge).strip() or "1"
+        ep_nach = bool(re.match(r"[^+·]*\bals EP\b", rest))
+        gefunden.append((m.start(), ArtikelRef(f"WB{m.group(1)}", menge,
                                                bool(m.group(2)) or ep_nach)))
 
     for m in re.finditer(r"\bZ(\d{2})\b(?:\s*[–-]\s*Z(\d{2}))?", text):
@@ -397,7 +427,8 @@ def logik_einlesen() -> tuple[Logik, Pruefbericht]:
 
     # v8: reine Erfassungsbögen PV/KL (eigene Blätter, ohne Artikel-Aktionen)
     sparten_fragen: dict[str, dict[str, Frage]] = {}
-    for sparte, blatt in (("PV", "Fragen PV"), ("KL", "Fragen KL")):
+    # v34 (PLAN_V21 Phase 178): „Fragen WB“ – fehlt das Blatt, bleibt WB Freitext
+    for sparte, blatt in (("PV", "Fragen PV"), ("KL", "Fragen KL"), ("WB", "Fragen WB")):
         if blatt not in wb.sheetnames:
             bericht.warnungen.append(
                 f"Blatt „{blatt}“ fehlt – die {sparte}-Erfassung läuft nur als Freitext.")
@@ -412,6 +443,7 @@ def logik_einlesen() -> tuple[Logik, Pruefbericht]:
         _bedingungen_pruefen(sfragen, bericht, f"Fragen {sparte}")
     _pv_einlesen(wb, logik, bericht)   # v13-PV
     _kl_einlesen(wb, logik, bericht)   # v24 Klimakonfigurator
+    _wb_einlesen(wb, logik, bericht)   # v34 Wallbox-Konfigurator
     return logik, bericht
 
 
@@ -1047,6 +1079,343 @@ def _kl_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
         bericht.fehler.append("Angebotsaufbau KL: kein Block mit Nummer.")
 
 
+# --- v34 (PLAN_V21 Phase 178): Wallbox-Konfigurator ---------------------------------
+
+# Spezialzeilen im Blatt „Aktionen WB“ (keine Frage des Bogens): „Grundpaket“ /
+# „immer“ (Anschlussvorbereitung WB003, Netzanmeldung WB004), „Händisch“ (nur Editor)
+WB_SPEZIAL = {"Grundpaket", "immer", "Händisch", "Gruppen-Trigger", "Ampel-Auswertung"}
+
+# Pflichtzeilen des Blatts „WB-Parameter“ (Namen wörtlich aus PLAN_V21 Phase 178) mit
+# Standardwerten – nur Fallback: fehlt eine Zeile, meldet die Validierung sie als
+# Hinweis mit dem Standardwert; ein unlesbarer Wert ist ein Fehler.
+STANDARD_WB_PARAMETER: dict[str, str] = {
+    "leitung_inklusive_m": "10",
+    "meterposition_leitung": "WB005",
+    "erdarbeiten_position": "WB006",      # Nachtrag 15.10.2026: Erdarbeiten × WB04
+    "fundament_position": "WB007",        # Nachtrag 15.10.2026: Säule → Fundament/Standsäule
+    "durchbrueche_inklusive": "2",        # Ergänzung 15.10.2026: Durchbrüche in WB003 enthalten
+    "durchbruch_position": "WB008",       # Ergänzung 15.10.2026: WB07 > 2 → WB008 × (WB07 − 2)
+    "wallbox_standard": "",
+}
+PFLICHT_WB_PARAMETER = list(STANDARD_WB_PARAMETER)
+WB_POSITIONS_PARAMETER = ("meterposition_leitung", "erdarbeiten_position", "fundament_position",
+                          "durchbruch_position")
+WB_ZAHL_PARAMETER = ("leitung_inklusive_m", "durchbrueche_inklusive")
+WB_PFLICHT_BLAETTER = ("Angebotsaufbau WB", "WB-Parameter", "WB-Artikel")
+# Fragen, ohne die der Rechenkern (app/wb_auslegung.py) nicht arbeiten kann (Nachtrag
+# 15.10.2026: WB03 Erdarbeiten Ja/Nein, WB04 Meter Erdarbeiten, WB05 Wandmontage/Säule,
+# WB07 Anzahl Durchbrüche; WB06 bleibt unbelegt, WB08 = Bemerkung)
+WB_PFLICHT_FRAGEN = {"WB01": "Auswahl", "WB02": "Zahleneingabe", "WB03": "Auswahl",
+                     "WB04": "Zahleneingabe", "WB05": "Auswahl", "WB07": "Zahleneingabe"}
+# Schwellen „über N“ im Blatt Aktionen WB, die zu einem Parameter gehören
+WB_SCHWELLEN = {"WB02": "leitung_inklusive_m", "WB07": "durchbrueche_inklusive"}
+WB_ARTIKEL_KOPF = ("WB-Nr.", "Datei", "Position", "Beschreibungsanfang",
+                   "GUID (zuletzt gesehen)", "Einheit", "Bemerkung")
+
+
+def wb_standardwert_text(name: str) -> str:
+    """Standardwert eines WB-Parameters als Anzeigetext (Parametrierung); „(leer)“
+    für wallbox_standard."""
+    return STANDARD_WB_PARAMETER.get(name, "") or "(leer)"
+
+
+def wb_parameter_fehlende(logik: Logik) -> list[str]:
+    """Pflichtzeilen des Blatts „WB-Parameter“, die als Zeile fehlen (Parametrierung
+    zeigt sie mit dem Standardwert an); wallbox_standard darf leer sein."""
+    return [name for name in PFLICHT_WB_PARAMETER if name not in logik.wb_parameter]
+
+
+def _wb_zahl(text) -> Optional[float]:
+    """Parameterwert als Zahl: „10“ / „10,5“ / „10 m“."""
+    t = re.sub(r"\s*m\s*$", "", str(text or "").strip())
+    return _pv_zahl(t)
+
+
+def _wb_einlesen(wb, logik: Logik, bericht: Pruefbericht) -> None:
+    """Blätter des Wallbox-Konfigurators. Fehlt „Aktionen WB“, bleibt WB ein reiner
+    Freitext-/Erfassungsweg (TAIFUN-Schiene); mit „Aktionen WB“ sind die übrigen
+    WB-Blätter Pflicht (wie bei PV/KL)."""
+    if "Aktionen WB" not in wb.sheetnames:
+        return
+    fehlend = [blatt for blatt in WB_PFLICHT_BLAETTER if blatt not in wb.sheetnames]
+    if fehlend:
+        for blatt in fehlend:
+            bericht.fehler.append(f"Blatt „{blatt}“ fehlt (Pflicht zu „Aktionen WB“).")
+        return
+    _wb_aktionen_einlesen(wb, logik, bericht)
+    _wb_aufbau_einlesen(wb, logik, bericht)
+    _wb_parameter_einlesen(wb, logik)
+    _wb_artikel_einlesen(wb, logik, bericht)
+    _wb_pruefen(logik, bericht)
+
+
+def _wb_aktionen_einlesen(wb, logik: Logik, bericht: Pruefbericht) -> None:
+    """Blatt „Aktionen WB“ (Frage · Antwort · Aktion · Bemerkung · Zusatzbedingung).
+    Schreibweisen (PLAN_V21 Phase 178): „Artikel: WB001 ×1“ · „Artikel: WB005 ×
+    Mehrlänge“ · „Hinweis: <Text>“ (fachlicher Hinweis, typ „hinweis“) · „–“."""
+    for row in wb["Aktionen WB"].iter_rows(min_row=2, values_only=True):
+        frage, antwort, aktion_roh, bemerkung, zusatz = (
+            _zelle(v) for v in (tuple(row) + (None,) * 5)[:5])
+        if not frage:
+            continue
+        m_hinweis = re.match(r"(?:Fachlicher\s+Hinweis|Protokollhinweis|Hinweis)\s*:\s*(.+)$",
+                             aktion_roh, re.S)
+        if aktion_roh.startswith("AMPEL"):
+            m = re.search(r"Grund:\s*(.+)$", aktion_roh)
+            typ, grund = "ampel", (m.group(1).strip() if m else aktion_roh)
+            refs = refs_extrahieren(aktion_roh)
+        elif m_hinweis:
+            typ, grund, refs = "hinweis", m_hinweis.group(1).strip(), []
+        else:
+            typ, grund = "normal", ""
+            refs = [] if re.search(r"\blt\.\s", aktion_roh) else refs_extrahieren(aktion_roh)
+        zusatz_b = None
+        if zusatz:
+            zusatz_b = bedingung_parsen(zusatz)
+            if zusatz_b is None:
+                bericht.fehler.append(
+                    f"Aktionen WB {frage}: Zusatzbedingung „{zusatz}“ nicht parsebar.")
+        logik.wb_aktionen.append(Aktion(frage, antwort, aktion_roh, typ, grund, refs,
+                                        bemerkung, zusatz_b))
+
+
+def _wb_aufbau_einlesen(wb, logik: Logik, bericht: Pruefbericht) -> None:
+    """Blatt „Angebotsaufbau WB“ (Block · Überschrift · Inhalt · Wann) – nur Zeilen
+    mit Blocknummer (Summenblock, Nachtexte, Anhänge, Protokoll bleiben Dokumentation).
+    Die Reihenfolge der WB-Nummern im Inhalt ist die Sortierung im Block."""
+    for row in wb["Angebotsaufbau WB"].iter_rows(min_row=2, values_only=True):
+        nr, ueberschrift, inhalt, wann = (_zelle(v) for v in (tuple(row) + (None,) * 4)[:4])
+        if not nr:
+            continue
+        try:
+            block_nr = int(float(nr))
+        except ValueError:
+            continue
+        bedingung = bedingung_parsen(wann)
+        if bedingung is None:
+            bericht.fehler.append(
+                f"Angebotsaufbau WB Block {block_nr}: Bedingung „{wann}“ nicht parsebar.")
+        refs = refs_extrahieren(inhalt)
+        if not refs:
+            bericht.fehler.append(
+                f"Angebotsaufbau WB Block {block_nr}: Inhalt nennt keine WB-Nummer "
+                "(jede Position muss ausdrücklich stehen, z. B. „WB003 · WB005 …“).")
+        logik.wb_bloecke.append(AngebotsBlock(block_nr, ueberschrift, inhalt, bedingung, refs))
+
+
+def _wb_parameter_einlesen(wb, logik: Logik) -> None:
+    """Blatt „WB-Parameter“ (Parameter · Wert · Einheit · Bemerkung)."""
+    for row in wb["WB-Parameter"].iter_rows(min_row=2, values_only=True):
+        name, wert, einheit, bemerkung = (_zelle(v) for v in (tuple(row) + (None,) * 4)[:4])
+        if name:
+            logik.wb_parameter[name] = (wert, bemerkung)
+            logik.wb_parameter_einheit[name] = einheit
+
+
+def _wb_artikel_einlesen(wb, logik: Logik, bericht: Pruefbericht) -> None:
+    """Blatt „WB-Artikel“ (WB-Nr. · Datei · Position · Beschreibungsanfang · GUID
+    (zuletzt gesehen) · Einheit · Bemerkung): Anker für app/import_wallbox.py ist
+    Datei + Position (+ Beschreibungsanfang) – die GUIDs der TAIFUN-Exporte sind
+    Angebots-GUIDs und je Export verschieden (nur dokumentiert)."""
+    zeilen = wb["WB-Artikel"].iter_rows(values_only=True)
+    kopf = [_zelle(z) for z in next(zeilen, [])]
+    for pflicht in ("WB-Nr.", "Datei", "Position", "Beschreibungsanfang"):
+        if pflicht not in kopf:
+            bericht.fehler.append(f"WB-Artikel: Kopfzeile ohne die Spalte „{pflicht}“.")
+            return
+    spalten = {name: kopf.index(name) for name in kopf if name}
+
+    def wert(row, name) -> str:
+        i = spalten.get(name)
+        return _zelle(row[i]) if i is not None and i < len(row) else ""
+
+    for zeile, row in enumerate(zeilen, 2):
+        row = tuple(row)
+        nr = wert(row, "WB-Nr.")
+        if not nr:
+            continue
+        if re.fullmatch(r"WB\d{3}", nr) is None:
+            bericht.fehler.append(f"WB-Artikel Zeile {zeile}: „{nr}“ ist keine WB-Nummer.")
+            continue
+        if nr in logik.wb_artikel_nummern:
+            bericht.fehler.append(f"WB-Artikel: Nummer {nr} doppelt (Zeile {zeile}).")
+            continue
+        eintrag = {
+            "nr": nr, "datei": wert(row, "Datei"), "position": wert(row, "Position"),
+            "anfang": wert(row, "Beschreibungsanfang"), "guid": wert(row, "GUID (zuletzt gesehen)"),
+            "einheit": wert(row, "Einheit"), "bemerkung": wert(row, "Bemerkung"), "zeile": zeile,
+        }
+        if not eintrag["datei"] or not eintrag["position"]:
+            bericht.fehler.append(
+                f"WB-Artikel {nr}: Datei und Position sind Pflicht (Anker des Imports).")
+        if not eintrag["anfang"]:
+            bericht.fehler.append(f"WB-Artikel {nr}: Beschreibungsanfang fehlt (Anker des Imports).")
+        logik.wb_artikel_nummern.append(nr)
+        logik.wb_artikel[nr] = eintrag
+        logik.wb_artikel_zeilen.append(eintrag)
+
+
+def wb_referenzen(logik: Logik) -> dict[str, list[str]]:
+    """Alle WB-Referenzen der Wallbox-Blätter mit Fundstellen (Validierung gegen das
+    Blatt „WB-Artikel“ und den Artikelstamm)."""
+    fundstellen: dict[str, list[str]] = {}
+
+    def merken(ref: str, quelle: str):
+        fundstellen.setdefault(ref, []).append(quelle)
+
+    for aktion in logik.wb_aktionen:
+        for ref in aktion.artikel:
+            merken(ref.ref, f"Aktionen WB {aktion.frage} („{aktion.antwort}“)")
+    for block in logik.wb_bloecke:
+        for ref in block.refs:
+            merken(ref.ref, f"Angebotsaufbau WB Block {block.nr}")
+    for name in WB_POSITIONS_PARAMETER:
+        wert = str(logik.wb_parameter.get(name, ("", ""))[0]).strip()
+        if re.fullmatch(r"WB\d{3}", wert):
+            merken(wert, f"WB-Parameter „{name}“")
+    return fundstellen
+
+
+def _wb_pruefen(logik: Logik, bericht: Pruefbericht) -> None:
+    """Validierung des Wallbox-Konfigurators (Parametrierung → „Logik prüfen“):
+    Pflichtfragen WB_PFLICHT_FRAGEN (WB01–WB05, WB07 mit Typ), Pflichtparameter (fehlend =
+    Hinweis mit Standardwert, unlesbar = Fehler), Aktionen gegen den Bogen „Fragen WB“,
+    Mengenwort „× Mehrlänge“ nur bei WB02, „× WB04“ / „× (WB07 − 2)“ nur mit Zahlenfragen,
+    Schwellen „über N“ = leitung_inklusive_m / durchbrueche_inklusive (sonst Hinweis), jede
+    WB-Referenz steht im Blatt „WB-Artikel“, Abdeckung der WB01-Optionen, Blöcke."""
+    fragen = logik.sparten_fragen.get("WB", {})
+    nummern = set(logik.wb_artikel_nummern)
+
+    for fid, typ in WB_PFLICHT_FRAGEN.items():
+        if fid not in fragen:
+            bericht.fehler.append(
+                f"Fragen WB: Frage {fid} fehlt – der Wallbox-Konfigurator (app/wb_auslegung.py) "
+                "braucht sie.")
+        elif fragen[fid].typ != typ:
+            bericht.fehler.append(f"Fragen WB {fid}: Typ muss „{typ}“ sein (ist „{fragen[fid].typ}“).")
+
+    # Parameter
+    for name in PFLICHT_WB_PARAMETER:
+        if name not in logik.wb_parameter:
+            bericht.warnungen.append(
+                f"WB-Parameter „{name}“ fehlt – Standardwert {wb_standardwert_text(name)} "
+                "wird verwendet (Wallbox v34).")
+            continue
+        wert = str(logik.wb_parameter[name][0]).strip()
+        if name in WB_ZAHL_PARAMETER:
+            zahl = _wb_zahl(wert)
+            if zahl is None or zahl < 0:
+                bericht.fehler.append(f"WB-Parameter „{name}“: „{wert}“ ist keine Zahl ≥ 0.")
+        elif name in WB_POSITIONS_PARAMETER:
+            if re.fullmatch(r"WB\d{3}", wert) is None:
+                bericht.fehler.append(f"WB-Parameter „{name}“: „{wert}“ ist keine WB-Nummer.")
+        elif name == "wallbox_standard" and wert and "WB01" in fragen:
+            if _alias_aufloesen(wert, fragen["WB01"].antworten) is None:
+                bericht.fehler.append(
+                    f"WB-Parameter „wallbox_standard“: „{wert}“ ist keine Option von WB01 "
+                    f"({' | '.join(fragen['WB01'].antworten)}).")
+
+    def schwelle_parameter(name: str) -> Optional[float]:
+        wert = _wb_zahl(str(logik.wb_parameter.get(name, ("", ""))[0]))
+        return wert if wert is not None else _wb_zahl(STANDARD_WB_PARAMETER[name])
+
+    # Aktionen: Frage bekannt, Antwort plausibel, Zusatzbedingung auflösbar, Mehrlänge nur WB02
+    for aktion in logik.wb_aktionen:
+        b = aktion.zusatz_bedingung
+        if b is not None:
+            terme = ([(b.frage_id, b.werte)] if b.art == "antwort"
+                     else [t for k in b.klauseln for t in k])
+            for fid, werte in terme:
+                if fid not in fragen:
+                    bericht.fehler.append(
+                        f"Aktionen WB {aktion.frage}: Zusatzbedingung verweist auf "
+                        f"unbekannte Frage {fid}.")
+                    continue
+                if fragen[fid].typ != "Auswahl":
+                    continue
+                for wert in werte:
+                    if _alias_aufloesen(wert, fragen[fid].antworten) is None:
+                        bericht.fehler.append(
+                            f"Aktionen WB {aktion.frage}: Zusatzbedingungswert „{wert}“ ist "
+                            f"keine Option von {fid}.")
+        mehrlaenge_refs = [r.ref for r in aktion.artikel if "mehrl" in r.menge.lower()]
+        if mehrlaenge_refs and aktion.frage != "WB02":
+            bericht.fehler.append(
+                f"Aktionen WB {aktion.frage}: Mengenwort „× Mehrlänge“ ({', '.join(mehrlaenge_refs)}) "
+                "ist nur bei WB02-Bedingungen erlaubt.")
+        # Nachtrag/Ergänzung 15.10.2026: Mengenwörter „× WB04“ (Zahl der Frage) und
+        # „× (WB07 − 2)“ (Zahl der Frage minus enthaltene Stück) verweisen auf Zahlenfragen
+        for ref in aktion.artikel:
+            m_frage = re.fullmatch(r"\(?\s*(WB\d{2})\s*(?:[−–-]\s*\d+\s*)?\)?", str(ref.menge or "").strip())
+            if m_frage is None:
+                continue
+            quelle = fragen.get(m_frage.group(1))
+            if quelle is None:
+                bericht.fehler.append(
+                    f"Aktionen WB {aktion.frage}: Mengenwort „× {ref.menge}“ ({ref.ref}) "
+                    "verweist auf eine unbekannte Frage.")
+            elif quelle.typ not in ZAHLEN_TYPEN:
+                bericht.fehler.append(
+                    f"Aktionen WB {aktion.frage}: Mengenwort „× {ref.menge}“ ({ref.ref}) – "
+                    f"{m_frage.group(1)} ist keine Zahleneingabe.")
+        # Schwellen „über N“ (WB02 ↔ leitung_inklusive_m, WB07 ↔ durchbrueche_inklusive) müssen
+        # zum Parameter passen – sonst Hinweis (der Rechenkern rechnet mit dem Parameter)
+        parameter_name = WB_SCHWELLEN.get(aktion.frage)
+        if parameter_name and aktion.artikel:
+            m = re.search(r"über\s*(\d[\d.,]*)", aktion.antwort)
+            schwelle = _wb_zahl(m.group(1)) if m else None
+            soll = schwelle_parameter(parameter_name)
+            if schwelle is not None and soll is not None and abs(schwelle - soll) > 1e-9:
+                bericht.warnungen.append(
+                    f"Aktionen WB {aktion.frage} „{aktion.antwort}“: die Schwelle weicht vom "
+                    f"WB-Parameter {parameter_name} ({_zelle(logik.wb_parameter.get(parameter_name, ('', ''))[0]) or STANDARD_WB_PARAMETER[parameter_name]}) ab – "
+                    "beide Werte gehören zusammen.")
+        if aktion.frage in WB_SPEZIAL:
+            continue
+        if aktion.frage not in fragen:
+            bericht.fehler.append(
+                f"Aktionen WB: unbekannte Frage „{aktion.frage}“ (Antwort „{aktion.antwort}“).")
+            continue
+        problem = _antwort_pruefen(fragen[aktion.frage], aktion.antwort, fragen)
+        if problem:
+            bericht.fehler.append(f"Aktionen WB {aktion.frage}: {problem}")
+    # Doppler-Schutz: Grundpaket-Artikel nicht zusätzlich über eine Fragezeile
+    immer_refs = {r.ref: a.frage for a in logik.wb_aktionen
+                  if a.frage in ("Grundpaket", "immer") for r in a.artikel}
+    for aktion in logik.wb_aktionen:
+        if aktion.typ != "normal" or aktion.frage in WB_SPEZIAL:
+            continue
+        for ref in aktion.artikel:
+            if ref.ref in immer_refs:
+                bericht.warnungen.append(
+                    f"Doppelte Artikelquelle WB: {ref.ref} kommt über „{immer_refs[ref.ref]}“ "
+                    f"UND über die Aktionszeile {aktion.frage} („{aktion.antwort}“) – "
+                    "der Artikel würde doppelt im Angebot landen.")
+    # Abdeckung: jede Option von WB01 braucht eine Aktionszeile
+    wb01 = fragen.get("WB01")
+    if wb01 is not None:
+        zeilen = [a for a in logik.wb_aktionen if a.frage == "WB01"]
+        abgedeckt = {o for a in zeilen for t in [a.antwort] + antwort_teile(a.antwort)
+                     if (o := _alias_aufloesen(t, wb01.antworten))}
+        fehlend = [o for o in wb01.antworten if o not in abgedeckt]
+        if fehlend:
+            bericht.warnungen.append(
+                f"Aktionen WB WB01: keine Aktionszeile für Option(en) {', '.join(fehlend)}.")
+        if not any(a.artikel for a in zeilen):
+            bericht.fehler.append("Aktionen WB WB01: keine Zeile mit Artikel – keine Wallbox im Angebot.")
+
+    # Referenzen: jede WB-Nummer der Wallbox-Blätter steht im Blatt „WB-Artikel“
+    for ref, quellen in sorted(wb_referenzen(logik).items()):
+        if ref not in nummern:
+            bericht.fehler.append(
+                f"WB-Referenz {ref} fehlt im Blatt „WB-Artikel“ – referenziert in: "
+                f"{'; '.join(sorted(set(quellen)))}.")
+    if not logik.wb_bloecke:
+        bericht.fehler.append("Angebotsaufbau WB: kein Block mit Nummer.")
+    if not logik.wb_artikel_nummern:
+        bericht.fehler.append("WB-Artikel: keine Zeile – der Wallbox-Import hat keinen Anker.")
+
+
 def _anhaenge_einlesen(wb, bericht: Pruefbericht) -> list[Anhang]:
     """Blatt "Anhänge": Datei · Regel · Bemerkung.
     Regeln: 'immer' | 'wenn <Frage> = <Antwort>' | 'wenn Pos. <Nr> im Angebot'."""
@@ -1081,6 +1450,12 @@ def _anhaenge_einlesen(wb, bericht: Pruefbericht) -> list[Anhang]:
                                       range(int(m_bereich.group(1)), int(m_bereich.group(2)) + 1)]
             else:
                 eintrag.positionen = [n.zfill(3) for n in re.findall(r"\d{1,3}", teil)]
+        elif (m := re.match(r"wenn\s+(?:Artikel|Pos\.)\s*((?:[A-Z]{1,2}\d{3}|Z\d{2})"
+                            r"(?:\s*[,/·]\s*(?:[A-Z]{1,2}\d{3}|Z\d{2}))*)\s+im Angebot$", regel)):
+            # v34 (PLAN_V21 Phase 178): Artikel mit Sparten-Präfix (WB001, KL013, PV010,
+            # Z15) – z. B. ein Datenblatt je Wallbox-Modell („wenn Artikel WB001 im Angebot“)
+            eintrag.art = "position"
+            eintrag.positionen = re.findall(r"[A-Z]{1,2}\d{3}|Z\d{2}", m.group(1))
         else:
             bericht.warnungen.append(f"Anhänge: Regel „{regel}“ für {datei} nicht lesbar.")
         anhaenge.append(eintrag)
@@ -1501,6 +1876,8 @@ def artikel_referenzen(logik: Logik) -> dict[str, list[str]]:
         merken(block.refs, f"Angebotsaufbau PV Block {block.nr}")
     for ref, quellen in kl_referenzen(logik).items():   # v24 Klima
         fundstellen.setdefault(ref, []).extend(quellen)
+    for ref, quellen in wb_referenzen(logik).items():   # v34 Wallbox
+        fundstellen.setdefault(ref, []).extend(quellen)
     return fundstellen
 
 
@@ -1513,12 +1890,28 @@ def artikel_pruefen(logik: Logik, session: Session, bericht: Pruefbericht) -> No
             "Artikelstamm ist leer – bitte zuerst die Preisliste importieren "
             "(Artikel → Preisliste importieren).")
         return
+    # v34 (PLAN_V21 Phase 178): Solange der Wallbox-Import nie gelaufen ist (kein einziger
+    # WB-Artikel im Stamm – die Preislisten in Artikel-Preislisten/Wallbox/ sind eine
+    # Zulieferung), sind fehlende WB-Referenzen EIN Hinweis statt je ein Fehler: die
+    # Parametrierung bleibt grün, der WP-/PV-/KL-Bogen wird nicht blockiert und die
+    # WB-Sicht bleibt ein reiner Erfassungsbogen (logik_fuer_sparte, wb_artikel_fehlen).
+    wb_vorhanden = any(pos.startswith("WB") for pos in vorhanden)
+    logik.wb_artikel_fehlen = bool(logik.wb_aktionen) and not wb_vorhanden
+    if logik.wb_artikel_fehlen:
+        bericht.warnungen.append(
+            "Wallbox-Artikel (WB001–WB008) fehlen im Artikelstamm – bitte Artikel → "
+            "Wallbox-Positionslisten importieren (Dateien in Artikel-Preislisten/Wallbox/). "
+            "Bis dahin erzeugt eine WB-Katalog-Erfassung kein Angebot (TAIFUN-Schiene).")
     for ref, quellen in sorted(artikel_referenzen(logik).items()):
         if ref not in vorhanden:
             if ref.startswith("PV"):
                 hinweis = " – bitte Artikel → PV-Positionslisten importieren"
             elif ref.startswith("KL"):     # v24 Klima
                 hinweis = " – bitte Artikel → Klima-Positionslisten importieren"
+            elif ref.startswith("WB"):     # v34 Wallbox
+                if logik.wb_artikel_fehlen:
+                    continue   # ein Sammelhinweis (oben) statt je Referenz ein Fehler
+                hinweis = " – bitte Artikel → Wallbox-Positionslisten importieren"
             else:
                 hinweis = ""
             bericht.fehler.append(
@@ -1567,6 +1960,19 @@ def logik_fuer_sparte(logik: Logik, sparte: str) -> Optional[Logik]:
                      kl_parameter_einheit=logik.kl_parameter_einheit,
                      kl_artikel=logik.kl_artikel, kl_artikel_nummern=logik.kl_artikel_nummern,
                      kl_artikel_zeilen=logik.kl_artikel_zeilen)
+    if sparte == "WB" and logik.wb_aktionen and not logik.wb_artikel_fehlen:
+        # v34 (PLAN_V21 Phase 178): WB ist ein Konfigurator, sobald „Aktionen WB“ existiert
+        # UND die WB-Artikel importiert sind (artikel_pruefen setzt wb_artikel_fehlen);
+        # sonst reiner Erfassungsbogen (unten) – Katalog-Erfassungen laufen dann wie bei
+        # PV vor v16 über die TAIFUN-Schiene. Anhänge („wenn Sparte = WB“) und KfW-
+        # Parameter der Voll-Logik werden durchgereicht.
+        return Logik(fragen, logik.wb_aktionen, [], logik.wb_bloecke, logik.kfw,
+                     logik.geladen_am, logik.anhaenge, sparte="WB",
+                     wb_aktionen=logik.wb_aktionen, wb_bloecke=logik.wb_bloecke,
+                     wb_parameter=logik.wb_parameter,
+                     wb_parameter_einheit=logik.wb_parameter_einheit,
+                     wb_artikel=logik.wb_artikel, wb_artikel_nummern=logik.wb_artikel_nummern,
+                     wb_artikel_zeilen=logik.wb_artikel_zeilen)
     return Logik(fragen, [], [], [], logik.kfw, logik.geladen_am, [], sparte=sparte)
 
 

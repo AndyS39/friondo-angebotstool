@@ -1,8 +1,9 @@
 # Login/Logout (Phase 13): Benutzer wählen + PIN, signiertes Cookie.
 # v27 (PLAN_V17 Phase 130): Fehlversuchssperre, IP-Grenze und Login-Protokoll
 # über auth.login_pruefen, Cookie v2 mit Ablauf (auth.cookie_setzen), Häkchen
-# „Auf diesem Gerät angemeldet bleiben“ (wirkt nur für Außendienst/Montage –
-# auth.sitzungsdauer_s entscheidet, Büro-Rollen bekommen immer 12 h) und der
+# „Auf diesem Gerät angemeldet bleiben“ (v27: nur Außendienst/Montage; v34, PLAN_V21
+# Phase 181: auf Mobilgeräten für alle Rollen – User-Agent oder Feld mobil=1,
+# auth.sitzungsdauer_s entscheidet, Büro-Rollen am PC 12 h) und der
 # Pflicht-PIN-Wechsel /pin-wechsel (erster Login, Admin-Reset, CSV-Import).
 
 from types import SimpleNamespace
@@ -41,16 +42,20 @@ def startseite(session: Session, benutzer) -> str:
     return ziel
 
 
-def _login_kontext(session: Session) -> dict:
+def _login_kontext(session: Session, request: Request | None = None) -> dict:
     """Hinweistext unter dem Häkchen: Sitzungsdauern aus den Parametern.
     v27-Nachtrag 2: mobile_rollen (auth.MOBILE_ROLLEN) – das Template markiert
-    Außendienst/Montage in der Benutzerwahl (data-mobil), damit das Häkchen
-    „angemeldet bleiben“ nur für diese Rollen eingeblendet wird; die
-    Sitzungsdauer entscheidet weiterhin auth.sitzungsdauer_s."""
+    Außendienst/Montage in der Benutzerwahl (data-mobil); für diese Rollen gilt das
+    Häkchen „angemeldet bleiben“ auf jedem Gerät.
+    v34 (PLAN_V21 Phase 181): mobil_geraet – Mobilgerät laut User-Agent; dann zeigt
+    die Seite das Häkchen für ALLE Rollen (das Skript ergänzt Breite < 600 px /
+    Touch über das Feld mobil=1); die Sitzungsdauer entscheidet auth.sitzungsdauer_s."""
     mobil = auth.sitzungsdauer_s(session, SimpleNamespace(rolle="aussendienst"), True)
     buero = auth.sitzungsdauer_s(session, SimpleNamespace(rolle="innendienst"), True)
+    user_agent = request.headers.get("user-agent", "") if request is not None else ""
     return {"tage_mobil": max(1, mobil // 86400), "stunden_buero": max(1, buero // 3600),
-            "mobile_rollen": tuple(auth.MOBILE_ROLLEN)}
+            "mobile_rollen": tuple(auth.MOBILE_ROLLEN),
+            "mobil_geraet": auth.ist_mobilgeraet(user_agent)}
 
 
 def _aktive_benutzer(session: Session) -> list[Benutzer]:
@@ -62,7 +67,7 @@ def _aktive_benutzer(session: Session) -> list[Benutzer]:
 def login_formular(request: Request, session: Session = Depends(get_session)):
     return render(request, "anmeldung/login.html", aktiv=None,
                   benutzer=_aktive_benutzer(session), fehler="",
-                  angemeldet_bleiben=False, **_login_kontext(session))
+                  angemeldet_bleiben=False, **_login_kontext(session, request))
 
 
 @router.post("/login")
@@ -74,6 +79,9 @@ def login(request: Request, session: Session = Depends(get_session)):
         benutzer_id = 0
     pin = (form.get("pin") or "").strip()
     angemeldet_bleiben = (form.get("angemeldet_bleiben") or "") in ("on", "1", "true")
+    # v34 (PLAN_V21 Phase 181): Mobilgerät = User-Agent ODER Feld mobil=1 (Skript der
+    # Anmeldeseite bei Breite < 600 px / Touch) – dann 30 Tage für jede Rolle mit Häkchen
+    mobil = auth.ist_mobilgeraet(request.headers.get("user-agent", ""), form.get("mobil"))
     benutzer = session.get(Benutzer, benutzer_id) if benutzer_id else None
     # v27 (Phase 130): PIN-Prüfung mit Sperre (5 Fehlversuche/15 min), IP-Grenze,
     # Protokoll und stiller Hash-Umstellung – committet selbst
@@ -81,7 +89,8 @@ def login(request: Request, session: Session = Depends(get_session)):
     if not ok:
         return render(request, "anmeldung/login.html", aktiv=None,
                       benutzer=_aktive_benutzer(session), fehler=text,
-                      angemeldet_bleiben=angemeldet_bleiben, **_login_kontext(session))
+                      angemeldet_bleiben=angemeldet_bleiben,
+                      **_login_kontext(session, request))
     # Pflichtwechsel (erster Login, Admin-Reset, Import): direkt auf /pin-wechsel –
     # die Middleware leitet zusätzlich jede andere Seite dorthin um
     if benutzer.pin_wechsel_noetig:
@@ -90,7 +99,7 @@ def login(request: Request, session: Session = Depends(get_session)):
         ziel = startseite(session, benutzer)
     antwort = RedirectResponse(ziel, status_code=303)
     auth.cookie_setzen(antwort, benutzer,
-                       auth.sitzungsdauer_s(session, benutzer, angemeldet_bleiben))
+                       auth.sitzungsdauer_s(session, benutzer, angemeldet_bleiben, mobil=mobil))
     # v30 (PLAN_V18 Phase 145): gespeicherte Darstellung des Benutzers als Cookie
     # mitgeben – an einem anderen Browser stimmt der Modus so ab der ersten Seite
     # (nie gewählt = „Gerät“, ein fremdes Cookie derselben Maschine wird ersetzt)

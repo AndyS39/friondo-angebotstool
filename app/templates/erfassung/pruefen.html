@@ -21,6 +21,15 @@
         </div>
     {% endif %}
 
+    {# v34 (PLAN_V21 Phase 179): nicht blockierende Hinweise des Wallbox-Konfigurators
+       (z. B. „Leitungslänge über 100 m – bitte prüfen“) – Absenden bleibt möglich #}
+    {% if warnungen is defined and warnungen %}
+        <div class="warnblock">
+            <strong>Bitte prüfen (Absenden möglich):</strong>
+            <ul>{% for w in warnungen %}<li>{{ w }}</li>{% endfor %}</ul>
+        </div>
+    {% endif %}
+
     {% if gruende %}
         <div class="warnblock">
             <strong>Hinweis für den Innendienst: individuelle Prüfung nötig</strong>

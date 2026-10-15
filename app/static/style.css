@@ -39,6 +39,8 @@
     --akzent-hover: #326ea5;
     --akzent-text: #ffffff;           /* Text auf --akzent */
     --akzent-flaeche: #eaf2fa;        /* Akzent-Tint (aktive Zeile, Chip, Hover) */
+    --alternativ: #6b3f8f;            /* v34: Alternativ-Kennzeichen „in anderem Angebot enthalten“ (4,5:1 auf Weiß) */
+    --alternativ-flaeche: #f3ecf8;    /* v34: Fläche des Alternativ-Hinweises */
     --akzent-glanz: rgba(51, 118, 182, 0.25);   /* Fokus-/Glanzring */
     --fokus: #3376b6;
 
@@ -142,6 +144,8 @@
     --akzent-hover: #9cf0fb;
     --akzent-text: #06202a;
     --akzent-flaeche: #0f2a36;
+    --alternativ: #d8b4fe;            /* v34: Alternativ-Kennzeichen (dunkel) */
+    --alternativ-flaeche: #2a1b3d;
     --akzent-glanz: rgba(103, 232, 249, 0.25);
     --fokus: #67e8f9;
     --g-50: #0b1221;
@@ -202,6 +206,8 @@
         --akzent-hover: #9cf0fb;
         --akzent-text: #06202a;
         --akzent-flaeche: #0f2a36;
+        --alternativ: #d8b4fe;
+        --alternativ-flaeche: #2a1b3d;
         --akzent-glanz: rgba(103, 232, 249, 0.25);
         --fokus: #67e8f9;
         --g-50: #0b1221;

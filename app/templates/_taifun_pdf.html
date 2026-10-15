@@ -1,0 +1,75 @@
+{# v34 (PLAN_V21 Phase 180, Agent V): Drop-Zone für das TAIFUN-Angebots-PDF.
+   Zwei Makros:
+   - taifun_pdf_zone(modus='dialog', …)   Zone im Dialog „Extern erledigt“ – nur Datei-Feld
+     (pdf_datei) + Status; taifun_pdf.js liest das PDF über POST /angebote/extern/pdf-lesen
+     und belegt die Felder des Dialogs vor (data-tp-feld="nummer|datum|endbetrag").
+   - taifun_pdf_eintrag(angebot, zurueck, kompakt)   eigenes Formular am TAIFUN-Eintrag
+     (TAIFUN-Seite, Vorgangsakte, Angebotsliste): Zone ersetzt den Datei-Knopf; nach dem
+     Ablegen erscheinen die Häkchen „Nummer/Datum/Endbetrag aus dem PDF übernehmen“ und
+     der Speichern-Knopf; ein vorhandenes PDF wird nur mit Bestätigung ersetzt
+     (Sicherheitsabfrage im Browser → Feld bestaetigt=1, serverseitig geprüft).
+   Ohne JavaScript: Datei-Feld + Knopf im <noscript>-Block (Tastatur-/Datei-Dialog als
+   Fallback); am Handy (pointer: coarse) zeigt die Zone nur „auswählen“ (CSS).
+   Styles: app/static/vorgang_v34.css (nur Tokens), Verhalten: app/static/taifun_pdf.js. #}
+{% from "_symbole.html" import symbol %}
+
+{% macro taifun_pdf_zone(modus='dialog', ersetzen=False, kompakt=False, name='pdf_datei') -%}
+<div class="tp-zone {{ 'tp-kompakt' if kompakt }}" data-taifun-dropzone data-modus="{{ modus }}"
+     data-lesen-url="/angebote/extern/pdf-lesen" data-ersetzen="{{ '1' if ersetzen else '0' }}"
+     tabindex="0" role="button"
+     aria-label="TAIFUN-Angebot (PDF) hierher ziehen oder auswählen">
+    <span class="tp-symbol">{{ symbol('pdf') }}</span>
+    <span class="tp-text"><span class="tp-text-drag">{{ 'Neues ' if ersetzen }}TAIFUN-Angebot (PDF) hierher ziehen oder</span>
+        <span class="tp-text-wahl">{{ 'Neues ' if ersetzen }}TAIFUN-Angebot (PDF)</span> <u>auswählen</u>
+        <span class="dezent tp-grenze">(ein PDF, max. 20 MB)</span></span>
+    <input type="file" name="{{ name }}" accept="application/pdf,.pdf" class="tp-datei"
+           aria-label="TAIFUN-Angebot (PDF) auswählen">
+</div>
+<p class="tp-status dezent" data-taifun-status aria-live="polite" hidden></p>
+{%- endmacro %}
+
+{% macro taifun_pdf_eintrag(angebot, zurueck='', kompakt=False) -%}
+<form method="post" action="/angebote/{{ angebot.id }}/taifun-pdf" enctype="multipart/form-data"
+      class="tp-form {{ 'tp-form-kompakt' if kompakt }}" data-taifun-form
+      onsubmit="return window.taifunPdfAbsenden ? window.taifunPdfAbsenden(this) : true;">
+    <input type="hidden" name="zurueck" value="{{ zurueck or ('/angebote/' ~ angebot.id) }}">
+    <input type="hidden" name="bestaetigt" value="0" data-taifun-bestaetigt>
+    <div class="tp-stand">
+        {% if angebot.extern_pdf_pfad %}
+            <a class="knopf klein zweitrangig" href="/angebote/{{ angebot.id }}/taifun-pdf"
+               target="_blank" title="Hinterlegtes TAIFUN-PDF ansehen">{{ symbol('pdf') }} PDF ansehen</a>
+            <span class="dezent">hinterlegt am {{ angebot.extern_pdf_am.strftime('%d.%m.%Y %H:%M') if angebot.extern_pdf_am }}</span>
+        {% else %}
+            <span class="abzeichen ep" title="Ohne PDF ist der Eintrag im Kombi-Versand nicht wählbar">kein PDF</span>
+        {% endif %}
+    </div>
+    {{ taifun_pdf_zone('eintrag', ersetzen=angebot.extern_pdf_pfad, kompakt=kompakt) }}
+    <div class="tp-ergebnis" data-taifun-ergebnis hidden>
+        <p class="tp-datei-name"><strong data-feld="dateiname"></strong>
+            <span class="dezent" data-feld="ersetzt-hinweis"></span></p>
+        <p class="dezent tp-uebernehmen-titel">Aus dem neuen PDF übernehmen (Häkchen je Feld – aus PDF gelesen, bitte prüfen):</p>
+        <label class="kontrollfeld"><input type="checkbox" name="uebernehmen_nummer" value="1" data-uebernehmen="nummer">
+            Nummer <b data-feld="nummer">–</b></label>
+        <label class="kontrollfeld"><input type="checkbox" name="uebernehmen_datum" value="1" data-uebernehmen="datum">
+            Datum <b data-feld="datum">–</b></label>
+        <label class="kontrollfeld"><input type="checkbox" name="uebernehmen_endbetrag" value="1" data-uebernehmen="endbetrag">
+            Endbetrag <b data-feld="endbetrag">–</b></label>
+        <p class="tp-hinweis" data-feld="hinweis" hidden></p>
+        <div class="formaktionen">
+            <button class="knopf klein" type="submit">{{ 'PDF ersetzen und speichern' if angebot.extern_pdf_pfad else 'PDF speichern' }}</button>
+            <button class="knopf klein zweitrangig" type="button" data-taifun-abbrechen>Abbrechen</button>
+        </div>
+    </div>
+    <noscript>
+        <div class="formaktionen">
+            {% if angebot.extern_pdf_pfad %}
+            <label class="kontrollfeld"><input type="checkbox" name="bestaetigt" value="1"> Vorhandenes PDF ersetzen (bestätigen)</label>
+            {% endif %}
+            <label class="kontrollfeld"><input type="checkbox" name="uebernehmen_nummer" value="1"> Nummer aus dem PDF übernehmen</label>
+            <label class="kontrollfeld"><input type="checkbox" name="uebernehmen_datum" value="1"> Datum aus dem PDF übernehmen</label>
+            <label class="kontrollfeld"><input type="checkbox" name="uebernehmen_endbetrag" value="1"> Endbetrag aus dem PDF übernehmen</label>
+            <button class="knopf klein" type="submit">{{ 'Ersetzen' if angebot.extern_pdf_pfad else 'Hochladen' }}</button>
+        </div>
+    </noscript>
+</form>
+{%- endmacro %}

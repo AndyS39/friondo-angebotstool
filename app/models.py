@@ -2,7 +2,7 @@
 # Phase 1: Kunden · Phase 2: Artikel. Weitere Modelle folgen in späteren Phasen.
 
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal   # v34 (PLAN_V21 Phase 180): USt kaufmännisch
 from typing import Optional
 
 from sqlalchemy import (Boolean, Date, DateTime, Float, ForeignKey, Integer, String,
@@ -88,7 +88,7 @@ INTERESSE_CODES = [code for code, _ in INTERESSEN]
 
 # Konfigurator-Typ (v5): aktuell nur WP; PV/Klima docken später als eigene
 # Kataloge an – jeder Vorgang trägt den Typ bereits mit.
-KONFIGURATOR_TYPEN = ["WP", "PV", "KL"]
+KONFIGURATOR_TYPEN = ["WP", "PV", "KL", "WB"]   # v34: Wallbox-Konfigurator
 
 
 def angebot_status_setzen(angebot, neuer_status: str) -> None:
@@ -120,6 +120,7 @@ QUELLE_ZUSATZ = "zusatz"           # Zusatzartikel Z01–Z22 aus der Logik-Excel
 QUELLE_MANUELL = "manuell"         # im Tool angelegt, wird vom Import nie verändert
 QUELLE_PV = "pv"                   # v13-PV: PV-Positionslisten (PV001 …, Anker: GUID)
 QUELLE_KL = "kl"   # v24: Klima-Positionslisten (KL001 …, Anker: GUID; KL050 ohne GUID)
+QUELLE_WB = "wb"   # v34: Wallbox-Positionsliste (WB001–WB008, Anker: Datei + Position aus Blatt „WB-Artikel“)
 
 
 class Artikel(Base):
@@ -338,6 +339,9 @@ def ust_standard(sparte: str) -> float:
 DB_AMPEL_SPARTEN = ("WP", "PV", "KL", "WB")
 
 
+DB_SCHWELLEN_SPARTE = {"WB": ("800", "1200")}   # v34: Startwerte je Sparte ohne eigene Einstellung
+
+
 def db_schwellen(session, sparte: str = "") -> tuple[int, int]:
     """v13-PV (Phase 78): DB-Ampel-Schwellen in Euro je Sparte
     (rot unter, grün über). Eigene Werte db_ampel_rot_unter_<SPARTE> /
@@ -346,8 +350,12 @@ def db_schwellen(session, sparte: str = "") -> tuple[int, int]:
     rot = einstellung_holen(session, "db_ampel_rot_unter", "9000")
     gruen = einstellung_holen(session, "db_ampel_gruen_ueber", "10000")
     if sparte:
-        rot = einstellung_holen(session, f"db_ampel_rot_unter_{sparte}", rot)
-        gruen = einstellung_holen(session, f"db_ampel_gruen_ueber_{sparte}", gruen)
+        # v34 (PLAN_V21 Phase 178, Rückfrage W1): Wallbox-Angebote liegen bei 2–5 T€ netto – mit den
+        # WP-Schwellen wäre jedes WB-Angebot rot (kein Außendienst-Rabatt). Eigener Startwert [ANNAHME]:
+        # rot unter 800 €, grün über 1.200 €; Änderung in der Parametrierung (Zeile WB).
+        standard_rot, standard_gruen = DB_SCHWELLEN_SPARTE.get(sparte.upper(), (rot, gruen))
+        rot = einstellung_holen(session, f"db_ampel_rot_unter_{sparte}", standard_rot)
+        gruen = einstellung_holen(session, f"db_ampel_gruen_ueber_{sparte}", standard_gruen)
     return int(rot), int(gruen)
 
 
@@ -1241,6 +1249,10 @@ class Angebot(Base):
     # Kombinationen, Montage) als als_dict() von app.kl_auslegung; leer bei
     # anderen Sparten
     kl_json: Mapped[str] = mapped_column(Text, default="")
+    # v34 (PLAN_V21 Phase 179): Wallbox-Auslegung (wb_auslegung.Auslegung.als_dict())
+    wb_json: Mapped[str] = mapped_column(Text, default="")
+    # v34 (PLAN_V21 Phase 180): Auslegungstext (vormals 0,00-€-Position) – nur Innendienst/Admin
+    auslegung_text: Mapped[str] = mapped_column(Text, default="")
 
     positionen: Mapped[list["AngebotsPosition"]] = relationship(
         back_populates="angebot", order_by="AngebotsPosition.sort",
@@ -1285,7 +1297,10 @@ class Angebot(Base):
         Netto-Anteil des Rabatts (Rabatt ÷ (1 + USt-Satz), bei 0 % der volle Rabatt –
         Basis für den Deckungsbeitrag), ``netto_nach_rabatt`` = Netto − rabatt_netto.
         Externe TAIFUN-Einträge (v7) haben nur einen festen Endbetrag brutto –
-        Netto/USt sind dort unbekannt und bleiben 0."""
+        Netto/USt sind dort unbekannt und bleiben 0.
+        v34 (PLAN_V21 Phase 180, Entscheidung R7): die USt wird kaufmännisch gerundet
+        (ROUND_HALF_UP) wie in TAIFUN – bis v33 wurde sie abgeschnitten (int), v24-Fall A:
+        1.238,54 € statt TAIFUN 1.238,55 €. Rabatt-/KfW-Logik unverändert."""
         if self.extern:
             betrag = self.extern_endbetrag_cent or 0
             return {"netto": 0, "ust": 0, "brutto": betrag,
@@ -1296,8 +1311,10 @@ class Angebot(Base):
             # bauseits (v5) und Alternativ-Positionen (v10) zählen nie mit
             if not p.ep_flag and not p.bauseits and not p.alternativ:
                 netto += p.gesamt_cent
-        # v13-PV: Steuersatz je Angebot (bei 0 % ist brutto = netto)
-        ust = int(Decimal(netto) * self.ust_prozent / 100)
+        # v13-PV: Steuersatz je Angebot (bei 0 % ist brutto = netto);
+        # v34: kaufmännisch gerundet (Rückfrage 7 – wie TAIFUN)
+        ust = int((Decimal(netto) * self.ust_prozent / 100)
+                  .quantize(Decimal("1"), rounding=ROUND_HALF_UP))
         brutto = netto + ust
         rabatt = self.rabatt_effektiv_cent(brutto)
         rabatt_netto = int((Decimal(rabatt) / (1 + self.ust_prozent / 100))
@@ -1376,6 +1393,9 @@ class AngebotsPosition(Base):
     # verweist auf das Geschwister-Angebot des Vorgangs (oder Freitext)
     alternativ: Mapped[bool] = mapped_column(Boolean, default=False)
     alternativ_zu: Mapped[str] = mapped_column(String(200), default="")
+    # v34 (PLAN_V21 Phase 180): „Elektroarbeiten ins PV-Angebot“ – Herkunft der übernommenen Position
+    uebernommen_von_angebot_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    uebernommen_von_position_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     angebot: Mapped["Angebot"] = relationship(back_populates="positionen")
 

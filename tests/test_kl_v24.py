@@ -272,10 +272,11 @@ class Voraussetzungen(Basis):
 # --- Fall A -----------------------------------------------------------------------
 
 class FallA(Basis):
+    # v34 (PLAN_V21 Phase 180): keine 0,00-€-Auslegungszeile mehr als 7. Position –
+    # der Auslegungstext steht in angebot.auslegung_text (Editor „Auslegung (intern)“)
     ERWARTET = [("KL023", 1.0, 317800, False), ("KL008", 1.0, 49800, False),
                 ("KL038", 1.0, 196624, False), ("KL026", 3.0, 29214, False),
-                ("KL013", 3.0, 8250, True), ("KL049", 1.0, 0, False),
-                ("", 1.0, 0, False)]
+                ("KL013", 3.0, 8250, True), ("KL049", 1.0, 0, False)]
 
     def pruefe_angebot(self, angebot: Angebot):
         self.assertEqual((angebot.konfigurator_typ, angebot.ust_satz, angebot.kfw_json),
@@ -284,24 +285,24 @@ class FallA(Basis):
         self.assertEqual([(p.pos_nr, p.menge, p.e_preis_cent, bool(p.ep_flag)) for p in pos],
                          self.ERWARTET)
         self.assertEqual(pos[3].gesamt_cent, 87642)                       # 3 × 292,14
-        self.assertEqual([p.gruppe for p in pos], ["", ""] + [GRUPPE] * 5)
-        self.assertEqual([p.block_nr for p in pos], [1, 2, 3, 3, 3, 3, 3])
-        letzte = pos[-1]
-        self.assertEqual((letzte.bezeichnung, letzte.einheit, letzte.e_preis_cent, letzte.menge),
-                         (AUSLEGUNGSZEILE, "psl.", 0, 1.0))
-        self.assertTrue(letzte.beschreibung.startswith(
+        self.assertEqual([p.gruppe for p in pos], ["", ""] + [GRUPPE] * 4)
+        self.assertEqual([p.block_nr for p in pos], [1, 2, 3, 3, 3, 3])
+        self.assertFalse([p for p in pos if p.bezeichnung == AUSLEGUNGSZEILE])   # v34
+        auslegung = angebot.auslegung_text
+        self.assertTrue(auslegung.startswith(
             "Auslegung Klimaanlage – Serie Bosch Climate 3200i"))
         self.assertIn("Raum 1 „Wohnzimmer“: 25,0 m² × 1,0 × 60 W/m² = 1,50 kW → Innengerät "
-                      "2,6 kW (Klasse 9), Außengerät 1", letzte.beschreibung)
+                      "2,6 kW (Klasse 9), Außengerät 1", auslegung)
         # Gerätename = 1. Zeile des Artikels KL038 (nicht die 2. Zeile „Multisplit Außeneinh. …“)
         self.assertIn("Außengerät 1: BOSCH Klimagerät CL5000M 79/3 E, Multi-Split, "
-                      "Kombination 9+9+9, 3 Innengeräte", letzte.beschreibung)
+                      "Kombination 9+9+9, 3 Innengeräte", auslegung)
         self.assertIn("Montage: 3 Innengeräte / 1 Außengerät (Pauschale). Leitungslänge bis "
-                      "5 m je Innengerät enthalten.", letzte.beschreibung)
+                      "5 m je Innengerät enthalten.", auslegung)
         su = angebot.summen()
         self.assertEqual(su["netto"], 651866)                              # 6.518,66 €
-        self.assertAlmostEqual(su["ust"], 123855, delta=1)                 # 1.238,55 € ± 0,01
-        self.assertAlmostEqual(su["brutto"], 775721, delta=1)              # 7.757,21 € ± 0,01
+        # v34 (PLAN_V21 Phase 180, R7): USt kaufmännisch wie das Musterangebot – exakt
+        self.assertEqual(su["ust"], 123855)                                # 1.238,55 €
+        self.assertEqual(su["brutto"], 775721)                             # 7.757,21 €
         self.assertEqual(su["endbetrag"], su["brutto"])
         self.assertEqual(angebot.ust_bezeichnung, "19,00 % USt.")
         kl = json.loads(angebot.kl_json)
@@ -344,13 +345,12 @@ class FallA(Basis):
         self.assertIn("EP.", text)
         self.assertIn("19,00 % USt.", text)
         self.assertIn("6.518,66", text)
-        self.assertIn(AUSLEGUNGSZEILE, text)
-        # Auslegungszeile am Blockende: nach der Systemgarantie, vor der Netto-Summe
-        i_garantie = text.index("Systemgarantie")
-        i_auslegung = text.index(AUSLEGUNGSZEILE)
-        i_netto = text.index("Netto-Summe")
-        self.assertLess(i_garantie, i_auslegung)
-        self.assertLess(i_auslegung, i_netto)
+        # v34 (PLAN_V21 Phase 180): keine Auslegungszeile mehr im PDF (Text intern im Editor);
+        # USt kaufmännisch gerundet (R7): 1.238,55 / 7.757,21 statt 1.238,54 / 7.757,20
+        self.assertNotIn(AUSLEGUNGSZEILE, text)
+        self.assertIn("1.238,55", text)
+        self.assertIn("7.757,21", text)
+        self.assertLess(text.index("Systemgarantie"), text.index("Netto-Summe"))
         self.assertIn("Hinweis zur Kältetechnik", text)
         for verboten in ("KfW", "Förderung", "Zuschuss", "Eigenanteil", "Wirtschaftlichkeit",
                          "So rechnet sich", "Vollmacht", "Beispielrate",
@@ -415,10 +415,10 @@ class FallA(Basis):
 # --- Fall B -----------------------------------------------------------------------
 
 class FallB(Basis):
+    # v34 (PLAN_V21 Phase 180): ohne 0,00-€-Auslegungszeile (Text in angebot.auslegung_text)
     ERWARTET = [("KL020", 1.0, 158700), ("KL019", 1.0, 52900), ("KL016", 1.0, 35600),
                 ("KL014", 1.0, 16900), ("KL017", 5.0, 6800), ("KL050", 1.0, 49900),
-                ("KL001", 1.0, 22900), ("KL035", 1.0, 178600), ("KL049", 1.0, 0),
-                ("", 1.0, 0)]
+                ("KL001", 1.0, 22900), ("KL035", 1.0, 178600), ("KL049", 1.0, 0)]
 
     def test_fall_b(self):
         antworten = fall_b()
@@ -435,12 +435,13 @@ class FallB(Basis):
         self.assertEqual(mengen(pos)["KL017"], 5)                 # 6–10 m → +5 m
         self.assertNotIn("KL013", mengen(pos))                    # KO08 = Nein
         self.assertNotIn("KL008", mengen(pos))                    # KE01 = Ja → KL001
-        self.assertEqual([p.gruppe for p in pos], [""] * 7 + [GRUPPE] * 3)
-        self.assertEqual(pos[-1].bezeichnung, AUSLEGUNGSZEILE)
+        self.assertEqual([p.gruppe for p in pos], [""] * 7 + [GRUPPE] * 2)
+        # v34 (PLAN_V21 Phase 180): Auslegungstext im Feld statt als letzte Position
+        self.assertEqual(pos[-1].pos_nr, "KL049")
         self.assertIn("Raum 1 „Wohnküche“: 30,0 m² × 1,1 × 90 W/m² = 2,97 kW → Innengerät "
-                      "3,5 kW (Klasse 12), Außengerät 1", pos[-1].beschreibung)
+                      "3,5 kW (Klasse 12), Außengerät 1", angebot.auslegung_text)
         self.assertIn("Außengerät 1: Klimaanlage Bosch Single-Split, Single-Split, 1 Innengerät",
-                      pos[-1].beschreibung)                        # 1. Zeile des Artikels KL035
+                      angebot.auslegung_text)                      # 1. Zeile des Artikels KL035
         su = angebot.summen()
         self.assertEqual((su["netto"], su["ust"], su["brutto"]), (549500, 104405, 653905))
         kl = json.loads(angebot.kl_json)
@@ -455,8 +456,9 @@ class FallB(Basis):
         self.assertIn("1.044,05", text)
         self.assertIn("6.539,05", text)
         self.assertIn("Rollgerüst", text)
-        self.assertLess(text.index("Systemgarantie"), text.index(AUSLEGUNGSZEILE))
-        self.assertLess(text.index(AUSLEGUNGSZEILE), text.index("Netto-Summe"))
+        # v34 (PLAN_V21 Phase 180): keine Auslegungszeile mehr im PDF
+        self.assertNotIn(AUSLEGUNGSZEILE, text)
+        self.assertLess(text.index("Systemgarantie"), text.index("Netto-Summe"))
         self.assertNotIn("EP.", text)                             # Fall B ohne EP-Zeile
         for verboten in ("KfW", "Wirtschaftlichkeit", "Vollmacht"):
             self.assertNotIn(verboten, text)
@@ -514,8 +516,8 @@ class FallD(Basis):
         self.assertEqual((e.ampel, e.status), ("gruen", "Neu"))
         angebot = self.angebot_erzeugen(e)
         pos = angebot.positionen
-        self.assertEqual([p.pos_nr for p in pos],
-                         ["KL020", "KL008", "KL044", "KL042", "KL013", "KL049", ""])
+        self.assertEqual([p.pos_nr for p in pos],                 # v34: ohne Auslegungszeile
+                         ["KL020", "KL008", "KL044", "KL042", "KL013", "KL049"])
         self.assertEqual(mengen(pos), {"KL020": 1, "KL008": 1, "KL044": 1, "KL042": 1,
                                        "KL013": 1, "KL049": 1})
         gateway = pos[4]
@@ -622,11 +624,13 @@ class FallH(Basis):
                           m.get("KL013"), m.get("KL049"), m.get("KL008")),
                          (1, 1, 1, 4, 4, 1, 1))
         # Reihenfolge laut „Angebotsaufbau KL“: Block 1 Montage/Dach, Block 2 Elektro/§14a,
-        # Block 3 Gruppe mit Außengerät, Innengeräten, Gateway, Garantie, Auslegungszeile
+        # Block 3 Gruppe mit Außengerät, Innengeräten, Gateway, Garantie
+        # (v34, PLAN_V21 Phase 180: ohne Auslegungszeile – Text in angebot.auslegung_text)
         self.assertEqual([p.pos_nr for p in pos],
                          ["KL025", "KL004", "KL005", "KL006", "KL008", "KL003",
-                          "KL039", "KL026", "KL013", "KL049", ""])
-        self.assertEqual([p.block_nr for p in pos], [1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 3])
+                          "KL039", "KL026", "KL013", "KL049"])
+        self.assertEqual([p.block_nr for p in pos], [1, 1, 1, 1, 2, 2, 3, 3, 3, 3])
+        self.assertIn("Kombination 9+9+9+9", angebot.auslegung_text)
         kl = json.loads(angebot.kl_json)
         g = kl["aussengeraete"][0]
         self.assertEqual((g["kombination"], g["geraet"], g["p14a"]),
@@ -996,16 +1000,17 @@ class PrueferF(Basis):
         Multi-Außengerät von Außengerät 1 steht."""
         g = fall_g()
         g["KR07#3"] = "2"
+        # v34 (PLAN_V21 Phase 180): Listen ohne die frühere Auslegungszeile ("", 1.0)
         self.assertEqual([(p["pos_nr"], p["menge"]) for p in self.positionen(g)],
                          [("KL024", 1.0), ("KL008", 2.0), ("KL037", 1.0), ("KL034", 1.0),
-                          ("KL026", 2.0), ("KL013", 3.0), ("KL049", 1.0), ("", 1.0)])
+                          ("KL026", 2.0), ("KL013", 3.0), ("KL049", 1.0)])
         # zwei 7000i-Singles (Klasse 9 an AG 1, Klasse 12 an AG 2): Außengeräte zuerst,
         # danach die Innengeräte je Klasse, Montage 2/2
         z = bogen([raum("A", 30, zuordnung="1"), raum("B", 50, zuordnung="2")],
                   KO04="2", KO06="Climate 7000i")
         self.assertEqual(engine.ampel_gruende(self.logik, z), [])
         self.assertEqual([p["pos_nr"] for p in self.positionen(z)],
-                         ["KL022", "KL008", "KL043", "KL044", "KL041", "KL042", "KL013", "KL049", ""])
+                         ["KL022", "KL008", "KL043", "KL044", "KL041", "KL042", "KL013", "KL049"])
         # zwei gleiche Single-Sets werden im Block addiert
         z2 = bogen([raum("A", 20, zuordnung="1"), raum("B", 20, zuordnung="2")], KO04="2")
         m = mengen(self.positionen(z2))
@@ -1013,15 +1018,16 @@ class PrueferF(Basis):
                          (2, 1, 2, 2))
         # Fälle A/B/H unverändert
         self.assertEqual([p["pos_nr"] for p in self.positionen(fall_a())],
-                         ["KL023", "KL008", "KL038", "KL026", "KL013", "KL049", ""])
+                         ["KL023", "KL008", "KL038", "KL026", "KL013", "KL049"])
         self.assertEqual([p["pos_nr"] for p in self.positionen(fall_h())],
                          ["KL025", "KL004", "KL005", "KL006", "KL008", "KL003", "KL039", "KL026",
-                          "KL013", "KL049", ""])
-        # Auslegungszeile ist immer die letzte Zeile des Gruppen-Blocks (Gruppe gesetzt)
+                          "KL013", "KL049"])
+        # v34: die Systemgarantie ist die letzte Zeile des Gruppen-Blocks (Gruppe gesetzt),
+        # eine Auslegungszeile wird nicht mehr angelegt
         letzte = self.positionen(g)[-1]
-        self.assertEqual((letzte["bezeichnung"], letzte["gruppe"], letzte["block_nr"],
-                          letzte["einheit"], letzte["e_preis_cent"], letzte["ep_flag"]),
-                         (AUSLEGUNGSZEILE, GRUPPE, 3, "psl.", 0, False))
+        self.assertEqual((letzte["pos_nr"], letzte["gruppe"], letzte["block_nr"]),
+                         ("KL049", GRUPPE, 3))
+        self.assertFalse([p for p in self.positionen(g) if p["bezeichnung"] == AUSLEGUNGSZEILE])
 
     def test_rechenweg_grenzen_rundung_kombinationssuche(self):
         p = kl_auslegung.parameter(self.logik)

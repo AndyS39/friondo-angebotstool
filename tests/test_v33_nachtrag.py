@@ -26,7 +26,11 @@ PRAEFIX = "V33NT"
 
 
 class FotoUpload(unittest.TestCase):
-    """P7: Fotos werden auf dem Gerät verkleinert, die Sammelbox lädt Foto für Foto hoch."""
+    """P7: Fotos werden auf dem Gerät verkleinert, die Sammelbox lädt Foto für Foto hoch.
+    v34 (PLAN_V21 Phase 181, Agent M): der Foto-für-Foto-Upload ist durch den Sammel-Request
+    der neuen Sammelbox (static/galerie_v34.js, EIN Request mit Ordner/Bemerkung je Datei,
+    Fortschritt über XMLHttpRequest) ersetzt – die Verkleinerung beim Hinzufügen bleibt,
+    liegt jetzt in galerie_v34.js; Drag & Drop (pjGalDrop) sendet weiter per requestSubmit."""
 
     def test_skript_eingebunden_und_sammelbox_umgestellt(self):
         js = (PROJEKT / "app/static/bild_verkleinern.js").read_text(encoding="utf-8")
@@ -36,9 +40,13 @@ class FotoUpload(unittest.TestCase):
         base = (PROJEKT / "app/templates/base.html").read_text(encoding="utf-8")
         self.assertIn("/static/bild_verkleinern.js", base)
         galerie = (PROJEKT / "app/templates/_galerie.html").read_text(encoding="utf-8")
-        self.assertIn("window.bildVerkleinern(datei)", galerie)
-        self.assertIn("'Lade ' + (nr + 1) + ' von ' + gesamt", galerie)
         self.assertIn("form.requestSubmit()", galerie)
+        self.assertIn("macro sammelbox(", galerie)
+        # v34: Verkleinerung beim Hinzufügen und Fortschritt des Sammel-Requests in galerie_v34.js
+        sammel = (PROJEKT / "app/static/galerie_v34.js").read_text(encoding="utf-8")
+        self.assertIn("window.bildVerkleinern(datei)", sammel)
+        self.assertIn("upload.addEventListener('progress'", sammel)
+        self.assertNotIn("pjSammelHochladen", galerie)
         c = TestClient(app)
         c.cookies.set(auth.COOKIE_NAME, auth.cookie_wert(1))
         self.assertIn("bild_verkleinern.js", c.get("/angebotstool").text)

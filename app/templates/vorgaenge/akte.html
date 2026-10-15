@@ -4,6 +4,7 @@
 {% import "_sparten.html" as sparten_ui %}
 {% from "_komponenten.html" import status_badge, statuskette, wiedervorlage_chip, leer_zustand, notizen_chat, verfolgung_chip %}
 {% from "_symbole.html" import symbol %}
+{% from "_taifun_pdf.html" import taifun_pdf_eintrag %}
 
 {% block titel %}Vorgang {{ kunde.anzeige_name if kunde else vorgang.id }} – Friondo Angebotstool{% endblock %}
 
@@ -12,17 +13,10 @@
 {# v31 (PLAN_LEAD_V5 Phase 153): Angebots- und Erfassungskarten als Makros, damit die
    Akte sie je Objekt gruppieren kann (Überschrift nur bei mehr als einem Objekt) #}
 {% macro angebot_karte(a) -%}
-    {% set waehlbar, grund = kombi_info[a.id] %}
-    <div class="angebot-karte {{ 'ueberholt-karte' if a.status == 'Überholt' }}">
+    {# v34 (PLAN_V21 Phase 180, Agent V): die Kombi-Häkchen liegen jetzt im Kasten
+       „Gemeinsam versenden“ unter den Angeboten – keine Häkchen mehr an der Karte #}
+    <div class="angebot-karte {{ 'ueberholt-karte' if a.status == 'Überholt' }}" id="angebot-{{ a.id }}">
         <div class="kartenkopf">
-            {% if kombi_erlaubt %}
-                {% if waehlbar %}
-                    <input type="checkbox" name="angebot_ids" value="{{ a.id }}"
-                           title="Für den Kombi-Versand auswählen">
-                {% else %}
-                    <span class="dezent" title="{{ grund }}">–</span>
-                {% endif %}
-            {% endif %}
             <strong>
                 {% if a.extern %}<span class="abzeichen status-taifun">TAIFUN</span> {{ a.taifun_nummer or a.nummer }}
                 {% else %}{{ a.nummer }}{% endif %}
@@ -57,6 +51,11 @@
                 <a class="knopf klein zweitrangig" href="/meine-angebote/{{ a.id }}/pdf" target="_blank">{{ symbol('pdf') }} PDF</a>
             {% endif %}
         </div>
+        {% if a.extern and benutzer.basisrolle in ('admin', 'innendienst') %}
+            {# v34 (Phase 180): TAIFUN-PDF per Drop-Zone ablegen/ersetzen (Nummer/Datum/Endbetrag
+               aus dem PDF übernehmbar) – ersetzt den Datei-Knopf der TAIFUN-Seite #}
+            {{ taifun_pdf_eintrag(a, zurueck='/vorgaenge/' ~ vorgang.id ~ '#angebot-' ~ a.id, kompakt=True) }}
+        {% endif %}
     </div>
 {%- endmacro %}
 
@@ -82,6 +81,9 @@
 {% block inhalt %}
 {# v32 (PLAN_V19 Phase 163): Styles des Verfolgungs-Chips und des Dialogs „Nächster Schritt“ #}
 <link rel="stylesheet" href="/static/verfolgung.css?v={{ css_version }}">
+{# v34 (PLAN_V21 Phase 180, Agent V): Kasten „Gemeinsam versenden“ + Drop-Zone TAIFUN-PDF #}
+<link rel="stylesheet" href="/static/vorgang_v34.css?v={{ css_version }}">
+<script src="/static/taifun_pdf.js?v={{ css_version }}" defer></script>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
 {# v31 (PLAN_LEAD_V5 Phase 154): Archivieren ist eine Lead-Sicht – die Akte zeigt den
@@ -236,8 +238,6 @@
 {# v31 (PLAN_LEAD_V5 Phase 153): Vorgang mit mehreren Objekten – Angebote und
    Erfassungen je Objekt (Bezeichnung + Adresse), Kombi-Versand über alle Objekte #}
 <h2 id="angebote" style="margin-top:0">Angebote und Erfassungen je Objekt</h2>
-<form method="post" action="/vorgaenge/{{ vorgang.id }}/kombi-versand" id="kombiform"
-      onsubmit="return confirm('Gewählte Angebote in EINER Mail (je ein PDF) als Entwurf vorbereiten?');">
 {% for g in objekt_gruppen %}
 <section class="objekt-gruppe {{ 'objekt-inaktiv' if not g.aktiv }}" id="objekt-{{ g.objekt_id or 0 }}">
     <h3>{{ symbol('ort') }} {{ g.ueberschrift }}
@@ -265,39 +265,106 @@
     {% endif %}
 </section>
 {% endfor %}
-{% if kombi_erlaubt and angebote %}
-<div class="formaktionen">
-    <button class="knopf" type="submit">{{ symbol('brief') }} Gemeinsam versenden (eine Mail, mehrere PDFs)</button>
-    <span class="dezent">Wählbar: Entwurf/Versand vorbereitet; TAIFUN nur mit hinterlegtem PDF.
-        Der Einzelversand über das Angebot bleibt unverändert.</span>
-    {% if kombi_doppelt %}
-        <span class="abzeichen ep" title="Diese Artikelnummern sind in mehreren Tool-Angeboten voll berechnet – ggf. Alternativ-Kennzeichen setzen">{{ symbol('warnung') }} doppelt: {{ kombi_doppelt | join(', ') }}</span>
-    {% endif %}
-</div>
-{% endif %}
-</form>
 {% else %}
 
 <h2 id="angebote" style="margin-top:0">Angebote</h2>
 {% if angebote %}
-<form method="post" action="/vorgaenge/{{ vorgang.id }}/kombi-versand" id="kombiform"
-      onsubmit="return confirm('Gewählte Angebote in EINER Mail (je ein PDF) als Entwurf vorbereiten?');">
 {% for a in angebote %}{{ angebot_karte(a) }}{% endfor %}
-{% if kombi_erlaubt %}
-<div class="formaktionen">
-    <button class="knopf" type="submit">{{ symbol('brief') }} Gemeinsam versenden (eine Mail, mehrere PDFs)</button>
-    <span class="dezent">Wählbar: Entwurf/Versand vorbereitet; TAIFUN nur mit hinterlegtem PDF.
-        Der Einzelversand über das Angebot bleibt unverändert.</span>
-    {% if kombi_doppelt %}
-        <span class="abzeichen ep" title="Diese Artikelnummern sind in mehreren Tool-Angeboten voll berechnet – ggf. Alternativ-Kennzeichen setzen">{{ symbol('warnung') }} doppelt: {{ kombi_doppelt | join(', ') }}</span>
-    {% endif %}
-</div>
-{% endif %}
-</form>
 {% else %}
 {{ leer_zustand('Noch kein Angebot – über eine Erfassung starten.') }}
 {% endif %}
 {% endif %}{# /mehrere_objekte #}
+
+{% if kombi_erlaubt and angebote %}
+{# v34 (PLAN_V21 Phase 180, Agent V): Kasten „Gemeinsam versenden“ – Häkchen an allen
+   versandfähigen Angeboten (Entwurf, Versand vorbereitet, TAIFUN mit PDF); nicht wählbare
+   ausgegraut mit Grund (Tooltip + Zeile); Vorauswahl über ?kombi=<angebot_id> (Link
+   „Mit weiteren Angeboten dieses Vorgangs versenden“ aus dem Editor, Agent E);
+   Entwürfe werden beim Kombi-Versand automatisch auf „Versand vorbereitet“ gesetzt
+   (kombi_versand.entwuerfe_vorbereiten, Route /vorgaenge/<id>/kombi-versand). #}
+{% set kombi_zeilen = kombi_auswahl if kombi_auswahl is defined else [] %}
+{% set kombi_waehlbar_anzahl = kombi_zeilen | selectattr('waehlbar') | list | length %}
+<section class="kombi-kasten" id="gemeinsam-versenden" aria-labelledby="kombi-titel">
+    <h3 id="kombi-titel">{{ symbol('brief') }} Gemeinsam versenden</h3>
+    <p class="dezent kombi-erklaerung">Alle angehakten Angebote gehen als separate PDFs in einer Mail an den Kunden;
+        Entwürfe werden dabei automatisch versandfertig gemacht.</p>
+    <form method="post" action="/vorgaenge/{{ vorgang.id }}/kombi-versand" id="kombiform" data-kombi-form
+          onsubmit="return kombiAbsenden(this);">
+        <ul class="kombi-liste">
+            {% for z in kombi_zeilen %}
+            <li class="kombi-zeile {{ 'gesperrt' if not z.waehlbar }}" {% if not z.waehlbar %}title="{{ z.grund }}"{% endif %}>
+                <label class="kontrollfeld">
+                    <input type="checkbox" name="angebot_ids" value="{{ z.id }}"
+                           {{ 'checked' if z.vorgewaehlt }} {{ 'disabled' if not z.waehlbar }}
+                           aria-describedby="kombi-grund-{{ z.id }}"
+                           title="{{ z.grund if not z.waehlbar else 'Für den Kombi-Versand auswählen' }}">
+                    {% if z.extern %}<span class="abzeichen status-taifun">TAIFUN</span>{% endif %}
+                    <strong>{{ z.nummer }}</strong>
+                    {{ sparten_ui.chip(z.sparte) }}
+                    {{ status_badge(z.status) }}
+                    {% if z.entwurf %}<span class="kombi-auto" title="Der Entwurf wird beim Kombi-Versand automatisch auf „Versand vorbereitet“ gesetzt">wird automatisch versandfertig gemacht</span>{% endif %}
+                    {% if z.pdf_fehlt %}<span class="abzeichen ep">PDF fehlt</span>{% endif %}
+                    <span class="betrag">{{ z.angebot.summen().endbetrag | euro }}</span>
+                    {% if not z.waehlbar %}<span class="kombi-grund" id="kombi-grund-{{ z.id }}">{{ z.grund }}</span>{% endif %}
+                </label>
+            </li>
+            {% endfor %}
+        </ul>
+        <div class="formaktionen">
+            <button class="knopf" type="submit" id="kombi-knopf" data-kombi-knopf disabled
+                    title="Mindestens zwei Angebote auswählen – ein einzelnes Angebot geht über „Versand vorbereiten“ am Angebot">
+                {{ symbol('brief') }} Kombi-Versand vorbereiten (<span data-kombi-anzahl>0</span> Angebote)</button>
+            <span class="dezent">{% if kombi_waehlbar_anzahl < 2 %}Für den Kombi-Versand müssen mindestens zwei Angebote versandfähig sein.
+                {% else %}Der Einzelversand über das Angebot bleibt unverändert.{% endif %}</span>
+            {% if kombi_doppelt %}
+                <span class="abzeichen ep" title="Diese Artikelnummern sind in mehreren Tool-Angeboten voll berechnet – ggf. Alternativ-Kennzeichen setzen">{{ symbol('warnung') }} doppelt: {{ kombi_doppelt | join(', ') }}</span>
+            {% endif %}
+        </div>
+    </form>
+</section>
+<script>
+(function () {
+    var form = document.getElementById('kombiform');
+    if (!form) { return; }
+    var knopf = form.querySelector('[data-kombi-knopf]');
+    var anzahl = form.querySelector('[data-kombi-anzahl]');
+    function gewaehlt() {
+        return form.querySelectorAll('input[name="angebot_ids"]:checked:not([disabled])').length;
+    }
+    function aktualisieren() {
+        var n = gewaehlt();
+        if (anzahl) { anzahl.textContent = String(n); }
+        if (knopf) {
+            knopf.disabled = n < 2;
+            knopf.title = n < 2
+                ? 'Mindestens zwei Angebote auswählen – ein einzelnes Angebot geht über „Versand vorbereiten“ am Angebot'
+                : 'Eine Mail mit ' + n + ' Angebots-PDFs als Entwurf vorbereiten';
+        }
+    }
+    form.addEventListener('change', aktualisieren);
+    aktualisieren();
+    window.kombiAbsenden = function (f) {
+        var n = gewaehlt();
+        if (n < 2) {
+            window.alert('Bitte mindestens zwei Angebote für den Kombi-Versand wählen (Einzelversand über das Angebot).');
+            return false;
+        }
+        var entwuerfe = 0;
+        Array.prototype.forEach.call(f.querySelectorAll('input[name="angebot_ids"]:checked'), function (h) {
+            if (h.closest('.kombi-zeile') && h.closest('.kombi-zeile').querySelector('.kombi-auto')) { entwuerfe += 1; }
+        });
+        var text = n + ' Angebote in EINER Mail (je ein PDF) als Entwurf vorbereiten?';
+        if (entwuerfe) { text += '\n' + entwuerfe + ' Entwurf/Entwürfe werden dabei automatisch auf „Versand vorbereitet“ gesetzt.'; }
+        return window.confirm(text);
+    };
+    // Vorauswahl aus dem Editor (?kombi=…): zum Kasten springen
+    if (window.location.hash === '#gemeinsam-versenden' || /[?&]kombi=\d+/.test(window.location.search)) {
+        var kasten = document.getElementById('gemeinsam-versenden');
+        if (kasten && kasten.scrollIntoView) { kasten.scrollIntoView({ block: 'center' }); }
+    }
+})();
+</script>
+{% endif %}
 
 {# v33 (PLAN_V20 Phase 168): Block „Termine“ – Service-Einsätze des Vorgangs (auch ohne
    Projekt: Bestandskunde) mit Badge Service, Anlass, Status, Besetzung, Outlook-Stand;

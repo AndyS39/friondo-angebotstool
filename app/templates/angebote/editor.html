@@ -5,6 +5,8 @@
 {% block titel %}{{ angebot.nummer }} – Friondo Angebotstool{% endblock %}
 
 {% block inhalt %}
+{# v34 (PLAN_V21 Phase 180, Agent E): Alternativ-Badge/Balken, Elektro-Knöpfe, Auslegung (intern) #}
+<link rel="stylesheet" href="/static/angebot_v34.css?v={{ css_version }}">
 <div class="seitenkopf">
     <h1>Angebot {{ angebot.nummer }}
         <span class="abzeichen" title="Konfigurator-Typ">{{ angebot.konfigurator_typ or 'WP' }}</span>
@@ -78,6 +80,14 @@
         <form method="post" action="/angebote/{{ angebot.id }}/email">
             <button class="knopf klein" type="submit">Versand vorbereiten</button>
         </form>
+        {% if angebot.vorgang_id and angebot.status in ('Entwurf', 'Versand vorbereitet') and not angebot.extern %}
+        {# v34 (PLAN_V21 Phase 180): Sprung in den Kasten „Gemeinsam versenden“ der Vorgangsakte
+           (Agent V wertet ?kombi= aus und hakt dieses Angebot vor) #}
+        <a class="knopf klein zweitrangig" id="kombi-sprung"
+           href="/vorgaenge/{{ angebot.vorgang_id }}?kombi={{ angebot.id }}#gemeinsam-versenden"
+           title="Kombi-Versand: dieses Angebot zusammen mit weiteren Angeboten des Vorgangs in EINER Mail (je ein PDF)">
+            Mit weiteren Angeboten dieses Vorgangs versenden</a>
+        {% endif %}
         {% endif %}
     </div>
 </div>
@@ -183,7 +193,50 @@ function zbFreitextUmschalten(an) {
 
 </div>{# /editor-kopfkarte #}
 
+{% if auslegung_sichtbar %}
+{# v34 (PLAN_V21 Phase 180): Auslegungstext (vormals 0,00-€-Position im Angebot) – aufklappbar,
+   grau, nur Innendienst/Admin (der Außendienst nutzt die meine_angebote-Templates ohne diesen
+   Block); der Text bleibt zusätzlich im Konfigurationsprotokoll #}
+<details class="auslegung-intern" id="auslegung-intern">
+    <summary>Auslegung (intern) <span class="dezent">– Herleitung aus der Erfassung, erscheint nicht im Angebots-PDF</span></summary>
+    <div class="auslegung-text">{{ angebot.auslegung_text }}</div>
+</details>
+{% endif %}
+
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+{% if not nur_lesen and not angebot.extern and (elektro_pv_ziel or elektro_rueckholbar or alternativ_ungueltig) %}
+{# v34 (PLAN_V21 Phase 180): Elektroarbeiten ins PV-Angebot (0 % USt) / zurückholen –
+   nur Innendienst/Admin (Routen in routers/angebote_elektro.py, Logik app/elektro_pv.py) #}
+<div class="elektro-block" id="elektro-block">
+    {% if elektro_pv_ziel %}
+    <form method="post" action="/angebote/{{ angebot.id }}/elektro-ins-pv"
+          onsubmit="return confirm('Elektro-Positionen dieses Angebots ins PV-Angebot {{ elektro_pv_ziel.nummer }} übernehmen?\nHier werden sie Alternativ „im PV-Angebot enthalten“, dort voll berechnet zu 0 % USt.');">
+        <button class="knopf klein elektro-knopf" type="submit"
+                title="Block Elektroarbeiten + gewerkeübergreifende Artikel → PV-Angebot {{ elektro_pv_ziel.nummer }} (0 % USt, § 12 Abs. 3 UStG)">
+            Elektroarbeiten ins PV-Angebot (0 % USt)</button>
+    </form>
+    <span class="dezent">Ziel: <a href="/angebote/{{ elektro_pv_ziel.id }}">PV-Angebot {{ elektro_pv_ziel.nummer }}</a>
+        ({{ elektro_pv_ziel.status }}) – die Elektro-Positionen bleiben hier als Alternativ „im PV-Angebot enthalten“
+        sichtbar und werden dort voll berechnet; der Kunde spart die Umsatzsteuer darauf.</span>
+    {% endif %}
+    {% if elektro_rueckholbar %}
+    <form method="post" action="/angebote/{{ angebot.id }}/elektro-zurueckholen"
+          onsubmit="return confirm('Elektroarbeiten zurückholen? Die übernommenen Positionen werden aus dem PV-Angebot entfernt und hier wieder voll berechnet.');">
+        <button class="knopf klein zweitrangig" type="submit">Elektroarbeiten zurückholen</button>
+    </form>
+    {% endif %}
+</div>
+{% if alternativ_ungueltig %}
+<div class="warnblock alternativ-warnung">
+    <strong>⚠ Geschwister-Angebot nicht mehr gültig</strong> – diese Alternativ-Positionen verweisen auf ein
+    gelöschtes, überholtes oder abgelehntes Angebot und werden hier weiterhin nicht berechnet:
+    <ul>{% for p in alternativ_ungueltig %}<li>{{ p.pos_nr }} {{ p.titel | truncate(70) }} <span class="dezent">({{ p.alternativ_zu }})</span></li>{% endfor %}</ul>
+    {% if elektro_rueckholbar %}<span class="dezent">„Elektroarbeiten zurückholen“ hebt das Kennzeichen wieder auf.</span>
+    {% else %}<span class="dezent">{{ elektro_rueckhol_grund }}</span>{% endif %}
+</div>
+{% endif %}
+{% endif %}
 
 {% if angebot.monday_rueck_status == 'fehler' %}
 <div class="warnblock fehlerblock">
@@ -462,7 +515,7 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
         </thead>
         <tbody class="sortierbar" data-block="{{ gruppe.block }}" data-gruppe="{{ gruppe.name }}">
         {% for p in gruppe.positionen %}
-            <tr data-pos-id="{{ p.id }}" class="{{ 'bauseits' if p.bauseits }}"{% if not nur_lesen %} draggable="true"{% endif %}>
+            <tr data-pos-id="{{ p.id }}" class="{{ 'bauseits' if p.bauseits }}{{ ' alternativ' if p.alternativ }}"{% if not nur_lesen %} draggable="true"{% endif %}>
                 {% if not nur_lesen %}<td class="griff" title="Ziehen zum Umsortieren">☰</td>{% endif %}
                 <td>
                     {% if nur_lesen %}{{ p.lfd_nr }}{% else %}
@@ -484,6 +537,19 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
                             <a href="#" class="dezent text-bearbeiten" onclick="textBearbeiten({{ p.id }}); return false;" title="Text nur in diesem Angebot ändern – der Artikelstamm bleibt unberührt">✎ Text</a>
                         {% endif %}
                         {% if p.bauseits %}<br><span class="abzeichen ep">bauseits</span>{% endif %}
+                        {% if p.alternativ %}
+                        {# v34 (PLAN_V21 Phase 180): Badge „Alternativ · im PV-Angebot AN-C-…“ mit Link zum
+                           Geschwister-Angebot des Vorgangs; EP behält sein Badge „EP“ #}
+                        {% set ai = alternativ_info.get(p.id) %}
+                        <br><span class="abzeichen alternativ-badge{{ ' ungueltig' if ai and not ai.gueltig }}"
+                                  title="Alternativ – in anderem Angebot des Vorgangs enthalten: Preis ausgewiesen, zählt nicht in Summe/KfW/DB ({{ ai.text if ai else (p.alternativ_zu or 'Parallel-Angebot') }})">
+                            Alternativ · {{ ai.label if ai else 'in anderem Angebot' }}{% if ai and ai.nummer %}
+                            {% if ai.ziel_id %}<a href="/angebote/{{ ai.ziel_id }}">{{ ai.nummer }}</a>{% else %}{{ ai.nummer }}{% endif %}{% endif %}{% if ai and not ai.gueltig %} – nicht mehr gültig{% endif %}</span>
+                        {% endif %}
+                        {% if p.id in uebernommen_von %}
+                        <br><span class="uebernommen-hinweis">↩ übernommen aus Angebot
+                            <a href="/angebote/{{ uebernommen_von[p.id].id }}">{{ uebernommen_von[p.id].nummer }}</a> (dort Alternativ, hier voll berechnet)</span>
+                        {% endif %}
                         {# v30 (PLAN_V18 Phase 149) [ANNAHME]: nur Anzeige – entfällt die
                            Hauptposition auf dem Lieferschein (EP/Alternativ/bauseits),
                            entfällt auch diese Folgeposition; keine automatische EP-Änderung #}
@@ -528,7 +594,7 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
                 <td class="rechts">
                     {% if p.bauseits %}<span class="dezent">bauseits</span>
                     {% elif p.ep_flag %}EP.
-                    {% elif p.alternativ %}<span class="dezent" title="Alternativ – enthalten in: {{ p.alternativ_zu or 'Parallel-Angebot' }}">Altern.</span>
+                    {% elif p.alternativ %}<span class="alternativ-gpreis" title="Alternativ – enthalten in: {{ p.alternativ_zu or 'Parallel-Angebot' }}">{{ alternativ_info[p.id].label if p.id in alternativ_info else 'in anderem Angebot' }}</span>
                     {% else %}{{ p.gesamt_cent | euro }}{% endif %}
                 </td>
                 <td class="aktionen">
@@ -631,6 +697,9 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
 {% if (angebot.konfigurator_typ or 'WP') == 'PV' %}
 {# v13-PV: PV-Angebote haben keinen KfW-/Förderblock (0 % USt, § 12 Abs. 3 UStG) #}
 <p class="dezent">PV-Angebot: kein KfW-Förderblock – Nullsteuersatz nach § 12 Abs. 3 UStG.</p>
+{% elif (angebot.konfigurator_typ or 'WP') in ('KL', 'WB') %}
+{# v34 (PLAN_V21 Phase 179): Klima- und Wallbox-Angebote haben keinen Förderblock – der Förder-Editor entfällt #}
+<p class="dezent">{{ 'Klimaanlagen' if angebot.konfigurator_typ == 'KL' else 'Wallbox' }}-Angebot: kein KfW-Förderblock.</p>
 {% elif not nur_lesen %}
 <form method="post" action="/angebote/{{ angebot.id }}/foerderung" class="formular foerder-editor">
     <strong>Förderung

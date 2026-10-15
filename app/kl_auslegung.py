@@ -934,15 +934,11 @@ def positionen_bauen(logik, antworten: dict, artikel_map: dict) -> list[dict]:
         }
         gesehen[schluessel] = eintrag
         positionen.append(eintrag)
-    text = auslegungs_text(a)
-    if text:
-        in_gruppe = [i for i, x in enumerate(positionen) if x["block_nr"] == gruppe_nr]
-        stelle = (in_gruppe[-1] + 1) if in_gruppe else len(positionen)
-        positionen.insert(stelle, {
-            "block_nr": gruppe_nr, "gruppe": ueberschrift(gruppe),
-            "pos_nr": "", "bezeichnung": AUSLEGUNGSZEILE,
-            "beschreibung": text, "menge": 1.0, "einheit": "psl.",
-            "e_preis_cent": 0, "ep_flag": False, "ek_cent": 0, "guid": ""})
+    # v34 (PLAN_V21 Phase 180): keine 0,00-€-Auslegungszeile „Auslegung der Klimaanlage“
+    # mehr als letzte Zeile von Block 3 (v24–v33) – auslegungs_text(a) wandert beim Anlegen
+    # in angebote.auslegung_text (angebot_aufbau.auslegungs_text_fuer) und bleibt auf der
+    # Protokollseite „Auslegung“ (protokoll_zeilen); AUSLEGUNGSZEILE bleibt als Kennung
+    # für Bestand/Migration.
     for sort, x in enumerate(positionen, 1):
         x["sort"] = sort
     return positionen

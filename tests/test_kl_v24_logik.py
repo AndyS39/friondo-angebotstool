@@ -240,7 +240,14 @@ class Lader(Basis):
         pv = logik_modul.logik_fuer_sparte(self.logik, "PV")
         self.assertEqual(pv.sparte, "PV")
         self.assertEqual(pv.kl_aktionen, [])
-        self.assertIsNone(logik_modul.logik_fuer_sparte(self.logik, "WB"))
+        # v34 (PLAN_V21 Phase 178, Agent W): WB hat seit v34 ein eigenes Blatt „Fragen WB“ und
+        # den Wallbox-Konfigurator – die WB-Sicht ist nicht mehr None (vorher: nur Freitext);
+        # die KL-Sicht bleibt davon unberührt (keine WB-Felder in der KL-Sicht)
+        wb = logik_modul.logik_fuer_sparte(self.logik, "WB")
+        self.assertIsNotNone(wb)
+        self.assertEqual(wb.sparte, "WB")
+        self.assertEqual((kl.wb_aktionen, kl.wb_bloecke), ([], []))
+        self.assertIsNone(logik_modul.logik_fuer_sparte(self.logik, "XX"))
 
     def test_artikel_referenzen_und_pruefung(self):
         refs = logik_modul.artikel_referenzen(self.logik)

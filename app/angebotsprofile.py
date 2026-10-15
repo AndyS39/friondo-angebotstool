@@ -511,6 +511,156 @@ def ist_kl(angebot: Angebot) -> bool:
     return (angebot.konfigurator_typ or "WP").upper() == "KL"
 
 
+# --- v34 (PLAN_V21 Phase 179): Wallbox-Texte (Wallbox-Konfigurator) -----------------
+# Vortext wörtlich aus PLAN_V21 „Grundlagen Wallbox“ (TAIFUN-Muster AN261737, Seite 1);
+# [Haken] wie bei WP/PV/KL als "- " (Haken-Zeile) bzw. "* " (Haken-Zeile mit fettem
+# Anfang bis " – "). Der TAIFUN-„Text vor Position“ („Komplettpaket Wallbox inkl.
+# Montage …“) ist ein eigener Absatz am Ende des Vortexts [ANNAHME Plan] – der Seed trägt
+# den im Plan zitierten Anfang als ENTWURF; den vollständigen Wortlaut der Excel-
+# Textzeile (Import-Protokoll zeigt sie) trägt der Innendienst in Parametrierung →
+# Textblöcke nach. Nachtext = B „Installationsvoraussetzungen“ (Haftungsbegrenzung,
+# Rücktrittsrecht Feinplanung wie KL, Zahlung mit {zahlungsbedingungen} = v30-Standard,
+# Rückfrage 3) + C Schlussseite; die Vollmacht (Nachtext D) rendert pdf_export bei WB
+# immer (anhaenge.vollmacht_erforderlich, Rückfrage 4). Kein Nachtext A „Ihre
+# Zahlungsoptionen“, kein KfW-/Förderblock, keine Wirtschaftlichkeit. Alle WB-Texte sind
+# Entwürfe für das Gegenlesen durch den Innendienst.
+WB_KOMPLETTPAKET_TITEL = "Komplettpaket Wallbox inkl. Montage"
+WB_KOMPLETTPAKET_TEXT = ("Die Zukunft der Energie beginnt bei Ihnen zuhause – effizient, "
+                         "nachhaltig und zuverlässig.")
+
+_WB_VORTEXT_KOPF = """## Ihre individuelle Wallbox zum Festpreis
+
+{briefanrede}
+
+vielen Dank für Ihr Vertrauen in die Friondo GmbH. Mit einer modernen Wallbox laden Sie Ihr Elektrofahrzeug bequem zu Hause, sparen Zeit und machen sich unabhängiger von öffentlichen Ladeinfrastrukturen. So schaffen Sie Komfort, Sicherheit und ein smartes Energiemanagement direkt bei Ihnen vor Ort.
+
+Anbei erhalten Sie Ihr maßgeschneidertes Angebot. Darin enthalten sind:
+
+- Ihre individuelle Wallbox – perfekt abgestimmt auf Ihre Immobilie & Ihren Bedarf
+- Fachgerechte Installation – sauber, sicher und termingerecht
+- Transparent & zum Festpreis – klar verständlich, ohne versteckte Kosten
+- Unser Rundum-Sorglos-Service – von der Planung bis zur Inbetriebnahme
+
+## Warum Friondo?
+
+* Fachkompetenz & Qualität – Als Meisterbetrieb und zertifizierter Fachbetrieb setzen wir auf höchste Standards
+* Alles aus einer Hand – Von Photovoltaik bis Energiemanagement – perfekt kombinierbar mit Ihrer Wallbox
+* Persönliche Beratung – Wir begleiten Sie von der ersten Idee bis zur fertigen Lösung
+* Effizienz & Nachhaltigkeit – Wir helfen Ihnen, Ihr Zuhause energieoptimiert und zukunftssicher zu gestalten
+* Fördermittel-Check & Unterstützung – Wir prüfen für Sie mögliche Zuschüsse und Förderungen
+
+Wir sind auf moderne Energiesysteme spezialisiert und gehören in der Region zu den führenden Anbietern von Photovoltaik, Wärmepumpen, Klimaanlagen, Energiemanagement-Systemen und Wallboxen. Lassen Sie uns gemeinsam Ihr Zuhause fit für die Zukunft machen!
+
+Ihr Friondo-Team"""
+
+
+def wb_vortext(komplettpaket: str | None = None) -> str:
+    """Vortext WB mit dem Absatz „Komplettpaket Wallbox inkl. Montage“ am Ende: Text aus der
+    Textzeile der Wallbox-Excel (erste Zeile = Überschrift, Rest = Absätze; Nachtrag
+    15.10.2026, `import_wallbox.komplettpaket_text`) oder – ohne Datei – der Entwurf."""
+    titel, text = WB_KOMPLETTPAKET_TITEL, WB_KOMPLETTPAKET_TEXT
+    zeilen = [z.strip() for z in (komplettpaket or "").strip().splitlines()]
+    if zeilen:
+        if zeilen[0].lower().startswith("komplettpaket"):
+            titel, zeilen = zeilen[0], zeilen[1:]
+        rest = "\n".join(zeilen).strip()
+        if rest:
+            text = rest
+    return _WB_VORTEXT_KOPF + "\n\n## " + titel + "\n\n" + text
+
+
+WB_VORTEXT = wb_vortext()   # Entwurf (ohne Excel-Textzeile)
+
+# Nachtext C WB: Schlussseite ohne „Aufschiebende Bedingung“ (keine KfW-Förderung),
+# mit „Voraussichtlicher Ausführungszeitraum“ wie KL [ANNAHME]; Unterschriftenblock wie WP
+_WB_ABSCHLUSS = """Wir sichern Ihnen eine fach- und zeitgerechte Ausführung aller angebotenen Leistungen zu.
+
+Sie haben Fragen oder wünschen weitere Informationen? Rufen Sie uns an - wir sind für Sie da.
+
+Mit freundlichen Grüßen,
+
+Ihr Friondo-Team
+
+Sollte Ihnen das Angebot zusagen, senden Sie uns bitte zur Auftragserteilung das unterschriebene Angebot zurück.
+
+Voraussichtlicher Ausführungszeitraum: ______________
+
+[UNTERSCHRIFT]"""
+
+# Nachtext B WB: nur „Installationsvoraussetzungen“ (Haftungsbegrenzung, Rücktrittsrecht
+# Feinplanung, Zahlung {zahlungsbedingungen}), Bindefrist/AGB/Datenschutz – wie das
+# TAIFUN-Muster; kein Hinweis zur Kältetechnik (KL), kein KfW-Hinweis (WP)
+WB_STANDARD_NACHTEXT = """# Installationsvoraussetzungen
+""" + _RECHT_UND_ZAHLUNG + "\n\n" + _BINDUNG + """
+---
+""" + _WB_ABSCHLUSS
+
+# Nachtexte der Kanal-Profile: Start = Kopie des Standard-Nachtexts [ANNAHME Plan]
+WB_SEED_BLOECKE = [
+    ("vortext", "Friondo WB Standard", WB_VORTEXT),
+    ("nachtext", "Friondo WB Standard", WB_STANDARD_NACHTEXT),
+    ("nachtext", "Friondo WB Enni", WB_STANDARD_NACHTEXT),
+    ("nachtext", "Friondo WB SWD", WB_STANDARD_NACHTEXT),
+    ("nachtext", "Friondo WB Sparkasse DU", WB_STANDARD_NACHTEXT),
+]
+
+
+def seed_wb(session: Session, komplettpaket: str | None = None) -> list[str]:
+    """v34: WB-Textblöcke nachträglich anlegen (idempotent, je Art + Name; vorhandene –
+    ggf. in der Parametrierung bearbeitete – Blöcke bleiben). Der Vortext trägt den Absatz
+    „Komplettpaket Wallbox inkl. Montage“ wörtlich aus der Textzeile der Wallbox-Excel
+    (Nachtrag 15.10.2026; `komplettpaket` übergeben oder aus Artikel-Preislisten/Wallbox/
+    gelesen); liegt die Datei nicht vor, bleibt der Entwurf. Ein noch unveränderter
+    Entwurfs-Vortext wird beim nächsten Lauf mit Datei auf den Excel-Text gehoben."""
+    if komplettpaket is None:
+        try:
+            from app import import_wallbox
+            komplettpaket = import_wallbox.komplettpaket_text()
+        except Exception:   # noqa: BLE001 – Textzeile ist Zusatz, nie ein Grund abzubrechen
+            komplettpaket = ""
+    vortext = wb_vortext(komplettpaket or None)
+    bloecke = [("vortext", "Friondo WB Standard", vortext)] + [
+        b for b in WB_SEED_BLOECKE if b[0] != "vortext"]
+    vorhanden = {(b.art, b.name): b for b in session.query(Textblock)}
+    neu = 0
+    aktualisiert = 0
+    for art, name, text in bloecke:
+        block = vorhanden.get((art, name))
+        if block is None:
+            session.add(Textblock(art=art, name=name, text=text))
+            neu += 1
+        elif art == "vortext" and block.text == WB_VORTEXT and text != WB_VORTEXT:
+            block.text = text          # Entwurf → wörtlicher Text aus der Excel-Textzeile
+            aktualisiert += 1
+    meldungen = []
+    if neu:
+        meldungen.append(f"{neu} WB-Textblöcke (Vor-/Nachtexte Wallbox) angelegt"
+                         + ("" if komplettpaket else " – Absatz „Komplettpaket“ als Entwurf "
+                            "(Wallbox-Excel nicht gefunden)"))
+    if aktualisiert:
+        meldungen.append("WB-Vortext: Absatz „Komplettpaket Wallbox inkl. Montage“ aus der "
+                         "Wallbox-Excel übernommen")
+    return meldungen
+
+
+def _wb_block(session: Session, art: str, profil: Profil | None) -> str:
+    """WB-Textblock des Profils („Friondo WB <Profil>“), sonst WB Standard; ohne
+    Blöcke in der Datenbank die Seed-Konstanten."""
+    namen = ([f"Friondo WB {profil.name}"] if profil is not None else []) \
+        + ["Friondo WB Standard"]
+    for name in namen:
+        block = (session.query(Textblock)
+                 .filter(Textblock.art == art, Textblock.name == name).first())
+        if block is not None and block.text.strip():
+            return block.text
+    return WB_VORTEXT if art == "vortext" else WB_STANDARD_NACHTEXT
+
+
+def ist_wb(angebot: Angebot) -> bool:
+    """v34: Wallbox-Angebot aus dem Wallbox-Konfigurator (konfigurator_typ „WB“)."""
+    return (angebot.konfigurator_typ or "WP").upper() == "WB"
+
+
 SEED_BLOECKE = [
     ("nachtext", "Friondo Standard", STANDARD_NACHTEXT),
     ("nachtext", "Friondo Enni", ENNI_NACHTEXT),
@@ -598,6 +748,8 @@ def nachtext_fuer_angebot(session: Session, angebot: Angebot) -> str:
         return _pv_block(session, "nachtext", profil)
     if ist_kl(angebot):   # v24: eigene KL-Nachtexte je Profil
         return _kl_block(session, "nachtext", profil)
+    if ist_wb(angebot):   # v34: eigene WB-Nachtexte je Profil
+        return _wb_block(session, "nachtext", profil)
     if profil is not None and profil.nachtext_id:
         block = session.get(Textblock, profil.nachtext_id)
         if block is not None and block.text.strip():
@@ -613,6 +765,8 @@ def vortext_fuer_angebot(session: Session, angebot: Angebot) -> str:
         return _pv_block(session, "vortext", profil)
     if ist_kl(angebot):   # v24
         return _kl_block(session, "vortext", profil)
+    if ist_wb(angebot):   # v34
+        return _wb_block(session, "vortext", profil)
     if profil is not None and profil.vortext_id:
         block = session.get(Textblock, profil.vortext_id)
         if block is not None and block.text.strip():
@@ -621,6 +775,11 @@ def vortext_fuer_angebot(session: Session, angebot: Angebot) -> str:
 
 
 def vollmacht_erlaubt(session: Session, angebot: Angebot) -> bool:
+    """Profil-Regel „ohne Vollmacht“ (Enni/SWD, v9). v34 (PLAN_V21 Phase 179, Rückfrage 4):
+    bei Wallbox-Angeboten gilt die Vollmacht immer – auch bei Enni/SWD, weil die
+    Netzanmeldung nach § 14a EnWG (WB004) Teil des Angebots ist [ANNAHME]."""
+    if ist_wb(angebot):
+        return True
     profil = profil_fuer_angebot(session, angebot)
     return not (profil is not None and profil.ohne_vollmacht)
 
@@ -656,6 +815,13 @@ def regeln_beschreibung_fuer_angebot(angebot: Angebot, profil: Profil | None) ->
                    else "Versand-Empfänger bleibt leer")
         return (f"{profil.name}: Klima-Angebot – keine Positionsregeln (kein Friondo "
                 f"Fit for Future); eigener KL-Nachtext; {versand}.")
+    if ist_wb(angebot) and profil is not None and profil.regel_kennung in ("enni", "swd"):
+        # v34: Wallbox – keine Positionsregeln, Vollmacht immer (Netzanmeldung § 14a)
+        versand = ("Versand zusätzlich CC " + (profil.versand_cc or ENNI_CC)
+                   if profil.regel_kennung == "enni"
+                   else "Versand-Empfänger bleibt leer")
+        return (f"{profil.name}: Wallbox-Angebot – keine Positionsregeln (kein Friondo "
+                f"Fit for Future); eigener WB-Nachtext; Vollmacht-Seite immer; {versand}.")
     return regeln_beschreibung(profil)
 
 
@@ -670,7 +836,8 @@ def positionsregeln_anwenden(session: Session, angebot: Angebot,
     # Future – die WP-Artikel 014–017 werden weder eingefügt noch entfernt/
     # umgepreist, Pos. 162 nie ergänzt (kein Gruppen-Trigger). Versandregeln
     # (Enni-CC, SWD-Empfänger leer) greifen weiterhin über das Profil.
-    if ist_kl(angebot):
+    # v34 (PLAN_V21 Phase 179): Wallbox-Angebote ebenso – keine Pos. 014–017 [ANNAHME].
+    if ist_kl(angebot) or ist_wb(angebot):
         return meldungen
     if kennung not in ("enni", "swd"):
         return meldungen

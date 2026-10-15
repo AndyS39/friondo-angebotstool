@@ -134,7 +134,12 @@ def vollmacht_kreuze(angebot: Angebot) -> dict:
 
 def vollmacht_erforderlich(angebot: Angebot) -> bool:
     """Nachtext D (Vollmacht) nur, wenn iMSys (P02/Pos. 016) und/oder
-    SpotDynamic (P03/Pos. 017) im Angebot sind."""
+    SpotDynamic (P03/Pos. 017) im Angebot sind.
+    v34 (PLAN_V21 Phase 179, Rückfrage 4 – Entscheidung 15.10.2026): bei Wallbox-
+    Angeboten (konfigurator_typ „WB“) IMMER – die Netzanmeldung nach § 14a EnWG
+    (WB004) braucht die Vollmacht; Anker für pdf_export._mit_vollmacht."""
+    if (angebot.konfigurator_typ or "WP").upper() == "WB":
+        return True
     positionen = {p.pos_nr for p in angebot.positionen}
     if positionen & {"016", "017"}:
         return True

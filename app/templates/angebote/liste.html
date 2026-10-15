@@ -4,6 +4,7 @@
 {% from "_komponenten.html" import status_badge, verfolgung_chip %}
 {% from "_symbole.html" import symbol %}
 {% from "leadmanagement/_tabelle.html" import spalten_kopf, spalten_colgroup, breiten_gesetzt, spaltenwahl, tabellen_daten %}
+{% from "_taifun_pdf.html" import taifun_pdf_eintrag %}
 
 {% block titel %}Angebote – Friondo Angebotstool{% endblock %}
 {% block mainklasse %}breit{% endblock %}
@@ -20,6 +21,10 @@
    = Gesamtbetrag nach USt und Rabatt (Phase 172/A, vorher „Brutto“ = Betrag VOR Rabatt).
    Keine Sammelaktionen (Entscheidung Claudia Castro); Einzelaktionen wie bisher. #}
 {% block inhalt %}
+{# v34 (PLAN_V21 Phase 180, Agent V): Drop-Zone für das TAIFUN-PDF am TAIFUN-Eintrag (Aktionen-
+   Zelle) – ersetzt den Datei-Knopf der TAIFUN-Seite auch hier; Spaltenlogik (Phase 174) unverändert #}
+<link rel="stylesheet" href="/static/vorgang_v34.css?v={{ css_version }}">
+<script src="/static/taifun_pdf.js?v={{ css_version }}" defer></script>
 {% set vf_filter = verfolgung_filter if verfolgung_filter is defined and verfolgung_filter else (verfolgung | default('')) %}
 {% set vf_werte = verfolgung_werte if verfolgung_werte is defined and verfolgung_werte else [
     ('versendet', 'Versendet'), ('nachgefasst', 'Nachgefasst'),
@@ -186,6 +191,9 @@
                     <button class="knopf symbol" type="submit"
                             title="Angebot duplizieren">{{ symbol('kopie') }}</button>
                 </form>
+                {% else %}
+                {# v34 (Phase 180): TAIFUN-PDF ablegen/ersetzen direkt in der Liste (kompakte Zone) #}
+                {{ taifun_pdf_eintrag(a, zurueck=request.url.path ~ ('?' ~ request.url.query if request.url.query else ''), kompakt=True) }}
                 {% endif %}
                 {% if a.status == 'Entwurf' %}
                 <form method="post" action="/angebote/{{ a.id }}/loeschen" style="display:inline"

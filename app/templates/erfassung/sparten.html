@@ -54,7 +54,9 @@
                 <input type="checkbox" name="sparte_{{ s }}"
                        {{ 'checked' if s in vorausgewaehlt }} {{ 'disabled' if s in erfasst }}>
                 <span>{{ s }} – {{ sparten_namen[s] }}{{ ' ✓ bereits erfasst' if s in erfasst }}
-                    {% if freitext_sparten is defined and s in freitext_sparten %}<span class="dezent">(immer Freitext)</span>{% elif s == 'WB' %}<span class="dezent">(immer Freitext)</span>{% endif %}</span>
+                    {# v34 (PLAN_V21 Phase 179): Freitext-Sparten kommen aus sparten.freitext_sparten(logik) –
+                       WB zeigt die Weiche Katalog | Freitext, sobald die Logik „Aktionen WB“ trägt #}
+                    {% if freitext_sparten is defined and s in freitext_sparten %}<span class="dezent">(immer Freitext)</span>{% endif %}</span>
             </label>
         {% endfor %}
         </div>

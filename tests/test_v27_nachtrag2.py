@@ -1,7 +1,9 @@
 # Tests v27-Nachtrag 2 (PLAN_V17, Nachtrag 06.10.2026 – Agent N): Anhänge Klima
 # (Blatt „Anhänge“ mit „Bosch Climate 3200i.pdf“, Regel „immer“ unabhängig von
 # Sparte/Profil, tolerante Dateisuche), E-Mail-Vorlage je Sparte (Ableitung,
-# Migration, Reihenfolge AD → Sparte → Standard, Versand-Route, Parametrierung)
+# Migration, Reihenfolge AD → Sparte → Standard – seit v34 (PLAN_V21 Phase 180) bei
+# PV/KL/WB Sparte → AD → Standard, siehe test_reihenfolge_ad_sparte_standard –, Versand-Route,
+# Parametrierung)
 # und die neue Anmeldeseite (zweispaltig, Häkchen nur Außendienst/Montage,
 # Fehlermeldung unter dem Knopf). Die Versand- und Seiten-Tests laufen gegen die
 # Entwicklungs-DB (DB_PFAD_OVERRIDE); Testdaten tragen das Präfix „V27N “ bzw. die
@@ -311,12 +313,17 @@ class SpartenVorlagen(unittest.TestCase):
         betreff, _, quelle = mail_vorlagen.mail_fuer_angebot(self.s, self.pv, self.kunde)
         self.assertEqual((quelle, betreff), ("Sparten-Vorlage PV",
                                              "Ihr PV-Angebot AN-C-260103 der Friondo GmbH"))
-        # AD-Vorlage geht vor der Sparten-Vorlage
+        # v34 (PLAN_V21 Phase 180, Entscheidung R6): bei KL/PV/WB geht die Sparten-Vorlage der
+        # AD-Vorlage vor (AD-Vorlagen sind WP-formuliert – Ursache des Befunds „Klima-Mailtext
+        # wird nicht gezogen“); bis v33 gewann hier die AD-Vorlage. WP bleibt AD → Standard.
         mail_vorlagen.vorlage_speichern(self.s, self.ad.id, "Rene: {angebotsnummer}", "Moin {vorname}")
         self.s.commit()
         betreff, text, quelle = mail_vorlagen.mail_fuer_angebot(self.s, self.kl, self.kunde)
+        self.assertEqual((quelle, betreff),
+                         ("Sparten-Vorlage KL", "Ihr Klimaanlagen-Angebot AN-C-260101 der Friondo GmbH"))
+        betreff, text, quelle = mail_vorlagen.mail_fuer_angebot(self.s, self.wp, self.kunde)
         self.assertEqual((quelle, betreff, text),
-                         ("Vorlage Rene Golaschewski", "Rene: AN-C-260101", "<p>Moin Erika</p>"))
+                         ("Vorlage Rene Golaschewski", "Rene: AN-C-260102", "<p>Moin Erika</p>"))
         mail_vorlagen.vorlage_speichern(self.s, self.ad.id, "", "")
         # Sparten-Vorlage entfernt → Standard
         mail_vorlagen.sparten_vorlage_speichern(self.s, "KL", "", "")
