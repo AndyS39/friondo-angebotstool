@@ -3445,3 +3445,56 @@ additiv – v32-Code läuft auf der v33-Datenbank (Rückweg-Probe im Rollout-Skr
   `docs/design-system.md`, `docs/signaturen.md`, `docs/PROTOKOLL-2026-10-14-Angebotstool.md`;
   `config.VERSION = "v33"`. Foto-Upload-Meldung der Vertriebler (15.10.2026): Ursache Datenmenge der
   Originalfotos über LTE/VPN – Vorschlag Verkleinern auf dem Handy, Entscheidung offen (nicht Teil von v33).
+- **Nachtrag 15.10.2026 – Entscheidungen zu den Rückfragen des Durchlaufs** (Andreas: „alle offenen Fragen
+  selbst nach bestem Gewissen und im Interesse des Projekts beantworten“; Nummern wie in
+  `diagnose/v33/gesamtuebersicht.md`, Commit „v33-Nachtrag 15.10.2026“, kein Push):
+  **Plan/Orchestrator:** P1 Tests rechnen nach echtem Kalender (10.10.2026 = Samstag); P2 die alte
+  Lead-Wochenansicht bleibt in v33 über `?alt=1` als Übergang und entfällt mit einem späteren Plan; P3
+  nächste Rollout-Prüfung mit frischer Server-Kopie; P4 „Claude outputs/“ steht jetzt in `.gitignore`; P5
+  Alias `GET/POST /einstellungen/spalten` bleibt; P6 Lasttest-Zielwerte bleiben – nach dem Rollout auf dem
+  Server nachmessen (Parametrierung → Betrieb, p95 je Route), bei Bestätigung Folgeplan (Cache für
+  `nachfassen.wiedervorlage_liste`, Profil der Terminvorschläge); **P7 Foto-Upload in v33:**
+  `app/static/bild_verkleinern.js` (in `base.html`) verkleinert Bilder vor dem Upload auf dem Gerät auf
+  2000 px Kante / JPEG 0,85 (Grenze wie `galerie.MAX_KANTE`; < 400 KB, Nicht-Bilder und nicht dekodierbare
+  Formate bleiben) – jedes Formular mit Bild-Dateien (Galerie-Upload, Montage-Foto, Formular-Fotos) wird beim
+  Absenden abgefangen und mit den verkleinerten Dateien gesendet (DataTransfer + `requestSubmit`); die
+  Foto-Sammelbox (`_galerie.html`) verkleinert beim Hinzufügen und lädt **Foto für Foto** mit Fortschritt
+  „Lade 2 von 5 …“ hoch; Server unverändert.
+  **K:** R1 Umleitung bleibt; R2 Leadmanagement zählt zu „Innendienst“; **R3 erfolgte Vor-Ort-Termine bleiben
+  als Rückschau sichtbar** (gedämpft `kz-erfolgt`, nicht verschiebbar); R5 Kalender-Knopf im Montage-Backend
+  reicht; **R6 Drag in die Zeile eines anderen Vertrieblers verlangt eine Bestätigung** („Vertriebler wechseln
+  zu …? Umbuchung + Terminänderungs-Mail“, `bestaetigung_noetig`); R8 Monatsansicht mit Punkten reicht.
+  **G:** R1 rote Mitarbeiter-Postfächer schalten den Modus nicht zurück; R2 keine Suche in
+  Innendienst-Postfächern (`MessageCopyForSentAsEnabled` ist Pflicht); R3 Info-Mail an angebot@ ja; **R4
+  Admins mit E-Mail stehen in der Postfach-Liste** (`MITARBEITER_BASISROLLEN` + admin); R5 Verbindungstest
+  prüft alle Kalender; R6 PEM + Thumbprint bleibt.
+  **R:** R1 Marker-Aktivität bleibt; R2 Kanal-Regel bleibt „fest zuständig“; R3 Standardregel F13 ohne
+  Kennzeichen; **R4 Migration `leadmanagement.migration_v33_swd_profil` setzt dem SWD-Profil die
+  Kanalwerte „SWD, Stadtwerke Düsseldorf“, wenn leer**; **R5 HV-Dashboard zeigt den Block „Simons Gruppe –
+  noch nicht verteilt“** (`dashboard_daten["gruppe_offen"]`, `hv_dashboard_block.html`); R6 Admin keine
+  Zusatzrolle.
+  **S:** R1 Ereignis-Phasen bleiben manuell; R2 Pflichtfelder bestätigt; R3 Abschluss beendet den Einsatz;
+  **R5 Service-Einsatz ohne Team/Techniker ist erlaubt** (Besetzung folgt in der Akte; Backend-Sicht und
+  Outlook-Kopien erst mit Besetzung); R6 Standarddauer 2 h, Anlass Pflicht.
+  **A:** **R1 monday-Deal-Wert bei Basis „netto“ = Netto nach Rabatt** (`summen["netto_nach_rabatt"]`,
+  alle Quellen stehen auf brutto – keine Änderung im Bestand); R2 schreibende GET-Routen bleiben (Folgeplan);
+  R6 Backup-Test nur bei parallelen Läufen flaky.
+  **O:** R1 TAIFUN-[ANNAHME] bleibt bis zum Abgleich mit dem Monteur-Kalender (Skript liegt bereit, Kategorie
+  „Friondo-Tool“ erlaubt späteres Filtern); R2 `kalender_sync` bleibt der VOT-Schalter; R3 Kundennummer,
+  sonst Vorgangs-ID; R4 Glockenart `kommentar`; **R5 keine automatische Kundenmail bei Verschiebung aus
+  Outlook – Glocke an den Leadmanager** („bitte den Kunden über die Terminänderung informieren“); R6
+  Team-Kalender nur bei `outlook_adresse`; **R7 Handlauf `scripts/outlook_bestand_einreihen.py`**
+  (Projekt-/Service-Termine und bei `kalender_sync = an` offene VOT der nächsten 8 Wochen als Aufträge
+  „anlegen“, Blöcke je 50, `--trocken`) nach dem grünen Verbindungstest.
+  **M:** R1 Überfällig-Block bleibt; R2 ohne Einstufung = Niedrig; R3 Tabelle Lead-basiert; R4 Leiste
+  „Kalender“ = Meine Termine; R5 Hinweiszeile bleibt. **T:** R1 DB-Summe mit Kalkulationssicht; R2 acht
+  Spalten; R3 Katalog `erfassungen`. **N:** R1 Einwand-Startliste bestätigt; R2 Standardtexte als Entwurf
+  (Innendienst passt im Editor an); R3 Grußformel bleibt in den Vorlagen – Signatur ohne eigene Grußformel
+  hochladen; R4 PDF-Häkchen Standard aus; R5 Innendienst/Admin aus eigenem Postfach ja; R6 Antworten im
+  AD-Postfach reichen; R7 Kontakt inkl. System-Notizen; R8 Zähler nur bei „nachgefasst“; R10 delegiert bleibt
+  gesperrt. Tests `tests/test_v33_nachtrag.py` (9); angepasste Alt-Tests: `test_v33_service::
+  test_pflichtfelder_und_mannschaft` (Service ohne Besetzung erlaubt), `test_v33_kalender` (Fixture „erledigt“
+  = erfolgt sichtbar, neue Fixture abgesagt unsichtbar), `test_monday_rueckspielung::test_deal_wert_netto` und
+  `test_v33_rabatt::test_monday_deal_wert` (Basis netto = Netto nach Rabatt). Gesamtsuite nach dem Nachtrag
+  1352 bestanden, 5 übersprungen; `migrate.py` zweimal auf einer Kopie (2. Lauf ohne Änderungen); Skripte
+  per Chrome headless geprüft (`diagnose/v33/orch/js_check.py`).

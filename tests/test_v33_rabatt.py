@@ -287,9 +287,10 @@ class Darstellung(Basis):
         self.assertEqual(monday_rueckspielung._betrag(a, "brutto"), "19000.00")
         self.assertEqual(monday_rueckspielung._betrag(a, "brutto", self.s), "19000.00")
         self.assertEqual(monday_rueckspielung.vorgangssumme_cent(self.s, a, "brutto"), 1_900_000)
-        # Basis „netto“ (Parametrierung je Quelle, im Bestand nicht genutzt): Netto ohne Rabatt –
-        # unverändert zu v32, als Rückfrage im Bericht (summen()["netto_nach_rabatt"] stünde bereit)
-        self.assertEqual(monday_rueckspielung._betrag(a, "netto"), "20000.00")
+        # Basis „netto“ (Parametrierung je Quelle, im Bestand nicht genutzt): seit dem v33-Nachtrag
+        # 15.10.2026 (Entscheidung A-R1) Netto NACH Rabatt (summen()["netto_nach_rabatt"]) –
+        # bei 0 % USt also derselbe Wert wie „brutto“
+        self.assertEqual(monday_rueckspielung._betrag(a, "netto"), "19000.00")
 
     def test_statistik_summe_versendet(self):
         von = datetime.now() - timedelta(days=1)

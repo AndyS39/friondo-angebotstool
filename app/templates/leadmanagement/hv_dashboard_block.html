@@ -20,6 +20,21 @@
         <span class="lm-delta">mir zugewiesen</span></a>
 </div>
 <div class="hv-dashboard">
+    {#- v33-Nachtrag 15.10.2026 (R-R5): an „Simons Gruppe“ verschobene Leads ohne Mitglied #}
+    {% if dashboard.gruppe_offen %}
+    <div class="lm-karte" id="hv-gruppe-offen">
+        <h2>{{ symbol('handelsvertreter') }} Simons Gruppe – noch nicht verteilt
+            <span class="sub">{{ dashboard.kacheln.gruppe_offen }} Lead{{ 's' if dashboard.kacheln.gruppe_offen != 1 }} · Mitglied in der Kartei wählen (Feld Außendienst / Handelsvertreter)</span></h2>
+        <ul class="hv-liste">
+            {% for e in dashboard.gruppe_offen %}
+            <li><span><a href="/lead-management/lead/{{ e.vorgang.id }}">{{ e.kunde.anzeige_name if e.kunde else '?' }}</a>
+                {% if e.kunde and e.kunde.ort %}<small class="dezent">{{ e.kunde.ort }}</small>{% endif %}
+                <span class="abzeichen status-versand-vorbereitet" data-hv-gruppe-offen="{{ e.vorgang.id }}">noch nicht verteilt</span></span>
+                <span class="dezent">{{ e.eingang | de_datum('%d.%m.%Y') if e.eingang else '' }}</span></li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
     <div class="lm-karte" id="hv-faellig">
         <h2>{{ symbol('wiedervorlage') }} Wiedervorlagen <span class="sub">manuell gesetzt · fällig zuerst, dann die nächsten 7 Tage</span></h2>
         <ul class="hv-liste">

@@ -1079,6 +1079,17 @@ def _termin_nachziehen(session: Session, ereignis: OutlookEreignis, beginn: date
         from app import leadmanagement as lm
         if termin.vorgang_id:
             lm.aktivitaet(session, termin.vorgang_id, "termin", text)
+            # Nachtrag 15.10.2026 (O-R5): keine automatische Kundenmail – Glocke an den Leadmanager
+            # (Rückfall Leitung), damit die Terminänderung bewusst an den Kunden geht
+            vorgang = session.get(Vorgang, termin.vorgang_id)
+            empfaenger = [vorgang.leadmanager_id] if vorgang is not None and vorgang.leadmanager_id else []
+            if not empfaenger:
+                from app import lead_termin
+                empfaenger = lead_termin.leitung_ids(session)
+            if empfaenger:
+                lm.benachrichtigen(session, empfaenger,
+                                   (text + " – bitte den Kunden über die Terminänderung informieren")[:500],
+                                   f"/lead-management/lead/{termin.vorgang_id}", art="terminaenderung")
     ereignis.beginn, ereignis.ende = termin.beginn, termin.ende
     ereignis.letzte_aenderung = datetime.now()
     session.flush()

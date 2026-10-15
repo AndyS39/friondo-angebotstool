@@ -828,11 +828,20 @@ def dashboard_daten(session: Session, benutzer) -> dict:
     todos = (session.query(Todo)
              .filter(Todo.an_benutzer_id == benutzer.id, Todo.status == "offen")
              .order_by(Todo.faellig_am.is_(None), Todo.faellig_am).limit(20).all())
+    # Nachtrag 15.10.2026 (R-R5): Leads, die über die Sammelaktion an „Simons Gruppe“ gingen und
+    # noch kein Mitglied haben (Marker-Aktivität) – nur beim Gruppenleiter nicht leer
+    from app import lead_v2
+    gruppe_offen_ids = lead_v2.hv_gruppe_offen_ids(session, eigene)
+    gruppe_offen = sorted([v for v in eigene if v.id in gruppe_offen_ids],
+                          key=lambda v: v.eingang_am or v.angelegt_am or jetzt)
     return {
         "jetzt": jetzt, "benutzer": benutzer,
         "offen_labels": _offen_labels(),
         "kacheln": {"faellig": len(faellig), "kommend": len(kommend),
-                    "termine": len(termine), "offen": len(offen), "todos": len(todos)},
+                    "termine": len(termine), "offen": len(offen), "todos": len(todos),
+                    "gruppe_offen": len(gruppe_offen)},
+        "gruppe_offen": [{"vorgang": v, "kunde": kunden.get(v.kunde_id),
+                          "eingang": v.eingang_am or v.angelegt_am} for v in gruppe_offen[:30]],
         "faellig": [{"vorgang": v, "kunde": kunden.get(v.kunde_id), "wann": _wv(v)}
                     for v in faellig[:15]],
         "kommend": [{"vorgang": v, "kunde": kunden.get(v.kunde_id), "wann": _wv(v)}

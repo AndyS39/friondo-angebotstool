@@ -108,6 +108,7 @@
 .kz-eintrag:hover { background: color-mix(in srgb, var(--kz-f, var(--pj-muted)) 30%, var(--flaeche-karte)); }
 .kz-eintrag.kz-ganz { border-left-width: 1px; border-style: solid; font-style: normal; }
 .kz-eintrag.kz-vorgemerkt { border-style: dashed; color: var(--text-dezent); background: var(--flaeche-karte); }
+.kz-eintrag.kz-erfolgt { opacity: .55; }   /* v33-Nachtrag (K-R3): erfolgte VOT als Rückschau */
 .kz-eintrag.kz-unbestaetigt { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--kz-f) 22%, var(--flaeche-karte)) 0 5px, var(--flaeche-karte) 5px 9px); }
 .kz-eintrag.kz-belegt, .kz-eintrag.kz-sperrzeit { color: var(--text-dezent); cursor: default; border-color: var(--linie-stark); border-left-width: 1px; }
 .kz-eintrag.kz-krankheit, .kz-eintrag.kz-urlaub, .kz-eintrag.kz-abwesenheit { cursor: default; color: var(--text-dezent); border-color: var(--linie-stark); }

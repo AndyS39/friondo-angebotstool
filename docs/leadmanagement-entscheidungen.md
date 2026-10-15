@@ -992,3 +992,19 @@ Outlook löscht nie im Tool (Markierung + Glocke an den Leadmanager, Rückfrage 
 | N-3 | Innendienst/Admin dürfen die Nachfass-Mail aus ihrem eigenen Postfach senden (gleiche Rechte wie „Nächster Schritt“) | gebaut, Rückfrage N-5 |
 | N-4 | Einwand-Startliste: Förderung unklar · wartet auf Mitbewerber · Entscheidung in der Familie · Finanzierung offen; Nachfass-Vorlagen 1/2 als Entwurf; PDF-Häkchen Standard aus | gebaut, Rückfragen N-1/N-2/N-4 |
 | N-5 | Versand (Graph) vor dem `_speichern`-Muster, nie doppelt senden; Kundenantworten auf die Nachfass-Mail bleiben im AD-Postfach (kein CC an angebot@) | gebaut, Rückfrage N-6 |
+
+### Antworten 15.10.2026 (Orchestrator im Sinne des Projekts, Auftrag Andreas)
+
+| Nr | Entscheidung | Umsetzung |
+|---|---|---|
+| K-R1/R2/R5/R8 | Umleitung bleibt (`?alt=1` Übergang); Leadmanagement = Gruppe Innendienst; Kalender-Knopf im Montage-Backend reicht; Monatsansicht mit Punkten | bestätigt |
+| K-R3 | erfolgte VOT bleiben als Rückschau sichtbar (gedämpft, nicht verschiebbar) | `kalender_zentral` + `.kz-erfolgt` |
+| K-R6 | Vertrieblerwechsel per Drag nur nach Bestätigung (Umbuchung + Terminänderungs-Mail) | `_vot_verschieben` → `bestaetigung_noetig` |
+| R-R1/R2/R3/R6 | Marker-Aktivität; Kanal-Regel „fest zuständig“; F13 ohne Kennzeichen; Admin keine Zusatzrolle | bestätigt |
+| R-R4 | SWD-Profil bekommt Kanalwerte „SWD, Stadtwerke Düsseldorf“ | `leadmanagement.migration_v33_swd_profil` |
+| R-R5 | HV-Dashboard-Block „Simons Gruppe – noch nicht verteilt“ | `dashboard_daten["gruppe_offen"]` |
+| O-R2/R3/R4/R6 | `kalender_sync` bleibt VOT-Schalter; Kundennummer sonst Vorgangs-ID; Glockenart kommentar; Team-Kalender optional | bestätigt |
+| O-R5 | Verschiebung aus Outlook → Glocke an Leadmanager, keine automatische Kundenmail | `outlook_sync._termin_nachziehen` |
+| O-R7 | Bestandstermine einmalig per Handlauf einreihen | `scripts/outlook_bestand_einreihen.py` |
+| M-R1…R5 | Überfällig-Block, Niedrig ohne Einstufung, Lead-basierte Tabelle, Leiste „Meine Termine“, Hinweiszeile | bestätigt |
+| N-R1…R8/R10 | Einwand-Startliste, Entwurfstexte, Grußformel in der Vorlage, PDF-Häkchen aus, ID/Admin eigenes Postfach, Antworten im AD-Postfach, Kontakt inkl. System-Notizen, Zähler nur nachgefasst, delegiert gesperrt | bestätigt |

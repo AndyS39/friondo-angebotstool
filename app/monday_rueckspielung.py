@@ -41,6 +41,7 @@ def lead_fuer_angebot(session, angebot: Angebot) -> Lead | None:
 _SUMMEN_STATUS = ("Versendet", "Versendet (extern)", "Angenommen")
 
 
+# v33-Nachtrag 15.10.2026 (A-R1): Basis netto = Netto NACH Rabatt (summen["netto_nach_rabatt"])
 def vorgangssumme_cent(session, angebot: Angebot, basis: str) -> int:
     """v10 (Phase 62): Deal-Wert = Summe der Endbeträge ALLER versendeten,
     nicht überholten, nicht abgelehnten Angebote des Vorgangs. Externe
@@ -55,11 +56,11 @@ def vorgangssumme_cent(session, angebot: Angebot, basis: str) -> int:
             continue
         summen = a.summen()
         summe += (summen["endbetrag"] if a.extern
-                  else (summen["netto"] if basis == "netto" else summen["endbetrag"]))
+                  else (summen.get("netto_nach_rabatt", summen["netto"]) if basis == "netto" else summen["endbetrag"]))
     if summe == 0 and angebot.status in _SUMMEN_STATUS:
         summen = angebot.summen()
         summe = (summen["endbetrag"] if angebot.extern
-                 else (summen["netto"] if basis == "netto" else summen["endbetrag"]))
+                 else (summen.get("netto_nach_rabatt", summen["netto"]) if basis == "netto" else summen["endbetrag"]))
     return summe
 
 
@@ -70,7 +71,7 @@ def _betrag(angebot: Angebot, basis: str, session=None) -> str:
     else:
         summen = angebot.summen()
         cent = (summen["endbetrag"] if angebot.extern
-                else (summen["netto"] if basis == "netto" else summen["endbetrag"]))
+                else (summen.get("netto_nach_rabatt", summen["netto"]) if basis == "netto" else summen["endbetrag"]))
     return str((Decimal(cent) / 100).quantize(Decimal("0.01")))
 
 

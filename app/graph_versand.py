@@ -59,7 +59,8 @@ ART_FUNKTIONSPOSTFACH = "funktionspostfach"
 ART_MITARBEITER = "mitarbeiter"
 # Basisrollen, deren aktive Benutzer (mit E-Mail) Termine/Besetzungen tragen und damit ein
 # Postfach in der Zugriffsgruppe brauchen (Kalender je Mitarbeiter, Phase 170)
-MITARBEITER_BASISROLLEN = ("aussendienst", "projektierung", "montage", "innendienst")
+MITARBEITER_BASISROLLEN = ("aussendienst", "projektierung", "montage", "innendienst",
+                           "admin")   # Nachtrag 15.10.2026 (G-R4): Admins mit E-Mail ebenfalls
 TEXT_NICHT_ANGEMELDET = "Nicht bei Microsoft angemeldet"
 TEXT_ANWENDUNG_FEHLER = "Anmeldung der Anwendung fehlgeschlagen"
 KONTO_ANWENDUNG = f"Anwendung ({ZUGRIFFSGRUPPE})"   # Rückgabe von angemeldeter_benutzer()

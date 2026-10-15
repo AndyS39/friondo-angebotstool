@@ -158,10 +158,14 @@ class Basis(unittest.TestCase):
         cls.monday = VotTermin(vorgang_id=cls.vorgang.id, ad_id=cls.ad.id, beginn=_dt(mo + timedelta(days=3), 9),
                                ende=_dt(mo + timedelta(days=3), 10, 30), status="geplant", typ="vot",
                                quelle="monday")
+        # Nachtrag 15.10.2026 (K-R3): erfolgte Termine bleiben als Rueckschau sichtbar, abgesagte nicht
         cls.erledigt = VotTermin(vorgang_id=cls.vorgang.id, ad_id=cls.ad.id, beginn=_dt(mo + timedelta(days=4), 9),
-                                 ende=_dt(mo + timedelta(days=4), 10), status="abgesagt", typ="vot",
+                                 ende=_dt(mo + timedelta(days=4), 10), status="erfolgt", typ="vot",
                                  quelle="manuell")
-        s.add_all([cls.vot, cls.telefon, cls.sperrzeit, cls.monday, cls.erledigt])
+        cls.abgesagt = VotTermin(vorgang_id=cls.vorgang.id, ad_id=cls.ad.id, beginn=_dt(mo + timedelta(days=4), 11),
+                                 ende=_dt(mo + timedelta(days=4), 12), status="abgesagt", typ="vot",
+                                 quelle="manuell")
+        s.add_all([cls.vot, cls.telefon, cls.sperrzeit, cls.monday, cls.erledigt, cls.abgesagt])
         # Projekt mit Gewerk und allen Terminarten
         cls.projekt = Projekt(nummer=f"{PRAEFIX}-1", kunde_id=cls.kunde.id, vorgang_id=cls.vorgang.id,
                               ausfuehrung_strasse="Testweg 7", ausfuehrung_plz="47139",
@@ -321,7 +325,11 @@ class Eintraege(Basis):
         self.assertEqual(vot["kunde"], self.kunde.anzeige_name)
         self.assertTrue(vot["verschiebbar"])
         self.assertFalse(je_key[f"vot-{self.monday.id}"]["verschiebbar"])   # monday-Termin gesperrt
-        self.assertNotIn(f"vot-{self.erledigt.id}", je_key)                 # nur offene Status
+        # Nachtrag 15.10.2026 (Entscheidung K-R3): erfolgte Termine bleiben als Rueckschau sichtbar (gedaempft)
+        self.assertIn(f"vot-{self.erledigt.id}", je_key)
+        self.assertIn("kz-erfolgt", je_key[f"vot-{self.erledigt.id}"]["farbe_klasse"])
+        self.assertFalse(je_key[f"vot-{self.erledigt.id}"]["verschiebbar"])
+        self.assertNotIn(f"vot-{self.abgesagt.id}", je_key)   # abgesagte Termine bleiben unsichtbar
         sperr = je_key[f"vot-{self.sperrzeit.id}"]
         self.assertEqual(sperr["personen"], [self.hv.id])
         self.assertFalse(sperr["verschiebbar"])

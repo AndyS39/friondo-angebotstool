@@ -785,6 +785,7 @@ def _daten() -> list[str]:
                                     ("app.outlook_sync", "migration_v33_outlook"),
                                     ("app.projektierung", "migration_v33_service"),
                                     ("app.montage_formulare", "migration_v33_termin_id"),
+                                    ("app.leadmanagement", "migration_v33_swd_profil"),
                                     ("app.verfolgung", "migration_v33_nachfassen"),
                                     ("app.lead_boards", "migration_v33_tabellen")):
             try:

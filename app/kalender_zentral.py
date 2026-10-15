@@ -322,7 +322,8 @@ def _eintrag(key: str, nr, quelle: str, art: str, beginn, ende, personen, kunde:
          "kunde": kunde or "", "ort": ort or "", "text": text or "", "link": link or "",
          "personen": [int(p) for p in personen if p],
          "farbe_klasse": f"kz-{art}" + (" kz-vorgemerkt" if status == "vorgemerkt" else "")
-                         + (" kz-unbestaetigt" if status == "unbestaetigt" else ""),
+                         + (" kz-unbestaetigt" if status == "unbestaetigt" else "")
+                         + (" kz-erfolgt" if status == "erfolgt" else ""),
          "verschiebbar": bool(verschiebbar), "status": status or ""}
     if zusatz:
         e.update(zusatz)
@@ -340,7 +341,9 @@ def _vot_eintraege(session: Session, benutzer, ids: list[int], von_dt: datetime,
         return []
     termine = (session.query(VotTermin)
                .filter(VotTermin.ad_id.in_(ids),
-                       VotTermin.status.in_(OFFENE_VOT_STATUS),
+                       # Nachtrag 15.10.2026 (K-R3): erfolgte Termine bleiben als Rückschau sichtbar
+                       # (gedämpft, nicht verschiebbar – _vot_recht verlangt einen offenen Status)
+                       VotTermin.status.in_(OFFENE_VOT_STATUS + ("erfolgt",)),
                        VotTermin.beginn.isnot(None),
                        VotTermin.beginn < bis_dt,
                        VotTermin.beginn >= von_dt - timedelta(days=1))
@@ -716,6 +719,11 @@ def _vot_verschieben(session: Session, benutzer, termin: VotTermin, beginn: date
         return _antwort(True, f"{name} verschoben auf {beginn:%d.%m.%Y %H:%M}.")
     objekt = lead_termin.objekt_holen(session, vorgang, termin.objekt_id, anlegen=False)
     lead_ort = lead_termin.objekt_ort(session, vorgang, objekt)
+    # Nachtrag 15.10.2026 (K-R6): Drag in die Zeile eines anderen Vertrieblers = Umbuchung mit
+    # Terminänderungs-Mail an den Kunden – nur nach ausdrücklicher Bestätigung
+    if ad_id != int(termin.ad_id or 0) and not bestaetigt:
+        return _antwort(False, f"Vertriebler wechseln zu {person.name}? Der Termin wird umgebucht, "
+                        "der Kunde erhält eine Terminänderungs-Mail.", [], bestaetigung_noetig=True)
     k = lead_termin.konflikte(session, ad_id, beginn, lead_ort=lead_ort, ignorieren_id=termin.id)
     if k["sperren"]:
         return _antwort(False, "Nicht möglich – " + "; ".join(k["texte"]), k["texte"])

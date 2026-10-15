@@ -1898,9 +1898,8 @@ def termin_speichern(session: Session, gewerk: Gewerk | None, daten: dict,
             mannschaft = [b for b in (daten.get("besetzung") or []) if str(b).strip()]
         else:
             mannschaft = besetzung_ids(session, termin.id) if bearbeiten else []
-        if team is None and not mannschaft and not person_id:
-            return False, ("Service-Einsatz: bitte ein Team oder mindestens eine Person "
-                           "einteilen."), []
+        # Nachtrag 15.10.2026 (S-R5): ein Service-Einsatz darf ohne Team/Techniker geplant werden –
+        # die Besetzung folgt in der Akte; Outlook-Kopien und Backend-Sichten entstehen erst mit ihr
     if art in ("montage", "elektro"):
         if team is None:
             return False, "Montagetermine brauchen ein Team – bitte Team wählen.", []

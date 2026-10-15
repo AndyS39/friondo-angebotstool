@@ -214,6 +214,12 @@ davor meldet die Kontrolle „HTTP 404“ (normal). Nach dem Rollback
   für …“, „Teams (v33): Gewerk gesetzt – n Elektro, m Heizung“, Graph-Modus `delegiert`, Outlook-Tabellen
   (`outlook_ereignisse`, `outlook_auftraege`, `outlook_belegt`), Service-Parameter (`phase_auto`), Einwände
   (vier Startwerte), Spalten/Indizes `ix_v33_*`. Der zweite Lauf meldet „keine Änderungen nötig“.
+  Mit dem Nachtrag 15.10.2026 zusätzlich beim ersten Lauf: „Angebotsprofil SWD (v33): Kanalwerte … gesetzt“
+  (nur, wenn das SWD-Profil keine Kanalwerte hatte).
+- Nachtrag 15.10.2026: nach dem grünen Verbindungstest (Modus „anwendung“) einmalig
+  `venv\Scripts\python scripts\outlook_bestand_einreihen.py --wochen 8` (vorher `--trocken` zum Zählen) –
+  reiht die Bestandstermine als persönliche Outlook-Kopien ein; Fotos werden seit dem Nachtrag vor dem Upload
+  auf dem Gerät verkleinert (keine Server-Einstellung nötig).
 - Danach `scripts\smoke.bat` wie immer. Neue Hintergrundläufe `outlook-sync`/`outlook-ruecklesen` stehen in
   Parametrierung → Betrieb (aktiv erst im Modus „anwendung“ bzw. mit Kalender-Freigabe).
 - Admin-To-dos aus `docs/nach-dem-update-v33.md`: Rollen/Teams prüfen (René Golaschewski und Simon O Grady

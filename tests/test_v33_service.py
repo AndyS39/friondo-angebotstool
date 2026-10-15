@@ -306,8 +306,8 @@ class ServiceAmVorgang(Basis):
             "art": "service", "vorgang_id": self.vorgang.id, "service_gewerk": "heizung",
             "anlass": "wartung", "beginn": date.today() + timedelta(days=3), "uhrzeit": "08:00"},
             benutzer=self.adminb)
-        self.assertFalse(ok)
-        self.assertIn("mindestens eine Person", meldung)
+        # Nachtrag 15.10.2026 (Entscheidung S-R5): ohne Team/Techniker erlaubt – Besetzung folgt in der Akte
+        self.assertTrue(ok, meldung)
         ok, meldung, _ = kern.termin_speichern(self.s, None, {
             "art": "service", "vorgang_id": self.vorgang.id, "service_gewerk": "wasser",
             "anlass": "wartung", "beginn": date.today(), "besetzung": [self.service_h.id],

@@ -63,7 +63,9 @@ class TestRueckspielung(unittest.TestCase):
         self.quelle.rueck_wert_basis = "netto"; self.s.commit()
         with mock.patch.object(monday_sync, "_api", side_effect=self._fake_api):
             monday_rueckspielung.uebertragen(self.s, self.angebot)
-        self.assertEqual(json.loads(self.aufrufe[0][1]["werte"])["numbers_1"], "10000.00")
+        # v33-Nachtrag 15.10.2026 (Entscheidung A-R1): Basis „netto“ = Netto nach Rabatt
+        # (10.000,00 € − 500 € Rabatt ÷ 1,19 = 9.579,83 €); vorher Netto vor Rabatt (10000.00)
+        self.assertEqual(json.loads(self.aufrufe[0][1]["werte"])["numbers_1"], "9579.83")
 
     def test_gruppen_modus(self):
         self.quelle.rueck_modus = "gruppe"; self.quelle.rueck_gruppe_id = "group_xyz"

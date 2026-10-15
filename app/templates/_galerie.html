@@ -233,7 +233,8 @@ function pjGalDrop(ev, form) {
     form.classList.remove('drop');
     if (!ev.dataTransfer.files.length) return;
     form.querySelector('input[type=file][multiple]:not([hidden])').files = ev.dataTransfer.files;
-    form.submit();
+    /* v33-Nachtrag: requestSubmit löst das submit-Ereignis aus – bild_verkleinern.js verkleinert vorher */
+    if (typeof form.requestSubmit === 'function') { form.requestSubmit(); } else { form.submit(); }
 }
 /* Foto-Sammelbox (27.09.2026): mehrere Fotos sammeln, Ordner je Foto,
    ein Upload am Ende */
@@ -245,6 +246,14 @@ function pjSammelAdd(input) {
     Array.from(input.files).forEach(function (datei) {
         var eintrag = {datei: datei};
         box._dateien.push(eintrag);
+        /* v33-Nachtrag 15.10.2026: Foto auf dem Gerät verkleinern (max. 2000 px, JPEG) – die
+           verkleinerte Datei ersetzt das Original in der Liste; der Upload wartet darauf */
+        if (window.bildVerkleinern) {
+            box._laufend = (box._laufend || 0) + 1;
+            window.bildVerkleinern(datei).then(function (klein) { eintrag.datei = klein; })
+                .catch(function () {})
+                .then(function () { box._laufend -= 1; });
+        }
         var zeile = document.createElement('div');
         zeile.className = 'foto';
         var bild = document.createElement('img');
@@ -284,25 +293,46 @@ function pjSammelLeeren(knopf) {
     pjSammelZahl(box);
 }
 function pjSammelHochladen(knopf) {
+    /* v33-Nachtrag 15.10.2026 (Meldung der Vertriebler): Foto für Foto hochladen – eine Anfrage je
+       Foto (verkleinert), Fortschritt am Knopf „Lade 2 von 5 …“; am Ende zurück mit Meldung */
     var box = pjSammelBox(knopf);
     if (!box._dateien || !box._dateien.length) return;
+    if (box._laufend) { setTimeout(function () { pjSammelHochladen(knopf); }, 150); return; }
     knopf.disabled = true;
-    var daten = new FormData();
-    daten.append('ordner', box.querySelector('.haupt-ordner').value);
-    daten.append('sparte', box.dataset.sparte);
-    daten.append('zurueck', box.dataset.zurueck);
-    daten.append('bemerkung', box.querySelector('.bemerkung').value);
-    box._dateien.forEach(function (e) {
-        daten.append('dateien', e.datei);
+    var text = knopf.textContent;
+    var dateien = box._dateien.slice();
+    var gesamt = dateien.length, nr = 0;
+    function fertig(fehler) {
+        if (fehler) {
+            knopf.disabled = false; knopf.textContent = text;
+            alert('Upload fehlgeschlagen – ' + nr + ' von ' + gesamt + ' Fotos abgelegt. Bitte erneut versuchen.');
+            return;
+        }
+        var ziel = box.dataset.zurueck || window.location.pathname;
+        ziel += (ziel.indexOf('?') >= 0 ? '&' : '?') + 'meldung=' + encodeURIComponent(gesamt + ' Foto(s) abgelegt.') + '#galerie';
+        window.location = ziel;
+    }
+    function naechstes() {
+        if (nr >= gesamt) { fertig(false); return; }
+        var e = dateien[nr];
+        knopf.textContent = 'Lade ' + (nr + 1) + ' von ' + gesamt + ' …';
+        var daten = new FormData();
+        daten.append('ordner', box.querySelector('.haupt-ordner').value);
+        daten.append('sparte', box.dataset.sparte);
+        daten.append('zurueck', box.dataset.zurueck);
+        daten.append('bemerkung', box.querySelector('.bemerkung').value);
+        daten.append('dateien', e.datei, e.datei.name);
         daten.append('datei_ordner', e.wahl.value);
-    });
-    fetch('/vorgaenge/' + box.dataset.vorgang + '/galerie/upload',
-          {method: 'POST', body: daten})
-        .then(function (antwort) { window.location = antwort.url; })
-        .catch(function () {
-            knopf.disabled = false;
-            alert('Upload fehlgeschlagen – bitte erneut versuchen.');
-        });
+        fetch('/vorgaenge/' + box.dataset.vorgang + '/galerie/upload',
+              {method: 'POST', body: daten, credentials: 'same-origin'})
+            .then(function (antwort) {
+                if (!antwort.ok) { throw new Error('HTTP ' + antwort.status); }
+                nr += 1;
+                naechstes();
+            })
+            .catch(function () { fertig(true); });
+    }
+    naechstes();
 }
 </script>
 {% endmacro %}

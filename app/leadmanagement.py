@@ -2968,3 +2968,19 @@ def demo_kennzeichen_entfernen(session: Session, benutzer=None) -> int:
                            benutzer)
     session.flush()
     return anzahl
+
+
+def migration_v33_swd_profil(session: Session) -> list:
+    """migrate.py-Hook (v33-Nachtrag 15.10.2026, Entscheidung R-R4): das Angebotsprofil mit
+    `regel_kennung = swd` bekommt die Kanalwerte „SWD, Stadtwerke Düsseldorf“, wenn es keine
+    trägt – damit `profil_fuer_kanal` SWD-Leads das Profil zuordnet. Idempotent."""
+    from app.models import Profil
+    meldungen = []
+    for profil in session.query(Profil).filter(Profil.regel_kennung == "swd"):
+        if (profil.kanalwerte or "").strip():
+            continue
+        profil.kanalwerte = f"SWD, {KANAL_SWD}"
+        meldungen.append(f"Angebotsprofil {profil.name} (v33): Kanalwerte 'SWD, Stadtwerke Duesseldorf' gesetzt")
+    if meldungen:
+        session.commit()
+    return meldungen

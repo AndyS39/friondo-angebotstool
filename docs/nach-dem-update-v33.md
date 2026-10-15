@@ -140,6 +140,25 @@ Vorlagen-Editor (Parametrierung → E-Mail-Vorlagen) hat die Reiter „Nachfasse
 die Standardtexte sind Entwürfe, bitte gegenlesen; `{absender}` ist dort der sendende Außendienstler,
 die Signatur hängt das Tool darunter.
 
+### Alle: Fotos werden vor dem Upload verkleinert (Nachtrag 15.10.2026)
+Fotos aus Galerie, Montage-Foto und Formularen werden jetzt **auf dem Handy verkleinert** (längste Kante 2000 px,
+dieselbe Größe, die der Server bisher nach dem Upload erzeugt hat) und **Foto für Foto** hochgeladen – der Knopf
+zeigt „Lade 2 von 5 …“. Ein Foto ist damit meist 300–600 KB statt mehrere MB; über LTE/VPN geht der Upload
+fünf- bis zehnmal schneller. Nicht lesbare Formate (z. B. HEIC ohne Browser-Unterstützung) gehen unverändert.
+
+### Weitere Entscheidungen vom 15.10.2026 (Team)
+- Mitarbeiter-Kalender: erledigte Vor-Ort-Termine bleiben in der Vergangenheit sichtbar (ausgegraut).
+  Wer einen Vor-Ort-Termin in die Zeile eines anderen Vertrieblers zieht, bekommt eine Rückfrage – der Termin
+  wird umgebucht und der Kunde erhält eine Terminänderungs-Mail.
+- Service-Einsätze dürfen ohne Team/Techniker geplant werden; die Besetzung folgt in der Akte (im
+  Service-Backend und in Outlook erscheint der Einsatz erst mit Besetzung).
+- Handelsvertreter-Dashboard: Block „Simons Gruppe – noch nicht verteilt“ listet die Leads, für die noch ein
+  Mitglied gewählt werden muss.
+- Verschiebt ein Mitarbeiter einen Vor-Ort-Termin in Outlook, übernimmt das Tool die Zeit und schickt dem
+  Leadmanager eine Glocke – die Terminänderung an den Kunden geht bewusst von Hand.
+- Nachfass-Mail: die Vorlagen enden mit Grußformel und {absender}; die hochgeladene Signatur daher ohne eigene
+  Grußformel anlegen (sonst doppelt).
+
 ## Für Andreas / Admin
 
 1. **Graph als Anwendung einschalten (IT, Anleitung `docs/graph-einrichtung.md`):**
@@ -196,3 +215,9 @@ Nachfass-Mail: Graph als Anwendung (Phase 166) mit allen Außendienst-Postfäche
 `friondo-tool-zugriff@` (ein AD ohne Postfach in der Gruppe bekommt beim Senden „Versand aus
 <Postfach> fehlgeschlagen: … 403“). Bis dahin bleibt der Knopf im Modus delegiert gesperrt.
 8. **Tabellen (Phase 174):** keine Einstellung nötig – Spalten/Sortierung speichert jede Person für sich (`benutzer_einstellungen`); „Zurücksetzen“ stellt den Standard her.
+
+9. **Bestandstermine nach Outlook (Nachtrag 15.10.2026):** nach dem grünen Verbindungstest einmalig
+   `venv\Scripts\python scripts\outlook_bestand_einreihen.py --trocken` (zählt) und dann ohne `--trocken`
+   ausführen – alle Projekt-/Service-Termine und (bei `kalender_sync = an`) offenen Vor-Ort-Termine der
+   nächsten 8 Wochen bekommen persönliche Outlook-Kopien über den Lauf outlook-sync. Angebotsprofil SWD:
+   die Kanalwerte „SWD, Stadtwerke Düsseldorf“ setzt `migrate.py` selbst, wenn sie fehlen.

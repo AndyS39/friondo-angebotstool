@@ -1141,3 +1141,16 @@ Rückfrage O-R6]; Löschen in Outlook löscht nie im Tool (Markierung „in Outl
 Projektleiter/Ersteller); Storno beim Löschen eines Termins/Projekts wird immer eingereiht (Vorschlag O 4a);
 persönliche Kopien für Bestandstermine entstehen beim nächsten Speichern (Massenanlage per Handlauf –
 Rückfrage O-R7).
+
+### Antworten 15.10.2026 (Orchestrator im Sinne des Projekts, Auftrag Andreas)
+
+| Nr | Entscheidung | Umsetzung |
+|---|---|---|
+| S-R1/R2/R3/R6 | Ereignis-Phasen manuell; Pflichtfelder Anlass/Arbeiten/Ergebnis/Unterschriften; Abschluss beendet den Einsatz; 2 h / Anlass Pflicht | bestätigt |
+| S-R5 | Service-Einsatz ohne Team/Techniker erlaubt – Besetzung folgt in der Akte | `projektierung.termin_speichern` |
+| K-P6 | Menü „Kalender“ für Monteure: Link im Montage-Backend reicht | bestätigt |
+| O-R1 | TAIFUN: [ANNAHME] sichtbar / Betreff-Muster / Kategorie bis zum Abgleich mit dem Monteur-Kalender | offen (Skript `scripts/outlook_abgleich.py`) |
+| O-R7 | Bestandstermine (8 Wochen) einmalig als persönliche Kopien | `scripts/outlook_bestand_einreihen.py` |
+| G-R4 | Admins mit E-Mail in der Postfach-Liste der Verbindungs-Seite | `graph_versand.MITARBEITER_BASISROLLEN` |
+| A-R1 | monday-Basis „netto“ = Netto nach Rabatt | `monday_rueckspielung` |
+| P7 | Foto-Upload: Verkleinern auf dem Gerät + Upload Foto für Foto | `static/bild_verkleinern.js`, `_galerie.html` |
