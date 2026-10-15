@@ -2,13 +2,19 @@
 # Die Modelle der einzelnen Phasen registrieren sich an Base; init_db() legt
 # beim App-Start alle noch fehlenden Tabellen an.
 
+import contextvars
+import threading
+import time
+import weakref
 from contextlib import contextmanager
 from pathlib import Path
 
 from sqlalchemy import create_engine, event
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from starlette.requests import Request
 
-from app import config
+from app import anfrage, config
 
 # Hotfix 06.10.2026 (Verbindungspool): auf dem Server trat
 # „QueuePool limit of size 5 overflow 10 reached, connection timed out,
@@ -27,6 +33,65 @@ engine = create_engine(
     connect_args={"check_same_thread": False},  # FastAPI: Zugriff aus mehreren Threads
     pool_size=POOL_SIZE, max_overflow=MAX_OVERFLOW, pool_timeout=POOL_TIMEOUT,
 )
+
+# v33 (PLAN_V20 Phase 172, v30-Nachtrag 21): Schreibtransaktionen sofort eröffnen.
+# SQLite im WAL-Modus liefert bei einem Schreibzugriff nach Lesezugriffen derselben
+# verzögert (DEFERRED) eröffneten Transaktion SOFORT „database is locked“
+# (BUSY_SNAPSHOT), sobald ein anderer Schreiber zwischenzeitlich festgeschrieben hat –
+# der busy_timeout greift dort nicht, weil der eigene Lese-Schnappschuss veraltet ist.
+# Sitzungen, die schreiben wollen (POST/PUT/PATCH/DELETE-Anfragen über get_session,
+# Scheduler-Blöcke über kurz()), eröffnen ihre Transaktion deshalb mit BEGIN IMMEDIATE:
+# die Schreibsperre wird vor dem ersten Lesen genommen, ein weiterer Schreiber wartet
+# den busy_timeout (5 s) ab, statt sofort zu scheitern; Lesen-Rechnen-Schreiben einer
+# Schreibanfrage ist damit gegen andere Schreiber serialisiert (kein verlorener
+# Zwischenstand). Leseanfragen (GET) und alle übrigen Sitzungen bleiben unverändert im
+# Legacy-Modus des Treibers. Technik (SQLAlchemy-Muster für sqlite3, nur für die
+# Schreibsitzung angewandt): im begin-Event isolation_level=None setzen (der Treiber
+# beginnt dann keine Transaktion selbst) und BEGIN IMMEDIATE schicken; commit()/
+# rollback() des Treibers beenden die Transaktion wie bisher. Nebeneffekt: SAVEPOINTs
+# (angebot_aufbau.angebot_anlegen(commit=False)) funktionieren in Schreibsitzungen korrekt.
+SCHREIBTRANSAKTION_SOFORT = True     # Schalter für Messungen/Tests (False = alles wie bis v32)
+# Engine-Ansicht mit der Option „schreibend“ – gleicher Pool, gleiche Events; eine
+# Sitzung mit diesem Bind erkennt das begin-Event an conn.get_execution_options().
+_ENGINE_SCHREIBEND = engine.execution_options(schreibend=True)
+# Offene BEGIN-IMMEDIATE-Transaktionen im aktuellen Kontext: eine zweite Sitzung
+# desselben Threads (z. B. rollen.katalog() oder graph_versand._modus_lesen() mit
+# eigener kurz()-Sitzung innerhalb einer schreibenden Anfrage) darf nicht ebenfalls
+# IMMEDIATE eröffnen – sie liefe gegen die eigene Schreibsperre und scheiterte nach
+# 5 s; sie bleibt DEFERRED (Lesen funktioniert sofort). ContextVar statt threading.local:
+# jeder Threadpool-Aufruf (Route, Dependency-Abschluss) arbeitet auf einer Kontextkopie,
+# ein in einem anderen Thread geschlossener Rest kann den Zähler nicht dauerhaft
+# verfälschen. Die Verbindungen selbst werden schwach referenziert.
+_IMMEDIATE_OFFEN: contextvars.ContextVar[int] = contextvars.ContextVar(
+    "db_immediate_offen", default=0)
+_IMMEDIATE_VERBINDUNGEN: "weakref.WeakSet" = weakref.WeakSet()
+# Zähler für Betriebs-Seite, Lasttest und Tests (sofort = BEGIN IMMEDIATE, verzoegert =
+# Legacy-Transaktion, sofort_wiederholt = BEGIN IMMEDIATE nach „database is locked“ einmal
+# wiederholt, sofort_gescheitert = auch die Wiederholung lief in „database is locked“)
+TRANSAKTIONEN = {"sofort": 0, "verzoegert": 0, "sofort_wiederholt": 0, "sofort_gescheitert": 0}
+_transaktionen_sperre = threading.Lock()
+# v22-Muster (routers/angebote._speichern): nach „database is locked“ (busy_timeout 5 s
+# abgelaufen) einmal kurz warten und erneut versuchen – hier für BEGIN IMMEDIATE, damit
+# die Wiederholung jede Schreibanfrage schon beim ersten Zugriff schützt; _speichern
+# wiederholt eine so gescheiterte Transaktion nicht ein zweites Mal (Budget ≈ 10,7 s).
+WIEDERHOLUNG_S = 0.7
+
+
+def _transaktionen_zaehlen(art: str) -> None:
+    with _transaktionen_sperre:
+        TRANSAKTIONEN[art] += 1
+
+
+def transaktionen_zuruecksetzen() -> None:
+    with _transaktionen_sperre:
+        TRANSAKTIONEN.update(sofort=0, verzoegert=0, sofort_wiederholt=0, sofort_gescheitert=0)
+
+
+def schreibsitzung() -> Session:
+    """v33 (Phase 172): Sitzung, deren Transaktion sofort als Schreibtransaktion
+    beginnt (BEGIN IMMEDIATE) – für Code, der außerhalb von get_session/kurz()
+    schreibt (z. B. GET-Routen, die Datensätze anlegen). Schließen nicht vergessen."""
+    return SessionLocal(bind=_ENGINE_SCHREIBEND)
 
 
 def pool_status() -> str:
@@ -66,13 +131,18 @@ def pool_invariante(anzahl_scheduler: int) -> tuple[bool, str]:
 
 
 @contextmanager
-def kurz():
+def kurz(schreibend: bool = True):
     """v27 (PLAN_V17 Phase 128) – kurze Sitzung für Scheduler und Hilfsfunktionen:
     ``with db.kurz() as s:`` committet bei Erfolg, rollt bei einer Ausnahme
     zurück und schließt immer. Muster für Hintergrundläufe: lesen → Sitzung
     schließen → Netzaufruf → neue kurze Sitzung zum Zurückschreiben. Anfragen
-    behalten die Dependency get_session."""
-    session: Session = SessionLocal()
+    behalten die Dependency get_session.
+    v33 (Phase 172): ``schreibend=True`` (Standard – Scheduler-Blöcke schreiben)
+    eröffnet die Transaktion sofort als Schreibtransaktion (BEGIN IMMEDIATE); reine
+    Lesesitzungen können ``schreibend=False`` übergeben. Innerhalb einer Anfrage oder
+    eines Laufs, der schon eine Schreibtransaktion hält, bleibt eine verschachtelte
+    kurz()-Sitzung automatisch DEFERRED (siehe _transaktion_eroeffnen)."""
+    session: Session = schreibsitzung() if schreibend else SessionLocal()
     try:
         yield session
         session.commit()
@@ -96,11 +166,19 @@ def wal_pflege() -> dict:
     """v27 (Phase 128) SQLite-Pflege, nächtlich 02:40 per Scheduler:
     ``PRAGMA wal_checkpoint(TRUNCATE)`` (WAL in die Datei einspielen und auf 0
     kürzen) und ``PRAGMA optimize`` (Statistiken für den Abfrageplaner).
-    Liefert busy/log/checkpointed des Checkpoints und die WAL-Größe danach."""
+    Liefert busy/log/checkpointed des Checkpoints und die WAL-Größe danach.
+    v33 (Phase 172): rohe Pool-Verbindung statt der Ausführungsoption AUTOCOMMIT –
+    die ist laut SQLAlchemy mit dem BEGIN-Event (siehe _transaktion_eroeffnen)
+    unverträglich; mit isolation_level=None laufen die PRAGMAs ohne Transaktion."""
     vorher = wal_groesse_mb()
-    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as v:
-        zeile = v.exec_driver_sql("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
-        v.exec_driver_sql("PRAGMA optimize")
+    roh = engine.raw_connection()
+    try:
+        zeiger = roh.cursor()
+        zeile = zeiger.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        zeiger.execute("PRAGMA optimize")
+        zeiger.close()
+    finally:
+        roh.close()
     busy, log_seiten, eingespielt = (zeile or (None, None, None))[:3]
     return {"busy": busy, "wal_seiten": log_seiten, "eingespielt": eingespielt,
             "wal_mb_vorher": vorher, "wal_mb_nachher": wal_groesse_mb()}
@@ -131,12 +209,85 @@ def _sqlite_einstellen(verbindung, _):
     """WAL-Modus: Leser blockieren Schreiber nicht (mehrere gleichzeitige
     Benutzer + Hintergrund-Syncs). Der Modus ist in der DB-Datei persistent,
     das Setzen je Verbindung ist idempotent; busy_timeout überbrückt kurze
-    Schreibkonflikte statt sofort 'database is locked' zu werfen."""
+    Schreibkonflikte statt sofort 'database is locked' zu werfen.
+    v33 (Phase 172): der Transaktionsmodus des Treibers (isolation_level) wird je
+    Transaktion in _transaktion_eroeffnen gesetzt – hier bleibt der Treiber-Standard
+    („legacy“: SELECT ohne Transaktion, implizites BEGIN vor dem ersten DML)."""
     zeiger = verbindung.cursor()
     zeiger.execute("PRAGMA journal_mode=WAL")
     zeiger.execute("PRAGMA synchronous=NORMAL")
     zeiger.execute("PRAGMA busy_timeout=5000")
     zeiger.close()
+
+
+@event.listens_for(engine, "begin")
+def _transaktion_eroeffnen(verbindung):
+    """v33 (Phase 172): BEGIN IMMEDIATE für Schreibsitzungen (Option „schreibend“
+    des Binds – get_session bei POST/PUT/PATCH/DELETE, kurz(), schreibsitzung()):
+    der Treiber wird für diese Verbindung auf isolation_level=None gestellt (er
+    beginnt dann keine Transaktion selbst) und BEGIN IMMEDIATE nimmt die Schreibsperre
+    vor dem ersten Lesen; commit()/rollback() des Treibers beenden die Transaktion.
+    Alle anderen Sitzungen (GET, Lesesitzungen, Tests, DDL) behalten EXAKT das
+    Verhalten bis v32 – den Legacy-Modus des sqlite3-Treibers (isolation_level „“):
+    SELECT läuft ohne Transaktion (kein Lese-Schnappschuss, der WAL-Checkpoint und
+    spätere Schreibzugriffe werden nicht blockiert), das implizite BEGIN kommt erst
+    vor dem ersten INSERT/UPDATE/DELETE. Ein einheitliches explizites BEGIN für alle
+    Sitzungen (reines SQLAlchemy-Rezept) wurde verworfen: damit hielt jede Sitzung ab
+    dem ersten SELECT einen Schnappschuss und lief nach einem fremden Commit beim
+    Schreiben sofort in „database is locked“ (BUSY_SNAPSHOT; Befund im Durchlauf v33,
+    29 Alt-Tests rot). Hält der Kontext bereits eine Schreibtransaktion, bleibt eine
+    weitere Sitzung im Legacy-Modus (sonst liefe sie gegen die eigene Sperre).
+    Scheitert BEGIN IMMEDIATE nach dem busy_timeout (5 s) mit „database is locked“,
+    wird nach WIEDERHOLUNG_S einmal erneut versucht (v22-Muster, für jede Schreib-
+    anfrage – auch ohne _speichern); scheitert auch das, kommt der OperationalError
+    beim ersten Zugriff der Sitzung (Fehlerprotokoll + Meldung „Datenbank kurz
+    belegt“ über den globalen Handler, bei kurz() der Fehler des Laufs)."""
+    optionen = verbindung.get_execution_options()
+    if optionen.get("isolation_level") == "AUTOCOMMIT":
+        return   # Treiber-Autocommit: keine Transaktion (nur zur Sicherheit, s. wal_pflege)
+    treiber = verbindung.connection.dbapi_connection
+    sofort = (SCHREIBTRANSAKTION_SOFORT and bool(optionen.get("schreibend"))
+              and _IMMEDIATE_OFFEN.get() == 0 and not treiber.in_transaction)
+    if not sofort:
+        # Legacy-Modus des Treibers (Umschalten nur außerhalb einer Transaktion –
+        # das Setzen von isolation_level würde eine offene Transaktion committen)
+        if treiber.isolation_level is None and not treiber.in_transaction:
+            treiber.isolation_level = ""
+        _transaktionen_zaehlen("verzoegert")
+        return
+    if treiber.isolation_level is not None:
+        treiber.isolation_level = None   # keine Transaktion offen (oben geprüft)
+    try:
+        verbindung.exec_driver_sql("BEGIN IMMEDIATE")
+    except OperationalError as fehler:
+        if "locked" not in str(fehler).lower():
+            raise
+        _transaktionen_zaehlen("sofort_wiederholt")
+        time.sleep(WIEDERHOLUNG_S)
+        try:
+            verbindung.exec_driver_sql("BEGIN IMMEDIATE")
+        except Exception:
+            _transaktionen_zaehlen("sofort_gescheitert")
+            raise
+    _IMMEDIATE_VERBINDUNGEN.add(verbindung)
+    _IMMEDIATE_OFFEN.set(_IMMEDIATE_OFFEN.get() + 1)
+    _transaktionen_zaehlen("sofort")
+
+
+@event.listens_for(engine, "commit")
+@event.listens_for(engine, "rollback")
+def _transaktion_beendet(verbindung):
+    """Gegenstück zu _transaktion_eroeffnen: Schreibtransaktion im Kontext austragen."""
+    if verbindung in _IMMEDIATE_VERBINDUNGEN:
+        _IMMEDIATE_VERBINDUNGEN.discard(verbindung)
+        _IMMEDIATE_OFFEN.set(max(0, _IMMEDIATE_OFFEN.get() - 1))
+
+
+def schreibtransaktion_offen() -> bool:
+    """True, wenn der aktuelle Kontext gerade eine BEGIN-IMMEDIATE-Transaktion hält
+    (Tests, Diagnose)."""
+    return _IMMEDIATE_OFFEN.get() > 0
+
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
@@ -190,12 +341,22 @@ def taegliches_backup(aufbewahrung_tage: int = 30) -> None:
 # Nachträglich eingeführte Spalten (SQLite: create_all ergänzt keine Spalten).
 # Format: Tabelle -> {Spaltenname: SQL-Typdefinition}
 _NACHTRAEGLICHE_SPALTEN = {
+    "montage_formulare": {
+        "termin_id": "INTEGER",                                  # v33 Phase 168 (Servicebericht je Termin)
+    },
     "teams": {
+        "gewerk": "VARCHAR(10) NOT NULL DEFAULT ''",                # v33 Phase 167
         "leiter_id": "INTEGER",                                 # v15 Phase 75
         "farbe": "VARCHAR(20) NOT NULL DEFAULT ''",             # v15 Phase 75
         "outlook_adresse": "VARCHAR(200) NOT NULL DEFAULT ''",  # v15 Phase 75
     },
     "projekt_termine": {
+        "vorgang_id": "INTEGER",                                 # v33 Phase 168 (Service am Vorgang)
+        "service_gewerk": "VARCHAR(10) NOT NULL DEFAULT ''",     # v33 Phase 168
+        "anlass": "VARCHAR(30) NOT NULL DEFAULT ''",             # v33 Phase 168
+        "service_status": "VARCHAR(20) NOT NULL DEFAULT ''",     # v33 Phase 168
+        "gestartet_am": "DATETIME",                              # v33 Phase 168
+        "beendet_am": "DATETIME",                                # v33 Phase 168
         "outlook_fehler": "VARCHAR(300) NOT NULL DEFAULT ''", # v15 Phase 81
         "graph_conversation_id": "VARCHAR(200)",              # v15 Phase 81
         "kunden_antwort_am": "DATETIME",                      # v15 Phase 81
@@ -226,6 +387,8 @@ _NACHTRAEGLICHE_SPALTEN = {
         "version": "VARCHAR(5) NOT NULL DEFAULT 'v2'",         # v15 Phase 78
     },
     "gewerke": {
+        "phase_auto": "BOOLEAN NOT NULL DEFAULT 1",              # v33 Phase 171
+        "phase_auto_pause": "VARCHAR(30) NOT NULL DEFAULT ''",   # v33 Phase 171
         "objekt_id": "INTEGER",                                 # v31 Phase 153
         "auftragsdaten_am": "DATETIME",                        # V3 Phase 84
         "bestand_import_id": "INTEGER",                        # V3 Phase 85
@@ -392,6 +555,8 @@ _NACHTRAEGLICHE_SPALTEN = {
     },
     # v12 (Lead-Management, Phase 73): Lead-Kopf am Vorgang – alle nullable
     "vorgaenge": {
+        "nachfass_versuche": "INTEGER NOT NULL DEFAULT 0",       # v33 Phase 176
+        "letzter_einwand_id": "INTEGER",                         # v33 Phase 176
         "archiviert_am": "DATETIME",                             # v31 Phase 154
         "archiviert_von": "INTEGER",                             # v31 Phase 154
         "kopie_von_id": "INTEGER",                               # v31 Phase 154
@@ -520,6 +685,8 @@ def _spalten_ergaenzen() -> None:
 # Spaltenliste); CREATE INDEX IF NOT EXISTS ist idempotent und nur additiv –
 # v26 läuft auf einer Datenbank mit diesen Indizes unverändert.
 _INDIZES = [
+    ("ix_v33_projekt_termine_vorgang_id", "projekt_termine", "vorgang_id"),   # v33 Phase 168
+    ("ix_v33_montage_formulare_termin_id", "montage_formulare", "termin_id"),  # v33 Phase 168
     ("ix_v27_vorgaenge_lead_phase", "vorgaenge", "lead_phase"),
     ("ix_v27_angebote_status", "angebote", "status"),
     ("ix_v27_angebote_archiviert_status", "angebote", "archiviert, status"),
@@ -584,9 +751,15 @@ def indizes_anlegen() -> list[str]:
     return neu
 
 
-def get_session():
-    """FastAPI-Dependency: liefert eine Session und schließt sie nach dem Request."""
-    session: Session = SessionLocal()
+def get_session(request: Request = None):
+    """FastAPI-Dependency: liefert eine Session und schließt sie nach dem Request.
+    v33 (Phase 172): schreibende Anfragen (POST/PUT/PATCH/DELETE) bekommen eine
+    Schreibsitzung (BEGIN IMMEDIATE), Leseanfragen (GET) bleiben DEFERRED. Die
+    Methode kommt aus dem Request, den FastAPI hereinreicht; ohne ihn (direkter
+    Aufruf, Sub-Dependency) aus anfrage.METHODE (setzt die RollenMiddleware)."""
+    methode = getattr(request, "method", "") or anfrage.aktuelle_methode()
+    session: Session = (schreibsitzung() if anfrage.ist_schreibend(methode)
+                        else SessionLocal())
     try:
         yield session
     finally:

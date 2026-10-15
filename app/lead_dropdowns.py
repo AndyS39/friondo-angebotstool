@@ -20,6 +20,7 @@
 from sqlalchemy.orm import Session
 
 from app.models import AdProfil, Benutzer, Vorgang
+from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 
 NICHT_WAEHLBAR = " (nicht mehr wählbar)"
 
@@ -53,15 +54,17 @@ def leadmanager_ids(session: Session) -> set[int]:
 
 
 def _hv_ids(session: Session) -> set[int]:
-    return {p.benutzer_id for p in session.query(AdProfil)
-            .filter(AdProfil.terminiert_selbst.is_(True))}
+    """v33 (PLAN_V20 Phase 167): Rollen-Kennzeichen Handelsvertreter ODER gespiegeltes
+    Profil-Kennzeichen terminiert_selbst (lead_v2.handelsvertreter_ids)."""
+    from app import lead_v2
+    return set(lead_v2.handelsvertreter_ids(session, nur_aktive=False))
 
 
 def angestellte_ad(session: Session) -> list[Benutzer]:
     """Aktive Außendienstler ohne Handelsvertreter-Kennzeichen, nach Name."""
     hv = _hv_ids(session)
     return [b for b in session.query(Benutzer)
-            .filter(Benutzer.aktiv.is_(True), Benutzer.rolle == "aussendienst")
+            .filter(Benutzer.aktiv.is_(True), rollen_modul.filter_basis("aussendienst"))
             .order_by(Benutzer.name)
             if b.id not in hv]
 

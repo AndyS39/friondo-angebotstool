@@ -236,7 +236,7 @@
                 {% if objekte.mehrere %}{% set a_obj = (objekte.liste | selectattr('id', 'equalto', a.objekt_id) | list | first) if a.objekt_id else none %}<span class="abzeichen" title="Objekt">{{ a_obj.objekt.bezeichnung if a_obj else 'Objekt 1' }}</span>{% endif %}
                 <span class="dezent">{{ a.datum.strftime('%d.%m.%Y') if a.datum }}</span>
                 {{ status_badge(a.status) }}
-                {% if benutzer.rolle in ('admin', 'innendienst') %}
+                {% if benutzer.basisrolle in ('admin', 'innendienst') %}
                     <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">Öffnen</a>
                 {% elif not a.extern %}
                     <a class="knopf klein zweitrangig" href="/meine-angebote/{{ a.id }}">Ansehen</a>
@@ -261,7 +261,7 @@
                 {{ status_badge(e.status) }}
                 <span class="dezent">{{ benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '–' }}
                     · {{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am else 'nicht abgesendet' }}</span>
-                {% if benutzer.rolle in ('admin', 'innendienst') or benutzer.hat_rolle('leadmanagement') %}
+                {% if benutzer.basisrolle in ('admin', 'innendienst') or benutzer.hat_rolle('leadmanagement') %}
                     <a class="knopf klein zweitrangig" href="/erfassungen/{{ e.id }}">Öffnen</a>
                 {% elif e.status == 'Entwurf' and not readonly %}
                     <a class="knopf klein zweitrangig" href="/erfassung/{{ e.id }}/weiche">Fortsetzen</a>

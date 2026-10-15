@@ -26,7 +26,7 @@ router = APIRouter(prefix="/vorgaenge")
 def _eigener(session: Session, vorgang: Vorgang, benutzer) -> bool:
     if benutzer is None:
         return False
-    if benutzer.rolle in ("admin", "innendienst"):
+    if benutzer.basisrolle in ("admin", "innendienst"):
         return True
     return vorgaenge_modul.gehoert_benutzer(session, vorgang, benutzer.id)
 
@@ -71,7 +71,7 @@ def liste(request: Request, q: str = "", verfolgung: str = "",
     ang_je_vorgang: dict[int, list[Angebot]] = {}
     for a in session.query(Angebot).filter(Angebot.vorgang_id.isnot(None)):
         ang_je_vorgang.setdefault(a.vorgang_id, []).append(a)
-    if benutzer.rolle == "aussendienst":
+    if benutzer.basisrolle == "aussendienst":
         vorgaenge = [v for v in vorgaenge
                      if vorgaenge_modul.gehoert_benutzer(session, v, benutzer.id)]
     if q:
@@ -98,7 +98,7 @@ def liste(request: Request, q: str = "", verfolgung: str = "",
         if (stand is None or notiz.zeit > stand) and notiz.benutzer_id != benutzer.id:
             neue_notizen.add(notiz.vorgang_id)
     return render(request, "vorgaenge/liste.html", aktiv="/vorgaenge",
-                  mobil=benutzer.rolle == "aussendienst",
+                  mobil=benutzer.basisrolle == "aussendienst",
                   vorgaenge=vorgaenge, kunden=kunden, leads=leads,
                   erf_je_vorgang=erf_je_vorgang, ang_je_vorgang=ang_je_vorgang,
                   chips=chips, neue_notizen=neue_notizen, q=q,
@@ -188,7 +188,7 @@ def akte(request: Request, vorgang_id: int,
     vertriebler_ids |= {a.vertriebler_id for a in angebote if a.vertriebler_id}
     erfassung_offen = next((e for e in erfassungen if e.status == "Entwurf"), None)
     aussendienst = [b for b in benutzer_map.values()
-                    if b.rolle == "aussendienst" and b.aktiv]
+                    if b.basisrolle == "aussendienst" and b.aktiv]
     # v11 (Phase 66): Projektstand + „Angebot → Projekt" je angenommenem Angebot
     from app import projektierung as projektierung_modul
     from app.models import Gewerk as GewerkModell, Projekt as ProjektModell
@@ -231,6 +231,43 @@ def akte(request: Request, vorgang_id: int,
             gewerk = session.get(GewerkModell, a.projekt_gewerk_id)
             if gewerk is not None:
                 projekt_je_angebot[a.id] = gewerk.projekt_id
+    # v33 (PLAN_V20 Phase 168): Block „Termine“ – Service-Einsätze des Vorgangs (direkt
+    # am Vorgang ohne Projekt oder an seinen Projekten) mit Badge „Service“, Anlass,
+    # Status, Outlook-Stand; „Service-Einsatz planen“ für ID/Admin/Projektierung
+    # (Rechte wie der Termin-Dialog, Modul sichtbar); Dialog-Kontext aus dem Kern
+    service_termine: list = []
+    service_planen_erlaubt = False
+    td = None
+    service_besetzung: dict = {}
+    service_besetzung_ids: dict = {}
+    outlook_stand: dict = {}
+    if projekt_modul_ok:
+        service_termine = projektierung_modul.service_termine(
+            session, vorgang_id=vorgang.id,
+            projekt_ids=[e["projekt"].id for e in vorgang_projekte])
+        service_planen_erlaubt = projektierung_modul.termin_bearbeiten_erlaubt(session, benutzer)
+        if service_planen_erlaubt:
+            td = projektierung_modul.termin_dialog_kontext(session)
+        service_besetzung_ids = projektierung_modul.besetzung_map(
+            session, [t.id for t in service_termine])
+        service_besetzung = {t.id: projektierung_modul.besetzung_namen(
+            session, t.id, kurz=True, benutzer_map=benutzer_map) for t in service_termine}
+        outlook_stand = {t.id: projektierung_modul.outlook_status_fuer(session, t)
+                         for t in service_termine}
+    service_ctx = {
+        "service_termine": service_termine,
+        "service_planen_erlaubt": service_planen_erlaubt,
+        "td": td,
+        "service_besetzung": service_besetzung,
+        "service_besetzung_ids": service_besetzung_ids,
+        "outlook_stand": outlook_stand,
+        "outlook_makro_da": projektierung_modul.outlook_makro_vorhanden(),
+        "service_anlass_namen": projektierung_modul.SERVICE_ANLASS_NAMEN,
+        "service_gewerk_namen": projektierung_modul.SERVICE_GEWERK_NAMEN,
+        "service_status_namen": projektierung_modul.SERVICE_STATUS_NAMEN,
+        "projekte_map": {e["projekt"].id: e["projekt"] for e in vorgang_projekte},
+        "termin_art_name": projektierung_modul.termin_art_name,
+    }
     # Kombi-Versand (Phase 61): Wählbarkeit je Angebot + fachliche Hinweise
     from app import kombi_versand as kombi_modul
     kombi_info = {a.id: kombi_modul.waehlbar(a) for a in angebote}
@@ -281,18 +318,26 @@ def akte(request: Request, vorgang_id: int,
     archiv_wiederherstellen_erlaubt = _archiv_recht(benutzer)
     # v32 (PLAN_V19 Phase 163): Dialog „Nächster Schritt“ im Verfolgungs-Block (ID und AD) –
     # Variablen des Partials vorgaenge/_naechster_schritt.html (gruende, naechster_3wt, ziel)
+    # v33 (PLAN_V20 Phase 176): + Einwand-Chips, Zähler, Kontext der Nachfass-Mail (benutzer =
+    # Absender aus dem eigenen Postfach)
     verfolgung_ctx = verfolgung_modul.dialog_kontext(session, vorgang,
-                                                     zurueck=f"/vorgaenge/{vorgang.id}")
+                                                     zurueck=f"/vorgaenge/{vorgang.id}",
+                                                     benutzer=benutzer)
     naechster_schritt_erlaubt = _naechster_schritt_recht(session, vorgang, benutzer)
     return render(request, "vorgaenge/akte.html", aktiv="/vorgaenge",
+                  **service_ctx,   # v33 (Phase 168): Block Termine / Service-Einsatz planen
                   gruende=verfolgung_ctx["gruende"], naechster_3wt=verfolgung_ctx["naechster_3wt"],
                   ziel=verfolgung_ctx["ziel"], heute_iso=verfolgung_ctx["heute_iso"],
+                  einwaende=verfolgung_ctx.get("einwaende", []),
+                  letzter_einwand=verfolgung_ctx.get("letzter_einwand", ""),
+                  nachfass_versuche=verfolgung_ctx.get("nachfass_versuche", 0),
+                  nachfass_mail=verfolgung_ctx.get("nachfass_mail"),
                   naechster_schritt_erlaubt=naechster_schritt_erlaubt,
                   akte_todos=akte_todos, todo_empfaenger=todo_empfaenger,   # v23 (Phase 110)
                   objekt_gruppen=objekt_gruppen, archiviert_von_name=archiviert_von_name,
                   archiv_wiederherstellen_erlaubt=archiv_wiederherstellen_erlaubt,
                   **anschrift_kontext,
-                  mobil=benutzer.rolle == "aussendienst",
+                  mobil=benutzer.basisrolle == "aussendienst",
                   galerie_daten=galerie_daten, galerie_ordner=galerie_ordner,
                   galerie_sparten=galerie_sparten,
                   galerie_darf_loeschen=galerie_darf_loeschen,
@@ -300,7 +345,7 @@ def akte(request: Request, vorgang_id: int,
                       session, [g.id for e in vorgang_projekte for g in e["gewerke"]])
                       if vorgang_projekte else {}),
                   steckbrief_felder=projektierung_modul.steckbrief_felder,
-                  steckbrief_nur_lesen=benutzer.rolle == "aussendienst",
+                  steckbrief_nur_lesen=benutzer.basisrolle == "aussendienst",
                   lead_kontext=lead_kontext, lead_readonly=lead_readonly,
                   lead_phasen_namen=__import__("app.models", fromlist=["x"]).LEAD_PHASEN_NAMEN,
                   vorgang=vorgang, kunde=kunde, lead=lead, kanal=kanal,
@@ -334,7 +379,7 @@ def kombi_versand(request: Request, vorgang_id: int,
     from app.models import einstellung_holen
     benutzer = request.state.benutzer
     vorgang = session.get(Vorgang, vorgang_id)
-    if vorgang is None or benutzer.rolle not in ("admin", "innendienst"):
+    if vorgang is None or benutzer.basisrolle not in ("admin", "innendienst"):
         return RedirectResponse("/vorgaenge", status_code=303)
     form = anfrage.formular(request)
     ids = [int(w) for w in form.getlist("angebot_ids") if str(w).isdigit()]
@@ -360,10 +405,12 @@ def kombi_versand(request: Request, vorgang_id: int,
     # Angebote sind geladen; msal kann das Token über das Netz erneuern)
     from app.db import verbindung_freigeben
     verbindung_freigeben(session)
-    if graph_versand.angemeldeter_benutzer() is None:
+    # v33 (PLAN_V20 Phase 166): Modus anwendung braucht keine Anmeldung einer Person –
+    # verbunden() prüft je Modus (Geheimnis + Verbindungstest bzw. angemeldete Person)
+    if not graph_versand.verbunden(session):
         return RedirectResponse("/versand?meldung=" + quote_plus(
-            "Bitte zuerst mit Microsoft anmelden, dann den Kombi-Versand "
-            "erneut starten."), status_code=303)
+            graph_versand.nicht_verbunden_text(session)
+            + " Danach den Kombi-Versand erneut starten."), status_code=303)
     kunde = session.get(Kunde, vorgang.kunde_id)
     # PDFs: je Angebot ein Anhang (Tool frisch erzeugt, TAIFUN aus dem Upload)
     pdfs = [kombi_modul.pdf_fuer(session, a) for a in angebote]
@@ -454,7 +501,7 @@ def anschriften_standard(request: Request, vorgang_id: int,
     benutzer = request.state.benutzer
     vorgang = session.get(Vorgang, vorgang_id)
     if (vorgang is None or benutzer is None
-            or benutzer.rolle not in ("admin", "innendienst", "aussendienst")
+            or benutzer.basisrolle not in ("admin", "innendienst", "aussendienst")
             or not _eigener(session, vorgang, benutzer)):
         return RedirectResponse("/vorgaenge", status_code=303)
     kunde = session.get(Kunde, vorgang.kunde_id) if vorgang.kunde_id else None
@@ -477,7 +524,7 @@ def _archiv_recht(benutzer) -> bool:
     Leadmanagement (Haupt- oder Zusatzrolle) und Admin."""
     if benutzer is None:
         return False
-    if benutzer.rolle in ("admin", "innendienst", "leadmanagement"):
+    if benutzer.basisrolle in ("admin", "innendienst", "leadmanagement"):
         return True
     hat = getattr(benutzer, "hat_rolle", None)
     return bool(hat and hat("leadmanagement"))
@@ -554,7 +601,7 @@ def verfolgung(request: Request, vorgang_id: int,
         return RedirectResponse("/vorgaenge", status_code=303)
     form = anfrage.formular(request)
     verantwortlicher_id = None
-    if benutzer.rolle in ("admin", "innendienst"):
+    if benutzer.basisrolle in ("admin", "innendienst"):
         try:
             verantwortlicher_id = int(form.get("wv_verantwortlicher") or 0) or None
         except ValueError:
@@ -577,9 +624,9 @@ def _naechster_schritt_recht(session: Session, vorgang: Vorgang, benutzer) -> bo
     Vorgang (vorgaenge.gehoert_benutzer); andere Rollen nicht."""
     if benutzer is None or vorgang is None:
         return False
-    if benutzer.rolle in ("admin", "innendienst"):
+    if benutzer.basisrolle in ("admin", "innendienst"):
         return True
-    if benutzer.rolle == "aussendienst":
+    if benutzer.basisrolle == "aussendienst":
         return vorgaenge_modul.gehoert_benutzer(session, vorgang, benutzer.id)
     return False
 
@@ -638,7 +685,8 @@ def naechster_schritt(request: Request, vorgang_id: int,
                 session, v, schritt, benutzer,
                 grund_id=form.get("grund_id"), freitext=form.get("freitext") or "",
                 wann=form.get("wann") or "", datum=form.get("datum") or "",
-                notiz=form.get("notiz") or "")
+                notiz=form.get("notiz") or "",
+                einwand_id=form.get("einwand_id") or "")   # v33 (Phase 176): Einwand-Chip
         if not ok:
             session.rollback()
         ergebnis.update(ok=ok, meldung=meldung, daten=daten)
@@ -647,6 +695,93 @@ def naechster_schritt(request: Request, vorgang_id: int,
     if not ergebnis.get("ok"):
         return antwort(False, ergebnis.get("meldung") or "Nicht gespeichert.",
                        status_code=400, zurueck=zurueck)
+    return antwort(True, ergebnis["meldung"], ergebnis.get("daten"), zurueck=zurueck)
+
+
+# --- v33 (PLAN_V20 Phase 176, Agent N): Nachfass-Mail aus dem eigenen Postfach ----------
+
+@router.get("/{vorgang_id}/nachfass-mail/vorschau")
+def nachfass_mail_vorschau(request: Request, vorgang_id: int, vorlage: str = "1",
+                           session: Session = Depends(get_session)):
+    """Vorschau der Nachfass-Mail (JSON): betreff, html (Signatur-Bilder eingebettet),
+    text, empfaenger, absender, fehlende[]. Rechte wie „Nächster Schritt“ (AD nur eigener
+    Vorgang → 403). Kein Netzaufruf."""
+    from fastapi.responses import JSONResponse
+
+    from app import nachfassen
+    benutzer = request.state.benutzer
+    vorgang = session.get(Vorgang, vorgang_id)
+    if vorgang is None:
+        return JSONResponse({"ok": False, "meldung": "Vorgang nicht gefunden."}, status_code=404)
+    if not _naechster_schritt_recht(session, vorgang, benutzer):
+        return JSONResponse({"ok": False, "meldung": "Kein Zugriff – der Vorgang gehört einem "
+                                                    "anderen Vertriebler."}, status_code=403)
+    daten = nachfassen.nachfass_mail_rendern(session, vorgang, benutzer, vorlage)
+    kontext = nachfassen.nachfass_mail_kontext(session, vorgang, benutzer)
+    return JSONResponse({
+        "ok": True, "vorlage": daten["vorlage_nr"], "vorlage_name": daten["vorlage_name"],
+        "betreff": daten["betreff"], "html": daten["html_vorschau"], "text": daten["text"],
+        "empfaenger": kontext["empfaenger"], "absender": kontext["absender"],
+        "erlaubt": kontext["erlaubt"], "hinweis": kontext["hinweis"],
+        "fehlende": daten["fehlende"]})
+
+
+@router.post("/{vorgang_id}/nachfass-mail")
+def nachfass_mail(request: Request, vorgang_id: int,
+                  session: Session = Depends(get_session)):
+    """Nachfass-Mail senden: Felder `vorlage` (1|2), `pdf` (1 = Angebots-PDF anhängen),
+    `zurueck`. Versand aus dem Postfach des angemeldeten Benutzers über
+    graph_versand.mail_senden_als (nur Modus anwendung – sonst 409 mit Hinweis); AD nur
+    eigener Vorgang (403). JSON bei Accept: application/json, sonst Redirect mit Meldung.
+    nachfassen.nachfass_mail_senden gibt die Sitzung vor dem Graph-Aufruf frei (v27) und
+    schreibt danach Mail-Verlauf + Notiz; Commit über das _speichern-Muster."""
+    from fastapi.responses import JSONResponse
+
+    from app import nachfassen
+    from app.routers.angebote import _speichern
+    benutzer = request.state.benutzer
+    vorgang = session.get(Vorgang, vorgang_id)
+    json_antwort = _json_gewuenscht(request)
+
+    def antwort(ok: bool, meldung: str, daten: dict | None = None, status_code: int = 200,
+                zurueck: str = ""):
+        if json_antwort:
+            inhalt = {"ok": ok, "meldung": meldung}
+            inhalt.update({k: v for k, v in (daten or {}).items() if k != "status_code"})
+            return JSONResponse(inhalt, status_code=status_code)
+        return RedirectResponse(_rueckweg(zurueck, vorgang_id, meldung), status_code=303)
+
+    if vorgang is None:
+        return antwort(False, "Vorgang nicht gefunden.", status_code=404)
+    if not _naechster_schritt_recht(session, vorgang, benutzer):
+        return antwort(False, "Kein Zugriff – der Vorgang gehört einem anderen Vertriebler.",
+                       status_code=403)
+    form = anfrage.formular(request)
+    zurueck = form.get("zurueck") or ""
+    vorlage = form.get("vorlage") or "1"
+    pdf_anhaengen = (form.get("pdf") or "") in ("1", "on", "true")
+    # Schritt 1 (Sitzung): prüfen, rendern, Signatur-Bilder und PDF lesen
+    ok, meldung, paket = nachfassen.nachfass_mail_vorbereiten(session, vorgang, benutzer,
+                                                              vorlage, pdf_anhaengen)
+    if not ok:
+        return antwort(False, meldung, paket, status_code=int(paket.get("status_code") or 400),
+                       zurueck=zurueck)
+    # Schritt 2 (Netz): Verbindung freigeben (v27), dann Graph – außerhalb von _speichern,
+    # damit eine Wiederholung wegen Schreibsperre die Mail nie ein zweites Mal sendet
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
+    gesendet, fehler, conversation_id = nachfassen.nachfass_mail_absenden(paket)
+    if not gesendet:
+        return antwort(False, f"Nachfass-Mail nicht gesendet: {fehler}", status_code=502,
+                       zurueck=zurueck)
+    # Schritt 3 (Sitzung): Mail-Verlauf + Notiz, Commit über das _speichern-Muster
+    ergebnis: dict = {}
+
+    def aktion():
+        meldung_ok, daten = nachfassen.nachfass_mail_verbuchen(session, paket, conversation_id)
+        ergebnis.update(meldung=meldung_ok, daten=daten)
+
+    _speichern(session, aktion)
     return antwort(True, ergebnis["meldung"], ergebnis.get("daten"), zurueck=zurueck)
 
 
@@ -719,6 +854,10 @@ def galerie_upload(request: Request, vorgang_id: int,
         return RedirectResponse(f"/vorgaenge/{vorgang_id}?meldung="
                                 + quote_plus("Kein Upload-Recht für diesen Vorgang."),
                                 status_code=303)
+    # v33 (PLAN_V20 Phase 172, Befund 15.10.2026): der Request-Body (Upload) ist Netz-I/O – die
+    # Schreibsitzung darf die SQLite-Schreibsperre nicht während der Übertragung halten
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     form = anfrage.formular(request)
     ordner = form.get("ordner") or "Allgemein"
     sparte = form.get("sparte") or "WP"

@@ -573,6 +573,8 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
             </select>
         </form>
         {% endif %}</th><td class="rechts">{{ summen.ust | euro }}</td></tr>
+    {# Gesamt-Betrag → − Rabatt → = Endbetrag bei jedem Steuersatz (v33 Phase 172: bei 0 % USt
+       ist der Gesamt-Betrag der Nettobetrag, der Rabatt wird davon abgezogen – kein Zusatz „brutto“) #}
     <tr><th>Gesamt-Betrag</th><td class="rechts">{{ summen.brutto | euro }}</td></tr>
     {% if summen.rabatt %}
     <tr><th>− Rabatt{{ ' (' ~ angebot.rabatt_bezeichnung ~ ')' if angebot.rabatt_bezeichnung }}</th>
@@ -596,7 +598,8 @@ Rabatt und „bauseits“ direkt in der Zeile ändern (Enter oder ✓) ·
     <input type="text" name="bezeichnung" placeholder="Bezeichnung (optional)"
            value="{{ angebot.rabatt_bezeichnung }}">
     <button class="knopf klein" type="submit">Übernehmen</button>
-    <span class="dezent">leer = Rabatt entfernen · Abzug vom Brutto-Gesamtbetrag (Endbetrag)</span>
+    {# v33 (PLAN_V20 Phase 172): neutral – der Rabatt gilt bei jedem Steuersatz (0 % = Netto) #}
+    <span class="dezent">leer = Rabatt entfernen · Abzug vom Gesamtbetrag (nach USt) = Endbetrag</span>
 </form>
 {% endif %}
 

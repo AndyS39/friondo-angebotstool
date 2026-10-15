@@ -12,6 +12,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.models import AdProfil, Benutzer, BenutzerEinstellung, Kunde, Vorgang
+from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 
 # Produktkompetenz laut F3 (Startwerte; Pflege danach im AD-Profil durch Admin).
 # Schlüssel = Namensbestandteile (klein, ohne Punkte), Wert = (Sparten, Kombi,
@@ -49,17 +50,37 @@ def profil_fuer(session: Session, benutzer_id: int) -> AdProfil | None:
 
 
 def ist_handelsvertreter(session: Session, benutzer) -> bool:
-    """Kennzeichen „terminiert selbst“ am AD-Profil (Hauptrolle aussendienst)."""
-    if benutzer is None or benutzer.rolle != "aussendienst":
+    """v33 (PLAN_V20 Phase 167): Rollen-Kennzeichen „handelsvertreter“ (Variante der
+    Basisrolle Außendienst); das Profil-Kennzeichen terminiert_selbst bleibt gespiegelt
+    und gilt weiter (v32-Code, Altbestand)."""
+    if benutzer is None or benutzer.basisrolle != "aussendienst":
         return False
+    hat = getattr(benutzer, "hat_kennzeichen", None)
+    if hat is not None and hat("handelsvertreter"):
+        return True
     profil = profil_fuer(session, benutzer.id)
     return bool(profil is not None and profil.terminiert_selbst)
 
 
-def handelsvertreter_liste(session: Session) -> list:
-    """Aktive Handelsvertreter (für Dropdowns, G3) – aus der Benutzerverwaltung."""
+def handelsvertreter_ids(session: Session, nur_aktive: bool = True) -> set:
+    """v33 (PLAN_V20 Phase 167): Benutzer-IDs der Handelsvertreter – Rollen-Kennzeichen
+    „handelsvertreter“ (Haupt- oder Zusatzrolle, Basisrolle Außendienst) ODER das
+    gespiegelte Profil-Kennzeichen terminiert_selbst (Altbestand, v32-Code)."""
     ids = {p.benutzer_id for p in session.query(AdProfil)
            .filter(AdProfil.terminiert_selbst.is_(True))}
+    abfrage = session.query(Benutzer).filter(rollen_modul.filter_basis("aussendienst"))
+    if nur_aktive:
+        abfrage = abfrage.filter(Benutzer.aktiv.is_(True))
+    for b in abfrage:
+        if b.id not in ids and b.hat_kennzeichen("handelsvertreter"):
+            ids.add(b.id)
+    return ids
+
+
+def handelsvertreter_liste(session: Session) -> list:
+    """Aktive Handelsvertreter (für Dropdowns, G3) – aus der Benutzerverwaltung:
+    v33 Rollen-Kennzeichen oder Profil-Kennzeichen (handelsvertreter_ids)."""
+    ids = handelsvertreter_ids(session)
     return [b for b in session.query(Benutzer)
             .filter(Benutzer.aktiv.is_(True), Benutzer.id.in_(ids or {0}))
             .order_by(Benutzer.name)]
@@ -89,15 +110,19 @@ def hv_ausschluss_liste(session: Session) -> list:
 
 
 def hv_ausgeschlossen(session: Session, vorgang: Vorgang, kunde: Kunde | None = None) -> str:
-    """Leerer Text = Vergabe an HV erlaubt; sonst der treffende Ausschlussgrund."""
+    """Leerer Text = Vergabe an HV erlaubt; sonst der treffende Ausschlussgrund.
+    v33 (PLAN_V20 Phase 175): Kanal alias-sicher („SWD“ = „Stadtwerke Düsseldorf“), die
+    Meldung nennt den Anzeigewert („übersprungen: Kanal Stadtwerke Düsseldorf“)."""
+    from app import leadmanagement as kern
     from app.models import LeadQuelle
     liste = hv_ausschluss_liste(session)
     if not liste:
         return ""
     kunde = kunde or session.get(Kunde, vorgang.kunde_id)
     kanal = (kunde.vertriebskanal or "").strip().lower() if kunde else ""
-    if kanal and kanal in liste:
-        return f"Kanal „{kunde.vertriebskanal}“ wird nur vom Innendienst terminiert."
+    if kanal and (kanal in liste
+                  or any(a.lower() in liste for a in kern.kanal_aliase(kunde.vertriebskanal))):
+        return f"Kanal „{kern.kanal_anzeige(kunde.vertriebskanal)}“ wird nur vom Innendienst terminiert."
     quelle = session.get(LeadQuelle, vorgang.quelle_id) if vorgang.quelle_id else None
     if quelle is not None:
         for kandidat in (quelle.key, quelle.name, quelle.kanal or ""):
@@ -293,7 +318,7 @@ def bestand_nachziehen(session: Session) -> list:
     # Kompetenzen + Handelsvertreter
     kompetenz = 0
     hv = 0
-    for b in session.query(Benutzer).filter(Benutzer.rolle == "aussendienst"):
+    for b in session.query(Benutzer).filter(rollen_modul.filter_basis("aussendienst")):
         start = kompetenz_startwerte(b.name)
         ist_hv = ist_handelsvertreter_name(b.name)
         if start is None and not ist_hv:
@@ -449,14 +474,99 @@ def hv_gruppe_ziel(session: Session, key: str):
 
 
 def hv_gruppen_wahl(session: Session) -> list[dict]:
-    """Schaltflächen des Sammelaktions-Dialogs: [{key, name, zusatz, benutzer_id}]
-    – nur Gruppen mit gültigem Ziel."""
+    """Schaltflächen des Sammelaktions-Dialogs: [{key, name, zusatz, benutzer_id, ziel_name}]
+    – nur Gruppen mit gültigem Ziel. v33 (PLAN_V20 Phase 175): die zweite Schaltfläche
+    heißt „Simons Gruppe“ (HV_GRUPPE_SIMON_NAME) – der Lead hängt danach an der Gruppe
+    (ad_id = Gruppenleiter + Kennzeichen „noch nicht verteilt“), Simon verteilt selbst."""
     wahl = []
-    for key, zusatz in (("rene", ""), ("simon", "verteilt an sein Team")):
+    for key in ("rene", "simon"):
         ziel = hv_gruppe_ziel(session, key)
         if ziel is not None:
-            wahl.append({"key": key, "name": ziel.name, "zusatz": zusatz, "benutzer_id": ziel.id})
+            name = HV_GRUPPE_SIMON_NAME if key == "simon" else ziel.name
+            wahl.append({"key": key, "name": name, "zusatz": "", "benutzer_id": ziel.id,
+                         "ziel_name": ziel.name})
     return wahl
+
+
+# --- v33 (PLAN_V20 Phase 175): „Simons Gruppe“ – Kennzeichen „noch nicht verteilt“ -------
+# [ANNAHME, einfachster Weg – Andreas kann die Alternative Spalte vorgaenge.hv_gruppe wählen]:
+# Ziel der Sammelaktion ist der Gruppenleiter (erster Eintrag von hv_gruppe_simon, vorgaenge.
+# ad_id = Simon); das Kennzeichen „Simons Gruppe (noch nicht verteilt)“ ist eine Marker-
+# Aktivität (typ hv_gruppe_offen, ergebnis offen) – additiv, keine neue Spalte. Wählt
+# Simon (oder der Innendienst) über das Zuständigen-Dropdown ein Mitglied, schließt
+# ad_zuweisen den Marker (ergebnis verteilt) und schreibt „Zuständiger: <Name>“.
+HV_GRUPPE_SIMON_NAME = "Simons Gruppe"
+HV_GRUPPE_MARKER = "hv_gruppe_offen"
+HV_GRUPPE_OFFEN_TEXT = "An Simons Gruppe verschoben – noch nicht verteilt"
+HV_GRUPPE_KENNZEICHEN = "Simons Gruppe (noch nicht verteilt)"
+
+
+def _hv_gruppe_marker(session: Session, vorgang_id: int):
+    from app.models import LeadAktivitaet
+    return (session.query(LeadAktivitaet)
+            .filter(LeadAktivitaet.vorgang_id == vorgang_id,
+                    LeadAktivitaet.typ == HV_GRUPPE_MARKER)
+            .order_by(LeadAktivitaet.id.desc()).first())
+
+
+def hv_gruppe_offen(session: Session, vorgang) -> bool:
+    """Liegt der Lead bei Simons Gruppe, ohne dass ein Mitglied gewählt wurde? (jüngster
+    Marker offen UND ad_id = Gruppenleiter)."""
+    if vorgang is None or not vorgang.ad_id:
+        return False
+    marker = _hv_gruppe_marker(session, vorgang.id)
+    if marker is None or marker.ergebnis != "offen":
+        return False
+    leiter = hv_gruppe_ziel(session, "simon")
+    return leiter is not None and vorgang.ad_id == leiter.id
+
+
+def hv_gruppe_offen_ids(session: Session, vorgaenge) -> set:
+    """IDs der Vorgänge mit offenem Kennzeichen (eine Abfrage für Listen)."""
+    from app.models import LeadAktivitaet
+    leiter = hv_gruppe_ziel(session, "simon")
+    kandidaten = {v.id: v for v in vorgaenge if leiter is not None and v.ad_id == leiter.id}
+    if not kandidaten:
+        return set()
+    juengste: dict[int, str] = {}
+    for a in (session.query(LeadAktivitaet)
+              .filter(LeadAktivitaet.vorgang_id.in_(list(kandidaten)),
+                      LeadAktivitaet.typ == HV_GRUPPE_MARKER)
+              .order_by(LeadAktivitaet.id)):
+        juengste[a.vorgang_id] = a.ergebnis or ""
+    return {vid for vid, erg in juengste.items() if erg == "offen"}
+
+
+def hv_gruppe_offen_setzen(session: Session, vorgang, benutzer=None) -> bool:
+    """Kennzeichen setzen (Sammelaktion „Simons Gruppe“); Aktivität „An Simons Gruppe
+    verschoben“. Liefert False, wenn es schon offen ist."""
+    from app import leadmanagement as kern
+    if hv_gruppe_offen(session, vorgang):
+        return False
+    kern.aktivitaet(session, vorgang.id, HV_GRUPPE_MARKER, HV_GRUPPE_OFFEN_TEXT,
+                    benutzer=benutzer, ergebnis="offen")
+    return True
+
+
+def hv_gruppe_verteilt(session: Session, vorgang, neu=None, benutzer=None) -> bool:
+    """Kennzeichen schließen: alle offenen Marker auf „verteilt“ (bzw. „aufgehoben“ ohne
+    neuen Zuständigen), Aktivität „Zuständiger: <Name>“. Liefert True, wenn ein Marker
+    offen war."""
+    from app import leadmanagement as kern
+    from app.models import LeadAktivitaet
+    offene = (session.query(LeadAktivitaet)
+              .filter(LeadAktivitaet.vorgang_id == vorgang.id,
+                      LeadAktivitaet.typ == HV_GRUPPE_MARKER,
+                      LeadAktivitaet.ergebnis == "offen").all())
+    if not offene:
+        return False
+    for marker in offene:
+        marker.ergebnis = "verteilt" if neu is not None else "aufgehoben"
+    if neu is not None:
+        kern.aktivitaet(session, vorgang.id, "status", f"Zuständiger: {neu.name}",
+                        benutzer=benutzer, ergebnis="verteilt")
+    session.flush()
+    return True
 
 
 def hv_gruppe_von(session: Session, benutzer_id: int | None) -> str:
@@ -478,10 +588,15 @@ def ad_zuweisen(session: Session, vorgang: Vorgang, ad_id: int | None,
     Liefert eine Meldung; leerer Text = Fehler bereits als Meldung."""
     from app import leadmanagement as kern
     alt_id = vorgang.ad_id
+    # v33 (Phase 175): offenes Kennzeichen „Simons Gruppe (noch nicht verteilt)“ merken –
+    # jede Änderung des Zuständigen löst es auf
+    gruppe_offen = hv_gruppe_offen(session, vorgang)
     if ad_id in (None, 0, ""):
         vorgang.ad_id = None
         kern.aktivitaet(session, vorgang.id, "status", "Außendienst-Zuweisung entfernt",
                         benutzer=benutzer)
+        if gruppe_offen:
+            hv_gruppe_verteilt(session, vorgang, None, benutzer)
         session.flush()
         return "Zuweisung entfernt."
     neu = session.get(Benutzer, int(ad_id))
@@ -492,11 +607,17 @@ def ad_zuweisen(session: Session, vorgang: Vorgang, ad_id: int | None,
         if grund:
             return "Nicht möglich: " + grund
     if alt_id == neu.id:
+        if gruppe_offen:
+            # Simon wählt sich selbst: Lead bleibt bei ihm, Kennzeichen weg [ANNAHME]
+            hv_gruppe_verteilt(session, vorgang, neu, benutzer)
+            return f"{neu.name} behält den Lead ({HV_GRUPPE_SIMON_NAME} verteilt)."
         return f"{neu.name} ist bereits zugewiesen."
     vorgang.ad_id = neu.id
     wer = f" (vorher {session.get(Benutzer, alt_id).name})" if alt_id and session.get(Benutzer, alt_id) else ""
     kern.aktivitaet(session, vorgang.id, "status", f"Zugewiesen an {neu.name}{wer}",
                     benutzer=benutzer)
+    if gruppe_offen:
+        hv_gruppe_verteilt(session, vorgang, neu, benutzer)
     kunde = session.get(Kunde, vorgang.kunde_id)
     # v29 (PLAN_LEAD_V4 Phase 141): Glocken-Art „zuweisung“ – standardmäßig
     # abgeschaltet (glocke_lead_arten), die Aktivität bleibt in der Timeline

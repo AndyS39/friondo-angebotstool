@@ -1,48 +1,83 @@
 {% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
+{% import "_interesse.html" as interesse_ui %}
+{% from "leadmanagement/_tabelle.html" import spalten_kopf, spalten_colgroup, breiten_gesetzt, spaltenwahl, tabellen_daten %}
 
 {% block titel %}Kunden – Friondo Angebotstool{% endblock %}
+{% block mainklasse %}breit{% endblock %}
 
+{# v33 (PLAN_V20 Phase 174, Protokoll Claudia Castro 14.10.2026 Teil A.4): Lead-Board-Layout –
+   Sticky-Filterblock (Suche, Kanal und Objektart als Chip-Selects, inaktive, Spaltenwähler),
+   Tabelle im eigenen Scroll-Container mit festem Kopf, Spalten je Nutzer (Katalog `kunden`,
+   feste erste Spalte Name/Firma), Sortierung per Spaltenkopf (gemerkt, serverseitig vor dem
+   Rendern). Keine Sammelaktionen; Bearbeiten/Deaktivieren bleiben Einzelaktionen. #}
 {% block inhalt %}
+{% macro zelle(key, kunde) -%}
+{%- if key == 'lead' -%}
+<td class="sp-lead"><a href="/kunden/{{ kunde.id }}/bearbeiten">{{ kunde.anzeige_name }}</a>
+    {% if not kunde.aktiv %}<span class="abzeichen">inaktiv</span>{% endif %}
+    {% if kunde.grosskunde %}<span class="abzeichen" title="Großkunde">Großkunde</span>{% endif %}</td>
+{%- elif key == 'adresse' -%}
+<td class="sp-adresse">{{ kunde.strasse }}{% if kunde.strasse and (kunde.plz or kunde.ort) %}, {% endif %}{{ kunde.plz }} {{ kunde.ort }}</td>
+{%- elif key == 'email' -%}
+<td class="sp-email">{% if kunde.email %}<a href="mailto:{{ kunde.email }}">{{ kunde.email }}</a>{% endif %}</td>
+{%- elif key == 'telefon' -%}
+<td class="sp-telefon">{% if kunde.telefon %}<a href="tel:{{ kunde.telefon | replace(' ', '') }}">{{ kunde.telefon }}</a>{% endif %}</td>
+{%- elif key == 'kunden_nr' -%}
+<td class="sp-kunden_nr">{{ kunde.kunden_nr }}</td>
+{%- elif key == 'kanal' -%}
+<td class="sp-kanal dezent">{{ kunde.vertriebskanal or '–' }}</td>
+{%- elif key == 'objektart' -%}
+<td class="sp-objektart">{{ kunde.objektart or '' }}{% if kunde.objektart == 'MFH' and kunde.parteien %} <span class="dezent">({{ kunde.parteien }} Parteien)</span>{% endif %}</td>
+{%- elif key == 'interessen' -%}
+<td class="sp-interessen">{{ interesse_ui.badges(kunde.interessen) }}</td>
+{%- elif key == 'angelegt' -%}
+<td class="sp-angelegt" data-wert="{{ kunde.angelegt_am.isoformat() if kunde.angelegt_am else '' }}">{{ kunde.angelegt_am.strftime('%d.%m.%Y') if kunde.angelegt_am }}</td>
+{%- else -%}
+<td class="sp-{{ key }}"></td>
+{%- endif -%}
+{%- endmacro %}
 <div class="seitenkopf">
     <h1>Kunden</h1>
-    <a class="knopf" href="/kunden/neu">+ Neuer Kunde</a>
+    {% if not nur_lesend %}<a class="knopf" href="/kunden/neu">+ Neuer Kunde</a>{% endif %}
+</div>
+<p class="meldung" id="lm-meldung" {{ '' if meldung else 'hidden' }} role="status">{{ meldung }}</p>
+
+<div class="lm-filterblock" id="lm-filterblock" data-lm-spalten-board="{{ board }}" data-lm-spalten-url="{{ lm_spalten_url(request.state.benutzer) }}" data-lm-suche="1">
+<form method="get" action="/kunden" class="suchleiste lm-suchleiste" id="lm-filterform">
+    <input type="search" name="q" id="lm-suche" value="{{ q }}" placeholder="Suche: Name, Firma, Ort, Kunden-Nr., E-Mail" aria-label="Suche" autocomplete="off">
+    <label class="kontrollfeld">Kanal
+        <select name="kanal">
+            <option value="">alle</option>
+            {% for kn in kanal_werte %}<option value="{{ kn }}" {{ 'selected' if kanal == kn }}>{{ kn }}</option>{% endfor %}
+        </select></label>
+    <label class="kontrollfeld">Objektart
+        <select name="objektart">
+            <option value="">alle</option>
+            {% for code, name in objektart_werte %}<option value="{{ code }}" {{ 'selected' if objektart == code }}>{{ code }}{% if name and name != code %} – {{ name }}{% endif %}</option>{% endfor %}
+        </select></label>
+    <label class="lm-filterchip {{ 'aktiv' if inaktive }}" title="Deaktivierte Kunden mit anzeigen"><input type="checkbox" name="inaktive" value="true" {{ 'checked' if inaktive }} onchange="this.form.submit()"> inaktive anzeigen</label>
+    <button class="knopf klein zweitrangig" type="submit">{{ symbol('filter') }} Filtern</button>
+    {% if q or kanal or objektart or inaktive %}<a class="knopf klein ghost" href="/kunden" title="Filter zurücksetzen">Filter zurücksetzen</a>{% endif %}
+    {{ spaltenwahl(spalten, spalten_fest) }}
+</form>
 </div>
 
-{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
-
-<form method="get" action="/kunden" class="suchleiste">
-    <input type="text" name="q" value="{{ q }}" placeholder="Suche: Name, Firma, Ort, Kunden-Nr., E-Mail">
-    <label class="kontrollfeld">
-        <input type="checkbox" name="inaktive" value="true" {{ 'checked' if inaktive }}>
-        inaktive anzeigen
-    </label>
-    <button class="knopf" type="submit">Suchen</button>
-</form>
-
 {% if kunden %}
-<table class="tabelle">
+<div class="lm-tabellen lm-tabellen-at" id="lm-tabellen">
+<table class="tabelle lm-tabelle" data-lm-breiten="{{ breiten_gesetzt(spalten) }}">
+    {{ spalten_colgroup(spalten, ctx, hinten=1) }}
     <thead>
-        <tr>
-            <th>Name / Firma</th>
-            <th>Adresse</th>
-            <th>E-Mail</th>
-            <th>Telefon</th>
-            <th>Kunden-Nr.</th>
-            <th></th>
-        </tr>
+        <tr>{{ spalten_kopf(spalten, ctx, spalten_fest) }}<th class="sp-aktionen"></th></tr>
     </thead>
     <tbody>
     {% for kunde in kunden %}
-        <tr class="{{ 'inaktiv' if not kunde.aktiv }}">
-            <td>
-                <a href="/kunden/{{ kunde.id }}/bearbeiten">{{ kunde.anzeige_name }}</a>
-                {% if not kunde.aktiv %}<span class="abzeichen">inaktiv</span>{% endif %}
-            </td>
-            <td>{{ kunde.strasse }}{% if kunde.strasse and (kunde.plz or kunde.ort) %}, {% endif %}{{ kunde.plz }} {{ kunde.ort }}</td>
-            <td>{{ kunde.email }}</td>
-            <td>{{ kunde.telefon }}</td>
-            <td>{{ kunde.kunden_nr }}</td>
+        <tr data-zeile="{{ kunde.id }}" class="{{ 'inaktiv' if not kunde.aktiv }}" data-suche="{{ (kunde.anzeige_name ~ ' ' ~ (kunde.ort or '') ~ ' ' ~ (kunde.plz or '') ~ ' ' ~ (kunde.kunden_nr or '') ~ ' ' ~ (kunde.email or '') ~ ' ' ~ (kunde.telefon or '') ~ ' ' ~ (kunde.vertriebskanal or '')) | lower }}">
+            {%- for sp in spalten if sp.sichtbar %}{{ zelle(sp.key, kunde) }}{% endfor %}
             <td class="aktionen">
+                {% if nur_lesend %}
+                <a class="knopf klein zweitrangig" href="/kunden/{{ kunde.id }}/bearbeiten">Ansehen</a>
+                {% else %}
                 <a class="knopf klein" href="/kunden/{{ kunde.id }}/bearbeiten">Bearbeiten</a>
                 <form method="post" action="/kunden/{{ kunde.id }}/aktiv">
                     {% if kunde.aktiv %}
@@ -53,13 +88,16 @@
                         <button class="knopf klein" type="submit">Aktivieren</button>
                     {% endif %}
                 </form>
+                {% endif %}
             </td>
         </tr>
     {% endfor %}
     </tbody>
 </table>
+</div>
 <p class="dezent">{{ kunden | length }} Kunde{{ 'n' if kunden | length != 1 }}</p>
 {% else %}
 <p class="hinweis">Keine Kunden gefunden{% if q %} für „{{ q }}“{% endif %}.</p>
 {% endif %}
+{{ tabellen_daten(board, spalten, sortierung) }}
 {% endblock %}

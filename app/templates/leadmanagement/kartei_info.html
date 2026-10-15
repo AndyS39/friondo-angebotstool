@@ -23,7 +23,7 @@
 {% macro stern(key) -%}{% if key in pflichtig or key in ('parteien', 'rechnungsadresse') %}<abbr title="Pflichtfeld">*</abbr>{% endif %}{%- endmacro %}
 {% set id_person = benutzer_map.get(vorgang.leadmanager_id) %}
 {% set ad_person = benutzer_map.get(vorgang.ad_id) %}
-{% set darf_grosskunde = not readonly and (benutzer.rolle in ('admin', 'innendienst') or benutzer.hat_rolle('leadmanagement')) %}
+{% set darf_grosskunde = not readonly and (benutzer.basisrolle in ('admin', 'innendienst') or benutzer.hat_rolle('leadmanagement')) %}
 
 <form method="post" action="{{ kartei_url }}/stammdaten" class="lk-stammdaten lk-autospeichern" id="lk-stammdaten"
       autocomplete="off" data-feld-url="{{ feld_url }}" data-readonly="{{ '1' if readonly else '' }}"
@@ -155,12 +155,14 @@
                         </select>
                     {% endif %}
                 </div>
-                {% if not readonly and hv_sperre and benutzer.rolle in ('admin', 'innendienst') %}
+                {% if not readonly and hv_sperre and benutzer.basisrolle in ('admin', 'innendienst') %}
                     <label class="lk-check dezent" title="Ausschlussliste (F14) nur für diese Zuweisung übergehen"><input type="checkbox" name="erzwingen" value="1" data-erzwingen> Ausschluss übergehen</label>
                 {% endif %}
                 <small class="lk-feld-status" aria-live="polite"></small>
                 <small class="lk-ad-hinweis" data-ad-hinweis {{ '' if ad_offen else 'hidden' }}>{{ symbol('warnung') }} {{ pflicht.ad_hinweis }}</small>
                 {% if hv_sperre %}<small class="dezent lk-hinweis">{{ symbol('verbot') }} {{ hv_sperre }} Handelsvertreter sind deshalb deaktiviert.</small>{% endif %}
+                {#- v33 (PLAN_V20 Phase 175): Kennzeichen „Simons Gruppe (noch nicht verteilt)“ – das Dropdown zeigt nur die Gruppe #}
+                {% if hv_gruppe_offen %}<small class="lk-hinweis" data-hv-gruppe-hinweis><span class="abzeichen status-versand-vorbereitet">{{ hv_gruppe_kennzeichen }}</span> {{ 'Mitglied der Gruppe wählen – das Kennzeichen verschwindet dann.' if not readonly else 'Der Gruppenleiter verteilt den Lead.' }}</small>{% endif %}
                 {% if lead_kontext.ad and lead_kontext.ad.id != vorgang.ad_id %}
                     <small class="dezent lk-hinweis">Aktiver Termin bei {{ lead_kontext.ad.name }}.</small>
                 {% endif %}

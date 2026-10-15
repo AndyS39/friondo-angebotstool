@@ -275,9 +275,15 @@ def seite(request: Request, zeitraum: str = "monat", von: str = "",
                 session: Session = Depends(get_session)):
     benutzer = request.state.benutzer
     start, ende, zeitraum = _zeitraum(zeitraum, von, bis)
-    nur = benutzer.id if benutzer.rolle == "aussendienst" else None
+    nur = benutzer.id if benutzer.basisrolle == "aussendienst" else None
     daten = kennzahlen(session, start, ende, nur_benutzer_id=nur)
     grund_zeilen = ablehnungsgruende_verteilung(
+        session, start, ende, nur_benutzer_id=nur,
+        ad_id=grund_ad, kanal=grund_kanal, sparte=grund_sparte)
+    # v33 (PLAN_V20 Phase 176): Einwände beim Nachfassen neben den Ablehnungsgründen –
+    # derselbe Zeitraum und dieselben Filter (Vertriebler, Kanal, Sparte)
+    from app import verfolgung as verfolgung_modul
+    einwand_zeilen = verfolgung_modul.einwaende_verteilung(
         session, start, ende, nur_benutzer_id=nur,
         ad_id=grund_ad, kanal=grund_kanal, sparte=grund_sparte)
     vorgaenge = vorgangs_kennzahlen(session, start, ende, nur_benutzer_id=nur)
@@ -295,11 +301,12 @@ def seite(request: Request, zeitraum: str = "monat", von: str = "",
     sparten_zeilen = sorted(daten["je_sparte"].items(),
                             key=lambda kv: reihenfolge.get(kv[0], 99))
     return render(request, "statistik.html", aktiv="/statistik",
-                  mobil=benutzer.rolle == "aussendienst",
+                  mobil=benutzer.basisrolle == "aussendienst",
                   gesamt=daten["gesamt"], ad_zeilen=ad_zeilen,
                   kanal_zeilen=kanal_zeilen, sparten_zeilen=sparten_zeilen,
                   grund_zeilen=grund_zeilen, grund_ad=grund_ad,
                   grund_kanal=grund_kanal, grund_sparte=grund_sparte,
+                  einwand_zeilen=einwand_zeilen,   # v33 (Phase 176)
                   vorgaenge=vorgaenge, auftragseingang=auftragseingang,
                   ae_ad=ae_ad, ae_kanal=ae_kanal, ae_sparte=ae_sparte,
                   ae_quelle=ae_quelle,

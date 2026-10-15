@@ -474,6 +474,38 @@
     // (Montage- und Sub-Teams – Sub-Teams montieren ebenfalls Wärmepumpen), nur der
     // Sub-Einsatz bleibt auf Sub-Teams beschränkt; leer = kein Filter
     const ARTEN_TEAM = {montage: '', elektro: '', sub: 'sub'};
+    ARTEN_TEAM.service = '';   // v33 (Phase 168): Service-Einsatz – alle Teams (Vorlage), Techniker in der Besetzung
+    // v33 (PLAN_V20 Phase 167/168): Gewerk der Terminart – Monteure/Teams mit passendem
+    // Gewerk stehen im Dialog zuerst, andere bleiben wählbar, aber grau („anderes Gewerk“);
+    // Service-Einsätze: Gewerk aus dem Feld, Service-Varianten zuerst
+    function gewerkFuerArt(form, art) {
+        if (art === 'montage' || art === 'sub') { return 'heizung'; }
+        if (art === 'elektro') { return 'elektro'; }
+        if (art === 'service') {
+            const g = form.querySelector('[data-service-gewerk]');
+            return g ? g.value : '';
+        }
+        return '';
+    }
+
+    function optionenNachGewerk(select, gewerk, service) {
+        if (!select) { return; }
+        const opts = Array.prototype.filter.call(select.options, function (o) { return o.value; });
+        opts.forEach(function (o) {
+            if (!o.dataset.label) { o.dataset.label = o.textContent; }
+            const fremdGewerk = !!(gewerk && o.dataset.gewerk && o.dataset.gewerk !== gewerk);
+            const keinService = !!(service && o.dataset.service !== undefined && o.dataset.service !== '1');
+            const fremd = fremdGewerk || keinService;
+            o.classList.toggle('pj-opt-fremd', fremd);
+            o.textContent = o.dataset.label + (fremdGewerk ? ' (anderes Gewerk)' : (keinService ? ' (kein Service)' : ''));
+            o.dataset.rang = fremd ? '1' : (o.dataset.gewerk ? '0' : '0');
+        });
+        opts.sort(function (a, b) {
+            if (a.dataset.rang !== b.dataset.rang) { return a.dataset.rang < b.dataset.rang ? -1 : 1; }
+            return a.dataset.label.localeCompare(b.dataset.label, 'de');
+        });
+        opts.forEach(function (o) { select.appendChild(o); });
+    }
 
     function arbeitstagePlus(datum, tage) {
         const d = new Date(datum + 'T12:00:00');
@@ -487,7 +519,7 @@
 
     function monteurName(form, id) {
         const opt = form.querySelector('[data-monteur-wahl] option[value="' + id + '"]');
-        return opt ? opt.textContent : ('#' + id);
+        return opt ? (opt.dataset.label || opt.textContent) : ('#' + id);
     }
 
     function chipsRendern(form) {
@@ -540,17 +572,39 @@
     function artAnwenden(form) {
         const artFeld = form.querySelector('[data-art]');
         const art = artFeld ? artFeld.value : 'montage';
+        const service = art === 'service';
         const zeigen = {
-            team: art === 'montage' || art === 'elektro' || art === 'sub',
+            team: art === 'montage' || art === 'elektro' || art === 'sub' || service,
             sub: art === 'sub',
             person: art === 'feinplanung' || art === 'abnahme' || art === 'sonstige',
-            besetzung: art === 'montage' || art === 'elektro' || art === 'sub',
+            besetzung: art === 'montage' || art === 'elektro' || art === 'sub' || service,
+            service: service,
+            dauer: service,
+            ende: !service,
             vorschlaege: art === 'montage' && !form.action.match(/\/termin\/\d+\/bearbeiten/)
         };
         Object.keys(zeigen).forEach(function (k) {
             const block = form.querySelector('[data-feld="' + k + '"]');
             if (block) { block.hidden = !zeigen[k]; }
         });
+        // v33 (Phase 168): Service – Uhrzeit Pflicht (15-Minuten-Takt), Texte
+        const uhrzeit = form.querySelector('[data-uhrzeit]');
+        if (uhrzeit) { uhrzeit.required = service; }
+        const uhrHinweis = form.querySelector('[data-uhrzeit-hinweis]');
+        if (uhrHinweis) { uhrHinweis.textContent = service ? '(Pflicht, 15-Minuten-Takt)' : '(leer = ganztägig)'; }
+        const besTitel = form.querySelector('[data-besetzung-titel]');
+        if (besTitel) { besTitel.textContent = service ? 'Techniker (Besetzung)' : 'Besetzung'; }
+        const besHinweis = form.querySelector('[data-besetzung-hinweis]');
+        if (besHinweis) {
+            besHinweis.textContent = service
+                ? 'Service-Techniker des Gewerks zuerst – Team optional (nur Vorlage), andere wählbar (grau)'
+                : 'Mannschaft für diesen Einsatz – das Team ist nur die Vorlage';
+        }
+        const notizTitel = form.querySelector('[data-notiz-titel]');
+        if (notizTitel) { notizTitel.textContent = service ? 'Beschreibung' : 'Notiz'; }
+        const gewerk = gewerkFuerArt(form, art);
+        optionenNachGewerk(form.querySelector('[data-monteur-wahl]'), gewerk, service);
+        optionenNachGewerk(form.querySelector('[data-team]'), gewerk, false);
         // Team-Liste: Montage/Elektro alle Teams (Montage- und Sub-Teams), Sub-Einsatz nur Sub-Teams
         const team = form.querySelector('[data-team]');
         if (team) {
@@ -563,7 +617,7 @@
             if (aktuell && aktuell.hidden) { team.value = ''; }
             team.required = art === 'montage' || art === 'elektro';
             const pflicht = form.querySelector('[data-team-pflicht]');
-            if (pflicht) { pflicht.textContent = team.required ? '(Pflicht)' : (art === 'sub' ? '(oder Subunternehmer)' : ''); }
+            if (pflicht) { pflicht.textContent = team.required ? '(Pflicht)' : (art === 'sub' ? '(oder Subunternehmer)' : (service ? '(optional – oder Techniker unten)' : '')); }
         }
         const person = form.querySelector('[name=person_id]');
         if (person) {
@@ -642,6 +696,7 @@
             dialog.dataset.gewerk = o.gewerk;
             form.action = '/projektierung/gewerk/' + o.gewerk + '/termin';
         }
+        if (o.action) { form.action = o.action; }   // v33: Service am Vorgang (Vorgangsakte)
         if (o.sparte !== undefined) {
             dialog.dataset.sparte = o.sparte;
             const s = dialog.querySelector('[data-sparte-text]');
@@ -668,6 +723,7 @@
         const form = t.closest('form[data-pj-termin]');
         if (!form) { return; }
         if (t.matches('[data-art]')) { artAnwenden(form); }
+        else if (t.matches('[data-service-gewerk]')) { artAnwenden(form); }   // v33: Gewerk gewechselt → neu sortieren
         else if (t.matches('[data-team]')) {
             if (form.dataset.besetzungManuell !== '1') { besetzungSetzen(form, teamMitglieder(form)); }
             else if (!form.querySelector('input[name=besetzung]')) { besetzungSetzen(form, teamMitglieder(form)); }
@@ -715,7 +771,8 @@
                 const dialog = form.closest('dialog');
                 if (dialog) { dialog.close(); }
                 const zurueck = fd.get('zurueck');
-                const ziel = (zurueck && String(zurueck).indexOf('/projektierung') === 0) ? String(zurueck) : (location.pathname + location.search);
+                // v33: Rückweg auch in die Vorgangsakte (Service-Einsatz am Vorgang)
+                const ziel = (zurueck && (String(zurueck).indexOf('/projektierung') === 0 || String(zurueck).indexOf('/vorgaenge/') === 0)) ? String(zurueck) : (location.pathname + location.search);
                 const trenner = ziel.indexOf('?') >= 0 ? '&' : '?';
                 location.href = ziel.split('#')[0] + trenner + 'meldung=' + encodeURIComponent(text) + '#termine';
             })
@@ -731,5 +788,45 @@
             artAnwenden(form);
             chipsRendern(form);
         });
+    });
+
+    // v33 (PLAN_V20 Phase 169, Vorschlag K 4.2/4.3): Doppelklick im zentralen Kalender
+    // öffnet die Projektakte mit ?termin_neu=1&beginn=YYYY-MM-DD&uhrzeit=HH:MM&person=<id>
+    // [&art=…] bzw. die Vorgangsakte mit ?termin_neu=service&… – der Termin-Dialog wird
+    // mit Datum, Uhrzeit und Person (Besetzung manuell, Service-Gewerk aus der Rolle der
+    // Person) vorbelegt geöffnet; danach history.replaceState ohne Query.
+    document.addEventListener('DOMContentLoaded', function () {
+        const p = new URLSearchParams(location.search);
+        const modus = p.get('termin_neu');
+        if (!modus) { return; }
+        let art = p.get('art') || '';
+        let dialog = null;
+        if (modus === 'service') {
+            art = 'service';
+            dialog = document.getElementById('dlg-service-vorgang');
+        }
+        if (!dialog) {
+            dialog = document.querySelector('dialog[id^="dlg-termin-"]:not([id^="dlg-termin-edit-"]):not([id^="dlg-termin-del-"])');
+        }
+        if (!dialog) { return; }
+        const form = dialog.querySelector('form');
+        const person = p.get('person') || '';
+        if (art === 'service' && person) {
+            const opt = form.querySelector('[data-monteur-wahl] option[value="' + person + '"]');
+            const gewerkFeld = form.querySelector('[data-service-gewerk]');
+            if (opt && opt.dataset.gewerk && gewerkFeld) { gewerkFeld.value = opt.dataset.gewerk; }
+        }
+        terminDialogOeffnen(dialog.id, {art: art});
+        const beginn = form.querySelector('input[name=beginn]');
+        const uhrzeit = form.querySelector('input[name=uhrzeit]');
+        if (beginn && p.get('beginn')) { beginn.value = p.get('beginn'); endeVorbelegen(form); }
+        if (uhrzeit && p.get('uhrzeit')) { uhrzeit.value = p.get('uhrzeit'); }
+        if (person) {
+            form.dataset.besetzungManuell = '1';
+            besetzungSetzen(form, [person]);
+            const personFeld = form.querySelector('select[name=person_id]');
+            if (personFeld) { personFeld.value = person; }
+        }
+        history.replaceState(null, '', location.pathname + location.hash);
     });
 })();

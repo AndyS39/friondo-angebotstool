@@ -35,7 +35,15 @@
       jedes Spaltenkopfs – Ziehen ändert die Breite live über <colgroup> (alle
       Tabellen des Boards, table-layout fixed), Loslassen speichert per fetch
       {breite: {key, px}} (60–600 px), Doppelklick = Standardbreite ({px: null},
-      Seite lädt neu). Nur für den angemeldeten Nutzer, je Board. */
+      Seite lädt neu). Nur für den angemeldeten Nutzer, je Board.
+   5. v33 (PLAN_V20 Phase 174, Vertrag T): dieselben Spaltenwerkzeuge für die Tabellen des
+      Angebotstools (Angebote, Erfassungen, Meine Angebote, TAIFUN-Warteschlange, Kunden,
+      Leads VOT) – die Seite trägt data-lm-spalten-board="<key>" (Nur-Spalten-Modus wie
+      Infoabend/HV), optional data-lm-spalten-url (Speicher-Route je Rolle: Projektierung
+      /einstellungen/spalten, sonst /lead-management/boards/spalten) und data-lm-suche="1"
+      (Schnellfilter über data-suche der Zeilen). Zeilen tragen data-zeile statt
+      data-vorgang; feste Spalten kommen aus draggable="false" (Kopf) bzw. dem gesperrten
+      Häkchen im Spaltenwähler – kein fester Key „lead“ mehr im Skript. */
 (function () {
     'use strict';
     if (window.__lmBoardsGeladen) { return; }
@@ -74,6 +82,14 @@
     if (!kopf && !spaltenTraeger) { return; }
     const board = kopf ? kopf.dataset.lmBoard : spaltenTraeger.dataset.lmSpaltenBoard;
     const nurSpalten = !kopf;
+    // v33 (Phase 174): Speicher-Route je Rolle (data-lm-spalten-url), sonst die Lead-Route;
+    // Zeilen-Selektor für Lead-Boards (data-vorgang) und Angebotstool-Tabellen (data-zeile);
+    // Schnellfilter auch im Nur-Spalten-Modus, wenn die Seite data-lm-suche="1" trägt
+    const traeger = kopf || spaltenTraeger;
+    const spaltenUrl = traeger.dataset.lmSpaltenUrl || '/lead-management/boards/spalten';
+    const ZEILEN = 'tr[data-vorgang], tr[data-zeile]';
+    const ZEILEN_TBODY = 'tbody tr[data-vorgang], tbody tr[data-zeile]';
+    const schnellsuche = !nurSpalten || (spaltenTraeger && spaltenTraeger.dataset.lmSuche === '1');
     let daten = { gruende: {}, status: [], sort: null, spalten: [] };
     try { daten = Object.assign(daten, JSON.parse(document.getElementById('lm-daten').textContent)); } catch (e) { /* leer */ }
     const statusInfo = {};
@@ -93,7 +109,7 @@
     // ---- Zähler der Gruppenköpfe nach Zeilenänderung
     function zaehlerAktualisieren() {
         document.querySelectorAll('details.lm-gruppe').forEach(function (g) {
-            const n = g.querySelectorAll('tbody tr[data-vorgang]').length;
+            const n = g.querySelectorAll(ZEILEN_TBODY).length;
             const z = g.querySelector('summary .n');
             if (z) { z.textContent = n; }
         });
@@ -465,14 +481,14 @@
 
     // ---- Schnellsuche über die sichtbaren Zeilen (Server-Filter bleibt per Enter)
     const suche = document.getElementById('lm-suche');
-    if (suche && !nurSpalten) {
+    if (suche && schnellsuche) {
         let timer = null;
         suche.addEventListener('input', function () {
             clearTimeout(timer);
             timer = setTimeout(function () {
                 const q = suche.value.trim().toLowerCase();
                 const ziffern = q.replace(/[^\d+]/g, '');
-                document.querySelectorAll('tr[data-vorgang]').forEach(function (tr) {
+                document.querySelectorAll(ZEILEN).forEach(function (tr) {
                     const text = tr.dataset.suche || '';
                     let treffer = !q || text.indexOf(q) >= 0;
                     if (!treffer && ziffern.length >= 4) {
@@ -489,7 +505,8 @@
     async function spaltenSenden(nutzlast) {
         nutzlast.board = board;
         try {
-            const r = await fetch('/lead-management/boards/spalten', {
+            // v33 (Phase 174): Route je Rolle aus data-lm-spalten-url, Standard /lead-management/boards/spalten
+            const r = await fetch(spaltenUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify(nutzlast)
@@ -553,7 +570,7 @@
         tabelle.querySelectorAll('thead th[aria-sort]').forEach(function (k) { k.removeAttribute('aria-sort'); });
         const th = tabelle.querySelectorAll('thead th')[index];
         if (th) { th.setAttribute('aria-sort', absteigend ? 'descending' : 'ascending'); }
-        const zeilen = Array.from(tbody.querySelectorAll('tr[data-vorgang]'));
+        const zeilen = Array.from(tbody.querySelectorAll(ZEILEN));
         zeilen.sort(function (a, b) {
             const ka = sortSchluessel(sortWert(a.children[index]));
             const kb = sortSchluessel(sortWert(b.children[index]));
@@ -584,7 +601,7 @@
             const t = th.querySelector('.lm-th-text');
             if (t) { t.textContent = titel; }
             th.dataset.name = name || '';
-            const fest = key === 'lead' || th.getAttribute('draggable') === 'false';
+            const fest = th.getAttribute('draggable') === 'false';   // v33: feste Spalten ohne festen Key
             th.title = titel + ' – Klick sortiert (auf/ab, wird gemerkt)' + (fest ? '' : ' · Ziehen verschiebt die Spalte');
         });
         const li = document.querySelector('#lm-spaltenliste li[data-key="' + key + '"] .lm-sp-name');
@@ -614,7 +631,7 @@
             fertig = true;
             const neu = eingabe.value.trim();
             eingabe.remove(); textEl.hidden = false; stift.hidden = false;
-            th.setAttribute('draggable', key === 'lead' ? 'false' : draggableVorher);
+            th.setAttribute('draggable', draggableVorher);   // feste Spalten bleiben 'false'
             if (!speichern || neu === (th.dataset.name || '')) { return; }
             const j = await spaltenSenden({ umbenennen: { key: key, name: neu } });
             if (!j) { return; }
@@ -675,7 +692,7 @@
     // feste Spalten (draggable="false": Kundenname, im Infoabend auch Status) sind kein Ablageziel
     function ablageziel(e) {
         const th = e.target.closest && e.target.closest('.lm-tabelle thead th[data-key]');
-        if (!th || th.dataset.key === gezogenKey || th.dataset.key === 'lead'
+        if (!th || th.dataset.key === gezogenKey
             || th.getAttribute('draggable') === 'false') { return null; }
         return th;
     }
@@ -814,7 +831,8 @@
             const keys = sichtbarKeys.concat(reihenfolge.filter(function (k) { return sichtbarKeys.indexOf(k) < 0; }));
             const liste = keys.map(function (key) {
                 const box = spaltenliste.querySelector('input[data-key="' + key + '"]');
-                return { key: key, sichtbar: key === 'lead' || !!(box && box.checked), name: (bekannt[key] || {}).name || '' };
+                // feste Spalten = gesperrtes Häkchen (immer sichtbar), sonst der Haken des Nutzers
+                return { key: key, sichtbar: !!(box && (box.checked || box.disabled)), name: (bekannt[key] || {}).name || '' };
             });
             spaltenSenden({ spalten: liste }).then(function (j) { if (j) { window.location.reload(); } });
         });
@@ -822,7 +840,7 @@
     const reset = document.getElementById('lm-spalten-reset');
     if (reset) {
         reset.addEventListener('click', function () {
-            if (!window.confirm('Spalten dieses Boards auf den Standard zurücksetzen (Reihenfolge, Sichtbarkeit, Namen, Sortierung)? Gilt nur für Sie.')) { return; }
+            if (!window.confirm('Spalten dieser Tabelle auf den Standard zurücksetzen (Reihenfolge, Sichtbarkeit, Namen, Sortierung)? Gilt nur für Sie.')) { return; }
             spaltenSenden({ zuruecksetzen: true }).then(function (j) { if (j) { window.location.reload(); } });
         });
     }

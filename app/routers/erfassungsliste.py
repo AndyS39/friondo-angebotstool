@@ -14,8 +14,44 @@ from app.db import get_session
 from app.models import (ERFASSUNG_STATUS, Angebot, Benutzer, Erfassung, Kunde)
 from app.templating import render
 from app import anfrage   # v27: Formular/JSON in def-Routen
+from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
+from app import lead_boards   # v33 (PLAN_V20 Phase 174): Spalten je Nutzer, gemerkte Sortierung
+from app import sparten as sparten_modul
 
 router = APIRouter(prefix="/erfassungen")
+
+
+def _sortwert(e: Erfassung, key: str, kunden: dict, benutzer: dict, angebote: dict):
+    """v33 (Phase 174): Sortierwert je Spalte der Erfassungsliste bzw. TAIFUN-Warteschlange
+    (None = leer, steht immer am Ende – lead_boards.zeilen_sortieren)."""
+    kunde = kunden.get(e.kunde_id)
+    if key == "lead":
+        return lead_boards.sort_text(kunde.anzeige_name if kunde else None)
+    if key in ("datum", "erfassung"):
+        return e.abgesendet_am
+    if key == "vertriebler":
+        b = benutzer.get(e.benutzer_id)
+        return lead_boards.sort_text(b.name if b else None)
+    if key == "ampel":
+        return 1 if e.ampel == "orange" else 0
+    if key == "status":
+        return lead_boards.sort_text(e.status)
+    if key == "angebot":
+        a = angebote.get(e.angebot_id) if e.angebot_id else None
+        if a is None:
+            return None
+        return lead_boards.sort_text((a.taifun_nummer or a.nummer) if a.extern else a.nummer)
+    if key == "sparte":
+        return lead_boards.sort_text(e.sparte or "WP")
+    if key == "typ":
+        return lead_boards.sort_text(e.typ)
+    if key == "kanal":
+        return lead_boards.sort_text(kunde.vertriebskanal if kunde else None)
+    if key == "ort":
+        return lead_boards.sort_text(f"{kunde.plz or ''} {kunde.ort or ''}" if kunde else None)
+    if key == "telefon":
+        return lead_boards.sort_text(kunde.telefon if kunde else None)
+    return None
 
 
 def _kontext(session: Session, erfassungen):
@@ -82,6 +118,18 @@ def liste(request: Request, q: str = "", status: str = "", ampel: str = "",
     vertriebler_werte = sorted({e.benutzer_id for e in erfassungen if e.benutzer_id}
                                | ({vertriebler_id} if vertriebler_id else set()),
                                key=lambda i: benutzer[i].name if i in benutzer else "")
+    # v33 (PLAN_V20 Phase 174): Lead-Board-Layout – Board-Key je Sicht (der Reiter „In TAIFUN
+    # zu schreiben“ und die Startseiten-Kachel individuell-offen sind die TAIFUN-Warteschlange
+    # mit fester erster Spalte „Erfassung“), Spalten je Nutzer (Katalog nach Basisrolle) und
+    # die gemerkte Spaltensortierung vor dem Rendern (ohne gemerkte Sortierung bleibt die
+    # bisherige Reihenfolge: zuletzt abgesendet zuerst)
+    board = ("taifun_warteschlange" if status in ("In TAIFUN zu schreiben", "individuell-offen")
+             else "erfassungen")
+    benutzer_obj = request.state.benutzer
+    spalten = lead_boards.spalten_fuer(session, benutzer_obj, board)
+    sortierung = lead_boards.sortierung_fuer(session, benutzer_obj, board)
+    lead_boards.zeilen_sortieren(erfassungen, sortierung,
+                                 wert=lambda e, key: _sortwert(e, key, kunden, benutzer, angebote))
     return render(request, "erfassungen/liste.html", aktiv="/erfassungen",
                   erfassungen=erfassungen, kunden=kunden, benutzer_map=benutzer,
                   angebote=angebote, q=q, status=status, ampel=ampel,
@@ -89,6 +137,10 @@ def liste(request: Request, q: str = "", status: str = "", ampel: str = "",
                   vertriebler_werte=vertriebler_werte,
                   bemerkungen=bemerkungen, fachhinweis_ids=fachhinweis_ids,
                   status_liste=ERFASSUNG_STATUS,
+                  board=board, spalten=spalten, sortierung=sortierung,
+                  ctx={"board": board, "sortierung": sortierung},
+                  spalten_fest=lead_boards.spalten_fest(board),
+                  sparten_liste=sparten_modul.SPARTEN,
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -108,7 +160,7 @@ def detail(request: Request, erfassung_id: int,
     angebot = session.get(Angebot, erfassung.angebot_id) if erfassung.angebot_id else None
     seiten = logik.seiten
     aussendienst = (session.query(Benutzer)
-                    .filter(Benutzer.rolle == "aussendienst", Benutzer.aktiv.is_(True))
+                    .filter(rollen_modul.filter_basis("aussendienst"), Benutzer.aktiv.is_(True))
                     .order_by(Benutzer.name).all())
     from datetime import date
     fachhinweise = engine.fachliche_hinweise(antworten)   # v9
@@ -185,7 +237,7 @@ def freitext_aendern(request: Request, erfassung_id: int,
     benutzer = request.state.benutzer
     if erfassung is None or erfassung.typ != "freitext":
         return RedirectResponse(f"/erfassungen/{erfassung_id}", status_code=303)
-    if benutzer.rolle == "aussendienst" and erfassung.benutzer_id != benutzer.id:
+    if benutzer.basisrolle == "aussendienst" and erfassung.benutzer_id != benutzer.id:
         return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
             "Keine Berechtigung – der Freitext gehört zu einer fremden Erfassung."),
             status_code=303)

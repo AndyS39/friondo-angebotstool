@@ -1,22 +1,29 @@
 # v32 (PLAN_V19 Phase 161): Datenaufbereitung der Vertriebler-Ansicht „Mein Tag“
-# (GET /leads, Template templates/leads/mein_tag.html). Quelle der Termine ist
-# ausschließlich vot_termine (Tool-Termine und monday-VOT-Termine, seit v23 gemeinsam):
-# - Terminart vot; offene Status geplant | bestaetigt | unbestaetigt [ANNAHME – der Plan
-#   nennt „terminiert/unbestätigt“, in vot_termine stehen geplant/erfolgt; abgesagt,
-#   no_show, verschoben und vorgemerkt fallen heraus]; ein Termin mit Status erfolgt
-#   bleibt nur sichtbar, solange der Vorgang noch eine offene Sparte hat (v8-Regel der
-#   Leads-VOT-Liste: Status-Chips je Sparte) [ANNAHME];
+# (GET /leads, Template templates/leads/mein_tag.html).
+# v33 (PLAN_V20 Phase 173, Protokoll Claudia Castro 14.10.2026 Teil A): „Mein Tag“ gilt nur
+# noch mobil (Basisrolle Außendienst unter 600 px – CSS-Media-Query, derselbe Datenbestand im
+# HTML); der v32-Umschalter „Karten | Tabelle“ und die Einstellung `leads_darstellung`
+# entfallen, der Block „Heiße Kunden“ geht im Abschnitt „Wiedervorlage“ auf
+# (app/nachfassen.wiedervorlage_liste). Aufbau nach dem Design-Entwurf: Kopf (Datum, Titel,
+# Initialen) · Karte „Als Nächstes“ · Liste „Heute“ mit Zeitstrahl · Wiedervorlage ·
+# „Kommende Tage“ (14 Tage [ANNAHME]) · untere Leiste.
+#
+# Quelle der Termine ist ausschließlich vot_termine (Tool-Termine und monday-VOT-Termine):
+# - Terminarten vot | telefon | online (Phase 173: „Sparte, Termintyp“ aus vot_termine.typ –
+#   vot → „Vor-Ort-Termin“, telefon → „Telefontermin“, online → „Teams“ [ANNAHME]);
+#   offene Status geplant | bestaetigt | unbestaetigt [ANNAHME v32]; Status erfolgt bleibt nur
+#   am selben Tag (als erledigt) bzw. solange eine Sparte des Objekts offen ist;
 # - ohne verknüpftes Angebot am Vorgang (Regel von „Leads VOT“ seit v1);
-# - Außendienst: nur eigene Termine – vot_termine.ad_id = Benutzer, Rückfall
-#   vorgaenge.ad_id bzw. leads.benutzer_id, wenn ad_id am Termin leer ist [ANNAHME];
-#   Innendienst/Admin: alle, Filter Vertriebler;
-# - Blöcke: „Termine heute“ (überfällige Termine der Vergangenheit ohne Erfassung zuoberst,
-#   Label „überfällig“) und „Weitere Termine“ (ab morgen, chronologisch);
-# - je Karte Datum „Mo, 13.10.“, Uhrzeit, Kundenname, Objektadresse (objekte.
-#   ausfuehrungsort, bei mehreren Objekten mit Bezeichnung) als Google-Maps-Link,
-#   tel:-Link, Sparten-Chips, Herkunft monday | Tool, „Erfassung starten“ mit objekt_id.
-# Die Blöcke „Fällig heute“ (app/nachfassen.py) und „Heiße Kunden“ (verfolgung.
-# heisse_vorgaenge, Rückfall hier) liefern eigene Karten. Reine Datenbankarbeit.
+# - Außendienst: nur eigene Termine – vot_termine.ad_id = Benutzer, Rückfall vorgaenge.ad_id
+#   bzw. leads.benutzer_id [ANNAHME]; Innendienst/Admin: alle, Filter Vertriebler;
+# - **Erledigt-Logik (Phase 173):** ein Termin ist erledigt, sobald die aus „Erfassung
+#   starten“ angelegte Erfassung abgeschlossen ist – Verknüpfung Termin ↔ Erfassung über
+#   Vorgang + Objekt (vot_termine.objekt_id ↔ erfassungen.objekt_id, v31) + Sparte: alle
+#   Sparten des Objekts sind abgesendet (Status ≠ Entwurf) oder ausgeblendet. Kein Haken,
+#   kein manuelles Abhaken. Vergangene Vor-Ort-Termine ohne Erfassung bleiben „überfällig“
+#   in „Heute“ (v32); Telefon-/Teams-Termine ohne Erfassung bleiben bis Tagesende offen und
+#   fallen am Folgetag aus „Heute“ [ANNAHME].
+# Reine Datenbankarbeit – kein Netzaufruf (v27-Regel).
 from datetime import date, datetime, timedelta
 from urllib.parse import quote
 
@@ -24,15 +31,35 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from app import nachfassen, objekte
-from app.models import Angebot, Benutzer, Erfassung, Kunde, Lead, Vorgang, VotTermin
+from app import sparten as sparten_modul
+from app.models import (AdProfil, Angebot, Benutzer, Erfassung, Kunde, Lead, Vorgang,
+                        VorgangObjekt, VotTermin)
 
 OFFENE_STATUS = ("geplant", "bestaetigt", "unbestaetigt")
 STATUS_ABFRAGE = OFFENE_STATUS + ("erfolgt",)
+TERMIN_TYPEN = ("vot", "telefon", "online")
+TYP_NAMEN = {"vot": "Vor-Ort-Termin", "telefon": "Telefontermin", "online": "Teams"}   # [ANNAHME]
 WOCHENTAGE = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
+WOCHENTAGE_LANG = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
+MONATE = ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August",
+          "September", "Oktober", "November", "Dezember")
 MAPS_URL = "https://www.google.com/maps/search/?api=1&query="
-DARSTELLUNGEN = ("karten", "tabelle")
-EINSTELLUNG_DARSTELLUNG = "leads_darstellung"   # benutzer_einstellungen (lead_v2.einstellung_*)
+ROUTE_URL = "https://www.google.com/maps/dir/?api=1&destination={ziel}&travelmode=driving"
+KOMMENDE_TAGE = 14            # [ANNAHME] Zeitraum „Kommende Tage“
+STANDARD_DAUER_MIN = 90       # [ANNAHME] ohne Ende und ohne AD-Profil: Beginn + 90 Minuten
 VERFOLGUNG_CHIPS = {"bestellung_angekuendigt": "Bestellung angekündigt"}
+# Phase 174 (Vertrag T, Endstand 14.10.2026): der Spaltenkatalog „Leads VOT Desktop“ liegt in
+# lead_boards.KATALOGE["leads_vot"]; diese Liste ist das dokumentierte Spiegelbild (T-Test
+# test_vertrag_leads_vot_und_kataloge prüft die Gleichheit) und nur noch Dokumentation
+BOARD_KEY = "leads_vot"
+SPALTEN_RUECKFALL = [
+    ("lead", "Kundenname", True), ("termin", "Termin", True),
+    ("prioritaet", "Priorität", True), ("sparten", "Sparten", True),
+    ("ort", "Ort", True), ("kanal", "Kanal", True),
+    ("vertriebler", "Vertriebler", True), ("status", "Status", True),
+]
+SPALTEN_FEST = ("lead",)
+PRIORITAET_TEXTE = {"hoch": "Hoch", "mittel": "Mittel", "niedrig": "Niedrig"}
 
 
 # --- Helfer ---------------------------------------------------------------------------
@@ -51,6 +78,15 @@ def _tag(wert) -> date | None:
     return None
 
 
+def _jetzt(heute) -> datetime:
+    """Bezugszeitpunkt: datetime wie übergeben, ein Datum → 00:00 dieses Tages, sonst jetzt."""
+    if isinstance(heute, datetime):
+        return heute
+    if isinstance(heute, date):
+        return datetime(heute.year, heute.month, heute.day)
+    return datetime.now()
+
+
 def datum_text(wert) -> str:
     """„Mo, 13.10.“ – Wochentag kurz, Tag und Monat."""
     tag = _tag(wert)
@@ -59,8 +95,44 @@ def datum_text(wert) -> str:
     return f"{WOCHENTAGE[tag.weekday()]}, {tag.strftime('%d.%m.')}"
 
 
+def datum_lang(wert) -> str:
+    """„Mittwoch, 14. Oktober“ – Wochentag und Monat ausgeschrieben (Kopf, Gruppen)."""
+    tag = _tag(wert)
+    if tag is None:
+        return ""
+    return f"{WOCHENTAGE_LANG[tag.weekday()]}, {tag.day}. {MONATE[tag.month - 1]}"
+
+
+def wochentag_kurz(wert) -> str:
+    """„DO“ – Datumskachel der kommenden Tage (zweibuchstabig, Versalien)."""
+    tag = _tag(wert)
+    return WOCHENTAGE[tag.weekday()].upper() if tag is not None else ""
+
+
 def uhr_text(wert) -> str:
     return f"{wert.strftime('%H:%M')} Uhr" if isinstance(wert, datetime) else ""
+
+
+def uhr_kurz(wert) -> str:
+    return wert.strftime("%H:%M") if isinstance(wert, datetime) else ""
+
+
+def minuten_text(beginn: datetime, jetzt: datetime) -> str:
+    """Hinweis der Karte „Als Nächstes“: „in 25 Min“ (Minuten bis Beginn), ab einer Stunde
+    „in 1 Std 15 Min“, nach dem Beginn „jetzt“."""
+    if beginn <= jetzt:
+        return "jetzt"
+    minuten = int((beginn - jetzt).total_seconds() // 60)
+    if minuten < 1:
+        return "jetzt"
+    if minuten < 60:
+        return f"in {minuten} Min"
+    stunden, rest = divmod(minuten, 60)
+    return f"in {stunden} Std" + (f" {rest} Min" if rest else "")
+
+
+def tage_text_termine(anzahl: int) -> str:
+    return f"{anzahl} Termin{'e' if anzahl != 1 else ''}"
 
 
 def maps_url(ort: dict) -> str:
@@ -69,9 +141,21 @@ def maps_url(ort: dict) -> str:
     return MAPS_URL + quote(adresse, safe="") if adresse else ""
 
 
+def route_url(ort: dict) -> str:
+    """„Route starten“ (Phase 173): Google-Maps-Routenplaner mit der Anschrift als Ziel
+    (Start = Standort des Geräts; der v29-Routenplaner des Lead-Dashboards nutzt dieselbe
+    dir-API mit festem Start)."""
+    adresse = ort.get("einzeilig") or ""
+    return ROUTE_URL.format(ziel=quote(adresse, safe="")) if adresse else ""
+
+
 def herkunft(termin: VotTermin) -> str:
     """Herkunfts-Badge „monday“ oder „Tool“ (Assistent/manuell) [ANNAHME]."""
     return "monday" if (termin.quelle or "") == "monday" else "Tool"
+
+
+def typ_name(termin: VotTermin) -> str:
+    return TYP_NAMEN.get((termin.typ or "vot").strip(), TYP_NAMEN["vot"])
 
 
 def effektiver_ad(termin: VotTermin, vorgang: Vorgang, lead: Lead | None) -> int | None:
@@ -81,25 +165,26 @@ def effektiver_ad(termin: VotTermin, vorgang: Vorgang, lead: Lead | None) -> int
 
 
 def ist_aussendienst(benutzer) -> bool:
-    return getattr(benutzer, "rolle", "") == "aussendienst"
+    """v33: Basisrolle (gilt auch für die Variante Handelsvertreter)."""
+    if benutzer is None:
+        return False
+    basis = getattr(benutzer, "basisrolle", None)
+    if basis is None:
+        basis = getattr(benutzer, "rolle", "")
+    return basis == "aussendienst"
 
 
-def darstellung_lesen(session: Session, benutzer) -> str:
-    """Karten | Tabelle für Innendienst/Admin (Standard Karten, je Nutzer gespeichert);
-    der Außendienst sieht immer Karten."""
-    if ist_aussendienst(benutzer):
-        return "karten"
-    from app import lead_v2
-    wert = lead_v2.einstellung_holen(session, benutzer.id, EINSTELLUNG_DARSTELLUNG, "karten")
-    return wert if wert in DARSTELLUNGEN else "karten"
-
-
-def darstellung_setzen(session: Session, benutzer, wert: str) -> str:
-    from app import lead_v2
-    wert = wert if wert in DARSTELLUNGEN else "karten"
-    if not ist_aussendienst(benutzer):
-        lead_v2.einstellung_setzen(session, benutzer.id, EINSTELLUNG_DARSTELLUNG, wert)
-    return wert
+def initialen(benutzer) -> str:
+    """Zwei Buchstaben aus Vor- und Nachname (Kopf-Kreis); ohne Vorname die ersten beiden
+    Namensteile bzw. Buchstaben des Namens."""
+    vorname = (getattr(benutzer, "vorname", "") or "").strip()
+    name = (getattr(benutzer, "name", "") or "").strip()
+    teile = [t for t in name.replace("-", " ").split() if t]
+    if vorname and teile:
+        return (vorname[:1] + teile[-1][:1]).upper()
+    if len(teile) >= 2:
+        return (teile[0][:1] + teile[-1][:1]).upper()
+    return (name[:2] or "?").upper()
 
 
 def _archiv_filter(abfrage):
@@ -113,8 +198,11 @@ def _archiv_filter(abfrage):
 def _chips(lead: Lead | None, sparten: list[str], erfasst: set[str]) -> list[tuple[str, str]]:
     """Status-Chips je Sparte wie in Leads VOT (v8): erfasst | ausgeblendet | offen."""
     if lead is not None:
-        from app.routers.leads import sparten_chips
-        return sparten_chips(lead, erfasst)
+        # wie routers.leads.sparten_chips (v8), aber für eine beliebige Sparten-Liste
+        # (Phase 173: Sparten des Termin-Objekts statt der Lead-Interessen)
+        ausgeblendet = set(lead.ausgeblendete_sparten)
+        return [(s, "erfasst" if s in erfasst else ("ausgeblendet" if s in ausgeblendet else "offen"))
+                for s in sparten]
     return [(s, "erfasst" if s in erfasst else "offen") for s in sparten]
 
 
@@ -128,17 +216,37 @@ def erfassen_url(vorgang: Vorgang, lead: Lead | None, kunde: Kunde, objekt_id) -
     return url + (f"&objekt_id={int(objekt_id)}" if objekt_id else "")
 
 
+def sparten_text(sparten: list[str]) -> str:
+    """„Wärmepumpe und Photovoltaik“ (Langform aus app/sparten.py)."""
+    try:
+        return sparten_modul.sparten_text(sparten) or ", ".join(sparten)
+    except Exception:   # noqa: BLE001 – die Karte darf daran nie scheitern
+        return ", ".join(sparten)
+
+
+def _objekt_sparten(objekt: VorgangObjekt | None, haupt_sparten: list[str]) -> list[str]:
+    """Sparten des Termin-Objekts: Objekt 2 ff. tragen eigene Interessen (v31), das
+    Hauptobjekt die des Leads/Vorgangs."""
+    if objekt is None or (objekt.reihenfolge or 1) == 1:
+        return haupt_sparten
+    try:
+        eigene = sparten_modul.codes(objekt.interessen)
+    except Exception:   # noqa: BLE001
+        eigene = []
+    return eigene or haupt_sparten
+
+
 # --- Termine ---------------------------------------------------------------------------
 
 def termin_karten(session: Session, benutzer, heute=None) -> list[dict]:
     """Alle sichtbaren Termin-Karten des Benutzers (ungefiltert, chronologisch)."""
-    jetzt = heute if isinstance(heute, datetime) else datetime.now()
+    jetzt = _jetzt(heute)
     heute_tag = jetzt.date()
     aussendienst = ist_aussendienst(benutzer)
     abfrage = (session.query(VotTermin, Vorgang)
                .join(Vorgang, Vorgang.id == VotTermin.vorgang_id)
                .outerjoin(Lead, Lead.id == Vorgang.lead_id)
-               .filter(VotTermin.typ == "vot", VotTermin.beginn.isnot(None),
+               .filter(VotTermin.typ.in_(TERMIN_TYPEN), VotTermin.beginn.isnot(None),
                        VotTermin.status.in_(STATUS_ABFRAGE)))
     abfrage = _archiv_filter(abfrage)
     if aussendienst:
@@ -158,11 +266,28 @@ def termin_karten(session: Session, benutzer, heute=None) -> list[dict]:
              .filter(Lead.id.in_({v.lead_id for _, v in zeilen if v.lead_id} or {0}))}
     kunden = {k.id: k for k in session.query(Kunde)
               .filter(Kunde.id.in_({v.kunde_id for _, v in zeilen} or {0}))}
+    objekte_map: dict[int, VorgangObjekt] = {}
+    haupt_map: dict[int, VorgangObjekt] = {}
+    for o in (session.query(VorgangObjekt)
+              .filter(VorgangObjekt.vorgang_id.in_(vorgang_ids), VorgangObjekt.aktiv.is_(True))):
+        objekte_map[o.id] = o
+        if (o.reihenfolge or 1) == 1 and o.vorgang_id not in haupt_map:
+            haupt_map[o.vorgang_id] = o
+    # abgesendete Erfassungen je Vorgang und je Objekt (Entwürfe zählen nicht)
     erfasst: dict[int, set[str]] = {}
+    erfasst_objekt: dict[tuple[int, int | None], set[str]] = {}
+    erfassungen_objekt: dict[tuple[int, int | None], list[Erfassung]] = {}
     for e in (session.query(Erfassung)
-              .filter(Erfassung.vorgang_id.in_(vorgang_ids), Erfassung.status != "Entwurf")):
-        erfasst.setdefault(e.vorgang_id, set()).add(e.sparte or "WP")
+              .filter(Erfassung.vorgang_id.in_(vorgang_ids), Erfassung.status != "Entwurf")
+              .order_by(Erfassung.abgesendet_am.desc().nullslast(), Erfassung.id.desc())):
+        sparte = e.sparte or "WP"
+        erfasst.setdefault(e.vorgang_id, set()).add(sparte)
+        haupt = haupt_map.get(e.vorgang_id)
+        schluessel = (e.vorgang_id, e.objekt_id or (haupt.id if haupt else None))
+        erfasst_objekt.setdefault(schluessel, set()).add(sparte)
+        erfassungen_objekt.setdefault(schluessel, []).append(e)
     benutzer_map = {b.id: b for b in session.query(Benutzer)}
+    dauer_profil = {p.benutzer_id: p.termin_dauer_min for p in session.query(AdProfil)}
     karten: list[dict] = []
     for termin, vorgang in zeilen:
         if vorgang.id in mit_angebot:
@@ -178,48 +303,102 @@ def termin_karten(session: Session, benutzer, heute=None) -> list[dict]:
                    else (objekte.vorgang_interessen(session, vorgang.id) or kunde.interessen or ["WP"]))
         erfasst_set = erfasst.get(vorgang.id, set())
         chips = _chips(lead, sparten, erfasst_set)
-        offen = any(status == "offen" for _, status in chips)
-        if termin.status == "erfolgt" and not offen:
-            continue   # Erfassung vollständig – der Termin ist erledigt
+        offen_vorgang = any(status == "offen" for _, status in chips)
+        # Erledigt je Objekt (Phase 173): Sparten des Termin-Objekts gegen die Erfassungen
+        # desselben Objekts; Termine ohne objekt_id zählen zum Hauptobjekt
+        haupt = haupt_map.get(vorgang.id)
+        objekt = objekte_map.get(termin.objekt_id) if termin.objekt_id else haupt
+        objekt_schluessel = (vorgang.id, objekt.id if objekt is not None else None)
+        sparten_objekt = _objekt_sparten(objekt, sparten)
+        erfasst_obj = erfasst_objekt.get(objekt_schluessel, set())
+        chips_objekt = _chips(lead, sparten_objekt, erfasst_obj)
+        offen_objekt = any(status == "offen" for _, status in chips_objekt)
+        erledigt = bool(sparten_objekt) and not offen_objekt
         tag = termin.beginn.date()
         vergangen = tag < heute_tag
-        ueberfaellig = vergangen and not erfasst_set
-        teilweise = vergangen and bool(erfasst_set) and offen
+        if termin.status == "erfolgt" and not offen_vorgang and (vergangen or not erledigt):
+            continue   # Erfassung vollständig und nicht mehr heute – der Termin ist durch
+        ueberfaellig = vergangen and not erfasst_set and termin.typ == "vot"
+        teilweise = vergangen and bool(erfasst_set) and offen_vorgang and termin.typ == "vot"
         if vergangen and not (ueberfaellig or teilweise):
-            continue
+            continue   # vergangene erledigte Termine und Telefon-/Teams-Termine [ANNAHME]
         ort = objekte.ausfuehrungsort(session, termin=termin, vorgang=vorgang, kunde=kunde)
         objekt_id = ort.get("objekt_id") or termin.objekt_id
         ad = benutzer_map.get(ad_id) if ad_id else None
         telefon = (kunde.telefon or "").strip() or (lead.telefon if lead else "") or ""
+        dauer = dauer_profil.get(ad_id) or STANDARD_DAUER_MIN
+        ende = termin.ende or (termin.beginn + timedelta(minutes=int(dauer)))
+        letzte = (erfassungen_objekt.get(objekt_schluessel) or [None])[0]
+        typ = (termin.typ or "vot").strip()
         karten.append({
             "termin": termin, "vorgang": vorgang, "kunde": kunde, "lead": lead,
-            "tag": tag, "beginn": termin.beginn,
+            "tag": tag, "beginn": termin.beginn, "ende": ende,
             "datum_text": datum_text(termin.beginn), "uhr_text": uhr_text(termin.beginn),
+            "uhr": uhr_kurz(termin.beginn), "ende_uhr": uhr_kurz(ende),
             "name": nachfassen.kundenname(kunde),
             "ort": ort, "adresse": ort.get("einzeilig") or "",
             "strasse": ort.get("strasse") or "", "plz_ort": " ".join(
                 x for x in (ort.get("plz") or "", ort.get("ort") or "") if x),
+            "ort_text": (ort.get("ort") or "").strip() or (ort.get("plz") or ""),
             "objekt_bezeichnung": (ort.get("bezeichnung") or "") if ort.get("mehrere_objekte") else "",
-            "objekt_id": objekt_id, "maps_url": maps_url(ort),
+            "objekt_id": objekt_id, "maps_url": maps_url(ort), "route_url": route_url(ort),
             "telefon": telefon, "tel_href": nachfassen.tel_href(telefon),
-            "sparten": sparten, "chips": chips,
+            "sparten": sparten, "chips": chips, "sparten_objekt": sparten_objekt,
+            "sparten_text": sparten_text(sparten_objekt),
+            "typ": typ, "typ_name": typ_name(termin),
+            "beschreibung": ", ".join(t for t in (sparten_text(sparten_objekt), typ_name(termin)) if t),
             "herkunft": herkunft(termin), "status": termin.status,
             "status_text": (lead.status_text if lead else "") or "",
             "ad_id": ad_id, "ad": ad, "ad_name": ad.name if ad else "",
             "ueberfaellig": ueberfaellig, "teilweise": teilweise, "heute": tag == heute_tag,
+            "erledigt": erledigt,
+            "erfassung": letzte,
+            "erfassung_url": (f"/erfassung/{letzte.id}/pruefen" if letzte is not None
+                              else f"/vorgaenge/{vorgang.id}"),
             "erfassen_url": erfassen_url(vorgang, lead, kunde, objekt_id),
             "akte_url": f"/vorgaenge/{vorgang.id}",
             "grosskunde": bool(getattr(kunde, "grosskunde", False)),
             "kanal": (lead.vertriebskanal if lead else "") or kunde.vertriebskanal or "",
+            "ampel": vorgang.verfolgung_ampel or "",
         })
     return karten
+
+
+def naechster_termin(heute_karten: list[dict], jetzt: datetime) -> dict | None:
+    """Karte „Als Nächstes“: der nächste noch nicht erledigte Termin des Tages – der erste,
+    dessen Ende noch nicht erreicht ist (vor dem Beginn „in n Min“, danach „jetzt“); ohne
+    Termin heute (oder alle vorbei/erledigt) keine Karte [ANNAHME: Ende = termin.ende bzw.
+    Beginn + Dauer des AD-Profils]."""
+    for k in sorted((k for k in heute_karten if k["heute"] and not k["erledigt"]),
+                    key=lambda k: (k["beginn"], k["termin"].id)):
+        if k["ende"] > jetzt:
+            return k
+    return None
+
+
+def kommende_tage(karten: list[dict], heute_tag: date, tage: int = KOMMENDE_TAGE) -> list[dict]:
+    """Abschnitt „Kommende Tage“: Termine ab morgen bis heute + `tage`, gruppiert je Tag
+    (Datumskachel „DO“ + „15“, Überschrift „Donnerstag, 15. Oktober“, Zähler)."""
+    grenze = heute_tag + timedelta(days=tage)
+    gruppen: dict[date, list[dict]] = {}
+    for k in karten:
+        if heute_tag < k["tag"] <= grenze:
+            gruppen.setdefault(k["tag"], []).append(k)
+    ergebnis = []
+    for tag in sorted(gruppen):
+        eintraege = sorted(gruppen[tag], key=lambda k: (k["beginn"], k["termin"].id))
+        ergebnis.append({"tag": tag, "iso": tag.isoformat(), "wochentag": wochentag_kurz(tag),
+                         "tag_nr": str(tag.day), "titel": datum_lang(tag),
+                         "zaehler": tage_text_termine(len(eintraege)), "termine": eintraege})
+    return ergebnis
 
 
 def termine(session: Session, benutzer, von=None, bis=None, status: str = "",
             vertriebler_id: int = 0, heute=None) -> dict:
     """Termin-Blöcke mit Filtern (Termin von/bis, Status = monday-Statustext, Vertriebler
-    bei ID/Admin): heute (überfällige zuoberst, dann die heutigen) und weitere (ab morgen),
-    jeweils chronologisch; dazu die Auswahlwerte der Filter aus der ungefilterten Liste."""
+    bei ID/Admin): heute (überfällige zuoberst, dann die heutigen chronologisch),
+    naechster (Karte „Als Nächstes“), kommende (14 Tage je Tag), weitere (alle ab morgen),
+    spaeter (Anzahl jenseits der 14 Tage); dazu die Auswahlwerte der Filter."""
     alle = termin_karten(session, benutzer, heute)
     status_werte = sorted({k["status_text"] for k in alle if k["status_text"]})
     vertriebler_werte = sorted({(k["ad_id"], k["ad_name"]) for k in alle if k["ad_id"]},
@@ -236,78 +415,128 @@ def termine(session: Session, benutzer, von=None, bis=None, status: str = "",
         if vertriebler_id and k["ad_id"] != int(vertriebler_id):
             continue
         gefiltert.append(k)
-    jetzt = heute if isinstance(heute, datetime) else datetime.now()
+    jetzt = _jetzt(heute)
     heute_tag = jetzt.date()
     heute_block = [k for k in gefiltert if k["tag"] <= heute_tag]
     heute_block.sort(key=lambda k: (0 if k["tag"] < heute_tag else 1, k["beginn"], k["termin"].id))
+    naechster = naechster_termin(heute_block, jetzt)
+    for k in heute_block:
+        k["naechster"] = naechster is not None and k["termin"].id == naechster["termin"].id
+    if naechster is not None:
+        naechster["hinweis"] = minuten_text(naechster["beginn"], jetzt)
     weitere = [k for k in gefiltert if k["tag"] > heute_tag]
-    return {"heute": heute_block, "weitere": weitere, "alle": gefiltert,
+    kommende = kommende_tage(gefiltert, heute_tag)
+    grenze = heute_tag + timedelta(days=KOMMENDE_TAGE)
+    # Phase 173 [eigene Annahme]: überfällige Termine (Vergangenheit, Erfassung fehlt) stehen
+    # zuoberst (v32), aber als eigener, aufklappbarer Block – „Heute“ zählt nur den Tag selbst
+    ueberfaellige = [k for k in heute_block if k["tag"] < heute_tag]
+    heute_nur = [k for k in heute_block if k["tag"] == heute_tag]
+    return {"heute": heute_block, "heute_nur": heute_nur, "ueberfaellige": ueberfaellige,
+            "weitere": weitere, "alle": gefiltert,
+            "naechster": naechster, "kommende": kommende,
+            "spaeter": sum(1 for k in weitere if k["tag"] > grenze), "grenze": grenze,
             "ueberfaellig": sum(1 for k in heute_block if k["ueberfaellig"]),
             "status_werte": status_werte, "vertriebler_werte": vertriebler_werte,
             "anzahl": len(gefiltert), "gesamt": len(alle)}
 
 
-# --- Heiße Kunden (Phase 163, Darstellung in Mein Tag) --------------------------------------
+# --- Leads VOT Desktop: Gruppen und Spalten (Phase 174, Vertrag T) -------------------------
 
-def _heisse_vorgaenge_rueckfall(session: Session, benutzer_id: int | None) -> list[Vorgang]:
-    abfrage = _archiv_filter(session.query(Vorgang).filter(
-        or_(Vorgang.verfolgung_ampel == "heiss",
-            Vorgang.verfolgung_status == "bestellung_angekuendigt")))
-    vorgaenge = abfrage.all()
-    if benutzer_id:
-        from app import vorgaenge as vorgaenge_modul
-        vorgaenge = [v for v in vorgaenge
-                     if v.ad_id == benutzer_id or v.wiedervorlage_benutzer_id == benutzer_id
-                     or vorgaenge_modul.gehoert_benutzer(session, v, benutzer_id)]
-    vorgaenge.sort(key=lambda v: (v.wiedervorlage_am is None, v.wiedervorlage_am or datetime.max, -v.id))
-    return vorgaenge
+def gruppen_bilden(zeilen: list[dict], heute=None) -> list[dict]:
+    """Zeilen der Desktop-Tabelle in Gruppen: „Überfällig“ (Termin vor heute), „Heute“ und je
+    ein Block pro Folgetag („Donnerstag, 15. Oktober · 2 Termine“); innerhalb der Gruppe nach
+    Uhrzeit. Eine Zeile braucht `termin` (datetime|None); ohne Termin → Gruppe „Ohne Termin“."""
+    heute_tag = _jetzt(heute).date()
+    sammel: dict[str, list[dict]] = {}
+    for z in zeilen:
+        termin = z.get("termin")
+        tag = _tag(termin)
+        if tag is None:
+            key = "ohne"
+        elif tag < heute_tag:
+            key = "ueberfaellig"
+        elif tag == heute_tag:
+            key = "heute"
+        else:
+            key = tag.isoformat()
+        sammel.setdefault(key, []).append(z)
+    gruppen = []
+    for key in sorted(sammel, key=lambda k: {"ueberfaellig": "0", "heute": "1", "ohne": "9"}.get(k, "2" + k)):
+        eintraege = sorted(sammel[key], key=lambda z: (z.get("termin") or datetime.max, z.get("id") or 0))
+        if key == "ueberfaellig":
+            titel, erkl = "Überfällig", "Termin liegt in der Vergangenheit – Erfassung fehlt"
+        elif key == "heute":
+            titel, erkl = "Heute", datum_lang(heute_tag)
+        elif key == "ohne":
+            titel, erkl = "Ohne Termin", ""
+        else:
+            titel, erkl = datum_lang(key), ""
+        gruppen.append({"key": key, "titel": titel, "erkl": erkl,
+                        "zaehler": tage_text_termine(len(eintraege)), "zeilen": eintraege,
+                        "rot": key == "ueberfaellig"})
+    return gruppen
 
 
-def heisse_kunden(session: Session, benutzer, vertriebler_id: int = 0) -> list[dict]:
-    """Karten „Heiße Kunden“: eigene Vorgänge mit Hot-Ampel heiß oder Verfolgungsstatus
-    bestellung_angekuendigt (verfolgung.heisse_vorgaenge, Rückfall eigene Abfrage) –
-    Kunde, Telefon-Link, Angebots-Kurzinfo, Chip, nächste Wiedervorlage, Akte."""
-    benutzer_id = benutzer.id if ist_aussendienst(benutzer) else None
-    try:
-        from app import verfolgung
-        vorgaenge = verfolgung.heisse_vorgaenge(session, benutzer_id=benutzer_id)
-    except (ImportError, AttributeError):
-        vorgaenge = _heisse_vorgaenge_rueckfall(session, benutzer_id)
-    if vertriebler_id:
-        vorgaenge = [v for v in vorgaenge if v.ad_id == int(vertriebler_id)
-                     or v.wiedervorlage_benutzer_id == int(vertriebler_id)]
-    kunden = {k.id: k for k in session.query(Kunde)
-              .filter(Kunde.id.in_({v.kunde_id for v in vorgaenge} or {0}))}
-    karten = []
-    for v in vorgaenge:
-        kunde = kunden.get(v.kunde_id)
-        if kunde is None:
-            continue
-        status = v.verfolgung_status or ""
-        karten.append({
-            "vorgang": v, "kunde": kunde, "name": nachfassen.kundenname(kunde),
-            "telefon": (kunde.telefon or "").strip(), "tel_href": nachfassen.tel_href(kunde.telefon),
-            "angebot": nachfassen.angebots_kurzinfo(session, v),
-            "verfolgung_status": status,
-            "chip": VERFOLGUNG_CHIPS.get(status, "heiß"),
-            "chip_klasse": "orange" if status == "bestellung_angekuendigt" else "rot",
-            "ampel": v.verfolgung_ampel or "",
-            "wiedervorlage_am": v.wiedervorlage_am,
-            "wiedervorlage_text": v.wiedervorlage_am.strftime("%d.%m.%Y") if v.wiedervorlage_am else "",
-            "akte_url": f"/vorgaenge/{v.id}",
-            "grosskunde": bool(getattr(kunde, "grosskunde", False)),
-        })
-    return karten
+def spalten_fuer(session: Session, benutzer) -> list[dict]:
+    """Spalten je Nutzer für die Tabelle „Leads VOT“ (Vertrag T: lead_boards.spalten_fuer mit
+    Board-Key leads_vot – Rollen-Katalog, feste Spalte Kundenname vorn)."""
+    from app import lead_boards
+    return lead_boards.spalten_fuer(session, benutzer, BOARD_KEY)
+
+
+def sortierung_fuer(session: Session, benutzer) -> dict | None:
+    """Gemerkte Spaltensortierung {key, richtung} des Nutzers (Vertrag T), sonst None."""
+    from app import lead_boards
+    return lead_boards.sortierung_fuer(session, benutzer, BOARD_KEY)
+
+
+def spalten_fest() -> tuple:
+    """Feste Spalten der Tabelle (immer sichtbar, vorn, kein Ablageziel) – Vertrag T."""
+    from app import lead_boards
+    return lead_boards.spalten_fest(BOARD_KEY)
+
+
+def _sortier_wert(z: dict, key: str):
+    """Sortierwert einer Zeile für lead_boards.zeilen_sortieren(wert=…): None = leer (ans Ende)."""
+    wert = z.get(key)
+    if key == "lead":
+        wert = (z.get("name") or "").lower()
+    elif key == "termin":
+        wert = z.get("termin")
+    elif key == "prioritaet":
+        wert = {"hoch": 0, "mittel": 1, "niedrig": 2}.get(z.get("prioritaet") or "", None)
+    elif key == "sparten":
+        wert = ",".join(z.get("sparten") or []) or None
+    elif isinstance(wert, str):
+        wert = wert.lower() or None
+    return wert
+
+
+def gruppen_sortieren(gruppen: list[dict], sort: dict | None) -> list[dict]:
+    """Spaltensortierung innerhalb der Gruppen über lead_boards.zeilen_sortieren (Vertrag T:
+    leere Werte ans Ende; ohne Sortierung bleibt die Uhrzeit-Reihenfolge erhalten)."""
+    from app import lead_boards
+    for g in gruppen:
+        lead_boards.zeilen_sortieren(g["zeilen"], sort, wert=_sortier_wert)
+    return gruppen
+
+
+def prioritaet_von(ampel: str) -> str:
+    """Priorität = Hot-Ampel (Protokoll A.1): heiß → hoch, warm → mittel, kalt → niedrig;
+    ohne Einstufung → niedrig [ANNAHME]."""
+    return {"heiss": "hoch", "warm": "mittel", "kalt": "niedrig"}.get((ampel or "").strip(), "niedrig")
 
 
 # --- Dialog „Nächster Schritt“ (Partial von N) ---------------------------------------------
 
-def naechster_schritt_kontext(session: Session, vorgang: Vorgang, ziel: str, heute=None) -> dict:
+def naechster_schritt_kontext(session: Session, vorgang: Vorgang, ziel: str, heute=None,
+                              benutzer=None) -> dict:
     """Variablen des Partials templates/vorgaenge/_naechster_schritt.html (Vertrag N:
     verfolgung.dialog_kontext); Rückfall mit denselben Schlüsseln, solange das Modul fehlt."""
     try:
         from app import verfolgung
-        return verfolgung.dialog_kontext(session, vorgang, zurueck=ziel, heute=heute)
+        # v33 (Phase 176, N 4b): Absender der Nachfass-Mail = angemeldeter Benutzer (sonst AD des Vorgangs)
+        return verfolgung.dialog_kontext(session, vorgang, zurueck=ziel, heute=heute, benutzer=benutzer)
     except (ImportError, AttributeError):
         pass
     from app import werktage

@@ -13,7 +13,7 @@
         {% if demo_badge %}<span class="demo-badge">Demo</span>{% endif %}</h1>
     <div class="aktionen">
         <a class="knopf klein zweitrangig" href="/lead-management/lead/{{ vorgang.id }}">Kartei {{ kunde.anzeige_name }}</a>
-        <a class="knopf klein zweitrangig" href="/lead-management/kalender?ad_id={{ termin.ad_id or '' }}">Kalender</a>
+        <a class="knopf klein zweitrangig" href="/kalender?gruppe=vertrieb{% if termin.ad_id %}&person={{ termin.ad_id }}{% endif %}">Kalender</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}

@@ -9,6 +9,7 @@ from app import config, logik as logik_modul
 from app.db import get_session
 from app.templating import render
 from app import anfrage   # v27: Formular/JSON in def-Routen
+from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 
 router = APIRouter(prefix="/parametrierung")
 
@@ -35,7 +36,7 @@ def _parametrierung_kontext(session: Session) -> dict:
     Parameter und die pflegbaren Einstellungen. Fehlt die Logik-Excel, fehlen
     nur die Logik-Werte (`dateifehler`); die Einstellungen bleiben erreichbar."""
     from app import lieferschein_pdf, mail_sync, wirtschaftlichkeit
-    from app.models import AblehnungsGrund, AngebotsLoeschung, einstellung_holen
+    from app.models import AblehnungsGrund, AngebotsLoeschung, Einwand, einstellung_holen
     if config.LOGIK_EXCEL_PFAD.exists():
         logik, bericht = logik_modul.hole_logik(session)
         # v22 (Phase 102): fehlende Wirtschaftlichkeits-Parameter mit Standardwert
@@ -66,6 +67,11 @@ def _parametrierung_kontext(session: Session) -> dict:
         ablehnung_tage=einstellung_holen(session, "ablehnung_auto_tage", "90"),
         nachfass_werktage=leadmanagement.parameter_holen(session, "nachfass_werktage", "3"),
         nachfass_werktage_mfh=leadmanagement.parameter_holen(session, "nachfass_werktage_mfh", "5"),
+        # v33 (PLAN_V20 Phase 176): Inaktivitäts-Kennzeichen „ohne Kontakt seit X Tagen“ und
+        # die pflegbare Einwand-Liste (Chips im Dialog „Nächster Schritt“)
+        inaktiv_tage=leadmanagement.parameter_holen(session, "inaktiv_tage", "14"),
+        inaktiv_tage_mfh=leadmanagement.parameter_holen(session, "inaktiv_tage_mfh", "20"),
+        einwaende=session.query(Einwand).order_by(Einwand.sortierung, Einwand.id).all(),
         ablehnung_protokoll=einstellung_holen(session, "ablehnung_auto_protokoll", ""),
         db_rot=einstellung_holen(session, "db_ampel_rot_unter", "9000"),
         db_gruen=einstellung_holen(session, "db_ampel_gruen_ueber", "10000"),
@@ -102,7 +108,7 @@ def _golive_stand(request: Request, session: Session):
     """Badge „<n>/11 grün“ am Eintrag Go-live-Checkliste (nur Admin) –
     (grün, gesamt) oder None; ein Fehler der Prüfung blockiert die Übersicht nie."""
     benutzer = request.state.benutzer
-    if benutzer is None or benutzer.rolle != "admin":
+    if benutzer is None or benutzer.basisrolle != "admin":
         return None
     try:
         from app import golive
@@ -213,6 +219,12 @@ def einstellungen_speichern(request: Request,
         for name in ("nachfass_werktage", "nachfass_werktage_mfh"):
             wert = (form.get(name) or "").strip()
             if wert.isdigit() and 0 <= int(wert) <= 30:
+                leadmanagement.parameter_setzen(session, name, str(int(wert)))
+        # v33 (PLAN_V20 Phase 176): Schwellen des Inaktivitäts-Kennzeichens (Tage, 0–365;
+        # inaktiv_tage = 14, inaktiv_tage_mfh = 20; gelesen von app/nachfassen.py)
+        for name in ("inaktiv_tage", "inaktiv_tage_mfh"):
+            wert = (form.get(name) or "").strip()
+            if wert.isdigit() and 0 <= int(wert) <= 365:
                 leadmanagement.parameter_setzen(session, name, str(int(wert)))
     session.commit()
     # v26 (Phase 125): zurück auf die Seite, von der das Formular kam
@@ -353,6 +365,73 @@ def ablehnungsgruende_pflegen(request: Request,
 
 # --- E-Mail-Vorlagen (Phase 30) ------------------------------------------
 
+@router.post("/einwaende")
+def einwaende_pflegen(request: Request, session: Session = Depends(get_session)):
+    """v33 (PLAN_V20 Phase 176, Agent N): Liste „Einwände“ (Chips beim Ergebnis „Nochmal
+    anrufen“) pflegen wie die Ablehnungsgründe – `hinzufuegen` (name), `umbenennen` (id,
+    name), `umschalten` (aktiv/deaktiviert – gelöscht wird nicht, Altdaten bleiben in der
+    Statistik lesbar), `hoch`/`runter` (Reihenfolge, Spalte sortierung 1 … n)."""
+    from urllib.parse import quote_plus
+
+    from app.models import Einwand
+    form = anfrage.formular(request)
+    zurueck = _zurueck_ziel(request)
+    anker = "#nachfassen" if zurueck != "/parametrierung" else ""
+    aktion = form.get("aktion") or ""
+    meldung = "Einwände aktualisiert"
+
+    def _reihenfolge() -> list:
+        """Alle Einwände in Reihenfolge; sortierung lückenlos 1 … n nachziehen."""
+        eintraege = (session.query(Einwand).order_by(Einwand.sortierung, Einwand.id).all())
+        for nr, e in enumerate(eintraege, start=1):
+            e.sortierung = nr
+        return eintraege
+
+    def _name_frei(name: str, ausser_id: int = 0) -> bool:
+        return not any((e.name or "").strip().casefold() == name.casefold() and e.id != ausser_id
+                       for e in session.query(Einwand))
+
+    if aktion == "hinzufuegen":
+        name = (form.get("name") or "").strip()[:100]
+        if not name:
+            meldung = "Bitte einen Einwand eingeben"
+        elif not _name_frei(name):
+            meldung = f"Einwand „{name}“ gibt es schon"
+        else:
+            eintraege = _reihenfolge()
+            session.add(Einwand(name=name, aktiv=True, sortierung=len(eintraege) + 1))
+            meldung = f"Einwand „{name}“ hinzugefügt"
+    elif aktion == "umbenennen":
+        eintrag = session.get(Einwand, int(form.get("id") or 0))
+        name = (form.get("name") or "").strip()[:100]
+        if eintrag is None or not name:
+            meldung = "Bitte einen Namen eingeben"
+        elif not _name_frei(name, eintrag.id):
+            meldung = f"Einwand „{name}“ gibt es schon"
+        else:
+            alt = eintrag.name
+            eintrag.name = name
+            meldung = f"Einwand „{alt}“ in „{name}“ umbenannt"
+    elif aktion == "umschalten":
+        eintrag = session.get(Einwand, int(form.get("id") or 0))
+        if eintrag is not None:
+            eintrag.aktiv = not eintrag.aktiv
+            meldung = f"Einwand „{eintrag.name}“ {'aktiviert' if eintrag.aktiv else 'deaktiviert'}"
+    elif aktion in ("hoch", "runter"):
+        eintraege = _reihenfolge()
+        ids = [e.id for e in eintraege]
+        nummer = int(form.get("id") or 0)
+        if nummer in ids:
+            i = ids.index(nummer)
+            j = i - 1 if aktion == "hoch" else i + 1
+            if 0 <= j < len(eintraege):
+                eintraege[i].sortierung, eintraege[j].sortierung = (
+                    eintraege[j].sortierung, eintraege[i].sortierung)
+                meldung = "Reihenfolge der Einwände geändert"
+    session.commit()
+    return RedirectResponse(zurueck + "?meldung=" + quote_plus(meldung) + anker, status_code=303)
+
+
 def _vorlagen_sparte(wert: str) -> str:
     """v27-Nachtrag 2: Reiter-Parameter „sparte“ (WP/PV/KL/WB), sonst leer."""
     from app import mail_vorlagen
@@ -360,24 +439,38 @@ def _vorlagen_sparte(wert: str) -> str:
     return wert if wert in mail_vorlagen.SPARTEN else ""
 
 
+def _vorlagen_nachfass(wert: str) -> int:
+    """v33 (PLAN_V20 Phase 176): Reiter-Parameter „vorlage“ = nachfassen_1 | nachfassen_2
+    (Nachfass-Mail des Außendienstlers), sonst 0."""
+    from app import mail_vorlagen
+    wert = (wert or "").strip().lower()
+    return mail_vorlagen.nachfass_nummer(wert) if wert.startswith("nachfassen") else 0
+
+
 @router.get("/vorlagen")
 def vorlagen_uebersicht(request: Request, benutzer_id: int = 0,
-                              angebot_id: int = 0, sparte: str = "",
+                              angebot_id: int = 0, sparte: str = "", vorlage: str = "",
                               session: Session = Depends(get_session)):
     """Standard-Vorlage + optionale Vorlage je Außendienstler, mit Platzhalter-
     liste und Vorschau anhand eines echten Angebots.
     v27-Nachtrag 2: Reiter je Sparte (?sparte=WP|PV|KL|WB) – die Sparten-Vorlage
-    greift beim Versand nach der AD-Vorlage und vor dem Standard."""
+    greift beim Versand nach der AD-Vorlage und vor dem Standard.
+    v33 (Phase 176): Reiter „Nachfassen 1“/„Nachfassen 2“ (?vorlage=nachfassen_1|2) –
+    die Nachfass-Mail, die der Außendienstler aus seinem Postfach sendet; Platzhalter wie
+    die Angebotsvorlagen, {absender} = sendender Außendienstler."""
     from app import mail_vorlagen
     from app.models import Angebot, Benutzer, Kunde
-    sparte = _vorlagen_sparte(sparte)
-    if sparte:
-        benutzer_id = 0           # Reiter Sparte und AD-Auswahl schließen sich aus
+    nachfass = _vorlagen_nachfass(vorlage)
+    sparte = "" if nachfass else _vorlagen_sparte(sparte)
+    if sparte or nachfass:
+        benutzer_id = 0           # Reiter Sparte/Nachfassen und AD-Auswahl schließen sich aus
     aussendienst = (session.query(Benutzer)
-                    .filter(Benutzer.rolle == "aussendienst", Benutzer.aktiv.is_(True))
+                    .filter(rollen_modul.filter_basis("aussendienst"), Benutzer.aktiv.is_(True))
                     .order_by(Benutzer.name).all())
     ausgewaehlt = session.get(Benutzer, benutzer_id) if benutzer_id else None
-    if sparte:
+    if nachfass:
+        betreff, text, eigene = mail_vorlagen.nachfass_vorlage_laden(session, nachfass)
+    elif sparte:
         betreff, text, quelle = mail_vorlagen.vorlage_laden(session, None, sparte)
         # Hat die Sparte eine eigene Vorlage? (sonst Standard als Ausgangspunkt)
         eigene = quelle != "Standard-Vorlage"
@@ -417,6 +510,10 @@ def vorlagen_uebersicht(request: Request, benutzer_id: int = 0,
                   sparte=sparte, sparten=mail_vorlagen.SPARTEN,
                   sparten_namen=mail_vorlagen.SPARTEN_NAMEN,
                   sparten_status=mail_vorlagen.sparten_status(session),
+                  # v33 (Phase 176): Reiter Nachfassen 1/2
+                  nachfass=nachfass, nachfass_nummern=mail_vorlagen.NACHFASS_NUMMERN,
+                  nachfass_namen=mail_vorlagen.NACHFASS_NAMEN,
+                  nachfass_status=mail_vorlagen.nachfass_status(session),
                   platzhalter=mail_vorlagen.PLATZHALTER,
                   unbekannt=mail_vorlagen.unbekannte_platzhalter(betreff + text),
                   angebote=angebote, vorschau_angebot=vorschau_angebot,
@@ -432,6 +529,30 @@ def vorlagen_speichern(request: Request, session: Session = Depends(get_session)
     form = anfrage.formular(request)
     benutzer_id = form.get("benutzer_id") or ""
     bid = int(benutzer_id) if benutzer_id.isdigit() and int(benutzer_id) > 0 else None
+    # v33 (Phase 176): Nachfass-Vorlage (Reiter Nachfassen 1/2) – eigener Speicherweg
+    nachfass = _vorlagen_nachfass(form.get("vorlage") or "")
+    if nachfass:
+        zurueck = f"/parametrierung/vorlagen?vorlage=nachfassen_{nachfass}"
+        aktion = form.get("aktion") or "speichern"
+        if aktion == "entfernen":
+            mail_vorlagen.nachfass_vorlage_speichern(session, nachfass, "", "")
+            session.commit()
+            return RedirectResponse(zurueck + "&meldung=" + quote_plus(
+                f"Vorlage „Nachfassen {nachfass}“ auf den Standardtext zurückgesetzt"),
+                status_code=303)
+        betreff = (form.get("betreff") or "").strip()
+        text = (form.get("text") or "").strip()
+        if not betreff or not text:
+            return RedirectResponse(zurueck + "&meldung="
+                                    + quote_plus("Betreff und Text dürfen nicht leer sein"),
+                                    status_code=303)
+        mail_vorlagen.nachfass_vorlage_speichern(session, nachfass, betreff, text)
+        session.commit()
+        meldung = f"Vorlage „Nachfassen {nachfass}“ gespeichert"
+        unbekannt = mail_vorlagen.unbekannte_platzhalter(betreff + text)
+        if unbekannt:
+            meldung += " – unbekannte Platzhalter bleiben im Text stehen: " + ", ".join(unbekannt)
+        return RedirectResponse(zurueck + "&meldung=" + quote_plus(meldung), status_code=303)
     # v27-Nachtrag 2: Sparten-Vorlage (Reiter) – Ziel nach dem Speichern bleibt der Reiter
     sparte = _vorlagen_sparte(form.get("sparte") or "")
     if sparte:
@@ -476,7 +597,7 @@ def signaturen_uebersicht(request: Request, benutzer_id: int = 0,
     from app import signaturen
     from app.models import Benutzer
     innendienst = (session.query(Benutzer)
-                   .filter(Benutzer.rolle.in_(["admin", "innendienst"]),
+                   .filter(rollen_modul.filter_basen(("admin", "innendienst")),
                            Benutzer.aktiv.is_(True))
                    .order_by(Benutzer.name).all())
     if not benutzer_id:
@@ -848,7 +969,7 @@ def kl_logik_seite(request: Request, session: Session = Depends(get_session)):
                   kl_fehlende=kl_fehlende,
                   kl_standard={name: logik_modul.kl_standardwert_text(name)
                                for name in kl_fehlende},
-                  ek_sichtbar=benutzer is not None and benutzer.rolle != "aussendienst",
+                  ek_sichtbar=benutzer is not None and benutzer.basisrolle != "aussendienst",
                   kl_import_ok=_import_klima() is not None,
                   # v27 (Phase 128): Hinweis „Dauer etwa <n> s …“ für die Import-Buttons
                   import_hinweise=import_preisliste.import_hinweise(session),
@@ -860,7 +981,7 @@ def kl_logik_seite(request: Request, session: Session = Depends(get_session)):
 def _nur_admin(request: Request):
     """Projektierung-Einstellungen (Demo-Schalter usw.) sind Admin-exklusiv."""
     benutzer = request.state.benutzer
-    if benutzer is None or benutzer.rolle != "admin":
+    if benutzer is None or benutzer.basisrolle != "admin":
         return RedirectResponse("/parametrierung", status_code=303)
     return None
 
@@ -880,7 +1001,99 @@ def teams_seite(request: Request, session: Session = Depends(get_session)):
                   benutzer_liste=sorted(
                       [b for b in benutzer_map.values() if b.aktiv],
                       key=lambda b: b.name),
+                  # v33 (PLAN_V20 Phase 167): Gewerk je Team (heizung | elektro | leer)
+                  gewerke=[(g, rollen_modul.GEWERK_NAMEN.get(g, g)) for g in rollen_modul.GEWERKE],
                   meldung=request.query_params.get("meldung", ""))
+
+
+# --- v33 (PLAN_V20 Phase 167): Parametrierung → Rollen (Admin) ------------------------------
+# Rollen als Varianten einer Basisrolle (app/rollen.py, Tabelle `rollen`): Liste, Anlegen
+# (Name, Basisrolle, Gewerk, Service, Handelsvertreter – Key automatisch aus dem Namen),
+# Umbenennen, Deaktivieren/Aktivieren (nur ohne aktive Benutzer – Meldung mit Namen),
+# Systemrollen gesperrt. Kleine Schreibvorgänge ohne _speichern-Muster; Template eigen
+# (konfiguration/rollen.html). Ein Include in app/main.py ist tabu – die Routen liegen
+# hier unter dem Präfix /parametrierung/rollen.
+
+def _rollen_zurueck(meldung: str, fehler: bool = False) -> RedirectResponse:
+    from urllib.parse import quote_plus
+    ziel = "/parametrierung/rollen?meldung=" + quote_plus(meldung)
+    if fehler:
+        ziel += "&fehler=1"
+    return RedirectResponse(ziel, status_code=303)
+
+
+@router.get("/rollen")
+def rollen_seite(request: Request, session: Session = Depends(get_session)):
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    rollen_modul.cache_leeren()
+    zeilen = rollen_modul.alle(session, nur_aktive=False)
+    anzahl = rollen_modul.benutzer_anzahl(session, nur_aktive=True)
+    return render(request, "konfiguration/rollen.html", aktiv="/parametrierung",
+                  rollen=zeilen, anzahl=anzahl,
+                  basisrollen=[(b, rollen_modul.BASISROLLEN_NAMEN[b]) for b in rollen_modul.BASISROLLEN],
+                  basis_namen=rollen_modul.BASISROLLEN_NAMEN,
+                  gewerke=[(g, rollen_modul.GEWERK_NAMEN.get(g, g)) for g in rollen_modul.GEWERKE],
+                  gewerk_namen=rollen_modul.GEWERK_NAMEN,
+                  meldung=request.query_params.get("meldung", ""),
+                  fehler=request.query_params.get("fehler") == "1")
+
+
+@router.post("/rollen")
+def rolle_anlegen(request: Request, session: Session = Depends(get_session)):
+    """Neue Variante: Name, Basisrolle, Gewerk, Service, Handelsvertreter; der Key wird
+    aus dem Namen gebildet (rollen.anlegen), ein Wunsch-Key ist optional."""
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    form = anfrage.formular(request)
+    ok, meldung, _rolle = rollen_modul.anlegen(
+        session, key=(form.get("key") or "").strip(), name=(form.get("name") or "").strip(),
+        basisrolle=(form.get("basisrolle") or "").strip(),
+        gewerk=(form.get("gewerk") or "").strip().lower(),
+        service=form.get("service") == "on", handelsvertreter=form.get("handelsvertreter") == "on",
+        benutzer=request.state.benutzer)
+    if not ok:
+        session.rollback()
+        return _rollen_zurueck(meldung, fehler=True)
+    session.commit()
+    rollen_modul.cache_leeren()
+    return _rollen_zurueck(meldung)
+
+
+@router.post("/rollen/{key}/umbenennen")
+def rolle_umbenennen(request: Request, key: str, session: Session = Depends(get_session)):
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    from app.models import Rolle
+    form = anfrage.formular(request)
+    rolle = session.query(Rolle).filter_by(key=key.strip().lower()).first()
+    if rolle is not None and rolle.system:
+        session.rollback()
+        return _rollen_zurueck("Systemrollen (Basisrollen) können nicht umbenannt werden.", fehler=True)
+    ok, meldung = rollen_modul.umbenennen(session, key, (form.get("name") or "").strip())
+    if not ok:
+        session.rollback()
+        return _rollen_zurueck(meldung, fehler=True)
+    session.commit()
+    rollen_modul.cache_leeren()
+    return _rollen_zurueck(meldung)
+
+
+@router.post("/rollen/{key}/aktiv")
+def rolle_aktiv(request: Request, key: str, session: Session = Depends(get_session)):
+    """aktiv=0 deaktiviert (nur ohne aktive Benutzer – Meldung nennt sie), aktiv=1
+    aktiviert wieder; Systemrollen sind gesperrt (rollen.deaktivieren)."""
+    if (umleitung := _nur_admin(request)) is not None:
+        return umleitung
+    form = anfrage.formular(request)
+    aktiv = (form.get("aktiv") or "").strip() == "1"
+    ok, meldung = rollen_modul.deaktivieren(session, key, aktiv=aktiv)
+    if not ok:
+        session.rollback()
+        return _rollen_zurueck(meldung, fehler=True)
+    session.commit()
+    rollen_modul.cache_leeren()
+    return _rollen_zurueck(meldung)
 
 
 @router.post("/teams")
@@ -897,6 +1110,12 @@ def team_speichern(request: Request, session: Session = Depends(get_session)):
     leiter = form.get("leiter_id") or "0"
     farbe = (form.get("farbe") or "").strip()[:20]
     outlook = (form.get("outlook_adresse") or "").strip()[:200]
+    # v33 (PLAN_V20 Phase 167): Gewerk des Teams (heizung | elektro | leer) – nur ändern,
+    # wenn das Formular das Feld mitschickt (Altformulare lassen den Wert stehen)
+    gewerk_dabei = "gewerk" in form
+    gewerk = (form.get("gewerk") or "").strip().lower()
+    if gewerk not in rollen_modul.GEWERKE:
+        gewerk = ""
     if team_id.isdigit():
         team = session.get(Team, int(team_id))
         if team is not None:
@@ -907,10 +1126,12 @@ def team_speichern(request: Request, session: Session = Depends(get_session)):
             team.leiter_id = int(leiter) if leiter.isdigit() and int(leiter) else None
             team.farbe = farbe
             team.outlook_adresse = outlook
+            if gewerk_dabei:
+                team.gewerk = gewerk
     elif name:
         session.add(Team(name=name, typ=typ, aktiv=True, farbe=farbe,
                          leiter_id=int(leiter) if leiter.isdigit() and int(leiter) else None,
-                         outlook_adresse=outlook,
+                         outlook_adresse=outlook, gewerk=gewerk,
                          erstellt_von=request.state.benutzer.id))
     else:
         return RedirectResponse("/parametrierung/teams?meldung="
@@ -1077,6 +1298,8 @@ def projektierung_einstellungen(request: Request,
                   mail_protokoll=kern.parameter_holen(session, "mail_protokoll"),
                   # v28 (PLAN_PROJ_V6 Phase 133/135): Wächter-Modus, Terminvorschläge
                   waechter_modus=kern.parameter_holen(session, "waechter_modus", "warnen"),
+                  # v33 (PLAN_V20 Phase 171): automatischer Phasenwechsel (Standard an)
+                  phase_auto=kern.parameter_holen(session, "phase_auto", "an"),
                   montage_dauer_tage_standard=kern.parameter_holen(
                       session, "montage_dauer_tage_standard", "5"),
                   vorschlag_vorlauf_wochen=kern.parameter_holen(
@@ -1161,6 +1384,14 @@ def projektierung_einstellungen_speichern(
             _proj_protokoll(session, kern, f"waechter_modus {alt} → {form.get('waechter_modus')}",
                             request.state.benutzer)
         kern.parameter_setzen(session, "waechter_modus", form.get("waechter_modus"))
+    # v33 (PLAN_V20 Phase 171): Häkchen phase_auto (an|aus, Standard an) – nur wenn das
+    # Formular es mitschickt (phase_auto_dabei), Protokoll wie waechter_modus
+    if form.get("phase_auto_dabei"):
+        neu = "an" if form.get("phase_auto") == "on" else "aus"
+        alt = kern.parameter_holen(session, "phase_auto", "an")
+        if alt != neu:
+            _proj_protokoll(session, kern, f"phase_auto {alt} → {neu}", request.state.benutzer)
+        kern.parameter_setzen(session, "phase_auto", neu)
     if form.get("vorschlag_outlook") in ("an", "aus"):
         kern.parameter_setzen(session, "vorschlag_outlook", form.get("vorschlag_outlook"))
     for schluessel, laenge in (("montage_dauer_tage_standard", 3),
@@ -1557,7 +1788,7 @@ def stuecklisten_seite(request: Request, session: Session = Depends(get_session)
                   standard_lieferant=kern.parameter_holen(
                       session, "stueckliste_standard_lieferant", "Collin"),
                   stand=projektierung_logik.hole_logik(session).stand,
-                  darf_admin=request.state.benutzer.rolle == "admin",
+                  darf_admin=request.state.benutzer.basisrolle == "admin",
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -1919,7 +2150,7 @@ def lead_demo_seite(request: Request,
     from app import leadmanagement
     from app.models import Vorgang
     _lead_gate(request, session)
-    if request.state.benutzer.rolle != "admin":
+    if request.state.benutzer.basisrolle != "admin":
         return RedirectResponse("/parametrierung", status_code=303)
     return render(request, "konfiguration/lead_demo.html",
                   aktiv="/parametrierung",
@@ -1936,7 +2167,7 @@ def lead_demo_aktion(request: Request,
 
     from app import leadmanagement
     _lead_gate(request, session)
-    if request.state.benutzer.rolle != "admin":
+    if request.state.benutzer.basisrolle != "admin":
         return RedirectResponse("/parametrierung", status_code=303)
     form = anfrage.formular(request)
     if form.get("aktion") == "erzeugen":
@@ -2062,7 +2293,7 @@ def lead_einstellungen(request: Request,
     from app import leadmanagement as lead_kern
     from app.models import Vorgang
     _lead_gate(request, session)
-    if request.state.benutzer.rolle != "admin":
+    if request.state.benutzer.basisrolle != "admin":
         return RedirectResponse("/parametrierung", status_code=303)
     schluessel = ["lead_freigabe_modus", "mail_modus", "mail_testadresse",
                   "parser_modus", "kalender_sync", "kalender_testpostfach",
@@ -2152,7 +2383,7 @@ def lead_demo_ende(request: Request, session: Session = Depends(get_session)):
     from app.models import einstellung_setzen
     _lead_gate(request, session)
     benutzer = request.state.benutzer
-    if benutzer.rolle != "admin":
+    if benutzer.basisrolle != "admin":
         return RedirectResponse("/parametrierung", status_code=303)
     form = anfrage.formular(request)
     aktion = (form.get("aktion") or "").strip()
@@ -2190,7 +2421,7 @@ def lead_einstellungen_speichern(request: Request,
     from app.models import Vorgang
     _lead_gate(request, session)
     benutzer = request.state.benutzer
-    if benutzer.rolle != "admin":
+    if benutzer.basisrolle != "admin":
         return RedirectResponse("/parametrierung", status_code=303)
     form = anfrage.formular(request)
 
@@ -2341,7 +2572,7 @@ def _fehlerprotokoll_gate(request: Request):
     bereits für AD/Montage/Projektierung/Leadmanagement – doppelt hält besser)."""
     from app.auth import BUERO_ROLLEN
     benutzer = request.state.benutzer
-    if benutzer is None or benutzer.rolle not in BUERO_ROLLEN:
+    if benutzer is None or benutzer.basisrolle not in BUERO_ROLLEN:
         return RedirectResponse("/", status_code=303)
     return None
 
@@ -2388,7 +2619,7 @@ def fehlerprotokoll_seite(request: Request,
                                 .filter(Fehlerprotokoll.erledigt.is_(False)).count()),
                   gesamt_anzahl=session.query(Fehlerprotokoll).count(),
                   log_pfad=str(fp_modul.log_pfad()),
-                  darf_admin=request.state.benutzer.rolle == "admin",
+                  darf_admin=request.state.benutzer.basisrolle == "admin",
                   meldung=request.query_params.get("meldung", ""))
 
 

@@ -3,13 +3,73 @@
 {% from "_symbole.html" import symbol %}
 {% import "_interesse.html" as interesse_ui %}
 {% import "_sparten.html" as sparten_ui %}
+{% from "leadmanagement/_tabelle.html" import spalten_kopf, spalten_colgroup, breiten_gesetzt, spaltenwahl, tabellen_daten %}
 
 {% block titel %}Erfassungen – Friondo Angebotstool{% endblock %}
+{% block mainklasse %}breit{% endblock %}
 
+{# v33 (PLAN_V20 Phase 174, Protokoll Claudia Castro 14.10.2026 Teil A.4): Lead-Board-Layout –
+   Sticky-Filterblock (Reiter Status/Archiv, Chip-Selects Sparte · Ampel · Interesse ·
+   Vertriebler, Suchfeld, Spaltenwähler „Spalten“), Tabelle scrollt waagerecht und senkrecht im
+   eigenen Container mit festem Kopf, Spalten je Nutzer (Katalog `erfassungen`; im Reiter
+   „In TAIFUN zu schreiben“ bzw. über die Startseiten-Kachel die TAIFUN-Warteschlange mit
+   Katalog `taifun_warteschlange` und fester erster Spalte „Erfassung“), Sortierung per Klick auf
+   den Spaltenkopf (gemerkt je Nutzer, serverseitig vor dem Rendern angewendet). Keine
+   Sammelaktionen (Entscheidung Claudia Castro); Einzelaktionen wie bisher. Bausteine:
+   leadmanagement/_tabelle.html (Makros), lm_boards.js (Spaltenwerkzeuge), lead_v2.css. #}
 {% block inhalt %}
-<h1>Erfassungen</h1>
-{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+{% macro zelle(key, e) -%}
+{%- set k = kunden.get(e.kunde_id) -%}
+{%- if key == 'lead' -%}
+<td class="sp-lead"><a href="/vorgaenge/zu-erfassung/{{ e.id }}" title="Vorgangsakte öffnen">{{ k.anzeige_name if k else '?' }}</a>
+    {% if k %}{{ interesse_ui.badges(k.interessen) }}{% endif %}
+    {% if k and k.vertriebskanal %}<span class="abzeichen">{{ k.vertriebskanal }}</span>{% endif %}
+    {{ sparten_ui.chip(e.sparte or 'WP') }}
+    {% if e.typ == 'freitext' %}<span class="abzeichen">Freitext</span>{% endif %}
+    {% if 'Freitext geändert (Vorgang bereits' in (e.aenderungs_protokoll or '') %}
+        <span class="abzeichen ep" title="Freitext wurde geändert, während der Vorgang bereits lief – Details im Änderungsprotokoll.">Freitext geändert</span>
+    {% endif %}
+    {% if e.id in fachhinweis_ids %}<span class="wv-faellig" title="{{ fachhinweis_ids[e.id] }}">{{ symbol('warnung') }}</span>{% endif %}
+    {% if e.id in bemerkungen %}<span class="bemerkung-symbol dezent" title="{{ bemerkungen[e.id] | truncate(300) }}">{{ symbol('notiz') }}</span>{% endif %}</td>
+{%- elif key == 'erfassung' -%}
+<td class="sp-erfassung" data-wert="{{ e.abgesendet_am.isoformat() if e.abgesendet_am else '' }}"><a href="/erfassungen/{{ e.id }}" title="Erfassung öffnen">{{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am else 'Erfassung #' ~ e.id }}</a>
+    {{ sparten_ui.chip(e.sparte or 'WP') }}{% if e.typ == 'freitext' %} <span class="abzeichen">Freitext</span>{% endif %}
+    {% if e.id in fachhinweis_ids %}<span class="wv-faellig" title="{{ fachhinweis_ids[e.id] }}">{{ symbol('warnung') }}</span>{% endif %}</td>
+{%- elif key == 'datum' -%}
+<td class="sp-datum" data-wert="{{ e.abgesendet_am.isoformat() if e.abgesendet_am else '' }}">{{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am }}</td>
+{%- elif key == 'vertriebler' -%}
+<td class="sp-vertriebler">{{ benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '?' }}</td>
+{%- elif key == 'ampel' -%}
+<td class="sp-ampel" data-wert="{{ 1 if e.ampel == 'orange' else 0 }}">
+    {%- if e.ampel == 'orange' %}<span class="ampel orange" title="{{ e.gruende_text }}">● Individuell</span>
+    {%- else %}<span class="ampel gruen">● Konfigurierbar</span>{% endif %}</td>
+{%- elif key == 'status' -%}
+<td class="sp-status">{{ status_badge(e.status) }}</td>
+{%- elif key == 'angebot' -%}
+<td class="sp-angebot">{% if e.angebot_id and e.angebot_id in angebote %}
+    <a href="/angebote/{{ e.angebot_id }}">{% if angebote[e.angebot_id].extern %}<span class="abzeichen">TAIFUN</span> {{ angebote[e.angebot_id].taifun_nummer }}{% else %}{{ angebote[e.angebot_id].nummer }}{% endif %}</a>
+    {% endif %}</td>
+{%- elif key == 'sparte' -%}
+<td class="sp-sparte">{{ sparten_ui.chip(e.sparte or 'WP') }}</td>
+{%- elif key == 'typ' -%}
+<td class="sp-typ">{{ 'Freitext' if e.typ == 'freitext' else 'Katalog' }}</td>
+{%- elif key == 'kanal' -%}
+<td class="sp-kanal dezent">{{ (k.vertriebskanal or '–') if k else '–' }}</td>
+{%- elif key == 'ort' -%}
+<td class="sp-ort">{{ ((k.plz or '') ~ ' ' ~ (k.ort or '')) | trim if k else '' }}</td>
+{%- elif key == 'telefon' -%}
+<td class="sp-telefon">{% if k and k.telefon %}<a href="tel:{{ k.telefon | replace(' ', '') }}">{{ k.telefon }}</a>{% endif %}</td>
+{%- else -%}
+<td class="sp-{{ key }}"></td>
+{%- endif -%}
+{%- endmacro %}
+<div class="seitenkopf">
+    <h1>Erfassungen</h1>
+    {% if board == 'taifun_warteschlange' %}<span class="dezent">TAIFUN-Warteschlange – Übergabe an TAIFUN (Protokoll-PDF je Erfassung)</span>{% endif %}
+</div>
+<p class="meldung" id="lm-meldung" {{ '' if meldung else 'hidden' }} role="status">{{ meldung }}</p>
 
+<div class="lm-filterblock" id="lm-filterblock" data-lm-spalten-board="{{ board }}" data-lm-spalten-url="{{ lm_spalten_url(request.state.benutzer) }}" data-lm-suche="1">
 <div class="tab-leiste">
     {% for wert, name in [('', 'Alle'), ('offen', 'Offen'),
                           ('Individuell – zu prüfen', 'Individuell – zu prüfen'),
@@ -19,70 +79,48 @@
            href="/erfassungen?status={{ wert | urlencode }}">{{ name }}</a>
     {% endfor %}
 </div>
-
-<form method="get" action="/erfassungen" class="suchleiste">
+<form method="get" action="/erfassungen" class="suchleiste lm-suchleiste" id="lm-filterform">
     <input type="hidden" name="status" value="{{ status }}">
-    <input type="text" name="q" value="{{ q }}" placeholder="Suche: Kunde, Vertriebler">
-    <select name="sparte" title="Sparte">
-        <option value="">Alle Sparten</option>
-        {% for s in ('WP', 'PV', 'KL', 'WB', 'GW', 'MS', 'WA', 'DMS') %}
-            <option value="{{ s }}" {{ 'selected' if sparte == s }}>{{ s }}</option>
-        {% endfor %}
-    </select>
-    <select name="ampel">
-        <option value="">Alle Ampeln</option>
-        <option value="gruen" {{ 'selected' if ampel == 'gruen' }}>Konfigurierbar</option>
-        <option value="orange" {{ 'selected' if ampel == 'orange' }}>Individuell</option>
-    </select>
-    {{ interesse_ui.filter(interesse) }}
-    <select name="vertriebler_id">
-        <option value="0">Alle Vertriebler</option>
-        {% for vid in vertriebler_werte %}
-            <option value="{{ vid }}" {{ 'selected' if vertriebler_id == vid }}>{{ benutzer_map[vid].name if vid in benutzer_map else vid }}</option>
-        {% endfor %}
-    </select>
-    <button class="knopf" type="submit">Filtern</button>
+    <input type="search" name="q" id="lm-suche" value="{{ q }}" placeholder="Suche: Kunde, Vertriebler" aria-label="Suche" autocomplete="off">
+    <label class="kontrollfeld">Sparte
+        <select name="sparte">
+            <option value="">alle</option>
+            {% for s in sparten_liste %}<option value="{{ s }}" {{ 'selected' if sparte == s }}>{{ s }}</option>{% endfor %}
+        </select></label>
+    <label class="kontrollfeld">Ampel
+        <select name="ampel">
+            <option value="">alle</option>
+            <option value="gruen" {{ 'selected' if ampel == 'gruen' }}>Konfigurierbar</option>
+            <option value="orange" {{ 'selected' if ampel == 'orange' }}>Individuell</option>
+        </select></label>
+    <label class="kontrollfeld">Interesse {{ interesse_ui.filter(interesse) }}</label>
+    <label class="kontrollfeld">Vertriebler
+        <select name="vertriebler_id">
+            <option value="0">alle</option>
+            {% for vid in vertriebler_werte %}
+                <option value="{{ vid }}" {{ 'selected' if vertriebler_id == vid }}>{{ benutzer_map[vid].name if vid in benutzer_map else vid }}</option>
+            {% endfor %}
+        </select></label>
+    <button class="knopf klein zweitrangig" type="submit">{{ symbol('filter') }} Filtern</button>
+    {% if q or sparte or ampel or interesse or vertriebler_id %}
+        <a class="knopf klein ghost" href="/erfassungen?status={{ status | urlencode }}" title="Filter zurücksetzen">Filter zurücksetzen</a>
+    {% endif %}
+    {{ spaltenwahl(spalten, spalten_fest) }}
 </form>
+</div>
 
 {% if erfassungen %}
-<table class="tabelle">
+<div class="lm-tabellen lm-tabellen-at" id="lm-tabellen">
+<table class="tabelle lm-tabelle" data-lm-breiten="{{ breiten_gesetzt(spalten) }}">
+    {{ spalten_colgroup(spalten, ctx, hinten=1) }}
     <thead>
-        <tr><th>Datum</th><th>Kunde</th><th>Vertriebler</th><th>Ampel</th><th>Status</th><th>Angebot</th><th></th></tr>
+        <tr>{{ spalten_kopf(spalten, ctx, spalten_fest) }}<th class="sp-aktionen"></th></tr>
     </thead>
     <tbody>
     {% for e in erfassungen %}
-        <tr>
-            <td>{{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am }}</td>
-            <td>
-                <a href="/vorgaenge/zu-erfassung/{{ e.id }}" title="Vorgangsakte öffnen">{{ kunden[e.kunde_id].anzeige_name if e.kunde_id in kunden else '?' }}</a>
-                {% if e.kunde_id in kunden %}{{ interesse_ui.badges(kunden[e.kunde_id].interessen) }}{% endif %}
-                {% if e.kunde_id in kunden and kunden[e.kunde_id].vertriebskanal %}
-                    <span class="abzeichen">{{ kunden[e.kunde_id].vertriebskanal }}</span>
-                {% endif %}
-                {{ sparten_ui.chip(e.sparte or 'WP') }}
-                {% if e.typ == 'freitext' %}<span class="abzeichen">Freitext</span>{% endif %}
-                {% if 'Freitext geändert (Vorgang bereits' in (e.aenderungs_protokoll or '') %}
-                    <span class="abzeichen ep" title="Freitext wurde geändert, während der Vorgang bereits lief – Details im Änderungsprotokoll.">Freitext geändert</span>
-                {% endif %}
-                {% if e.id in fachhinweis_ids %}
-                    <span class="wv-faellig" title="{{ fachhinweis_ids[e.id] }}">{{ symbol('warnung') }}</span>
-                {% endif %}
-                {% if e.id in bemerkungen %}
-                    <span class="bemerkung-symbol dezent" title="{{ bemerkungen[e.id] | truncate(300) }}">{{ symbol('notiz') }}</span>
-                {% endif %}
-            </td>
-            <td>{{ benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '?' }}</td>
-            <td>
-                {% if e.ampel == 'orange' %}
-                    <span class="ampel orange" title="{{ e.gruende_text }}">● Individuell</span>
-                {% else %}
-                    <span class="ampel gruen">● Konfigurierbar</span>
-                {% endif %}
-            </td>
-            <td>{{ status_badge(e.status) }}</td>
-            <td>{% if e.angebot_id and e.angebot_id in angebote %}
-                <a href="/angebote/{{ e.angebot_id }}">{% if angebote[e.angebot_id].extern %}<span class="abzeichen">TAIFUN</span> {{ angebote[e.angebot_id].taifun_nummer }}{% else %}{{ angebote[e.angebot_id].nummer }}{% endif %}</a>
-            {% endif %}</td>
+        {% set k = kunden.get(e.kunde_id) %}
+        <tr data-zeile="{{ e.id }}" data-suche="{{ ((k.anzeige_name if k else '') ~ ' ' ~ (k.ort if k else '') ~ ' ' ~ (benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '') ~ ' ' ~ e.status ~ ' ' ~ (e.sparte or 'WP')) | lower }}">
+            {%- for sp in spalten if sp.sichtbar %}{{ zelle(sp.key, e) }}{% endfor %}
             <td class="aktionen">
                 <a class="knopf symbol" href="/erfassungen/{{ e.id }}"
                    title="Erfassung öffnen">{{ symbol('stift') }}</a>
@@ -95,9 +133,11 @@
     {% endfor %}
     </tbody>
 </table>
+</div>
 <p class="dezent">{{ erfassungen | length }} Erfassung{{ 'en' if erfassungen | length != 1 }}</p>
 {{ sparten_ui.legende() }}
 {% else %}
 <p class="hinweis">Keine Erfassungen gefunden.</p>
 {% endif %}
+{{ tabellen_daten(board, spalten, sortierung) }}
 {% endblock %}

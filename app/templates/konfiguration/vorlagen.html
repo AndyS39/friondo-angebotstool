@@ -19,17 +19,23 @@ Pflege durch Admin und Innendienst.</p>
 
 {# Reiter: Standard + je Sparte (v27-Nachtrag 2) #}
 <div class="tab-leiste vorlagen-reiter">
-    <a class="tab {{ 'aktiv' if not sparte and not benutzer_id }}" href="/parametrierung/vorlagen">Standard</a>
+    <a class="tab {{ 'aktiv' if not sparte and not benutzer_id and not nachfass }}" href="/parametrierung/vorlagen">Standard</a>
     {% for sp in sparten %}
         <a class="tab {{ 'aktiv' if sparte == sp }}" href="/parametrierung/vorlagen?sparte={{ sp }}"
            title="{{ sparten_namen[sp] }}">{{ sp }} – {{ sparten_namen[sp] }}{{ ' ✓' if sparten_status[sp] }}</a>
+    {% endfor %}
+    {# v33 (PLAN_V20 Phase 176): Nachfass-Mail des Außendienstlers – zwei Vorlagen #}
+    {% for nr in nachfass_nummern %}
+        <a class="tab {{ 'aktiv' if nachfass == nr }}" href="/parametrierung/vorlagen?vorlage=nachfassen_{{ nr }}"
+           title="Nachfass-Mail, die der Außendienstler aus seinem Postfach sendet">{{ nachfass_namen[nr] }}{{ ' ✓' if nachfass_status[nr] }}</a>
     {% endfor %}
 </div>
 
 <form method="get" action="/parametrierung/vorlagen" class="suchleiste">
     {% if sparte %}<input type="hidden" name="sparte" value="{{ sparte }}">{% endif %}
+    {% if nachfass %}<input type="hidden" name="vorlage" value="nachfassen_{{ nachfass }}">{% endif %}
     <label class="kontrollfeld">Vorlage für Außendienstler
-        <select name="benutzer_id" onchange="this.form.sparte && this.form.sparte.remove(); this.form.submit()">
+        <select name="benutzer_id" onchange="this.form.sparte && this.form.sparte.remove(); this.form.vorlage && this.form.vorlage.remove(); this.form.submit()">
             <option value="0" {{ 'selected' if not benutzer_id }}>– Standard / Sparte –</option>
             {% for b in aussendienst %}
                 <option value="{{ b.id }}" {{ 'selected' if benutzer_id == b.id }}>
@@ -52,11 +58,15 @@ Pflege durch Admin und Innendienst.</p>
     <form method="post" action="/parametrierung/vorlagen" class="formular konfigurator-haupt">
         <input type="hidden" name="benutzer_id" value="{{ benutzer_id }}">
         <input type="hidden" name="sparte" value="{{ sparte }}">
+        {% if nachfass %}<input type="hidden" name="vorlage" value="nachfassen_{{ nachfass }}">{% endif %}
         <p><strong>
-            {% if sparte %}Sparten-Vorlage {{ sparte }} ({{ sparten_namen[sparte] }})
+            {% if nachfass %}Vorlage „{{ nachfass_namen[nachfass] }}“ (Nachfass-Mail des Außendienstlers)
+            {% elif sparte %}Sparten-Vorlage {{ sparte }} ({{ sparten_namen[sparte] }})
             {% elif ausgewaehlt %}Vorlage für {{ ausgewaehlt.name }}
             {% else %}Standard-Vorlage{% endif %}</strong>
-        {% if (ausgewaehlt or sparte) and not eigene %}
+        {% if nachfass and not eigene %}
+            <span class="dezent">– Standardtext (Entwurf v33, bitte gegenlesen); {absender} = sendender Außendienstler, die Signatur hängt das Tool darunter</span>
+        {% elif (ausgewaehlt or sparte) and not eigene %}
             <span class="dezent">– noch keine eigene; unten steht der Standard als Ausgangspunkt</span>
         {% endif %}</p>
         <div class="formzeile">
@@ -89,6 +99,10 @@ Pflege durch Admin und Innendienst.</p>
             <button class="knopf zweitrangig" type="submit" name="aktion" value="entfernen"
                     onclick="return confirm('Sparten-Vorlage {{ sparte }} entfernen? Danach gilt für {{ sparten_namen[sparte] }}-Angebote die Standard-Vorlage.');">
                 Sparten-Vorlage entfernen</button>
+            {% elif nachfass and eigene %}
+            <button class="knopf zweitrangig" type="submit" name="aktion" value="entfernen"
+                    onclick="return confirm('Vorlage Nachfassen {{ nachfass }} auf den Standardtext zurücksetzen?');">
+                Standardtext wiederherstellen</button>
             {% endif %}
         </div>
     </form>

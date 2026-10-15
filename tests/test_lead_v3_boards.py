@@ -46,7 +46,7 @@ NAV_HAUPT = [("dashboard", "Mein Dashboard", "/lead-management/dashboard"),
              ("todos", "To-Dos", "/lead-management/todos"),
              ("handelsvertreter", "Handelsvertreter", "/lead-management/handelsvertreter")]
 NAV_MEHR = [("anrufliste", "/lead-management/anrufliste"), ("board", "/lead-management/board"),
-            ("kalender", "/lead-management/kalender"), ("vorlagen", "/lead-management/vorlagen"),
+            ("kalender", "/kalender?gruppe=vertrieb"), ("vorlagen", "/lead-management/vorlagen"),
             ("uebersicht", "/lead-management/uebersicht"), ("statistik", "/lead-management/statistik"),
             ("kanal_report", "/lead-management/statistik/kanal"),
             ("posteingang", "/lead-management/posteingang"), ("import", "/lead-management/import"),

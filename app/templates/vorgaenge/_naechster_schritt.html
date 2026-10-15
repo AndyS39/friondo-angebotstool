@@ -3,24 +3,47 @@
    Abgelehnt klappt die Grund-Chips auf (Pflicht-Freitext bei freitext_pflicht), Nochmal
    anrufen den Chip „In 3 Werktagen (Mi 14.10.)“ (vorgewählt) + Datumsfeld (nur Datum),
    Bestellung kommt speichert sofort; Bestätigungszeile mit Rückgängig-Link (10 s).
-   Include-Variablen (aus app.verfolgung.dialog_kontext(session, vorgang, zurueck)):
+   v33 (PLAN_V20 Phase 176, Agent N): Kopfzeile der Anruf-Karte „Letzter Einwand: …“ +
+   Zähler „n Nachfass-Anrufe“; Einwand-Chips (optional, „kein Einwand“ vorgewählt) im
+   Formular „Nochmal anrufen“; Block „Nachfass-Mail“ (Vorlage Nachfassen 1/2, Vorschau,
+   Häkchen Angebots-PDF, Senden aus dem eigenen Postfach des Absenders – im Modus delegiert
+   ausgegraut mit Hinweis).
+   Include-Variablen (aus app.verfolgung.dialog_kontext(session, vorgang, zurueck, benutzer=)):
      vorgang, gruende (aktive Angebotstool-Gründe), naechster_3wt {datum, text, iso},
      ziel (Rücksprung-URL ohne JavaScript), heute_iso (optional);
-     mit_notiz (optional, Standard true) – eigenes Feld „Notiz zum Gespräch“; die
+     einwaende (aktive Einwände), letzter_einwand (Name oder leer), nachfass_versuche (int),
+     nachfass_mail (dict aus nachfassen.nachfass_mail_kontext oder none) – fehlen sie im
+     Include, greift der Rückfall auf eine Schleifenvariable `ctx` (Mein Tag) bzw. auf den
+     Vorgang; mit_notiz (optional, Standard true) – eigenes Feld „Notiz zum Gespräch“; die
      Anruf-Karte (Mein Tag, M) setzt mit_notiz=false und kennzeichnet ihr Notizfeld mit
      data-ns-notiz="<vorgang.id>" – verfolgung.js übernimmt den Text beim Speichern.
-   Route POST /vorgaenge/{id}/naechster-schritt (JSON bei Accept: application/json).
-   Nach dem Speichern: CustomEvent „ns:gespeichert“ / „ns:rueckgaengig“ am Dialog-Element
-   (detail = JSON-Antwort) – Mein Tag blendet die Karte damit aus bzw. verschiebt sie.
+   Routen: POST /vorgaenge/{id}/naechster-schritt (Feld einwand_id neu), GET …/nachfass-mail/
+   vorschau, POST …/nachfass-mail (JSON bei Accept: application/json).
+   Nach dem Speichern: CustomEvent „ns:gespeichert“ / „ns:rueckgaengig“ / „ns:mail“ am
+   Dialog-Element (detail = JSON-Antwort) – Mein Tag blendet die Karte damit aus bzw. verschiebt sie.
    Kein tojson in on*-Attributen (v30): alle Daten in data-Attributen, Logik in
    /static/verfolgung.js. Styles: /static/verfolgung.css (nur Tokens). #}
+{% from "_symbole.html" import symbol %}
 {% set ns_mit_notiz = mit_notiz if mit_notiz is defined else true %}
 {% set ns_ziel = ziel if ziel is defined and ziel else '/vorgaenge/' ~ vorgang.id %}
 {% set ns_3wt = naechster_3wt if naechster_3wt is defined else none %}
+{% set ns_ctx = ctx if ctx is defined and ctx else none %}
+{% set ns_einwaende = einwaende if einwaende is defined else (ns_ctx.einwaende if ns_ctx and ns_ctx.einwaende is defined else []) %}
+{% set ns_letzter_einwand = letzter_einwand if letzter_einwand is defined else (ns_ctx.letzter_einwand if ns_ctx and ns_ctx.letzter_einwand is defined else '') %}
+{% set ns_versuche = (nachfass_versuche if nachfass_versuche is defined else (ns_ctx.nachfass_versuche if ns_ctx and ns_ctx.nachfass_versuche is defined else (vorgang.nachfass_versuche or 0))) | int %}
+{% set ns_mail = nachfass_mail if nachfass_mail is defined else (ns_ctx.nachfass_mail if ns_ctx and ns_ctx.nachfass_mail is defined else none) %}
 <link rel="stylesheet" href="/static/verfolgung.css?v={{ css_version }}">
 <div class="ns-dialog" id="ns-{{ vorgang.id }}" data-vorgang="{{ vorgang.id }}"
      data-url="/vorgaenge/{{ vorgang.id }}/naechster-schritt"
-     data-rueckgaengig-s="10" data-status="{{ vorgang.verfolgung_status or '' }}">
+     data-rueckgaengig-s="10" data-status="{{ vorgang.verfolgung_status or '' }}"
+     data-versuche="{{ ns_versuche }}">
+    {# v33: oben auf der Anruf-Karte – zuletzt gesetzter Einwand und Zähler der Telefonversuche #}
+    <p class="ns-kopf" {{ 'hidden' if not ns_letzter_einwand and not ns_versuche }}>
+        <span class="ns-letzter-einwand" data-ns-einwand="{{ vorgang.id }}" {{ 'hidden' if not ns_letzter_einwand }}>
+            Letzter Einwand: <strong>{{ ns_letzter_einwand }}</strong></span>
+        <span class="ns-versuche dezent" data-ns-versuche="{{ vorgang.id }}" {{ 'hidden' if not ns_versuche }}>
+            {{ ns_versuche }} Nachfass-Anruf{{ 'e' if ns_versuche != 1 }}</span>
+    </p>
     <div class="ns-knoepfe" role="group" aria-label="Nächster Schritt">
         <button type="button" class="knopf ns-knopf ns-rot" data-ns-schritt="abgelehnt"
                 aria-controls="ns-form-abgelehnt-{{ vorgang.id }}" aria-expanded="false">Abgelehnt</button>
@@ -81,10 +104,24 @@
                        {% if heute_iso is defined and heute_iso %}min="{{ heute_iso }}"{% endif %}>
             </label>
         </div>
+        {# v33 (Phase 176): Einwand-Chips – optional, „kein Einwand“ ist erlaubt und vorgewählt #}
+        <p class="ns-titel">Einwand des Kunden <span class="dezent">(optional – zählt in der Statistik)</span></p>
+        <div class="ns-chips ns-einwaende">
+            <label class="ns-chip ns-chip-leer">
+                <input type="radio" name="einwand_id" value="" checked>
+                <span>kein Einwand</span>
+            </label>
+            {% for e in ns_einwaende %}
+            <label class="ns-chip">
+                <input type="radio" name="einwand_id" value="{{ e.id }}">
+                <span>{{ e.name }}</span>
+            </label>
+            {% endfor %}
+        </div>
         <div class="ns-aktionen">
             <button type="submit" class="knopf">Wiedervorlage speichern</button>
             <button type="button" class="knopf zweitrangig ns-abbrechen">Abbrechen</button>
-            <span class="dezent ns-hinweis">Wiedervorlage ohne Uhrzeit, Status „Nachgefasst“.</span>
+            <span class="dezent ns-hinweis">Wiedervorlage ohne Uhrzeit, Status „Nachgefasst“ – der Anruf wird gezählt.</span>
         </div>
     </form>
 
@@ -93,6 +130,57 @@
         <span class="dezent">Notiz zum Gespräch <span class="dezent">(optional, landet mit dem Schritt im Notizen-Chat)</span></span>
         <textarea rows="2" maxlength="2000" data-ns-notiz="{{ vorgang.id }}" placeholder="Was hat der Kunde gesagt?"></textarea>
     </label>
+    {% endif %}
+
+    {% if ns_mail %}
+    {# v33 (Phase 176): Nachfass-Mail aus dem eigenen Postfach des Außendienstlers – Vorlage
+       Nachfassen 1/2, Vorschau, Angebots-PDF wählbar [ANNAHME]; im Modus delegiert
+       ausgegraut mit Hinweis (graph_versand.modus) #}
+    <div class="ns-mail" data-ns-mail="{{ vorgang.id }}" data-url="{{ ns_mail.url }}"
+         data-vorschau-url="{{ ns_mail.vorschau_url }}">
+        <div class="ns-mail-kopf">
+            <button type="button" class="knopf zweitrangig ns-mail-knopf" data-ns-schritt="mail"
+                    aria-controls="ns-form-mail-{{ vorgang.id }}" aria-expanded="false"
+                    {{ 'disabled' if not ns_mail.erlaubt }}
+                    title="{{ ns_mail.hinweis if not ns_mail.erlaubt else 'Nachfass-Mail aus dem eigenen Postfach senden' }}">
+                {{ symbol('brief') }} Nachfass-Mail</button>
+            {% if not ns_mail.erlaubt %}
+            <span class="dezent ns-mail-hinweis">{{ ns_mail.hinweis }}</span>
+            {% else %}
+            <span class="dezent ns-mail-hinweis">an {{ ns_mail.empfaenger }} · aus {{ ns_mail.absender }}{% if not ns_mail.signatur %}
+                · <a href="/einstellungen/signatur">Signatur hinterlegen</a>{% endif %}</span>
+            {% endif %}
+        </div>
+        {% if ns_mail.erlaubt %}
+        <form method="post" action="{{ ns_mail.url }}" class="ns-mail-form ns-form-mail ns-aufklapp"
+              id="ns-form-mail-{{ vorgang.id }}" hidden>
+            <input type="hidden" name="zurueck" value="{{ ns_ziel }}">
+            <p class="ns-titel">Vorlage <span class="dezent">(Angebot {{ ns_mail.angebot_nummer }})</span></p>
+            <div class="ns-chips">
+                {% for nr, name in ns_mail.vorlagen %}
+                <label class="ns-chip">
+                    <input type="radio" name="vorlage" value="{{ nr }}" {{ 'checked' if loop.first }}>
+                    <span>{{ name }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            {% if ns_mail.pdf_moeglich %}
+            <label class="kontrollfeld ns-mail-pdf">
+                <input type="checkbox" name="pdf" value="1"> Angebots-PDF {{ ns_mail.angebot_nummer }} anhängen</label>
+            {% endif %}
+            <div class="ns-mail-vorschau" hidden aria-live="polite">
+                <p class="ns-mail-betreff"></p>
+                <div class="mail-vorschau ns-mail-inhalt"></div>
+            </div>
+            <div class="ns-aktionen">
+                <button type="button" class="knopf zweitrangig ns-mail-vorschau-knopf">Vorschau</button>
+                <button type="submit" class="knopf ns-mail-senden">Senden</button>
+                <button type="button" class="knopf zweitrangig ns-abbrechen">Abbrechen</button>
+                <span class="dezent ns-hinweis">Versand aus Ihrem Postfach {{ ns_mail.absender }} – die Mail landet im Mail-Verlauf und im Notizen-Chat.</span>
+            </div>
+        </form>
+        {% endif %}
+    </div>
     {% endif %}
 
     <p class="ns-bestaetigung" hidden aria-live="polite">

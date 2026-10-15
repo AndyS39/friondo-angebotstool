@@ -15,7 +15,7 @@
 #  - Terminbestätigung je Vertriebler: Vorlage terminbestaetigung_<benutzer_id>
 #    (Einstellungen lead_vorlage_terminbestaetigung_<id>_betreff/_text, dazu
 #    _quelle und _hash für die Zulieferung) – Rahmen + individueller Block
-#    {vertriebler_block} (Bild als Inline-CID, Name, Telefon, E-Mail, Infotext);
+#    {vertriebler_block} (Bild als Inline-CID, Name, Telefon, E-Mail; Infotext bis v32);
 #    Sparten-Baustein {sparten_hinweise} aus dem Blatt „Terminhinweise“.
 #  - Nurture entfällt: Vorlage ausgeblendet (Datensatz bleibt), offene
 #    Nurture-Einträge werden storniert, die Kaskade endet mit disqualifiziert.
@@ -56,6 +56,13 @@
 #    Gesperrte Einträge werden beim späteren Einschalten NICHT nachgesendet [ANNAHME],
 #    „Erneut senden“ bleibt als bewusster Klick möglich. gesperrte_anzahl() für den
 #    Zähler der Lead-Einstellungen (B). Migration migration_v31_mails (migrate.py-Hook).
+# v33 (PLAN_V20 Phase 166/175):
+#  - Graph-Versand (_graph_senden, testmail_senden) über graph_versand.versand_pfad: im
+#    Modus anwendung sendMail direkt am Postfach /users/<absender_lead_mails> (termin@,
+#    kein from-Feld, kein „Senden als“); im Modus delegiert unverändert /me/sendMail mit
+#    from = termin@. Kein Fallback-Postfach (v29 bleibt).
+#  - {vertriebler_block} nur noch Bild, Name, Telefon, E-Mail – der Infotext zum AD entfällt
+#    vollständig (Spalte benutzer.infotext bleibt, wird nicht mehr gelesen; Phase 175).
 
 import base64
 import hashlib
@@ -69,6 +76,7 @@ from sqlalchemy.orm import Session, mapped_column
 
 from app import config
 from app import sparten as sparten_modul
+from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 
 from app.models import (AdProfil, Benutzer, KommunikationLog, Kunde, LeadQuelle,
                         Vorgang, VotTermin, LEAD_PHASEN_NAMEN)
@@ -371,7 +379,7 @@ def vertriebler_liste(session: Session) -> list[Benutzer]:
     if not ids:
         return []
     return (session.query(Benutzer)
-            .filter(Benutzer.aktiv.is_(True), Benutzer.rolle == "aussendienst",
+            .filter(Benutzer.aktiv.is_(True), rollen_modul.filter_basis("aussendienst"),
                     Benutzer.id.in_(ids))
             .order_by(Benutzer.name).all())
 
@@ -608,7 +616,8 @@ def bild_mime(pfad: Path) -> str:
 
 def vertriebler_block_html(benutzer, bild_src: str | None = None) -> str:
     """Individueller Block: Bild (cid:vertriebler-<id>, im Editor eine URL),
-    Name, Telefon, E-Mail, Infotext – als Tabelle, damit Outlook es sauber setzt."""
+    Name, Telefon, E-Mail – als Tabelle, damit Outlook es sauber setzt.
+    v33 (PLAN_V20 Phase 175): ohne Infotext (Benutzer.infotext wird nicht mehr gelesen)."""
     if benutzer is None:
         return ""
     bild = bild_pfad(benutzer)
@@ -617,10 +626,7 @@ def vertriebler_block_html(benutzer, bild_src: str | None = None) -> str:
         zeilen.append(f"Telefon: {_esc(benutzer.telefon)}")
     if getattr(benutzer, "email", ""):
         zeilen.append(f"E-Mail: <a href=\"mailto:{_esc(benutzer.email)}\">{_esc(benutzer.email)}</a>")
-    info = (getattr(benutzer, "infotext", "") or "").strip()
     text_html = "<br>".join(zeilen)
-    if info:
-        text_html += "<br><br>" + _esc(info).replace("\n", "<br>")
     bild_html = ""
     if bild is not None:
         src = bild_src or f"cid:{CID_PRAEFIX}{benutzer.id}"
@@ -632,6 +638,7 @@ def vertriebler_block_html(benutzer, bild_src: str | None = None) -> str:
 
 
 def vertriebler_block_text(benutzer) -> str:
+    """Textfassung des Blocks (Name, Telefon, E-Mail) – v33: ohne Infotext (Phase 175)."""
     if benutzer is None:
         return ""
     zeilen = [benutzer.name]
@@ -639,9 +646,6 @@ def vertriebler_block_text(benutzer) -> str:
         zeilen.append(f"Telefon: {benutzer.telefon}")
     if getattr(benutzer, "email", ""):
         zeilen.append(f"E-Mail: {benutzer.email}")
-    info = (getattr(benutzer, "infotext", "") or "").strip()
-    if info:
-        zeilen += ["", info]
     return "\n".join(zeilen)
 
 
@@ -1217,11 +1221,14 @@ def _graph_senden(session: Session, an: str, betreff: str, body_html: str,
                   anhang_pfad: str | None,
                   inline_bilder: list[tuple[str, Path, str]] | None = None,
                   vorgang: Vorgang | None = None) -> tuple[bool, str]:
-    """HTML-Mail (+ ICS, + Inline-Bilder) über Graph als absender_lead_mails
-    („Senden als“). v29: KEIN Fallback auf ein anderes Postfach – scheitert der
-    Versand, kommt (False, Grund) zurück und der Aufrufer wiederholt/markiert.
+    """HTML-Mail (+ ICS, + Inline-Bilder) über Graph als absender_lead_mails.
+    v29: KEIN Fallback auf ein anderes Postfach – scheitert der Versand, kommt
+    (False, Grund) zurück und der Aufrufer wiederholt/markiert.
     Nachtrag 08.10.2026: mit `vorgang` trägt die Nachricht replyTo = Leadmanager +
-    Absender (antwort_adressen); ohne Vorgang nur den Absender."""
+    Absender (antwort_adressen); ohne Vorgang nur den Absender.
+    v33 (Phase 166): Modus anwendung → POST /users/<termin@>/sendMail ohne from-Feld
+    (Postfach aus der Zugriffsgruppe); Modus delegiert → /me/sendMail mit from = termin@
+    („Senden als“, unverändert). Die Entscheidung trifft graph_versand.versand_pfad."""
     from app import graph_versand
     absender_adresse = _absender(session)
     reply_to = antwort_adressen(session, vorgang, absender_adresse)
@@ -1232,7 +1239,8 @@ def _graph_senden(session: Session, an: str, betreff: str, body_html: str,
     verbindung_freigeben(session)
     token = graph_versand._token()
     if token is None:
-        return False, "Nicht bei Microsoft angemeldet"
+        return False, graph_versand.nicht_verbunden_text()
+    basis, von = graph_versand.versand_pfad(absender_adresse)
     anhaenge = []
     for cid, pfad, mime in inline_bilder or []:
         try:
@@ -1261,14 +1269,15 @@ def _graph_senden(session: Session, an: str, betreff: str, body_html: str,
         "subject": betreff,
         "body": {"contentType": "html", "content": body_html},
         "toRecipients": [{"emailAddress": {"address": an}}],
-        "from": {"emailAddress": {"address": absender_adresse}},
         # Nachtrag 08.10.2026: Antworten an Leadmanager UND termin@
         "replyTo": [{"emailAddress": {"address": adresse}} for adresse in reply_to],
     }
+    if von:
+        nachricht["from"] = {"emailAddress": {"address": von}}   # nur Modus delegiert
     if anhaenge:
         nachricht["attachments"] = anhaenge
     try:
-        graph_versand._graph_aufruf("POST", "/me/sendMail", token,
+        graph_versand._graph_aufruf("POST", f"{basis}/sendMail", token,
                                     {"message": nachricht, "saveToSentItems": False})
         return True, ""
     except Exception as fehler:
@@ -1278,11 +1287,13 @@ def _graph_senden(session: Session, an: str, betreff: str, body_html: str,
 def testmail_senden(absender_adresse: str, an: str) -> tuple[bool, str]:
     """Prüfpunkt „Testmail aus termin@“ (Lead-Parametrierung): kurze Text-Mail
     als absender_adresse ohne Fallback. Läuft OHNE Sitzung – der Aufrufer
-    (Route) gibt seine Sitzung vorher frei. Liefert (erfolg, fehlertext)."""
+    (Route) gibt seine Sitzung vorher frei. Liefert (erfolg, fehlertext).
+    v33: Modus anwendung → sendMail direkt an /users/<absender_adresse>."""
     from app import graph_versand
     token = graph_versand._token()
     if token is None:
-        return False, "Nicht bei Microsoft angemeldet"
+        return False, graph_versand.nicht_verbunden_text()
+    basis, von = graph_versand.versand_pfad(absender_adresse)
     nachricht = {
         "subject": f"Friondo Angebotstool – Testmail aus {absender_adresse}",
         "body": {"contentType": "text",
@@ -1290,10 +1301,11 @@ def testmail_senden(absender_adresse: str, an: str) -> tuple[bool, str]:
                              f"{absender_adresse} (Lead-Management V4, Prüfpunkt). "
                              f"Gesendet am {datetime.now():%d.%m.%Y %H:%M}.")},
         "toRecipients": [{"emailAddress": {"address": an}}],
-        "from": {"emailAddress": {"address": absender_adresse}},
     }
+    if von:
+        nachricht["from"] = {"emailAddress": {"address": von}}   # nur Modus delegiert
     try:
-        graph_versand._graph_aufruf("POST", "/me/sendMail", token,
+        graph_versand._graph_aufruf("POST", f"{basis}/sendMail", token,
                                     {"message": nachricht, "saveToSentItems": False})
         return True, ""
     except Exception as fehler:
@@ -1326,7 +1338,7 @@ def _admins_glocke(session: Session, vorgang: Vorgang, eintrag: KommunikationLog
     zweite Sitzung → Schreibsperre). Link: Warteschlange mit Filter fehler."""
     from app import projektierung as kern_projekt
     admin_ids = [b.id for b in session.query(Benutzer)
-                 .filter(Benutzer.rolle == "admin", Benutzer.aktiv.is_(True))
+                 .filter(rollen_modul.filter_basis("admin"), Benutzer.aktiv.is_(True))
                  .order_by(Benutzer.id)]
     if not admin_ids:
         return False
@@ -2323,7 +2335,7 @@ def versand_job() -> dict:
     hält die Schreibsperre nie für die übrigen Einträge."""
     from app.db import kurz
     zaehler = {"gesendet": 0, "gesperrt": 0, "fehler": 0}
-    with kurz() as s:
+    with kurz(schreibend=False) as s:   # v33 (Phase 172): nur lesen - keine Schreibtransaktion
         ids = [zeile[0] for zeile in
                s.query(KommunikationLog.id)
                .filter(KommunikationLog.status == "geplant",

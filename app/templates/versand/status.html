@@ -1,41 +1,171 @@
 {% extends "base.html" %}
 
-{% block titel %}Versand – Friondo Angebotstool{% endblock %}
+{% block titel %}Verbindung Microsoft 365 – Friondo Angebotstool{% endblock %}
 
+{# v33 (PLAN_V20 Phase 166): aus der Versand-Seite (Phase 17, Microsoft-Anmeldung einer
+   Person) wird die Verbindungs-Seite: Modus Anwendung | Delegiert mit Grund, Mandant
+   (maskiert), Geheimnis-Ablauf, letzte erfolgreiche Aufrufe je Postfach, Knopf
+   „Verbindung testen“, Liste aller Postfächer, die das Tool braucht (Abgleich mit der
+   Exchange-Zugriffsgruppe – auch vor der Einrichtung sichtbar, damit die IT die Gruppe
+   füllen kann), Kopierliste für die IT; Rückfallebene Device-Code-Anmeldung.
+   Farben nur über Tokens/Badge-Klassen (v30), Zurück-Leiste aus base.html. #}
 {% block inhalt %}
-<h1>E-Mail-Versand (Microsoft Graph)</h1>
+<div class="seitenkopf">
+    <h1>Verbindung zu Microsoft 365 <small class="dezent">Graph</small></h1>
+    <div class="aktionen">
+        {% if konfiguriert %}
+        <form method="post" action="/versand/test" style="display:inline" id="form-verbindungstest"
+              onsubmit="this.querySelector('button').disabled = true; this.querySelector('button').textContent = 'Test läuft …';">
+            <button class="knopf" type="submit" title="Je Funktionspostfach einen Ordner und je Mitarbeiter den Kalender lesen (nur lesend)">Verbindung testen</button>
+        </form>
+        {% endif %}
+        <a class="knopf zweitrangig" href="/parametrierung">Zur Parametrierung</a>
+        <a class="knopf zweitrangig" href="/parametrierung/betrieb">Betrieb</a>
+    </div>
+</div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-{% if not konfiguriert %}
+<section class="karte" id="verbindung-modus">
+    <h2>Modus</h2>
+    {% if not konfiguriert %}
     <p class="hinweis">Microsoft Graph ist noch nicht eingerichtet. Die IT trägt
-    nach der App-Registrierung <code>GRAPH_CLIENT_ID</code> (und optional
-    <code>GRAPH_TENANT_ID</code>) in die <code>.env</code> ein –
+    nach der App-Registrierung <code>GRAPH_CLIENT_ID</code>, <code>GRAPH_TENANT_ID</code>
+    und das Geheimnis <code>GRAPH_CLIENT_SECRET</code> (Ablaufdatum
+    <code>GRAPH_GEHEIMNIS_ABLAUF</code>) in die <code>.env</code> auf dem Server ein –
     Anleitung: <code>docs/graph-einrichtung.md</code>.<br>
     Bis dahin: Angebots-PDF im Editor herunterladen und manuell versenden.</p>
+    {% endif %}
+    <table class="liste">
+        <tbody>
+        <tr>
+            <th style="width:14em">Zugriff</th>
+            <td>
+                <span class="abzeichen status-badge {{ 'erfolg status-angenommen' if modus == 'anwendung' else 'status-versand-vorbereitet' }}" id="verbindung-modus-wert">{{ modus_name }}</span>
+                {% if modus == 'anwendung' %}
+                <span class="dezent">als Anwendung über die Zugriffsgruppe <code>{{ zugriffsgruppe }}</code> – keine Anmeldung einer Person nötig</span>
+                {% else %}
+                <span class="dezent">Rückfallebene: Anmeldung einer Person („Mit Microsoft anmelden“, Senden als){% if modus_grund %} · <strong>{{ modus_grund }}</strong>{% endif %}</span>
+                {% endif %}
+            </td>
+        </tr>
+        <tr><th>Mandant</th><td><code>{{ mandant }}</code> <span class="dezent">(GRAPH_TENANT_ID, maskiert)</span></td></tr>
+        <tr><th>Geheimnis</th>
+            <td>{% if geheimnis_gesetzt %}hinterlegt{% elif zertifikat_gesetzt %}Zertifikat hinterlegt{% else %}<strong>fehlt</strong> (<code>GRAPH_CLIENT_SECRET</code> in der <code>.env</code>){% endif %}
+                {% if geheimnis_warnung %} · <span class="abzeichen status-badge fehler status-abgelehnt">{{ geheimnis_warnung }}</span>
+                {% elif geheimnis_ablauf %} · <span class="dezent">gültig bis {{ geheimnis_ablauf | de_datum }} (noch {{ geheimnis_tage }} Tage; /health warnt ab 30 Tagen)</span>
+                {% else %} · <span class="dezent">Ablaufdatum nicht hinterlegt (<code>GRAPH_GEHEIMNIS_ABLAUF</code>)</span>{% endif %}</td></tr>
+        <tr><th>Zugriffsgruppe</th><td><code>{{ zugriffsgruppe_adresse }}</code> <span class="dezent">(mail-aktivierte Sicherheitsgruppe in Exchange, <code>New-ApplicationAccessPolicy</code> – docs/graph-einrichtung.md)</span></td></tr>
+        <tr><th>Letzter Verbindungstest</th>
+            <td>{% if letzter_test %}{{ letzter_test_zeit }} –
+                {% set gruen_anzahl = letzter_test.ergebnisse | selectattr('ok') | list | length %}
+                <strong>{{ gruen_anzahl }} von {{ letzter_test.ergebnisse | length }}</strong> Postfächern erreichbar,
+                Ergebnis: Modus {{ 'Anwendung' if letzter_test.modus == 'anwendung' else 'Delegiert' }}
+                {% elif konfiguriert %}<span class="dezent">noch nicht ausgeführt – „Verbindung testen“ oben rechts</span>
+                {% else %}<span class="dezent">erst nach der Einrichtung möglich</span>{% endif %}</td></tr>
+        </tbody>
+    </table>
+    <p class="dezent">Der Test liest je Funktionspostfach den Posteingangs-Ordner und je Mitarbeiter den Kalender
+        (nur <code>$select=id</code>, nichts wird gesendet oder geändert). Sind alle Funktionspostfächer grün,
+        schaltet das Tool auf den Modus Anwendung; rote Mitarbeiter-Postfächer fehlen in der Zugriffsgruppe
+        (Kopierliste unten).</p>
+</section>
 
-{% elif konto %}
-    <p class="meldung">Angemeldet als <strong>{{ konto }}</strong> –
-    „Versand vorbereiten“ legt Entwürfe in diesem Postfach ab.</p>
-    <form method="post" action="/versand/abmelden">
-        <button class="knopf zweitrangig" type="submit">Abmelden</button>
-    </form>
+<section class="karte" id="verbindung-postfaecher">
+    <h2>Postfächer, die das Tool braucht <small class="dezent">{{ postfaecher | length }} · Abgleich mit der Zugriffsgruppe</small></h2>
+    <table class="liste" id="tabelle-postfaecher">
+        <thead><tr><th></th><th>Postfach</th><th>Verwendung</th><th>Prüfung</th><th>Letzter erfolgreicher Aufruf</th><th>Verbindungstest</th></tr></thead>
+        <tbody>
+        {% for e in funktionspostfaecher %}
+        <tr class="postfach-funktion" data-postfach="{{ e.postfach }}">
+            <td style="width:2.5em;text-align:center">
+                {% if e.test_ok is none %}<span class="abzeichen" title="noch nicht getestet">–</span>
+                {% elif e.test_ok %}<span class="abzeichen status-badge erfolg status-angenommen">✓</span>
+                {% else %}<span class="abzeichen status-badge fehler status-abgelehnt">✗</span>{% endif %}</td>
+            <td><code>{{ e.postfach }}</code></td>
+            <td>{{ e.name }} <span class="abzeichen">Funktionspostfach</span></td>
+            <td class="dezent">{{ 'Posteingang' if e.pruefung == 'inbox' else 'Kalender' }}</td>
+            <td class="dezent">{{ e.erfolg_text or '–' }}{% if e.verweigert_text %} · <span class="abzeichen status-badge fehler status-abgelehnt">403 am {{ e.verweigert_text }}</span>{% endif %}</td>
+            <td class="dezent">{% if e.test_ok is none %}offen{% elif e.test_ok %}erreichbar{% else %}{{ e.test_grund }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+        {% for e in mitarbeiter %}
+        <tr class="postfach-mitarbeiter" data-postfach="{{ e.postfach }}">
+            <td style="width:2.5em;text-align:center">
+                {% if e.test_ok is none %}<span class="abzeichen" title="noch nicht getestet">–</span>
+                {% elif e.test_ok %}<span class="abzeichen status-badge erfolg status-angenommen">✓</span>
+                {% else %}<span class="abzeichen status-badge fehler status-abgelehnt">✗</span>{% endif %}</td>
+            <td><code>{{ e.postfach }}</code></td>
+            <td>{{ e.name }}</td>
+            <td class="dezent">Kalender</td>
+            <td class="dezent">{{ e.erfolg_text or '–' }}{% if e.verweigert_text %} · <span class="abzeichen status-badge fehler status-abgelehnt">403 am {{ e.verweigert_text }}</span>{% endif %}</td>
+            <td class="dezent">{% if e.test_ok is none %}offen{% elif e.test_ok %}erreichbar{% else %}{{ e.test_grund }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+        {% if not mitarbeiter %}
+        <tr class="postfach-mitarbeiter-leer"><td></td><td colspan="5" class="dezent">Keine Mitarbeiter-Postfächer: kein aktiver Benutzer der Basisrollen Außendienst, Projektierung, Montage oder Innendienst hat eine E-Mail-Adresse (Benutzerverwaltung).</td></tr>
+        {% endif %}
+        </tbody>
+    </table>
+    <p class="dezent">Funktionspostfächer kommen aus den Einstellungen (Angebotsversand, Lead-Mails, Lead-Parser,
+        Projektierung, Testpostfach, Team-Kalender); Mitarbeiter sind alle aktiven Benutzer mit E-Mail der
+        Basisrollen Außendienst, Projektierung, Montage und Innendienst – Handelsvertreter ohne Friondo-Postfach
+        stehen nicht in der Liste. Abweichende Kalender-Postfächer aus dem AD-Profil werden berücksichtigt.</p>
 
-{% elif flow.laeuft %}
-    <div class="hinweis">
-        <p><strong>Anmeldung läuft:</strong> Auf
-        <a href="{{ flow.verification_uri }}" target="_blank">{{ flow.verification_uri }}</a>
-        diesen Code eingeben:</p>
-        <p style="font-size:1.6rem; letter-spacing:0.2em;"><strong>{{ flow.user_code }}</strong></p>
-        <p class="dezent">Diese Seite danach neu laden.</p>
-    </div>
-    <meta http-equiv="refresh" content="5">
+    <details id="kopierliste-alle">
+        <summary>Kopierliste aller Postfächer (für die IT – Mitglieder der Gruppe <code>{{ zugriffsgruppe_adresse }}</code>)</summary>
+        <textarea readonly rows="{{ [postfaecher | length, 12] | min + 1 }}" style="width:100%" id="kopierliste">{{ kopierliste }}</textarea>
+    </details>
 
-{% else %}
-    {% if flow.fehler %}<p class="meldung fehler">{{ flow.fehler }}</p>{% endif %}
-    <p>Der Innendienst-Mitarbeiter meldet sich einmalig mit seinem
-    Microsoft-Konto an; Entwürfe werden dann in seinem Postfach erstellt.</p>
-    <form method="post" action="/versand/anmelden">
-        <button class="knopf" type="submit">Mit Microsoft anmelden</button>
-    </form>
+    {% if fehlend %}
+    <h3>Fehlt in der Zugriffsgruppe <small class="dezent">{{ fehlend | length }}</small></h3>
+    <ul id="liste-fehlend">
+        {% for f in fehlend %}<li><code>{{ f.postfach }}</code> <span class="dezent">– {{ f.grund }}</span></li>{% endfor %}
+    </ul>
+    <details id="kopierliste-fehlend" open>
+        <summary>Kopierliste der fehlenden Postfächer</summary>
+        <textarea readonly rows="{{ [fehlend | length, 8] | min + 1 }}" style="width:100%">{{ fehlend_liste }}</textarea>
+    </details>
+    {% else %}
+    <p class="dezent" id="liste-fehlend-leer">Keine Postfächer mit verweigertem Zugriff bekannt
+        {% if not letzter_test %}(Verbindungstest noch nicht ausgeführt){% endif %}.</p>
+    {% endif %}
+</section>
+
+{% if konfiguriert %}
+<section class="karte" id="verbindung-delegiert">
+    <h2>Übergangsweg: Anmeldung einer Person <small class="dezent">Modus Delegiert</small></h2>
+    {% if modus == 'anwendung' %}
+    <p class="hinweis">Im Modus <strong>Anwendung</strong> ist die Anmeldung einer Person nicht mehr nötig –
+        Entwürfe liegen im Postfach <code>angebot@</code>, Lead- und Projekt-Mails gehen direkt aus den
+        Funktionspostfächern. Die Anmeldung unten bleibt nur als Rückfallebene erhalten.</p>
+    {% endif %}
+    {% if konto %}
+        <p class="meldung">Angemeldet als <strong>{{ konto }}</strong>{% if modus != 'anwendung' %} –
+        „Versand vorbereiten“ legt Entwürfe in diesem Postfach ab (Absender „Senden als“ angebot@).{% endif %}</p>
+        <form method="post" action="/versand/abmelden">
+            <button class="knopf zweitrangig" type="submit">Abmelden</button>
+        </form>
+    {% elif flow.laeuft %}
+        <div class="hinweis">
+            <p><strong>Anmeldung läuft:</strong> Auf
+            <a href="{{ flow.verification_uri }}" target="_blank" rel="noopener">{{ flow.verification_uri }}</a>
+            diesen Code eingeben:</p>
+            <p style="font-size:1.6rem; letter-spacing:0.2em;"><strong>{{ flow.user_code }}</strong></p>
+            <p class="dezent">Diese Seite danach neu laden.</p>
+        </div>
+        <meta http-equiv="refresh" content="5">
+    {% else %}
+        {% if flow.fehler %}<p class="meldung fehler">{{ flow.fehler }}</p>{% endif %}
+        {% if modus != 'anwendung' %}
+        <p>Der Innendienst-Mitarbeiter meldet sich einmalig mit seinem Microsoft-Konto an;
+        Entwürfe werden dann in seinem Postfach erstellt (Senden als angebot@).</p>
+        {% else %}
+        <p class="dezent">Keine Person angemeldet – im Modus Anwendung nicht erforderlich.</p>
+        {% endif %}
+        <form method="post" action="/versand/anmelden">
+            <button class="knopf {{ 'zweitrangig' if modus == 'anwendung' }}" type="submit">Mit Microsoft anmelden</button>
+        </form>
+    {% endif %}
+</section>
 {% endif %}
 {% endblock %}

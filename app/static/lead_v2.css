@@ -1708,3 +1708,32 @@ a.lmt-gesperrt[aria-disabled="true"] { opacity: .55; pointer-events: none; }
     .lk-v5 .lk-oben { grid-template-columns: 1fr; }
     .lk-v5 .lk-objekt-raster { grid-template-columns: 1fr; }
 }
+
+/* --- v33 (PLAN_V20 Phase 174, Vertrag T): Lead-Board-Layout für die Tabellen des Angebotstools
+       (Angebote, Erfassungen, Meine Angebote, TAIFUN-Warteschlange, Kunden, Leads VOT). Die Klassen
+       .lm-filterblock / .lm-tabellen / .lm-tabelle / .lm-scrollleiste gelten dort unverändert (diese
+       Datei lädt base.html global); hier nur die Ergänzungen für eine einzelne Tabelle ohne
+       Gruppen-<details> (.lm-tabellen-at) und für die Angebotstool-Zellen. Nur Tokens, Hell/Dunkel
+       gleich. --- */
+.lm-tabellen-at > .lm-tabelle { width: 100%; margin: 0; }
+.lm-tabellen-at > details.lm-gruppe { width: max-content; min-width: 100%; }
+.lm-tabelle td.sp-lead a, .lm-tabelle td.sp-erfassung a { font-weight: 600; }
+.lm-tabelle td.sp-erfassung, .lm-tabelle td.sp-nummer, .lm-tabelle td.sp-adresse, .lm-tabelle td.sp-verfolgung,
+.lm-tabelle td.sp-angebot, .lm-tabelle td.sp-sparten { white-space: normal; min-width: 150px; }
+.lm-tabelle td.sp-endbetrag, .lm-tabelle td.sp-netto, .lm-tabelle td.sp-db,
+.lm-tabelle th.sp-endbetrag, .lm-tabelle th.sp-netto, .lm-tabelle th.sp-db { text-align: right; }
+.lm-tabelle td.sp-endbetrag, .lm-tabelle td.sp-netto, .lm-tabelle td.sp-db, .lm-tabelle td.sp-datum,
+.lm-tabelle td.sp-wiedervorlage, .lm-tabelle td.sp-angelegt, .lm-tabelle td.sp-kunden_nr { font-variant-numeric: tabular-nums; }
+.lm-tabelle td.aktionen { white-space: nowrap; }
+.lm-tabelle td.aktionen form { display: inline; }
+.lm-tabelle tr.inaktiv td { color: var(--text-dezent); }
+.lm-tabelle td.sp-inaktiv .lm-inaktiv { color: var(--status-orange); font-weight: 600; white-space: nowrap; }
+.lm-filterblock .tab-leiste { margin-bottom: var(--a-2); }
+.lm-filterblock .lm-suchleiste input[type="search"] { min-width: 200px; }
+.lm-filterblock .lm-suchleiste .kontrollfeld { white-space: nowrap; }
+.lm-summenblock { margin-top: var(--a-2); }
+.lm-tabellen-at + .dezent, .lm-summenblock + .dezent { margin-top: var(--a-2); }
+@media (max-width: 900px) {
+    /* Angebotstool-Tabellen scrollen auf dem Handy weiter im eigenen Container (Meine Angebote) */
+    .lm-tabellen-at { overflow-x: auto; max-height: none; -webkit-overflow-scrolling: touch; }
+}

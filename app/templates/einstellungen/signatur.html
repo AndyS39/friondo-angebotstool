@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block titel %}Meine E-Mail-Signatur – Friondo Angebotstool{% endblock %}
+
+{# v33 (PLAN_V20 Phase 176, Agent N): eigene Signatur je Benutzer – Upload wie in
+   Parametrierung → Signaturen (v6), aber nur die eigene; steht unter der Nachfass-Mail
+   aus dem eigenen Postfach (Dialog „Nächster Schritt“). Zurück-Leiste aus base.html. #}
+{% block inhalt %}
+<div class="{{ 'mobil-inhalt' if mobil }}">
+<div class="seitenkopf">
+    <h1>Meine E-Mail-Signatur</h1>
+</div>
+
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<p class="dezent">Diese Signatur setzt das Tool unter jede <strong>Nachfass-Mail</strong>, die Sie aus
+Ihrem eigenen Postfach senden (Vorgangsakte und „Mein Tag“ → Nächster Schritt → Nachfass-Mail).
+Woher die Dateien kommen: In Outlook unter <code>%APPDATA%\Microsoft\Signatures</code> liegen die
+<strong>.htm-Datei</strong> der Signatur und ein gleichnamiger <strong>…-Dateien-Ordner</strong> mit
+den Bildern – beim Hochladen die .htm-Datei UND alle Bilder aus dem Ordner auswählen. Ohne
+hochgeladene Signatur gilt die neutrale Standard-Signatur der Firma.</p>
+
+<form method="post" action="/einstellungen/signatur" enctype="multipart/form-data" class="formular">
+    <div class="formzeile">
+        <label class="breit">Signatur-Dateien (.htm + Bilder, Mehrfachauswahl)
+            <input type="file" name="dateien" multiple accept=".htm,.html,.png,.jpg,.jpeg,.gif,.bmp">
+        </label>
+    </div>
+    <div class="formaktionen">
+        <button class="knopf" type="submit">Hochladen (ersetzt vorhandene)</button>
+        {% if hochgeladen %}
+        <button class="knopf zweitrangig" type="submit" name="aktion" value="entfernen"
+                onclick="return confirm('Eigene Signatur entfernen? Danach gilt die Standard-Signatur.');">
+            Entfernen</button>
+        {% endif %}
+    </div>
+</form>
+
+{% if hochgeladen %}
+<p class="dezent">Hochgeladene Dateien: {{ dateien | join(' · ') }}</p>
+{% endif %}
+
+<h2>Vorschau <span class="dezent">– so erscheint die Signatur unter der Mail</span></h2>
+<div class="hinweis mail-vorschau">{{ vorschau_html | safe }}</div>
+</div>
+{% endblock %}

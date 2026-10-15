@@ -38,7 +38,9 @@ FORMATE = [("Fett", "<strong>", "</strong>"), ("Kursiv", "<em>", "</em>"),
 def _pflege_erlaubt(benutzer) -> bool:
     """Rechte wie heute: Admin/Innendienst pflegen; Hauptrolle leadmanagement
     (und alle anderen Modul-Sichtbaren) nur lesen."""
-    return benutzer is not None and benutzer.rolle in ("admin", "innendienst")
+    # v33: Basisrolle (Rollen-Varianten); Rückfall auf `rolle` für Aufrufer mit einfachen Objekten
+    basis = getattr(benutzer, "basisrolle", None) or getattr(benutzer, "rolle", "")
+    return benutzer is not None and basis in ("admin", "innendienst")
 
 
 def _gate(request: Request, session: Session) -> None:

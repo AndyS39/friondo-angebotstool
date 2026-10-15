@@ -15,7 +15,7 @@
         {{ kunde.anzeige_name if kunde else '?' }} ·
         {{ angebot.datum.strftime('%d.%m.%Y') if angebot.datum }} ·
         <span class="abzeichen">{{ angebot.status }}</span>
-        {% if vorgang is defined and vorgang %}{{ verfolgung_chip(vorgang.verfolgung_status, klein=True, vorgang_id=vorgang.id) }}{% endif %}
+        {% if vorgang is defined and vorgang %}{{ verfolgung_chip(vorgang.verfolgung_status, klein=True, vorgang_id=vorgang.id, versuche=vorgang.nachfass_versuche or 0) }}{% endif %}
         {% if angebot.vorgaenger_id %}<span class="abzeichen" title="Neue Version eines früheren Angebots">Version</span>{% endif %}
         {# v30-Nachtrag 12.10.2026 (Entscheidung 9): gewählte Zahlungsbedingung nur lesend #}
         {% if zahlungsbedingung_name %}· Zahlungsbedingung: <strong>{{ zahlungsbedingung_name }}</strong>{% endif %}
@@ -107,7 +107,7 @@
     <h2>Gesamtrabatt</h2>
     <p>DB-Ampel:
         <span class="ampel {{ {'gruen': 'gruen', 'orange': 'orange', 'rot': 'rot'}[db_ampel] }}">● {{ {'gruen': 'Grün', 'orange': 'Orange', 'rot': 'Rot'}[db_ampel] }}</span>
-        <span class="dezent">(Rabatt ist möglich, solange die Ampel nicht auf Rot fällt)</span>
+        <span class="dezent">(Rabatt ist möglich, solange die Ampel nicht auf Rot fällt · Abzug vom Gesamtbetrag nach USt = Endbetrag)</span>
     </p>
     {% if freigabe_offen %}
         <p class="meldung">Rabatt-Freigabe beim Innendienst offen
@@ -125,7 +125,8 @@
             </label>
             <label>Art
                 <select name="rabatt_typ">
-                    <option value="betrag" {{ 'selected' if not angebot.rabatt_prozent }}>€ (brutto)</option>
+                    {# v33 (Phase 172): Abzug vom Gesamtbetrag nach USt bei jedem Steuersatz – kein Zusatz „brutto“ #}
+                    <option value="betrag" {{ 'selected' if not angebot.rabatt_prozent }}>€</option>
                     <option value="prozent" {{ 'selected' if angebot.rabatt_prozent }}>%</option>
                 </select>
             </label>

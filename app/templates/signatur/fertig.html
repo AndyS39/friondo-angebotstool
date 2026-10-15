@@ -12,7 +12,7 @@
     <div class="mobil-aktionen">
         <a class="knopf gross" href="/signatur/{{ angebot.id }}/signiert.pdf" target="_blank">Signiertes PDF öffnen</a>
         {% set b = request.state.benutzer %}
-        {% if b and b.rolle != 'aussendienst' %}
+        {% if b and b.basisrolle != 'aussendienst' %}
             <a class="knopf zweitrangig gross" href="/angebote/{{ angebot.id }}">Zum Angebot</a>
         {% else %}
             <a class="knopf zweitrangig gross" href="/erfassung">Zur Übersicht</a>

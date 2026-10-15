@@ -41,7 +41,9 @@ MAX_HOEHE = 5000
 # EK-/DB-Angaben (Innendienst-Sicht) vor der Aufnahme ausblenden – nie im Bild
 STYLE_OHNE_EK = (
     ".db-box, .db-rot, .db-orange, .db-gruen, th[title*='Deckungsbeitrag'], "
-    "label:has(input[name='ek_preis']), .ek, .ek-spalte, [data-ek] "
+    "label:has(input[name='ek_preis']), .ek, .ek-spalte, [data-ek], "
+    # v33 (Phase 174): Tabellen im Lead-Board-Layout – DB-/EK-Spalten und die DB-Summe der Angebotsliste
+    ".sp-db, .sp-ek, .sp-db_ampel, th[data-key='db'], th[data-key='ek'], th[data-key='db_ampel'], .sp-db-summe "
     "{ visibility: hidden !important; }"
 )
 # Reihenfolge und Rollen der Seiten (Phase 152): name → (Rolle, Pfad oder Ermittler, mobil)
@@ -50,7 +52,13 @@ SEITEN = ["portal", "angebotsliste", "editor", "vorgangsakte", "hauptboard", "ka
           # v31/v32 (13.10.2026): Lead-Dashboard, Benutzerverwaltung, Lead-Einstellungen,
           # Leads VOT / Mein Tag (Desktop + Handy), Kundensuche
           "lead-dashboard", "benutzer", "lead-einstellungen", "leads-vot", "mein-tag-mobil",
-          "suche", "angebotsliste-verfolgung"]
+          "suche", "angebotsliste-verfolgung",
+          # v33 (PLAN_V20 Phase 177): Verbindungs-Seite, Rollen, Kalender je Modul, Service-Backend,
+          # Tabellen (Erfassungen, Kunden, Meine Angebote), Mein Tag Wiedervorlage mobil
+          "versand", "rollen", "kalender-projektierung", "kalender-vertrieb", "kalender-tag",
+          "kalender-monat", "kalender-montage-mobil", "service-backend",
+          "montage-backend", "erfassungen", "kunden", "meine-angebote", "parametrierung",
+          "wiedervorlage-mobil"]
 
 
 def argumente() -> argparse.Namespace:
@@ -150,7 +158,13 @@ def benutzer_je_rolle(session) -> dict:
     # Vor-Ort-Terminen nehmen (sonst zeigt die mobile Aufnahme nur den Leerzustand)
     try:
         from sqlalchemy import text as _text
+        # v33 (M 4.2): zuerst ein Außendienstler mit Terminen HEUTE („Als Nächstes“ + Zeitstrahl im Bild),
+        # sonst wie bisher der mit den meisten offenen Terminen
         zeile = session.execute(_text(
+            "SELECT b.id FROM benutzer b JOIN vot_termine t ON t.ad_id=b.id "
+            "WHERE b.aktiv=1 AND b.rolle IN ('aussendienst','handelsvertreter') "
+            "AND t.status IN ('geplant','bestaetigt','unbestaetigt') AND date(t.beginn)=date('now','localtime') "
+            "GROUP BY b.id ORDER BY COUNT(*) DESC LIMIT 1")).fetchone() or session.execute(_text(
             "SELECT b.id FROM benutzer b JOIN vorgaenge v ON v.ad_id=b.id "
             "JOIN vot_termine t ON t.vorgang_id=v.id "
             "WHERE b.aktiv=1 AND b.rolle='aussendienst' AND t.status IN ('geplant','terminiert','unbestaetigt') "
@@ -159,8 +173,14 @@ def benutzer_je_rolle(session) -> dict:
             rollen["aussendienst"] = int(zeile[0])
     except Exception:   # noqa: BLE001 – ältere Kopien ohne die Tabellen
         pass
-    return {"admin": rollen.get("admin", 1), "montage": rollen.get("montage", 2),
-            "aussendienst": rollen.get("aussendienst", 3)}
+    ergebnis = {"admin": rollen.get("admin", 1), "montage": rollen.get("montage", 2),
+                "aussendienst": rollen.get("aussendienst", 3)}
+    # v33: Service-Variante (Rolle service_heizung/service_elektro) fuer das Service-Backend
+    for rolle, bid in rollen.items():
+        if str(rolle).startswith("service_"):
+            ergebnis["service"] = bid
+            break
+    return ergebnis
 
 
 def ziele_ermitteln(basis: str, cookies: dict, cookie_name: str) -> dict:
@@ -243,6 +263,22 @@ def seitenliste(ziele: dict, cookies: dict, erfassung_id: int) -> list[tuple[str
     liste.append(("mein-tag-mobil", "/leads", ad, True))
     liste.append(("suche", "/suche?q=M%C3%BC", admin, False))
     liste.append(("angebotsliste-verfolgung", "/angebote?verfolgung=versendet", admin, False))
+    # v33
+    liste.append(("versand", "/versand", admin, False))
+    liste.append(("rollen", "/parametrierung/rollen", admin, False))
+    liste.append(("kalender-projektierung", "/kalender?gruppe=projektierung", admin, False))
+    liste.append(("kalender-vertrieb", "/kalender?gruppe=vertrieb", admin, False))
+    liste.append(("kalender-tag", "/kalender?gruppe=alle&ansicht=tag", admin, False))
+    liste.append(("kalender-monat", "/kalender?gruppe=projektierung&ansicht=monat", admin, False))
+    liste.append(("kalender-montage-mobil", "/kalender", montage, True))
+    if cookies.get("service"):
+        liste.append(("service-backend", "/montage", cookies["service"], True))
+    liste.append(("montage-backend", "/montage", montage, True))
+    liste.append(("erfassungen", "/erfassungen", admin, False))
+    liste.append(("kunden", "/kunden", admin, False))
+    liste.append(("meine-angebote", "/meine-angebote", ad, False))
+    liste.append(("parametrierung", "/parametrierung", admin, False))
+    liste.append(("wiedervorlage-mobil", "/leads/wiedervorlagen", ad, True))
     return liste
 
 

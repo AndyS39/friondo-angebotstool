@@ -101,12 +101,13 @@ class Uebersicht(Basis):
                       "/parametrierung/angebotstool#ablehnung",
                       "/parametrierung/projektierung-einstellungen#mailprotokoll"):
             self.assertIn(f'href="{anker}"', r.text, anker)
-        # fünf Bereichskarten, Suchfeld, Go-live-Badge „<n>/11 grün“
+        # fünf Bereichskarten, Suchfeld, Go-live-Badge „<n>/12 grün“ (v33: 12 Punkte)
         for bereich in ("bereich-allgemein", "bereich-angebotstool", "bereich-projektierung",
                         "bereich-lead", "bereich-system"):
             self.assertIn(f'id="{bereich}"', r.text, bereich)
         self.assertIn('id="param-suche"', r.text)
-        self.assertRegex(r.text, r"\d+/11 grün")
+        # v33 (PLAN_V20 Phase 166, Agent G): 12 Prüfpunkte (neu „Graph als Anwendung verbunden“)
+        self.assertRegex(r.text, r"\d+/12 grün")
         # keine Inline-Formulare mehr auf der Übersicht
         self.assertNotIn('action="/parametrierung/einstellungen"', r.text)
         self.assertNotIn("Eingelesene Logik", r.text)
@@ -120,7 +121,7 @@ class Uebersicht(Basis):
         self.assertEqual(r.status_code, 200)
         for pfad in ADMIN_EINTRAEGE:
             self.assertNotIn(f'href="{pfad}"', r.text, pfad)
-        self.assertNotIn("/11 grün", r.text)
+        self.assertNotIn("/12 grün", r.text)   # v33: 12 Prüfpunkte
         # Nicht-Admin-Einträge bleiben
         for pfad in ("/parametrierung/vorlagen", "/parametrierung/teams",
                      "/parametrierung/fehlerprotokoll", "/parametrierung/angebotstool",

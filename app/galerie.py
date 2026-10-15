@@ -18,8 +18,9 @@ from app.models import GalerieDatei, Projekt, ProjektDokument, Vorgang
 # 27.09.2026 (Andreas): eigene Galerie je Sparte - WP behaelt die acht
 # Plan-Ordner, PV/KL/WB bekommen passende Ordner + die gemeinsamen vier.
 # V4 (Phase 92): „Förderung“ (BzA-PDF u. a.) für alle Sparten
+# v33 (PLAN_V20 Phase 168): Ordner „Service“ für Servicebericht-PDFs und Service-Fotos
 GEMEINSAME_ORDNER = ["Montagedokumente", "Förderung", "Inbetrieb-/Abnahme",
-                     "Neue Anlage", "Allgemein"]
+                     "Neue Anlage", "Service", "Allgemein"]
 SPARTEN_ORDNER = {
     "WP": ["Alte Heizung", "Elektro", "Außengerät", "Öl-Tank"]
           + GEMEINSAME_ORDNER,
@@ -210,8 +211,22 @@ def loeschen(session: Session, datei: GalerieDatei) -> None:
 
 def _montage_zugriff(session: Session, vorgang: Vorgang, benutzer) -> bool:
     """v15 (Phase 82): Montage sieht die Galerie der Vorgänge, deren Gewerke
-    einem eigenen Team zugewiesen oder terminiert sind."""
-    from app.models import Angebot, Gewerk, ProjektTermin, TeamMitglied
+    einem eigenen Team zugewiesen oder terminiert sind.
+    v33 (PLAN_V20 Phase 168): zusätzlich Vorgänge mit Terminen (Service-Einsätze,
+    auch ohne Projekt), in denen der Benutzer eingeteilt ist (Besetzung/Person)."""
+    from sqlalchemy import or_
+    from app.models import Angebot, Gewerk, ProjektTermin, TeamMitglied, TerminBesetzung
+    eigene_termine = [b.termin_id for b in session.query(TerminBesetzung)
+                      .filter(TerminBesetzung.benutzer_id == benutzer.id)]
+    projekt_ids = [p.id for p in session.query(Projekt).filter(Projekt.vorgang_id == vorgang.id)]
+    eingeteilt = (session.query(ProjektTermin)
+                  .filter(or_(ProjektTermin.vorgang_id == vorgang.id,
+                              ProjektTermin.projekt_id.in_(projekt_ids or [0])),
+                          or_(ProjektTermin.id.in_(eigene_termine or [0]),
+                              ProjektTermin.person_id == benutzer.id))
+                  .first())
+    if eingeteilt is not None:
+        return True
     team_ids = [m.team_id for m in session.query(TeamMitglied)
                 .filter(TeamMitglied.benutzer_id == benutzer.id)]
     if not team_ids:
@@ -237,9 +252,9 @@ def darf_hochladen(session: Session, vorgang: Vorgang, benutzer) -> bool:
     (ansehen + hochladen, nie löschen)."""
     if benutzer is None:
         return False
-    if benutzer.rolle in ("admin", "innendienst", "projektierung"):
+    if benutzer.basisrolle in ("admin", "innendienst", "projektierung"):
         return True
-    if benutzer.rolle == "aussendienst":
+    if benutzer.basisrolle == "aussendienst":
         from app.routers.vorgaenge import _eigener
         return _eigener(session, vorgang, benutzer)
     if benutzer.hat_rolle("montage"):
@@ -248,7 +263,7 @@ def darf_hochladen(session: Session, vorgang: Vorgang, benutzer) -> bool:
 
 
 def darf_loeschen(benutzer) -> bool:
-    return benutzer is not None and benutzer.rolle in (
+    return benutzer is not None and benutzer.basisrolle in (
         "admin", "innendienst", "projektierung")
 
 

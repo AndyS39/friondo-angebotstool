@@ -18,6 +18,8 @@
         <span class="pj-chip {{ 'on' if ansicht == 'chrono' }}"
               {% if ansicht != 'chrono' %}onclick="location.href='/projektierung/kalender?ansicht=chrono'" style="cursor:pointer"{% endif %}>Chronologisch</span>
         <a class="pj-btn" href="/projektierung/termine">Terminliste</a>
+        {# v33 (PLAN_V20 Phase 169): zentraler Planungskalender je Mitarbeiter (Monteure + Projektierer vorbelegt) #}
+        <a class="pj-btn" href="/kalender?gruppe=projektierung" title="Eine Zeile je Mitarbeiter – Montage, Service, Projektierung">Mitarbeiter-Kalender</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}

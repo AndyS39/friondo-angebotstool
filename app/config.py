@@ -32,7 +32,7 @@ def _schalter(env_name: str) -> bool:
 
 
 # v27 (PLAN_V17): Versionskennung für /health und die Betriebs-Seite
-VERSION = "v32"   # 13.10.2026: v31 Lead-Management V5 (PLAN_LEAD_V5) + v32 Mein Tag, Wiedervorlage, Nächster Schritt, Suche (PLAN_V19) – ein Durchlauf
+VERSION = "v33"   # 14.10.2026: Outlook je Mitarbeiter, Graph als Anwendung, zentraler Kalender, Rollen-Varianten, Service, Auto-Phase, Rabatt 0 %, Mein Tag mobil, Tabellen-Layout, Nachfassen (PLAN_V20, Phasen 166-177)
 
 
 # --- Pfade ---------------------------------------------------------------
@@ -115,3 +115,11 @@ SESSION_SECRET = os.getenv("SESSION_SECRET", "").strip()  # leer = auto (data/.s
 # Microsoft Graph (Versand, Phase 17) – Einrichtung: docs/graph-einrichtung.md
 GRAPH_CLIENT_ID = os.getenv("GRAPH_CLIENT_ID", "").strip()
 GRAPH_TENANT_ID = os.getenv("GRAPH_TENANT_ID", "").strip()
+# v33 (PLAN_V20 Phase 166): Zugriff als Anwendung – das Geheimnis steht NUR in der .env
+# (nie im Code, in der Doku oder in Tests); alternativ ein Zertifikat (PEM-Datei mit
+# privatem Schlüssel + Fingerabdruck aus Entra). GRAPH_GEHEIMNIS_ABLAUF (JJJJ-MM-TT)
+# speist die /health-Warnung 30 Tage vor Ablauf.
+GRAPH_CLIENT_SECRET = os.getenv("GRAPH_CLIENT_SECRET", "").strip()
+GRAPH_ZERTIFIKAT_PFAD = os.getenv("GRAPH_ZERTIFIKAT_PFAD", "").strip().strip('"')
+GRAPH_ZERTIFIKAT_THUMBPRINT = os.getenv("GRAPH_ZERTIFIKAT_THUMBPRINT", "").strip()
+GRAPH_GEHEIMNIS_ABLAUF = os.getenv("GRAPH_GEHEIMNIS_ABLAUF", "").strip()

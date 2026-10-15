@@ -19,7 +19,13 @@
    .lm-th-griff im Spaltenkopf (lm_boards.js: Ziehen = Breite live, Loslassen =
    speichern, Doppelklick = Standard); Zeilen mit z.rang0 (Mail nicht gesendet /
    E-Mail falsch, Vertrag L2) tragen tr.lm-rang0, die Notiz-Zelle vorn die roten
-   Labels aus z.mail_labels. #}
+   Labels aus z.mail_labels.
+   v33 (PLAN_V20 Phase 174, Vertrag T): spalten_kopf/spalten_colgroup sind generisch (ctx
+   braucht nur `sortierung`, `fest` = lead_boards.spalten_fest(board)) und werden auch von
+   den Angebotstool-Tabellen (Angebote, Erfassungen, Meine Angebote, Warteschlange, Kunden,
+   Leads VOT) genutzt; neue Makros spaltenwahl (Aufklappmenü „Spalten“) und tabellen_daten
+   (JSON #lm-daten + lm_boards.js). Phase 175 (R 4c): Badge „Simons Gruppe (noch nicht
+   verteilt)“ in der AD-Zelle (z.hv_gruppe_offen). #}
 {% from "_symbole.html" import symbol %}
 {% from "_sparten.html" import chip %}
 {% from "_komponenten.html" import wiedervorlage_chip, status_badge %}
@@ -167,7 +173,9 @@
         {%- if v.ad_id and z.ad and v.ad_id not in (ad_wahl | map(attribute='id') | list) %}<option value="{{ v.ad_id }}" selected>{{ z.ad.name }} (nicht mehr wählbar)</option>{% endif %}
     </select>
     {%- endif %}</span>
-    {%- if z.hv_grund %} <span class="lm-hv-hinweis" title="{{ z.hv_grund }} Handelsvertreter sind deshalb deaktiviert.">{{ symbol('warnung') }}</span>{% endif %}</span></td>
+    {%- if z.hv_grund %} <span class="lm-hv-hinweis" title="{{ z.hv_grund }} Handelsvertreter sind deshalb deaktiviert.">{{ symbol('warnung') }}</span>{% endif %}</span>
+    {#- v33 (Phase 175, Vorschlag R 4c): Lead hängt an Simons Gruppe, noch kein Mitglied gewählt #}
+    {%- if z.hv_gruppe_offen %} <span class="abzeichen status-versand-vorbereitet" data-hv-gruppe-offen="{{ v.id }}" title="Über die Sammelaktion an Simons Gruppe verschoben – Mitglied wählen">Simons Gruppe (noch nicht verteilt)</span>{% endif %}</td>
 {%- elif key == 'innendienst' -%}
 <td class="sp-id"><span class="lm-person"><span class="lm-person-pille">{{ avatar(z.leadmanager, 'Innendienst') }}
     {%- if not ctx.nur_lesen and not ctx.hv %}<span class="lm-avatar-pfeil" aria-hidden="true">▾</span>
@@ -261,4 +269,34 @@
         {%- for z in zeilen %}{{ lead_zeile(z, spalten, ctx) }}{% endfor %}
     </tbody>
 </table>
+{%- endmacro %}
+
+{# v33 (PLAN_V20 Phase 174, Vertrag T): generische Bausteine für ALLE Tabellen mit Spalten je
+   Nutzer (Lead-Boards und Angebotstool-Tabellen). spaltenwahl = das Aufklappmenü „Spalten“ in
+   der Filterleiste (Häkchen = sichtbar, feste Spalten gesperrt, „Zurücksetzen“); tabellen_daten
+   = der JSON-Block #lm-daten (board, sort, spalten) plus Einbindung von lm_boards.js – einmal je
+   Seite am Ende des Inhalts. Keine Lead-Annahmen: `fest` = lead_boards.spalten_fest(board). #}
+{% macro spaltenwahl(spalten, fest=('lead',), hinweis='') -%}
+<details class="lm-spaltenwahl" id="lm-spaltenwahl">
+    <summary class="knopf klein zweitrangig" id="lm-spalten-knopf" title="Spalten ein-/ausblenden (je Nutzer gespeichert) · Reihenfolge: Spaltenkopf ziehen · Umbenennen: Stift im Spaltenkopf · Sortieren: Klick auf den Spaltenkopf">{{ symbol('spalten') }} Spalten</summary>
+    <div class="lm-spaltenmenue" role="group" aria-label="Spalten">
+        <ul class="lm-spaltenliste-neu" id="lm-spaltenliste">
+            {% for sp in spalten %}
+            <li data-key="{{ sp.key }}" class="{{ 'fest' if sp.key in fest }}"{% if sp.key in fest %} data-fest="1"{% endif %}>
+                <label><input type="checkbox" data-key="{{ sp.key }}" {{ 'checked' if sp.sichtbar }} {{ 'disabled' if sp.key in fest }}>
+                    <span class="lm-sp-name">{{ sp.titel }}</span>{% if sp.name %} <small title="Standardname">({{ sp.standard }})</small>{% endif %}</label>
+            </li>
+            {% endfor %}
+        </ul>
+        <div class="lm-spalten-fuss">
+            <button type="button" class="knopf klein zweitrangig" id="lm-spalten-reset" title="Spalten auf den Standard zurücksetzen (Reihenfolge, Sichtbarkeit, Namen, Sortierung) – nur für Sie">{{ symbol('zuruecksetzen') }} Zurücksetzen</button>
+            <span class="dezent">{{ hinweis or 'Gilt nur für Sie, je Tabelle. Reihenfolge: Spaltenkopf ziehen · Umbenennen: Stift im Spaltenkopf · Sortieren: Klick auf den Spaltenkopf (wird gemerkt).' }}</span>
+        </div>
+    </div>
+</details>
+{%- endmacro %}
+
+{% macro tabellen_daten(board, spalten, sortierung) -%}
+<script type="application/json" id="lm-daten">{{ {'board': board, 'sort': sortierung, 'spalten': spalten} | tojson }}</script>
+<script src="/static/lm_boards.js?v={{ css_version }}" defer></script>
 {%- endmacro %}

@@ -581,7 +581,7 @@ class Q_MontagBisFreitag(Basis):
         self.assertTrue(all(datetime.strptime(t["datum"], "%Y-%m-%d").weekday() < 5 for t in d["tage"]))
         woche = lead_termin.kalender_woche(self.s, [self.horst.id])
         self.assertEqual(len(woche["tage"]), 5)
-        r = self.client.get("/lead-management/kalender")
+        r = self.client.get("/lead-management/kalender?alt=1")   # v33 (Phase 169): alte Wochenansicht
         self.assertEqual(r.status_code, 200)
         self.assertNotIn("Sa ", r.text.split("<thead", 1)[1].split("</thead>", 1)[0] if "<thead" in r.text else "")
         r = self.client.get(f"/lead-management/lead/{v.id}/termin")

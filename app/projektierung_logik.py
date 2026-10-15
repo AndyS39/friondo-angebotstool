@@ -136,15 +136,20 @@ class StuecklistenZeile:
 # `pflicht_wenn:<feld>≠<wert>` / `pflicht_wenn:<feld>=<wert>` (text/zahl/auswahl/
 # ja_nein/datum). „Logik prüfen“ meldet unbekannte Typen und Optionsformen als
 # Fehler (Datei wird beim Upload abgelehnt).
+# v33 (PLAN_V20 Phase 168): Typ `zeit` (Uhrzeit HH:MM, 15-Minuten-Takt) und das
+# Formular `servicebericht` (Service-Einsätze; Felder sb_* im Blatt „Formulare“)
 FORMULAR_FELD_TYPEN = ("text", "zahl", "ja_nein", "auswahl", "foto",
-                       "unterschrift", "datum", "wiederhol")
+                       "unterschrift", "datum", "wiederhol", "zeit")
 FORMULAR_NAMEN = {"montagebericht": "Montagebericht",
                   "inbetriebnahme": "Inbetriebnahmeprotokoll",
-                  "abnahme": "Abnahmeprotokoll"}
+                  "abnahme": "Abnahmeprotokoll",
+                  "servicebericht": "Servicebericht"}
+# Formulare, die am Service-Einsatz (Termin) hängen statt am Gewerk (v33)
+FORMULARE_SERVICE = ("servicebericht",)
 # Optionsformen je Typ: welche Schlüsselwörter in der Spalte `optionen` erlaubt sind
 FORMULAR_OPTION_GROSS = "gross"
 FORMULAR_OPTION_PFLICHT_WENN = "pflicht_wenn:"
-FORMULAR_PFLICHT_WENN_TYPEN = ("text", "zahl", "auswahl", "ja_nein", "datum")
+FORMULAR_PFLICHT_WENN_TYPEN = ("text", "zahl", "auswahl", "ja_nein", "datum", "zeit")
 
 
 def _ist_optionsform(teil: str) -> bool:

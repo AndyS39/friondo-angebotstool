@@ -23,6 +23,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy.orm import Session
 
 from app.models import Angebot, Benutzer, Erfassung, Kunde, einstellung_holen
+from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 
 FEHLT = "— fehlt: bitte beim Kunden erfragen"
 FEHLT_ERSTELLER = "— fehlt: in der Benutzerverwaltung pflegen"
@@ -225,7 +226,7 @@ def ersteller_kandidaten(session: Session) -> list[Benutzer]:
     (Abschnitt 6 entfällt); bleibt für die Gewerk-Route und den v29-Code."""
     return (session.query(Benutzer)
             .filter(Benutzer.aktiv.is_(True),
-                    Benutzer.rolle.in_(["innendienst", "admin"]))
+                    rollen_modul.filter_basen(("innendienst", "admin")))
             .order_by(Benutzer.name).all())
 
 

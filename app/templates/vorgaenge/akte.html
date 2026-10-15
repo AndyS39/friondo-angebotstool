@@ -42,15 +42,15 @@
                     <a class="knopf klein" href="/projektierung/angebot/{{ a.id }}/projekt">Angebot → Projekt</a>
                 {% endif %}
             {% endif %}
-            {% if a.status == 'Angenommen' and not a.extern and benutzer.rolle != 'aussendienst' %}
+            {% if a.status == 'Angenommen' and not a.extern and benutzer.basisrolle != 'aussendienst' %}
                 {# v13 (Phase 80): Lieferschein ohne Preise #}
                 <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}/lieferschein.pdf" target="_blank">{{ symbol('pdf') }} Lieferschein</a>
             {% endif %}
-            {% if benutzer.rolle in ('admin', 'innendienst') and (a.konfigurator_typ or 'WP') == 'WP' %}
+            {% if benutzer.basisrolle in ('admin', 'innendienst') and (a.konfigurator_typ or 'WP') == 'WP' %}
                 {# v19 (Phase 96): BzA-Datenblatt – Tool- und TAIFUN-WP-Angebote #}
                 <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}/bza-datenblatt">{{ symbol('pdf') }} BzA-Datenblatt</a>
             {% endif %}
-            {% if benutzer.rolle in ('admin', 'innendienst') %}
+            {% if benutzer.basisrolle in ('admin', 'innendienst') %}
                 <a class="knopf klein zweitrangig" href="/angebote/{{ a.id }}">{{ symbol('stift') }} Öffnen</a>
             {% elif not a.extern %}
                 <a class="knopf klein zweitrangig" href="/meine-angebote/{{ a.id }}">Ansehen</a>
@@ -70,7 +70,7 @@
             <span class="dezent" style="margin-left:auto">{{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am else '– noch nicht abgesendet –' }}</span>
         </div>
         <div class="kartenfuss">
-            {% if benutzer.rolle in ('admin', 'innendienst') %}
+            {% if benutzer.basisrolle in ('admin', 'innendienst') %}
                 <a class="knopf klein zweitrangig" href="/erfassungen/{{ e.id }}">{{ symbol('stift') }} Öffnen</a>
             {% elif e.status == 'Entwurf' %}
                 <a class="knopf klein zweitrangig" href="/erfassung/{{ e.id }}/weiche">Fortsetzen</a>
@@ -110,8 +110,9 @@
             {% if vorgang.verfolgung_ampel %}
                 <span title="Verfolgung: {{ vorgang.verfolgung_ampel }}">{{ {'heiss': '🔥', 'warm': '🌤', 'kalt': '❄'}[vorgang.verfolgung_ampel] }}</span>
             {% endif %}
-            {# v32 (PLAN_V19 Phase 163): Verfolgungs-Chip (fünf Stufen) neben der Hot-Ampel #}
-            {{ verfolgung_chip(vorgang.verfolgung_status, vorgang_id=vorgang.id) }}
+            {# v32 (PLAN_V19 Phase 163): Verfolgungs-Chip (fünf Stufen) neben der Hot-Ampel;
+               v33 (Phase 176): mit Zähler der Telefonversuche „Nachgefasst (2)“ #}
+            {{ verfolgung_chip(vorgang.verfolgung_status, vorgang_id=vorgang.id, versuche=vorgang.nachfass_versuche or 0) }}
             {{ wiedervorlage_chip(vorgang.wiedervorlage_am, heute) }}
         </h1>
         <p class="dezent" style="margin:0.15rem 0">
@@ -131,7 +132,7 @@
             {% for b in vertriebler %}{{ b.name }}{{ ', ' if not loop.last }}{% else %}–{% endfor %}
             {% if lead and lead.vot_datum %} · {{ symbol('uhr') }} VOT {{ lead.vot_datum.strftime('%d.%m.%Y %H:%M') }}{% endif %}
         </p>
-        {% if kunde and benutzer.rolle in ('admin', 'innendienst', 'aussendienst') %}
+        {% if kunde and benutzer.basisrolle in ('admin', 'innendienst', 'aussendienst') %}
         {# v20 (Phase 98): Standard-Anschriften des Kunden für neue Erfassungen/Angebote
            (30.09.2026: auch Außendienst – die Akte sieht er nur bei eigenen Vorgängen) #}
         {% from "_anschriften.html" import anschriften_karten %}
@@ -157,7 +158,7 @@
                 <input type="date" name="wiedervorlage_am"
                        value="{{ vorgang.wiedervorlage_am.strftime('%Y-%m-%d') if vorgang.wiedervorlage_am }}"
                        class="{{ 'wv-faellig' if vorgang.wiedervorlage_am and vorgang.wiedervorlage_am <= heute }}"></label>
-            {% if benutzer.rolle in ('admin', 'innendienst') %}
+            {% if benutzer.basisrolle in ('admin', 'innendienst') %}
             <label class="kontrollfeld">Verantwortlich
                 <select name="wv_verantwortlicher">
                     <option value="0" {{ 'selected' if not vorgang.wiedervorlage_benutzer_id }}>– Innendienst –</option>
@@ -179,7 +180,15 @@
         <details class="ns-block" id="naechster-schritt"
                  {{ 'open' if vorgang.verfolgung_status in ('versendet', 'nachgefasst', 'bestellung_angekuendigt') }}>
             <summary class="dezent"><strong>Nächster Schritt nach dem Anruf</strong>
-                <span class="dezent">– Abgelehnt · Bestellung kommt · Nochmal anrufen</span></summary>
+                <span class="dezent">– Abgelehnt · Bestellung kommt · Nochmal anrufen · Nachfass-Mail</span>
+                {# v33 (PLAN_V20 Phase 176): Zähler der Telefonversuche und letzter Einwand in der Akte
+                   (dezenter Text – eine Pille in der summary bekäme den Auswahl-Pfeil der v30-Regel) #}
+                {% if nachfass_versuche is defined and nachfass_versuche %}
+                    <span class="dezent" title="Ergebnisse „Nochmal anrufen“ (Dialog Nächster Schritt)">· <strong>{{ nachfass_versuche }} Nachfass-Anruf{{ 'e' if nachfass_versuche != 1 }}</strong></span>
+                {% endif %}
+                {% if letzter_einwand is defined and letzter_einwand %}
+                    <span class="dezent" title="Zuletzt gesetzter Einwand-Chip">· Letzter Einwand: <strong>{{ letzter_einwand }}</strong></span>
+                {% endif %}</summary>
             {% set mit_notiz = true %}
             {% include "vorgaenge/_naechster_schritt.html" %}
         </details>
@@ -191,7 +200,7 @@
         <a class="knopf" href="/erfassung/sparten?kunde_id={{ kunde.id }}{{ '&lead_id=' ~ lead.id if lead }}">
             {{ symbol('plus') }} Neue Erfassung</a>
         {% endif %}
-        {% if angebote and benutzer.rolle in ('admin', 'innendienst') %}
+        {% if angebote and benutzer.basisrolle in ('admin', 'innendienst') %}
         <a class="knopf zweitrangig" href="#angebote">{{ symbol('brief') }} Gemeinsam versenden</a>
         {% endif %}
         <a class="knopf zweitrangig" href="#notizen">{{ symbol('notiz') }} Notiz</a>
@@ -221,7 +230,7 @@
 {% endif %}
 <div class="akte-spalten">
 <div>{# ---------- linke Spalte: Angebote + Erfassungen ---------- #}
-{% set kombi_erlaubt = benutzer.rolle in ('admin', 'innendienst') %}
+{% set kombi_erlaubt = benutzer.basisrolle in ('admin', 'innendienst') %}
 
 {% if mehrere_objekte %}
 {# v31 (PLAN_LEAD_V5 Phase 153): Vorgang mit mehreren Objekten – Angebote und
@@ -289,6 +298,66 @@
 {{ leer_zustand('Noch kein Angebot – über eine Erfassung starten.') }}
 {% endif %}
 {% endif %}{# /mehrere_objekte #}
+
+{# v33 (PLAN_V20 Phase 168): Block „Termine“ – Service-Einsätze des Vorgangs (auch ohne
+   Projekt: Bestandskunde) mit Badge Service, Anlass, Status, Besetzung, Outlook-Stand;
+   „Service-Einsatz planen“ (ID/Admin/Projektierung) öffnet den gemeinsamen Termin-Dialog
+   mit fester Art service → POST /projektierung/vorgang/<id>/service-termin #}
+{% if service_planen_erlaubt or service_termine %}
+{% from "projektierung/_termin_dialog.html" import termin_dialog, termin_loeschen_dialog, outlook_stand as outlook_stand_pille %}
+<h2 id="termine">Termine</h2>
+<div class="pj-termine vg-termine">
+    {% if service_termine %}
+    <table class="pj-termine-tab">
+        <thead><tr><th>Art</th><th>Datum / Uhrzeit</th><th>Team / Besetzung</th><th>Projekt</th><th>Outlook</th><th></th></tr></thead>
+        <tbody>
+        {% for t in service_termine %}
+        <tr class="pj-termin-zeile {{ 'vergangen' if t.beginn and t.beginn < heute }}" id="termin-{{ t.id }}">
+            <td><span class="pj-badge pj-art-service pj-service">Service</span>
+                <b>{{ service_anlass_namen.get(t.anlass, t.anlass or '–') }}</b>
+                <small class="dezent">· {{ service_gewerk_namen.get(t.service_gewerk, t.service_gewerk or '–') }}
+                    · <span class="pj-service-status {{ t.service_status or 'geplant' }}">{{ service_status_namen.get(t.service_status or '', t.service_status) }}</span></small>
+                {% if t.notiz %}<br><small class="dezent">{{ t.notiz }}</small>{% endif %}</td>
+            <td><b>{{ t.beginn | de_datum('%a %d.%m.%Y') if t.beginn }}</b>
+                {%- if t.beginn and not t.ganztaegig and t.beginn.strftime('%H:%M') != '00:00' %} {{ t.beginn.strftime('%H:%M') }}{% if t.ende and t.ende.date() == t.beginn.date() %}–{{ t.ende.strftime('%H:%M') }}{% endif %}{% endif -%}
+                {%- if t.ende and t.ende.date() != t.beginn.date() %} – <b>{{ t.ende | de_datum('%a %d.%m.') }}</b>{% endif %}</td>
+            <td>{% if t.team_id and t.team_id in (td.teams | map(attribute='id') | list if td else []) %}{% for te in td.teams if te.id == t.team_id %}{{ te.name }}{% endfor %} · {% endif %}
+                {{ service_besetzung.get(t.id) or '–' }}</td>
+            <td>{% if t.projekt_id and t.projekt_id in projekte_map %}<a href="/projektierung/projekt/{{ t.projekt_id }}#termine" class="pj-mono">{{ projekte_map[t.projekt_id].nummer }}</a>{% else %}<span class="dezent">ohne Projekt</span>{% endif %}</td>
+            <td>{{ outlook_stand_pille(outlook_stand.get(t.id), outlook_makro_da) }}</td>
+            <td class="pj-termin-aktionen">
+                {% if service_planen_erlaubt and td %}
+                <button class="pj-btn" type="button" title="Service-Einsatz bearbeiten"
+                        onclick="window.pjTerminDialogOeffnen('dlg-termin-edit-{{ t.id }}', {zurueck: '/vorgaenge/{{ vorgang.id }}'})">bearbeiten</button>
+                <button class="pj-btn danger" type="button" title="Service-Einsatz löschen (Pflichtgrund)"
+                        onclick="document.getElementById('dlg-termin-del-{{ t.id }}').showModal()">löschen</button>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="dezent" style="font-size:13px;margin:4px 0">Noch keine Service-Einsätze zu diesem Vorgang.</p>
+    {% endif %}
+    {% if service_planen_erlaubt and td %}
+    <div class="pj-btnrow">
+        <button class="pj-btn primary" type="button"
+                title="Service-Einsatz (Wartung, Störung, Nacharbeit) planen – auch ohne Projekt"
+                onclick="window.pjTerminDialogOeffnen('dlg-service-vorgang', {action: '/projektierung/vorgang/{{ vorgang.id }}/service-termin', zurueck: '/vorgaenge/{{ vorgang.id }}'})">🔧 Service-Einsatz planen</button>
+    </div>
+    {{ termin_dialog(td, 'dlg-service-vorgang', art='service', nur_art='service', vorgang=vorgang,
+                     action='/projektierung/vorgang/' ~ vorgang.id ~ '/service-termin',
+                     zurueck='/vorgaenge/' ~ vorgang.id, titel='Service-Einsatz planen · ' ~ (kunde.anzeige_name if kunde else '')) }}
+    {% for t in service_termine %}
+    {{ termin_dialog(td, 'dlg-termin-edit-' ~ t.id, termin=t, art='service', nur_art='service', vorgang=vorgang,
+                     besetzung=service_besetzung_ids.get(t.id, []), zurueck='/vorgaenge/' ~ vorgang.id,
+                     titel='Service-Einsatz bearbeiten · ' ~ (t.beginn.strftime('%d.%m.%Y') if t.beginn else '')) }}
+    {{ termin_loeschen_dialog(t, 'dlg-termin-del-' ~ t.id, art_name='Service-Einsatz', zurueck='/vorgaenge/' ~ vorgang.id) }}
+    {% endfor %}
+    {% endif %}
+</div>
+{% endif %}
 
 {% if projekt_modul_ok and vorgang_projekte %}
 {% from "_projektierung.html" import phase_name %}

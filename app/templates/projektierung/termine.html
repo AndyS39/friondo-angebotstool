@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 {% from "projektierung/_termin_dialog.html" import termin_dialog %}
+{# v33 (PLAN_V20 Phase 170, Agent O): Outlook-Stand je Termin (Kopien in den persönlichen
+   Kalendern der Besetzung/Person, Lauf outlook-sync) über das Makro _outlook_status.html und
+   das Template-Global outlook_status_map (eine Abfrage für alle Termine der Ansicht) #}
+{% from "_outlook_status.html" import outlook_status_zeile %}
 
 {% block titel %}Projektierung – Termine{% endblock %}
 
@@ -14,6 +18,9 @@
     <div class="aktionen">
         <a class="pj-btn" href="/projektierung">Board</a>
         <a class="pj-btn" href="/projektierung/liste">Liste</a>
+        {# v33 (PLAN_V20 Phase 168/169): Statistik der Service-Einsätze, zentraler Kalender (K) #}
+        <a class="pj-btn" href="/projektierung/statistik">Service-Statistik</a>
+        <a class="pj-btn" href="/kalender">Mitarbeiter-Kalender</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
@@ -42,13 +49,14 @@
     </select>
     <select name="typ" class="pj-chip {{ 'on' if typ }}" onchange="this.form.submit()">
         <option value="">Typ ▾</option>
-        {% for t in ('feinplanung', 'montage', 'abnahme', 'sub', 'sonstige') %}
+        {% for t in ('feinplanung', 'montage', 'abnahme', 'sub', 'sonstige', 'service') %}
             <option value="{{ t }}" {{ 'selected' if typ == t }}>{{ t | capitalize }}</option>
         {% endfor %}
     </select>
     <button class="pj-chip" type="submit">Anzeigen</button>
 </form>
 
+{% set os_map = outlook_status_map('projekt', tage) if outlook_status_map is defined else {} %}
 {% if tage %}
 {% for tag, liste in tage %}
 <h2 style="font-size:15px;margin:14px 0 2px">{{ tag | de_datum('%A, %d.%m.%Y') }}</h2>
@@ -61,10 +69,18 @@
         <div style="flex:1">
             {% if gewerk %}<span class="pj-sp {{ gewerk.sparte }}">{{ gewerk.sparte }}</span>{% endif %}
             {# v28 (Phase 135): Art aus typ/zweck, Besetzung als Tooltip #}
-            <strong>{{ termin_art(t) }}</strong>
+            {% if t.typ == 'service' %}
+            {# v33 (Phase 168): Badge Service + Anlass · Gewerk · Status #}
+            <span class="pj-badge pj-art-service pj-service">Service</span>
+            <strong>{{ service_anlass_namen.get(t.anlass, t.anlass or '–') }}</strong>
+            <span class="dezent">· {{ service_gewerk_namen.get(t.service_gewerk, t.service_gewerk or '–') }}
+                · {{ service_status_namen.get(t.service_status or '', t.service_status) }}</span>
+            {% else %}<strong>{{ termin_art(t) }}</strong>{% endif %}
             {% if t.ende and t.ende.date() != t.beginn.date() %}<span class="dezent">bis {{ t.ende.strftime('%d.%m.') }}</span>{% endif %}
             {% if projekt %}· <a href="/projektierung/projekt/{{ projekt.id }}#termine" class="pj-mono">{{ projekt.nummer }}</a>
-                · {{ kunden[projekt.kunde_id].anzeige_name if projekt.kunde_id in kunden else '?' }}{% endif %}
+                · {{ kunden[projekt.kunde_id].anzeige_name if projekt.kunde_id in kunden else '?' }}
+            {% elif t.vorgang_id %}· <a href="/vorgaenge/{{ t.vorgang_id }}#termine">Vorgang</a>
+                · {{ service_kunden.get(t.id, '?') }}{% endif %}
             <span style="color:var(--pj-muted)">
                 {% if t.team_id and t.team_id in teams | map(attribute='id') | list %}
                     {% for team in teams if team.id == t.team_id %}· {{ team.name }}{% endfor %}
@@ -73,6 +89,8 @@
                 {% if besetzung.get(t.id) %}· <span title="{{ besetzung[t.id] }}">👥 {{ besetzung[t.id] | truncate(40, true) }}</span>{% endif %}
                 {{ '· Kunde bestätigt ✔' if t.kunde_bestaetigt }}
                 {{ '· ' ~ t.notiz if t.notiz }}</span>
+            {# v33 (Phase 170, O): Outlook-Spalte – Stand der Kopien, Hinweistext bei Fehler/HV ohne Postfach #}
+            {% if os_map %}{% set os = os_map.get(t.id) %}· {{ outlook_status_zeile(os) }}{% if os and os.stand != 'ok' and os.kopien %} <span class="dezent">{{ os.text }}</span>{% endif %}{% endif %}
         </div>
     </div>
 {% endfor %}
@@ -97,7 +115,8 @@
                      window.pjTerminDialogOeffnen('dlg-termin-uebersicht', {gewerk: w.value, sparte: w.options[w.selectedIndex].dataset.sparte, zurueck: location.pathname + location.search});">+ Termin</button>
 </div>
 <p class="dezent">Ein Dialog für alle Terminarten (Montage · Elektro-Montage · Sub-Einsatz ·
-    Feinplanung VOT · Abnahme · Sonstiges); Feinplanungs- und Montage-Termine berechnen die
-    FP+N/M±N-Fälligkeiten der Aufgaben des Gewerks automatisch nach.</p>
+    Feinplanung VOT · Abnahme · Sonstiges · Service-Einsatz); Feinplanungs- und Montage-Termine berechnen die
+    FP+N/M±N-Fälligkeiten der Aufgaben des Gewerks automatisch nach. Service-Einsätze ohne Projekt
+    (Bestandskunden) plant die Vorgangsakte (Block „Termine“ → „Service-Einsatz planen“).</p>
 {{ termin_dialog(td, 'dlg-termin-uebersicht', zurueck='/projektierung/termine') }}
 {% endblock %}

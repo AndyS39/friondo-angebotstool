@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
+
+{% block titel %}Rollen – Friondo Angebotstool{% endblock %}
+
+{# v33 (PLAN_V20 Phase 167): Parametrierung → Rollen (nur Admin). Eine Rolle ist eine
+   der sechs Basisrollen (Systemzeile: nicht umbenennbar, nicht deaktivierbar) oder eine
+   Variante mit Kennzeichen Gewerk (Heizung | Elektro), Service und Handelsvertreter.
+   Rechte erben immer von der Basisrolle; die Kennzeichen steuern Einsatzlisten, Kalender
+   und Zuweisungen. Liste (Key, Name, Basisrolle, Gewerk, Service, HV, aktiv, Benutzer),
+   Anlegen (Key automatisch aus dem Namen), Umbenennen, Deaktivieren nur ohne aktive
+   Benutzer. Nur Design-v2-Tokens (Klassen aus style.css). #}
+{% block inhalt %}
+<style>
+/* v33 (Phase 167): Kleinst-Styles der Rollen-Seite – nur Tokens */
+.rollen-tabelle td, .rollen-tabelle th { vertical-align: middle; }
+.rollen-tabelle .rollen-key { font-family: var(--schrift-mono, monospace); font-size: var(--t-xs); color: var(--text-dezent); }
+.rollen-tabelle .rollen-umbenennen { display: flex; gap: 4px; align-items: center; }
+.rollen-tabelle .rollen-umbenennen input { min-width: 160px; }
+.rollen-tabelle tr.inaktiv td { color: var(--text-dezent); }
+.rollen-tabelle .ja { color: var(--status-gruen); font-weight: 600; }
+.rollen-tabelle .nein { color: var(--text-dezent); }
+.rollen-neu .formzeile { align-items: flex-end; }
+</style>
+<div class="seitenkopf">
+    <h1>Rollen</h1>
+    <div class="aktionen">
+        <a class="knopf zweitrangig" href="/benutzer">Benutzer</a>
+        <a class="knopf zweitrangig" href="/parametrierung">← Parametrierung</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung {{ 'fehler' if fehler }}">{{ meldung }}</p>{% endif %}
+<p class="dezent">Eine Variante erbt die Rechte ihrer Basisrolle (Menü, Pfade, Login-Ziel, Sitzungsdauer)
+    und trägt Kennzeichen: <b>Gewerk</b> (Montage Heizung/Elektro sehen im Montage-Backend die Einsätze ihres
+    Gewerks), <b>Service</b> (Service-Einsätze statt Montage), <b>Handelsvertreter</b> (Außendienst, terminiert
+    selbst – HV-Sicht im Lead-Management; das Kennzeichen „terminiert selbst“ im AD-Profil bleibt synchron).
+    Basisrollen sind Systemrollen und gesperrt. Zuweisen in der <a href="/benutzer">Benutzerverwaltung</a>
+    (Rollen-Dropdown und Zusatzrollen).</p>
+
+<table class="tabelle rollen-tabelle">
+    <thead><tr>
+        <th>Name</th><th>Schlüssel</th><th>Basisrolle</th><th>Gewerk</th><th>Service</th>
+        <th title="Handelsvertreter">HV</th><th>Aktiv</th>
+        <th title="Aktive Benutzer mit dieser Haupt- oder Zusatzrolle">Benutzer</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for r in rollen %}
+        <tr class="{{ 'inaktiv' if not r.aktiv }}" data-rolle="{{ r.key }}">
+            <td>
+                {% if r.system %}
+                    <b>{{ r.name }}</b> <span class="abzeichen status-entwurf" title="Basisrolle – Systemzeile, nicht umbenennbar, nicht deaktivierbar">System</span>
+                {% else %}
+                    <form method="post" action="/parametrierung/rollen/{{ r.key }}/umbenennen" class="rollen-umbenennen">
+                        <input type="text" name="name" value="{{ r.name }}" maxlength="100" required aria-label="Name der Rolle {{ r.key }}">
+                        <button class="knopf klein zweitrangig" type="submit" title="Rolle umbenennen (Schlüssel bleibt)">Umbenennen</button>
+                    </form>
+                {% endif %}
+            </td>
+            <td class="rollen-key">{{ r.key }}</td>
+            <td>{{ basis_namen.get(r.basisrolle, r.basisrolle) }}</td>
+            <td>{{ gewerk_namen.get(r.gewerk, r.gewerk) if r.gewerk else '–' }}</td>
+            <td class="{{ 'ja' if r.service else 'nein' }}">{{ 'ja' if r.service else '–' }}</td>
+            <td class="{{ 'ja' if r.handelsvertreter else 'nein' }}">{{ 'ja' if r.handelsvertreter else '–' }}</td>
+            <td>{{ 'aktiv' if r.aktiv else 'deaktiviert' }}</td>
+            <td>{{ anzahl.get(r.key, 0) }}</td>
+            <td class="aktionen">
+                {% if not r.system %}
+                    <form method="post" action="/parametrierung/rollen/{{ r.key }}/aktiv"
+                          {% if r.aktiv %}onsubmit="return confirm('Rolle {{ r.name }} deaktivieren? Sie steht danach in keiner Auswahl mehr (nur möglich ohne aktive Benutzer).');"{% endif %}>
+                        <input type="hidden" name="aktiv" value="{{ '0' if r.aktiv else '1' }}">
+                        <button class="knopf klein zweitrangig" type="submit"
+                                title="{{ 'Deaktivieren – nur ohne aktive Benutzer' if r.aktiv else 'Wieder aktivieren' }}">{{ 'Deaktivieren' if r.aktiv else 'Aktivieren' }}</button>
+                    </form>
+                {% else %}
+                    <span class="dezent" title="Systemrolle">gesperrt</span>
+                {% endif %}
+            </td>
+        </tr>
+    {% else %}
+        <tr><td colspan="9" class="dezent">Noch keine Rollen – migrate.py legt die Basisrollen und Startvarianten an.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Neue Rolle (Variante)</h2>
+<form method="post" action="/parametrierung/rollen" class="formular karte rollen-neu" style="max-width:760px">
+    <div class="formzeile">
+        <label>Name <input type="text" name="name" required maxlength="100" placeholder="z. B. Service Klima"></label>
+        <label class="schmal">Basisrolle
+            <select name="basisrolle" required>
+                {% for key, name in basisrollen %}<option value="{{ key }}" {{ 'selected' if key == 'montage' }}>{{ name }}</option>{% endfor %}
+            </select></label>
+        <label class="schmal">Gewerk
+            <select name="gewerk">
+                {% for key, name in gewerke %}<option value="{{ key }}">{{ name }}</option>{% endfor %}
+            </select></label>
+    </div>
+    <div class="formzeile">
+        <label class="kontrollfeld" title="Service-Einsätze (Terminart Service) statt Montage-Einsätze"><input type="checkbox" name="service"> Service</label>
+        <label class="kontrollfeld" title="Handelsvertreter: nur mit Basisrolle Außendienst sinnvoll – setzt das Kennzeichen „terminiert selbst“"><input type="checkbox" name="handelsvertreter"> Handelsvertreter</label>
+        <label class="schmal" title="Optional – sonst automatisch aus dem Namen (Kleinbuchstaben, Ziffern, _)">Schlüssel (optional)
+            <input type="text" name="key" maxlength="40" pattern="[a-z][a-z0-9_]{1,39}" placeholder="automatisch"></label>
+    </div>
+    <button class="knopf" type="submit">Rolle anlegen</button>
+    <span class="dezent">Der Schlüssel entsteht aus dem Namen (z. B. „Service Klima“ → <code>service_klima</code>) und bleibt danach fest.</span>
+</form>
+{% endblock %}

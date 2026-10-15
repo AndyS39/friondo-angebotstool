@@ -31,6 +31,7 @@ from starlette.requests import ClientDisconnect
 from app import config
 from app.db import SessionLocal
 from app.models import Benutzer
+from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 
 COOKIE_NAME = "angebotstool_sitzung"
 COOKIE_VERSION = "v2"
@@ -47,7 +48,11 @@ OFFENE_PFADE = ("/login", "/logout", "/static", "/signatur/extern",
 PIN_WECHSEL_PFAD = "/pin-wechsel"
 # v32 (PLAN_V19 Phase 164): /suche – die Route prüft die Rolle selbst (Montage und
 # Projektierung erhalten 403, Außendienst nur eigene Kunden)
-AUSSENDIENST_PFADE = ("/suche", "/erfassung", "/leads", "/signatur", "/statistik",
+# v33 (PLAN_V20 Phase 169, Rückfrage R4 Agent K): /kalender (inkl. /kalender/daten.json
+# und Unterpfade) für Außendienst und Handelsvertreter (Basisrolle aussendienst +
+# Kennzeichen) nur lesend – Schreibrouten (Verschieben) sperrt kalender_zentral.nur_lesen
+# in der Route (403), die Pfadtabelle kennt für den Außendienst keine Schreibliste
+AUSSENDIENST_PFADE = ("/suche", "/kalender", "/erfassung", "/leads", "/signatur", "/statistik",
                       "/meine-angebote", "/vorgaenge", "/benachrichtigungen",
                       # v12 (Phase 81): AD-Sicht des Lead-Moduls (Meine
                       # Termine, No-Show/Verschieben) – Routen prüfen selbst
@@ -62,17 +67,18 @@ BUERO_ROLLEN = ("admin", "innendienst")
 # v11 (Phase 70): Hauptrolle projektierung – Projektierung voll, Angebote/
 # Erfassungen/Kunden nur lesend, Parametrierung nur die drei Projektierungs-
 # Stammseiten. Hauptrolle montage – ausschließlich der mobile /montage-Bereich.
-PROJEKTIERUNG_PFADE = ("/suche", "/projektierung", "/montage", "/benachrichtigungen",
+PROJEKTIERUNG_PFADE = ("/suche", "/kalender", "/projektierung", "/montage", "/benachrichtigungen",
                        "/kunden", "/erfassungen", "/angebote",
+                       "/vorgaenge",   # v33 (PLAN_V20 Phase 168): Vorgangsakte lesend – „Service-Einsatz planen“
                        "/parametrierung/projektierung-logik",
                        "/parametrierung/teams", "/parametrierung/subunternehmer",
                        "/parametrierung/stuecklisten",       # V4 Phase 93.2
                        "/login", "/logout", "/static", PIN_WECHSEL_PFAD,
                        "/einstellungen")   # v30 (Phase 145): Darstellung je Benutzer
-PROJEKTIERUNG_SCHREIBEN = ("/projektierung", "/montage", "/benachrichtigungen",
+PROJEKTIERUNG_SCHREIBEN = ("/kalender", "/projektierung", "/montage", "/benachrichtigungen",
                            "/parametrierung", "/login", "/logout", PIN_WECHSEL_PFAD,
                            "/einstellungen")   # v30 (Phase 145)
-MONTAGE_PFADE = ("/suche", "/montage", "/benachrichtigungen", "/login", "/logout", "/static",
+MONTAGE_PFADE = ("/suche", "/kalender", "/montage", "/benachrichtigungen", "/login", "/logout", "/static",
                  PIN_WECHSEL_PFAD, "/einstellungen")   # v30 (Phase 145): Darstellung
 # v15 (Phase 82): Montage erreicht die Vorgangs-Galerie (ansehen + Upload –
 # die Datei-/Upload-Routen prüfen selbst über galerie.darf_hochladen, dass
@@ -84,13 +90,13 @@ _ANGEBOTE_LESEPFAD = re.compile(r"^/angebote(/\d+/(pdf|lieferschein\.pdf))?$")
 # v12 (Phase 81): Hauptrolle leadmanagement – Lead-Modul voll, Kunden
 # lesend/schreibend, Vorgangsakte, Angebote nur Liste+PDF, Erfassungen lesend;
 # Parametrierung nur Quellen & Kampagnen + Steuerdatei (Plan 81)
-LEADMANAGEMENT_PFADE = ("/suche", "/lead-management", "/api/leads", "/benachrichtigungen",
+LEADMANAGEMENT_PFADE = ("/suche", "/kalender", "/lead-management", "/api/leads", "/benachrichtigungen",
                         "/kunden", "/vorgaenge", "/erfassungen", "/angebote",
                         "/parametrierung/lead-quellen",
                         "/parametrierung/lead-logik",
                         "/login", "/logout", "/static", PIN_WECHSEL_PFAD,
                         "/einstellungen")   # v30 (Phase 145): Darstellung je Benutzer
-LEADMANAGEMENT_SCHREIBEN = ("/lead-management", "/api/leads",
+LEADMANAGEMENT_SCHREIBEN = ("/kalender", "/lead-management", "/api/leads",
                             "/benachrichtigungen", "/kunden", "/vorgaenge",
                             "/parametrierung", "/login", "/logout", PIN_WECHSEL_PFAD,
                             "/einstellungen")   # v30 (Phase 145)
@@ -357,7 +363,7 @@ def sitzungsdauer_s(session, benutzer, angemeldet_bleiben: bool = False) -> int:
         tage = int(_einstellung(session, "sitzung_tage_mobil", str(SITZUNG_TAGE_MOBIL)))
     except ValueError:
         tage = SITZUNG_TAGE_MOBIL
-    rolle = getattr(benutzer, "rolle", "")
+    rolle = getattr(benutzer, "basisrolle", None) or getattr(benutzer, "rolle", "")   # v33: Basisrolle
     if angemeldet_bleiben and rolle in MOBILE_ROLLEN:
         return max(1, tage) * 24 * 3600
     return max(1, stunden) * 3600
@@ -445,7 +451,7 @@ def standardbenutzer_anlegen() -> None:
             session.add(Benutzer(name="Admin", rolle="admin",
                                  pin_hash=pin_hash("1234"), pin_wechsel_noetig=True))
             session.commit()
-        elif not session.query(Benutzer).filter(Benutzer.rolle == "admin").count():
+        elif not session.query(Benutzer).filter(rollen_modul.filter_basis("admin")).count():
             admin = session.query(Benutzer).filter(Benutzer.name == "Admin").first()
             if admin is not None:
                 admin.rolle = "admin"
@@ -581,6 +587,9 @@ class RollenMiddleware(BaseHTTPMiddleware):
             # v27: Kontext für Jinja-Globals ohne Request (reicht in den Worker-Thread)
             from app import anfrage
             anfrage.KONTEXT.set({"lm_demo_badge": getattr(request.state, "lm_demo_badge", None)})
+            # v33 (PLAN_V20 Phase 172): Schreibsitzung für POST/PUT/PATCH/DELETE – Rückfall für
+            # db.get_session und Helfer ohne Request-Objekt (Vorschlag A 4a)
+            anfrage.METHODE.set(request.method)
             antwort = await self._weiterleiten(request, benutzer, pfad, call_next)
             status = antwort.status_code
             # v30 (Phase 145): Cookie „darstellung“ an die gespeicherte Wahl angleichen
@@ -613,7 +622,7 @@ class RollenMiddleware(BaseHTTPMiddleware):
         if (getattr(benutzer, "pin_wechsel_noetig", False)
                 and not pfad.startswith(PIN_WECHSEL_PFAD)):
             return RedirectResponse(PIN_WECHSEL_PFAD, status_code=303)
-        if benutzer.rolle == "projektierung":
+        if benutzer.basisrolle == "projektierung":
             # "/" bleibt erreichbar: Landeplatz im Demo-Modus (Portal
             # zeigt die nicht anklickbare Projektierungs-Karte)
             if pfad != "/" and not pfad.startswith(PROJEKTIERUNG_PFADE):
@@ -624,13 +633,13 @@ class RollenMiddleware(BaseHTTPMiddleware):
             # Angebote nur lesend: Liste + PDF (kein Editor, kein EK/DB)
             if pfad.startswith("/angebote") and not _ANGEBOTE_LESEPFAD.match(pfad):
                 return RedirectResponse("/angebote", status_code=303)
-        elif benutzer.rolle == "montage":
+        elif benutzer.basisrolle == "montage":
             # Bugfix 27.09.2026: auch "/" umleiten - das Portal hat fuer
             # die Rolle Montage nichts Klickbares (Handy-Login strandete)
             if (not pfad.startswith(MONTAGE_PFADE)
                     and not _MONTAGE_GALERIE.match(pfad)):
                 return RedirectResponse("/montage", status_code=303)
-        elif benutzer.rolle == "leadmanagement":
+        elif benutzer.basisrolle == "leadmanagement":
             if pfad != "/" and not pfad.startswith(LEADMANAGEMENT_PFADE):
                 return RedirectResponse("/lead-management", status_code=303)
             if (request.method != "GET"
@@ -639,13 +648,13 @@ class RollenMiddleware(BaseHTTPMiddleware):
             # Angebote nur Liste + PDF (kein Editor, kein EK/DB)
             if pfad.startswith("/angebote") and not _ANGEBOTE_LESEPFAD.match(pfad):
                 return RedirectResponse("/angebote", status_code=303)
-        elif benutzer.rolle not in BUERO_ROLLEN and not pfad.startswith(AUSSENDIENST_PFADE):
+        elif benutzer.basisrolle not in BUERO_ROLLEN and not pfad.startswith(AUSSENDIENST_PFADE):
             # v32 (PLAN_V19 Phase 161) [ANNAHME]: Außendienst mit nur einer Rolle landet bei „/“
             # auf „Mein Tag“ (/leads), sonst wie bisher auf der mobilen Erfassung
-            if pfad == "/" and benutzer.rolle == "aussendienst" and benutzer.rollen_liste == ["aussendienst"]:
+            if pfad == "/" and benutzer.basisrolle == "aussendienst" and benutzer.basisrollen == ["aussendienst"]:
                 return RedirectResponse("/leads", status_code=303)
             return RedirectResponse("/erfassung", status_code=303)
-        if (benutzer.rolle == "innendienst" and pfad.startswith(ADMIN_PFADE)
+        if (benutzer.basisrolle == "innendienst" and pfad.startswith(ADMIN_PFADE)
                 and not _INNENDIENST_BENUTZER_AUSNAHME.match(pfad)):
             return RedirectResponse("/", status_code=303)
         return await call_next(request)

@@ -97,7 +97,7 @@ def folgepositionen_lesen(session) -> dict[str, list[str]]:
 def _folgepositionen_laden() -> dict[str, list[str]]:
     """Ohne übergebene Regeln (z. B. Tests, Aufrufe ohne Sitzung): kurze Lesesitzung."""
     from app import db
-    with db.kurz() as s:
+    with db.kurz(schreibend=False) as s:   # v33 (Phase 172): nur lesen - keine Schreibtransaktion
         return folgepositionen_lesen(s)
 
 

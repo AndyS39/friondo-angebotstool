@@ -25,7 +25,7 @@
         <a class="knopf klein zweitrangig"
            href="/lead-management/lead/{{ vorgang.id }}/termin/vorab">{{ symbol('telefon') }} Vorab-Gespräch</a>
         <a class="knopf klein zweitrangig"
-           href="/lead-management/kalender?ad_id={{ kalender_ad or '' }}">{{ symbol('kalender') }} Kalender</a>
+           href="/kalender?gruppe=vertrieb{% if kalender_ad %}&person={{ kalender_ad }}{% endif %}">{{ symbol('kalender') }} Kalender</a>
     </div>
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
@@ -198,9 +198,13 @@
     <h2>{{ symbol('kalender') }} Terminierung <span class="dezent">{{ vorgemerkte | length }} vorgemerkte{{ 'r' if vorgemerkte | length == 1 }} Termin{{ 'e' if vorgemerkte | length != 1 }}{% if objekte_hinweis %} · {{ objekte_hinweis }}{% endif %}</span></h2>
     <ul class="lmt-liste">
         {% for t in vorgemerkte %}
+        {%- set os_hinweis = outlook_hinweis_person(t.ad_id) if (outlook_hinweis_person is defined and t.ad_id) else '' -%}
         <li><strong>{{ t.beginn | de_datum('%a %d.%m.%Y · %H:%M') }} Uhr</strong>
             · {{ benutzer_map[t.ad_id].name if t.ad_id and benutzer_map.get(t.ad_id) else '?' }}
-            {% if mehrere_objekte %}· {{ t.adresse or '?' }}{% endif %}</li>
+            {% if mehrere_objekte %}· {{ t.adresse or '?' }}{% endif %}
+            {# v33 (PLAN_V20 Phase 170, O): kein Outlook-Eintrag möglich (Handelsvertreter ohne
+               Friondo-Postfach) – Terminbestätigung und Tool-Kalender bleiben unberührt #}
+            {% if os_hinweis %}· <span class="outlook-hinweis" data-rolle="outlook-hinweis" title="Kein Outlook-Eintrag möglich – Terminbestätigung und Tool-Kalender bleiben">{{ symbol('warnung') }} {{ os_hinweis }}</span>{% endif %}</li>
         {% endfor %}
     </ul>
     <form method="post" action="/lead-management/lead/{{ vorgang.id }}/termin/terminierung" class="formular lmt-terminierung-form">
@@ -224,6 +228,28 @@
             <span class="dezent">Objekte ohne vorgemerkten Termin bleiben offen.</span>
         </div>
     </form>
+</section>
+{% endif %}
+
+{# v33 (PLAN_V20 Phase 170, Agent O): Outlook-Stand der aktiven Termine des Vorgangs – je Termin
+   eine Kopie im persönlichen Kalender des Vertrieblers (Lauf outlook-sync, TAIFUN liest von dort);
+   Stände ausstehend/ok/Fehler/in Outlook gelöscht, „HV ohne Postfach“ bei Handelsvertretern ohne
+   Friondo-Postfach. Template-Global outlook_status_map (eine Abfrage, kurze Sitzung, nie Netz). #}
+{% if aktive_termine and outlook_status_map is defined %}
+{% from "_outlook_status.html" import outlook_status_zeile %}
+{% set os_map = outlook_status_map('vot', aktive_termine) %}
+<section class="karte lmt-outlook" id="lmt-outlook" data-rolle="outlook">
+    <h2>{{ symbol('kalender') }} Outlook <span class="dezent">Kopie im persönlichen Kalender des eingeteilten Vertrieblers (TAIFUN liest von dort) · Übertragung durch den Lauf outlook-sync (etwa eine Minute)</span></h2>
+    <ul class="lmt-liste">
+        {% for t in aktive_termine %}
+        {%- set os = os_map.get(t.id) -%}
+        <li><strong>{{ t.beginn | de_datum('%a %d.%m.%Y · %H:%M') if t.beginn }} Uhr</strong>
+            · {{ typ_namen.get(t.typ or 'vot', t.typ) }}{{ ' (' ~ status_namen.get(t.status, t.status) ~ ')' if t.status != 'geplant' }}
+            · {{ benutzer_map[t.ad_id].name if t.ad_id and benutzer_map.get(t.ad_id) else '?' }}
+            {{ outlook_status_zeile(os) }}
+            {% if os and os.stand != 'ok' %}<span class="dezent">{{ os.text }}</span>{% endif %}</li>
+        {% endfor %}
+    </ul>
 </section>
 {% endif %}
 

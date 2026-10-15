@@ -1,0 +1,166 @@
+/* v33 (PLAN_V20 Phase 169, Agent K): zentraler Planungskalender /kalender.
+   Nur semantische Tokens aus style.css (Hell/Dunkel, Token-Wächter tests/test_v30_design.py).
+   Aufbau: Kopf mit Ansicht/Datum, Filterzeile (Gruppen-Chips, Suche, Sa/So), Legende,
+   Raster = eine Zeile je Mitarbeiter (Spalte 1 sticky: Avatar + Name + Gruppe), je Tag eine
+   Zeitachse mit 15-Minuten-Raster (Hintergrundlinien aus --linie), Einträge absolut nach
+   Uhrzeit; Monat = Tageskästchen mit Punkten. Farben je Terminart über --kz-f. */
+
+.kz-seite { --kz-zeile: 30px; --kz-name: 220px; }
+.kz-kopf h1 { display: flex; align-items: center; gap: 0.5rem; }
+.kz-kopf h1 .symbol-svg { width: 1.2em; height: 1.2em; }
+.kz-aktionen { flex-wrap: wrap; gap: var(--a-3); row-gap: var(--a-2); }
+.kz-ansichten, .kz-navigation { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.kz-ansichten .pj-chip, .kz-navigation .pj-chip { cursor: pointer; }
+.kz-datum { padding: 2px 6px; font: inherit; font-size: var(--t-s); }
+.kz-zeitraum { font-size: var(--t-m); margin-left: var(--a-2); white-space: nowrap; }
+
+/* --- Filterzeile ----------------------------------------------------------------- */
+.kz-filter { display: flex; flex-wrap: wrap; gap: var(--a-3); align-items: center;
+  margin: var(--a-3) 0 var(--a-2); }
+.kz-gruppen { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.kz-gruppe { cursor: pointer; user-select: none; }
+.kz-gruppe input { position: absolute; opacity: 0; width: 0; height: 0; }
+.kz-gruppe.leer { opacity: 0.5; cursor: default; }
+.kz-zahl { display: inline-block; min-width: 1.3em; padding: 0 5px; margin-left: 2px; border-radius: 999px;
+  background: var(--flaeche-abgesetzt); color: var(--text-dezent); font-size: var(--t-xs); text-align: center; }
+.kz-gruppe.on .kz-zahl { background: var(--akzent); color: var(--akzent-text); }
+.kz-werkzeuge { display: flex; flex-wrap: wrap; gap: var(--a-2); align-items: center; margin-left: auto; }
+.kz-suche { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--linie-stark);
+  border-radius: var(--r-s); padding: 2px 8px; background: var(--flaeche-karte); color: var(--text-dezent); }
+.kz-suche input { border: 0; outline: 0; background: transparent; color: var(--text); font: inherit;
+  font-size: var(--t-s); width: 150px; }
+.kz-suche:focus-within { border-color: var(--akzent); box-shadow: 0 0 0 2px var(--akzent-glanz); }
+.kz-wochenende { cursor: pointer; }
+.kz-wochenende input { margin: 0 4px 0 0; accent-color: var(--akzent); }
+.kz-nur-person { display: inline-flex; align-items: center; gap: 4px; }
+.kz-chip-x { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 1rem;
+  line-height: 1; padding: 0 2px; }
+.kz-status { min-height: 1em; }
+.kz-hinweis { margin: 0; }
+
+/* --- Legende ----------------------------------------------------------------------- */
+.kz-legende { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-xs);
+  color: var(--text-dezent); margin: 0 0 var(--a-3); }
+.kz-legende span { display: inline-flex; align-items: center; gap: 4px; }
+.kz-lg { display: inline-block; width: 12px; height: 12px; border-radius: 3px;
+  background: var(--kz-f, var(--pj-muted)); border: 1px solid color-mix(in srgb, var(--kz-f, var(--pj-muted)) 60%, var(--text)); }
+
+/* --- Farben je Terminart (ein Token je Art) ----------------------------------------- */
+.kz-vot { --kz-f: var(--status-blau); }
+.kz-telefon { --kz-f: var(--status-gruen); }
+.kz-online { --kz-f: var(--status-violett); }
+.kz-sperrzeit { --kz-f: var(--status-grau); }
+.kz-montage { --kz-f: var(--pj-wp); }
+.kz-elektro { --kz-f: var(--pj-kl); }
+.kz-sub { --kz-f: var(--pj-pv); }
+.kz-feinplanung { --kz-f: var(--pj-info); }
+.kz-abnahme { --kz-f: var(--pj-wb); }
+.kz-sonstige { --kz-f: var(--pj-muted); }
+.kz-service { --kz-f: var(--status-orange); }
+.kz-krankheit, .kz-urlaub, .kz-abwesenheit { --kz-f: var(--status-grau); }
+.kz-belegt { --kz-f: var(--text-dezent); }
+.kz-lg.kz-belegt, .kz-eintrag.kz-belegt {
+  background: repeating-linear-gradient(135deg, var(--linie) 0 4px, var(--flaeche-karte) 4px 8px); }
+.kz-lg.kz-sperrzeit, .kz-eintrag.kz-sperrzeit {
+  background: repeating-linear-gradient(135deg, var(--flaeche-abgesetzt) 0 4px, var(--flaeche-karte) 4px 8px); }
+.kz-lg.kz-krankheit, .kz-lg.kz-urlaub, .kz-eintrag.kz-krankheit, .kz-eintrag.kz-urlaub, .kz-eintrag.kz-abwesenheit {
+  background: var(--status-grau-bg); }
+
+/* --- Raster ------------------------------------------------------------------------ */
+.kz-raster-rahmen { position: relative; border: 1px solid var(--linie); border-radius: var(--r-m);
+  background: var(--flaeche-karte); overflow: auto; max-height: calc(100vh - 290px); min-height: 160px; }
+.kz-raster { display: grid; grid-template-columns: var(--kz-name) repeat(var(--kz-tage, 5), minmax(var(--kz-tag-min, 160px), 1fr));
+  min-width: max-content; font-size: var(--t-s); }
+.kz-raster[aria-busy="true"] { opacity: 0.6; }
+.kz-zelle { border-bottom: 1px solid var(--linie); border-left: 1px solid var(--linie); min-height: var(--kz-zeile); }
+.kz-kopfzelle { position: sticky; top: 0; z-index: 3; background: var(--flaeche-abgesetzt); color: var(--text-dezent);
+  font-size: var(--t-xs); padding: 4px 6px; border-bottom: 1px solid var(--linie-stark); }
+.kz-kopfzelle.kz-heute { color: var(--akzent); font-weight: 700; }
+.kz-kopfzelle.kz-we { color: var(--text-dezent); background: var(--flaeche-hover); }
+.kz-kopfzelle .kz-stunden { display: flex; justify-content: space-between; margin-top: 2px; color: var(--text-dezent);
+  font-size: 0.65rem; letter-spacing: 0.02em; }
+.kz-name { position: sticky; left: 0; z-index: 2; background: var(--flaeche-karte); display: flex; align-items: center;
+  gap: 8px; padding: 2px 8px; border-left: 0; color: var(--text); }
+.kz-name.kz-kopfzelle { z-index: 4; background: var(--flaeche-abgesetzt); }
+.kz-name .kz-name-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.kz-name .kz-name-text b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kz-name .kz-name-text small { color: var(--text-dezent); font-size: var(--t-xs); }
+.kz-gruppenkopf { grid-column: 1 / -1; position: sticky; left: 0; background: var(--flaeche-abgesetzt);
+  color: var(--text-titel); font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 3px 8px; border-bottom: 1px solid var(--linie); border-top: 1px solid var(--linie); cursor: pointer; z-index: 2; }
+.kz-gruppenkopf .kz-zahl { margin-left: 6px; }
+.kz-gruppenkopf::before { content: "▾"; display: inline-block; width: 1em; }
+.kz-gruppenkopf.zu::before { content: "▸"; }
+.kz-tag { position: relative; overflow: hidden;
+  background-image: repeating-linear-gradient(to right, var(--linie) 0 1px, transparent 1px var(--kz-stunde, 25%));
+  background-origin: content-box; }
+.kz-tag.kz-we { background-color: var(--flaeche-abgesetzt); }
+.kz-tag.kz-heute-tag { box-shadow: inset 0 0 0 1px var(--akzent-glanz); }
+.kz-tag.drop { outline: 2px solid var(--akzent); outline-offset: -2px; background-color: var(--akzent-flaeche); }
+.kz-tag.kz-frei { cursor: cell; }
+
+/* Einträge (absolut nach Uhrzeit; Lane = Zeile bei Überlappung) */
+.kz-eintrag { position: absolute; top: 2px; height: calc(var(--kz-zeile) - 6px); box-sizing: border-box;
+  display: flex; align-items: center; gap: 4px; padding: 0 5px; border-radius: 5px; overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis; font-size: var(--t-xs); line-height: 1.1; cursor: pointer;
+  color: var(--text); border: 1px solid var(--kz-f, var(--pj-muted)); border-left-width: 4px;
+  background: color-mix(in srgb, var(--kz-f, var(--pj-muted)) 18%, var(--flaeche-karte)); text-decoration: none; }
+.kz-eintrag:hover { background: color-mix(in srgb, var(--kz-f, var(--pj-muted)) 30%, var(--flaeche-karte)); }
+.kz-eintrag.kz-ganz { border-left-width: 1px; border-style: solid; font-style: normal; }
+.kz-eintrag.kz-vorgemerkt { border-style: dashed; color: var(--text-dezent); background: var(--flaeche-karte); }
+.kz-eintrag.kz-unbestaetigt { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--kz-f) 22%, var(--flaeche-karte)) 0 5px, var(--flaeche-karte) 5px 9px); }
+.kz-eintrag.kz-belegt, .kz-eintrag.kz-sperrzeit { color: var(--text-dezent); cursor: default; border-color: var(--linie-stark); border-left-width: 1px; }
+.kz-eintrag.kz-krankheit, .kz-eintrag.kz-urlaub, .kz-eintrag.kz-abwesenheit { cursor: default; color: var(--text-dezent); border-color: var(--linie-stark); }
+.kz-eintrag.kz-ohne-link { cursor: default; }
+.kz-eintrag[draggable="true"] { cursor: grab; }
+.kz-eintrag.kz-zieht { opacity: 0.45; }
+.kz-eintrag b { font-weight: 600; }
+.kz-eintrag .kz-zeit { color: var(--text-dezent); font-variant-numeric: tabular-nums; }
+.kz-eintrag .kz-ort { color: var(--text-dezent); }
+.kz-eintrag:focus-visible { outline: 2px solid var(--fokus); outline-offset: 1px; }
+
+/* Tagesansicht: eine breite Zeitachse, Stundenbeschriftung im Kopf, größere Einträge */
+.kz-raster.kz-ansicht-tag { --kz-tag-min: 900px; }
+.kz-raster.kz-ansicht-tag .kz-eintrag { font-size: var(--t-s); }
+
+/* Monat: Tageskästchen je Zeile mit Punkten/Zählern */
+.kz-raster.kz-ansicht-monat { --kz-tag-min: 34px; }
+.kz-monat-zelle { position: relative; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 2px; padding: 3px;
+  min-height: var(--kz-zeile); border-bottom: 1px solid var(--linie); border-left: 1px solid var(--linie); cursor: cell; }
+.kz-monat-zelle.kz-we { background: var(--flaeche-abgesetzt); }
+.kz-monat-zelle.kz-abwesend { background: var(--status-grau-bg); }
+.kz-monat-zelle.drop { outline: 2px solid var(--akzent); outline-offset: -2px; }
+.kz-punkt { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--kz-f, var(--pj-muted));
+  border: 1px solid color-mix(in srgb, var(--kz-f, var(--pj-muted)) 60%, var(--text)); cursor: pointer; }
+.kz-punkt.kz-belegt { background: repeating-linear-gradient(135deg, var(--linie) 0 2px, var(--flaeche-karte) 2px 4px); }
+.kz-punkt[draggable="true"] { cursor: grab; }
+.kz-punkt:focus-visible { outline: 2px solid var(--fokus); }
+.kz-mehr { font-size: 0.62rem; color: var(--text-dezent); align-self: center; }
+
+/* Dialoge */
+.kz-dialog .formular { padding: var(--a-4); display: flex; flex-direction: column; gap: var(--a-2); }
+.kz-dialog h3 { margin: 0; }
+.kz-dialog ul { margin: 0; padding-left: 1.2em; }
+.kz-dialog-aktionen { display: flex; gap: var(--a-2); justify-content: flex-end; margin-top: var(--a-2); }
+.kz-neu-suche { width: 100%; }
+.kz-neu-suche input { width: 100%; }
+.kz-neu-liste { max-height: 40vh; overflow-y: auto; display: flex; flex-direction: column; }
+.kz-neu-treffer { display: block; padding: 6px 8px; border-bottom: 1px solid var(--linie); color: var(--text);
+  text-decoration: none; border-radius: var(--r-s); }
+.kz-neu-treffer:hover, .kz-neu-treffer:focus-visible { background: var(--flaeche-hover); }
+.kz-neu-treffer b { display: block; }
+.kz-neu-treffer small { color: var(--text-dezent); }
+.kz-neu-leer { padding: 6px 8px; color: var(--text-dezent); font-size: var(--t-s); }
+
+/* Mobil (unter 600 px): Tagesansicht, schmale Namensspalte, Filter untereinander */
+@media (max-width: 600px) {
+  .kz-seite { --kz-name: 110px; --kz-zeile: 34px; }
+  .kz-raster.kz-ansicht-tag { --kz-tag-min: 640px; }
+  .kz-raster-rahmen { max-height: none; }
+  .kz-werkzeuge { margin-left: 0; }
+  .kz-legende { display: none; }
+  .kz-name .kz-name-text small { display: none; }
+  .kz-name .avatar { display: none; }
+  .kz-zeitraum { font-size: var(--t-s); }
+  .kz-eintrag { height: calc(var(--kz-zeile) - 8px); }
+}

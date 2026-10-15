@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block titel %}{{ titel }} · {{ projekt.nummer }}{% endblock %}
+{% block titel %}{{ titel }} · {{ projekt.nummer if projekt else 'Service-Einsatz' }}{% endblock %}
 
 {% block inhalt %}
 {# v28 (PLAN_PROJ_V6 Phase 138): Typ wiederhol (Zeilen mit × und „+ weitere
@@ -11,7 +11,8 @@
     <div class="pj-btnrow" style="margin-top:0">
         <a class="pj-btn" href="/montage/einsatz/{{ termin.id }}">← Auftrag</a>
     </div>
-    <div class="pj-eyebrow">{{ projekt.nummer }} · {{ gewerk.sparte }}</div>
+    {# v33 (Phase 168): Servicebericht auch ohne Projekt/Gewerk (Service am Vorgang) #}
+    <div class="pj-eyebrow">{{ projekt.nummer if projekt else 'Service-Einsatz' }} · {{ gewerk.sparte if gewerk else ('Service ' ~ service_gewerk_name) }}</div>
     <h2>{{ titel }} <small class="dezent">{{ seiten_name }} · {{ seite + 1 }}/{{ seiten | length }}</small></h2>
     {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
     {% if eintrag.status == 'abgeschlossen' %}
@@ -45,6 +46,9 @@
             </div>
             {% elif f.typ == 'datum' %}
             <input type="date" name="{{ f.feld_key }}" value="{{ wert }}">
+            {% elif f.typ == 'zeit' %}
+            {# v33 (Phase 168): Uhrzeit im 15-Minuten-Takt, leer bleibt leer #}
+            <input type="time" name="{{ f.feld_key }}" step="900" data-leer-lassen value="{{ wert }}">
             {% elif f.typ == 'zahl' %}
             <input type="text" inputmode="decimal" name="{{ f.feld_key }}" value="{{ wert }}">
             {% elif f.typ == 'wiederhol' %}

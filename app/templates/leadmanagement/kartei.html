@@ -43,6 +43,8 @@
                     {% if vorgang.eingang_art == 'monday' %}<span class="abzeichen">monday</span>{% endif %}
                     {% if vorgang.vorab_angebot %}<span class="abzeichen lk-vorab" title="Angebot ohne Vor-Ort-Termin – keine Terminbestätigung (F10)">Vorab-Angebot</span>{% endif %}
                     {% if lead_kontext.wiederkehrer %}<span class="abzeichen ep">Wiederkehrer</span>{% endif %}
+                    {#- v33 (PLAN_V20 Phase 175): Lead hängt an Simons Gruppe, noch kein Mitglied gewählt #}
+                    {% if hv_gruppe_offen %}<span class="abzeichen status-versand-vorbereitet" data-rolle="hv-gruppe-badge" title="Über die Sammelaktion an Simons Gruppe verschoben – der Gruppenleiter wählt im Feld „Außendienst / Handelsvertreter“ ein Mitglied">{{ hv_gruppe_kennzeichen }}</span>{% endif %}
                     {% if vorgang.archiviert_am %}<span class="abzeichen" title="Im Lead-Management archiviert am {{ vorgang.archiviert_am.strftime('%d.%m.%Y') }}">Archiviert</span>{% endif %}
                     {%- if kopie_von %}<span class="abzeichen" title="Dupliziert (Sammelaktion)">Kopie von <a href="/lead-management/lead/{{ kopie_von.id }}">V{{ kopie_von.id }}</a></span>{% endif %}
                     {%- for k in kopien | default([]) %}<span class="abzeichen" title="Duplikat dieses Leads">Kopie: <a href="/lead-management/lead/{{ k.id }}">V{{ k.id }}</a></span>{% endfor %}

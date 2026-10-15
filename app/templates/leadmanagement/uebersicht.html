@@ -46,7 +46,7 @@
     <a class="kachel stat" href="/lead-management/anrufliste?versuche_min=3">
         <span class="stat-zahl {{ 'warn' if kpis.drei_versuche }}">{{ kpis.drei_versuche }}</span>≥ 3 Versuche offen
         <span class="lm-delta">davon {{ kpis.vier_versuche }} mit 4+ Versuchen</span></a>
-    <a class="kachel stat" href="/lead-management/kalender">
+    <a class="kachel stat" href="/kalender?gruppe=vertrieb">
         <span class="stat-zahl">{{ kpis.termine_heute }}</span>VOT-Termine heute
         <span class="lm-delta">{{ kpis.termine_text or 'je AD' }}</span></a>
     {% if kpis.posteingang %}

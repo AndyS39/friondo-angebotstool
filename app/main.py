@@ -80,6 +80,12 @@ async def lifespan(app: FastAPI):
     # v29 (PLAN_LEAD_V4 Phase 142): Antworten/Bounces aus termin@ alle 2 Minuten
     from app import lead_mail_abruf
     lead_mail_abruf.scheduler_starten()
+    # v33 (PLAN_V20 Phase 170): Outlook je Mitarbeiter – Läufe outlook-sync / outlook-ruecklesen
+    try:
+        from app import outlook_sync
+        outlook_sync.scheduler_starten()
+    except ImportError:
+        pass
     # v27 (Phase 129): Backup 02:30, SQLite-Pflege 02:40, Betriebs-Wache, Login-Protokoll
     betrieb.scheduler_registrieren()
     ok, text = db_modul.pool_invariante(scheduler.anzahl())
@@ -187,6 +193,12 @@ app.include_router(angebote.router)
 app.include_router(statistik.router)
 app.include_router(meine_angebote.router)
 app.include_router(versand.router)
+# v33 (PLAN_V20 Phase 169): zentraler Planungskalender /kalender
+try:
+    from app.routers import kalender_zentral
+    app.include_router(kalender_zentral.router)
+except ImportError:
+    pass
 
 
 def _start_kontext() -> dict:
@@ -208,7 +220,7 @@ def _start_kontext() -> dict:
         from app.models import Benutzer, Vorgang
         from datetime import datetime as dt
         buero = {b.id for b in session.query(Benutzer)
-                 if b.rolle in ("admin", "innendienst")}
+                 if b.basisrolle in ("admin", "innendienst")}
         from app import leadmanagement
         faellige = sum(
             1 for v in leadmanagement.ohne_demo(session.query(Vorgang))
@@ -248,10 +260,10 @@ def startseite(request: Request):
     Rollen-Middleware bei „/“ automatisch auf die mobile Erfassung um."""
     from fastapi.responses import RedirectResponse
     benutzer = request.state.benutzer
-    if benutzer is not None and benutzer.rolle == "aussendienst":
+    if benutzer is not None and benutzer.basisrolle == "aussendienst":
         # v32 (PLAN_V19 Phase 161) [ANNAHME]: Außendienst mit NUR dieser Rolle startet auf
         # „Mein Tag“ (/leads); Mehrfachrollen behalten die mobile Erfassung als Einstieg
-        if benutzer.rollen_liste == ["aussendienst"]:
+        if benutzer.basisrollen == ["aussendienst"]:
             return RedirectResponse("/leads", status_code=303)
         return RedirectResponse("/erfassung", status_code=303)
     # v11 (Phase 68/70): Projektierungs-Karte – Live-Kacheln nur, wenn das

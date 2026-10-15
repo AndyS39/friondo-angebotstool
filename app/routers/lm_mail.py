@@ -68,7 +68,7 @@ def _mit_meldung(pfad: str, meldung: str, fehler: bool = False) -> str:
 
 def _nur_admin(request: Request) -> None:
     benutzer = request.state.benutzer
-    if benutzer is None or benutzer.rolle != "admin":
+    if benutzer is None or benutzer.basisrolle != "admin":
         raise HTTPException(status_code=404)
 
 

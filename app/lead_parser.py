@@ -254,13 +254,14 @@ def postfach_abrufen(session: Session) -> dict:
     # dauert bis zu 60 s)
     from app.db import verbindung_freigeben
     verbindung_freigeben(session)
+    basis = graph_versand.basis_pfad(postfach)   # v33 (Phase 166): /users/<leads@> in beiden Modi
     token = graph_versand._token()
     if token is None:
-        return {"fehler": NICHT_ANGEMELDET}
+        return {"fehler": graph_versand.nicht_verbunden_text()}
     ergebnis = {"leads": 0, "unklar": 0}
     try:
         antwort = graph_versand._graph_aufruf(
-            "GET", f"/users/{postfach}/mailFolders/inbox/messages"
+            "GET", f"{basis}/mailFolders/inbox/messages"
                    "?$top=20&$filter=isRead eq false"
                    "&$select=id,subject,from,receivedDateTime,body", token)
         for nachricht in antwort.get("value", []):
@@ -279,7 +280,7 @@ def postfach_abrufen(session: Session) -> dict:
             verbindung_freigeben(session)
             try:   # als gelesen markieren, damit sie nicht erneut kommt
                 graph_versand._graph_aufruf(
-                    "PATCH", f"/users/{postfach}/messages/{graph_id}", token,
+                    "PATCH", f"{basis}/messages/{graph_id}", token,
                     {"isRead": True})
             except Exception:
                 pass
@@ -293,7 +294,7 @@ def parser_aktiv():
     kurzen Sitzung gelesen, damit das Umschalten ohne Neustart wirkt)."""
     from app import leadmanagement as kern
     from app.db import kurz
-    with kurz() as s:
+    with kurz(schreibend=False) as s:   # v33 (Phase 172): nur lesen - keine Schreibtransaktion
         an = kern.parameter_holen(s, "parser_modus", "aus") == "an"
     return True if an else "Parser aus"
 
@@ -308,7 +309,10 @@ def scheduler_lauf() -> dict:
     with kurz() as s:
         ergebnis = postfach_abrufen(s)
     fehler = ergebnis.get("fehler")
-    if fehler and fehler != NICHT_ANGEMELDET:
+    # v33 (Phase 166): „nicht angemeldet“ (delegiert) bzw. „Anmeldung der Anwendung
+    # fehlgeschlagen“ (anwendung) sind Zustände, keine Fehler
+    if fehler and not fehler.startswith((NICHT_ANGEMELDET, graph_versand.TEXT_NICHT_ANGEMELDET,
+                                         graph_versand.TEXT_ANWENDUNG_FEHLER)):
         raise RuntimeError(f"Postfach-Abruf: {fehler}"[:500])
     return ergebnis
 

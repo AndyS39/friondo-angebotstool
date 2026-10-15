@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
+{% from "_komponenten.html" import avatar %}
+{#- v33 (PLAN_V20 Phase 169, Agent K): zentraler Planungskalender /kalender – eine Zeile je
+    Mitarbeiter, Zeitachse waagerecht (15-Minuten-Raster von kalender_tagesbeginn bis
+    kalender_tagesende), Umschalter Tag | Woche | Monat, Sa/So einblendbar, Gruppen-Chips,
+    Namenssuche, Auswahl je Nutzer gemerkt. Die Einträge lädt kalender_zentral.js nachgelagert
+    über GET /kalender/daten.json; Drag → POST /kalender/verschieben (Konflikte → Bestätigung im
+    Dialog), Doppelklick → Suche (/kalender/suche.json) → Termin-Dialog des Moduls. Nur Tokens
+    (kalender_zentral.css); keine on*-Attribute mit tojson – die Daten liegen in einem
+    application/json-Block. Zurück-Leiste aus base.html. -#}
+
+{% block titel %}Kalender – Mitarbeiter{% endblock %}
+
+{% block mainklasse %}breit kz-seite{% endblock %}
+
+{% block inhalt %}
+<link rel="stylesheet" href="/static/kalender_zentral.css?v={{ css_version }}">
+<div class="seitenkopf kz-kopf">
+    <div>
+        <div class="pj-eyebrow">{{ {'projektierung': 'Projektierung', 'vertrieb': 'Lead-Management', 'eigene': 'Montage'}.get(einstieg, 'Planung') }}</div>
+        <h1>{{ symbol('kalender') }} Kalender</h1>
+    </div>
+    <div class="aktionen kz-aktionen">
+        <div class="kz-ansichten" role="tablist" aria-label="Ansicht">
+            {% for key, name in (('tag', 'Tag'), ('woche', 'Woche'), ('monat', 'Monat')) %}
+            <button type="button" class="pj-chip{{ ' on' if auswahl.ansicht == key }}" role="tab"
+                    data-ansicht="{{ key }}" aria-selected="{{ 'true' if auswahl.ansicht == key else 'false' }}">{{ name }}</button>
+            {% endfor %}
+        </div>
+        <div class="kz-navigation">
+            <button type="button" class="pj-chip" data-schritt="-1" title="Zurück" aria-label="Zurück">◀</button>
+            <button type="button" class="pj-chip" data-heute="1">Heute</button>
+            <button type="button" class="pj-chip" data-schritt="1" title="Weiter" aria-label="Weiter">▶</button>
+            <input type="date" class="pj-chip kz-datum" id="kz-datum" value="{{ auswahl.datum }}" aria-label="Datum">
+            <strong class="kz-zeitraum" id="kz-zeitraum"></strong>
+        </div>
+        {% if einstieg in ('projektierung', 'alle') %}
+        <a class="pj-btn" href="/projektierung/kalender">Team-Kalender</a>
+        {% endif %}
+        {% if einstieg in ('vertrieb', 'alle') and rechte.lead %}
+        <a class="pj-btn" href="/lead-management/dashboard">Meine Arbeit</a>
+        {% endif %}
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<div class="kz-filter" id="kz-filter">
+    {% if not nur_lesen %}
+    <div class="kz-gruppen" role="group" aria-label="Mitarbeiter-Gruppen">
+        {% for g in gruppen %}
+        <label class="pj-chip kz-gruppe{{ ' on' if g.key in auswahl.gruppen }}{{ ' leer' if not g.anzahl }}" data-gruppe="{{ g.key }}" title="{{ g.name }} – {{ g.anzahl }} Personen">
+            <input type="checkbox" name="gruppe" value="{{ g.key }}"{{ ' checked' if g.key in auswahl.gruppen }}{{ ' disabled' if not g.anzahl }}>
+            {{ g.name }} <span class="kz-zahl">{{ g.anzahl }}</span>
+        </label>
+        {% endfor %}
+        <button type="button" class="pj-chip kz-alle" data-gruppen-alle="1">Alle</button>
+        <button type="button" class="pj-chip kz-keine" data-gruppen-keine="1">Keine</button>
+    </div>
+    {% else %}
+    <p class="dezent kz-hinweis">Du siehst deinen eigenen Kalender und den deines Teams (nur lesend).</p>
+    {% endif %}
+    <div class="kz-werkzeuge">
+        <label class="kz-suche">{{ symbol('suche') }}<input type="search" id="kz-suche" placeholder="Name suchen …" value="{{ auswahl.q }}" aria-label="Mitarbeiter suchen"></label>
+        <label class="pj-chip kz-wochenende{{ ' on' if auswahl.wochenende }}"><input type="checkbox" id="kz-wochenende"{{ ' checked' if auswahl.wochenende }}> Sa/So</label>
+        {% if auswahl.person %}
+        <span class="pj-chip on kz-nur-person" id="kz-nur-person" data-person="{{ auswahl.person }}">Nur: <span id="kz-nur-person-name"></span>
+            <button type="button" class="kz-chip-x" title="Alle Personen anzeigen" aria-label="Alle Personen anzeigen">×</button></span>
+        {% endif %}
+        <span class="dezent kz-status" id="kz-status" aria-live="polite"></span>
+    </div>
+</div>
+
+<div class="kz-legende" aria-label="Legende">
+    <span><i class="kz-lg kz-vot"></i> Vor-Ort-Termin</span>
+    <span><i class="kz-lg kz-telefon"></i> Telefon</span>
+    <span><i class="kz-lg kz-online"></i> Online</span>
+    <span><i class="kz-lg kz-sperrzeit"></i> Sperrzeit</span>
+    <span><i class="kz-lg kz-montage"></i> Montage (WP)</span>
+    <span><i class="kz-lg kz-elektro"></i> Elektro</span>
+    <span><i class="kz-lg kz-sub"></i> Sub</span>
+    <span><i class="kz-lg kz-feinplanung"></i> Feinplanung</span>
+    <span><i class="kz-lg kz-abnahme"></i> Abnahme</span>
+    <span><i class="kz-lg kz-sonstige"></i> Sonstiges</span>
+    <span><i class="kz-lg kz-service"></i> Service</span>
+    <span><i class="kz-lg kz-krankheit"></i> Abwesenheit</span>
+    <span><i class="kz-lg kz-belegt"></i> Outlook belegt</span>
+    {% if not nur_lesen %}<span class="dezent">Ziehen verschiebt Tool-Termine (mit Konfliktprüfung), Klick öffnet den Termin, Doppelklick auf freie Fläche legt einen Termin an.</span>{% endif %}
+</div>
+
+<div class="kz-raster-rahmen" id="kz-rahmen">
+    <div class="kz-raster" id="kz-raster" aria-busy="true"></div>
+    <div class="leer-zustand kz-leer" id="kz-leer" hidden>Keine Mitarbeiter in der Auswahl – Gruppe wählen oder Suche leeren.</div>
+</div>
+
+{# Konfliktbestätigung beim Verschieben (kein Termin-Dialog – nur die Nachfrage) #}
+<dialog id="kz-konflikt" class="lm-dialog kz-dialog">
+    <div class="formular">
+        <h3>Konflikte beim Verschieben</h3>
+        <p class="dezent" id="kz-konflikt-ziel"></p>
+        <ul id="kz-konflikt-liste"></ul>
+        <div class="kz-dialog-aktionen">
+            <button type="button" class="knopf" id="kz-konflikt-ja">Trotzdem verschieben</button>
+            <button type="button" class="knopf zweitrangig" id="kz-konflikt-nein">Abbrechen</button>
+        </div>
+    </div>
+</dialog>
+
+{# Doppelklick: Kunde/Lead bzw. Projekt wählen, dann öffnet der Dialog des Moduls #}
+<dialog id="kz-neu" class="lm-dialog kz-dialog">
+    <div class="formular">
+        <h3 id="kz-neu-titel">Neuer Termin</h3>
+        <p class="dezent" id="kz-neu-text"></p>
+        <label class="kz-suche kz-neu-suche">{{ symbol('suche') }}<input type="search" id="kz-neu-suche" placeholder="Kunde oder Projekt suchen …" autocomplete="off" aria-label="Suchen"></label>
+        <div class="kz-neu-liste" id="kz-neu-liste" role="listbox"></div>
+        <div class="kz-dialog-aktionen">
+            <button type="button" class="knopf zweitrangig" id="kz-neu-schliessen">Schließen</button>
+        </div>
+    </div>
+</dialog>
+
+<script type="application/json" id="kz-kontext">{{ {
+    'einstieg': einstieg, 'personen': personen, 'gruppen': gruppen, 'auswahl': auswahl,
+    'raster': raster, 'nur_lesen': nur_lesen, 'rechte': rechte, 'heute': heute,
+    'daten_url': '/kalender/daten.json', 'verschieben_url': '/kalender/verschieben',
+    'einstellung_url': '/kalender/einstellung', 'suche_url': '/kalender/suche.json'
+} | tojson }}</script>
+<script src="/static/kalender_zentral.js?v={{ css_version }}" defer></script>
+{% endblock %}

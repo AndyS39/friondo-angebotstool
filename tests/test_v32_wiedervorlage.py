@@ -330,7 +330,10 @@ class WiedervorlageTests(unittest.TestCase):
             nachfassen.wiedervorlage_setzen(s, vorgang4, heute, self.ad2_id, "angebot_nachfassen")
             s.commit()
             karten = nachfassen.faellig_heute(s, self.ad_id)
-            ids = [k["vorgang"].id for k in karten]
+            # v33 (14.10.2026): nur die vier Vorgänge dieses Tests betrachten – die Versand-Tests
+            # oben setzen Fr 09.10.2026 + 3 Werktage = Mi 14.10.2026, am 14.10. sind sie selbst fällig
+            eigene = {vorgang.id, vorgang2.id, vorgang3.id, vorgang4.id}
+            ids = [k["vorgang"].id for k in karten if k["vorgang"].id in eigene]
             self.assertEqual(ids[:2], [vorgang2.id, vorgang.id])   # überfällig zuerst
             self.assertNotIn(vorgang3.id, ids)
             self.assertNotIn(vorgang4.id, ids)
@@ -350,7 +353,9 @@ class WiedervorlageTests(unittest.TestCase):
         # Seite des Außendienstes
         seite = self.ad.get("/leads")
         self.assertEqual(seite.status_code, 200)
-        self.assertIn("Fällig heute", seite.text)
+        # v33 (PLAN_V20 Phase 173, Protokoll A.5): Block „Fällig heute“ ist der Abschnitt „Wiedervorlage“
+        self.assertIn("<h2>Wiedervorlage</h2>", seite.text)
+        self.assertNotIn("<h2>Fällig heute", seite.text)
         self.assertIn(f"{PRAEFIX} Faellig", seite.text)
         self.assertIn("WP-Angebot vom 09.10.2026, Endbetrag 32.450,00 €", seite.text)
         self.assertIn(f'id="faellig-{vorgang_id}"', seite.text)
@@ -362,11 +367,13 @@ class WiedervorlageTests(unittest.TestCase):
         # Dialog „Nächster Schritt“ (Partial von N) hängt an der Karte
         self.assertIn(f"/vorgaenge/{vorgang_id}/naechster-schritt", seite.text)
         self.assertIn(f'data-ns-notiz="{vorgang_id}"', seite.text)
-        # ID mit Vertriebler-Filter sieht die Karten des gewählten Vertrieblers
+        # v33 (PLAN_V20 Phase 173, Protokoll A.3): Innendienst/Admin haben keine Anruf-Karten mehr
+        # (nur die Tabelle „Leads VOT“) – sie nutzen die Angebotsliste mit Verfolgungsfilter
         id_seite = self.id_client.get(f"/leads?vertriebler_id={self.ad_id}")
         self.assertEqual(id_seite.status_code, 200)
-        self.assertIn(f"{PRAEFIX} Faellig", id_seite.text)
-        self.assertNotIn(f"{PRAEFIX} Fremd", id_seite.text)
+        self.assertNotIn('id="wiedervorlage"', id_seite.text)
+        self.assertNotIn(f'id="faellig-{vorgang_id}"', id_seite.text)
+        self.assertIn(f"{PRAEFIX} Faellig", self.id_client.get("/angebote").text)
 
     def test_notiz_aus_dem_feld_landet_im_chat_mit_autor_ad(self):
         s = SessionLocal()
@@ -420,7 +427,7 @@ class WiedervorlageTests(unittest.TestCase):
             self.assertEqual(len(glocken), 1)
             self.assertTrue(glocken[0].text.startswith("Fällig heute: "), glocken[0].text)
             self.assertIn("Anruf", glocken[0].text)
-            self.assertEqual(glocken[0].link, "/leads#faellig")
+            self.assertEqual(glocken[0].link, "/leads#wiedervorlage")   # v33: Abschnitt „Wiedervorlage“
             self.assertEqual(s.query(MailAusgang).filter(MailAusgang.empfaenger == "rene@v32m.local").count(),
                              mails_vorher, "art nachfassen: keine Sofort-Mail")
             # zweiter Lauf am selben Tag legt keine zweite Glocke an

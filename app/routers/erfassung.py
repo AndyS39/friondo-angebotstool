@@ -444,7 +444,7 @@ def _erfassung_laden(request: Request, erfassung_id: int, session: Session):
     benutzer = _benutzer(request)
     if erfassung is None:
         return None
-    if benutzer.rolle == "aussendienst" and erfassung.benutzer_id != benutzer.id:
+    if benutzer.basisrolle == "aussendienst" and erfassung.benutzer_id != benutzer.id:
         return None
     return erfassung
 

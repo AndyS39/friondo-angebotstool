@@ -354,9 +354,23 @@ class Bestellung(Basis):
         self.assertIn("Bestellung angekündigt", start)
         self.assertIn('href="/angebote?verfolgung=bestellung_angekuendigt"', start)
         self.assertIn("Bestellung angekündigt", self.admin.get("/").text)
+        # v33 (PLAN_V20 Phase 173, Protokoll A.5): Kontrollwert „Vorgang in Heiße Kunden“ ersetzt durch
+        # „Vorgang in Wiedervorlage mit Badge Hoch, an erster Stelle bei Sortierung Priorität“
+        mein_tag = self.ad.get("/leads").text
+        wv = mein_tag[mein_tag.index('id="wiedervorlage"'):mein_tag.index('id="kommende-tage"')]
+        self.assertIn(f'id="faellig-{vid}"', wv)
+        karte = wv[wv.index(f'id="faellig-{vid}"'):]
+        self.assertIn('data-prio="hoch"', karte[:300])
+        erste = wv[wv.index('<article class="mt-wv-karte"'):]
+        self.assertIn('data-prio="hoch"', erste[:300])          # Sortierung Priorität: Hoch zuerst
+        self.assertIn("Bestellung angekündigt", karte[:karte.index("</article>")])
+        self.assertNotIn("Heiße Kunden", mein_tag)
         liste = self.admin.get("/angebote?verfolgung=bestellung_angekuendigt").text
         self.assertIn("<th", liste)
-        self.assertIn(">Verfolgung</th>", liste)
+        # v33 (PLAN_V20 Phase 174): Spaltenköpfe tragen Werkzeuge – der Titel steht im
+        # <span class="lm-th-text">, die Spalte ist über data-sort erkennbar
+        self.assertIn('data-sort="verfolgung"', liste)
+        self.assertIn(">Verfolgung</span>", liste)
         self.assertIn('value="bestellung_angekuendigt" selected', liste)
 
     def test_rueckgaengig(self):
@@ -616,7 +630,9 @@ class Oberflaeche(Basis):
 
     def test_angebotsliste_spalte_und_filter(self):
         html = self.admin.get("/angebote").text
-        self.assertIn(">Verfolgung</th>", html)
+        # v33 (PLAN_V20 Phase 174): Spaltenkopf mit Werkzeugen (Titel im <span class="lm-th-text">)
+        self.assertIn('data-sort="verfolgung"', html)
+        self.assertIn(">Verfolgung</span>", html)
         self.assertIn('<optgroup label="Verfolgungsstatus (v32)">', html)
         for status in verfolgung.STATUS:
             self.assertIn(f'value="{status}"', html)

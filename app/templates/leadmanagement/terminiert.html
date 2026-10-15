@@ -7,3 +7,21 @@
    „Angebot öffnen“ und Sparten-Chips kommt aus lead_boards.SPALTEN_TERMINIERT.
    Keine Sammelaktionen (H3). #}
 {% extends "leadmanagement/hauptboard.html" %}
+{# v33 (PLAN_V20 Phase 170, Agent O): Fußzeile mit dem Stand des Outlook-Syncs je Mitarbeiter
+   (Warteschlange outlook_auftraege, Termine von Handelsvertretern ohne Friondo-Postfach,
+   Postfächer außerhalb der Zugriffsgruppe) – das Board zeigt Leads mit Vor-Ort-Termin; der
+   Stand je Termin steht in der Kartei (Block Termine) und im Terminassistenten.
+   Template-Global outlook_zusammenfassung (app/outlook_sync.py, kurze Sitzung, nie Netz). #}
+{% block inhalt %}
+{{ super() }}
+{% if outlook_zusammenfassung is defined %}{% set os = outlook_zusammenfassung() %}{% if os %}
+<p class="outlook-zusammenfassung" data-rolle="outlook-zusammenfassung">Outlook-Sync je Mitarbeiter:
+    {{ os.offen }} Auftr{{ 'ag' if os.offen == 1 else 'äge' }} offen
+    · <span class="{{ 'os-fehler' if os.fehler_24h }}">{{ os.fehler_24h }} Fehler (24 h)</span>
+    · <span class="{{ 'os-warn' if os.ohne_postfach }}">{{ os.ohne_postfach }} Termin{{ 'e' if os.ohne_postfach != 1 }} ohne Postfach (HV ohne Postfach – kein Outlook-Eintrag)</span>
+    {% if os.in_outlook_geloescht %}· <span class="os-fehler">{{ os.in_outlook_geloescht }} in Outlook gelöscht – im Tool prüfen</span>{% endif %}
+    {% if os.ohne_zugriff %}· <span class="os-fehler">{{ os.ohne_zugriff }} Postf{{ 'ach' if os.ohne_zugriff == 1 else 'ächer' }} nicht in der Zugriffsgruppe</span>{% endif %}
+    {% if os.letzter_sync %}· letzter Lauf {{ os.letzter_sync | de_datum('%d.%m. %H:%M') }}{% endif %}
+    · Stand je Termin: Kartei → Termine, Terminassistent.</p>
+{% endif %}{% endif %}
+{% endblock %}

@@ -64,7 +64,7 @@ def herkunft_fuer(benutzer, gewuenscht: str = "") -> str:
     wunsch = (gewuenscht or "").strip().lower()
     if wunsch in HERKUNFT_WERTE:
         return wunsch
-    rolle = getattr(benutzer, "rolle", "") or ""
+    rolle = getattr(benutzer, "basisrolle", None) or getattr(benutzer, "rolle", "") or ""   # v33: Basisrolle
     return {"projektierung": "projektierung", "leadmanagement": "lead",
             "montage": "montage"}.get(rolle, "vertrieb")
 

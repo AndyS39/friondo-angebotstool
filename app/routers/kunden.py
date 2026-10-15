@@ -42,9 +42,30 @@ def _validieren(daten: dict) -> dict[str, str]:
     return fehler
 
 
+def _sortwert(k: Kunde, key: str):
+    """v33 (PLAN_V20 Phase 174): Sortierwert je Spalte der Kundenliste (None = leer, ans Ende)."""
+    from app import lead_boards
+    if key == "lead":
+        return lead_boards.sort_text(k.anzeige_name)
+    if key == "adresse":
+        return lead_boards.sort_text(f"{k.ort or ''} {k.plz or ''} {k.strasse or ''}")
+    if key in ("email", "telefon", "kunden_nr", "objektart"):
+        return lead_boards.sort_text(getattr(k, key, None))
+    if key == "kanal":
+        return lead_boards.sort_text(k.vertriebskanal)
+    if key == "interessen":
+        return lead_boards.sort_text(",".join(k.interessen))
+    if key == "angelegt":
+        return k.angelegt_am
+    return None
+
+
 @router.get("")
-def liste(request: Request, q: str = "", inaktive: bool = False,
-                session: Session = Depends(get_session)):
+def liste(request: Request, q: str = "", inaktive: bool = False, kanal: str = "",
+                objektart: str = "", session: Session = Depends(get_session)):
+    """v33 (PLAN_V20 Phase 174): Lead-Board-Layout – Sticky-Filter (Suche, Kanal und
+    Objektart als Chip-Selects, inaktive), Spalten je Nutzer (Katalog kunden), Sortierung per
+    Spaltenkopf (gemerkt, vor dem Rendern angewendet; Standard bleibt Firma/Nachname/Vorname)."""
     abfrage = session.query(Kunde)
     from app import leadmanagement
     demo_kunden = leadmanagement.demo_kunden_ids(session)   # v12: Demo-Leads
@@ -62,9 +83,37 @@ def liste(request: Request, q: str = "", inaktive: bool = False,
             Kunde.kunden_nr.ilike(suchwort),
             Kunde.email.ilike(suchwort),
         ))
+    if kanal:        # v33: Filter Vertriebskanal (Chip-Select)
+        abfrage = abfrage.filter(Kunde.vertriebskanal == kanal)
+    if objektart:    # v33: Filter Objektart (EFH/RH/REH/MFH, v23)
+        abfrage = abfrage.filter(Kunde.objektart == objektart)
     kunden = abfrage.order_by(Kunde.firma, Kunde.nachname, Kunde.vorname).all()
+    from app import lead_boards
+    from app.models import OBJEKTART_CODES
+    kanal_werte = sorted({w for (w,) in session.query(Kunde.vertriebskanal)
+                          .filter(Kunde.vertriebskanal != "").distinct() if w}
+                         | ({kanal} if kanal else set()))
+    # Objektarten (Code, Bezeichnung) aus dem Blatt „Objektarten“ der Lead-Steuerdatei (v23),
+    # Rückfall auf die Codes EFH/RH/REH/MFH
+    try:
+        from app import leadmanagement_logik
+        objektart_werte = [(o.code, o.bezeichnung) for o in leadmanagement_logik.hole_logik().objektarten]
+    except Exception:   # noqa: BLE001 – Steuerdatei fehlt/unlesbar: Codes reichen für den Filter
+        objektart_werte = []
+    if not objektart_werte:
+        objektart_werte = [(code, code) for code in OBJEKTART_CODES]
+    board = "kunden"
+    benutzer = request.state.benutzer
+    spalten = lead_boards.spalten_fuer(session, benutzer, board)
+    sortierung = lead_boards.sortierung_fuer(session, benutzer, board)
+    lead_boards.zeilen_sortieren(kunden, sortierung, wert=_sortwert)
     return render(request, "kunden/liste.html", aktiv="/kunden",
-                  kunden=kunden, q=q, inaktive=inaktive,
+                  kunden=kunden, q=q, inaktive=inaktive, kanal=kanal, objektart=objektart,
+                  kanal_werte=kanal_werte, objektart_werte=objektart_werte,
+                  board=board, spalten=spalten, sortierung=sortierung,
+                  ctx={"board": board, "sortierung": sortierung},
+                  spalten_fest=lead_boards.spalten_fest(board),
+                  nur_lesend=benutzer.basisrolle == "projektierung",
                   meldung=request.query_params.get("meldung", ""))
 
 

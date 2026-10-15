@@ -125,6 +125,86 @@ EINSTELLUNG_KEY = "boards_spalten"
 # Infoabend, Handelsvertreter – Infoabend/HV nutzen den Hauptboard-Katalog)
 KONFIG_BOARDS = ("hauptboard", "terminiert", "info", "handelsvertreter")
 SORT_RICHTUNGEN = ("auf", "ab")
+
+# --- v33 (PLAN_V20 Phase 174, Protokoll Claudia Castro 14.10.2026 Teil A.4): -------------
+# Lead-Board-Layout für alle Tabellen des Angebotstools. Je Tabelle ein Board-Key in
+# benutzer_einstellungen → boards_spalten (gleiche Ablage wie die Lead-Boards) und ein
+# Spaltenkatalog als Konstante (key, Standardtitel, Standard sichtbar); der
+# Standard-Spaltensatz ist die heutige Spaltenfolge der jeweiligen Tabelle, die feste
+# erste Spalte ist der Kundenname (Key lead) bzw. die Erfassung (Warteschlange).
+# Die Seiten selbst liegen bei den Routern (angebote, erfassungsliste, meine_angebote,
+# kunden; leads_vot baut Agent M in routers/leads.py auf diesen Bausteinen) – hier
+# liegen nur Katalog, Rollenregel, Ablage, Sortierung. KONFIG_BOARDS bleibt die Liste der
+# Lead-Boards (Alt-Tests), TABELLEN_BOARDS die der Angebotstool-Tabellen, ALLE_BOARDS beides.
+TABELLEN_BOARDS = ("leads_vot", "erfassungen", "angebote", "meine_angebote",
+                   "taifun_warteschlange", "kunden")
+ALLE_BOARDS = KONFIG_BOARDS + TABELLEN_BOARDS
+KATALOGE = {
+    # Leads VOT Desktop (Phase 173/174, Seite von M): Reihenfolge wie M's Rückfallliste in
+    # app/mein_tag.py (Kundenname fest vorn; Priorität = Hot-Ampel, Sparten = Chips)
+    "leads_vot": [
+        ("lead", "Kundenname", True), ("termin", "Termin", True),
+        ("prioritaet", "Priorität", True), ("sparten", "Sparten", True),
+        ("ort", "Ort", True), ("kanal", "Kanal", True),
+        ("vertriebler", "Vertriebler", True), ("status", "Status", True),
+    ],
+    # Erfassungen (/erfassungen): heutige Folge Datum · Kunde · Vertriebler · Ampel · Status ·
+    # Angebot – der Kundenname rückt als feste Spalte nach vorn; Sparte/Kanal/Typ stehen heute
+    # als Chips in der Kundenzelle und sind zusätzlich als eigene Spalten einblendbar
+    "erfassungen": [
+        ("lead", "Kunde", True), ("datum", "Datum", True), ("vertriebler", "Vertriebler", True),
+        ("ampel", "Ampel", True), ("status", "Status", True), ("angebot", "Angebot", True),
+        ("sparte", "Sparte", False), ("typ", "Art", False), ("kanal", "Kanal", False),
+        ("ort", "Ort", False), ("telefon", "Telefon", False),
+    ],
+    # Angebotsliste (/angebote): heutige Folge Angebots-Nr. · Kunde · Kanal · Vertriebler ·
+    # Datum · Status · Verfolgung · Endbetrag (A 4b: Gesamtbetrag nach USt und Rabatt statt
+    # „Brutto“) · DB (nur mit Kalkulation); „inaktiv“ = Kennzeichen „ohne Kontakt seit X
+    # Tagen“ von N (Phase 176, nachfassen.inaktiv_tage_fuer – Rückfall leer)
+    "angebote": [
+        ("lead", "Kunde", True), ("nummer", "Angebots-Nr.", True), ("kanal", "Kanal", True),
+        ("vertriebler", "Vertriebler", True), ("datum", "Datum", True), ("status", "Status", True),
+        ("verfolgung", "Verfolgung", True), ("endbetrag", "Endbetrag", True),
+        ("db", "DB", True), ("inaktiv", "Ohne Kontakt", False),
+        ("sparte", "Sparte", False), ("netto", "Netto", False), ("ort", "Ort", False),
+        ("wiedervorlage", "Wiedervorlage", False), ("ampel", "Hot-Ampel", False),
+    ],
+    # Meine Angebote (/meine-angebote, Außendienst): Kundenpreise, nie EK/DB
+    "meine_angebote": [
+        ("lead", "Kunde", True), ("nummer", "Angebots-Nr.", True), ("datum", "Datum", True),
+        ("status", "Status", True), ("verfolgung", "Verfolgung", True),
+        ("endbetrag", "Endbetrag", True), ("wiedervorlage", "Wiedervorlage", False),
+        ("sparte", "Sparte", False), ("ort", "Ort", False),
+    ],
+    # TAIFUN-Warteschlange (/erfassungen?status=In TAIFUN zu schreiben bzw. individuell-offen):
+    # feste erste Spalte „Erfassung“ (Datum + Sparte + Art, Link), dann Kunde …
+    "taifun_warteschlange": [
+        ("erfassung", "Erfassung", True), ("lead", "Kunde", True), ("sparte", "Sparte", True),
+        ("vertriebler", "Vertriebler", True), ("status", "Status", True),
+        ("angebot", "Angebot", True), ("ampel", "Ampel", False), ("kanal", "Kanal", False),
+        ("ort", "Ort", False), ("telefon", "Telefon", False),
+    ],
+    # Kunden (/kunden): heutige Folge Name/Firma · Adresse · E-Mail · Telefon · Kunden-Nr.
+    "kunden": [
+        ("lead", "Name / Firma", True), ("adresse", "Adresse", True), ("email", "E-Mail", True),
+        ("telefon", "Telefon", True), ("kunden_nr", "Kunden-Nr.", True),
+        ("kanal", "Vertriebskanal", False), ("objektart", "Objektart", False),
+        ("interessen", "Interessen", False), ("angelegt", "Angelegt am", False),
+    ],
+}
+# Feste erste Spalte je Tabelle (immer sichtbar, immer vorn, kein Ablageziel)
+SPALTEN_FEST_JE_BOARD = {"taifun_warteschlange": ("erfassung",)}
+# Rollenregel (fest, keine Rückfrage): EK, Deckungsbeitrag, DB-Ampel und Rabatt-Interna
+# stehen für die Basisrolle Außendienst (und ihre Varianten, Phase 167) in keinem Katalog –
+# auch nicht ausgeblendet; gespeicherte Keys werden beim Lesen gegen den Rollen-Katalog
+# gefiltert. Dieselben Spalten fehlen jeder Rolle ohne Kalkulationssicht (Projektierung,
+# Leadmanagement ohne Häkchen kalkulation_sichtbar – v11-Regel der Angebotsliste).
+INTERNE_SPALTEN = ("ek", "db", "db_ampel", "rabatt_intern")
+# Speicher-Route der Spaltenwerkzeuge (lm_boards.js): Standard im Lead-Modul; Alias unter
+# /einstellungen für Rollen, deren Pfadtabelle /lead-management nicht enthält (Projektierung –
+# auth.PROJEKTIERUNG_PFADE/_SCHREIBEN; /einstellungen steht seit v30 in jeder Rollenliste)
+SPALTEN_URL = "/lead-management/boards/spalten"
+SPALTEN_URL_ALIAS = "/einstellungen/spalten"
 # v29 (Phase 141): Spaltenbreite je Nutzer in Pixeln (leer = Standardbreite)
 BREITE_MIN = 60
 BREITE_MAX = 600
@@ -188,6 +268,72 @@ def _benutzer_id(benutzer) -> int:
     return int(getattr(benutzer, "id", benutzer) or 0)
 
 
+# --- v33 (Phase 174): Kataloge der Angebotstool-Tabellen, Rollenregel ------------------
+
+def board_bekannt(board: str) -> bool:
+    """Lead-Board (KONFIG_BOARDS) oder Angebotstool-Tabelle (TABELLEN_BOARDS)?"""
+    return board in ALLE_BOARDS
+
+
+def ist_tabelle(board: str) -> bool:
+    """Angebotstool-Tabelle (Phase 174) – kein Lead-Gate, Katalog nach Basisrolle."""
+    return board in TABELLEN_BOARDS
+
+
+def spalten_fest(board: str) -> tuple:
+    """Feste Spalten je Board: immer sichtbar, immer vorn, kein Ablageziel beim Ziehen
+    (Kundenname; bei der TAIFUN-Warteschlange die Erfassung)."""
+    return SPALTEN_FEST_JE_BOARD.get(board, SPALTEN_FEST)
+
+
+def _benutzer_objekt(session, benutzer):
+    """Benutzer-Objekt für die Rollenregel (v23-Aufrufer übergeben nur die ID)."""
+    if benutzer is None or hasattr(benutzer, "basisrolle"):
+        return benutzer
+    if session is None:
+        return None
+    try:
+        return session.get(Benutzer, int(benutzer))
+    except (TypeError, ValueError):
+        return None
+
+
+def kalkulation_sichtbar(benutzer) -> bool:
+    """Darf dieser Benutzer EK/DB sehen? Admin und Innendienst immer, Außendienst (und
+    Varianten) nie, Projektierung/Leadmanagement nur mit Häkchen kalkulation_sichtbar
+    (v11-Regel der Angebotsliste)."""
+    if benutzer is None:
+        return False
+    basis = getattr(benutzer, "basisrolle", "") or ""
+    if basis == "aussendienst":
+        return False
+    if basis in ("admin", "innendienst"):
+        return True
+    return bool(getattr(benutzer, "kalkulation_sichtbar", False))
+
+
+def katalog_fuer(board: str, benutzer, session=None, score: bool = False) -> list:
+    """Spaltenkatalog eines Boards NACH Rollenregel: (key, Standardtitel, Standard sichtbar).
+    Angebotstool-Tabellen aus KATALOGE – für die Basisrolle Außendienst (und jede Rolle
+    ohne Kalkulationssicht) fehlen EK/DB/DB-Ampel/Rabatt-Interna komplett (auch nicht
+    ausgeblendet); Lead-Boards weiter über spalten_basis (Score nur bei aktivem Scoring).
+    `benutzer` = Benutzer oder Benutzer-ID (dann wird er über die Session geladen)."""
+    if not ist_tabelle(board):
+        return spalten_basis(board, score=score)
+    basis = list(KATALOGE[board])
+    if not kalkulation_sichtbar(_benutzer_objekt(session, benutzer)):
+        basis = [(k, t, s) for k, t, s in basis if k not in INTERNE_SPALTEN]
+    return basis
+
+
+def spalten_url(benutzer) -> str:
+    """Speicher-Route der Spaltenwerkzeuge für diese Rolle (data-lm-spalten-url): die
+    Projektierung erreicht /lead-management nicht (Pfadtabellen in auth.py, dort tabu) und
+    nutzt den Alias unter /einstellungen; alle anderen Rollen die Lead-Route."""
+    basis = getattr(benutzer, "basisrolle", "") or ""
+    return SPALTEN_URL_ALIAS if basis in ("projektierung", "montage") else SPALTEN_URL
+
+
 def breite_normieren(wert) -> int | None:
     """v29: Spaltenbreite in Pixeln (60–600) oder None (= Standard)."""
     if wert in (None, "", 0, "0"):
@@ -245,8 +391,12 @@ def spalten_fuer(session: Session, benutzer, board: str) -> list[dict]:
     an, ‚lead' (Kundenname) bleibt vorn. Je Eintrag: key, titel (Anzeige =
     eigener Name oder Standard), standard (Standardtitel), name (eigener
     Name oder ''), sichtbar, breite (px oder None = Standard, v29).
-    `benutzer` = Benutzer oder Benutzer-ID."""
-    basis = spalten_basis(board, score=lead_v2.score_aktiv(session))
+    `benutzer` = Benutzer oder Benutzer-ID.
+    v33 (Phase 174): Angebotstool-Tabellen (TABELLEN_BOARDS) nutzen den Katalog der
+    Basisrolle (katalog_fuer) – gespeicherte Keys außerhalb des Rollen-Katalogs (EK/DB
+    eines Außendienstlers) fallen beim Lesen weg; feste Spalte je Board (spalten_fest)."""
+    basis = katalog_fuer(board, benutzer, session, score=lead_v2.score_aktiv(session))
+    fest = spalten_fest(board)
     titel = {k: t for k, t, _ in basis}
     konfig = spalten_konfig(session, benutzer, board)
     ergebnis, gesehen = [], set()
@@ -255,24 +405,26 @@ def spalten_fuer(session: Session, benutzer, board: str) -> list[dict]:
         if key in titel and key not in gesehen:
             gesehen.add(key)
             ergebnis.append({"key": key, "titel": sp["name"] or titel[key], "standard": titel[key],
-                             "name": sp["name"], "sichtbar": sp["sichtbar"] or key in SPALTEN_FEST,
+                             "name": sp["name"], "sichtbar": sp["sichtbar"] or key in fest,
                              "breite": sp.get("breite")})
     for key, t, s in basis:
         if key not in gesehen:
             ergebnis.append({"key": key, "titel": t, "standard": t, "name": "", "sichtbar": s,
                              "breite": None})
-    ergebnis.sort(key=lambda sp: 0 if sp["key"] in SPALTEN_FEST else 1)
+    ergebnis.sort(key=lambda sp: 0 if sp["key"] in fest else 1)
     return ergebnis
 
 
 def sortierung_fuer(session: Session, benutzer, board: str) -> dict | None:
     """Gemerkte Sortierung {key, richtung} des Nutzers für das Board (oder None);
     Keys außerhalb des AKTIVEN Katalogs zählen nicht (eine gemerkte Score-
-    Sortierung ruht, solange score_aktiv aus ist – gespeichert bleibt sie)."""
+    Sortierung ruht, solange score_aktiv aus ist – gespeichert bleibt sie;
+    v33: eine gemerkte DB-Sortierung zählt für den Außendienst nicht)."""
     sort = spalten_konfig(session, benutzer, board)["sort"]
     if not sort:
         return None
-    gueltig = {k for k, _, _ in spalten_basis(board, score=lead_v2.score_aktiv(session))}
+    gueltig = {k for k, _, _ in katalog_fuer(board, benutzer, session,
+                                             score=lead_v2.score_aktiv(session))}
     return sort if sort["key"] in gueltig else None
 
 
@@ -287,9 +439,13 @@ def spalten_speichern(session: Session, benutzer, board: str, liste=_BEHALTEN,
     Reihenfolge (weggelassen = Reihenfolge/Sichtbarkeit bleiben),
     sort = {key, richtung} | None (weggelassen = bleibt), umbenennen =
     (key, name) mit leer = Standard, zuruecksetzen = alles auf Standard,
-    v29: breite = (key, px | None) – None = Standardbreite (Doppelklick)."""
+    v29: breite = (key, px | None) – None = Standardbreite (Doppelklick).
+    v33 (Phase 174): Angebotstool-Tabellen speichern nur Keys des Rollen-Katalogs
+    (ein Außendienstler kann EK/DB auch nicht „mitspeichern“); feste Spalte je Board."""
     benutzer_id = _benutzer_id(benutzer)
-    gueltig = {k for k, _, _ in spalten_basis(board, score=True)}
+    fest = spalten_fest(board)
+    katalog = katalog_fuer(board, benutzer, session, score=True)
+    gueltig = {k for k, _, _ in katalog}
     alt = spalten_konfig(session, benutzer_id, board)
     namen = {sp["key"]: sp["name"] for sp in alt["spalten"] if sp["name"]}
     breiten = {sp["key"]: sp.get("breite") for sp in alt["spalten"] if sp.get("breite")}
@@ -304,7 +460,7 @@ def spalten_speichern(session: Session, benutzer, board: str, liste=_BEHALTEN,
             for sp in _konfig_normieren(liste if isinstance(liste, (list, tuple)) else [])["spalten"]:
                 if sp["key"] in gueltig and sp["key"] not in [n["key"] for n in neu_spalten]:
                     neu_spalten.append({"key": sp["key"],
-                                        "sichtbar": sp["sichtbar"] or sp["key"] in SPALTEN_FEST,
+                                        "sichtbar": sp["sichtbar"] or sp["key"] in fest,
                                         "name": sp["name"] or namen.get(sp["key"], ""),
                                         "breite": sp.get("breite") or breiten.get(sp["key"])})
         if sort is not _BEHALTEN:
@@ -319,7 +475,7 @@ def spalten_speichern(session: Session, benutzer, board: str, liste=_BEHALTEN,
             if key in gueltig:
                 if key not in [n["key"] for n in neu_spalten]:
                     # Spalte noch ohne Eintrag: Katalogreihenfolge/-sichtbarkeit übernehmen
-                    for k, _, s in spalten_basis(board, score=True):
+                    for k, _, s in katalog:
                         if k not in [n["key"] for n in neu_spalten]:
                             neu_spalten.append({"key": k, "sichtbar": s, "name": namen.get(k, "")})
                 for sp in neu_spalten:
@@ -331,7 +487,7 @@ def spalten_speichern(session: Session, benutzer, board: str, liste=_BEHALTEN,
             px = breite_normieren(px)
             if key in gueltig:
                 if key not in [n["key"] for n in neu_spalten]:
-                    for k, _, s in spalten_basis(board, score=True):
+                    for k, _, s in katalog:
                         if k not in [n["key"] for n in neu_spalten]:
                             neu_spalten.append({"key": k, "sichtbar": s, "name": namen.get(k, ""),
                                                 "breite": breiten.get(k)})
@@ -422,17 +578,23 @@ def _sortier_wert(z: dict, key: str):
     return None
 
 
-def zeilen_sortieren(zeilen: list, sort: dict | None, jetzt=None) -> list:
+def zeilen_sortieren(zeilen: list, sort: dict | None, jetzt=None, wert=None) -> list:
     """Zeilen einer Gruppe nach der gemerkten Spalte sortieren (auf/ab, leere
     Werte immer ans Ende); ohne Sortierung Eingang neueste zuerst.
     v29 (Phase 142, Vertrag L2): Zeilen mit Rang 0 (Mail nicht gesendet /
-    E-Mail falsch) stehen immer ganz oben – vor jeder Sortierung."""
+    E-Mail falsch) stehen immer ganz oben – vor jeder Sortierung.
+    v33 (Phase 174, Vertrag T): generisch für jede Tabelle – `wert(zeile, key)` liefert
+    den Sortierwert einer Zeile (None = leer, ans Ende; gemischte Typen fallen auf Text
+    zurück); mit `wert` bleibt ohne Sortierung die übergebene Reihenfolge erhalten
+    (Standardsortierung der Route), Zeilen dürfen Modelle oder Dicts sein."""
     jetzt = jetzt or datetime.now()
     if not sort or not sort.get("key"):
-        zeilen.sort(key=lambda z: z["eingang"] or jetzt, reverse=True)
+        if wert is None:
+            zeilen.sort(key=lambda z: z["eingang"] or jetzt, reverse=True)
     else:
         key, ab = sort["key"], sort.get("richtung") == "ab"
-        mit = [(z, _sortier_wert(z, key)) for z in zeilen]
+        holen = wert or _sortier_wert
+        mit = [(z, holen(z, key)) for z in zeilen]
         voll = [p for p in mit if p[1] is not None]
         leer = [p[0] for p in mit if p[1] is None]
         try:
@@ -440,8 +602,76 @@ def zeilen_sortieren(zeilen: list, sort: dict | None, jetzt=None) -> list:
         except TypeError:
             voll.sort(key=lambda p: str(p[1]), reverse=ab)
         zeilen[:] = [p[0] for p in voll] + leer
-    zeilen.sort(key=lambda z: 0 if z.get("rang0") else 1)   # stabil: Rang 0 zuerst
+    if wert is None:
+        zeilen.sort(key=lambda z: 0 if z.get("rang0") else 1)   # stabil: Rang 0 zuerst
     return zeilen
+
+
+def sort_text(wert) -> str | None:
+    """Sortierwert für Text (klein, ohne Rand); leer → None (ans Ende). Vertrag T."""
+    if wert is None:
+        return None
+    text = str(wert).strip().lower()
+    return text or None
+
+
+def sort_zahl(wert):
+    """Sortierwert für Zahlen/Cent; None oder nicht lesbar → None (ans Ende). Vertrag T."""
+    if wert is None or wert == "":
+        return None
+    try:
+        return float(wert)
+    except (TypeError, ValueError):
+        return None
+
+
+def angebot_sortwert(a, key: str, kunden: dict | None = None, vorgaenge: dict | None = None,
+                     vertriebler_namen: dict | None = None, extra: dict | None = None):
+    """v33 (Phase 174): Sortierwert je Spalte der Angebotslisten (Angebotsliste und Meine
+    Angebote, Kataloge angebote/meine_angebote). kunden = {id: Kunde}, vorgaenge = {id: Vorgang},
+    vertriebler_namen = {angebot_id: Name}, extra = {angebot_id: Wert} für die Spalte inaktiv
+    (Kennzeichen von N). None = leer (ans Ende)."""
+    kunde = (kunden or {}).get(a.kunde_id)
+    vorgang = (vorgaenge or {}).get(a.vorgang_id) if a.vorgang_id else None
+    if key == "lead":
+        return sort_text(kunde.anzeige_name if kunde else None)
+    if key == "nummer":
+        return sort_text((a.taifun_nummer or "") if a.extern else a.nummer)
+    if key == "kanal":
+        return sort_text(kunde.vertriebskanal if kunde else None)
+    if key == "vertriebler":
+        return sort_text((vertriebler_namen or {}).get(a.id))
+    if key == "datum":
+        return a.datum
+    if key == "status":
+        return sort_text(a.status)
+    if key == "verfolgung":
+        status = (vorgang.verfolgung_status if vorgang else "") or ""
+        if not status:
+            return None
+        try:
+            from app import verfolgung as verfolgung_modul
+            return list(verfolgung_modul.STATUS).index(status)
+        except (ImportError, AttributeError, ValueError):
+            return sort_text(status)
+    if key == "endbetrag":
+        return a.summen()["endbetrag"]
+    if key == "netto":
+        return None if a.extern else a.summen()["netto"]
+    if key == "db":
+        return None if a.extern else a.deckungsbeitrag()["db"]
+    if key == "inaktiv":
+        return sort_zahl((extra or {}).get(a.id))
+    if key == "sparte":
+        return sort_text(a.konfigurator_typ or "WP")
+    if key == "ort":
+        return sort_text(f"{kunde.plz or ''} {kunde.ort or ''}" if kunde else None)
+    if key == "wiedervorlage":
+        return (vorgang.wiedervorlage_am if vorgang else None) or getattr(a, "wiedervorlage_am", None)
+    if key == "ampel":
+        ampel = (vorgang.verfolgung_ampel if vorgang else "") or getattr(a, "verfolgung_ampel", "") or ""
+        return {"heiss": 0, "warm": 1, "kalt": 2}.get(ampel)
+    return None
 
 
 def mail_labels(vorgang) -> list[str]:
@@ -691,6 +921,9 @@ def board_zeilen(session: Session, benutzer, board: str, f: dict | None = None) 
             Vorgang.kopie_von_id.in_(ids)):
         kopien.setdefault(von, []).append(kid)
     hv_alle = {b.id for b in lead_v2.handelsvertreter_liste(session)}
+    # v33 (Phase 175, Vorschlag R 4c): Kennzeichen „Simons Gruppe (noch nicht verteilt)“ je
+    # Zeile – eine Abfrage je Board (lead_v2.hv_gruppe_offen_ids), Badge in der AD-Zelle
+    gruppe_offen = lead_v2.hv_gruppe_offen_ids(session, vorgaenge)
     # v25: Status-Filter trifft alle Phasen mit demselben Label („Kontaktiert“
     # = in_kontaktierung + qualifiziert)
     status_filter = phasen_mit_label(logik, f.get("status") or "")
@@ -782,6 +1015,7 @@ def board_zeilen(session: Session, benutzer, board: str, f: dict | None = None) 
             "kopie_von": v.kopie_von_id,
             "kopien": kopien.get(v.id, []),
             "hv_lead": bool(v.ad_id and v.ad_id in hv_alle),
+            "hv_gruppe_offen": v.id in gruppe_offen,   # v33 (Phase 175, R 4c)
         }
         if not _suche_passt(zeile, suche):
             continue
@@ -1050,7 +1284,7 @@ def zeile_aendern(session: Session, vorgang: Vorgang, feld: str, wert, benutzer=
                 session, vorgang, ziel_id, benutzer=benutzer,
                 erzwingen=bool(daten.get("erzwingen"))
                 and benutzer is not None
-                and benutzer.rolle in ("admin", "innendienst"))
+                and benutzer.basisrolle in ("admin", "innendienst"))
             ok = not meldung.startswith(("Nicht möglich", "Außendienstler nicht"))
             return ok, meldung
         meldung = lead_v2.leadmanager_zuweisen(session, vorgang, ziel_id, benutzer=benutzer)
@@ -1130,15 +1364,24 @@ def _sammel_hv_verschieben(session: Session, vorgaenge: list, params: dict, benu
     if ziel is None:
         return 0, ["Ziel-Handelsvertreter nicht gesetzt (Lead-Einstellungen → HV-Gruppen)"], \
             "Nicht möglich: Ziel-Handelsvertreter nicht gesetzt (Lead-Einstellungen → HV-Gruppen)."
+    # v33 (PLAN_V20 Phase 175): Ziel „Simons Gruppe“ statt eines festen Mitglieds – der Lead
+    # hängt am Gruppenleiter (ad_id = Simon) mit Kennzeichen „noch nicht verteilt“ (Marker-
+    # Aktivität lead_v2.hv_gruppe_offen_setzen), Simon verteilt über das Zuständigen-Dropdown
+    gruppe = ziel_key == "simon"
+    ziel_label = lead_v2.HV_GRUPPE_SIMON_NAME if gruppe else ziel.name
     ok, fehler, gruende = 0, [], []
     for v in vorgaenge:
         if v.ad_id == ziel.id:
-            ok += 1          # liegt schon beim Ziel – zählt als verschoben, keine Aktivität nötig
+            ok += 1          # liegt schon beim Ziel – zählt als verschoben, keine Zuweisungs-Aktivität
+            if gruppe:
+                lead_v2.hv_gruppe_offen_setzen(session, v, benutzer)
             continue
         meldung = lead_handelsvertreter.zuweisen(session, v, ziel.id, benutzer=benutzer,
                                                  erzwingen=False)
         if meldung.startswith("Zugewiesen an"):
             ok += 1
+            if gruppe:
+                lead_v2.hv_gruppe_offen_setzen(session, v, benutzer)
         else:
             kunde = session.get(Kunde, v.kunde_id)
             fehler.append(f"{kunde.anzeige_name if kunde else v.id}: {meldung}")
@@ -1148,7 +1391,7 @@ def _sammel_hv_verschieben(session: Session, vorgaenge: list, params: dict, benu
     text = f"{ok} verschoben"
     if fehler:
         text += f", {len(fehler)} übersprungen: " + ", ".join(gruende[:5])
-    text += f" (Ziel {ziel.name})."
+    text += f" (Ziel {ziel_label})."
     return ok, fehler, text
 
 
@@ -1278,7 +1521,7 @@ def sammelaktion_ausfuehren_voll(session: Session, benutzer, board: str, aktion:
     eine Aktivität); (ok, meldung, extra) – extra z. B. {"kopien": [...]} beim
     Duplizieren (Links in der Ergebnis-Meldung). Handelsvertreter/AD: nicht erlaubt."""
     params = params or {}
-    if benutzer is None or benutzer.rolle == "aussendienst":
+    if benutzer is None or benutzer.basisrolle == "aussendienst":
         return False, "Sammelaktionen sind für den Außendienst nicht freigegeben.", {}
     eintrag = next((e for e in SAMMELAKTIONEN.get(board, []) if e[0] == aktion), None)
     if eintrag is None:
@@ -1407,3 +1650,46 @@ def kontaktiert_daten(session: Session, benutzer, q: str = "", telefon: str = ""
     return {"zeilen": zeilen[start:start + je_seite], "gesamt": gesamt, "seite": seite,
             "seiten": seiten, "q": q, "telefon": telefon, "treffer": treffer,
             "telefon_norm": kern.telefon_normalisieren(telefon) if telefon else "", "hv": hv}
+
+
+# --- v33 (PLAN_V20 Phase 174): Migration ------------------------------------------------
+
+def migration_v33_tabellen(session: Session) -> list[str]:
+    """Hook aus migrate.py (idempotent, zweiter Lauf still): nichts Zwingendes – die neuen
+    Board-Keys entstehen erst beim ersten Speichern je Nutzer. Bereinigt gespeicherte
+    Konfigurationen der Angebotstool-Tabellen um Keys, die kein Katalog kennt (z. B. aus
+    einer Vorabversion), und entfernt die v32-Einstellung `leads_darstellung` nicht
+    (gehört zu Phase 173/M). Liefert Meldungen nur bei Änderungen."""
+    from app.models import BenutzerEinstellung
+    meldungen: list[str] = []
+    bekannt = {board: {k for k, _, _ in KATALOGE[board]} for board in TABELLEN_BOARDS}
+    for zeile in session.query(BenutzerEinstellung).filter(BenutzerEinstellung.key == EINSTELLUNG_KEY):
+        try:
+            alle = json.loads(zeile.wert or "{}")
+        except ValueError:
+            continue
+        if not isinstance(alle, dict):
+            continue
+        geaendert = False
+        for board, keys in bekannt.items():
+            konfig = alle.get(board)
+            if not isinstance(konfig, dict):
+                continue
+            spalten = konfig.get("spalten")
+            if isinstance(spalten, list):
+                bereinigt = [sp for sp in spalten
+                             if not (isinstance(sp, dict) and sp.get("key") not in keys)]
+                if len(bereinigt) != len(spalten):
+                    konfig["spalten"] = bereinigt
+                    geaendert = True
+            sort = konfig.get("sort")
+            if isinstance(sort, dict) and sort.get("key") not in keys:
+                konfig["sort"] = None
+                geaendert = True
+        if geaendert:
+            zeile.wert = json.dumps(alle, ensure_ascii=False)
+            meldungen.append(f"Tabellen (v33): Spaltenkonfiguration von Benutzer {zeile.benutzer_id} "
+                             "um unbekannte Spalten bereinigt")
+    if meldungen:
+        session.flush()
+    return meldungen

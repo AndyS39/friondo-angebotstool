@@ -756,8 +756,8 @@ def tabellen_kontext(session: Session, benutzer) -> dict:
     return {
         "board": "info", "jetzt": jetzt, "heute": jetzt.date(), "hv": hv,
         "nur_lesen": False, "grosskunde_farbe": grosskunde_farbe,
-        "sammel": not hv and benutzer is not None and benutzer.rolle != "aussendienst",
-        "erzwingen": benutzer is not None and benutzer.rolle in ("admin", "innendienst"),
+        "sammel": not hv and benutzer is not None and benutzer.basisrolle != "aussendienst",
+        "erzwingen": benutzer is not None and benutzer.basisrolle in ("admin", "innendienst"),
         "versuche_max": kern.versuche_max(session),
         "veranstaltungen": veranstaltung_wahl(session),
         "unq_gruende": logik.gruende_der_phase("unqualifiziert"),
@@ -938,7 +938,7 @@ def sammelaktion_ausfuehren(session: Session, benutzer, aktion: str, ids, params
     if lb is not None:
         sammelaktionen_registrieren()
         return lb.sammelaktion_ausfuehren(session, benutzer, "info", aktion, list(ids or []), params)
-    if benutzer is None or benutzer.rolle == "aussendienst":
+    if benutzer is None or benutzer.basisrolle == "aussendienst":
         return False, "Sammelaktionen sind für den Außendienst nicht freigegeben."
     eintrag = next((e for e in SAMMELAKTIONEN_INFO if e[0] == aktion), None)
     if eintrag is None:

@@ -412,12 +412,21 @@ def angebot_anlegen(session: Session, kunde_id: int,
                     konfiguration_id: int | None = None,
                     nur_protokoll: bool = False,
                     sparte: str = "WP",
-                    erfassung=None) -> Angebot:
+                    erfassung=None,
+                    commit: bool = True) -> Angebot:
     """Legt ein Angebot mit transaktionssicherer Nummer an (Retry bei Kollision).
     Mit Antworten + Logik werden Positionen, Protokoll und KfW-Daten erzeugt;
     nur_protokoll=True übernimmt Protokoll/KfW ohne Positionen (manuelles Angebot
     zu einer orangen Erfassung). v13-PV: sparte steuert Steuersatz (PV 0 %)
-    und bei PV die Positionslogik aus den PV-Blättern (app.pv_auslegung)."""
+    und bei PV die Positionslogik aus den PV-Blättern (app.pv_auslegung).
+    v33 (PLAN_V20 Phase 172, v30-Nachtrag 22): ``commit=False`` legt das Angebot
+    innerhalb der Transaktion des Aufrufers an (duplizieren/ueberarbeiten/kopieren
+    über routers/angebote._speichern – Rollback und Wiederholung bei „database is
+    locked“ gelten dann für den ganzen Vorgang, es bleibt kein halb angelegtes
+    Angebot zurück); eine Nummernkollision wird dabei über einen SAVEPOINT
+    abgefangen, der Rest der Transaktion bleibt bestehen. ``commit=True`` (Standard,
+    z. B. GET-Routen „Neues Angebot“/„aus Konfiguration“, Erfassungsliste, Tests)
+    committet wie bisher selbst."""
     from app.models import ust_standard
     sparte = (sparte or "WP").upper()
     protokoll_json = "[]"
@@ -514,6 +523,31 @@ def angebot_anlegen(session: Session, kunde_id: int,
         if profil is not None:
             angebot.profil_id = profil.id
             angebotsprofile.positionsregeln_anwenden(session, angebot, profil)
+        if not commit:
+            # v33 (Phase 172): in der Transaktion des Aufrufers. Läuft schon eine
+            # Transaktion (Schreibsitzung mit BEGIN IMMEDIATE – der Regelfall über
+            # _speichern), schützt ein SAVEPOINT nur das Anlegen: bei einer Nummern-
+            # kollision rollt SQLAlchemy den Savepoint zurück (das Angebot ist wieder aus
+            # der Sitzung ausgetragen), die nächste Nummer wird versucht, die äußere
+            # Transaktion (z. B. neuer Kunde beim Kopieren) bleibt bestehen. Ohne offene
+            # Transaktion (Legacy-Modus des Treibers, erst das INSERT eröffnet sie) gäbe
+            # es nichts zu schützen – dann reicht flush + rollback wie beim Commit-Pfad.
+            treiber = session.connection().connection.dbapi_connection
+            if getattr(treiber, "in_transaction", False):
+                try:
+                    with session.begin_nested():
+                        session.add(angebot)
+                        session.flush()
+                    return angebot
+                except IntegrityError:
+                    continue
+            session.add(angebot)
+            try:
+                session.flush()
+                return angebot
+            except IntegrityError:
+                session.rollback()
+                continue
         session.add(angebot)
         try:
             session.commit()

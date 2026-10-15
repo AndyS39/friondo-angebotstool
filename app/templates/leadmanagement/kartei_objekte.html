@@ -80,7 +80,7 @@
             <a class="abzeichen" href="/erfassungen/{{ e.id }}" title="Erfassung · {{ e.status }}">{{ symbol('stift') }} {{ e.sparte or 'WP' }} · {{ e.status }}</a>
         {% endfor %}
         {% for a in o.angebote %}
-            <a class="abzeichen" href="{{ '/angebote/' ~ a.id if benutzer.rolle in ('admin', 'innendienst') else '/meine-angebote/' ~ a.id }}" title="Angebot · {{ a.status }}">{{ symbol('euro') }} {{ a.nummer }} · {{ a.status }}</a>
+            <a class="abzeichen" href="{{ '/angebote/' ~ a.id if benutzer.basisrolle in ('admin', 'innendienst') else '/meine-angebote/' ~ a.id }}" title="Angebot · {{ a.status }}">{{ symbol('euro') }} {{ a.nummer }} · {{ a.status }}</a>
         {% endfor %}
     </div>
     {% if not readonly %}

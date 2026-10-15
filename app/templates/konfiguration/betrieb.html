@@ -58,6 +58,11 @@
     <div class="karte betrieb-kachel{{ ' betrieb-kachel-warn' if anhaenge_fehlend }}" id="kachel-anhaenge"><span class="kachel-titel">Anhang-Dateien (anlagen/)</span>
         <span class="kachel-wert">{{ 'vollständig' if not anhaenge_fehlend else (anhaenge_fehlend | length ~ ' fehlt') }}</span>
         <span class="dezent">{% if anhaenge_fehlend %}fehlt: {{ anhaenge_fehlend | join(', ') }}{% else %}alle im Blatt „Anhänge“ genannten Dateien liegen bereit{% endif %}</span></div>
+    {# v33 (PLAN_V20 Phase 166): Graph-Modus und Ablauf des Geheimnisses #}
+    <div class="karte betrieb-kachel{{ ' betrieb-kachel-warn' if graph.warnung }}" id="kachel-graph"><span class="kachel-titel">Graph-Modus (Microsoft 365)</span>
+        <span class="kachel-wert">{{ graph.modus }}</span>
+        <span class="dezent">{% if graph.warnung %}{{ graph.warnung }}{% elif graph.ablauf %}Geheimnis gültig bis {{ graph.ablauf | de_datum }} (noch {{ graph.tage }} Tage){% elif graph.grund %}{{ graph.grund }}{% else %}Zugriff als Anwendung über die Zugriffsgruppe{% endif %}
+            · <a href="/versand">Verbindungs-Seite</a></span></div>
 </div>
 
 <section class="karte" id="wartung">

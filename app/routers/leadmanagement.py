@@ -21,6 +21,7 @@ from app.models import (Benutzer, Kampagne, Kunde, LeadAktivitaet,
                         ANRUF_ERGEBNIS_NAMEN, LEAD_PHASEN, LEAD_PHASEN_NAMEN)
 from app.templating import render
 from app import anfrage   # v27: Formular/JSON in def-Routen
+from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 
 router = APIRouter(prefix="/lead-management")
 
@@ -1109,14 +1110,34 @@ def lead_verloren_setzen(request: Request, vorgang_id: int,
 @router.get("/kalender")
 def terminkalender(request: Request,
                          session: Session = Depends(get_session)):
+    """v12 Terminkalender Woche je AD – seit v33 (PLAN_V20 Phase 169) [ANNAHME] eine
+    Umleitung auf den zentralen Planungskalender /kalender?gruppe=vertrieb&person=<id>
+    (?woche=<Versatz> wird als Datum übernommen). Hinweis: denselben Pfad bedient zuerst
+    der V2-Router lm_termin.terminkalender (in main.py vor diesem Router eingebunden);
+    diese Umleitung greift erst, wenn dort ebenfalls umgeleitet wird (Vorschlag im
+    Bericht K). Die alte Wochenansicht (_wochenraster, leadmanagement/kalender.html)
+    bleibt als Funktion erhalten."""
     _gate(request, session)
     from datetime import datetime as dt
     versatz = request.query_params.get("woche", "0")
     versatz = int(versatz) if versatz.lstrip("-").isdigit() else 0
     start = dt.now() + timedelta(weeks=versatz)
     nur_ad = request.query_params.get("ad_id", "")
+    ziel = f"/kalender?gruppe=vertrieb&ansicht=woche&datum={start:%Y-%m-%d}"
+    if nur_ad.isdigit():
+        ziel += f"&person={int(nur_ad)}"
+    return RedirectResponse(ziel, status_code=303)
+
+
+def terminkalender_v12(request: Request, session: Session):
+    """Alte Wochenansicht (bis v32) – nicht mehr als Route eingebunden."""
+    from datetime import datetime as dt
+    versatz = request.query_params.get("woche", "0")
+    versatz = int(versatz) if versatz.lstrip("-").isdigit() else 0
+    start = dt.now() + timedelta(weeks=versatz)
+    nur_ad = request.query_params.get("ad_id", "")
     alle_ad = [b for b in session.query(Benutzer)
-               .filter(Benutzer.aktiv.is_(True), Benutzer.rolle == "aussendienst")
+               .filter(Benutzer.aktiv.is_(True), rollen_modul.filter_basis("aussendienst"))
                .order_by(Benutzer.name)]
     ad_ids = ([int(nur_ad)] if nur_ad.isdigit()
               else [b.id for b in alle_ad])
@@ -1440,7 +1461,7 @@ def karte(request: Request, session: Session = Depends(get_session)):
                   phasen_namen=LEAD_PHASEN_NAMEN,
                   alle_ad=[b for b in session.query(Benutzer)
                            .filter(Benutzer.aktiv.is_(True),
-                                   Benutzer.rolle == "aussendienst")
+                                   rollen_modul.filter_basis("aussendienst"))
                            .order_by(Benutzer.name)],
                   meldung=request.query_params.get("meldung", ""))
 
@@ -1618,7 +1639,7 @@ def lead_statistik(request: Request,
                                for i, n, _w in lead_dropdowns.leadmanager_auswahl(session)],
                   alle_ad=[b for b in session.query(Benutzer)
                            .filter(Benutzer.aktiv.is_(True),
-                                   Benutzer.rolle == "aussendienst")
+                                   rollen_modul.filter_basis("aussendienst"))
                            .order_by(Benutzer.name)],
                   **daten,
                   meldung=request.query_params.get("meldung", ""))

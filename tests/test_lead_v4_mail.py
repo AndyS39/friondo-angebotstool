@@ -264,7 +264,8 @@ class Editor(Basis):
         self.assertIn(f"/lead-management/benutzer/{self.horst.id}/bild", r.text)
         self.assertIn('name="rahmen_alle"', r.text)
         self.assertIn("{vertriebler_block}", r.text)
-        self.assertIn("Ich berate seit 2015.", r.text)
+        # v33 (PLAN_V20 Phase 175): der Infotext entfaellt vollstaendig - auch im Vorlagen-Baum
+        self.assertNotIn("Ich berate seit 2015.", r.text)
         # Suche (GET-Fallback) blendet andere aus
         r = self.client.get("/lead-management/vorlagen?q=horst")
         self.assertIn("lmv-ausgeblendet", r.text)
@@ -306,7 +307,9 @@ class Editor(Basis):
         self.assertTrue(lead_mail.rendern(self.s, eintrag))
         self.assertIn("HORST-INDIVIDUELL", eintrag.body_html)
         self.assertIn(f"cid:{lead_mail.CID_PRAEFIX}{self.horst.id}", eintrag.body_html)
-        self.assertIn("Ich berate seit 2015.", eintrag.body_html)
+        # v33 (PLAN_V20 Phase 175): der Infotext zum AD entfällt – der Block enthält nur noch
+        # Bild, Name, Telefon, E-Mail (Spalte bleibt, wird nicht mehr gelesen)
+        self.assertNotIn("Ich berate seit 2015.", eintrag.body_html)
         self.assertIn("0203 111", eintrag.body_html)
         self.assertIn("Teststraße 1", eintrag.body_html)
         self.assertIn("Termin bei Horst am", eintrag.betreff)
@@ -446,7 +449,8 @@ class Editor(Basis):
         self.assertIn("Bild gespeichert", meldung_aus(r))
         self.s.expire_all()
         person = self.s.get(Benutzer, self.neu_ad.id)
-        self.assertEqual((person.vorname, person.infotext), ("Nico", "Neu im Team."))
+        # v33 (Phase 175): das Formular kennt keinen Infotext mehr (Agent R) - nur der Vorname wird gespeichert
+        self.assertEqual(person.vorname, "Nico")
         self.assertEqual(person.bild_datei, f"benutzerbilder/{person.id}.png")
         self.assertTrue(lead_mail.bild_pfad(person).exists())
         self.assertTrue(lead_mail.vorlage_vorhanden(self.s, lead_mail.vertriebler_key(person.id)))
@@ -462,7 +466,7 @@ class Editor(Basis):
                              follow_redirects=False)
         self.assertIn("größer als 2 MB", meldung_aus(r))
         r = self.client.get(f"/benutzer/{self.neu_ad.id}/ad-profil")
-        self.assertIn('name="infotext"', r.text)
+        self.assertNotIn('name="infotext"', r.text)   # v33 (Phase 175): Feld entfernt
         self.assertIn(f"/lead-management/benutzer/{person.id}/bild", r.text)
         # Vorname in der Benutzerliste
         r = self.client.post(f"/benutzer/{self.neu_ad.id}/aendern",
@@ -472,9 +476,10 @@ class Editor(Basis):
         self.assertEqual(self.s.get(Benutzer, self.neu_ad.id).vorname, "Nikolaus")
         self.assertIn('name="vorname"', self.client.get("/benutzer").text)
         block = lead_mail.vertriebler_block_html(self.s.get(Benutzer, self.neu_ad.id))
-        self.assertIn("Neu im Team.", block)
+        # v33 (PLAN_V20 Phase 175): Infotext entfällt im Block (HTML und Text), Bild bleibt
+        self.assertNotIn("Neu im Team.", block)
         self.assertIn(f"cid:{lead_mail.CID_PRAEFIX}{person.id}", block)
-        self.assertIn("Neu im Team.", lead_mail.vertriebler_block_text(person))
+        self.assertNotIn("Neu im Team.", lead_mail.vertriebler_block_text(person))
 
 
 # --- (j) Sparten-Baustein -----------------------------------------------------------------
@@ -1110,6 +1115,9 @@ class Bounce(Basis):
             erste = r.text.index('data-vorgang="')
             self.assertEqual(r.text[erste:].split('"', 2)[1], str(v.id), "Bounce-Lead nicht ganz oben")
         # derselbe Bericht noch einmal → bekannt (Dedup über graph_id)
+        # v33 (PLAN_V20 Phase 172): ein Lauf eroeffnet sofort eine Schreibtransaktion (BEGIN IMMEDIATE) -
+        # die offene Schreibung des Tests (mail_planen 'disqualifiziert') vorher festschreiben
+        self.s.commit()
         ergebnis, gelesen = self.lauf([n])
         self.assertIn("bekannt=1", ergebnis["ergebnis"])
         # Adressänderung gibt frei

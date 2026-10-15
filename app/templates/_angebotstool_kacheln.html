@@ -4,7 +4,7 @@
    klein; fällige Zahlen rot über die Klasse "dringend". #}
 {% from "_symbole.html" import symbol %}
 <div class="kacheln start-shortcuts">
-    <a class="kachel" href="/leads"><span class="kachel-icon">{{ symbol('telefon') }}</span>{{ 'Mein Tag' if request.state.benutzer and request.state.benutzer.rolle == 'aussendienst' else 'Leads VOT' }}</a>
+    <a class="kachel" href="/leads"><span class="kachel-icon">{{ symbol('telefon') }}</span>{{ 'Mein Tag' if request.state.benutzer and request.state.benutzer.basisrolle == 'aussendienst' else 'Leads VOT' }}</a>
     <a class="kachel" href="/erfassungen"><span class="kachel-icon">{{ symbol('stift') }}</span>Erfassungen</a>
     <a class="kachel" href="/angebote"><span class="kachel-icon">{{ symbol('pdf') }}</span>Angebote</a>
 </div>

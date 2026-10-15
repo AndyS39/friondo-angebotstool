@@ -245,11 +245,36 @@ class ProjektLoeschenAkte(Basis):
         self.assertEqual(antwort.status_code, 303, antwort.text[:300])
         self.assertTrue(antwort.headers["location"].startswith("/projektierung/liste?meldung="))
         self.assertIn("gel%C3%B6scht", antwort.headers["location"])
-        # Outlook-Storno genau für den Termin mit Ereignis (DELETE am Team-Postfach)
+        # v33 (PLAN_V20 Phase 170): kein Graph-Aufruf mehr im Request – der Storno des Termins
+        # mit Ereignis steht als Auftrag „loeschen“ in der Warteschlange outlook_auftraege
+        # (Team-Postfach + Event-ID aus dem Altbestand); der Lauf outlook-sync setzt genau
+        # ein DELETE am Team-Postfach ab
+        from app import outlook_sync
+        from app.models import OutlookAuftrag
+        self.assertEqual(aufrufe, [])
+        self.s.rollback()
+        # (nur „loeschen“: offene anlegen-Aufträge anderer Testmodule zu wiederverwendeten
+        # Termin-IDs erledigt der Lauf ohne Graph-Aufruf – Person nicht eingeteilt / Termin weg)
+        offen = (self.s.query(OutlookAuftrag)
+                 .filter(OutlookAuftrag.termin_art == "projekt",
+                         OutlookAuftrag.termin_id.in_(termin_ids),
+                         OutlookAuftrag.status == "offen",
+                         OutlookAuftrag.aktion == "loeschen").all())
+        self.assertEqual([(a.aktion, a.postfach, a.event_id) for a in offen],
+                         [("loeschen", "montage-v30p@friondo.test", "AAMk-v30p-1")])
+        # offene Aufträge anderer Testmodule nicht mitmessen (nur der Storno-Auftrag bleibt offen)
+        outlook_sync.fremde_auftraege_abschliessen(self.s, termin_ids=[offen[0].termin_id])
+        self.s.commit()
+        with mock.patch("app.graph_versand._token", return_value="tok"), \
+                mock.patch("app.graph_versand._graph_aufruf", side_effect=graph):
+            outlook_sync.sync_lauf()
         self.assertEqual(len(aufrufe), 1)
         self.assertEqual(aufrufe[0][0], "DELETE")
         self.assertIn("AAMk-v30p-1", aufrufe[0][1])
         self.assertIn("montage-v30p%40friondo.test", aufrufe[0][1])
+        self.s.query(OutlookAuftrag).filter(
+            OutlookAuftrag.postfach == "montage-v30p@friondo.test").delete(synchronize_session=False)
+        self.s.commit()
         self.s.expunge_all()
         # keine Zeilen mehr in Projekt/Gewerk/Aufgaben/Termine/Besetzung …
         self.assertIsNone(self.s.get(Projekt, pid))

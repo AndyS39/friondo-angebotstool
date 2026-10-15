@@ -219,7 +219,46 @@ class Benutzer(Base):
         return [self.rolle] + [r for r in zusatz if r != self.rolle]
 
     def hat_rolle(self, name: str) -> bool:
-        return name in self.rollen_liste
+        """Rolle ODER Basisrolle (v33: ein Benutzer der Variante „Montage Heizung“ hat
+        damit die Rolle montage)."""
+        return name in self.rollen_liste or name in self.basisrollen
+
+    # v33 (PLAN_V20 Phase 167): Rollen als Varianten einer Basisrolle – Rechte prüfen
+    # ausschließlich über `basisrolle`/`basisrollen`, Kennzeichen über `hat_kennzeichen`
+    @property
+    def basisrolle(self) -> str:
+        from app import rollen as rollen_modul
+        return rollen_modul.basisrolle_von(self.rolle)
+
+    @property
+    def basisrollen(self) -> list[str]:
+        from app import rollen as rollen_modul
+        liste: list[str] = []
+        for r in self.rollen_liste:
+            basis = rollen_modul.basisrolle_von(r)
+            if basis not in liste:
+                liste.append(basis)
+        return liste
+
+    def hat_kennzeichen(self, name: str) -> bool:
+        """Kennzeichen (service | handelsvertreter) irgendeiner Rolle des Benutzers."""
+        from app import rollen as rollen_modul
+        return any(name in rollen_modul.kennzeichen_von(r) for r in self.rollen_liste)
+
+    @property
+    def gewerk(self) -> str:
+        """Gewerk (heizung | elektro) der ersten Rolle mit Gewerk, sonst leer."""
+        from app import rollen as rollen_modul
+        for r in self.rollen_liste:
+            g = rollen_modul.gewerk_von(r)
+            if g:
+                return g
+        return ""
+
+    @property
+    def rollen_name(self) -> str:
+        from app import rollen as rollen_modul
+        return rollen_modul.name_von(self.rolle)
 
 
 # Statuskette v7 (ersetzt das v6-Auto-Archiv von „Individuell“):
@@ -499,6 +538,9 @@ class Vorgang(Base):
     # (versendet | nachgefasst | bestellung_angekuendigt | angenommen | abgelehnt)
     wiedervorlage_art: Mapped[str] = mapped_column(String(30), default="")
     verfolgung_status: Mapped[str] = mapped_column(String(30), default="")
+    # v33 (PLAN_V20 Phase 176): Zähler „Nochmal anrufen“ und zuletzt gesetzter Einwand
+    nachfass_versuche: Mapped[int] = mapped_column(Integer, default=0)
+    letzter_einwand_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
 
 class VorgangsNotiz(Base):
@@ -618,6 +660,10 @@ class Gewerk(Base):
     projekt_id: Mapped[int] = mapped_column(Integer, index=True)
     sparte: Mapped[str] = mapped_column(String(4), default="WP")
     phase: Mapped[str] = mapped_column(String(30), default="auftragseingang")
+    # v33 (PLAN_V20 Phase 171): automatischer Phasenwechsel je Gewerk; nach einem
+    # manuellen Rückschritt pausiert die Automatik für diese Phase
+    phase_auto: Mapped[bool] = mapped_column(Boolean, default=True)
+    phase_auto_pause: Mapped[str] = mapped_column(String(30), default="")
     # v15 (Phase 74): Häkchen "Feinplanung erfasst" (bis die Feinplanungs-
     # Erfassung in Phase 80 kommt) – Wächter Feinplanung VOT → Planung
     feinplanung_erfasst: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -765,6 +811,14 @@ class ProjektTermin(Base):
     bestaetigt_quelle: Mapped[str] = mapped_column(String(20), default="")  # manuell | mail
     # v28 (PLAN_PROJ_V6 Phase 135): Zweck eines Montagetermins wp | elektro | sub | leer
     zweck: Mapped[str] = mapped_column(String(10), default="")
+    # v33 (PLAN_V20 Phase 168): Service-Einsatz – auch am Vorgang ohne Projekt
+    # (projekt_id = 0), Gewerk heizung | elektro, Anlass, Start/Ende des Einsatzes
+    vorgang_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    service_gewerk: Mapped[str] = mapped_column(String(10), default="")
+    anlass: Mapped[str] = mapped_column(String(30), default="")
+    service_status: Mapped[str] = mapped_column(String(20), default="")
+    gestartet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    beendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
@@ -836,6 +890,9 @@ class MontageFormular(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     gewerk_id: Mapped[int] = mapped_column(Integer, index=True)
     projekt_id: Mapped[int] = mapped_column(Integer, index=True)
+    # v33 (PLAN_V20 Phase 168): Servicebericht je Service-Einsatz (gewerk_id 0, projekt_id 0);
+    # Übergangsschlüssel `_termin_id` in antworten_json wird von migration_v33_termin_id übernommen
+    termin_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     formular: Mapped[str] = mapped_column(String(40), default="")
     antworten_json: Mapped[str] = mapped_column(Text, default="{}")
     status: Mapped[str] = mapped_column(String(20), default="entwurf")
@@ -968,6 +1025,8 @@ class Team(Base):
     leiter_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     farbe: Mapped[str] = mapped_column(String(20), default="")
     outlook_adresse: Mapped[str] = mapped_column(String(200), default="")
+    # v33 (PLAN_V20 Phase 167): Gewerk des Teams (heizung | elektro | leer)
+    gewerk: Mapped[str] = mapped_column(String(10), default="")
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
@@ -1205,26 +1264,33 @@ class Angebot(Base):
         basis, punkt, rest = self.nummer.rpartition(".")
         return basis if punkt and rest.isdigit() else self.nummer
 
-    def rabatt_effektiv_cent(self, brutto_cent: int) -> int:
-        """Rabatt in Cent (Betrag direkt, Prozent vom Brutto), nie über dem Brutto.
-        Seit Phase 26 ist der Rabatt ein BRUTTO-Abzug nach dem Gesamt-Betrag."""
+    def rabatt_effektiv_cent(self, gesamt_cent: int) -> int:
+        """Gesamtrabatt in Cent – Betrag direkt, Prozent vom Gesamtbetrag nach USt
+        (Gesamt-Betrag; bei 0 % USt nach § 12 Abs. 3 UStG ist das der Nettobetrag) –
+        nie über dem Gesamtbetrag. Seit Phase 26 ist der Rabatt ein Abzug NACH dem
+        Gesamt-Betrag; v33 (PLAN_V20 Phase 172): er gilt bei jedem Steuersatz."""
         if self.rabatt_cent:
-            return min(self.rabatt_cent, brutto_cent)
+            return max(0, min(self.rabatt_cent, gesamt_cent))
         if self.rabatt_prozent:
-            betrag = int((Decimal(brutto_cent) * Decimal(str(self.rabatt_prozent))
+            betrag = int((Decimal(gesamt_cent) * Decimal(str(self.rabatt_prozent))
                           / 100).quantize(Decimal("1")))
-            return min(betrag, brutto_cent)
+            return max(0, min(betrag, gesamt_cent))
         return 0
 
     def summen(self) -> dict:
-        """Netto → 19 % USt → Gesamt-Betrag → − Rabatt (brutto) → = Endbetrag
-        (Phase 26); EP-Positionen zählen nicht mit, der Rabatt ist keine Position.
+        """Netto → USt (19 % oder 0 %) → Gesamt-Betrag → − Rabatt → = Endbetrag
+        (Phase 26; v33 Phase 172: der Rabatt gilt bei jedem Steuersatz auf den
+        Gesamtbetrag nach USt, bei 0 % also auf den Nettobetrag); EP-Positionen
+        zählen nicht mit, der Rabatt ist keine Position. ``rabatt_netto`` ist der
+        Netto-Anteil des Rabatts (Rabatt ÷ (1 + USt-Satz), bei 0 % der volle Rabatt –
+        Basis für den Deckungsbeitrag), ``netto_nach_rabatt`` = Netto − rabatt_netto.
         Externe TAIFUN-Einträge (v7) haben nur einen festen Endbetrag brutto –
         Netto/USt sind dort unbekannt und bleiben 0."""
         if self.extern:
             betrag = self.extern_endbetrag_cent or 0
             return {"netto": 0, "ust": 0, "brutto": betrag,
-                    "rabatt": 0, "endbetrag": betrag}
+                    "rabatt": 0, "endbetrag": betrag,
+                    "rabatt_netto": 0, "netto_nach_rabatt": 0}
         netto = 0
         for p in self.positionen:
             # bauseits (v5) und Alternativ-Positionen (v10) zählen nie mit
@@ -1234,8 +1300,12 @@ class Angebot(Base):
         ust = int(Decimal(netto) * self.ust_prozent / 100)
         brutto = netto + ust
         rabatt = self.rabatt_effektiv_cent(brutto)
+        rabatt_netto = int((Decimal(rabatt) / (1 + self.ust_prozent / 100))
+                           .quantize(Decimal("1")))
         return {"netto": netto, "ust": ust, "brutto": brutto,
-                "rabatt": rabatt, "endbetrag": brutto - rabatt}
+                "rabatt": rabatt, "endbetrag": brutto - rabatt,
+                "rabatt_netto": rabatt_netto,
+                "netto_nach_rabatt": netto - rabatt_netto}
 
     def nummerierung(self) -> list[str]:
         """Anzeigenummer je Position (v5) in Sortierreihenfolge: eigene Nummer,
@@ -1245,8 +1315,10 @@ class Angebot(Base):
 
     def deckungsbeitrag(self) -> dict:
         """Σ VK netto − Σ Material-EK (ohne EP). Nur Innendienst, nie im PDF.
-        Der Brutto-Rabatt mindert den DB um seinen Netto-Anteil (÷ 1,19; Phase 26).
-        Externe TAIFUN-Einträge (v7) haben keinen DB im Tool."""
+        Der Gesamtrabatt mindert den DB um seinen Netto-Anteil (Rabatt ÷ (1 + USt-Satz),
+        also ÷ 1,19 bei 19 % und der volle Rabatt bei 0 % – Phase 26, v33 Phase 172;
+        Wert ``rabatt_netto`` aus summen()). Externe TAIFUN-Einträge (v7) haben
+        keinen DB im Tool."""
         if self.extern:
             return {"vk": 0, "ek": 0, "db": 0, "prozent": 0.0,
                     "rabatt": 0, "ohne_ek": []}
@@ -1262,9 +1334,7 @@ class Angebot(Base):
             else:
                 ek += int((Decimal(str(p.menge)) * Decimal(p.ek_cent))
                           .quantize(Decimal("1")))
-        rabatt_brutto = self.rabatt_effektiv_cent(self.summen()["brutto"])
-        rabatt_netto = int((Decimal(rabatt_brutto) / (1 + self.ust_prozent / 100))
-                           .quantize(Decimal("1")))
+        rabatt_netto = self.summen()["rabatt_netto"]
         vk_nach_rabatt = max(0, vk - rabatt_netto)
         db = vk_nach_rabatt - ek
         prozent = (db / vk_nach_rabatt * 100) if vk_nach_rabatt else 0.0
@@ -2000,3 +2070,102 @@ class BenutzerAbwesenheit(Base):
     bemerkung: Mapped[str] = mapped_column(String(300), default="")
     angelegt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+# --- v33 (PLAN_V20 Phase 167): Rollen als Varianten einer Basisrolle ---------------------
+
+class Rolle(Base):
+    """Rolle = Basisrolle (Systemzeile, nicht löschbar) oder Variante mit Kennzeichen
+    (Gewerk heizung|elektro, Service, Handelsvertreter). Logik in app/rollen.py."""
+    __tablename__ = "rollen"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(40), unique=True)
+    name: Mapped[str] = mapped_column(String(100), default="")
+    basisrolle: Mapped[str] = mapped_column(String(20), default="aussendienst")
+    gewerk: Mapped[str] = mapped_column(String(10), default="")       # "" | heizung | elektro
+    service: Mapped[bool] = mapped_column(Boolean, default=False)
+    handelsvertreter: Mapped[bool] = mapped_column(Boolean, default=False)
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
+    sortierung: Mapped[int] = mapped_column(Integer, default=0)
+    system: Mapped[bool] = mapped_column(Boolean, default=False)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+# --- v33 (PLAN_V20 Phase 170): Outlook-Sync je Mitarbeiter -------------------------------
+
+class OutlookEreignis(Base):
+    """Eine Kopie eines Tool-Termins im persönlichen Kalender einer Person
+    (termin_art vot | projekt, termin_id = vot_termine.id bzw. projekt_termine.id).
+    Additiv neben den alten outlook_event_id-Feldern."""
+    __tablename__ = "outlook_ereignisse"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    termin_art: Mapped[str] = mapped_column(String(10), default="projekt", index=True)
+    termin_id: Mapped[int] = mapped_column(Integer, index=True)
+    benutzer_id: Mapped[int] = mapped_column(Integer, index=True)
+    postfach: Mapped[str] = mapped_column(String(200), default="")
+    event_id: Mapped[str] = mapped_column(String(300), default="")
+    # ausstehend | ok | fehler | geloescht | in_outlook_geloescht
+    stand: Mapped[str] = mapped_column(String(25), default="ausstehend")
+    beginn: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    ende: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    fehler_text: Mapped[str] = mapped_column(String(300), default="")
+    letzte_aenderung: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,
+                                                       onupdate=datetime.now)
+
+
+class OutlookAuftrag(Base):
+    """Warteschlange des Laufs outlook-sync (kein Graph-Aufruf im Request):
+    aktion anlegen | aendern | loeschen, Status offen | erledigt | fehler, 3 Versuche."""
+    __tablename__ = "outlook_auftraege"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    aktion: Mapped[str] = mapped_column(String(10), default="anlegen")
+    termin_art: Mapped[str] = mapped_column(String(10), default="projekt")
+    termin_id: Mapped[int] = mapped_column(Integer, index=True)
+    benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    postfach: Mapped[str] = mapped_column(String(200), default="")
+    event_id: Mapped[str] = mapped_column(String(300), default="")
+    status: Mapped[str] = mapped_column(String(10), default="offen", index=True)
+    versuche: Mapped[int] = mapped_column(Integer, default=0)
+    fehler_text: Mapped[str] = mapped_column(String(300), default="")
+    angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    erledigt_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class OutlookBelegt(Base):
+    """Belegtzeiten fremder Outlook-Einträge je Person (nur Zeit, kein Betreff) –
+    Cache des Laufs outlook-ruecklesen für /kalender und den Terminassistenten."""
+    __tablename__ = "outlook_belegt"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    benutzer_id: Mapped[int] = mapped_column(Integer, index=True)
+    von: Mapped[datetime] = mapped_column(DateTime, index=True)
+    bis: Mapped[datetime] = mapped_column(DateTime)
+    event_id: Mapped[str] = mapped_column(String(300), default="")
+    stand: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+# --- v33 (PLAN_V20 Phase 176): Einwand-Chips beim Nachfassen -----------------------------
+
+class Einwand(Base):
+    """Pflegbare Liste (Parametrierung wie die Ablehnungsgründe)."""
+    __tablename__ = "einwaende"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), default="")
+    aktiv: Mapped[bool] = mapped_column(Boolean, default=True)
+    sortierung: Mapped[int] = mapped_column(Integer, default=0)
+    erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class VorgangEinwand(Base):
+    """Gesetzter Einwand je „Nochmal anrufen“ (Auswertung in der Statistik)."""
+    __tablename__ = "vorgang_einwaende"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    vorgang_id: Mapped[int] = mapped_column(Integer, index=True)
+    einwand_id: Mapped[int] = mapped_column(Integer)
+    zeit: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    benutzer_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

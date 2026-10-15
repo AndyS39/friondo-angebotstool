@@ -1093,3 +1093,51 @@ Umgesetzt und getestet gegen die DB-Kopie `diagnose/v28_patches/db_P1.db`
 | P2-7 PDF-Präfix „Seriennummer n“ | ok | bleibt |
 | P2-8 Alte Formular-Entwürfe beim Update leeren? | Ja | `montage_formulare.migration_v28_entwuerfe` (migrate.py): Entwürfe mit alten Schlüsseln werden geleert |
 
+## PLAN_V20 (14.10.2026) – Umsetzung durch Claude Code (v33): Phasen 168 (Service), 169 (Kalender), 171 (Auto-Phase)
+
+Umgesetzt im Durchlauf v33 (Agenten S und K, Orchestrator); Rückfragen-Nummern beziehen sich auf die
+Berichte `diagnose/v33/S_ergebnis.md` und `K_ergebnis.md` (Gesamtübersicht im Durchlauf).
+
+### Service-Einsätze und automatischer Phasenwechsel (Agent S)
+
+| Nr | Entscheidung | Stand |
+|---|---|---|
+| S-1 | Service-Einsatz = Terminart `service` mit `service_gewerk`, `anlass`, Dauer → `ende`; keine Phase, keine Aufgabe, keine Zuweisung | gebaut |
+| S-2 | Service ohne Projekt: `projekt_id 0` + `vorgang_id`, Notizen-Chat statt Projektverlauf | gebaut |
+| S-3 | Mannschaft Pflicht (Team oder ≥ 1 Person); Anlass Pflicht; Standarddauer 2 h | gebaut, Rückfrage R5/R6 |
+| S-4 | Servicebericht am Termin (`_termin_id`), PDF `Servicebericht_<Nr>_<Datum>.pdf` im Ordner „Service“, Abschluss beendet den Einsatz | gebaut, Rückfrage R2/R3 |
+| S-5 | Backend-Filter: Service-Varianten nur Service des Gewerks; Montage Heizung = Montage (WP) + Sub, Montage Elektro = Elektro; Basisrolle montage alles außer Service; Leitung alles | gebaut |
+| S-6 | Besetzungsvorschlag nach Gewerk im Dialog (passende zuerst, andere grau wählbar) | gebaut |
+| A-1 | Auto-Phase nur Auftragseingang → Feinplanung VOT → Planung → Montagevorbereitung und Abnahme → Freigabe; Montage/Abnahme sind Ereignis-Phasen | gebaut, Rückfrage R1 |
+| A-2 | Nie mit offenen Wächter-Punkten (beide Modi), nie ohne Pflichtaufgaben in der Phase (V1-Bestand/Bestandsimport springen nicht) | gebaut |
+| A-3 | Rückschritt → `phase_auto_pause`; Pause endet beim manuellen Verlassen oder Neu-Setzen des Häkchens | gebaut |
+
+Rückfragen S: **R1** Montagevorbereitung → Montage und Montage → Abnahme bewusst nicht automatisch
+(Ereignis-Phasen) – bestätigen? **R2** Servicebericht-Pflichtfelder Anlass/Arbeiten/Ergebnis/beide
+Unterschriften richtig? **R3** Soll der Servicebericht-Abschluss den Einsatz automatisch auf „beendet“ setzen
+(so gebaut)? **R4** Rolle Projektierung liest die Vorgangsakte (Orchestrator: umgesetzt, `/vorgaenge` in
+`PROJEKTIERUNG_PFADE`). **R5** Service-Einsatz ohne Techniker (Besetzung später) – derzeit abgelehnt.
+**R6** Standarddauer 2 h und Anlass-Pflicht bestätigen. Zusätzlich (Orchestrator): Spalte
+`montage_formulare.termin_id` angelegt (Vorschlag S 4.3), Übergangsschlüssel `_termin_id` wird von
+`migration_v33_termin_id` übernommen.
+
+### Zentraler Planungskalender `/kalender` (Agent K, Projektierungsteil)
+
+| Nr | Entscheidung | Stand |
+|---|---|---|
+| K-P1 | Mehrfachbesetzung: ein Projekt-/Service-Termin erscheint in jeder Zeile seiner Personen; Drag verschiebt den Termin für alle | gebaut |
+| K-P2 | Personenwechsel per Drag für Projekt-/Service-Termine abgelehnt („Besetzung bitte in der Projektakte ändern“); Dauer bleibt, ganztägige Termine wandern tageweise | gebaut |
+| K-P3 | Service-Zeilen (Gruppen Service Heizung/Elektro) verlinken auf die Vorgangsakte `#termine`; Doppelklick → `/vorgaenge/{id}?termin_neu=service&beginn=&uhrzeit=&person=` (S 4.3 gebaut) | gebaut |
+| K-P4 | Basisrolle montage ohne Gewerk → Gruppe „Montage Heizung“ [ANNAHME Plan]; Montage/Service sehen nur sich und ihr Team, lesend, unter 600 px Tagesansicht; Kalender-Knopf im Montage-Backend (K 4.5) | gebaut |
+| K-P5 | Konflikte (Team/Person) als Bestätigungsdialog; Rechte wie `projektierung.termin_bearbeiten_erlaubt` (Admin/Innendienst/Projektierung) | gebaut |
+| K-P6 | Rückfrage R5: Menü „Kalender“ für Monteure – Link im Montage-Backend statt Menüpunkt | offen |
+| K-P7 | Rückfrage R7: Vorbelegung des Zieldialogs (Datum/Uhrzeit/Person) – Projektakte und Vorgangsakte umgesetzt (S 4.2/4.3), Terminassistent (lm_termin.js, Orchestrator) | gebaut |
+
+### Outlook je Person (Phase 170, Agent O)
+
+Projekt-Termine als Kopie je Person der Besetzung (Montage/Elektro/Sub/Service), Feinplanung/Abnahme/Sonstiges
+bei der eingetragenen Person; Team-Kalender nur zusätzlich bei `teams.outlook_adresse` [ANNAHME optional,
+Rückfrage O-R6]; Löschen in Outlook löscht nie im Tool (Markierung „in Outlook gelöscht“ + Glocke an
+Projektleiter/Ersteller); Storno beim Löschen eines Termins/Projekts wird immer eingereiht (Vorschlag O 4a);
+persönliche Kopien für Bestandstermine entstehen beim nächsten Speichern (Massenanlage per Handlauf –
+Rückfrage O-R7).

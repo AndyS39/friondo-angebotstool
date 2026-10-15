@@ -143,7 +143,7 @@
         <span class="abzeichen ep" title="Der Freitext wurde geändert, während der Vorgang bereits in Bearbeitung/mit Angebot war – Details im Änderungsprotokoll.">Freitext geändert</span>
     {% endif %}
 </h2>
-{% set darf_freitext = benutzer.rolle != 'aussendienst' or erfassung.benutzer_id == benutzer.id %}
+{% set darf_freitext = benutzer.basisrolle != 'aussendienst' or erfassung.benutzer_id == benutzer.id %}
 {% if darf_freitext %}
 <form method="post" action="/erfassungen/{{ erfassung.id }}/freitext" class="formular">
     <textarea name="freitext" rows="10" style="width:100%">{{ erfassung.freitext }}</textarea>

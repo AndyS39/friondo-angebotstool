@@ -17,6 +17,8 @@ from app.models import (ANGEBOT_STATUS, Angebot, AngebotsPosition, Artikel,
 from app.routers.artikel import preis_parsen
 from app.templating import render
 from app import anfrage   # v27: Formular/JSON in def-Routen
+from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
+from app import lead_boards   # v33 (PLAN_V20 Phase 174): Spalten je Nutzer, gemerkte Sortierung
 
 router = APIRouter(prefix="/angebote")
 
@@ -42,7 +44,12 @@ def _speichern(session: Session, aktion, wiederholungen: int = 1) -> None:
     Internal Server Error beim Löschen/Verschieben) wird zurückgerollt, kurz
     gewartet und die Aktion einmal erneut ausgeführt. Bleibt die Sperre,
     läuft die Ausnahme in den globalen Handler (Fehlerprotokoll + Meldung
-    „Datenbank kurz belegt“ statt Internal Server Error)."""
+    „Datenbank kurz belegt“ statt Internal Server Error).
+    v33 (PLAN_V20 Phase 172): die Sitzung einer POST-Route ist eine Schreibsitzung
+    (BEGIN IMMEDIATE, app/db.py) – das Warten auf die Sperre passiert damit schon beim
+    ersten Zugriff, und db._transaktion_eroeffnen wiederholt dort selbst einmal nach
+    0,7 s. Kommt die Ausnahme von diesem bereits wiederholten BEGIN IMMEDIATE, wird
+    hier nicht ein zweites Mal gewartet (Gesamtbudget bleibt ≈ 10,7 s wie bisher)."""
     import time
 
     from sqlalchemy.exc import OperationalError
@@ -62,7 +69,8 @@ def _speichern(session: Session, aktion, wiederholungen: int = 1) -> None:
             gesperrt = "locked" in str(problem).lower()
             betrieb.schreibsperre_messen(int((time.perf_counter() - start) * 1000),
                                          locked=gesperrt)
-            if not gesperrt or versuch >= wiederholungen:
+            schon_wiederholt = "BEGIN IMMEDIATE" in str(problem)
+            if not gesperrt or versuch >= wiederholungen or schon_wiederholt:
                 raise
             time.sleep(0.7)
 
@@ -123,11 +131,67 @@ def _verfolgung_werte() -> list[tuple[str, str]]:
                 ("angenommen", "Angenommen"), ("abgelehnt", "Abgelehnt")]
 
 
+def _inaktiv_tage(session: Session, angebote, vorgaenge_map: dict) -> dict[int, int]:
+    """v33 (PLAN_V20 Phase 174/176, Vertrag N): Tage „ohne Kontakt“ je Angebot über
+    `nachfassen.inaktiv_tage_fuer(session, vorgang)` (14 Tage, MFH 20 – Parameter inaktiv_tage/
+    inaktiv_tage_mfh). Fehlt die Funktion (N noch nicht integriert) oder liefert sie nichts,
+    bleibt das Kennzeichen leer; ein Fehler im Nachfass-Modul blockiert die Liste nie."""
+    try:
+        from app import nachfassen
+    except ImportError:
+        return {}
+    # v33 (Phase 176, Vorschlag N 4c): Mengenabfrage für alle Vorgänge der Seite – kein Aufruf je Zeile
+    mengen = getattr(nachfassen, "inaktiv_kennzeichen", None)
+    if mengen is not None:
+        try:
+            vorgaenge = list({a.vorgang_id: vorgaenge_map.get(a.vorgang_id) for a in angebote
+                              if a.vorgang_id and vorgaenge_map.get(a.vorgang_id) is not None}.values())
+            tage_je_vorgang = mengen(session, vorgaenge) if vorgaenge else {}
+            return {a.id: int(tage_je_vorgang[a.vorgang_id]) for a in angebote
+                    if a.vorgang_id in tage_je_vorgang and tage_je_vorgang[a.vorgang_id]}
+        except Exception:   # noqa: BLE001 – Rückfall auf den Einzelaufruf
+            pass
+    funktion = getattr(nachfassen, "inaktiv_tage_fuer", None)
+    if funktion is None:
+        return {}
+    je_vorgang: dict[int, int | None] = {}
+    ergebnis: dict[int, int] = {}
+    for a in angebote:
+        vorgang = vorgaenge_map.get(a.vorgang_id) if a.vorgang_id else None
+        if vorgang is None:
+            continue
+        if vorgang.id not in je_vorgang:
+            try:
+                wert = funktion(session, vorgang)
+            except TypeError:
+                try:
+                    wert = funktion(vorgang)
+                except Exception:   # noqa: BLE001
+                    wert = None
+            except Exception:   # noqa: BLE001 – Nachfass-Modul darf die Liste nie blockieren
+                wert = None
+            if isinstance(wert, dict):
+                wert = wert.get("tage")
+            try:
+                wert = int(wert) if wert not in (None, "", False) else None
+            except (TypeError, ValueError):
+                wert = None
+            je_vorgang[vorgang.id] = wert if wert and wert > 0 else None
+        if je_vorgang[vorgang.id]:
+            ergebnis[a.id] = je_vorgang[vorgang.id]
+    return ergebnis
+
+
 @router.get("")
 def liste(request: Request, q: str = "", status: str = "", interesse: str = "",
                 vertriebler_id: int = 0, sortierung: str = "nummer", kanal: str = "",
-                verfolgung: str = "", sparte: str = "",
+                verfolgung: str = "", sparte: str = "", inaktiv: str = "",
                 session: Session = Depends(get_session)):
+    """Angebotsliste. v33 (PLAN_V20 Phase 174): Lead-Board-Layout – Spalten je Nutzer
+    (Katalog `angebote`, EK/DB nur mit Kalkulationssicht), gemerkte Spaltensortierung vor dem
+    Rendern (die Grundreihenfolge `sortierung` = nummer|datum|kunde|vertriebler gilt nur ohne
+    gemerkte Spalte), Filter `inaktiv=1` = Kennzeichen „ohne Kontakt seit X Tagen“ (Phase 176,
+    Vertrag N), Summenzeile folgt der gefilterten UND sortierten Liste."""
     abfrage = session.query(Angebot).options(joinedload(Angebot.positionen))
     if sparte:   # Sparten-Filter (v8): Konfigurator-Typ des Angebots
         abfrage = abfrage.filter(Angebot.konfigurator_typ == sparte)
@@ -243,7 +307,25 @@ def liste(request: Request, q: str = "", status: str = "", interesse: str = "",
     mail_zaehler = dict(session.query(AngebotsMail.angebot_id, func.count())
                         .filter(AngebotsMail.eingehend.is_(True))
                         .group_by(AngebotsMail.angebot_id))
-    # Summenzeile (v6): über die aktuell gefilterte Liste
+    # v33 (Phase 174/176, Vertrag N): Kennzeichen „ohne Kontakt seit X Tagen“ als Spalte/Filter
+    inaktiv_tage = _inaktiv_tage(session, angebote, vorgaenge_map)
+    inaktiv_filter = inaktiv in ("1", "true", "ja")
+    if inaktiv_filter:
+        angebote = [a for a in angebote if inaktiv_tage.get(a.id)]
+    # v33 (PLAN_V20 Phase 174): Spalten je Nutzer (Katalog nach Basisrolle und
+    # Kalkulationssicht) und gemerkte Spaltensortierung – angewendet VOR der Summenzeile,
+    # damit Summe und Reihenfolge zur gezeigten Liste gehören
+    board = "angebote"
+    benutzer_obj = request.state.benutzer
+    spalten = lead_boards.spalten_fuer(session, benutzer_obj, board)
+    spalten_sortierung = lead_boards.sortierung_fuer(session, benutzer_obj, board)
+    vertriebler_namen = {a.id: vertriebler[angebot_vertriebler[a.id]].name for a in angebote
+                         if angebot_vertriebler.get(a.id) in vertriebler}
+    lead_boards.zeilen_sortieren(
+        angebote, spalten_sortierung,
+        wert=lambda a, key: lead_boards.angebot_sortwert(a, key, kunden, vorgaenge_map,
+                                                         vertriebler_namen, inaktiv_tage))
+    # Summenzeile (v6): über die aktuell gefilterte (und seit v33 sortierte) Liste
     summen_gesamt = {"netto": 0, "endbetrag": 0, "db": 0}
     for a in angebote:
         su = a.summen()
@@ -255,6 +337,12 @@ def liste(request: Request, q: str = "", status: str = "", interesse: str = "",
                   angebote=angebote, kunden=kunden, q=q, status=status,
                   interesse=interesse, vertriebler_id=vertriebler_id, sortierung=sortierung,
                   kanal=kanal, verfolgung=verfolgung, sparte=sparte,
+                  # v33 (Phase 174): Lead-Board-Layout
+                  board=board, spalten=spalten, spalten_sortierung=spalten_sortierung,
+                  ctx={"board": board, "sortierung": spalten_sortierung},
+                  spalten_fest=lead_boards.spalten_fest(board),
+                  sparten_liste=sparten_modul.SPARTEN,
+                  inaktiv=inaktiv_filter, inaktiv_tage=inaktiv_tage,
                   # v32 (Phase 163): Filter-Markup von N (templates/angebote/liste.html)
                   verfolgung_filter=verfolgung_filter, verfolgung_werte=verfolgung_werte,
                   vorgaenge_map=vorgaenge_map,
@@ -271,9 +359,9 @@ def liste(request: Request, q: str = "", status: str = "", interesse: str = "",
                   db_schwellen_cent=db_schwellen_cent,
                   # v11 (Phase 70): Rolle projektierung sieht die Liste lesend –
                   # DB-Spalte nur mit kalkulation_sichtbar, Öffnen → PDF
-                  kalk_sichtbar=(request.state.benutzer.rolle in ("admin", "innendienst")
+                  kalk_sichtbar=(request.state.benutzer.basisrolle in ("admin", "innendienst")
                                  or request.state.benutzer.kalkulation_sichtbar),
-                  nur_lesend=request.state.benutzer.rolle in ("projektierung",
+                  nur_lesend=request.state.benutzer.basisrolle in ("projektierung",
                                                               "leadmanagement"),
                   meldung=request.query_params.get("meldung", ""))
 
@@ -507,7 +595,7 @@ def editor(request: Request, angebot_id: int,
     from app.models import Benutzer as BenutzerModell
     angebot_vertriebler = mail_vorlagen.vertriebler_fuer_angebot(session, angebot)
     aussendienst = (session.query(BenutzerModell)
-                    .filter(BenutzerModell.rolle == "aussendienst",
+                    .filter(rollen_modul.filter_basis("aussendienst"),
                             BenutzerModell.aktiv.is_(True))
                     .order_by(BenutzerModell.name).all())
 
@@ -954,7 +1042,11 @@ def position_neu(request: Request, angebot_id: int,
 def rabatt_setzen(request: Request, angebot_id: int,
                         session: Session = Depends(get_session)):
     """Rabatt (Phase 21): Betrag ODER Prozent + optionale Bezeichnung;
-    leerer Wert entfernt den Rabatt. Nur Innendienst/Admin (Middleware)."""
+    leerer Wert entfernt den Rabatt. Nur Innendienst/Admin (Middleware).
+    v33 (PLAN_V20 Phase 172): der Rabatt gilt bei jedem Steuersatz auf den
+    Gesamtbetrag nach USt (0 % = Netto) – die Rechnung steckt in Angebot.summen();
+    gespeichert wird über _speichern (Rollback + Wiederholung bei „database is
+    locked“) wie bei den Positionsrouten."""
     if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
         return umleitung
     angebot = session.get(Angebot, angebot_id)
@@ -963,37 +1055,37 @@ def rabatt_setzen(request: Request, angebot_id: int,
     form = anfrage.formular(request)
     wert = (form.get("wert") or "").strip()
     typ = form.get("typ", "betrag")
-    angebot.rabatt_bezeichnung = (form.get("bezeichnung") or "").strip()
-    angebot.rabatt_cent = None
-    angebot.rabatt_prozent = None
+    bezeichnung = (form.get("bezeichnung") or "").strip()
+    cent = prozent = None
+    meldung = "Rabatt+gespeichert"
     if wert:
         if typ == "prozent":
             from app.konfigurator import zahl_parsen
             prozent = zahl_parsen(wert)
             # v11: 0 = Rabatt entfernen (wie leeres Feld), keine Fehlermeldung
             if prozent == 0:
-                session.commit()
-                return RedirectResponse(
-                    f"/angebote/{angebot_id}?meldung=Rabatt+entfernt", status_code=303)
-            if prozent is None or not (0 < prozent <= 100):
+                prozent, meldung = None, "Rabatt+entfernt"
+            elif prozent is None or not (0 < prozent <= 100):
                 return RedirectResponse(
                     f"/angebote/{angebot_id}?meldung=Ung%C3%BCltiger+Prozentwert",
                     status_code=303)
-            angebot.rabatt_prozent = prozent
         else:
-            betrag = preis_parsen(wert)
-            if betrag == 0:
-                session.commit()
-                return RedirectResponse(
-                    f"/angebote/{angebot_id}?meldung=Rabatt+entfernt", status_code=303)
-            if betrag is None or betrag <= 0:
+            cent = preis_parsen(wert)
+            if cent == 0:
+                cent, meldung = None, "Rabatt+entfernt"
+            elif cent is None or cent <= 0:
                 return RedirectResponse(
                     f"/angebote/{angebot_id}?meldung=Ung%C3%BCltiger+Rabattbetrag",
                     status_code=303)
-            angebot.rabatt_cent = betrag
-    session.commit()
-    return RedirectResponse(f"/angebote/{angebot_id}?meldung=Rabatt+gespeichert",
-                            status_code=303)
+
+    def aktion():
+        ziel = session.get(Angebot, angebot_id)   # nach einem Rollback frisch laden
+        ziel.rabatt_bezeichnung = bezeichnung
+        ziel.rabatt_cent = cent
+        ziel.rabatt_prozent = prozent
+
+    _speichern(session, aktion)
+    return RedirectResponse(f"/angebote/{angebot_id}?meldung={meldung}", status_code=303)
 
 
 @router.get("/{angebot_id}/protokoll.pdf")
@@ -1211,11 +1303,13 @@ def email_entwurf(request: Request, angebot_id: int,
     # sind geladen; msal kann das Token über das Netz erneuern)
     from app.db import verbindung_freigeben
     verbindung_freigeben(session)
-    if graph_versand.angemeldeter_benutzer() is None:
+    # v33 (PLAN_V20 Phase 166): Modus anwendung braucht keine Anmeldung einer Person –
+    # verbunden() prüft je Modus (Geheimnis + Verbindungstest bzw. angemeldete Person)
+    if not graph_versand.verbunden(session):
         return RedirectResponse(
             "/versand?meldung=" + quote_plus(
-                "Bitte zuerst mit Microsoft anmelden, dann den Versand erneut "
-                "vorbereiten."), status_code=303)
+                graph_versand.nicht_verbunden_text(session)
+                + " Danach den Versand erneut vorbereiten."), status_code=303)
 
     pdf_pfad = pdf_export.pdf_fuer_angebot(session, angebot)
     # Anhänge (Phase 15/67, v27-Nachtrag 2): volle Logik für ALLE Sparten – das
@@ -1645,6 +1739,10 @@ def taifun_pdf_hochladen(request: Request, angebot_id: int,
     angebot = session.get(Angebot, angebot_id)
     if angebot is None or not angebot.extern:
         return RedirectResponse("/angebote", status_code=303)
+    # v33 (PLAN_V20 Phase 172, Befund 15.10.2026): der Request-Body (Upload) ist Netz-I/O – die
+    # Schreibsitzung darf die SQLite-Schreibsperre nicht während der Übertragung halten
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     form = anfrage.formular(request)
     datei = form.get("pdf_datei")
     if datei is None or not getattr(datei, "filename", ""):
@@ -1803,7 +1901,9 @@ def ueberarbeiten(request: Request, angebot_id: int,
             status_code=303)
     # v30 (PLAN_V18 Phase 149): mit der v22-Wiederholung _speichern – Fehler
     # F-20261002-073115-9c9e: die Route starb ohne Wiederholung an „database is
-    # locked“ (Schreibsperre eines Hintergrundlaufs, reproduziert auf der DB-Kopie)
+    # locked“ (Schreibsperre eines Hintergrundlaufs, reproduziert auf der DB-Kopie).
+    # v33 (Phase 172): version_erzeugen committet nicht selbst (nur flush) – die
+    # Version entsteht vollständig in dieser einen Transaktion.
     ergebnis: dict = {}
 
     def aktion():
@@ -1857,7 +1957,10 @@ def duplizieren(angebot_id: int, session: Session = Depends(get_session)):
     F-20261002-073115-9c9e nach „Überarbeiten → Version .2 → Duplizieren“:
     angebot_anlegen() committet das neue Angebot ohne Wiederholung und starb,
     während ein Hintergrundlauf die SQLite-Schreibsperre hielt (Beleg:
-    Reproduktion mit gehaltener Sperre, tests/test_v30_duplizieren.py)."""
+    Reproduktion mit gehaltener Sperre, tests/test_v30_duplizieren.py).
+    v33 (PLAN_V20 Phase 172, v30-Nachtrag 22): angebot_anlegen(commit=False) –
+    Anlage und Kopie der Positionen in EINER Transaktion, kein eigener Commit
+    innerhalb der Wiederholung (kein halb angelegtes Angebot bei Rollback)."""
     original = session.get(Angebot, angebot_id)
     if original is None:
         return RedirectResponse("/angebote", status_code=303)
@@ -1870,7 +1973,8 @@ def duplizieren(angebot_id: int, session: Session = Depends(get_session)):
         # nach einem Rollback ist das Original abgelaufen → frisch laden
         quelle = session.get(Angebot, angebot_id)
         kopie = angebot_aufbau.angebot_anlegen(
-            session, quelle.kunde_id, sparte=quelle.konfigurator_typ or "WP")
+            session, quelle.kunde_id, sparte=quelle.konfigurator_typ or "WP",
+            commit=False)
         kopie.protokoll_json = quelle.protokoll_json
         kopie.kfw_json = quelle.kfw_json
         kopie.ust_satz = quelle.ust_satz   # v13-PV
@@ -1937,7 +2041,8 @@ def fuer_anderen_kunden_kopieren(request: Request, angebot_id: int,
             "Kunden gibt es „Duplizieren“."), status_code=303)
 
     # v30 (PLAN_V18 Phase 149): Neuanlage des Kunden, Kopie, Vorgang und Notiz in
-    # EINER Transaktion über _speichern (Wiederholung bei „database is locked“)
+    # EINER Transaktion über _speichern (Wiederholung bei „database is locked“);
+    # v33 (Phase 172): angebot_anlegen(commit=False) committet nicht mehr mittendrin
     benutzer = request.state.benutzer
     ergebnis: dict = {}
 
@@ -1951,7 +2056,7 @@ def fuer_anderen_kunden_kopieren(request: Request, angebot_id: int,
         else:
             kunde_id = ziel_id
         kopie = angebot_aufbau.angebot_anlegen(
-            session, kunde_id, sparte=quelle.konfigurator_typ or "WP")
+            session, kunde_id, sparte=quelle.konfigurator_typ or "WP", commit=False)
         kopie.protokoll_json = quelle.protokoll_json
         kopie.kfw_json = quelle.kfw_json
         kopie.vermerke_json = quelle.vermerke_json
@@ -2009,7 +2114,7 @@ def zahlungsbedingung_setzen(request: Request, angebot_id: int,
     if (umleitung := _sperr_umleitung(request, angebot_id)) is not None:
         return umleitung
     benutzer = request.state.benutzer
-    if benutzer is None or benutzer.rolle not in ("admin", "innendienst"):
+    if benutzer is None or benutzer.basisrolle not in ("admin", "innendienst"):
         return RedirectResponse(f"/angebote/{angebot_id}", status_code=303)
     angebot = session.get(Angebot, angebot_id)
     if angebot is None or angebot.extern:

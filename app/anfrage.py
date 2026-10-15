@@ -29,6 +29,29 @@ def kontext_wert(name: str, standard=None):
     return daten.get(name, standard)
 
 
+# v33 (PLAN_V20 Phase 172, v30-Nachtrag 21): HTTP-Methode der laufenden Anfrage.
+# Die RollenMiddleware setzt sie vor call_next (anfrage.METHODE.set(request.method)) –
+# sie reicht wie KONTEXT in den Worker-Thread der def-Route. db.get_session() liest sie
+# als Rückfall, wenn FastAPI keinen Request hereinreicht: schreibende Anfragen
+# (POST/PUT/PATCH/DELETE) eröffnen ihre Transaktion sofort als Schreibtransaktion
+# (BEGIN IMMEDIATE), Leseanfragen (GET) bleiben verzögert (DEFERRED). Außerhalb einer
+# Anfrage (Scheduler, Tests, Skripte) ist die Methode leer.
+METHODE: contextvars.ContextVar[str] = contextvars.ContextVar("anfrage_methode", default="")
+SCHREIBENDE_METHODEN = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def aktuelle_methode() -> str:
+    """HTTP-Methode der laufenden Anfrage in Großbuchstaben („“ außerhalb einer Anfrage)."""
+    return (METHODE.get() or "").upper()
+
+
+def ist_schreibend(methode: str | None = None) -> bool:
+    """True für Anfragen, die Daten ändern (POST/PUT/PATCH/DELETE); ohne Argument
+    gilt die Methode der laufenden Anfrage."""
+    wert = methode if methode is not None else aktuelle_methode()
+    return (wert or "").upper() in SCHREIBENDE_METHODEN
+
+
 def _in_loop(coro_funktion):
     """Coroutine-Funktion ohne Argumente in der Event-Loop ausführen.
     Aus einem anyio-Worker-Thread (FastAPI-Threadpool, TestClient) über

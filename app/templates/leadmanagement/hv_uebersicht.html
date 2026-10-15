@@ -72,8 +72,9 @@
 {% if hinweise and (hinweise.fehlen or hinweise.ohne_kennzeichen) %}
 <div class="hv-hinweis">
     {{ symbol('warnung') }}
-    {% if hinweise.fehlen %}<b>Noch nicht als Benutzer angelegt:</b> {{ hinweise.fehlen | join(', ') }} (Benutzerverwaltung → Rolle Außendienst, danach AD-Profil „terminiert selbst“).{% endif %}
-    {% if hinweise.ohne_kennzeichen %} <b>Benutzer ohne Kennzeichen „Handelsvertreter“ am AD-Profil:</b> {{ hinweise.ohne_kennzeichen | join(', ') }}.{% endif %}
+    {#- v33 (PLAN_V20 Phase 167): Handelsvertreter ist eine Rolle (Variante von Außendienst) #}
+    {% if hinweise.fehlen %}<b>Noch nicht als Benutzer angelegt:</b> {{ hinweise.fehlen | join(', ') }} (Benutzerverwaltung → Rolle „Handelsvertreter“ – setzt das Kennzeichen „terminiert selbst“ im AD-Profil).{% endif %}
+    {% if hinweise.ohne_kennzeichen %} <b>Benutzer ohne Rolle/Kennzeichen „Handelsvertreter“:</b> {{ hinweise.ohne_kennzeichen | join(', ') }}.{% endif %}
 </div>
 {% endif %}
 
@@ -86,11 +87,12 @@
     {% if filter_werte.offen %}<input type="hidden" name="offen" value="1">{% endif %}
     <span class="trenner"></span>
     {% if gesamt %}
-    {#- v29 (PLAN_LEAD_V4 Phase 140): Filter „Gruppe“ – René | Simon-Team | alle (Parameter hv_gruppe_rene/_simon) #}
+    {#- v29 (PLAN_LEAD_V4 Phase 140): Filter „Gruppe“ – René | Simons Gruppe | alle (Parameter hv_gruppe_rene/_simon);
+        v33 (Phase 175): die zweite Gruppe heißt „Simons Gruppe“ (lead_v2.hv_gruppen_wahl) #}
     <select name="gruppe" onchange="this.form.submit()" title="Gruppe (HV-Gruppen aus den Lead-Einstellungen)">
         <option value="">Gruppe: alle</option>
         {% for g in gruppen_wahl %}
-            <option value="{{ g.key }}" {{ 'selected' if filter_werte.gruppe == g.key }}>{{ g.name }}{{ ' + Team' if g.key == 'simon' and (hv_gruppen.simon | length) > 1 }}</option>
+            <option value="{{ g.key }}" {{ 'selected' if filter_werte.gruppe == g.key }}>{{ g.name }}{{ ' (' ~ g.ziel_name ~ ')' if g.key == 'simon' and g.ziel_name }}</option>
         {% endfor %}
     </select>
     <select name="vertreter" onchange="this.form.submit()" title="Vertreter">
@@ -180,7 +182,9 @@
             <td>{% if z.kunde.telefon %}<a href="tel:{{ z.kunde.telefon }}">{{ symbol('telefon') }} {{ z.kunde.telefon }}</a>{% endif %}</td>
             <td>{% if z.termin_text %}{{ symbol('kalender') }} {{ z.termin_text }}{% else %}<span class="dezent">–</span>{% endif %}</td>
             {% endif %}
-            <td class="sp-hv">{{ hv_zuweisung(z, hv_liste, zurueck, gesamt, standard) }}</td>
+            <td class="sp-hv">{#- v33 (PLAN_V20 Phase 175): Kennzeichen „Simons Gruppe (noch nicht verteilt)“, solange kein Mitglied gewählt ist #}
+                {% if z.hv_gruppe_offen %}<span class="abzeichen status-versand-vorbereitet hv-gruppe-offen" data-hv-gruppe-offen="{{ z.vorgang.id }}" title="Über die Sammelaktion an Simons Gruppe verschoben – Mitglied im Dropdown wählen">Simons Gruppe (noch nicht verteilt)</span>{% endif %}
+                {{ hv_zuweisung(z, hv_liste, zurueck, gesamt, standard) }}</td>
         </tr>
         {% else %}
         <tr><td colspan="{{ (spalten | selectattr('sichtbar') | list | length) + 1 if konfig else 11 }}" class="dezent">Keine Leads{% if filter_werte.q or filter_werte.status or filter_werte.kanal or filter_werte.offen %} für diesen Filter{% endif %}.</td></tr>
@@ -190,7 +194,7 @@
     </div>
 </details>
 {% else %}
-<div class="lm-karte"><p class="dezent">Keine Handelsvertreter gekennzeichnet (AD-Profil → „terminiert selbst“).</p></div>
+<div class="lm-karte"><p class="dezent">Keine Handelsvertreter gekennzeichnet (Benutzerverwaltung → Rolle „Handelsvertreter“ bzw. AD-Profil → „terminiert selbst“).</p></div>
 {% endfor %}
 {% if sperrzeit_fremd %}
 {#- Nachtrag 08.10.2026 (Antwort Andreas): Innendienst/Admin tragen Sperrzeiten für
@@ -243,6 +247,8 @@
     <span><b>nur Innendienst</b> = Kanal/Quelle auf der Ausschlussliste (Parametrierung → hv_ausschluss)</span>
     <span><b>Sonderregel monday</b> = Board „Deals - Rene“, Verantwortlicher immer René Golaschewski</span>
     <span><b>Ausschlusskanal</b> (rot) = Kanal nachträglich geändert, Zuweisung bleibt bis zur Rücknahme</span>
+    {#- v33 (PLAN_V20 Phase 175) #}
+    <span><b>Simons Gruppe (noch nicht verteilt)</b> = per Sammelaktion an die Gruppe gegeben; der Gruppenleiter wählt ein Mitglied</span>
 </div>
 <script src="/static/lm_hv.js?v={{ css_version }}" defer></script>
 {% endblock %}

@@ -194,6 +194,11 @@ def fahrzeit(session: Session, von: tuple | None,
                 "geschaetzt": zeile.anbieter == "luftlinie"}
     minuten, km = _geschaetzt(von, nach)
     _cache_schreiben(session, von, nach, minuten, km, "luftlinie")
+    # v33 (PLAN_V20 Phase 172, Vorschlag A 4c): wie in matrix_fuellen den Cache-Eintrag sofort
+    # festschreiben, damit die (GET-)Sitzung der Terminvorschläge die SQLite-Schreibsperre nicht
+    # bis zum Ende der Berechnung hält (nur im Cache-Miss-Pfad)
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     return {"minuten": round(minuten, 1), "km": round(km, 1),
             "geschaetzt": True}
 

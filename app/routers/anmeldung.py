@@ -27,7 +27,9 @@ STARTSEITEN = {"aussendienst": "/erfassung", "projektierung": "/projektierung",
 
 def startseite(session: Session, benutzer) -> str:
     """Rollen-Startseite nach Login und PIN-Wechsel (gleiche Zuordnung)."""
-    ziel = STARTSEITEN.get(benutzer.rolle, "/angebotstool")
+    # v33 (PLAN_V20 Phase 167): Basisrolle – Varianten (Montage Heizung, Service Elektro …)
+    # landen direkt auf der Startseite ihrer Basisrolle
+    ziel = STARTSEITEN.get(getattr(benutzer, "basisrolle", None) or benutzer.rolle, "/angebotstool")
     # v23 (Phase 109): Handelsvertreter landen nach dem Login im Lead-Modul
     # (Modul-Einstieg → persönliches Dashboard mit eigenen Leads)
     try:

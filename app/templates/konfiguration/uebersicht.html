@@ -7,7 +7,7 @@
    und /parametrierung/logik. Jeder Link der alten Button-Reihe kommt genau einmal
    vor; Admin-/Lead-Bedingungen wie bisher. #}
 {% block inhalt %}
-{% set ist_admin = request.state.benutzer and request.state.benutzer.rolle == 'admin' %}
+{% set ist_admin = request.state.benutzer and request.state.benutzer.basisrolle == 'admin' %}
 {% set lead_ok = request.state.lead_modul_ok | default(false) %}
 
 {% macro eintrag(titel, kurz, href, badge='', badge_klasse='') -%}
@@ -41,6 +41,8 @@
     <ul class="param-liste">
         {% if ist_admin %}
         {{ eintrag('Benutzer', 'Konten, Rollen, PINs, Montageteam-Zuordnung', '/benutzer') }}
+        {# v33 (PLAN_V20 Phase 167): Rollen als Varianten einer Basisrolle (nur Admin) #}
+        {{ eintrag('Rollen', 'Varianten einer Basisrolle (Montage Heizung/Elektro, Service, Handelsvertreter): anlegen, umbenennen, deaktivieren', '/parametrierung/rollen') }}
         {% endif %}
         {{ eintrag('E-Mail-Vorlagen', 'Betreff und Text der Angebots-Mails je Außendienstler', '/parametrierung/vorlagen') }}
         {{ eintrag('Signaturen', 'Outlook-Signaturen des Innendiensts (HTML, Bilder)', '/parametrierung/signaturen') }}
@@ -67,11 +69,11 @@
     <h2>Projektierung</h2>
     <ul class="param-liste">
         {% if ist_admin %}
-        {{ eintrag('Projektierung-Einstellungen', 'Freigabe & Pilot, Vorlauf-Ampel, Verantwortliche, Mails, Portal-URLs, UGL, Kalender, BzA-Mail', '/parametrierung/projektierung-einstellungen') }}
+        {{ eintrag('Projektierung-Einstellungen', 'Freigabe & Pilot, Vorlauf-Ampel, Wächter & automatischer Phasenwechsel, Verantwortliche, Mails, Portal-URLs, UGL, Kalender, BzA-Mail', '/parametrierung/projektierung-einstellungen') }}
         {{ eintrag('Heizreport', 'API-Zugang, Kennzahlen, PDF-Ablage', '/parametrierung/heizreport') }}
         {% endif %}
         {{ eintrag('Projektierung-Logik', 'Logik-Excel der Projektierung: Aufgaben, Ordnerstruktur, Formulare, Sub-Typen', '/parametrierung/projektierung-logik') }}
-        {{ eintrag('Teams', 'Montageteams, Mitglieder, Outlook-Adressen', '/parametrierung/teams') }}
+        {{ eintrag('Teams', 'Montageteams, Gewerk (Heizung/Elektro), Mitglieder, Outlook-Adressen', '/parametrierung/teams') }}
         {{ eintrag('Subunternehmer', 'Sub-Firmen je Typ, Standard-Sub, E-Mail-Versand', '/parametrierung/subunternehmer') }}
         {{ eintrag('Stücklisten', 'Positionen den Lieferanten-Artikeln zuordnen (UGL Collin), CSV-Export', '/parametrierung/stuecklisten') }}
         {% if ist_admin %}

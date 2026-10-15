@@ -776,7 +776,17 @@ def _daten() -> list[str]:
                                     ("app.objekte", "migration_v31_objekte"),
                                     ("app.lead_v5", "migration_v31_lead"),
                                     ("app.lead_mail", "migration_v31_mails"),
-                                    ("app.verfolgung", "migration_v32_verfolgung")):
+                                    ("app.verfolgung", "migration_v32_verfolgung"),
+                                    # v33 (PLAN_V20): Rollen-Varianten (+ HV-Rolle, Teams-
+                                    # Gewerk), Graph-Modus, Outlook-Sync, Service, Nachfassen
+                                    # (Einwände), Tabellen-Layout – alle idempotent
+                                    ("app.rollen", "migration_v33_rollen"),
+                                    ("app.graph_versand", "migration_v33_graph"),
+                                    ("app.outlook_sync", "migration_v33_outlook"),
+                                    ("app.projektierung", "migration_v33_service"),
+                                    ("app.montage_formulare", "migration_v33_termin_id"),
+                                    ("app.verfolgung", "migration_v33_nachfassen"),
+                                    ("app.lead_boards", "migration_v33_tabellen")):
             try:
                 modul = importlib.import_module(modulname)
             except ImportError:
@@ -1031,6 +1041,13 @@ def _v4_bza_umbauen(session) -> list[str]:
 
 
 def main() -> int:
+    # v33 (Rollout-Befund 15.10.2026): Meldungen koennen Zeichen ausserhalb von cp1252 enthalten
+    # (Server-Konsole in update.bat) - nie an der Ausgabe scheitern, die Hooks haben bereits committet
+    for strom in (sys.stdout, sys.stderr):
+        try:
+            strom.reconfigure(errors="replace")
+        except Exception:   # noqa: BLE001
+            pass
     parser = argparse.ArgumentParser(description="Friondo Angebotstool – DB-Migration")
     parser.add_argument("--db", help="Pfad zu einer SQLite-Datei (Standard: data/angebotstool.db)")
     argumente = parser.parse_args()

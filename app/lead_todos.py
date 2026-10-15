@@ -58,7 +58,7 @@ def link_fuer(session: Session, benutzer_id: int, todo: Todo | None = None) -> s
     lead_v2.zugriff_erlaubt – „Meine Termine“ wäre für sie im Demo-Modus 404."""
     empfaenger = session.get(Benutzer, benutzer_id) if benutzer_id else None
     anker = f"#todo-{todo.id}" if todo is not None and todo.id else ""
-    if empfaenger is not None and empfaenger.rolle == "aussendienst":
+    if empfaenger is not None and empfaenger.basisrolle == "aussendienst":
         try:
             from app import lead_v2
             hv = lead_v2.ist_handelsvertreter(session, empfaenger)
@@ -106,7 +106,7 @@ def empfaenger_liste(session: Session) -> list[Benutzer]:
 def darf_sehen(benutzer, todo: Todo) -> bool:
     if benutzer is None or todo is None:
         return False
-    return (benutzer.rolle == "admin" or todo.an_benutzer_id == benutzer.id
+    return (benutzer.basisrolle == "admin" or todo.an_benutzer_id == benutzer.id
             or todo.von_benutzer_id == benutzer.id)
 
 
@@ -119,7 +119,7 @@ def darf_loeschen(benutzer, todo: Todo) -> bool:
     """Nur Ersteller oder Admin (Vertrag Phase 110)."""
     if benutzer is None or todo is None:
         return False
-    return benutzer.rolle == "admin" or todo.von_benutzer_id == benutzer.id
+    return benutzer.basisrolle == "admin" or todo.von_benutzer_id == benutzer.id
 
 
 def _aktivitaet(session: Session, todo: Todo, text: str, benutzer=None) -> None:

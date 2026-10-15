@@ -7,8 +7,16 @@
 # Filter Rolle/aktiv und Spalte „Letzter Login“, Einstellungen-Block (Sitzung,
 # PIN-Regeln), CSV-Import mit Vorschau und einmaliger Start-PIN-Liste
 # (app/benutzer_import.py), Login-Protokoll (/benutzer/login-protokoll).
+# v33 (PLAN_V20 Phase 167): Rollen aus dem Katalog (app/rollen.py) – Dropdown,
+# Zusatzrollen und Filter kennen Basisrollen und Varianten (Montage Heizung/Elektro,
+# Service Heizung/Elektro, Handelsvertreter, weitere aus Parametrierung → Rollen),
+# Varianten-Kennzeichen als Badges, Rolle Handelsvertreter ↔ AD-Profil-Häkchen
+# „terminiert selbst“ in beide Richtungen (rollen.hv_spiegeln / hv_rolle_setzen).
+# Phase 175: Infotext zum AD entfällt (Formular/Anzeige), Kanal „Stadtwerke
+# Düsseldorf“ in der Kanal-Regel mit allen Schreibweisen (SWD).
 
 import re
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -24,19 +32,59 @@ from app.models import (Benutzer, Erfassung, Lead, MondayPerson, MondayQuelle,
                         einstellung_holen, einstellung_setzen)
 from app.templating import render
 from app import anfrage   # v27: Formular/JSON in def-Routen
+from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 
 router = APIRouter(prefix="/benutzer")
 
-ROLLEN = ["admin", "innendienst", "aussendienst", "projektierung", "montage",
-          "leadmanagement"]
+# v33 (PLAN_V20 Phase 167): Rollen kommen aus dem Katalog (app/rollen.py, Tabelle
+# `rollen`) – Basisrollen plus Varianten (Montage Heizung/Elektro, Service Heizung/
+# Elektro, Handelsvertreter, weitere aus Parametrierung → Rollen). ROLLEN bleibt als
+# Alias für die sechs Basisrollen (Altcode), ROLLEN_NAMEN als lebendiger Alias über
+# rollen.namen() (key → Name, auch Varianten).
+ROLLEN = list(rollen_modul.BASISROLLEN)
 # v11 (Phase 70): Zusatzrollen als Häkchen – die Hauptrolle steuert weiterhin
-# die Grundsicht, Zusatzrollen schalten Projektierung/Montage frei
+# die Grundsicht, Zusatzrollen schalten Projektierung/Montage frei. v33: die
+# Häkchen bieten alle aktiven Rollen außer Admin (rollen_zusatz_liste).
 ZUSATZROLLEN = ["projektierung", "montage", "leadmanagement"]
-# 27.09.2026: sprechende Namen fuer die neue Benutzer-Seite
-ROLLEN_NAMEN = {"admin": "Admin", "innendienst": "Innendienst",
-                "aussendienst": "Außendienst",
-                "projektierung": "Projektierung", "montage": "Montage",
-                "leadmanagement": "Lead-Management"}
+
+
+class _KatalogNamen(Mapping):
+    """key → Name aus dem Rollen-Katalog (ersetzt das feste Dict von 27.09.2026)."""
+
+    def __getitem__(self, key):
+        return rollen_modul.namen()[key]
+
+    def __iter__(self):
+        return iter(rollen_modul.namen())
+
+    def __len__(self):
+        return len(rollen_modul.namen())
+
+    def get(self, key, default=None):
+        return rollen_modul.namen().get(key, default)
+
+
+ROLLEN_NAMEN = _KatalogNamen()
+
+
+def rollen_liste(session=None) -> list[dict]:
+    """Aktive Rollen für Dropdowns (Basisrollen zuerst): [{key, name, basisrolle, …}]."""
+    return rollen_modul.katalog_liste(nur_aktive=True)
+
+
+def rollen_zusatz_liste(session=None) -> list[dict]:
+    """Zusatzrollen-Häkchen: alle aktiven Rollen außer Admin [ANNAHME: Admin ist nur
+    als Hauptrolle sinnvoll – Rechte erben von der Hauptrolle]."""
+    return [e for e in rollen_liste(session) if e["key"] != "admin"]
+
+
+def _rolle_aus_formular(form, standard: str, zusaetzlich=()) -> str:
+    """Rollen-Key aus dem Formular – nur aktive Katalog-Keys (bzw. die heutige Rolle
+    des Benutzers), sonst der Standard."""
+    wert = (form.get("rolle") or "").strip().lower()
+    return wert if wert and rollen_modul.key_gueltig(wert, zusaetzlich) else standard
+
+
 _EMAIL_MUSTER = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 # v27 (Phase 130): Einstellungen des Blocks „Sitzung & PIN-Regeln“ (Tabelle
@@ -81,7 +129,7 @@ def verknuepfungen(session: Session, benutzer_id: int) -> dict[str, int]:
 def _email_pruefen(rolle: str, email: str) -> str | None:
     if email and not _EMAIL_MUSTER.match(email):
         return "E-Mail-Adresse ist ungültig"
-    if rolle == "aussendienst" and not email:
+    if rollen_modul.basisrolle_von(rolle) == "aussendienst" and not email:   # v33: auch Varianten
         return "Für Außendienst-Benutzer ist eine E-Mail-Adresse Pflicht (CC im Versand)"
     return None
 
@@ -103,11 +151,17 @@ def einstellungen_lesen(session: Session) -> dict:
 def liste(request: Request, session: Session = Depends(get_session)):
     from app.models import Team, TeamMitglied
     # v27 (Phase 130): Filter Rolle (Hauptrolle) und aktiv/inaktiv
-    rolle_filter = request.query_params.get("rolle") or ""
+    # v33 (Phase 167): Filter kennt alle Rollen des Katalogs – eine Basisrolle schließt
+    # ihre Varianten ein (montage → auch Montage Heizung/Elektro, Service …), eine
+    # Variante filtert genau diesen Key
+    rolle_filter = (request.query_params.get("rolle") or "").strip().lower()
     aktiv_filter = request.query_params.get("aktiv") or ""
     abfrage = session.query(Benutzer)
-    if rolle_filter in ROLLEN:
-        abfrage = abfrage.filter(Benutzer.rolle == rolle_filter)
+    if rolle_filter and rollen_modul.eintrag(rolle_filter) is not None:
+        if rolle_filter in rollen_modul.BASISROLLEN:
+            abfrage = abfrage.filter(rollen_modul.filter_basis(rolle_filter))
+        else:
+            abfrage = abfrage.filter(Benutzer.rolle == rolle_filter)
     else:
         rolle_filter = ""
     if aktiv_filter == "1":
@@ -127,10 +181,24 @@ def liste(request: Request, session: Session = Depends(get_session)):
     from app import abwesenheiten
     abwesenheit_je_benutzer = abwesenheiten.je_benutzer(session, [b.id for b in benutzer])
     namen = {b.id: b.name for b in session.query(Benutzer.id, Benutzer.name)}
+    # v33 (Phase 167): Rollen-Katalog (aktive Rollen, Basisrollen zuerst); die heutige
+    # Rolle eines Benutzers bleibt im Dropdown, auch wenn sie inzwischen deaktiviert ist
+    katalog = rollen_liste(session)
+    bekannte = {e["key"] for e in katalog}
+    for b in benutzer:
+        if b.rolle and b.rolle not in bekannte:
+            e = rollen_modul.eintrag(b.rolle)
+            katalog.append(dict(e, variante=True, inaktiv=True) if e is not None else
+                           {"key": b.rolle, "name": f"{b.rolle} (unbekannt)", "basisrolle": b.rolle,
+                            "gewerk": "", "service": False, "handelsvertreter": False,
+                            "aktiv": False, "system": False, "sortierung": 999, "variante": True,
+                            "inaktiv": True})
+            bekannte.add(b.rolle)
     return render(request, "benutzer/liste.html", aktiv="/benutzer",
-                  benutzer=benutzer, rollen=ROLLEN, loeschbar=loeschbar,
-                  zusatzrollen=ZUSATZROLLEN, teams=teams,
+                  benutzer=benutzer, rollen=katalog, loeschbar=loeschbar,
+                  zusatzrollen=rollen_zusatz_liste(session), teams=teams,
                   rollen_namen=ROLLEN_NAMEN,
+                  rollen_badges=rollen_modul.benutzer_badges,
                   team_je_benutzer=team_je_benutzer,
                   abwesenheit_je_benutzer=abwesenheit_je_benutzer,
                   abwesenheit_arten=abwesenheiten.ARTEN, benutzer_namen=namen,
@@ -145,7 +213,7 @@ def liste(request: Request, session: Session = Depends(get_session)):
 def anlegen(request: Request, session: Session = Depends(get_session)):
     form = anfrage.formular(request)
     name = (form.get("name") or "").strip()
-    rolle = form.get("rolle") if form.get("rolle") in ROLLEN else "aussendienst"
+    rolle = _rolle_aus_formular(form, "aussendienst")   # v33: auch Varianten-Keys
     pin = (form.get("pin") or "").strip()
     email = (form.get("email") or "").strip().lower()
     if not name:
@@ -167,6 +235,8 @@ def anlegen(request: Request, session: Session = Depends(get_session)):
     auth.pin_setzen(neuer, pin)          # schreibt pin_hash_v2 UND pin_hash
     session.add(neuer)
     session.flush()
+    # v33 (Phase 167): Rolle Handelsvertreter ↔ AD-Profil-Kennzeichen terminiert_selbst
+    rollen_modul.hv_spiegeln(session, neuer)
     # 27.09.2026: Montage-Benutzer direkt beim Anlegen einem Team zuordnen
     from app.models import Team, TeamMitglied
     gueltig = {t.id for t in session.query(Team)}
@@ -191,7 +261,9 @@ def aendern(request: Request, benutzer_id: int,
                                           Benutzer.id != benutzer.id).first():
             return RedirectResponse("/benutzer?meldung=Name+bereits+vergeben", status_code=303)
         benutzer.name = neuer_name
-    rolle = form.get("rolle") if form.get("rolle") in ROLLEN else benutzer.rolle
+    # v33 (Phase 167): auch Varianten-Keys; die heutige Rolle bleibt gültig, selbst wenn
+    # sie inzwischen deaktiviert wurde
+    rolle = _rolle_aus_formular(form, benutzer.rolle, zusaetzlich=(benutzer.rolle,))
     email = (form.get("email") or "").strip().lower()
     fehler = _email_pruefen(rolle, email)
     if fehler:
@@ -202,16 +274,23 @@ def aendern(request: Request, benutzer_id: int,
     if form.get("benachrichtigung_mail") in ("aus", "sofort", "digest"):
         benutzer.benachrichtigung_mail = form.get("benachrichtigung_mail")
     # v11 (Phase 70): Mehrfachrollen (Häkchen), Kalkulation, Telefon, Teams
-    zusatz = [r for r in ZUSATZROLLEN if form.get(f"zusatz_{r}") == "on"]
-    benutzer.rollen = ",".join([rolle] + [r for r in zusatz if r != rolle])
+    # v33: Häkchen für alle aktiven Rollen des Katalogs (zusatz_<key>); bisherige
+    # Zusatzrollen, die das Formular nicht kennt (deaktivierte Variante), bleiben erhalten
+    bekannt = [e["key"] for e in rollen_zusatz_liste(session)]
+    zusatz = [r for r in bekannt if form.get(f"zusatz_{r}") == "on"]
+    zusatz += [r for r in benutzer.rollen_liste[1:] if r not in bekannt and r != rolle]
+    # die Basisrolle der eigenen Variante ist als Zusatzrolle überflüssig (Rechte erben)
+    basis = rollen_modul.basisrolle_von(rolle)
+    benutzer.rollen = ",".join([rolle] + [r for r in zusatz if r not in (rolle, basis)])
     benutzer.kalkulation_sichtbar = form.get("kalkulation_sichtbar") == "on"
     benutzer.telefon = (form.get("telefon") or "").strip()
-    # v29 (PLAN_LEAD_V4 Phase 141/142): Vorname („Hallo, <Vorname>“) und Infotext
-    # der Terminbestätigung – nur ändern, wenn das Formular die Felder mitschickt
+    # v29 (PLAN_LEAD_V4 Phase 141/142): Vorname („Hallo, <Vorname>“) – nur ändern, wenn
+    # das Formular das Feld mitschickt. v33 (PLAN_V20 Phase 175): der Infotext zum AD
+    # entfällt – die Spalte bleibt, wird aber weder gelesen noch geschrieben
     if form.get("vorname") is not None:
         benutzer.vorname = (form.get("vorname") or "").strip()[:100]
-    if form.get("infotext") is not None:
-        benutzer.infotext = (form.get("infotext") or "").strip()
+    # v33 (Phase 167): Rolle Handelsvertreter ↔ AD-Profil-Kennzeichen terminiert_selbst
+    rollen_modul.hv_spiegeln(session, benutzer)
     # v12 (Phase 73): Leadmanager-Einstellungen (Round-Robin-Zuweisung)
     benutzer.lm_aktiv = form.get("lm_aktiv") == "on"
     benutzer.lm_arbeitszeit = (form.get("lm_arbeitszeit") or "").strip() or None
@@ -433,7 +512,9 @@ def _import_seite(request: Request, schritt: str, **kontext):
     from app import benutzer_import
     return render(request, "benutzer/import.html", aktiv="/benutzer", schritt=schritt,
                   spalten=benutzer_import.SPALTEN, beispiel=benutzer_import.BEISPIEL_CSV,
-                  rollen_namen=ROLLEN_NAMEN, **kontext)
+                  rollen_namen=ROLLEN_NAMEN,
+                  # v33 (Phase 167): erlaubte Rollen (Keys und Namen aller aktiven Rollen)
+                  rollen_liste=benutzer_import.rollen_namen_text(), **kontext)
 
 
 @router.get("/import")
@@ -554,6 +635,9 @@ def ad_profil_seite(request: Request, benutzer_id: int,
                   bild_vorhanden=lead_mail.bild_pfad(person) is not None,
                   vorlage_vorhanden=lead_mail.vorlage_vorhanden(session, lead_mail.vertriebler_key(person.id)),
                   bild_max_mb=lead_mail.BILD_MAX_BYTES // (1024 * 1024),
+                  # v33 (Phase 167): Rolle/Kennzeichen des Benutzers (Hinweis am Häkchen HV)
+                  rollen_name=person.rollen_name,
+                  hat_hv_rolle=person.hat_kennzeichen("handelsvertreter"),
                   gebiet=", ".join(str(p) for p in gebiet),
                   # v31 (PLAN_LEAD_V5 Phase 158): Terminassistent nur Montag bis Freitag –
                   # kein Samstags-Eingabefeld mehr (Migration leert Samstag)
@@ -578,6 +662,10 @@ def ad_profil_speichern(request: Request, benutzer_id: int,
     person = session.get(Benutzer, benutzer_id)
     if person is None:
         return RedirectResponse("/benutzer", status_code=303)
+    # v33 (PLAN_V20 Phase 172, Befund 15.10.2026): der Request-Body (Upload) ist Netz-I/O – die
+    # Schreibsitzung darf die SQLite-Schreibsperre nicht während der Übertragung halten
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     form = anfrage.formular(request)
     profil = (session.query(AdProfil)
               .filter(AdProfil.benutzer_id == benutzer_id).first())
@@ -628,16 +716,19 @@ def ad_profil_speichern(request: Request, benutzer_id: int,
         kompetenz.append("GW")
         profil.kompetenz_sparten = json_modul.dumps(kompetenz)
     profil.terminiert_selbst = form.get("terminiert_selbst") == "on"
+    # v33 (PLAN_V20 Phase 167): das Häkchen setzt umgekehrt die Rolle Handelsvertreter
+    # (bzw. nimmt sie zurück) – Kennzeichen und Rolle bleiben synchron
+    rollen_modul.hv_rolle_setzen(session, person, profil.terminiert_selbst)
     if "buchungslink" in form:
         person.buchungslink = (form.get("buchungslink") or "").strip()[:500] or None
-    # v29 (PLAN_LEAD_V4 Phase 142): Vorname, Infotext und Bild (JPG/PNG, max 2 MB,
+    # v29 (PLAN_LEAD_V4 Phase 142): Vorname und Bild (JPG/PNG, max 2 MB,
     # data/benutzerbilder/<id>.<ext>) für den Block {vertriebler_block} der
-    # Terminbestätigung; neue Vertriebler erhalten automatisch die Standard-Kopie
+    # Terminbestätigung; neue Vertriebler erhalten automatisch die Standard-Kopie.
+    # v33 (PLAN_V20 Phase 175): der Infotext entfällt vollständig (Spalte bleibt, wird
+    # nicht mehr gelesen – den Vertriebler-Block in lead_mail baut G um)
     from app import lead_mail
     if form.get("vorname") is not None:
         person.vorname = (form.get("vorname") or "").strip()[:100]
-    if form.get("infotext") is not None:
-        person.infotext = (form.get("infotext") or "").strip()
     bild_meldung = ""
     if form.get("bild_entfernen") == "on":
         lead_mail.benutzerbild_entfernen(person)
@@ -658,9 +749,15 @@ def ad_profil_speichern(request: Request, benutzer_id: int,
         bild_meldung = " Bild gespeichert."
     if lead_mail.vertriebler_vorlage_sicherstellen(session, person):
         bild_meldung += " Terminbestätigung als Standard-Kopie angelegt."
-    # Kanal-Regel: der AD steht genau in den angehakten Kanälen (leer = keine)
-    lead_termin.kanal_regel_ad_setzen(
-        session, person.id, [str(k) for k in form.getlist("kanal_fest")])
+    # Kanal-Regel: der AD steht genau in den angehakten Kanälen (leer = keine).
+    # v33 (PLAN_V20 Phase 175): „Stadtwerke Düsseldorf“ wird mit allen Schreibweisen
+    # (monday-Kanal „SWD“) hinterlegt, damit der Kandidatenfilter beide Werte trifft
+    kanaele: list[str] = []
+    for k in form.getlist("kanal_fest"):
+        for alias in kern.kanal_aliase(str(k)):
+            if alias not in kanaele:
+                kanaele.append(alias)
+    lead_termin.kanal_regel_ad_setzen(session, person.id, kanaele)
     session.flush()
     if profil.start_adresse and profil.start_lat is None:
         try:   # Startadresse sofort geokodieren (best effort)

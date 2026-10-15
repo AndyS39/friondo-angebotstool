@@ -160,7 +160,7 @@ in der monday-Anbindung gemappt ist.</p>
     {% if not eigene_ansicht %}
     <select name="grund_ad">
         <option value="0">Alle Vertriebler</option>
-        {% for bid, b in benutzer_map.items() if b.rolle == 'aussendienst' %}
+        {% for bid, b in benutzer_map.items() if b.basisrolle == 'aussendienst' %}
             <option value="{{ bid }}" {{ 'selected' if grund_ad == bid }}>{{ b.name }}</option>
         {% endfor %}
     </select>
@@ -186,6 +186,22 @@ in der monday-Anbindung gemappt ist.</p>
 </table>
 {% else %}
 <p class="dezent">Keine Ablehnungen im gewählten Zeitraum/Filter.</p>
+{% endif %}
+
+{# v33 (PLAN_V20 Phase 176): Einwände beim Nachfassen (Chips beim Ergebnis „Nochmal anrufen“
+   im Dialog „Nächster Schritt“) – derselbe Zeitraum und dieselben Filter wie die Gründe #}
+<h3>Einwände beim Nachfassen <span class="dezent">– Chips aus „Nochmal anrufen“, gleicher Filter</span></h3>
+{% if einwand_zeilen %}
+<table class="tabelle" style="max-width:520px">
+    <thead><tr><th>Einwand</th><th class="rechts">Anzahl</th></tr></thead>
+    <tbody>
+    {% for name, anzahl in einwand_zeilen %}
+        <tr><td>{{ name }}</td><td class="rechts">{{ anzahl }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="dezent">Keine Einwände im gewählten Zeitraum/Filter.</p>
 {% endif %}
 
 {# v10 (Phase 63): Kennzahlen je Vorgang #}
@@ -214,7 +230,7 @@ in der monday-Anbindung gemappt ist.</p>
     {% if not eigene_ansicht %}
     <select name="ae_ad">
         <option value="0">Alle Vertriebler</option>
-        {% for bid, b in benutzer_map.items() if b.rolle == 'aussendienst' %}
+        {% for bid, b in benutzer_map.items() if b.basisrolle == 'aussendienst' %}
             <option value="{{ bid }}" {{ 'selected' if ae_ad == bid }}>{{ b.name }}</option>
         {% endfor %}
     </select>

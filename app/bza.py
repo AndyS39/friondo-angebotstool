@@ -207,6 +207,9 @@ def mail_senden(session, gewerk, betreff: str, text: str,
     # Absender und CC sind gelesen; der Versand läuft über mehrere Graph-Aufrufe)
     from app.db import verbindung_freigeben
     verbindung_freigeben(session)
+    # v33 (PLAN_V20 Phase 166): kein direkter Graph-Pfad hier – die Postfach-Entscheidung
+    # (Modus anwendung: /users/<projektierung@>, delegiert: /me + „Senden als“) trifft
+    # graph_versand.mail_mit_anhaengen_senden über versand_pfad(absender)
     ok, fehler, _konversation = graph_versand.mail_mit_anhaengen_senden(
         empfaenger, betreff, text, [anhang], cc=cc, absender=absender)
     if not ok:

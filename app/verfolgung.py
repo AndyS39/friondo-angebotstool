@@ -27,6 +27,17 @@
 #   aktive_gruende(session), bestellung_angekuendigt_anzahl(session) (ID-Kachel)
 #   migration_v32_verfolgung(session) -> list[str]  (idempotent, migrate.py ruft sie auf)
 #
+# v33 (PLAN_V20 Phase 176, Agent N – Nachfassen):
+#   status_text(status, versuche=0) -> „Nachgefasst (2)“ (Zähler nur bei nachgefasst)
+#   naechster_schritt(..., einwand_id=None): „Nochmal anrufen“ erhöht
+#       vorgaenge.nachfass_versuche (Rückgängig senkt wieder) und speichert den optionalen
+#       Einwand-Chip als VorgangEinwand + vorgaenge.letzter_einwand_id
+#   aktive_einwaende(session), einwand_pruefen(session, einwand_id), letzter_einwand(session,
+#       vorgang) -> Einwand | None, einwaende_verteilung(session, von, bis, ...) (Statistik)
+#   dialog_kontext(..., benutzer=None) liefert zusätzlich einwaende, letzter_einwand,
+#       nachfass_versuche und nachfass_mail (Kontext der Nachfass-Mail, app/nachfassen.py)
+#   migration_v33_nachfassen(session) -> list[str]  (vier Start-Einwände, idempotent)
+#
 # Wiedervorlagen laufen über den Vertrag von Agent M (`nachfassen.wiedervorlage_setzen`);
 # solange das Modul fehlt, setzt der Rückfall hier die Spalten direkt. Reine
 # Datenbankarbeit – Netzaufrufe (monday-Wert, Outlook-Storno) liegen in den gerufenen
@@ -41,8 +52,8 @@ from sqlalchemy.orm import Session
 
 from app import werktage
 from app.models import (AblehnungsGrund, Angebot, AngebotsNotiz, Benachrichtigung,
-                        Benutzer, Erfassung, Kunde, Vorgang, angebot_status_setzen,
-                        einstellung_holen, einstellung_setzen)
+                        Benutzer, Einwand, Erfassung, Kunde, Vorgang, VorgangEinwand,
+                        angebot_status_setzen, einstellung_holen, einstellung_setzen)
 
 STATUS = ("versendet", "nachgefasst", "bestellung_angekuendigt", "angenommen", "abgelehnt")
 STATUS_TEXTE = {
@@ -82,13 +93,108 @@ GRUENDE_FREITEXT_PFLICHT = ("Sonstiges",)
 AUTO_GRUND = "90 Tage Ablauf"   # Systemgrund des Prüflaufs (app/ablauf_pruefung.AUTO_GRUND)
 MIGRATION_MARKER = "migration_v32_ablehnungsgruende"
 _ANGEBOT_VERSENDET = ("Versendet", "Versendet (extern)")
+# v33 (PLAN_V20 Phase 176): Start-Einwände (Entscheidung Andreas: bestätigen/ergänzen –
+# Rückfrage im Bericht), Marker der einmaligen Anlage
+EINWAENDE_START = ("Förderung unklar", "wartet auf Mitbewerber",
+                   "Entscheidung in der Familie", "Finanzierung offen")
+MIGRATION_MARKER_V33 = "migration_v33_einwaende"
 
 
 # --- Status-Texte, Filter, Listen ------------------------------------------------------
 
-def status_text(status: str | None) -> str:
-    """Anzeigetext der Stufe; unbekannt/leer → leerer Text (Suche nutzt den Rückfall)."""
-    return STATUS_TEXTE.get((status or "").strip(), "")
+def status_text(status: str | None, versuche: int = 0) -> str:
+    """Anzeigetext der Stufe; unbekannt/leer → leerer Text (Suche nutzt den Rückfall).
+    v33 (Phase 176): bei „nachgefasst“ mit Zähler der Telefonversuche – „Nachgefasst (2)“;
+    0 oder kein Zähler → ohne Klammer (rückwärtskompatibel)."""
+    s = (status or "").strip()
+    text = STATUS_TEXTE.get(s, "")
+    try:
+        anzahl = int(versuche or 0)
+    except (TypeError, ValueError):
+        anzahl = 0
+    if text and s == "nachgefasst" and anzahl > 0:
+        return f"{text} ({anzahl})"
+    return text
+
+
+# --- v33 (Phase 176): Einwand-Chips ----------------------------------------------------
+
+def aktive_einwaende(session: Session) -> list[Einwand]:
+    """Aktive Einwände in Pflege-Reihenfolge (Chips im Dialog „Nächster Schritt“)."""
+    return (session.query(Einwand).filter(Einwand.aktiv.is_(True))
+            .order_by(Einwand.sortierung, Einwand.id).all())
+
+
+def einwand_pruefen(session: Session, einwand_id) -> tuple[Einwand | None, str]:
+    """Optionaler Chip: leer = kein Einwand (None, ""); eine Nummer muss einen aktiven
+    Einwand treffen, sonst (None, Fehlertext)."""
+    roh = str(einwand_id or "").strip()
+    if not roh or roh == "0":
+        return None, ""
+    try:
+        nummer = int(roh)
+    except ValueError:
+        return None, "Unbekannter Einwand."
+    einwand = session.get(Einwand, nummer)
+    if einwand is None or not einwand.aktiv:
+        return None, "Unbekannter oder deaktivierter Einwand."
+    return einwand, ""
+
+
+def letzter_einwand(session: Session, vorgang: Vorgang) -> Einwand | None:
+    """Der zuletzt gesetzte Einwand (vorgaenge.letzter_einwand_id) – steht beim nächsten
+    Anruf oben auf der Anruf-Karte; deaktivierte Einwände bleiben lesbar."""
+    if vorgang is None or not getattr(vorgang, "letzter_einwand_id", None):
+        return None
+    return session.get(Einwand, vorgang.letzter_einwand_id)
+
+
+def nachfass_versuche(vorgang: Vorgang) -> int:
+    return int(getattr(vorgang, "nachfass_versuche", 0) or 0)
+
+
+def einwaende_verteilung(session: Session, von: datetime, bis: datetime,
+                         nur_benutzer_id=None, ad_id: int = 0, kanal: str = "",
+                         sparte: str = "") -> list[tuple[str, int]]:
+    """Statistik (neben den Ablehnungsgründen): Verteilung der gesetzten Einwände im
+    Zeitraum (vorgang_einwaende.zeit), filterbar nach Vertriebler (AD des Vorgangs,
+    sonst der setzende Benutzer), Kanal des Kunden und Sparte (eine Sparte der
+    versendeten Angebote des Vorgangs bzw. das Interesse des Kunden)."""
+    eintraege = (session.query(VorgangEinwand)
+                 .filter(VorgangEinwand.zeit >= von, VorgangEinwand.zeit < bis).all())
+    if not eintraege:
+        return []
+    vorgang_ids = {e.vorgang_id for e in eintraege}
+    vorgaenge = {v.id: v for v in session.query(Vorgang).filter(Vorgang.id.in_(vorgang_ids))}
+    kunden = {k.id: k for k in session.query(Kunde)
+              .filter(Kunde.id.in_({v.kunde_id for v in vorgaenge.values()} or {0}))}
+    namen = {e.id: e.name for e in session.query(Einwand)}
+    sparten_je_vorgang: dict[int, set[str]] = {}
+    if sparte:
+        for a in (session.query(Angebot.vorgang_id, Angebot.konfigurator_typ)
+                  .filter(Angebot.vorgang_id.in_(vorgang_ids))):
+            sparten_je_vorgang.setdefault(a[0], set()).add((a[1] or "WP").upper())
+    zaehler: dict[str, int] = {}
+    for e in eintraege:
+        v = vorgaenge.get(e.vorgang_id)
+        if v is None or getattr(v, "demo", False):
+            continue
+        verantwortlich = v.ad_id or e.benutzer_id
+        if nur_benutzer_id is not None and verantwortlich != nur_benutzer_id:
+            continue
+        if ad_id and verantwortlich != ad_id:
+            continue
+        kunde = kunden.get(v.kunde_id)
+        if kanal and (kunde is None or (kunde.vertriebskanal or "") != kanal):
+            continue
+        if sparte:
+            sparten = sparten_je_vorgang.get(v.id) or set(
+                getattr(kunde, "interessen", []) if kunde is not None else [])
+            if sparte.upper() not in sparten:
+                continue
+        name = namen.get(e.einwand_id) or "– unbekannt –"
+        zaehler[name] = zaehler.get(name, 0) + 1
+    return sorted(zaehler.items(), key=lambda kv: (-kv[1], kv[0]))
 
 
 def status_farbe(status: str | None) -> str:
@@ -295,7 +401,7 @@ def _verantwortlicher(vorgang: Vorgang, benutzer) -> int | None:
     der handelnde Außendienstler, sonst der bisherige Verantwortliche (None = Innendienst)."""
     if getattr(vorgang, "ad_id", None):
         return vorgang.ad_id
-    if benutzer is not None and getattr(benutzer, "rolle", "") == "aussendienst":
+    if benutzer is not None and getattr(benutzer, "basisrolle", "") == "aussendienst":   # v33: Basisrolle
         return benutzer.id
     return vorgang.wiedervorlage_benutzer_id
 
@@ -321,8 +427,12 @@ def _schnappschuss(session: Session, vorgang: Vorgang, schritt: str, benutzer) -
                         "wiedervorlage_art": vorgang.wiedervorlage_art,
                         "lead_phase": vorgang.lead_phase,
                         "naechste_aktion_am": vorgang.naechste_aktion_am,
-                        "zurueckgestellt_bis": vorgang.zurueckgestellt_bis},
-            "angebote": angebote, "erfassungen": erfassungen, "glocken": []}
+                        "zurueckgestellt_bis": vorgang.zurueckgestellt_bis,
+                        # v33 (Phase 176): Zähler und letzter Einwand – Rückgängig senkt wieder
+                        "nachfass_versuche": nachfass_versuche(vorgang),
+                        "letzter_einwand_id": getattr(vorgang, "letzter_einwand_id", None)},
+            "angebote": angebote, "erfassungen": erfassungen, "glocken": [],
+            "einwand_eintrag_id": None}
 
 
 def _schnappschuss_merken(daten: dict) -> str:
@@ -351,8 +461,8 @@ def _innendienst_ids(session: Session) -> list[int]:
     """[ANNAHME] Empfänger der Glocke „Bestellung angekündigt“: alle aktiven Benutzer der
     Rolle Innendienst; gibt es keinen, die Admins."""
     aktive = session.query(Benutzer).filter(Benutzer.aktiv.is_(True)).all()
-    ids = [b.id for b in aktive if b.rolle == "innendienst"]
-    return ids or [b.id for b in aktive if b.rolle == "admin"]
+    ids = [b.id for b in aktive if b.basisrolle == "innendienst"]
+    return ids or [b.id for b in aktive if b.basisrolle == "admin"]
 
 
 def _glocke_innendienst(session: Session, vorgang: Vorgang, kunde) -> list[int]:
@@ -403,11 +513,15 @@ def _angebote_ablehnen_v8(session: Session, vorgang: Vorgang, grund: str, text: 
 
 def naechster_schritt(session: Session, vorgang: Vorgang, schritt: str, benutzer,
                       grund_id=None, freitext: str = "", wann: str = "", datum=None,
-                      notiz: str = "", heute: date | None = None) -> tuple[bool, str, dict]:
+                      notiz: str = "", heute: date | None = None,
+                      einwand_id=None) -> tuple[bool, str, dict]:
     """Die drei Wege des Dialogs (Phase 163). Rückgabe (ok, meldung, daten) – daten
     für die JSON-Antwort: status, status_text, ampel, wiedervorlage_am (TT.MM.JJJJ oder
     leer), schritt, rueckgaengig {token, sekunden}. Kein Commit – der Aufrufer committet
-    (Route über das _speichern-Muster)."""
+    (Route über das _speichern-Muster).
+    v33 (Phase 176): „Nochmal anrufen“ zählt den Telefonversuch (vorgaenge.nachfass_versuche
+    + 1, kein Limit, keine Eskalation) und nimmt den optionalen Einwand-Chip `einwand_id`
+    (VorgangEinwand + vorgaenge.letzter_einwand_id); daten zusätzlich versuche, einwand."""
     schritt = (schritt or "").strip()
     freitext = (freitext or "").strip()
     notiz = (notiz or "").strip()
@@ -418,6 +532,7 @@ def naechster_schritt(session: Session, vorgang: Vorgang, schritt: str, benutzer
         return False, "Unbekannter Schritt.", {}
     kunde = session.get(Kunde, vorgang.kunde_id) if vorgang.kunde_id else None
     grund = None
+    einwand = None
     neues_datum = None
     if schritt == "abgelehnt":
         grund, fehler = grund_pruefen(session, grund_id, freitext)
@@ -435,6 +550,9 @@ def naechster_schritt(session: Session, vorgang: Vorgang, schritt: str, benutzer
                 return False, "Das Datum liegt in der Vergangenheit.", {}
         else:
             return False, "Bitte „In 3 Werktagen“ oder ein Datum wählen.", {}
+        einwand, fehler = einwand_pruefen(session, einwand_id)
+        if fehler:
+            return False, fehler, {}
     else:
         neues_datum = werktage.plus_werktage(heute, BESTELLUNG_WERKTAGE)
 
@@ -471,18 +589,34 @@ def naechster_schritt(session: Session, vorgang: Vorgang, schritt: str, benutzer
         wiedervorlage_setzen(session, vorgang, neues_datum, _verantwortlicher(vorgang, benutzer),
                              WIEDERVORLAGE_ART_NOCHMAL)
         setzen(session, vorgang, "nachgefasst", benutzer)
+        # v33 (Phase 176): Telefonversuch zählen, Einwand-Chip speichern
+        vorgang.nachfass_versuche = nachfass_versuche(vorgang) + 1
         text = f"Nochmal anrufen am {neues_datum.strftime('%d.%m.%Y')}"
+        if einwand is not None:
+            eintrag = VorgangEinwand(vorgang_id=vorgang.id, einwand_id=einwand.id,
+                                     zeit=datetime.now(),
+                                     benutzer_id=getattr(benutzer, "id", None))
+            session.add(eintrag)
+            session.flush()
+            vorgang.letzter_einwand_id = einwand.id
+            schnappschuss["einwand_eintrag_id"] = eintrag.id
+            text += f" – Einwand: {einwand.name}"
+        text += f" (Nachfass-Anruf {vorgang.nachfass_versuche})"
         meldung = f"Nochmal anrufen am {datum_text(neues_datum)} gespeichert."
+        if einwand is not None:
+            meldung += f" Einwand „{einwand.name}“ vermerkt."
     _system_notiz(session, vorgang, text, benutzer)
     session.flush()
     token = _schnappschuss_merken(schnappschuss)
     return True, meldung, {
         "schritt": schritt,
         "status": vorgang.verfolgung_status,
-        "status_text": status_text(vorgang.verfolgung_status),
+        "status_text": status_text(vorgang.verfolgung_status, nachfass_versuche(vorgang)),
         "ampel": vorgang.verfolgung_ampel or "",
         "wiedervorlage_am": (vorgang.wiedervorlage_am.strftime("%d.%m.%Y")
                              if vorgang.wiedervorlage_am else ""),
+        "versuche": nachfass_versuche(vorgang),
+        "einwand": einwand.name if einwand is not None else "",
         "rueckgaengig": {"token": token, "sekunden": RUECKGAENGIG_SEKUNDEN},
     }
 
@@ -525,6 +659,12 @@ def rueckgaengig(session: Session, vorgang: Vorgang, token: str, benutzer) -> tu
         glocke = session.get(Benachrichtigung, gid)
         if glocke is not None:
             session.delete(glocke)
+    # v33 (Phase 176): den mit diesem Schritt gesetzten Einwand-Eintrag entfernen
+    # (Zähler und letzter_einwand_id sind über daten["vorgang"] bereits zurückgesetzt)
+    if daten.get("einwand_eintrag_id"):
+        eintrag = session.get(VorgangEinwand, daten["einwand_eintrag_id"])
+        if eintrag is not None:
+            session.delete(eintrag)
     if daten["schritt"] == "abgelehnt" and vorgang.lead_phase:
         from app import leadmanagement as kern
         kern.aktivitaet(session, vorgang.id, "status",
@@ -540,10 +680,11 @@ def rueckgaengig(session: Session, vorgang: Vorgang, token: str, benutzer) -> tu
     return True, meldung, {
         "schritt": daten["schritt"],
         "status": vorgang.verfolgung_status or "",
-        "status_text": status_text(vorgang.verfolgung_status),
+        "status_text": status_text(vorgang.verfolgung_status, nachfass_versuche(vorgang)),
         "ampel": vorgang.verfolgung_ampel or "",
         "wiedervorlage_am": (vorgang.wiedervorlage_am.strftime("%d.%m.%Y")
                              if vorgang.wiedervorlage_am else ""),
+        "versuche": nachfass_versuche(vorgang),
         "angebote": wiederhergestellt,
     }
 
@@ -551,15 +692,53 @@ def rueckgaengig(session: Session, vorgang: Vorgang, token: str, benutzer) -> tu
 # --- Kontext für das Partial -----------------------------------------------------------
 
 def dialog_kontext(session: Session, vorgang: Vorgang, zurueck: str = "",
-                   heute: date | None = None) -> dict:
+                   heute: date | None = None, benutzer=None) -> dict:
     """Variablen für `{% include "vorgaenge/_naechster_schritt.html" %}`: vorgang,
     gruende (aktive Angebotstool-Gründe), naechster_3wt {datum, text „Mi 14.10.“, iso},
-    ziel (Rücksprung ohne JavaScript), heute_iso (min des Datumsfelds)."""
+    ziel (Rücksprung ohne JavaScript), heute_iso (min des Datumsfelds).
+    v33 (Phase 176): einwaende (aktive Chips), letzter_einwand (Name oder leer),
+    nachfass_versuche (Zähler) und nachfass_mail (Kontext des Knopfes „Nachfass-Mail“ aus
+    app/nachfassen.py – `benutzer` = Absender; ohne Benutzer gilt der AD des Vorgangs)."""
     heute = _datum(heute) or date.today()
     tag = naechster_3wt(heute)
-    return {"vorgang": vorgang, "gruende": aktive_gruende(session),
-            "naechster_3wt": {"datum": tag, "text": datum_text(tag), "iso": tag.isoformat()},
-            "ziel": zurueck or f"/vorgaenge/{vorgang.id}", "heute_iso": heute.isoformat()}
+    einwand = letzter_einwand(session, vorgang)
+    kontext = {"vorgang": vorgang, "gruende": aktive_gruende(session),
+               "naechster_3wt": {"datum": tag, "text": datum_text(tag), "iso": tag.isoformat()},
+               "ziel": zurueck or f"/vorgaenge/{vorgang.id}", "heute_iso": heute.isoformat(),
+               "einwaende": aktive_einwaende(session),
+               "letzter_einwand": einwand.name if einwand is not None else "",
+               "nachfass_versuche": nachfass_versuche(vorgang),
+               "nachfass_mail": None}
+    try:
+        from app import nachfassen
+        kontext["nachfass_mail"] = nachfassen.nachfass_mail_kontext(session, vorgang, benutzer)
+    except (ImportError, AttributeError):   # Vertrag fehlt: Knopf bleibt aus
+        pass
+    return kontext
+
+
+# --- v33 (Phase 176): Migration (migrate.py: ("app.verfolgung", "migration_v33_nachfassen"))
+
+def migration_v33_nachfassen(session: Session) -> list[str]:
+    """Vier Start-Einwände einmalig anlegen (Marker migration_v33_einwaende); vorhandene
+    Namen (ohne Groß-/Kleinschreibung) werden nicht doppelt angelegt, bestehende Einträge
+    behalten Reihenfolge und Aktiv-Kennzeichen. Zweiter Lauf: keine Meldung."""
+    if einstellung_holen(session, MIGRATION_MARKER_V33, "") == "erledigt":
+        return []
+    vorhanden = {(e.name or "").strip().casefold(): e for e in session.query(Einwand)}
+    naechste = (max((e.sortierung or 0) for e in vorhanden.values()) + 1) if vorhanden else 1
+    neu = []
+    for name in EINWAENDE_START:
+        if name.casefold() in vorhanden:
+            continue
+        session.add(Einwand(name=name, aktiv=True, sortierung=naechste))
+        naechste += 1
+        neu.append(name)
+    einstellung_setzen(session, MIGRATION_MARKER_V33, "erledigt")
+    session.flush()
+    if not neu:
+        return ["Einwände (v33): Startwerte bereits vorhanden – nichts angelegt"]
+    return [f"Einwände (v33): {len(neu)} Start-Einwände angelegt ({', '.join(neu)})"]
 
 
 # --- Migration (migrate.py: ("app.verfolgung", "migration_v32_verfolgung")) ------------

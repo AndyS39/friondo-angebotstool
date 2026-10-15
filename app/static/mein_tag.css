@@ -1,128 +1,264 @@
 /* v32 (PLAN_V19 Phase 161/162): Vertriebler-Ansicht „Mein Tag“ (templates/leads/mein_tag.html).
-   Eine Spalte von Karten, unter 600 px Vollbreite, sonst zentriert mit höchstens 720 px.
-   Nur semantische Tokens aus style.css (Design v2, beide Modi), keine Hex-Werte.
-   Mobil: Safe-Area-Abstände (env(safe-area-inset-*), viewport-fit=cover setzt mein_tag.js),
-   Schaltflächen mindestens 44 px hoch, kein horizontales Scrollen. */
+   v33 (PLAN_V20 Phase 173/174, Design-Entwurf „Außendienst App“ 14.10.2026): Aufbau,
+   Abstände und Verhalten des Entwurfs; Farben ausschließlich aus den Design-v2-Tokens
+   (style.css, Hell/Dunkel) – Akzent --akzent/--akzent-text, Flächen --flaeche-karte/
+   --flaeche-abgesetzt, dunkle Karte „Als Nächstes“ --flaeche-erhoeht/--text-invers,
+   Status-/Ampelfarben --status-*, Text --text/--text-dezent. Keine Hex-Werte.
+   Blöcke: 1 Umschaltung mobil/Desktop · 2 Kopf · 3 „Als Nächstes“ · 4 Zeitstrahl „Heute“ und
+   „Kommende Tage“ · 5 Wiedervorlage (Abschnitt + Seite) · 6 Anruf-Karte (v32) · 7 untere
+   Leiste · 8 Leads VOT Desktop (Gruppen, Priorität) · 9 Media-Queries.
+   Mobil: Safe-Area-Abstände (env(safe-area-inset-*)), Schaltflächen mindestens 44 px hoch,
+   kein horizontales Scrollen. */
 
-main.mein-tag-seite {
-    max-width: 720px;
-    margin: 0 auto;
-    padding-left: max(var(--a-4), env(safe-area-inset-left));
-    padding-right: max(var(--a-4), env(safe-area-inset-right));
-    padding-bottom: calc(var(--a-6) + env(safe-area-inset-bottom));
-    overflow-x: hidden;
-}
+/* ---- 1. Umschaltung: Karten nur unter 600 px (Außendienst), sonst die Tabelle ---- */
+main.mein-tag-seite { padding-left: max(var(--a-4), env(safe-area-inset-left)); padding-right: max(var(--a-4), env(safe-area-inset-right)); overflow-x: hidden; }
+.mt-mobil { display: none; max-width: 720px; margin: 0 auto; }
+.mt-mobil-immer { display: block; }
+.mt-desktop { display: block; }
+.mt-mobil, .mt-desktop { overflow-wrap: anywhere; }
 
-.mt-kopf { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--a-3); flex-wrap: wrap; margin-bottom: var(--a-3); }
-.mt-kopf h1 { margin: 0; }
-.mt-datum { margin: 0.15rem 0 0; }
-
-/* Umschalter Karten | Tabelle (Innendienst/Admin) */
-.mt-umschalter { display: inline-flex; border: 1px solid var(--linie-stark); border-radius: var(--r-m); overflow: hidden; }
-.mt-umschalter a { padding: 0.45rem 0.9rem; min-height: 44px; display: inline-flex; align-items: center; text-decoration: none; color: var(--text); background: var(--flaeche-karte); }
-.mt-umschalter a + a { border-left: 1px solid var(--linie-stark); }
-.mt-umschalter a.aktiv { background: var(--akzent); color: var(--akzent-text); font-weight: 600; }
-.mt-umschalter a:hover:not(.aktiv) { background: var(--akzent-flaeche); }
-
-/* Filter als aufklappbare Karte */
-.mt-filter { margin-bottom: var(--a-4); padding: var(--a-3) var(--a-4); }
-.mt-filter summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; gap: var(--a-2); flex-wrap: wrap; }
-.mt-filter-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--a-3); margin-top: var(--a-3); align-items: end; }
-.mt-filter-form label { display: grid; gap: 0.25rem; font-size: var(--t-s); color: var(--text-dezent); }
-.mt-filter-form input, .mt-filter-form select { min-height: 44px; font-size: var(--t-m); }
-.mt-filter-knoepfe { display: flex; gap: var(--a-2); flex-wrap: wrap; }
-.mt-sync { display: flex; gap: var(--a-3); align-items: center; flex-wrap: wrap; margin-top: var(--a-3); padding-top: var(--a-3); border-top: 1px solid var(--linie); }
-
-/* Blöcke */
-.mt-block { margin-bottom: var(--a-5); }
-.mt-block h2 { display: flex; align-items: center; gap: var(--a-2); font-size: var(--t-l); margin: 0 0 var(--a-3); flex-wrap: wrap; }
-.mt-zahl { display: inline-flex; align-items: center; justify-content: center; min-width: 1.6em; padding: 0 0.45em; height: 1.6em; border-radius: 999px; background: var(--flaeche-abgesetzt); color: var(--text-dezent); font-size: var(--t-s); font-weight: 700; }
-.mt-zahl.rot { background: var(--status-rot-bg); color: var(--status-rot); }
+/* ---- 2. Kopf: Datum klein in Versalien, Titel groß, Initialen-Kreis rechts ---- */
+.mt-kopf { display: flex; justify-content: space-between; align-items: center; gap: var(--a-3); margin: var(--a-2) 0 var(--a-5); }
+.mt-kopf-text { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.mt-datum { font-size: var(--t-s); font-weight: 600; color: var(--text-dezent); letter-spacing: 0.06em; text-transform: uppercase; }
+.mt-kopf h1 { margin: 0; font-size: var(--t-xxl); letter-spacing: -0.02em; line-height: 1.05; color: var(--text-titel); }
+.avatar.mt-avatar { width: 48px; height: 48px; font-size: 1rem; flex: none; }
+.mt-block { margin-bottom: var(--a-6); }
+.mt-block-kopf { display: flex; justify-content: space-between; align-items: baseline; gap: var(--a-3); margin-bottom: var(--a-3); }
+.mt-block h2 { margin: 0; font-size: var(--t-xl); color: var(--text-titel); }
+.mt-zaehler { font-size: var(--t-s); color: var(--text-dezent); white-space: nowrap; }
+.mt-zaehler-rot { color: var(--status-rot); font-weight: 600; }
 .mt-block .leer-zustand { margin: 0; }
+/* überfällige Termine: aufklappbarer Block über der Heute-Liste */
+.mt-ueberfaellig-block { margin-bottom: var(--a-3); border: 1px solid color-mix(in srgb, var(--status-rot) 45%, var(--linie)); border-left: 4px solid var(--status-rot); border-radius: var(--r-l); background: var(--flaeche-karte); }
+.mt-ueberfaellig-block > summary { cursor: pointer; min-height: 48px; display: flex; align-items: center; gap: var(--a-2); flex-wrap: wrap; padding: var(--a-2) var(--a-4); font-weight: 600; font-size: var(--t-s); }
+.mt-ueberfaellig-block > .mt-liste { border: 0; border-top: 1px solid var(--linie); border-radius: 0 0 var(--r-l) var(--r-l); box-shadow: none; }
 
-/* Karten */
-.mt-karte {
-    background: var(--flaeche-karte);
-    border: 1px solid var(--linie);
-    border-radius: var(--r-l);
-    box-shadow: var(--schatten-1);
-    padding: var(--a-4);
-    margin-bottom: var(--a-3);
-    display: grid;
-    gap: var(--a-2);
-    overflow-wrap: anywhere;
-}
-.mt-karte.mt-ueberfaellig { border-color: color-mix(in srgb, var(--status-rot) 45%, var(--linie)); border-left: 4px solid var(--status-rot); }
-.mt-karte.mt-fertig { opacity: 0.55; }
-.mt-zeile1 { display: flex; align-items: center; gap: var(--a-2); flex-wrap: wrap; }
-.mt-datum-zeit { font-size: var(--t-l); color: var(--text-titel); }
-.mt-uhr { font-size: var(--t-xl); }
-.mt-badges { margin-left: auto; display: inline-flex; gap: 0.25rem; flex-wrap: wrap; align-items: center; }
-.mt-name { font-weight: 600; font-size: var(--t-l); color: var(--text-titel); }
-.mt-anruf .mt-name, .mt-heiss .mt-name { font-size: var(--t-l); }
-.mt-ad { font-weight: 400; font-size: var(--t-s); }
-.mt-adresse a, .mt-tel { color: var(--link); text-decoration: none; display: inline-flex; align-items: center; gap: 0.3rem; min-height: 44px; }
-.mt-adresse a:hover, .mt-tel:hover { text-decoration: underline; }
+/* ---- 3. Karte „Als Nächstes“ (dunkle Fläche, Akzent-Knopf) ---- */
+.mt-naechstes { background: var(--flaeche-erhoeht); color: var(--text-invers); border: 1px solid var(--linie); border-radius: var(--r-xl); padding: var(--a-5) var(--a-5) var(--a-5); display: flex; flex-direction: column; gap: var(--a-3); margin-bottom: var(--a-6); box-shadow: var(--schatten-1); }
+.mt-naechstes a { color: inherit; }
+.mt-naechstes-kopf { display: flex; justify-content: space-between; align-items: center; gap: var(--a-2); }
+.mt-badge { background: var(--akzent); color: var(--akzent-text); font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.35rem 0.65rem; border-radius: 999px; }
+.mt-hinweis { font-size: var(--t-s); font-weight: 600; opacity: 0.85; }
+.mt-naechstes-zeit { display: flex; align-items: baseline; gap: var(--a-3); }
+.mt-uhr-gross { font-size: 2.75rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.mt-bis { font-size: var(--t-m); opacity: 0.85; }
+.mt-naechstes-kunde { display: flex; flex-direction: column; gap: 0.25rem; }
+.mt-naechstes-name { font-size: var(--t-l); font-weight: 700; }
+.mt-naechstes-typ { font-size: var(--t-m); opacity: 0.85; }
+.mt-naechstes-ort { display: flex; align-items: center; gap: 0.5rem; font-size: var(--t-s); }
+.mt-naechstes-ort a { text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
+.mt-naechstes-ort a:hover { text-decoration: underline; }
+.mt-naechstes-leer { opacity: 0.7; }
+.mt-naechstes-aktionen { display: flex; gap: var(--a-2); margin-top: var(--a-1); }
+.mt-route { flex: 1 1 auto; min-height: 52px; border: 0; border-radius: var(--r-l); background: var(--akzent); color: var(--akzent-text); font-size: var(--t-m); font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; text-decoration: none; }
+.mt-route:hover { background: var(--akzent-hover); color: var(--akzent-text); text-decoration: none; }
+.mt-route-aus, .mt-rund-aus { opacity: 0.45; cursor: default; }
+.mt-rund { width: 52px; height: 52px; flex: none; border: 0; border-radius: var(--r-l); background: color-mix(in srgb, var(--text-invers) 14%, transparent); color: var(--text-invers); display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+.mt-rund:hover { background: color-mix(in srgb, var(--text-invers) 24%, transparent); }
+.mt-rund .symbol-svg, .mt-route .symbol-svg { width: 1.3rem; height: 1.3rem; }
+
+/* ---- 4. Zeitstrahl „Heute“ und Liste „Kommende Tage“ ---- */
+.mt-liste { background: var(--flaeche-karte); border: 1px solid var(--linie); border-radius: var(--r-xl); padding: var(--a-1) 0; box-shadow: var(--schatten-1); }
+.mt-termin { border-top: 1px solid var(--linie); }
+.mt-termin:first-child { border-top: 0; }
+.mt-termin-zeile { display: flex; gap: var(--a-3); align-items: flex-start; padding: var(--a-3) var(--a-4); min-height: 64px; cursor: pointer; }
+.mt-termin-zeile:focus-visible { outline: 3px solid var(--fokus); outline-offset: -3px; border-radius: var(--r-m); }
+.mt-uhr { width: 46px; flex: 0 0 46px; font-size: var(--t-m); font-weight: 700; color: var(--text-titel); padding-top: 1px; font-variant-numeric: tabular-nums; }
+.mt-punkt { position: relative; width: 14px; flex: 0 0 14px; align-self: stretch; }
+.mt-punkt::before { content: ""; position: absolute; left: 6px; top: -0.75rem; bottom: -0.75rem; width: 2px; background: var(--linie); }
+.mt-termin:first-child .mt-punkt::before { top: 7px; }
+.mt-termin:last-child .mt-punkt::before { bottom: auto; height: 1.5rem; }
+.mt-punkt::after { content: ""; position: absolute; left: 1px; top: 5px; width: 12px; height: 12px; border-radius: 50%; box-sizing: border-box; background: var(--flaeche-karte); border: 2px solid var(--linie-stark); }
+.mt-termin-erledigt .mt-punkt::after { background: var(--status-gruen); border-color: var(--status-gruen); }
+.mt-termin-naechster .mt-punkt::after { background: var(--status-orange); border-color: var(--status-orange); }
+.mt-termin-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+.mt-termin-name { font-size: var(--t-m); font-weight: 600; color: var(--text); }
+.mt-termin-typ, .mt-termin-ort { font-size: var(--t-s); color: var(--text-dezent); }
+.mt-termin-ort { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.mt-termin-erledigt .mt-uhr, .mt-termin-erledigt .mt-termin-name { color: var(--text-dezent); }
+.mt-termin-ueberfaellig, .mt-ueberfaellig .mt-uhr { color: var(--status-rot); }
+.mt-termin-aktion { flex: none; align-self: center; display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; }
+.mt-termin-aktion .knopf { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
+.mt-haupt { padding-left: var(--a-4); padding-right: var(--a-4); font-weight: 600; }
+.mt-link { color: var(--link); text-decoration: none; font-weight: 600; font-size: var(--t-s); min-height: 44px; display: inline-flex; align-items: center; }
+.mt-link:hover { text-decoration: underline; }
+.mt-termin-detail { padding: 0 var(--a-4) var(--a-3) calc(46px + var(--a-3) + 14px + var(--a-3)); display: grid; gap: var(--a-2); font-size: var(--t-s); }
+.mt-termin-klein .mt-termin-detail { padding-left: calc(46px + var(--a-3) + var(--a-3)); }
+.mt-termin-detail[hidden] { display: none; }
+.mt-detail-zeile { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.mt-detail-zeile a { color: var(--link); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; gap: 0.3rem; }
+.mt-detail-zeile a:hover { text-decoration: underline; }
+.mt-detail-aktionen { gap: var(--a-3); }
 .mt-objekt { font-weight: 600; }
-.mt-telefon .mt-tel { font-weight: 600; font-size: var(--t-m); }
-.mt-angebot { margin: 0; line-height: 1.45; }
+.mt-tel { font-weight: 600; }
+.mt-termin-klein .mt-termin-zeile { min-height: 56px; padding: var(--a-2) var(--a-4); align-items: center; }
+.mt-termin-klein .mt-uhr { width: 42px; flex-basis: 42px; font-size: var(--t-s); }
+.mt-tag { display: flex; flex-direction: column; gap: var(--a-2); margin-bottom: var(--a-4); }
+.mt-tag-kopf { display: flex; align-items: center; gap: var(--a-3); }
+.mt-datumskachel { width: 46px; height: 50px; flex: none; border-radius: var(--r-l); background: var(--flaeche-karte); border: 1.5px solid var(--linie-stark); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; }
+.mt-wd { font-size: 0.7rem; font-weight: 700; color: var(--text-dezent); letter-spacing: 0.06em; }
+.mt-nr { font-size: var(--t-xl); font-weight: 700; color: var(--text-titel); }
+.mt-tag-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.mt-tag-titel { font-size: var(--t-m); font-weight: 700; color: var(--text); }
+.mt-tag-zaehler { font-size: var(--t-s); color: var(--text-dezent); }
+.mt-tag-liste { margin-left: calc(46px + var(--a-3)); border-radius: var(--r-l); }
+.mt-fuss { margin: var(--a-2) 0 0; }
+
+/* ---- 5. Wiedervorlage: Abschnitt (Mein Tag) und Seite ---- */
+.mt-wv { background: var(--flaeche-karte); border: 2px solid var(--akzent); border-radius: var(--r-xl); padding: var(--a-5) var(--a-4) var(--a-4); display: flex; flex-direction: column; gap: var(--a-4); box-shadow: var(--schatten-1); }
+.mt-wv-kopf { display: flex; align-items: flex-start; gap: var(--a-3); }
+.mt-wv-symbol { width: 44px; height: 44px; flex: none; border-radius: var(--r-l); background: var(--status-orange-bg); color: var(--status-orange); display: inline-flex; align-items: center; justify-content: center; }
+.mt-wv-symbol .symbol-svg { width: 1.4rem; height: 1.4rem; }
+.mt-wv-titel { display: flex; flex-direction: column; gap: 0.15rem; flex: 1 1 auto; min-width: 0; }
+.mt-untertitel { font-size: var(--t-s); color: var(--text-dezent); }
+.mt-wv-zahl { flex: none; background: var(--status-rot); color: var(--text-auf-farbe); font-size: var(--t-s); font-weight: 700; min-width: 28px; height: 28px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; padding: 0 0.5rem; box-sizing: border-box; }
+.mt-wv-filter { display: flex; flex-direction: column; gap: var(--a-3); }
+.mt-chips { display: flex; gap: var(--a-2); flex-wrap: wrap; }
+.mt-chip { min-height: 40px; padding: 0 0.85rem; border-radius: 999px; border: 1.5px solid var(--linie-stark); background: var(--flaeche-karte); color: var(--text); font: inherit; font-size: var(--t-s); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.45rem; }
+.mt-chip.aktiv { background: var(--akzent); color: var(--akzent-text); border-color: var(--akzent); }
+.mt-chip-zahl { min-width: 20px; height: 20px; border-radius: 999px; padding: 0 0.35rem; box-sizing: border-box; background: var(--flaeche-abgesetzt); color: var(--text); font-size: var(--t-xs); font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.mt-chip.aktiv .mt-chip-zahl { background: var(--akzent-text); color: var(--akzent); }
+.mt-sortieren { display: flex; align-items: center; gap: var(--a-3); }
+.mt-sortieren-titel { font-size: var(--t-s); color: var(--text-dezent); font-weight: 600; flex: none; }
+.mt-segment { flex: 1 1 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: var(--flaeche-abgesetzt); border-radius: var(--r-m); padding: 3px; gap: 3px; }
+.mt-segment-knopf { min-height: 36px; border: 0; border-radius: calc(var(--r-m) - 3px); background: transparent; color: var(--text-dezent); font: inherit; font-size: var(--t-s); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 0.25rem; }
+.mt-segment-knopf.aktiv { background: var(--flaeche-karte); color: var(--text); box-shadow: var(--schatten-1); }
+.mt-pfeil { font-size: var(--t-s); min-width: 0.7em; }
+.mt-wv-liste { display: flex; flex-direction: column; }
+.mt-wv-karte { border-top: 1px solid var(--linie); }
+.mt-wv-karte:first-child { border-top: 0; }
+.mt-wv-karte[hidden] { display: none; }
+.mt-wv-zeile { display: flex; align-items: center; gap: var(--a-3); padding: var(--a-3) 0; min-height: 64px; cursor: pointer; }
+.mt-wv-zeile:focus-visible { outline: 3px solid var(--fokus); outline-offset: -3px; border-radius: var(--r-m); }
+.avatar.mt-wv-avatar { width: 42px; height: 42px; font-size: var(--t-s); flex: none; }
+.mt-wv-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.mt-wv-name { font-size: var(--t-m); font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+.mt-wv-sparte { font-size: var(--t-s); color: var(--text-dezent); }
+.mt-wv-kontakt { display: flex; align-items: center; gap: 0.35rem; font-size: var(--t-s); color: var(--text-dezent); flex-wrap: wrap; }
+.mt-wv-kontakt .symbol-svg { width: 0.95rem; height: 0.95rem; }
+.mt-wv-tage { font-weight: 600; }
+.mt-wv-tage.warn { color: var(--status-rot); }
+.mt-wv-pfeil { color: var(--text-dezent); font-size: var(--t-xl); line-height: 1; flex: none; }
+.mt-wv-tel { background: var(--akzent); color: var(--akzent-text); width: 46px; height: 46px; border-radius: var(--r-l); }
+.mt-wv-tel:hover { background: var(--akzent-hover); color: var(--akzent-text); }
+.mt-wv-karte.mt-aufgeklappt .mt-wv-zeile { background: var(--flaeche-abgesetzt); border-radius: var(--r-m); padding-left: var(--a-2); padding-right: var(--a-2); }
+.mt-wv-detail { padding: var(--a-2) 0 var(--a-3); display: grid; gap: var(--a-2); }
+.mt-wv-detail[hidden] { display: none; }
+.mt-wv-alle { min-height: 50px; border-radius: var(--r-l); background: var(--flaeche-erhoeht); color: var(--text-invers); text-decoration: none; font-size: var(--t-m); font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+.mt-wv-alle:hover { opacity: 0.92; color: var(--text-invers); text-decoration: none; }
+.mt-wv-leer[hidden] { display: none; }
+.mt-wv-leer .leer-zustand { margin: 0; }
+.mt-wv-leer-zeile { margin: var(--a-2) 0 0; text-align: center; }
+.mt-wv-leer-zeile[hidden] { display: none; }
+/* Priorität Hoch/Mittel/Niedrig: drei Balken + Text in den Ampel-Farben */
+.mt-prio { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0.5rem; border-radius: var(--r-s); font-size: var(--t-xs); font-weight: 700; white-space: nowrap; }
+.mt-balken { display: inline-flex; align-items: flex-end; gap: 2px; height: 10px; }
+.mt-balken i { width: 3px; border-radius: 1px; background: var(--linie-stark); display: block; }
+.mt-balken i:nth-child(1) { height: 4px; }
+.mt-balken i:nth-child(2) { height: 7px; }
+.mt-balken i:nth-child(3) { height: 10px; }
+.mt-prio-hoch { background: var(--status-rot-bg); color: var(--status-rot); }
+.mt-prio-hoch .mt-balken i { background: var(--status-rot); }
+.mt-prio-mittel { background: var(--status-orange-bg); color: var(--status-orange); }
+.mt-prio-mittel .mt-balken i:nth-child(-n+2) { background: var(--status-orange); }
+.mt-prio-niedrig { background: var(--status-grau-bg); color: var(--status-grau); }
+.mt-prio-niedrig .mt-balken i:nth-child(1) { background: var(--status-grau); }
+/* Seite „Wiedervorlage“ */
+.mt-wv-seitenkopf { display: flex; flex-direction: column; gap: var(--a-3); padding-bottom: var(--a-3); border-bottom: 1px solid var(--linie); margin-bottom: var(--a-3); }
+.mt-zurueck { align-self: flex-start; min-height: 44px; display: inline-flex; align-items: center; gap: 0.25rem; color: var(--link); text-decoration: none; font-weight: 600; margin-left: -0.5rem; padding: 0 0.5rem; }
+.mt-zurueck:hover { text-decoration: underline; }
+.mt-wv-seitentitel { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--a-3); }
+.mt-wv-seitentitel h1 { margin: 0; font-size: var(--t-xxl); letter-spacing: -0.02em; line-height: 1.05; color: var(--text-titel); }
+.mt-wv-offen { font-size: var(--t-s); color: var(--text-dezent); font-weight: 600; white-space: nowrap; }
+.mt-suche { position: relative; display: block; }
+.mt-suche-symbol { position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); color: var(--text-dezent); display: inline-flex; }
+.mt-suche input[type="search"] { width: 100%; box-sizing: border-box; min-height: 50px; border-radius: var(--r-l); border: 1.5px solid var(--linie-stark); background: var(--flaeche-karte); color: var(--text); padding: 0 var(--a-3) 0 2.75rem; font: inherit; font-size: var(--t-m); }
+.mt-suche input[type="search"]:focus { outline: 2px solid var(--akzent-glanz); border-color: var(--akzent); }
+.mt-wv-seite .mt-chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+.mt-wv-seite .mt-chip { flex: none; }
+.mt-wv-seitenliste { gap: var(--a-2); }
+.mt-wv-seitenliste .mt-wv-karte { background: var(--flaeche-karte); border: 1px solid var(--linie); border-radius: var(--r-xl); padding: 0 var(--a-3) 0 var(--a-4); box-shadow: var(--schatten-1); }
+.mt-wv-seitenliste .mt-wv-detail { padding-bottom: var(--a-3); }
+
+/* ---- 6. Anruf-Karte (v32 Phase 162/163) im aufgeklappten Teil ---- */
+.mt-label { display: inline-flex; align-items: center; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: var(--t-xs); font-weight: 600; background: var(--flaeche-abgesetzt); color: var(--text-dezent); white-space: nowrap; }
+.mt-label-rot { background: var(--status-rot-bg); color: var(--status-rot); }
+.mt-label-gruen { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.mt-herkunft { display: inline-flex; align-items: center; padding: 0.05rem 0.45rem; border-radius: 999px; font-size: var(--t-xs); background: var(--status-grau-bg); color: var(--status-grau); border: 1px solid color-mix(in srgb, var(--status-grau) 30%, transparent); }
+.mt-badges { display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center; }
+.mt-angebot { margin: 0; line-height: 1.45; font-size: var(--t-s); }
 .mt-angebot svg { vertical-align: -0.15em; margin-right: 0.2rem; }
 .mt-angebot a { color: var(--text); text-decoration: none; font-weight: 600; }
 .mt-angebot a:hover { text-decoration: underline; }
-
-/* Labels, Badges, Ampel, Chips */
-.mt-label { display: inline-flex; align-items: center; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: var(--t-s); font-weight: 600; background: var(--flaeche-abgesetzt); color: var(--text-dezent); }
-.mt-label-rot { background: var(--status-rot-bg); color: var(--status-rot); }
-.mt-herkunft { display: inline-flex; align-items: center; padding: 0.05rem 0.45rem; border-radius: 999px; font-size: var(--t-xs, 0.75rem); background: var(--status-grau-bg); color: var(--status-grau); border: 1px solid color-mix(in srgb, var(--status-grau) 30%, transparent); }
-.mt-ampel { width: 0.9rem; height: 0.9rem; border-radius: 50%; display: inline-block; flex: none; background: var(--status-grau); box-shadow: 0 0 0 2px var(--flaeche-karte), 0 0 0 3px var(--linie); }
-.mt-ampel-heiss { background: var(--status-rot); }
-.mt-ampel-warm { background: var(--status-orange); }
-.mt-ampel-kalt { background: var(--status-blau); }
-.mt-ampel-leer { background: var(--flaeche-abgesetzt); }
-.mt-chip { display: inline-flex; align-items: center; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: var(--t-s); font-weight: 600; margin-left: auto; }
-.mt-chip-orange { background: var(--status-orange-bg); color: var(--status-orange); }
-.mt-chip-rot { background: var(--status-rot-bg); color: var(--status-rot); }
-
-/* Aktionen: Hauptknopf rechts unten, unter 600 px volle Breite; mind. 44 px */
-.mt-aktionen { display: flex; justify-content: flex-end; align-items: center; gap: var(--a-3); margin-top: var(--a-1); flex-wrap: wrap; }
-.mt-aktionen-klein { justify-content: space-between; }
-.mt-karte .knopf { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
-.mt-haupt { padding-left: var(--a-5); padding-right: var(--a-5); font-weight: 600; }
-.mt-akte { color: var(--link); font-size: var(--t-s); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
-.mt-akte:hover { text-decoration: underline; }
-.knopf.mt-gruen { background: var(--status-gruen); color: var(--text-auf-farbe); }
-
-/* Dialog „Nächster Schritt“ (Partial von N) und Rückfall */
+.mt-versuche { margin: 0; font-size: var(--t-s); }
 .mt-schritt { margin-top: var(--a-1); }
 .mt-schritt .ns-dialog { margin: 0; }
 .mt-schritt-rueckfall { display: flex; gap: var(--a-2); flex-wrap: wrap; }
 .mt-schritt-rueckfall form { flex: 1 1 140px; display: flex; }
-.mt-schritt-rueckfall .knopf { flex: 1; }
-
-/* Letzte Aktivitäten + Notiz */
+.mt-schritt-rueckfall .knopf { flex: 1; min-height: 44px; }
+.knopf.mt-gruen { background: var(--status-gruen); color: var(--text-auf-farbe); }
 .mt-aktivitaeten summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: var(--a-2); font-weight: 600; font-size: var(--t-s); }
 .mt-aktivitaeten ul { margin: 0; padding-left: 1.1rem; font-size: var(--t-s); display: grid; gap: 0.25rem; }
 .mt-akt-zeit { color: var(--text-dezent); font-variant-numeric: tabular-nums; }
-.mt-akt-art { display: inline-block; padding: 0 0.4rem; border-radius: 999px; background: var(--flaeche-abgesetzt); color: var(--text-dezent); font-size: var(--t-xs, 0.75rem); }
+.mt-akt-art { display: inline-block; padding: 0 0.4rem; border-radius: 999px; background: var(--flaeche-abgesetzt); color: var(--text-dezent); font-size: var(--t-xs); }
 .mt-notiz { display: grid; gap: var(--a-2); margin-top: var(--a-1); }
 .mt-notiz label { display: grid; gap: 0.25rem; font-size: var(--t-s); color: var(--text-dezent); }
 .mt-notiz textarea { width: 100%; box-sizing: border-box; font-size: var(--t-m); min-height: 44px; }
 .mt-notiz-aktionen { display: flex; align-items: center; gap: var(--a-3); flex-wrap: wrap; }
+.mt-notiz-aktionen .knopf { min-height: 44px; }
 .mt-notiz-aktionen .mt-akte { margin-left: auto; }
+.mt-akte { color: var(--link); font-size: var(--t-s); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
+.mt-akte:hover { text-decoration: underline; }
 .mt-notiz-meldung.ok { color: var(--status-gruen); }
 .mt-notiz-meldung.fehler { color: var(--status-rot); }
-.mt-fuss { margin-top: var(--a-4); }
+.mt-karte.mt-fertig, .mt-wv-karte.mt-fertig { opacity: 0.55; }
 
+/* ---- 7. Untere feste Leiste (nur Außendienst, nur mobil – Block 9) ---- */
+.mt-leiste { display: none; }
+
+/* ---- 8. Leads VOT Desktop: Gruppen je Termintag, Priorität, Filterleiste ---- */
+.lv-kopf { flex-wrap: wrap; row-gap: 6px; }
+.lv-kopf h1 { margin: 0.4rem 0; }
+.lv-sync { display: inline; }
+.lv-sync-stand { margin: 0 0 var(--a-2); }
+.lv-gruppe > summary { cursor: pointer; }
+.lv-gruppe .lv-punkt { margin: 0 0.1rem; }
+.lv-tabelle td.sp-lead { white-space: normal; min-width: 220px; }
+.lv-tabelle td.sp-sparten { white-space: normal; }
+.lv-tabelle td.aktionen { white-space: nowrap; }
+.lv-tabelle td.aktionen form { display: inline; }
+.lv-chip-form { display: inline; }
+.lv-tabelle .sp-prioritaet .mt-prio { font-size: var(--t-xs); }
+.lv-tabelle td.sp-kanal input[type="text"] { width: 7.5em; }
+.lv-leer { padding: var(--a-4); }
+.lv-summe { margin: var(--a-2) 0 0; }
+.mt-desktop .lm-filterblock .lm-spaltenwahl { margin-left: auto; }
+.mt-desktop .lm-suchleiste { flex-wrap: wrap; gap: var(--a-2); align-items: flex-end; }
+
+/* ---- 9. Media-Queries ---- */
 @media (max-width: 600px) {
-    main.mein-tag-seite { max-width: none; padding-left: max(var(--a-3), env(safe-area-inset-left)); padding-right: max(var(--a-3), env(safe-area-inset-right)); }
-    .mt-karte { padding: var(--a-3); border-radius: var(--r-m); }
-    .mt-aktionen { flex-direction: column; align-items: stretch; }
-    .mt-aktionen .mt-haupt { width: 100%; }
-    .mt-aktionen .mt-akte { justify-content: center; }
-    .mt-aktionen-klein { flex-direction: row; align-items: center; }
-    .mt-badges { margin-left: 0; width: 100%; }
-    .mt-filter-form { grid-template-columns: 1fr 1fr; }
-    .mt-filter-knoepfe, .mt-filter-form label:nth-child(n+4) { grid-column: 1 / -1; }
+    /* Außendienst: Karten statt Tabelle; die Tabelle bleibt für die übrigen Rollen (Liste) */
+    main.mein-tag-seite { padding-left: max(var(--a-3), env(safe-area-inset-left)); padding-right: max(var(--a-3), env(safe-area-inset-right)); padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+    .mt-mobil { display: block; max-width: none; }
+    .mt-desktop { display: none; }
+    .mt-desktop-immer { display: block; }
+    .mt-naechstes { padding: var(--a-4); border-radius: var(--r-xl); }
+    .mt-termin-aktion .knopf { padding-left: var(--a-3); padding-right: var(--a-3); font-size: var(--t-s); }
+    .mt-termin-zeile { padding-left: var(--a-3); padding-right: var(--a-3); }
+    .mt-termin-detail { padding-left: var(--a-3); }
+    .mt-termin-klein .mt-termin-detail { padding-left: var(--a-3); }
     .mt-schritt-rueckfall form { flex-basis: 100%; }
-    .mt-kopf { align-items: flex-start; }
+    /* untere feste Leiste mit Safe-Area */
+    .mt-leiste { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; min-height: 64px; padding: 6px 8px calc(10px + env(safe-area-inset-bottom)); box-sizing: border-box; background: var(--flaeche-karte); border-top: 1px solid var(--linie); box-shadow: var(--schatten-2); }
+    .mt-leiste-eintrag { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-decoration: none; color: var(--text-dezent); font-size: var(--t-xs); font-weight: 600; min-height: 48px; }
+    .mt-leiste-eintrag.aktiv { color: var(--akzent); font-weight: 700; }
+    .mt-leiste-symbol { width: 56px; height: 30px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; }
+    .mt-leiste-eintrag.aktiv .mt-leiste-symbol { background: var(--akzent-flaeche); }
+    .mt-leiste-symbol .symbol-svg { width: 1.35rem; height: 1.35rem; }
+    body:has(.mt-leiste) main, body.mt-mit-leiste main { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+    body:has(.mt-leiste) .fusszeile, body.mt-mit-leiste .fusszeile { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+}
+@media (min-width: 601px) {
+    .mt-mobil-immer { max-width: 720px; }
 }

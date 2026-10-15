@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app import lead_archiv
+from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 from app import leadmanagement as kern
 from app import sparten as sparten_modul
 from app.models import (Benutzer, Kampagne, Kunde, LeadAktivitaet, LeadQualifizierung,
@@ -762,7 +763,7 @@ def offene_mails_stornieren(session: Session, vorgang_id: int,
 def _leitung_ids(session: Session) -> list[int]:
     return [b.id for b in session.query(Benutzer)
             .filter(Benutzer.aktiv.is_(True),
-                    Benutzer.rolle.in_(("admin", "leadmanagement")))]
+                    rollen_modul.filter_basen(("admin", "leadmanagement")))]
 
 
 def faellige_wiedervorlagen_melden(session: Session, jetzt: datetime | None = None,
@@ -942,7 +943,9 @@ def dauer_korrigieren(session: Session, aktivitaet: LeadAktivitaet, neu_sek: int
         return "Nur Anruf-Einträge haben eine Dauer."
     if benutzer is None:
         return "Nicht angemeldet."
-    if aktivitaet.benutzer_id != benutzer.id and benutzer.rolle != "admin":
+    # v33: Basisrolle (Rollen-Varianten); Rueckfall auf `rolle` fuer Aufrufer mit einfachen Objekten
+    basis = getattr(benutzer, "basisrolle", None) or getattr(benutzer, "rolle", "")
+    if aktivitaet.benutzer_id != benutzer.id and basis != "admin":
         return "Nur der eigene Eintrag oder ein Admin darf die Dauer ändern."
     if neu_sek is None:
         return "Bitte eine Dauer als Sekunden oder mm:ss angeben."

@@ -707,7 +707,9 @@ class DashboardOhneSchritt(Basis):
 
     def test_dashboard_links_und_board_namen(self):
         seite = inhalt(self.client.get("/lead-management/dashboard").text)
-        for text in ("gruppe=", "quelle_typ=", "quelle_id=", "Info-Veranstaltung"):
+        # v33 (Phase 169): der Dashboard-Link "Kalender" zeigt /kalender?gruppe=vertrieb -
+        # verboten bleibt nur der alte Anrufliste-Parameter (wie unten in der HV-Sicht)
+        for text in ("anrufliste?gruppe=", "quelle_typ=", "quelle_id=", "Info-Veranstaltung"):
             self.assertNotIn(text, seite, text)
         self.assertIn('<a href="/lead-management/terminiert">Deals</a>', seite)
         self.assertIn('<a href="/lead-management/hauptboard">Hauptboard</a>', seite)
@@ -826,7 +828,7 @@ class KeinScoreImHtml(Basis):
         seiten = ["/lead-management/dashboard",
                   f"/lead-management/lead/{v.id}/termin",
                   f"/lead-management/termin/{termin.id}/ersatz",
-                  "/lead-management/kalender",
+                  "/lead-management/kalender?alt=1",   # v33 (Phase 169): sonst Umleitung auf /kalender
                   "/lead-management/handelsvertreter",
                   f"/lead-management/handelsvertreter/dashboard?hv={self.hv.id}",
                   "/lead-management/uebersicht",

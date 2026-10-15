@@ -11,8 +11,11 @@
 </div>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
+{# v33 (PLAN_V20 Phase 167): Spalte „Gewerk“ (Heizung | Elektro | –) je Team – die Migration
+   hat Elektro-Teams an Gewerken auf elektro, übrige auf heizung gesetzt [ANNAHME]; Montage-
+   Varianten (Montage/Service Heizung/Elektro) sehen im Montage-Backend die Einsätze ihres Gewerks. #}
 <table class="tabelle">
-    <thead><tr><th>Name</th><th>Typ</th><th>Leiter</th><th>Farbe</th>
+    <thead><tr><th>Name</th><th>Typ</th><th title="Gewerk des Teams: Heizung oder Elektro (v33)">Gewerk</th><th>Leiter</th><th>Farbe</th>
         <th>Outlook-Kalender</th><th>Mitglieder</th><th>Aktiv</th><th></th></tr></thead>
     <tbody>
     {% for t in teams %}
@@ -26,6 +29,13 @@
                     {% if t.typ not in ('montage', 'sub') %}
                         <option value="{{ t.typ }}" selected>{{ t.typ }} (alt)</option>
                     {% endif %}
+                </select>
+            </td>
+            <td>
+                <select form="t{{ t.id }}" name="gewerk" title="Gewerk des Teams">
+                    {% for key, gname in gewerke %}
+                        <option value="{{ key }}" {{ 'selected' if (t.gewerk or '') == key }}>{{ gname }}</option>
+                    {% endfor %}
                 </select>
             </td>
             <td>
@@ -51,7 +61,7 @@
             </td>
         </tr>
     {% else %}
-        <tr><td colspan="8" class="dezent">Noch keine Teams.</td></tr>
+        <tr><td colspan="9" class="dezent">Noch keine Teams.</td></tr>
     {% endfor %}
     </tbody>
 </table>
@@ -65,11 +75,18 @@
             <option value="sub">Sub</option>
         </select>
     </label>
+    {# v33 (Phase 167): Gewerk des neuen Teams (Standard Heizung [ANNAHME: alle heutigen Teams sind Heizung]) #}
+    <label>Gewerk
+        <select name="gewerk">
+            {% for key, gname in gewerke %}<option value="{{ key }}" {{ 'selected' if key == 'heizung' }}>{{ gname }}</option>{% endfor %}
+        </select>
+    </label>
     {# fest: Vorgabewert des Farbfelds (Formularwert, kein Stil) #}
     <label>Farbe <input type="color" name="farbe" value="#2d6bd6"></label>
     <button class="knopf" type="submit">Anlegen</button>
 </form>
 <p class="dezent">Die Mitglieder werden in der Benutzerverwaltung je Benutzer
     zugeordnet (Spalte „Teams“). Termine mit Team erscheinen den Mitgliedern
-    unter „Meine Einsätze“ (/montage).</p>
+    unter „Meine Einsätze“ (/montage). Das Gewerk (v33) ordnet das Team Heizung oder Elektro zu –
+    Monteure der Varianten „Montage Heizung/Elektro“ sehen die Einsätze ihres Gewerks.</p>
 {% endblock %}

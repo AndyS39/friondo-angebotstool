@@ -15,6 +15,7 @@ from app.models import (Angebot, Aufgabe, AufgabenpaketInstanz, Benachrichtigung
                         Benutzer, Gewerk, Kunde, Projekt, ProjektDokument,
                         ProjektTermin, ProjektVerlauf, Team, TeamMitglied,
                         TerminBesetzung, Vorgang)
+from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 
 PROJEKT_PREFIX = "PR-"
 PROJEKTE_ORDNER = config.DATA_ORDNER / "projekte"
@@ -127,13 +128,13 @@ def modul_sichtbar(session: Session, benutzer) -> bool:
     """Server-seitige Sichtbarkeitsprüfung des gesamten Moduls (Phase 70)."""
     if benutzer is None:
         return False
-    if benutzer.rolle == "admin":
+    if benutzer.basisrolle == "admin":
         return True
     # Bugfix 27.09.2026: HAUPTROLLE projektierung/montage sieht ihr Modul
     # auch im Demo-Modus - wer diese Rolle bekommt, wurde bewusst angelegt;
     # ein Monteur landete sonst nach dem Login auf dem leeren Portal.
     # Der Demo-Schalter versteckt das Modul weiter vor Innendienst/Vertrieb.
-    if benutzer.rolle in ("projektierung", "montage"):
+    if benutzer.basisrolle in ("projektierung", "montage"):
         return True
     modus = freigabe_modus(session)
     if modus == "pilot":
@@ -141,9 +142,9 @@ def modul_sichtbar(session: Session, benutzer) -> bool:
         return benutzer.id in pilot_benutzer_ids(session)
     if modus != "alle":
         return False
-    return (benutzer.rolle in ("innendienst",)
+    return (benutzer.basisrolle in ("innendienst",)
             or benutzer.hat_rolle("projektierung") or benutzer.hat_rolle("montage")
-            or benutzer.rolle == "aussendienst")
+            or benutzer.basisrolle == "aussendienst")
 
 
 # --- Nummernkreis PR-JJNNNN ---------------------------------------------------
@@ -195,7 +196,11 @@ def ordner_anlegen(session: Session, projekt: Projekt,
 
 def verlauf(session: Session, projekt_id: int, text: str, benutzer=None,
             gewerk_id: int | None = None, aufgabe_id: int | None = None,
-            art: str = "system", erwaehnte: list[int] | None = None) -> ProjektVerlauf:
+            art: str = "system", erwaehnte: list[int] | None = None) -> ProjektVerlauf | None:
+    # v33 (PLAN_V20 Phase 168): Service-Einsätze am Vorgang ohne Projekt tragen
+    # projekt_id 0 – dafür gibt es keinen Projektverlauf (Notiz im Vorgangs-Chat)
+    if not projekt_id:
+        return None
     eintrag = ProjektVerlauf(
         projekt_id=projekt_id, gewerk_id=gewerk_id, aufgabe_id=aufgabe_id,
         art=art, text=(text or "").strip()[:4000],
@@ -252,7 +257,7 @@ def _standard_benutzer(session: Session, rolle: str, gewerk: Gewerk,
             return int(wert)
     if rolle in ("innendienst", "buchhaltung"):
         buero = (session.query(Benutzer)
-                 .filter(Benutzer.rolle.in_(["innendienst", "admin"]),
+                 .filter(rollen_modul.filter_basen(("innendienst", "admin")),
                          Benutzer.aktiv.is_(True))
                  .order_by(Benutzer.id).first())
         if buero is not None:
@@ -375,6 +380,9 @@ def aufgabe_auswahl_setzen(session: Session, aufgabe: Aufgabe, auswahl: str,
         # v28 (PLAN_PROJ_V6 Phase 133): die gewählte Option ist der Grund
         aufgabe.entfaellt_grund = auswahl[:300]
     session.flush()
+    # v33 (PLAN_V20 Phase 171): Erledigung/entfällt kann die Phase weiterschalten
+    if aufgabe.status in ("erledigt", "entfaellt"):
+        auto_hook(session, aufgabe.gewerk_id, benutzer)
     return True
 
 
@@ -402,6 +410,7 @@ def aufgabe_entfaellt(session: Session, aufgabe: Aufgabe, grund: str,
             f"Aufgabe „{aufgabe.titel}“ entfällt – {grund}",
             benutzer=benutzer, gewerk_id=aufgabe.gewerk_id, aufgabe_id=aufgabe.id)
     session.flush()
+    auto_hook(session, aufgabe.gewerk_id, benutzer)   # v33 (Phase 171)
     return True, f"Aufgabe „{aufgabe.titel}“ entfällt."
 
 
@@ -477,6 +486,7 @@ def galerie_haekchen_pruefen(session: Session, gewerk: Gewerk) -> int:
             erledigt += 1
     if erledigt:
         session.flush()
+        auto_hook(session, gewerk, None)   # v33 (Phase 171): Galerie-Aufgabe erledigt
     return erledigt
 
 
@@ -575,7 +585,9 @@ def steckbrief_schritte_nachziehen(session: Session, gewerk: Gewerk,
     Bestehende Aufgaben bleiben; nicht mehr erfüllte Bedingungen setzen die
     Aufgabe auf „entfällt“ (abhaengige_pruefen). Liefert die Anzahl neu
     angelegter Schritte."""
-    return bedingungen_nachziehen(session, gewerk, benutzer=benutzer)["neu"]
+    ergebnis = bedingungen_nachziehen(session, gewerk, benutzer=benutzer)
+    auto_hook(session, gewerk, benutzer)   # v33 (Phase 171): Steckbrief-Nachzug
+    return ergebnis["neu"]
 
 
 def foerderung_schritte_nachziehen(session: Session, gewerk: Gewerk,
@@ -583,7 +595,9 @@ def foerderung_schritte_nachziehen(session: Session, gewerk: Gewerk,
     """v28 (PLAN_PROJ_V6 Phase 133): Hook nach einer Änderung von
     `kfw_gefoerdert` (Angebot/Auftragsdaten) bzw. des Förderblocks – zieht die
     Schritte mit `foerderung:ja|nein` (und alle anderen Bedingungen) nach."""
-    return bedingungen_nachziehen(session, gewerk, benutzer=benutzer)
+    ergebnis = bedingungen_nachziehen(session, gewerk, benutzer=benutzer)
+    auto_hook(session, gewerk, benutzer)   # v33 (Phase 171)
+    return ergebnis
 
 
 def _statische_bedingung(bedingung: str) -> bool:
@@ -1534,6 +1548,7 @@ def fp_abschliessen(session: Session, gewerk: Gewerk,
             + f" (Gewerk {gewerk.sparte})",
             benutzer=benutzer, gewerk_id=gewerk.id)
     session.flush()
+    auto_hook(session, gewerk, benutzer)   # v33 (Phase 171): Formular-Aufgabe erledigt
     return True, "Feinplanung erfasst – Steckbrief aktualisiert."
 
 
@@ -1616,9 +1631,21 @@ TERMIN_ARTEN = {
     "feinplanung": ("feinplanung", "", "Feinplanung VOT", ""),
     "abnahme": ("abnahme", "", "Abnahme", ""),
     "sonstige": ("sonstige", "", "Sonstiges", ""),
+    # v33 (PLAN_V20 Phase 168): Service-Einsatz (Gewerk in service_gewerk, Anlass in anlass,
+    # auch am Vorgang ohne Projekt – projekt_id 0 + vorgang_id)
+    "service": ("service", "", "Service-Einsatz", ""),
 }
 TERMIN_ARTEN_REIHENFOLGE = ("montage", "elektro", "sub", "feinplanung", "abnahme",
-                            "sonstige")
+                            "sonstige", "service")
+SERVICE_ANLAESSE = (("wartung", "Wartung"), ("stoerung", "Störung"),
+                    ("nacharbeit", "Nacharbeit"), ("sonstiges", "Sonstiges"))   # [ANNAHME]
+SERVICE_ANLASS_NAMEN = dict(SERVICE_ANLAESSE)
+# v33 (PLAN_V20 Phase 168): Gewerk, Status und Standarddauer eines Service-Einsatzes
+SERVICE_GEWERKE = (("heizung", "Heizung"), ("elektro", "Elektro"))
+SERVICE_GEWERK_NAMEN = dict(SERVICE_GEWERKE)
+SERVICE_STATUS_NAMEN = {"": "Geplant", "geplant": "Geplant", "gestartet": "Einsatz läuft",
+                        "beendet": "Beendet"}
+SERVICE_DAUER_STANDARD_MIN = 120   # [ANNAHME] Standarddauer 2 Stunden
 # Rollen, die als „Person“ an Feinplanung/Abnahme/Sonstiges stehen können
 # [ANNAHME Plan: Projektierung + Innendienst + Admin]
 PERSON_ROLLEN = ("projektierung", "innendienst", "admin")
@@ -1767,11 +1794,13 @@ def person_konflikte(session: Session, benutzer_ids, beginn: datetime, ende,
         t_ende = t.ende or t.beginn
         if not (t.beginn.date() <= ende.date() and beginn.date() <= t_ende.date()):
             continue
-        projekt = session.get(Projekt, t.projekt_id)
-        kunde = session.get(Kunde, projekt.kunde_id) if projekt else None
+        projekt = session.get(Projekt, t.projekt_id) if t.projekt_id else None
+        kunde = session.get(Kunde, projekt.kunde_id) if projekt else termin_kunde(session, t)
+        # v33 (Phase 168): Service-Einsatz am Vorgang ohne Projekt
+        wo = projekt.nummer if projekt else ("Service-Einsatz" if t.typ == "service" else "?")
         treffer.append(f"{namen.get(besetzung.benutzer_id, '?')} ist am "
                        f"{max(t.beginn.date(), beginn.date()).strftime('%d.%m.')} bereits bei "
-                       f"{projekt.nummer if projekt else '?'}"
+                       f"{wo}"
                        + (f" ({kunde.anzeige_name})" if kunde else ""))
     return treffer
 
@@ -1808,7 +1837,7 @@ def _zuweisungs_aufgabe_setzen(session: Session, gewerk: Gewerk, name: str,
     return geaendert
 
 
-def termin_speichern(session: Session, gewerk: Gewerk, daten: dict,
+def termin_speichern(session: Session, gewerk: Gewerk | None, daten: dict,
                      benutzer=None, termin: ProjektTermin | None = None
                      ) -> tuple[bool, str, list[str]]:
     """v28 (PLAN_PROJ_V6 Phase 135): EINE Anlage-/Bearbeiten-Funktion für alle
@@ -1820,7 +1849,12 @@ def termin_speichern(session: Session, gewerk: Gewerk, daten: dict,
     gesperrt; Teamwechsel setzt das Zuweisungsfeld am Gewerk um („Montageteam
     gewechselt: alt → neu“). Montage/Elektro-Montage: Team Pflicht, Aufgabe
     „<Team> zuweisen“ erledigt, Fälligkeiten nachberechnet. Liefert
-    (ok, meldung, konflikte) – Konflikte (Team und je Person) sind Warnungen."""
+    (ok, meldung, konflikte) – Konflikte (Team und je Person) sind Warnungen.
+    v33 (PLAN_V20 Phase 168): Art `service` (Service-Einsatz) mit service_gewerk
+    (heizung | elektro), anlass (SERVICE_ANLAESSE), Dauer (dauer_stunden/dauer_minuten
+    bzw. dauer_min → ende), Team oder Personen in der Besetzung; `gewerk` darf None
+    sein – dann ist es ein Service-Einsatz am Vorgang (daten["vorgang_id"], projekt_id 0).
+    Service-Einsätze erledigen keine Aufgabe, setzen keine Zuweisung und keine Phase."""
     bearbeiten = termin is not None
     art = (daten.get("art") or "").strip().lower()
     if bearbeiten:
@@ -1834,8 +1868,39 @@ def termin_speichern(session: Session, gewerk: Gewerk, daten: dict,
             return int(daten.get(name) or 0) or None
         except (TypeError, ValueError):
             return None
+    if gewerk is None and bearbeiten and termin.gewerk_id:
+        gewerk = session.get(Gewerk, termin.gewerk_id)
+    vorgang_id = _id("vorgang_id") or (termin.vorgang_id if bearbeiten else None)
+    if gewerk is None:
+        if art != "service":
+            return False, ("Dieser Termin braucht ein Gewerk – nur Service-Einsätze sind "
+                           "am Vorgang ohne Projekt möglich."), []
+        if not vorgang_id or session.get(Vorgang, vorgang_id) is None:
+            return False, "Service-Einsatz ohne Projekt: Vorgang nicht gefunden.", []
     team_id, sub_id, person_id = _id("team_id"), _id("sub_id"), _id("person_id")
     team = session.get(Team, team_id) if team_id else None
+    service_gewerk = anlass = ""
+    dauer_min = 0
+    if art == "service":
+        service_gewerk = (daten.get("service_gewerk") or "").strip().lower()
+        if bearbeiten and not service_gewerk:
+            service_gewerk = termin.service_gewerk or ""
+        if service_gewerk not in SERVICE_GEWERK_NAMEN:
+            return False, "Service-Einsatz: bitte das Gewerk (Heizung oder Elektro) wählen.", []
+        anlass = (daten.get("anlass") or "").strip().lower()
+        if bearbeiten and not anlass:
+            anlass = termin.anlass or ""
+        if anlass not in SERVICE_ANLASS_NAMEN:
+            return False, "Service-Einsatz: bitte einen Anlass wählen.", []
+        dauer_min = service_dauer_minuten(daten, termin if bearbeiten else None)
+        sub_id = None
+        if daten.get("besetzung_gesetzt"):
+            mannschaft = [b for b in (daten.get("besetzung") or []) if str(b).strip()]
+        else:
+            mannschaft = besetzung_ids(session, termin.id) if bearbeiten else []
+        if team is None and not mannschaft and not person_id:
+            return False, ("Service-Einsatz: bitte ein Team oder mindestens eine Person "
+                           "einteilen."), []
     if art in ("montage", "elektro"):
         if team is None:
             return False, "Montagetermine brauchen ein Team – bitte Team wählen.", []
@@ -1881,6 +1946,9 @@ def termin_speichern(session: Session, gewerk: Gewerk, daten: dict,
         ende_datum = beginn_datum
     if ganztaegig:
         ende = datetime.combine(ende_datum, datetime.min.time())
+    elif art == "service":
+        # v33 (Phase 168): Dauer in Minuten → Ende am selben Tag (15-Minuten-Takt)
+        ende = beginn + timedelta(minutes=dauer_min or SERVICE_DAUER_STANDARD_MIN)
     elif ende_datum == beginn_datum:
         ende = None          # Termin mit Uhrzeit an einem Tag: kein Ende (wie bisher)
     else:
@@ -1910,15 +1978,26 @@ def termin_speichern(session: Session, gewerk: Gewerk, daten: dict,
             termin.bestaetigt_quelle = ""
         if not termin.zweck and zweck:
             termin.zweck = zweck
+        if art == "service":
+            termin.service_gewerk, termin.anlass = service_gewerk, anlass
+            if not termin.service_status:
+                termin.service_status = "geplant"
     else:
         termin = ProjektTermin(
-            projekt_id=gewerk.projekt_id, gewerk_id=gewerk.id, typ=typ, zweck=zweck,
+            projekt_id=gewerk.projekt_id if gewerk is not None else 0,
+            gewerk_id=gewerk.id if gewerk is not None else None, typ=typ, zweck=zweck,
             beginn=beginn, ende=ende, team_id=team.id if team is not None else None,
             sub_id=sub_id, person_id=person_id, ganztaegig=ganztaegig,
             kunde_bestaetigt=kunde_bestaetigt,
             bestaetigt_am=datetime.now() if kunde_bestaetigt else None,
             bestaetigt_quelle="manuell" if kunde_bestaetigt else "",
             notiz=notiz, erstellt_von=benutzer.id if benutzer else None)
+        if art == "service":
+            # Vorgang immer mitführen (auch bei Service am Projekt) – Vorgangsakte,
+            # Service-Backend und Kalender lesen darüber Kunde und Adresse
+            termin.vorgang_id = vorgang_id or _vorgang_id_fuer_gewerk(session, gewerk)
+            termin.service_gewerk, termin.anlass = service_gewerk, anlass
+            termin.service_status = "geplant"
         session.add(termin)
         session.flush()
     termin.dauer_tage = max(1, ((termin.ende or termin.beginn).date()
@@ -1937,7 +2016,14 @@ def termin_speichern(session: Session, gewerk: Gewerk, daten: dict,
             _zuweisungs_aufgabe_setzen(session, gewerk, name, "erledigt", benutzer)
     # Besetzung: explizit gesetzt → übernehmen; sonst Vorlage aus dem Team
     # (neu) bzw. bei Teamwechsel neu belegen, wenn sie der alten Vorlage entsprach
-    if team is not None and typ in ("montage", "sub"):
+    if typ == "service":
+        # v33 (Phase 168): Personen = Besetzung (Service-Techniker); Team nur Vorlage
+        if daten.get("besetzung_gesetzt"):
+            besetzung_setzen(session, termin, daten.get("besetzung") or [], benutzer)
+        elif team is not None and (not bearbeiten or alt_team_id != team.id):
+            besetzung_setzen(session, termin, team_mitglieder_ids(session, team.id),
+                             benutzer)
+    elif team is not None and typ in ("montage", "sub"):
         if daten.get("besetzung_gesetzt"):
             besetzung_setzen(session, termin, daten.get("besetzung") or [], benutzer)
         elif not bearbeiten:
@@ -1970,28 +2056,37 @@ def termin_speichern(session: Session, gewerk: Gewerk, daten: dict,
     elif person_id:
         person = session.get(Benutzer, person_id)
         wer = f" · {person.name}" if person else ""
+    if art == "service":
+        art_name = f"Service-Einsatz {SERVICE_ANLASS_NAMEN.get(anlass, anlass)} ({SERVICE_GEWERK_NAMEN.get(service_gewerk, service_gewerk)})"
+    projekt_id = gewerk.projekt_id if gewerk is not None else 0
+    gewerk_id = gewerk.id if gewerk is not None else None
+    sparte = gewerk.sparte if gewerk is not None else "Service"
     if bearbeiten:
-        verlauf(session, gewerk.projekt_id,
-                f"Termin {art_name} bearbeitet: {alt_text} → "
+        text = (f"Termin {art_name} bearbeitet: {alt_text} → "
                 f"{termin_zeitraum_text(termin)}{wer}"
                 + (" · Kunde bestätigt" if termin.kunde_bestaetigt else "")
-                + (f" – {nachberechnet} Fälligkeiten nachberechnet" if nachberechnet else ""),
-                benutzer=benutzer, gewerk_id=gewerk.id)
+                + (f" – {nachberechnet} Fälligkeiten nachberechnet" if nachberechnet else ""))
+        verlauf(session, projekt_id, text, benutzer=benutzer, gewerk_id=gewerk_id)
         meldung = f"Termin {art_name} {termin_zeitraum_text(termin)} gespeichert."
     else:
-        verlauf(session, gewerk.projekt_id,
-                f"Termin {art_name} {termin_zeitraum_text(termin)} angelegt ({gewerk.sparte})"
+        text = (f"Termin {art_name} {termin_zeitraum_text(termin)} angelegt ({sparte})"
                 + wer + (" · Kunde bestätigt" if kunde_bestaetigt else "")
                 + (f" · Besetzung: {besetzung_namen(session, termin.id, kurz=False)}"
-                   if typ in ("montage", "sub") and besetzung_ids(session, termin.id) else "")
-                + (f" – {nachberechnet} Fälligkeiten nachberechnet" if nachberechnet else ""),
-                benutzer=benutzer, gewerk_id=gewerk.id)
+                   if typ in ("montage", "sub", "service") and besetzung_ids(session, termin.id) else "")
+                + (f" – {nachberechnet} Fälligkeiten nachberechnet" if nachberechnet else ""))
+        verlauf(session, projekt_id, text, benutzer=benutzer, gewerk_id=gewerk_id)
         if zuweisung and team is not None:
             meldung = f"{ZUWEISUNGS_FELDER[zuweisung][1]} {team.name} zugewiesen, Termin angelegt."
         else:
             meldung = f"Termin {art_name} {termin_zeitraum_text(termin)} angelegt."
+    if art == "service" and not projekt_id:
+        # Service am Vorgang ohne Projekt: einzige Spur ist der Notizen-Chat des Vorgangs
+        service_chat_notiz(session, termin, text, benutzer, herkunft="projektierung")
     session.flush()
     daten["termin_id"] = termin.id      # für den Aufrufer (Outlook, JSON)
+    # v33 (Phase 171): Besetzung/Termin kann Pflichtaufgaben erledigt haben
+    if gewerk is not None and typ != "service":
+        auto_hook(session, gewerk, benutzer)
     return True, meldung, konflikte
 
 
@@ -2016,6 +2111,7 @@ def termin_loeschen(session: Session, termin: ProjektTermin, grund: str,
     (session.query(TerminBesetzung)
      .filter(TerminBesetzung.termin_id == termin.id).delete())
     projekt_id, gewerk_id = termin.projekt_id, termin.gewerk_id
+    vorgang_id = termin.vorgang_id
     session.delete(termin)
     session.flush()
     if gewerk is not None and typ == "montage":
@@ -2030,7 +2126,13 @@ def termin_loeschen(session: Session, termin: ProjektTermin, grund: str,
             if _zuweisungs_aufgabe_setzen(session, gewerk, name, "offen", benutzer):
                 text += f" · Aufgabe „{name} zuweisen“ wieder offen"
         faelligkeiten_nachberechnen(session, gewerk)
-    verlauf(session, projekt_id, text, benutzer=benutzer, gewerk_id=gewerk_id)
+    if projekt_id:
+        verlauf(session, projekt_id, text, benutzer=benutzer, gewerk_id=gewerk_id)
+    elif vorgang_id:
+        # v33 (Phase 168): Service am Vorgang ohne Projekt → Notizen-Chat
+        from app import notizen as notizen_modul
+        notizen_modul.notiz_anlegen(session, vorgang_id, benutzer, text,
+                                    herkunft="projektierung")
     return True, "Termin gelöscht."
 
 
@@ -2055,9 +2157,9 @@ def team_termin_zuweisen(session: Session, gewerk: Gewerk, zweck: str,
         "ende": ende, "kunde_bestaetigt": kunde_bestaetigt}, benutzer=benutzer)
 
 
-def termin_verschieben(session: Session, termin: ProjektTermin,
-                       neues_datum, neues_team_id: int = 0,
-                       art: str = "verschieben", benutzer=None) -> str:
+def termin_kalender_drag(session: Session, termin: ProjektTermin,
+                         neues_datum, neues_team_id: int = 0,
+                         art: str = "verschieben", benutzer=None) -> str:
     """Kalender-Drag (v15): Balken verschieben (Beginn-Delta auf Beginn+Ende,
     optional Teamwechsel) oder Ende ziehen. Protokolliert im Verlauf.
     v28 (PLAN_PROJ_V6 Phase 135): bei Teamwechsel wird die Besetzung aus dem
@@ -2570,6 +2672,10 @@ def waechter_details(session: Session, gewerk: Gewerk, ziel: str) -> dict:
     begruendung_pflicht = bool(rueckwaerts or (modus == "sperren" and offen))
     if rueckwaerts:
         hinweis = "Rückwärts-Wechsel nur mit Begründung (wird im Verlauf protokolliert)."
+        if phase_auto_aktiv(session) and gewerk.phase_auto:
+            # v33 (Phase 171): Hinweis auf die Pause der Automatik
+            hinweis += (" Der automatische Phasenwechsel bleibt in der Zielphase pausiert "
+                        "– kein erneutes Vorspringen, bis die Phase manuell verlassen wird.")
     elif modus == "warnen":
         hinweis = ("Offene Punkte blockieren nicht – sie werden im Verlauf vermerkt."
                    if offen else "Wächter erfüllt – keine offenen Punkte.")
@@ -2583,7 +2689,10 @@ def waechter_details(session: Session, gewerk: Gewerk, ziel: str) -> dict:
             "ziel_name": GEWERK_PHASEN_NAMEN.get(ziel, ziel),
             "phase": gewerk.phase,
             "phase_name": GEWERK_PHASEN_NAMEN.get(gewerk.phase, gewerk.phase),
-            "anzahl": len(offen)}
+            "anzahl": len(offen),
+            # v33 (Phase 171)
+            "phase_auto": bool(gewerk.phase_auto),
+            "phase_auto_pause": gewerk.phase_auto_pause or ""}
 
 
 def terminstatus_map(session: Session, gewerk_ids: list[int]) -> dict[int, dict]:
@@ -2627,7 +2736,8 @@ def terminstatus(session: Session, gewerk: Gewerk) -> dict:
 
 
 def phase_wechseln(session: Session, gewerk: Gewerk, ziel: str,
-                   begruendung: str, benutzer=None) -> tuple[bool, str]:
+                   begruendung: str, benutzer=None,
+                   automatisch: bool = False) -> tuple[bool, str]:
     """Phasenwechsel mit Wächtern. v28 (PLAN_PROJ_V6 Phase 133): Modus
     `waechter_modus` – „warnen“ (Standard): offene Punkte blockieren nicht,
     sie stehen im Verlauf („… – mit offenen Punkten: <Liste>“, mit Begründung
@@ -2661,6 +2771,13 @@ def phase_wechseln(session: Session, gewerk: Gewerk, ziel: str,
     alt = gewerk.phase
     gewerk.phase = ziel
     gewerk.phase_geaendert_am = datetime.now()
+    # v33 (PLAN_V20 Phase 171): manueller Rückschritt pausiert die Automatik in der
+    # Zielphase (kein sofortiges Vorspringen); wer die pausierte Phase wieder
+    # verlässt, hebt die Pause auf
+    if rueckwaerts and not automatisch:
+        gewerk.phase_auto_pause = ziel
+    elif (gewerk.phase_auto_pause or "") and gewerk.phase_auto_pause != ziel:
+        gewerk.phase_auto_pause = ""
     if ziel in ("abnahme", "freigabe") and gewerk.montage_fertig_am is None:
         gewerk.montage_fertig_am = datetime.now()   # Häkchen „Montage fertig" (Override)
     projekt = session.get(Projekt, gewerk.projekt_id)
@@ -2668,7 +2785,9 @@ def phase_wechseln(session: Session, gewerk: Gewerk, ziel: str,
         projektstatus_berechnen(session, projekt)
     text = (f"Phase des Gewerks {gewerk.sparte} geändert: "
             f"{GEWERK_PHASEN_NAMEN[alt]} → {GEWERK_PHASEN_NAMEN[ziel]}")
-    if offen and modus == "sperren":
+    if automatisch:
+        text += f" – {begruendung}"
+    elif offen and modus == "sperren":
         # Verhalten wie bisher: Override mit Begründung
         text += f" – trotz offener Punkte: {begruendung} ({' · '.join(offen)})"
     elif offen:
@@ -2685,9 +2804,13 @@ def phase_wechseln(session: Session, gewerk: Gewerk, ziel: str,
             session,
             [projekt.projektleiter_id, gewerk.feinplaner_id,
              gewerk.elektroplaner_id],
-            f"{projekt.nummer} {gewerk.sparte}: {GEWERK_PHASEN_NAMEN[ziel]}",
+            f"{projekt.nummer} {gewerk.sparte}: {GEWERK_PHASEN_NAMEN[ziel]}"
+            + (" (automatisch – alle Pflichtaufgaben erledigt)" if automatisch else ""),
             f"/projektierung/projekt/{projekt.id}", art="phase")
     meldung = f"Gewerk {gewerk.sparte}: {GEWERK_PHASEN_NAMEN[ziel]}."
+    if automatisch:
+        meldung = (f"Gewerk {gewerk.sparte} automatisch nach "
+                   f"„{GEWERK_PHASEN_NAMEN[ziel]}“ weitergeschaltet.")
     if offen and modus == "warnen":
         meldung += (f" {len(offen)} offene{'r' if len(offen) == 1 else ''} "
                     f"Punkt{'' if len(offen) == 1 else 'e'} im Verlauf vermerkt.")
@@ -2743,7 +2866,7 @@ def rechnung_freigeben(session: Session, gewerk: Gewerk, restarbeiten: str,
         ziele = [int(buchhaltung)]
     else:
         ziele = [b.id for b in session.query(Benutzer)
-                 .filter(Benutzer.rolle == "innendienst",
+                 .filter(rollen_modul.filter_basis("innendienst"),
                          Benutzer.aktiv.is_(True))]
     if projekt is not None:
         benachrichtigen(session, ziele,
@@ -2962,16 +3085,14 @@ def projekt_loeschen(session: Session, projekt: Projekt, grund: str,
     termine = (session.query(ProjektTermin)
                .filter(ProjektTermin.projekt_id == projekt_id).all())
     termin_ids = [t.id for t in termine]
-    # 1. Outlook-Storno OHNE offene Sitzung (v27): alles Nötige ist gelesen,
-    #    Verbindung freigeben, dann je Termin stornieren (event_loeschen gibt vor
-    #    jedem Graph-Aufruf selbst erneut frei); Fehler blockieren nie
-    mit_outlook = [t for t in termine if t.outlook_event_id]
+    # 1. Outlook-Storno für ALLE Termine einreihen (v33, PLAN_V20 Phase 170, Vorschlag O 4a):
+    #    event_loeschen ist netzfrei (Warteschlange outlook_auftraege) – Kopien können in
+    #    outlook_ereignisse stehen, auch wenn der Spiegel outlook_event_id leer ist;
+    #    Fehler blockieren nie
     storno_fehler = 0
-    if mit_outlook:
+    if termine:
         from app import outlook_kalender
-        from app.db import verbindung_freigeben
-        verbindung_freigeben(session)
-        for termin in mit_outlook:
+        for termin in termine:
             try:
                 if not outlook_kalender.event_loeschen(session, termin):
                     storno_fehler += 1
@@ -3060,7 +3181,7 @@ def altbestand_migrieren(session: Session) -> list[str]:
     projektleiter_id = int(standard_pl) if standard_pl.isdigit() else None
     if projektleiter_id is None:
         admin = (session.query(Benutzer)
-                 .filter(Benutzer.rolle == "admin", Benutzer.aktiv.is_(True))
+                 .filter(rollen_modul.filter_basis("admin"), Benutzer.aktiv.is_(True))
                  .order_by(Benutzer.id).first())
         projektleiter_id = admin.id if admin is not None else None
     angebote = (session.query(Angebot)
@@ -3170,4 +3291,577 @@ def migration_v28(session: Session) -> list[str]:
             session.flush()
             meldungen.append(f"Projektierung V6: Bedingung (sichtbar_wenn) an "
                              f"{nachgetragen} bestehenden Aufgaben aus der Logik nachgetragen")
+    return meldungen
+
+
+# =====================================================================================
+# v33 (PLAN_V20 Phase 168, Agent S): Service-Einsätze – Terminart `service`, auch am
+# Vorgang ohne Projekt (projekt_id 0 + vorgang_id). Helfer für Dialog, Vorgangsakte,
+# Montage-/Service-Backend, Kalender (Vertrag mit K) und Outlook (O).
+# =====================================================================================
+
+def service_dauer_minuten(daten: dict, termin: ProjektTermin | None = None) -> int:
+    """Dauer eines Service-Einsatzes in Minuten: `dauer_min`, sonst `dauer_stunden` +
+    `dauer_minuten`, sonst (beim Bearbeiten) die bisherige Dauer, sonst der Standard
+    (2 h [ANNAHME]); auf 15 Minuten gerundet, mindestens 15."""
+    minuten = 0
+    try:
+        roh = daten.get("dauer_min")
+        if roh not in (None, ""):
+            minuten = int(float(str(roh).replace(",", ".")))
+        else:
+            stunden, mins = daten.get("dauer_stunden"), daten.get("dauer_minuten")
+            if stunden not in (None, "") or mins not in (None, ""):
+                minuten = (int(float(str(stunden or 0).replace(",", "."))) * 60
+                           + int(float(str(mins or 0).replace(",", "."))))
+    except (TypeError, ValueError):
+        minuten = 0
+    if (minuten <= 0 and termin is not None and termin.beginn is not None
+            and termin.ende is not None and not termin.ganztaegig):
+        minuten = int((termin.ende - termin.beginn).total_seconds() // 60)
+    if minuten <= 0:
+        minuten = SERVICE_DAUER_STANDARD_MIN
+    return max(15, int(round(minuten / 15.0)) * 15)
+
+
+def _vorgang_id_fuer_gewerk(session: Session, gewerk: Gewerk | None) -> int | None:
+    if gewerk is None:
+        return None
+    projekt = session.get(Projekt, gewerk.projekt_id)
+    return projekt.vorgang_id if projekt is not None else None
+
+
+def termin_vorgang(session: Session, termin: ProjektTermin) -> Vorgang | None:
+    """Vorgang eines Termins: direkt (`vorgang_id`, Service) oder über das Projekt."""
+    if termin.vorgang_id:
+        vorgang = session.get(Vorgang, termin.vorgang_id)
+        if vorgang is not None:
+            return vorgang
+    if termin.projekt_id:
+        projekt = session.get(Projekt, termin.projekt_id)
+        if projekt is not None and projekt.vorgang_id:
+            return session.get(Vorgang, projekt.vorgang_id)
+    return None
+
+
+def termin_kunde(session: Session, termin: ProjektTermin) -> Kunde | None:
+    """Kunde eines Termins – über das Projekt, sonst über den Vorgang (Service)."""
+    if termin.projekt_id:
+        projekt = session.get(Projekt, termin.projekt_id)
+        if projekt is not None and projekt.kunde_id:
+            return session.get(Kunde, projekt.kunde_id)
+    vorgang = termin_vorgang(session, termin)
+    if vorgang is not None and vorgang.kunde_id:
+        return session.get(Kunde, vorgang.kunde_id)
+    return None
+
+
+def termin_adresse(session: Session, termin: ProjektTermin) -> dict:
+    """Ausführungsort eines Termins (v31-Regel): Projektadresse bzw. Objekt des
+    Gewerks; bei Service am Vorgang ohne Projekt das Hauptobjekt / die Kundenadresse
+    (objekte.ausfuehrungsort). Schlüssel wie projekt_ausfuehrungsort."""
+    projekt = session.get(Projekt, termin.projekt_id) if termin.projekt_id else None
+    gewerk = session.get(Gewerk, termin.gewerk_id) if termin.gewerk_id else None
+    if projekt is not None:
+        return projekt_ausfuehrungsort(session, projekt, gewerk)
+    leer = {"strasse": "", "plz": "", "ort": "", "plz_ort": "", "einzeilig": "",
+            "zeile": "", "objekt_id": None}
+    vorgang = termin_vorgang(session, termin)
+    kunde = termin_kunde(session, termin)
+    if vorgang is None and kunde is None:
+        return leer
+    from app import objekte
+    satz = objekte.ausfuehrungsort(session, vorgang=vorgang, kunde=kunde)
+    strasse = satz.get("strasse") or ""
+    plz = satz.get("plz") or ""
+    ort = satz.get("ort") or ""
+    plz_ort = f"{plz} {ort}".strip()
+    return {"strasse": strasse, "plz": plz, "ort": ort, "plz_ort": plz_ort,
+            "einzeilig": _adresse_text(strasse, plz, ort),
+            "zeile": " ".join(t for t in (strasse, plz_ort) if t),
+            "objekt_id": satz.get("objekt_id")}
+
+
+def service_termin_text(termin: ProjektTermin) -> str:
+    """„Service-Einsatz Wartung (Heizung) 20.10.2026 09:00“ für Verlauf und Chat."""
+    return (f"Service-Einsatz {SERVICE_ANLASS_NAMEN.get(termin.anlass, termin.anlass or '–')} "
+            f"({SERVICE_GEWERK_NAMEN.get(termin.service_gewerk, termin.service_gewerk or '–')}) "
+            f"{termin_zeitraum_text(termin)}")
+
+
+def service_chat_notiz(session: Session, termin: ProjektTermin, text: str, benutzer=None,
+                       herkunft: str = "montage") -> None:
+    """Eintrag im Notizen-Chat des Vorgangs (einzige Notizspur Lead → Montage) –
+    nie blockierend, ohne Vorgang kein Eintrag."""
+    vorgang = termin_vorgang(session, termin)
+    if vorgang is None:
+        return
+    try:
+        from app import notizen as notizen_modul
+        notizen_modul.notiz_anlegen(session, vorgang.id, benutzer, text, herkunft=herkunft)
+    except Exception:
+        pass
+
+
+def service_status_setzen(session: Session, termin: ProjektTermin, aktion: str,
+                          benutzer=None, zeitpunkt: datetime | None = None
+                          ) -> tuple[bool, str]:
+    """Knöpfe „Einsatz gestartet“ / „Einsatz beendet“ im Service-Backend:
+    service_status geplant → gestartet → beendet, gestartet_am/beendet_am im
+    15-Minuten-Takt, Verlauf (mit Projekt) und Notiz im Vorgangs-Chat (Herkunft
+    montage). Beenden ohne vorheriges Starten ist erlaubt (gestartet_am bleibt leer)."""
+    if termin is None or termin.typ != "service":
+        return False, "Kein Service-Einsatz."
+    zeitpunkt = viertelstunde(zeitpunkt or datetime.now())
+    status = termin.service_status or "geplant"
+    zeit_text = zeitpunkt.strftime("%d.%m.%Y %H:%M")
+    if aktion == "gestartet":
+        if status == "gestartet":
+            return False, "Der Einsatz läuft bereits."
+        if status == "beendet":
+            return False, "Der Einsatz ist bereits beendet."
+        termin.service_status = "gestartet"
+        termin.gestartet_am = zeitpunkt
+        text = f"{service_termin_text(termin)}: Einsatz gestartet ({zeit_text})"
+        meldung = "Einsatz gestartet."
+    elif aktion in ("beendet", "fertig"):
+        if status == "beendet":
+            return False, "Der Einsatz ist bereits beendet."
+        termin.service_status = "beendet"
+        termin.beendet_am = zeitpunkt
+        text = f"{service_termin_text(termin)}: Einsatz beendet ({zeit_text})"
+        meldung = "Einsatz beendet."
+    else:
+        return False, "Unbekannte Aktion."
+    if termin.projekt_id:
+        verlauf(session, termin.projekt_id, text, benutzer=benutzer, gewerk_id=termin.gewerk_id)
+    service_chat_notiz(session, termin, text, benutzer, herkunft="montage")
+    session.flush()
+    return True, meldung
+
+
+def service_termine(session: Session, vorgang_id: int | None = None,
+                    projekt_ids=()) -> list[ProjektTermin]:
+    """Service-Einsätze eines Vorgangs (direkt am Vorgang oder an seinen Projekten),
+    chronologisch."""
+    from sqlalchemy import or_
+    bedingungen = []
+    if vorgang_id:
+        bedingungen.append(ProjektTermin.vorgang_id == vorgang_id)
+    ids = [int(p) for p in (projekt_ids or []) if p]
+    if ids:
+        bedingungen.append(ProjektTermin.projekt_id.in_(ids))
+    if not bedingungen:
+        return []
+    return (session.query(ProjektTermin)
+            .filter(ProjektTermin.typ == "service", or_(*bedingungen))
+            .order_by(ProjektTermin.beginn, ProjektTermin.id).all())
+
+
+def outlook_status_fuer(session: Session, termin: ProjektTermin) -> dict:
+    """Outlook-Stand eines Termins für die Akten: Vertrag mit O
+    (`outlook_sync.status_fuer(session, "projekt", termin_id) -> {stand, text, kopien}`),
+    bis dahin Rückfall auf die v15-Felder outlook_event_id/outlook_fehler.
+    stand ∈ ausstehend | ok | fehler | geloescht | in_outlook_geloescht | leer."""
+    try:
+        from app import outlook_sync
+        funktion = getattr(outlook_sync, "status_fuer", None)
+        if callable(funktion):
+            daten = funktion(session, "projekt", termin.id)
+            if isinstance(daten, dict) and daten.get("stand"):
+                return {"stand": daten.get("stand", "leer"), "text": daten.get("text", ""),
+                        "kopien": daten.get("kopien", [])}
+    except Exception:
+        pass
+    if termin.outlook_fehler:
+        return {"stand": "fehler", "text": termin.outlook_fehler, "kopien": []}
+    if termin.outlook_event_id:
+        return {"stand": "ok", "text": "In Outlook eingetragen", "kopien": []}
+    return {"stand": "leer", "text": "", "kopien": []}
+
+
+def outlook_makro_vorhanden() -> bool:
+    """Liefert True, sobald O die Makro-Datei templates/_outlook_status.html gebaut hat."""
+    try:
+        from app.templating import templates
+        templates.env.loader.get_source(templates.env, "_outlook_status.html")
+        return True
+    except Exception:
+        return False
+
+
+def termin_dialog_kontext(session: Session) -> dict:
+    """Listen für das Makro termin_dialog (Teams mit Gewerk, Personen, Monteure mit
+    Gewerk/Service-Kennzeichen, Subs, Team-Mitglieder als Vorlage der Besetzung,
+    Standarddauer, Terminarten, Service-Gewerke/-Anlässe). v33: aus
+    routers/projektierung._termin_dialog_kontext hierher gezogen, damit auch die
+    Vorgangsakte den Dialog bekommt."""
+    from app.models import Subunternehmer
+    teams = (session.query(Team).filter(Team.aktiv.is_(True))
+             .order_by(Team.typ.desc(), Team.id).all())
+    mitglieder: dict[int, list[int]] = {}
+    for m in session.query(TeamMitglied).order_by(TeamMitglied.id):
+        mitglieder.setdefault(m.team_id, []).append(m.benutzer_id)
+    monteure = montage_benutzer(session)
+    return {
+        "teams": teams,
+        "montage_teams": [t for t in teams if t.typ != "sub"],
+        "sub_teams": [t for t in teams if t.typ == "sub"],
+        "personen": personen_benutzer(session),
+        "monteure": monteure,
+        "monteur_info": {b.id: {"gewerk": b.gewerk or "",
+                                "service": b.hat_kennzeichen("service")} for b in monteure},
+        "subs": (session.query(Subunternehmer).filter(Subunternehmer.aktiv.is_(True))
+                 .order_by(Subunternehmer.firma).all()),
+        "team_mitglieder": mitglieder,
+        "dauer_standard": montage_dauer_standard(session),
+        "arten": [(k, TERMIN_ARTEN[k][2]) for k in TERMIN_ARTEN_REIHENFOLGE],
+        "service_gewerke": SERVICE_GEWERKE,
+        "service_anlaesse": SERVICE_ANLAESSE,
+        "service_dauer_standard": SERVICE_DAUER_STANDARD_MIN,
+    }
+
+
+def termin_bearbeiten_erlaubt(session: Session, benutzer) -> bool:
+    """Rechte wie im Termin-Dialog: Projektierung, Innendienst, Admin (bei sichtbarem
+    Modul)."""
+    if benutzer is None or not modul_sichtbar(session, benutzer):
+        return False
+    return (benutzer.basisrolle in ("admin", "innendienst")
+            or benutzer.hat_rolle("projektierung"))
+
+
+def termine_fuer_personen(session: Session, benutzer_ids, von, bis) -> list[dict]:
+    """Vertrag S → K (zentraler Planungskalender): alle Projekt-Termine inkl. Service je
+    Person über die Besetzung (termin_besetzung) und `person_id` im Zeitraum [von, bis).
+    Felder je Termin: id, art, art_name, typ, beginn, ende, ganztaegig, kunde, ort,
+    link, besetzung_ids, gewerk_id, projekt_id, vorgang_id, status (Service:
+    geplant|gestartet|beendet, sonst bestaetigt|unbestaetigt) – zusätzlich person_id,
+    personen_ids (Besetzung ∪ Person), team_id, sparte, nummer, anlass, service_gewerk,
+    kunde_bestaetigt, notiz, einsatz_link (Montage-/Service-Backend)."""
+    from sqlalchemy import and_, or_
+    ids = set()
+    for b in benutzer_ids or []:
+        try:
+            ids.add(int(b))
+        except (TypeError, ValueError):
+            continue
+    if not ids:
+        return []
+
+    def _dt(wert, ende: bool) -> datetime:
+        if isinstance(wert, datetime):
+            return wert
+        if isinstance(wert, date):
+            return datetime.combine(wert, datetime.min.time())
+        try:
+            return datetime.strptime(str(wert)[:10], "%Y-%m-%d")
+        except (TypeError, ValueError):
+            jetzt = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            return jetzt + timedelta(days=7) if ende else jetzt
+    von_dt, bis_dt = _dt(von, False), _dt(bis, True)
+    besetzt = {b.termin_id for b in session.query(TerminBesetzung)
+               .filter(TerminBesetzung.benutzer_id.in_(ids))}
+    termine = (session.query(ProjektTermin)
+               .filter(ProjektTermin.beginn.isnot(None),
+                       ProjektTermin.beginn < bis_dt,
+                       or_(ProjektTermin.ende >= von_dt,
+                           and_(ProjektTermin.ende.is_(None), ProjektTermin.beginn >= von_dt)),
+                       or_(ProjektTermin.id.in_(besetzt or {0}),
+                           ProjektTermin.person_id.in_(ids)))
+               .order_by(ProjektTermin.beginn, ProjektTermin.id).all())
+    if not termine:
+        return []
+    besetzung = besetzung_map(session, [t.id for t in termine])
+    projekte = {p.id: p for p in session.query(Projekt)
+                .filter(Projekt.id.in_({t.projekt_id for t in termine if t.projekt_id} or {0}))}
+    gewerke = {g.id: g for g in session.query(Gewerk)
+               .filter(Gewerk.id.in_({t.gewerk_id for t in termine if t.gewerk_id} or {0}))}
+    vorgaenge = {v.id: v for v in session.query(Vorgang)
+                 .filter(Vorgang.id.in_({t.vorgang_id for t in termine if t.vorgang_id}
+                                        | {p.vorgang_id for p in projekte.values() if p.vorgang_id}
+                                        or {0}))}
+    kunden_ids = {p.kunde_id for p in projekte.values() if p.kunde_id} | {
+        v.kunde_id for v in vorgaenge.values() if v.kunde_id}
+    kunden = {k.id: k for k in session.query(Kunde).filter(Kunde.id.in_(kunden_ids or {0}))}
+    adressen: dict[tuple, str] = {}
+    ergebnis: list[dict] = []
+    for t in termine:
+        projekt = projekte.get(t.projekt_id) if t.projekt_id else None
+        gewerk = gewerke.get(t.gewerk_id) if t.gewerk_id else None
+        vorgang = vorgaenge.get(t.vorgang_id) if t.vorgang_id else None
+        if vorgang is None and projekt is not None and projekt.vorgang_id:
+            vorgang = vorgaenge.get(projekt.vorgang_id)
+        kunde = None
+        if projekt is not None and projekt.kunde_id:
+            kunde = kunden.get(projekt.kunde_id)
+        elif vorgang is not None and vorgang.kunde_id:
+            kunde = kunden.get(vorgang.kunde_id)
+        schluessel = ("p", t.projekt_id, t.gewerk_id) if projekt is not None else ("v", t.vorgang_id)
+        if schluessel not in adressen:
+            adressen[schluessel] = termin_adresse(session, t).get("einzeilig", "")
+        art = termin_art(t)
+        if art == "service":
+            status = t.service_status or "geplant"
+        else:
+            status = "bestaetigt" if t.kunde_bestaetigt else "unbestaetigt"
+        ids_besetzung = list(besetzung.get(t.id, []))
+        personen = list(ids_besetzung)
+        if t.person_id and t.person_id not in personen:
+            personen.append(t.person_id)
+        if projekt is not None:
+            link = f"/projektierung/projekt/{projekt.id}#termine"
+        elif vorgang is not None:
+            link = f"/vorgaenge/{vorgang.id}#termine"
+        else:
+            link = "/projektierung/termine"
+        ergebnis.append({
+            "id": t.id, "art": art, "art_name": termin_art_name(t), "typ": t.typ,
+            "beginn": t.beginn, "ende": t.ende, "ganztaegig": bool(t.ganztaegig),
+            "kunde": kunde.anzeige_name if kunde is not None else "",
+            "ort": adressen[schluessel], "link": link,
+            "einsatz_link": f"/montage/einsatz/{t.id}",
+            "besetzung_ids": ids_besetzung, "personen_ids": personen,
+            "person_id": t.person_id, "team_id": t.team_id,
+            "gewerk_id": t.gewerk_id, "projekt_id": t.projekt_id or 0,
+            "vorgang_id": t.vorgang_id or (projekt.vorgang_id if projekt is not None else None),
+            "sparte": gewerk.sparte if gewerk is not None else "",
+            "nummer": projekt.nummer if projekt is not None else "",
+            "anlass": t.anlass or "", "service_gewerk": t.service_gewerk or "",
+            "status": status, "kunde_bestaetigt": bool(t.kunde_bestaetigt),
+            "notiz": t.notiz or "",
+        })
+    return ergebnis
+
+
+def termin_verschieben(session: Session, termin: ProjektTermin, beginn, ende=None,
+                       benutzer=None, **alt):
+    """Vertrag S → K (Drag im zentralen Kalender): Termin auf `beginn`/`ende`
+    (datetime) verschieben – Rechte wie im Dialog (termin_bearbeiten_erlaubt),
+    15-Minuten-Takt, Dauer bleibt, wenn `ende` fehlt; Konfliktwarnung (Team und je
+    Person, kein Verbot), Verlauf bzw. Chat-Notiz, Outlook über
+    outlook_kalender.event_senden (best effort). Liefert (ok, meldung, konflikte).
+    Rückwärtskompatibel: der alte Kalender-Drag v15 (`termin_verschieben(session,
+    termin, datum, neues_team_id=, art=, benutzer=)` mit einem `date`) läuft weiter
+    über termin_kalender_drag und liefert wie bisher den Text."""
+    if alt or (beginn is not None and not isinstance(beginn, datetime)):
+        return termin_kalender_drag(session, termin, beginn,
+                                    neues_team_id=alt.get("neues_team_id", 0) or 0,
+                                    art=alt.get("art", "verschieben") or "verschieben",
+                                    benutzer=benutzer)
+    if termin is None or beginn is None:
+        return False, "Termin nicht gefunden.", []
+    if not termin_bearbeiten_erlaubt(session, benutzer):
+        return False, ("Keine Berechtigung – Termine verschieben dürfen Projektierung, "
+                       "Innendienst und Admin."), []
+    if termin.typ == "service" and (termin.service_status or "") == "beendet":
+        return False, "Beendeter Service-Einsatz – nicht mehr verschiebbar.", []
+    if termin.beginn is None:
+        return False, "Termin ohne Beginn – bitte im Dialog bearbeiten.", []
+    alt_text = termin_zeitraum_text(termin)
+    neu_beginn = viertelstunde(beginn)
+    neu_ende = viertelstunde(ende) if isinstance(ende, datetime) else None
+    if neu_ende is None and termin.ende is not None:
+        neu_ende = neu_beginn + (termin.ende - termin.beginn)
+    if neu_ende is not None and neu_ende < neu_beginn:
+        neu_ende = neu_beginn
+    ganztaegig = (neu_beginn.time() == datetime.min.time()
+                  and (neu_ende is None or neu_ende.time() == datetime.min.time()))
+    termin.beginn, termin.ende, termin.ganztaegig = neu_beginn, neu_ende, ganztaegig
+    termin.dauer_tage = max(1, ((termin.ende or termin.beginn).date()
+                                - termin.beginn.date()).days + 1)
+    gewerk = session.get(Gewerk, termin.gewerk_id) if termin.gewerk_id else None
+    if gewerk is not None:
+        faelligkeiten_nachberechnen(session, gewerk)
+    konflikte: list[str] = []
+    if termin.team_id and termin.typ == "montage":
+        konflikte += team_konflikte(session, termin.team_id, termin.beginn,
+                                    termin.ende or termin.beginn, ausser_termin_id=termin.id)
+    personen = besetzung_ids(session, termin.id)
+    if termin.person_id and termin.person_id not in personen:
+        personen.append(termin.person_id)
+    konflikte += person_konflikte(session, personen, termin.beginn,
+                                  termin.ende or termin.beginn, ausser_termin_id=termin.id)
+    text = (f"Termin {termin_art_name(termin)} im Kalender verschoben: "
+            f"{alt_text} → {termin_zeitraum_text(termin)}")
+    if termin.projekt_id:
+        verlauf(session, termin.projekt_id, text, benutzer=benutzer, gewerk_id=termin.gewerk_id)
+    else:
+        service_chat_notiz(session, termin, text, benutzer, herkunft="projektierung")
+    session.flush()
+    # Outlook best effort – event_senden gibt die Verbindung selbst vor dem Netz frei
+    # (verbindung_freigeben = Commit der bisherigen Änderungen) und wirft nie
+    try:
+        from app import outlook_kalender
+        outlook_kalender.event_senden(session, termin)
+    except Exception:
+        pass
+    return True, f"Termin {termin_art_name(termin)} verschoben: {termin_zeitraum_text(termin)}", konflikte
+
+
+def service_statistik(session: Session, monate: int = 12) -> list[dict]:
+    """Zahl der Service-Einsätze je Monat (nach Beginn) für die letzten `monate`
+    Monate inkl. des laufenden [ANNAHME]: je Monat gesamt, je Gewerk, je Anlass,
+    beendet. Älteste zuerst."""
+    heute = date.today()
+    erster = date(heute.year, heute.month, 1)
+    monate_liste: list[date] = []
+    for _ in range(max(1, monate)):
+        monate_liste.append(erster)
+        erster = (erster - timedelta(days=1)).replace(day=1)
+    monate_liste.reverse()
+    von = datetime.combine(monate_liste[0], datetime.min.time())
+    zeilen = {m: {"monat": m.strftime("%Y-%m"), "name": m.strftime("%m/%Y"), "gesamt": 0,
+                  "heizung": 0, "elektro": 0, "beendet": 0,
+                  "anlaesse": {k: 0 for k, _ in SERVICE_ANLAESSE}} for m in monate_liste}
+    for t in (session.query(ProjektTermin)
+              .filter(ProjektTermin.typ == "service", ProjektTermin.beginn.isnot(None),
+                      ProjektTermin.beginn >= von)):
+        monat = date(t.beginn.year, t.beginn.month, 1)
+        zeile = zeilen.get(monat)
+        if zeile is None:
+            continue
+        zeile["gesamt"] += 1
+        if t.service_gewerk in ("heizung", "elektro"):
+            zeile[t.service_gewerk] += 1
+        if t.anlass in zeile["anlaesse"]:
+            zeile["anlaesse"][t.anlass] += 1
+        if (t.service_status or "") == "beendet":
+            zeile["beendet"] += 1
+    return [zeilen[m] for m in monate_liste]
+
+
+# =====================================================================================
+# v33 (PLAN_V20 Phase 171, Agent S): automatischer Phasenwechsel
+# =====================================================================================
+
+# Nur diese Übergänge laufen automatisch: Aufgaben-Phasen → nächste Phase. Montage
+# (Start durch „Montage starten“ am Einsatztag) und Abnahme (Ende der Montage bzw.
+# Abnahmeprotokoll) sind Ereignis-Phasen und werden nicht automatisch betreten;
+# „abgeschlossen“ nur über „Rechnung freigeben“ (Plan). Rückfrage im Bericht.
+AUTO_PHASEN_ZIELE = {"auftragseingang": "feinplanung_vot", "feinplanung_vot": "planung",
+                     "planung": "montagevorbereitung", "abnahme": "freigabe"}
+AUTO_BEGRUENDUNG = "automatisch – alle Pflichtaufgaben erledigt"
+
+
+def phase_auto_aktiv(session: Session) -> bool:
+    """Parameter `phase_auto` (Projektierung-Einstellungen → Board & Wächter,
+    Standard an)."""
+    wert = parameter_holen(session, "phase_auto", "an").strip().lower()
+    return wert not in ("aus", "0", "nein", "false", "off")
+
+
+def pflichtaufgaben_der_phase(session: Session, gewerk: Gewerk
+                              ) -> tuple[list[Aufgabe], list[Aufgabe]]:
+    """(offen, alle) – Pflichtaufgaben in aktiven Paket-Instanzen, deren Paket zur
+    aktuellen Phase gehört (Paket-Rang = Boardspalte, V1-Pakete zählen nicht);
+    „entfällt“ ist nicht offen, optionale Aufgaben zählen nie."""
+    rang = _PHASEN_RANG.get(gewerk.phase)
+    if rang is None:
+        return [], []
+    instanzen = [i.id for i in (session.query(AufgabenpaketInstanz)
+                                .filter(AufgabenpaketInstanz.gewerk_id == gewerk.id,
+                                        AufgabenpaketInstanz.deaktiviert_am.is_(None),
+                                        AufgabenpaketInstanz.version != "v1"))
+                 if paket_rang(i.paket_name) == rang]
+    if not instanzen:
+        return [], []
+    alle = (session.query(Aufgabe)
+            .filter(Aufgabe.gewerk_id == gewerk.id, Aufgabe.pflicht.is_(True),
+                    Aufgabe.paket_instanz_id.in_(instanzen),
+                    Aufgabe.status != "entfaellt")
+            .order_by(Aufgabe.paket_instanz_id, Aufgabe.reihenfolge, Aufgabe.id).all())
+    offen = [a for a in alle if a.status != "erledigt"]
+    return offen, alle
+
+
+def auto_weiterschalten(session: Session, gewerk: Gewerk, benutzer=None) -> tuple[bool, str]:
+    """Nach jeder Erledigung einer Aufgabe, eines Formulars, einer Besetzung/eines
+    Termins oder eines Steckbrief-Nachzugs: sind alle Pflichtaufgaben der aktuellen
+    Phase erledigt oder „entfällt“ (optionale zählen nicht), wechselt das Gewerk über
+    phase_wechseln in die nächste Phase („automatisch – alle Pflichtaufgaben
+    erledigt“: Verlauf, Aktivität, Glocke an Projektleiter/Planer). Nur vorwärts,
+    eine Phase je Auslöser, nie nach abgeschlossen, nie mit offenen Wächter-Punkten
+    (in beiden Modi), nie in der Pause nach einem manuellen Rückschritt, nie bei
+    Parameter/Gewerk-Häkchen aus. Liefert (gewechselt, meldung)."""
+    if gewerk is None:
+        return False, "Kein Gewerk."
+    if gewerk.phase in ("abgeschlossen", "storniert"):
+        return False, "Endzustand – kein automatischer Wechsel."
+    if not phase_auto_aktiv(session):
+        return False, "Automatischer Phasenwechsel ist in der Parametrierung ausgeschaltet."
+    if not gewerk.phase_auto:
+        return False, "Automatischer Phasenwechsel am Gewerk ausgeschaltet."
+    ziel = AUTO_PHASEN_ZIELE.get(gewerk.phase)
+    if not ziel:
+        from app.models import GEWERK_PHASEN_NAMEN
+        return False, (f"„{GEWERK_PHASEN_NAMEN.get(gewerk.phase, gewerk.phase)}“ wird nicht "
+                       "automatisch verlassen.")
+    if (gewerk.phase_auto_pause or "") == gewerk.phase:
+        return False, "Pausiert nach manuellem Rückschritt in diese Phase."
+    offen, alle = pflichtaufgaben_der_phase(session, gewerk)
+    if not alle:
+        return False, "Keine Pflichtaufgaben in dieser Phase – kein automatischer Wechsel."
+    if offen:
+        return False, f"{len(offen)} Pflichtaufgabe{'n' if len(offen) != 1 else ''} offen."
+    punkte = waechter_pruefen(session, gewerk, ziel)
+    if punkte:
+        return False, "Wächter: " + " · ".join(punkte)
+    ok, meldung = phase_wechseln(session, gewerk, ziel, AUTO_BEGRUENDUNG,
+                                 benutzer=benutzer, automatisch=True)
+    return ok, meldung
+
+
+def auto_hook(session: Session, gewerk, benutzer=None) -> tuple[bool, str]:
+    """Nicht blockierender Aufruf von auto_weiterschalten aus den Auslösern
+    (Gewerk oder Gewerk-ID); Fehler brechen den Auslöser nie ab."""
+    try:
+        if isinstance(gewerk, int):
+            gewerk = session.get(Gewerk, gewerk)
+        if gewerk is None:
+            return False, "Kein Gewerk."
+        return auto_weiterschalten(session, gewerk, benutzer=benutzer)
+    except Exception as problem:   # noqa: BLE001 – die eigentliche Aktion zählt
+        return False, f"Automatik übersprungen: {problem}"[:200]
+
+
+def phase_auto_setzen(session: Session, gewerk: Gewerk, an: bool, benutzer=None) -> str:
+    """Häkchen „automatisch weiterschalten“ je Gewerk (Projektakte); Einschalten hebt
+    eine Pause auf. Verlaufseintrag, liefert die Meldung."""
+    an = bool(an)
+    if bool(gewerk.phase_auto) == an and not (an and gewerk.phase_auto_pause):
+        return ("Automatischer Phasenwechsel ist bereits "
+                + ("eingeschaltet." if an else "ausgeschaltet."))
+    gewerk.phase_auto = an
+    if an:
+        gewerk.phase_auto_pause = ""
+    text = (f"Automatischer Phasenwechsel {'eingeschaltet' if an else 'ausgeschaltet'} "
+            f"(Gewerk {gewerk.sparte})")
+    verlauf(session, gewerk.projekt_id, text, benutzer=benutzer, gewerk_id=gewerk.id)
+    session.flush()
+    return text + "."
+
+
+# =====================================================================================
+# v33 (PLAN_V20 Phase 168/171, Agent S): Datenmigration – von migrate.py aufgerufen
+# =====================================================================================
+
+def migration_v33_service(session: Session) -> list[str]:
+    """Idempotent (zweiter Lauf still): Parameter `phase_auto` = an anlegen, falls er
+    fehlt; Service-Einsätze ohne Status auf „geplant“ setzen. Spalten kommen aus
+    db._NACHTRAEGLICHE_SPALTEN (Fundament), Gewerk-Häkchen aus dem Spaltendefault."""
+    meldungen: list[str] = []
+    if not parameter_holen(session, "phase_auto", ""):
+        parameter_setzen(session, "phase_auto", "an")
+        meldungen.append("Projektierung (v33): Parameter phase_auto = an angelegt "
+                         "(automatischer Phasenwechsel)")
+    ohne_status = (session.query(ProjektTermin)
+                   .filter(ProjektTermin.typ == "service",
+                           ProjektTermin.service_status == "").all())
+    for t in ohne_status:
+        t.service_status = "geplant"
+    if ohne_status:
+        session.flush()
+        meldungen.append(f"Service (v33): {len(ohne_status)} Service-Einsätze auf Status "
+                         "„geplant“ gesetzt")
     return meldungen

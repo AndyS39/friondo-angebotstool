@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v32)
+# Friondo Angebotstool – Projektkontext (v33)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -10,7 +10,7 @@ Deckungsbeitrag, E-Signatur). Läuft lokal/on-prem.
 - Rollen: **Admin** (Benutzer verwalten inkl. Namen ändern, alles sehen),
   **Innendienst** (alles außer Benutzerverwaltung), **Außendienst** (nur Leads VOT
   eigene + Erfassung; nie Preise/EK/DB/Rabatt), seit v11 **Projektierung** und
-  **Montage** (nur `/montage`), seit v12 **Leadmanagement**; Mehrfachrollen
+  **Montage** (nur `/montage`), seit v12 **Leadmanagement**; Mehrfachrollen *(ergänzt v33: Varianten einer Basisrolle – Montage Heizung/Elektro, Service Heizung/Elektro, Handelsvertreter – Parametrierung → Rollen; Rechte prüfen die Basisrolle)*
   möglich (Details in den jeweiligen Abschnitten).
 - Startseite: Friondo-Logo oben links; nur drei Shortcuts **Leads VOT · Erfassungen ·
   Angebote**; alle weiteren Punkte im Dropdown „Menü" oben rechts; darunter
@@ -77,12 +77,13 @@ Nummern vergeben.
 | v30 | PLAN_V18.md | 145–152 |
 | v31 | PLAN_LEAD_V5.md | 153–160 |
 | v32 | PLAN_V19.md | 161–165 |
+| v33 | PLAN_V20.md | 166–177 |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
   optionale Bezeichnung, keine Angebotsposition. Darstellung: Netto → 19 % USt →
-  Gesamt-Betrag → **− Rabatt (brutto) → = Endbetrag**. KfW rechnet mit dem
-  Endbetrag; der Deckungsbeitrag sinkt um den Netto-Anteil (Rabatt ÷ 1,19).
+  Gesamt-Betrag → **− Rabatt (brutto) → = Endbetrag**. KfW rechnet mit dem *(überholt – siehe v33 Phase 172: Rabatt bei jedem Steuersatz vom Gesamtbetrag nach USt, bei 0 % vom Netto; kein Zusatz „brutto“)*
+  Endbetrag; der Deckungsbeitrag sinkt um den Netto-Anteil (Rabatt ÷ 1,19). *(v33: Rabatt ÷ (1 + USt-Satz), bei 0 % voller Rabatt)*
   Hinweis in docs/: Auf der späteren Rechnung (TAIFUN) ist der Rabatt vor der
   USt auszuweisen – die Angebots-Darstellung ist eine Brutto-Optik.
 - **Deckungsbeitrag** in der Angebotsliste absolut in € mit Farbampel:
@@ -140,6 +141,19 @@ Nummern vergeben.
     (Rückweg `rollback.bat --nur-code`).
   - **Jeder Plan mit neuen Netzaufrufen ergänzt das Inventar** in
     `docs/betrieb.md` (Modul, Auslöser, Intervall, Netzaufruf, Freigabe, Maßnahme).
+- **Rollen = Basisrolle + Kennzeichen (v33, Phase 167):** `benutzer.rolle` trägt den Key einer Rolle aus der
+  Tabelle `rollen` (Basisrollen admin · innendienst · aussendienst · montage · projektierung · leadmanagement
+  und Varianten wie Montage Heizung, Service Elektro, Handelsvertreter). Rechte und Pfadtabellen prüfen immer
+  die **Basisrolle** (`Benutzer.basisrolle`, `hat_rolle`), Kennzeichen (`gewerk`, `hat_kennzeichen("service")`,
+  `hat_kennzeichen("handelsvertreter")`) filtern innerhalb der Module; Pflege unter Parametrierung → Rollen.
+- **Outlook je Person, TAIFUN liest Outlook (v33, Phase 170):** jeder Tool-Termin steht als Kopie im
+  persönlichen Outlook-Kalender jeder eingeteilten Person (Vertriebler, Monteure, Techniker, Projektierer) –
+  erzeugt und gepflegt ausschließlich durch die Läufe `outlook-sync`/`outlook-ruecklesen` über die Warteschlange
+  `outlook_auftraege`; fremde Outlook-Einträge (TAIFUN, privat) werden nie verändert, nur als Belegtzeit gelesen.
+  Löschen in Outlook löscht nie im Tool (Markierung + Glocke).
+- **Rabatt bei jedem Steuersatz (v33, Phase 172):** der Gesamtrabatt wird vom Gesamtbetrag nach USt abgezogen –
+  bei 0 % USt (PV, § 12 Abs. 3 UStG) also vom Nettobetrag; der Deckungsbeitrag sinkt um Rabatt ÷ (1 + USt-Satz).
+  Kontrollwerte: 20.000,00 € netto, 0 %, 5 % → 19.000,00 €, DB −1.000,00 €.
 
 ## Neu in v6 (abgestimmt 21.08.2026)
 - **Lead-Zuordnung:** Personen-Zuordnung wirkt sofort rückwirkend auf bestehende
@@ -150,7 +164,7 @@ Nummern vergeben.
   Erfassungen und Angebote (außerhalb des Tools geschrieben); seit v7 gilt
   die Statuskette aus „Neu in v7" statt Auto-Archiv. Versendete Angebote sind (ID + Admin) mit Sicherheitsabfrage
   löschbar; jede Löschung landet im Lösch-Protokoll (Parametrierung).
-- **Angebotsliste:** Summenzeile Netto/Endbetrag/DB über die gefilterte Liste.
+- **Angebotsliste:** Summenzeile Netto/Endbetrag/DB über die gefilterte Liste. *(ergänzt v33: über die gefilterte UND sortierte Liste, Spalte „Endbetrag“ nach USt und Rabatt, DB-Summe nur mit Kalkulationssicht)*
 - **Editor:** Artikeltexte je Position editierbar (nur im Angebot), lange
   Beschreibungen aufklappbar statt abgeschnitten, EP-Kästchen je Position;
   Förderbetrag manuell überschreibbar (Kennzeichen „manuell“) und Förderblock
@@ -160,7 +174,7 @@ Nummern vergeben.
 - **Statistik-Seite:** Zeitraumwahl, Kennzahlen gesamt/je AD/je Kanal,
   Abschlussquote; Außendienst sieht nur die eigenen Zahlen.
 - **E-Mail:** Versand als HTML; Vorlagen-Editor mit Formatierung (fett usw.);
-  je ID-Benutzer die echte Outlook-Signatur (Upload .htm + Bilder, Inline-CID)
+  je ID-Benutzer die echte Outlook-Signatur (Upload .htm + Bilder, Inline-CID) *(ergänzt v33: auch der Außendienst über `/einstellungen/signatur` – Nachfass-Mail)*
   1:1 unter dem Entwurf.
 
 ## Neu in v7 (abgestimmt 24.08.2026)
@@ -209,7 +223,7 @@ Nummern vergeben.
   Vollmacht-Häkchen wieder leer; Kunden-Nr. entfällt im Briefkopf;
   PDF zeigt Rechnungsanschrift im Empfängerfeld und abweichenden
   Ausführungsort als eigene Zeile.
-- Rollen: Außendienst sieht „Meine Angebote" (read-only, Kundenpreise
+- Rollen: Außendienst sieht „Meine Angebote" (read-only, Kundenpreise *(seit v33 als Tabelle im Lead-Board-Layout, Katalog `meine_angebote` ohne DB – siehe v33)*
   und PDF, ohne EK/DB/Editor/Versand).
 - Abgelehnt-Prozess: Pflichtdialog „Grund der Ablehnung" (Auswahlliste
   aus Parametrierung + Freitext) für Tool- und TAIFUN-Angebote;
@@ -340,12 +354,12 @@ Nummern vergeben.
 ## E-Mail-Versand, Vorlagen & Verlauf (v5)
 - Versand über Graph aus dem Postfach des angemeldeten ID-Mitarbeiters, Absender
   ist immer **angebot@friondo.de** („Senden als"-Berechtigung durch M365-Admin;
-  Graph-Berechtigungen um Shared-Mailbox-Zugriff erweitern, docs/graph-einrichtung.md
+  Graph-Berechtigungen um Shared-Mailbox-Zugriff erweitern, docs/graph-einrichtung.md *überholt – siehe v33 (Phase 166): Modus anwendung legt Entwurf/Versand direkt am Postfach angebot@ an, kein „Senden als“, keine Anmeldung einer Person*
   fortschreiben).
 - Automatisch: **CC = Außendienstler des Vorgangs** (E-Mail aus der Benutzer-
   verwaltung; fehlt sie, Entwurf ohne CC + Hinweis), **BCC** aus der Parametrierung
   (Standard info@friondo.de).
-- **Vorlagen:** Standard-Vorlage für Betreff + Text plus optionale Vorlage je
+- **Vorlagen:** Standard-Vorlage für Betreff + Text plus optionale Vorlage je *(ergänzt v33: zusätzlich die Nachfass-Vorlagen „Nachfassen 1/2“, Versand durch den AD aus dem eigenen Postfach)*
   Außendienstler (greift automatisch nach AD des Vorgangs) – *ergänzt seit v27-Nachtrag 2:
   zusätzlich Vorlage je Sparte WP/PV/KL/WB, Reihenfolge AD → Sparte → Standard*. Platzhalter: {anrede},
   {vorname}, {nachname}, {angebotsnummer}, {endbetrag}, {eigenanteil}, {foerderung},
@@ -370,7 +384,7 @@ Stack (FastAPI/SQLite/fpdf2), TAIFUN-Import mit GUID-Anker und Textregeln,
 Fragebogen mit Seiten + AMPEL, Erfassungsliste, Nummernkreis AN-C-<JJ><NNNN>,
 EP-Regel, Decimal/Cent, 19 % USt, KfW-Modul mit Testfällen gegen den HTML-Rechner,
 PDF nach Referenz AN250096, Vollmacht nur bei iMSys/SpotDynamic, Anhänge-Bibliothek,
-Graph-Versand über Innendienst, Terminal-Server-Betrieb.
+Graph-Versand über Innendienst, Terminal-Server-Betrieb. *überholt – siehe v33 (Phase 166): Zugriff als Anwendung (Client Credentials), Modus delegiert nur als Rückfall*
 
 ## Neu in v11 – Projektierung V1 (abgestimmt 22.09.2026)
 
@@ -438,7 +452,7 @@ Graph-Versand über Innendienst, Terminal-Server-Betrieb.
   tragen `demo = 1` und erscheinen in keiner bestehenden Liste/Statistik/Kachel/
   Rückspielung; Umstellung auf `alle` fragt: Demo-Leads löschen oder behalten.
   Sperren im Demo-Modus: `mail_modus` nur protokoll/test (live abgewiesen),
-  `kalender_sync` nur ins Testpostfach, monday-Leads nicht buchbar.
+  `kalender_sync` nur ins Testpostfach, monday-Leads nicht buchbar. *(ergänzt v33: Testpostfach nur für Demo-Termine; Kopien je Person über die Warteschlange, Phase 170)*
 - **Eingang:** Schnellanlage, CSV/Excel-Import mit Spaltenzuordnung, `POST
   /api/leads` (API-Key je Quelle), Mail-Parser mit Regeln + Test (Abruf nur bei
   `parser_modus = an`), Formular-Standard `[LEAD] <quelle> <kampagne>` + `Feld: Wert`,
@@ -453,11 +467,11 @@ Graph-Versand über Innendienst, Terminal-Server-Betrieb.
 - **Terminassistent:** Top-5-Slots (*überholt – seit v29 genau drei Vorschläge, der erste
   „Ideal“, Parameter `vorschlaege_anzahl`*) über AD-Profile (Startadresse, Arbeitszeiten,
   Dauer/Puffer/Max), Tool-Termine (`vot_termine`, auch aus monday-VOT-Datum),
-  optional Outlook-Frei/Belegt (Graph, `kalender_sync`), Fahrzeiten
+  optional Outlook-Frei/Belegt (Graph, `kalender_sync`), Fahrzeiten *(überholt – seit v33 Belegtzeiten aus dem Cache `outlook_belegt`, Ereignisse über die Warteschlange `outlook_auftraege`, Phase 170)*
   (`routing_anbieter` ors / google / luftlinie, Caches), Bewertung Umweg +
   Wunschzeit/Tour-Tag/Randzeit; Buchen schreibt Termin, Outlook-Ereignis (falls an),
   Bestätigung + Erinnerung; Umbuchen, No-Show (Lead zurück auf Qualifiziert),
-  Terminkalender Woche je AD, Karte (Leaflet lokal, OSM-Kacheln), „Adresse prüfen".
+  Terminkalender Woche je AD, Karte (Leaflet lokal, OSM-Kacheln), „Adresse prüfen". *(Terminkalender Woche je AD überholt – seit v33 zentraler Planungskalender `/kalender?gruppe=vertrieb`, Umleitung [ANNAHME])*
 - **Kommunikation:** Vorlagen eingangsbestaetigung / nicht_erreicht /
   terminbestaetigung (ICS) / terminerinnerung (−24 h) / terminaenderung / nurture
   (nur mit Einwilligung), Warteschlange + Versand-Job, `mail_modus` protokoll / test /
@@ -571,7 +585,7 @@ Lead-Management belegt.)
   das Team ist nur die Vorlage, die Mannschaft steht je Termin in der Besetzung
   `termin_besetzung`; EIN Termin-Dialog für alle Terminarten – siehe v28*);
   Kalender mit Balken über die Projektdauer (Standard 1 Woche), Drag,
-  Konfliktwarnung; Outlook-Sync über Graph in beide Richtungen.
+  Konfliktwarnung; Outlook-Sync über Graph in beide Richtungen. *(ergänzt v33: Team-Kalender bleibt, daneben der Mitarbeiter-Kalender `/kalender?gruppe=projektierung` mit einer Zeile je Person; Outlook-Sync seit v33 über die Auftrags-Warteschlange je Mitarbeiter, Phase 170)*
 - Galerie am Vorgang mit festen Ordnern (*Ordnerliste überholt – seit
   27.09. Galerie je Sparte + Ordner „Förderung", siehe unten*), Upload mobil per Kamera für Vertrieb (auch ohne
   Auftrag), Planung und Montage; Projektakte zeigt dieselbe Galerie (*seit v28 Lightbox
@@ -684,7 +698,7 @@ Team-Feedback belegt – Plan-Text „Neu in v13“ entspricht diesem Abschnitt.
   `abnahme` und `freigabe` ersetzen `abnahme_freigabe` (Pakete Abnahme:
   Montagebericht · IBN-Protokoll · Abnahmeprotokoll · Restarbeiten ·
   Abweichungen/Nachtrag; Freigabe: Rechnung freigegeben · BnD); Wächter
-  Abnahme → Freigabe = Pflichtaufgaben Abnahme.
+  Abnahme → Freigabe = Pflichtaufgaben Abnahme. *ergänzt v33 (Phase 171): dieser Wechsel läuft automatisch, sobald alle Abnahme-Pflichtaufgaben erledigt sind (phase_auto)*
 - **Vorlauf-Ampel** je Gewerk bis Montagebeginn: grün > 8 Wochen, gelb
   4–8, rot < 4 / unterminiert (Parameter `vorlauf_gruen_ab_wochen`,
   `vorlauf_gelb_ab_wochen`); Punkt vor dem Termin-Badge, Spalte in Liste,
@@ -759,7 +773,7 @@ Team-Feedback belegt – Plan-Text „Neu in v13“ entspricht diesem Abschnitt.
   Projektierung-Einstellungen; Hauptrolle Projektierung/Montage sieht das
   Modul immer). Portal-Badge „Demo · Coming soon“ / „Pilot“ / keins. BzA-
   Kundenmail nur im Demo-Modus an `projekt_testadresse`, im Pilot echt.
-  Parametrierung → **Go-live-Checkliste** (`app/golive.py`, 11 Live-Punkte
+  Parametrierung → **Go-live-Checkliste** (`app/golive.py`, 11 Live-Punkte *überholt – v33: 12 Live-Punkte (Punkt 12 „Graph als Anwendung verbunden“)*
   mit Link: Absender + Testmail ohne Fallback, Kalender-Modus + Outlook-
   Termin, Benutzer je Rolle, Teams mit Mitgliedern, Sub je Typ, Portal-URLs,
   Collin-Kundennummer, Stücklisten ≥ 90 % ohne BEISPIEL-Nummern,
@@ -980,7 +994,7 @@ v14“ entspricht diesem Abschnitt.)
   nach dem ersten Schreibzugriff die SQLite-Schreibsperre während der
   Netz-I/O; ein Editor-POST wartet busy_timeout (5 s) und stirbt. Abgefangen
   durch `_speichern` in `routers/angebote.py` (Rollback + eine Wiederholung
-  nach 0,7 s für entfernen/sortierung/aendern/menge/neu-nummerieren – *seit v30
+  nach 0,7 s für entfernen/sortierung/aendern/menge/neu-nummerieren – *seit v30 *(seit v33 wiederholt bereits `BEGIN IMMEDIATE` beim ersten Zugriff; `_speichern` wiederholt diesen Fall nicht erneut)*
   auch duplizieren/ueberarbeiten/kopieren, siehe v30*;
   Sortierung mit robustem Parser und Rückmeldung bei geänderten
   Positionen), das Fehlerprotokoll (Meldung „Datenbank kurz belegt …“) und
@@ -1032,7 +1046,7 @@ Prüf-Agent, Hook-Änderungen an geteilten Dateien zentral eingespielt.)
   (EFH/RH/REH/MFH) + `parteien`; `vorgaenge.ad_id` (zuständiger AD/HV, A-7),
   `vorab_angebot` (F10), `veranstaltung_id`, `teilgenommen`; `vot_termine.typ`
   (vot|telefon|online, A-2), `medium`, `ics_uid`, `ics_sequence`;
-  `benutzer.buchungslink`, `nebenstelle`; `ad_profile.terminiert_selbst`
+  `benutzer.buchungslink`, `nebenstelle`; `ad_profile.terminiert_selbst` *(seit v33 gespiegeltes Kennzeichen der Rolle Handelsvertreter)*
   (Handelsvertreter, A-1), `kompetenz_sparten` (JSON), `kompetenz_kombi`,
   `kompetenz_mfh`, `kompetenz_gewerbe`; `lead_aktivitaeten.call_id/richtung/
   nebenstelle` (CTI-Vorbereitung). Tabellen `todos`, `info_veranstaltungen`,
@@ -1308,7 +1322,7 @@ Abschnitt V3; Team-Hinweise: docs/nach-dem-update-v25.md.)
   Kontaktiert). Interne Phasen, `lead_phase_berechnen` und Board-Zuordnung
   unverändert; Aktivitätstexte behalten die internen Phasennamen. Hinweis in der
   Parametrierung (Logik-Seite), dass zwei Phasen dasselbe Label tragen dürfen.
-- **Spalten je Nutzer** (Hauptboard, Deals, Infoabend, Handelsvertreter;
+- **Spalten je Nutzer** (Hauptboard, Deals, Infoabend, Handelsvertreter; *(seit v33 auch die sechs Angebotstool-Tabellen, `TABELLEN_BOARDS` – siehe v33)*
   `benutzer_einstellungen` Key `boards_spalten`, Struktur
   `{"<board>": {"spalten": [{key, sichtbar, name}], "sort": {key, richtung}}}`,
   v23-Listen werden weiter gelesen): `lead_boards.spalten_fuer(session, benutzer,
@@ -1407,7 +1421,7 @@ Abschnitt V3; Team-Hinweise: docs/nach-dem-update-v25.md.)
   Qualifizierung/Scoring/Klassen als „vorhanden, nicht aktiv“. Daten und Blätter
   bleiben unverändert; bei „an“ verhält sich alles wie in V2.
 - **Terminassistent ohne Handelsvertreter**: `lead_termin.kandidaten(...,
-  benutzer)` lässt HV (`terminiert_selbst`) nur zu, wenn `benutzer.id == hv.id`
+  benutzer)` lässt HV (`terminiert_selbst`) nur zu, wenn `benutzer.id == hv.id` *(seit v33 auch über das Rollen-Kennzeichen handelsvertreter)*
   („Handelsvertreter terminieren ihre Leads selbst“, `manuell_erlaubt`/
   `hv_manuell`); Leads mit `ad_id` = HV liefern `hv_lead`/`hv_hinweis` für den
   Innendienst, termin.html zeigt die HV als optgroup „Handelsvertreter (nur
@@ -1584,7 +1598,7 @@ Projektierung weiter im eingestellten `freigabe_modus`.)
   (`templates/benutzer/liste.html`) steht in der Hauptzeile und im Formular „Neuer
   Benutzer“ statt der Chip-Reihe ein `<select name="team_ids">` mit „– kein Team –“
   und allen aktiven Teams (Typ montage zuerst, dann sub, je alphabetisch; die Route
-  liefert `order_by(typ, name)`, das Template sichert montage-zuerst ab). Sichtbar nur
+  liefert `order_by(typ, name)`, das Template sichert montage-zuerst ab). Sichtbar nur *(seit v33 Basisrolle montage inkl. Varianten, `data-basis`)*
   bei Rolle Montage – Live-Umschaltung über `benTeamsUmschalten`; Nicht-Montage-
   Benutzer ohne Zuordnung haben kein Dropdown im HTML, beim Umschalten klont das JS
   eines aus `<template id="ben-team-vorlage">`. Hat ein Benutzer mehrere Teams,
@@ -1603,7 +1617,7 @@ Projektierung weiter im eingestellten `freigabe_modus`.)
   Bereichskarten – Allgemein · Angebotstool · Projektierung · Lead-Management ·
   System & Protokolle. Alle bisherigen Adressen bleiben; jeder Link der alten
   Button-Reihe kommt genau einmal vor, Admin- und Lead-Bedingungen wie zuvor, der
-  Go-live-Eintrag trägt ein Badge „n/11 grün“. Die Inline-Abschnitte der alten
+  Go-live-Eintrag trägt ein Badge „n/11 grün“. Die Inline-Abschnitte der alten *überholt – v33: „n/12 grün“*
   Übersicht liegen auf zwei neuen Seiten: `/parametrierung/angebotstool`
   („Angebotstool-Einstellungen“: DB-Ampel inkl. je Sparte, E-Mail-Versand mit
   Versand-Erkennung (#versand), Kombi-Versand, gewerkeübergreifende Artikel,
@@ -1681,7 +1695,7 @@ Freigabe davor ist ein Fehler.
   keine Relationships, Routen laden ihn bei Bedarf über `session.get`).
 - Freigabe vor Netz-I/O eingebaut in `routing.matrix_fuellen`,
   `geocoding.geokodieren` (auch im 5-Minuten-Hintergrundlauf je Adresse),
-  `kalender.frei_belegt/termin_schreiben/termin_aendern/termin_loeschen` (Rumpf
+  `kalender.frei_belegt/termin_schreiben/termin_aendern/termin_loeschen` (Rumpf *(überholt – seit v33 rufen diese Funktionen kein Netz mehr: Warteschlange + Cache, Phase 170)*
   vorher gelesen), `heizreport_api._anfrage_v2/_anfrage` und PDF-Download sowie in
   den Mail-/Sync-Modulen (siehe unten). Die automatischen Terminvorschläge der
   Kundenkartei rechnen damit ohne gehaltene Verbindung (Routing-Matrix und
@@ -1795,11 +1809,11 @@ weiter, Rückweg `rollback.bat --nur-code`. Rollout nur im Wartungsfenster.)
 - **Pool, Threads, Invariante:** `.env`-Schlüssel `DB_POOL_SIZE` (20),
   `DB_POOL_OVERFLOW` (**70** – Plan 40; mit 64 Threads und 13 Scheduler-Läufen
   verlangt die Invariante 64 + 13 + 5 = 82 Verbindungen; *seit v29 14 Läufe mit
-  `lead-mail-abruf`: 64 + 14 + 5 = 83 ≤ 90*), `DB_POOL_TIMEOUT` (10),
+  `lead-mail-abruf`: 64 + 14 + 5 = 83 ≤ 90*), `DB_POOL_TIMEOUT` (10), *(seit v33 16 Läufe mit `outlook-sync`/`outlook-ruecklesen`: 64 + 16 + 5 = 85 ≤ 90)*
   `WORKER_THREADS` (64). `db.pool_invariante(anzahl_scheduler)` wird beim Start
   geprüft, protokolliert (`data\fehler.log`, Betriebs-Seite, /health „Pool-Invariante
   verletzt“) und bei Verletzung ins Fehlerprotokoll geschrieben.
-- **`db.kurz()`** (Kontextmanager, commit bei Erfolg / rollback bei Fehler / immer
+- **`db.kurz()`** (Kontextmanager, commit bei Erfolg / rollback bei Fehler / immer *(seit v33 `kurz(schreibend=True)` → BEGIN IMMEDIATE; Lesesitzungen `kurz(schreibend=False)`)*
   close) für Scheduler und Hilfsfunktionen; Anfragen behalten `get_session`.
 - **Scheduler-Rahmen `app/scheduler.py`:** `scheduler.registrieren(name, intervall_s,
   funktion, beschreibung=, start_verzoegerung_s=, taeglich_um=, aktiv=)` je Lauf;
@@ -1813,10 +1827,10 @@ weiter, Rückweg `rollback.bat --nur-code`. Rollout nur im Wartungsfenster.)
   `leadmanagement` 300 s, `geocoding` 300 s, `lead-mail` 60 s, **`mail-ausgang`**
   60 s, `backup` täglich 02:30, `sqlite-pflege` täglich 02:40, `betrieb-wache` 300 s,
   `login-protokoll` täglich 03:10; *seit v29 zusätzlich `lead-mail-abruf` 120 s
-  (Antworten/Bounces aus termin@, aktiv nur mit Graph) – 14 Läufe*. Inaktive Läufe
+  (Antworten/Bounces aus termin@, aktiv nur mit Graph) – 14 Läufe*. Inaktive Läufe *(seit v33 zusätzlich `outlook-sync` 60 s und `outlook-ruecklesen` 300 s – 16 Läufe; mail-sync ohne Outlook-Teilschritt)*
   melden „inaktiv (Grund)“ – kein Fehler.
 - **Sitzungsdisziplin der Läufe (Agent A):** `mail_sync.sync`, `sub_mail`/
-  `terminmail.antworten_abgleichen`, `outlook_kalender.ruecklesen`, der monday-
+  `terminmail.antworten_abgleichen`, `outlook_kalender.ruecklesen`, der monday- *(v33: `outlook_kalender.ruecklesen` ruft den Lauf `outlook_sync.ruecklesen_lauf`)*
   Scheduler-Pfad, `geocoding.hintergrund_lauf`, `lead_mail.versand_job` arbeiten mit
   `db.kurz()` (lesen → Sitzung zu → Netz → kurze Sitzung schreiben); geteilte
   Funktionen mit Request-Session behalten die Hotfix-Freigabe (`geokodieren`,
@@ -1938,7 +1952,7 @@ weiter, Rückweg `rollback.bat --nur-code`. Rollout nur im Wartungsfenster.)
   nur bei Außendienst/Montage sichtbar*), `GET/POST /pin-wechsel` (jede Rolle, Menü
   „PIN ändern“), Benutzerverwaltung mit Filter Rolle/aktiv, Spalte „Letzter Login“,
   „Sperre aufheben“, „Alle Sitzungen beenden“, Einstellungen-Block, CSV-Import
-  `/benutzer/import` (`app/benutzer_import.py`: `Name;Rolle;E-Mail;Team;Vertriebskanal`,
+  `/benutzer/import` (`app/benutzer_import.py`: `Name;Rolle;E-Mail;Team;Vertriebskanal`, *(seit v33 Rolle = Key oder Name jeder aktiven Rolle)*
   Vorschau, Start-PINs einmalig angezeigt, nicht gespeichert), Login-Protokoll
   `/benutzer/login-protokoll`; Styles in `app/static/login_v27.css`. Tests:
   `tests/test_v27_login.py`; `tests/conftest.py` setzt den IP-Zähler je Test zurück.
@@ -2099,7 +2113,7 @@ Entscheidungen: `docs/projektierung-entscheidungen.md` Abschnitt „PLAN_PROJ_V6
   headless, DevTools) – 1 920 px: 7 Spalten, kein Seiten-Scroll; 2 560 px: 9 Spalten;
   1 366 × 768: Mindesthöhe 480 px greift (*seit Nachtrag 08.10.2026 ohne Seiten-Scroll*).
   Bilder `docs/design-v28/`.
-- **Termine (Phase 135):** EIN Dialog (`templates/projektierung/_termin_dialog.html`, Makro
+- **Termine (Phase 135):** EIN Dialog (`templates/projektierung/_termin_dialog.html`, Makro *ergänzt v33 (Phase 168): Terminart Service-Einsatz (Gewerk, Anlass, auch am Vorgang ohne Projekt; Dialog-Kontext `projektierung.termin_dialog_kontext`)*
   `termin_dialog`, JS in `projektierung.js`) für Montage (WP) · Elektro-Montage · Sub-Einsatz ·
   Feinplanung VOT · Abnahme · Sonstiges (`projekt_termine.zweck` wp/elektro/sub);
   `kern.termin_speichern` ist die einzige Anlage-/Bearbeiten-Funktion (`team_termin_zuweisen`
@@ -2145,7 +2159,7 @@ Entscheidungen: `docs/projektierung-entscheidungen.md` Abschnitt „PLAN_PROJ_V6
   attachment`) – Ursache des Sofort-Downloads war das `filename=`-Attachment der Route.
 - **Montage-Backend `/montage` (Phase 137, `app/routers/montage.py`):** Besetzung je Termin
   entscheidet (`termin_besetzung`; Termine ohne Besetzung: Team-Mitglied oder `person_id`;
-  Admin/Projektierung alles – bestätigt 08.10.2026). Standardansicht „Meine Einsätze“ (Heute/Diese
+  Admin/Projektierung alles – bestätigt 08.10.2026). Standardansicht „Meine Einsätze“ (Heute/Diese *ergänzt v33 (Phase 167/168): Rollen-Varianten filtern nach Gewerk, Service-Varianten sehen nur Service-Einsätze ihres Gewerks*
   Woche/Danach), Team-Umschalter für mehrere Teams und Admin/Projektierung („Team <Name>“ =
   alle Termine des Teams), Wochenkalender mit Besetzungs-Initialen. Auftragsseite: Kopf ·
   Steckbrief vollständig (`steckbrief_zeilen`: alle Felder aus `kern.steckbrief_felder`, leere
@@ -2167,7 +2181,7 @@ Entscheidungen: `docs/projektierung-entscheidungen.md` Abschnitt „PLAN_PROJ_V6
   08.10.2026: `ib_kaeltemittel` entfällt, Antwort Andreas) mit den elf
   Fragen von Andreas; Abnahme unverändert). Feldtypen datum · text (Option `gross`) · ja_nein ·
   auswahl · zahl · foto (Ordner, mehrere Dateien, Wert `galerie:<id>:<name>|…`) · unterschrift ·
-  `wiederhol` (Spalte optionen = Einzelfeld, Formularfelder `<key>[]`, JSON-Liste, „+ weitere
+  `wiederhol` (Spalte optionen = Einzelfeld, Formularfelder `<key>[]`, JSON-Liste, „+ weitere *ergänzt v33 (Phase 168): zusätzlich Typ `zeit`; Formular `servicebericht` hängt am Termin (`montage_formulare.termin_id`)*
   <Einzelfeld>“); Optionsform `pflicht_wenn:<feld>≠<wert>` / `=<wert>`
   (`FormularFeld.pflicht_erfuellt`, in `offene_pflicht`); „Logik prüfen“ meldet unbekannte
   Typen/Optionsformen als Fehler. `mb_mitarbeiter` wird mit der Besetzung vorbelegt. Abschluss
@@ -2243,7 +2257,7 @@ versuche`); v27-Code läuft auf der v29-Datenbank weiter. Entscheidungen:
   Logik-Seite zeigt das Blatt „Terminhinweise“ und die Kaskaden-Spalte `nach_letztem`.
   Betriebs-Seite: Kachel „Lead-Mails mit Fehler“ (kein `/health`-warn [ANNAHME]).
 - **Handelsvertreter-Sicht (Phase 140, `lead_v2.hv_sicht`):** Benutzer mit
-  `ad_profile.terminiert_selbst` ohne Innendienst-/Leadmanagement-/Admin-Rolle sehen in der
+  `ad_profile.terminiert_selbst` ohne Innendienst-/Leadmanagement-/Admin-Rolle sehen in der *(überholt – seit v33 Rolle Handelsvertreter (Kennzeichen) oder gespiegeltes Flag)*
   Icon-Leiste (`_nav.html`, Import `lm_nav … with context`) nur Mein Dashboard · Karte ·
   To-Dos · Handelsvertreter; Hauptboard, Deals, Kontaktiert, Infoabend und alle
   „Mehr …“-Einstiege liefern per URL 404 (`lead_v2.HV_GESPERRTE_PFADE`, `lead_v2.gate` –
@@ -2253,7 +2267,7 @@ versuche`); v27-Code läuft auf der v29-Datenbank weiter. Entscheidungen:
   zeigt HV nur eigene Leads/Termine/Startadresse, Mittelpunkt = eigene Leads; Kartei:
   Innendienst/Leadmanager nur Anzeige. Sammelaktion **„An Handelsvertreter verschieben“**
   (`lead_boards.SAMMELAKTION_HV`, auch Deals/Infoabend) mit zwei Ziel-Schaltflächen aus
-  `hv_gruppe_rene`/`hv_gruppe_simon` (erster Eintrag = Ziel), Ausschluss F14 wird gemeldet
+  `hv_gruppe_rene`/`hv_gruppe_simon` (erster Eintrag = Ziel), Ausschluss F14 wird gemeldet *(überholt – seit v33 zweite Schaltfläche „Simons Gruppe“ mit Kennzeichen „noch nicht verteilt“)*
   („3 verschoben, 1 übersprungen: Kanal Enni“), Aktivität je Lead, keine Glocke; HV-Ansicht
   mit Filter „Gruppe“ (René | Simon-Team | alle).
 - **Navigation, Boards, Dashboard (Phase 141):** „Mehr …“ ist ein Flyout
@@ -2280,7 +2294,7 @@ versuche`); v27-Code läuft auf der v29-Datenbank weiter. Entscheidungen:
   Akzentfarbe je Modus* –, Badge, auch im
   Block Termine der Kartei), gebündelter Routing-Aufruf unverändert; Kalenderansicht per
   `GET /lead/{id}/termin/kalender.json?woche=&neu=1` (`lead_termin.kalender_json`: Mo–Sa,
-  15-Minuten-Raster, Spalte je Kandidat, Tool-Termine, Outlook-Belegt nur bei `kalender_sync
+  15-Minuten-Raster, Spalte je Kandidat, Tool-Termine, Outlook-Belegt nur bei `kalender_sync *(überholt – seit v33 Belegtzeiten aus dem Cache `outlook_belegt`, kein Graph im Request)*
   = an` und nie für HV, Vorschlags-Slots, Cache 10 Min je Lead/Woche, Verbindung vor dem
   Graph-Abruf freigegeben; Klick auf freien Slot = manuelle Buchung), „Weitere Kalender“
   (Mehrfachauswahl, `benutzer_einstellungen` Key `assistent_kalender`, Spalten „außerhalb
@@ -2299,7 +2313,7 @@ versuche`); v27-Code läuft auf der v29-Datenbank weiter. Entscheidungen:
   <Name>“; Ablage weiter in `lead_vorlage_<key>_betreff/_text`, dazu `_quelle`
   editor|zulieferung|standard_kopie und `_hash`). Rahmen + individueller Block: Platzhalter
   `{vertriebler_block}` (Bild als Inline-CID `cid:vertriebler-<id>`, Name, Telefon, E-Mail,
-  Infotext aus der Benutzerverwaltung – `Benutzer.vorname/infotext/bild_datei`, Upload
+  Infotext aus der Benutzerverwaltung – `Benutzer.vorname/infotext/bild_datei`, Upload *überholt – siehe v33 (Phase 175): ohne Infotext, Block = Bild, Name, Telefon, E-Mail*
   JPG/PNG ≤ 2 MB im AD-Profil nach `data/benutzerbilder/`) oder ein Bereich zwischen
   `<!-- vertriebler_block -->` und `<!-- /vertriebler_block -->`; „Rahmen für alle
   Terminbestätigungen übernehmen“ (`lead_mail.rahmen_uebernehmen`, Sicherheitsabfrage mit
@@ -2663,9 +2677,9 @@ parallelen Agenten D1/D2/B/P mit eigenen DB-Kopien, Briefings und Berichte unter
   derselben Transaktion sofort „database is locked“ (BUSY_SNAPSHOT), sobald ein anderer
   Schreiber zwischenzeitlich festgeschrieben hat – der `busy_timeout` greift dort nicht; die
   Flanke in `test_pool_hotfix::test_40_…` (20 gleichzeitige Terminvorschläge) kam daher. Eine
-  allgemeine Lösung (`BEGIN IMMEDIATE` für schreibende Anfragen) bleibt ein eigener Punkt;
+  allgemeine Lösung (`BEGIN IMMEDIATE` für schreibende Anfragen) bleibt ein eigener Punkt; *(erledigt in v33, Phase 172 – Hybrid: nur Schreibsitzungen)*
   (22) `angebot_anlegen` mit
-  `commit=False` innerhalb von `_speichern` bleibt ein eigener Plan; (23) **Demo-Badge auch auf
+  `commit=False` innerhalb von `_speichern` bleibt ein eigener Plan; (23) **Demo-Badge auch auf *(erledigt in v33, Phase 172)*
   den Board-Karten** (`projektierung/kanban.html`). **(24) Befund Andreas (Vorschau 12.10.2026):
   Drag & Drop im Kanban-Board tat nichts.** Ursache: Jinja `tojson` lässt doppelte
   Anführungszeichen stehen – in DOPPELT gequoteten on*-Attributen endete das Attribut am ersten
@@ -2850,7 +2864,7 @@ Rückfragen: `docs/leadmanagement-entscheidungen.md` Abschnitt V5; Team-Hinweise
   Angebote/Termine je Objekt (`vorgang_verlauf.objekt_gruppen`, nur bei mehreren Objekten).
 - **Zuständigen-Dropdowns (Phase 156, B):** NUR über `app/lead_dropdowns.py` – Leadmanager =
   `benutzer.leadmanager` (nach Vorname, Altwert „(nicht mehr wählbar)“), Außendienst = angestellte AD
-  ohne `terminiert_selbst`; HV-Lead → nur seine Gruppe (`hv_gruppe_rene`, `hv_gruppe_simon` +
+  ohne `terminiert_selbst`; HV-Lead → nur seine Gruppe (`hv_gruppe_rene`, `hv_gruppe_simon` + *(seit v33 ohne Rolle/Kennzeichen Handelsvertreter)*
   `hv_gruppe_simon_mitglieder`). Round-Robin verlangt weiterhin `lm_aktiv` UND Häkchen.
 - **Sparten MS/WA/DMS (Phase 157, B/AT):** Codes aus `app/sparten.py` überall (Jinja-Globals
   `lm_sparten`, `lm_sparten_lang`), Boards/Anrufliste/Kanban/Karte/Trichter/Kanal-Report/
@@ -2874,7 +2888,7 @@ Rückfragen: `docs/leadmanagement-entscheidungen.md` Abschnitt V5; Team-Hinweise
   (`erzeuge_pdf(ausfuehrungsort=)`, Zeile „Ausführungsort“, Lieferanschrift-Vergleich,
   Verbrauchsstelle der Vollmacht, Kopf der Wirtschaftlichkeitsseiten), `lieferschein_pdf`,
   `bza_datenblatt` Abschnitt 1, `heizreport_api.projektdaten_v2`, `steckbrief_pdf`, Sub-Mail-
-  Platzhalter, `ugl.lieferadresse_zeilen`, `outlook_kalender._event_daten`, Montage-Auftragsseite,
+  Platzhalter, `ugl.lieferadresse_zeilen`, `outlook_kalender._event_daten`, Montage-Auftragsseite, *(v33: `outlook_sync._daten_projekt` über `projektierung.termin_adresse`)*
   `projektierung.terminvorschlaege`, `projekt_anlegen`/`gewerk_anlegen` (`gewerke.objekt_id`),
   Dialog „Angebot → Projekt“ (Vorbelegung), `geocoding.lead_adresse(objekt_id=)`. Regeln in
   `anschriften.py`: Empfänger = Kunde (Kundenadresse), „Ausführungsort: …“ sobald die
@@ -2928,14 +2942,14 @@ Do 22.10.; Rückfrage).)
 
 - **Vertriebler-Ansicht „Mein Tag“ (Phase 161, Agent M, `app/mein_tag.py`, `routers/leads.py`,
   `templates/leads/mein_tag.html`, `static/mein_tag.css/.js`):** `GET /leads` ist für den Außendienst
-  eine Kartenliste in einer Spalte (< 600 px Vollbreite, sonst max. 720 px) mit den Blöcken **Fällig
+  eine Kartenliste in einer Spalte (< 600 px Vollbreite, sonst max. 720 px) mit den Blöcken **Fällig *(überholt – seit v33 Karten nur mobil für den Außendienst mit den Blöcken Als Nächstes · Heute · Wiedervorlage · Kommende Tage, Innendienst/Admin nur die Tabelle, kein Umschalter „Karten | Tabelle“, siehe v33)*
   heute · Termine heute · Heiße Kunden · Weitere Termine**; Innendienst/Admin sehen dieselbe Seite mit
   Vertriebler-Filter und Umschalter **„Karten | Tabelle“** (Standard Karten, Wahl je Nutzer
   `benutzer_einstellungen.leads_darstellung`; Tabelle = bisheriges `leads/liste.html`) [ANNAHME
   AT-Chat]. Datenquelle **nur `vot_termine`** (Status geplant/bestaetigt/unbestaetigt – der Plan nannte
   „terminiert/unbestätigt“; erfolgt nur bei offener Sparte – v8-Chips), ohne verknüpftes Angebot am
   Vorgang; AD nur eigene (`vot_termine.ad_id`, Rückfall `vorgaenge.ad_id`/`leads.benutzer_id`).
-  Termin-Karte: „Mo, 13.10.“ + „14:00 Uhr“, Kundenname, Objektadresse (`objekte.ausfuehrungsort(
+  Termin-Karte: „Mo, 13.10.“ + „14:00 Uhr“, Kundenname, Objektadresse (`objekte.ausfuehrungsort( *(überholt – seit v33 Termin-Zeile mit Zeitstrahl, überfällige Termine als aufklappbarer Block, keine Filterkarte)*
   termin=…)`, bei mehreren Objekten mit Bezeichnung) als Google-Maps-Link, `tel:`-Link, Sparten-/
   Status-Chips, Herkunft „monday“/„Tool“ [ANNAHME], „Erfassung starten“ (mit `objekt_id`), „Akte“;
   überfällige Termine ohne Erfassung zuoberst in „Termine heute“ mit rotem Label „überfällig“ (der
@@ -2965,21 +2979,21 @@ Do 22.10.; Rückfrage).)
   wird nur überschrieben, wenn sie leer ist oder früher liegt [ANNAHME]; Verfolgungsstufe „versendet“
   über `verfolgung.nach_angebotsstatus`. Vertrag `nachfassen.wiedervorlage_setzen(session, vorgang,
   datum, benutzer_id, art)` (Datum ohne Uhrzeit) für „Nochmal anrufen“/„Bestellung“ (N).
-- **Block „Fällig heute“** (`nachfassen.faellig_heute`): eigene Wiedervorlagen mit Datum ≤ heute,
+- **Block „Fällig heute“** (`nachfassen.faellig_heute`): eigene Wiedervorlagen mit Datum ≤ heute, *(überholt – seit v33 Abschnitt „Wiedervorlage“ über `nachfassen.wiedervorlage_liste`; `faellig_heute` bleibt für die Glocke)*
   überfällige zuerst („seit TT.MM.“), Anruf-Karte mit Telefon-Link, Angebots-Kurzinfo („WP-Angebot vom
   09.10.2026, Endbetrag 32.450,00 €“ – Kundenpreis, nie EK/DB), Hot-Ampel, Verfolgungs-Chip, Dialog
   „Nächster Schritt“ (N), „Letzte Aktivitäten“ (drei Einträge aus Mail-Verlauf/Versand, Notizen-Chat,
   Signaturprotokoll), Notizfeld → `POST /leads/notiz/{vorgang_id}` (ein Eintrag im Notizen-Chat). Die
   ID-Kachel „fällig“ zählt AD-Wiedervorlagen weiterhin nicht. **Glocke:** art `nachfassen` im täglichen
   Lauf `benachrichtigungen` (07:00) – je AD „Fällig heute: n Anrufe zum Nachfassen – Mein Tag“, Link
-  `/leads#faellig`, keine Mail (`MAIL_FREIE_ARTEN` = todo, nachfassen, verfolgung), nicht Teil von
+  `/leads#faellig`, keine Mail (`MAIL_FREIE_ARTEN` = todo, nachfassen, verfolgung), nicht Teil von *(v33: `/leads#wiedervorlage`)*
   `glocke_lead_arten`. Tests `tests/test_v32_mein_tag.py` (13), `test_v32_wiedervorlage.py` (14),
   `test_v32_werktage.py` (5; Kontrollwerte nach echtem Kalender – 10.10.2026 ist ein Samstag).
 
 - **Dialog „Nächster Schritt“, Bestellung angekündigt, Verfolgungs-Chip, Ablehnungsgründe
   (Phase 163, Agent N, `app/verfolgung.py`):** Verfolgungsstufe je Vorgang
   `vorgaenge.verfolgung_status` (`versendet | nachgefasst | bestellung_angekuendigt | angenommen |
-  abgelehnt`, `STATUS_TEXTE`, Makro `verfolgung_chip(status, klein, vorgang_id)` in
+  abgelehnt`, `STATUS_TEXTE`, Makro `verfolgung_chip(status, klein, vorgang_id)` in *(ergänzt v33: mit Zähler `versuche` → „Nachgefasst (2)“)*
   `_komponenten.html`, Klassen `.vf-<status>` in `static/verfolgung.css`, zentral in `base.html`
   eingebunden); Migration `migration_v32_verfolgung` (Marker `migration_v32_ablehnungsgruende`):
   die fünf Gründe „Zu teuer · Kein Interesse mehr · Bleibt bei Öl/Gas · Woanders unterschrieben ·
@@ -3001,11 +3015,11 @@ Do 22.10.; Rückfrage).)
   `ns:gespeichert`/`ns:rueckgaengig`, Notiz über `data-ns-notiz`) in der Vorgangsakte
   (Verfolgungs-Block, ID und AD) und in „Mein Tag“ (M). Chip in Akte-Kopfkarte, „Meine Angebote“
   (Liste + Detail) und Angebotsliste (Spalte „Verfolgung“, Filter `?verfolgung=<stufe>` über
-  `verfolgung.filter_anwenden`); `heisse_vorgaenge(session, benutzer_id)` (Heiße Kunden),
+  `verfolgung.filter_anwenden`); `heisse_vorgaenge(session, benutzer_id)` (Heiße Kunden), *(Block „Heiße Kunden“ entfällt seit v33 – heiße Vorgänge laufen im Abschnitt „Wiedervorlage“ mit Chip „Hoch“)*
   ID-Kachel „Bestellung angekündigt“ (`bestellung_angekuendigt_anzahl`, Klick = Angebotsliste mit
   Filter). „Angenommen“ setzen Signaturweg (`routers/signatur.py`) und AD-Statuswechsel über
   `nach_angebotsstatus`, „abgelehnt“ ID-Dialog/Route; Parametrierung → Angebotstool-Einstellungen:
-  Gründe mit Nr./↑↓/Häkchen „Freitext Pflicht“, Abschnitt „Nachfassen nach Angebotsversand“
+  Gründe mit Nr./↑↓/Häkchen „Freitext Pflicht“, Abschnitt „Nachfassen nach Angebotsversand“ *(ergänzt v33: auch `inaktiv_tage` 14 / `inaktiv_tage_mfh` 20 und die Liste „Einwände beim Nachfassen“)*
   (`nachfass_werktage` 3 / `nachfass_werktage_mfh` 5, Lead-Parameter). Tests
   `tests/test_v32_naechster_schritt.py` (18); `tests/abnahme.py` v8-Block nutzt den ersten
   aktiven Grund.
@@ -3048,3 +3062,386 @@ Do 22.10.; Rückfrage).)
   (hell/dunkel, Handy 390 × 844 und Desktop, anonymisierte Kopie); `config.VERSION = "v32"`;
   `docs/nach-dem-update-v31.md`, `docs/nach-dem-update-v32.md`, `docs/updates.md`,
   `docs/betrieb.md` („Ergänzungen v31 + v32“), `docs/design-system.md`.
+
+## Neu in v33 – Outlook je Mitarbeiter, Graph als Anwendung, zentraler Kalender, Rollen-Varianten, Service-Einsätze, Auto-Phase, Rabatt 0 %, Mein Tag mobil, Tabellen-Layout, Nachfassen (abgestimmt 14.10.2026)
+
+(Plan: PLAN_V20.md, Phasen 166–177; Protokoll Claudia Castro vom 14.10.2026 in
+`docs/PROTOKOLL-2026-10-14-Angebotstool.md` als Phasen 173–176 eingearbeitet; Design-Entwurf
+`docs/design-v33/vorlage/` gibt Aufbau und Verhalten vor, nicht die Farben. Umgesetzt am 14.10.2026 in EINEM
+Durchlauf: Fundament durch den Orchestrator (Rollen-Modell, Tabellen/Spalten, Graph-Kern, Verträge), Welle 1
+mit sechs Agenten G (Graph), R (Rollen), S (Service/Auto-Phase), A (Rabatt/Schreibtransaktionen), O
+(Outlook), K (Kalender), Welle 2 mit M (Mein Tag/Leads), T (Tabellen), N (Nachfassen) auf eigenen
+DB-Kopien; Lastmodell, Rollout-Vorbereitung und Doku durch den Orchestrator; Berichte
+`diagnose/v33/<X>_ergebnis.md` (lokal). EIN Commit, kein Push vor Freigabe. Alle Datenbankänderungen
+additiv – v32-Code läuft auf der v33-Datenbank (Rückweg-Probe im Rollout-Skript).)
+
+**Leitplanken ab v33 (zusätzlich zu v27/v30):**
+- **Rollen:** Rechte prüfen ausschließlich `Benutzer.basisrolle` / `basisrollen` / `hat_rolle` /
+  `hat_kennzeichen("service"|"handelsvertreter")` / `gewerk` (`app/rollen.py`); DB-Filter über
+  `rollen.filter_basis/filter_basen/keys_fuer_basis`. Nie mehr `rolle == "montage"` – `benutzer.rolle`
+  trägt den Varianten-Key (`montage_heizung`, `service_elektro`, `handelsvertreter`, …). Umgestellte Stellen:
+  `diagnose/v33/basisrolle_stellen.md` (179 Vergleiche + 5 SQL-Abfragen im Fundament, Ergänzungen in
+  `R_ergebnis.md`).
+- **Schreibtransaktionen:** nur Schreibsitzungen (`get_session` bei POST/PUT/PATCH/DELETE, `db.kurz()`,
+  `db.schreibsitzung()`) eröffnen mit `BEGIN IMMEDIATE`; alle anderen Sitzungen bleiben im Legacy-Modus des
+  sqlite3-Treibers. Ein pauschales explizites BEGIN für alle Sitzungen ist verboten (BUSY_SNAPSHOT – 29
+  Alt-Tests rot im Durchlauf). **Der Request-Body ist Netz-I/O:** eine Route mit Datei-Upload liest das
+  Formular (`anfrage.formular(request)`) VOR dem ersten Datenbankzugriff oder ruft davor
+  `verbindung_freigeben(session)` auf – sonst hält die Schreibsitzung die SQLite-Schreibsperre während der
+  gesamten Übertragung (Handy-Upload über LTE/VPN: Sekunden bis Minuten; Befund 15.10.2026, sieben Routen
+  umgestellt, Wächter `tests/test_v33_fundament.py::UploadRoutenOhneSchreibsperre`). **Rein lesende
+  Kurz-Sitzungen** (Kataloge, Einstellungen, Template-Globals, /health, Lesephasen der Läufe) nutzen
+  `db.kurz(schreibend=False)` – eine `kurz()`-Sitzung innerhalb einer Anfrage oder eines Laufs, der selbst
+  schreibt, liefe sonst gegen die eigene Sperre. Tests, die über ihre Sitzung schreiben und danach eine
+  POST-Anfrage oder einen Lauf auslösen, committen (oder verwerfen) vorher – der Lauf bzw. die Anfrage
+  eröffnet sofort eine Schreibtransaktion.
+- **Graph:** Modus `anwendung` nur über den grünen Verbindungstest (`/versand`), bis dahin `delegiert`
+  (heutiger Betrieb); kein Geheimnis in Code, Doku oder Tests; alle Graph-Aufrufe über
+  `graph_versand.basis_pfad(postfach)`; 403 = „nicht in der Zugriffsgruppe“ (einmal je Postfach und Stunde
+  im Fehlerprotokoll).
+- **Outlook:** Schreibvorgänge nur über die Auftrags-Warteschlange `outlook_auftraege` und den Lauf
+  `outlook-sync` (nie Graph in einer Anfrage); fremde Outlook-Einträge (TAIFUN, privat) werden nie geändert;
+  Belegtzeiten aus dem Cache `outlook_belegt` (Lauf `outlook-ruecklesen`).
+- **Kalender:** `GET /kalender/daten.json` ist eine reine Leseanfrage (kein Netz, kein Betreff fremder
+  Einträge).
+- Weiterhin: keine offene Datenbanksitzung während Netz-I/O (Wächter `tests/test_v27_sitzungen.py`),
+  def-Routen, jeder Hintergrundlauf über `scheduler.registrieren`, nur Tokens Hell/Dunkel (Token-Wächter),
+  `tojson` in on*-Attributen nur mit `forceescape`, Zurück-Leiste aus `base.html`, `docs/betrieb.md`
+  fortschreiben.
+
+- **Graph als Anwendung (Phase 166, `app/graph_versand.py`, G):** zwei Betriebsmodi – `anwendung` (Client-
+  Credentials-Token der App-Registrierung, Anwendungsberechtigungen `Mail.Send`/`Mail.ReadWrite`/
+  `Calendars.ReadWrite`, Exchange-Zugriffsgruppe `friondo-tool-zugriff@` per `New-ApplicationAccessPolicy
+  -AccessRight RestrictAccess`) und `delegiert` (Rückfallebene: Device-Code-Anmeldung einer Person, `/me/…` +
+  „Senden als“, unverändert). `.env`: `GRAPH_CLIENT_SECRET` (oder `GRAPH_ZERTIFIKAT_PFAD` PEM +
+  `GRAPH_ZERTIFIKAT_THUMBPRINT` [ANNAHME: beide Wege, Secret reicht zum Start]), `GRAPH_GEHEIMNIS_ABLAUF`
+  (JJJJ-MM-TT). Einstellung `graph_modus` (Migration `delegiert`); `anwendung` erst, wenn das Geheimnis
+  gesetzt ist UND der Verbindungstest grün war (`graph_versand.modus()`, `modus_setzen`, Cache im Prozess).
+  `_token()` liefert je Modus das Token (`_token_anwendung`: MSAL ConfidentialClient, Scope `/.default`,
+  Cache, Erneuerung 5 min vor Ablauf, Fehlertext `token_fehler()`); `basis_pfad(postfach)` →
+  `/users/<postfach>` (anwendung: leer = Funktionspostfach `mail_absender`), `versand_pfad(absender)` →
+  (`/users/<absender>`, kein `from`) bzw. (`/me`, `from`); alle Sende-/Abruf-/Entwurfsfunktionen
+  (`text_mail_senden`, `mail_mit_anhaengen_senden`, `entwurf_erstellen`, `info_mail_senden`,
+  `postfach_ungelesen`/`nachricht_*`, `mail_sync._basis`, `lead_mail._graph_senden`/`testmail_senden`,
+  `lead_parser` über `basis_pfad`) nutzen sie – Versand `sendMail` direkt an angebot@/termin@/projektierung@,
+  kein „Senden als“, **Entwürfe von „Versand vorbereiten“ und Kombi-Versand liegen im Modus anwendung in
+  angebot@ → Entwürfe** (Signatur des ID-Benutzers im HTML, CC/BCC wie bisher; Exchange
+  `MessageCopyForSentAsEnabled` für die Versand-Erkennung). HTTP 403 → `GraphZugriffVerweigert` +
+  Fehlerprotokoll „Postfach <x> ist nicht in der Zugriffsgruppe Friondo-Tool-Zugriff“ (einmal je Postfach und
+  Stunde), erfolgreiche Aufrufe je Postfach in `letzte_erfolge()`. Neu `mail_senden_als(postfach, empfaenger,
+  betreff, html, anhaenge=, cc=, text_alternativ=) -> (ok, fehler, conversation_id)` (Versand aus einem
+  beliebigen Postfach der Gruppe, Nachfass-Mail Phase 176; im Modus delegiert nur eigenes Konto).
+  **Verbindungs-Seite `/versand`** (`routers/versand.py`, `versand/status.html`): Modus mit Grund, Mandant
+  maskiert, Geheimnis-Ablauf, letzter Verbindungstest, Liste aller Postfächer, die das Tool braucht
+  (`benoetigte_postfaecher`: Funktionspostfächer aus Einstellungen/Parametern inkl. Team-/Testpostfächer +
+  aktive Benutzer mit E-Mail der Basisrollen Außendienst/Projektierung/Montage/Innendienst, HV ohne
+  Friondo-Postfach ausgenommen, `AdProfil.kalender_postfach` berücksichtigt) mit letztem Erfolg/403 und
+  Kopierlisten, Knopf „Verbindung testen“ (`POST /versand/test` → `verbindungstest(session)`: je
+  Funktionspostfach `GET /users/<pf>/mailFolders/inbox?$select=id`, je Mitarbeiter
+  `GET /users/<upn>/calendar?$select=id`, 403 → „nicht in der Zugriffsgruppe“, 404 → „Postfach unbekannt“,
+  Token-Fehler → „Anmeldung der Anwendung fehlgeschlagen: …“; alle Funktionspostfächer grün → `graph_modus =
+  anwendung`, sonst `delegiert` [eigene Annahme G: rote Mitarbeiter-Postfächer schalten nicht zurück, Rückfrage];
+  Ergebnis in Einstellung `graph_letzter_test`), Vertrag O `outlook_sync.postfaecher_ohne_zugriff(session)`,
+  im Modus delegiert weiter „Mit Microsoft anmelden“/„Abmelden“. `angemeldeter_benutzer()` liefert im Modus
+  anwendung `KONTO_ANWENDUNG`; die Versand-Routen (`routers/angebote.py`, `routers/vorgaenge.py`) prüfen
+  `graph_versand.verbunden(session)` und melden `nicht_verbunden_text(session)`. Go-live-Checkliste: 12. Punkt
+  „Graph als Anwendung verbunden“ (`golive.graph_punkt`); `/health`: Felder `graph_modus`,
+  `graph_geheimnis_tage`, `warn` „Graph-Geheimnis läuft in n Tagen ab“ (≤ 30); Betriebs-Seite Kachel
+  „Graph-Modus“. Doku `docs/graph-einrichtung.md` komplett neu (Entra, Exchange, Verbindungstest,
+  Geheimnis-Wechsel, neue Mitarbeiter). Tests `tests/test_v33_graph.py` (28, alles gemockt).
+- **Rollen als Varianten (Phase 167, `app/rollen.py`, Parametrierung → Rollen `/parametrierung/rollen`, nur
+  Admin, R):** Tabelle `rollen` (Basisrollen als Systemzeilen, Varianten Montage Heizung/Elektro, Service
+  Heizung/Elektro, Handelsvertreter; Kennzeichen Gewerk/Service/HV). Rollen-Seite: Anlegen (Name, Basisrolle,
+  Gewerk, Service, HV; Key aus dem Namen), Umbenennen, Deaktivieren nur ohne aktive Benutzer (Meldung mit
+  Namen), Systemrollen gesperrt (`rollen.anlegen/umbenennen/deaktivieren`, Cache `rollen.cache_leeren`).
+  Benutzerverwaltung: Dropdown/Zusatzrollen/Filter aus dem Katalog (`rollen.katalog_liste`, Basisrolle filtert
+  mit Varianten, `data-basis` steuert das Team-Dropdown bei jeder Montage-Variante), Kennzeichen-Badges
+  (`rollen.benutzer_badges`), `ROLLEN_NAMEN` nur noch Alias über `rollen.namen()`. Handelsvertreter = Rolle:
+  `rollen.hv_spiegeln` (Rolle → `ad_profile.terminiert_selbst`) und `rollen.hv_rolle_setzen` (AD-Profil-Häkchen
+  → Rolle); `lead_v2.ist_handelsvertreter/handelsvertreter_ids/handelsvertreter_liste`, `lead_dropdowns._hv_ids`,
+  Kartei-Dropdown lesen Rollen-Kennzeichen ∪ Profil-Flag. Migration `rollen.migration_v33_rollen` (idempotent):
+  Systemzeilen + Varianten, AD-Profile mit `terminiert_selbst` → Rolle `handelsvertreter` (Dev-DB: Rene
+  Golaschewski, Simon O Grady), Teams-Gewerk (Elektro-Teams an Gewerken → elektro, übrige → heizung
+  [ANNAHME]), überflüssige Zusatzrollen bereinigt. CSV-Import (`benutzer_import.rolle_zuordnen`) akzeptiert Keys
+  und Namen aller aktiven Rollen. Teams tragen `teams.gewerk`. Login-Ziel (`anmeldung.STARTSEITEN`) und
+  Cookie-Dauer über die Basisrolle; Pfadtabellen in `auth.py` prüfen die Basisrolle – neu `/kalender` in
+  `AUSSENDIENST_PFADE`, `/vorgaenge` (lesend) in `PROJEKTIERUNG_PFADE`. Montage-Backend `/montage` zeigt einem
+  Benutzer der Variante nur die Termine seines Gewerks (S). Tests `tests/test_v33_rollen.py` (22),
+  `tests/test_v33_fundament.py` (12).
+- **Service-Einsätze (Phase 168, S):** Terminart `service` im gemeinsamen Termin-Dialog
+  (`projektierung.TERMIN_ARTEN["service"]`, Gewerk heizung | elektro in `service_gewerk`, Anlass
+  `SERVICE_ANLAESSE` Wartung · Störung · Nacharbeit · Sonstiges [ANNAHME], Uhrzeit im 15-Minuten-Takt
+  Pflicht, Dauer → `ende` (Standard 2 h), Team optional als Vorlage, Techniker in der Besetzung –
+  Service-Varianten des Gewerks zuerst, andere grau); planbar am Projekt-Gewerk und **am Vorgang ohne Projekt**
+  (`projekt_id = 0` + `vorgang_id`; Vorgangsakte → Block „Termine“ → „Service-Einsatz planen“, Route
+  `POST /projektierung/vorgang/{id}/service-termin`, ID/Admin/Projektierung). Service hat keine Phase,
+  erledigt keine Aufgabe, setzt keine Zuweisung; ohne Projekt keinen Projektverlauf – die Spur ist der
+  Notizen-Chat. `kern.termin_speichern(session, gewerk | None, daten, …)`, `termin_loeschen`,
+  `termin_vorgang/termin_kunde/termin_adresse` (Ausführungsort v31 über Projekt bzw. Hauptobjekt/
+  Kundenadresse). **Service-Backend** `/montage`: Service Heizung/Elektro sehen NUR Service-Einsätze ihres
+  Gewerks (`routers/montage._sicht`/`_termin_passt`), Montage Heizung Montage (WP) + Sub, Montage Elektro
+  Elektro-Montagen, Basisrolle montage alles außer Service; Seite `montage/service_einsatz.html` (Kunde,
+  Ausführungsort, Steckbrief, Notizen lesen, Galerie, „Einsatz gestartet/beendet“ → `service_status` geplant →
+  gestartet → beendet mit `gestartet_am/beendet_am`, Verlauf + Chat-Notiz), Formular **Servicebericht**
+  (Blatt „Formulare“ der Logik-Excel, 9 Felder `sb_*` [ANNAHME, Andreas liest gegen], neuer Feldtyp `zeit`;
+  Datensatz je Termin – `montage_formulare.termin_id` (Spalte, Übergangsschlüssel `_termin_id` per
+  `migration_v33_termin_id`); PDF `Servicebericht_<Nr>_<Datum>.pdf` im Galerie-Ordner „Service“, Chat-Eintrag,
+  Einsatz beendet). Akten zeigen Service mit Badge „Service“ + Anlass · Gewerk · Status und dem Outlook-Stand
+  (Makro `_outlook_status.html`); Statistik `/projektierung/statistik` (Service-Einsätze je Monat) [ANNAHME].
+  Verträge für `/kalender`: `projektierung.termine_fuer_personen(session, ids, von, bis)` und
+  `termin_verschieben(session, termin, beginn, ende, benutzer) -> (ok, meldung, konflikte)` (Kalender-Drag v15 =
+  `termin_kalender_drag`). `migration_v33_service`: Parameter `phase_auto`, Status-Backfill. Tests
+  `tests/test_v33_service.py` (17).
+- **Zentraler Planungskalender `/kalender` (Phase 169, `app/kalender_zentral.py`, `routers/kalender_zentral.py`,
+  `templates/kalender/zentral.html`, `static/kalender_zentral.js/.css`, K):** eine Zeile je Mitarbeiter,
+  Zeitachse waagerecht im 15-Minuten-Raster zwischen `kalender_tagesbeginn`/`kalender_tagesende`
+  (Lead-Parameter, 07:00–18:00), Ansichten Tag | Woche (Mo–Fr, Sa/So einblendbar) | Monat (Tageskästchen mit
+  Punkten), Gruppen Außendienst · Handelsvertreter · Projektierung · Montage Heizung · Montage Elektro ·
+  Service Heizung · Service Elektro · Innendienst aus Basisrolle/Kennzeichen/Gewerk
+  (`kalender_zentral.gruppe_von`; montage ohne Gewerk → Heizung [ANNAHME], leadmanagement → Innendienst),
+  aufklappbar mit Zählern, Suche nach Name, Einstieg `?gruppe=projektierung` (Menü/Team-Kalender) ·
+  `?gruppe=vertrieb` (Lead-Icon-Leiste „Mehr …“) · ohne Parameter nach Basisrolle; Auswahl je Nutzer und
+  Einstieg in `benutzer_einstellungen` Key `kalender_gruppen`. Daten nachgelagert über
+  `GET /kalender/daten.json?von&bis&personen&ansicht` (je Quelle eine Abfrage: `vot_termine` offene Status
+  inkl. Vorab-Gespräche/Sperrzeiten, Projekt-/Service-Termine über `projektierung.termine_fuer_personen`,
+  Abwesenheiten, Outlook-Belegt aus `outlook_belegt` – nie Graph im Request, nie ein Betreff; Messung 60
+  Personen × 1 Woche ≈ 40 ms). Klick öffnet Kartei `?tab=termin`, Projektakte `#termine` bzw. Vorgangsakte;
+  Drag → `POST /kalender/verschieben` (VOT = Umbuchung über `lead_termin.termin_anlegen`, Vorab direkt,
+  Projekt/Service über `projektierung.termin_verschieben`; Konflikte als Liste mit Bestätigung; Outlook über
+  die Hooks der Phase 170; Rechte wie im Modul, monday/Sperrzeiten nie, Testphase sperrt); Doppelklick auf
+  freie Fläche → Such-Dialog Kunde/Projekt (`GET /kalender/suche.json`) → Dialog des Moduls mit
+  `?termin_neu=…&beginn=&uhrzeit=&person=` (Projektakte, Vorgangsakte, Terminassistent `?beginn=`).
+  Montage/Service-Benutzer sehen nur sich und ihr Team (lesend, unter 600 px Tagesansicht; Knopf „Kalender“
+  im Montage-Backend); Außendienst/HV die eigene Zeile. Menü „Kalender“ (Admin/Innendienst/Projektierung/
+  Leadmanagement), `projektierung/kalender.html` → „Mitarbeiter-Kalender“, `GET /lead-management/kalender`
+  (v12) leitet auf `/kalender?gruppe=vertrieb&ansicht=woche&datum=…&person=…` um [ANNAHME] (`?alt=1`/
+  `?meldung=` zeigen die alte Ansicht; Lead-Links zeigen auf `/kalender?gruppe=vertrieb`). Farben nur über
+  Tokens (`--kz-f` je Art), CSS-Schraffur für Belegt/Sperrzeit. Tests `tests/test_v33_kalender.py` (17).
+- **Outlook-Sync je Mitarbeiter (Phase 170, `app/outlook_sync.py`, O):** Jeder Tool-Termin steht als Kopie im
+  persönlichen Outlook-Kalender jeder eingeteilten Person (TAIFUN liest von dort): VOT → Vertriebler (`ad_id`;
+  Demo-Termine ins Testpostfach `kalender_testpostfach`; Schalter `kalender_sync` gilt weiter für VOT und den
+  Belegt-Abgleich), Montage/Elektro/Sub/Service → jede Person der Besetzung, Feinplanung/Abnahme/Sonstiges →
+  Person, Team-Kalender nur zusätzlich bei `teams.outlook_adresse` [ANNAHME optional], Abwesenheiten/Sperrzeiten
+  nicht. Postfach = `AdProfil.kalender_postfach`, sonst `Benutzer.email`; Handelsvertreter nur mit
+  Friondo-Postfach, sonst Hinweis **„HV ohne Postfach“**. **Kein Graph-Aufruf im Request:**
+  `kalender.termin_schreiben/termin_aendern/termin_loeschen` und `outlook_kalender.event_senden/event_loeschen`
+  (Signaturen unverändert, `RELEVANTE_TYPEN` + sub/sonstige/service) reihen über
+  `outlook_sync.auftrag_einreihen(session, aktion, termin_art, termin_id, benutzer_ids=None)` Aufträge in
+  `outlook_auftraege` ein (anlegen | aendern | loeschen; Besetzungswechsel = loeschen für entfernte, anlegen für
+  neue Personen); Wahrheit ist `outlook_ereignisse` (termin_art vot|projekt, termin_id, benutzer_id, postfach,
+  event_id, stand ausstehend|ok|fehler|geloescht|in_outlook_geloescht|leer), die alten Felder `outlook_event_id`
+  spiegeln die erste Kopie. Lauf **`outlook-sync`** (60 s, Start +60 s, aktiv nur mit Graph): Block ≤ 50 in
+  `db.kurz()` lesen → Graph `POST/PATCH/DELETE /users/<upn>/events` (`graph_versand.basis_pfad`, Modus delegiert
+  dieselben Pfade) → kurze Sitzung je Auftrag; 3 Versuche dann `fehler` + Fehlerprotokoll „Outlook-Sync“; HTTP 403
+  sofort `fehler` („nicht in der Zugriffsgruppe“) mit stündlicher Wiederholung bis 7 Tage. Ereignis: Betreff
+  **`<Art>: <Kunde>, <PLZ Ort> (<Nummer>)`** [ANNAHME bis TAIFUN-Abgleich], Service `Service <Anlass>: …`, Body
+  (Kunde, Adresse, Besetzung, Steckbrief, Link ins Tool), `categories ["Friondo-Tool"]`,
+  `singleValueExtendedProperties friendoTerminId` = `<art>:<termin_id>:<benutzer_id>` (feste GUID), `showAs busy`,
+  ganztägig als `isAllDay`. Lauf **`outlook-ruecklesen`** (300 s, Start +330 s): `calendarView` je Person mit
+  Terminen in den nächsten 8 Wochen (`$expand` des Kennzeichens, seitenweise) – verschobene Tool-Kopien ziehen den
+  Termin nach (erste Änderung gewinnt, übrige Kopien per Auftrag `aendern`, Verlauf/Aktivität „Termin aus Outlook
+  übernommen von <Name>“, keine Kundenmail), fehlende Kopien → Stand `in_outlook_geloescht`, Termin markiert
+  (VOT `grund_text` + Aktivität, Projekt `outlook_fehler = "in Outlook gelöscht"` + Verlauf) und Glocke an
+  Projektleiter/Ersteller (`kommentar`) bzw. Leadmanager (`terminaenderung`), nie stilles Löschen; fremde Einträge
+  nur als Belegtzeit im Cache **`outlook_belegt`** (`outlook_sync.belegt(session, benutzer_ids, von, bis)` für
+  `/kalender`; `kalender.frei_belegt` liest denselben Cache, `lead_termin` nutzt `outlook_sync.belegt_fuer` – nie
+  Graph im Request). `outlook_kalender.ruecklesen()` ruft den Lauf (Rückgabe int, mail-sync-Teilschritt).
+  Anzeige: Makro `templates/_outlook_status.html` `outlook_status(stand)` über `outlook_sync.status_fuer(session,
+  termin_art, termin_id) -> {stand, text, kopien}` / `status_map` / Template-Global `outlook_status_map` –
+  Terminassistent (Block „Outlook“, HV-Hinweis an vorgemerkten Terminen), Meine Termine, Projektierung → Termine,
+  Projekt-/Vorgangsakte (S), Deals-Board-Fußzeile (`outlook_zusammenfassung`). Verbindungs-Seite:
+  `outlook_sync.postfaecher_ohne_zugriff(session)` (Aufträge mit 403-Text + Rücklese-403 + graph_versand-Liste).
+  Migration `outlook_sync.migration_v33_outlook` spiegelt den Altbestand (`outlook_event_id`) als Ereignisse
+  (VOT → Person, Projekt → Team-Kopie `benutzer_id 0`), idempotent. TAIFUN-Vorab-Abgleich nur vorbereitet
+  (`docs/outlook-sync.md` Abschnitt 1, `scripts/outlook_abgleich.py` – nur lesend); Entscheidung Andreas offen.
+  Pool-Invariante mit 16 Läufen: 64 + 16 + 5 = 85 ≤ 90. Tests `tests/test_v33_outlook.py` (21).
+- **Automatischer Phasenwechsel (Phase 171, S):** Parameter `phase_auto` (Standard an, Projektierung-
+  Einstellungen „Board & Wächter“, protokolliert) + Häkchen je Gewerk (`gewerke.phase_auto`,
+  `POST …/gewerk/{id}/phase-auto`). `projektierung.auto_weiterschalten` läuft nach Aufgaben-Erledigung/entfällt
+  (Routen, `aufgabe_auswahl_setzen`, `aufgabe_entfaellt`, Galerie-Häkchen), Formular-Abschluss
+  (`montage_formulare.abschliessen`, `fp_abschliessen`), Termin/Besetzung (`termin_speichern`) und
+  Steckbrief-/Förder-Nachzug: alle Pflichtaufgaben der aktuellen Phase erledigt/entfällt →
+  `phase_wechseln(…, "automatisch – alle Pflichtaufgaben erledigt", automatisch=True)` (Verlauf, Glocke
+  [ANNAHME]). Nur Auftragseingang → Feinplanung VOT → Planung → Montagevorbereitung und Abnahme → Freigabe;
+  Montage/Abnahme sind Ereignis-Phasen, abgeschlossen nur über Rechnung freigeben; nie mit offenen
+  Wächter-Punkten. Manueller Rückschritt → `gewerke.phase_auto_pause` (Hinweis im Dialog „Phase ändern“),
+  endet beim Verlassen der Phase oder beim Neu-Setzen des Häkchens. Tests `tests/test_v33_auto_phase.py` (10).
+- **Rabatt bei 0 % USt + Schreibtransaktionen (Phase 172, A):** Der Gesamtrabatt gilt bei jedem Steuersatz
+  auf den Gesamtbetrag nach USt (bei 0 % nach § 12 Abs. 3 UStG ist das der Nettobetrag): Netto → USt →
+  Gesamt-Betrag → − Rabatt → = Endbetrag; der Deckungsbeitrag sinkt um Rabatt ÷ (1 + USt-Satz).
+  `Angebot.summen()` liefert zusätzlich `rabatt_netto` und `netto_nach_rabatt`. **Ursache des gemeldeten
+  Fehlers:** rechnerisch griff der Rabatt bei 0 % schon vorher (Editor, PDF, {endbetrag}, monday, Statistik,
+  DB korrekt); er fehlte nur in der Angebotsliste (Spalte „Brutto“ = Gesamt-Betrag vor Rabatt – jetzt
+  „Endbetrag“) und in den Beschriftungen („Brutto-Gesamtbetrag“, „€ (brutto)“). Kontrollwerte: PV 20.000,00 €
+  netto, 0 %, Rabatt 5 % → 19.000,00 €, DB −1.000,00 €; 500 € → 19.500,00 €. Tests `tests/test_v33_rabatt.py`
+  (21). **Schreibtransaktionen (v30-Nachtrag 21/22):** Sitzungen schreibender Anfragen (`get_session` bei
+  POST/PUT/PATCH/DELETE – FastAPI reicht den Request herein, Rückfall `anfrage.METHODE` aus der
+  RollenMiddleware), `db.kurz()` (Standard `schreibend=True`) und `db.schreibsitzung()` eröffnen ihre
+  Transaktion mit `BEGIN IMMEDIATE` (SQLAlchemy-begin-Event in `app/db.py`, Treiber je Transaktion auf
+  `isolation_level=None`): die Schreibsperre liegt vor dem ersten Lesen, ein weiterer Schreiber wartet den
+  busy_timeout (5 s) ab, bei „database is locked“ wird einmal nach 0,7 s wiederholt (`_speichern` wiederholt
+  dann nicht erneut – Budget ≈ 10,7 s). Alle übrigen Sitzungen bleiben im Legacy-Modus (SELECT ohne
+  Schnappschuss). Zähler `db.TRANSAKTIONEN` (`/health`-Feld `transaktionen`), Schalter
+  `db.SCHREIBTRANSAKTION_SOFORT` (nur Messung). `angebot_aufbau.angebot_anlegen(commit=False)` in
+  `duplizieren`/`kopieren` (SAVEPOINT bei Nummernkollision), `rabatt_setzen` über `_speichern`, `wal_pflege`
+  über eine rohe Pool-Verbindung. Dazu (Orchestrator): `routing.fahrzeit` schreibt den Luftlinien-Cache-
+  Eintrag sofort fest, `geocoding._zaehler` fängt den IntegrityError des Tageszählers ab. Messung:
+  Schreibsturm 20 parallele POST → 0 locked; Lesen → fremder Commit → Schreiben serialisiert (vorher
+  verlorenes Update). Tests `tests/test_pool_hotfix.py` (Klassen `Schreibtransaktionen`, `Schreibsturm`).
+- **„Mein Tag“ nur mobil, Seite „Wiedervorlage“, Leads VOT Desktop mit Gruppen (Phase 173 + 174,
+  Agent M; Protokoll Claudia Castro 14.10.2026 Teil A, Design-Entwurf „Außendienst App“ –
+  Aufbau/Abstände/Verhalten, Farben aus den Design-v2-Tokens):** `GET /leads` liefert dem Außendienst
+  (Basisrolle, auch Handelsvertreter) Karten (`.mt-mobil`, unter 600 px) und die Tabelle „Leads VOT“
+  (`.mt-desktop`, ab 600 px) im selben HTML (`templates/leads/mein_tag.html`, Media-Query in
+  `static/mein_tag.css`); Innendienst/Admin/Leadmanagement sehen nur die Tabelle
+  (`templates/leads/liste.html` → Partial `leads/_tabelle.html`). Der v32-Umschalter „Karten |
+  Tabelle“, die Einstellung `leads_darstellung`, die mobile Filterkarte und die Blöcke „Fällig heute“/
+  „Heiße Kunden“/„Weitere Termine“ entfallen. Aufbau mobil (`app/mein_tag.py`, Makros
+  `leads/_karten.html`): Kopf „Mittwoch, 14. Oktober“ + „Mein Tag“ + Initialen (`avatar`), keine
+  Kennzahlen; Karte **„Als Nächstes“** (nächster nicht erledigter Termin, dessen Ende noch nicht
+  erreicht ist: „in 25 Min“/„jetzt“, Uhrzeit groß + „bis HH:MM“ aus `ende` bzw. Beginn +
+  `ad_profile.termin_dauer_min`, „Sparte, Termintyp“ aus `app/sparten.py` + `vot_termine.typ`
+  (vot/telefon/online → Vor-Ort-Termin/Telefontermin/Teams [ANNAHME]), Anschrift als Maps-Link,
+  „Route starten“ = Google-Maps-Routenplaner mit Zieladresse, `tel:`); aufklappbarer Block
+  „n überfällige Termine“ (Vergangenheit ohne Erfassung, eingeklappt ab vier) [eigene Annahme];
+  **„Heute · n Termine“** mit Zeitstrahl (erledigt = `--status-gruen`, nächster = `--status-orange`,
+  übrige leer; erledigte gedämpft mit Link „Erfassung“ auf `/erfassung/<id>/pruefen` statt Knopf);
+  Zeilen klappen Details auf; **Erledigt-Logik:** Termin erledigt, sobald alle Sparten des
+  Termin-Objekts abgesendet oder ausgeblendet sind (Vorgang + `objekt_id` + Sparte, kein Haken);
+  Telefon-/Teams-Termine ohne Erfassung bleiben bis Tagesende offen und fehlen am Folgetag [ANNAHME];
+  **Abschnitt „Wiedervorlage“** (Untertitel „Vorgänge, die auf Rückmeldung warten“, Zähler, Chips
+  Alle · Hoch · Mittel · Niedrig mit Anzahl, Segment „Sortieren: Priorität · Name · Datum“ mit ↓/↑,
+  höchstens vier Karten mit Initialen, Sparten in Langform, Badge aus der Hot-Ampel (heiß = Hoch,
+  warm = Mittel, kalt/leer = Niedrig), „Letzter Kontakt TT.MM. · seit X Tagen“ (ab 14 Tagen Warnfarbe,
+  „heute“/„seit gestern“), Tippen klappt die Anruf-Karte v32 (Dialog „Nächster Schritt“, Notizfeld,
+  letzte Aktivitäten) auf, Link „Alle N Wiedervorlagen anzeigen“; Datenbasis
+  `nachfassen.wiedervorlage_liste(session, benutzer_id, heute=None)` = fällige + überfällige
+  Wiedervorlagen des AD ∪ eigene Vorgänge mit Ampel heiß oder Status `bestellung_angekuendigt`,
+  „Letzter Kontakt“ = letzter Notizen-Chat-Eintrag aller Herkünfte [ANNAHME], Inaktivitäts-Kennzeichen
+  von N über `inaktiv_kennzeichen`); **„Kommende Tage“** (14 Tage [ANNAHME], Datumskachel „DO/15“,
+  „Donnerstag, 15. Oktober · 2 Termine“); **untere feste Leiste** Mein Tag · Kalender (Meine Termine) ·
+  Wiedervorlage · Kunden (Kopfzeilen-Suche) mit aktivem Eintrag und Safe-Area
+  (`leads/_leiste.html`, von `base.html` für den Außendienst auf allen Seiten außer Login/PIN-Wechsel/
+  Erfassungsbogen/Signatur/einbett eingebunden; Logik in `static/mein_tag.js`, Chips/Sortierung/Suche
+  clientseitig, Zustand `sessionStorage` [ANNAHME]). **Seite „Wiedervorlage“** `GET /leads/
+  wiedervorlagen` (Außendienst; andere Rollen → `/angebote?verfolgung=versendet` [ANNAHME]):
+  Zurück-Pfeil „Mein Tag“, Titel „n offen“, Suchfeld „Nach Name suchen“, Chips bezogen auf die
+  Suchtreffer, alle Vorgänge, Telefon-Knopf je Karte, Leerzustand „Keine Vorgänge gefunden“ + „Filter
+  oder Suche anpassen.“. Glocke art `nachfassen` verlinkt `/leads#wiedervorlage`. **Leads VOT Desktop
+  (Phase 174):** Lead-basierte Tabelle (wie seit v1/v8) mit Gruppen Überfällig · Heute · je Folgetag
+  (`details.lm-gruppe`, Uhrzeit innerhalb der Gruppe), Sticky-Filterleiste (Suche, Termin/Ansicht,
+  Vertriebler, Status, **Priorität = Hot-Ampel** (`?prioritaet=hoch|mittel|niedrig`), Kanal, Sparte,
+  Spaltenwähler), Spalten je Nutzer über T's Bausteine (Board-Key `leads_vot`,
+  `lead_boards.spalten_fuer/sortierung_fuer/spalten_fest`, Jinja-Globals `lm_spalten_url`/
+  `lm_spalten_fest`, Makros `spalten_kopf`/`spalten_colgroup`/`breiten_gesetzt`/`spaltenwahl`/
+  `tabellen_daten`, `lm_boards.js` im Nur-Spalten-Modus; `mein_tag.SPALTEN_RUECKFALL` nur noch als
+  dokumentiertes Spiegelbild des Katalogs), feste erste Spalte Kundenname, Spaltensortierung innerhalb
+  der Gruppen (`mein_tag.gruppen_sortieren` → `lead_boards.zeilen_sortieren(…, wert=)`).
+  Tests `tests/test_v33_mein_tag.py` (15); Alt-Tests v32 angepasst (Protokoll A.5).
+- **Lead-Board-Layout für alle Tabellen des Angebotstools (Phase 174, Protokoll Claudia Castro
+  14.10.2026 Teil A.4):** Angebotsliste, Erfassungen (inkl. TAIFUN-Warteschlange = Reiter „In TAIFUN
+  zu schreiben“/Kachel `individuell-offen`), Meine Angebote, Kunden und Leads VOT Desktop (M) haben
+  dieselbe Bedienung wie die Lead-Boards: Sticky-Filterblock (heutige Filter als Chip-Selects,
+  Suchfeld mit Schnellfilter, Spaltenwähler „Spalten“), Tabelle scrollt waagerecht/senkrecht im
+  eigenen Container (`.lm-tabellen-at`, Sticky-Kopf, Zweit-Scrollleiste), Sortierung per Klick
+  auf den Spaltenkopf (1. Klick auf, 2. ab, Pfeil, leere Werte ans Ende, je Nutzer gemerkt und
+  serverseitig vor dem Rendern angewendet), Spalten je Nutzer (ein-/ausblenden, umbenennen,
+  Reihenfolge per Drag & Drop, Breite, „Zurücksetzen“), **keine Sammelaktionen**. Bausteine in
+  `app/lead_boards.py`: `TABELLEN_BOARDS` (`leads_vot · erfassungen · angebote · meine_angebote ·
+  taifun_warteschlange · kunden`, `KONFIG_BOARDS` bleibt das Lead-Tupel), Kataloge `KATALOGE`
+  (Standard = heutige Spaltenfolge, feste erste Spalte Kundenname bzw. „Erfassung“ in der
+  Warteschlange – `spalten_fest`), **Rollenregel** `katalog_fuer(board, benutzer)`: EK,
+  Deckungsbeitrag, DB-Ampel und Rabatt-Interna (`INTERNE_SPALTEN`) fehlen für die Basisrolle
+  Außendienst (und Varianten) sowie für jede Rolle ohne Kalkulationssicht komplett, gespeicherte
+  Keys werden beim Lesen und Speichern gegen den Rollen-Katalog gefiltert; `zeilen_sortieren(…,
+  wert=)` generisch, `angebot_sortwert`, `migration_v33_tabellen` (idempotent). Makros
+  `spalten_kopf`/`spalten_colgroup` (generisch) + `spaltenwahl`/`tabellen_daten` in
+  `leadmanagement/_tabelle.html`; `lm_boards.js` läuft über `data-lm-spalten-board` auf jeder
+  Seite (Route aus `data-lm-spalten-url`, Zeilen `data-zeile`, Schnellfilter `data-lm-suche`).
+  Speicher-Route `GET/POST /lead-management/boards/spalten` für alle Rollen bei Angebotstool-Boards
+  (Lead-Gate nur für Lead-Boards), Alias `GET/POST /einstellungen/spalten` für die Projektierung
+  (`lead_boards.spalten_url`). Angebotsliste: Spalte **„Endbetrag“** (Gesamtbetrag nach USt und
+  Rabatt, Phase 172) statt „Brutto“, Summenzeile folgt Filter + Sortierung, DB-Summe nur mit
+  Kalkulationssicht, Filter/Spalte „Ohne Kontakt“ (Phase 176, `nachfassen.inaktiv_tage_fuer`).
+  Kunden: Filter Kanal und Objektart. Meine Angebote: Tabelle mit Status/Sparte-Filter (Katalog
+  ohne DB). Tests `tests/test_v33_tabellen.py`.
+- Phase 175 (R 4c): Hauptboard-Zeilen tragen `hv_gruppe_offen` (Badge „Simons Gruppe (noch nicht
+  verteilt)“ in der AD-Zelle, eine Abfrage je Board über `lead_v2.hv_gruppe_offen_ids`).
+- **Lead-Management-Nachträge (Phase 175, R + G):** Kanal „Stadtwerke Düsseldorf“ (`leadmanagement.KANAL_SWD`,
+  Aliase `SWD`: `kanal_anzeige/kanal_schluessel/kanal_aliase/kanal_gleich`; `kanal_werte` liefert ihn, sobald
+  das Angebotsprofil SWD existiert) – AD-Profil/CSV-Import hinterlegen `kanal_ad_regel` mit allen
+  Schreibweisen, `lead_termin.kanal_regel…` unverändert (Semantik „fest zuständig“, Rückfrage R2);
+  `lead_v2.hv_ausgeschlossen` alias-sicher. **Infotext zum AD entfällt vollständig** (AD-Profil,
+  Benutzerverwaltung, Vorlagen-Baum; `lead_mail.vertriebler_block_html/_text` nur Bild, Name, Telefon, E-Mail;
+  Spalte `benutzer.infotext` bleibt ungelesen; Kontrollwert: Terminbestätigung eines AD mit altem Infotext
+  enthält den Text nicht). Sammelaktion „An Handelsvertreter verschieben“: zweite Schaltfläche „Simons Gruppe“
+  (`lead_v2.hv_gruppen_wahl`, `HV_GRUPPE_SIMON_NAME`) → `ad_id` = Gruppenleiter + Marker-Aktivität
+  `hv_gruppe_offen` (`lead_v2.hv_gruppe_offen_setzen/hv_gruppe_offen/hv_gruppe_offen_ids/hv_gruppe_verteilt`)
+  [ANNAHME: kein neues Feld], Badge „Simons Gruppe (noch nicht verteilt)“ in Kartei, HV-Ansicht und
+  Hauptboard (T), Auflösung über jede Zuweisung (`ad_zuweisen` → Aktivität „Zuständiger: <Name>“; Simon wählt
+  sich selbst → behält den Lead). Tests `tests/test_v33_lead_nachtrag.py` (6), Alt-Test `test_lead_v4`
+  (C_SammelaktionHV: Schaltfläche „Simons Gruppe“) und `test_lead_v4_mail` (Infotext) angepasst.
+- **Angebotsverfolgung / Nachfassen (Phase 176, `app/nachfassen.py` unten, `app/verfolgung.py`):**
+  **Inaktivitäts-Kennzeichen** „ohne Kontakt seit X Tagen“ für Vorgänge mit Verfolgungsstatus
+  Versendet/Nachgefasst – Schwelle `inaktiv_tage` (14) bzw. `inaktiv_tage_mfh` (20, Objektart MFH am
+  Kunden; Lead-Parameter, Angebotstool-Einstellungen → Nachfassen); „Kontakt“ = jüngster Eintrag aus
+  Notizen-Chat (alle Herkünfte), Anruf-Ergebnis (`LeadAktivitaet` anruf), Lead-Mail
+  (`KommunikationLog.gesendet_am`), Mail-Verlauf der Angebote und Angebotsversand; eine Wiedervorlage
+  in der Zukunft schützt nicht (`nachfassen.inaktiv_tage_fuer`, `inaktiv_kennzeichen` als Mengenabfrage,
+  `inaktiv_text`; Anzeige in Mein Tag/Wiedervorlage und Angebotsliste mit Filter, Baustein
+  `.inaktiv-kennzeichen` in `verfolgung.css`). **Telefonversuche:** jedes „Nochmal anrufen“ zählt
+  `vorgaenge.nachfass_versuche` (Rückgängig senkt), Chip „Nachgefasst (2)“ (`verfolgung.status_text(status,
+  versuche)`, Makro `verfolgung_chip(status, klein, vorgang_id, versuche)`), Akte zeigt „n Nachfass-Anrufe“;
+  keine Schwelle, keine Eskalation. **Einwand-Chips** beim Ergebnis „Nochmal anrufen“ (optional):
+  Tabelle `einwaende` (Startwerte Förderung unklar · wartet auf Mitbewerber · Entscheidung in der Familie ·
+  Finanzierung offen, `verfolgung.migration_v33_nachfassen`), Speicherung `vorgang_einwaende` +
+  `vorgaenge.letzter_einwand_id`, der letzte Einwand steht oben auf der Anruf-Karte; Pflege wie die
+  Ablehnungsgründe (`POST /parametrierung/einwaende`: anlegen, umbenennen, deaktivieren, ↑/↓);
+  Statistik „Einwände beim Nachfassen“ neben den Ablehnungsgründen (`verfolgung.einwaende_verteilung`,
+  gleiche Filter). **Nachfass-Mail aus dem eigenen Postfach:** Vorlagen „Nachfassen 1/2“ im
+  Vorlagen-Editor (`?vorlage=nachfassen_1|2`, `mail_vorlage_nachfassen_<n>_betreff/_text`, Platzhalter
+  wie die Angebotsvorlagen, `{absender}` = sendender Außendienstler, Standardtexte als Entwurf), Block im
+  Partial `_naechster_schritt.html` (Vorlage, Vorschau `GET /vorgaenge/{id}/nachfass-mail/vorschau`,
+  Häkchen Angebots-PDF [ANNAHME], Senden `POST /vorgaenge/{id}/nachfass-mail` – JSON/Redirect, AD nur
+  eigener Vorgang); Versand über `graph_versand.mail_senden_als(<E-Mail des Absenders>, …)` nur im Modus
+  anwendung (delegiert: Knopf ausgegraut, Route 409 „Versand aus dem eigenen Postfach erst mit Graph als
+  Anwendung“); Ablauf vorbereiten → `verbindung_freigeben` → Graph → Verbuchen im `_speichern`-Muster
+  (nie doppelt senden); Mail im Mail-Verlauf (`AngebotsMail`, `eingehend = False`, `graph_id`
+  `nachfass-mail:<conversationId>`) und als System-Notiz im Chat (+ Lead-Aktivität `mail`). Signatur des
+  Absenders aus dem Upload: neue Seite `/einstellungen/signatur` (eigene Signatur für Außendienst/
+  Innendienst/Admin, gleiche Ablage wie v6; ohne Upload nur der Firmenblock); Inline-Bilder bis zur
+  Erweiterung von `mail_senden_als` als data:-URI. Tests `tests/test_v33_nachfassen.py` (17).
+- **Tests, Rollout-Vorbereitung, Doku (Phase 177, Orchestrator, 14./15.10.2026):** elf neue Testdateien
+  `tests/test_v33_*.py` (graph 28, rollen 22, service 17, kalender 17, outlook 21, auto_phase 10, rabatt 21,
+  mein_tag 15, tabellen 15, lead_nachtrag 6, nachfassen 17, fundament 13); Gesamtsuite `pytest tests -q`
+  **1344 bestanden, 5 übersprungen, 0 Fehler** (11:48 min), Wächter-AST v27, Token-Wächter v30 und der neue
+  Wächter `UploadRoutenOhneSchreibsperre` grün. Angepasste Alt-Tests (Begründung in der Gesamtübersicht
+  `diagnose/v33/gesamtuebersicht.md`): Lead-Kalender-Umleitung (`?alt=1`), Infotext, Go-live 12 Punkte,
+  „Simons Gruppe“, Kalender-Rechte AD, Scheduler 16 Läufe / 3 mail-sync-Teilschritte, Outlook-Warteschlange
+  statt Direktaufruf, Basisrolle auf der Anmeldeseite, Spaltenkopf mit Werkzeugen, Mein-Tag-Blöcke, zwei Tests
+  mit ungesicherter Schreibung über eine Anfrage/einen Lauf hinweg (commit/rollback davor), festes Testdatum →
+  `date.today()`, `tests/abnahme.py` „Endbetrag:“. **Rollout-Vorbereitung** (`diagnose/v33/abschluss_tests.sh`,
+  Server-Kopie vom 03.10.2026, Protokolle `diagnose/test_v33_final/`): `migrate.py` zweimal (zweiter Lauf ohne
+  Änderungen), Testbenutzer je Basisrolle + Varianten Montage Heizung / Service Elektro / Handelsvertreter,
+  VOT-Abgleich ohne Abweichungen, **Rückweg-Probe v32-Code (Worktree c3be9fc) auf der v33-Datenbank 24/24**,
+  Abnahmeskript 93/93, Voll-Crawl sechs Basisrollen + drei Varianten je hell/dunkel (106.884 Aufrufe, 0 Abstürze,
+  inkl. der sechs Tabellen der Phase 174), Smoke 8/8, **Lasttest** Profil `normal` (50 Nutzer, 20 min, Modus
+  anwendung gemockt, `kalender_sync = an` → 16 Läufe inkl. `outlook-sync`/`outlook-ruecklesen`, Pool-Invariante
+  85 ≤ 90): 0 × 5xx, 0 locked, Pool-Spitze 43 %, p95 Editor 261 ms / PDF 1,8 s / Kundensuche 224 ms erfüllt,
+  **nicht erfüllt** p95 Listen und Akten 1.568 ms (Ziel 1.500) und p95 Terminvorschläge 14,2 s (Ziel 6 s; v32
+  8,9 s – Rückfrage, Vergleichslauf ohne Kalender-Sync in `docs/lasttest-v27.md` 4.8); Profil `schreibsturm`
+  190/190 Positionen korrekt, 0 locked, Schreibsperre max. 9 ms. Screenshots `docs/design-v33/` (64 Bilder
+  nachher hell/dunkel: Kalender je Modul/Tag/Monat/mobil, Rollen, Service- und Montage-Backend, Verbindungs-
+  Seite, Mein Tag und Wiedervorlage 390 px, sechs Tabellen, Kartei, Portal …; anonymisierte Kopie, EK/DB
+  ausgeblendet). **Befunde des Abschlusslaufs (behoben):** `migrate.py`-Meldung mit „→“ hätte auf der
+  cp1252-Konsole des Servers NACH den Commits abgebrochen (`update.bat` → `:migration_fehler`) → ASCII-Meldung +
+  `errors="replace"`; sieben Upload-Routen hielten mit Phase 172 die Schreibsperre während der Übertragung →
+  Freigabe vor `anfrage.formular` + Wächter; 13 rein lesende Kurz-Sitzungen → `kurz(schreibend=False)`;
+  `lead_anrufliste.dauer_korrigieren` mit getattr-Rückfall. Doku: dieser Abschnitt, Zuordnungszeile v33,
+  Titelzeile, Leitplanken ab v33, Fachliche Regeln (Rollen, Outlook, Rabatt), überholt-Marker in v5/v6/v8/v12/
+  v15/v17/v22/v25/v27/v28/v29/v30/v32; `docs/graph-einrichtung.md` (neu gegliedert), `docs/outlook-sync.md`
+  (neu), `docs/betrieb.md` („Ergänzungen v33“), `docs/lasttest-v27.md` (4.8), `docs/nach-dem-update-v33.md`,
+  `docs/updates.md` (4b), `docs/projektierung-entscheidungen.md`, `docs/leadmanagement-entscheidungen.md`,
+  `docs/design-system.md`, `docs/signaturen.md`, `docs/PROTOKOLL-2026-10-14-Angebotstool.md`;
+  `config.VERSION = "v33"`. Foto-Upload-Meldung der Vertriebler (15.10.2026): Ursache Datenmenge der
+  Originalfotos über LTE/VPN – Vorschlag Verkleinern auf dem Handy, Entscheidung offen (nicht Teil von v33).

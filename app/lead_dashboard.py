@@ -148,7 +148,7 @@ def mails_mit_fehler(session: Session) -> int:
 def ist_buero(benutzer) -> bool:
     """Innendienst, Leadmanagement (auch als Mehrfachrolle) und Admin."""
     return benutzer is not None and (
-        benutzer.rolle in ("admin", "innendienst") or benutzer.hat_rolle("leadmanagement"))
+        benutzer.basisrolle in ("admin", "innendienst") or benutzer.hat_rolle("leadmanagement"))
 
 
 def _meine_leads(abfrage, benutzer, hv: bool, mit_freien: bool = True):
@@ -637,7 +637,7 @@ def daten(session: Session, benutzer, termine_alle: bool = False,
 def _zugriff_wv(benutzer, vorgang: Vorgang, art: str, hv: bool) -> bool:
     if benutzer is None:
         return False
-    if benutzer.rolle == "admin":
+    if benutzer.basisrolle == "admin":
         return True
     if art == "angebot":
         if hv or not ist_buero(benutzer):

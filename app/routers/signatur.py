@@ -26,7 +26,7 @@ def _berechtigt(request: Request, angebot: Angebot, session: Session) -> bool:
     benutzer = request.state.benutzer
     if benutzer is None:
         return False
-    if benutzer.rolle in ("admin", "innendienst"):
+    if benutzer.basisrolle in ("admin", "innendienst"):
         return True
     erfassung = (session.query(Erfassung)
                  .filter(Erfassung.angebot_id == angebot.id).first())

@@ -203,6 +203,29 @@ davor meldet die Kontrolle „HTTP 404“ (normal). Nach dem Rollback
   (`terminierung_aktiv`/`mail_versand_aktiv`) erst nach grünen Prüfpunkten.
 - Rückweg: `rollback.bat --nur-code` (v30-Code läuft auf der v32-Datenbank – nur additive Änderungen).
 
+## 4b. Besonderheiten beim Update auf v33 (ein Commit, 14.10.2026)
+
+- `.env` auf dem Server um die vier Schlüssel aus `.env.example` ergänzen (`GRAPH_CLIENT_SECRET`,
+  `GRAPH_ZERTIFIKAT_PFAD`, `GRAPH_ZERTIFIKAT_THUMBPRINT`, `GRAPH_GEHEIMNIS_ABLAUF`) – zunächst LEER lassen:
+  ohne Geheimnis läuft das Tool im Modus „delegiert“ genau wie v32 weiter. Das Geheimnis kommt erst, wenn die
+  IT die Entra-/Exchange-Schritte aus `docs/graph-einrichtung.md` erledigt hat; danach Versand → „Verbindung
+  testen“ (grün → Modus „anwendung“).
+- `migrate.py` meldet beim ersten Lauf u. a.: „Rollen (v33): … Rollen angelegt“, „Handelsvertreter-Rolle gesetzt
+  für …“, „Teams (v33): Gewerk gesetzt – n Elektro, m Heizung“, Graph-Modus `delegiert`, Outlook-Tabellen
+  (`outlook_ereignisse`, `outlook_auftraege`, `outlook_belegt`), Service-Parameter (`phase_auto`), Einwände
+  (vier Startwerte), Spalten/Indizes `ix_v33_*`. Der zweite Lauf meldet „keine Änderungen nötig“.
+- Danach `scripts\smoke.bat` wie immer. Neue Hintergrundläufe `outlook-sync`/`outlook-ruecklesen` stehen in
+  Parametrierung → Betrieb (aktiv erst im Modus „anwendung“ bzw. mit Kalender-Freigabe).
+- Admin-To-dos aus `docs/nach-dem-update-v33.md`: Rollen/Teams prüfen (René Golaschewski und Simon O Grady
+  als Handelsvertreter; Gewerk je Team), Kalender-Parameter, Häkchen „Phasen automatisch weiterschalten“,
+  Servicebericht-Feldliste, Einwand-Liste und Nachfass-Vorlagen gegenlesen, Graph-Verbindungstest nach der
+  Einrichtung.
+- Rückweg: `rollback.bat --nur-code` (v32-Code läuft auf der v33-Datenbank – nur additive Änderungen;
+  Rückweg-Probe im Durchlauf: `diagnose/test_v33_final/rueckweg_probe.txt`).
+- `migrate.py` druckt seine Meldungen seit v33 auch auf der cp1252-Konsole des Servers ohne Abbruch
+  (Zeichen außerhalb des Zeichensatzes werden ersetzt) – ein Abbruch NACH den Commits durch eine Meldung mit
+  Sonderzeichen ist damit ausgeschlossen (Befund im Durchlauf, Probe mit `PYTHONIOENCODING=cp1252`).
+
 ## 5. Versionsstand prüfen
 
 Auf PC und Server zeigt `git log --oneline -1` den aktuellen Commit; auf dem

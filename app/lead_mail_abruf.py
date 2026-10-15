@@ -9,8 +9,12 @@
 # Zurückschreiben (Commit) → danach PATCH isRead ohne Sitzung. Höchstens
 # BLOCK_GROESSE (50) Nachrichten je Lauf.
 #
+# v33 (PLAN_V20 Phase 166): Postfach-Abruf über graph_versand.postfach_ungelesen –
+# im Modus anwendung /users/<termin@>/mailFolders/inbox/… mit dem Anwendungs-Token
+# (Zugriffsgruppe), im Modus delegiert wie bisher über das angemeldete Konto.
+#
 # Zuordnung einer Nachricht zu Vorgang/Eintrag (keine Konversations-ID am
-# Warteschlangen-Eintrag – /me/sendMail liefert keine; Vorschlag im Bericht:
+# Warteschlangen-Eintrag – sendMail liefert keine; Vorschlag im Bericht:
 # Spalte kommunikation_log.graph_conversation_id für v30):
 #   Bounce: Original-Empfänger aus Kopfzeilen/Text (im Testmodus die echte
 #           Adresse aus dem Betreff-Präfix „[TEST an …]“) → jüngster gesendeter
@@ -247,7 +251,7 @@ def scheduler_lauf() -> dict:
     from app import graph_versand, lead_mail
     from app import leadmanagement as kern
     from app.db import kurz
-    with kurz() as s:
+    with kurz(schreibend=False) as s:   # v33 (Phase 172): nur lesen - keine Schreibtransaktion
         postfach = lead_mail.absender(s)
         demo = kern.demo_aktiv(s)
     # eigene Adressen (werden als Original-Empfänger eines Bounces ausgeschlossen);
@@ -256,7 +260,9 @@ def scheduler_lauf() -> dict:
     eigene = {postfach.lower()}
     token = graph_versand._token()
     if token is None:
-        return {"ergebnis": NICHT_ANGEMELDET}
+        # v33: Text je Modus („Nicht bei Microsoft angemeldet …“ bzw. „Anmeldung der
+        # Anwendung fehlgeschlagen: …“) – ein Zustand, kein Fehler
+        return {"ergebnis": graph_versand.nicht_verbunden_text()}
     nachrichten = graph_versand.postfach_ungelesen(token, postfach, top=BLOCK_GROESSE)
     zaehler = {"bounce": 0, "antwort": 0, "unklar": 0, "bekannt": 0, "uebersprungen": 0,
                "gelesen": len(nachrichten)}

@@ -125,7 +125,40 @@ def pruefen(session: Session) -> list[Pruefpunkt]:
     punkte.append(Pruefpunkt("Bestandsimport durchgeführt", bool(importe),
                              f"{importe} Import(e) aktiv",
                              "/parametrierung/bestandsimport"))
+    # 12 (v33, PLAN_V20 Phase 166): Graph als Anwendung verbunden – Einstellung graph_modus =
+    #    anwendung (grüner Verbindungstest unter /versand) und Geheimnis > 30 Tage gültig
+    #    (oder ohne hinterlegtes Ablaufdatum); der Text nennt das Ablaufdatum
+    punkte.append(graph_punkt(session))
     return punkte
+
+
+def graph_punkt(session: Session) -> Pruefpunkt:
+    """v33 (Phase 166): Prüfpunkt „Graph als Anwendung verbunden“."""
+    from app import graph_versand
+    from app.models import einstellung_holen
+    modus_wert = einstellung_holen(session, graph_versand.EINSTELLUNG_MODUS,
+                                   graph_versand.MODUS_DELEGIERT)
+    anwendung = (modus_wert == graph_versand.MODUS_ANWENDUNG
+                 and graph_versand.anwendung_konfiguriert())
+    tage = graph_versand.geheimnis_ablauf_tage()
+    datum = graph_versand.geheimnis_ablauf_datum()
+    geheimnis_ok = tage is None or tage > graph_versand.GEHEIMNIS_WARN_TAGE
+    if datum is None:
+        ablauf = "Ablaufdatum des Geheimnisses nicht hinterlegt (GRAPH_GEHEIMNIS_ABLAUF)"
+    elif tage is not None and tage < 0:
+        ablauf = f"Geheimnis seit {datum:%d.%m.%Y} abgelaufen"
+    else:
+        ablauf = f"Geheimnis gültig bis {datum:%d.%m.%Y} (noch {tage} Tage)"
+    if not graph_versand.anwendung_konfiguriert():
+        modus_text = "Modus: Delegiert – " + graph_versand.modus_grund()
+    elif anwendung:
+        modus_text = "Modus: Anwendung (Verbindungstest grün)"
+    else:
+        modus_text = "Modus: Delegiert – Verbindungstest unter Versand noch nicht grün"
+    if anwendung and not geheimnis_ok:
+        modus_text += " · Geheimnis erneuern"
+    return Pruefpunkt("Graph als Anwendung verbunden", anwendung and geheimnis_ok,
+                      f"{modus_text} · {ablauf}", "/versand")
 
 
 def haekchen_setzen(session: Session, name: str, an: bool, benutzer) -> None:

@@ -135,7 +135,7 @@ def verfolgung_setzen(session: Session, vorgang: Vorgang, benutzer,
             # (Ersteller); beim Innendienst bedeutet leer „Innendienst"
             if verantwortlicher_id:
                 vorgang.wiedervorlage_benutzer_id = verantwortlicher_id
-            elif benutzer is not None and benutzer.rolle == "aussendienst":
+            elif benutzer is not None and benutzer.basisrolle == "aussendienst":
                 vorgang.wiedervorlage_benutzer_id = benutzer.id
             else:
                 vorgang.wiedervorlage_benutzer_id = None
@@ -143,7 +143,7 @@ def verfolgung_setzen(session: Session, vorgang: Vorgang, benutzer,
             vorgang.wiedervorlage_benutzer_id = (verantwortlicher_id
                                                  or vorgang.wiedervorlage_benutzer_id)
             if (verantwortlicher_id is None and benutzer is not None
-                    and benutzer.rolle in ("admin", "innendienst")):
+                    and benutzer.basisrolle in ("admin", "innendienst")):
                 # ID hat aktiv „– Innendienst –“ gewählt
                 vorgang.wiedervorlage_benutzer_id = None
     else:
@@ -159,13 +159,13 @@ def wiedervorlage_gehoert(session: Session, vorgang: Vorgang, benutzer) -> bool:
     ihm gesetzten, der Innendienst alle mit ID-/unbekanntem Verantwortlichen."""
     if benutzer is None:
         return False
-    if benutzer.rolle == "aussendienst":
+    if benutzer.basisrolle == "aussendienst":
         return vorgang.wiedervorlage_benutzer_id == benutzer.id
     if vorgang.wiedervorlage_benutzer_id is None:
         return True
     from app.models import Benutzer
     verantwortlicher = session.get(Benutzer, vorgang.wiedervorlage_benutzer_id)
-    return verantwortlicher is None or verantwortlicher.rolle in ("admin", "innendienst")
+    return verantwortlicher is None or verantwortlicher.basisrolle in ("admin", "innendienst")
 
 
 def faellige_vorgaenge(session: Session, benutzer=None) -> list[Vorgang]:

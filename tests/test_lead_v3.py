@@ -63,7 +63,7 @@ NAV_HAUPT = [("dashboard", "/lead-management/dashboard"),
              ("handelsvertreter", "/lead-management/handelsvertreter")]
 NAV_MEHR = [("anrufliste", "/lead-management/anrufliste"),
             ("board", "/lead-management/board"),
-            ("kalender", "/lead-management/kalender"),
+            ("kalender", "/kalender?gruppe=vertrieb"),   # v33 (PLAN_V20 Phase 169): zentraler Kalender statt Wochenkalender je AD
             ("vorlagen", "/lead-management/vorlagen"),
             ("uebersicht", "/lead-management/uebersicht"),
             ("statistik", "/lead-management/statistik"),

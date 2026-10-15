@@ -16,6 +16,7 @@ from app.models import (Angebot, Benutzer, Erfassung, Kampagne, Kunde, Lead,
                         LeadAktivitaet, LeadParameter, LeadQualifizierung,
                         LeadQuelle, Vorgang, VotTermin,
                         LEAD_PHASEN_MANUELL)
+from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 
 _logger = logging.getLogger("angebotstool")
 # v27 (PLAN_V17 Phase 128): Blockgröße der Scheduler-Läufe (Commit je Block –
@@ -82,6 +83,10 @@ PARAMETER_START = {
     "erwartungswert_MS": "2000000", "erwartungswert_WA": "500000", "erwartungswert_DMS": "3000000",
     # v32 (PLAN_V19 Phase 162): Wiedervorlage nach Angebotsversand in Werktagen (MFH gesondert)
     "nachfass_werktage": "3", "nachfass_werktage_mfh": "5",
+    # v33 (PLAN_V20 Phase 176): Inaktivitäts-Kennzeichen „ohne Kontakt seit X Tagen“ (EFH / MFH)
+    "inaktiv_tage": "14", "inaktiv_tage_mfh": "20",
+    # v33 (Phase 169): zentraler Planungskalender – angezeigter Tagesbereich
+    "kalender_tagesbeginn": "07:00", "kalender_tagesende": "18:00",
     "puffer_min": "30",                  # F4: Puffer = max(30, Fahrzeit)
     "max_termine_tag_start": "3",        # A-13: Startwert neuer AD-Profile
     # v23 (Phase 108): Terminassistent V2 – von app/lead_termin.py mit Standard gelesen
@@ -201,11 +206,11 @@ def lead_modul_sichtbar(session: Session, benutzer) -> bool:
     Freischaltung „alle“ gilt dauerhaft (Rechte-Matrix v12/v23 bleibt)."""
     if benutzer is None:
         return False
-    if benutzer.rolle == "admin":
+    if benutzer.basisrolle == "admin":
         return True
     if not DEMO_BEENDET and freigabe_modus(session) != "alle":
         return False
-    return (benutzer.rolle in ("innendienst",)
+    return (benutzer.basisrolle in ("innendienst",)
             or benutzer.hat_rolle("leadmanagement"))
 
 
@@ -276,7 +281,7 @@ def leadmanager_benutzer(session: Session) -> list[Benutzer]:
     return [b for b in session.query(Benutzer)
             .filter(Benutzer.aktiv.is_(True)).order_by(Benutzer.id)
             if b.lm_aktiv and getattr(b, "leadmanager", False)
-            and (b.hat_rolle("leadmanagement") or b.rolle in ("admin", "innendienst"))]
+            and (b.hat_rolle("leadmanagement") or b.basisrolle in ("admin", "innendienst"))]
 
 
 def naechster_leadmanager(session: Session, aktueller_benutzer=None) -> int | None:
@@ -515,16 +520,67 @@ def quelle_gruppe(quelle) -> str:
 
 # --- v21 (Phase 87): Quelle · Kampagne · Kanal -------------------------------------
 
+# --- v33 (PLAN_V20 Phase 175): Kanal „Stadtwerke Düsseldorf“ --------------------------------
+# Der monday-Kanal „SWD“ und das Angebotsprofil SWD (v9, regel_kennung swd) bilden auf
+# denselben Kanalwert ab. Anzeigename ist „Stadtwerke Düsseldorf“; Vergleiche laufen über
+# kanal_schluessel (klein, Alias aufgelöst), Pflege-Listen (kanal_ad_regel) tragen alle
+# Schreibweisen (kanal_aliase), damit lead_termin.kanal_regel unverändert bleibt.
+KANAL_SWD = "Stadtwerke Düsseldorf"
+KANAL_ALIASE = {
+    "swd": KANAL_SWD, "stadtwerke düsseldorf": KANAL_SWD, "stadtwerke duesseldorf": KANAL_SWD,
+    "stadtwerke-düsseldorf": KANAL_SWD, "stadtwerke-duesseldorf": KANAL_SWD,
+    "stadtwerke düsseldorf ag": KANAL_SWD,
+}
+
+
+def kanal_anzeige(wert) -> str:
+    """Anzeigewert eines Kanals: Alias → kanonischer Name („SWD“ → „Stadtwerke Düsseldorf“),
+    sonst der bereinigte Wert selbst."""
+    text = (wert or "").strip()
+    return KANAL_ALIASE.get(text.lower(), text)
+
+
+def kanal_schluessel(wert) -> str:
+    """Vergleichsschlüssel (klein, Alias aufgelöst)."""
+    return kanal_anzeige(wert).lower()
+
+
+def kanal_aliase(wert) -> list[str]:
+    """Alle Schreibweisen eines Kanals (Anzeigewert zuerst) – für kanal_ad_regel und
+    Ausschlusslisten; Kanäle ohne Alias liefern sich selbst."""
+    anzeige = kanal_anzeige(wert)
+    if not anzeige:
+        return []
+    aliase = [anzeige]
+    if anzeige == KANAL_SWD:
+        aliase.append("SWD")
+    return aliase
+
+
+def kanal_gleich(a, b) -> bool:
+    """Zwei Kanalwerte meinen denselben Kanal (Alias-sicher, Groß/Klein egal)."""
+    return bool(kanal_schluessel(a)) and kanal_schluessel(a) == kanal_schluessel(b)
+
+
 def kanal_werte(session: Session) -> list[str]:
     """Dropdown-Werte für den Kanal an der Quelle: „Standard“ + die Kanalwerte
-    der Angebotsprofile (v9-Zuordnung, erster Wert je Profil)."""
+    der Angebotsprofile (v9-Zuordnung, erster Wert je Profil).
+    v33 (Phase 175): Profilwerte alias-bereinigt („SWD“ → „Stadtwerke Düsseldorf“);
+    „Stadtwerke Düsseldorf“ steht auch dann in der Liste, wenn das SWD-Profil (regel_kennung
+    swd) keinen Kanalwert trägt – gleichwertig zu Enni im AD-Profil, Import, Kartei, Filtern."""
     from app.models import Profil
     werte = ["Standard"]
+    swd_profil = False
     for profil in session.query(Profil).order_by(Profil.id):
         erster = next((w.strip() for w in (profil.kanalwerte or "").split(",")
                        if w.strip()), "")
-        if erster and erster not in werte:
+        if (profil.regel_kennung or "") == "swd":
+            swd_profil = True
+        erster = kanal_anzeige(erster)
+        if erster and erster.lower() not in [w.lower() for w in werte]:
             werte.append(erster)
+    if swd_profil and KANAL_SWD.lower() not in [w.lower() for w in werte]:
+        werte.append(KANAL_SWD)
     return werte
 
 
@@ -536,7 +592,7 @@ def profil_zum_kanal(session: Session, kanal: str) -> str:
 
 def _admins(session: Session) -> list[int]:
     return [b.id for b in session.query(Benutzer).filter(Benutzer.aktiv.is_(True))
-            if b.rolle == "admin"]
+            if b.basisrolle == "admin"]
 
 
 def unbekannt_quelle(session: Session) -> LeadQuelle:
@@ -813,7 +869,7 @@ def lead_anlegen(session: Session, daten: dict, quelle: LeadQuelle | None,
         ziele = ([vorgang.leadmanager_id] if vorgang.leadmanager_id
                  else [b.id for b in session.query(Benutzer)
                        .filter(Benutzer.aktiv.is_(True))
-                       if b.rolle == "admin" or b.hat_rolle("leadmanagement")])
+                       if b.basisrolle == "admin" or b.hat_rolle("leadmanagement")])
         # v29 (Phase 141): Glocken-Art lead_eingang – standardmäßig gesperrt,
         # das Ereignis bleibt als Aktivität „Lead angelegt“ in der Timeline
         benachrichtigen(session, ziele,
@@ -934,7 +990,7 @@ def demo_leads_erzeugen(session: Session, benutzer=None) -> dict:
     quellen = [q for q in session.query(LeadQuelle)
                .filter(LeadQuelle.aktiv.is_(True), LeadQuelle.typ != "monday")]
     ad_liste = [b for b in session.query(Benutzer)
-                .filter(Benutzer.aktiv.is_(True), Benutzer.rolle == "aussendienst")]
+                .filter(Benutzer.aktiv.is_(True), rollen_modul.filter_basis("aussendienst"))]
     logik = leadmanagement_logik.hole_logik()
     mit_score = score_aktiv(session)   # v25: Score nur bei an
     jetzt = datetime.now()
@@ -1524,8 +1580,7 @@ def taeglicher_lauf_leads(session: Session | None = None,
             if freie:
                 leiter = [b.id for b in session.query(Benutzer)
                           .filter(Benutzer.aktiv.is_(True),
-                                  Benutzer.rolle.in_(("admin",
-                                                      "leadmanagement")))]
+                                  rollen_modul.filter_basen(("admin", "leadmanagement")))]
                 benachrichtigen(session, leiter,
                                 f"{len(freie)} Lead{'s' if len(freie) != 1 else ''} "
                                 "ohne Leadmanager in der Anrufliste",
@@ -1800,7 +1855,7 @@ def ad_kandidaten(session: Session, vorgang: Vorgang,
     kunde = session.get(Kunde, vorgang.kunde_id)
     plz = (kunde.plz or "") if kunde else ""
     alle_ad = [b for b in session.query(Benutzer)
-               .filter(Benutzer.aktiv.is_(True), Benutzer.rolle == "aussendienst")]
+               .filter(Benutzer.aktiv.is_(True), rollen_modul.filter_basis("aussendienst"))]
     # v23 (Phase 109, OF-G6): Handelsvertreter sind nur für Leads mit eigener
     # Zuweisung Kandidat – nie als Innendienst-Vorschlag für fremde Leads
     from app import lead_v2
@@ -2361,9 +2416,9 @@ def akte_kontext(session: Session, vorgang: Vorgang) -> dict:
         **__import__("app.lead_anrufliste", fromlist=["x"]).kopf_kontext(session, vorgang),
         "verloren_gruende": __import__("app.leadmanagement_logik", fromlist=["x"]).hole_logik().gruende_der_phase("verloren_vor_termin"),
         "leadmanager_wahl": [b for b in benutzer_map.values()
-                             if b.aktiv and (b.lm_aktiv or b.rolle == "admin"
+                             if b.aktiv and (b.lm_aktiv or b.basisrolle == "admin"
                                              or b.hat_rolle("leadmanagement")
-                                             or b.rolle == "innendienst")],
+                                             or b.basisrolle == "innendienst")],
         "no_show_gruende": logik.gruende_der_phase("no_show"),
         "sparten": [s.strip() for s in ((kunde.interesse or "") if kunde else "").split(",")
                     if s.strip()],
@@ -2885,7 +2940,7 @@ def kanal_report(session: Session, monate: int = 12,
 def lead_ad_sicht(session: Session, benutzer) -> bool:
     """Außendienst-Sicht auf die Lead-Akte (read-only + No-Show/Verschieben):
     erst bei lead_freigabe_modus = alle wirksam (Plan 81)."""
-    return (benutzer is not None and benutzer.rolle == "aussendienst"
+    return (benutzer is not None and benutzer.basisrolle == "aussendienst"
             and freigabe_modus(session) == "alle")   # v31: freigabe_modus() ist immer „alle“
 
 

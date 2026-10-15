@@ -46,7 +46,7 @@ def _benutzer_mit_rolle(session: Session, rolle: str) -> list[Benutzer]:
     alle = session.query(Benutzer).filter(Benutzer.aktiv.is_(True)).all()
     treffer = [b for b in alle if b.hat_rolle(rolle)]
     return sorted(treffer or [b for b in alle
-                              if b.rolle in ("admin", "innendienst")],
+                              if b.basisrolle in ("admin", "innendienst")],
                   key=lambda b: b.name)
 
 
@@ -67,7 +67,7 @@ LOESCHEN_BESTAETIGUNG = "LÖSCHEN"
 def _nur_admin(request: Request):
     """v30 (Phase 151): „Projekt löschen“ nur für Admins – sonst 403."""
     benutzer = request.state.benutzer
-    if benutzer is None or benutzer.rolle != "admin":
+    if benutzer is None or benutzer.basisrolle != "admin":
         raise HTTPException(status_code=403,
                             detail="Nur Administratoren dürfen Projekte löschen.")
     return benutzer
@@ -181,32 +181,29 @@ def _meldung_json(meldung: str, ok: bool = True, status_code: int = 200, **zusat
 # --- v28 (PLAN_PROJ_V6 Phase 135): gemeinsamer Termin-Dialog -------------------
 
 def _termin_dialog_kontext(session: Session) -> dict:
-    """Listen für das Makro termin_dialog (Teams, Personen, Monteure, Subs,
-    Team-Mitglieder als Vorlage der Besetzung, Standarddauer)."""
-    teams = (session.query(Team).filter(Team.aktiv.is_(True))
-             .order_by(Team.typ.desc(), Team.id).all())
-    from app.models import TeamMitglied
-    mitglieder: dict[int, list[int]] = {}
-    for m in session.query(TeamMitglied).order_by(TeamMitglied.id):
-        mitglieder.setdefault(m.team_id, []).append(m.benutzer_id)
-    return {
-        "teams": teams,
-        "montage_teams": [t for t in teams if t.typ != "sub"],
-        "sub_teams": [t for t in teams if t.typ == "sub"],
-        "personen": kern.personen_benutzer(session),
-        "monteure": kern.montage_benutzer(session),
-        "subs": (session.query(Subunternehmer).filter(Subunternehmer.aktiv.is_(True))
-                 .order_by(Subunternehmer.firma).all()),
-        "team_mitglieder": mitglieder,
-        "dauer_standard": kern.montage_dauer_standard(session),
-        "arten": [(k, kern.TERMIN_ARTEN[k][2]) for k in kern.TERMIN_ARTEN_REIHENFOLGE],
-    }
+    """Listen für das Makro termin_dialog – v33 (PLAN_V20 Phase 168): aus
+    kern.termin_dialog_kontext (Teams mit Gewerk, Monteure mit Gewerk/Service-
+    Kennzeichen, Service-Gewerke/-Anlässe), damit auch die Vorgangsakte den Dialog
+    „Service-Einsatz planen“ bekommt."""
+    return kern.termin_dialog_kontext(session)
 
 
-def _termin_antwort(request: Request, gewerk: Gewerk, form, ok: bool, meldung: str,
-                    konflikte: list[str], termin_id: int | None = None):
+def _termin_zurueck_pfad(termin: ProjektTermin) -> str:
+    """v33 (Phase 168): Ziel nach Termin-Aktionen – Projektakte, bei Service am
+    Vorgang ohne Projekt die Vorgangsakte."""
+    if termin.projekt_id:
+        return f"/projektierung/projekt/{termin.projekt_id}"
+    if termin.vorgang_id:
+        return f"/vorgaenge/{termin.vorgang_id}"
+    return "/projektierung/termine"
+
+
+def _termin_antwort(request: Request, gewerk: Gewerk | None, form, ok: bool, meldung: str,
+                    konflikte: list[str], termin_id: int | None = None,
+                    vorgang_id: int | None = None):
     """JSON bei Accept application/json ({ok, meldung, konflikte}), sonst
-    Redirect (zurueck-Feld unter /projektierung, sonst Akte) mit Meldung."""
+    Redirect (zurueck-Feld unter /projektierung oder /vorgaenge/, sonst Akte) mit
+    Meldung. v33 (Phase 168): ohne Gewerk (Service am Vorgang) → Vorgangsakte."""
     text = meldung
     if ok and konflikte:
         text += " ⚠ Konflikt: " + "; ".join(konflikte[:4])
@@ -214,9 +211,14 @@ def _termin_antwort(request: Request, gewerk: Gewerk, form, ok: bool, meldung: s
         return _meldung_json(meldung, ok=ok, konflikte=konflikte,
                              termin_id=termin_id, status_code=200 if ok else 400)
     zurueck = (form.get("zurueck") or "") if form is not None else ""
-    if zurueck.startswith("/projektierung") and "//" not in zurueck:
+    if ((zurueck.startswith("/projektierung") or zurueck.startswith("/vorgaenge/"))
+            and "//" not in zurueck):
         trenner = "&" if "?" in zurueck else "?"
         return RedirectResponse(zurueck + trenner + "meldung=" + quote_plus(text),
+                                status_code=303)
+    if gewerk is None:
+        ziel = f"/vorgaenge/{vorgang_id}" if vorgang_id else "/projektierung/termine"
+        return RedirectResponse(ziel + "?meldung=" + quote_plus(text) + "#termine",
                                 status_code=303)
     return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}"
                             "?meldung=" + quote_plus(text) + "#termine",
@@ -239,7 +241,10 @@ def _termin_daten_aus_form(form) -> dict:
         else:
             art = "sonstige"
     daten["art"] = art
-    for feld in ("team_id", "sub_id", "person_id", "notiz", "dauer_tage"):
+    for feld in ("team_id", "sub_id", "person_id", "notiz", "dauer_tage",
+                 # v33 (Phase 168): Service-Einsatz
+                 "service_gewerk", "anlass", "dauer_stunden", "dauer_minuten", "dauer_min",
+                 "vorgang_id"):
         daten[feld] = form.get(feld)
     beginn_roh = (form.get("beginn") or "").strip()
     uhrzeit = (form.get("uhrzeit") or "").strip()
@@ -697,7 +702,7 @@ def liste(request: Request, sparte: str = "", projektleiter_id: int = 0,
                   benutzer=benutzer,
                   # v30 (PLAN_V18 Phase 151): Demo-Filter, Mehrfachauswahl (Admin)
                   demo=bool(demo),
-                  ist_admin=(benutzer is not None and benutzer.rolle == "admin"),
+                  ist_admin=(benutzer is not None and benutzer.basisrolle == "admin"),
                   loesch_hinweis=kern.LOESCH_HINWEIS,
                   loesch_bestaetigung=LOESCHEN_BESTAETIGUNG,
                   **_filter_werte(session),
@@ -751,7 +756,17 @@ def termine(request: Request, ansicht: str = "woche", start: str = "",
     besetzung = {tid: kern.besetzung_namen(session, tid, kurz=False,
                                            benutzer_map=benutzer_alle)
                  for tid in kern.besetzung_map(session, [t.id for t in termine_liste])}
+    # v33 (Phase 168): Kunde der Service-Einsätze ohne Projekt (über den Vorgang)
+    service_kunden = {}
+    for t in termine_liste:
+        if t.typ == "service" and not t.projekt_id:
+            kunde = kern.termin_kunde(session, t)
+            service_kunden[t.id] = kunde.anzeige_name if kunde is not None else "?"
     return render(request, "projektierung/termine.html", aktiv="/projektierung",
+                  service_kunden=service_kunden,
+                  service_anlass_namen=kern.SERVICE_ANLASS_NAMEN,
+                  service_gewerk_namen=kern.SERVICE_GEWERK_NAMEN,
+                  service_status_namen=kern.SERVICE_STATUS_NAMEN,
                   tage=sorted(tage.items()), von=von, bis=bis, ansicht=ansicht,
                   team_id=team_id, person_id=person_id, typ=typ,
                   besetzung=besetzung, td=_termin_dialog_kontext(session),
@@ -1060,7 +1075,7 @@ def akte(request: Request, projekt_id: int,
     ampeln = {g.id: kern.planungs_ampel(session, g) for g in gewerke}
     logik = projektierung_logik.hole_logik(session)
     benutzer = request.state.benutzer
-    ek_sichtbar = (benutzer.rolle in ("admin", "innendienst")
+    ek_sichtbar = (benutzer.basisrolle in ("admin", "innendienst")
                    or benutzer.kalkulation_sichtbar)
     gesamtwert = sum(g.auftragswert_aktuell for g in gewerke
                      if g.phase != "storniert")
@@ -1118,9 +1133,18 @@ def akte(request: Request, projekt_id: int,
                       for tid in besetzung_ids}
     # v30 (PLAN_V18 Phase 151): „Projekt löschen“ nur für Admins – Sperrgrund
     # (Gewerk in Montage mit Bericht) und Demo-Badge für den Kopfblock
-    ist_admin = benutzer is not None and benutzer.rolle == "admin"
+    ist_admin = benutzer is not None and benutzer.basisrolle == "admin"
     vorgang_obj = session.get(Vorgang, projekt.vorgang_id) if projekt.vorgang_id else None
+    # v33 (PLAN_V20 Phase 168/171): Outlook-Stand je Termin (Vertrag mit O, Rückfall
+    # v15-Felder), Service-Namen für den Block Termine, Parameter phase_auto
+    outlook_stand = {t.id: kern.outlook_status_fuer(session, t) for t in termine}
     return render(request, "projektierung/akte.html", aktiv="/projektierung",
+                  outlook_stand=outlook_stand,
+                  outlook_makro_da=kern.outlook_makro_vorhanden(),
+                  phase_auto_param=kern.phase_auto_aktiv(session),
+                  service_anlass_namen=kern.SERVICE_ANLASS_NAMEN,
+                  service_gewerk_namen=kern.SERVICE_GEWERK_NAMEN,
+                  service_status_namen=kern.SERVICE_STATUS_NAMEN,
                   ist_admin=ist_admin,
                   loeschen_sperre=(kern.loeschen_gesperrt(session, projekt)
                                    if ist_admin else ""),
@@ -1373,6 +1397,9 @@ def aufgabe_status(request: Request, aufgabe_id: int,
                                        + timedelta(days=aufgabe.wartet_frist_tage))
         elif neuer_status != "wartet":
             aufgabe.wartet_frist_am = None
+        if neuer_status in ("erledigt", "entfaellt"):
+            # v33 (PLAN_V20 Phase 171): letzte Pflichtaufgabe → nächste Phase
+            kern.auto_hook(session, aufgabe.gewerk_id, benutzer)
     session.commit()
     if _json_gewuenscht(request):
         return _aufgabe_json(request, session, aufgabe, "Aufgabe gespeichert.")
@@ -1399,6 +1426,7 @@ def aufgabe_umschalten(request: Request, aufgabe_id: int,
         aufgabe.erledigt_am = datetime.now()
         aufgabe.erledigt_von = benutzer.id if benutzer else None
         aufgabe.entfaellt_grund = ""   # v28: Häkchen hebt „entfällt“ auf
+        kern.auto_hook(session, aufgabe.gewerk_id, benutzer)   # v33 (Phase 171)
     session.commit()
     if _json_gewuenscht(request):
         return _aufgabe_json(request, session, aufgabe)
@@ -1497,11 +1525,11 @@ def termin_bearbeiten(request: Request, termin_id: int,
     gewechselt: alt → neu“), Besetzung folgt der Vorlage oder bleibt; Outlook-
     Ereignis wird aktualisiert (best effort)."""
     termin = session.get(ProjektTermin, termin_id)
-    if termin is None or not termin.gewerk_id:
+    if termin is None or (not termin.gewerk_id and termin.typ != "service"):
         if _json_gewuenscht(request):
             return _meldung_json("Termin nicht gefunden.", ok=False, status_code=404)
         return RedirectResponse("/projektierung", status_code=303)
-    gewerk, umleitung = _gewerk_laden(request, session, termin.gewerk_id)
+    gewerk, umleitung = _termin_gewerk_laden(request, session, termin)
     if umleitung is not None:
         return umleitung
     form = anfrage.formular(request)
@@ -1511,13 +1539,14 @@ def termin_bearbeiten(request: Request, termin_id: int,
                                                    termin=termin)
     if not ok:
         session.rollback()
-        return _termin_antwort(request, gewerk, form, False, meldung, [])
+        return _termin_antwort(request, gewerk, form, False, meldung, [],
+                               vorgang_id=termin.vorgang_id)
     session.commit()
     from app import outlook_kalender
     outlook_kalender.event_senden(session, termin)
     session.commit()
     return _termin_antwort(request, gewerk, form, True, meldung, konflikte,
-                           termin_id=termin.id)
+                           termin_id=termin.id, vorgang_id=termin.vorgang_id)
 
 
 @router.post("/termin/{termin_id}/loeschen")
@@ -1527,30 +1556,124 @@ def termin_loeschen(request: Request, termin_id: int,
     Outlook-Storno best effort (event_loeschen), Besetzung mit; war es der
     maßgebliche Montagetermin, wird „Montageteam zuweisen“ wieder offen."""
     termin = session.get(ProjektTermin, termin_id)
-    if termin is None or not termin.gewerk_id:
+    if termin is None or (not termin.gewerk_id and termin.typ != "service"):
         if _json_gewuenscht(request):
             return _meldung_json("Termin nicht gefunden.", ok=False, status_code=404)
         return RedirectResponse("/projektierung", status_code=303)
-    gewerk, umleitung = _gewerk_laden(request, session, termin.gewerk_id)
+    gewerk, umleitung = _termin_gewerk_laden(request, session, termin)
     if umleitung is not None:
         return umleitung
+    vorgang_id = termin.vorgang_id
     form = anfrage.formular(request)
     grund = " ".join((form.get("grund") or "").split())[:300]
     if not grund:
         return _termin_antwort(request, gewerk, form, False,
-                               "Bitte einen Grund angeben.", [])
+                               "Bitte einen Grund angeben.", [], vorgang_id=vorgang_id)
+    # v33 (PLAN_V20 Phase 170, Vorschlag O 4a): Storno immer einreihen – Kopien stehen in
+    # outlook_ereignisse (auch noch in der Warteschlange), nicht nur im Spiegel outlook_event_id;
+    # event_loeschen ist netzfrei
+    from app import outlook_kalender
     storno_hinweis = ""
-    if termin.outlook_event_id:
-        from app import outlook_kalender
-        if not outlook_kalender.event_loeschen(session, termin):
-            storno_hinweis = " (Outlook-Storno fehlgeschlagen – bitte im Kalender prüfen)"
+    if not outlook_kalender.event_loeschen(session, termin):
+        storno_hinweis = " (Outlook-Storno nicht eingereiht – bitte im Kalender prüfen)"
     ok, meldung = kern.termin_loeschen(session, termin, grund + storno_hinweis,
                                        benutzer=request.state.benutzer)
     if not ok:
         session.rollback()
-        return _termin_antwort(request, gewerk, form, False, meldung, [])
+        return _termin_antwort(request, gewerk, form, False, meldung, [],
+                               vorgang_id=vorgang_id)
     session.commit()
-    return _termin_antwort(request, gewerk, form, True, meldung + storno_hinweis, [])
+    return _termin_antwort(request, gewerk, form, True, meldung + storno_hinweis, [],
+                           vorgang_id=vorgang_id)
+
+
+def _termin_gewerk_laden(request: Request, session: Session, termin: ProjektTermin):
+    """v33 (Phase 168): Gewerk eines Termins laden (Schreib-Gate); Service-Einsätze am
+    Vorgang ohne Projekt haben kein Gewerk – dann nur das Gate."""
+    if termin.gewerk_id:
+        return _gewerk_laden(request, session, termin.gewerk_id)
+    umleitung = _gate(request, session, schreiben=True)
+    return None, umleitung
+
+
+@router.post("/vorgang/{vorgang_id}/service-termin")
+def service_termin_vorgang(request: Request, vorgang_id: int,
+                           session: Session = Depends(get_session)):
+    """v33 (PLAN_V20 Phase 168): Service-Einsatz am Vorgang – auch ohne Projekt
+    (Bestandskunde): Vorgangsakte → Block „Termine“ → „Service-Einsatz planen“
+    (ID/Admin/Projektierung). Felder wie der Termin-Dialog (Art service fest):
+    service_gewerk, anlass, beginn, uhrzeit (15-Minuten-Takt), dauer_stunden/
+    dauer_minuten, team_id/besetzung, notiz; projekt_id 0, gewerk_id leer. Outlook je
+    eingeteilter Person über outlook_kalender.event_senden (best effort – O füllt
+    dahinter die Warteschlange). Antwort JSON {ok, meldung, konflikte} bei Accept
+    application/json, sonst Redirect in die Vorgangsakte (#termine)."""
+    if (umleitung := _gate(request, session, schreiben=True)) is not None:
+        return umleitung
+    vorgang = session.get(Vorgang, vorgang_id)
+    if vorgang is None:
+        if _json_gewuenscht(request):
+            return _meldung_json("Vorgang nicht gefunden.", ok=False, status_code=404)
+        return RedirectResponse("/vorgaenge", status_code=303)
+    form = anfrage.formular(request)
+    daten = _termin_daten_aus_form(form)
+    daten["art"] = "service"
+    daten["vorgang_id"] = vorgang.id
+    ok, meldung, konflikte = kern.termin_speichern(session, None, daten,
+                                                   benutzer=request.state.benutzer)
+    if not ok:
+        session.rollback()
+        return _termin_antwort(request, None, form, False, meldung, [],
+                               vorgang_id=vorgang.id)
+    session.commit()
+    termin = session.get(ProjektTermin, daten.get("termin_id") or 0)
+    if termin is not None:
+        from app import outlook_kalender
+        outlook_kalender.event_senden(session, termin)
+        session.commit()
+    return _termin_antwort(request, None, form, True, meldung, konflikte,
+                           termin_id=termin.id if termin is not None else None,
+                           vorgang_id=vorgang.id)
+
+
+@router.post("/gewerk/{gewerk_id}/phase-auto")
+def phase_auto_setzen(request: Request, gewerk_id: int,
+                      session: Session = Depends(get_session)):
+    """v33 (PLAN_V20 Phase 171): Häkchen „automatisch weiterschalten“ je Gewerk
+    (Projektakte); Einschalten hebt die Pause nach einem manuellen Rückschritt auf."""
+    gewerk, umleitung = _gewerk_laden(request, session, gewerk_id)
+    if umleitung is not None:
+        return umleitung
+    form = anfrage.formular(request)
+    an = (form.get("phase_auto") or "").strip().lower() in ("1", "on", "an", "ja", "true")
+    meldung = kern.phase_auto_setzen(session, gewerk, an, benutzer=request.state.benutzer)
+    session.commit()
+    if _json_gewuenscht(request):
+        return _meldung_json(meldung, phase_auto=bool(gewerk.phase_auto),
+                             phase_auto_pause=gewerk.phase_auto_pause or "")
+    return RedirectResponse(f"/projektierung/projekt/{gewerk.projekt_id}"
+                            "?meldung=" + quote_plus(meldung), status_code=303)
+
+
+@router.get("/statistik")
+def statistik(request: Request, monate: int = 12,
+              session: Session = Depends(get_session)):
+    """v33 (PLAN_V20 Phase 168) [ANNAHME]: Statistik der Projektierung – Zahl der
+    Service-Einsätze je Monat (Gewerk, Anlass, beendet), letzte 12 Monate."""
+    if (umleitung := _gate(request, session)) is not None:
+        return umleitung
+    monate = max(1, min(36, monate))
+    zeilen = kern.service_statistik(session, monate=monate)
+    summe = {"gesamt": sum(z["gesamt"] for z in zeilen),
+             "heizung": sum(z["heizung"] for z in zeilen),
+             "elektro": sum(z["elektro"] for z in zeilen),
+             "beendet": sum(z["beendet"] for z in zeilen),
+             "anlaesse": {k: sum(z["anlaesse"].get(k, 0) for z in zeilen)
+                          for k, _ in kern.SERVICE_ANLAESSE}}
+    return render(request, "projektierung/statistik.html", aktiv="/projektierung",
+                  zeilen=zeilen, summe=summe, monate=monate,
+                  anlaesse=kern.SERVICE_ANLAESSE,
+                  benutzer=request.state.benutzer,
+                  meldung=request.query_params.get("meldung", ""))
 
 
 @router.get("/gewerk/{gewerk_id}/terminvorschlaege.json")
@@ -1586,8 +1709,8 @@ def termin_outlook_senden(request: Request, termin_id: int,
     ok, fehler = outlook_kalender.event_senden(session, termin)
     session.commit()
     meldung = "Termin nach Outlook übertragen." if ok else fehler
-    return RedirectResponse(f"/projektierung/projekt/{termin.projekt_id}"
-                            "?meldung=" + quote_plus(meldung), status_code=303)
+    return RedirectResponse(_termin_zurueck_pfad(termin)
+                            + "?meldung=" + quote_plus(meldung), status_code=303)
 
 
 @router.post("/termin/{termin_id}/kundenmail")
@@ -1605,8 +1728,8 @@ def termin_kundenmail(request: Request, termin_id: int,
         session.commit()
     else:
         session.rollback()
-    return RedirectResponse(f"/projektierung/projekt/{termin.projekt_id}"
-                            "?meldung=" + quote_plus(meldung), status_code=303)
+    return RedirectResponse(_termin_zurueck_pfad(termin)
+                            + "?meldung=" + quote_plus(meldung), status_code=303)
 
 
 @router.post("/termin/{termin_id}/kunde-bestaetigt")
@@ -1626,8 +1749,7 @@ def termin_kunde_bestaetigt(request: Request, termin_id: int,
                     else "manuell") + ")",
                  benutzer=request.state.benutzer, gewerk_id=termin.gewerk_id)
     session.commit()
-    return RedirectResponse(f"/projektierung/projekt/{termin.projekt_id}",
-                            status_code=303)
+    return RedirectResponse(_termin_zurueck_pfad(termin), status_code=303)
 
 
 def _restarbeiten_je_gewerk(session: Session, gewerke) -> dict[int, list]:
@@ -2373,6 +2495,10 @@ def auftragsdaten_speichern(request: Request, gewerk_id: int,
                                 status_code=303)
     benutzer = request.state.benutzer
     projekt = session.get(Projekt, gewerk.projekt_id)
+    # v33 (PLAN_V20 Phase 172, Befund 15.10.2026): der Request-Body (Upload) ist Netz-I/O – die
+    # Schreibsitzung darf die SQLite-Schreibsperre nicht während der Übertragung halten
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     form = anfrage.formular(request)
     basis = f"/projektierung/gewerk/{gewerk.id}/auftragsdaten"
     # Pflicht-Upload des Angebots-PDFs, falls am TAIFUN-Eintrag noch keins liegt
@@ -2568,10 +2694,12 @@ def kalender_drop(request: Request, termin_id: int,
         neues_team = int(form.get("team_id") or 0)
     except ValueError:
         neues_team = 0
-    neu_text = kern.termin_verschieben(session, termin, datum,
-                                       neues_team_id=neues_team,
-                                       art=form.get("art") or "verschieben",
-                                       benutzer=request.state.benutzer)
+    # v33: termin_verschieben ist der Vertrag für den zentralen Kalender (K);
+    # der Balken-Drag v15 heißt jetzt termin_kalender_drag
+    neu_text = kern.termin_kalender_drag(session, termin, datum,
+                                         neues_team_id=neues_team,
+                                         art=form.get("art") or "verschieben",
+                                         benutzer=request.state.benutzer)
     konflikte = kern.team_konflikte(session, termin.team_id, termin.beginn,
                                     termin.ende, ausser_termin_id=termin.id)
     # v15 (Phase 81): verschobenen Termin nach Outlook spiegeln
@@ -2702,6 +2830,10 @@ def dokument_hochladen(request: Request, projekt_id: int,
     projekt = session.get(Projekt, projekt_id)
     if projekt is None:
         return RedirectResponse("/projektierung", status_code=303)
+    # v33 (PLAN_V20 Phase 172, Befund 15.10.2026): der Request-Body (Upload) ist Netz-I/O – die
+    # Schreibsitzung darf die SQLite-Schreibsperre nicht während der Übertragung halten
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     form = anfrage.formular(request)
     datei = form.get("datei")
     ziel_meldung = f"/projektierung/projekt/{projekt_id}?meldung="
@@ -2769,7 +2901,7 @@ def dokument_loeschen(request: Request, dokument_id: int,
     if (umleitung := _gate(request, session)) is not None:
         return umleitung
     benutzer = request.state.benutzer
-    if not (benutzer.rolle == "admin" or benutzer.hat_rolle("projektierung")):
+    if not (benutzer.basisrolle == "admin" or benutzer.hat_rolle("projektierung")):
         return RedirectResponse("/projektierung", status_code=303)
     dokument = session.get(ProjektDokument, dokument_id)
     if dokument is None:

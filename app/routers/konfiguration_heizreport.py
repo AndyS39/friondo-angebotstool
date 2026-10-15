@@ -26,7 +26,7 @@ GENERISCH_FELDER = tuple(n for n in heizreport_api.PARAMETER if n != "heizreport
 
 def _nur_admin(request: Request):
     benutzer = request.state.benutzer
-    if benutzer is None or benutzer.rolle != "admin":
+    if benutzer is None or benutzer.basisrolle != "admin":
         return RedirectResponse("/parametrierung", status_code=303)
     return None
 

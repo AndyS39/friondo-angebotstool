@@ -418,6 +418,9 @@ class DauerKorrektur(Basis):
         self.assertEqual(lead_anrufliste.dauer_korrigieren(self.s, system[0], 10, self.admin),
                          "Nur Anruf-Einträge haben eine Dauer.")
         self.assertEqual(lead_anrufliste.dauer_korrigieren(self.s, akt, 300, self.admin), "")
+        # v33 (PLAN_V20 Phase 172): eine POST-Anfrage eroeffnet sofort eine Schreibtransaktion -
+        # die ungesicherte Direktaenderung der Test-Sitzung vorher verwerfen (wie am Testende)
+        self.s.rollback()
         self.assertEqual(self.client.post("/lead-management/anruf/aktivitaet/99999999/dauer",
                                           data={"dauer_sek": "5"}, follow_redirects=False).status_code, 303)
         self.s.rollback()

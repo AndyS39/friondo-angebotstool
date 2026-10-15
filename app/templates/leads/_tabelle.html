@@ -1,0 +1,228 @@
+{# v33 (PLAN_V20 Phase 174, Protokoll A.4 – „Leads VOT Desktop mit Gruppen“): die
+   Lead-basierte Tabelle „Leads VOT“ (seit v1/v8: Leads mit Vor-Ort-Termin, bis alle Sparten
+   erfasst oder ausgeblendet sind) mit dem Lead-Board-Layout: Sticky-Filterleiste
+   (.lm-filterblock: Suche, Termin/Ansicht, Vertriebler, Status, Priorität = Hot-Ampel,
+   Kanal, Sparte, Spaltenwähler), Zeilen gruppiert in Überfällig · Heute · je Folgetag
+   („Donnerstag, 15. Oktober · 2 Termine“, auf-/zuklappbar [ANNAHME]), Sortierung innerhalb
+   der Gruppe nach Uhrzeit, Spaltensortierung/Umbenennen/Drag & Drop/Spaltenwähler über die
+   Bausteine von Agent T (Makros spalten_kopf/spalten_colgroup aus leadmanagement/_tabelle.html,
+   Skript lm_boards.js mit data-lm-spalten-board="leads_vot", Ablage je Nutzer über
+   lead_boards.spalten_fuer – solange der Katalog leads_vot fehlt, gilt die feste
+   Spaltenfolge aus app/mein_tag.py). Feste erste Spalte Kundenname, Aktionen rechts
+   (Einzelaktionen wie bisher, keine Sammelaktionen). Eingebunden von leads/liste.html
+   (Innendienst/Admin/Leadmanagement) und leads/mein_tag.html (.mt-desktop, Außendienst). #}
+{% from "_symbole.html" import symbol %}
+{% from "leadmanagement/_tabelle.html" import spalten_kopf, spalten_colgroup, breiten_gesetzt, spaltenwahl, tabellen_daten %}
+{% import "_interesse.html" as interesse_ui %}
+{% import "_sparten.html" as sparten_ui %}
+
+<div class="seitenkopf lm-boardkopf lv-kopf">
+    <h1>Leads VOT</h1>
+    <span class="dezent">Leads mit Vor-Ort-Termin · <b>{{ zeilen | length }}</b> {{ 'ausgeblendet' if ausgeblendet else 'offen' }}{% if ad_sicht %} · nur eigene{% endif %}</span>
+    {% if not ad_sicht %}
+    <div class="aktionen">
+        {# v27 (PLAN_V17 Phase 128): Hinweis + Bestätigung vor dem monday-Vollabgleich #}
+        <form method="post" action="/leads/sync" class="lv-sync"
+              onsubmit="return confirm('monday-Vollabgleich: {{ monday_hinweis | e }}. Jetzt starten?');">
+            <input type="hidden" name="bestaetigt" value="1">
+            <button class="knopf klein zweitrangig" type="submit" title="{{ monday_hinweis }}">{{ symbol('aktualisieren') }} Jetzt aktualisieren</button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% if meldung and not mobil %}<p class="meldung">{{ meldung }}</p>{% endif %}
+<p class="meldung" id="lm-meldung" hidden role="status"></p>
+
+{% if ueberfaellig_anzahl and ansicht != 'ueberfaellig' %}
+<div class="warnblock">⏰ <strong>{{ ueberfaellig_anzahl }} Termin{{ 'e' if ueberfaellig_anzahl != 1 }} in der Vergangenheit ohne Erfassung</strong> –
+    bitte nachfassen (Erfassung starten oder Lead ausblenden).
+    <a href="/leads?ansicht=ueberfaellig">Nur überfällige zeigen</a></div>
+{% endif %}
+{% if ansicht == 'ueberfaellig' %}
+<div class="warnblock">Gefiltert: nur überfällige VOT-Termine –
+    <a href="/leads">alle offenen Leads zeigen</a></div>
+{% endif %}
+{% if ohne_ad %}
+<div class="warnblock">⚠ <strong>{{ ohne_ad }} Lead{{ 's' if ohne_ad != 1 }} ohne Vertriebler</strong> –
+bitte die <a href="/parametrierung/monday">Personen-Zuordnung</a> prüfen oder in der
+Spalte „Vertriebler“ direkt zuordnen.</div>
+{% endif %}
+{% if sync_status and sync_status.letzter_sync %}
+<p class="dezent lv-sync-stand">Letzter monday-Sync: {{ sync_status.letzter_sync.strftime('%d.%m.%Y %H:%M') }}
+{% if sync_status.fehler %} · <span title="{{ sync_status.fehler | join(' · ') }}">⚠ Hinweise</span>{% endif %}</p>
+{% elif sync_status and sync_status.fehler %}
+<div class="warnblock">{{ sync_status.fehler | join(' · ') }}</div>
+{% endif %}
+
+{#- Phase 174 (Vertrag T): Spaltenwerkzeuge im Nur-Spalten-Modus von lm_boards.js – Speicher-Route je Rolle
+    (Jinja-Global lm_spalten_url), Schnellfilter über data-suche der Zeilen (data-lm-suche) #}
+<div class="lm-filterblock" id="lm-filterblock" data-lm-spalten-board="{{ board_key }}" data-lm-spalten-url="{{ lm_spalten_url(benutzer) }}" data-lm-suche="1">
+<form method="get" action="/leads" class="suchleiste lm-suchleiste" id="lm-filterform">
+    <input type="search" name="q" id="lm-suche" value="{{ q }}" placeholder="Suche: Name, Ort, PLZ" aria-label="Suche" autocomplete="off">
+    <label class="kontrollfeld">Termin
+        <select name="ansicht" title="Ansicht">
+            <option value="" {{ 'selected' if not ansicht }}>alle offenen</option>
+            <option value="ueberfaellig" {{ 'selected' if ansicht == 'ueberfaellig' }}>nur überfällige</option>
+            <option value="ausgeblendet" {{ 'selected' if ausgeblendet }}>Ausgeblendete</option>
+        </select></label>
+    {% if not ad_sicht %}
+    <label class="kontrollfeld">Vertriebler
+        <select name="vertriebler_id">
+            <option value="0">alle</option>
+            {% for vid in vertriebler_werte %}
+                <option value="{{ vid }}" {{ 'selected' if vertriebler_id == vid }}>{{ vertriebler[vid].name if vid in vertriebler else vid }}</option>
+            {% endfor %}
+        </select></label>
+    {% endif %}
+    <label class="kontrollfeld">Status
+        <select name="lead_status">
+            <option value="">alle</option>
+            {% for st in status_werte %}
+                <option value="{{ st }}" {{ 'selected' if lead_status == st }}>{{ st }}</option>
+            {% endfor %}
+        </select></label>
+    <label class="kontrollfeld" title="Priorität = Hot-Ampel des Vorgangs (heiß · warm · kalt)">Priorität
+        <select name="prioritaet">
+            <option value="">alle</option>
+            {% for p in prioritaeten %}
+                <option value="{{ p }}" {{ 'selected' if prioritaet == p }}>{{ prioritaet_texte[p] }}</option>
+            {% endfor %}
+        </select></label>
+    {% if kanal_werte %}
+    <label class="kontrollfeld">Kanal
+        <select name="kanal" title="Vertriebskanal">
+            <option value="">alle</option>
+            {% for k in kanal_werte %}
+                <option value="{{ k }}" {{ 'selected' if kanal == k }}>{{ k }}</option>
+            {% endfor %}
+        </select></label>
+    {% endif %}
+    <label class="kontrollfeld">Sparte {{ interesse_ui.filter(interesse) }}</label>
+    <button class="knopf klein zweitrangig" type="submit">{{ symbol('filter') }} Filtern</button>
+    {% if filter_aktiv %}
+        <a class="knopf klein ghost" href="/leads" title="Filter zurücksetzen">Filter zurücksetzen</a>
+    {% endif %}
+    {#- Phase 174 (Vertrag T): Spaltenwähler „Spalten“ aus leadmanagement/_tabelle.html #}
+    {{ spaltenwahl(spalten, fest=lm_spalten_fest(board_key), hinweis='Gilt nur für Sie. Reihenfolge: Spaltenkopf ziehen · Umbenennen: Stift im Spaltenkopf · Sortieren: Klick auf den Spaltenkopf (innerhalb der Gruppen, wird gemerkt).') }}
+</form>
+</div>
+
+{# ---- Zelle je Spalten-Key ---- #}
+{% macro zelle(key, z) -%}
+{%- if key == 'lead' -%}
+<td class="sp-lead"><a href="/vorgaenge/zu-lead/{{ z.lead.id }}" title="Vorgangsakte öffnen">{{ z.name }}</a>
+    {% if z.grosskunde %}<span class="lm-grosskunde"{% if grosskunde_farbe %} style="--f:{{ grosskunde_farbe }}"{% endif %}>Großkunde</span>{% endif %}
+    <span class="sparten-chips">
+    {% for sparte, status in z.chips %}
+        <form method="post" action="/leads/{{ z.lead.id }}/sparte-ausblenden" class="lv-chip-form">
+            <input type="hidden" name="sparte" value="{{ sparte }}">
+            <button class="chip chip-{{ sparte | lower }} chip-{{ status }}" type="submit"
+                    title="{{ sparten_ui.NAMEN.get(sparte, sparte) }}: {{ sparten_ui.ZUSTAND.get(status, status) }} – klicken zum {{ 'Zurückholen' if status == 'ausgeblendet' else 'Ausblenden' }} dieser Sparte"
+                    {{ 'disabled' if status == 'erfasst' }}>
+                {{ sparte }}{{ ' ✓' if status == 'erfasst' else (' ✕' if status == 'ausgeblendet') }}
+            </button>
+        </form>
+    {% endfor %}
+    </span></td>
+{%- elif key == 'termin' -%}
+<td class="sp-termin" data-wert="{{ z.termin.isoformat() if z.termin else '' }}">{% if z.termin %}<span {% if z.ueberfaellig %}class="ueberfaellig-rot" title="Termin liegt in der Vergangenheit – Erfassung fehlt"{% endif %}>{{ z.termin_text }}</span>{% endif %}</td>
+{%- elif key == 'prioritaet' -%}
+<td class="sp-prioritaet" data-wert="{{ {'hoch': 1, 'mittel': 2, 'niedrig': 3}[z.prioritaet] }}"><span class="mt-prio mt-prio-{{ z.prioritaet }}" title="Hot-Ampel: {{ z.ampel or 'keine Einstufung' }}"><span class="mt-balken" aria-hidden="true"><i></i><i></i><i></i></span>{{ z.prioritaet_text }}</span></td>
+{%- elif key == 'sparten' -%}
+<td class="sp-sparten" data-wert="{{ z.sparten | join(',') }}">{% for sparte, status in z.chips %}{{ sparten_ui.chip(sparte, status) }}{% endfor %}</td>
+{%- elif key == 'ort' -%}
+<td class="sp-ort">{{ z.ort }}</td>
+{%- elif key == 'kanal' -%}
+<td class="sp-kanal dezent" data-wert="{{ z.kanal }}">
+    {% if ad_sicht %}
+        {{ z.kanal or '–' }}
+    {% else %}
+    <form method="post" action="/leads/{{ z.lead.id }}/kanal" title="Vertriebskanal manuell setzen (leer = Sync-Automatik)">
+        <input type="text" name="kanal" value="{{ z.kanal }}" size="9" placeholder="–" onchange="this.form.submit()">
+        {% if z.lead.kanal_manuell %}<span title="manuell gesetzt – Sync überschreibt nicht">✎</span>{% endif %}
+    </form>
+    {% endif %}
+</td>
+{%- elif key == 'vertriebler' -%}
+<td class="sp-vertriebler" data-wert="{{ z.vertriebler }}">
+    {% if ad_sicht %}
+        {{ z.vertriebler or '–' }}
+    {% else %}
+    <form method="post" action="/leads/{{ z.lead.id }}/vertriebler">
+        <select name="benutzer_id" onchange="this.form.submit()"
+                title="Vertriebler ändern{{ ' (monday: ' ~ z.lead.monday_person ~ ')' if z.lead.monday_person }}">
+            <option value="0">– nicht zugeordnet –</option>
+            {% for b in aussendienst_liste %}
+                <option value="{{ b.id }}" {{ 'selected' if z.lead.benutzer_id == b.id }}>{{ b.name }}</option>
+            {% endfor %}
+            {% if z.lead.benutzer_id and z.lead.benutzer_id in vertriebler
+                  and vertriebler[z.lead.benutzer_id] not in aussendienst_liste %}
+                <option value="{{ z.lead.benutzer_id }}" selected>{{ vertriebler[z.lead.benutzer_id].name }}</option>
+            {% endif %}
+        </select>
+    </form>
+    {% endif %}
+</td>
+{%- elif key == 'status' -%}
+<td class="sp-status dezent">{{ z.status }}</td>
+{%- else -%}
+<td class="sp-{{ key }}"></td>
+{%- endif -%}
+{%- endmacro %}
+
+<div class="lm-tabellen lm-tabellen-at" id="lm-tabellen">
+<div class="lm-gruppen">
+    {% for g in gruppen %}
+    <details class="lm-gruppe lv-gruppe" open data-gruppe="{{ g.key }}">
+        <summary class="lm-gruppe-kopf">{{ g.titel }} <span class="dezent lv-punkt">·</span> <span class="n{{ ' rot' if g.rot }}">{{ g.zeilen | length }}</span> {{ 'Termin' if g.zeilen | length == 1 else 'Termine' }}
+            {% if g.erkl %}<span class="erkl">{{ g.erkl }}</span>{% endif %}</summary>
+        <table class="tabelle lm-tabelle lv-tabelle" data-gruppe="{{ g.key }}" data-lm-breiten="{{ breiten_gesetzt(spalten) }}">
+            {{ spalten_colgroup(spalten, tabellen_ctx, hinten=(2 if ausgeblendet else 1)) }}
+            <thead>
+                <tr>
+                    {{ spalten_kopf(spalten, tabellen_ctx, lm_spalten_fest(board_key)) }}
+                    {% if ausgeblendet %}<th class="sp-ausgeblendet">Ausgeblendet</th>{% endif %}
+                    <th class="sp-aktionen"></th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for z in g.zeilen %}
+                <tr data-zeile="{{ z.lead.id }}" data-suche="{{ (z.name ~ ' ' ~ z.ort ~ ' ' ~ (z.lead.telefon or '')) | lower }}">
+                    {% for sp in spalten if sp.sichtbar %}{{ zelle(sp.key, z) }}{% endfor %}
+                    {% if ausgeblendet %}
+                    <td class="sp-ausgeblendet dezent">{{ z.lead.ausgeblendet_am.strftime('%d.%m.%Y') if z.lead.ausgeblendet_am }}
+                        {% if z.lead.ausgeblendet_grund %}<br>{{ z.lead.ausgeblendet_grund }}{% endif %}</td>
+                    <td class="aktionen">
+                        <form method="post" action="/leads/{{ z.lead.id }}/zurueckholen">
+                            <button class="knopf klein" type="submit">Zurückholen</button>
+                        </form>
+                    </td>
+                    {% else %}
+                    <td class="aktionen">
+                        <a class="knopf klein" href="/leads/{{ z.lead.id }}/erfassen">Erfassung starten</a>
+                        <form method="post" action="/leads/{{ z.lead.id }}/ausblenden" class="ausblenden-form"
+                              onsubmit="var g = prompt('Lead ausblenden: {{ z.name | e }}\nGrund (optional):', ''); if (g === null) return false; this.grund.value = g; return true;">
+                            <input type="hidden" name="grund" value="">
+                            <button class="knopf klein zweitrangig" type="submit" title="Aus Leads VOT ausblenden (zurückholbar)">Ausblenden</button>
+                        </form>
+                    </td>
+                    {% endif %}
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </details>
+    {% else %}
+    <div class="lm-leer dezent lv-leer">
+        {% if ausgeblendet %}Keine ausgeblendeten Leads.
+        {% else %}Keine offenen Leads mit Vor-Ort-Termin.
+        {% if not ad_sicht %}Die monday-Anbindung wird in der <a href="/parametrierung">Parametrierung</a> eingerichtet.{% endif %}{% endif %}
+    </div>
+    {% endfor %}
+</div>
+</div>
+{% if zeilen %}
+<p class="dezent lv-summe">{{ zeilen | length }} {{ 'ausgeblendete' if ausgeblendet else 'offene' }}{{ 'r' if zeilen | length == 1 and not ausgeblendet }} Lead{{ 's' if zeilen | length != 1 }} in {{ gruppen | length }} Gruppe{{ 'n' if gruppen | length != 1 }}</p>
+{% endif %}
+{{ sparten_ui.legende() }}
+{{ tabellen_daten(board_key, spalten, sortierung_spalte) }}

@@ -26,3 +26,11 @@ Ohne hochgeladene Signatur verwendet das Tool eine neutrale
 Standard-Signatur der Firma. „Entfernen“ stellt diesen Zustand wieder her.
 Nach einer Änderung der Signatur in Outlook einfach erneut hochladen
 (ersetzt die vorhandene).
+
+## Eigene Signatur (Außendienst, v33)
+
+Seit v33 (PLAN_V20 Phase 176) lädt jeder Außendienstler – ebenso Innendienst und Admin – die eigene Outlook-
+Signatur unter Menü ☰ → „Meine E-Mail-Signatur“ (`/einstellungen/signatur`) hoch: dieselben Dateien wie beim
+Innendienst (.htm-Datei plus Bilder aus dem gleichnamigen Ordner), gleiche Ablage `data/signaturen/<id>/`. Die
+Signatur wirkt nur auf die Nachfass-Mail aus dem eigenen Postfach (Dialog „Nächster Schritt“). Inline-Bilder
+der Signatur gehen als Graph-Anhänge mit `contentId` (`graph_versand.mail_senden_als(inline_bilder=…)`).

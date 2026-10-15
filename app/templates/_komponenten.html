@@ -94,15 +94,20 @@
    `vorgang_id` setzt data-verfolgung-chip, damit verfolgung.js den Chip nach dem
    Dialog „Nächster Schritt“ ohne Neuladen aktualisiert. Genutzt in Vorgangsakte
    (Kopfkarte neben der Hot-Ampel), „Meine Angebote“, Angebotsliste, Mein Tag (M). #}
-{% macro verfolgung_chip(status, klein=False, vorgang_id=None) -%}
+{% macro verfolgung_chip(status, klein=False, vorgang_id=None, versuche=0) -%}
+{#- v33 (PLAN_V20 Phase 176): Zähler der Telefonversuche – „Nachgefasst (2)“ (nur bei
+    nachgefasst, 0 = ohne Klammer; verfolgung.status_text(status, versuche) liefert denselben
+    Text für JSON-Antworten) -#}
 {%- set s = (status or '') | trim -%}
+{%- set n = (versuche or 0) | int -%}
 {%- set texte = {'versendet': 'Versendet', 'nachgefasst': 'Nachgefasst',
                  'bestellung_angekuendigt': 'Bestellung angekündigt',
                  'angenommen': 'Angenommen', 'abgelehnt': 'Abgelehnt'} -%}
 {%- if s in texte -%}
-<span class="verfolgung-chip vf-{{ s }}{{ ' klein' if klein }}"{% if vorgang_id %} data-verfolgung-chip="{{ vorgang_id }}"{% endif %} title="Verfolgung: {{ texte[s] }}"><i class="abzeichen-punkt" aria-hidden="true"></i>{{ texte[s] }}</span>
+{%- set text = texte[s] ~ (' (' ~ n ~ ')' if s == 'nachgefasst' and n > 0 else '') -%}
+<span class="verfolgung-chip vf-{{ s }}{{ ' klein' if klein }}"{% if vorgang_id %} data-verfolgung-chip="{{ vorgang_id }}"{% endif %} data-versuche="{{ n }}" title="Verfolgung: {{ text }}{{ ' – ' ~ n ~ ' Nachfass-Anruf' ~ ('e' if n != 1) if n > 0 }}"><i class="abzeichen-punkt" aria-hidden="true"></i>{{ text }}</span>
 {%- elif vorgang_id -%}
-<span class="verfolgung-chip" data-verfolgung-chip="{{ vorgang_id }}" hidden></span>
+<span class="verfolgung-chip" data-verfolgung-chip="{{ vorgang_id }}" data-versuche="{{ n }}" hidden></span>
 {%- endif -%}
 {%- endmacro %}
 

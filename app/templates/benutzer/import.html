@@ -31,7 +31,8 @@
             Kopfzeile ist Pflicht. <b>Team</b> und <b>Vertriebskanal</b> sind optional.</p>
         <ul class="dezent ben-regeln">
             <li>Name muss eindeutig sein (auch gegenüber vorhandenen Benutzern).</li>
-            <li>Rolle: Admin, Innendienst, Außendienst, Projektierung, Montage, Lead-Management.</li>
+            {# v33 (PLAN_V20 Phase 167): alle aktiven Rollen des Katalogs – Keys oder Namen #}
+            <li>Rolle (Name oder Schlüssel): {{ rollen_liste }}.</li>
             <li>E-Mail ist für Außendienst Pflicht (CC im Versand).</li>
             <li>Team: Name eines aktiven Teams aus <a href="/parametrierung/teams">Parametrierung → Teams</a>.</li>
             <li>Vertriebskanal nur für Außendienst{% if kanaele %} – erlaubt: {{ kanaele|join(', ') }}{% else %} – zurzeit sind keine Kanäle hinterlegt (Angebotsprofile){% endif %}.</li>

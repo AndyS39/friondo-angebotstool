@@ -135,7 +135,10 @@ def _betreff(session: Session, text: str, art: str) -> str:
 def mail_senden(session: Session, empfaenger: str, betreff: str, text: str) -> bool:
     """Eine Text-Mail über Graph; erst mit dem eingestellten Absender-Postfach,
     bei fehlender „Senden als“-Berechtigung Fallback auf angebot@friondo.de.
-    Fehler landen im Protokoll, es wird nie eine Ausnahme geworfen."""
+    Fehler landen im Protokoll, es wird nie eine Ausnahme geworfen.
+    v33 (PLAN_V20 Phase 166): im Modus anwendung sendet graph_versand.text_mail_senden
+    direkt am Postfach /users/<projektierung@> (Zugriffsgruppe, kein „Senden als“);
+    der Fallback angebot@ bleibt als zweiter Versuch (z. B. Postfach nicht in der Gruppe)."""
     from app import graph_versand
     from app.db import verbindung_freigeben
     absender = _absender(session)
@@ -203,11 +206,13 @@ def mail_ausgang_lauf() -> dict:
     zu → Graph (mit Fallback-Absender wie mail_senden) → kurze Sitzung zum
     Zurückschreiben je Eintrag. Nach 3 Fehlversuchen bleibt ein Eintrag auf
     „fehler“ (Protokoll). Ohne Graph-Einrichtung werden offene Einträge als
-    „fehler: Graph nicht eingerichtet“ abgelegt, damit nichts aufläuft."""
+    „fehler: Graph nicht eingerichtet“ abgelegt, damit nichts aufläuft.
+    v33: Postfach-Entscheidung (anwendung /users/<projektierung@> | delegiert /me +
+    „Senden als“) in graph_versand.text_mail_senden."""
     from app import graph_versand
     from app.db import kurz
     from app.models import MailAusgang
-    with kurz() as s:
+    with kurz(schreibend=False) as s:   # v33 (Phase 172): nur lesen - keine Schreibtransaktion
         offen = [(m.id, m.empfaenger, m.betreff, m.text, int(m.versuche or 0))
                  for m in s.query(MailAusgang).filter(MailAusgang.status == "offen")
                  .order_by(MailAusgang.id).limit(MAIL_AUSGANG_BLOCK)]

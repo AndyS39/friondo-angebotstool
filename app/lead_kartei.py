@@ -36,6 +36,7 @@ from app.models import (AdProfil, Angebot, Benutzer, Erfassung, GalerieDatei,
                         LeadQuelle, Todo, Vorgang, VorgangObjekt, VorgangsNotiz, VotTermin,
                         ANRUF_ERGEBNIS_NAMEN, INTERESSE_CODES, INTERESSEN,
                         LEAD_PHASEN_NAMEN, TERMIN_TYP_NAMEN, VOT_STATUS_NAMEN)
+from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 # Kampagne/LeadQuelle bleiben für stammdaten_speichern (Fallback-Route, Boards-Inline)
 
 ANREDEN = ["", "Herr", "Frau", "Familie", "Firma"]
@@ -922,6 +923,13 @@ def feld_speichern(session: Session, vorgang: Vorgang, kunde: Kunde, feld: str, 
                           str(getattr(vorgang, feld) or ""))
         neu_id = int(roh) if roh else None
         if neu_id == (getattr(vorgang, feld) or None):
+            # v33 (PLAN_V20 Phase 175): Simon wählt sich selbst → Kennzeichen „Simons Gruppe
+            # (noch nicht verteilt)“ aufheben (lead_v2.ad_zuweisen schließt den Marker)
+            if feld == "ad_id" and neu_id and lead_v2.hv_gruppe_offen(session, vorgang):
+                meldung = lead_v2.ad_zuweisen(session, vorgang, neu_id, benutzer=benutzer,
+                                              erzwingen=erzwingen)
+                session.flush()
+                return ok(str(neu_id), meldung, geaendert=True)
             return ok(str(neu_id or ""), "Keine Änderung.", geaendert=False)
         if feld == "leadmanager_id":
             meldung = lead_v2.leadmanager_zuweisen(session, vorgang, neu_id, benutzer=benutzer)
@@ -936,7 +944,7 @@ def feld_speichern(session: Session, vorgang: Vorgang, kunde: Kunde, feld: str, 
 
     # --- v31 (Phase 153): Großkunde-Häkchen (ID/LM/Admin) – Aktivität statt „Änderung“ ---
     if feld == "grosskunde":
-        if benutzer is not None and not (benutzer.rolle in ("admin", "innendienst")
+        if benutzer is not None and not (benutzer.basisrolle in ("admin", "innendienst")
                                          or benutzer.hat_rolle("leadmanagement")):
             return fehler("Großkunde darf nur Innendienst, Leadmanagement oder Admin setzen.",
                           "1" if kunde.grosskunde else "")
@@ -1630,7 +1638,7 @@ def _ad_auswahl(session: Session, vorgang: Vorgang, kunde: Kunde) -> list:
     except Exception:   # noqa: BLE001 – Rückfall
         erlaubt = None
     alle = (session.query(Benutzer).filter(Benutzer.aktiv.is_(True),
-                                           Benutzer.rolle == "aussendienst")
+                                           rollen_modul.filter_basis("aussendienst"))
             .order_by(Benutzer.name).all())
     if erlaubt is None:
         hv_aktuell = hv_am_vorgang(session, vorgang)
@@ -1651,7 +1659,8 @@ def _ad_auswahl(session: Session, vorgang: Vorgang, kunde: Kunde) -> list:
     auswahl = []
     for b in kandidaten:
         profil = profile.get(b.id)
-        hv = bool(profil is not None and profil.terminiert_selbst)
+        # v33 (Phase 167): HV über Rollen-Kennzeichen oder gespiegeltes Profil-Kennzeichen
+        hv = bool(profil is not None and profil.terminiert_selbst) or b.hat_kennzeichen("handelsvertreter")
         ok, grund = lead_v2.kompetenz_passt(profil, kunde.interessen if kunde else [],
                                             kunde.objektart if kunde else None)
         auswahl.append({"benutzer": b, "hv": hv, "gesperrt": sperre if hv else "",
@@ -1806,6 +1815,9 @@ def kartei_kontext(session: Session, vorgang: Vorgang, benutzer, readonly: bool 
         "innendienst_wahl": innendienst_auswahl(session, vorgang),
         "ad_wahl": _ad_auswahl(session, vorgang, kunde) if kunde else [],
         "hv_sperre": lead_v2.hv_ausgeschlossen(session, vorgang, kunde) if kunde else "",
+        # v33 (PLAN_V20 Phase 175): Kennzeichen „Simons Gruppe (noch nicht verteilt)“
+        "hv_gruppe_offen": lead_v2.hv_gruppe_offen(session, vorgang),
+        "hv_gruppe_kennzeichen": lead_v2.HV_GRUPPE_KENNZEICHEN,
         "demo": kern.demo_aktiv(session),
         # v31 (Phase 159): Buchen/Vormerken nur in der Freischaltung (Schalter) – im Demo-
         # Modus (bis zur Umstellung) weiter nur Demo-Leads

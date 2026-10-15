@@ -713,7 +713,9 @@ class Freischaltung(Basis):
         mit_bestand = self.s.get(Vorgang, bestand_id)
         demo = type("D", (), {"id": demo_id})()
         protokoll = (self.s.query(AngebotsLoeschung)
-                     .filter(AngebotsLoeschung.art == "lead", AngebotsLoeschung.nummer == str(demo.id)).all())
+                     .filter(AngebotsLoeschung.art == "lead", AngebotsLoeschung.nummer == str(demo.id),
+                             # SQLite vergibt Vorgangs-IDs neu – nur die Zeile dieses Testlaufs zählt
+                             AngebotsLoeschung.kunde_name.like(f"%{NACHNAME}%")).all())
         self.assertEqual(len(protokoll), 1)
         self.assertEqual(protokoll[0].grund, "Demo-Ende v31")
         self.assertIn(NACHNAME, protokoll[0].kunde_name)

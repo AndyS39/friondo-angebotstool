@@ -137,3 +137,70 @@
 .verfolgung-chip[hidden], .ns-aufklapp[hidden], .ns-freitext[hidden],
 .ns-bestaetigung[hidden], .ns-rueckgaengig[hidden], .ns-fehler[hidden],
 .ns-knoepfe[hidden], .ns-notiz[hidden] { display: none !important; }
+
+/* --- v33 (PLAN_V20 Phase 176, Agent N): Einwand-Chips, Zähler, Nachfass-Mail,
+       Inaktivitäts-Kennzeichen – nur Tokens, keine festen Farbwerte ------------------- */
+.ns-kopf {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--a-2) var(--a-3);
+    align-items: center;
+    font-size: var(--t-s);
+}
+.ns-letzter-einwand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 999px;
+    padding: 0.18rem 0.7rem;
+    background: var(--status-orange-bg);
+    color: var(--status-orange);
+    border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+    font-weight: 500;
+}
+.ns-letzter-einwand strong { font-weight: 700; }
+.ns-versuche { white-space: nowrap; }
+.ns-einwaende .ns-chip { font-weight: 500; }
+.ns-einwaende .ns-chip-leer { border-style: dashed; }
+
+/* Nachfass-Mail aus dem eigenen Postfach */
+.ns-mail { display: grid; gap: var(--a-2); }
+.ns-mail-kopf { display: flex; flex-wrap: wrap; gap: var(--a-2); align-items: center; }
+.ns-mail-knopf { min-height: 44px; }
+.ns-mail-knopf:disabled { opacity: 0.55; cursor: not-allowed; }
+.ns-mail-knopf[aria-expanded="true"] { outline: 3px solid var(--fokus); outline-offset: 1px; }
+.ns-mail-hinweis { font-size: var(--t-s); }
+.ns-mail-pdf { align-items: center; gap: 0.4rem; }
+.ns-mail-vorschau {
+    border: 1px solid var(--linie);
+    border-radius: var(--r-l);
+    background: var(--flaeche-karte);
+    padding: var(--a-3);
+    display: grid;
+    gap: var(--a-2);
+}
+.ns-mail-betreff { margin: 0; font-weight: 600; }
+.ns-mail-inhalt { max-height: 24rem; overflow: auto; color: var(--text); }
+.ns-mail-inhalt img { max-width: 100%; height: auto; }
+
+/* Kennzeichen „ohne Kontakt seit X Tagen“ (Angebotsliste T, Mein Tag/Wiedervorlage M) */
+.inaktiv-kennzeichen {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 999px;
+    padding: 0.18rem 0.7rem;
+    font-size: var(--t-s);
+    font-weight: 600;
+    line-height: 1.3;
+    white-space: nowrap;
+    background: var(--status-rot-bg);
+    color: var(--status-rot);
+    border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+}
+.inaktiv-kennzeichen::before { content: ""; width: 0.45rem; height: 0.45rem; border-radius: 50%; background: currentColor; flex: none; }
+.inaktiv-kennzeichen.klein { font-size: var(--t-xs); padding: 0.1rem 0.55rem; }
+
+.ns-kopf[hidden], .ns-letzter-einwand[hidden], .ns-versuche[hidden], .ns-mail-vorschau[hidden],
+.ns-mail-form[hidden], .ns-mail[hidden], .inaktiv-kennzeichen[hidden] { display: none !important; }

@@ -2,6 +2,10 @@
 # Platzhalter aus Steckbrief/Projekt, Foto-Anhänge aus der Galerie (auf
 # 1600 px verkleinert, max. 20 MB gesamt), Steckbrief-PDF, Versand über
 # Graph als projektierung@ (Fallback angebot@), CC Projektleiter.
+# v33 (PLAN_V20 Phase 166): absender = Funktionspostfach – im Modus anwendung Entwurf,
+# Anhänge und Versand direkt an /users/<projektierung@> (Zugriffsgruppe, kein „Senden
+# als“); Antworten der Subs liest antworten_abgleichen aus demselben Postfach über
+# mail_sync.nachrichten_je_konversation (/users/<projektierung@>/messages).
 
 import io
 import json

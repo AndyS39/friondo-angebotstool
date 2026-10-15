@@ -1,53 +1,105 @@
 {% extends "base.html" %}
 {% from "_komponenten.html" import status_badge, verfolgung_chip %}
 {% from "_symbole.html" import symbol %}
+{% import "_sparten.html" as sparten_ui %}
+{% from "leadmanagement/_tabelle.html" import spalten_kopf, spalten_colgroup, breiten_gesetzt, spaltenwahl, tabellen_daten %}
 
 {% block titel %}Meine Angebote – Friondo{% endblock %}
+{% block mainklasse %}breit{% endblock %}
 
+{# v8/v10: Außendienst sieht die eigenen Angebote read-only (Kundenpreise, PDF, nie EK/DB).
+   v33 (PLAN_V20 Phase 174, Protokoll Claudia Castro 14.10.2026 Teil A.4): Tabelle im
+   Lead-Board-Layout – Sticky-Filterblock (Suche, Status und Sparte als Chip-Selects,
+   Spaltenwähler), Container mit festem Kopf (auf dem Handy seitlich scrollbar), Spalten je
+   Nutzer aus dem Katalog `meine_angebote` (Rollenregel: ohne EK/DB/DB-Ampel – lead_boards.
+   katalog_fuer), Sortierung per Spaltenkopf (gemerkt, serverseitig vor dem Rendern).
+   Keine Sammelaktionen. Verfolgungs-Chip des Vorgangs (v32, Zähler Phase 176/N) in der
+   Spalte „Verfolgung“. #}
 {% block inhalt %}
-{# v32 (PLAN_V19 Phase 163): Verfolgungs-Chip des Vorgangs je Angebot #}
-<link rel="stylesheet" href="/static/verfolgung.css?v={{ css_version }}">
-<div class="mobil-inhalt">
+{% macro zelle(key, a, v) -%}
+{%- set k = kunden.get(a.kunde_id) -%}
+{%- if key == 'lead' -%}
+<td class="sp-lead"><a href="/vorgaenge/zu-angebot/{{ a.id }}" title="Vorgangsakte öffnen">{{ k.anzeige_name if k else '?' }}</a></td>
+{%- elif key == 'nummer' -%}
+<td class="sp-nummer">{% if a.extern %}<span class="abzeichen status-taifun">TAIFUN</span> {{ a.taifun_nummer or '– Nummer fehlt –' }}{% else %}<a href="/meine-angebote/{{ a.id }}" title="Angebot ansehen"><strong>{{ a.nummer }}</strong></a>{% endif %}</td>
+{%- elif key == 'datum' -%}
+<td class="sp-datum" data-wert="{{ a.datum.isoformat() if a.datum else '' }}">{{ a.datum.strftime('%d.%m.%Y') if a.datum }}</td>
+{%- elif key == 'status' -%}
+<td class="sp-status">{{ status_badge(a.status) }}</td>
+{%- elif key == 'verfolgung' -%}
+<td class="sp-verfolgung">
+    {%- if v %}{{ verfolgung_chip(v.verfolgung_status, klein=True, versuche=v.nachfass_versuche or 0) }}{% endif %}
+    {%- set ampel = (v.verfolgung_ampel if v else '') or a.verfolgung_ampel %}
+    {%- if ampel %} <span title="Verfolgung des Vorgangs: {{ ampel }}">{{ {'heiss': '🔥', 'warm': '🌤', 'kalt': '❄'}.get(ampel, '') }}</span>{% endif %}
+    {%- set wv = (v.wiedervorlage_am if v else none) or a.wiedervorlage_am %}
+    {%- if wv %} <span class="wv-datum {{ 'wv-faellig' if wv <= heute }}" title="Wiedervorlage des Vorgangs">{{ symbol('wiedervorlage') }} {{ wv.strftime('%d.%m.%Y') }}</span>{% endif %}</td>
+{%- elif key == 'endbetrag' -%}
+{%- set su = a.summen() -%}
+<td class="sp-endbetrag" data-wert="{{ su.endbetrag }}" title="Gesamtbetrag nach USt und Rabatt"><strong>{{ su.endbetrag | euro }}</strong></td>
+{%- elif key == 'wiedervorlage' -%}
+{%- set wv = (v.wiedervorlage_am if v else none) or a.wiedervorlage_am %}
+<td class="sp-wiedervorlage" data-wert="{{ wv.isoformat() if wv else '' }}">{% if wv %}<span class="{{ 'wv-faellig' if wv <= heute }}">{{ wv.strftime('%d.%m.%Y') }}</span>{% endif %}</td>
+{%- elif key == 'sparte' -%}
+<td class="sp-sparte">{{ sparten_ui.chip(a.konfigurator_typ or 'WP') }}</td>
+{%- elif key == 'ort' -%}
+<td class="sp-ort">{{ ((k.plz or '') ~ ' ' ~ (k.ort or '')) | trim if k else '' }}</td>
+{%- else -%}
+<td class="sp-{{ key }}"></td>
+{%- endif -%}
+{%- endmacro %}
+<div class="seitenkopf">
     <h1>Meine Angebote</h1>
-    <p class="dezent">Ansicht + Gesamtrabatt (mit DB-Ampel-Wächter) – Versand läuft über den Innendienst.</p>
-    {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
-
-    <form method="get" class="filterleiste">
-        <input type="text" name="q" value="{{ q }}" placeholder="Suche: Name, Ort, Angebots-Nr." size="26">
-        <button class="knopf" type="submit">Suchen</button>
-        {% if q %}<a class="knopf klein zweitrangig" href="/meine-angebote">Zurücksetzen</a>{% endif %}
-    </form>
-
-    {% if angebote %}
-    <ul class="erfassung-liste">
-    {% for a in angebote %}
-        <li>
-            <div style="padding: 0.7rem 1rem 0.2rem">
-                <strong>{% if a.extern %}<span class="abzeichen status-taifun">TAIFUN</span> {{ a.taifun_nummer or '– Nummer fehlt –' }}{% else %}{{ a.nummer }}{% endif %}</strong>
-                · {{ kunden[a.kunde_id].anzeige_name if a.kunde_id in kunden else '?' }}<br>
-                <span class="dezent">{{ a.datum.strftime('%d.%m.%Y') }} ·
-                    {{ status_badge(a.status) }}
-                    {% set v = vorgaenge_map.get(a.vorgang_id) if vorgaenge_map is defined and a.vorgang_id else none %}
-                    {% if v %}{{ verfolgung_chip(v.verfolgung_status, klein=True) }}{% endif %}
-                    {% if a.verfolgung_ampel %}{{ {'heiss': '🔥', 'warm': '🌤', 'kalt': '❄'}[a.verfolgung_ampel] }}{% endif %}
-                    {% if a.wiedervorlage_am %}
-                        <span class="wv-datum {{ 'wv-faellig' if a.wiedervorlage_am <= heute }}">{{ symbol('wiedervorlage') }} {{ a.wiedervorlage_am.strftime('%d.%m.%Y') }}</span>
-                    {% endif %}
-                    · Endbetrag: <strong>{{ a.summen().endbetrag | euro }}</strong></span>
-            </div>
-            {% if not a.extern %}
-            <a class="knopf klein" style="margin: 0.3rem 0.4rem 0.8rem 1rem"
-               href="/meine-angebote/{{ a.id }}">Ansehen</a>
-            <a class="knopf klein zweitrangig" style="margin: 0.3rem 0 0.8rem"
-               href="/meine-angebote/{{ a.id }}/pdf" target="_blank">Angebots-PDF</a>
-            {% endif %}
-            <a class="knopf klein zweitrangig" style="margin: 0.3rem 0.4rem 0.8rem"
-               href="/vorgaenge/zu-angebot/{{ a.id }}">Vorgangsakte</a>
-        </li>
-    {% endfor %}
-    </ul>
-    {% else %}
-    <div class="leer-zustand">Noch keine Angebote zu deinen Vorgängen.</div>
-    {% endif %}
+    <span class="dezent">Ansicht + Gesamtrabatt (mit DB-Ampel-Wächter) – Versand läuft über den Innendienst.</span>
 </div>
+<p class="meldung" id="lm-meldung" {{ '' if meldung else 'hidden' }} role="status">{{ meldung }}</p>
+
+<div class="lm-filterblock" id="lm-filterblock" data-lm-spalten-board="{{ board }}" data-lm-spalten-url="{{ lm_spalten_url(request.state.benutzer) }}" data-lm-suche="1">
+<form method="get" action="/meine-angebote" class="suchleiste lm-suchleiste" id="lm-filterform">
+    <input type="search" name="q" id="lm-suche" value="{{ q }}" placeholder="Suche: Name, Ort, Angebots-Nr." aria-label="Suche" autocomplete="off">
+    <label class="kontrollfeld">Status
+        <select name="status">
+            <option value="">alle</option>
+            {% for s in status_liste %}<option value="{{ s }}" {{ 'selected' if status == s }}>{{ s }}</option>{% endfor %}
+        </select></label>
+    <label class="kontrollfeld">Sparte
+        <select name="sparte">
+            <option value="">alle</option>
+            {% for s in sparten_liste %}<option value="{{ s }}" {{ 'selected' if sparte == s }}>{{ s }}</option>{% endfor %}
+        </select></label>
+    <button class="knopf klein zweitrangig" type="submit">{{ symbol('filter') }} Filtern</button>
+    {% if q or status or sparte %}<a class="knopf klein ghost" href="/meine-angebote" title="Filter zurücksetzen">Filter zurücksetzen</a>{% endif %}
+    {{ spaltenwahl(spalten, spalten_fest) }}
+</form>
+</div>
+
+{% if angebote %}
+<div class="lm-tabellen lm-tabellen-at" id="lm-tabellen">
+<table class="tabelle lm-tabelle" data-lm-breiten="{{ breiten_gesetzt(spalten) }}">
+    {{ spalten_colgroup(spalten, ctx, hinten=1) }}
+    <thead>
+        <tr>{{ spalten_kopf(spalten, ctx, spalten_fest) }}<th class="sp-aktionen"></th></tr>
+    </thead>
+    <tbody>
+    {% for a in angebote %}
+        {% set k = kunden.get(a.kunde_id) %}
+        {% set v = vorgaenge_map.get(a.vorgang_id) if (vorgaenge_map is defined and a.vorgang_id) else none %}
+        <tr data-zeile="{{ a.id }}" data-suche="{{ ((k.anzeige_name if k else '') ~ ' ' ~ (k.ort if k else '') ~ ' ' ~ a.nummer ~ ' ' ~ (a.taifun_nummer or '') ~ ' ' ~ a.status) | lower }}">
+            {%- for sp in spalten if sp.sichtbar %}{{ zelle(sp.key, a, v) }}{% endfor %}
+            <td class="aktionen">
+                {% if not a.extern %}
+                <a class="knopf klein" href="/meine-angebote/{{ a.id }}">Ansehen</a>
+                <a class="knopf klein zweitrangig" href="/meine-angebote/{{ a.id }}/pdf" target="_blank">PDF</a>
+                {% endif %}
+                <a class="knopf klein zweitrangig" href="/vorgaenge/zu-angebot/{{ a.id }}">Vorgangsakte</a>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+<p class="dezent">{{ angebote | length }} Angebot{{ 'e' if angebote | length != 1 }}</p>
+{% else %}
+<div class="leer-zustand">{% if q or status or sparte %}Keine Angebote zu diesem Filter.{% else %}Noch keine Angebote zu deinen Vorgängen.{% endif %}</div>
+{% endif %}
+{{ tabellen_daten(board, spalten, sortierung) }}
 {% endblock %}

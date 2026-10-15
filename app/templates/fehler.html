@@ -29,7 +29,7 @@
     {% endif %}
     <a class="knopf zweitrangig" href="/">Startseite</a>
     {% set b = request.state.benutzer | default(none) %}
-    {% if b and b.rolle in ('admin', 'innendienst') %}
+    {% if b and b.basisrolle in ('admin', 'innendienst') %}
         <a class="knopf zweitrangig" href="/parametrierung/fehlerprotokoll">Fehlerprotokoll</a>
     {% endif %}
 </p>

@@ -293,3 +293,46 @@ nur, wo etabliert (Hot-Ampel 🔥/🌤/❄, Glocke 🔔, Kamera in der Montage).
 - Neue Module (Projektierung `pj-*`, Lead-Management `lm-*`) bauen auf den
   Tokens auf; Layout-Änderungen der Projektierung weiterhin zuerst im
   Prototyp `docs/projektierung-prototyp.html` – Farben nach Abschnitt „Design v2“.
+
+## Kalender (v33, PLAN_V20 Phase 169)
+
+`app/static/kalender_zentral.css` (Klassen `.kz-*`): Art-Farbe je Eintrag als Token `--kz-f` – VOT
+`--status-blau`, Telefon `--status-gruen`, Online `--status-violett`, Sperrzeit `--status-grau`, Montage
+`--pj-wp`, Elektro `--pj-kl`, Sub `--pj-pv`, Feinplanung `--pj-info`, Abnahme `--pj-wb`, Sonstiges
+`--pj-muted`, Service `--status-orange`, Abwesenheit `--status-grau-bg`; Schraffuren (Outlook-belegt,
+Sperrzeit) aus `--linie`/`--flaeche-abgesetzt`; Einträge `color-mix(in srgb, var(--kz-f) 18 %,
+var(--flaeche-karte))`. Hell und Dunkel ausschließlich über die Tokens aus `style.css`; keine Farbliterale
+(Token-Wächter `tests/test_v30_design.py`). Unter 600 px Tagesansicht, Zeilenköpfe sticky.
+
+**Rollen-Seite (v33, Phase 167):** nutzt nur bestehende Klassen (`tabelle`, `karte formular`, `abzeichen
+status-*`, `kontrollfeld`); Badge „Simons Gruppe (noch nicht verteilt)“ = `abzeichen status-versand-vorbereitet`
+(Orange-Token), kein neues CSS.
+
+## Tabellen mit Spalten je Nutzer (v33, PLAN_V20 Phase 174)
+
+Aufbau jeder Angebotstool-Tabelle: `div.lm-filterblock` (sticky; Chip-Selects = `label.kontrollfeld > select`,
+Filter-Chips = `label.lm-filterchip`, Suchfeld `data-lm-suche`, Spaltenwähler über das Makro `spaltenwahl`) →
+`p#lm-meldung` → `div.lm-tabellen.lm-tabellen-at` (`table.tabelle.lm-tabelle` mit `spalten_colgroup` +
+`spalten_kopf`, Zeilen `tr[data-zeile][data-suche]`, Zellen `td.sp-<key>` mit `data-wert` für Datum/Beträge,
+Zweit-Scrollleiste `.lm-scrollleiste`) → `tabellen_daten(board, spalten, sortierung)`. Neue Spalten nur in
+`lead_boards.KATALOGE` eintragen und die Zelle im Template-Makro `zelle` ergänzen; Rollenregel über
+`lead_boards.INTERNE_SPALTEN` (EK/DB/DB-Ampel nie für Außendienst oder ohne Kalkulationssicht). Alles über
+Tokens, CSS-Block „v33“ in `lead_v2.css`.
+
+## Mein Tag mobil (v33, PLAN_V20 Phase 173)
+
+- Mobile Bausteine (Block „Mein Tag“ in `static/mein_tag.css`): Hero-Karte `.mt-naechstes`
+  (`--flaeche-erhoeht` + `--text-invers`, Akzent-Knopf `.mt-route` = `--akzent`/`--akzent-text`, runde
+  Nebenknöpfe `.mt-rund` aus `color-mix(--text-invers 14 %)`), Zeitstrahl `.mt-zeitstrahl`/`.mt-punkt`
+  (Linie `--linie`, Punkte `--status-gruen`/`--status-orange`/leer `--linie-stark`), Prioritäts-Badge
+  `.mt-prio` mit drei Balken in `--status-rot/-orange/-grau` (+ `-bg`), Chips `.mt-chip` (aktiv =
+  `--akzent`), Segment `.mt-segment` (`--flaeche-abgesetzt`, aktiv `--flaeche-karte` + `--schatten-1`),
+  Datumskachel `.mt-datumskachel`, untere Leiste `.mt-leiste` (fixed, `--flaeche-karte`, aktiv `--akzent`
+  auf `--akzent-flaeche`, Safe-Area). Regel: Mobile Leisten/Karten nur unter 600 px (`@media
+  (max-width: 600px)`), beide Modi über Tokens – keine `fest:`-Ausnahmen nötig.
+
+## Nachfassen (v33, PLAN_V20 Phase 176)
+
+Bausteine in `static/verfolgung.css` (nur Tokens): Makro `verfolgung_chip(status, klein, vorgang_id, versuche)`
+(„Nachgefasst (2)“), `.inaktiv-kennzeichen` (rote Pille, Variante `klein`), Kopfzeile `.ns-kopf` /
+`.ns-letzter-einwand` (orange Pille), Block `.ns-mail` (Vorlage, Vorschau, PDF-Häkchen, Senden).

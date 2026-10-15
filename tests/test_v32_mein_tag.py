@@ -1,15 +1,21 @@
 # v32 (PLAN_V19 Phase 161): Vertriebler-Ansicht „Mein Tag“ (GET /leads) – Außendienst
-# sieht nur eigene Termine aus vot_termine; Termin heute 14:00 in „Termine heute“, morgen in
-# „Weitere Termine“, gestern ohne Erfassung in „Termine heute“ mit „überfällig“; Karte mit
+# sieht nur eigene Termine aus vot_termine; Termin heute 14:00 in „Heute“, morgen in
+# „Kommende Tage“, gestern ohne Erfassung in „Heute“ mit „überfällig“; Termin-Zeile mit
 # Datum, Uhrzeit, Name, Straße, Ort, tel:-Link, Maps-Link, „Erfassung starten“; Vorgang mit
-# verknüpftem Angebot erscheint nicht; ID sieht alle, filtert nach Vertriebler und schaltet
-# Karten | Tabelle um; Leerzustände; Objektadresse bei mehreren Objekten; Heiße Kunden.
+# verknüpftem Angebot erscheint nicht; ID sieht die Tabelle „Leads VOT“ und filtert nach
+# Vertriebler; Leerzustände; Objektadresse bei mehreren Objekten; Wiedervorlage.
+# v33 (PLAN_V20 Phase 173, Protokoll Claudia Castro 14.10.2026 A.5): angepasst – „Mein Tag“
+# nur mobil (Karten .mt-mobil nur für den Außendienst, Tabelle .mt-desktop für alle), der
+# Umschalter „Karten | Tabelle“ und die Einstellung leads_darstellung entfallen, die Blöcke
+# heißen Heute · Wiedervorlage · Kommende Tage (statt Fällig heute · Termine heute · Heiße
+# Kunden · Weitere Termine), die mobile Filterkarte (Termin von/bis, Status) entfällt
+# (Entwurf ohne Filter – die Datenfunktion mein_tag.termine filtert weiterhin).
 import unittest
 from datetime import date, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
-from app import auth, lead_v2, mein_tag, objekte
+from app import auth, lead_v2, mein_tag, nachfassen, objekte
 from app.db import SessionLocal
 from app.main import app
 from app.models import (Angebot, Benutzer, BenutzerEinstellung, Erfassung, Kunde, Lead, Vorgang,
@@ -35,6 +41,23 @@ def _block(html: str, anker: str) -> str:
     return html[start:ende if ende > 0 else None]
 
 
+def _mobil(html: str) -> str:
+    """Nur der Kartenteil (.mt-mobil) – die Tabelle (.mt-desktop) steht im selben HTML."""
+    return html[:html.index('class="mt-desktop"')]
+
+
+def _freie_benutzer_id(s) -> int:
+    """SQLite vergibt gelöschte IDs neu – DB-Kopien tragen verwaiste Verweise (vorgaenge.ad_id,
+    leads.benutzer_id, vot_termine.ad_id, wiedervorlage_benutzer_id) auf gelöschte Benutzer, die
+    ein neuer Testbenutzer sonst „erbt“; Testbenutzer bekommen deshalb IDs oberhalb aller Verweise."""
+    from sqlalchemy import func
+    werte = [s.query(func.max(Benutzer.id)).scalar(), s.query(func.max(Vorgang.ad_id)).scalar(),
+             s.query(func.max(Vorgang.wiedervorlage_benutzer_id)).scalar(),
+             s.query(func.max(Lead.benutzer_id)).scalar(), s.query(func.max(VotTermin.ad_id)).scalar(),
+             s.query(func.max(Erfassung.benutzer_id)).scalar()]
+    return max([int(w or 0) for w in werte]) + 1
+
+
 class MeinTagTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -43,8 +66,11 @@ class MeinTagTests(unittest.TestCase):
         try:
             cls._aufraeumen(s)
 
+            naechste_id = [_freie_benutzer_id(s)]   # v33: keine geerbten Verweise aus DB-Kopien
+
             def benutzer(name, rolle):
-                b = Benutzer(name=f"{PRAEFIX} {name}", rolle=rolle, aktiv=True,
+                naechste_id[0] += 1
+                b = Benutzer(id=naechste_id[0], name=f"{PRAEFIX} {name}", rolle=rolle, aktiv=True,
                              email=f"{name.lower().replace(' ', '')}@v32mt.local",
                              pin_hash=auth.pin_hash("4321"))
                 s.add(b)
@@ -120,7 +146,7 @@ class MeinTagTests(unittest.TestCase):
             k8 = kunde("Abgesagt")
             cls.v8 = vorgang(k8, cls.ad1_id)
             termin(cls.v8, _um(heute, 17), cls.ad1_id, status="abgesagt")
-            # Heiße Kunden: Bestellung angekündigt am Vorgang 1
+            # Wiedervorlage (v33: statt „Heiße Kunden“): Bestellung angekündigt am Vorgang 1
             cls.v1.verfolgung_status = "bestellung_angekuendigt"
             cls.v1.verfolgung_ampel = "heiss"
             s.commit()
@@ -167,33 +193,37 @@ class MeinTagTests(unittest.TestCase):
     def test_ad_sieht_nur_eigene_termine_in_den_richtigen_bloecken(self):
         seite = self.ad1.get("/leads")
         self.assertEqual(seite.status_code, 200)
-        html = seite.text
-        for ueberschrift in ("Fällig heute", "Termine heute", "Heiße Kunden", "Weitere Termine"):
+        html = _mobil(seite.text)
+        # v33: Blöcke Heute · Wiedervorlage · Kommende Tage
+        for ueberschrift in ("<h2>Heute</h2>", "<h2>Wiedervorlage</h2>", "<h2>Kommende Tage</h2>"):
             self.assertIn(ueberschrift, html)
-        self.assertIn("Mein Tag", html)
+        for alt in ("Fällig heute", "Heiße Kunden", "Weitere Termine"):
+            self.assertNotIn(alt, html)
+        self.assertIn("<h1>Mein Tag</h1>", html)
         heute = _block(html, "termine-heute")
-        weitere = _block(html, "weitere-termine")
+        kommende = _block(html, "kommende-tage")
         self.assertIn(f"{PRAEFIX} Mueller", heute)
         self.assertIn(f"{PRAEFIX} Gestern", heute)
-        self.assertIn(f"{PRAEFIX} Morgen", weitere)
+        self.assertIn(f"{PRAEFIX} Morgen", kommende)
         self.assertNotIn(f"{PRAEFIX} Morgen", heute)
-        self.assertNotIn(f"{PRAEFIX} Mueller", weitere)
+        self.assertNotIn(f"{PRAEFIX} Mueller", kommende)
         # überfälliger Termin (gestern, ohne Erfassung) zuoberst mit rotem Label
         self.assertLess(heute.index(f"{PRAEFIX} Gestern"), heute.index(f"{PRAEFIX} Mueller"))
         self.assertIn('class="mt-label mt-label-rot" title="Termin liegt in der Vergangenheit – Erfassung fehlt">überfällig', heute)
         self.assertNotIn(f"{PRAEFIX} Schmidt", html)        # fremder Vertriebler
         self.assertNotIn(f"{PRAEFIX} MitAngebot", html)     # Vorgang mit verknüpftem Angebot
         self.assertNotIn(f"{PRAEFIX} Abgesagt", html)       # abgesagter Termin
-        self.assertNotIn("ueberfaellig-rot", html)          # Überfällig-Banner (v15) entfällt in dieser Sicht
+        self.assertNotIn("ueberfaellig-rot", html)          # Überfällig-Banner (v15) nur in der Tabelle
         self.assertNotIn("Termine in der Vergangenheit ohne Erfassung", html)
 
     def test_termin_karte_pflichtinhalt(self):
-        html = _block(self.ad1.get("/leads").text, "termine-heute")
+        html = _block(_mobil(self.ad1.get("/leads").text), "termine-heute")
         karte = html[html.index(f'data-termin="{self.t_heute.id}"'):]
         karte = karte[:karte.find("</article>")]
         tag = self.heute
         self.assertIn(f"{mein_tag.WOCHENTAGE[tag.weekday()]}, {tag.strftime('%d.%m.')}", karte)   # „Mo, 13.10.“
         self.assertIn("14:00 Uhr", karte)
+        self.assertIn('<span class="mt-uhr">14:00</span>', karte)                    # v33: Uhrzeit links
         self.assertIn(f"Herr Peter {PRAEFIX} Mueller", karte)
         self.assertIn("Testweg 1", karte)
         self.assertIn("47798 Krefeld", karte)
@@ -208,9 +238,10 @@ class MeinTagTests(unittest.TestCase):
         self.assertIn("chip chip-pv chip-offen", karte)
         self.assertIn('class="mt-herkunft" title="Herkunft des Termins">monday', karte)
         self.assertIn('class="knopf mt-haupt"', karte)
+        self.assertIn("Wärmepumpe und Photovoltaik, Vor-Ort-Termin", karte)   # v33: Sparte, Termintyp
 
     def test_objektadresse_bei_mehreren_objekten(self):
-        html = _block(self.ad1.get("/leads").text, "weitere-termine")
+        html = _block(_mobil(self.ad1.get("/leads").text), "kommende-tage")
         karte = html[html.index(f'data-termin="{self.t_objekt.id}"'):]
         karte = karte[:karte.find("</article>")]
         self.assertIn('<span class="mt-objekt">Garage:</span>', karte)
@@ -227,40 +258,52 @@ class MeinTagTests(unittest.TestCase):
         dritter = self.ad3.get(f"/leads/{self.lead_id}/erfassen")
         self.assertEqual(dritter.headers["location"], "/leads")
         # Karte des Lead-Termins verlinkt die Lead-Übergabe mit objekt_id
-        html = self.ad1.get("/leads").text
+        html = _mobil(self.ad1.get("/leads").text)
         self.assertIn(f'href="/leads/{self.lead_id}/erfassen?objekt_id=', html)
 
     def test_leerzustaende(self):
-        html = self.ad3.get("/leads").text
-        self.assertEqual(html.count("Heute nichts offen."), 2)
-        self.assertIn("Keine weiteren Termine.", html)
-        self.assertIn("Keine heißen Kunden.", html)
+        html = _mobil(self.ad3.get("/leads").text)
+        self.assertIn("Heute keine Termine.", html)
+        self.assertIn("Keine Vorgänge, die auf Rückmeldung warten.", html)
+        self.assertIn("Keine Termine in den nächsten 14 Tagen.", html)
         self.assertIn('class="leer-zustand"', html)
 
-    def test_heisse_kunden_block(self):
-        html = _block(self.ad1.get("/leads").text, "heisse-kunden")
+    def test_wiedervorlage_statt_heisse_kunden(self):
+        """v33 (Protokoll A.5, Phase 163): „Heiße Kunden“ entfällt – der Vorgang mit Bestellung
+        angekündigt steht im Abschnitt „Wiedervorlage“ mit Badge Hoch (Hot-Ampel heiß)."""
+        html = _block(_mobil(self.ad1.get("/leads").text), "wiedervorlage")
         self.assertIn(f"{PRAEFIX} Mueller", html)
         self.assertIn("Bestellung angekündigt", html)
-        self.assertIn('class="mt-chip mt-chip-orange"', html)
+        self.assertIn(f'data-vorgang="{self.ids["v1"]}"', html)
+        self.assertIn('data-prio="hoch"', html)
+        self.assertIn(">Hoch</span>", html)
         self.assertIn(f'href="/vorgaenge/{self.ids["v1"]}"', html)
         self.assertNotIn(f"{PRAEFIX} Schmidt", html)
-        self.assertNotIn(f"{PRAEFIX} Mueller", _block(self.ad2.get("/leads").text, "heisse-kunden"))
+        self.assertNotIn(f"{PRAEFIX} Mueller", _block(_mobil(self.ad2.get("/leads").text), "wiedervorlage"))
 
-    def test_filter_von_bis_und_status(self):
-        morgen = (self.heute + timedelta(days=1)).isoformat()
-        html = self.ad1.get(f"/leads?von={morgen}&bis={morgen}").text
-        self.assertIn(f"{PRAEFIX} Morgen", html)
-        self.assertNotIn(f"{PRAEFIX} Mueller", _block(html, "termine-heute"))
-        self.assertIn("Zurücksetzen", html)
-        html = self.ad1.get("/leads?status=Terminiert").text
-        self.assertIn(f"{PRAEFIX} LeadFremd", html)
-        self.assertNotIn(f"{PRAEFIX} Morgen", html)
-        self.assertIn('<option value="Terminiert" selected>', html)
+    def test_filter_von_bis_und_status_in_der_datenfunktion(self):
+        """v33: die mobile Filterkarte entfällt (Entwurf ohne Filter) – die Filter der
+        Datenfunktion mein_tag.termine bleiben (Termin von/bis, Status)."""
+        s = SessionLocal()
+        try:
+            ad1 = s.get(Benutzer, self.ad1_id)
+            morgen = self.heute + timedelta(days=1)
+            daten = mein_tag.termine(s, ad1, von=morgen.isoformat(), bis=morgen.isoformat())
+            self.assertEqual([k["termin"].id for k in daten["alle"]], [self.t_morgen.id])
+            daten = mein_tag.termine(s, ad1, status="Terminiert")
+            self.assertEqual([k["termin"].id for k in daten["alle"]], [self.t_lead.id])
+            self.assertEqual(daten["status_werte"], ["Terminiert"])
+        finally:
+            s.close()
+        self.assertNotIn("mt-filter-form", _mobil(self.ad1.get("/leads").text))
 
     def test_ad_sieht_immer_karten(self):
+        """v33: ?darstellung=… wird nicht mehr gelesen – der Außendienst bekommt Karten (mobil)
+        und Tabelle (ab 600 px) im selben HTML, nichts wird gespeichert."""
         html = self.ad1.get("/leads?darstellung=tabelle").text
         self.assertIn("mein_tag.css", html)
-        self.assertNotIn('<table class="tabelle">', html)
+        self.assertIn('class="mt-mobil"', html)
+        self.assertIn('class="mt-desktop"', html)
         self.assertNotIn("mt-umschalter", html)
         s = SessionLocal()
         try:
@@ -269,38 +312,41 @@ class MeinTagTests(unittest.TestCase):
             s.close()
 
     # --- Innendienst / Admin ----------------------------------------------------------------
-    def test_id_sieht_alle_und_filtert_nach_vertriebler(self):
+    def test_id_sieht_tabelle_und_filtert_nach_vertriebler(self):
+        """v33: Innendienst/Admin sehen nur die Tabelle „Leads VOT“ (Lead-basiert) – der
+        Lead von AD2 (Termin in drei Tagen) mit Vertriebler-Filter."""
         html = self.innen.get("/leads").text
-        self.assertIn(f"{PRAEFIX} Mueller", html)
-        self.assertIn(f"{PRAEFIX} Schmidt", html)
-        self.assertIn('class="mt-umschalter"', html)
+        self.assertIn("<h1>Leads VOT</h1>", html)
+        self.assertIn(f"{PRAEFIX} LeadFremd", html)
+        self.assertNotIn('class="mt-mobil', html)
+        self.assertNotIn("mt-umschalter", html)
         self.assertIn("Vertriebler", html)
-        self.assertIn(f"{PRAEFIX} Rene", html)   # Name des Vertrieblers an der Karte
+        self.assertIn(f"{PRAEFIX} Simon", html)   # Name des Vertrieblers im Dropdown der Zeile
         gefiltert = self.innen.get(f"/leads?vertriebler_id={self.ad2_id}").text
-        self.assertIn(f"{PRAEFIX} Schmidt", gefiltert)
-        self.assertNotIn(f"{PRAEFIX} Mueller", gefiltert)
+        self.assertIn(f"{PRAEFIX} LeadFremd", gefiltert)
         self.assertIn(f'<option value="{self.ad2_id}" selected>', gefiltert)
+        leer = self.innen.get(f"/leads?vertriebler_id={self.ad1_id}").text
+        self.assertNotIn(f"{PRAEFIX} LeadFremd", leer)
 
-    def test_umschalter_karten_tabelle_je_nutzer(self):
+    def test_id_nur_tabelle_kein_umschalter(self):
+        """v33: der v32-Umschalter „Karten | Tabelle“ entfällt; die Einstellung
+        leads_darstellung wird weder gelesen noch geschrieben."""
         tabelle = self.innen.get("/leads?darstellung=tabelle")
         self.assertEqual(tabelle.status_code, 200)
-        self.assertIn('<table class="tabelle">', tabelle.text)
+        self.assertIn('class="tabelle lm-tabelle', tabelle.text)
         self.assertIn("<h1>Leads VOT</h1>", tabelle.text)
-        self.assertIn('class="aktiv" href="/leads?darstellung=tabelle"', tabelle.text)
+        self.assertNotIn('href="/leads?darstellung=tabelle"', tabelle.text)
         s = SessionLocal()
         try:
-            self.assertEqual(lead_v2.einstellung_holen(s, self.id_id, "leads_darstellung"), "tabelle")
+            self.assertIsNone(lead_v2.einstellung_holen(s, self.id_id, "leads_darstellung"))
         finally:
             s.close()
-        # gespeicherte Wahl gilt beim nächsten Aufruf ohne Parameter
-        self.assertIn('<table class="tabelle">', self.innen.get("/leads").text)
         karten = self.innen.get("/leads?darstellung=karten").text
-        self.assertNotIn('<table class="tabelle">', karten)
-        self.assertIn('id="termine-heute"', karten)
-        self.assertIn('id="termine-heute"', self.innen.get("/leads").text)
-        # Admin: Standard Karten, Legende der Sparten-Chips bleibt (Abnahme v9)
+        self.assertNotIn('id="termine-heute"', karten)
+        self.assertIn('class="tabelle lm-tabelle', karten)
+        # Admin: Tabelle mit Legende der Sparten-Chips (Abnahme v9)
         admin = self.admin.get("/leads").text
-        self.assertIn('id="termine-heute"', admin)
+        self.assertNotIn('id="termine-heute"', admin)
         self.assertIn("chip-legende", admin)
 
     def test_meine_termine_link_zur_tagesansicht(self):
@@ -321,7 +367,7 @@ class MeinTagTests(unittest.TestCase):
         self.assertIn("@media (max-width: 600px)", css)
         self.assertIn("viewport-fit=cover", js)
         self.assertNotRegex(css, r"#[0-9a-fA-F]{3,6}\b")   # nur Tokens
-        self.assertNotIn("tojson", html.split('id="faellig"')[0])
+        self.assertNotIn("tojson", html.split('id="wiedervorlage"')[0])
 
     # --- Datenaufbereitung direkt -------------------------------------------------------------
     def test_datenfunktionen(self):
@@ -337,6 +383,7 @@ class MeinTagTests(unittest.TestCase):
             self.assertEqual(karte["uhr_text"], "14:00 Uhr")
             self.assertEqual(karte["herkunft"], "monday")
             self.assertEqual(karte["chips"], [("WP", "offen"), ("PV", "offen")])
+            self.assertFalse(karte["erledigt"])
             # erfolgter Termin bleibt nur mit offener Sparte sichtbar (v8-Regel)
             s.add(Erfassung(kunde_id=self.v3.kunde_id, vorgang_id=self.ids["v3"], benutzer_id=self.ad1_id,
                             status="Neu", sparte="WP"))
@@ -351,9 +398,13 @@ class MeinTagTests(unittest.TestCase):
             s.flush()
             daten = mein_tag.termine(s, ad1)
             self.assertNotIn(self.t_gestern.id, [k["termin"].id for k in daten["heute"]])
-            heiss = mein_tag.heisse_kunden(s, ad1)
-            self.assertEqual([k["vorgang"].id for k in heiss], [self.ids["v1"]])
-            self.assertEqual(heiss[0]["chip"], "Bestellung angekündigt")
+            # v33: Wiedervorlage-Liste statt heisse_kunden
+            wv = nachfassen.wiedervorlage_liste(s, self.ad1_id)
+            self.assertEqual([k["vorgang"].id for k in wv], [self.ids["v1"]])
+            self.assertEqual(wv[0]["grund"], "bestellung")
+            self.assertEqual(wv[0]["prioritaet"], "hoch")
+            self.assertEqual(wv[0]["verfolgung_status"], "bestellung_angekuendigt")
+            self.assertFalse(hasattr(mein_tag, "heisse_kunden"))
             s.rollback()
         finally:
             s.close()

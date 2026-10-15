@@ -430,11 +430,16 @@ class C_SammelaktionHV(Basis):
         self.assertIn(f'data-vorgang="{b.id}"', seite)
         self.assertNotIn(f'data-vorgang="{a.id}"', seite)
         self.assertIn('name="gruppe"', seite)
-        # Hauptboard zeigt die zwei Ziel-Schaltflächen mit den Namen aus der Benutzerverwaltung
+        # Hauptboard zeigt die zwei Ziel-Schaltflächen: René mit dem Namen aus der
+        # Benutzerverwaltung; v33 (PLAN_V20 Phase 175): die zweite Schaltfläche heißt
+        # „Simons Gruppe“ statt „<Simon> (verteilt an sein Team)“ – der Lead hängt an der
+        # Gruppe (ad_id = Simon + Kennzeichen „noch nicht verteilt“), Simon verteilt selbst
         board = self.client.get("/lead-management/hauptboard").text
         self.assertIn('id="lm-sammel-hv"', board)
         self.assertEqual(re.findall(r'data-ziel="([^"]+)"', board), ["rene", "simon"])
-        self.assertIn(f"{self.simon.name} (verteilt an sein Team)", board)
+        self.assertIn(self.rene.name, board)
+        self.assertIn("Simons Gruppe", board)
+        self.assertNotIn("verteilt an sein Team", board)
         # ohne Ziel-Parameter: klare Meldung, Außendienst darf nicht
         ok, text = lead_boards.sammelaktion_ausfuehren(self.s, self.admin, "hauptboard", "hv_verschieben", [b.id], {})
         self.assertFalse(ok)
@@ -793,35 +798,70 @@ class M_Terminassistent(Basis):
         self.assertIn("nicht wählbar", unquote_plus(r.headers["location"]))
 
     def test_kalender_json_ohne_gehaltene_verbindung(self):
-        """Outlook-Abruf (kalender_sync an, Graph gemockt auf Ebene des Netzaufrufs)
-        läuft ohne offene Sitzung: im Moment des Graph-Aufrufs ist keine Pool-
-        Verbindung entnommen – weder in den Vorschlägen noch in der Kalenderansicht."""
+        """v33 (PLAN_V20 Phase 170): Outlook-Belegt kommt aus dem Cache outlook_belegt des Laufs
+        outlook-ruecklesen – die Kalenderansicht ruft Graph nie im Request auf (vorher: calendarView
+        je Vertriebler direkt aus der Anfrage, Sitzung vorher freigegeben). Gemessen: der Lauf
+        liest den Kalender des Vertrieblers mit Termin ohne gehaltene Pool-Verbindung, die fremde
+        Belegtzeit landet im Cache, kalender.json?neu=1 zeigt sie in der Spalte des Vertrieblers
+        – ohne Token- und ohne Graph-Aufruf im Request."""
+        import urllib.parse
+        from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+        from app import outlook_sync
+        from app.models import OutlookBelegt
         v = self.lead(81)
         kern.parameter_setzen(self.s, "kalender_sync", "an")
         kern.parameter_setzen(self.s, "kalender_testpostfach", "test@example.invalid")
+        # Horst hat einen Termin im Rücklese-Fenster (acht Wochen) → der Lauf liest sein Postfach
+        tag = _dt.now().replace(hour=0, minute=0, second=0, microsecond=0) + _td(days=3)
+        while tag.weekday() >= 5:
+            tag += _td(days=1)
+        self.s.add(VotTermin(vorgang_id=v.id, ad_id=self.horst.id, beginn=tag.replace(hour=9),
+                             ende=tag.replace(hour=10, minute=30), status="geplant", typ="vot",
+                             adresse="Teststraße 1, 47139 Duisburg"))
         self.s.commit()
+        fremd_von = tag.replace(hour=7)
+        fremd_utc = fremd_von.astimezone(_tz.utc).replace(tzinfo=None)
         belegungen = []
 
-        def graph_mock(methode, pfad, token, daten=None):
-            belegungen.append(db.engine.pool.checkedout())
+        def graph_mock(methode, pfad, token, daten=None, *a, **kw):
+            belegungen.append((methode, db.engine.pool.checkedout()))
+            if f"/users/{urllib.parse.quote(self.horst.email)}/" in pfad:
+                return {"value": [{"id": "lv4-fremd", "showAs": "busy", "isAllDay": False,
+                                   "subject": "TAIFUN-Termin",
+                                   "start": {"dateTime": fremd_utc.strftime("%Y-%m-%dT%H:%M:%S.0000000"),
+                                             "timeZone": "UTC"},
+                                   "end": {"dateTime": (fremd_utc + _td(minutes=30)).strftime("%Y-%m-%dT%H:%M:%S.0000000"),
+                                           "timeZone": "UTC"}}]}
             return {"value": []}
         try:
-            with mock.patch("app.kalender._token", return_value="t"), \
+            db.verbindung_freigeben(self.s)
+            with mock.patch("app.graph_versand._token", return_value="t"), \
                     mock.patch("app.graph_versand._graph_aufruf", side_effect=graph_mock):
-                k = self.client.get(f"/lead-management/lead/{v.id}/termin/kalender.json?neu=1").json()
+                ergebnis = outlook_sync.ruecklesen_lauf()
+            self.assertGreaterEqual(ergebnis.get("belegt", 0), 1, ergebnis)
+            self.assertTrue(belegungen, "Rücklese-Lauf hat kein Postfach gelesen")
+            self.assertTrue(all(m == "GET" for m, _ in belegungen), belegungen)
+            self.assertEqual(max(b for _, b in belegungen), 0, belegungen)
+            self.assertEqual(self.s.query(OutlookBelegt).filter_by(benutzer_id=self.horst.id).count(), 1)
+            woche = (tag - _td(days=tag.weekday())).strftime("%Y-%m-%d")
+            with mock.patch("app.graph_versand._token", side_effect=AssertionError("Token im Request")), \
+                    mock.patch("app.graph_versand._graph_aufruf",
+                               side_effect=AssertionError("Graph-Aufruf im Request")):
+                k = self.client.get(f"/lead-management/lead/{v.id}/termin/kalender.json?neu=1&woche={woche}").json()
         finally:
             kern.parameter_setzen(self.s, "kalender_sync", "aus")
             kern.parameter_setzen(self.s, "kalender_testpostfach", self.gesichert["kalender_testpostfach"])
+            self.s.query(OutlookBelegt).filter_by(benutzer_id=self.horst.id).delete(synchronize_session=False)
             self.s.commit()
             lead_termin.vorschlaege_cache_leeren()
         self.assertTrue(k["sync"])
-        self.assertTrue(belegungen, "Outlook-Abruf wurde nicht aufgerufen")
-        self.assertEqual(max(belegungen), 0, belegungen)
-        # v31 (PLAN_LEAD_V5 Phase 159): Demo-Ende – das Testpostfach gilt nicht mehr für alle,
-        # Outlook wird je Vertriebler über dessen Postfach/E-Mail gelesen; Kandidaten der
-        # DB-Kopie ohne E-Mail bleiben ohne Outlook-Spalte
+        # v31 (PLAN_LEAD_V5 Phase 159): Demo-Ende – Outlook wird je Vertriebler über dessen
+        # Postfach/E-Mail gelesen; Kandidaten der DB-Kopie ohne E-Mail bleiben ohne Outlook-Spalte
         self.assertTrue(all(sp["outlook"] for sp in k["spalten"]
                             if sp["ad_id"] in (self.horst.id, self.rudi.id)))
+        spalte = next(sp for sp in k["spalten"] if sp["ad_id"] == self.horst.id)
+        self.assertTrue(any(b["beginn"].startswith(fremd_von.strftime("%Y-%m-%dT%H:%M"))
+                            for b in spalte.get("belegt", [])), spalte.get("belegt"))
         self.assertEqual(db.engine.pool.checkedout(), 0)
 
     def test_hv_nur_eigener_kalender_und_sperrzeit(self):
@@ -913,7 +953,8 @@ class M_Terminassistent(Basis):
         self.client_paolo.post("/lead-management/dashboard/sperrzeit",
                                data={"datum": erster.strftime("%Y-%m-%d"), "von": "13:00", "bis": "14:00"},
                                follow_redirects=False)
-        self.assertEqual(self.client.get(f"/lead-management/kalender?ad_id={self.paolo.id}").status_code, 200)
+        # v33 (Phase 169): alte Wochenansicht über ?alt=1 (sonst Umleitung auf /kalender)
+        self.assertEqual(self.client.get(f"/lead-management/kalender?ad_id={self.paolo.id}&alt=1").status_code, 200)
 
     def test_sperrzeit_exakt_ohne_puffer(self):
         """Nachtrag 08.10.2026 (Antwort Andreas): eine Sperrzeit zählt exakt von–bis –

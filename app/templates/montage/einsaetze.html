@@ -5,13 +5,15 @@
 {% block inhalt %}
 {% set ich = request.state.benutzer %}
 <div class="pj-mob">
-    <div class="pj-eyebrow">Montage{{ ' · ' ~ ich.name if ich }}</div>
+    {# v33 (PLAN_V20 Phase 167/168): Service-Varianten sehen nur ihre Service-Einsätze
+       (sicht.service), Montage Heizung/Elektro nur die Terminarten ihres Gewerks #}
+    <div class="pj-eyebrow">{{ 'Service' if sicht.service else 'Montage' }}{{ ' · ' ~ ich.name if ich }}{{ ' · ' ~ (sicht.gewerk | capitalize) if sicht.gewerk }}</div>
     {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
     {# v28 (PLAN_PROJ_V6 Phase 137): Standardansicht „Meine Einsätze“ (eigene
        Besetzung + Fallback), Team-Umschalter für mehrere Teams / Leitung #}
     {% if meine %}
-    <h2>Meine Einsätze</h2>
+    <h2>{{ 'Meine Service-Einsätze' if sicht.service else 'Meine Einsätze' }}</h2>
     {% else %}
     {#- v30 (PLAN_V18 Phase 145): Teamfarbe als --f, Rückfall = Token --pj-muted (projektierung_v28.css) #}
     <h2><i class="pj-teamfarbe"{% if team.farbe %} style="--f:{{ team.farbe }}"{% endif %}></i>
@@ -30,6 +32,8 @@
         {% set basis = '/montage?team_id=' ~ team.id if team else '/montage?team_id=0' %}
         <a class="pj-btn {{ 'primary' if ansicht == 'liste' }}" href="{{ basis }}">Liste</a>
         <a class="pj-btn {{ 'primary' if ansicht == 'kalender' }}" href="{{ basis }}&ansicht=kalender">Wochenkalender</a>
+        {# v33 (PLAN_V20 Phase 169, Vorschlag K 4.5): zentraler Kalender – Monteure/Service nur lesend (eigene Einsätze + Team) #}
+        <a class="pj-btn" href="/kalender" title="Mitarbeiter-Kalender: eigene Einsätze und Team (nur lesend)">Kalender</a>
     </div>
     {% if meine and not eigene_teams and not leitung %}
     <p class="dezent">Du bist keinem Team zugeordnet – bitte beim
@@ -47,15 +51,19 @@
         {% set gewerk = gewerke.get(t.gewerk_id) %}
         {% set kunde = kunden.get(projekt.kunde_id) if projekt else none %}
         {% set steck = steckbriefe.get(gewerk.id, {}) if gewerk else {} %}
-        <div class="pj-einsatz">
+        {% set info = service_info.get(t.id) %}
+        <div class="pj-einsatz {{ 'service' if info }}">
             <div class="d">{{ t.beginn | de_datum('%a %d.%m.') }}{{ ' – ' ~ (t.ende | de_datum('%a %d.%m.')) if t.ende and t.ende.date() != t.beginn.date() }}
-                {% if gewerk and ts_map.get(gewerk.id) %}
+                {% if info and info.zeit %} · {{ info.zeit }}{% endif %}
+                {% if gewerk and ts_map.get(gewerk.id) and not info %}
                     {% set ts = ts_map[gewerk.id] %}
                     <span class="pj-ts {{ {'terminiert': 'g', 'unbestaetigt': 'y', 'unterminiert': 'r'}.get(ts.status, 'y') }}">{{ ts.status }}</span>
-                {% endif %}</div>
-            <b>{{ kunde.anzeige_name if kunde else '?' }} · {{ projekt.ausfuehrung_ort if projekt else '?' }}</b><br>
+                {% endif %}
+                {% if info %}<span class="pj-badge pj-service-status {{ info.status_key }}">{{ info.status }}</span>{% endif %}</div>
+            {# v33 (Phase 168): Service-Einsatz – Kunde/Ort über den Vorgang (auch ohne Projekt) #}
+            <b>{{ info.kunde if info else (kunde.anzeige_name if kunde else '?') }} · {{ info.ort if info else (projekt.ausfuehrung_ort if projekt else '?') }}</b><br>
             {% if gewerk %}<span class="pj-sp {{ gewerk.sparte }}">{{ gewerk.sparte }}</span>{% endif %}
-            {{ termin_art(t) }}
+            {% if info %}<span class="pj-badge pj-service">Service</span> {{ info.anlass }} · {{ info.gewerk }}{% else %}{{ termin_art(t) }}{% endif %}
             {% if t.team_id in teams_map %}<small class="dezent">· {{ teams_map[t.team_id].name }}</small>{% endif %}
             {{ besetzung_chips(besetzung_namen.get(t.id, [])) }}
             {% set geraet = [] %}
@@ -81,8 +89,10 @@
         {% for t in kalender.get(tag, []) %}
             {% set projekt = projekte.get(t.projekt_id) %}
             {% set kunde = kunden.get(projekt.kunde_id) if projekt else none %}
-            <a class="e {{ 'unbest' if not t.kunde_bestaetigt }}" href="/montage/einsatz/{{ t.id }}">
-                {{ kunde.anzeige_name if kunde else '?' }} · {{ projekt.ausfuehrung_ort if projekt else '' }}
+            {% set info = service_info.get(t.id) %}
+            <a class="e {{ 'unbest' if not t.kunde_bestaetigt and not info }} {{ 'service' if info }}" href="/montage/einsatz/{{ t.id }}">
+                {% if info %}🔧 {{ t.beginn.strftime('%H:%M') if not t.ganztaegig }} {{ info.kunde }} · {{ info.ort }}
+                {% else %}{{ kunde.anzeige_name if kunde else '?' }} · {{ projekt.ausfuehrung_ort if projekt else '' }}{% endif %}
                 {# v28: Besetzung als Initialen #}
                 {{ besetzung_chips(besetzung_namen.get(t.id, []), nur_initialen=true) }}</a>
         {% else %}

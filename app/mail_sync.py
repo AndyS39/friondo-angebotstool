@@ -6,7 +6,13 @@
 #  2) Mail-Verlauf: Nachrichten der Konversation (Antworten des Kunden) werden
 #     dem Angebot zugeordnet; Fallback ohne conversationId: Betreff mit AN-C-Nr.
 # Postfach: das Versand-Postfach angebot@friondo.de (Parametrierung
-# mail_postfach; leer = eigenes Postfach /me). Delegiertes Token aus graph_versand.
+# mail_postfach; leer = eigenes Postfach /me). Token aus graph_versand.
+# v33 (PLAN_V20 Phase 166): Basis über graph_versand.basis_pfad – im Modus anwendung
+# liest die Versand-Erkennung immer /users/<angebot@>/messages (Entwurf, Gesendete
+# Elemente und Antworten derselben Konversation im Funktionspostfach; der Entwurf
+# liegt dort seit v33 selbst), im Modus delegiert wie bisher Shared Mailbox bzw. /me.
+# Voraussetzung im Modus anwendung: Exchange legt die aus Outlook gesendete Kopie im
+# Postfach angebot@ ab (Set-Mailbox -MessageCopyForSentAsEnabled, docs/graph-einrichtung.md).
 # v27 (PLAN_V17 Phase 128): der 15-Minuten-Lauf ist am Scheduler-Rahmen
 # registriert (aktiv nur mit eingerichtetem Graph); sync() liest in einer kurzen
 # Sitzung, ruft Graph OHNE Sitzung und schreibt je Angebot in einer kurzen
@@ -16,7 +22,6 @@
 import json
 import logging
 import urllib.parse
-import urllib.request
 from datetime import datetime, timedelta
 
 from sqlalchemy import and_, or_
@@ -35,11 +40,10 @@ status: dict = {"letzter_lauf": None, "neu": 0, "versendet": 0, "fehler": []}
 
 
 def _graph_get(pfad: str, token: str) -> dict:
-    anfrage = urllib.request.Request(
-        GRAPH + pfad,
-        headers={"Authorization": f"Bearer {token}"})
-    with urllib.request.urlopen(anfrage, timeout=60) as antwort:   # v22: Timeout
-        return json.loads(antwort.read())
+    """v33: über graph_versand._graph_aufruf (Timeout 60 s wie bisher, 403 → Fehlerprotokoll
+    „nicht in der Zugriffsgruppe“ einmal je Stunde, letzter Erfolg je Postfach)."""
+    from app import graph_versand
+    return graph_versand._graph_aufruf("GET", pfad, token)
 
 
 def _zeit_parsen(wert: str) -> datetime | None:
@@ -53,8 +57,11 @@ def _zeit_parsen(wert: str) -> datetime | None:
 
 
 def _basis(postfach: str) -> str:
-    """Graph-Pfadbasis: Shared Mailbox angebot@ oder eigenes Postfach."""
-    return f"/users/{urllib.parse.quote(postfach)}" if postfach else "/me"
+    """Graph-Pfadbasis: v33 über graph_versand.basis_pfad – Modus anwendung immer
+    /users/<postfach> (leer = Funktionspostfach angebot@), Modus delegiert Shared
+    Mailbox /users/<postfach> bzw. /me für das eigene Postfach."""
+    from app import graph_versand
+    return graph_versand.basis_pfad(postfach)
 
 
 def nachrichten_je_konversation(token: str, conversation_id: str,
@@ -278,11 +285,6 @@ def _sub_antworten() -> int:
     return sub_mail.antworten_abgleichen()
 
 
-def _outlook_ruecklauf() -> int:
-    from app import outlook_kalender              # v15 (Phase 81): Outlook → Tool
-    return outlook_kalender.ruecklesen()
-
-
 def _terminantworten() -> int:
     from app import terminmail                    # v15 (Phase 81): Kunden-Terminantworten
     return terminmail.antworten_abgleichen()
@@ -297,7 +299,8 @@ def scheduler_lauf() -> dict:
     Teilschritte scheiterten – als Ausnahme hochgeworfen (Lauf = fehler)."""
     schritte = (("mail-abgleich", "Mail-Abgleich fehlgeschlagen", sync),
                 ("sub-antworten", "Sub-Antworten fehlgeschlagen", _sub_antworten),
-                ("outlook-ruecklauf", "Outlook-Rücklauf fehlgeschlagen", _outlook_ruecklauf),
+                # v33 (PLAN_V20 Phase 170): der Outlook-Rücklauf ist der eigene Lauf
+                # outlook-ruecklesen (outlook_sync.ruecklesen_lauf) – kein Teilschritt mehr
                 ("terminantworten", "Terminantworten fehlgeschlagen", _terminantworten))
     ergebnis: dict = {}
     fehler: list[str] = []

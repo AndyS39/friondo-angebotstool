@@ -22,7 +22,11 @@
    – kein „Mehr …“; gesperrte Seiten liefern server-seitig 404 (lead_v2.gate).
    „Mehr …“ öffnet als Flyout (.lm-leiste-menue[data-flyout], position: fixed neben der Leiste,
    z-index unter dem Wartungsbanner, unter 900 px nach oben; Verhalten in
-   app/static/lm_nav.js: Escape, Klick außerhalb, erneuter Klick). #}
+   app/static/lm_nav.js: Escape, Klick außerhalb, erneuter Klick).
+   v33 (PLAN_V20 Phase 169): „Kalender“ unter „Mehr …“ zeigt den zentralen
+   Mitarbeiter-Kalender /kalender?gruppe=vertrieb (Außendienst + Handelsvertreter
+   vorbelegt); der Wochen-Terminkalender je AD (v12) leitet auf /kalender um [ANNAHME]
+   und bleibt nur noch über /lead-management/kalender?alt=1 erreichbar (Übergang). #}
 {% from "_symbole.html" import symbol %}
 
 {% macro lm_nav(aktiv) %}
@@ -45,7 +49,7 @@
 {%- set mehr = [
     ('/lead-management/anrufliste', 'telefon', 'Anrufliste', 'anrufliste'),
     ('/lead-management/board', 'kanban', 'Kanban', 'board'),
-    ('/lead-management/kalender', 'kalender', 'Kalender', 'kalender'),
+    ('/kalender?gruppe=vertrieb', 'kalender', 'Kalender', 'kalender'),
     ('/lead-management/vorlagen', 'brief', 'E-Mail-Vorlagen', 'vorlagen'),
     ('/lead-management/uebersicht', 'statistik', 'Übersicht', 'uebersicht'),
     ('/lead-management/statistik', 'statistik', 'Statistik Leads', 'statistik'),

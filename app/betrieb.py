@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from app import config
+from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 
 START_ZEIT = datetime.now()
 _START_MONO = time.monotonic()
@@ -386,7 +387,7 @@ def admins_benachrichtigen(text: str, link: str = "/parametrierung/betrieb") -> 
         from app.models import Benutzer
         with kurz() as s:
             ids = [b.id for b in s.query(Benutzer)
-                   .filter(Benutzer.aktiv.is_(True), Benutzer.rolle == "admin")]
+                   .filter(Benutzer.aktiv.is_(True), rollen_modul.filter_basis("admin"))]
             if ids:
                 kern.benachrichtigen(s, ids, text[:500], link, art="system")
             return len(ids)
@@ -441,16 +442,44 @@ def health() -> dict:
     if POOL_INVARIANTE is not None and not POOL_INVARIANTE[0]:
         gruende.append("Pool-Invariante verletzt")
     mail_ausgang = {"offen": None, "fehler_24h": None}
+    graph_modus = None
     if db_ok:
         try:
-            from app import benachrichtigungen
+            from app import benachrichtigungen, graph_versand
             from app.db import kurz
-            with kurz() as s:
+            with kurz(schreibend=False) as s:   # v33 (Phase 172): nur lesen - keine Schreibtransaktion
                 mail_ausgang = benachrichtigungen.mail_ausgang_zaehler(s)
+                # v33 (PLAN_V20 Phase 166): Graph-Modus (anwendung | delegiert) im JSON
+                graph_modus = graph_versand.modus(s)
             if (mail_ausgang["offen"] or 0) > 50:
                 gruende.append(f"Mail-Ausgang: {mail_ausgang['offen']} Mails offen")
         except Exception:
             pass
+    # v33 (PLAN_V20 Phase 170, Vorschlag O 4c): Outlook-Warteschlange – warn ab 200 offenen
+    # oder ab einem fehlgeschlagenen Auftrag (24 h)
+    outlook = {"offen": None, "fehler_24h": None}
+    if db_ok:
+        try:
+            from app import outlook_sync
+            from app.db import kurz
+            with kurz(schreibend=False) as s:   # v33 (Phase 172): nur lesen - keine Schreibtransaktion
+                outlook = outlook_sync.zusammenfassung(s)
+            if (outlook.get("offen") or 0) > 200:
+                gruende.append(f"Outlook-Sync: {outlook['offen']} Aufträge offen")
+            if outlook.get("fehler_24h"):
+                gruende.append(f"Outlook-Sync: {outlook['fehler_24h']} Aufträge fehlgeschlagen (24 h)")
+        except Exception:   # noqa: BLE001 – /health darf daran nie scheitern
+            pass
+    # v33 (PLAN_V20 Phase 166): Geheimnis der App-Registrierung läuft in ≤ 30 Tagen ab → warn
+    graph_tage = None
+    try:
+        from app import graph_versand
+        graph_tage = graph_versand.geheimnis_ablauf_tage()
+        graph_warnung = graph_versand.geheimnis_warnung()
+    except Exception:   # noqa: BLE001 – /health darf daran nie scheitern
+        graph_warnung = ""
+    if graph_warnung:
+        gruende.append(graph_warnung)
     status = "fehler" if not db_ok else ("warn" if gruende else "ok")
     return {
         "status": status, "version": config.VERSION, "commit": commit_hash(),
@@ -466,8 +495,11 @@ def health() -> dict:
         "wal_mb": db.wal_groesse_mb(), "uptime_s": uptime_s(),
         "importe": [i["name"] for i in laufende_importe()],
         "mail_ausgang": mail_ausgang,
+        "graph_modus": graph_modus, "graph_geheimnis_tage": graph_tage,   # v33
+        "outlook_sync": {"offen": outlook.get("offen"), "fehler_24h": outlook.get("fehler_24h")},   # v33 Phase 170
         "schreibsperre_max_ms": SCHREIBSPERRE["max_ms"],
         "schreibsperre_locked": SCHREIBSPERRE["locked"],
+        "transaktionen": dict(getattr(db, "TRANSAKTIONEN", {})),   # v33 (Phase 172): sofort/verzoegert/sofort_wiederholt/sofort_gescheitert
         "prozess": prozess_kennzahlen(),
         "gruende": gruende, "zeit": jetzt,
     }

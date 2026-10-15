@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from sqlalchemy.orm import Session
 
 from app import auth
+from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 
 SPALTEN = ("Name", "Rolle", "E-Mail", "Team", "Vertriebskanal")
 PFLICHTSPALTEN = ("Name", "Rolle", "E-Mail")
@@ -40,6 +41,9 @@ BEISPIEL_CSV = (
     "Monteur Eins;Montage;;Montageteam 1;\r\n"
     "Petra Planung;Projektierung;petra.planung@friondo.de;;\r\n"
 )
+# v33 (PLAN_V20 Phase 167): Varianten per Key oder Name („Montage Elektro“,
+# „montage_elektro“, „Handelsvertreter“) – die Beispiel-CSV bleibt bei vier Zeilen
+# (tests/test_v27_login.py liest sie), der Hinweistext der Importseite nennt alle Rollen.
 
 
 @dataclass
@@ -61,8 +65,10 @@ class Zeile:
 
     @property
     def rolle_name(self) -> str:
-        from app.routers.benutzer import ROLLEN_NAMEN
-        return ROLLEN_NAMEN.get(self.rolle, self.rolle_roh or self.rolle)
+        # v33 (Phase 167): Name aus dem Rollen-Katalog (auch Varianten)
+        if self.rolle and rollen_modul.eintrag(self.rolle) is not None:
+            return rollen_modul.name_von(self.rolle)
+        return self.rolle_roh or self.rolle
 
 
 # --- Lesen ----------------------------------------------------------------------------
@@ -139,27 +145,50 @@ def csv_lesen(text: str) -> tuple[list[Zeile], list[str]]:
 
 # --- Prüfen ---------------------------------------------------------------------------
 
+def _vereinfacht(text: str) -> str:
+    return (text or "").strip().lower().replace("ß", "ss").replace(" ", "").replace("-", "").replace("_", "")
+
+
 def rolle_zuordnen(text: str) -> str | None:
-    """Rollenschlüssel oder sprechender Name (Groß/Klein egal) → Schlüssel."""
-    from app.routers.benutzer import ROLLEN, ROLLEN_NAMEN
+    """Rollenschlüssel oder sprechender Name (Groß/Klein egal) → Schlüssel.
+    v33 (Phase 167): alle AKTIVEN Rollen des Katalogs – Basisrollen und Varianten
+    („montage_heizung“, „Montage Heizung“, „Handelsvertreter“ …) [ANNAHME: deaktivierte
+    Varianten werden per Import nicht vergeben]."""
     wert = (text or "").strip().lower()
     if not wert:
         return None
-    for schluessel in ROLLEN:
-        if wert in (schluessel, ROLLEN_NAMEN.get(schluessel, "").lower()):
-            return schluessel
-    # Schreibvarianten: „Aussendienst“, „Lead Management“, „Leadmanagement“
-    vereinfacht = wert.replace("ß", "ss").replace(" ", "").replace("-", "")
-    for schluessel in ROLLEN:
-        if vereinfacht == ROLLEN_NAMEN.get(schluessel, "").lower().replace("-", "").replace(" ", ""):
-            return schluessel
+    eintraege = rollen_modul.katalog_liste(nur_aktive=True)
+    for e in eintraege:
+        if wert in (e["key"], e["name"].lower()):
+            return e["key"]
+    # Schreibvarianten: „Aussendienst“, „Lead Management“, „Leadmanagement“, „montage heizung“
+    vereinfacht = _vereinfacht(wert)
+    for e in eintraege:
+        if vereinfacht in (_vereinfacht(e["name"]), _vereinfacht(e["key"])):
+            return e["key"]
     return None
+
+
+def rollen_namen_text() -> str:
+    """Erlaubte Rollen für Hinweistexte: „Admin, Innendienst, …, Montage Heizung, …“."""
+    return ", ".join(e["name"] for e in rollen_modul.katalog_liste(nur_aktive=True))
 
 
 def kanal_werte_import(session: Session) -> list[str]:
     """Erlaubte Vertriebskanäle (wie im AD-Profil: ohne „Standard“)."""
     from app import leadmanagement
     return [k for k in leadmanagement.kanal_werte(session) if k.lower() != "standard"]
+
+
+def _kanal_zuordnung(session: Session) -> dict[str, str]:
+    """Schreibweise (klein) → Anzeigewert; v33 (Phase 175): auch die Aliase
+    („swd“ → „Stadtwerke Düsseldorf“)."""
+    from app import leadmanagement
+    zuordnung: dict[str, str] = {}
+    for k in kanal_werte_import(session):
+        for alias in leadmanagement.kanal_aliase(k):
+            zuordnung.setdefault(alias.lower(), k)
+    return zuordnung
 
 
 def pruefen(session: Session, zeilen: list[Zeile]) -> list[Zeile]:
@@ -172,7 +201,8 @@ def pruefen(session: Session, zeilen: list[Zeile]) -> list[Zeile]:
     vorhandene = {(b.name or "").strip().lower() for b in session.query(Benutzer.name)}
     teams = {(t.name or "").strip().lower(): t.id
              for t in session.query(Team).filter(Team.aktiv.is_(True))}
-    kanaele = {k.lower(): k for k in kanal_werte_import(session)}
+    kanaele = _kanal_zuordnung(session)
+    erlaubte_kanaele = kanal_werte_import(session)
     gesehen: dict[str, int] = {}
     for zeile in zeilen:
         zeile.fehler = []
@@ -190,8 +220,7 @@ def pruefen(session: Session, zeilen: list[Zeile]) -> list[Zeile]:
         rolle = rolle_zuordnen(zeile.rolle_roh)
         if rolle is None:
             zeile.fehler.append(f"Rolle unbekannt: „{zeile.rolle_roh or '–'}“ "
-                                "(erlaubt: Admin, Innendienst, Außendienst, Projektierung, "
-                                "Montage, Lead-Management)")
+                                f"(erlaubt: {rollen_namen_text()})")
         else:
             zeile.rolle = rolle
             email_fehler = _email_pruefen(rolle, zeile.email)
@@ -202,10 +231,11 @@ def pruefen(session: Session, zeilen: list[Zeile]) -> list[Zeile]:
             if zeile.team_id is None:
                 zeile.fehler.append(f"Team unbekannt: „{zeile.team}“ (Parametrierung → Teams)")
         if zeile.kanal:
-            if rolle is not None and rolle != "aussendienst":
+            # v33 (Phase 167): auch Varianten des Außendienstes (Handelsvertreter)
+            if rolle is not None and rollen_modul.basisrolle_von(rolle) != "aussendienst":
                 zeile.fehler.append("Vertriebskanal nur für Außendienst")
             elif zeile.kanal.lower() not in kanaele:
-                erlaubt = ", ".join(kanaele.values()) or "keine Kanäle hinterlegt"
+                erlaubt = ", ".join(erlaubte_kanaele) or "keine Kanäle hinterlegt"
                 zeile.fehler.append(f"Vertriebskanal unbekannt: „{zeile.kanal}“ (erlaubt: {erlaubt})")
             else:
                 zeile.kanal = kanaele[zeile.kanal.lower()]
@@ -231,6 +261,7 @@ def anlegen(session: Session, zeilen: list[Zeile], erstellt_von: int | None) -> 
     Kanal-Regel für Außendienst. Committet NICHT (macht die Route). Liefert
     [{name, rolle, rolle_name, pin}] für die einmalige Start-PIN-Liste."""
     from app import lead_termin
+    from app import leadmanagement
     from app.models import Benutzer, TeamMitglied
     ergebnis = []
     for zeile in zeilen:
@@ -242,11 +273,15 @@ def anlegen(session: Session, zeilen: list[Zeile], erstellt_von: int | None) -> 
         auth.pin_setzen(neuer, pin)
         session.add(neuer)
         session.flush()
+        # v33 (Phase 167): Rolle Handelsvertreter → AD-Profil-Kennzeichen terminiert_selbst
+        rollen_modul.hv_spiegeln(session, neuer)
         if zeile.team_id:
             session.add(TeamMitglied(team_id=zeile.team_id, benutzer_id=neuer.id,
                                      erstellt_von=erstellt_von))
-        if zeile.kanal and zeile.rolle == "aussendienst":
-            lead_termin.kanal_regel_ad_setzen(session, neuer.id, [zeile.kanal])
+        if zeile.kanal and rollen_modul.basisrolle_von(zeile.rolle) == "aussendienst":   # v33
+            # Phase 175: „Stadtwerke Düsseldorf“ mit allen Schreibweisen (SWD) hinterlegen
+            lead_termin.kanal_regel_ad_setzen(session, neuer.id,
+                                              leadmanagement.kanal_aliase(zeile.kanal))
         ergebnis.append({"name": neuer.name, "rolle": neuer.rolle,
                          "rolle_name": zeile.rolle_name, "pin": pin})
     return ergebnis

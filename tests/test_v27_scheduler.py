@@ -25,7 +25,7 @@ from unittest import mock
 from app import (ablauf_pruefung, benachrichtigungen, betrieb, config, db,
                  geocoding, graph_versand, lead_anrufliste, lead_mail,
                  lead_mail_abruf, lead_parser, lead_todos, leadmanagement, mail_sync,
-                 monday_sync, scheduler)
+                 monday_sync, outlook_sync, scheduler)
 from app.db import init_db
 from app.models import (Angebot, GeocodeCache, KommunikationLog, Kunde, Lead,
                         LeadAktivitaet, LeadParameter, SchedulerStatus,
@@ -33,19 +33,24 @@ from app.models import (Angebot, GeocodeCache, KommunikationLog, Kunde, Lead,
 
 PRAEFIX = "V27A"
 # v29 (PLAN_LEAD_V4 Phase 142): zehnter Modul-Lauf lead-mail-abruf (Antworten und
-# Bounces aus termin@, 120 s) – mit den vier v27-Läufen aus betrieb sind es 14
+# Bounces aus termin@, 120 s) – mit den vier v27-Läufen aus betrieb sind es 14.
+# v33 (PLAN_V20 Phase 170, Agent O): zwei weitere Modul-Läufe outlook-sync (60 s, Warteschlange
+# outlook_auftraege) und outlook-ruecklesen (300 s, calendarView je Person) aus
+# outlook_sync.scheduler_starten – mit betrieb sind es 16 (Pool-Invariante 64 + 16 + 5 = 85 ≤ 90)
 ACHT = {"monday-sync", "mail-sync", "ablauf-pruefung", "benachrichtigungen",
         "lead-parser", "leadmanagement", "geocoding", "lead-mail",
         "mail-ausgang",   # v27: Ausgangs-Warteschlange (benachrichtigungen.scheduler_starten)
-        "lead-mail-abruf"}   # v29: Lauf lead-mail-abruf (lead_mail_abruf.scheduler_starten)
+        "lead-mail-abruf",   # v29: Lauf lead-mail-abruf (lead_mail_abruf.scheduler_starten)
+        "outlook-sync", "outlook-ruecklesen"}   # v33: Outlook je Mitarbeiter (outlook_sync)
 MODULE = (monday_sync, mail_sync, ablauf_pruefung, benachrichtigungen,
-          lead_parser, leadmanagement, geocoding, lead_mail, lead_mail_abruf)
+          lead_parser, leadmanagement, geocoding, lead_mail, lead_mail_abruf, outlook_sync)
 ERWARTET = {   # Name: (Intervall s, Startverzögerung s)
     "monday-sync": (900, 0), "mail-sync": (900, 0), "ablauf-pruefung": (86400, 120),
     "benachrichtigungen": (300, 180), "lead-parser": (120, 240),
     "leadmanagement": (300, 200), "geocoding": (300, 300), "lead-mail": (60, 150),
     "mail-ausgang": (60, 90),
     "lead-mail-abruf": (120, 270),   # v29
+    "outlook-sync": (60, 60), "outlook-ruecklesen": (300, 330),   # v33
 }
 
 
@@ -732,23 +737,23 @@ class MondayBloecke(Basis):
 
 class Teilschritte(Basis):
     def test_mail_sync_alle_vier_scheitern(self):
+        # v33 (PLAN_V20 Phase 170): der Outlook-Rücklauf ist ein eigener Lauf (outlook-ruecklesen),
+        # mail-sync hat noch drei Teilschritte
         knall = mock.Mock(side_effect=RuntimeError("V27A kaputt"))
         with mock.patch.object(mail_sync, "sync", knall), \
                 mock.patch.object(mail_sync, "_sub_antworten", knall), \
-                mock.patch.object(mail_sync, "_outlook_ruecklauf", knall), \
                 mock.patch.object(mail_sync, "_terminantworten", knall):
             ergebnis = scheduler.jetzt_ausfuehren("mail-sync")   # auch ohne Graph
-        self.assertEqual(knall.call_count, 4, "ein Fehler darf die anderen nicht blockieren")
+        self.assertEqual(knall.call_count, 3, "ein Fehler darf die anderen nicht blockieren")
         self.assertFalse(ergebnis["ok"])
         self.assertIn("Alle Teilschritte fehlgeschlagen", ergebnis["fehler"])
         self.assertIn("Terminantworten fehlgeschlagen", ergebnis["fehler"])
-        self.assertEqual(len(mail_sync.status["fehler"]), 4)
+        self.assertEqual(len(mail_sync.status["fehler"]), 3)
 
     def test_mail_sync_ein_teilschritt_scheitert(self):
         with mock.patch.object(mail_sync, "sync", return_value=0), \
                 mock.patch.object(mail_sync, "_sub_antworten",
                                   side_effect=RuntimeError("V27A Sub")), \
-                mock.patch.object(mail_sync, "_outlook_ruecklauf", return_value=0), \
                 mock.patch.object(mail_sync, "_terminantworten", return_value=0):
             ergebnis = scheduler.jetzt_ausfuehren("mail-sync")
         self.assertTrue(ergebnis["ok"], ergebnis)

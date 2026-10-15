@@ -443,7 +443,8 @@ class Phase86GoLive(Basis):
         seite = self.client.get("/parametrierung/golive")
         self.assertEqual(seite.status_code, 200)
         punkte = golive.pruefen(self.s)
-        self.assertEqual(len(punkte), 11)
+        # v33 (PLAN_V20 Phase 166): 12. Punkt „Graph als Anwendung verbunden“ (Agent G)
+        self.assertEqual(len(punkte), 12)
         titel = [p.titel for p in punkte]
         self.assertIn("UGL-Testdatei von Collin bestätigt", titel)
         self.assertIn("Bestandsimport durchgeführt", titel)

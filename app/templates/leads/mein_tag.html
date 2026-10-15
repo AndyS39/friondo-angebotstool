@@ -1,234 +1,110 @@
 {% extends "base.html" %}
-{% import "_sparten.html" as sparten_ui %}
 {% from "_symbole.html" import symbol %}
-{% from "_komponenten.html" import leer_zustand, verfolgung_chip %}
-{# v32 (PLAN_V19 Phase 161/162/163): Vertriebler-Ansicht „Mein Tag“ – eine Spalte von
-   Karten (unter 600 px Vollbreite, sonst zentriert mit höchstens 720 px), Blöcke in dieser
-   Reihenfolge: Fällig heute (Anrufe, Phase 162) · Termine heute · Heiße Kunden (Phase 163)
-   · Weitere Termine. Daten: app/mein_tag.py (Termine aus vot_termine), app/nachfassen.py
-   (Fällig heute), verfolgung.heisse_vorgaenge (Heiße Kunden). Innendienst/Admin sehen
-   dieselbe Seite mit Vertriebler-Filter und Umschalter „Karten | Tabelle“. Design v2:
-   nur Tokens (app/static/mein_tag.css), keine on*-Attribute mit tojson – Logik in
-   app/static/mein_tag.js über data-Attribute. /leads ist Modul-Startseite (ohne
-   Zurück-Knopf, base.html). #}
+{% from "_komponenten.html" import leer_zustand, avatar %}
+{% import "leads/_karten.html" as mt with context %}
+{# v32 (PLAN_V19 Phase 161/162/163): Vertriebler-Ansicht „Mein Tag“.
+   v33 (PLAN_V20 Phase 173, Protokoll Claudia Castro 14.10.2026 Teil A): nur noch mobil –
+   diese Seite liefert dem Außendienst BEIDE Darstellungen: die Karten (.mt-mobil, unter
+   600 px) und die Tabelle „Leads VOT“ (.mt-desktop, ab 600 px, Partial leads/_tabelle.html);
+   die Media-Query in mein_tag.css blendet um. Aufbau der Karten nach dem Design-Entwurf:
+   (1) Kopf „Mittwoch, 14. Oktober“ + „Mein Tag“ + Initialen-Kreis (keine Kennzahlen),
+   (2) Karte „Als Nächstes“, (3) Liste „Heute“ mit Zeitstrahl, (4) Abschnitt „Wiedervorlage“
+   (ersetzt „Fällig heute“ und „Heiße Kunden“), (5) „Kommende Tage“, (6) untere feste Leiste
+   (leads/_leiste.html über base.html). Daten: app/mein_tag.py, app/nachfassen.py.
+   Design v2: nur Tokens (app/static/mein_tag.css), keine on*-Attribute mit tojson – Logik
+   in app/static/mein_tag.js über data-Attribute. /leads ist Modul-Startseite des
+   Außendienstes (ohne Zurück-Leiste, base.html). #}
+{% set zurueck_aus = true %}
 
-{# /leads ist für den Außendienst die Modul-Startseite – ohne Zurück-Leiste (v30-Regel);
-   Innendienst/Admin kommen vom Angebotstool-Portal und behalten den Knopf #}
-{% set zurueck_aus = aussendienst %}
+{% block titel %}Mein Tag – Friondo Angebotstool{% endblock %}
 
-{% block titel %}{{ 'Mein Tag' if aussendienst else 'Leads VOT – Mein Tag' }} – Friondo Angebotstool{% endblock %}
-
-{% block mainklasse %}mein-tag-seite{% endblock %}
+{% block mainklasse %}mein-tag-seite breit{% endblock %}
 
 {% block inhalt %}
 <link rel="stylesheet" href="/static/mein_tag.css?v={{ css_version }}">
-<div class="mt-kopf">
-    <div>
-        <h1>{{ 'Mein Tag' if aussendienst else 'Leads VOT' }}</h1>
-        <p class="dezent mt-datum">{{ heute | de_datum('%A, %d.%m.%Y') }}
-            {% if not aussendienst %}· Mein Tag (Karten){% endif %}</p>
-    </div>
-    {% if not aussendienst %}
-    <nav class="mt-umschalter" aria-label="Darstellung">
-        <a class="aktiv" href="/leads?darstellung=karten" aria-current="page">Karten</a>
-        <a href="/leads?darstellung=tabelle">Tabelle</a>
-    </nav>
-    {% endif %}
-</div>
-{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+<div class="mt-mobil" id="mein-tag">
+    {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-<details class="karte mt-filter" {{ 'open' if filter_aktiv }}>
-    <summary>{{ symbol('filter') }} Filter{% if filter_aktiv %} <span class="mt-zahl">aktiv</span>{% endif %}
-        <span class="dezent">· {{ termine_anzahl }} Termin{{ 'e' if termine_anzahl != 1 }}{% if termine_anzahl != termine_gesamt %} von {{ termine_gesamt }}{% endif %}</span></summary>
-    <form method="get" action="/leads" class="mt-filter-form">
-        <input type="hidden" name="darstellung" value="karten">
-        <label>Termin von <input type="date" name="von" value="{{ von }}"></label>
-        <label>bis <input type="date" name="bis" value="{{ bis }}"></label>
-        <label>Status
-            <select name="status">
-                <option value="">Alle Status</option>
-                {% for st in status_werte %}
-                <option value="{{ st }}" {{ 'selected' if status == st }}>{{ st }}</option>
-                {% endfor %}
-            </select>
-        </label>
-        {% if not aussendienst %}
-        <label>Vertriebler
-            <select name="vertriebler_id">
-                <option value="0">Alle Vertriebler</option>
-                {% for b in aussendienst_liste %}
-                <option value="{{ b.id }}" {{ 'selected' if vertriebler_id == b.id }}>{{ b.name }}</option>
-                {% endfor %}
-            </select>
-        </label>
-        {% endif %}
-        <div class="mt-filter-knoepfe">
-            <button class="knopf" type="submit">Filtern</button>
-            {% if filter_aktiv %}<a class="knopf zweitrangig" href="/leads">Zurücksetzen</a>{% endif %}
+    <header class="mt-kopf">
+        <div class="mt-kopf-text">
+            <span class="mt-datum">{{ heute_lang }}</span>
+            <h1>Mein Tag</h1>
         </div>
-    </form>
-    {% if not aussendienst %}
-    {# v27 (PLAN_V17 Phase 128): Hinweis + Bestätigung vor dem monday-Vollabgleich #}
-    <form method="post" action="/leads/sync" class="mt-sync"
-          onsubmit="return confirm('monday-Vollabgleich: {{ monday_hinweis | e }}. Jetzt starten?');">
-        <input type="hidden" name="bestaetigt" value="1">
-        <button class="knopf klein zweitrangig" type="submit" title="{{ monday_hinweis }}">Jetzt aktualisieren</button>
-        {% if sync_status and sync_status.letzter_sync %}
-        <span class="dezent">Letzter monday-Sync: {{ sync_status.letzter_sync.strftime('%d.%m.%Y %H:%M') }}
-            {% if sync_status.fehler %}· <span title="{{ sync_status.fehler | join(' · ') }}">⚠ Hinweise</span>{% endif %}</span>
-        {% endif %}
-    </form>
-    {% endif %}
-</details>
+        {{ avatar((benutzer.vorname ~ ' ' ~ benutzer.name) if benutzer.vorname else benutzer.name, benutzer.id, 'mt-avatar') }}
+    </header>
 
-{# ---- Anruf-Karte (Fällig heute, Phase 162) ---- #}
-{% macro anruf_karte(k) -%}
-<article class="mt-karte mt-anruf{{ ' mt-ueberfaellig' if k.ueberfaellig }}" id="faellig-{{ k.vorgang.id }}"
-         data-vorgang="{{ k.vorgang.id }}" data-mt-karte="faellig">
-    <div class="mt-zeile1">
-        <span class="mt-ampel mt-ampel-{{ k.ampel or 'leer' }}" title="Hot-Ampel: {{ k.ampel_text or 'keine Einstufung' }}" aria-label="Hot-Ampel {{ k.ampel_text or 'keine Einstufung' }}"></span>
-        <span class="mt-name">{{ k.name }}</span>
-        {% if k.grosskunde %}<span class="lm-grosskunde"{% if grosskunde_farbe %} style="--f:{{ grosskunde_farbe }}"{% endif %}>Großkunde</span>{% endif %}
-        {% if k.ueberfaellig %}<span class="mt-label mt-label-rot" title="Wiedervorlage vom {{ k.seit.strftime('%d.%m.%Y') }}">seit {{ k.seit_text }}</span>
-        {% else %}<span class="mt-label">heute</span>{% endif %}
-        <span class="mt-badges">{{ verfolgung_chip(k.verfolgung_status, True, k.vorgang.id) }}</span>
-    </div>
-    <div class="mt-telefon">
-        {% if k.telefon %}<a href="{{ k.tel_href }}" class="mt-tel">{{ symbol('telefon') }} {{ k.telefon }}</a>
-        {% else %}<span class="dezent">{{ symbol('telefon') }} keine Telefonnummer hinterlegt</span>{% endif %}
-    </div>
-    {% if k.angebot %}
-    <p class="mt-angebot">{{ symbol('euro') }}
-        <a href="{{ k.angebot.url_ad if aussendienst else k.angebot.url_id }}">{{ k.angebot.text }}</a></p>
-    {% else %}
-    <p class="mt-angebot dezent">{{ symbol('euro') }} Kein versendetes Angebot am Vorgang
-        {% if k.art %}· Wiedervorlage „{{ k.art }}“{% endif %}</p>
-    {% endif %}
-    <div class="mt-schritt">
-        {% if partial_da %}
-            {% set ctx = schritt_kontext.get(k.vorgang.id) or {} %}
-            {% with vorgang=k.vorgang, gruende=ctx.gruende, naechster_3wt=ctx.naechster_3wt,
-                    ziel=ziel, heute_iso=ctx.heute_iso, mit_notiz=false %}
-            {% include "vorgaenge/_naechster_schritt.html" ignore missing %}
-            {% endwith %}
-        {% else %}
-            {# Rückfall, solange das Partial von N fehlt: drei Knöpfe an die Route von N #}
-            <div class="mt-schritt-rueckfall">
-                <form method="post" action="/vorgaenge/{{ k.vorgang.id }}/naechster-schritt">
-                    <input type="hidden" name="schritt" value="abgelehnt"><input type="hidden" name="zurueck" value="{{ ziel }}">
-                    <button class="knopf gefaehrlich" type="submit">Abgelehnt</button></form>
-                <form method="post" action="/vorgaenge/{{ k.vorgang.id }}/naechster-schritt">
-                    <input type="hidden" name="schritt" value="bestellung"><input type="hidden" name="zurueck" value="{{ ziel }}">
-                    <button class="knopf mt-gruen" type="submit">Bestellung kommt</button></form>
-                <form method="post" action="/vorgaenge/{{ k.vorgang.id }}/naechster-schritt">
-                    <input type="hidden" name="schritt" value="nochmal"><input type="hidden" name="wann" value="3wt"><input type="hidden" name="zurueck" value="{{ ziel }}">
-                    <button class="knopf" type="submit">Nochmal anrufen</button></form>
+    {% if naechster %}{{ mt.als_naechstes(naechster) }}{% endif %}
+
+    <section class="mt-block" id="termine-heute">
+        {% if termine_ueberfaellig %}
+        {# überfällige Termine (Vergangenheit ohne Erfassung) zuoberst, aufklappbar – bei mehr
+           als drei eingeklappt, damit der heutige Tag nicht nach unten rutscht [eigene Annahme] #}
+        <details class="mt-ueberfaellig-block" id="termine-ueberfaellig" {{ 'open' if termine_ueberfaellig | length <= 3 }}>
+            <summary><span class="mt-zaehler-rot">{{ termine_ueberfaellig | length }} überfällige{{ 'r' if termine_ueberfaellig | length == 1 }} Termin{{ 'e' if termine_ueberfaellig | length != 1 }}</span>
+                <span class="dezent">ohne Erfassung – bitte nachfassen</span></summary>
+            <div class="mt-liste mt-zeitstrahl">
+                {% for k in termine_ueberfaellig %}{{ mt.termin_zeile(k) }}{% endfor %}
             </div>
+        </details>
         {% endif %}
-    </div>
-    <details class="mt-aktivitaeten">
-        <summary>Letzte Aktivitäten <span class="dezent">({{ k.aktivitaeten | length }})</span></summary>
-        {% if k.aktivitaeten %}
-        <ul>
-            {% for a in k.aktivitaeten %}
-            <li><span class="mt-akt-zeit">{{ a.zeit_text }}</span> <span class="mt-akt-art">{{ a.art }}</span> {{ a.text }}</li>
-            {% endfor %}
-        </ul>
-        {% else %}<p class="dezent">Noch keine Aktivitäten.</p>{% endif %}
-    </details>
-    <form method="post" action="/leads/notiz/{{ k.vorgang.id }}" class="mt-notiz" data-mt-notiz="{{ k.vorgang.id }}">
-        <input type="hidden" name="zurueck" value="{{ ziel }}">
-        <label>Notiz zum Gespräch
-            <textarea name="text" rows="2" maxlength="2000" data-ns-notiz="{{ k.vorgang.id }}"
-                      placeholder="Was hat der Kunde gesagt? (landet im Notizen-Chat)"></textarea></label>
-        <div class="mt-notiz-aktionen">
-            <button class="knopf klein zweitrangig" type="submit">Notiz speichern</button>
-            <span class="mt-notiz-meldung dezent" aria-live="polite" hidden></span>
-            <a class="mt-akte" href="{{ k.akte_url }}">Akte</a>
+        <div class="mt-block-kopf">
+            <h2>Heute</h2>
+            <span class="mt-zaehler">{{ termine_heute_nur | length }} Termin{{ 'e' if termine_heute_nur | length != 1 }}</span>
         </div>
-    </form>
-</article>
-{%- endmacro %}
+        {% if termine_heute_nur %}
+        <div class="mt-liste mt-zeitstrahl">
+            {% for k in termine_heute_nur %}{{ mt.termin_zeile(k) }}{% endfor %}
+        </div>
+        {% else %}{{ leer_zustand('Heute keine Termine.') }}{% endif %}
+    </section>
 
-{# ---- Termin-Karte (Phase 161) ---- #}
-{% macro termin_karte(k) -%}
-<article class="mt-karte mt-termin{{ ' mt-ueberfaellig' if k.ueberfaellig }}" data-termin="{{ k.termin.id }}" data-mt-karte="termin">
-    <div class="mt-zeile1">
-        <span class="mt-datum-zeit"><strong>{{ k.datum_text }}</strong> · <strong class="mt-uhr">{{ k.uhr_text }}</strong></span>
-        {% if k.ueberfaellig %}<span class="mt-label mt-label-rot" title="Termin liegt in der Vergangenheit – Erfassung fehlt">überfällig</span>
-        {% elif k.teilweise %}<span class="mt-label" title="Termin liegt in der Vergangenheit – noch nicht alle Sparten erfasst">teilweise erfasst</span>{% endif %}
-        <span class="mt-badges">
-            {% for sparte, status in k.chips %}{{ sparten_ui.chip(sparte, status) }}{% endfor %}
-            <span class="mt-herkunft" title="Herkunft des Termins">{{ k.herkunft }}</span>
-        </span>
-    </div>
-    <div class="mt-name">{{ k.name }}
-        {% if k.grosskunde %}<span class="lm-grosskunde"{% if grosskunde_farbe %} style="--f:{{ grosskunde_farbe }}"{% endif %}>Großkunde</span>{% endif %}
-        {% if not aussendienst and k.ad_name %}<span class="dezent mt-ad">· {{ k.ad_name }}</span>{% endif %}</div>
-    <div class="mt-adresse">{{ symbol('ort') }}
-        {% if k.adresse %}
-        <a href="{{ k.maps_url }}" target="_blank" rel="noopener" title="In Google Maps öffnen (neuer Tab)">
-            {%- if k.objekt_bezeichnung %}<span class="mt-objekt">{{ k.objekt_bezeichnung }}:</span> {% endif -%}
-            {{ k.strasse }}{% if k.strasse and k.plz_ort %}, {% endif %}{{ k.plz_ort }} ↗</a>
-        {% else %}<span class="dezent">keine Adresse</span>{% endif %}
-    </div>
-    <div class="mt-telefon">
-        {% if k.telefon %}<a href="{{ k.tel_href }}" class="mt-tel">{{ symbol('telefon') }} {{ k.telefon }}</a>
-        {% else %}<span class="dezent">{{ symbol('telefon') }} keine Telefonnummer hinterlegt</span>{% endif %}
-    </div>
-    <div class="mt-aktionen">
-        <a class="knopf mt-haupt" href="{{ k.erfassen_url }}">Erfassung starten</a>
-        <a class="mt-akte" href="{{ k.akte_url }}">Akte</a>
-    </div>
-</article>
-{%- endmacro %}
+    <section class="mt-block mt-wv" id="wiedervorlage" data-mt-wv>
+        <div class="mt-wv-kopf">
+            <span class="mt-wv-symbol" aria-hidden="true">{{ symbol('wiedervorlage') }}</span>
+            <div class="mt-wv-titel">
+                <h2>Wiedervorlage</h2>
+                <span class="mt-untertitel">Vorgänge, die auf Rückmeldung warten</span>
+            </div>
+            <span class="mt-wv-zahl" data-mt-wv-gesamt>{{ wv_zaehler.alle }}</span>
+        </div>
+        {{ mt.wv_filter(wv_zaehler) }}
+        <div class="mt-wv-liste" data-mt-wv-liste data-mt-max="{{ wv_max }}">
+            {% for k in wiedervorlagen %}{{ mt.wv_karte(k, versteckt=(loop.index > wv_max)) }}{% endfor %}
+        </div>
+        <div class="mt-wv-leer" data-mt-wv-leer {{ '' if not wiedervorlagen else 'hidden' }}>
+            {{ leer_zustand('Keine Vorgänge, die auf Rückmeldung warten.') }}
+            <p class="dezent mt-wv-leer-zeile" data-mt-wv-leer-filter hidden>Filter anpassen.</p>
+        </div>
+        <a class="mt-wv-alle" href="/leads/wiedervorlagen">Alle <span data-mt-wv-gesamt>{{ wv_zaehler.alle }}</span> Wiedervorlagen anzeigen <span aria-hidden="true">→</span></a>
+    </section>
 
-{# ---- Heiße-Kunden-Karte (Phase 163, Darstellung) ---- #}
-{% macro heiss_karte(k) -%}
-<article class="mt-karte mt-heiss" data-vorgang="{{ k.vorgang.id }}" data-mt-karte="heiss">
-    <div class="mt-zeile1">
-        <span class="mt-ampel mt-ampel-{{ k.ampel or 'leer' }}" aria-hidden="true"></span>
-        <span class="mt-name">{{ k.name }}</span>
-        {% if k.grosskunde %}<span class="lm-grosskunde"{% if grosskunde_farbe %} style="--f:{{ grosskunde_farbe }}"{% endif %}>Großkunde</span>{% endif %}
-        <span class="mt-chip mt-chip-{{ k.chip_klasse }}">{{ k.chip }}</span>
-    </div>
-    <div class="mt-telefon">
-        {% if k.telefon %}<a href="{{ k.tel_href }}" class="mt-tel">{{ symbol('telefon') }} {{ k.telefon }}</a>
-        {% else %}<span class="dezent">{{ symbol('telefon') }} keine Telefonnummer hinterlegt</span>{% endif %}
-    </div>
-    {% if k.angebot %}<p class="mt-angebot">{{ symbol('euro') }} <a href="{{ k.angebot.url_ad if aussendienst else k.angebot.url_id }}">{{ k.angebot.text }}</a></p>{% endif %}
-    <div class="mt-aktionen mt-aktionen-klein">
-        <span class="dezent">{{ symbol('wiedervorlage') }} Nächste Wiedervorlage: {{ k.wiedervorlage_text or '–' }}</span>
-        <a class="mt-akte" href="{{ k.akte_url }}">Akte</a>
-    </div>
-</article>
-{%- endmacro %}
+    <section class="mt-block" id="kommende-tage">
+        <div class="mt-block-kopf"><h2>Kommende Tage</h2></div>
+        {% for tag in kommende %}
+        <div class="mt-tag" data-tag="{{ tag.iso }}">
+            <div class="mt-tag-kopf">
+                <span class="mt-datumskachel" aria-hidden="true"><span class="mt-wd">{{ tag.wochentag }}</span><span class="mt-nr">{{ tag.tag_nr }}</span></span>
+                <div class="mt-tag-text">
+                    <span class="mt-tag-titel">{{ tag.titel }}</span>
+                    <span class="mt-tag-zaehler">{{ tag.zaehler }}</span>
+                </div>
+            </div>
+            <div class="mt-liste mt-tag-liste">
+                {% for k in tag.termine %}{{ mt.termin_zeile(k, klein=true) }}{% endfor %}
+            </div>
+        </div>
+        {% else %}
+        {{ leer_zustand('Keine Termine in den nächsten 14 Tagen.') }}
+        {% endfor %}
+        {% if spaeter %}
+        <p class="dezent mt-fuss">{{ spaeter }} weitere{{ 'r' if spaeter == 1 }} Termin{{ 'e' if spaeter != 1 }} nach dem {{ grenze_text }} –
+            <a href="/lead-management/meine-termine">Kalender</a></p>
+        {% endif %}
+    </section>
+</div>
 
-<section class="mt-block" id="faellig">
-    <h2>Fällig heute <span class="mt-zahl{{ ' rot' if faellig }}">{{ faellig | length }}</span></h2>
-    {% for k in faellig %}{{ anruf_karte(k) }}{% else %}{{ leer_zustand('Heute nichts offen.') }}{% endfor %}
-</section>
-
-<section class="mt-block" id="termine-heute">
-    <h2>Termine heute <span class="mt-zahl">{{ termine_heute | length }}</span>
-        {% if ueberfaellig_anzahl %}<span class="mt-label mt-label-rot">{{ ueberfaellig_anzahl }} überfällig</span>{% endif %}</h2>
-    {% for k in termine_heute %}{{ termin_karte(k) }}{% else %}{{ leer_zustand('Heute nichts offen.') }}{% endfor %}
-</section>
-
-<section class="mt-block" id="heisse-kunden">
-    <h2>Heiße Kunden <span class="mt-zahl">{{ heiss | length }}</span></h2>
-    {% for k in heiss %}{{ heiss_karte(k) }}{% else %}{{ leer_zustand('Keine heißen Kunden.') }}{% endfor %}
-</section>
-
-<section class="mt-block" id="weitere-termine">
-    <h2>Weitere Termine <span class="mt-zahl">{{ termine_weitere | length }}</span></h2>
-    {% for k in termine_weitere %}{{ termin_karte(k) }}{% else %}{{ leer_zustand('Keine weiteren Termine.') }}{% endfor %}
-</section>
-
-{{ sparten_ui.legende() }}
-{% if aussendienst %}
-<p class="dezent mt-fuss">Termine stammen aus dem Terminassistenten und monday (Vor-Ort-Termine);
-    <a href="/lead-management/meine-termine">Meine Termine</a> zeigt denselben Bestand mit To-Dos.</p>
-{% endif %}
+<div class="mt-desktop">
+    {% include "leads/_tabelle.html" %}
+</div>
 <script src="/static/mein_tag.js?v={{ css_version }}" defer></script>
 {% endblock %}

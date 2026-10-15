@@ -42,7 +42,8 @@ PLATZHALTER = [
     ("{foerderung}", "voraussichtliche KfW-Förderung (nur WP – bei PV/KL leer)"),
     ("{gueltig_bis}", "Angebotsdatum + 30 Tage"),
     ("{vertriebler}", "Name des Außendienstlers des Vorgangs"),
-    ("{absender}", "Name des angemeldeten Innendienst-Mitarbeiters"),
+    ("{absender}", "Name des Absenders – beim „Versand vorbereiten“ der angemeldete Innendienst-"
+                   "Mitarbeiter, bei der Nachfass-Mail (v33) der sendende Außendienstler"),
     # v30 (PLAN_V18 Phase 150) [ANNAHME]: Name des am Angebot gewählten Eintrags
     ("{zahlungsbedingung}", "Name der am Angebot gewählten Zahlungsbedingung, "
                             "z. B. „80 % Anzahlung, 2 % Skonto“ (Standard: „Standard“)"),
@@ -309,6 +310,96 @@ def mail_fuer_angebot(session, angebot: Angebot, kunde: Kunde | None,
     werte = werte_fuer_angebot(session, angebot, kunde, absender_name)
     return (einsetzen(betreff, werte),
             einsetzen_html(als_html(text), werte), quelle)
+
+
+# --- v33 (PLAN_V20 Phase 176, Agent N): Nachfass-Vorlagen „Nachfassen 1“ / „Nachfassen 2“ ---
+# Der Außendienstler sendet sie aus seinem eigenen Postfach (app/nachfassen.py,
+# graph_versand.mail_senden_als); Pflege im Vorlagen-Editor (Parametrierung → E-Mail-
+# Vorlagen, Reiter Nachfassen 1/2), Ablage mail_vorlage_nachfassen_<nr>_betreff/_text.
+# Platzhalter wie die Angebotsvorlagen; {absender} = Name des sendenden Außendienstlers,
+# {vertriebler} = AD des Vorgangs. Die Signatur des Absenders hängt das Tool darunter.
+# Standardtexte sind Entwürfe [ANNAHME] – Rückfrage an Andreas/Innendienst im Bericht.
+
+NACHFASS_NUMMERN = (1, 2)
+NACHFASS_NAMEN = {1: "Nachfassen 1", 2: "Nachfassen 2"}
+NACHFASS_BETREFF = {
+    1: "Ihr Angebot {angebotsnummer} der Friondo GmbH – haben Sie noch Fragen?",
+    2: "Ihr Angebot {angebotsnummer} – kurze Nachfrage",
+}
+NACHFASS_TEXT = {
+    1: ("{briefanrede}\n\n"
+        "vor einigen Tagen haben Sie unser Angebot {angebotsnummer} erhalten. Ich wollte "
+        "mich kurz erkundigen, ob Sie schon einen Blick darauf werfen konnten und ob noch "
+        "Fragen offen sind – zum Beispiel zur Technik, zur Förderung oder zum Ablauf.\n\n"
+        "Gerne bespreche ich alles Weitere persönlich mit Ihnen: Rufen Sie mich einfach an "
+        "oder antworten Sie auf diese E-Mail, dann melde ich mich bei Ihnen.\n\n"
+        "Mit freundlichen Grüßen\n"
+        "{absender}"),
+    2: ("{briefanrede}\n\n"
+        "ich habe Sie leider telefonisch nicht erreicht und wollte mich noch einmal zu "
+        "unserem Angebot {angebotsnummer} über {endbetrag} melden. Falls noch etwas unklar "
+        "ist oder Sie Bedenken haben, lassen Sie es mich gerne wissen – wir finden gemeinsam "
+        "eine Lösung.\n\n"
+        "Sollten Sie sich bereits anders entschieden haben, freue ich mich über eine kurze "
+        "Rückmeldung, damit ich das Angebot bei uns entsprechend ablegen kann.\n\n"
+        "Mit freundlichen Grüßen\n"
+        "{absender}"),
+}
+
+
+def nachfass_nummer(wert) -> int:
+    """1 oder 2 (alles andere → 1); nimmt auch „nachfassen_2“."""
+    roh = str(wert or "").strip().lower().replace("nachfassen_", "").replace("nachfassen", "")
+    try:
+        nr = int(roh or 1)
+    except ValueError:
+        nr = 1
+    return nr if nr in NACHFASS_NUMMERN else 1
+
+
+def nachfass_schluessel(nr: int) -> str:
+    return f"mail_vorlage_nachfassen_{nachfass_nummer(nr)}"
+
+
+def nachfass_vorlage_laden(session, nr: int) -> tuple[str, str, bool]:
+    """(betreff, text, eigene) – gespeicherte Vorlage „Nachfassen n“, sonst der
+    Standardtext (eigene = False); je Feld Rückfall auf den Standard."""
+    nr = nachfass_nummer(nr)
+    schluessel = nachfass_schluessel(nr)
+    betreff = einstellung_holen(session, schluessel + "_betreff", "")
+    text = einstellung_holen(session, schluessel + "_text", "")
+    eigene = bool(betreff or text)
+    return (betreff or NACHFASS_BETREFF[nr], text or NACHFASS_TEXT[nr], eigene)
+
+
+def nachfass_vorlage_speichern(session, nr: int, betreff: str, text: str) -> None:
+    """Vorlage „Nachfassen n“ schreiben; beide Felder leer = Standard gilt wieder."""
+    schluessel = nachfass_schluessel(nr)
+    einstellung_setzen(session, schluessel + "_betreff", (betreff or "").strip())
+    einstellung_setzen(session, schluessel + "_text", (text or "").strip())
+
+
+def nachfass_status(session) -> dict[int, bool]:
+    """Je Nachfass-Vorlage: ist eine eigene gespeichert? (Reiter-Beschriftung)."""
+    return {nr: nachfass_vorlage_laden(session, nr)[2] for nr in NACHFASS_NUMMERN}
+
+
+def nachfass_mail_fuer_vorgang(session, angebot: Angebot, kunde: Kunde | None, nr: int,
+                               absender_name: str = "") -> tuple[str, str, str]:
+    """Fertiger Betreff, HTML-Text und Klartext (Alternativkörper) der Nachfass-Mail
+    „Nachfassen n“ für ein Angebot; Platzhalter wie werte_fuer_angebot, {absender} =
+    sendender Außendienstler."""
+    import html as html_modul
+    import re as re_modul
+    nr = nachfass_nummer(nr)
+    betreff, text, _eigene = nachfass_vorlage_laden(session, nr)
+    werte = werte_fuer_angebot(session, angebot, kunde, absender_name)
+    html_text = einsetzen_html(als_html(text), werte)
+    klartext = einsetzen(text, werte)
+    if ist_html(text):   # HTML-Vorlage aus dem Editor → lesbarer Klartext
+        klartext = re_modul.sub(r"<\s*(?:br|/p|/div|/li)\s*/?>", "\n", klartext, flags=re_modul.I)
+        klartext = html_modul.unescape(re_modul.sub(r"<[^>]+>", "", klartext)).strip()
+    return einsetzen(betreff, werte), html_text, klartext
 
 
 # --- v27-Nachtrag 2: Sparten-Vorlagen aus der Standard-Vorlage ableiten ----------

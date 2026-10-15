@@ -942,3 +942,53 @@ Fundament und Integration durch den Orchestrator. Berichte: `diagnose/v31/*_erge
 | O-R2 | Screenshots `docs/design-v30/` auf echte Kundennamen prüfen (v31/v32 wurden von einer anonymisierten Kopie aufgenommen) | offen |
 | O-R3 | Agent AT hat verwaiste Test-PDFs in `data/angebote/` entfernt (Nummern ohne Datensatz) – zur Kenntnis | Hinweis |
 | O-R4 | Der Innendienst sieht in der Parametrierung die Lead-Einträge Quellen & Kampagnen (inkl. API-Keys), Parser, Routing, Vorlagen und Steuerdatei – wie in v30 bei Modus „alle“ (jetzt dauerhaft). Auf Admin/Leadmanagement beschränken? | offen |
+
+## V33 (PLAN_V20, 14.10.2026) – Phasen 169 (Kalender, Vertriebsteil), 175 (Lead-Nachträge); 173/176 siehe Nachtrag unten
+
+### Zentraler Planungskalender – Vertriebsteil (Agent K)
+
+| Nr | Entscheidung | Stand |
+|---|---|---|
+| K-L1 | Basisrolle leadmanagement zählt zur Gruppe „Innendienst“ (Plan nennt acht Gruppen ohne Leadmanagement) | gebaut, Rückfrage R2 |
+| K-L2 | VOT nur in offenen Status (geplant, bestätigt, unbestätigt, vorgemerkt – gestrichelt); erfolgte/abgesagte/No-Show/verschobene nicht | gebaut, Rückfrage R3 |
+| K-L3 | Auswahl (Gruppen, Wochenende, Ansicht) je Nutzer UND je Einstieg gemerkt (`kalender_gruppen`), damit Lead- und Projektierungs-Einstieg sich nicht überschreiben | gebaut |
+| K-L4 | Drag eines VOT = Umbuchung wie Kartei/Lead-Kalender (`lead_termin.termin_anlegen(umbuchen_id=…)`: neuer Termin, alter „verschoben“, ICS-UID + SEQUENCE, Terminänderungs-Mail, Slot-frei-Glocke); Vorab-Gespräche direkt verschoben; Drag in die Zeile eines anderen AD = Vertrieblerwechsel | gebaut, Rückfrage R6 |
+| K-L5 | Konfliktwarnung als Bestätigungsdialog: „sperren“ (harte Überschneidung) abgelehnt, „warnen“ (Puffer, Arbeitszeit, Kapazität, Outlook) fragt nach | gebaut |
+| K-L6 | Doppelklick → Such-Dialog Kunde (`app.suche`) → Terminassistent mit `?ad_id&woche&beginn=` (Vorbelegung des manuellen Formulars in `lm_termin.js`) | gebaut |
+| K-L7 | Rechte: VOT verschieben Admin/Innendienst/Leadmanagement und der zuständige AD für den eigenen Termin; monday-Termine und Sperrzeiten nie; Testphase (`terminierung_aktiv = aus`) sperrt den Drag | gebaut |
+| K-L8 | `GET /lead-management/kalender` (v12 Wochenkalender je AD) leitet auf `/kalender?gruppe=vertrieb&ansicht=woche&datum=…&person=…` um [ANNAHME Plan]; `?alt=1` und `?meldung=` zeigen die alte Ansicht (Übergang) | gebaut, Rückfrage R1 |
+| K-L9 | Außendienst/Handelsvertreter erreichen `/kalender` (eigene Zeile; `auth.AUSSENDIENST_PFADE`) | gebaut (Rückfrage R4 so entschieden) |
+
+### Lead-Nachträge (Agent R)
+
+ Simons Gruppe = `ad_id` Gruppenleiter + Marker-Aktivität
+(Alternative Spalte `vorgaenge.hv_gruppe` – R1); SWD-Kanal = Anzeigewert „Stadtwerke Düsseldorf“ mit Alias „SWD“, Regel
+mit allen Schreibweisen hinterlegt, `lead_termin` unverändert (Semantik „fest zuständig“, R2); Infotext entfällt
+(Spalte bleibt). `docs/design-system.md`: Rollen-Seite nutzt nur bestehende Klassen (`tabelle`, `karte formular`,
+`abzeichen status-*`, `kontrollfeld`), Badge „noch nicht verteilt“ = `abzeichen status-versand-vorbereitet` (Orange-
+Token), kein neues CSS.
+
+### Outlook je Person (Phase 170, Agent O)
+
+VOT-Kopie beim zuständigen Vertriebler (Schalter `kalender_sync` bleibt der VOT-Schalter, Rückfrage O-R2);
+Handelsvertreter nur mit Friondo-Postfach (sonst Stand „HV ohne Postfach“); Demo-Termine ins Testpostfach;
+Belegtzeiten im Terminassistenten aus dem Cache `outlook_belegt` (Lauf `outlook-ruecklesen`), nie Graph im
+Request; Verschiebung in Outlook zieht den Tool-Termin nach, ohne Kundenmail (Rückfrage O-R5); Löschen in
+Outlook löscht nie im Tool (Markierung + Glocke an den Leadmanager, Rückfrage O-R4). Betreff-Muster
+„<Art>: <Kunde>, <PLZ Ort> (<Nummer>)“ [ANNAHME bis TAIFUN-Abgleich, Rückfrage O-R3].
+
+### Mein Tag mobil und Nachfassen (Phasen 173/176, Agenten M und N) – Nachtrag
+
+| Nr | Entscheidung | Stand |
+|---|---|---|
+| M-1 | Karten nur mobil (< 600 px, CSS-Media-Query, beide Darstellungen im HTML); Innendienst/Admin nur Tabelle; Umschalter „Karten | Tabelle“ und Blöcke Fällig heute/Heiße Kunden/Weitere Termine entfallen (Protokoll A.1) | gebaut |
+| M-2 | Überfällige Termine als eigener aufklappbarer Block über „Heute“ (eingeklappt ab vier) statt ungekürzt in der Heute-Liste | gebaut, Rückfrage M-1 |
+| M-3 | Hot-Ampel leer = Priorität Niedrig (Badge immer vorhanden) | gebaut, Rückfrage M-2 |
+| M-4 | Erledigt = alle Sparten des Termin-Objekts abgesendet/ausgeblendet (kein Haken); Telefon-/Teams-Termine ohne Erfassung bis Tagesende, am Folgetag weg | gebaut |
+| M-5 | Desktop-Tabelle Lead-basiert (wie seit v1), Gruppen Überfällig · Heute · je Folgetag; Priorität = Hot-Ampel als Filter | gebaut, Rückfrage M-3 |
+| M-6 | Untere Leiste: Kalender = „Meine Termine“ (Plan-Wortlaut), nicht `/kalender?gruppe=vertrieb` | gebaut, Rückfrage M-4 |
+| N-1 | „Kontakt“ = Notizen-Chat aller Herkünfte (auch System), Anruf, Lead-Mail, Mail-Verlauf, Angebotsversand; Wiedervorlage in der Zukunft schützt nicht | gebaut, Rückfrage N-7 |
+| N-2 | Zähler „Nachgefasst (n)“ nur bei Stufe nachgefasst; `nachfass_versuche` bleibt am Vorgang | gebaut, Rückfrage N-8 |
+| N-3 | Innendienst/Admin dürfen die Nachfass-Mail aus ihrem eigenen Postfach senden (gleiche Rechte wie „Nächster Schritt“) | gebaut, Rückfrage N-5 |
+| N-4 | Einwand-Startliste: Förderung unklar · wartet auf Mitbewerber · Entscheidung in der Familie · Finanzierung offen; Nachfass-Vorlagen 1/2 als Entwurf; PDF-Häkchen Standard aus | gebaut, Rückfragen N-1/N-2/N-4 |
+| N-5 | Versand (Graph) vor dem `_speichern`-Muster, nie doppelt senden; Kundenantworten auf die Nachfass-Mail bleiben im AD-Postfach (kein CC an angebot@) | gebaut, Rückfrage N-6 |

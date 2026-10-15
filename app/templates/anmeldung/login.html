@@ -25,7 +25,7 @@
                 <label>Benutzer
                     <select name="benutzer_id" id="login-benutzer">
                         {% for b in benutzer %}
-                            <option value="{{ b.id }}"{% if b.rolle in mobile_rollen %} data-mobil="1"{% endif %}>{{ b.name }} ({{ b.rolle }})</option>
+                            <option value="{{ b.id }}"{% if b.basisrolle in mobile_rollen %} data-mobil="1"{% endif %}>{{ b.name }} ({{ b.rolle }})</option>
                         {% endfor %}
                     </select>
                 </label>

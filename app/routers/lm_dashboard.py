@@ -39,7 +39,7 @@ TODOS = "/lead-management/todos"
 
 def _ad_ohne_hv(session: Session, benutzer) -> bool:
     """Außendienst ohne Handelsvertreter-Kennzeichen bleibt bei Meine Termine."""
-    return (benutzer is not None and benutzer.rolle == "aussendienst"
+    return (benutzer is not None and benutzer.basisrolle == "aussendienst"
             and not lead_v2.ist_handelsvertreter(session, benutzer))
 
 
@@ -280,7 +280,7 @@ def abwesenheit_beenden(request: Request, eintrag_id: int,
     form = anfrage.formular(request)
     zurueck = _zurueck(request, form, standard_zurueck)
     eintrag = session.get(BenutzerAbwesenheit, eintrag_id)
-    if eintrag is None or (eintrag.benutzer_id != benutzer.id and benutzer.rolle != "admin"):
+    if eintrag is None or (eintrag.benutzer_id != benutzer.id and benutzer.basisrolle != "admin"):
         raise HTTPException(status_code=404)
     abwesenheiten.beenden(session, eintrag_id, form.get("bis") or None)
     session.commit()

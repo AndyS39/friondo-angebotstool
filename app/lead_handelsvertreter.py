@@ -33,6 +33,7 @@ from app.models import (AdProfil, Benutzer, Kunde, Lead, LeadAktivitaet,
                         LeadQuelle, MondayQuelle, Todo, Vorgang, VotTermin,
                         ANRUF_ERGEBNIS_NAMEN, LEAD_PHASEN_NAMEN,
                         TERMIN_TYP_NAMEN)
+from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 
 # Rechte-Matrix als Daten (für Doku/Abnahme; Reihenfolge = Anzeige)
 RECHTE_MATRIX = [
@@ -71,7 +72,8 @@ KONTAKT_TYPEN = {"anruf": "Anruf", "mail_aus": "E-Mail", "mail_ein": "E-Mail (Ei
 # --- Rechte ------------------------------------------------------------------------
 
 def ist_hv(session: Session, benutzer) -> bool:
-    """Kennzeichen „terminiert selbst“ (A-1) – Hauptrolle aussendienst."""
+    """Kennzeichen „terminiert selbst“ (A-1) – Hauptrolle aussendienst; v33: auch das
+    Rollen-Kennzeichen der Variante Handelsvertreter (lead_v2.ist_handelsvertreter)."""
     return lead_v2.ist_handelsvertreter(session, benutzer)
 
 
@@ -89,7 +91,7 @@ def hv_kreis(session: Session) -> dict:
     Profil) plus namentlich bekannte Außendienstler ohne Kennzeichen (Rene/
     Simon vor der Migration) – {id: (benutzer, gekennzeichnet)}."""
     kreis = {b.id: (b, True) for b in lead_v2.handelsvertreter_liste(session)}
-    for b in session.query(Benutzer).filter(Benutzer.rolle == "aussendienst",
+    for b in session.query(Benutzer).filter(rollen_modul.filter_basis("aussendienst"),
                                             Benutzer.aktiv.is_(True)):
         if b.id not in kreis and lead_v2.ist_handelsvertreter_name(b.name):
             kreis[b.id] = (b, False)
@@ -337,7 +339,7 @@ def dropdown_sperre(session: Session, vorgang: Vorgang, kunde: Kunde | None = No
 
 def _leitung_ids(session: Session) -> list:
     return [b.id for b in session.query(Benutzer).filter(Benutzer.aktiv.is_(True))
-            if b.rolle == "admin" or b.hat_rolle("leadmanagement")]
+            if b.basisrolle == "admin" or b.hat_rolle("leadmanagement")]
 
 
 def kanal_hinweis(session: Session, vorgang: Vorgang, kunde: Kunde | None = None,
@@ -418,7 +420,9 @@ def benutzer_abgleich(session: Session) -> dict:
             continue
         for b in treffer:
             p = profile.get(b.id)
-            if b.aktiv and b.rolle == "aussendienst" and not (p and p.terminiert_selbst):
+            # v33 (Phase 167): Rollen-Kennzeichen zählt wie das Profil-Kennzeichen
+            if (b.aktiv and b.basisrolle == "aussendienst" and not (p and p.terminiert_selbst)
+                    and not b.hat_kennzeichen("handelsvertreter")):
                 ohne_kennzeichen.append(b.name)
     return {"fehlen": fehlen, "ohne_kennzeichen": ohne_kennzeichen}
 
@@ -491,6 +495,8 @@ def zeilen_bauen(session: Session, vorgaenge: list, kreis: dict | None = None) -
         kontakte.setdefault(a.vorgang_id, a)
     farben = _kanal_farben(session)
     ids_hv = {b for b, (_, gekennzeichnet) in kreis.items() if gekennzeichnet}
+    # v33 (PLAN_V20 Phase 175): Kennzeichen „Simons Gruppe (noch nicht verteilt)“ je Zeile
+    gruppe_offen = lead_v2.hv_gruppe_offen_ids(session, vorgaenge)
     zeilen = []
     for v in vorgaenge:
         kunde = kunden.get(v.kunde_id)
@@ -531,6 +537,7 @@ def zeilen_bauen(session: Session, vorgaenge: list, kreis: dict | None = None) -
                             if termin is not None and termin.beginn else ""),
             "hv": hv, "hv_id": hv_id,
             "aus_monday": bool(hv_id and not v.ad_id),
+            "hv_gruppe_offen": v.id in gruppe_offen,   # v33 (Phase 175)
             "sperre": sperre, "sperre_kurz": sperre_kurz,
             "kanal_hinweis": kanal_hinweis(session, v, kunde, ids_hv=ids_hv, grund=aus_grund),
             "quelle": quelle, "quelle_gruppe": kern.quelle_gruppe(quelle),
@@ -613,7 +620,7 @@ def gruppieren(zeilen: list, kreis: dict) -> list:
 
 
 HV_ZEILEN_KEYS = ("hv", "hv_id", "aus_monday", "sperre", "sperre_kurz", "kanal_hinweis",
-                  "offen", "wiedervorlage")
+                  "offen", "wiedervorlage", "hv_gruppe_offen")   # v33: Simons Gruppe
 
 
 def tabelle_makro_vorhanden() -> bool:

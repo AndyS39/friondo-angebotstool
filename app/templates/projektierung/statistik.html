@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block titel %}Projektierung – Statistik{% endblock %}
+
+{% block mainklasse %}breit pj-voll{% endblock %}
+
+{% block inhalt %}
+{# v33 (PLAN_V20 Phase 168) [ANNAHME]: Statistik der Projektierung – Zahl der
+   Service-Einsätze je Monat (nach Beginn), je Gewerk, je Anlass, davon beendet.
+   Nur Tokens (Design v2). #}
+<div class="seitenkopf">
+    <div>
+        <div class="pj-eyebrow">Projektierung</div>
+        <h1>Statistik · Service-Einsätze</h1>
+    </div>
+    <div class="aktionen">
+        <a class="pj-btn" href="/projektierung">Board</a>
+        <a class="pj-btn" href="/projektierung/termine">Terminliste</a>
+        <a class="pj-btn {{ 'primary' if monate == 12 }}" href="/projektierung/statistik?monate=12">12 Monate</a>
+        <a class="pj-btn {{ 'primary' if monate == 24 }}" href="/projektierung/statistik?monate=24">24 Monate</a>
+    </div>
+</div>
+{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+<div class="pj-stat-kacheln">
+    <div class="kachel stat"><span class="stat-zahl">{{ summe.gesamt }}</span><span>Service-Einsätze ({{ monate }} Monate)</span></div>
+    <div class="kachel stat"><span class="stat-zahl">{{ summe.heizung }}</span><span>Heizung</span></div>
+    <div class="kachel stat"><span class="stat-zahl">{{ summe.elektro }}</span><span>Elektro</span></div>
+    <div class="kachel stat"><span class="stat-zahl">{{ summe.beendet }}</span><span>beendet</span></div>
+</div>
+
+<table class="tabelle pj-stat-tabelle">
+    <thead>
+        <tr><th>Monat</th><th class="rechts">Einsätze</th><th class="rechts">Heizung</th><th class="rechts">Elektro</th>
+            {% for key, name in anlaesse %}<th class="rechts">{{ name }}</th>{% endfor %}
+            <th class="rechts">beendet</th></tr>
+    </thead>
+    <tbody>
+        {% for z in zeilen %}
+        <tr class="{{ 'leer' if not z.gesamt }}">
+            <td class="pj-mono">{{ z.name }}</td>
+            <td class="rechts pj-mono"><b>{{ z.gesamt }}</b></td>
+            <td class="rechts pj-mono">{{ z.heizung }}</td>
+            <td class="rechts pj-mono">{{ z.elektro }}</td>
+            {% for key, name in anlaesse %}<td class="rechts pj-mono">{{ z.anlaesse.get(key, 0) }}</td>{% endfor %}
+            <td class="rechts pj-mono">{{ z.beendet }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr><td>Summe</td>
+            <td class="rechts pj-mono"><b>{{ summe.gesamt }}</b></td>
+            <td class="rechts pj-mono">{{ summe.heizung }}</td>
+            <td class="rechts pj-mono">{{ summe.elektro }}</td>
+            {% for key, name in anlaesse %}<td class="rechts pj-mono">{{ summe.anlaesse.get(key, 0) }}</td>{% endfor %}
+            <td class="rechts pj-mono">{{ summe.beendet }}</td></tr>
+    </tfoot>
+</table>
+<p class="dezent">Zählung nach dem Beginn des Einsatzes; Service-Einsätze am Vorgang ohne Projekt zählen mit.
+    Service-Einsätze haben keine Phase – das Projektboard bleibt unverändert.</p>
+{% endblock %}

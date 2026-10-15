@@ -77,7 +77,7 @@ def _zaehler(session: Session, dienst: str) -> None:
     Schreiber zwischenzeitlich festgeschrieben hat; der busy_timeout greift dort
     nicht). Scheitert der Zähler trotzdem, wird er übersprungen statt die Anfrage
     (Terminvorschläge, Geocoding) mit 500 abzubrechen."""
-    from sqlalchemy.exc import OperationalError
+    from sqlalchemy.exc import IntegrityError, OperationalError
 
     from app import leadmanagement as kern
     from app.db import verbindung_freigeben
@@ -90,12 +90,15 @@ def _zaehler(session: Session, dienst: str) -> None:
             stand = 0
         kern.parameter_setzen(session, schluessel, str(stand + 1))
         session.commit()
-    except OperationalError as fehler:
-        if "locked" not in str(fehler).lower():
+    except (OperationalError, IntegrityError) as fehler:
+        # v33 (PLAN_V20 Phase 172, Vorschlag A 4d): beim ersten Aufruf des Tages können zwei
+        # parallele Anfragen den Zähler gleichzeitig anlegen (UNIQUE lead_parameter.name) –
+        # Zählung überspringen statt 500
+        if isinstance(fehler, OperationalError) and "locked" not in str(fehler).lower():
             raise
         session.rollback()
         logging.getLogger("angebotstool").warning(
-            "Aufruf-Zähler %s: Datenbank belegt – Zählung übersprungen", dienst)
+            "Aufruf-Zähler %s: Datenbank belegt oder Eintrag parallel angelegt – Zählung übersprungen", dienst)
 
 
 def _abrufen(url: str, kopf: dict | None = None) -> dict | list:

@@ -441,4 +441,16 @@
     }
 
     setTimeout(function () { laden(false); }, 80);   // nachgelagert – die Seite rendert ohne Graph
+
+    // v33 (PLAN_V20 Phase 169): Doppelklick im zentralen Kalender öffnet den Assistenten mit
+    // ?beginn=YYYY-MM-DDTHH:MM – Datum und Uhrzeit in das manuelle Formular übernehmen
+    (function () {
+        const vorbelegt = new URLSearchParams(location.search).get('beginn') || '';
+        const manuell = document.querySelector('form[action$="/termin/manuell"]');
+        if (vorbelegt.length < 16 || !manuell) { return; }
+        const datum = manuell.querySelector('input[name=datum]');
+        const zeit = manuell.querySelector('input[name=uhrzeit]');
+        if (datum) { datum.value = vorbelegt.slice(0, 10); }
+        if (zeit) { zeit.value = vorbelegt.slice(11, 16); }
+    })();
 })();

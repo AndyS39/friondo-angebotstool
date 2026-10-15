@@ -358,7 +358,9 @@ def kandidaten(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None,
             grund_aus = OHNE_AD_GRUND
         elif profil is not None and not profil.aktiv_terminierung:
             grund_aus = "Terminierung nicht aktiv"
-        elif profil is not None and profil.terminiert_selbst and ad.id != benutzer_id:
+        elif ((profil is not None and profil.terminiert_selbst)
+              or ad.hat_kennzeichen("handelsvertreter")) and ad.id != benutzer_id:
+            # v33 (PLAN_V20 Phase 167): Handelsvertreter auch über das Rollen-Kennzeichen
             grund_aus = HV_GRUND
             manuell_erlaubt = True
         elif ganz_abwesend or (heute_abwesend is not None and heute_abwesend.bis is None):
@@ -394,7 +396,8 @@ def kandidaten(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None,
         ergebnis.append({"ad": ad, "profil": kern.ad_profil(session, ad.id),
                          "gruende": gruende, "gebiet": gebiet_ok,
                          "abwertung": 0 if gebiet_ok else 20,
-                         "handelsvertreter": bool(profil and profil.terminiert_selbst),
+                         "handelsvertreter": bool((profil and profil.terminiert_selbst)
+                                                  or ad.hat_kennzeichen("handelsvertreter")),
                          "abwesenheiten": eintraege})
     return {"kandidaten": ergebnis, "ausgeschlossen": ausgeschlossen,
             "sparten": sparten, "kanal": kanal, "nur_ad_id": nur_ad_id,
@@ -537,7 +540,7 @@ def vorschlaege(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None
     Objekts (Phase 153), kranke Vertriebler tagesgenau ausgelassen, `ohne_ad_id`
     für die Umbuchung ohne den kranken Vertriebler; im Testmodus Aktivität
     „Vorschläge berechnet“ (Phase 159)."""
-    from app import kalender as kalender_modul
+    from app import outlook_sync   # v33 (Phase 170): Belegt-Cache statt kalender.frei_belegt
     from app import routing
     if anzahl is None:
         anzahl = vorschlaege_anzahl(session)
@@ -601,7 +604,9 @@ def vorschlaege(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None
                     session, lead_ort, _ort(t, start_ort))["minuten"]
         # v29 (Phase 143, [OFFEN 3]): Handelsvertreter haben kein Friondo-Postfach –
         # kein Outlook-Abruf, nur Tool-Termine und Sperrzeiten
-        belegt_extern = (kalender_modul.frei_belegt(
+        # v33 (PLAN_V20 Phase 170): Belegtzeiten aus dem Cache outlook_belegt (Lauf
+        # outlook-ruecklesen) – nie Graph im Request
+        belegt_extern = (outlook_sync.belegt_fuer(
             session, ad, jetzt, tage[-1] + timedelta(days=1))
             if tage and not k.get("handelsvertreter") else None)
         for tag in tage:
@@ -1070,7 +1075,7 @@ def konflikte(session: Session, ad_id: int, beginn: datetime,
     """Konflikte eines Wunschslots desselben AD: voll (harte Überlappung mit
     Tool-Terminen → Sperre), puffer (Fahrzeit-/Mindestpuffer verletzt →
     Warnung), outlook (nur bei kalender_sync an), arbeitszeit, kapazitaet."""
-    from app import kalender as kalender_modul
+    from app import outlook_sync   # v33 (Phase 170): Belegt-Cache statt kalender.frei_belegt
     from app import routing
     ad = session.get(Benutzer, ad_id)
     profil = kern.ad_profil(session, ad_id)
@@ -1105,7 +1110,8 @@ def konflikte(session: Session, ad_id: int, beginn: datetime,
         if abstand < noetig - 1e-6:
             puffer_konflikte.append((t, round(noetig)))
     outlook = []
-    belegt = kalender_modul.frei_belegt(session, ad, tag, tag + timedelta(days=1))
+    # v33 (PLAN_V20 Phase 170): Belegtzeiten aus dem Cache (nie Graph im Request)
+    belegt = outlook_sync.belegt_fuer(session, ad, tag, tag + timedelta(days=1))
     if belegt:
         outlook = [(b_von, b_ende) for b_von, b_ende in belegt
                    if beginn < b_ende and b_von < ende]
@@ -1293,7 +1299,7 @@ def vorab_personen(session: Session, typ: str) -> list[Benutzer]:
         return ad_basis(session)
     return [b for b in session.query(Benutzer)
             .filter(Benutzer.aktiv.is_(True)).order_by(Benutzer.name)
-            if b.rolle in ("innendienst", "admin") or b.hat_rolle("leadmanagement")]
+            if b.basisrolle in ("innendienst", "admin") or b.hat_rolle("leadmanagement")]
 
 
 def vorab_anlegen(session: Session, vorgang: Vorgang, typ: str, person_id: int,
@@ -1372,7 +1378,7 @@ def vorab_anlegen(session: Session, vorgang: Vorgang, typ: str, person_id: int,
 def leitung_ids(session: Session) -> list[int]:
     """„Leitung“ für Glocken: Admins + Benutzer mit Rolle Leadmanagement."""
     return [b.id for b in session.query(Benutzer).filter(Benutzer.aktiv.is_(True))
-            if b.rolle == "admin" or b.hat_rolle("leadmanagement")]
+            if b.basisrolle == "admin" or b.hat_rolle("leadmanagement")]
 
 
 def absagen(session: Session, termin: VotTermin, grund: str, text: str = "",
@@ -1587,7 +1593,7 @@ def bestaetigung_erneut(session: Session, termin: VotTermin, benutzer=None,
 # --- Kalender (Woche je AD, alle Terminarten + vorgemerkt) --------------------------
 
 def kalender_woche(session: Session, ad_ids: list[int], start=None) -> dict:
-    from app import kalender as kalender_modul
+    from app import outlook_sync   # v33 (Phase 170): Belegt-Cache statt kalender.frei_belegt
     jetzt = datetime.now()
     start = start or (jetzt - timedelta(days=jetzt.weekday()))
     start = start.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -1600,8 +1606,9 @@ def kalender_woche(session: Session, ad_ids: list[int], start=None) -> dict:
             continue
         ad = session.get(Benutzer, ad_id)
         termine = termine_je_ad.get(ad_id, [])
-        belegt = kalender_modul.frei_belegt(session, ad, tage[0],
-                                            tage[-1] + timedelta(days=1))
+        # v33 (PLAN_V20 Phase 170): Belegtzeiten aus dem Cache (nie Graph im Request)
+        belegt = outlook_sync.belegt_fuer(session, ad, tage[0],
+                                          tage[-1] + timedelta(days=1))
         raster[ad_id] = {
             "termine": {t.date(): [x for x in termine if x.beginn.date() == t.date()]
                         for t in tage},
@@ -1834,6 +1841,7 @@ def kalender_json(session: Session, vorgang: Vorgang, benutzer=None, woche=None,
     Outlook-Abruf → Antwort (kein Zurückschreiben). Cache 10 Minuten je Lead,
     Sicht, Woche und Auswahl; neu=True erzwingt."""
     from app import kalender as kalender_modul
+    from app import outlook_sync   # v33 (Phase 170): Belegt-Cache statt kalender.frei_belegt
     from app.db import verbindung_freigeben
     jetzt = jetzt or datetime.now()
     hv_id = hv_nur_eigene(session, benutzer)
@@ -1925,7 +1933,8 @@ def kalender_json(session: Session, vorgang: Vorgang, benutzer=None, woche=None,
         for sp in spalten:
             if not sp["outlook"]:
                 continue
-            belegt = kalender_modul.frei_belegt(session, personen[sp["ad_id"]], tage[0], ende_woche)
+            # v33 (PLAN_V20 Phase 170): Belegtzeiten aus dem Cache (nie Graph im Request)
+            belegt = outlook_sync.belegt_fuer(session, personen[sp["ad_id"]], tage[0], ende_woche)
             if belegt is None:
                 sp["outlook"] = False
                 continue

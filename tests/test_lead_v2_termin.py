@@ -673,13 +673,15 @@ class AdProfilUndSeiten(Basis):
         heute = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         woche = ((tag - timedelta(days=tag.weekday()))
                  - (heute - timedelta(days=heute.weekday()))).days // 7
-        seite = self.client.get(f"/lead-management/kalender?ad_id={horst.id}&woche={woche}")
+        # v33 (Phase 169): /lead-management/kalender leitet auf /kalender um – die alte
+        # Wochenansicht je AD wird über ?alt=1 geprüft
+        seite = self.client.get(f"/lead-management/kalender?ad_id={horst.id}&woche={woche}&alt=1")
         self.assertEqual(seite.status_code, 200)
         self.assertIn("typ-telefon", seite.text)
         self.assertIn("typ-vot vorgemerkt", seite.text)
         self.assertIn("lmt-absage-knopf", seite.text)
         # Alle-AD-Sicht enthält die Testprofile (Basis = AD-Profil, nicht nur Hauptrolle)
-        seite = self.client.get(f"/lead-management/kalender?woche={woche}")
+        seite = self.client.get(f"/lead-management/kalender?woche={woche}&alt=1")
         self.assertIn("LeadV2T Horst", seite.text)
         # neue Vorlage vorhanden
         self.assertIn("terminabsage", lead_mail.VORLAGEN_START)

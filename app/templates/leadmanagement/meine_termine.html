@@ -10,7 +10,8 @@
     <span class="dezent">„Mein Tag“: Fällig heute · Termine heute · Heiße Kunden · Weitere Termine</span></p>
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
-{% macro termin_karten(liste) %}
+{% macro termin_karten(liste, os_map=None) %}
+{% from "_outlook_status.html" import outlook_status_zeile %}
 {% if liste %}
 <div class="einsatz-liste">
     {% for z in liste %}
@@ -30,6 +31,11 @@
             <a class="knopf klein" href="/erfassung/sparten?kunde_id={{ z.kunde.id }}{{ '&lead_id=' ~ z.vorgang.lead_id if z.vorgang.lead_id }}">Erfassung starten</a>
             <a class="knopf klein zweitrangig" href="/vorgaenge/{{ z.vorgang.id }}">Lead-Akte öffnen</a>
         </span>
+        {# v33 (PLAN_V20 Phase 170, O): Kopie des Termins im eigenen Outlook-Kalender (TAIFUN liest
+           von dort); Handelsvertreter ohne Friondo-Postfach sehen „HV ohne Postfach“ #}
+        {% if os_map and os_map.get(z.termin.id) %}{% set os = os_map[z.termin.id] %}
+        <span data-rolle="outlook-stand">{{ outlook_status_zeile(os) }}{% if os.stand != 'ok' %} <span class="dezent">{{ os.text }}</span>{% endif %}</span>
+        {% endif %}
         {% if z.steckbrief %}
         <details>
             <summary class="dezent">Steckbrief aus der Qualifizierung</summary>
@@ -46,10 +52,12 @@
 {% else %}<p class="dezent">Keine Termine.</p>{% endif %}
 {% endmacro %}
 
+{# v33 (Phase 170, O): Outlook-Stand aller Karten in EINER Abfrage (Template-Global, kurze Sitzung) #}
+{% set os_map = outlook_status_map('vot', heute_liste + woche_liste) if outlook_status_map is defined else {} %}
 <h2>Heute ({{ heute_liste | length }})</h2>
-{{ termin_karten(heute_liste) }}
+{{ termin_karten(heute_liste, os_map) }}
 <h2>Diese Woche ({{ woche_liste | length }})</h2>
-{{ termin_karten(woche_liste) }}
+{{ termin_karten(woche_liste, os_map) }}
 <p class="dezent">No-Show melden und Verschieben (eigene Woche) direkt in der
     Lead-Akte des Termins.</p>
 

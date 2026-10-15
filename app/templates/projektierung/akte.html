@@ -3,7 +3,7 @@
 {% from "_steckbrief.html" import steckbrief %}
 {% from "_projektierung.html" import pj_dot %}
 {# v28 (PLAN_PROJ_V6 Phase 135/136): gemeinsamer Termin-Dialog, Notizen-Chat #}
-{% from "projektierung/_termin_dialog.html" import termin_dialog, termin_loeschen_dialog %}
+{% from "projektierung/_termin_dialog.html" import termin_dialog, termin_loeschen_dialog, outlook_stand as outlook_stand_pille %}
 {% from "_komponenten.html" import notizen_chat %}
 {# v30 (PLAN_V18 Phase 151): Sicherheitsdialog „Projekt löschen“ (nur Admin) #}
 {% from "projektierung/_loeschen_dialog.html" import projekt_loeschen_dialog %}
@@ -51,7 +51,7 @@
             {{ benutzer_map[projekt.vertriebler_id].name if projekt.vertriebler_id in benutzer_map else '–' }}
             {% if projekt.kanal %} <span class="pj-badge kanal">{{ projekt.kanal }}</span>{% endif %}</div>
         <div><span>Projektleiter</span><br>
-            {% if benutzer.rolle in ('admin', 'innendienst') or benutzer.hat_rolle('projektierung') %}
+            {% if benutzer.basisrolle in ('admin', 'innendienst') or benutzer.hat_rolle('projektierung') %}
             <form method="post" action="/projektierung/projekt/{{ projekt.id }}/projektleiter" style="display:inline">
                 <select name="projektleiter_id" onchange="this.form.submit()">
                     {% for b in benutzer_map.values() | sort(attribute='name') if b.aktiv %}
@@ -131,6 +131,20 @@
             <span>Phase: <b>{{ phasen_namen.get(g.phase, g.phase) }}</b></span>
             {% if g.phase_geaendert_am %}<span>seit {{ g.phase_geaendert_am.strftime('%d.%m.') }}</span>{% endif %}
         </div>
+        {# v33 (PLAN_V20 Phase 171): Häkchen „automatisch weiterschalten“ je Gewerk;
+           Parameter phase_auto (Parametrierung → Board & Wächter) schaltet die Automatik
+           insgesamt; nach einem manuellen Rückschritt pausiert sie in dieser Phase #}
+        {% if g.phase not in ('abgeschlossen', 'storniert') %}
+        <form method="post" action="/projektierung/gewerk/{{ g.id }}/phase-auto" class="pj-phase-auto">
+            <input type="hidden" name="phase_auto" value="{{ '1' if g.phase_auto else '0' }}">
+            <label class="kontrollfeld" title="Sind alle Pflichtaufgaben der Phase erledigt oder „entfällt“, wechselt das Gewerk automatisch in die nächste Phase (nur vorwärts, nie nach Montage/Abnahme/Abgeschlossen){{ '' if phase_auto_param else ' – in der Parametrierung ausgeschaltet' }}">
+                <input type="checkbox" {{ 'checked' if g.phase_auto }} {{ 'disabled' if not phase_auto_param }}
+                       onchange="this.form.querySelector('input[name=phase_auto]').value = this.checked ? '1' : '0'; this.form.submit()">
+                automatisch weiterschalten</label>
+            {% if not phase_auto_param %}<small class="dezent">(Parameter aus)</small>
+            {% elif g.phase_auto and g.phase_auto_pause == g.phase %}<small class="dezent" title="Nach dem manuellen Rückschritt bleibt die Automatik in dieser Phase pausiert – sie läuft wieder, sobald die Phase manuell verlassen wird oder das Häkchen neu gesetzt wird">pausiert (Rückschritt)</small>{% endif %}
+        </form>
+        {% endif %}
 
         {# V4 (Phase 90.3): zwei Ampeln mit klarer Beschriftung – Vorlauf (Zeit)
            und Planung (Aufgaben); die Planungs-Ampel aktualisiert sich per fetch #}
@@ -278,7 +292,13 @@
                 {% for t in gewerk_termine | sort(attribute='beginn') %}
                 {% set t_art = termin_art(t) %}
                 <tr class="pj-termin-zeile {{ 'vergangen' if t.beginn and t.beginn < heute }}" id="termin-{{ t.id }}">
-                    <td><span class="pj-badge pj-art-{{ t_art }}">{{ termin_art_name(t) }}</span></td>
+                    <td>{% if t_art == 'service' %}
+                        {# v33 (Phase 168): Badge „Service“ + Anlass · Gewerk · Status #}
+                        <span class="pj-badge pj-art-service pj-service">Service</span>
+                        <b>{{ service_anlass_namen.get(t.anlass, t.anlass or '–') }}</b>
+                        <small class="dezent">· {{ service_gewerk_namen.get(t.service_gewerk, t.service_gewerk or '–') }}
+                            · <span class="pj-service-status {{ t.service_status or 'geplant' }}">{{ service_status_namen.get(t.service_status or '', t.service_status) }}</span></small>
+                        {% else %}<span class="pj-badge pj-art-{{ t_art }}">{{ termin_art_name(t) }}</span>{% endif %}</td>
                     <td><b>{{ t.beginn | de_datum('%a %d.%m.') if t.beginn }}</b>
                         {%- if t.beginn and not t.ganztaegig and t.beginn.strftime('%H:%M') != '00:00' %} {{ t.beginn.strftime('%H:%M') }}{% endif -%}
                         {%- if t.ende and t.ende.date() != t.beginn.date() %} – <b>{{ t.ende | de_datum('%a %d.%m.') }}</b>{% endif %}
@@ -305,12 +325,13 @@
                         </form>
                         {% endif %}
                         {% else %}<span class="dezent">–</span>{% endif %}</td>
-                    <td>{% if t.outlook_fehler %}
+                    <td>{# v33 (Phase 168/170): Outlook-Stand – Makro von O, sonst eigene Pille #}
+                        {{ outlook_stand_pille(outlook_stand.get(t.id), outlook_makro_da) }}
+                        {% if t.outlook_fehler %}
                         <form method="post" action="/projektierung/termin/{{ t.id }}/outlook" style="display:inline">
                             <button class="pj-btn" type="submit" title="{{ t.outlook_fehler }}">⚠ erneut senden</button>
                         </form>
-                        {% elif t.outlook_event_id %}<span title="In Outlook eingetragen">📅✓</span>
-                        {% else %}<span class="dezent">–</span>{% endif %}</td>
+                        {% endif %}</td>
                     <td class="pj-termin-aktionen">
                         {% if g.phase != 'storniert' %}
                         <button class="pj-btn" type="button" title="Termin bearbeiten (Art bleibt)"
@@ -572,7 +593,7 @@
         {% for d in dateien %}
         <div class="f"><a href="/projektierung/dokument/{{ d.id }}" target="_blank">{{ d.dateiname }}</a>
             · {{ d.erstellt_am.strftime('%d.%m.%y') }}{{ ' · auto' if d.quelle == 'auto' }}
-            {% if benutzer.rolle in ('admin',) or benutzer.hat_rolle('projektierung') %}
+            {% if benutzer.basisrolle in ('admin',) or benutzer.hat_rolle('projektierung') %}
             <form method="post" action="/projektierung/dokument/{{ d.id }}/loeschen" style="display:inline"
                   onsubmit="return confirm('Datei wirklich löschen? Die Löschung wird protokolliert.');">
                 <button class="pj-btn" type="submit" title="Löschen (protokolliert)"

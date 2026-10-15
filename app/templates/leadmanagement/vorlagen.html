@@ -52,8 +52,8 @@
                 <div>
                     <strong>{{ vertriebler.name }}</strong>{% if hv %} <span class="abzeichen">Handelsvertreter</span>{% endif %}<br>
                     <span class="dezent">{{ vertriebler.telefon or 'kein Telefon' }} · {{ vertriebler.email or 'keine E-Mail' }}</span><br>
-                    <span class="dezent">Infotext: {{ (vertriebler.infotext or 'noch keiner')[:160] }}{% if vertriebler.infotext and vertriebler.infotext|length > 160 %}…{% endif %}</span><br>
-                    <a class="dezent" href="/benutzer/{{ vertriebler.id }}/ad-profil">Bild, Infotext, Telefon und E-Mail im AD-Profil pflegen</a>
+                    {#- v33 (PLAN_V20 Phase 175): Infotext entfällt – Block zeigt nur Bild, Name, Telefon, E-Mail #}
+                    <a class="dezent" href="/benutzer/{{ vertriebler.id }}/ad-profil">Bild, Telefon und E-Mail im AD-Profil pflegen</a>
                     {% if hv %}<br><span class="dezent lm-rot">Handelsvertreter-Leads: Versandweg <code>hv_versandweg</code> = {{ hv_versandweg | default('entwurf') }} – keine Kundenmail aus dem Tool, Entwurf (.eml)/To-Do mit Vorschau an den HV.</span>{% endif %}
                 </div>
             </div>

@@ -468,7 +468,11 @@ def _summen_und_kfw(pdf: AngebotsPdf, angebot: Angebot, ergebnis):
     pdf.set_draw_color(120, 120, 120)
     pdf.line(pdf.l_margin + 70, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
     pdf.ln(1.5)
-    # Phase 26: Netto → USt → Gesamt-Betrag → − Rabatt (brutto) → = Endbetrag
+    # Phase 26: Netto → USt → Gesamt-Betrag → − Rabatt → = Endbetrag. v33 (PLAN_V20
+    # Phase 172): bei jedem Steuersatz – bei 0 % USt (PV, § 12 Abs. 3 UStG) ist der
+    # Gesamt-Betrag der Nettobetrag und der Rabatt wird davon abgezogen; die
+    # Beschriftungen bleiben neutral (kein Zusatz „brutto“), die Zahlen kommen
+    # ausschließlich aus Angebot.summen().
     _summen_zeile(pdf, "Netto-Summe", summen["netto"])
     _summen_zeile(pdf, angebot.ust_bezeichnung, summen["ust"])   # v13-PV
     if summen.get("rabatt"):

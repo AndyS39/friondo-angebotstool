@@ -15,6 +15,8 @@ import unicodedata
 import warnings
 from pathlib import Path
 from types import SimpleNamespace
+
+from app import rollen as rollen_modul   # v33: Varianten → Basisrolle
 from unittest import mock
 from urllib.parse import unquote_plus
 
@@ -516,7 +518,8 @@ class Anmeldeseite(unittest.TestCase):
         self.assertTrue(rollen & set(auth.MOBILE_ROLLEN), rollen)
         self.assertTrue(rollen - set(auth.MOBILE_ROLLEN), rollen)
         for _, markiert, name, rolle in optionen:
-            self.assertEqual(bool(markiert), rolle in auth.MOBILE_ROLLEN, name)
+            # v33 (PLAN_V20 Phase 167): Rollen-Varianten (z. B. handelsvertreter) zählen über ihre Basisrolle
+            self.assertEqual(bool(markiert), rollen_modul.basisrolle_von(rolle) in auth.MOBILE_ROLLEN, name)
 
     def test_fehlermeldung_unter_dem_knopf(self):
         r = TestClient(app).post("/login", data={"benutzer_id": "0", "pin": "1"},

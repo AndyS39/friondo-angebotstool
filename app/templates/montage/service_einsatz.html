@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% from "_galerie.html" import galerie as galerie_makro, galerie_fuss %}
+{% from "_komponenten.html" import notizen_chat %}
+
+{% block titel %}Service-Einsatz · {{ kunde.anzeige_name if kunde else '?' }} – Montage{% endblock %}
+
+{% block inhalt %}
+{# v33 (PLAN_V20 Phase 168): Service-Einsatzseite (Service Heizung/Elektro, Leitung) –
+   1 Kopf (Anlass, Gewerk, Status, Termin, Besetzung, Beschreibung) · 2 Kundendaten +
+   Ausführungsort (Objektadresse v31) · 3 Steckbrief (falls Gewerk) · 4 Notizen (lesen)
+   · 5 Einsatz gestartet/beendet · 6 Servicebericht · 7 Galerie des Vorgangs.
+   Keine Preise, keine Phase (Service hat keine Phase). #}
+{% macro besetzung_chips(liste) %}
+{% if liste %}<span class="pj-besetzung">{% for p in liste %}<span class="pj-ini {{ 'ich' if p.ich }}" title="{{ p.name }}">{{ p.kurz }}</span>{% endfor %}</span>{% endif %}
+{% endmacro %}
+{% set status = termin.service_status or 'geplant' %}
+<div class="pj-mob pj-service-seite">
+    <div class="pj-btnrow" style="margin-top:0">
+        <a class="pj-btn" href="/montage">← Einsätze</a>
+    </div>
+    <div class="pj-eyebrow">Service-Einsatz{% if projekt %} · {{ projekt.nummer }}{% endif %}</div>
+    <h2>{{ kunde.anzeige_name if kunde else '?' }}
+        <span class="pj-badge pj-service">Service</span>
+        {% if gewerk %}<span class="pj-sp {{ gewerk.sparte }}">{{ gewerk.sparte }}</span>{% endif %}</h2>
+    {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+
+    {# 1 · Kopf #}
+    <div class="pj-kv">
+        <span>Anlass</span>
+        <div><b>{{ info.anlass }}</b> · {{ info.gewerk }}
+            <span class="pj-badge pj-service-status {{ status }}">{{ status_namen.get(status, status) }}</span></div>
+        <span>Termin</span>
+        <div><b>{{ termin.beginn | de_datum('%a %d.%m.%Y') if termin.beginn }}</b>
+            {% if info.zeit %} · {{ info.zeit }}{% elif termin.beginn and not termin.ganztaegig %} · {{ termin.beginn.strftime('%H:%M') }} Uhr{% else %} · ganztägig{% endif %}
+            {% if team %}<br>{% if team.farbe %}<i class="pj-teamfarbe" style="--f:{{ team.farbe }}"></i>{% endif %}{{ team.name }}{% endif %}
+            {% if person %}<br>{{ person.name }}{% endif %}
+            {% if besetzung %}<br>{{ besetzung_chips(besetzung) }}{% endif %}
+            {% if termin.gestartet_am %}<br><small class="dezent">gestartet {{ termin.gestartet_am.strftime('%d.%m.%Y %H:%M') }}</small>{% endif %}
+            {% if termin.beendet_am %}<small class="dezent"> · beendet {{ termin.beendet_am.strftime('%d.%m.%Y %H:%M') }}</small>{% endif %}</div>
+        {% if termin.notiz %}
+        <span>Beschreibung</span>
+        <div>{{ termin.notiz }}</div>
+        {% endif %}
+    </div>
+
+    {# 2 · Kunde + Ausführungsort #}
+    <h3 class="pj-sektion">👤 Kunde &amp; Ausführungsort</h3>
+    <div class="pj-kv">
+        <span>Kunde</span>
+        <div>{{ kunde.anzeige_name if kunde else '–' }}
+            {% if kunde and kunde.email %}<br><a href="mailto:{{ kunde.email }}">{{ kunde.email }}</a>{% endif %}</div>
+        {% if kunde and kunde.telefon %}
+        <span>Telefon</span>
+        <div><a href="tel:{{ kunde.telefon }}">{{ kunde.telefon }}</a></div>
+        {% endif %}
+        <span>Adresse</span>
+        <div>{{ adresse or 'Keine Ausführungsadresse hinterlegt' }}
+            {% if adresse %}<br><a href="{{ karten_link }}" target="_blank">In Karten öffnen ↗</a>{% endif %}</div>
+        {% if projektleiter %}
+        <span>Friondo</span>
+        <div>{{ projektleiter.name }}
+            {% if projektleiter.telefon %} · <a href="tel:{{ projektleiter.telefon }}">{{ projektleiter.telefon }}</a>{% endif %}
+            {% if projektleiter.email %} · <a href="mailto:{{ projektleiter.email }}">{{ projektleiter.email }}</a>{% endif %}</div>
+        {% endif %}
+        {% if gewerk %}
+        <span>Projektstand</span>
+        <div>{{ phasen_namen.get(gewerk.phase, gewerk.phase) }}</div>
+        {% endif %}
+    </div>
+
+    {# 3 · Steckbrief (falls Gewerk/Projekt) #}
+    {% if steckbrief %}
+    <details class="pj-paket">
+        <summary>Steckbrief <span class="cnt">{{ steckbrief | rejectattr('leer') | list | length }}/{{ steckbrief | length }}</span></summary>
+        <div class="pj-steck-raster" style="padding:4px 2px">
+            {% for z in steckbrief %}
+            <span class="k">{{ z.name }}</span><span class="w {{ 'leer' if z.leer }}">{{ z.wert }}</span>
+            {% endfor %}
+        </div>
+    </details>
+    {% endif %}
+
+    {# 4 · Notizen (lesen) #}
+    <h3 class="pj-sektion">💬 Notizen
+        {% if notizen_ctx %}<small>· {{ notizen_ctx.anzahl }} Einträge</small>{% endif %}</h3>
+    {% if projekt and projekt.notiz_kopf %}
+    <div class="pj-technik"><b>Bemerkung für die Technik:</b> {{ projekt.notiz_kopf }}</div>
+    {% endif %}
+    {% if notizen_ctx %}
+    {{ notizen_chat(notizen_ctx) }}
+    {% else %}
+    <p class="dezent" style="font-size:12px">Kein Vorgang am Einsatz – keine Notizen.</p>
+    {% endif %}
+
+    {# 5 · Einsatz gestartet / beendet #}
+    <h3 id="status" class="pj-sektion">Einsatz-Status <small>· {{ status_namen.get(status, status) }}</small></h3>
+    <div class="pj-status-block">
+    {% if status == 'geplant' %}
+    <form method="post" action="/montage/einsatz/{{ termin.id }}/service-status">
+        <input type="hidden" name="aktion" value="gestartet">
+        <div class="pj-btnrow" style="margin-top:0">
+            <label style="font-size:13px;color:var(--pj-muted)">Uhrzeit
+                <input type="time" name="uhrzeit" step="900" class="pj-viertel"></label>
+            <button class="pj-btn primary" type="submit">Einsatz gestartet</button>
+        </div>
+        <p class="hinweis">Setzt den Einsatz auf „läuft“ – Zeitpunkt landet im Verlauf und im Notizen-Chat.</p>
+    </form>
+    {% elif status == 'gestartet' %}
+    <form method="post" action="/montage/einsatz/{{ termin.id }}/service-status">
+        <input type="hidden" name="aktion" value="beendet">
+        <div class="pj-btnrow" style="margin-top:0">
+            <label style="font-size:13px;color:var(--pj-muted)">Uhrzeit
+                <input type="time" name="uhrzeit" step="900" class="pj-viertel"></label>
+            <button class="pj-btn primary" type="submit">Einsatz beendet</button>
+        </div>
+        <p class="hinweis">Bitte danach den Servicebericht ausfüllen – der Abschluss legt das PDF in die Galerie (Ordner Service).</p>
+    </form>
+    {% else %}
+    <p class="dezent" style="font-size:12px;margin:0">Einsatz beendet{% if termin.beendet_am %} am {{ termin.beendet_am.strftime('%d.%m.%Y %H:%M') }}{% endif %}.</p>
+    {% endif %}
+    </div>
+
+    {# 6 · Servicebericht #}
+    <h3 class="pj-sektion">📋 Servicebericht</h3>
+    <div class="pj-btnrow" style="margin-top:0">
+        <a class="pj-btn {{ 'primary' if not (bericht and bericht.status == 'abgeschlossen') }}"
+           href="/montage/einsatz/{{ termin.id }}/formular/servicebericht">
+            Servicebericht{{ ' ✓' if bericht and bericht.status == 'abgeschlossen' }}</a>
+        {% if bericht and bericht.pdf_galerie_id %}
+        <a class="pj-btn" href="/vorgaenge/galerie/datei/{{ bericht.pdf_galerie_id }}" target="_blank">PDF ansehen</a>
+        {% endif %}
+    </div>
+
+    {# 7 · Galerie des Vorgangs (Ordner „Service“ für Fotos/PDF) #}
+    <h3 id="foto" class="pj-sektion">📁 Galerie {{ galerie_sparte }}</h3>
+    {% if vorgang_id %}
+    {{ galerie_makro(vorgang_id, galerie_daten, galerie_ordner, false,
+                     '/montage/einsatz/' ~ termin.id, sparte=galerie_sparte,
+                     darf_verschieben=false) }}
+    {{ galerie_fuss() }}
+    {% else %}
+    <p class="dezent" style="font-size:12px">Kein Vorgang am Einsatz – Galerie nicht verfügbar.</p>
+    {% endif %}
+
+    <div class="pj-note">Keine Preise, keine anderen Projekte – Fragen an Friondo (oben).</div>
+</div>
+{% endblock %}

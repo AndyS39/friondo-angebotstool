@@ -30,7 +30,7 @@ def health_route():
 
 def _nur_admin(request: Request):
     benutzer = request.state.benutzer
-    if benutzer is None or benutzer.rolle != "admin":
+    if benutzer is None or benutzer.basisrolle != "admin":
         return RedirectResponse("/parametrierung", status_code=303)
     return None
 
@@ -113,7 +113,15 @@ def betrieb_seite(request: Request, session: Session = Depends(get_session)):
     laeufe = scheduler_uebersicht(session)
     wartung = betrieb.wartungshinweis(session)
     von_vorschlag, bis_vorschlag = betrieb.naechstes_wartungsfenster()
+    # v33 (PLAN_V20 Phase 166): Kachel Graph-Modus (Anwendung/Delegiert, Geheimnis-Ablauf)
+    from app import graph_versand
+    graph = {"modus": graph_versand.modus_name(daten.get("graph_modus") or graph_versand.modus(session)),
+             "grund": graph_versand.modus_grund(session),
+             "ablauf": graph_versand.geheimnis_ablauf_datum(),
+             "tage": graph_versand.geheimnis_ablauf_tage(),
+             "warnung": graph_versand.geheimnis_warnung()}
     return render(request, "konfiguration/betrieb.html", aktiv="/parametrierung",
+                  graph=graph,
                   health=daten, uptime_text=_uptime_text(daten["uptime_s"]),
                   pool=daten["pool"], pool_groesse=f"{db_modul.POOL_SIZE} + {db_modul.MAX_OVERFLOW}",
                   pool_timeout=db_modul.POOL_TIMEOUT,

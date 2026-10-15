@@ -1,0 +1,21 @@
+{# v33 (PLAN_V20 Phase 170, Agent O): Outlook-Stand eines Tool-Termins (Vertrag O → S/K).
+   outlook_status(stand, text='', kopien=None, klein=True)
+     stand ∈ ausstehend | ok | fehler | geloescht | in_outlook_geloescht | leer
+     (outlook_sync.STAENDE); `text` = Tooltip (z. B. outlook_sync.status_fuer()['text']),
+     `kopien` = Liste {name, stand, fehler} (Tooltip-Zeilen je Person).
+   outlook_status_zeile(status) nimmt direkt das Dict von outlook_sync.status_fuer /
+   status_map bzw. des Template-Globals outlook_status_map(termin_art, termine).
+   Farben ausschließlich über Tokens (style.css, Block „v33 Phase 170“). #}
+{% macro outlook_status(stand, text='', kopien=None, klein=True) -%}
+{%- set namen = {'ausstehend': 'ausstehend', 'ok': 'ok', 'fehler': 'Fehler',
+                 'geloescht': 'gelöscht', 'in_outlook_geloescht': 'in Outlook gelöscht',
+                 'leer': 'kein Eintrag'} -%}
+{%- set s = (stand or 'leer') | trim -%}
+{%- set s = s if s in namen else 'leer' -%}
+<span class="abzeichen outlook-status os-{{ s }}{{ ' klein' if klein }}" data-outlook-stand="{{ s }}"
+      title="{{ text or ('Outlook: ' ~ namen[s]) }}{% if kopien %} – {% for k in kopien %}{{ k.name }}: {{ namen.get(k.stand, k.stand) }}{% if k.fehler %} ({{ k.fehler }}){% endif %}{% if not loop.last %} · {% endif %}{% endfor %}{% endif %}"><i class="abzeichen-punkt" aria-hidden="true"></i>Outlook: {{ namen[s] }}</span>
+{%- endmacro %}
+
+{% macro outlook_status_zeile(status, klein=True) -%}
+{%- if status -%}{{ outlook_status(status.stand, status.text, status.kopien, klein) }}{%- else -%}{{ outlook_status('leer', '', none, klein) }}{%- endif -%}
+{%- endmacro %}

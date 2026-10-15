@@ -181,6 +181,11 @@ wird der Status auf „Angenommen" gesetzt und der Innendienst per E-Mail inform
         <input type="number" name="nachfass_werktage" value="{{ nachfass_werktage }}" min="0" max="30" size="4"> Werktage</label>
     <label class="kontrollfeld">bei Mehrfamilienhaus (MFH)
         <input type="number" name="nachfass_werktage_mfh" value="{{ nachfass_werktage_mfh }}" min="0" max="30" size="4"> Werktage</label>
+    {# v33 (PLAN_V20 Phase 176): Inaktivitäts-Kennzeichen „ohne Kontakt seit X Tagen“ #}
+    <label class="kontrollfeld" title="Kennzeichen „ohne Kontakt seit X Tagen“ ab diesem Wert (Verfolgungsstatus Versendet/Nachgefasst)">Kennzeichen „ohne Kontakt“ ab
+        <input type="number" name="inaktiv_tage" value="{{ inaktiv_tage }}" min="0" max="365" size="4"> Tagen</label>
+    <label class="kontrollfeld">bei MFH ab
+        <input type="number" name="inaktiv_tage_mfh" value="{{ inaktiv_tage_mfh }}" min="0" max="365" size="4"> Tagen</label>
     <button class="knopf klein" type="submit">Speichern</button>
 </form>
 <p class="dezent">Nach jedem Versand (Einzel, Kombi, „Als versendet markieren“, externer
@@ -188,6 +193,71 @@ wird der Status auf „Angenommen" gesetzt und der Innendienst per E-Mail inform
     Außendienstler: Versandtag + Werktage (Montag bis Freitag ohne NRW-Feiertage), bei
     Objektart MFH am Kunden der zweite Wert. Eine spätere manuelle Wiedervorlage bleibt
     stehen. Standard 3 bzw. 5 Werktage.</p>
+<p class="dezent">Das Kennzeichen <strong>„ohne Kontakt seit X Tagen“</strong> (v33) erscheint in
+    „Mein Tag“/Wiedervorlage und in der Angebotsliste (Filter „inaktiv“) bei Vorgängen mit
+    Verfolgungsstatus Versendet oder Nachgefasst, deren letzter Kontakt (Notizen-Chat,
+    Anruf-Ergebnis, Mail am Vorgang, Angebotsversand) die Schwelle erreicht – Standard 14 Tage,
+    bei Objektart MFH 20 Tage. Eine Wiedervorlage in der Zukunft schützt nicht davor.</p>
+
+{# v33 (PLAN_V20 Phase 176): Einwand-Chips beim Ergebnis „Nochmal anrufen“ – Pflege wie die
+   Ablehnungsgründe (anlegen, umbenennen, deaktivieren, ↑/↓); Auswertung in der Statistik #}
+<p><strong>Einwände beim Nachfassen</strong> <span class="dezent">(Chips im Dialog „Nächster Schritt“
+    bei „Nochmal anrufen“ – optional, nur aktive, Reihenfolge wie hier; Auswertung in der Statistik
+    neben den Ablehnungsgründen)</span></p>
+<table class="tabelle gruende-tabelle" style="max-width:640px">
+    <thead>
+        <tr><th>Nr.</th><th>Einwand</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for e in einwaende %}
+        <tr class="{{ 'grund-inaktiv' if not e.aktiv }}">
+            <td class="dezent">{{ loop.index }}</td>
+            <td>
+                <form method="post" action="/parametrierung/einwaende" class="inline-form">
+                    <input type="hidden" name="aktion" value="umbenennen">
+                    <input type="hidden" name="id" value="{{ e.id }}">
+                    <input type="text" name="name" value="{{ e.name }}" maxlength="100" size="28"
+                           aria-label="Einwand umbenennen" class="{{ 'dezent' if not e.aktiv }}">
+                    <button class="knopf klein zweitrangig" type="submit" title="Namen speichern">Umbenennen</button>
+                    {% if not e.aktiv %}<span class="dezent">(deaktiviert)</span>{% endif %}
+                </form>
+            </td>
+            <td class="aktionen">
+                {% if not loop.first %}
+                <form method="post" action="/parametrierung/einwaende" style="display:inline">
+                    <input type="hidden" name="aktion" value="hoch">
+                    <input type="hidden" name="id" value="{{ e.id }}">
+                    <button class="knopf klein zweitrangig" type="submit" title="Nach oben">↑</button>
+                </form>
+                {% endif %}
+                {% if not loop.last %}
+                <form method="post" action="/parametrierung/einwaende" style="display:inline">
+                    <input type="hidden" name="aktion" value="runter">
+                    <input type="hidden" name="id" value="{{ e.id }}">
+                    <button class="knopf klein zweitrangig" type="submit" title="Nach unten">↓</button>
+                </form>
+                {% endif %}
+                <form method="post" action="/parametrierung/einwaende" style="display:inline">
+                    <input type="hidden" name="aktion" value="umschalten">
+                    <input type="hidden" name="id" value="{{ e.id }}">
+                    <button class="knopf klein zweitrangig" type="submit">
+                        {{ 'Aktivieren' if not e.aktiv else 'Deaktivieren' }}</button>
+                </form>
+            </td>
+        </tr>
+    {% else %}
+        <tr><td colspan="3" class="dezent">Noch keine Einwände – die vier Startwerte legt migrate.py an.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+<form method="post" action="/parametrierung/einwaende" class="suchleiste">
+    <input type="hidden" name="aktion" value="hinzufuegen">
+    <input type="text" name="name" maxlength="100" placeholder="Neuer Einwand …">
+    <button class="knopf klein" type="submit">Hinzufügen</button>
+</form>
+<p class="dezent">Startwerte (v33): „Förderung unklar“, „wartet auf Mitbewerber“, „Entscheidung in
+    der Familie“, „Finanzierung offen“. Der zuletzt gesetzte Einwand steht beim nächsten Anruf oben
+    auf der Anruf-Karte; deaktivierte Einwände bleiben in der Statistik-Historie erhalten.</p>
 </section>
 
 <section class="pe-abschnitt" id="ablehnung">

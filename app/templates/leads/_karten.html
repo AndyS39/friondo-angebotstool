@@ -1,0 +1,214 @@
+{# v33 (PLAN_V20 Phase 173): Makros der mobilen Vertriebler-Ansicht „Mein Tag“ und der
+   Seite „Wiedervorlage“ (Design-Entwurf „Außendienst App“ 14.10.2026 – Aufbau, Abstände
+   und Verhalten übernommen, Farben aus den Design-v2-Tokens). Import mit Kontext:
+   {% import "leads/_karten.html" as mt with context %} – die Makros lesen schritt_kontext,
+   partial_da, ziel, grosskunde_farbe, aussendienst aus dem Seitenkontext.
+   Keine on*-Attribute mit tojson (v30): alle Daten in data-Attributen, Logik in
+   /static/mein_tag.js. #}
+{% from "_symbole.html" import symbol %}
+{% from "_komponenten.html" import leer_zustand, verfolgung_chip, avatar %}
+{% import "_sparten.html" as sparten_ui %}
+
+{# Pfeil „Route starten“ (im Symbolvorrat nicht vorhanden – inline, nur currentColor) #}
+{% macro pfeil_route() -%}
+<svg class="symbol-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l18-8-8 18-2-8-8-2z"></path></svg>
+{%- endmacro %}
+
+{% macro grosskunde(k) -%}
+{% if k.grosskunde %}<span class="lm-grosskunde"{% if grosskunde_farbe %} style="--f:{{ grosskunde_farbe }}"{% endif %}>Großkunde</span>{% endif %}
+{%- endmacro %}
+
+{# ---- Karte „Als Nächstes“: nächster nicht erledigter Termin des Tages ---- #}
+{% macro als_naechstes(k) -%}
+<section class="mt-naechstes" id="als-naechstes" aria-label="Nächster Termin" data-termin="{{ k.termin.id }}">
+    <div class="mt-naechstes-kopf">
+        <span class="mt-badge">Als Nächstes</span>
+        <span class="mt-hinweis" data-mt-hinweis>{{ k.hinweis }}</span>
+    </div>
+    <div class="mt-naechstes-zeit">
+        <span class="mt-uhr-gross">{{ k.uhr }}</span>
+        <span class="mt-bis">bis {{ k.ende_uhr }}</span>
+    </div>
+    <div class="mt-naechstes-kunde">
+        <span class="mt-naechstes-name">{{ k.name }} {{ grosskunde(k) }}</span>
+        <span class="mt-naechstes-typ">{{ k.beschreibung }}</span>
+    </div>
+    <div class="mt-naechstes-ort">{{ symbol('ort') }}
+        {% if k.adresse %}<a href="{{ k.maps_url }}" target="_blank" rel="noopener" title="In Google Maps öffnen (neuer Tab)">
+            {%- if k.objekt_bezeichnung %}<span class="mt-objekt">{{ k.objekt_bezeichnung }}:</span> {% endif -%}
+            {{ k.strasse }}{% if k.strasse and k.plz_ort %}, {% endif %}{{ k.plz_ort }}</a>
+        {% else %}<span class="mt-naechstes-leer">keine Adresse hinterlegt</span>{% endif %}
+    </div>
+    <div class="mt-naechstes-aktionen">
+        {% if k.route_url %}
+        <a class="mt-route" href="{{ k.route_url }}" target="_blank" rel="noopener" title="Route in Google Maps starten (neuer Tab)">{{ pfeil_route() }} Route starten</a>
+        {% else %}
+        <span class="mt-route mt-route-aus" aria-disabled="true" title="Keine Adresse hinterlegt">{{ pfeil_route() }} Route starten</span>
+        {% endif %}
+        {% if k.tel_href %}<a class="mt-rund" href="{{ k.tel_href }}" aria-label="Kunde anrufen" title="Anrufen: {{ k.telefon }}">{{ symbol('telefon') }}</a>
+        {% else %}<span class="mt-rund mt-rund-aus" aria-disabled="true" title="keine Telefonnummer hinterlegt">{{ symbol('telefon') }}</span>{% endif %}
+        <a class="mt-rund" href="{{ k.erfassen_url }}" aria-label="Erfassung starten" title="Erfassung starten">{{ symbol('notiz') }}</a>
+    </div>
+</section>
+{%- endmacro %}
+
+{# ---- Zeile der Liste „Heute“ (Zeitstrahl) bzw. „Kommende Tage“ (klein) ---- #}
+{% macro termin_zeile(k, klein=false) -%}
+{%- set zustand = 'erledigt' if k.erledigt else ('naechster' if k.naechster else 'offen') -%}
+<article class="mt-termin mt-termin-{{ zustand }}{{ ' mt-termin-klein' if klein }}{{ ' mt-ueberfaellig' if k.ueberfaellig }}"
+         data-termin="{{ k.termin.id }}" data-mt-karte="termin" data-zustand="{{ zustand }}">
+    <div class="mt-termin-zeile" data-mt-aufklappen role="button" tabindex="0" aria-expanded="false" aria-controls="termin-detail-{{ k.termin.id }}">
+        <span class="mt-uhr">{{ k.uhr }}</span>
+        {% if not klein %}<span class="mt-punkt" aria-hidden="true"></span>{% endif %}
+        <div class="mt-termin-text">
+            <span class="mt-termin-name">{{ k.name }} {{ grosskunde(k) }}
+                {% if not aussendienst and k.ad_name %}<span class="dezent mt-ad">· {{ k.ad_name }}</span>{% endif %}</span>
+            <span class="mt-termin-typ">{{ k.beschreibung }}{% if klein and k.ort_text %} · {{ k.ort_text }}{% endif %}</span>
+            {% if not klein %}
+            <span class="mt-termin-ort">{{ k.ort_text or 'kein Ort' }}
+                {% if k.ueberfaellig %}<span class="mt-label mt-label-rot" title="Termin liegt in der Vergangenheit – Erfassung fehlt">überfällig</span>
+                {% elif k.teilweise %}<span class="mt-label" title="Termin liegt in der Vergangenheit – noch nicht alle Sparten erfasst">teilweise erfasst</span>
+                {% elif k.erledigt %}<span class="mt-label mt-label-gruen">erfasst</span>{% endif %}</span>
+            {% endif %}
+        </div>
+        {% if not klein %}
+        <div class="mt-termin-aktion">
+            {% if k.erledigt %}<a class="mt-link" href="{{ k.erfassung_url }}" title="Erfassung öffnen">Erfassung</a>
+            {% else %}<a class="knopf mt-haupt" href="{{ k.erfassen_url }}">Erfassung starten</a>{% endif %}
+        </div>
+        {% endif %}
+    </div>
+    <div class="mt-termin-detail" id="termin-detail-{{ k.termin.id }}" hidden>
+        <div class="mt-detail-zeile">{{ symbol('ort') }}
+            {% if k.adresse %}<a href="{{ k.maps_url }}" target="_blank" rel="noopener" title="In Google Maps öffnen (neuer Tab)">
+                {%- if k.objekt_bezeichnung %}<span class="mt-objekt">{{ k.objekt_bezeichnung }}:</span> {% endif -%}
+                {{ k.strasse }}{% if k.strasse and k.plz_ort %}, {% endif %}{{ k.plz_ort }} ↗</a>
+            {% else %}<span class="dezent">keine Adresse</span>{% endif %}</div>
+        <div class="mt-detail-zeile">{{ symbol('telefon') }}
+            {% if k.telefon %}<a href="{{ k.tel_href }}" class="mt-tel">{{ k.telefon }}</a>
+            {% else %}<span class="dezent">keine Telefonnummer hinterlegt</span>{% endif %}</div>
+        <div class="mt-detail-zeile mt-badges">
+            {% for sparte, status in k.chips %}{{ sparten_ui.chip(sparte, status) }}{% endfor %}
+            <span class="mt-herkunft" title="Herkunft des Termins">{{ k.herkunft }}</span>
+            <span class="mt-herkunft" title="Terminart">{{ k.typ_name }}</span>
+            {% if k.datum_text %}<span class="dezent">{{ k.datum_text }} · {{ k.uhr_text }}</span>{% endif %}
+        </div>
+        <div class="mt-detail-zeile mt-detail-aktionen">
+            {% if klein %}<a class="knopf klein mt-haupt" href="{{ k.erfassen_url }}">Erfassung starten</a>{% endif %}
+            {% if k.route_url %}<a class="mt-link" href="{{ k.route_url }}" target="_blank" rel="noopener">Route starten</a>{% endif %}
+            <a class="mt-link" href="{{ k.akte_url }}">Akte</a>
+        </div>
+    </div>
+</article>
+{%- endmacro %}
+
+{# ---- Chips + Sortier-Segment des Abschnitts „Wiedervorlage“ ---- #}
+{% macro wv_filter(zaehler) -%}
+<div class="mt-wv-filter">
+    <div class="mt-chips" role="group" aria-label="Nach Priorität filtern">
+        {% for key, label in (('alle', 'Alle'), ('hoch', 'Hoch'), ('mittel', 'Mittel'), ('niedrig', 'Niedrig')) %}
+        <button type="button" class="mt-chip{{ ' aktiv' if key == 'alle' }}" data-mt-prio="{{ key }}" aria-pressed="{{ 'true' if key == 'alle' else 'false' }}">{{ label }} <span class="mt-chip-zahl" data-mt-prio-zahl="{{ key }}">{{ zaehler.get(key, 0) }}</span></button>
+        {% endfor %}
+    </div>
+    <div class="mt-sortieren">
+        <span class="mt-sortieren-titel">Sortieren</span>
+        <div class="mt-segment" role="group" aria-label="Sortierung">
+            {% for key, label in (('prio', 'Priorität'), ('name', 'Name'), ('datum', 'Datum')) %}
+            <button type="button" class="mt-segment-knopf{{ ' aktiv' if key == 'prio' }}" data-mt-sort="{{ key }}" aria-pressed="{{ 'true' if key == 'prio' else 'false' }}"
+                    title="{{ label }}{{ ' – nochmal tippen dreht die Richtung' }}">{{ label }}<span class="mt-pfeil" data-mt-pfeil aria-hidden="true">{{ '↓' if key == 'prio' }}</span></button>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{%- endmacro %}
+
+{# ---- Anruf-Karte (v32 Phase 162/163) als aufklappender Teil der Wiedervorlage-Karte ---- #}
+{% macro anruf_detail(k) -%}
+<div class="mt-wv-detail" id="wv-detail-{{ k.vorgang.id }}" hidden>
+    <div class="mt-detail-zeile">{{ symbol('telefon') }}
+        {% if k.telefon %}<a href="{{ k.tel_href }}" class="mt-tel">{{ k.telefon }}</a>
+        {% else %}<span class="dezent">keine Telefonnummer hinterlegt</span>{% endif %}
+        {% if k.faellig %}<span class="mt-label{{ ' mt-label-rot' if k.ueberfaellig }}" title="Wiedervorlage{% if k.seit %} vom {{ k.seit.strftime('%d.%m.%Y') }}{% endif %}">{{ 'seit ' ~ k.seit_text if k.ueberfaellig else 'heute fällig' }}</span>
+        {% elif k.grund == 'bestellung' %}<span class="mt-label">Bestellung angekündigt</span>
+        {% elif k.grund == 'heiss' %}<span class="mt-label">heißer Vorgang</span>{% endif %}
+    </div>
+    {% if k.angebot %}
+    <p class="mt-angebot">{{ symbol('euro') }}
+        <a href="{{ k.angebot.url_ad if aussendienst else k.angebot.url_id }}">{{ k.angebot.text }}</a></p>
+    {% else %}
+    <p class="mt-angebot dezent">{{ symbol('euro') }} Kein versendetes Angebot am Vorgang
+        {% if k.art %}· Wiedervorlage „{{ k.art }}“{% endif %}</p>
+    {% endif %}
+    {% if k.nachfass_versuche %}<p class="dezent mt-versuche">{{ k.nachfass_versuche }} Nachfass-Anruf{{ 'e' if k.nachfass_versuche != 1 }}</p>{% endif %}
+    <div class="mt-schritt">
+        {% if partial_da %}
+            {% set ctx = schritt_kontext.get(k.vorgang.id) or {} %}
+            {% with vorgang=k.vorgang, gruende=ctx.gruende, naechster_3wt=ctx.naechster_3wt,
+                    ziel=ziel, heute_iso=ctx.heute_iso, mit_notiz=false %}
+            {% include "vorgaenge/_naechster_schritt.html" ignore missing %}
+            {% endwith %}
+        {% else %}
+            {# Rückfall, solange das Partial von N fehlt: drei Knöpfe an die Route von N #}
+            <div class="mt-schritt-rueckfall">
+                <form method="post" action="/vorgaenge/{{ k.vorgang.id }}/naechster-schritt">
+                    <input type="hidden" name="schritt" value="abgelehnt"><input type="hidden" name="zurueck" value="{{ ziel }}">
+                    <button class="knopf gefaehrlich" type="submit">Abgelehnt</button></form>
+                <form method="post" action="/vorgaenge/{{ k.vorgang.id }}/naechster-schritt">
+                    <input type="hidden" name="schritt" value="bestellung"><input type="hidden" name="zurueck" value="{{ ziel }}">
+                    <button class="knopf mt-gruen" type="submit">Bestellung kommt</button></form>
+                <form method="post" action="/vorgaenge/{{ k.vorgang.id }}/naechster-schritt">
+                    <input type="hidden" name="schritt" value="nochmal"><input type="hidden" name="wann" value="3wt"><input type="hidden" name="zurueck" value="{{ ziel }}">
+                    <button class="knopf" type="submit">Nochmal anrufen</button></form>
+            </div>
+        {% endif %}
+    </div>
+    <details class="mt-aktivitaeten">
+        <summary>Letzte Aktivitäten <span class="dezent">({{ k.aktivitaeten | length }})</span></summary>
+        {% if k.aktivitaeten %}
+        <ul>
+            {% for a in k.aktivitaeten %}
+            <li><span class="mt-akt-zeit">{{ a.zeit_text }}</span> <span class="mt-akt-art">{{ a.art }}</span> {{ a.text }}</li>
+            {% endfor %}
+        </ul>
+        {% else %}<p class="dezent">Noch keine Aktivitäten.</p>{% endif %}
+    </details>
+    <form method="post" action="/leads/notiz/{{ k.vorgang.id }}" class="mt-notiz" data-mt-notiz="{{ k.vorgang.id }}">
+        <input type="hidden" name="zurueck" value="{{ ziel }}">
+        <label>Notiz zum Gespräch
+            <textarea name="text" rows="2" maxlength="2000" data-ns-notiz="{{ k.vorgang.id }}"
+                      placeholder="Was hat der Kunde gesagt? (landet im Notizen-Chat)"></textarea></label>
+        <div class="mt-notiz-aktionen">
+            <button class="knopf klein zweitrangig" type="submit">Notiz speichern</button>
+            <span class="mt-notiz-meldung dezent" aria-live="polite" hidden></span>
+            <a class="mt-akte" href="{{ k.akte_url }}">Akte</a>
+        </div>
+    </form>
+</div>
+{%- endmacro %}
+
+{# ---- Wiedervorlage-Karte (Entwurf: Initialen, Name, Sparte, Badge, letzter Kontakt) ---- #}
+{% macro wv_karte(k, versteckt=false, mit_telefon=false) -%}
+<article class="mt-wv-karte" id="faellig-{{ k.vorgang.id }}" data-mt-karte="faellig" data-vorgang="{{ k.vorgang.id }}"
+         data-prio="{{ k.prioritaet }}" data-rang="{{ k.prioritaet_rang }}" data-name="{{ k.name | lower }}"
+         data-datum="{{ k.letzter_kontakt_iso }}" data-grund="{{ k.grund }}"{% if versteckt %} hidden data-mt-ueberzahl="1"{% endif %}>
+    <div class="mt-wv-zeile" data-mt-aufklappen role="button" tabindex="0" aria-expanded="false" aria-controls="wv-detail-{{ k.vorgang.id }}">
+        <span class="avatar avatar-{{ (k.kunde.id or 0) % 8 + 1 }} mt-wv-avatar" aria-hidden="true">{{ k.initialen }}</span>
+        <div class="mt-wv-text">
+            <span class="mt-wv-name">{{ k.name }} {{ grosskunde(k) }}
+                <span class="mt-prio mt-prio-{{ k.prioritaet }}" title="Priorität aus der Hot-Ampel: {{ k.ampel_text or 'keine Einstufung' }}"><span class="mt-balken" aria-hidden="true"><i></i><i></i><i></i></span>{{ k.prioritaet_text }}</span>
+                {{ verfolgung_chip(k.verfolgung_status, True, k.vorgang.id, k.nachfass_versuche or 0) }}
+                {% if k.inaktiv %}<span class="mt-label mt-label-rot" title="Inaktivitäts-Kennzeichen (Phase 176)">ohne Kontakt seit {{ k.inaktiv }} Tagen</span>{% endif %}</span>
+            <span class="mt-wv-sparte">{{ k.sparten_text or '–' }}</span>
+            <span class="mt-wv-kontakt">{{ symbol('kalender') }} Letzter Kontakt {{ k.letzter_kontakt_text or '–' }}
+                <span class="mt-wv-tage{{ ' warn' if k.warn }}" data-mt-tage>· {{ k.tage_text }}</span></span>
+        </div>
+        {% if mit_telefon %}
+            {% if k.tel_href %}<a class="mt-rund mt-wv-tel" href="{{ k.tel_href }}" aria-label="Anrufen: {{ k.telefon }}" title="Anrufen">{{ symbol('telefon') }}</a>
+            {% else %}<span class="mt-rund mt-rund-aus mt-wv-tel" aria-disabled="true" title="keine Telefonnummer hinterlegt">{{ symbol('telefon') }}</span>{% endif %}
+        {% else %}
+            <span class="mt-wv-pfeil" aria-hidden="true">›</span>
+        {% endif %}
+    </div>
+    {{ anruf_detail(k) }}
+</article>
+{%- endmacro %}

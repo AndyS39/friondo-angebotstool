@@ -1,253 +1,236 @@
-# Microsoft Graph für den E-Mail-Versand einrichten (Phase 17)
+# Microsoft Graph einrichten – Zugriff als Anwendung (v33, PLAN_V20 Phase 166)
 
-Anleitung für die IT: Das Angebotstool legt E-Mail-Entwürfe direkt im Postfach
-des angemeldeten Innendienst-Mitarbeiters ab (delegierte Berechtigung
-**Mail.ReadWrite** – es wird nichts automatisch gesendet). Dafür ist einmalig
-eine App-Registrierung im Microsoft-365-Mandanten der Friondo GmbH nötig.
+Anleitung für die IT (M365-Admin, `admin@`) und für Andreas. Stand 14.10.2026.
 
-## 1. App-Registrierung anlegen
+Das Angebotstool greift ab v33 **als Anwendung** auf Microsoft 365 zu: Es meldet sich
+mit einer App-Registrierung (Anwendungs-ID + Geheimnis) an und darf genau die
+Postfächer anfassen, die in der Exchange-Zugriffsgruppe **`friondo-tool-zugriff@friondo.de`**
+stehen. Es gibt keine persönliche „Mit Microsoft anmelden“-Verbindung mehr und keine
+Kalender-Freigaben je Person. Der bisherige Weg (Anmeldung einer Person, „Senden als“)
+bleibt als **Übergangsweg „delegiert“** erhalten (Abschnitt 4) und wird automatisch
+benutzt, solange der Verbindungstest nicht grün ist.
 
-1. https://portal.azure.com → **Microsoft Entra ID** → **App-Registrierungen**
-   → **Neue Registrierung**
-2. Name: `Friondo Angebotstool`
-3. Unterstützte Kontotypen: **Nur Konten in diesem Organisationsverzeichnis**
-   (einzelner Mandant)
-4. Umleitungs-URI: leer lassen → **Registrieren**
+Was das Tool im Modus Anwendung tut:
 
-## 2. Device-Code-Anmeldung erlauben
-
-App-Registrierung → **Authentifizierung** →
-„Erweiterte Einstellungen" → **Öffentliche Clientflows zulassen: Ja** → Speichern.
-
-## 3. Berechtigung vergeben
-
-App-Registrierung → **API-Berechtigungen** → **Berechtigung hinzufügen** →
-**Microsoft Graph** → **Delegierte Berechtigungen** → folgende auswählen →
-Hinzufügen → anschließend **„Administratorzustimmung für Friondo erteilen"**
-(bei jeder späteren Erweiterung der Liste erneut nötig):
-
-| Berechtigung | Wofür |
-|---|---|
-| `Mail.ReadWrite` | Entwurf im Postfach des Mitarbeiters ablegen (Phase 17) |
-| `Mail.Read` | Mail-Verlauf am Angebot (Phase 27) |
-| `Mail.Send` | Info-Mail an den Innendienst nach Fern-Signatur (Phase 28) |
-| `Mail.ReadWrite.Shared` | Zugriff auf das freigegebene Postfach **angebot@friondo.de** – Versand-Erkennung + Kundenantworten (Phase 31) |
-| `Mail.Send.Shared` | Senden im Namen von angebot@friondo.de (Phase 31) |
-
-Es wird weiterhin nichts ohne Zutun eines Mitarbeiters an Kunden gesendet:
-Das Tool legt Entwürfe an, gesendet wird in Outlook.
-
-## 3a. Postfach angebot@friondo.de („Senden als") – Phase 31
-
-Alle Angebots-Mails gehen mit dem Absender **angebot@friondo.de** raus, und
-Kundenantworten laufen dort auf. Dafür richtet der M365-Admin ein:
-
-1. **Freigegebenes Postfach** `angebot@friondo.de` anlegen (Exchange Admin
-   Center → Empfänger → Postfächer → Freigegebenes Postfach hinzufügen), falls
-   noch nicht vorhanden.
-2. Für **jeden Innendienst-Mitarbeiter** unter diesem Postfach →
-   **Postfachdelegierung** zwei Rechte vergeben:
-   - **„Senden als"** – damit der in Outlook gesendete Entwurf mit dem
-     Absender angebot@friondo.de rausgeht
-   - **„Lesen und Verwalten (Vollzugriff)"** – damit das Tool über das
-     Konto des Mitarbeiters die gesendeten Mails und Antworten im Postfach
-     angebot@ lesen kann (Graph `Mail.ReadWrite.Shared`)
-3. Die Rechte greifen nach bis zu 60 Minuten. Danach im Tool einmal
-   **Versand → Abmelden → Mit Microsoft anmelden**, damit das Token die
-   neuen Berechtigungen enthält.
-
-Im Tool stehen Absender und Abgleich-Postfach unter **Parametrierung →
-E-Mail-Versand** (Vorbelegung angebot@friondo.de, BCC info@friondo.de).
-
-## 4. IDs in die .env eintragen
-
-Von der Übersichtsseite der App-Registrierung kopieren und in die `.env`
-im Projektordner eintragen (danach App neu starten):
-
-```
-GRAPH_CLIENT_ID=<Anwendungs-ID (Client)>
-GRAPH_TENANT_ID=<Verzeichnis-ID (Mandant)>
-```
-
-## 5. Anmeldung im Tool
-
-Im Angebotstool: **Versand** → „Mit Microsoft anmelden" → der angezeigte Code
-wird auf https://microsoft.com/devicelogin mit dem Microsoft-365-Konto des
-Innendienst-Mitarbeiters eingegeben. Das Token wird lokal gespeichert
-(`data/.graph_token.json`) und automatisch erneuert; „Abmelden" löscht es.
-
-## 6. Ablauf danach
-
-„Versand vorbereiten" im Angebots-Editor erzeugt den Entwurf mit Betreff
-„Ihr Wärmepumpen-Angebot AN-C-… der Friondo GmbH", Standardtext, Angebots-PDF
-und den Anhängen laut Blatt „Anhänge". Gesendet wird in Outlook nach Kontrolle;
-anschließend im Tool den Status auf „Versendet" setzen.
-
-**Übergangslösung, solange Graph nicht eingerichtet ist:** „PDF anzeigen" im
-Editor und die E-Mail manuell verfassen.
-
-## 7. Ablauf Versand, Status-Automatik und Mail-Verlauf (Phase 27/31)
-
-1. **„Versand vorbereiten"** im Angebots-Editor (seit v6 als **HTML-Mail** mit
-   der Outlook-Signatur des Mitarbeiters, siehe `docs/signaturen.md`): Das Tool baut Betreff und
-   Text aus der E-Mail-Vorlage (Standard oder die des Außendienstlers des
-   Vorgangs), setzt Absender angebot@friondo.de, **CC = E-Mail des
-   Außendienstlers** (aus der Benutzerverwaltung; fehlt sie, kommt ein
-   deutlicher Hinweis und der Entwurf geht ohne CC raus), **BCC** aus der
-   Parametrierung, hängt PDF + Anlagen an, legt den Entwurf im Postfach des
-   Mitarbeiters ab und setzt den Status auf **„Versand vorbereitet"**.
-2. Der Mitarbeiter prüft den Entwurf in Outlook und sendet ihn.
-3. Der **Abgleich alle 15 Minuten** sucht die Konversation der Angebots-Mail
-   im Postfach angebot@friondo.de. Sobald dort eine gesendete (nicht mehr als
-   Entwurf markierte) Nachricht von uns liegt, springt der Status automatisch
-   auf **„Versendet"** – erst das löst die monday-Rückspielung aus. Notfalls
-   kann der Status im Editor auch manuell gesetzt werden.
-4. Antworten des Kunden in derselben Konversation (Fallback: Betreff mit der
-   AN-C-Nummer) erscheinen in der Angebotsliste als Brief-Symbol mit Zähler;
-   Klick öffnet den Mail-Verlauf (Absender, Zeitpunkt, Textauszug).
-   Geantwortet wird weiterhin in Outlook – das Tool zeigt nur an.
-
-## Projektierung V1 (v11): Shared-Postfach projektierung@friondo.de
-
-Aufgaben für den M365-Admin, damit die Benachrichtigungs-Mails der
-Projektierung (Sofort-Mail und Tagesdigest 07:15) mit dem richtigen Absender
-rausgehen:
-
-1. **Shared-Postfach anlegen**: Exchange Admin Center → Empfänger →
-   Postfächer → „Freigegebenes Postfach hinzufügen" →
-   `projektierung@friondo.de` (kein eigenes Konto/keine Lizenz nötig).
-2. **„Senden als"-Berechtigung** für die Benutzer vergeben, unter deren
-   Graph-Anmeldung das Tool läuft (dieselben Konten wie beim Angebotsversand):
-   Shared-Postfach → Delegierung → „Senden als" → Benutzer hinzufügen.
-   Die Berechtigung greift erfahrungsgemäß erst nach bis zu einer Stunde.
-3. Das Absender-Postfach steht im Tool unter **Parametrierung →
-   Projektierung-Einstellungen** (Standard `projektierung@friondo.de`).
-   Fehlt die Berechtigung, versucht das Tool automatisch den Fallback
-   `angebot@friondo.de`; beide Fehler landen im **Mail-Protokoll** auf
-   derselben Einstellungsseite. Der Mail-Versand blockiert das Tool nie.
-
-## Lead-Management V1 (v12): Kalender-Rechte + Postfächer
-
-Aufgaben für den M365-Admin (Terminassistent, Mail-Parser, Kundenmails):
-
-1. **Postfach `leads@friondo.de`** anlegen (Shared-Postfach) – Eingang der
-   Formular-Mails (Parser). *Seit v29 (Lead-Management V4) wird leads@ nur
-   noch gelesen – Absender aller Kundenmails ist termin@friondo.de, siehe
-   den Abschnitt „Lead-Management V4 (v29)“ unten.*
-2. **Testpostfach** (z. B. `lead-test@friondo.de`) anlegen: Im Demo-Modus
-   schreibt der Terminassistent Kalender-Ereignisse AUSSCHLIESSLICH in
-   dieses Postfach (Parametrierung → Lead-Einstellungen →
-   `kalender_testpostfach`) – nie in echte AD-Kalender.
-3. **Kalender-Berechtigung**: App-Registrierung um `Calendars.ReadWrite`
-   (Application) erweitern, Admin-Consent erteilen und den Zugriff mit
-   einer **Application Access Policy** auf die AD-Postfächer + das
-   Testpostfach beschränken:
-   `New-ApplicationAccessPolicy -AppId <App-ID> -PolicyScopeGroupId
-   <Mail-aktivierte Sicherheitsgruppe mit den AD-Postfächern> -AccessRight
-   RestrictAccess`
-4. Ohne Kalender-Recht arbeitet der Assistent nur mit Tool-Terminen
-   (Frei/Belegt aus Outlook entfällt) – das Tool blockiert nie; ein Hinweis
-   erscheint in der Parametrierung.
-
-## Lead-Management V4 (v29): Postfach termin@friondo.de – Absender aller Lead-Mails
-
-Entscheidung 07.10.2026 (Claudia Castro): **Alle automatisierten Kundenmails des
-Lead-Moduls** (Eingangsbestätigung, Nicht erreicht, Disqualifiziert,
-Terminbestätigung – auch „erneut senden“ –, Terminerinnerung, Terminänderung,
-Terminabsage, Online-Termin-Einladung und alle künftigen Vorlagen) gehen mit dem
-Absender **termin@friondo.de** raus (Parameter `absender_lead_mails`,
-Parametrierung → Lead-Einstellungen → „Lead-Management V4“). **Es gibt bewusst
-keinen Fallback** auf ein anderes Postfach: fehlt das Senderecht oder schlägt
-der Versand fehl, bleibt die Mail nach drei Versuchen mit Status `fehler` in
-der Warteschlange, der Lead steht oben im Hauptboard mit dem roten Vermerk
-„Mail nicht gesendet“ und die Kundenkartei zeigt „Erneut senden“.
-**leads@friondo.de bleibt ausschließlich Eingangspostfach** (Parser, Formulare,
-Portale, Lead-Partner) und wird nicht mehr als Absender genutzt.
-
-Aufgaben für den M365-Admin (vor der Freischaltung `lead_freigabe_modus = alle`;
-im Demo-Modus betrifft das nur das Testpostfach):
-
-1. **Shared-Postfach `termin@friondo.de`** anlegen (Exchange Admin Center →
-   Empfänger → Postfächer → Freigegebenes Postfach hinzufügen; keine Lizenz
-   nötig).
-2. **„Senden als“** für die Konten vergeben, unter deren Graph-Anmeldung das
-   Tool läuft (dieselben Konten wie beim Angebotsversand): Shared-Postfach →
-   Delegierung → „Senden als“ → Benutzer hinzufügen. Das Tool sendet über
-   `/me/sendMail` mit `from = termin@friondo.de` (Berechtigung
-   `Mail.Send.Shared`, bereits in der App-Registrierung).
-3. **Lesezugriff („Lesen und Verwalten / Vollzugriff“)** für dieselben Konten:
-   Der Lauf `lead-mail-abruf` (alle 2 Minuten, Betriebs-Seite/`/health`) liest
-   ungelesene Nachrichten im Posteingang von termin@ (Graph
-   `/users/termin@friondo.de/mailFolders/inbox/messages`, Berechtigung
-   `Mail.ReadWrite.Shared`), ordnet **Kundenantworten** dem Vorgang zu (Timeline
-   „Antwort von …“, Wiedervorlage „jetzt“) und erkennt
-   **Unzustellbarkeitsberichte** (Absender postmaster/MAILER-DAEMON, Betreff
-   „Unzustellbar“/„Undeliverable“/„Delivery Status Notification“): der Lead
-   erhält `email_status = ungueltig` („E-Mail falsch“, oben im Hauptboard),
-   weitere Mails an die Adresse warten bis zur Adressänderung. Verarbeitete
-   Nachrichten werden als gelesen markiert; nicht zuordenbare landen in
-   „Posteingang unklar“. Die Rechte greifen nach bis zu 60 Minuten; danach im
-   Tool einmal Versand → Abmelden → Mit Microsoft anmelden.
-4. **Prüfpunkt im Tool:** Parametrierung → Lead-Einstellungen → „Prüfpunkte V4“
-   → „Testmail aus dem Lead-Absender senden“ (Admin). Die Testmail geht als
-   termin@ an die Testadresse (`mail_testadresse`; im Demo-Modus ausschließlich
-   dorthin); Ergebnis steht in der Meldung und im Einstellungs-Protokoll
-   („fehlgeschlagen … (kein Fallback)“ = Senderecht fehlt). Ohne eingerichtetes
-   Graph (`GRAPH_CLIENT_ID`) melden Testmail und Lauf „Graph nicht eingerichtet“.
-5. **Handelsvertreter** (ohne Friondo-Postfach) sind von termin@ nicht
-   betroffen: für ihre Leads sendet das Tool bis zur Entscheidung
-   [OFFEN 2] keine Terminbestätigung (`hv_versandweg = offen`), sondern legt
-   dem HV ein To-Do mit Vorschau (Text + ICS) an.
-
-Übersicht der Postfächer nach v29:
-
-| Postfach | Zweck | Graph-Zugriff des Tools |
+| Was | Postfach | Graph-Aufruf |
 |---|---|---|
-| angebot@friondo.de | Angebots-Mails (Entwurf in Outlook, Abgleich) | Senden als + Vollzugriff (Phase 31) |
-| projektierung@friondo.de | Benachrichtigungen der Projektierung | Senden als (v11) |
-| leads@friondo.de | **nur Eingang**: Lead-Parser (Lauf `lead-parser`) | Lesen und Verwalten (nur lesen + `isRead`) |
-| termin@friondo.de | **Absender aller Lead-Mails**, Antworten + Bounces (Lauf `lead-mail-abruf`) | Senden als + Lesen und Verwalten |
-| lead-test@ (Testpostfach) | Demo-Modus: Kalender-Ereignisse, Testmails | wie bisher |
+| „Versand vorbereiten“ (Angebots-Entwurf mit PDF, Anhängen, Signatur des ID-Benutzers, CC/BCC) | `angebot@friondo.de` → Ordner **Entwürfe** | `POST /users/angebot@…/messages` + Anhänge |
+| Versand-Erkennung („Versand vorbereitet“ → „Versendet“) und Mail-Verlauf am Angebot | `angebot@friondo.de` (Konversation: Entwurf, gesendete Kopie, Antworten) | `GET /users/angebot@…/messages?$filter=conversationId …` |
+| Lead-Mails (Eingangsbestätigung, Terminbestätigung, Erinnerung, Absage …) | `termin@friondo.de` | `POST /users/termin@…/sendMail` |
+| Antworten und Unzustellbarkeitsberichte zu Lead-Mails (Lauf `lead-mail-abruf`) | `termin@friondo.de` | `GET /users/termin@…/mailFolders/inbox/messages`, `PATCH … isRead` |
+| Lead-Parser (Formular-Mails, Lauf `lead-parser`) | `leads@friondo.de` (nur Eingang) | `GET /users/leads@…/mailFolders/inbox/messages` |
+| Projektierung: Benachrichtigungen, Tagesdigest, Sub-Anfragen, Kunden-Terminmail, BzA-Mail | `projektierung@friondo.de` (Fallback angebot@ nur bei Benachrichtigungen) | `POST /users/projektierung@…/sendMail` bzw. `…/messages` + `/send` |
+| Antworten der Subs und der Kunden auf Terminmails | `projektierung@friondo.de` | `GET /users/projektierung@…/messages?$filter=conversationId …` |
+| Kalender je Mitarbeiter (Tool-Termine schreiben, Rücklesen, Belegtzeiten – Phase 170) | persönliches Postfach jedes Mitarbeiters mit Terminen | `/users/<upn>/events`, `/users/<upn>/calendarView` |
+| Nachfass-Mail durch den Außendienst (Phase 176) | persönliches Postfach des AD | `POST /users/<upn>/messages` + `/send` |
 
+Jeder Aufruf, der mit **HTTP 403** scheitert, landet als „Postfach <x> ist nicht in der
+Zugriffsgruppe Friondo-Tool-Zugriff“ im Fehlerprotokoll (einmal je Postfach und Stunde)
+und auf der Verbindungs-Seite (Abschnitt 6).
 
-## Outlook-Kalender-Sync der Montageteams (v15, Phase 81)
+## 1. Entra ID: App-Registrierung, Anwendungsberechtigungen, Geheimnis
 
-Das Tool spiegelt Montage-, Feinplanungs- und Abnahmetermine nach Outlook
-und liest Verschiebungen alle 15 Minuten zurück. Zwei Wege – die Wahl
-trifft die Parametrierung (Projektierung-Einstellungen → Outlook-Kalender):
+1. https://entra.microsoft.com → **Identität → Anwendungen → App-Registrierungen** →
+   die bestehende Registrierung **„Friondo Angebotstool“** öffnen (sonst neu anlegen:
+   Name `Friondo Angebotstool`, Kontotyp „Nur Konten in diesem Organisationsverzeichnis“,
+   keine Umleitungs-URI).
+2. **API-Berechtigungen → Berechtigung hinzufügen → Microsoft Graph →
+   Anwendungsberechtigungen** (nicht „delegiert“):
 
-### Weg A: Team-Postfächer (Standard)
+   | Berechtigung | Wofür |
+   |---|---|
+   | `Mail.Send` | Lead-, Projekt-, Nachfass-Mails direkt aus den Postfächern senden |
+   | `Mail.ReadWrite` | Entwürfe in angebot@ anlegen, Posteingänge lesen, `isRead` setzen |
+   | `Calendars.ReadWrite` | Termine in die persönlichen Kalender schreiben und zurücklesen |
 
-1. In Microsoft 365 je Team ein Postfach oder eine freigegebene Mailbox
-   anlegen: `team1@friondo.de` … `team10@friondo.de`,
-   `subteam1@friondo.de` … `subteam5@friondo.de`.
-2. Dem in der Azure-App angemeldeten Konto die Berechtigung
-   **Calendars.ReadWrite.Shared** (delegiert) erteilen und die Kalender
-   der Team-Postfächer für dieses Konto freigeben (Bearbeiter-Rechte).
-3. Im Tool unter Parametrierung → Teams je Team die **Outlook-Adresse**
-   des Postfachs eintragen.
-4. Sync-Modus in den Projektierung-Einstellungen auf
-   „Team-Postfächer“ lassen.
+   Danach **„Administratorzustimmung für Friondo erteilen“** (grüner Haken in der
+   Spalte Status). Die bisherigen delegierten Berechtigungen (`Mail.ReadWrite`,
+   `Mail.Read`, `Mail.Send`, `Mail.ReadWrite.Shared`, `Mail.Send.Shared`,
+   `Calendars.ReadWrite.Shared`) bleiben für den Übergangsweg stehen.
+3. **Zertifikate & Geheimnisse → Geheime Clientschlüssel → Neuer geheimer Clientschlüssel**:
+   Beschreibung `Angebotstool Server`, Gültigkeit **24 Monate** (längste Auswahl).
+   Den **Wert** sofort kopieren – er ist nur einmal sichtbar. **Der Wert gehört nur in die
+   `.env` auf dem Server**, nie in E-Mails, Chats, Tickets, das Projektwissen oder
+   diese Doku. Das **Ablaufdatum** notieren.
+4. Auf dem Server (`C:\Users\kdadmin\Desktop\Angebotstool\.env`, als kdadmin) eintragen:
 
-Vorteil: jedes Team sieht nur den eigenen Kalender (auch am Handy).
+   ```
+   GRAPH_CLIENT_ID=<Anwendungs-ID (Client) von der Übersichtsseite>
+   GRAPH_TENANT_ID=<Verzeichnis-ID (Mandant)>
+   GRAPH_CLIENT_SECRET=<Wert des geheimen Clientschlüssels>
+   GRAPH_GEHEIMNIS_ABLAUF=<Ablaufdatum JJJJ-MM-TT>
+   ```
 
-### Weg B: Gemeinsamer Kalender mit Kategorien
+   Danach den Dienst neu starten (`scripts\dienst-neustart.bat`). Das Tool liest die
+   `.env` nur beim Start.
+5. **Alternative Zertifikat** statt Geheimnis (läuft länger, kein Klartext-Wert in der
+   `.env`): unter „Zertifikate & Geheimnisse → Zertifikate“ das öffentliche Zertifikat
+   (`.cer`) hochladen; auf dem Server den privaten Schlüssel als PEM ablegen (aus einer
+   `.pfx`: `openssl pkcs12 -in angebotstool.pfx -nocerts -nodes -out angebotstool.key.pem`)
+   und eintragen:
 
-1. EIN Postfach (z. B. `montage@friondo.de`) anlegen und dessen Kalender
-   für alle freigeben; Berechtigung wie oben.
-2. Sync-Modus „Gemeinsamer Kalender mit Kategorie je Team“ wählen und
-   die Adresse eintragen; jeder Eintrag bekommt die Kategorie mit dem
-   Teamnamen (Farben in Outlook einmalig je Kategorie festlegen).
+   ```
+   GRAPH_ZERTIFIKAT_PFAD=C:\Friondo\zertifikate\angebotstool.key.pem
+   GRAPH_ZERTIFIKAT_THUMBPRINT=<Fingerabdruck aus Entra, ohne Doppelpunkte>
+   ```
 
-Vorteil: eine einzige Kalenderfreigabe, Filterung über Kategorien.
+   Ist `GRAPH_CLIENT_SECRET` gesetzt, hat das Geheimnis Vorrang. Die PEM-Datei nur für
+   kdadmin/SYSTEM lesbar machen (NTFS-Rechte), nicht in den Projektordner legen.
 
-### Verhalten
+## 2. Exchange: Zugriffsgruppe und Application Access Policy
 
-- Betreff: „PR-… · Kunde · Sparte“, Ort = Ausführungsadresse, Text =
-  Steckbrief-Kurzfassung + Link in die Projektakte (Basis-URL in der
-  Parametrierung).
-- Outlook → Tool: Datum/Dauer-Änderungen werden alle 15 Minuten
-  übernommen (Verlaufseintrag „Termin in Outlook verschoben von …“);
-  alles andere (Teilnehmer, Text) bleibt Outlook.
-- Fehler blockieren nie: der Termin zeigt ein Warnsymbol mit
-  „Erneut senden“.
+Ohne Einschränkung dürfte die Anwendung **jedes** Postfach des Mandanten lesen und
+senden. Deshalb wird der Zugriff auf eine mail-aktivierte Sicherheitsgruppe beschränkt.
+PowerShell als M365-Admin (Modul `ExchangeOnlineManagement`):
+
+```powershell
+Connect-ExchangeOnline -UserPrincipalName admin@friondo.de
+
+# 1) mail-aktivierte Sicherheitsgruppe anlegen (einmalig)
+New-DistributionGroup -Name "Friondo-Tool-Zugriff" -Alias "friondo-tool-zugriff" `
+    -PrimarySmtpAddress "friondo-tool-zugriff@friondo.de" -Type Security `
+    -Notes "Postfaecher, auf die das Friondo Angebotstool als Anwendung zugreifen darf"
+
+# 2) Mitglieder: Funktionspostfächer + alle Mitarbeiter mit Terminen
+#    (die vollständige Liste liefert das Tool: Versand → Verbindungs-Seite → Kopierliste)
+"angebot@friondo.de","termin@friondo.de","leads@friondo.de","projektierung@friondo.de" |
+    ForEach-Object { Add-DistributionGroupMember -Identity "friondo-tool-zugriff@friondo.de" -Member $_ }
+# Mitarbeiter aus der Kopierliste (eine Adresse je Zeile) ebenso hinzufügen:
+Get-Content .\kopierliste.txt | ForEach-Object { Add-DistributionGroupMember -Identity "friondo-tool-zugriff@friondo.de" -Member $_ }
+
+# 3) Zugriff der Anwendung auf die Gruppe beschränken (AppId = GRAPH_CLIENT_ID)
+New-ApplicationAccessPolicy -AppId "<Anwendungs-ID (Client)>" `
+    -PolicyScopeGroupId "friondo-tool-zugriff@friondo.de" -AccessRight RestrictAccess `
+    -Description "Friondo Angebotstool: nur Postfaecher der Gruppe Friondo-Tool-Zugriff"
+
+# 4) prüfen – AccessCheckResult muss „Granted“ sein (Mitglied) bzw. „Denied“ (Nichtmitglied)
+Test-ApplicationAccessPolicy -Identity "angebot@friondo.de" -AppId "<Anwendungs-ID (Client)>"
+Test-ApplicationAccessPolicy -Identity "jemand-ohne-zugriff@friondo.de" -AppId "<Anwendungs-ID (Client)>"
+
+# 5) gesendete Kopie im Funktionspostfach ablegen (Versand-Erkennung liest die Konversation in angebot@)
+Set-Mailbox -Identity "angebot@friondo.de" -MessageCopyForSentAsEnabled $true -MessageCopyForSendOnBehalfEnabled $true
+```
+
+Hinweise:
+
+- Die Policy greift erfahrungsgemäß nach **bis zu 30 Minuten**; Gruppenänderungen
+  (neue Mitglieder) ebenfalls. Danach im Tool **„Verbindung testen“**.
+- Die Gruppe braucht keine Lizenz und muss nicht in der Adressliste sichtbar sein
+  (`Set-DistributionGroup -HiddenFromAddressListsEnabled $true` ist erlaubt).
+- Freigegebene Postfächer (angebot@, termin@, leads@, projektierung@) sind normale
+  Mitglieder; Team-Kalender-Postfächer (Parametrierung → Teams → Outlook-Adresse) und
+  das Testpostfach des Terminassistenten gehören ebenfalls hinein, wenn sie genutzt
+  werden – die Verbindungs-Seite listet sie.
+- Damit jeder Innendienstler die Entwürfe in angebot@ sieht und von dort sendet, braucht
+  er wie bisher **Vollzugriff + Senden als** auf angebot@ (Outlook blendet das Postfach
+  dann automatisch ein). Das ist Exchange-Delegierung, unabhängig von Graph.
+
+## 3. Einschalten im Tool: Verbindungstest
+
+1. Im Angebotstool als Admin oder Innendienst: **Menü → Versand** (`/versand`,
+   „Verbindung zu Microsoft 365“). Die Seite zeigt Modus, Mandant (maskiert),
+   Geheimnis-Ablauf, die **Liste aller Postfächer, die das Tool braucht**
+   (Funktionspostfächer aus den Einstellungen + alle aktiven Benutzer mit E-Mail der
+   Rollen Außendienst, Projektierung, Montage, Innendienst; Handelsvertreter ohne
+   Friondo-Postfach ausgenommen) mit **Kopierliste** für Schritt 2.
+2. **„Verbindung testen“**: Das Tool holt ein Anwendungs-Token und liest je
+   Funktionspostfach den Posteingangs-Ordner (`GET /users/<pf>/mailFolders/inbox?$select=id`)
+   und je Mitarbeiter den Kalender (`GET /users/<upn>/calendar?$select=id`) – nur lesend,
+   nichts wird gesendet. Ergebnis je Postfach grün/rot mit Grund.
+3. Sind **alle Funktionspostfächer grün**, stellt das Tool die Einstellung
+   `graph_modus = anwendung` – ab jetzt laufen alle Aufrufe als Anwendung. Rote
+   Mitarbeiter-Postfächer schalten den Modus nicht zurück, sie stehen unter „Fehlt in der
+   Zugriffsgruppe“ mit eigener Kopierliste für die IT (Termine dieser Personen landen erst
+   nach dem Nachtragen in Outlook).
+4. Ist ein Funktionspostfach rot oder die Anmeldung der Anwendung schlägt fehl, bleibt
+   (oder wird) der Modus `delegiert` – der bisherige Weg läuft weiter, nichts bricht ab.
+
+Die Anmeldung einer Person („Mit Microsoft anmelden“) ist im Modus Anwendung **nicht
+mehr nötig**; der Knopf bleibt als Rückfallebene auf der Seite.
+
+## 4. Übergangsweg „delegiert“ (bis zum grünen Verbindungstest)
+
+Die am **14.10.2026** gesetzten delegierten Freigaben bleiben gültig und stören im Modus
+Anwendung nicht; sie werden dort nicht mehr gebraucht und können später von der IT
+zurückgenommen werden:
+
+- Skript mit `Add-MailboxFolderPermission` (Kalender-Freigaben der Außendienstler für
+  das im Tool angemeldete Konto),
+- **Vollzugriff und „Senden als“ auf `termin@friondo.de`** für die Konten, unter deren
+  Anmeldung das Tool lief,
+- Vollzugriff/„Senden als“ auf `angebot@friondo.de` (Phase 31) und „Senden als“ auf
+  `projektierung@friondo.de` (v11) – Vollzugriff/Senden als auf angebot@ bleibt für
+  Outlook auch im Modus Anwendung nötig (Abschnitt 2).
+
+So funktioniert der Übergangsweg: Ein Innendienst-Mitarbeiter meldet sich unter
+**Versand → „Mit Microsoft anmelden“** per Device-Code (https://microsoft.com/devicelogin)
+mit seinem Microsoft-365-Konto an (delegierte Berechtigungen `Mail.ReadWrite`, `Mail.Read`,
+`Mail.Send`, `Mail.ReadWrite.Shared`, `Mail.Send.Shared`; App-Registrierung →
+Authentifizierung → „Öffentliche Clientflows zulassen: Ja“). Das Token liegt in
+`data/.graph_token.json` und wird automatisch erneuert; „Abmelden“ löscht es. Alle
+Aufrufe laufen dann über `/me/…` mit `from = Funktionspostfach` („Senden als“),
+Entwürfe liegen im Postfach der angemeldeten Person, Shared-Postfächer werden über
+`/users/<postfach>` mit Vollzugriff gelesen.
+
+## 5. Checkliste neuer Mitarbeiter
+
+1. Benutzer im Tool anlegen (Benutzerverwaltung) **mit E-Mail-Adresse** (= UPN des
+   Postfachs; Außendienst mit abweichendem Kalender-Postfach: Feld im AD-Profil).
+2. Postfach in die Gruppe aufnehmen:
+   `Add-DistributionGroupMember -Identity friondo-tool-zugriff@friondo.de -Member <upn>`
+   (bis zu 30 Minuten warten).
+3. Im Tool **Versand → „Verbindung testen“** – das neue Postfach muss grün sein.
+4. Handelsvertreter ohne Friondo-Postfach: nichts zu tun (keine Outlook-Termine, keine
+   Nachfass-Mail aus dem Tool; OFFEN 3 aus Lead-Management V4).
+5. Beim Ausscheiden: Benutzer im Tool deaktivieren, Postfach aus der Gruppe nehmen.
+
+## 6. Verbindungstest und Fehlerbilder
+
+| Anzeige | Bedeutung | Maßnahme |
+|---|---|---|
+| „Geheimnis fehlt (.env …)“ | `GRAPH_CLIENT_SECRET` bzw. Zertifikat nicht in der `.env` | Abschnitt 1 Schritt 4/5, Dienst neu starten |
+| „Anmeldung der Anwendung fehlgeschlagen: invalid_client …“ | Geheimnis falsch/abgelaufen oder Anwendungs-ID/Mandant falsch | neues Geheimnis anlegen, `.env` prüfen |
+| „Anmeldung der Anwendung fehlgeschlagen: … consent …“ / HTTP 401 | Administratorzustimmung fehlt | Abschnitt 1 Schritt 2 |
+| „nicht in der Zugriffsgruppe Friondo-Tool-Zugriff (HTTP 403)“ | Postfach ist kein Mitglied der Gruppe (oder Policy noch nicht aktiv) | Mitglied hinzufügen, 30 Minuten warten, erneut testen |
+| „Postfach unbekannt (HTTP 404)“ | Adresse existiert nicht (Tippfehler in Einstellung/Benutzerverwaltung) | Adresse korrigieren |
+| „Timeout“/„URLError“ | keine Verbindung zu `login.microsoftonline.com`/`graph.microsoft.com` | Proxy/Firewall des Servers (HTTPS ausgehend) |
+| Modus bleibt „Delegiert“ trotz grünem Test | Seite neu laden; Einstellung `graph_modus` prüfen (Parametrierung → Betrieb → Kachel Graph-Modus) | – |
+
+Laufender Betrieb:
+
+- **`/health`** meldet `graph_modus` (anwendung | delegiert) und warnt (`warn`) mit
+  „Graph-Geheimnis läuft in n Tagen ab“, sobald `GRAPH_GEHEIMNIS_ABLAUF` ≤ 30 Tage
+  entfernt ist; die Betriebs-Seite zeigt die Kachel „Graph-Modus“.
+- **Go-live-Checkliste** (Parametrierung → Go-live): Punkt „Graph als Anwendung verbunden“
+  ist grün, wenn der Verbindungstest grün war und das Geheimnis noch > 30 Tage gilt.
+- **Geheimnis erneuern** (alle 24 Monate, spätestens bei der /health-Warnung): neuen
+  geheimen Clientschlüssel in Entra anlegen, Wert und neues Ablaufdatum in die `.env`,
+  Dienst neu starten, „Verbindung testen“, altes Geheimnis in Entra löschen.
+- 403-Treffer aus den Hintergrundläufen (Outlook-Sync je Mitarbeiter, Postfach-Abrufe)
+  erscheinen im Fehlerprotokoll und auf der Verbindungs-Seite unter „Fehlt in der
+  Zugriffsgruppe“ mit Kopierliste.
+
+## 7. Postfächer im Überblick
+
+| Postfach | Zweck | Modus Anwendung | Modus delegiert (Übergang) |
+|---|---|---|---|
+| angebot@friondo.de | Angebots-Entwürfe (Ordner Entwürfe), Absender, Versand-Erkennung, Kundenantworten | Gruppe; Innendienst braucht Vollzugriff + Senden als für Outlook | Senden als + Vollzugriff (Phase 31) |
+| termin@friondo.de | Absender aller Lead-Mails, Antworten + Bounces (Lauf `lead-mail-abruf`) | Gruppe | Senden als + Vollzugriff (v29) |
+| leads@friondo.de | nur Eingang: Lead-Parser (Lauf `lead-parser`) | Gruppe | Vollzugriff (lesen + `isRead`) |
+| projektierung@friondo.de | Benachrichtigungen, Sub-/Termin-/BzA-Mails, Antworten | Gruppe | Senden als (v11) |
+| Mitarbeiter (UPN) | Kalender je Person (Phase 170), Nachfass-Mail des AD (Phase 176) | Gruppe | Kalender-Freigaben vom 14.10.2026 |
+| Team-/Testpostfächer | Team-Kalender (v15), Testpostfach Terminassistent | Gruppe (wenn genutzt) | Kalender-Freigabe |
+
+Keine Geheimnisse und keine Mandanten-IDs in diese Datei schreiben – die Verbindungs-Seite
+zeigt den Mandanten bewusst nur maskiert.
+
+## Hinweis Outlook je Mitarbeiter (Phase 170)
+
+Die Zugriffsgruppe `friondo-tool-zugriff@` muss **alle Postfächer mit Terminen** enthalten (Außendienst,
+Projektierung, Monteure, Service-Techniker, Testpostfach, Team-Postfächer). Fehlende Postfächer erscheinen auf
+der Verbindungs-Seite unter „Fehlt in der Zugriffsgruppe“ (Kopierliste); Aufträge, die mit HTTP 403 scheiterten,
+laufen nach dem Nachtragen stündlich von selbst nach (bis zu 7 Tage). Details: `docs/outlook-sync.md`.
+
+Dazu gehören **alle Außendienst-Postfächer**: Die Nachfass-Mail (v33, Phase 176) sendet mit `messages`/`send` am
+Postfach `/users/<AD-E-Mail>`; fehlt ein Postfach in der Gruppe, meldet der Knopf „Versand aus <Postfach>
+fehlgeschlagen“ und das Fehlerprotokoll „Postfach … ist nicht in der Zugriffsgruppe“.

@@ -264,7 +264,7 @@ def feld(request: Request, vorgang_id: int,
                              "meldung": "Innendienst wird vom Innendienst zugewiesen (nur Anzeige).",
                              **_pflicht_antwort(session, vorgang, kunde)}, status_code=400)
     erzwingen = (str(daten.get("erzwingen") or "") in ("1", "true", "on")
-                 and benutzer.rolle in ("admin", "innendienst"))
+                 and benutzer.basisrolle in ("admin", "innendienst"))
     ergebnis = lead_kartei.feld_speichern(session, vorgang, kunde, feld_name,
                                           daten.get("wert"), benutzer=benutzer,
                                           erzwingen=erzwingen)
@@ -331,7 +331,7 @@ def aussendienst(request: Request, vorgang_id: int,
     if not gueltig:
         return _zurueck(vorgang_id, "Außendienst: ungültige Auswahl – nichts geändert.", _tab(form))
     erzwingen = (form.get("erzwingen") == "1"
-                 and benutzer.rolle in ("admin", "innendienst"))
+                 and benutzer.basisrolle in ("admin", "innendienst"))
     meldung = lead_v2.ad_zuweisen(session, vorgang, neu_id,
                                   benutzer=benutzer, erzwingen=erzwingen)
     session.commit()

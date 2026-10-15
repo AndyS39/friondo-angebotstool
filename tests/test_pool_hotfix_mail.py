@@ -192,46 +192,80 @@ class SitzungUebergeben(Basis):
         self.assertEqual(quelle.board_name, "Pool-Test")
 
     def test_outlook_event_senden_post_patch_und_loeschen(self):
+        """v33 (PLAN_V20 Phase 170): event_senden/event_loeschen reihen nur noch Aufträge in
+        outlook_auftraege ein – im Request gibt es weder Token- noch Graph-Aufruf mehr (vorher:
+        POST/PATCH/DELETE mit Freigabe davor). Die Netzphase liegt im Lauf outlook-sync; die
+        Sitzungs-Invariante wird deshalb dort gemessen: Auftrag anlegen → Lauf mit gemocktem
+        Graph → POST, PATCH, DELETE in dieser Reihenfolge, im Moment jedes Aufrufs (und des
+        Tokens) keine Pool-Verbindung. Braucht einen Benutzer mit E-Mail (Postfach); der Termin
+        hängt an keinem Projekt (projekt_id 0), alle Zeilen werden am Ende entfernt."""
+        from app import outlook_sync
+        from app.models import OutlookAuftrag, OutlookEreignis
+        person = (self.s.query(Benutzer).filter(Benutzer.aktiv.is_(True), Benutzer.email != "")
+                  .order_by(Benutzer.id).first())
+        if person is None:
+            self.skipTest("Dev-DB ohne Benutzer mit E-Mail – Lauf nicht gemessen")
+        person_id = person.id
+        termin = ProjektTermin(typ="sonstige", projekt_id=0, gewerk_id=None, person_id=person_id,
+                               beginn=datetime(2026, 10, 6, 8, 0), ende=None, ganztaegig=False,
+                               notiz="Pool-Hotfix-Test v33", outlook_event_id="")
+        self.s.add(termin)
+        self.s.commit()
+        termin_id = termin.id
+        # offene Aufträge anderer Testmodule (Termine über Routen angelegt, Warteschlange nie
+        # aufgeräumt) würden im gemessenen Lauf mitlaufen – als erledigt markieren
+        outlook_sync.fremde_auftraege_abschliessen(self.s, termin_ids=(termin_id,))
+        self.s.commit()
         messungen = []
-        projekt = self.s.query(Projekt).order_by(Projekt.id).first()
-        termin = ProjektTermin(typ="montage", beginn=datetime(2026, 10, 6, 8, 0), ende=None,
-                               team_id=None, projekt_id=projekt.id if projekt else None,
-                               gewerk_id=None, outlook_event_id="")            # transient
-
-        def ziel(session, _termin):
-            self.lesen(session)          # Team/Parameter → Verbindung belegt
-            return "kalender@test.local", [], ""
 
         def token():
             messungen.append(("token", belegt()))
             return "tok"
 
-        def graph(methode, pfad, tok, daten=None):
+        def graph(methode, pfad, tok, daten=None, *a, **kw):
             messungen.append((methode, belegt()))
             return {"id": "ev-pool-test"}
 
-        patches = [mock.patch.object(outlook_kalender, "_kalender_ziel", side_effect=ziel),
-                   mock.patch.object(graph_versand, "_token", side_effect=token),
-                   mock.patch.object(graph_versand, "_graph_aufruf", side_effect=graph)]
-        if projekt is None:                 # Dev-DB ohne Projekt: Ereignisdaten nur lesen
-            def daten(session, _termin, _kategorien):
-                self.lesen(session)
-                return {"subject": "Test"}
-            patches.append(mock.patch.object(outlook_kalender, "_event_daten",
-                                             side_effect=daten))
-        self.belegen()
-        with contextlib.ExitStack() as stapel:
-            for patch in patches:
-                stapel.enter_context(patch)
-            ok, fehler = outlook_kalender.event_senden(self.s, termin)        # POST
-            ok2, fehler2 = outlook_kalender.event_senden(self.s, termin)      # PATCH
-            geloescht = outlook_kalender.event_loeschen(self.s, termin)       # DELETE
+        def lauf():
+            self.entlasten()          # Testsitzung ohne Verbindung – wie der Scheduler-Thread
+            with mock.patch.object(graph_versand, "_token", side_effect=token), \
+                    mock.patch.object(graph_versand, "_graph_aufruf", side_effect=graph):
+                outlook_sync.sync_lauf()
+        try:
+            self.belegen()
+            with mock.patch.object(graph_versand, "_token",
+                                   side_effect=AssertionError("Token im Request")), \
+                    mock.patch.object(graph_versand, "_graph_aufruf",
+                                      side_effect=AssertionError("Graph-Aufruf im Request")):
+                ok, fehler = outlook_kalender.event_senden(self.s, termin)        # → anlegen
+            self.s.commit()
+            offen = (self.s.query(OutlookAuftrag)
+                     .filter_by(termin_art="projekt", termin_id=termin_id, status="offen").all())
+            self.assertEqual([a.aktion for a in offen], ["anlegen"])
+            lauf()                                                                 # POST
+            termin = self.s.get(ProjektTermin, termin_id)
+            self.s.refresh(termin)
+            self.assertEqual(termin.outlook_event_id, "ev-pool-test")
+            termin.beginn = datetime(2026, 10, 7, 8, 0)
+            ok2, fehler2 = outlook_kalender.event_senden(self.s, termin)           # → aendern
+            self.s.commit()
+            lauf()                                                                 # PATCH
+            geloescht = outlook_kalender.event_loeschen(self.s, self.s.get(ProjektTermin, termin_id))
+            self.s.commit()
+            lauf()                                                                 # DELETE
+        finally:
+            self.s.rollback()
+            for modell in (OutlookAuftrag, OutlookEreignis):
+                self.s.query(modell).filter_by(termin_art="projekt", termin_id=termin_id).delete(
+                    synchronize_session=False)
+            rest = self.s.get(ProjektTermin, termin_id)
+            if rest is not None:
+                self.s.delete(rest)
+            self.s.commit()
         self.assertEqual((ok, fehler, ok2, fehler2, geloescht), (True, "", True, "", True))
         self.assertEqual([m[0] for m in messungen],
                          ["token", "POST", "token", "PATCH", "token", "DELETE"])
         self.assertEqual([m[1] for m in messungen], [0] * 6, messungen)
-        self.assertNotIn(termin, self.s)            # transient geblieben
-        self.assertEqual(termin.outlook_event_id, "")
 
 
 class EigeneSitzung(Basis):
@@ -312,26 +346,29 @@ class EigeneSitzung(Basis):
             self.skipTest("Dev-DB ohne offene Sub-Konversationen – Schleife nicht gemessen")
 
     def test_outlook_ruecklesen(self):
-        anzahl = (self.s.query(ProjektTermin)
-                  .filter(ProjektTermin.outlook_event_id != "",
-                          ProjektTermin.beginn.isnot(None)).count())
+        """v33 (PLAN_V20 Phase 170): outlook_kalender.ruecklesen ruft den Lauf outlook-ruecklesen
+        (app/outlook_sync.py) – Token VOR jeder Sitzung, Personenliste in einer kurzen Sitzung,
+        dann je Person mit Terminen in den nächsten acht Wochen EIN calendarView-Abruf ohne
+        gehaltene Verbindung (vorher: ein Abruf je Projekttermin mit Ereignis)."""
+        from datetime import timedelta
+        from app import outlook_sync
+        von = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        with db.kurz() as s:
+            anzahl = len(outlook_sync._personen_mit_terminen(
+                s, von, von + timedelta(weeks=outlook_sync.RUECKLESE_WOCHEN)))
         konto, abrufe = [], []
 
-        def ziel(session, _termin):
-            self.lesen(session)
-            return "kalender@test.local", [], ""
-
-        def graph(methode, pfad, tok, daten=None):
+        def graph(methode, pfad, tok, daten=None, *a, **kw):
             abrufe.append((methode, belegt()))
-            return {}                          # kein start → keine Änderung
+            self.assertIn("calendarView", pfad)
+            return {"value": []}               # leerer Kalender → nichts zu übernehmen
         geaendert = self.lauf(outlook_kalender.ruecklesen, self.mocks(konto, []) + [
-            mock.patch.object(outlook_kalender, "_kalender_ziel", side_effect=ziel),
             mock.patch.object(graph_versand, "_graph_aufruf", side_effect=graph)])
         self.assertEqual(geaendert, 0)
         self.assertEqual(konto, [("token", 0)])                  # Token vor der Sitzung
         self.assertEqual(abrufe, [("GET", 0)] * anzahl, abrufe)
         if not anzahl:
-            self.skipTest("Dev-DB ohne Outlook-Termine – Schleife nicht gemessen")
+            self.skipTest("Dev-DB ohne Personen mit Terminen – Schleife nicht gemessen")
 
 
 if __name__ == "__main__":

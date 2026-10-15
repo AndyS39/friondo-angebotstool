@@ -937,6 +937,21 @@ def termin_verschieben(request: Request, termin_id: int,
 def terminkalender(request: Request, session: Session = Depends(get_session)):
     lead_v2.gate(request, session)
     benutzer = request.state.benutzer
+    # v33 (PLAN_V20 Phase 169) [ANNAHME]: der Wochen-Terminkalender je AD (v12) ist im
+    # zentralen Mitarbeiter-Kalender aufgegangen – Umleitung mit Person und Woche. Die alte
+    # Ansicht bleibt über ?alt=1 erreichbar (Übergang, Kartei) und für Rückmeldungen
+    # (?meldung=) der Absage-/Sperrzeit-Routen, die nur hier angezeigt werden.
+    q = request.query_params
+    if q.get("alt") != "1" and not q.get("meldung"):
+        versatz = q.get("woche", "0")
+        versatz = int(versatz) if versatz.lstrip("-").isdigit() else 0
+        start = datetime.now() + timedelta(weeks=versatz)
+        hv_id = lead_termin.hv_nur_eigene(session, benutzer)
+        person = str(hv_id) if hv_id else q.get("ad_id", "")
+        ziel = f"/kalender?gruppe=vertrieb&ansicht=woche&datum={start:%Y-%m-%d}"
+        if person.isdigit():
+            ziel += f"&person={int(person)}"
+        return RedirectResponse(ziel, status_code=303)
     versatz = request.query_params.get("woche", "0")
     versatz = int(versatz) if versatz.lstrip("-").isdigit() else 0
     start = datetime.now() + timedelta(weeks=versatz)

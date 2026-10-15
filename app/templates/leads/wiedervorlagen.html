@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
+{% from "_komponenten.html" import leer_zustand %}
+{% import "leads/_karten.html" as mt with context %}
+{# v33 (PLAN_V20 Phase 173, Protokoll A.3): Seite „Wiedervorlage“ mobil (GET
+   /leads/wiedervorlagen, Basisrolle Außendienst). Zurück-Pfeil „Mein Tag“ im Seitenkopf
+   (Entwurf – die Zurück-Leiste aus base.html ist abgeschaltet), Titel mit Zähler „n offen“,
+   Suchfeld „Nach Name suchen“ (filtert beim Tippen, clientseitig), Chips mit Anzahl bezogen
+   auf die Suchtreffer, Sortierung mit Richtungspfeil, alle Vorgänge ohne Begrenzung,
+   Leerzustand „Keine Vorgänge gefunden“ + „Filter oder Suche anpassen.“; untere Leiste
+   (base.html) mit aktivem „Wiedervorlage“. Logik: app/static/mein_tag.js. #}
+{% set zurueck_aus = true %}
+
+{% block titel %}Wiedervorlage – Friondo Angebotstool{% endblock %}
+
+{% block mainklasse %}mein-tag-seite mt-wv-seite{% endblock %}
+
+{% block inhalt %}
+<link rel="stylesheet" href="/static/mein_tag.css?v={{ css_version }}">
+<div class="mt-mobil mt-mobil-immer" id="wiedervorlage" data-mt-wv data-mt-wv-seite="1">
+    <header class="mt-wv-seitenkopf">
+        <a class="mt-zurueck" href="/leads">{{ symbol('pfeil-links') }} Mein Tag</a>
+        <div class="mt-wv-seitentitel">
+            <h1>Wiedervorlage</h1>
+            <span class="mt-wv-offen"><span data-mt-wv-zahl>{{ wv_zaehler.alle }}</span> offen</span>
+        </div>
+        {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+        <label class="mt-suche">
+            <span class="mt-suche-symbol" aria-hidden="true">{{ symbol('suche') }}</span>
+            <input type="search" placeholder="Nach Name suchen" aria-label="Nach Name suchen" autocomplete="off" data-mt-suche>
+        </label>
+        {{ mt.wv_filter(wv_zaehler) }}
+    </header>
+    <div class="mt-wv-liste mt-wv-seitenliste" data-mt-wv-liste>
+        {% for k in wiedervorlagen %}{{ mt.wv_karte(k, mit_telefon=true) }}{% endfor %}
+    </div>
+    <div class="mt-wv-leer" data-mt-wv-leer {{ '' if not wiedervorlagen else 'hidden' }}>
+        {{ leer_zustand('Keine Vorgänge gefunden') }}
+        <p class="dezent mt-wv-leer-zeile">Filter oder Suche anpassen.</p>
+    </div>
+</div>
+<script src="/static/mein_tag.js?v={{ css_version }}" defer></script>
+{% endblock %}

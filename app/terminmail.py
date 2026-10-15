@@ -66,6 +66,9 @@ def senden(session, termin, benutzer=None) -> tuple[bool, str]:
     # und Absender sind gelesen; der Versand läuft über mehrere Graph-Aufrufe)
     from app.db import verbindung_freigeben
     verbindung_freigeben(session)
+    # v33 (PLAN_V20 Phase 166): absender = Funktionspostfach projektierung@ – im Modus
+    # anwendung Entwurf + Versand direkt an /users/<projektierung@>, im Modus delegiert
+    # „Senden als“ wie bisher (Entscheidung in graph_versand.versand_pfad)
     ok, fehler, conversation_id = graph_versand.mail_mit_anhaengen_senden(
         kunde.email, betreff, text, absender=absender)
     if not ok:

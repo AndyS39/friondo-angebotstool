@@ -66,7 +66,7 @@
             <label class="kontrollfeld pe-pilot">
                 <input type="checkbox" name="pilot_benutzer" value="{{ b.id }}"
                        {{ 'checked' if b.id in pilot_ids }}> {{ b.name }}
-                <span class="dezent">({{ b.rolle }})</span></label>
+                <span class="dezent">({{ b.rollen_name }})</span></label>
             {% endfor %}
             <p class="dezent">Benutzer mit Hauptrolle Projektierung oder Montage sehen das
                 Modul immer. Status des Go-live: <a href="/parametrierung/golive">Go-live-Checkliste</a>.</p>
@@ -99,6 +99,16 @@
         <p class="dezent">warnen: Phasenwechsel immer möglich, offene Pflichtaufgaben werden
             angezeigt · sperren: Wechsel nur mit Begründung. Rückwärts-Wechsel brauchen in
             beiden Modi eine Begründung; Aufgaben können mit Grund auf „entfällt“ gesetzt werden.</p>
+        {# v33 (PLAN_V20 Phase 171): Parameter phase_auto (Standard an) – automatischer
+           Phasenwechsel, sobald alle Pflichtaufgaben erledigt oder „entfällt“ sind; je Gewerk
+           zusätzlich ein Häkchen in der Projektakte (Agent S). Protokoll wie waechter_modus. #}
+        <input type="hidden" name="phase_auto_dabei" value="1">
+        <label class="kontrollfeld" title="Nach jeder Erledigung einer Aufgabe, eines Formulars, einer Besetzung oder eines Steckbrief-Nachzugs wechselt das Gewerk in die nächste Phase, sobald alle Pflichtaufgaben erledigt sind – nur vorwärts, eine Phase je Auslöser, nie nach „abgeschlossen“, nicht bei Wächter „sperren“ mit offenen Punkten">
+            <input type="checkbox" name="phase_auto" {{ 'checked' if phase_auto != 'aus' }}>
+            Phasen automatisch weiterschalten, sobald alle Pflichtaufgaben erledigt sind (Standard an)</label>
+        <p class="dezent">Gilt je Gewerk zusätzlich über das Häkchen „automatisch weiterschalten“ in der
+            Projektakte; ein manueller Rückschritt setzt das Häkchen des Gewerks für diese Phase aus.
+            Manuelles Ändern (Board, Dialog) bleibt in beide Richtungen möglich.</p>
     </section>
 
     {# v28 (PLAN_PROJ_V6 Phase 135): Terminvorschläge Stufe 1 #}

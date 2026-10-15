@@ -3,147 +3,166 @@
 {% import "_sparten.html" as sparten_ui %}
 {% from "_komponenten.html" import status_badge, verfolgung_chip %}
 {% from "_symbole.html" import symbol %}
+{% from "leadmanagement/_tabelle.html" import spalten_kopf, spalten_colgroup, breiten_gesetzt, spaltenwahl, tabellen_daten %}
 
 {% block titel %}Angebote – Friondo Angebotstool{% endblock %}
+{% block mainklasse %}breit{% endblock %}
 
+{# v32 (PLAN_V19 Phase 163): Spalte „Verfolgung“ + Filter nach Verfolgungsstufe (Kontext
+   verfolgung_filter/verfolgung_werte aus dem Router, Rückfall fünf Stufen).
+   v33 (PLAN_V20 Phase 174, Protokoll Claudia Castro 14.10.2026 Teil A.4): Lead-Board-Layout –
+   Sticky-Filterblock (Chip-Selects Status · Verfolgung · Sparte · Interesse · Kanal ·
+   Vertriebler, Filter-Chip „Ohne Kontakt“ (Phase 176/N), Suchfeld, Spaltenwähler „Spalten“),
+   Tabelle scrollt waagerecht und senkrecht im eigenen Container mit festem Kopf, Spalten je
+   Nutzer (Katalog `angebote`; EK/DB/DB-Ampel nur mit Kalkulationssicht – lead_boards.
+   katalog_fuer), Sortierung per Klick auf den Spaltenkopf (gemerkt, serverseitig vor dem
+   Rendern), Summenzeile (v6) folgt der gefilterten und sortierten Liste. Spalte „Endbetrag“
+   = Gesamtbetrag nach USt und Rabatt (Phase 172/A, vorher „Brutto“ = Betrag VOR Rabatt).
+   Keine Sammelaktionen (Entscheidung Claudia Castro); Einzelaktionen wie bisher. #}
 {% block inhalt %}
-{# v32 (PLAN_V19 Phase 163): Spalte „Verfolgung“ + Filter nach Verfolgungsstufe. Der
-   Query-Parameter `verfolgung` wird vom Router gesetzt (M: verfolgung.filter_anwenden,
-   Kontext verfolgung_filter/verfolgung_werte) – bis dahin Rückfall auf `verfolgung` und
-   die festen fünf Stufen. #}
-<link rel="stylesheet" href="/static/verfolgung.css?v={{ css_version }}">
 {% set vf_filter = verfolgung_filter if verfolgung_filter is defined and verfolgung_filter else (verfolgung | default('')) %}
 {% set vf_werte = verfolgung_werte if verfolgung_werte is defined and verfolgung_werte else [
     ('versendet', 'Versendet'), ('nachgefasst', 'Nachgefasst'),
     ('bestellung_angekuendigt', 'Bestellung angekündigt'), ('angenommen', 'Angenommen'),
     ('abgelehnt', 'Abgelehnt')] %}
+{% macro zelle(key, a, v, k) -%}
+{%- if key == 'lead' -%}
+<td class="sp-lead"><a href="/vorgaenge/zu-angebot/{{ a.id }}" title="Vorgangsakte öffnen">{{ k.anzeige_name if k else '?' }}</a>
+    {% if k %}{{ interesse_ui.badges(k.interessen) }}{% endif %}</td>
+{%- elif key == 'nummer' -%}
+<td class="sp-nummer">
+    {%- if a.extern %}<a href="/angebote/{{ a.id }}"><span class="abzeichen">TAIFUN</span> {{ a.taifun_nummer or '' }}</a>
+        {%- if not a.taifun_nummer %} <span class="abzeichen ep" title="TAIFUN-Angebotsnummer nachtragen">Nummer fehlt</span>{% endif %}
+    {%- else %}<a href="/angebote/{{ a.id }}">{{ a.nummer }}</a>{% endif %}
+    {{ sparten_ui.chip(a.konfigurator_typ or 'WP') }}
+    {%- if mail_zaehler.get(a.id) %} <a class="mail-abzeichen" href="/angebote/{{ a.id }}/mails"
+       title="{{ mail_zaehler[a.id] }} Antwort{{ 'en' if mail_zaehler[a.id] != 1 }} zur Angebots-Mail">{{ symbol('brief') }} {{ mail_zaehler[a.id] }}</a>{% endif %}</td>
+{%- elif key == 'kanal' -%}
+<td class="sp-kanal dezent">{{ (k.vertriebskanal or '–') if k else '–' }}</td>
+{%- elif key == 'vertriebler' -%}
+<td class="sp-vertriebler dezent">{% set vid = angebot_vertriebler.get(a.id) %}{{ vertriebler[vid].name if vid in vertriebler else '–' }}</td>
+{%- elif key == 'datum' -%}
+<td class="sp-datum" data-wert="{{ a.datum.isoformat() if a.datum else '' }}">{{ a.datum.strftime('%d.%m.%Y') if a.datum }}</td>
+{%- elif key == 'status' -%}
+<td class="sp-status">{{ status_badge(a.status) }}</td>
+{%- elif key == 'verfolgung' -%}
+<td class="sp-verfolgung verfolgung-spalte">
+    {#- v32 (PLAN_V19 Phase 163): Verfolgungs-Chip des Vorgangs + Ampel/Wiedervorlage (v10);
+        Zähler der Telefonversuche (Phase 176/N); Kennzeichen „ohne Kontakt“ (Phase 176/N) #}
+    {%- if v %}{{ verfolgung_chip(v.verfolgung_status, klein=True, versuche=v.nachfass_versuche or 0) }}{% endif %}
+    {%- if v and v.verfolgung_ampel %} <span title="Verfolgung des Vorgangs: {{ v.verfolgung_ampel }}">{{ {'heiss': '🔥', 'warm': '🌤', 'kalt': '❄'}.get(v.verfolgung_ampel, '') }}</span>{% endif %}
+    {%- if v and v.wiedervorlage_am %}<br><span class="wv-datum {{ 'wv-faellig' if v.wiedervorlage_am <= heute }}" title="Wiedervorlage des Vorgangs">{{ symbol('wiedervorlage') }} {{ v.wiedervorlage_am.strftime('%d.%m.%Y') }}</span>{% endif %}
+    {%- if inaktiv_tage.get(a.id) %}<br><span class="lm-inaktiv" title="Kein Kontakt (Notiz, Anruf, Mail) seit {{ inaktiv_tage[a.id] }} Tagen">⏱ ohne Kontakt seit {{ inaktiv_tage[a.id] }} Tagen</span>{% endif %}</td>
+{%- elif key == 'endbetrag' -%}
+{#- Phase 172 (A 4b): Gesamtbetrag nach USt UND Rabatt – bei 0 % USt exakt Netto − Rabatt #}
+{%- set su = a.summen() -%}
+<td class="sp-endbetrag" data-wert="{{ su.endbetrag }}" title="Gesamtbetrag nach USt und Rabatt">{{ su.endbetrag | euro }}</td>
+{%- elif key == 'netto' -%}
+<td class="sp-netto" data-wert="{{ '' if a.extern else a.summen().netto }}">{{ '–' if a.extern else (a.summen().netto | euro) }}</td>
+{%- elif key == 'db' -%}
+{%- if not kalk_sichtbar -%}
+<td class="sp-db"></td>
+{%- elif a.extern -%}
+<td class="sp-db dezent" data-wert="" title="Externer TAIFUN-Eintrag – kein DB im Tool">–</td>
+{%- else -%}
+{%- set deckung = a.deckungsbeitrag() -%}
+{#- v13-PV: Schwellen je Sparte #}
+{%- set schwelle = db_schwellen_cent.get(a.konfigurator_typ or 'WP', (db_rot_cent, db_gruen_cent)) -%}
+{%- set db_farbe = 'db-rot' if deckung.db < schwelle[0] else ('db-gruen' if deckung.db > schwelle[1] else 'db-orange') -%}
+<td class="sp-db {{ db_farbe }}" data-wert="{{ deckung.db }}" title="{{ ('%.1f' | format(deckung.prozent)) | replace('.', ',') }} % · VK netto {{ deckung.vk | euro }} − EK {{ deckung.ek | euro }}{% if deckung.ohne_ek %} · EK fehlt bei {{ deckung.ohne_ek | length }} Pos.{% endif %}">
+    {{ deckung.db | euro }}{% if deckung.ohne_ek %} <span class="abzeichen ep">!</span>{% endif %}</td>
+{%- endif -%}
+{%- elif key == 'inaktiv' -%}
+<td class="sp-inaktiv" data-wert="{{ inaktiv_tage.get(a.id, '') }}">{% if inaktiv_tage.get(a.id) %}<span class="lm-inaktiv" title="Kein Kontakt seit {{ inaktiv_tage[a.id] }} Tagen">{{ inaktiv_tage[a.id] }} Tage</span>{% endif %}</td>
+{%- elif key == 'sparte' -%}
+<td class="sp-sparte">{{ sparten_ui.chip(a.konfigurator_typ or 'WP') }}</td>
+{%- elif key == 'ort' -%}
+<td class="sp-ort">{{ ((k.plz or '') ~ ' ' ~ (k.ort or '')) | trim if k else '' }}</td>
+{%- elif key == 'wiedervorlage' -%}
+<td class="sp-wiedervorlage" data-wert="{{ v.wiedervorlage_am.isoformat() if v and v.wiedervorlage_am else '' }}">{% if v and v.wiedervorlage_am %}<span class="{{ 'wv-faellig' if v.wiedervorlage_am <= heute }}">{{ v.wiedervorlage_am.strftime('%d.%m.%Y') }}</span>{% endif %}</td>
+{%- elif key == 'ampel' -%}
+{%- set ampel = v.verfolgung_ampel if v else '' -%}
+<td class="sp-ampel" data-wert="{{ {'heiss': 0, 'warm': 1, 'kalt': 2}.get(ampel, '') }}">{% if ampel %}<span title="{{ ampel }}">{{ {'heiss': '🔥 heiß', 'warm': '🌤 warm', 'kalt': '❄ kalt'}.get(ampel, '') }}</span>{% endif %}</td>
+{%- else -%}
+<td class="sp-{{ key }}"></td>
+{%- endif -%}
+{%- endmacro %}
 <div class="seitenkopf">
     <h1>Angebote</h1>
+    {% if not nur_lesend %}
     <a class="knopf" href="/erfassung/neu"
        title="Startet den regulären Erfassungs-Ablauf (Sparten → Bogen/Freitext → Absenden → Angebot)">+ Neuer Vorgang (Erfassung)</a>
+    {% endif %}
+</div>
+<p class="meldung" id="lm-meldung" {{ '' if meldung else 'hidden' }} role="status">{{ meldung }}</p>
+
+<div class="lm-filterblock" id="lm-filterblock" data-lm-spalten-board="{{ board }}" data-lm-spalten-url="{{ lm_spalten_url(request.state.benutzer) }}" data-lm-suche="1">
+<form method="get" action="/angebote" class="suchleiste lm-suchleiste" id="lm-filterform">
+    <input type="search" name="q" id="lm-suche" value="{{ q }}" placeholder="Suche: Angebots-Nr., Kunde, Ort" aria-label="Suche" autocomplete="off">
+    <label class="kontrollfeld">Status
+        <select name="status">
+            <option value="">alle (ohne Archiv)</option>
+            {% for s in status_liste %}<option value="{{ s }}" {{ 'selected' if status == s }}>{{ s }}</option>{% endfor %}
+            <option value="archiv" {{ 'selected' if status == 'archiv' }}>Archiv</option>
+        </select></label>
+    <label class="kontrollfeld">Verfolgung
+        <select name="verfolgung" title="Verfolgung">
+            <option value="">alle</option>
+            <option value="faellig" {{ 'selected' if vf_filter == 'faellig' }}>Wiedervorlage fällig</option>
+            <option value="heiss" {{ 'selected' if vf_filter == 'heiss' }}>🔥 heiß</option>
+            <option value="warm" {{ 'selected' if vf_filter == 'warm' }}>🌤 warm</option>
+            <option value="kalt" {{ 'selected' if vf_filter == 'kalt' }}>❄ kalt</option>
+            <optgroup label="Verfolgungsstatus (v32)">
+            {% for wert, text in vf_werte %}
+                {% if wert is mapping %}{% set wert, text = wert.key, wert.text %}{% endif %}
+                <option value="{{ wert }}" {{ 'selected' if vf_filter == wert }}>{{ text }}</option>
+            {% endfor %}
+            </optgroup>
+        </select></label>
+    <label class="kontrollfeld">Sparte
+        <select name="sparte" title="Sparte">
+            <option value="">alle</option>
+            {% for s in sparten_liste %}<option value="{{ s }}" {{ 'selected' if sparte == s }}>{{ s }}</option>{% endfor %}
+        </select></label>
+    <label class="kontrollfeld">Interesse {{ interesse_ui.filter(interesse) }}</label>
+    {% if kanal_werte %}
+    <label class="kontrollfeld">Kanal
+        <select name="kanal" title="Vertriebskanal">
+            <option value="">alle</option>
+            {% for kn in kanal_werte %}<option value="{{ kn }}" {{ 'selected' if kanal == kn }}>{{ kn }}</option>{% endfor %}
+        </select></label>
+    {% endif %}
+    <label class="kontrollfeld">Vertriebler
+        <select name="vertriebler_id">
+            <option value="0">alle</option>
+            {% for vid in vertriebler_werte %}
+                <option value="{{ vid }}" {{ 'selected' if vertriebler_id == vid }}>{{ vertriebler[vid].name if vid in vertriebler else vid }}</option>
+            {% endfor %}
+        </select></label>
+    {#- Phase 176 (N): Kennzeichen „ohne Kontakt seit X Tagen“ als Filter-Chip #}
+    <label class="lm-filterchip {{ 'aktiv' if inaktiv }}" title="Nur Vorgänge mit Kennzeichen „ohne Kontakt seit X Tagen“ (14 Tage, MFH 20 – Angebotstool-Einstellungen)"><input type="checkbox" name="inaktiv" value="1" {{ 'checked' if inaktiv }} onchange="this.form.submit()"> ⏱ Ohne Kontakt</label>
+    <button class="knopf klein zweitrangig" type="submit">{{ symbol('filter') }} Filtern</button>
+    {% if q or status or interesse or vertriebler_id or kanal or vf_filter or sparte or inaktiv %}
+        <a class="knopf klein ghost" href="/angebote" title="Filter zurücksetzen">Filter zurücksetzen</a>
+    {% endif %}
+    {{ spaltenwahl(spalten, spalten_fest) }}
+</form>
 </div>
 
-{% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
-
-<form method="get" action="/angebote" class="suchleiste">
-    <input type="text" name="q" value="{{ q }}" placeholder="Suche: Angebots-Nr., Kunde, Ort">
-    <select name="status">
-        <option value="">Alle Status (ohne Archiv)</option>
-        {% for s in status_liste %}
-            <option value="{{ s }}" {{ 'selected' if status == s }}>{{ s }}</option>
-        {% endfor %}
-        <option value="archiv" {{ 'selected' if status == 'archiv' }}>Archiv</option>
-    </select>
-    {{ interesse_ui.filter(interesse) }}
-    <select name="vertriebler_id">
-        <option value="0">Alle Vertriebler</option>
-        {% for vid in vertriebler_werte %}
-            <option value="{{ vid }}" {{ 'selected' if vertriebler_id == vid }}>{{ vertriebler[vid].name if vid in vertriebler else vid }}</option>
-        {% endfor %}
-    </select>
-    <select name="verfolgung" title="Verfolgung">
-        <option value="">Verfolgung: alle</option>
-        <option value="faellig" {{ 'selected' if vf_filter == 'faellig' }}>Wiedervorlage fällig</option>
-        <option value="heiss" {{ 'selected' if vf_filter == 'heiss' }}>🔥 heiß</option>
-        <option value="warm" {{ 'selected' if vf_filter == 'warm' }}>🌤 warm</option>
-        <option value="kalt" {{ 'selected' if vf_filter == 'kalt' }}>❄ kalt</option>
-        <optgroup label="Verfolgungsstatus (v32)">
-        {% for wert, text in vf_werte %}
-            {% if wert is mapping %}{% set wert, text = wert.key, wert.text %}{% endif %}
-            <option value="{{ wert }}" {{ 'selected' if vf_filter == wert }}>{{ text }}</option>
-        {% endfor %}
-        </optgroup>
-    </select>
-    <select name="sparte" title="Sparte">
-        <option value="">Alle Sparten</option>
-        {% for s in ('WP', 'PV', 'KL', 'WB') %}
-            <option value="{{ s }}" {{ 'selected' if sparte == s }}>{{ s }}</option>
-        {% endfor %}
-    </select>
-    {% if kanal_werte %}
-    <select name="kanal" title="Vertriebskanal">
-        <option value="">Alle Kanäle</option>
-        {% for k in kanal_werte %}
-            <option value="{{ k }}" {{ 'selected' if kanal == k }}>{{ k }}</option>
-        {% endfor %}
-    </select>
-    {% endif %}
-    <select name="sortierung" title="Sortierung">
-        <option value="nummer" {{ 'selected' if sortierung == 'nummer' }}>Sortierung: Nummer</option>
-        <option value="datum" {{ 'selected' if sortierung == 'datum' }}>Sortierung: Datum</option>
-        <option value="kunde" {{ 'selected' if sortierung == 'kunde' }}>Sortierung: Kunde</option>
-        <option value="vertriebler" {{ 'selected' if sortierung == 'vertriebler' }}>Sortierung: Vertriebler</option>
-    </select>
-    <button class="knopf" type="submit">Filtern</button>
-    {% if q or status or interesse or vertriebler_id or sortierung != 'nummer' or kanal or vf_filter %}
-        <a class="knopf klein zweitrangig" href="/angebote">Zurücksetzen</a>
-    {% endif %}
-</form>
-
 {% if angebote %}
-<table class="tabelle">
+<div class="lm-tabellen lm-tabellen-at" id="lm-tabellen">
+<table class="tabelle lm-tabelle" data-lm-breiten="{{ breiten_gesetzt(spalten) }}">
+    {{ spalten_colgroup(spalten, ctx, hinten=1) }}
     <thead>
-        <tr>
-            <th>Angebots-Nr.</th>
-            <th>Kunde</th>
-            <th>Kanal</th>
-            <th>Vertriebler</th>
-            <th>Datum</th>
-            <th>Status</th>
-            <th title="Verfolgung des Vorgangs: Stufe, Hot-Ampel, Wiedervorlage">Verfolgung</th>
-            <th class="rechts">Brutto</th>
-            {% if kalk_sichtbar %}<th class="rechts" title="Deckungsbeitrag (intern)">DB</th>{% endif %}
-            <th></th>
-        </tr>
+        <tr>{{ spalten_kopf(spalten, ctx, spalten_fest) }}<th class="sp-aktionen"></th></tr>
     </thead>
     <tbody>
     {% for a in angebote %}
-        <tr>
-            <td>
-                {% if a.extern %}
-                    <a href="/angebote/{{ a.id }}"><span class="abzeichen">TAIFUN</span>
-                        {{ a.taifun_nummer or '' }}</a>
-                    {% if not a.taifun_nummer %}<span class="abzeichen ep" title="TAIFUN-Angebotsnummer nachtragen">Nummer fehlt</span>{% endif %}
-                {% else %}
-                    <a href="/angebote/{{ a.id }}">{{ a.nummer }}</a>
-                {% endif %}
-                {{ sparten_ui.chip(a.konfigurator_typ or 'WP') }}
-                {% if mail_zaehler.get(a.id) %}
-                    <a class="mail-abzeichen" href="/angebote/{{ a.id }}/mails"
-                       title="{{ mail_zaehler[a.id] }} Antwort{{ 'en' if mail_zaehler[a.id] != 1 }} zur Angebots-Mail">
-                        {{ symbol('brief') }} {{ mail_zaehler[a.id] }}</a>
-                {% endif %}
-            </td>
-            <td><a href="/vorgaenge/zu-angebot/{{ a.id }}" title="Vorgangsakte öffnen">{{ kunden[a.kunde_id].anzeige_name if a.kunde_id in kunden else '?' }}</a>
-                {% if a.kunde_id in kunden %}{{ interesse_ui.badges(kunden[a.kunde_id].interessen) }}{% endif %}</td>
-            <td class="dezent">{{ kunden[a.kunde_id].vertriebskanal or '–' if a.kunde_id in kunden else '–' }}</td>
-            <td class="dezent">{% set vid = angebot_vertriebler.get(a.id) %}{{ vertriebler[vid].name if vid in vertriebler else '–' }}</td>
-            <td>{{ a.datum.strftime('%d.%m.%Y') }}</td>
-            {% set v = vorgaenge_map.get(a.vorgang_id) %}
-            <td>{{ status_badge(a.status) }}</td>
-            <td class="verfolgung-spalte">
-                {# v32 (PLAN_V19 Phase 163): Verfolgungs-Chip des Vorgangs + Ampel/Wiedervorlage (v10) #}
-                {% if v %}{{ verfolgung_chip(v.verfolgung_status, klein=True) }}{% endif %}
-                {% if v and v.verfolgung_ampel %}<span title="Verfolgung des Vorgangs: {{ v.verfolgung_ampel }}">{{ {'heiss': '🔥', 'warm': '🌤', 'kalt': '❄'}[v.verfolgung_ampel] }}</span>{% endif %}
-                {% if v and v.wiedervorlage_am %}
-                    <br><span class="wv-datum {{ 'wv-faellig' if v.wiedervorlage_am <= heute }}"
-                          title="Wiedervorlage des Vorgangs">{{ symbol('wiedervorlage') }} {{ v.wiedervorlage_am.strftime('%d.%m.%Y') }}</span>
-                {% endif %}</td>
-            <td class="rechts">{{ a.summen().brutto | euro }}</td>
-            {% if not kalk_sichtbar %}
-            {% elif a.extern %}
-            <td class="rechts dezent" title="Externer TAIFUN-Eintrag – kein DB im Tool">–</td>
-            {% else %}
-            {% set deckung = a.deckungsbeitrag() %}
-            {# v13-PV: Schwellen je Sparte #}
-            {% set schwelle = db_schwellen_cent.get(a.konfigurator_typ or 'WP', (db_rot_cent, db_gruen_cent)) %}
-            {% set db_farbe = 'db-rot' if deckung.db < schwelle[0]
-               else ('db-gruen' if deckung.db > schwelle[1] else 'db-orange') %}
-            <td class="rechts {{ db_farbe }}" title="{{ ('%.1f' | format(deckung.prozent)) | replace('.', ',') }} % · VK netto {{ deckung.vk | euro }} − EK {{ deckung.ek | euro }}{% if deckung.ohne_ek %} · EK fehlt bei {{ deckung.ohne_ek | length }} Pos.{% endif %}">
-                {{ deckung.db | euro }}
-                {% if deckung.ohne_ek %}<span class="abzeichen ep">!</span>{% endif %}
-            </td>
-            {% endif %}
+        {% set k = kunden.get(a.kunde_id) %}
+        {% set v = vorgaenge_map.get(a.vorgang_id) if a.vorgang_id else none %}
+        {% set vid = angebot_vertriebler.get(a.id) %}
+        <tr data-zeile="{{ a.id }}" data-suche="{{ (a.nummer ~ ' ' ~ (a.taifun_nummer or '') ~ ' ' ~ (k.anzeige_name if k else '') ~ ' ' ~ (k.ort if k else '') ~ ' ' ~ a.status ~ ' ' ~ ((k.vertriebskanal or '') if k else '') ~ ' ' ~ (vertriebler[vid].name if vid in vertriebler else '')) | lower }}">
+            {%- for sp in spalten if sp.sichtbar %}{{ zelle(sp.key, a, v, k) }}{% endfor %}
             <td class="aktionen">
                 {% if nur_lesend %}
                     <a class="knopf symbol" href="/angebote/{{ a.id }}/pdf" target="_blank"
@@ -161,6 +180,7 @@
                            title="Projekt/Gewerk aus diesem Auftrag anlegen">→ Projekt</a>
                     {% endif %}
                 {% endif %}
+                {% if not nur_lesend %}
                 {% if not a.extern %}
                 <form method="post" action="/angebote/{{ a.id }}/duplizieren" style="display:inline">
                     <button class="knopf symbol" type="submit"
@@ -180,17 +200,22 @@
                         {{ symbol('wiederherstellen' if a.archiviert else 'archiv') }}</button>
                 </form>
                 {% endif %}
+                {% endif %}
             </td>
         </tr>
     {% endfor %}
     </tbody>
 </table>
-<table class="tabelle zusammenfassung summenblock">
+</div>
+{#- Summenzeile (v6): folgt der gefilterten UND sortierten Liste (Router rechnet nach dem
+    Sortieren); DB-Summe nur mit Kalkulationssicht (Rollenregel Phase 174); Endbetrag = nach
+    USt und Rabatt (Phase 172/A) #}
+<table class="tabelle zusammenfassung summenblock lm-summenblock">
     <tr class="summenzeile">
         <th>Summe ({{ angebote | length }} Angebot{{ 'e' if angebote | length != 1 }})</th>
         <td class="rechts">Netto: <strong>{{ summen_gesamt.netto | euro }}</strong></td>
-        <td class="rechts">Endbetrag (brutto): <strong>{{ summen_gesamt.endbetrag | euro }}</strong></td>
-        <td class="rechts">DB: <strong>{{ summen_gesamt.db | euro }}</strong></td>
+        <td class="rechts">Endbetrag: <strong>{{ summen_gesamt.endbetrag | euro }}</strong></td>
+        {% if kalk_sichtbar %}<td class="rechts sp-db-summe">DB: <strong>{{ summen_gesamt.db | euro }}</strong></td>{% endif %}
     </tr>
 </table>
 {% if angebote | selectattr('extern') | list %}
@@ -199,8 +224,9 @@ sind dort unbekannt und bleiben außen vor.</p>
 {% endif %}
 {{ sparten_ui.legende() }}
 {% else %}
-<div class="leer-zustand">Noch keine Angebote – über eine neue Erfassung
-oder als manuelles Angebot über einen Kunden starten.
-    <br><a class="knopf klein" href="/erfassung/neu">Neue Erfassung starten</a></div>
+<div class="leer-zustand">{% if q or status or interesse or vertriebler_id or kanal or vf_filter or sparte or inaktiv %}Keine Angebote zu diesem Filter.{% else %}Noch keine Angebote – über eine neue Erfassung
+oder als manuelles Angebot über einen Kunden starten.{% endif %}
+    {% if not nur_lesend %}<br><a class="knopf klein" href="/erfassung/neu">Neue Erfassung starten</a>{% endif %}</div>
 {% endif %}
+{{ tabellen_daten(board, spalten, spalten_sortierung) }}
 {% endblock %}

@@ -6,6 +6,13 @@
 # Funktionen später für Montage-Termine nutzen.
 # Berechtigung (M365-Admin): Calendars.ReadWrite (Application) mit
 # Application Access Policy – siehe docs/graph-einrichtung.md.
+#
+# v33 (PLAN_V20 Phase 170): KEIN Graph-Aufruf mehr im Request. termin_schreiben /
+# termin_aendern / termin_loeschen behalten ihre Signaturen, reihen aber nur noch
+# Aufträge in outlook_auftraege ein (Lauf outlook-sync, app/outlook_sync.py);
+# frei_belegt liest den Belegt-Cache outlook_belegt (Lauf outlook-ruecklesen).
+# Der Schalter kalender_sync gilt weiter für VOT-Termine und den Belegt-Abgleich
+# [ANNAHME O]; Demo-Termine (vot_termine.demo) gehen weiter ins Testpostfach.
 
 from datetime import datetime
 
@@ -59,43 +66,12 @@ def _ist_handelsvertreter(session: Session, ad) -> bool:
 
 def frei_belegt(session: Session, ad, von: datetime,
                 bis: datetime) -> list[tuple[datetime, datetime]] | None:
-    """Belegte Zeiten aus calendarView; None = Kalender nicht verfügbar
-    (aus, kein Postfach, kein Recht) → Assistent nutzt nur Tool-Termine."""
-    if not aktiv(session):
-        return None
-    if _ist_handelsvertreter(session, ad):
-        _logger.info("kalender_sync: Handelsvertreter %s übersprungen (kein Friondo-Postfach)",
-                     getattr(ad, "name", "?"))
-        return None
-    postfach = _postfach(session, ad)
-    if not postfach:
-        return None
-    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Token-Erneuerung
-    # über msal und calendarView dauern bis zu 60 s)
-    from app.db import verbindung_freigeben
-    verbindung_freigeben(session)
-    token = _token()
-    if token is None:
-        return None
-    from app import graph_versand
-    try:
-        antwort = graph_versand._graph_aufruf(
-            "GET",
-            f"/users/{postfach}/calendarView?"
-            f"startDateTime={von.strftime('%Y-%m-%dT%H:%M:%S')}"
-            f"&endDateTime={bis.strftime('%Y-%m-%dT%H:%M:%S')}"
-            "&$top=100&$select=start,end,showAs", token)
-        belegt = []
-        for eintrag in antwort.get("value", []):
-            if eintrag.get("showAs") in ("free",):
-                continue
-            beginn = datetime.fromisoformat(
-                eintrag["start"]["dateTime"][:19])
-            ende = datetime.fromisoformat(eintrag["end"]["dateTime"][:19])
-            belegt.append((beginn, ende))
-        return belegt
-    except Exception:
-        return None
+    """Belegte Zeiten der Person; None = Kalender nicht verfügbar (kalender_sync aus,
+    Handelsvertreter ohne Postfach) → Assistent nutzt nur Tool-Termine.
+    v33 (PLAN_V20 Phase 170): liest den Cache outlook_belegt des Laufs
+    outlook-ruecklesen – kein Graph-Aufruf im Request mehr (Signatur bleibt)."""
+    from app import outlook_sync
+    return outlook_sync.belegt_fuer(session, ad, von, bis)
 
 
 def _ereignis_rumpf(session: Session, termin, vorgang, kunde) -> dict:
@@ -137,74 +113,53 @@ def _ereignis_rumpf(session: Session, termin, vorgang, kunde) -> dict:
     }
 
 
+def _auftrag(session: Session, aktion: str, termin, ad=None) -> bool:
+    """v33: Auftrag für die Warteschlange outlook_auftraege einreihen (kein Netz);
+    True = mindestens ein Auftrag angelegt. Der Lauf outlook-sync überträgt."""
+    from app import outlook_sync
+    if termin is None or getattr(termin, "id", None) is None:
+        return False
+    personen = [ad.id] if ad is not None else None
+    try:
+        auftraege = outlook_sync.auftrag_einreihen(session, aktion, outlook_sync.ART_VOT,
+                                                   termin.id, personen)
+        if auftraege:
+            return True
+        # kein neuer Auftrag nötig, wenn ein offener (z. B. „anlegen“) die Kopie schon abdeckt
+        return outlook_sync.auftraege_offen(session, outlook_sync.ART_VOT, termin.id) > 0
+    except Exception:   # noqa: BLE001 – die Buchung darf an Outlook nie scheitern
+        _logger.exception("kalender: Outlook-Auftrag %s für Termin %s nicht eingereiht",
+                          aktion, termin.id)
+        return False
+
+
 def termin_schreiben(session: Session, termin, vorgang, kunde, ad) -> bool:
-    """Outlook-Ereignis anlegen (best effort; speichert outlook_event_id)."""
-    if not aktiv(session):
+    """Outlook-Ereignis im persönlichen Kalender des Vertrieblers anlegen – v33: reiht
+    nur den Auftrag „anlegen“ ein (Lauf outlook-sync schreibt; Demo-Termine ins
+    Testpostfach; Handelsvertreter ohne Friondo-Postfach → kein Auftrag, Hinweis
+    „HV ohne Postfach“ am Termin). Signatur und Rückgabe (True = eingereiht) bleiben."""
+    if not aktiv(session) or termin is None or termin.beginn is None:
         return False
     if _ist_handelsvertreter(session, ad):
-        _logger.info("kalender_sync: Handelsvertreter %s übersprungen (kein Friondo-Postfach)",
+        _logger.info("kalender_sync: Handelsvertreter %s – Kopie nur mit Friondo-Postfach",
                      getattr(ad, "name", "?"))
-        return False
-    postfach = _postfach(session, ad)
-    if not postfach:
-        return False
-    rumpf = _ereignis_rumpf(session, termin, vorgang, kunde)
-    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Rumpf ist gelesen;
-    # der commit speichert den bereits angelegten Termin – wie bisher am Ende)
-    from app.db import verbindung_freigeben
-    verbindung_freigeben(session)
-    token = _token()
-    if token is None:
-        return False
-    from app import graph_versand
-    try:
-        antwort = graph_versand._graph_aufruf(
-            "POST", f"/users/{postfach}/events", token, rumpf)
-        termin.outlook_event_id = f"{postfach}|{antwort.get('id', '')}"
-        return True
-    except Exception:
-        return False
+    from app import outlook_sync
+    return _auftrag(session, outlook_sync.AKTION_ANLEGEN, termin, ad)
 
 
 def termin_aendern(session: Session, termin, vorgang, kunde, ad) -> bool:
-    if _ist_handelsvertreter(session, ad):
-        _logger.info("kalender_sync: Handelsvertreter %s übersprungen (kein Friondo-Postfach)",
-                     getattr(ad, "name", "?"))
+    """v33: Auftrag „aendern“ je Kopie (Personenwechsel: alte Kopie löschen, neue
+    anlegen – macht outlook_sync.auftrag_einreihen); ohne vorhandene Kopie wird
+    angelegt. Kein Graph-Aufruf im Request."""
+    if not aktiv(session) or termin is None or termin.beginn is None:
         return False
-    if not aktiv(session) or not termin.outlook_event_id:
-        return termin_schreiben(session, termin, vorgang, kunde, ad)
-    rumpf = _ereignis_rumpf(session, termin, vorgang, kunde)
-    postfach, _, ereignis_id = termin.outlook_event_id.partition("|")
-    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben
-    from app.db import verbindung_freigeben
-    verbindung_freigeben(session)
-    token = _token()
-    if token is None:
-        return False
-    from app import graph_versand
-    try:
-        graph_versand._graph_aufruf(
-            "PATCH", f"/users/{postfach}/events/{ereignis_id}", token, rumpf)
-        return True
-    except Exception:
-        return False
+    from app import outlook_sync
+    return _auftrag(session, outlook_sync.AKTION_AENDERN, termin, ad)
 
 
 def termin_loeschen(session: Session, termin) -> bool:
-    if not aktiv(session) or not termin.outlook_event_id:
-        return False
-    postfach, _, ereignis_id = termin.outlook_event_id.partition("|")
-    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben
-    from app.db import verbindung_freigeben
-    verbindung_freigeben(session)
-    token = _token()
-    if token is None:
-        return False
-    from app import graph_versand
-    try:
-        graph_versand._graph_aufruf(
-            "DELETE", f"/users/{postfach}/events/{ereignis_id}", token)
-        termin.outlook_event_id = None
-        return True
-    except Exception:
-        return False
+    """v33: Auftrag „loeschen“ für alle Kopien des Termins (auch wenn kalender_sync
+    inzwischen aus ist – vorhandene Kopien sollen verschwinden). Das alte Feld
+    outlook_event_id leert der Lauf nach dem erfolgreichen DELETE."""
+    from app import outlook_sync
+    return _auftrag(session, outlook_sync.AKTION_LOESCHEN, termin)

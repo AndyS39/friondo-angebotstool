@@ -17,6 +17,16 @@
 # nicht mehr gibt (z. B. ib_dichtheit, mb_beginn); `ib_kaeltemittel` ist aus dem
 # Blatt entfernt (Inbetriebnahmeprotokoll 5 Seiten / 30 Felder) – im Code war der
 # Schlüssel nie hart verdrahtet.
+#
+# v33 (PLAN_V20 Phase 168): Formular `servicebericht` hängt am Service-Einsatz
+# (ProjektTermin), nicht am Gewerk – ein Datensatz je Termin, auch ohne Projekt/Gewerk
+# (gewerk_id 0, projekt_id 0). Bis eine Spalte montage_formulare.termin_id existiert
+# (Vorschlag im Bericht – models.py/db.py sind für diesen Durchlauf tabu), steht der
+# Termin als Schlüssel `_termin_id` in antworten_json (Schlüssel mit „_“ sind
+# Metadaten, keine Felder). Abschluss: PDF Servicebericht_<Nr>.pdf im Galerie-Ordner
+# „Service“, Eintrag im Notizen-Chat (Herkunft montage), Einsatz auf „beendet“, falls
+# noch nicht. Neuer Feldtyp `zeit` (Uhrzeit HH:MM). Phase 171: nach jedem Abschluss
+# eines Gewerk-Formulars läuft kern.auto_hook (automatischer Phasenwechsel).
 
 import base64
 import io
@@ -51,9 +61,49 @@ FOTO_PRAEFIX = "galerie:"
 MAX_WIEDERHOL = 50
 
 
-def formular_holen(session, gewerk, name: str, benutzer=None):
-    """Bestehenden Entwurf laden oder neu anlegen."""
+META_PRAEFIX = "_"        # Metadaten-Schlüssel in antworten_json (kein Formularfeld)
+SERVICE_ORDNER = "Service"
+
+
+def ist_service_formular(name: str) -> bool:
+    from app import projektierung_logik
+    return name in getattr(projektierung_logik, "FORMULARE_SERVICE", ("servicebericht",))
+
+
+def formular_holen_termin(session, termin, name: str, benutzer=None):
+    """v33 (Phase 168): Formular am Service-Einsatz – ein Datensatz je Termin;
+    bevorzugt die Spalte termin_id (sobald vorhanden), sonst der Schlüssel
+    `_termin_id` in antworten_json."""
     from app.models import MontageFormular
+    spalte = getattr(MontageFormular, "termin_id", None)
+    abfrage = session.query(MontageFormular).filter(MontageFormular.formular == name)
+    eintrag = None
+    if spalte is not None:
+        eintrag = abfrage.filter(spalte == termin.id).first()
+    if eintrag is None:
+        for kandidat in (abfrage.filter(MontageFormular.projekt_id == (termin.projekt_id or 0))
+                         .order_by(MontageFormular.id)):
+            if antworten(kandidat).get("_termin_id") == termin.id:
+                eintrag = kandidat
+                break
+    if eintrag is None:
+        eintrag = MontageFormular(
+            gewerk_id=termin.gewerk_id or 0, projekt_id=termin.projekt_id or 0,
+            formular=name, antworten_json=json.dumps({"_termin_id": termin.id}),
+            erstellt_von=benutzer.id if benutzer else None)
+        if spalte is not None:
+            eintrag.termin_id = termin.id
+        session.add(eintrag)
+        session.flush()
+    return eintrag
+
+
+def formular_holen(session, gewerk, name: str, benutzer=None, termin=None):
+    """Bestehenden Entwurf laden oder neu anlegen. v33: Service-Formulare
+    (servicebericht) hängen am Termin – `termin` übergeben, `gewerk` darf None sein."""
+    from app.models import MontageFormular
+    if termin is not None and ist_service_formular(name):
+        return formular_holen_termin(session, termin, name, benutzer)
     eintrag = (session.query(MontageFormular)
                .filter(MontageFormular.gewerk_id == gewerk.id,
                        MontageFormular.formular == name).first())
@@ -127,15 +177,30 @@ def wert_leer(feld, wert) -> bool:
     return not str(wert or "").strip()
 
 
+def _vorgang_id_fuer(session, gewerk, termin=None) -> int | None:
+    """Vorgang eines Formulars: über das Angebot des Gewerks, sonst (Service am
+    Vorgang) über den Termin."""
+    from app.models import Angebot
+    if gewerk is not None and gewerk.angebot_id:
+        angebot = session.get(Angebot, gewerk.angebot_id)
+        if angebot is not None and angebot.vorgang_id:
+            return angebot.vorgang_id
+    if termin is not None:
+        vorgang = kern.termin_vorgang(session, termin)
+        return vorgang.id if vorgang is not None else None
+    return None
+
+
 def seite_speichern(session, eintrag, gewerk, felder, form,
-                          benutzer=None) -> None:
+                          benutzer=None, termin=None) -> None:
     """Feldwerte einer Seite übernehmen; Fotos landen sofort in der Galerie
     (Zielordner = optionen-Spalte, mehrere Dateien je Feld – neue Fotos werden
     an vorhandene angehängt [ANNAHME]), Unterschriften als PNG-Daten-URL,
-    wiederhol-Felder (`<key>[]`) als JSON-Liste."""
+    wiederhol-Felder (`<key>[]`) als JSON-Liste. v33: `gewerk` darf None sein
+    (Service am Vorgang) – der Vorgang kommt dann vom Termin; Typ zeit = HH:MM."""
     from app import galerie as galerie_modul
-    from app.models import Angebot
     daten = antworten(eintrag)
+    sparte = gewerk.sparte if gewerk is not None else "WP"
     for feld in felder:
         if feld.typ == "foto":
             try:
@@ -146,18 +211,17 @@ def seite_speichern(session, eintrag, gewerk, felder, form,
             dateien = [d for d in dateien if getattr(d, "filename", "")]
             if not dateien:
                 continue
-            angebot = (session.get(Angebot, gewerk.angebot_id)
-                       if gewerk.angebot_id else None)
-            if angebot is None or not angebot.vorgang_id:
+            vorgang_id = _vorgang_id_fuer(session, gewerk, termin)
+            if not vorgang_id:
                 continue
             fotos = foto_werte(daten.get(feld.feld_key))
             for datei in dateien:
                 galerie_datei = galerie_modul.speichern(
-                    session, angebot.vorgang_id,
+                    session, vorgang_id,
                     feld.optionen or "Inbetrieb-/Abnahme", datei.filename,
                     datei.file, benutzer=benutzer,   # v27: wird gestreamt
                     bemerkung=f"{feld.bezeichnung} ({eintrag.formular})",
-                    quelle="formular", sparte=gewerk.sparte)
+                    quelle="formular", sparte=sparte)
                 if galerie_datei is not None:
                     fotos.append((galerie_datei.id, galerie_datei.dateiname))
             daten[feld.feld_key] = foto_wert_bauen(fotos)
@@ -178,6 +242,15 @@ def seite_speichern(session, eintrag, gewerk, felder, form,
             wert = (form.get(feld.feld_key) or "").strip()[:2000]
             if feld.typ == "zahl" and wert:
                 wert = wert.replace(",", ".")
+            if feld.typ == "zeit" and wert:
+                # v33: Uhrzeit HH:MM im 15-Minuten-Takt (serverseitig gerundet)
+                try:
+                    stunde, _, minute = wert.partition(":")
+                    gerundet = kern.viertelstunde(datetime.now().replace(
+                        hour=int(stunde), minute=int(minute or 0), second=0, microsecond=0))
+                    wert = gerundet.strftime("%H:%M")
+                except (TypeError, ValueError):
+                    wert = ""
             daten[feld.feld_key] = wert
     eintrag.antworten_json = json.dumps(daten, ensure_ascii=False)
     session.flush()
@@ -338,21 +411,36 @@ class _FormularPdf(FPDF):
         self.set_font("Arial", "", 10)
 
 
-def pdf_bytes(session, logik, eintrag, gewerk) -> bytes:
+def pdf_bytes(session, logik, eintrag, gewerk, termin=None) -> bytes:
+    """PDF eines Formulars. v33: bei Service-Einsätzen (`termin`) stehen im Kopf
+    Kunde, Ausführungsort, Einsatz (Zeitraum), Anlass und Gewerk des Service –
+    `gewerk` darf None sein."""
     from app import projektierung_logik
     from app.models import Kunde, Projekt
-    projekt = session.get(Projekt, eintrag.projekt_id)
+    projekt = session.get(Projekt, eintrag.projekt_id) if eintrag.projekt_id else None
     kunde = session.get(Kunde, projekt.kunde_id) if projekt else None
+    if kunde is None and termin is not None:
+        kunde = kern.termin_kunde(session, termin)
     titel = projektierung_logik.FORMULAR_NAMEN.get(eintrag.formular,
                                                    eintrag.formular)
     daten = antworten(eintrag)
     pdf = _FormularPdf(titel)
     pdf.add_page()
     pdf.set_font("Arial", "", 10)
-    for name, wert in [("Projekt", projekt.nummer if projekt else "–"),
-                       ("Kunde", kunde.anzeige_name if kunde else "–"),
-                       ("Gewerk", gewerk.sparte),
-                       ("Erstellt", datetime.now().strftime("%d.%m.%Y %H:%M"))]:
+    kopf = [("Projekt", projekt.nummer if projekt else "–"),
+            ("Kunde", kunde.anzeige_name if kunde else "–")]
+    if termin is not None and termin.typ == "service":
+        kopf += [("Ausführungsort", kern.termin_adresse(session, termin).get("einzeilig") or "–"),
+                 ("Einsatz", kern.termin_zeitraum_text(termin)),
+                 ("Anlass", kern.SERVICE_ANLASS_NAMEN.get(termin.anlass, termin.anlass or "–")),
+                 ("Gewerk", "Service " + kern.SERVICE_GEWERK_NAMEN.get(
+                     termin.service_gewerk, termin.service_gewerk or "–")
+                  + (f" · {gewerk.sparte}" if gewerk is not None else "")),
+                 ("Techniker", kern.besetzung_namen(session, termin.id, kurz=False) or "–")]
+    else:
+        kopf.append(("Gewerk", gewerk.sparte if gewerk is not None else "–"))
+    kopf.append(("Erstellt", datetime.now().strftime("%d.%m.%Y %H:%M")))
+    for name, wert in kopf:
         pdf.set_font("Arial", "B", 10)
         pdf.cell(55, 6, name)
         pdf.set_font("Arial", "", 10)
@@ -447,15 +535,64 @@ def _restarbeiten_uebernehmen(session, gewerk, zeilen: list[str], benutzer=None,
     return neue
 
 
+def abschliessen_service(session, logik, eintrag, termin, gewerk=None,
+                         benutzer=None) -> tuple[bool, str]:
+    """v33 (Phase 168): Servicebericht abschließen – Pflicht prüfen, PDF
+    Servicebericht_<Nr>.pdf in den Galerie-Ordner „Service“ (Sparte des Gewerks,
+    sonst WP), Eintrag im Notizen-Chat (Herkunft montage), Verlauf bei Projekt,
+    Einsatz auf „beendet“, falls noch nicht [ANNAHME]."""
+    from app import galerie as galerie_modul
+    from app import projektierung_logik
+    from app.models import Projekt
+    offen = offene_pflicht(logik, eintrag)
+    if offen:
+        return False, ("Pflichtfelder offen: " + " · ".join(offen[:4])
+                       + (" …" if len(offen) > 4 else ""))
+    projekt = session.get(Projekt, eintrag.projekt_id) if eintrag.projekt_id else None
+    inhalt = pdf_bytes(session, logik, eintrag, gewerk, termin=termin)
+    titel = projektierung_logik.FORMULAR_NAMEN.get(eintrag.formular, eintrag.formular)
+    vorgang_id = _vorgang_id_fuer(session, gewerk, termin)
+    nummer = projekt.nummer if projekt is not None else f"V{vorgang_id or termin.id}"
+    datum = (termin.beginn or datetime.now()).strftime("%Y%m%d")
+    dateiname = f"{titel}_{nummer}_{datum}.pdf"
+    zusatz = ""
+    if vorgang_id:
+        galerie_datei = galerie_modul.speichern(
+            session, vorgang_id, SERVICE_ORDNER, dateiname, inhalt,
+            benutzer=benutzer, bemerkung=f"{titel} · {kern.service_termin_text(termin)}",
+            quelle="formular", sparte=gewerk.sparte if gewerk is not None else "WP")
+        if galerie_datei is not None:
+            eintrag.pdf_galerie_id = galerie_datei.id
+            dateiname = galerie_datei.dateiname
+    else:
+        zusatz = " (kein Vorgang – PDF nicht abgelegt)"
+    eintrag.status = "abgeschlossen"
+    eintrag.abgeschlossen_am = datetime.now()
+    text = f"{titel} abgeschlossen – PDF {dateiname} im Galerie-Ordner „{SERVICE_ORDNER}“"
+    if (termin.service_status or "") != "beendet":
+        kern.service_status_setzen(session, termin, "beendet", benutzer=benutzer)
+        zusatz += " Einsatz beendet."
+    if termin.projekt_id:
+        kern.verlauf(session, termin.projekt_id, text, benutzer=benutzer,
+                     gewerk_id=termin.gewerk_id)
+    kern.service_chat_notiz(session, termin, text, benutzer, herkunft="montage")
+    session.flush()
+    return True, f"{titel} abgeschlossen – PDF liegt in der Galerie (Ordner Service).{zusatz}"
+
+
 def abschliessen(session, logik, eintrag, gewerk,
-                 benutzer=None) -> tuple[bool, str]:
+                 benutzer=None, termin=None) -> tuple[bool, str]:
     """Pflicht prüfen → PDF in die Galerie → Aufgabe erledigen →
     Restarbeiten aus Abnahmeprotokoll (Mängel) bzw. Inbetriebnahme (Frage 10)
     → Verlauf. v28 (Phase 137): das unterschriebene Abnahmeprotokoll beendet die
-    Montage (Phase montage → abnahme, montage_fertig_am)."""
+    Montage (Phase montage → abnahme, montage_fertig_am). v33: Service-Formulare
+    laufen über abschliessen_service; danach prüft kern.auto_hook den
+    automatischen Phasenwechsel (Phase 171)."""
     from app import galerie as galerie_modul
     from app import projektierung_logik
     from app.models import Angebot, Aufgabe, Projekt
+    if termin is not None and ist_service_formular(eintrag.formular):
+        return abschliessen_service(session, logik, eintrag, termin, gewerk, benutzer)
     offen = offene_pflicht(logik, eintrag)
     if offen:
         return False, ("Pflichtfelder offen: " + " · ".join(offen[:4])
@@ -520,6 +657,10 @@ def abschliessen(session, logik, eintrag, gewerk,
                     if neue_restarbeiten else ""),
                  benutzer=benutzer, gewerk_id=gewerk.id)
     session.flush()
+    # v33 (PLAN_V20 Phase 171): Formular-Aufgabe erledigt → ggf. nächste Phase
+    gewechselt, auto_meldung = kern.auto_hook(session, gewerk, benutzer)
+    if gewechselt:
+        meldung_zusatz += " " + auto_meldung
     return True, "Formular abgeschlossen – PDF liegt in der Galerie." + meldung_zusatz
 
 
@@ -549,7 +690,8 @@ def migration_v28_entwuerfe(session) -> list[str]:
         if felder is None:
             continue
         daten = antworten(eintrag)
-        if not daten or all(key in felder for key in daten):
+        # v33: Metadaten-Schlüssel (_termin_id) sind keine Felder
+        if not daten or all(key in felder or key.startswith(META_PRAEFIX) for key in daten):
             continue
         eintrag.antworten_json = "{}"
         eintrag.seite_index = 0
@@ -560,3 +702,24 @@ def migration_v28_entwuerfe(session) -> list[str]:
     gesamt = sum(zaehler.values())
     details = ", ".join(f"{name}: {anzahl}" for name, anzahl in sorted(zaehler.items()))
     return [f"Formulare (v28): {gesamt} alte Entwürfe geleert ({details})"]
+
+
+def migration_v33_termin_id(session) -> list:
+    """migrate.py-Hook (v33, PLAN_V20 Phase 168, Vorschlag S 4.3): die Spalte
+    montage_formulare.termin_id aus dem Übergangsschlüssel `_termin_id` in antworten_json
+    füllen – idempotent, nur Zeilen ohne termin_id."""
+    from app.models import MontageFormular
+    if getattr(MontageFormular, "termin_id", None) is None:
+        return []
+    anzahl = 0
+    for eintrag in (session.query(MontageFormular)
+                    .filter(MontageFormular.termin_id.is_(None),
+                            MontageFormular.antworten_json.like('%"_termin_id"%'))):
+        termin_id = antworten(eintrag).get("_termin_id")
+        if termin_id:
+            eintrag.termin_id = int(termin_id)
+            anzahl += 1
+    if anzahl:
+        session.commit()
+        return [f"Servicebericht (v33): termin_id für {anzahl} Formulare nachgetragen"]
+    return []

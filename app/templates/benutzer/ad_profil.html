@@ -19,14 +19,15 @@
 
 <form method="post" action="/benutzer/{{ person.id }}/ad-profil"
       class="formular" style="max-width:760px" enctype="multipart/form-data">
-    {# v29 (PLAN_LEAD_V4 Phase 142): Vorname, Infotext und Bild für den Block
-       {vertriebler_block} der Terminbestätigung je Vertriebler; Telefon/E-Mail
-       bleiben in der Benutzerliste. Styles: lead_v29.css. #}
+    {# v29 (PLAN_LEAD_V4 Phase 142): Vorname und Bild für den Block {vertriebler_block}
+       der Terminbestätigung je Vertriebler; Telefon/E-Mail bleiben in der Benutzerliste.
+       v33 (PLAN_V20 Phase 175): der Infotext zum AD entfällt vollständig – der Block
+       enthält nur noch Bild, Name, Telefon, E-Mail. Styles: lead_v29.css. #}
     <h2>Terminbestätigung (v29)</h2>
     <p class="dezent">Die Terminbestätigung dieses Vertrieblers
         {% if vorlage_vorhanden %}<a href="/lead-management/vorlagen?vorlage=terminbestaetigung_{{ person.id }}">im Vorlagen-Editor öffnen</a>{% else %}wird beim Speichern als Kopie der Standard-Vorlage angelegt{% endif %};
         Bild (JPG/PNG, max. {{ bild_max_mb }} MB) geht als Inline-Bild mit, Name, Telefon
-        ({{ person.telefon or 'fehlt' }}), E-Mail ({{ person.email or 'fehlt' }}) und Infotext füllen den persönlichen Block.</p>
+        ({{ person.telefon or 'fehlt' }}) und E-Mail ({{ person.email or 'fehlt' }}) füllen den persönlichen Block.</p>
     <div class="ben-bild-zeile">
         {% if bild_vorhanden %}
         <img class="ben-bild-vorschau" src="/lead-management/benutzer/{{ person.id }}/bild?v={{ css_version }}" alt="Bild {{ person.name }}">
@@ -44,8 +45,6 @@
         <label class="schmal">Vorname („Hallo, …“)
             <input type="text" name="vorname" value="{{ person.vorname or '' }}" maxlength="100"></label>
     </div>
-    <label>Infotext (persönlicher Absatz in der Terminbestätigung)
-        <textarea name="infotext" rows="4" placeholder="z. B. Seit 2015 berate ich Familien in Duisburg und Umgebung zu Wärmepumpe und Photovoltaik …">{{ person.infotext or '' }}</textarea></label>
 
     <h2>Terminassistent</h2>
     <label>Startadresse (Wohnort oder Büro)
@@ -118,7 +117,9 @@
     <h2>Kanal-Regel (E2)</h2>
     <p class="dezent">Kanäle, für die dieser Außendienstler fest zuständig ist. Ist für einen
         Vertriebskanal mindestens ein AD hinterlegt, schlägt der Assistent für Leads dieses
-        Kanals nur diese AD vor (Ausschluss). Parameter <code>kanal_ad_regel</code>.</p>
+        Kanals nur diese AD vor (Ausschluss); alle anderen AD sind für diesen Kanal „außer“.
+        Parameter <code>kanal_ad_regel</code>. {# v33 (Phase 175) #}„Stadtwerke Düsseldorf“ gilt
+        zugleich für den monday-Kanal „SWD“ und das Angebotsprofil SWD.</p>
     <div class="formzeile lmt-kompetenz">
         {% for kanal in kanaele %}
         <label class="kontrollfeld">
@@ -133,10 +134,12 @@
     <label class="kontrollfeld"><input type="checkbox" name="aktiv_terminierung"
                   {{ 'checked' if profil and profil.aktiv_terminierung }}>
         Nimmt an der automatischen Terminierung teil</label>
-    <label class="kontrollfeld" title="A-1: Handelsvertreter terminieren ihre Leads selbst (nur eigener Kalender, nur zugewiesene Leads)">
+    <label class="kontrollfeld" title="A-1: Handelsvertreter terminieren ihre Leads selbst (nur eigener Kalender, nur zugewiesene Leads). v33: setzt zugleich die Rolle „Handelsvertreter“ in der Benutzerverwaltung (und umgekehrt)">
         <input type="checkbox" name="terminiert_selbst"
                {{ 'checked' if profil and profil.terminiert_selbst }}>
-        Handelsvertreter – terminiert selbst</label>
+        Handelsvertreter – terminiert selbst
+        {# v33 (PLAN_V20 Phase 167): Rolle und Kennzeichen bleiben synchron #}
+        <span class="dezent">(Rolle: {{ rollen_name }}{{ ' – Kennzeichen Handelsvertreter' if hat_hv_rolle }}; das Häkchen setzt die Rolle Handelsvertreter bzw. nimmt sie zurück)</span></label>
     <label>Kalender-Postfach (Outlook; leer = Benutzer-E-Mail)
         <input type="email" name="kalender_postfach"
                value="{{ profil.kalender_postfach or '' if profil else '' }}"></label>

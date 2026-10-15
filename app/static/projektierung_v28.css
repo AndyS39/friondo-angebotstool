@@ -360,3 +360,35 @@ dialog.pj-dlg .opt.sel { border-color: var(--akzent); background: var(--akzent-f
     .pj-mob .pj-btnrow .pj-btn { flex: 1 1 auto; text-align: center; }
     .pj-mob .pj-steck-raster .w { border-bottom-color: var(--linie); }
 }
+
+
+/* --- v33 (PLAN_V20 Phasen 167/168/171, Agent S): Service-Einsätze, Besetzung nach Gewerk,
+       Auto-Phase – nur semantische Tokens (Hell/Dunkel), keine festen Farben --- */
+.pj-badge.pj-service { background: var(--status-orange-bg); color: var(--status-orange); border-color: transparent; font-weight: 600; }
+.pj-service-status { font-weight: 600; }
+.pj-service-status.geplant { color: var(--text-dezent); }
+.pj-service-status.gestartet { color: var(--status-orange); }
+.pj-service-status.beendet { color: var(--status-gruen); }
+.pj-badge.pj-service-status.gestartet { background: var(--status-orange-bg); }
+.pj-badge.pj-service-status.beendet { background: var(--status-gruen-bg); }
+.pj-badge.pj-outlook.ok { color: var(--status-gruen); background: var(--status-gruen-bg); border-color: transparent; }
+.pj-badge.pj-outlook.fehler { color: var(--status-rot); background: var(--status-rot-bg); border-color: transparent; }
+.pj-badge.pj-outlook.ausstehend { color: var(--status-orange); background: var(--status-orange-bg); border-color: transparent; }
+.pj-termin-service { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; }
+.pj-termin-form .pj-dauer { display: inline-flex; align-items: center; gap: 4px; }
+.pj-termin-form .pj-dauer select { width: auto; min-width: 56px; }
+.pj-termin-form option.pj-opt-fremd { color: var(--text-dezent); font-style: italic; }
+.pj-phase-auto { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 2px 0 6px; color: var(--text-dezent); }
+.pj-phase-auto .kontrollfeld { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-size: 12px; }
+.pj-einsatz.service { border-left: 3px solid var(--status-orange); }
+.pj-mob-tag .e.service { background: var(--status-orange-bg); }
+.vg-termine { max-width: 1000px; margin-top: 6px; }
+.vg-termine .pj-termine-tab td, .vg-termine .pj-termine-tab th { vertical-align: top; }
+.pj-stat-kacheln { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 14px; }
+.pj-stat-kacheln .kachel.stat { flex: 1 1 160px; min-width: 150px; }
+.pj-stat-tabelle { max-width: 1100px; }
+.pj-stat-tabelle tr.leer td { color: var(--text-dezent); }
+.pj-stat-tabelle tfoot td { border-top: 2px solid var(--linie-stark); font-weight: 600; }
+@media (max-width: 600px) {
+    .pj-termin-service { grid-template-columns: 1fr; }
+}

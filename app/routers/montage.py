@@ -19,6 +19,15 @@
 # Montagebericht (mb_bemerkung). Die Route nimmt ein mitgeschicktes Feld
 # „bericht“ nur noch aus Altgründen entgegen (ältere Oberflächen/Tests) und
 # schreibt es ausschließlich dann in den Verlauf, wenn es nicht leer ist.
+#
+# v33 (PLAN_V20 Phase 167/168): Rollen-Varianten – Montage Heizung sieht die
+# Terminarten Montage (WP) und Sub-Einsatz seines Teams, Montage Elektro die
+# Elektro-Montagen, Basisrolle montage ohne Gewerk alles wie bisher, nie Service;
+# Service Heizung/Elektro sehen NUR Service-Einsätze ihres Gewerks (chronologisch,
+# Wochenkalender) mit Kundendaten, Ausführungsort (Objektadresse v31), Steckbrief
+# (falls Gewerk), Galerie, Notizen (lesen), Knöpfen „Einsatz gestartet/beendet“ und dem
+# Formular Servicebericht (Blatt „Formulare“, am Termin – auch am Vorgang ohne Projekt).
+# Admin/Projektierung (Leitung) sehen alles.
 
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -49,13 +58,16 @@ TERMIN_ARTEN = {("montage", "wp"): "Montage (WP)", ("montage", ""): "Montage",
                 ("montage", "elektro"): "Elektro-Montage", ("montage", "sub"): "Sub-Einsatz",
                 ("sub", ""): "Sub-Einsatz", ("sub", "sub"): "Sub-Einsatz",
                 ("feinplanung", ""): "Feinplanung VOT", ("abnahme", ""): "Abnahme",
-                ("sonstige", ""): "Sonstiges"}
+                ("sonstige", ""): "Sonstiges",
+                ("service", ""): "Service-Einsatz"}   # v33 (Phase 168)
+SERVICE_FOTO_ORDNER = "Service"
+SERVICE_NOTIZEN_HINWEIS = "Bemerkungen bitte im Servicebericht eintragen."
 
 
 def _ist_leitung(benutzer) -> bool:
     """Admin und Projektierung sehen alle Einsätze (Team-Umschalter)."""
     return benutzer is not None and (
-        benutzer.rolle == "admin" or benutzer.hat_rolle("projektierung"))
+        benutzer.basisrolle == "admin" or benutzer.hat_rolle("projektierung"))
 
 
 def _gate(request: Request, session: Session):
@@ -74,6 +86,65 @@ def _gate(request: Request, session: Session):
 def _eigene_teams(session: Session, benutzer) -> list[int]:
     return [m.team_id for m in session.query(TeamMitglied)
             .filter(TeamMitglied.benutzer_id == benutzer.id)]
+
+
+# --- v33 (PLAN_V20 Phase 167/168): Sicht nach Rollen-Variante -----------------------
+
+def _sicht(benutzer) -> dict:
+    """{"leitung", "service", "gewerk"} eines Benutzers: Leitung = Admin/Projektierung,
+    Service = Kennzeichen der Rolle (Service Heizung/Elektro), Gewerk aus der Rolle
+    (heizung | elektro | leer)."""
+    return {"leitung": _ist_leitung(benutzer),
+            "service": bool(benutzer is not None and benutzer.hat_kennzeichen("service")),
+            "gewerk": (getattr(benutzer, "gewerk", "") or "") if benutzer is not None else ""}
+
+
+def _termin_passt(sicht: dict, termin: ProjektTermin) -> bool:
+    """Gewerk-/Service-Filter: Leitung alles; Service-Varianten nur Service-Einsätze
+    ihres Gewerks (Einsatz ohne Gewerk: beide); Montage Heizung → Montage (WP) +
+    Sub-Einsatz; Montage Elektro → Elektro-Montage; Basisrolle montage ohne Gewerk →
+    alle Nicht-Service-Termine. Montage-Benutzer sehen nie Service-Einsätze."""
+    if sicht.get("leitung"):
+        return True
+    typ = (termin.typ or "").lower()
+    zweck = (getattr(termin, "zweck", "") or "").lower()
+    if sicht.get("service"):
+        if typ != "service":
+            return False
+        return not sicht.get("gewerk") or (termin.service_gewerk or "") in ("", sicht["gewerk"])
+    if typ == "service":
+        return False
+    gewerk = sicht.get("gewerk") or ""
+    if not gewerk:
+        return True
+    if gewerk == "heizung":
+        return (typ == "montage" and zweck in ("wp", "", "sub")) or typ == "sub"
+    if gewerk == "elektro":
+        return typ == "montage" and zweck == "elektro"
+    return True
+
+
+def _service_info(session: Session, termine) -> dict[int, dict]:
+    """Kunde, Ort, Anlass, Gewerk und Status je Service-Einsatz (Liste/Kalender)."""
+    info: dict[int, dict] = {}
+    for t in termine:
+        if (t.typ or "") != "service":
+            continue
+        kunde = kern.termin_kunde(session, t)
+        adresse = kern.termin_adresse(session, t)
+        info[t.id] = {
+            "kunde": kunde.anzeige_name if kunde is not None else "?",
+            "ort": adresse.get("plz_ort") or adresse.get("ort") or "",
+            "adresse": adresse.get("einzeilig") or "",
+            "anlass": kern.SERVICE_ANLASS_NAMEN.get(t.anlass, t.anlass or "–"),
+            "gewerk": kern.SERVICE_GEWERK_NAMEN.get(t.service_gewerk, t.service_gewerk or "–"),
+            "status": kern.SERVICE_STATUS_NAMEN.get(t.service_status or "", t.service_status or ""),
+            "status_key": t.service_status or "geplant",
+            "zeit": (f"{t.beginn.strftime('%H:%M')}–{t.ende.strftime('%H:%M')} Uhr"
+                     if t.beginn and t.ende and not t.ganztaegig
+                     and t.ende.date() == t.beginn.date() else ""),
+        }
+    return info
 
 
 # --- Besetzung je Termin (v28, Vertrag mit P1: kern.besetzung_ids/-namen, sonst
@@ -137,6 +208,8 @@ def _einsatz_erlaubt(session: Session, benutzer, termin: ProjektTermin,
     Person; Admin/Projektierung alles."""
     if _ist_leitung(benutzer):
         return True
+    if not _termin_passt(_sicht(benutzer), termin):   # v33: Gewerk-/Service-Filter
+        return False
     ids = besetzung if besetzung is not None else _besetzung_ids(session, termin.id)
     if ids:
         return benutzer.id in ids
@@ -208,8 +281,13 @@ def meine_einsaetze(request: Request, team_id: int = 0,
                            ProjektTermin.team_id == team.id)
                    .order_by(ProjektTermin.beginn).all())
         besetzung = _besetzung_map(session, [t.id for t in termine])
+    # v33 (Phase 167/168): Gewerk-/Service-Filter nach Rollen-Variante
+    sicht = _sicht(benutzer)
+    termine = [t for t in termine if _termin_passt(sicht, t)]
+    besetzung = {t.id: besetzung.get(t.id, []) for t in termine}
+    service_info = _service_info(session, termine)
     projekte = {p.id: p for p in session.query(Projekt)
-                .filter(Projekt.id.in_({t.projekt_id for t in termine} or {0}))}
+                .filter(Projekt.id.in_({t.projekt_id for t in termine if t.projekt_id} or {0}))}
     gewerke = {g.id: g for g in session.query(Gewerk)
                .filter(Gewerk.id.in_({t.gewerk_id for t in termine if t.gewerk_id} or {0}))}
     kunden = {k.id: k for k in session.query(Kunde)
@@ -258,6 +336,7 @@ def meine_einsaetze(request: Request, team_id: int = 0,
                   projekte=projekte, gewerke=gewerke, kunden=kunden,
                   steckbriefe=steckbriefe, ts_map=ts_map,
                   besetzung_namen=besetzung_namen, termin_art=termin_art,
+                  sicht=sicht, service_info=service_info,   # v33 (Phase 167/168)
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -321,7 +400,9 @@ def einsatz(request: Request, termin_id: int,
     termin = session.get(ProjektTermin, termin_id)
     if termin is None or not _einsatz_erlaubt(session, benutzer, termin):
         return RedirectResponse("/montage", status_code=303)
-    projekt = session.get(Projekt, termin.projekt_id)
+    if (termin.typ or "") == "service":
+        return _service_einsatz(request, session, benutzer, termin)   # v33 (Phase 168)
+    projekt = session.get(Projekt, termin.projekt_id) if termin.projekt_id else None
     gewerk = session.get(Gewerk, termin.gewerk_id) if termin.gewerk_id else None
     kunde = session.get(Kunde, projekt.kunde_id) if projekt else None
     if projekt is None or kunde is None:
@@ -400,6 +481,93 @@ def einsatz(request: Request, termin_id: int,
                   meldung=request.query_params.get("meldung", ""))
 
 
+def _service_einsatz(request: Request, session: Session, benutzer, termin: ProjektTermin):
+    """v33 (PLAN_V20 Phase 168): Service-Einsatzseite – Kundendaten, Ausführungsort
+    (Objektadresse v31), Steckbrief (falls Gewerk), Galerie des Vorgangs, Notizen
+    (lesen), Knöpfe „Einsatz gestartet“/„Einsatz beendet“, Formular Servicebericht."""
+    from app import galerie as galerie_modul
+    from app import montage_formulare
+    from app.models import MontageFormular
+    projekt = session.get(Projekt, termin.projekt_id) if termin.projekt_id else None
+    gewerk = session.get(Gewerk, termin.gewerk_id) if termin.gewerk_id else None
+    vorgang = kern.termin_vorgang(session, termin)
+    kunde = kern.termin_kunde(session, termin)
+    adresse = kern.termin_adresse(session, termin)["zeile"]
+    benutzer_map = {b.id: b for b in session.query(Benutzer)}
+    besetzung = _personen(_besetzung_ids(session, termin.id), benutzer_map, benutzer.id)
+    team = session.get(Team, termin.team_id) if termin.team_id else None
+    person = benutzer_map.get(termin.person_id) if termin.person_id else None
+    steckbrief = steckbrief_zeilen(session, gewerk) if gewerk is not None else []
+    galerie_sparte = gewerk.sparte if gewerk is not None else "WP"
+    vorgang_id = vorgang.id if vorgang is not None else None
+    galerie_daten = (galerie_modul.uebersicht(session, vorgang_id, galerie_sparte)
+                     if vorgang_id else {})
+    projektleiter = (session.get(Benutzer, projekt.projektleiter_id)
+                     if projekt is not None and projekt.projektleiter_id else None)
+    notizen_ctx = (notizen_modul.kontext(session, vorgang_id, benutzer, limit=NOTIZEN_LIMIT,
+                                         nur_lesen=True, hinweis=SERVICE_NOTIZEN_HINWEIS)
+                   if vorgang_id else None)
+    # Servicebericht: bestehenden Datensatz nur lesen (Anlage erst beim Öffnen)
+    bericht = None
+    for kandidat in (session.query(MontageFormular)
+                     .filter(MontageFormular.formular == "servicebericht",
+                             MontageFormular.projekt_id == (termin.projekt_id or 0))
+                     .order_by(MontageFormular.id)):
+        if montage_formulare.antworten(kandidat).get("_termin_id") == termin.id \
+                or getattr(kandidat, "termin_id", None) == termin.id:
+            bericht = kandidat
+            break
+    info = _service_info(session, [termin]).get(termin.id, {})
+    return render(request, "montage/service_einsatz.html", aktiv="/montage", mobil=True,
+                  benutzer=benutzer, termin=termin, projekt=projekt, gewerk=gewerk,
+                  kunde=kunde, vorgang=vorgang, adresse=adresse, info=info,
+                  karten_link="https://www.google.com/maps/search/?api=1&query="
+                              + quote_plus(adresse),
+                  besetzung=besetzung, team=team, person=person,
+                  steckbrief=steckbrief, galerie_daten=galerie_daten,
+                  vorgang_id=vorgang_id, galerie_sparte=galerie_sparte,
+                  galerie_ordner=galerie_modul.ordner_liste(session, galerie_sparte),
+                  projektleiter=projektleiter, notizen_ctx=notizen_ctx,
+                  notizen_hinweis=SERVICE_NOTIZEN_HINWEIS, bericht=bericht,
+                  status_namen=kern.SERVICE_STATUS_NAMEN,
+                  phasen_namen=GEWERK_PHASEN_NAMEN,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/einsatz/{termin_id}/service-status")
+def service_status(request: Request, termin_id: int,
+                   session: Session = Depends(get_session)):
+    """v33 (PLAN_V20 Phase 168): „Einsatz gestartet“ / „Einsatz beendet“ –
+    service_status geplant → gestartet → beendet, Zeit im 15-Minuten-Takt,
+    Verlauf (mit Projekt) und Notiz im Vorgangs-Chat."""
+    if (umleitung := _gate(request, session)) is not None:
+        return umleitung
+    benutzer = request.state.benutzer
+    termin = session.get(ProjektTermin, termin_id)
+    if termin is None or not _einsatz_erlaubt(session, benutzer, termin):
+        return RedirectResponse("/montage", status_code=303)
+    ziel_meldung = f"/montage/einsatz/{termin_id}?meldung="
+    if (termin.typ or "") != "service":
+        return RedirectResponse(ziel_meldung + quote_plus("Kein Service-Einsatz."),
+                                status_code=303)
+    form = anfrage.formular(request)
+    zeitpunkt = datetime.now()
+    try:
+        stunde, _, minute = (form.get("uhrzeit") or "").partition(":")
+        if stunde:
+            zeitpunkt = zeitpunkt.replace(hour=int(stunde), minute=int(minute or 0),
+                                          second=0, microsecond=0)
+    except ValueError:
+        pass
+    ok, meldung = kern.service_status_setzen(session, termin, form.get("aktion") or "",
+                                             benutzer=benutzer, zeitpunkt=zeitpunkt)
+    if ok:
+        session.commit()
+    else:
+        session.rollback()
+    return RedirectResponse(ziel_meldung + quote_plus(meldung), status_code=303)
+
+
 @router.get("/dokument/{dokument_id}")
 def dokument_anzeigen(request: Request, dokument_id: int,
                             session: Session = Depends(get_session)):
@@ -458,8 +626,12 @@ def foto_hochladen(request: Request, termin_id: int,
     termin = session.get(ProjektTermin, termin_id)
     if termin is None or not _einsatz_erlaubt(session, benutzer, termin):
         return RedirectResponse("/montage", status_code=303)
-    projekt = session.get(Projekt, termin.projekt_id)
+    projekt = session.get(Projekt, termin.projekt_id) if termin.projekt_id else None
     gewerk = session.get(Gewerk, termin.gewerk_id) if termin.gewerk_id else None
+    # v33 (PLAN_V20 Phase 172, Befund 15.10.2026): der Request-Body (Upload) ist Netz-I/O – die
+    # Schreibsitzung darf die SQLite-Schreibsperre nicht während der Übertragung halten
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     form = anfrage.formular(request)
     datei = form.get("datei")
     ziel_meldung = f"/montage/einsatz/{termin_id}?meldung="
@@ -471,6 +643,20 @@ def foto_hochladen(request: Request, termin_id: int,
         return RedirectResponse(ziel_meldung + quote_plus(
             "Datei größer als 20 MB – bitte kleinere Auflösung wählen."),
             status_code=303)
+    if projekt is None:
+        # v33 (Phase 168): Service-Einsatz ohne Projekt → Galerie des Vorgangs (Ordner Service)
+        from app import galerie as galerie_modul
+        vorgang = kern.termin_vorgang(session, termin)
+        if vorgang is None:
+            return RedirectResponse(ziel_meldung + quote_plus(
+                "Kein Vorgang am Einsatz – Foto nicht gespeichert."), status_code=303)
+        galerie_modul.speichern(session, vorgang.id, SERVICE_FOTO_ORDNER,
+                                Path(datei.filename).name, inhalt, benutzer=benutzer,
+                                bemerkung="Service-Einsatz", quelle="upload",
+                                sparte=gewerk.sparte if gewerk is not None else "WP")
+        session.commit()
+        return RedirectResponse(ziel_meldung + quote_plus("Foto gespeichert."),
+                                status_code=303)
     ordner = FOTO_ORDNER
     if gewerk is not None:
         ordner = f"{gewerk.sparte}/{FOTO_ORDNER}"
@@ -526,11 +712,15 @@ def formular_seite(request: Request, termin_id: int, name: str,
     gewerk = session.get(Gewerk, termin.gewerk_id) if termin.gewerk_id else None
     logik = projektierung_logik.hole_logik(session)
     seiten = logik.formular_seiten(name)
-    if gewerk is None or not seiten:
+    # v33 (Phase 168): Servicebericht hängt am Service-Einsatz (auch ohne Gewerk)
+    ist_service = montage_formulare.ist_service_formular(name)
+    if not seiten or (ist_service and (termin.typ or "") != "service") \
+            or (gewerk is None and not ist_service):
         return RedirectResponse(f"/montage/einsatz/{termin_id}?meldung="
                                 + quote_plus("Formular nicht verfügbar."),
                                 status_code=303)
-    eintrag = montage_formulare.formular_holen(session, gewerk, name, benutzer)
+    eintrag = montage_formulare.formular_holen(session, gewerk, name, benutzer,
+                                               termin=termin if ist_service else None)
     session.commit()
     try:
         seite = max(0, min(int(request.query_params.get(
@@ -542,10 +732,13 @@ def formular_seite(request: Request, termin_id: int, name: str,
         vorbelegung = _mitarbeiter_vorbelegung(session, termin)
         if vorbelegung:
             antworten["mb_mitarbeiter"] = vorbelegung
+    if ist_service and not str(antworten.get("sb_anlass") or "").strip():
+        antworten["sb_anlass"] = kern.SERVICE_ANLASS_NAMEN.get(termin.anlass, "")
     felder_namen = {f.feld_key: f.bezeichnung for f in logik.formulare.get(name, [])}
     return render(request, "montage/formular.html", aktiv="/montage", mobil=True,
                   benutzer=benutzer, termin=termin, gewerk=gewerk,
-                  projekt=session.get(Projekt, termin.projekt_id),
+                  projekt=session.get(Projekt, termin.projekt_id) if termin.projekt_id else None,
+                  service_gewerk_name=kern.SERVICE_GEWERK_NAMEN.get(termin.service_gewerk, ""),
                   name=name,
                   titel=projektierung_logik.FORMULAR_NAMEN.get(name, name),
                   eintrag=eintrag, seiten=seiten, seite=seite,
@@ -570,21 +763,26 @@ def formular_speichern(request: Request, termin_id: int, name: str,
     gewerk = session.get(Gewerk, termin.gewerk_id) if termin.gewerk_id else None
     logik = projektierung_logik.hole_logik(session)
     seiten = logik.formular_seiten(name)
-    if gewerk is None or not seiten:
+    ist_service = montage_formulare.ist_service_formular(name)   # v33 (Phase 168)
+    if not seiten or (ist_service and (termin.typ or "") != "service") \
+            or (gewerk is None and not ist_service):
         return RedirectResponse(f"/montage/einsatz/{termin_id}", status_code=303)
-    eintrag = montage_formulare.formular_holen(session, gewerk, name, benutzer)
+    eintrag = montage_formulare.formular_holen(session, gewerk, name, benutzer,
+                                               termin=termin if ist_service else None)
     form = anfrage.formular(request)
     try:
         seite = max(0, min(int(form.get("seite") or 0), len(seiten) - 1))
     except ValueError:
         seite = 0
     montage_formulare.seite_speichern(session, eintrag, gewerk,
-                                            seiten[seite][1], form, benutzer)
+                                            seiten[seite][1], form, benutzer,
+                                            termin=termin if ist_service else None)
     aktion = form.get("aktion") or "weiter"
     basis = f"/montage/einsatz/{termin_id}/formular/{name}"
     if aktion == "abschliessen":
         ok, meldung = montage_formulare.abschliessen(session, logik, eintrag,
-                                                     gewerk, benutzer)
+                                                     gewerk, benutzer,
+                                                     termin=termin if ist_service else None)
         session.commit()
         if ok:
             return RedirectResponse(f"/montage/einsatz/{termin_id}?meldung="
@@ -614,6 +812,10 @@ def restarbeit_melden(request: Request, termin_id: int,
     gewerk = session.get(Gewerk, termin.gewerk_id) if termin.gewerk_id else None
     if gewerk is None:
         return RedirectResponse(f"/montage/einsatz/{termin_id}", status_code=303)
+    # v33 (PLAN_V20 Phase 172, Befund 15.10.2026): der Request-Body (Upload) ist Netz-I/O – die
+    # Schreibsitzung darf die SQLite-Schreibsperre nicht während der Übertragung halten
+    from app.db import verbindung_freigeben
+    verbindung_freigeben(session)
     form = anfrage.formular(request)
     text = (form.get("text") or "").strip()[:500]
     if not text:

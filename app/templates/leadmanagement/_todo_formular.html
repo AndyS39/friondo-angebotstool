@@ -22,7 +22,7 @@
         <label>Für
             <select name="an_benutzer_id" required>
                 {% for b in benutzer_liste %}
-                <option value="{{ b.id }}" {{ 'selected' if benutzer and b.id == benutzer.id }}>{{ b.name }}{% if b.rolle != 'innendienst' %} · {{ rollen_namen.get(b.rolle, b.rolle) }}{% endif %}</option>
+                <option value="{{ b.id }}" {{ 'selected' if benutzer and b.id == benutzer.id }}>{{ b.name }}{% if b.basisrolle != 'innendienst' %} · {{ rollen_namen.get(b.rolle, b.rolle) }}{% endif %}</option>
                 {% endfor %}
             </select></label>
         <label>Fällig <input type="datetime-local" name="faellig_am" step="900"></label>
@@ -45,8 +45,8 @@
 {% if zeilen %}
 <ul class="lm-todos">
     {% for z in zeilen %}{% set t = z.todo %}
-    {% set darf = benutzer and (benutzer.rolle == 'admin' or t.an_benutzer_id == benutzer.id or t.von_benutzer_id == benutzer.id) %}
-    {% set darf_loeschen = benutzer and (benutzer.rolle == 'admin' or t.von_benutzer_id == benutzer.id) %}
+    {% set darf = benutzer and (benutzer.basisrolle == 'admin' or t.an_benutzer_id == benutzer.id or t.von_benutzer_id == benutzer.id) %}
+    {% set darf_loeschen = benutzer and (benutzer.basisrolle == 'admin' or t.von_benutzer_id == benutzer.id) %}
     <li class="lm-todo {{ z.klasse }} {{ 'erledigt' if t.status == 'erledigt' }}" id="todo-{{ t.id }}">
         <form method="post" action="/lead-management/todos/{{ t.id }}/{{ 'offen' if t.status == 'erledigt' else 'erledigt' }}" class="lm-todo-haken">
             <input type="hidden" name="zurueck" value="{{ zurueck }}">
@@ -89,7 +89,7 @@
 {% if offene %}
 <ul class="lm-todos lk-todo-liste">
     {% for z in offene %}{% set t = z.todo %}
-    {% set darf = benutzer and not readonly and (benutzer.rolle == 'admin' or t.an_benutzer_id == benutzer.id or t.von_benutzer_id == benutzer.id) %}
+    {% set darf = benutzer and not readonly and (benutzer.basisrolle == 'admin' or t.an_benutzer_id == benutzer.id or t.von_benutzer_id == benutzer.id) %}
     <li class="lm-todo lk-todo {{ z.klasse }}" id="todo-{{ t.id }}">
         <form method="post" action="/lead-management/todos/{{ t.id }}/erledigt" class="lm-todo-haken lk-inline" data-fetch="reload">
             <input type="hidden" name="zurueck" value="{{ zurueck }}">

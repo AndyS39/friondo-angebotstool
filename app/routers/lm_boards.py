@@ -61,6 +61,10 @@ templates.env.globals.setdefault("lm_kundenname", lead_boards.kundenname)
 # Filter-Selects, Häkchen und Badges der Modul-Templates – keine festen Listen mehr
 templates.env.globals.setdefault("lm_sparten", tuple(sparten_modul.SPARTEN))
 templates.env.globals.setdefault("lm_sparten_lang", dict(sparten_modul.SPARTEN_LANG))
+# v33 (PLAN_V20 Phase 174): Speicher-Route der Spaltenwerkzeuge je Rolle (data-lm-spalten-url
+# der Angebotstool-Tabellen; Projektierung → Alias /einstellungen/spalten)
+templates.env.globals.setdefault("lm_spalten_url", lead_boards.spalten_url)
+templates.env.globals.setdefault("lm_spalten_fest", lead_boards.spalten_fest)
 
 
 def _speichern(session: Session, aktion, wiederholungen: int = 1):
@@ -103,8 +107,8 @@ def _tabellen_kontext(session: Session, benutzer, board: str) -> dict:
     jetzt = datetime.now()
     return {
         "board": board, "jetzt": jetzt, "heute": jetzt.date(), "hv": hv,
-        "sammel": not hv and benutzer is not None and benutzer.rolle != "aussendienst",
-        "erzwingen": benutzer is not None and benutzer.rolle in ("admin", "innendienst"),
+        "sammel": not hv and benutzer is not None and benutzer.basisrolle != "aussendienst",
+        "erzwingen": benutzer is not None and benutzer.basisrolle in ("admin", "innendienst"),
         "versuche_max": kern.versuche_max(session),
         "score_aktiv": lead_v2.score_aktiv(session),
         "sortierung": lead_boards.sortierung_fuer(session, benutzer, board),
@@ -350,17 +354,31 @@ def sammelaktion(request: Request, session: Session = Depends(get_session)):
 
 # --- Spaltenkonfiguration je Nutzer (A-14, v25 erweitert) ------------------------------------
 
-@router.get("/boards/spalten")
-def spalten_holen(request: Request, session: Session = Depends(get_session)):
-    """{board, spalten: [{key, titel, standard, name, sichtbar}], sort: {key, richtung} | null}"""
-    lead_v2.gate(request, session)
+def _spalten_gate(request: Request, session: Session, board: str) -> None:
+    """v33 (PLAN_V20 Phase 174): die Spaltenwerkzeuge der Angebotstool-Tabellen
+    (lead_boards.TABELLEN_BOARDS) stehen jeder angemeldeten Rolle offen – auch dem
+    Außendienst für meine_angebote/leads_vot (Katalog nach Basisrolle, lead_boards.
+    katalog_fuer); nur die Lead-Boards laufen weiter über lead_v2.gate (404/HV-Sicht)."""
+    if not lead_boards.ist_tabelle(board):
+        lead_v2.gate(request, session)
+
+
+def spalten_holen_antwort(request: Request, session: Session) -> JSONResponse:
+    """Antwort von GET …/spalten – auch vom Alias /einstellungen/spalten genutzt (v33)."""
     board = request.query_params.get("board", "hauptboard")
-    if board not in lead_boards.KONFIG_BOARDS:
+    if not lead_boards.board_bekannt(board):
         board = "hauptboard"
+    _spalten_gate(request, session, board)
     benutzer = request.state.benutzer
     return JSONResponse({"board": board,
                          "spalten": lead_boards.spalten_fuer(session, benutzer, board),
                          "sort": lead_boards.sortierung_fuer(session, benutzer, board)})
+
+
+@router.get("/boards/spalten")
+def spalten_holen(request: Request, session: Session = Depends(get_session)):
+    """{board, spalten: [{key, titel, standard, name, sichtbar}], sort: {key, richtung} | null}"""
+    return spalten_holen_antwort(request, session)
 
 
 @router.post("/boards/spalten")
@@ -370,7 +388,11 @@ def spalten_speichern(request: Request, session: Session = Depends(get_session))
     Standard), zuruecksetzen?: true} → gespeicherte Liste + Sortierung. Gilt
     nur für den angemeldeten Nutzer. Mindestens eine Angabe ist Pflicht;
     kaputte Daten setzen die Konfiguration nie still zurück."""
-    lead_v2.gate(request, session)
+    return spalten_speichern_antwort(request, session)
+
+
+def spalten_speichern_antwort(request: Request, session: Session) -> JSONResponse:
+    """Antwort von POST …/spalten – auch vom Alias /einstellungen/spalten genutzt (v33)."""
     try:
         daten = anfrage.json_lesen(request)
     except Exception:
@@ -382,8 +404,9 @@ def spalten_speichern(request: Request, session: Session = Depends(get_session))
     if not isinstance(daten, dict):
         return JSONResponse({"ok": False, "meldung": "Ungültige Anfrage."}, status_code=400)
     board = daten.get("board") or "hauptboard"
-    if board not in lead_boards.KONFIG_BOARDS:
+    if not lead_boards.board_bekannt(board):
         return JSONResponse({"ok": False, "meldung": "Unbekanntes Board."}, status_code=400)
+    _spalten_gate(request, session, board)
     benutzer = request.state.benutzer
     zuruecksetzen = bool(daten.get("zuruecksetzen"))
     liste = daten.get("spalten", lead_boards._BEHALTEN)

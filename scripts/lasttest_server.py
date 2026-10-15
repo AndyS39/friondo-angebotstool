@@ -23,7 +23,9 @@
 # Vorbereitung der Kopie (einmal je Start, idempotent; --ohne-vorbereitung schaltet ab):
 #   Lead-Parameter parser_modus=an (2-Minuten-Postfachlauf aktiv, Graph gemockt),
 #   routing_anbieter=ors + ors_api_key=lasttest (Terminvorschläge rufen die Matrix),
-#   kalender_sync laut --kalender (Standard aus, wie in der Server-Kopie),
+#   kalender_sync laut --kalender (Standard aus, wie in der Server-Kopie; v33: „an“ im
+#   Rollout-Skript, damit die Läufe outlook-sync/outlook-ruecklesen Kopien einreihen und
+#   Belegtzeiten lesen – alles gemockt, Modus anwendung),
 #   [ANNAHME] AD-Profile mit Startkoordinaten für alle aktiven Außendienstler ohne
 #   Profil (--ohne-ad-profile schaltet ab) – ohne Profile hätten die Terminvorschläge
 #   keine Kandidaten und damit keinen Netzaufruf.
@@ -175,6 +177,13 @@ def mock_konfiguriert(*_a, **_k) -> bool:
     return True
 
 
+def mock_modus(*_a, **_k) -> str:
+    """v33 (PLAN_V20 Phase 177): das Lastmodell fährt im Modus „anwendung“ (Graph als
+    Anwendung) – Token/Verbindungstest sind gemockt, die Läufe outlook-sync und
+    outlook-ruecklesen (Phase 170) sind damit aktiv (16 Läufe)."""
+    return "anwendung"
+
+
 def _monday_titel() -> list[str]:
     """Gruppentitel der monday-Quellen aus der Kopie (für „leere Boards“)."""
     try:
@@ -236,6 +245,10 @@ def patches_setzen() -> tuple[list, list, list]:
         (graph_versand, "_token", mock_token),
         (graph_versand, "angemeldeter_benutzer", mock_angemeldet),
         (graph_versand, "konfiguriert", mock_konfiguriert),
+        # v33 (Phase 177): Modus anwendung – Anwendungs-Token und Geheimnis-Prüfung gemockt
+        (graph_versand, "anwendung_konfiguriert", mock_konfiguriert),
+        (graph_versand, "_token_anwendung", mock_token),
+        (graph_versand, "modus", mock_modus),
         (graph_versand, "_app", sperre_msal),
         (kalender, "_token", mock_token),
         (mail_sync, "_graph_get", mock_graph_get),

@@ -55,7 +55,10 @@ def _db_ampel(session: Session, db_cent: int, sparte: str = "") -> str:
 
 
 def _db_mit_rabatt(angebot: Angebot, cent, prozent) -> int:
-    """DB-Simulation mit hypothetischem Gesamtrabatt (ohne zu speichern)."""
+    """DB-Simulation mit hypothetischem Gesamtrabatt (ohne zu speichern). v33
+    (Phase 172): der Rabatt gilt bei jedem Steuersatz auf den Gesamtbetrag nach
+    USt – der DB sinkt um Rabatt ÷ (1 + USt-Satz), bei 0 % um den vollen Rabatt
+    (Angebot.deckungsbeitrag)."""
     alt = (angebot.rabatt_cent, angebot.rabatt_prozent)
     angebot.rabatt_cent, angebot.rabatt_prozent = cent, prozent
     try:
@@ -173,8 +176,11 @@ def projekt_kommentar(request: Request, angebot_id: int,
 
 
 @router.get("")
-def liste(request: Request, q: str = "",
+def liste(request: Request, q: str = "", status: str = "", sparte: str = "",
                 session: Session = Depends(get_session)):
+    """v33 (PLAN_V20 Phase 174): Tabelle im Lead-Board-Layout (Sticky-Filter mit Status und
+    Sparte als Chip-Selects, Spalten je Nutzer, Sortierung per Spaltenkopf) – Katalog
+    meine_angebote ohne EK/DB (lead_boards.katalog_fuer, Basisrolle Außendienst)."""
     benutzer = request.state.benutzer
     angebote = _eigene_angebote(session, benutzer.id)
     kunden = {k.id: k for k in session.query(Kunde)
@@ -187,13 +193,32 @@ def liste(request: Request, q: str = "",
                     or (a.kunde_id in kunden
                         and (suchwort in kunden[a.kunde_id].anzeige_name.lower()
                              or suchwort in (kunden[a.kunde_id].ort or "").lower()))]
+    if status:   # v33: Filter Status (Chip-Select)
+        angebote = [a for a in angebote if a.status == status]
+    if sparte:   # v33: Filter Sparte (Konfigurator-Typ)
+        angebote = [a for a in angebote if (a.konfigurator_typ or "WP") == sparte]
     # v32 (PLAN_V19 Phase 163): Verfolgungs-Chip des Vorgangs je Angebot
-    from app.models import Vorgang
+    from app.models import ANGEBOT_STATUS, Vorgang
     vorgaenge_map = {v.id: v for v in session.query(Vorgang)
                      .filter(Vorgang.id.in_({a.vorgang_id for a in angebote if a.vorgang_id} or {0}))}
+    # v33 (Phase 174): Spalten je Nutzer + gemerkte Sortierung vor dem Rendern (ohne gemerkte
+    # Sortierung bleibt die Reihenfolge von _eigene_angebote: neueste Nummer zuerst)
+    from app import lead_boards
+    from app import sparten as sparten_modul
+    board = "meine_angebote"
+    spalten = lead_boards.spalten_fuer(session, benutzer, board)
+    sortierung = lead_boards.sortierung_fuer(session, benutzer, board)
+    lead_boards.zeilen_sortieren(
+        angebote, sortierung,
+        wert=lambda a, key: lead_boards.angebot_sortwert(a, key, kunden, vorgaenge_map))
     return render(request, "angebote/meine.html", aktiv=None, mobil=True,
                   benutzer=benutzer, angebote=angebote, kunden=kunden, q=q,
+                  status=status, sparte=sparte, status_liste=ANGEBOT_STATUS,
+                  sparten_liste=sparten_modul.SPARTEN,
                   vorgaenge_map=vorgaenge_map,
+                  board=board, spalten=spalten, sortierung=sortierung,
+                  ctx={"board": board, "sortierung": sortierung},
+                  spalten_fest=lead_boards.spalten_fest(board),
                   heute=datetime.now(),
                   meldung=request.query_params.get("meldung", ""))
 
@@ -340,7 +365,8 @@ def status_setzen(request: Request, angebot_id: int,
 @router.post("/{angebot_id}/rabatt")
 def rabatt(request: Request, angebot_id: int,
                  session: Session = Depends(get_session)):
-    """v10: AD-Gesamtrabatt (Brutto, v4-Mechanik). Zulässig, solange die
+    """v10: AD-Gesamtrabatt (Abzug vom Gesamtbetrag nach USt, bei 0 % USt vom
+    Netto – v4-Mechanik, v33 Phase 172). Zulässig, solange die
     DB-Ampel nicht auf Rot fällt – sonst Freigabe-Anfrage an den Innendienst.
     Entwürfe direkt, versendete Angebote über Version .2 (v9-Mechanik)."""
     benutzer = request.state.benutzer

@@ -4,13 +4,22 @@
 # postfach | kategorien; Einrichtung: docs/graph-einrichtung.md).
 # Fehler blockieren nie – sie landen als Warnsymbol am Termin
 # (ProjektTermin.outlook_fehler) mit Knopf "Erneut senden".
+#
+# v33 (PLAN_V20 Phase 170): Outlook je Mitarbeiter. event_senden / event_loeschen
+# behalten ihre Signaturen, reihen aber nur noch Aufträge für app/outlook_sync.py ein
+# (je Person der Besetzung bzw. Person eine Kopie im persönlichen Kalender; der
+# Team-Kalender nur zusätzlich, wenn teams.outlook_adresse gesetzt ist [ANNAHME
+# optional]); kein Graph-Aufruf im Request. ruecklesen() ruft den Lauf
+# outlook-ruecklesen. _kalender_ziel/_event_daten bleiben für den Altbestand
+# (Migration, Storno alter Team-Ereignisse) erhalten.
 
 import urllib.parse
 from datetime import datetime, timedelta
 
 from app import projektierung as kern
 
-RELEVANTE_TYPEN = ("montage", "feinplanung", "abnahme")
+# v33: alle Terminarten des Dialogs, zusätzlich Service-Einsätze (Phase 168)
+RELEVANTE_TYPEN = ("montage", "sub", "feinplanung", "abnahme", "sonstige", "service")
 GRAPH = "https://graph.microsoft.com/v1.0"
 ZEITZONE = "W. Europe Standard Time"
 
@@ -78,66 +87,39 @@ def _event_daten(session, termin, kategorien: list[str]) -> dict:
 
 
 def event_senden(session, termin) -> tuple[bool, str]:
-    """Anlegen oder Aktualisieren – wirft nie; Fehlertext landet am Termin."""
-    from app import graph_versand
-    from app.db import verbindung_freigeben
-    if termin.typ not in RELEVANTE_TYPEN or termin.beginn is None:
+    """Anlegen oder Aktualisieren – wirft nie; Fehlertext landet am Termin.
+    v33 (PLAN_V20 Phase 170): reiht je Person der Besetzung bzw. Person einen Auftrag
+    ein (anlegen für neue Kopien, aendern für vorhandene, loeschen für Personen, die
+    nicht mehr eingeteilt sind – Besetzungsdifferenz vergleicht outlook_sync mit der
+    Tabelle outlook_ereignisse); kein Graph-Aufruf im Request. True = eingereiht."""
+    from app import outlook_sync
+    if termin is None or termin.typ not in RELEVANTE_TYPEN or termin.beginn is None:
         return True, ""
-    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (msal kann das Token
-    # über das Netz erneuern; der commit speichert den bereits angelegten bzw.
-    # geänderten Termin – wie bisher beim commit des Aufrufers)
-    verbindung_freigeben(session)
-    token = graph_versand._token()
-    if token is None:
-        termin.outlook_fehler = "Nicht bei Microsoft angemeldet"
-        return False, termin.outlook_fehler
-    adresse, kategorien, fehler = _kalender_ziel(session, termin)
-    if fehler:
-        termin.outlook_fehler = fehler
-        return False, fehler
-    basis = f"/users/{urllib.parse.quote(adresse)}/calendar/events"
-    daten = _event_daten(session, termin, kategorien)
-    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Ziel und
-    # Ereignisdaten sind gelesen)
-    verbindung_freigeben(session)
+    if getattr(termin, "id", None) is None:
+        return True, ""
     try:
-        if termin.outlook_event_id:
-            graph_versand._graph_aufruf(
-                "PATCH", f"{basis}/{termin.outlook_event_id}", token, daten)
-        else:
-            antwort = graph_versand._graph_aufruf("POST", basis, token, daten)
-            termin.outlook_event_id = antwort.get("id", "")
-        termin.outlook_fehler = ""
-        return True, ""
-    except Exception as problem:
+        outlook_sync.auftrag_einreihen(session, outlook_sync.AKTION_AENDERN,
+                                       outlook_sync.ART_PROJEKT, termin.id)
+    except Exception as problem:   # noqa: BLE001 – Termin speichern darf nie scheitern
         termin.outlook_fehler = f"Outlook-Sync fehlgeschlagen: {problem}"[:300]
         return False, termin.outlook_fehler
+    termin.outlook_fehler = ""
+    return True, ""
 
 
 def event_loeschen(session, termin) -> bool:
-    from app import graph_versand
-    from app.db import verbindung_freigeben
-    if not termin.outlook_event_id:
+    """v33: Aufträge „loeschen“ für alle Kopien des Termins (persönliche Kalender und
+    – Altbestand – der Team-Kalender); die Aufträge tragen Postfach und Event-ID, der
+    Termin darf danach gelöscht werden. Kein Graph-Aufruf im Request."""
+    from app import outlook_sync
+    if termin is None or getattr(termin, "id", None) is None:
         return True
-    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (msal kann das Token
-    # über das Netz erneuern)
-    verbindung_freigeben(session)
-    token = graph_versand._token()
-    if token is None:
-        return False
-    adresse, _kategorien, fehler = _kalender_ziel(session, termin)
-    if fehler:
-        return False
-    # Hotfix 06.10.2026: Verbindung vor Netz-I/O freigeben (Ziel ist gelesen)
-    verbindung_freigeben(session)
     try:
-        graph_versand._graph_aufruf(
-            "DELETE", f"/users/{urllib.parse.quote(adresse)}/calendar/events/"
-                      f"{termin.outlook_event_id}", token)
-        termin.outlook_event_id = ""
-        return True
-    except Exception:
+        outlook_sync.auftrag_einreihen(session, outlook_sync.AKTION_LOESCHEN,
+                                       outlook_sync.ART_PROJEKT, termin.id)
+    except Exception:   # noqa: BLE001 – Storno-Fehler blockieren das Löschen nie
         return False
+    return True
 
 
 def _zeit_parsen(daten: dict) -> datetime | None:
@@ -149,65 +131,24 @@ def _zeit_parsen(daten: dict) -> datetime | None:
 
 
 def ruecklesen() -> int:
-    """Outlook → Tool (15-Minuten-Scheduler): Datum/Dauer-Änderungen der
-    gesyncten Termine zurücklesen; Verlaufseintrag je Änderung."""
-    from app import graph_versand
-    from app.db import kurz
-    from app.models import Gewerk, ProjektTermin
-    token = graph_versand._token()
-    if token is None:
+    """Outlook → Tool. v33 (PLAN_V20 Phase 170): ruft den Lauf outlook-ruecklesen
+    (calendarView je Person mit Terminen, acht Wochen; verschobene Kopien ziehen den
+    Tool-Termin nach, fehlende setzen „in Outlook gelöscht“, fremde Einträge füllen den
+    Belegt-Cache). Signatur und Rückgabe (Anzahl geänderter Termine) bleiben für den
+    Teilschritt von mail_sync erhalten; läuft der registrierte Lauf gerade, wird nichts
+    doppelt gelesen. Sitzungsdisziplin liegt im Lauf (Token und Graph ohne Sitzung)."""
+    from app import outlook_sync, scheduler
+    lauf = scheduler.holen(outlook_sync.LAUF_RUECKLESEN)
+    if lauf is not None and lauf.sperre.locked():
         return 0
-    # v27 (PLAN_V17 Phase 128): Lesephase in einer kurzen Sitzung (Termine mit
-    # Outlook-Ereignis und ihr Kalenderziel), dann je Termin der Graph-Abruf
-    # OHNE Sitzung und – nur bei einer Änderung – eine kurze Sitzung zum
-    # Zurückschreiben mit Commit (Block = ein Termin)
-    with kurz() as s:
-        auftraege = []
-        for termin in (s.query(ProjektTermin)
-                       .filter(ProjektTermin.outlook_event_id != "",
-                               ProjektTermin.beginn.isnot(None))
-                       .order_by(ProjektTermin.id).all()):
-            adresse, _kategorien, ziel_fehler = _kalender_ziel(s, termin)
-            if ziel_fehler:
-                continue
-            auftraege.append((termin.id, adresse, termin.outlook_event_id))
-    geaendert = 0
+    ergebnis = outlook_sync.ruecklesen_lauf()
+    geaendert = int(ergebnis.get("geaendert", 0) or 0)
     fehler: list[str] = []
-    for termin_id, adresse, event_id in auftraege:
-        try:
-            event = graph_versand._graph_aufruf(
-                "GET", f"/users/{urllib.parse.quote(adresse)}/calendar/"
-                       f"events/{event_id}"
-                       "?$select=start,end,isCancelled", token)
-        except Exception as problem:
-            fehler.append(f"Termin {termin_id}: {problem}")
-            continue
-        neu_beginn = _zeit_parsen(event.get("start"))
-        neu_ende = _zeit_parsen(event.get("end"))
-        if neu_beginn is None:
-            continue
-        with kurz() as s:
-            termin = s.get(ProjektTermin, termin_id)
-            if termin is None or termin.beginn is None:
-                continue
-            if (neu_beginn == termin.beginn
-                    and (neu_ende is None or neu_ende == termin.ende)):
-                continue
-            alt_text = termin.beginn.strftime("%d.%m.%Y %H:%M")
-            termin.beginn = neu_beginn
-            if neu_ende is not None:
-                termin.ende = neu_ende
-                termin.dauer_tage = max(1, (neu_ende.date()
-                                            - neu_beginn.date()).days + 1)
-            kern.verlauf(s, termin.projekt_id,
-                         f"Termin in Outlook verschoben von {alt_text} auf "
-                         f"{neu_beginn.strftime('%d.%m.%Y %H:%M')} ({termin.typ})",
-                         gewerk_id=termin.gewerk_id)
-            gewerk = (s.get(Gewerk, termin.gewerk_id)
-                      if termin.gewerk_id else None)
-            if gewerk is not None and termin.typ in ("feinplanung", "montage"):
-                kern.faelligkeiten_nachberechnen(s, gewerk)
-            geaendert += 1
-    status.update(letzter_ruecklauf=datetime.now(), geaendert=geaendert,
-                  fehler=fehler)
+    if ergebnis.get("ergebnis"):
+        fehler.append(str(ergebnis["ergebnis"]))
+    if ergebnis.get("fehler"):
+        fehler.append(f"{ergebnis['fehler']} Postfächer nicht gelesen")
+    if ergebnis.get("ohne_zugriff"):
+        fehler.append(f"{ergebnis['ohne_zugriff']} Postfächer ohne Zugriff (403)")
+    status.update(letzter_ruecklauf=datetime.now(), geaendert=geaendert, fehler=fehler)
     return geaendert

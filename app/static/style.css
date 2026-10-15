@@ -972,6 +972,9 @@ h2 { color: var(--friondo-dunkel); margin-top: 2rem; font-size: 1.15rem; }
 /* v30 (PLAN_V18 Phase 146, Befund Screenshot): `display: grid` übersteuerte das
    hidden-Attribut – die Textformulare aller Positionen standen offen im Editor */
 .textform[hidden], .text-anzeige[hidden] { display: none; }
+/* v33-Nebenbefund (N): .notizen-chat { display: flex } übersteuerte das hidden-Attribut des
+   Verlaufs „alles“ (#nc-alles-<id>) – jede Notiz erschien doppelt */
+.notizen-chat[hidden], .nc-verlauf[hidden] { display: none !important; }
 .mehr-link { margin-left: 0.3rem; white-space: nowrap; }
 .text-bearbeiten { margin-left: 0.5rem; white-space: nowrap; text-decoration: none; }
 .text-bearbeiten:hover { text-decoration: underline; }
@@ -3886,3 +3889,18 @@ dialog.pj-dlg { background: var(--flaeche-karte); color: var(--text); border: 1p
     body { background: #fff; color: #000; }   /* fest: Druckansicht immer Schwarz auf Weiß */
     .karte, .tabelle, .kachel, .formular, .suchleiste { box-shadow: none; }
 }
+
+/* v33 (PLAN_V20 Phase 170, Agent O): Outlook-Stand am Termin – Makro templates/_outlook_status.html
+   (Stände ausstehend | ok | fehler | geloescht | in_outlook_geloescht | leer); nur Tokens, beide Modi */
+.outlook-status { display: inline-flex; align-items: center; gap: var(--a-1); font-size: var(--t-xs);
+                  margin-left: 0; white-space: nowrap; vertical-align: middle; }
+.outlook-status.os-ok { background: var(--status-gruen-bg); color: var(--status-gruen); }
+.outlook-status.os-ausstehend { background: var(--status-blau-bg); color: var(--status-blau); }
+.outlook-status.os-fehler, .outlook-status.os-in_outlook_geloescht { background: var(--status-rot-bg); color: var(--status-rot); }
+.outlook-status.os-geloescht { background: var(--status-grau-bg); color: var(--status-grau); }
+.outlook-status.os-leer { background: var(--flaeche-abgesetzt); color: var(--text-dezent); }
+.outlook-hinweis { font-size: var(--t-xs); color: var(--status-orange); white-space: nowrap; }
+.outlook-zusammenfassung { margin-top: var(--a-3); font-size: var(--t-xs); color: var(--text-dezent); }
+.outlook-zusammenfassung .os-warn { color: var(--status-orange); }
+.outlook-zusammenfassung .os-fehler { color: var(--status-rot); }
+.lmt-outlook .lmt-liste li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--a-2); }

@@ -301,7 +301,8 @@ def main():
            s.get(Angebot, indiv.id).status == "Individuell" and not s.get(Angebot, indiv.id).archiviert)
     # Summenzeile
     pruefe("v6", "Angebotsliste mit Summenzeile Netto/Endbetrag/DB",
-           all(w in client.get("/angebote").text for w in ("Summe (", "Netto:", "Endbetrag (brutto):", "DB:")))
+           # v33 (PLAN_V20 Phase 172/174): "Endbetrag:" ohne "(brutto)" - Rabatt gilt bei jedem Steuersatz
+           all(w in client.get("/angebote").text for w in ("Summe (", "Netto:", "Endbetrag:", "DB:")))
     # Förder-Override + EP-Kästchen (auf dem Rabatt-Angebot ang)
     a2 = s.get(Angebot, indiv.id); a2.status = "Entwurf"; a2.archiviert = False; s.commit()
     # v8: der v6-Gesamt-Override ist durch Baustein-Overrides ersetzt –

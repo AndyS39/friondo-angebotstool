@@ -39,7 +39,7 @@
 {# Design-Fix 27.09.2026: einbett=1 = Seite laeuft in einem Panel-iframe
    (Anrufliste) - Kopfleiste/Fusszeile ausblenden, sonst doppelte Navigation #}
 <header class="kopfleiste">
-    <a class="marke" href="{{ {'aussendienst': '/erfassung', 'projektierung': '/projektierung', 'montage': '/montage', 'leadmanagement': '/lead-management'}.get(benutzer_angemeldet.rolle, '/') if benutzer_angemeldet else '/' }}">
+    <a class="marke" href="{{ {'aussendienst': '/erfassung', 'projektierung': '/projektierung', 'montage': '/montage', 'leadmanagement': '/lead-management'}.get(benutzer_angemeldet.basisrolle, '/') if benutzer_angemeldet else '/' }}">
         {# feste Maße direkt am Bild – wirkt auch bei veraltetem CSS-Cache #}
         <img src="/static/logo.png" alt="Friondo" class="marken-logo"
              width="75" height="30" style="height:30px; width:auto;">
@@ -49,7 +49,7 @@
        Außendienst; nicht auf Login/PIN-Wechsel, im Erfassungsbogen und eingebettet.
        Vorschläge/Tastatur in suche.js, Trefferseite /suche, Logik in app/suche.py. #}
     {% set suche_zeigen = benutzer_angemeldet
-       and benutzer_angemeldet.rolle in ('admin', 'innendienst', 'leadmanagement', 'aussendienst')
+       and benutzer_angemeldet.basisrolle in ('admin', 'innendienst', 'leadmanagement', 'aussendienst')
        and request.query_params.get('einbett') != '1'
        and request.url.path not in ('/login', '/pin-wechsel')
        and not request.url.path.startswith('/erfassung/') %}
@@ -88,14 +88,16 @@
             <details class="menue">
                 <summary>Menü ☰</summary>
                 <div class="menue-liste">
-                    {% if benutzer_angemeldet.rolle in ('admin', 'innendienst') %}
+                    {% if benutzer_angemeldet.basisrolle in ('admin', 'innendienst') %}
                         {# Design-Fix 27.09.2026: Start + Projektierung fehlten im Menü #}
                         <a href="/" class="{{ 'aktiv' if aktiv == '/' else '' }}">Start</a>
                         {% if request.state.lead_modul_ok | default(false) %}
                             <a href="/lead-management" class="{{ 'aktiv' if aktiv == '/lead-management' else '' }}">Lead-Management</a>
                         {% endif %}
+                        {# v33 (PLAN_V20 Phase 169): zentraler Planungskalender – alle Mitarbeiter mit Filter #}
+                        <a href="/kalender" class="{{ 'aktiv' if aktiv == '/kalender' else '' }}">Kalender</a>
                         {% for pfad, name in navigation %}
-                            {% if pfad != '/benutzer' or benutzer_angemeldet.rolle == 'admin' %}
+                            {% if pfad != '/benutzer' or benutzer_angemeldet.basisrolle == 'admin' %}
                                 <a href="{{ pfad }}" class="{{ 'aktiv' if aktiv == pfad else '' }}">{{ name }}</a>
                             {% endif %}
                         {% endfor %}
@@ -103,12 +105,14 @@
                             <a href="/projektierung" class="{{ 'aktiv' if aktiv == '/projektierung' else '' }}">Projektierung</a>
                             <a href="/montage">Montage</a>
                         {% endif %}
-                    {% elif benutzer_angemeldet.rolle == 'projektierung' %}
+                    {% elif benutzer_angemeldet.basisrolle == 'projektierung' %}
                         {# v11 (Phase 70): Projektierungs-Sicht – Projektierung voll,
                            Angebote/Erfassungen/Kunden lesend, drei Stammseiten #}
                         <a href="/projektierung">Board</a>
                         <a href="/projektierung/liste">Liste</a>
                         <a href="/projektierung/termine">Termine</a>
+                        {# v33 (PLAN_V20 Phase 169): Mitarbeiter-Kalender, vorbelegt Monteure + Projektierer #}
+                        <a href="/kalender?gruppe=projektierung">Kalender</a>
                         <a href="/projektierung/meine-aufgaben">Meine Aufgaben</a>
                         <a href="/angebote">Angebote (lesend)</a>
                         <a href="/erfassungen">Erfassungen (lesend)</a>
@@ -117,19 +121,21 @@
                         <a href="/parametrierung/stuecklisten">Stücklisten</a>
                         <a href="/parametrierung/teams">Teams</a>
                         <a href="/parametrierung/subunternehmer">Subunternehmer</a>
-                    {% elif benutzer_angemeldet.rolle == 'leadmanagement' %}
+                    {% elif benutzer_angemeldet.basisrolle == 'leadmanagement' %}
                         {# v23 (Phase 105/110): Modulpunkte liegen in der Icon-Leiste (lm_nav) –
                            hier Einstieg, Dashboard und To-Dos #}
                         <a href="/lead-management/dashboard">Meine Arbeit</a>
                         <a href="/lead-management/todos">To-Dos</a>
                         <a href="/lead-management/hauptboard">Lead-Management</a>
+                        {# v33 (PLAN_V20 Phase 169): Mitarbeiter-Kalender, vorbelegt Außendienst + Handelsvertreter #}
+                        <a href="/kalender?gruppe=vertrieb">Kalender</a>
                         <a href="/vorgaenge">Vorgänge</a>
                         <a href="/kunden">Kunden</a>
                         <a href="/angebote">Angebote (lesend)</a>
                         <a href="/erfassungen">Erfassungen (lesend)</a>
                         <a href="/parametrierung/lead-quellen">Quellen &amp; Kampagnen</a>
                         <a href="/parametrierung/lead-logik">Steuerdatei</a>
-                    {% elif benutzer_angemeldet.rolle == 'montage' %}
+                    {% elif benutzer_angemeldet.basisrolle == 'montage' %}
                         <a href="/montage">Meine Einsätze</a>
                     {% else %}
                         {# v32 (PLAN_V19 Phase 161): „Leads VOT“ heißt für den Außendienst „Mein Tag“ #}
@@ -163,6 +169,10 @@
                     </form>
                     {# v27 (PLAN_V17 Phase 130): eigene PIN ändern – für jede Rolle #}
                     <a href="/pin-wechsel">PIN ändern</a>
+                    {# v33 (PLAN_V20 Phase 176): eigene E-Mail-Signatur (Nachfass-Mail aus dem eigenen Postfach) #}
+                    {% if request.state.benutzer and request.state.benutzer.basisrolle in ('aussendienst', 'innendienst', 'admin') %}
+                    <a href="/einstellungen/signatur">Meine E-Mail-Signatur</a>
+                    {% endif %}
                     <a href="/logout">{{ benutzer_angemeldet.name }} abmelden ⏻</a>
                 </div>
             </details>
@@ -185,7 +195,7 @@
 {% set zurueck_pfad = request.url.path %}
 {% if zurueck_pfad.startswith('/angebote/') %}{% set zurueck_standard = '/angebote' %}
 {% elif zurueck_pfad.startswith('/erfassungen/') %}{% set zurueck_standard = '/erfassungen' %}
-{% elif zurueck_pfad.startswith('/vorgaenge/') %}{% set zurueck_standard = '/lead-management/hauptboard' if (benutzer_angemeldet and benutzer_angemeldet.rolle == 'leadmanagement') else '/leads' %}
+{% elif zurueck_pfad.startswith('/vorgaenge/') %}{% set zurueck_standard = '/lead-management/hauptboard' if (benutzer_angemeldet and benutzer_angemeldet.basisrolle == 'leadmanagement') else '/leads' %}
 {% elif zurueck_pfad.startswith('/projektierung/') %}{% set zurueck_standard = '/projektierung' %}
 {% elif zurueck_pfad.startswith('/montage/') %}{% set zurueck_standard = '/montage' %}
 {% elif zurueck_pfad.startswith('/parametrierung/') %}{% set zurueck_standard = '/parametrierung' %}
@@ -199,6 +209,17 @@
     {% if zurueck_zeigen %}<div class="zurueck-leiste">{{ zurueck_knopf(zurueck_standard) }}</div>{% endif %}
     {% block inhalt %}{% endblock %}
 </main>
+{# v33 (PLAN_V20 Phase 173): untere feste Leiste des Außendienstes (Mein Tag · Kalender ·
+   Wiedervorlage · Kunden) – nur Basisrolle Außendienst (auch Handelsvertreter), nur mobil
+   unter 600 px (Media-Query in mein_tag.css), nicht auf Login/PIN-Wechsel, im
+   Erfassungsbogen, bei der Signatur und eingebettet (einbett=1). Markup: leads/_leiste.html #}
+{% if benutzer_angemeldet and benutzer_angemeldet.basisrolle == 'aussendienst'
+      and request.query_params.get('einbett') != '1'
+      and request.url.path not in ('/login', '/pin-wechsel')
+      and not request.url.path.startswith('/erfassung/')
+      and not request.url.path.startswith('/signatur') %}
+{% include "leads/_leiste.html" %}
+{% endif %}
 <footer class="fusszeile">
     Friondo GmbH – internes Angebotstool
 </footer>
