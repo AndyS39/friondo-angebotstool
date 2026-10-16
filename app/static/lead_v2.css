@@ -1751,3 +1751,344 @@ a.lmt-gesperrt[aria-disabled="true"] { opacity: .55; pointer-events: none; }
 .lm-kanal-wahl { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .lm-kanal-wahl .lm-filterchip { font-size: var(--t-xs); padding: 2px 8px; }
 .lm-kanal-wahl .lm-filterchip.aktiv { background: var(--lm-aktiv-bg); color: var(--lm-aktiv-fg); border-color: var(--lm-aktiv-bg); }
+
+
+/* ==================================================================== */
+/* v37 (PLAN_LEAD_V7 Phase 196, Agent L1): Kartei-Review – Notizblock.   */
+/* Das Makro notizen_chat (_komponenten.html) bleibt für Vorgangsakte,    */
+/* Projektakte und Montage unverändert; nur in der Kundenkartei           */
+/* (.lk-v5 .lk-notizen) liegt die Eingabe als Raster: Textfeld über die   */
+/* volle Spaltenbreite (mindestens 3 Zeilen, wächst mit – JS des Makros), */
+/* rechts daneben eine Spalte mit „Senden“ über „Diktieren“, der Diktat-  */
+/* Hinweis klein unter dem Diktieren-Knopf; unter 900 px Feld oben,       */
+/* darunter beide Knöpfe nebeneinander. To-Dos rechts bleiben schmal.     */
+/* ==================================================================== */
+.lk-v5 .lk-notizen { min-width: 0; }
+.lk-v5 .lk-notizen .nc-eingabe { display: grid; grid-template-columns: minmax(0, 1fr) minmax(136px, max-content);
+    grid-template-rows: auto auto 1fr; gap: 8px 12px; align-items: start; max-width: none; margin-top: var(--a-3); }
+.lk-v5 .lk-notizen .nc-eingabe textarea { grid-column: 1; grid-row: 1 / span 3; width: 100%; min-width: 0;
+    box-sizing: border-box; min-height: calc(3 * 1.45em + 16px); }
+.lk-v5 .lk-notizen .nc-eingabe > .knopf { grid-column: 2; grid-row: 1; width: 100%; justify-content: center; margin: 0; }
+.lk-v5 .lk-notizen .nc-eingabe .diktat-block { grid-column: 2; grid-row: 2; display: flex; flex-direction: column;
+    gap: 4px; align-items: stretch; min-width: 0; margin: 0; }   /* diktat.js gibt dem Block sonst 0.3rem Abstand oben */
+.lk-v5 .lk-notizen .nc-eingabe .diktat-knopf { width: 100%; justify-content: center; margin: 0; }
+.lk-v5 .lk-notizen .nc-eingabe .diktat-hinweis { font-size: var(--t-xs); line-height: 1.3; white-space: normal;
+    max-width: 160px; }
+.lk-v5 .lk-notizen .nc-eingabe .nc-fehler { grid-column: 1 / -1; grid-row: 4; }
+@media (max-width: 900px) {
+    .lk-v5 .lk-notizen .nc-eingabe { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto auto; }
+    .lk-v5 .lk-notizen .nc-eingabe textarea { grid-column: 1 / -1; grid-row: 1; }
+    .lk-v5 .lk-notizen .nc-eingabe > .knopf { grid-column: 1; grid-row: 2; }
+    .lk-v5 .lk-notizen .nc-eingabe .diktat-block { grid-column: 2; grid-row: 2; }
+    .lk-v5 .lk-notizen .nc-eingabe .diktat-hinweis { max-width: none; }
+    .lk-v5 .lk-notizen .nc-eingabe .nc-fehler { grid-row: 3; }
+}
+
+
+/* ==================================================================== */
+/* v37 (PLAN_LEAD_V7 Phase 197, Agent L1): Design v3 – NUR Lead-Modul.    */
+/* Wrapper: <body data-modul="lead"> – base.html setzt ihn für            */
+/* /lead-management/* und /parametrierung/lead-* (oder eine Seite setzt   */
+/* {% set lead_modul = true %}). Mechanik: die semantischen Tokens aus     */
+/* style.css (Design v2) werden am Wrapper überschrieben, dazu die Aliase */
+/* (--friondo-*, --grau-*, --lm-aktiv-*), die sonst am :root gegen die    */
+/* v2-Werte berechnet würden – alle Lead-Regeln (v23–v37) folgen damit    */
+/* automatisch; Angebotstool, Projektierung, Kopfzeile, der zentrale      */
+/* /kalender und die Angebotstool-Tabellen im Lead-Board-Layout (v33)     */
+/* bleiben Design v2. Typografie-Tokens liegen auf <main> (die Kopfzeile  */
+/* behält Schrift und Größe der v2). Dunkelmodus in beiden Mechaniken     */
+/* (data-theme und prefers-color-scheme) mit identischen Werten – der     */
+/* Wächter tests/test_v30_design.py prüft die Gleichheit; Hex-Werte nur   */
+/* zwischen den Markern v3-tokens-anfang / v3-tokens-ende.                */
+/* Startwerte laut PLAN_LEAD_V7 (die Vorlage „Friondo Tool Design.html“   */
+/* lag nicht vor); Dunkelwerte abgeleitet [ANNAHME]. Schrift: „Inter“ ist */
+/* nicht lokal vorhanden (kein Netz, keine lizenzfreie Datei im Projekt) – */
+/* der Stapel fällt auf Open Sans/system-ui zurück [ANNAHME]; liegt Inter */
+/* später als woff2 unter static/fonts/, genügt ein @font-face hier.       */
+/* Status-/Kanalfarben bleiben Daten (Blatt Status, vertriebskanaele).    */
+/* ==================================================================== */
+/* v3-tokens-anfang */
+:root {
+    --sparte-pvv: #1f7a72;              /* v37: Merkmal „PV vorhanden“ (Badge chip-pvv, Petrol – frei von WP/PV/KL/WB) */
+}
+[data-modul="lead"] {
+    /* --- Flächen, Linien, Text (Hell) --- */
+    --flaeche: #f6f8fa;                 /* Seite */
+    --flaeche-karte: #ffffff;           /* Karten, Tabellen, Dialoge */
+    --flaeche-hover: #eef1f5;           /* Zeilen-Hover */
+    --flaeche-abgesetzt: #ecf0f5;       /* Tabellenkopf, Gruppenköpfe, Kästen */
+    --lm3-feld: #eef1f5;                /* Eingabefelder */
+    --linie: #dce4eb;                   /* Rahmen */
+    --linie-stark: #c8d2dd;             /* Feldränder, Griffe [ANNAHME: aus #dce4eb abgedunkelt] */
+    --text: #0e2338;
+    --text-titel: #0e2338;
+    --lm3-text-zweit: #33414f;          /* Zweittext */
+    --text-dezent: #687186;             /* gedämpft (≥ 4,5 : 1 auf Weiß) */
+    --g-50: #f6f8fa; --g-100: #eef1f5; --g-200: #dce4eb; --g-300: #c8d2dd; --g-500: #687186; --g-700: #33414f;
+    /* --- Primärblau --- */
+    --akzent: #2f72b5;
+    --akzent-hover: #245c95;
+    --akzent-text: #ffffff;
+    --akzent-flaeche: #e3edf7;          /* Hintergrund-Blau */
+    --lm3-akzent-hell: #4489c9;         /* helles Blau (Balken, Symbole) */
+    --lm3-akzent-linie: #8db4de;        /* Akzentlinie */
+    --lm3-akzent-auf-flaeche: #245c95;  /* Akzent-Text auf --akzent-flaeche (≥ 4,5 : 1) */
+    --link: #2f72b5;
+    --fokus: #2f72b5;
+    --akzent-glanz: rgba(47, 114, 181, 0.25);
+    /* --- Hinweis/Warnung Orange --- */
+    --lm3-orange: #ffa500;              /* Pille „IDEAL“ – mit dunklem Text */
+    --lm3-orange-text: #a85400;
+    --lm3-orange-flaeche: #fff1d6;
+    --lm3-orange-text-auf: #0e2338;     /* Text auf --lm3-orange (beide Modi dunkel) */
+    --status-orange: #a85400; --status-orange-bg: #fff1d6;
+    /* --- Aliase (am Wrapper neu, damit sie gegen die v3-Werte auflösen) --- */
+    --friondo-blau: var(--akzent); --friondo-blau-dunkel: var(--akzent-hover); --friondo-blau-hell: var(--akzent-flaeche);
+    --friondo-dunkel: var(--text-titel); --grau-hell: var(--flaeche); --grau-linie: var(--linie);
+    --lm-aktiv-bg: var(--akzent); --lm-aktiv-fg: var(--akzent-text);
+    --lm-punkt-leer: color-mix(in srgb, var(--text-dezent) 28%, transparent);
+    /* --- Rundungen, Schatten --- */
+    --r-s: 8px;                         /* Knöpfe, Felder */
+    --r-m: 12px;                        /* Karten */
+    --r-l: 14px;                        /* Karten groß, Gruppen, Dialoge */
+    --r-xl: 20px;                       /* große Kacheln */
+    --lm3-r-kachel: 18px;               /* Dashboard-Kacheln */
+    --schatten-1: 0 1px 4px rgba(0, 0, 0, 0.08);
+    --schatten-2: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+[data-modul="lead"] main {
+    /* --- Typografie (nur Inhalt + Leiste; Kopfzeile bleibt v2) --- */
+    --lm3-schrift: "Inter", "Open Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --schrift: var(--lm3-schrift);
+    --t-xs: 12px;                       /* Nebentext klein */
+    --t-s: 13px;                        /* Nebentext */
+    --t-m: 14px;                        /* Grundgröße */
+    --t-l: 16px;                        /* Überschrift klein */
+    --lm3-t-h2: 18px;                   /* Überschrift Karte */
+    --t-xl: 22px;                       /* Seitentitel */
+    --t-xxl: 32px;                      /* Kennzahl (26–38) */
+    --lm3-t-klein: 11px;                /* Kleintext: Tabellenkopf, Pillen, Beschriftungen */
+    --lm3-t-kennzahl: 32px;
+}
+:root[data-theme="dunkel"] {
+    --sparte-pvv: #6fd6c8;
+}
+:root[data-theme="dunkel"] [data-modul="lead"] {
+    --flaeche: #0f1a26;
+    --flaeche-karte: #16243a;
+    --flaeche-hover: #1e2f48;
+    --flaeche-abgesetzt: #1b2a40;
+    --lm3-feld: #1b2a40;
+    --linie: #2a3b52;
+    --linie-stark: #3a4d68;
+    --text: #e8eef5;
+    --text-titel: #e8eef5;
+    --lm3-text-zweit: #c9d4e2;
+    --text-dezent: #9aa8ba;
+    --g-50: #142033; --g-100: #1b2a40; --g-200: #2a3b52; --g-300: #3a4d68; --g-500: #9aa8ba; --g-700: #c9d4e2;
+    --akzent: #2f72b5;
+    --akzent-hover: #245c95;
+    --akzent-text: #ffffff;
+    --akzent-flaeche: #1c3450;
+    --lm3-akzent-hell: #4489c9;
+    --lm3-akzent-linie: #8db4de;
+    --lm3-akzent-auf-flaeche: #8db4de;
+    --link: #8db4de;
+    --fokus: #4489c9;
+    --akzent-glanz: rgba(68, 137, 201, 0.35);
+    --lm3-orange: #ffa500;
+    --lm3-orange-text: #ffc266;
+    --lm3-orange-flaeche: #3a2a0e;
+    --lm3-orange-text-auf: #0e2338;
+    --status-orange: #ffc266; --status-orange-bg: #3a2a0e;
+    --schatten-1: 0 0 0 1px #2a3b52;
+    --schatten-2: 0 0 0 1px #3a4d68, 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="hell"]) {
+        --sparte-pvv: #6fd6c8;
+    }
+    :root:not([data-theme="hell"]) [data-modul="lead"] {
+        --flaeche: #0f1a26;
+        --flaeche-karte: #16243a;
+        --flaeche-hover: #1e2f48;
+        --flaeche-abgesetzt: #1b2a40;
+        --lm3-feld: #1b2a40;
+        --linie: #2a3b52;
+        --linie-stark: #3a4d68;
+        --text: #e8eef5;
+        --text-titel: #e8eef5;
+        --lm3-text-zweit: #c9d4e2;
+        --text-dezent: #9aa8ba;
+        --g-50: #142033; --g-100: #1b2a40; --g-200: #2a3b52; --g-300: #3a4d68; --g-500: #9aa8ba; --g-700: #c9d4e2;
+        --akzent: #2f72b5;
+        --akzent-hover: #245c95;
+        --akzent-text: #ffffff;
+        --akzent-flaeche: #1c3450;
+        --lm3-akzent-hell: #4489c9;
+        --lm3-akzent-linie: #8db4de;
+        --lm3-akzent-auf-flaeche: #8db4de;
+        --link: #8db4de;
+        --fokus: #4489c9;
+        --akzent-glanz: rgba(68, 137, 201, 0.35);
+        --lm3-orange: #ffa500;
+        --lm3-orange-text: #ffc266;
+        --lm3-orange-flaeche: #3a2a0e;
+        --lm3-orange-text-auf: #0e2338;
+        --status-orange: #ffc266; --status-orange-bg: #3a2a0e;
+        --schatten-1: 0 0 0 1px #2a3b52;
+        --schatten-2: 0 0 0 1px #3a4d68, 0 16px 40px rgba(0, 0, 0, 0.55);
+    }
+}
+/* v3-tokens-ende */
+
+/* --- Grundschrift und Überschriften (Inhalt; Kopfzeile/Fußzeile bleiben v2) --- */
+[data-modul="lead"] main { font-family: var(--lm3-schrift); font-size: var(--t-m); line-height: 1.45; }
+[data-modul="lead"] main h1 { font-size: var(--t-xl); font-weight: 700; letter-spacing: -0.01em; color: var(--text-titel); }
+[data-modul="lead"] main h2 { font-size: var(--lm3-t-h2); font-weight: 600; color: var(--text-titel); }
+[data-modul="lead"] main h3 { font-size: var(--t-l); font-weight: 600; color: var(--text-titel); }
+[data-modul="lead"] main .dezent { font-size: var(--t-s); }
+[data-modul="lead"] main .knopf { font-size: var(--t-m); font-weight: 600; border-radius: var(--r-s); }   /* v2 gibt Knöpfen --r-m; v3: 8 px */
+[data-modul="lead"] main .knopf.klein { font-size: var(--t-s); }
+[data-modul="lead"] main .knopf.zweitrangig { border: 1px solid var(--linie-stark); }
+[data-modul="lead"] main .knopf.zweitrangig:hover { background: var(--akzent-flaeche); border-color: var(--akzent); color: var(--akzent-hover); }
+[data-modul="lead"] .lk-abschnitt, [data-modul="lead"] .lm-kommende-tag, [data-modul="lead"] .lmv-baum h3, [data-modul="lead"] .lmv-baum summary {
+    font-size: var(--lm3-t-klein); letter-spacing: 0.06em; font-weight: 600; }
+[data-modul="lead"] .lm-karte h2 .sub, [data-modul="lead"] .lk-panel-titel .dezent, [data-modul="lead"] .lk-block-sub { font-weight: 400; }
+
+/* --- Icon-Leiste: aktive Kachel in Primärblau, keine Innenkontur --- */
+[data-modul="lead"] .lm-leiste-eintrag { border-radius: var(--r-m); }
+[data-modul="lead"] .lm-leiste-eintrag.aktiv, [data-modul="lead"] .lm-leiste-mehr[open].aktiv > summary { box-shadow: none; }
+[data-modul="lead"] .lm-leiste-eintrag:hover { background: var(--akzent-flaeche); color: var(--akzent-hover); }
+
+/* --- Karten, Kästen, Dialoge (Rundungen laufen über --r-*, Schatten über --schatten-*) --- */
+[data-modul="lead"] .karte, [data-modul="lead"] .formular, [data-modul="lead"] .lm-karte, [data-modul="lead"] .lm-arbeitsliste,
+[data-modul="lead"] details.lm-gruppe, [data-modul="lead"] .hv-gruppe { border-color: var(--linie); }
+[data-modul="lead"] .lk-kopf-v3 { border-radius: var(--r-l); padding: var(--a-4) var(--a-5); }
+[data-modul="lead"] .lk-v5 .lk-oben > .karte, [data-modul="lead"] .lk-info, [data-modul="lead"] main.lk-v3 .lk-mitte { border-radius: var(--r-l); }
+[data-modul="lead"] .lk-bereich { border-radius: var(--r-l); }
+[data-modul="lead"] .lk-terminierung, [data-modul="lead"] .lk-anruf, [data-modul="lead"] .lk-vorschlaege, [data-modul="lead"] .lk-mfh,
+[data-modul="lead"] .lmt-begruendung, [data-modul="lead"] .lk-objekt { border-radius: var(--r-m); }
+
+/* --- Eingabefelder: getönte Fläche, 8 px, Fokus mit Akzent --- */
+[data-modul="lead"] .lk-feld input:not([type="checkbox"]):not([type="radio"]), [data-modul="lead"] .lk-feld select, [data-modul="lead"] .lk-feld textarea,
+[data-modul="lead"] .lk-anruf-notiz, [data-modul="lead"] .lk-todo-kurz input, [data-modul="lead"] .lk-todo-kurz select,
+[data-modul="lead"] .lk-zuweisung select, [data-modul="lead"] .lk-notiz-eingabe textarea, [data-modul="lead"] .nc-eingabe textarea,
+[data-modul="lead"] .lm-todo-form input, [data-modul="lead"] .lm-todo-form select, [data-modul="lead"] .lm-todo-form textarea,
+[data-modul="lead"] .lm-wv-menue input, [data-modul="lead"] .lm-sperrzeit-form input, [data-modul="lead"] .lm-sperrzeit-form select,
+[data-modul="lead"] .lm-abwesenheit-form input, [data-modul="lead"] .lm-abwesenheit-form select,
+[data-modul="lead"] .lmt-manuell input, [data-modul="lead"] .lmt-manuell select, [data-modul="lead"] .lm-vorlage textarea,
+[data-modul="lead"] .lm-vorlage input[type="text"], [data-modul="lead"] .lk-mail-vorschau textarea, [data-modul="lead"] .lk-mail-zeile select,
+[data-modul="lead"] .lk-mail-vorschau input[type="text"], [data-modul="lead"] .li-notiz-form textarea, [data-modul="lead"] .lk-anpassen-form input,
+[data-modul="lead"] .lk-anpassen-form select, [data-modul="lead"] .lk-anpassen-form textarea, [data-modul="lead"] .lm-dialog .formular input,
+[data-modul="lead"] .lm-dialog .formular select, [data-modul="lead"] .lk-dialog .formular input, [data-modul="lead"] .lk-dialog .formular select,
+[data-modul="lead"] .lk-dialog .formular textarea, [data-modul="lead"] .formular.lm-einstellungen input, [data-modul="lead"] .formular.lm-einstellungen select,
+[data-modul="lead"] .formular.lm-einstellungen textarea {
+    background: var(--lm3-feld); color: var(--text); border: 1px solid var(--linie); border-radius: var(--r-s); font-family: inherit; }
+[data-modul="lead"] .lk-feld input:focus, [data-modul="lead"] .lk-feld select:focus, [data-modul="lead"] .lk-feld textarea:focus,
+[data-modul="lead"] .lk-anruf-notiz:focus, [data-modul="lead"] .nc-eingabe textarea:focus, [data-modul="lead"] .lk-notiz-eingabe textarea:focus,
+[data-modul="lead"] .lk-todo-kurz input:focus, [data-modul="lead"] .lm-todo-form input:focus, [data-modul="lead"] .lm-todo-form textarea:focus,
+[data-modul="lead"] .lm-vorlage textarea:focus, [data-modul="lead"] .lm-vorlage input[type="text"]:focus {
+    background: var(--flaeche-karte); border-color: var(--akzent); outline: 2px solid var(--akzent-glanz); outline-offset: 0; }
+[data-modul="lead"] .lk-pflicht-offen input, [data-modul="lead"] .lk-pflicht-offen select { border-color: var(--status-rot) !important; }
+
+/* --- Boards: Filterleiste als Karte, Pillen, Tabellenzeilen 40 px --- */
+[data-modul="lead"] .lm-filterblock .lm-suchleiste, [data-modul="lead"] .lm-filterblock .lm-schnellfilter, [data-modul="lead"] .lm-filterblock .hv-filter {
+    background: var(--flaeche-karte); border: 1px solid var(--linie); border-radius: var(--r-m); box-shadow: var(--schatten-1);
+    padding: 10px 12px; gap: 8px 10px; margin: 0 0 var(--a-3); }
+[data-modul="lead"] main .suchleiste { border-radius: var(--r-m); }
+[data-modul="lead"] .lm-suchleiste input[type="search"], [data-modul="lead"] .suchleiste input[type="search"], [data-modul="lead"] .suchleiste input[type="text"],
+[data-modul="lead"] .lm-rufnummer input[type="search"], [data-modul="lead"] .lm-todo-suche input[type="search"], [data-modul="lead"] .lmv-suchfeld {
+    background: var(--lm3-feld); border: 1px solid var(--linie); border-radius: var(--r-s); min-height: 36px; }
+[data-modul="lead"] .lm-suchleiste input[type="search"]:focus, [data-modul="lead"] .suchleiste input[type="search"]:focus, [data-modul="lead"] .suchleiste input[type="text"]:focus {
+    background: var(--flaeche-karte); border-color: var(--akzent); outline: 2px solid var(--akzent-glanz); box-shadow: none; }
+[data-modul="lead"] main .suchleiste select, [data-modul="lead"] .lm-schnellfilter select, [data-modul="lead"] .lm-mehrfach > summary {
+    border-radius: 999px; background: var(--lm3-feld); border: 1px solid var(--linie); color: var(--text); font-size: var(--t-s);
+    padding: 6px 12px; min-height: 32px; }
+[data-modul="lead"] main .suchleiste select:hover, [data-modul="lead"] .lm-mehrfach > summary:hover { border-color: var(--akzent); background: var(--akzent-flaeche); }
+[data-modul="lead"] .kontrollfeld { font-size: var(--t-s); color: var(--lm3-text-zweit); }
+[data-modul="lead"] .lm-filterchip, [data-modul="lead"] .lm-schnellfilter .f { font-size: var(--t-s); padding: 5px 12px; min-height: 32px; border-radius: 999px; }
+[data-modul="lead"] .lm-filterchip.aktiv, [data-modul="lead"] .lm-schnellfilter .f.aktiv { background: var(--akzent); color: var(--akzent-text); border-color: var(--akzent); }
+[data-modul="lead"] .lm-umschalter { border-color: var(--linie); }
+[data-modul="lead"] .lm-umschalter a { font-size: var(--t-s); padding: 6px 14px; }
+[data-modul="lead"] .lm-umschalter a.aktiv { background: var(--akzent); color: var(--akzent-text); }
+[data-modul="lead"] .lm-tabelle td, [data-modul="lead"] .hv-tabelle td { height: 40px; padding: 6px 12px; font-size: var(--t-s); }
+[data-modul="lead"] .lm-tabelle th, [data-modul="lead"] .hv-tabelle th { font-size: var(--lm3-t-klein); letter-spacing: 0.06em; padding: 10px 12px 9px;
+    background: var(--flaeche-abgesetzt); color: var(--text-dezent); }
+[data-modul="lead"] .lm-gruppe-kopf { font-size: var(--t-s); padding: 10px 14px; }
+[data-modul="lead"] .lm-gruppe-kopf .n { background: var(--akzent); color: var(--akzent-text); font-size: var(--lm3-t-klein); padding: 1px 9px; }
+[data-modul="lead"] .lm-status, [data-modul="lead"] .hv-status, [data-modul="lead"] .lm-kanal.mit-farbe, [data-modul="lead"] .lm-grosskunde,
+[data-modul="lead"] .lm-mail-label, [data-modul="lead"] .lm-archiv-chip, [data-modul="lead"] .lm-zaehler { font-size: var(--lm3-t-klein); padding: 3px 10px; }
+[data-modul="lead"] .lm-tabelle td.sp-lead .abzeichen:not(.li-terminiert):not(.lk-vorab) { border-radius: 999px; font-size: var(--lm3-t-klein); }
+[data-modul="lead"] .lm-lead-name { font-size: var(--t-m); }
+[data-modul="lead"] .lm-zaehler, [data-modul="lead"] .lk-zahl, [data-modul="lead"] .lm-kopie-link, [data-modul="lead"] .lk-stoppuhr,
+[data-modul="lead"] .lk-schritt.fertig { color: var(--lm3-akzent-auf-flaeche); }
+
+/* --- Dashboard: Kennzahl-Kacheln wie „Dashboard Desktop“ (Zahl oben links, Text darunter, 18 px) --- */
+[data-modul="lead"] .lm-dash-kacheln-v4 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+@media (min-width: 1200px) { [data-modul="lead"] .lm-dash-kacheln-v4 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+[data-modul="lead"] .lm-kacheln .kachel.stat { align-items: flex-start; text-align: left; padding: 18px 20px 16px 22px; gap: 2px;
+    border-radius: var(--lm3-r-kachel); font-size: var(--t-s); font-weight: 600; color: var(--lm3-text-zweit); }
+[data-modul="lead"] .lm-kacheln .kachel.stat::before { top: 18px; bottom: 18px; }
+[data-modul="lead"] .lm-kacheln .kachel.stat .stat-zahl { font-size: var(--lm3-t-kennzahl); font-weight: 800; line-height: 1.05;
+    letter-spacing: -0.02em; color: var(--text-titel); margin-bottom: 6px; }
+[data-modul="lead"] .lm-kacheln .kachel.stat .stat-zahl.dringend { color: var(--status-rot); }
+[data-modul="lead"] .lm-kacheln .kachel.stat .stat-zahl.warn { color: var(--status-orange); }
+[data-modul="lead"] .lm-kacheln .lm-delta { font-size: var(--t-xs); color: var(--text-dezent); font-weight: 400; margin-top: 2px; }
+[data-modul="lead"] .lm-dash-kompakt .lm-karte h2 { font-size: var(--t-l); }
+[data-modul="lead"] .lm-dash-raster > .lm-karte, [data-modul="lead"] .lm-karte { border-radius: var(--r-l); }
+[data-modul="lead"] .lm-wv-gruppe > summary.lm-gruppe-kopf { border-radius: var(--r-s); }
+
+/* --- Kundenkartei: Kopfkarte mit Avatar, Phasen-Pills, runde Aktions-Icons --- */
+[data-modul="lead"] .lk-avatar { box-shadow: 0 0 0 3px var(--akzent-flaeche); }
+[data-modul="lead"] .lk-kopf-v3 .lk-name { font-size: var(--t-xl); font-weight: 700; }
+[data-modul="lead"] .lk-schritt { padding: 5px 14px; font-size: var(--t-s); font-weight: 500; }
+[data-modul="lead"] .lk-schritt.aktiv { font-weight: 600; }
+[data-modul="lead"] .lk-rund { width: 42px; height: 42px; box-shadow: var(--schatten-1); }
+[data-modul="lead"] .lk-rund:hover { background: var(--akzent-flaeche); border-color: var(--akzent); color: var(--akzent-hover); }
+[data-modul="lead"] .lk-kopf-fakten { font-size: var(--t-s); color: var(--lm3-text-zweit); }
+[data-modul="lead"] .lk-pflicht-zaehler { font-size: var(--t-xs); }
+/* Reiter Anruf · E-Mail · Timeline als Pill-Leiste */
+[data-modul="lead"] .lk-reiter { border-bottom: 0; padding: 4px; gap: 4px; background: var(--flaeche-abgesetzt); border-radius: 999px;
+    width: max-content; max-width: 100%; align-items: center; }
+[data-modul="lead"] .lk-tab { border-radius: 999px; padding: 8px 14px; font-weight: 500; color: var(--lm3-text-zweit); }
+[data-modul="lead"] .lk-tab:hover { background: var(--flaeche-karte); color: var(--text); }
+[data-modul="lead"] .lk-tab[aria-selected="true"] { background: var(--akzent); color: var(--akzent-text); border-color: var(--akzent); box-shadow: var(--schatten-1); }
+[data-modul="lead"] .lk-tab[aria-selected="true"] .lk-tab-zahl { background: color-mix(in srgb, var(--akzent-text) 22%, transparent); color: var(--akzent-text); }
+[data-modul="lead"] .lk-tab-zahl { font-size: var(--lm3-t-klein); }
+[data-modul="lead"] .lk-tab-termine { border-radius: 999px; margin-left: 4px; }
+[data-modul="lead"] .lk-chip { font-size: var(--t-xs); padding: 4px 10px; }
+/* Anruf-Block: große Ergebnis-Buttons */
+[data-modul="lead"] .lk-anruf { padding: var(--a-4); }
+[data-modul="lead"] .lk-anruf-knoepfe { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+[data-modul="lead"] .lk-anruf-knoepfe .knopf, [data-modul="lead"] .lk-anruf-knoepfe .knopf.klein { font-size: var(--t-m); padding: 10px 14px;
+    min-height: 44px; justify-content: center; border-radius: var(--r-s); }
+[data-modul="lead"] .lk-anruf-notiz { min-height: 40px; }
+/* Termine: Vorschlagskarten, „IDEAL“-Pille in Orange */
+[data-modul="lead"] .lk-vorschlag { padding: 12px 14px; box-shadow: var(--schatten-1); }
+[data-modul="lead"] .lk-vorschlag.lk-ideal, [data-modul="lead"] .lmt-vorschlag.lmt-ideal { border: 2px solid var(--lm3-orange);
+    box-shadow: 0 0 0 3px var(--lm3-orange-flaeche); }
+[data-modul="lead"] .lmt-vorschlag.lmt-ideal.aktiv { box-shadow: 0 0 0 3px var(--lm3-orange-flaeche); }
+[data-modul="lead"] .lmt-ideal-badge { background: var(--lm3-orange); color: var(--lm3-orange-text-auf); letter-spacing: 0.08em; font-size: var(--lm3-t-klein); }
+[data-modul="lead"] .lmt-ideal-grund, [data-modul="lead"] .lk-vorschlag-ideal-grund { background: var(--lm3-orange-flaeche); color: var(--lm3-orange-text); }
+[data-modul="lead"] .lmt-kalender-tabelle td.lmt-k-vorschlag.lmt-k-ideal, [data-modul="lead"] .lmt-kalender-legende i.ideal { background: var(--lm3-orange); }
+[data-modul="lead"] .lmt-k-vorschlag.lmt-k-ideal .lmt-k-text { color: var(--lm3-orange-text-auf); }
+[data-modul="lead"] .lmt-k-vorschlag.lmt-k-ideal .lmt-k-nr { background: var(--lm3-orange-text-auf); color: var(--lm3-orange); }
+[data-modul="lead"] .lk-objekt-termin { border-radius: var(--r-s); }
+[data-modul="lead"] .lk-bereich > summary { padding: var(--a-3) var(--a-4); }
+
+/* --- Terminassistent, Vorlagen-Editor, Karte, Kanban --- */
+[data-modul="lead"] .lmt-vorschlag { border-radius: var(--r-m); }
+[data-modul="lead"] .lmv-eintrag a { border-radius: var(--r-s); }
+[data-modul="lead"] .lmv-vertriebler-kasten { border-radius: var(--r-m); }
+[data-modul="lead"] .lm-karte-leaflet, [data-modul="lead"] #lmt-karte { border-radius: var(--r-m); }
+[data-modul="lead"] .kanban-karte.lead-karte { border-radius: var(--r-m); }
+
+/* --- Mobil (390 px): Kopfkarte, Reiter, Kacheln --- */
+@media (max-width: 600px) {
+    [data-modul="lead"] .lk-kopf-v3 { padding: var(--a-3) var(--a-4); }
+    [data-modul="lead"] .lk-reiter { width: 100%; border-radius: var(--r-l); }
+    [data-modul="lead"] .lm-kacheln .kachel.stat { padding: 14px 16px 12px 18px; }
+    [data-modul="lead"] .lm-kacheln .kachel.stat .stat-zahl { font-size: 26px; }
+    [data-modul="lead"] .lk-anruf-knoepfe { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

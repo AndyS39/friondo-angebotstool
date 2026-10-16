@@ -1,8 +1,11 @@
-# Friondo Design-System (v14, PLAN_V12 · Design v2 ab v30, PLAN_V18)
+# Friondo Design-System (v14, PLAN_V12 · Design v2 ab v30, PLAN_V18 · Design v3 Lead-Modul ab v37, PLAN_LEAD_V7)
 
 Ein zentrales Stylesheet (`app/static/style.css`), keine externen CDNs
 oder Webfonts – das Tool funktioniert vollständig ohne Internet. Das
 Angebots-PDF (und alle anderen fpdf2-PDFs) sind davon unberührt.
+Seit v37 trägt **nur das Lead-Modul** das Design v3 (Abschnitt unten);
+Angebotstool, Projektierung, Vorgangsakte, Kopfzeile und der zentrale
+Kalender bleiben beim Design v2.
 
 ## Design v2 (v30, PLAN_V18 Phasen 145/146) – Hell und Dunkel
 
@@ -208,6 +211,115 @@ Screenshots vorher/nachher (beide Modi): `docs/design-v30/<seite>-<praefix>-<mod
 (`scripts/design_screenshots.py`). Prototypen `docs/projektierung-prototyp.html`
 und `docs/leadmanagement-prototyp.html` bleiben Layout-Vorlagen; für Farben
 gilt dieser Abschnitt.
+
+## Design v3 (Lead-Modul, v37, PLAN_LEAD_V7 Phasen 196/197)
+
+Vorlage ist der claude.ai-Export „Friondo Tool Design.html“ (Claudia Castro, vier
+Boards: Dashboard Desktop · Lead Detail Übersicht · Termine · Anrufe). Die Datei lag
+bei der Umsetzung **nicht** vor – die Tokens tragen die Startwerte aus PLAN_LEAD_V7
+(Abweichungen der Vorlage gewinnen, sobald sie unter `docs/design-v37/vorlage/` liegt).
+Übernommen wird **nur die Optik** (Schrift, Größen, Farben, Rundungen, Kacheln,
+Abstände), keine Inhalte; Aufbau, Routen, Formularnamen und Rollenregeln der Lead-Seiten
+sind unverändert (v31–v35).
+
+**Geltungsbereich – der Wrapper:** `base.html` setzt `<body data-modul="lead">` für alle
+Seiten unter `/lead-management` und `/parametrierung/lead-*` (Lead-Einstellungen,
+Lead-Routing, Quellen, Steuerdatei); eine Seite kann sich mit `{% set lead_modul = true %}`
+zusätzlich anmelden. Alles andere – Angebotstool, Projektierung, Vorgangsakte, Leads VOT /
+Mein Tag, der zentrale `/kalender`, die Angebotstool-Tabellen im Lead-Board-Layout (v33) –
+bleibt Design v2.
+
+**Mechanik:** Am Wrapper überschreibt `lead_v2.css` (Block „Design v3“, Token-Marker
+`/* v3-tokens-anfang */ … /* v3-tokens-ende */`) die semantischen v2-Tokens (`--flaeche*`,
+`--linie*`, `--text*`, `--akzent*`, `--link`, `--fokus`, `--status-orange(-bg)`, `--g-*`,
+`--r-*`, `--schatten-*`) und deklariert die Aliase (`--friondo-*`, `--grau-*`,
+`--lm-aktiv-*`) neu – Alias-Tokens werden am deklarierenden Element berechnet, am `:root`
+würden sie sonst die v2-Werte behalten. Damit folgen alle Lead-Regeln (v23–v37) ohne
+Umschreiben dem neuen Design. Typografie-Tokens (`--schrift`, `--t-*`) liegen auf
+`[data-modul="lead"] main`, die Kopfzeile behält Schrift, Größe und Farbe der v2
+(`--flaeche-erhoeht`, `--text-invers` werden nicht überschrieben; `theme-color` bleibt).
+Dunkelmodus: `:root[data-theme="dunkel"] [data-modul="lead"]` und
+`@media (prefers-color-scheme: dark) { :root:not([data-theme="hell"]) [data-modul="lead"] }`
+mit identischen Werten (Wächter `tests/test_v30_design.py::TokenBloeckeV3`), Umschalter und
+Speicherung je Benutzer aus v30 unverändert. Hex-Werte in `lead_v2.css` sind nur zwischen
+den Markern erlaubt (Wächter blendet den Block aus).
+
+### Tokens Design v3 (Hell / Dunkel – Dunkel abgeleitet [ANNAHME])
+
+| Token | Hell | Dunkel | Zweck |
+|---|---|---|---|
+| `--flaeche` | `#f6f8fa` | `#0f1a26` | Seite |
+| `--flaeche-karte` | `#ffffff` | `#16243a` | Karten, Tabellen, Dialoge |
+| `--flaeche-hover` | `#eef1f5` | `#1e2f48` | Zeilen-Hover |
+| `--flaeche-abgesetzt` | `#ecf0f5` | `#1b2a40` | Tabellenkopf, Gruppenköpfe, Kästen |
+| `--lm3-feld` | `#eef1f5` | `#1b2a40` | Eingabefelder (Fokus → Karte + Akzentrand) |
+| `--linie` / `--linie-stark` | `#dce4eb` / `#c8d2dd` | `#2a3b52` / `#3a4d68` | Rahmen / Feldränder |
+| `--text` / `--text-titel` | `#0e2338` | `#e8eef5` | Text, Überschriften |
+| `--lm3-text-zweit` (`--g-700`) | `#33414f` | `#c9d4e2` | Zweittext |
+| `--text-dezent` (`--g-500`) | `#687186` | `#9aa8ba` | gedämpft (≥ 4,5 : 1 auf Karte) |
+| `--akzent` / `--akzent-hover` | `#2f72b5` / `#245c95` | unverändert | Primärblau: Knöpfe, aktive Kachel der Icon-Leiste, Reiter, Chips |
+| `--akzent-text` | `#ffffff` | `#ffffff` | Text auf Primärblau (5,0 : 1) |
+| `--akzent-flaeche` | `#e3edf7` | `#1c3450` | Hintergrund-Blau (Tint) |
+| `--lm3-akzent-auf-flaeche` | `#245c95` | `#8db4de` | Akzent-Text auf dem Tint (Zähler, Phasen „fertig“) |
+| `--lm3-akzent-hell` / `--lm3-akzent-linie` | `#4489c9` / `#8db4de` | unverändert | helles Blau (Balken, Symbole) / dekorative Akzentlinie (nie für Text) |
+| `--link` / `--fokus` | `#2f72b5` | `#8db4de` / `#4489c9` | Textlinks / Fokusring |
+| `--lm3-orange` + `--lm3-orange-text-auf` | `#ffa500` + `#0e2338` | unverändert | Pille „IDEAL“, Vorschlagsrahmen (dunkler Text, 8,1 : 1) |
+| `--lm3-orange-text` / `--lm3-orange-flaeche` (= `--status-orange(-bg)`) | `#a85400` / `#fff1d6` | `#ffc266` / `#3a2a0e` | Hinweis/Warnung, Testphase-Kästen |
+| `--sparte-pvv` (global am `:root`) | `#1f7a72` | `#6fd6c8` | Badge „PV vorhanden“ (Merkmal, v37 Phase 199) |
+| `--r-s` / `--r-m` / `--r-l` / `--r-xl` / `--lm3-r-kachel` | 8 / 12 / 14 / 20 / 18 px | – | Knöpfe+Felder / Karten / große Karten+Dialoge / große Kacheln / Dashboard-Kacheln; Chips/Pills 999 px, Avatare 50 % |
+| `--schatten-1` / `--schatten-2` | `0 1px 4px rgba(0,0,0,.08)` / `0 8px 24px rgba(0,0,0,.12)` | Kontur `#2a3b52` / `#3a4d68` + Tiefe | Karten / Overlays |
+| `--lm3-schrift` (`--schrift` auf `main`) | `"Inter", "Open Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif` | – | Inter liegt nicht lokal vor (kein Netz, keine lizenzfreie Datei) – Rückfall auf die Systemschrift [ANNAHME]; eine lokale woff2 unter `static/fonts/` braucht nur ein `@font-face` im v3-Block |
+| `--t-xs` / `--t-s` / `--t-m` / `--t-l` / `--lm3-t-h2` / `--t-xl` / `--t-xxl` / `--lm3-t-klein` / `--lm3-t-kennzahl` | 12 / 13 / 14 / 16 / 18 / 22 / 32 / 11 / 32 px | – | Nebentext / Nebentext / Grundgröße / Überschrift klein / Karten-Überschrift / Seitentitel / Kennzahl / Kleintext (Tabellenkopf, Pillen) / Dashboard-Kennzahl (800) |
+
+Status- und Kanalfarben bleiben Daten (Blatt Status, Tabelle `vertriebskanaele`, Parameter
+`grosskunde_farbe`) und kommen weiter als `--f` im `style`-Attribut; Sparten-Chips WP/PV/KL/WB
+behalten ihre v2-Tokens. Abstände = v2-Skala `--a-2 … --a-6` (8/12/16/24/32 px).
+
+### Bausteine Design v3 (Regeln im Block „Phase 197“ von `lead_v2.css`)
+
+- **Dashboard:** Kennzahl-Kacheln `.lm-dash-kacheln-v4 .kachel.stat` – drei Spalten ab 1200 px,
+  Rundung 18 px, Kennzahl 32 px/800 oben links, Beschriftung darunter, Farbbalken links bleibt
+  (rot bei dringend). Karten `.lm-karte` 14 px.
+- **Boards (Hauptboard, Deals, Infoabend, Handelsvertreter, Kontaktiert, Anrufliste):**
+  Filterleiste `.lm-filterblock .lm-suchleiste` als Karte (12 px, Kontur, Schatten), Suchfeld auf
+  `--lm3-feld`, Selects/Filter-Chips/Umschalter als Pills (999 px, 32 px hoch, aktiv Primärblau),
+  Tabellenzeilen 40 px (`td { height: 40px }`), Kopfzeile 11 px Kapitälchen auf
+  `--flaeche-abgesetzt`, Status-/Kanal-Pillen 11 px.
+- **Kundenkartei:** Kopfkarte 14 px mit Avatar (Ring `--akzent-flaeche`), Phasen-Pills
+  `.lk-schritt` (aktiv Primärblau), runde Aktions-Icons `.lk-rund` 42 px; Reiter Anruf · E-Mail ·
+  Timeline als Pill-Leiste (`.lk-reiter` auf `--flaeche-abgesetzt`, aktiver Tab Primärblau);
+  Anruf-Block mit großen Ergebnis-Buttons (Raster, ≥ 44 px, 14 px); Termine-Block mit
+  Vorschlagskarten `.lk-vorschlag` und „IDEAL“-Pille in Orange (`.lmt-ideal-badge`, Rahmen
+  `--lm3-orange`), ebenso im Terminassistenten (`.lmt-vorschlag.lmt-ideal`) und in der
+  Kalenderansicht; Eingabefelder auf `--lm3-feld` mit 8 px.
+- **Notizblock der Kartei (Phase 196):** `.lk-v5 .lk-notizen .nc-eingabe` ist ein Raster –
+  Textfeld über die volle Spaltenbreite (mindestens 3 Zeilen, wächst mit dem Makro-JS), rechts
+  eine Spalte mit „Senden“ über „Diktieren“ und dem Diktat-Hinweis klein darunter; unter 900 px
+  Feld oben, Knöpfe nebeneinander. Das Makro `notizen_chat` bleibt für Vorgangsakte, Projektakte
+  und Montage unverändert. Kopfzeile ohne Badge „monday“ und ohne SLA-Chip (Quelle steht in der
+  Eingangszeile „Eingang … (monday)“, im Kundeninfo-Block und in der Timeline; SLA in
+  Anrufliste/Statistik).
+- **Icon-Leiste:** aktive Kachel Primärblau mit weißem Text ohne Innenkontur, Hover
+  `--akzent-flaeche`.
+
+### Regeln für neue Lead-Seiten
+
+- **Nur v3-Tokens** – keine Hex-/rgb()-Werte außerhalb des Token-Blocks; neue Farbtokens immer
+  in Hell-, Dunkel- und Geräte-Block (identische Dunkelwerte), neue Textpaare in
+  `TOKEN_PAARE_V3_TEXT/_DEZENT` (`tests/test_v30_design.py`) eintragen (≥ 4,5 : 1 bzw. ≥ 3 : 1).
+- Neue Lead-Seiten liegen unter `/lead-management` (Wrapper automatisch) oder melden sich mit
+  `{% set lead_modul = true %}` an; sie nutzen die bestehenden Bausteine (`.karte`, `.lm-karte`,
+  `.knopf`, `.lm-filterblock`, `.lm-tabelle`, `.abzeichen`) – Rundungen und Schatten kommen aus
+  den Tokens.
+- Angebotstool-Tabellen im Lead-Board-Layout (`/angebote`, `/erfassungen`, `/kunden`, `/leads`,
+  Meine Angebote) bleiben v2 – keine Lead-Wrapper-Regel dorthin tragen.
+- Beide Modi prüfen: `scripts/design_screenshots.py nachher --modus hell|dunkel --ziel
+  docs/design-v37` (Seiten `lead-dashboard, hauptboard, deals, infoabend, handelsvertreter,
+  kontaktiert, anrufliste, kartei, termin, karte-lead, todos, vorlagen, kalender-lead-alt,
+  kanaele, taifun-uebergaben, lead-einstellungen, lead-routing, kartei-mobil, hauptboard-mobil,
+  lead-dashboard-mobil`); die Instanz läuft mit `--lifespan off`, Chrome löst nur `127.0.0.1`
+  auf (keine Netzaufrufe). Nur Demo-Daten im Bild (DB-Kopie vorher mit
+  `diagnose/v31/anonymisieren.py` + `diagnose/v37/L1_patches/anonym_rest.py` anonymisieren).
 
 ## Design-Tokens bis v29 (v14, CSS-Variablen in `:root` – als Alias erhalten)
 

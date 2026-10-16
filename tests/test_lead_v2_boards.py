@@ -248,8 +248,10 @@ class Gruppen(Basis):
                   'class="lm-wahl-alle"', 'data-feld="notiz"', 'data-feld="status"'):
             self.assertIn(t, seite, t)
         term_seite = self.client.get("/lead-management/terminiert").text
-        self.assertIn("Erfassung starten", term_seite)
-        self.assertIn(f"/erfassung/sparten?kunde_id={termin.kunde_id}", term_seite)
+        # v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Knopf „Erfassung starten“ und Spalte
+        # „Erfassung / Angebot“ sind im Deals-Board entfallen (Start aus Kartei, Leads VOT, Mein Tag)
+        self.assertNotIn("Erfassung starten", term_seite)
+        self.assertNotIn(f"/erfassung/sparten?kunde_id={termin.kunde_id}", term_seite)
         self.assertIn("vor Termin", term_seite)
 
 
@@ -447,9 +449,10 @@ class Spalten(Basis):
             self.assertLess(seite.index('<th class="sp-status"'), seite.index('<th class="sp-ort"'))
             self.assertNotIn('<th class="sp-telefon"', seite)
             self.assertNotIn('class="sp-telefon"', seite.split('<tbody>', 1)[1].split('</tbody>', 1)[0])
-            # Board Terminiert unabhängig konfiguriert (Spalte Erfassung / Angebot)
+            # Board Terminiert unabhängig konfiguriert; v37 (PLAN_LEAD_V7 Phase 199, Agent L3):
+            # die Spalte „Erfassung / Angebot“ (Key angebot) gibt es im Deals-Katalog nicht mehr
             t = lead_boards.spalten_fuer(self.s, 1, "terminiert")
-            self.assertIn("angebot", [sp["key"] for sp in t])
+            self.assertNotIn("angebot", [sp["key"] for sp in t])
             self.assertTrue(next(sp for sp in t if sp["key"] == "telefon")["sichtbar"])
             # Standard zurücksetzen
             r = self.json_post("/lead-management/boards/spalten", {"board": "hauptboard", "zuruecksetzen": True})
@@ -625,9 +628,10 @@ class Pruefung(Basis):
         v = self.lead(703, "terminiert")
         t = self.termin(v)
         seite = self.client.get("/lead-management/terminiert").text
-        self.assertIn(f"/lead-management/termin/{t.id}/bestaetigung-erneut", seite)
-        self.assertIn("Bestätigung erneut", seite)
-        # im Hauptboard (ohne aktiven VOT) gibt es den Knopf nicht
+        # v37 (PLAN_LEAD_V7 Phase 199, Agent L3): kein Knopf „Bestätigung erneut“ je Zeile mehr –
+        # „Terminbestätigung erneut senden“ bleibt in der Kartei (Block Termine), die Route bleibt
+        self.assertNotIn(f"/lead-management/termin/{t.id}/bestaetigung-erneut", seite)
+        self.assertNotIn("Bestätigung erneut", seite)
         haupt = self.client.get("/lead-management/hauptboard").text
         self.assertNotIn("bestaetigung-erneut", haupt)
         # Zeile nach Inline-Änderung wird gezielt nachgeladen (nur dieser Vorgang)

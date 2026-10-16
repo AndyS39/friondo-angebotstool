@@ -23,6 +23,10 @@
     <link rel="stylesheet" href="/static/verfolgung.css?v={{ css_version }}">
     {# v35 (PLAN_LEAD_V6 Phase 185): Avatare mit Profilbild (Agent R) #}
     <link rel="stylesheet" href="/static/lm_v35_r.css?v={{ css_version }}">
+    {# v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Interessen-Plus-Popover, Badge „PV vorhanden“ #}
+    <link rel="stylesheet" href="/static/lead_v37_l3.css?v={{ css_version }}">
+    {# v37 (PLAN_LEAD_V7 Phase 198, Agent L2): Objekte-Akkordeon, Dialog „Anpassen“, Strecke in km, Login-Vorbelegung #}
+    <link rel="stylesheet" href="/static/lead_v37_l2.css?v={{ css_version }}">
     {# v14 (Phase 73): PWA-Darstellung - Startansicht, Icon, Farbe.
        v30 (Phase 145): Farbe folgt dem Modus (Werte aus app/darstellung.py); bei „Gerät“
        zwei Einträge mit Media-Query, navigation.js zieht sie beim Umschalten nach #}
@@ -36,7 +40,15 @@
     <link rel="icon" href="/static/logo.png">
     <link rel="apple-touch-icon" href="/static/logo.png">
 </head>
-<body{% if request.query_params.get('einbett') == '1' %} class="einbett"{% endif %}>
+{#- v37 (PLAN_LEAD_V7 Phase 197, Agent L1): Design v3 nur für das Lead-Modul – <body data-modul="lead">
+    ist der Wrapper, an dem lead_v2.css die semantischen Tokens (Farben, Rundungen, Schatten, Schrift)
+    überschreibt. Gilt für alle Seiten unter /lead-management und die Lead-Parametrierung
+    (/parametrierung/lead-*, z. B. Lead-Einstellungen, Lead-Routing); eine Seite kann sich mit
+    {% set lead_modul = true %} zusätzlich anmelden. Angebotstool, Projektierung, Vorgangsakte, der
+    zentrale /kalender und die Angebotstool-Tabellen im Lead-Board-Layout (v33) bleiben Design v2. -#}
+{%- set lead_modul = (lead_modul | default(false)) or request.url.path.startswith('/lead-management')
+    or request.url.path.startswith('/parametrierung/lead-') -%}
+<body{% if lead_modul %} data-modul="lead"{% endif %}{% if request.query_params.get('einbett') == '1' %} class="einbett"{% endif %}>
 {% set benutzer_angemeldet = request.state.benutzer if request.state is defined else None %}
 {# Design-Fix 27.09.2026: einbett=1 = Seite laeuft in einem Panel-iframe
    (Anrufliste) - Kopfleiste/Fusszeile ausblenden, sonst doppelte Navigation #}

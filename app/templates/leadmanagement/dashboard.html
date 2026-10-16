@@ -13,9 +13,9 @@
    v25 (PLAN_LEAD_V3 Phase 120): Wiedervorlagen nur noch manuell gesetzte.
    v29 (PLAN_LEAD_V4 Phase 141): Überschrift „Hallo, <Vorname>“ (Benutzer.vorname,
    sonst Name); Fällig heute · Kommende Wiedervorlagen (alle künftigen, nach Datum
-   gruppiert, „mehr anzeigen“) · Offene To-Dos; Karte „Routenplaner“ (Google-Maps-Link,
-   Start = Parameter routen_start, Ziel leer, neuer Tab) und die Liste „Meine Termine“
-   [ANNAHME bleibt] – für Handelsvertreter mit den Sperrzeiten (Phase 143).
+   gruppiert, „mehr anzeigen“) · Offene To-Dos; die Karte „Routenplaner“ (Google-Maps-Link,
+   Start = Parameter routen_start) ist seit v37 (PLAN_LEAD_V7 Phase 198) entfallen; die Liste
+   „Meine Termine“ [ANNAHME bleibt] – für Handelsvertreter mit den Sperrzeiten (Phase 143).
    Nachtrag 08.10.2026 (Antwort Andreas): „Mir zugeteilte Vorgänge“ entfällt ganz.
    v31 (PLAN_LEAD_V5 Phasen 154/158):
    - Kacheln verschieben: Stift oben rechts (lokales SVG) → Bearbeitungsmodus (Griff an jeder
@@ -255,16 +255,11 @@
             {% if todos | length > 8 %}<p class="dezent lm-wv-leer"><a href="/lead-management/todos">{{ todos | length - 8 }} weitere in der To-Do-Liste</a></p>{% endif %}
             {{ todo_formular(empfaenger, benutzer, zurueck='/lead-management/dashboard') }}
         </div>
-{% elif key == 'routenplaner' %}
-        {#- v29 (Phase 141): Routenplaner – Start aus Parameter routen_start, Ziel leer, neuer Tab #}
-        <div class="lm-karte lm-routenplaner" id="routenplaner" data-kachel="routenplaner">
-            <button type="button" class="lm-kachel-griff" title="Kachel verschieben" aria-label="Kachel „Routenplaner“ verschieben">{{ symbol('griff') }}</button>
-            <h2>{{ symbol('karte') }} Routenplaner <span class="sub">Google Maps · Start Friondo, Ziel frei</span></h2>
-            <p class="lm-routen-start">{{ symbol('ort') }} Start: <strong>{{ routen_start }}</strong></p>
-            <a class="knopf" id="lm-routen-link" href="{{ routen_link }}" target="_blank" rel="noopener noreferrer">{{ symbol('karte') }} Route in Google Maps öffnen</a>
-            <p class="dezent lm-routen-hinweis">Das Ziel tragen Sie in Google Maps ein; die Startadresse pflegt der Admin in den Lead-Einstellungen (routen_start).</p>
-        </div>
 {% elif key == 'termine' %}
+        {#- v37 (PLAN_LEAD_V7 Phase 198, Agent L2): die Kachel „Routenplaner“ (v29, Google-Maps-Link mit
+            Start aus routen_start) ist entfallen – gespeicherte Reihenfolgen verlieren den Key ohne Fehler
+            (lead_dashboard.kachel_reihenfolge); Strecken stehen jetzt in km an Terminvorschlägen,
+            Kalender, Ersatzkunde, Karte und „Mein Tag“ #}
         <div class="lm-karte" id="termine" data-kachel="termine">
             <button type="button" class="lm-kachel-griff" title="Kachel verschieben" aria-label="Kachel „Meine Termine“ verschieben">{{ symbol('griff') }}</button>
             <h2>Meine Termine · nächste {{ horizont }} Tage <span class="sub">alle Terminarten</span>

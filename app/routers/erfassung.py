@@ -378,6 +378,16 @@ def sparten_start(request: Request, session: Session = Depends(get_session)):
                     vorbelegung_obj = {"KO01": dict(basis["O01"])}
         except Exception:
             vorbelegung_obj = {}
+        # v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Merkmal „PV vorhanden“ aus der Kundenkartei →
+        # WP-Bogen Frage A11 „PV-Anlage vorhanden?“ = Ja (Objekt vor Kunde; der KL- und der
+        # PV-Bogen haben keine solche Frage – lead_kartei.pv_vorhanden_vorbelegung)
+        try:
+            from app import lead_kartei
+            quelle_pv = objekt if objekt is not None else kunde
+            for key, eintrag in lead_kartei.pv_vorhanden_vorbelegung(quelle_pv, sparte).items():
+                vorbelegung_obj.setdefault(key, eintrag)
+        except Exception:
+            pass
         if vorbelegung_obj:
             antworten_obj = json.loads(erfassung.antworten_json or "{}")
             kennzeichen_obj = json.loads(erfassung.vorbelegt_json or "{}")

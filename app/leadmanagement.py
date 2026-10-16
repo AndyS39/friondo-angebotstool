@@ -787,8 +787,10 @@ def lead_anlegen(session: Session, daten: dict, quelle: LeadQuelle | None,
     erzwingt einen eigenen Vorgang. Liefert (vorgang, status) mit status
     neu | angehaengt | wiederkehrer."""
     # v31 (PLAN_LEAD_V5 Phase 157): Sparten-Liste aus app/sparten.py (inkl. MS/WA/DMS)
+    # v37 (PLAN_LEAD_V7 Phase 199, Agent L3): zusätzlich das Merkmal „PV vorhanden“ (PVV) –
+    # Schnellanlage, Import, API, Parser reichen es wie eine Sparte herein
     from app import sparten as sparten_modul
-    sparten = [s for s in (daten.get("sparten") or []) if s in sparten_modul.SPARTEN]
+    sparten = [s for s in (daten.get("sparten") or []) if s in sparten_modul.INTERESSEN_ALLE]
     duplikat = duplikat_pruefen(
         session, telefon=daten.get("telefon", ""), email=daten.get("email", ""),
         name=f"{daten.get('vorname', '')} {daten.get('nachname', '')}",

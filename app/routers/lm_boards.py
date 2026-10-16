@@ -68,6 +68,12 @@ templates.env.globals.setdefault("lm_kundenname", lead_boards.kundenname)
 # Filter-Selects, Häkchen und Badges der Modul-Templates – keine festen Listen mehr
 templates.env.globals.setdefault("lm_sparten", tuple(sparten_modul.SPARTEN))
 templates.env.globals.setdefault("lm_sparten_lang", dict(sparten_modul.SPARTEN_LANG))
+# v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Interessen-Häkchen inkl. Merkmal „PV vorhanden“ (PVV) für
+# das Plus-Popover der Boards und den Filter „Sparte“ im Hauptboard/Deals; lm_sparten bleibt die
+# Erfassungs-Liste (Kanban, Karte, Anrufliste, Statistik)
+templates.env.globals.setdefault("lm_interessen", tuple(sparten_modul.INTERESSEN_ALLE))
+templates.env.globals.setdefault("lm_interessen_lang", dict(sparten_modul.INTERESSEN_LANG))
+templates.env.globals.setdefault("lm_interessen_merkmale", tuple(sparten_modul.INTERESSEN_MERKMALE))
 # v33 (PLAN_V20 Phase 174): Speicher-Route der Spaltenwerkzeuge je Rolle (data-lm-spalten-url
 # der Angebotstool-Tabellen; Projektierung → Alias /einstellungen/spalten)
 templates.env.globals.setdefault("lm_spalten_url", lead_boards.spalten_url)

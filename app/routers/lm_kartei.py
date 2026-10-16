@@ -536,6 +536,27 @@ def objekt_feld(request: Request, vorgang_id: int, objekt_id: int,
     return JSONResponse(antwort, status_code=200 if ergebnis["ok"] else 400)
 
 
+@router.post("/lead/{vorgang_id}/objekte/zustand")
+def objekte_zustand(request: Request, vorgang_id: int,
+                    session: Session = Depends(get_session)):
+    """v37 (PLAN_LEAD_V7 Phase 198, Agent L2): Akkordeon der Objektliste – Zustand je Nutzer
+    und Vorgang merken (JSON {zu: true|false} oder Formular zu=1|0 → benutzer_einstellungen
+    Key objekte_zu); reine Anzeige-Einstellung, deshalb auch in der Lesesicht erlaubt."""
+    vorgang = _vorgang(session, vorgang_id)
+    _lesegate(request, session, vorgang)
+    daten = _json_oder_form(request)
+    roh = daten.get("zu")
+    zu = roh if isinstance(roh, bool) else str(roh or "").strip().lower() in ("1", "true", "zu", "on")
+    benutzer = request.state.benutzer
+
+    def aktion():
+        return lead_kartei.objekte_zustand_setzen(session, benutzer, vorgang.id, zu)
+    _speichern(session, aktion)
+    if _json_gewuenscht(request) or "application/json" in (request.headers.get("content-type") or "").lower():
+        return JSONResponse({"ok": True, "zu": zu, "vorgang_id": vorgang.id})
+    return _zurueck(vorgang_id)
+
+
 @router.post("/lead/{vorgang_id}/objekt/{objekt_id}/deaktivieren")
 def objekt_deaktivieren(request: Request, vorgang_id: int, objekt_id: int,
                         session: Session = Depends(get_session)):

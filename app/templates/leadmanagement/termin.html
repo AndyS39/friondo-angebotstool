@@ -151,6 +151,9 @@
             {% if v.tour_tag %}<span class="abzeichen">Tour-Tag</span>{% endif %}
             {% if v.leerer_tag %}<span class="abzeichen ep">leerer Tag</span>{% endif %}</p>
         <p class="lmt-begruendung">{{ v.begruendung }}</p>
+        {#- v37 (PLAN_LEAD_V7 Phase 198): Strecke in km – Anfahrt (Vortermin/Start → Lead) und Umweg #}
+        <p class="lmt-strecke" data-rolle="strecke">{{ symbol('karte') }}
+            {% if v.anfahrt_text %}Anfahrt <strong>{{ v.anfahrt_text }}</strong> · {% endif %}Umweg <strong>{{ v.umweg_text }}</strong></p>
         <p class="dezent">
             {% if v.vorher %}davor {{ v.vorher.beginn.strftime('%H:%M') }}
                 ({{ v.vorher.adresse.split(',')[-1] if v.vorher.adresse else '?' }}){% endif %}

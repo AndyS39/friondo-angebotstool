@@ -147,7 +147,10 @@ def kompetenz_passt(profil, sparten: list, objektart: str | None = None) -> tupl
     Sparte muss einzeln hinterlegt sein (WB ist frei, GW = Gewerbe-Kompetenz)."""
     if profil is None:
         return True, "kein AD-Profil – keine Einschränkung"
-    sparten = [s.upper() for s in sparten if s]
+    # v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Merkmale (PVV „PV vorhanden“) sind keine
+    # Sparte – keine Kompetenzprüfung (sparten.INTERESSEN_MERKMALE)
+    from app import sparten as sparten_modul
+    sparten = [s.upper() for s in sparten if s and s.upper() not in sparten_modul.INTERESSEN_MERKMALE]
     koennen = kompetenz_sparten(profil)
     if not koennen and not getattr(profil, "kompetenz_kombi", False):
         return True, "keine Kompetenzen gepflegt – keine Einschränkung"
@@ -225,7 +228,10 @@ def pflichtfelder_offen(session: Session, kunde: Kunde, vorgang: Vorgang | None 
     offen = []
     for feld in pflichtfelder(session):
         if feld == "interesse":
-            if not (kunde.interesse or "").strip():
+            # v37 (PLAN_LEAD_V7 Phase 199, Agent L3): das Merkmal „PV vorhanden“ (PVV) erfüllt
+            # das Pflichtfeld nicht – es zählt nur eine Erfassungs-Sparte [ANNAHME]
+            from app import sparten as sparten_modul
+            if not sparten_modul.erfassungs_codes(kunde.interesse):
                 offen.append("Interesse")
             continue
         if feld == "vertriebskanal":
@@ -767,13 +773,18 @@ def freischaltung_pruefpunkte(session: Session) -> list[dict]:
     punkte.append({"name": "Kalender-Sync (kalender_sync)", "ok": kalender,
                    "text": "an – Outlook-Frei/Belegt und Termineinträge für angestellte AD"
                    if kalender else "aus – der Assistent rechnet nur mit Tool-Terminen"})
+    # v37 (PLAN_LEAD_V7 Phase 198, Agent L2): ORS-Key aus der .env hat Vorrang (routing.ors_schluessel)
+    from app import routing
     anbieter = kern.parameter_holen(session, "routing_anbieter", "luftlinie").strip().lower()
-    schluessel = (kern.parameter_holen(session, "ors_api_key", "") if anbieter == "ors"
+    schluessel = (routing.ors_schluessel(session) if anbieter == "ors"
                   else kern.parameter_holen(session, "google_api_key", "") if anbieter == "google" else "")
     routing_ok = anbieter in ("ors", "google") and bool((schluessel or "").strip())
+    quelle = routing.ors_schluessel_quelle(session)
     punkte.append({"name": "Routing-Dienst (Fahrzeiten)", "ok": routing_ok,
-                   "text": f"{anbieter} mit Schlüssel" if routing_ok
-                   else f"{anbieter} – ohne Schlüssel rechnet der Assistent mit Luftlinie"})
+                   "text": (f"{anbieter} mit Schlüssel" + (" aus der .env (ORS_API_KEY)" if quelle == "env" else "")
+                            + " – Prüfpunkt „Routing-Dienst antwortet“ in den Lead-Einstellungen") if routing_ok
+                   else (f"{anbieter} – {routing.KEY_FEHLT_TEXT}" if anbieter == "ors" or not quelle
+                         else f"{anbieter} – Key vorhanden, Anbieter auf „ors“ stellen (Lead-Routing)")})
     leadmanager = [b for b in session.query(Benutzer).filter(Benutzer.aktiv.is_(True))
                    if getattr(b, "leadmanager", False)]
     punkte.append({"name": "Leadmanager-Häkchen (Benutzerverwaltung)", "ok": bool(leadmanager),

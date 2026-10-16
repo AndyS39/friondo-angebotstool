@@ -91,7 +91,7 @@
                 <span>Interessen{{ stern('interesse') }}</span>
                 <div>
                     {% for code, name in interessen_wahl %}
-                        <label class="lk-check" title="{{ sparten_langnamen.get(code, name) }}"><input type="checkbox" name="interesse" value="{{ code }}" data-feld-teil="interesse" {{ 'checked' if code in (kunde.interesse or '').upper().replace(' ', '').split(',') }}> {{ code }}</label>
+                        <label class="lk-check" title="{{ sparten_langnamen.get(code, name) }}"><input type="checkbox" name="interesse" value="{{ code }}" data-feld-teil="interesse" {{ 'checked' if code in (kunde.interesse or '').upper().replace(' ', '').split(',') }}> {{ name if code in (interessen_merkmale or []) else code }}</label>{#- v37 (Phase 199): Merkmal „PV vorhanden“ mit Langname #}
                     {% endfor %}
                 </div><small class="lk-feld-status" aria-live="polite"></small>
             </div>

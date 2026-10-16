@@ -192,11 +192,12 @@ class Dashboard(Basis):
         seite = self.client.get("/lead-management/dashboard")
         self.assertEqual(seite.status_code, 200)
         # v29 (Phase 141): „Hallo, <Vorname>“, Fällig heute · Kommende Wiedervorlagen ·
-        # Offene To-Dos, Routenplaner, Meine Termine; keine Angebots-Wiedervorlagen mehr
+        # Offene To-Dos, Meine Termine; keine Angebots-Wiedervorlagen mehr
         # v31 (PLAN_LEAD_V5 Phase 159): Demo-Modus beendet – kein Zusatz „inkl. Demo“ mehr
+        # v37 (PLAN_LEAD_V7 Phase 198): die Kachel „Routenplaner“ ist entfallen
         for text in ("Hallo, ", "Fällig heute", "Kommende Wiedervorlagen",
                      "Offene To-Dos", "Meine Termine · nächste",
-                     "Routenplaner", "Telefongespräch",
+                     "Telefongespräch",
                      "Rückruf gewünscht", "Bauphase später", f"{PRAEFIX} Unterlagen prüfen",
                      'href="/lead-management/uebersicht"', "Mehr …"):
             self.assertIn(text, seite.text, text)

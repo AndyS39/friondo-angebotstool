@@ -324,7 +324,11 @@ PLATZHALTER_NEU = ["{sparten}", "{quelle}", "{termin_datum}", "{termin_uhrzeit}"
                    "{vertriebler_vorname}", "{vertriebler_email}",
                    # v31 (Phase 153/156/158)
                    "{sparten_interesse}", "{objektadresse}", "{objektliste}",
-                   "{vorname}", "{nachname}", "{absender}"]
+                   "{vorname}", "{nachname}", "{absender}",
+                   # v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Merkmal „PV vorhanden“ – „Sie haben
+                   # bereits eine PV-Anlage“ oder leer; {sparten}/{sparten_interesse}/
+                   # {sparten_hinweise} nennen das Merkmal nie [ANNAHME: eigener Platzhalter]
+                   "{pv_vorhanden}"]
 # Platzhalter, deren Wert fertiges HTML ist (nicht maskieren)
 _HTML_WERTE = ("sparten_hinweise", "vertriebler_block", "objektliste")
 # Vorlagen, die einen Termin brauchen (Pflichtdaten im Kartei-Dialog, Phase 158)
@@ -657,7 +661,7 @@ def sparten_hinweise_punkte(sparten: list[str], langnamen: dict | None = None) -
     logik = leadmanagement_logik.hole_logik()
     gesehen: set[str] = set()
     ergebnis = []
-    for sparte in sparten_modul.codes(sparten):
+    for sparte in sparten_modul.erfassungs_codes(sparten):   # v37: ohne Merkmale (PVV)
         punkte = []
         for punkt in logik.hinweise_der_sparte(sparte):
             schluessel = punkt.strip().lower()
@@ -846,6 +850,8 @@ def werte_fuer(session: Session, vorgang: Vorgang,
         "nachname": kunde.nachname or "",
         "sparten": sparten_modul.sparten_text(codes, langnamen=namen) or "Ihre Anfrage",
         "sparten_interesse": sparten_modul.sparten_interesse(codes, langnamen=namen),
+        # v37 (Phase 199): Merkmal „PV vorhanden“ nur über diesen Platzhalter (leer ohne Merkmal)
+        "pv_vorhanden": sparten_modul.pv_vorhanden_text(codes),
         "quelle": quelle.name if quelle else "",
         "termin_datum": termin_datum,
         "termin_uhrzeit": termin.beginn.strftime("%H:%M") if termin and termin.beginn else "",

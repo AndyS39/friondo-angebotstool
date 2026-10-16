@@ -5,6 +5,9 @@
 # Parameter `sparten_langnamen` (Lead-Einstellungen, JSON {"WP": "Wärmepumpe", …})
 # übersteuert die Langformen; Parameter liest der Aufrufer über
 # leadmanagement.parameter_holen und reicht ihn als `langnamen` herein.
+# v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Merkmal „PV vorhanden“ (PVV) – siehe
+# INTERESSEN_MERKMALE/INTERESSEN_ALLE; codes() liefert Sparten UND Merkmale,
+# erfassungs_codes() nur die Erfassungs-Sparten.
 import json
 import re
 
@@ -23,12 +26,27 @@ INTERESSE_FORM = {
 }
 # Platzhalter-Sparten, die keine eigene Konfigurator-Erfassung haben (Freitext-Weg)
 FREITEXT_SPARTEN = ("WB", "GW", "MS", "WA", "DMS")
+# v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Merkmale der Interessenliste – Häkchen wie eine
+# Sparte (Kartei, Inline-Bearbeitung, Schnellanlage, Import, API, Filter, Badge), aber KEIN
+# Sparten-Code: kein Erfassungsstart, keine Kompetenzprüfung, nicht in {sparten}/
+# {sparten_interesse}/{sparten_hinweise}, kein Pflichtfeld „Interesse“ [ANNAHME: „PV vorhanden“
+# ist ein Merkmal des Kunden (bestehende PV-Anlage), keine Erfassungs-Sparte]. `SPARTEN` bleibt
+# die Erfassungs-Liste, `INTERESSEN_ALLE` die Liste der Interessen-Häkchen.
+INTERESSEN_MERKMALE = ("PVV",)
+MERKMALE_LANG = {"PVV": "PV vorhanden"}
+INTERESSEN_ALLE = SPARTEN + INTERESSEN_MERKMALE
+INTERESSEN_LANG = {**SPARTEN_LANG, **MERKMALE_LANG}
+PV_VORHANDEN = "PVV"
+# Platzhalter {pv_vorhanden} in Kundenmails (lead_mail.werte_fuer) – nur in Vorlagen, die ihn
+# nutzen [ANNAHME: Wortlaut laut Plan]
+PV_VORHANDEN_TEXT = "Sie haben bereits eine PV-Anlage"
 _TRENNER = re.compile(r"[,;/ ]+")
 
 
 def codes(wert) -> list[str]:
     """Kürzel aus einem Text („WP,PV“, „WP PV“, JSON-Liste) oder einer Liste – in
-    Anzeigereihenfolge, unbekannte Kürzel bleiben am Ende erhalten."""
+    Anzeigereihenfolge (Sparten, dann Merkmale wie PVV), unbekannte Kürzel bleiben am
+    Ende erhalten. Für reine Erfassungs-Sparten: erfassungs_codes()."""
     if wert is None:
         return []
     if isinstance(wert, str):
@@ -43,14 +61,41 @@ def codes(wert) -> list[str]:
     else:
         liste = list(wert)
     roh = [str(c).strip().upper() for c in liste if str(c).strip()]
-    bekannt = [c for c in SPARTEN if c in roh]
-    fremd = [c for c in roh if c not in SPARTEN]
+    bekannt = [c for c in INTERESSEN_ALLE if c in roh]
+    fremd = [c for c in roh if c not in INTERESSEN_ALLE]
     return bekannt + [c for c in dict.fromkeys(fremd)]
 
 
+def erfassungs_codes(wert) -> list[str]:
+    """v37: nur die Erfassungs-Sparten (SPARTEN) eines Interessen-Wertes – ohne Merkmale
+    wie „PV vorhanden“ und ohne unbekannte Kürzel (Sparten-Start, Chips „Mein Tag“/Leads
+    VOT, Kompetenz, Pflichtfeld „Interesse“, Mail-Platzhalter)."""
+    return [c for c in codes(wert) if c in SPARTEN]
+
+
+def merkmale(wert) -> list[str]:
+    """v37: nur die Merkmale (INTERESSEN_MERKMALE) eines Interessen-Wertes."""
+    return [c for c in codes(wert) if c in INTERESSEN_MERKMALE]
+
+
+def ist_merkmal(code) -> bool:
+    return (str(code or "")).strip().upper() in INTERESSEN_MERKMALE
+
+
+def pv_vorhanden(wert) -> bool:
+    """v37: trägt der Interessen-Wert das Merkmal „PV vorhanden“ (PVV)?"""
+    return PV_VORHANDEN in codes(wert)
+
+
+def pv_vorhanden_text(wert) -> str:
+    """v37: Platzhalter {pv_vorhanden} – „Sie haben bereits eine PV-Anlage“ oder leer."""
+    return PV_VORHANDEN_TEXT if pv_vorhanden(wert) else ""
+
+
 def langnamen_laden(parameter_wert: str | None) -> dict:
-    """Langformen inkl. Übersteuerung aus dem Parameter `sparten_langnamen` (JSON)."""
-    namen = dict(SPARTEN_LANG)
+    """Langformen inkl. Übersteuerung aus dem Parameter `sparten_langnamen` (JSON);
+    v37: auch die Merkmale („PVV“ → „PV vorhanden“)."""
+    namen = dict(INTERESSEN_LANG)
     if parameter_wert and parameter_wert.strip():
         try:
             daten = json.loads(parameter_wert)
@@ -65,7 +110,7 @@ def langnamen_laden(parameter_wert: str | None) -> dict:
 
 def langname(code: str, langnamen: dict | None = None) -> str:
     code = (code or "").strip().upper()
-    return (langnamen or SPARTEN_LANG).get(code, code)
+    return (langnamen or INTERESSEN_LANG).get(code, code)
 
 
 def _aufzaehlung(teile: list[str]) -> str:
@@ -79,8 +124,9 @@ def _aufzaehlung(teile: list[str]) -> str:
 
 def sparten_text(wert, form: str = "lang", langnamen: dict | None = None) -> str:
     """Natürliche Aufzählung der Sparten: form „lang“ → „Wärmepumpe und Photovoltaik“,
-    „kurz“ → „WP und PV“ (Phase 156, Platzhalter {sparten})."""
-    liste = codes(wert)
+    „kurz“ → „WP und PV“ (Phase 156, Platzhalter {sparten}). v37: ohne Merkmale (PVV)
+    – „PV vorhanden“ kommt nur über {pv_vorhanden} in Kundentexte."""
+    liste = erfassungs_codes(wert)
     if form == "kurz":
         return _aufzaehlung(liste)
     return _aufzaehlung([langname(c, langnamen) for c in liste])
@@ -89,8 +135,8 @@ def sparten_text(wert, form: str = "lang", langnamen: dict | None = None) -> str
 def sparten_interesse(wert, langnamen: dict | None = None) -> str:
     """Platzhalter {sparten_interesse}: „Interesse an einer Wärmepumpe“, „Interesse an
     Photovoltaik“, bei mehreren „Interesse an einer Wärmepumpe und Photovoltaik“.
-    Übersteuerte Langnamen (Parameter) werden ohne Artikel eingesetzt."""
-    liste = codes(wert)
+    Übersteuerte Langnamen (Parameter) werden ohne Artikel eingesetzt. v37: ohne Merkmale."""
+    liste = erfassungs_codes(wert)
     if not liste:
         return "Interesse an unseren Lösungen"
     teile = []

@@ -93,8 +93,11 @@ async function laden() {
                 `<a href="/lead-management/lead/${p.vorgang_id}/termin">Termin vorschlagen</a>`)
               .addTo(ebene);
         } else if (p.art === 'termin') {
+            // v37 (PLAN_LEAD_V7 Phase 198): Strecke von der Startadresse des Vertrieblers („18,4 km · 24 Min“,
+            // geschätzt mit Kennzeichen) statt Luftlinie
             L.marker([p.lat, p.lon]).bindPopup(
                 `VOT ${p.beginn} · ${p.ad}<br>` +
+                (p.strecke ? `<span class="lmt-strecke">Anfahrt vom Start: <strong>${p.strecke}</strong></span><br>` : '') +
                 `<a href="/lead-management/lead/${p.vorgang_id}">Akte</a>`)
               .addTo(ebene);
         } else if (p.art === 'start') {

@@ -301,6 +301,26 @@ davor meldet die Kontrolle „HTTP 404“ (normal). Nach dem Rollback
 - Admin-To-dos und Team-Hinweise: `docs/nach-dem-update-v36.md` (Edge auf dem Server, `pdf_engine`, Titelbilder/Teamfoto,
   Cloover-Key/-Modus, Verbindungstest, PDF-Ablage, Fußnote/Datenschutzsatz).
 
+## 4f. Besonderheiten beim Update auf v37 (ein Commit, 16.10.2026)
+
+- Keine neuen Abhängigkeiten, keine neuen Hintergrundläufe (weiter 18). Neuer `.env`-Schlüssel `ORS_API_KEY`
+  (openrouteservice, Konto account.heigit.org) – ohne Key bleibt das Routing „geschätzt“ (Luftlinie × 1,3), nichts
+  bricht; nach dem Eintragen Dienst neu starten und in den Lead-Einstellungen den Prüfpunkt „Routing-Dienst
+  antwortet“ ausführen (die Migration stellt `routing_anbieter` auf „ors“, sobald der Key da ist).
+- `migrate.py` meldet beim ersten Lauf: Spalten `vot_termine.monday_beginn/angepasst_am/angepasst_von`; „Kanaele
+  (v37): 'WELOVEX' deaktiviert …“ und „… 'DAA' deaktiviert …“ (dazu je Treffer „Hinweis - '<Kanal>' steht im Parameter
+  hv_ausschluss/kanal_ad_regel (nicht geaendert, bitte pruefen)“ – diese Zeilen notieren), „Routing (v37):
+  routing_kontingent_tag = 2000 angelegt“ bzw. „ORS_API_KEY fehlt - Anbieter bleibt luftlinie“. Der zweite Lauf meldet
+  „keine Änderungen nötig“.
+- Design v3 gilt nur im Lead-Modul (eigene Tokens, Hell/Dunkel); Browser laden die neuen Stylesheets über die
+  `?v=`-Nummer automatisch nach. Die Design-Zulieferung (`Friondo Tool Design.html`) lag nicht vor – gebaut nach den
+  Startwerten des Plans; Abweichungen später per CSS-Tokens nachziehen.
+- Danach `scripts\smoke.bat` wie immer; `/health` zeigt `version` v37 und **18 Läufe**.
+- Rückweg: `rollback.bat --nur-code` (v36-Code läuft auf der v37-Datenbank – nur additive Änderungen; Rückweg-Probe
+  in der Rollout-Prüfung der Plan-Kette v36–v38).
+- Admin-To-dos und Team-Hinweise: `docs/nach-dem-update-v37.md` (ORS-Key und Kontingent, Kanäle WeLoveX/DAA,
+  Termine anpassen, Plus bei Interessen, Login-Vorbelegung, Design v3).
+
 ## 5. Versionsstand prüfen
 
 Auf PC und Server zeigt `git log --oneline -1` den aktuellen Commit; auf dem

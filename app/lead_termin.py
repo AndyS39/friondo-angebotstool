@@ -162,6 +162,17 @@ def parameter(session: Session, name: str, standard: str | None = None) -> str:
                                 PARAMETER_LOKAL.get(name, standard or ""))
 
 
+def umweg_strecke_text(umweg_km: float, umweg_min: float, geschaetzt: bool) -> str:
+    """v37 (Phase 198): Umweg als Strecke – „+3,2 km · 5 Min“, geschätzt „ca. +3 km · 5 Min
+    (geschätzt)“, ohne Umweg „kein Umweg“."""
+    from app import routing
+    if round(float(umweg_min or 0)) <= 0 and float(umweg_km or 0) < 0.05:
+        return "kein Umweg"
+    if geschaetzt:
+        return f"ca. +{int(round(float(umweg_km or 0)))} km · {routing.min_text(umweg_min)} (geschätzt)"
+    return f"+{routing.km_text(umweg_km)} · {routing.min_text(umweg_min)}"
+
+
 def _int(wert, standard: int) -> int:
     try:
         return int(str(wert).strip())
@@ -659,13 +670,20 @@ def vorschlaege(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None
                               key=lambda t: t.beginn, default=None)
                 geschaetzt = False
                 umweg = 0.0
+                # v37 (PLAN_LEAD_V7 Phase 198): Straßenkilometer und Fahrzeit der Anfahrt
+                # (Vortermin bzw. Startadresse → Lead) und des Umwegs in km – Anzeige
+                # „18,4 km · 24 Min“, geschätzt „ca. 24 km · 31 Min (geschätzt)“ (routing.strecke_text)
+                umweg_km = 0.0
+                anfahrt = None
                 if lead_ort is not None:
                     hin = routing.fahrzeit(session, _ort(vorher, start_ort), lead_ort)
                     weg = routing.fahrzeit(session, lead_ort, _ort(nachher, start_ort))
                     direkt = routing.fahrzeit(session, _ort(vorher, start_ort),
                                               _ort(nachher, start_ort))
                     umweg = max(0.0, hin["minuten"] + weg["minuten"] - direkt["minuten"])
+                    umweg_km = max(0.0, float(hin["km"]) + float(weg["km"]) - float(direkt["km"]))
                     geschaetzt = hin["geschaetzt"] or weg["geschaetzt"] or direkt["geschaetzt"]
+                    anfahrt = hin if _ort(vorher, start_ort) is not None else None
                 bewertung = umweg + k["abwertung"]
                 wunsch_text = _wunsch_bezeichnung(fenster, beginn) if fenster else ""
                 wunsch = bool(wunsch_text)
@@ -680,7 +698,11 @@ def vorschlaege(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None
                 if score_an and (vorgang.score_klasse or "") == "A":
                     bewertung += (beginn.date() - jetzt.date()).days * 2
                 teile = list(k["gruende"])
-                teile.append(f"Umweg {round(umweg)} Min" + (" (geschätzt)" if geschaetzt else ""))
+                anfahrt_text = routing.strecke_text(anfahrt) if anfahrt is not None else ""
+                umweg_text = umweg_strecke_text(umweg_km, umweg, geschaetzt)
+                if anfahrt_text:
+                    teile.append(f"Anfahrt {anfahrt_text}")
+                teile.append(f"Umweg {umweg_text}")
                 if fenster:
                     teile.append(f"Wunschzeit {wunsch_text} ✓" if wunsch
                                  else "außerhalb Wunschzeit")
@@ -692,6 +714,10 @@ def vorschlaege(session: Session, vorgang: Vorgang, nur_ad_id: int | None = None
                 alle.append({
                     "ad": ad, "beginn": beginn, "ende": ende,
                     "umweg": round(umweg), "geschaetzt": geschaetzt,
+                    "umweg_km": round(umweg_km, 1), "umweg_text": umweg_text,
+                    "anfahrt_km": round(float(anfahrt["km"]), 1) if anfahrt else None,
+                    "anfahrt_min": round(float(anfahrt["minuten"])) if anfahrt else None,
+                    "anfahrt_text": anfahrt_text,
                     "wunsch": wunsch, "tour_tag": tour_tag,
                     "leerer_tag": leerer_tag, "bewertung": bewertung,
                     "vorher": vorher, "nachher": nachher,
@@ -822,6 +848,10 @@ def vorschlaege_json(session: Session, vorgang: Vorgang, benutzer=None,
                 "ende": v["ende"].strftime("%Y-%m-%dT%H:%M"),
                 "beginn_text": _beginn_text(v["beginn"]),
                 "begruendung": v["begruendung"], "umweg_min": int(v["umweg"]),
+                # v37 (Phase 198): Strecke in km – Anfahrt (Vortermin/Start → Lead) und Umweg
+                "umweg_km": v.get("umweg_km", 0.0), "umweg_text": v.get("umweg_text", ""),
+                "anfahrt_km": v.get("anfahrt_km"), "anfahrt_min": v.get("anfahrt_min"),
+                "anfahrt_text": v.get("anfahrt_text", ""), "geschaetzt": bool(v.get("geschaetzt")),
                 "ideal": bool(v.get("ideal")), "ideal_grund": v.get("ideal_grund", ""),
             } for v in ergebnis["vorschlaege"][:anzahl]]
             antwort["vorschlaege"] = liste
@@ -1529,6 +1559,11 @@ def ersatz_kandidaten(session: Session, termin: VotTermin) -> dict:
         if len(gewaehlt) >= min_treffer:
             break
     klasse_bonus = {"A": 15, "B": 5} if score_an else {}
+    # v37 (PLAN_LEAD_V7 Phase 198): Straßenkilometer/Fahrzeit vom freien Slot zu den Kandidaten –
+    # EIN gebündelter Matrix-Aufruf (≤ 50 Ziele, matrix_fuellen gibt die Sitzung vorher frei),
+    # danach je Kandidat aus dem Cache; die Umkreis-Stufen bleiben Luftlinie (billig, kein Netz)
+    if gewaehlt:
+        routing.matrix_fuellen(session, [ort], [(v.lat, v.lon) for v, _km, _alter in gewaehlt[:50]])
     kandidaten_liste = []
     for v, km, alter in gewaehlt:
         kunde = session.get(Kunde, v.kunde_id)
@@ -1536,8 +1571,10 @@ def ersatz_kandidaten(session: Session, termin: VotTermin) -> dict:
         punkte = (km * 2 - (20 if bevorzugt else 0)
                   - klasse_bonus.get(v.score_klasse or "", 0)
                   + (10 if v.lead_phase == "in_kontaktierung" else 0))
-        gruende = [f"{km:.1f} km Luftlinie",
-                   f"{alter} Tage alt" + (" (bevorzugt)" if bevorzugt else "")]
+        strecke = routing.strecke(session, ort, (v.lat, v.lon))
+        gruende = ([f"Strecke {strecke['text']}"] if strecke.get("text") else []) + [
+            f"{km:.1f} km Luftlinie (Umkreis)",
+            f"{alter} Tage alt" + (" (bevorzugt)" if bevorzugt else "")]
         if score_an:
             gruende.append(f"Klasse {v.score_klasse or '–'}")
         # v25: Label aus dem Blatt Status (beide Phasen „Kontaktiert“), die
@@ -1552,6 +1589,7 @@ def ersatz_kandidaten(session: Session, termin: VotTermin) -> dict:
                                  "alter": alter, "bevorzugt": bevorzugt,
                                  "punkte": round(punkte, 1),
                                  "begruendung": " · ".join(gruende),
+                                 "strecke": strecke, "strecke_text": strecke.get("text", ""),
                                  "sparten": sparten_des_kunden(kunde)})
     kandidaten_liste.sort(key=lambda k: (k["punkte"], k["km"]))
     ergebnis.update(kandidaten=kandidaten_liste, radius=radius)
@@ -1987,7 +2025,9 @@ def kalender_json(session: Session, vorgang: Vorgang, benutzer=None, woche=None,
         "raster": {"von": raster_von, "bis": raster_bis, "schritt": KALENDER_RASTER_MIN},
         "spalten": spalten, "kandidaten": kandidaten_ids, "weitere": weitere,
         "vorschlaege": [{"nr": i + 1, "ad_id": v["ad_id"], "beginn": v["beginn"],
-                         "ende": v.get("ende", ""), "ideal": bool(v.get("ideal"))}
+                         "ende": v.get("ende", ""), "ideal": bool(v.get("ideal")),
+                         # v37 (Phase 198): Strecke im Slot-Tooltip der Kalenderansicht
+                         "anfahrt_text": v.get("anfahrt_text", ""), "umweg_text": v.get("umweg_text", "")}
                         for i, v in enumerate(liste)],
         "status": vorschlaege_antwort.get("status", "ok"),
         "buchbar": vorschlaege_antwort.get("buchbar", True),
@@ -2001,3 +2041,207 @@ def kalender_json(session: Session, vorgang: Vorgang, benutzer=None, woche=None,
 def _wochentag_kurz(tag: datetime) -> str:
     from app.templating import de_datum
     return de_datum(tag, "%a %d.%m.")
+
+
+# --- v37 (PLAN_LEAD_V7 Phase 198, Agent L2): bestehende Vor-Ort-Termine anpassen ---------------
+# „Anpassen“ in der Kartei (Datum, Uhrzeit im 15-Minuten-Raster, Vertriebler, Objekt,
+# Bemerkung) ändert den Termin IN PLACE – anders als die Umbuchung (termin_anlegen mit
+# umbuchen_id), die einen neuen Termin anlegt. Auch monday-Termine (quelle = monday) sind
+# anpassbar: die Änderung gilt im Tool, monday wird NICHT zurückgeschrieben; das Datum laut
+# monday bleibt in vot_termine.monday_beginn (Hinweis „ursprünglich aus monday: …“), der
+# Sync (monday_sync.vot_termine_nachfuehren) setzt den Termin nicht zurück, solange monday
+# dieses Datum trägt. Outlook-Auftrag und Kundenmail „terminaenderung“ nur bei
+# terminierung_aktiv bzw. mail_versand_aktiv – sonst „Testphase: nur im Tool geändert“.
+# Die manuelle NEUANLAGE eines Vor-Ort-Termins bleibt in der Testphase gesperrt [OFFEN 1].
+# [ANNAHME] Bemerkung = vot_termine.grund_text (freies Feld aktiver Termine; die Absage
+# überschreibt es mit dem Absagegrund).
+
+ANPASSEN_TESTPHASE_HINWEIS = "Testphase: nur im Tool geändert"
+ANPASSEN_STATUS = BELEGT_STATUS   # geplant, bestätigt, vorgemerkt
+
+
+def monday_hinweis(termin) -> str:
+    """„ursprünglich aus monday: 22.10.2026 10:00“ für im Tool angepasste monday-Termine
+    (Kartei: Termin je Objekt, Historie); leer für alle anderen."""
+    if termin is None or (termin.quelle or "") != "monday" or termin.monday_beginn is None:
+        return ""
+    if termin.angepasst_am is None and termin.beginn == termin.monday_beginn:
+        return ""
+    return f"ursprünglich aus monday: {termin.monday_beginn:%d.%m.%Y %H:%M}"
+
+
+def monday_hinweise(termine) -> dict:
+    """{termin_id: Hinweistext} für die Templates der Kartei."""
+    ergebnis = {}
+    for t in (termine or []):
+        text = monday_hinweis(t)
+        if text:
+            ergebnis[t.id] = text
+    return ergebnis
+
+
+def anpassbar(termin) -> bool:
+    """Darf der Termin über „Anpassen“ geändert werden? Vor-Ort-Termine (auch aus monday)
+    in den Status geplant/bestätigt/vorgemerkt."""
+    return (termin is not None and (termin.typ or "vot") == "vot"
+            and termin.status in ANPASSEN_STATUS)
+
+
+def _anpassen_ergebnis(ok: bool, meldung: str, status: int = 200, **zusatz) -> dict:
+    daten = {"ok": ok, "meldung": meldung, "status": status, "konflikte": [],
+             "bestaetigung_noetig": False, "aenderungen": []}
+    daten.update(zusatz)
+    return daten
+
+
+def termin_anpassen(session: Session, termin: VotTermin, vorgang: Vorgang, beginn=None,
+                    ad_id=None, objekt_id=None, bemerkung=None, benutzer=None,
+                    bestaetigt: bool = False) -> dict:
+    """Bestehenden Vor-Ort-Termin anpassen. Felder: beginn (datetime, wird auf das
+    manuelle Raster gerundet), ad_id, objekt_id, bemerkung – None = unverändert.
+    Konfliktprüfung (lead_termin.konflikte ohne den Termin selbst) nach
+    termin_konflikt_modus: harte Überschneidung sperrt immer (409); Puffer-/Outlook-/
+    Arbeitszeit-/Kapazitätswarnungen → im Modus „warnen“ Hinweis + Bestätigung
+    (bestaetigt=True), im Modus „sperren“ 409. Liefert {ok, meldung, status (HTTP),
+    konflikte, bestaetigung_noetig, aenderungen, folgen} – der Aufrufer committet."""
+    from app import kalender as kalender_modul
+    if not anpassbar(termin):
+        return _anpassen_ergebnis(False, "Nur aktive Vor-Ort-Termine (geplant, bestätigt, vorgemerkt) "
+                                         "lassen sich anpassen.", 400)
+    if termin.vorgang_id != vorgang.id:
+        return _anpassen_ergebnis(False, "Termin gehört nicht zu diesem Vorgang.", 400)
+    kunde = session.get(Kunde, vorgang.kunde_id)
+    jetzt = datetime.now()
+    raster = _int(parameter(session, "vorschlag_raster_manuell_min", "15"), 15)
+    alt_beginn, alt_ad_id, alt_objekt_id = termin.beginn, termin.ad_id, termin.objekt_id
+    alt_bemerkung = (termin.grund_text or "").strip()
+    neu_beginn = viertelstunde(beginn, raster) if beginn is not None else alt_beginn
+    neu_ad_id = int(ad_id) if ad_id not in (None, "", 0, "0") else alt_ad_id
+    neu_objekt_id = int(objekt_id) if objekt_id not in (None, "", 0, "0") else alt_objekt_id
+    neu_bemerkung = alt_bemerkung if bemerkung is None else str(bemerkung).strip()[:500]
+    if neu_beginn is None:
+        return _anpassen_ergebnis(False, "Datum und Uhrzeit sind Pflicht.", 400)
+    if not neu_ad_id:
+        return _anpassen_ergebnis(False, "Vertriebler ist Pflicht.", 400)
+    ad = session.get(Benutzer, neu_ad_id)
+    if ad is None or not ad.aktiv:
+        return _anpassen_ergebnis(False, "Vertriebler nicht gefunden oder inaktiv.", 400)
+    if neu_ad_id != alt_ad_id and not hv_ad_erlaubt(session, benutzer, neu_ad_id):
+        return _anpassen_ergebnis(False, HV_GRUPPE_KALENDER_TEXT, 403)
+    objekt = objekt_holen(session, vorgang, neu_objekt_id, anlegen=False)
+    if neu_objekt_id and (objekt is None or objekt.id != neu_objekt_id):
+        return _anpassen_ergebnis(False, "Objekt nicht gefunden.", 400)
+    datum_geaendert = neu_beginn != alt_beginn
+    ad_geaendert = neu_ad_id != alt_ad_id
+    objekt_geaendert = bool(objekt is not None and objekt.id != alt_objekt_id)
+    bemerkung_geaendert = neu_bemerkung != alt_bemerkung
+    if not (datum_geaendert or ad_geaendert or objekt_geaendert or bemerkung_geaendert):
+        return _anpassen_ergebnis(True, "Keine Änderung.")
+    if datum_geaendert and neu_beginn < jetzt:
+        return _anpassen_ergebnis(False, "Der neue Termin liegt in der Vergangenheit.", 400)
+    dauer = ((termin.ende - termin.beginn) if termin.ende and termin.beginn
+             else timedelta(minutes=(getattr(kern.ad_profil(session, neu_ad_id), "termin_dauer_min", 90) or 90)))
+    if dauer.total_seconds() <= 0:
+        dauer = timedelta(minutes=90)
+    neu_ende = neu_beginn + dauer
+    konflikte_texte: list[str] = []
+    if datum_geaendert or ad_geaendert or objekt_geaendert:
+        lead_ort = objekt_ort(session, vorgang, objekt)
+        k = konflikte(session, neu_ad_id, neu_beginn, neu_ende, ignorieren_id=termin.id,
+                      lead_ort=lead_ort)
+        if neu_beginn.weekday() >= WERKTAGE_MAX:
+            k["texte"] = [SAMSTAG_WARNUNG if neu_beginn.weekday() == 5
+                          else "Sonntag: außerhalb der Arbeitstage"] + list(k["texte"])
+            k["warnen"] = True
+        konflikte_texte = list(k["texte"])
+        modus = parameter(session, "termin_konflikt_modus", "warnen")
+        if k["sperren"] or (modus == "sperren" and k["warnen"]):
+            return _anpassen_ergebnis(False, "Nicht möglich – " + "; ".join(konflikte_texte), 409,
+                                      konflikte=konflikte_texte)
+        if k["warnen"] and not bestaetigt:
+            return _anpassen_ergebnis(False, "Bitte Konflikte prüfen und bestätigen: "
+                                      + "; ".join(konflikte_texte), 409,
+                                      konflikte=konflikte_texte, bestaetigung_noetig=True)
+    # --- Änderungen anwenden ------------------------------------------------------------
+    aenderungen = []
+    benutzer_map = {b.id: b.name for b in session.query(Benutzer)
+                    .filter(Benutzer.id.in_({i for i in (alt_ad_id, neu_ad_id) if i} or {0}))}
+    if (termin.quelle or "") == "monday" and termin.monday_beginn is None:
+        termin.monday_beginn = alt_beginn      # Datum laut monday beim ersten Anpassen merken
+    if datum_geaendert:
+        termin.beginn, termin.ende = neu_beginn, neu_ende
+        aenderungen.append(f"Datum/Zeit {alt_beginn:%d.%m.%Y %H:%M} → {neu_beginn:%d.%m.%Y %H:%M}"
+                           if alt_beginn else f"Datum/Zeit → {neu_beginn:%d.%m.%Y %H:%M}")
+    if ad_geaendert:
+        termin.ad_id = neu_ad_id
+        aenderungen.append(f"Vertriebler {benutzer_map.get(alt_ad_id, '–')} → {benutzer_map.get(neu_ad_id, '?')}")
+    if objekt_geaendert:
+        alt_objekt = session.get(VorgangObjekt, alt_objekt_id) if alt_objekt_id else None
+        termin.objekt_id = objekt.id
+        ort = objekte_modul.ausfuehrungsort(session, objekt_id=objekt.id, vorgang=vorgang, kunde=kunde)
+        termin.adresse = (ort.get("einzeilig") or "")[:300]
+        koordinaten = objekt_ort(session, vorgang, objekt)
+        termin.lat, termin.lon = (koordinaten[0], koordinaten[1]) if koordinaten else (None, None)
+        aenderungen.append(f"Objekt {alt_objekt.bezeichnung if alt_objekt else 'Objekt 1'} → {objekt.bezeichnung}")
+    if bemerkung_geaendert:
+        termin.grund_text = neu_bemerkung
+        aenderungen.append(f"Bemerkung „{neu_bemerkung}“" if neu_bemerkung else "Bemerkung entfernt")
+    termin.angepasst_am = jetzt
+    termin.angepasst_von = getattr(benutzer, "id", None)
+    if datum_geaendert or ad_geaendert or objekt_geaendert:
+        if not termin.ics_uid:
+            termin.ics_uid = f"friondo-vot-{termin.id}@friondo.de"
+        termin.ics_sequence = (termin.ics_sequence or 0) + 1
+    # --- Folgen: Outlook, Kundenmail, Zuständiger -------------------------------------------
+    folgen = []
+    gebucht = termin.status in AKTIVE_STATUS
+    terminierung_an = lead_v5.terminierung_aktiv(session)
+    mail_an = lead_v5.mail_versand_aktiv(session)
+    if gebucht and terminierung_an and (datum_geaendert or ad_geaendert or objekt_geaendert):
+        if kalender_modul.termin_aendern(session, termin, vorgang, kunde, ad):
+            folgen.append("Outlook-Kopie wird aktualisiert")
+    if gebucht and mail_an and (datum_geaendert or ad_geaendert or objekt_geaendert) \
+            and kunde is not None and kunde.email:
+        kern.geplante_mails_stornieren(session, termin.id, nur_vorlagen=("terminerinnerung",))
+        if kern.mail_planen(session, vorgang, "terminaenderung", termin=termin) is not None:
+            folgen.append("Terminänderung an den Kunden geplant")
+        kern.mail_planen(session, vorgang, "terminerinnerung", termin=termin,
+                         geplant_am=neu_beginn - timedelta(hours=24))
+    if ad_geaendert and gebucht:
+        # [ANNAHME] wie vot_buchen/vormerken: der Vertriebler des aktiven Termins ist der
+        # zuständige Außendienst des Vorgangs (ad_zuweisen schreibt eine eigene Aktivität)
+        _ad_am_vorgang(session, vorgang, neu_ad_id, benutzer)
+    testphase = not (terminierung_an and mail_an)
+    text = "Termin angepasst: " + " · ".join(aenderungen)
+    hinweis_monday = monday_hinweis(termin)
+    if hinweis_monday:
+        text += f" – {hinweis_monday}"
+    if testphase and (datum_geaendert or ad_geaendert or objekt_geaendert):
+        text += f" – {ANPASSEN_TESTPHASE_HINWEIS}"
+        if not terminierung_an:
+            text += " (kein Outlook)"
+        if not mail_an:
+            text += " (keine Kundenmail)"
+    kern.aktivitaet(session, vorgang.id, "termin", text, benutzer=benutzer)
+    if ad_geaendert and gebucht:
+        kern.benachrichtigen(session, [neu_ad_id],
+                             f"VOT-Termin {neu_beginn:%d.%m. %H:%M} angepasst: "
+                             f"{kunde.anzeige_name if kunde else '?'}, {kunde.ort if kunde and kunde.ort else '?'}",
+                             f"/lead-management/lead/{vorgang.id}", art="terminaenderung")
+    session.flush()
+    vorschlaege_cache_leeren()
+    meldung = "Termin angepasst (" + ", ".join(aenderungen) + ")."
+    if folgen:
+        meldung += " " + "; ".join(folgen) + "."
+    elif datum_geaendert or ad_geaendert or objekt_geaendert:
+        meldung += f" {ANPASSEN_TESTPHASE_HINWEIS}."
+    if hinweis_monday:
+        meldung += f" Hinweis am Termin: {hinweis_monday}."
+    if konflikte_texte and bestaetigt:
+        meldung += " Hinweis: " + "; ".join(konflikte_texte) + "."
+    return _anpassen_ergebnis(True, meldung, 200, aenderungen=aenderungen, folgen=folgen,
+                              konflikte=konflikte_texte, testphase=testphase,
+                              termin={"id": termin.id, "beginn": _iso(termin.beginn),
+                                      "ende": _iso(termin.ende), "ad_id": termin.ad_id,
+                                      "objekt_id": termin.objekt_id, "status": termin.status,
+                                      "monday_hinweis": hinweis_monday})

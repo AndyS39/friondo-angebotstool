@@ -299,7 +299,11 @@
                             text.appendChild(nr); text.appendChild(document.createTextNode(vorschlag.ideal ? 'Ideal' : 'Vorschlag'));
                             td.appendChild(text);
                         }
-                        td.title = 'Vorschlag ' + vorschlag.nr + (vorschlag.ideal ? ' (Ideal)' : '') + ' · ' + vorschlag.beginn.slice(11, 16) + ' · ' + sp.name + ' – Klick übernimmt den Slot ins Formular';
+                        // v37 (Phase 198): Strecke „18,4 km · 24 Min“ (bzw. geschätzt) im Slot-Tooltip
+                        td.title = 'Vorschlag ' + vorschlag.nr + (vorschlag.ideal ? ' (Ideal)' : '') + ' · ' + vorschlag.beginn.slice(11, 16) + ' · ' + sp.name
+                            + (vorschlag.anfahrt_text ? ' · Anfahrt ' + vorschlag.anfahrt_text : '')
+                            + (vorschlag.umweg_text ? ' · Umweg ' + vorschlag.umweg_text : '')
+                            + ' – Klick übernimmt den Slot ins Formular';
                         td.dataset.ad = sp.ad_id; td.dataset.beginn = vorschlag.beginn; td.dataset.ausserhalb = sp.kandidat ? '' : '1';
                     } else if (belegt) {
                         klassen.push(belegt.art === 'termin' ? 'lmt-k-termin lmt-k-typ-' + (belegt.typ || 'vot') : (belegt.art === 'sperrzeit' ? 'lmt-k-sperrzeit' : 'lmt-k-belegt'));
@@ -453,4 +457,136 @@
         if (datum) { datum.value = vorbelegt.slice(0, 10); }
         if (zeit) { zeit.value = vorbelegt.slice(11, 16); }
     })();
+})();
+
+
+// --- v37 (PLAN_LEAD_V7 Phase 198, Agent L2): Dialog „Anpassen“ im Block Termine der Kartei ----
+// Knopf [data-termin-anpassen=<id>] öffnet <dialog id="dlg-anpassen-<id>">; im Dialog läuft die
+// Live-Konfliktprüfung (GET data-konflikt-url?ad_id&beginn&vorgang_id&objekt_id&ignorieren_id –
+// der Termin selbst zählt nicht als Überschneidung), das Formular sendet per fetch (JSON, Accept
+// application/json) an POST …/termin/<id>/anpassen. Antwort 409 mit bestaetigung_noetig zeigt die
+// Konflikte und das Häkchen „Konflikte geprüft – trotzdem speichern“; Sperren (409 ohne
+// bestaetigung_noetig) und 400/403 zeigen die Meldung; 200 lädt die Kartei neu (Meldung in der
+// URL, Anker #termine). Ohne JavaScript postet das Formular normal (303 mit Meldung).
+(function () {
+    'use strict';
+    if (!document.querySelector('[data-termin-anpassen]')) { return; }
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function runden(uhrzeit, schritt) {
+        if (!uhrzeit.value) { return; }
+        var teile = uhrzeit.value.split(':');
+        var minuten = parseInt(teile[0], 10) * 60 + parseInt(teile[1], 10);
+        minuten = Math.round(minuten / schritt) * schritt;
+        if (minuten >= 24 * 60) { minuten = 24 * 60 - schritt; }
+        var neu = pad(Math.floor(minuten / 60)) + ':' + pad(minuten % 60);
+        if (neu !== uhrzeit.value) { uhrzeit.value = neu; }
+    }
+    function karteiUrl(dialog) {
+        var kopf = document.querySelector('.lk-kopf');
+        return kopf && kopf.dataset.vorgang ? '/lead-management/lead/' + kopf.dataset.vorgang
+            : (dialog.dataset.vorgang ? '/lead-management/lead/' + dialog.dataset.vorgang : location.pathname);
+    }
+    function konflikteZeigen(dialog, texte, sperren, bestaetigungNoetig) {
+        var box = dialog.querySelector('[data-rolle="konflikte"]');
+        var haken = dialog.querySelector('[data-rolle="bestaetigen"]');
+        if (!box) { return; }
+        box.textContent = '';
+        box.classList.remove('sperre', 'warnung', 'frei');
+        if (!texte || !texte.length) {
+            box.hidden = true;
+            if (haken) { haken.hidden = true; }
+            return;
+        }
+        var titel = document.createElement('strong');
+        titel.textContent = sperren ? 'Nicht möglich: ' : 'Konflikte – bitte prüfen: ';
+        box.appendChild(titel);
+        var liste = document.createElement('ul');
+        texte.forEach(function (t) { var li = document.createElement('li'); li.textContent = t; liste.appendChild(li); });
+        box.appendChild(liste);
+        box.classList.add(sperren ? 'sperre' : 'warnung');
+        box.hidden = false;
+        if (haken) { haken.hidden = !(bestaetigungNoetig && !sperren); }
+    }
+    function fehlerZeigen(dialog, text) {
+        var el = dialog.querySelector('[data-rolle="fehler"]');
+        if (!el) { return; }
+        el.textContent = text || '';
+        el.hidden = !text;
+    }
+    document.querySelectorAll('[data-termin-anpassen]').forEach(function (knopf) {
+        knopf.addEventListener('click', function () {
+            var dialog = document.getElementById('dlg-anpassen-' + knopf.dataset.terminAnpassen);
+            if (!dialog) { return; }
+            fehlerZeigen(dialog, '');
+            if (dialog.showModal) { dialog.showModal(); } else { dialog.setAttribute('open', ''); }
+            var ersteingabe = dialog.querySelector('input[name=datum]');
+            if (ersteingabe) { ersteingabe.focus(); }
+        });
+    });
+    document.querySelectorAll('dialog.lk-anpassen-dialog').forEach(function (dialog) {
+        var form = dialog.querySelector('form');
+        if (!form) { return; }
+        var datum = form.querySelector('input[name=datum]');
+        var uhrzeit = form.querySelector('input[name=uhrzeit]');
+        var ad = form.querySelector('select[name=ad_id]');
+        var objekt = form.querySelector('select[name=objekt_id]');
+        var schritt = Math.max(5, Math.round((parseInt(uhrzeit && uhrzeit.step, 10) || 900) / 60));
+        var laufend = null;
+        function pruefen() {
+            if (!window.fetch || !datum || !uhrzeit || !ad || !datum.value || !uhrzeit.value || !ad.value) { return; }
+            var params = new URLSearchParams({
+                ad_id: ad.value, beginn: datum.value + 'T' + uhrzeit.value,
+                vorgang_id: dialog.dataset.vorgang || '', ignorieren_id: dialog.dataset.termin || ''
+            });
+            if (objekt && objekt.value) { params.set('objekt_id', objekt.value); }
+            var meinLauf = {};
+            laufend = meinLauf;
+            fetch(dialog.dataset.konfliktUrl + '?' + params.toString(), { credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (laufend !== meinLauf) { return; }
+                    konflikteZeigen(dialog, d.texte || [], !!d.sperren, !!d.warnen);
+                })
+                .catch(function () { /* Prüfung ist Komfort – der Server prüft beim Speichern */ });
+        }
+        if (uhrzeit) { uhrzeit.addEventListener('change', function () { runden(uhrzeit, schritt); pruefen(); }); }
+        if (datum) { datum.addEventListener('change', pruefen); }
+        if (ad) { ad.addEventListener('change', pruefen); }
+        if (objekt) { objekt.addEventListener('change', pruefen); }
+        form.addEventListener('submit', function (ev) {
+            if (!window.fetch) { return; }
+            ev.preventDefault();
+            fehlerZeigen(dialog, '');
+            var knopf = form.querySelector('button[type=submit]');
+            if (knopf) { knopf.disabled = true; }
+            var daten = {};
+            new FormData(form).forEach(function (wert, name) { daten[name] = wert; });
+            if (!form.querySelector('input[name=bestaetigt]:checked')) { delete daten.bestaetigt; }
+            fetch(form.action, {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify(daten)
+            })
+                .then(function (r) { return r.json().then(function (d) { return { status: r.status, d: d }; }); })
+                .then(function (a) {
+                    var d = a.d || {};
+                    if (a.status === 200 && d.ok) {
+                        var meldung = d.meldung || 'Termin angepasst.';
+                        location.href = karteiUrl(dialog) + '?meldung=' + encodeURIComponent(meldung) + '#termine';
+                        return;
+                    }
+                    if (knopf) { knopf.disabled = false; }
+                    if (a.status === 409) {
+                        konflikteZeigen(dialog, d.konflikte || [d.meldung], !d.bestaetigung_noetig, !!d.bestaetigung_noetig);
+                        if (!d.bestaetigung_noetig) { fehlerZeigen(dialog, d.meldung || 'Nicht möglich.'); }
+                        return;
+                    }
+                    fehlerZeigen(dialog, d.meldung || 'Anpassen nicht möglich.');
+                })
+                .catch(function () {
+                    if (knopf) { knopf.disabled = false; }
+                    fehlerZeigen(dialog, 'Verbindung fehlgeschlagen – nicht gespeichert.');
+                });
+        });
+    });
 })();

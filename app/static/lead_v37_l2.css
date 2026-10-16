@@ -1,0 +1,56 @@
+/* v37 (PLAN_LEAD_V7 Phase 198, Agent L2) – Objekte-Akkordeon, Dialog „Anpassen“, Strecke in km,
+   Login „Anderer Benutzer“, Routing-Abschnitt der Lead-Einstellungen. Nur Tokens Hell/Dunkel
+   (style.css Design v2; Agent L1 legt danach das Design v3 des Lead-Moduls in lead_v2.css an –
+   diese Datei bleibt eigenständig und ist in base.html mit einer Zeile eingebunden).
+   v37 (Phase 197, Agent L1): innerhalb von <body data-modul="lead"> lösen alle Tokens hier
+   (--linie, --flaeche-*, --akzent, --status-orange, --r-*, --t-*) gegen die v3-Werte auf –
+   keine eigenen Farb- oder Maßangaben nötig; auf der Login-Seite (kein Lead-Wrapper) bleiben sie v2. */
+
+/* Objekte-Akkordeon (Kundenkartei, kartei_objekte.html) */
+.lk-objekte-akkordeon { border: 0; margin: 0; }
+.lk-objekte-akkordeon > summary.lk-objekte-kopf { cursor: pointer; list-style: none; display: flex; justify-content: space-between;
+    align-items: baseline; gap: var(--a-3); flex-wrap: wrap; padding: var(--a-1) 0; border-radius: var(--r-s); }
+.lk-objekte-akkordeon > summary.lk-objekte-kopf::-webkit-details-marker { display: none; }
+.lk-objekte-akkordeon > summary.lk-objekte-kopf:hover { background: var(--flaeche-hover); }
+.lk-objekte-akkordeon > summary.lk-objekte-kopf:focus-visible { outline: 2px solid var(--fokus); outline-offset: 2px; }
+.lk-objekte-akkordeon > summary .lk-abschnitt { margin: 0; display: inline-flex; flex-wrap: wrap; gap: 0.4rem 0.6rem; align-items: baseline; }
+.lk-objekte-kopfzeile { text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--text); font-size: var(--t-s); }
+.lk-objekte-kopf-rechts { display: inline-flex; align-items: center; gap: var(--a-2); font-size: var(--t-s); }
+.lk-objekte-pfeil { display: inline-block; width: 0.6em; height: 0.6em; border-right: 2px solid var(--text-dezent);
+    border-bottom: 2px solid var(--text-dezent); transform: rotate(-45deg); transition: transform 0.15s ease; margin-left: 0.2rem; }
+.lk-objekte-akkordeon[open] > summary .lk-objekte-pfeil { transform: rotate(45deg); }
+.lk-objekte-akkordeon:not([open]) > summary .lk-info-hinweis { display: none; }
+
+/* Dialog „Anpassen“ (kartei_bloecke.html, lm_termin.js) */
+.lk-anpassen-dialog { max-width: 560px; }
+.lk-anpassen-dialog .lk-anpassen-konflikte { margin: var(--a-2) 0; padding: var(--a-2) var(--a-3); border-radius: var(--r-s);
+    border: 1px solid var(--linie); font-size: var(--t-s); background: var(--flaeche-abgesetzt); }
+.lk-anpassen-dialog .lk-anpassen-konflikte.warnung { border-color: var(--status-orange); background: var(--status-orange-bg); color: var(--text); }
+.lk-anpassen-dialog .lk-anpassen-konflikte.sperre { border-color: var(--status-rot); background: var(--status-rot-bg); color: var(--text); }
+.lk-anpassen-dialog .lk-anpassen-konflikte ul { margin: 0.3rem 0 0; padding-left: 1.2rem; }
+.lk-anpassen-dialog .lk-anpassen-bestaetigen { font-weight: 600; }
+.lk-anpassen-knopf { white-space: nowrap; }
+.lk-monday-hinweis { font-size: var(--t-xs, var(--t-s)); }
+.lk-objekt-termin .lk-anpassen-knopf { margin-left: auto; }
+
+/* Strecke in Kilometern – Terminassistent, Kartei-Vorschläge, Mein Tag, Karte */
+.lmt-strecke, .lk-vorschlag-strecke { color: var(--text-dezent); font-size: var(--t-s); }
+.lmt-strecke strong { color: var(--text); font-weight: 600; }
+.mt-strecke { display: inline-flex; align-items: center; gap: 0.3rem; font-size: var(--t-s); color: var(--text-dezent); }
+.mt-strecke .mt-strecke-wert { color: var(--text); font-weight: 600; }
+.mt-strecke.geschaetzt .mt-strecke-wert { font-weight: 500; }
+.mt-naechstes .mt-strecke { margin-top: 0.2rem; }
+
+/* Login: vorbelegter Benutzer, Link „Anderer Benutzer“ */
+.login-anderer { display: flex; justify-content: space-between; align-items: center; gap: var(--a-2); margin: -0.4rem 0 0.6rem; font-size: var(--t-s); }
+.login-anderer a { color: var(--link); }
+
+/* Lead-Einstellungen / Lead-Routing: Abschnitt Routing */
+.lm-routing-status { display: grid; gap: 0.3rem var(--a-4); grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); font-size: var(--t-s); margin: var(--a-2) 0; }
+.lm-routing-status .ok { color: var(--status-gruen); }
+.lm-routing-status .offen { color: var(--status-rot); }
+.lm-routing-balken { height: 8px; border-radius: 999px; background: var(--flaeche-abgesetzt); overflow: hidden; max-width: 360px; border: 1px solid var(--linie); }
+.lm-routing-balken > i { display: block; height: 100%; background: var(--akzent); }
+.lm-routing-balken.warn > i { background: var(--status-orange); }
+.lm-routing-balken.voll > i { background: var(--status-rot); }
+.lm-routing-warnung { color: var(--status-orange); font-weight: 600; }

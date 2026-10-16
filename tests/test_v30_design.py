@@ -28,8 +28,33 @@ PROJEKT = Path(__file__).resolve().parents[1]
 STATIC = PROJEKT / "app" / "static"
 TEMPLATES = PROJEKT / "app" / "templates"
 STYLE = STATIC / "style.css"
+LEAD_CSS = STATIC / "lead_v2.css"
 HEX = re.compile(r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b")
 TOKEN_ENDE = "* { box-sizing: border-box; }"
+# v37 (PLAN_LEAD_V7 Phase 197, Agent L1): Design v3 des Lead-Moduls – eigener Token-Block in
+# lead_v2.css zwischen diesen Markern (Hell am Wrapper [data-modul="lead"], Dunkel in beiden
+# Mechaniken); nur dort sind Hex-Werte erlaubt, der Wächter prüft die Gleichheit der Dunkelblöcke.
+V3_ANFANG, V3_ENDE = "/* v3-tokens-anfang */", "/* v3-tokens-ende */"
+V3_HELL = '[data-modul="lead"] {'
+V3_SCHRIFT = '[data-modul="lead"] main {'
+V3_DUNKEL = ':root[data-theme="dunkel"] [data-modul="lead"] {'
+V3_MEDIA = ':root:not([data-theme="hell"]) [data-modul="lead"] {'
+TOKEN_PAARE_V3_TEXT = [       # (Vordergrund, Hintergrund) ≥ 4,5 : 1 – Lead-Modul, Hell und Dunkel
+    ("--text", "--flaeche"), ("--text", "--flaeche-karte"), ("--text", "--flaeche-abgesetzt"), ("--text", "--flaeche-hover"),
+    ("--text", "--lm3-feld"), ("--text-titel", "--flaeche-karte"), ("--lm3-text-zweit", "--flaeche-karte"),
+    ("--text-dezent", "--flaeche-karte"), ("--akzent-text", "--akzent"), ("--akzent-text", "--akzent-hover"),
+    ("--akzent-text", "--lm-aktiv-bg"), ("--link", "--flaeche-karte"), ("--link", "--flaeche"),
+    ("--lm3-akzent-auf-flaeche", "--akzent-flaeche"), ("--status-orange", "--status-orange-bg"),
+    ("--status-orange", "--flaeche-karte"), ("--lm3-orange-text", "--lm3-orange-flaeche"),
+    ("--lm3-orange-text-auf", "--lm3-orange"), ("--text-auf-farbe", "--status-orange"),
+    ("--sparte-pvv", "--flaeche-karte"), ("--status-rot", "--flaeche-karte"), ("--status-gruen", "--flaeche-karte"),
+]
+TOKEN_PAARE_V3_DEZENT = [     # ≥ 3 : 1
+    ("--text-dezent", "--flaeche"), ("--text-dezent", "--flaeche-abgesetzt"), ("--text-dezent", "--lm3-feld"),
+    ("--akzent", "--flaeche-karte"), ("--akzent", "--flaeche"), ("--fokus", "--flaeche"), ("--lm3-akzent-hell", "--flaeche-karte"),
+    # --lm3-akzent-linie (#8db4de) ist eine rein dekorative Akzentlinie (2,16 : 1 auf Weiß) – nie für Text
+    # oder bedeutungstragende Rahmen verwenden; deshalb kein Prüfpaar
+]
 PDF_MODULE = ["pdf_export", "protokoll_pdf", "lieferschein_pdf", "bza_datenblatt",
               "wirtschaftlichkeit_pdf", "steckbrief_pdf"]
 TOKEN_PAARE_TEXT = [          # (Vordergrund, Hintergrund) ≥ 4,5 : 1
@@ -107,6 +132,31 @@ def _fest_erlaubt(zeilen: list[str], i: int) -> bool:
     return "fest:" in zeilen[i] or (i > 0 and "fest:" in zeilen[i - 1])
 
 
+def _ohne_v3_tokens(text: str) -> str:
+    """v37: Zeilen zwischen den Markern des v3-Token-Blocks leeren – Zeilennummern bleiben erhalten."""
+    if V3_ANFANG not in text:
+        return text
+    innen, ergebnis = False, []
+    for zeile in text.split("\n"):
+        if V3_ANFANG in zeile:
+            innen = True
+        elif V3_ENDE in zeile:
+            innen = False
+        ergebnis.append("" if innen or V3_ENDE in zeile else zeile)
+    return "\n".join(ergebnis)
+
+
+def _v3_abschnitt() -> str:
+    """Token-Block des Design v3 (lead_v2.css) zwischen den Markern."""
+    text = LEAD_CSS.read_text(encoding="utf-8")
+    assert V3_ANFANG in text and V3_ENDE in text, "v3-Token-Marker fehlen in lead_v2.css"
+    return text.split(V3_ANFANG, 1)[1].split(V3_ENDE, 1)[0]
+
+
+def _v3_tokens(selektor: str) -> dict[str, str]:
+    return _tokens(_block(_v3_abschnitt(), selektor))
+
+
 def _benutzer(rolle: str) -> Benutzer:
     s = SessionLocal()
     try:
@@ -144,7 +194,8 @@ class TokenWaechter(unittest.TestCase):
                 versatz = kopf.count("\n")
                 zeilen = rest.split("\n")
             else:
-                versatz, zeilen = 0, text.split("\n")
+                # v37: der v3-Token-Block in lead_v2.css ist der einzige weitere Ort für Hex-Werte
+                versatz, zeilen = 0, _ohne_v3_tokens(text).split("\n")
             for i, zeile in enumerate(zeilen):
                 if HEX.search(zeile) and not _fest_erlaubt(zeilen, i):
                     verstoesse.append(f"{datei.name}:{versatz + i + 1}: {zeile.strip()[:80]}")
@@ -222,6 +273,58 @@ class TokenBloecke(unittest.TestCase):
         self.assertNotIn("--pj-surface: #", rest)
 
 
+# --- (b2) v37: Design v3 des Lead-Moduls – Token-Block in lead_v2.css ---------------------
+class TokenBloeckeV3(unittest.TestCase):
+    """Hell-Block am Wrapper [data-modul="lead"], Dunkel-Block und Geräte-Block (prefers-color-scheme)
+    mit identischen Werten; jeder Farb-Token des Hell-Blocks hat einen Dunkelwert; --sparte-pvv liegt
+    global am :root (Badge „PV vorhanden“ auch außerhalb des Lead-Moduls)."""
+
+    def setUp(self):
+        self.v3 = _v3_abschnitt()
+
+    def test_marker_genau_einmal_und_bloecke_vorhanden(self):
+        text = LEAD_CSS.read_text(encoding="utf-8")
+        self.assertEqual(text.count(V3_ANFANG), 1)
+        self.assertEqual(text.count(V3_ENDE), 1)
+        for anker in (V3_HELL, V3_SCHRIFT, V3_DUNKEL, V3_MEDIA, "@media (prefers-color-scheme: dark)",
+                      ':root[data-theme="dunkel"] {', ':root:not([data-theme="hell"]) {'):
+            self.assertIn(anker, self.v3, anker)
+        self.assertIn("--sparte-pvv", _tokens(_block(self.v3, ":root {")))
+
+    def test_dunkel_und_media_block_gleich(self):
+        dunkel, media = _v3_tokens(V3_DUNKEL), _v3_tokens(V3_MEDIA)
+        self.assertGreater(len(dunkel), 25)
+        self.assertEqual(sorted(dunkel), sorted(media), "Token-Namen der beiden Dunkel-Blöcke weichen ab")
+        self.assertEqual({k: (dunkel[k], media[k]) for k in dunkel if dunkel[k] != media[k]}, {})
+        # --sparte-pvv: beide Dunkel-Mechaniken am :root gleich
+        pvv_dunkel = _tokens(_block(self.v3, ':root[data-theme="dunkel"] {'))
+        pvv_media = _tokens(_block(self.v3, ':root:not([data-theme="hell"]) {'))
+        self.assertEqual(pvv_dunkel, pvv_media)
+        self.assertIn("--sparte-pvv", pvv_dunkel)
+
+    def test_dunkel_block_definiert_alle_farbtokens_des_hell_blocks(self):
+        hell, dunkel = _v3_tokens(V3_HELL), _v3_tokens(V3_DUNKEL)
+        farbig = [n for n, w in hell.items() if w.startswith("#") or w.startswith("rgba(") or "#" in w]
+        self.assertGreater(len(farbig), 25)
+        for name in farbig:
+            self.assertIn(name, dunkel, f"{name} fehlt im Dunkel-Block des Lead-Moduls")
+        for name in dunkel:
+            self.assertIn(name, hell, f"{name} nur im Dunkel-Block")
+        # Aliase hängen am Wrapper neu, damit sie gegen die v3-Werte auflösen
+        for alias in ("--friondo-blau", "--friondo-blau-dunkel", "--friondo-blau-hell", "--friondo-dunkel",
+                      "--grau-hell", "--grau-linie", "--lm-aktiv-bg", "--lm-aktiv-fg"):
+            self.assertIn(alias, hell, alias)
+            self.assertTrue(hell[alias].startswith("var("), alias)
+
+    def test_typografie_ohne_farben_am_main(self):
+        schrift = _v3_tokens(V3_SCHRIFT)
+        self.assertIn("--schrift", schrift)
+        self.assertIn("Inter", schrift["--lm3-schrift"])
+        self.assertEqual(schrift["--t-m"], "14px")
+        for name, wert in schrift.items():
+            self.assertFalse(HEX.search(wert), f"{name}: Farbwert im Typografie-Block")
+
+
 # --- (d) Kontrast der Token-Paare ---------------------------------------------------
 class Kontrast(unittest.TestCase):
     def setUp(self):
@@ -257,6 +360,44 @@ class Kontrast(unittest.TestCase):
         hell, dunkel = self.modi["hell"], self.modi["dunkel"]
         self.assertEqual(darstellung.THEME_COLOR["hell"], _aufloesen(hell, "--flaeche-erhoeht"))
         self.assertEqual(darstellung.THEME_COLOR["dunkel"], _aufloesen(dunkel, "--flaeche"))
+
+
+# --- (d2) v37: Kontrast der v3-Token-Paare des Lead-Moduls (Hell und Dunkel) ------------
+class KontrastV3(Kontrast):
+    def setUp(self):
+        super().setUp()
+        hell = dict(self.modi["hell"])
+        hell.update(_tokens(_block(_v3_abschnitt(), ":root {")))
+        hell.update(_v3_tokens(V3_HELL))
+        dunkel = dict(self.modi["dunkel"])
+        dunkel.update(_tokens(_block(_v3_abschnitt(), ':root[data-theme="dunkel"] {')))
+        dunkel.update(_v3_tokens(V3_HELL))      # Aliase/Hell-Werte, die der Dunkelblock nicht überschreibt
+        dunkel.update(_v3_tokens(V3_DUNKEL))
+        self.modi = {"lead-hell": hell, "lead-dunkel": dunkel}
+
+    def test_text_auf_flaechen_mindestens_4_5(self):
+        self._pruefen(TOKEN_PAARE_V3_TEXT, 4.5)
+
+    def test_dezenter_text_mindestens_3(self):
+        self._pruefen(TOKEN_PAARE_V3_DEZENT, 3.0)
+
+    def test_theme_color_entspricht_tokens(self):
+        """Die theme-color der Kopfzeile bleibt die v2 (Kopfzeile ist nicht Teil des Lead-Designs)."""
+        self.assertEqual(darstellung.THEME_COLOR["hell"], _aufloesen(self.modi["lead-hell"], "--flaeche-erhoeht"))
+
+    def test_kontrollwerte_des_plans(self):
+        hell, dunkel = self.modi["lead-hell"], self.modi["lead-dunkel"]
+        self.assertEqual(hell["--flaeche"], "#f6f8fa")
+        self.assertEqual(hell["--flaeche-karte"], "#ffffff")
+        self.assertEqual(hell["--akzent"], "#2f72b5")
+        self.assertEqual(hell["--akzent-hover"], "#245c95")
+        self.assertEqual(hell["--r-m"], "12px")
+        self.assertEqual(dunkel["--flaeche"], "#0f1a26")
+        self.assertEqual(dunkel["--flaeche-karte"], "#16243a")
+        self.assertEqual(dunkel["--linie"], "#2a3b52")
+        self.assertEqual(dunkel["--text"], "#e8eef5")
+        self.assertEqual(dunkel["--text-dezent"], "#9aa8ba")
+        self.assertEqual(dunkel["--akzent"], "#2f72b5", "Blau unverändert")
 
 
 # --- (c) data-theme aus Cookie bzw. Einstellung -------------------------------------

@@ -1,0 +1,36 @@
+/* v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Interessen-Popover hinter dem PLUS (Chips mit Häkchen),
+   Badge „PV vorhanden“ (Merkmal PVV). Nur Tokens aus style.css / lead_v2.css (Hell/Dunkel identisch),
+   keine festen Farbwerte. Eingebunden zentral in base.html (nach lm_v35_r.css); lead_v2.css bleibt
+   unverändert (Design v3 des Lead-Moduls ist Sache von Agent L1). Das Plus-Popover trägt das
+   Attribut data-plus="1" am <details class="lm-popover"> (Markup der v35-Mechanik bleibt). */
+
+/* --- Merkmal „PV vorhanden“ (Code PVV): Token --sparte-pvv (v37 Design v3, Agent L1 – definiert in lead_v2.css
+       am :root für Hell und Dunkel, damit das Badge auch außerhalb des Lead-Moduls dieselbe Farbe trägt) --- */
+.chip-pvv { --chip-farbe: var(--sparte-pvv, var(--status-grau)); }
+.abzeichen.interesse-pvv { --chip-farbe: var(--sparte-pvv, var(--status-grau)); background: color-mix(in srgb, var(--chip-farbe) 14%, transparent);
+    color: var(--chip-farbe); margin-left: 0.2rem; }
+.chip.chip-merkmal { border-style: dashed; }   /* Merkmal = gestrichelter Rand, keine Erfassung */
+
+/* --- Plus statt Stift: runder, gestrichelter Knopf am Ende der Badges --- */
+.lm-popover[data-plus] > summary { width: 22px; height: 22px; border-radius: 999px; border: 1px dashed var(--linie-stark);
+    color: var(--text-dezent); background: transparent; }
+.lm-popover[data-plus] > summary:hover, .lm-popover[data-plus][open] > summary { border-style: solid;
+    border-color: var(--akzent); color: var(--akzent); background: var(--akzent-flaeche); }
+.lm-popover[data-plus] > summary:focus-visible { outline: 2px solid var(--fokus); outline-offset: 2px; }
+
+/* --- Popover-Inhalt: Chips statt nackter Häkchen (gewählte gefüllt, Klick wählt ab/an) --- */
+.lm-popover[data-plus] .lm-popover-inhalt { display: flex; flex-wrap: wrap; gap: 6px 8px; max-width: 360px; white-space: normal;
+    align-items: center; }
+.lm-popover[data-plus] .lm-popover-zeile.lm-popover-chip { position: relative; display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 2px 2px 0; border-radius: 999px; }
+.lm-popover-chip input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; margin: 0; pointer-events: none; }
+.lm-popover-chip .chip { cursor: pointer; background: var(--flaeche-karte); }
+.lm-popover-chip input:checked + .chip { background: var(--chip-farbe); color: var(--text-auf-farbe); }
+.lm-popover-chip input:focus-visible + .chip { outline: 2px solid var(--fokus); outline-offset: 2px; }
+.lm-popover-chip:hover .chip { box-shadow: 0 0 0 2px color-mix(in srgb, var(--chip-farbe) 25%, transparent); }
+.lm-popover-chip small { font-size: var(--t-xs); }
+.lm-popover[data-plus] .lm-popover-fuss { flex-basis: 100%; }
+
+@media (max-width: 900px) {
+    .lm-popover[data-plus] .lm-popover-inhalt { max-width: none; }
+}

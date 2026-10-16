@@ -83,10 +83,14 @@ class Kunde(Base):
 # Interesse (v5): Codes und Anzeigenamen; Reihenfolge = Anzeigereihenfolge
 # v23 (Phase 104): Sparte GW (Gewerbe) – wie WB nur Freitext-Erfassung
 # v31 (PLAN_LEAD_V5 Phase 157): MS/WA/DMS; Langformen zentral in app/sparten.py
+# v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Merkmal „PV vorhanden“ (PVV) – Häkchen in der
+# Interessenliste, aber keine Erfassungs-Sparte (sparten.INTERESSEN_MERKMALE; Lead.sparten
+# lässt Merkmale weg)
 INTERESSEN = [("WP", "Wärmepumpe"), ("PV", "Photovoltaik"), ("KL", "Klima"),
               ("WB", "Wallbox"), ("GW", "Gewerbe"), ("MS", "Mieterstrom"),
-              ("WA", "Wasser"), ("DMS", "Denkmalschutz")]
+              ("WA", "Wasser"), ("DMS", "Denkmalschutz"), ("PVV", "PV vorhanden")]
 INTERESSE_CODES = [code for code, _ in INTERESSEN]
+INTERESSEN_MERKMALE = ("PVV",)   # = sparten.INTERESSEN_MERKMALE (hier ohne Import des Moduls)
 
 # Konfigurator-Typ (v5): aktuell nur WP; PV/Klima docken später als eigene
 # Kataloge an – jeder Vorgang trägt den Typ bereits mit.
@@ -457,8 +461,10 @@ class Lead(Base):
 
     @property
     def sparten(self) -> list[str]:
-        """v8: die zu erfassenden Sparten – die Lead-Interessen, sonst WP."""
-        return self.interessen or ["WP"]
+        """v8: die zu erfassenden Sparten – die Lead-Interessen, sonst WP.
+        v37 (Phase 199): ohne Merkmale (PVV) – ein Merkmal ist keine Erfassungs-Sparte
+        (Leads VOT, Mein Tag, Sparten-Start)."""
+        return [c for c in self.interessen if c not in INTERESSEN_MERKMALE] or ["WP"]
 
     @property
     def ausgeblendete_sparten(self) -> list[str]:
@@ -1746,6 +1752,13 @@ class VotTermin(Base):
     ics_sequence: Mapped[int] = mapped_column(Integer, default=0)
     # v31 (PLAN_LEAD_V5 Phase 153): Objekt des Termins (Adresse/Fahrzeit je Objekt)
     objekt_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # v37 (PLAN_LEAD_V7 Phase 198, Agent L2): „Anpassen“ bestehender Termine in der Kartei –
+    # monday_beginn = Datum laut monday beim letzten Sync (Hinweis „ursprünglich aus monday: …“,
+    # der Sync setzt einen im Tool angepassten Termin nicht zurück, solange monday dieses Datum
+    # trägt); angepasst_am/_von = letzte Anpassung im Tool [ANNAHME: additive Spalten]
+    monday_beginn: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    angepasst_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    angepasst_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,

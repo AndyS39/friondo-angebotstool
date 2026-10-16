@@ -40,12 +40,17 @@ RATE_LIMIT = 60   # Aufrufe je Minute je Schlüssel
 # kommen als Code oder als Text („Mieterstrom“, „Wasser“, „Denkmalschutz“)
 from app import sparten as sparten_modul
 SPARTEN_API = tuple(sparten_modul.SPARTEN)
+# v37 (PLAN_LEAD_V7 Phase 199, Agent L3): zusätzlich das Merkmal „PV vorhanden“ (PVV) – als Code
+# oder Text („PV vorhanden“); es zählt nicht als Sparte (Pflicht „sparten“ bleibt an SPARTEN_API)
+INTERESSEN_API = tuple(sparten_modul.INTERESSEN_ALLE)
 # Aliase der Agenturen (Formular-Standard): Klartext → Code
 SPARTEN_ALIAS = {"WAERMEPUMPE": "WP", "WÄRMEPUMPE": "WP", "PHOTOVOLTAIK": "PV", "SOLAR": "PV",
                  "KLIMA": "KL", "KLIMAANLAGE": "KL", "WALLBOX": "WB", "GEWERBE": "GW",
                  "GEWERBLICH": "GW",
                  "MIETERSTROM": "MS", "WASSER": "WA", "WASSERAUFBEREITUNG": "WA",
-                 "DENKMALSCHUTZ": "DMS", "DENKMAL": "DMS"}
+                 "DENKMALSCHUTZ": "DMS", "DENKMAL": "DMS",
+                 "PV VORHANDEN": "PVV", "PV-VORHANDEN": "PVV", "PV_VORHANDEN": "PVV",
+                 "PVVORHANDEN": "PVV", "BESTEHENDE PV-ANLAGE": "PVV", "PV-ANLAGE VORHANDEN": "PVV"}
 
 
 def _rate_ok(schluessel: str) -> bool:
@@ -64,7 +69,7 @@ def _sparten_lesen(werte) -> list[str]:
     for s in werte or []:
         code = str(s).strip().upper()
         code = SPARTEN_ALIAS.get(code, code)
-        if code in SPARTEN_API and code not in ergebnis:
+        if code in INTERESSEN_API and code not in ergebnis:   # v37: inkl. Merkmal PVV
             ergebnis.append(code)
     return ergebnis
 
@@ -134,9 +139,12 @@ def lead_anlegen(request: Request, session: Session = Depends(get_session)):
     quelle_vorab = _quelle_vorab(session, str(daten.get("quelle") or ""), quelle)
     sparten = _sparten_lesen(daten.get("sparten") or [])
     sparten_aus_quelle = False
-    if not sparten:
-        sparten = _standard_sparten(quelle_vorab)
-        sparten_aus_quelle = bool(sparten)
+    # v37 (Phase 199): das Merkmal „PV vorhanden“ (PVV) ist keine Sparte – kommt keine
+    # Erfassungs-Sparte mit, greifen die Standard-Sparten der Quelle, das Merkmal bleibt erhalten
+    if not any(s in SPARTEN_API for s in sparten):
+        standard = _standard_sparten(quelle_vorab)
+        sparten_aus_quelle = bool(standard)
+        sparten = standard + [s for s in sparten if s not in standard]
 
     fehlend = []
     if not (daten.get("nachname") or "").strip():
@@ -145,7 +153,7 @@ def lead_anlegen(request: Request, session: Session = Depends(get_session)):
         fehlend.append("plz")
     if not (daten.get("telefon") or "").strip() and not (daten.get("email") or "").strip():
         fehlend.append("telefon oder email")
-    if not sparten:
+    if not any(s in SPARTEN_API for s in sparten):   # v37: PVV allein reicht nicht
         fehlend.append("sparten (" + "/".join(SPARTEN_API) + ")")
     if fehlend:
         return JSONResponse({"fehler": "Pflichtfelder fehlen",

@@ -37,7 +37,7 @@
 {%- if hv_sicht and aktiv not in hv_keys -%}{%- set aktiv = 'handelsvertreter' -%}{%- endif -%}
 {%- set haupt = aktiv in ('hauptboard', 'tabelle') -%}
 {%- set eintraege = [
-    ('dashboard', '/lead-management/dashboard', 'dashboard', 'Mein Dashboard', 'Mein Dashboard – Fällig heute, kommende Wiedervorlagen, To-Dos, Routenplaner', aktiv == 'dashboard'),
+    ('dashboard', '/lead-management/dashboard', 'dashboard', 'Mein Dashboard', 'Mein Dashboard – Fällig heute, kommende Wiedervorlagen, To-Dos, Meine Termine', aktiv == 'dashboard'),
     ('hauptboard', '/lead-management/hauptboard', 'board', hauptname, hauptname ~ ' – Leads ohne Vor-Ort-Termin (Tabelle · Kanban)', haupt),
     ('terminiert', '/lead-management/terminiert', 'deals', deals, deals ~ ' – Leads mit Vor-Ort-Termin, Angebot nachverfolgen', aktiv == 'terminiert'),
     ('kontaktiert', '/lead-management/kontaktiert', 'telefon-eingehend', 'Kontaktiert', 'Kontaktiert – alle Kontaktversuche, Rufnummernsuche', aktiv == 'kontaktiert'),

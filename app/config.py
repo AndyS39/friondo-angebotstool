@@ -32,7 +32,7 @@ def _schalter(env_name: str) -> bool:
 
 
 # v27 (PLAN_V17): Versionskennung für /health und die Betriebs-Seite
-VERSION = "v36"   # 16.10.2026: Angebotslayout v3 (HTML-Vorlagen + Browser-Druck), Cloover-Finanzierung (PLAN_V22, Phasen 188-195); vorher v35 16.10.2026: TAIFUN-Kundenuebergabe, Kanal-Stammdaten, Rechte AD/HV-Gruppen, Profilbild, Inline-Bearbeitung, Filter, Sofortsuche (PLAN_LEAD_V6, Phasen 183-187)
+VERSION = "v37"   # 16.10.2026: Lead-Management V7 – Design v3, Kartei-Review, Termine anpassbar, Routing in km, Kanaele/Interessen (PLAN_LEAD_V7, Phasen 196-200); vorher v36 16.10.2026: Angebotslayout v3 (HTML + Browser-Druck), Cloover-Finanzierung (PLAN_V22, Phasen 188-195)
 
 
 # --- Pfade ---------------------------------------------------------------
@@ -135,3 +135,8 @@ PDF_BROWSER_PFAD = os.getenv("PDF_BROWSER_PFAD", "").strip().strip('"')
 CLOOVER_TEST_URL = "https://partners-api-530331765008.europe-west3.run.app"
 CLOOVER_API_KEY = os.getenv("CLOOVER_API_KEY", "").strip()
 CLOOVER_BASIS_URL = os.getenv("CLOOVER_BASIS_URL", "").strip().rstrip("/") or CLOOVER_TEST_URL
+# v37 (PLAN_LEAD_V7 Phase 198, Agent L2): openrouteservice-Key fuer Strassenkilometer/Fahrzeit –
+# NUR in der .env (nie im Code, in der Doku oder in Tests); die .env hat Vorrang vor dem alten
+# Lead-Parameter ors_api_key (Rueckfall, Parametrierung → Lead-Routing). Leer = Luftlinie × 1,3
+# mit Kennzeichen „geschaetzt“ (routing.ors_schluessel entscheidet).
+ORS_API_KEY = os.getenv("ORS_API_KEY", "").strip()

@@ -461,7 +461,10 @@ class D_Pflege(Basis):
         self.assertEqual(r.status_code, 400)
         seite = self.client.get("/lead-management/kanaele").text
         self.assertIn('class="kf-chip kf-text-hell" style="--f: #333333"', seite)
-        self.assertIn('class="kf-chip kf-text-dunkel" style="--f: #F0B14A"', seite)
+        # v37 (PLAN_LEAD_V7 Phase 199, Agent L3): DAA (#F0B14A) ist seit v37 inaktiv und steht unter
+        # „nicht mehr wählbar“ (kf-chip-inaktiv) – Kontrastprüfung „dunkel“ am aktiven Kanal Enni
+        self.assertIn('class="kf-chip kf-text-dunkel" style="--f: #7BC67E"', seite)
+        self.assertIn('class="kf-chip kf-chip-inaktiv kf-text-dunkel" style="--f: #F0B14A"', seite)
         self.assertIn('<input type="color" name="farbe" value="#123456"', seite)
         self.assertIn('value="#333333"', seite)
         # Zeile-Label der Boards nutzt die Tabellenfarbe (lead_boards.kanal_farben)

@@ -42,8 +42,11 @@ from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 
 ANREDEN = ["", "Herr", "Frau", "Familie", "Firma"]
 # v31 (Phase 157): Interessen-Häkchen inkl. MS/WA/DMS – Codes und Langnamen aus app/sparten.py
-INTERESSEN_WAHL = [(code, sparten_modul.SPARTEN_LANG.get(code, code)) for code in sparten_modul.SPARTEN]
-INTERESSE_CODES_V31 = list(sparten_modul.SPARTEN)
+# v37 (PLAN_LEAD_V7 Phase 199, Agent L3): zusätzlich das Merkmal „PV vorhanden“ (PVV) –
+# Häkchen/Badge/Filter wie eine Sparte, aber kein Erfassungsstart (sparten.INTERESSEN_ALLE)
+INTERESSEN_WAHL = [(code, sparten_modul.INTERESSEN_LANG.get(code, code)) for code in sparten_modul.INTERESSEN_ALLE]
+INTERESSE_CODES_V31 = list(sparten_modul.INTERESSEN_ALLE)
+INTERESSEN_MERKMALE = tuple(sparten_modul.INTERESSEN_MERKMALE)
 
 # Filtergruppen der Timeline (Reiter Mitte): Aktivitätstyp → Gruppe
 TIMELINE_GRUPPEN = [("anruf", "Anrufe"), ("notiz", "Notizen"), ("mail", "E-Mails"),
@@ -105,7 +108,8 @@ def _objekt_pflicht_keys(session: Session, objekt: VorgangObjekt, pflicht_keys: 
             offen.add(feld)
     if "objektart" in pflicht_keys and not (objekt.objektart or "").strip():
         offen.add("objektart")
-    if "interesse" in pflicht_keys and not objekte_modul.interessen_liste(objekt):
+    # v37 (Phase 199): das Merkmal „PV vorhanden“ (PVV) allein erfüllt das Pflichtfeld nicht
+    if "interesse" in pflicht_keys and not sparten_modul.erfassungs_codes(objekte_modul.interessen_liste(objekt)):
         offen.add("interesse")
     if (objekt.objektart or "").upper() == "MFH":
         if not objekt.parteien:
@@ -790,6 +794,30 @@ def objektart_vorbelegung_kunde(kunde: Kunde | None, sparte: str = "WP") -> dict
     return ergebnis
 
 
+# v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Frage A11 „PV-Anlage vorhanden?“ des WP-Bogens
+# (Blatt Fragen, Antworten Ja | Nein | Ist geplant) – der KL- und der PV-Bogen haben keine
+# solche Frage (Bericht). Die Kennung des Merkmals kommt aus app/sparten.py.
+PV_VORHANDEN_FRAGE = "A11"
+PV_VORHANDEN_ANTWORT = "Ja"
+
+
+def pv_vorhanden_vorbelegung(quelle, sparte: str = "WP") -> dict:
+    """Vorbelegung {A11: {wert: "Ja", info}} für den WP-Bogen, wenn der Kunde (Kunde) bzw. das
+    Objekt (VorgangObjekt) das Merkmal „PV vorhanden“ trägt; sonst {} (andere Sparten: {})."""
+    if quelle is None or (sparte or "WP").upper() != "WP":
+        return {}
+    if isinstance(quelle, VorgangObjekt):
+        interessen = objekte_modul.interessen_liste(quelle)
+        herkunft = f"aus Objekt „{quelle.bezeichnung or 'Objekt'}“"
+    else:
+        interessen = getattr(quelle, "interesse", "") or ""
+        herkunft = "aus Kundenkartei"
+    if not sparten_modul.pv_vorhanden(interessen):
+        return {}
+    return {PV_VORHANDEN_FRAGE: {"wert": PV_VORHANDEN_ANTWORT,
+                                 "info": f"{herkunft} (Interesse „{sparten_modul.MERKMALE_LANG['PVV']}“)"}}
+
+
 # --- v25 (Phase 119): Statuskette, Autospeichern, Vorschläge-Zustand -----------------
 
 # Felder des Kundeninfo-Blocks, die POST /lead/{id}/feld annimmt → Anzeigename
@@ -1258,13 +1286,51 @@ def objekt_haengt(session: Session, vorgang: Vorgang, objekt: VorgangObjekt) -> 
     return ", ".join(gruende)
 
 
+OBJEKTE_ZU_EINSTELLUNG = "objekte_zu"      # v37: {vorgang_id: true|false} je Nutzer
+OBJEKTE_ZU_AB = 3                           # v37: mehr als drei Objekte → Standard zugeklappt
+
+
+def objekte_zustand_holen(session: Session, benutzer) -> dict:
+    """v37 (PLAN_LEAD_V7 Phase 198): gemerkter Akkordeon-Zustand je Nutzer –
+    benutzer_einstellungen Key objekte_zu = {"<vorgang_id>": true (zu) | false (auf)}
+    [ANNAHME: Dict je Vorgang]."""
+    benutzer_id = int(getattr(benutzer, "id", benutzer) or 0)
+    if not benutzer_id:
+        return {}
+    roh = lead_v2.einstellung_holen(session, benutzer_id, OBJEKTE_ZU_EINSTELLUNG, {}) or {}
+    return {str(k): bool(v) for k, v in roh.items()} if isinstance(roh, dict) else {}
+
+
+def objekte_zustand_setzen(session: Session, benutzer, vorgang_id: int, zu: bool) -> dict:
+    """Zustand je Nutzer und Vorgang speichern (POST /lead/{id}/objekte/zustand)."""
+    benutzer_id = int(getattr(benutzer, "id", benutzer) or 0)
+    if not benutzer_id:
+        return {}
+    zustand = objekte_zustand_holen(session, benutzer_id)
+    zustand[str(int(vorgang_id))] = bool(zu)
+    lead_v2.einstellung_setzen(session, benutzer_id, OBJEKTE_ZU_EINSTELLUNG, zustand)
+    return zustand
+
+
+def objekte_kopfzeile(anzahl: int, mit_termin: int, mit_angebot: int, mit_erfassung: int = 0) -> str:
+    """„5 Objekte · 2 mit Termin · 1 mit Angebot“ (Erfassungen nur, wenn vorhanden)."""
+    teile = [f"{anzahl} Objekt{'e' if anzahl != 1 else ''}",
+             f"{mit_termin} mit Termin", f"{mit_angebot} mit Angebot"]
+    if mit_erfassung:
+        teile.append(f"{mit_erfassung} mit Erfassung")
+    return " · ".join(teile)
+
+
 def objekte_kontext(session: Session, vorgang: Vorgang, kunde: Kunde | None, pflicht: dict,
                     benutzer_map: dict | None = None, erfassungen: list | None = None,
-                    angebote: list | None = None) -> dict:
+                    angebote: list | None = None, benutzer=None) -> dict:
     """Block „Objekte“ (Phase 153): Karten je aktivem Objekt mit Termin-Status
     (objekt_termine), Erfassungs-/Angebots-Chips, offenen Pflicht-Keys, Deaktivieren-
     Sperre und Pfeil-Zuständen; `mehrere` steuert, ob die Kartei Karten zeigt (sonst nur die
-    bekannten Adressfelder + „Weiteres Objekt hinzufügen“)."""
+    bekannten Adressfelder + „Weiteres Objekt hinzufügen“).
+    v37 (Phase 198): Akkordeon – `zu` (Standard zugeklappt bei Großkunde oder mehr als drei
+    Objekten, Zustand je Nutzer aus benutzer_einstellungen objekte_zu), `kopfzeile`
+    („5 Objekte · 2 mit Termin · 1 mit Angebot“), Zähler mit_termin/mit_angebot/mit_erfassung."""
     benutzer_map = benutzer_map or {}
     alle = objekte_modul.objekte_fuer(session, vorgang.id, nur_aktive=False)
     aktive = [o for o in alle if o.aktiv]
@@ -1302,9 +1368,20 @@ def objekte_kontext(session: Session, vorgang: Vorgang, kunde: Kunde | None, pfl
             "feld_url": f"/lead-management/lead/{vorgang.id}/objekt/{o.id}",
             "text": objekte_modul.objekt_text(o),
         })
+    mit_termin = sum(1 for e in liste if e["termin"] is not None)
+    mit_angebot = sum(1 for e in liste if e["angebote"])
+    mit_erfassung = sum(1 for e in liste if e["erfassungen"])
+    grosskunde = bool(kunde is not None and getattr(kunde, "grosskunde", False))
+    zu_standard = grosskunde or len(liste) > OBJEKTE_ZU_AB
+    gemerkt = objekte_zustand_holen(session, benutzer).get(str(vorgang.id)) if benutzer is not None else None
     return {"liste": liste, "inaktive": [o for o in alle if not o.aktiv],
             "anzahl": len(liste), "mehrere": len(liste) > 1,
-            "ohne_termin": sum(1 for e in liste if e["termin"] is None)}
+            "ohne_termin": sum(1 for e in liste if e["termin"] is None),
+            "mit_termin": mit_termin, "mit_angebot": mit_angebot, "mit_erfassung": mit_erfassung,
+            "zu_standard": zu_standard, "zu": zu_standard if gemerkt is None else bool(gemerkt),
+            "zu_gemerkt": gemerkt is not None,
+            "kopfzeile": objekte_kopfzeile(len(liste), mit_termin, mit_angebot, mit_erfassung),
+            "zustand_url": f"/lead-management/lead/{vorgang.id}/objekte/zustand"}
 
 
 def objekt_feld_speichern(session: Session, vorgang: Vorgang, kunde: Kunde | None,
@@ -1689,6 +1766,15 @@ def _ad_auswahl(session: Session, vorgang: Vorgang, kunde: Kunde) -> list:
     return auswahl
 
 
+def lead_termin_modul_hinweis() -> str:
+    """v37: Hinweistext des Dialogs „Anpassen“ in der Testphase (aus lead_termin, Rückfall fest)."""
+    try:
+        from app import lead_termin as termin_modul
+        return getattr(termin_modul, "ANPASSEN_TESTPHASE_HINWEIS", "Testphase: nur im Tool geändert")
+    except Exception:   # noqa: BLE001
+        return "Testphase: nur im Tool geändert"
+
+
 def _taifun_kontext(session: Session, vorgang: Vorgang, kunde, benutzer, readonly: bool) -> dict | None:
     """v35 (Phase 183, Agent T): Kontext `taifun` aus app/taifun_export.kartei_kontext."""
     try:
@@ -1767,7 +1853,8 @@ def kartei_kontext(session: Session, vorgang: Vorgang, benutzer, readonly: bool 
                          "farbe": status_farben.get(phase, "")}
     # v31 (PLAN_LEAD_V5): Objekte, Großkunde, Testphase-Schalter, Status aus der Kartei,
     # Timeline mit Herkunft (vorgang_verlauf), To-Do-Zeilen für die schmale Spalte
-    objekte = objekte_kontext(session, vorgang, kunde, pflicht, benutzer_map, erfassungen, angebote)
+    objekte = objekte_kontext(session, vorgang, kunde, pflicht, benutzer_map, erfassungen, angebote,
+                              benutzer=benutzer)
     try:
         vorgang_interessen = objekte_modul.vorgang_interessen(session, vorgang.id) or (kunde.interessen if kunde else [])
     except Exception:   # noqa: BLE001
@@ -1788,11 +1875,19 @@ def kartei_kontext(session: Session, vorgang: Vorgang, benutzer, readonly: bool 
                  "mail_versand_aktiv": mail_versand_aktiv, "mailsperre_hinweis": lead_v5.MAILSPERRE_HINWEIS}
     objekt_zeilen, objekte_hinweis_text, bestaetigung_vorbelegung = [], "", "auto"
     vorgemerkte = terminierung.get("vorgemerkte") or []
+    # v37 (PLAN_LEAD_V7 Phase 198, Agent L2): Block Termine – „Anpassen“ je aktivem Vor-Ort-Termin
+    # (auch monday), Hinweis „ursprünglich aus monday: …“ je Termin, Testphase-Hinweis des Dialogs
+    termin_hinweise: dict = {}
+    anpassbar_ids: set = set()
     try:
         from app import lead_termin as termin_modul
         fn = getattr(termin_modul, "testphase_kontext", None)
         if callable(fn):
             testphase.update(fn(session))
+        fn = getattr(termin_modul, "monday_hinweise", None)
+        termin_hinweise = fn(termine) if callable(fn) else {}
+        fn = getattr(termin_modul, "anpassbar", None)
+        anpassbar_ids = {t.id for t in termine if fn(t)} if callable(fn) else set()
         objekt_zeilen = objekt_termine(session, vorgang)
         fn = getattr(termin_modul, "objekte_hinweis", None)
         objekte_hinweis_text = fn(session, vorgang) if callable(fn) else ""
@@ -1810,6 +1905,11 @@ def kartei_kontext(session: Session, vorgang: Vorgang, benutzer, readonly: bool 
         **testphase,
         "objekt_zeilen": objekt_zeilen, "objekte_hinweis": objekte_hinweis_text,
         "vorgemerkte": vorgemerkte, "bestaetigung_vorbelegung": bestaetigung_vorbelegung,
+        # v37 (Phase 198): „Anpassen“ je Termin, monday-Hinweise, Testphase-Text des Dialogs
+        "termin_hinweise": termin_hinweise, "anpassbar_ids": anpassbar_ids,
+        "anpassen_testphase": (lead_termin_modul_hinweis()
+                               if not (terminierung_aktiv and mail_versand_aktiv) else ""),
+        "konflikt_url": "/lead-management/termin/konflikt",
         "termine_aktiv": [t for t in termine if t.status in TERMIN_OFFEN],
         "mail_absender": mail_absender,
         "vorgang": vorgang, "kunde": kunde, "lead": lead, "benutzer": benutzer,
@@ -1850,6 +1950,7 @@ def kartei_kontext(session: Session, vorgang: Vorgang, benutzer, readonly: bool 
         "taifun": _taifun_kontext(session, vorgang, kunde, benutzer, readonly),
         "objektarten": lead_v2.objektarten(session), "anreden": ANREDEN,
         "interessen": INTERESSEN, "interessen_wahl": INTERESSEN_WAHL,
+        "interessen_merkmale": INTERESSEN_MERKMALE,   # v37 (Phase 199): „PV vorhanden“ mit Langname im Häkchen
         "sparten_langnamen": langnamen, "kanal_werte": kanal_werte,
         "kanal_labels": kanal_labels,   # v35 (Phase 184): „(nicht mehr wählbar)“ / „? – Vertriebskanal klären“
         "innendienst_wahl": innendienst_auswahl(session, vorgang),

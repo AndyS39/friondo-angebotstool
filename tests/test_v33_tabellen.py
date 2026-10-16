@@ -454,7 +454,13 @@ class Spalten(Basis):
         css = open(CSS, encoding="utf-8").read()
         self.assertIn("Phase 174", css)
         self.assertIn(".lm-tabellen-at", css)
-        self.assertNotRegex(css.split("Phase 174", 1)[1], r"#[0-9a-fA-F]{3,8}\b")
+        # v37 (PLAN_LEAD_V7 Phase 197): der Design-v3-Token-Block (Marker wie beim v30-Wächter) darf Hex-Werte
+        # tragen und liegt hinter dem v33-Block – nur der Rest bleibt token-rein
+        rest = css.split("Phase 174", 1)[1]
+        if "/* v3-tokens-anfang */" in rest and "/* v3-tokens-ende */" in rest:
+            vor, nach = rest.split("/* v3-tokens-anfang */", 1)
+            rest = vor + nach.split("/* v3-tokens-ende */", 1)[1]
+        self.assertNotRegex(rest, r"#[0-9a-fA-F]{3,8}\b")
         # Makros generisch: Spaltenwähler + Datenblock einmal je Seite, Script eingebunden
         html = self.admin.get("/kunden").text
         self.assertEqual(html.count('id="lm-spaltenliste"'), 1)

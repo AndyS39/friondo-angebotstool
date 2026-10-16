@@ -3,9 +3,11 @@
    logik.board_label) – Leads mit Vor-Ort-Termin, Gruppen Angebotserstellung ·
    Angebotsversand · Gewonnen · Verloren (Endzustände 30 Tage, Filter „Archiv“).
    Gleicher Aufbau wie das Hauptboard (Tabelle A3, Spalten je Nutzer, Status-
-   Dialog); Spalte „Erfassung / Angebot“ mit Buttons „Erfassung starten“ /
-   „Angebot öffnen“ und Sparten-Chips kommt aus lead_boards.SPALTEN_TERMINIERT.
-   Keine Sammelaktionen (H3). #}
+   Dialog). v37 (PLAN_LEAD_V7 Phase 199, Agent L3): die Spalte „Erfassung / Angebot“
+   (Knöpfe „Erfassung starten“/„Angebot öffnen“) und der Knopf „Bestätigung erneut“ je
+   Zeile sind entfallen – Erfassung aus Kartei, Leads VOT und Mein Tag, Terminbestätigung
+   erneut aus der Kartei (Block Termine); gespeicherte Spaltenkonfigurationen verlieren den
+   Key „angebot“ ohne Fehler (lead_boards.spalten_fuer). Keine Sammelaktionen (H3). #}
 {% extends "leadmanagement/hauptboard.html" %}
 {# v33 (PLAN_V20 Phase 170, Agent O): Fußzeile mit dem Stand des Outlook-Syncs je Mitarbeiter
    (Warteschlange outlook_auftraege, Termine von Handelsvertretern ohne Friondo-Postfach,

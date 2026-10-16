@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v36)
+# Friondo Angebotstool – Projektkontext (v37)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -92,6 +92,7 @@ Nummern vergeben.
 | v35 | PLAN_LEAD_V6.md | 183–187 |
 | v35-Nachtrag 3 | PLAN_LEAD_V6_1.md (Nachtrag 16.10.2026, eingearbeitet in PLAN_LEAD_V6.md) | – |
 | v36 | PLAN_V22.md | 188–195 |
+| v37 | PLAN_LEAD_V7.md | 196–200 |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
@@ -494,7 +495,8 @@ Graph-Versand über Innendienst, Terminal-Server-Betrieb. *überholt – siehe v
   Erfasst/Angebot/Gewonnen/Verloren; Seitenzustände Zurückgestellt · Nicht
   erreicht · Unqualifiziert – seit v31 Label „Disqualifiziert“), Quelle/Kampagne/UTM, Eingang, SLA, Score (A/B/C),
   Leadmanager, Wunschzeiten, Koordinaten, Einwilligungen. Gesyncte monday-Leads
-  erhalten die Phase abgeleitet (Badge „monday"); **monday-Sync und -Rückspielung
+  erhalten die Phase abgeleitet (Badge „monday" *(in der Kundenkartei entfällt das Badge seit v37,
+  Phase 196)*); **monday-Sync und -Rückspielung
   unverändert**.
 - **Demo-Modus** *(überholt – seit v31 beendet: `leadmanagement.DEMO_BEENDET`, `lead_freigabe_modus` wirkungslos = alle; Testphase über `terminierung_aktiv`/`mail_versand_aktiv`, `mail_modus` keine Steuerung mehr)*: Parameter `lead_freigabe_modus` (admin / alle, Standard admin):
   bei admin sind alle Routen unter `/lead-management` (`app/routers/leadmanagement.py`),
@@ -521,7 +523,9 @@ Graph-Versand über Innendienst, Terminal-Server-Betrieb. *überholt – siehe v
   „Ideal“, Parameter `vorschlaege_anzahl`*) über AD-Profile (Startadresse, Arbeitszeiten,
   Dauer/Puffer/Max), Tool-Termine (`vot_termine`, auch aus monday-VOT-Datum),
   optional Outlook-Frei/Belegt (Graph, `kalender_sync`), Fahrzeiten *(überholt – seit v33 Belegtzeiten aus dem Cache `outlook_belegt`, Ereignisse über die Warteschlange `outlook_auftraege`, Phase 170)*
-  (`routing_anbieter` ors / google / luftlinie, Caches), Bewertung Umweg +
+  (`routing_anbieter` ors / google / luftlinie, Caches *(v37: Key `ORS_API_KEY` nur aus der `.env`,
+  Luftlinie nur noch Rückfall „geschätzt“, Anzeige in km · Min über `routing.strecke_text` – siehe v37)*),
+  Bewertung Umweg +
   Wunschzeit/Tour-Tag/Randzeit; Buchen schreibt Termin, Outlook-Ereignis (falls an),
   Bestätigung + Erinnerung; Umbuchen, No-Show (Lead zurück auf Qualifiziert),
   Terminkalender Woche je AD, Karte (Leaflet lokal, OSM-Kacheln), „Adresse prüfen". *(Terminkalender Woche je AD überholt – seit v33 zentraler Planungskalender `/kalender?gruppe=vertrieb`, Umleitung [ANNAHME])*
@@ -618,7 +622,8 @@ Lead-Management belegt.)
 - Bestands-Bugfix: `td.aktionen` fiel durch `display:flex` aus dem
   Tabellenlayout (Aktions-Buttons standen seit v6 versetzt neben den
   Listen) – jetzt table-cell.
-- Angebots-PDF unverändert. Künftige Module bauen auf den Tokens auf;
+- Angebots-PDF unverändert. Künftige Module bauen auf den Tokens auf *(v37: im Lead-Modul gilt Design v3 mit
+  eigenen Tokens unter `[data-modul="lead"]` – siehe v37)*;
   Screenshots vorher/nachher unter docs/design-v12/, Screenshot-Helfer
   scripts/design_screenshots.py (Playwright + lokales Chrome) (*überholt –
   siehe v30: Design v2 mit semantischen Tokens je Modus Hell/Dunkel statt
@@ -1144,7 +1149,8 @@ Prüf-Agent, Hook-Änderungen an geteilten Dateien zentral eingespielt.)
   (`SAMMELAKTIONEN`, `POST /boards/sammelaktion`, Aktivität je Lead).
   Hauptboard = Phasen ohne aktiven VOT (Neu · Pausiert · Disqualifiziert, Label
   „Telefongespräch“), Terminiert = mit VOT bzw. terminiert/erfasst/angebot/
-  gewonnen/verloren (Angebotserstellung mit „Erfassung starten“/„Angebot öffnen“,
+  gewonnen/verloren (Angebotserstellung mit „Erfassung starten“/„Angebot öffnen“ *(überholt – seit v37
+  ohne Spalte „Erfassung / Angebot“, ohne „Erfassung starten“ und „Bestätigung erneut“ im Deals-Board)*,
   Angebotsversand, Gewonnen, Verloren „vor Termin“); Verloren setzt offene
   Angebote auf Abgelehnt (`lead_boards.angebote_ablehnen`, Hook in *(ergänzt – siehe v32: Verfolgungsstufe je Vorgang, Dialog „Nächster Schritt“, fünf Gründe mit Pflicht-Freitext)*
   `kern.lead_verloren`). Kanban zeigt nur das aktive Board. Reiter Kontaktiert
@@ -1428,7 +1434,8 @@ Abschnitt V3; Team-Hinweise: docs/nach-dem-update-v25.md.)
 - **Kundenkartei** (Phase 119, `lead_kartei.py`, `lm_kartei.py`, Templates
   `kartei.html` + `kartei_info.html` + `kartei_mitte.html` + `kartei_bloecke.html`
   + `kartei_dialoge.html`; `kartei_links/_rechts` entfallen): Kopf mit
-  Kundenname, Kanal-/Interessen-Badges, Statuskette (`lead_kartei.phasen_kette`,
+  Kundenname, Kanal-/Interessen-Badges *(v37: ohne monday-Badge und SLA-Chip, Phase 196)*, Statuskette
+  (`lead_kartei.phasen_kette`,
   Phasen mit gleichem Label = ein Schritt, Seitenzustände als roter Schritt),
   rechts oben Button „Terminierung“ (B8 unverändert, ausgegraut mit Tooltip der
   fehlenden Felder) und die runden Schnellaktionen Anrufen · E-Mail · Notiz ·
@@ -2341,7 +2348,8 @@ versuche`); v27-Code läuft auf der v29-Datenbank weiter. Entscheidungen:
   Doppelklick = Standard), `POST /boards/spalten {breite:{key,px}}`. **Dashboard** „Hallo,
   <Vorname>“ (`Benutzer.vorname`, sonst Name; `lead_dashboard.anrede_name`): links Fällig
   heute · Kommende Wiedervorlagen (alle künftigen, nach Datum, „weitere anzeigen“) · Offene
-  To-Dos, rechts „Routenplaner“ (Google-Maps-Link, Start = Parameter `routen_start`, Ziel
+  To-Dos, rechts „Routenplaner“ *(Kachel entfällt seit v37, Phase 198)* (Google-Maps-Link, Start =
+  Parameter `routen_start`, Ziel
   leer) und „Meine Termine“ (HV: mit Sperrzeiten); entfernt „Ohne nächsten Schritt“,
   „Angebots-Wiedervorlagen“, „Termine 7 Tage“; „Mir zugeteilte Vorgänge“ eingeklappt
   [ANNAHME] (*seit Nachtrag 08.10.2026 entfernt*); Kachel „Mails mit Fehler“ nur bei > 0.
@@ -2506,7 +2514,9 @@ Icon-Leiste für alle Module, „441 Hinweise“ wurden nicht nachgebaut. Umsetz
 parallelen Agenten D1/D2/B/P mit eigenen DB-Kopien, Briefings und Berichte unter
 `diagnose/v30/`.)
 
-- **Design v2 – Tokens, Hell/Dunkel, Umschalter (Phase 145):** drei Token-Blöcke am Anfang
+- **Design v2 – Tokens, Hell/Dunkel, Umschalter (Phase 145)** *(v37: im Lead-Modul gilt Design v3 mit
+  eigenen Tokens unter `[data-modul="lead"]` in `lead_v2.css` – siehe v37; alle übrigen Module bleiben
+  v2)*: drei Token-Blöcke am Anfang
   von `app/static/style.css` – Hell (`:root`, heutige Friondo-CI; für 4,5 : 1 leicht
   nachgedunkelt: `--akzent #3376b6`, `--status-orange #9e5305`, `--status-grau #566376`,
   Sparten-Farben hell ebenso), Dunkel (`:root[data-theme="dunkel"]`, Vorlage „Nachtglas“:
@@ -2804,7 +2814,8 @@ Rückfragen: `docs/leadmanagement-entscheidungen.md` Abschnitt V5; Team-Hinweise
   `hv_gruppe_simon_mitglieder`, Samstag aus den AD-Arbeitszeiten, `lead_freigabe_modus = alle`,
   `pflichtfelder` + `ad_id`), `lead_mail.migration_v31_mails` (T). Neue Module: `app/werktage.py`
   (NRW-Feiertage/Osterformel aus `lead_info` herausgezogen, `ist_werktag`, `plus_werktage`,
-  `naechster_werktag`), `app/sparten.py` (`SPARTEN` = WP/PV/KL/WB/GW/MS/WA/DMS, Langnamen,
+  `naechster_werktag`), `app/sparten.py` (`SPARTEN` = WP/PV/KL/WB/GW/MS/WA/DMS, Langnamen *(v37: dazu das
+  Merkmal PVV „PV vorhanden“ in `INTERESSEN_ALLE` – kein Erfassungsstart)*,
   `sparten_text`, `sparten_interesse`, `ist_freitext_sparte`; `models.INTERESSEN` erweitert),
   `app/objekte.py` (`hauptobjekt`, `hauptobjekt_sync` Kundenfelder ↔ Hauptobjekt,
   `objekt_anlegen`, `objekte_fuer`, `vorgang_interessen`, `objekte_loeschen`,
@@ -3406,7 +3417,7 @@ additiv – v32-Code läuft auf der v33-Datenbank (Rückweg-Probe im Rollout-Skr
   der Gruppen (`mein_tag.gruppen_sortieren` → `lead_boards.zeilen_sortieren(…, wert=)`).
   Tests `tests/test_v33_mein_tag.py` (15); Alt-Tests v32 angepasst (Protokoll A.5).
 - **Lead-Board-Layout für alle Tabellen des Angebotstools (Phase 174, Protokoll Claudia Castro
-  14.10.2026 Teil A.4):** Angebotsliste, Erfassungen (inkl. TAIFUN-Warteschlange = Reiter „In TAIFUN
+  14.10.2026 Teil A.4):** *(v37: diese Tabellen bleiben Design v2 – der Lead-Wrapper greift dort nicht)* Angebotsliste, Erfassungen (inkl. TAIFUN-Warteschlange = Reiter „In TAIFUN
   zu schreiben“/Kachel `individuell-offen`), Meine Angebote, Kunden und Leads VOT Desktop (M) haben
   dieselbe Bedienung wie die Lead-Boards: Sticky-Filterblock (heutige Filter als Chip-Selects,
   Suchfeld mit Schnellfilter, Spaltenwähler „Spalten“ *(Lead-Boards seit v35 mit serverseitiger Sofortsuche,
@@ -3896,7 +3907,8 @@ Suchfelder sind Sofortsuche (`lm_sofort.js`, keine „Suchen“-Knöpfe, kein `o
   ED - Meta · Webinar · DAA · Enni · Google · Andere · Prepair Tech. · Konfigurator · Stadtwerke Düsseldorf ·
   Mitsubishi · WhatsApp · OTC · Klimakonfigurator · Empfehlung · Bosch · Sparkasse · EEE · Messe · Showroom ·
   Infoveranstaltung · Kontaktformular/info · Reonic · WELOVEX · Comodomo · Bestandskunde · ? · Energy Systems, mit
-  den Hex-Startwerten des Plans), bildet alte Schreibweisen ab (`lead_kanaele.ALT_NEU`: „SWD“/„Stadtwerke
+  den Hex-Startwerten des Plans *(v37: WELOVEX und DAA inaktiv – `migration_v37_kanaele`)*), bildet alte
+  Schreibweisen ab (`lead_kanaele.ALT_NEU`: „SWD“/„Stadtwerke
   Düsseld…“ → Stadtwerke Düsseldorf, „Sparkasse DU“ → Sparkasse, „EnergieDigital Google/Meta“ → ED - Google/Meta,
   „info“/„Kontaktformular“ → Kontaktformular/info …), leert den Alt-Kanal „Standard“ (kein Kanal mehr; das
   Angebotsprofil „Standard“ bleibt Fallback) und legt Bestandswerte außerhalb der Liste (EON, Provinzial,
@@ -3956,7 +3968,8 @@ Suchfelder sind Sofortsuche (`lm_sofort.js`, keine „Suchen“-Knöpfe, kein `o
   weiterhin in der Benutzerverwaltung. Tests `tests/test_lead_v6_rechte.py` (10; (l)–(n)).
 - **Hauptboard: Zeilen direkt bearbeiten (Phase 186, `app/lead_boards.py`, `_tabelle.html`, `lm_boards.js`,
   Agent B):** Inline-Edit (v23: Status, Notiz, AD, Innendienst, Wiedervorlage) erweitert auf **Interessen** (Popover
-  mit Mehrfach-Häkchen, alle Sparten inkl. MS/WA/DMS; Häkchen speichern 600 ms verzögert, „Übernehmen“ sofort),
+  mit Mehrfach-Häkchen, alle Sparten inkl. MS/WA/DMS; Häkchen speichern 600 ms verzögert, „Übernehmen“ sofort
+  – *überholt: seit v37 Plus statt Stift, Chips, Speichern beim Schließen ohne Timer, Phase 199*),
   **Vertriebskanal** (Auswahl hinter der Pille, Kanäle nach Häufigkeit aus `lead_kanaele.kanal_sortiert`, „?“ rot
   mit „Vertriebskanal klären“ und wählbar [Rückfrage]), **Großkunde** (Häkchen, nur Innendienst/Leadmanagement/
   Admin), **Objektart** (neue Spalte, Standard ausgeblendet), **Telefon/E-Mail** (Klick in die Zelle öffnet das
@@ -4382,3 +4395,137 @@ Cloover-Tests sind gemockt.)
   `docs/nach-dem-update-v36.md` (Teil A/B), `docs/updates.md` (4e), `docs/lasttest-v27.md` Abschnitt 2;
   `config.VERSION = "v36"`. Zwischenstand-Commit „v36: Angebotslayout v3 (HTML + Browser-Druck), Cloover-Finanzierung
   (PLAN_V22, Phasen 188-195)“ ohne Push.
+
+## Neu in v37 – Lead-Management V7: Design v3, Kartei-Review, Termine anpassbar, Routing in Kilometern, Kanäle/Interessen (abgestimmt 16.10.2026)
+
+(Plan: PLAN_LEAD_V7.md, Phasen 196–200 (Chat Lead-Management 16.10.2026, Claudia Castro); Nummern in der Vorprüfung
+der Plan-Kette bestätigt. Umgesetzt am 16.10.2026 auf dem committeten v36-Stand 341778b in EINEM Durchlauf: Welle 1 mit
+den Agenten L2 (Phase 198 Termine/Routing/Objekte/Dashboard/Login) und L3 (Phase 199 Kanäle/Interessen/Deals) parallel,
+danach L1 (Phasen 196/197 Kartei-Review + Design v3 auf dem Endstand), je auf eigener DB-Kopie `diagnose/v37/data_<X>`;
+Integration, Doku und Zwischenstand-Commit durch den Orchestrator; Berichte `diagnose/v37/<X>_ergebnis.md` (lokal),
+Gesamtübersicht der Kette `diagnose/v36/gesamtuebersicht.md`. **Zulieferungen fehlten:** die Design-Datei
+`docs/design-v37/vorlage/Friondo Tool Design.html` und der Review-Screenshot (Claudia) – Design v3 nach den
+Startwerten des Plans, Sichtvergleich entfällt; `ORS_API_KEY` (IT) – Routing bleibt bis dahin „geschätzt“. Alle
+Datenbankänderungen additiv – v36-Code läuft auf der v37-Datenbank (Rückweg-Probe in der Rollout-Prüfung der Kette).
+Zwischenstand-Commit „v37“ ohne Push; Rückfragen gebündelt am Ende der Kette.)
+
+**Leitplanken ab v37 (zusätzlich zu v27/v30/v33/v35/v36):**
+- **Design v3 nur im Lead-Modul:** Lead-Seiten (Wrapper `[data-modul="lead"]`) nutzen ausschließlich die v3-Tokens aus
+  `app/static/lead_v2.css` (Hell/Dunkel in beiden Mechaniken, Token-Wächter `tests/test_v30_design.py`); Angebotstool,
+  Projektierung, Montage, die Angebotstool-Tabellen mit Lead-Board-Layout (v33) und der zentrale Kalender bleiben bei
+  Design v2. Keine festen Farben in Lead-Templates (nur `fest:`-Ausnahmen), keine Webfonts aus dem Netz.
+- **Routing-Key nur aus der `.env`** (`ORS_API_KEY`, `routing.ors_schluessel`); jeder Matrix-Aufruf zählt gegen das
+  Tageskontingent `routing_kontingent_tag` und läuft nach `verbindung_freigeben`; Anzeige nur über
+  `routing.strecke_text` (nie „Luftlinie“ im Kundentext, sondern „geschätzt“).
+- **Termine ändern nur in place über `lead_termin.termin_anpassen`** (Konfliktprüfung, Aktivität je Feld, Outlook/Mails
+  nur nach Freischaltung, monday nie zurückschreiben); Interessen = Sparten + Merkmale (`sparten.INTERESSEN_ALLE`,
+  Erfassungsstart nur für `erfassungs_codes()`).
+
+- **Kartei-Review (Phase 196, Review Claudia Castro 16.10.2026):** Kopf der Kundenkartei ohne Badge „monday“ neben dem
+  Namen und ohne SLA-Chip (die Quelle steht in der Eingangszeile „Eingang <Datum> (monday)“, im Kundeninfo-Block und in
+  der Timeline; SLA bleibt in Anrufliste und Statistik); Phasenkette, Versuchs-Punkte, Pflichtfeld-Zähler,
+  Schnellaktionen, „Terminierung“, „Nachbearbeitung“, „Vorgangsakte“ unverändert. **Notizblock:** `section.lk-notizen`
+  nutzt die volle Breite seiner Spalte; die Eingabe des Makros `notizen_chat` ist nur dort ein Raster (`.lk-v5
+  .lk-notizen .nc-eingabe` in `lead_v2.css`): Textfeld über die ganze Breite (mindestens 3 Zeilen, wächst mit), rechts
+  daneben „Senden“ über „Diktieren“ mit dem Diktat-Hinweis klein darunter; unter 900 px Feld oben, Knöpfe nebeneinander.
+  To-Dos rechts bleiben schmal (v31); Vorgangsakte/Projektakte/Montage unverändert. Sichtprüfung gegen den
+  Review-Screenshot offen (Zulieferung). Tests `tests/test_lead_v7_design.py::A_KarteiReview`.
+- **Design v3 nur für das Lead-Modul (Phase 197, `app/static/lead_v2.css` Block „Design v3“, Wrapper `<body
+  data-modul="lead">` aus `base.html` für `/lead-management/*` und `/parametrierung/lead-*` bzw. `{% set lead_modul =
+  true %}`):** Am Wrapper werden die semantischen v2-Tokens und die Aliase (`--friondo-*`, `--grau-*`, `--lm-aktiv-*`)
+  mit den v3-Startwerten des Plans überschrieben – alle Lead-Regeln folgen ohne Umschreiben; Typografie-Tokens liegen
+  auf `main` (Kopfzeile bleibt v2). Hell: Primärblau `#2F72B5` (hover `#245C95`, hell `#4489C9`, Tint `#E3EDF7`,
+  Akzentlinie `#8DB4DE`), Text `#0E2338`/`#33414F`/`#687186`, Seite `#F6F8FA`, Karten `#FFFFFF`, Felder `#EEF1F5`,
+  Rahmen `#DCE4EB`, Orange `#FFA500`/`#A85400`/`#FFF1D6`; Dunkel (abgeleitet [ANNAHME]) Seite `#0F1A26`, Karten
+  `#16243A`, Rahmen `#2A3B52`, Text `#E8EEF5`, gedämpft `#9AA8BA`, Blau unverändert, Links `#8DB4DE`, Orange-Fläche
+  `#3A2A0E` – in beiden Mechaniken (`data-theme` und `prefers-color-scheme`) identisch, Umschalter v30 bleibt.
+  Schrift „Inter“, „Open Sans“, system-ui (keine lokale Font-Datei, Rückfall Systemschrift [ANNAHME]); 14 px Grund,
+  12/13 Nebentext, 11 Kleintext, 16/18/22 Überschriften, 32 Kennzahlen (800); Rundungen 8 (Knöpfe/Felder) · 12–14
+  (Karten) · 18–20 (Kacheln) · 999 (Pills); Schatten `0 1px 4px rgba(0,0,0,.08)`. Angewendet auf Dashboard
+  (Kennzahl-Kacheln 3 Spalten ab 1200 px, Zahl oben links), Boards (Filterleiste als Karte, Pills, Zeilen 40 px),
+  Kartei (Kopfkarte mit Avatar, Phasen-Pills, runde Icons, Reiter als Pill-Leiste, Anruf-Block mit großen Buttons,
+  Termine mit Vorschlagskarten und „IDEAL“-Pille in Orange), Terminassistent, Kalender (Lead), Karte, To-Dos,
+  Vorlagen-Editor, Lead-Einstellungen. Status-/Kanalfarben bleiben Stammdaten; Badge „PV vorhanden“ über das neue
+  globale Token `--sparte-pvv` (`#1F7A72`/`#6FD6C8`). Design v2 behalten: Angebotstool, Projektierung, Vorgangsakte,
+  Leads VOT / Mein Tag, zentraler `/kalender`, Angebotstool-Tabellen im Lead-Board-Layout (v33), Kopfzeile. Wächter
+  `tests/test_v30_design.py` (Token-Block zwischen `/* v3-tokens-anfang */`/`-ende`, `TokenBloeckeV3`, `KontrastV3`
+  ≥ 4,5 : 1 / 3 : 1 in beiden Modi), Tests `tests/test_lead_v7_design.py` (12, davon 2 in Chrome headless),
+  Screenshots `docs/design-v37/` (20 Seiten vorher/nachher hell/dunkel), Doku `docs/design-system.md` Abschnitt
+  „Design v3 (Lead-Modul)“ mit der Regel „neue Lead-Seiten nur mit v3-Tokens“.
+- **Terminierte Vor-Ort-Termine anpassbar (Phase 198, `app/lead_termin.termin_anpassen`, Route `POST /lead-management/
+  lead/{id}/termin/{tid}/anpassen`):** im Block „Termine“ der Kartei hat jeder aktive Vor-Ort-Termin (geplant, bestätigt,
+  vorgemerkt – auch `quelle = monday`) den Knopf **„Anpassen“** (Dialog: Datum, Uhrzeit im 15-Minuten-Raster, Vertriebler
+  nach v31-Regeln, Objekt bei mehreren Objekten, Bemerkung = `grund_text` [ANNAHME]); Änderung in place (kein neuer
+  Termin), Konfliktprüfung ohne den Termin selbst nach `termin_konflikt_modus` (Überschneidung → 409 immer; Puffer/
+  Outlook/Arbeitszeit/Kapazität → warnen: 409 `bestaetigung_noetig` + Häkchen „Konflikte geprüft – trotzdem speichern“;
+  sperren: 409), Aktivität „Termin angepasst: <Feld> alt → neu“ je Feld, ICS SEQUENCE + 1; Outlook-Auftrag
+  (`kalender.termin_aendern`) nur bei `terminierung_aktiv`, Kundenmail `terminaenderung` + neue Erinnerung nur bei
+  `mail_versand_aktiv`, sonst „Testphase: nur im Tool geändert“. monday-Termine: Änderung gilt im Tool, monday wird nicht
+  zurückgeschrieben; `vot_termine.monday_beginn` hält das Datum laut monday (Hinweis „ursprünglich aus monday: <Datum>“),
+  `monday_sync.vot_termine_nachfuehren` lässt angepasste Termine (`angepasst_am`) unberührt, solange monday dieses Datum
+  trägt – ein neues monday-Datum gewinnt (Aktivität) [ANNAHME]. Rechte `lead_v2.bearbeiten_erlaubt` (fremder AD → 403).
+  Die manuelle Neuanlage bleibt in der Testphase gesperrt [OFFEN 1].
+- **Route in Kilometern (Phase 198, `app/routing.py`):** der openrouteservice-Key kommt aus der `.env` (`ORS_API_KEY`,
+  Vorrang vor dem Lead-Parameter `ors_api_key`; `routing.ors_schluessel`), Migration `routing.migration_v37_routing` setzt
+  `routing_anbieter` auf `ors`, sobald ein Key vorliegt (idempotent); ohne Key Luftlinie × 1,3 mit Kennzeichen
+  „geschätzt“ und Hinweis „ORS_API_KEY fehlt“. Anzeige überall `routing.strecke_text`: „18,4 km · 24 Min“ bzw. „ca. 24 km
+  · 31 Min (geschätzt)“ – Terminvorschläge (Begründung „Anfahrt … · Umweg +3,2 km · 5 Min“, JSON `anfahrt_text`,
+  `umweg_km`, `umweg_text`), Kalenderansicht (Slot-Tooltip), Ersatzkunde-Dialog (Spalte „Strecke“, Umkreis bleibt
+  Luftlinie), Karte (Termin-Popup, Start → Termin), Mein Tag („Als Nächstes“/„Heute“: vom Vortermin bzw. von der
+  Startadresse des AD-Profils, Rückfall `routen_start`). Tageskontingent `routing_kontingent_tag` (Standard 2000
+  [ANNAHME], Zähler `aufrufe_ors_matrix_<Datum>`): Hinweis ab 80 % in den Lead-Einstellungen (Abschnitt „Lead-Management
+  V7 – Routing“), ab 100 % kein Matrix-Aufruf mehr bis Mitternacht; Prüfpunkt „Routing-Dienst antwortet“ (`POST
+  /parametrierung/lead-routing/test`, Admin, Matrix 1×1 Duisburg → Bochum nach `verbindung_freigeben`). Cache 90 Tage.
+- **Objekte ein- und ausklappbar (Phase 198):** Objektliste der Kartei als Akkordeon (`<details>`), Standard zu bei
+  Großkunde oder mehr als drei Objekten, Kopfzeile „5 Objekte · 2 mit Termin · 1 mit Angebot“, Zustand je Nutzer
+  (`benutzer_einstellungen` Key `objekte_zu` = `{vorgang_id: true|false}` [ANNAHME], `POST /lead-management/lead/{id}/
+  objekte/zustand`); Ein-Objekt-Vorgänge ohne Akkordeon.
+- **Dashboard (Phase 198):** Kachel „Routenplaner“ (v29) entfällt; gespeicherte Reihenfolgen verlieren den Key ohne
+  Fehler; `routen_start` bleibt für Mein Tag.
+- **Login (Phase 198):** zuletzt verwendeter Benutzer je Browser (Cookie `angebotstool_benutzer` = Benutzer-ID, 90
+  Tage, HttpOnly, SameSite=Lax, Secure bei `HTTPS_AKTIV`, nie die PIN) belegt die Benutzerwahl vor, Fokus in der PIN;
+  „Anderer Benutzer“ (`/login?anderer=1`) leert das Cookie; Abmelden behält es; „Angemeldet bleiben“ (v34) unabhängig.
+- Tests: `tests/test_lead_v7_termine_routing.py` (18).
+- **Kanäle WeLoveX und DAA deaktiviert (Phase 199, `lead_kanaele.migration_v37_kanaele`, Agent L3):**
+  `vertriebskanaele.aktiv = 0` für WELOVEX und DAA (wie EON & Co. in v35) – nicht mehr wählbar, Leads behalten
+  das Label („(nicht mehr wählbar)“ nur am betroffenen Lead), die Filter-Selects in Hauptboard/Deals zeigen nur
+  aktive Kanäle; Reaktivierung unter Lead-Management → Vertriebskanäle. `hv_ausschluss`/`kanal_ad_regel` werden
+  nur gemeldet (`lead_kanaele.parameter_treffer`), nicht geändert; Migration idempotent, Meldungen ASCII.
+- **Interesse „PV vorhanden“ (Code `PVV`, Merkmal):** `sparten.INTERESSEN_MERKMALE = ("PVV",)`,
+  `INTERESSEN_ALLE = SPARTEN + Merkmale`, `INTERESSEN_LANG`; `codes()` liefert Sparten und Merkmale,
+  `erfassungs_codes()` nur Erfassungs-Sparten. Häkchen in Kartei (Langname), Inline-Popover, Schnellanlage,
+  Import, `POST /api/leads` („PV vorhanden“/`PVV`), Mail-Parser, Filter „Sparte“ (Hauptboard/Deals/Infoabend),
+  Badge `chip-pvv` (neutrales Token, gestrichelt). **Kein** Erfassungsstart (`ERFASSUNGS_SPARTEN`, `Lead.sparten`,
+  Mein Tag), keine Kompetenzprüfung, Pflichtfeld „Interesse“ nur mit Erfassungs-Sparte [ANNAHME], nie in
+  `{sparten}`/`{sparten_interesse}`/`{sparten_hinweise}` – eigener Platzhalter `{pv_vorhanden}` („Sie haben bereits
+  eine PV-Anlage“ oder leer) [ANNAHME]. WP-Bogen: Frage A11 „PV-Anlage vorhanden?“ wird mit „Ja“ vorbelegt
+  (`lead_kartei.pv_vorhanden_vorbelegung`, Kennzeichen wie Objektart); KL/PV/WB-Bogen haben keine solche Frage.
+- **Inline-Interessen mit Plus (Hauptboard, Deals, Infoabend, HV-Ansicht – ein Makro `_tabelle.zelle`):** gewählte
+  Badges plus Plus-Symbol (`symbol('plus')`, kein Stift); Popover mit allen Interessen inkl. „PV vorhanden“ als
+  Chips (gewählte gefüllt, Klick wählt ab/an), Speichern per fetch beim Schließen (Klick daneben/Plus/„Übernehmen“,
+  v35-Weg `window.lmInline` → `POST /boards/zeile/{id}`, Aktivität über `lead_kartei.feld_speichern`), Escape/
+  „Abbrechen“ ohne Speichern; der v35-Timer entfällt [ANNAHME]. Markup `class="lm-popover" data-feld="interessen"
+  … data-plus="1"`, Styles `app/static/lead_v37_l3.css`, Jinja-Globals `lm_interessen`/`lm_interessen_lang`/
+  `lm_interessen_merkmale`.
+- **Deals-Board:** Knopf „Bestätigung erneut“ je Zeile, Spalte „Erfassung / Angebot“ (`SPALTEN_TERMINIERT =
+  SPALTEN`, Alias) und Knopf „Erfassung starten“ entfallen; gespeicherte Spaltenkonfigurationen verlieren den Key
+  `angebot` beim Lesen ohne Fehler (`spalten_fuer`); „Terminbestätigung erneut senden“ bleibt in der Kartei (Route
+  unverändert), Erfassung startet aus Kartei, Leads VOT und Mein Tag. Tests
+  `tests/test_lead_v7_kanaele_interessen.py` (14, davon 1 in Chrome headless).
+- **Tests, Doku, Zwischenstand (Phase 200, Orchestrator, 16.10.2026):** neue Testdateien
+  `tests/test_lead_v7_termine_routing.py` (18), `test_lead_v7_kanaele_interessen.py` (14, davon 1 in Chrome headless),
+  `test_lead_v7_design.py` (L1). **Integrations-Testlauf** (Orchestrator, Kopie `diagnose/v37/data_INT` aus der Dev-DB, `migrate.py` zweimal – zweiter Lauf ohne Änderungen; 47 Testdateien: v37-Tests, Wächter v27/v30/v33, Scheduler, Lead-Modul v2–v6, Mein Tag, Tabellen, Login, monday, Nachfassen – `diagnose/v36/orch/testlauf_v37_int1.txt`): 718 bestanden, 2 übersprungen, 1 Fehler → `test_v33_tabellen::Spalten::test_js_css_markup` prüfte „kein Hex-Wert hinter dem v33-Block“ in `lead_v2.css` und traf den neuen v3-Token-Block (Hex nur in Token-Blöcken, Marker `v3-tokens-anfang/-ende` wie beim v30-Wächter) → Token-Block ausgenommen, Wiederholung der Datei 15/15 grün. **Angepasste Alt-Tests** (Begründung in den Berichten): `test_lead_v2_dashboard`,
+  `test_lead_v4` (Routenplaner-Kachel entfallen – L2); `test_lead_v2_boards` (3), `test_lead_v3_boards` (2),
+  `test_lead_v5_boards` (1), `test_lead_v6_kanaele` (1) (Deals ohne Spalte „Erfassung / Angebot“, Plus-Popover,
+  WELOVEX/DAA inaktiv – L3); L1 siehe Bericht; dazu `test_lead_v5_at::test_ein_objekt_angebot_pdf_byteidentisch_zur_kontrolle`
+  als überholt übersprungen (v31-Schnappschuss eines fpdf2-PDFs – seit v36 ändert sich das Angebots-PDF absichtlich;
+  die Ausführungsort-Regel bleibt durch die übrigen Tests der Klasse abgedeckt). Migration zweimal auf einer frischen
+  Kopie (zweiter Lauf ohne Änderungen). **Nicht in diesem Zwischenstand:** Gesamtsuite, Rollout-Vorbereitung
+  (Server-Kopie, Rückweg-Probe v36-Code, Voll-Crawl hell/dunkel, Abnahme, Smoke, Lasttest), Screenshots gegen die
+  fehlende Design-Vorlage und der Routing-Echtlauf (kein ORS-Key) – einmal am Ende der Plan-Kette v36 → v37 → v38
+  (`diagnose/v36/gesamtuebersicht.md` §10). Doku: dieser Abschnitt, Leitplanken ab v37, Zuordnungstabelle, Titelzeile,
+  überholt-Marker in v12 (Luftlinie-Rückfall, monday-Badge), v23 (Deals-Spalte), v29 (Routenplaner-Kachel), v30 (Design v2
+  im Lead-Modul), v31 (Merkmal PVV), v35 (Kanalliste, Inline-Interessen); `docs/design-system.md` („Design v3
+  (Lead-Modul)“), `docs/nach-dem-update-v37.md`, `docs/updates.md` (4f), `docs/betrieb.md` („Ergänzungen v37“);
+  `config.VERSION = "v37"`. Zwischenstand-Commit „v37: Lead-Management V7 Design v3, Kartei-Review, Termine, Routing
+  (PLAN_LEAD_V7, Phasen 196-200)“ ohne Push.

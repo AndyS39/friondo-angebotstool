@@ -130,8 +130,12 @@ SPALTEN = [
     # sortierbar nach Übergabedatum; Filter-Chip taifun=1, Rang 0 + rotes Label bei Status fehler)
     ("taifun", "TAIFUN-Übergabe", False),
 ]
-# Board Deals: zusätzlich Erfassung/Angebot (Buttons + Sparten-Chips)
-SPALTEN_TERMINIERT = SPALTEN[:5] + [("angebot", "Erfassung / Angebot", True)] + SPALTEN[5:]
+# Board Deals: bis v36 zusätzlich die Spalte „Erfassung / Angebot“ (Knöpfe „Erfassung starten“/
+# „Angebot öffnen“ + Sparten-Chips). v37 (PLAN_LEAD_V7 Phase 199, Agent L3): die Spalte entfällt –
+# derselbe Katalog wie das Hauptboard; gespeicherte Konfigurationen (v25, boards_spalten) mit dem
+# Key „angebot“ verlieren ihn beim Lesen ohne Fehler (spalten_fuer wirft unbekannte Keys weg).
+# Der Name bleibt als Alias (Alt-Tests, Infoabend/HV lesen spalten_basis).
+SPALTEN_TERMINIERT = SPALTEN
 # Spalte Score steht nur im Katalog, wenn lead_v2.score_aktiv(session) (v25, Standard aus)
 SPALTE_SCORE = ("score", "Score", True)
 SPALTEN_FEST = ("lead",)          # immer sichtbar, immer vorn
@@ -1293,6 +1297,12 @@ def auswahl_listen(session: Session) -> dict:
         "kanal_wahl": kanal_auswahl(session),
         "objektarten": [{"code": c, "name": n} for c, n, _p in lead_v2.objektarten(session)],
         "sparten_lang": dict(sparten_modul.SPARTEN_LANG),
+        # v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Interessen-Popover (Plus) mit allen Häkchen
+        # inkl. Merkmal „PV vorhanden“ (PVV) – Filter-Chip „Sparte“ ebenso; Merkmale tragen
+        # ihren Langnamen als Badge-Titel
+        "interessen": list(sparten_modul.INTERESSEN_ALLE),
+        "interessen_lang": dict(sparten_modul.INTERESSEN_LANG),
+        "interessen_merkmale": list(sparten_modul.INTERESSEN_MERKMALE),
         "gruende": {phase: [{"grund": g.grund, "freitext": g.freitext_pflicht}
                             for g in logik.gruende_der_phase(phase)]
                     for phase in ("zurueckgestellt", "unqualifiziert", "verloren")},

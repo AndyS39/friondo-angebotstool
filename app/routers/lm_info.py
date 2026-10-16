@@ -172,7 +172,8 @@ def info_board(request: Request, session: Session = Depends(get_session)):
     p = lead_info.parameter(session)
     # v31 (Phase 157): Sparten inkl. MS/WA/DMS (app/sparten.py) statt models.INTERESSEN
     from app import sparten as sparten_modul
-    interessen = [(c, sparten_modul.SPARTEN_LANG.get(c, c)) for c in sparten_modul.SPARTEN]
+    # v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Filter „Sparte“ inkl. Merkmal „PV vorhanden“ (PVV)
+    interessen = [(c, sparten_modul.INTERESSEN_LANG.get(c, c)) for c in sparten_modul.INTERESSEN_ALLE]
     return render(request, "leadmanagement/info_board.html", aktiv="/lead-management",
                   gruppen=daten["gruppen"], anzahl=daten["anzahl"], jetzt=daten["jetzt"],
                   archiv=daten["archiv"], filter_werte=f, ctx=ctx, sparten_liste=interessen,

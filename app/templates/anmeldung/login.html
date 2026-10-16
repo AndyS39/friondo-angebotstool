@@ -21,16 +21,23 @@
             <h1>Anmeldung</h1>
             <p class="login-untertitel">Friondo Angebotstool</p>
             {% if benutzer %}
-            <form method="post" action="/login" id="login-formular">
+            {# v37 (PLAN_LEAD_V7 Phase 198, Agent L2): zuletzt verwendeter Benutzer je Browser (Cookie
+               angebotstool_benutzer, nur die ID, 90 Tage) wird vorbelegt, der Fokus steht in der PIN;
+               „Anderer Benutzer“ leert das Cookie (GET /login?anderer=1) und setzt den Fokus in die Auswahl. #}
+            <form method="post" action="/login" id="login-formular" data-vorgewaehlt="{{ vorgewaehlt or '' }}">
                 <label>Benutzer
-                    <select name="benutzer_id" id="login-benutzer">
+                    <select name="benutzer_id" id="login-benutzer" {{ 'autofocus' if not vorgewaehlt }}>
                         {% for b in benutzer %}
-                            <option value="{{ b.id }}"{% if b.basisrolle in mobile_rollen %} data-mobil="1"{% endif %}>{{ b.name }} ({{ b.rolle }})</option>
+                            <option value="{{ b.id }}"{% if b.basisrolle in mobile_rollen %} data-mobil="1"{% endif %}{% if vorgewaehlt == b.id %} selected{% endif %}>{{ b.name }} ({{ b.rolle }})</option>
                         {% endfor %}
                     </select>
                 </label>
+                {% if vorgewaehlt %}
+                <p class="login-anderer" id="login-anderer"><span class="dezent">Zuletzt angemeldet – nur die PIN eingeben.</span>
+                    <a href="/login?anderer=1" rel="nofollow">Anderer Benutzer</a></p>
+                {% endif %}
                 <label>PIN
-                    <input type="password" name="pin" inputmode="numeric" autocomplete="off" autofocus>
+                    <input type="password" name="pin" id="login-pin" inputmode="numeric" autocomplete="off" {{ 'autofocus' if vorgewaehlt }}>
                 </label>
                 {# v27 (Phase 130): 30 Tage Sitzung für Außendienst/Montage – Büro-Rollen
                    bleiben am PC bei 12 h (auth.sitzungsdauer_s entscheidet).
@@ -101,6 +108,12 @@
     auswahl.addEventListener('change', anpassen);
     window.addEventListener('resize', anpassen);
     anpassen();
+    // v37 (Phase 198): vorbelegter Benutzer → Fokus in die PIN (autofocus-Attribut greift nicht in
+    // jedem Browser nach einem Redirect); sonst Fokus auf die Benutzerwahl
+    var formular = document.getElementById('login-formular');
+    var pin = document.getElementById('login-pin');
+    if (formular && formular.getAttribute('data-vorgewaehlt') && pin) { pin.focus(); }
+    else if (formular && !formular.getAttribute('data-vorgewaehlt')) { auswahl.focus(); }
 })();
 </script>
 {% endblock %}

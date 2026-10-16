@@ -70,9 +70,13 @@ def uebersicht(request: Request, session: Session = Depends(get_session)):
 # --- Phase 75: Schnellanlage, Import, Posteingang unklar ---------------------------
 
 # v31 (PLAN_LEAD_V5 Phase 157): Sparten inkl. MS/WA/DMS aus app/sparten.py
+# v37 (PLAN_LEAD_V7 Phase 199, Agent L3): die Häkchen der Schnellanlage und des Imports zeigen
+# zusätzlich das Merkmal „PV vorhanden“ (PVV, sparten.INTERESSEN_ALLE); SPARTEN bleibt die
+# Erfassungs-Liste (Qualifizierung, „Mindestens eine Sparte wählen“)
 from app import sparten as sparten_modul
 SPARTEN = tuple(sparten_modul.SPARTEN)
-SPARTEN_WAHL = [(code, sparten_modul.SPARTEN_LANG.get(code, code)) for code in SPARTEN]
+INTERESSEN = tuple(sparten_modul.INTERESSEN_ALLE)
+SPARTEN_WAHL = [(code, sparten_modul.INTERESSEN_LANG.get(code, code)) for code in INTERESSEN]
 
 
 def _quellen(session: Session) -> list[LeadQuelle]:
@@ -121,7 +125,7 @@ def schnellanlage(request: Request, session: Session = Depends(get_session)):
              for feld in ("anrede", "vorname", "nachname", "telefon", "email",
                           "strasse", "plz", "ort", "nachricht",
                           "vertriebskanal")}   # v35 (Phase 184): Kanalwahl, leer → „?“
-    daten["sparten"] = [s for s in form.getlist("sparten") if s in SPARTEN]
+    daten["sparten"] = [s for s in form.getlist("sparten") if s in INTERESSEN]   # v37: inkl. PVV
     daten["wunschzeiten"] = [w for w in form.getlist("wunschzeiten")]
     daten["einwilligung_werbung"] = form.get("einwilligung_werbung") == "on"
     daten["einwilligung_quelle"] = form.get("einwilligung_quelle") or "telefonisch"
@@ -133,7 +137,8 @@ def schnellanlage(request: Request, session: Session = Depends(get_session)):
         fehler.append("Telefon ist Pflicht (ersatzweise E-Mail).")
     if not daten["plz"]:
         fehler.append("PLZ ist Pflicht.")
-    if not daten["sparten"]:
+    if not any(s in SPARTEN for s in daten["sparten"]):
+        # v37 (Phase 199): das Merkmal „PV vorhanden“ allein ist keine Sparte [ANNAHME]
         fehler.append("Mindestens eine Sparte wählen.")
     quelle = None
     if str(form.get("quelle_id") or "").isdigit():
@@ -327,7 +332,7 @@ def import_verarbeiten(request: Request,
               if str(form.get("quelle_id") or "").isdigit() else None)
     kampagne_id = (int(form.get("kampagne_id"))
                    if str(form.get("kampagne_id") or "").isdigit() else None)
-    sparten = [s for s in form.getlist("sparten") if s in SPARTEN]
+    sparten = [s for s in form.getlist("sparten") if s in INTERESSEN]   # v37: inkl. PVV
     if quelle is not None:   # Zuordnung je Quelle merken
         kern.parameter_setzen(session, f"import_mapping_{quelle.key}",
                               json_modul.dumps(zuordnung))
@@ -1519,6 +1524,7 @@ def karte_daten(request: Request, session: Session = Depends(get_session)):
                      "grosskunde": bool(getattr(kunde, "grosskunde", False)),
                      "vorgang_id": v.id})
     benutzer_map = {b.id: b for b in session.query(Benutzer)}
+    termine_pins = []
     for t in (session.query(VotTermin)
               .filter(VotTermin.lat.isnot(None),
                       VotTermin.status.in_(("geplant", "bestaetigt")),
@@ -1529,17 +1535,31 @@ def karte_daten(request: Request, session: Session = Depends(get_session)):
         if hv and t.ad_id not in gruppe:
             continue
         ad = benutzer_map.get(t.ad_id)
-        pins.append({"art": "termin", "lat": t.lat, "lon": t.lon,
-                     "beginn": t.beginn.strftime("%d.%m. %H:%M"),
-                     "ad": ad.name if ad else "?",
-                     "vorgang_id": t.vorgang_id})
+        termine_pins.append((t, {"art": "termin", "lat": t.lat, "lon": t.lon,
+                                 "beginn": t.beginn.strftime("%d.%m. %H:%M"),
+                                 "ad": ad.name if ad else "?",
+                                 "vorgang_id": t.vorgang_id, "strecke": ""}))
+    starts = {}
     for profil in session.query(AdProfil).filter(AdProfil.start_lat.isnot(None)):
         if hv and profil.benutzer_id not in gruppe:
             continue
         ad = benutzer_map.get(profil.benutzer_id)
+        starts[profil.benutzer_id] = (profil.start_lat, profil.start_lon)
         pins.append({"art": "start", "lat": profil.start_lat,
                      "lon": profil.start_lon,
                      "ad": ad.name if ad else "?"})
+    # v37 (PLAN_LEAD_V7 Phase 198, Agent L2): Strecke (Straßenkilometer · Fahrzeit) von der
+    # Startadresse des Vertrieblers zum Termin im Popup – EIN gebündelter Matrix-Aufruf
+    # (routing.matrix_fuellen gibt die Sitzung vor dem Netz frei, ≤ 50 Ziele; weitere Termine
+    # und Termine ohne Startadresse bekommen die Luftlinien-Schätzung mit Kennzeichen)
+    from app import routing
+    paare = [(pin, starts[t.ad_id], (t.lat, t.lon)) for t, pin in termine_pins if t.ad_id in starts]
+    if paare:
+        routing.matrix_fuellen(session, list(dict.fromkeys(p[1] for p in paare)),
+                               list(dict.fromkeys(p[2] for p in paare))[:50])
+        for pin, von, nach in paare:
+            pin["strecke"] = routing.strecke(session, von, nach).get("text", "")
+    pins.extend(pin for _t, pin in termine_pins)
     return JSONResponse({"pins": pins})
 
 

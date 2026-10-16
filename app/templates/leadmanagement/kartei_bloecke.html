@@ -54,6 +54,12 @@
                 {% if o.termin %}
                     <span class="abzeichen lk-tstatus-{{ o.termin.status }}">{{ termin_status_namen.get(o.termin.status, o.termin.status) }}</span>
                     <span>{{ o.termin.beginn | de_datum('%a %d.%m.%Y %H:%M') if o.termin.beginn else 'ohne Uhrzeit' }}{% if o.termin_ad %} · {{ o.termin_ad.name }}{% endif %}</span>
+                    {#- v37 (Phase 198): Hinweis „ursprünglich aus monday: …“ + Knopf „Anpassen“ (Dialog in der Historie) #}
+                    {% if termin_hinweise.get(o.termin.id) %}<span class="dezent lk-monday-hinweis" data-rolle="monday-hinweis">{{ termin_hinweise[o.termin.id] }}</span>{% endif %}
+                    {% if not readonly and o.termin.id in anpassbar_ids %}
+                    <button type="button" class="knopf klein zweitrangig lk-anpassen-knopf" data-termin-anpassen="{{ o.termin.id }}"
+                            title="Datum, Uhrzeit, Vertriebler, Objekt und Bemerkung dieses Termins anpassen">{{ symbol('stift') }} Anpassen</button>
+                    {% endif %}
                 {% else %}
                     <span class="dezent">kein Termin</span>
                     {% if not readonly and objekte.mehrere %}<a class="knopf klein zweitrangig" href="{{ kartei_url }}/termin?objekt_id={{ o.id }}">Termin vorschlagen</a>{% endif %}
@@ -158,7 +164,10 @@
                         <td>{% set t_obj = (objekte.liste | selectattr('id', 'equalto', t.objekt_id) | list | first) if t.objekt_id else none %}{{ t_obj.objekt.bezeichnung if t_obj else ('Objekt 1' if objekte.liste else '–') }}</td>
                         <td><span class="abzeichen lk-tstatus-{{ t.status }}">{{ termin_status_namen.get(t.status, t.status) }}</span>
                             {% if t.quelle == 'monday' %}<span class="abzeichen">monday</span>{% endif %}
-                            {% if t.grund_text %}<div class="dezent">{{ t.grund_text }}</div>{% endif %}</td>
+                            {% if t.grund_text %}<div class="dezent">{{ t.grund_text }}</div>{% endif %}
+                            {#- v37 (Phase 198): im Tool angepasster monday-Termin – monday wird nicht zurückgeschrieben #}
+                            {% if termin_hinweise.get(t.id) %}<div class="dezent lk-monday-hinweis" data-rolle="monday-hinweis">{{ termin_hinweise[t.id] }}</div>{% endif %}
+                            {% if t.angepasst_am %}<div class="dezent" title="Zuletzt im Tool angepasst">angepasst {{ t.angepasst_am | de_datum('%d.%m.%Y %H:%M') }}{% if benutzer_map.get(t.angepasst_von) %} · {{ benutzer_map[t.angepasst_von].name }}{% endif %}</div>{% endif %}</td>
                         <td>{{ t_ad.name if t_ad else '–' }}{% if t.umweg_min is not none %} <span class="dezent">· Umweg +{{ t.umweg_min }} Min</span>{% endif %}</td>
                         <td>{{ t.quelle }}</td>
                         <td class="aktionen lk-termin-aktionen">
@@ -180,6 +189,12 @@
                                         </form></details>
                                 {% endif %}
                             {% elif t.status in ('vorgemerkt', 'geplant', 'bestaetigt') %}
+                                {#- v37 (PLAN_LEAD_V7 Phase 198, Agent L2): „Anpassen“ für jeden aktiven Vor-Ort-Termin,
+                                    auch aus monday (Änderung gilt im Tool, monday wird nicht zurückgeschrieben) #}
+                                {% if t.id in anpassbar_ids %}
+                                <button type="button" class="knopf klein lk-anpassen-knopf" data-termin-anpassen="{{ t.id }}"
+                                        title="Datum, Uhrzeit (15-Minuten-Raster), Vertriebler, Objekt und Bemerkung anpassen{{ ' – ' ~ anpassen_testphase if anpassen_testphase }}">{{ symbol('stift') }} Anpassen</button>
+                                {% endif %}
                                 {% if t.status != 'vorgemerkt' %}
                                 <form method="post" action="/lead-management/termin/{{ t.id }}/bestaetigung-erneut" class="lk-inline"
                                       onsubmit="return confirm('Terminbestätigung mit ICS erneut senden (gleiche UID, SEQUENCE+1)?')">
@@ -223,6 +238,64 @@
                 {{ leer_zustand('Noch kein Termin – Vorschlag oben vormerken, Termin vorschlagen, manuell eintragen oder Vorab-Gespräch planen.') }}
             {% endif %}
         </details>
+
+        {#- v37 (PLAN_LEAD_V7 Phase 198, Agent L2): Dialog „Anpassen“ je aktivem Vor-Ort-Termin (auch monday):
+            Datum, Uhrzeit (15-Minuten-Raster), Vertriebler (Dropdown nach v31-Regeln, ad_wahl), Objekt (nur
+            bei mehreren Objekten), Bemerkung (vot_termine.grund_text [ANNAHME]). Ohne JavaScript postet das
+            Formular normal (303 in die Kartei mit Meldung); lm_termin.js ergänzt die Live-Konfliktprüfung
+            (GET /termin/konflikt?ignorieren_id=), das Senden per fetch und die Bestätigung bei Warnungen
+            (409 bestaetigung_noetig → Häkchen „Konflikte geprüft – trotzdem speichern“). Route:
+            POST /lead-management/lead/{id}/termin/{tid}/anpassen (Rechte lead_v2.bearbeiten_erlaubt). #}
+        {% if not readonly %}
+        {% for t in termine if t.id in anpassbar_ids %}
+        <dialog id="dlg-anpassen-{{ t.id }}" class="lk-dialog lk-anpassen-dialog" data-termin="{{ t.id }}"
+                data-konflikt-url="{{ konflikt_url }}" data-vorgang="{{ vorgang.id }}">
+            <form method="post" action="{{ kartei_url }}/termin/{{ t.id }}/anpassen" class="formular lk-anpassen-form"
+                  data-termin-anpassen-form="{{ t.id }}">
+                <h3>{{ symbol('stift') }} Termin anpassen</h3>
+                <p class="dezent">{{ termin_typ_namen.get(t.typ or 'vot', t.typ) }} ·
+                    {{ t.beginn | de_datum('%a %d.%m.%Y %H:%M') if t.beginn else 'ohne Uhrzeit' }}
+                    · {{ termin_status_namen.get(t.status, t.status) }}
+                    {% if t.quelle == 'monday' %}· <span class="abzeichen">monday</span> <span data-rolle="monday-dialog-hinweis">Änderung gilt im Tool – monday wird nicht zurückgeschrieben{% if termin_hinweise.get(t.id) %} ({{ termin_hinweise[t.id] }}){% endif %}</span>{% endif %}</p>
+                {% if anpassen_testphase %}<p class="lm-hinweis" data-rolle="anpassen-testphase">{{ symbol('warnung') }} {{ anpassen_testphase }}{{ ' – kein Outlook-Eintrag' if not terminierung_aktiv }}{{ ' – keine Kundenmail' if not mail_versand_aktiv }}.</p>{% endif %}
+                <input type="hidden" name="zurueck" value="{{ kartei_url }}#termine">
+                <div class="formzeile">
+                    <label class="schmal">Datum <input type="date" name="datum" required value="{{ t.beginn.strftime('%Y-%m-%d') if t.beginn }}"></label>
+                    <label class="schmal">Uhrzeit <input type="time" name="uhrzeit" required step="900" value="{{ t.beginn.strftime('%H:%M') if t.beginn }}">
+                        <small class="dezent">15-Minuten-Raster</small></label>
+                </div>
+                <label>Vertriebler
+                    <select name="ad_id" required>
+                        {% set ns_ad = namespace(dabei=false) %}
+                        {% for e in ad_wahl %}
+                            {% if e.benutzer.id == t.ad_id %}{% set ns_ad.dabei = true %}{% endif %}
+                            <option value="{{ e.benutzer.id }}" {{ 'selected' if t.ad_id == e.benutzer.id }}
+                                    {{ 'disabled' if e.gesperrt and t.ad_id != e.benutzer.id }}
+                                    title="{{ e.gesperrt or e.kompetenz_grund }}">{{ e.benutzer.name }}{{ ' · HV' if e.hv }}{{ ' – ' ~ e.kompetenz_grund if not e.kompetenz_ok }}</option>
+                        {% endfor %}
+                        {% if t.ad_id and not ns_ad.dabei and benutzer_map.get(t.ad_id) %}
+                            <option value="{{ t.ad_id }}" selected>{{ benutzer_map[t.ad_id].name }} (aktuell)</option>
+                        {% endif %}
+                    </select></label>
+                {% if objekte.mehrere %}
+                <label>Objekt
+                    <select name="objekt_id">
+                        {% for o in objekte.liste %}<option value="{{ o.id }}" {{ 'selected' if t.objekt_id == o.id or (not t.objekt_id and o.haupt) }}>{{ o.objekt.bezeichnung }} – {{ o.objekt.strasse }}, {{ o.objekt.plz }} {{ o.objekt.ort }}</option>{% endfor %}
+                    </select></label>
+                {% endif %}
+                <label class="breit">Bemerkung <input type="text" name="bemerkung" maxlength="500" value="{{ t.grund_text or '' }}" placeholder="optional – erscheint am Termin"></label>
+                <div class="lk-anpassen-konflikte lmt-konflikte" data-rolle="konflikte" hidden></div>
+                <label class="kontrollfeld lk-anpassen-bestaetigen" data-rolle="bestaetigen" hidden>
+                    <input type="checkbox" name="bestaetigt" value="1"> Konflikte geprüft – trotzdem speichern</label>
+                <p class="lm-rot" data-rolle="fehler" hidden></p>
+                <div class="formzeile">
+                    <button class="knopf" type="submit">Speichern</button>
+                    <button class="knopf zweitrangig" type="button" onclick="this.closest('dialog').close()">Abbrechen</button>
+                </div>
+            </form>
+        </dialog>
+        {% endfor %}
+        {% endif %}
     </div>
 </details>
 

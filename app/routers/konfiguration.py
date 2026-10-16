@@ -2341,13 +2341,16 @@ def lead_routing_seite(request: Request,
         session, f"aufrufe_{dienst}_{heute}", "0")
         for dienst in ("ors_geocode", "ors_matrix", "google_geocode",
                        "google_matrix", "nominatim")}
+    # v37 (PLAN_LEAD_V7 Phase 198, Agent L2): Key-Status aus der .env (nie der Wert), Kontingent,
+    # 80-%-Hinweis, Prüfpunkt „Routing-Dienst antwortet“ (routing.einstellungen_kontext)
+    from app import routing
     return render(request, "konfiguration/lead_routing.html",
                   aktiv="/parametrierung",
                   anbieter=lead_kern.parameter_holen(session, "routing_anbieter",
                                                      "luftlinie"),
                   ors_key=lead_kern.parameter_holen(session, "ors_api_key"),
                   google_key=lead_kern.parameter_holen(session, "google_api_key"),
-                  zaehler=zaehler,
+                  zaehler=zaehler, routing=routing.einstellungen_kontext(session),
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -2367,13 +2370,45 @@ def lead_routing_speichern(request: Request,
     if form.get("routing_anbieter") in ("ors", "google", "luftlinie"):
         lead_kern.parameter_setzen(session, "routing_anbieter",
                                    form.get("routing_anbieter"))
-    lead_kern.parameter_setzen(session, "ors_api_key",
-                               (form.get("ors_api_key") or "").strip())
-    lead_kern.parameter_setzen(session, "google_api_key",
-                               (form.get("google_api_key") or "").strip())
+    # v37: der Rückfall-Parameter bleibt pflegbar; ist ORS_API_KEY in der .env gesetzt, gewinnt
+    # die .env (routing.ors_schluessel) – das Feld ist dann nur Rückfall/Anzeige „gesetzt“
+    if form.get("ors_api_key") is not None:
+        lead_kern.parameter_setzen(session, "ors_api_key",
+                                   (form.get("ors_api_key") or "").strip())
+    if form.get("google_api_key") is not None:
+        lead_kern.parameter_setzen(session, "google_api_key",
+                                   (form.get("google_api_key") or "").strip())
+    kontingent = (form.get(routing.KONTINGENT_PARAMETER) or "").strip()
+    if kontingent.isdigit() and int(kontingent) > 0:
+        lead_kern.parameter_setzen(session, routing.KONTINGENT_PARAMETER, kontingent)
     session.commit()
     return RedirectResponse("/parametrierung/lead-routing?meldung=Gespeichert",
                             status_code=303)
+
+
+@router.post("/lead-routing/test")
+def lead_routing_test(request: Request, session: Session = Depends(get_session)):
+    """v37 (PLAN_LEAD_V7 Phase 198, Agent L2): Prüfpunkt „Routing-Dienst antwortet“ (nur Admin):
+    Matrix 1×1 Duisburg → Bochum direkt beim Dienst (routing.dienst_pruefen gibt die Sitzung
+    vor dem Netzaufruf frei), Ergebnis „Routing-Dienst antwortet (ors): Duisburg → Bochum
+    28,0 km · 31 Min“ oder Fehlertext, ohne Key „ORS_API_KEY fehlt …“; Rücksprung auf die
+    aufrufende Seite (Lead-Einstellungen oder Lead-Routing)."""
+    from urllib.parse import quote_plus
+
+    from app import routing
+    _lead_gate(request, session)
+    if request.state.benutzer.basisrolle != "admin":
+        return RedirectResponse("/parametrierung", status_code=303)
+    form = anfrage.formular(request)
+    ziel = _zurueck_ziel(request, "/parametrierung/lead-routing")
+    zurueck = (form.get("zurueck") or "").strip()
+    if zurueck.startswith("/parametrierung") and "?" not in zurueck:
+        ziel = zurueck
+    ok, text = routing.dienst_pruefen(session, request.state.benutzer)
+    if "application/json" in (request.headers.get("accept") or "").lower():
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"ok": ok, "meldung": text})
+    return RedirectResponse(ziel + "?meldung=" + quote_plus(text) + "#routing", status_code=303)
 
 
 @router.get("/lead-vorlagen")
@@ -2494,8 +2529,12 @@ def lead_einstellungen(request: Request,
     demo_mit_bestand = len(lead_kern.demo_leads_mit_bestand(session)) if demo_anzahl else 0
     demo_marker = einstellung_holen(session, "demo_ende_v31", "")
     demo_abfrage = not demo_marker and demo_anzahl > 0
+    # v37 (PLAN_LEAD_V7 Phase 198, Agent L2): Abschnitt „Routing“ – Key-Status aus der .env,
+    # Tageszähler/Kontingent, 80-%-Hinweis, Prüfpunkt „Routing-Dienst antwortet“
+    from app import routing
     return render(request, "konfiguration/lead_einstellungen.html",
                   aktiv="/parametrierung", werte=werte,
+                  routing=routing.einstellungen_kontext(session),
                   handelsvertreter=handelsvertreter,
                   demo_anzahl=demo_anzahl,
                   demo_mit_bestand=demo_mit_bestand, demo_abfrage=demo_abfrage,
@@ -2698,7 +2737,9 @@ def lead_einstellungen_speichern(request: Request,
               # v25 (Phase 120): Dashboard „Ohne nächsten Schritt“
               "ohne_schritt_tage",
               # v31 (Phase 157): Erwartungswerte der neuen Sparten
-              "erwartungswert_MS", "erwartungswert_WA", "erwartungswert_DMS"]
+              "erwartungswert_MS", "erwartungswert_WA", "erwartungswert_DMS",
+              # v37 (PLAN_LEAD_V7 Phase 198): Tageskontingent der Routing-Matrix-Aufrufe
+              "routing_kontingent_tag"]
     # v25 (Phase 120): zentraler Schalter Score/Qualifizierung (an|aus), protokolliert
     if form.get("score_aktiv") in ("an", "aus"):
         alt = lead_kern.parameter_holen(session, "score_aktiv", "aus")

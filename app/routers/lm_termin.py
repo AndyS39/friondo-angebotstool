@@ -560,6 +560,67 @@ def termin_manuell(request: Request, vorgang_id: int,
     return _manuell(request, session, vorgang, form)
 
 
+# --- v37 (PLAN_LEAD_V7 Phase 198, Agent L2): bestehenden Termin anpassen ------------------------
+
+@router.post("/lead/{vorgang_id}/termin/{termin_id}/anpassen")
+def termin_anpassen(request: Request, vorgang_id: int, termin_id: int,
+                    session: Session = Depends(get_session)):
+    """Dialog „Anpassen“ im Block Termine der Kartei: Datum + Uhrzeit (datum/uhrzeit oder
+    beginn, 15-Minuten-Raster), ad_id, objekt_id (nur bei mehreren Objekten), bemerkung,
+    bestaetigt=1 (Konfliktwarnungen bestätigt) – JSON oder Formular. Rechte:
+    lead_v2.bearbeiten_erlaubt (Innendienst/Leadmanagement/Admin, angestellter Außendienst
+    an eigenen Leads, Handelsvertreter in ihrer Gruppe) → sonst 403. Antwort: JSON {ok,
+    meldung, konflikte, bestaetigung_noetig, aenderungen, termin} mit dem Status aus
+    lead_termin.termin_anpassen (200/400/403/409) bei Accept: application/json, sonst 303 in
+    die Kartei (#termine) mit Meldung. _speichern-Muster (v27). monday-Termine: Änderung
+    gilt im Tool, monday wird nicht zurückgeschrieben; Testphase: nur im Tool geändert."""
+    termin = session.get(VotTermin, termin_id)
+    vorgang = session.get(Vorgang, vorgang_id)
+    if termin is None or vorgang is None or termin.vorgang_id != vorgang.id:
+        raise HTTPException(status_code=404)
+    lead_v2.hv_umleitung(request, session)
+    benutzer = request.state.benutzer
+    if not lead_v2.bearbeiten_erlaubt(session, benutzer, vorgang):
+        if _json_gewuenscht(request):
+            return JSONResponse({"ok": False, "meldung": "Keine Berechtigung für diesen Vorgang."},
+                                status_code=403)
+        raise HTTPException(status_code=403)
+    try:
+        daten = anfrage.json_lesen(request)
+        if not isinstance(daten, dict):
+            daten = {}
+    except Exception:
+        daten = dict(anfrage.formular(request))
+    beginn = _datum_uhrzeit(daten)
+    if (daten.get("datum") or daten.get("uhrzeit") or daten.get("beginn")) and beginn is None:
+        meldung = "Datum und Uhrzeit nicht lesbar."
+        if _json_gewuenscht(request):
+            return JSONResponse({"ok": False, "meldung": meldung}, status_code=400)
+        return RedirectResponse(_kartei(vorgang.id, meldung) + "#termine", status_code=303)
+    bemerkung = daten.get("bemerkung")
+    ergebnis: dict = {}
+
+    def _aktion():
+        ergebnis.update(lead_termin.termin_anpassen(
+            session, termin, vorgang, beginn=beginn,
+            ad_id=_int_oder_none(daten.get("ad_id")),
+            objekt_id=_int_oder_none(daten.get("objekt_id")),
+            bemerkung=None if bemerkung is None else str(bemerkung),
+            benutzer=benutzer, bestaetigt=str(daten.get("bestaetigt") or "") in ("1", "true", "on")))
+        if not ergebnis.get("ok"):
+            raise _Abbruch()
+    try:
+        _speichern(session, _aktion)
+    except _Abbruch:
+        session.rollback()
+    ok = bool(ergebnis.get("ok"))
+    status = int(ergebnis.get("status") or (200 if ok else 400))
+    meldung = ergebnis.get("meldung", "Anpassen nicht möglich.")
+    if _json_gewuenscht(request):
+        return JSONResponse({k: v for k, v in ergebnis.items() if k != "status"}, status_code=status)
+    return RedirectResponse(_kartei(vorgang.id, meldung) + "#termine", status_code=303)
+
+
 # --- v31 (Phase 153): Vormerken je Objekt, Terminierung aller Objekttermine -------------
 
 @router.post("/lead/{vorgang_id}/termin/vormerken")
@@ -702,7 +763,8 @@ class _Abbruch(Exception):
 @router.get("/termin/konflikt")
 def termin_konflikt(request: Request, session: Session = Depends(get_session)):
     """Live-Konfliktprüfung des manuellen Formulars (fetch aus lm_termin.js).
-    v31: ?objekt_id= (Fahrzeit vom Objekt), Samstag-Hinweis."""
+    v31: ?objekt_id= (Fahrzeit vom Objekt), Samstag-Hinweis. v37 (Phase 198):
+    ?ignorieren_id= lässt den Termin selbst aus (Dialog „Anpassen“)."""
     lead_v2.gate(request, session)
     q = request.query_params
     ad_id = q.get("ad_id", "")
@@ -720,7 +782,8 @@ def termin_konflikt(request: Request, session: Session = Depends(get_session)):
         lead_ort = lead_termin.objekt_ort(session, vorgang, objekt)
     raster = lead_termin._int(lead_termin.parameter(session, "vorschlag_raster_manuell_min", "15"), 15)
     beginn = lead_termin.viertelstunde(beginn, raster)
-    k = lead_termin.konflikte(session, int(ad_id), beginn, lead_ort=lead_ort)
+    k = lead_termin.konflikte(session, int(ad_id), beginn, lead_ort=lead_ort,
+                              ignorieren_id=_int_oder_none(q.get("ignorieren_id", "")))
     texte = list(k["texte"])
     warnen = bool(k["warnen"])
     if beginn.weekday() >= lead_termin.WERKTAGE_MAX:

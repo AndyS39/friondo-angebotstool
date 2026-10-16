@@ -551,9 +551,11 @@ class F_Dashboard(Basis):
         self.assertNotIn("Meine Arbeit <", seite)
         for weg in ("Ohne nächsten Schritt", "Angebots-Wiedervorlagen", "Termine 7 Tage", 'id="ohne-schritt"'):
             self.assertNotIn(weg, seite, weg)
-        for da in ("Fällig heute", "Kommende Wiedervorlagen", "Offene To-Dos", "Routenplaner",
+        # v37 (PLAN_LEAD_V7 Phase 198): die Kachel „Routenplaner“ ist entfallen
+        for da in ("Fällig heute", "Kommende Wiedervorlagen", "Offene To-Dos",
                    "Meine Termine", 'id="kommende"', 'id="faellig"', 'id="todos"'):
             self.assertIn(da, seite, da)
+        self.assertNotIn("Routenplaner", seite)
         # Wiedervorlage in 30 Tagen (außerhalb des alten 7-Tage-Horizonts) unter „Kommende“
         kommende = seite.split('id="kommende"', 1)[1].split('id="todos"', 1)[0]
         self.assertIn(self.kunde(kommend).anzeige_name, kommende)
@@ -561,10 +563,11 @@ class F_Dashboard(Basis):
         self.assertNotIn(self.kunde(heute).anzeige_name, kommende)
         faellig = seite.split('id="faellig"', 1)[1].split('id="kommende"', 1)[0]
         self.assertIn(self.kunde(heute).anzeige_name, faellig)
-        # Maps-Link exakt wie im Plan (Start, Ziel leer, neuer Tab)
-        link = re.search(r'id="lm-routen-link" href="([^"]+)"', seite).group(1).replace("&amp;", "&")
+        # Maps-Link der Routenplaner-Kachel (v29) – seit v37 (PLAN_LEAD_V7 Phase 198) nicht mehr auf
+        # dem Dashboard; lead_dashboard.routen_link bleibt als Funktion mit demselben Format
+        self.assertNotIn('id="lm-routen-link"', seite)
+        link = lead_dashboard.routen_link("Arnold-Overbeck-Straße 63-65, 47139 Duisburg")
         self.assertEqual(link, "https://www.google.com/maps/dir/?api=1&origin=Arnold-Overbeck-Stra%C3%9Fe+63-65,+47139+Duisburg&travelmode=driving")
-        self.assertIn('target="_blank"', seite)
         # Nachtrag 08.10.2026 (Antwort Andreas): „Mir zugeteilte Vorgänge“ ist vom
         # Dashboard entfernt (Block und Kontext); lead_dashboard.zugeteilte bleibt als Funktion
         self.assertNotIn("Mir zugeteilte Vorgänge", seite)
@@ -588,12 +591,14 @@ class F_Dashboard(Basis):
         seite = inhalt(self.client_claudia.get("/lead-management/dashboard").text)
         self.assertIn("weitere anzeigen", seite)
         self.assertIn('class="lm-kommende-mehr"', seite)
-        # Routenplaner-Start aus dem Parameter
+        # Routenplaner-Start aus dem Parameter (v37: nur noch in den Daten, nicht mehr auf der Seite –
+        # der Parameter routen_start bleibt für „Mein Tag“/Kalender)
         kern.parameter_setzen(self.s, "routen_start", "Königstraße 1, 47798 Krefeld")
         self.s.commit()
         try:
-            seite = inhalt(self.client_claudia.get("/lead-management/dashboard").text)
-            self.assertIn("origin=K%C3%B6nigstra%C3%9Fe+1,+47798+Krefeld", seite)
+            daten = lead_dashboard.daten(self.s, self.claudia)
+            self.assertEqual(daten["routen_start"], "Königstraße 1, 47798 Krefeld")
+            self.assertIn("origin=K%C3%B6nigstra%C3%9Fe+1,+47798+Krefeld", daten["routen_link"])
         finally:
             kern.parameter_setzen(self.s, "routen_start", "Arnold-Overbeck-Straße 63-65, 47139 Duisburg")
             self.s.commit()

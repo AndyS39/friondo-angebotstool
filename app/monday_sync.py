@@ -368,8 +368,30 @@ def vot_termine_nachfuehren(session: Session, nur_vorgang_ids=None, anlegen: boo
             else:
                 zaehler["fehlend"] += 1
                 continue
+        # v37 (PLAN_LEAD_V7 Phase 198, Agent L2): ein im Tool angepasster Termin (Kartei
+        # „Anpassen“, vot_termine.angepasst_am) bleibt unberührt, solange monday noch das
+        # Datum trägt, das der Sync zuletzt gesehen hat (monday_beginn); erst ein in monday
+        # geändertes Datum übernimmt wieder die monday-Werte und beendet die Anpassung
+        # (Aktivität am Vorgang) [ANNAHME]
+        if (ziel.angepasst_am is not None and ziel.monday_beginn is not None
+                and ziel.monday_beginn == lead.vot_datum and ziel.beginn):
+            if ziel.objekt_id is None:
+                haupt = objekte.hauptobjekt(session, vorgang.id, anlegen=True)
+                if haupt is not None:
+                    ziel.objekt_id = haupt.id
+            continue
         geaendert = (ziel.beginn != lead.vot_datum or ziel.ad_id != lead.benutzer_id)
-        if geaendert or ziel.objekt_id is None or not ziel.beginn:
+        if geaendert and ziel.angepasst_am is not None:
+            from app.models import LeadAktivitaet
+            session.add(LeadAktivitaet(
+                vorgang_id=vorgang.id, typ="termin",
+                text=(f"monday-Termin neu gesetzt: {lead.vot_datum:%d.%m.%Y %H:%M} ersetzt die "
+                      f"Anpassung im Tool vom {ziel.angepasst_am:%d.%m.%Y %H:%M}"
+                      + (f" ({ziel.beginn:%d.%m.%Y %H:%M})" if ziel.beginn else ""))))
+            ziel.angepasst_am = None
+            ziel.angepasst_von = None
+        if geaendert or ziel.objekt_id is None or not ziel.beginn or ziel.monday_beginn != lead.vot_datum:
+            ziel.monday_beginn = lead.vot_datum      # v37: Datum laut monday (Hinweis in der Kartei)
             profil = leadmanagement.ad_profil(session, lead.benutzer_id or 0)
             dauer = timedelta(minutes=getattr(profil, "termin_dauer_min", 90) or 90)
             ziel.beginn = lead.vot_datum

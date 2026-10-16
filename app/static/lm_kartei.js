@@ -761,10 +761,16 @@
             badge.title = v.ideal_grund || 'Bester Vorschlag';
             kopfZeile.appendChild(badge);
         }
-        if (v.umweg_min !== undefined && v.umweg_min !== null && v.umweg_min !== '') {
+        // v37 (PLAN_LEAD_V7 Phase 198): Strecke in Kilometern – „Anfahrt 18,4 km · 24 Min · Umweg
+        // +3,2 km · 5 Min“ (geschätzt mit Kennzeichen) statt nur „Umweg +n Min“
+        var strecke = [];
+        if (v.anfahrt_text) { strecke.push('Anfahrt ' + v.anfahrt_text); }
+        if (v.umweg_text) { strecke.push('Umweg ' + v.umweg_text); }
+        else if (v.umweg_min !== undefined && v.umweg_min !== null && v.umweg_min !== '') { strecke.push('Umweg +' + v.umweg_min + ' Min'); }
+        if (strecke.length) {
             var umweg = document.createElement('span');
-            umweg.className = 'dezent';
-            umweg.textContent = ' · Umweg +' + v.umweg_min + ' Min';
+            umweg.className = 'dezent lk-vorschlag-strecke';
+            umweg.textContent = ' · ' + strecke.join(' · ');
             kopfZeile.appendChild(umweg);
         }
         li.appendChild(kopfZeile);
@@ -937,6 +943,24 @@
                 .catch(function () { if (knopf) { knopf.disabled = false; } form.submit(); });
         });
     });
+
+    /* ---------- v37 (PLAN_LEAD_V7 Phase 198): Objekte-Akkordeon – Zustand je Nutzer (Server) ---------- */
+    var akkordeon = $('[data-objekte-akkordeon]');
+    if (akkordeon && akkordeon.dataset.zustandUrl) {
+        var akkTimer = null;
+        akkordeon.addEventListener('toggle', function () {
+            if (!window.fetch) { return; }
+            clearTimeout(akkTimer);
+            var zu = !akkordeon.open;
+            akkTimer = setTimeout(function () {
+                fetch(akkordeon.dataset.zustandUrl, {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                    body: JSON.stringify({ zu: zu })
+                }).catch(function () { /* nur Komfort – beim nächsten Laden gilt der Standard */ });
+            }, 250);
+        });
+    }
 
     /* ---------- Blöcke merken (nur Komfort je Browser) ---------- */
     $$('.lk-bereich[data-bereich]').forEach(function (d) {

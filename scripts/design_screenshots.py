@@ -62,7 +62,13 @@ SEITEN = ["portal", "angebotsliste", "editor", "vorgangsakte", "hauptboard", "ka
           # v34 (PLAN_V21 Phase 182): Login mobil, Galerie-Sammelbox mobil, Wallbox-Editor/-Erfassung
           "login-mobil", "vorgangsakte-mobil", "editor-wb", "erfassung-wb-mobil",
           # v35 (PLAN_LEAD_V6 Phase 187): Vertriebskanäle, TAIFUN-Übergabeliste, Mein Profil, Kontaktiert
-          "kanaele", "taifun-uebergaben", "profil", "profil-mobil", "kontaktiert"]
+          "kanaele", "taifun-uebergaben", "profil", "profil-mobil", "kontaktiert",
+          # v37 (PLAN_LEAD_V7 Phase 197, Agent L1): Design v3 des Lead-Moduls – Deals, Infoabend,
+          # Handelsvertreter, Anrufliste, Terminassistent, Karte, To-Dos, Vorlagen-Editor, alte
+          # Lead-Wochenansicht, Lead-Routing sowie Kartei/Hauptboard/Dashboard bei 390 px
+          "deals", "infoabend", "handelsvertreter", "anrufliste", "termin", "karte-lead", "todos",
+          "vorlagen", "kalender-lead-alt", "lead-routing", "kartei-mobil", "hauptboard-mobil",
+          "lead-dashboard-mobil"]
 
 
 def argumente() -> argparse.Namespace:
@@ -314,6 +320,21 @@ def seitenliste(ziele: dict, cookies: dict, erfassung_id: int) -> list[tuple[str
     liste.append(("profil", "/einstellungen/profil", admin, False))
     liste.append(("profil-mobil", "/einstellungen/profil", ad, True))
     liste.append(("kontaktiert", "/lead-management/kontaktiert", admin, False))
+    # v37 (PLAN_LEAD_V7 Phase 197, Agent L1): Lead-Seiten für das Design v3 (vorher/nachher)
+    liste.append(("deals", "/lead-management/terminiert", admin, False))
+    liste.append(("infoabend", "/lead-management/info-veranstaltung", admin, False))
+    liste.append(("handelsvertreter", "/lead-management/handelsvertreter", admin, False))
+    liste.append(("anrufliste", "/lead-management/anrufliste", admin, False))
+    if ziele.get("lead_id"):
+        liste.append(("termin", f"/lead-management/lead/{ziele['lead_id']}/termin", admin, False))
+        liste.append(("kartei-mobil", f"/lead-management/lead/{ziele['lead_id']}", admin, True))
+    liste.append(("karte-lead", "/lead-management/karte", admin, False))
+    liste.append(("todos", "/lead-management/todos", admin, False))
+    liste.append(("vorlagen", "/lead-management/vorlagen", admin, False))
+    liste.append(("kalender-lead-alt", "/lead-management/kalender?alt=1", admin, False))
+    liste.append(("lead-routing", "/parametrierung/lead-routing", admin, False))
+    liste.append(("hauptboard-mobil", "/lead-management/hauptboard", admin, True))
+    liste.append(("lead-dashboard-mobil", "/lead-management/dashboard", admin, True))
     return liste
 
 
@@ -407,8 +428,10 @@ def main() -> int:
     try:
         if not args.server:
             umgebung = dict(os.environ, PYTHONIOENCODING="utf-8")
+            # v37 (L1): Lifespan aus – keine Hintergrundläufe (Geocoding/monday/Graph) aus der
+            # Screenshot-Instanz, kein Netzaufruf während der Aufnahme
             server = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1",
-                                       "--port", str(args.port), "--log-level", "warning"],
+                                       "--port", str(args.port), "--log-level", "warning", "--lifespan", "off"],
                                       cwd=str(PROJEKT), env=umgebung)
         warten(basis + "/login")
         for rolle, cookie in cookies.items():
@@ -421,8 +444,11 @@ def main() -> int:
         if fehlend:
             print("übersprungen (kein Ziel in den Daten):", ", ".join(fehlend))
 
+        # v37 (L1): Chrome löst nur 127.0.0.1 auf – externe Hosts (OSM-Kacheln der Karte,
+        # Webfonts) bleiben unerreichbar, die Aufnahme bleibt ohne Netz
         chrome = subprocess.Popen([args.chrome, "--headless=new", f"--remote-debugging-port={args.cdp}",
                                    f"--user-data-dir={profil}", "--window-size=1440,900",
+                                   "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1",
                                    "--no-first-run", "--disable-gpu", "--hide-scrollbars", "about:blank"],
                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         ws_url = ""

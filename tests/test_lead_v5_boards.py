@@ -971,11 +971,12 @@ class NacharbeitenTAT(Basis):
         self.assertEqual([g["bezeichnung"] for g in zeile["objekt_gruppen"]], ["Objekt 1", "Garage"])
         self.assertEqual([a.nummer for a in zeile["objekt_gruppen"][1]["angebote"]], ["V31B-1005-2"])
         self.assertEqual(len(zeile["objekt_gruppen"][0]["termine"]), 1)   # Termin ohne objekt_id → Hauptobjekt
+        # v37 (PLAN_LEAD_V7 Phase 199, Agent L3): die Deals-Spalte „Erfassung / Angebot“ (mit den
+        # Objektgruppen und „Erfassung <Objekt>“) ist entfallen – die Daten (zeile["objekt_gruppen"])
+        # bleiben für Kartei/Vorgangsakte, die Seite zeigt sie nicht mehr
         seite = self.client.get("/lead-management/terminiert").text
-        self.assertIn("lm-objekt-gruppe", seite)
-        self.assertIn("Garage", seite)
-        self.assertIn(f"objekt_id={zweites.id}", seite)
-        self.assertIn("V31B-1005-2", seite)
+        self.assertNotIn("lm-objekt-gruppe", seite)
+        self.assertNotIn(f"objekt_id={zweites.id}", seite)
         # ein Objekt → keine Gruppierung
         einzeln = self.lead(1006)
         self.termin(einzeln)

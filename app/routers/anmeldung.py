@@ -20,6 +20,38 @@ from app import anfrage   # v27: Formular/JSON in def-Routen
 
 router = APIRouter()
 
+# v37 (PLAN_LEAD_V7 Phase 198, Agent L2): zuletzt verwendeter Benutzer je Browser – Cookie mit
+# der Benutzer-ID (nie die PIN, nie der Name), 90 Tage, HttpOnly, SameSite=Lax, Secure bei
+# HTTPS_AKTIV; die Login-Seite belegt die Benutzerwahl vor und setzt den Fokus in die PIN,
+# „Anderer Benutzer“ (GET /login?anderer=1) leert das Cookie; Abmelden behält es.
+BENUTZER_COOKIE = "angebotstool_benutzer"
+BENUTZER_COOKIE_TAGE = 90
+
+
+def benutzer_cookie_setzen(antwort, benutzer_id: int) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app import config
+    dauer_s = BENUTZER_COOKIE_TAGE * 86400
+    antwort.set_cookie(BENUTZER_COOKIE, str(int(benutzer_id)), httponly=True, max_age=dauer_s,
+                       expires=datetime.now(timezone.utc) + timedelta(seconds=dauer_s),
+                       path="/", samesite="lax", secure=bool(config.HTTPS_AKTIV))
+
+
+def benutzer_cookie_loeschen(antwort) -> None:
+    from app import config
+    antwort.delete_cookie(BENUTZER_COOKIE, path="/", samesite="lax", secure=bool(config.HTTPS_AKTIV))
+
+
+def gemerkter_benutzer(request: Request, benutzer: list[Benutzer]) -> int | None:
+    """ID aus dem Cookie, wenn sie zu einem aktiven Benutzer der Auswahl gehört."""
+    wert = (request.cookies.get(BENUTZER_COOKIE) or "").strip()
+    if not wert.isdigit():
+        return None
+    nr = int(wert)
+    return nr if any(b.id == nr for b in benutzer) else None
+
+
 # v9-Portal: Innendienst landet nach dem Login direkt im Angebotstool
 # (das Portal „/“ ist über den Home-Link im Kopf erreichbar)
 STARTSEITEN = {"aussendienst": "/erfassung", "projektierung": "/projektierung",
@@ -65,9 +97,17 @@ def _aktive_benutzer(session: Session) -> list[Benutzer]:
 
 @router.get("/login")
 def login_formular(request: Request, session: Session = Depends(get_session)):
-    return render(request, "anmeldung/login.html", aktiv=None,
-                  benutzer=_aktive_benutzer(session), fehler="",
-                  angemeldet_bleiben=False, **_login_kontext(session, request))
+    benutzer = _aktive_benutzer(session)
+    # v37 (Phase 198): ?anderer=1 leert das Cookie des gemerkten Benutzers (Fokus auf die Auswahl)
+    anderer = request.query_params.get("anderer") == "1"
+    vorgewaehlt = None if anderer else gemerkter_benutzer(request, benutzer)
+    antwort = render(request, "anmeldung/login.html", aktiv=None,
+                     benutzer=benutzer, fehler="",
+                     angemeldet_bleiben=False, vorgewaehlt=vorgewaehlt, anderer=anderer,
+                     **_login_kontext(session, request))
+    if anderer:
+        benutzer_cookie_loeschen(antwort)
+    return antwort
 
 
 @router.post("/login")
@@ -90,6 +130,7 @@ def login(request: Request, session: Session = Depends(get_session)):
         return render(request, "anmeldung/login.html", aktiv=None,
                       benutzer=_aktive_benutzer(session), fehler=text,
                       angemeldet_bleiben=angemeldet_bleiben,
+                      vorgewaehlt=benutzer_id or None, anderer=False,
                       **_login_kontext(session, request))
     # Pflichtwechsel (erster Login, Admin-Reset, Import): direkt auf /pin-wechsel –
     # die Middleware leitet zusätzlich jede andere Seite dorthin um
@@ -106,11 +147,14 @@ def login(request: Request, session: Session = Depends(get_session)):
     from app import darstellung
     darstellung.cookie_setzen(antwort, darstellung.lesen(session, benutzer.id)
                               or darstellung.STANDARD)
+    # v37 (PLAN_LEAD_V7 Phase 198): Benutzer je Browser merken (nur die ID, nie die PIN)
+    benutzer_cookie_setzen(antwort, benutzer.id)
     return antwort
 
 
 @router.get("/logout")
 def logout():
+    # v37: das Sitzungs-Cookie geht, der gemerkte Benutzername (angebotstool_benutzer) bleibt
     antwort = RedirectResponse("/login", status_code=303)
     antwort.delete_cookie(auth.COOKIE_NAME)
     return antwort

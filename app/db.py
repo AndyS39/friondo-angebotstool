@@ -517,6 +517,11 @@ _NACHTRAEGLICHE_SPALTEN = {
         "medium": "VARCHAR(10) NOT NULL DEFAULT 'vor_ort'",
         "ics_uid": "VARCHAR(100)",
         "ics_sequence": "INTEGER NOT NULL DEFAULT 0",
+        # v37 (PLAN_LEAD_V7 Phase 198, Agent L2): Termin anpassen – monday-Ursprungsdatum,
+        # letzte Anpassung im Tool (additiv, v36-Code liest sie nicht)
+        "monday_beginn": "DATETIME",
+        "angepasst_am": "DATETIME",
+        "angepasst_von": "INTEGER",
     },
     "ad_profile": {
         "terminiert_selbst": "BOOLEAN NOT NULL DEFAULT 0",

@@ -61,10 +61,15 @@ KOMMENDE_SICHTBAR = 10          # „mehr anzeigen“ ab so vielen kommenden Wie
 # Standardreihenfolge (Key → Titel). Neue Kacheln späterer Versionen hängen sich hinten
 # an gespeicherte Reihenfolgen an; „mails_fehler“ erscheint nur bei > 0, „abwesenheit“
 # (Phase 158, eigener Krankheits-/Urlaubseintrag) für jeden Nutzer.
-KACHELN = [("faellig", "Fällig heute"), ("routenplaner", "Routenplaner"),
+# v37 (PLAN_LEAD_V7 Phase 198, Agent L2): die Kachel „Routenplaner“ (v29, Google-Maps-Link)
+# entfällt – kachel_reihenfolge lässt den Key gespeicherter Reihenfolgen stillschweigend weg
+# (unbekannte Keys fallen seit v31 heraus); der Parameter routen_start bleibt für „Mein Tag“
+# (Startpunkt der Strecke) und den Kalender, routen_start()/routen_link() bleiben als Funktionen.
+KACHELN = [("faellig", "Fällig heute"),
            ("kommende", "Kommende Wiedervorlagen"), ("termine", "Meine Termine"),
            ("todos", "Offene To-Dos"), ("mails_fehler", "Mails mit Fehler"),
            ("abwesenheit", "Meine Abwesenheit")]
+KACHELN_ENTFALLEN = ("routenplaner",)       # v37: nur noch Dokumentation/Tests
 KACHEL_KEYS = [k for k, _ in KACHELN]
 KACHELN_EINSTELLUNG = "dashboard_kacheln"
 # Phase 158: Aktivitätstext (Dedup je Termin) für Termine kranker Vertriebler
@@ -599,8 +604,9 @@ def sperrzeit_namen(session: Session, liste: list) -> dict:
 def daten(session: Session, benutzer, termine_alle: bool = False,
           jetzt: datetime | None = None) -> dict:
     """Alles für dashboard.html (v29: „Hallo, <Vorname>“, Fällig heute, Kommende
-    Wiedervorlagen ohne Grenze, Offene To-Dos, Routenplaner, Meine Termine,
-    HV-Sperrzeiten, Kachel „Mails mit Fehler“)."""
+    Wiedervorlagen ohne Grenze, Offene To-Dos, Meine Termine, HV-Sperrzeiten, Kachel
+    „Mails mit Fehler“; v37: ohne Routenplaner-Kachel – routen_start/routen_link bleiben
+    im Kontext für Alt-Templates ohne Wirkung)."""
     jetzt = jetzt or datetime.now()
     hv = ist_hv(session, benutzer)
     horizont = horizont_tage(session)

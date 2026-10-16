@@ -55,7 +55,12 @@
       damit die Inline-Felder (Rechte je Zeile serverseitig, Zeile kommt vom Makro hv_zeile).
       Nach der Sofortsuche (document „lm-sofort:geladen“, lm_sofort.js) werden Layout,
       Spaltenbreiten, Zähler und Markierungen neu berechnet; die lokale Schnellsuche ruht,
-      wenn das Suchfeld zu einem Sofortsuche-Formular gehört (data-lm-sofort). */
+      wenn das Suchfeld zu einem Sofortsuche-Formular gehört (data-lm-sofort).
+   7. v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Interessen-Popover hinter dem PLUS – Chips mit
+      Häkchen (gewählte markiert, Klick wählt ab/an), KEIN 600-ms-Timer mehr: gespeichert wird
+      per fetch beim Schließen (Klick daneben, Klick auf das Plus, „Übernehmen“), Escape und
+      „Abbrechen“ schließen ohne Speichern [ANNAHME: Speichern erst beim Schließen, damit
+      mehrere Klicks in einem Zug möglich sind]. */
 (function () {
     'use strict';
     if (window.__lmBoardsGeladen) { return; }
@@ -345,15 +350,15 @@
         if (el.dataset.lmFertig === '1') { delete el.dataset.lmFertig; return; }
         textzelleSchliessen(el, true);
     });
-    // Interessen-Popover: Häkchen speichern verzögert (mehrere Klicks sammeln), Übernehmen sofort,
-    // Abbrechen/Escape stellt den gespeicherten Stand wieder her, Klick daneben = Verlassen (speichert)
-    const popoverTimer = new WeakMap();
+    // Interessen-Popover (v37, Teil 7): Chips mit Häkchen hinter dem PLUS – Klick wählt ab/an,
+    // gespeichert wird beim SCHLIESSEN (Klick daneben, Klick auf das Plus, „Übernehmen“);
+    // Abbrechen/Escape stellt den gespeicherten Stand wieder her und schließt ohne Speichern.
+    // (v35 hatte einen 600-ms-Timer je Häkchen – entfällt, damit mehrere Klicks in einem Zug gehen.)
     function popoverGeaendert(details) {
         const aktuell = (details.dataset.aktuell || '').split(',').filter(Boolean).sort().join(',');
         return window.lmInline.popoverWerte(details).slice().sort().join(',') !== aktuell;
     }
     function popoverSpeichern(details) {
-        clearTimeout(popoverTimer.get(details));
         const werte = window.lmInline.popoverWerte(details);
         if (!popoverGeaendert(details)) { details.removeAttribute('open'); return; }
         details.dataset.aktuell = werte.join(',');
@@ -361,22 +366,18 @@
         inlineSenden(details.dataset.vorgang, { feld: details.dataset.feld || 'interessen', wert: werte }, details.closest('tr'));
     }
     function popoverVerwerfen(details) {
-        clearTimeout(popoverTimer.get(details));
         const aktuell = (details.dataset.aktuell || '').split(',').filter(Boolean);
         details.querySelectorAll('input[type=checkbox]').forEach(function (cb) { cb.checked = aktuell.indexOf(cb.value) >= 0; });
         details.removeAttribute('open');
     }
-    document.addEventListener('change', function (e) {
-        const details = e.target.closest('details.lm-popover');
-        if (!details || e.target.type !== 'checkbox') { return; }
-        clearTimeout(popoverTimer.get(details));
-        popoverTimer.set(details, setTimeout(function () { if (details.open) { popoverSpeichern(details); } }, 600));
-    });
     document.addEventListener('click', function (e) {
         const ok = e.target.closest('.lm-popover-ok');
         const abbruch = e.target.closest('.lm-popover-abbruch');
         if (ok) { e.preventDefault(); popoverSpeichern(ok.closest('details.lm-popover')); return; }
         if (abbruch) { e.preventDefault(); popoverVerwerfen(abbruch.closest('details.lm-popover')); return; }
+        // Klick auf das Plus eines OFFENEN Popovers: schließen = speichern (statt nativem Zuklappen)
+        const knopf = e.target.closest('details.lm-popover[open] > summary');
+        if (knopf) { e.preventDefault(); popoverSpeichern(knopf.parentElement); return; }
         document.querySelectorAll('details.lm-popover[open]').forEach(function (d) {
             if (!d.contains(e.target)) { popoverSpeichern(d); }
         });

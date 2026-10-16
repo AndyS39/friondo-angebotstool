@@ -708,3 +708,28 @@ Beschreibung der Funktionen in CLAUDE.md „Neu in v33“ (PLAN_V20, Phasen 166�
   `angebote.cloover_json` (projekt_am, projekt_von, pdf_ablage, kombi_*, status_fehler …). Der v35-Code liest nichts
   davon (Rückweg `rollback.bat --nur-code`).
 - **Glocke:** art `cloover` steht in `benachrichtigungen.MAIL_FREIE_ARTEN` (nie Sofort-/Digest-Mail).
+
+## Ergänzungen v37 – Lead-Management V7: Routing in Kilometern, Termine anpassen (16.10.2026, Agent L2)
+
+- **Kein neuer Hintergrundlauf** (weiter 18 Läufe, Pool-Invariante 64 + 18 + 5 = 87 ≤ 90). Neue bzw. geänderte
+  Netzaufrufe aus Anfragen – alle nach `verbindung_freigeben`, Wächter `tests/test_v27_sitzungen.py` grün:
+
+  | Modul | Funktion | Auslöser | Intervall | Netzaufruf | hält Sitzung während Netz-I/O | Schreibtransaktion | Hinweis |
+  |---|---|---|---|---|---|---|---|
+  | `app/routing.py` `matrix_fuellen` (v37) | Key aus `.env` (`ORS_API_KEY`) mit Vorrang vor dem Parameter; Tageskontingent `routing_kontingent_tag` (Standard 2000, ab 100 % kein Aufruf, Schätzung) | Anfrage: Terminvorschläge, Kalenderansicht, Ersatzkunde-Dialog, Karte (`karte/daten`), Mein Tag (`GET /leads`, heutige Termine) | je Cache-Miss, gebündelt ≤ 50 × 50 | ORS Matrix (Timeout 8 s) | nein – `verbindung_freigeben` vor dem HTTP-Aufruf | ja: Zähler (eigene kurze Transaktion) + Cache-Upsert mit sofortigem Commit | Cache 90 Tage; Zähler `aufrufe_ors_matrix_<Datum>`, Anzeige/Warnung in den Lead-Einstellungen |
+  | `app/routing.py` `dienst_pruefen` (v37) | Prüfpunkt „Routing-Dienst antwortet“ – Matrix 1×1 Duisburg → Bochum | Anfrage `POST /parametrierung/lead-routing/test` (Admin) | manuell | ORS Matrix (8 s) | nein – Freigabe vor dem Aufruf | ja: Zähler, Cache, Parameter `routing_pruefung` | ohne Key „ORS_API_KEY fehlt“ |
+  | `app/mein_tag.py` `_startpunkt` (v37) | Rückfall-Startpunkt: `routen_start` über `geocoding.geokodieren` (nur ohne Startadresse im AD-Profil) | Anfrage `GET /leads` (Außendienst) | je Cache-Miss | Nominatim/ORS/Google-Geocoding (8 s) | nein – `geokodieren` gibt vorher frei | ja: Geocode-Cache | best effort, Fehler → ohne Strecke |
+  | `app/lead_termin.py` `termin_anpassen` (v37) | Termin in place ändern, Outlook-Auftrag/Mails nur nach Freischaltung | Anfrage `POST …/termin/{tid}/anpassen` | je Klick | kein Netz (Outlook über `outlook_auftraege`, Lauf `outlook-sync`) | nein | ja (`_speichern`: Rollback + eine Wiederholung) | monday wird nie zurückgeschrieben |
+  | `app/monday_sync.py` `vot_termine_nachfuehren` (v37) | lässt im Tool angepasste Termine aus, solange monday das Datum `monday_beginn` trägt; Backfill `monday_beginn` | Scheduler „monday-sync“ / Button | 900 s | kein Netz (Nachlauf) | nein | ja (wie bisher) | Aktivität bei monday-Datumswechsel |
+
+- Neue Request-Pfade mit Schreibzugriff (ohne Netz): `POST /lead-management/lead/{id}/termin/{tid}/anpassen`,
+  `POST /lead-management/lead/{id}/objekte/zustand`, `POST /parametrierung/lead-routing/test` (Netz, s. o.),
+  `POST /login` (zusätzliches Cookie `angebotstool_benutzer` – nur die Benutzer-ID, nie die PIN).
+- **Routing-Kontingent (IT):** der openrouteservice-Key liegt nur in der `.env` (`ORS_API_KEY`, Konto
+  account.heigit.org); Tageskontingent `routing_kontingent_tag` (Lead-Einstellungen, Standard 2000 – Free-Plan Matrix
+  vermutlich 500/Tag, Rückfrage) an den tatsächlichen Plan anpassen; ab 80 % Hinweis, ab 100 % Schätzung (Luftlinie
+  × 1,3) bis Mitternacht.
+- **Migration v37 (additiv):** Spalten `vot_termine.monday_beginn/angepasst_am/angepasst_von`, Lead-Parameter
+  `routing_kontingent_tag`/`routing_pruefung` (`routing.migration_v37_routing`), `vertriebskanaele.aktiv = 0` für
+  WELOVEX/DAA (`lead_kanaele.migration_v37_kanaele`), Benutzereinstellungen `objekte_zu`; der v36-Code liest nichts
+  davon (Rückweg `rollback.bat --nur-code`).

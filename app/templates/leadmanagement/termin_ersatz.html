@@ -26,7 +26,8 @@
         {% if termin.grund_text %}<span class="dezent">– {{ termin.grund_text }}</span>{% endif %}</p>
     <p class="dezent">Suche: offene Leads mit Status „Kontaktiert“ (qualifiziert zuerst, dann
         erreichte Kunden in Kontaktierung) im Umkreis, Stufen {{ stufen | join(' → ') }} km
-        (Luftlinie) bis mindestens drei Treffer; Leads ab {{ alter_tage }} Tagen bevorzugt{% if score_aktiv %},
+        (Umkreis als Luftlinie) bis mindestens drei Treffer; je Kandidat Straßenkilometer und Fahrzeit
+        vom freien Slot (Routing-Dienst, sonst „geschätzt“); Leads ab {{ alter_tage }} Tagen bevorzugt{% if score_aktiv %},
         Score-Klasse berücksichtigt{% endif %}.
         {% if radius %}Verwendeter Radius: <strong>{{ radius | round(0) | int }} km</strong>.{% endif %}
         {% if not ort %}<span class="lmt-aus">Slot ohne Koordinaten – keine Umkreissuche möglich.</span>{% endif %}</p>
@@ -35,13 +36,15 @@
 <h2>{{ kandidaten | length }} Kandidat{{ 'en' if kandidaten | length != 1 }}</h2>
 {% if kandidaten %}
 <table class="tabelle lmt-ersatz-tabelle">
-    <thead><tr><th>#</th><th>Kunde</th><th>Sparten</th><th>Begründung</th><th>Aktion</th></tr></thead>
+    <thead><tr><th>#</th><th>Kunde</th><th>Strecke</th><th>Sparten</th><th>Begründung</th><th>Aktion</th></tr></thead>
     <tbody>
     {% for k in kandidaten %}
         <tr class="{{ 'lmt-bevorzugt' if k.bevorzugt }}">
             <td>{{ loop.index }}</td>
             <td><a href="/lead-management/lead/{{ k.vorgang.id }}">{{ k.kunde.anzeige_name if k.kunde else '?' }}</a>
                 <div class="dezent">{{ k.kunde.plz if k.kunde }} {{ k.kunde.ort if k.kunde }}</div></td>
+            {#- v37 (PLAN_LEAD_V7 Phase 198): Straßenkilometer · Fahrzeit vom freien Slot (Luftlinie nur für den Umkreis) #}
+            <td class="lmt-strecke" data-rolle="strecke"><strong>{{ k.strecke_text or '–' }}</strong></td>
             <td>{% for s in k.sparten %}<span class="abzeichen interesse-{{ s | lower }}">{{ s }}</span> {% endfor %}</td>
             <td>{{ k.begruendung }}{% if k.bevorzugt %} <span class="abzeichen ep">bevorzugt</span>{% endif %}</td>
             <td class="aktionen">

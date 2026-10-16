@@ -14,7 +14,12 @@
    entfällt) → Block Termine (aktiver Termin je Objekt, Historie, Vorschläge mit
    Kalenderansicht, Vorab-Gespräch, Umbuchung, Absage, Bestätigung erneut) → Angebote ·
    Erfassungen · Projekt · Anhänge. Der To-Dos-Block unten entfällt. Unter 900 px alles
-   untereinander. Testphase (Phase 159): Terminierung/Vormerken gesperrt mit Tooltip. #}
+   untereinander. Testphase (Phase 159): Terminierung/Vormerken gesperrt mit Tooltip.
+   v37 (PLAN_LEAD_V7 Phase 196, Agent L1): Kopf ohne Badge „monday“ und ohne SLA-Chip (Review
+   16.10.2026); der Notizblock nimmt die volle Breite seiner Spalte ein, „Senden“ und „Diktieren“
+   stehen rechts neben dem Textfeld (Raster .lk-v5 .lk-notizen .nc-eingabe in lead_v2.css – das
+   Makro notizen_chat bleibt für alle anderen Akten unverändert). Phase 197: Design v3 über
+   <body data-modul="lead"> (base.html) – nur Optik, Aufbau wie v31–v35. #}
 
 {% block titel %}Kundenkartei {{ kunde.anzeige_name if kunde else vorgang.id }} – Friondo Angebotstool{% endblock %}
 {% block mainklasse %}breit lk-seite lk-v3 lk-v5{% endblock %}
@@ -45,7 +50,9 @@
                     {#- v35 (PLAN_LEAD_V6 Phase 183, Agent T): grünes Badge „TAIFUN <Datum>“ (+ Kundennummer) nach erfolgter Übergabe #}
                     {% if taifun is defined and taifun and taifun.badge %}<span class="abzeichen lm-taifun-badge" data-rolle="taifun-badge" title="{{ taifun.badge_titel }}">{{ taifun.badge }}</span>{% endif %}
                     {% if vorgang.demo %}<span class="demo-badge">Demo</span>{% endif %}
-                    {% if vorgang.eingang_art == 'monday' %}<span class="abzeichen">monday</span>{% endif %}
+                    {#- v37 (PLAN_LEAD_V7 Phase 196, Review Claudia 16.10.2026): kein Badge „monday“ mehr neben dem Namen –
+                        die Quelle steht weiter in der Eingangszeile (Tooltip „Eingangsdatum · monday“), im Kundeninfo-Block
+                        („Eingangsdatum (monday)“) und in der Timeline #}
                     {% if vorgang.vorab_angebot %}<span class="abzeichen lk-vorab" title="Angebot ohne Vor-Ort-Termin – keine Terminbestätigung (F10)">Vorab-Angebot</span>{% endif %}
                     {% if lead_kontext.wiederkehrer %}<span class="abzeichen ep">Wiederkehrer</span>{% endif %}
                     {#- v33 (PLAN_V20 Phase 175): Lead hängt an Simons Gruppe, noch kein Mitglied gewählt #}
@@ -101,13 +108,9 @@
 
         <div class="lk-kopf-fakten">
             {#- v29 (Phase 141): Eingangsdatum „TT.MM.JJJJ, HH:MM Uhr“ auch im Kopf #}
-            <span title="Eingangsdatum{{ ' · ' ~ vorgang.eingang_art if vorgang.eingang_art }}" data-eingang>{{ symbol('uhr') }} Eingang {{ vorgang.eingang_am | de_datum_zeit if vorgang.eingang_am else '–' }}</span>
-            <span>SLA:
-                {% if lead_kontext.sla.farbe == 'erfuellt' %}
-                    <span class="sla-chip sla-erfuellt" title="Zeit bis zum Erstkontakt (innerhalb der LM-Arbeitszeit)">erfüllt · {{ lead_kontext.sla.text }}</span>
-                {% elif lead_kontext.sla.farbe %}
-                    <span class="sla-chip sla-{{ lead_kontext.sla.farbe }}" title="wartet seit {{ lead_kontext.sla.text }} auf den Erstkontakt">{{ lead_kontext.sla.text }}</span>
-                {% else %}–{% endif %}</span>
+            <span title="Eingangsdatum{{ ' · ' ~ vorgang.eingang_art if vorgang.eingang_art }}" data-eingang>{{ symbol('uhr') }} Eingang {{ vorgang.eingang_am | de_datum_zeit if vorgang.eingang_am else '–' }}{% if vorgang.eingang_art %} <span class="dezent">({{ vorgang.eingang_art }})</span>{% endif %}</span>
+            {#- v37 (Phase 196): der SLA-Chip ist aus der Kopfzeile gestrichen – SLA bleibt in der Anrufliste
+                (Sortierung/Chip) und in der Statistik; der Kontaktstatus-Satz (lead_kontext.kontakt_satz) bleibt #}
             <span class="lk-versuche">Versuche: {{ versuche_punkte(vorgang, lead_kontext.versuche) }}
                 <span>{% for text, klasse in lead_kontext.kontakt_satz %}<span class="{{ {'faellig': 'lm-rot', 'rueckruf': 'lm-blau', 'warn': 'lm-warn', 'rot': 'lm-rot', 'dezent': 'dezent'}.get(klasse, '') }}">{{ text }}</span>{{ ' · ' if not loop.last }}{% endfor %}</span></span>
             {% if vorgang.lead_phase == 'zurueckgestellt' %}

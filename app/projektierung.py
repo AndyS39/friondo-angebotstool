@@ -2232,14 +2232,9 @@ def _adresse_text(strasse: str, plz: str, ort: str) -> str:
 def routing_konfiguriert(session: Session) -> bool:
     """Routing-Anbieter des Lead-Moduls (ors/google mit Schlüssel); Luftlinie
     gilt als „kein Anbieter“ – dann Umweg „–“ (Hinweis im Dialog)."""
-    from app import leadmanagement
-    anbieter = (leadmanagement.parameter_holen(session, "routing_anbieter", "luftlinie")
-                or "luftlinie").strip().lower()
-    if anbieter == "ors":
-        return bool(leadmanagement.parameter_holen(session, "ors_api_key", ""))
-    if anbieter == "google":
-        return bool(leadmanagement.parameter_holen(session, "google_api_key", ""))
-    return False
+    # v37 (PLAN_LEAD_V7 Phase 198, Agent L2): Key aus der .env hat Vorrang – routing.dienst_aktiv
+    from app import routing
+    return routing.dienst_aktiv(session)
 
 
 def terminvorschlaege(session: Session, gewerk: Gewerk, team_id: int | None = None,

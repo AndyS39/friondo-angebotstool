@@ -230,7 +230,7 @@ def _objekt_sparten(objekt: VorgangObjekt | None, haupt_sparten: list[str]) -> l
     if objekt is None or (objekt.reihenfolge or 1) == 1:
         return haupt_sparten
     try:
-        eigene = sparten_modul.codes(objekt.interessen)
+        eigene = sparten_modul.erfassungs_codes(objekt.interessen)   # v37: ohne Merkmal PVV
     except Exception:   # noqa: BLE001
         eigene = []
     return eigene or haupt_sparten
@@ -299,8 +299,11 @@ def termin_karten(session: Session, benutzer, heute=None) -> list[dict]:
         ad_id = effektiver_ad(termin, vorgang, lead)
         if aussendienst and ad_id != benutzer.id:
             continue
+        # v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Merkmale (PVV „PV vorhanden“) sind keine
+        # Erfassungs-Sparte – weder Chip noch Erledigt-Logik (Lead.sparten filtert sie selbst)
         sparten = (lead.sparten if lead is not None
-                   else (objekte.vorgang_interessen(session, vorgang.id) or kunde.interessen or ["WP"]))
+                   else (sparten_modul.erfassungs_codes(objekte.vorgang_interessen(session, vorgang.id))
+                         or sparten_modul.erfassungs_codes(kunde.interessen) or ["WP"]))
         erfasst_set = erfasst.get(vorgang.id, set())
         chips = _chips(lead, sparten, erfasst_set)
         offen_vorgang = any(status == "offen" for _, status in chips)
@@ -364,6 +367,94 @@ def termin_karten(session: Session, benutzer, heute=None) -> list[dict]:
     return karten
 
 
+# --- v37 (PLAN_LEAD_V7 Phase 198, Agent L2): Strecke in Kilometern je Termin des Tages ---------
+
+STRECKE_VON_START = "von der Startadresse"
+
+
+def _termin_ort(karte: dict) -> tuple | None:
+    """Koordinaten des Termins: vot_termine.lat/lon, sonst Objekt (v31), sonst Vorgang."""
+    t = karte["termin"]
+    if t.lat is not None and t.lon is not None:
+        return (t.lat, t.lon)
+    v = karte["vorgang"]
+    if v.lat is not None and v.lon is not None:
+        return (v.lat, v.lon)
+    return None
+
+
+def _startpunkt(session: Session, ad_id, benutzer) -> tuple | None:
+    """Startpunkt des Tages: Startadresse des AD-Profils (start_lat/start_lon), sonst der
+    Parameter routen_start (Firmensitz) über den Geocode-Cache [ANNAHME]."""
+    kandidaten = [i for i in (ad_id, getattr(benutzer, "id", None)) if i]
+    for nr in kandidaten:
+        profil = session.query(AdProfil).filter(AdProfil.benutzer_id == int(nr)).first()
+        if profil is not None and profil.start_lat is not None and profil.start_lon is not None:
+            return (profil.start_lat, profil.start_lon)
+    try:
+        from app import geocoding, lead_dashboard
+        adresse = lead_dashboard.routen_start(session)
+        if adresse:
+            lat, lon, status = geocoding.geokodieren(session, adresse)
+            if lat is not None and lon is not None:
+                return (lat, lon)
+    except Exception:   # noqa: BLE001 – die Karte darf daran nie scheitern
+        pass
+    return None
+
+
+def strecken_ergaenzen(session: Session, karten: list[dict], benutzer, heute=None) -> None:
+    """Strecke (Straßenkilometer und Fahrzeit) für die Termine des heutigen Tages: vom
+    Vortermin des Tages (gleicher Vertriebler), beim ersten Termin von der Startadresse.
+    EIN gebündelter Matrix-Aufruf über routing.matrix_fuellen (gibt die Sitzung vor dem
+    Netzaufruf frei; ohne Key/Anbieter kein Netz), danach je Paar aus dem Cache
+    (routing.strecke → „18,4 km · 24 Min“ bzw. „ca. 24 km · 31 Min (geschätzt)“).
+    Setzt je Karte strecke (dict), strecke_text, strecke_von (Text), strecke_geschaetzt."""
+    from app import routing
+    heute_tag = _jetzt(heute).date()
+    tages = sorted((k for k in karten if k.get("tag") == heute_tag),
+                   key=lambda k: (k["beginn"], k["termin"].id))
+    for k in karten:
+        k.setdefault("strecke", None)
+        k.setdefault("strecke_text", "")
+        k.setdefault("strecke_von", "")
+        k.setdefault("strecke_geschaetzt", False)
+    if not tages:
+        return
+    paare = []
+    starts: dict = {}
+    vorher: dict = {}
+    for k in tages:
+        ziel = _termin_ort(k)
+        if ziel is None:
+            continue
+        ad_id = k.get("ad_id")
+        von = vorher.get(ad_id)
+        von_text = ""
+        if von is not None:
+            von_text = f"vom Termin {von[1]}"
+            von = von[0]
+        else:
+            if ad_id not in starts:
+                starts[ad_id] = _startpunkt(session, ad_id, benutzer)
+            von = starts[ad_id]
+            von_text = STRECKE_VON_START if von is not None else ""
+        if von is not None and von != ziel:
+            paare.append((k, von, ziel, von_text))
+        vorher[ad_id] = (ziel, k.get("uhr") or uhr_kurz(k["beginn"]))
+    if not paare:
+        return
+    quellen = list(dict.fromkeys(p[1] for p in paare))
+    ziele = list(dict.fromkeys(p[2] for p in paare))
+    routing.matrix_fuellen(session, quellen, ziele)
+    for k, von, ziel, von_text in paare:
+        ergebnis = routing.strecke(session, von, ziel)
+        k["strecke"] = ergebnis
+        k["strecke_text"] = ergebnis.get("text", "")
+        k["strecke_von"] = von_text
+        k["strecke_geschaetzt"] = bool(ergebnis.get("geschaetzt"))
+
+
 def naechster_termin(heute_karten: list[dict], jetzt: datetime) -> dict | None:
     """Karte „Als Nächstes“: der nächste noch nicht erledigte Termin des Tages – der erste,
     dessen Ende noch nicht erreicht ist (vor dem Beginn „in n Min“, danach „jetzt“); ohne
@@ -419,6 +510,13 @@ def termine(session: Session, benutzer, von=None, bis=None, status: str = "",
     heute_tag = jetzt.date()
     heute_block = [k for k in gefiltert if k["tag"] <= heute_tag]
     heute_block.sort(key=lambda k: (0 if k["tag"] < heute_tag else 1, k["beginn"], k["termin"].id))
+    # v37 (Phase 198): Strecke in km für die heutigen Termine (Vortermin bzw. Startadresse)
+    try:
+        strecken_ergaenzen(session, heute_block, benutzer, jetzt)
+    except Exception:   # noqa: BLE001 – Mein Tag darf an der Strecke nie scheitern
+        for k in heute_block:
+            k.setdefault("strecke_text", "")
+            k.setdefault("strecke_von", "")
     naechster = naechster_termin(heute_block, jetzt)
     for k in heute_block:
         k["naechster"] = naechster is not None and k["termin"].id == naechster["termin"].id

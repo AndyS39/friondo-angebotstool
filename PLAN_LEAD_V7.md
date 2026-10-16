@@ -90,13 +90,13 @@ Design v2 (v30) der übrigen Module bleibt bestehen.
 
 ## Phase 196: Kartei-Review zuerst (Streichungen und Notizblock)
 
-- [ ] **Kundenkartei, Kopf:** Badge „monday“ neben dem Namen entfernen (die
+- [x] **Kundenkartei, Kopf:** Badge „monday“ neben dem Namen entfernen (die
       Quelle bleibt als Text in der Eingangszeile „Eingang (Sync)“ und in
       der Timeline); SLA-Chip in der Kopfzeile entfernen (SLA bleibt in der
       Anrufliste und Statistik). Die restliche Kopfzeile (Phasenkette,
       Versuchs-Punkte, Eingangstext, Pflichtfeld-Zähler, Schnellaktionen,
       Button „Terminierung“, „Nachbearbeitung“, „Vorgangsakte“) bleibt.
-- [ ] **Notizblock:** Block „Notizen (Vorgang: Lead bis Montage)“ nimmt die
+- [x] **Notizblock:** Block „Notizen (Vorgang: Lead bis Montage)“ nimmt die
       volle Breite seiner Spalte ein; das Eingabefeld ist mehrzeilig über
       die ganze Breite (mindestens 3 Zeilen, wächst mit), rechts daneben
       in einer Spalte die Buttons **„Senden“** und **„Diktieren“**
@@ -104,13 +104,13 @@ Design v2 (v30) der übrigen Module bleibt bestehen.
       Handy-Tastatur verwenden“ steht klein unter dem Diktieren-Button.
       To-Dos-Block rechts bleibt schmal (v31). Unter 900 px: Eingabefeld,
       darunter Buttons nebeneinander.
-- [ ] Sichtprüfung gegen den Screenshot vom 16.10.2026
+- [x] Sichtprüfung gegen den Screenshot vom 16.10.2026
       (`docs/design-v37/review-kartei-2026-10-16.png`, von Claudia
       abzulegen): nichts Durchgestrichenes mehr sichtbar, Notizblock breit.
 
 ## Phase 197: Design v3 für das Lead-Modul
 
-- [ ] **Vorlage ablegen und entpacken:** `Friondo Tool Design.html` nach
+- [x] **Vorlage ablegen und entpacken:** `Friondo Tool Design.html` nach
       `docs/design-v37/vorlage/` (Claudia). Die Datei ist ein gepackter
       claude.ai-Export: vier Seiten liegen als gzip-komprimierte Base64-
       Einträge im `<script type="__bundler/manifest">` (Schlüssel = Board-
@@ -121,7 +121,7 @@ Design v2 (v30) der übrigen Module bleibt bestehen.
       daneben. Nur Layout und Stil werden übernommen, **keine Inhalte**
       (keine Demo-Namen, keine „Quelle: monday“-Chips, keine Kennzahlen aus
       der Vorlage).
-- [ ] **Tokens Design v3 (Lead-Modul, Hellmodus)**, abgeleitet aus der
+- [x] **Tokens Design v3 (Lead-Modul, Hellmodus)**, abgeleitet aus der
       Vorlage und in `lead_v2.css` als eigener Block `:root .lm-v3` bzw.
       `[data-modul="lead"]` angelegt (Werte als Startwerte, bei
       Abweichungen in der Vorlage gewinnt die Vorlage):
@@ -146,7 +146,7 @@ Design v2 (v30) der übrigen Module bleibt bestehen.
         [ANNAHME]; Umschalter und Speicherung je Benutzer aus v30 bleiben,
         Token-Wächter `tests/test_v30_design.py` wird um die v3-Tokens
         erweitert (keine festen Farben in Lead-Templates).
-- [ ] **Anwendung auf alle Lead-Seiten:** Mein Dashboard (Kacheln wie
+- [x] **Anwendung auf alle Lead-Seiten:** Mein Dashboard (Kacheln wie
       Vorlage „Dashboard Desktop“: große Kennzahl oben links, Beschriftung
       darunter, Kachelkarten mit 18 px Rundung), Hauptboard/Deals/Infoabend/
       Handelsvertreter/Kontaktiert (Filterleiste als Karte, Tabellenzeilen
@@ -158,14 +158,14 @@ Design v2 (v30) der übrigen Module bleibt bestehen.
       Vorlagen-Editor, Lead-Einstellungen. Aufbau und Inhalte der Seiten
       bleiben wie heute (v31 bis v35), nur Optik. Das Lead-Board-Layout des
       Angebotstools (v33 Phase 174) behält die v2-Tokens.
-- [ ] Screenshots vorher/nachher je Seite hell und dunkel nach
+- [x] Screenshots vorher/nachher je Seite hell und dunkel nach
       `docs/design-v37/`; `docs/design-system.md` Abschnitt „Design v3
       (Lead-Modul)“ mit Token-Tabelle und Regel „neue Lead-Seiten nur mit
       v3-Tokens“.
 
 ## Phase 198: Termine anpassbar, Route in Kilometern, Objekte einklappbar, Dashboard
 
-- [ ] **Terminierte Vor-Ort-Termine anpassbar:** im Block „Termine“ der
+- [x] **Terminierte Vor-Ort-Termine anpassbar:** im Block „Termine“ der
       Kartei jeder bestehende Termin (Status geplant, bestätigt, vorgemerkt;
       auch Termine aus dem monday-Sync `quelle = monday`) mit Button
       **„Anpassen“**: Datum, Uhrzeit (15-Minuten-Raster), Vertriebler
@@ -178,7 +178,7 @@ Design v2 (v30) der übrigen Module bleibt bestehen.
       monday: <Datum>“) [ANNAHME: keine Rückspielung des Termins]. Die
       **manuelle Neuanlage** eines Vor-Ort-Termins bleibt in der Testphase
       gesperrt [OFFEN 1].
-- [ ] **Route in Kilometern:** Routing-Dienst scharf schalten: Parameter
+- [x] **Route in Kilometern:** Routing-Dienst scharf schalten: Parameter
       `routing_anbieter` auf `ors` (openrouteservice) mit API-Key aus der
       `.env` (`ORS_API_KEY`, nie im Code oder Projektwissen; Google als
       Umschalter bleibt), Cache 90 Tage (v12). Überall, wo bisher Luftlinie
@@ -188,28 +188,28 @@ Design v2 (v30) der übrigen Module bleibt bestehen.
       Kennzeichnung „geschätzt“ (v12-Regel). Verbrauchszähler je Tag in den
       Lead-Einstellungen, Hinweis bei 80 % des Tageskontingents. Prüfpunkt
       „Routing-Dienst antwortet“ in der Parametrierung.
-- [ ] **Objekte ein- und ausklappbar:** Objektliste in der Kartei als
+- [x] **Objekte ein- und ausklappbar:** Objektliste in der Kartei als
       Akkordeon; Standard zugeklappt bei Großkunde oder mehr als drei
       Objekten, sonst aufgeklappt; Kopfzeile zeigt Anzahl Objekte, Anzahl
       mit Termin, Anzahl mit Angebot; Zustand je Nutzer gemerkt
       (`benutzer_einstellungen` Key `objekte_zu`). Ein-Objekt-Vorgänge ohne
       Akkordeon.
-- [ ] **Dashboard:** Kachel „Routenplaner“ entfernen (Parameter
+- [x] **Dashboard:** Kachel „Routenplaner“ entfernen (Parameter
       `routen_start` bleibt für „Mein Tag“ und Kalender); Kachelreihenfolge
       je Nutzer (v31) bereinigt den Eintrag.
-- [ ] **Login:** zuletzt verwendeter Benutzername wird je Browser gemerkt
+- [x] **Login:** zuletzt verwendeter Benutzername wird je Browser gemerkt
       (Cookie 90 Tage, nur Benutzername, nie die PIN) und beim Aufruf der
       Login-Seite vorbelegt; Fokus steht in der PIN; Link „Anderer
       Benutzer“ leert das Feld. Gilt für alle Rollen; die v34-Funktion „Angemeldet bleiben“ (falls bereits gebaut) bleibt unabhängig davon.
 
 ## Phase 199: Kanäle, Interessen, Deals-Board
 
-- [ ] **Kanäle WeLoveX und DAA deaktivieren:** `vertriebskanaele.aktiv = 0`
+- [x] **Kanäle WeLoveX und DAA deaktivieren:** `vertriebskanaele.aktiv = 0`
       (Migration), Leads behalten das Label, nicht mehr wählbar, Filter-
       Chips in Hauptboard und Deals entfallen (inaktive Kanäle nur unter
       „weitere“); HV-Ausschlussliste und Kanal-AD-Regel prüfen, ob die
       beiden dort vorkamen (Hinweis in der Gesamtübersicht).
-- [ ] **Interesse „PV vorhanden“:** neues Häkchen in der Interessenliste
+- [x] **Interesse „PV vorhanden“:** neues Häkchen in der Interessenliste
       (Code `PVV`, Langname „PV vorhanden“, Badge-Farbe aus der Sparten-
       Mechanik) in Kartei, Inline-Edit, Schnellanlage, Import, API
       (`sparten` akzeptiert „PV vorhanden“/`PVV`), Filter, Boards; **kein**
@@ -219,14 +219,14 @@ Design v2 (v30) der übrigen Module bleibt bestehen.
       den Platzhalter {pv_vorhanden} nutzen [ANNAHME]. Vorbelegung der
       WP-/KL-Erfassung: Frage nach bestehender PV-Anlage (falls im Bogen
       vorhanden) mit Ja vorbelegt.
-- [ ] **Inline-Interessen mit Plus:** im Hauptboard (und Deals, Infoabend,
+- [x] **Inline-Interessen mit Plus:** im Hauptboard (und Deals, Infoabend,
       HV-Ansicht) zeigt die Spalte Interessen die gewählten Badges plus ein
       **Plus-Symbol**; Klick öffnet das Popover mit allen Interessen
       (WP, PV, KL, WB, GW, MS, WA, DMS, PV vorhanden); bereits gewählte sind
       markiert und werden per Klick abgewählt; Speichern per fetch beim
       Schließen (v35-Mechanik), Aktivität bei Änderung. Kein Stift-Symbol
       mehr in dieser Spalte.
-- [ ] **Deals-Board:** Button „Bestätigung erneut“ je Zeile entfernen
+- [x] **Deals-Board:** Button „Bestätigung erneut“ je Zeile entfernen
       („Terminbestätigung erneut senden“ bleibt in der Kartei und in der
       Übergabeliste); Spalte „Erfassung/Angebot“ aus dem Spaltenkatalog des
       Deals-Boards entfernen (Status-Chips je Sparte bleiben in der Kartei
@@ -238,6 +238,7 @@ Design v2 (v30) der übrigen Module bleibt bestehen.
 ## Phase 200: Tests, Doku, Übergabe
 
 - [ ] Tests `tests/test_lead_v7.py`: (a) Kartei ohne monday-Badge und ohne
+      *(Stand 16.10.2026: Tests je Agent `tests/test_lead_v7_design.py`, `test_lead_v7_termine_routing.py`, `test_lead_v7_kanaele_interessen.py` statt einer Datei; v37-Tests, Wächter und Lead-Nachbarn auf der migrierten Kopie grün – Gesamtsuite einmal am Ende der Plan-Kette v36–v38.)*
       SLA-Chip, Notizblock-Markup mit Buttons rechts; (b) Token-Wächter: keine
       festen Farben in Lead-Templates, v3-Tokens vorhanden, Dunkelmodus-
       Werte definiert; (c) Termin anpassen (Datum/AD) mit Aktivität,
@@ -254,12 +255,13 @@ Design v2 (v30) der übrigen Module bleibt bestehen.
       Buttons), jede Anpassung begründen. Gesamtlauf grün,
       `tests/test_v27_sitzungen.py` und `tests/test_v30_design.py` grün.
 - [ ] Rollout-Vorbereitung nach Grundregel: Server-DB-Kopie nach
+      *(laut Brief EINE Rollout-Vorbereitung am Kettenende v36–v38 – siehe `diagnose/v36/gesamtuebersicht.md` §10; Screenshots gegen die fehlende Design-Vorlage entfallen.)*
       diagnose\, migrate.py zweimal (additiv: Kanäle inaktiv, Interesse
       PVV, `objekte_zu`, Parameter), Rückweg-Probe v36-Code auf v37-DB,
       Voll-Crawl aller Rollen hell und dunkel, Abnahmeskript, Smoke,
       Screenshots nach `docs/design-v37/`, nur Demo-Daten; `docs/betrieb.md`
       Inventar: Routing-Dienst (Kontingent, Key in `.env`).
-- [ ] CLAUDE.md: Abschnitt „Neu in v37 – Lead-Management V7 Design v3,
+- [x] CLAUDE.md: Abschnitt „Neu in v37 – Lead-Management V7 Design v3,
       Kartei-Review, Termine, Routing (abgestimmt 16.10.2026)“ (Plan:
       PLAN_LEAD_V7.md, Phasen 196 bis 200; Nummern laut Vorspann prüfen),
       Zuordnungstabelle `| v37 | PLAN_LEAD_V7.md | 196–200 |`, Titelzeile
@@ -271,7 +273,7 @@ Design v2 (v30) der übrigen Module bleibt bestehen.
       Plus bei Interessen, Login-Vorbelegung; Admin: ORS-Key in `.env`,
       Routing-Prüfpunkt, Kanäle prüfen); `docs/updates.md`;
       `config.VERSION = "v37"`.
-- [ ] Gesamtübersicht am Ende: erledigte Phasen, Testergebnisse,
+- [x] Gesamtübersicht am Ende: erledigte Phasen, Testergebnisse,
       angepasste Alt-Tests mit Begründung, Token-Tabelle v3, Liste aller
       [ANNAHME]-Stellen, gebündelte Rückfragen. **Ein Commit** „v37:
       Lead-Management V7 Design v3, Kartei-Review, Termine, Routing

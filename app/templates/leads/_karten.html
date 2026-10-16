@@ -39,6 +39,9 @@
             {{ k.strasse }}{% if k.strasse and k.plz_ort %}, {% endif %}{{ k.plz_ort }}</a>
         {% else %}<span class="mt-naechstes-leer">keine Adresse hinterlegt</span>{% endif %}
     </div>
+    {#- v37 (PLAN_LEAD_V7 Phase 198): Strecke in km vom Vortermin bzw. von der Startadresse #}
+    {% if k.strecke_text %}<div class="mt-strecke{{ ' geschaetzt' if k.strecke_geschaetzt }}" data-mt-strecke title="Straßenkilometer und Fahrzeit {{ k.strecke_von }}">{{ symbol('karte') }}
+        <span class="mt-strecke-wert">{{ k.strecke_text }}</span><span class="dezent">{{ k.strecke_von }}</span></div>{% endif %}
     <div class="mt-naechstes-aktionen">
         {% if k.route_url %}
         <a class="mt-route" href="{{ k.route_url }}" target="_blank" rel="noopener" title="Route in Google Maps starten (neuer Tab)">{{ pfeil_route() }} Route starten</a>
@@ -66,6 +69,8 @@
             <span class="mt-termin-typ">{{ k.beschreibung }}{% if klein and k.ort_text %} · {{ k.ort_text }}{% endif %}</span>
             {% if not klein %}
             <span class="mt-termin-ort">{{ k.ort_text or 'kein Ort' }}
+                {#- v37 (Phase 198): Strecke „18,4 km · 24 Min“ (geschätzt mit Kennzeichen) in der Zeile „Heute“ #}
+                {% if k.strecke_text %}<span class="mt-strecke{{ ' geschaetzt' if k.strecke_geschaetzt }}" data-mt-strecke title="Straßenkilometer und Fahrzeit {{ k.strecke_von }}">· <span class="mt-strecke-wert">{{ k.strecke_text }}</span></span>{% endif %}
                 {% if k.ueberfaellig %}<span class="mt-label mt-label-rot" title="Termin liegt in der Vergangenheit – Erfassung fehlt">überfällig</span>
                 {% elif k.teilweise %}<span class="mt-label" title="Termin liegt in der Vergangenheit – noch nicht alle Sparten erfasst">teilweise erfasst</span>
                 {% elif k.erledigt %}<span class="mt-label mt-label-gruen">erfasst</span>{% endif %}</span>

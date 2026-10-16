@@ -37,7 +37,10 @@ _SPARTEN_ALIAS = {"wp": "WP", "wärmepumpe": "WP", "waermepumpe": "WP",
                   "gw": "GW", "gewerbe": "GW",
                   # v31 (PLAN_LEAD_V5 Phase 157): Mieterstrom, Wasser, Denkmalschutz
                   "ms": "MS", "mieterstrom": "MS", "wa": "WA", "wasser": "WA",
-                  "dms": "DMS", "denkmalschutz": "DMS", "denkmal": "DMS"}
+                  "dms": "DMS", "denkmalschutz": "DMS", "denkmal": "DMS",
+                  # v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Merkmal „PV vorhanden“ (sparten.PV_VORHANDEN)
+                  "pvv": "PVV", "pv vorhanden": "PVV", "pv-vorhanden": "PVV", "pv_vorhanden": "PVV",
+                  "bestehende pv-anlage": "PVV", "pv-anlage vorhanden": "PVV"}
 
 
 def standardregel_anlegen(session: Session) -> bool:
@@ -112,8 +115,10 @@ def _sparten_liste(wert) -> list[str]:
     sparten = []
     for eintrag in roh:
         schluessel = eintrag.strip().lower()
+        # v37 (Phase 199): Codes aus app/sparten.py inkl. Merkmal PVV (statt fester Liste)
+        from app import sparten as sparten_modul
         sparte = _SPARTEN_ALIAS.get(schluessel, eintrag.strip().upper()
-                                    if eintrag.strip().upper() in ("WP", "PV", "KL", "WB", "GW", "MS", "WA", "DMS")
+                                    if eintrag.strip().upper() in sparten_modul.INTERESSEN_ALLE
                                     else "")
         if sparte and sparte not in sparten:
             sparten.append(sparte)

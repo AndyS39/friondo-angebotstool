@@ -2,7 +2,10 @@
    Vertriebler, Hinweisbalken „Mail nicht gesendet“/„E-Mail falsch“, Benutzerbild.
    Pflege: Agent L2 (L1 pflegt lead_v2.css). Nur CSS-Tokens des Design-Systems v14.
    v30 (PLAN_V18 Phase 145): feste Farbwerte auf die semantischen Tokens (Hell/Dunkel)
-   umgestellt; die Mail-Vorschau bleibt bewusst hell (fest). */
+   umgestellt; die Mail-Vorschau bleibt bewusst hell (fest).
+   v37 (PLAN_LEAD_V7 Phase 197, Agent L1): unter <body data-modul="lead"> (Vorlagen-Editor, Kartei)
+   lösen --g-500, --friondo-blau-hell, --grau-linie, --akzent, --r-s gegen die v3-Tokens aus
+   lead_v2.css auf – Farben und Maße kommen damit aus dem Design v3, Regeln unverändert. */
 
 /* --- Hinweisbalken Kundenkartei (_mail_hinweis.html) ------------------------------ */
 .lm-mail-hinweis { display: flex; flex-wrap: wrap; gap: var(--a-3); align-items: center;

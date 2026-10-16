@@ -371,6 +371,31 @@
             Projektierungs- und Angebotstool-Glocken sind nicht betroffen.</p>
     </fieldset>
 
+    {# v37 (PLAN_LEAD_V7 Phase 198, Agent L2): Routing – Key-Status aus der .env (ORS_API_KEY, nie der
+       Wert), Anbieter, Verbrauchszähler je Tag mit Tageskontingent (Hinweis ab 80 %), Prüfpunkt
+       „Routing-Dienst antwortet“ (eigenes Formular unter dem Haupt-Formular, Route POST
+       /parametrierung/lead-routing/test). Kontext `routing` aus routing.einstellungen_kontext. #}
+    {% if routing is defined and routing %}
+    <h2 id="routing">Lead-Management V7 – Routing (Straßenkilometer und Fahrzeit)</h2>
+    <div class="lm-routing-status" data-rolle="routing-status">
+        <span class="{{ 'ok' if routing.key_vorhanden else 'offen' }}" data-rolle="routing-key"><strong>Key:</strong> {{ routing.key_text }}</span>
+        <span class="{{ 'ok' if routing.aktiv else 'offen' }}" data-rolle="routing-anbieter"><strong>Anbieter:</strong> {{ routing.anbieter }}{{ ' – aktiv (Straßenkilometer)' if routing.aktiv else ' – Fahrzeiten geschätzt (Luftlinie × 1,3)' }}</span>
+        <span data-rolle="routing-zaehler"><strong>Heute:</strong> {{ routing.zaehler.text }}</span>
+        {% if routing.letzte_pruefung %}<span data-rolle="routing-pruefung"><strong>Letzter Prüfpunkt:</strong> {{ routing.letzte_pruefung }}</span>{% endif %}
+    </div>
+    <div class="lm-routing-balken{{ ' voll' if routing.zaehler.erschoepft else (' warn' if routing.zaehler.warnung) }}" aria-hidden="true"><i style="width:{{ [routing.zaehler.prozent, 100] | min }}%"></i></div>
+    {% if routing.zaehler.warnung %}<p class="lm-routing-warnung" data-rolle="routing-warnung">{{ routing.zaehler.text }} – ab 100 % werden Fahrzeiten bis Mitternacht geschätzt.</p>{% endif %}
+    {% if routing.hinweis %}<p class="lm-hinweis" data-rolle="routing-hinweis">{{ routing.hinweis }}</p>{% endif %}
+    <div class="formzeile">
+        <label class="schmal">Tageskontingent (Matrix-Aufrufe)
+            <input type="number" name="{{ routing.kontingent_parameter }}" min="1" value="{{ routing.zaehler.kontingent }}"></label>
+        <a class="knopf klein zweitrangig" href="/parametrierung/lead-routing">Lead-Routing (Anbieter, Rückfall-Key)</a>
+    </div>
+    <p class="dezent">Der Key steht nur in der <code>.env</code> (<code>ORS_API_KEY</code>, Konto auf account.heigit.org) und hat Vorrang vor dem
+        Lead-Parameter <code>ors_api_key</code>; ohne Key rechnet das Tool mit Luftlinie × 1,3 und kennzeichnet „geschätzt“. Ab {{ routing.warnung_prozent }} %
+        des Kontingents erscheint hier ein Hinweis, ab 100 % wird bis Mitternacht geschätzt. Fahrzeiten je Koordinatenpaar bleiben 90 Tage im Cache.</p>
+    {% endif %}
+
     <h2>Lead-Management V2 – Infoabend</h2>
     <div class="formzeile">
         <label class="schmal">Wochentag (0=Mo … 6=So)
@@ -455,8 +480,13 @@
         <form method="post" action="/lead-management/vorlagen/einspielen" class="lm-inline">
             <button class="knopf zweitrangig" type="submit">Terminbestätigungen aus docs/vorlagen einspielen</button></form>
         <a class="knopf zweitrangig" href="/lead-management/vorlagen">Vorlagen-Editor</a>
+        {#- v37 (PLAN_LEAD_V7 Phase 198): Prüfpunkt „Routing-Dienst antwortet“ (Matrix 1×1 Duisburg → Bochum) #}
+        <form method="post" action="/parametrierung/lead-routing/test" class="lm-inline" id="routing-test-form">
+            <input type="hidden" name="zurueck" value="/parametrierung/lead-einstellungen">
+            <button class="knopf zweitrangig" type="submit" title="Matrix-Aufruf Duisburg → Bochum beim Routing-Dienst (zählt einen Aufruf)">Routing-Dienst antwortet (Duisburg → Bochum)</button></form>
     </div>
-    <p class="dezent">Ergebnis beider Prüfpunkte erscheint als Meldung bzw. im Protokoll unten.</p>
+    <p class="dezent">Ergebnis der Prüfpunkte erscheint als Meldung bzw. im Protokoll unten; der Routing-Prüfpunkt meldet
+        „Routing-Dienst antwortet: Duisburg → Bochum …“, einen Fehlertext oder „ORS_API_KEY fehlt“.</p>
 </section>
 
 {% if loeschvorschau %}

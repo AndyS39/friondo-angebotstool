@@ -173,8 +173,9 @@ def vorbereiten(session: Session, adresse: str) -> dict:
         auftrag["backoff"] = True
         return auftrag
     auftrag["versuche"] = int(cache.versuche or 0) if cache is not None else 0
+    from app import routing
     anbieter = kern.parameter_holen(session, "routing_anbieter", "luftlinie")
-    ors_key = kern.parameter_holen(session, "ors_api_key")
+    ors_key = routing.ors_schluessel(session)   # v37: .env (ORS_API_KEY) hat Vorrang vor dem Parameter
     google_key = kern.parameter_holen(session, "google_api_key")
     if anbieter == "ors" and ors_key:
         benutzt, schluessel = "ors", ors_key

@@ -480,9 +480,10 @@ class Spalten(Basis):
         kopf_b = thead_html(seite_b)
         self.assertLess(kopf_b.index('<th class="sp-status"'), kopf_b.index('<th class="sp-telefon"'))
         self.assertNotIn("Bemerkung", seite_b)
-        # Deals-Board von A bleibt eigenständig (Standardreihenfolge, Spalte Erfassung / Angebot)
+        # Deals-Board von A bleibt eigenständig (Standardreihenfolge); v37 (PLAN_LEAD_V7 Phase 199,
+        # Agent L3): die Spalte „Erfassung / Angebot“ (Key angebot) ist aus dem Deals-Katalog gestrichen
         d = lead_boards.spalten_fuer(self.s, self.admin, "terminiert")
-        self.assertIn("angebot", [x["key"] for x in d])
+        self.assertNotIn("angebot", [x["key"] for x in d])
         self.assertNotEqual([x["key"] for x in d][1], "telefon")
         self.assertEqual(next(x for x in d if x["key"] == "notiz")["titel"], "Notiz")
         # leerer Name = Standard
@@ -577,9 +578,10 @@ class Spalten(Basis):
         self.assertIsNone(j["sort"])
         self.assertEqual(lead_v2.einstellung_holen(self.s, 1, KEY)["hauptboard"], {"spalten": [], "sort": None})
         # Zurücksetzen gilt nur für das Board des Aufrufers: Deals-Konfiguration bleibt
-        self.json_post("/lead-management/boards/spalten", {"board": "terminiert", "umbenennen": {"key": "angebot", "name": "Doku"}})
+        # (v37, PLAN_LEAD_V7 Phase 199, Agent L3: Key „angebot“ gibt es im Deals-Katalog nicht mehr – Spalte Notiz)
+        self.json_post("/lead-management/boards/spalten", {"board": "terminiert", "umbenennen": {"key": "notiz", "name": "Doku"}})
         self.json_post("/lead-management/boards/spalten", {"board": "hauptboard", "zuruecksetzen": True})
-        self.assertEqual(next(x for x in self.spalten_json(self.client, "terminiert")["spalten"] if x["key"] == "angebot")["titel"], "Doku")
+        self.assertEqual(next(x for x in self.spalten_json(self.client, "terminiert")["spalten"] if x["key"] == "notiz")["titel"], "Doku")
         self.reset(self.client, "terminiert")
 
     def test_score_nur_bei_aktivem_scoring(self):

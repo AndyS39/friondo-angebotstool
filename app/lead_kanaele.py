@@ -679,3 +679,58 @@ def migration_v35_kanaele(session: Session) -> list[str]:
         meldungen.append("Kanaele (v35): Parameter kanal_farben aus der Tabelle geschrieben")
     session.flush()
     return meldungen
+
+
+# --- v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Kanaele WeLoveX und DAA deaktivieren ------------
+
+# Entscheidung Chat Lead-Management 16.10.2026 (Claudia Castro): wie EON & Co. in v35 – nicht
+# mehr waehlbar, Leads behalten das Label, Filter-Chips in Hauptboard/Deals entfallen (die
+# Filter zeigen nur aktive Kanaele, kern.kanal_werte). Reaktivieren jederzeit ueber
+# Lead-Management -> Vertriebskanaele -> „nicht mehr waehlbar“ -> Aktivieren.
+KANAELE_V37_INAKTIV = ("WELOVEX", "DAA")
+# Parameter, die Kanalnamen tragen – werden NICHT automatisch geaendert, nur gemeldet
+# (Briefing L3: hv_ausschluss und kanal_ad_regel pruefen, Hinweis im Bericht)
+_PARAMETER_MIT_KANAL = ("hv_ausschluss", "kanal_ad_regel")
+
+
+def parameter_treffer(session: Session, name: str) -> list[str]:
+    """Namen der Parameter (hv_ausschluss, kanal_ad_regel), in denen der Kanal `name` vorkommt
+    (alias-sicher ueber schluessel()); leer, wenn nirgends."""
+    ziel = schluessel(name)
+    if not ziel:
+        return []
+    treffer: list[str] = []
+    roh = _parameter(session, "hv_ausschluss", "")
+    if any(schluessel(t) == ziel for t in roh.split(";") if t.strip()):
+        treffer.append("hv_ausschluss")
+    try:
+        from app import lead_termin
+        regel = lead_termin.kanal_regel(session) or {}
+    except Exception:   # noqa: BLE001 – Regel ist Beiwerk der Pruefung
+        regel = {}
+    if any(schluessel(k) == ziel for k in regel):
+        treffer.append("kanal_ad_regel")
+    return treffer
+
+
+def migration_v37_kanaele(session: Session) -> list[str]:
+    """Phase 199: Kanaele WELOVEX und DAA auf aktiv = 0 setzen (nur wenn aktiv; Meldung je
+    Kanal, zweiter Lauf still). Leads behalten das Label (bestehende Mechanik „(nicht mehr
+    waehlbar)“ am betroffenen Lead), Dropdowns und Filter-Chips zeigen sie nicht mehr.
+    Kommt ein Kanal in hv_ausschluss oder kanal_ad_regel vor, wird das nur gemeldet –
+    nicht geaendert. Idempotent, Meldungen ASCII (cp1252-Konsole des Servers)."""
+    meldungen: list[str] = []
+    for name in KANAELE_V37_INAKTIV:
+        zeile = kanal_zeile(session, name)
+        if zeile is None or not zeile.aktiv:
+            continue
+        zeile.aktiv = False
+        meldungen.append(f"Kanaele (v37): '{zeile.name}' deaktiviert - nicht mehr waehlbar, "
+                         "Leads behalten das Label (Reaktivierung: Lead-Management -> Vertriebskanaele)")
+        for parameter in parameter_treffer(session, zeile.name):
+            meldungen.append(f"Kanaele (v37): Hinweis - '{zeile.name}' steht im Parameter "
+                             f"{parameter} (nicht geaendert, bitte pruefen)")
+    if meldungen:
+        session.flush()
+        cache_leeren()
+    return meldungen

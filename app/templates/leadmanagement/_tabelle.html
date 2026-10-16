@@ -34,7 +34,14 @@
    (Klick in die Zelle öffnet das Textfeld), Vor-Ort-Termin nur Anzeige + Link in die Kartei;
    Pflichtfeld-Verletzungen (z.pflicht_zellen) färben die Zelle (Attribut data-pflicht am <td>,
    die Spaltenklassen class="sp-…" bleiben unverändert);
-   Makro filter_speicher = Leiste „Gespeicherte Filter“ (lm_sofort.js, POST /boards/filter). #}
+   Makro filter_speicher = Leiste „Gespeicherte Filter“ (lm_sofort.js, POST /boards/filter).
+   v37 (PLAN_LEAD_V7 Phase 199, Agent L3): Spalte Interessen = gewählte Badges plus ein PLUS
+   (symbol('plus'), kein Stift mehr) – das Popover zeigt alle Interessen inkl. Merkmal „PV
+   vorhanden“ (Jinja-Global lm_interessen) als Chips, gewählte markiert, Klick wählt ab/an,
+   Speichern per fetch beim Schließen (lm_boards.js, window.lmInline), Escape schließt ohne
+   Speichern; Badge „PVV“ mit Langname als Titel (lm_interessen_merkmale, CSS lead_v37_l3.css).
+   Deals-Board: die Spalte „Erfassung / Angebot“ (Knöpfe „Erfassung starten“/„Angebot öffnen“)
+   und der Knopf „Bestätigung erneut“ je Zeile sind entfallen. #}
 {% from "_symbole.html" import symbol %}
 {% from "_sparten.html" import chip %}
 {% from "_komponenten.html" import wiedervorlage_chip, status_badge %}
@@ -154,17 +161,22 @@
     {%- if gk_setzbar %}<label class="lm-inline-haken" title="Großkunde setzen/entfernen (Aktivität)"><input type="checkbox" class="lm-inline" data-feld="grosskunde" data-vorgang="{{ v.id }}" value="1" {{ 'checked' if z.grosskunde }} aria-label="Großkunde"> {% if z.grosskunde %}{{ grosskunde_badge(ctx) }}{% else %}<span class="dezent">Großkunde</span>{% endif %}</label>
     {%- elif z.grosskunde %}{{ grosskunde_badge(ctx) }}{% else %}<span class="dezent">–</span>{% endif %}</td>
 {%- elif key == 'interessen' -%}
-{#- v35 (Phase 186): Popover mit Mehrfach-Häkchen (alle Sparten inkl. MS/WA/DMS, Jinja-Global
-    lm_sparten) – Häkchen speichern verzögert, „Übernehmen“ sofort, Escape/Abbrechen verwirft #}
+{#- v35 (Phase 186): Popover mit Mehrfachauswahl; v37 (PLAN_LEAD_V7 Phase 199, Agent L3): gewählte
+    Badges plus PLUS statt Stift, alle Interessen inkl. Merkmal „PV vorhanden“ (Jinja-Global
+    lm_interessen) als Chips – gewählte markiert, Klick wählt ab, Speichern beim Schließen
+    (Klick daneben/Plus/„Übernehmen“), Escape/Abbrechen schließt ohne Speichern (lm_boards.js) #}
+{%- set merkmale = lm_interessen_merkmale if lm_interessen_merkmale is defined else [] -%}
+{%- set interessen_liste = lm_interessen if lm_interessen is defined else lm_sparten -%}
+{%- set interessen_namen = lm_interessen_lang if lm_interessen_lang is defined else lm_sparten_lang -%}
 <td class="sp-interessen"{% if 'interessen' in pflicht %} data-pflicht="1"{% endif %} data-wert="{{ z.sparten | join(',') }}"><span class="sparten-chips">
-    {%- for s in z.sparten %}{{ chip(s, z.sparten_status.get(s, 'offen') if ctx.board == 'terminiert' else 'offen') }}{% else %}<span class="dezent">–</span>{% endfor -%}
+    {%- for s in z.sparten %}{% if s in merkmale %}<span class="chip chip-{{ s | lower }} chip-offen chip-merkmal" title="{{ interessen_namen.get(s, s) }} – Merkmal (bestehende PV-Anlage), keine Erfassung">{{ s }}</span>{% else %}{{ chip(s, z.sparten_status.get(s, 'offen') if ctx.board == 'terminiert' else 'offen') }}{% endif %}{% else %}<span class="dezent">–</span>{% endfor -%}
 </span>
     {%- if not lesen %}
-    <details class="lm-popover" data-feld="interessen" data-vorgang="{{ v.id }}" data-aktuell="{{ z.sparten | join(',') }}">
-        <summary class="lm-popover-knopf" title="Interessen ändern (Mehrfachauswahl)" aria-label="Interessen ändern">{{ symbol('stift') }}</summary>
+    <details class="lm-popover" data-feld="interessen" data-vorgang="{{ v.id }}" data-aktuell="{{ z.sparten | join(',') }}" data-plus="1">
+        <summary class="lm-popover-knopf" title="Interesse hinzufügen oder abwählen (speichert beim Schließen, Esc = ohne Speichern)" aria-label="Interessen ändern">{{ symbol('plus') }}</summary>
         <div class="lm-popover-inhalt" role="group" aria-label="Interessen">
-            {%- for s in lm_sparten %}
-            <label class="lm-popover-zeile"><input type="checkbox" value="{{ s }}" {{ 'checked' if s in z.sparten }}> <b>{{ s }}</b> <small class="dezent">{{ lm_sparten_lang.get(s, s) }}</small></label>
+            {%- for s in interessen_liste %}
+            <label class="lm-popover-zeile lm-popover-chip" title="{{ interessen_namen.get(s, s) }}{{ ' – Merkmal, keine Erfassung' if s in merkmale }}"><input type="checkbox" value="{{ s }}" {{ 'checked' if s in z.sparten }} aria-label="{{ interessen_namen.get(s, s) }}"><span class="chip chip-{{ s | lower }}">{{ s }}</span> <small class="dezent">{{ interessen_namen.get(s, s) }}</small></label>
             {%- endfor %}
             <div class="lm-popover-fuss">
                 <button type="button" class="knopf klein lm-popover-ok">Übernehmen</button>
@@ -183,38 +195,9 @@
         {%- if z.objektart and z.objektart not in ((ctx.objektarten or []) | map(attribute='code') | list) %}<option value="{{ z.objektart }}" selected>{{ z.objektart }}</option>{% endif %}
     </select>
     {%- elif z.objektart %}<span class="abzeichen" title="Objektart">{{ z.objektart }}</span>{% else %}<span class="dezent">–</span>{% endif %}</td>
-{%- elif key == 'angebot' -%}
-<td class="sp-angebot">
-    <div class="lm-mini-aktionen">
-        <a class="knopf klein zweitrangig" href="/erfassung/sparten?kunde_id={{ k.id }}&amp;lead_id={{ v.lead_id or 0 }}" title="Erfassung je Sparte starten (bestehender Erfassungsbogen)">{{ symbol('stift') }} Erfassung starten</a>
-        {%- if z.angebote %}
-        <a class="knopf klein zweitrangig" href="/angebote/{{ z.angebote[0].id }}" title="letztes Angebot {{ z.angebote[0].nummer }} öffnen">{{ symbol('oeffnen') }} Angebot öffnen{% if z.angebote | length > 1 %} ({{ z.angebote | length }}){% endif %}</a>
-        {%- endif %}
-    </div>
-    {%- if z.objekt_gruppen %}
-    {#- v31 (Phase 153, Vertrag AT 4.8): mehrere Objekte → Erfassungen/Angebote/Termine je Objekt (vorgang_verlauf.objekt_gruppen) #}
-    {%- for g in z.objekt_gruppen %}
-    {%- set g_erf = g.erfassungen | rejectattr('archiviert') | list %}
-    {%- set g_ang = g.angebote | rejectattr('archiviert') | list %}
-    {%- set g_term = g.termine | selectattr('status', 'in', ['geplant', 'bestaetigt', 'vorgemerkt']) | list %}
-    <div class="lm-objekt-gruppe{{ ' haupt' if g.haupt }}" title="{{ g.ueberschrift }}">
-        <span class="lm-objekt-name">{{ g.bezeichnung }}</span>{% if g.adresse %} <span class="dezent">{{ g.adresse }}</span>{% endif %}
-        {%- if not g.aktiv %} <span class="abzeichen" title="Objekt deaktiviert – es hängen noch Erfassungen, Angebote oder Termine daran">deaktiviert</span>{% endif %}
-        <div class="lm-objekt-zeilen">
-            {%- if g_erf %}<div class="dezent">Erfassung: {{ g_erf | map(attribute='sparte') | join(', ') }}</div>{% endif %}
-            {%- for a in g_ang %}<div class="dezent lm-angebot-zeile"><a href="/angebote/{{ a.id }}" title="Angebot {{ a.nummer }} öffnen">{{ a.nummer }}</a> {{ status_badge(a.status) }}</div>{% endfor %}
-            {%- for t in g_term[:1] %}<div class="dezent">Termin {{ t.beginn | de_datum('%d.%m.%Y %H:%M') if t.beginn else 'ohne Zeit' }}{{ ' (vorgemerkt)' if t.status == 'vorgemerkt' }}</div>{% endfor %}
-            {%- if not g_erf and not g_ang and not g_term %}<div class="dezent">noch keine Erfassung, kein Angebot, kein Termin</div>{% endif %}
-        </div>
-        {%- if g.aktiv %}<a class="knopf klein zweitrangig" href="/erfassung/sparten?kunde_id={{ k.id }}&amp;lead_id={{ v.lead_id or 0 }}&amp;objekt_id={{ g.objekt_id }}" title="Erfassung für dieses Objekt starten (Ausführungsort = Objektadresse)">{{ symbol('stift') }} Erfassung {{ g.bezeichnung }}</a>{% endif %}
-    </div>
-    {%- endfor %}
-    {%- else %}
-    {%- for a in z.angebote[:2] %}<div class="dezent lm-angebot-zeile">{{ a.nummer }} {{ status_badge(a.status) }}</div>{% endfor %}
-    {%- endif %}
-    {#- H5 Angebotsversand: Hot-Ampel der bestehenden Angebotsverfolgung (vorgaenge.verfolgung_ampel) bleibt das Werkzeug #}
-    {%- if v.verfolgung_ampel %}<div class="lm-angebot-zeile"><span class="abzeichen lm-ampel lm-ampel-{{ v.verfolgung_ampel }}" title="Hot-Ampel der Angebotsverfolgung (Vorgangsakte)">{{ {'heiss': 'heiß', 'warm': 'warm', 'kalt': 'kalt'}.get(v.verfolgung_ampel, v.verfolgung_ampel) }}</span></div>{% endif %}
-</td>
+{#- v37 (PLAN_LEAD_V7 Phase 199, Agent L3): die Deals-Spalte „Erfassung / Angebot“ (Key angebot, v23 H5:
+    Knöpfe „Erfassung starten“/„Angebot öffnen“, Objektgruppen, Hot-Ampel) ist entfallen – Erfassung aus
+    Kartei, Leads VOT und Mein Tag; Angebote/Objekte in der Kartei und der Vorgangsakte #}
 {%- elif key == 'versuche' -%}<td class="sp-versuche" data-wert="{{ z.versuche }}">{{ punkte(z, ctx) }}</td>
 {%- elif key == 'letzter_kontakt' -%}
 <td class="sp-letzter" data-wert="{{ z.letzter.zeitpunkt.strftime('%Y-%m-%d %H:%M') if z.letzter else '' }}">{% if z.letzter %}<span title="{{ z.letzter_art }}{{ ' · ' ~ z.letzter_benutzer.name if z.letzter_benutzer }}">{{ z.letzter.zeitpunkt | de_datum('%a %d.%m.%Y %H:%M') }}</span><br><small class="dezent">{{ z.letzter_art }}{% if z.letzter_benutzer %} · {{ lm_initialen(z.letzter_benutzer.name) }}{% endif %}</small>{% else %}<span class="dezent">noch kein Kontakt</span>{% endif %}</td>
@@ -274,14 +257,9 @@
     {%- if (z.termin.typ or 'vot') != 'vot' %} <span class="abzeichen">{{ 'Teams' if z.termin.typ == 'online' else 'Telefon' }}</span>{% endif %}
     {%- if z.termin.status == 'vorgemerkt' %} <span class="abzeichen" title="vorgemerkt – Terminierung (Pflichtfelder) steht noch aus">vorgemerkt</span>{% endif %}
     {%- if z.termin_ad %} <small class="dezent">{{ lm_initialen(z.termin_ad.name) }}</small>{% endif %}
-    {#- H5/A-9: an jedem Lead des Boards Deals (Key terminiert) – Terminbestätigung erneut senden
-        (Route Phase 108: gleiche ICS-UID, SEQUENCE+1, Aktivität; Rücksprung über Referer) #}
-    {%- if ctx.board == 'terminiert' and not lesen and (z.termin.typ or 'vot') == 'vot' and z.termin.status in ('geplant', 'bestaetigt') %}
-    <form method="post" action="/lead-management/termin/{{ z.termin.id }}/bestaetigung-erneut" class="lm-inline-form"
-          onsubmit="return window.confirm('Terminbestätigung mit aktuellem Kalendereintrag (ICS) erneut an den Kunden senden?')">
-        <button type="submit" class="knopf klein zweitrangig lm-bestaetigung-erneut" title="Terminbestätigung erneut senden (Vorlage terminbestaetigung mit aktuellem ICS, Protokoll als Aktivität)">{{ symbol('aktualisieren') }} Bestätigung erneut</button>
-    </form>
-    {%- endif %}
+    {#- v37 (PLAN_LEAD_V7 Phase 199, Agent L3): der Knopf „Bestätigung erneut“ je Zeile (v23 H5/A-9) ist
+        entfallen – „Terminbestätigung erneut senden“ bleibt in der Kartei (Block Termine, Route
+        /lead-management/termin/{id}/bestaetigung-erneut unverändert) #}
 {% else %}<a class="dezent lm-termin-link" href="/lead-management/lead/{{ v.id }}?tab=termin" title="Kein Termin – Kartei, Block Termine">–</a>{% endif %}</td>
 {%- elif key == 'taifun' -%}
 {#- v35 (PLAN_LEAD_V6 Phase 183, Agent T): Spalte „TAIFUN-Übergabe“ (Standard ausgeblendet) – grün nach

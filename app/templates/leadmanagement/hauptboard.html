@@ -64,8 +64,9 @@
     <label class="kontrollfeld">Sparte
         <select name="sparte">
             <option value="">alle</option>
-            {#- v31 (Phase 157): Sparten inkl. MS/WA/DMS aus app/sparten.py (Jinja-Global lm_sparten) #}
-            {% for s in lm_sparten %}<option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }} title="{{ lm_sparten_lang.get(s, s) }}">{{ s }}</option>{% endfor %}
+            {#- v31 (Phase 157): Sparten inkl. MS/WA/DMS aus app/sparten.py (Jinja-Global lm_sparten);
+                v37 (Phase 199): inkl. Merkmal „PV vorhanden“ (lm_interessen) #}
+            {% for s in (lm_interessen if lm_interessen is defined else lm_sparten) %}<option value="{{ s }}" {{ 'selected' if filter_werte.sparte == s }} title="{{ (lm_interessen_lang if lm_interessen_lang is defined else lm_sparten_lang).get(s, s) }}">{{ s }}{{ ' – ' ~ lm_interessen_lang.get(s, s) if lm_interessen_merkmale is defined and s in lm_interessen_merkmale }}</option>{% endfor %}
         </select></label>
     {% if not ctx.hv %}
     {#- v31 (Phase 156): Außendienst-Filter nur angestellte AD (lead_dropdowns); HV-Leads stehen in der HV-Ansicht #}

@@ -107,14 +107,27 @@
 
 <div class="lk-objekte" id="lk-objekte" data-bereich="objekte" data-objekt-url="{{ objekt_url }}" data-anzahl="{{ objekte.anzahl }}">
     {% if objekte.mehrere %}
-    <div class="lk-objekte-kopf">
-        <h3 class="lk-abschnitt">Objekte <span class="lk-zahl">{{ objekte.anzahl }}</span>
-            <span class="dezent lk-info-hinweis">je Objekt eigener Vor-Ort-Termin, eigene Erfassung, eigenes Angebot</span></h3>
-        {% if objekte.ohne_termin %}<span class="dezent" data-rolle="objekte-ohne-termin">{{ objekte.ohne_termin }} von {{ objekte.anzahl }} Objekten ohne Termin</span>{% endif %}
-    </div>
-    <div class="lk-objekt-karten">
-        {% for o in objekte.liste %}{{ objekt_karte(o) }}{% endfor %}
-    </div>
+    {#- v37 (PLAN_LEAD_V7 Phase 198, Agent L2): Objektliste als Akkordeon – Standard zugeklappt bei
+        Großkunde oder mehr als drei Objekten, sonst aufgeklappt; Kopfzeile „5 Objekte · 2 mit Termin ·
+        1 mit Angebot“; Zustand je Nutzer (lm_kartei.js → POST objekte.zustand_url, Key objekte_zu).
+        Ein-Objekt-Vorgänge zeigen kein Akkordeon (dieser Zweig greift nur bei mehreren Objekten). #}
+    <details class="lk-objekte-akkordeon" id="lk-objekte-akkordeon" data-objekte-akkordeon
+             data-zustand-url="{{ objekte.zustand_url }}" data-zu-standard="{{ '1' if objekte.zu_standard else '' }}"
+             {{ '' if objekte.zu else 'open' }}>
+        <summary class="lk-objekte-kopf" data-rolle="objekte-kopf">
+            <h3 class="lk-abschnitt">Objekte <span class="lk-zahl">{{ objekte.anzahl }}</span>
+                <span class="lk-objekte-kopfzeile" data-rolle="objekte-kopfzeile">{{ objekte.kopfzeile }}</span>
+                <span class="dezent lk-info-hinweis">je Objekt eigener Vor-Ort-Termin, eigene Erfassung, eigenes Angebot</span></h3>
+            <span class="lk-objekte-kopf-rechts">
+                {% if objekte.ohne_termin %}<span class="dezent" data-rolle="objekte-ohne-termin">{{ objekte.ohne_termin }} von {{ objekte.anzahl }} Objekten ohne Termin</span>{% endif %}
+                <span class="lk-objekte-pfeil" aria-hidden="true"></span>
+                <span class="sr-only">Objektliste auf- oder zuklappen</span>
+            </span>
+        </summary>
+        <div class="lk-objekt-karten">
+            {% for o in objekte.liste %}{{ objekt_karte(o) }}{% endfor %}
+        </div>
+    </details>
     {% endif %}
     {% if objekte.inaktive %}
     <p class="dezent lk-objekte-inaktiv">Deaktiviert:
