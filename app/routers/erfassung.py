@@ -288,16 +288,12 @@ def sparten_auswahl(request: Request, kunde_id: int = 0, lead_id: int = 0,
     # v34 (PLAN_V21 Phase 179): WB ist keine Freitext-Sparte mehr, sobald die Logik
     # „Aktionen WB“ trägt (sparten.ist_freitext_sparte mit der geladenen Logik)
     logik_voll, _bericht = logik_modul.hole_logik(session)
-    # v35 (PLAN_LEAD_V6 Phase 186, Agent G): Fotos des übergebenen Objekts (Kartei) – nur Anzeige
-    from app import galerie as galerie_modul
-    objektfotos = (galerie_modul.objektfotos_daten(session, vorgang.id, objekt)
-                   if objekt is not None and vorgang is not None else [])
     return render(request, "erfassung/sparten.html", aktiv=None, mobil=True,
                   benutzer=_benutzer(request), kunde=kunde, lead=lead,
                   sparten=ERFASSUNGS_SPARTEN, sparten_namen=SPARTEN_NAMEN,
                   freitext_sparten=sparten_modul.freitext_sparten(logik_voll),
                   objekt=objekt, objekte=objekte_liste if len(objekte_liste) > 1 else [],
-                  objekt_text=objekte_modul.objekt_text, objektfotos=objektfotos,
+                  objekt_text=objekte_modul.objekt_text,
                   vorausgewaehlt=vorausgewaehlt - erfasst, erfasst=erfasst,
                   entwuerfe=entwuerfe, fehler="")
 
@@ -539,9 +535,7 @@ def seite(request: Request, erfassung_id: int, nr: int,
                   benutzer=_benutzer(request), erfassung=erfassung, kunde=kunde,
                   seiten=seiten, nr=nr, fragen=fragen, sichtbar=sichtbar,
                   werte=werte, fehler={},
-                  # v35 (Phase 186, Agent G): + Objekt-Ordner des Vorgangs in der Sammelbox
-                  galerie_ordner=galerie_modul.ordner_liste(
-                      session, erfassung.sparte or "WP", vorgang=erfassung.vorgang_id),
+                  galerie_ordner=galerie_modul.ordner_liste(session, erfassung.sparte or "WP"),
                   vorbelegt=json.loads(erfassung.vorbelegt_json or "{}"),
                   client_regel=lambda f: _client_regel(f, antworten, logik),
                   wiederhol_id=engine.ID_WIEDERHOL_ANZAHL)
@@ -737,14 +731,9 @@ def pruefen(request: Request, erfassung_id: int,
     prot = engine.protokoll(logik, antworten)
     gruende = engine.ampel_gruende(logik, antworten)
     kunde = session.get(Kunde, erfassung.kunde_id)
-    # v35 (PLAN_LEAD_V6 Phase 186, Agent G): Fotos des Erfassungs-Objekts (Kartei) – nur Anzeige
-    from app import galerie as galerie_modul
-    objekt = session.get(VorgangObjekt, erfassung.objekt_id) if erfassung.objekt_id else None
-    objektfotos = (galerie_modul.objektfotos_daten(session, objekt.vorgang_id, objekt)
-                   if objekt is not None else [])
     return render(request, "erfassung/pruefen.html", aktiv=None, mobil=True,
                   benutzer=_benutzer(request), erfassung=erfassung, kunde=kunde,
-                  protokoll=prot, gruende=gruende, offen=offen, objektfotos=objektfotos,
+                  protokoll=prot, gruende=gruende, offen=offen,
                   seiten=logik.seiten,
                   validierung=_kl_validierung(erfassung, logik, antworten),   # v24/v34
                   warnungen=_warnungen(erfassung, logik, antworten))          # v34 WB

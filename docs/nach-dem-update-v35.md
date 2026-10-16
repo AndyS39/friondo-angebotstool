@@ -1,4 +1,5 @@
-# Nach dem Update auf v35 – Lead-Management V6: TAIFUN-Kundenübergabe, Vertriebskanäle, Rechte, Profilbild, Boards, Objektfotos (PLAN_LEAD_V6, Phasen 183–187)
+# Nach dem Update auf v35 – Lead-Management V6: TAIFUN-Kundenübergabe, Vertriebskanäle, Rechte, Profilbild, Boards (PLAN_LEAD_V6, Phasen 183–187; Nachtrag 16.10.2026: ohne Objektfotos, ohne Kartei-Knopf TAIFUN,
+ohne Kundennummer-Feld)
 
 Stand 16.10.2026. v35 ist PLAN_LEAD_V6 (im Plan stand v34/178–182 – diese Nummern waren durch PLAN_V21/v34
 belegt). Rollout nur im Wartungsfenster Dienstag 22:30–23:30: Wartungsbanner setzen, `update.bat`, danach
@@ -49,18 +50,18 @@ auf der v35-Datenbank – Rückweg-Probe im Durchlauf).
 
 - Sobald der Admin den Schalter einschaltet: Nach „Terminierung“ (auch in der Testphase – der Knopf ist dann aktiv
   und sagt „Testphase: nur Übergabe an TAIFUN, keine Buchung, keine Mail“) liegt der Kunde als XML-Datei im
-  TAIFUN-Ordner; Badge „TAIFUN <Datum>“ im Kartei-Kopf. Ohne Termin: Knopf „An TAIFUN übergeben“ im Kartei-Kopf
-  (nach der ersten Übergabe „Erneut an TAIFUN übergeben“ mit Rückfrage). Bei Kanal „?“ geht beides nicht –
-  erst den Vertriebskanal klären.
-- Ist der Kunde vermutlich schon in TAIFUN (TAIFUN-Angebotsnummer, Bestandsimport, Kundennummer), fragt das Tool
-  „Trotzdem übergeben?“; die Terminierung überspringt die Übergabe in diesem Fall – bei Bedarf bewusst über den
-  Kartei-Knopf.
+  TAIFUN-Ordner; Badge „TAIFUN <Datum>“ im Kartei-Kopf. Einen Knopf „An TAIFUN übergeben“ gibt es in der Kartei
+  nicht (Review 16.10.2026) – die Übergabe läuft nur über „Terminierung“. Bei Kanal „?“ keine Übergabe – erst den
+  Vertriebskanal klären.
+- Ist der Kunde vermutlich schon in TAIFUN (TAIFUN-Angebotsnummer, Bestandsimport), überspringt die Terminierung die
+  Übergabe; die Zeile steht dann als „übersprungen (Rückfrage)“ in der Übergabeliste – dort „Trotzdem übergeben“,
+  wenn der Kunde wirklich neu angelegt werden soll.
 - Erscheint „TAIFUN-Übergabe fehlgeschlagen“ (rot in Kartei und Hauptboard oben), den Grund lesen (Ordner/Rechte),
-  Admin informieren, danach „Erneut übergeben“.
-- Nach dem Import in TAIFUN die Kundennummer im Feld „TAIFUN-Kundennummer“ (Kundeninfo-Block) nachtragen.
-  Übergabeliste: Lead-Einstellungen → „Übergabeliste“ bzw. `/lead-management/taifun-uebergaben` (Status
-  „abgeholt“ = Datei aus dem Ordner verschwunden; „Als importiert markieren“ für manuelle Importe; „XML“ zeigt
-  die Kopie).
+  Admin informieren; der Balken in der Kartei führt mit „Zur Übergabeliste“ zur Liste – dort „Erneut übergeben“
+  (Rückfrage mit dem Datum der letzten Übergabe: doppelte Kunden in TAIFUN vermeiden).
+- Die Kundennummer aus TAIFUN wird nicht mehr im Tool nachgetragen (Feld entfallen). Übergabeliste: Lead-Einstellungen
+  → „Übergabeliste“ bzw. `/lead-management/taifun-uebergaben` (Status „abgeholt“ = Datei aus dem Ordner verschwunden;
+  „Als importiert markieren“ für manuelle Importe; „XML“ zeigt die Kopie; „Erneut übergeben“ je Zeile).
 
 ### Vertriebskanäle (alle Lead-Rollen)
 
@@ -72,7 +73,7 @@ auf der v35-Datenbank – Rückweg-Probe im Durchlauf).
 ### Außendienst: eigene Leads voll bearbeiten
 
 - Die Kundenkartei eigener Leads (Zuständigkeit „Außendienst“ = ihr) ist jetzt voll bearbeitbar – Felder speichern
-  beim Verlassen, Status über die Statuskette/„Status ändern …“, Kanal, Objekte, Objektfotos, Notizen, To-Dos,
+  beim Verlassen, Status über die Statuskette/„Status ändern …“, Kanal, Objekte, Notizen, To-Dos,
   Anruf-Ergebnisse, Wiedervorlage. Leads anderer Außendienstler bleiben Lesesicht. Archivieren/Duplizieren und die
   Boards bleiben beim Innendienst.
 
@@ -120,23 +121,21 @@ auf der v35-Datenbank – Rückweg-Probe im Durchlauf).
   (Sicherheitsabfrage) entfernen; hängt ein Angebot daran, bleibt die Erfassung (Hinweis). Ein verknüpfter
   monday-Lead erscheint nach dem Löschen wieder in „Leads VOT“.
 
-### Fotos je Objekt (Innendienst/Außendienst)
+### Fotos (Hinweis zum Review vom 16.10.2026)
 
-- In der Kundenkartei hat jede Objektkarte unten einen Block „Fotos“ (bei einem Objekt: „Fotos zum Objekt“ unter
-  den Adressfeldern). „Foto aufnehmen“ öffnet am Handy die Kamera, „Fotos wählen“ nimmt mehrere Dateien; die Fotos
-  werden sofort hochgeladen (Fortschrittsbalken) und als Kacheln angezeigt, Klick öffnet die Großansicht. JPG, PNG
-  und HEIC (iPhone) bis 10 MB je Bild; HEIC wird automatisch in JPG gewandelt (gilt jetzt für jeden
-  Galerie-Upload; bisher hochgeladene HEIC-Dateien bleiben HEIC). Löschen über das ✕ an der Kachel (Hochladender,
-  Innendienst, Admin). Die Fotos liegen in der Galerie der Vorgangsakte im Ordner „Objekt“ bzw.
-  „Objekt <Bezeichnung>“ und erscheinen in der Erfassung (Sparten-Start, Übersicht) und in der Projektakte
-  (Dokumente) zum jeweiligen Objekt; in der Galerie der Vorgangsakte lassen sich Fotos per „→“ in den
-  Objekt-Ordner einsortieren.
+- Die mit v35 angekündigten „Fotos je Objekt“ in der Kundenkartei sind nach dem Screenshot-Review entfallen – Fotos
+  laufen wie bisher über die Galerie der Vorgangsakte (Anhänge, Sammelbox, Kamera-Serie). Geblieben: iPhone-Fotos
+  (HEIC) werden bei jedem Galerie-Upload automatisch in JPG gewandelt (bisher hochgeladene HEIC-Dateien bleiben HEIC).
+  Bereits in Ordnern „Objekt …“ abgelegte Fotos bleiben in der Galerie sichtbar und lassen sich per „→“ in einen
+  Standard-Ordner einsortieren.
 
 ## Offene Rückfragen (werden im Chat beantwortet, Details in `diagnose/v35/gesamtuebersicht.md`)
 
 - TAIFUN: Original-XSD und Muster-XML; automatischer Ordnerimport oder manuell, Verhalten bei Dubletten, Rückgabe
   der Kundennummer; Telefon-Schreibweise und Encoding bestätigen; Vorgangsnummer „V<ID>“ in Datei/Karteikarte;
-  Terminierung bei Dublette überspringen (gebaut) oder schreiben; darf ein Außendienstler über „Terminierung“ die
+  Terminierung bei Dublette überspringen (gebaut, seit dem Nachtrag mit Zeile „übersprungen (Rückfrage)“ und
+  „Trotzdem übergeben“ in der Übergabeliste – [ANNAHME N6-1]) oder direkt am Terminierungs-Klick Ja/Nein fragen;
+  Beschriftung „Übergabeliste (erneut)“ für den Übergabegrund „manuell“; darf ein Außendienstler über „Terminierung“ die
   Datei auslösen; Rechner/Rechte des Import-Ordners.
 - Kanäle: Alt-Kanäle (EON …) nur inaktiv lassen oder je Lead umhängen; „info“/„Kontaktformular“ →
   Kontaktformular/info; monday-Sync ohne Label künftig „?“; darf die Rolle Leadmanagement Kanäle pflegen; darf ein
@@ -145,4 +144,4 @@ auf der v35-Datenbank – Rückweg-Probe im Durchlauf).
   Gruppengrenze gesperrt; Vorname/Telefon selbst pflegbar; `/kalender` für HV als Gruppe; v31-Rückfall „leer = alle
   außer René“ auch für die Sicht.
 - Boards: Freigabe-Recht auch für Leadmanagement; Sortierung des Standardfilters; Sichtprüfung mobil.
-- Objektfotos: darf die Projektierung löschen; AD löscht nur eigene Uploads; Sparte des Kartei-Uploads.
+

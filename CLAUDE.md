@@ -85,6 +85,7 @@ Nummern vergeben.
 | v33 | PLAN_V20.md | 166–177 |
 | v34 | PLAN_V21.md | 178–182 |
 | v35 | PLAN_LEAD_V6.md | 183–187 |
+| v35-Nachtrag 3 | PLAN_LEAD_V6_1.md (Nachtrag 16.10.2026, eingearbeitet in PLAN_LEAD_V6.md) | – |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
@@ -3790,13 +3791,13 @@ synthetischen Fixture gleichen Aufbaus plus Stichproben gegen die echte Datei. E
   und im E-Mail-Abschnitt; `ANGEBOTSTEXTE.md` Abschnitt 10, `docs/nach-dem-update-v34.md`, `docs/updates.md`
   (4c), `docs/betrieb.md` („Ergänzungen v34“), `docs/https-intern.md`; `config.VERSION = "v34"`.
 
-## Neu in v35 – Lead-Management V6: TAIFUN-Kundenübergabe, Kanal-Stammdaten, Rechte Außendienst/HV-Gruppen, Profilbild, Inline-Bearbeitung, Filter, Sofortsuche, Objektfotos (abgestimmt 15.10.2026)
+## Neu in v35 – Lead-Management V6: TAIFUN-Kundenübergabe, Kanal-Stammdaten, Rechte Außendienst/HV-Gruppen, Profilbild, Inline-Bearbeitung, Filter, Sofortsuche, Objektfotos *(überholt – Nachtrag 3)* (abgestimmt 15.10.2026)
 
 (Plan: PLAN_LEAD_V6.md, Phasen 183–187 – der Plan nannte v34/178–182, diese Nummern waren durch PLAN_V21
 belegt (Hinweisblock im Plan). Umgesetzt am 15./16.10.2026 auf dem v34-Stand 7327226 in EINEM Durchlauf:
 Fundament durch den Orchestrator (Tabellen `taifun_uebergaben`, `vertriebskanaele`; Spalten
 `vorgaenge.taifun_export_am/_von/_datei/_status/_grund`, `kunden.taifun_kundennr`, `galerie_dateien.objekt_id`
-(+ Index); Router-Hüllen `lm_taifun`, `lm_kanaele`, `lm_objektfotos`; `app/taifun_export.py` mit dem 17. Scheduler-
+(+ Index); Router-Hüllen `lm_taifun`, `lm_kanaele`, `lm_objektfotos` *(entfernt, Nachtrag 3)*; `app/taifun_export.py` mit dem 17. Scheduler-
 Lauf; `requirements.txt` lxml/Pillow/pillow-heif; Menüpunkt „Mein Profil“), dann fünf Agenten T (TAIFUN-Export,
 Phase 183), K (Kanal-Stammdaten, Phase 184), R (Rechte, HV-Gruppen, Profilbild, Phase 185), B (Inline-Edit, Filter,
 Sofortsuche, Phase 186), G (Objektfotos, Phase 186) parallel auf eigenen DB-Kopien; Integration, Rollout-
@@ -3815,7 +3816,8 @@ Datei, das Original kann ohne Codeänderung eingesetzt werden. Entscheidungen, [
 prüfen `lead_v2.bearbeiten_erlaubt(session, benutzer, vorgang)` (eine Funktion für Innendienst/Leadmanagement/Admin,
 angestellten Außendienst an eigenen Leads und Handelsvertreter in ihrer Gruppe `lead_v2.hv_gruppe_fuer`); der
 TAIFUN-Export schreibt Dateien nur über `taifun_export` nach `verbindung_freigeben` (nie überschreiben, immer
-validiert); Objektfotos laufen über `galerie` (Formular vor dem ersten DB-Zugriff, HEIC → JPG); Lead-Filter und
+validiert); Objektfotos laufen über `galerie` (Formular vor dem ersten DB-Zugriff, HEIC → JPG) *(überholt –
+Objektfotos entfallen mit dem Nachtrag 16.10.2026 (3); HEIC → JPG bleibt für jeden Galerie-Upload)*; Lead-Filter und
 Suchfelder sind Sofortsuche (`lm_sofort.js`, keine „Suchen“-Knöpfe, kein `onchange="this.form.submit()"`).
 
 - **TAIFUN-Kundenübergabe (Phase 183, `app/taifun_export.py`, `app/routers/lm_taifun.py`, Agent T):** Ein Lead wird
@@ -3840,16 +3842,18 @@ Suchfelder sind Sofortsuche (`lm_sofort.js`, keine „Suchen“-Knöpfe, kein `o
   (`lm_termin.terminierung` → `taifun_export.terminierung_export` VOR der Testphase-Sperre; freigeschaltet läuft der
   Export vor der Buchung, ein Export-Fehler blockiert die Buchung nicht); (2) Kartei-Knopf „An TAIFUN übergeben“ →
   nach Erfolg „Erneut an TAIFUN übergeben“ mit Rückfrage und Datum der letzten Übergabe (Innendienst/Leadmanagement/
-  Admin, nicht AD/HV; Kanal „?“ sperrt über `lead_kanaele.kanal_unklar`); (3) Dubletten-Hinweis vor dem Export
-  (externer TAIFUN-Eintrag mit Nummer, Bestandsimport `angebote.bestand = 1`, gefülltes `kunden.taifun_kundennr` –
+  Admin, nicht AD/HV; Kanal „?“ sperrt über `lead_kanaele.kanal_unklar`) *(überholt – Nachtrag 16.10.2026 (3):
+  kein Kartei-Knopf, Wiederholung nur über die Übergabeliste)*; (3) Dubletten-Hinweis vor dem Export
+  (externer TAIFUN-Eintrag mit Nummer, Bestandsimport `angebote.bestand = 1`, gefülltes `kunden.taifun_kundennr` *(Kundennummer überholt – Nachtrag 3)* –
   alle über den Kunden): „Kunde ist vermutlich schon in TAIFUN angelegt (<Beleg>). Trotzdem übergeben?“ mit Ja/Nein;
-  die Terminierung überspringt den Export in diesem Fall mit Aktivität [ANNAHME]; (4) nach Erfolg
+  die Terminierung überspringt den Export in diesem Fall mit Aktivität [ANNAHME] *(ergänzt Nachtrag 3:
+  zusätzlich Zeile „übersprungen (Rückfrage)“ in der Übergabeliste)*; (4) nach Erfolg
   `vorgaenge.taifun_export_am/_von/_datei/_status = geschrieben`, Aktivität „An TAIFUN übergeben: <Datei>“, grünes
   Badge „TAIFUN <Datum>“ (+ Kundennummer) im Kartei-Kopf, Spalte „TAIFUN-Übergabe“ im Spaltenkatalog der Boards
   (Standard ausgeblendet), Filter-Chip „an TAIFUN übergeben“ (`taifun=1`); keine Glocke, keine Kundenmail. Fehler
   (Ordner fehlt, keine Rechte, Validierung) → `taifun_export_status = fehler` + Grund, rotes Label „TAIFUN-Übergabe
   fehlgeschlagen“ (Notiz-Spalte mit Rang 0 wie „Mail nicht gesendet“ v29, Kartei-Balken `_taifun_hinweis.html` mit
-  „Erneut übergeben“), Zähler in den Lead-Einstellungen. **Übergabeliste** `/lead-management/taifun-uebergaben`
+  „Erneut übergeben“ *(seit Nachtrag 3: Link „Zur Übergabeliste“)*), Zähler in den Lead-Einstellungen. **Übergabeliste** `/lead-management/taifun-uebergaben`
   (Datum, Vorgang, Datei, Benutzer, Status geschrieben · abgeholt · fehler · manuell importiert; „XML“ lädt die
   Kopie, „Als importiert markieren“); Scheduler-Lauf **`taifun-uebergaben`** (900 s, Start +240 s, 17. Lauf –
   Pool-Invariante 64 + 17 + 5 = 86 ≤ 90): Übergaben mit Status geschrieben, deren Datei nicht mehr im Ordner liegt →
@@ -3860,7 +3864,7 @@ Suchfelder sind Sofortsuche (`lm_sofort.js`, keine „Suchen“-Knöpfe, kein `o
   `FriondoAngebotstool`, UNC-Pfad bei fremdem Rechner) und „Testdatei schreiben“, Prüfpunkte für den Go-live (Ordner
   erreichbar · Testdatei in TAIFUN importiert (Häkchen) · Encoding bestätigt (Häkchen)), Fehlerzähler mit Link.
   Feld „TAIFUN-Kundennummer“ (`kunden.taifun_kundennr`, Autospeichern im Kundeninfo-Block, Badge zeigt sie; Rückgabe
-  aus TAIFUN OFFEN 2). Doku `docs/taifun-kundenexport.md` (Feldzuordnung als Tabelle, Beispiel `docs/taifun/
+  aus TAIFUN OFFEN 2) *(überholt – Nachtrag 3: kein Feld, Spalte ungelesen)*. Doku `docs/taifun-kundenexport.md` (Feldzuordnung als Tabelle, Beispiel `docs/taifun/
   beispiel_LM.xml`, Ordner/Rechte, Fragen an den TAIFUN-Betreuer: automatischer Import, Dubletten, Kundennummer,
   Encoding, Original-XSD). Tests `tests/test_lead_v6_taifun.py` (21; (a)–(j) des Plans).
 - **Vertriebskanal-Stammdaten (Phase 184, `app/lead_kanaele.py`, `app/routers/lm_kanaele.py`, Agent K):** Tabelle
@@ -3900,7 +3904,7 @@ Suchfelder sind Sofortsuche (`lm_sofort.js`, keine „Suchen“-Knöpfe, kein `o
   Handelsvertreter an Leads seiner Gruppe (auch monday-Leads ohne `ad_id` über `leads.benutzer_id`);
   `zugriff_erlaubt`/`gate` entscheiden mit Vorgang darüber. Der Außendienst öffnet die Kundenkartei eigener Leads
   ohne Lesesicht (Autospeichern aller Felder, Status mit Pflichtgründen, Innendienst-Dropdown = Leadmanager,
-  Außendienst-Dropdown wie v31, Kanal, Objekte, Objektfotos, Notizen, To-Dos, Anruf-Ergebnisse, Wiedervorlage,
+  Außendienst-Dropdown wie v31, Kanal, Objekte, Objektfotos *(entfallen, Nachtrag 3)*, Notizen, To-Dos, Anruf-Ergebnisse, Wiedervorlage,
   Termine im Rahmen der Testphase-Sperren); jede Änderung ist eine Aktivität mit Autor. Nicht: Archivieren/
   Duplizieren/Sammelaktionen (Boards bleiben dem AD verschlossen), Parametrierung, Löschlauf; fremde Leads bleiben
   Lesesicht (`kern.lead_ad_sicht` + `gehoert_benutzer`); EK/DB unverändert unsichtbar; `auth.py` brauchte keine
@@ -3967,7 +3971,8 @@ Suchfelder sind Sofortsuche (`lm_sofort.js`, keine „Suchen“-Knöpfe, kein `o
   Knöpfe „Filtern“/„Suchen“/„Anwenden“ sind entfallen (noscript-Rückfall), `onchange="this.form.submit()"` kommt im
   Modul nicht mehr vor; gespeicherte Filter speichern den Suchtext mit. Tests `tests/test_lead_v6_boards.py` (12,
   davon einer in Chrome headless; (o), (p), (r)).
-- **Fotos je Objekt (Phase 186, `app/galerie.py` Abschnitt „Fotos je Objekt“, `app/routers/lm_objektfotos.py`,
+- *(überholt – vollständig entfernt mit dem Nachtrag 16.10.2026 (3); es bleibt nur HEIC/HEIF → JPG bei jedem
+  Galerie-Upload)* **Fotos je Objekt (Phase 186, `app/galerie.py` Abschnitt „Fotos je Objekt“, `app/routers/lm_objektfotos.py`,
   `templates/_objektfotos.html`, `kartei_objekte.html`, `static/objektfotos_v35.js`/`lm_v35_g.css`, Agent G):** Die
   Galerie des Vorgangs (v15) erhält je aktivem Objekt (`vorgang_objekte`, v31) einen Ordner „Objekt <Bezeichnung>“ –
   bei Ein-Objekt-Vorgängen „Objekt“ – hinter den Sparten-Ordnern (`galerie.ordner_liste(session, sparte,
@@ -3987,7 +3992,7 @@ Suchfelder sind Sofortsuche (`lm_sofort.js`, keine „Suchen“-Knöpfe, kein `o
   lagen bisher nicht darstellbar in der Galerie). Tests `tests/test_lead_v6_objektfotos.py` (21; (q)).
 - **Tests, Rollout-Vorbereitung, Doku (Phase 187, Orchestrator):** neue Testdateien `tests/test_lead_v6_taifun.py`
   (21), `test_lead_v6_kanaele.py` (14), `test_lead_v6_rechte.py` (10), `test_lead_v6_boards.py` (12),
-  `test_lead_v6_objektfotos.py` (21); `tests/test_v27_scheduler.py` kennt den 17. Lauf. Angepasste Alt-Tests
+  `test_lead_v6_objektfotos.py` (21 – *gelöscht mit Nachtrag 3*); `tests/test_v27_scheduler.py` kennt den 17. Lauf. Angepasste Alt-Tests
   (Begründung in der Gesamtübersicht): Kanal „Standard“/Nav-Eintrag/„ohne Kanal“ (`test_lead_v11.py`,
   `test_lead_v3_anruf.py`, `test_lead_v3.py`, `test_lead_v3_boards.py` – K), HV-Gruppen statt Einzel-HV und AD am
   eigenen Lead ohne Lesesicht (`test_lead_v2_handelsvertreter.py`, `test_lead_v2_kartei.py`,
@@ -4033,3 +4038,45 @@ Suchfelder sind Sofortsuche (`lm_sofort.js`, keine „Suchen“-Knöpfe, kein `o
   das Select je Zeile trägt nur die aktuelle Option, die Kanalliste steht einmal je Tabelle in
   `<template data-lm-kanal-optionen>` und wird beim Öffnen gefüllt (`lm_boards.js`, delegiert – auch nach dem
   Fragment-Tausch der Sofortsuche); Deals-Board 413 Zeilen 5,2 → 4,6 MB.
+
+- **Nachtrag 16.10.2026 (3) – Screenshot-Review Claudia Castro (PLAN_LEAD_V6_1, Agent N6; Commit „v35-Nachtrag 3“,
+  kein Push vor Freigabe):** drei Streichungen am v35-Stand. **(A) Kein Kartei-Knopf „An TAIFUN übergeben“:** die
+  TAIFUN-Übergabe läuft nur noch automatisch beim Klick auf „Terminierung“ (Testphase-Verhalten, Schalter
+  `taifun_export_aktiv`, Dubletten-Hinweis unverändert); eine Wiederholung nach Fehler oder eine erneute Übergabe gibt es
+  ausschließlich in der **Übergabeliste** (`/lead-management/taifun-uebergaben`, Innendienst/Leadmanagement/Admin):
+  Knopf „Erneut übergeben“ je Zeile mit Vorgang, Rückfrage „Letzte Übergabe am TT.MM.JJJJ HH:MM – trotzdem erneut
+  übergeben? Doppelte Kunden in TAIFUN vermeiden.“ (`taifun_export.erneut_text`, confirm mit `tojson | forceescape`,
+  setzt `bestaetigt=1`, Rücksprung über das Feld `zurueck`; ohne JavaScript Rückfrage-Balken in der Liste
+  `?taifun_rueckfrage=<Vorgang>`); die Route `POST /lead-management/lead/{id}/taifun` bleibt (Standard-Rücksprung =
+  Liste). Der Fehler-Balken der Kartei zeigt statt des Knopfs den Link „Zur Übergabeliste“ (`?status=fehler`; AD/HV
+  sehen nur den Satz „Wiederholung durch den Innendienst über die Übergabeliste.“); bei Kanal „?“ steht in der Liste
+  „Vertriebskanal klären“. Überspringt die Terminierung den Export wegen einer Rückfrage (Dublette / bereits übergeben),
+  entsteht eine Zeile mit dem neuen Status **`uebersprungen`** („übersprungen (Rückfrage)“: keine Datei, kein rotes
+  Label, Vorgangs-Status unverändert, der Scheduler lässt sie liegen, „Als importiert markieren“ gesperrt, gleiche
+  Zeilen werden nicht verdoppelt) mit „Trotzdem übergeben“ in der Liste [ANNAHME N6-1 – ohne Zeile gäbe es keinen Weg
+  mehr, den Dubletten-Hinweis bewusst zu übergehen; Alternative Ja/Nein-Dialog am Terminierungs-Klick, Rückfrage];
+  der Dubletten-Hinweis kennt nur noch den externen TAIFUN-Eintrag (v7) und den Bestandsimport (v18)
+  (`taifun_export.dubletten_belege`). `kartei_kontext` ohne `knopf_*`/`url`/`rueckfrage`/`kundennr`, neu
+  `liste_erlaubt`; `GRUND_MANUELL` wird als „Übergabeliste (erneut)“ angezeigt. **(B) Kein Feld „TAIFUN-Kundennummer“**
+  in der Kartei: Badge „TAIFUN <Datum>“ ohne Nummer, `taifun_kundennr` ist kein Autospeichern-Feld mehr („Feld
+  unbekannt“), die Spalte `kunden.taifun_kundennr` bleibt additiv und ungelesen (wie `benutzer.infotext` seit v33);
+  Rückgabe der Kundennummer bleibt OFFEN 2. **(C) Objektfotos vollständig entfernt** (Phase 186, Agent G): Router
+  `lm_objektfotos.py`, Template `_objektfotos.html`, `objektfotos_v35.js`, `lm_v35_g.css`, Makro `objekt_fotos`,
+  Kontext `objektfotos`, Anzeige in Erfassung (Sparten-Start, Prüfen) und Projektakte, Objekt-Ordner „Objekt
+  <Bezeichnung>“ in `galerie.ordner_liste` (Parameter `vorgang` bleibt wirkungslos), Zuordnung „Objekt“ beim
+  Upload/Einsortieren, Umbenennungs-Hook, `tests/test_lead_v6_objektfotos.py`. **Bleibt:** HEIC/HEIF → JPG bei jedem
+  Galerie-Upload (`galerie.ist_heic`, `_heic_nach_jpg`, pillow-heif), Spalte `galerie_dateien.objekt_id` + Index
+  (ungelesen), `migration_v35_objektfotos` als No-op (Hook in `migrate.py` unverändert). Bestandsdateien in Ordnern
+  „Objekt …“ bleiben in der Galerie sichtbar: `galerie.uebersicht` liefert sie per `setdefault`, das Makro `galerie` in
+  `_galerie.html` rendert Ordner, die nur im Datenbestand vorkommen, hinter den gültigen Ordnern (neu hochladen/
+  einsortieren nur in gültige Ordner; physische Ordner auf der Platte bleiben). Tests `tests/test_v35_nachtrag3.py`
+  (10), `test_lead_v6_taifun.py` angepasst (21), 203 Tests der betroffenen Dateien grün, Crawl admin/innendienst/
+  aussendienst ohne Absturz; Doku `docs/taifun-kundenexport.md`, `docs/nach-dem-update-v35.md`, `docs/betrieb.md`.
+- **Vorprüfung der Plan-Kette 16.10.2026 (Claude Code, `diagnose/v36/orch/vorpruefung.md`):** Reihenfolge laut
+  Andreas PLAN_LEAD_V6_1 (Nachtrag, oben) → PLAN_V22 (**v36, Phasen 188–195**) → PLAN_LEAD_V7 (**v37, 196–200**) →
+  PLAN_V23 (**v38, 201–205** – der Entwurf nannte v37/192–196, beides belegt; Plan-Regel „nächste freie Nummern,
+  durchgängig ersetzen“). Die Arbeitskopie von PLAN_V21.md war vom Planungs-Chat auf v35/183–187 zurückgedreht und
+  ist auf die committete v34-Fassung zurückgesetzt (plus Hinweis-Absatz zum PDF-Kasten). Einziger Konflikt: V6_1/V7
+  streichen die Objektfotos, PLAN_V23 setzt sie in einem Regressionstest voraus → Streichung gilt, der V23-Test
+  entfällt (Rückfrage in der Gesamtübersicht der Kette). Je Plan ein Zwischenstand-Commit ohne Push; Rückfragen
+  gebündelt am Ende; eine Rollout-Prüfung für alles.

@@ -8,15 +8,17 @@
 #  (d) MFH mit abweichender Rechnungsadresse → Rechnungsadresse im Ad, Objektadresse in der Kartei
 #  (e) Terminierung in der Testphase schreibt die Datei, bucht nicht, sendet nicht (Phase bleibt);
 #      bei freigeschalteter Terminierung Export + Buchung in einem Klick
-#  (f) Ordner nicht beschreibbar → Status fehler, rotes Label (Kartei + Hauptboard Rang 0), Zähler,
-#      „Erneut übergeben“ nach Reparatur → Erfolg, Label weg
-#  (g) zweite Übergabe fragt nach (bereits übergeben), Dubletten-Hinweis bei TAIFUN-Angebotsnummer /
-#      Kundennummer; Terminierung überspringt den Export dann mit Aktivität
+#  (f) Ordner nicht beschreibbar → Status fehler, rotes Label (Kartei mit Link „Zur Übergabeliste“ +
+#      Hauptboard Rang 0), Zähler, „Erneut übergeben“ aus der Übergabeliste nach Reparatur → Erfolg, Label weg
+#  (g) zweite Übergabe aus der Übergabeliste fragt nach (bereits übergeben), Dubletten-Hinweis bei
+#      TAIFUN-Angebotsnummer – NICHT mehr bei der Kundennummer (v35-Nachtrag 3, 16.10.2026: kein
+#      Kartei-Knopf, kein Kundennummer-Feld); Terminierung überspringt den Export dann mit Aktivität
+#      und Zeile „übersprungen (Rückfrage)“ in der Übergabeliste
 #  (h) Scheduler-Lauf taifun-uebergaben setzt „abgeholt“, wenn die Datei fehlt; nicht erreichbarer
 #      Ordner markiert nichts; Lauf registriert (900 s)
 #  (i) Längen über 60 Zeichen werden gekürzt und in Kartei + Aktivität vermerkt
-#  (j) kein Export bei taifun_export_aktiv = aus (Standard!) – Kartei-Knopf ausgegraut, Terminierung
-#      nur Aktivität „nicht aktiv“; „Testdatei schreiben“ funktioniert trotzdem
+#  (j) kein Export bei taifun_export_aktiv = aus (Standard!) – Terminierung nur Aktivität „nicht aktiv“,
+#      Übergabeliste ohne „Erneut übergeben“; „Testdatei schreiben“ funktioniert trotzdem
 #  dazu: Übergabeliste, „Als importiert markieren“, XML-Download, Rechte (AD 403), Lead-Einstellungen
 #  (Abschnitt, Speichern, Ordner prüfen), Boards (Spalte/Chip), Migration idempotent, Wächter-Regeln.
 # Läuft gegen die DB-Kopie (DB_PFAD_OVERRIDE); Testdaten tragen die E-Mail-Domäne „v35t.test“
@@ -409,7 +411,12 @@ class E_Terminierung(Basis):
         seite = self.kartei(v)
         self.assertIn('data-rolle="taifun-badge"', seite)
         self.assertIn(f"TAIFUN {v.taifun_export_am.strftime('%d.%m.%Y')}", seite)
-        self.assertIn("Erneut an TAIFUN übergeben", seite)
+        # v35-Nachtrag 3: kein Kartei-Knopf mehr – Wiederholung nur über die Übergabeliste
+        self.assertNotIn("Erneut an TAIFUN übergeben", seite)
+        self.assertNotIn('id="lk-taifun-knopf"', seite)
+        liste = self.client.get("/lead-management/taifun-uebergaben").text
+        self.assertIn(f'data-vorgang="{v.id}"', liste)
+        self.assertIn("Erneut übergeben", liste)
         # JSON-Variante
         v2 = self.lead()
         r = self.client.post(f"/lead-management/lead/{v2.id}/terminierung", json={"bestaetigung": "auto"},
@@ -479,8 +486,15 @@ class F_Fehler(Basis):
         seite = self.kartei(v)
         self.assertIn('id="lm-taifun-hinweis"', seite)
         self.assertIn("TAIFUN-Übergabe fehlgeschlagen", seite)
-        self.assertIn('data-rolle="taifun-erneut"', seite)
+        # v35-Nachtrag 3: der Balken zeigt den Link „Zur Übergabeliste“ statt eines Knopfs
+        self.assertNotIn('data-rolle="taifun-erneut"', seite)
+        self.assertIn('data-rolle="taifun-liste-link"', seite)
+        self.assertIn("/lead-management/taifun-uebergaben?status=fehler", seite)
         self.assertNotIn('data-rolle="taifun-badge"', seite)
+        liste = self.client.get("/lead-management/taifun-uebergaben?status=fehler").text
+        zeile_liste = liste.split(f'data-vorgang="{v.id}"', 1)[1].split("</tr>", 1)[0]
+        self.assertIn('data-rolle="taifun-erneut"', zeile_liste)
+        self.assertIn("Erneut übergeben", zeile_liste)
         board = self.client.get("/lead-management/hauptboard").text
         zeile = board.split(f'data-vorgang="{v.id}"', 1)[0].rsplit("<tr ", 1)[1] \
             + board.split(f'data-vorgang="{v.id}"', 1)[1].split("</tr>", 1)[0]
@@ -497,12 +511,16 @@ class F_Fehler(Basis):
             self.assertIn("lm-rang0", zeile_vor, f"Zeile {vid} ohne Rang 0 vor dem Testlead")
         einst = self.client.get("/parametrierung/lead-einstellungen").text
         self.assertIn(f"{basis + 1} TAIFUN-Übergabe(n) mit Fehler", einst)
-        # Reparatur: Ordner wieder erreichbar → „Erneut übergeben“ (bestaetigt=1) → Erfolg, Label weg
+        # Reparatur: Ordner wieder erreichbar → „Erneut übergeben“ aus der Übergabeliste (bestaetigt=1,
+        # zurueck = Liste) → Erfolg, Redirect zurück auf die Liste, Label weg
         kern.parameter_setzen(self.s, "taifun_import_ordner", str(self.ordner))
         self.s.commit()
-        r = self.client.post(f"/lead-management/lead/{v.id}/taifun", data={"bestaetigt": "1"})
+        r = self.client.post(f"/lead-management/lead/{v.id}/taifun",
+                             data={"bestaetigt": "1", "zurueck": "/lead-management/taifun-uebergaben?status=fehler"})
         self.assertEqual(r.status_code, 303, r.text)
         self.assertNotIn("fehler=1", r.headers["location"])
+        self.assertTrue(r.headers["location"].startswith("/lead-management/taifun-uebergaben?status=fehler"),
+                        r.headers["location"])
         v = self.frisch(v)
         self.assertEqual(v.taifun_export_status, "geschrieben")
         self.assertEqual(v.taifun_export_grund, "")
@@ -550,23 +568,31 @@ class G_Rueckfrage(Basis):
         self.assertIn("Erneut übergeben?", r.json()["rueckfrage"])
         self.assertIn(datetime.now().strftime("%d.%m.%Y"), r.json()["rueckfrage"])
         self.assertEqual(len(self.dateien(v)), 1)
-        # Formular ohne JavaScript → Kartei mit Rückfrage-Balken „Trotzdem übergeben“
-        r = self.client.post(f"/lead-management/lead/{v.id}/taifun", data={})
+        # Formular ohne JavaScript (aus der Übergabeliste) → Liste mit Rückfrage-Balken „Trotzdem übergeben“
+        # (v35-Nachtrag 3: kein Rückfrage-Balken mehr in der Kartei)
+        r = self.client.post(f"/lead-management/lead/{v.id}/taifun", data={"zurueck": "/lead-management/taifun-uebergaben"})
         self.assertEqual(r.status_code, 303)
-        self.assertIn("taifun_rueckfrage=1", r.headers["location"])
+        self.assertIn(f"taifun_rueckfrage={v.id}", r.headers["location"])
+        self.assertTrue(r.headers["location"].startswith("/lead-management/taifun-uebergaben"), r.headers["location"])
         seite = self.client.get(r.headers["location"]).text
         self.assertIn('data-rolle="taifun-trotzdem"', seite)
-        # Kartei-Knopf trägt die Rückfrage als confirm (tojson|forceescape)
-        knopf = tag(self.kartei(v), "lk-taifun-knopf")
+        self.assertNotIn('data-rolle="taifun-trotzdem"', self.kartei(v))
+        # Knopf „Erneut übergeben“ der Liste trägt die Rückfrage mit dem Datum der letzten Übergabe als
+        # confirm (tojson|forceescape)
+        u1 = self.uebergaben(v)[0]
+        knopf = tag(seite, f"taifun-erneut-{u1.id}")
         self.assertIn("window.confirm(&#34;", knopf)   # forceescape: keine rohen Anführungszeichen im Attribut
         self.assertNotIn('confirm("', knopf)
-        self.assertIn("bereits an TAIFUN übergeben", unquote_plus(knopf.encode("ascii", "backslashreplace").decode()
-                                                                .replace("\\u00fc", "ü")))
+        self.assertIn("Letzte Übergabe am " + datetime.now().strftime("%d.%m.%Y"), knopf)   # title-Attribut
+        self.assertIn("Doppelte Kunden in TAIFUN vermeiden", knopf)
+        self.assertIn("Erneut übergeben", seite.split(f'data-vorgang="{v.id}"', 1)[1].split("</tr>", 1)[0])
         r = self.client.post(f"/lead-management/lead/{v.id}/taifun", json={"bestaetigt": 1},
                              headers={"accept": "application/json"})
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(len(self.dateien(v)), 2)
         self.assertEqual(len(self.uebergaben(v)), 2)
+        self.assertEqual(self.uebergaben(v)[1].grund, "manuell")
+        self.assertIn("Übergabeliste (erneut)", self.client.get("/lead-management/taifun-uebergaben").text)
         # zweite Übergabe in derselben Sekunde → Laufnummer „-2“, nie überschrieben
         jetzt = datetime.now().replace(microsecond=0)
         name_1 = taifun_export.freier_dateiname(str(self.ordner), v, jetzt)
@@ -578,7 +604,7 @@ class G_Rueckfrage(Basis):
         self.assertRegex(name_2, r"^[A-Z0-9_\-]+\.xml$")
         (self.ordner / name_1).unlink()
 
-    def test_dubletten_hinweis_angebotsnummer_kundennummer(self):
+    def test_dubletten_hinweis_angebotsnummer_ohne_kundennummer(self):
         v = self.lead()
         k = self.kunde(v)
         self.s.add(Angebot(nummer=f"V35T-{v.id}", kunde_id=k.id, vorgang_id=v.id, status="Versendet (extern)",
@@ -599,18 +625,33 @@ class G_Rueckfrage(Basis):
                              headers={"accept": "application/json"})
         self.assertEqual(r.status_code, 403)
         self.assertTrue(r.json()["testphase"])
-        # Kundennummer (manuell nachgetragen, Autospeichern) als Beleg + im Badge
+        # v35-Nachtrag 3: die übersprungene Übergabe steht als Zeile „übersprungen (Rückfrage)“ in der
+        # Übergabeliste mit „Trotzdem übergeben“ (kein Kartei-Knopf mehr); zweimaliger Klick → eine Zeile
+        u = self.uebergaben(v)
+        self.assertEqual([x.status for x in u], ["uebersprungen"])
+        self.assertIn("AN123456", u[0].fehler_text)
+        self.assertEqual(self.frisch(v).taifun_export_status, "")   # kein rotes Label
+        liste = self.client.get("/lead-management/taifun-uebergaben?status=uebersprungen").text
+        zeile = liste.split(f'data-vorgang="{v.id}"', 1)[1].split("</tr>", 1)[0]
+        self.assertIn("Trotzdem übergeben", zeile)
+        self.assertIn('data-rolle="taifun-erneut"', zeile)
+        self.assertFalse(taifun_export.als_importiert(self.s, u[0])[0])
+        # Kundennummer ist KEIN Beleg und KEIN Kartei-Feld mehr (Feld entfallen, Spalte bleibt ungelesen)
         r = self.client.post(f"/lead-management/lead/{v.id}/feld", json={"feld": "taifun_kundennr", "wert": " 10815 "})
-        self.assertEqual(r.status_code, 200, r.text)
-        self.assertEqual(r.json()["wert"], "10815")
-        self.assertEqual(self.kunde(v).taifun_kundennr, "10815")
-        self.assertIn("TAIFUN-Kundennummer 10815", taifun_export.dubletten_hinweis(self.s, v, self.kunde(v)))
+        self.assertEqual(r.status_code, 400, r.text)
+        self.assertEqual(self.kunde(v).taifun_kundennr, "")
+        k = self.kunde(v)
+        k.taifun_kundennr = "10815"
+        self.s.commit()
+        self.assertEqual(taifun_export.dubletten_hinweis(self.s, v, self.kunde(v)), "TAIFUN-Angebot AN123456")
         r = self.client.post(f"/lead-management/lead/{v.id}/taifun", json={"bestaetigt": "1"},
                              headers={"accept": "application/json"})
         self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual([x.status for x in self.uebergaben(v)], ["uebersprungen", "geschrieben"])
         seite = self.kartei(v)
-        self.assertIn("Nr. 10815", seite)
-        self.assertIn('name="taifun_kundennr"', seite)
+        self.assertIn('data-rolle="taifun-badge"', seite)
+        self.assertNotIn("Nr. 10815", seite)
+        self.assertNotIn('name="taifun_kundennr"', seite)
 
 
 # --- (h) Scheduler: abgeholt --------------------------------------------------------------------------------
@@ -695,8 +736,10 @@ class J_SchalterAus(Basis):
         self.assertFalse(taifun_export.aktiv(self.s))
         v = self.lead()
         seite = self.kartei(v)
-        self.assertIn("disabled", tag(seite, "lk-taifun-knopf"))
-        self.assertIn("nicht aktiv", seite)
+        self.assertNotIn('id="lk-taifun-knopf"', seite)   # v35-Nachtrag 3: kein Kartei-Knopf
+        liste = self.client.get("/lead-management/taifun-uebergaben").text
+        self.assertIn("ausgeschaltet", liste)
+        self.assertNotIn('data-rolle="taifun-erneut"', liste)   # Schalter aus: kein „Erneut übergeben“
         terminierung = tag(seite, "lk-terminierung-knopf")
         self.assertIn('data-testphase="1"', terminierung)
         self.assertIn("disabled", terminierung)
@@ -747,14 +790,16 @@ class K_Rechte(Basis):
         self.assertIn(r.status_code, (303, 404))
         r = ad_client.post("/lead-management/taifun/testdatei", data={})
         self.assertIn(r.status_code, (303, 404))
-        # Leadmanagerin (Innendienst) darf
+        # Leadmanagerin (Innendienst) darf – über die Übergabeliste (v35-Nachtrag 3: kein Kartei-Knopf)
         lm_client = TestClient(app, follow_redirects=False)
         lm_client.cookies.set(auth.COOKIE_NAME, auth.cookie_wert(self.lm.id))
-        self.assertIn('id="lk-taifun-knopf"', lm_client.get(f"/lead-management/lead/{v.id}").text)
+        self.assertNotIn('id="lk-taifun-knopf"', lm_client.get(f"/lead-management/lead/{v.id}").text)
         r = lm_client.post(f"/lead-management/lead/{v.id}/taifun", json={}, headers={"accept": "application/json"})
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(self.frisch(v).taifun_export_von, self.lm.id)
-        self.assertEqual(lm_client.get("/lead-management/taifun-uebergaben").status_code, 200)
+        liste = lm_client.get("/lead-management/taifun-uebergaben")
+        self.assertEqual(liste.status_code, 200)
+        self.assertIn('data-rolle="taifun-erneut"', liste.text.split(f'data-vorgang="{v.id}"', 1)[1].split("</tr>", 1)[0])
 
 
 class L_Einstellungen(Basis):
@@ -865,8 +910,10 @@ class O_Waechter(unittest.TestCase):
         css = (PROJEKT / "app" / "static" / "lm_v35_t.css").read_text(encoding="utf-8")
         self.assertNotRegex(css, r"#[0-9a-fA-F]{3,6}\b")   # nur Tokens
         kartei = (PROJEKT / "app" / "templates" / "leadmanagement" / "kartei.html").read_text(encoding="utf-8")
-        self.assertIn("taifun.rueckfrage | tojson | forceescape", kartei)
+        self.assertNotIn("lk-taifun-knopf", kartei)   # v35-Nachtrag 3: kein Kartei-Knopf
         self.assertIn("leadmanagement/_taifun_hinweis.html", kartei)
+        liste_tpl = (PROJEKT / "app" / "templates" / "leadmanagement" / "taifun_uebergaben.html").read_text(encoding="utf-8")
+        self.assertIn("z.erneut_text | tojson | forceescape", liste_tpl)   # Rückfrage als confirm, escaped
         self.assertTrue((PROJEKT / "docs" / "taifun" / "beispiel_LM.xml").exists())
         self.assertEqual(taifun_export.validieren((PROJEKT / "docs" / "taifun" / "beispiel_LM.xml").read_bytes()), [])
         self.assertTrue((PROJEKT / "docs" / "taifun-kundenexport.md").exists())

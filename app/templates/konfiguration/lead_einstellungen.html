@@ -399,8 +399,8 @@
     <div class="formzeile lm-taifun-abschnitt">
         <label>TAIFUN-Übergabe
             <select name="taifun_export_aktiv">
-                <option value="aus" {{ 'selected' if not taifun.aktiv }}>aus – keine Datei bei „Terminierung“/„An TAIFUN übergeben“ (Testdatei geht immer)</option>
-                <option value="an" {{ 'selected' if taifun.aktiv }}>an – „Terminierung“ (auch in der Testphase) und der Kartei-Knopf schreiben die XML-Datei</option>
+                <option value="aus" {{ 'selected' if not taifun.aktiv }}>aus – keine Datei bei „Terminierung“ (Testdatei geht immer)</option>
+                <option value="an" {{ 'selected' if taifun.aktiv }}>an – „Terminierung“ (auch in der Testphase) schreibt die XML-Datei; Wiederholung nur über die Übergabeliste</option>
             </select></label>
         <label>Import-Ordner von TAIFUN
             <input type="text" name="taifun_import_ordner" value="{{ taifun.ordner }}" placeholder="{{ taifun.standard_ordner }}"></label>

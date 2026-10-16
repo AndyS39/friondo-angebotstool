@@ -177,20 +177,8 @@
                 <input type="hidden" name="bestaetigung" value="auto">
                 {% endif %}
             </form>
-            {#- v35 (PLAN_LEAD_V6 Phase 183, Agent T): „An TAIFUN übergeben“ / „Erneut an TAIFUN übergeben“ (ID/LM/Admin,
-                nicht AD/HV); ausgegraut mit Tooltip bei Schalter aus oder Kanal „?“; Rückfrage (Dublette / bereits
-                übergeben) als confirm – ohne JavaScript antwortet die Route mit dem Rückfrage-Balken (bestaetigt=1) #}
-            {% if taifun is defined and taifun and taifun.erlaubt %}
-            <form method="post" action="{{ taifun.url }}" class="lk-inline" id="lk-taifun-form" data-rolle="taifun-form">
-                <input type="hidden" name="bestaetigt" value="">
-                {% if taifun.knopf_gesperrt %}
-                <button class="knopf zweitrangig" type="button" disabled aria-disabled="true" id="lk-taifun-knopf" title="{{ taifun.knopf_tooltip }}">{{ symbol('import') }} {{ taifun.knopf_text }}</button>
-                {% else %}
-                <button class="knopf zweitrangig" type="submit" id="lk-taifun-knopf" title="{{ taifun.knopf_tooltip }}"
-                        {% if taifun.rueckfrage %}onclick="if (!window.confirm({{ taifun.rueckfrage | tojson | forceescape }})) { return false; } this.form.elements.bestaetigt.value = '1'; return true;"{% endif %}>{{ symbol('import') }} {{ taifun.knopf_text }}</button>
-                {% endif %}
-            </form>
-            {% endif %}
+            {#- v35-Nachtrag 3 (16.10.2026, PLAN_LEAD_V6_1): kein Knopf „An TAIFUN übergeben“ mehr – die Übergabe läuft
+                nur automatisch bei „Terminierung“; Wiederholung/erneute Übergabe nur in der Übergabeliste #}
         {% endif %}
         <div class="lk-schnell" role="toolbar" aria-label="Schnellaktionen">
             {% if kunde and kunde.telefon %}

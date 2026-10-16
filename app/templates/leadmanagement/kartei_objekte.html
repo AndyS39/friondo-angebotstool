@@ -1,41 +1,6 @@
 {% from "_symbole.html" import symbol %}
-{% from "_objektfotos.html" import objektfotos_raster, objektfotos_stil %}
-{# v35 (PLAN_LEAD_V6 Phase 186, Agent G): Fotos je Objekt – Makro objekt_fotos(oid, titel):
-   Vorschaukacheln (Lightbox v28 über galerie_fuss() der Kartei), Upload direkt an der Objektkarte
-   (mehrere Dateien, mobil per Kamera, JPG/PNG/HEIC → JPG, max 10 MB je Bild), Löschen durch
-   Hochladenden/Innendienst/Admin. Daten: objektfotos (galerie.objektfotos_kontext – je_objekt,
-   einzel, darf_hochladen, max_mb); Routen app/routers/lm_objektfotos.py; Verhalten
-   static/objektfotos_v35.js (sofortiger Upload nach der Auswahl, Kacheln ohne Neuladen; ohne
-   JavaScript Formular + Redirect); Styles static/lm_v35_g.css. Ein-Objekt-Vorgang: eigener
-   Block „Fotos zum Objekt“ (Ordner „Objekt“), ab zwei Objekten der Block in jeder Karte. #}
-{% macro objekt_fotos(oid, titel='Fotos') %}
-{% set of = (objektfotos.je_objekt.get(oid) if (objektfotos is defined and objektfotos) else none) %}
-{% if of %}
-<div class="lk-objektfotos" id="objektfotos-{{ oid }}" data-rolle="objektfotos" data-objekt="{{ oid }}"
-     data-url="{{ of.url }}" data-gruppe="{{ of.gruppe }}" data-max-mb="{{ objektfotos.max_mb }}"
-     data-zurueck="{{ kartei_url }}">
-    <div class="lk-objektfotos-kopf">
-        <span class="t">{{ symbol('kopie') }} {{ titel }} <span class="lk-zahl of-zahl">{{ of.anzahl }}</span></span>
-        <span class="dezent" title="Ordner in der Galerie des Vorgangs (Vorgangsakte → Galerie)">Galerie-Ordner „{{ of.ordner }}“</span>
-    </div>
-    {{ objektfotos_raster(of.fotos, of.gruppe, loeschen=True, zurueck=kartei_url) }}
-    <p class="dezent of-leer" {{ 'hidden' if of.fotos }}>Noch keine Fotos.</p>
-    {% if objektfotos.darf_hochladen %}
-    <form method="post" action="{{ of.url }}" enctype="multipart/form-data" class="lk-objektfotos-form" autocomplete="off">
-        <input type="hidden" name="zurueck" value="{{ kartei_url }}">
-        <label class="knopf klein zweitrangig of-knopf">{{ symbol('plus') }} Foto aufnehmen
-            <input type="file" name="dateien" accept="image/*" capture="environment" hidden></label>
-        <label class="knopf klein zweitrangig of-knopf">{{ symbol('kopie') }} Fotos wählen
-            <input type="file" name="dateien" accept="image/jpeg,image/png,image/heic,image/heif,.jpg,.jpeg,.png,.heic,.heif" multiple hidden></label>
-        <button type="submit" class="knopf klein of-senden">Hochladen</button>
-        <progress class="of-fortschritt" value="0" max="100" hidden></progress>
-        <span class="of-status dezent" aria-live="polite" hidden></span>
-        <small class="dezent">JPG, PNG oder HEIC, bis {{ objektfotos.max_mb }} MB je Bild – HEIC wird in JPG gewandelt.</small>
-    </form>
-    {% endif %}
-</div>
-{% endif %}
-{% endmacro %}
+{# v35-Nachtrag 3 (16.10.2026, PLAN_LEAD_V6_1): die „Fotos je Objekt“ (Phase 186, Makro objekt_fotos,
+   Upload an der Objektkarte) sind entfallen – Anhänge/Galerie bleiben wie bisher. #}
 {# v31 (PLAN_LEAD_V5 Phase 153/157) – Block „Objekte“ im Kundeninfo-Bereich.
    Ein-Objekt-Vorgänge sehen nur den Link „Weiteres Objekt hinzufügen“ (die bekannten
    Adressfelder stehen im Stammdaten-Formular); ab zwei Objekten Karten je Objekt:
@@ -120,8 +85,6 @@
             <a class="abzeichen" href="{{ '/angebote/' ~ a.id if benutzer.basisrolle in ('admin', 'innendienst') else '/meine-angebote/' ~ a.id }}" title="Angebot · {{ a.status }}">{{ symbol('euro') }} {{ a.nummer }} · {{ a.status }}</a>
         {% endfor %}
     </div>
-    {# v35 (Phase 186, Agent G): Fotos je Objekt direkt an der Karte #}
-    {{ objekt_fotos(oid) }}
     {% if not readonly %}
     <div class="lk-objekt-fuss">
         {% if o.haupt %}
@@ -151,13 +114,6 @@
     </div>
     <div class="lk-objekt-karten">
         {% for o in objekte.liste %}{{ objekt_karte(o) }}{% endfor %}
-    </div>
-    {% endif %}
-    {# v35 (PLAN_LEAD_V6 Phase 186, Agent G): Ein-Objekt-Vorgang – keine Objektkarte, der Fotoblock
-       steht für sich (Galerie-Ordner „Objekt“, ersetzt nichts Bestehendes) #}
-    {% if not objekte.mehrere and objektfotos is defined and objektfotos and objektfotos.einzel %}
-    <div class="lk-objektfotos-einzel" data-rolle="objektfotos-einzel">
-        {{ objekt_fotos(objektfotos.einzel.objekt_id, 'Fotos zum Objekt') }}
     </div>
     {% endif %}
     {% if objekte.inaktive %}
@@ -217,6 +173,3 @@
     </details>
     {% endif %}
 </div>
-{# v35 (Phase 186, Agent G): Styles und Verhalten der Objektfotos – einmal je Kartei #}
-{{ objektfotos_stil() }}
-<script src="/static/objektfotos_v35.js?v={{ css_version | default('') }}" defer></script>

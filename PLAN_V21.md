@@ -31,6 +31,12 @@ Hell/Dunkel, Token-Wächter `tests/test_v30_design.py`, `tojson |
 forceescape` in on*-Attributen, Zurück-Leiste aus `base.html`) und die
 v33-Tabellenregeln (Lead-Board-Layout) für neue Listen.
 
+Hinweis 16.10.2026 (Planungs-Chat, eingespielt bei der Vorprüfung der Plan-Kette): Das Angebots-PDF wird mit
+PLAN_V22 (v36) auf ein neues Layout mit HTML-Vorlagen umgestellt; die PDF-Darstellung des Alternativ-Kastens
+aus Phase 180 wird dort im neuen Layout erneut umgesetzt (die v34-Umsetzung in fpdf2 bleibt als Rückfall-Engine
+`pdf_engine = fpdf2` erhalten); Positions-/Summenänderungen (Auslegungszeile, USt-Rundung) gelten für beide
+Engines.
+
 Geltungsbereich: Angebotstool – Konfigurator-Rahmen (`app/logik.py`,
 `app/angebot_aufbau.py`, `app/konfigurator.py`, `app/routers/erfassung.py`,
 Steuerdatei `konfigurator_logik_v5.xlsx`), neues Modul `app/wb_auslegung.py`

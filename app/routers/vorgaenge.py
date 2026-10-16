@@ -213,9 +213,7 @@ def akte(request: Request, vorgang_id: int,
         galerie_sparten = ["WP"]
     galerie_daten = {sp: galerie_modul.uebersicht(session, vorgang.id, sp)
                      for sp in galerie_sparten}
-    # v35 (PLAN_LEAD_V6 Phase 186, Agent G): + Ordner „Objekt <Bezeichnung>“ je Objekt des Vorgangs
-    # (Zuordnung „Objekt“ beim Upload und beim Einsortieren aus der Sammelbox)
-    galerie_ordner = {sp: galerie_modul.ordner_liste(session, sp, vorgang=vorgang)
+    galerie_ordner = {sp: galerie_modul.ordner_liste(session, sp)
                       for sp in galerie_sparten}
     galerie_darf_loeschen = galerie_modul.darf_loeschen(benutzer)
     vorgang_projekte = []

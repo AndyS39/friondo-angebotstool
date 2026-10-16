@@ -1,17 +1,22 @@
 # TAIFUN-Kundenübergabe (XML-Export nach ADRESSEN.xsd) – v35, PLAN_LEAD_V6 Phase 183
 
-Stand 15.10.2026 (Agent T). Bei der **Terminierung** eines Leads (und über den Knopf
-„An TAIFUN übergeben“ in der Kundenkartei) schreibt das Tool den Kunden als XML-Datei in den
-Import-Ordner von TAIFUN. TAIFUN liest die Datei (Import „Adressen“) und legt den Kunden an.
+Stand 16.10.2026 (Agent T; Nachtrag 3 nach dem Screenshot-Review von Claudia Castro, PLAN_LEAD_V6_1).
+Bei der **Terminierung** eines Leads schreibt das Tool den Kunden **automatisch** als XML-Datei in den
+Import-Ordner von TAIFUN. TAIFUN liest die Datei (Import „Adressen“) und legt den Kunden an. Einen
+manuellen Knopf „An TAIFUN übergeben“ in der Kundenkartei gibt es seit dem Nachtrag 16.10.2026 **nicht
+mehr**; eine Wiederholung nach Fehler oder eine erneute Übergabe läuft ausschließlich über die
+**Übergabeliste** (`/lead-management/taifun-uebergaben`, Knopf „Erneut übergeben“ je Zeile).
 Technik: `app/taifun_export.py` (Generator, Validierung, Datei, Übergabeliste, Scheduler-Lauf),
 `app/routers/lm_taifun.py` (Routen), Schema `docs/taifun/ADRESSEN.xsd`, Beispiel
 `docs/taifun/beispiel_LM.xml`, Tabelle `taifun_uebergaben`, Vorgangsfelder
-`vorgaenge.taifun_export_am/_von/_datei/_status/_grund`, Kundenfeld `kunden.taifun_kundennr`.
+`vorgaenge.taifun_export_am/_von/_datei/_status/_grund`. Die Spalte `kunden.taifun_kundennr` (v35)
+bleibt additiv in der Datenbank, wird aber nicht mehr angezeigt oder gelesen (kein Kartei-Feld mehr,
+Rückgabe der Kundennummer bleibt OFFEN 2).
 
 **Schalter:** Lead-Einstellungen → „TAIFUN-Übergabe“ → `taifun_export_aktiv`, Standard **aus**
 (Andreas 15.10.2026), bis der Import-Weg mit dem TAIFUN-Betreuer geklärt ist. Mit „aus“ erzeugt
-die Terminierung keine Datei (nur die Aktivität „TAIFUN-Übergabe nicht aktiv“), der Kartei-Knopf ist
-ausgegraut; **„Testdatei schreiben“ funktioniert immer.**
+die Terminierung keine Datei (nur die Aktivität „TAIFUN-Übergabe nicht aktiv“), die Übergabeliste
+zeigt keine „Erneut übergeben“-Knöpfe; **„Testdatei schreiben“ funktioniert immer.**
 
 ## 1. Datei
 
@@ -74,25 +79,31 @@ Quelle: Website/Förderrechner</TAIFUN:Kartei>
   TAIFUN, keine Buchung, keine Mail“; Buchung, Outlook, Mail, Phase Terminiert und Leads VOT bleiben
   gesperrt. Bei freigeschalteter Terminierung laufen Export und Buchung in einem Klick; ein
   Export-Fehler blockiert die Buchung nicht [ANNAHME].
-- **„An TAIFUN übergeben“ / „Erneut an TAIFUN übergeben“** (Kartei, nur Innendienst/Leadmanagement/
-  Admin): Übergabe ohne Termin; nach erfolgter Übergabe fragt der Knopf mit dem Datum der letzten
-  Übergabe nach.
-- **Dubletten-Hinweis** vor jedem Export: externer TAIFUN-Eintrag mit Nummer (v7), Bestandsimport
-  (v18) oder gefüllte `kunden.taifun_kundennr` → „Kunde ist vermutlich schon in TAIFUN angelegt
-  (<Beleg>). Trotzdem übergeben?“ (Ja/Nein). Die Terminierung überspringt den automatischen
-  Export in diesem Fall und schreibt eine Aktivität – übergeben wird dann bewusst per Knopf [ANNAHME].
-- **Nach Erfolg:** grünes Badge „TAIFUN <Datum>“ (+ Kundennummer) im Kartei-Kopf, Aktivität
+- **Kein manueller Knopf in der Kartei** (Nachtrag 16.10.2026): die Übergabe läuft nur automatisch bei
+  „Terminierung“. Wiederholung/erneute Übergabe ausschließlich in der **Übergabeliste** (Innendienst/
+  Leadmanagement/Admin): Knopf **„Erneut übergeben“ je Zeile** mit Rückfrage „Letzte Übergabe am
+  TT.MM.JJJJ HH:MM – trotzdem erneut übergeben? Doppelte Kunden in TAIFUN vermeiden.“ (Route
+  `POST /lead-management/lead/{id}/taifun` mit `bestaetigt=1`, Rücksprung über das Formularfeld `zurueck`
+  auf die Liste; ohne JavaScript zeigt die Liste den Rückfrage-Balken „Trotzdem übergeben“).
+- **Dubletten-Hinweis** vor jedem Export: externer TAIFUN-Eintrag mit Nummer (v7) oder Bestandsimport
+  (v18) – **nicht mehr** die manuelle Kundennummer → „Kunde ist vermutlich schon in TAIFUN angelegt
+  (<Beleg>). Trotzdem übergeben?“. Die Terminierung überspringt den automatischen Export in diesem Fall,
+  schreibt eine Aktivität und eine Zeile **„übersprungen (Rückfrage)“** in die Übergabeliste; dort steht
+  „Trotzdem übergeben“ (bewusste Entscheidung, [ANNAHME N6: ohne Zeile gäbe es keinen Weg mehr, den
+  Dubletten-Hinweis zu übergehen]).
+- **Nach Erfolg:** grünes Badge „TAIFUN <Datum>“ im Kartei-Kopf (ohne Kundennummer), Aktivität
   „An TAIFUN übergeben: <Datei>“, Spalte „TAIFUN-Übergabe“ (Boards, Standard ausgeblendet), Filter-Chip
   „an TAIFUN übergeben“. Keine Glocke, keine Kundenmail.
 - **Fehler** (Ordner fehlt, keine Rechte, Validierung): `taifun_export_status = fehler` mit Grund,
   rotes Label „TAIFUN-Übergabe fehlgeschlagen“ in Notiz-Spalte (Rang 0) und Kartei (Hinweisbalken
-  mit „Erneut übergeben“), Zähler in den Lead-Einstellungen.
+  mit dem Link „Zur Übergabeliste“, Filter „Fehler“), Zähler in den Lead-Einstellungen.
 - **Übergabeliste** `/lead-management/taifun-uebergaben`: Datum, Vorgang, Datei, Benutzer, Auslöser,
-  Status `geschrieben · abgeholt · fehler · manuell importiert`, Knöpfe „XML“, „Als importiert
-  markieren“, „Erneut übergeben“. Der Scheduler-Lauf `taifun-uebergaben` (alle 15 Minuten) setzt
-  `abgeholt`, sobald die Datei nicht mehr im Ordner liegt (ein nicht erreichbarer Ordner markiert
-  nichts), und löscht Kopien älter als 12 Monate.
-- **Kundennummer:** Feld „TAIFUN-Kundennummer“ im Kundeninfo-Block (manuell nachtragen, OFFEN 2).
+  Status `geschrieben · abgeholt · fehler · manuell importiert · übersprungen (Rückfrage)`, Knöpfe „XML“,
+  „Als importiert markieren“, „Erneut übergeben“ bzw. „Trotzdem übergeben“. Der Scheduler-Lauf
+  `taifun-uebergaben` (alle 15 Minuten) setzt `abgeholt`, sobald die Datei nicht mehr im Ordner liegt
+  (ein nicht erreichbarer Ordner markiert nichts), und löscht Kopien älter als 12 Monate.
+- **Kundennummer:** kein Feld in der Kartei mehr (Nachtrag 16.10.2026); die Rückgabe der TAIFUN-Kundennummer
+  ins Tool bleibt OFFEN 2.
 
 ## 4. Ordner und Rechte des Dienstkontos (OFFEN 3, IT)
 
@@ -120,7 +131,8 @@ Prüfpunkte Go-live (Lead-Einstellungen): Ordner erreichbar · Testdatei in TAIF
 2. **Dubletten:** Was passiert, wenn der Kunde (Name + Adresse) schon existiert – neue Adresse,
    Aktualisierung, Abbruch? Gibt es ein Schlüsselfeld für den Abgleich?
 3. **Kundennummer zurück:** Kann TAIFUN die vergebene Kundennummer zurückgeben (Export-Datei,
-   Abfrage)? Bis dahin manuelles Feld `kunden.taifun_kundennr`.
+   Abfrage)? (Ein manuelles Feld gibt es seit dem Nachtrag 16.10.2026 nicht mehr; die Spalte
+   `kunden.taifun_kundennr` bleibt ungenutzt in der Datenbank.)
 4. **Kodierung:** Erwartet der Import `windows-1252` (wie die XSD) oder UTF-8? Bleiben Umlaute/ß
    nach dem Import korrekt? (Parameter `taifun_export_encoding`.)
 5. **Original-XSD:** Bitte die Original-`ADRESSEN.xsd` liefern – `docs/taifun/ADRESSEN.xsd` ist eine
@@ -133,6 +145,6 @@ Prüfpunkte Go-live (Lead-Einstellungen): Ordner erreichbar · Testdatei in TAIF
 
 | Modul | Auslöser | Intervall | Netz/Datei-I/O | Sitzung | Maßnahme |
 |---|---|---|---|---|---|
-| `taifun_export.exportieren` (Routen `POST /lead-management/lead/{id}/taifun`, `…/terminierung`) | Innendienst/LM/Admin | je Übergabe | Datei schreiben (Zielordner, ggf. UNC) + Kopie | Request-Sitzung vor dem Schreiben freigegeben (`verbindung_freigeben`), danach kurze Schreibtransaktion | def-Route, atomar, nie überschreiben |
+| `taifun_export.exportieren` (Routen `…/terminierung` automatisch; `POST /lead-management/lead/{id}/taifun` nur aus der Übergabeliste „Erneut übergeben“) | Innendienst/LM/Admin | je Übergabe | Datei schreiben (Zielordner, ggf. UNC) + Kopie | Request-Sitzung vor dem Schreiben freigegeben (`verbindung_freigeben`), danach kurze Schreibtransaktion | def-Route, atomar, nie überschreiben |
 | `taifun_export.scheduler_lauf` – Lauf `taifun-uebergaben` | Scheduler | 900 s (Start +240 s) | `Path.exists()` je offener Übergabe, Kopien > 365 Tage löschen (03:00–03:20) | `db.kurz(schreibend=False)` lesen → Datei-I/O ohne Sitzung → `db.kurz()` je Block ≤ 50 | Pool-Invariante: 17 Läufe → 64 + 17 + 5 = 86 ≤ 90 |
 | `POST /lead-management/taifun/testdatei`, `…/ordner-pruefen` | Admin | manuell | Testdatei bzw. `LM_PRUEF_*.tmp` | Sitzung vorher freigegeben | – |

@@ -185,10 +185,8 @@
                     {% endif %}
                 </div><small class="lk-feld-status" aria-live="polite"></small></div>
 
-            {#- v35 (PLAN_LEAD_V6 Phase 183, Agent T): TAIFUN-Kundennummer – manuell nachgetragen (Rückgabe aus TAIFUN
-                offen, OFFEN 2); Autospeichern wie die übrigen Felder, das Kopf-Badge „TAIFUN“ zeigt die Nummer #}
-            <label class="lk-feld lk-taifun-feld" data-feld-wrap="taifun_kundennr"><span>TAIFUN-Kundennummer <small class="dezent">(manuell)</small></span>
-                <input type="text" name="taifun_kundennr" data-feld="taifun_kundennr" value="{{ kunde.taifun_kundennr or '' }}" maxlength="30" placeholder="aus TAIFUN"><small class="lk-feld-status" aria-live="polite"></small></label>
+            {#- v35-Nachtrag 3 (16.10.2026, PLAN_LEAD_V6_1): kein Feld „TAIFUN-Kundennummer“ mehr (Rückgabe aus
+                TAIFUN bleibt OFFEN 2; die Spalte kunden.taifun_kundennr bleibt ungelesen) #}
 
             {#- v29 (Phase 141): Eingangsdatum im Format „TT.MM.JJJJ, HH:MM Uhr“ (Filter de_datum_zeit);
                 v31 (Phase 157): Zelle umbricht, Eingangsart als eigene Zeile – ragt nicht mehr ins Nachbarfeld #}

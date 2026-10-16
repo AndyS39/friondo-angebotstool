@@ -627,11 +627,9 @@ Beschreibung der Funktionen in CLAUDE.md „Neu in v33“ (PLAN_V20, Phasen 166�
 
   | Modul / Route | Auslöser | Intervall | Netz / Datei-I/O | Sitzung | Maßnahme |
   |---|---|---|---|---|---|
-  | `taifun_export.exportieren` – `POST /lead-management/lead/{id}/taifun`, `lm_termin.terminierung` | Kartei-Knopf „An TAIFUN übergeben“, „Terminierung“ (auch Testphase) – nur bei `taifun_export_aktiv = an` | – | XML atomar (`.tmp` + Umbenennen, nie überschreiben) in den Import-Ordner (lokal oder UNC) + Kopie `data\taifun_export\`, vorher lxml-Validierung | lesen → `verbindung_freigeben` → Datei → kurze Schreibtransaktion (Übergabe-Zeile, Vorgangsfelder, Aktivität) | Fehler → `taifun_export_status = fehler`, Label, „Erneut übergeben“, Zähler |
+  | `taifun_export.exportieren` – `POST /lead-management/lead/{id}/taifun`, `lm_termin.terminierung` | „Terminierung“ (auch Testphase, automatisch); „Erneut übergeben“/„Trotzdem übergeben“ je Zeile der Übergabeliste (`POST /lead-management/lead/{id}/taifun`, kein Kartei-Knopf – Nachtrag 16.10.2026) – nur bei `taifun_export_aktiv = an` | – | XML atomar (`.tmp` + Umbenennen, nie überschreiben) in den Import-Ordner (lokal oder UNC) + Kopie `data\taifun_export\`, vorher lxml-Validierung | lesen → `verbindung_freigeben` → Datei → kurze Schreibtransaktion (Übergabe-Zeile, Vorgangsfelder, Aktivität) | Fehler → `taifun_export_status = fehler`, Label, „Erneut übergeben“, Zähler |
   | Lauf `taifun-uebergaben` | Scheduler | 900 s | `Path.exists()` je Übergabe mit Status geschrieben (Ordner lokal/UNC); Kopien > 365 Tage löschen (03:00–03:20) | `db.kurz(schreibend=False)` lesen → Datei → `db.kurz()` je Block ≤ 50 | nicht erreichbarer Ordner markiert nichts; inaktiv ohne Schalter? nein – prüft auch bei `aus` (nur Bestand) |
   | `POST /lead-management/taifun/testdatei`, `…/taifun/ordner-pruefen`, `POST /parametrierung/lead-einstellungen` (Ordnerprüfung) | Admin (Lead-Einstellungen) | – | Testdatei schreiben und löschen | Formular lesen → `verbindung_freigeben` → Datei → kurz | Hinweis auf das Dienstkonto SYSTEM |
-  | `routers/lm_objektfotos.objektfotos_hochladen` – `POST /lead-management/lead/{id}/objekt/{oid}/fotos` | Kundenkartei, Objektkarte (auch mobil per Kamera) | – | Verkleinern, HEIC → JPG (pillow-heif), Schreiben nach `data\vorgaenge\<id>\galerie\Objekt …` | Formular VOR dem ersten DB-Zugriff, Datei ohne Sitzung, kurze Schreibtransaktion je Datei | Teilerfolg je Datei in Meldung/JSON; 10 MB je Bild |
-  | `…/fotos/{datei_id}/loeschen` | Kartei | – | Datei-Unlink nach dem Commit | kurz | Chat-Notiz |
   | `POST /einstellungen/profil/bild` | „Mein Profil“ (alle Rollen) | – | Pillow-Zuschnitt 512 px, `data\benutzerbilder\<id>.jpg` | Formular + Pillow VOR dem ersten DB-Zugriff, Datei ohne Sitzung, kurze Schreibtransaktion | `GET /einstellungen/profil/bild/{id}` liest ohne Datenbank (30-s-Ordnercache, Cache-Header ein Tag) |
   | `lead_kanaele.farbe_schnell` (Jinja-Global `lm_kanal_farbe`) | jede Seite mit Kanal-Badge | – | – | `db.kurz(schreibend=False)` höchstens einmal je 60 s (Prozess-Cache, Schreibfunktionen leeren ihn) | – |
   | Sofortsuche `?fragment=1` (Boards, Kontaktiert) und Seiten-Parsing (übrige Lead-Seiten) | Tippen/Auswählen im Lead-Modul | – | – | Leseanfrage wie die Seite selbst | höchstens eine laufende Anfrage je Formular (AbortController) |
@@ -644,8 +642,7 @@ Beschreibung der Funktionen in CLAUDE.md „Neu in v33“ (PLAN_V20, Phasen 166�
   `vertriebskanaele`; Spalten `vorgaenge.taifun_export_am/_von/_datei/_status/_grund`, `kunden.taifun_kundennr`,
   `galerie_dateien.objekt_id` (+ Index `ix_v35_galerie_dateien_objekt_id`); Hooks `migration_v35_taifun`
   (Lead-Parameter `taifun_*`, Ordner `data/taifun_export`), `migration_v35_kanaele` (30 Kanäle, Abgleich alt → neu,
-  inaktive Alt-Kanäle, Parameter `kanal_farben` gespiegelt), `migration_v35_objektfotos` (`objekt_id` aus den
-  Ordnernamen); zweiter Lauf ohne Änderungen. Neue Abhängigkeiten `lxml`, `Pillow`, `pillow-heif` (binäre Wheels) –
+  inaktive Alt-Kanäle, Parameter `kanal_farben` gespiegelt), `migration_v35_objektfotos` (seit dem Nachtrag 16.10.2026 No-op – Objektfotos entfallen, Spalte bleibt); zweiter Lauf ohne Änderungen. Neue Abhängigkeiten `lxml`, `Pillow`, `pillow-heif` (binäre Wheels) –
   `update.bat` installiert sie über `requirements.txt`; Prüfung `venv\Scripts\python -c "import lxml, PIL, pillow_heif"`.
 - **Gespeicherte Filter** liegen in `benutzer_einstellungen` (Keys `boards_filter`, global `boards_filter_geteilt`
   unter benutzer_id 0) – keine neue Tabelle.

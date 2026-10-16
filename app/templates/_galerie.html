@@ -95,7 +95,11 @@
     {# Foto-Sammelbox (27.09.2026; v34 PLAN_V21 Phase 181): Kamera-Serie oder
        Mehrfachauswahl, Ordner + Bemerkung je Foto, EIN Upload für alles #}
     {{ sammelbox(galerie_vorgang_id, galerie_ordner, galerie_zurueck, sparte) }}
-    {% for ordner in galerie_ordner %}
+    {#- v35-Nachtrag 3 (16.10.2026): Ordner, die nur noch im Datenbestand vorkommen (z. B. „Objekt …“ aus
+        der Zeit vor dem Nachtrag oder entfernte Zusatzordner), bleiben hinter den gültigen Ordnern sichtbar –
+        galerie.uebersicht() liefert sie per setdefault; neu hochladen/einsortieren geht nur in gültige Ordner #}
+    {% set zusatz_ordner = galerie_daten.keys() | reject('in', galerie_ordner) | list %}
+    {% for ordner in (galerie_ordner | list) + zusatz_ordner %}
     {% set eintrag = galerie_daten.get(ordner, {'eintraege': [], 'vorschau': None}) %}
     <details class="pj-gal-ordner" {{ 'open' if eintrag.eintraege and loop.first }}>
         <summary>

@@ -17,15 +17,6 @@
         {% set adresse = objekt_text(objekt, False) if objekt_text is defined else '' %}
         {% if adresse %}· {{ adresse }}{% endif %}
         {% if objekt.objektart %}· {{ objekt.objektart }}{% if objekt.parteien %} ({{ objekt.parteien }} Parteien){% endif %}{% endif %}</p>
-    {# v35 (PLAN_LEAD_V6 Phase 186, Agent G): Fotos des Objekts aus der Kundenkartei – nur Anzeige
-       (Kacheln mit Lightbox; galerie_fuss() liefert die Lightbox) #}
-    {% if objektfotos is defined and objektfotos %}
-    {% from "_objektfotos.html" import objektfotos_abschnitt, objektfotos_stil %}
-    {% from "_galerie.html" import galerie_fuss %}
-    {{ objektfotos_stil() }}
-    {{ objektfotos_abschnitt(objektfotos, 'Fotos zum Objekt', 'erfassung/' ~ objekt.id) }}
-    {{ galerie_fuss() }}
-    {% endif %}
     {% endif %}
 
     {% if entwuerfe %}

@@ -36,8 +36,8 @@ Geltungsbereich: Modul Lead-Management (Kundenkartei, Boards, Button
 „Terminierung“, Lead-Einstellungen, Rechte-Matrix, HV-Sicht), ein neues
 Modul `app/taifun_export.py`, ein Scheduler-Job, die Vertriebskanal-
 Stammdaten (Parametrierung, Kanal-Farben, Angebotsprofil-Zuordnung nur
-lesend), Benutzereinstellungen (Profilbild) und die Galerie des Vorgangs
-(Objektfotos) sowie die Doku. Keine Änderung an
+lesend), Benutzereinstellungen (Profilbild) sowie die Doku *(Objektfotos: mit dem Nachtrag 16.10.
+entfallen)*. Keine Änderung an
 Angebotstool, Projektierung, TAIFUN-Import der Artikel/Preislisten,
 Bestandsimport, monday-Sync oder monday-Rückspielung. Die Testphase aus
 v31 (Phase 159: Buchen und Mailversand gesperrt) bleibt bestehen; der
@@ -56,8 +56,8 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
   keine Felder für Anrede, Vorname und Nachname hat.
 - **Auslöser: Klick auf „Terminierung“, auch in der Testphase.** Der Button
   bleibt für Buchung und Mail gesperrt (v31), erzeugt aber bereits die
-  TAIFUN-Datei, damit der Export sofort getestet werden kann. Zusätzlich
-  Button „An TAIFUN übergeben / erneut übergeben“ in der Kundenkartei.
+  TAIFUN-Datei, damit der Export sofort getestet werden kann. Kein
+  manueller Button in der Kartei (Nachtrag 16.10.).
 - **Import-Weg in TAIFUN [ANNAHME, Rückfrage unbeantwortet]:** Das Tool legt
   die Datei ab und führt eine Übergabeliste; ob TAIFUN den Ordner
   automatisch liest oder ein Mitarbeiter den Import manuell startet, ist
@@ -65,8 +65,7 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
   tauglich: Ablage plus Liste „TAIFUN-Übergaben“ mit Status; eine Datei,
   die aus dem Ordner verschwindet, gilt als abgeholt.
 - **Keine Rückmeldung aus TAIFUN** (Kundennummer zurück ins Tool) in diesem
-  Plan; vorbereitet als Feld `kunden.taifun_kundennr` zum manuellen
-  Nachtragen [OFFEN 2].
+  Plan und kein manuelles Feld dafür (Nachtrag 16.10.) [OFFEN 2].
 
 - **Nachtrag 15.10.2026 (Claudia Castro):**
   - **Außendienst darf die Lead-Kartei anpassen wie der Innendienst**: an
@@ -90,10 +89,21 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
     „Vertriebskanal unklar“ und macht den Kanal zum rot markierten
     Pflichtfeld, bis ein echter Kanal gewählt ist. Kanal „Standard“ entfällt
     als Label; das Angebotsprofil „Standard“ bleibt Fallback.
-  - **Fotos je Objekt** hochladen (Galerie am Objekt).
   - **Kontaktiert: eine Suchleiste** für Name, Ort und Rufnummer, keine
     separate Rufnummernleiste; **Sofortsuche beim Tippen ohne Enter**, das
     gilt für alle Suchfelder und Filter im Lead-Management.
+
+- **Nachtrag 16.10.2026 (Claudia Castro, Screenshot-Review; Datei PLAN_LEAD_V6_1.md):** Die
+  TAIFUN-Übergabe läuft **nur automatisch** beim Klick auf „Terminierung“;
+  der Button „An TAIFUN übergeben / erneut übergeben“ in der Kartei und das
+  Feld „TAIFUN-Kundennummer (manuell)“ entfallen (Wiederholung nach Fehler
+  nur über die Übergabeliste in den Lead-Einstellungen). **Objektfotos
+  entfallen** (Phase 186 ohne Fotos; Anhänge/Galerie bleiben wie bisher).
+  Weitere Punkte des Reviews stehen in PLAN_LEAD_V7. *Umgesetzt als
+  v35-Nachtrag 3 am 16.10.2026 (Vorprüfung der Plan-Kette): die drei Punkte
+  waren in v35 gebaut und sind im Code wieder entfernt – Spalten
+  `kunden.taifun_kundennr` und `galerie_dateien.objekt_id` bleiben additiv
+  ungelesen, die HEIC→JPG-Wandlung der Galerie bleibt.*
 
 ## Phase 183: TAIFUN-Kundenexport
 
@@ -168,22 +178,20 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       Validierung) → Vorgang erhält `taifun_export_status = fehler` mit
       Grund, rotes Label **„TAIFUN-Übergabe fehlgeschlagen“** in Notiz-
       Spalte und Kartei (gleiches Muster wie „Mail nicht gesendet“, v29),
-      Button „Erneut übergeben“, Zähler in den Lead-Einstellungen.
+      „Erneut übergeben“ in der Übergabeliste, Zähler in den Lead-Einstellungen.
 - [x] **Auslöser und Bedienung:** (1) Klick auf **„Terminierung“** (B8)
       erzeugt nach erfolgreicher Pflichtfeldprüfung die Datei, **auch in der
       Testphase** mit `terminierung_aktiv = aus`: der Button ist dann nicht
       mehr ausgegraut, sondern aktiv mit Tooltip „Testphase: nur Übergabe an
       TAIFUN, keine Buchung, keine Mail“; die übrigen Wirkungen (Buchung,
       Outlook, Mail, Phase Terminiert, Leads VOT) bleiben gesperrt wie in
-      v31 Phase 159 und werden beim Freischalten wieder aktiv. (2) Button
-      **„An TAIFUN übergeben“** in der Kundenkartei (Kopf, neben
-      Terminierung; ID/LM/Admin, nicht AD/HV) für Übergaben ohne Termin;
-      nach erfolgter Übergabe heißt er „Erneut an TAIFUN übergeben“ und
-      fragt mit Hinweis auf das Datum der letzten Übergabe nach (Doppelte
-      in TAIFUN vermeiden). (3) **Dubletten-Hinweis vor dem Export:** hat
+      v31 Phase 159 und werden beim Freischalten wieder aktiv. (2) Kein manueller Button in der Kartei
+      (Nachtrag 16.10.); eine Wiederholung nach Fehler oder eine erneute Übergabe erfolgt nur über
+      die Übergabeliste in den Lead-Einstellungen (Button „Erneut übergeben“ je Zeile, mit Hinweis
+      auf das Datum der letzten Übergabe, Doppelte in TAIFUN vermeiden). (3) **Dubletten-Hinweis
+      vor dem Export:** hat
       der Kunde bereits einen TAIFUN-Angebotseintrag (externer Eintrag mit
-      TAIFUN-Nummer, v7), einen Bestandsimport (v18) oder ein gefülltes
-      `kunden.taifun_kundennr`, erscheint „Kunde ist vermutlich schon in
+      TAIFUN-Nummer, v7), einen Bestandsimport (v18) erscheint „Kunde ist vermutlich schon in
       TAIFUN angelegt (<Beleg>). Trotzdem übergeben?“ mit Ja/Nein.
       (4) Nach Erfolg: `vorgaenge.taifun_export_am/_von/_datei`
       (additiv), Aktivität „An TAIFUN übergeben: <Dateiname>“, grünes Badge
@@ -198,8 +206,8 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       einem Mitarbeiter verarbeitet). Button „Als importiert markieren“ je
       Zeile, Button „XML anzeigen/herunterladen“ (Kopie bleibt unter
       `data/taifun_export/<Dateiname>` als Protokoll, 12 Monate, Löschlauf
-      vorhanden). Feld `kunden.taifun_kundennr` (additiv) im Kundeninfo-
-      Block der Kartei zum manuellen Nachtragen, Badge zeigt die Nummer.
+      vorhanden). Kein Feld „TAIFUN-Kundennummer“ in der Kartei (Nachtrag 16.10.); die
+      Rückgabe der Kundennummer bleibt [OFFEN 2].
 - [x] **Parametrierung und Prüfpunkte:** Abschnitt „TAIFUN-Übergabe“ mit
       Schalter, Ordner, Encoding, Button „Testdatei schreiben“ (Demo-Lead
       „Max Mustermann“, Datei `LM_TEST_<Zeit>.xml`, zum Import-Test in
@@ -291,7 +299,7 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       Terminbestätigung je Vertriebler (v29 `{vertriebler_block}`) genutzt;
       Admin kann Bilder weiterhin in der Benutzerverwaltung setzen.
 
-## Phase 186: Hauptboard Inline-Bearbeitung, gespeicherte Filter, Sofortsuche, Objektfotos (Nachtrag 15.10.)
+## Phase 186: Hauptboard Inline-Bearbeitung, gespeicherte Filter, Sofortsuche (Nachtrag 15.10.; Objektfotos mit dem Nachtrag 16.10. entfallen)
 
 - [x] **Zeilen direkt bearbeiten:** Inline-Edit (v23: status, notiz,
       ad_id, leadmanager_id, wiedervorlage) wird erweitert auf **Interessen**
@@ -330,16 +338,9 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       Ergebnisse). Lupe-Button und „Suchen“-Buttons entfallen; die URL
       spiegelt den aktuellen Filter (teilbar, Zurück-Navigation v30 bleibt).
       Gespeicherte Filter (oben) speichern den Suchtext mit.
-- [x] **Fotos je Objekt:** die Galerie des Vorgangs (v15, je Sparte +
-      Sammelbox) erhält je Objekt (v31 `vorgang_objekte`) einen eigenen
-      Ordner „Objekt <Bezeichnung>“; Upload in der Kartei direkt an der
-      Objektkarte (mehrere Dateien, mobil per Kamera, JPG/PNG/HEIC → JPG,
-      max 10 MB je Bild, Vorschaukacheln, Lightbox v28, Löschen durch
-      Hochladenden/ID/Admin), zusätzlich Zuordnung „Objekt“ beim Upload in
-      der Galerie und beim Einsortieren aus der Sammelbox. Erfassung und
-      Projektakte zeigen die Objektfotos des jeweiligen Objekts (nur
-      Anzeige). Ein-Objekt-Vorgänge: Ordner heißt „Objekt“ und ersetzt
-      nichts Bestehendes.
+- [x] **Fotos je Objekt:** entfällt (Nachtrag 16.10.2026 / PLAN_LEAD_V6_1 – in v35
+      gebaut und mit dem v35-Nachtrag 3 am 16.10.2026 wieder entfernt; die Galerie bleibt wie
+      vor v35, HEIC → JPG bleibt).
 
 ## Phase 187: Tests, Doku, Übergabe
 
@@ -351,9 +352,11 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       (c) Mobilnummer → Funk, Festnetz → Telefon; (d) MFH mit abweichender
       Rechnungsadresse → Rechnungsadresse im Ad, Objektadresse in der
       Karteikarte; (e) Terminierung in der Testphase schreibt die Datei,
-      bucht nicht, sendet nicht; (f) Ordner nicht beschreibbar → Status
+      bucht nicht, sendet nicht; kein TAIFUN-Button und kein Kundennummer-Feld
+      in der Kartei; (f) Ordner nicht beschreibbar → Status
       fehler, Label, Erneut-Button, nach Reparatur Erfolg; (g) zweite
-      Übergabe fragt nach, Dubletten-Hinweis bei TAIFUN-Angebotsnummer;
+      Übergabe aus der Übergabeliste fragt nach, Dubletten-Hinweis bei
+      TAIFUN-Angebotsnummer;
       (h) Scheduler setzt „abgeholt“, wenn die Datei fehlt; (i) Längen über
       60 Zeichen werden gekürzt und vermerkt; (j) kein Export bei
       `taifun_export_aktiv = aus`; (k) Kanäle: Migration legt die Liste an,
@@ -363,15 +366,14 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       Hartmuts Leads, René nicht, und umgekehrt; (n) Profilbild erscheint
       als Avatar und in der Terminbestätigung; (o) Inline-Edit Interessen
       und Kanal im Hauptboard mit Aktivität; (p) gespeicherter Standardfilter
-      greift beim Öffnen; (q) Objektfoto landet im Objekt-Ordner und ist in
-      der Erfassung sichtbar; (r) Kontaktiert: „4711“ in der allgemeinen
+      greift beim Öffnen; (q) entfällt (Objektfotos, Nachtrag 16.10.); (r) Kontaktiert: „4711“ in der allgemeinen
       Suchleiste findet die Rufnummer, Treffer erscheinen ohne Enter; Filter-
       Chip im Hauptboard aktualisiert die Liste ohne Seitenneuladen. Gesamtlauf grün,
       `tests/test_v27_sitzungen.py` grün.
 - [x] Rollout-Vorbereitung nach Grundregel: Server-DB-Kopie nach
       diagnose\, migrate.py zweimal (additiv: `vorgaenge.taifun_export_*`,
-      `kunden.taifun_kundennr`, Tabellen `taifun_uebergaben` und
-      `vertriebskanaele`, Galerie-Ordner je Objekt, `boards_filter`,
+      Tabellen `taifun_uebergaben` und
+      `vertriebskanaele`, `boards_filter`,
       Parameter),
       Rückweg-Probe, Voll-Crawl, Abnahmeskript, Smoke grün;
       `docs/betrieb.md` Inventar: Export-Ordner, Scheduler-Job, Rechte des

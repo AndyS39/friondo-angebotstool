@@ -1,17 +1,16 @@
 /* v35 (PLAN_LEAD_V6 Phase 183, Agent T): TAIFUN-Kundenübergabe – Kartei-Badge, Hinweisbalken,
-   Übergabeliste, Abschnitt der Lead-Einstellungen. Nur Tokens (Design v2, Hell/Dunkel). */
+   Übergabeliste, Abschnitt der Lead-Einstellungen. Nur Tokens (Design v2, Hell/Dunkel).
+   v35-Nachtrag 3 (16.10.2026): kein Kartei-Knopf mehr (die Regeln für den Knopf neben „Terminierung“
+   sind entfallen); die Rückfrage in Warnfarbe steht jetzt in der Übergabeliste („Trotzdem übergeben“),
+   neuer Status „übersprungen (Rückfrage)“. */
 
 /* Kartei: grünes Badge „TAIFUN <Datum>“ im Kopf (Paar --status-gruen) */
 .lm-taifun-badge { background: var(--status-gruen-bg); color: var(--status-gruen);
   border: 1px solid color-mix(in srgb, var(--status-gruen) 35%, transparent); white-space: nowrap; }
 
-/* Hinweisbalken (Muster .lm-mail-hinweis aus lead_v29.css); Rückfrage in Warnfarbe */
+/* Hinweisbalken (Muster .lm-mail-hinweis aus lead_v29.css); Rückfrage in Warnfarbe (Übergabeliste) */
 .lm-taifun-rueckfrage { border-color: var(--status-orange); background: var(--status-orange-bg);
-  color: var(--status-orange); }
-
-/* Knopf „An TAIFUN übergeben“ neben „Terminierung“ */
-#lk-taifun-form { display: inline; margin: 0; }
-#lk-taifun-knopf[disabled] { opacity: .6; cursor: not-allowed; }
+  color: var(--status-orange); margin-bottom: 12px; }
 
 /* Übergabeliste */
 .lm-taifun-liste .lm-taifun-datei { font-family: inherit; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -21,6 +20,7 @@
 .lm-taifun-status-geschrieben { background: var(--status-blau-bg); color: var(--status-blau); }
 .lm-taifun-status-abgeholt, .lm-taifun-status-importiert { background: var(--status-gruen-bg); color: var(--status-gruen); }
 .lm-taifun-status-fehler { background: var(--status-rot-bg); color: var(--status-rot); }
+.lm-taifun-status-uebersprungen { background: var(--status-orange-bg); color: var(--status-orange); }
 .lm-taifun-fehlerzeile td:first-child { box-shadow: inset 4px 0 0 var(--status-rot); }
 .lm-taifun-filter .n.rot { color: var(--status-rot); font-weight: 700; }
 

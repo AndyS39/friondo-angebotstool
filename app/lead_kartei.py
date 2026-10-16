@@ -805,9 +805,9 @@ FELD_LABELS = {"anrede": "Anrede", "vorname": "Vorname", "nachname": "Nachname",
                "leadmanager_id": "Innendienst", "ad_id": "Außendienst",
                # v31 (Phase 153/157): Großkunde-Häkchen, MFH-Frage „Rechnungsadresse
                # identisch mit der Objektadresse?“ (Hauptobjekt)
-               "grosskunde": "Großkunde", "rechnung_abweichend": "Rechnungsadresse abweichend",
-               # v35 (PLAN_LEAD_V6 Phase 183, Agent T): TAIFUN-Kundennummer (manuell nachgetragen)
-               "taifun_kundennr": "TAIFUN-Kundennummer"}
+               "grosskunde": "Großkunde", "rechnung_abweichend": "Rechnungsadresse abweichend"}
+# v35-Nachtrag 3 (16.10.2026, PLAN_LEAD_V6_1): „taifun_kundennr“ ist kein Kartei-Feld mehr – das
+# Autospeichern weist es wie ein unbekanntes Feld ab; die Spalte kunden.taifun_kundennr bleibt ungelesen.
 AUTOSPEICHER_FELDER = tuple(FELD_LABELS)
 ADRESS_FELDER = ("strasse", "plz", "ort")
 # v31 (Phase 153): Kundenfelder, die das Hauptobjekt spiegelt (objekte.hauptobjekt_sync)
@@ -816,8 +816,7 @@ GROSSKUNDE_TEXT = "als Großkunde gekennzeichnet"
 GROSSKUNDE_ENTFERNT_TEXT = "Großkunde-Kennzeichen entfernt"
 _TEXT_LAENGEN = {"vorname": 100, "nachname": 100, "firma": 200, "telefon": 50,
                  "email": 200, "strasse": 200, "ort": 100, "rechnung_name": 200,
-                 "rechnung_strasse": 200, "rechnung_plz": 10, "rechnung_ort": 100,
-                 "taifun_kundennr": 30}   # v35 (Phase 183, Agent T)
+                 "rechnung_strasse": 200, "rechnung_plz": 10, "rechnung_ort": 100}
 _EMAIL_MUSTER = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$")
 SEITENZUSTAENDE = ("zurueckgestellt", "nicht_erreicht", "unqualifiziert", "verloren")
 
@@ -1395,11 +1394,6 @@ def objekt_feld_speichern(session: Session, vorgang: Vorgang, kunde: Kunde | Non
         # Adresse geändert → Geocoding je Objekt (AT, Lauf geocoding) neu; Koordinaten verwerfen
         objekt.lat, objekt.lon, objekt.geocode_status = None, None, None
         vorschlaege_cache_leeren(vorgang.id)
-    if feld == "bezeichnung":
-        # v35 (PLAN_LEAD_V6 Phase 186, Agent G): Galerie-Ordner „Objekt <Bezeichnung>“ folgt der
-        # Umbenennung (nur das Feld ordner der Fotos, Dateien bleiben liegen)
-        from app import galerie as galerie_modul
-        galerie_modul.objekt_umbenannt(session, objekt, alt_vgl)
     _aenderung(session, vorgang, praefix + label, alt_vgl, neu_vgl, benutzer)
     session.flush()
     return ok(neu_vgl)
@@ -1774,12 +1768,6 @@ def kartei_kontext(session: Session, vorgang: Vorgang, benutzer, readonly: bool 
     # v31 (PLAN_LEAD_V5): Objekte, Großkunde, Testphase-Schalter, Status aus der Kartei,
     # Timeline mit Herkunft (vorgang_verlauf), To-Do-Zeilen für die schmale Spalte
     objekte = objekte_kontext(session, vorgang, kunde, pflicht, benutzer_map, erfassungen, angebote)
-    # v35 (PLAN_LEAD_V6 Phase 186, Agent G): Fotos je Objekt – Block an der Objektkarte
-    # (kartei_objekte.html, Makro objekt_fotos); Kontext aus galerie.objektfotos_kontext
-    try:
-        objektfotos = galerie_modul.objektfotos_kontext(session, vorgang, benutzer)
-    except Exception:   # noqa: BLE001 – die Kartei darf daran nie scheitern
-        objektfotos = dict(galerie_modul.OBJEKTFOTOS_LEER)
     try:
         vorgang_interessen = objekte_modul.vorgang_interessen(session, vorgang.id) or (kunde.interessen if kunde else [])
     except Exception:   # noqa: BLE001
@@ -1879,7 +1867,6 @@ def kartei_kontext(session: Session, vorgang: Vorgang, benutzer, readonly: bool 
         "sperre_text": ("Demo-Modus: Buchung nur für Demo-Leads" if demo_sperre
                         else (lead_v5.TESTPHASE_HINWEIS if not terminierung_aktiv else "")),
         "objekte": objekte, "vorgang_interessen": vorgang_interessen,
-        "objektfotos": objektfotos,   # v35 (Phase 186, Agent G): Fotos je Objekt
         "rechnung_abweichend": rechnung_abweichend(session, vorgang, kunde),
         "grosskunde": bool(kunde is not None and kunde.grosskunde),
         "grosskunde_farbe": (kern.parameter_holen(session, "grosskunde_farbe", "") or "").strip(),

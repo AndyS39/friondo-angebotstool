@@ -6,15 +6,22 @@
 {% block mainklasse %}breit{% endblock %}
 
 {# v35 (PLAN_LEAD_V6 Phase 183, Agent T): Übergabeliste aller TAIFUN-Kundenexporte
-   (GET /lead-management/taifun-uebergaben?status=geschrieben|abgeholt|fehler|importiert):
+   (GET /lead-management/taifun-uebergaben?status=geschrieben|abgeholt|fehler|importiert|uebersprungen):
    Datum, Vorgang, Datei, Benutzer, Status; „Als importiert markieren“ je Zeile, „XML“
-   (Protokoll-Kopie unter data/taifun_export, 12 Monate), bei Fehler „Erneut übergeben“.
-   Status abgeholt setzt der Lauf taifun-uebergaben (alle 15 Minuten), wenn die Datei nicht
-   mehr im Import-Ordner liegt. Nur Tokens (lm_v35_t.css). #}
+   (Protokoll-Kopie unter data/taifun_export, 12 Monate).
+   v35-Nachtrag 3 (16.10.2026, PLAN_LEAD_V6_1): der Kartei-Knopf ist entfallen – eine Wiederholung
+   nach Fehler oder eine erneute Übergabe gibt es NUR hier: Knopf „Erneut übergeben“ je Zeile mit
+   Vorgang (ID/LM/Admin), Rückfrage mit dem Datum der letzten Übergabe („Letzte Übergabe am … –
+   trotzdem erneut übergeben? Doppelte Kunden in TAIFUN vermeiden.“); Zeilen „übersprungen (Rückfrage)“
+   (Terminierung bei Dublette/bereits übergeben) tragen „Trotzdem übergeben“. Das confirm setzt
+   bestaetigt=1 (tojson|forceescape); ohne JavaScript antwortet die Route mit dem Rückfrage-Balken
+   (?taifun_rueckfrage=<Vorgang>). Status abgeholt setzt der Lauf taifun-uebergaben (alle 15 Minuten),
+   wenn die Datei nicht mehr im Import-Ordner liegt. Nur Tokens (lm_v35_t.css). #}
 {% block inhalt %}
 {#- Nav-Key „lead-einstellungen“ (Vertrag v25: nur bekannte Keys; die Liste hängt an den Lead-Einstellungen) #}
 {{ lm_nav('lead-einstellungen') }}
 <link rel="stylesheet" href="/static/lm_v35_t.css?v={{ css_version }}">
+{%- set liste_zurueck = liste_url ~ ('?status=' ~ status if status else '') %}
 <div class="seitenkopf">
     <h1>TAIFUN-Übergaben</h1>
     <span class="dezent">Import-Ordner {{ ordner }} · Übergabe {{ 'eingeschaltet' if aktiv_schalter else 'ausgeschaltet (Lead-Einstellungen → TAIFUN-Übergabe)' }}
@@ -24,7 +31,25 @@
         <a class="knopf klein zweitrangig" href="/lead-management/dashboard">← Dashboard</a>
     </div>
 </div>
-{% if meldung %}<p class="meldung {{ 'fehler' if fehler }}" role="status">{{ meldung }}</p>{% endif %}
+{% if meldung and not rueckfrage %}<p class="meldung {{ 'fehler' if fehler }}" role="status">{{ meldung }}</p>{% endif %}
+{#- v35-Nachtrag 3: Rückfrage ohne JavaScript – die Route leitet mit ?taifun_rueckfrage=<Vorgang> hierher #}
+{% if rueckfrage %}
+<div class="lm-mail-hinweis lm-taifun-hinweis lm-taifun-rueckfrage" role="alert" id="lm-taifun-rueckfrage" data-art="rueckfrage">
+    <span class="lm-mail-hinweis-symbol" aria-hidden="true">{{ symbol('fragezeichen') }}</span>
+    <div class="lm-mail-hinweis-text">
+        <strong>TAIFUN-Übergabe – Rückfrage{% if rueckfrage.kunde %} ({{ rueckfrage.kunde.anzeige_name }}, V{{ rueckfrage.vorgang.id }}){% endif %}</strong>
+        <span>{{ rueckfrage.text }}</span>
+    </div>
+    <div class="lm-mail-hinweis-aktionen">
+        <form method="post" action="{{ rueckfrage.url }}" class="lm-inline" data-rolle="taifun-trotzdem">
+            <input type="hidden" name="bestaetigt" value="1">
+            <input type="hidden" name="zurueck" value="{{ liste_zurueck }}">
+            <button class="knopf klein" type="submit">{{ symbol('aktualisieren') }} Trotzdem übergeben</button>
+        </form>
+        <a class="knopf klein zweitrangig" href="{{ liste_zurueck }}">Abbrechen</a>
+    </div>
+</div>
+{% endif %}
 {#- v35 (Phase 186, Agent B): Sofortfilter – die Status-Links wirken ohne Seitenneuladen (lm_sofort.js:
     verstecktes Formular, data-lm-sofort-links="status", Leiste und Liste sind Tauschbereiche) #}
 <form method="get" action="/lead-management/taifun-uebergaben" id="lm-taifun-form" data-lm-sofort="1" data-lm-sofort-links="status" hidden>{% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}</form>
@@ -40,7 +65,7 @@
     <tbody>
     {% for z in zeilen %}
     {% set e = z.eintrag %}
-    <tr data-uebergabe="{{ e.id }}" data-status="{{ e.status }}" class="{{ 'lm-taifun-fehlerzeile' if e.status == 'fehler' }}">
+    <tr data-uebergabe="{{ e.id }}" data-status="{{ e.status }}"{% if z.vorgang %} data-vorgang="{{ z.vorgang.id }}"{% endif %} class="{{ 'lm-taifun-fehlerzeile' if e.status == 'fehler' }}">
         <td class="nowrap">{{ e.geschrieben_am.strftime('%d.%m.%Y %H:%M') if e.geschrieben_am else '–' }}
             {% if e.abgeholt_am %}<br><small class="dezent">abgeholt {{ e.abgeholt_am.strftime('%d.%m.%y %H:%M') }}</small>{% endif %}
             {% if e.importiert_am %}<br><small class="dezent">importiert {{ e.importiert_am.strftime('%d.%m.%y %H:%M') }}</small>{% endif %}</td>
@@ -56,16 +81,24 @@
             {% if z.kopie and (z.vorgang or z.test) %}<a class="knopf klein zweitrangig" href="/lead-management/lead/{{ z.vorgang.id if z.vorgang else 0 }}/taifun/{{ e.id }}/xml" title="Protokoll-Kopie der XML-Datei anzeigen/herunterladen">{{ symbol('oeffnen') }} XML</a>{% endif %}
             {% if e.status in ('geschrieben', 'abgeholt') %}
             <form method="post" action="/lead-management/taifun-uebergaben/{{ e.id }}/importiert" class="lm-inline">
-                <input type="hidden" name="zurueck" value="/lead-management/taifun-uebergaben{{ '?status=' ~ status if status }}">
+                <input type="hidden" name="zurueck" value="{{ liste_zurueck }}">
                 <button class="knopf klein zweitrangig" type="submit" title="Manuellen Import in TAIFUN bestätigen">{{ symbol('haken') }} Als importiert markieren</button>
             </form>
             {% endif %}
-            {% if e.status == 'fehler' and z.vorgang and aktiv_schalter %}
-            <form method="post" action="/lead-management/lead/{{ z.vorgang.id }}/taifun" class="lm-inline">
-                <input type="hidden" name="bestaetigt" value="1">
-                <input type="hidden" name="zurueck" value="/lead-management/taifun-uebergaben{{ '?status=' ~ status if status }}">
-                <button class="knopf klein" type="submit" title="XML erneut in den Import-Ordner schreiben">{{ symbol('aktualisieren') }} Erneut übergeben</button>
+            {#- v35-Nachtrag 3: „Erneut übergeben“ / „Trotzdem übergeben“ je Zeile mit Vorgang – das confirm nennt das
+                Datum der letzten Übergabe und setzt bestaetigt=1; ohne JavaScript antwortet die Route mit dem Balken oben #}
+            {% if z.erneut and aktiv_schalter %}
+            {% if z.kanal_unklar %}
+            <span class="dezent" title="Kanal „?“ = Vertriebskanal unklar – erst in der Kartei klären">{{ symbol('verbot') }} Vertriebskanal klären</span>
+            {% else %}
+            <form method="post" action="/lead-management/lead/{{ z.vorgang.id }}/taifun" class="lm-inline" data-rolle="taifun-erneut">
+                <input type="hidden" name="bestaetigt" value="">
+                <input type="hidden" name="zurueck" value="{{ liste_zurueck }}">
+                <button class="knopf klein{{ ' zweitrangig' if e.status != 'fehler' and e.status != 'uebersprungen' }}" type="submit"
+                        id="taifun-erneut-{{ e.id }}" title="{{ z.erneut_text }}"
+                        onclick="if (!window.confirm({{ z.erneut_text | tojson | forceescape }})) { return false; } this.form.elements.bestaetigt.value = '1'; return true;">{{ symbol('aktualisieren') }} {{ z.erneut_label }}</button>
             </form>
+            {% endif %}
             {% endif %}
         </td>
     </tr>
@@ -78,8 +111,11 @@
 <p class="dezent" style="margin-top:8px">Status <b>geschrieben</b> = Datei liegt im Import-Ordner; <b>abgeholt</b> = Datei ist aus dem Ordner
     verschwunden (von TAIFUN oder einem Mitarbeiter verarbeitet, Lauf alle 15 Minuten); <b>Fehler</b> = Ordner fehlt,
     keine Rechte oder Validierung gegen ADRESSEN.xsd gescheitert – der Lead steht oben im Hauptboard mit
-    „TAIFUN-Übergabe fehlgeschlagen“; <b>manuell importiert</b> = per Knopf bestätigt.
-    Kopien bleiben 12 Monate unter <code>data/taifun_export/</code>.</p>
+    „TAIFUN-Übergabe fehlgeschlagen“; <b>manuell importiert</b> = per Knopf bestätigt;
+    <b>übersprungen (Rückfrage)</b> = die Terminierung hat die Übergabe ausgelassen, weil der Kunde vermutlich schon
+    in TAIFUN ist oder der Lead bereits übergeben wurde – bei Bedarf „Trotzdem übergeben“.
+    Eine Wiederholung oder erneute Übergabe gibt es nur hier („Erneut übergeben“, mit Rückfrage – doppelte Kunden in
+    TAIFUN vermeiden). Kopien bleiben 12 Monate unter <code>data/taifun_export/</code>.</p>
 {#- v35 (Phase 186, Agent B): Sofortfilter der Status-Links #}
 <link rel="stylesheet" href="/static/lm_v35_b.css?v={{ css_version }}">
 <script src="/static/lm_sofort.js?v={{ css_version }}" defer></script>

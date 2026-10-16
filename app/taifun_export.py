@@ -3,9 +3,13 @@
 # urn:taifun-software.de:schema:TAIFUN) in den Import-Ordner geschrieben (Parameter
 # taifun_import_ordner, Standard C:\Users\kdadmin\Desktop\LM Datenimport).
 #
-# Auslöser: „Terminierung“ in der Kundenkartei (auch in der Testphase – nur der Export, keine
-# Buchung, keine Mail) und der Knopf „An TAIFUN übergeben“ (ID/LM/Admin); „Testdatei schreiben“
-# in den Lead-Einstellungen funktioniert immer (auch bei taifun_export_aktiv = aus).
+# Auslöser: NUR „Terminierung“ in der Kundenkartei (auch in der Testphase – nur der Export, keine
+# Buchung, keine Mail). Eine Wiederholung nach Fehler, eine erneute Übergabe oder das bewusste
+# „Trotzdem übergeben“ nach einem Dubletten-Hinweis gibt es ausschließlich in der Übergabeliste
+# (/lead-management/taifun-uebergaben, Knopf je Zeile, ID/LM/Admin) – der Kartei-Knopf „An TAIFUN
+# übergeben“ und das Feld „TAIFUN-Kundennummer“ sind mit dem Nachtrag 16.10.2026 (PLAN_LEAD_V6_1,
+# v35-Nachtrag 3) entfallen. „Testdatei schreiben“ in den Lead-Einstellungen funktioniert immer
+# (auch bei taifun_export_aktiv = aus).
 #
 # Regeln (v27/v33, gemeinsames Briefing): Datei-I/O nie innerhalb einer offenen Datenbanksitzung –
 # exportieren() liest alle Daten, gibt die Verbindung frei (db.verbindung_freigeben), schreibt die
@@ -73,16 +77,24 @@ STATUS_GESCHRIEBEN = "geschrieben"
 STATUS_ABGEHOLT = "abgeholt"
 STATUS_FEHLER = "fehler"
 STATUS_IMPORTIERT = "importiert"
+# v35-Nachtrag 3 (16.10.2026): „übersprungen“ = die Terminierung hat den Export wegen einer Rückfrage
+# (Dublette / bereits übergeben) NICHT ausgeführt – die Zeile erscheint in der Übergabeliste mit
+# „Trotzdem übergeben“, weil der Kartei-Knopf entfallen ist [ANNAHME N6]; keine Datei, kein Fehler
+STATUS_UEBERSPRUNGEN = "uebersprungen"
 STATUS_NAMEN = {STATUS_GESCHRIEBEN: "geschrieben", STATUS_ABGEHOLT: "abgeholt",
-                STATUS_FEHLER: "Fehler", STATUS_IMPORTIERT: "manuell importiert"}
+                STATUS_FEHLER: "Fehler", STATUS_IMPORTIERT: "manuell importiert",
+                STATUS_UEBERSPRUNGEN: "übersprungen (Rückfrage)"}
 ERFOLG_STATUS = (STATUS_GESCHRIEBEN, STATUS_ABGEHOLT, STATUS_IMPORTIERT)
 GRUND_TERMINIERUNG = "terminierung"
-GRUND_MANUELL = "manuell"
+GRUND_MANUELL = "manuell"        # Wert bleibt (Bestand); Auslöser ist seit dem Nachtrag 3 die Übergabeliste
 GRUND_TESTDATEI = "testdatei"
-GRUND_NAMEN = {GRUND_TERMINIERUNG: "Terminierung", GRUND_MANUELL: "Kartei (manuell)",
+GRUND_NAMEN = {GRUND_TERMINIERUNG: "Terminierung", GRUND_MANUELL: "Übergabeliste (erneut)",
                GRUND_TESTDATEI: "Testdatei"}
 
 LABEL_FEHLER = "TAIFUN-Übergabe fehlgeschlagen"
+ERNEUT_LABEL = "Erneut übergeben"
+TROTZDEM_LABEL = "Trotzdem übergeben"
+DOPPELT_HINWEIS = "Doppelte Kunden in TAIFUN vermeiden."
 NICHT_AKTIV_TEXT = "TAIFUN-Übergabe nicht aktiv (Parameter taifun_export_aktiv)"
 KANAL_UNKLAR_TEXT = "Vertriebskanal klären – bei Kanal „?“ keine Übergabe an TAIFUN"
 TESTPHASE_EXPORT_HINWEIS = "Testphase: nur Übergabe an TAIFUN, keine Buchung, keine Mail"
@@ -632,25 +644,39 @@ def _aktivitaet(session: Session, vorgang_id: int, text: str, benutzer_id=None) 
     kern.aktivitaet(session, vorgang_id, "hinweis", text, benutzer=benutzer)
 
 
+def dubletten_belege(session: Session, kunden_ids) -> dict:
+    """{kunde_id: Beleg-Text} für mehrere Kunden in zwei Abfragen (Übergabeliste): externer
+    TAIFUN-Eintrag mit Nummer (v7) und Bestandsimport (v18, angebote.bestand). Die manuelle
+    TAIFUN-Kundennummer zählt seit dem Nachtrag 16.10.2026 nicht mehr (Feld entfallen)."""
+    ids = sorted({int(k) for k in kunden_ids if k})
+    if not ids:
+        return {}
+    extern: dict[int, str] = {}
+    for a in (session.query(Angebot)
+              .filter(Angebot.kunde_id.in_(ids), Angebot.extern.is_(True), Angebot.taifun_nummer != "")
+              .order_by(Angebot.id)):
+        extern[a.kunde_id] = a.taifun_nummer   # jüngster Eintrag gewinnt (aufsteigend überschrieben)
+    bestand = {a.kunde_id for a in session.query(Angebot.kunde_id)
+               .filter(Angebot.kunde_id.in_(ids), Angebot.bestand.is_(True))}
+    belege: dict[int, str] = {}
+    for kid in ids:
+        teile = []
+        if kid in extern:
+            teile.append(f"TAIFUN-Angebot {extern[kid]}")
+        if kid in bestand:
+            teile.append("Bestandsimport")
+        if teile:
+            belege[kid] = "; ".join(teile)
+    return belege
+
+
 def dubletten_hinweis(session: Session, vorgang: Vorgang, kunde: Kunde | None) -> str:
     """Beleg, dass der Kunde vermutlich schon in TAIFUN angelegt ist: externer TAIFUN-Eintrag mit
-    Nummer (v7), Bestandsimport (v18, angebote.bestand), gefülltes kunden.taifun_kundennr."""
+    Nummer (v7) oder Bestandsimport (v18, angebote.bestand) – NICHT mehr kunden.taifun_kundennr
+    (Nachtrag 16.10.2026)."""
     if kunde is None:
         return ""
-    belege = []
-    nummer = (getattr(kunde, "taifun_kundennr", "") or "").strip()
-    if nummer:
-        belege.append(f"TAIFUN-Kundennummer {nummer}")
-    extern = (session.query(Angebot)
-              .filter(Angebot.kunde_id == kunde.id, Angebot.extern.is_(True), Angebot.taifun_nummer != "")
-              .order_by(Angebot.id.desc()).first())
-    if extern is not None:
-        belege.append(f"TAIFUN-Angebot {extern.taifun_nummer}")
-    bestand = (session.query(Angebot)
-               .filter(Angebot.kunde_id == kunde.id, Angebot.bestand.is_(True)).first())
-    if bestand is not None:
-        belege.append("Bestandsimport")
-    return "; ".join(belege)
+    return dubletten_belege(session, [kunde.id]).get(kunde.id, "")
 
 
 def bereits_uebergeben_text(vorgang: Vorgang) -> str:
@@ -674,6 +700,28 @@ def rueckfrage_text(session: Session, vorgang: Vorgang, kunde: Kunde | None) -> 
     return " ".join(teile)
 
 
+def erneut_text(vorgang: Vorgang | None, kunde: Kunde | None = None, beleg: str = "",
+                uebergabe: TaifunUebergabe | None = None) -> str:
+    """Rückfrage des Knopfs „Erneut übergeben“ / „Trotzdem übergeben“ in der Übergabeliste (Plan-
+    Wortlaut: „Letzte Übergabe am TT.MM.JJJJ HH:MM – trotzdem erneut übergeben? Doppelte Kunden in
+    TAIFUN vermeiden.“); vor einer ersten erfolgreichen Übergabe der Dubletten-Beleg bzw. der
+    Grund der übersprungenen Übergabe."""
+    teile = []
+    if beleg:
+        teile.append(f"Kunde ist vermutlich schon in TAIFUN angelegt ({beleg}).")
+    am = getattr(vorgang, "taifun_export_am", None) if vorgang is not None else None
+    if am:
+        teile.append(f"Letzte Übergabe am {am.strftime('%d.%m.%Y %H:%M')} – trotzdem erneut übergeben? "
+                     + DOPPELT_HINWEIS)
+    elif uebergabe is not None and uebergabe.status == STATUS_UEBERSPRUNGEN:
+        if not beleg and (uebergabe.fehler_text or "").strip():
+            teile.append((uebergabe.fehler_text or "").strip())
+        teile.append("Jetzt trotzdem an TAIFUN übergeben?")
+    else:
+        teile.append("TAIFUN-Übergabe erneut versuchen? " + DOPPELT_HINWEIS)
+    return " ".join(teile)
+
+
 def pruefung(session: Session, vorgang: Vorgang, kunde: Kunde | None = None) -> dict:
     """Zustand vor einer Übergabe: aktiv, kanal_unklar, dublette, bereits, rueckfrage."""
     if kunde is None:
@@ -692,6 +740,25 @@ def _fehler_verbuchen(session: Session, vorgang: Vorgang, benutzer_id, grund: st
                                 grund=grund, status=STATUS_FEHLER, fehler_text=(text or "")[:2000])
     session.add(uebergabe)
     _aktivitaet(session, vorgang.id, f"{LABEL_FEHLER}: {text}", benutzer_id)
+    session.flush()
+    return uebergabe
+
+
+def _uebersprungen_verbuchen(session: Session, vorgang: Vorgang, benutzer_id, text: str,
+                             jetzt: datetime | None = None) -> TaifunUebergabe | None:
+    """v35-Nachtrag 3: die Terminierung hat den Export wegen einer Rückfrage ausgelassen – Zeile mit
+    Status „übersprungen (Rückfrage)“ für die Übergabeliste („Trotzdem übergeben“), ohne Datei, ohne
+    Vorgangs-Status (kein rotes Label). Direkt aufeinanderfolgende gleiche Zeilen werden nicht
+    verdoppelt (Testphase: mehrfacher Klick auf „Terminierung“)."""
+    letzte = (session.query(TaifunUebergabe).filter(TaifunUebergabe.vorgang_id == vorgang.id)
+              .order_by(TaifunUebergabe.id.desc()).first())
+    if (letzte is not None and letzte.status == STATUS_UEBERSPRUNGEN
+            and (letzte.fehler_text or "") == (text or "")[:2000]):
+        return letzte
+    uebergabe = TaifunUebergabe(vorgang_id=vorgang.id, datei="", pfad="", benutzer_id=benutzer_id,
+                                grund=GRUND_TERMINIERUNG, status=STATUS_UEBERSPRUNGEN,
+                                fehler_text=(text or "")[:2000], geschrieben_am=jetzt or datetime.now())
+    session.add(uebergabe)
     session.flush()
     return uebergabe
 
@@ -802,6 +869,8 @@ def als_importiert(session: Session, uebergabe: TaifunUebergabe, benutzer=None) 
     Aktivität am Vorgang. Der Aufrufer committet."""
     if uebergabe.status == STATUS_FEHLER:
         return False, "Eine fehlgeschlagene Übergabe kann nicht als importiert markiert werden."
+    if uebergabe.status == STATUS_UEBERSPRUNGEN:
+        return False, "Eine übersprungene Übergabe (keine Datei) kann nicht als importiert markiert werden."
     if uebergabe.status == STATUS_IMPORTIERT:
         return False, "Bereits als importiert markiert."
     uebergabe.status = STATUS_IMPORTIERT
@@ -824,9 +893,10 @@ def terminierung_export(session: Session, vorgang: Vorgang, benutzer=None) -> di
     {exportiert, ok, meldung, uebergabe, bereit, uebersprungen}. Regeln: Pflichtfelder + vorgemerkter
     Termin (lead_kartei.terminierung_pruefung) und Kanal nicht „?“; bei taifun_export_aktiv = aus nur
     die Aktivität „TAIFUN-Übergabe nicht aktiv (Parameter)“ [ANNAHME]; Dubletten-Beleg oder
-    bereits übergeben → kein automatischer Export, sondern Aktivität + Hinweis [ANNAHME – der
-    Knopf in der Kartei fragt dann nach]. Eigene kleine Commits (Aktivität); der Export selbst
-    committet in exportieren()."""
+    bereits übergeben → kein automatischer Export, sondern Aktivität + Zeile „übersprungen
+    (Rückfrage)“ in der Übergabeliste, dort „Trotzdem übergeben“ (Nachtrag 16.10.2026: kein
+    Kartei-Knopf mehr). Eigene kleine Commits (Aktivität); der Export selbst committet in
+    exportieren()."""
     from app import lead_kartei
     kunde = session.get(Kunde, vorgang.kunde_id)
     ergebnis = {"exportiert": False, "ok": False, "meldung": "", "uebergabe": None,
@@ -852,10 +922,12 @@ def terminierung_export(session: Session, vorgang: Vorgang, benutzer=None) -> di
     rueckfrage = rueckfrage_text(session, vorgang, kunde)
     if rueckfrage:
         text = f"TAIFUN-Übergabe bei der Terminierung übersprungen: {rueckfrage}"
-        _aktivitaet(session, vorgang.id, text, benutzer.id if benutzer is not None else None)
+        benutzer_id = benutzer.id if benutzer is not None else None
+        _aktivitaet(session, vorgang.id, text, benutzer_id)
+        uebergabe = _uebersprungen_verbuchen(session, vorgang, benutzer_id, rueckfrage)
         _commit_mit_wiederholung(session)
-        ergebnis.update(meldung=text + " (Knopf „An TAIFUN übergeben“ in der Kartei)",
-                        uebersprungen="rueckfrage")
+        ergebnis.update(meldung=text + " (Übergabeliste → „Trotzdem übergeben“)",
+                        uebersprungen="rueckfrage", uebergabe=uebergabe)
         return ergebnis
     ok, meldung, uebergabe = exportieren(session, vorgang.id, benutzer.id if benutzer is not None else None,
                                          GRUND_TERMINIERUNG)
@@ -866,13 +938,16 @@ def terminierung_export(session: Session, vorgang: Vorgang, benutzer=None) -> di
 # --- Kartei, Boards, Einstellungen (Kontexte) ------------------------------------------------
 
 def darf_uebergeben(session: Session, benutzer) -> bool:
-    """Knopf „An TAIFUN übergeben“: Innendienst, Leadmanagement, Admin – nicht Außendienst/HV."""
+    """„Erneut übergeben“ / „Trotzdem übergeben“ (Übergabeliste) und der Zugang zur Liste:
+    Innendienst, Leadmanagement, Admin – nicht Außendienst/HV."""
     from app import leadmanagement as kern
     return bool(benutzer is not None and kern.lead_modul_sichtbar(session, benutzer))
 
 
 def kartei_hinweis(session: Session, vorgang: Vorgang) -> dict | None:
-    """Roter Hinweisbalken „TAIFUN-Übergabe fehlgeschlagen“ (Muster _mail_hinweis.html, v29)."""
+    """Roter Hinweisbalken „TAIFUN-Übergabe fehlgeschlagen“ (Muster _mail_hinweis.html, v29) –
+    seit dem Nachtrag 16.10.2026 mit dem Link „Zur Übergabeliste“ (?status=fehler) statt eines
+    Knopfs; wiederholt wird dort."""
     if vorgang is None or (vorgang.taifun_export_status or "") != STATUS_FEHLER:
         return None
     letzte = (session.query(TaifunUebergabe)
@@ -881,57 +956,39 @@ def kartei_hinweis(session: Session, vorgang: Vorgang) -> dict | None:
     wann = letzte.geschrieben_am.strftime("%d.%m.%Y %H:%M") if letzte is not None and letzte.geschrieben_am else ""
     return {"art": "fehler", "titel": LABEL_FEHLER,
             "text": (f"vom {wann}: " if wann else "") + (vorgang.taifun_export_grund or "Grund unbekannt"),
-            "erneut_url": f"/lead-management/lead/{vorgang.id}/taifun",
             "liste_url": "/lead-management/taifun-uebergaben?status=fehler",
             "uebergabe_id": letzte.id if letzte is not None else None}
 
 
 def kartei_kontext(session: Session, vorgang: Vorgang, kunde: Kunde | None, benutzer=None,
                    readonly: bool = False) -> dict:
-    """Kontext `taifun` der Kundenkartei (Knopf, Badge, Rückfrage, Hinweisbalken, Testphase)."""
+    """Kontext `taifun` der Kundenkartei: Badge „TAIFUN <Datum>“ (ohne Kundennummer), Hinweisbalken,
+    Testphase-Kennzeichen des Terminierungs-Knopfs, Link zur Übergabeliste. Kein Kartei-Knopf, kein
+    Kundennummer-Feld (Nachtrag 16.10.2026, PLAN_LEAD_V6_1)."""
     from app import lead_v5
-    zustand = pruefung(session, vorgang, kunde)
+    ist_aktiv = aktiv(session)
+    unklar = kanal_unklar(session, vorgang, kunde)
     status = vorgang.taifun_export_status or ""
     erfolg = status in ERFOLG_STATUS and vorgang.taifun_export_am is not None
     von = session.get(Benutzer, vorgang.taifun_export_von) if vorgang.taifun_export_von else None
     am_text = vorgang.taifun_export_am.strftime("%d.%m.%Y") if vorgang.taifun_export_am else ""
-    kundennr = (getattr(kunde, "taifun_kundennr", "") or "").strip() if kunde is not None else ""
-    letzte = (session.query(TaifunUebergabe)
-              .filter(TaifunUebergabe.vorgang_id == vorgang.id, TaifunUebergabe.status != STATUS_FEHLER)
-              .order_by(TaifunUebergabe.id.desc()).first())
-    if zustand["kanal_unklar"]:
-        tooltip = KANAL_UNKLAR_TEXT
-    elif not zustand["aktiv"]:
-        tooltip = NICHT_AKTIV_TEXT + " – Lead-Einstellungen → TAIFUN-Übergabe"
-    elif erfolg:
-        tooltip = f"Erneut als XML in den TAIFUN-Import-Ordner schreiben – {zustand['bereits']}"
-    else:
-        tooltip = "Lead als XML-Datei in den TAIFUN-Import-Ordner schreiben (ohne Termin möglich)"
     badge_titel = ""
     if erfolg:
         badge_titel = (f"An TAIFUN übergeben am {vorgang.taifun_export_am.strftime('%d.%m.%Y %H:%M')}"
                        + (f" durch {von.name}" if von is not None else "")
                        + (f" · {vorgang.taifun_export_datei}" if vorgang.taifun_export_datei else "")
-                       + f" · Status {STATUS_NAMEN.get(status, status)}"
-                       + (f" · Kundennummer {kundennr}" if kundennr else ""))
+                       + f" · Status {STATUS_NAMEN.get(status, status)}")
     return {
-        "aktiv": zustand["aktiv"], "kanal_unklar": zustand["kanal_unklar"],
-        "erlaubt": (not readonly) and darf_uebergeben(session, benutzer),
+        "aktiv": ist_aktiv, "kanal_unklar": unklar,
+        "liste_erlaubt": darf_uebergeben(session, benutzer),
         "status": status, "status_text": STATUS_NAMEN.get(status, status), "am": vorgang.taifun_export_am,
         "am_text": am_text, "datei": vorgang.taifun_export_datei or "", "von": von,
-        "badge": (f"TAIFUN {am_text}" + (f" · Nr. {kundennr}" if kundennr else "")) if erfolg else "",
-        "badge_titel": badge_titel, "kundennr": kundennr,
-        "knopf_text": "Erneut an TAIFUN übergeben" if erfolg else "An TAIFUN übergeben",
-        "knopf_tooltip": tooltip, "knopf_gesperrt": zustand["kanal_unklar"] or not zustand["aktiv"],
-        "rueckfrage": zustand["rueckfrage"], "dublette": zustand["dublette"], "bereits": zustand["bereits"],
+        "badge": f"TAIFUN {am_text}" if erfolg else "",
+        "badge_titel": badge_titel,
         "hinweis": kartei_hinweis(session, vorgang),
-        "testphase_export": bool(zustand["aktiv"] and not lead_v5.terminierung_aktiv(session)
-                                 and not zustand["kanal_unklar"]),
+        "testphase_export": bool(ist_aktiv and not lead_v5.terminierung_aktiv(session) and not unklar),
         "testphase_hinweis": TESTPHASE_EXPORT_HINWEIS,
-        "url": f"/lead-management/lead/{vorgang.id}/taifun",
         "liste_url": "/lead-management/taifun-uebergaben",
-        "xml_url": (f"/lead-management/lead/{vorgang.id}/taifun/{letzte.id}/xml"
-                    if letzte is not None and kopie_pfad(letzte.datei) is not None else ""),
     }
 
 
@@ -953,7 +1010,10 @@ def fehler_anzahl(session: Session) -> int:
 
 
 def liste(session: Session, status: str = "", limit: int = 300) -> list[dict]:
-    """Zeilen der Übergabeliste (Datum, Vorgang, Datei, Benutzer, Status) – Filter nach Status."""
+    """Zeilen der Übergabeliste (Datum, Vorgang, Datei, Benutzer, Status) – Filter nach Status.
+    Je Zeile mit Vorgang (v35-Nachtrag 3): `erneut` (Knopf anzeigen), `erneut_label`
+    („Erneut übergeben“ / „Trotzdem übergeben“ bei übersprungener Rückfrage), `erneut_text`
+    (Rückfrage mit Datum der letzten Übergabe bzw. Dubletten-Beleg) und `kanal_unklar`."""
     abfrage = session.query(TaifunUebergabe)
     if status in STATUS_NAMEN:
         abfrage = abfrage.filter(TaifunUebergabe.status == status)
@@ -966,16 +1026,24 @@ def liste(session: Session, status: str = "", limit: int = 300) -> list[dict]:
     benutzer_ids = {e.benutzer_id for e in eintraege if e.benutzer_id}
     benutzer = ({b.id: b for b in session.query(Benutzer).filter(Benutzer.id.in_(benutzer_ids))}
                 if benutzer_ids else {})
+    belege = dubletten_belege(session, kunden_ids)
     zeilen = []
     for e in eintraege:
         vorgang = vorgaenge.get(e.vorgang_id)
-        zeilen.append({"eintrag": e, "vorgang": vorgang,
-                       "kunde": kunden.get(vorgang.kunde_id) if vorgang is not None else None,
+        kunde = kunden.get(vorgang.kunde_id) if vorgang is not None else None
+        erneut = vorgang is not None and bool(e.vorgang_id)
+        zeilen.append({"eintrag": e, "vorgang": vorgang, "kunde": kunde,
                        "benutzer": benutzer.get(e.benutzer_id),
                        "status_text": STATUS_NAMEN.get(e.status, e.status),
                        "grund_text": GRUND_NAMEN.get(e.grund, e.grund),
                        "kopie": kopie_pfad(e.datei) is not None,
-                       "test": not e.vorgang_id})
+                       "test": not e.vorgang_id,
+                       "erneut": erneut,
+                       "erneut_label": TROTZDEM_LABEL if e.status == STATUS_UEBERSPRUNGEN else ERNEUT_LABEL,
+                       "erneut_text": (erneut_text(vorgang, kunde, belege.get(kunde.id, "") if kunde else "", e)
+                                       if erneut else ""),
+                       "kanal_unklar": bool(erneut and kunde is not None
+                                            and (kunde.vertriebskanal or "").strip() == "?")})
     return zeilen
 
 
