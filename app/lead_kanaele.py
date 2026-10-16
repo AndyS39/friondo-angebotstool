@@ -81,6 +81,9 @@ ALT_NEU = {
     "kontaktformular": "Kontaktformular/info", "kontaktformular / info": "Kontaktformular/info",
     "kontaktformular/ info": "Kontaktformular/info", "kontaktformular /info": "Kontaktformular/info",
     "info": "Kontaktformular/info", "info@": "Kontaktformular/info",
+    # Orchestrator 16.10.2026 (Befund Server-Kopie): monday-Label mit "@" am Ende
+    "kontaktformular/info@": "Kontaktformular/info", "kontaktformular / info@": "Kontaktformular/info",
+    "kontaktformular/ info@": "Kontaktformular/info", "kontaktformular /info@": "Kontaktformular/info",
     "prepair": "Prepair Tech.", "prepair tech": "Prepair Tech.", "prepair technologies": "Prepair Tech.",
     "prepair technology": "Prepair Tech.",
     "infoabend": "Infoveranstaltung", "info-veranstaltung": "Infoveranstaltung",

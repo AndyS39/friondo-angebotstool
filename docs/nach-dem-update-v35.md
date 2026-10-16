@@ -102,6 +102,14 @@ auf der v35-Datenbank – Rückweg-Probe im Durchlauf).
   „Filtern“-Knopf mehr. In „Kontaktiert“ gibt es nur noch eine Suchleiste: eine Ziffernfolge ab 3 Ziffern (z. B.
   „4711“) sucht Rufnummern.
 
+### Kundensuche: alle eigenen Kunden, jeder Status (Außendienst) – Nachtrag 16.10.2026
+
+- Die Kopfzeilen-Suche (und die Leiste „Kunden“ in „Mein Tag“) findet jetzt jeden Kunden, mit dem ihr
+  verbunden seid – als Zuständiger, als Verantwortlicher des monday-Leads, über eine eigene Erfassung, einen
+  eigenen Vor-Ort-Termin oder ein eigenes Angebot –, unabhängig davon, ob der Vorgang offen, gewonnen,
+  verloren oder archiviert ist. Der Treffer öffnet direkt die Vorgangsakte (bisher fehlten Kunden, bei denen
+  ihr nicht als Zuständiger eingetragen wart).
+
 ### Fotos je Objekt (Innendienst/Außendienst)
 
 - In der Kundenkartei hat jede Objektkarte unten einen Block „Fotos“ (bei einem Objekt: „Fotos zum Objekt“ unter

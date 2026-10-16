@@ -60,7 +60,9 @@ SEITEN = ["portal", "angebotsliste", "editor", "vorgangsakte", "hauptboard", "ka
           "montage-backend", "erfassungen", "kunden", "meine-angebote", "parametrierung",
           "wiedervorlage-mobil",
           # v34 (PLAN_V21 Phase 182): Login mobil, Galerie-Sammelbox mobil, Wallbox-Editor/-Erfassung
-          "login-mobil", "vorgangsakte-mobil", "editor-wb", "erfassung-wb-mobil"]
+          "login-mobil", "vorgangsakte-mobil", "editor-wb", "erfassung-wb-mobil",
+          # v35 (PLAN_LEAD_V6 Phase 187): Vertriebskanäle, TAIFUN-Übergabeliste, Mein Profil, Kontaktiert
+          "kanaele", "taifun-uebergaben", "profil", "profil-mobil", "kontaktiert"]
 
 
 def argumente() -> argparse.Namespace:
@@ -306,6 +308,12 @@ def seitenliste(ziele: dict, cookies: dict, erfassung_id: int) -> list[tuple[str
         liste.append(("editor-wb", f"/angebote/{ziele['wb_angebot_id']}", admin, False))
     if ziele.get("wb_erfassung_id"):
         liste.append(("erfassung-wb-mobil", f"/erfassung/{ziele['wb_erfassung_id']}/seite/0", admin, True))
+    # v35 (PLAN_LEAD_V6 Phase 187)
+    liste.append(("kanaele", "/lead-management/kanaele", admin, False))
+    liste.append(("taifun-uebergaben", "/lead-management/taifun-uebergaben", admin, False))
+    liste.append(("profil", "/einstellungen/profil", admin, False))
+    liste.append(("profil-mobil", "/einstellungen/profil", ad, True))
+    liste.append(("kontaktiert", "/lead-management/kontaktiert", admin, False))
     return liste
 
 

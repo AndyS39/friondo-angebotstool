@@ -115,6 +115,30 @@ def gehoert_benutzer(session: Session, vorgang: Vorgang, benutzer_id: int) -> bo
                         Angebot.vertriebler_id == benutzer_id).count())
 
 
+def eigene_vorgang_ids(session: Session, benutzer_id: int,
+                       kunden_ids: list[int] | None = None) -> set[int]:
+    """v35-Nachtrag 16.10.2026 (Andreas): Mengenform von `gehoert_benutzer` – alle Vorgänge, die dem
+    Außendienstler über Zuständigkeit (`vorgaenge.ad_id`), monday-Lead (`leads.benutzer_id`), eigene
+    Erfassung, eigenen VOT-Termin oder eigenes Angebot gehören – unabhängig von Status, Lead-Phase oder
+    Archiv. Mit `kunden_ids` nur die Vorgänge dieser Kunden (Kundensuche)."""
+    from app.models import VotTermin
+    basis = session.query(Vorgang.id)
+    if kunden_ids is not None:
+        if not kunden_ids:
+            return set()
+        basis = basis.filter(Vorgang.kunde_id.in_(list(kunden_ids)))
+    ids = {z[0] for z in basis.filter(Vorgang.ad_id == benutzer_id).all()}
+    ids |= {z[0] for z in basis.join(Lead, Lead.id == Vorgang.lead_id)
+            .filter(Lead.benutzer_id == benutzer_id).all()}
+    ids |= {z[0] for z in basis.join(Erfassung, Erfassung.vorgang_id == Vorgang.id)
+            .filter(Erfassung.benutzer_id == benutzer_id).all()}
+    ids |= {z[0] for z in basis.join(VotTermin, VotTermin.vorgang_id == Vorgang.id)
+            .filter(VotTermin.ad_id == benutzer_id).all()}
+    ids |= {z[0] for z in basis.join(Angebot, Angebot.vorgang_id == Vorgang.id)
+            .filter(Angebot.vertriebler_id == benutzer_id).all()}
+    return ids
+
+
 def verfolgung_setzen(session: Session, vorgang: Vorgang, benutzer,
                       ampel: str, datum: str, notiz: str = "",
                       verantwortlicher_id: int | None = None) -> None:

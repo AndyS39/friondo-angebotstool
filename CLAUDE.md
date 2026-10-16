@@ -3074,7 +3074,8 @@ Do 22.10.; Rückfrage).)
   Indizes `ix_v32_kunden_nachname`/`ix_v32_kunden_ort` aus `db._INDIZES` – plus LIKE, exakte
   Prüfung in Python) sowie Telefon-Endziffern ab 4 Ziffern [ANNAHME] (Normalisierung
   `leadmanagement.telefon_normalisieren`, „endet mit“ vor „enthält“); Außendienst nur Kunden mit
-  eigenem Vorgang (`vorgaenge.ad_id`), Montage und Projektierung 403 [ANNAHME: Plan nennt nur
+  eigenem Vorgang (`vorgaenge.ad_id`) *(überholt – seit v35-Nachtrag 16.10.2026 alle eigenen Vorgänge
+  nach `gehoert_benutzer`, jeder Status)*, Montage und Projektierung 403 [ANNAHME: Plan nennt nur
   Montage]. Treffer: Name, PLZ/Ort, Sparten-Badges, Verfolgungs-Chip des jüngsten Vorgangs
   (`verfolgung.status_text`), Link = Vorgangsakte des jüngsten offenen Vorgangs, sonst
   Kundenakte (`/kunden/{id}/bearbeiten`; Außendienst: jüngster eigener Vorgang [ANNAHME]);
@@ -3997,3 +3998,15 @@ Suchfelder sind Sofortsuche (`lm_sofort.js`, keine „Suchen“-Knöpfe, kein `o
   überholt-/ergänzt-Marker in v6/v9/v12/v23/v25/v29/v31/v33; `docs/taifun-kundenexport.md`, `docs/taifun/`,
   `docs/nach-dem-update-v35.md`, `docs/updates.md` (4d), `docs/betrieb.md` („Ergänzungen v35“);
   `config.VERSION = "v35"`.
+- **Nachtrag 16.10.2026 (Andreas: „Der AD muss auf die Vorgangsakte seiner Kunden kommen, unabhängig welchen
+  Status sie haben“):** Die Vorgangsakte `/vorgaenge/{id}` war für den Außendienst schon statusunabhängig
+  (`vorgaenge.gehoert_benutzer`: Zuständigkeit `ad_id`, monday-Lead `leads.benutzer_id`, eigene Erfassung,
+  eigener VOT-Termin, eigenes Angebot). Die Lücke lag in der **Kundensuche** (v32): sie kannte als „eigene
+  Kunden“ nur Vorgänge mit `vorgaenge.ad_id` und verglich `rolle == "aussendienst"` statt der Basisrolle
+  (Handelsvertreter-Variante sah alle Kunden). Jetzt liefert `vorgaenge.eigene_vorgang_ids(session,
+  benutzer_id, kunden_ids=None)` die Mengenform von `gehoert_benutzer`; `suche._rechte_filter`/
+  `_treffer_aufbauen` nutzen sie über die Basisrolle – der Außendienst findet jeden Kunden, mit dem er über
+  einen der fünf Wege verbunden ist, auch bei archivierten, verlorenen oder abgeschlossenen Vorgängen; der
+  Treffer-Link führt immer auf eine Vorgangsakte, die er öffnen darf (offener Vorgang zuerst, sonst der
+  jüngste eigene). `/vorgaenge` (Liste, AD nur eigene) war bereits konsistent. Test
+  `tests/test_v35_nachtrag.py` (4: alle Verknüpfungen, archiviert/verloren, HV-Variante, Innendienst).

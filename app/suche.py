@@ -43,7 +43,14 @@ _VERFOLGUNG_TEXTE = {
 
 
 def darf_suchen(benutzer) -> bool:
-    return bool(benutzer) and getattr(benutzer, "rolle", "") in ROLLEN_MIT_SUCHE
+    """Suche fuer Admin/Innendienst/Leadmanagement/Aussendienst – ueber die Basisrollen (v33: Rollen-Varianten
+    wie Handelsvertreter tragen einen eigenen Key; v35-Nachtrag 16.10.2026)."""
+    if not benutzer:
+        return False
+    rollen = getattr(benutzer, "basisrollen", None)
+    if not rollen:
+        rollen = [getattr(benutzer, "basisrolle", None) or getattr(benutzer, "rolle", "")]
+    return bool(set(rollen) & set(ROLLEN_MIT_SUCHE))
 
 
 def ist_rufnummer(q: str) -> bool:
@@ -155,13 +162,30 @@ def _per_rufnummer(session: Session, q: str) -> list[Kunde]:
     return [kunden[i] for i in ids if i in kunden]
 
 
+def _ist_aussendienst(benutzer) -> bool:
+    """Basisrolle Außendienst (auch Varianten wie Handelsvertreter – v33 Rollen-Regel)."""
+    basis = getattr(benutzer, "basisrolle", None) or getattr(benutzer, "rolle", "")
+    return basis == "aussendienst"
+
+
+def _eigene_vorgaenge(session: Session, benutzer, kunden_ids: list[int]) -> set[int]:
+    """v35-Nachtrag 16.10.2026 (Andreas): „eigene Kunden“ des Außendienstes = alle Vorgänge nach
+    `vorgaenge.gehoert_benutzer` (Zuständigkeit, monday-Lead, Erfassung, VOT-Termin, Angebot) –
+    unabhängig vom Status, der Lead-Phase oder dem Archiv; vorher zählte nur `vorgaenge.ad_id`."""
+    from app import vorgaenge as vorgaenge_modul
+    return vorgaenge_modul.eigene_vorgang_ids(session, benutzer.id, kunden_ids)
+
+
 def _rechte_filter(session: Session, kunden: list[Kunde], benutzer) -> list[Kunde]:
-    """Außendienst: nur Kunden mit mindestens einem eigenen Vorgang."""
-    if not kunden or getattr(benutzer, "rolle", "") != "aussendienst":
+    """Außendienst: nur Kunden mit mindestens einem eigenen Vorgang (alle Verknüpfungen, jeder Status)."""
+    if not kunden or not _ist_aussendienst(benutzer):
         return kunden
     ids = [k.id for k in kunden]
+    eigene_vorgaenge = _eigene_vorgaenge(session, benutzer, ids)
+    if not eigene_vorgaenge:
+        return []
     eigene = {z[0] for z in session.query(Vorgang.kunde_id)
-              .filter(Vorgang.ad_id == benutzer.id, Vorgang.kunde_id.in_(ids)).all()}
+              .filter(Vorgang.id.in_(list(eigene_vorgaenge))).all()}
     return [k for k in kunden if k.id in eigene]
 
 
@@ -173,12 +197,15 @@ def _treffer_aufbauen(session: Session, kunden: list[Kunde], benutzer) -> list[d
     for v in (session.query(Vorgang).filter(Vorgang.kunde_id.in_(ids))
               .order_by(Vorgang.id.desc()).all()):
         je_kunde.setdefault(v.kunde_id, []).append(v)
-    aussendienst = getattr(benutzer, "rolle", "") == "aussendienst"
+    aussendienst = _ist_aussendienst(benutzer)
+    eigene_ids = _eigene_vorgaenge(session, benutzer, ids) if aussendienst else set()
     treffer = []
     for k in kunden:
         vorgaenge = je_kunde.get(k.id, [])
         if aussendienst:
-            vorgaenge = [v for v in vorgaenge if v.ad_id == benutzer.id]
+            # v35-Nachtrag: alle eigenen Vorgänge (nicht nur ad_id), jeder Status – der Link führt immer
+            # auf eine Vorgangsakte, die der Außendienst öffnen darf
+            vorgaenge = [v for v in vorgaenge if v.id in eigene_ids]
         juengster = vorgaenge[0] if vorgaenge else None
         offen = next((v for v in vorgaenge
                       if vorgang_offen(v) and getattr(v, "archiviert_am", None) is None), None)

@@ -675,6 +675,10 @@ class Freischaltung(Basis):
         self.assertEqual(len(punkte), 6)
         self.assertTrue(next(p for p in punkte if p["name"].startswith("Leadmanager"))["ok"])
         self.assertIsInstance(lead_v2.mails_gesperrt_anzahl(self.s), int)
+        # Orchestrator v35 (16.10.2026): Ausgangszustand selbst setzen - andere Testdateien lassen den
+        # Schalter sonst auf "an" zurueck (Gesamtsuite der Rollout-Pruefung); Restore in tearDownClass
+        kern.parameter_setzen(self.s, "terminierung_aktiv", "aus")
+        self.s.commit()
         self.assertFalse(lead_v5.terminierung_aktiv(self.s))
         r = self.client.post("/parametrierung/lead-einstellungen", data={"terminierung_aktiv": "an"},
                              follow_redirects=False)
