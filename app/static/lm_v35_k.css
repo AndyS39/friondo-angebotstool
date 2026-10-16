@@ -37,3 +37,9 @@ tr.kf-unklar td.kf-name .kf-chip { outline: 2px solid var(--status-rot); outline
     .kf-tabelle td.kf-name { min-width: 160px; }
     .kf-umbenennen { flex-wrap: wrap; }
 }
+
+/* Orchestrator 16.10.2026 (Screenshot 1440 px): die breite Tabelle lief ueber ihre Spalte hinaus und die
+   Karte "Neuer Kanal" lag ueber den Aktionen der ersten Zeilen - die Listenspalte darf schrumpfen und
+   scrollt waagerecht in sich. */
+.kf-seite .kf-liste { min-width: 0; overflow-x: auto; }
+.kf-seite .kf-neu { min-width: 0; }

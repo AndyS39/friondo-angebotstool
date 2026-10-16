@@ -1274,3 +1274,207 @@ Rohdaten: `C:\Users\a.scheelen\Tools\Angebotstool\diagnose\test_v27\lasttest_202
 Zähler: schreibsturm_wenig_positionen = 1
 
 Rohdaten: `C:\Users\a.scheelen\Tools\Angebotstool\diagnose\test_v27\lasttest_20261015-221136.json` · Serverkonsole: `C:\Users\a.scheelen\Tools\Angebotstool\diagnose\test_v27\server_20261015-221136.log`
+
+### 4.10 Läufe nach v35 (16.10.2026, Durchlauf v35 – PLAN_LEAD_V6 Phase 187)
+
+Umgebung: Entwicklungsrechner (Terminal-Server, **während der Läufe 49 % Grundlast durch andere Sitzungen –
+`Win32_Processor.LoadPercentage` ohne eigenen Testlauf gemessen**), Server-Kopie vom 03.10.2026 nach
+`migrate.py` ×2, Modus „anwendung“ gemockt, `kalender_sync = an` – 17 Scheduler-Läufe (neu
+`taifun-uebergaben`), Pool-Invariante 64 + 17 + 5 = 86 ≤ 90. Skript `diagnose/v35/abschluss_tests.sh`.
+Lauf 1 (12:20–12:41, im Rollout-Skript) lief parallel zu Testläufen des Orchestrators und ist verworfen
+(Berichte `diagnose/test_v35_final/lauf1_lasttest/`); **Lauf 2 (12:47–13:08, `nur-lasttest`, nichts
+Eigenes parallel) zählt.**
+
+**Ergebnis gegen die Zielwerte (Abschnitt 2):** Profil `normal` (50 Nutzer, 35 aktiv, 20,2 min, 6.077
+Anfragen): 0 × 5xx, 0 TimeoutError, 0 „database is locked“ (Schreibsperre max. 53 ms), Pool-Spitze 40 von 90
+(44 %), Fehlerquote 0 %; p95 Editor 479 ms, Angebots-PDF 2,6 s, Protokoll-PDF 1,2 s, TAIFUN-PDF lesen 375 ms –
+erfüllt; **nicht erfüllt:** p95 Listen und Akten 3.993 ms (Ziel ≤ 1.500; v34 1.850), Terminvorschläge 20,1 s
+(Ziel ≤ 6 s; v34 13,2 s), Kundensuche 451 ms (Ziel ≤ 300; p50 91 ms; v34 249 ms). Profil `schreibsturm`
+(20 Innendienst-Nutzer × 10 Positionen): 190 von 190 Positionen korrekt, 0 locked, Schreibsperre max. 11 ms,
+p95 Editor-Aktionen 74 ms – erfüllt. Entscheidung „SQLite bestätigt“ bleibt (keine Sperren, keine Fehler).
+
+**Einordnung (A/B-Vergleich ohne Last, `diagnose/v35/orch/ab_vergleich.py`: aktueller Code gegen den
+v34-Worktree 7327226, beide gegen dieselbe Kopie der Lasttest-Datenbank, sequenziell 12 Aufrufe je Route,
+zwei Runden):** die Antwortzeiten aller Seiten sind auf diesem Rechner heute generell höher (externe Last);
+der v35-Code selbst kostet je Seite 1,1–1,25× (Portal, Erfassung, Kartei, Akte, Editor, Kundensuche) und
+in den Lead-Boards mehr: Deals-Board 885 → 474 ms (×1,87), Hauptboard 158 → 107 ms (×1,47), Leads VOT
+(Tabelle) 167 → 118 ms (×1,42). Ursache ist kein N+1 (74 SQL-Statements je Board, unverändert), sondern das
+Zeilen-Markup der Inline-Bearbeitung (Phase 186): je Zeile ein `<select>` mit allen ~30 Vertriebskanälen,
+Objektart-Auswahl, Textzellen – das Deals-Board (413 Zeilen) wuchs von 3,2 auf 5,2 MB. **Behoben im selben
+Durchlauf:** die Kanalliste steht einmal je Tabelle in `<template data-lm-kanal-optionen>`, das Select je Zeile
+trägt nur die aktuelle Option und wird beim Öffnen gefüllt (`lm_boards.js`, delegiert) → Deals-Board 4,6 MB,
+769 ms (×1,6), Hauptboard 0,41 MB, 158 ms. Rest-Mehrkosten = übriges Zeilen-Markup; der strukturelle Punkt
+bleibt der v27-Befund „Deals-Board rendert alle Zeilen ohne Blättern“ (Folgeplan: Blättern oder Zeilen erst
+beim Aufklappen rendern; dazu Leads VOT mit Kanal-Select je Zeile – 1,4 MB – gleich behandeln). Kundensuche:
+der Außendienst-Pfad ermittelt seit dem Nachtrag die eigenen Vorgänge über fünf Verknüpfungen (einmal je
+Suche); p50 91 ms. Empfehlung wie v33 P6: nach dem Rollout `data\log\zugriff.log` / Parametrierung →
+Betrieb (p95 je Route) prüfen.
+
+<!-- lasttest.py 20261016-124651 -->
+#### Lauf 16.10.2026 12:47:02 – Profil normal, 50 Nutzer (35 aktiv), 20 min
+
+- Lastmodell: 15 Außendienst mobil, 12 Lead-Management, 5 Innendienst, 2 Projektierung, 1 Montage; dazu 15 angemeldete Leser · Denkzeit 5–15 s · Seed 27 · Latenz je externem Aufruf 2 s · Port 8191
+- Server: v35 · Commit d2cb5ed · Pool 20 (max 90) · Threads 64 · Scheduler 17 Läufe · DATA_ORDNER `C:\Users\a.scheelen\Tools\Angebotstool\diagnose\test_v35_final\lasttest\data`
+- Benutzer je Rolle: Außendienst mobil = 4, 7, 9, 13, 17; Innendienst = 14, 18; Lead-Management = 14, 18; Projektierung = 1, 2, 12, 16, 20; Montage = 24
+- Hinweis: keine Hauptrolle leadmanagement in der Kopie – Innendienst-Personen fahren das Lead-Szenario (v31: Modul für alle Rollen frei)
+- Hinweis: keine aktive Person mit Hauptrolle „projektierung“ in der Kopie – Admins übernehmen die Rolle [ANNAHME]
+- Anfragen gesamt: 6077 (301.2/min) · 5xx 0 · Timeouts 0 · Verbindungsfehler 0 · Szenarien 659 · Tool-Fehler 0 · Laufzeit 20.2 min (16.10.2026 12:47:02 – 13:07:12)
+
+**Antwortzeiten je Route (Client-Sicht, Millisekunden)**
+
+| Route | Anzahl | p50 | p95 | p99 | max | 5xx | Timeout | Verb. |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `GET /erfassung/{id}/seite/{nr}` | 977 | 91 | 481 | 721 | 1.414 | 0 | 0 | 0 |
+| `POST /erfassung/{id}/seite/{nr}` | 975 | 69 | 673 | 2.519 | 6.160 | 0 | 0 | 0 |
+| `GET /lead-management/lead/{id}` | 503 | 667 | 2.366 | 3.731 | 7.587 | 0 | 0 | 0 |
+| `GET /angebote/{id}` | 357 | 546 | 2.387 | 3.463 | 5.211 | 0 | 0 | 0 |
+| `POST /angebote/{id}/position/{pid}/menge` | 299 | 54 | 484 | 2.438 | 3.638 | 0 | 0 | 0 |
+| `GET /lead-management/hauptboard` | 258 | 819 | 6.864 | 8.009 | 8.492 | 0 | 0 | 0 |
+| `GET /lead-management/lead/{id}/termin/vorschlaege.json` | 254 | 6.992 | 20.060 | 25.726 | 33.377 | 0 | 0 | 0 |
+| `POST /lead-management/anruf/{id}` | 249 | 72 | 555 | 2.620 | 6.607 | 0 | 0 | 0 |
+| `GET /lead-management/terminiert` | 248 | 2.071 | 6.643 | 10.083 | 11.196 | 0 | 0 | 0 |
+| `GET /leads` | 129 | 1.111 | 5.861 | 7.948 | 8.202 | 0 | 0 | 0 |
+| `GET /erfassung/sparten` | 126 | 77 | 376 | 759 | 981 | 0 | 0 | 0 |
+| `GET /leads/{id}/erfassen` | 126 | 57 | 355 | 577 | 634 | 0 | 0 | 0 |
+| `GET /suche.json` | 126 | 91 | 451 | 808 | 1.301 | 0 | 0 | 0 |
+| `GET /erfassung/{id}/weiche` | 125 | 78 | 335 | 595 | 605 | 0 | 0 | 0 |
+| `POST /erfassung/sparten-start` | 125 | 82 | 1.527 | 4.596 | 4.628 | 0 | 0 | 0 |
+| `GET /erfassung/{id}/pruefen` | 120 | 90 | 435 | 643 | 823 | 0 | 0 | 0 |
+| `POST /erfassung/{id}/absenden` | 119 | 110 | 779 | 1.365 | 2.922 | 0 | 0 | 0 |
+| `GET /erfassungen/{id}/protokoll.pdf` | 117 | 488 | 1.247 | 1.502 | 1.504 | 0 | 0 | 0 |
+| `GET /projektierung/projekt/{id}` | 109 | 422 | 2.033 | 2.665 | 3.464 | 0 | 0 | 0 |
+| `GET /` | 101 | 897 | 5.325 | 5.649 | 7.694 | 0 | 0 | 0 |
+| `GET /erfassung` | 89 | 199 | 716 | 886 | 1.244 | 0 | 0 | 0 |
+| `GET /montage/einsatz/{id}` | 76 | 181 | 638 | 823 | 1.327 | 0 | 0 | 0 |
+| `GET /projektierung` | 56 | 428 | 2.613 | 3.552 | 3.771 | 0 | 0 | 0 |
+| `POST /projektierung/aufgabe/{id}/erledigt-umschalten` | 55 | 494 | 1.766 | 2.507 | 2.705 | 0 | 0 | 0 |
+| `POST /vorgaenge/{id}/galerie/upload` | 54 | 721 | 1.507 | 2.313 | 6.363 | 0 | 0 | 0 |
+| `GET /montage` | 39 | 129 | 504 | 958 | 958 | 0 | 0 | 0 |
+| `POST /montage/einsatz/{id}/foto` | 38 | 192 | 972 | 2.206 | 2.206 | 0 | 0 | 0 |
+| `GET /erfassungen` | 30 | 678 | 4.507 | 4.512 | 4.512 | 0 | 0 | 0 |
+| `GET /erfassungen/{id}` | 30 | 84 | 435 | 512 | 512 | 0 | 0 | 0 |
+| `GET /erfassungen/{id}/angebot-erzeugen` | 30 | 289 | 1.042 | 1.653 | 1.653 | 0 | 0 | 0 |
+| `POST /angebote/extern/pdf-lesen` | 30 | 51 | 375 | 388 | 388 | 0 | 0 | 0 |
+| `GET /angebote/{id}/pdf` | 29 | 1.582 | 2.600 | 3.402 | 3.402 | 0 | 0 | 0 |
+| `POST /angebote/{id}/email` | 28 | 13.805 | 16.211 | 17.677 | 17.677 | 0 | 0 | 0 |
+| `GET /vorgaenge/{id}` | 25 | 347 | 1.514 | 2.514 | 2.514 | 0 | 0 | 0 |
+| `POST /angebote/{id}/sperre-frei` | 25 | 44 | 163 | 217 | 217 | 0 | 0 | 0 |
+
+**Zielwerte Phase 131 [ANNAHME]**
+
+| Kriterium | Ziel | Ist | Ergebnis |
+|---|---|---|---|
+| p95 Listen und Akten | ≤ 1500 ms | 3993 ms (n = 2050, p50 661 ms) | **nicht erfüllt** |
+| p95 Editor-Aktionen | ≤ 1000 ms | 479 ms (n = 324, p50 54 ms) | erfüllt |
+| p95 Angebots-PDF | ≤ 4000 ms | 2600 ms (n = 29, p50 1582 ms) | erfüllt |
+| p95 Protokoll-PDF | ≤ 3000 ms | 1247 ms (n = 117, p50 488 ms) | erfüllt |
+| p95 Terminvorschläge | ≤ 6000 ms | 20060 ms (n = 254, p50 6992 ms) | **nicht erfüllt** |
+| p95 Kundensuche | ≤ 300 ms | 451 ms (n = 126, p50 91 ms) | **nicht erfüllt** |
+| p95 TAIFUN-PDF lesen | ≤ 1000 ms | 375 ms (n = 30, p50 51 ms) | erfüllt |
+| TimeoutError (Pool) / Client-Timeouts | 0 | Server 0 · Client 0 | erfüllt |
+| „database is locked“ an der Oberfläche | 0 | 0 (fehler.log gesamt 0, davon Anfragen 0) | erfüllt |
+| Pool-Spitze | ≤ 60 % von 90 | 40 (44.4 %) | erfüllt |
+| Fehlerquote (5xx + Timeouts + Verbindungsfehler) | < 0.1 % | 0.000 % (0 von 6077) | erfüllt |
+
+**Gruppen (p95 nach Kriterium)**
+
+| Gruppe | Anzahl | p50 | p95 | p99 | max | 5xx |
+|---|---:|---:|---:|---:|---:|---:|
+| Listen und Akten | 2050 | 661 | 3.993 | 7.587 | 11.196 | 0 |
+| Editor-Aktionen | 324 | 54 | 479 | 2.438 | 3.638 | 0 |
+| Angebots-PDF | 29 | 1.582 | 2.600 | 3.402 | 3.402 | 0 |
+| Protokoll-PDF | 117 | 488 | 1.247 | 1.502 | 1.504 | 0 |
+| Terminvorschläge | 254 | 6.992 | 20.060 | 25.726 | 33.377 | 0 |
+| Kundensuche | 126 | 91 | 451 | 808 | 1.301 | 0 |
+| TAIFUN-PDF lesen | 30 | 51 | 375 | 388 | 388 | 0 |
+| übrige Schritte | 3093 | 84 | 640 | 4.628 | 17.677 | 0 |
+
+**Betrieb (/health alle 10 s, 119 Proben)**: Pool-Spitze 17 von 90 (18.9 %) · WAL max 4.52 MB · Schreibsperre max 53 ms, locked 0 · RSS max 385.4 MB · CPU 1088.1 s · /health p95 325 ms · Status: ok ×119
+
+**Server-Sicht (zugriff.log der Kopie)**: 6081 Anfragen (301.4/min) · 5xx 0 · Pool-Spitze zu Anfragebeginn 40 · Anteil > 2 s 9.85 %
+
+| Route (Server) | Anzahl | p50 | p95 | max | 5xx |
+|---|---:|---:|---:|---:|---:|
+| `GET /erfassung/{id}/seite/{nr}` | 977 | 85 | 457 | 1.287 | 0 |
+| `POST /erfassung/{id}/seite/{nr}` | 975 | 53 | 631 | 6.152 | 0 |
+| `GET /lead-management/lead/{id}` | 503 | 663 | 2.357 | 7.570 | 0 |
+| `GET /angebote/{id}` | 357 | 530 | 2.374 | 5.203 | 0 |
+| `POST /angebote/{id}/position/{pid}/menge` | 299 | 41 | 461 | 3.626 | 0 |
+| `GET /lead-management/hauptboard` | 258 | 793 | 6.836 | 8.489 | 0 |
+| `GET /lead-management/lead/{id}/termin/vorschlaege.json` | 254 | 6.988 | 20.024 | 33.371 | 0 |
+| `POST /lead-management/anruf/{id}` | 249 | 57 | 520 | 6.559 | 0 |
+| `GET /lead-management/terminiert` | 248 | 2.032 | 6.576 | 11.035 | 0 |
+| `GET /leads` | 129 | 1.096 | 5.854 | 8.130 | 0 |
+| `GET /suche.json` | 126 | 67 | 424 | 1.202 | 0 |
+| `GET /leads/{id}/erfassen` | 126 | 50 | 288 | 626 | 0 |
+| `GET /erfassung/sparten` | 126 | 70 | 370 | 921 | 0 |
+| `POST /erfassung/sparten-start` | 125 | 70 | 1.504 | 4.603 | 0 |
+| `GET /erfassung/{id}/weiche` | 125 | 74 | 330 | 583 | 0 |
+
+**Fehlerprotokoll der Kopie**: 0 neue Tabelleneinträge · fehler.log: 0 Fehler-Nummern, „database is locked“ 0 (Anfragen 0), TimeoutError 0, QueuePool 0
+
+Zähler: formularfehler = 3, id_angebot_erzeugen_fallback:/erfassungen (Antworten unvollständig für die aktuelle Logik) = 5, id_angebot_erzeugt = 25, id_erfassung_vom_aussendienst = 25, szenario_bei_laufende_abgebrochen = 50, vorschlaege_status:adresse_fehlt = 2, vorschlaege_status:hv_lead = 40, vorschlaege_status:ok = 212
+
+Rohdaten: `C:\Users\a.scheelen\Tools\Angebotstool\diagnose\test_v27\lasttest_20261016-124651.json` · Serverkonsole: `C:\Users\a.scheelen\Tools\Angebotstool\diagnose\test_v27\server_20261016-124651.log`
+
+<!-- lasttest.py 20261016-130735 -->
+#### Lauf 16.10.2026 13:07:45 – Profil schreibsturm, 20 Nutzer (20 aktiv), 10 min
+
+- Lastmodell: 20 Innendienst (Schreibsturm) · Denkzeit 1–3 s · Seed 27 · Latenz je externem Aufruf 2 s · Port 8192
+- Server: v35 · Commit d2cb5ed · Pool 20 (max 90) · Threads 64 · Scheduler 17 Läufe · DATA_ORDNER `C:\Users\a.scheelen\Tools\Angebotstool\diagnose\test_v35_final\lasttest\data`
+- Benutzer je Rolle: Außendienst mobil = 4, 7, 9, 13, 17; Innendienst = 14, 18; Lead-Management = 14, 18; Projektierung = 1, 2, 12, 16, 20; Montage = 24; Innendienst (Schreibsturm) = 14, 18, 1, 2, 12, 16, 20
+- Hinweis: keine Hauptrolle leadmanagement in der Kopie – Innendienst-Personen fahren das Lead-Szenario (v31: Modul für alle Rollen frei)
+- Hinweis: keine aktive Person mit Hauptrolle „projektierung“ in der Kopie – Admins übernehmen die Rolle [ANNAHME]
+- Anfragen gesamt: 420 (810.6/min) · 5xx 0 · Timeouts 0 · Verbindungsfehler 0 · Szenarien 20 · Tool-Fehler 0 · Laufzeit 0.5 min (16.10.2026 13:07:45 – 13:08:16)
+
+**Antwortzeiten je Route (Client-Sicht, Millisekunden)**
+
+| Route | Anzahl | p50 | p95 | p99 | max | 5xx | Timeout | Verb. |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `GET /angebote/{id}` | 210 | 171 | 2.367 | 2.776 | 2.851 | 0 | 0 | 0 |
+| `POST /angebote/{id}/position/{pid}/menge` | 190 | 23 | 75 | 196 | 329 | 0 | 0 | 0 |
+| `POST /angebote/{id}/sperre-frei` | 20 | 13 | 30 | 44 | 44 | 0 | 0 | 0 |
+
+**Zielwerte Phase 131 [ANNAHME]**
+
+| Kriterium | Ziel | Ist | Ergebnis |
+|---|---|---|---|
+| p95 Listen und Akten | ≤ 1500 ms | 2367 ms (n = 210, p50 171 ms) | **nicht erfüllt** |
+| p95 Editor-Aktionen | ≤ 1000 ms | 74 ms (n = 210, p50 22 ms) | erfüllt |
+| p95 Angebots-PDF | ≤ 4000 ms | keine Messung | offen |
+| p95 Protokoll-PDF | ≤ 3000 ms | keine Messung | offen |
+| p95 Terminvorschläge | ≤ 6000 ms | keine Messung | offen |
+| p95 Kundensuche | ≤ 300 ms | keine Messung | offen |
+| p95 TAIFUN-PDF lesen | ≤ 1000 ms | keine Messung | offen |
+| TimeoutError (Pool) / Client-Timeouts | 0 | Server 0 · Client 0 | erfüllt |
+| „database is locked“ an der Oberfläche | 0 | 0 (fehler.log gesamt 0, davon Anfragen 0) | erfüllt |
+| Pool-Spitze | ≤ 60 % von 90 | 19 (21.1 %) | erfüllt |
+| Fehlerquote (5xx + Timeouts + Verbindungsfehler) | < 0.1 % | 0.000 % (0 von 420) | erfüllt |
+
+**Gruppen (p95 nach Kriterium)**
+
+| Gruppe | Anzahl | p50 | p95 | p99 | max | 5xx |
+|---|---:|---:|---:|---:|---:|---:|
+| Listen und Akten | 210 | 171 | 2.367 | 2.776 | 2.851 | 0 |
+| Editor-Aktionen | 210 | 22 | 74 | 196 | 329 | 0 |
+
+**Betrieb (/health alle 10 s, 4 Proben)**: Pool-Spitze 3 von 90 (3.3 %) · WAL max 0.95 MB · Schreibsperre max 11 ms, locked 0 · RSS max 267.0 MB · CPU 24.8 s · /health p95 64 ms · Status: ok ×4
+
+**Server-Sicht (zugriff.log der Kopie)**: 423 Anfragen (423.0/min) · 5xx 0 · Pool-Spitze zu Anfragebeginn 19 · Anteil > 2 s 4.02 %
+
+| Route (Server) | Anzahl | p50 | p95 | max | 5xx |
+|---|---:|---:|---:|---:|---:|
+| `GET /angebote/{id}` | 210 | 169 | 2.332 | 2.845 | 0 |
+| `POST /angebote/{id}/position/{pid}/menge` | 190 | 17 | 54 | 148 | 0 |
+| `POST /angebote/{id}/sperre-frei` | 20 | 10 | 26 | 34 | 0 |
+| `GET /` | 1 | 67 | 67 | 67 | 0 |
+| `GET /erfassungen` | 1 | 92 | 92 | 92 | 0 |
+| `GET /erfassungen/{id}` | 1 | 17 | 17 | 17 | 0 |
+
+**Fehlerprotokoll der Kopie**: 0 neue Tabelleneinträge · fehler.log: 0 Fehler-Nummern, „database is locked“ 0 (Anfragen 0), TimeoutError 0, QueuePool 0
+
+**Schreibsturm (Soll/Ist je Position aus der Kopie)**: 190 Positionen geändert · 190 korrekt · 0 Abweichungen · 5xx bei Editor-Aktionen: 0 · nicht bestätigte Änderungen: 0
+
+Zähler: schreibsturm_wenig_positionen = 1
+
+Rohdaten: `C:\Users\a.scheelen\Tools\Angebotstool\diagnose\test_v27\lasttest_20261016-130735.json` · Serverkonsole: `C:\Users\a.scheelen\Tools\Angebotstool\diagnose\test_v27\server_20261016-130735.log`

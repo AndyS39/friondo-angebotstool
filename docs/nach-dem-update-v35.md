@@ -110,6 +110,16 @@ auf der v35-Datenbank – Rückweg-Probe im Durchlauf).
   verloren oder archiviert ist. Der Treffer öffnet direkt die Vorgangsakte (bisher fehlten Kunden, bei denen
   ihr nicht als Zuständiger eingetragen wart).
 
+### Meine Termine, Erfassungen (Außendienst) – Nachtrag 16.10.2026
+
+- „Meine Termine“ hat oben den Reiter **„Vergangene Termine“**: alle eigenen Termine vor heute (neueste
+  zuerst) mit Status (Erfolgt, No-Show, Abgesagt …), Knopf „Vorgangsakte öffnen“, den eigenen Erfassungen des
+  Kunden und „Neue Erfassung“.
+- In der Erfassungsübersicht (Startseite „Erfassungen“) führt jede Erfassung mit dem Knopf **„Vorgangsakte“** in
+  die Akte des Kunden. Eigene Erfassungen ohne verknüpftes Angebot lassen sich dort mit **„Löschen“**
+  (Sicherheitsabfrage) entfernen; hängt ein Angebot daran, bleibt die Erfassung (Hinweis). Ein verknüpfter
+  monday-Lead erscheint nach dem Löschen wieder in „Leads VOT“.
+
 ### Fotos je Objekt (Innendienst/Außendienst)
 
 - In der Kundenkartei hat jede Objektkarte unten einen Block „Fotos“ (bei einem Objekt: „Fotos zum Objekt“ unter

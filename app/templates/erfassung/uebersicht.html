@@ -10,6 +10,7 @@
           class="wv-datum wv-faellig" style="text-decoration:none">↻ {{ faellige_wv }} fällige
           Wiedervorlage{{ 'n' if faellige_wv != 1 }} – jetzt nachfassen</a></p>
     {% endif %}
+    {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
     <a class="knopf gross" href="/erfassung/neu">+ Neue Erfassung</a>
 
     {% if erfassungen %}
@@ -27,10 +28,21 @@
                     {% else %}· <span class="ampel gruen">Konfigurierbar</span>{% endif %}
                 {% endif %}</span>
             </a>
+            {# v35-Nachtrag 16.10.2026 (Andreas): Vorgangsakte je Erfassung, eigene Erfassungen ohne
+               Angebot löschbar (Sicherheitsabfrage) #}
+            <span class="formzeile" style="margin: 0 1rem 0.8rem">
             {% if e.angebot_id and e.angebot_id not in extern_ids %}
-                <a class="knopf klein" style="margin: 0 1rem 0.8rem"
-                   href="/signatur/{{ e.angebot_id }}">Angebot signieren</a>
+                <a class="knopf klein" href="/signatur/{{ e.angebot_id }}">Angebot signieren</a>
             {% endif %}
+                <a class="knopf klein zweitrangig" data-rolle="akte-link"
+                   href="{{ '/vorgaenge/' ~ e.vorgang_id if e.vorgang_id else '/vorgaenge/zu-erfassung/' ~ e.id }}">Vorgangsakte</a>
+            {% if not e.angebot_id and e.benutzer_id == benutzer.id %}
+                <form method="post" action="/erfassung/{{ e.id }}/loeschen" data-rolle="erfassung-loeschen"
+                      onsubmit="return confirm('Diese Erfassung wirklich löschen?')">
+                    <button class="knopf klein ghost" type="submit">Löschen</button>
+                </form>
+            {% endif %}
+            </span>
         </li>
     {% endfor %}
     </ul>

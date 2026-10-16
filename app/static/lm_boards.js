@@ -977,3 +977,32 @@
         });
     }
 })();
+
+// v35-Nachtrag 16.10.2026 (Orchestrator, Befund A/B-Vergleich): die Kanal-Auswahl je Zeile enthält nur die
+// aktuelle Option; die volle Liste steht einmal je Tabelle in <template data-lm-kanal-optionen> und wird beim
+// Öffnen des Selects ergänzt (delegiert – gilt auch für Zeilen aus der Sofortsuche/Inline-Neurendering).
+(function () {
+    function kanalOptionenLaden(sel) {
+        if (!sel || sel.dataset.geladen) { return; }
+        var vorlage = document.querySelector('template[data-lm-kanal-optionen]');
+        if (!vorlage || !vorlage.content) { sel.dataset.geladen = '1'; return; }
+        var vorhanden = {};
+        Array.prototype.forEach.call(sel.options, function (o) { vorhanden[(o.value || '').toLowerCase()] = true; });
+        Array.prototype.forEach.call(vorlage.content.querySelectorAll('option'), function (o) {
+            var wert = (o.value || '').toLowerCase();
+            if (vorhanden[wert]) { return; }
+            var neu = o.cloneNode(true);
+            if (neu.dataset.gesperrt) { neu.disabled = true; }
+            sel.appendChild(neu);
+        });
+        sel.dataset.geladen = '1';
+    }
+    ['mousedown', 'focusin', 'keydown', 'touchstart'].forEach(function (ereignis) {
+        document.addEventListener(ereignis, function (e) {
+            var ziel = e.target;
+            var sel = ziel && ziel.closest ? ziel.closest('select[data-lazy="kanal"]') : null;
+            if (sel) { kanalOptionenLaden(sel); }
+        }, true);
+    });
+    window.lmKanalOptionenLaden = kanalOptionenLaden;
+})();

@@ -176,12 +176,15 @@ def _eigene_vorgaenge(session: Session, benutzer, kunden_ids: list[int]) -> set[
     return vorgaenge_modul.eigene_vorgang_ids(session, benutzer.id, kunden_ids)
 
 
-def _rechte_filter(session: Session, kunden: list[Kunde], benutzer) -> list[Kunde]:
-    """Außendienst: nur Kunden mit mindestens einem eigenen Vorgang (alle Verknüpfungen, jeder Status)."""
+def _rechte_filter(session: Session, kunden: list[Kunde], benutzer,
+                   eigene_vorgaenge: set | None = None) -> list[Kunde]:
+    """Außendienst: nur Kunden mit mindestens einem eigenen Vorgang (alle Verknüpfungen, jeder Status).
+    `eigene_vorgaenge` (aus `suchen`) vermeidet die zweite Abfrage im Treffer-Aufbau."""
     if not kunden or not _ist_aussendienst(benutzer):
         return kunden
     ids = [k.id for k in kunden]
-    eigene_vorgaenge = _eigene_vorgaenge(session, benutzer, ids)
+    if eigene_vorgaenge is None:
+        eigene_vorgaenge = _eigene_vorgaenge(session, benutzer, ids)
     if not eigene_vorgaenge:
         return []
     eigene = {z[0] for z in session.query(Vorgang.kunde_id)
@@ -189,7 +192,8 @@ def _rechte_filter(session: Session, kunden: list[Kunde], benutzer) -> list[Kund
     return [k for k in kunden if k.id in eigene]
 
 
-def _treffer_aufbauen(session: Session, kunden: list[Kunde], benutzer) -> list[dict]:
+def _treffer_aufbauen(session: Session, kunden: list[Kunde], benutzer,
+                      eigene_ids: set | None = None) -> list[dict]:
     if not kunden:
         return []
     ids = [k.id for k in kunden]
@@ -198,7 +202,9 @@ def _treffer_aufbauen(session: Session, kunden: list[Kunde], benutzer) -> list[d
               .order_by(Vorgang.id.desc()).all()):
         je_kunde.setdefault(v.kunde_id, []).append(v)
     aussendienst = _ist_aussendienst(benutzer)
-    eigene_ids = _eigene_vorgaenge(session, benutzer, ids) if aussendienst else set()
+    if aussendienst and eigene_ids is None:
+        eigene_ids = _eigene_vorgaenge(session, benutzer, ids)
+    eigene_ids = eigene_ids or set()
     treffer = []
     for k in kunden:
         vorgaenge = je_kunde.get(k.id, [])
@@ -243,5 +249,9 @@ def suchen(session: Session, q: str, benutzer, limit: int = MAX_VORSCHLAEGE) -> 
         kunden = _per_rufnummer(session, q)
     else:
         kunden = _per_name(session, q)
-    kunden = _rechte_filter(session, kunden, benutzer)
-    return _treffer_aufbauen(session, kunden[:max(1, min(limit, MAX_SEITE))], benutzer)
+    # v35-Nachtrag: die eigenen Vorgänge des Außendienstes EINMAL je Suche ermitteln (fünf Abfragen über
+    # die Kandidaten), Rechtefilter und Treffer-Aufbau nutzen dieselbe Menge
+    eigene = (_eigene_vorgaenge(session, benutzer, [k.id for k in kunden])
+              if kunden and _ist_aussendienst(benutzer) else None)
+    kunden = _rechte_filter(session, kunden, benutzer, eigene)
+    return _treffer_aufbauen(session, kunden[:max(1, min(limit, MAX_SEITE))], benutzer, eigene)

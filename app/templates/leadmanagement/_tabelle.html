@@ -134,12 +134,14 @@
     {%- if z.kanal %}<span class="lm-status lm-kanal-label{{ ' lm-kanal-unklar' if z.kanal_unklar }}" style="--f:{{ z.kanal_farbe }}" title="{{ 'Vertriebskanal unklar – bitte klären' if z.kanal_unklar else 'Vertriebskanal – steuert das Angebotsprofil' }}">{{ z.kanal }}</span>
     {%- else %}<span class="lm-status lm-kanal-leer" title="{{ 'Kein Vertriebskanal – Klick wählt' if not lesen else 'Kein Vertriebskanal' }}">–</span>{% endif %}
     {%- if not lesen %}
-    <select class="lm-inline lm-mini" data-feld="kanal" data-vorgang="{{ v.id }}" data-aktuell="{{ z.kanal }}" title="Vertriebskanal ändern (Aktivität, steuert das Angebotsprofil)" aria-label="Vertriebskanal ändern">
+    {#- v35-Nachtrag 16.10.2026 (Orchestrator): nur die aktuelle Option je Zeile – die volle Kanalliste steht
+        EINMAL je Tabelle in <template data-lm-kanal-optionen> (Makro lead_tabelle), lm_boards.js füllt das
+        Select beim Öffnen (Deals-Board: 5,2 MB → 3,3 MB bei 413 Zeilen) #}
+    {%- set kn_ns = namespace(gefunden=false, waehlbar=true) %}
+    {%- for kn in (ctx.kanal_wahl or []) if z.kanal and kn.wert | lower == z.kanal | lower %}{% set kn_ns.gefunden = true %}{% set kn_ns.waehlbar = kn.waehlbar %}{% endfor %}
+    <select class="lm-inline lm-mini" data-feld="kanal" data-vorgang="{{ v.id }}" data-aktuell="{{ z.kanal }}" data-lazy="kanal" title="Vertriebskanal ändern (Aktivität, steuert das Angebotsprofil)" aria-label="Vertriebskanal ändern">
         <option value="" {{ 'selected' if not z.kanal }}>– kein Kanal –</option>
-        {%- for kn in (ctx.kanal_wahl or []) %}
-        <option value="{{ kn.wert }}" {{ 'selected' if kn.wert | lower == z.kanal | lower }}{{ ' disabled' if not kn.waehlbar and kn.wert | lower != z.kanal | lower }}>{{ kn.wert }}{{ ' (unklar)' if kn.wert == '?' }}{{ ' (nicht mehr wählbar)' if not kn.waehlbar }}</option>
-        {%- endfor %}
-        {%- if z.kanal and z.kanal | lower not in ((ctx.kanal_wahl or []) | map(attribute='wert') | map('lower') | list) %}<option value="{{ z.kanal }}" selected>{{ z.kanal }} (nicht mehr wählbar)</option>{% endif %}
+        {%- if z.kanal %}<option value="{{ z.kanal }}" selected>{{ z.kanal }}{{ ' (unklar)' if z.kanal == '?' }}{{ ' (nicht mehr wählbar)' if not kn_ns.gefunden or not kn_ns.waehlbar }}</option>{% endif %}
     </select>
     {%- endif %}</span>
     {%- if z.kanal_unklar %} <span class="lm-pflicht-hinweis" title="Kanal „?“ = Vertriebskanal unklar – Pflichtfeld, bis ein echter Kanal gewählt ist">Vertriebskanal klären</span>{% endif %}</span>
@@ -347,6 +349,10 @@
         {%- for z in zeilen %}{{ lead_zeile(z, spalten, ctx) }}{% endfor %}
     </tbody>
 </table>
+{#- v35-Nachtrag 16.10.2026 (Orchestrator): Kanalliste einmal je Tabelle für die Inline-Auswahl (lm_boards.js) #}
+{%- if ctx.kanal_wahl %}
+<template data-lm-kanal-optionen>{% for kn in ctx.kanal_wahl %}<option value="{{ kn.wert }}"{{ ' data-gesperrt="1"' if not kn.waehlbar }}>{{ kn.wert }}{{ ' (unklar)' if kn.wert == '?' }}{{ ' (nicht mehr wählbar)' if not kn.waehlbar }}</option>{% endfor %}</template>
+{%- endif %}
 {%- endmacro %}
 
 {# v33 (PLAN_V20 Phase 174, Vertrag T): generische Bausteine für ALLE Tabellen mit Spalten je

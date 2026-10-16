@@ -148,7 +148,34 @@ def uebersicht(request: Request, session: Session = Depends(get_session)):
     faellige_wv = len(vorgaenge_modul.faellige_vorgaenge(session, benutzer))
     return render(request, "erfassung/uebersicht.html", aktiv=None, mobil=True,
                   benutzer=benutzer, erfassungen=erfassungen, kunden=kunden,
-                  extern_ids=extern_ids, faellige_wv=faellige_wv)
+                  extern_ids=extern_ids, faellige_wv=faellige_wv,
+                  meldung=request.query_params.get("meldung", ""))
+
+
+@router.post("/{erfassung_id}/loeschen")
+def eigene_loeschen(request: Request, erfassung_id: int, session: Session = Depends(get_session)):
+    """v35-Nachtrag 16.10.2026 (Andreas): der Außendienst löscht eigene Erfassungen (wie der
+    Innendienst in /erfassungen: gesperrt, sobald ein Angebot verknüpft ist; ein verknüpfter Lead
+    wird gelöst). Innendienst/Admin dürfen hier jede Erfassung löschen."""
+    from urllib.parse import quote_plus
+    from app.models import Lead
+    benutzer = _benutzer(request)
+    erfassung = session.get(Erfassung, erfassung_id)
+    if erfassung is None:
+        return RedirectResponse("/erfassung?meldung=" + quote_plus("Erfassung nicht gefunden."),
+                                status_code=303)
+    if erfassung.benutzer_id != benutzer.id and benutzer.basisrolle not in ("admin", "innendienst"):
+        return RedirectResponse("/erfassung?meldung=" + quote_plus(
+            "Löschen nicht möglich – nur eigene Erfassungen."), status_code=303)
+    if erfassung.angebot_id:
+        return RedirectResponse("/erfassung?meldung=" + quote_plus(
+            "Löschen nicht möglich – mit dieser Erfassung ist ein Angebot verknüpft."), status_code=303)
+    for lead in session.query(Lead).filter(Lead.erfassung_id == erfassung.id):
+        lead.erfassung_id = None
+    session.delete(erfassung)
+    session.commit()
+    return RedirectResponse("/erfassung?meldung=" + quote_plus(
+        f"Erfassung {erfassung_id} gelöscht."), status_code=303)
 
 
 @router.get("/neu")

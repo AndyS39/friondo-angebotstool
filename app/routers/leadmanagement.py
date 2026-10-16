@@ -1835,7 +1835,54 @@ def meine_termine(request: Request,
                    if z["termin"].beginn.date() == jetzt.date()]
     woche_liste = [z for z in zeilen
                    if z["termin"].beginn.date() > jetzt.date()]
+    # v35-Nachtrag 16.10.2026 (Andreas): Reiter „Vergangene Termine“ – alle eigenen Termine vor heute
+    # (jeder Status außer Sperrzeiten), neueste zuerst, mit Vorgangsakte und den eigenen Erfassungen
+    reiter = "vergangen" if request.query_params.get("reiter") == "vergangen" else "aktuell"
+    vergangen_liste = []
+    if reiter == "vergangen":
+        vergangen_liste = meine_termine_vergangen(session, benutzer, heute_start)
     return render(request, "leadmanagement/meine_termine.html",
                   aktiv=None, mobil=True, benutzer=benutzer,
                   heute_liste=heute_liste, woche_liste=woche_liste,
+                  reiter=reiter, vergangen_liste=vergangen_liste,
                   meldung=request.query_params.get("meldung", ""))
+
+
+VERGANGEN_STATUS_TEXTE = {"erfolgt": "Erfolgt", "no_show": "No-Show", "abgesagt": "Abgesagt",
+                          "geplant": "Geplant", "bestaetigt": "Bestätigt", "unbestaetigt": "Unbestätigt",
+                          "vorgemerkt": "Vorgemerkt"}
+VERGANGEN_LIMIT = 200
+
+
+def meine_termine_vergangen(session: Session, benutzer, heute_start) -> list[dict]:
+    """v35-Nachtrag 16.10.2026: eigene Termine vor heute (ohne Sperrzeiten), neueste zuerst, je Termin
+    Kunde, Vorgang, Statuslabel, eigene Erfassungen des Vorgangs und der Kartenlink."""
+    from urllib.parse import quote_plus as url_quote
+    from app.models import Erfassung
+    termine = (session.query(VotTermin)
+               .filter(VotTermin.ad_id == benutzer.id,
+                       VotTermin.beginn.isnot(None),
+                       VotTermin.beginn < heute_start,
+                       VotTermin.typ != "sperrzeit")
+               .order_by(VotTermin.beginn.desc()).limit(VERGANGEN_LIMIT).all())
+    vorgang_ids = {t.vorgang_id for t in termine if t.vorgang_id}
+    erfassungen: dict[int, list] = {}
+    if vorgang_ids:
+        for e in (session.query(Erfassung)
+                  .filter(Erfassung.vorgang_id.in_(vorgang_ids), Erfassung.benutzer_id == benutzer.id)
+                  .order_by(Erfassung.angelegt_am.desc())):
+            erfassungen.setdefault(e.vorgang_id, []).append(e)
+    zeilen = []
+    for t in termine:
+        vorgang = session.get(Vorgang, t.vorgang_id) if t.vorgang_id else None
+        kunde = session.get(Kunde, vorgang.kunde_id) if vorgang else None
+        if kunde is None:
+            continue
+        zeilen.append({
+            "termin": t, "vorgang": vorgang, "kunde": kunde,
+            "status_text": VERGANGEN_STATUS_TEXTE.get(t.status or "", t.status or "–"),
+            "erfassungen": erfassungen.get(vorgang.id, []),
+            "karten_link": "https://www.google.com/maps/dir/?api=1&destination="
+                           + url_quote(t.adresse or ""),
+        })
+    return zeilen

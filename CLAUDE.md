@@ -109,7 +109,8 @@ Nummern vergeben.
 - EK-Preise sind unter „Artikel bearbeiten" änderbar (Innendienst/Admin).
 - **Löschen & Archiv (v5):** Benutzer sind löschbar, solange keine Vorgänge an
   ihnen hängen – sonst deaktivieren (Historie bleibt lesbar). Erfassungen sind
-  löschbar (ID/Admin), außer ein Angebot ist verknüpft. Angebote: nur **Entwürfe**
+  löschbar (ID/Admin *(ergänzt v35-Nachtrag 16.10.2026: der Außendienst löscht eigene Erfassungen
+  über `/erfassung`)*), außer ein Angebot ist verknüpft. Angebote: nur **Entwürfe**
   löschbar; versendete/abgelehnte werden **archiviert** (Aufbewahrungspflicht) und
   über den Filter „Archiv" erreichbar. Benutzer haben ein E-Mail-Feld (für CC).
 - **Angebots-Editor (v5):** Positionen per Drag & Drop umsortierbar, Positions-
@@ -3991,7 +3992,15 @@ Suchfelder sind Sofortsuche (`lm_sofort.js`, keine „Suchen“-Knöpfe, kein `o
   `test_lead_v3_anruf.py`, `test_lead_v3.py`, `test_lead_v3_boards.py` – K), HV-Gruppen statt Einzel-HV und AD am
   eigenen Lead ohne Lesesicht (`test_lead_v2_handelsvertreter.py`, `test_lead_v2_kartei.py`,
   `test_lead_v3_kartei.py`, `test_lead_v4.py`, `test_lead_v2_dashboard.py`, `test_lead_v3.py`,
-  `test_lead_v3_phase120.py` – R). **Ergebnis der Rollout-Prüfung:** [ZAHLEN_FOLGEN]. Rollout-Vorbereitung
+  `test_lead_v3_phase120.py` – R). **Ergebnis der Rollout-Prüfung (16.10.2026):** `migrate.py` zweimal auf der Server-Kopie (2. Lauf ohne
+  Änderungen; Alt-Kanal „EnergieDigital“ inaktiv, „Kontaktformular/info@“ nach Alias-Ergänzung abgebildet),
+  Rückweg-Probe v34-Code 24/24, Gesamtsuite **1613 bestanden, 5 übersprungen** (1 Fehler durch einen
+  hinterlassenen Testphase-Schalter – Test selbst-tragend gemacht), Abnahme 93/93, Voll-Crawl 8 Läufe 0 Abstürze,
+  Smoke 8/8, Lasttest `schreibsturm` 190/190, `normal` 0 × 5xx / 0 locked / Pool 44 %, p95 Listen 3.993 ms und
+  Terminvorschläge 20,1 s **nicht erfüllt** (Terminal-Server mit 49 % Fremdlast; A/B ohne Last: v35-Code ×1,1–1,25
+  je Seite, Lead-Boards ×1,5–1,9 durch das Inline-Markup – Kanal-Optionen seit dem Nachtrag einmal je Tabelle als
+  `<template>`, Deals-Board 5,2 → 4,6 MB; Folgeplan Blättern), Kundensuche p95 451 ms (p50 91 ms) –
+  `docs/lasttest-v27.md` 4.10. Rollout-Vorbereitung
   `diagnose/v35/abschluss_tests.sh` (Server-Kopie, `migrate.py` zweimal, Testbenutzer, Rückweg-Probe v34-Code
   (Worktree 7327226) auf der v35-DB, Gesamtsuite, Abnahme, Voll-Crawl sechs Basisrollen + drei Varianten hell/dunkel,
   Smoke, Lasttest normal + schreibsturm). Doku: dieser Abschnitt, Zuordnungstabelle, Titelzeile, Zentrale Dateien,
@@ -4010,3 +4019,17 @@ Suchfelder sind Sofortsuche (`lm_sofort.js`, keine „Suchen“-Knöpfe, kein `o
   Treffer-Link führt immer auf eine Vorgangsakte, die er öffnen darf (offener Vorgang zuerst, sonst der
   jüngste eigene). `/vorgaenge` (Liste, AD nur eigene) war bereits konsistent. Test
   `tests/test_v35_nachtrag.py` (4: alle Verknüpfungen, archiviert/verloren, HV-Variante, Innendienst).
+  **Drei weitere Punkte (Andreas, 16.10.2026):** (1) „Meine Termine“ (`/lead-management/meine-termine`) hat
+  den Reiter **„Vergangene Termine“** (`?reiter=vergangen`, `leadmanagement.meine_termine_vergangen`: eigene
+  Termine vor heute ohne Sperrzeiten, neueste zuerst, höchstens 200, Statuslabel Erfolgt/No-Show/Abgesagt/…,
+  Knöpfe Vorgangsakte · eigene Erfassungen des Vorgangs · Neue Erfassung); der Wrapper in `lm_dashboard`
+  reicht den Kontext durch. (2) Die Erfassungsübersicht des Außendienstes (`/erfassung`,
+  `erfassung/uebersicht.html`) hat je Erfassung den Knopf **„Vorgangsakte“** (`/vorgaenge/<vorgang_id>`, ohne
+  Vorgang `/vorgaenge/zu-erfassung/<id>`). (3) **Erfassungen löschbar für den Außendienst:** Knopf „Löschen“
+  mit Sicherheitsabfrage an eigenen Erfassungen ohne verknüpftes Angebot → `POST /erfassung/<id>/loeschen`
+  (`routers/erfassung.eigene_loeschen`: nur eigene Erfassungen – Innendienst/Admin jede –, gesperrt mit
+  Angebot, verknüpfter Lead wird gelöst und erscheint wieder in „Leads VOT“; Meldung auf `/erfassung`).
+  Tests `tests/test_v35_nachtrag2.py`. **Kanal-Auswahl in den Boards schlank** (Befund des A/B-Vergleichs):
+  das Select je Zeile trägt nur die aktuelle Option, die Kanalliste steht einmal je Tabelle in
+  `<template data-lm-kanal-optionen>` und wird beim Öffnen gefüllt (`lm_boards.js`, delegiert – auch nach dem
+  Fragment-Tausch der Sofortsuche); Deals-Board 413 Zeilen 5,2 → 4,6 MB.

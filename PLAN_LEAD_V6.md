@@ -343,7 +343,7 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
 
 ## Phase 187: Tests, Doku, Übergabe
 
-- [ ] Tests `tests/test_lead_v6_taifun.py`: (a) XML eines Demo-Leads
+- [x] Tests `tests/test_lead_v6_taifun.py`: (a) XML eines Demo-Leads
       validiert gegen `docs/taifun/ADRESSEN.xsd`, Elementreihenfolge und
       Namensraum korrekt, Encoding-Deklaration windows-1252, Umlaut im Namen
       korrekt kodiert; (b) Name3 „Helmut Schliwa“, Straße „Im Knick“,
@@ -368,7 +368,7 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       Suchleiste findet die Rufnummer, Treffer erscheinen ohne Enter; Filter-
       Chip im Hauptboard aktualisiert die Liste ohne Seitenneuladen. Gesamtlauf grün,
       `tests/test_v27_sitzungen.py` grün.
-- [ ] Rollout-Vorbereitung nach Grundregel: Server-DB-Kopie nach
+- [x] Rollout-Vorbereitung nach Grundregel: Server-DB-Kopie nach
       diagnose\, migrate.py zweimal (additiv: `vorgaenge.taifun_export_*`,
       `kunden.taifun_kundennr`, Tabellen `taifun_uebergaben` und
       `vertriebskanaele`, Galerie-Ordner je Objekt, `boards_filter`,
@@ -378,7 +378,7 @@ TAIFUN-Export läuft **trotz** gesperrter Buchung.
       Dienstkontos; `docs/nach-dem-update-v35.md` (Admin: Ordner prüfen,
       Testdatei in TAIFUN importieren, Encoding bestätigen; Team: Badge
       TAIFUN, Button, Kundennummer nachtragen).
-- [ ] CLAUDE.md: Abschnitt „Neu in v35 – Lead-Management V6 TAIFUN-
+- [x] CLAUDE.md: Abschnitt „Neu in v35 – Lead-Management V6 TAIFUN-
       Kundenübergabe, Kanal-Stammdaten, Rechte, Inline-Bearbeitung
       (abgestimmt 15.10.2026)“ (Plan: PLAN_LEAD_V6.md, Phasen 183 bis 187;
       Nummern laut Vorspann prüfen), Zuordnungstabelle
