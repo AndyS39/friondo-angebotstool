@@ -522,6 +522,9 @@ _NACHTRAEGLICHE_SPALTEN = {
         "monday_beginn": "DATETIME",
         "angepasst_am": "DATETIME",
         "angepasst_von": "INTEGER",
+        # v38 (PLAN_V23 Phase 204): „Termin nicht stattgefunden“ – Grund/Bemerkung (additiv)
+        "ausfall_grund": "VARCHAR(40)",
+        "ausfall_bemerkung": "TEXT",
     },
     "ad_profile": {
         "terminiert_selbst": "BOOLEAN NOT NULL DEFAULT 0",
@@ -656,6 +659,10 @@ _NACHTRAEGLICHE_SPALTEN = {
         "angelegt_am": "DATETIME",
     },
     "erfassungen": {
+        # v38 (PLAN_V23 Phase 202): Korrektur nach Senden, Fortsetzung des Entwurfs (additiv)
+        "geaendert_am": "DATETIME",
+        "geaendert_von": "INTEGER",
+        "aktuelle_frage": "VARCHAR(20)",
         "objekt_id": "INTEGER",                                 # v31 Phase 153
         "vorbelegt_json": "TEXT",   # v12 Phase 76: aus Qualifizierung
         "vorgang_id": "INTEGER",            # v10 Vorgangsakte

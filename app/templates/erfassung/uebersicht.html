@@ -3,8 +3,12 @@
 {% block titel %}Erfassung – Friondo{% endblock %}
 
 {% block inhalt %}
+{# v38 (PLAN_V23 Phase 202/204): Badges „Entwurf · Frage 12 von 31“ (Warnfarbe ab 30 Tagen) und
+   „nachträglich geändert (TT.MM.)“, Objektzeile je Erfassung (erfassung_korrektur.py) #}
+<link rel="stylesheet" href="/static/erfassung_v38.css?v={{ css_version }}">
 <div class="mobil-inhalt">
     <h1>Erfassungen</h1>
+    {% include "erfassung/_galerie_puffer.html" %}
     {% if faellige_wv %}
     <p class="meldung"><a href="/vorgaenge?verfolgung=faellig"
           class="wv-datum wv-faellig" style="text-decoration:none">↻ {{ faellige_wv }} fällige
@@ -16,16 +20,29 @@
     {% if erfassungen %}
     <ul class="erfassung-liste">
     {% for e in erfassungen %}
-        <li>
-            <a href="{{ '/erfassung/' ~ e.id ~ '/seite/' ~ e.seite_index if e.status == 'Entwurf' else '/erfassung/' ~ e.id ~ '/pruefen' }}">
-                <strong>{{ kunden[e.kunde_id].anzeige_name if e.kunde_id in kunden else '?' }}</strong><br>
+        {% set eb = entwurf_badges.get(e.id) if entwurf_badges is defined else none %}
+        {% set oz = objekt_zeilen.get(e.id) if objekt_zeilen is defined else none %}
+        {% set gb = korrektur_badge(e) if korrektur_badge is defined else '' %}
+        <li class="{{ 'entwurf-alt' if eb and eb.alt }}" data-rolle="erfassung-eintrag" data-erfassung="{{ e.id }}">
+            {# v38: Entwürfe öffnen bei der ersten unbeantworteten Frage (/fortsetzen) #}
+            <a href="{{ '/erfassung/' ~ e.id ~ '/fortsetzen' if e.status == 'Entwurf' else '/erfassung/' ~ e.id ~ '/pruefen' }}">
+                <strong>{{ kunden[e.kunde_id].anzeige_name if e.kunde_id in kunden else '?' }}</strong>
+                {%- if oz and oz.text %}
+                <span class="objekt-zeile" data-rolle="objekt-zeile">
+                    {%- if oz.bezeichnung %}<span class="objekt-name">{{ oz.bezeichnung }}</span> · {% endif -%}
+                    {{ oz.adresse }}{% if oz.kunde %} <span class="objekt-kunde">(Kunde)</span>{% endif %}</span>
+                {%- else %}<br>{% endif %}
                 <span class="dezent">{{ e.angelegt_am.strftime('%d.%m.%Y %H:%M') }} ·
-                {% if e.status == 'Entwurf' %}Entwurf – fortsetzen
+                {% if e.status == 'Entwurf' %}
+                    <span class="abzeichen entwurf-badge{{ ' alt' if eb and eb.alt }}" data-rolle="entwurf-badge"
+                          {% if eb and eb.alt %}title="Entwurf seit mehr als 30 Tagen – bitte fortsetzen oder löschen"{% endif %}>{{ eb.text if eb else 'Entwurf' }}</span>
+                    · fortsetzen
                 {% else %}abgesendet ({{ e.status }})
                     · <span class="abzeichen">{{ e.sparte or 'WP' }}</span>
                     {% if e.typ == 'freitext' %}· <span class="abzeichen">Freitext</span>{% endif %}
                     {% if e.ampel == 'orange' %}· <span class="ampel orange">Individuell</span>
                     {% else %}· <span class="ampel gruen">Konfigurierbar</span>{% endif %}
+                    {% if gb %}· <span class="abzeichen geaendert-badge" data-rolle="geaendert-badge">{{ gb }}</span>{% endif %}
                 {% endif %}</span>
             </a>
             {# v35-Nachtrag 16.10.2026 (Andreas): Vorgangsakte je Erfassung, eigene Erfassungen ohne

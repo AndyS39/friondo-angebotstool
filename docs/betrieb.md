@@ -733,3 +733,43 @@ Beschreibung der Funktionen in CLAUDE.md „Neu in v33“ (PLAN_V20, Phasen 166�
   `routing_kontingent_tag`/`routing_pruefung` (`routing.migration_v37_routing`), `vertriebskanaele.aktiv = 0` für
   WELOVEX/DAA (`lead_kanaele.migration_v37_kanaele`), Benutzereinstellungen `objekte_zu`; der v36-Code liest nichts
   davon (Rückweg `rollback.bat --nur-code`).
+
+## Ergänzungen v38 – Phase 201 Foto-Upload: Pop-up, Offline-Zwischenspeicher, Mehrfach-Löschen (16.10.2026, Agent G)
+
+- **Kein neuer Hintergrundlauf, kein neuer Netzaufruf aus Anfragen** (weiter 18 Läufe, Pool-Invariante unverändert).
+  Neue Request-Pfade mit Schreibzugriff (ohne Netz):
+
+  | Modul | Funktion | Auslöser | Netzaufruf | hält Sitzung während I/O | Schreibtransaktion | Hinweis |
+  |---|---|---|---|---|---|---|
+  | `app/routers/vorgaenge.py` `galerie_mehrfach_loeschen` (v38) | Mehrfach-Löschen aus dem Auswählen-Modus der Galerie; Rechte je Datei `galerie.darf_datei_loeschen` (Admin/Innendienst/Projektierung alle, Außendienst eigene Uploads im eigenen Vorgang, Montage nie – Pfadtabelle `auth._GALERIE_SCHREIBEN`/`_MONTAGE_GALERIE`) | Anfrage `POST /vorgaenge/{id}/galerie/loeschen` (`datei_ids`, JSON bei `Accept: application/json`) | kein Netz | nein – Formular vor dem ersten DB-Zugriff; die Dateien auf der Platte werden erst NACH dem Commit entfernt (`galerie.dateien_entfernen`) | ja (`_speichern`: Rollback + eine Wiederholung bei „database is locked“) | Eintrag im Notizen-Chat je Ordner („Galerie: 3 Fotos gelöscht (Ordner Zählerschrank): …“) wie beim Einzel-Löschen |
+  | `app/routers/vorgaenge.py` `galerie_upload` (v34, erweitert) | Antwort `abgelegt[]` trägt zusätzlich `bild`, `datum`, `datum_lang` (Kacheln ohne Seitenneuladen) | wie bisher | kein Netz | wie bisher (Freigabe vor dem Lesen des Bodys) | wie bisher (Commit je Datei) | keine Änderung am Ablauf |
+
+- **Offline-Zwischenspeicher (nur im Browser des Geräts):** Schlägt ein Upload wegen fehlendem Netz fehl (Netzfehler,
+  Timeout 10 min, HTTP-Status 0), legt `static/galerie_v34.js` die bereits verkleinerten Fotos mit Ordner, Bemerkung,
+  Sparte und Vorgangs-ID in der IndexedDB des Browsers ab (`friondo_galerie_puffer`, Store `wartend`,
+  `static/galerie_puffer.js`; Grenze 50 Fotos / 100 MB je Browser [ANNAHME]). Der Puffer liegt ausschließlich im
+  jeweiligen Browser des jeweiligen Geräts – nicht auf dem Server, nicht im Backup, nicht auf einem zweiten Gerät des
+  Mitarbeiters; ein Löschen der Browserdaten (Website-Daten/Cache) löscht auch die wartenden Fotos. **Kein Upload im
+  Hintergrund:** ohne HTTPS gibt es keinen Service Worker (`docs/https-intern.md`); der Mitarbeiter stößt den Upload beim
+  nächsten Öffnen der Galerie desselben Vorgangs über den Hinweiskasten „n Fotos warten auf Upload“ → „Jetzt hochladen“
+  selbst an (normaler Upload-Request wie oben), die Startseite der mobilen Erfassung (`/erfassung`) listet wartende Fotos
+  anderer Vorgänge. Antwortet der Server beim Nachholen mit 403/404 (Vorgang archiviert/gelöscht, Zugriff entzogen),
+  bleibt der Eintrag mit „Vorgang nicht mehr vorhanden“ liegen und kann nur verworfen werden. Betriebsfolge: Fotos, die
+  ein Außendienstler „hochgeladen“ zu haben glaubt, können bei fehlendem Netz noch auf seinem Handy liegen – bei
+  Rückfragen zuerst dort die Galerie des Vorgangs öffnen lassen.
+- **Upload-Pop-up:** Fortschritt je Datei wird aus dem Byte-Anteil des EINEN Requests abgeleitet (keine zusätzlichen
+  Requests); Restdauer-Schätzung Startwert 500 KB/s [ANNAHME], danach gemessene Geschwindigkeit. Kein Einfluss auf
+  Server oder Datenbank.
+- **Migration v38 (Phase 201):** keine Datenbankänderung; `auth.py` (Pfadtabelle Projektierung + Benutzer im
+  `anfrage.KONTEXT` für das Jinja-Global `galerie_loeschrecht`), `templating.py` (Global) – der v37-Code läuft
+  unverändert weiter (Rückweg `rollback.bat --nur-code`).
+
+- **Phase 203/204 (Agent V, Orchestrator-Eintrag):** keine Netzaufrufe, keine neuen Läufe. Neue Request-Pfade:
+  `GET /leads/vergangene` (Außendienst, reine Leseanfrage: `vot_termine` der letzten 180 Tage ohne abgeschlossene
+  Erfassung), `POST /leads/termin/{id}/ausgefallen` (`_speichern`-Muster, `lead_termin_ausfall.melden` → Bestandsfunktionen
+  `termin_no_show` (Outlook-Storno nur über die Auftrags-Warteschlange), `lead_todos.anlegen`, `nachfassen.wiedervorlage_setzen`,
+  `lead_boards.status_setzen`; nie eine Kundenmail), `POST /leads/{lead_id}/kanal` zusätzlich mit JSON-Antwort (Kanal-Menü).
+  `GET /leads` enthält für Innendienst/Admin die Gruppe „Vergangene Termine“ (mehr Zeilen bei vielen offenen Alt-Terminen –
+  p95 Listen beobachten, Folgeplan „Blättern“); `scripts/lasttest.py` ruft im AD-Profil `GET /leads/vergangene` auf (der
+  Dialog verändert Daten und ist nicht im Lastmodell [ANNAHME]). Keine Datenbankänderung außer den additiven Spalten
+  `vot_termine.ausfall_grund/ausfall_bemerkung` (Rückweg `rollback.bat --nur-code`).

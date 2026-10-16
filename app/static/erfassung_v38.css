@@ -1,0 +1,52 @@
+/* v38 (PLAN_V23 Phase 202/204, Agent E): Erfassung zwischenspeichern / Korrektur nach „Senden“ /
+   Objektzeile der Erfassungslisten. Nur Tokens (Hell/Dunkel über style.css), keine festen Farben.
+   Eingebunden je Seite: erfassung/seite.html, pruefen.html, uebersicht.html, erfassungen/liste.html,
+   erfassungen/detail.html, vorgaenge/akte.html. */
+
+/* Kopf des Bogens: Kunde links, „Später fortsetzen“ oben rechts */
+.bogen-kopf { display: flex; align-items: center; justify-content: space-between; gap: var(--a-2); flex-wrap: wrap; }
+.bogen-kopf .dezent { margin: 0; }
+.spaeter-knopf { white-space: nowrap; }
+
+/* Korrekturmodus: Leiste über dem Bogen */
+.korrektur-leiste {
+    background: var(--status-orange-bg);
+    border: 1px solid color-mix(in srgb, var(--status-orange) 30%, transparent);
+    border-left: 4px solid var(--status-orange);
+    border-radius: var(--r-m, 8px);
+    padding: var(--a-2) var(--a-3);
+    margin: var(--a-2) 0;
+    color: var(--text);
+}
+.korrektur-leiste strong { color: var(--status-orange); }
+
+/* Hinweis „Fortgesetzt bei Frage 12“ + markierte Frage */
+.fortgesetzt-hinweis { margin: var(--a-2) 0; }
+.fragefeld.fortgesetzt { outline: 2px solid var(--akzent); outline-offset: 4px; border-radius: 6px; }
+
+/* Badges: Entwurf (Warnfarbe ab 30 Tagen), nachträglich geändert */
+.abzeichen.entwurf-badge { background: var(--status-grau-bg, var(--flaeche-abgesetzt)); color: var(--status-grau); }
+.abzeichen.entwurf-badge.alt { background: var(--status-orange-bg); color: var(--status-orange); }
+.abzeichen.geaendert-badge { background: var(--status-orange-bg); color: var(--status-orange); }
+.erfassung-liste li.entwurf-alt { border-left: 4px solid var(--status-orange); }
+
+/* Objektzeile (mobil unter dem Kundennamen, Desktop-Spalte „Objekt“) */
+.objekt-zeile { display: block; color: var(--text-dezent); font-size: var(--t-s); margin-top: 2px; }
+.objekt-zeile .objekt-name { font-weight: 600; color: var(--text); }
+.objekt-zeile .objekt-kunde { font-style: italic; }
+/* Desktop-Tabelle: unter 600 px steht die Objektzeile in der Kundenzelle (Spalte „Objekt“ wird dort schmal) */
+.sp-lead .objekt-zeile.nur-mobil { display: none; }
+@media (max-width: 600px) {
+    .sp-lead .objekt-zeile.nur-mobil { display: block; }
+}
+
+/* Knopf „Antworten korrigieren“ gesperrt (Tooltip über title) */
+.knopf.gesperrt, .knopf[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; pointer-events: auto; }
+.korrektur-aktionen { display: flex; gap: var(--a-2); flex-wrap: wrap; align-items: center; margin: var(--a-2) 0; }
+.protokoll-zeile a.korrektur-link { color: var(--link); text-decoration: none; font-size: var(--t-s); }
+.protokoll-zeile a.korrektur-link:hover { text-decoration: underline; }
+
+/* Notizen-Chat: aufklappbarer Block „Alle Änderungen“ (Makro _nc_eintrag) */
+.nc-mehr { margin-top: 4px; }
+.nc-mehr summary { cursor: pointer; color: var(--link); font-size: var(--t-s); }
+.nc-mehr .notiz-text { margin-top: 4px; }

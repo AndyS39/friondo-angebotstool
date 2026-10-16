@@ -1,14 +1,42 @@
 {% extends "base.html" %}
 {# v34 (PLAN_V21 Phase 181): Diktat-Knopf an Bemerkungsfeldern, Foto-Sammelbox (Kamera-Serie,
-   Ordner je Foto) auf der Seite Einschätzung – Formular-Modus, Route unverändert #}
+   Ordner je Foto) auf der Seite Einschätzung – Formular-Modus, Route unverändert
+   v38 (PLAN_V23 Phase 202): Knopf „Später fortsetzen“ oben rechts (speichert den Stand ohne
+   Pflichtprüfung → Erfassungsliste), Hinweis „Fortgesetzt bei Frage 12“ mit Sprung zur Frage,
+   beforeunload nur bei ungespeicherter Eingabe, Korrekturmodus für abgesendete Erfassungen
+   (alle Antworten vorbelegt, Knopf „Korrektur speichern“, kein Freitext-Wechsel) #}
 {% from "_diktat.html" import diktat_knopf %}
 {% from "_galerie.html" import sammelbox, galerie_einbindung %}
 
 {% block titel %}{{ seiten[nr] }} – Erfassung{% endblock %}
 
 {% block inhalt %}
+<link rel="stylesheet" href="/static/erfassung_v38.css?v={{ css_version }}">
+{% set korrektur = korrektur | default(false) %}
+{% set kctx = kctx | default(none) %}
 <div class="mobil-inhalt">
-    <p class="dezent">Kunde: <strong>{{ kunde.anzeige_name }}</strong></p>
+    <div class="bogen-kopf">
+        <p class="dezent">Kunde: <strong>{{ kunde.anzeige_name }}</strong></p>
+        {% if not korrektur %}
+        <button class="knopf klein zweitrangig spaeter-knopf" type="submit" form="seitenform"
+                name="richtung" value="spaeter" formnovalidate data-rolle="spaeter-fortsetzen"
+                title="Stand speichern und später weitermachen">Später fortsetzen</button>
+        {% endif %}
+    </div>
+
+    {% if korrektur %}
+    <div class="korrektur-leiste" data-rolle="korrektur-leiste">
+        <strong>Korrekturmodus</strong> – die Erfassung ist bereits abgesendet ({{ erfassung.status }}).
+        Geänderte Antworten werden im Notizen-Chat des Vorgangs protokolliert, der Status bleibt
+        unverändert.
+        {% if kctx and kctx.badge %}<span class="abzeichen geaendert-badge">{{ kctx.badge }}</span>{% endif %}
+        <a href="/erfassung/{{ erfassung.id }}/pruefen">Zur Übersicht</a>
+    </div>
+    {% endif %}
+    {% if fortgesetzt | default('') %}
+    <p class="meldung fortgesetzt-hinweis" data-rolle="fortgesetzt">{{ fortgesetzt }}</p>
+    {% endif %}
+    {% if meldung | default('') %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
     {# v14 (Phase 73): Fortschritt als "Seite x von y" + Balken #}
     <div class="erfassung-fortschritt">
@@ -33,7 +61,8 @@
             {% set raum_ns.nr = klon[1] %}
             <h2 class="raum-titel">Raum {{ raum_ns.nr }}</h2>
         {% endif %}
-        <div class="fragefeld {{ 'verborgen' if not sichtbar[frage.id] }}"
+        <div class="fragefeld{{ ' verborgen' if not sichtbar[frage.id] }}{{ ' fortgesetzt' if (sprung_frage | default('')) == frage.id }}"
+             id="{{ anker(frage.id) if anker is defined else 'frage-' ~ frage.id | replace('#', '-') }}"
              data-frage="{{ frage.id }}" data-regel='{{ client_regel(frage) }}'>
             <label class="fragetitel">{{ frage.text.split(': ', 1)[1] if klon | length > 1 and ': ' in frage.text else frage.text }}
                 {%- if vorbelegt is defined and vorbelegt.get(frage.id) %}
@@ -121,16 +150,27 @@
             {% if nr > 0 %}
                 <button class="knopf zweitrangig gross" type="submit" name="richtung" value="zurueck">← Zurück</button>
             {% endif %}
+            {% if korrektur %}
+                {# v38: Korrekturmodus – Speichern führt zur Prüfseite (AMPEL/Pflichtfragen dort erneut geprüft);
+                   „Weiter“ blättert weiter und protokolliert die Änderungen dieser Seite ebenfalls #}
+                {% if nr + 1 < seiten | length %}
+                <button class="knopf zweitrangig gross" type="submit" name="richtung" value="weiter">Weiter →</button>
+                {% endif %}
+                <button class="knopf gross" type="submit" name="richtung" value="korrektur" data-rolle="korrektur-speichern">Korrektur speichern</button>
+            {% else %}
             <button class="knopf gross" type="submit" name="richtung" value="weiter">
                 {{ 'Zur Übersicht →' if nr + 1 == seiten | length else 'Weiter →' }}
             </button>
+            {% endif %}
         </div>
+        {% if not korrektur %}
         <p class="freitext-wechsel">
             <button class="knopf zweitrangig" type="submit" name="richtung" value="freitext"
                     formnovalidate
                     onclick="return confirm('In die Freitext-Erfassung wechseln? Die bisherigen Antworten bleiben im Protokoll erhalten.');">
                 ✎ In Freitext wechseln (individueller Fall)</button>
         </p>
+        {% endif %}
     </form>
 </div>
 
@@ -211,6 +251,28 @@
         if (stark) stark.checked = true;
     });
     aktualisieren();
+})();
+
+// v38 (PLAN_V23 Phase 202): beforeunload NUR bei ungespeicherter Eingabe auf dieser Seite –
+// jedes Absenden des Formulars (Weiter, Zurück, Später fortsetzen, Korrektur speichern,
+// Freitext-Wechsel) hebt die Markierung auf; nach dem Absenden gibt es keine Eingaben mehr.
+// Der Sprung zur fortgesetzten Frage (#frage-…) scrollt die Frage in die Mitte.
+(function () {
+    var form = document.getElementById('seitenform');
+    var geaendert = false;
+    form.addEventListener('input', function () { geaendert = true; });
+    form.addEventListener('change', function () { geaendert = true; });
+    form.addEventListener('submit', function () { geaendert = false; });
+    window.addEventListener('beforeunload', function (ev) {
+        if (!geaendert) { return; }
+        ev.preventDefault();
+        ev.returnValue = '';
+    });
+    window.friondoBogenGeaendert = function () { return geaendert; };
+    var ziel = document.querySelector('.fragefeld.fortgesetzt');
+    if (ziel && ziel.scrollIntoView) {
+        setTimeout(function () { ziel.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 50);
+    }
 })();
 </script>
 {% endblock %}

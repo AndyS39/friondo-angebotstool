@@ -1,0 +1,10 @@
+{# v38 (PLAN_V23 Phase 201, Agent G): Zeile „Wartende Fotos: Vorgang Müller (3), Vorgang Schmidt (1)“ auf der
+   Startseite der mobilen Erfassung – rein clientseitig aus dem Offline-Zwischenspeicher des Browsers
+   (IndexedDB friondo_galerie_puffer, static/galerie_puffer.js) gefüllt; Links führen auf die Galerie des
+   jeweiligen Vorgangs (/vorgaenge/<id>#galerie), wo der Hinweiskasten „n Fotos warten auf Upload“ den
+   Upload anstößt. Ohne wartende Fotos bleibt die Zeile versteckt (hidden). Eingebunden über EINE Zeile in
+   erfassung/uebersicht.html; die Skripte sind dieselben wie im Makro galerie_einbindung (_galerie.html). #}
+<p class="gal38-puffer-zeile dezent" hidden data-gal38-puffer-zeile>Wartende Fotos: <span class="gal38-puffer-liste"></span></p>
+<link rel="stylesheet" href="/static/galerie_v38.css?v={{ css_version | default('') }}">
+<script src="/static/galerie_puffer.js?v={{ css_version | default('') }}"></script>
+<script src="/static/galerie_v38.js?v={{ css_version | default('') }}"></script>

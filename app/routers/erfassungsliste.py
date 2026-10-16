@@ -8,6 +8,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app import angebot_aufbau
+from app import erfassung_korrektur as korrektur_modul   # v38 (PLAN_V23 Phase 202/204)
 from app import konfigurator as engine
 from app import logik as logik_modul
 from app.db import get_session
@@ -21,12 +22,17 @@ from app import sparten as sparten_modul
 router = APIRouter(prefix="/erfassungen")
 
 
-def _sortwert(e: Erfassung, key: str, kunden: dict, benutzer: dict, angebote: dict):
+def _sortwert(e: Erfassung, key: str, kunden: dict, benutzer: dict, angebote: dict,
+              objekt_zeilen: dict | None = None):
     """v33 (Phase 174): Sortierwert je Spalte der Erfassungsliste bzw. TAIFUN-Warteschlange
-    (None = leer, steht immer am Ende – lead_boards.zeilen_sortieren)."""
+    (None = leer, steht immer am Ende – lead_boards.zeilen_sortieren).
+    v38 (Phase 204): Spalte „Objekt“ (Objektbezeichnung · Adresse)."""
     kunde = kunden.get(e.kunde_id)
     if key == "lead":
         return lead_boards.sort_text(kunde.anzeige_name if kunde else None)
+    if key == "objekt":
+        oz = (objekt_zeilen or {}).get(e.id)
+        return lead_boards.sort_text(oz["text"] if oz and oz.get("text") else None)
     if key in ("datum", "erfassung"):
         return e.abgesendet_am
     if key == "vertriebler":
@@ -68,7 +74,14 @@ def _kontext(session: Session, erfassungen):
 def liste(request: Request, q: str = "", status: str = "", ampel: str = "",
                 interesse: str = "", vertriebler_id: int = 0, sparte: str = "",
                 session: Session = Depends(get_session)):
-    abfrage = session.query(Erfassung).filter(Erfassung.status != "Entwurf")
+    # v38 (PLAN_V23 Phase 202): Entwürfe (nicht abgesendete Bögen) stehen im Reiter „Entwürfe“ und in
+    # „Alle“ mit Badge „Entwurf · Frage 12 von 31“ (Warnfarbe ab 30 Tagen) [ANNAHME: „Alle“ zeigt
+    # sie mit]; die übrigen Reiter/Kacheln bleiben wie bisher ohne Entwürfe
+    abfrage = session.query(Erfassung)
+    if status == "entwuerfe":
+        abfrage = abfrage.filter(Erfassung.status == "Entwurf")
+    elif status:
+        abfrage = abfrage.filter(Erfassung.status != "Entwurf")
     if sparte:   # Sparten-Filter (v8)
         abfrage = abfrage.filter(Erfassung.sparte == sparte)
     # Archiv (v6): Standardansicht ohne archivierte, Filter „Archiv“ nur diese;
@@ -85,19 +98,25 @@ def liste(request: Request, q: str = "", status: str = "", ampel: str = "",
         elif status == "individuell-offen":   # Startseiten-Kachel (v7)
             abfrage = abfrage.filter(Erfassung.status.in_(
                 ["Individuell – zu prüfen", "In TAIFUN zu schreiben"]))
+        elif status == "entwuerfe":           # v38: Reiter „Entwürfe“ (Filter steht oben)
+            pass
         elif status:
             abfrage = abfrage.filter(Erfassung.status == status)
     if ampel:
         abfrage = abfrage.filter(Erfassung.ampel == ampel)
     erfassungen = abfrage.order_by(Erfassung.abgesendet_am.desc()).all()
     kunden, benutzer, angebote = _kontext(session, erfassungen)
+    # v38 (PLAN_V23 Phase 204): Objektzeile je Erfassung (eine Abfrage je Liste) – Spalte „Objekt“,
+    # Zeile unter dem Kundennamen (< 600 px), Suche findet die Objektbezeichnung
+    objekt_map = korrektur_modul.objekt_zeilen(session, erfassungen, kunden)
     if q:
         suchwort = q.lower()
         erfassungen = [e for e in erfassungen
                        if (e.kunde_id in kunden
                            and suchwort in kunden[e.kunde_id].anzeige_name.lower())
                        or (e.benutzer_id in benutzer
-                           and suchwort in benutzer[e.benutzer_id].name.lower())]
+                           and suchwort in benutzer[e.benutzer_id].name.lower())
+                       or (e.id in objekt_map and suchwort in objekt_map[e.id]["text"].lower())]
     if interesse:   # Filter nach Interesse des Kunden (Phase 33)
         erfassungen = [e for e in erfassungen
                        if e.kunde_id in kunden and interesse in kunden[e.kunde_id].interessen]
@@ -129,9 +148,13 @@ def liste(request: Request, q: str = "", status: str = "", ampel: str = "",
     spalten = lead_boards.spalten_fuer(session, benutzer_obj, board)
     sortierung = lead_boards.sortierung_fuer(session, benutzer_obj, board)
     lead_boards.zeilen_sortieren(erfassungen, sortierung,
-                                 wert=lambda e, key: _sortwert(e, key, kunden, benutzer, angebote))
+                                 wert=lambda e, key: _sortwert(e, key, kunden, benutzer, angebote,
+                                                               objekt_map))
     return render(request, "erfassungen/liste.html", aktiv="/erfassungen",
                   erfassungen=erfassungen, kunden=kunden, benutzer_map=benutzer,
+                  objekt_zeilen=objekt_map,                                        # v38 Phase 204
+                  entwurf_badges=korrektur_modul.entwurf_badges(session, erfassungen),   # v38 Phase 202
+                  korrektur_badge=korrektur_modul.badge_text,
                   angebote=angebote, q=q, status=status, ampel=ampel,
                   interesse=interesse, vertriebler_id=vertriebler_id, sparte=sparte,
                   vertriebler_werte=vertriebler_werte,
@@ -164,6 +187,11 @@ def detail(request: Request, erfassung_id: int,
                     .order_by(Benutzer.name).all())
     from datetime import date
     fachhinweise = engine.fachliche_hinweise(antworten)   # v9
+    # v38 (PLAN_V23 Phase 202/204): Korrektur-Kontext (Knopf/Sperre/Badge/Angebots-Hinweis),
+    # Entwurf-Badge „Frage x von y“, Objektzeile
+    kctx = korrektur_modul.kontext(session, request.state.benutzer, erfassung)
+    entwurf_badge = (korrektur_modul.entwurf_badge(logik, erfassung, antworten)
+                     if erfassung.status == korrektur_modul.STATUS_ENTWURF else None)
     return render(request, "erfassungen/detail.html", aktiv="/erfassungen",
                   fachhinweise=fachhinweise, benutzer=request.state.benutzer,
                   erfassung=erfassung, kunde=kunde, vertriebler=vertriebler,
@@ -172,6 +200,8 @@ def detail(request: Request, erfassung_id: int,
                   gruende=erfassung.gruende_text.splitlines(),
                   status_liste=ERFASSUNG_STATUS,
                   heute=date.today().strftime("%Y-%m-%d"),
+                  kctx=kctx, entwurf_badge=entwurf_badge,
+                  objekt=korrektur_modul.objekt_zeile(session, erfassung, kunde),
                   meldung=request.query_params.get("meldung", ""))
 
 
@@ -248,11 +278,15 @@ def freitext_aendern(request: Request, erfassung_id: int,
     if neuer_text == (erfassung.freitext or "").strip():
         return RedirectResponse(f"/erfassungen/{erfassung_id}", status_code=303)
     laeuft = erfassung.status != "Neu" or erfassung.angebot_id is not None
+    alter_text = erfassung.freitext or ""
     erfassung.freitext = neuer_text
     _kette_protokollieren(erfassung, benutzer,
                           "Freitext geändert"
                           + (" (Vorgang bereits in Bearbeitung/mit Angebot)"
                              if laeuft else ""))
+    # v38 (PLAN_V23 Phase 202): derselbe Eintrag wie die Katalog-Korrektur – Änderungsnotiz im
+    # Notizen-Chat des Vorgangs + Badge „nachträglich geändert (TT.MM.)“
+    korrektur_modul.freitext_aenderung(session, erfassung, benutzer, alter_text, neuer_text)
     session.commit()
     return RedirectResponse(f"/erfassungen/{erfassung_id}?meldung=" + quote_plus(
         "Freitext gespeichert – die Änderung steht im Änderungsprotokoll."),
@@ -522,6 +556,12 @@ def angebot_erzeugen(erfassung_id: int, session: Session = Depends(get_session))
     erfassung = session.get(Erfassung, erfassung_id)
     if erfassung is None:
         return RedirectResponse("/erfassungen", status_code=303)
+    if erfassung.status == korrektur_modul.STATUS_ENTWURF:
+        # v38: Entwürfe stehen jetzt in der Liste – kein Angebot aus einem nicht abgesendeten Bogen
+        from urllib.parse import quote_plus
+        return RedirectResponse(f"/erfassungen/{erfassung.id}?meldung=" + quote_plus(
+            "Entwurf – die Erfassung ist noch nicht abgesendet. Angebot erst nach dem Absenden."),
+            status_code=303)
     logik, bericht = logik_modul.hole_logik(session)
     if not bericht.ok:
         return RedirectResponse("/parametrierung", status_code=303)
@@ -570,6 +610,11 @@ def manuelles_angebot(erfassung_id: int, session: Session = Depends(get_session)
     erfassung = session.get(Erfassung, erfassung_id)
     if erfassung is None:
         return RedirectResponse("/erfassungen", status_code=303)
+    if erfassung.status == korrektur_modul.STATUS_ENTWURF:   # v38: kein Angebot aus einem Entwurf
+        from urllib.parse import quote_plus
+        return RedirectResponse(f"/erfassungen/{erfassung.id}?meldung=" + quote_plus(
+            "Entwurf – die Erfassung ist noch nicht abgesendet. Angebot erst nach dem Absenden."),
+            status_code=303)
     logik, _ = logik_modul.hole_logik(session)
     sparte = (erfassung.konfigurator_typ or erfassung.sparte or "WP").upper()
     logik = logik_modul.logik_fuer_sparte(logik, sparte) or logik   # v13-PV

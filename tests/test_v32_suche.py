@@ -204,11 +204,13 @@ class SucheTests(unittest.TestCase):
         erfassung = ad.get("/erfassung")
         self.assertEqual(erfassung.status_code, 200)
         self.assertIn('class="kopf-suche"', erfassung.text)
-        # v33 (PLAN_V20 Phase 173, Protokoll A.5): Suche zusätzlich als Eintrag „Kunden“ der unteren
-        # Leiste des Außendienstes (mobil); Innendienst/Montage ohne Leiste
+        # v33 (PLAN_V20 Phase 173, Protokoll A.5): untere Leiste des Außendienstes (mobil);
+        # v38 (PLAN_V23 Phase 204): der Eintrag „Kunden“ ist durch „Vergangene Termine“ ersetzt –
+        # die Suche bleibt über die Lupe der Kopfzeile erreichbar; Innendienst/Montage ohne Leiste
         self.assertIn('class="mt-leiste"', erfassung.text)
-        self.assertIn('href="/suche" class="mt-leiste-eintrag" data-mt-leiste-kunden', erfassung.text)
-        self.assertIn("Kunden</a>", erfassung.text)
+        self.assertNotIn("data-mt-leiste-kunden", erfassung.text)
+        self.assertIn('href="/leads/vergangene"', erfassung.text)
+        self.assertNotIn("Kunden</a>", erfassung.text)
         self.assertNotIn("mt-leiste", self.admin.get("/").text)
         # Montage: kein Suchfeld
         montage = _client(self.montage_id).get("/montage")

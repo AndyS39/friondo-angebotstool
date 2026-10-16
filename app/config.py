@@ -32,7 +32,7 @@ def _schalter(env_name: str) -> bool:
 
 
 # v27 (PLAN_V17): Versionskennung für /health und die Betriebs-Seite
-VERSION = "v37"   # 16.10.2026: Lead-Management V7 – Design v3, Kartei-Review, Termine anpassbar, Routing in km, Kanaele/Interessen (PLAN_LEAD_V7, Phasen 196-200); vorher v36 16.10.2026: Angebotslayout v3 (HTML + Browser-Druck), Cloover-Finanzierung (PLAN_V22, Phasen 188-195)
+VERSION = "v38"   # 17.10.2026: Foto-Upload Pop-up/Offline/Mehrfach-Loeschen, Erfassung Entwurf/Korrektur, Leads VOT Kanal-Pfeil/Vergangene Termine, Mobil (PLAN_V23, Phasen 201-205); vorher v37 16.10.2026: Lead-Management V7 (PLAN_LEAD_V7, Phasen 196-200)
 
 
 # --- Pfade ---------------------------------------------------------------

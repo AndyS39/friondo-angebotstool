@@ -63,19 +63,34 @@
 {%- endmacro %}
 
 {% macro erfassung_karte(e) -%}
-    <div class="angebot-karte">
+    {# v38 (PLAN_V23 Phase 202, Agent E): Badge „nachträglich geändert (TT.MM.)“ und Knopf
+       „Antworten korrigieren“ (Außendienst nur eigene, Innendienst/Admin alle; gesperrt mit Tooltip,
+       sobald ein verknüpftes Angebot – auch eine Version – versandfertig ist); Entwürfe öffnen bei der
+       ersten unbeantworteten Frage. Kontext ohne Datenbank aus den geladenen Angeboten der Akte. #}
+    {% set korr = erfassung_korrektur_info(e, benutzer, angebote) %}
+    <div class="angebot-karte" data-rolle="erfassung-karte" data-erfassung="{{ e.id }}">
         <div class="kartenkopf">
             {{ sparten_ui.chip(e.sparte or 'WP') }}
             <strong>{{ 'Freitext' if e.typ == 'freitext' else 'Katalog' }}</strong>
             {{ status_badge(e.status) }}
+            {% if korr.badge %}<span class="abzeichen geaendert-badge" data-rolle="geaendert-badge" title="Antworten nach dem Absenden geändert – Details im Notizen-Chat">{{ korr.badge }}</span>{% endif %}
             <span class="dezent">{{ symbol('nutzer') }} {{ benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '–' }}</span>
             <span class="dezent" style="margin-left:auto">{{ e.abgesendet_am.strftime('%d.%m.%Y %H:%M') if e.abgesendet_am else '– noch nicht abgesendet –' }}</span>
         </div>
         <div class="kartenfuss">
             {% if benutzer.basisrolle in ('admin', 'innendienst') %}
                 <a class="knopf klein zweitrangig" href="/erfassungen/{{ e.id }}">{{ symbol('stift') }} Öffnen</a>
-            {% elif e.status == 'Entwurf' %}
-                <a class="knopf klein zweitrangig" href="/erfassung/{{ e.id }}/weiche">Fortsetzen</a>
+            {% endif %}
+            {% if e.status == 'Entwurf' %}
+                {% if benutzer.basisrolle in ('admin', 'innendienst') or e.benutzer_id == benutzer.id %}
+                <a class="knopf klein zweitrangig" href="/erfassung/{{ e.id }}/fortsetzen">Fortsetzen</a>
+                {% endif %}
+            {% elif korr.erlaubt and e.typ != 'freitext' %}
+                {% if korr.gesperrt %}
+                <span class="knopf klein zweitrangig gesperrt" aria-disabled="true" title="{{ korr.sperr_text }}" data-rolle="korrektur-gesperrt">Antworten korrigieren</span>
+                {% else %}
+                <a class="knopf klein zweitrangig" href="/erfassung/{{ e.id }}/korrektur" data-rolle="korrektur-knopf">Antworten korrigieren</a>
+                {% endif %}
             {% endif %}
         </div>
     </div>
@@ -87,6 +102,8 @@
 {# v34 (PLAN_V21 Phase 180, Agent V): Kasten „Gemeinsam versenden“ + Drop-Zone TAIFUN-PDF #}
 <link rel="stylesheet" href="/static/vorgang_v34.css?v={{ css_version }}">
 <script src="/static/taifun_pdf.js?v={{ css_version }}" defer></script>
+{# v38 (PLAN_V23 Phase 202, Agent E): Badge/Knopf der Erfassungskarte, aufklappbare Änderungsnotiz #}
+<link rel="stylesheet" href="/static/erfassung_v38.css?v={{ css_version }}">
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
 
 {# v31 (PLAN_LEAD_V5 Phase 154): Archivieren ist eine Lead-Sicht – die Akte zeigt den

@@ -1,15 +1,44 @@
 {% extends "base.html" %}
+{% from "_komponenten.html" import status_badge %}
+{# v38 (PLAN_V23 Phase 202): Knopf „Antworten korrigieren“ (Außendienst nur eigene, Innendienst/Admin
+   alle; gesperrt mit Tooltip, sobald ein verknüpftes Angebot versandfertig ist), Sprung zu einer
+   Frage per Klick („ändern“), Badge „nachträglich geändert (TT.MM.)“, Hinweis „Angebot neu
+   berechnen“ bei verknüpftem Angebotsentwurf, Objektzeile (Phase 204) #}
 
 {% block titel %}Übersicht – Erfassung{% endblock %}
 
 {% block inhalt %}
+<link rel="stylesheet" href="/static/erfassung_v38.css?v={{ css_version }}">
+{% set kctx = kctx | default(none) %}
+{% set entwurf = erfassung.status == 'Entwurf' %}
 <div class="mobil-inhalt">
     <h1>Übersicht</h1>
-    <p class="dezent">Kunde: <strong>{{ kunde.anzeige_name }}</strong></p>
+    <p class="dezent">Kunde: <strong>{{ kunde.anzeige_name }}</strong>
+        {% if objekt is defined and objekt and objekt.text %}
+        <span class="objekt-zeile" data-rolle="objekt-zeile">
+            {%- if objekt.bezeichnung %}<span class="objekt-name">{{ objekt.bezeichnung }}</span> · {% endif -%}
+            {{ objekt.adresse }}{% if objekt.kunde %} <span class="objekt-kunde">(Kunde)</span>{% endif %}</span>
+        {% endif %}
+    </p>
+    {% if not entwurf %}
+    <p class="korrektur-status">{{ status_badge(erfassung.status) }}
+        {% if kctx and kctx.badge %}<span class="abzeichen geaendert-badge" data-rolle="geaendert-badge"
+            title="Zuletzt korrigiert am {{ kctx.geaendert_am.strftime('%d.%m.%Y %H:%M') if kctx.geaendert_am }}{{ ' von ' ~ kctx.geaendert_von_name if kctx.geaendert_von_name }} – Details im Notizen-Chat des Vorgangs">{{ kctx.badge }}</span>{% endif %}
+    </p>
+    {% endif %}
+    {% if meldung | default('') %}<p class="meldung" data-rolle="meldung">{{ meldung }}</p>{% endif %}
+    {% if kctx and kctx.hinweis_angebot %}
+    <div class="warnblock" data-rolle="angebot-hinweis">
+        <strong>{{ kctx.hinweis_text }}</strong>
+        <a href="/angebote/{{ kctx.angebot_entwurf.id }}">Zum Angebot {{ kctx.angebot_entwurf.nummer }}</a>
+        <span class="dezent">(Entwurf – keine automatische Neuberechnung)</span>
+    </div>
+    {% endif %}
 
     {% if offen %}
         <p class="meldung fehler">Es fehlen noch Antworten (z. B. {{ offen.id }} –
-        {{ offen.text }}). Bitte die Seiten vervollständigen.</p>
+        {{ offen.text }}). Bitte die Seiten vervollständigen.
+        {% if entwurf %}<a href="/erfassung/{{ erfassung.id }}/fortsetzen" data-rolle="fortsetzen-link">Bei der nächsten offenen Frage weitermachen →</a>{% endif %}</p>
     {% endif %}
 
     {# v24 (Klimakonfigurator): Validierung beim Absenden – jedes Außengerät braucht
@@ -37,6 +66,21 @@
         </div>
     {% endif %}
 
+    {# v38: Korrektur nach „Senden“ – Knopf nur mit Recht; gesperrt mit Tooltip #}
+    {% if not entwurf and kctx and kctx.erlaubt and erfassung.typ != 'freitext' %}
+    <div class="korrektur-aktionen">
+        {% if kctx.gesperrt %}
+        <span class="knopf zweitrangig gesperrt" aria-disabled="true" title="{{ kctx.sperr_text }}"
+              data-rolle="korrektur-gesperrt">Antworten korrigieren</span>
+        <span class="dezent">{{ kctx.sperr_text }}.</span>
+        {% else %}
+        <a class="knopf zweitrangig" href="/erfassung/{{ erfassung.id }}/korrektur"
+           data-rolle="korrektur-knopf">Antworten korrigieren</a>
+        <span class="dezent">Zum Ändern eine Frage antippen („ändern“).</span>
+        {% endif %}
+    </div>
+    {% endif %}
+
     {% set ns = namespace(seite=None) %}
     {% for p in protokoll %}
         {% if p.seite != ns.seite %}
@@ -44,7 +88,13 @@
             <h2>{{ p.seite }}</h2>
         {% endif %}
         <div class="protokoll-zeile {{ 'ampel-zeile' if p.get('ampel_grund') }}">
-            <span class="dezent">{{ p.frage }}</span><br><strong>{{ p.antwort }}</strong>
+            <span class="dezent">{{ p.frage }}</span>
+            {%- if p.frage_id and kctx and kctx.knopf_aktiv %}
+                <a class="korrektur-link" href="/erfassung/{{ erfassung.id }}/korrektur?frage={{ p.frage_id | urlencode }}" title="Antwort korrigieren">✎ ändern</a>
+            {%- elif p.frage_id and entwurf and p.seite in seiten %}
+                <a class="korrektur-link" href="/erfassung/{{ erfassung.id }}/seite/{{ seiten.index(p.seite) }}#frage-{{ p.frage_id | replace('#', '-') }}" title="Antwort ändern">✎ ändern</a>
+            {%- endif %}
+            <br><strong>{{ p.antwort }}</strong>
             {% if p.get('ampel_grund') %}
                 <br><span class="ampel orange">● {{ p.ampel_grund }}</span>
             {% endif %}
@@ -52,12 +102,16 @@
     {% endfor %}
 
     <div class="mobil-aktionen sticky-fuss">
+        {% if entwurf %}
         <a class="knopf zweitrangig gross" href="/erfassung/{{ erfassung.id }}/seite/{{ seiten | length - 1 }}">← Zurück</a>
-        {% if not offen and erfassung.status == 'Entwurf' %}
+        {% else %}
+        <a class="knopf zweitrangig gross" href="{{ '/erfassungen/' ~ erfassung.id if benutzer.basisrolle in ('admin', 'innendienst') else '/erfassung' }}">← Zur Übersicht</a>
+        {% endif %}
+        {% if not offen and entwurf %}
         <form method="post" action="/erfassung/{{ erfassung.id }}/absenden">
             <button class="knopf gross" type="submit">Absenden</button>
         </form>
-        {% elif erfassung.status != 'Entwurf' %}
+        {% elif not entwurf %}
         <p class="meldung">Bereits abgesendet ({{ erfassung.status }}).</p>
         {% endif %}
     </div>

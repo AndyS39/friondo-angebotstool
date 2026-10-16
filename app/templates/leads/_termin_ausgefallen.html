@@ -1,0 +1,82 @@
+{# v38 (PLAN_V23 Phase 204, Nachtrag „Termin nicht stattgefunden“ 16.10.2026): EIN Dialog je Seite
+   (natives <dialog>, Design-v2-Tokens in mein_tag.css, unter 600 px als Vollbild-Sheet), geöffnet
+   über den Knopf termin_ausgefallen_knopf an jeder Termin-Karte (Mein Tag „Als Nächstes“/„Heute“,
+   Seite „Vergangene Termine“, Zeilenaktion der Desktop-Tabelle Leads VOT). Die Logik liegt in
+   static/mein_tag.js (Abschnitt „Termin nicht stattgefunden“): Knopf-Daten (data-ta-*) füllen Titel
+   und Formular-Ziel, Grund steuert Pflicht-Freitext und Vorbelegung der Folge, „Kunde möchte
+   keinen neuen Termin“ klappt die zweite Abfrage „Kunden disqualifizieren?“ auf (Pflichtgrund aus
+   dem Logik-Blatt Gründe, Freitext bei Sonstiges), Senden per fetch (Accept: application/json) an
+   POST /leads/termin/{id}/ausgefallen – danach verschwindet die Karte/Zeile, Meldung in der Seite;
+   ohne fetch normales Absenden (Redirect auf `ziel`). „Abbrechen“/Escape ändert nichts. Keine
+   on*-Attribute mit tojson (v30), alle Daten in data-Attributen. #}
+{% from "_symbole.html" import symbol %}
+{% from "_diktat.html" import diktat_knopf %}
+
+{% macro termin_ausgefallen_knopf(termin_id, name, zeit, klasse='knopf klein zweitrangig') -%}
+<button type="button" class="{{ klasse }} ta-oeffnen" data-ta-oeffnen data-ta-termin="{{ termin_id }}"
+        data-ta-name="{{ name }}" data-ta-zeit="{{ zeit }}" data-ta-url="/leads/termin/{{ termin_id }}/ausgefallen"
+        title="Termin nicht stattgefunden – Grund melden, Folge wählen">Termin nicht stattgefunden</button>
+{%- endmacro %}
+
+{% macro termin_ausgefallen_dialog(gruende, folgen, vorbelegung, dq_gruende, ziel='/leads') -%}
+<dialog class="ta-dialog" id="termin-ausgefallen" data-ta-dialog aria-labelledby="ta-titel">
+    <form method="post" action="" class="ta-form" data-ta-form data-ta-vorbelegung="{{ vorbelegung | tojson | forceescape }}">
+        <input type="hidden" name="zurueck" value="{{ ziel }}">
+        <header class="ta-kopf">
+            <div class="ta-kopf-text">
+                <h2 id="ta-titel">Termin nicht stattgefunden</h2>
+                <p class="ta-untertitel dezent" data-ta-untertitel></p>
+            </div>
+            <button type="button" class="ta-schliessen" aria-label="Schließen" data-ta-abbrechen>{{ symbol('loeschen') }}</button>
+        </header>
+        <fieldset class="ta-block">
+            <legend>Grund</legend>
+            <div class="ta-wahl" role="radiogroup" aria-label="Grund">
+                {% for key, label in gruende %}
+                <label class="ta-option">
+                    <input type="radio" name="grund" value="{{ key }}" required data-ta-grund{{ ' checked' if loop.first }}>
+                    <span>{{ label }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            <label class="ta-feld" data-ta-grund-text hidden>
+                <span>Was ist passiert? <strong class="ta-pflicht">(Pflicht bei „Sonstiges“)</strong></span>
+                <input type="text" name="grund_text" maxlength="300" placeholder="kurz beschreiben" autocomplete="off">
+            </label>
+        </fieldset>
+        <div class="ta-block ta-bemerkung">
+            <label class="ta-feld" for="ta-bemerkung-feld"><span>Bemerkung <span class="dezent">(optional)</span></span></label>
+            <textarea name="bemerkung" id="ta-bemerkung-feld" rows="3" maxlength="2000" placeholder="z. B. Nachbar sagt, Kunde ist im Urlaub"></textarea>
+            {{ diktat_knopf('ta-bemerkung-feld') }}
+        </div>
+        <fieldset class="ta-block">
+            <legend>Was soll passieren?</legend>
+            <div class="ta-wahl ta-folgen" role="radiogroup" aria-label="Was soll passieren?">
+                {% for key, label in folgen %}
+                <label class="ta-option ta-folge">
+                    <input type="radio" name="folge" value="{{ key }}" data-ta-folge{{ ' checked' if loop.first }}>
+                    <span>{{ label }}</span>
+                    <small class="dezent">{% if key == 'neuer_termin' %}To-Do an das Leadmanagement, Lead zurück auf „Kontaktiert“{% else %}zweite Abfrage: Kunden disqualifizieren{% endif %}</small>
+                </label>
+                {% endfor %}
+            </div>
+        </fieldset>
+        <fieldset class="ta-block ta-dq" data-ta-dq hidden>
+            <legend>Kunden disqualifizieren?</legend>
+            <p class="dezent ta-dq-hinweis">Der Kunde möchte keinen neuen Termin – der Lead wird mit Grund disqualifiziert. Es geht keine E-Mail an den Kunden.</p>
+            <label class="ta-feld"><span>Grund <strong class="ta-pflicht">(Pflicht)</strong></span>
+                <select name="dq_grund" data-ta-dq-grund>
+                    <option value="">– bitte wählen –</option>
+                    {% for g in dq_gruende %}<option value="{{ g.grund }}" data-freitext-pflicht="{{ '1' if g.freitext_pflicht else '0' }}">{{ g.grund }}</option>{% endfor %}
+                </select></label>
+            <label class="ta-feld" data-ta-dq-text hidden><span>Freitext <strong class="ta-pflicht">(Pflicht bei diesem Grund)</strong></span>
+                <input type="text" name="dq_text" maxlength="300" autocomplete="off"></label>
+        </fieldset>
+        <p class="ta-fehler" data-ta-fehler role="alert" hidden></p>
+        <div class="ta-aktionen">
+            <button type="submit" class="knopf ta-senden" data-ta-senden data-text-neu="Weitergeben an das Leadmanagement" data-text-dq="Disqualifizieren">Weitergeben an das Leadmanagement</button>
+            <button type="button" class="knopf zweitrangig" data-ta-abbrechen>Abbrechen</button>
+        </div>
+    </form>
+</dialog>
+{%- endmacro %}

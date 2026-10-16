@@ -6,7 +6,10 @@
    Status-/Ampelfarben --status-*, Text --text/--text-dezent. Keine Hex-Werte.
    Blöcke: 1 Umschaltung mobil/Desktop · 2 Kopf · 3 „Als Nächstes“ · 4 Zeitstrahl „Heute“ und
    „Kommende Tage“ · 5 Wiedervorlage (Abschnitt + Seite) · 6 Anruf-Karte (v32) · 7 untere
-   Leiste · 8 Leads VOT Desktop (Gruppen, Priorität) · 9 Media-Queries.
+   Leiste · 8 Leads VOT Desktop (Gruppen, Priorität) · 9 v38 (PLAN_V23 Phase 203/204): Kanal-Pfeil
+   + Menü, Gruppe „Vergangene Termine“, Seite „Vergangene Termine“, Dialog „Termin nicht
+   stattgefunden“ (Vollbild-Sheet unter 600 px), Leistenbeschriftung · 10 Media-Queries.
+   v38: die Überfällig-Regeln (Block 4) sind entfallen.
    Mobil: Safe-Area-Abstände (env(safe-area-inset-*)), Schaltflächen mindestens 44 px hoch,
    kein horizontales Scrollen. */
 
@@ -29,10 +32,6 @@ main.mein-tag-seite { padding-left: max(var(--a-4), env(safe-area-inset-left)); 
 .mt-zaehler { font-size: var(--t-s); color: var(--text-dezent); white-space: nowrap; }
 .mt-zaehler-rot { color: var(--status-rot); font-weight: 600; }
 .mt-block .leer-zustand { margin: 0; }
-/* überfällige Termine: aufklappbarer Block über der Heute-Liste */
-.mt-ueberfaellig-block { margin-bottom: var(--a-3); border: 1px solid color-mix(in srgb, var(--status-rot) 45%, var(--linie)); border-left: 4px solid var(--status-rot); border-radius: var(--r-l); background: var(--flaeche-karte); }
-.mt-ueberfaellig-block > summary { cursor: pointer; min-height: 48px; display: flex; align-items: center; gap: var(--a-2); flex-wrap: wrap; padding: var(--a-2) var(--a-4); font-weight: 600; font-size: var(--t-s); }
-.mt-ueberfaellig-block > .mt-liste { border: 0; border-top: 1px solid var(--linie); border-radius: 0 0 var(--r-l) var(--r-l); box-shadow: none; }
 
 /* ---- 3. Karte „Als Nächstes“ (dunkle Fläche, Akzent-Knopf) ---- */
 .mt-naechstes { background: var(--flaeche-erhoeht); color: var(--text-invers); border: 1px solid var(--linie); border-radius: var(--r-xl); padding: var(--a-5) var(--a-5) var(--a-5); display: flex; flex-direction: column; gap: var(--a-3); margin-bottom: var(--a-6); box-shadow: var(--schatten-1); }
@@ -77,7 +76,6 @@ main.mein-tag-seite { padding-left: max(var(--a-4), env(safe-area-inset-left)); 
 .mt-termin-typ, .mt-termin-ort { font-size: var(--t-s); color: var(--text-dezent); }
 .mt-termin-ort { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .mt-termin-erledigt .mt-uhr, .mt-termin-erledigt .mt-termin-name { color: var(--text-dezent); }
-.mt-termin-ueberfaellig, .mt-ueberfaellig .mt-uhr { color: var(--status-rot); }
 .mt-termin-aktion { flex: none; align-self: center; display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; }
 .mt-termin-aktion .knopf { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
 .mt-haupt { padding-left: var(--a-4); padding-right: var(--a-4); font-weight: 600; }
@@ -236,7 +234,78 @@ main.mein-tag-seite { padding-left: max(var(--a-4), env(safe-area-inset-left)); 
 .mt-desktop .lm-filterblock .lm-spaltenwahl { margin-left: auto; }
 .mt-desktop .lm-suchleiste { flex-wrap: wrap; gap: var(--a-2); align-items: flex-end; }
 
-/* ---- 9. Media-Queries ---- */
+/* ---- 9. v38 (PLAN_V23 Phase 203/204): Kanal-Pfeil, Vergangene Termine, Dialog, Leiste ---- */
+/* Kanalzelle: Badge + kleiner Pfeil (16 px, gedämpft) statt Dropdown; Menü fest unter der Zelle */
+.lv-kanal-zelle { white-space: nowrap; }
+.lv-kanal-wert { display: inline-block; vertical-align: middle; }
+.lv-kanal-pfeil { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-left: 2px; padding: 0; border: 0; border-radius: var(--r-s); background: transparent; color: var(--text-dezent); cursor: pointer; vertical-align: middle; }
+.lv-kanal-pfeil .symbol-svg { width: 16px; height: 16px; }
+.lv-kanal-pfeil:hover, .lv-kanal-pfeil[aria-expanded="true"] { background: var(--flaeche-abgesetzt); color: var(--text); }
+.lv-kanal-pfeil:focus-visible { outline: 2px solid var(--fokus); outline-offset: 1px; }
+.lv-kanal-manuell { color: var(--text-dezent); font-size: var(--t-xs); margin-left: 2px; }
+.lv-kanal-manuell[hidden] { display: none; }
+.lv-kanal-noscript { display: inline-flex; gap: 4px; align-items: center; margin-top: 4px; }
+.lv-kanal-menue { position: fixed; z-index: 60; min-width: 200px; max-height: 60vh; overflow-y: auto; padding: 4px; background: var(--flaeche-karte); color: var(--text); border: 1px solid var(--linie-stark); border-radius: var(--r-m); box-shadow: var(--schatten-2); display: flex; flex-direction: column; }
+.lv-kanal-menue[hidden] { display: none; }
+.lv-kanal-eintrag { text-align: left; border: 0; border-radius: var(--r-s); background: transparent; color: var(--text); font: inherit; font-size: var(--t-s); padding: 8px 10px; min-height: 36px; cursor: pointer; }
+.lv-kanal-eintrag:hover, .lv-kanal-eintrag:focus-visible { background: var(--flaeche-abgesetzt); outline: none; }
+.lv-kanal-eintrag.aktuell { font-weight: 700; color: var(--akzent); }
+.lv-kanal-eintrag.aktuell::before { content: "✓ "; }
+/* Gruppe „Vergangene Termine“: Termin-Spalte gedämpft mit „vor n Tagen“ */
+.lv-gruppe-vergangen > summary .n { background: var(--status-grau-bg); color: var(--status-grau); }
+.lv-tabelle td.lv-vergangen .lv-termin-text { color: var(--text-dezent); }
+.lv-vor { font-size: var(--t-xs); white-space: nowrap; }
+.lv-tabelle td.aktionen .lv-ausfall { margin-left: 4px; }
+/* Knopf „Termin nicht stattgefunden“ an den Karten (Link-Optik, 44 px) */
+.mt-ausfall-link { border: 0; background: transparent; color: var(--status-rot); font: inherit; font-size: var(--t-s); font-weight: 600; min-height: 44px; padding: 0; cursor: pointer; display: inline-flex; align-items: center; }
+.mt-ausfall-link:hover { text-decoration: underline; }
+.mt-ausfall-klein { font-size: var(--t-xs); text-align: right; }
+.mt-naechstes-ausfall { display: flex; justify-content: flex-end; }
+.mt-naechstes .mt-ausfall-link { color: var(--text-invers); opacity: 0.85; }
+.mt-termin-fuss { display: flex; justify-content: space-between; align-items: center; gap: var(--a-3); padding: 0 var(--a-4) var(--a-2) calc(46px + var(--a-3)); }
+.mt-termin-vergangen .mt-uhr { color: var(--text-dezent); }
+.mt-termin-vergangen .mt-termin-ort .symbol-svg { width: 0.95rem; height: 0.95rem; }
+.mt-termin[hidden] { display: none; }
+/* Seite „Vergangene Termine“ */
+.mt-vg-hinweis { margin: 0; font-size: var(--t-s); }
+.mt-vg-liste { display: flex; flex-direction: column; gap: var(--a-2); }
+.mt-vg-liste .mt-tag[hidden] { display: none; }
+.mt-vg-tagliste { margin-left: 0; }
+.mt-vg-hinweis-link { margin-top: var(--a-3); min-height: 44px; display: inline-flex; align-items: center; gap: 0.4rem; color: var(--link); text-decoration: none; font-weight: 600; font-size: var(--t-s); }
+.mt-vg-hinweis-link:hover { text-decoration: underline; }
+/* Dialog „Termin nicht stattgefunden“ (natives <dialog>, Design-v2-Tokens) */
+.ta-dialog { border: 1px solid var(--linie-stark); border-radius: var(--r-xl); padding: 0; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); background: var(--flaeche-karte); color: var(--text); box-shadow: var(--schatten-2); }
+.ta-dialog::backdrop { background: rgba(7, 13, 26, 0.55); }   /* fest: Abdunklung hinter dem Dialog (::backdrop erbt in älteren Browsern keine Tokens) */
+.ta-form { display: flex; flex-direction: column; gap: var(--a-3); padding: var(--a-4) var(--a-5) var(--a-5); }
+.ta-kopf { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--a-3); }
+.ta-kopf h2 { margin: 0; font-size: var(--t-xl); color: var(--text-titel); }
+.ta-untertitel { margin: 0.25rem 0 0; font-size: var(--t-s); }
+.ta-schliessen { flex: none; width: 44px; height: 44px; border: 0; border-radius: var(--r-l); background: var(--flaeche-abgesetzt); color: var(--text); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.ta-block { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--a-2); }
+.ta-block legend { font-weight: 700; font-size: var(--t-s); color: var(--text-titel); padding: 0; margin-bottom: var(--a-1); }
+.ta-wahl { display: flex; flex-direction: column; gap: var(--a-2); }
+.ta-option { display: grid; grid-template-columns: auto 1fr; column-gap: var(--a-3); align-items: center; min-height: 48px; padding: var(--a-2) var(--a-3); border: 1.5px solid var(--linie-stark); border-radius: var(--r-l); background: var(--flaeche-karte); cursor: pointer; font-size: var(--t-m); }
+.ta-option input { margin: 0; width: 20px; height: 20px; accent-color: var(--akzent); }
+.ta-option:has(input:checked), .ta-option.gewaehlt { border-color: var(--akzent); background: var(--akzent-flaeche); }
+.ta-option small { grid-column: 2; font-size: var(--t-xs); }
+.ta-feld { display: grid; gap: 0.3rem; font-size: var(--t-s); color: var(--text-dezent); }
+.ta-feld[hidden] { display: none; }
+.ta-feld input, .ta-feld select, .ta-bemerkung textarea { width: 100%; box-sizing: border-box; min-height: 44px; font: inherit; font-size: var(--t-m); color: var(--text); background: var(--flaeche-karte); border: 1.5px solid var(--linie-stark); border-radius: var(--r-m); padding: 0.5rem 0.75rem; }
+.ta-bemerkung textarea { min-height: 72px; resize: vertical; }
+.ta-bemerkung .diktat-block { margin-top: var(--a-1); }
+.ta-pflicht { color: var(--status-rot); font-weight: 600; }
+.ta-dq { padding: var(--a-3); border-radius: var(--r-l); background: var(--status-rot-bg); }
+.ta-dq[hidden] { display: none; }
+.ta-dq legend { float: left; width: 100%; color: var(--status-rot); }
+.ta-dq-hinweis { margin: 0; }
+.ta-fehler { margin: 0; color: var(--status-rot); font-weight: 600; font-size: var(--t-s); }
+.ta-fehler[hidden] { display: none; }
+.ta-aktionen { display: flex; gap: var(--a-2); flex-wrap: wrap; justify-content: flex-end; }
+.ta-aktionen .knopf { min-height: 48px; }
+/* Untere Leiste: lange/kurze Beschriftung des Reiters „Vergangene Termine“ */
+.mt-leiste-kurz { display: none; }
+
+/* ---- 10. Media-Queries ---- */
 @media (max-width: 600px) {
     /* Außendienst: Karten statt Tabelle; die Tabelle bleibt für die übrigen Rollen (Liste) */
     main.mein-tag-seite { padding-left: max(var(--a-3), env(safe-area-inset-left)); padding-right: max(var(--a-3), env(safe-area-inset-right)); padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
@@ -258,6 +327,17 @@ main.mein-tag-seite { padding-left: max(var(--a-4), env(safe-area-inset-left)); 
     .mt-leiste-symbol .symbol-svg { width: 1.35rem; height: 1.35rem; }
     body:has(.mt-leiste) main, body.mt-mit-leiste main { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
     body:has(.mt-leiste) .fusszeile, body.mt-mit-leiste .fusszeile { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+    /* v38: Dialog „Termin nicht stattgefunden“ als Vollbild-Sheet */
+    .ta-dialog { width: 100vw; max-width: none; height: 100dvh; max-height: none; margin: 0; border: 0; border-radius: 0; }
+    .ta-form { min-height: 100%; box-sizing: border-box; padding: max(var(--a-4), env(safe-area-inset-top)) max(var(--a-4), env(safe-area-inset-right)) calc(var(--a-4) + env(safe-area-inset-bottom)) max(var(--a-4), env(safe-area-inset-left)); }
+    .ta-aktionen { flex-direction: column-reverse; margin-top: auto; }
+    .ta-aktionen .knopf { width: 100%; }
+    .mt-termin-fuss { padding-left: var(--a-3); padding-right: var(--a-3); }
+}
+@media (max-width: 360px) {
+    /* v38: Reiter „Vergangene Termine“ unter 360 px kurz „Vergangen“ */
+    .mt-leiste-lang { display: none; }
+    .mt-leiste-kurz { display: inline; }
 }
 @media (min-width: 601px) {
     .mt-mobil-immer { max-width: 720px; }

@@ -8,6 +8,9 @@
 # abgeschlossene Erfassung des Termin-Objekts; Telefontermin ohne Erfassung am Folgetag weg;
 # Leads VOT Desktop mit Gruppen „Heute“, „Donnerstag, 15. Oktober“, „Montag, 19. Oktober“
 # (gemocktes heute 14.10.2026); untere Leiste mit vier Einträgen und aktivem Eintrag.
+# v38 (PLAN_V23 Phase 203/204): „überfällig“ gestrichen (kein Block, kein Label, keine Gruppe
+# „Überfällig“ – stattdessen „Vergangene Termine“ bzw. Seite /leads/vergangene), vierter
+# Leisteneintrag „Vergangene Termine“ statt „Kunden“ – Erwartungen entsprechend angepasst.
 import re
 import unittest
 from datetime import date, datetime, timedelta
@@ -361,12 +364,13 @@ class MeinTagV33Tests(unittest.TestCase):
         html = self.ad1.get("/leads").text
         heute = _block(html, "termine-heute")
         self.assertIn("<h2>Heute</h2>", heute)
-        # 5 heutige Termine + Termin am Hauptobjekt + Garage = 7; der überfällige von gestern
-        # steht zuoberst im aufklappbaren Block „überfällige Termine“ (offen bei höchstens drei)
+        # 5 heutige Termine + Termin am Hauptobjekt + Garage = 7; der gestrige Termin ohne
+        # Erfassung steht seit v38 nicht mehr hier (kein Überfällig-Block), sondern auf /leads/vergangene
         self.assertIn("7 Termine", heute)
-        self.assertIn('id="termine-ueberfaellig" open', heute)
-        self.assertIn("1 überfälliger Termin", heute)
-        self.assertIn("ohne Erfassung – bitte nachfassen", heute)
+        self.assertNotIn('id="termine-ueberfaellig"', heute)
+        self.assertNotIn("überfällig", heute)
+        self.assertNotIn(f'data-termin="{self.t_gestern.id}"', heute)
+        self.assertIn(f'data-termin="{self.t_gestern.id}"', self.ad1.get("/leads/vergangene").text)
         erledigt = _karte(heute, f'data-termin="{self.t_erledigt.id}"')
         self.assertIn('data-zustand="erledigt"', erledigt)
         self.assertIn("mt-termin-erledigt", erledigt)
@@ -381,9 +385,6 @@ class MeinTagV33Tests(unittest.TestCase):
         self.assertIn("mt-punkt", offen)
         teams = _karte(heute, f'data-termin="{self.t_14.id}"')
         self.assertIn("Teams", teams)
-        gestern = _karte(heute, f'data-termin="{self.t_gestern.id}"')
-        self.assertIn('class="mt-label mt-label-rot" title="Termin liegt in der Vergangenheit – Erfassung fehlt">überfällig', gestern)
-        self.assertLess(heute.index(f'data-termin="{self.t_gestern.id}"'), heute.index(f'data-termin="{self.t_erledigt.id}"'))
         # Uhrzeit links, Name, Typ, Ort
         self.assertIn('<span class="mt-uhr">11:45</span>', offen)
         self.assertIn("Krefeld", offen)
@@ -407,7 +408,10 @@ class MeinTagV33Tests(unittest.TestCase):
         html = self.ad1.get("/leads").text
         self.assertNotIn(f'data-termin="{self.t_tel_gestern.id}"', html)
         self.assertNotIn(f"{PRAEFIX} TelefonGestern", html)
-        self.assertIn(f'data-termin="{self.t_gestern.id}"', html)   # Vor-Ort bleibt als überfällig
+        # v38: der Vor-Ort-Termin von gestern steht in den Karten nicht mehr (nur auf /leads/vergangene
+        # und in der Desktop-Gruppe „Vergangene Termine“ derselben Seite)
+        self.assertNotIn(f'data-termin="{self.t_gestern.id}"', html[:html.index('class="mt-desktop"')])
+        self.assertNotIn(f"{PRAEFIX} TelefonGestern", self.ad1.get("/leads/vergangene").text)   # Telefontermin nie
         s = SessionLocal()
         try:
             ad1 = s.get(Benutzer, self.ad1_id)
@@ -674,10 +678,13 @@ class MeinTagV33Tests(unittest.TestCase):
             hoch = leads_router._tabelle_kontext(s, ad, "", "", 0, "", "", "", "", prioritaet="hoch",
                                                  heute=datetime(2026, 10, 14, 8))
             self.assertEqual([g["titel"] for g in hoch["gruppen"]], ["Heute"])
-            # am 20.10. sind die drei Leads überfällig
+            # am 20.10. liegen die drei Leads in der Vergangenheit – v38: Gruppe „Vergangene Termine“
+            # (zugeklappt, unten; Lead-Zeilen ohne vot_termine-Eintrag bleiben als Rückfall [ANNAHME])
             spaeter = leads_router._tabelle_kontext(s, ad, "", "", 0, "", "", "", "", heute=datetime(2026, 10, 20, 8))
-            self.assertEqual([g["titel"] for g in spaeter["gruppen"]], ["Überfällig"])
+            self.assertEqual([g["titel"] for g in spaeter["gruppen"]], ["Vergangene Termine"])
             self.assertEqual(spaeter["gruppen"][0]["zaehler"], "3 Termine")
+            self.assertTrue(spaeter["gruppen"][0]["zu"])
+            self.assertEqual([z["vor_text"] for z in spaeter["gruppen"][0]["zeilen"]], ["gestern", "vor 5 Tagen", "vor 6 Tagen"])
             # Spaltensortierung innerhalb der Gruppe: Kundenname absteigend
             gruppen = mein_tag.gruppen_sortieren(mein_tag.gruppen_bilden(spaeter["zeilen"], datetime(2026, 10, 20)),
                                                  {"key": "lead", "richtung": "ab"})
@@ -715,14 +722,17 @@ class MeinTagV33Tests(unittest.TestCase):
     def test_untere_leiste_vier_eintraege(self):
         html = self.ad1.get("/leads").text
         leiste = html[html.index('class="mt-leiste"'):html.index("</nav>", html.index('class="mt-leiste"'))]
+        # v38 (PLAN_V23 Phase 204): vierter Eintrag „Vergangene Termine“ statt „Kunden“
         for href, text in (("/leads", "Mein Tag"), ("/lead-management/meine-termine", "Kalender"),
-                           ("/leads/wiedervorlagen", "Wiedervorlage"), ("/suche", "Kunden")):
+                           ("/leads/wiedervorlagen", "Wiedervorlage"), ("/leads/vergangene", "Vergangene Termine")):
             self.assertIn(f'href="{href}"', leiste)
-            self.assertIn(text + "</a>", leiste)
+            self.assertIn(text, leiste)
+        self.assertNotIn('href="/suche"', leiste)
+        self.assertNotIn("Kunden</a>", leiste)
         self.assertEqual(leiste.count("mt-leiste-eintrag"), 4)
         self.assertIn('href="/leads" class="mt-leiste-eintrag aktiv" aria-current="page"', leiste)
         self.assertEqual(leiste.count('aria-current="page"'), 1)
-        self.assertIn("data-mt-leiste-kunden", leiste)
+        self.assertIn("data-mt-leiste-vergangene", leiste)
         # auch auf anderen Außendienst-Seiten (Erfassungsstart), nicht für den Innendienst
         self.assertIn('class="mt-leiste"', self.ad1.get("/erfassung").text)
         self.assertIn('class="mt-leiste"', self.hv.get("/leads").text)
@@ -737,7 +747,7 @@ class MeinTagV33Tests(unittest.TestCase):
         self.assertIn("min-height: 44px", css)
         js = open(JS, encoding="utf-8").read()
         self.assertIn("viewport-fit=cover", js)
-        self.assertIn("data-mt-leiste-kunden", js)
+        self.assertNotIn("data-mt-leiste-kunden", js)   # v38: Suche nur noch über die Lupe der Kopfzeile
 
     # --- Design-Regeln (v30) -----------------------------------------------------------------
     def test_design_regeln_keine_json_in_attributen(self):

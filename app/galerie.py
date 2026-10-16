@@ -273,8 +273,13 @@ def mehrfach_speichern(session: Session, vorgang_id: int, dateien, ordner_je_dat
             ergebnis["fehler"].append({"nr": nr, "name": name[:150],
                                        "grund": _fehlergrund(fehler)})
             continue
+        # v38 (PLAN_V23 Phase 201): `bild` und `datum` (TT.MM.) je abgelegter Datei, damit die
+        # Sammelbox die neuen Vorschaukacheln ohne Seitenneuladen anhängen kann
         ergebnis["abgelegt"].append({"nr": nr, "id": eintrag.id, "name": eintrag.dateiname,
-                                     "ordner": eintrag.ordner})
+                                     "ordner": eintrag.ordner, "bild": bool(eintrag.bild),
+                                     "datum": (eintrag.hochgeladen_am or datetime.now()).strftime("%d.%m."),
+                                     "datum_lang": (eintrag.hochgeladen_am or datetime.now())
+                                     .strftime("%d.%m.%Y %H:%M")})
         if eintrag.ordner not in ergebnis["ordner"]:
             ergebnis["ordner"].append(eintrag.ordner)
     return ergebnis
@@ -462,3 +467,130 @@ def migration_v35_objektfotos(session: Session) -> list[str]:
     gestrichen, die Spalte galerie_dateien.objekt_id bleibt additiv und ungelesen. Der Hook in
     migrate.py zeigt weiter hierher – No-op, idempotent, keine Meldung."""
     return []
+
+
+# --- v38 (PLAN_V23 Phase 201, Agent G): Löschrecht je Datei, Mehrfach-Löschen -------------------
+#
+# Befund 16.10.2026: `darf_loeschen` prüfte bis v37 nur die Rolle (Admin, Innendienst,
+# Projektierung) – eine Regel „Hochladender darf löschen“ gab es im Einzel-Löschen nicht
+# (der Außendienst konnte kein Foto löschen, auch kein eigenes). Der Plan nennt als Rechte des
+# Mehrfach-Löschens „Hochladender, Innendienst, Admin“; darum gilt je Datei zusätzlich: der
+# Außendienstler darf Dateien löschen, die er selbst hochgeladen hat (im eigenen Vorgang).
+# Montage bleibt bei der heutigen Regel (ansehen + hochladen, nie löschen – Plan: „nicht über
+# die heutigen Rechte hinaus“) [ANNAHME: die Hochladenden-Regel gilt nur für die Basisrolle
+# Außendienst]. Das Einzel-Löschen (Route galerie_loeschen) bleibt unverändert rollenbasiert.
+
+def darf_datei_loeschen(benutzer, datei: GalerieDatei | None) -> bool:
+    """Löschrecht je Datei: Rolle (darf_loeschen) ODER eigener Upload eines Außendienstlers."""
+    if darf_loeschen(benutzer):
+        return True
+    if benutzer is None or datei is None:
+        return False
+    return (benutzer.basisrolle == "aussendienst"
+            and datei.hochgeladen_von is not None
+            and datei.hochgeladen_von == benutzer.id)
+
+
+def loeschrecht(benutzer) -> dict:
+    """Für das Galerie-Makro (_galerie.html, Jinja-Global `galerie_loeschrecht`): Kennzeichen,
+    ob der angemeldete Benutzer eigene Uploads löschen darf (`eigene`, Basisrolle Außendienst)
+    und seine ID zum Vergleich mit galerie_dateien.hochgeladen_von. Das rollenbasierte Recht
+    bleibt der Makro-Parameter `galerie_darf_loeschen` der jeweiligen Seite (das Montage-Backend
+    übergibt bewusst false)."""
+    if benutzer is None:
+        return {"benutzer_id": None, "eigene": False, "alle": False}
+    return {"benutzer_id": benutzer.id,
+            "eigene": benutzer.basisrolle == "aussendienst",
+            "alle": darf_loeschen(benutzer)}
+
+
+def _anzahl_text(anzahl: int, nur_bilder: bool) -> str:
+    if nur_bilder:
+        return f"{anzahl} Foto" if anzahl == 1 else f"{anzahl} Fotos"
+    return f"{anzahl} Datei" if anzahl == 1 else f"{anzahl} Dateien"
+
+
+def mehrfach_loeschen(session: Session, vorgang: Vorgang, datei_ids, benutzer,
+                      pfade_sammeln: list | None = None) -> tuple[list[int], list[int]]:
+    """Mehrere Galerie-Dateien eines Vorgangs löschen. Jede ID wird gegen den Vorgang und das
+    Löschrecht je Datei (darf_datei_loeschen) geprüft; fremde, unbekannte oder nicht erlaubte IDs
+    landen in `abgelehnt`. Datensätze werden in der laufenden Transaktion gelöscht, je Ordner
+    entsteht ein Eintrag im Notizen-Chat („Galerie: 3 Fotos gelöscht (Ordner Zählerschrank): …“ –
+    wie beim Einzel-Löschen, das seit v15 protokolliert).
+    Datei-I/O: mit `pfade_sammeln` werden die Pfade nur gesammelt und vom Aufrufer NACH dem
+    Commit mit `dateien_entfernen` gelöscht (keine Datei-I/O in der Schreibtransaktion –
+    Route galerie_mehrfach_loeschen); ohne Liste löscht die Funktion die Dateien sofort.
+    Rückgabe (geloescht_ids, abgelehnt_ids) in der Reihenfolge der Anfrage."""
+    from app import vorgaenge as vorgaenge_modul
+    geloescht: list[int] = []
+    abgelehnt: list[int] = []
+    gesehen: set[int] = set()
+    je_ordner: dict[str, list[GalerieDatei]] = {}
+    for roh in datei_ids or []:
+        try:
+            datei_id = int(roh)
+        except (TypeError, ValueError):
+            continue
+        if datei_id in gesehen:
+            continue
+        gesehen.add(datei_id)
+        datei = session.get(GalerieDatei, datei_id)
+        if (datei is None or vorgang is None or datei.vorgang_id != vorgang.id
+                or not darf_datei_loeschen(benutzer, datei)):
+            abgelehnt.append(datei_id)
+            continue
+        je_ordner.setdefault(datei.ordner or "Allgemein", []).append(datei)
+        geloescht.append(datei_id)
+    for ordner, dateien in je_ordner.items():
+        namen = ", ".join(d.dateiname for d in dateien)
+        text = (f"Galerie: {_anzahl_text(len(dateien), all(d.bild for d in dateien))} "
+                f"gelöscht (Ordner {ordner}): {namen}")
+        for d in dateien:
+            pfad = config.DATA_ORDNER / d.pfad if d.pfad else None
+            if pfade_sammeln is not None:
+                if pfad is not None:
+                    pfade_sammeln.append(pfad)
+            elif pfad is not None:
+                dateien_entfernen([pfad])
+            session.delete(d)
+        vorgaenge_modul.notiz_anlegen(session, vorgang.id, benutzer, text, herkunft="Galerie")
+    if geloescht:
+        session.flush()
+    return geloescht, abgelehnt
+
+
+def dateien_entfernen(pfade, versuche: int = 5, pause_s: float = 0.2) -> int:
+    """Gesammelte Dateipfade nach dem Commit löschen (best effort, fehlende Dateien zählen nicht).
+    Windows sperrt eine Datei, die gerade noch an den Browser ausgeliefert wird (Vorschaukachel) –
+    darum bis zu `versuche` Anläufe mit kurzer Pause; bleibt eine Datei liegen, ist sie eine
+    verwaiste Datei ohne Datensatz (unsichtbar, kein Fehler). Leere Unterordner bleiben stehen
+    (wie beim Einzel-Löschen)."""
+    import time
+    anzahl = 0
+    for pfad in pfade or []:
+        p = Path(pfad)
+        for versuch in range(versuche):
+            try:
+                if p.exists():
+                    p.unlink()
+                    anzahl += 1
+                break
+            except OSError:
+                if versuch + 1 >= versuche:
+                    break
+                time.sleep(pause_s)
+    return anzahl
+
+
+def loesch_meldung(geloescht: list[int], abgelehnt: list[int], nur_bilder: bool = True) -> str:
+    """Meldung der Route: „3 Fotos gelöscht.“ bzw. „2 von 3 Fotos gelöscht – 1 ohne Löschrecht.“"""
+    n_ok, n_ab = len(geloescht), len(abgelehnt)
+    if not n_ok and not n_ab:
+        return "Keine Dateien ausgewählt."
+    if not n_ab:
+        return f"{_anzahl_text(n_ok, nur_bilder)} gelöscht."
+    if not n_ok:
+        return (f"Keine Datei gelöscht – {n_ab} ohne Löschrecht oder nicht (mehr) in diesem "
+                "Vorgang.")
+    return (f"{n_ok} von {n_ok + n_ab} {'Fotos' if nur_bilder else 'Dateien'} gelöscht – "
+            f"{n_ab} ohne Löschrecht oder nicht (mehr) in diesem Vorgang.")

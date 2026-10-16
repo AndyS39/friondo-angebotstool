@@ -321,6 +321,22 @@ davor meldet die Kontrolle „HTTP 404“ (normal). Nach dem Rollback
 - Admin-To-dos und Team-Hinweise: `docs/nach-dem-update-v37.md` (ORS-Key und Kontingent, Kanäle WeLoveX/DAA,
   Termine anpassen, Plus bei Interessen, Login-Vorbelegung, Design v3).
 
+## 4g. Besonderheiten beim Update auf v38 (ein Commit, 17.10.2026)
+
+- Keine neuen Abhängigkeiten, keine neuen Hintergrundläufe (weiter 18), keine neuen `.env`-Schlüssel.
+- `migrate.py` meldet beim ersten Lauf nur neue Spalten: `erfassungen.geaendert_am`, `erfassungen.geaendert_von`,
+  `erfassungen.aktuelle_frage`, `vot_termine.ausfall_grund`, `vot_termine.ausfall_bemerkung`. Der zweite Lauf
+  meldet „keine Änderungen nötig“. Der Status „Entwurf“ der Erfassungen ist der bestehende Wert (keine Migration).
+- Browser laden die neuen Skripte/Styles über die `?v=`-Nummer automatisch nach; der Offline-Puffer für Fotos liegt
+  nur im Browser des jeweiligen Geräts (IndexedDB) – nichts auf dem Server einzurichten.
+- Danach `scripts\smoke.bat` wie immer; `/health` zeigt `version` v38 und **18 Läufe**.
+- Rückweg: `rollback.bat --nur-code` (v37-Code läuft auf der v38-Datenbank – nur additive Spalten; Rückweg-Probe in
+  der Rollout-Prüfung der Plan-Kette v36–v38).
+- Admin-To-dos und Team-Hinweise: `docs/nach-dem-update-v38.md` (Außendienst: Hochladen mit Pop-up, wartende Fotos,
+  Auswählen zum Löschen, „Später fortsetzen“, „Antworten korrigieren“, Reiter „Vergangene Termine“, Dialog „Termin
+  nicht stattgefunden“; Leadmanagement: To-Do „Neuen Termin vereinbaren“; Innendienst: Kanal-Pfeil, Gruppe
+  „Vergangene Termine“, Badge „nachträglich geändert“).
+
 ## 5. Versionsstand prüfen
 
 Auf PC und Server zeigt `git log --oneline -1` den aktuellen Commit; auf dem

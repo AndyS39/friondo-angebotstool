@@ -318,11 +318,18 @@
 
 {# Ein Eintrag des Notizen-Chats (intern, für notizen_chat) #}
 {% macro _nc_eintrag(n) -%}
+{#- v38 (PLAN_V23 Phase 202): Änderungsnotizen der Erfassung tragen ab der sechsten Änderung den
+    Block „Alle Änderungen:“ – er wird aufklappbar gezeigt (Kurzform „… und n weitere“ bleibt sichtbar);
+    der Rohtext bleibt an allen anderen Stellen (Timeline, JSON) vollständig lesbar -#}
+{%- set _teile = (n.text or '').split('\nAlle Änderungen:\n', 1) -%}
 <div class="notiz{{ ' eigene' if n.eigen }}" data-notiz="{{ n.id }}">
     <span class="notiz-kopf"><strong>{{ n.benutzer_name }}</strong>
         <span class="dezent">{{ n.zeit.strftime('%d.%m.%y %H:%M') if n.zeit else '' }} Uhr</span>
         {% if n.kennzeichen %}<span class="abzeichen nc-herkunft {{ n.kennzeichen_klasse }}" title="{{ n.herkunft }}">{{ n.kennzeichen }}</span>{% endif %}
     </span>
-    <div class="notiz-text">{{ n.text }}</div>
+    <div class="notiz-text">{{ _teile[0] }}</div>
+    {%- if _teile | length > 1 %}
+    <details class="nc-mehr"><summary>Alle Änderungen anzeigen</summary><div class="notiz-text">{{ _teile[1] }}</div></details>
+    {%- endif %}
 </div>
 {%- endmacro %}

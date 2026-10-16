@@ -4,11 +4,13 @@
 
 import json
 from datetime import datetime
+from urllib.parse import quote_plus
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app import erfassung_korrektur as korrektur_modul   # v38 (PLAN_V23 Phase 202): Entwurf/Korrektur
 from app import kl_auslegung                      # v24: Klimakonfigurator
 from app import wb_auslegung                      # v34: Wallbox-Konfigurator
 from app import konfigurator as engine
@@ -146,10 +148,21 @@ def uebersicht(request: Request, session: Session = Depends(get_session)):
     # Wiedervorlagen des Außendienstlers
     from app import vorgaenge as vorgaenge_modul
     faellige_wv = len(vorgaenge_modul.faellige_vorgaenge(session, benutzer))
+    # v38 (PLAN_V23 Phase 202/204): Badge „Entwurf · Frage 12 von 31“ (Warnfarbe ab 30 Tagen),
+    # Badge „nachträglich geändert (TT.MM.)“ und die Objektzeile je Erfassung
     return render(request, "erfassung/uebersicht.html", aktiv=None, mobil=True,
                   benutzer=benutzer, erfassungen=erfassungen, kunden=kunden,
                   extern_ids=extern_ids, faellige_wv=faellige_wv,
+                  entwurf_badges=korrektur_modul.entwurf_badges(session, erfassungen),
+                  objekt_zeilen=korrektur_modul.objekt_zeilen(session, erfassungen, kunden),
+                  korrektur_badge=korrektur_modul.badge_text,
                   meldung=request.query_params.get("meldung", ""))
+
+
+def _listen_ziel(benutzer) -> str:
+    """v38: „Später fortsetzen“ führt zur Erfassungsliste der Rolle – Außendienst zur mobilen
+    Übersicht /erfassung, Innendienst/Admin zur Erfassungsliste /erfassungen."""
+    return "/erfassung" if getattr(benutzer, "basisrolle", "") == "aussendienst" else "/erfassungen"
 
 
 @router.post("/{erfassung_id}/loeschen")
@@ -510,8 +523,74 @@ def _erfassung_laden(request: Request, erfassung_id: int, session: Session):
     return erfassung
 
 
+def _anker(frage_id: str) -> str:
+    """v38: Sprungziel einer Frage im Bogen (Klone wie KR01#1 ohne „#“ im Fragment)."""
+    return "frage-" + (frage_id or "").replace("#", "-")
+
+
+@router.get("/{erfassung_id}/fortsetzen")
+def fortsetzen(request: Request, erfassung_id: int,
+               session: Session = Depends(get_session)):
+    """v38 (PLAN_V23 Phase 202): Entwurf bei der ersten unbeantworteten Frage fortsetzen –
+    Sprung auf deren Bogenseite mit Hinweis „Fortgesetzt bei Frage 12“ (seite.html);
+    vollständige Entwürfe und abgesendete Erfassungen landen auf der Prüfseite."""
+    erfassung = _erfassung_laden(request, erfassung_id, session)
+    if erfassung is None:
+        return RedirectResponse("/erfassung", status_code=303)
+    if erfassung.status != korrektur_modul.STATUS_ENTWURF:
+        return RedirectResponse(f"/erfassung/{erfassung.id}/pruefen", status_code=303)
+    logik, bericht = _sparten_logik(session, erfassung)
+    if logik is None:
+        return RedirectResponse(f"/erfassung/{erfassung.id}/freitext", status_code=303)
+    if not bericht.ok:
+        return RedirectResponse(f"/erfassung/{erfassung.id}/seite/0", status_code=303)
+    f = korrektur_modul.fortschritt(logik, _antworten(erfassung))
+    if f["frage"] is None:
+        return RedirectResponse(f"/erfassung/{erfassung.id}/pruefen", status_code=303)
+    return RedirectResponse(
+        f"/erfassung/{erfassung.id}/seite/{f['seite_nr']}?fortgesetzt={quote_plus(f['frage'].id)}"
+        f"#{_anker(f['frage'].id)}", status_code=303)
+
+
+@router.get("/{erfassung_id}/korrektur")
+def korrektur_start(request: Request, erfassung_id: int, frage: str = "", seite: int = -1,
+                    session: Session = Depends(get_session)):
+    """v38 (PLAN_V23 Phase 202): Einstieg „Antworten korrigieren“ – Rechte über die Basisrolle
+    (Außendienst nur eigene Erfassungen → sonst 403, Innendienst/Admin alle), Sperre, sobald ein
+    verknüpftes Angebot versandfertig ist (Prüfseite mit Meldung), Sprung zur gewünschten Frage
+    (`frage=A04`) bzw. Bogenseite (`seite=1`). Der Bogen öffnet mit allen Antworten vorbelegt."""
+    erfassung = session.get(Erfassung, erfassung_id)
+    if erfassung is None:
+        return RedirectResponse("/erfassung", status_code=303)
+    benutzer = _benutzer(request)
+    if not korrektur_modul.korrektur_erlaubt(benutzer, erfassung):
+        return PlainTextResponse("Keine Berechtigung – Antworten korrigieren nur an eigenen "
+                                 "Erfassungen (Innendienst/Admin an allen).", status_code=403)
+    if erfassung.status == korrektur_modul.STATUS_ENTWURF:
+        return RedirectResponse(f"/erfassung/{erfassung.id}/fortsetzen", status_code=303)
+    if erfassung.typ == "freitext":
+        # Freitext-Erfassungen korrigiert der Freitext-Editor (v13) auf der Detailseite
+        return RedirectResponse(f"/erfassungen/{erfassung.id}", status_code=303)
+    logik, bericht = _sparten_logik(session, erfassung)
+    if logik is None or not bericht.ok:
+        return RedirectResponse(f"/erfassungen/{erfassung.id}", status_code=303)
+    kctx = korrektur_modul.kontext(session, benutzer, erfassung)
+    if kctx["gesperrt"]:
+        return RedirectResponse(f"/erfassung/{erfassung.id}/pruefen?meldung="
+                                + quote_plus(korrektur_modul.MELDUNG_GESPERRT), status_code=303)
+    seiten = logik.seiten
+    ziel_nr, anker = 0, ""
+    f = logik.fragen.get(frage) or logik.fragen.get(frage.split("#", 1)[0]) if frage else None
+    if f is not None and f.seite in seiten:
+        ziel_nr, anker = seiten.index(f.seite), _anker(frage)
+    elif seite >= 0:
+        ziel_nr = max(0, min(seite, len(seiten) - 1))
+    return RedirectResponse(f"/erfassung/{erfassung.id}/seite/{ziel_nr}"
+                            + (f"#{anker}" if anker else ""), status_code=303)
+
+
 @router.get("/{erfassung_id}/seite/{nr}")
-def seite(request: Request, erfassung_id: int, nr: int,
+def seite(request: Request, erfassung_id: int, nr: int, fortgesetzt: str = "",
                 session: Session = Depends(get_session)):
     erfassung = _erfassung_laden(request, erfassung_id, session)
     if erfassung is None:
@@ -522,11 +601,32 @@ def seite(request: Request, erfassung_id: int, nr: int,
     if not bericht.ok:
         return render(request, "konfigurator/logikfehler.html", aktiv=None,
                       bericht=bericht)
+    # v38 (PLAN_V23 Phase 202): abgesendete Erfassungen öffnen im Korrekturmodus – Rechte über
+    # die Basisrolle (AD nur eigene → 403), Sperre bei versandfertigem Angebot (Prüfseite + Meldung)
+    korrektur = erfassung.status != korrektur_modul.STATUS_ENTWURF
+    kctx = None
+    if korrektur:
+        kctx = korrektur_modul.kontext(session, _benutzer(request), erfassung)
+        if not kctx["erlaubt"]:
+            return PlainTextResponse("Keine Berechtigung – nur eigene Erfassungen.", status_code=403)
+        if kctx["gesperrt"]:
+            return RedirectResponse(f"/erfassung/{erfassung.id}/pruefen?meldung="
+                                    + quote_plus(korrektur_modul.MELDUNG_GESPERRT), status_code=303)
     seiten = logik.seiten
     nr = max(0, min(nr, len(seiten) - 1))
     antworten = _antworten(erfassung)
     kunde = session.get(Kunde, erfassung.kunde_id)
     fragen = _fragen_der_seite(logik, seiten[nr], antworten)
+    # v38: Hinweis „Fortgesetzt bei Frage 12 von 31“ (Route /fortsetzen) + Sprungziel auf der Seite
+    fortgesetzt_text, sprung_frage = "", ""
+    if fortgesetzt and not korrektur:
+        f = korrektur_modul.fortschritt(logik, antworten)
+        if f["frage"] is not None and any(x.id == f["frage"].id for x in fragen):
+            fortgesetzt_text = f"Fortgesetzt bei Frage {f['nr']} von {f['gesamt']}"
+            sprung_frage = f["frage"].id
+        elif any(x.id == fortgesetzt for x in fragen):
+            fortgesetzt_text = f"Fortgesetzt bei Frage {fortgesetzt}"
+            sprung_frage = fortgesetzt
     # v9: Enni-Bogen zeigt nur die HEMS-Frage (P02/P03 sind mit Nein vorbelegt)
     from app import angebotsprofile
     if angebotsprofile.enni_bogen(session, erfassung):
@@ -548,24 +648,47 @@ def seite(request: Request, erfassung_id: int, nr: int,
                   galerie_ordner=galerie_modul.ordner_liste(session, erfassung.sparte or "WP"),
                   vorbelegt=json.loads(erfassung.vorbelegt_json or "{}"),
                   client_regel=lambda f: _client_regel(f, antworten, logik),
-                  wiederhol_id=engine.ID_WIEDERHOL_ANZAHL)
+                  wiederhol_id=engine.ID_WIEDERHOL_ANZAHL,
+                  korrektur=korrektur, kctx=kctx, fortgesetzt=fortgesetzt_text,
+                  sprung_frage=sprung_frage, anker=_anker,
+                  meldung=request.query_params.get("meldung", ""))
 
 
 @router.post("/{erfassung_id}/seite/{nr}")
 def seite_speichern(request: Request, erfassung_id: int, nr: int,
                           session: Session = Depends(get_session)):
+    # v33-Regel (Phase 172/177): der Request-Body ist Netz-I/O – die Seite „Einschätzung“ trägt die
+    # Foto-Sammelbox (Upload), deshalb das Formular VOR dem ersten Datenbankzugriff lesen
+    # (Wächter tests/test_v33_fundament.py::UploadRoutenOhneSchreibsperre; Integration v38)
+    form = anfrage.formular(request)
+    # v38 (PLAN_V23 Phase 202): Korrekturmodus an abgesendeten Erfassungen – Rechte über die
+    # Basisrolle (Außendienst nur eigene → 403), Sperre bei versandfertigem Angebot
+    roh = session.get(Erfassung, erfassung_id)
+    benutzer = _benutzer(request)
+    korrektur = roh is not None and roh.status != korrektur_modul.STATUS_ENTWURF
+    if korrektur and not korrektur_modul.korrektur_erlaubt(benutzer, roh):
+        return PlainTextResponse("Keine Berechtigung – nur eigene Erfassungen.", status_code=403)
     erfassung = _erfassung_laden(request, erfassung_id, session)
     if erfassung is None:
         return RedirectResponse("/erfassung", status_code=303)
+    kctx = None
+    if korrektur:
+        kctx = korrektur_modul.kontext(session, benutzer, erfassung)
+        if kctx["gesperrt"]:
+            return RedirectResponse(f"/erfassung/{erfassung.id}/pruefen?meldung="
+                                    + quote_plus(korrektur_modul.MELDUNG_GESPERRT), status_code=303)
     logik, _ = _sparten_logik(session, erfassung)
     if logik is None:
         return RedirectResponse(f"/erfassung/{erfassung.id}/freitext", status_code=303)
     seiten = logik.seiten
     nr = max(0, min(nr, len(seiten) - 1))
-    form = anfrage.formular(request)
     antworten = _antworten(erfassung)
     antworten_vorher = dict(antworten)
     fragen = _fragen_der_seite(logik, seiten[nr], antworten)
+    richtung = form.get("richtung", "weiter")
+    # v38: „Später fortsetzen“ speichert den Stand ohne Pflichtprüfung – nur gültige, nicht leere
+    # Eingaben werden übernommen, leere Felder bleiben offen (Wiedereinstieg genau dort)
+    spaeter = richtung == korrektur_modul.RICHTUNG_SPAETER and not korrektur
 
     fehler: dict[str, str] = {}
     for frage in fragen:
@@ -573,6 +696,14 @@ def seite_speichern(request: Request, erfassung_id: int, nr: int,
             antworten.pop(frage.id, None)   # unsichtbar geworden -> Antwort verwerfen
             continue
         wert, problem = _wert_lesen(frage, form, antworten)
+        if spaeter:
+            if problem or wert in (None, "", [], {}):
+                continue
+            if (frage.id.startswith(f"{kl_auslegung.ID_FLAECHE}#")
+                    and isinstance(wert, (int, float)) and wert <= 0):
+                continue
+            antworten[frage.id] = wert
+            continue
         if problem:
             if wert in (None, "", [], {}) and _ist_optional(frage):
                 antworten[frage.id] = ""
@@ -598,8 +729,8 @@ def seite_speichern(request: Request, erfassung_id: int, nr: int,
                               "bitte den Stromverbrauch der Wärmepumpe manuell eingeben "
                               "(0 = keine Wärmepumpe).")
 
-    richtung = form.get("richtung", "weiter")
-    if fehler and richtung == "weiter":
+    # v38: „Korrektur speichern“ prüft die Seite wie „Weiter“ (Pflichtfragen erneut)
+    if fehler and richtung in ("weiter", korrektur_modul.RICHTUNG_KORREKTUR):
         kunde = session.get(Kunde, erfassung.kunde_id)
         sichtbar = {f.id: engine.ist_sichtbar(f, antworten, logik.fragen, logik) for f in fragen}
         werte = {f.id: antworten.get(f.id) for f in fragen}
@@ -608,11 +739,23 @@ def seite_speichern(request: Request, erfassung_id: int, nr: int,
                       seiten=seiten, nr=nr, fragen=fragen, sichtbar=sichtbar,
                       werte=werte, fehler=fehler,
                       client_regel=lambda f: _client_regel(f, antworten, logik),
-                      wiederhol_id=engine.ID_WIEDERHOL_ANZAHL)
+                      wiederhol_id=engine.ID_WIEDERHOL_ANZAHL,
+                      korrektur=korrektur, kctx=kctx, fortgesetzt="", sprung_frage="",
+                      anker=_anker, meldung="")
 
     erfassung.antworten_json = json.dumps(antworten, ensure_ascii=False)
     _korrekturen_protokollieren(erfassung, antworten_vorher, antworten,
                                 _benutzer(request), logik)
+    # v38 (PLAN_V23 Phase 202): Korrektur nach „Senden“ – Diff der Antworten → Änderungsnotiz im
+    # Notizen-Chat + Badge „nachträglich geändert“; Status bleibt unverändert. Entwürfe merken sich
+    # die erste unbeantwortete Frage (aktuelle_frage) für die Fortsetzung/Liste.
+    korrektur_liste: list[dict] = []
+    if korrektur:
+        korrektur_liste = korrektur_modul.aenderungen(logik, antworten_vorher, antworten)
+        korrektur_modul.korrektur_verbuchen(session, erfassung, benutzer, korrektur_liste)
+    else:
+        fortschritt = korrektur_modul.fortschritt(logik, antworten)
+        erfassung.aktuelle_frage = (fortschritt["frage"].id if fortschritt["frage"] else "")[:20]
     # v15 (Phase 76): Fotos der Einschätzungs-Seite in die Vorgangs-Galerie
     galerie_uploads = [k for k in form if k.startswith("galerie_")
                        and not k.startswith("galerie_ordner_")]
@@ -633,6 +776,25 @@ def seite_speichern(request: Request, erfassung_id: int, nr: int,
                                                quelle="erfassung",
                                                sparte=erfassung.sparte or "WP"):
                         gespeichert += 1
+    if spaeter:   # v38: „Später fortsetzen“ → Erfassungsliste der Rolle mit Meldung
+        erfassung.seite_index = nr
+        session.commit()
+        return RedirectResponse(_listen_ziel(benutzer) + "?meldung="
+                                + quote_plus(korrektur_modul.MELDUNG_GESPEICHERT), status_code=303)
+    if richtung == korrektur_modul.RICHTUNG_KORREKTUR or (korrektur and richtung == "freitext"):
+        # v38: „Korrektur speichern“ → Prüfseite (AMPEL/Pflichtfragen dort erneut geprüft); bei
+        # verknüpftem Angebotsentwurf zusätzlich der Hinweis „Angebot neu berechnen“ [ANNAHME: im
+        # Korrekturmodus kein Wechsel in den Freitext – der Knopf ist ausgeblendet]
+        session.commit()
+        if korrektur and richtung == "freitext":
+            meldung = "Im Korrekturmodus ist der Wechsel in den Freitext nicht möglich."
+        else:
+            meldung = (korrektur_modul.MELDUNG_KORREKTUR if korrektur_liste
+                       else korrektur_modul.MELDUNG_KEINE_AENDERUNG)
+            if korrektur_liste and kctx is not None and kctx.get("angebot_entwurf") is not None:
+                meldung += " " + korrektur_modul.HINWEIS_ANGEBOT
+        return RedirectResponse(f"/erfassung/{erfassung.id}/pruefen?meldung=" + quote_plus(meldung),
+                                status_code=303)
     if richtung == "freitext":   # v7: Wechsel in die Freitext-Erfassung –
         session.commit()         # bereits gegebene Antworten bleiben erhalten
         return RedirectResponse(f"/erfassung/{erfassung.id}/freitext", status_code=303)
@@ -741,12 +903,17 @@ def pruefen(request: Request, erfassung_id: int,
     prot = engine.protokoll(logik, antworten)
     gruende = engine.ampel_gruende(logik, antworten)
     kunde = session.get(Kunde, erfassung.kunde_id)
+    # v38 (PLAN_V23 Phase 202): Knopf „Antworten korrigieren“ (Rechte/Sperre), Badge „nachträglich
+    # geändert“, Hinweis „Angebot neu berechnen“, Sprung zur Frage (Klick auf die Frage)
+    kctx = korrektur_modul.kontext(session, _benutzer(request), erfassung)
     return render(request, "erfassung/pruefen.html", aktiv=None, mobil=True,
                   benutzer=_benutzer(request), erfassung=erfassung, kunde=kunde,
                   protokoll=prot, gruende=gruende, offen=offen,
                   seiten=logik.seiten,
                   validierung=_kl_validierung(erfassung, logik, antworten),   # v24/v34
-                  warnungen=_warnungen(erfassung, logik, antworten))          # v34 WB
+                  warnungen=_warnungen(erfassung, logik, antworten),          # v34 WB
+                  kctx=kctx, objekt=korrektur_modul.objekt_zeile(session, erfassung, kunde),
+                  meldung=request.query_params.get("meldung", ""))
 
 
 def _verfolgung_startwerte(session, erfassung) -> None:

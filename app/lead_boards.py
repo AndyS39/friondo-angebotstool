@@ -198,8 +198,12 @@ KATALOGE = {
     # Erfassungen (/erfassungen): heutige Folge Datum · Kunde · Vertriebler · Ampel · Status ·
     # Angebot – der Kundenname rückt als feste Spalte nach vorn; Sparte/Kanal/Typ stehen heute
     # als Chips in der Kundenzelle und sind zusätzlich als eigene Spalten einblendbar
+    # v38 (PLAN_V23 Phase 204, Agent E): Spalte „Objekt“ (Objektbezeichnung · Adresse aus
+    # vorgang_objekte, Standard sichtbar [ANNAHME]) – hängt sich bei gespeicherten Konfigurationen
+    # hinten an (spalten_fuer), bei neuen Nutzern direkt hinter dem Kunden
     "erfassungen": [
-        ("lead", "Kunde", True), ("datum", "Datum", True), ("vertriebler", "Vertriebler", True),
+        ("lead", "Kunde", True), ("objekt", "Objekt", True),
+        ("datum", "Datum", True), ("vertriebler", "Vertriebler", True),
         ("ampel", "Ampel", True), ("status", "Status", True), ("angebot", "Angebot", True),
         ("sparte", "Sparte", False), ("typ", "Art", False), ("kanal", "Kanal", False),
         ("ort", "Ort", False), ("telefon", "Telefon", False),

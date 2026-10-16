@@ -23,8 +23,9 @@
     <div class="hinweis">
         <strong>Offene Entwürfe zu diesem Lead:</strong>
         {% for e in entwuerfe %}
+            {# v38 (PLAN_V23 Phase 202): Wiedereinstieg bei der ersten unbeantworteten Frage #}
             <a class="knopf klein zweitrangig" style="margin: 0.2rem"
-               href="/erfassung/{{ e.id }}/seite/{{ e.seite_index }}">{{ e.sparte }} fortsetzen</a>
+               href="/erfassung/{{ e.id }}/fortsetzen">{{ e.sparte }} fortsetzen</a>
         {% endfor %}
     </div>
     {% endif %}

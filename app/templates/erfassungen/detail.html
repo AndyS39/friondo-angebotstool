@@ -8,9 +8,16 @@
 {# v34 (PLAN_V21 Phase 180, Agent V): Drop-Zone für das TAIFUN-PDF im Dialog „Extern erledigt“ #}
 <link rel="stylesheet" href="/static/vorgang_v34.css?v={{ css_version }}">
 <script src="/static/taifun_pdf.js?v={{ css_version }}" defer></script>
+{# v38 (PLAN_V23 Phase 202, Agent E): Entwurf-Hinweis, Knopf „Antworten korrigieren“ (Sperre mit
+   Tooltip), Badge „nachträglich geändert (TT.MM.)“, Hinweis „Angebot neu berechnen“ #}
+<link rel="stylesheet" href="/static/erfassung_v38.css?v={{ css_version }}">
+{% set kctx = kctx | default(none) %}
+{% set entwurf = erfassung.status == 'Entwurf' %}
 <div class="seitenkopf">
-    <h1>Erfassung vom {{ erfassung.abgesendet_am.strftime('%d.%m.%Y %H:%M') if erfassung.abgesendet_am }}
-        {% if erfassung.archiviert %}<span class="abzeichen">🗄 Archiv</span>{% endif %}</h1>
+    <h1>{% if entwurf %}Erfassung #{{ erfassung.id }} – Entwurf{% else %}Erfassung vom {{ erfassung.abgesendet_am.strftime('%d.%m.%Y %H:%M') if erfassung.abgesendet_am }}{% endif %}
+        {% if erfassung.archiviert %}<span class="abzeichen">🗄 Archiv</span>{% endif %}
+        {% if entwurf and entwurf_badge is defined and entwurf_badge %}<span class="abzeichen entwurf-badge{{ ' alt' if entwurf_badge.alt }}" data-rolle="entwurf-badge">{{ entwurf_badge.text }}</span>{% endif %}
+        {% if kctx and kctx.badge %}<span class="abzeichen geaendert-badge" data-rolle="geaendert-badge" title="Zuletzt korrigiert am {{ kctx.geaendert_am.strftime('%d.%m.%Y %H:%M') if kctx.geaendert_am }}{{ ' von ' ~ kctx.geaendert_von_name if kctx.geaendert_von_name }} – Details im Notizen-Chat des Vorgangs">{{ kctx.badge }}</span>{% endif %}</h1>
     <form method="post" action="/erfassungen/{{ erfassung.id }}/status" class="statusform">
         <select name="status" onchange="this.form.submit()">
             {% for s in status_liste %}
@@ -21,9 +28,25 @@
 </div>
 
 {% if meldung %}<p class="meldung">{{ meldung }}</p>{% endif %}
+{% if kctx and kctx.hinweis_angebot %}
+<div class="warnblock" data-rolle="angebot-hinweis">
+    <strong>{{ kctx.hinweis_text }}</strong>
+    <a href="/angebote/{{ kctx.angebot_entwurf.id }}">Zum Angebot {{ kctx.angebot_entwurf.nummer }}</a>
+    <span class="dezent">(Entwurf – keine automatische Neuberechnung)</span>
+</div>
+{% endif %}
+{% if entwurf %}
+<div class="hinweis" data-rolle="entwurf-hinweis">
+    <strong>Entwurf – noch nicht abgesendet.</strong>
+    {% if entwurf_badge is defined and entwurf_badge and entwurf_badge.gesamt %}Stand: Frage {{ entwurf_badge.nr }} von {{ entwurf_badge.gesamt }}.{% endif %}
+    Der Vertriebler setzt den Bogen fort; erst nach dem Absenden stehen Ampel und Angebotserzeugung zur Verfügung.
+    {% if benutzer.basisrolle in ('admin', 'innendienst') %}<a class="knopf klein zweitrangig" href="/erfassung/{{ erfassung.id }}/fortsetzen">Bogen fortsetzen</a>{% endif %}
+</div>
+{% endif %}
 
 <p class="dezent">
     Kunde: <strong>{{ kunde.anzeige_name if kunde }}</strong>
+    {% if objekt is defined and objekt and objekt.text %}· Objekt: <span data-rolle="objekt-zeile">{% if objekt.bezeichnung %}<strong>{{ objekt.bezeichnung }}</strong> · {% endif %}{{ objekt.adresse }}{% if objekt.kunde %} (Kunde){% endif %}</span>{% endif %}
     · Vertriebler:
     <form method="post" action="/erfassungen/{{ erfassung.id }}/vertriebler" style="display:inline">
         <select name="benutzer_id" onchange="this.form.submit()" title="Vertriebler ändern (wirkt auf CC und Mail-Vorlage)">
@@ -73,7 +96,18 @@
 {% endif %}
 
 <div class="formaktionen">
-    {% if angebot %}
+    {# v38 (PLAN_V23 Phase 202): „Antworten korrigieren“ – Innendienst/Admin an allen, Außendienst nur
+       eigene (korrektur_erlaubt); gesperrt mit Tooltip, sobald ein verknüpftes Angebot versandfertig ist #}
+    {% if not entwurf and erfassung.typ != 'freitext' and kctx and kctx.erlaubt %}
+        {% if kctx.gesperrt %}
+        <span class="knopf zweitrangig gesperrt" aria-disabled="true" title="{{ kctx.sperr_text }}" data-rolle="korrektur-gesperrt">Antworten korrigieren</span>
+        {% else %}
+        <a class="knopf zweitrangig" href="/erfassung/{{ erfassung.id }}/korrektur" data-rolle="korrektur-knopf" title="Bogen mit allen Antworten öffnen – Änderungen landen im Notizen-Chat">Antworten korrigieren</a>
+        {% endif %}
+    {% endif %}
+    {% if entwurf %}
+        {# Entwurf: keine Angebotserzeugung, kein TAIFUN-Weg – erst nach dem Absenden #}
+    {% elif angebot %}
         <a class="knopf" href="/angebote/{{ angebot.id }}">
             {% if angebot.extern %}Zum TAIFUN-Eintrag {{ angebot.taifun_nummer }}{% else %}Zum Angebot {{ angebot.nummer }}{% endif %}</a>
     {% elif erfassung.status == 'In TAIFUN zu schreiben' %}
@@ -179,8 +213,11 @@
         <h2 class="gruppentitel">{{ p.seite }}
             {# Bugfix 30.09.2026: berechnete Abschnitte (PV-„Auslegung“, v16) sind
                keine Bogenseite – kein Korrektur-Link (vorher ValueError/500) #}
-            {% if p.seite in seiten %}
-            <a class="aendern" href="/erfassung/{{ erfassung.id }}/seite/{{ seiten.index(p.seite) }}">korrigieren</a>
+            {% if p.seite in seiten and (entwurf or (kctx and kctx.knopf_aktiv)) %}
+            {# v38: über den Korrektur-Einstieg (Rechte + Sperre), Entwürfe direkt in den Bogen #}
+            <a class="aendern" href="{{ '/erfassung/' ~ erfassung.id ~ '/seite/' ~ seiten.index(p.seite) if entwurf else '/erfassung/' ~ erfassung.id ~ '/korrektur?seite=' ~ seiten.index(p.seite) }}">korrigieren</a>
+            {% elif p.seite in seiten %}
+            <span class="dezent" title="{{ kctx.sperr_text if kctx and kctx.gesperrt else 'nur eigene Erfassungen' }}">gesperrt</span>
             {% else %}
             <span class="dezent" title="aus den Antworten berechnet – über die Bogenseiten korrigieren">berechnet</span>
             {% endif %}

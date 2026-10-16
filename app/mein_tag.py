@@ -20,9 +20,16 @@
 #   starten“ angelegte Erfassung abgeschlossen ist – Verknüpfung Termin ↔ Erfassung über
 #   Vorgang + Objekt (vot_termine.objekt_id ↔ erfassungen.objekt_id, v31) + Sparte: alle
 #   Sparten des Objekts sind abgesendet (Status ≠ Entwurf) oder ausgeblendet. Kein Haken,
-#   kein manuelles Abhaken. Vergangene Vor-Ort-Termine ohne Erfassung bleiben „überfällig“
-#   in „Heute“ (v32); Telefon-/Teams-Termine ohne Erfassung bleiben bis Tagesende offen und
-#   fallen am Folgetag aus „Heute“ [ANNAHME].
+#   kein manuelles Abhaken. Telefon-/Teams-Termine ohne Erfassung bleiben bis Tagesende offen
+#   und fallen am Folgetag aus „Heute“ [ANNAHME].
+# v38 (PLAN_V23 Phase 203/204): „überfällig“ entfällt – „Heute“ enthält nur Termine mit Beginn am
+#   heutigen Tag; vergangene Vor-Ort-Termine ohne abgeschlossene Erfassung (Erledigt-Logik oben)
+#   der letzten VERGANGEN_TAGE (180) Tage stehen in der Gruppe „Vergangene Termine“ der
+#   Desktop-Tabelle bzw. auf der mobilen Seite /leads/vergangene (vergangene_tage), neueste
+#   zuerst, mit „vor 12 Tagen“; ältere erscheinen nirgends. Telefon-/Teams-Termine bleiben wie
+#   v33 außen vor [ANNAHME: ein Vorab-Gespräch erwartet keine Erfassung]. Dazu die Datenbasis
+#   der Zeilen „Vergangene Termine“ für die Desktop-Tabelle (vergangene_zeilen) und der Dialog
+#   „Termin nicht stattgefunden“ (app/lead_termin_ausfall.py; Knopf an jeder Termin-Karte).
 # Reine Datenbankarbeit – kein Netzaufruf (v27-Regel).
 from datetime import date, datetime, timedelta
 from urllib.parse import quote
@@ -46,6 +53,7 @@ MONATE = ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August"
 MAPS_URL = "https://www.google.com/maps/search/?api=1&query="
 ROUTE_URL = "https://www.google.com/maps/dir/?api=1&destination={ziel}&travelmode=driving"
 KOMMENDE_TAGE = 14            # [ANNAHME] Zeitraum „Kommende Tage“
+VERGANGEN_TAGE = 180          # v38 (Phase 203): „Vergangene Termine“ = Beginn vor heute, höchstens 180 Tage zurück
 STANDARD_DAUER_MIN = 90       # [ANNAHME] ohne Ende und ohne AD-Profil: Beginn + 90 Minuten
 VERFOLGUNG_CHIPS = {"bestellung_angekuendigt": "Bestellung angekündigt"}
 # Phase 174 (Vertrag T, Endstand 14.10.2026): der Spaltenkatalog „Leads VOT Desktop“ liegt in
@@ -133,6 +141,21 @@ def minuten_text(beginn: datetime, jetzt: datetime) -> str:
 
 def tage_text_termine(anzahl: int) -> str:
     return f"{anzahl} Termin{'e' if anzahl != 1 else ''}"
+
+
+def vor_text(wert, heute=None) -> str:
+    """v38 (Phase 203): „vor 12 Tagen“ – Zusatz der Termin-Spalte in „Vergangene Termine“
+    („gestern“ für einen Tag, „heute“ am selben Tag)."""
+    tag = _tag(wert)
+    if tag is None:
+        return ""
+    heute_tag = _jetzt(heute).date()
+    tage = (heute_tag - tag).days
+    if tage <= 0:
+        return "heute"
+    if tage == 1:
+        return "gestern"
+    return f"vor {tage} Tagen"
 
 
 def maps_url(ort: dict) -> str:
@@ -239,14 +262,19 @@ def _objekt_sparten(objekt: VorgangObjekt | None, haupt_sparten: list[str]) -> l
 # --- Termine ---------------------------------------------------------------------------
 
 def termin_karten(session: Session, benutzer, heute=None) -> list[dict]:
-    """Alle sichtbaren Termin-Karten des Benutzers (ungefiltert, chronologisch)."""
+    """Alle sichtbaren Termin-Karten des Benutzers (ungefiltert, chronologisch): heutige und
+    künftige Termine sowie – v38 (Phase 203) – vergangene Vor-Ort-Termine ohne abgeschlossene
+    Erfassung der letzten VERGANGEN_TAGE Tage (Schlüssel `vergangen`, `vor_text`)."""
     jetzt = _jetzt(heute)
     heute_tag = jetzt.date()
     aussendienst = ist_aussendienst(benutzer)
+    # v38: ältere Termine als 180 Tage erscheinen nirgends – die Abfrage endet dort
+    ab = datetime.combine(heute_tag - timedelta(days=VERGANGEN_TAGE), datetime.min.time())
     abfrage = (session.query(VotTermin, Vorgang)
                .join(Vorgang, Vorgang.id == VotTermin.vorgang_id)
                .outerjoin(Lead, Lead.id == Vorgang.lead_id)
                .filter(VotTermin.typ.in_(TERMIN_TYPEN), VotTermin.beginn.isnot(None),
+                       VotTermin.beginn >= ab,
                        VotTermin.status.in_(STATUS_ABFRAGE)))
     abfrage = _archiv_filter(abfrage)
     if aussendienst:
@@ -321,10 +349,12 @@ def termin_karten(session: Session, benutzer, heute=None) -> list[dict]:
         vergangen = tag < heute_tag
         if termin.status == "erfolgt" and not offen_vorgang and (vergangen or not erledigt):
             continue   # Erfassung vollständig und nicht mehr heute – der Termin ist durch
-        ueberfaellig = vergangen and not erfasst_set and termin.typ == "vot"
-        teilweise = vergangen and bool(erfasst_set) and offen_vorgang and termin.typ == "vot"
-        if vergangen and not (ueberfaellig or teilweise):
-            continue   # vergangene erledigte Termine und Telefon-/Teams-Termine [ANNAHME]
+        # v38 (Phase 203): vergangene Termine zählen nur als „Vergangene Termine“ – Vor-Ort-
+        # Termine ohne abgeschlossene Erfassung des Termin-Objekts (Erledigt-Logik); erledigte
+        # und Telefon-/Teams-Termine fallen am Folgetag heraus [ANNAHME]; kein „überfällig“ mehr
+        if vergangen and (erledigt or termin.typ != "vot"):
+            continue
+        teilweise = vergangen and bool(erfasst_obj) and not erledigt
         ort = objekte.ausfuehrungsort(session, termin=termin, vorgang=vorgang, kunde=kunde)
         objekt_id = ort.get("objekt_id") or termin.objekt_id
         ad = benutzer_map.get(ad_id) if ad_id else None
@@ -353,8 +383,13 @@ def termin_karten(session: Session, benutzer, heute=None) -> list[dict]:
             "herkunft": herkunft(termin), "status": termin.status,
             "status_text": (lead.status_text if lead else "") or "",
             "ad_id": ad_id, "ad": ad, "ad_name": ad.name if ad else "",
-            "ueberfaellig": ueberfaellig, "teilweise": teilweise, "heute": tag == heute_tag,
+            "teilweise": teilweise, "heute": tag == heute_tag,
+            "vergangen": vergangen, "vor_text": vor_text(tag, heute_tag) if vergangen else "",
             "erledigt": erledigt,
+            # v38 (Phase 204): Dialog „Termin nicht stattgefunden“ an jeder nicht erledigten Karte
+            "ausfall": not erledigt and termin.status in OFFENE_STATUS,
+            "ausfall_url": f"/leads/termin/{termin.id}/ausgefallen",
+            "ausfall_zeit": f"{datum_text(termin.beginn)} · {uhr_kurz(termin.beginn)} Uhr",
             "erfassung": letzte,
             "erfassung_url": (f"/erfassung/{letzte.id}/pruefen" if letzte is not None
                               else f"/vorgaenge/{vorgang.id}"),
@@ -487,9 +522,11 @@ def kommende_tage(karten: list[dict], heute_tag: date, tage: int = KOMMENDE_TAGE
 def termine(session: Session, benutzer, von=None, bis=None, status: str = "",
             vertriebler_id: int = 0, heute=None) -> dict:
     """Termin-Blöcke mit Filtern (Termin von/bis, Status = monday-Statustext, Vertriebler
-    bei ID/Admin): heute (überfällige zuoberst, dann die heutigen chronologisch),
+    bei ID/Admin): heute (nur der heutige Tag, chronologisch – v38: ohne überfällige),
     naechster (Karte „Als Nächstes“), kommende (14 Tage je Tag), weitere (alle ab morgen),
-    spaeter (Anzahl jenseits der 14 Tage); dazu die Auswahlwerte der Filter."""
+    spaeter (Anzahl jenseits der 14 Tage), vergangene (v38: vergangene Vor-Ort-Termine ohne
+    abgeschlossene Erfassung, neueste zuerst) + vergangene_tage (je Tag gruppiert); dazu die
+    Auswahlwerte der Filter."""
     alle = termin_karten(session, benutzer, heute)
     status_werte = sorted({k["status_text"] for k in alle if k["status_text"]})
     vertriebler_werte = sorted({(k["ad_id"], k["ad_name"]) for k in alle if k["ad_id"]},
@@ -508,8 +545,9 @@ def termine(session: Session, benutzer, von=None, bis=None, status: str = "",
         gefiltert.append(k)
     jetzt = _jetzt(heute)
     heute_tag = jetzt.date()
-    heute_block = [k for k in gefiltert if k["tag"] <= heute_tag]
-    heute_block.sort(key=lambda k: (0 if k["tag"] < heute_tag else 1, k["beginn"], k["termin"].id))
+    # v38 (Phase 203): „Heute“ enthält nur Termine mit Beginn am heutigen Tag
+    heute_block = [k for k in gefiltert if k["tag"] == heute_tag]
+    heute_block.sort(key=lambda k: (k["beginn"], k["termin"].id))
     # v37 (Phase 198): Strecke in km für die heutigen Termine (Vortermin bzw. Startadresse)
     try:
         strecken_ergaenzen(session, heute_block, benutzer, jetzt)
@@ -525,25 +563,89 @@ def termine(session: Session, benutzer, von=None, bis=None, status: str = "",
     weitere = [k for k in gefiltert if k["tag"] > heute_tag]
     kommende = kommende_tage(gefiltert, heute_tag)
     grenze = heute_tag + timedelta(days=KOMMENDE_TAGE)
-    # Phase 173 [eigene Annahme]: überfällige Termine (Vergangenheit, Erfassung fehlt) stehen
-    # zuoberst (v32), aber als eigener, aufklappbarer Block – „Heute“ zählt nur den Tag selbst
-    ueberfaellige = [k for k in heute_block if k["tag"] < heute_tag]
-    heute_nur = [k for k in heute_block if k["tag"] == heute_tag]
-    return {"heute": heute_block, "heute_nur": heute_nur, "ueberfaellige": ueberfaellige,
+    vergangene = vergangene_karten(gefiltert, heute_tag)
+    return {"heute": heute_block, "heute_nur": heute_block,
             "weitere": weitere, "alle": gefiltert,
             "naechster": naechster, "kommende": kommende,
             "spaeter": sum(1 for k in weitere if k["tag"] > grenze), "grenze": grenze,
-            "ueberfaellig": sum(1 for k in heute_block if k["ueberfaellig"]),
+            "vergangene": vergangene, "vergangene_tage": vergangene_tage(vergangene, heute_tag),
+            "vergangene_anzahl": len(vergangene),
             "status_werte": status_werte, "vertriebler_werte": vertriebler_werte,
             "anzahl": len(gefiltert), "gesamt": len(alle)}
 
 
+# --- v38 (PLAN_V23 Phase 203/204): Vergangene Termine ------------------------------------
+
+def vergangene_karten(karten: list[dict], heute_tag: date) -> list[dict]:
+    """Vergangene Vor-Ort-Termine ohne abgeschlossene Erfassung (Beginn vor heute, höchstens
+    VERGANGEN_TAGE Tage zurück – die Abfrage in termin_karten endet dort), neueste zuerst."""
+    grenze = heute_tag - timedelta(days=VERGANGEN_TAGE)
+    liste = [k for k in karten if k.get("vergangen") and grenze <= k["tag"] < heute_tag]
+    liste.sort(key=lambda k: (k["beginn"], k["termin"].id), reverse=True)
+    return liste
+
+
+def vergangene_tage(karten: list[dict], heute_tag: date) -> list[dict]:
+    """Seite „Vergangene Termine“ (mobil): Gruppen je Tag mit Datumskachel wie „Kommende
+    Tage“, neueste zuerst, innerhalb des Tages nach Uhrzeit."""
+    gruppen: dict[date, list[dict]] = {}
+    for k in karten:
+        gruppen.setdefault(k["tag"], []).append(k)
+    ergebnis = []
+    for tag in sorted(gruppen, reverse=True):
+        eintraege = sorted(gruppen[tag], key=lambda k: (k["beginn"], k["termin"].id))
+        ergebnis.append({"tag": tag, "iso": tag.isoformat(), "wochentag": wochentag_kurz(tag),
+                         "tag_nr": str(tag.day), "titel": datum_lang(tag),
+                         "vor_text": vor_text(tag, heute_tag),
+                         "zaehler": tage_text_termine(len(eintraege)), "termine": eintraege})
+    return ergebnis
+
+
+def vergangene_zeilen(session: Session, benutzer, heute=None) -> list[dict]:
+    """Zeilen der Desktop-Gruppe „Vergangene Termine“ (Phase 203) – dieselbe Datenbasis wie
+    die mobile Seite (termin_karten → vergangene_karten), in der Form der Lead-Zeilen von
+    routers.leads._tabelle_kontext (Kundenname, Termin, Priorität, Sparten/Chips, Ort, Kanal,
+    Vertriebler, Status); `lead` ist bei Tool-Terminen ohne monday-Lead None."""
+    jetzt = _jetzt(heute)
+    zeilen = []
+    for k in vergangene_karten(termin_karten(session, benutzer, jetzt), jetzt.date()):
+        lead, vorgang, kunde, termin = k["lead"], k["vorgang"], k["kunde"], k["termin"]
+        prio = prioritaet_von(k["ampel"])
+        zeilen.append({
+            "id": f"termin-{termin.id}", "zeilen_id": f"termin-{termin.id}", "termin_id": termin.id,
+            "lead": lead, "vorgang": vorgang, "kunde": kunde, "karte": k,
+            "termin": termin.beginn, "termin_text": termin.beginn.strftime("%d.%m.%Y %H:%M"),
+            "uhr": k["uhr"], "vergangen": True, "vor_text": k["vor_text"],
+            "name": k["name"], "ort": k["plz_ort"] or k["ort_text"],
+            "kanal": k["kanal"], "vertriebler": k["ad_name"], "vertriebler_id": k["ad_id"],
+            "status": k["status_text"], "prioritaet": prio,
+            "prioritaet_text": PRIORITAET_TEXTE[prio], "ampel": k["ampel"],
+            "sparten": list(k["sparten"]), "chips": k["chips"], "grosskunde": k["grosskunde"],
+            "teilweise": k["teilweise"], "telefon": k["telefon"],
+            "erfassen_url": k["erfassen_url"], "akte_url": k["akte_url"],
+            "ausfall": k["ausfall"], "ausfall_url": k["ausfall_url"], "ausfall_zeit": k["ausfall_zeit"],
+        })
+    return zeilen
+
+
 # --- Leads VOT Desktop: Gruppen und Spalten (Phase 174, Vertrag T) -------------------------
 
+GRUPPE_VERGANGEN = "vergangen"
+GRUPPE_VERGANGEN_TITEL = "Vergangene Termine"
+GRUPPE_VERGANGEN_ERKL = f"ohne Erfassung · letzte {VERGANGEN_TAGE} Tage"
+
+
+def _zeilen_id(z: dict):
+    return z.get("zeilen_id") or z.get("id") or 0
+
+
 def gruppen_bilden(zeilen: list[dict], heute=None) -> list[dict]:
-    """Zeilen der Desktop-Tabelle in Gruppen: „Überfällig“ (Termin vor heute), „Heute“ und je
-    ein Block pro Folgetag („Donnerstag, 15. Oktober · 2 Termine“); innerhalb der Gruppe nach
-    Uhrzeit. Eine Zeile braucht `termin` (datetime|None); ohne Termin → Gruppe „Ohne Termin“."""
+    """Zeilen der Desktop-Tabelle in Gruppen: „Heute“ und je ein Block pro Folgetag
+    („Donnerstag, 15. Oktober · 2 Termine“); innerhalb der Gruppe nach Uhrzeit. Eine Zeile
+    braucht `termin` (datetime|None); ohne Termin → Gruppe „Ohne Termin“. v38 (Phase 203):
+    die Gruppe „Überfällig“ entfällt – Zeilen mit Termin vor heute landen in der Gruppe
+    „Vergangene Termine“ (Schlüssel GRUPPE_VERGANGEN, unten, standardmäßig zugeklappt,
+    neueste zuerst); routers.leads füllt sie aus vot_termine (vergangene_zeilen)."""
     heute_tag = _jetzt(heute).date()
     sammel: dict[str, list[dict]] = {}
     for z in zeilen:
@@ -552,18 +654,21 @@ def gruppen_bilden(zeilen: list[dict], heute=None) -> list[dict]:
         if tag is None:
             key = "ohne"
         elif tag < heute_tag:
-            key = "ueberfaellig"
+            key = GRUPPE_VERGANGEN
         elif tag == heute_tag:
             key = "heute"
         else:
             key = tag.isoformat()
         sammel.setdefault(key, []).append(z)
     gruppen = []
-    for key in sorted(sammel, key=lambda k: {"ueberfaellig": "0", "heute": "1", "ohne": "9"}.get(k, "2" + k)):
-        eintraege = sorted(sammel[key], key=lambda z: (z.get("termin") or datetime.max, z.get("id") or 0))
-        if key == "ueberfaellig":
-            titel, erkl = "Überfällig", "Termin liegt in der Vergangenheit – Erfassung fehlt"
-        elif key == "heute":
+    for key in sorted(sammel, key=lambda k: {"heute": "1", "ohne": "8", GRUPPE_VERGANGEN: "9"}.get(k, "2" + k)):
+        if key == GRUPPE_VERGANGEN:
+            eintraege = sorted(sammel[key], key=lambda z: (z.get("termin") or datetime.min, str(_zeilen_id(z))),
+                               reverse=True)
+            gruppen.append(vergangene_gruppe(eintraege))
+            continue
+        eintraege = sorted(sammel[key], key=lambda z: (z.get("termin") or datetime.max, str(_zeilen_id(z))))
+        if key == "heute":
             titel, erkl = "Heute", datum_lang(heute_tag)
         elif key == "ohne":
             titel, erkl = "Ohne Termin", ""
@@ -571,8 +676,36 @@ def gruppen_bilden(zeilen: list[dict], heute=None) -> list[dict]:
             titel, erkl = datum_lang(key), ""
         gruppen.append({"key": key, "titel": titel, "erkl": erkl,
                         "zaehler": tage_text_termine(len(eintraege)), "zeilen": eintraege,
-                        "rot": key == "ueberfaellig"})
+                        "rot": False, "vergangen": False, "zu": False})
     return gruppen
+
+
+def vergangene_gruppe(zeilen: list[dict]) -> dict:
+    """Gruppe „Vergangene Termine · n“ der Desktop-Tabelle (Phase 203): unten, zugeklappt,
+    Zustand je Benutzer in localStorage (mein_tag.js), Termin-Spalte gedämpft mit „vor n Tagen“."""
+    return {"key": GRUPPE_VERGANGEN, "titel": GRUPPE_VERGANGEN_TITEL, "erkl": GRUPPE_VERGANGEN_ERKL,
+            "zaehler": tage_text_termine(len(zeilen)), "zeilen": zeilen,
+            "rot": False, "vergangen": True, "zu": True}
+
+
+def gruppen_mit_vergangenen(gruppen: list[dict], vergangene: list[dict]) -> list[dict]:
+    """Zeilen aus vot_termine (vergangene_zeilen) in die Gruppe „Vergangene Termine“ legen –
+    sie ersetzt eine vorhandene Lead-basierte Vergangen-Gruppe; Lead-Zeilen bleiben nur, wenn
+    ihr Vorgang keinen Termin in vot_termine kennt (Altbestand vor v32 [ANNAHME]), Dubletten je
+    Vorgang entfallen; die Gruppe steht immer zuletzt und fehlt bei null Zeilen."""
+    rest = [g for g in gruppen if g["key"] != GRUPPE_VERGANGEN]
+    alt = next((g for g in gruppen if g["key"] == GRUPPE_VERGANGEN), None)
+    zeilen = list(vergangene)
+    bekannt = {z["vorgang"].id for z in zeilen if z.get("vorgang") is not None}
+    for z in (alt["zeilen"] if alt else []):
+        vorgang = z.get("vorgang")
+        if vorgang is not None and (vorgang.id in bekannt or z.get("termin_bekannt")):
+            continue
+        zeilen.append(z)
+    zeilen.sort(key=lambda z: (z.get("termin") or datetime.min, str(_zeilen_id(z))), reverse=True)
+    if zeilen:
+        rest.append(vergangene_gruppe(zeilen))
+    return rest
 
 
 def spalten_fuer(session: Session, benutzer) -> list[dict]:

@@ -1,6 +1,7 @@
 # v32 (PLAN_V19 Phase 161): Vertriebler-Ansicht „Mein Tag“ (GET /leads) – Außendienst
 # sieht nur eigene Termine aus vot_termine; Termin heute 14:00 in „Heute“, morgen in
-# „Kommende Tage“, gestern ohne Erfassung in „Heute“ mit „überfällig“; Termin-Zeile mit
+# „Kommende Tage“, gestern ohne Erfassung in „Heute“ mit „überfällig“ (v38: auf der Seite
+# /leads/vergangene – PLAN_V23 Phase 203/204 streicht „überfällig“); Termin-Zeile mit
 # Datum, Uhrzeit, Name, Straße, Ort, tel:-Link, Maps-Link, „Erfassung starten“; Vorgang mit
 # verknüpftem Angebot erscheint nicht; ID sieht die Tabelle „Leads VOT“ und filtert nach
 # Vertriebler; Leerzustände; Objektadresse bei mehreren Objekten; Wiedervorlage.
@@ -203,13 +204,14 @@ class MeinTagTests(unittest.TestCase):
         heute = _block(html, "termine-heute")
         kommende = _block(html, "kommende-tage")
         self.assertIn(f"{PRAEFIX} Mueller", heute)
-        self.assertIn(f"{PRAEFIX} Gestern", heute)
         self.assertIn(f"{PRAEFIX} Morgen", kommende)
         self.assertNotIn(f"{PRAEFIX} Morgen", heute)
         self.assertNotIn(f"{PRAEFIX} Mueller", kommende)
-        # überfälliger Termin (gestern, ohne Erfassung) zuoberst mit rotem Label
-        self.assertLess(heute.index(f"{PRAEFIX} Gestern"), heute.index(f"{PRAEFIX} Mueller"))
-        self.assertIn('class="mt-label mt-label-rot" title="Termin liegt in der Vergangenheit – Erfassung fehlt">überfällig', heute)
+        # v38 (PLAN_V23 Phase 203/204): „überfällig“ gestrichen – der gestrige Termin ohne Erfassung
+        # steht nicht mehr in „Heute“, sondern auf der Seite „Vergangene Termine“
+        self.assertNotIn(f"{PRAEFIX} Gestern", heute)
+        self.assertNotIn("überfällig", html)
+        self.assertIn(f"{PRAEFIX} Gestern", self.ad1.get("/leads/vergangene").text)
         self.assertNotIn(f"{PRAEFIX} Schmidt", html)        # fremder Vertriebler
         self.assertNotIn(f"{PRAEFIX} MitAngebot", html)     # Vorgang mit verknüpftem Angebot
         self.assertNotIn(f"{PRAEFIX} Abgesagt", html)       # abgesagter Termin
@@ -376,9 +378,13 @@ class MeinTagTests(unittest.TestCase):
             ad1 = s.get(Benutzer, self.ad1_id)
             daten = mein_tag.termine(s, ad1)
             ids_heute = [k["termin"].id for k in daten["heute"]]
-            self.assertEqual(ids_heute[:2], [self.t_gestern.id, self.t_heute.id])
+            # v38 (PLAN_V23 Phase 203): „Heute“ nur der heutige Tag, gestern unter „vergangene“
+            self.assertEqual(ids_heute[:1], [self.t_heute.id])
+            self.assertNotIn(self.t_gestern.id, ids_heute)
+            self.assertEqual([k["termin"].id for k in daten["vergangene"]], [self.t_gestern.id])
             self.assertIn(self.t_morgen.id, [k["termin"].id for k in daten["weitere"]])
-            self.assertEqual(daten["ueberfaellig"], 1)
+            self.assertEqual(daten["vergangene_anzahl"], 1)
+            self.assertNotIn("ueberfaellig", daten)
             karte = next(k for k in daten["heute"] if k["termin"].id == self.t_heute.id)
             self.assertEqual(karte["uhr_text"], "14:00 Uhr")
             self.assertEqual(karte["herkunft"], "monday")
@@ -389,15 +395,16 @@ class MeinTagTests(unittest.TestCase):
                             status="Neu", sparte="WP"))
             s.flush()
             daten = mein_tag.termine(s, ad1)
-            k3 = next(k for k in daten["heute"] if k["termin"].id == self.t_gestern.id)
+            k3 = next(k for k in daten["vergangene"] if k["termin"].id == self.t_gestern.id)   # v38
             self.assertTrue(k3["teilweise"])
-            self.assertFalse(k3["ueberfaellig"])
+            self.assertNotIn("ueberfaellig", k3)
             self.assertEqual(k3["chips"], [("WP", "erfasst"), ("PV", "offen")])
             s.add(Erfassung(kunde_id=self.v3.kunde_id, vorgang_id=self.ids["v3"], benutzer_id=self.ad1_id,
                             status="Neu", sparte="PV"))
             s.flush()
             daten = mein_tag.termine(s, ad1)
             self.assertNotIn(self.t_gestern.id, [k["termin"].id for k in daten["heute"]])
+            self.assertNotIn(self.t_gestern.id, [k["termin"].id for k in daten["vergangene"]])   # v38: erledigt → nirgends
             # v33: Wiedervorlage-Liste statt heisse_kunden
             wv = nachfassen.wiedervorlage_liste(s, self.ad1_id)
             self.assertEqual([k["vorgang"].id for k in wv], [self.ids["v1"]])

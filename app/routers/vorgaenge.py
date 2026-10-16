@@ -1018,3 +1018,74 @@ def galerie_loeschen(request: Request, datei_id: int,
         herkunft="Galerie")
     session.commit()
     return RedirectResponse(f"/vorgaenge/{vorgang_id}#galerie", status_code=303)
+
+
+@router.post("/{vorgang_id}/galerie/loeschen")
+def galerie_mehrfach_loeschen(request: Request, vorgang_id: int,
+                              session: Session = Depends(get_session)):
+    """v38 (PLAN_V23 Phase 201, Agent G): Mehrfach-Löschen aus dem Auswählen-Modus der Galerie
+    (Makro galerie in _galerie.html, static/galerie_v38.js). Formular `datei_ids` (mehrfach,
+    auch `datei_ids[]`); jede ID wird gegen den Vorgang und das Löschrecht je Datei geprüft
+    (galerie.darf_datei_loeschen: Admin/Innendienst/Projektierung alle, Außendienst eigene
+    Uploads im eigenen Vorgang, Montage nie – Pfadtabelle in auth.py). Läuft im `_speichern`-
+    Muster (Rollback + eine Wiederholung bei „database is locked“); die Dateien auf der Platte
+    werden erst NACH dem Commit entfernt (keine Datei-I/O in der Schreibtransaktion). Mit
+    `Accept: application/json` Antwort {ok, geloescht[], abgelehnt[], meldung} – ok = keine
+    abgelehnte ID und mindestens eine gelöscht –, sonst Redirect mit Meldung (`zurueck`, nur
+    relative Pfade)."""
+    from fastapi.responses import JSONResponse
+
+    from app import galerie as galerie_modul
+    from app.models import GalerieDatei
+    from app.routers.angebote import _speichern
+    json_antwort = "application/json" in (request.headers.get("accept") or "")
+    benutzer = request.state.benutzer
+    form = anfrage.formular(request)
+    roh_ids = form.getlist("datei_ids") or form.getlist("datei_ids[]")
+    ids: list[int] = []
+    for wert in roh_ids:
+        for teil in str(wert or "").split(","):
+            teil = teil.strip()
+            if teil.isdigit() and int(teil) not in ids:
+                ids.append(int(teil))
+    ziel = form.get("zurueck") or f"/vorgaenge/{vorgang_id}"
+    if not ziel.startswith("/") or ziel.startswith("//"):
+        ziel = f"/vorgaenge/{vorgang_id}"
+    trenner = "&" if "?" in ziel else "?"
+
+    def antwort(status: int, daten: dict):
+        if json_antwort:
+            return JSONResponse(daten, status_code=status)
+        return RedirectResponse("/vorgaenge" if status == 404 else
+                                ziel + trenner + "meldung=" + quote_plus(daten.get("meldung", ""))
+                                + "#galerie", status_code=303)
+
+    vorgang = session.get(Vorgang, vorgang_id)
+    if vorgang is None:
+        return antwort(404, {"ok": False, "geloescht": [], "abgelehnt": ids,
+                             "meldung": "Vorgang nicht gefunden."})
+    if not galerie_modul.darf_hochladen(session, vorgang, benutzer):
+        return antwort(403, {"ok": False, "geloescht": [], "abgelehnt": ids,
+                             "meldung": "Kein Zugriff auf die Galerie dieses Vorgangs."})
+    if not ids:
+        return antwort(400, {"ok": False, "geloescht": [], "abgelehnt": [],
+                             "meldung": "Keine Dateien ausgewählt."})
+    ergebnis: dict = {}
+    pfade: list = []
+
+    def aktion():
+        del pfade[:]   # bei einer Wiederholung nach Rollback nicht doppelt sammeln
+        v = session.get(Vorgang, vorgang_id)
+        nur_bilder = all(d.bild for d in session.query(GalerieDatei)
+                         .filter(GalerieDatei.id.in_(ids), GalerieDatei.vorgang_id == vorgang_id))
+        geloescht, abgelehnt = galerie_modul.mehrfach_loeschen(session, v, ids, benutzer,
+                                                               pfade_sammeln=pfade)
+        ergebnis.update(geloescht=geloescht, abgelehnt=abgelehnt, nur_bilder=nur_bilder)
+
+    _speichern(session, aktion)
+    galerie_modul.dateien_entfernen(pfade)   # Datei-I/O erst nach dem Commit
+    geloescht = ergebnis.get("geloescht", [])
+    abgelehnt = ergebnis.get("abgelehnt", [])
+    meldung = galerie_modul.loesch_meldung(geloescht, abgelehnt, ergebnis.get("nur_bilder", True))
+    return antwort(200, {"ok": bool(geloescht) and not abgelehnt, "geloescht": geloescht,
+                         "abgelehnt": abgelehnt, "meldung": meldung})

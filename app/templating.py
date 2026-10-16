@@ -117,6 +117,23 @@ def _cloover_ablage_kontext() -> dict:
 
 templates.env.globals["cloover_ablage_kontext"] = _cloover_ablage_kontext
 
+# v38 (PLAN_V23 Phase 202, Agent E): Korrektur-Kontext je Erfassungskarte der Vorgangsakte (Knopf
+# „Antworten korrigieren“, Sperre, Badge „nachträglich geändert“) – ohne Datenbank, die Akte übergibt
+# ihre bereits geladenen Angebote (Versionen/Kombi über die vorgaenger_id-Kette)
+from app import erfassung_korrektur as _erfassung_korrektur  # noqa: E402
+templates.env.globals["erfassung_korrektur_info"] = _erfassung_korrektur.info_fuer_template
+
+
+def _galerie_loeschrecht() -> dict:
+    """v38 (PLAN_V23 Phase 201, Agent G): Löschrecht je Datei für das Galerie-Makro (_galerie.html,
+    Auswählen-Modus) – der angemeldete Benutzer kommt aus anfrage.KONTEXT (RollenMiddleware), keine
+    Datenbank; das rollenbasierte Recht bleibt der Makro-Parameter galerie_darf_loeschen."""
+    from app import anfrage, galerie
+    return galerie.loeschrecht(anfrage.kontext_wert("benutzer"))
+
+
+templates.env.globals["galerie_loeschrecht"] = _galerie_loeschrecht
+
 # Menü-Einträge (Phase 19: Dropdown oben rechts, rollenabhängig gefiltert)
 NAVIGATION = [
     ("/leads", "Leads VOT"),

@@ -18,10 +18,31 @@
    Sammelaktionen (Entscheidung Claudia Castro); Einzelaktionen wie bisher. Bausteine:
    leadmanagement/_tabelle.html (Makros), lm_boards.js (Spaltenwerkzeuge), lead_v2.css. #}
 {% block inhalt %}
+{# v38 (PLAN_V23 Phase 202/204, Agent E): Entwürfe in der Liste (Reiter „Entwürfe“, in „Alle“ mit
+   Badge „Entwurf · Frage 12 von 31“, Warnfarbe ab 30 Tagen), Badge „nachträglich geändert (TT.MM.)“,
+   Spalte „Objekt“ (Standard sichtbar) + Objektzeile unter 600 px, Suche findet die Objektbezeichnung #}
+<link rel="stylesheet" href="/static/erfassung_v38.css?v={{ css_version }}">
+{% macro objektzeile(e, klasse='') -%}
+{%- set oz = objekt_zeilen.get(e.id) if objekt_zeilen is defined else none -%}
+{%- if oz and oz.text -%}
+<span class="objekt-zeile {{ klasse }}" data-rolle="objekt-zeile">
+    {%- if oz.bezeichnung %}<span class="objekt-name">{{ oz.bezeichnung }}</span> · {% endif -%}
+    {{ oz.adresse }}{% if oz.kunde %} <span class="objekt-kunde">(Kunde)</span>{% endif %}</span>
+{%- endif -%}
+{%- endmacro %}
+{% macro entwurf_badge(e) -%}
+{%- set eb = entwurf_badges.get(e.id) if entwurf_badges is defined else none -%}
+<span class="abzeichen entwurf-badge{{ ' alt' if eb and eb.alt }}" data-rolle="entwurf-badge"
+      {% if eb and eb.alt %}title="Entwurf seit mehr als 30 Tagen – nicht abgesendet"{% endif %}>{{ eb.text if eb else 'Entwurf' }}</span>
+{%- endmacro %}
 {% macro zelle(key, e) -%}
 {%- set k = kunden.get(e.kunde_id) -%}
+{%- set gb = korrektur_badge(e) if korrektur_badge is defined else '' -%}
 {%- if key == 'lead' -%}
 <td class="sp-lead"><a href="/vorgaenge/zu-erfassung/{{ e.id }}" title="Vorgangsakte öffnen">{{ k.anzeige_name if k else '?' }}</a>
+    {% if e.status == 'Entwurf' %}{{ entwurf_badge(e) }}{% endif %}
+    {% if gb %}<span class="abzeichen geaendert-badge" data-rolle="geaendert-badge" title="Antworten nach dem Absenden geändert – Details im Notizen-Chat des Vorgangs">{{ gb }}</span>{% endif %}
+    {{ objektzeile(e, 'nur-mobil') }}
     {% if k %}{{ interesse_ui.badges(k.interessen) }}{% endif %}
     {% if k and k.vertriebskanal %}<span class="abzeichen">{{ k.vertriebskanal }}</span>{% endif %}
     {{ sparten_ui.chip(e.sparte or 'WP') }}
@@ -44,7 +65,9 @@
     {%- if e.ampel == 'orange' %}<span class="ampel orange" title="{{ e.gruende_text }}">● Individuell</span>
     {%- else %}<span class="ampel gruen">● Konfigurierbar</span>{% endif %}</td>
 {%- elif key == 'status' -%}
-<td class="sp-status">{{ status_badge(e.status) }}</td>
+<td class="sp-status">{% if e.status == 'Entwurf' %}{{ entwurf_badge(e) }}{% else %}{{ status_badge(e.status) }}{% endif %}</td>
+{%- elif key == 'objekt' -%}
+<td class="sp-objekt">{{ objektzeile(e) }}</td>
 {%- elif key == 'angebot' -%}
 <td class="sp-angebot">{% if e.angebot_id and e.angebot_id in angebote %}
     <a href="/angebote/{{ e.angebot_id }}">{% if angebote[e.angebot_id].extern %}<span class="abzeichen">TAIFUN</span> {{ angebote[e.angebot_id].taifun_nummer }}{% else %}{{ angebote[e.angebot_id].nummer }}{% endif %}</a>
@@ -71,7 +94,7 @@
 
 <div class="lm-filterblock" id="lm-filterblock" data-lm-spalten-board="{{ board }}" data-lm-spalten-url="{{ lm_spalten_url(request.state.benutzer) }}" data-lm-suche="1">
 <div class="tab-leiste">
-    {% for wert, name in [('', 'Alle'), ('offen', 'Offen'),
+    {% for wert, name in [('', 'Alle'), ('offen', 'Offen'), ('entwuerfe', 'Entwürfe'),
                           ('Individuell – zu prüfen', 'Individuell – zu prüfen'),
                           ('In TAIFUN zu schreiben', 'In TAIFUN zu schreiben'),
                           ('erledigt', 'Erledigt'), ('archiv', 'Archiv')] %}
@@ -119,7 +142,8 @@
     <tbody>
     {% for e in erfassungen %}
         {% set k = kunden.get(e.kunde_id) %}
-        <tr data-zeile="{{ e.id }}" data-suche="{{ ((k.anzeige_name if k else '') ~ ' ' ~ (k.ort if k else '') ~ ' ' ~ (benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '') ~ ' ' ~ e.status ~ ' ' ~ (e.sparte or 'WP')) | lower }}">
+        {% set oz = objekt_zeilen.get(e.id) if objekt_zeilen is defined else none %}
+        <tr data-zeile="{{ e.id }}" data-suche="{{ ((k.anzeige_name if k else '') ~ ' ' ~ (k.ort if k else '') ~ ' ' ~ (benutzer_map[e.benutzer_id].name if e.benutzer_id in benutzer_map else '') ~ ' ' ~ e.status ~ ' ' ~ (e.sparte or 'WP') ~ ' ' ~ (oz.text if oz else '')) | lower }}">
             {%- for sp in spalten if sp.sichtbar %}{{ zelle(sp.key, e) }}{% endfor %}
             <td class="aktionen">
                 <a class="knopf symbol" href="/erfassungen/{{ e.id }}"

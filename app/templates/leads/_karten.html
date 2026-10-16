@@ -7,6 +7,7 @@
    /static/mein_tag.js. #}
 {% from "_symbole.html" import symbol %}
 {% from "_komponenten.html" import leer_zustand, verfolgung_chip, avatar %}
+{% from "leads/_termin_ausgefallen.html" import termin_ausgefallen_knopf %}{# v38 (Phase 204) #}
 {% import "_sparten.html" as sparten_ui %}
 
 {# Pfeil „Route starten“ (im Symbolvorrat nicht vorhanden – inline, nur currentColor) #}
@@ -52,13 +53,17 @@
         {% else %}<span class="mt-rund mt-rund-aus" aria-disabled="true" title="keine Telefonnummer hinterlegt">{{ symbol('telefon') }}</span>{% endif %}
         <a class="mt-rund" href="{{ k.erfassen_url }}" aria-label="Erfassung starten" title="Erfassung starten">{{ symbol('notiz') }}</a>
     </div>
+    {#- v38 (Phase 204): Zweitaktion „Termin nicht stattgefunden“ (Dialog) #}
+    {% if k.ausfall %}<div class="mt-naechstes-ausfall">{{ termin_ausgefallen_knopf(k.termin.id, k.name, k.ausfall_zeit, klasse='mt-ausfall-link') }}</div>{% endif %}
 </section>
 {%- endmacro %}
 
 {# ---- Zeile der Liste „Heute“ (Zeitstrahl) bzw. „Kommende Tage“ (klein) ---- #}
+{# v38 (Phase 203/204): kein Label „überfällig“ mehr (vergangene Termine stehen nur noch auf
+   /leads/vergangene); Zweitaktion „Termin nicht stattgefunden“ in den aufgeklappten Aktionen #}
 {% macro termin_zeile(k, klein=false) -%}
 {%- set zustand = 'erledigt' if k.erledigt else ('naechster' if k.naechster else 'offen') -%}
-<article class="mt-termin mt-termin-{{ zustand }}{{ ' mt-termin-klein' if klein }}{{ ' mt-ueberfaellig' if k.ueberfaellig }}"
+<article class="mt-termin mt-termin-{{ zustand }}{{ ' mt-termin-klein' if klein }}"
          data-termin="{{ k.termin.id }}" data-mt-karte="termin" data-zustand="{{ zustand }}">
     <div class="mt-termin-zeile" data-mt-aufklappen role="button" tabindex="0" aria-expanded="false" aria-controls="termin-detail-{{ k.termin.id }}">
         <span class="mt-uhr">{{ k.uhr }}</span>
@@ -71,15 +76,17 @@
             <span class="mt-termin-ort">{{ k.ort_text or 'kein Ort' }}
                 {#- v37 (Phase 198): Strecke „18,4 km · 24 Min“ (geschätzt mit Kennzeichen) in der Zeile „Heute“ #}
                 {% if k.strecke_text %}<span class="mt-strecke{{ ' geschaetzt' if k.strecke_geschaetzt }}" data-mt-strecke title="Straßenkilometer und Fahrzeit {{ k.strecke_von }}">· <span class="mt-strecke-wert">{{ k.strecke_text }}</span></span>{% endif %}
-                {% if k.ueberfaellig %}<span class="mt-label mt-label-rot" title="Termin liegt in der Vergangenheit – Erfassung fehlt">überfällig</span>
-                {% elif k.teilweise %}<span class="mt-label" title="Termin liegt in der Vergangenheit – noch nicht alle Sparten erfasst">teilweise erfasst</span>
+                {% if k.teilweise %}<span class="mt-label" title="noch nicht alle Sparten erfasst">teilweise erfasst</span>
                 {% elif k.erledigt %}<span class="mt-label mt-label-gruen">erfasst</span>{% endif %}</span>
             {% endif %}
         </div>
         {% if not klein %}
         <div class="mt-termin-aktion">
             {% if k.erledigt %}<a class="mt-link" href="{{ k.erfassung_url }}" title="Erfassung öffnen">Erfassung</a>
-            {% else %}<a class="knopf mt-haupt" href="{{ k.erfassen_url }}">Erfassung starten</a>{% endif %}
+            {% else %}<a class="knopf mt-haupt" href="{{ k.erfassen_url }}">Erfassung starten</a>
+            {#- v38 (Phase 204): Zweitaktion neben „Erfassung starten“ – Dialog „Termin nicht stattgefunden“ #}
+            {% if k.ausfall %}{{ termin_ausgefallen_knopf(k.termin.id, k.name, k.ausfall_zeit, klasse='mt-ausfall-link mt-ausfall-klein') }}{% endif %}
+            {% endif %}
         </div>
         {% endif %}
     </div>
@@ -103,6 +110,45 @@
             {% if k.route_url %}<a class="mt-link" href="{{ k.route_url }}" target="_blank" rel="noopener">Route starten</a>{% endif %}
             <a class="mt-link" href="{{ k.akte_url }}">Akte</a>
         </div>
+    </div>
+</article>
+{%- endmacro %}
+
+{# ---- v38 (Phase 204): Zeile der Seite „Vergangene Termine“ (mobil) ---- #}
+{% macro vergangen_zeile(k) -%}
+<article class="mt-termin mt-termin-vergangen" data-termin="{{ k.termin.id }}" data-mt-karte="termin" data-name="{{ k.name | lower }}" data-mt-vergangen>
+    <div class="mt-termin-zeile" data-mt-aufklappen role="button" tabindex="0" aria-expanded="false" aria-controls="vergangen-detail-{{ k.termin.id }}">
+        <span class="mt-uhr">{{ k.uhr }}</span>
+        <div class="mt-termin-text">
+            <span class="mt-termin-name">{{ k.name }} {{ grosskunde(k) }}
+                {% if not aussendienst and k.ad_name %}<span class="dezent mt-ad">· {{ k.ad_name }}</span>{% endif %}</span>
+            <span class="mt-termin-typ">{{ k.beschreibung }}</span>
+            <span class="mt-termin-ort">{{ symbol('ort') }}
+                {% if k.adresse %}{% if k.objekt_bezeichnung %}<span class="mt-objekt">{{ k.objekt_bezeichnung }}</span> · {% endif %}{{ k.adresse }}
+                {% else %}<span class="dezent">keine Adresse</span>{% endif %}
+                {% if k.teilweise %}<span class="mt-label" title="noch nicht alle Sparten erfasst">teilweise erfasst</span>{% endif %}</span>
+        </div>
+        <div class="mt-termin-aktion">
+            <a class="knopf mt-haupt" href="{{ k.erfassen_url }}">Erfassung starten</a>
+        </div>
+    </div>
+    <div class="mt-termin-detail" id="vergangen-detail-{{ k.termin.id }}" hidden>
+        <div class="mt-detail-zeile">{{ symbol('telefon') }}
+            {% if k.telefon %}<a href="{{ k.tel_href }}" class="mt-tel">{{ k.telefon }}</a>
+            {% else %}<span class="dezent">keine Telefonnummer hinterlegt</span>{% endif %}</div>
+        <div class="mt-detail-zeile mt-badges">
+            {% for sparte, status in k.chips %}{{ sparten_ui.chip(sparte, status) }}{% endfor %}
+            <span class="mt-herkunft" title="Herkunft des Termins">{{ k.herkunft }}</span>
+            <span class="dezent">{{ k.datum_text }} · {{ k.uhr_text }} · {{ k.vor_text }}</span>
+        </div>
+        <div class="mt-detail-zeile mt-detail-aktionen">
+            {% if k.maps_url %}<a class="mt-link" href="{{ k.maps_url }}" target="_blank" rel="noopener">In Maps öffnen</a>{% endif %}
+            {% if k.route_url %}<a class="mt-link" href="{{ k.route_url }}" target="_blank" rel="noopener">Route starten</a>{% endif %}
+        </div>
+    </div>
+    <div class="mt-termin-fuss">
+        {% if k.ausfall %}{{ termin_ausgefallen_knopf(k.termin.id, k.name, k.ausfall_zeit, klasse='mt-ausfall-link') }}{% endif %}
+        <a class="mt-link mt-akte-link" href="{{ k.akte_url }}">Akte</a>
     </div>
 </article>
 {%- endmacro %}

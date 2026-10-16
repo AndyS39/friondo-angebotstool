@@ -508,9 +508,14 @@ class E_Seiten(Basis):
     def test_b_leads_vot_und_listen(self):
         seite = self.client.get("/leads")
         self.assertEqual(seite.status_code, 200)
-        self.assertIn('<option value="EON" selected>EON (nicht mehr wählbar)</option>', seite.text)
+        # v38 (PLAN_V23 Phase 203): Leads VOT zeigt Badge + Pfeil statt Dropdown – der inaktive
+        # Kanal EON steht als Badge in der Zelle (data-aktuell am Pfeil), die aktiven Kanäle einmal
+        # je Seite in <template data-lv-kanal-optionen> (das Menü ergänzt „(nicht mehr wählbar)“)
+        self.assertIn('data-aktuell="EON"', seite.text)
+        self.assertIn(">EON</span>", seite.text)
+        self.assertIn('<template data-lv-kanal-optionen>', seite.text)
         self.assertIn('<option value="Enni"', seite.text)
-        self.assertNotIn('<input type="text" name="kanal"', seite.text)
+        self.assertNotIn('<select name="kanal" onchange', seite.text)
         kunden = self.client.get("/kunden?q=V35K-Kunde-3")
         self.assertEqual(kunden.status_code, 200)
         # Makro kanal_badge ohne Farbe: Tabellenfarbe über das Jinja-Global lm_kanal_farbe (Alias „SWD“),

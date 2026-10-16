@@ -357,7 +357,8 @@ class SammelboxMarkup(Basis):
                          'multiple hidden data-gal34="dateien"',
                          'data-start="Fotos aufnehmen" data-weiter="Weiteres Foto"',
                          'class="gal34-vorlage"', 'class="gal34-bemerkung"', "Für alle übernehmen",
-                         'class="gal34-fortschritt"', "Fotos hochladen", 'class="pj-btn gal34-abbrechen"',
+                         # v38 (PLAN_V23 Phase 201): Knopf heißt „Hochladen (n)“ statt „n Fotos hochladen“
+                         'class="gal34-fortschritt"', "Hochladen (<span", 'class="pj-btn gal34-abbrechen"',
                          "/static/galerie_v34.js", "/static/galerie_v34.css",
                          'class="haupt-ordner"'):
             self.assertIn(erwartet, html, erwartet)
@@ -636,9 +637,14 @@ class SammelboxImBrowser(Basis):
                 "(function () { var ev = new Event('beforeunload', {cancelable: true});"
                 " window.dispatchEvent(ev); return ev.defaultPrevented; })()")
             await js(f"{box}.querySelector('.gal34-hochladen').click()")
-            await warten(3.0)
+            await warten(2.5)
+            # v38 (PLAN_V23 Phase 201): nach dem Upload keine Navigation mehr (bis v37 window.location =
+            # antwort.ziel mit ?meldung=) – das Pop-up zeigt „3 Fotos hochgeladen“, die Seite bleibt,
+            # die Kacheln kommen ohne Neuladen; die Meldung steht im Status der Sammelbox
             ergebnis["url"] = await js("location.pathname + location.search")
-            ergebnis["meldung"] = await js("decodeURIComponent(location.search)")
+            ergebnis["meldung"] = await js(f"{box}.querySelector('.gal34-status').textContent")
+            ergebnis["popup"] = await js(f"{box}.querySelector('dialog.gal38-dialog .gal38-dlg-titel').textContent")
+            ergebnis["liste_leer"] = await js(f"{box}.querySelectorAll('.gal34-zeile').length === 0")
 
         with mock.patch.object(galerie_modul, "mehrfach_speichern", side_effect=gezaehlt):
             fehler = self._lauf(schritte)
@@ -651,8 +657,10 @@ class SammelboxImBrowser(Basis):
         self.assertTrue(ergebnis["vorschau"], ergebnis)
         self.assertTrue(ergebnis["warnung"], ergebnis)
         self.assertEqual(len(aufrufe), 1, "genau EIN Upload-Request")
-        self.assertEqual(ergebnis["url"].split("?")[0], f"/vorgaenge/{self.vorgang.id}", ergebnis)
-        self.assertIn("3 Datei(en) abgelegt", ergebnis["meldung"].replace("+", " "), ergebnis)
+        self.assertEqual(ergebnis["url"], f"/vorgaenge/{self.vorgang.id}", ergebnis)
+        self.assertIn("3 Datei(en) abgelegt", ergebnis["meldung"], ergebnis)
+        self.assertEqual(ergebnis["popup"], "3 Fotos hochgeladen", ergebnis)
+        self.assertTrue(ergebnis["liste_leer"], ergebnis)
         dateien = self.dateien(self.vorgang.id)
         self.assertEqual([(d.dateiname, d.ordner, d.bemerkung) for d in dateien],
                          [("kamera1.jpg", ergebnis["standard_ordner"], "aus dem Browser"),

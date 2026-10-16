@@ -313,6 +313,11 @@ class Erfassung(Base):
     objekt_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     angelegt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     abgesendet_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # v38 (PLAN_V23 Phase 202): Korrektur nach „Senden“ (Badge „nachträglich geändert“) und
+    # Fortsetzung eines Entwurfs bei der ersten unbeantworteten Frage [ANNAHME: additive Spalten]
+    geaendert_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    geaendert_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    aktuelle_frage: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
 
 class Einstellung(Base):
@@ -1759,6 +1764,10 @@ class VotTermin(Base):
     monday_beginn: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     angepasst_am: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     angepasst_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # v38 (PLAN_V23 Phase 204): „Termin nicht stattgefunden“ – Grund und Bemerkung des Vertrieblers
+    # [ANNAHME: additive Spalten]
+    ausfall_grund: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    ausfall_bemerkung: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     erstellt_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     erstellt_von: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     geaendert_am: Mapped[datetime] = mapped_column(DateTime, default=datetime.now,

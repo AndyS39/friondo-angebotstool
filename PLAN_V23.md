@@ -112,7 +112,7 @@ mit `dateien[]`, `ordner[]`, `bemerkung[]`, client-seitige Verkleinerung
 auf 2.000 px, Teilerfolg je Datei. Gilt in Vorgangsakte, Projektakte,
 Montage-Backend und mobiler Erfassung (auch ohne Auftrag).
 
-- [ ] **Knopf „Hochladen":** Der Knopf der Upload-Liste heißt **„Hochladen
+- [x] **Knopf „Hochladen":** Der Knopf der Upload-Liste heißt **„Hochladen
       (n)"** (n = Anzahl Fotos in der Liste, bei 0 deaktiviert). Vor dem
       Senden erscheint ein Pop-up (Makro `galerie_upload_dialog`, Design-v2-
       Tokens, auch unter 390 px lesbar) mit: Titel „Fotos werden hochgeladen",
@@ -124,7 +124,7 @@ Montage-Backend und mobiler Erfassung (auch ohne Auftrag).
       Sekunden steht „gleich fertig". Das Pop-up hat keinen Schließen-Knopf,
       solange der Upload läuft (Abbrechen-Knopf bricht den Request ab, die
       Liste bleibt erhalten wie in v35).
-- [ ] **Erfolgs- und Fehlermeldung im Pop-up:** Nach Antwort des Servers
+- [x] **Erfolgs- und Fehlermeldung im Pop-up:** Nach Antwort des Servers
       wechselt das Pop-up auf **„3 Fotos hochgeladen"** (Erfolgsfarbe, Knopf
       „Schließen", schließt nach 3 Sekunden auch von selbst und leert die
       Upload-Liste) oder **„2 von 3 Fotos hochgeladen"** (Warnfarbe) mit der
@@ -136,7 +136,7 @@ Montage-Backend und mobiler Erfassung (auch ohne Auftrag).
       hochgeladen."** mit Knopf „Schließen" (siehe nächste Checkbox). Die
       Galerie-Ansicht aktualisiert sich nach Erfolg ohne Seitenneuladen
       (Vorschaukacheln anhängen).
-- [ ] **Offline-Zwischenspeicher:** Fehlschlag wegen Netz → die verkleinerten
+- [x] **Offline-Zwischenspeicher:** Fehlschlag wegen Netz → die verkleinerten
       Dateien (Blob), Ordner, Bemerkung, Vorgangs-ID, Objekt-ID und
       Zeitstempel werden in **IndexedDB** des Browsers abgelegt (Datenbank
       `friondo_galerie_puffer`, Store `wartend`, `static/galerie_puffer.js`;
@@ -155,7 +155,7 @@ Montage-Backend und mobiler Erfassung (auch ohne Auftrag).
       vorhanden" und kann verworfen werden. **Kein automatischer Upload im
       Hintergrund** (kein Service Worker); Hinweis in `docs/betrieb.md`,
       dass der Puffer nur im jeweiligen Browser des Geräts liegt.
-- [ ] **Mehrfach-Löschen in der Galerie:** In jedem Ordner (und in der
+- [x] **Mehrfach-Löschen in der Galerie:** In jedem Ordner (und in der
       Sammelbox) ein Knopf **„Auswählen"**,
       der je Vorschaukachel ein Kästchen einblendet; Kopfleiste „n
       ausgewählt · Alle · Keine" und Knopf **„n Fotos löschen"**
@@ -169,7 +169,7 @@ Montage-Backend und mobiler Erfassung (auch ohne Auftrag).
       Eintrag im Notizen-Chat „3 Fotos gelöscht (Ordner Zählerschrank)"
       [ANNAHME: wie beim Einzel-Löschen, falls dort ein Eintrag entsteht,
       sonst keiner]. Bestehendes Einzel-Löschen und Lightbox unverändert.
-- [ ] Tests `tests/test_v38_galerie.py`: Teilerfolgs-Antwort mit Grund je
+- [x] Tests `tests/test_v38_galerie.py`: Teilerfolgs-Antwort mit Grund je
       Datei; Mehrfach-Löschen drei IDs (zwei erlaubt, eine fremd → eine
       abgelehnt, zwei gelöscht, Dateien weg); Rechte je Rolle; Headless-
       Chrome (Muster `test_v30_navigation.py`): Upload-Pop-up zeigt Dauer
@@ -178,7 +178,7 @@ Montage-Backend und mobiler Erfassung (auch ohne Auftrag).
 
 ## Phase 202: Erfassung zwischenspeichern und nachträglich korrigieren
 
-- [ ] **Befund Abbruch des Bogens:** Reproduzieren (Playwright, Mobile-
+- [x] **Befund Abbruch des Bogens:** Reproduzieren (Playwright, Mobile-
       Emulation, Rolle Außendienst): Bogen starten, fünf Fragen beantworten,
       Seite verlassen (Zurück, Tab schließen, Menü), Bogen über die
       Erfassungsliste erneut öffnen. Feststellen und in der Gesamtübersicht
@@ -188,7 +188,7 @@ Montage-Backend und mobiler Erfassung (auch ohne Auftrag).
       beantworteten Frage weitermacht oder von vorn beginnt; (4) ob
       `beforeunload` greift. Danach die folgenden Punkte so umsetzen, dass
       das Soll gilt, ohne bereits Vorhandenes doppelt zu bauen.
-- [ ] **Soll Zwischenspeichern:** Jede Antwort wird beim Weiter sofort
+- [x] **Soll Zwischenspeichern:** Jede Antwort wird beim Weiter sofort
       serverseitig gespeichert (ist das schon so, nur Test). Erfassungen ohne
       Absenden tragen den Status **„Entwurf"** [ANNAHME: Statuswert
       `entwurf`, additiv; falls ein gleichbedeutender Status existiert, den
@@ -202,7 +202,7 @@ Montage-Backend und mobiler Erfassung (auch ohne Auftrag).
       Browser-Hinweis (`beforeunload`), nicht bei „Später fortsetzen" und
       nicht nach Absenden. Entwürfe älter als 30 Tage [ANNAHME] erscheinen
       in der Liste mit Warnfarbe, werden nicht automatisch gelöscht.
-- [ ] **Korrektur nach „Senden":** In der Erfassungsansicht (Prüfen-Seite
+- [x] **Korrektur nach „Senden":** In der Erfassungsansicht (Prüfen-Seite
       `/erfassung/{id}/pruefen` und Vorgangsakte, Karte Erfassung) ein Knopf
       **„Antworten korrigieren"**. Rechte: Außendienst nur bei
       `erfassungen.ad_id` = eigener Benutzer [ANNAHME: Feldname wie beim
@@ -217,7 +217,7 @@ Montage-Backend und mobiler Erfassung (auch ohne Auftrag).
       Prüfen-Seite (Klick auf die Frage), Knopf „Korrektur speichern"
       (statt Absenden), AMPEL und Pflichtfragen werden erneut geprüft.
       Status der Erfassung bleibt unverändert (nicht wieder „Entwurf").
-- [ ] **Änderungsnotiz:** Jede gespeicherte Korrektur erzeugt einen Eintrag
+- [x] **Änderungsnotiz:** Jede gespeicherte Korrektur erzeugt einen Eintrag
       im Notizen-Chat des Vorgangs (Makro `notizen_chat`, Herkunft System):
       **„Erfassung nachträglich geändert von <Name> am TT.MM.JJJJ HH:MM:
       A04 Aufstellort: Keller → Dachgeschoss; B02 Heizlast: 8 kW → 9 kW"**
@@ -226,7 +226,7 @@ Montage-Backend und mobiler Erfassung (auch ohne Auftrag).
       Zusätzlich an der Erfassung ein Badge **„nachträglich geändert
       (TT.MM.)"** in Liste, Prüfen-Seite und Vorgangsakte. Der bestehende
       Freitext-Editor (v13) bleibt und schreibt künftig denselben Eintrag.
-- [ ] Tests `tests/test_v38_erfassung.py`: Entwurf nach Abbruch sichtbar und
+- [x] Tests `tests/test_v38_erfassung.py`: Entwurf nach Abbruch sichtbar und
       fortsetzbar an der richtigen Frage; „Später fortsetzen"; Korrektur als
       AD an eigener Erfassung erlaubt, an fremder 403; ID an allen;
       gesperrt bei „Versand vorbereitet"; Notizen-Chat-Eintrag mit altem
@@ -237,7 +237,7 @@ Montage-Backend und mobiler Erfassung (auch ohne Auftrag).
 Grundlage ist die Tabelle aus v33 Phase 174 (Gruppen „Heute" und je
 Folgetag, auf- und zuklappbar, Chip-Filter, Spaltenwähler).
 
-- [ ] **Kanalspalte ohne Dropdown:** Die Zelle zeigt nur das farbige Kanal-
+- [x] **Kanalspalte ohne Dropdown:** Die Zelle zeigt nur das farbige Kanal-
       Badge (`kanal_badge`, Farben aus `kanal_farben`) und rechts daneben
       einen kleinen Pfeil nach unten (Symbol aus `_symbole.html`, 16 px,
       gedämpfte Farbe, `aria-label="Vertriebskanal ändern"`). Erst ein Klick
@@ -247,7 +247,7 @@ Folgetag, auf- und zuklappbar, Chip-Filter, Spaltenwähler).
       (manuelle Änderung mit Vorrang vor Sync, v13), Badge wechselt ohne
       Seitenneuladen. Escape und Klick außerhalb schließen das Menü. Keine
       Änderung in Kundenliste, Kundenkartei und Lead-Boards.
-- [ ] **Gruppe „Vergangene Termine":** Neue Gruppe **unterhalb** der
+- [x] **Gruppe „Vergangene Termine":** Neue Gruppe **unterhalb** der
       Folgetage [ANNAHME: unten, damit „Heute" oben bleibt], Kopf
       **„Vergangene Termine · 7"**, standardmäßig zugeklappt, Zustand je
       Benutzer gemerkt (wie die übrigen Gruppen, `localStorage`). Inhalt:
@@ -257,12 +257,12 @@ Folgetag, auf- und zuklappbar, Chip-Filter, Spaltenwähler).
       Außendienst sieht nur eigene, Innendienst/Admin alle; Chip-Filter
       (Vertriebler, Status, Priorität) wirken auch hier. Termine älter als
       180 Tage erscheinen nicht (kein eigener Filter).
-- [ ] **„Überfällig" streichen:** Das rote Label „überfällig" und die
+- [x] **„Überfällig" streichen:** Das rote Label „überfällig" und die
       Einsortierung vergangener Termine in „Heute" (v32 Phase 161, v33
       Phase 173) entfallen auf Desktop und mobil. „Heute" enthält nur
       Termine mit Beginn am heutigen Tag. Die Startseiten-Kachel-Zähler und
       die Statistik „Offene Leads" bleiben unverändert [ANNAHME].
-- [ ] Tests `tests/test_v38_leads_vot.py`: Kanal-Änderung über die neue
+- [x] Tests `tests/test_v38_leads_vot.py`: Kanal-Änderung über die neue
       Route liefert neues Badge; Termin gestern ohne Erfassung → in
       „Vergangene Termine", nicht in „Heute", ohne Label „überfällig";
       Termin vor 181 Tagen → nirgends; Termin gestern mit abgeschlossener
@@ -270,14 +270,14 @@ Folgetag, auf- und zuklappbar, Chip-Filter, Spaltenwähler).
 
 ## Phase 204: Mobil: Reiter „Vergangene Termine", Erfassungsliste mit Objekt
 
-- [ ] **Untere Leiste:** Der vierte Eintrag **„Kunden"** (v33 Phase 173)
+- [x] **Untere Leiste:** Der vierte Eintrag **„Kunden"** (v33 Phase 173)
       wird durch **„Vergangene Termine"** ersetzt (Symbol Uhr/Verlauf aus
       `_symbole.html`; Beschriftung unter 360 px „Vergangen"). Reihenfolge:
       „Mein Tag" · „Kalender" · „Wiedervorlage" · „Vergangene Termine".
       Die allgemeine Suche (v32 Phase 164) bleibt über die Lupe im
       Hauptmenü erreichbar; `docs/nach-dem-update-v38.md` nennt das dem
       Außendienst.
-- [ ] **Seite „Vergangene Termine" mobil:** Route [ANNAHME] `GET /leads/
+- [x] **Seite „Vergangene Termine" mobil:** Route [ANNAHME] `GET /leads/
       vergangene` (Rolle Außendienst, Datenbestand identisch zur Desktop-
       Gruppe aus Phase 203, 180 Tage, nur eigene): Zurück-Pfeil „Mein Tag",
       Titel „Vergangene Termine" mit Zähler „7 ohne Erfassung", Suchfeld
@@ -290,7 +290,7 @@ Folgetag, auf- und zuklappbar, Chip-Filter, Spaltenwähler).
       vergangenen Termine ohne Erfassung" mit Zeile „Alles erfasst." Untere
       Leiste mit aktivem Eintrag. Für Innendienst/Admin entfällt die Seite
       (sie nutzen die Desktop-Gruppe).
-- [ ] **Erfassungsliste mobil mit Objekt:** In der Liste der Erfassungen des
+- [x] **Erfassungsliste mobil mit Objekt:** In der Liste der Erfassungen des
       Außendienstlers (`/erfassungen`, Darstellung unter 600 px) zeigt jede
       Erfassung unter dem Kundennamen eine Zeile **„<Objektbezeichnung> ·
       <Straße Nr., PLZ Ort>"** aus `vorgang_objekte` (Objekt, das der
@@ -300,7 +300,7 @@ Folgetag, auf- und zuklappbar, Chip-Filter, Spaltenwähler).
       Erfassung unterscheidbar. Desktop-Tabelle: neue Spalte „Objekt"
       (über den Spaltenwähler, Standard sichtbar) mit demselben Inhalt
       [ANNAHME]. Suchfeld der Liste findet auch die Objektbezeichnung.
-- [ ] **Dialog „Termin nicht stattgefunden":** Knopf (Zweitaktion neben
+- [x] **Dialog „Termin nicht stattgefunden":** Knopf (Zweitaktion neben
       „Erfassung starten") an jeder Termin-Karte in „Mein Tag" (Blöcke „Als
       Nächstes" und „Heute"), auf der Seite „Vergangene Termine" mobil und
       als Zeilenaktion in der Desktop-Tabelle Leads VOT (alle Gruppen). Der
@@ -316,7 +316,7 @@ Folgetag, auf- und zuklappbar, Chip-Filter, Spaltenwähler).
       /leads/termin/{termin_id}/ausgefallen` (`_speichern`-Muster), Rechte:
       Außendienst nur eigene Termine (`vot_termine` des eigenen Vorgangs),
       Innendienst/Admin/Leadmanagement alle.
-- [ ] **Folge „Neuen Termin vereinbaren lassen":** `vot_termine.status` =
+- [x] **Folge „Neuen Termin vereinbaren lassen":** `vot_termine.status` =
       `no_show` [ANNAHME: Wert wie der bestehende No-Show-Weg der AD-Sicht
       aus v12/v23, sonst neuer Wert], Grund und Bemerkung am Termin
       gespeichert; Lead-Phase wie beim bestehenden No-Show zurück auf
@@ -339,7 +339,7 @@ Folgetag, auf- und zuklappbar, Chip-Filter, Spaltenwähler).
       durch Leadmanagement"**. Keine automatische E-Mail an den Kunden
       [ANNAHME; Vorlage `terminabsage` bleibt dem Leadmanagement
       vorbehalten].
-- [ ] **Folge „Kunde möchte keinen neuen Termin":** Zweite Abfrage
+- [x] **Folge „Kunde möchte keinen neuen Termin":** Zweite Abfrage
       **„Kunden disqualifizieren?"** mit Grund-Auswahl aus den bestehenden
       Disqualifizierungs-Gründen (v23/v25, Pflicht) und Knopf „Disqualifizieren";
       Termin wird `abgesagt`, Lead-Phase **„Disqualifiziert"** über denselben
@@ -357,7 +357,7 @@ Folgetag, auf- und zuklappbar, Chip-Filter, Spaltenwähler).
       (entschieden 16.10.2026): Ist der Kunde unentschieden, wählt der
       Vertriebler „Neuen Termin vereinbaren lassen" und schreibt das in
       die Bemerkung.
-- [ ] Tests `tests/test_v38_mobil.py`: Leiste enthält „Vergangene Termine"
+- [x] Tests `tests/test_v38_mobil.py`: Leiste enthält „Vergangene Termine"
       und nicht „Kunden"; Dialog „Termin nicht stattgefunden": Option 1 →
       Termin `no_show`, Phase „Kontaktiert", To-Do mit Titel und Fälligkeit
       heute, Benachrichtigung beim zugewiesenen Innendienstler, Termin nicht mehr in den
@@ -372,15 +372,17 @@ Folgetag, auf- und zuklappbar, Chip-Filter, Spaltenwähler).
 
 ## Phase 205: Tests, Rollout-Vorbereitung, Doku, CLAUDE.md v38
 
-- [ ] **Regressionstest Fotos je Objekt:** entfällt – die Objektfotos sind mit dem Nachtrag 16.10.
+- [x] **Regressionstest Fotos je Objekt:** entfällt – die Objektfotos sind mit dem Nachtrag 16.10.
       zu PLAN_LEAD_V6 (PLAN_LEAD_V6_1) gestrichen (Vorprüfung der Plan-Kette 16.10.2026, Rückfrage).
 - [ ] **Tests gesamt:** `test_v38_galerie.py`, `test_v38_erfassung.py`,
+      *(Stand 17.10.2026: v38-Tests, Wächter und Nachbarn auf der migrierten Kopie grün – Gesamtsuite und Außendienst-Sichtprüfung einmal am Ende der Plan-Kette v36–v38.)*
       `test_v38_leads_vot.py`, `test_v38_mobil.py`; angepasste Alt-Tests
       (Label „überfällig", Knopfbeschriftung „n Fotos hochladen", untere
       Leiste) mit Begründung; `pytest tests -q` komplett grün, Wächter v27
       und Token-Wächter v30 grün; Außendienst-Sichtprüfung (kein EK/DB,
       Korrektur nur an eigenen Erfassungen).
 - [ ] **Rollout-Vorbereitung** nach Grundregel: Server-DB-Kopie nach
+      *(laut Brief EINE Rollout-Vorbereitung am Kettenende v36–v38 – siehe `diagnose/v36/gesamtuebersicht.md` §10.)*
       diagnose\, migrate.py zweimal (zweiter Lauf ohne Änderungen; additiv:
       Status `entwurf` falls neu, `erfassungen.geaendert_am` und
       `erfassungen.geaendert_von` [ANNAHME: Felder für das Badge],
@@ -392,7 +394,7 @@ Folgetag, auf- und zuklappbar, Chip-Filter, Spaltenwähler).
       ins AD-Profil); additiv auch `vot_termine.ausfall_grund`,
       `vot_termine.ausfall_bemerkung` [ANNAHME], Screenshots nach
       `docs/design-v38/`, nur Demo-Daten.
-- [ ] **Doku:** CLAUDE.md Abschnitt „Neu in v38 – Foto-Upload, Erfassung
+- [x] **Doku:** CLAUDE.md Abschnitt „Neu in v38 – Foto-Upload, Erfassung
       Zwischenspeichern/Korrektur, Vergangene Termine (abgestimmt
       16.10.2026)" nach „Neu in v37", Zuordnungstabelle `| v38 | PLAN_V23.md
       | 201–205 |`, Titelzeile „(v38)"; in „Neu in v32" und „Neu in v33"
@@ -408,7 +410,7 @@ Folgetag, auf- und zuklappbar, Chip-Filter, Spaltenwähler).
       Pfeil, Gruppe „Vergangene Termine", Badge „nachträglich geändert" im
       Notizen-Chat beachten); `docs/betrieb.md` (IndexedDB-Puffer je Gerät,
       Mehrfach-Löschen); `docs/updates.md`; `config.VERSION = "v38"`.
-- [ ] **Gesamtübersicht am Ende:** erledigte Phasen, Testergebnisse
+- [x] **Gesamtübersicht am Ende:** erledigte Phasen, Testergebnisse
       (Gesamtzahl), angepasste Alt-Tests mit Begründung, **Befund Abbruch
       des Bogens** (Phase 202), [ANNAHME]-Liste, Rückfragen gebündelt. **Ein
       Commit** „v38: Foto-Upload Pop-up/Offline/Mehrfach-Löschen, Erfassung

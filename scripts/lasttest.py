@@ -885,6 +885,9 @@ class Nutzer(threading.Thread):
         Bogen gibt es keinen Link, die Route ist für den AD erreichbar])."""
         self.get("/leads", "GET /leads")   # v32: „Mein Tag“
         self.denken()
+        # v38 (PLAN_V23 Phase 204): Seite „Vergangene Termine“ des Außendienstes (untere Leiste)
+        self.get("/leads/vergangene", "GET /leads/vergangene")
+        self.denken(1.0, 3.0)
         # v32 (Phase 164): Kundensuche beim Tippen – zwei bis drei Zeichen eines Nachnamens
         namen = self.lauf.pools.get("kunden_namen") or []
         if namen:

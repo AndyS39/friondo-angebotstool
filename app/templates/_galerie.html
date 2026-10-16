@@ -13,12 +13,52 @@
    Fortschrittsbalken und Teilerfolg je Datei – static/galerie_v34.js/.css, eingebunden über
    galerie_einbindung()); Modus „formular“ für die mobile Erfassung (Dateien landen je
    Ordner in galerie_<i> des Seitenformulars). Das Foto-für-Foto-JS des v33-Nachtrags
-   (pjSammel*) ist durch den Sammel-Request ersetzt. #}
+   (pjSammel*) ist durch den Sammel-Request ersetzt.
+   v38 (PLAN_V23 Phase 201, Agent G): Knopf „Hochladen (n)“ mit Pop-up (Makro galerie_upload_dialog:
+   Fortschritt je Datei und gesamt, Restdauer, Erfolgs-/Fehlermeldung, „Erneut versuchen“ nur für
+   fehlgeschlagene Dateien), Offline-Zwischenspeicher (IndexedDB, static/galerie_puffer.js) mit
+   Hinweiskasten „n Fotos warten auf Upload“ über der Galerie, Auswählen-Modus mit Kästchen je Kachel
+   und Mehrfach-Löschen (POST /vorgaenge/<id>/galerie/loeschen, static/galerie_v38.js/.css);
+   Kästchen nur an Dateien, die der Benutzer löschen darf (galerie_darf_loeschen der Seite oder eigener
+   Upload eines Außendienstlers – Jinja-Global galerie_loeschrecht). #}
 {% macro galerie_einbindung() -%}
 {# v34 (PLAN_V21 Phase 181): Skript + Styles der Sammelbox – einmal je Seite
-   (galerie_fuss() ruft es mit; Seiten ohne Lightbox rufen es selbst) #}
+   (galerie_fuss() ruft es mit; Seiten ohne Lightbox rufen es selbst);
+   v38: dazu Zwischenspeicher (galerie_puffer.js) und Auswählen/Hinweiskasten (galerie_v38.js/.css) #}
 <link rel="stylesheet" href="/static/galerie_v34.css?v={{ css_version | default('') }}">
+<link rel="stylesheet" href="/static/galerie_v38.css?v={{ css_version | default('') }}">
+<script src="/static/galerie_puffer.js?v={{ css_version | default('') }}"></script>
 <script src="/static/galerie_v34.js?v={{ css_version | default('') }}"></script>
+<script src="/static/galerie_v38.js?v={{ css_version | default('') }}"></script>
+{%- endmacro %}
+
+{% macro galerie_upload_dialog() -%}
+{# v38 (PLAN_V23 Phase 201): Pop-up „Fotos werden hochgeladen“ – je Sammelbox eines; gefüllt und
+   gesteuert von galerie_v34.js (hochladen): Zeile je Datei mit Fortschritt, Gesamtbalken, Restdauer
+   („Voraussichtlich noch ca. 20 Sekunden“, unter 5 s „gleich fertig“), danach „3 Fotos hochgeladen“
+   (Erfolgsfarbe, schließt nach 3 s) oder „2 von 3 Fotos hochgeladen“ (Warnfarbe, Liste der
+   fehlgeschlagenen Dateien mit Grund, „Erneut versuchen“) bzw. „Kein Netz …“ (Zwischenspeicher).
+   Während des Uploads kein Schließen (Esc abgefangen), nur „Abbrechen“. #}
+<dialog class="pj-dlg gal38-dialog" aria-live="polite">
+    <h3 class="gal38-dlg-titel">Fotos werden hochgeladen</h3>
+    <template class="gal38-dlg-vorlage">
+        <div class="gal38-dlg-zeile">
+            <span class="gal38-dlg-name"></span>
+            <progress class="gal38-dlg-datei" value="0" max="100"></progress>
+            <span class="gal38-dlg-stand dezent"></span>
+        </div>
+    </template>
+    <div class="gal38-dlg-dateien"></div>
+    <progress class="gal38-dlg-gesamt" value="0" max="100"></progress>
+    <p class="gal38-dlg-dauer dezent"></p>
+    <p class="gal38-dlg-meldung" hidden></p>
+    <ul class="gal38-dlg-fehler" hidden></ul>
+    <div class="gal38-dlg-knoepfe">
+        <button type="button" class="pj-btn gal38-dlg-abbrechen">Abbrechen</button>
+        <button type="button" class="pj-btn primary gal38-dlg-erneut" hidden>Erneut versuchen</button>
+        <button type="button" class="pj-btn gal38-dlg-schliessen" hidden>Schließen</button>
+    </div>
+</dialog>
 {%- endmacro %}
 
 {% macro sammelbox(galerie_vorgang_id, galerie_ordner, galerie_zurueck, sparte='WP',
@@ -47,6 +87,8 @@
     </div>
     <template class="gal34-vorlage">
         <div class="gal34-zeile">
+            {#- v38: Kästchen des Auswählen-Modus (Mehrfach-Entfernen aus der Liste) #}
+            <label class="gal38-kasten" hidden><input type="checkbox" class="gal38-wahl" aria-label="Auswählen"></label>
             <img src="" alt="" class="gal34-bild">
             <span class="gal34-doku" hidden>📄</span>
             <div class="gal34-felder">
@@ -60,22 +102,37 @@
             <button type="button" class="gal34-weg" title="Aus der Liste entfernen">✕</button>
         </div>
     </template>
+    {#- v38 (PLAN_V23 Phase 201): Auswählen-Modus der Sammelbox – Kopfleiste „n ausgewählt · Alle · Keine“
+        und „n Fotos entfernen“ (nur aus der Liste, nichts auf dem Server) [ANNAHME] #}
+    <div class="gal38-auswahl-leiste" hidden data-gal38-leiste="liste">
+        <span class="gal38-auswahl-zahl">0 ausgewählt</span>
+        <span class="gal38-auswahl-punkt">·</span>
+        <button type="button" class="gal38-link gal38-alle">Alle</button>
+        <span class="gal38-auswahl-punkt">·</span>
+        <button type="button" class="gal38-link gal38-keine">Keine</button>
+        <button type="button" class="pj-btn danger gal38-entfernen" disabled>0 Fotos entfernen</button>
+        <button type="button" class="pj-btn gal38-auswahl-ende">Fertig</button>
+    </div>
     <div class="gal34-liste" hidden></div>
     <div class="fuss" hidden>
         <label class="dezent gal34-nur-upload">Bemerkung für alle
             <input type="text" class="bemerkung" placeholder="optional" maxlength="300" size="16"></label>
         <button class="pj-btn gal34-alle" type="button"
                 title="Standard-Ordner (und Bemerkung) für alle Dateien der Liste setzen">Für alle übernehmen</button>
+        <button class="pj-btn gal38-auswaehlen" type="button" data-gal38-ziel="liste"
+                title="Mehrere Fotos aus der Liste entfernen">Auswählen</button>
         <progress class="gal34-fortschritt" value="0" max="100" hidden></progress>
         <span class="gal34-status dezent" hidden></span>
         {% if modus == 'upload' %}
-        <button class="pj-btn primary gal34-hochladen" type="button">⬆ <span class="zahl">0</span> Fotos hochladen</button>
+        {#- v38: „Hochladen (n)“ statt „n Fotos hochladen“, bei 0 deaktiviert; Pop-up vor dem Senden #}
+        <button class="pj-btn primary gal34-hochladen" type="button" disabled>⬆ Hochladen (<span class="zahl">0</span>)</button>
         <button class="pj-btn gal34-abbrechen" type="button" hidden>Abbrechen</button>
         {% else %}
         <span class="dezent"><span class="zahl">0</span> Foto(s) – werden mit „Weiter“ gespeichert</span>
         {% endif %}
         <button class="pj-btn gal34-leeren" type="button">Leeren</button>
     </div>
+    {% if modus == 'upload' %}{{ galerie_upload_dialog() }}{% endif %}
     {% if modus == 'formular' %}
     {% for o in galerie_ordner %}
     <input type="file" name="{{ feld_praefix }}{{ loop.index0 }}" multiple hidden class="gal34-ziel" data-ordner="{{ o }}">
@@ -91,7 +148,24 @@
 {% macro galerie(galerie_vorgang_id, galerie_daten, galerie_ordner,
                  galerie_darf_loeschen, galerie_zurueck, sparte='WP',
                  darf_verschieben=True) %}
-<div class="pj-galerie" id="galerie-{{ sparte }}">
+{#- v38 (PLAN_V23 Phase 201): Löschrecht je Datei – rollenbasiert über galerie_darf_loeschen der Seite,
+    eigene Uploads eines Außendienstlers über das Jinja-Global galerie_loeschrecht (anfrage.KONTEXT) #}
+{% set recht = galerie_loeschrecht() %}
+<div class="pj-galerie" id="galerie-{{ sparte }}" data-gal38 data-vorgang="{{ galerie_vorgang_id or '' }}"
+     data-sparte="{{ sparte }}" data-zurueck="{{ galerie_zurueck }}"
+     data-loeschen-alle="{{ '1' if galerie_darf_loeschen else '0' }}"
+     data-loeschen-eigene="{{ '1' if recht.eigene else '0' }}"
+     data-benutzer="{{ recht.benutzer_id or '' }}"
+     data-loeschen-url="/vorgaenge/{{ galerie_vorgang_id }}/galerie/loeschen">
+    {#- v38: Hinweiskasten „n Fotos warten auf Upload (seit …)“ – Inhalt aus dem Offline-Zwischenspeicher
+        des Browsers (galerie_puffer.js), gefüllt von galerie_v38.js; ohne wartende Fotos versteckt #}
+    <div class="gal38-wartend pj-note" hidden data-gal38-wartend>
+        <span class="gal38-wartend-text">0 Fotos warten auf Upload</span>
+        <span class="gal38-wartend-knoepfe">
+            <button type="button" class="pj-btn primary gal38-wartend-hochladen">Jetzt hochladen</button>
+            <button type="button" class="pj-btn gal38-wartend-verwerfen">Verwerfen</button>
+        </span>
+    </div>
     {# Foto-Sammelbox (27.09.2026; v34 PLAN_V21 Phase 181): Kamera-Serie oder
        Mehrfachauswahl, Ordner + Bemerkung je Foto, EIN Upload für alles #}
     {{ sammelbox(galerie_vorgang_id, galerie_ordner, galerie_zurueck, sparte) }}
@@ -101,7 +175,16 @@
     {% set zusatz_ordner = galerie_daten.keys() | reject('in', galerie_ordner) | list %}
     {% for ordner in (galerie_ordner | list) + zusatz_ordner %}
     {% set eintrag = galerie_daten.get(ordner, {'eintraege': [], 'vorschau': None}) %}
-    <details class="pj-gal-ordner" {{ 'open' if eintrag.eintraege and loop.first }}>
+    {#- v38: je Datei entscheidet `loeschbar` über das Kästchen des Auswählen-Modus #}
+    {% set ns = namespace(loeschbar_anzahl=0) %}
+    {% for d in eintrag.eintraege %}
+        {% if galerie_darf_loeschen or (recht.eigene and d.hochgeladen_von and d.hochgeladen_von == recht.benutzer_id) %}
+            {% set ns.loeschbar_anzahl = ns.loeschbar_anzahl + 1 %}
+        {% endif %}
+    {% endfor %}
+    <details class="pj-gal-ordner" data-ordner="{{ ordner }}"
+             data-gruppe="{{ galerie_vorgang_id }}/{{ sparte }}/{{ ordner }}"
+             {{ 'open' if eintrag.eintraege and loop.first }}>
         <summary>
             {% if eintrag.vorschau %}
                 <img src="/vorgaenge/galerie/datei/{{ eintrag.vorschau.id }}" alt="" loading="lazy">
@@ -110,11 +193,32 @@
             <span class="n">{{ eintrag.eintraege | length }}</span>
         </summary>
         <div class="pj-gal-inhalt">
+            {#- v38 (PLAN_V23 Phase 201): Auswählen-Modus je Ordner – Knopf nur, wenn mindestens eine Datei
+                löschbar ist (galerie_v38.js blendet ihn nach einem Upload ein); Kopfleiste
+                „n ausgewählt · Alle · Keine“, „n Fotos löschen“ mit Sicherheitsabfrage #}
+            <div class="gal38-leiste" data-gal38-leiste="ordner" data-ordner="{{ ordner }}">
+                <button type="button" class="pj-btn gal38-auswaehlen" data-gal38-ziel="ordner"
+                        {% if not ns.loeschbar_anzahl %}hidden{% endif %}>Auswählen</button>
+                <div class="gal38-auswahl-leiste" hidden>
+                    <span class="gal38-auswahl-zahl">0 ausgewählt</span>
+                    <span class="gal38-auswahl-punkt">·</span>
+                    <button type="button" class="gal38-link gal38-alle">Alle</button>
+                    <span class="gal38-auswahl-punkt">·</span>
+                    <button type="button" class="gal38-link gal38-keine">Keine</button>
+                    <button type="button" class="pj-btn danger gal38-loeschen" disabled>0 Fotos löschen</button>
+                    <button type="button" class="pj-btn gal38-auswahl-ende">Fertig</button>
+                </div>
+            </div>
             {% set bilder = eintrag.eintraege | selectattr('bild') | list %}
             {% if bilder %}
             <div class="pj-gal-raster" data-lb-gruppe="{{ galerie_vorgang_id }}/{{ sparte }}/{{ ordner }}">
                 {% for d in bilder %}
-                <figure>
+                {% set loeschbar = galerie_darf_loeschen or (recht.eigene and d.hochgeladen_von and d.hochgeladen_von == recht.benutzer_id) %}
+                <figure data-datei="{{ d.id }}" data-name="{{ d.dateiname }}"{% if loeschbar %} data-loeschbar="1"{% endif %}>
+                    {% if loeschbar %}
+                    <label class="gal38-kasten" hidden><input type="checkbox" class="gal38-wahl" value="{{ d.id }}"
+                           aria-label="{{ d.dateiname }} auswählen"></label>
+                    {% endif %}
                     <a href="/vorgaenge/galerie/datei/{{ d.id }}" target="_blank"
                        class="pj-lb-link"
                        data-lb-gruppe="{{ galerie_vorgang_id }}/{{ sparte }}/{{ ordner }}"
@@ -149,7 +253,11 @@
             {% if doks %}
             <div class="pj-tree">
                 {% for d in doks %}
-                <div class="f"><a href="/vorgaenge/galerie/datei/{{ d.id }}" target="_blank">{{ d.dateiname }}</a>
+                {% set loeschbar = galerie_darf_loeschen or (recht.eigene and d.hochgeladen_von and d.hochgeladen_von == recht.benutzer_id) %}
+                <div class="f" data-datei="{{ d.id }}" data-name="{{ d.dateiname }}"{% if loeschbar %} data-loeschbar="1"{% endif %}>
+                    {%- if loeschbar %}<label class="gal38-kasten gal38-kasten-zeile" hidden><input type="checkbox" class="gal38-wahl"
+                           value="{{ d.id }}" aria-label="{{ d.dateiname }} auswählen"></label>{% endif %}
+                    <a href="/vorgaenge/galerie/datei/{{ d.id }}" target="_blank">{{ d.dateiname }}</a>
                     <small>{{ d.hochgeladen_am.strftime('%d.%m.%y') }}{{ ' · ' ~ d.bemerkung if d.bemerkung }}</small>
                     <a href="/vorgaenge/galerie/datei/{{ d.id }}?download=1" download title="Herunterladen">⬇</a>
                     {% if galerie_darf_loeschen %}

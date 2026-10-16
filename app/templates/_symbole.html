@@ -119,6 +119,12 @@
     {#- v34 (PLAN_V21 Phase 181): Mikrofon für den Diktat-Knopf (_diktat.html) -#}
     {%- elif name == 'mikrofon' -%}
         <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>
+    {#- v38 (PLAN_V23 Phase 203/204): Uhr/Verlauf für den Reiter „Vergangene Termine“ und Pfeil nach unten
+        für das Kanal-Menü in Leads VOT (Lucide history / chevron-down) -#}
+    {%- elif name == 'verlauf' -%}
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>
+    {%- elif name == 'pfeil-unten' -%}
+        <path d="m6 9 6 6 6-6"/>
     {%- else -%}
         <circle cx="12" cy="12" r="9"/>
     {%- endif -%}

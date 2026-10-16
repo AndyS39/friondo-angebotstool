@@ -94,7 +94,9 @@ _MONTAGE_GALERIE = re.compile(r"^/vorgaenge/(galerie/datei/\d+|\d+/galerie/uploa
 # Upload aus der Projektakte lief für Projektierer auf einen Redirect. Galerie-Schreibrouten
 # (Upload, Verschieben, Löschen) sind für die Projektierung jetzt ausdrücklich erlaubt.
 _GALERIE_SCHREIBEN = re.compile(
-    r"^/vorgaenge/(\d+/galerie/upload|galerie/datei/\d+/(verschieben|loeschen))$")
+    r"^/vorgaenge/(\d+/galerie/(upload|loeschen)|galerie/datei/\d+/(verschieben|loeschen))$")
+# v38 (PLAN_V23 Phase 201): /vorgaenge/<id>/galerie/loeschen = Mehrfach-Löschen aus dem
+# Auswählen-Modus (Projektierung erlaubt; Montage bleibt über _MONTAGE_GALERIE ohne Löschen)
 # v13 (Phase 80): Lieferschein (ohne Preise) ist ebenfalls lesend erlaubt
 _ANGEBOTE_LESEPFAD = re.compile(r"^/angebote(/\d+/(pdf|lieferschein\.pdf))?$")
 # v12 (Phase 81): Hauptrolle leadmanagement – Lead-Modul voll, Kunden
@@ -619,7 +621,10 @@ class RollenMiddleware(BaseHTTPMiddleware):
             benutzer = await run_in_threadpool(self._laden, request)
             # v27: Kontext für Jinja-Globals ohne Request (reicht in den Worker-Thread)
             from app import anfrage
-            anfrage.KONTEXT.set({"lm_demo_badge": getattr(request.state, "lm_demo_badge", None)})
+            # v38 (PLAN_V23 Phase 201): der angemeldete Benutzer für Jinja-Globals ohne Request
+            # (galerie_loeschrecht – Löschrecht je Datei im Galerie-Makro; abgelöstes Objekt)
+            anfrage.KONTEXT.set({"lm_demo_badge": getattr(request.state, "lm_demo_badge", None),
+                                 "benutzer": benutzer})
             # v33 (PLAN_V20 Phase 172): Schreibsitzung für POST/PUT/PATCH/DELETE – Rückfall für
             # db.get_session und Helfer ohne Request-Objekt (Vorschlag A 4a)
             anfrage.METHODE.set(request.method)

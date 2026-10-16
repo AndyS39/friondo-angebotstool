@@ -13,6 +13,14 @@
 # (Phase 174, Vertrag T – Endstand: lead_boards.KATALOGE["leads_vot"], spalten_fuer/sortierung_fuer/
 # spalten_fest/zeilen_sortieren, Jinja-Globals lm_spalten_url/lm_spalten_fest). Neu: GET /leads/wiedervorlagen (Seite „Wiedervorlage“
 # mobil, nur Außendienst – andere Rollen → Angebotsliste mit Verfolgungsfilter).
+# v38 (PLAN_V23 Phase 203/204): „überfällig“ entfällt (kein rotes Label, keine Einsortierung in
+# „Heute“, kein v15-Banner, keine Ansicht „nur überfällige“ – dieselbe Logik); die Desktop-Tabelle
+# bekommt unten die zugeklappte Gruppe „Vergangene Termine · n“ aus vot_termine (mein_tag.
+# vergangene_zeilen, 180 Tage, Erledigt-Logik), die Kanalzelle zeigt Badge + Pfeil mit Menü
+# (POST /leads/{lead_id}/kanal antwortet bei Accept: application/json mit dem neuen Badge);
+# GET /leads/vergangene = mobile Seite „Vergangene Termine“ (Außendienst; ID/Admin → /leads);
+# POST /leads/termin/{termin_id}/ausgefallen = Dialog „Termin nicht stattgefunden“
+# (app/lead_termin_ausfall.py, _speichern-Muster, JSON bei Accept: application/json).
 
 from datetime import datetime
 
@@ -22,18 +30,47 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.db import get_session
-from app.models import Benutzer, Erfassung, Kunde, Lead, Vorgang
-from app.templating import render
+from app.models import Benutzer, Erfassung, Kunde, Lead, Vorgang, VotTermin
+from app.templating import render, templates
 from app import anfrage   # v27: Formular/JSON in def-Routen
 from app import import_preisliste   # v27: Hinweis/Bestätigung monday-Vollabgleich
 from app import rollen as rollen_modul   # v33: Basisrolle/Rollen-Varianten
 from app import leadmanagement as lead_kern   # v35 (Phase 184): Kanal-Dropdown aus den Stammdaten
+from app import lead_termin_ausfall   # v38 (Phase 204): Dialog „Termin nicht stattgefunden“
 
 router = APIRouter(prefix="/leads")
 
 WIEDERVORLAGE_ZIEL = "/leads/wiedervorlagen"
 WIEDERVORLAGE_ID_ZIEL = "/angebote?verfolgung=versendet"   # [ANNAHME] ID/Admin: Angebotsliste mit Verfolgungsfilter
+VERGANGENE_ZIEL = "/leads/vergangene"
+VERGANGENE_ID_ZIEL = "/leads#vergangene"   # [ANNAHME Plan] ID/Admin nutzen die Desktop-Gruppe
 PRIORITAETEN = ("hoch", "mittel", "niedrig")
+
+
+def _json_gewuenscht(request: Request) -> bool:
+    return "application/json" in (request.headers.get("accept") or "")
+
+
+def _sicheres_ziel(wert: str, standard: str) -> str:
+    """Rücksprung nur auf eigene Pfade (kein //, kein fremder Host)."""
+    ziel = (wert or "").strip() or standard
+    if not ziel.startswith("/") or ziel.startswith("//"):
+        return standard
+    return ziel
+
+
+def _mit_meldung(ziel: str, meldung: str) -> str:
+    from urllib.parse import quote_plus
+    pfad, _, anker = ziel.partition("#")
+    trenner = "&" if "?" in pfad else "?"
+    return f"{pfad}{trenner}meldung={quote_plus(meldung)}" + (f"#{anker}" if anker else "")
+
+
+def kanal_badge_html(kanal: str) -> str:
+    """v38 (Phase 203): das Kanal-Badge (Makro kanal_badge, Farbe aus den Stammdaten) als HTML
+    für die JSON-Antwort der Kanal-Route – der Pfeil tauscht nur das Badge, kein Neuladen."""
+    vorlage = templates.env.from_string('{% from "_komponenten.html" import kanal_badge %}{{ kanal_badge(k) }}')
+    return vorlage.render(k=kanal)
 
 
 def erfasste_sparten(session: Session, leads) -> dict[int, set[str]]:
@@ -127,9 +164,9 @@ def liste(request: Request, q: str = "", interesse: str = "",
     """v33 (PLAN_V20 Phase 173): Außendienst → templates/leads/mein_tag.html mit beiden
     Darstellungen (Karten mobil, Tabelle ab 600 px); übrige Rollen → templates/leads/
     liste.html (nur Tabelle). Filter der Tabelle: q, interesse, vertriebler_id, lead_status,
-    kanal, prioritaet (hoch|mittel|niedrig = Hot-Ampel), ansicht (ausgeblendet |
-    ueberfaellig); `sortierung` (v5: termin|vertriebler|status) sortiert innerhalb der
-    Gruppen, sonst gilt die je Nutzer gemerkte Spaltensortierung (T)."""
+    kanal, prioritaet (hoch|mittel|niedrig = Hot-Ampel), ansicht (ausgeblendet – v38: die
+    Ansicht „nur überfällige“ entfällt); `sortierung` (v5: termin|vertriebler|status) sortiert
+    innerhalb der Gruppen, sonst gilt die je Nutzer gemerkte Spaltensortierung (T)."""
     from app import mein_tag
     benutzer = request.state.benutzer
     tabelle = _tabelle_kontext(session, benutzer, q, interesse, vertriebler_id, lead_status,
@@ -145,7 +182,8 @@ def liste(request: Request, q: str = "", interesse: str = "",
 def _mein_tag_kontext(session: Session, benutzer, heute=None) -> dict:
     """Kartenansicht „Mein Tag“ (Phase 173): Kopf (Datum ausgeschrieben, Initialen), Karte
     „Als Nächstes“, Liste „Heute“ mit Zeitstrahl, Abschnitt „Wiedervorlage“, „Kommende
-    Tage“ (14 Tage); Daten aus app/mein_tag.py und app/nachfassen.py."""
+    Tage“ (14 Tage); Daten aus app/mein_tag.py und app/nachfassen.py. v38: ohne den
+    Überfällig-Block – vergangene Termine zählt nur noch die Seite /leads/vergangene."""
     from app import mein_tag
     jetzt = heute if isinstance(heute, datetime) else datetime.now()
     termine = mein_tag.termine(session, benutzer, heute=jetzt)
@@ -156,14 +194,80 @@ def _mein_tag_kontext(session: Session, benutzer, heute=None) -> dict:
         "initialen": mein_tag.initialen(benutzer),
         "naechster": termine["naechster"],
         "termine_heute": termine["heute"], "termine_weitere": termine["weitere"],
-        "termine_heute_nur": termine["heute_nur"], "termine_ueberfaellig": termine["ueberfaellige"],
+        "termine_heute_nur": termine["heute_nur"],
         "kommende": termine["kommende"], "spaeter": termine["spaeter"],
         "grenze_text": termine["grenze"].strftime("%d.%m."),
-        "ueberfaellig_anzahl": termine["ueberfaellig"],
+        "vergangene_anzahl": termine["vergangene_anzahl"],
         "termine_anzahl": termine["anzahl"], "termine_gesamt": termine["gesamt"],
         "wv_max": 4,
+        "ta_ziel": "/leads",
     })
+    kontext.update(lead_termin_ausfall.dialog_kontext())
     return kontext
+
+
+@router.get("/vergangene")
+def vergangene(request: Request, session: Session = Depends(get_session)):
+    """v38 (PLAN_V23 Phase 204): Seite „Vergangene Termine“ mobil (Basisrolle Außendienst inkl.
+    Handelsvertreter): Zurück-Pfeil „Mein Tag“, Titel mit Zähler „n ohne Erfassung“, Suchfeld
+    „Nach Name suchen“ (clientseitig), Liste je Tag mit Datumskachel, neueste zuerst – je Termin
+    Uhrzeit, Kundenname, Sparte/Termintyp, Objektbezeichnung + Objektadresse, „Erfassung
+    starten“, „Akte“, „Termin nicht stattgefunden“; Leerzustand; untere Leiste aktiv.
+    Datenbasis = Desktop-Gruppe (mein_tag.vergangene_karten: 180 Tage, Erledigt-Logik, nur
+    eigene). Innendienst/Admin → Leads VOT mit der Desktop-Gruppe (303) [ANNAHME Plan]."""
+    from app import mein_tag
+    benutzer = request.state.benutzer
+    if not mein_tag.ist_aussendienst(benutzer):
+        return RedirectResponse(VERGANGENE_ID_ZIEL, status_code=303)
+    jetzt = datetime.now()
+    termine = mein_tag.termine(session, benutzer, heute=jetzt)
+    kontext = {"vergangene": termine["vergangene"], "vergangene_tage": termine["vergangene_tage"],
+               "vergangene_anzahl": termine["vergangene_anzahl"], "vergangen_tage_grenze": mein_tag.VERGANGEN_TAGE,
+               "ta_ziel": VERGANGENE_ZIEL}
+    kontext.update(lead_termin_ausfall.dialog_kontext())
+    return render(request, "leads/vergangene.html", aktiv="/leads", mobil=True, benutzer=benutzer,
+                  aussendienst=True, heute=jetzt, meldung=request.query_params.get("meldung", ""), **kontext)
+
+
+@router.post("/termin/{termin_id}/ausgefallen")
+def termin_ausgefallen(request: Request, termin_id: int, session: Session = Depends(get_session)):
+    """v38 (PLAN_V23 Phase 204): Dialog „Termin nicht stattgefunden“ – Grund (Kunde nicht
+    angetroffen · anders entschieden · Sonstiges mit Pflicht-Freitext), Bemerkung, Folge
+    „Neuen Termin vereinbaren lassen“ (no_show, Phase Kontaktiert, To-Do an den Leadmanager,
+    Wiedervorlage heute, Chat) oder „Kunde möchte keinen neuen Termin“ (abgesagt, Phase
+    Disqualifiziert mit Pflichtgrund, Chat) – beides ohne Kundenmail (app/lead_termin_ausfall).
+    Rechte: Außendienst nur eigene Termine (403), Innendienst/Admin/Leadmanagement alle.
+    _speichern-Muster; JSON bei Accept: application/json, sonst Redirect auf `zurueck`."""
+    from app.routers.angebote import _speichern
+    benutzer = request.state.benutzer
+    json_antwort = _json_gewuenscht(request)
+    form = anfrage.formular(request)
+    zurueck = _sicheres_ziel(form.get("zurueck") or "", "/leads")
+    termin = session.get(VotTermin, termin_id)
+    vorgang = session.get(Vorgang, termin.vorgang_id) if termin is not None else None
+    if termin is None or vorgang is None:
+        if json_antwort:
+            return JSONResponse({"ok": False, "meldung": "Termin nicht gefunden."}, status_code=404)
+        return RedirectResponse(_mit_meldung(zurueck, "Termin nicht gefunden."), status_code=303)
+    if not lead_termin_ausfall.erlaubt(session, benutzer, termin, vorgang):
+        if json_antwort:
+            return JSONResponse({"ok": False, "meldung": "Keine Berechtigung für diesen Termin."}, status_code=403)
+        return RedirectResponse(_mit_meldung(zurueck, "Keine Berechtigung für diesen Termin."), status_code=303)
+    daten = {k: (form.get(k) or "") for k in ("grund", "grund_text", "bemerkung", "folge", "dq_grund", "dq_text")}
+    ergebnis: dict = {"ok": False, "meldung": "", "daten": {}}
+
+    def aktion():
+        ok, meldung, werte = lead_termin_ausfall.melden(session, termin, benutzer, daten)
+        if not ok:
+            session.rollback()   # Prüfung schlug fehl – nichts bleibt geschrieben
+        ergebnis.update({"ok": ok, "meldung": meldung, "daten": werte})
+
+    _speichern(session, aktion)
+    if json_antwort:
+        antwort = {"ok": ergebnis["ok"], "meldung": ergebnis["meldung"]}
+        antwort.update(ergebnis["daten"])
+        return JSONResponse(antwort, status_code=200 if ergebnis["ok"] else 400)
+    return RedirectResponse(_mit_meldung(zurueck, ergebnis["meldung"]), status_code=303)
 
 
 def _tabelle_kontext(session: Session, benutzer, q: str, interesse: str, vertriebler_id: int,
@@ -212,71 +316,128 @@ def _tabelle_kontext(session: Session, benutzer, q: str, interesse: str, vertrie
         leads = [l for l in leads
                  if mein_tag.prioritaet_von(getattr(vorgaenge.get(l.id), "verfolgung_ampel", "") or "")
                  == prioritaet]
-    # Prozess-Fix 27.09.2026: VOT liegt in der Vergangenheit, aber keine
-    # Sparte ist erfasst - vorher stand so ein Lead wochenlang unauffaellig
-    # als "Terminiert" in der Liste
-    ueberfaellige = [l for l in leads
-                     if l.vot_datum is not None and l.vot_datum < jetzt]
-    if ansicht == "ueberfaellig":
-        leads = ueberfaellige
+    # v38 (Phase 203): kein „überfällig“ mehr – Leads mit Termin vor heute laufen nur noch über die
+    # Gruppe „Vergangene Termine“ aus vot_termine (unten); der v15-Banner und die Ansicht „nur
+    # überfällige“ (dieselbe Logik: VOT-Datum vor jetzt ohne Erfassung) entfallen damit.
     aussendienst = (session.query(Benutzer)
                     .filter(rollen_modul.filter_basis("aussendienst"), Benutzer.aktiv.is_(True))
                     .order_by(Benutzer.name).all())
     # v8: Status-Chips je Interesse („WP ✓ · PV offen“)
     erfasst = erfasste_sparten(session, leads)
     chips = {l.id: sparten_chips(l, erfasst.get(l.id, set())) for l in leads}
+    # v38 (Phase 204): Termin je Vorgang für die Zeilenaktion „Termin nicht stattgefunden“ (offener
+    # Vor-Ort-Termin zum VOT-Datum, sonst der erste offene); Leads, deren Termine alle gemeldet sind
+    # (no_show/abgesagt – nach dem Dialog), verschwinden aus der Tabelle wie aus Mein Tag [ANNAHME]
+    termine_je_vorgang: dict[int, list] = {}
+    vorgang_ids = [v.id for v in vorgaenge.values()]
+    if vorgang_ids:
+        for t in (session.query(VotTermin)
+                  .filter(VotTermin.vorgang_id.in_(vorgang_ids), VotTermin.typ.in_(mein_tag.TERMIN_TYPEN),
+                          VotTermin.beginn.isnot(None))
+                  .order_by(VotTermin.beginn, VotTermin.id)):
+            termine_je_vorgang.setdefault(t.vorgang_id, []).append(t)
+
+    def _termin_fuer(lead, vorgang):
+        liste_t = termine_je_vorgang.get(vorgang.id, []) if vorgang is not None else []
+        offene = [t for t in liste_t if t.status in mein_tag.OFFENE_STATUS]
+        if lead.vot_datum is not None:
+            gleich = [t for t in offene if t.beginn.date() == lead.vot_datum.date()]
+            if gleich:
+                return gleich[0]
+        return offene[0] if offene else None
+
     zeilen = []
     for l in leads:
         vorgang = vorgaenge.get(l.id)
         kunde = kunden.get(l.kunde_id) if l.kunde_id else None
+        bekannte = termine_je_vorgang.get(vorgang.id, []) if vorgang is not None else []
+        if bekannte and not any(t.status in mein_tag.STATUS_ABFRAGE for t in bekannte):
+            continue   # alle Termine gemeldet/abgesagt – Lead bleibt dem Lead-Modul (Kontaktiert/Disqualifiziert)
         ampel = (getattr(vorgang, "verfolgung_ampel", "") or "") if vorgang is not None else ""
         prio = mein_tag.prioritaet_von(ampel)
         vname = (vertriebler[l.benutzer_id].name if l.benutzer_id in vertriebler
                  else (l.monday_person or ""))
+        termin = _termin_fuer(l, vorgang)
         zeilen.append({
-            "id": l.id, "lead": l, "vorgang": vorgang, "kunde": kunde,
+            "id": l.id, "zeilen_id": l.id, "lead": l, "vorgang": vorgang, "kunde": kunde,
             "termin": l.vot_datum,
             "termin_text": l.vot_datum.strftime("%d.%m.%Y %H:%M") if l.vot_datum else "",
             "uhr": l.vot_datum.strftime("%H:%M") if l.vot_datum else "",
-            "ueberfaellig": l.vot_datum is not None and l.vot_datum < jetzt,
+            "vergangen": l.vot_datum is not None and l.vot_datum.date() < jetzt.date(),
+            "vor_text": mein_tag.vor_text(l.vot_datum, jetzt) if l.vot_datum and l.vot_datum.date() < jetzt.date() else "",
+            "termin_bekannt": bool(bekannte),
             "name": l.anzeige_name, "ort": " ".join(x for x in (l.plz or "", l.ort or "") if x),
             "kanal": l.vertriebskanal or "", "vertriebler": vname,
             "vertriebler_id": l.benutzer_id, "status": l.status_text or "",
             "prioritaet": prio, "prioritaet_text": mein_tag.PRIORITAET_TEXTE[prio], "ampel": ampel,
             "sparten": list(l.sparten), "chips": chips.get(l.id, []),
             "grosskunde": bool(getattr(kunde, "grosskunde", False)) if kunde is not None else False,
+            "erfassen_url": f"/leads/{l.id}/erfassen",
+            "akte_url": f"/vorgaenge/zu-lead/{l.id}",
+            "termin_id": termin.id if termin is not None else None,
+            "ausfall": termin is not None,
+            "ausfall_url": f"/leads/termin/{termin.id}/ausgefallen" if termin is not None else "",
+            "ausfall_zeit": (f"{mein_tag.datum_text(termin.beginn)} · {mein_tag.uhr_kurz(termin.beginn)} Uhr"
+                             if termin is not None else ""),
         })
+    # v38 (Phase 203): Gruppe „Vergangene Termine“ aus vot_termine – dieselben Chip-Filter
+    # (Suche, Sparte, Vertriebler, Status, Kanal, Priorität) wie die Lead-Zeilen; nicht in der
+    # Ansicht „Ausgeblendete“
+    vergangene = []
+    if not ausgeblendet:
+        for z in mein_tag.vergangene_zeilen(session, benutzer, jetzt):
+            if q and not any(q.lower() in (w or "").lower() for w in (z["name"], z["ort"])):
+                continue
+            if interesse and interesse not in z["sparten"]:
+                continue
+            if vertriebler_id and z["vertriebler_id"] != vertriebler_id:
+                continue
+            if lead_status and z["status"] != lead_status:
+                continue
+            if kanal and z["kanal"] != kanal:
+                continue
+            if prioritaet and z["prioritaet"] != prioritaet:
+                continue
+            vergangene.append(z)
     # Spaltensortierung je Nutzer (T) – der v5-Parameter `sortierung` übersteuert sie
     sort = mein_tag.sortierung_fuer(session, benutzer)
     if sortierung in ("vertriebler", "status"):
         sort = {"key": sortierung, "richtung": "auf"}
     elif sortierung == "termin":
         sort = None
-    gruppen = mein_tag.gruppen_sortieren(mein_tag.gruppen_bilden(zeilen, jetzt), sort)
+    gruppen = mein_tag.gruppen_mit_vergangenen(mein_tag.gruppen_bilden(zeilen, jetzt), vergangene)
+    gruppen = mein_tag.gruppen_sortieren(gruppen, sort)
     spalten = mein_tag.spalten_fuer(session, benutzer)   # Vertrag T: Katalog leads_vot, Rollen-Katalog
     from app import lead_boards
     grosskunde_farbe = lead_boards.grosskunde_farbe(session)
-    return {"mobil": aussendienst_sicht, "ad_sicht": aussendienst_sicht,
-            "aussendienst_liste": aussendienst, "chips": chips,
-            "leads": leads, "zeilen": zeilen, "gruppen": gruppen, "spalten": spalten,
-            "sortierung_spalte": sort, "board_key": mein_tag.BOARD_KEY,
-            "tabellen_ctx": {"board": mein_tag.BOARD_KEY, "sortierung": sort},
-            "vertriebler": vertriebler, "benutzer": benutzer,
-            "q": q, "interesse": interesse, "vertriebler_id": vertriebler_id,
-            "lead_status": lead_status, "sortierung": sortierung or "termin", "ansicht": ansicht,
-            "ausgeblendet": ausgeblendet, "kanal": kanal, "kanal_werte": kanal_werte,
-            # v35 (PLAN_LEAD_V6 Phase 184): Dropdown „Kanal manuell setzen“ aus den Stammdaten
-            "kanal_wahl": lead_kern.kanal_werte(session),
-            "prioritaet": prioritaet, "prioritaeten": PRIORITAETEN,
-            "prioritaet_texte": mein_tag.PRIORITAET_TEXTE,
-            "ohne_ad": ohne_ad, "ueberfaellig_anzahl": len(ueberfaellige),
-            "heute": jetzt, "grosskunde_farbe": grosskunde_farbe,
-            "status_werte": status_werte, "vertriebler_werte": vertriebler_werte,
-            "sync_status": monday_sync.status,
-            # v27 (Phase 128): Hinweistext vor dem monday-Vollabgleich
-            "monday_hinweis": import_preisliste.import_hinweis(session, "monday"),
-            "filter_aktiv": bool(q or interesse or vertriebler_id or lead_status or kanal
-                                 or prioritaet or ansicht or (sortierung and sortierung != "termin"))}
+    vergangen_gruppe = next((g for g in gruppen if g.get("vergangen")), None)
+    kontext = {"mobil": aussendienst_sicht, "ad_sicht": aussendienst_sicht,
+               "aussendienst_liste": aussendienst, "chips": chips,
+               "leads": leads, "zeilen": zeilen, "gruppen": gruppen, "spalten": spalten,
+               "vergangene_zeilen": vergangene,
+               "vergangene_anzahl": len(vergangen_gruppe["zeilen"]) if vergangen_gruppe else 0,
+               "sortierung_spalte": sort, "board_key": mein_tag.BOARD_KEY,
+               "tabellen_ctx": {"board": mein_tag.BOARD_KEY, "sortierung": sort},
+               "vertriebler": vertriebler, "benutzer": benutzer,
+               "q": q, "interesse": interesse, "vertriebler_id": vertriebler_id,
+               "lead_status": lead_status, "sortierung": sortierung or "termin", "ansicht": ansicht,
+               "ausgeblendet": ausgeblendet, "kanal": kanal, "kanal_werte": kanal_werte,
+               # v35 (PLAN_LEAD_V6 Phase 184): Kanalliste aus den Stammdaten (v38: Menü hinter dem Pfeil)
+               "kanal_wahl": lead_kern.kanal_werte(session),
+               "prioritaet": prioritaet, "prioritaeten": PRIORITAETEN,
+               "prioritaet_texte": mein_tag.PRIORITAET_TEXTE,
+               "ohne_ad": ohne_ad,
+               "heute": jetzt, "grosskunde_farbe": grosskunde_farbe,
+               "status_werte": status_werte, "vertriebler_werte": vertriebler_werte,
+               "sync_status": monday_sync.status,
+               # v27 (Phase 128): Hinweistext vor dem monday-Vollabgleich
+               "monday_hinweis": import_preisliste.import_hinweis(session, "monday"),
+               "filter_aktiv": bool(q or interesse or vertriebler_id or lead_status or kanal
+                                    or prioritaet or ansicht or (sortierung and sortierung != "termin")),
+               # v38 (Phase 204): Dialog „Termin nicht stattgefunden“ (Zeilenaktion aller Gruppen)
+               "ta_ziel": "/leads"}
+    kontext.update(lead_termin_ausfall.dialog_kontext())
+    return kontext
 
 
 @router.post("/notiz/{vorgang_id}")
@@ -394,15 +555,23 @@ def ausblenden(request: Request, lead_id: int,
 def kanal_aendern(request: Request, lead_id: int,
                         session: Session = Depends(get_session)):
     """v9: Vertriebskanal manuell setzen (Vorrang vor dem monday-Sync);
-    wirkt auf Lead UND Kunden. Leer = zurück zur Sync-Automatik."""
+    wirkt auf Lead UND Kunden. Leer = zurück zur Sync-Automatik.
+    v38 (PLAN_V23 Phase 203): bei Accept: application/json antwortet die Route mit
+    {ok, kanal, manuell, badge_html, meldung} – das Kanal-Menü hinter dem Pfeil in Leads VOT
+    tauscht damit nur das Badge (kein Neuladen); sonst wie bisher Redirect."""
     from urllib.parse import quote_plus
 
     from app.models import Kunde
     benutzer = request.state.benutzer
+    json_antwort = _json_gewuenscht(request)
     if benutzer.basisrolle == "aussendienst":
+        if json_antwort:
+            return JSONResponse({"ok": False, "meldung": "Keine Berechtigung."}, status_code=403)
         return RedirectResponse("/leads", status_code=303)
     lead = session.get(Lead, lead_id)
     if lead is None:
+        if json_antwort:
+            return JSONResponse({"ok": False, "meldung": "Lead nicht gefunden."}, status_code=404)
         return RedirectResponse("/leads", status_code=303)
     form = anfrage.formular(request)
     kanal = (form.get("kanal") or "").strip()[:100]
@@ -422,10 +591,13 @@ def kanal_aendern(request: Request, lead_id: int,
     except Exception:
         pass
     session.commit()
-    return RedirectResponse("/leads?meldung=" + quote_plus(
-        f"{lead.anzeige_name}: Kanal "
-        + (f"manuell auf „{kanal}“ gesetzt (Sync überschreibt nicht mehr)."
-           if kanal else "zurück auf Sync-Automatik.")), status_code=303)
+    meldung = (f"{lead.anzeige_name}: Kanal "
+               + (f"manuell auf „{kanal}“ gesetzt (Sync überschreibt nicht mehr)."
+                  if kanal else "zurück auf Sync-Automatik."))
+    if json_antwort:
+        return JSONResponse({"ok": True, "kanal": kanal, "manuell": bool(kanal),
+                             "badge_html": kanal_badge_html(kanal), "meldung": meldung})
+    return RedirectResponse("/leads?meldung=" + quote_plus(meldung), status_code=303)
 
 
 @router.post("/{lead_id}/sparte-ausblenden")

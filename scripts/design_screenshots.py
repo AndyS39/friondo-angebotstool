@@ -68,7 +68,22 @@ SEITEN = ["portal", "angebotsliste", "editor", "vorgangsakte", "hauptboard", "ka
           # Lead-Wochenansicht, Lead-Routing sowie Kartei/Hauptboard/Dashboard bei 390 px
           "deals", "infoabend", "handelsvertreter", "anrufliste", "termin", "karte-lead", "todos",
           "vorlagen", "kalender-lead-alt", "lead-routing", "kartei-mobil", "hauptboard-mobil",
-          "lead-dashboard-mobil"]
+          "lead-dashboard-mobil",
+          # v38 (PLAN_V23 Phase 203/204, Agent V): Seite „Vergangene Termine“ (390 px), Dialog „Termin
+          # nicht stattgefunden“ (beide Folgen), Leads VOT Desktop mit offener Gruppe und Kanal-Menü
+          "vergangene-mobil", "termin-ausgefallen-mobil", "termin-ausgefallen-dq-mobil",
+          "leads-vot-vergangene", "leads-vot-kanal-menue"]
+# v38: Seiten, die vor der Aufnahme einen Handgriff im Browser brauchen (Runtime.evaluate nach dem Laden)
+JS_VOR_AUFNAHME = {
+    "termin-ausgefallen-mobil": "(function(){var k=document.querySelector('[data-ta-oeffnen]');if(k){k.click();}})()",
+    "termin-ausgefallen-dq-mobil": ("(function(){var k=document.querySelector('[data-ta-oeffnen]');if(k){k.click();}"
+                                    "var r=document.querySelector('input[name=\"grund\"][value=\"anders_entschieden\"]');"
+                                    "if(r){r.click();r.dispatchEvent(new Event('change',{bubbles:true}));}})()"),
+    "leads-vot-vergangene": ("(function(){var d=document.getElementById('vergangene');if(d){d.open=true;"
+                             "d.scrollIntoView();}})()"),
+    "leads-vot-kanal-menue": ("(function(){document.querySelectorAll('details.lv-gruppe').forEach(function(d){d.open=true;});"
+                              "var p=document.querySelector('[data-lv-kanal-pfeil]');if(p){p.scrollIntoView({block:'center'});p.click();}})()"),
+}
 
 
 def argumente() -> argparse.Namespace:
@@ -335,6 +350,12 @@ def seitenliste(ziele: dict, cookies: dict, erfassung_id: int) -> list[tuple[str
     liste.append(("lead-routing", "/parametrierung/lead-routing", admin, False))
     liste.append(("hauptboard-mobil", "/lead-management/hauptboard", admin, True))
     liste.append(("lead-dashboard-mobil", "/lead-management/dashboard", admin, True))
+    # v38 (PLAN_V23 Phase 203/204, Agent V)
+    liste.append(("vergangene-mobil", "/leads/vergangene", ad, True))
+    liste.append(("termin-ausgefallen-mobil", "/leads/vergangene", ad, True))
+    liste.append(("termin-ausgefallen-dq-mobil", "/leads/vergangene", ad, True))
+    liste.append(("leads-vot-vergangene", "/leads", admin, False))
+    liste.append(("leads-vot-kanal-menue", "/leads", admin, False))
     return liste
 
 
@@ -387,6 +408,10 @@ async def aufnehmen(ws_url: str, basis: str, cookie_name: str, modus: str, seite
                 + json.dumps(STYLE_OHNE_EK) + ";document.head.appendChild(s);"
                 "document.querySelectorAll('details.menue[open]').forEach(function(d){d.open=false});"
                 "return document.documentElement.getAttribute('data-theme')||'';})()"))
+            # v38: Handgriff je Seite (Dialog öffnen, Gruppe aufklappen, Menü öffnen) + kurze Wartezeit
+            if name in JS_VOR_AUFNAHME:
+                await senden("Runtime.evaluate", expression=JS_VOR_AUFNAHME[name])
+                await asyncio.sleep(0.4)
             metrik = await senden("Page.getLayoutMetrics")
             inhalt = metrik.get("cssContentSize") or metrik.get("contentSize") or {}
             voll_hoehe = int(min(max(inhalt.get("height", hoehe), hoehe), MAX_HOEHE))

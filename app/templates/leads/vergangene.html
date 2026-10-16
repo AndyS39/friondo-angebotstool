@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% from "_symbole.html" import symbol %}
+{% from "_komponenten.html" import leer_zustand %}
+{% from "leads/_termin_ausgefallen.html" import termin_ausgefallen_dialog %}
+{% import "leads/_karten.html" as mt with context %}
+{# v38 (PLAN_V23 Phase 204): Seite „Vergangene Termine“ mobil (GET /leads/vergangene, Basisrolle
+   Außendienst inkl. Handelsvertreter; Innendienst/Admin → Desktop-Gruppe). Muster: Seite
+   „Wiedervorlage“ (v33): Zurück-Pfeil „Mein Tag“ (Zurück-Leiste aus base.html abgeschaltet),
+   Titel mit Zähler „n ohne Erfassung“, Suchfeld „Nach Name suchen“ (clientseitig,
+   mein_tag.js), Liste je Tag mit Datumskachel wie „Kommende Tage“, neueste zuerst; je Termin
+   Uhrzeit, Kundenname, Sparte/Termintyp, Objektbezeichnung + Objektadresse, „Erfassung starten“
+   (Termin + Objekt wie Mein Tag), „Akte“, „Termin nicht stattgefunden“ (Dialog); Leerzustand
+   „Keine vergangenen Termine ohne Erfassung“ + „Alles erfasst.“; untere Leiste (base.html) mit
+   aktivem Eintrag. Datenbasis: mein_tag.vergangene_tage (180 Tage, Erledigt-Logik, nur eigene). #}
+{% set zurueck_aus = true %}
+
+{% block titel %}Vergangene Termine – Friondo Angebotstool{% endblock %}
+
+{% block mainklasse %}mein-tag-seite mt-vg-seite{% endblock %}
+
+{% block inhalt %}
+<link rel="stylesheet" href="/static/mein_tag.css?v={{ css_version }}">
+<div class="mt-mobil mt-mobil-immer" id="vergangene-termine" data-mt-vergangene>
+    <header class="mt-wv-seitenkopf">
+        <a class="mt-zurueck" href="/leads">{{ symbol('pfeil-links') }} Mein Tag</a>
+        <div class="mt-wv-seitentitel">
+            <h1>Vergangene Termine</h1>
+            <span class="mt-wv-offen"><span data-mt-vg-zahl>{{ vergangene_anzahl }}</span> ohne Erfassung</span>
+        </div>
+        {% if meldung %}<p class="meldung" data-mt-meldung>{{ meldung }}</p>{% else %}<p class="meldung" data-mt-meldung hidden></p>{% endif %}
+        <label class="mt-suche">
+            <span class="mt-suche-symbol" aria-hidden="true">{{ symbol('suche') }}</span>
+            <input type="search" placeholder="Nach Name suchen" aria-label="Nach Name suchen" autocomplete="off" data-mt-suche>
+        </label>
+        <p class="dezent mt-vg-hinweis">Vor-Ort-Termine der letzten {{ vergangen_tage_grenze }} Tage, zu denen noch keine Erfassung vorliegt – neueste zuerst.</p>
+    </header>
+    <div class="mt-vg-liste" data-mt-vg-liste>
+        {% for tag in vergangene_tage %}
+        <div class="mt-tag" data-tag="{{ tag.iso }}" data-mt-vg-tag>
+            <div class="mt-tag-kopf">
+                <span class="mt-datumskachel" aria-hidden="true"><span class="mt-wd">{{ tag.wochentag }}</span><span class="mt-nr">{{ tag.tag_nr }}</span></span>
+                <div class="mt-tag-text">
+                    <span class="mt-tag-titel">{{ tag.titel }}</span>
+                    <span class="mt-tag-zaehler"><span data-mt-vg-tag-zahl>{{ tag.termine | length }}</span> Termin{{ 'e' if tag.termine | length != 1 }} · {{ tag.vor_text }}</span>
+                </div>
+            </div>
+            <div class="mt-liste mt-tag-liste mt-vg-tagliste">
+                {% for k in tag.termine %}{{ mt.vergangen_zeile(k) }}{% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="mt-wv-leer" data-mt-vg-leer {{ '' if not vergangene else 'hidden' }}>
+        {{ leer_zustand('Keine vergangenen Termine ohne Erfassung') }}
+        <p class="dezent mt-wv-leer-zeile" data-mt-vg-leer-alles {{ 'hidden' if vergangene }}>Alles erfasst.</p>
+        <p class="dezent mt-wv-leer-zeile" data-mt-vg-leer-suche hidden>Suche anpassen.</p>
+    </div>
+</div>
+{{ termin_ausgefallen_dialog(ta_gruende, ta_folgen, ta_vorbelegung, ta_dq_gruende, ta_ziel) }}
+<script src="/static/mein_tag.js?v={{ css_version }}" defer></script>
+{% endblock %}

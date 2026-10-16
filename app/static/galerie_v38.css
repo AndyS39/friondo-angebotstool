@@ -1,0 +1,211 @@
+/* v38 (PLAN_V23 Phase 201, Agent G): Galerie – Upload-Pop-up, Hinweiskasten „n Fotos warten auf
+   Upload“, Auswählen-Modus (Kästchen je Kachel, Kopfleiste, „n Fotos löschen“), Zeile „Wartende Fotos“
+   auf /erfassung, neue Kacheln nach dem Upload. Gehört zu _galerie.html (Makros galerie,
+   sammelbox, galerie_upload_dialog), galerie_v34.js und galerie_v38.js; eingebunden über
+   galerie_einbindung() bzw. erfassung/_galerie_puffer.html. Nur Design-v2-Tokens (hell/dunkel),
+   keine festen Farbwerte; unter 390 px lesbar. */
+
+/* ---- Upload-Pop-up ---------------------------------------------------------------------------- */
+dialog.gal38-dialog {
+    max-width: 440px;
+    width: calc(100% - 24px);
+    background: var(--flaeche-karte);
+    color: var(--text);
+    border: 1px solid var(--linie-stark);
+    box-shadow: var(--schatten-2);
+    padding: 16px;
+}
+dialog.gal38-dialog .gal38-dlg-titel {
+    margin: 0 0 10px;
+    font-size: 16px;
+    color: var(--text-titel);
+}
+dialog.gal38-dialog.erfolg .gal38-dlg-titel { color: var(--status-gruen); }
+dialog.gal38-dialog.warnung .gal38-dlg-titel { color: var(--status-orange); }
+dialog.gal38-dialog.fehler .gal38-dlg-titel { color: var(--status-rot); }
+dialog.gal38-dialog .gal38-dlg-dateien {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 40vh;
+    overflow: auto;
+    margin-bottom: 10px;
+}
+dialog.gal38-dialog .gal38-dlg-zeile {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 96px;
+    grid-template-areas: "name stand" "balken balken";
+    gap: 2px 8px;
+    align-items: center;
+    font-size: 12px;
+}
+dialog.gal38-dialog .gal38-dlg-name {
+    grid-area: name;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+dialog.gal38-dialog .gal38-dlg-stand { grid-area: stand; text-align: right; font-size: 11px; }
+dialog.gal38-dialog .gal38-dlg-zeile.ok .gal38-dlg-stand { color: var(--status-gruen); }
+dialog.gal38-dialog .gal38-dlg-zeile.fehler .gal38-dlg-stand { color: var(--status-rot); font-weight: 600; }
+dialog.gal38-dialog progress {
+    grid-area: balken;
+    width: 100%;
+    height: 8px;
+    accent-color: var(--akzent);
+}
+dialog.gal38-dialog .gal38-dlg-gesamt { width: 100%; height: 12px; accent-color: var(--akzent); display: block; }
+dialog.gal38-dialog .gal38-dlg-gesamt[hidden] { display: none; }
+dialog.gal38-dialog .gal38-dlg-dauer { margin: 8px 0 0; font-size: 13px; min-height: 1.3em; }
+dialog.gal38-dialog .gal38-dlg-dauer[hidden] { display: none; }
+dialog.gal38-dialog .gal38-dlg-meldung { margin: 8px 0 0; font-size: 13px; }
+dialog.gal38-dialog .gal38-dlg-meldung[hidden] { display: none; }
+dialog.gal38-dialog.fehler .gal38-dlg-meldung { color: var(--status-rot); font-weight: 600; }
+dialog.gal38-dialog .gal38-dlg-fehler {
+    margin: 4px 0 0;
+    padding-left: 18px;
+    font-size: 12px;
+    color: var(--status-rot);
+}
+dialog.gal38-dialog .gal38-dlg-fehler[hidden] { display: none; }
+dialog.gal38-dialog .gal38-dlg-knoepfe {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 14px;
+}
+dialog.gal38-dialog .gal38-dlg-knoepfe .pj-btn { min-height: 40px; padding: 8px 14px; }
+dialog.gal38-dialog .gal38-dlg-knoepfe .pj-btn[hidden] { display: none; }
+dialog.gal38-dialog::backdrop { background: rgba(0, 0, 0, 0.45);   /* fest: Dialog-Abdunklung in beiden Modi (wie dialog.pj-dlg) */ }
+
+/* ---- Hinweiskasten „n Fotos warten auf Upload“ ------------------------------------------------ */
+.gal38-wartend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin: 0 0 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--status-orange);
+    border-left-width: 4px;
+    border-radius: var(--r-m, 10px);
+    background: var(--status-orange-bg);
+    color: var(--text);
+    font-size: 13px;
+    grid-column: 1 / -1;
+}
+.gal38-wartend[hidden] { display: none; }
+.gal38-wartend .gal38-wartend-text { flex: 1 1 200px; font-weight: 600; }
+.gal38-wartend .gal38-wartend-knoepfe { display: flex; gap: 8px; flex-wrap: wrap; }
+.gal38-wartend .pj-btn { min-height: 36px; }
+.gal38-wartend .pj-btn[hidden] { display: none; }
+
+/* ---- Auswählen-Modus -------------------------------------------------------------------------- */
+.gal38-leiste {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    margin: 0 0 8px;
+    font-size: 12px;
+}
+.gal38-leiste .gal38-auswaehlen[hidden] { display: none; }
+.gal38-auswahl-leiste {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--linie);
+    border-radius: var(--r-s, 6px);
+    background: var(--flaeche-abgesetzt);
+    color: var(--text);
+    font-size: 12px;
+}
+.gal38-auswahl-leiste[hidden] { display: none; }
+.gal38-auswahl-leiste .gal38-auswahl-zahl { font-weight: 600; }
+.gal38-auswahl-leiste .gal38-auswahl-punkt { color: var(--text-dezent); }
+.gal38-auswahl-leiste .pj-btn { min-height: 32px; }
+.gal38-auswahl-leiste .gal38-loeschen,
+.gal38-auswahl-leiste .gal38-entfernen { margin-left: auto; font-weight: 600; }
+.gal38-auswahl-leiste .pj-btn.danger:disabled { opacity: 0.55; cursor: default; }
+.gal38-link {
+    border: none;
+    background: none;
+    padding: 0 2px;
+    font: inherit;
+    color: var(--link, var(--akzent));
+    text-decoration: underline;
+    cursor: pointer;
+    min-height: 32px;
+}
+.gal38-link:hover { color: var(--akzent-hover); }
+.gal38-meldung { flex: 1 1 100%; font-size: 12px; }
+.gal38-meldung[hidden] { display: none; }
+.gal38-meldung.fehler { color: var(--status-rot); font-weight: 600; }
+
+/* Kästchen über der Kachel (Bilder) bzw. vor der Zeile (Dokumente, Sammelbox) */
+.pj-gal-raster figure { position: relative; }
+.gal38-kasten {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--flaeche-karte);
+    border: 1px solid var(--linie-stark);
+    box-shadow: var(--schatten-1);
+    cursor: pointer;
+}
+.gal38-kasten[hidden] { display: none; }
+.gal38-kasten input { width: 18px; height: 18px; margin: 0; accent-color: var(--akzent); cursor: pointer; }
+.gal38-kasten.gal38-kasten-zeile {
+    position: static;
+    display: inline-flex;
+    width: 28px;
+    height: 28px;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+.pj-tree .f { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.gal38-auswahl figure.gal38-gewaehlt img,
+.gal38-auswahl .f.gal38-gewaehlt { outline: 2px solid var(--akzent); outline-offset: 1px; border-radius: 8px; }
+.gal34-zeile { position: relative; }
+.gal34-zeile .gal38-kasten { top: 50%; left: 4px; transform: translateY(-50%); width: 28px; height: 28px; }
+.gal34-zeile.gal38-gewaehlt { outline: 2px solid var(--akzent); outline-offset: 1px; }
+.gal38-auswahl .gal34-zeile { padding-left: 38px; }
+
+/* Neue Kacheln nach dem Upload (ohne Seitenneuladen) */
+.pj-gal-raster figure.gal38-neu img { outline: 2px solid var(--status-gruen); outline-offset: 1px; }
+.pj-tree .f.gal38-neu a:first-of-type { color: var(--status-gruen); font-weight: 600; }
+
+/* ---- Zeile „Wartende Fotos“ auf /erfassung ---------------------------------------------------- */
+.gal38-puffer-zeile {
+    margin: 0 0 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--status-orange);
+    border-left-width: 4px;
+    border-radius: var(--r-m, 10px);
+    background: var(--status-orange-bg);
+    color: var(--text);
+    font-size: 13px;
+}
+.gal38-puffer-zeile[hidden] { display: none; }
+.gal38-puffer-zeile a { color: var(--link, var(--akzent)); font-weight: 600; }
+.gal38-puffer-zeile .gal38-puffer-fehler { color: var(--status-rot); }
+
+@media (max-width: 600px) {
+    dialog.gal38-dialog { padding: 12px; }
+    dialog.gal38-dialog .gal38-dlg-zeile { grid-template-columns: minmax(0, 1fr) 84px; }
+    dialog.gal38-dialog .gal38-dlg-knoepfe .pj-btn { flex: 1 1 40%; min-height: 44px; text-align: center; }
+    .gal38-wartend .pj-btn { min-height: 44px; flex: 1 1 40%; text-align: center; }
+    .gal38-auswahl-leiste .pj-btn { min-height: 40px; }
+    .gal38-leiste .gal38-auswaehlen { min-height: 40px; }
+}

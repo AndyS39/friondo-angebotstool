@@ -2,18 +2,26 @@
    Lead-basierte Tabelle „Leads VOT“ (seit v1/v8: Leads mit Vor-Ort-Termin, bis alle Sparten
    erfasst oder ausgeblendet sind) mit dem Lead-Board-Layout: Sticky-Filterleiste
    (.lm-filterblock: Suche, Termin/Ansicht, Vertriebler, Status, Priorität = Hot-Ampel,
-   Kanal, Sparte, Spaltenwähler), Zeilen gruppiert in Überfällig · Heute · je Folgetag
+   Kanal, Sparte, Spaltenwähler), Zeilen gruppiert in Heute · je Folgetag
    („Donnerstag, 15. Oktober · 2 Termine“, auf-/zuklappbar [ANNAHME]), Sortierung innerhalb
    der Gruppe nach Uhrzeit, Spaltensortierung/Umbenennen/Drag & Drop/Spaltenwähler über die
    Bausteine von Agent T (Makros spalten_kopf/spalten_colgroup aus leadmanagement/_tabelle.html,
    Skript lm_boards.js mit data-lm-spalten-board="leads_vot", Ablage je Nutzer über
-   lead_boards.spalten_fuer – solange der Katalog leads_vot fehlt, gilt die feste
-   Spaltenfolge aus app/mein_tag.py). Feste erste Spalte Kundenname, Aktionen rechts
+   lead_boards.spalten_fuer). Feste erste Spalte Kundenname, Aktionen rechts
    (Einzelaktionen wie bisher, keine Sammelaktionen). Eingebunden von leads/liste.html
-   (Innendienst/Admin/Leadmanagement) und leads/mein_tag.html (.mt-desktop, Außendienst). #}
+   (Innendienst/Admin/Leadmanagement) und leads/mein_tag.html (.mt-desktop, Außendienst).
+   v38 (PLAN_V23 Phase 203/204): „Überfällig“ entfällt (kein rotes Label, kein v15-Banner, keine
+   Ansicht „nur überfällige“); unten die zugeklappte Gruppe „Vergangene Termine · n“ aus
+   vot_termine (Zeilen ohne monday-Lead möglich: z.lead = none → Links auf die Vorgangsakte,
+   Chips nur Anzeige), Zustand je Benutzer in localStorage (mein_tag.js); Kanalzelle = Badge +
+   kleiner Pfeil (aria-label „Vertriebskanal ändern“), Menü unter der Zelle aus
+   <template data-lv-kanal-optionen> (mein_tag.js, POST /leads/{id}/kanal mit JSON-Antwort,
+   Badge wechselt ohne Neuladen; <noscript>-Formular als Rückfall); Zeilenaktion „Termin nicht
+   stattgefunden“ in allen Gruppen (Makro termin_ausgefallen_dialog, einmal je Seite). #}
 {% from "_symbole.html" import symbol %}
 {% from "leadmanagement/_tabelle.html" import spalten_kopf, spalten_colgroup, breiten_gesetzt, spaltenwahl, tabellen_daten %}
 {% from "_komponenten.html" import kanal_badge %}{# v35 (Phase 184): Kanal-Label aus den Stammdaten #}
+{% from "leads/_termin_ausgefallen.html" import termin_ausgefallen_dialog, termin_ausgefallen_knopf %}
 {% import "_interesse.html" as interesse_ui %}
 {% import "_sparten.html" as sparten_ui %}
 
@@ -34,15 +42,6 @@
 {% if meldung and not mobil %}<p class="meldung">{{ meldung }}</p>{% endif %}
 <p class="meldung" id="lm-meldung" hidden role="status"></p>
 
-{% if ueberfaellig_anzahl and ansicht != 'ueberfaellig' %}
-<div class="warnblock">⏰ <strong>{{ ueberfaellig_anzahl }} Termin{{ 'e' if ueberfaellig_anzahl != 1 }} in der Vergangenheit ohne Erfassung</strong> –
-    bitte nachfassen (Erfassung starten oder Lead ausblenden).
-    <a href="/leads?ansicht=ueberfaellig">Nur überfällige zeigen</a></div>
-{% endif %}
-{% if ansicht == 'ueberfaellig' %}
-<div class="warnblock">Gefiltert: nur überfällige VOT-Termine –
-    <a href="/leads">alle offenen Leads zeigen</a></div>
-{% endif %}
 {% if ohne_ad %}
 <div class="warnblock">⚠ <strong>{{ ohne_ad }} Lead{{ 's' if ohne_ad != 1 }} ohne Vertriebler</strong> –
 bitte die <a href="/parametrierung/monday">Personen-Zuordnung</a> prüfen oder in der
@@ -63,7 +62,6 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
     <label class="kontrollfeld">Termin
         <select name="ansicht" title="Ansicht">
             <option value="" {{ 'selected' if not ansicht }}>alle offenen</option>
-            <option value="ueberfaellig" {{ 'selected' if ansicht == 'ueberfaellig' }}>nur überfällige</option>
             <option value="ausgeblendet" {{ 'selected' if ausgeblendet }}>Ausgeblendete</option>
         </select></label>
     {% if not ad_sicht %}
@@ -108,13 +106,14 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
 </form>
 </div>
 
-{# ---- Zelle je Spalten-Key ---- #}
+{# ---- Zelle je Spalten-Key (z.lead kann in „Vergangene Termine“ fehlen – Tool-Termine ohne monday-Lead) ---- #}
 {% macro zelle(key, z) -%}
 {%- if key == 'lead' -%}
-<td class="sp-lead"><a href="/vorgaenge/zu-lead/{{ z.lead.id }}" title="Vorgangsakte öffnen">{{ z.name }}</a>
+<td class="sp-lead"><a href="{{ z.akte_url }}" title="Vorgangsakte öffnen">{{ z.name }}</a>
     {% if z.grosskunde %}<span class="lm-grosskunde"{% if grosskunde_farbe %} style="--f:{{ grosskunde_farbe }}"{% endif %}>Großkunde</span>{% endif %}
     <span class="sparten-chips">
     {% for sparte, status in z.chips %}
+        {% if z.lead %}
         <form method="post" action="/leads/{{ z.lead.id }}/sparte-ausblenden" class="lv-chip-form">
             <input type="hidden" name="sparte" value="{{ sparte }}">
             <button class="chip chip-{{ sparte | lower }} chip-{{ status }}" type="submit"
@@ -123,10 +122,11 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
                 {{ sparte }}{{ ' ✓' if status == 'erfasst' else (' ✕' if status == 'ausgeblendet') }}
             </button>
         </form>
+        {% else %}{{ sparten_ui.chip(sparte, status) }}{% endif %}
     {% endfor %}
     </span></td>
 {%- elif key == 'termin' -%}
-<td class="sp-termin" data-wert="{{ z.termin.isoformat() if z.termin else '' }}">{% if z.termin %}<span {% if z.ueberfaellig %}class="ueberfaellig-rot" title="Termin liegt in der Vergangenheit – Erfassung fehlt"{% endif %}>{{ z.termin_text }}</span>{% endif %}</td>
+<td class="sp-termin{{ ' lv-vergangen' if z.vergangen }}" data-wert="{{ z.termin.isoformat() if z.termin else '' }}">{% if z.termin %}<span class="lv-termin-text">{{ z.termin_text }}</span>{% if z.vergangen and z.vor_text %} <span class="lv-vor dezent" title="Termin liegt in der Vergangenheit">{{ z.vor_text }}</span>{% endif %}{% if z.teilweise %} <span class="mt-label" title="noch nicht alle Sparten erfasst">teilweise erfasst</span>{% endif %}{% endif %}</td>
 {%- elif key == 'prioritaet' -%}
 <td class="sp-prioritaet" data-wert="{{ {'hoch': 1, 'mittel': 2, 'niedrig': 3}[z.prioritaet] }}"><span class="mt-prio mt-prio-{{ z.prioritaet }}" title="Hot-Ampel: {{ z.ampel or 'keine Einstufung' }}"><span class="mt-balken" aria-hidden="true"><i></i><i></i><i></i></span>{{ z.prioritaet_text }}</span></td>
 {%- elif key == 'sparten' -%}
@@ -134,25 +134,22 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
 {%- elif key == 'ort' -%}
 <td class="sp-ort">{{ z.ort }}</td>
 {%- elif key == 'kanal' -%}
-<td class="sp-kanal dezent" data-wert="{{ z.kanal }}">
-    {% if ad_sicht %}
-        {% if z.kanal %}{{ kanal_badge(z.kanal) }}{% else %}–{% endif %}
-    {% else %}
-    <form method="post" action="/leads/{{ z.lead.id }}/kanal" title="Vertriebskanal manuell setzen (leer = Sync-Automatik)">
-        {#- v35 (PLAN_LEAD_V6 Phase 184): Label aus den Stammdaten + Dropdown nach Häufigkeit (kanal_wahl) statt Freitext #}
-        {% if z.kanal %}{{ kanal_badge(z.kanal) }}{% endif %}
-        <select name="kanal" onchange="this.form.submit()" aria-label="Vertriebskanal">
-            <option value="" {{ 'selected' if not z.kanal }}>–</option>
-            {% for kn in kanal_wahl | default([]) %}<option value="{{ kn }}" {{ 'selected' if z.kanal == kn }}>{{ kn }}</option>{% endfor %}
-            {% if z.kanal and z.kanal not in (kanal_wahl | default([])) %}<option value="{{ z.kanal }}" selected>{{ z.kanal }}{{ ' – Vertriebskanal klären' if z.kanal == '?' else ' (nicht mehr wählbar)' }}</option>{% endif %}
-        </select>
-        {% if z.lead.kanal_manuell %}<span title="manuell gesetzt – Sync überschreibt nicht">✎</span>{% endif %}
-    </form>
-    {% endif %}
+{#- v38 (Phase 203): Badge + Pfeil statt Dropdown; das Menü baut mein_tag.js aus <template data-lv-kanal-optionen> #}
+<td class="sp-kanal lv-kanal-zelle" data-wert="{{ z.kanal }}" data-lv-kanal-zelle{% if z.lead %} data-lead="{{ z.lead.id }}"{% endif %}>
+    <span class="lv-kanal-wert" data-lv-kanal-badge>{% if z.kanal %}{{ kanal_badge(z.kanal) }}{% else %}<span class="dezent">–</span>{% endif %}</span>
+    {%- if not ad_sicht and z.lead %}
+    <button type="button" class="lv-kanal-pfeil" aria-label="Vertriebskanal ändern" title="Vertriebskanal ändern"
+            aria-haspopup="menu" aria-expanded="false" data-lv-kanal-pfeil data-aktuell="{{ z.kanal }}" data-url="/leads/{{ z.lead.id }}/kanal">{{ symbol('pfeil-unten') }}</button>
+    <span class="lv-kanal-manuell" data-lv-kanal-manuell title="manuell gesetzt – Sync überschreibt nicht"{% if not z.lead.kanal_manuell %} hidden{% endif %}>✎</span>
+    {#- Rückfall ohne JavaScript: Textfeld mit der Kanalliste aus EINER <datalist> je Seite (kein Select je Zeile – Seitengröße) #}
+    <noscript><form method="post" action="/leads/{{ z.lead.id }}/kanal" class="lv-kanal-noscript">
+        <input type="text" name="kanal" value="{{ z.kanal }}" list="lv-kanal-liste" aria-label="Vertriebskanal" placeholder="Kanal">
+        <button class="knopf klein zweitrangig" type="submit">OK</button></form></noscript>
+    {%- endif %}
 </td>
 {%- elif key == 'vertriebler' -%}
 <td class="sp-vertriebler" data-wert="{{ z.vertriebler }}">
-    {% if ad_sicht %}
+    {% if ad_sicht or not z.lead %}
         {{ z.vertriebler or '–' }}
     {% else %}
     <form method="post" action="/leads/{{ z.lead.id }}/vertriebler">
@@ -178,10 +175,10 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
 {%- endmacro %}
 
 <div class="lm-tabellen lm-tabellen-at" id="lm-tabellen">
-<div class="lm-gruppen">
+<div class="lm-gruppen" data-lv-gruppen data-benutzer="{{ benutzer.id }}">
     {% for g in gruppen %}
-    <details class="lm-gruppe lv-gruppe" open data-gruppe="{{ g.key }}">
-        <summary class="lm-gruppe-kopf">{{ g.titel }} <span class="dezent lv-punkt">·</span> <span class="n{{ ' rot' if g.rot }}">{{ g.zeilen | length }}</span> {{ 'Termin' if g.zeilen | length == 1 else 'Termine' }}
+    <details class="lm-gruppe lv-gruppe{{ ' lv-gruppe-vergangen' if g.vergangen }}" {{ 'open' if not g.zu }} data-gruppe="{{ g.key }}"{% if g.vergangen %} id="vergangene" data-lv-zu="1"{% endif %}>
+        <summary class="lm-gruppe-kopf">{{ g.titel }} <span class="dezent lv-punkt">·</span> <span class="n{{ ' rot' if g.rot }}">{{ g.zeilen | length }}</span>{% if not g.vergangen %} {{ 'Termin' if g.zeilen | length == 1 else 'Termine' }}{% endif %}
             {% if g.erkl %}<span class="erkl">{{ g.erkl }}</span>{% endif %}</summary>
         <table class="tabelle lm-tabelle lv-tabelle" data-gruppe="{{ g.key }}" data-lm-breiten="{{ breiten_gesetzt(spalten) }}">
             {{ spalten_colgroup(spalten, tabellen_ctx, hinten=(2 if ausgeblendet else 1)) }}
@@ -194,7 +191,7 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
             </thead>
             <tbody>
             {% for z in g.zeilen %}
-                <tr data-zeile="{{ z.lead.id }}" data-suche="{{ (z.name ~ ' ' ~ z.ort ~ ' ' ~ (z.lead.telefon or '')) | lower }}">
+                <tr data-zeile="{{ z.zeilen_id }}"{% if z.termin_id %} data-termin="{{ z.termin_id }}"{% endif %} data-suche="{{ (z.name ~ ' ' ~ z.ort ~ ' ' ~ ((z.lead.telefon if z.lead else z.telefon) or '')) | lower }}">
                     {% for sp in spalten if sp.sichtbar %}{{ zelle(sp.key, z) }}{% endfor %}
                     {% if ausgeblendet %}
                     <td class="sp-ausgeblendet dezent">{{ z.lead.ausgeblendet_am.strftime('%d.%m.%Y') if z.lead.ausgeblendet_am }}
@@ -206,12 +203,15 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
                     </td>
                     {% else %}
                     <td class="aktionen">
-                        <a class="knopf klein" href="/leads/{{ z.lead.id }}/erfassen">Erfassung starten</a>
+                        <a class="knopf klein" href="{{ z.erfassen_url }}">Erfassung starten</a>
+                        {% if z.ausfall %}{{ termin_ausgefallen_knopf(z.termin_id, z.name, z.ausfall_zeit, klasse='knopf klein zweitrangig lv-ausfall') }}{% endif %}
+                        {% if z.lead %}
                         <form method="post" action="/leads/{{ z.lead.id }}/ausblenden" class="ausblenden-form"
                               onsubmit="var g = prompt('Lead ausblenden: {{ z.name | e }}\nGrund (optional):', ''); if (g === null) return false; this.grund.value = g; return true;">
                             <input type="hidden" name="grund" value="">
                             <button class="knopf klein zweitrangig" type="submit" title="Aus Leads VOT ausblenden (zurückholbar)">Ausblenden</button>
                         </form>
+                        {% else %}<a class="knopf klein zweitrangig" href="{{ z.akte_url }}">Akte</a>{% endif %}
                     </td>
                     {% endif %}
                 </tr>
@@ -229,7 +229,18 @@ Spalte „Vertriebler“ direkt zuordnen.</div>
 </div>
 </div>
 {% if zeilen %}
-<p class="dezent lv-summe">{{ zeilen | length }} {{ 'ausgeblendete' if ausgeblendet else 'offene' }}{{ 'r' if zeilen | length == 1 and not ausgeblendet }} Lead{{ 's' if zeilen | length != 1 }} in {{ gruppen | length }} Gruppe{{ 'n' if gruppen | length != 1 }}</p>
+<p class="dezent lv-summe">{{ zeilen | length }} {{ 'ausgeblendete' if ausgeblendet else 'offene' }}{{ 'r' if zeilen | length == 1 and not ausgeblendet }} Lead{{ 's' if zeilen | length != 1 }} in {{ gruppen | length }} Gruppe{{ 'n' if gruppen | length != 1 }}{% if vergangene_anzahl %} · {{ vergangene_anzahl }} vergangene{{ 'r' if vergangene_anzahl == 1 }} Termin{{ 'e' if vergangene_anzahl != 1 }} ohne Erfassung{% endif %}</p>
 {% endif %}
 {{ sparten_ui.legende() }}
+{#- v38 (Phase 203): Kanalliste einmal je Seite für das Menü hinter dem Pfeil (mein_tag.js) #}
+{% if not ad_sicht %}
+<template data-lv-kanal-optionen>{% for kn in kanal_wahl | default([]) %}<option value="{{ kn }}">{{ kn }}</option>{% endfor %}</template>
+<datalist id="lv-kanal-liste">{% for kn in kanal_wahl | default([]) %}<option value="{{ kn }}"></option>{% endfor %}</datalist>
+<div class="lv-kanal-menue" role="menu" aria-label="Vertriebskanal wählen" hidden data-lv-kanal-menue></div>
+{% endif %}
+{#- v38 (Phase 204): Dialog „Termin nicht stattgefunden“ – einmal je Seite (mein_tag.html bindet ihn samt
+    mein_tag.js selbst ein; für Innendienst/Admin liefert dieses Partial Dialog und Skript – Kanal-Menü,
+    Klappzustand der Gruppen, Dialog) #}
+{% if not mobil %}{{ termin_ausgefallen_dialog(ta_gruende, ta_folgen, ta_vorbelegung, ta_dq_gruende, ta_ziel) }}
+<script src="/static/mein_tag.js?v={{ css_version }}" defer></script>{% endif %}
 {{ tabellen_daten(board_key, spalten, sortierung_spalte) }}

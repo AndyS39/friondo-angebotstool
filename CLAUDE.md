@@ -1,4 +1,4 @@
-# Friondo Angebotstool – Projektkontext (v37)
+# Friondo Angebotstool – Projektkontext (v38)
 
 ## Ziel
 Zweistufiger Vertriebsprozess der Friondo GmbH: Außendienst erfasst mobil per
@@ -93,6 +93,7 @@ Nummern vergeben.
 | v35-Nachtrag 3 | PLAN_LEAD_V6_1.md (Nachtrag 16.10.2026, eingearbeitet in PLAN_LEAD_V6.md) | – |
 | v36 | PLAN_V22.md | 188–195 |
 | v37 | PLAN_LEAD_V7.md | 196–200 |
+| v38 | PLAN_V23.md | 201–205 |
 
 ## Fachliche Regeln (Änderungen v3)
 - **Rabatt** (optional je Angebot, nur Innendienst/Admin): Betrag in € oder %,
@@ -199,6 +200,14 @@ Nummern vergeben.
   Privatkunden mit E-Mail, Telefon und vollständigem Ausführungsort und nicht ausgeblendeter Finanzierung;
   Enni/SWD/Sparkasse DU, TAIFUN-Einträge und Modus `aus` (kein Key) bleiben ohne. Der Angebotsstatus folgt nie
   automatisch dem Cloover-Status („Angenommen“ setzt der Innendienst, Glocke art `cloover`).
+- **Korrektur nach „Senden“ mit Änderungsnotiz (v38, Phase 202):** abgesendete Katalog-Erfassungen sind über
+  „Antworten korrigieren“ änderbar – Außendienst nur eigene (`erfassungen.benutzer_id`), Innendienst/Admin alle
+  (Basisrolle, `erfassung_korrektur.korrektur_erlaubt`); gesperrt, sobald ein verknüpftes Angebot (auch eine
+  Version oder ein Kombi-Versand) nicht mehr „Entwurf“ ist („Angebot ist bereits versandfertig“). Der Status
+  der Erfassung bleibt, AMPEL und Pflichtfragen werden neu geprüft, jede Korrektur steht als Eintrag
+  „Erfassung nachträglich geändert von … am …: <Kürzel> <Frage>: alt → neu“ im Notizen-Chat des Vorgangs und
+  als Badge „nachträglich geändert (TT.MM.)“ an der Erfassung; bei verknüpftem Angebotsentwurf muss das Angebot
+  von Hand neu berechnet werden (Hinweis mit Link). Der Freitext-Editor (v13) folgt derselben Regel.
 
 ## Neu in v6 (abgestimmt 21.08.2026)
 - **Lead-Zuordnung:** Personen-Zuordnung wirkt sofort rückwirkend auf bestehende
@@ -684,7 +693,8 @@ Lead-Management belegt.)
   vor mail_modus=live.
 - Arbeitsvorrat: freie + qualifizierte Leads in der Anrufliste, Kunden-
   antwort weckt den Lead, Tagesdigest, Cockpit „Termin-Rückmeldung offen",
-  Pfad „Verloren vor Termin", Überfällig-Banner in Leads VOT. *(ergänzt – siehe v32: „Mein Tag“ aus `vot_termine`, automatische Wiedervorlage, monday-Nachführung, Glocke nachfassen)*
+  Pfad „Verloren vor Termin", Überfällig-Banner in Leads VOT *(überholt – seit v38 ohne Banner, Gruppe „Vergangene Termine“, siehe v38)*.
+  *(ergänzt – siehe v32: „Mein Tag“ aus `vot_termine`, automatische Wiedervorlage, monday-Nachführung, Glocke nachfassen)*
 - Design: LM-Unternavigation, lesbare SLA-Chips (Min/Std/AT), de_datum-
   Filter (deutsche Wochentage), Icons statt Emojis, Cockpit-Kacheln,
   einbett=1 für das Anrufliste-Panel, Hauptmenü + Parametrierungs-Reiter.
@@ -3029,7 +3039,9 @@ Do 22.10.; Rückfrage).)
   Termin-Karte: „Mo, 13.10.“ + „14:00 Uhr“, Kundenname, Objektadresse (`objekte.ausfuehrungsort( *(überholt – seit v33 Termin-Zeile mit Zeitstrahl, überfällige Termine als aufklappbarer Block, keine Filterkarte)*
   termin=…)`, bei mehreren Objekten mit Bezeichnung) als Google-Maps-Link, `tel:`-Link, Sparten-/
   Status-Chips, Herkunft „monday“/„Tool“ [ANNAHME], „Erfassung starten“ (mit `objekt_id`), „Akte“;
-  überfällige Termine ohne Erfassung zuoberst in „Termine heute“ mit rotem Label „überfällig“ (der
+  überfällige Termine ohne Erfassung zuoberst in „Termine heute“ mit rotem Label „überfällig“ *(überholt –
+  seit v38 kein Label „überfällig“, vergangene Termine nur noch in der Gruppe bzw. dem Reiter „Vergangene
+  Termine“, Phasen 203/204)* (der
   Überfällig-Banner v15 bleibt nur in der Tabelle). Filterkarte (Termin von/bis, Status, Vertriebler),
   Leerzustände `leer_zustand`, Safe-Area/`viewport-fit=cover` (`base.html`), Knöpfe ≥ 44 px, keine
   Zurück-Leiste für den AD; Außendienst mit nur einer Rolle startet bei „/“ auf `/leads` [ANNAHME]
@@ -3381,7 +3393,8 @@ additiv – v32-Code läuft auf der v33-Datenbank (Rückweg-Probe im Rollout-Skr
   `ad_profile.termin_dauer_min`, „Sparte, Termintyp“ aus `app/sparten.py` + `vot_termine.typ`
   (vot/telefon/online → Vor-Ort-Termin/Telefontermin/Teams [ANNAHME]), Anschrift als Maps-Link,
   „Route starten“ = Google-Maps-Routenplaner mit Zieladresse, `tel:`); aufklappbarer Block
-  „n überfällige Termine“ (Vergangenheit ohne Erfassung, eingeklappt ab vier) [eigene Annahme];
+  „n überfällige Termine“ (Vergangenheit ohne Erfassung, eingeklappt ab vier) [eigene Annahme] *(überholt –
+  Block entfällt seit v38, Reiter „Vergangene Termine“)*;
   **„Heute · n Termine“** mit Zeitstrahl (erledigt = `--status-gruen`, nächster = `--status-orange`,
   übrige leer; erledigte gedämpft mit Link „Erfassung“ auf `/erfassung/<id>/pruefen` statt Knopf);
   Zeilen klappen Details auf; **Erledigt-Logik:** Termin erledigt, sobald alle Sparten des
@@ -3398,7 +3411,8 @@ additiv – v32-Code läuft auf der v33-Datenbank (Rückweg-Probe im Rollout-Skr
   „Letzter Kontakt“ = letzter Notizen-Chat-Eintrag aller Herkünfte [ANNAHME], Inaktivitäts-Kennzeichen
   von N über `inaktiv_kennzeichen`); **„Kommende Tage“** (14 Tage [ANNAHME], Datumskachel „DO/15“,
   „Donnerstag, 15. Oktober · 2 Termine“); **untere feste Leiste** Mein Tag · Kalender (Meine Termine) ·
-  Wiedervorlage · Kunden (Kopfzeilen-Suche) mit aktivem Eintrag und Safe-Area
+  Wiedervorlage · Kunden (Kopfzeilen-Suche) *(seit v38 „Vergangene Termine“ statt „Kunden“ – die Suche
+  bleibt über die Lupe im Hauptmenü)* mit aktivem Eintrag und Safe-Area
   (`leads/_leiste.html`, von `base.html` für den Außendienst auf allen Seiten außer Login/PIN-Wechsel/
   Erfassungsbogen/Signatur/einbett eingebunden; Logik in `static/mein_tag.js`, Chips/Sortierung/Suche
   clientseitig, Zustand `sessionStorage` [ANNAHME]). **Seite „Wiedervorlage“** `GET /leads/
@@ -3406,7 +3420,8 @@ additiv – v32-Code läuft auf der v33-Datenbank (Rückweg-Probe im Rollout-Skr
   Zurück-Pfeil „Mein Tag“, Titel „n offen“, Suchfeld „Nach Name suchen“, Chips bezogen auf die
   Suchtreffer, alle Vorgänge, Telefon-Knopf je Karte, Leerzustand „Keine Vorgänge gefunden“ + „Filter
   oder Suche anpassen.“. Glocke art `nachfassen` verlinkt `/leads#wiedervorlage`. **Leads VOT Desktop
-  (Phase 174):** Lead-basierte Tabelle (wie seit v1/v8) mit Gruppen Überfällig · Heute · je Folgetag
+  (Phase 174):** Lead-basierte Tabelle (wie seit v1/v8) mit Gruppen Überfällig · Heute · je Folgetag *(überholt – seit v38 Heute · je Folgetag · Vergangene
+  Termine)*
   (`details.lm-gruppe`, Uhrzeit innerhalb der Gruppe), Sticky-Filterleiste (Suche, Termin/Ansicht,
   Vertriebler, Status, **Priorität = Hot-Ampel** (`?prioritaet=hoch|mittel|niedrig`), Kanal, Sparte,
   Spaltenwähler), Spalten je Nutzer über T's Bausteine (Board-Key `leads_vot`,
@@ -3565,7 +3580,7 @@ additiv – v32-Code läuft auf der v33-Datenbank (Rückweg-Probe im Rollout-Skr
   Team-Kalender nur bei `outlook_adresse`; **R7 Handlauf `scripts/outlook_bestand_einreihen.py`**
   (Projekt-/Service-Termine und bei `kalender_sync = an` offene VOT der nächsten 8 Wochen als Aufträge
   „anlegen“, Blöcke je 50, `--trocken`) nach dem grünen Verbindungstest.
-  **M:** R1 Überfällig-Block bleibt; R2 ohne Einstufung = Niedrig; R3 Tabelle Lead-basiert; R4 Leiste
+  **M:** R1 Überfällig-Block bleibt *(überholt – seit v38 entfällt er)*; R2 ohne Einstufung = Niedrig; R3 Tabelle Lead-basiert; R4 Leiste
   „Kalender“ = Meine Termine; R5 Hinweiszeile bleibt. **T:** R1 DB-Summe mit Kalkulationssicht; R2 acht
   Spalten; R3 Katalog `erfassungen`. **N:** R1 Einwand-Startliste bestätigt; R2 Standardtexte als Entwurf
   (Innendienst passt im Editor an); R3 Grußformel bleibt in den Vorlagen – Signatur ohne eigene Grußformel
@@ -3790,7 +3805,8 @@ synthetischen Fixture gleichen Aufbaus plus Stichproben gegen die echte Datei. E
   `capture="environment"`, „Dateien wählen“ `multiple`, Liste mit Vorschaubild, Dateiname/Größe,
   Ordner-Dropdown je Datei (Vorbelegung Standard-Ordner; Ordnerliste je Sparte – Objekt-Ordner aus PLAN_LEAD_V6
   liegen noch nicht vor), Bemerkung je Datei, „Für alle übernehmen“, Fortschrittsbalken, Abbrechen/Leeren,
-  `beforeunload`-Hinweis bei ungesendeten Fotos) und `galerie_einbindung()`; Bilder werden beim Hinzufügen auf
+  `beforeunload`-Hinweis bei ungesendeten Fotos *(v38: Knopf „Hochladen (n)“ mit Pop-up, Offline-Puffer in
+  IndexedDB, Mehrfach-Löschen – siehe v38)*) und `galerie_einbindung()`; Bilder werden beim Hinzufügen auf
   dem Gerät verkleinert (`bild_verkleinern.js`, 2.000 px / JPEG 85 %, PDFs unverändert). **EIN Request** `POST
   /vorgaenge/<id>/galerie/upload` mit `dateien` / `datei_ordner` / `datei_bemerkung` positionsgleich (Aliase
   `dateien[]`/`ordner[]`/`bemerkung[]`); `galerie.mehrfach_speichern` legt mit Commit je Datei ab und meldet
@@ -4529,3 +4545,166 @@ Zwischenstand-Commit „v37“ ohne Push; Rückfragen gebündelt am Ende der Ket
   (Lead-Modul)“), `docs/nach-dem-update-v37.md`, `docs/updates.md` (4f), `docs/betrieb.md` („Ergänzungen v37“);
   `config.VERSION = "v37"`. Zwischenstand-Commit „v37: Lead-Management V7 Design v3, Kartei-Review, Termine, Routing
   (PLAN_LEAD_V7, Phasen 196-200)“ ohne Push.
+
+## Neu in v38 – Foto-Upload, Erfassung Zwischenspeichern/Korrektur, Vergangene Termine, Termin nicht stattgefunden (abgestimmt 16.10.2026)
+
+(Plan: PLAN_V23.md, Phasen 201–205 – der Entwurf nannte v37/192–196, beides belegt; Prüfvermerk im Plan (v38 ist die
+nächste freie Nummer). Entwurf Claudia Castro 16.10.2026 aus den Punkten von Andreas, Nachtrag „Termin nicht
+stattgefunden“. Umgesetzt am 16./17.10.2026 auf dem committeten v37-Stand 72724a6 in EINEM Durchlauf: Fundament durch den
+Orchestrator (additive Spalten `erfassungen.geaendert_am/geaendert_von/aktuelle_frage`, `vot_termine.ausfall_grund/
+ausfall_bemerkung`), drei Agenten G (Phase 201 Galerie), E (Phase 202 Erfassung + Erfassungsliste mit Objekt aus Phase
+204) und V (Phasen 203/204 Leads VOT, Mobil, Dialog) parallel auf eigenen DB-Kopien `diagnose/v38/data_<X>` (vor
+Screenshots anonymisiert); Integration, Doku und Zwischenstand-Commit durch den Orchestrator; Berichte
+`diagnose/v38/<X>_ergebnis.md` (lokal), Gesamtübersicht der Kette `diagnose/v36/gesamtuebersicht.md`. Die Objektfotos
+aus v35 sind seit dem v35-Nachtrag 3 entfallen – der im Plan vorgesehene Regressionstest entfällt (Rückfrage). Alle
+Datenbankänderungen additiv – v37-Code läuft auf der v38-Datenbank (Rückweg-Probe in der Rollout-Prüfung der Kette).
+Kamera-Serie ohne Rückkehr ins Tool, Browser-Diktat und echter Offline-Betrieb (Service Worker) bleiben ohne HTTPS
+außerhalb (`docs/https-intern.md`). Zwischenstand-Commit „v38“ ohne Push; Rückfragen gebündelt am Ende der Kette.)
+
+**Leitplanken ab v38 (zusätzlich zu v27/v30/v33/v35/v36/v37):** kein „überfällig“ mehr im Vertrieb – vergangene
+Vor-Ort-Termine ohne Erfassung stehen nur in der Gruppe bzw. dem Reiter „Vergangene Termine“ (180 Tage, Erledigt-Logik
+v33); „Termin nicht stattgefunden“ läuft ausschließlich über `lead_termin_ausfall.melden` (Bestandsfunktionen
+`termin_no_show`, `lead_todos.anlegen`, `lead_boards.status_setzen` – nie eine Kundenmail); Korrekturen abgesendeter
+Erfassungen nur über `erfassung_korrektur` (Rechte, Sperre, Änderungsnotiz im Vorgangs-Chat); Löschrecht je
+Galerie-Datei über `galerie.darf_datei_loeschen` (Mehrfach-Löschen); der Foto-Puffer liegt nur in der IndexedDB des
+Geräts (kein Hintergrund-Upload, kein Service Worker ohne HTTPS).
+
+- **Foto-Upload mit Bestätigung (Phase 201, `app/static/galerie_v34.js`, `_galerie.html` Makro
+  `galerie_upload_dialog`, Agent G):** Knopf der Upload-Liste heißt **„Hochladen (n)“** (bei 0 deaktiviert); vor
+  dem Senden Pop-up „Fotos werden hochgeladen“ mit Fortschritt je Datei und gesamt (aus dem Byte-Anteil des EINEN
+  Requests abgeleitet [ANNAHME]) und „Voraussichtlich noch ca. n Sekunden“ (Startwert 500 KB/s [ANNAHME], ab der
+  ersten fertigen Datei – oder sobald die Messung darunter liegt – die gemessene Geschwindigkeit, alle 2 s, unter
+  5 s „Gleich fertig“); kein Schließen während des Uploads (Esc abgefangen), „Abbrechen“ bricht den Request ab.
+  Danach „3 Fotos hochgeladen“ (Erfolgsfarbe, schließt nach 3 s, Liste leer, Kacheln ohne Seitenneuladen –
+  Upload-Antwort `abgelegt[]` mit `bild`/`datum`/`datum_lang`, Ereignis `gal34:hochgeladen`) oder „2 von 3 Fotos
+  hochgeladen“ (Warnfarbe, fehlgeschlagene Dateien mit Grund, „Erneut versuchen“ sendet nur diese). Keine Navigation
+  mehr nach dem Upload (bis v37 `window.location = ziel`).
+- **Offline-Zwischenspeicher (Phase 201, `app/static/galerie_puffer.js`):** Netzfehler/Timeout/Status 0 → „Kein
+  Netz. Die Fotos bleiben gespeichert und werden später hochgeladen.“ – die verkleinerten Dateien liegen mit
+  Ordner, Bemerkung, Sparte und Vorgang in der IndexedDB des Browsers (`friondo_galerie_puffer`/`wartend`, max.
+  50 Fotos / 100 MB je Browser [ANNAHME], sonst „Zwischenspeicher voll, bitte zuerst hochladen“); Hinweiskasten
+  „n Fotos warten auf Upload (seit TT.MM., HH:MM)“ über der Galerie desselben Vorgangs mit „Jetzt hochladen“
+  (normaler Upload mit Pop-up) und „Verwerfen“ (Sicherheitsabfrage); `/erfassung` zeigt „Wartende Fotos: Vorgang
+  Müller (3), …“ mit Link auf die Galerie; nach Erfolg Einträge gelöscht, bei 403/404 „Vorgang nicht mehr
+  vorhanden“ (nur verwerfbar). Kein Hintergrund-Upload (kein Service Worker ohne HTTPS), Puffer nur im jeweiligen
+  Browser des Geräts (`docs/betrieb.md`).
+- **Mehrfach-Löschen (Phase 201, `galerie.mehrfach_loeschen`, Route `POST /vorgaenge/<id>/galerie/loeschen`,
+  `app/static/galerie_v38.js/.css`):** je Ordner (und in der Sammelbox) Knopf „Auswählen“ → Kästchen je Kachel,
+  Kopfleiste „n ausgewählt · Alle · Keine“, „n Fotos löschen“ (Gefahrfarbe) mit Sicherheitsabfrage „3 Fotos
+  endgültig löschen? Das lässt sich nicht rückgängig machen.“; Kästchen nur an Dateien mit Löschrecht –
+  **Befund:** das Einzel-Löschen prüfte nur die Rolle (Admin/Innendienst/Projektierung), darum gilt je Datei
+  zusätzlich „eigener Upload eines Außendienstlers“ (`galerie.darf_datei_loeschen`, Jinja-Global
+  `galerie_loeschrecht` aus `anfrage.KONTEXT["benutzer"]`); Montage weiter nie. Route im `_speichern`-Muster, prüft
+  jede ID gegen Vorgang und Recht, antwortet `{ok, geloescht[], abgelehnt[], meldung}` (JSON) bzw. Redirect;
+  Dateien werden erst nach dem Commit gelöscht (Wiederholung bei Windows-Dateisperre); Notizen-Chat je Ordner
+  „Galerie: 3 Fotos gelöscht (Ordner Zählerschrank): …“ (wie beim Einzel-Löschen, das protokolliert). Kacheln
+  verschwinden ohne Neuladen; gilt überall, wo das Makro `galerie` liegt. Einzel-Löschen und Lightbox unverändert.
+  Tests `tests/test_v38_galerie.py` (11, davon 3 Chrome headless); angepasst `test_v34_galerie.py` (Knopftext,
+  keine Navigation nach dem Upload). Screenshots `docs/design-v38/galerie-*`, `erfassung-wartende-fotos-*`.
+- **Befund Abbruch des Bogens (Phase 202, Agent E, `diagnose/v38/E_patches/befund_abbruch.py`):** Antworten
+  wurden nur seitenweise beim „Weiter“/„Zurück“ gespeichert (nie je Frage), Eingaben der aktuellen Seite gingen
+  beim Verlassen verloren; unvollständige Bögen trugen schon den Status „Entwurf“ (Modell-Default) und standen
+  nur in der AD-Übersicht `/erfassung`, nicht in `/erfassungen`; der Wiedereinstieg war seitenbasiert
+  (`seite_index`); `beforeunload` gab es nicht.
+- **Zwischenspeichern (`app/erfassung_korrektur.py`, `routers/erfassung.py`):** Status „Entwurf“ bleibt der
+  bestehende Wert. Knopf **„Später fortsetzen“** oben rechts im Bogen speichert die aktuelle Seite ohne
+  Pflichtprüfung (nur gefüllte, gültige Felder; `richtung=spaeter`) und führt zur Erfassungsliste der Rolle
+  (`/erfassung` bzw. `/erfassungen`) mit „Erfassung gespeichert. Sie können jederzeit weitermachen.“. Jedes
+  Speichern eines Entwurfs merkt sich die erste unbeantwortete sichtbare Frage (`erfassungen.aktuelle_frage`);
+  `GET /erfassung/{id}/fortsetzen` öffnet die Seite dieser Frage mit Hinweis „Fortgesetzt bei Frage 12 von 31“
+  und Sprung zum Anker `#frage-<ID>` (alle Listen, Sparten-Seite und Vorgangsakte verlinken darauf). Badge
+  **„Entwurf · Frage 12 von 31“** (`entwurf_badge`: Position/Anzahl der sichtbaren Fragen) in der AD-Übersicht,
+  im Innendienst-Reiter **„Entwürfe“** und in „Alle“ (übrige Reiter/Kacheln ohne Entwürfe); Entwürfe älter als
+  30 Tage (Anlagedatum [ANNAHME]) mit Warnfarbe, kein automatisches Löschen; Entwurf-Detailseite ohne
+  Angebotsknöpfe (`angebot-erzeugen`/`manuelles-angebot` weisen Entwürfe ab). `beforeunload` (seite.html) nur bei
+  ungespeicherter Eingabe auf der Seite, nicht nach „Später fortsetzen“/Weiter/Absenden.
+- **Korrektur nach „Senden“:** Knopf **„Antworten korrigieren“** auf der Prüfseite, in der Innendienst-
+  Detailseite und in der Vorgangsakte (Karte Erfassung, Jinja-Global `erfassung_korrektur_info` ohne Datenbank);
+  Rechte über die Basisrolle (`korrektur_erlaubt`: Außendienst nur `erfassungen.benutzer_id` = eigene ID → sonst
+  403, Innendienst/Admin alle); Sperre (`sperre`), sobald ein verknüpftes Angebot – inkl. Versionen über
+  `vorgaenger_id` und Kombi-Versand – den Status „Entwurf“ verlassen hat: Knopf deaktiviert mit Tooltip „Angebot
+  ist bereits versandfertig“, Routen leiten mit Meldung auf die Prüfseite. Korrekturmodus
+  (`GET /erfassung/{id}/korrektur?frage=A04|seite=n`) = Bogen mit allen Antworten vorbelegt, Sprung zur Frage
+  per Klick auf „ändern“ in der Prüfseite, Knopf „Korrektur speichern“ (Pflichtprüfung der Seite wie „Weiter“,
+  AMPEL/Gründe neu über `_korrekturen_protokollieren`, Prüfseite prüft die Pflichtfragen erneut), Status
+  unverändert, kein Freitext-Wechsel. Bei verknüpftem Angebotsentwurf Hinweis **„Antworten geändert. Bitte das
+  Angebot neu berechnen.“** mit Link (keine automatische Neuberechnung).
+- **Änderungsnotiz:** jede gespeicherte Seite mit Änderungen schreibt in den Notizen-Chat des Vorgangs (Autor
+  „System“, Herkunft „Erfassung (Korrektur)“) „Erfassung nachträglich geändert von <Name> am TT.MM.JJJJ HH:MM:
+  A04 Lage des Heizraums: KG → EG; …“ – ab der sechsten Änderung „… und n weitere“ plus Block „Alle
+  Änderungen:“, den das Makro `_nc_eintrag` aufklappbar zeigt; Badge **„nachträglich geändert (TT.MM.)“**
+  (`geaendert_am/_von`) in Listen, Prüfseite, Detailseite und Vorgangsakte. Der Freitext-Editor (v13,
+  `POST /erfassungen/{id}/freitext`) schreibt denselben Eintrag (`freitext_aenderung`).
+- Tests `tests/test_v38_erfassung.py` (12); Styles `app/static/erfassung_v38.css` (nur Tokens).
+- **Erfassungsliste mit Objekt:** jede Erfassung zeigt ihre Objektzeile aus `vorgang_objekte`
+  (`erfassung_korrektur.objekt_zeilen`, eine Abfrage je Liste, Master-Regel v31: Hauptobjekt = Kundenadresse) –
+  bei Vorgängen mit mehreren Objekten „<Objektbezeichnung> · <Straße Nr., PLZ Ort>“, bei Ein-Objekt-Vorgängen nur
+  die Adresse, ohne Zuordnung die Kundenadresse mit „(Kunde)“: mobil unter dem Kundennamen (`/erfassung`, unter
+  600 px auch in der Kundenzelle von `/erfassungen`), Desktop als Spalte **„Objekt“** (Katalog
+  `lead_boards.KATALOGE["erfassungen"]`, Standard sichtbar [ANNAHME], sortierbar); Suchfeld und Schnellfilter
+  finden die Objektbezeichnung. Kontrollwert „Halle Nord“/„Verwaltung“ in `tests/test_v38_erfassung.py`.
+- **Leads VOT Desktop: Kanal-Pfeil, Gruppe „Vergangene Termine“, „überfällig“ gestrichen (Phase 203, Agent V,
+  `app/mein_tag.py`, `app/routers/leads.py`, `templates/leads/_tabelle.html`, `static/mein_tag.js/.css`):** Die
+  Kanalzelle zeigt nur das farbige `kanal_badge` (Stammdaten) und rechts einen 16-px-Pfeil (`aria-label="Vertriebskanal
+  ändern"`); Klick öffnet ein Menü unter der Zelle (Werte wie das bisherige Dropdown aus `leadmanagement.kanal_werte`,
+  „– (Sync-Automatik)“ zuerst, aktueller Wert markiert, Tastatur, Escape/Klick außerhalb), die Auswahl speichert sofort
+  über die bestehende Route `POST /leads/{lead_id}/kanal` (bei `Accept: application/json` jetzt `{ok, kanal, manuell,
+  badge_html, meldung}` – Badge wechselt ohne Neuladen; `<noscript>`-Textfeld mit `<datalist>` als Rückfall); Kundenliste,
+  Kundenkartei und Lead-Boards unverändert. Neue Gruppe **„Vergangene Termine · n“** unterhalb der Folgetage [ANNAHME],
+  standardmäßig zugeklappt, Klappzustand aller Gruppen je Benutzer in `localStorage` (`lv_gruppen_<id>`): alle
+  Vor-Ort-Termine aus `vot_termine` ohne abgeschlossene Erfassung (Erledigt-Logik je Objekt, v33) mit Beginn vor heute
+  und innerhalb der letzten 180 Tage (`mein_tag.VERGANGEN_TAGE`), neueste zuerst, Termin-Spalte gedämpft mit „vor 12
+  Tagen“; Außendienst nur eigene, Innendienst/Admin alle (auch Tool-Termine ohne monday-Lead – Zeile ohne Lead-Aktionen,
+  Links auf die Vorgangsakte); Chip-Filter (Suche, Sparte, Vertriebler, Status, Kanal, Priorität) wirken; ältere Termine
+  erscheinen nirgends. `mein_tag.vergangene_karten/vergangene_tage/vergangene_zeilen`, `gruppen_bilden` ohne
+  „Überfällig“, `gruppen_mit_vergangenen` (Lead-Zeilen ohne `vot_termine`-Eintrag bleiben als Rückfall). **„Überfällig“
+  entfällt** auf Desktop und mobil: kein rotes Label, keine Einsortierung in „Heute“ (nur Beginn am heutigen Tag), kein
+  Überfällig-Block in Mein Tag, keine Gruppe „Überfällig“, keine Ansicht „nur überfällige“ und kein v15-Banner der
+  Lead-Tabelle (dieselbe Logik); Leads, deren Termine alle gemeldet/abgesagt sind, verlassen die Tabelle [ANNAHME].
+  Startseiten-Kachel-Zähler und Statistik „Offene Leads“ unverändert [ANNAHME]. Tests `tests/test_v38_leads_vot.py` (5).
+- **Mobil: Reiter „Vergangene Termine“, Seite `/leads/vergangene`, Dialog „Termin nicht stattgefunden“ (Phase 204,
+  Agent V, `app/lead_termin_ausfall.py`, `templates/leads/vergangene.html`, `_termin_ausgefallen.html`, `_leiste.html`,
+  `_karten.html`):** Die untere Leiste des Außendienstes heißt „Mein Tag · Kalender · Wiedervorlage · Vergangene Termine“
+  (Symbol `verlauf`, unter 360 px „Vergangen“); der Eintrag „Kunden“ entfällt – die allgemeine Suche (v32) bleibt über die
+  Lupe im Hauptmenü. Seite **`GET /leads/vergangene`** (Außendienst inkl. Handelsvertreter – nur eigene Termine;
+  Innendienst/Admin → 303 `/leads#vergangene` [ANNAHME]): Zurück-Pfeil „Mein Tag“, Titel mit Zähler „n ohne Erfassung“,
+  Suchfeld „Nach Name suchen“ (clientseitig), Liste je Tag mit Datumskachel, neueste zuerst; je Termin Uhrzeit,
+  Kundenname, Sparte/Termintyp, Objektbezeichnung + Objektadresse (`objekte.ausfuehrungsort(termin=…)`, Ein-Objekt nur
+  Adresse), Hauptaktion „Erfassung starten“ (Termin + Objekt wie Mein Tag), „Akte“, „Termin nicht stattgefunden“;
+  Leerzustand „Keine vergangenen Termine ohne Erfassung“ + „Alles erfasst.“; Datenbasis identisch zur Desktop-Gruppe.
+  „Heute“ in Mein Tag trägt einen Hinweis-Link „n vergangene Termine ohne Erfassung →“ [ANNAHME]. **Dialog „Termin
+  nicht stattgefunden“** (Makro `termin_ausgefallen_dialog`, natives `<dialog>`, mobil Vollbild-Sheet, Design-v2-Tokens,
+  Diktat-Knopf v34) an „Als Nächstes“, jeder Zeile in „Heute“, auf der neuen Seite und als Zeilenaktion der
+  Desktop-Tabelle (alle Gruppen): Grund „Kunde nicht angetroffen“ · „Kunde hat sich anders entschieden“ · „Sonstiges“
+  (Pflicht-Freitext), optionale Bemerkung, „Was soll passieren?“ mit „Neuen Termin vereinbaren lassen“ (vorausgewählt bei
+  nicht angetroffen/Sonstiges) und „Kunde möchte keinen neuen Termin“ (vorausgewählt bei anders entschieden) [ANNAHME];
+  Route **`POST /leads/termin/{termin_id}/ausgefallen`** (`_speichern`-Muster, Prüfung vor dem ersten Schreiben, JSON bei
+  `Accept: application/json`, sonst Redirect; Rechte: Außendienst nur eigene Termine nach `vorgaenge.gehoert_benutzer`
+  bzw. HV-Gruppe, Innendienst/Admin/Leadmanagement alle; die Testphase `terminierung_aktiv` sperrt das Melden nicht).
+  **Folge 1:** `leadmanagement.termin_no_show(…, "no_show")` (Termin no_show + `grund_text`, Outlook-Storno nur über die
+  Auftrags-Warteschlange, geplante Mails storniert, Lead-Phase zurück auf „Kontaktiert“), `vot_termine.ausfall_grund/
+  ausfall_bemerkung` (additive Spalten), To-Do „Neuen Termin vereinbaren: <Kunde>“ (Text „Termin am TT.MM. HH:MM nicht
+  stattgefunden (Grund: …). Bemerkung: …“, fällig heute) an `vorgaenge.leadmanager_id` mit Glocke (`todo_zugewiesen`,
+  v29) – ohne Leadmanager an den nächsten Leadmanager per Round-Robin, sonst den Handelnden, mit Hinweis „kein
+  Leadmanager zugewiesen“ (`todos.an_benutzer_id` ist NOT NULL) [ANNAHME, Rückfrage]; Wiedervorlage des Vorgangs auf
+  heute (`wiedervorlage_art = termin_ausgefallen`) [ANNAHME]; Chat-Eintrag „Termin am TT.MM. nicht stattgefunden (Grund)
+  · neue Terminfindung durch Leadmanagement“; Meldung „Weitergegeben an das Leadmanagement“. **Folge 2:** zweite Abfrage
+  „Kunden disqualifizieren?“ mit Pflichtgrund aus dem Logik-Blatt Gründe (`unqualifiziert`); `termin_no_show(…,
+  "abgesagt")` + `lead_boards.status_setzen(…, "unqualifiziert", grund=…)` (Phase „Disqualifiziert“, Verlauf,
+  Hauptboard), Chat-Eintrag „… · Kunde disqualifiziert durch <AD-Name>: <Grund>“. **Beide Folgen ohne Kundenmail**
+  (keine `mail_planen`-Zeile auf beiden Wegen; die Vorlage „disqualifiziert“ bleibt der Kaskade „nicht erreicht“
+  vorbehalten); der Termin verschwindet aus allen Listen; keine dritte Option. Tests `tests/test_v38_mobil.py` (8),
+  Browser-Prüfung `diagnose/v38/V_patches/js_pruefung.py`; Screenshots `docs/design-v38/` (390 px / 1440 px, hell/dunkel).
+- **Tests, Doku, Zwischenstand (Phase 205, Orchestrator):** neue Testdateien `tests/test_v38_galerie.py`,
+  `test_v38_erfassung.py`, `test_v38_leads_vot.py`, `test_v38_mobil.py` (Zahlen in den Berichten und in der
+  Gesamtübersicht). **Integrations-Testlauf** (Orchestrator, Kopie `diagnose/v38/data_INT` aus der Dev-DB, `migrate.py` zweimal – zweiter Lauf ohne Änderungen; 37 Testdateien: v38-Tests, Wächter v27/v30/v33, Scheduler, Galerie v34, Tabellen, Mein Tag v32/v33, Suche, Kanäle, Termine, Nachfassen, Regression, Montage, Navigation, Login – `diagnose/v36/orch/testlauf_v38_int1.txt`): 489 bestanden, 2 übersprungen, 1 Fehler → der v33-Upload-Wächter (`test_v33_fundament::UploadRoutenOhneSchreibsperre`) meldete `erfassung.seite_speichern` (Seite „Einschätzung“ mit Foto-Sammelbox): die Rechteprüfung des Korrekturmodus (E) las die Erfassung vor dem Formular → Formular wieder vor dem ersten Datenbankzugriff; Wiederholung Wächter + `test_v38_erfassung` + `test_v27_sitzungen` 32/32 grün. Angepasste Alt-Tests mit Begründung: siehe Berichte G/E/V und Gesamtübersicht §5
+  (Label „überfällig“, Knopfbeschriftung „Hochladen (n)“, untere Leiste, Erfassungsliste mit Objekt). Migration zweimal
+  auf einer frischen Kopie (zweiter Lauf ohne Änderungen). **Nicht in diesem Zwischenstand:** Gesamtsuite und
+  Rollout-Vorbereitung (Server-Kopie, Rückweg-Probe v37-Code, Voll-Crawl aller Rollen hell/dunkel, Abnahme, Smoke,
+  Lasttest `normal` mit Mehrfach-Löschen, `/leads/vergangene` und dem Dialog im AD-Profil) – einmal am Ende der
+  Plan-Kette v36 → v37 → v38 (`diagnose/v36/gesamtuebersicht.md` §10). Doku: dieser Abschnitt, Zuordnungstabelle,
+  Titelzeile, Fachliche Regeln („Korrektur nach Senden mit Änderungsnotiz“), überholt-Marker in v32/v33 („überfällig“,
+  Reiter „Kunden“) und v34 (Upload-Knopf); `docs/nach-dem-update-v38.md`, `docs/betrieb.md` („Ergänzungen v38“:
+  IndexedDB-Puffer je Gerät, Mehrfach-Löschen), `docs/updates.md` (4g); `config.VERSION = "v38"`. Zwischenstand-Commit
+  „v38: Foto-Upload Pop-up/Offline/Mehrfach-Löschen, Erfassung Entwurf/Korrektur, Leads VOT Kanal-Pfeil/Vergangene
+  Termine, Mobil (PLAN_V23, Phasen 201-205)“ ohne Push.

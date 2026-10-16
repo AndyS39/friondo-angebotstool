@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_symbole.html" import symbol %}
 {% from "_komponenten.html" import leer_zustand, avatar %}
+{% from "leads/_termin_ausgefallen.html" import termin_ausgefallen_dialog %}
 {% import "leads/_karten.html" as mt with context %}
 {# v32 (PLAN_V19 Phase 161/162/163): Vertriebler-Ansicht „Mein Tag“.
    v33 (PLAN_V20 Phase 173, Protokoll Claudia Castro 14.10.2026 Teil A): nur noch mobil –
@@ -13,7 +14,11 @@
    (leads/_leiste.html über base.html). Daten: app/mein_tag.py, app/nachfassen.py.
    Design v2: nur Tokens (app/static/mein_tag.css), keine on*-Attribute mit tojson – Logik
    in app/static/mein_tag.js über data-Attribute. /leads ist Modul-Startseite des
-   Außendienstes (ohne Zurück-Leiste, base.html). #}
+   Außendienstes (ohne Zurück-Leiste, base.html).
+   v38 (PLAN_V23 Phase 203/204): der Überfällig-Block über „Heute“ entfällt – vergangene
+   Termine stehen auf /leads/vergangene (Reiter der unteren Leiste); Dialog „Termin nicht
+   stattgefunden“ (Makro termin_ausgefallen_dialog, einmal je Seite) an „Als Nächstes“ und
+   „Heute“ sowie an der Desktop-Tabelle. #}
 {% set zurueck_aus = true %}
 
 {% block titel %}Mein Tag – Friondo Angebotstool{% endblock %}
@@ -36,17 +41,6 @@
     {% if naechster %}{{ mt.als_naechstes(naechster) }}{% endif %}
 
     <section class="mt-block" id="termine-heute">
-        {% if termine_ueberfaellig %}
-        {# überfällige Termine (Vergangenheit ohne Erfassung) zuoberst, aufklappbar – bei mehr
-           als drei eingeklappt, damit der heutige Tag nicht nach unten rutscht [eigene Annahme] #}
-        <details class="mt-ueberfaellig-block" id="termine-ueberfaellig" {{ 'open' if termine_ueberfaellig | length <= 3 }}>
-            <summary><span class="mt-zaehler-rot">{{ termine_ueberfaellig | length }} überfällige{{ 'r' if termine_ueberfaellig | length == 1 }} Termin{{ 'e' if termine_ueberfaellig | length != 1 }}</span>
-                <span class="dezent">ohne Erfassung – bitte nachfassen</span></summary>
-            <div class="mt-liste mt-zeitstrahl">
-                {% for k in termine_ueberfaellig %}{{ mt.termin_zeile(k) }}{% endfor %}
-            </div>
-        </details>
-        {% endif %}
         <div class="mt-block-kopf">
             <h2>Heute</h2>
             <span class="mt-zaehler">{{ termine_heute_nur | length }} Termin{{ 'e' if termine_heute_nur | length != 1 }}</span>
@@ -56,6 +50,10 @@
             {% for k in termine_heute_nur %}{{ mt.termin_zeile(k) }}{% endfor %}
         </div>
         {% else %}{{ leer_zustand('Heute keine Termine.') }}{% endif %}
+        {#- v38 (Phase 204): Hinweis auf vergangene Termine ohne Erfassung – die Liste liegt auf dem Reiter #}
+        {% if vergangene_anzahl %}
+        <a class="mt-vg-hinweis-link" href="/leads/vergangene">{{ symbol('verlauf') }} {{ vergangene_anzahl }} vergangene{{ 'r' if vergangene_anzahl == 1 }} Termin{{ 'e' if vergangene_anzahl != 1 }} ohne Erfassung <span aria-hidden="true">→</span></a>
+        {% endif %}
     </section>
 
     <section class="mt-block mt-wv" id="wiedervorlage" data-mt-wv>
@@ -106,5 +104,7 @@
 <div class="mt-desktop">
     {% include "leads/_tabelle.html" %}
 </div>
+{#- v38 (Phase 204): EIN Dialog „Termin nicht stattgefunden“ für Karten und Tabelle #}
+{{ termin_ausgefallen_dialog(ta_gruende, ta_folgen, ta_vorbelegung, ta_dq_gruende, ta_ziel) }}
 <script src="/static/mein_tag.js?v={{ css_version }}" defer></script>
 {% endblock %}

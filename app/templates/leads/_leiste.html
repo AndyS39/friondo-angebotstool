@@ -1,16 +1,17 @@
 {# v33 (PLAN_V20 Phase 173, Design-Entwurf): untere feste Leiste des Außendienstes mit vier
    Einträgen Mein Tag (/leads) · Kalender (Meine Termine) · Wiedervorlage
-   (/leads/wiedervorlagen) · Kunden (allgemeine Suche v32: klappt das Kopfzeilen-Suchfeld
-   auf, ohne JavaScript /suche). Eingebunden von base.html für die Basisrolle Außendienst
-   (auch Handelsvertreter) auf allen Seiten außer Login/PIN-Wechsel, Erfassungsbogen,
+   (/leads/wiedervorlagen) · v38 (PLAN_V23 Phase 204): Vergangene Termine (/leads/vergangene,
+   Symbol Uhr/Verlauf, unter 360 px „Vergangen“) statt „Kunden“ – die allgemeine Suche (v32)
+   bleibt über die Lupe im Hauptmenü erreichbar. Eingebunden von base.html für die Basisrolle
+   Außendienst (auch Handelsvertreter) auf allen Seiten außer Login/PIN-Wechsel, Erfassungsbogen,
    Signatur und eingebetteten Seiten; sichtbar nur unter 600 px (Media-Query in
    mein_tag.css), Safe-Area des Geräts berücksichtigt. Aktiver Eintrag nach Pfad. #}
 {% from "_symbole.html" import symbol %}
 {% set _pfad = request.url.path %}
 {% if _pfad.startswith('/leads/wiedervorlagen') %}{% set _aktiv = 'wiedervorlage' %}
+{% elif _pfad.startswith('/leads/vergangene') %}{% set _aktiv = 'vergangene' %}
 {% elif _pfad == '/leads' %}{% set _aktiv = 'meintag' %}
 {% elif _pfad.startswith('/lead-management/meine-termine') or _pfad.startswith('/kalender') %}{% set _aktiv = 'kalender' %}
-{% elif _pfad.startswith('/suche') %}{% set _aktiv = 'kunden' %}
 {% else %}{% set _aktiv = '' %}{% endif %}
 <link rel="stylesheet" href="/static/mein_tag.css?v={{ css_version }}">
 <nav class="mt-leiste" aria-label="Außendienst-Navigation" data-mt-leiste>
@@ -20,7 +21,7 @@
         <span class="mt-leiste-symbol">{{ symbol('kalender') }}</span>Kalender</a>
     <a href="/leads/wiedervorlagen" class="mt-leiste-eintrag{{ ' aktiv' if _aktiv == 'wiedervorlage' }}"{% if _aktiv == 'wiedervorlage' %} aria-current="page"{% endif %}>
         <span class="mt-leiste-symbol">{{ symbol('wiedervorlage') }}</span>Wiedervorlage</a>
-    <a href="/suche" class="mt-leiste-eintrag{{ ' aktiv' if _aktiv == 'kunden' }}"{% if _aktiv == 'kunden' %} aria-current="page"{% endif %} data-mt-leiste-kunden>
-        <span class="mt-leiste-symbol">{{ symbol('nutzer') }}</span>Kunden</a>
+    <a href="/leads/vergangene" class="mt-leiste-eintrag{{ ' aktiv' if _aktiv == 'vergangene' }}"{% if _aktiv == 'vergangene' %} aria-current="page"{% endif %} data-mt-leiste-vergangene>
+        <span class="mt-leiste-symbol">{{ symbol('verlauf') }}</span><span class="mt-leiste-lang">Vergangene Termine</span><span class="mt-leiste-kurz" aria-hidden="true">Vergangen</span></a>
 </nav>
 <script src="/static/mein_tag.js?v={{ css_version }}" defer></script>
